@@ -1,7 +1,8 @@
 # Synthèse — jeu de guerre idle (projet sans nom)
 
-État au terme de la phase de recherche et de cadrage artistique.
-Trois passes d'analyse sur *Tiberium Alliances*, une DA établie, aucun code de jeu écrit.
+État au terme de la **Phase 0**. Recherche close, DA établie, trois décisions de cadrage prises, aucun code de jeu écrit.
+
+Le projet s'appelle **Foyer Zéro**. Codename interne et nom de dépôt : *Chantier*.
 
 ---
 
@@ -30,6 +31,68 @@ La partie se termine — prise de la forteresse centrale — puis repart sur une
 | Prestige | Forteresse centrale = fin de run → reset + méta-progression |
 
 **Calibrage directeur :** le joueur doit toujours pouvoir enchaîner **3 à 5 attaques par session**, quel que soit son palier. C'est ce qui pilote la courbe de plafond CP.
+
+### Architecture (décision 0.3)
+
+| Décision | Détail |
+|---|---|
+| Livrable | **HTML autonome, offline, sauvegarde locale.** Non négociable — c'est ce qui rend le Play Store possible |
+| Sources | **Modulaires**, pas un monolithe éditable. « Livré autonome » n'implique pas « source unique » |
+| Build | **esbuild seul**, version épinglée, aucune dépendance transitive, fonctionne sans réseau |
+| `dist/` | Produit **par la CI uniquement**. Jamais édité ni commité à la main — la désynchronisation devient impossible, pas seulement déconseillée |
+| Langage | **JavaScript + JSDoc.** Pas de TypeScript pour l'instant ; bascule locale si le moteur le mérite |
+| Tests | **`node --test` natif**, zéro framework |
+| `sim/` | Pur, déterministe, PRNG injecté, **zéro dépendance navigateur** |
+| `render/` | Canvas 2D, interpolation 60 fps, **aucune logique** |
+| `data/` | Tables de calibrage **générées depuis le tableur de la 1.2**, jamais écrites à la main |
+| Sauvegarde | Versionnée **avec migration dès le premier jour** (Archipel l'a ajouté après coup, il en est à `SAVE_VERSION` 31) |
+
+**Ce qui a emporté la décision :** la simulation est déterministe à 10 Hz. Un cœur pur se teste en Node en millisecondes et se rejoue depuis une graine — donc 10 000 combats en batch pour calibrer. C'est la seule façon de confronter le modèle économique au moteur avant l'étape 2.5.
+
+**Ce qu'on perd, et c'est réel :** dans le modèle Archipel, le fichier source *est* le fichier livré. Aucun build à déboguer. Les garde-fous ci-dessus existent pour compenser cette perte.
+
+### Défense idle (décision 0.2)
+
+| Décision | Détail |
+|---|---|
+| Sanction | **Par les PV, pas par une taxe.** Production proportionnelle aux PV + réservoir Base qui se vide en réparant : la punition existe déjà, elle est lisible et s'auto-régule |
+| Butin | **Oui, en réserve saturante.** Chaque raid repoussé l'alimente, elle plafonne |
+| Plafond | ~**une attaque manuelle**, pas trois. Valeur exacte fixée par le modèle de la 1.2 — on verrouille la forme, pas le chiffre |
+| Collecte | **Manuelle**, au retour |
+
+**Bénéfice technique, aussi lourd que le bénéfice de design :** la saturation rend le rattrapage hors ligne **analytique**. Sans plafond, revenir après trois jours obligerait à rejouer des dizaines de combats 10 Hz au chargement — coûteux, et surtout une source de divergence entre la sim de rattrapage et la sim en direct. Avec saturation, l'état final se calcule : réserve pleine, PV au plancher, réservoir Base à l'équilibre.
+
+**Contrainte induite :** la fréquence des raids doit être indexée sur la **progression** du joueur, jamais sur sa **vulnérabilité** — sinon on crée une incitation à rester mal défendu pour farmer.
+
+### Univers et lexique (décision 0.1)
+
+Monde **distinct d'Archipel**. On hérite de la méthode de nommage, pas du monde. Trois raisons : Archipel est un jeu de logistique pacifique déjà en test fermé et son ton ne doit pas changer rétroactivement ; un univers partagé crée une dette bidirectionnelle sur chaque nom ; le cross-sell ne paie que si le premier jeu a une audience, ce qui n'est pas encore le cas.
+
+L'univers n'a pas été inventé, il a été **constaté** : la DA l'avait déjà tranché. Ennemi radial, à pattes, modules identiques, accent émissif = une machine qui se réplique, pas une nation. Joueur kaki, directionnel, chenillé, à évents = industriel et humain. Forteresse au centre d'un disque = une racine qu'on remonte.
+
+| Terme | Désigne |
+|---|---|
+| **L'Ouvrage** | La faction ennemie. Nom collectif, jamais une nation, jamais un chef |
+| **Le Foyer** | La forteresse centrale. Sa prise arrête la réplication et termine la run |
+| **Quartz** | Ressource neutre, présente partout, sert la structure et la construction |
+| **Scorie** | Le dépôt que l'Ouvrage laisse en s'étendant. Ressource riche, donc située sur le terrain contaminé, donc défendu |
+
+**Prémisse.** Une installation d'extraction automatisée a continué de tourner sans supervision. Elle s'est répliquée, module par module, jusqu'à recouvrir le terrain de son propre dépôt. Le joueur dirige un **chantier de reprise** industrielle qui remonte les anneaux jusqu'au nœud d'origine.
+
+**Pourquoi « l'Ouvrage » :** c'est un nom d'usage, pas une métaphore. Le mot que l'installation emploierait dans ses propres journaux d'exploitation, sans intention. Une machine qui continue son travail parce que personne ne l'a arrêtée est plus inquiétante qu'une machine hostile. Bénéfice induit : **chantier de reprise contre Ouvrage**, deux termes du même registre industriel — le joueur ne combat pas une autre espèce, il reprend un site. C'est ce ton qui alimentera les rapports de raid et les descriptions.
+
+**Titre : Foyer Zéro.** *Foyer* est métallurgique — le creuset, la forge. Mais « foyer zéro »
+calque « patient zéro » : le **foyer originel d'une contagion**, ce qu'est exactement l'Ouvrage,
+une réplication partie sans supervision. Le titre porte les deux sens à la fois.
+
+**Contre-ouvrage** — terme de fortification, ouvrage élevé face à celui de l'assiégeant — n'est
+**pas** dans le titre mais devient le mot in-game pour **la base du joueur**. On ne construit pas
+« une base » : on élève **son contre-ouvrage** face à l'Ouvrage. Placé là, le mot travaille à
+chaque écran plutôt que d'être consommé une fois sur une icône.
+
+**Piège identifié :** la scorie ne doit pas dériver vers un cristal vert qui pousse tout seul. C'est le point exact où la reprise C&C se réintroduit sans qu'on la voie.
+
+Non nommés à dessein : les **14 bâtiments** (leur vocabulaire dépend de fonctions économiques que la 1.2 n'a pas fixées) et le **projet lui-même**.
 
 ### Dimensionnement visé
 
@@ -110,22 +173,25 @@ Les trois premiers peuvent être comblés par un dump `GAMEDATA` depuis la conso
 
 ### B — Décisions de conception non prises
 
-1. **La défense idle rapporte-t-elle du butin ?** Question posée, jamais tranchée. Si oui, revenu passif qui peut concurrencer l'attaque ; si non, taxe pure que le joueur cherchera à minimiser. Ma position : butin réel mais plafonné.
-2. **Univers.** « À part dans la forme, pareil dans le fond » reste ambigu : même monde qu'Archipel, ou monde distinct avec la même méthode de travail ? Ça conditionne le nommage, le lore et la réutilisation d'assets.
-3. **Nommage complet.** Aucun nom de ressource, d'unité ou de bâtiment n'existe. `tiberium` figure encore dans la fiche de style avec la mention « à renommer ». **Aucune reprise C&C n'est acceptable en aval.**
-4. **Courbe de pression ennemie.** C'est ce qui remplace la tension sociale du multi. Rien de défini.
-5. **Contenu de la méta-progression.** Que gagne-t-on au reset ?
-6. **Équivalents des 7 POI** et leurs bonus.
-7. **Arbre de recherche.** Structure, coûts, ce qu'il débloque.
-8. **Rythme des MCV** et nombre de bases.
+*Les trois premiers points de cette liste — butin de la défense idle, univers, lexique — ont été tranchés en Phase 0. Voir §2.*
 
-### C — Technique non abordé
+1. **Courbe de pression ennemie.** C'est ce qui remplace la tension sociale du multi. Rien de défini. **Contrainte déjà posée :** indexée sur la progression, jamais sur la vulnérabilité (cf. 0.2).
+2. **Contenu de la méta-progression.** Que gagne-t-on au reset ?
+3. **Équivalents des 7 POI** et leurs bonus.
+4. **Arbre de recherche.** Structure, coûts, ce qu'il débloque.
+5. **Rythme des MCV** et nombre de bases.
+6. **Nommage des 14 bâtiments.** Volontairement repoussé après la 1.2 : nommer une chose avant de savoir ce qu'elle fait, c'est se contraindre pour rien.
+7. *(clos)* **Nom du projet** — **Foyer Zéro**, arrêté le 22/08/2026.
 
-- Architecture : fichier HTML autonome façon Archipel ? React UMD ? Canvas 2D ?
-- Format de sauvegarde et migration
-- Algorithme de rattrapage hors ligne (Archipel en a un — réutilisable ?)
-- Graine et rejouabilité déterministe des combats
-- Cible de publication : web seul, ou Play Store comme Archipel ?
+### C — Technique
+
+*Tranché en 0.3 : architecture, build, format et migration de sauvegarde, déterminisme par graine. Voir §2.*
+
+Reste ouvert, sans rien bloquer :
+
+- **React ou pas pour l'UI.** Le prototype en rectangles colorés n'a quasiment pas d'interface ; la question se pose au moment des panneaux, de la recherche et des rapports, pas avant
+- **Cible de publication** : web seul, ou Play Store comme Archipel. L'architecture retenue ne ferme aucune des deux portes
+- **Rattrapage hors ligne** : rendu analytique par la saturation du butin (cf. 0.2). Reste à écrire, mais le problème difficile — éviter de resimuler des heures de combat au chargement — est désamorcé
 
 ### D — Dette DA déjà connue
 
@@ -144,13 +210,15 @@ Les trois premiers peuvent être comblés par un dump `GAMEDATA` depuis la conso
 
 Un prototype en rectangles colorés répond à la seule question qui compte : *est-ce que placer trois vagues contre une défense visible est intéressant à faire cinquante fois ?* Si la réponse est non, tout le reste est sans objet.
 
-### Phase 0 — Décider (aucun code)
+### Phase 0 — Décider (aucun code) — **CLOSE**
 
-| # | Tâche | Débloque |
+| # | Tâche | Verdict |
 |---|---|---|
-| 0.1 | Univers et nommage | tous les sprites, tout le texte |
-| 0.2 | Défense idle : butin ou pas | toute l'économie |
-| 0.3 | Cible technique et architecture | tout le reste |
+| 0.1 | Univers et nommage | Monde distinct. L'Ouvrage, le Foyer, quartz, scorie, 7 terrains renommés |
+| 0.2 | Défense idle : butin ou pas | Butin en réserve saturante, sanction par les PV |
+| 0.3 | Cible technique et architecture | Sources modulaires + esbuild → HTML autonome unique |
+
+Détail dans §2. **Ne pas rouvrir sans raison nouvelle.**
 
 ### Phase 1 — Chiffrer
 

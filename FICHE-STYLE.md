@@ -78,7 +78,7 @@ Toutes les valeurs sont fixes. Aucune teinte hors de cette liste.
 
 ### Une seule faction jouable
 
-Il n'y a **pas de dualité GDI/Nod**. Le joueur a une armée, le jeu en a une autre. Conséquences :
+Il n'y a **pas de dualité GDI/Nod**. Le joueur mène un **chantier de reprise** et élève son **contre-ouvrage** ; l'adversaire est **l'Ouvrage**, une installation d'extraction automatisée qui s'est répliquée sans supervision. Ce n'est pas une nation et ça n'a pas de chef — la grammaire de formes doit le dire : modules identiques, radial, à pattes, accent émissif. Conséquences :
 
 - La rampe kaki ci-dessus est **celle du joueur**, définitivement.
 - L'ennemi reçoit sa propre rampe 5 tons, à définir, et surtout une **grammaire de formes différente** — l'opposition doit se lire à la silhouette, pas seulement à la teinte.
@@ -187,7 +187,23 @@ poi_<type>.png                   point d'intérêt
 
 Cibles : `ai` (anti-infanterie) · `av` (anti-véhicule) · `aa` (anti-aérien)
 
-Terrains (7, repris du modèle de données) : `vide`, `cristal`, `tiberium`→**à renommer**, `bois`, `broussaille`, `petrole`, `marais`
+Terrains (7, lexique arrêté en Phase 0) :
+
+| Fichier | Contenait, dans le modèle d'origine |
+|---|---|
+| `tile_sterile` | vide |
+| `tile_affleurement` | cristal — donne du **quartz** |
+| `tile_croute` | ~~tiberium~~ — donne de la **scorie** |
+| `tile_futaie` | bois |
+| `tile_friche` | broussaille |
+| `tile_suintement` | pétrole |
+| `tile_vasiere` | marais |
+
+**Deux ressources :** le **quartz** (neutre, partout, structure et construction) et la **scorie** (le dépôt que l'Ouvrage laisse en s'étendant — riche, donc sur terrain contaminé, donc défendu).
+
+⚠ La scorie ne doit **pas** dériver vers un cristal vert qui pousse tout seul. C'est le point exact où la reprise C&C se réintroduit sans qu'on la voie.
+
+Les trois châssis — tourelle, véhicule, infanterie — sont des mots neutres : **aucune dette de nommage sur cet axe**, `def_tourelle_av.png` reste valide tel quel.
 
 ---
 
@@ -219,4 +235,11 @@ Les sprites sont **générés par composition** (`CHASSIS[x](arme)`), jamais des
 
 ---
 
-*v1 — établie à partir de la planche d'étalon (3 châssis × 2 armements).*
+*v3 — établie à partir de la planche d'étalon (3 châssis × 2 armements), complétée du lexique
+arrêté en Phase 0 : l'Ouvrage, le Foyer, le contre-ouvrage, quartz, scorie, 7 terrains.*
+
+**Titre du jeu : Foyer Zéro.** La DA doit servir ce double sens — la forge *et* le foyer
+originel d'une contagion. Le Foyer central doit se lire comme un creuset qui rayonne, pas
+comme une citadelle.
+
+**Reste à inscrire** (dette DA connue, cf. synthèse §4 D) : la rampe ennemie 5 tons, la correction du marcheur (pattes trop fines à 40 px), la couche d'accent séparée pour les casques d'infanterie, le socle de la tourelle mangé par le dôme.
