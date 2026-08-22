@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "node tools/build.js",
-    "test": "node --test test/",
-    "check": "node tools/build.js && node --test test/"
+    "test": "node --test",
+    "check": "node tools/build.js && node --test"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
