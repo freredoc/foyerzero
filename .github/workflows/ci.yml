@@ -1,8 +1,16 @@
-# CI de Chantier : npm ci → build → tests → publication de l'artefact HTML.
-# Le HTML est buildé DANS le job, jamais repris d'un commit : dist/ n'existe
-# pas dans le dépôt, la désynchronisation code/livrable est structurellement
-# impossible. La construction de l'APK viendra avec le lot 1C, une fois la
-# voie de distribution (A/B/C) tranchée.
+# CI de Foyer Zéro.
+#
+#   web      npm ci → build → tests Node → artefact HTML
+#   android  tests JVM du module :maj → APK (signé si les secrets existent,
+#            non signé sinon — le workflow n'échoue pas sans secrets)
+#   pages    sur main uniquement : HTML rebuildé DANS le job + manifeste
+#            généré à partir de CE HTML, publiés ensemble sur GitHub Pages.
+#            dist/ n'est jamais commité : la désynchronisation code/livrable
+#            comme manifeste/HTML est structurellement impossible.
+#
+# Le keystore de signature ne vit QUE dans les secrets GitHub Actions :
+# FOYERZERO_KEYSTORE_BASE64, FOYERZERO_KEYSTORE_PASSWORD, FOYERZERO_KEY_ALIAS,
+# FOYERZERO_KEY_PASSWORD. Jamais dans le dépôt, ni en clair ni chiffré.
 name: CI
 
 on:
@@ -10,7 +18,7 @@ on:
   pull_request:
 
 jobs:
-  build-et-tests:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +28,91 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node tools/build.js
-      - run: node --test
+      - run: npm test
       - uses: actions/upload-artifact@v4
         with:
-          name: chantier-html
+          name: foyerzero-html
           path: dist/index.html
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Le HTML embarqué dans l'APK est buildé dans CE job, pas repris d'un
+      # commit ni d'un artefact.
+      - run: npm ci
+      - run: node tools/build.js
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Tests JVM de la logique de mise à jour
+        run: gradle -p android :maj:test
+      - name: Préparer la signature (uniquement si les secrets existent)
+        if: ${{ github.event_name == 'push' && secrets.FOYERZERO_KEYSTORE_BASE64 != '' }}
+        env:
+          FOYERZERO_KEYSTORE_BASE64: ${{ secrets.FOYERZERO_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$FOYERZERO_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/foyerzero.jks"
+          echo "FOYERZERO_KEYSTORE=$RUNNER_TEMP/foyerzero.jks" >> "$GITHUB_ENV"
+      - name: Construire l'APK release
+        env:
+          FOYERZERO_KEYSTORE_PASSWORD: ${{ secrets.FOYERZERO_KEYSTORE_PASSWORD }}
+          FOYERZERO_KEY_ALIAS: ${{ secrets.FOYERZERO_KEY_ALIAS }}
+          FOYERZERO_KEY_PASSWORD: ${{ secrets.FOYERZERO_KEY_PASSWORD }}
+        run: gradle -p android :app:assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foyerzero-apk
+          path: android/app/build/outputs/apk/release/*.apk
+
+  pages:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [web, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node tools/build.js
+      - run: npm test
+      - name: Générer le manifeste à partir du HTML de CE job
+        run: |
+          mkdir -p site
+          cp dist/index.html site/
+          VERSION=$(node -p "require('./package.json').version")
+          BUILD=$(node -p "require('./package.json').config.build")
+          SHA=$(sha256sum dist/index.html | cut -d' ' -f1)
+          # Le nom du dépôt est LU du contexte, jamais écrit en dur : l'URL
+          # reste juste même si le dépôt est renommé (l'allowlist du client,
+          # elle, est volontairement en dur — la faire suivre en cas de
+          # nouveau renommage).
+          URL="https://freredoc.github.io/${GITHUB_REPOSITORY#*/}/index.html"
+          printf '{ "version": "%s", "build": %s, "sha256": "%s", "url": "%s" }\n' \
+            "$VERSION" "$BUILD" "$SHA" "$URL" > site/manifest.json
+          cat site/manifest.json
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploiement
+        uses: actions/deploy-pages@v4

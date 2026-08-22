@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le Foyer : un creuset qui rayonne — un cœur plein, un anneau, quatre
+     rais. Tons kaki de FICHE-STYLE.md (lumière 8C9A72, éclairé 6A7658). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Cœur du creuset. -->
+    <path
+        android:fillColor="#8C9A72"
+        android:pathData="M54,46 a8,8 0 1,0 0.01,0 Z" />
+
+    <!-- Anneau de rayonnement. -->
+    <path
+        android:fillColor="#6A7658"
+        android:fillType="evenOdd"
+        android:pathData="M54,36 a18,18 0 1,0 0.01,0 Z M54,41 a13,13 0 1,1 -0.01,0 Z" />
+
+    <!-- Quatre rais, aux points cardinaux. -->
+    <path
+        android:fillColor="#8C9A72"
+        android:pathData="M52.5,26 h3 v7 h-3 Z M52.5,75 h3 v7 h-3 Z M26,52.5 h7 v3 h-7 Z M75,52.5 h7 v3 h-7 Z" />
+</vector>

@@ -2,7 +2,7 @@
 // installation atomique, rollback. Kotlin JVM, zéro dépendance runtime —
 // exécutable et testable sans SDK Android ni émulateur.
 plugins {
-    kotlin("jvm") version "2.0.21"
+    kotlin("jvm")
 }
 
 // Bytecode 17, compilé par la JVM courante (>= 17) : aucun toolchain à
