@@ -1,11 +1,11 @@
 {
   "name": "chantier",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Chantier — jeu de stratégie solo/idle hors ligne, distribué comme un fichier HTML autonome.",
   "config": {
-    "build": "1"
+    "build": "2"
   },
   "scripts": {
     "build": "node tools/build.js",
