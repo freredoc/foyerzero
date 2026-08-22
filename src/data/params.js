@@ -4,6 +4,17 @@
 // Source : MODELE-ECONOMIQUE.md (courbes hyperboliques coût/production,
 // coût croisé, plancher d'amorçage), repris dans le brief du lot 1.
 
+// Coût croisé : quartz(n) = C(n)·ρ/(1+ρ), scorie(n) = C(n)/(1+ρ).
+// ρ est une constante de la CLASSE du bâtiment. Table extraite du littéral
+// pour que les bâtiments la RÉFÉRENCENT au lieu d'en recopier la valeur :
+// une seule source de vérité, impossible de la faire diverger en silence.
+export const RHO = {
+  producteurQuartz: 0.45,
+  neutre: 1.2,
+  defensif: 1.5,
+  producteurScorie: 3.5,
+};
+
 export const PARAMS = {
   courbes: {
     // ratio_C(n) = RInfC + (R1c − RInfC) / n — ratio de coût du niveau n vers n+1.
@@ -15,14 +26,7 @@ export const PARAMS = {
   // Fenêtre de calcul du facteur de temps de retour moyen (test 6).
   facteurTempsRetour: { niveaux: 25 },
 
-  // Coût croisé : quartz(n) = C(n)·ρ/(1+ρ), scorie(n) = C(n)/(1+ρ).
-  // ρ est une constante de la CLASSE du bâtiment.
-  rho: {
-    producteurQuartz: 0.45,
-    neutre: 1.2,
-    defensif: 1.5,
-    producteurScorie: 3.5,
-  },
+  rho: RHO,
 
   // Plancher d'amorçage : les niveaux 1 à N coûtent 100 % quartz (scorie = 0),
   // sinon rien n'est constructible avant d'avoir pris du terrain contaminé.
@@ -30,8 +34,8 @@ export const PARAMS = {
 
   // Bâtiments du lot 1. echelleCout = coût total du niveau 1 (E), en unités.
   batiments: {
-    foreuse: { rho: 0.45, echelleCout: 20, ressource: 'quartz' },
-    decapeuse: { rho: 3.5, echelleCout: 35, ressource: 'scorie' },
+    foreuse: { rho: RHO.producteurQuartz, echelleCout: 20, ressource: 'quartz' },
+    decapeuse: { rho: RHO.producteurScorie, echelleCout: 35, ressource: 'scorie' },
   },
 
   // Colis : un toutes les 5 minutes, 2 en attente maximum, puis arrêt.

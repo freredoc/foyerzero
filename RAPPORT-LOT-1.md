@@ -3,6 +3,10 @@
 Session du 2026-08-22. Livraison : lots **1A et 1B complets**, lot **1C non lancé**
 (arrêt volontaire avant, conformément au brief — voir « Questions ouvertes »).
 
+**Mise à jour post-audit** : deux défauts silencieux relevés à la relecture de la PR #1 ont
+été corrigés — source unique pour ρ, et vecteur de référence figé du PRNG. Les deux
+sabotages de contrôle sont reproduits au §3. Suite portée à **25 tests**.
+
 ---
 
 ## 1. Version et build produits
@@ -19,22 +23,24 @@ Session du 2026-08-22. Livraison : lots **1A et 1B complets**, lot **1C non lanc
 ## 2. Arborescence réelle créée
 
 ```
+art/etalon/                  assets de l'étalon DA (déplacés de la racine, cf. §6)
+  joueur/ ennemi_pale/ ennemi_sombre/ generateur.py
 .github/workflows/ci.yml     npm ci → build → tests → artefact HTML (sans APK, cf. §6)
 src/
   sim/
-    rng.js        PRNG mulberry32 à graine, état = 1 uint32 sérialisable
+    rng.js        PRNG mulberry32 à graine, état = 1 uint32 sérialisable, suite figée
     clock.js      horloge 10 Hz, temps réel injecté, jamais lu
     economy.js    courbes (flottants) + tick économique (entiers) + rattrapage
     state.js      état versionné, boucle tickJeu, rattraperJeu, migration
   data/
-    params.js     TOUTES les valeurs de calibrage
+    params.js     TOUTES les valeurs de calibrage ; table RHO = source unique
   render/         vide (.gitkeep)
   ui/             vide (.gitkeep)
   index.src.html  page minimale : version, build, état du moteur
 tools/
   build.js        esbuild → dist/index.html tout inliné, garde offline bloquante
 test/
-  rng.test.js     tests 1–2 + helpers
+  rng.test.js     tests 1–2 + helpers + vecteur de référence figé
   clock.test.js   tests 3–4 + exactitude de l'horloge
   economy.test.js tests 5–10 + saturation du flux continu
   state.test.js   tests 11–12 + sérialisation en pleine partie   ← fichier ajouté, cf. §6
@@ -49,7 +55,7 @@ package.json      scripts build / test / check ; esbuild seule dépendance
 
 ## 3. Résultat de chaque test
 
-Suite complète : **24 tests, 24 PASS, 0 KO** (`npm run check` : build puis tests).
+Suite complète : **25 tests, 25 PASS, 0 KO** (`npm run check` : build puis tests).
 
 | # | Test du brief | Verdict | Montage effectif |
 |---|---|---|---|
@@ -81,6 +87,19 @@ La garde offline du build a été éprouvée de la même façon : une feuille de
 réseau injectée dans la source fait échouer le build avec un message explicite
 (code de sortie 1).
 
+**Correctifs post-audit, sabotages reproduits dans les deux sens :**
+
+| Défaut | Avant correctif | Après correctif |
+|---|---|---|
+| Table ρ recopiée par les bâtiments : passer `RHO.producteurQuartz` de 0,45 à 0,50 | **silencieux** — 25/25 PASS | `not ok 9 — test 7 (verrou croisé)` |
+| Constante interne du PRNG : `t \| 61` → `t \| 63` dans `tirer()` | **silencieux** — 24/24 PASS | `not ok 20 — vecteur figé` |
+
+Le second est le plus coûteux des deux : une graine est une promesse de
+compatibilité (combat rejoué, sauvegarde reprise, batch de calibrage), et rien
+ne signalait qu'elle était rompue. Si le test « vecteur figé » échoue un jour,
+ce n'est pas un test à mettre à jour : c'est une rupture de compatibilité à
+décider explicitement, avec migration.
+
 ---
 
 ## 4. Valeurs obtenues / attendues (tests 5, 6, 7, 10)
@@ -100,7 +119,7 @@ réseau injectée dans la source fait échouer le build avec un message explicit
 
 ## 5. Taille du HTML produit
 
-**2 930 octets (2,9 Kio)** — `dist/index.html`, tout inliné, minifié, aucune
+**2 968 octets (2,9 Kio)** — `dist/index.html`, tout inliné, minifié, aucune
 référence réseau (vérifié par la garde du build). La page affiche la version,
 le build et une ligne d'état produite par le moteur réellement bundlé
 (`creerEtat` + un `tickJeu`), vérifiée par smoke test.
@@ -144,9 +163,19 @@ le build et une ligne d'état produite par le moteur réellement bundlé
    `index.src.html`**, extrait puis réinjecté par `tools/build.js` : évite
    d'ajouter un `main.js` absent de l'arborescence prescrite.
 
+10. **Table `RHO` exportée de `data/params.js`** (correctif d'audit) : les
+    bâtiments référencent `RHO.producteurQuartz` au lieu de recopier `0.45`.
+    Un objet littéral ne pouvant s'auto-référencer pendant sa construction, la
+    table est sortie du littéral et réinjectée via `rho: RHO`. Une seule source
+    de vérité, et le problème n'empire plus à chaque bâtiment ajouté.
+11. **Assets de l'étalon déplacés sous `art/etalon/`** (hygiène) :
+    `joueur/`, `ennemi_pale/`, `ennemi_sombre/`, `generateur.py` quittent la
+    racine. Aucun effet sur le code — vérifié, aucune référence de chemin dans
+    les sources, et `generateur.py` écrit vers un chemin absolu.
+
 Écart de contexte signalé (non bloquant) : le dépôt réel ne contenait ni
 `CLAUDE.md`, ni `MODELE-ECONOMIQUE.md`, ni le classeur — seulement les
-documents de cadrage et les sprites. `generateur.py` a été lu, pas exécuté.
+documents de cadrage et les sprites. `art/etalon/generateur.py` a été lu, pas exécuté.
 
 ---
 
@@ -188,8 +217,9 @@ documents de cadrage et les sprites. `generateur.py` a été lu, pas exécuté.
 ## 9. Relecture hostile — faite
 
 - Chaque test peut échouer : prouvé par sabotage pour les plus critiques (11,
-  garde offline), par contre-épreuve interne pour les autres (appât du test 4,
-  graine différente du test 3, garde de montage du test 11).
+  garde offline, table ρ, suite du PRNG), par contre-épreuve interne pour les
+  autres (appât du test 4, graine différente du test 3, garde de montage du
+  test 11).
 - Valeurs codées en dur hors `data/params.js` : aucune dans `src/` ; les tests
   portent leurs propres constantes de contrôle, ce qui est leur rôle.
 - Références navigateur dans `src/sim/` : **zéro**, prouvé par le test 4 (qui

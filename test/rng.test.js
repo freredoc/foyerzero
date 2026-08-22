@@ -84,3 +84,42 @@ test('helpers — melanger est une permutation, reproductible à graine égale',
   const c = melanger(creerRng(2025), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.notDeepEqual(a, c, 'deux graines différentes donnent le même mélange');
 });
+
+// ---------------------------------------------------------------------------
+// Vecteur de référence figé.
+//
+// Les tests 1 et 2 vérifient la REPRODUCTIBILITÉ et la SÉRIALISATION : deux
+// propriétés qui restent vraies même si l'algorithme change entièrement. Elles
+// ne protègent donc de rien si mulberry32 est un jour remplacé ou modifié.
+//
+// Or une graine est une promesse de compatibilité : un combat rejoué depuis sa
+// graine, une sauvegarde reprise, un batch de calibrage reproduit — tout casse
+// en silence si la suite produite change. Ce test fige la suite elle-même.
+//
+// Vérifié par sabotage : modifier une constante interne de tirer() (par exemple
+// `t | 61` en `t | 63`) ne faisait échouer AUCUN test avant celui-ci.
+//
+// Si ce test échoue, ce n'est PAS un test à mettre à jour : c'est une rupture
+// de compatibilité à décider explicitement, et à accompagner d'une migration.
+// ---------------------------------------------------------------------------
+test('vecteur figé — la suite produite par une graine ne doit jamais changer', () => {
+  const r = creerRng(12345);
+  const obtenu = Array.from({ length: 8 }, () => Number(tirer(r).toFixed(12)));
+  assert.deepStrictEqual(obtenu, [
+    0.979728267761, 0.3067522645, 0.484205421526, 0.817934412509,
+    0.509428369347, 0.34747186047, 0.073757541832, 0.766396467341,
+  ]);
+
+  const r2 = creerRng(1);
+  assert.deepStrictEqual(
+    Array.from({ length: 4 }, () => Number(tirer(r2).toFixed(12))),
+    [0.627073940588, 0.00273572118, 0.52744703996, 0.981050967472],
+  );
+
+  // Le helper entier() est figé lui aussi : c'est lui que le combat utilisera.
+  const r3 = creerRng(2026);
+  assert.deepStrictEqual(
+    Array.from({ length: 10 }, () => entier(r3, 1, 6)),
+    [3, 2, 4, 4, 1, 2, 5, 5, 2, 1],
+  );
+});
