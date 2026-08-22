@@ -242,4 +242,17 @@ arrêté en Phase 0 : l'Ouvrage, le Foyer, le contre-ouvrage, quartz, scorie, 7 
 originel d'une contagion. Le Foyer central doit se lire comme un creuset qui rayonne, pas
 comme une citadelle.
 
+### ⚠ Forme volante de l'Ouvrage — MANQUANTE
+
+L'étalon v4 comporte trois formes ennemies : **pylône** (structure), **marcheur** (véhicule),
+**essaim** (infanterie légère et nombreuse). **Aucune forme volante.**
+
+Or la planche joueur contient déjà `arme_aa.png`, et le modèle de combat repose sur quatre
+types de cible dont l'aviation. **Sans ennemi aérien, l'anti-aérien du joueur n'a pas de cible
+et un quart du système de ciblage est mort.**
+
+Nom retenu : **le Dard**. Petit, rapide, isolé — l'inverse de l'essaim au sol. À traiter dans
+la grammaire de formes de l'Ouvrage : modules identiques, radial, accent émissif, anodisé
+sombre. Pas d'ailes portantes : la sustentation doit sembler procédée, non aérodynamique.
+
 **Reste à inscrire** (dette DA connue, cf. synthèse §4 D) : la rampe ennemie 5 tons, la correction du marcheur (pattes trop fines à 40 px), la couche d'accent séparée pour les casques d'infanterie, le socle de la tourelle mangé par le dôme.

@@ -1,6 +1,7 @@
 # Synthèse — jeu de guerre idle (projet sans nom)
 
-État au terme de la **Phase 0**. Recherche close, DA établie, trois décisions de cadrage prises, aucun code de jeu écrit.
+État au 22/08/2026 : **Phase 0 close, 1.1 close, 1.2 close, lot 1 livré et mergé**
+(socle déterministe, build, enveloppe Android, mise à jour prouvée). Recherche close, DA établie, trois décisions de cadrage prises, aucun code de jeu écrit.
 
 Le projet s'appelle **Foyer Zéro**. Codename interne et nom de dépôt : *Chantier*.
 
@@ -176,6 +177,11 @@ Les trois premiers peuvent être comblés par un dump `GAMEDATA` depuis la conso
 *Les trois premiers points de cette liste — butin de la défense idle, univers, lexique — ont été tranchés en Phase 0. Voir §2.*
 
 1. **Courbe de pression ennemie.** C'est ce qui remplace la tension sociale du multi. Rien de défini. **Contrainte déjà posée :** indexée sur la progression, jamais sur la vulnérabilité (cf. 0.2).
+1bis. **Courbe de butin par anneau.** ⚠ **Manque le plus urgent.** Le butin des raids est le
+   revenu principal passé un certain palier — c'est lui qui finance les niveaux hauts, pas la
+   production. Sans cette courbe, aucun calcul de rentabilité n'est valide au-delà des premiers
+   niveaux, et la question du niveau maximum ne peut pas être tranchée. Voir
+   `MODELE-ECONOMIQUE.md` §2.
 2. **Contenu de la méta-progression.** Que gagne-t-on au reset ?
 3. **Équivalents des 7 POI** et leurs bonus.
 4. **Arbre de recherche.** Structure, coûts, ce qu'il débloque.
