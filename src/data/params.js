@@ -48,5 +48,5 @@ export const PARAMS = {
 
   // Stockage : capacité par ressource, en milli-unités. Le flux continu
   // s'arrête stockage plein.
-  stockage: { capaciteMilli: 2_000_000 },
+  stockage: { capaciteMilli: 10_000_000 },
 };

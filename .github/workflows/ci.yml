@@ -1,0 +1,27 @@
+# CI de Chantier : npm ci → build → tests → publication de l'artefact HTML.
+# Le HTML est buildé DANS le job, jamais repris d'un commit : dist/ n'existe
+# pas dans le dépôt, la désynchronisation code/livrable est structurellement
+# impossible. La construction de l'APK viendra avec le lot 1C, une fois la
+# voie de distribution (A/B/C) tranchée.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-et-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node tools/build.js
+      - run: node --test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chantier-html
+          path: dist/index.html
