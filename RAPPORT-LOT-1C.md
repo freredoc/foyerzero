@@ -148,7 +148,7 @@ Un workflow, trois jobs :
 | Objet | Taille |
 |---|---|
 | HTML embarqué (`dist/index.html`, v0.2.0) | **2 974 octets** |
-| APK | **non mesurée localement** — voir §7 ; l'artefact `foyerzero-apk` du premier passage CI fera foi |
+| APK (release, non signé) | **≈ 613 Kio** (627 561 octets, artefact `foyerzero-apk` du run CI n° 7 — sans androidx, l'enveloppe reste mince) |
 
 ---
 
@@ -160,8 +160,12 @@ Un workflow, trois jobs :
   testé localement ; `:app` est écrit avec des API plateforme minimales et
   stables, et sera compilé par la CI (le SDK est préinstallé sur ses runners).
   `settings.gradle.kts` exclut `:app` quand le SDK manque, avec un message
-  clair, pour que les tests JVM restent exécutables partout. La PR est
-  surveillée : un échec CI sur `:app` sera corrigé dans la foulée.
+  clair, pour que les tests JVM restent exécutables partout. Résolu depuis :
+  la CI de la PR a compilé `:app` et produit l'APK du premier coup (run n° 7,
+  vert), après un correctif de workflow — le contexte `secrets` n'est pas
+  admis dans le `if` d'un step (« Unrecognized named-value »), un échec AU
+  PARSING qui ne produit ni job ni événement ; seul un contrôle actif de la
+  CI l'a détecté. Les secrets passent désormais par l'env du job.
 - **AAB.** APK seul pour l'itération sur device ; le format store viendra avec
   la publication.
 - **Cadence de mise à jour.** Une vérification par lancement, en arrière-plan.
