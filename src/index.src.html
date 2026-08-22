@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chantier</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-content: center;
+    gap: 0.5rem;
+    background: #16191d;
+    color: #c2c7cb;
+    font-family: system-ui, sans-serif;
+    text-align: center;
+  }
+  h1 { margin: 0; font-size: 2rem; letter-spacing: 0.3em; text-transform: uppercase; color: #8c9a72; }
+  p { margin: 0; }
+  #statut { color: #69564d; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Chantier</h1>
+  <p>version %VERSION% · build %BUILD%</p>
+  <p id="statut">moteur non initialisé</p>
+</main>
+<script type="module">
+// Point d'entrée du bundle : prouve que sim/ et data/ se chargent et
+// tournent dans la page livrée. Le vrai jeu (render/, ui/) vient aux lots
+// suivants.
+import { PARAMS } from './data/params.js';
+import { TICK_MS } from './sim/clock.js';
+import { creerEtat, tickJeu, SAVE_VERSION } from './sim/state.js';
+
+const etat = creerEtat(1, PARAMS);
+tickJeu(etat, PARAMS);
+document.getElementById('statut').textContent =
+  `moteur prêt — sauvegarde v${SAVE_VERSION}, tick ${TICK_MS} ms, `
+  + `${etat.batiments.length} bâtiment, t=${etat.horloge.tempsSimuleMs} ms`;
+</script>
+</body>
+</html>
