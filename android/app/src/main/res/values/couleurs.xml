@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palette de FICHE-STYLE.md : contour/creux du châssis. -->
+    <color name="icone_fond">#161914</color>
+</resources>
