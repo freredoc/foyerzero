@@ -19,6 +19,7 @@ import {
   pointsRecherche,
   construireResultat,
   serialiserEtat,
+  facteurMilli,
   CAUSES,
   TICKS_MAX_COMBAT,
   TICKS_PAR_VAGUE,
@@ -639,8 +640,9 @@ test('T11 — la Souche tombée, le combat s\'arrête et le site livre tout', ()
   // 300 × 3 = 900, toutes deux quartz pur → 1200 quartz, 0 scorie.
   assert.deepEqual(butin(resultat, montage), { quartz: 1200, scorie: 0 });
   // Aucune défense sur le site : aucun point de recherche. Les bâtiments,
-  // Souche comprise, ne rapportent rien.
-  assert.equal(pointsRecherche(resultat, montage), 0);
+  // Souche comprise, ne rapportent rien. Le type est un BigInt depuis le lot
+  // 2B — 0n, pas 0.
+  assert.equal(pointsRecherche(resultat, montage), 0n);
 });
 
 // ---------------------------------------------------------------------------
@@ -680,8 +682,10 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
     niveau: 3,
     saveur: null,
     obstacles: [],
-    // Merlon monté à 250 000 sur 500 000 : exactement 50 % de dégâts subis.
-    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 250_000 }],
+    // Au niveau 3, facteurMilli(3) = round(1000 × 1,259²) = round(1585,081)
+    // = 1585, donc le Merlon vaut 500 × 1585 = 792 500 milli-PV au lieu de
+    // 500 000. Monté à 396 250, il est à exactement 50 % de dégâts subis.
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 396_250 }],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
     // = 17 000 000, hors de sa portée² de 2 250 000. Rien ne bouge en un tick.
@@ -692,17 +696,22 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
   const resultat = resoudre(etat, { maxTicks: 1 });
 
   const merlon = resultat.defenses.find(parId('merlon'));
-  assert.equal(merlon.pvPerdusMilli, 250_000);
+  assert.equal(facteurMilli(3), 1585);
+  assert.equal(merlon.pvMaxMilli, 500 * 1585);
+  assert.equal(merlon.pvPerdusMilli, 396_250);
+  assert.equal(merlon.niveau, 3, 'le niveau de l\'entité, plus celui du site');
 
   // 2 × 1000 × 2^(3−1) × 0,5 = 2 × 1000 × 4 × 0,5 = 4 000 milli-points.
-  assert.equal(pointsRecherche(resultat, montage), 4000);
+  // BigInt depuis le lot 2B : le barème double par niveau quand tout le reste
+  // croît en ×1,32, et déborde l'entier sûr dès le niveau 39.
+  assert.equal(pointsRecherche(resultat, montage), 4000n);
 
   // Avec le module de la cible débloqué (Merlon côté Ouvrage : pvPlusVingt),
   // × 1,2 → 4 800.
   const avecModule = { ...montage, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } };
   const etatModule = creerCombat(avecModule);
   const resultatModule = resoudre(etatModule, { maxTicks: 1 });
-  assert.equal(pointsRecherche(resultatModule, avecModule), 4800);
+  assert.equal(pointsRecherche(resultatModule, avecModule), 4800n);
 
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.
   assert.equal(resultat.batiments.length, 1);
@@ -898,7 +907,7 @@ test('§11 — construireResultat rend le même objet que resoudre', () => {
 // moteur ne seraient asseyés par rien.
 // ---------------------------------------------------------------------------
 
-test('§7 — une barrière ne bloque pas, elle saigne', () => {
+test('§7 — une barrière ne bloque pas, elle saigne, et on en réchappe', () => {
   const montage = (id) => ({
     niveau: 1,
     saveur: null,
@@ -925,36 +934,40 @@ test('§7 — une barrière ne bloque pas, elle saigne', () => {
   // barrière donc lue en colonne « structure ». 200 000 − 20 × 2400 = 152 000.
   assert.equal(ronce.pvMilli, 152_000);
 
-  // Premier tick de présence : la Ronce est à floor(152000 × 1000/200000)
-  // = 760 ‰, et son franchissement vaut floor(20 × 1000 × 760/1000) = 15 200
-  // milli-PV — pondéré par sa matrice contre l'infanterie (1,0) et
-  // proportionnel aux PV qui lui restent.
+  // Premier tick de présence. Le franchissement de la Ronce vaut 2,5 PV/tick
+  // depuis l'arbitrage du lot 2B, soit 2500 milli-PV. La Ronce est à
+  // floor(152000 × 1000/200000) = 760 ‰, donc
+  // floor(2500 × 1000 × 760 / 1 000 000) = 1900 milli-PV.
   jouer(etat, 21);
-  assert.equal(meute.pvMilli, 100_000 - 15_200);
-  assert.equal(ronce.pvMilli, 152_000 - 2400);
+  assert.equal(meute.pvMilli, 100_000 - 1900);
 
   // Et il traverse : cinq ticks plus tard il a bien avancé de 5 × 50, sans
   // jamais s'arrêter — 3000 + 250 = 3250.
   jouer(etat, 25);
   assert.equal(meute.rangeeMilli, 3250);
 
-  // Au-delà, les deux décroissances s'imbriquent. Le Meute rend
-  // floor(2400 × floor(M/100) / 1000) à la Ronce ; la Ronce lui rend
-  // 20 × floor(R/200). Partant de M = 84 800 et R = 149 600 au tick 22, la
-  // suite des PV du Meute est 69 840 · 55 100 · 40 520 · 26 080 · 11 740, et au
-  // tick 27 le franchissement vaut 20 × floor(142 972/200) = 20 × 714 = 14 280,
-  // au-dessus des 11 740 restants : le Meute meurt au tick 27.
-  jouer(etat, 26);
-  assert.equal(meute.pvMilli, 11_740);
-  jouer(etat, 27);
-  assert.equal(meute.pvMilli, 0);
-  assert.equal(meute.vivant, false);
-  // Une barrière ne se détruit pas en la franchissant : elle n'a encaissé que
-  // les tirs, et elle est toujours debout.
-  assert.equal(ronce.pvMilli, 142_692);
-  assert.equal(ronce.vivant, true);
+  // Une case fait 1000 milli-cases et le Meute avance de 50 : il reste
+  // 1000/50 = 20 ticks sur la case, ticks 21 à 40. Les deux décroissances
+  // s'imbriquent — le Meute rend floor(2400 × floor(M/100) / 1000) à la Ronce,
+  // la Ronce lui rend floor(2500 × floor(R/200) / 1000) — et au tick 40 il
+  // sort avec 67 116 milli-PV, soit 32,884 PV perdus sur 100.
+  jouer(etat, 40);
+  assert.equal(caseDepuisMilli(meute.rangeeMilli), 4, 'sorti de la case au tick 40');
+  assert.equal(meute.pvMilli, 67_116);
+  assert.equal(meute.vivant, true, 'une infanterie RÉCHAPPE désormais d\'une Ronce');
 
-  // L'aviation, elle, ne paie rien : la matrice de la Ronce vaut 0 en colonne
+  // Plus un milli-PV de franchissement une fois la case quittée.
+  jouer(etat, 60);
+  assert.equal(meute.pvMilli, 67_116);
+
+  // Le toll est plus faible que les 50 PV du tableau du §3 parce que celui-ci
+  // suppose la barrière à pleine vie : ici le Meute l'a canardée pendant toute
+  // son approche, et les dégâts de franchissement sont proportionnels aux PV
+  // qui restent à la barrière. Elle tient quand même — une barrière ne se
+  // détruit pas en la franchissant.
+  assert.ok(ronce.pvMilli > 90_000 && ronce.vivant);
+
+  // L'aviation ne paie rien : la matrice de la Ronce vaut 0 en colonne
   // « aviation ». Crécelle à 150 milli/tick, 2000 + 20 × 150 = 5000, PV intacts.
   const air = creerCombat(montage('crecelle'));
   const crecelle = entite(air, (e) => e.camp === 'attaque');

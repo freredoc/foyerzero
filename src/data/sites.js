@@ -229,15 +229,34 @@ export const GEOGRAPHIE = {
   avantPostesParBaseJoueur: { min: 1, max: 2, niveauRelatif: 1, renouvelables: true },
 };
 
-// --- À CONFIRMER — ne pas traiter comme arbitré ------------------------------
-// La disposition des défenses dans les 8 rangées de la bande de défense.
-// SITES-DENSITE porte des formules cassées (« j'ai pas compris j'ai mis au pif »,
-// couverture > 100 %). L'audit propose une reconstruction, mais son texte dit
-// 7/9 alors que ses deux exemples chiffrés (camp 5 → 1 rangée à 33 % ;
-// avant-poste 40 → 6 rangées à 65 %) n'admettent que 6/9.
-// Valeur ci-dessous = 6/9, celle qui reproduit les exemples. À trancher.
-export const DISPOSITION_DEFENSES_A_CONFIRMER = {
-  couvertureMax: 6 / 9, // trois colonnes libres au minimum ; jamais 100 %
-  rangees: 'ARRONDI.SUP(nbDefenses / (largeur × couvertureMax))',
-  couvertureMoyenne: 'nbDefenses / (rangees × largeur)',
+// --- disposition des défenses ------------------------------------------------
+// ARBITRÉ au lot 2B. Le texte de SITES-DENSITE annonçait 7/9, mais ses deux
+// exemples chiffrés — camp 5 à 1 rangée et 33 %, avant-poste 40 à 6 rangées et
+// 65 % — n'admettent que 6/9. C'est 6/9 qui fait foi.
+//
+// Le nombre maximal de rangées n'est PAS dupliqué ici : c'est la hauteur de
+// GRILLE.bandes.defense, une seule table fait foi.
+export const DISPOSITION_DEFENSES = {
+  // Six occupants au plus par rangée de neuf colonnes : trois colonnes libres
+  // au minimum, jamais 100 %. Sans passage, le terrain ne décide plus rien.
+  occupantsMaxParRangee: 6,
+
+  // Les défenses se collent aux bâtiments : les rangées les plus ARRIÈRE de la
+  // bande sont garnies les premières, l'attaquant traverse d'abord du vide.
+  versLeFond: true,
+
+  // Ordre de garnissage, du fond vers l'avant. Nécessité arithmétique, pas
+  // préférence : une artillerie a une portée minimale de 3,5. En rangée 10 elle
+  // engage entre les rangées 4,5 et 6,5 ; en rangée 3 elle engagerait entre
+  // −2,5 et −0,5, c'est-à-dire jamais. Toute artillerie avancée est inerte.
+  //
+  // Les unités mobiles de garnison s'intercalent entre tourelles et murs : la
+  // ligne de murs les couvre, et elles restent devant les tourelles qu'elles
+  // protègent. Les barrières viennent en tête, puisqu'on les franchit d'abord.
+  ordreCategories: ['artillerie', 'tourelle', 'unite', 'mur', 'barriere'],
+
+  // Écart maximal de charge entre la colonne la plus garnie et la moins garnie.
+  // Les unités ne changent jamais de colonne : une colonne à huit structures
+  // serait infranchissable et une colonne vide une autoroute.
+  ecartColonnesMax: 2,
 };

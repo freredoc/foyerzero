@@ -243,7 +243,10 @@ export const DEFENSES = {
   ronce: {
     nom: 'Ronce', ta: 'Barbelés', type: 'barriere', cible: 'infanterie',
     points: 5, pv: 200, degats: 0, portee: 1, porteeMini: 0,
-    degatsFranchissement: 20, bloque: false,
+    // Divisé par 8 au lot 2B. À 20 PV/tick, un Fusilier mourait quatre fois
+    // avant d'avoir franchi la case (20 ticks de traversée, 5 de survie) :
+    // « traversable, blesse au passage » n'avait plus de sens.
+    degatsFranchissement: 2.5, bloque: false,
     matrice: { infanterie: 1, vehicule: 0.1, structureOuAviation: 0 },
     moduleJoueur: 'autoReparation', moduleOuvrage: 'pvPlusVingt',
     apparition: 24, apparitionModule: 38,
@@ -251,8 +254,11 @@ export const DEFENSES = {
   herse: {
     nom: 'Herse', ta: 'Anti-tank barrier', type: 'barriere', cible: 'vehicule',
     points: 5, pv: 200, degats: 0, portee: 1, porteeMini: 0,
-    degatsFranchissement: 20, bloque: false,
-    matrice: { infanterie: 0.1, vehicule: 1, structureOuAviation: 0 },
+    // 15 PV/tick, et 0,03 seulement contre l'infanterie (arbitrage du lot 2B).
+    // La Herse cesse ainsi d'être une meilleure Ronce que la Ronce : elle
+    // coûte 9 % à un Fusilier là où la Ronce lui coûte 50 %.
+    degatsFranchissement: 15, bloque: false,
+    matrice: { infanterie: 0.03, vehicule: 1, structureOuAviation: 0 },
     moduleJoueur: 'autoReparation', moduleOuvrage: 'pvPlusVingt',
     apparition: 20, apparitionModule: 34,
   },
