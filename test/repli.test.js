@@ -274,11 +274,16 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   assert.equal(r.cause, 'attaquants', 'la cause n\'est plus l\'expiration');
   assert.ok(r.nbTicks < 900, `${r.nbTicks} ticks, il en fallait moins de 900`);
   assert.equal(r.nbTicks, 566);
-  // Butin IDENTIQUE : les unités repliées ne faisaient rien, leur départ ne
-  // coûte pas un quartz.
-  assert.deepEqual(r.butin, { quartz: 65_190, scorie: 21_730 });
-  // Et elles comptent parmi les survivants, comme avant.
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
+  // ⚠ Seuils déplacés par le lot 3C, et c'est la règle qui a changé, pas le
+  // repli qui aurait régressé. Au lot 3B le butin valait 65 190 quartz et
+  // 21 730 scorie pour six survivants ; il vaut maintenant 82 849 et 27 616
+  // pour cinq. La raison tient en une phrase : les tirs qui partaient dans le
+  // vide — facteur de matrice nul, ou bâtiment hors réserve — vont désormais
+  // sur des cibles qu'ils entament. Plus de bâtiments tombent, donc plus de
+  // butin ; et une unité de plus meurt parce que la défense, elle aussi, ne
+  // gaspille plus ses tirs.
+  assert.deepEqual(r.butin, { quartz: 82_849, scorie: 27_616 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',

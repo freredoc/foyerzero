@@ -695,6 +695,28 @@ function apparitionDeVague(etat, casesPrises = null) {
 }
 
 /**
+ * Dégâts effectifs qu'un tir de `e` porterait à `cible`, en milli-PV.
+ *
+ * C'est le SEUL prédicat de validité du moteur. Le ciblage l'emploie pour
+ * n'élire qu'une cible qu'on peut blesser, et le repli pour savoir si l'unité
+ * nuit encore : les deux questions sont la même, et deux prédicats parallèles
+ * finiraient par répondre différemment.
+ *
+ * Il rend zéro dans trois cas, tous déjà connus de tir() :
+ *   — la matrice du tireur est nulle contre la colonne de la cible ;
+ *   — les PV du tireur sont tombés sous 1 ‰ de son maximum, sa santé arrondie
+ *     vaut alors 0 et son tir ne retire plus rien ;
+ *   — la cible est un bâtiment et la réserve de l'attaquant est épuisée. Le
+ *     plancher de réserve ne protège que les bâtiments : le tir sur une entité
+ *     de la défense reste gratuit, donc toujours valide.
+ */
+function degatsContre(e, p, cible) {
+  const pc = profil(cible);
+  if (pc.genre === 'batiment' && e.camp === 'attaque' && e.reserve <= 0) return 0;
+  return degatsDUnTir(e.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
+}
+
+/**
  * 3. Ciblage : la cible valide la plus proche ; à égalité, la plus à gauche.
  * L'ordre total est complété par la rangée puis l'indice d'insertion — deux
  * cibles peuvent partager distance et colonne (au-dessus et au-dessous du
@@ -718,6 +740,10 @@ function ciblage(etat) {
       if (c.camp === e.camp || !estActive(c)) continue;
       const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
       if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+      // UNE CIBLE VALIDE EST UNE CIBLE QU'ON PEUT BLESSER. Sans cette ligne, une
+      // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
+      // serre de plus près, et toute la couche anti-aérienne est inerte.
+      if (degatsContre(e, p, c) === 0) continue;
       if (
         meilleur === null
         || d2 < meilleureDistance
@@ -733,8 +759,13 @@ function ciblage(etat) {
     }
     if (meilleur !== null) {
       e.cibleIndice = meilleur;
-    } else if (e.cibleIndice !== null && !estActive(etat.entites[e.cibleIndice])) {
-      e.cibleIndice = null;
+    } else if (e.cibleIndice !== null) {
+      // La cible conservée suit la MÊME règle : devenue insensible — réserve
+      // épuisée, tireur sous 1 ‰ de vie — elle n'est plus conservée.
+      const ancienne = etat.entites[e.cibleIndice];
+      if (!estActive(ancienne) || degatsContre(e, p, ancienne) === 0) {
+        e.cibleIndice = null;
+      }
     }
   }
 }
@@ -794,18 +825,17 @@ function tir(etat) {
     const cible = etat.entites[e.cibleIndice];
     if (!estActive(cible)) continue;
     const p = profil(e);
-    const pc = profil(cible);
     const d2 = distanceCarree(e.rangeeMilli, e.colonne, cible.rangeeMilli, cible.colonne);
     if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
-    // Réserve : le plancher porte sur la NATURE DE LA CIBLE, jamais sur la
-    // position du tireur (brief §8). Sur un bâtiment, la réserve descend
-    // jusqu'à 0 et l'unité vidée ne tire plus du tout ; sur une entité de la
-    // défense, elle s'arrête au plancher et l'unité continue de tirer.
-    if (e.camp === 'attaque' && pc.genre === 'batiment' && e.reserve <= 0) continue;
-    ajouter(
-      e.cibleIndice,
-      degatsDUnTir(e.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli),
-    );
+    // Le MÊME prédicat que le ciblage — dont la réserve : le plancher porte sur
+    // la nature de la cible, jamais sur la position du tireur (brief 2A §8). Sur
+    // un bâtiment la réserve descend jusqu'à 0 et l'unité vidée ne tire plus ;
+    // sur une entité de la défense elle s'arrête au plancher et le tir continue.
+    // Depuis le lot 3C le ciblage a déjà écarté les cibles à zéro dégât : ce
+    // test ne peut plus mordre, et il vaut comme énoncé de l'invariant.
+    const degats = degatsContre(e, p, cible);
+    if (degats === 0) continue;
+    ajouter(e.cibleIndice, degats);
     e.aTire = true;
   }
 
@@ -913,34 +943,26 @@ function peutAvancer(etat, e, p, occupation, rangee, caseDestination) {
 }
 
 /**
- * L'entité peut-elle NUIRE ? Il lui faut une cible à portée à laquelle son tir
- * ôterait réellement des PV, et — s'il s'agit d'un bâtiment — une réserve non
- * épuisée : la cible existe, mais elle est hors d'atteinte.
+ * L'entité NUIT-ELLE ? Depuis le lot 3C, plus aucun balayage indépendant ne
+ * répond à cette question : l'étape 4 y a déjà répondu, et `aTire` porte la
+ * réponse. Une entité a tiré si et seulement si elle avait une cible active, à
+ * portée, et des dégâts effectifs non nuls — c'est-à-dire exactement « elle
+ * nuit ». L'ordre du tick garantit que l'étape 4 précède l'étape 7.
  *
- * Le critère est les DÉGÂTS EFFECTIFS, pas le seul facteur de matrice. Le brief
- * du lot 3B retient « aucune cible à portée dont le facteur de matrice est non
- * nul » ; c'est trop étroit, et le raid C le prouve. Une unité à 2739 milli-PV
- * sur 2 897 400 a une santé de floor(2739 × 1000 / 2 897 400) = 0 ‰, donc un
- * tir de floor(degats × facteur × 0 / 1000) = 0 : sa matrice est pleine, elle
- * ne fait rien. Deux unités dans cet état se tirent dessus indéfiniment.
+ * ⚠ Le brief du lot 3C propose `e.cibleIndice !== null`. Ce serait trop
+ * généreux : une entité CONSERVE sa cible précédente quand aucune n'est à
+ * portée (règle du lot 2A), et une cible conservée hors de portée ferait croire
+ * indéfiniment à l'unité qu'elle nuit — elle ne se replierait plus jamais.
+ * `aTire` ajoute la seule condition qui manque, la portée, sans second balayage.
  *
- * Le test des dégâts effectifs subsume celui de la matrice — un facteur nul
- * donne des dégâts nuls — et referme ce cas. Voir le rapport du lot 3B.
+ * MONOTONIE. Le prédicat de validité ne remonte jamais : en combat les PV du
+ * tireur ne croissent pas, sa réserve ne croît pas, sa matrice est constante.
+ * Une cible devenue invalide ne redevient donc jamais valide, et une unité ne
+ * reprend jamais une cible abandonnée pour cette raison. C'est ce qui autorise
+ * à ne mémoriser aucun état supplémentaire.
  */
-function peutNuire(etat, e, p) {
-  if (!peutTirer(p)) return false;
-  for (const c of etat.entites) {
-    if (c.camp === e.camp || !estActive(c)) continue;
-    const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
-    if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
-    const pc = profil(c);
-    if (pc.genre === 'batiment' && e.reserve <= 0) continue;
-    const degats = degatsDUnTir(
-      e.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli,
-    );
-    if (degats > 0) return true;
-  }
-  return false;
+function nuit(e) {
+  return e.aTire;
 }
 
 /**
@@ -972,7 +994,7 @@ function deplacement(etat) {
     const caseDestination = caseDepuisMilli(destinationMilli);
 
     // Une unité arrêtée pour sa cible de prédilection ne PROGRESSE pas : elle a
-    // choisi de combattre plutôt que d'avancer. Si son tir porte, peutNuire la
+    // choisi de combattre plutôt que d'avancer. Si son tir porte, `nuit` la
     // garde en jeu ; s'il ne porte pas, elle ne fait plus rien du tout — c'est
     // exactement le cas que le raid C exhibait.
     const arrete = doitSArreter(etat, e, p);
@@ -984,7 +1006,7 @@ function deplacement(etat) {
     // sans être détruite, et compte parmi les survivants. Le compteur se remet
     // à zéro dès qu'une des deux conditions cesse d'être vraie — un blocage est
     // souvent transitoire.
-    if (progresse || peutNuire(etat, e, p)) {
+    if (progresse || nuit(e)) {
       e.ticksInutiles = 0;
     } else {
       e.ticksInutiles += 1;
