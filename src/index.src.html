@@ -3,44 +3,140 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Foyer Zéro</title>
+<title>Foyer Zéro — banc d'essai</title>
 <style>
+  /* Palette : FICHE-STYLE.md §3, aucune teinte hors de la fiche.
+     Les accents fonctionnels sont réservés aux entités — l'interface
+     s'habille en kaki et en métal. */
   :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
-    min-height: 100vh;
-    display: grid;
-    place-content: center;
-    gap: 0.5rem;
-    background: #16191d;
-    color: #c2c7cb;
+    display: flex;
+    flex-direction: column;
+    background: #161914;
+    color: #8C9A72;
     font-family: system-ui, sans-serif;
-    text-align: center;
+    font-size: 14px;
   }
-  h1 { margin: 0; font-size: 2rem; letter-spacing: 0.3em; text-transform: uppercase; color: #8c9a72; }
-  p { margin: 0; }
-  #statut { color: #69564d; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 8px;
+    background: #1E2124;
+    border-bottom: 1px solid #343A2C;
+  }
+  header h1 {
+    margin: 0 8px 0 0;
+    font-size: 1rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #8C9A72;
+  }
+  header .version { color: #68727E; font-size: 0.8rem; margin-right: 8px; }
+  label { display: inline-flex; align-items: center; gap: 4px; color: #68727E; }
+  select, input, button {
+    background: #343A2C;
+    color: #8C9A72;
+    border: 1px solid #4E5742;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font: inherit;
+  }
+  input[type="number"] { width: 5em; }
+  button { cursor: pointer; }
+  button:active { background: #4E5742; }
+  button.actif { background: #6A7658; color: #161914; }
+  main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #banc-canvas {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: block;
+    /* Jamais de zoom ni de transform: scale ici : le buffer et la géométrie
+       doivent rester d'accord. Le letterboxing vit dans la projection. */
+  }
+  #banc-statut {
+    padding: 4px 8px;
+    color: #68727E;
+    background: #1E2124;
+    border-top: 1px solid #343A2C;
+  }
+  #banc-fin {
+    padding: 8px;
+    background: #1E2124;
+    border-top: 1px solid #4E5742;
+  }
+  #banc-fin h2 { margin: 0 0 4px; font-size: 1rem; color: #8C9A72; }
+  #banc-fin p { margin: 2px 0; }
+  #banc-tick {
+    max-height: 30dvh;
+    overflow-y: auto;
+    background: #1E2124;
+  }
+  #banc-tick table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+  #banc-tick th, #banc-tick td {
+    text-align: left;
+    padding: 2px 6px;
+    border-bottom: 1px solid #343A2C;
+  }
+  #banc-tick th { color: #68727E; position: sticky; top: 0; background: #1E2124; }
 </style>
 </head>
 <body>
-<main>
+<header>
   <h1>Foyer Zéro</h1>
-  <p>version %VERSION% · build %BUILD%</p>
-  <p id="statut">moteur non initialisé</p>
+  <span class="version">banc d'essai · v%VERSION% b%BUILD%</span>
+  <label>type
+    <select id="banc-type">
+      <option value="camp">camp</option>
+      <option value="avantPoste">avant-poste</option>
+      <option value="base">base</option>
+    </select>
+  </label>
+  <label>niveau <input id="banc-niveau" type="number" min="1" max="50" value="10"></label>
+  <label>saveur
+    <select id="banc-saveur">
+      <option value="aucune">aucune</option>
+      <option value="richeQuartz">riche en quartz</option>
+      <option value="richeScorie">riche en scorie</option>
+    </select>
+  </label>
+  <label>graine <input id="banc-graine" type="number" step="1" value="1"></label>
+  <label>assaut
+    <select id="banc-assaut">
+      <option value="infanterie">Infanterie</option>
+      <option value="blindeLourd">Blindé lourd</option>
+      <option value="mixte">Mixte</option>
+    </select>
+  </label>
+  <button id="banc-lancer">Lancer</button>
+  <button id="banc-pause">Pause</button>
+  <button id="banc-pas">Pas à pas</button>
+  <button id="banc-rejouer">Rejouer</button>
+  <button id="banc-v1">×1</button>
+  <button id="banc-v2">×2</button>
+  <button id="banc-v4">×4</button>
+</header>
+<main>
+  <canvas id="banc-canvas"></canvas>
+  <div id="banc-tick"></div>
+  <p id="banc-statut">initialisation…</p>
+  <div id="banc-fin" hidden></div>
 </main>
 <script type="module">
-// Point d'entrée du bundle : prouve que sim/ et data/ se chargent et
-// tournent dans la page livrée. Le vrai jeu (render/, ui/) vient aux lots
-// suivants.
-import { PARAMS } from './data/params.js';
-import { TICK_MS } from './sim/clock.js';
-import { creerEtat, tickJeu, SAVE_VERSION } from './sim/state.js';
-
-const etat = creerEtat(1, PARAMS);
-tickJeu(etat, PARAMS);
-document.getElementById('statut').textContent =
-  `moteur prêt — sauvegarde v${SAVE_VERSION}, tick ${TICK_MS} ms, `
-  + `${etat.batiments.length} bâtiment, t=${etat.horloge.tempsSimuleMs} ms`;
+// Point d'entrée du bundle : le banc d'essai du lot 3A. Toute la logique vit
+// dans src/ui/banc.js — la page ne fait que l'appeler.
+import { initialiserBanc } from './ui/banc.js';
+initialiserBanc(document);
 </script>
 </body>
 </html>

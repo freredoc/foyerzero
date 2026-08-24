@@ -25,11 +25,16 @@
 | Fichier livré | **128 × 128 PNG** RGBA |
 | Rendu écran cible | **40 px CSS** (≈120 px réels en DPR 3) |
 | Ancrage | **centre de la case** (pas au sol) |
-| Champ de bataille | **9 colonnes × 20 lignes** |
-| — lignes 0–7 | base (bâtiments) |
-| — lignes 8–15 | défense |
-| — lignes 16–19 | armée offensive |
+| Champ de bataille | **9 colonnes × 18 rangées** |
+| — rangées 11–18 | bâtiments (8 rangées, le fond) |
+| — rangées 3–10 | défense (8 rangées) |
+| — rangées 1–2 | déploiement de l'armée offensive (2 rangées, le bas) |
 | Écran cible | téléphone portrait, 9:19,5 → **la grille entière tient sans caméra** |
+
+> Corrigé au lot 3A : la fiche annonçait 9 × 20 avec quatre lignes de déploiement.
+> La grille arbitrée fait **9 × 18** avec **deux** rangées de déploiement — c'est ce que
+> porte `GRILLE.bandes` dans `src/data/combat.js`, qui fait foi. Les rangées sont
+> numérotées de 1 (bas, côté attaquant) à 18 (haut, le fond) : l'attaquant monte.
 
 **Interdit :** dessiner directement en 128. Le pixel art disparaît et le sprite se brouille à l'affichage.
 
