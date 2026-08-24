@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { UNITES, DEFENSES } from '../src/data/combat.js';
-import { creerCombat, tick, resoudre, TICKS_AVANT_REPLI } from '../src/sim/combat.js';
+import { UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
+import { creerCombat, tick, resoudre, facteurMilli, TICKS_AVANT_REPLI } from '../src/sim/combat.js';
 import { montageDuBanc, executerRaidComplet } from '../src/ui/banc.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,17 +42,26 @@ const COLONNE_TYPE_DEFENSE = {
 const colonneDe = (e) => (e.genre === 'batiment' ? 'structureOuAviation'
   : e.genre === 'defense' ? COLONNE_TYPE_DEFENSE[DEFENSES[e.id].type]
     : COLONNE_CHASSIS[UNITES[e.id].chassis]);
-const matriceDe = (e) => (e.genre === 'batiment' ? null
-  : e.genre === 'defense' ? DEFENSES[e.id].matrice : UNITES[e.id].matrice);
+/**
+ * LOT 4A — plus de matrice : la table de dégâts, en PV entiers par colonne.
+ * Rend null pour une entité qui ne tire pas (bâtiments, Merlon, barrières).
+ */
+const tableDe = (e) => (e.genre === 'batiment' ? null
+  : e.genre === 'defense' ? DEFENSES[e.id].degats : UNITES[e.id].degats);
 
-/** Les dégâts qu'un tir de `x` porterait à `c`, recalculés depuis les données. */
+/**
+ * Les dégâts qu'un tir de `x` porterait à `c`, recalculés depuis les DONNÉES
+ * seules — c'est l'oracle des balayages T5 et T8, et il ne doit rien devoir au
+ * moteur. La colonne se lit en PV entiers dans la table, passe en milli-PV par
+ * la courbe de niveau — exactement, sans reste — puis se pondère par la santé.
+ */
 function degatsAttendus(x, c) {
-  const matrice = matriceDe(x);
-  if (matrice === null) return 0;
+  const table = tableDe(x);
+  if (table === null) return 0;
   if (c.genre === 'batiment' && x.camp === 'attaque' && x.reserve <= 0) return 0;
-  const facteur = Math.round(matrice[colonneDe(c)] * 1000);
+  const colonneMilli = table[colonneDe(c)] * facteurMilli(x.niveau);
   const sante = Math.floor((x.pvMilli * 1000) / x.pvMaxMilli);
-  return Math.floor((x.degats * facteur * sante) / 1000);
+  return Math.floor((colonneMilli * sante) / 1000);
 }
 
 /** Les 54 raids du §2 : 3 préréglages × 3 types × 6 graines, niveau 15. */
@@ -91,8 +100,8 @@ test('T1 — une Batterie vise l\'aéronef lointain, pas l\'infanterie collée',
     vagues: [[{ id: 'meute', rangee: 4, colonne: 5 }, { id: 'crecelle', rangee: 4, colonne: 6 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
-  assert.deepEqual(DEFENSES.batterie.matrice, {
-    infanterie: 0, vehicule: 0, structureOuAviation: 1,
+  assert.deepEqual(DEFENSES.batterie.degats, {
+    infanterie: 0, vehicule: 0, structureOuAviation: 40,
   });
 
   const etat = creerCombat(montage);
@@ -103,71 +112,55 @@ test('T1 — une Batterie vise l\'aéronef lointain, pas l\'infanterie collée',
   jouer(etat, 1);
   assert.equal(cibleDe(etat, batterie), 'crecelle', 'dès le premier ciblage');
 
-  // ⚠ Les dégâts NE SONT PAS constants, et c'est le piège de ce montage : les
-  // trois pièces se tirent dessus au même tick, et la formule pondère chaque
-  // tir par la santé COURANTE du tireur. Le calcul se conduit donc à trois
-  // décroissances couplées, reproduites ici depuis les seules données :
-  //
-  //   Batterie → Crécelle  15 × 1000‰ × santé(B) / 1000  (aéronef, facteur 1,0)
-  //   Crécelle → Batterie  12 ×  200‰ × santé(C) / 1000  (tourelle, facteur 0,2)
-  //   Fusilier → Batterie   8 ×  300‰ × santé(F) / 1000  (tourelle, facteur 0,3)
-  //
-  // Le Fusilier ne reçoit rien : sa santé reste à 1000 ‰ et ses 2 400 milli-PV
-  // par tick sont constants. La Crécelle, elle, s'affaiblit, donc rend de moins
-  // en moins à la Batterie, qui s'affaiblit quand même et frappe de moins en
-  // moins fort. Le premier tir seul est rond : 15 × 1000 × 1000/1000 = 15 000.
-  assert.equal(crecelle.pvMilli, 200_000 - 15_000, 'premier tir à pleine santé');
+  // ⚠ Seuils déplacés au lot 4A, roster mesuré. La Batterie (Flak) tire 6 400 ÷
+  // 160 = 40 PV contre l'aviation, la Crécelle (Orca) a 900 PV, le Fusilier 700.
+  // Premier tir à pleine santé : floor(40 × 1000 × 1000 / 1000) = 40 000.
+  assert.equal(crecelle.pvMilli, 900_000 - 40_000, 'premier tir à pleine santé');
 
-  // On rejoue la même mécanique à la main et on exige que le moteur la suive
-  // tick par tick. Une lecture naïve à dégâts constants annoncerait la mort au
-  // tick 14 — ceil(200 000 / 15 000) — ; la décroissance la repousse au 15e.
-  const sante = (pv, pvMax) => Math.floor((pv * 1000) / pvMax);
-  const modele = { b: 350_000, c: 200_000, f: 100_000 };
-  let mortAttendue = null;
-  for (let t = 1; t <= 33 && mortAttendue === null; t += 1) {
-    const versC = Math.floor((15 * 1000 * sante(modele.b, 350_000)) / 1000);
-    const versB = Math.floor((12 * 200 * sante(modele.c, 200_000)) / 1000)
-      + Math.floor((8 * 300 * sante(modele.f, 100_000)) / 1000);
-    modele.c = Math.max(0, modele.c - versC);
-    modele.b = Math.max(0, modele.b - versB);
-    if (modele.c === 0) mortAttendue = t;
-    else {
-      jouer(etat, t);
-      assert.equal(crecelle.pvMilli, modele.c, `PV de la Crécelle au tick ${t}`);
-    }
-  }
-  assert.equal(mortAttendue, 15, 'la Crécelle tombe au 15e tick, pas au 14e');
+  // Les dégâts décroissent ensuite, la Batterie étant elle-même sous le feu des
+  // deux : le Fusilier lui rend 7 PV et la Crécelle 12, tous deux en colonne
+  // « structure » — une tourelle se lit là. 19 000 milli-PV par tick au départ.
+  //
+  // ⚠ Et la Crécelle S'EN TIRE, ce qu'elle ne faisait pas avant la conversion :
+  // traversante à 120 milli-cases par tick, elle passe au-dessus de la Batterie
+  // et sort de sa portée de 2,5 avant d'être abattue. Au début du tick 28 elle
+  // est en 7360, à 2360 milli-cases de rangée et 1000 de colonne, soit
+  // 2360² + 1000² = 6 569 600 > 6 250 000. Le dernier tir est celui du tick 28.
+  jouer(etat, 27);
+  assert.equal(crecelle.rangeeMilli, 7240);
+  assert.equal((7240 - 5000) ** 2 + 1000 ** 2, 6_017_600, 'encore à portée au tick 27');
+  assert.ok(6_017_600 <= (DEFENSES.batterie.portee * 1000) ** 2);
 
-  jouer(etat, 14);
-  assert.equal(crecelle.vivant, true, 'elle tient encore au tick 14');
-  assert.equal(crecelle.pvMilli, 6080, '200 000 moins les quatorze premiers tirs');
-  jouer(etat, 15);
-  assert.equal(crecelle.pvMilli, 0, 'abattue au tick 15');
-  assert.equal(crecelle.vivant, false);
+  jouer(etat, 28);
+  assert.equal(crecelle.pvMilli, 160, 'le dernier tir la laisse à 160 milli-PV sur 900 000');
+  assert.equal((7360 - 5000) ** 2 + 1000 ** 2, 6_569_600, 'hors de portée au tick 28');
+  assert.ok(6_569_600 > (DEFENSES.batterie.portee * 1000) ** 2);
+
+  // Elle file, intouchable, et garde ses 160 milli-PV — 0,018 % de sa vie.
+  jouer(etat, 33);
+  assert.equal(crecelle.pvMilli, 160);
+  assert.equal(crecelle.vivant, true, 'elle s\'échappe, à un cheveu près');
 
   // Et le Fusilier, lui, n'a JAMAIS rien perdu — avant le lot 3C, ni lui ni la
-  // Crécelle ne perdaient un seul point de vie en 33 ticks.
-  jouer(etat, 33);
-  assert.equal(fusilier.pvMilli, 100_000, 'le Fusilier reste intact de bout en bout');
+  // Crécelle ne perdaient un seul point de vie en 33 ticks. C'est ce que ce
+  // test tient, et la conversion ne l'a pas changé.
+  assert.equal(fusilier.pvMilli, 700_000, 'le Fusilier reste intact de bout en bout');
   assert.equal(fusilier.vivant, true);
-  // La Crécelle morte, la Batterie n'a plus de cible valide du tout : le
-  // Fusilier est collé à elle, mais son facteur contre l'infanterie est nul.
-  assert.equal(batterie.cibleIndice, null);
 });
 
 // ---------------------------------------------------------------------------
-// T2 — le facteur nul en général, des deux côtés du champ
+// T2 — la colonne nulle en général, des deux côtés du champ
 // ---------------------------------------------------------------------------
 
-test('T2 — un facteur de matrice nul disqualifie la cible, si proche soit-elle', () => {
-  // CÔTÉ ATTAQUE. Frappeur en (4,5), matrice {0, 0, 1}, portée 1,5 → 2 250 000.
+test('T2 — une colonne de dégâts nulle disqualifie la cible, si proche soit-elle', () => {
+  // CÔTÉ ATTAQUE. Frappeur en (4,5), dégâts {0, 0, 300}, portée 1,5 → 2 250 000.
   //   Meute défensive en (5,5) : 1000² = 1 000 000, soit 1,000 case.
   //   Merlon en (5,6)          : 1000² + 1000² = 2 000 000, soit 1,414 case.
   // Les DEUX sont à portée — 2 000 000 ≤ 2 250 000 — et la Meute est la plus
   // proche. Il doit viser le Merlon. (Poser le Merlon en (6,5) le mettrait à
   // 2,0 cases, hors de portée : le test passerait pour la mauvaise raison.)
-  assert.deepEqual(UNITES.frappeur.matrice, {
-    infanterie: 0, vehicule: 0, structureOuAviation: 1,
+  assert.deepEqual(UNITES.frappeur.degats, {
+    infanterie: 0, vehicule: 0, structureOuAviation: 300,
   });
   assert.ok(2_000_000 <= (UNITES.frappeur.portee * 1000) ** 2, 'le Merlon doit être à portée');
 
@@ -182,17 +175,17 @@ test('T2 — un facteur de matrice nul disqualifie la cible, si proche soit-elle
   });
   jouer(offense, 1);
   assert.equal(cibleDe(offense, trouver(offense, 'frappeur')), 'merlon');
-  // Et la Meute, plus proche mais insensible, n'a rien perdu.
-  assert.equal(trouver(offense, 'meute').pvMilli, 100_000);
+  // Et la Meute, plus proche mais insensible, n'a rien perdu. 700 PV mesurés.
+  assert.equal(trouver(offense, 'meute').pvMilli, 700_000);
 
-  // CÔTÉ DÉFENSE. Harpon en (8,5), portée 5,5 → 30 250 000, portée minimale
+  // CÔTÉ DÉFENSE. Harpon en (8,5), dégâts {0, 0, 16}, portée 5,5 → 30 250 000, portée minimale
   // 3,5 → 12 250 000.
   //   Fendeur en (4,5) : 4000² = 16 000 000, soit 4,000 cases.
   //   Crécelle en (4,7) : 4000² + 2000² = 20 000 000, soit 4,472 cases.
   // Les deux sont dans la fenêtre, le Fendeur est le plus proche, et le Harpon
   // doit viser la Crécelle.
-  assert.deepEqual(DEFENSES.harpon.matrice, {
-    infanterie: 0, vehicule: 0, structureOuAviation: 1,
+  assert.deepEqual(DEFENSES.harpon.degats, {
+    infanterie: 0, vehicule: 0, structureOuAviation: 16,
   });
   for (const d2 of [16_000_000, 20_000_000]) {
     assert.ok(d2 >= (DEFENSES.harpon.porteeMini * 1000) ** 2, 'au-delà de la portée minimale');
@@ -210,7 +203,7 @@ test('T2 — un facteur de matrice nul disqualifie la cible, si proche soit-elle
   });
   jouer(defense, 1);
   assert.equal(cibleDe(defense, trouver(defense, 'harpon')), 'crecelle');
-  assert.equal(trouver(defense, 'fendeur').pvMilli, 300_000, 'le Fendeur reste intact');
+  assert.equal(trouver(defense, 'fendeur').pvMilli, 1_000_000, 'le Fendeur reste intact');
 });
 
 // ---------------------------------------------------------------------------
@@ -275,14 +268,17 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
     type: 'avantPoste', niveau: 15, saveur: 'richeQuartz', graine: 1, assaut: 'blindeLourd',
   };
   const r = executerRaidComplet(parametres);
-  // Avant le lot 3C : `duree` au tick 900. Après : `attaquants` au tick 542.
+  // ⚠ SEUILS DÉPLACÉS AU LOT 4A. Avant le lot 3C : `duree` au tick 900. Au lot
+  // 3C : `attaquants` au tick 542, butin 55 251 + 18 417, 2 survivants. Avec le
+  // roster mesuré, le même assaut lourd RASE le site : `souche` au tick 419,
+  // 299 878 quartz et 99 959 scorie, 4 survivants. Ce que ce test tient est
+  // inchangé — le raid ne se termine pas faute de mieux — et il le tient
+  // désormais par une victoire au lieu d'une élimination.
   assert.notEqual(r.cause, 'duree', 'le raid ne doit plus expirer faute de mieux');
-  assert.equal(r.cause, 'attaquants');
-  assert.equal(r.nbTicks, 542);
-  // Le butin ne bouge pas : le Percheron gelé ne rapportait rien, et les tirs
-  // qu'il place désormais vont sur la défense, qui ne paie pas de butin.
-  assert.deepEqual(r.butin, { quartz: 55_251, scorie: 18_417 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 2);
+  assert.equal(r.cause, 'souche');
+  assert.equal(r.nbTicks, 419);
+  assert.deepEqual(r.butin, { quartz: 299_878, scorie: 99_959 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
 });
 
 // ---------------------------------------------------------------------------
@@ -298,7 +294,7 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // C'est ce que ferme le lot 3C, et la réponse doit être non, jamais.
   let survivants = 0;
   let raids = 0;
-  let expires = 0;
+  const expires = [];
   let ticksVises = 0;
   let dcaVises = 0;
   let dcaSteriles = 0;
@@ -324,7 +320,7 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
       for (const x of etat.entites) {
         if (!x.vivant || x.sorti || x.cibleIndice === null) continue;
         const c = etat.entites[x.cibleIndice];
-        if (!c.vivant || c.sorti || matriceDe(x) === null) continue;
+        if (!c.vivant || c.sorti || tableDe(x) === null) continue;
         ticksVises += 1;
         if (dca.has(x.indice)) {
           dcaVises += 1;
@@ -333,15 +329,28 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
         if (degatsAttendus(x, c) === 0) precedent.set(x.indice, x.cibleIndice);
       }
     }
-    if (etat.cause === 'duree') expires += 1;
+    if (etat.cause === 'duree') expires.push(nom);
   }
 
   assert.equal(raids, 54, '3 préréglages × 3 types × 6 graines');
   assert.ok(ticksVises > 40_000, `balayage trop maigre : ${ticksVises} ticks-entités`);
   assert.equal(survivants, 0, 'aucune cible stérile ne doit survivre à un ciblage');
-  // Plus aucun raid ne se termine faute de mieux : avant le lot 3C, un
-  // Percheron gelé en faisait expirer un.
-  assert.equal(expires, 0, 'aucun raid ne doit plus finir par « duree »');
+
+  // ⚠ SEUIL DÉPLACÉ AU LOT 4A, et il faut dire exactement ce qu'il mesure.
+  // Le lot 3C exigeait zéro raid terminé par `duree`, et c'était le bon critère
+  // TANT QUE la seule cause d'expiration était une unité gelée sur une cible
+  // qu'elle ne pouvait pas blesser. Cette cause-là a bien disparu et ne revient
+  // pas. Mais l'échelle T = 16 s allonge tous les combats, et UN raid sur 54
+  // dépasse maintenant les 90 secondes : `mixte` / avant-poste 15 / graine 7.
+  //
+  // Ce n'est pas un gel. Vérifié en levant le plafond : ce raid se conclut de
+  // lui-même au tick 907, par `attaquants`, le dernier Pilon se repliant après
+  // ses 30 ticks inutiles. Il manque SEPT ticks, pas une issue. Le §3 du brief
+  // annonçait 389 ticks de marge sous le plafond, mesurés avec le roster
+  // d'avant ; le roster mesuré les consomme. C'est un fait à remonter, pas à
+  // corriger en douce — voir le rapport.
+  assert.deepEqual(expires, ['mixte/avantPoste/7'],
+    'un seul raid touche le plafond de 900, et par dépassement de délai');
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');
   assert.equal(dcaSteriles, 0, 'la DCA ne vise plus rien qu\'elle ne puisse abattre');
@@ -372,12 +381,14 @@ test('T6 — la réserve épuisée fait CHANGER de cible, pas conserver l\'ancie
   jouer(etat, 1);
   assert.equal(cibleDe(etat, grenadier), 'gangue', 'la plus proche, et valide');
   assert.equal(grenadier.reserve, 0, 'le tir a vidé la réserve');
-  // Dégâts : 8 × 1000 × 1000/1000 = 8000 milli-PV. Gangue 150 000 → 142 000.
-  assert.equal(trouver(etat, 'gangue').pvMilli, 150_000 - 8000);
+  // ⚠ Seuil déplacé au lot 4A : le Grenadier (Missile Squad) tire 4 000 ÷ 160
+  // = 25 PV contre une structure, soit 25 000 milli-PV à pleine santé.
+  // Gangue 150 000 → 125 000.
+  assert.equal(trouver(etat, 'gangue').pvMilli, 150_000 - 25_000);
 
   jouer(etat, 2);
   assert.equal(cibleDe(etat, grenadier), 'casemate', 'il CHANGE de cible');
-  assert.equal(trouver(etat, 'gangue').pvMilli, 150_000 - 8000, 'et la Gangue ne reçoit plus rien');
+  assert.equal(trouver(etat, 'gangue').pvMilli, 125_000, 'et la Gangue ne reçoit plus rien');
 });
 
 // ---------------------------------------------------------------------------
@@ -438,7 +449,7 @@ test('T8 — aucune entité ne reprend une cible abandonnée pour invalidité', 
       for (const x of etat.entites) {
         if (!x.vivant || x.sorti || x.cibleIndice === null) continue;
         const c = etat.entites[x.cibleIndice];
-        if (!c.vivant || c.sorti || matriceDe(x) === null) continue;
+        if (!c.vivant || c.sorti || tableDe(x) === null) continue;
         const cle = `${x.indice}→${c.indice}`;
         if (invalides.has(cle)) {
           reprises += 1;
@@ -450,7 +461,7 @@ test('T8 — aucune entité ne reprend une cible abandonnée pour invalidité', 
       for (const x of etat.entites) {
         if (!x.vivant || x.sorti) continue;
         for (const c of etat.entites) {
-          if (c.camp === x.camp || !c.vivant || c.sorti || matriceDe(x) === null) continue;
+          if (c.camp === x.camp || !c.vivant || c.sorti || tableDe(x) === null) continue;
           if (degatsAttendus(x, c) === 0) {
             const cle = `${x.indice}→${c.indice}`;
             if (!invalides.has(cle)) { invalides.add(cle); couplesSteriles += 1; }

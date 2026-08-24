@@ -235,10 +235,13 @@ test('T3 — à distance égale, la cible retenue est la plus à gauche', () => 
   // Portée du Meute : 1,5 → 1500² = 2 250 000 ≥ 2 000 000, les deux sont à
   // portée. L'ordre total tranche sur la colonne : 4 avant 6.
   assert.equal(meute.cibleIndice, gauche.indice, 'la cible doit être la colonne 4');
-  // Dégâts du Meute contre une structure, à pleine vie : santé = floor(100000 ×
-  // 1000/100000) = 1000 ‰, puis floor(8 × 300 × 1000/1000) = 2400 milli-PV.
-  assert.equal(gauche.pvMilli, 500_000 - 2400);
-  assert.equal(droite.pvMilli, 500_000, 'le Merlon de droite ne doit pas être touché');
+  // ⚠ SEUILS DÉPLACÉS AU LOT 4A, roster mesuré. Le Merlon (Wall) passe de 500
+  // à 2 000 PV, et le Fusilier de 8 × 0,3 = 2,4 PV contre une structure à ses
+  // 7 PV mesurés (1 120 du relevé ÷ 160).
+  // Dégâts du Meute contre une structure, à pleine vie : santé = floor(700000 ×
+  // 1000/700000) = 1000 ‰, puis floor(7 × 1000) = 7000 milli-PV.
+  assert.equal(gauche.pvMilli, 2_000_000 - 7000);
+  assert.equal(droite.pvMilli, 2_000_000, 'le Merlon de droite ne doit pas être touché');
 });
 
 // ---------------------------------------------------------------------------
@@ -247,8 +250,11 @@ test('T3 — à distance égale, la cible retenue est la plus à gauche', () => 
 
 test('T4 — la Faucheuse ne tire ni trop près ni trop loin', () => {
   // Faucheuse en (8,5) : portée 5,5 → 5500² = 30 250 000 ; portée mini 3,5 →
-  // 3500² = 12 250 000. Dégâts contre infanterie, à pleine vie : santé 1000 ‰,
-  // puis floor(20 × 1000 × 1000/1000) = 20 000 milli-PV.
+  // 3500² = 12 250 000. Les deux portées sont INCHANGÉES par le lot 4A — le
+  // relevé donne les mêmes 5,5 et 3,5 pour ses trois artilleries.
+  // ⚠ Seuils déplacés : la Faucheuse est le Watchtower, 1 600 contre
+  // l'infanterie ÷ 160 = 10 PV par tir, et le Fusilier a 700 PV.
+  // À pleine vie : santé 1000 ‰, puis floor(10 × 1000) = 10 000 milli-PV.
   const montageAvec = (rangee) => ({
     niveau: 1,
     saveur: null,
@@ -274,7 +280,7 @@ test('T4 — la Faucheuse ne tire ni trop près ni trop loin', () => {
     const dr = (8 - rangee) * 1000;
     assert.equal(dr * dr, d2, `distance² attendue pour la rangée ${rangee}`);
     jouer(etat, 1);
-    const attendu = tire ? 100_000 - 20_000 : 100_000;
+    const attendu = tire ? 700_000 - 10_000 : 700_000;
     assert.equal(
       meute.pvMilli, attendu,
       `rangée ${rangee} : distance² ${d2}, la Faucheuse ${tire ? 'doit' : 'ne doit pas'} tirer`,
@@ -304,51 +310,57 @@ test('T5 — sur une entité de la défense, la réserve s\'arrête au plancher 
   const meute = entite(etat, (e) => e.camp === 'attaque');
   const merlon = entite(etat, parId('merlon'));
 
+  // ⚠ SEUILS DÉPLACÉS AU LOT 4A, roster mesuré. Le Merlon (Wall) passe de 500 à
+  // 2 000 PV, le Fusilier de 2,4 à 7 PV par tir contre une structure, sa réserve
+  // de 150 à 70 et sa vitesse de 50 à 60 milli-cases par tick. La MÉCANIQUE ne
+  // bouge pas d'un pouce : le plancher arrête la consommation, pas le tir.
+  //
   // Le Meute apparaît en (2,5), le Merlon est en (3,5) : distance² = 1 000 000
   // ≤ portée² 2 250 000, il tire dès le tick 1.
-  // Dégâts par tir : santé du Meute = floor(100000 × 1000/100000) = 1000 ‰,
-  // puis floor(8 × 300 × 1000/1000) = 2400 milli-PV. Constants, puisque le
-  // Merlon ne tire pas (degats 0) et que le Meute n'est donc jamais blessé.
-  // Plancher de réserve = floor(150 × 0,10) = 15, atteint après 135 tirs.
-  jouer(etat, 135);
-  assert.equal(etat.tick, 135);
-  assert.equal(meute.reserve, 15, 'réserve au plancher au tick 135');
-  assert.equal(merlon.pvMilli, 500_000 - 135 * 2400);
+  // Dégâts par tir : santé du Meute = floor(700000 × 1000/700000) = 1000 ‰,
+  // puis floor(7 × 1000) = 7000 milli-PV. Constants, puisque le Merlon ne tire
+  // pas (degats null) et que le Meute n'est donc jamais blessé.
+  // Plancher de réserve = floor(70 × 0,10) = 7, atteint après 70 − 7 = 63 tirs.
+  jouer(etat, 63);
+  assert.equal(etat.tick, 63);
+  assert.equal(meute.reserve, 7, 'réserve au plancher au tick 63');
+  assert.equal(merlon.pvMilli, 2_000_000 - 63 * 7000);
 
   // Le tir CONTINUE au-delà du plancher, sans plus rien consommer :
-  // ceil(500 000 / 2400) = 209, car 208 × 2400 = 499 200 < 500 000 et
-  // 209 × 2400 = 501 600 ≥ 500 000. Le mur tombe donc au tick 209,
-  // dont 209 − 135 = 74 tirs gratuits.
-  jouer(etat, 208);
-  assert.equal(merlon.pvMilli, 500_000 - 208 * 2400, 'le mur tient encore au tick 208');
+  // ceil(2 000 000 / 7000) = 286, car 285 × 7000 = 1 995 000 < 2 000 000 et
+  // 286 × 7000 = 2 002 000 ≥ 2 000 000. Le mur tombe donc au tick 286,
+  // dont 286 − 63 = 223 tirs gratuits — contre 74 avant la conversion.
+  jouer(etat, 285);
+  assert.equal(merlon.pvMilli, 2_000_000 - 285 * 7000, 'le mur tient encore au tick 285');
   assert.ok(merlon.vivant);
 
-  jouer(etat, 209);
-  assert.equal(meute.reserve, 15, 'réserve toujours au plancher au tick 209');
-  assert.equal(merlon.pvMilli, 0, 'le Merlon tombe au tick 209');
+  jouer(etat, 286);
+  assert.equal(meute.reserve, 7, 'réserve toujours au plancher au tick 286');
+  assert.equal(merlon.pvMilli, 0, 'le Merlon tombe au tick 286');
   assert.equal(merlon.vivant, false, 'et il est retiré de la grille');
 
-  // Le Meute était bloqué devant le mur depuis le tick 20 : parti de 2000 à
-  // 50 milli-cases par tick, il atteint 2950 au tick 19 et refuse 3000 tant que
-  // le mur l'occupe. La case libérée, il avance — au tick 209 même, l'ordre
-  // normatif du §6 plaçant le RETRAIT DES MORTS (6) avant le DÉPLACEMENT (7).
-  // Le §12 du brief annonce le tick 210 ; c'est le seul point où ses deux
-  // sections divergent, et §6 est déclaré normatif.
-  assert.equal(meute.rangeeMilli, 3000, 'la case libérée, le Meute avance dès le tick 209');
-  jouer(etat, 210);
-  assert.equal(meute.rangeeMilli, 3050);
+  // Le Meute était bloqué devant le mur : parti de 2000 à 60 milli-cases par
+  // tick, il atteint 2960 au tick 16 (2000 + 16 × 60) et refuse le pas suivant,
+  // qui le porterait à 3020, donc dans la case du mur. La case libérée, il
+  // avance — au tick 286 même, l'ordre normatif du §6 plaçant le RETRAIT DES
+  // MORTS (6) avant le DÉPLACEMENT (7). Le §12 du brief annonce le tick
+  // d'après ; c'est le seul point où ses deux sections divergent, et §6 est
+  // déclaré normatif.
+  assert.equal(meute.rangeeMilli, 3020, 'la case libérée, le Meute avance dès le tick 286');
+  jouer(etat, 287);
+  assert.equal(meute.rangeeMilli, 3080);
 });
 
 test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', () => {
-  // Même Meute, monté à reserve 15 — soit exactement son plancher — et passé la
-  // ligne, face à une Gangue (150 PV) adjacente.
+  // Même Meute, monté à reserve 7 — soit exactement son plancher, floor(70 ×
+  // 0,10) — et passé la ligne, face à une Gangue (150 PV) adjacente.
   const montage = {
     niveau: 1,
     saveur: null,
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 11, colonne: 5 }],
     defenseurs: [],
-    vagues: [[{ id: 'meute', rangee: 10, colonne: 5, reserve: 15 }]],
+    vagues: [[{ id: 'meute', rangee: 10, colonne: 5, reserve: 7 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const etat = creerCombat(montage);
@@ -357,17 +369,18 @@ test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', 
 
   const resultat = resoudre(etat, { maxTicks: 25 });
 
-  // Toujours 2400 milli-PV par tir. 15 × 2400 = 36 000 milli-PV, soit 24 % de
-  // 150 000. Gangue finale = 150 000 − 36 000 = 114 000.
-  assert.equal(gangue.pvMilli, 114_000);
+  // ⚠ Seuils déplacés au lot 4A : 7000 milli-PV par tir et 7 de réserve.
+  // 7 × 7000 = 49 000 milli-PV, soit 32,7 % de 150 000.
+  // Gangue finale = 150 000 − 49 000 = 101 000.
+  assert.equal(gangue.pvMilli, 101_000);
   assert.equal(meute.reserve, 0, 'la réserve descend jusqu\'à 0 sur un bâtiment');
   // Et à 0, plus un seul tir : les dix ticks suivants n'ont rien changé.
   assert.equal(resultat.tick, 25);
   assert.equal(resultat.cause, 'duree');
 
   // Butin plein niveau 1, indice 3 = 300 × 3 = 900 quartz.
-  // 900 × 36 000 / 150 000 = 216 quartz, la Gangue étant quartz pur.
-  assert.deepEqual(butin(resultat, montage), { quartz: 216, scorie: 0 });
+  // 900 × 49 000 / 150 000 = 294 quartz, la Gangue étant quartz pur.
+  assert.deepEqual(butin(resultat, montage), { quartz: 294, scorie: 0 });
 });
 
 // ---------------------------------------------------------------------------
@@ -375,13 +388,15 @@ test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', 
 // ---------------------------------------------------------------------------
 
 test('T6 — un Meute à demi-vie inflige exactement la moitié des dégâts', () => {
-  const etat = creerCombat(montageMeuteContreMerlon({ pvMilli: 50_000 }));
+  // ⚠ Seuil déplacé au lot 4A : la demi-vie du Fusilier n'est plus 50 000
+  // milli-PV mais 350 000, puisqu'il en a 700 000 et non plus 100 000.
+  const etat = creerCombat(montageMeuteContreMerlon({ pvMilli: 350_000 }));
   const merlon = entite(etat, parId('merlon'));
   jouer(etat, 10);
-  // Santé du Meute = floor(50000 × 1000/100000) = 500 ‰, donc dégâts par tir
-  // = floor(8 × 300 × 500/1000) = 1200 milli-PV, la moitié exacte des 2400 de
-  // T5. Après 10 ticks : 500 000 − 10 × 1200 = 488 000.
-  assert.equal(merlon.pvMilli, 488_000);
+  // Santé du Meute = floor(350000 × 1000/700000) = 500 ‰, donc dégâts par tir
+  // = floor(7 × 500) = 3500 milli-PV, la moitié exacte des 7000 de T5.
+  // Après 10 ticks : 2 000 000 − 10 × 3500 = 1 965 000.
+  assert.equal(merlon.pvMilli, 1_965_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -402,19 +417,22 @@ test('T7 a — masse supérieure : la bloquante meurt, la mobile ne s\'arrête p
   const fendeur = entite(etat, (e) => e.camp === 'attaque');
   const meute = entite(etat, (e) => e.camp === 'defense' && e.id === 'meute');
 
-  // Fendeur : masse 10, vitesse 1,0 → 100 milli-cases par tick, parti de 2000.
-  // Le Meute défensif (masse 1) occupe la case 3. 2000 + 9 × 100 = 2900 : la
-  // case de destination n'est atteinte qu'au tick 10.
-  jouer(etat, 9);
-  assert.equal(fendeur.rangeeMilli, 2900);
-  assert.equal(meute.vivant, true, 'le Meute tient encore au tick 9');
+  // ⚠ Seuil déplacé au lot 4A : le Fendeur (Predator) avance à 90 milli-cases
+  // par tick et non plus 100. Sa masse, elle, ne vient pas du relevé et n'a pas
+  // bougé — l'écrasement au seuil de masse reste l'arbitrage d'Ethan.
+  // Le Meute défensif (masse 1) occupe la case 3, qui commence à 3000.
+  // 2000 + 11 × 90 = 2990 : encore dans la case 2. Le pas suivant viserait
+  // 3080, donc la case 3 — c'est là que la rencontre a lieu, au tick 12.
+  jouer(etat, 11);
+  assert.equal(fendeur.rangeeMilli, 2990);
+  assert.equal(meute.vivant, true, 'le Meute tient encore au tick 11');
 
-  jouer(etat, 10);
+  jouer(etat, 12);
   assert.equal(meute.vivant, false, 'écrasé au tick de la rencontre');
   assert.equal(meute.ecrase, true);
   assert.equal(meute.pvMilli, 0);
-  // Et la mobile continue sans s'arrêter : elle avance bien de 100 milli-cases.
-  assert.equal(fendeur.rangeeMilli, 3000);
+  // Et la mobile continue sans s'arrêter : elle avance bien de 90 milli-cases.
+  assert.equal(fendeur.rangeeMilli, 3080);
 });
 
 test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
@@ -435,17 +453,21 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
   // Aucun n'avance : position identique 20 ticks plus tard.
   assert.equal(attaquant.rangeeMilli, 2000);
   assert.equal(defenseur.rangeeMilli, 3000);
+  // ⚠ Seuil déplacé au lot 4A : le Fendeur passe de 300 à 1 000 PV et de 12 ×
+  // 1,0 à 23 PV par tir contre un véhicule. Chacun inflige
+  // floor(23 × floor(pv × 1000 / 1 000 000)) = 23 × floor(pv/1000) par tick,
+  // soit 23 000 à pleine vie — 2,3 % de la cible, contre 4,0 % avant. Le combat
+  // en miroir est donc plus lent, et c'est le sens du T = 16 s : après 20 ticks
+  // chacun est à 628 044 milli-PV, là où il tombait à ~132 000 avant.
   // Ils sont bien encore en vie — le blocage n'est pas un artefact d'une mort.
-  // Chacun inflige 12 × floor(pv × 1000 / 300 000) = 12 × floor(pv/300) par
-  // tick, soit 12 000 à pleine vie : après 20 ticks, pv ≈ 300 000 × 0,96^20
-  // ≈ 132 000, très au-dessus de 0.
   assert.ok(attaquant.vivant && defenseur.vivant);
-  assert.ok(attaquant.pvMilli > 100_000 && attaquant.pvMilli < 200_000);
+  assert.equal(attaquant.pvMilli, 628_044);
+  assert.equal(defenseur.pvMilli, 628_044, 'le miroir est exact : mêmes PV des deux côtés');
 
-  // Le Fendeur s'arrête aussi pour prédilection (matrice véhicule = 1,0). Pour
-  // isoler le SEUL blocage par masse égale, on rejoue avec un couple qui n'est
-  // pas de prédilection l'un pour l'autre : Ratisseur (masse 5, matrice véhicule
-  // 0,3) contre Bélier défensif (masse 5, châssis blindé).
+  // Le Fendeur s'arrête aussi pour prédilection (colonne véhicule dominante).
+  // Pour isoler le SEUL blocage par masse égale, on rejoue avec un couple qui
+  // n'est pas de prédilection l'un pour l'autre : Ratisseur (masse 5, dominante
+  // infanterie) contre Bélier défensif (masse 5, châssis blindé).
   const montageMarche = {
     niveau: 1,
     saveur: null,
@@ -483,19 +505,25 @@ test('T8 — l\'obstacle divise la vitesse par 2,5 ; l\'aviation l\'ignore', () 
   const etat = creerCombat(montageSol);
   const meute = entite(etat, (e) => e.camp === 'attaque');
 
-  // Meute : vitesse 0,5 → 50 milli/tick. Rangée 1, sans obstacle :
-  // 10 ticks → 1000 + 10 × 50 = 1500, soit +500.
+  // ⚠ Seuils déplacés au lot 4A : le Fusilier avance à 60 milli/tick, et sous
+  // obstacle à 60 / 2,5 = 24. Le RAPPORT des deux, lui, est le même — c'est
+  // l'invariant que ce test tient, et il ne bouge pas.
+  // Rangée 1, sans obstacle : 10 ticks → 1000 + 10 × 60 = 1600, soit +600.
   jouer(etat, 10);
-  assert.equal(meute.rangeeMilli, 1500);
+  assert.equal(meute.rangeeMilli, 1600);
 
-  // Ticks 11 à 20 : 1500 → 1950 puis l'entrée en case 2 au tick 20 (1950 + 50).
-  jouer(etat, 20);
-  assert.equal(meute.rangeeMilli, 2000, 'entré dans la case porteuse d\'obstacle');
+  // La case 2 commence à 2000 : 1000 + 60k ≥ 2000 dès k = 17 (2020), le pas de
+  // 16 ne portant qu'à 1960.
+  jouer(etat, 16);
+  assert.equal(meute.rangeeMilli, 1960, 'encore dans la case 1 au tick 16');
+  jouer(etat, 17);
+  assert.equal(meute.rangeeMilli, 2020, 'entré dans la case porteuse d\'obstacle');
 
-  // Ticks 21 à 30, sur l'obstacle « infanterie » : 50 / 2,5 = 20 par tick,
-  // donc 2000 + 10 × 20 = 2200, soit +200 au lieu de +500.
-  jouer(etat, 30);
-  assert.equal(meute.rangeeMilli, 2200);
+  // Ticks 18 à 32, sur l'obstacle « infanterie » : 24 par tick au lieu de 60,
+  // donc 2020 + 15 × 24 = 2380 — +360 là où quinze pas libres auraient fait
+  // +900.
+  jouer(etat, 32);
+  assert.equal(meute.rangeeMilli, 2380);
 
   const montageAir = {
     niveau: 1,
@@ -510,10 +538,11 @@ test('T8 — l\'obstacle divise la vitesse par 2,5 ; l\'aviation l\'ignore', () 
   };
   const air = creerCombat(montageAir);
   const crecelle = entite(air, (e) => e.camp === 'attaque');
-  // Crécelle : vitesse 1,5 → 150 milli/tick. 10 ticks → 1000 + 1500 = 2500,
-  // en traversant la case porteuse d'obstacle sans ralentir.
+  // ⚠ Seuil déplacé : la Crécelle (Orca) vole à 120 milli/tick et non 150.
+  // 10 ticks → 1000 + 1200 = 2200, en traversant la case porteuse d'obstacle
+  // sans ralentir — 120 par tick du premier au dixième.
   jouer(air, 10);
-  assert.equal(crecelle.rangeeMilli, 2500);
+  assert.equal(crecelle.rangeeMilli, 2200);
   assert.equal(caseDepuisMilli(crecelle.rangeeMilli), 2, 'bien passée sur la case d\'obstacle');
 });
 
@@ -530,7 +559,7 @@ test('T9 — les quatre vagues apparaissent aux ticks 0, 50, 100 et 150', () => 
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     defenseurs: [],
     // Une unité par vague, même colonne : au tick 50, l'unité de la vague 1 est
-    // à 2000 + 50 × 50 = 4500, soit la case 4 — la case 2 est libre.
+    // à 2000 + 50 × 60 = 5000, soit la case 5 — la case 2 est libre.
     vagues: [
       [{ id: 'meute', colonne: 1 }],
       [{ id: 'meute', colonne: 1 }],
@@ -559,8 +588,9 @@ test('T10 — une Casemate descend jusqu\'à 0, pas jusqu\'à 1 %', () => {
     saveur: null,
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
-    // Casemate montée à 35 000 milli-PV, soit 10 % de ses 350 000.
-    defenseurs: [{ id: 'casemate', rangee: 3, colonne: 5, pvMilli: 35_000 }],
+    // ⚠ Seuil déplacé au lot 4A : la Casemate (MG Nest) passe de 350 à
+    // 1 000 PV. Montée à 100 000 milli-PV, soit 10 % de ses 1 000 000.
+    defenseurs: [{ id: 'casemate', rangee: 3, colonne: 5, pvMilli: 100_000 }],
     vagues: [[{ id: 'fouisseurs', colonne: 5 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
@@ -569,30 +599,40 @@ test('T10 — une Casemate descend jusqu\'à 0, pas jusqu\'à 1 %', () => {
   const fouisseurs = entite(etat, (e) => e.camp === 'attaque');
 
   jouer(etat, 1);
-  // À 10 % de PV, sa santé vaut floor(35000 × 1000/350000) = 100 ‰, et son tir
-  // contre une cible de matrice 1,0 vaut floor(15 × 1000 × 100/1000) = 1500
-  // milli-PV, le dixième exact de ses 15 000 nominaux. Les Fouisseurs passent
-  // donc de 150 000 à 148 500.
-  assert.equal(fouisseurs.pvMilli, 150_000 - 1500);
-  // Les Fouisseurs, à pleine vie, rendent floor(20 × 1000 × 1000/1000) = 20 000 :
-  // la Casemate tombe de 35 000 à 15 000.
-  assert.equal(casemate.pvMilli, 15_000);
+  // À 10 % de PV, sa santé vaut floor(100000 × 1000/1000000) = 100 ‰, et son
+  // tir contre l'infanterie vaut floor(20 × 100) = 2000 milli-PV, le dixième
+  // exact de ses 20 000 nominaux. Les Fouisseurs (900 PV) passent donc de
+  // 900 000 à 898 000.
+  assert.equal(fouisseurs.pvMilli, 900_000 - 2000);
+  // Les Fouisseurs, à pleine vie, rendent floor(50 × 1000) = 50 000 contre une
+  // tourelle : la Casemate tombe de 100 000 à 50 000.
+  assert.equal(casemate.pvMilli, 50_000);
 
   jouer(etat, 2);
-  // Tick 2 : la Casemate, à 15 000, a une santé de floor(15000 × 1000/350000)
-  // = 42 ‰ et rend floor(15 × 1000 × 42/1000) = 630 ; les Fouisseurs, à
-  // 148 500, ont 990 ‰ et rendent floor(20 × 1000 × 990/1000) = 19 800, soit
-  // plus que les 15 000 restants. Aucun plancher : elle tombe à 0.
+  // Tick 2 : la Casemate, à 50 000, a 50 ‰ et rend floor(20 × 50) = 1000 ; les
+  // Fouisseurs, à 898 000, ont floor(898000 × 1000/900000) = 997 ‰ et rendent
+  // floor(50 × 997) = 49 850. Il reste donc 150 milli-PV à la Casemate — un
+  // cheveu, mais elle est encore debout. Aucun plancher ne l'a sauvée : c'est
+  // l'arithmétique.
+  assert.equal(casemate.pvMilli, 150);
+  assert.equal(casemate.vivant, true);
+  assert.equal(fouisseurs.pvMilli, 898_000 - 1000);
+
+  jouer(etat, 3);
+  // Tick 3 : à 150 milli-PV sur 1 000 000, la santé arrondie de la Casemate
+  // tombe à 0 ‰ et son tir ne retire plus rien — c'est le point de
+  // quantification en millièmes signalé aux lots 3B et 3C, laissé à
+  // l'arbitrage. Les Fouisseurs, eux, l'achèvent : elle descend à 0, PAS à 1 %.
   assert.equal(casemate.pvMilli, 0, 'aucun plancher de 1 % pendant le combat');
   assert.equal(casemate.vivant, false);
-  assert.equal(fouisseurs.pvMilli, 148_500 - 630);
+  assert.equal(fouisseurs.pvMilli, 897_000, 'un tir à 0 ‰ ne retire rien');
 
   // Et elle cesse de tirer : trente ticks plus tard, les Fouisseurs n'ont pas
   // perdu un milli-PV de plus.
   jouer(etat, 32);
-  assert.equal(fouisseurs.pvMilli, 148_500 - 630);
-  // Retirée de la grille : la case 3 est libre, les Fouisseurs (50 milli/tick,
-  // repartis de 2000 au tick 3) l'occupent avant le tick 32.
+  assert.equal(fouisseurs.pvMilli, 897_000);
+  // Retirée de la grille : la case 3 est libre, les Fouisseurs (60 milli/tick,
+  // repartis de 2000 au tick 4) l'occupent avant le tick 32.
   assert.equal(caseDepuisMilli(fouisseurs.rangeeMilli), 3);
 });
 
@@ -624,12 +664,12 @@ test('T11 — la Souche tombée, le combat s\'arrête et le site livre tout', ()
   // Pilon en (10,5), Souche en (11,5) : distance² = 1 000 000 ≤ portée² 6 250 000.
   // La Gangue en (11,7) est à 1 000 000 + 4 000 000 = 5 000 000, également à
   // portée mais plus loin : la Souche est la cible.
-  // Matrice du Pilon contre une structure = 1,0, donc cible de prédilection :
+  // ⚠ Seuil déplacé au lot 4A : la colonne structure du Pilon (Juggernaut) est
+  // sa dominante — 8 000 du relevé ÷ 160 = 50 PV — donc cible de prédilection :
   // il s'arrête et tire. À pleine vie, santé 1000 ‰ et dégâts
-  // floor(15 × 1000 × 1000/1000) = 15 000 milli-PV par tick.
-  // ceil(400 000 / 15 000) = 27, car 26 × 15 000 = 390 000
-  // < 400 000 et 27 × 15 000 = 405 000 ≥ 400 000.
-  assert.equal(resultat.tick, 27);
+  // floor(50 × 1000) = 50 000 milli-PV par tick, contre 15 000 avant.
+  // ceil(400 000 / 50 000) = 8, exactement : 8 × 50 000 = 400 000.
+  assert.equal(resultat.tick, 8);
   assert.equal(resultat.cause, 'souche');
 
   const gangue = resultat.batiments.find(parId('gangue'));
@@ -657,13 +697,20 @@ test('T12 — un bâtiment à moitié détruit paie la moitié', () => {
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 11, colonne: 5 }],
     defenseurs: [],
-    vagues: [[{ id: 'pilon', rangee: 10, colonne: 5 }]],
+    // ⚠ MONTAGE CHANGÉ AU LOT 4A. Le Pilon retirait 15 000 milli-PV par tick,
+    // et cinq ticks faisaient la moitié pile des 150 000 de la Gangue. Il en
+    // retire maintenant 50 000, et 150 000 / 2 = 75 000 n'est pas un multiple
+    // de 50 000 : aucun nombre entier de ticks ne donnerait la moitié. Le
+    // Bélier (Pitbull, 4 000 ÷ 160 = 25 PV contre une structure) la donne en
+    // trois ticks exactement. Le test mesure la même chose ; seul le tireur
+    // change, pour que le seuil reste rond.
+    vagues: [[{ id: 'belier', rangee: 10, colonne: 5 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const etat = creerCombat(montage);
-  const resultat = resoudre(etat, { maxTicks: 5 });
+  const resultat = resoudre(etat, { maxTicks: 3 });
 
-  // Pilon : 15 000 milli-PV par tick contre une structure. 5 ticks → 75 000
+  // Bélier : 25 000 milli-PV par tick contre une structure. 3 ticks → 75 000
   // milli-PV perdus sur 150 000, soit 50 % exactement.
   const gangue = resultat.batiments.find(parId('gangue'));
   assert.equal(gangue.pvPerdusMilli, 75_000);
@@ -683,10 +730,13 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
     niveau: 3,
     saveur: null,
     obstacles: [],
+    // ⚠ Seuil déplacé au lot 4A : le Merlon (Wall) passe de 500 à 2 000 PV.
     // Au niveau 3, facteurMilli(3) = round(1000 × 1,259²) = round(1585,081)
-    // = 1585, donc le Merlon vaut 500 × 1585 = 792 500 milli-PV au lieu de
-    // 500 000. Monté à 396 250, il est à exactement 50 % de dégâts subis.
-    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 396_250 }],
+    // = 1585, donc le Merlon vaut 2000 × 1585 = 3 170 000 milli-PV au lieu de
+    // 2 000 000. Monté à 1 585 000, il est à exactement 50 % de dégâts subis.
+    // Le barème de points de recherche, lui, ne dépend que du niveau et de la
+    // FRACTION détruite : les 4 000 milli-points ne bougent donc pas.
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 1_585_000 }],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
     // = 17 000 000, hors de sa portée² de 2 250 000. Rien ne bouge en un tick.
@@ -698,8 +748,8 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
 
   const merlon = resultat.defenses.find(parId('merlon'));
   assert.equal(facteurMilli(3), 1585);
-  assert.equal(merlon.pvMaxMilli, 500 * 1585);
-  assert.equal(merlon.pvPerdusMilli, 396_250);
+  assert.equal(merlon.pvMaxMilli, 2000 * 1585);
+  assert.equal(merlon.pvPerdusMilli, 1_585_000);
   assert.equal(merlon.niveau, 3, 'le niveau de l\'entité, plus celui du site');
 
   // 2 × 1000 × 2^(3−1) × 0,5 = 2 × 1000 × 4 × 0,5 = 4 000 milli-points.
@@ -742,9 +792,12 @@ test('T14 — un adversaire hors d\'échelle fait durer le raid jusqu\'au tick 9
     // Le seul bâtiment est en colonne 9, hors de portée : la fin ne peut pas
     // venir de « plus aucun bâtiment debout ».
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
-    // Merlon de niveau 50 : 500 × facteurMilli(50) = 500 × 480 941 681
-    // = 240 470 840 500 milli-PV. Il ne tire pas (degats 0), le Meute reste
-    // donc à pleine vie et rend 2400 milli-PV par tick.
+    // ⚠ Seuil déplacé au lot 4A : le Merlon (Wall) passe de 500 à 2 000 PV.
+    // Merlon de niveau 50 : 2000 × facteurMilli(50) = 2000 × 480 941 681
+    // = 961 883 362 000 milli-PV. Il ne tire pas (degats null), le Meute reste
+    // donc à pleine vie et rend 7000 milli-PV par tick — il lui faudrait
+    // 137 millions de ticks, contre 100 millions avant. La conclusion est la
+    // même et le plafond de 900 mord toujours.
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, niveau: 50 }],
     vagues: [[{ id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
@@ -752,15 +805,15 @@ test('T14 — un adversaire hors d\'échelle fait durer le raid jusqu\'au tick 9
   const etat = creerCombat(montage);
   const meute = entite(etat, (e) => e.camp === 'attaque');
   const merlon = entite(etat, parId('merlon'));
-  assert.equal(merlon.pvMaxMilli, 500 * facteurMilli(50));
+  assert.equal(merlon.pvMaxMilli, 2000 * facteurMilli(50));
 
   const resultat = resoudre(etat);
   assert.equal(resultat.tick, 900);
   assert.equal(resultat.tick, TICKS_MAX_COMBAT, '90 s à 10 Hz');
   assert.equal(resultat.cause, 'duree');
 
-  // 900 × 2400 = 2 160 000 milli-PV, soit 0,0009 % du mur : il n'a rien entamé.
-  assert.equal(merlon.pvMilli, 500 * facteurMilli(50) - 900 * 2400);
+  // 900 × 7000 = 6 300 000 milli-PV, soit 0,00066 % du mur : il n'a rien entamé.
+  assert.equal(merlon.pvMilli, 2000 * facteurMilli(50) - 900 * 7000);
   // Et il ne s'est jamais replié : il nuisait, même dérisoirement.
   assert.equal(meute.ticksInutiles, 0);
   assert.equal(meute.sorti, false);
@@ -904,11 +957,19 @@ test('§9 — un raid ne s\'arrête pas tant qu\'il reste une vague à venir', (
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const etat = creerCombat(montage);
-  // Casemate à pleine vie : santé 1000 ‰, floor(15 × 1000 × 1000/1000)
-  // = 15 000 milli-PV par tick
-  // contre une infanterie (matrice 1,0). Le Meute, 100 000 milli-PV, tombe au
-  // tick 7 : 7 × 15 000 = 105 000 ≥ 100 000, alors que 6 × 15 000 = 90 000.
-  jouer(etat, 7);
+  // ⚠ Seuils déplacés au lot 4A. Casemate à pleine vie : santé 1000 ‰,
+  // floor(20 × 1000) = 20 000 milli-PV par tick contre l'infanterie (sa colonne
+  // dominante). Le Meute, 700 000 milli-PV, en encaisse 20 000 au premier tick.
+  //
+  // Mais il rend coup pour coup — 7 PV contre une tourelle — et la Casemate
+  // s'affaiblit donc elle aussi : son tir décroît avec sa santé, si bien que la
+  // mise à mort ne tombe pas à ceil(700 000 / 20 000) = 35 mais quatre ticks
+  // plus tard, au 39e. Le Fusilier tient ainsi cinq fois plus longtemps
+  // qu'avant la conversion (7 ticks), et il meurt AVANT la vague 2 du tick 50 —
+  // ce que ce test exige.
+  jouer(etat, 38);
+  assert.equal(attaquantsPresents(etat), 1, 'il tient encore au tick 38');
+  jouer(etat, 39);
   assert.equal(attaquantsPresents(etat), 0);
   assert.equal(etat.termine, false, 'la vague 2 est encore à venir');
   jouer(etat, 50);
@@ -946,59 +1007,68 @@ test('§7 — une barrière ne bloque pas, elle saigne, et on en réchappe', () 
   const meute = entite(etat, (e) => e.camp === 'attaque');
   const ronce = entite(etat, parId('ronce'));
 
-  // La Ronce ne bloque pas (bloque: false) : le Meute, 50 milli/tick depuis
-  // 2000, entre dans sa case au tick 20 (2000 + 20 × 50 = 3000) au lieu d'être
+  // ⚠ SEUILS DÉPLACÉS AU LOT 4A. La Ronce (Barbwire) passe de 200 à 1 000 PV,
+  // le Fusilier de 100 à 700, sa vitesse de 50 à 60 milli/tick et son tir
+  // contre une structure de 2,4 à 7 PV. Le franchissement, lui, ne bouge PAS :
+  // le relevé ne l'expose pas, et le ÷8 du lot 2B reste notre arbitrage —
+  // 2 500 milli-PV par tick contre l'infanterie, simplement écrit désormais en
+  // colonne absolue au lieu de 2,5 × matrice 1,0.
+  //
+  // La Ronce ne bloque pas (bloque: false) : le Fusilier, 60 milli/tick depuis
+  // 2000, entre dans sa case au tick 17 (2000 + 17 × 60 = 3020) au lieu d'être
   // arrêté comme il l'aurait été par un mur.
-  jouer(etat, 20);
-  assert.equal(meute.rangeeMilli, 3000);
+  jouer(etat, 17);
+  assert.equal(meute.rangeeMilli, 3020);
   // Rien encore : les dégâts d'un tick se calculent sur les positions de DÉBUT
-  // de tick, et au début du tick 20 le Meute était encore à 2950, en case 2.
-  assert.equal(meute.pvMilli, 100_000);
-  // Pendant ces 20 ticks, le Meute a tiré sur la Ronce à pleine vie : santé
-  // 1000 ‰, floor(8 × 300 × 1000/1000) = 2400 par tick, la Ronce étant une
-  // barrière donc lue en colonne « structure ». 200 000 − 20 × 2400 = 152 000.
-  assert.equal(ronce.pvMilli, 152_000);
+  // de tick, et au début du tick 17 le Meute était encore à 2960, en case 2.
+  assert.equal(meute.pvMilli, 700_000);
+  // Pendant ces 17 ticks, le Meute a tiré sur la Ronce à pleine vie : santé
+  // 1000 ‰, floor(7 × 1000) = 7000 par tick, la Ronce étant une barrière donc
+  // lue en colonne « structure ». 1 000 000 − 17 × 7000 = 881 000.
+  assert.equal(ronce.pvMilli, 881_000);
 
-  // Premier tick de présence. Le franchissement de la Ronce vaut 2,5 PV/tick
-  // depuis l'arbitrage du lot 2B, soit 2500 milli-PV. La Ronce est à
-  // floor(152000 × 1000/200000) = 760 ‰, donc
-  // floor(2500 × 1000 × 760 / 1 000 000) = 1900 milli-PV.
-  jouer(etat, 21);
-  assert.equal(meute.pvMilli, 100_000 - 1900);
+  // Premier tick de présence. La Ronce est à floor(881000 × 1000/1000000)
+  // = 881 ‰, donc floor(2500 × 881 / 1000) = 2202 milli-PV de franchissement.
+  jouer(etat, 18);
+  assert.equal(meute.pvMilli, 700_000 - 2202);
 
-  // Et il traverse : cinq ticks plus tard il a bien avancé de 5 × 50, sans
-  // jamais s'arrêter — 3000 + 250 = 3250.
-  jouer(etat, 25);
-  assert.equal(meute.rangeeMilli, 3250);
+  // Et il traverse : cinq ticks plus tard il a bien avancé de 5 × 60, sans
+  // jamais s'arrêter — 3020 + 300 = 3320.
+  jouer(etat, 22);
+  assert.equal(meute.rangeeMilli, 3320);
 
-  // Une case fait 1000 milli-cases et le Meute avance de 50 : il reste
-  // 1000/50 = 20 ticks sur la case, ticks 21 à 40. Les deux décroissances
-  // s'imbriquent — le Meute rend floor(2400 × floor(M/100) / 1000) à la Ronce,
-  // la Ronce lui rend floor(2500 × floor(R/200) / 1000) — et au tick 40 il
-  // sort avec 67 116 milli-PV, soit 32,884 PV perdus sur 100.
-  jouer(etat, 40);
-  assert.equal(caseDepuisMilli(meute.rangeeMilli), 4, 'sorti de la case au tick 40');
-  assert.equal(meute.pvMilli, 67_116);
+  // Entré à 3020, il quitte la case 3 quand il dépasse 3999 : 3020 + 60k ≥ 4000
+  // dès k = 17, soit au tick 34. Il paie donc le franchissement aux ticks 18 à
+  // 34, dix-sept fois. Les deux décroissances s'imbriquent — le Meute rend
+  // 7 × floor(R/1000) à la Ronce, la Ronce lui rend floor(2500 × floor(R/1000)
+  // / 1000) — et il sort avec 664 919 milli-PV, soit 35,081 PV perdus sur 700,
+  // c'est-à-dire 5,0 % de sa vie là où la Ronce lui coûtait 32,9 % avant la
+  // conversion. Le PV mesuré du Fusilier est sept fois le PV deviné ; le
+  // franchissement, lui, n'a pas suivi. C'est un point à revoir au banc.
+  jouer(etat, 34);
+  assert.equal(caseDepuisMilli(meute.rangeeMilli), 4, 'sorti de la case au tick 34');
+  assert.equal(meute.pvMilli, 664_919);
   assert.equal(meute.vivant, true, 'une infanterie RÉCHAPPE désormais d\'une Ronce');
 
   // Plus un milli-PV de franchissement une fois la case quittée.
   jouer(etat, 60);
-  assert.equal(meute.pvMilli, 67_116);
+  assert.equal(meute.pvMilli, 664_919);
 
-  // Le toll est plus faible que les 50 PV du tableau du §3 parce que celui-ci
-  // suppose la barrière à pleine vie : ici le Meute l'a canardée pendant toute
-  // son approche, et les dégâts de franchissement sont proportionnels aux PV
-  // qui restent à la barrière. Elle tient quand même — une barrière ne se
-  // détruit pas en la franchissant.
-  assert.ok(ronce.pvMilli > 90_000 && ronce.vivant);
+  // Le toll est plus faible que le tableau du §3 parce que celui-ci suppose la
+  // barrière à pleine vie : ici le Meute l'a canardée pendant toute son
+  // approche, et les dégâts de franchissement sont proportionnels aux PV qui
+  // restent à la barrière. Elle tient quand même — une barrière ne se détruit
+  // pas en la franchissant.
+  assert.ok(ronce.pvMilli > 500_000 && ronce.vivant);
 
-  // L'aviation ne paie rien : la matrice de la Ronce vaut 0 en colonne
-  // « aviation ». Crécelle à 150 milli/tick, 2000 + 20 × 150 = 5000, PV intacts.
+  // L'aviation ne paie rien : la table de franchissement de la Ronce vaut 0 en
+  // colonne « aviation ». Crécelle (Orca) à 120 milli/tick et 900 PV :
+  // 2000 + 20 × 120 = 4400, PV intacts.
   const air = creerCombat(montage('crecelle'));
   const crecelle = entite(air, (e) => e.camp === 'attaque');
   jouer(air, 20);
-  assert.equal(crecelle.rangeeMilli, 5000);
-  assert.equal(crecelle.pvMilli, 200_000, 'l\'aviation ne franchit rien, elle survole');
+  assert.equal(crecelle.rangeeMilli, 4400);
+  assert.equal(crecelle.pvMilli, 900_000, 'l\'aviation ne franchit rien, elle survole');
 });
 
 test('§7 — la traversante sort par le haut, la stoppeuse rentre à la base', () => {
@@ -1012,19 +1082,22 @@ test('§7 — la traversante sort par le haut, la stoppeuse rentre à la base', 
     modulesDebloques: { ouvrage: [], joueur: [] },
   });
 
-  // Frappeur : traversant, vitesse 3 → 300 milli/tick. Parti de 2000, il vise
-  // au-delà de la rangée 18 quand 2000 + 300k ≥ 19000, soit k ≥ 56,67 → k = 57.
-  // Traversant, il ne compte jamais un tick inutile : il progresse toujours.
+  // ⚠ Seuils déplacés au lot 4A : le Frappeur (Firehawk) vole à 240 milli/tick
+  // et non plus 300 — c'est toujours DEUX FOIS le reste de l'aviation, le
+  // relevé le donnant à 240 quand les trois autres sont à 120.
+  // Traversant, parti de 2000, il passe au-delà de la rangée 18 quand
+  // 2000 + 240k ≥ 19000, soit k ≥ 70,83 → k = 71. Il ne compte jamais un tick
+  // inutile : il progresse toujours.
   const traversant = creerCombat(montageAerien('frappeur'));
   const frappeur = entite(traversant, (e) => e.camp === 'attaque');
-  jouer(traversant, 56);
+  jouer(traversant, 70);
   assert.equal(frappeur.rangeeMilli, 18_800);
   assert.equal(frappeur.sorti, false);
   assert.equal(frappeur.ticksInutiles, 0);
   const resultat = resoudre(traversant);
   assert.equal(frappeur.sorti, true, 'sorti du combat, il n\'y revient pas');
   assert.equal(frappeur.vivant, true, 'sorti n\'est pas mort');
-  assert.equal(resultat.tick, 57);
+  assert.equal(resultat.tick, 71);
   assert.equal(resultat.cause, 'attaquants');
 
   // ⚠ SECONDE MOITIÉ MODIFIÉE AU LOT 3B. Le Busard restait auparavant planté à
@@ -1032,30 +1105,34 @@ test('§7 — la traversante sort par le haut, la stoppeuse rentre à la base', 
   // la règle qui a changé, pas le test. Ce qu'il prouve toujours : une
   // stoppeuse ne franchit JAMAIS le fond, elle ne part pas par le haut.
   //
-  // Busard : stoppeur, vitesse 1,5 → 150 milli/tick. 2000 + 107 × 150 = 18 050 :
-  // il est en rangée 18 dès le DÉBUT du tick 108, donc il ne peut plus avancer.
+  // ⚠ Seuils déplacés au lot 4A : le Busard (Paladin) vole à 120 milli/tick et
+  // non plus 150. 2000 + 134 × 120 = 18 080 : il entre en rangée 18 au tick 134,
+  // et c'est le DERNIER tick où il progresse — dès le 135e, la dernière rangée
+  // est un cul-de-sac pour une stoppeuse.
   // La Gangue en (18,9) est à 8 colonnes, soit 8000² = 64 000 000, très au-delà
   // de sa portée² de 6 250 000 : il ne peut pas nuire non plus. Le compteur part
-  // au tick 108 et atteint 30 au tick 108 + 29 = 137.
+  // au tick 135 et atteint 30 au tick 135 + 29 = 164.
   const stoppeur = creerCombat(montageAerien('busard'));
   const busard = entite(stoppeur, (e) => e.camp === 'attaque');
-  jouer(stoppeur, 107);
-  assert.equal(busard.rangeeMilli, 18_050);
+  jouer(stoppeur, 134);
+  assert.equal(busard.rangeeMilli, 18_080);
   assert.equal(busard.ticksInutiles, 0, 'il progressait encore jusqu\'ici');
 
-  jouer(stoppeur, 108);
+  jouer(stoppeur, 135);
   assert.equal(busard.ticksInutiles, 1, 'premier tick sans avancer ni nuire');
 
-  // Il rampe encore dans sa case jusqu'à 18 950, puis refuse le pas suivant :
-  // 2000 + 113 × 150 = 18 950, et 19 100 tomberait en rangée 19.
-  jouer(stoppeur, 113);
-  assert.equal(busard.rangeeMilli, 18_950);
-  jouer(stoppeur, 136);
-  assert.equal(busard.rangeeMilli, 18_950, 'une stoppeuse ne franchit pas le fond');
+  // Il rampe encore DANS sa case jusqu'à 18 920, le compteur courant pendant ce
+  // temps — ramper n'est pas progresser —, puis refuse le pas suivant :
+  // 2000 + 141 × 120 = 18 920, et 19 040 tomberait en rangée 19.
+  jouer(stoppeur, 141);
+  assert.equal(busard.rangeeMilli, 18_920);
+  assert.equal(busard.ticksInutiles, 7);
+  jouer(stoppeur, 163);
+  assert.equal(busard.rangeeMilli, 18_920, 'une stoppeuse ne franchit pas le fond');
   assert.equal(busard.ticksInutiles, 29);
   assert.equal(busard.sorti, false);
 
-  jouer(stoppeur, 137);
+  jouer(stoppeur, 164);
   assert.equal(busard.ticksInutiles, TICKS_AVANT_REPLI);
   assert.equal(busard.sorti, true, 'elle rentre à la base');
   assert.equal(busard.vivant, true, 'rentrer n\'est pas mourir');
@@ -1074,8 +1151,10 @@ test('§8 — passée la ligne, une unité qui tire sur la défense garde son pl
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 10, colonne: 5 }],
-    // Réserve montée à 16, soit un tir au-dessus du plancher de 15.
-    vagues: [[{ id: 'meute', rangee: 11, colonne: 5, reserve: 16 }]],
+    // ⚠ Seuil déplacé au lot 4A : la réserve du Fusilier passe de 150 à 70,
+    // donc son plancher de 15 à floor(70 × 0,10) = 7. Réserve montée à 8, soit
+    // un tir au-dessus du plancher.
+    vagues: [[{ id: 'meute', rangee: 11, colonne: 5, reserve: 8 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const etat = creerCombat(montage);
@@ -1083,14 +1162,16 @@ test('§8 — passée la ligne, une unité qui tire sur la défense garde son pl
   const merlon = entite(etat, parId('merlon'));
 
   jouer(etat, 1);
-  assert.equal(meute.reserve, 15, 'le premier tir descend au plancher');
+  assert.equal(meute.reserve, 7, 'le premier tir descend au plancher');
 
-  // Le Meute s'éloigne du mur à 50 milli/tick ; au début du tick 10 il est à
-  // 11 450, distance 1450 → 2 102 500 ≤ portée² 2 250 000 : il tire encore.
-  // Dix tirs de 2400 → 500 000 − 24 000 = 476 000.
-  jouer(etat, 10);
-  assert.equal(meute.reserve, 15, 'la défense ne prend pas les 10 % réservés aux bâtiments');
-  assert.equal(merlon.pvMilli, 476_000, 'et le tir n\'a jamais cessé');
+  // Le Meute s'éloigne du mur à 60 milli/tick. Les dégâts d'un tick se calculent
+  // sur les positions de DÉBUT de tick : au début du tick 9 il est à 11 480,
+  // distance 1480 → 2 190 400 ≤ portée² 2 250 000, il tire ; au début du tick 10
+  // il est à 11 540, distance 1540 → 2 371 600 > 2 250 000, il ne tire plus.
+  // Neuf tirs de 7000 → 2 000 000 − 63 000 = 1 937 000.
+  jouer(etat, 20);
+  assert.equal(meute.reserve, 7, 'la défense ne prend pas les 10 % réservés aux bâtiments');
+  assert.equal(merlon.pvMilli, 1_937_000, 'et le tir n\'a cessé que faute de portée');
 });
 
 test('§10 — le butin plein suit ses deux pentes et son indice', () => {

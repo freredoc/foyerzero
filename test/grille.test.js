@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRILLE, OBSTACLES, UNITES, DEFENSES, MATRICE_COLONNES } from '../src/data/combat.js';
+import { GRILLE, OBSTACLES, UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
 import { POINTS_RECHERCHE, GEOGRAPHIE } from '../src/data/sites.js';
 import {
   MILLI_PAR_CASE,
@@ -147,12 +147,12 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
   assert.equal(GRILLE.vaguesParRaid, 4);
 
   for (const [id, u] of Object.entries(UNITES)) {
-    // vitesse × 100 = milli-cases par tick (0,5 → 50 · 1 → 100 · 1,2 → 120
-    // · 1,5 → 150 · 3 → 300).
-    const vitesseMilli = u.vitesse * 100;
-    assert.ok(Number.isInteger(vitesseMilli), `${id} : vitesse ${u.vitesse} × 100 non entière`);
-    // La même vitesse divisée par 2,5 doit rester entière : 50 → 20, 120 → 48,
-    // 300 → 120. On le vérifie en entiers : (v × 1000) % 2500 === 0.
+    // LOT 4A — la vitesse EST le milli-case par tick, plus de conversion :
+    // 60 · 90 · 120 · 240, quatre valeurs, toutes entières par construction.
+    const vitesseMilli = u.vitesse;
+    assert.ok(Number.isInteger(vitesseMilli), `${id} : vitesse ${u.vitesse} non entière`);
+    // La même vitesse divisée par 2,5 doit rester entière : 60 → 24, 90 → 36,
+    // 120 → 48, 240 → 96. On le vérifie en entiers : (v × 1000) % 2500 === 0.
     assert.equal(
       (vitesseMilli * 1000) % 2500, 0,
       `${id} : ${vitesseMilli} / ${OBSTACLES.diviseurVitesse} non entier`,
@@ -162,49 +162,54 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
     // Portées et PV passent aussi en entiers.
     assert.ok(Number.isInteger(u.portee * 1000), `${id} : portée non entière en milli-cases`);
     assert.ok(Number.isInteger(u.porteeMini * 1000), `${id} : portée mini non entière`);
-    assert.ok(Number.isInteger(u.pv * 1000), `${id} : PV non entiers en milli-PV`);
-    assert.ok(Number.isInteger(u.degats), `${id} : dégâts non entiers`);
+    assert.ok(Number.isInteger(u.pv), `${id} : PV non entiers`);
     assert.ok(Number.isInteger(u.masse), `${id} : masse non entière`);
     assert.ok(Number.isInteger(u.reserve), `${id} : réserve non entière`);
+    assert.ok(Number.isInteger(u.degatsParcours), `${id} : dégâts de parcours non entiers`);
+    assert.ok(Number.isInteger(u.reparation), `${id} : réparation non entière`);
 
-    // Toutes les valeurs de matrice tombent juste en millièmes, dans 0…1000.
-    // Le lot 2A exigeait des multiples de 100 ; la Herse vaut 0,03 contre
-    // l'infanterie depuis l'arbitrage du lot 2B, soit 30 ‰. La granularité
-    // effective du calibrage est donc la DIZAINE de millièmes — c'est ce qui
-    // est asseré, pour qu'une dérive se voie.
-    for (const colonne of MATRICE_COLONNES) {
-      const milli = u.matrice[colonne] * 1000;
-      assert.ok(Number.isInteger(milli), `${id}.${colonne} : ${milli} non entier`);
-      assert.equal(milli % 10, 0, `${id}.${colonne} : ${milli} n'est pas multiple de 10`);
-      assert.ok(milli >= 0 && milli <= 1000, `${id}.${colonne} : ${milli} hors de 0…1000`);
+    // ⚠ SEUIL RÉÉCRIT AU LOT 4A. Le lot 2A exigeait des facteurs de matrice
+    // multiples de 100 en millièmes ; le lot 2B a ramené le pas à la dizaine
+    // pour la Herse à 0,03. La matrice ayant disparu, l'invariant n'a plus
+    // d'objet : ce qui le remplace est plus dur, pas plus lâche — TOUTE valeur
+    // de dégâts est un entier de PV, sans échelle ni arrondi.
+    for (const colonne of COLONNES_DEGATS) {
+      const valeur = u.degats[colonne];
+      assert.ok(Number.isInteger(valeur), `${id}.${colonne} : ${valeur} n'est pas entier`);
+      assert.ok(valeur >= 0, `${id}.${colonne} : ${valeur} est négatif`);
     }
   }
 
   for (const [id, d] of Object.entries(DEFENSES)) {
-    assert.ok(Number.isInteger(d.pv * 1000), `${id} : PV non entiers en milli-PV`);
+    assert.ok(Number.isInteger(d.pv), `${id} : PV non entiers`);
     assert.ok(Number.isInteger(d.portee * 1000), `${id} : portée non entière`);
     assert.ok(Number.isInteger(d.porteeMini * 1000), `${id} : portée mini non entière`);
-    assert.ok(Number.isInteger(d.degats), `${id} : dégâts non entiers`);
-    // Le franchissement se lit en MILLI-PV depuis le lot 2B : la Ronce vaut
-    // 2,5 PV/tick, qui ne s'écrit pas en entier autrement. 2,5 × 1000 = 2500.
-    assert.ok(
-      Number.isInteger(d.degatsFranchissement * 1000),
-      `${id} : franchissement ${d.degatsFranchissement} non entier en milli-PV`,
-    );
-    if (d.matrice === null) continue;
-    for (const colonne of MATRICE_COLONNES) {
-      const milli = d.matrice[colonne] * 1000;
-      assert.ok(Number.isInteger(milli), `${id}.${colonne} : ${milli} non entier`);
-      assert.equal(milli % 10, 0, `${id}.${colonne} : ${milli} n'est pas multiple de 10`);
-      assert.ok(milli >= 0 && milli <= 1000, `${id}.${colonne} : ${milli} hors de 0…1000`);
+    for (const table of ['degats', 'degatsFranchissement']) {
+      if (d[table] === null) continue;
+      for (const colonne of COLONNES_DEGATS) {
+        const valeur = d[table][colonne];
+        assert.ok(Number.isInteger(valeur), `${id}.${table}.${colonne} : ${valeur} non entier`);
+        assert.ok(valeur >= 0, `${id}.${table}.${colonne} : ${valeur} est négatif`);
+      }
     }
+    // Une défense tire OU saigne, jamais les deux : la table de franchissement
+    // est en milli-PV, celle de tir en PV, et les confondre serait un facteur
+    // 1000 d'écart silencieux.
+    assert.ok(d.degats === null || d.degatsFranchissement === null,
+      `${id} : une défense ne peut pas porter les deux tables à la fois`);
   }
 
-  // Valeur de matrice la plus fine du calibrage, et seule sous les 100 ‰ :
-  // la Herse contre l'infanterie, arbitrée à 0,03 au lot 2B.
-  assert.equal(DEFENSES.herse.matrice.infanterie * 1000, 30);
-  assert.equal(DEFENSES.herse.degatsFranchissement, 15);
-  assert.equal(DEFENSES.ronce.degatsFranchissement, 2.5);
+  // Le franchissement des barrières se lit en MILLI-PV par tick et par colonne,
+  // seule table du calibrage qui ne soit pas en PV entiers : la Ronce vaut
+  // 2,5 PV/tick contre l'infanterie, qui ne s'écrit pas en entier autrement.
+  // Report exact des arbitrages du lot 2B — ÷8 sur la Ronce, 15 PV/tick sur la
+  // Herse et 0,03 contre l'infanterie — dans la forme absolue du lot 4A :
+  //   Ronce   2,5 × {1 · 0,1 · 0}    = {2500 · 250 · 0}
+  //   Herse   15  × {0,03 · 1 · 0}   = {450 · 15000 · 0}
+  assert.deepEqual(DEFENSES.ronce.degatsFranchissement,
+    { infanterie: 2500, vehicule: 250, structureOuAviation: 0 });
+  assert.deepEqual(DEFENSES.herse.degatsFranchissement,
+    { infanterie: 450, vehicule: 15_000, structureOuAviation: 0 });
 
   // Les points de recherche doublent par niveau de cible. Le plafond de niveau
   // est 50, donc l'exposant maximal est 49 : 2^49 = 562 949 953 421 312, sous

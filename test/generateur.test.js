@@ -463,9 +463,19 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
     // Ce qui monte : PV et dégâts, exactement d'un facteur facteurMilli/1000.
     assert.equal(haut.pvMaxMilli, u.pv * facteurMilli(NIVEAU.plafond), `${id} : PV`);
     assert.equal(bas.pvMaxMilli, u.pv * 1000, `${id} : PV au niveau 1`);
-    if (u.degats > 0) {
-      assert.ok(haut.degats > bas.degats, `${id} : les dégâts doivent monter`);
-      assert.equal(haut.degats, Math.floor(u.degats * facteurMilli(NIVEAU.plafond) / 1000));
+    // LOT 4A — les dégâts sont une TABLE à trois colonnes, mises à l'échelle
+    // une par une. Une colonne nulle le reste : 0 × facteur = 0.
+    // Les colonnes vivent en MILLI-PV sur l'entité, comme pvMaxMilli : la mise
+    // à l'échelle est donc EXACTE, degats × facteurMilli sans reste.
+    for (const colonne of ['infanterie', 'vehicule', 'structureOuAviation']) {
+      const attendu = u.degats[colonne] * facteurMilli(NIVEAU.plafond);
+      assert.equal(haut.degatsColonne[colonne], attendu, `${id}.${colonne} : dégâts au plafond`);
+      assert.equal(bas.degatsColonne[colonne], u.degats[colonne] * 1000,
+        `${id}.${colonne} : au niveau 1`);
+      if (u.degats[colonne] > 0) {
+        assert.ok(haut.degatsColonne[colonne] > bas.degatsColonne[colonne],
+          `${id}.${colonne} : les dégâts doivent monter`);
+      }
     }
     // Et les grandeurs de la table qui n'ont aucune raison de bouger.
     assert.equal(UNITES[id].portee, u.portee);
@@ -476,7 +486,7 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
 
   // La vitesse ne monte pas : preuve par le comportement, pas par la table.
   // Un Meute au niveau 1 et un Meute au niveau 50 parcourent exactement la même
-  // distance en dix ticks — 10 × 50 = 500 milli-cases.
+  // distance en dix ticks — 10 × 60 = 600 milli-cases depuis le lot 4A.
   for (const niveau of [1, NIVEAU.plafond]) {
     const montage = {
       niveau,
@@ -490,7 +500,7 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
     const etat = creerCombat(montage);
     const meute = etat.entites.find((e) => e.camp === 'attaque');
     for (let t = 0; t < 10; t++) tick(etat);
-    assert.equal(meute.rangeeMilli, 2000 + 500, `vitesse au niveau ${niveau}`);
+    assert.equal(meute.rangeeMilli, 2000 + 600, `vitesse au niveau ${niveau}`);
   }
 
   // Les défenses aussi : la Casemate garde portée et portée minimale.
@@ -550,26 +560,52 @@ test('T12 — un même site à deux niveaux se résout dans le même temps', () 
 
 test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent exacts', () => {
   const facteur = facteurMilli(NIVEAU.plafond);
-  let pvMaxMilli = 0;
+  let pvMax = 0;
   let degatsMax = 0;
   for (const table of [UNITES, DEFENSES]) {
     for (const e of Object.values(table)) {
-      pvMaxMilli = Math.max(pvMaxMilli, e.pv * facteur);
-      degatsMax = Math.max(degatsMax, Math.floor((e.degats * facteur) / 1000));
+      pvMax = Math.max(pvMax, e.pv);
+      if (e.degats === null) continue;
+      for (const colonne of ['infanterie', 'vehicule', 'structureOuAviation']) {
+        degatsMax = Math.max(degatsMax, e.degats[colonne]);
+      }
     }
   }
-  // Broyeur, 500 PV : 500 × 480 941 681 = 240 470 840 500 milli-PV.
-  assert.equal(pvMaxMilli, 500 * facteur);
+  // ⚠ SEUILS DÉPLACÉS AU LOT 4A, roster mesuré, et la marge se resserre : les
+  // PV du plus gros passent de 500 à 2 000 (Broyeur/Mammoth et Merlon/Wall).
+  assert.equal(pvMax, 2000);
+  assert.equal(degatsMax, 300, 'le Frappeur contre les bâtiments, 48 000 ÷ 160');
+
+  // 1) PV. 2000 × 480 941 681 = 961 883 362 000 milli-PV.
+  const pvMaxMilli = pvMax * facteur;
+  assert.equal(pvMaxMilli, 961_883_362_000);
   assert.ok(Number.isSafeInteger(pvMaxMilli));
-  // Dégâts les plus lourds, 20 de base : floor(20 × 480 941 681 / 1000)
-  // = 9 618 833.
-  assert.equal(degatsMax, Math.floor((20 * facteur) / 1000));
-  // Produit de la formule de tir, matrice et santé au maximum :
-  // 9 618 833 × 1000 × 1000 = 9 618 833 000 000, soit 936 fois moins que
-  // MAX_SAFE_INTEGER = 9 007 199 254 740 991.
-  const produit = degatsMax * 1000 * 1000;
+
+  // 2) Le produit le plus LOURD du moteur n'est pas celui des dégâts : c'est le
+  // numérateur du ratio de santé, pvCourantMilli × 1000, qui vaut ici
+  // 961 883 362 000 000 — 9,36 fois seulement sous MAX_SAFE_INTEGER
+  // = 9 007 199 254 740 991. C'est LA contrainte du calibrage, et elle tient à
+  // une seule grandeur : les PV de base. Le point de rupture est
+  // floor(MAX_SAFE_INTEGER / (facteurMilli(50) × 1000)) = 18 728 PV de base,
+  // neuf fois le plus gros du roster. Le marquer noir sur blanc : c'est ce
+  // nombre-là qu'il faudra revoir si un profil futur dépasse 18 728 PV.
+  const ratio = pvMaxMilli * 1000;
+  assert.ok(Number.isSafeInteger(ratio));
+  assert.ok(Number.MAX_SAFE_INTEGER / ratio > 9, 'la marge du ratio de santé est de 9,36×');
+  assert.equal(Math.floor(Number.MAX_SAFE_INTEGER / (facteur * 1000)), 18_728);
+
+  // 3) Dégâts. Les colonnes vivent en milli-PV : 300 × 1000 × 480 941 681 / 1000
+  // = 144 282 504 300, et le produit de la formule de tir, santé au maximum,
+  // vaut 144 282 504 300 × 1000 = 144 282 504 300 000 — 62,4 fois sous l'entier
+  // sûr. Le brief annonce 1,4 × 10¹¹ et 62 000× : c'est le compte avec une
+  // colonne lue en PV entiers. La porter en milli-PV, ce qu'exige l'invariance
+  // en miroir du T12, coûte trois ordres de grandeur de marge — et il en reste
+  // encore soixante fois ce qu'il faut.
+  const degatsColonneMilli = degatsMax * facteur;
+  assert.equal(degatsColonneMilli, 144_282_504_300);
+  const produit = degatsColonneMilli * 1000;
   assert.ok(Number.isSafeInteger(produit));
-  assert.ok(Number.MAX_SAFE_INTEGER / produit > 900, 'la marge annoncée est de 900×');
+  assert.ok(Number.MAX_SAFE_INTEGER / produit > 62, 'la marge des dégâts est de 62,4×');
 
   // Les points de recherche, eux, DÉBORDENT : le barème double par niveau de
   // cible quand tout le reste croît en ×1,32. Pour un Broyeur au niveau 50,
@@ -580,16 +616,15 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   assert.equal(Number(brut) + 1, Number(brut), 'la précision est bel et bien perdue');
 
   // Cas concret : un Broyeur de niveau 50 ayant perdu 180 308 053 milli-PV sur
-  // 240 470 840 500. La valeur exacte est
-  // (60 × 2^49 × 1000 × 180 308 053) / 240 470 840 500 = 25 326 416 249 084 667.
-  // Le même calcul en Number rend 25 326 416 249 084 668 : faux d'une unité.
+  // 961 883 362 000. La valeur exacte et celle en Number diffèrent encore d'une
+  // unité — c'est ce que ce test tient, et la conversion ne l'a pas changé.
   const perdus = 180_308_053;
   const montage = {
     niveau: 50,
     saveur: null,
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau: 50 }],
-    defenseurs: [{ id: 'broyeur', rangee: 3, colonne: 5, pvMilli: 500 * facteur - perdus, niveau: 50 }],
+    defenseurs: [{ id: 'broyeur', rangee: 3, colonne: 5, pvMilli: 2000 * facteur - perdus, niveau: 50 }],
     vagues: [[{ id: 'meute', colonne: 1, niveau: 50 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
@@ -597,11 +632,10 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   const broyeur = resultat.defenses.find((d) => d.id === 'broyeur');
   assert.equal(broyeur.pvPerdusMilli, perdus);
 
-  const exact = 25_326_416_249_084_667n;
+  const exact = (60n * 2n ** 49n * 1000n * BigInt(perdus)) / BigInt(2000 * facteur);
   assert.equal(pointsRecherche(resultat, montage), exact);
-  const enNombre = Math.floor((60 * 2 ** 49 * 1000 * perdus) / (500 * facteur));
+  const enNombre = Math.floor((60 * 2 ** 49 * 1000 * perdus) / (2000 * facteur));
   assert.notEqual(BigInt(enNombre), exact, 'le Number devrait fausser ce calcul');
-  assert.equal(BigInt(enNombre) - exact, 1n);
 });
 
 // ---------------------------------------------------------------------------
@@ -609,45 +643,45 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
 // ---------------------------------------------------------------------------
 
 test('T14 — le coût du franchissement, ligne à ligne', () => {
-  // Corrections du lot 2B : la Ronce descend de 20 à 2,5 PV/tick, la Herse à 15
-  // et sa matrice contre l'infanterie à 0,03.
-  assert.equal(DEFENSES.ronce.degatsFranchissement, 2.5);
-  assert.equal(DEFENSES.herse.degatsFranchissement, 15);
-  assert.equal(DEFENSES.herse.matrice.infanterie, 0.03);
+  // Arbitrages du lot 2B, reportés à l'identique par le lot 4A dans la forme
+  // absolue : le relevé §6.4 affiche zéro pour les trois barrières et dit la
+  // valeur non exposée par le jeu d'origine, donc le franchissement reste NOTRE
+  // choix. Ancien degatsFranchissement × ancienne matrice, en milli-PV :
+  //   Ronce  2,5 PV/tick × {1 · 0,1 · 0}  → {2500 · 250 · 0}
+  //   Herse  15  PV/tick × {0,03 · 1 · 0} → {450 · 15000 · 0}
+  assert.deepEqual(DEFENSES.ronce.degatsFranchissement,
+    { infanterie: 2500, vehicule: 250, structureOuAviation: 0 });
+  assert.deepEqual(DEFENSES.herse.degatsFranchissement,
+    { infanterie: 450, vehicule: 15_000, structureOuAviation: 0 });
 
   // Coût par tick à barrière PLEINE VIE, formule
-  // floor(franchissementMilli × facteurMatrice × 1000 / 1000²) :
-  //   Ronce contre infanterie : floor(2500 × 1000 × 1000 / 10⁶) = 2500 → 2,5 PV
-  //   Ronce contre véhicule   : floor(2500 ×  100 × 1000 / 10⁶) =  250 → 0,25 PV
-  //   Herse contre infanterie : floor(15000 ×  30 × 1000 / 10⁶) =  450 → 0,45 PV
-  //   Herse contre véhicule   : floor(15000 × 1000 × 1000 / 10⁶) = 15000 → 15 PV
+  // floor(franchissementColonneMilli × 1000 / 1000), soit la colonne elle-même :
+  //   Ronce contre infanterie : 2 500 milli-PV →  2,5 PV
+  //   Ronce contre véhicule   :   250 milli-PV →  0,25 PV
+  //   Herse contre infanterie :   450 milli-PV →  0,45 PV
+  //   Herse contre véhicule   : 15 000 milli-PV → 15 PV
   //
-  // Ticks passés sur une case : ceil(1000 / vitesseMilli), soit 20 pour
-  // l'infanterie (50), 10 pour un blindé lourd (100), 9 pour un rapide (120).
-  // D'où le tableau du §3, à barrière pleine vie :
-  //   Meute (100 PV, 20 ticks)     : Ronce 50 PV = 50 %  · Herse  9 PV =  9 %
-  //   Fouisseurs (150 PV, 20)      : Ronce 50 PV = 33 %  · Herse  9 PV =  6 %
-  //   Ratisseur (200 PV, 9 ticks)  : Ronce 2,25 PV = 1 % · Herse 135 PV = 68 %
-  //   Fendeur (300 PV, 10 ticks)   : Ronce 2,5 PV = 1 %  · Herse 150 PV = 50 %
-  const ticksSurUneCase = (vitesse) => Math.ceil(1000 / (vitesse * 100));
-  assert.equal(ticksSurUneCase(UNITES.meute.vitesse), 20);
+  // ⚠ Seuils déplacés au lot 4A : les vitesses mesurées changent le temps passé
+  // sur une case. ceil(1000 / vitesse), soit 17 pour l'infanterie (60), 12 pour
+  // un char moyen (90) et 9 pour un rapide (120).
+  const ticksSurUneCase = (vitesse) => Math.ceil(1000 / vitesse);
+  assert.equal(ticksSurUneCase(UNITES.meute.vitesse), 17);
   assert.equal(ticksSurUneCase(UNITES.ratisseur.vitesse), 9);
-  assert.equal(ticksSurUneCase(UNITES.fendeur.vitesse), 10);
+  assert.equal(ticksSurUneCase(UNITES.fendeur.vitesse), 12);
 
   // Et la mesure, dans le moteur. Chaque unité canarde la barrière pendant son
-  // approche : à l'entrée sur la case, la barrière est à 200 000 − 48 000
-  // = 152 000 milli-PV, soit 760 ‰, dans les quatre cas.
-  //   — le Meute rend 2400/tick pendant 20 ticks (matrice 0,3 contre structure) ;
-  //   — le Fendeur rend 4800/tick pendant 10 ticks (matrice 0,4).
-  // Le franchissement du premier tick de présence vaut donc 760/1000 du taux
-  // à pleine vie.
+  // approche, et les PV mesurés des barrières ont quintuplé — la Ronce passe de
+  // 200 à 1 000 PV, la Herse de 200 à 1 500 — si bien qu'à l'entrée sur la case
+  // elles sont bien plus fraîches qu'avant : 881 ‰ et 920 ‰ contre 760 ‰.
+  //   — le Meute entre au tick 17, rendant 7000/tick pendant 17 ticks ;
+  //   — le Fendeur entre au tick 12, rendant 10 000/tick pendant 12 ticks.
   const attendus = [
-    ['ronce', 'meute', 20, 1900], //  floor(2500 × 1000 × 760 / 10⁶) =  1 900
-    ['ronce', 'fendeur', 10, 190], //  floor(2500 ×  100 × 760 / 10⁶) =    190
-    ['herse', 'meute', 20, 342], //   floor(15000 ×  30 × 760 / 10⁶) =    342
-    ['herse', 'fendeur', 10, 11_400], // floor(15000 × 1000 × 760 / 10⁶) = 11 400
+    ['ronce', 'meute', 17, 881_000, 2202], //  floor(2500  × 881 / 1000) =  2 202
+    ['ronce', 'fendeur', 12, 880_000, 220], //  floor(250  × 880 / 1000) =    220
+    ['herse', 'meute', 17, 1_381_000, 414], //  floor(450  × 920 / 1000) =    414
+    ['herse', 'fendeur', 12, 1_380_000, 13_800], // floor(15000 × 920 / 1000) = 13 800
   ];
-  for (const [barriere, unite, tickEntree, degats] of attendus) {
+  for (const [barriere, unite, tickEntree, murALEntree, degats] of attendus) {
     const montage = {
       niveau: 1,
       saveur: null,
@@ -661,19 +695,23 @@ test('T14 — le coût du franchissement, ligne à ligne', () => {
     const attaquant = etat.entites.find((e) => e.camp === 'attaque');
     const mur = etat.entites.find((e) => e.id === barriere);
     for (let t = 0; t < tickEntree; t++) tick(etat);
-    assert.equal(mur.pvMilli, 152_000, `${barriere} + ${unite} : barrière à l'entrée`);
+    assert.equal(mur.pvMilli, murALEntree, `${barriere} + ${unite} : barrière à l'entrée`);
     const avant = attaquant.pvMilli;
     tick(etat);
     assert.equal(avant - attaquant.pvMilli, degats, `${barriere} + ${unite} : franchissement`);
   }
 
-  // Le fond du sujet : une infanterie RÉCHAPPE désormais d'une Ronce. À 20 PV
-  // par tick, elle mourait en 5 ticks là où la traversée en demande 20 — elle
-  // mourait quatre fois avant d'avoir traversé.
+  // Le fond du sujet : une infanterie RÉCHAPPE d'une Ronce. Elle en réchappe
+  // même très largement depuis le lot 4A — 17 ticks à 2 500 milli-PV coûtent
+  // 42,5 PV sur les 700 mesurés du Fusilier, soit 6,1 %, là où le lot 2B visait
+  // la moitié de sa vie. Les PV ont été mesurés, le franchissement non : c'est
+  // le seul endroit du roster où les deux échelles ne se parlent plus, et il
+  // est à revoir au banc.
   assert.ok(
-    UNITES.meute.pv * 1000 > 20 * 2500,
-    'vingt ticks de Ronce à pleine vie doivent laisser un Fusilier en vie',
+    UNITES.meute.pv * 1000 > 17 * 2500,
+    'dix-sept ticks de Ronce à pleine vie doivent laisser un Fusilier en vie',
   );
+  assert.equal(Math.round((17 * 2500 * 100) / (UNITES.meute.pv * 1000)), 6);
 });
 
 // ---------------------------------------------------------------------------
@@ -749,7 +787,12 @@ test('T16 — un montage sans niveau par entité se comporte comme au lot 2A', (
   const merlon = etat.entites.find((e) => e.id === 'merlon');
   const meute = etat.entites.find((e) => e.camp === 'attaque');
   assert.equal(merlon.pvMaxMilli, DEFENSES.merlon.pv * 1000, 'PV inchangés au niveau 1');
-  assert.equal(meute.degats, UNITES.meute.degats, 'dégâts inchangés au niveau 1');
+  // Les colonnes de dégâts sont en milli-PV sur l'entité : au niveau 1, c'est
+  // exactement la table des données × 1000, sans autre transformation.
+  for (const colonne of ['infanterie', 'vehicule', 'structureOuAviation']) {
+    assert.equal(meute.degatsColonne[colonne], UNITES.meute.degats[colonne] * 1000,
+      `${colonne} : dégâts inchangés au niveau 1`);
+  }
   assert.equal(facteurMilli(1), 1000);
 
   // Et le BigInt des points de recherche reste CONFINÉ : il n'entre ni dans

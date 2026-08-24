@@ -1,5 +1,18 @@
 # Annexe — statistiques d'unités
 
+⚠⚠ **PÉRIMÉ DEPUIS LE LOT 4A (24/08). NE PAS CODER À PARTIR DE CE FICHIER.**
+
+Les tables de statistiques ci-dessous — PV, dégâts, portées, vitesses, réserves, et toute la
+« matrice d'efficacité » — ont été **remplacées en bloc** par les profils mesurés du §6 de
+`RELEVE-TA-COURBES-2.md`, transcrits dans `src/data/combat.js`. Le Fusilier n'a plus 100 PV mais
+700 ; **la matrice n'existe plus**, les dégâts sont absolus, un entier par colonne.
+
+Ce qui reste utile ici : la correspondance des noms (Ouvrage / joueur / TA), les châssis, les
+spécialités, les comportements aériens, les masses et les points d'armée — que le relevé ne donne
+pas. Tout le reste ment. **La seule source de calibrage est `src/data/`.**
+
+---
+
 ⚠ **Transcription, pas source.** Ces valeurs proviennent du classeur `FOYER-ZERO-CALIBRAGE-2.xlsx`
 rempli par Ethan, qui n'est plus accessible dans la session courante. Elles ont été relevées lors
 de l'audit et sont fidèles, mais **le classeur original fait foi** et doit être ajouté au dossier.
