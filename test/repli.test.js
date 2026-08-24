@@ -283,17 +283,19 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   const r = executerRaidComplet(parametres);
   assert.equal(r.cause, 'attaquants', 'la cause n\'est plus l\'expiration');
   assert.ok(r.nbTicks < 900, `${r.nbTicks} ticks, il en fallait moins de 900`);
-  assert.equal(r.nbTicks, 471);
-  // ⚠ Seuils déplacés deux fois, et à chaque fois par un changement de RÈGLE,
+  assert.equal(r.nbTicks, 315);
+  // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
   // tick — les tirs stériles allaient enfin sur des cibles qu'ils entamaient.
-  // Lot 4A, roster mesuré et T = 16 s : 66 992 + 22 330, six survivants,
-  // tick 471. Le raid est plus COURT malgré l'allongement des combats, parce
-  // que l'assaut d'infanterie mesuré est bien plus mordant contre les bâtiments
-  // — les Grenadiers passent de 8 × 1,0 à 25 PV par tir contre une structure.
-  assert.deepEqual(r.butin, { quartz: 66_992, scorie: 22_330 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
+  // Lot 4A, roster mesuré : 66 992 + 22 330, six survivants, tick 471.
+  // Lot 4B : 26 319 + 8 773, sept survivants, tick 315. Deux causes cumulées —
+  // les bâtiments quintuplent de PV, donc la même infanterie en entame une
+  // fraction cinq fois moindre ; et l'assaut, désormais borné aux 95 points du
+  // niveau 15, ne peut plus aligner des Guetteurs et des Fouisseurs verrouillés
+  // jusqu'aux niveaux 22 et 24.
+  assert.deepEqual(r.butin, { quartz: 26_319, scorie: 8773 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 7);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',

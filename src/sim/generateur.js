@@ -28,6 +28,9 @@ import {
   TYPES_SITE,
   RAID_OUVRAGE,
   DISPOSITION_DEFENSES,
+  POINTS_ARMEE,
+  PROFILS_ASSAUT,
+  EMPLACEMENTS_ASSAUT,
 } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
 import { enEntier, cleCase, estDansLaBande } from './grille.js';
@@ -428,6 +431,42 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
 const CASES_DEPLOIEMENT = (GRILLE.bandes.deploiement.derniere
   - GRILLE.bandes.deploiement.premiere + 1) * GRILLE.largeur;
 
+/**
+ * Tirage pondéré d'unités sous contrainte de budget et d'emplacements.
+ *
+ * C'est le cœur commun de `genererVague` (l'Ouvrage) et de `genererAssaut` (le
+ * joueur) : une seule mécanique, pas deux. On tire une unité à la fois, par
+ * ticket entier — un ticket par millième de la répartition —, en ne gardant
+ * comme candidates que celles qui tiennent encore dans ce qui reste du budget.
+ * La renormalisation aux seules candidates abordables est ce qui fait converger
+ * le remplissage : quand il ne reste que 5 points, seules les unités à 5 points
+ * peuvent sortir.
+ *
+ * @param {object} rng PRNG explicite, consommé dans l'ordre.
+ * @param {Map<string, number>} repartition identifiant → poids en millièmes.
+ * @param {number} budget points d'armée disponibles.
+ * @param {number} maxEmplacements bornage physique, indépendant du budget.
+ * @returns {{ choisis: string[], reste: number }}
+ */
+function tirerSousBudget(rng, repartition, budget, maxEmplacements) {
+  const choisis = [];
+  let reste = budget;
+  while (choisis.length < maxEmplacements) {
+    const candidats = [...repartition].filter(([id]) => UNITES[id].points <= reste);
+    if (candidats.length === 0) break;
+    const total = candidats.reduce((somme, [, p]) => somme + p, 0);
+    let ticket = entier(rng, 1, total);
+    let choisi = candidats[candidats.length - 1][0];
+    for (const [id, p] of candidats) {
+      ticket -= p;
+      if (ticket <= 0) { choisi = id; break; }
+    }
+    choisis.push(choisi);
+    reste -= UNITES[choisi].points;
+  }
+  return { choisis, reste };
+}
+
 /** Rang d'une unité dans l'ordre de vagues de l'Ouvrage. */
 function rangSpecialite(id) {
   const rang = RAID_OUVRAGE.ordreVagues.indexOf(UNITES[id].specialite);
@@ -462,23 +501,7 @@ export function genererVague({ niveau, budgetPoints, graine }) {
   const rng = creerRng(graine);
   const repartition = composerRepartition(rng, VAGUES.parNiveau, niveau, VAGUES.variancePoints);
 
-  const choisis = [];
-  let reste = budgetPoints;
-  while (choisis.length < CASES_DEPLOIEMENT) {
-    const candidats = [...repartition].filter(([id]) => UNITES[id].points <= reste);
-    if (candidats.length === 0) break;
-    // Tirage pondéré entier : un ticket par millième, renormalisé aux seuls
-    // candidats encore abordables.
-    const total = candidats.reduce((somme, [, p]) => somme + p, 0);
-    let ticket = entier(rng, 1, total);
-    let choisi = candidats[candidats.length - 1][0];
-    for (const [id, p] of candidats) {
-      ticket -= p;
-      if (ticket <= 0) { choisi = id; break; }
-    }
-    choisis.push(choisi);
-    reste -= UNITES[choisi].points;
-  }
+  const { choisis, reste } = tirerSousBudget(rng, repartition, budgetPoints, CASES_DEPLOIEMENT);
 
   choisis.sort((a, b) => rangSpecialite(a) - rangSpecialite(b));
   const rangeeFront = GRILLE.bandes.deploiement.derniere;
@@ -497,4 +520,126 @@ export function budgetRaid(niveau) {
   return interpolerEntier(
     RAID_OUVRAGE.budgetParNiveau[bas], RAID_OUVRAGE.budgetParNiveau[haut], delta, portee,
   );
+}
+
+// ---------------------------------------------------------------------------
+// L'assaut du joueur — lot 4B
+// ---------------------------------------------------------------------------
+
+/** Emplacements d'un assaut : quatre vagues de neuf, soit 36. */
+const CASES_ASSAUT = EMPLACEMENTS_ASSAUT.vagues * EMPLACEMENTS_ASSAUT.parVague;
+
+/** Budget d'armée du joueur à un niveau donné : `base + parNiveau × niveau`. */
+export function budgetAssaut(niveau) {
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
+    throw new Error(`générateur : niveau ${niveau} hors de 1…${NIVEAU.plafond}`);
+  }
+  return POINTS_ARMEE.offense.base + POINTS_ARMEE.offense.parNiveau * niveau;
+}
+
+/**
+ * Repondère une répartition d'unités selon des proportions de CHÂSSIS.
+ *
+ * La répartition d'entrée dit quelle unité a sa place à ce niveau ; le profil
+ * dit quelle part revient à chaque châssis. On regroupe donc par châssis, on
+ * renormalise la part de chacun sur les seuls châssis PRÉSENTS — un blindé
+ * n'existe pas avant le niveau 12, sa part doit bien aller quelque part —, puis
+ * on redistribue cette part entre les unités du châssis au prorata de leur poids
+ * d'origine.
+ *
+ * Tout en entiers : le facteur MILLE² donne assez de marge pour que le plancher
+ * n'écrase aucune unité, et `renormaliser` ramène la somme à 1000 millièmes.
+ *
+ * @returns {Map<string, number>|null} null si AUCUN châssis du profil n'est
+ *   représenté — l'appelant retombe alors sur la répartition nue.
+ */
+function pondererParChassis(repartition, proportions) {
+  const parChassis = new Map();
+  for (const [id, p] of repartition) {
+    const c = UNITES[id].chassis;
+    if (!parChassis.has(c)) parChassis.set(c, []);
+    parChassis.get(c).push([id, p]);
+  }
+
+  const actifs = [...parChassis.keys()].filter((c) => (proportions[c] ?? 0) > 0);
+  if (actifs.length === 0) return null;
+  const totalActif = actifs.reduce((somme, c) => somme + proportions[c], 0);
+
+  const sortie = new Map();
+  for (const c of actifs) {
+    const lignes = parChassis.get(c);
+    const sommeChassis = lignes.reduce((somme, [, p]) => somme + p, 0);
+    for (const [id, p] of lignes) {
+      const poids = Math.floor(
+        (proportions[c] * MILLE * MILLE * p) / (totalActif * sommeChassis),
+      );
+      if (poids > 0) sortie.set(id, poids);
+    }
+  }
+  return sortie.size > 0 ? renormaliser(sortie) : null;
+}
+
+/**
+ * Compose l'assaut du joueur : même mécanique que `genererVague`, à deux
+ * différences près — la répartition passe par les proportions de châssis du
+ * profil, et le plafond d'emplacements est celui des quatre vagues et non de la
+ * bande de déploiement.
+ *
+ * Trois garanties, éprouvées en test :
+ *   — le coût total ne dépasse JAMAIS le budget ;
+ *   — aucune unité dont `apparition > niveau` n'est retenue, le filtre étant
+ *     celui de `composerRepartition` ;
+ *   — au plus 36 emplacements, au plus 9 par vague.
+ *
+ * `profilRespecte` vaut false quand aucun châssis du profil n'est débloqué —
+ * un assaut blindé sous le niveau 12. Le générateur retombe alors sur la
+ * répartition nue plutôt que de rendre une armée vide, et le dit.
+ *
+ * @returns {{ vagues: Array<Array<{id,colonne,niveau}>>, pointsEngages: number,
+ *   pointsRestants: number, budgetPoints: number, profilRespecte: boolean }}
+ */
+export function genererAssaut({ niveau, budgetPoints, profil, graine }) {
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
+    throw new Error(`générateur : niveau ${niveau} hors de 1…${NIVEAU.plafond}`);
+  }
+  const modele = PROFILS_ASSAUT[profil];
+  if (modele === undefined) {
+    throw new Error(`générateur : profil d'assaut inconnu « ${profil} »`);
+  }
+  const budget = budgetPoints ?? budgetAssaut(niveau);
+  if (!Number.isInteger(budget) || budget < 0) {
+    throw new Error(`générateur : budget ${budget} doit être un entier ≥ 0`);
+  }
+  if (!Number.isInteger(graine)) {
+    throw new Error(`générateur : graine ${graine} n'est pas un entier`);
+  }
+
+  const rng = creerRng(graine);
+  const nue = composerRepartition(rng, VAGUES.parNiveau, niveau, VAGUES.variancePoints);
+  const pondere = pondererParChassis(nue, modele.chassis);
+  const profilRespecte = pondere !== null;
+
+  const { choisis, reste } = tirerSousBudget(
+    rng, pondere ?? nue, budget, CASES_ASSAUT,
+  );
+  choisis.sort((a, b) => rangSpecialite(a) - rangSpecialite(b));
+
+  // Quatre vagues de neuf. La colonne suit le rang dans la vague, si bien que
+  // l'ordre de spécialité se lit de gauche à droite puis de vague en vague.
+  const vagues = [];
+  for (let v = 0; v * EMPLACEMENTS_ASSAUT.parVague < choisis.length; v += 1) {
+    const debut = v * EMPLACEMENTS_ASSAUT.parVague;
+    vagues.push(
+      choisis.slice(debut, debut + EMPLACEMENTS_ASSAUT.parVague).map((id, i) => ({
+        id, colonne: i + 1, niveau,
+      })),
+    );
+  }
+  return {
+    vagues,
+    pointsEngages: budget - reste,
+    pointsRestants: reste,
+    budgetPoints: budget,
+    profilRespecte,
+  };
 }

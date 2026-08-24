@@ -230,7 +230,7 @@ test('T3 — à réserve nulle, le bâtiment sort du jeu et la défense y reste'
   const vide = creerCombat(montageAvec(0));
   jouer(vide, 1);
   assert.equal(cibleDe(vide, trouver(vide, 'perceurs')), 'casemate');
-  assert.equal(trouver(vide, 'gangue').pvMilli, 150_000, 'la Gangue n\'a rien reçu');
+  assert.equal(trouver(vide, 'gangue').pvMilli, 1_000_000, 'la Gangue n\'a rien reçu');
 
   // À réserve 1, les deux redeviennent valides et c'est la règle du lot 2A qui
   // tranche : « la plus proche, à égalité la plus à gauche ». Distances égales,
@@ -268,17 +268,21 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
     type: 'avantPoste', niveau: 15, saveur: 'richeQuartz', graine: 1, assaut: 'blindeLourd',
   };
   const r = executerRaidComplet(parametres);
-  // ⚠ SEUILS DÉPLACÉS AU LOT 4A. Avant le lot 3C : `duree` au tick 900. Au lot
-  // 3C : `attaquants` au tick 542, butin 55 251 + 18 417, 2 survivants. Avec le
-  // roster mesuré, le même assaut lourd RASE le site : `souche` au tick 419,
-  // 299 878 quartz et 99 959 scorie, 4 survivants. Ce que ce test tient est
-  // inchangé — le raid ne se termine pas faute de mieux — et il le tient
-  // désormais par une victoire au lieu d'une élimination.
+  // ⚠ SEUILS DÉPLACÉS DEUX FOIS. Avant le lot 3C : `duree` au tick 900. Lot 3C :
+  // `attaquants` au tick 542. Lot 4A, roster mesuré : `souche` au tick 419, le
+  // même assaut lourd rasant le site.
+  //
+  // Lot 4B : `attaquants` au tick 383, 2 656 quartz. L'assaut s'effondre, et
+  // pour DEUX raisons cumulées. Les bâtiments quintuplent de PV, donc l'objectif
+  // demande cinq fois plus de travail ; et surtout le préréglage figé alignait
+  // au niveau 15 un Broyeur (débloqué au 28) et un Pilon (au 32), que le budget
+  // refuse désormais. Ce que ce test tient est inchangé depuis le lot 3C : le
+  // raid ne se termine pas faute de mieux.
   assert.notEqual(r.cause, 'duree', 'le raid ne doit plus expirer faute de mieux');
-  assert.equal(r.cause, 'souche');
-  assert.equal(r.nbTicks, 419);
-  assert.deepEqual(r.butin, { quartz: 299_878, scorie: 99_959 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
+  assert.equal(r.cause, 'attaquants');
+  assert.equal(r.nbTicks, 383);
+  assert.deepEqual(r.butin, { quartz: 2656, scorie: 885 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 2);
 });
 
 // ---------------------------------------------------------------------------
@@ -336,21 +340,23 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   assert.ok(ticksVises > 40_000, `balayage trop maigre : ${ticksVises} ticks-entités`);
   assert.equal(survivants, 0, 'aucune cible stérile ne doit survivre à un ciblage');
 
-  // ⚠ SEUIL DÉPLACÉ AU LOT 4A, et il faut dire exactement ce qu'il mesure.
+  // ⚠ SEUIL DÉPLACÉ DEUX FOIS, et il faut dire exactement ce qu'il mesure.
   // Le lot 3C exigeait zéro raid terminé par `duree`, et c'était le bon critère
   // TANT QUE la seule cause d'expiration était une unité gelée sur une cible
-  // qu'elle ne pouvait pas blesser. Cette cause-là a bien disparu et ne revient
-  // pas. Mais l'échelle T = 16 s allonge tous les combats, et UN raid sur 54
-  // dépasse maintenant les 90 secondes : `mixte` / avant-poste 15 / graine 7.
+  // qu'elle ne pouvait pas blesser. Cette cause-là a disparu et ne revient pas —
+  // c'est ce que les assertions ci-dessus tiennent, et elles tiennent toujours.
   //
-  // Ce n'est pas un gel. Vérifié en levant le plafond : ce raid se conclut de
-  // lui-même au tick 907, par `attaquants`, le dernier Pilon se repliant après
-  // ses 30 ticks inutiles. Il manque SEPT ticks, pas une issue. Le §3 du brief
-  // annonçait 389 ticks de marge sous le plafond, mesurés avec le roster
-  // d'avant ; le roster mesuré les consomme. C'est un fait à remonter, pas à
-  // corriger en douce — voir le rapport.
-  assert.deepEqual(expires, ['mixte/avantPoste/7'],
-    'un seul raid touche le plafond de 900, et par dépassement de délai');
+  // Ce qui bouge est la DURÉE des combats. Au lot 4A, l'échelle T = 16 s en
+  // faisait déjà dépasser un sur 54. Au lot 4B, les bâtiments quintuplent de PV
+  // et les assauts rentrent dans leur budget : deux raids dépassent les 90
+  // secondes, `infanterie/base/11` et `blindeLourd/base/11`.
+  //
+  // Aucun des deux n'est un gel. Vérifié en levant le plafond : ils se
+  // concluent d'eux-mêmes aux ticks 1084 et 1964, par `attaquants`. Ce sont des
+  // combats trop longs, pas des combats sans issue — un fait à remonter, pas à
+  // corriger en douce. Voir le rapport.
+  assert.deepEqual(expires.sort(), ['blindeLourd/base/11', 'infanterie/base/11'],
+    'deux raids touchent le plafond de 900, et par dépassement de délai');
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');
   assert.equal(dcaSteriles, 0, 'la DCA ne vise plus rien qu\'elle ne puisse abattre');
@@ -381,14 +387,15 @@ test('T6 — la réserve épuisée fait CHANGER de cible, pas conserver l\'ancie
   jouer(etat, 1);
   assert.equal(cibleDe(etat, grenadier), 'gangue', 'la plus proche, et valide');
   assert.equal(grenadier.reserve, 0, 'le tir a vidé la réserve');
-  // ⚠ Seuil déplacé au lot 4A : le Grenadier (Missile Squad) tire 4 000 ÷ 160
-  // = 25 PV contre une structure, soit 25 000 milli-PV à pleine santé.
-  // Gangue 150 000 → 125 000.
-  assert.equal(trouver(etat, 'gangue').pvMilli, 150_000 - 25_000);
+  // Le Grenadier (Missile Squad) tire 4 000 ÷ 160 = 25 PV contre une structure,
+  // soit 25 000 milli-PV à pleine santé (lot 4A).
+  // ⚠ Seuil déplacé au lot 4B : la Gangue passe de 150 à 1 000 PV.
+  // 1 000 000 → 975 000.
+  assert.equal(trouver(etat, 'gangue').pvMilli, 1_000_000 - 25_000);
 
   jouer(etat, 2);
   assert.equal(cibleDe(etat, grenadier), 'casemate', 'il CHANGE de cible');
-  assert.equal(trouver(etat, 'gangue').pvMilli, 125_000, 'et la Gangue ne reçoit plus rien');
+  assert.equal(trouver(etat, 'gangue').pvMilli, 975_000, 'et la Gangue ne reçoit plus rien');
 });
 
 // ---------------------------------------------------------------------------
