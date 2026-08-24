@@ -33,9 +33,11 @@ const GANGUE_LOINTAINE = { id: 'gangue', rangee: 18, colonne: 9 };
 // ---------------------------------------------------------------------------
 
 test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'ennemie', () => {
-  // Fendeur masse 10, vitesse 1,0 → 100 milli/tick, en (1,5). Fusilier allié
-  // masse 1 en (2,5), vitesse 0,5 → 50 milli/tick. Le Fendeur va deux fois plus
-  // vite : il rattrape l'allié et voudrait l'écraser.
+  // ⚠ Seuils déplacés au lot 4A : le Fendeur (Predator) avance à 90 milli/tick
+  // et le Fusilier à 60, le premier ayant 1 000 PV et le second 700. Le rapport
+  // des vitesses passe de 2,0 à 1,5 — le Fendeur rattrape toujours l'allié, un
+  // peu moins vite, et c'est tout ce dont ce test a besoin.
+  // Fendeur masse 10 en (1,5), Fusilier allié masse 1 en (2,5).
   const allie = {
     niveau: 1,
     saveur: null,
@@ -53,10 +55,10 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
   // Le Fusilier est INTACT : entre alliés, blocage, jamais écrasement.
   assert.equal(fusilier.vivant, true, 'le Fusilier allié doit survivre');
   assert.equal(fusilier.ecrase, false);
-  assert.equal(fusilier.pvMilli, 100_000, 'et ne rien avoir perdu — nul ne lui tire dessus');
+  assert.equal(fusilier.pvMilli, 700_000, 'et ne rien avoir perdu — nul ne lui tire dessus');
 
   // Et le Fendeur ne l'a pas doublé : il reste sous lui. Le Fusilier progresse
-  // de 50/tick depuis 2000 sans jamais être bloqué ; le Fendeur le suit et se
+  // de 60/tick depuis 2000 sans jamais être bloqué ; le Fendeur le suit et se
   // retrouve collé au plafond de la case qu'occupe l'allié.
   assert.ok(
     caseDepuisMilli(fendeur.rangeeMilli) < caseDepuisMilli(fusilier.rangeeMilli),
@@ -77,13 +79,14 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
   const combat = creerCombat(ennemi);
   const attaquant = combat.entites.find((e) => e.camp === 'attaque');
   const defenseur = combat.entites.find((e) => e.camp === 'defense' && e.id === 'meute');
-  // 2000 + 10 × 100 = 3000 : la rencontre a lieu au tick 10.
-  jouer(combat, 9);
-  assert.equal(defenseur.vivant, true, 'pas encore au contact au tick 9');
-  jouer(combat, 10);
+  // 2000 + 11 × 90 = 2990, encore en case 2 ; le pas suivant viserait 3080,
+  // donc la case 3 : la rencontre a lieu au tick 12.
+  jouer(combat, 11);
+  assert.equal(defenseur.vivant, true, 'pas encore au contact au tick 11');
+  jouer(combat, 12);
   assert.equal(defenseur.vivant, false, 'écrasé au tick de la rencontre');
   assert.equal(defenseur.ecrase, true);
-  assert.equal(attaquant.rangeeMilli, 3000, 'et la mobile continue sans s\'arrêter');
+  assert.equal(attaquant.rangeeMilli, 3080, 'et la mobile continue sans s\'arrêter');
 });
 
 // ---------------------------------------------------------------------------
@@ -141,32 +144,34 @@ test('T3 — une unité qui ne peut plus rien faire rentre à la base', () => {
   const etat = creerCombat(montage);
   const meute = etat.entites.find((e) => e.camp === 'attaque');
 
-  // Vitesse 0,5 → 50 milli/tick, départ à 2000, la rangée 18 commence à 18 000 :
-  // t₁₈ = (18 000 − 2 000) / 50 = 320. Au début du tick 321 il est en rangée 18,
-  // premier tick où il ne peut ni avancer ni nuire.
-  const t18 = (18_000 - 2000) / UNITES.meute.vitesse / 100;
-  assert.equal(t18, 320);
+  // ⚠ Seuil déplacé au lot 4A : vitesse 60 milli/tick au lieu de 50. Départ à
+  // 2000, la rangée 18 commence à 18 000 : t₁₈ = ceil(16 000 / 60) = 267, le
+  // pas de 266 ne portant qu'à 17 960. Au tick 267 il ENTRE en rangée 18 —
+  // c'est encore un tick de progrès. Le premier tick sans avancer ni nuire est
+  // le 268e.
+  const t18 = Math.ceil((18_000 - 2000) / UNITES.meute.vitesse);
+  assert.equal(t18, 267);
   jouer(etat, t18);
-  assert.equal(meute.rangeeMilli, 18_000);
+  assert.equal(meute.rangeeMilli, 18_020);
   assert.equal(meute.ticksInutiles, 0, 'il progressait encore jusqu\'ici');
 
   jouer(etat, t18 + 1);
   assert.equal(meute.ticksInutiles, 1);
 
-  // Le compteur court 30 ticks : sortie au tick t₁₈ + 30 = 350.
+  // Le compteur court 30 ticks : sortie au tick t₁₈ + 30 = 297.
   jouer(etat, t18 + TICKS_AVANT_REPLI - 1);
   assert.equal(meute.ticksInutiles, TICKS_AVANT_REPLI - 1);
   assert.equal(meute.sorti, false);
 
   jouer(etat, t18 + TICKS_AVANT_REPLI);
-  assert.equal(etat.tick, 350);
+  assert.equal(etat.tick, 297);
   assert.equal(meute.sorti, true, 'sortie exactement au tick t₁₈ + 30');
   assert.equal(meute.vivant, true, 'rentrer à la base n\'est pas mourir');
 
   // Elle compte parmi les survivants, et le raid s'arrête faute d'attaquants.
   const resultat = resoudre(etat);
   assert.equal(resultat.cause, 'attaquants');
-  assert.equal(resultat.tick, 350);
+  assert.equal(resultat.tick, 297);
   const survivants = resultat.attaquants.filter((a) => !a.detruit);
   assert.equal(survivants.length, 1);
   assert.equal(survivants[0].sorti, true);
@@ -183,14 +188,16 @@ test('T4 — un blocage transitoire remet le compteur à zéro', () => {
   //   A — Fusilier posé D'EMBLÉE en rangée 18. Il ne peut ni avancer (c'est le
   //       fond) ni nuire (4000² = 16 000 000 contre une portée² de 2 250 000) :
   //       son compteur part au tick 1 et il rentre à la base au tick 30.
-  //   B — Chasseur en rangée 17, vitesse 1,0 → 100 milli/tick. Parti de 17 000,
-  //       il est à 17 900 au tick 9 ; au tick 10 sa destination tombe en
-  //       rangée 18, occupée par A. Entre alliés c'est un BLOCAGE, jamais un
-  //       écrasement — et sa portée² de 6 250 000 ne couvre pas davantage la
-  //       Gangue. Son compteur part donc au tick 10.
+  //   B — Chasseur en rangée 17, vitesse 90 milli/tick depuis le lot 4A. Parti
+  //       de 17 000, il est à 17 990 au tick 11 ; au tick 12 sa destination,
+  //       18 080, tombe en rangée 18, occupée par A. Entre alliés c'est un
+  //       BLOCAGE, jamais un écrasement — et sa portée² de 6 250 000 ne couvre
+  //       pas davantage la Gangue. Son compteur part donc au tick 12.
   //
-  // De 10 à 29 inclus, B accumule 20 ticks inutiles. Au tick 30 A libère la
-  // case en rentrant, B repart, et son compteur retombe à zéro.
+  // ⚠ Seuils déplacés au lot 4A : de 12 à 29 inclus, B accumule 18 ticks
+  // inutiles au lieu de 20, sa vitesse de 90 lui laissant deux pas de plus
+  // avant le contact. Au tick 30 A libère la case en rentrant, B repart, et son
+  // compteur retombe à zéro — ce que ce test tient, inchangé.
   const montage = {
     niveau: 1,
     saveur: null,
@@ -207,13 +214,13 @@ test('T4 — un blocage transitoire remet le compteur à zéro', () => {
   const bloqueur = etat.entites.find((e) => e.id === 'meute');
   const bloque = etat.entites.find((e) => e.id === 'fendeur');
 
-  jouer(etat, 9);
-  assert.equal(bloque.rangeeMilli, 17_900, '17 000 + 9 × 100');
+  jouer(etat, 11);
+  assert.equal(bloque.rangeeMilli, 17_990, '17 000 + 11 × 90');
   assert.equal(bloque.ticksInutiles, 0, 'il progressait encore');
 
   jouer(etat, 29);
-  assert.equal(bloque.ticksInutiles, 20, 'vingt ticks bloqué derrière son allié');
-  assert.equal(bloque.rangeeMilli, 17_900, 'et pas d\'un milli-case de plus');
+  assert.equal(bloque.ticksInutiles, 18, 'dix-huit ticks bloqué derrière son allié');
+  assert.equal(bloque.rangeeMilli, 17_990, 'et pas d\'un milli-case de plus');
   assert.equal(bloque.sorti, false, 'il n\'est pas encore rentré');
   assert.equal(bloqueur.vivant, true, 'et son allié est toujours vivant : blocage, pas écrasement');
   assert.equal(bloqueur.ecrase, false);
@@ -223,7 +230,7 @@ test('T4 — un blocage transitoire remet le compteur à zéro', () => {
   jouer(etat, 30);
   assert.equal(bloqueur.sorti, true);
   assert.equal(bloque.ticksInutiles, 0, 'le compteur est remis à zéro');
-  assert.equal(bloque.rangeeMilli, 18_000, 'et B a repris sa marche dès ce tick');
+  assert.equal(bloque.rangeeMilli, 18_080, 'et B a repris sa marche dès ce tick');
   assert.equal(bloque.sorti, false);
 });
 
@@ -232,10 +239,13 @@ test('T4 — un blocage transitoire remet le compteur à zéro', () => {
 // ---------------------------------------------------------------------------
 
 test('T5 — nuire suffit à rester, même bloqué contre un mur', () => {
-  // Le montage du lot 2A : Meute en (2,5), Merlon en (3,5). Dégâts par tir
-  // 2400 milli-PV, mur de 500 000 → ceil(500 000 / 2400) = 209 ticks. Le Meute
-  // est bloqué dès le tick 20 et le reste jusqu'au bout : il ne peut pas
-  // avancer, mais il nuit, donc il ne compte aucun tick inutile.
+  // ⚠ Seuils déplacés au lot 4A. Le montage du lot 2A : Meute en (2,5), Merlon
+  // en (3,5). Dégâts par tir 7000 milli-PV, mur de 2 000 000 →
+  // ceil(2 000 000 / 7000) = 286 ticks. Le Meute est bloqué dès le tick 17 et
+  // le reste jusqu'au bout : il ne peut pas avancer, mais il nuit, donc il ne
+  // compte aucun tick inutile. C'est bien plus long qu'avant (209 ticks) — et
+  // c'est justement ce que le test doit couvrir : le repli à 30 ticks ne doit
+  // jamais mordre sur une unité qui travaille, si lente soit-elle.
   const montage = {
     niveau: 1,
     saveur: null,
@@ -249,13 +259,13 @@ test('T5 — nuire suffit à rester, même bloqué contre un mur', () => {
   const meute = etat.entites.find((e) => e.camp === 'attaque');
   const merlon = etat.entites.find((e) => e.id === 'merlon');
 
-  for (const t of [30, 100, 208]) {
+  for (const t of [30, 100, 285]) {
     jouer(etat, t);
     assert.equal(meute.ticksInutiles, 0, `tick ${t} : il tire, il ne compte rien`);
     assert.equal(meute.sorti, false);
   }
-  jouer(etat, 209);
-  assert.equal(merlon.pvMilli, 0, 'le mur tombe au tick 209');
+  jouer(etat, 286);
+  assert.equal(merlon.pvMilli, 0, 'le mur tombe au tick 286');
   assert.equal(meute.sorti, false, 'et il ne s\'est jamais replié');
   assert.equal(meute.ticksInutiles, 0);
 });
@@ -273,17 +283,17 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   const r = executerRaidComplet(parametres);
   assert.equal(r.cause, 'attaquants', 'la cause n\'est plus l\'expiration');
   assert.ok(r.nbTicks < 900, `${r.nbTicks} ticks, il en fallait moins de 900`);
-  assert.equal(r.nbTicks, 566);
-  // ⚠ Seuils déplacés par le lot 3C, et c'est la règle qui a changé, pas le
-  // repli qui aurait régressé. Au lot 3B le butin valait 65 190 quartz et
-  // 21 730 scorie pour six survivants ; il vaut maintenant 82 849 et 27 616
-  // pour cinq. La raison tient en une phrase : les tirs qui partaient dans le
-  // vide — facteur de matrice nul, ou bâtiment hors réserve — vont désormais
-  // sur des cibles qu'ils entament. Plus de bâtiments tombent, donc plus de
-  // butin ; et une unité de plus meurt parce que la défense, elle aussi, ne
-  // gaspille plus ses tirs.
-  assert.deepEqual(r.butin, { quartz: 82_849, scorie: 27_616 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
+  assert.equal(r.nbTicks, 471);
+  // ⚠ Seuils déplacés deux fois, et à chaque fois par un changement de RÈGLE,
+  // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
+  // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
+  // tick — les tirs stériles allaient enfin sur des cibles qu'ils entamaient.
+  // Lot 4A, roster mesuré et T = 16 s : 66 992 + 22 330, six survivants,
+  // tick 471. Le raid est plus COURT malgré l'allongement des combats, parce
+  // que l'assaut d'infanterie mesuré est bien plus mordant contre les bâtiments
+  // — les Grenadiers passent de 8 × 1,0 à 25 PV par tir contre une structure.
+  assert.deepEqual(r.butin, { quartz: 66_992, scorie: 22_330 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
@@ -336,7 +346,7 @@ test('T7 — la légende présente exactement ce que la scène peut émettre', (
   const fictive = {
     mirage: {
       chassis: 'orbital',
-      matrice: { infanterie: 1, vehicule: 0, structureOuAviation: 0 },
+      degats: { infanterie: 1, vehicule: 0, structureOuAviation: 0 },
     },
   };
   const memoire = UNITES.mirage;
@@ -448,7 +458,7 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
   // « Fusiliers » côté assaut et « Meute » côté Ouvrage.
   const assaut = entitesSurLaCase(etat, 2, 5);
   assert.equal(assaut.length, 1);
-  assert.match(decrireEntite(etat, assaut[0]), /^Fusiliers \(Escouade\) · assaut · 100,0 \/ 100,0 PV/);
+  assert.match(decrireEntite(etat, assaut[0]), /^Fusiliers \(Escouade\) · assaut · 700,0 \/ 700,0 PV/);
 
   const ouvrage = entitesSurLaCase(etat, 3, 5);
   assert.equal(ouvrage.length, 1);
@@ -461,8 +471,9 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
   tick(etat);
   assert.match(decrireEntite(etat, assaut[0]), /vise Meute/);
 
-  // Et le compteur de repli s'affiche dès qu'il court. Un Fusilier seul en
-  // colonne 1 arrive au fond au tick 320 et compte à partir du tick 321.
+  // Et le compteur de repli s'affiche dès qu'il court. ⚠ Seuil déplacé au lot
+  // 4A : à 60 milli/tick, un Fusilier seul en colonne 1 entre en rangée 18 au
+  // tick 267 et compte à partir du tick 268.
   const seul = creerCombat({
     niveau: 1,
     saveur: null,
@@ -472,7 +483,7 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
     vagues: [[{ id: 'meute', colonne: 1 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   });
-  jouer(seul, 325);
+  jouer(seul, 272);
   const isole = seul.entites.find((e) => e.camp === 'attaque');
   assert.equal(isole.ticksInutiles, 5);
   // 30 − 5 = 25 ticks avant qu'il ne rentre.

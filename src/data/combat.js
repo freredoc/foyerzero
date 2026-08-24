@@ -66,24 +66,68 @@ export const OBSTACLES = {
   types: ['infanterie', 'vehicule', 'les_deux'],
 };
 
-// --- la matrice unique -------------------------------------------------------
+// --- les trois colonnes de dégâts --------------------------------------------
 // Trois colonnes pour toutes les entités. La troisième change de sens selon le
 // camp : structure en offense, aviation en défense. Les deux lectures ne se
 // croisent jamais — aucun aéronef ne défend, aucun défenseur ne rencontre de
-// structure amie.
+// structure amie. Le §3 du relevé valide cette bascule sur le moteur d'origine :
+// la même unité, consultée en attaque puis en défense, porte les mêmes nombres à
+// une case près, la quatrième passant du bâtiment à l'aviation. Trois colonnes
+// suffisent, une quatrième serait redondante.
 //
 // Règle de bascule, sans exception : anti-structure en attaque → anti-aérien en
 // défense. Les deux autres spécialités se conservent.
-export const MATRICE_COLONNES = ['infanterie', 'vehicule', 'structureOuAviation'];
+//
+// ⚠ LOT 4A — il n'y a PLUS de matrice de facteurs. Les dégâts sont ABSOLUS, un
+// entier par colonne, en PV par tir. La raison est arithmétique : le Fusilier
+// mesuré fait 3 520 · 1 760 · 1 120, dont les ratios valent 1 · 0,5 · 0,31818…,
+// qui ne tient dans aucun entier ; en absolu, 22 · 11 · 7 est exact. Aucune des
+// 57 valeurs de dégâts du relevé n'a de ratio propre, toutes sont multiples de
+// 160. La prédilection n'est donc plus « le facteur vaut 1 » mais « la colonne
+// la plus élevée » — les deux lectures coïncident sur les 23 profils.
+export const COLONNES_DEGATS = ['infanterie', 'vehicule', 'structureOuAviation'];
+
+// --- l'échelle de temps ------------------------------------------------------
+// Le relevé donne des dégâts délivrés sur T secondes ; notre moteur tire 10 fois
+// par seconde. Donc degats = valeur_relevée / (10 × T).
+//
+// T = 16 s n'est pas un compromis, c'est le seul choix EXACT de la plage utile :
+// les 57 valeurs de dégâts du relevé ont 160 pour PGCD, de la plus petite (160,
+// le Watchtower contre l'aviation) à la plus grande (48 000, le Firehawk contre
+// les bâtiments). La conversion est entière si et seulement si 10 × T divise
+// 160. T = 20 donnerait 200, T = 13 donnerait 130, T = 10 donnerait 100 — aucun
+// ne divise 160, et chaque profil demanderait un arrondi.
+export const ECHELLE_DEGATS = {
+  secondes: 16,
+  parTir: 160, // 10 tirs/s × 16 s : le diviseur des valeurs du relevé
+};
 
 // --- unités ------------------------------------------------------------------
 // 14 unités, trois châssis. Deux jeux de noms : le joueur emploie le vocabulaire
 // d'une armée régulière, l'Ouvrage celui des outils et des bêtes. La même ligne
 // sert les deux camps ; seul le module peut différer (moduleOuvrage).
 //
-// Cadence : 10 tirs/s pour tout le monde, DPS = degats × 10. Aucune portée
-// minimale offensive — elle n'existe plus que côté défense.
+// Cadence : 10 tirs/s pour tout le monde, DPS = degats × 10, par colonne.
+// Aucune portée minimale offensive — elle n'existe plus que côté défense.
 // Les dégâts sont proportionnels au pourcentage de PV restants, partout.
+//
+// LOT 4A — profils MESURÉS, plus aucune valeur devinée. PV, dégâts, portée et
+// vitesse sortent tels quels du §6 de RELEVE-TA-COURBES-2.md.
+//   degats         PV par tir et par colonne = valeur du relevé ÷ 160.
+//   vitesse        MILLI-CASES par tick, directement la valeur du relevé.
+//                  60 · 90 · 120 · 240, toutes divisibles par 2,5 (24 · 36 ·
+//                  48 · 96), donc exactes aussi sous obstacle.
+//   reserve        SEULE valeur non mesurée : le relevé ÷ 10. Prise au pied de
+//                  la lettre elle donnerait de 40 à 500 secondes de tir pour un
+//                  raid qui en dure 90 — dix unités sur quatorze auraient de
+//                  quoi tirer plus longtemps que le combat entier, et le
+//                  plancher de 10 % ne mordrait plus sur personne. Divisée par
+//                  10 : de 4 s (Guetteur) à 50 s (Fouisseurs, Pilon).
+//   degatsParcours dégâts d'écrasement mesurés, propriété des VÉHICULES et non
+//                  des barrières. Rangés ici, PAS câblés : notre écrasement
+//                  reste au seuil de masse, arbitrage d'Ethan (§8 du brief).
+//   reparation     secondes au bâtiment producteur de niveau 1, §4 du relevé.
+//                  Hors périmètre du moteur de combat, rangé en données.
 // `apparition` / `apparitionModule` : niveau auquel l'Ouvrage débloque l'unité,
 // puis son module. UNITES fait foi (arbitrage du 24/08) ; CIBLAGE-DEFENSE avait
 // trois valeurs divergentes, écartées.
@@ -91,19 +135,21 @@ export const UNITES = {
   meute: {
     nom: { ouvrage: 'Meute', joueur: 'Fusiliers' }, ta: 'Rifleman Squad',
     chassis: 'escouade', specialite: 'antiInfanterie',
-    points: 5, pv: 100, degats: 8, portee: 1.5, porteeMini: 0, vitesse: 0.5,
-    reserve: 150, masse: 1, comportementAerien: null,
-    matrice: { infanterie: 1, vehicule: 0.2, structureOuAviation: 0.3 },
+    points: 5, pv: 700, portee: 1.5, porteeMini: 0, vitesse: 60,
+    reserve: 70, masse: 1, comportementAerien: null,
+    degats: { infanterie: 22, vehicule: 11, structureOuAviation: 7 },
+    degatsParcours: 0, reparation: 441,
     module: 'fumigene', moduleOuvrage: null,
     defense: { present: true, cible: 'antiInfanterie', module: null },
     apparition: 0, apparitionModule: 20,
   },
   guetteur: {
-    nom: { ouvrage: 'Guetteur', joueur: 'Voltigeurs' }, ta: 'Sniper',
+    nom: { ouvrage: 'Guetteur', joueur: 'Voltigeurs' }, ta: 'Sniper Team',
     chassis: 'escouade', specialite: 'antiInfanterie', // longue portée
-    points: 10, pv: 100, degats: 20, portee: 2.5, porteeMini: 0, vitesse: 0.5,
-    reserve: 150, masse: 1, comportementAerien: null,
-    matrice: { infanterie: 1, vehicule: 0.1, structureOuAviation: 0.1 },
+    points: 10, pv: 500, portee: 2.5, porteeMini: 0, vitesse: 60,
+    reserve: 40, masse: 1, comportementAerien: null,
+    degats: { infanterie: 30, vehicule: 5, structureOuAviation: 4 },
+    degatsParcours: 0, reparation: 882,
     module: 'camouflage', moduleOuvrage: null,
     // Seule unité qui garde son rôle des deux côtés — c'est ce qui la
     // caractérise. Le classeur la donnait anti-véhicule en défense : écarté.
@@ -113,9 +159,10 @@ export const UNITES = {
   perceurs: {
     nom: { ouvrage: 'Perceurs', joueur: 'Grenadiers' }, ta: 'Missile Squad',
     chassis: 'escouade', specialite: 'antiStructure', // matrice : 1 en structure
-    points: 5, pv: 100, degats: 8, portee: 1.5, porteeMini: 0, vitesse: 0.5,
+    points: 5, pv: 700, portee: 1.5, porteeMini: 0, vitesse: 60,
     reserve: 250, masse: 1, comportementAerien: null,
-    matrice: { infanterie: 0.2, vehicule: 0.5, structureOuAviation: 1 },
+    degats: { infanterie: 5, vehicule: 12, structureOuAviation: 25 },
+    degatsParcours: 0, reparation: 441,
     module: 'tirDeBarrage', moduleOuvrage: null,
     defense: { present: true, cible: 'antiAerien', module: null },
     apparition: 4, apparitionModule: 22,
@@ -123,19 +170,21 @@ export const UNITES = {
   fouisseurs: {
     nom: { ouvrage: 'Fouisseurs', joueur: 'Sapeurs' }, ta: 'Commando',
     chassis: 'escouade', specialite: 'antiStructure',
-    points: 10, pv: 150, degats: 20, portee: 1.5, porteeMini: 0, vitesse: 0.5,
-    reserve: 300, masse: 1, comportementAerien: null,
-    matrice: { infanterie: 0.2, vehicule: 0.2, structureOuAviation: 1 },
+    points: 10, pv: 900, portee: 1.5, porteeMini: 0, vitesse: 60,
+    reserve: 500, masse: 1, comportementAerien: null,
+    degats: { infanterie: 8, vehicule: 4, structureOuAviation: 50 },
+    degatsParcours: 0, reparation: 882,
     module: 'booster', moduleOuvrage: 'camouflage',
     defense: { present: false, cible: null, module: null },
     apparition: 24, apparitionModule: 38,
   },
   carapace: {
-    nom: { ouvrage: 'Carapace', joueur: 'Cuirassiers' }, ta: 'Exosoldat',
+    nom: { ouvrage: 'Carapace', joueur: 'Cuirassiers' }, ta: 'Zone Troopers',
     chassis: 'escouade', specialite: 'antiVehicule',
-    points: 10, pv: 150, degats: 10, portee: 1.5, porteeMini: 0, vitesse: 0.5,
-    reserve: 150, masse: 1, comportementAerien: null,
-    matrice: { infanterie: 0.2, vehicule: 1, structureOuAviation: 0.2 },
+    points: 10, pv: 800, portee: 1.5, porteeMini: 0, vitesse: 60,
+    reserve: 60, masse: 1, comportementAerien: null,
+    degats: { infanterie: 4, vehicule: 35, structureOuAviation: 6 },
+    degatsParcours: 0, reparation: 441,
     module: 'booster', moduleOuvrage: 'camouflage',
     defense: { present: true, cible: 'antiVehicule', module: 'emp' },
     apparition: 8, apparitionModule: 28,
@@ -143,29 +192,32 @@ export const UNITES = {
   ratisseur: {
     nom: { ouvrage: 'Ratisseur', joueur: 'Éclaireur' }, ta: 'Guardian',
     chassis: 'blinde', specialite: 'antiInfanterie',
-    points: 10, pv: 200, degats: 10, portee: 1.5, porteeMini: 0, vitesse: 1.2,
-    reserve: 150, masse: 5, comportementAerien: null,
-    matrice: { infanterie: 1, vehicule: 0.3, structureOuAviation: 0.4 },
+    points: 10, pv: 1000, portee: 1.5, porteeMini: 0, vitesse: 120,
+    reserve: 80, masse: 5, comportementAerien: null,
+    degats: { infanterie: 32, vehicule: 12, structureOuAviation: 15 },
+    degatsParcours: 32, reparation: 972,
     module: 'garnison', moduleOuvrage: null,
     defense: { present: true, cible: 'antiInfanterie', module: 'garnison' },
     apparition: 18, apparitionModule: 36,
   },
   fendeur: {
-    nom: { ouvrage: 'Fendeur', joueur: 'Chasseur' }, ta: 'Predator Tank',
+    nom: { ouvrage: 'Fendeur', joueur: 'Chasseur' }, ta: 'Predator',
     chassis: 'blinde', specialite: 'antiVehicule',
-    points: 10, pv: 300, degats: 12, portee: 2.5, porteeMini: 0, vitesse: 1,
-    reserve: 200, masse: 10, comportementAerien: null,
-    matrice: { infanterie: 0.3, vehicule: 1, structureOuAviation: 0.4 },
+    points: 10, pv: 1000, portee: 2.5, porteeMini: 0, vitesse: 90,
+    reserve: 100, masse: 10, comportementAerien: null,
+    degats: { infanterie: 6, vehicule: 23, structureOuAviation: 10 },
+    degatsParcours: 23, reparation: 972,
     module: 'ecraseur', moduleOuvrage: null,
     defense: { present: true, cible: 'antiVehicule', module: 'emp' },
     apparition: 12, apparitionModule: 34,
   },
   broyeur: {
-    nom: { ouvrage: 'Broyeur', joueur: 'Percheron' }, ta: 'Mammoth Tank',
+    nom: { ouvrage: 'Broyeur', joueur: 'Percheron' }, ta: 'Mammoth',
     chassis: 'blinde', specialite: 'antiVehicule', // lourd ; matrice : 1 en véhicule
-    points: 15, pv: 500, degats: 15, portee: 2.5, porteeMini: 0, vitesse: 1,
-    reserve: 200, masse: 20, comportementAerien: null,
-    matrice: { infanterie: 0.3, vehicule: 1, structureOuAviation: 0.4 },
+    points: 15, pv: 2000, portee: 2.5, porteeMini: 0, vitesse: 90,
+    reserve: 180, masse: 20, comportementAerien: null,
+    degats: { infanterie: 15, vehicule: 28, structureOuAviation: 18 },
+    degatsParcours: 25, reparation: 1458,
     module: 'ecraseur', moduleOuvrage: 'volDeVie',
     defense: { present: true, cible: 'antiVehicule', module: 'pvPlusVingt' },
     apparition: 28, apparitionModule: 42,
@@ -173,9 +225,10 @@ export const UNITES = {
   belier: {
     nom: { ouvrage: 'Bélier', joueur: 'Pionnier' }, ta: 'Pitbull',
     chassis: 'blinde', specialite: 'antiStructure',
-    points: 10, pv: 200, degats: 10, portee: 2.5, porteeMini: 0, vitesse: 1.2,
+    points: 10, pv: 800, portee: 2.5, porteeMini: 0, vitesse: 120,
     reserve: 250, masse: 5, comportementAerien: null,
-    matrice: { infanterie: 0.2, vehicule: 0.3, structureOuAviation: 1 },
+    degats: { infanterie: 7, vehicule: 12, structureOuAviation: 25 },
+    degatsParcours: 7, reparation: 972,
     module: 'fumigene', moduleOuvrage: null,
     defense: { present: true, cible: 'antiAerien', module: 'fumigene' },
     apparition: 16, apparitionModule: 32,
@@ -183,9 +236,10 @@ export const UNITES = {
   pilon: {
     nom: { ouvrage: 'Pilon', joueur: 'Obusier' }, ta: 'Juggernaut',
     chassis: 'blinde', specialite: 'antiStructure', // lourd
-    points: 15, pv: 400, degats: 15, portee: 2.5, porteeMini: 0, vitesse: 1,
-    reserve: 300, masse: 20, comportementAerien: null,
-    matrice: { infanterie: 0.3, vehicule: 0.3, structureOuAviation: 1 },
+    points: 15, pv: 1300, portee: 2.5, porteeMini: 0, vitesse: 60,
+    reserve: 500, masse: 20, comportementAerien: null,
+    degats: { infanterie: 5, vehicule: 10, structureOuAviation: 50 },
+    degatsParcours: 40, reparation: 1458,
     module: 'tirDeBarrage', moduleOuvrage: null,
     // Absent de la défense : choix assumé, pas un oubli (une artillerie de
     // siège n'a pas de rôle en défense rapprochée).
@@ -195,9 +249,10 @@ export const UNITES = {
   crecelle: {
     nom: { ouvrage: 'Crécelle', joueur: 'Milan' }, ta: 'Orca',
     chassis: 'aeronef', specialite: 'antiInfanterie',
-    points: 10, pv: 200, degats: 12, portee: 1.5, porteeMini: 0, vitesse: 1.5,
-    reserve: 150, masse: 0, comportementAerien: 'traversant',
-    matrice: { infanterie: 1, vehicule: 0.2, structureOuAviation: 0.2 },
+    points: 10, pv: 900, portee: 1.5, porteeMini: 0, vitesse: 120,
+    reserve: 120, masse: 0, comportementAerien: 'traversant',
+    degats: { infanterie: 36, vehicule: 18, structureOuAviation: 12 },
+    degatsParcours: 0, reparation: 1070,
     module: 'emp', moduleOuvrage: null,
     defense: { present: false, cible: null, module: null },
     apparition: 10, apparitionModule: 32,
@@ -205,9 +260,10 @@ export const UNITES = {
   busard: {
     nom: { ouvrage: 'Busard', joueur: 'Épervier' }, ta: 'Paladin',
     chassis: 'aeronef', specialite: 'antiVehicule',
-    points: 10, pv: 200, degats: 10, portee: 2.5, porteeMini: 0, vitesse: 1.5,
-    reserve: 200, masse: 0, comportementAerien: 'stoppeur',
-    matrice: { infanterie: 0.2, vehicule: 1, structureOuAviation: 0.3 },
+    points: 10, pv: 1050, portee: 2.5, porteeMini: 0, vitesse: 120,
+    reserve: 120, masse: 0, comportementAerien: 'stoppeur',
+    degats: { infanterie: 4, vehicule: 20, structureOuAviation: 12 },
+    degatsParcours: 0, reparation: 1070,
     module: 'garnison', moduleOuvrage: null,
     defense: { present: false, cible: null, module: null },
     apparition: 14, apparitionModule: 34,
@@ -215,9 +271,10 @@ export const UNITES = {
   frappeur: {
     nom: { ouvrage: 'Frappeur', joueur: 'Foudre' }, ta: 'Firehawk',
     chassis: 'aeronef', specialite: 'antiStructure', // rapide
-    points: 10, pv: 150, degats: 20, portee: 1.5, porteeMini: 0, vitesse: 3,
-    reserve: 300, masse: 0, comportementAerien: 'traversant',
-    matrice: { infanterie: 0, vehicule: 0, structureOuAviation: 1 },
+    points: 10, pv: 550, portee: 1.5, porteeMini: 0, vitesse: 240,
+    reserve: 450, masse: 0, comportementAerien: 'traversant',
+    degats: { infanterie: 0, vehicule: 0, structureOuAviation: 300 },
+    degatsParcours: 0, reparation: 1070,
     module: 'camouflage', moduleOuvrage: null,
     defense: { present: false, cible: null, module: null },
     apparition: 20, apparitionModule: 36,
@@ -225,9 +282,10 @@ export const UNITES = {
   enclume: {
     nom: { ouvrage: 'Enclume', joueur: 'Albatros' }, ta: 'Kodiak',
     chassis: 'aeronef', specialite: 'antiStructure', // lourd
-    points: 15, pv: 300, degats: 10, portee: 2.5, porteeMini: 0, vitesse: 1.5,
-    reserve: 300, masse: 0, comportementAerien: 'stoppeur',
-    matrice: { infanterie: 0.3, vehicule: 0.3, structureOuAviation: 1 },
+    points: 15, pv: 1800, portee: 2.5, porteeMini: 0, vitesse: 120,
+    reserve: 400, masse: 0, comportementAerien: 'stoppeur',
+    degats: { infanterie: 10, vehicule: 15, structureOuAviation: 40 },
+    degatsParcours: 0, reparation: 1605,
     module: 'bouclier', moduleOuvrage: 'volDeVie',
     defense: { present: false, cible: null, module: null },
     apparition: 36, apparitionModule: 46,
@@ -237,85 +295,104 @@ export const UNITES = {
 // --- défenses ----------------------------------------------------------------
 // Neuf structures. Le joueur et l'Ouvrage construisent les mêmes ; seul le
 // module diffère. Les barrières ne bloquent pas : on les traverse en perdant
-// des PV (degatsFranchissement, par tick). Le mur bloque et s'attaque jusqu'à
-// destruction. Les trois artilleries sont des VÉHICULES, pas des structures :
+// des PV (degatsFranchissement, par tick et par colonne, en MILLI-PV — la Ronce
+// vaut 2,5 PV/tick contre l'infanterie, qui ne s'écrit pas en entier autrement).
+//
+// ⚠ Le franchissement est la seule grandeur de combat que le lot 4A NE reprend
+// PAS du relevé. Son §6.4 affiche zéro pour les trois barrières et dit la valeur
+// non exposée par le jeu d'origine : le ÷8 de la Ronce et les 15 PV/tick de la
+// Herse restent nos choix, arbitrés au lot 2B, et sont reportés à l'identique
+// dans la nouvelle forme (ancien degatsFranchissement × ancienne matrice).
+//
+// Pour une défense, la troisième colonne se lit AVIATION : une défense ne vise
+// jamais de bâtiment. C'est la quatrième colonne du relevé, pas sa colonne bât.
+//
+// Le mur bloque et s'attaque jusqu'à destruction. Les trois artilleries — la
+// Faucheuse, le Mortier et le Harpon — sont des VÉHICULES, pas des structures :
 // c'est ce qui explique la part de cibles véhicule d'une garnison de haut
 // niveau. Une unité défensive mobile traverse librement toute sa rangée.
 export const DEFENSES = {
   merlon: {
-    nom: 'Merlon', ta: 'Mur', type: 'mur', cible: null,
-    points: 5, pv: 500, degats: 0, portee: 0, porteeMini: 0,
-    degatsFranchissement: 0, bloque: true, matrice: null, // ne tire pas
+    nom: 'Merlon', ta: 'Wall', type: 'mur', cible: null,
+    points: 5, pv: 2000, portee: 0, porteeMini: 0,
+    degatsFranchissement: null, bloque: true,
+    degats: null, // ne tire pas
     moduleJoueur: 'autoReparation', moduleOuvrage: 'pvPlusVingt',
     apparition: 6, apparitionModule: 32,
   },
   ronce: {
-    nom: 'Ronce', ta: 'Barbelés', type: 'barriere', cible: 'infanterie',
-    points: 5, pv: 200, degats: 0, portee: 1, porteeMini: 0,
+    nom: 'Ronce', ta: 'Barbwire', type: 'barriere', cible: 'infanterie',
+    points: 5, pv: 1000, portee: 1, porteeMini: 0,
     // Divisé par 8 au lot 2B. À 20 PV/tick, un Fusilier mourait quatre fois
     // avant d'avoir franchi la case (20 ticks de traversée, 5 de survie) :
     // « traversable, blesse au passage » n'avait plus de sens.
-    degatsFranchissement: 2.5, bloque: false,
-    matrice: { infanterie: 1, vehicule: 0.1, structureOuAviation: 0 },
+    degatsFranchissement: {
+      infanterie: 2500, vehicule: 250, structureOuAviation: 0,
+    },
+    bloque: false,
+    degats: null,
     moduleJoueur: 'autoReparation', moduleOuvrage: 'pvPlusVingt',
     apparition: 24, apparitionModule: 38,
   },
   herse: {
     nom: 'Herse', ta: 'Anti-tank barrier', type: 'barriere', cible: 'vehicule',
-    points: 5, pv: 200, degats: 0, portee: 1, porteeMini: 0,
+    points: 5, pv: 1500, portee: 1, porteeMini: 0,
     // 15 PV/tick, et 0,03 seulement contre l'infanterie (arbitrage du lot 2B).
     // La Herse cesse ainsi d'être une meilleure Ronce que la Ronce : elle
     // coûte 9 % à un Fusilier là où la Ronce lui coûte 50 %.
-    degatsFranchissement: 15, bloque: false,
-    matrice: { infanterie: 0.03, vehicule: 1, structureOuAviation: 0 },
+    degatsFranchissement: {
+      infanterie: 450, vehicule: 15000, structureOuAviation: 0,
+    },
+    bloque: false,
+    degats: null,
     moduleJoueur: 'autoReparation', moduleOuvrage: 'pvPlusVingt',
     apparition: 20, apparitionModule: 34,
   },
   casemate: {
     nom: 'Casemate', ta: 'MG Nest', type: 'tourelle', cible: 'infanterie',
-    points: 8, pv: 350, degats: 15, portee: 2.5, porteeMini: 0,
-    degatsFranchissement: 0, bloque: true,
-    matrice: { infanterie: 1, vehicule: 0.4, structureOuAviation: 0.6 },
+    points: 8, pv: 1000, portee: 2.5, porteeMini: 0,
+    degatsFranchissement: null, bloque: true,
+    degats: { infanterie: 20, vehicule: 7, structureOuAviation: 8 },
     moduleJoueur: 'autoReparation', moduleOuvrage: 'munitionSpeciale',
     apparition: 8, apparitionModule: 30,
   },
   creneau: {
-    nom: 'Créneau', ta: 'Tourelle anti-véhicule', type: 'tourelle', cible: 'vehicule',
-    points: 10, pv: 350, degats: 15, portee: 2.5, porteeMini: 0,
-    degatsFranchissement: 0, bloque: true,
-    matrice: { infanterie: 0.6, vehicule: 1, structureOuAviation: 0 },
+    nom: 'Créneau', ta: 'Guardian Cannon', type: 'tourelle', cible: 'vehicule',
+    points: 10, pv: 1250, portee: 2.5, porteeMini: 0,
+    degatsFranchissement: null, bloque: true,
+    degats: { infanterie: 10, vehicule: 35, structureOuAviation: 0 },
     moduleJoueur: 'autoReparation', moduleOuvrage: 'munitionSpeciale',
     apparition: 18, apparitionModule: 38,
   },
   batterie: {
     nom: 'Batterie', ta: 'Flak', type: 'tourelle', cible: 'aviation',
-    points: 10, pv: 350, degats: 15, portee: 2.5, porteeMini: 0,
-    degatsFranchissement: 0, bloque: true,
-    matrice: { infanterie: 0, vehicule: 0, structureOuAviation: 1 },
+    points: 10, pv: 1000, portee: 2.5, porteeMini: 0,
+    degatsFranchissement: null, bloque: true,
+    degats: { infanterie: 0, vehicule: 0, structureOuAviation: 40 },
     moduleJoueur: 'autoReparation', moduleOuvrage: 'munitionSpeciale',
     apparition: 14, apparitionModule: 34,
   },
   faucheuse: {
-    nom: 'Faucheuse', ta: 'Reaper', type: 'artillerie', cible: 'infanterie',
-    points: 22, pv: 200, degats: 20, portee: 5.5, porteeMini: 3.5,
-    degatsFranchissement: 0, bloque: true,
-    matrice: { infanterie: 1, vehicule: 0.3, structureOuAviation: 0.4 },
+    nom: 'Faucheuse', ta: 'Watchtower', type: 'artillerie', cible: 'infanterie',
+    points: 22, pv: 600, portee: 5.5, porteeMini: 3.5,
+    degatsFranchissement: null, bloque: true,
+    degats: { infanterie: 10, vehicule: 2, structureOuAviation: 1 },
     moduleJoueur: 'rayonMiniMoinsUn', moduleOuvrage: 'rayonMiniMoinsUn',
     apparition: 26, apparitionModule: 42,
   },
   mortier: {
-    nom: 'Mortier', ta: 'Demolisher', type: 'artillerie', cible: 'vehicule',
-    points: 30, pv: 200, degats: 20, portee: 5.5, porteeMini: 3.5,
-    degatsFranchissement: 0, bloque: true,
-    matrice: { infanterie: 0.3, vehicule: 1, structureOuAviation: 0 },
+    nom: 'Mortier', ta: 'Titan Artillery', type: 'artillerie', cible: 'vehicule',
+    points: 30, pv: 700, portee: 5.5, porteeMini: 3.5,
+    degatsFranchissement: null, bloque: true,
+    degats: { infanterie: 2, vehicule: 12, structureOuAviation: 0 },
     moduleJoueur: 'rayonMiniMoinsUn', moduleOuvrage: 'rayonMiniMoinsUn',
     apparition: 30, apparitionModule: 44,
   },
   harpon: {
-    nom: 'Harpon', ta: 'SAM', type: 'artillerie', cible: 'aviation',
-    points: 30, pv: 200, degats: 20, portee: 5.5, porteeMini: 3.5,
-    degatsFranchissement: 0, bloque: true,
-    matrice: { infanterie: 0, vehicule: 0, structureOuAviation: 1 },
+    nom: 'Harpon', ta: 'SAM Site', type: 'artillerie', cible: 'aviation',
+    points: 30, pv: 650, portee: 5.5, porteeMini: 3.5,
+    degatsFranchissement: null, bloque: true,
+    degats: { infanterie: 0, vehicule: 0, structureOuAviation: 16 },
     moduleJoueur: 'rayonMiniMoinsUn', moduleOuvrage: 'rayonMiniMoinsUn',
     apparition: 32, apparitionModule: 46,
   },

@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRILLE, UNITES, DEFENSES, MATRICE_COLONNES } from '../src/data/combat.js';
+import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
 import { TICK_MS } from '../src/sim/clock.js';
 import { creerCombat, tick, serialiserEtat } from '../src/sim/combat.js';
 import {
@@ -191,20 +191,20 @@ test('T3 — alpha 0 : précédent · alpha 1000 : courant · alpha 500 : milieu
   // Gangue est l'indice 0, le Meute l'indice 1.
   const precedentes = prendrePositions(etat); // [18000, 2000]
   assert.deepEqual(precedentes, [18_000, 2000]);
-  tick(etat); // le Meute avance de 50 milli-cases
+  tick(etat); // le Meute avance de 60 milli-cases (lot 4A : 50 avant conversion)
   const meute = etat.entites.find((e) => e.camp === 'attaque');
-  assert.equal(meute.rangeeMilli, 2050);
+  assert.equal(meute.rangeeMilli, 2060);
   const proj = calculerProjection(412, 900);
 
   const avecInstantane = listeAffichage(etat, proj, precedentes, 500);
   const sansInstantane = listeAffichage(etat, proj, [], 500);
   // La première primitive kakiCorps est la figure de tête de l'escouade,
   // posée à floor(45/10) = 4 px sous le bord haut de sa case.
-  // Interpolé : position affichée 2000 + floor(50 × 500/1000) = 2025 →
-  // y de case = margeY + floor((18000 − 2025) × 45/1000) = margeY + 718,
+  // Interpolé : position affichée 2000 + floor(60 × 500/1000) = 2030 →
+  // y de case = margeY + floor((18000 − 2030) × 45/1000) = margeY + 718,
   // figure à margeY + 722.
-  // Sans instantané (le Meute est « nouveau ») : position COURANTE 2050 →
-  // y de case = margeY + floor(717,75) = margeY + 717, figure à margeY + 721.
+  // Sans instantané (le Meute est « nouveau ») : position COURANTE 2060 →
+  // y de case = margeY + floor(717,3) = margeY + 717, figure à margeY + 721.
   const yCorps = (liste) => liste.find((p) => p.couleur === PALETTE.kakiCorps).y;
   assert.equal(yCorps(avecInstantane) - proj.margeY, 722);
   assert.equal(yCorps(sansInstantane) - proj.margeY, 721);
@@ -329,32 +329,38 @@ test('T6 — l\'accent est la colonne dominante, dans les trois teintes de la fi
 
   // Les 14 unités : l'accent est celui de la colonne dominante, recalculée
   // ici indépendamment, et il appartient aux trois teintes.
+  // LOT 4A — la dominante se lit désormais dans `degats`, en PV absolus, et
+  // non plus dans une matrice de facteurs. Les 14 dominantes sont les mêmes
+  // qu'avant la conversion : aucun accent ne change à l'écran.
   for (const [id, u] of Object.entries(UNITES)) {
     const accent = accentDe('unite', id);
-    assert.ok(accent !== null, `${id} : une unité a toujours une matrice`);
-    let dominante = MATRICE_COLONNES[0];
-    for (const c of MATRICE_COLONNES) if (u.matrice[c] > u.matrice[dominante]) dominante = c;
+    assert.ok(accent !== null, `${id} : une unité a toujours une table de dégâts`);
+    let dominante = COLONNES_DEGATS[0];
+    for (const c of COLONNES_DEGATS) if (u.degats[c] > u.degats[dominante]) dominante = c;
     assert.equal(accent.colonne, dominante, `${id} : colonne dominante`);
     assert.deepEqual({ sombre: accent.sombre, clair: accent.clair }, TEINTES[dominante]);
     assert.ok(clairsAdmis.has(accent.clair));
     // La dominante est UNIQUE sur tout le calibrage : aucune égalité de tête,
     // sinon l'accent dépendrait de l'ordre des colonnes.
-    const valeurs = MATRICE_COLONNES.map((c) => u.matrice[c]);
+    const valeurs = COLONNES_DEGATS.map((c) => u.degats[c]);
     assert.equal(valeurs.filter((v) => v === Math.max(...valeurs)).length, 1,
       `${id} : deux colonnes à égalité en tête`);
   }
 
-  // Les 9 défenses : même règle. Le Merlon, seul sans matrice, n'a pas
-  // d'accent — il ne tue rien.
+  // Les 9 défenses : même règle, sur `degats` pour celles qui tirent et sur
+  // `degatsFranchissement` pour les deux barrières, qui ne tirent pas mais
+  // saignent — et saignent de façon typée. Le Merlon, qui ne fait ni l'un ni
+  // l'autre, est le seul sans accent.
   for (const [id, d] of Object.entries(DEFENSES)) {
     const accent = accentDe('defense', id);
-    if (d.matrice === null) {
-      assert.equal(id, 'merlon', 'seul le Merlon est sans matrice');
+    const table = d.degats ?? d.degatsFranchissement ?? null;
+    if (table === null) {
+      assert.equal(id, 'merlon', 'seul le Merlon ne nuit à personne');
       assert.equal(accent, null);
       continue;
     }
-    let dominante = MATRICE_COLONNES[0];
-    for (const c of MATRICE_COLONNES) if (d.matrice[c] > d.matrice[dominante]) dominante = c;
+    let dominante = COLONNES_DEGATS[0];
+    for (const c of COLONNES_DEGATS) if (table[c] > table[dominante]) dominante = c;
     assert.equal(accent.colonne, dominante, `${id} : colonne dominante`);
     assert.ok(clairsAdmis.has(accent.clair));
   }

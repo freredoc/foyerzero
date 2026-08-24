@@ -33,7 +33,7 @@
 // `modulesActifs` et `effetsTemporises` sur chaque entité, vides et inertes,
 // pour que 2C n'impose pas de refonte.
 
-import { GRILLE, UNITES, DEFENSES, MATRICE_COLONNES } from '../data/combat.js';
+import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import {
   BATIMENTS, BUTIN, SAVEURS, POINTS_RECHERCHE, GEOGRAPHIE,
 } from '../data/sites.js';
@@ -90,9 +90,6 @@ export const RANGEE_APPARITION = GRILLE.bandes.deploiement.derniere;
  */
 const MILLE = 1000;
 
-/** Facteur de matrice d'une cible de prédilection, en millièmes. */
-const PREDILECTION_MILLI = MILLE;
-
 /**
  * Ticks consécutifs sans pouvoir ni avancer ni nuire au terme desquels une
  * unité offensive rentre à la base. Lu des données, jamais écrit en dur.
@@ -128,31 +125,68 @@ const COLONNE_PAR_TYPE_DEFENSE = {
 };
 
 /**
- * Convertit une matrice de calibrage en millièmes entiers de 0 à 1000.
+ * Lit une table de dégâts à trois colonnes et la rend en entiers.
  *
- * Le lot 2A exigeait des multiples de 100 : c'était vrai du calibrage d'alors,
- * ce ne l'est plus depuis que la Herse vaut 0,03 contre l'infanterie (30 ‰,
- * arbitrage du lot 2B). L'invariant dur reste l'EXACTITUDE — enEntier refuse
- * toute valeur qui ne tombe pas juste en millièmes — plus les bornes. La
- * granularité effective des données, elle, est asserée en test, pour qu'une
- * dérive se voie sans empêcher un arbitrage plus fin.
+ * LOT 4A — il n'y a plus de matrice de facteurs, donc plus de bornes à 0…1000 :
+ * les dégâts sont ABSOLUS. L'invariant qui reste est l'exactitude entière, et
+ * elle est dure : le relevé ne contient aucune valeur fractionnaire une fois
+ * divisée par 160, et une valeur qui le deviendrait signalerait une saisie
+ * fausse, pas un calibrage plus fin.
+ *
+ * TOUTES les tables sont rendues en MILLI-PV, comme pvMaxMilli. C'est ce qui
+ * garantit que la mise à l'échelle de niveau est EXACTE des deux côtés : les PV
+ * valent pv × facteurMilli sans reste, et les dégâts degats × facteurMilli de
+ * même. Voir tableALEchelle pour la démonstration et ce qu'elle a coûté.
+ *
+ * @param {object|null} table valeurs par colonne, ou null si l'entité ne tire pas.
+ * @param {number} facteur MILLE pour une table écrite en PV entiers (les tirs),
+ *   1 pour une table déjà écrite en milli-PV (le franchissement des barrières).
  */
-function matriceEnMillieme(matrice, contexte) {
-  if (matrice === null || matrice === undefined) return null;
+function colonnesDeDegats(table, contexte, facteur = 1) {
+  if (table === null || table === undefined) return null;
   const sortie = {};
-  for (const colonne of MATRICE_COLONNES) {
-    if (matrice[colonne] === undefined) {
-      throw new Error(`combat : ${contexte} — colonne de matrice « ${colonne} » absente`);
+  for (const colonne of COLONNES_DEGATS) {
+    if (table[colonne] === undefined) {
+      throw new Error(`combat : ${contexte} — colonne de dégâts « ${colonne} » absente`);
     }
-    const milli = enEntier(matrice[colonne], MILLE, `${contexte}.${colonne}`);
-    if (milli < 0 || milli > MILLE) {
-      throw new Error(
-        `combat : ${contexte}.${colonne} = ${milli} millièmes hors de 0…${MILLE}`,
-      );
+    const valeur = enEntier(table[colonne], facteur, `${contexte}.${colonne}`);
+    if (valeur < 0) {
+      throw new Error(`combat : ${contexte}.${colonne} = ${valeur} est négatif`);
     }
-    sortie[colonne] = milli;
+    sortie[colonne] = valeur;
   }
   return sortie;
+}
+
+/**
+ * Colonne de PRÉDILECTION : celle où l'entité frappe le plus fort.
+ *
+ * Remplace le « facteur de matrice égal à 1,0 » du lot 2A, que la disparition
+ * de la matrice a privé d'objet. Les deux lectures coïncident sur les 23
+ * profils du relevé — vérifié en test, pas supposé.
+ *
+ * La dominante doit être STRICTEMENT unique : une égalité rendrait la règle
+ * d'arrêt ambiguë, et l'ambiguïté se paierait en indéterminisme. Rend null pour
+ * une entité qui ne tire pas.
+ */
+function colonneDominante(table, contexte) {
+  if (table === null) return null;
+  let meilleure = null;
+  let valeurMax = 0;
+  let exAequo = false;
+  for (const colonne of COLONNES_DEGATS) {
+    if (table[colonne] > valeurMax) {
+      valeurMax = table[colonne];
+      meilleure = colonne;
+      exAequo = false;
+    } else if (table[colonne] === valeurMax && valeurMax > 0) {
+      exAequo = true;
+    }
+  }
+  if (exAequo) {
+    throw new Error(`combat : ${contexte} — deux colonnes à ${valeurMax}, prédilection ambiguë`);
+  }
+  return meilleure;
 }
 
 /** Vérifie qu'une valeur de données est un entier positif ou nul. */
@@ -165,23 +199,28 @@ function entierDeDonnees(valeur, contexte) {
 
 function profilUnite(id, u) {
   const contexte = `UNITES.${id}`;
-  const vitesseMilli = enEntier(u.vitesse, 100, `${contexte}.vitesse`);
+  // LOT 4A — la vitesse du relevé EST le milli-case par tick : 60 · 90 · 120 ·
+  // 240. Plus de conversion, plus de flottant. Le facteur 100 du lot 2A servait
+  // à passer de cases/s (0,5 · 1,2 · 3) à milli/tick, et le relevé donne
+  // directement la seconde forme.
+  const vitesseMilli = entierDeDonnees(u.vitesse, `${contexte}.vitesse`);
   const porteeMilli = enEntier(u.portee, MILLE, `${contexte}.portee`);
   const porteeMiniMilli = enEntier(u.porteeMini, MILLE, `${contexte}.porteeMini`);
+  const degatsUnite = colonnesDeDegats(u.degats, `${contexte}.degats`, MILLE);
   return {
     genre: 'unite',
     id,
     chassis: u.chassis,
     colonneMatrice: COLONNE_PAR_CHASSIS[u.chassis],
     pvMaxMilli: enEntier(u.pv, MILLE, `${contexte}.pv`),
-    degats: entierDeDonnees(u.degats, `${contexte}.degats`),
+    degatsColonne: degatsUnite,
+    colonnePredilection: colonneDominante(degatsUnite, contexte),
     porteeCarree: porteeMilli * porteeMilli,
     porteeMiniCarree: porteeMiniMilli * porteeMiniMilli,
-    matriceMilli: matriceEnMillieme(u.matrice, `${contexte}.matrice`),
+    franchissementColonne: null,
     masse: entierDeDonnees(u.masse, `${contexte}.masse`),
     bloquant: u.masse > 0,
     ecrasable: true,
-    franchissementMilli: 0,
     vitesseMilli,
     vitesseObstacleMilli: vitesseSousObstacle(vitesseMilli),
     comportementAerien: u.comportementAerien,
@@ -201,6 +240,7 @@ function profilDefense(id, d) {
   if (!COLONNE_PAR_TYPE_DEFENSE[d.type]) {
     throw new Error(`combat : ${contexte} — type de défense inconnu « ${d.type} »`);
   }
+  const degatsDefense = colonnesDeDegats(d.degats, `${contexte}.degats`, MILLE);
   return {
     genre: 'defense',
     id,
@@ -208,18 +248,19 @@ function profilDefense(id, d) {
     chassis: null,
     colonneMatrice: COLONNE_PAR_TYPE_DEFENSE[d.type],
     pvMaxMilli: enEntier(d.pv, MILLE, `${contexte}.pv`),
-    degats: entierDeDonnees(d.degats, `${contexte}.degats`),
+    degatsColonne: degatsDefense,
+    colonnePredilection: colonneDominante(degatsDefense, contexte),
     porteeCarree: porteeMilli * porteeMilli,
     porteeMiniCarree: porteeMiniMilli * porteeMiniMilli,
-    matriceMilli: matriceEnMillieme(d.matrice, `${contexte}.matrice`),
     masse: null,
     bloquant: d.bloque === true,
     ecrasable: false,
-    // En MILLI-PV : la Ronce vaut 2,5 PV/tick depuis le lot 2B, et 2,5 n'est
-    // pas un entier. C'est la même porte que les portées (1,5 · 2,5 · 5,5) :
-    // enEntier exige que la forme en milli tombe juste, ici 2500.
-    franchissementMilli: enEntier(
-      d.degatsFranchissement, MILLE, `${contexte}.degatsFranchissement`,
+    // En MILLI-PV et par colonne : la Ronce vaut 2,5 PV/tick contre l'infanterie
+    // depuis le lot 2B, et 2,5 n'est pas un entier. Les données portent donc
+    // 2500 directement — c'est la seule table de dégâts qui ne soit pas en PV
+    // entiers, et la seule que le lot 4A ne reprenne pas du relevé.
+    franchissementColonne: colonnesDeDegats(
+      d.degatsFranchissement, `${contexte}.degatsFranchissement`,
     ),
     vitesseMilli: 0,
     vitesseObstacleMilli: 0,
@@ -241,14 +282,14 @@ function profilBatiment(id, b) {
     chassis: null,
     colonneMatrice: 'structureOuAviation',
     pvMaxMilli: enEntier(b.pv, MILLE, `${contexte}.pv`),
-    degats: 0,
+    degatsColonne: null,
+    colonnePredilection: null,
     porteeCarree: 0,
     porteeMiniCarree: 0,
-    matriceMilli: null,
     masse: null,
     bloquant: true,
     ecrasable: false,
-    franchissementMilli: 0,
+    franchissementColonne: null,
     vitesseMilli: 0,
     vitesseObstacleMilli: 0,
     comportementAerien: null,
@@ -330,6 +371,26 @@ function aLEchelle(valeur, facteur) {
   return Math.floor((valeur * facteur) / MILLE);
 }
 
+/**
+ * La même mise à l'échelle, colonne par colonne. Rend null pour une table nulle.
+ *
+ * Les tables étant en MILLI-PV, `aLEchelle` y est EXACTE : la colonne vaut
+ * degats × 1000, donc floor(degats × 1000 × facteur / 1000) = degats × facteur,
+ * sans reste. C'est la même exactitude que pvMaxMilli, et c'est ce qui conserve
+ * le rapport PV/dégâts d'un niveau à l'autre.
+ *
+ * Écrite en PV entiers, la colonne perdrait au contraire son reste à chaque
+ * niveau : au 12e, où le facteur vaut 2683, une colonne de 5 PV rendrait
+ * floor(13,415) = 13 au lieu de 13,415 — 1,56 % de moins, quand les PV, eux,
+ * ne perdent rien. Mesuré : l'invariance en miroir passait de 0 à 2 ticks.
+ */
+function tableALEchelle(table, facteur) {
+  if (table === null) return null;
+  const sortie = {};
+  for (const colonne of COLONNES_DEGATS) sortie[colonne] = aLEchelle(table[colonne], facteur);
+  return sortie;
+}
+
 const TABLES_PROFIL = {
   unite: PROFILS_UNITE,
   defense: PROFILS_DEFENSE,
@@ -341,9 +402,10 @@ function profil(entite) {
   return TABLES_PROFIL[entite.genre][entite.id];
 }
 
-/** Une entité qui n'a ni dégâts, ni portée, ni matrice ne tire jamais. */
+/** Une entité sans table de dégâts, sans portée, ou à table nulle, ne tire jamais. */
 function peutTirer(p) {
-  return p.degats > 0 && p.porteeCarree > 0 && p.matriceMilli !== null;
+  if (p.degatsColonne === null || p.porteeCarree === 0) return false;
+  return COLONNES_DEGATS.some((colonne) => p.degatsColonne[colonne] > 0);
 }
 
 /** Une entité vivante et encore sur la grille. */
@@ -408,8 +470,8 @@ function ajouterEntite(
   const facteur = facteurMilli(niveauEntite);
   // pvMaxMilli = pv × 1000 × facteurMilli / 1000 = pv × facteurMilli. Exact.
   const pvMaxMilli = (p.pvMaxMilli / MILLE) * facteur;
-  const degats = aLEchelle(p.degats, facteur);
-  const franchissementMilli = aLEchelle(p.franchissementMilli, facteur);
+  const degatsColonne = tableALEchelle(p.degatsColonne, facteur);
+  const franchissementColonne = tableALEchelle(p.franchissementColonne, facteur);
 
   let pv = pvMaxMilli;
   if (pvMilli !== undefined) {
@@ -443,8 +505,8 @@ function ajouterEntite(
     // Les deux seules grandeurs de combat qui suivent le niveau. Elles vivent
     // sur l'entité, pas sur le profil : deux entités du même identifiant
     // peuvent être à deux niveaux différents sur la même grille.
-    degats,
-    franchissementMilli,
+    degatsColonne,
+    franchissementColonne,
     reserve: res,
     plancherReserve: camp === 'attaque' ? p.plancherReserve : 0,
     vivant: true,
@@ -703,7 +765,7 @@ function apparitionDeVague(etat, casesPrises = null) {
  * finiraient par répondre différemment.
  *
  * Il rend zéro dans trois cas, tous déjà connus de tir() :
- *   — la matrice du tireur est nulle contre la colonne de la cible ;
+ *   — la colonne de dégâts du tireur est nulle contre le châssis de la cible ;
  *   — les PV du tireur sont tombés sous 1 ‰ de son maximum, sa santé arrondie
  *     vaut alors 0 et son tir ne retire plus rien ;
  *   — la cible est un bâtiment et la réserve de l'attaquant est épuisée. Le
@@ -713,7 +775,7 @@ function apparitionDeVague(etat, casesPrises = null) {
 function degatsContre(e, p, cible) {
   const pc = profil(cible);
   if (pc.genre === 'batiment' && e.camp === 'attaque' && e.reserve <= 0) return 0;
-  return degatsDUnTir(e.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
+  return degatsDUnTir(e.degatsColonne[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
 }
 
 /**
@@ -774,37 +836,49 @@ function ciblage(etat) {
  * Dégâts d'un tir, formule unique.
  *
  *   ratioMilli  = floor(pvCourantMilli × 1000 / pvMaxMilli)   // 0 à 1000
- *   degatsMilli = floor(degats × facteurMatrice × ratioMilli / 1000)
+ *   degatsMilli = floor(degatsColonneMilli × ratioMilli / 1000)
  *
- * La santé du tireur passe d'abord en MILLIÈMES, la même échelle que la
- * matrice : les trois grandeurs du produit vivent alors sur le même barème,
- * et les dégâts ne dépendent plus de la magnitude des PV maximaux, seulement
- * du pourcentage de vie restant.
+ * LOT 4A — la multiplication par le facteur de matrice a disparu avec la
+ * matrice : une opération de moins, et aucun arrondi intermédiaire de plus.
+ *
+ * ⚠ Le brief écrit la formule `floor(degatsColonne × ratioMilli)`, la colonne
+ * étant lue en PV entiers. Elle est exacte au niveau 1 et fausse ailleurs : une
+ * colonne en PV entiers perd son reste à chaque mise à l'échelle de niveau,
+ * alors que les PV, eux, vivent en milli et n'en perdent aucun. Cette asymétrie
+ * cassait l'invariance en miroir du T12 du lot 2B — 2 ticks d'écart, contre 0
+ * avant la conversion, et le brief exige justement qu'elle ne bouge pas. Les
+ * colonnes sont donc portées en MILLI-PV dès le profil, exactement comme
+ * pvMaxMilli, d'où la division par 1000 ici. Au niveau 1 les deux écritures
+ * coïncident au milli-PV près ; au-delà, seule celle-ci conserve le rapport.
+ *
+ * La santé du tireur passe en MILLIÈMES : les dégâts ne dépendent pas de la
+ * magnitude des PV maximaux, seulement du pourcentage de vie restant.
  *
  * Arbitrage d'Ethan reçu en cours d'exécution du lot 2A : il remplace le
  * « un seul Math.floor, jamais d'arrondi intermédiaire » du brief §4. Aucun
  * des seuils chiffrés du §12 ne bouge — ils portent tous sur des ratios ronds
  * (100 %, 50 %, 10 %), où les deux écritures coïncident exactement.
  */
-function degatsDUnTir(degats, facteurMatrice, pvCourantMilli, pvMaxMilli) {
+function degatsDUnTir(degatsColonneMilli, pvCourantMilli, pvMaxMilli) {
   const ratioMilli = Math.floor((pvCourantMilli * MILLE) / pvMaxMilli);
-  return Math.floor((degats * facteurMatrice * ratioMilli) / MILLE);
+  return Math.floor((degatsColonneMilli * ratioMilli) / MILLE);
 }
 
 /**
  * Dégâts de franchissement d'une barrière, par tick de présence.
  *
  *   ratioMilli  = floor(pvCourantMilli × 1000 / pvMaxMilli)
- *   degatsMilli = floor(franchissementMilli × facteurMatrice × ratioMilli / 1000²)
+ *   degatsMilli = floor(franchissementColonne × ratioMilli / 1000)
  *
  * Même forme que degatsDUnTir, à ceci près que le franchissement est DÉJÀ en
- * milli-PV — la Ronce vaut 2,5 PV/tick, qui ne s'écrit pas en entier autrement.
- * D'où la division par 1000 supplémentaire. À barrière pleine vie et matrice
- * 1,0 : floor(2500 × 1000 × 1000 / 1 000 000) = 2500 milli-PV, soit 2,5 PV.
+ * milli-PV — la Ronce vaut 2,5 PV/tick contre l'infanterie, qui ne s'écrit pas
+ * en entier autrement. D'où la division par 1000, qui ramène le produit d'une
+ * grandeur en milli et d'un ratio en millièmes à des milli-PV. À barrière pleine
+ * vie : floor(2500 × 1000 / 1000) = 2500 milli-PV, soit 2,5 PV.
  */
-function degatsDeFranchissement(franchissementMilli, facteurMatrice, pvCourantMilli, pvMaxMilli) {
+function degatsDeFranchissement(franchissementColonne, pvCourantMilli, pvMaxMilli) {
   const ratioMilli = Math.floor((pvCourantMilli * MILLE) / pvMaxMilli);
-  return Math.floor((franchissementMilli * facteurMatrice * ratioMilli) / (MILLE * MILLE));
+  return Math.floor((franchissementColonne * ratioMilli) / MILLE);
 }
 
 /**
@@ -840,13 +914,13 @@ function tir(etat) {
   }
 
   // Franchissement : une barrière ne bloque pas, elle saigne. Dégâts par tick
-  // de présence, pondérés par la matrice de la barrière contre le châssis qui
-  // la franchit — la matrice met déjà l'aviation à zéro.
+  // de présence, lus dans la colonne de la barrière qui correspond au châssis
+  // qui la franchit — la table met déjà l'aviation à zéro.
   const barrieres = new Map();
   for (const b of etat.entites) {
     if (!estActive(b) || b.genre !== 'defense') continue;
     const pb = profil(b);
-    if (pb.bloquant || b.franchissementMilli === 0) continue;
+    if (pb.bloquant || b.franchissementColonne === null) continue;
     barrieres.set(cleCase(caseDepuisMilli(b.rangeeMilli), b.colonne), b);
   }
   if (barrieres.size > 0) {
@@ -857,8 +931,7 @@ function tir(etat) {
       ajouter(
         e.indice,
         degatsDeFranchissement(
-          b.franchissementMilli,
-          profil(b).matriceMilli[profil(e).colonneMatrice],
+          b.franchissementColonne[profil(e).colonneMatrice],
           b.pvMilli,
           b.pvMaxMilli,
         ),
@@ -899,7 +972,7 @@ function doitSArreter(etat, e, p) {
   if (p.comportementAerien === 'traversant') return false;
   if (!e.aTire || e.cibleIndice === null) return false;
   const pc = profil(etat.entites[e.cibleIndice]);
-  return p.matriceMilli[pc.colonneMatrice] === PREDILECTION_MILLI;
+  return p.colonnePredilection === pc.colonneMatrice;
 }
 
 /**

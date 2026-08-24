@@ -7,7 +7,7 @@
 //
 // LA RÈGLE EST CELLE DE FICHE-STYLE.md §1-3 : la forme code la classe, la
 // couleur code la cible, jamais l'inverse. L'accent d'une entité est la
-// couleur de sa colonne de matrice DOMINANTE — pas de sa spécialité déclarée.
+// couleur de sa colonne de dégâts DOMINANTE — pas de sa spécialité déclarée.
 // La troisième colonne (structure en attaque, aviation en défense) n'a qu'une
 // couleur pour ses deux lectures : c'est la même colonne, la règle de bascule
 // de la spec §4 le dit. Aucune quatrième teinte d'accent n'existe.
@@ -18,7 +18,7 @@
 // la même palette (« anodisé sombre », dit la fiche du Dard). Provisoire,
 // consigné au rapport ; aucune teinte n'est inventée.
 
-import { GRILLE, UNITES, DEFENSES, MATRICE_COLONNES } from '../data/combat.js';
+import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { BATIMENTS } from '../data/sites.js';
 import { xDeColonne, yDeRangeeMilli, yDeRangee } from './projection.js';
 import { positionInterpolee } from './interpolation.js';
@@ -75,20 +75,28 @@ export function classeDe(genre, id) {
 }
 
 /**
- * Accent d'une entité : la paire de teintes de sa colonne de matrice
- * DOMINANTE. Rend null pour une entité sans matrice (Merlon, bâtiments) —
- * elle ne tue rien, elle ne porte aucun accent.
+ * Accent d'une entité : la paire de teintes de sa colonne de dégâts DOMINANTE.
+ * Rend null pour une entité qui ne nuit à personne (Merlon, bâtiments) — elle
+ * ne tue rien, elle ne porte aucun accent.
+ *
+ * Une barrière ne tire pas mais saigne ce qui la franchit, et ce saignement est
+ * typé : la Ronce coûte cher à l'infanterie, la Herse aux véhicules. C'est donc
+ * sa table de franchissement qui donne son accent, faute de table de tir. Les
+ * deux ne coexistent jamais sur une même entité.
  * @returns {{ colonne: string, sombre: string, clair: string } | null}
  */
 export function accentDe(genre, id) {
-  const matrice = genre === 'batiment' ? null
-    : genre === 'defense' ? DEFENSES[id].matrice
-    : UNITES[id].matrice;
-  if (matrice === null || matrice === undefined) return null;
-  let dominante = MATRICE_COLONNES[0];
-  for (const colonne of MATRICE_COLONNES) {
-    if (matrice[colonne] > matrice[dominante]) dominante = colonne;
+  if (genre === 'batiment') return null;
+  const ligne = genre === 'defense' ? DEFENSES[id] : UNITES[id];
+  const table = ligne.degats ?? ligne.degatsFranchissement ?? null;
+  if (table === null) return null;
+  let dominante = null;
+  for (const colonne of COLONNES_DEGATS) {
+    if (table[colonne] > 0 && (dominante === null || table[colonne] > table[dominante])) {
+      dominante = colonne;
+    }
   }
+  if (dominante === null) return null;
   return { colonne: dominante, ...PALETTE.accents[dominante] };
 }
 
