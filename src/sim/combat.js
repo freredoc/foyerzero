@@ -93,6 +93,12 @@ const MILLE = 1000;
 /** Facteur de matrice d'une cible de prédilection, en millièmes. */
 const PREDILECTION_MILLI = MILLE;
 
+/**
+ * Ticks consécutifs sans pouvoir ni avancer ni nuire au terme desquels une
+ * unité offensive rentre à la base. Lu des données, jamais écrit en dur.
+ */
+export const TICKS_AVANT_REPLI = GRILLE.ticksAvantRepli;
+
 /** Causes de fin, dans l'ordre de priorité du brief §9. */
 export const CAUSES = ['souche', 'attaquants', 'batiments', 'duree'];
 
@@ -444,6 +450,10 @@ function ajouterEntite(
     vivant: true,
     sorti: false,
     ecrase: false,
+    // Ticks consécutifs passés sans pouvoir ni avancer ni nuire. À
+    // TICKS_AVANT_REPLI, l'unité offensive rentre à la base. Visible au pas à
+    // pas et dans l'état sérialisé.
+    ticksInutiles: 0,
     cibleIndice: null,
     aTire: false,
     // Lot 2C : ces deux champs restent vides et inertes en 2A.
@@ -863,6 +873,77 @@ function doitSArreter(etat, e, p) {
 }
 
 /**
+ * L'entité mobile peut-elle ÉCRASER l'occupante de sa case de destination ?
+ *
+ * L'écrasement ne s'applique qu'entre camps OPPOSÉS. Entre alliés, blocage :
+ * celle de derrière attend, elle ne double jamais et ne tue jamais. Le brief du
+ * lot 2A énonçait la règle sans mentionner le camp, et un blindé attaquant
+ * écrasait donc l'infanterie ALLIÉE qui le précédait dans sa colonne — 18 % des
+ * écrasements mesurés. Corrigé au lot 3B.
+ *
+ * Conséquence de jeu, assumée : la colonne devient un choix. Poser un blindé
+ * derrière une infanterie dans la même colonne gâche le blindé, puisqu'aucune
+ * unité ne change jamais de colonne.
+ */
+function peutEcraser(e, p, occupante, po) {
+  return occupante.camp !== e.camp && po.ecrasable && p.masse > po.masse;
+}
+
+/**
+ * L'entité peut-elle AVANCER ? Non dans deux cas, et deux seulement : elle est
+ * sur la dernière rangée, ou sa case de destination est occupée par une entité
+ * qu'elle ne peut pas écraser.
+ *
+ * Sur la dernière rangée il n'y a plus rien devant, et ramper dans sa propre
+ * case ne compte pas comme progresser : seule l'aviation traversante franchit
+ * le fond. Ailleurs, avancer à l'intérieur de sa case compte — elle progresse.
+ *
+ * Aucune vitesse n'atteignant 1000 milli-cases par tick (300 au plus, pour le
+ * Frappeur), la case de destination ne saute jamais une rangée : depuis une
+ * rangée avant la dernière, elle vaut toujours la rangée ou la suivante.
+ */
+function peutAvancer(etat, e, p, occupation, rangee, caseDestination) {
+  if (rangee >= DERNIERE_RANGEE) return p.comportementAerien === 'traversant';
+  if (caseDestination === rangee) return true;
+  if (!p.bloquant) return true; // l'aviation ignore l'occupation
+  const indiceOccupante = occupantDe(occupation, caseDestination, e.colonne);
+  if (indiceOccupante === undefined) return true;
+  const occupante = etat.entites[indiceOccupante];
+  return peutEcraser(e, p, occupante, profil(occupante));
+}
+
+/**
+ * L'entité peut-elle NUIRE ? Il lui faut une cible à portée à laquelle son tir
+ * ôterait réellement des PV, et — s'il s'agit d'un bâtiment — une réserve non
+ * épuisée : la cible existe, mais elle est hors d'atteinte.
+ *
+ * Le critère est les DÉGÂTS EFFECTIFS, pas le seul facteur de matrice. Le brief
+ * du lot 3B retient « aucune cible à portée dont le facteur de matrice est non
+ * nul » ; c'est trop étroit, et le raid C le prouve. Une unité à 2739 milli-PV
+ * sur 2 897 400 a une santé de floor(2739 × 1000 / 2 897 400) = 0 ‰, donc un
+ * tir de floor(degats × facteur × 0 / 1000) = 0 : sa matrice est pleine, elle
+ * ne fait rien. Deux unités dans cet état se tirent dessus indéfiniment.
+ *
+ * Le test des dégâts effectifs subsume celui de la matrice — un facteur nul
+ * donne des dégâts nuls — et referme ce cas. Voir le rapport du lot 3B.
+ */
+function peutNuire(etat, e, p) {
+  if (!peutTirer(p)) return false;
+  for (const c of etat.entites) {
+    if (c.camp === e.camp || !estActive(c)) continue;
+    const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
+    if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+    const pc = profil(c);
+    if (pc.genre === 'batiment' && e.reserve <= 0) continue;
+    const degats = degatsDUnTir(
+      e.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli,
+    );
+    if (degats > 0) return true;
+  }
+  return false;
+}
+
+/**
  * 7. Déplacement. Strictement vertical, des rangées basses vers les hautes :
  * aucun pathfinding, aucune sortie de colonne. C'est ce que le terrain est
  * censé compenser. Itération dans l'ordre d'insertion, stable et consigné.
@@ -879,7 +960,6 @@ function deplacement(etat) {
     if (!estActive(e) || e.camp !== 'attaque') continue;
     const p = profil(e);
     if (p.vitesseMilli === 0) continue;
-    if (doitSArreter(etat, e, p)) continue;
 
     const rangee = caseDepuisMilli(e.rangeeMilli);
     let vitesse = p.vitesseMilli;
@@ -890,6 +970,33 @@ function deplacement(etat) {
 
     const destinationMilli = e.rangeeMilli + vitesse;
     const caseDestination = caseDepuisMilli(destinationMilli);
+
+    // Une unité arrêtée pour sa cible de prédilection ne PROGRESSE pas : elle a
+    // choisi de combattre plutôt que d'avancer. Si son tir porte, peutNuire la
+    // garde en jeu ; s'il ne porte pas, elle ne fait plus rien du tout — c'est
+    // exactement le cas que le raid C exhibait.
+    const arrete = doitSArreter(etat, e, p);
+    const progresse = !arrete
+      && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
+
+    // REPLI. Une unité offensive qui ne peut ni avancer ni nuire pendant
+    // TICKS_AVANT_REPLI ticks consécutifs rentre à la base : elle sort du champ
+    // sans être détruite, et compte parmi les survivants. Le compteur se remet
+    // à zéro dès qu'une des deux conditions cesse d'être vraie — un blocage est
+    // souvent transitoire.
+    if (progresse || peutNuire(etat, e, p)) {
+      e.ticksInutiles = 0;
+    } else {
+      e.ticksInutiles += 1;
+      if (e.ticksInutiles >= TICKS_AVANT_REPLI) {
+        e.sorti = true;
+        // Sa case se libère immédiatement : un allié derrière elle peut
+        // repartir dès ce tick.
+        retirer(occupation, rangee, e.colonne);
+        continue;
+      }
+    }
+    if (arrete) continue;
 
     if (caseDestination === rangee) {
       e.rangeeMilli = destinationMilli;
@@ -919,7 +1026,7 @@ function deplacement(etat) {
     }
     const occupante = etat.entites[indiceOccupante];
     const po = profil(occupante);
-    if (po.ecrasable && p.masse > po.masse) {
+    if (peutEcraser(e, p, occupante, po)) {
       occupante.pvMilli = 0;
       occupante.vivant = false;
       occupante.ecrase = true;

@@ -113,6 +113,8 @@ export const NB_PRIMITIVES = {
 // pour que la même scène rende les mêmes primitives à viewport égal.
 
 const rect = (x, y, l, h, couleur) => ({ forme: 'rect', x, y, l, h, couleur });
+const texte = (x, y, contenu, couleur, taille) =>
+  ({ forme: 'texte', x, y, texte: contenu, couleur, taille });
 const cadre = (x, y, l, h, couleur, epaisseur) => ({ forme: 'cadre', x, y, l, h, couleur, epaisseur });
 const disque = (x, y, rayon, couleur) => ({ forme: 'disque', x, y, rayon, couleur });
 const ligne = (x1, y1, x2, y2, couleur, epaisseur) => ({ forme: 'ligne', x1, y1, x2, y2, couleur, epaisseur });
@@ -307,5 +309,149 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
       accent.clair, 2,
     ));
   }
+  return liste;
+}
+
+// ---------------------------------------------------------------------------
+// Légende
+// ---------------------------------------------------------------------------
+//
+// La légende se dessine avec LES MÊMES primitives et LES MÊMES fonctions de
+// forme que le champ de bataille, et s'exécute par le même canvas2d.executer.
+// Aucune pastille recopiée à la main : c'est la seule façon qu'elle ne dérive
+// pas du rendu au premier changement de palette.
+//
+// La liste des entrées, elle, est ÉCRITE À LA MAIN. Si elle se déduisait des
+// données, elle se mettrait à jour toute seule et ne prouverait plus rien — le
+// test qui la verrouille (T7) compare cette liste à l'énumération faite depuis
+// UNITES, DEFENSES et BATIMENTS, et doit tomber en panne dès qu'une entité
+// d'une classe ou d'un accent non présenté apparaît.
+
+/** Libellé de chaque classe visuelle. */
+export const NOMS_CLASSE = {
+  escouade: 'Escouade',
+  blinde: 'Blindé',
+  aeronef: 'Aéronef',
+  mur: 'Mur',
+  barriere: 'Barrière',
+  tourelle: 'Tourelle',
+  artillerie: 'Artillerie',
+  batiment: 'Bâtiment',
+};
+
+/** Libellé de chaque colonne d'accent — ce que l'entité peut tuer. */
+export const NOMS_ACCENT = {
+  infanterie: 'anti-infanterie',
+  vehicule: 'anti-véhicule',
+  structureOuAviation: 'anti-structure / aérien',
+  aucun: 'ne tue rien',
+};
+
+/**
+ * Les 19 couples (classe, accent) que la scène peut produire, un par entrée.
+ * `accent: null` pour ce qui ne tue rien — le Merlon et les bâtiments.
+ */
+export const ENTREES_LEGENDE = [
+  { classe: 'escouade', accent: 'infanterie' },
+  { classe: 'escouade', accent: 'vehicule' },
+  { classe: 'escouade', accent: 'structureOuAviation' },
+  { classe: 'blinde', accent: 'infanterie' },
+  { classe: 'blinde', accent: 'vehicule' },
+  { classe: 'blinde', accent: 'structureOuAviation' },
+  { classe: 'aeronef', accent: 'infanterie' },
+  { classe: 'aeronef', accent: 'vehicule' },
+  { classe: 'aeronef', accent: 'structureOuAviation' },
+  { classe: 'mur', accent: null },
+  { classe: 'barriere', accent: 'infanterie' },
+  { classe: 'barriere', accent: 'vehicule' },
+  { classe: 'tourelle', accent: 'infanterie' },
+  { classe: 'tourelle', accent: 'vehicule' },
+  { classe: 'tourelle', accent: 'structureOuAviation' },
+  { classe: 'artillerie', accent: 'infanterie' },
+  { classe: 'artillerie', accent: 'vehicule' },
+  { classe: 'artillerie', accent: 'structureOuAviation' },
+  { classe: 'batiment', accent: null },
+];
+
+/** Dessine une entité de classe et d'accent donnés, comme sur le champ. */
+function dessinerVignette(liste, x, y, t, classe, camp, colonneAccent) {
+  const accent = colonneAccent === null ? null
+    : { colonne: colonneAccent, ...PALETTE.accents[colonneAccent] };
+  if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
+  else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, camp, accent);
+  else if (classe === 'blinde') dessinerBlinde(liste, x, y, t, camp, accent);
+  else if (classe === 'aeronef') dessinerAeronef(liste, x, y, t, camp, accent);
+  else dessinerStructure(liste, x, y, t, classe, accent);
+}
+
+/**
+ * Liste d'affichage de la légende. Elle occupe tout le canvas : le banc est en
+ * pause pendant qu'elle est ouverte, personne ne regarde le combat.
+ *
+ * @param {object} projection Résultat de calculerProjection.
+ * @returns {Array<object>} primitives, exécutables par canvas2d.executer.
+ */
+export function listeLegende(projection) {
+  const { largeurPx, hauteurPx } = projection;
+  const liste = [rect(0, 0, largeurPx, hauteurPx, FOND)];
+
+  // Une vignette par ligne, la hauteur de canvas répartie sur les 19 couples,
+  // les 2 camps, les 4 divers et les 4 titres — 29 lignes en tout.
+  const lignes = ENTREES_LEGENDE.length + 2 + 4 + 4;
+  const pas = Math.max(12, Math.floor((hauteurPx - 8) / lignes));
+  const t = Math.max(8, pas - 4);
+  const marge = Math.max(4, Math.floor(largeurPx / 40));
+  const taillePolice = Math.max(9, Math.min(13, Math.floor(t * 0.55)));
+  const xLibelle = marge + t + marge;
+  let y = 4;
+
+  const titre = (contenu) => {
+    liste.push(texte(marge, y + Math.floor(pas / 2), contenu, PALETTE.kakiLumiere,
+      Math.max(10, taillePolice + 1)));
+    y += pas;
+  };
+  const ligneVignette = (dessin, libelle) => {
+    dessin(y);
+    liste.push(texte(xLibelle, y + Math.floor(t / 2), libelle, PALETTE.metalClair, taillePolice));
+    y += pas;
+  };
+
+  titre('LA FORME DIT LA CLASSE, LA COULEUR DIT LA CIBLE');
+  for (const entree of ENTREES_LEGENDE) {
+    const libelle = `${NOMS_CLASSE[entree.classe]} · ${NOMS_ACCENT[entree.accent ?? 'aucun']}`;
+    ligneVignette(
+      (yv) => dessinerVignette(liste, marge, yv, t, entree.classe, 'attaque', entree.accent),
+      libelle,
+    );
+  }
+
+  titre('LE CAMP SE LIT AU TON DU CHÂSSIS');
+  for (const [camp, libelle] of [['attaque', 'Vous — châssis kaki'], ['defense', 'L\'Ouvrage — métal sombre']]) {
+    ligneVignette(
+      (yv) => dessinerVignette(liste, marge, yv, t, 'blinde', camp, 'vehicule'),
+      libelle,
+    );
+  }
+
+  titre('LE RESTE');
+  const bh = Math.max(2, Math.floor(t / 6));
+  ligneVignette(
+    (yv) => liste.push(rect(marge, yv, t, t, COULEUR_OBSTACLE)),
+    'Obstacle — vitesse divisée par 2,5',
+  );
+  ligneVignette((yv) => {
+    liste.push(rect(marge, yv + Math.floor(t / 2) - bh, t, bh, PALETTE.contour));
+    liste.push(rect(marge, yv + Math.floor(t / 2) - bh, Math.floor((t * 2) / 3), bh, COULEUR_BARRE_PV));
+  }, 'Barre de PV — au-dessus de chaque entité');
+  ligneVignette((yv) => {
+    liste.push(rect(marge, yv + Math.floor(t / 2) - bh, t, bh, PALETTE.contour));
+    liste.push(rect(marge, yv + Math.floor(t / 2) - bh, Math.floor(t / 3), bh, COULEUR_BARRE_RESERVE));
+  }, 'Barre de réserve — munitions restantes');
+  ligneVignette(
+    (yv) => liste.push(ligne(marge, yv + t, marge + t, yv, PALETTE.accents.vehicule.clair, 2)),
+    'Trait de tir — dans la couleur de la cible',
+  );
+
+  titre('Toucher une case pour identifier son occupant.');
   return liste;
 }

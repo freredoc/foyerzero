@@ -45,6 +45,15 @@ export const GRILLE = {
 
   // Réparation gratuite après un raid, au prorata des PV du complexe de défense.
   reparationGratuitePct: 70,
+
+  // Une unité offensive qui ne peut NI avancer NI nuire pendant ce nombre de
+  // ticks consécutifs rentre à la base : elle sort du champ sans être détruite,
+  // et compte parmi les survivants. 30 ticks = 3 s, soit 3,3 % des 900 ticks
+  // d'un raid — assez pour qu'un blocage transitoire (un allié qui repart, une
+  // cible qui meurt et en libère une autre) ne renvoie pas chez elle une unité
+  // qui allait percer. Le compteur se remet à zéro dès qu'une des deux
+  // conditions cesse d'être vraie.
+  ticksAvantRepli: 30,
 };
 
 // --- obstacles de terrain ----------------------------------------------------
