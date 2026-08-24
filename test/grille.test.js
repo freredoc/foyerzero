@@ -167,11 +167,15 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
     assert.ok(Number.isInteger(u.masse), `${id} : masse non entière`);
     assert.ok(Number.isInteger(u.reserve), `${id} : réserve non entière`);
 
-    // Toutes les valeurs de matrice sont des multiples de 100 en millièmes.
+    // Toutes les valeurs de matrice tombent juste en millièmes, dans 0…1000.
+    // Le lot 2A exigeait des multiples de 100 ; la Herse vaut 0,03 contre
+    // l'infanterie depuis l'arbitrage du lot 2B, soit 30 ‰. La granularité
+    // effective du calibrage est donc la DIZAINE de millièmes — c'est ce qui
+    // est asseré, pour qu'une dérive se voie.
     for (const colonne of MATRICE_COLONNES) {
       const milli = u.matrice[colonne] * 1000;
       assert.ok(Number.isInteger(milli), `${id}.${colonne} : ${milli} non entier`);
-      assert.equal(milli % 100, 0, `${id}.${colonne} : ${milli} n'est pas multiple de 100`);
+      assert.equal(milli % 10, 0, `${id}.${colonne} : ${milli} n'est pas multiple de 10`);
       assert.ok(milli >= 0 && milli <= 1000, `${id}.${colonne} : ${milli} hors de 0…1000`);
     }
   }
@@ -181,14 +185,26 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
     assert.ok(Number.isInteger(d.portee * 1000), `${id} : portée non entière`);
     assert.ok(Number.isInteger(d.porteeMini * 1000), `${id} : portée mini non entière`);
     assert.ok(Number.isInteger(d.degats), `${id} : dégâts non entiers`);
-    assert.ok(Number.isInteger(d.degatsFranchissement), `${id} : franchissement non entier`);
+    // Le franchissement se lit en MILLI-PV depuis le lot 2B : la Ronce vaut
+    // 2,5 PV/tick, qui ne s'écrit pas en entier autrement. 2,5 × 1000 = 2500.
+    assert.ok(
+      Number.isInteger(d.degatsFranchissement * 1000),
+      `${id} : franchissement ${d.degatsFranchissement} non entier en milli-PV`,
+    );
     if (d.matrice === null) continue;
     for (const colonne of MATRICE_COLONNES) {
       const milli = d.matrice[colonne] * 1000;
       assert.ok(Number.isInteger(milli), `${id}.${colonne} : ${milli} non entier`);
-      assert.equal(milli % 100, 0, `${id}.${colonne} : ${milli} n'est pas multiple de 100`);
+      assert.equal(milli % 10, 0, `${id}.${colonne} : ${milli} n'est pas multiple de 10`);
+      assert.ok(milli >= 0 && milli <= 1000, `${id}.${colonne} : ${milli} hors de 0…1000`);
     }
   }
+
+  // Valeur de matrice la plus fine du calibrage, et seule sous les 100 ‰ :
+  // la Herse contre l'infanterie, arbitrée à 0,03 au lot 2B.
+  assert.equal(DEFENSES.herse.matrice.infanterie * 1000, 30);
+  assert.equal(DEFENSES.herse.degatsFranchissement, 15);
+  assert.equal(DEFENSES.ronce.degatsFranchissement, 2.5);
 
   // Les points de recherche doublent par niveau de cible. Le plafond de niveau
   // est 50, donc l'exposant maximal est 49 : 2^49 = 562 949 953 421 312, sous

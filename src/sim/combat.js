@@ -37,6 +37,7 @@ import { GRILLE, UNITES, DEFENSES, MATRICE_COLONNES } from '../data/combat.js';
 import {
   BATIMENTS, BUTIN, SAVEURS, POINTS_RECHERCHE, GEOGRAPHIE,
 } from '../data/sites.js';
+import { NIVEAU } from '../data/niveaux.js';
 import {
   DERNIERE_RANGEE,
   enEntier,
@@ -120,7 +121,16 @@ const COLONNE_PAR_TYPE_DEFENSE = {
   artillerie: 'vehicule',
 };
 
-/** Convertit une matrice de calibrage en millièmes entiers, multiples de 100. */
+/**
+ * Convertit une matrice de calibrage en millièmes entiers de 0 à 1000.
+ *
+ * Le lot 2A exigeait des multiples de 100 : c'était vrai du calibrage d'alors,
+ * ce ne l'est plus depuis que la Herse vaut 0,03 contre l'infanterie (30 ‰,
+ * arbitrage du lot 2B). L'invariant dur reste l'EXACTITUDE — enEntier refuse
+ * toute valeur qui ne tombe pas juste en millièmes — plus les bornes. La
+ * granularité effective des données, elle, est asserée en test, pour qu'une
+ * dérive se voie sans empêcher un arbitrage plus fin.
+ */
 function matriceEnMillieme(matrice, contexte) {
   if (matrice === null || matrice === undefined) return null;
   const sortie = {};
@@ -129,9 +139,9 @@ function matriceEnMillieme(matrice, contexte) {
       throw new Error(`combat : ${contexte} — colonne de matrice « ${colonne} » absente`);
     }
     const milli = enEntier(matrice[colonne], MILLE, `${contexte}.${colonne}`);
-    if (milli % 100 !== 0) {
+    if (milli < 0 || milli > MILLE) {
       throw new Error(
-        `combat : ${contexte}.${colonne} = ${milli} millièmes n'est pas un multiple de 100`,
+        `combat : ${contexte}.${colonne} = ${milli} millièmes hors de 0…${MILLE}`,
       );
     }
     sortie[colonne] = milli;
@@ -165,7 +175,7 @@ function profilUnite(id, u) {
     masse: entierDeDonnees(u.masse, `${contexte}.masse`),
     bloquant: u.masse > 0,
     ecrasable: true,
-    franchissement: 0,
+    franchissementMilli: 0,
     vitesseMilli,
     vitesseObstacleMilli: vitesseSousObstacle(vitesseMilli),
     comportementAerien: u.comportementAerien,
@@ -199,8 +209,11 @@ function profilDefense(id, d) {
     masse: null,
     bloquant: d.bloque === true,
     ecrasable: false,
-    franchissement: entierDeDonnees(
-      d.degatsFranchissement, `${contexte}.degatsFranchissement`,
+    // En MILLI-PV : la Ronce vaut 2,5 PV/tick depuis le lot 2B, et 2,5 n'est
+    // pas un entier. C'est la même porte que les portées (1,5 · 2,5 · 5,5) :
+    // enEntier exige que la forme en milli tombe juste, ici 2500.
+    franchissementMilli: enEntier(
+      d.degatsFranchissement, MILLE, `${contexte}.degatsFranchissement`,
     ),
     vitesseMilli: 0,
     vitesseObstacleMilli: 0,
@@ -229,7 +242,7 @@ function profilBatiment(id, b) {
     masse: null,
     bloquant: true,
     ecrasable: false,
-    franchissement: 0,
+    franchissementMilli: 0,
     vitesseMilli: 0,
     vitesseObstacleMilli: 0,
     comportementAerien: null,
@@ -272,6 +285,44 @@ export function verifierArithmetique() {
 }
 
 verifierArithmetique();
+
+// ---------------------------------------------------------------------------
+// Courbe de niveau
+// ---------------------------------------------------------------------------
+
+/**
+ * Facteur d'échelle d'un niveau, en MILLIÈMES. Vaut exactement 1000 au niveau 1.
+ *
+ *   facteurMilli(n) = round(1000 × penteBasse^(min(n,12)−1) × penteHaute^max(n−12,0))
+ *
+ * Si NIVEAU.deuxRegimes vaut false, penteHaute s'applique partout.
+ * Seuls les PV et les dégâts s'y adossent : réserve, portée, portée minimale,
+ * vitesse, masse et points d'armée ne montent jamais.
+ * @param {number} niveau
+ * @returns {number} entier de millièmes.
+ */
+export function facteurMilli(niveau) {
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
+    throw new Error(`combat : niveau ${niveau} hors de 1…${NIVEAU.plafond}`);
+  }
+  const exposantBas = NIVEAU.deuxRegimes ? Math.min(niveau, NIVEAU.niveauBascule) - 1 : 0;
+  const exposantHaut = NIVEAU.deuxRegimes
+    ? Math.max(niveau - NIVEAU.niveauBascule, 0)
+    : niveau - 1;
+  return Math.round(
+    MILLE * NIVEAU.penteBasse ** exposantBas * NIVEAU.penteHaute ** exposantHaut,
+  );
+}
+
+/**
+ * Met une valeur de dégâts à l'échelle d'un niveau.
+ * Les PV, eux, se calculent depuis les PV BRUTS : `pv × facteurMilli` est exact
+ * par construction (pvMaxMilli = pv × 1000, donc × facteurMilli / 1000 = pv ×
+ * facteurMilli), là où un dégât doit être arrondi.
+ */
+function aLEchelle(valeur, facteur) {
+  return Math.floor((valeur * facteur) / MILLE);
+}
 
 const TABLES_PROFIL = {
   unite: PROFILS_UNITE,
@@ -317,8 +368,10 @@ function verifierEntierPositif(valeur, contexte) {
  * case) ; elle vaut null à l'apparition d'une vague, où c'est l'occupation
  * courante qui tranche — l'aviation, elle, partage librement une case.
  */
-function ajouterEntite(etat, contexte, { camp, genre, id, rangee, colonne, pvMilli, reserve },
-  casesPrises, obstaclesIndex) {
+function ajouterEntite(
+  etat, contexte, { camp, genre, id, rangee, colonne, pvMilli, reserve, niveau },
+  casesPrises, obstaclesIndex,
+) {
   const p = TABLES_PROFIL[genre][id];
   const ou = `${contexte} « ${id} » en (${rangee}, ${colonne})`;
 
@@ -339,11 +392,26 @@ function ajouterEntite(etat, contexte, { camp, genre, id, rangee, colonne, pvMil
     casesPrises.set(cle, id);
   }
 
-  let pv = p.pvMaxMilli;
+  // Niveau de l'ENTITÉ : celui du site par défaut, surchargeable ligne à ligne
+  // — une base est « composée de deux niveaux adjacents », ce que le niveau de
+  // site seul ne sait pas exprimer.
+  const niveauEntite = niveau ?? etat.niveau;
+  if (!Number.isInteger(niveauEntite) || niveauEntite < 1 || niveauEntite > NIVEAU.plafond) {
+    throw new Error(`combat : ${ou} — niveau ${niveauEntite} hors de 1…${NIVEAU.plafond}`);
+  }
+  const facteur = facteurMilli(niveauEntite);
+  // pvMaxMilli = pv × 1000 × facteurMilli / 1000 = pv × facteurMilli. Exact.
+  const pvMaxMilli = (p.pvMaxMilli / MILLE) * facteur;
+  const degats = aLEchelle(p.degats, facteur);
+  const franchissementMilli = aLEchelle(p.franchissementMilli, facteur);
+
+  let pv = pvMaxMilli;
   if (pvMilli !== undefined) {
+    // Forçage explicite, PRIORITAIRE sur l'échelle : c'est ce qui permet de
+    // monter un état déjà entamé.
     verifierEntierPositif(pvMilli, `${ou} — pvMilli`);
-    if (pvMilli === 0 || pvMilli > p.pvMaxMilli) {
-      throw new Error(`combat : ${ou} — pvMilli ${pvMilli} hors de 1…${p.pvMaxMilli}`);
+    if (pvMilli === 0 || pvMilli > pvMaxMilli) {
+      throw new Error(`combat : ${ou} — pvMilli ${pvMilli} hors de 1…${pvMaxMilli}`);
     }
     pv = pvMilli;
   }
@@ -362,9 +430,15 @@ function ajouterEntite(etat, contexte, { camp, genre, id, rangee, colonne, pvMil
     genre,
     id,
     colonne,
+    niveau: niveauEntite,
     rangeeMilli: milliDepuisCase(rangee),
     pvMilli: pv,
-    pvMaxMilli: p.pvMaxMilli,
+    pvMaxMilli,
+    // Les deux seules grandeurs de combat qui suivent le niveau. Elles vivent
+    // sur l'entité, pas sur le profil : deux entités du même identifiant
+    // peuvent être à deux niveaux différents sur la même grille.
+    degats,
+    franchissementMilli,
     reserve: res,
     plancherReserve: camp === 'attaque' ? p.plancherReserve : 0,
     vivant: true,
@@ -525,6 +599,7 @@ export function creerCombat(montage) {
         rangee,
         pvMilli: u.pvMilli,
         reserve: u.reserve,
+        niveau: u.niveau,
       });
     }
     etat.vagues.push(descripteurs);
@@ -676,6 +751,22 @@ function degatsDUnTir(degats, facteurMatrice, pvCourantMilli, pvMaxMilli) {
 }
 
 /**
+ * Dégâts de franchissement d'une barrière, par tick de présence.
+ *
+ *   ratioMilli  = floor(pvCourantMilli × 1000 / pvMaxMilli)
+ *   degatsMilli = floor(franchissementMilli × facteurMatrice × ratioMilli / 1000²)
+ *
+ * Même forme que degatsDUnTir, à ceci près que le franchissement est DÉJÀ en
+ * milli-PV — la Ronce vaut 2,5 PV/tick, qui ne s'écrit pas en entier autrement.
+ * D'où la division par 1000 supplémentaire. À barrière pleine vie et matrice
+ * 1,0 : floor(2500 × 1000 × 1000 / 1 000 000) = 2500 milli-PV, soit 2,5 PV.
+ */
+function degatsDeFranchissement(franchissementMilli, facteurMatrice, pvCourantMilli, pvMaxMilli) {
+  const ratioMilli = Math.floor((pvCourantMilli * MILLE) / pvMaxMilli);
+  return Math.floor((franchissementMilli * facteurMatrice * ratioMilli) / (MILLE * MILLE));
+}
+
+/**
  * 4. Tir. Les dégâts sont calculés sur l'état de DÉBUT de tick et accumulés
  * dans un tampon : le tir est simultané, l'ordre d'itération ne peut pas
  * influer. Le franchissement des barrières est compté ici, du même tampon.
@@ -703,7 +794,7 @@ function tir(etat) {
     if (e.camp === 'attaque' && pc.genre === 'batiment' && e.reserve <= 0) continue;
     ajouter(
       e.cibleIndice,
-      degatsDUnTir(p.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, p.pvMaxMilli),
+      degatsDUnTir(e.degats, p.matriceMilli[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli),
     );
     e.aTire = true;
   }
@@ -715,7 +806,7 @@ function tir(etat) {
   for (const b of etat.entites) {
     if (!estActive(b) || b.genre !== 'defense') continue;
     const pb = profil(b);
-    if (pb.bloquant || pb.franchissement === 0) continue;
+    if (pb.bloquant || b.franchissementMilli === 0) continue;
     barrieres.set(cleCase(caseDepuisMilli(b.rangeeMilli), b.colonne), b);
   }
   if (barrieres.size > 0) {
@@ -723,14 +814,13 @@ function tir(etat) {
       if (!estActive(e) || e.camp !== 'attaque') continue;
       const b = barrieres.get(cleCase(caseDepuisMilli(e.rangeeMilli), e.colonne));
       if (b === undefined) continue;
-      const pb = profil(b);
       ajouter(
         e.indice,
-        degatsDUnTir(
-          pb.franchissement,
-          pb.matriceMilli[profil(e).colonneMatrice],
+        degatsDeFranchissement(
+          b.franchissementMilli,
+          profil(b).matriceMilli[profil(e).colonneMatrice],
           b.pvMilli,
-          pb.pvMaxMilli,
+          b.pvMaxMilli,
         ),
       );
     }
@@ -918,6 +1008,7 @@ function ligneResultat(e) {
     indice: e.indice,
     id: e.id,
     genre: e.genre,
+    niveau: e.niveau,
     rangee: caseDepuisMilli(e.rangeeMilli),
     colonne: e.colonne,
     pvMaxMilli: e.pvMaxMilli,
@@ -998,7 +1089,9 @@ export function butin(resultat, montage) {
   let scorie = 0;
   for (const b of resultat.batiments) {
     const p = PROFILS_BATIMENT[b.id];
-    const plein = butinPlein(montage.niveau, p.indiceButin);
+    // Le niveau du BÂTIMENT, plus celui du site : une base mêle deux niveaux
+    // adjacents, et chacun paie le sien.
+    const plein = butinPlein(b.niveau, p.indiceButin);
     const gagne = rase ? plein : (plein * b.pvPerdusMilli) / b.pvMaxMilli;
     quartz += gagne * p.ressource.quartz;
     scorie += gagne * p.ressource.scorie;
@@ -1015,24 +1108,41 @@ export function butin(resultat, montage) {
 }
 
 /**
- * Points de recherche d'un raid, en MILLI-POINTS. Ils se prennent sur les
- * cibles défensives endommagées ; les bâtiments ne rapportent rien. Casser des
- * murs rapporte 2 : ce n'est pas une erreur, c'est le point du modèle.
- * @returns {number} milli-points entiers.
+ * Points de recherche d'un raid, en MILLI-POINTS, sous forme de **BigInt**.
+ *
+ * Ils se prennent sur les cibles défensives endommagées ; les bâtiments ne
+ * rapportent rien. Casser des murs rapporte 2 : ce n'est pas une erreur, c'est
+ * le point du modèle.
+ *
+ * ⚠ POURQUOI UN BigInt. Le barème double par niveau de cible quand tout le
+ * reste croît en ×1,32 : `bareme × 1000 × 2^(niveau−1)` dépasse
+ * Number.MAX_SAFE_INTEGER dès le niveau 39 pour le Broyeur. Un Number
+ * deviendrait alors approximatif — un compteur de points ne peut pas l'être.
+ * BigInt est exact quelle que soit la taille.
+ *
+ * ⚠ JSON.stringify LÈVE sur un BigInt. Il reste donc confiné à cette valeur de
+ * retour : il n'entre ni dans l'état du combat, ni dans l'objet rendu par
+ * resoudre — un test le verrouille. Toute écriture en sauvegarde passe par une
+ * chaîne décimale, jamais par le nombre.
+ *
+ * @returns {bigint} milli-points exacts.
  */
 export function pointsRecherche(resultat, montage) {
-  const multiplicateur = POINTS_RECHERCHE.multiplicateurParNiveau ** (montage.niveau - 1);
-  const bonusMilli = MILLE
-    + enEntier(POINTS_RECHERCHE.bonusModuleDebloque, MILLE, 'bonusModuleDebloque');
+  const bonusMilli = BigInt(
+    MILLE + enEntier(POINTS_RECHERCHE.bonusModuleDebloque, MILLE, 'bonusModuleDebloque'),
+  );
+  const neutre = BigInt(MILLE);
+  const parNiveau = BigInt(POINTS_RECHERCHE.multiplicateurParNiveau);
   const debloques = new Set(montage.modulesDebloques?.ouvrage ?? []);
-  let total = 0;
+  let total = 0n;
   for (const d of resultat.defenses) {
     const bareme = POINTS_RECHERCHE.parCible[d.id];
     if (bareme === undefined || d.pvPerdusMilli === 0) continue;
-    const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : MILLE;
-    total += Math.floor(
-      (bareme * multiplicateur * facteur * d.pvPerdusMilli) / d.pvMaxMilli,
-    );
+    const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
+    // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
+    // zéro : sur des grandeurs positives, c'est exactement le plancher voulu.
+    total += (BigInt(bareme) * parNiveau ** BigInt(d.niveau - 1) * facteur
+      * BigInt(d.pvPerdusMilli)) / BigInt(d.pvMaxMilli);
   }
   return total;
 }
