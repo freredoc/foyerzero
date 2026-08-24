@@ -9,10 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  PREREGLAGES, montageDuBanc, executerRaidComplet, nomAffiche,
+  montageDuBanc, executerRaidComplet, nomAffiche,
   formaterPointsMilli, formaterPv, LIBELLES_CAUSE, DPR_MAX,
 } from '../src/ui/banc.js';
 import { creerCombat, CAUSES } from '../src/sim/combat.js';
+import { PROFILS_ASSAUT, EMPLACEMENTS_ASSAUT } from '../src/data/sites.js';
+import { PREREGLAGES, montagePreregle } from './prereglages-lot3a.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -35,19 +37,37 @@ function fichiersJs(dossier) {
 // Préréglages et montage du banc
 // ---------------------------------------------------------------------------
 
-test('banc — les trois préréglages passent creerCombat sur des sites variés', () => {
+test('banc — les trois profils passent creerCombat sur des sites variés', () => {
   assert.deepEqual(Object.keys(PREREGLAGES), ['infanterie', 'blindeLourd', 'mixte']);
-  for (const assaut of Object.keys(PREREGLAGES)) {
+  assert.deepEqual(Object.keys(PROFILS_ASSAUT), ['infanterie', 'blindeLourd', 'mixte']);
+  for (const assaut of Object.keys(PROFILS_ASSAUT)) {
     for (const [type, niveau, saveur] of [
       ['camp', 5, 'richeQuartz'], ['avantPoste', 30, 'richeScorie'], ['base', 50, null],
     ]) {
       const montage = montageDuBanc({ type, niveau, saveur, graine: 3, assaut });
       assert.doesNotThrow(() => creerCombat(montage), `${assaut} sur ${type} ${niveau}`);
-      assert.ok(montage.vagues.length >= 3 && montage.vagues.length <= 4);
+      // ⚠ SEUIL RÉÉCRIT AU LOT 4B. Les préréglages figés portaient toujours 3 ou
+      // 4 vagues ; un assaut budgété en porte de 1 à 4 selon ce que le budget
+      // permet — une seule vague au niveau 5, où 45 points n'achètent que neuf
+      // Fusiliers. Ce que le test doit tenir est le PLAFOND, pas un plancher
+      // arbitraire : au plus 4 vagues, au plus 9 par vague.
+      assert.ok(montage.vagues.length >= 1 && montage.vagues.length <= EMPLACEMENTS_ASSAUT.vagues,
+        `${assaut} sur ${type} ${niveau} : ${montage.vagues.length} vagues`);
+      for (const vague of montage.vagues) {
+        assert.ok(vague.length >= 1 && vague.length <= EMPLACEMENTS_ASSAUT.parVague);
+      }
+      // Et le budget est tenu, ce qu'aucun préréglage ne garantissait.
+      assert.ok(montage.assaut.pointsEngages <= montage.assaut.budgetPoints);
     }
   }
   assert.throws(
     () => montageDuBanc({ type: 'camp', niveau: 5, saveur: null, graine: 1, assaut: 'horde' }),
+    /profil d'assaut inconnu/,
+  );
+  // Le témoin historique du lot 3A vit hors de `src/` et refuse le même nom
+  // inconnu — c'est lui qui porte encore le mot « préréglage ».
+  assert.throws(
+    () => montagePreregle({ type: 'camp', niveau: 5, saveur: null, graine: 1, assaut: 'horde' }),
     /préréglage d'assaut inconnu/,
   );
 });

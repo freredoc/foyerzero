@@ -22,7 +22,7 @@ import {
   creerCombat, tick, construireResultat, butin, pointsRecherche, TICKS_AVANT_REPLI,
 } from '../sim/combat.js';
 import { caseDepuisMilli } from '../sim/grille.js';
-import { genererSite } from '../sim/generateur.js';
+import { genererSite, genererAssaut, budgetAssaut } from '../sim/generateur.js';
 import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
 } from '../render/interpolation.js';
@@ -34,60 +34,38 @@ import { executer } from '../render/canvas2d.js';
 // Étage pur
 // ---------------------------------------------------------------------------
 
-/**
- * Trois compositions d'assaut suffisent au banc : infanterie, blindé lourd,
- * mixte. Des vagues de { id, colonne }, aux cases toutes distinctes — le
- * moteur refuse deux entités bloquantes sur une case d'apparition.
- */
-export const PREREGLAGES = {
-  infanterie: {
-    nom: 'Infanterie',
-    vagues: [
-      [{ id: 'meute', colonne: 1 }, { id: 'meute', colonne: 3 }, { id: 'meute', colonne: 5 },
-        { id: 'meute', colonne: 7 }, { id: 'meute', colonne: 9 }],
-      [{ id: 'perceurs', colonne: 2 }, { id: 'perceurs', colonne: 4 },
-        { id: 'perceurs', colonne: 6 }, { id: 'perceurs', colonne: 8 }],
-      [{ id: 'guetteur', colonne: 3 }, { id: 'guetteur', colonne: 7 },
-        { id: 'meute', colonne: 1 }, { id: 'meute', colonne: 9 }],
-      [{ id: 'fouisseurs', colonne: 2 }, { id: 'fouisseurs', colonne: 5 },
-        { id: 'fouisseurs', colonne: 8 }],
-    ],
-  },
-  blindeLourd: {
-    nom: 'Blindé lourd',
-    vagues: [
-      [{ id: 'fendeur', colonne: 2 }, { id: 'fendeur', colonne: 5 }, { id: 'fendeur', colonne: 8 }],
-      [{ id: 'broyeur', colonne: 3 }, { id: 'broyeur', colonne: 7 }],
-      [{ id: 'pilon', colonne: 4 }, { id: 'pilon', colonne: 6 }],
-    ],
-  },
-  mixte: {
-    nom: 'Mixte',
-    vagues: [
-      [{ id: 'meute', colonne: 1 }, { id: 'meute', colonne: 5 }, { id: 'meute', colonne: 9 },
-        { id: 'carapace', colonne: 3 }, { id: 'carapace', colonne: 7 }],
-      [{ id: 'fendeur', colonne: 2 }, { id: 'fendeur', colonne: 8 }, { id: 'belier', colonne: 5 }],
-      [{ id: 'crecelle', colonne: 4 }, { id: 'frappeur', colonne: 5 }, { id: 'busard', colonne: 6 }],
-      [{ id: 'pilon', colonne: 5 }],
-    ],
-  },
-};
 
 /**
- * Monte le combat du banc : le site vient de genererSite, l'assaut du
- * préréglage. genererSite rend vagues: [] — la force d'assaut est celle du
- * joueur, le générateur de site ne la connaît pas.
+ * Monte le combat du banc : le site vient de `genererSite`, l'assaut de
+ * `genererAssaut`. `genererSite` rend `vagues: []` — la force d'assaut est celle
+ * du joueur, le générateur de site ne la connaît pas.
+ *
+ * LOT 4B — l'assaut est désormais BUDGÉTÉ. `assaut` nomme un profil de
+ * `PROFILS_ASSAUT`, pas une liste : sa composition est fonction du niveau, et
+ * son coût ne dépasse jamais `20 + 5 × niveau`. La graine du site sert aussi à
+ * l'assaut, si bien qu'un couple (type, niveau, graine) décrit toujours un raid
+ * entier et un seul.
+ *
+ * Les trois LISTES FIGÉES du lot 3A ne sont plus ici : elles ne servaient plus
+ * qu'à mesurer l'écart qu'ouvre ce lot, et un banc hors ligne n'a pas à
+ * emporter deux kilo-octets d'armées mortes. Elles vivent désormais dans
+ * `test/prereglages-lot3a.js`, avec le rapport qui s'en sert.
+ *
  * @param {{ type: string, niveau: number, saveur: string|null, graine: number,
  *   assaut: string }} parametres
  * @returns {object} montage prêt pour creerCombat.
  */
 export function montageDuBanc({ type, niveau, saveur, graine, assaut }) {
-  const prereglage = PREREGLAGES[assaut];
-  if (!prereglage) {
-    throw new Error(`banc : préréglage d'assaut inconnu « ${assaut} »`);
-  }
   const montage = genererSite({ type, niveau, saveur, graine });
-  montage.vagues = prereglage.vagues.map((vague) => vague.map((u) => ({ ...u })));
+  const force = genererAssaut({ niveau, profil: assaut, graine });
+  montage.vagues = force.vagues;
+  montage.assaut = {
+    profil: assaut,
+    budgetPoints: force.budgetPoints,
+    pointsEngages: force.pointsEngages,
+    pointsRestants: force.pointsRestants,
+    profilRespecte: force.profilRespecte,
+  };
   return montage;
 }
 

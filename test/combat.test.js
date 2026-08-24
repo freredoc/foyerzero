@@ -353,7 +353,8 @@ test('T5 — sur une entité de la défense, la réserve s\'arrête au plancher 
 
 test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', () => {
   // Même Meute, monté à reserve 7 — soit exactement son plancher, floor(70 ×
-  // 0,10) — et passé la ligne, face à une Gangue (150 PV) adjacente.
+  // 0,10) — et passé la ligne, face à une Gangue adjacente.
+  // ⚠ Seuil déplacé au lot 4B : la Gangue (Silo) passe de 150 à 1 000 PV.
   const montage = {
     niveau: 1,
     saveur: null,
@@ -369,18 +370,20 @@ test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', 
 
   const resultat = resoudre(etat, { maxTicks: 25 });
 
-  // ⚠ Seuils déplacés au lot 4A : 7000 milli-PV par tir et 7 de réserve.
-  // 7 × 7000 = 49 000 milli-PV, soit 32,7 % de 150 000.
-  // Gangue finale = 150 000 − 49 000 = 101 000.
-  assert.equal(gangue.pvMilli, 101_000);
+  // 7000 milli-PV par tir (lot 4A) et 7 de réserve. 7 × 7000 = 49 000 milli-PV,
+  // soit 4,9 % de 1 000 000 — contre 32,7 % des 150 000 d'avant le lot 4B.
+  // Gangue finale = 1 000 000 − 49 000 = 951 000.
+  assert.equal(gangue.pvMilli, 951_000);
   assert.equal(meute.reserve, 0, 'la réserve descend jusqu\'à 0 sur un bâtiment');
   // Et à 0, plus un seul tir : les dix ticks suivants n'ont rien changé.
   assert.equal(resultat.tick, 25);
   assert.equal(resultat.cause, 'duree');
 
-  // Butin plein niveau 1, indice 3 = 300 × 3 = 900 quartz.
-  // 900 × 49 000 / 150 000 = 294 quartz, la Gangue étant quartz pur.
-  assert.deepEqual(butin(resultat, montage), { quartz: 294, scorie: 0 });
+  // Butin plein niveau 1, indice 3 = 300 × 3 = 900 quartz. Le butin est
+  // proportionnel à la FRACTION détruite, donc le quintuplement des PV le
+  // divise d'autant : 900 × 49 000 / 1 000 000 = 44 quartz, contre 294 avant le
+  // lot 4B. Le butin PLEIN, lui, n'a pas bougé d'un quartz.
+  assert.deepEqual(butin(resultat, montage), { quartz: 44, scorie: 0 });
 });
 
 // ---------------------------------------------------------------------------
@@ -664,12 +667,14 @@ test('T11 — la Souche tombée, le combat s\'arrête et le site livre tout', ()
   // Pilon en (10,5), Souche en (11,5) : distance² = 1 000 000 ≤ portée² 6 250 000.
   // La Gangue en (11,7) est à 1 000 000 + 4 000 000 = 5 000 000, également à
   // portée mais plus loin : la Souche est la cible.
-  // ⚠ Seuil déplacé au lot 4A : la colonne structure du Pilon (Juggernaut) est
-  // sa dominante — 8 000 du relevé ÷ 160 = 50 PV — donc cible de prédilection :
-  // il s'arrête et tire. À pleine vie, santé 1000 ‰ et dégâts
-  // floor(50 × 1000) = 50 000 milli-PV par tick, contre 15 000 avant.
-  // ceil(400 000 / 50 000) = 8, exactement : 8 × 50 000 = 400 000.
-  assert.equal(resultat.tick, 8);
+  // La colonne structure du Pilon (Juggernaut) est sa dominante — 8 000 du
+  // relevé ÷ 160 = 50 PV — donc cible de prédilection : il s'arrête et tire. À
+  // pleine vie, santé 1000 ‰ et dégâts floor(50 × 1000) = 50 000 milli-PV par
+  // tick.
+  // ⚠ Seuil déplacé au lot 4B : la Souche (Construction Yard) passe de 400 à
+  // 5 500 PV. ceil(5 500 000 / 50 000) = 110 ticks, exactement — contre 8.
+  // C'est tout le sens du lot : l'objectif redevient le gros du travail.
+  assert.equal(resultat.tick, 110);
   assert.equal(resultat.cause, 'souche');
 
   const gangue = resultat.batiments.find(parId('gangue'));
@@ -701,23 +706,29 @@ test('T12 — un bâtiment à moitié détruit paie la moitié', () => {
     // et cinq ticks faisaient la moitié pile des 150 000 de la Gangue. Il en
     // retire maintenant 50 000, et 150 000 / 2 = 75 000 n'est pas un multiple
     // de 50 000 : aucun nombre entier de ticks ne donnerait la moitié. Le
-    // Bélier (Pitbull, 4 000 ÷ 160 = 25 PV contre une structure) la donne en
-    // trois ticks exactement. Le test mesure la même chose ; seul le tireur
+    // Bélier (Pitbull, 4 000 ÷ 160 = 25 PV contre une structure) la donne en un
+    // nombre entier de ticks. Le test mesure la même chose ; seul le tireur
     // change, pour que le seuil reste rond.
     vagues: [[{ id: 'belier', rangee: 10, colonne: 5 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const etat = creerCombat(montage);
-  const resultat = resoudre(etat, { maxTicks: 3 });
+  // ⚠ Seuil déplacé au lot 4B : la Gangue passe de 150 à 1 000 PV, donc la
+  // moitié se fait en 20 ticks au lieu de 3.
+  const resultat = resoudre(etat, { maxTicks: 20 });
 
-  // Bélier : 25 000 milli-PV par tick contre une structure. 3 ticks → 75 000
-  // milli-PV perdus sur 150 000, soit 50 % exactement.
+  // Bélier : 25 000 milli-PV par tick contre une structure. 20 ticks → 500 000
+  // milli-PV perdus sur 1 000 000, soit 50 % exactement.
   const gangue = resultat.batiments.find(parId('gangue'));
-  assert.equal(gangue.pvPerdusMilli, 75_000);
-  assert.equal(gangue.pvMilli, 75_000);
+  assert.equal(gangue.pvPerdusMilli, 500_000);
+  assert.equal(gangue.pvMilli, 500_000);
   assert.equal(resultat.cause, 'duree');
 
   // Butin plein niveau 1, indice 3 = 300 × 3 = 900 quartz → 900 × 0,5 = 450.
+  // ⚠ Ce seuil-ci ne bouge PAS, et c'est la preuve que le lot 4B n'a pas touché
+  // à l'économie : le butin est proportionnel à la FRACTION détruite, jamais aux
+  // PV absolus. La moitié d'une Gangue paie 450 quartz, qu'elle en ait 150 ou
+  // 1 000.
   assert.deepEqual(butin(resultat, montage), { quartz: 450, scorie: 0 });
 });
 

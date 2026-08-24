@@ -18,14 +18,14 @@
 export const BATIMENTS = {
   souche: {
     nom: 'Souche', ta: 'Chantier de construction',
-    unique: true, part: null, indiceButin: 1, pv: 400,
+    unique: true, part: null, indiceButin: 1, pv: 5500, // Construction Yard
     ressource: { quartz: 1, scorie: 0 },
     // Sa destruction rase le site et livre tout.
     raseLeSite: true,
   },
   etai: {
     nom: 'Étai', ta: 'Complexe de défense',
-    unique: true, part: null, indiceButin: 1, pv: 300,
+    unique: true, part: null, indiceButin: 1, pv: 2500, // Defense Facility
     ressource: { quartz: 1, scorie: 0 },
     // Seul QG qui compte côté Ouvrage. Sa chute empêche définitivement la
     // réparation des défenses du site.
@@ -33,17 +33,17 @@ export const BATIMENTS = {
   },
   noeud: {
     nom: 'Nœud', ta: 'Collecteur',
-    unique: false, part: 0.4, indiceButin: 2, pv: 200,
+    unique: false, part: 0.4, indiceButin: 2, pv: 1500, // Harvester
     ressource: { quartz: 0.5, scorie: 0.5 },
   },
   gangue: {
     nom: 'Gangue', ta: 'Silo de tiberium',
-    unique: false, part: 0.3, indiceButin: 3, pv: 150,
+    unique: false, part: 0.3, indiceButin: 3, pv: 1000, // Silo
     ressource: { quartz: 1, scorie: 0 },
   },
   terril: {
     nom: 'Terril', ta: 'Silo de cristal',
-    unique: false, part: 0.3, indiceButin: 3, pv: 150,
+    unique: false, part: 0.3, indiceButin: 3, pv: 1000, // Silo
     ressource: { quartz: 0, scorie: 1 },
   },
 };
@@ -187,6 +187,43 @@ export const POINTS_ARMEE = {
   offense: { base: 20, parNiveau: 5, batiment: 'centreDeCommandement' },
   defense: { base: 40, parNiveau: 5, batiment: 'qgDeDefense' },
 };
+
+// --- profils d'assaut du joueur ----------------------------------------------
+// LOT 4B. Les trois assauts du banc étaient des LISTES D'UNITÉS figées, écrites
+// au lot 3A : mêmes seize Fusiliers au niveau 1 qu'au niveau 50. Elles
+// dépassaient le budget d'armée en dessous du niveau 15 et n'en utilisaient que
+// la moitié au-delà de 25, si bien qu'une courbe de difficulté lue au banc
+// mélangeait l'effet du niveau et celui d'un budget qui ne suivait pas.
+//
+// Un profil n'est donc plus une liste mais des PROPORTIONS DE CHÂSSIS, en
+// pour-cent. La composition se redimensionne au budget au lieu d'être tronquée,
+// et le CHOIX des unités dans un châssis reste gouverné par `VAGUES.parNiveau` —
+// la seule table qui dise quelle unité a sa place à quel niveau. En écrire une
+// seconde pour le joueur dupliquerait un barème, ce que les conventions
+// interdisent.
+//
+// Les trois proportions viennent des préréglages du lot 3A, mesurées en POINTS
+// d'armée et arrondies au dixième : Infanterie 100 % escouade, Blindé lourd
+// 100 % blindé, Mixte 32/41/27 → 30/40/30. Les profils gardent ainsi l'identité
+// qu'Ethan leur a donnée ; seule leur taille devient fonction du niveau.
+//
+// ⚠ Un profil n'est pas toujours honorable. AUCUN blindé n'est débloqué avant le
+// niveau 12, AUCUN aéronef avant le 10. En dessous, la part du châssis manquant
+// se reporte sur les châssis présents ; si aucun n'est présent — un assault
+// blindé au niveau 5 —, le générateur retombe sur la répartition nue et le
+// signale par `profilRespecte: false`. Il ne fabrique jamais une unité qui
+// n'existe pas encore.
+export const PROFILS_ASSAUT = {
+  infanterie: { nom: 'Infanterie', chassis: { escouade: 100, blinde: 0, aeronef: 0 } },
+  blindeLourd: { nom: 'Blindé lourd', chassis: { escouade: 0, blinde: 100, aeronef: 0 } },
+  mixte: { nom: 'Mixte', chassis: { escouade: 30, blinde: 40, aeronef: 30 } },
+};
+
+// Plafond STRUCTUREL de l'assaut : quatre vagues de neuf colonnes. Il mord avant
+// le budget dès le niveau 32 — 36 emplacements × 5 points l'unité la moins
+// chère = 180 ≤ 20 + 5 × 32. Au-delà, un joueur ne peut plus dépenser tout son
+// budget d'armée en un seul raid. La spec ne mentionne pas cette contrainte.
+export const EMPLACEMENTS_ASSAUT = { vagues: 4, parVague: 9 };
 
 // --- points de recherche -----------------------------------------------------
 // Ils ne se produisent pas, ils se prennent sur les défenses détruites.

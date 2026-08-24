@@ -383,16 +383,18 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
 // ---------------------------------------------------------------------------
 
 test('T6 — A, B et C, mesurés après conversion', () => {
-  // Le brief annonce 403 · 511 · 629 pour T = 16 s, mesurés avec le roster
-  // d'AVANT en divisant les dégâts uniformément. Le roster mesuré déplace ces
-  // valeurs, et le brief demande de donner les nouvelles sans les forcer.
+  // ⚠ SEUILS DÉPLACÉS AU LOT 4B. Deux changements les déplacent ensemble : les
+  // cinq bâtiments de site prennent leurs PV mesurés (la Souche passe de 400 à
+  // 5 500), et l'assaut du banc passe par `genererAssaut`, donc tient dans le
+  // budget d'armée et n'aligne plus d'unité verrouillée.
   //
-  // Le point qu'il fallait surveiller : « si B ne prend plus la Souche à
-  // T = 16, c'est un fait à remonter ». B la prend, et plus vite qu'avant.
+  // Ce test-ci tient ce que le BANC produit aujourd'hui. La comparaison terme à
+  // terme avec les préréglages figés du lot 3A est le T7 du lot 4B, dans
+  // `assaut.test.js` — c'est là qu'elle a sa place, pas dupliquée ici.
   const cas = [
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 321, butin: { quartz: 765, scorie: 255 }, survivants: 2 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'souche', tick: 267, butin: { quartz: 215_130, scorie: 71_710 }, survivants: 4 },
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 471, butin: { quartz: 66_992, scorie: 22_330 }, survivants: 6 },
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 434, butin: { quartz: 320, scorie: 106 }, survivants: 3 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 409, butin: { quartz: 34_977, scorie: 11_659 }, survivants: 8 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 315, butin: { quartz: 26_319, scorie: 8773 }, survivants: 7 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({
@@ -403,8 +405,15 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     assert.deepEqual(r.butin, c.butin, `raid ${c.nom} : butin`);
     assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, c.survivants,
       `raid ${c.nom} : survivants`);
-    // Aucun des trois ne bute sur le plafond de 90 secondes.
     assert.ok(r.nbTicks < TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
+  }
+
+  // Le fait qui compte : à assaut budgété, B ne rase PLUS la Souche. Le
+  // préréglage figé y parvenait en alignant au niveau 15 un Broyeur (débloqué
+  // au 28) et un Pilon (au 32) — deux unités que le joueur ne peut pas posséder
+  // avant treize et dix-sept niveaux de plus. C'est ce que ce lot corrige.
+  for (const id of ['broyeur', 'pilon']) {
+    assert.ok(UNITES[id].apparition > 15, `${id} devrait être verrouillé au niveau 15`);
   }
 });
 
