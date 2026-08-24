@@ -20,6 +20,7 @@ import {
   construireResultat,
   serialiserEtat,
   facteurMilli,
+  TICKS_AVANT_REPLI,
   CAUSES,
   TICKS_MAX_COMBAT,
   TICKS_PAR_VAGUE,
@@ -722,25 +723,49 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
 // T14 — durée maximale
 // ---------------------------------------------------------------------------
 
-test('T14 — un montage sans issue s\'arrête au tick 900, cause « duree »', () => {
+test('T14 — un adversaire hors d\'échelle fait durer le raid jusqu\'au tick 900', () => {
+  // ⚠ TEST MODIFIÉ AU LOT 3B. Il montait auparavant « un attaquant hors de
+  // portée de tout, aucun bâtiment atteignable » et attendait la fin par
+  // `duree`. Depuis le repli du lot 3B, un tel attaquant rentre à la base au
+  // bout de 30 ticks inutiles et la fin devient `attaquants` : c'est la RÈGLE
+  // qui a changé, pas le test qui avait tort. Le §7 du lot 3B en fait le cas
+  // témoin, et le lot 3B le consigne au rapport.
+  //
+  // Pour éprouver encore le plafond de 900 ticks, il faut un raid qui a une
+  // issue mais ne l'atteint pas : un Meute de niveau 1 devant un Merlon de
+  // niveau 50. Il nuit — donc il ne se replie jamais — mais il lui faudrait
+  // cent millions de ticks.
   const montage = {
     niveau: 1,
     saveur: null,
     obstacles: [],
-    // Le seul bâtiment est en colonne 9 ; l'attaquant monte la colonne 1 et
-    // s'arrête au fond. Distance² finale = 8000² = 64 000 000, très au-delà de
-    // sa portée² de 2 250 000 : il n'atteindra jamais rien.
+    // Le seul bâtiment est en colonne 9, hors de portée : la fin ne peut pas
+    // venir de « plus aucun bâtiment debout ».
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
-    defenseurs: [],
-    vagues: [[{ id: 'meute', colonne: 1 }]],
+    // Merlon de niveau 50 : 500 × facteurMilli(50) = 500 × 480 941 681
+    // = 240 470 840 500 milli-PV. Il ne tire pas (degats 0), le Meute reste
+    // donc à pleine vie et rend 2400 milli-PV par tick.
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, niveau: 50 }],
+    vagues: [[{ id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const etat = creerCombat(montage);
+  const meute = entite(etat, (e) => e.camp === 'attaque');
+  const merlon = entite(etat, parId('merlon'));
+  assert.equal(merlon.pvMaxMilli, 500 * facteurMilli(50));
+
   const resultat = resoudre(etat);
   assert.equal(resultat.tick, 900);
   assert.equal(resultat.tick, TICKS_MAX_COMBAT, '90 s à 10 Hz');
   assert.equal(resultat.cause, 'duree');
-  // Personne n'est mort, rien n'a été livré.
+
+  // 900 × 2400 = 2 160 000 milli-PV, soit 0,0009 % du mur : il n'a rien entamé.
+  assert.equal(merlon.pvMilli, 500 * facteurMilli(50) - 900 * 2400);
+  // Et il ne s'est jamais replié : il nuisait, même dérisoirement.
+  assert.equal(meute.ticksInutiles, 0);
+  assert.equal(meute.sorti, false);
+  assert.equal(meute.vivant, true);
+  // Personne n'a rien livré.
   assert.equal(resultat.batiments[0].pvPerdusMilli, 0);
   assert.deepEqual(butin(resultat, montage), { quartz: 0, scorie: 0 });
 });
@@ -976,7 +1001,7 @@ test('§7 — une barrière ne bloque pas, elle saigne, et on en réchappe', () 
   assert.equal(crecelle.pvMilli, 200_000, 'l\'aviation ne franchit rien, elle survole');
 });
 
-test('§7 — l\'aviation traversante sort par le haut, la stoppeuse s\'arrête au fond', () => {
+test('§7 — la traversante sort par le haut, la stoppeuse rentre à la base', () => {
   const montageAerien = (id) => ({
     niveau: 1,
     saveur: null,
@@ -989,28 +1014,53 @@ test('§7 — l\'aviation traversante sort par le haut, la stoppeuse s\'arrête 
 
   // Frappeur : traversant, vitesse 3 → 300 milli/tick. Parti de 2000, il vise
   // au-delà de la rangée 18 quand 2000 + 300k ≥ 19000, soit k ≥ 56,67 → k = 57.
+  // Traversant, il ne compte jamais un tick inutile : il progresse toujours.
   const traversant = creerCombat(montageAerien('frappeur'));
   const frappeur = entite(traversant, (e) => e.camp === 'attaque');
   jouer(traversant, 56);
   assert.equal(frappeur.rangeeMilli, 18_800);
   assert.equal(frappeur.sorti, false);
+  assert.equal(frappeur.ticksInutiles, 0);
   const resultat = resoudre(traversant);
   assert.equal(frappeur.sorti, true, 'sorti du combat, il n\'y revient pas');
   assert.equal(frappeur.vivant, true, 'sorti n\'est pas mort');
-  // Plus aucun attaquant sur la grille, morts OU sortis par le haut.
   assert.equal(resultat.tick, 57);
   assert.equal(resultat.cause, 'attaquants');
 
-  // Busard : stoppeur, vitesse 1,5 → 150 milli/tick. Il se comporte comme un
-  // véhicule volant et refuse de franchir le fond : 2000 + 150 × 113 = 18 950,
-  // et le pas suivant viserait la case 19.
+  // ⚠ SECONDE MOITIÉ MODIFIÉE AU LOT 3B. Le Busard restait auparavant planté à
+  // 18 950 jusqu'au tick 900. Le repli le renvoie désormais à la base — c'est
+  // la règle qui a changé, pas le test. Ce qu'il prouve toujours : une
+  // stoppeuse ne franchit JAMAIS le fond, elle ne part pas par le haut.
+  //
+  // Busard : stoppeur, vitesse 1,5 → 150 milli/tick. 2000 + 107 × 150 = 18 050 :
+  // il est en rangée 18 dès le DÉBUT du tick 108, donc il ne peut plus avancer.
+  // La Gangue en (18,9) est à 8 colonnes, soit 8000² = 64 000 000, très au-delà
+  // de sa portée² de 6 250 000 : il ne peut pas nuire non plus. Le compteur part
+  // au tick 108 et atteint 30 au tick 108 + 29 = 137.
   const stoppeur = creerCombat(montageAerien('busard'));
   const busard = entite(stoppeur, (e) => e.camp === 'attaque');
+  jouer(stoppeur, 107);
+  assert.equal(busard.rangeeMilli, 18_050);
+  assert.equal(busard.ticksInutiles, 0, 'il progressait encore jusqu\'ici');
+
+  jouer(stoppeur, 108);
+  assert.equal(busard.ticksInutiles, 1, 'premier tick sans avancer ni nuire');
+
+  // Il rampe encore dans sa case jusqu'à 18 950, puis refuse le pas suivant :
+  // 2000 + 113 × 150 = 18 950, et 19 100 tomberait en rangée 19.
   jouer(stoppeur, 113);
   assert.equal(busard.rangeeMilli, 18_950);
-  jouer(stoppeur, 200);
-  assert.equal(busard.rangeeMilli, 18_950, 'la stoppeuse ne sort pas');
+  jouer(stoppeur, 136);
+  assert.equal(busard.rangeeMilli, 18_950, 'une stoppeuse ne franchit pas le fond');
+  assert.equal(busard.ticksInutiles, 29);
   assert.equal(busard.sorti, false);
+
+  jouer(stoppeur, 137);
+  assert.equal(busard.ticksInutiles, TICKS_AVANT_REPLI);
+  assert.equal(busard.sorti, true, 'elle rentre à la base');
+  assert.equal(busard.vivant, true, 'rentrer n\'est pas mourir');
+  assert.ok(busard.rangeeMilli < 19_000, 'et elle n\'est jamais passée par le haut');
+  assert.equal(stoppeur.cause, 'attaquants');
 });
 
 test('§8 — passée la ligne, une unité qui tire sur la défense garde son plancher', () => {

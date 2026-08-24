@@ -33,6 +33,14 @@ export function executer(ctx, liste) {
         ctx.arc(p.x, p.y, p.rayon, 0, 2 * Math.PI);
         ctx.fill();
         break;
+      case 'texte':
+        // `y` est le CENTRE vertical du texte : c'est le contrat de la
+        // primitive, posé par scene.js, pas une décision prise ici.
+        ctx.fillStyle = p.couleur;
+        ctx.font = `${p.taille}px system-ui, sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.texte, p.x, p.y);
+        break;
       case 'ligne':
         ctx.strokeStyle = p.couleur;
         ctx.lineWidth = p.epaisseur;

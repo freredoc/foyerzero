@@ -19,14 +19,15 @@ import { UNITES, DEFENSES } from '../data/combat.js';
 import { BATIMENTS } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
 import {
-  creerCombat, tick, construireResultat, butin, pointsRecherche,
+  creerCombat, tick, construireResultat, butin, pointsRecherche, TICKS_AVANT_REPLI,
 } from '../sim/combat.js';
+import { caseDepuisMilli } from '../sim/grille.js';
 import { genererSite } from '../sim/generateur.js';
 import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
 } from '../render/interpolation.js';
-import { calculerProjection } from '../render/projection.js';
-import { listeAffichage } from '../render/scene.js';
+import { calculerProjection, caseDepuisPixels } from '../render/projection.js';
+import { listeAffichage, listeLegende, classeDe, NOMS_CLASSE } from '../render/scene.js';
 import { executer } from '../render/canvas2d.js';
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,33 @@ export function nomAffiche(entite) {
   return entite.camp === 'attaque' ? noms.joueur : noms.ouvrage;
 }
 
+/**
+ * Entités actives occupant une case. L'aviation ne bloque rien et peut donc
+ * partager sa case avec une entité au sol : la liste peut en compter deux.
+ */
+export function entitesSurLaCase(etat, rangee, colonne) {
+  return etat.entites.filter((e) => e.vivant && !e.sorti
+    && e.colonne === colonne && caseDepuisMilli(e.rangeeMilli) === rangee);
+}
+
+/**
+ * Décrit une entité pour l'inspecteur : nom selon le camp, classe, PV, réserve,
+ * cible visée, et le compteur de repli s'il a commencé à courir.
+ */
+export function decrireEntite(etat, e) {
+  const morceaux = [
+    `${nomAffiche(e)} (${NOMS_CLASSE[classeDe(e.genre, e.id)]})`,
+    e.camp === 'attaque' ? 'assaut' : 'Ouvrage',
+    `${formaterPv(e.pvMilli)} / ${formaterPv(e.pvMaxMilli)} PV`,
+  ];
+  if (e.camp === 'attaque' && e.genre === 'unite') morceaux.push(`réserve ${e.reserve}`);
+  morceaux.push(e.cibleIndice === null
+    ? 'aucune cible'
+    : `vise ${nomAffiche(etat.entites[e.cibleIndice])}`);
+  if (e.ticksInutiles > 0) morceaux.push(`repli dans ${TICKS_AVANT_REPLI - e.ticksInutiles} ticks`);
+  return morceaux.join(' · ');
+}
+
 /** Libellés des causes de fin, pour le panneau. */
 export const LIBELLES_CAUSE = {
   souche: 'Souche détruite — butin intégral',
@@ -191,12 +219,24 @@ export function initialiserBanc(doc) {
   let idImage = null;
   let derniereImageMs = null;
   let projection = null;
+  let legendeOuverte = false;
 
   // --- projection et buffer -------------------------------------------------
+  //
+  // ⚠ Le canvas ne change pas de taille qu'au redimensionnement de la fenêtre :
+  // il est en `flex: 1`, et le panneau de tick qui se remplit sous lui le fait
+  // rétrécir de 681 à 411 px dès la première pause. Une projection calculée une
+  // fois au chargement devient alors fausse — le dessin comme le pointage. D'où
+  // le ResizeObserver sur l'élément lui-même, et non le seul écouteur `resize`.
+  let dernieresDimensions = '';
+
   function dimensionner() {
     const largeur = canvas.clientWidth;
     const hauteur = canvas.clientHeight;
     if (largeur < 9 || hauteur < 18) return;
+    const empreinte = `${largeur}×${hauteur}×${fenetre.devicePixelRatio || 1}`;
+    if (empreinte === dernieresDimensions) return;
+    dernieresDimensions = empreinte;
     const dpr = Math.min(fenetre.devicePixelRatio || 1, DPR_MAX);
     canvas.width = Math.round(largeur * dpr);
     canvas.height = Math.round(hauteur * dpr);
@@ -206,9 +246,50 @@ export function initialiserBanc(doc) {
   }
 
   function dessiner() {
-    if (!etat || !projection) return;
+    if (!projection) return;
+    if (legendeOuverte) {
+      executer(ctx, listeLegende(projection));
+      return;
+    }
+    if (!etat) return;
     executer(ctx, listeAffichage(etat, projection, precedentes,
       etat.termine ? 0 : alphaMilli(accumulateur, vitesse)));
+  }
+
+  function basculerLegende() {
+    legendeOuverte = !legendeOuverte;
+    $('banc-legende').classList.toggle('actif', legendeOuverte);
+    // Le banc se met en pause pendant la lecture : elle occupe tout le canvas,
+    // personne ne regarde le combat. Le panneau de tick s'efface avec lui —
+    // sinon il ampute le canvas de 270 px et les vignettes tombent à 10 px de
+    // côté. Le ResizeObserver reprend la projection tout seul.
+    if (legendeOuverte && etat && !etat.termine) mettreEnPause(true);
+    $('banc-tick').hidden = legendeOuverte;
+    dimensionner();
+    dessiner();
+    if (legendeOuverte) majStatut('légende — retoucher le bouton pour revenir');
+    else if (etat) majStatut(`tick ${etat.tick}`);
+  }
+
+  /** Inspecteur : une case touchée dit qui l'occupe. */
+  function inspecter(evenement) {
+    if (legendeOuverte || !etat || !projection) return;
+    const cadre = canvas.getBoundingClientRect();
+    const point = evenement.touches?.[0] ?? evenement.changedTouches?.[0] ?? evenement;
+    const cible = caseDepuisPixels(
+      projection, point.clientX - cadre.left, point.clientY - cadre.top,
+    );
+    if (cible === null) {
+      majStatut('hors de la grille');
+      return;
+    }
+    const occupants = entitesSurLaCase(etat, cible.rangee, cible.colonne);
+    if (occupants.length === 0) {
+      majStatut(`case (${cible.rangee}, ${cible.colonne}) — vide`);
+      return;
+    }
+    majStatut(`(${cible.rangee}, ${cible.colonne}) `
+      + occupants.map((e) => decrireEntite(etat, e)).join('  ||  '));
   }
 
   // --- panneaux -------------------------------------------------------------
@@ -325,6 +406,7 @@ export function initialiserBanc(doc) {
       return;
     }
     parametresCourants = parametres;
+    if (legendeOuverte) basculerLegende();
     accumulateur = creerAccumulateur();
     precedentes = null;
     enPause = false;
@@ -367,6 +449,14 @@ export function initialiserBanc(doc) {
     if (parametresCourants) lancer(parametresCourants);
   });
   $('banc-pause').addEventListener('click', () => mettreEnPause(!enPause));
+  $('banc-legende').addEventListener('click', basculerLegende);
+  // Au doigt comme à la souris ; passive: false pour empêcher le double
+  // événement clic que le navigateur synthétise après un toucher.
+  canvas.addEventListener('click', inspecter);
+  canvas.addEventListener('touchstart', (evenement) => {
+    evenement.preventDefault();
+    inspecter(evenement);
+  }, { passive: false });
   $('banc-pas').addEventListener('click', pasAPas);
   for (const v of VITESSES) {
     $(`banc-v${v}`).addEventListener('click', () => choisirVitesse(v));
@@ -380,6 +470,13 @@ export function initialiserBanc(doc) {
     // supprime le cas du rattrapage massif au retour d'onglet.
     if (doc.hidden) mettreEnPause(true);
   });
+  // Le ResizeObserver couvre tout ce qui change la taille du canvas — panneau
+  // qui se remplit, rotation, clavier virtuel. L'écouteur `resize` reste pour
+  // le seul cas qu'il ne voit pas : un changement de devicePixelRatio à taille
+  // CSS constante, au passage d'un écran à l'autre.
+  if (typeof fenetre.ResizeObserver === 'function') {
+    new fenetre.ResizeObserver(() => dimensionner()).observe(canvas);
+  }
   fenetre.addEventListener('resize', dimensionner);
 
   choisirVitesse(1);

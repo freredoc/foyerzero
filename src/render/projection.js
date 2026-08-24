@@ -14,7 +14,7 @@
 // d'accord.
 
 import { GRILLE } from '../data/combat.js';
-import { MILLI_PAR_CASE } from '../sim/grille.js';
+import { MILLI_PAR_CASE, estDansLaGrille } from '../sim/grille.js';
 
 /**
  * Calcule la projection pour un viewport donné, en pixels CSS entiers.
@@ -83,4 +83,33 @@ export function yDeRangeeMilli(projection, rangeeMilli) {
 /** Bord haut de la case d'une RANGÉE entière (1 à 18) — obstacles, bâtiments. */
 export function yDeRangee(projection, rangee) {
   return projection.margeY + (GRILLE.longueur - rangee) * projection.tailleCase;
+}
+
+/**
+ * Projection INVERSE : un point en pixels CSS → la case qui le contient.
+ *
+ * Exacte réciproque de la projection directe, et volontairement STRICTE : un
+ * point tombé dans les marges de letterboxing ou hors du canvas ne rend
+ * AUCUNE case, jamais la plus proche. Un doigt à côté de la grille n'a rien
+ * désigné, et le banc doit le dire plutôt que de deviner.
+ *
+ * Le bord haut-gauche d'une case lui appartient : la case couvre
+ * [x, x + tailleCase) × [y, y + tailleCase).
+ *
+ * @param {object} projection Résultat de calculerProjection.
+ * @param {number} xPx Abscisse en pixels CSS, origine au coin haut-gauche.
+ * @param {number} yPx Ordonnée en pixels CSS.
+ * @returns {{ rangee: number, colonne: number } | null}
+ */
+export function caseDepuisPixels(projection, xPx, yPx) {
+  const { tailleCase, margeX, margeY } = projection;
+  if (!Number.isFinite(xPx) || !Number.isFinite(yPx)) return null;
+  const colonne = Math.floor((xPx - margeX) / tailleCase) + 1;
+  // La rangée 1 est en BAS : l'axe des y descend, celui des rangées monte.
+  const rangee = GRILLE.longueur - Math.floor((yPx - margeY) / tailleCase);
+  // Un point à gauche de la marge donnerait un quotient négatif que floor
+  // arrondit vers −∞ : le test de bornes suffit à l'écarter.
+  if (xPx < margeX || yPx < margeY) return null;
+  if (!estDansLaGrille(rangee, colonne)) return null;
+  return { rangee, colonne };
 }
