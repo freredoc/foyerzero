@@ -294,7 +294,10 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // fraction cinq fois moindre ; et l'assaut, désormais borné aux 95 points du
   // niveau 15, ne peut plus aligner des Guetteurs et des Fouisseurs verrouillés
   // jusqu'aux niveaux 22 et 24.
-  assert.deepEqual(r.butin, { quartz: 26_319, scorie: 8773 });
+  // Lot COURBE : 26 321 au lieu de 26 319. DEUX unités de quartz. Le tick 315,
+  // la cause et les sept survivants sont bit pour bit les mêmes sous une courbe
+  // 4 500 fois plus plate — c'est l'invariance en miroir qui se montre.
+  assert.deepEqual(r.butin, { quartz: 26_321, scorie: 8773 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 7);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),

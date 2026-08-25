@@ -284,37 +284,42 @@ test('T3 — la colonne dominante est unique sur les 23 profils', () => {
 
 test('T4 — au niveau 50, le Frappeur reste loin sous l\'entier sûr', () => {
   const facteur = facteurMilli(NIVEAU.plafond);
-  assert.equal(facteur, 480_941_681);
+  // ⚠ Lot COURBE : pente unique de 1,1, donc round(1000 × 1,1⁴⁹) = 106 719 au
+  // lieu de 480 941 681. C'est très exactement la raison d'être du changement —
+  // toutes les marges de ce test s'ouvrent de trois à quatre ordres de grandeur.
+  assert.equal(facteur, 106_719);
 
   // Le plus gros dégât du roster : le Firehawk contre les bâtiments,
   // 48 000 ÷ 160 = 300 PV par tir.
   assert.equal(UNITES.frappeur.degats.structureOuAviation, 300);
   const colonneMilli = 300 * facteur;
-  assert.equal(colonneMilli, 144_282_504_300);
+  assert.equal(colonneMilli, 32_015_700);
   assert.ok(Number.isSafeInteger(colonneMilli));
 
   // Produit de la formule de tir, santé au maximum :
-  // 144 282 504 300 × 1000 = 1,44 × 10¹⁴, soit 62,4 fois sous
-  // MAX_SAFE_INTEGER = 9 007 199 254 740 991.
+  // 32 015 700 × 1000 = 3,20 × 10¹⁰, soit 281 336 fois sous
+  // MAX_SAFE_INTEGER = 9 007 199 254 740 991. C'était 62,4 fois.
   const produitTir = colonneMilli * 1000;
   assert.ok(Number.isSafeInteger(produitTir));
-  assert.ok(Number.MAX_SAFE_INTEGER / produitTir > 62);
+  assert.ok(Number.MAX_SAFE_INTEGER / produitTir > 281_000);
 
   // ⚠ Et voici la vraie contrainte, qui n'est PAS celle-là. Le produit le plus
   // lourd du moteur est le numérateur du ratio de santé, pvCourantMilli × 1000.
   // Le plus gros PV du roster vaut 2 000 (Mammoth et Wall), donc
-  // 2000 × 480 941 681 × 1000 = 9,62 × 10¹⁴ : 9,36 fois seulement sous
-  // l'entier sûr, contre 37 avant la conversion. Le point de rupture est
-  // floor(MAX_SAFE_INTEGER / (facteurMilli(50) × 1000)) = 18 728 PV de base.
+  // 2000 × 106 719 × 1000 = 2,13 × 10¹¹ : 42 200 fois sous l'entier sûr, là où
+  // les deux régimes ne laissaient que 9,36 fois. Le point de rupture passe de
+  // 18 728 à floor(MAX_SAFE_INTEGER / (facteurMilli(50) × 1000)) = 84 401 083
+  // PV de base — quarante-deux mille fois le plus gros du roster. Cette
+  // contrainte cesse d'en être une, et c'est le gain principal du lot.
   const pvMax = Math.max(
     ...Object.values(UNITES).map((u) => u.pv), ...Object.values(DEFENSES).map((d) => d.pv),
   );
   assert.equal(pvMax, 2000);
   const produitSante = pvMax * facteur * 1000;
   assert.ok(Number.isSafeInteger(produitSante));
-  assert.ok(Number.MAX_SAFE_INTEGER / produitSante > 9, 'marge du ratio de santé : 9,36×');
-  assert.equal(Math.floor(Number.MAX_SAFE_INTEGER / (facteur * 1000)), 18_728);
-  assert.ok(pvMax < 18_728, 'aucun profil ne doit dépasser 18 728 PV de base');
+  assert.ok(Number.MAX_SAFE_INTEGER / produitSante > 42_000, 'marge du ratio de santé : 42 200×');
+  assert.equal(Math.floor(Number.MAX_SAFE_INTEGER / (facteur * 1000)), 84_401_083);
+  assert.ok(pvMax < 84_401_083, 'aucun profil ne doit dépasser 84 401 083 PV de base');
 
   // Éprouvé dans le moteur, pas seulement sur le papier : un Frappeur de niveau
   // 50 contre un Merlon de niveau 50, un tick, aucun débordement.
@@ -394,7 +399,13 @@ test('T6 — A, B et C, mesurés après conversion', () => {
   const cas = [
     { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 434, butin: { quartz: 320, scorie: 106 }, survivants: 3 },
     { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 409, butin: { quartz: 34_977, scorie: 11_659 }, survivants: 8 },
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 315, butin: { quartz: 26_319, scorie: 8773 }, survivants: 7 },
+    // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
+    // déplacement des trois raids — A et B sont identiques au champ près, et
+    // les trois causes, les trois ticks et les trois comptes de survivants ne
+    // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
+    // la même courbe, donc changer la courbe ne change pas l'issue du combat,
+    // seulement l'arrondi du butin qui s'en déduit.
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 315, butin: { quartz: 26_321, scorie: 8773 }, survivants: 7 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

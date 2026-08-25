@@ -386,9 +386,14 @@ test('T9 — dix obstacles, hors de la bande de déploiement, sous personne', ()
 // T10 — courbe de niveau
 // ---------------------------------------------------------------------------
 
-test('T10 — facteurMilli suit ses deux pentes, et vaut 1000 au niveau 1', () => {
+test('T10 — facteurMilli suit sa pente, et vaut 1000 au niveau 1', () => {
   assert.equal(facteurMilli(1), 1000, 'le niveau 1 est l\'ancrage, exactement');
 
+  // ⚠ LOT COURBE. La courbe de combat n'a plus qu'UNE pente, 1,1, et le
+  // drapeau deuxRegimes est retombé à false. Le test conserve sa forme à deux
+  // pentes : il vaut aussi bien pour une pente unique, où les deux valent 1,1,
+  // et il redeviendra mordant sans réécriture si la bascule revient un jour.
+  //
   // Rapport d'un niveau au suivant : penteBasse jusqu'à la bascule, penteHaute
   // au-delà. On le vérifie sur les facteurs NON arrondis, l'arrondi à l'entier
   // de millième introduisant jusqu'à 1/2 millième d'écart.
@@ -405,33 +410,40 @@ test('T10 — facteurMilli suit ses deux pentes, et vaut 1000 au niveau 1', () =
   }
   assert.ok(facteurMilli(50) === Math.round(1000 * nu(50)));
 
-  // ⚠ Le brief annonce 480 942 000 à deux régimes et 809 324 000 à un seul.
-  // Ce sont les facteurs NUS de son §6 (× 480 942 et × 809 324) suivis de trois
-  // zéros, c'est-à-dire un arrondi fait avant la mise en millièmes. La formule
-  // du brief, elle, arrondit en bout : round(1000 × 1,259^11 × 1,32^38)
-  // = round(480 941 681,0) = 480 941 681. C'est la formule qui fait foi — un
-  // arrondi anticipé donnerait 1000 au niveau 2 au lieu de 1259, soit aucune
-  // croissance. Le point est consigné au rapport.
-  assert.equal(facteurMilli(50), 480_941_681);
+  // round(1000 × 1,1⁴⁹) = round(106 718,96) = 106 719. C'était 480 941 681 sous
+  // les deux régimes : la courbe est 4 505 fois plus plate au niveau 50.
+  assert.equal(facteurMilli(50), 106_719);
 
-  // Un seul régime : penteHaute partout. round(1000 × 1,32^49) = 809 324 391.
-  // Le drapeau existe pour que le choix soit UNE LIGNE.
+  // Le drapeau deuxRegimes est aujourd'hui INERTE, parce que les deux pentes
+  // sont égales — et ce test le PROUVE plutôt que de le supposer : le basculer
+  // ne change aucune des deux bornes. Le jour où quelqu'un rouvre une bascule
+  // en ne touchant qu'une pente, cette assertion tombe et le lui dit.
   const memoire = NIVEAU.deuxRegimes;
   try {
-    NIVEAU.deuxRegimes = false;
-    assert.equal(facteurMilli(1), 1000, 'le niveau 1 reste l\'ancrage à un seul régime');
-    assert.equal(facteurMilli(50), 809_324_391);
+    NIVEAU.deuxRegimes = !memoire;
+    assert.equal(facteurMilli(1), 1000, 'le niveau 1 reste l\'ancrage');
+    assert.equal(facteurMilli(50), 106_719, 'le drapeau est inerte tant que les pentes sont égales');
   } finally {
     NIVEAU.deuxRegimes = memoire;
   }
-  assert.equal(facteurMilli(50), 480_941_681, 'le drapeau a bien été rendu');
+  assert.equal(facteurMilli(50), 106_719, 'le drapeau a bien été rendu');
+  assert.equal(NIVEAU.penteBasse, NIVEAU.penteHaute, 'une seule pente, donc drapeau inerte');
 
-  // Deux tables ne doivent jamais pouvoir diverger en silence sur la même
-  // grandeur : la courbe de niveau partage ses pentes avec celle du butin, et
-  // son plafond avec la géographie. C'est une DÉCISION, et elle est assérée.
-  assert.equal(NIVEAU.penteBasse, BUTIN.penteBasse);
-  assert.equal(NIVEAU.penteHaute, BUTIN.penteHaute);
-  assert.equal(NIVEAU.niveauBascule, BUTIN.niveauBascule);
+  // ⚠ CE GARDE-FOU A CHANGÉ DE SENS, ET C'EST LUI QUI A SIGNALÉ LE LOT.
+  // Il disait : « la courbe de niveau partage ses pentes avec celle du butin,
+  // c'est une DÉCISION, et elle est assérée ». La décision s'est inversée le
+  // 25/08 — le COMBAT descend à 1,1 pour ouvrir les marges arithmétiques et
+  // adoucir l'écart de niveau, l'ÉCONOMIE reste à 1,259/1,32 parce que c'est
+  // elle qui règle le rythme de progression. Le garde-fou reste, retourné : il
+  // asserte désormais que la divergence est bien celle qu'on a voulue, et il
+  // tombera tout autant si quelqu'un réaligne les deux par distraction.
+  assert.notEqual(NIVEAU.penteHaute, BUTIN.penteHaute, 'divergence VOULUE le 25/08');
+  assert.equal(NIVEAU.penteHaute, 1.1, 'courbe de COMBAT');
+  assert.equal(BUTIN.penteBasse, 1.259, 'courbe ÉCONOMIQUE, inchangée');
+  assert.equal(BUTIN.penteHaute, 1.32, 'courbe ÉCONOMIQUE, inchangée');
+  assert.equal(BUTIN.niveauBascule, 12, 'la bascule survit du côté économique');
+
+  // Le plafond, lui, reste partagé : c'est la même grandeur des deux côtés.
   assert.equal(NIVEAU.plafond, GEOGRAPHIE.niveauPlafond);
 });
 
@@ -576,39 +588,45 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   assert.equal(pvMax, 2000);
   assert.equal(degatsMax, 300, 'le Frappeur contre les bâtiments, 48 000 ÷ 160');
 
-  // 1) PV. 2000 × 480 941 681 = 961 883 362 000 milli-PV.
+  // 1) PV. 2000 × 106 719 = 213 438 000 milli-PV.
   const pvMaxMilli = pvMax * facteur;
-  assert.equal(pvMaxMilli, 961_883_362_000);
+  assert.equal(pvMaxMilli, 213_438_000);
   assert.ok(Number.isSafeInteger(pvMaxMilli));
 
   // 2) Le produit le plus LOURD du moteur n'est pas celui des dégâts : c'est le
   // numérateur du ratio de santé, pvCourantMilli × 1000, qui vaut ici
-  // 961 883 362 000 000 — 9,36 fois seulement sous MAX_SAFE_INTEGER
-  // = 9 007 199 254 740 991. C'est LA contrainte du calibrage, et elle tient à
-  // une seule grandeur : les PV de base. Le point de rupture est
-  // floor(MAX_SAFE_INTEGER / (facteurMilli(50) × 1000)) = 18 728 PV de base,
-  // neuf fois le plus gros du roster. Le marquer noir sur blanc : c'est ce
-  // nombre-là qu'il faudra revoir si un profil futur dépasse 18 728 PV.
+  // 213 438 000 000 — 42 200 fois sous MAX_SAFE_INTEGER
+  // = 9 007 199 254 740 991. ⚠ Sous les deux régimes il n'y avait que 9,36 fois
+  // de marge, et ce commentaire disait « C'EST LA contrainte du calibrage ».
+  // Elle n'en est plus une : le point de rupture,
+  // floor(MAX_SAFE_INTEGER / (facteurMilli(50) × 1000)), passe de 18 728 à
+  // 84 401 083 PV de base, soit quarante-deux mille fois le plus gros du
+  // roster. C'est le gain principal du lot COURBE.
   const ratio = pvMaxMilli * 1000;
   assert.ok(Number.isSafeInteger(ratio));
-  assert.ok(Number.MAX_SAFE_INTEGER / ratio > 9, 'la marge du ratio de santé est de 9,36×');
-  assert.equal(Math.floor(Number.MAX_SAFE_INTEGER / (facteur * 1000)), 18_728);
+  assert.ok(Number.MAX_SAFE_INTEGER / ratio > 42_000, 'la marge du ratio de santé est de 42 200×');
+  assert.equal(Math.floor(Number.MAX_SAFE_INTEGER / (facteur * 1000)), 84_401_083);
 
-  // 3) Dégâts. Les colonnes vivent en milli-PV : 300 × 1000 × 480 941 681 / 1000
-  // = 144 282 504 300, et le produit de la formule de tir, santé au maximum,
-  // vaut 144 282 504 300 × 1000 = 144 282 504 300 000 — 62,4 fois sous l'entier
-  // sûr. Le brief annonce 1,4 × 10¹¹ et 62 000× : c'est le compte avec une
-  // colonne lue en PV entiers. La porter en milli-PV, ce qu'exige l'invariance
-  // en miroir du T12, coûte trois ordres de grandeur de marge — et il en reste
-  // encore soixante fois ce qu'il faut.
+  // 3) Dégâts. Les colonnes vivent en milli-PV : 300 × 106 719 = 32 015 700, et
+  // le produit de la formule de tir, santé au maximum, vaut
+  // 32 015 700 × 1000 = 32 015 700 000 — 281 336 fois sous l'entier sûr, contre
+  // 62,4 fois auparavant.
   const degatsColonneMilli = degatsMax * facteur;
-  assert.equal(degatsColonneMilli, 144_282_504_300);
+  assert.equal(degatsColonneMilli, 32_015_700);
   const produit = degatsColonneMilli * 1000;
   assert.ok(Number.isSafeInteger(produit));
-  assert.ok(Number.MAX_SAFE_INTEGER / produit > 62, 'la marge des dégâts est de 62,4×');
+  assert.ok(Number.MAX_SAFE_INTEGER / produit > 281_000, 'la marge des dégâts est de 281 336×');
 
-  // Les points de recherche, eux, DÉBORDENT : le barème double par niveau de
-  // cible quand tout le reste croît en ×1,32. Pour un Broyeur au niveau 50,
+  // ⚠ LES POINTS DE RECHERCHE RESTENT LE SEUL DÉBORDEMENT, ET IL EST DÉSORMAIS
+  // SEUL DE SON ESPÈCE. Le lot COURBE a ouvert toutes les autres marges de trois
+  // à quatre ordres de grandeur ; le barème de recherche, lui, double toujours
+  // par niveau. Ethan a arbitré le 25/08 qu'il devait passer sur le facteur à
+  // deux régimes, ce qui le ramènerait à 3,5 × 10⁷ — 260 millions de fois sous
+  // l'entier sûr. Ce changement touche pointsRecherche() et POINTS_RECHERCHE :
+  // il n'est PAS dans ce lot, et ce test continue donc de tenir le débordement
+  // tel qu'il existe encore. Il devra être retourné avec lui.
+  //
+  // Pour un Broyeur au niveau 50,
   // 60 × 1000 × 2^49 = 33 776 997 205 278 720 000, très au-delà de l'entier
   // sûr — au point que lui ajouter 1 en Number ne change rien.
   const brut = 60n * 1000n * 2n ** 49n;

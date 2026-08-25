@@ -314,7 +314,10 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   assert.equal(budgetes[1].nbTicks, 409);
   assert.equal(budgetes[2].cause, 'attaquants');
   assert.equal(budgetes[2].nbTicks, 315);
-  assert.equal(budgetes[2].butin.quartz, 26_319);
+  // Lot COURBE : 26 321 au lieu de 26 319. Les six ticks ci-dessus — 321, 583,
+  // 551 pour les figés, 434, 409, 315 pour les budgétés — ne bougent pas d'un
+  // seul, courbe de combat divisée par 4 500 au niveau 50 comprise.
+  assert.equal(budgetes[2].butin.quartz, 26_321);
 
   // La raison du renversement de B, vérifiée et non supposée : le préréglage
   // figé alignait au niveau 15 deux unités que le joueur ne peut pas posséder,

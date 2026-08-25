@@ -741,13 +741,16 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
     niveau: 3,
     saveur: null,
     obstacles: [],
-    // ⚠ Seuil déplacé au lot 4A : le Merlon (Wall) passe de 500 à 2 000 PV.
-    // Au niveau 3, facteurMilli(3) = round(1000 × 1,259²) = round(1585,081)
-    // = 1585, donc le Merlon vaut 2000 × 1585 = 3 170 000 milli-PV au lieu de
-    // 2 000 000. Monté à 1 585 000, il est à exactement 50 % de dégâts subis.
-    // Le barème de points de recherche, lui, ne dépend que du niveau et de la
-    // FRACTION détruite : les 4 000 milli-points ne bougent donc pas.
-    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 1_585_000 }],
+    // ⚠ Seuil déplacé DEUX FOIS. Lot 4A : le Merlon (Wall) passe de 500 à
+    // 2 000 PV. Lot COURBE : la pente unique de 1,1 remplace les deux régimes,
+    // donc facteurMilli(3) = round(1000 × 1,1²) = 1210 au lieu de 1585, et le
+    // Merlon vaut 2000 × 1210 = 2 420 000 milli-PV. Monté à 1 210 000, il est à
+    // exactement 50 % de dégâts subis.
+    // Ce que ce test TIENT n'a pas bougé d'un iota, et c'est le point : le
+    // barème de points de recherche ne dépend que du niveau et de la FRACTION
+    // détruite, jamais des PV absolus. Les 4 000 milli-points sont les mêmes
+    // sous les deux courbes.
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 1_210_000 }],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
     // = 17 000 000, hors de sa portée² de 2 250 000. Rien ne bouge en un tick.
@@ -758,9 +761,9 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
   const resultat = resoudre(etat, { maxTicks: 1 });
 
   const merlon = resultat.defenses.find(parId('merlon'));
-  assert.equal(facteurMilli(3), 1585);
-  assert.equal(merlon.pvMaxMilli, 2000 * 1585);
-  assert.equal(merlon.pvPerdusMilli, 1_585_000);
+  assert.equal(facteurMilli(3), 1210);
+  assert.equal(merlon.pvMaxMilli, 2000 * 1210);
+  assert.equal(merlon.pvPerdusMilli, 1_210_000);
   assert.equal(merlon.niveau, 3, 'le niveau de l\'entité, plus celui du site');
 
   // 2 × 1000 × 2^(3−1) × 0,5 = 2 × 1000 × 4 × 0,5 = 4 000 milli-points.

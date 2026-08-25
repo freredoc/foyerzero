@@ -281,7 +281,10 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   assert.notEqual(r.cause, 'duree', 'le raid ne doit plus expirer faute de mieux');
   assert.equal(r.cause, 'attaquants');
   assert.equal(r.nbTicks, 383);
-  assert.deepEqual(r.butin, { quartz: 2656, scorie: 885 });
+  // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
+  // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
+  // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
+  assert.deepEqual(r.butin, { quartz: 2655, scorie: 885 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 2);
 });
 
