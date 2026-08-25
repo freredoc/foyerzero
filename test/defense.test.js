@@ -19,6 +19,7 @@ import {
   OCCUPANTS_MAX_PAR_RANGEE,
 } from '../src/ui/defense.js';
 import { calculerProjection, xDeColonne, yDeRangee } from '../src/render/projection.js';
+import { listeDefense } from '../src/render/scene.js';
 import { creerCombat } from '../src/sim/combat.js';
 import { genererSite } from '../src/sim/generateur.js';
 import { nomAffiche } from '../src/ui/banc.js';
@@ -451,5 +452,60 @@ test('T14 — sans propriétaire déclaré, rien ne change', () => {
   assert.equal(etat.proprietaireAttaque, 'joueur');
   for (const e of etat.entites) {
     assert.equal(e.proprietaire, e.camp === 'attaque' ? 'joueur' : 'ouvrage');
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// T15 — l'alignement de `listeDefense`
+// ---------------------------------------------------------------------------
+
+test('T15 — les cadres de listeDefense tombent sur les 9 × 8 cases du champ', () => {
+  // T1 vérifie que le MOTEUR retrouve la case de l'éditeur. T15 vérifie que le
+  // DESSIN la retrouve aussi : sans lui, l'éditeur pourrait montrer une grille
+  // décalée d'une rangée et poser juste quand même — le joueur viserait à côté.
+  //
+  // ⚠ On remplit avec une UNITÉ, pas avec une structure : `dessinerStructure`
+  // pousse elle aussi un `cadre`, et le filtre compterait 76 cadres au lieu des
+  // 72 cases. `dessinerEscouade` ne pousse que des `rect`, le filtre ne voit
+  // donc que les cadres de case.
+  //
+  // ⚠ On remplit les colonnes 1 à 6 dans CHAQUE rangée, jamais en quinconce :
+  // un dessin qui ne cadrerait que les cases occupées rendrait alors six
+  // abscisses au lieu de neuf, et l'égalité d'ensembles le ferait tomber.
+  let grille = defenseVide(50);
+  for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
+    for (let colonne = 1; colonne <= OCCUPANTS_MAX_PAR_RANGEE; colonne += 1) {
+      grille = poser(grille, { rangee, colonne, id: 'meute' });
+    }
+  }
+  assert.equal(bilan(grille).emplacementsOccupes, NB_RANGEES * OCCUPANTS_MAX_PAR_RANGEE);
+
+  for (const [largeur, hauteur] of VIEWPORTS) {
+    const projection = calculerProjection(largeur, hauteur);
+    const cadres = listeDefense(grille, projection).filter((p) => p.forme === 'cadre');
+    assert.equal(cadres.length, NB_EMPLACEMENTS,
+      `${largeur}×${hauteur} : ${cadres.length} cadres pour ${NB_EMPLACEMENTS} cases`);
+
+    // ÉGALITÉ D'ENSEMBLES, pas inclusion : une rangée oubliée doit tomber.
+    const attenduX = new Set(Array.from({ length: NB_COLONNES },
+      (_, i) => xDeColonne(projection, i + 1)));
+    const attenduY = new Set(Array.from({ length: NB_RANGEES },
+      (_, i) => yDeRangee(projection, PREMIERE_RANGEE + i)));
+    assert.deepEqual(new Set(cadres.map((c) => c.x)), attenduX,
+      `${largeur}×${hauteur} : abscisses`);
+    assert.deepEqual(new Set(cadres.map((c) => c.y)), attenduY,
+      `${largeur}×${hauteur} : ordonnées`);
+
+    // Et chaque couple (x, y) est unique : neuf colonnes × huit rangées, une
+    // seule fois chacun. Deux cadres empilés passeraient les deux ensembles.
+    assert.equal(new Set(cadres.map((c) => `${c.x},${c.y}`)).size, NB_EMPLACEMENTS,
+      `${largeur}×${hauteur} : couples (x, y) distincts`);
+
+    // Le cadre est bien de la taille d'une case.
+    for (const c of cadres) {
+      assert.equal(c.l, projection.tailleCase);
+      assert.equal(c.h, projection.tailleCase);
+    }
   }
 });

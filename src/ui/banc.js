@@ -16,22 +16,32 @@
 // vient des horodatages de requestAnimationFrame, jamais de l'horloge murale.
 
 import { UNITES, DEFENSES } from '../data/combat.js';
-import { BATIMENTS } from '../data/sites.js';
+import { BATIMENTS, RAID_OUVRAGE } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
 import {
   creerCombat, tick, construireResultat, butin, pointsRecherche, TICKS_AVANT_REPLI,
 } from '../sim/combat.js';
 import { caseDepuisMilli } from '../sim/grille.js';
-import { genererSite, genererAssaut, budgetAssaut } from '../sim/generateur.js';
+import {
+  genererSite, genererAssaut, budgetAssaut, genererVague, budgetRaid,
+} from '../sim/generateur.js';
 import {
   arsenalVide, poser, retirer, enVagues, depuisVagues, avecNiveau,
   unitesDisponibles, bilan, purger, estVide, NB_VAGUES,
 } from './arsenal.js';
 import {
+  defenseVide, poser as poserDefense, retirer as retirerDefense, enDefenseurs,
+  depuisDefenseurs, avecNiveau as avecNiveauDefense, defensesDisponibles,
+  bilan as bilanDefense, purger as purgerDefense,
+  PREMIERE_RANGEE, DERNIERE_RANGEE, OCCUPANTS_MAX_PAR_RANGEE, NB_EMPLACEMENTS,
+} from './defense.js';
+import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
 } from '../render/interpolation.js';
 import { calculerProjection, caseDepuisPixels } from '../render/projection.js';
-import { listeAffichage, listeLegende, listeArsenal, classeDe, NOMS_CLASSE } from '../render/scene.js';
+import {
+  listeAffichage, listeLegende, listeArsenal, listeDefense, classeDe, NOMS_CLASSE,
+} from '../render/scene.js';
 import { executer } from '../render/canvas2d.js';
 
 // ---------------------------------------------------------------------------
@@ -88,6 +98,43 @@ export function montageDuBanc({ type, niveau, saveur, graine, assaut, vagues }) 
     pointsEngages: force.pointsEngages,
     pointsRestants: force.pointsRestants,
     profilRespecte: force.profilRespecte,
+  };
+  return montage;
+}
+
+/**
+ * Monte un combat en sens DÉFENSE : la garnison du joueur tient le site, et
+ * c'est l'Ouvrage qui attaque.
+ *
+ * ⚠ NE PASSE PAS par `montageDuBanc`, et c'est délibéré : celui-ci appelle
+ * `genererAssaut` et pose un bloc `montage.assaut` qui n'a aucun sens ici.
+ * Six tests dépendent de `montageDuBanc` tel quel.
+ *
+ * ⚠ `genererVague` ne rend PAS un `vagues[][]`. Il rend une LISTE PLATE dont
+ * chaque unité porte sa propre `rangee` — 2 puis 1 —, et `creerCombat` lit
+ * `u.rangee ?? RANGEE_APPARITION`. Le raid de l'Ouvrage est un déploiement
+ * statique sur deux rangées, pas un assaut en quatre temps : il tient donc en
+ * UNE seule vague. Le répartir en quatre le ferait entrer par paquets de
+ * cinquante ticks, ce qu'il n'est pas.
+ *
+ * ⚠ Les deux propriétaires s'INVERSENT. Sans cela les Fusiliers du joueur
+ * s'afficheraient « Meute » et son Mur de défense « Merlon ». Un montage dont
+ * les deux propriétaires sont égaux lève — c'est voulu, et testé.
+ *
+ * @returns {object} montage prêt pour creerCombat, augmenté d'un bloc `raid`.
+ */
+export function montageDefense({ type, niveau, saveur, graine, defenseurs }) {
+  const montage = genererSite({ type, niveau, saveur, graine });
+  montage.defenseurs = defenseurs.map((d) => ({ ...d }));
+  const raid = genererVague({ niveau, budgetPoints: budgetRaid(niveau), graine });
+  montage.vagues = [raid.unites];
+  montage.proprietaireDefense = 'joueur';
+  montage.proprietaireAttaque = 'ouvrage';
+  montage.raid = {
+    unites: raid.unites.length,
+    budgetPoints: budgetRaid(niveau),
+    pointsEngages: raid.pointsEngages,
+    pointsRestants: raid.pointsRestants,
   };
   return montage;
 }
@@ -237,6 +284,11 @@ export function initialiserBanc(doc) {
   let arsenal = arsenalVide(10);
   let arsenalOuvert = false;
   let uniteChoisie = null;
+  // --- Défense (lot 5C) ---
+  let defense = defenseVide(10);
+  let defenseOuverte = false;
+  let defenseurChoisi = null;
+  let sens = 'raid';
 
   // --- projection et buffer -------------------------------------------------
   //
@@ -271,6 +323,10 @@ export function initialiserBanc(doc) {
     if (arsenalOuvert) {
       executer(ctx, listeArsenal(arsenal, projection,
         bilan(arsenal).indices.map((i) => i.colonne)));
+      return;
+    }
+    if (defenseOuverte) {
+      executer(ctx, listeDefense(defense, projection, bilanDefense(defense).indices));
       return;
     }
     if (!etat) return;
@@ -347,9 +403,10 @@ export function initialiserBanc(doc) {
     $('banc-arsenal').hidden = !arsenalOuvert;
     // Comme la légende : le banc se met en pause, l'Arsenal prend tout le
     // canvas, et le panneau de tick s'efface pour ne pas amputer la grille.
+    if (arsenalOuvert && defenseOuverte) basculerDefense();
     if (arsenalOuvert && etat && !etat.termine) mettreEnPause(true);
     if (arsenalOuvert && legendeOuverte) basculerLegende();
-    $('banc-tick').hidden = arsenalOuvert;
+    $('banc-tick').hidden = arsenalOuvert || defenseOuverte;
     dimensionner();
     majArsenal();
     if (arsenalOuvert) {
@@ -398,10 +455,162 @@ export function initialiserBanc(doc) {
     }
   }
 
+  // --- Défense (lot 5C) ----------------------------------------------------
+  //
+  // Jumeau de l'Arsenal, à une différence de fond près : la rangée touchée EST
+  // la rangée de la grille. Il n'y a pas d'équivalent de `vagueDeRangee` —
+  // poser une Tourelle mitrailleuse en rangée 7 produit `{ rangee: 7 }`, et le
+  // moteur la place en rangée 7.
+
+  /** Les obstacles du site courant : c'est la graine qui les tire. */
+  function obstaclesDuSite() {
+    const { type, niveau, saveur, graine } = lireParametres();
+    try {
+      return genererSite({ type, niveau, saveur, graine }).obstacles;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Reconstruit la grille sur les obstacles du site courant.
+   *
+   * ⚠ Nécessaire dès que la graine, le type ou le niveau change : les obstacles
+   * sont tirés par graine, et le moteur REFUSE un défenseur posé sur l'un
+   * d'eux. `depuisDefenseurs` enregistre bien les cases interdites, mais il
+   * n'écarte PAS les pièces déjà posées qui s'y trouvent — vérifié. On les
+   * retire donc ici, et JAMAIS en silence : le statut les nomme.
+   */
+  function reconstruireDefense() {
+    const obstacles = obstaclesDuSite();
+    const interdites = new Set(obstacles.map((o) => `${o.rangee},${o.colonne}`));
+    const gardees = [];
+    const perdues = [];
+    for (const d of enDefenseurs(defense)) {
+      if (interdites.has(`${d.rangee},${d.colonne}`)) perdues.push(d);
+      else gardees.push(d);
+    }
+    defense = depuisDefenseurs(gardees, defense.niveau, obstacles);
+    return perdues;
+  }
+
+  function majPaletteDefense() {
+    const disponibles = defensesDisponibles(defense.niveau);
+    if (defenseurChoisi !== null && !disponibles.includes(defenseurChoisi)) defenseurChoisi = null;
+    $('banc-palette-defense').innerHTML = disponibles.map((id) => {
+      const ligne = DEFENSES[id] ?? UNITES[id];
+      const nom = typeof ligne.nom === 'string' ? ligne.nom : ligne.nom.joueur;
+      const actif = id === defenseurChoisi ? ' actif' : '';
+      return `<button type="button" class="unite${actif}" data-defenseur="${id}">`
+        + `<span>${nom}</span><span class="cout">${ligne.points} pts</span></button>`;
+    }).join('');
+    for (const bouton of $('banc-palette-defense').querySelectorAll('button[data-defenseur]')) {
+      bouton.addEventListener('click', () => {
+        defenseurChoisi = defenseurChoisi === bouton.dataset.defenseur
+          ? null : bouton.dataset.defenseur;
+        majPaletteDefense();
+      });
+    }
+  }
+
+  function majCompteurDefense() {
+    const b = bilanDefense(defense);
+    const compteur = $('banc-compteur-defense');
+    const pleines = b.rangeesPleines.length === 0 ? ''
+      : ` · rangée${b.rangeesPleines.length > 1 ? 's' : ''} pleine${b.rangeesPleines.length > 1 ? 's' : ''} `
+        + b.rangeesPleines.join(', ');
+    const reduits = b.indices.length === 0 ? ''
+      : ` · ${b.indices.length} engagement${b.indices.length > 1 ? 's' : ''} réduit${b.indices.length > 1 ? 's' : ''}`;
+    compteur.textContent = `${b.pointsEngages} / ${b.budgetPoints} points`
+      + ` · ${b.emplacementsOccupes}/${NB_EMPLACEMENTS} emplacements${pleines}${reduits}`;
+    compteur.classList.toggle('depasse', !b.valide);
+  }
+
+  function majDefense() {
+    majPaletteDefense();
+    majCompteurDefense();
+    dessiner();
+  }
+
+  function basculerDefense() {
+    defenseOuverte = !defenseOuverte;
+    $('banc-defense-ouvrir').classList.toggle('actif', defenseOuverte);
+    $('banc-defense').hidden = !defenseOuverte;
+    // ⚠ Les deux éditeurs sont EXCLUSIFS : sans quoi `dessiner` devrait
+    // arbitrer entre deux branches vraies en même temps.
+    if (defenseOuverte && arsenalOuvert) basculerArsenal();
+    if (defenseOuverte && etat && !etat.termine) mettreEnPause(true);
+    if (defenseOuverte && legendeOuverte) basculerLegende();
+    $('banc-tick').hidden = defenseOuverte || arsenalOuvert;
+    dimensionner();
+    majDefense();
+    if (defenseOuverte) {
+      const perdues = reconstruireDefense();
+      majDefense();
+      if (perdues.length > 0) {
+        majStatut(`⚠ ${perdues.length} pièce(s) retirée(s) : la graine a posé un obstacle sur `
+          + perdues.map((d) => `(${d.rangee}, ${d.colonne})`).join(', '));
+      } else {
+        majStatut(`Défense — la rangée ${PREMIERE_RANGEE} est la plus avancée, la `
+          + `${DERNIERE_RANGEE} adossée aux bâtiments. Choisir une pièce, toucher une case `
+          + 'pour la poser ; toucher une case pleine la retire.');
+      }
+    } else if (etat) majStatut(`tick ${etat.tick}`);
+    else majStatut('prêt — composer, puis lancer');
+  }
+
+  /** Toucher une case de la Défense : poser si vide, retirer si pleine. */
+  function toucherDefense(cible) {
+    if (cible.rangee < PREMIERE_RANGEE || cible.rangee > DERNIERE_RANGEE) {
+      majStatut(`la garnison tient sur les rangées ${PREMIERE_RANGEE} à ${DERNIERE_RANGEE}`);
+      return;
+    }
+    const occupee = defense.cases[cible.rangee - PREMIERE_RANGEE][cible.colonne - 1];
+    if (occupee !== null) {
+      const ligne = DEFENSES[occupee] ?? UNITES[occupee];
+      const nom = typeof ligne.nom === 'string' ? ligne.nom : ligne.nom.joueur;
+      defense = retirerDefense(defense, { rangee: cible.rangee, colonne: cible.colonne });
+      majDefense();
+      majStatut(`retiré : ${nom} (rangée ${cible.rangee}, colonne ${cible.colonne})`);
+      return;
+    }
+    if (defenseurChoisi === null) {
+      majStatut('choisir d\'abord une pièce dans la palette');
+      return;
+    }
+    try {
+      defense = poserDefense(defense, {
+        rangee: cible.rangee, colonne: cible.colonne, id: defenseurChoisi,
+      });
+    } catch (erreur) {
+      majStatut(erreur.message);
+      return;
+    }
+    majDefense();
+    const b = bilanDefense(defense);
+    const ligne = DEFENSES[defenseurChoisi] ?? UNITES[defenseurChoisi];
+    const nom = typeof ligne.nom === 'string' ? ligne.nom : ligne.nom.joueur;
+    const marque = b.indices.find(
+      (i) => i.rangee === cible.rangee && i.colonne === cible.colonne,
+    );
+    if (marque === undefined) {
+      const pleine = b.rangeesPleines.includes(cible.rangee)
+        ? ` · la rangée ${cible.rangee} est pleine, ${OCCUPANTS_MAX_PAR_RANGEE} occupants` : '';
+      majStatut(`${nom} en rangée ${cible.rangee}, colonne ${cible.colonne}`
+        + ` · ${b.pointsRestants} points restants${pleine}`);
+    } else {
+      // « engagement réduit », JAMAIS « inerte » : une artillerie avancée tire
+      // moins longtemps, elle ne se tait pas.
+      majStatut(`⚠ (rangée ${marque.rangee}, colonne ${marque.colonne}) : ${nom} n'engage que `
+        + `${marque.couverture} cases sur ${marque.maximale} depuis cette rangée — `
+        + 'une artillerie avancée tire moins longtemps.');
+    }
+  }
+
   /** Inspecteur : une case touchée dit qui l'occupe. */
   function inspecter(evenement) {
     if (legendeOuverte || !projection) return;
-    if (!arsenalOuvert && !etat) return;
+    if (!arsenalOuvert && !defenseOuverte && !etat) return;
     const cadre = canvas.getBoundingClientRect();
     const point = evenement.touches?.[0] ?? evenement.changedTouches?.[0] ?? evenement;
     const cible = caseDepuisPixels(
@@ -413,6 +622,10 @@ export function initialiserBanc(doc) {
     }
     if (arsenalOuvert) {
       toucherArsenal(cible);
+      return;
+    }
+    if (defenseOuverte) {
+      toucherDefense(cible);
       return;
     }
     const occupants = entitesSurLaCase(etat, cible.rangee, cible.colonne);
@@ -454,11 +667,43 @@ export function initialiserBanc(doc) {
       .map((a) => `${nomAffiche({ genre: 'unite', camp: 'attaque', id: a.id })}`
         + ` — ${formaterPv(a.pvMilli)} PV${a.sorti ? ' (sorti)' : ''}`)
       .join('<br>') || 'aucun';
-    $('banc-fin').innerHTML = `<h2>${LIBELLES_CAUSE[resultat.cause]}</h2>`
-      + `<p>tick ${resultat.tick} · butin <strong>${gain.quartz}</strong> quartz`
+    // ⚠ En sens Défense, `butin` et `pointsRecherche` comptent la prise de
+    // l'ASSAILLANT — celle de l'Ouvrage, donc, et pas celle du joueur. Et
+    // « Souche détruite » désigne alors la Souche DU JOUEUR. Un panneau muet
+    // sur le sens se lirait à l'envers ; le brief le dit lui-même, un
+    // provisoire muet est un mensonge d'affichage.
+    const enDefense = montage.raid !== undefined;
+    // ⚠ TROIS NOTES DE RÉGIME EN SENS DÉFENSE, et aucune n'est décorative :
+    // sans elles, une lecture de calibrage faite au banc serait prise pour la
+    // campagne.
+    let notes = '';
+    if (enDefense) {
+      notes += '<p><em>bâtiments provisoires — base du joueur au lot suivant</em></p>';
+      if (montage.raid.pointsRestants > 0) {
+        // Le plafond de dix-huit cases de déploiement mord avant le budget au
+        // haut de la courbe : au niveau 50, 55 des 250 points restent à quai.
+        // Le sens Défense y est donc PLUS FACILE qu'il ne devrait.
+        notes += `<p><em>l'Ouvrage n'a pu déployer que ${montage.raid.unites} unités sur les `
+          + `dix-huit cases de déploiement, ${montage.raid.pointsRestants} points sur `
+          + `${montage.raid.budgetPoints} non engagés</em></p>`;
+      }
+      // MODELE-REPARATION-1.md §2 : sur un camp ou un avant-poste, rien ne
+      // planche et tout meurt définitivement, là où les défenses du joueur
+      // planchent à 1 PV. Le banc pose la garnison sur un site de camp : il
+      // montre donc le régime le plus DUR des deux.
+      notes += '<p><em>régime de site : rien ne planche, tout meurt définitivement — '
+        + 'la base du joueur, elle, planche à 1 PV</em></p>';
+    }
+    const entete = enDefense
+      ? '<p><em>sens Défense — l\'Ouvrage donne l\'assaut, le joueur tient le site</em></p>'
+      : '';
+    const aQui = enDefense ? 'butin de l\'Ouvrage' : 'butin';
+    const quiSurvit = enDefense ? 'survivants de l\'Ouvrage' : 'survivants';
+    $('banc-fin').innerHTML = `<h2>${LIBELLES_CAUSE[resultat.cause]}</h2>${entete}`
+      + `<p>tick ${resultat.tick} · ${aQui} <strong>${gain.quartz}</strong> quartz`
       + ` + <strong>${gain.scorie}</strong> scorie`
       + ` · <strong>${formaterPointsMilli(points)}</strong> points de recherche</p>`
-      + `<p>survivants : ${survivants}</p>`;
+      + `<p>${quiSurvit} : ${survivants}</p>${notes}`;
     $('banc-fin').hidden = false;
   }
 
@@ -528,31 +773,59 @@ export function initialiserBanc(doc) {
       // LOT 5A — la composition du joueur est la source de vérité. Le profil
       // ne sert plus qu'au bouton « Remplir ».
       vagues: enVagues(arsenal),
+      sens,
     };
   }
 
   function lancer(parametres) {
-    const b = bilan(arsenal);
-    if (estVide(arsenal)) {
-      majStatut('Arsenal vide — poser au moins une unité, ou toucher « Remplir »');
-      if (!arsenalOuvert) basculerArsenal();
-      return;
-    }
-    if (!b.valide) {
-      majStatut(`composition invalide au niveau ${arsenal.niveau} — `
-        + 'toucher « Vider » ou corriger à la main');
-      if (!arsenalOuvert) basculerArsenal();
-      return;
-    }
-    try {
-      montage = montageDuBanc(parametres);
-      etat = creerCombat(montage);
-    } catch (erreur) {
-      majStatut(`montage refusé : ${erreur.message}`);
-      return;
+    if (parametres.sens === 'defense') {
+      if (parametres.niveau < RAID_OUVRAGE.niveauMinimal) {
+        majStatut(`l'Ouvrage n'attaque pas avant le niveau ${RAID_OUVRAGE.niveauMinimal}`);
+        return;
+      }
+      // ⚠ ASYMÉTRIE VOULUE avec l'Arsenal : une garnison VIDE se lance. Un
+      // assaut sans unité n'est rien, alors qu'un site sans défense reste un
+      // site — ses bâtiments tiennent seuls, et c'est justement la mesure qui
+      // sert de plancher au calibrage.
+      const bd = bilanDefense(defense);
+      if (!bd.valide) {
+        majStatut(`garnison invalide au niveau ${defense.niveau} — `
+          + 'toucher « Vider » ou corriger à la main');
+        if (!defenseOuverte) basculerDefense();
+        return;
+      }
+      try {
+        montage = montageDefense({ ...parametres, defenseurs: enDefenseurs(defense) });
+        etat = creerCombat(montage);
+      } catch (erreur) {
+        majStatut(`montage refusé : ${erreur.message}`);
+        return;
+      }
+    } else {
+      const b = bilan(arsenal);
+      if (estVide(arsenal)) {
+        majStatut('Arsenal vide — poser au moins une unité, ou toucher « Remplir »');
+        if (!arsenalOuvert) basculerArsenal();
+        return;
+      }
+      if (!b.valide) {
+        majStatut(`composition invalide au niveau ${arsenal.niveau} — `
+          + 'toucher « Vider » ou corriger à la main');
+        if (!arsenalOuvert) basculerArsenal();
+        return;
+      }
+      try {
+        montage = montageDuBanc(parametres);
+        etat = creerCombat(montage);
+      } catch (erreur) {
+        majStatut(`montage refusé : ${erreur.message}`);
+        return;
+      }
     }
     parametresCourants = parametres;
     if (legendeOuverte) basculerLegende();
+    if (arsenalOuvert) basculerArsenal();
+    if (defenseOuverte) basculerDefense();
     accumulateur = creerAccumulateur();
     precedentes = null;
     enPause = false;
@@ -612,6 +885,29 @@ export function initialiserBanc(doc) {
     $('banc-saveur').disabled = $('banc-type').value === 'base';
   });
   $('banc-arsenal-ouvrir').addEventListener('click', basculerArsenal);
+  $('banc-defense-ouvrir').addEventListener('click', basculerDefense);
+  $('banc-vider-defense').addEventListener('click', () => {
+    defense = defenseVide(defense.niveau, obstaclesDuSite());
+    majDefense();
+    majStatut('garnison vidée');
+  });
+  $('banc-sens').addEventListener('change', () => {
+    sens = $('banc-sens').value;
+    majSens();
+  });
+  for (const champ of ['banc-graine', 'banc-type']) {
+    $(champ).addEventListener('change', () => {
+      // Les obstacles sont tirés par GRAINE : changer de graine ou de type peut
+      // en poser un sous une pièce déjà placée, et le moteur refuserait le
+      // montage. On reconstruit, et on nomme ce qui tombe — jamais en silence.
+      const perdues = reconstruireDefense();
+      majDefense();
+      if (perdues.length > 0) {
+        majStatut(`⚠ ${perdues.length} pièce(s) retirée(s) de la garnison : un obstacle est `
+          + `apparu en ${perdues.map((d) => `(${d.rangee}, ${d.colonne})`).join(', ')}`);
+      }
+    });
+  }
   $('banc-remplir').addEventListener('click', () => {
     // « Remplir » est un CONFORT : il verse une composition de genererAssaut
     // dans la grille, que le joueur corrige ensuite. Ses compositions ne sont
@@ -635,6 +931,16 @@ export function initialiserBanc(doc) {
     const niveau = Math.min(NIVEAU.plafond, Math.max(1, Number($('banc-niveau').value) | 0));
     if (niveau === arsenal.niveau) return;
     arsenal = avecNiveau(arsenal, niveau);
+    defense = avecNiveauDefense(defense, niveau);
+    majSens();
+    const bd = bilanDefense(defense);
+    if (!bd.valide && fenetre.confirm(`Garnison invalide au niveau ${niveau} —\n`
+      + `${bd.verrouilles.length} pièce(s) verrouillée(s), ${bd.pointsEngages} points pour un `
+      + `budget de ${bd.budgetPoints}.\n\nPurger la garnison ?`)) {
+      defense = purgerDefense(defense);
+    }
+    reconstruireDefense();
+    majDefense();
     const b = bilan(arsenal);
     majArsenal();
     if (b.valide) return;
@@ -670,10 +976,38 @@ export function initialiserBanc(doc) {
   }
   fenetre.addEventListener('resize', dimensionner);
 
+  /**
+   * Le sens Défense est grisé sous le niveau 10 — décision d'INTERFACE, que rien
+   * n'impose côté données : `budgetRaid` rend 30 par extrapolation basse et ne
+   * lève pas. La raison s'écrit à l'écran plutôt que de laisser un sélecteur
+   * mort sans explication.
+   */
+  function majSens() {
+    const niveau = Math.min(NIVEAU.plafond, Math.max(1, Number($('banc-niveau').value) | 0));
+    const permis = niveau >= RAID_OUVRAGE.niveauMinimal;
+    const option = $('banc-sens').querySelector('option[value="defense"]');
+    option.disabled = !permis;
+    $('banc-defense-ouvrir').disabled = !permis;
+    if (!permis && $('banc-sens').value === 'defense') {
+      $('banc-sens').value = 'raid';
+      sens = 'raid';
+      if (defenseOuverte) basculerDefense();
+    }
+    if (!permis) {
+      option.textContent = `Défense — l'Ouvrage n'attaque pas avant le niveau ${RAID_OUVRAGE.niveauMinimal}`;
+    } else {
+      option.textContent = 'Défense';
+    }
+  }
+
   choisirVitesse(1);
-  arsenal = arsenalVide(Math.min(NIVEAU.plafond,
-    Math.max(1, Number($('banc-niveau').value) | 0)));
+  const niveauInitial = Math.min(NIVEAU.plafond,
+    Math.max(1, Number($('banc-niveau').value) | 0));
+  arsenal = arsenalVide(niveauInitial);
+  defense = defenseVide(niveauInitial, obstaclesDuSite());
   majArsenal();
+  majDefense();
+  majSens();
   dimensionner();
   majStatut('prêt — ouvrir l\'Arsenal pour composer, puis lancer');
 }

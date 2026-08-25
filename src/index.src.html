@@ -10,6 +10,10 @@
      s'habille en kaki et en métal. */
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
+  /* `hidden` est posé par le JS sur des blocs dont le sélecteur d'id fixe
+     un `display` : un id l'emporte sur la règle `[hidden]` de la feuille
+     par défaut, et l'attribut n'aurait plus aucun effet. */
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -114,6 +118,33 @@
   #banc-arsenal button.unite.actif .cout { color: #343A2C; }
   #banc-compteur { color: #8C9A72; margin-left: auto; white-space: nowrap; }
   #banc-compteur.depasse { color: #E43E32; }
+
+  /* --- Défense, lot 5C : jumeau du bloc d'Arsenal --- */
+  #banc-defense {
+    padding: 6px 8px;
+    background: #1E2124;
+    border-top: 1px solid #4E5742;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  #banc-defense .palette { display: flex; flex-wrap: wrap; gap: 4px; }
+  #banc-defense button.unite {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.15;
+    padding: 3px 7px;
+    min-width: 4.5em;
+  }
+  #banc-defense button.unite .cout { color: #68727E; font-size: 0.75rem; }
+  #banc-defense button.unite.actif .cout { color: #343A2C; }
+  #banc-compteur-defense { color: #8C9A72; margin-left: auto; white-space: nowrap; }
+  #banc-compteur-defense.depasse { color: #E43E32; }
+  /* Le sens Défense est grisé sous le niveau 10 : encore faut-il que ça se
+     VOIE. Règle générale, aucun contrôle désactivé ne doit passer pour vif. */
+  select:disabled, button:disabled, option:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -136,7 +167,14 @@
     </select>
   </label>
   <label>graine <input id="banc-graine" type="number" step="1" value="1"></label>
+  <label>sens
+    <select id="banc-sens">
+      <option value="raid">Raid</option>
+      <option value="defense">Défense</option>
+    </select>
+  </label>
   <button id="banc-arsenal-ouvrir">Arsenal</button>
+  <button id="banc-defense-ouvrir">Défense</button>
   <button id="banc-lancer">Lancer</button>
   <button id="banc-pause">Pause</button>
   <button id="banc-pas">Pas à pas</button>
@@ -158,6 +196,11 @@
     <button id="banc-remplir">Remplir</button>
     <button id="banc-vider">Vider</button>
     <span id="banc-compteur"></span>
+  </div>
+  <div id="banc-defense" hidden>
+    <div class="palette" id="banc-palette-defense"></div>
+    <button id="banc-vider-defense">Vider</button>
+    <span id="banc-compteur-defense"></span>
   </div>
   <div id="banc-tick"></div>
   <p id="banc-statut">initialisation…</p>
