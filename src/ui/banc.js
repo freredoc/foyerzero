@@ -126,14 +126,26 @@ export function executerRaidComplet(parametres, { vitesse = 1, dureeImageMs = 10
 
 /**
  * Nom affiché d'une entité — DEUX JEUX DE NOMS, jamais mélangés : le joueur
- * (l'attaquant) emploie le vocabulaire d'une armée régulière, l'Ouvrage (la
- * défense entière, unités mobiles comprises) celui des outils et des bêtes.
+ * emploie le vocabulaire d'une armée régulière, l'Ouvrage celui des outils et
+ * des bêtes.
+ *
+ * ⚠ LA CLÉ EST LE PROPRIÉTAIRE, PAS LE CAMP. Elle a longtemps été le camp, et
+ * ça marchait tant que seul l'Ouvrage défendait. Le jour où le joueur garnit sa
+ * propre base, le camp de ses unités devient « defense » sans qu'elles changent
+ * de propriétaire — et elles s'afficheraient sous le nom de l'Ouvrage.
+ *
+ * Les BÂTIMENTS n'ont qu'un nom : une Souche est une Souche des deux côtés.
+ * Les DÉFENSES en ont deux depuis le 25/08/2026.
  */
 export function nomAffiche(entite) {
   if (entite.genre === 'batiment') return BATIMENTS[entite.id].nom;
-  if (entite.genre === 'defense') return DEFENSES[entite.id].nom;
+  const joueur = entite.proprietaire === 'joueur';
+  if (entite.genre === 'defense') {
+    const noms = DEFENSES[entite.id].nom;
+    return joueur ? noms.joueur : noms.ouvrage;
+  }
   const noms = UNITES[entite.id].nom;
-  return entite.camp === 'attaque' ? noms.joueur : noms.ouvrage;
+  return joueur ? noms.joueur : noms.ouvrage;
 }
 
 /**
