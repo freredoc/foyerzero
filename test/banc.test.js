@@ -14,6 +14,7 @@ import {
 } from '../src/ui/banc.js';
 import { creerCombat, CAUSES } from '../src/sim/combat.js';
 import { PROFILS_ASSAUT, EMPLACEMENTS_ASSAUT } from '../src/data/sites.js';
+import { DEFENSES } from '../src/data/combat.js';
 import { PREREGLAGES, montagePreregle } from './prereglages-lot3a.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -109,13 +110,38 @@ test('T8 — mêmes paramètres, même graine : exactement le même raid', () =>
 // ---------------------------------------------------------------------------
 
 test('banc — deux jeux de noms, jamais mélangés, et des causes toutes libellées', () => {
-  // L'attaquant parle armée régulière, l'Ouvrage outils et bêtes : la même
-  // ligne de données rend « Fusiliers » côté assaut et « Meute » côté défense.
-  assert.equal(nomAffiche({ genre: 'unite', camp: 'attaque', id: 'meute' }), 'Fusiliers');
-  assert.equal(nomAffiche({ genre: 'unite', camp: 'defense', id: 'meute' }), 'Meute');
-  assert.equal(nomAffiche({ genre: 'unite', camp: 'attaque', id: 'broyeur' }), 'Percheron');
-  assert.equal(nomAffiche({ genre: 'defense', camp: 'defense', id: 'casemate' }), 'Casemate');
-  assert.equal(nomAffiche({ genre: 'batiment', camp: 'defense', id: 'souche' }), 'Souche');
+  // ⚠ LA CLÉ EST LE PROPRIÉTAIRE, PAS LE CAMP — changement du 25/08/2026. Le
+  // camp désigne un côté de la grille, le propriétaire désigne à qui c'est. Les
+  // deux se confondaient tant que seul l'Ouvrage défendait ; le jour où le
+  // joueur garnit sa base, ses unités passent camp « defense » sans changer de
+  // propriétaire, et c'est le propriétaire qui doit décider du nom.
+  //
+  // Le CROISEMENT est ce qui prouve le changement de clé : la même ligne de
+  // données rend les quatre combinaisons, et un seul des quatre suffirait à
+  // passer avec l'ancienne implémentation.
+  const u = (camp, proprietaire, id) => nomAffiche({ genre: 'unite', camp, proprietaire, id });
+  assert.equal(u('attaque', 'joueur', 'meute'), 'Fusiliers');
+  assert.equal(u('defense', 'ouvrage', 'meute'), 'Meute');
+  assert.equal(u('defense', 'joueur', 'meute'), 'Fusiliers', 'le joueur garnit sa propre base');
+  assert.equal(u('attaque', 'ouvrage', 'meute'), 'Meute', 'l\'Ouvrage attaque le joueur');
+  assert.equal(u('attaque', 'joueur', 'broyeur'), 'Percheron');
+
+  // Les DÉFENSES ont deux noms depuis le 25/08 : neuf couples, tous distincts.
+  const d = (proprietaire, id) => nomAffiche({ genre: 'defense', camp: 'defense', proprietaire, id });
+  assert.equal(d('ouvrage', 'casemate'), 'Casemate');
+  assert.equal(d('joueur', 'casemate'), 'Tourelle mitrailleuse');
+  assert.equal(d('ouvrage', 'harpon'), 'Harpon');
+  assert.equal(d('joueur', 'harpon'), 'SAM');
+  for (const id of Object.keys(DEFENSES)) {
+    assert.ok(Object.prototype.hasOwnProperty.call(DEFENSES[id].nom, 'ouvrage'), `${id}.nom.ouvrage`);
+    assert.ok(Object.prototype.hasOwnProperty.call(DEFENSES[id].nom, 'joueur'), `${id}.nom.joueur`);
+  }
+  const cotes = Object.values(DEFENSES).map((x) => x.nom.joueur);
+  assert.equal(new Set(cotes).size, cotes.length, 'les neuf noms joueur sont distincts');
+
+  // Un bâtiment n'a qu'un nom : une Souche est une Souche des deux côtés.
+  assert.equal(nomAffiche({ genre: 'batiment', camp: 'defense', proprietaire: 'ouvrage', id: 'souche' }), 'Souche');
+  assert.equal(nomAffiche({ genre: 'batiment', camp: 'defense', proprietaire: 'joueur', id: 'souche' }), 'Souche');
 
   // Chaque cause du moteur a son libellé de panneau — aucune fin muette.
   for (const cause of CAUSES) {
