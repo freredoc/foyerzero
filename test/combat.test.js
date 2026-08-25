@@ -736,7 +736,7 @@ test('T12 — un bâtiment à moitié détruit paie la moitié', () => {
 // T13 — points de recherche
 // ---------------------------------------------------------------------------
 
-test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points', () => {
+test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points', () => {
   const montage = {
     niveau: 3,
     saveur: null,
@@ -746,10 +746,10 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
     // donc facteurMilli(3) = round(1000 × 1,1²) = 1210 au lieu de 1585, et le
     // Merlon vaut 2000 × 1210 = 2 420 000 milli-PV. Monté à 1 210 000, il est à
     // exactement 50 % de dégâts subis.
-    // Ce que ce test TIENT n'a pas bougé d'un iota, et c'est le point : le
-    // barème de points de recherche ne dépend que du niveau et de la FRACTION
-    // détruite, jamais des PV absolus. Les 4 000 milli-points sont les mêmes
-    // sous les deux courbes.
+    // Ce que ce test TIENT n'a pas bougé : le barème de points de recherche ne
+    // dépend que du niveau de la cible et de la FRACTION détruite, jamais de
+    // ses PV absolus. La moitié d'un Merlon reste la moitié d'un Merlon, que
+    // ses PV valent 2 000 000, 3 170 000 ou 2 420 000 milli-PV.
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 1_210_000 }],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
@@ -766,17 +766,26 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 4 000 milli-points
   assert.equal(merlon.pvPerdusMilli, 1_210_000);
   assert.equal(merlon.niveau, 3, 'le niveau de l\'entité, plus celui du site');
 
-  // 2 × 1000 × 2^(3−1) × 0,5 = 2 × 1000 × 4 × 0,5 = 4 000 milli-points.
-  // BigInt depuis le lot 2B : le barème double par niveau quand tout le reste
-  // croît en ×1,32, et déborde l'entier sûr dès le niveau 39.
-  assert.equal(pointsRecherche(resultat, montage), 4000n);
+  // ⚠ LOT RECHERCHE (25/08/2026). Le barème ne double plus par niveau : il suit
+  // la courbe ÉCONOMIQUE, celle de BUTIN, comme toute récompense de raid.
+  //   avant : 2 × 1000 × 2^(3−1)            × 0,5 = 4 000 milli-points
+  //   après : 2 × 1000 × facteurEconomiqueMilli(3)/1000 × 0,5
+  //         = 2 × 1000 × 1,585              × 0,5 = 1 585 milli-points
+  // Le niveau 3 perd donc 60 % de son rendement — c'est le prix à payer pour
+  // que le niveau 50 cesse de déborder l'entier sûr, et le rendement reste
+  // strictement croissant en niveau.
+  //
+  // BigInt reste OBLIGATOIRE malgré tout : le produit intermédiaire du calcul,
+  // barème × facteur × bonus × pvPerdusMilli, atteint encore 5,2 × 10²¹ au
+  // niveau 50. C'est le T13 de generateur.test.js qui le mesure.
+  assert.equal(pointsRecherche(resultat, montage), 1585n);
 
   // Avec le module de la cible débloqué (Merlon côté Ouvrage : pvPlusVingt),
-  // × 1,2 → 4 800.
+  // × 1,2 → 1 902.
   const avecModule = { ...montage, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } };
   const etatModule = creerCombat(avecModule);
   const resultatModule = resoudre(etatModule, { maxTicks: 1 });
-  assert.equal(pointsRecherche(resultatModule, avecModule), 4800n);
+  assert.equal(pointsRecherche(resultatModule, avecModule), 1902n);
 
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.
   assert.equal(resultat.batiments.length, 1);

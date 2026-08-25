@@ -31,7 +31,9 @@ import {
   vitesseSousObstacle,
   DIVISEUR_OBSTACLE_MILLI,
 } from '../src/sim/grille.js';
-import { verifierArithmetique, TICKS_MAX_COMBAT, TICKS_PAR_VAGUE } from '../src/sim/combat.js';
+import {
+  verifierArithmetique, TICKS_MAX_COMBAT, TICKS_PAR_VAGUE, facteurEconomiqueMilli,
+} from '../src/sim/combat.js';
 
 test('G1 — conversions en milli-cases, exactes et réversibles', () => {
   assert.equal(MILLI_PAR_CASE, 1000);
@@ -211,15 +213,31 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
   assert.deepEqual(DEFENSES.herse.degatsFranchissement,
     { infanterie: 450, vehicule: 15_000, structureOuAviation: 0 });
 
-  // Les points de recherche doublent par niveau de cible. Le plafond de niveau
-  // est 50, donc l'exposant maximal est 49 : 2^49 = 562 949 953 421 312, sous
-  // Number.MAX_SAFE_INTEGER = 9 007 199 254 740 991. C'est asserté, pas supposé.
+  // ⚠ LOT RECHERCHE (25/08/2026). Les points de recherche NE DOUBLENT PLUS par
+  // niveau : ils suivent la courbe économique. La constante
+  // `multiplicateurParNiveau` a disparu de la table, et ce test asserte sa
+  // disparition — un test qui ne vérifierait plus rien passerait aussi bien si
+  // quelqu'un la remettait en douce.
   assert.equal(GEOGRAPHIE.niveauPlafond, 50);
-  assert.equal(POINTS_RECHERCHE.multiplicateurParNiveau, 2);
-  const plafond = POINTS_RECHERCHE.multiplicateurParNiveau ** (GEOGRAPHIE.niveauPlafond - 1);
-  assert.equal(plafond, 562_949_953_421_312);
-  assert.ok(Number.isSafeInteger(plafond), '2^49 doit rester un entier sûr');
-  assert.ok(plafond < Number.MAX_SAFE_INTEGER);
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(POINTS_RECHERCHE, 'multiplicateurParNiveau'),
+    'le barème ne doit plus porter de multiplicateur propre',
+  );
+
+  // Le produit le plus lourd du barème, celui que garde `verifierArithmetique` :
+  // 60 (Broyeur) × 480 941 681 (facteur économique au niveau 50) × 1200 (module
+  // débloqué) = 34 627 801 032 000, soit 260 fois sous
+  // Number.MAX_SAFE_INTEGER = 9 007 199 254 740 991. Sous l'ancien barème le
+  // même produit valait 4 × 10¹⁹ : il débordait de 4 500 fois.
+  const bareme = Math.max(...Object.values(POINTS_RECHERCHE.parCible));
+  assert.equal(bareme, 60, 'le Broyeur est la cible la mieux payée');
+  const bonus = 1000 + Math.round(1000 * POINTS_RECHERCHE.bonusModuleDebloque);
+  assert.equal(bonus, 1200);
+  const plafond = bareme * facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond) * bonus;
+  assert.equal(facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond), 480_941_681);
+  assert.equal(plafond, 34_627_801_032_000);
+  assert.ok(Number.isSafeInteger(plafond), 'le plafond du barème doit rester un entier sûr');
+  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 260, 'la marge du barème est de 260×');
 
   // Et le moteur assied les mêmes invariants à son chargement.
   assert.equal(verifierArithmetique(), true);

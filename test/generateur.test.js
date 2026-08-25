@@ -16,7 +16,7 @@ import {
   budgetRaid,
 } from '../src/sim/generateur.js';
 import {
-  creerCombat, resoudre, tick, pointsRecherche, facteurMilli,
+  creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurEconomiqueMilli,
 } from '../src/sim/combat.js';
 import { GRILLE, OBSTACLES, UNITES, DEFENSES } from '../src/data/combat.js';
 import {
@@ -617,25 +617,34 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   assert.ok(Number.isSafeInteger(produit));
   assert.ok(Number.MAX_SAFE_INTEGER / produit > 281_000, 'la marge des dégâts est de 281 336×');
 
-  // ⚠ LES POINTS DE RECHERCHE RESTENT LE SEUL DÉBORDEMENT, ET IL EST DÉSORMAIS
-  // SEUL DE SON ESPÈCE. Le lot COURBE a ouvert toutes les autres marges de trois
-  // à quatre ordres de grandeur ; le barème de recherche, lui, double toujours
-  // par niveau. Ethan a arbitré le 25/08 qu'il devait passer sur le facteur à
-  // deux régimes, ce qui le ramènerait à 3,5 × 10⁷ — 260 millions de fois sous
-  // l'entier sûr. Ce changement touche pointsRecherche() et POINTS_RECHERCHE :
-  // il n'est PAS dans ce lot, et ce test continue donc de tenir le débordement
-  // tel qu'il existe encore. Il devra être retourné avec lui.
+  // ⚠ CE PARAGRAPHE A ÉTÉ RETOURNÉ LE 25/08/2026. Il tenait le DÉBORDEMENT des
+  // points de recherche, seule grandeur du jeu à croître en 2^(n−1) : au niveau
+  // 50, 60 × 1000 × 2^49 = 3,4 × 10¹⁹, quatre mille fois l'entier sûr, au point
+  // que lui ajouter 1 en Number ne changeait rien. Le débordement était consigné
+  // et non réparé depuis le lot 2B.
   //
-  // Pour un Broyeur au niveau 50,
-  // 60 × 1000 × 2^49 = 33 776 997 205 278 720 000, très au-delà de l'entier
-  // sûr — au point que lui ajouter 1 en Number ne change rien.
-  const brut = 60n * 1000n * 2n ** 49n;
-  assert.ok(brut > BigInt(Number.MAX_SAFE_INTEGER));
-  assert.equal(Number(brut) + 1, Number(brut), 'la précision est bel et bien perdue');
+  // Ethan a arbitré que les points de recherche sont une récompense ÉCONOMIQUE
+  // et doivent suivre la courbe économique. Le barème n'a plus de multiplicateur
+  // propre, et le produit le plus lourd tient désormais très largement :
+  //   60 × 480 941 681 × 1200 = 34 627 801 032 000, soit 260 fois sous l'entier
+  //   sûr, là où l'ancien barème le dépassait de 4 500 fois.
+  const bareme = 60;
+  const bonus = 1200;
+  const plafond = bareme * facteurEconomiqueMilli(NIVEAU.plafond) * bonus;
+  assert.equal(facteurEconomiqueMilli(NIVEAU.plafond), 480_941_681);
+  assert.equal(plafond, 34_627_801_032_000);
+  assert.ok(Number.isSafeInteger(plafond), 'le barème ne déborde plus');
+  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 260);
 
+  // ⚠ ET POURTANT BigInt RESTE OBLIGATOIRE — c'est le point que ce test tient
+  // désormais, et il n'est pas évident. Le PLAFOND DU BARÈME tient, mais le
+  // PRODUIT COMPLET du calcul ne tient pas : il multiplie encore par
+  // pvPerdusMilli, qui vaut jusqu'à 2000 × facteurMilli(50) = 213 438 000.
+  // 60 × 480 941 681 × 1000 × 180 308 053 = 5,2 × 10²¹, toujours hors de
+  // l'entier sûr. Passer ce calcul en Number serait une régression silencieuse.
+  //
   // Cas concret : un Broyeur de niveau 50 ayant perdu 180 308 053 milli-PV sur
-  // 961 883 362 000. La valeur exacte et celle en Number diffèrent encore d'une
-  // unité — c'est ce que ce test tient, et la conversion ne l'a pas changé.
+  // 213 438 000.
   const perdus = 180_308_053;
   const montage = {
     niveau: 50,
@@ -650,10 +659,18 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   const broyeur = resultat.defenses.find((d) => d.id === 'broyeur');
   assert.equal(broyeur.pvPerdusMilli, perdus);
 
-  const exact = (60n * 2n ** 49n * 1000n * BigInt(perdus)) / BigInt(2000 * facteur);
+  const fe = BigInt(facteurEconomiqueMilli(50));
+  const exact = (60n * fe * 1000n * BigInt(perdus)) / (BigInt(2000 * facteur) * 1000n);
+  assert.equal(exact, 24_377_381_190n);
   assert.equal(pointsRecherche(resultat, montage), exact);
-  const enNombre = Math.floor((60 * 2 ** 49 * 1000 * perdus) / (2000 * facteur));
-  assert.notEqual(BigInt(enNombre), exact, 'le Number devrait fausser ce calcul');
+
+  // Le produit intermédiaire, lui, sort de l'entier sûr : c'est la preuve que
+  // BigInt n'est pas une précaution décorative. Que le Number retombe ICI sur le
+  // même quotient est une coïncidence de cette division-là — l'asserter serait
+  // asserter une chance.
+  const intermediaire = 60 * facteurEconomiqueMilli(50) * 1000 * perdus;
+  assert.ok(!Number.isSafeInteger(intermediaire), 'BigInt reste obligatoire');
+  assert.ok(intermediaire > 5e21);
 });
 
 // ---------------------------------------------------------------------------
