@@ -227,11 +227,19 @@ export const EMPLACEMENTS_ASSAUT = { vagues: 4, parVague: 9 };
 
 // --- points de recherche -----------------------------------------------------
 // Ils ne se produisent pas, ils se prennent sur les défenses détruites.
-// Barème au niveau 1, ×2 par niveau de cible, +20 % si le module de la cible
-// est débloqué, et proportionnel au pourcentage de PV détruits.
+// Barème au niveau 1, +20 % si le module de la cible est débloqué, et
+// proportionnel au pourcentage de PV détruits.
 // Casser des murs ne paie pas ; tuer des défenseurs paie.
+//
+// ⚠ LE BARÈME NE DOUBLE PLUS PAR NIVEAU. Il portait `multiplicateurParNiveau: 2`
+// depuis le lot 2B, seule grandeur du jeu à croître en 2^(n−1) quand tout le
+// reste suivait 1,259/1,32 — d'où un débordement de l'entier sûr dès le niveau
+// 39, consigné et jamais réparé. Arbitré par Ethan le 25/08/2026 : les points de
+// recherche sont une récompense ÉCONOMIQUE, ils suivent donc la courbe
+// économique, celle de BUTIN ci-dessus. Une table fait foi par grandeur, et il
+// n'y a plus de constante ici — `facteurEconomiqueMilli` de sim/combat.js lit
+// BUTIN directement.
 export const POINTS_RECHERCHE = {
-  multiplicateurParNiveau: 2,
   bonusModuleDebloque: 0.2,
   proportionnelAuxDegats: true,
   parCible: {
