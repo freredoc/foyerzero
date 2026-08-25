@@ -440,7 +440,8 @@ function verifierEntierPositif(valeur, contexte) {
  * courante qui tranche — l'aviation, elle, partage librement une case.
  */
 function ajouterEntite(
-  etat, contexte, { camp, genre, id, rangee, colonne, pvMilli, reserve, niveau },
+  etat, contexte,
+  { camp, genre, id, rangee, colonne, pvMilli, reserve, niveau, proprietaire },
   casesPrises, obstaclesIndex,
 ) {
   const p = TABLES_PROFIL[genre][id];
@@ -498,6 +499,12 @@ function ajouterEntite(
   const entite = {
     indice: etat.entites.length,
     camp,
+    // ⚠ LE CAMP EST UN CÔTÉ DE GRILLE, LE PROPRIÉTAIRE EST À QUI C'EST. La
+    // destructuration ci-dessus est une LISTE FERMÉE : un champ passé par
+    // l'appelant et absent de cette liste disparaît en silence — c'est ce qui
+    // s'est produit à la première écriture de ce lot, et deux tests l'ont
+    // attrapé. Ajouter un champ ici, c'est l'ajouter AUX DEUX endroits.
+    proprietaire: proprietaire ?? (camp === 'attaque' ? 'joueur' : 'ouvrage'),
     genre,
     id,
     colonne,
@@ -578,6 +585,29 @@ export function creerCombat(montage) {
     );
   }
 
+  // ⚠ CAMP ET PROPRIÉTAIRE SONT DEUX CHOSES. `camp` désigne un CÔTÉ DE LA
+  // GRILLE — qui défend, qui attaque — et il ne bouge jamais. `proprietaire`
+  // désigne À QUI APPARTIENNENT les entités, et c'est lui qui décide du jeu de
+  // noms affiché. Tant que seul l'Ouvrage défendait, les deux se confondaient ;
+  // le jour où le joueur garnit sa propre base, ses Cuirassiers s'afficheraient
+  // « Carapace » si l'on continuait de lire le camp.
+  //
+  // Les DÉFAUTS reproduisent exactement le comportement d'avant : la défense
+  // appartient à l'Ouvrage, l'assaut au joueur.
+  const proprietaireDefense = montage.proprietaireDefense ?? 'ouvrage';
+  const proprietaireAttaque = montage.proprietaireAttaque ?? 'joueur';
+  for (const [cle, valeur] of [['proprietaireDefense', proprietaireDefense],
+    ['proprietaireAttaque', proprietaireAttaque]]) {
+    if (valeur !== 'joueur' && valeur !== 'ouvrage') {
+      throw new Error(`combat : ${cle} vaut « ${valeur} », attendu « joueur » ou « ouvrage »`);
+    }
+  }
+  if (proprietaireDefense === proprietaireAttaque) {
+    throw new Error(
+      `combat : les deux camps appartiennent à « ${proprietaireDefense} » — personne ne s'attaque soi-même`,
+    );
+  }
+
   const etat = {
     tick: 0,
     termine: false,
@@ -586,6 +616,8 @@ export function creerCombat(montage) {
     saveur,
     maxTicks: TICKS_MAX_COMBAT,
     obstacles,
+    proprietaireDefense,
+    proprietaireAttaque,
     entites: [],
     vagues: [],
     enAttente: [],
@@ -620,7 +652,8 @@ export function creerCombat(montage) {
         + `de défense (${bandeDefense.premiere}–${bandeDefense.derniere})`,
       );
     }
-    ajouterEntite(etat, 'défenseur', { ...d, camp: 'defense', genre }, casesPrises, obstaclesIndex);
+    ajouterEntite(etat, 'défenseur', { ...d, camp: 'defense', genre, proprietaire: proprietaireDefense },
+      casesPrises, obstaclesIndex);
   }
 
   const bandeBatiments = bornesBande('batiments');
@@ -640,7 +673,7 @@ export function creerCombat(montage) {
         + `des bâtiments (${bandeBatiments.premiere}–${bandeBatiments.derniere})`,
       );
     }
-    ajouterEntite(etat, 'bâtiment', { ...b, camp: 'defense', genre: 'batiment' },
+    ajouterEntite(etat, 'bâtiment', { ...b, camp: 'defense', genre: 'batiment', proprietaire: proprietaireDefense },
       casesPrises, obstaclesIndex);
   }
 
@@ -750,7 +783,7 @@ function apparitionDeVague(etat, casesPrises = null) {
     const entite = ajouterEntite(
       etat,
       'attaquant',
-      { ...d, camp: 'attaque', genre: 'unite' },
+      { ...d, camp: 'attaque', genre: 'unite', proprietaire: etat.proprietaireAttaque },
       casesPrises ?? null,
       obtenirIndexObstacles(etat),
     );
