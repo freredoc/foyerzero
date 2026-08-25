@@ -9,15 +9,6 @@
 > **Note de lecture :** le client français nomme « Points » le champ que le client anglais
 > nomme « Hitpoints ». Ce sont les **points de vie**. Toute lecture antérieure de ce champ
 > comme un score de classement est erronée.
->
-> **Statut au 24/08, lot 4A.** Les §6.1 à §6.4 sont transcrits dans
-> `src/data/combat.js` : PV, dégâts (÷ 160, soit T = 16 s), portées, vitesses et
-> temps de réparation. La réserve de munitions est le seul champ NON repris tel
-> quel — divisée par 10, faute de quoi dix unités sur quatorze tireraient plus
-> longtemps que le raid entier. Les **courbes du §0 ne sont pas reprises** :
-> Foyer Zéro garde les siennes, ×1,32 sur les PV comme sur les dégâts, pour que
-> le combat reste invariant en miroir. Deux passages de ce relevé étaient faux
-> sur la portée minimale (§6.4 et §9.4) : corrigés ci-dessous.
 
 ---
 
@@ -210,17 +201,11 @@ reste, le plus fragile de l'aviation. C'est le « traverser » à l'état pur.
 | Anti-tank barrier | 1 500 | 0 | 0 | 0 | 0 | statique | — | structure |
 | Wall | 2 000 | 0 | 0 | 0 | 0 | statique | — | structure |
 
-~~Deux mécaniques absentes de notre modèle :~~ **Corrigé au lot 4A — une seule
-l'est.**
+Deux mécaniques absentes de notre modèle :
 
-- ~~**Portée minimale.**~~ **Elle existe chez nous depuis le lot 2A.** La
-  Faucheuse, le Mortier et le Harpon portent `portee: 5.5` et `porteeMini: 3.5`
-  dans `src/data/combat.js`, et le T4 du lot 2A vérifie les trois cas de la zone
-  morte — trop près, dans la fenêtre, trop loin. Le relevé disait le contraire ;
-  c'était faux. La mécanique décrite est bien celle-ci : zone morte entre 0 et
-  3,5, tir entre 3,5 et 5,5, sans défense au contact.
-- **Trois classes de blindage chez les défenses**, pas une seule. Celle-là est
-  bien absente, et le reste : Ethan a tranché pour le modèle simple.
+- **Portée minimale.** Les trois artilleries ont une zone morte entre 0 et 3,5, et ne
+  tirent qu'entre 3,5 et 5,5. Elles sont sans défense au contact.
+- **Trois classes de blindage chez les défenses**, pas une seule.
 
 Les trois barrières affichent zéro partout malgré des descriptions qui mentionnent des
 dégâts de contact. **La valeur existe mais n'est exposée nulle part** : le ÷8 de la Ronce
@@ -308,9 +293,8 @@ fumigène : 5 M + 10 M), pas des coûts d'amélioration. Sans structure à extra
    anti-infanterie.
 3. **Trancher la montée en parallèle** : reprend-on les treize files d'attente de
    l'original, ou une progression à voie unique ? Le roster actuel supporte les deux.
-4. ~~**Décider si l'on reprend la portée minimale** des artilleries.~~ **Sans
-   objet, corrigé au lot 4A** : c'est déjà repris. Les trois artilleries ont leur
-   zone morte de 3,5 depuis le lot 2A, avec son test. Rien à décider.
+4. **Décider si l'on reprend la portée minimale** des artilleries. C'est une vraie
+   mécanique tactique — une zone morte au contact — et notre modèle n'a rien d'équivalent.
 5. **Reporter les coefficients** dans `FOYER-ZERO-CALIBRAGE.xlsx` : la table du §2.1
    remplace toute courbe devinée, les tables du §6 remplacent tout profil estimé.
 6. **Une mesure restante** : le Barbwire à un niveau intermédiaire, pour fermer la loi de
