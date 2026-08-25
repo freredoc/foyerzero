@@ -319,12 +319,15 @@ export function verifierArithmetique() {
   for (const [id, d] of Object.entries(DEFENSES)) PROFILS_DEFENSE[id] = profilDefense(id, d);
   for (const [id, b] of Object.entries(BATIMENTS)) PROFILS_BATIMENT[id] = profilBatiment(id, b);
 
-  // Les points de recherche doublent par niveau de cible : 2^(50−1) doit
-  // rester exactement représentable. L'asserter plutôt que le supposer.
-  const plafond = POINTS_RECHERCHE.multiplicateurParNiveau ** (GEOGRAPHIE.niveauPlafond - 1);
+  // Les points de recherche suivent la courbe économique. Le produit le plus
+  // lourd du barème est bareme × facteurEconomiqueMilli(plafond) × bonus : il
+  // doit rester un entier sûr. L'asserter plutôt que le supposer.
+  const bareme = Math.max(...Object.values(POINTS_RECHERCHE.parCible));
+  const bonus = MILLE + Math.round(MILLE * POINTS_RECHERCHE.bonusModuleDebloque);
+  const plafond = bareme * facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond) * bonus;
   if (!Number.isSafeInteger(plafond)) {
     throw new Error(
-      `combat : ${POINTS_RECHERCHE.multiplicateurParNiveau}^(${GEOGRAPHIE.niveauPlafond}−1) `
+      `combat : ${bareme} × ${facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond)} × ${bonus} `
       + `= ${plafond} n'est pas un entier sûr`,
     );
   }
@@ -1270,8 +1273,43 @@ export function resoudre(etat, options = {}) {
 // produit est fait AVANT sa division pour que les cas exacts le restent.
 
 /**
+ * Facteur d'échelle ÉCONOMIQUE d'un niveau. Deux régimes, penteBasse jusqu'à la
+ * bascule et penteHaute au-delà. Vaut exactement 1 au niveau 1.
+ *
+ * ⚠ À NE PAS CONFONDRE AVEC `facteurMilli`, qui est la courbe de COMBAT. Les
+ * deux ont porté les mêmes pentes jusqu'au 25/08/2026 ; elles divergent depuis
+ * — le combat est descendu à une pente unique de 1,1, l'économie est restée à
+ * 1,259/1,32. `test/generateur.test.js` T10 asserte que la divergence est bien
+ * celle qu'on a voulue.
+ *
+ * Servent tous deux la courbe économique : le butin et les points de recherche.
+ * @param {number} niveau
+ * @returns {number} réel, 1 au niveau 1.
+ */
+export function facteurEconomique(niveau) {
+  const bas = Math.min(niveau, BUTIN.niveauBascule) - 1;
+  const haut = Math.max(niveau - BUTIN.niveauBascule, 0);
+  return BUTIN.penteBasse ** bas * BUTIN.penteHaute ** haut;
+}
+
+/**
+ * Le même, en MILLIÈMES et entier — la forme qu'exige un calcul en BigInt.
+ * Vaut exactement 1000 au niveau 1, 480 941 681 au niveau 50.
+ * @param {number} niveau
+ * @returns {number} entier de millièmes.
+ */
+export function facteurEconomiqueMilli(niveau) {
+  return Math.round(MILLE * facteurEconomique(niveau));
+}
+
+/**
  * Butin plein d'un bâtiment, avant proportionnalité aux dégâts.
  * butinPlein = ancrage × indice × penteBasse^(min(n,12)−1) × penteHaute^max(n−12,0)
+ *
+ * ⚠ L'ORDRE DES PRODUITS EST CELUI D'ORIGINE, à dessein : le passer par
+ * `facteurEconomique` regrouperait autrement les flottants et déplacerait le
+ * butin d'une unité sur les raids de référence. La multiplication flottante
+ * n'est pas associative, et six tests mesurent ce butin au champ près.
  */
 export function butinPlein(niveau, indice) {
   const bas = Math.min(niveau, BUTIN.niveauBascule) - 1;
@@ -1334,7 +1372,7 @@ export function pointsRecherche(resultat, montage) {
     MILLE + enEntier(POINTS_RECHERCHE.bonusModuleDebloque, MILLE, 'bonusModuleDebloque'),
   );
   const neutre = BigInt(MILLE);
-  const parNiveau = BigInt(POINTS_RECHERCHE.multiplicateurParNiveau);
+  const mille = BigInt(MILLE);
   const debloques = new Set(montage.modulesDebloques?.ouvrage ?? []);
   let total = 0n;
   for (const d of resultat.defenses) {
@@ -1343,8 +1381,11 @@ export function pointsRecherche(resultat, montage) {
     const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
     // zéro : sur des grandeurs positives, c'est exactement le plancher voulu.
-    total += (BigInt(bareme) * parNiveau ** BigInt(d.niveau - 1) * facteur
-      * BigInt(d.pvPerdusMilli)) / BigInt(d.pvMaxMilli);
+    // Le facteur économique est en millièmes, d'où le MILLE au dénominateur ;
+    // il est placé là, avec l'autre division, pour que TOUS les produits se
+    // fassent avant la moindre troncature.
+    total += (BigInt(bareme) * BigInt(facteurEconomiqueMilli(d.niveau)) * facteur
+      * BigInt(d.pvPerdusMilli)) / (BigInt(d.pvMaxMilli) * mille);
   }
   return total;
 }
