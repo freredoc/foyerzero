@@ -203,6 +203,23 @@ function dessinerStructure(liste, x, y, t, classe, accent) {
   }
 }
 
+/**
+ * LE dispatch de formes — un seul, pour les trois listes d'affichage.
+ *
+ * `listeAffichage` (le champ), `listeLegende` (les vignettes) et `listeArsenal`
+ * (la composition) l'appellent toutes. C'est ce qui garantit qu'une unité se
+ * dessine à l'identique partout : le joueur ne peut pas apprendre un
+ * vocabulaire visuel dans l'éditeur et en découvrir un autre au combat. Aucune
+ * de ces fonctions ne redéfinit ni forme ni couleur en propre.
+ */
+function dessinerEntite(liste, x, y, t, classe, camp, accent) {
+  if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
+  else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, camp, accent);
+  else if (classe === 'blinde') dessinerBlinde(liste, x, y, t, camp, accent);
+  else if (classe === 'aeronef') dessinerAeronef(liste, x, y, t, camp, accent);
+  else dessinerStructure(liste, x, y, t, classe, accent);
+}
+
 function dessinerBatiment(liste, x, y, t) {
   // Carré plein, pleine case : plus grand que toute structure.
   liste.push(rect(x, y, t, t, PALETTE.metalMoyen));
@@ -269,13 +286,8 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
       if (!visible(e) || e.genre !== genreVoulu) continue;
       const x = xDe(e);
       const y = yDe(e);
-      const classe = classeDe(e.genre, e.id);
-      const accent = accentDe(e.genre, e.id);
-      if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
-      else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, e.camp, accent);
-      else if (classe === 'blinde') dessinerBlinde(liste, x, y, t, e.camp, accent);
-      else if (classe === 'aeronef') dessinerAeronef(liste, x, y, t, e.camp, accent);
-      else dessinerStructure(liste, x, y, t, classe, accent);
+      dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
+        accentDe(e.genre, e.id));
     }
   }
 
@@ -385,11 +397,7 @@ export const ENTREES_LEGENDE = [
 function dessinerVignette(liste, x, y, t, classe, camp, colonneAccent) {
   const accent = colonneAccent === null ? null
     : { colonne: colonneAccent, ...PALETTE.accents[colonneAccent] };
-  if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
-  else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, camp, accent);
-  else if (classe === 'blinde') dessinerBlinde(liste, x, y, t, camp, accent);
-  else if (classe === 'aeronef') dessinerAeronef(liste, x, y, t, camp, accent);
-  else dessinerStructure(liste, x, y, t, classe, accent);
+  dessinerEntite(liste, x, y, t, classe, camp, accent);
 }
 
 /**
@@ -461,5 +469,65 @@ export function listeLegende(projection) {
   );
 
   titre('Toucher une case pour identifier son occupant.');
+  return liste;
+}
+
+// --- l'Arsenal — lot 5A ------------------------------------------------------
+
+/**
+ * Liste d'affichage de l'Arsenal : la grille 4 × 9 de composition.
+ *
+ * ⚠ L'INVARIANT DU LOT. Les abscisses viennent de `xDeColonne`, les ordonnées
+ * de `yDeRangee` — les MÊMES que le champ de bataille. La colonne de l'Arsenal
+ * est donc la colonne du champ AU PIXEL PRÈS, et rien ici ne recalcule une
+ * abscisse.
+ *
+ * Le bloc occupe les quatre rangées BASSES du champ, là où l'assaut se déploie.
+ * La vague 1 — celle qui part la première — est la rangée du HAUT du bloc,
+ * c'est-à-dire la rangée 4 du champ ; la vague 4 est la rangée 1. La file
+ * avance vers le haut, comme tout le reste du jeu.
+ *
+ * @param {{cases: Array<Array<string|null>>}} grille État de `arsenal.js`.
+ * @param {object} projection Résultat de calculerProjection.
+ * @param {number[]} colonnesEnFile Colonnes portant un indice de file (§6).
+ * @returns {Array<object>} primitives, exécutables par canvas2d.executer.
+ */
+export function listeArsenal(grille, projection, colonnesEnFile = []) {
+  const t = projection.tailleCase;
+  const nbVagues = grille.cases.length;
+  const liste = [rect(0, 0, projection.largeurPx, projection.hauteurPx, FOND)];
+  const taillePolice = Math.max(9, Math.min(14, Math.floor(t * 0.4)));
+
+  // Numéros de colonne, juste au-dessus du bloc : ils disent au joueur que la
+  // colonne 5 de l'Arsenal est la colonne 5 du champ.
+  const yEntete = yDeRangee(projection, nbVagues + 1) + t - Math.floor(t / 4);
+  for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+    liste.push(texte(
+      xDeColonne(projection, colonne) + Math.floor(t / 2) - Math.floor(taillePolice / 3),
+      yEntete, String(colonne), PALETTE.metalClair, taillePolice,
+    ));
+  }
+
+  // Marquage de la file : une barre fine au-dessus de la colonne concernée,
+  // dans le kaki lumière de l'interface. Aucune teinte neuve, aucun accent —
+  // les accents disent ce qu'une entité peut tuer, jamais un avertissement.
+  const epaisseur = Math.max(2, Math.floor(t / 10));
+  for (const colonne of colonnesEnFile) {
+    liste.push(rect(xDeColonne(projection, colonne), yEntete + Math.floor(taillePolice / 2),
+      t, epaisseur, PALETTE.kakiLumiere));
+  }
+
+  // Les quatre rangées, vague 1 en haut.
+  for (let indice = 0; indice < nbVagues; indice += 1) {
+    const rangee = nbVagues - indice;
+    const y = yDeRangee(projection, rangee);
+    for (let colonne = 1; colonne <= grille.cases[indice].length; colonne += 1) {
+      const x = xDeColonne(projection, colonne);
+      liste.push(cadre(x, y, t, t, PALETTE.kakiOmbre, 1));
+      const id = grille.cases[indice][colonne - 1];
+      if (id === null) continue;
+      dessinerEntite(liste, x, y, t, classeDe('unite', id), 'attaque', accentDe('unite', id));
+    }
+  }
   return liste;
 }
