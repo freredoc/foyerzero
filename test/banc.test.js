@@ -246,3 +246,28 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   const octets = statSync(chemin).size;
   assert.ok(octets > 20_000 && octets < 200_000, `taille inattendue : ${octets} octets`);
 });
+
+// ---------------------------------------------------------------------------
+// T16 — la page porte les éléments du mode Défense
+// ---------------------------------------------------------------------------
+
+test('T16 — le HTML produit porte le bloc Défense, sa palette et son sélecteur', () => {
+  // ⚠ Le brief dit « étendre la boucle du T10 », mais il attend AUSSI un total
+  // de 150 et « aucun des 148 tests d'avant retouché ». Les deux ne tiennent
+  // qu'en écrivant un test à part : T10 reste intact, et le compte monte d'un.
+  //
+  // C'est peu de chose, et c'est exactement ce qui attrape un bloc oublié au
+  // build — un `hidden` mal recopié, un id renommé d'un côté seulement, ou un
+  // bout de page tombé du bundle. Le mode Défense est INVISIBLE tant qu'on ne
+  // clique pas : rien d'autre ici ne le verrait manquer.
+  const chemin = join(RACINE, 'dist', 'index.html');
+  const html = readFileSync(chemin, 'utf8');
+  for (const attendu of ['banc-defense', 'banc-defense-ouvrir', 'banc-palette-defense',
+    'banc-compteur-defense', 'banc-sens']) {
+    assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
+  }
+  // Les deux sens du sélecteur, et `raid` par défaut : c'est la première
+  // option qui gagne, faute de `selected`.
+  const options = [...html.matchAll(/<option value="(raid|defense)"/g)].map((m) => m[1]);
+  assert.deepEqual(options, ['raid', 'defense'], 'les deux sens, raid en premier');
+});

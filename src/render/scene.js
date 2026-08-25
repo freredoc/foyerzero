@@ -531,3 +531,73 @@ export function listeArsenal(grille, projection, colonnesEnFile = []) {
   }
   return liste;
 }
+
+// --- l'écran de Défense — lot 5C ---------------------------------------------
+
+/**
+ * Liste d'affichage de l'écran de Défense : la grille 8 × 9 de la garnison.
+ *
+ * ⚠ ELLE NE SE DÉDUIT PAS DE `listeArsenal`, et trois différences l'imposent :
+ *
+ *  1. **Les rangées montent.** L'Arsenal calcule `nbVagues - indice` et occupe
+ *     les rangées 4 à 1, les plus basses. Ici `cases[0]` est la rangée 3, la
+ *     plus AVANCÉE — celle que l'assaut rencontre en premier —, d'où
+ *     `rangee = PREMIERE_RANGEE + indice`, dans l'autre sens.
+ *  2. **Le genre n'est pas connu d'avance.** L'Arsenal ne porte que des UNITES.
+ *     La garnison porte des DEFENSES *et* des UNITES à rôle défensif : le genre
+ *     se déduit de l'identifiant, comme le fait `ligne(id)` dans `defense.js`.
+ *  3. **Le camp est la défense.** L'Arsenal dessine en `'attaque'`, châssis
+ *     kaki ; une garnison se dessine en `'defense'`.
+ *
+ * L'en-tête de colonnes, lui, est repris à l'identique : la colonne 5 de
+ * l'éditeur est la colonne 5 du champ, des deux côtés.
+ *
+ * @param {{cases: Array<Array<string|null>>}} grille État de `defense.js`.
+ * @param {object} projection Résultat de calculerProjection.
+ * @param {Array<{rangee: number, colonne: number}>} casesMarquees Sortie
+ *   d'`indicesDeCouverture` — l'indice désigne une PIÈCE, pas un couloir, donc
+ *   le marquage est par case et non par colonne.
+ * @returns {Array<object>} primitives, exécutables par canvas2d.executer.
+ */
+export function listeDefense(grille, projection, casesMarquees = []) {
+  const t = projection.tailleCase;
+  const premiereRangee = GRILLE.bandes.defense.premiere;
+  const nbRangees = grille.cases.length;
+  const liste = [rect(0, 0, projection.largeurPx, projection.hauteurPx, FOND)];
+  const taillePolice = Math.max(9, Math.min(14, Math.floor(t * 0.4)));
+
+  // Numéros de colonne, juste au-dessus de la bande — même repère que l'Arsenal.
+  const yEntete = yDeRangee(projection, premiereRangee + nbRangees) - Math.floor(t / 4);
+  for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+    liste.push(texte(
+      xDeColonne(projection, colonne) + Math.floor(t / 2) - Math.floor(taillePolice / 3),
+      yEntete, String(colonne), PALETTE.metalClair, taillePolice,
+    ));
+  }
+
+  // Les huit rangées, la 3 en bas de l'écran comme sur le champ — l'assaut
+  // monte, et la grille se lit dans le sens où il la traverse.
+  for (let indice = 0; indice < nbRangees; indice += 1) {
+    const rangee = premiereRangee + indice;
+    const y = yDeRangee(projection, rangee);
+    for (let colonne = 1; colonne <= grille.cases[indice].length; colonne += 1) {
+      const x = xDeColonne(projection, colonne);
+      liste.push(cadre(x, y, t, t, PALETTE.kakiOmbre, 1));
+      const id = grille.cases[indice][colonne - 1];
+      if (id === null) continue;
+      const genre = DEFENSES[id] !== undefined ? 'defense' : 'unite';
+      dessinerEntite(liste, x, y, t, classeDe(genre, id), 'defense', accentDe(genre, id));
+    }
+  }
+
+  // Marquage de l'engagement réduit : une barre fine au bas de la CASE, dans le
+  // kaki lumière de l'interface. Aucune teinte neuve, aucun accent — les accents
+  // disent ce qu'une entité peut tuer, jamais un avertissement. Posée en
+  // dernier, elle reste lisible par-dessus le socle d'une structure.
+  const epaisseur = Math.max(2, Math.floor(t / 10));
+  for (const c of casesMarquees) {
+    liste.push(rect(xDeColonne(projection, c.colonne),
+      yDeRangee(projection, c.rangee) + t - epaisseur, t, epaisseur, PALETTE.kakiLumiere));
+  }
+  return liste;
+}
