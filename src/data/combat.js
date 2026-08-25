@@ -40,11 +40,7 @@ export const GRILLE = {
   plancherReservePct: 10,
 
   // Un défenseur ne descend jamais sous ce pourcentage de PV. Comme les dégâts
-  // sont proportionnels aux PV restants, il ne fait alors plus rien d'utile.
-  plancherPvDefenseurPct: 1,
 
-  // Réparation gratuite après un raid, au prorata des PV du complexe de défense.
-  reparationGratuitePct: 70,
 
   // Une unité offensive qui ne peut NI avancer NI nuire pendant ce nombre de
   // ticks consécutifs rentre à la base : elle sort du champ sans être détruite,
@@ -313,7 +309,7 @@ export const UNITES = {
 // niveau. Une unité défensive mobile traverse librement toute sa rangée.
 export const DEFENSES = {
   merlon: {
-    nom: 'Merlon', ta: 'Wall', type: 'mur', cible: null,
+    nom: { ouvrage: 'Merlon', joueur: 'Mur de défense' }, ta: 'Wall', type: 'mur', cible: null,
     points: 5, pv: 2000, portee: 0, porteeMini: 0,
     degatsFranchissement: null, bloque: true,
     degats: null, // ne tire pas
@@ -321,7 +317,7 @@ export const DEFENSES = {
     apparition: 6, apparitionModule: 32,
   },
   ronce: {
-    nom: 'Ronce', ta: 'Barbwire', type: 'barriere', cible: 'infanterie',
+    nom: { ouvrage: 'Ronce', joueur: 'Barbelés' }, ta: 'Barbwire', type: 'barriere', cible: 'infanterie',
     points: 5, pv: 1000, portee: 1, porteeMini: 0,
     // Divisé par 8 au lot 2B. À 20 PV/tick, un Fusilier mourait quatre fois
     // avant d'avoir franchi la case (20 ticks de traversée, 5 de survie) :
@@ -335,7 +331,7 @@ export const DEFENSES = {
     apparition: 24, apparitionModule: 38,
   },
   herse: {
-    nom: 'Herse', ta: 'Anti-tank barrier', type: 'barriere', cible: 'vehicule',
+    nom: { ouvrage: 'Herse', joueur: 'Barrière anti-char' }, ta: 'Anti-tank barrier', type: 'barriere', cible: 'vehicule',
     points: 5, pv: 1500, portee: 1, porteeMini: 0,
     // 15 PV/tick, et 0,03 seulement contre l'infanterie (arbitrage du lot 2B).
     // La Herse cesse ainsi d'être une meilleure Ronce que la Ronce : elle
@@ -349,7 +345,7 @@ export const DEFENSES = {
     apparition: 20, apparitionModule: 34,
   },
   casemate: {
-    nom: 'Casemate', ta: 'MG Nest', type: 'tourelle', cible: 'infanterie',
+    nom: { ouvrage: 'Casemate', joueur: 'Tourelle mitrailleuse' }, ta: 'MG Nest', type: 'tourelle', cible: 'infanterie',
     points: 8, pv: 1000, portee: 2.5, porteeMini: 0,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 20, vehicule: 7, structureOuAviation: 8 },
@@ -357,7 +353,7 @@ export const DEFENSES = {
     apparition: 8, apparitionModule: 30,
   },
   creneau: {
-    nom: 'Créneau', ta: 'Guardian Cannon', type: 'tourelle', cible: 'vehicule',
+    nom: { ouvrage: 'Créneau', joueur: 'Canon anti-char' }, ta: 'Guardian Cannon', type: 'tourelle', cible: 'vehicule',
     points: 10, pv: 1250, portee: 2.5, porteeMini: 0,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 10, vehicule: 35, structureOuAviation: 0 },
@@ -365,7 +361,7 @@ export const DEFENSES = {
     apparition: 18, apparitionModule: 38,
   },
   batterie: {
-    nom: 'Batterie', ta: 'Flak', type: 'tourelle', cible: 'aviation',
+    nom: { ouvrage: 'Batterie', joueur: 'DCA' }, ta: 'Flak', type: 'tourelle', cible: 'aviation',
     points: 10, pv: 1000, portee: 2.5, porteeMini: 0,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 0, vehicule: 0, structureOuAviation: 40 },
@@ -373,7 +369,7 @@ export const DEFENSES = {
     apparition: 14, apparitionModule: 34,
   },
   faucheuse: {
-    nom: 'Faucheuse', ta: 'Watchtower', type: 'artillerie', cible: 'infanterie',
+    nom: { ouvrage: 'Faucheuse', joueur: 'Mirador' }, ta: 'Watchtower', type: 'artillerie', cible: 'infanterie',
     points: 22, pv: 600, portee: 5.5, porteeMini: 3.5,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 10, vehicule: 2, structureOuAviation: 1 },
@@ -381,7 +377,7 @@ export const DEFENSES = {
     apparition: 26, apparitionModule: 42,
   },
   mortier: {
-    nom: 'Mortier', ta: 'Titan Artillery', type: 'artillerie', cible: 'vehicule',
+    nom: { ouvrage: 'Mortier', joueur: 'Artillerie lourde' }, ta: 'Titan Artillery', type: 'artillerie', cible: 'vehicule',
     points: 30, pv: 700, portee: 5.5, porteeMini: 3.5,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 2, vehicule: 12, structureOuAviation: 0 },
@@ -389,7 +385,7 @@ export const DEFENSES = {
     apparition: 30, apparitionModule: 44,
   },
   harpon: {
-    nom: 'Harpon', ta: 'SAM Site', type: 'artillerie', cible: 'aviation',
+    nom: { ouvrage: 'Harpon', joueur: 'SAM' }, ta: 'SAM Site', type: 'artillerie', cible: 'aviation',
     points: 30, pv: 650, portee: 5.5, porteeMini: 3.5,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 0, vehicule: 0, structureOuAviation: 16 },

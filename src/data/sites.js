@@ -290,10 +290,25 @@ export const DISPOSITION_DEFENSES = {
   // bande sont garnies les premières, l'attaquant traverse d'abord du vide.
   versLeFond: true,
 
-  // Ordre de garnissage, du fond vers l'avant. Nécessité arithmétique, pas
-  // préférence : une artillerie a une portée minimale de 3,5. En rangée 10 elle
-  // engage entre les rangées 4,5 et 6,5 ; en rangée 3 elle engagerait entre
-  // −2,5 et −0,5, c'est-à-dire jamais. Toute artillerie avancée est inerte.
+  // Ordre de garnissage, du fond vers l'avant.
+  //
+  // ⚠ CE COMMENTAIRE ÉTAIT FAUX ET A ÉTÉ CORRIGÉ LE 25/08/2026. Il disait :
+  // « en rangée 3 [l'artillerie] engagerait entre −2,5 et −0,5, c'est-à-dire
+  // jamais. Toute artillerie avancée est inerte. » Le raisonnement est en
+  // RANGÉES ; le moteur, lui, teste une distance EUCLIDIENNE 2D et sans
+  // direction — `d² = (Δrangée)² + (Δcolonne)²` contre `porteeCarree` et
+  // `porteeMiniCarree`. Une Faucheuse en rangée 3 atteint donc les colonnes
+  // lointaines dès l'apparition, puis tire dans le dos de ce qui l'a dépassée.
+  // Mesuré sur cinq graines au niveau 30 : 23 ticks de tir, premier tir au
+  // tick 1. Elle n'est PAS inerte.
+  //
+  // Ce qui est vrai, et qui suffit à fonder l'ordre : elle engage MOINS. La
+  // couverture géométrique sature à partir de la rangée 6 — 50 cases en
+  // colonne 5 — et les rangées 3, 4 et 5 tombent à 32, 38 et 45 par
+  // débordement de la grille sous la rangée 1. Le gradient dynamique est
+  // encore plus marqué : 23 ticks de tir en rangée 3 contre 110 en rangée 10.
+  // `src/ui/defense.js` recalcule cette couverture pour en faire un indice
+  // montré au joueur, et son T7 la vérifie case par case.
   //
   // Les unités mobiles de garnison s'intercalent entre tourelles et murs : la
   // ligne de murs les couvre, et elles restent devant les tourelles qu'elles
