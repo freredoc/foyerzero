@@ -24,10 +24,14 @@ import {
 import { caseDepuisMilli } from '../sim/grille.js';
 import { genererSite, genererAssaut, budgetAssaut } from '../sim/generateur.js';
 import {
+  arsenalVide, poser, retirer, enVagues, depuisVagues, avecNiveau,
+  unitesDisponibles, bilan, purger, estVide, NB_VAGUES,
+} from './arsenal.js';
+import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
 } from '../render/interpolation.js';
 import { calculerProjection, caseDepuisPixels } from '../render/projection.js';
-import { listeAffichage, listeLegende, classeDe, NOMS_CLASSE } from '../render/scene.js';
+import { listeAffichage, listeLegende, listeArsenal, classeDe, NOMS_CLASSE } from '../render/scene.js';
 import { executer } from '../render/canvas2d.js';
 
 // ---------------------------------------------------------------------------
@@ -40,23 +44,42 @@ import { executer } from '../render/canvas2d.js';
  * `genererAssaut`. `genererSite` rend `vagues: []` — la force d'assaut est celle
  * du joueur, le générateur de site ne la connaît pas.
  *
- * LOT 4B — l'assaut est désormais BUDGÉTÉ. `assaut` nomme un profil de
- * `PROFILS_ASSAUT`, pas une liste : sa composition est fonction du niveau, et
- * son coût ne dépasse jamais `20 + 5 × niveau`. La graine du site sert aussi à
- * l'assaut, si bien qu'un couple (type, niveau, graine) décrit toujours un raid
- * entier et un seul.
+ * LOT 4B — l'assaut est BUDGÉTÉ. `assaut` nomme un profil de `PROFILS_ASSAUT`,
+ * pas une liste : sa composition est fonction du niveau, et son coût ne dépasse
+ * jamais `20 + 5 × niveau`. La graine du site sert aussi à l'assaut, si bien
+ * qu'un couple (type, niveau, graine) décrit toujours un raid entier et un seul.
+ *
+ * LOT 5A — `vagues` prend le pas sur `assaut` quand il est fourni : c'est la
+ * composition que le joueur a faite à la main dans l'Arsenal, et elle devient
+ * la source de vérité. Le chemin par PROFIL demeure — `genererAssaut` est
+ * désormais un bouton de confort, « Remplir », et les tests des lots antérieurs
+ * comme `executerRaidComplet` continuent de l'emprunter sans une ligne de
+ * changement.
  *
  * Les trois LISTES FIGÉES du lot 3A ne sont plus ici : elles ne servaient plus
- * qu'à mesurer l'écart qu'ouvre ce lot, et un banc hors ligne n'a pas à
- * emporter deux kilo-octets d'armées mortes. Elles vivent désormais dans
- * `test/prereglages-lot3a.js`, avec le rapport qui s'en sert.
+ * qu'à mesurer l'écart du lot 4B, et un banc hors ligne n'a pas à emporter deux
+ * kilo-octets d'armées mortes. Elles vivent dans `test/prereglages-lot3a.js`.
  *
  * @param {{ type: string, niveau: number, saveur: string|null, graine: number,
- *   assaut: string }} parametres
+ *   assaut?: string, vagues?: Array<Array<object>> }} parametres
  * @returns {object} montage prêt pour creerCombat.
  */
-export function montageDuBanc({ type, niveau, saveur, graine, assaut }) {
+export function montageDuBanc({ type, niveau, saveur, graine, assaut, vagues }) {
   const montage = genererSite({ type, niveau, saveur, graine });
+  if (vagues !== undefined) {
+    montage.vagues = vagues.map((vague) => vague.map((u) => ({ ...u })));
+    const engages = montage.vagues.flat()
+      .reduce((somme, u) => somme + UNITES[u.id].points, 0);
+    const budget = budgetAssaut(niveau);
+    montage.assaut = {
+      profil: null,
+      budgetPoints: budget,
+      pointsEngages: engages,
+      pointsRestants: budget - engages,
+      profilRespecte: true,
+    };
+    return montage;
+  }
   const force = genererAssaut({ niveau, profil: assaut, graine });
   montage.vagues = force.vagues;
   montage.assaut = {
@@ -198,6 +221,10 @@ export function initialiserBanc(doc) {
   let derniereImageMs = null;
   let projection = null;
   let legendeOuverte = false;
+  // --- Arsenal (lot 5A) ---
+  let arsenal = arsenalVide(10);
+  let arsenalOuvert = false;
+  let uniteChoisie = null;
 
   // --- projection et buffer -------------------------------------------------
   //
@@ -229,6 +256,11 @@ export function initialiserBanc(doc) {
       executer(ctx, listeLegende(projection));
       return;
     }
+    if (arsenalOuvert) {
+      executer(ctx, listeArsenal(arsenal, projection,
+        bilan(arsenal).indices.map((i) => i.colonne)));
+      return;
+    }
     if (!etat) return;
     executer(ctx, listeAffichage(etat, projection, precedentes,
       etat.termine ? 0 : alphaMilli(accumulateur, vitesse)));
@@ -249,9 +281,115 @@ export function initialiserBanc(doc) {
     else if (etat) majStatut(`tick ${etat.tick}`);
   }
 
+  // --- Arsenal -------------------------------------------------------------
+
+  /**
+   * Rangée du champ ↔ vague de l'Arsenal.
+   *
+   * Le bloc occupe les quatre rangées basses. La vague 1 — celle qui part la
+   * première — est la rangée du HAUT du bloc, soit la rangée 4 du champ ; la
+   * vague 4 est la rangée 1. Rend null hors du bloc.
+   */
+  function vagueDeRangee(rangee) {
+    if (rangee < 1 || rangee > NB_VAGUES) return null;
+    return NB_VAGUES - rangee + 1;
+  }
+
+  function majPalette() {
+    const disponibles = unitesDisponibles(arsenal.niveau);
+    if (uniteChoisie !== null && !disponibles.includes(uniteChoisie)) uniteChoisie = null;
+    $('banc-palette').innerHTML = disponibles.map((id) => {
+      const u = UNITES[id];
+      const actif = id === uniteChoisie ? ' actif' : '';
+      return `<button type="button" class="unite${actif}" data-unite="${id}">`
+        + `<span>${u.nom.joueur}</span><span class="cout">${u.points} pts</span></button>`;
+    }).join('');
+    for (const bouton of $('banc-palette').querySelectorAll('button[data-unite]')) {
+      bouton.addEventListener('click', () => {
+        uniteChoisie = uniteChoisie === bouton.dataset.unite ? null : bouton.dataset.unite;
+        majPalette();
+      });
+    }
+  }
+
+  function majCompteur() {
+    const b = bilan(arsenal);
+    const compteur = $('banc-compteur');
+    const file = b.indices.length === 0 ? ''
+      : ` · file : colonne${b.indices.length > 1 ? 's' : ''} `
+        + b.indices.map((i) => i.colonne).join(', ');
+    compteur.textContent = `${b.pointsEngages} / ${b.budgetPoints} points`
+      + ` · ${b.emplacementsOccupes}/36 emplacements${file}`;
+    compteur.classList.toggle('depasse', !b.valide);
+  }
+
+  function majArsenal() {
+    majPalette();
+    majCompteur();
+    dessiner();
+  }
+
+  function basculerArsenal() {
+    arsenalOuvert = !arsenalOuvert;
+    $('banc-arsenal-ouvrir').classList.toggle('actif', arsenalOuvert);
+    $('banc-arsenal').hidden = !arsenalOuvert;
+    // Comme la légende : le banc se met en pause, l'Arsenal prend tout le
+    // canvas, et le panneau de tick s'efface pour ne pas amputer la grille.
+    if (arsenalOuvert && etat && !etat.termine) mettreEnPause(true);
+    if (arsenalOuvert && legendeOuverte) basculerLegende();
+    $('banc-tick').hidden = arsenalOuvert;
+    dimensionner();
+    majArsenal();
+    if (arsenalOuvert) {
+      majStatut('Arsenal — la rangée du haut part la première. '
+        + 'Choisir une unité, toucher une case pour la poser ; toucher une case pleine la retire.');
+    } else if (etat) majStatut(`tick ${etat.tick}`);
+    else majStatut('prêt — choisir les paramètres et lancer');
+  }
+
+  /** Toucher une case de l'Arsenal : poser si vide, retirer si pleine. */
+  function toucherArsenal(cible) {
+    const vague = vagueDeRangee(cible.rangee);
+    if (vague === null) {
+      majStatut(`la grille de composition tient sur les ${NB_VAGUES} rangées du bas`);
+      return;
+    }
+    const occupee = arsenal.cases[vague - 1][cible.colonne - 1];
+    if (occupee !== null) {
+      arsenal = retirer(arsenal, { vague, colonne: cible.colonne });
+      majArsenal();
+      majStatut(`retiré : ${UNITES[occupee].nom.joueur} (vague ${vague}, colonne ${cible.colonne})`);
+      return;
+    }
+    if (uniteChoisie === null) {
+      majStatut('choisir d\'abord une unité dans la palette');
+      return;
+    }
+    try {
+      arsenal = poser(arsenal, { vague, colonne: cible.colonne, id: uniteChoisie });
+    } catch (erreur) {
+      majStatut(erreur.message);
+      return;
+    }
+    majArsenal();
+    const b = bilan(arsenal);
+    const enFile = b.indices.find((i) => i.colonne === cible.colonne);
+    if (enFile === undefined) {
+      majStatut(`${UNITES[uniteChoisie].nom.joueur} en vague ${vague}, colonne ${cible.colonne}`
+        + ` · ${b.pointsRestants} points restants`);
+    } else {
+      // L'indice, expliqué en une phrase — c'est un avertissement, pas un refus.
+      majStatut(`⚠ colonne ${cible.colonne} : ${UNITES[enFile.derriere.id].nom.joueur}`
+        + ` (vague ${enFile.derriere.vague}) est plus rapide que`
+        + ` ${UNITES[enFile.devant.id].nom.joueur} (vague ${enFile.devant.vague})`
+        + ' devant lui — il sera retenu derrière toute la traversée.');
+    }
+  }
+
   /** Inspecteur : une case touchée dit qui l'occupe. */
   function inspecter(evenement) {
-    if (legendeOuverte || !etat || !projection) return;
+    if (legendeOuverte || !projection) return;
+    if (!arsenalOuvert && !etat) return;
     const cadre = canvas.getBoundingClientRect();
     const point = evenement.touches?.[0] ?? evenement.changedTouches?.[0] ?? evenement;
     const cible = caseDepuisPixels(
@@ -259,6 +397,10 @@ export function initialiserBanc(doc) {
     );
     if (cible === null) {
       majStatut('hors de la grille');
+      return;
+    }
+    if (arsenalOuvert) {
+      toucherArsenal(cible);
       return;
     }
     const occupants = entitesSurLaCase(etat, cible.rangee, cible.colonne);
@@ -371,11 +513,25 @@ export function initialiserBanc(doc) {
       saveur: type === 'base' ? null
         : ($('banc-saveur').value === 'aucune' ? null : $('banc-saveur').value),
       graine: Number($('banc-graine').value) | 0, // saisie, jamais tirée
-      assaut: $('banc-assaut').value,
+      // LOT 5A — la composition du joueur est la source de vérité. Le profil
+      // ne sert plus qu'au bouton « Remplir ».
+      vagues: enVagues(arsenal),
     };
   }
 
   function lancer(parametres) {
+    const b = bilan(arsenal);
+    if (estVide(arsenal)) {
+      majStatut('Arsenal vide — poser au moins une unité, ou toucher « Remplir »');
+      if (!arsenalOuvert) basculerArsenal();
+      return;
+    }
+    if (!b.valide) {
+      majStatut(`composition invalide au niveau ${arsenal.niveau} — `
+        + 'toucher « Vider » ou corriger à la main');
+      if (!arsenalOuvert) basculerArsenal();
+      return;
+    }
     try {
       montage = montageDuBanc(parametres);
       etat = creerCombat(montage);
@@ -443,6 +599,51 @@ export function initialiserBanc(doc) {
     // Une base ne porte pas de saveur : le générateur refuse, le banc prévient.
     $('banc-saveur').disabled = $('banc-type').value === 'base';
   });
+  $('banc-arsenal-ouvrir').addEventListener('click', basculerArsenal);
+  $('banc-remplir').addEventListener('click', () => {
+    // « Remplir » est un CONFORT : il verse une composition de genererAssaut
+    // dans la grille, que le joueur corrige ensuite. Ses compositions ne sont
+    // pas optimales, et c'est sans conséquence dès lors qu'on peut les reprendre.
+    const force = genererAssaut({
+      niveau: arsenal.niveau,
+      profil: $('banc-assaut').value,
+      graine: Number($('banc-graine').value) | 0,
+    });
+    arsenal = depuisVagues(force.vagues, arsenal.niveau);
+    majArsenal();
+    majStatut(`rempli — ${force.pointsEngages} / ${force.budgetPoints} points`
+      + `${force.profilRespecte ? '' : ' (profil non tenu : aucun châssis débloqué)'}`);
+  });
+  $('banc-vider').addEventListener('click', () => {
+    arsenal = arsenalVide(arsenal.niveau);
+    majArsenal();
+    majStatut('Arsenal vidé');
+  });
+  $('banc-niveau').addEventListener('change', () => {
+    const niveau = Math.min(NIVEAU.plafond, Math.max(1, Number($('banc-niveau').value) | 0));
+    if (niveau === arsenal.niveau) return;
+    arsenal = avecNiveau(arsenal, niveau);
+    const b = bilan(arsenal);
+    majArsenal();
+    if (b.valide) return;
+    // ⚠ JAMAIS de retrait en silence. On dit ce qui ne va plus, et on propose.
+    const raisons = [];
+    if (b.verrouillees.length > 0) {
+      raisons.push(`${b.verrouillees.length} unité(s) verrouillée(s) au niveau ${niveau} : `
+        + [...new Set(b.verrouillees.map((v) => UNITES[v.id].nom.joueur))].join(', '));
+    }
+    if (b.depassementBudget) {
+      raisons.push(`${b.pointsEngages} points pour un budget de ${b.budgetPoints}`);
+    }
+    if (fenetre.confirm(`Composition invalide au niveau ${niveau} —\n${raisons.join('\n')}\n\n`
+      + 'Purger les unités en trop ?')) {
+      arsenal = purger(arsenal);
+      majArsenal();
+      majStatut('composition purgée');
+    } else {
+      majStatut(`composition invalide : ${raisons.join(' ; ')}`);
+    }
+  });
   doc.addEventListener('visibilitychange', () => {
     // Un banc d'essai qui tourne dans le vide n'a aucun intérêt — et la pause
     // supprime le cas du rattrapage massif au retour d'onglet.
@@ -458,6 +659,9 @@ export function initialiserBanc(doc) {
   fenetre.addEventListener('resize', dimensionner);
 
   choisirVitesse(1);
+  arsenal = arsenalVide(Math.min(NIVEAU.plafond,
+    Math.max(1, Number($('banc-niveau').value) | 0)));
+  majArsenal();
   dimensionner();
-  majStatut('prêt — choisir les paramètres et lancer');
+  majStatut('prêt — ouvrir l\'Arsenal pour composer, puis lancer');
 }

@@ -90,6 +90,30 @@
     border-bottom: 1px solid #343A2C;
   }
   #banc-tick th { color: #68727E; position: sticky; top: 0; background: #1E2124; }
+
+  /* --- Arsenal, lot 5A --- */
+  #banc-arsenal {
+    padding: 6px 8px;
+    background: #1E2124;
+    border-top: 1px solid #4E5742;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  #banc-arsenal .palette { display: flex; flex-wrap: wrap; gap: 4px; }
+  #banc-arsenal button.unite {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.15;
+    padding: 3px 7px;
+    min-width: 4.5em;
+  }
+  #banc-arsenal button.unite .cout { color: #68727E; font-size: 0.75rem; }
+  #banc-arsenal button.unite.actif .cout { color: #343A2C; }
+  #banc-compteur { color: #8C9A72; margin-left: auto; white-space: nowrap; }
+  #banc-compteur.depasse { color: #E43E32; }
 </style>
 </head>
 <body>
@@ -112,13 +136,7 @@
     </select>
   </label>
   <label>graine <input id="banc-graine" type="number" step="1" value="1"></label>
-  <label>assaut
-    <select id="banc-assaut">
-      <option value="infanterie">Infanterie</option>
-      <option value="blindeLourd">Blindé lourd</option>
-      <option value="mixte">Mixte</option>
-    </select>
-  </label>
+  <button id="banc-arsenal-ouvrir">Arsenal</button>
   <button id="banc-lancer">Lancer</button>
   <button id="banc-pause">Pause</button>
   <button id="banc-pas">Pas à pas</button>
@@ -130,6 +148,17 @@
 </header>
 <main>
   <canvas id="banc-canvas"></canvas>
+  <div id="banc-arsenal" hidden>
+    <div class="palette" id="banc-palette"></div>
+    <select id="banc-assaut" title="profil du bouton Remplir">
+      <option value="infanterie">Infanterie</option>
+      <option value="blindeLourd">Blindé lourd</option>
+      <option value="mixte">Mixte</option>
+    </select>
+    <button id="banc-remplir">Remplir</button>
+    <button id="banc-vider">Vider</button>
+    <span id="banc-compteur"></span>
+  </div>
   <div id="banc-tick"></div>
   <p id="banc-statut">initialisation…</p>
   <div id="banc-fin" hidden></div>
