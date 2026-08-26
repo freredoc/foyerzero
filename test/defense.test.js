@@ -509,3 +509,81 @@ test('T15 — les cadres de listeDefense tombent sur les 9 × 8 cases du champ',
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// T17 — une pièce prise sous un obstacle est signalée, jamais retirée d'office
+// ---------------------------------------------------------------------------
+
+test('T17 — un obstacle apparu sous une pièce se signale et se purge sur demande', () => {
+  // LA RÈGLE, arbitrée le 25/08/2026 : un obstacle interdit de POSER dessus,
+  // rien d'autre. Il ne bloque le déplacement de personne — pour un attaquant
+  // il ne fait que ralentir, `vitesse = p.vitesseObstacleMilli` — et les
+  // défenses mobiles pourront y aller comme l'offense le jour où elles
+  // bougeront. Aujourd'hui aucune ne bouge : `deplacement()` passe tout ce qui
+  // n'est pas `camp === 'attaque'`.
+  //
+  // Donc `poser` refuse, et LUI SEUL.
+  // ⚠ Le montage veut un TYPE d'obstacle —  lève sur un type
+  // inconnu. L'éditeur, lui, ne lit que la case : il se moque du type.
+  const obstacles = [{ type: 'les_deux', rangee: 5, colonne: 3 }];
+  assert.throws(() => poser(defenseVide(30, obstacles), { rangee: 5, colonne: 3, id: 'merlon' }),
+    /obstacle/);
+
+  // `depuisDefenseurs` est un CHARGEMENT, pas une pose : il accepte. Les
+  // obstacles sont tirés par graine, en changer peut en poser un sous une pièce
+  // déjà placée — la pièce n'y est pour rien, c'est le terrain qui a bougé.
+  // Lever ici ferait planter le chargement au lieu de dégrader.
+  const liste = [{ id: 'merlon', rangee: 5, colonne: 3 }, { id: 'ronce', rangee: 6, colonne: 4 }];
+  const charge = depuisDefenseurs(liste, 30, obstacles);
+  assert.equal(charge.cases[5 - PREMIERE_RANGEE][2], 'merlon', 'le chargement ne lève pas');
+
+  // C'est `bilan` qui juge — troisième défaut à côté de `verrouilles` et du
+  // dépassement de budget, et LE SEUL DES TROIS qui rende le montage impossible.
+  const b = bilan(charge);
+  assert.equal(b.surObstacle.length, 1);
+  assert.deepEqual(b.surObstacle[0], { rangee: 5, colonne: 3, id: 'merlon' });
+  assert.equal(b.emplacementsOccupes, 2, 'rien n\'a été retiré');
+  assert.ok(!b.valide);
+  assert.throws(() => creerCombat({
+    ...socle(enDefenseurs(charge)), obstacles,
+  }), /obstacle/, 'le moteur, lui, refuse');
+
+  // Et `purger` les retire SUR DEMANDE, comme il retire les verrouillées.
+  const purge = purger(charge);
+  assert.equal(bilan(purge).surObstacle.length, 0);
+  assert.equal(bilan(purge).emplacementsOccupes, 1);
+  assert.equal(enDefenseurs(purge)[0].id, 'ronce');
+  assert.ok(bilan(purge).valide);
+  assert.doesNotThrow(() => creerCombat({ ...socle(enDefenseurs(purge)), obstacles }));
+
+  // Contrôle : hors obstacle, `surObstacle` reste vide et `valide` tient.
+  assert.deepEqual(bilan(depuisDefenseurs(liste, 30)).surObstacle, []);
+  assert.ok(bilan(depuisDefenseurs(liste, 30)).valide);
+});
+
+// ---------------------------------------------------------------------------
+// T18 — le panneau de fin nomme les survivants selon leur propriétaire
+// ---------------------------------------------------------------------------
+
+test('T18 — un objet forgé à la main doit porter son propriétaire', () => {
+  // ⚠ CE TEST GARDE UNE RÉGRESSION RÉELLE, arrivée sur `main` et corrigée après
+  // coup. Le panneau de fin construit ses lignes de survivants à la main :
+  //   nomAffiche({ genre: 'unite', camp: 'attaque', id })
+  // Tant que `nomAffiche` lisait le CAMP, ça rendait « Fusiliers ». Le jour où
+  // il est passé au PROPRIÉTAIRE, le champ absent a fait retomber l'appel sur
+  // les noms de l'Ouvrage — et les survivants du joueur se sont affichés
+  // « Meute » en sens Raid. Aucun test ne couvrait ce texte.
+  //
+  // La leçon tient en une ligne : changer la clé d'une fonction oblige à suivre
+  // TOUS ceux qui la lisent, y compris ceux qui lui forgent leur argument.
+  const forge = (proprietaire) => nomAffiche({
+    genre: 'unite', camp: 'attaque', proprietaire, id: 'meute',
+  });
+  assert.equal(forge('joueur'), 'Fusiliers', 'sens Raid');
+  assert.equal(forge('ouvrage'), 'Meute', 'sens Défense');
+
+  // Et sans propriétaire, la valeur est celle de l'Ouvrage : c'est le piège.
+  // L'asserter, c'est empêcher qu'on le prenne pour un défaut à « corriger »
+  // dans nomAffiche — le défaut est chez l'appelant qui oublie le champ.
+  assert.equal(nomAffiche({ genre: 'unite', camp: 'attaque', id: 'meute' }), 'Meute');
+});
