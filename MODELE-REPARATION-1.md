@@ -49,14 +49,15 @@ D'où l'arbitrage : abattre l'Étai à la première passe rend la seconde peu co
 | Ce qu'on répare | Ce qui commande le **temps** | Ce qui commande le **coût** | Ressource |
 |---|---|---|---|
 | Bâtiments de la base | niveau du **Chantier de construction** — plus haut, plus court | **niveau du bâtiment réparé**, et rien d'autre | quartz |
-| Unités offensives | niveau de la **Caserne**, de l'**atelier** ou de l'**aérodrome**, selon le châssis | **niveau de l'unité**, et rien d'autre | scorie |
+| Unités offensives | niveau de la **Caserne**, du **Dépôt de véhicules** ou de l'**Aérodrome**, selon le châssis | **niveau de l'unité**, et rien d'autre | scorie |
 | Défenses | niveau du **Complexe de défense** | **gratuit** | — |
 
 Le découpage des ressources tombe juste avec la spec §1 : le quartz répare les bâtiments, la
 scorie répare les unités offensives, la défense n'est financée par rien.
 
-Correspondance châssis → bâtiment de réparation : Escouade → Caserne · Blindé → atelier ·
-Aéronef → aérodrome.
+Correspondance châssis → bâtiment de réparation : Escouade → Caserne · Blindé → **Dépôt de
+véhicules** · Aéronef → Aérodrome. (Les clés sont `caserne`, `depotDeVehicules` et `aerodrome`
+dans `src/data/base.js`.)
 
 ### Les bâtiments de l'Ouvrage se réparent seuls, en une heure
 
@@ -112,11 +113,12 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**, lot 2B
 
 1. ~~Les PV ne montent pas avec le niveau.~~ **Clos le 24/08** : PV et dégâts suivent la même
    courbe que tout le reste, ×1,32 par niveau. Voir `COURBE-DE-NIVEAU-2.md`.
-2. **La base du joueur** : partiellement relevée depuis `FOYER-ZERO-LEXIQUE.xlsx`, voir
-   `BASE-DU-JOUEUR-1.md`. Sept bâtiments nommés, onze attendus. Manquent le Chantier de construction,
-   la Caserne, l'atelier et l'aérodrome.
-3. **Deux bâtiments sans nom Foyer Zéro** : le central du joueur (« Chantier de construction » est
-   le nom TA ; côté Ouvrage il s'appelle Souche) et le bâtiment des véhicules.
+2. ~~**La base du joueur** : sept bâtiments nommés, onze attendus.~~ **Clos le 25/08** :
+   `src/data/base.js` porte les onze, Chantier de construction compris. ⚠ `BASE-DU-JOUEUR-1.md`
+   est resté à l'état du 24/08 et annonce encore sept sur onze : c'est `base.js` qui fait foi.
+3. ~~**Deux bâtiments sans nom Foyer Zéro**.~~ **Clos le 26/08** : le central est le **Chantier
+   de construction** (Souche côté Ouvrage) et le bâtiment des blindés le **Dépôt de véhicules**,
+   clé `depotDeVehicules`. Ce document disait « atelier » — corrigé au §3 le même jour.
 4. **La réserve de temps** : quatrième grandeur au même rang que quartz et scorie, ou compteur
    interne ? Taux d'accumulation ? Plafond ?
 5. ~~Un Complexe endommagé répare-t-il moins ?~~ **Clos le 24/08** : oui, au prorata de ses PV —

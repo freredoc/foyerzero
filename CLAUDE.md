@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot BASE-0), à confronter :** `npm test` →
-**180 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot CHAMPS), à confronter :** `npm test` →
+**193 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -110,8 +110,9 @@ src/data/               toutes les valeurs de calibrage — RIEN d'autre n'a le 
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
 
-src/sim/                simulation déterministe, sans DOM
+src/sim/                simulation déterministe, sans DOM — HUIT fichiers
   rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
+  champs.js             terrain d'une base : 12 cases tirées de la POSITION
 
 src/render/             rendu, sans DOM non plus : rend des primitives — QUATRE fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -121,9 +122,9 @@ src/ui/                 le banc d'essai et ses éditeurs — TROIS fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   dix-sept *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
-  arsenal  assaut  banc  base  cible  clock  combat  defense  donnees
-  economy  generateur  grille  rendu  repli  rng  roster  state
+test/                   dix-huit *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+  arsenal  assaut  banc  base  champs  cible  clock  combat  defense
+  donnees  economy  generateur  grille  rendu  repli  rng  roster  state
   ⤷ base.test.js : invariants de src/data/base.js — roster des onze, classes
     de coût, emplacements, géométrie, champs, débits, stockage. AJOUTÉ le
     26/08 (lot BASE-0) : le fichier vivait depuis un mois sans un seul test.
@@ -302,6 +303,19 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   RÉFÉRENCE ; en écrire une seconde, même identique, casserait la propagation.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
+- **Le tirage des champs vit dans `sim/champs.js`.** `champsDeLaBase(rangée,
+  colonne)` rend le terrain, fonction de la SEULE position. Deux règles y sont
+  DÉDUITES et non dictées, et il faut le savoir avant de les changer : deux
+  blocs de même ressource ne se touchent jamais par un côté (sinon deux blocs de
+  deux se lisent comme un bloc de quatre), et le contact en diagonale reste
+  permis. Les blocs se recomptent depuis les cases par composantes connexes —
+  ne jamais vérifier une taille de bloc en relisant ce que le tirage croit avoir
+  posé, il serait juge de sa propre partie.
+- **Le champ décide de la ressource du collecteur** qui s'y pose — arbitré le
+  26/08. C'est pourquoi `BASE_BATIMENTS.collecteur.ressource` vaut
+  `quartzOuScorie` : la réponse n'est pas dans la ligne du bâtiment, elle est
+  sous lui. Reste ouvert : savoir s'il en tire aussi un DÉBIT, comme la centrale
+  tire 60/h par champ de scorie voisin.
 - **Les champs de ressource sont le socle des collecteurs, pas un voisinage.**
   Douze cases par base, réparties 5/7, 6/6 ou 7/5 entre quartz et scorie, en
   blocs de 1, 2 ou 3 cases contiguës (triplets droits ou coudés), tirées
@@ -317,8 +331,12 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **Le bâtiment des blindés s'appelle « Dépôt de véhicules »**, clé
   `depotDeVehicules`. Trois noms avaient coexisté dans le dépôt — `usine` (la
   clé), « dépôt de véhicules » (le commentaire de `COUT_NIVEAU_DEUX`, qui avait
-  raison) et « atelier » (`MODELE-REPARATION-1.md` §3, encore à corriger).
-  Arbitré le 26/08.
+  raison) et « atelier » (`MODELE-REPARATION-1.md` §3). Arbitré le 26/08 et
+  corrigé partout où c'était un NOM DE BÂTIMENT. Il reste cinq occurrences du
+  mot, toutes légitimes et vérifiées : quatre qui racontent la correction
+  elle-même (`base.js`, `MODELE-REPARATION-1.md` §6.3, `test/base.test.js`, ici)
+  et une où « atelier » est un nom commun d'exemple, sans rapport
+  (`MODELE-ECONOMIQUE.md` l. 184, « un atelier un silo »).
 - **Deux courbes, à ne jamais confondre.** `NIVEAU` (`niveaux.js`) est la courbe
   du COMBAT — pente unique 1,1 depuis le 25/08. `BUTIN` et `ECONOMIE_NIVEAU`
   portent la courbe ÉCONOMIQUE — deux régimes, 1,259 puis 1,32. `facteurMilli`
