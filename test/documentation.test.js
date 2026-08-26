@@ -175,3 +175,51 @@ test('documentation — CLAUDE.md §2 nomme exactement les fichiers de test pré
     'CLAUDE.md §2 et le dossier test/ ne nomment pas les mêmes fichiers',
   );
 });
+
+test('documentation — aucun fichier de test ne traîne hors de test/', () => {
+  // ⚠ CE TEST EXISTE PARCE QUE C'EST ARRIVÉ DEUX FOIS EN DEUX LIVRAISONS.
+  // Le dépôt se met à jour depuis un téléphone, fichier par fichier, et le
+  // sélecteur n'affiche que les noms courts : `disposition.js` et
+  // `disposition.test.js` s'y ressemblent beaucoup. Résultat, le 26/08 :
+  //   — d'abord `src/sim/disposition.js` déposé DANS `test/`, sous le nom
+  //     `disposition.js` — donc invisible au glob `test/*.test.js`, donc quinze
+  //     tests disparus sans un mot ;
+  //   — puis `disposition.test.js` déposé DANS `src/sim/`, où il n'a rien à
+  //     faire, pendant que le module y restait périmé.
+  //
+  // Les deux fois, le symptôme était lointain et illisible. Ce test rend la
+  // faute IMMÉDIATE et NOMMÉE : il dit quel fichier est au mauvais endroit.
+  //
+  // Il vaut aussi comme règle de fond : `src/` ne contient que du code livré.
+  // Un fichier de test qui s'y trouve partirait dans le bundle si un jour
+  // `index.src.html` l'importait par erreur.
+  const intrus = [];
+  for (const dossier of [['src', 'data'], ['src', 'sim'], ['src', 'render'], ['src', 'ui'], ['tools']]) {
+    for (const nom of fichiersJs(...dossier)) {
+      if (nom.endsWith('.test.js')) intrus.push(`${dossier.join('/')}/${nom}`);
+    }
+  }
+  assert.deepEqual(
+    intrus, [],
+    `fichier(s) de test hors de test/ : ${intrus.join(', ')} — à supprimer, `
+      + 'le bon exemplaire est dans test/',
+  );
+
+  // Falsifiable dans l'autre sens : le dossier test/ doit, lui, être PLEIN de
+  // fichiers en .test.js. Sinon la boucle ci-dessus pourrait ne rien parcourir
+  // et l'égalité passerait sur un dépôt vide.
+  const vraisTests = fichiersJs('test').filter((n) => n.endsWith('.test.js'));
+  assert.ok(vraisTests.length > 10, `${vraisTests.length} fichiers de test dans test/`);
+
+  // Et le symétrique : aucun module de PRODUCTION ne doit traîner dans test/.
+  // C'est l'autre moitié de l'accident, celle du 26/08 au matin. Un fichier de
+  // test/ qui n'est ni un `.test.js` ni un préréglage connu est suspect.
+  const connus = new Set(['prereglages-lot3a.js']);
+  const egares = fichiersJs('test')
+    .filter((n) => !n.endsWith('.test.js') && !connus.has(n));
+  assert.deepEqual(
+    egares, [],
+    `fichier(s) inattendu(s) dans test/ : ${egares.join(', ')} — un module de `
+      + 'src/ déposé au mauvais endroit ne serait exécuté par personne',
+  );
+});
