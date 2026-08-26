@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot CHAMPS), à confronter :** `npm test` →
-**193 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot RAFFINERIE), à confronter :** `npm test` →
+**198 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -102,7 +102,7 @@ Relevée le **26/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — RIEN d'autre n'a le droit d'en porter
+src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'autre n'a le droit d'en porter
   params.js             économie du lot 1 : colis, flux continu, adjacence, stockage
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
@@ -110,21 +110,27 @@ src/data/               toutes les valeurs de calibrage — RIEN d'autre n'a le 
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
 
-src/sim/                simulation déterministe, sans DOM — HUIT fichiers
+src/sim/                simulation déterministe, sans DOM — 8 fichiers
   rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
 
-src/render/             rendu, sans DOM non plus : rend des primitives — QUATRE fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
 
-src/ui/                 le banc d'essai et ses éditeurs — TROIS fichiers
+src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
   banc.js               SEUL fichier du dépôt qui touche le DOM
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   dix-huit *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   19 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  champs  cible  clock  combat  defense
-  donnees  economy  generateur  grille  rendu  repli  rng  roster  state
+  documentation  donnees  economy  generateur  grille  rendu  repli  rng
+  roster  state
+  ⤷ documentation.test.js : les COMPTES de ce fichier-ci sont assertés contre
+    le disque. Ajouter un test ou un fichier sans mettre §0 et §2 à jour rend
+    la suite ROUGE. C'est voulu — §2 a menti deux fois, §0 quatre.
+  ⤷ base.test.js croise base.js et sites.js : ne pas le déplacer sans lire
+    pourquoi (appariements Ouvrage, dans les deux sens).
   ⤷ base.test.js : invariants de src/data/base.js — roster des onze, classes
     de coût, emplacements, géométrie, champs, débits, stockage. AJOUTÉ le
     26/08 (lot BASE-0) : le fichier vivait depuis un mois sans un seul test.
@@ -314,8 +320,35 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **Le champ décide de la ressource du collecteur** qui s'y pose — arbitré le
   26/08. C'est pourquoi `BASE_BATIMENTS.collecteur.ressource` vaut
   `quartzOuScorie` : la réponse n'est pas dans la ligne du bâtiment, elle est
-  sous lui. Reste ouvert : savoir s'il en tire aussi un DÉBIT, comme la centrale
-  tire 60/h par champ de scorie voisin.
+  sous lui. **Et c'est tout ce que le terrain lui donne** : arbitré le 26/08,
+  le Collecteur ne touche AUCUN bonus par champ voisin. **Asymétrie voulue**,
+  pas trou : la production suit ×1,25 quand les coûts suivent ×1,32, et c'est ce
+  décrochage qui pousse vers le raid — un multiplicateur de terrain sur le
+  Collecteur amplifierait le canal qu'on a laissé décrocher exprès.
+  ⚠ `champDeScorie: 60` sur la Centrale est donc **LE SEUL bonus de terrain de
+  toute la table**, et un test l'asserte de face. Un autre asserte la forme
+  EXACTE de chaque `parVoisin` : les égalités de valeurs laissaient passer un
+  AJOUT de clé, et c'est par là qu'un bonus de terrain serait entré sans qu'on
+  revoie la décision.
+- **`DEBITS` est complète : SEPT valeurs**, pas six. 120 · 60 · 72 · 48 · 240 ·
+  72 · 72, comptées par exécution. Le compte se vérifie, il ne se fait pas de
+  tête — je l'ai annoncé à six le 26/08, et c'était faux.
+- **`quartzOuScorie` est EXCLUSIF, `quartzEtScorie` est INCLUSIF.** Le
+  collecteur produit l'un ou l'autre — le champ sous lui tranche. La raffinerie
+  tient les deux à la fois, et `capaciteDuNiveau` vaut **par ressource** : une
+  raffinerie qui rend 2 880 tient 2 880 de quartz ET 2 880 de scorie. La prendre
+  pour un total divise le stockage par deux. `capaciteParRessource` dit qui est
+  concerné, et seule la raffinerie porte la clé.
+- **La raffinerie n'a PAS de pendant Ouvrage**, et c'est arbitré, pas oublié.
+  Côté Ouvrage le stockage est DEUX bâtiments — Gangue (quartz) et Terril
+  (scorie) — parce que c'est du butin ; côté joueur c'est UN qui tient les deux.
+  Un vers deux : aucun nom ne convient. Trois appariements seulement : Souche,
+  Étai, Nœud.
+  ⚠ **Le champ `ta` n'a pas le même sens dans les deux fichiers.** Dans
+  `data/base.js` c'est le nom Tiberium Alliances anglais (« Harvester ») ; dans
+  `data/sites.js` c'est le nom FRANÇAIS du pendant joueur (« Collecteur »), le
+  nom TA étant en commentaire de fin de ligne. Un test croise les deux tables
+  dans les deux sens — c'est ce renvoi qui a révélé l'appariement de trop.
 - **Les champs de ressource sont le socle des collecteurs, pas un voisinage.**
   Douze cases par base, réparties 5/7, 6/6 ou 7/5 entre quartz et scorie, en
   blocs de 1, 2 ou 3 cases contiguës (triplets droits ou coudés), tirées
