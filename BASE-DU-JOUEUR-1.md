@@ -78,7 +78,7 @@ gratuitement n'importe quoi, et il ne peut pas non plus acheter sa sortie en pil
 Les barèmes — production par centrale, coût en électricité par amélioration, plafonds — ne sont
 pas urgents. Ethan les retrouvera, ils se modifient a posteriori.
 
-Reste à trancher, sans urgence : la **réserve de temps de réparation** de `MODELE-REPARATION.md`
+Reste à trancher, sans urgence : la **réserve de temps de réparation** de `MODELE-REPARATION-1.md`
 §4 est-elle une cinquième grandeur de plein droit, ou un simple compteur interne ?
 
 ## 5. Défauts du lexique, à corriger à la source
@@ -90,7 +90,7 @@ Reste à trancher, sans urgence : la **réserve de temps de réparation** de `MO
    Lequel des deux garde le nom ?
 2. **Le Terril n'a pas de nom joueur** — la colonne est vide, alors que la Gangue en a un.
 3. **Le Complexe de défense y répare encore 70 %.** C'est périmé depuis la dictée du même jour :
-   il répare **tout**, en une heure. Voir `MODELE-REPARATION.md` §3.
+   il répare **tout**, en une heure. Voir `MODELE-REPARATION-1.md` §3.
 4. **Les défenses ont maintenant un nom joueur** — Mur de défense, barbelés, barrière anti-tank,
    Tourelle Mitrailleuse, Canon anti-char, DCA, Mirador, Artillerie lourde, SAM. `src/data/combat.js`
    n'en porte qu'un seul par défense, celui de l'Ouvrage. À aligner sur la convention

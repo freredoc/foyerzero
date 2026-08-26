@@ -1,6 +1,6 @@
 # Foyer Zéro — la courbe de niveau
 
-Arbitré par Ethan le 24/08/2026. Ferme le trou n° 1 de `MODELE-REPARATION.md`.
+Arbitré par Ethan le 24/08/2026. Ferme le trou n° 1 de `MODELE-REPARATION-1.md`.
 
 ---
 

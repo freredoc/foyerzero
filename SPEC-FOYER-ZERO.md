@@ -240,7 +240,7 @@ foreuses à quartz coûte de la scorie.
 
 ### Densité
 
-Tables explicites par niveau dans `FOYER-ZERO-CALIBRAGE.xlsx`. Camp plafonné à 25 bâtiments,
+Tables explicites par niveau dans `FOYER-ZERO-CALIBRAGE-2.xlsx`. Camp plafonné à 25 bâtiments,
 avant-poste à 35, **base = avant-poste de même niveau + 10 %**. Sous le niveau 15 la défense est
 en retard sur le bâti ; au-delà, une défense par bâtiment.
 
@@ -278,7 +278,7 @@ niveaux de progression pour un échelon d'arbre. Voir `FOYER-ZERO-RECHERCHE.xlsx
 
 | Fait | Valeur |
 |---|---|
-| Carte | couloir **9 × 300**, format téléphone : 30 de large, 300 de haut |
+| Carte | couloir **30 × 300**, format téléphone : 30 de large, 300 de haut |
 | Départ du joueur | strate 5, à 25 cases du bord bas |
 | Progression du niveau | **0,2 par case** vers le haut, plafond 50 |
 | Base terminale | à 25 cases du bord haut, au centre |

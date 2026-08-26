@@ -4,7 +4,7 @@
 > Toutes les valeurs sont lues à l'écran, jamais interpolées. Les lois sont ajustées sur
 > ces valeurs et l'écart résiduel est indiqué à chaque fois.
 >
-> Remplace `COURBE-DE-NIVEAU.md` §2 et complète `MODELE-REPARATION.md` §3.
+> Remplace `COURBE-DE-NIVEAU-2.md` §2 et complète `MODELE-REPARATION-1.md` §3.
 >
 > **Note de lecture :** le client français nomme « Points » le champ que le client anglais
 > nomme « Hitpoints ». Ce sont les **points de vie**. Toute lecture antérieure de ce champ
@@ -295,7 +295,7 @@ fumigène : 5 M + 10 M), pas des coûts d'amélioration. Sans structure à extra
    l'original, ou une progression à voie unique ? Le roster actuel supporte les deux.
 4. **Décider si l'on reprend la portée minimale** des artilleries. C'est une vraie
    mécanique tactique — une zone morte au contact — et notre modèle n'a rien d'équivalent.
-5. **Reporter les coefficients** dans `FOYER-ZERO-CALIBRAGE.xlsx` : la table du §2.1
+5. **Reporter les coefficients** dans `FOYER-ZERO-CALIBRAGE-2.xlsx` : la table du §2.1
    remplace toute courbe devinée, les tables du §6 remplacent tout profil estimé.
 6. **Une mesure restante** : le Barbwire à un niveau intermédiaire, pour fermer la loi de
    PV des structures défensives (§1).

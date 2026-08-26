@@ -24,7 +24,7 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026, à confronter :** `npm test` → **154 pass / 0 fail**,
+**Référence au 26/08/2026, à confronter :** `npm test` → **164 pass / 0 fail**,
 `npm run build` → `dist/index.html`, **81 236 octets**, 0 référence externe.
 
 ---
@@ -48,10 +48,18 @@ sous quel nom de fichier, et fait foi sur la liste ; `BRIEF-SPRITES-IA.md` dit
 COMMENT LE DEMANDER à un modèle d'image. Les trois se lisent ensemble, aucun ne
 remplace les deux autres. Les étalons visuels sont dans `art/etalon/`.
 
-⚠ **Les documents du rang 4 se citent entre eux SANS leur suffixe** —
-`MODELE-REPARATION-1.md` renvoie à `COURBE-DE-NIVEAU.md` et à
-`BASE-DU-JOUEUR.md`, qui n'existent pas sous ce nom. Trois liens morts. Lire les
-suffixes comme s'ils n'y étaient pas.
+⚠ **Les suffixes numériques font partie des noms.** Les documents du rang 4 se
+citaient entre eux SANS leur suffixe — `MODELE-REPARATION.md`,
+`COURBE-DE-NIVEAU.md`, `BASE-DU-JOUEUR.md`, plus `FOYER-ZERO-CALIBRAGE.xlsx` :
+neuf références vers des fichiers qui n'existent pas sous ce nom. **Réparées le
+26/08** dans les cinq documents concernés. Les fichiers n'ont PAS été renommés,
+délibérément : les renommer aurait cassé toutes les citations des passations et
+des rapports, qui font l'historique. En écrire une nouvelle : copier le nom de
+fichier, ne jamais le retaper.
+
+Trois références restent volontairement sans cible : `BRIEF-lot5B-*.md` et
+`BRIEF-lot5C-*.md` (livrables hors dépôt, `PASSATION-2026-08-25.md` §6) et
+`chantier-economie.xlsx` (`RAPPORT-LOT-1.md`). Elles se disent telles.
 
 ### Les classeurs `.xlsx` ne sont PAS des sources
 
@@ -69,10 +77,9 @@ pas dans le classeur.
 
 ### Sections périmées, à ne pas suivre
 
-- `SPEC-FOYER-ZERO.md` l. 281 se contredit dans sa propre cellule : « couloir
-  **9 × 300**, format téléphone : 30 de large ». C'est **30 × 300**, arbitré le
-  24/08. ⚠ C'est le fichier de rang 1 : le laisser faux, c'est laisser la source
-  de vérité mentir. **Toujours ouvert.**
+- ~~`SPEC-FOYER-ZERO.md` l. 281, « couloir 9 × 300 »~~ — **corrigé le 26/08**,
+  la cellule dit maintenant 30 × 300, conforme à `GEOGRAPHIE.carte` de
+  `sites.js`. C'était le fichier de rang 1 qui mentait.
 - `SPEC-FOYER-ZERO.md` §1 et §2, constante « réparation gratuite 70 % » :
   **périmée**, c'est 100 % en une heure (`MODELE-REPARATION-1.md` §3). Idem pour
   « plancher de PV des défenseurs : 1 % » — c'est **1 PV**, et ce n'est pas une
@@ -112,9 +119,11 @@ src/ui/                 le banc d'essai et ses éditeurs — TROIS fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   quinze *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
-  arsenal  assaut  banc  cible  clock  combat  defense  economy
+test/                   seize *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+  arsenal  assaut  banc  cible  clock  combat  defense  donnees  economy
   generateur  grille  rendu  repli  rng  roster  state
+  ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
+    références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
 tools/build.js          src/ → dist/index.html, un seul fichier autonome
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
@@ -126,16 +135,22 @@ art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, en
 HTML dans le job** et génère le manifeste à partir de CE HTML : la
 désynchronisation code/livrable est structurellement impossible.
 
-### Deux fichiers de la racine qui ne sont pas ce qu'ils paraissent
+### Un fichier de la racine qui n'est pas ce qu'il paraît
 
-- **`verif.mjs` est MORT.** Il plante à l'import : il demande
-  `MATRICE_COLONNES` à `src/data/combat.js`, qui exporte `COLONNES_DEGATS`
-  depuis un lot antérieur. Et même l'import réparé, sa boucle teste `u.matrice`
-  sur des unités qui portent `u.degats` : elle sauterait tout **en silence** et
-  afficherait « ok ». Il n'est pas dans `npm run check`, donc rien ne le
-  signale. **Ne pas s'y fier tant qu'il n'est pas réparé ou supprimé.**
-- **`foyer-zero-ui.html` est une maquette**, pas un livrable ni une source du
-  build. Le jeu est `src/index.src.html`.
+**`foyer-zero-ui.html` est une maquette**, pas un livrable ni une source du
+build. Le jeu est `src/index.src.html`.
+
+### `verif.mjs` a été supprimé le 26/08 — et pourquoi
+
+Il portait seize invariants de données et **aucune commande ne le lançait**. Il
+avait pourri sans que rien ne le dise : il importait `MATRICE_COLONNES`,
+renommé `COLONNES_DEGATS` depuis, donc il plantait à l'import. Et même l'import
+réparé, sa boucle testait `u.matrice` sur des entités qui portent `u.degats` :
+elle aurait sauté toutes les entités **en silence** et affiché « ok ».
+
+Ses invariants vivent maintenant dans `test/donnees.test.js`, dans
+`npm run check`. **Un audit hors de `npm run check` ne s'exécute pas, donc
+n'existe pas** — ne pas en recréer un.
 
 ---
 
@@ -312,11 +327,16 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 
 ### Sur les tests et l'outillage
 
-- **La garde du lot 1** (`test/clock.test.js`, test 4) scanne avec
-  `/\bdocument\b/`. `\b` est ASCII en JavaScript : **le mot « documenté » la
-  déclenche**. Écrire « consigné » dans `src/sim/`, ou corriger la garde avec
-  `` new RegExp(`(?<![\p{L}\p{N}_])${mot}(?![\p{L}\p{N}_])`, 'u') ``.
-  **Toujours ouvert.**
+- ~~**La garde du lot 1** scannait avec `/\bdocument\b/`~~ — **corrigée le
+  26/08.** `\b` est ASCII en JavaScript, si bien que « documenté » déclenchait
+  la garde (la frontière tombe entre le « t » et le « é ») alors que
+  « documentation » passait. On avait pris l'habitude d'écrire « consigné » dans
+  `src/sim/` pour la contourner : **ce n'est plus nécessaire.** Les motifs sont
+  bornés en Unicode par `` (?<![\p{L}\p{N}_])…(?![\p{L}\p{N}_]) ``, et le
+  test 4 asserte désormais les deux sens — cinq mots français innocents ne
+  déclenchent rien, quatre vraies violations sont attrapées.
+  ⚠ **La leçon reste vraie ailleurs** : `\b` est ASCII, et le projet écrit son
+  code en français. Tout nouveau motif de mot doit être borné en Unicode.
 - **Un montage de test doit tenir dans le budget** — sinon il ne prouve rien.
   Huit Faucheuses au niveau 30 font 202 points pour un budget de 190.
 - **`[hidden]` ne cache rien contre un sélecteur d'id.** `#banc-arsenal` fixe

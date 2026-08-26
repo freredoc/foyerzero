@@ -111,9 +111,9 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**, lot 2B
 ## 6. Ce qui reste ouvert
 
 1. ~~Les PV ne montent pas avec le niveau.~~ **Clos le 24/08** : PV et dégâts suivent la même
-   courbe que tout le reste, ×1,32 par niveau. Voir `COURBE-DE-NIVEAU.md`.
+   courbe que tout le reste, ×1,32 par niveau. Voir `COURBE-DE-NIVEAU-2.md`.
 2. **La base du joueur** : partiellement relevée depuis `FOYER-ZERO-LEXIQUE.xlsx`, voir
-   `BASE-DU-JOUEUR.md`. Sept bâtiments nommés, onze attendus. Manquent le Chantier de construction,
+   `BASE-DU-JOUEUR-1.md`. Sept bâtiments nommés, onze attendus. Manquent le Chantier de construction,
    la Caserne, l'atelier et l'aérodrome.
 3. **Deux bâtiments sans nom Foyer Zéro** : le central du joueur (« Chantier de construction » est
    le nom TA ; côté Ouvrage il s'appelle Souche) et le bâtiment des véhicules.
