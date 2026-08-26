@@ -1,0 +1,177 @@
+// Les compteurs de CLAUDE.md sont assertés contre le disque.
+//
+// POURQUOI CE FICHIER EXISTE. `CLAUDE.md` §0 annonce un nombre de tests « à
+// confronter » et §2 une arborescence. Les deux dérivent, et le dépôt en a déjà
+// payé le prix : §2 « a menti deux fois », de l'aveu du fichier lui-même, et
+// §0 a été réécrit à la main quatre fois dans la seule journée du 26/08 — dont
+// une fois avec un nombre écrit AVANT d'avoir lancé la suite, donc faux.
+//
+// Le remède n'est pas de promettre d'être plus attentif. C'est de faire tomber
+// la suite. Un lot qui ajoute un test ou un fichier sans mettre `CLAUDE.md` à
+// jour passe désormais au rouge, et c'est voulu : le premier geste de chaque
+// session est de lire ce fichier, il n'a donc pas le droit de mentir.
+//
+// ⚠ COMMENT LE COMPTE DE TESTS EST OBTENU. En comptant les déclarations
+// `test(` en TÊTE DE LIGNE dans `test/*.test.js`. Ça ne vaut que tant que la
+// suite n'utilise ni sous-tests imbriqués, ni groupements, ni tests ignorés ni
+// `test.skip` / `test.only` — un test asserte donc qu'aucun des quatre
+// n'apparaît. Le jour où l'un d'eux devient nécessaire, c'est CETTE méthode
+// qu'il faudra changer, pas le nombre.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+const CLAUDE_MD = readFileSync(join(RACINE, 'CLAUDE.md'), 'utf8');
+
+/** Les fichiers `.js` d'un dossier du dépôt, hors sous-dossiers. */
+function fichiersJs(...chemin) {
+  return readdirSync(join(RACINE, ...chemin), { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.js'))
+    .map((e) => e.name);
+}
+
+test('documentation — CLAUDE.md §0 annonce le vrai nombre de tests', () => {
+  const fichiers = fichiersJs('test').filter((n) => n.endsWith('.test.js'));
+
+  // Le comptage n'est valable que sous ces conditions. Les asserter d'abord,
+  // sinon le nombre obtenu plus bas ne voudrait rien dire — c'est le montage
+  // falsifiable avant la mesure.
+  //
+  // ⚠ LES MOTIFS SONT BORNÉS EN UNICODE, et il a fallu une première version
+  // ratée pour le réapprendre. Chercher la sous-chaîne « t·test( » attrape
+  // `interdit·test(source)` — un appel de `RegExp·test`, parfaitement innocent,
+  // qui se termine par le « t » d'« interdit ». C'est la faute que CLAUDE.md §6
+  // documente déjà pour la garde du lot 1, commise à nouveau sous une autre
+  // forme. Un motif de mot se borne, toujours.
+  //
+  // ⚠ ET CE FICHIER-CI EST EXCLU DU BALAYAGE. Il traque des motifs textuels, et
+  // toute prose qui les explique en devient une occurrence : il s'est dénoncé
+  // lui-même trois fois de suite — d'abord par sa liste de motifs, puis par son
+  // appât, puis par un commentaire. La prose a fini par être réécrite sans eux
+  // (les points médians plus haut remplacent des points, exprès), si bien que
+  // l'exclusion n'est PLUS nécessaire aujourd'hui. Elle reste, parce que la
+  // prochaine phrase d'explication la rendra nécessaire à nouveau, et qu'une
+  // alarme disant « la méthode de comptage ne tient plus » alors qu'il s'agit
+  // d'un commentaire ferait perdre bien plus de temps qu'elle n'en fait gagner.
+  // L'angle mort est d'un fichier, et c'est celui dont l'auteur connaît le
+  // mieux la règle.
+  const incompatibles = [
+    /(?<![\p{L}\p{N}_])t\.test\(/u, // sous-test imbriqué
+    /(?<![\p{L}\p{N}_])describe\(/u, // groupement
+    /(?<![\p{L}\p{N}_])test\.skip\(/u,
+    /(?<![\p{L}\p{N}_])test\.only\(/u,
+  ];
+  const balayes = fichiers.filter((n) => n !== 'documentation.test.js');
+  assert.equal(balayes.length, fichiers.length - 1, 'l\'exclusion doit porter sur UN fichier');
+
+  for (const nom of balayes) {
+    const contenu = readFileSync(join(RACINE, 'test', nom), 'utf8');
+    for (const motif of incompatibles) {
+      const m = contenu.match(motif);
+      assert.ok(
+        m === null,
+        `${nom} emploie « ${m?.[0]} » : la méthode de comptage ne tient plus, `
+          + 'c\'est ELLE qu\'il faut corriger, pas le nombre de CLAUDE.md',
+      );
+    }
+  }
+
+  // Les motifs doivent effectivement attraper une vraie violation, sinon la
+  // boucle ci-dessus passerait sur n'importe quoi. L'appât est assemblé à
+  // l'exécution : écrit d'une pièce il serait, lui aussi, une occurrence.
+  const appat = `await t${'.'}test("sous-test", () => {});`;
+  assert.ok(incompatibles.some((m) => m.test(appat)), 'les motifs n\'attrapent même pas un appât');
+  // Et laisser passer l'innocent qui avait fait tomber la première version.
+  const innocent = `assert.ok(!interdit${'.'}test(source), "…");`;
+  assert.deepEqual(
+    incompatibles.filter((m) => m.test(innocent)), [],
+    'la garde se déclenche sur un appel de RegExp.test',
+  );
+
+  let declares = 0;
+  for (const nom of fichiers) {
+    const contenu = readFileSync(join(RACINE, 'test', nom), 'utf8');
+    declares += (contenu.match(/^test\(/gm) ?? []).length;
+  }
+  // Le parse doit avoir trouvé quelque chose de plausible : à zéro ou à trois,
+  // c'est la lecture qui est cassée, pas la documentation.
+  assert.ok(declares > 100, `${declares} tests comptés : la lecture est cassée`);
+
+  const annonce = CLAUDE_MD.match(/\*\*(\d+) pass \/ 0 fail\*\*/);
+  assert.ok(annonce, 'CLAUDE.md §0 ne porte plus de ligne « N pass / 0 fail »');
+  assert.equal(
+    Number(annonce[1]), declares,
+    `CLAUDE.md §0 annonce ${annonce[1]} tests, le dépôt en déclare ${declares}. `
+      + 'Mettre le fichier à jour, ne pas toucher à ce test.',
+  );
+});
+
+test('documentation — CLAUDE.md §2 annonce la vraie arborescence', () => {
+  // Chaque ligne de l'arborescence porte « — N fichiers ». On les confronte au
+  // disque, dossier par dossier.
+  const attendus = [
+    { motif: /^src\/data\/.*— (\d+) fichiers/m, chemin: ['src', 'data'], filtre: () => true },
+    { motif: /^src\/sim\/.*— (\d+) fichiers/m, chemin: ['src', 'sim'], filtre: () => true },
+    { motif: /^src\/render\/.*— (\d+) fichiers/m, chemin: ['src', 'render'], filtre: () => true },
+    { motif: /^src\/ui\/.*— (\d+) fichiers/m, chemin: ['src', 'ui'], filtre: () => true },
+    {
+      motif: /^test\/ +(\d+) fichiers \*\.test\.js/m,
+      chemin: ['test'],
+      filtre: (n) => n.endsWith('.test.js'),
+    },
+  ];
+
+  for (const { motif, chemin, filtre } of attendus) {
+    const trouve = CLAUDE_MD.match(motif);
+    assert.ok(trouve, `CLAUDE.md §2 : plus de compte lisible pour ${chemin.join('/')}/`);
+    const reel = fichiersJs(...chemin).filter(filtre).length;
+    assert.equal(
+      Number(trouve[1]), reel,
+      `CLAUDE.md §2 annonce ${trouve[1]} fichiers dans ${chemin.join('/')}/, il y en a ${reel}`,
+    );
+    // Falsifiable : un dossier vide rendrait toutes ces égalités triviales.
+    assert.ok(reel > 0, `${chemin.join('/')}/ est vide : le montage ne mesure rien`);
+  }
+});
+
+test('documentation — CLAUDE.md §2 nomme exactement les fichiers de test présents', () => {
+  // Le compte seul ne suffit pas : deux fichiers pourraient s'échanger sans que
+  // le total bouge.
+  //
+  // ⚠ ÉGALITÉ D'ENSEMBLE, PAS RECHERCHE DE MOT. La première version cherchait
+  // chaque nom « quelque part dans le bloc » — et retirer `champs` de la liste
+  // PASSAIT, parce que le mot « champs » apparaît aussi dans une annotation en
+  // prose deux lignes plus bas. Un test qui accepte de trouver sa réponse dans
+  // le commentaire d'à côté ne mesure rien. On lit donc UNIQUEMENT les lignes
+  // de liste — deux espaces puis des noms séparés par des espaces — et on exige
+  // l'égalité stricte des deux ensembles, dans les deux sens.
+  const lignes = CLAUDE_MD.split('\n');
+  const debut = lignes.findIndex((l) => /^test\/ +\d+ fichiers \*\.test\.js/.test(l));
+  assert.ok(debut >= 0, 'CLAUDE.md §2 : ligne d\'en-tête de test/ introuvable');
+
+  const declares = [];
+  for (let i = debut + 1; i < lignes.length; i++) {
+    // Les lignes de liste : deux espaces exactement, puis un nom en minuscules.
+    // Les annotations commencent par « ⤷ » et arrêtent la lecture.
+    if (!/^ {2}[a-z]/.test(lignes[i])) break;
+    declares.push(...lignes[i].trim().split(/\s+/));
+  }
+
+  const reels = fichiersJs('test')
+    .filter((n) => n.endsWith('.test.js'))
+    .map((n) => n.replace('.test.js', ''));
+
+  // Falsifiable : les deux listes doivent être non triviales avant d'être
+  // comparées, sinon [] === [] passerait.
+  assert.ok(declares.length > 10, `${declares.length} noms lus dans CLAUDE.md`);
+  assert.ok(reels.length > 10, `${reels.length} fichiers de test trouvés`);
+
+  assert.deepEqual(
+    [...declares].sort(), [...reels].sort(),
+    'CLAUDE.md §2 et le dossier test/ ne nomment pas les mêmes fichiers',
+  );
+});

@@ -28,7 +28,7 @@ import {
   zoneDesChamps, estDansLaBase,
 } from '../src/data/base.js';
 import { GRILLE } from '../src/data/combat.js';
-import { GEOGRAPHIE } from '../src/data/sites.js';
+import { GEOGRAPHIE, BATIMENTS } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 
 const IDS = Object.keys(BASE_BATIMENTS);
@@ -67,9 +67,11 @@ test('base — onze bâtiments, nommés, et le dépôt de véhicules porte son n
   );
 });
 
-test('base — quatre bâtiments portent un nom d\'Ouvrage, et ce sont les bons', () => {
-  // L'en-tête du fichier annonçait TROIS depuis le 25/08. MESURÉ : quatre.
-  // C'est l'assertion qui a motivé ce fichier de test.
+test('base — trois bâtiments portent un nom d\'Ouvrage, et ce sont les bons', () => {
+  // TROIS, et le chemin compte : la ligne annonçait « trois » alors que la
+  // table en portait quatre (25/08) ; le décompte a corrigé la ligne (26/08) ;
+  // puis Ethan a arbitré que le quatrième appariement n'existait pas, et c'est
+  // la TABLE qui a été corrigée. Les deux fois, la mesure a précédé l'écriture.
   //
   // ⚠ `hasOwnProperty` et pas `!== undefined` : la règle du projet est que
   // l'absence de clé se distingue d'une valeur vide (CLAUDE.md §6).
@@ -78,17 +80,102 @@ test('base — quatre bâtiments portent un nom d\'Ouvrage, et ce sont les bons'
   );
   assert.deepEqual(
     avecOuvrage,
-    ['chantierDeConstruction', 'complexeDeDefense', 'collecteur', 'raffinerie'],
-    'les quatre bâtiments à pendant Ouvrage ont changé',
+    ['chantierDeConstruction', 'complexeDeDefense', 'collecteur'],
+    'les trois bâtiments à pendant Ouvrage ont changé',
   );
   assert.deepEqual(
     avecOuvrage.map((id) => BASE_BATIMENTS[id].nom.ouvrage),
-    ['Souche', 'Étai', 'Nœud', 'Gangue'],
+    ['Souche', 'Étai', 'Nœud'],
   );
 
-  // Les sept autres n'ont PAS la clé — c'est ce qui rend `hasOwnProperty`
+  // La raffinerie n'en a PAS, et c'est un arbitrage : côté Ouvrage le stockage
+  // est deux bâtiments (Gangue pour le quartz, Terril pour la scorie) parce que
+  // c'est du butin ; côté joueur c'est un seul qui tient les deux. Un vers
+  // deux : aucun nom ne convient.
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(BASE_BATIMENTS.raffinerie.nom, 'ouvrage'),
+    'la raffinerie ne doit pas porter de nom d\'Ouvrage',
+  );
+
+  // Les huit autres n'ont PAS la clé — c'est ce qui rend `hasOwnProperty`
   // capable de trancher. Sans cette moitié, le test ne mesurerait qu'un sens.
-  assert.equal(IDS.length - avecOuvrage.length, 7);
+  assert.equal(IDS.length - avecOuvrage.length, 8);
+});
+
+test('base — l\'appariement avec l\'Ouvrage boucle dans les deux sens', () => {
+  // C'EST CE TEST QUI AURAIT ATTRAPÉ L'APPARIEMENT DE TROP. sites.js porte le
+  // renvoi de l'autre côté : `BATIMENTS[x].ta` nomme le bâtiment JOUEUR
+  // correspondant, en français. Les trois appariements doivent donc boucler sur
+  // `nom.joueur` d'ici.
+  //
+  // ⚠ Le champ `ta` n'a pas le même sens dans les deux fichiers : ici c'est le
+  // nom Tiberium Alliances en anglais (« Harvester »), là-bas le nom français
+  // du pendant joueur (« Collecteur »), le nom TA étant en commentaire. Ne pas
+  // comparer `base.ta` à `sites.ta`, ils ne parlent pas de la même chose.
+  const parNomOuvrage = new Map(
+    IDS.filter((id) => Object.prototype.hasOwnProperty.call(BASE_BATIMENTS[id].nom, 'ouvrage'))
+      .map((id) => [BASE_BATIMENTS[id].nom.ouvrage, BASE_BATIMENTS[id].nom.joueur]),
+  );
+  // MESURÉ : 3 appariements déclarés côté base.
+  assert.equal(parNomOuvrage.size, 3);
+
+  let boucles = 0;
+  for (const site of Object.values(BATIMENTS)) {
+    const nomJoueur = parNomOuvrage.get(site.nom);
+    if (nomJoueur === undefined) continue;
+    boucles += 1;
+    assert.equal(
+      site.ta, nomJoueur,
+      `${site.nom} renvoie vers « ${site.ta} », mais base.js le déclare pendant de « ${nomJoueur} »`,
+    );
+  }
+  // Les trois déclarés doivent TOUS avoir été retrouvés dans sites.js : sans
+  // ça, un nom d'Ouvrage inventé passerait sans être vu.
+  assert.equal(boucles, parNomOuvrage.size, 'un nom d\'Ouvrage ne désigne aucun bâtiment de site');
+
+  // Falsifiable dans l'autre sens : les deux silos de l'Ouvrage ne renvoient
+  // vers AUCUN bâtiment du joueur, et c'est justement l'asymétrie arbitrée.
+  // Si l'un des deux se mettait à nommer la Raffinerie, il faudrait rouvrir
+  // l'arbitrage plutôt que de laisser le test muet.
+  const nomsJoueur = new Set(IDS.map((id) => BASE_BATIMENTS[id].nom.joueur));
+  assert.ok(!nomsJoueur.has(BATIMENTS.gangue.ta), `gangue.ta = ${BATIMENTS.gangue.ta}`);
+  assert.ok(!nomsJoueur.has(BATIMENTS.terril.ta), `terril.ta = ${BATIMENTS.terril.ta}`);
+  // Et les deux silos portent bien des ressources OPPOSÉES : c'est la raison de
+  // l'asymétrie, pas une coïncidence de nommage.
+  assert.equal(BATIMENTS.gangue.ressource.quartz, 1);
+  assert.equal(BATIMENTS.gangue.ressource.scorie, 0);
+  assert.equal(BATIMENTS.terril.ressource.quartz, 0);
+  assert.equal(BATIMENTS.terril.ressource.scorie, 1);
+});
+
+test('base — la raffinerie stocke les DEUX ressources, le collecteur en produit UNE', () => {
+  // Arbitré le 26/08, et la nuance porte tout : « quartzOuScorie » est
+  // exclusif, « quartzEtScorie » est inclusif. Les écrire pareil, c'est se
+  // préparer à additionner deux capacités qui ne s'additionnent pas.
+  assert.equal(BASE_BATIMENTS.collecteur.ressource, 'quartzOuScorie');
+  assert.equal(BASE_BATIMENTS.raffinerie.ressource, 'quartzEtScorie');
+  assert.notEqual(
+    BASE_BATIMENTS.collecteur.ressource, BASE_BATIMENTS.raffinerie.ressource,
+    'produire l\'une OU l\'autre et stocker les DEUX ne peuvent pas s\'écrire pareil',
+  );
+
+  // Seule la raffinerie porte une capacité par ressource. L'accumulateur n'a
+  // qu'une ressource, donc la clé est absente plutôt que `false` — même règle
+  // que pour `nom.ouvrage`.
+  assert.equal(BASE_BATIMENTS.raffinerie.capaciteParRessource, true);
+  const porteuses = IDS.filter(
+    (id) => Object.prototype.hasOwnProperty.call(BASE_BATIMENTS[id], 'capaciteParRessource'),
+  );
+  assert.deepEqual(porteuses, ['raffinerie']);
+
+  // Conséquence chiffrée : une raffinerie de niveau 1 tient 2 880 de chaque,
+  // soit 5 760 en tout. C'est le double de ce qu'on lirait en prenant
+  // `capaciteDuNiveau` pour un total.
+  const parRessource = capaciteDuNiveau('raffinerie', 1);
+  assert.equal(parRessource, 2880);
+  assert.equal(parRessource * 2, 5760);
+  // L'accumulateur, lui, n'a rien à doubler.
+  assert.equal(BASE_BATIMENTS.accumulateur.ressource, 'electricite');
 });
 
 test('base — sept bâtiments uniques, quatre libres, et le Chantier seul sans plancher de PV', () => {
@@ -395,6 +482,35 @@ test('base — les bonus de voisinage sont typés, et les deux couples réciproq
     Object.keys(DEBITS).sort(),
     ['accumulateur', 'centrale', 'collecteur', 'raffinerie'],
   );
+
+  // ⚠ LA FORME EXACTE, PAS SEULEMENT LES VALEURS. Les assertions ci-dessus
+  // passent toutes si quelqu'un AJOUTE une clé — c'est le trou par lequel un
+  // bonus de terrain sur le Collecteur entrerait sans qu'on revoie la décision.
+  // ARBITRÉ le 26/08 : asymétrie voulue, le Collecteur ne touche rien du
+  // terrain. Le champ sous lui décide de sa ressource, un point c'est tout.
+  assert.deepEqual(DEBITS.collecteur.parVoisin, { raffinerie: 72 });
+  assert.deepEqual(DEBITS.raffinerie.parVoisin, { collecteur: 72 });
+  assert.deepEqual(DEBITS.accumulateur.parVoisin, { centrale: 48 });
+  assert.deepEqual(DEBITS.centrale.parVoisin, { champDeScorie: 60, accumulateur: 72 });
+
+  // Et le corollaire, asserté de face : `champDeScorie` sur la Centrale est LE
+  // SEUL bonus de terrain de toute la table. Falsifiable — s'il y en avait
+  // zéro, l'égalité ci-dessous passerait aussi et ne prouverait rien.
+  const bonusDeTerrain = Object.entries(DEBITS).flatMap(
+    ([id, d]) => Object.keys(d.parVoisin ?? {})
+      .filter((v) => v.startsWith('champDe'))
+      .map((v) => `${id}.${v}`),
+  );
+  assert.deepEqual(bonusDeTerrain, ['centrale.champDeScorie']);
+  assert.equal(bonusDeTerrain.length, 1, 'un seul ancrage au terrain, arbitré le 26/08');
+
+  // DEBITS est COMPLÈTE : sept valeurs, et il n'en manque plus aucune.
+  // MESURÉ par exécution — j'en avais annoncé six, c'était faux.
+  const valeurs = Object.values(DEBITS).flatMap(
+    (d) => (d.propre === undefined ? [] : [d.propre]).concat(Object.values(d.parVoisin ?? {})),
+  );
+  assert.equal(valeurs.length, 7, `${valeurs.length} valeurs de débit, 7 attendues`);
+  for (const v of valeurs) assert.ok(Number.isInteger(v) && v > 0, `débit ${v} invalide`);
 
   // Le bonus se règle sur le niveau du bâtiment QUI PRODUIT, donc il suit la
   // même pente que le débit propre.
