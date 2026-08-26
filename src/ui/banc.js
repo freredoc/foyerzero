@@ -473,26 +473,22 @@ export function initialiserBanc(doc) {
   }
 
   /**
-   * Reconstruit la grille sur les obstacles du site courant.
+   * Recharge la garnison avec les obstacles du site courant. Ils sont tirés PAR
+   * GRAINE : en changer peut en poser un sous une pièce déjà placée.
    *
-   * ⚠ Nécessaire dès que la graine, le type ou le niveau change : les obstacles
-   * sont tirés par graine, et le moteur REFUSE un défenseur posé sur l'un
-   * d'eux. `depuisDefenseurs` enregistre bien les cases interdites, mais il
-   * n'écarte PAS les pièces déjà posées qui s'y trouvent — vérifié. On les
-   * retire donc ici, et JAMAIS en silence : le statut les nomme.
+   * ⚠ ON NE TRIE PLUS LA LISTE ICI. Le premier jet écartait les pièces
+   * touchées avant de rendre la liste à `depuisDefenseurs`, parce que le module
+   * ne les signalait pas. Il le fait depuis : `bilan(...).surObstacle` les
+   * nomme, `valide` passe à faux, et `purgerDefense` les retire sur demande —
+   * le même chemin exactement que la descente de niveau. Rien n'est retiré
+   * d'office : le terrain a bougé sous la pièce, ce n'est pas au banc d'en
+   * décider seul.
    */
   function reconstruireDefense() {
-    const obstacles = obstaclesDuSite();
-    const interdites = new Set(obstacles.map((o) => `${o.rangee},${o.colonne}`));
-    const gardees = [];
-    const perdues = [];
-    for (const d of enDefenseurs(defense)) {
-      if (interdites.has(`${d.rangee},${d.colonne}`)) perdues.push(d);
-      else gardees.push(d);
-    }
-    defense = depuisDefenseurs(gardees, defense.niveau, obstacles);
-    return perdues;
+    defense = depuisDefenseurs(enDefenseurs(defense), defense.niveau, obstaclesDuSite());
+    return bilanDefense(defense).surObstacle;
   }
+
 
   function majPaletteDefense() {
     const disponibles = defensesDisponibles(defense.niveau);
@@ -548,8 +544,9 @@ export function initialiserBanc(doc) {
       const perdues = reconstruireDefense();
       majDefense();
       if (perdues.length > 0) {
-        majStatut(`⚠ ${perdues.length} pièce(s) retirée(s) : la graine a posé un obstacle sur `
-          + perdues.map((d) => `(${d.rangee}, ${d.colonne})`).join(', '));
+        majStatut(`⚠ ${perdues.length} pièce(s) sous un obstacle : `
+          + `${perdues.map((d) => `(${d.rangee}, ${d.colonne})`).join(', ')} — la garnison ne `
+          + 'peut pas être lancée en l\'état. Vider, ou déplacer ces pièces.');
       } else {
         majStatut(`Défense — la rangée ${PREMIERE_RANGEE} est la plus avancée, la `
           + `${DERNIERE_RANGEE} adossée aux bâtiments. Choisir une pièce, toucher une case `
@@ -662,10 +659,18 @@ export function initialiserBanc(doc) {
     const resultat = construireResultat(etat);
     const gain = butin(resultat, montage);
     const points = pointsRecherche(resultat, montage);
+    // ⚠ LE PROPRIÉTAIRE, PAS LE CAMP. Cet objet est forgé à la main, il ne
+    // vient pas de `etat.entites` : il faut donc lui POSER son propriétaire.
+    // Sans lui, `nomAffiche` retombe sur les noms de l'Ouvrage et les
+    // survivants du joueur s'affichent « Meute » au lieu de « Fusiliers ».
+    // C'est le défaut qu'a introduit le passage de nomAffiche au propriétaire :
+    // la fonction a changé de clé, et cet appelant-ci ne l'a pas suivie.
+    const proprietaireAttaque = montage.proprietaireAttaque ?? 'joueur';
     const survivants = resultat.attaquants
       .filter((a) => !a.detruit)
-      .map((a) => `${nomAffiche({ genre: 'unite', camp: 'attaque', id: a.id })}`
-        + ` — ${formaterPv(a.pvMilli)} PV${a.sorti ? ' (sorti)' : ''}`)
+      .map((a) => `${nomAffiche({
+        genre: 'unite', camp: 'attaque', proprietaire: proprietaireAttaque, id: a.id,
+      })} — ${formaterPv(a.pvMilli)} PV${a.sorti ? ' (sorti)' : ''}`)
       .join('<br>') || 'aucun';
     // ⚠ En sens Défense, `butin` et `pointsRecherche` comptent la prise de
     // l'ASSAILLANT — celle de l'Ouvrage, donc, et pas celle du joueur. Et
@@ -903,8 +908,9 @@ export function initialiserBanc(doc) {
       const perdues = reconstruireDefense();
       majDefense();
       if (perdues.length > 0) {
-        majStatut(`⚠ ${perdues.length} pièce(s) retirée(s) de la garnison : un obstacle est `
-          + `apparu en ${perdues.map((d) => `(${d.rangee}, ${d.colonne})`).join(', ')}`);
+        majStatut(`⚠ ${perdues.length} pièce(s) sous un obstacle : un obstacle est apparu en `
+          + `${perdues.map((d) => `(${d.rangee}, ${d.colonne})`).join(', ')} — la garnison ne `
+          + 'peut pas être lancée en l\'état. Vider, ou déplacer ces pièces.');
       }
     });
   }
@@ -935,8 +941,9 @@ export function initialiserBanc(doc) {
     majSens();
     const bd = bilanDefense(defense);
     if (!bd.valide && fenetre.confirm(`Garnison invalide au niveau ${niveau} —\n`
-      + `${bd.verrouilles.length} pièce(s) verrouillée(s), ${bd.pointsEngages} points pour un `
-      + `budget de ${bd.budgetPoints}.\n\nPurger la garnison ?`)) {
+      + `${bd.verrouilles.length} pièce(s) verrouillée(s), ${bd.surObstacle.length} sous un `
+      + `obstacle, ${bd.pointsEngages} points pour un budget de ${bd.budgetPoints}.`
+      + '\n\nPurger la garnison ?')) {
       defense = purgerDefense(defense);
     }
     reconstruireDefense();

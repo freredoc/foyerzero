@@ -207,9 +207,19 @@ export function enDefenseurs(etat) {
 }
 
 /**
- * L'opération inverse. Aucune validation de budget ici : on charge ce qui a été
- * produit, et `bilan` dira ensuite si l'ensemble tient. Deux défenseurs sur la
- * même case, en revanche, lèvent — c'est une liste corrompue, pas un choix.
+ * L'opération inverse. C'est un CHARGEMENT, pas une pose : il accepte ce qu'on
+ * lui donne et laisse `bilan` juger, exactement comme `avecNiveau` accepte de
+ * descendre sous l'apparition d'une pièce déjà là.
+ *
+ * ⚠ EN PARTICULIER, IL ACCEPTE UNE PIÈCE SUR UN OBSTACLE. C'est délibéré et ça
+ * a été tranché le 25/08/2026. Les obstacles sont tirés PAR GRAINE : changer de
+ * graine peut en poser un sous une pièce déjà placée, et la pièce n'y est pour
+ * rien — c'est le terrain qui a bougé sous elle. Lever ici ferait planter le
+ * chargement au lieu de dégrader. `bilan` la signale dans `surObstacle`,
+ * `valide` passe à faux, et `purger` la retire SUR DEMANDE. Jamais en silence.
+ *
+ * Deux défenseurs sur la même case, en revanche, lèvent — c'est une liste
+ * corrompue, pas un terrain qui a bougé.
  */
 export function depuisDefenseurs(liste, niveau, obstacles = []) {
   const etat = defenseVide(niveau, obstacles);
@@ -307,14 +317,24 @@ export function indicesDeCouverture(etat) {
 /**
  * L'état de la composition en un coup d'œil.
  *
- * `verrouilles` et `depassementBudget` ne peuvent pas naître d'une pose — elle
- * les refuse — mais d'un CHANGEMENT DE NIVEAU vers le bas. Le banc doit alors le
- * dire et proposer de purger, jamais retirer des pièces en silence.
+ * Trois défauts possibles, et AUCUN ne peut naître d'une pose — `poser` les
+ * refuse tous les trois. Ils naissent d'un changement du contexte SOUS une
+ * composition déjà faite :
+ *   `verrouilles`        — le niveau est descendu sous l'apparition d'une pièce
+ *   `depassementBudget`  — le niveau est descendu, le budget avec lui
+ *   `surObstacle`        — la graine a changé, un obstacle est apparu dessous
+ *
+ * Le banc doit les dire et proposer de purger, jamais retirer en silence.
+ *
+ * ⚠ `surObstacle` est la seule des trois qui rende le montage IMPOSSIBLE :
+ * `creerCombat` lève sur un défenseur posé sur un obstacle, là où il accepte
+ * sans broncher une pièce verrouillée ou un budget dépassé.
  */
 export function bilan(etat) {
   const budgetPoints = budgetDuNiveau(etat.niveau);
   const pointsEngages = pointsDe(etat.cases);
   const verrouilles = [];
+  const surObstacle = [];
   const rangeesPleines = [];
   let emplacementsOccupes = 0;
   for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
@@ -326,6 +346,9 @@ export function bilan(etat) {
       if (id === null) continue;
       if (ligne(id).apparition > etat.niveau) {
         verrouilles.push({ rangee, colonne, id, apparition: ligne(id).apparition });
+      }
+      if (etat.interdites.includes(`${rangee},${colonne}`)) {
+        surObstacle.push({ rangee, colonne, id });
       }
     }
   }
@@ -340,15 +363,16 @@ export function bilan(etat) {
     rangeesPleines,
     indices: indicesDeCouverture(etat),
     verrouilles,
+    surObstacle,
     depassementBudget,
-    valide: !depassementBudget && verrouilles.length === 0,
+    valide: !depassementBudget && verrouilles.length === 0 && surObstacle.length === 0,
   };
 }
 
 /**
- * Retire ce que le niveau courant n'autorise plus : pièces verrouillées, puis
- * les plus chères jusqu'à retomber dans le budget. N'est appelée que sur demande
- * explicite du joueur — jamais en silence.
+ * Retire ce que le contexte courant n'autorise plus : pièces verrouillées,
+ * pièces prises sous un obstacle, puis les plus chères jusqu'à retomber dans le
+ * budget. N'est appelée que sur demande explicite du joueur — jamais en silence.
  *
  * On retire en partant de la rangée la plus AVANCÉE : c'est la ligne la plus
  * exposée, celle qu'on sacrifie en premier quand il faut réduire la voilure.
@@ -359,7 +383,9 @@ export function purger(etat) {
   for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
     for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
       const id = suivant.cases[rangee - PREMIERE_RANGEE][colonne - 1];
-      if (id !== null && ligne(id).apparition > suivant.niveau) {
+      if (id === null) continue;
+      if (ligne(id).apparition > suivant.niveau
+        || suivant.interdites.includes(`${rangee},${colonne}`)) {
         suivant.cases[rangee - PREMIERE_RANGEE][colonne - 1] = null;
       }
     }
