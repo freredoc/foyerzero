@@ -228,9 +228,36 @@ Dans les deux cas :
   nom descriptif. Contenu minimal : version et build réellement produits,
   fichiers touchés, résultat de chaque test (PASS/KO et montage effectif),
   écarts par rapport au brief et leurs raisons, points laissés en suspens.
-- Le brief ne propose **aucun numéro de version** : bumper `version` et
-  `config.build` de `package.json` ensemble, au numéro disponible au moment de
-  l'exécution.
+- Bumper `version` et `config.build` de `package.json` **ensemble**, au numéro
+  disponible au moment de l'exécution, et **seulement quand `dist/index.html`
+  change**. Un lot qui ne touche que des tests ou de la documentation laisse le
+  HTML identique à l'octet, donc son SHA-256 et le manifeste de Pages aussi :
+  bumper y pousserait une mise à jour aux appareils pour rien. S'en abstenir, et
+  le dire. Un brief ne propose jamais de numéro.
+
+### ⚠ La forme de la livraison — Ethan travaille sur TÉLÉPHONE
+
+**Dès qu'une livraison compte strictement plus de DEUX fichiers, livrer une
+archive ZIP unique.** Son arborescence reproduit celle du dépôt (racine,
+`src/sim/`, `test/`…), elle inclut le `RAPPORT-*.md`, et un
+`LISEZ-MOI-DEPOT.md` en tête donne les étapes de dépôt. À deux fichiers ou
+moins, livrer les fichiers tels quels.
+
+⚠ **Ne jamais écrire « décompresse le zip à la racine du dépôt » : GitHub ne
+décompresse pas une archive.** Le gain du zip est sur le TÉLÉCHARGEMENT — un
+fichier au lieu de onze. L'extraction se fait sur le téléphone, et le
+téléversement dossier par dossier via *Add file → Upload files*. Piège à
+signaler : téléverser depuis la racine des fichiers destinés à `test/` les
+dépose à la racine.
+
+**Vérifier le zip dans les conditions d'usage** : le décompresser sur une copie
+fraîche de `main` et y relancer `npm run check` avant de le livrer.
+
+### Le rapport de lot entre au dépôt
+
+`RAPPORT-<lot>.md` se commite à la racine, avec les autres. Sans lui, ce
+document affirme des seuils — « 100 ppm », « 19 fois », « 471 fois au-dessus »
+— sans que rien ne dise d'où ils sortent.
 - Ne jamais signaler un défaut connu au moment de livrer : le corriger avant.
 
 ### Les tests ne s'assouplissent jamais
