@@ -59,8 +59,9 @@ FORMAT DE SORTIE — obligatoire, pour chaque image
    portée, pas de vignette, pas de cadre, pas de damier.
 5. Aucun texte, aucun chiffre, aucune lettre, aucun logo, aucun emblème, aucune
    signature, aucune légende, aucune flèche, aucune annotation.
-6. Un seul sujet par image, centré. Pas de planche, pas de variantes côte à
-   côte, pas de vue éclatée.
+6. Un seul sujet par image, centré. Pas de variantes côte à côte, pas de vue
+   éclatée. (Sauf si un bloc PLANCHE est fourni ci-dessous : dans ce cas suivre
+   ce bloc à la lettre.)
 
 TAILLE DANS LA CASE — obligatoire, c'est une contrainte dure
 Le sujet ENTIER — y compris son canon, son antenne, sa face visible — tient
@@ -218,6 +219,63 @@ socle, une bande sombre et deux évents #1E2124.
 
 ---
 
+## 3 bis. Les planches — plusieurs sprites par image
+
+158 images à quatre minutes de réflexion chacune, c'est une douzaine d'heures de
+génération. La planche divise ce chiffre par le nombre de cellules.
+
+Bloc à ajouter au prompt, après le gabarit du §3, en remplaçant les nombres :
+
+```
+PLANCHE — remplace la règle « un seul sujet par image »
+Image de 2048 × 2048, divisée en 2 colonnes × 2 lignes de cellules carrées de
+1024 × 1024 pixels exactement. Chaque cellule est un sprite indépendant : elle
+contient une grille de 32 × 32 gros pixels de 32 pixels de côté, son sujet
+centré, et sa propre marge vide de 2 gros pixels sur ses quatre bords.
+
+Aucun trait, aucun cadre, aucune ligne de séparation entre les cellules : le fond
+magenta est continu d'un bord à l'autre de l'image.
+Aucun sujet ne chevauche deux cellules.
+Aucune cellule ne reste vide.
+Les sujets ne se « regardent » pas et ne composent pas une scène : ce sont quatre
+images sans rapport qui partagent un fichier.
+
+Contenu, cellule par cellule, de gauche à droite puis de haut en bas :
+  1. ...
+  2. ...
+  3. ...
+  4. ...
+```
+
+**Ce qui va bien en planche, et ce qui n'y va pas.** La planche exige que le
+modèle tienne une même échelle sur plusieurs sujets voisins — c'est ce qu'il
+réussit le moins bien.
+
+| Bon candidat | Pourquoi |
+|---|---|
+| Lot 1, terrain | quatre variantes du même terrain : aucune échelle à tenir, elles se ressemblent par construction |
+| États de dégâts, obstacles | même famille, même taille |
+| Icônes d'interface | même gabarit, même poids |
+
+| Mauvais candidat | Pourquoi |
+|---|---|
+| Unités de points différents dans la même planche | il alignera les tailles au lieu de les différencier — exactement le signal qu'on cherche à produire |
+| Joueur et Ouvrage mélangés | il fera converger les deux grammaires |
+| Le jet d'essai du §6 | on y compare deux rampes : elles doivent être générées séparément, sinon il les harmonise |
+
+Règle pratique : **une planche ne regroupe que des sprites qui doivent déjà se
+ressembler.** Si deux sujets doivent se distinguer, ils ne partagent pas d'image.
+
+**Côté outil**, `tools/conditionneur.html` a deux champs *Planche — colonnes* et
+*lignes*. Il découpe en cellules égales, conditionne chacune séparément, les
+nomme `<fichier>_1` à `<fichier>_N` de gauche à droite puis de haut en bas, et
+ajoute deux contrôles propres à la planche : **cellule vide** (le modèle n'a
+produit que trois sujets sur quatre) et **décentré de N gp** (le sujet ne tient
+pas le centre de sa cellule, la grille a glissé). Un décentrement au-delà de
+2 gros pixels signale une planche à refaire, pas à rattraper.
+
+---
+
 ## 4. Conditionnement — les trois opérations, non négociables
 
 Ce qui sort de ChatGPT n'est pas encore un sprite. Trois opérations, dans cet
@@ -329,9 +387,10 @@ et non aérodynamique. Ce qui manque, c'est la forme. Proposition à essayer :
 > portante. L'accent occupe un anneau large sur le moyeu.
 
 Le Dard est une **grammaire**, pas une unité : elle se décline sur les quatre
-aéronefs (`crecelle`, `busard`, `frappeur`, `enclume`) en faisant varier la
-taille du moyeu et le nombre de modules — trois pour les 10 points, cinq pour
-`enclume` à 15 points.
+aéronefs (`crecelle`, `busard`, `frappeur`, `enclume`) en faisant varier le
+nombre de modules — trois pour les 10 points, cinq pour `enclume` à 15. C'est
+exactement le compteur de pièces d'A6, et il s'applique de la même façon aux
+aéronefs du joueur.
 
 Un aéronef reste en **régime B**, comme les autres unités : ce n'est pas parce
 qu'il vole qu'il gagne du volume. Son altitude se lit au seul décalage de son
@@ -433,22 +492,45 @@ Tableau de paramètres, à recopier champ par champ dans le gabarit. `points`
 donne l'empreinte (échelle A6), `specialite` donne l'accent, `chassis` donne la
 forme.
 
-| Clé | Châssis | Accent | Points | Empreinte |
-|---|---|---|---|---|
-| `meute` | infanterie | blanc | 5 | 18 × 18 |
-| `guetteur` | infanterie | blanc | 10 | 24 × 24 |
-| `perceurs` | infanterie | jaune | 5 | 18 × 18 |
-| `fouisseurs` | infanterie | jaune | 10 | 24 × 24 |
-| `carapace` | infanterie | rouge | 10 | 24 × 24 |
-| `ratisseur` | véhicule | blanc | 10 | 24 × 24 |
-| `fendeur` | véhicule | rouge | 10 | 24 × 24 |
-| `broyeur` | véhicule | rouge | 15 | 28 × 28 |
-| `belier` | véhicule | jaune | 10 | 24 × 24 |
-| `pilon` | véhicule | jaune | 15 | 28 × 28 |
-| `crecelle` | aéronef | blanc | 10 | 24 × 24 |
-| `busard` | aéronef | rouge | 10 | 24 × 24 |
-| `frappeur` | aéronef | jaune | 10 | 24 × 24 |
-| `enclume` | aéronef | jaune | 15 | 28 × 28 |
+| Clé | Châssis | Accent | Points | Empreinte | Pièces |
+|---|---|---|---|---|---|
+| `meute` | infanterie | blanc | 5 | 18 × 18 | 3 figures |
+| `guetteur` | infanterie | blanc | 10 | 24 × 24 | 5 figures |
+| `perceurs` | infanterie | jaune | 5 | 18 × 18 | 3 figures |
+| `fouisseurs` | infanterie | jaune | 10 | 24 × 24 | 5 figures |
+| `carapace` | infanterie | rouge | 10 | 24 × 24 | 5 figures |
+| `ratisseur` | véhicule | blanc | 10 | 24 × 24 | 1 tube |
+| `fendeur` | véhicule | rouge | 10 | 24 × 24 | 1 tube |
+| `broyeur` | véhicule | rouge | 15 | 28 × 28 | **2 tubes**, double train |
+| `belier` | véhicule | jaune | 10 | 24 × 24 | 1 tube |
+| `pilon` | véhicule | jaune | 15 | 28 × 28 | **2 tubes**, double train |
+| `crecelle` | aéronef | blanc | 10 | 24 × 24 | 3 modules |
+| `busard` | aéronef | rouge | 10 | 24 × 24 | 3 modules |
+| `frappeur` | aéronef | jaune | 10 | 24 × 24 | 3 modules |
+| `enclume` | aéronef | jaune | 15 | 28 × 28 | **5 modules** |
+
+**La colonne Pièces est le vrai signal de coût, l'empreinte n'est que
+l'appoint.** Un écart de 24 à 28 gros pixels fait 17 % : personne ne le verra sur
+deux unités qui ne sont jamais côte à côte. Un écart de trois à cinq figures se
+compte d'un coup d'œil.
+
+La conséquence tient en une phrase, et elle va dans les prompts d'escouade :
+**la figure garde une taille constante d'environ 8 gros pixels, quel que soit le
+coût.** C'est le nombre qui monte, pas la taille qui descend — sinon cinq
+fantassins dans 24 gros pixels redeviennent une bouillie, et on aura perdu la
+lisibilité pour gagner un signal qu'on ne lit pas.
+
+Formulation à employer, plutôt que « plus grand » ou « plus imposant » :
+
+```
+Cinq figures identiques d'environ 8 gros pixels de haut chacune, disposées en
+deux rangs — trois devant, deux derrière — sans se toucher, l'ensemble tenant
+dans 24 × 24 gros pixels.
+```
+
+⚠ Le nombre de pièces code le **coût**, jamais la classe : cinq figures restent
+une escouade, deux tubes restent un blindé. La forme code la classe (§1.3 de la
+fiche) et rien ne change de ce côté.
 
 Les quatorze sont en **régime B — face visible de 1 à 2 gros pixels, jamais
 plus**. C'est la contrepartie exacte de la rotation à 90° et du miroir : la
@@ -459,6 +541,12 @@ et personne ne la verra ; à 6 px, tout le monde.
 Une empreinte de 28 × 28 (les trois unités à 15 points) est **au maximum
 absolu** : il n'y a plus un seul gros pixel de jeu, canon compris. Le rappeler
 dans ces trois prompts-là.
+
+Deux valeurs seulement par châssis, jamais trois : les escouades opposent 5 à 10
+(aucune à 15), les blindés et les aéronefs opposent 10 à 15 (aucun à 5). Il n'y
+a donc que **deux sprites sur vingt-huit à 18 gros pixels** — `meute` et
+`perceurs`. Le cas « trop petit pour être lisible » est marginal, et c'est
+l'opposition 24 / 28 qui demande le compteur de pièces.
 
 Côté Ouvrage, le châssis se traduit dans l'autre grammaire, et c'est cette
 traduction qui porte toute l'opposition : *infanterie → essaim* (plus de
@@ -567,7 +655,8 @@ noire.*
 
 ---
 
-*v2 — 26/08/2026. Réécrit après l'arbitrage sur la vue : top-down haut à 75°,
+*v3 — 26/08/2026. Ajout du §3 bis (planches) et du compteur de pièces d'A6.
+v2 — 26/08/2026. Réécrit après l'arbitrage sur la vue : top-down haut à 75°,
 non-dépassement de case absolu, trois régimes d'inclinaison, rotation limitée aux
 véhicules (90°) et miroir limité à l'infanterie. Voir les amendements A4, A6 et
 A7 d'`INVENTAIRE-SPRITES.md`, dont A7 modifie le §1.1 de `FICHE-STYLE.md`. Le

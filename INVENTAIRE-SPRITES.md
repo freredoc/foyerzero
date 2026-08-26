@@ -104,13 +104,46 @@ L'interdit du §11 devient : *aucune SECONDE ORIENTATION DESSINÉE*. On ne produ
 jamais un second fichier pour la même entité tournée ; on ne tourne au rendu que
 ce qui figure dans ce tableau.
 
-**A6 — l'échelle des empreintes devient 18 / 24 / 28.** [tranché 26/08]
+**A6 — empreintes 18 / 24 / 28, doublées d'un compteur de pièces.** [tranché 26/08]
 La fiche §7 annonçait 20 / 26 / 30 gros pixels sur 32 pour 5 / 10 / 15 points, la
 dernière valeur étant décrite comme « case débordante ». Le non-dépassement
-(A7) supprime cette possibilité, et la marge de 2 gros pixels sur les quatre
-bords plafonne à 28. Nouvelle échelle : **18 / 24 / 28**, ce qui creuse en plus
-l'écart entre 5 et 10 points — la fiche le demandait, 20 contre 26 ne le donnait
-pas.
+(A7) supprime cette possibilité et la marge de 2 gros pixels plafonne à 28.
+Nouvelle échelle : **18 / 24 / 28**.
+
+Mais la taille seule ne suffit pas, et le relevé de `combat.js` dit pourquoi :
+**l'échelle ne sert jamais à trois valeurs, seulement à trois oppositions
+binaires**, une par châssis.
+
+| Châssis | Opposition réelle | Absent |
+|---|---|---|
+| Escouade | 5 (`meute`, `perceurs`) contre 10 (`guetteur`, `fouisseurs`, `carapace`) | pas de 15 |
+| Blindé | 10 (`ratisseur`, `fendeur`, `belier`) contre 15 (`broyeur`, `pilon`) | pas de 5 |
+| Aéronef | 10 (`crecelle`, `busard`, `frappeur`) contre 15 (`enclume`) | pas de 5 |
+
+Deux conséquences. D'abord **18 gros pixels ne concerne que deux sprites sur
+vingt-huit** — le cas « trop petit pour être lisible » est marginal. Ensuite
+**24 contre 28 fait 17 % d'écart**, ce que personne ne verra sur deux unités qui
+ne sont jamais côte à côte.
+
+D'où le second signal : **compter des pièces**. La pièce garde une taille
+lisible, c'est son NOMBRE qui code le coût.
+
+| Châssis | 5 points | 10 points | 15 points |
+|---|---|---|---|
+| Escouade | **3 figures** | **5 figures** | — |
+| Blindé | — | **1 tube**, train de chenilles simple | **2 tubes**, double train |
+| Aéronef | — | **3 modules** radiaux | **5 modules** |
+
+C'est ce qui évite la bouillie : un fantassin garde **environ 8 gros pixels**
+quel que soit le coût de l'escouade, et l'empreinte passe de 18 à 24 par
+accumulation, pas par étirement. Un signal discret qui se compte, doublé d'un
+signal continu qui se voit ; aucun des deux ne demande de détail sous le gros
+pixel. La grammaire de l'aéronef est celle qui était déjà écrite pour le Dard
+(3 modules, 5 pour `enclume`) — elle est simplement généralisée au joueur.
+
+⚠ Le §1.3 de la fiche tient toujours : **la forme code la classe**. Le nombre de
+pièces code le coût, pas la classe — cinq figures restent une escouade, deux
+tubes restent un blindé. On n'ajoute pas un axe, on gradue celui de la taille.
 
 **A7 — vue top-down haute (~75°), non-dépassement absolu.** [tranché 26/08]
 Remplace le « zénithal strict » du §1.1 de la fiche. La caméra est à **75° de
@@ -274,22 +307,22 @@ Chaque ligne donne deux fichiers : `off_j_<cle>.png` (joueur, rampe kaki, armée
 régulière) et `off_o_<cle>.png` (Ouvrage, rampe ennemie, radial + pattes +
 accent émis).
 
-| Clé | Joueur | Ouvrage | Châssis | Accent | Points → empreinte |
+| Clé | Joueur | Ouvrage | Châssis | Accent | Points → empreinte · pièces |
 |---|---|---|---|---|---|
-| `meute` | Fusiliers | Meute | escouade | **ai** blanc | 5 → ~20×20 |
-| `guetteur` | Voltigeurs | Guetteur | escouade | **ai** blanc | 10 → ~26×26 |
-| `perceurs` | Grenadiers | Perceurs | escouade | **aa** jaune | 5 → ~20×20 |
-| `fouisseurs` | Sapeurs | Fouisseurs | escouade | **aa** jaune | 10 → ~26×26 |
-| `carapace` | Cuirassiers | Carapace | escouade | **av** rouge | 10 → ~26×26 |
-| `ratisseur` | Éclaireur | Ratisseur | blindé | **ai** blanc | 10 → ~26×26 |
-| `fendeur` | Chasseur | Fendeur | blindé | **av** rouge | 10 → ~26×26 |
-| `broyeur` | Percheron | Broyeur | blindé | **av** rouge | 15 → ~30×30 |
-| `belier` | Pionnier | Bélier | blindé | **aa** jaune | 10 → ~26×26 |
-| `pilon` | Obusier | Pilon | blindé | **aa** jaune | 15 → ~30×30 |
-| `crecelle` | Milan | Crécelle | aéronef | **ai** blanc | 10 → ~26×26 |
-| `busard` | Épervier | Busard | aéronef | **av** rouge | 10 → ~26×26 |
-| `frappeur` | Foudre | Frappeur | aéronef | **aa** jaune | 10 → ~26×26 |
-| `enclume` | Albatros | Enclume | aéronef | **aa** jaune | 15 → ~30×30 |
+| `meute` | Fusiliers | Meute | escouade | **ai** blanc | 5 → 18 × 18 · 3 figures |
+| `guetteur` | Voltigeurs | Guetteur | escouade | **ai** blanc | 10 → 24 × 24 · 5 figures |
+| `perceurs` | Grenadiers | Perceurs | escouade | **aa** jaune | 5 → 18 × 18 · 3 figures |
+| `fouisseurs` | Sapeurs | Fouisseurs | escouade | **aa** jaune | 10 → 24 × 24 · 5 figures |
+| `carapace` | Cuirassiers | Carapace | escouade | **av** rouge | 10 → 24 × 24 · 5 figures |
+| `ratisseur` | Éclaireur | Ratisseur | blindé | **ai** blanc | 10 → 24 × 24 · 1 tube |
+| `fendeur` | Chasseur | Fendeur | blindé | **av** rouge | 10 → 24 × 24 · 1 tube |
+| `broyeur` | Percheron | Broyeur | blindé | **av** rouge | 15 → 28 × 28 · **2 tubes** |
+| `belier` | Pionnier | Bélier | blindé | **aa** jaune | 10 → 24 × 24 · 1 tube |
+| `pilon` | Obusier | Pilon | blindé | **aa** jaune | 15 → 28 × 28 · **2 tubes** |
+| `crecelle` | Milan | Crécelle | aéronef | **ai** blanc | 10 → 24 × 24 · 3 modules |
+| `busard` | Épervier | Busard | aéronef | **av** rouge | 10 → 24 × 24 · 3 modules |
+| `frappeur` | Foudre | Frappeur | aéronef | **aa** jaune | 10 → 24 × 24 · 3 modules |
+| `enclume` | Albatros | Enclume | aéronef | **aa** jaune | 15 → 28 × 28 · **5 modules** |
 
 **Pourquoi l'anti-structure est jaune.** Il n'y a que trois accents, et la
 troisième colonne de dégâts s'appelle `structureOuAviation` : elle vaut
@@ -301,6 +334,11 @@ champ. Aucune variante de couleur à produire pour la garnison.
 **Longue portée.** Le Guetteur (2,5) et tous les blindés à 2,5 portent le tube
 long du §5. Ils ne prennent PAS le suffixe `_r`, réservé aux artilleries
 défensives à portée minimale.
+
+**Les pièces se comptent, la taille se voit.** La dernière colonne porte les deux
+signaux d'A6. Le nombre de figures, de tubes ou de modules est le signal fiable à
+40 px ; l'empreinte est le signal d'appoint. Ne jamais rétrécir la pièce pour
+tenir dans l'empreinte : c'est l'empreinte qui suit le nombre de pièces.
 
 **Vitesse et masse ne se dessinent pas.** Le Frappeur à 240 milli-cases/tick et
 le Pilon à 60 se distinguent au mouvement, pas au sprite. Ne pas essayer de coder
@@ -730,7 +768,7 @@ chacune reviendra dans une conversation future si elle n'est pas notée ici.
 
 *v3 — 26/08/2026. Arbitrages §2.4, §3.4, §5.3, §5.4, §6.2 tranchés par Ethan.
 Amendements ajoutés : A4 (deux transformations au rendu, et seulement deux),
-A5 (défenses monolithiques), A6 (empreintes 18/24/28), A7 (top-down à 75°,
+A5 (défenses monolithiques), A6 (empreintes 18/24/28 + compteur de pièces), A7 (top-down à 75°,
 non-dépassement absolu, trois régimes d'inclinaison). Pipeline basculé sur
 génération par modèle d'image, cf. `BRIEF-SPRITES-IA.md`. A7 modifie le §1.1 de
 `FICHE-STYLE.md`, qui est son premier principe non négociable : la fiche doit
