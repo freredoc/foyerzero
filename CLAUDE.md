@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **25/08/2026**, version 0.11.0 · build 11.
+Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
 
 ---
 
@@ -18,10 +18,14 @@ Dernière révision : **25/08/2026**, version 0.11.0 · build 11.
    Elle dit où en est le projet, ce qui est ouvert et ce qui a coûté cher.
 3. **Lister** la racine, `src/`, `src/data/`, `src/sim/`, `src/render/`,
    `src/ui/` et `test/`. Ne jamais se fier à la mémoire pour l'arborescence, ni
-   à la §2 de ce fichier : elle a déjà menti.
+   à la §2 de ce fichier : **elle a déjà menti, deux fois.** Elle est relevée le
+   26/08/2026 ; elle sera périmée le jour où quelqu'un ajoutera un fichier.
 4. `npm ci && npm run check` **avant de toucher quoi que ce soit**, et consigner
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
+
+**Référence au 26/08/2026, à confronter :** `npm test` → **154 pass / 0 fail**,
+`npm run build` → `dist/index.html`, **81 236 octets**, 0 référence externe.
 
 ---
 
@@ -34,9 +38,15 @@ Dans cet ordre, sans exception :
 | 1 | `SPEC-FOYER-ZERO.md` | **la spécification. Arbitrée par Ethan. Fait autorité.** |
 | 2 | `src/data/*.js` | transcription figée de la spec, **seule source lue par le code** |
 | 3 | `PASSATION-*.md` (la plus récente) | état du projet, décisions du jour, pièges |
-| 4 | `MODELE-REPARATION-1.md`, `COURBE-DE-NIVEAU-2.md`, `BASE-DU-JOUEUR-1.md`, `PATCH-grille-vagues-portrait.md` | arbitrages du 24–25/08, dictés par Ethan |
-| 5 | `ANNEXE-STATS.md`, `MODELE-COMBAT.md`, `MODELE-ECONOMIQUE.md`, `ROSTER.md` | appui, partiellement périmés |
-| 6 | `RELEVE-TA-*.md`, `REFERENCE-TA.md`, `COMPTE-RENDU.md`, `AUDIT-CALIBRAGE.md`, `RAPPORT-*.md` | matière première et historique |
+| 4 | `MODELE-REPARATION-1.md`, `COURBE-DE-NIVEAU-2.md`, `BASE-DU-JOUEUR-1.md`, `PATCH-grille-vagues-portrait.md` | arbitrages des 24–25/08, dictés par Ethan |
+| 5 | `ANNEXE-STATS.md`, `MODELE-COMBAT.md`, `MODELE-ECONOMIQUE.md`, `ROSTER.md`, `ARBRE-RECHERCHE.md` | appui, partiellement périmés |
+| 6 | `RELEVE-TA-*.md`, `REFERENCE-TA.md`, `COMPTE-RENDU.md`, `AUDIT-CALIBRAGE.md`, `SESSION-RELEVE-BUTIN.md`, `SYNTHESE-ET-PLAN.md`, `RAPPORT-*.md` | matière première et historique |
+
+**Pour les sprites, une hiérarchie à part** — `FICHE-STYLE.md` dit COMMENT
+dessiner et fait foi sur le style ; `INVENTAIRE-SPRITES.md` dit QUOI dessiner et
+sous quel nom de fichier, et fait foi sur la liste ; `BRIEF-SPRITES-IA.md` dit
+COMMENT LE DEMANDER à un modèle d'image. Les trois se lisent ensemble, aucun ne
+remplace les deux autres. Les étalons visuels sont dans `art/etalon/`.
 
 ⚠ **Les documents du rang 4 se citent entre eux SANS leur suffixe** —
 `MODELE-REPARATION-1.md` renvoie à `COURBE-DE-NIVEAU.md` et à
@@ -62,7 +72,7 @@ pas dans le classeur.
 - `SPEC-FOYER-ZERO.md` l. 281 se contredit dans sa propre cellule : « couloir
   **9 × 300**, format téléphone : 30 de large ». C'est **30 × 300**, arbitré le
   24/08. ⚠ C'est le fichier de rang 1 : le laisser faux, c'est laisser la source
-  de vérité mentir.
+  de vérité mentir. **Toujours ouvert.**
 - `SPEC-FOYER-ZERO.md` §1 et §2, constante « réparation gratuite 70 % » :
   **périmée**, c'est 100 % en une heure (`MODELE-REPARATION-1.md` §3). Idem pour
   « plancher de PV des défenseurs : 1 % » — c'est **1 PV**, et ce n'est pas une
@@ -78,11 +88,11 @@ pas dans le classeur.
 
 ## 2. Arborescence réelle
 
-Relevée le 25/08/2026. **La lister quand même** : cette section a déjà été
-périmée une fois, elle annonçait `src/render/` et `src/ui/` vides.
+Relevée le **26/08/2026**, fichier par fichier. **La lister quand même.**
 
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
+
 src/data/               toutes les valeurs de calibrage — RIEN d'autre n'a le droit d'en porter
   params.js             économie du lot 1 : colis, flux continu, adjacence, stockage
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
@@ -90,20 +100,42 @@ src/data/               toutes les valeurs de calibrage — RIEN d'autre n'a le 
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
+
 src/sim/                simulation déterministe, sans DOM
-  rng.js clock.js state.js economy.js grille.js combat.js generateur.js
-src/render/             rendu, sans DOM non plus : rend des primitives
-  projection.js canvas2d.js interpolation.js scene.js
-src/ui/                 le banc d'essai et ses éditeurs
+  rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
+
+src/render/             rendu, sans DOM non plus : rend des primitives — QUATRE fichiers
+  projection.js  canvas2d.js  interpolation.js  scene.js
+
+src/ui/                 le banc d'essai et ses éditeurs — TROIS fichiers
   banc.js               SEUL fichier du dépôt qui touche le DOM
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
-test/                   *.test.js, node:test ; prereglages-lot3a.js n'est pas un test
+
+test/                   quinze *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+  arsenal  assaut  banc  cible  clock  combat  defense  economy
+  generateur  grille  rendu  repli  rng  roster  state
+
 tools/build.js          src/ → dist/index.html, un seul fichier autonome
-android/                enveloppe WebView + module maj (Kotlin, tests JVM)
+android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
+art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
+.github/workflows/ci.yml   web (build + tests) · android (tests JVM + APK) · pages (main seul)
 ```
 
-`dist/` est un produit de build, jamais commité.
+`dist/` est un produit de build, jamais commité. Le job `pages` **rebuilde le
+HTML dans le job** et génère le manifeste à partir de CE HTML : la
+désynchronisation code/livrable est structurellement impossible.
+
+### Deux fichiers de la racine qui ne sont pas ce qu'ils paraissent
+
+- **`verif.mjs` est MORT.** Il plante à l'import : il demande
+  `MATRICE_COLONNES` à `src/data/combat.js`, qui exporte `COLONNES_DEGATS`
+  depuis un lot antérieur. Et même l'import réparé, sa boucle teste `u.matrice`
+  sur des unités qui portent `u.degats` : elle sauterait tout **en silence** et
+  afficherait « ok ». Il n'est pas dans `npm run check`, donc rien ne le
+  signale. **Ne pas s'y fier tant qu'il n'est pas réparé ou supprimé.**
+- **`foyer-zero-ui.html` est une maquette**, pas un livrable ni une source du
+  build. Le jeu est `src/index.src.html`.
 
 ---
 
@@ -138,6 +170,9 @@ exécuté se déclare **non exécuté**, jamais passé.
 - **Déterminisme strict** : PRNG explicite, boucle de combat à 10 Hz,
   arithmétique entière pour l'économie par tick. Aucun `Math.random`, aucune
   dépendance à l'horloge murale dans la simulation.
+- **Aucun débit ne s'arrondit par tick.** Un débit se range PAR HEURE, entier,
+  et le porteur garde un résidu — voir §6, « Sur l'économie ». La conversion
+  passe par `TICKS_PAR_HEURE` de `sim/clock.js`, et par elle seule.
 - **Deux jeux de noms.** Le joueur emploie le vocabulaire d'une armée régulière
   (Fusiliers, Grenadiers, Mur de défense…), l'Ouvrage celui des outils et des
   bêtes (Meute, Perceurs, Merlon…). Même ligne de données, `nom.joueur` et
@@ -172,7 +207,8 @@ Dans les deux cas :
 - Le **merge sur `main` appartient à Ethan seul.**
 - Toujours dire si la livraison laisse la suite **verte ou rouge, mesuré et non
   estimé**, et découper pour que ce qui peut être commité tout de suite le soit
-  sans casser `main`.
+  sans casser `main`. **Et dire quand ce n'est PAS découpable** : un lot qui
+  change une unité de mesure se commite d'un bloc ou laisse `main` rouge.
 - Un lot confié à Claude Code produit un `RAPPORT-<lot>.md` **écrit sur disque**,
   nom descriptif. Contenu minimal : version et build réellement produits,
   fichiers touchés, résultat de chaque test (PASS/KO et montage effectif),
@@ -191,6 +227,11 @@ une assertion sans le dire.
 
 Les seuils **se calculent, ne se devinent pas**. Cinq graines et une médiane au
 minimum : une seule graine ne mesure rien.
+
+**Un montage doit être falsifiable.** Asserter d'abord que le montage mesure
+quelque chose — qu'un débit n'est pas divisible avant de tester un résidu, qu'un
+bonus n'est pas nul avant de le comparer, qu'un stock sature bien dans la
+fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 
 ---
 
@@ -213,7 +254,42 @@ minimum : une seule graine ne mesure rien.
   sert la première, `facteurEconomiqueMilli` la seconde. Un test asserte que la
   divergence est bien celle qu'on a voulue, et il tombera si on les réaligne.
 
-### Sur le moteur
+### Sur l'économie
+
+- **`sim/economy.js` range un débit PAR HEURE, jamais par tick.** Chaque
+  bâtiment porte `residuFlux` dans l'état ; l'erreur d'arrondi par tick est
+  exactement nulle, à n'importe quelle fréquence. Le nom de la fonction est
+  `debitMilliParHeure` — `fluxMilliParTick` n'existe plus, et le recréer
+  réintroduirait un arrondi qui coûtait jusqu'à 0,71 % de production.
+- **Le rattrapage ne calcule JAMAIS `nbTicks × debit`.** Sur une longue absence
+  ce produit atteint 4,2 × 10¹⁸, soit 471 fois au-dessus de l'entier sûr — la
+  formule fermée « évidente » dérive en silence. Il décompose `nbTicks` en
+  heures pleines + reste (arithmétique modulaire) et **borne les heures pleines
+  à ce qu'il faut pour saturer** : au-delà le stock vaut la capacité de toute
+  façon, donc le produit n'a plus à être exact, donc il n'a plus le droit d'être
+  grand.
+- **`DEBIT_MILLI_PAR_HEURE_MAX`** (2,502 × 10¹¹ milli/h à 10 Hz) est le seuil
+  au-delà duquel l'exactitude tomberait. Le débit le plus lourd du jeu —
+  collecteur niveau 50 de `data/base.js`, 13 452 465 unités/h — est **19 fois
+  dessous seulement**. La marge est réelle et pas confortable : le rattrapage
+  **lève** si elle est franchie, plutôt que de dériver. Une donnée future qui
+  multiplierait un débit par 20 doit faire descendre la fréquence de tick, pas
+  franchir le seuil.
+- **Le résidu avance MÊME stockage plein.** Le geler casserait l'exactitude du
+  rattrapage : la composition `min(cap, min(cap, x+a)+b) = min(cap, x+a+b)` ne
+  tient que si les gains sont indépendants de l'état du stock. Un test le garde,
+  avec le commentaire qui dit pourquoi.
+- **`sim/economy.js` ne connaît qu'une capacité de stockage globale**
+  (`params.stockage.capaciteMilli`). La capacité par bâtiment de `data/base.js`
+  — `capaciteDuNiveau()`, ancrée sur `STOCKAGE.autonomieHeures` — n'est lue par
+  personne, comme `base.js` tout entier.
+- **BigInt reste obligatoire** pour les points de recherche : le plafond du
+  barème tient largement, mais le produit complet atteint encore 5,2 × 10²¹.
+- **`butinPlein` n'est délibérément PAS refactorisé.** La multiplication
+  flottante n'est pas associative : regrouper les facteurs autrement déplace le
+  butin d'une unité, et six tests le mesurent au champ près.
+
+### Sur le moteur de combat
 
 - **Un obstacle interdit de POSER, rien d'autre.** Il ne bloque le déplacement
   de personne : pour un attaquant il ne fait que ralentir. Et aucun défenseur ne
@@ -226,10 +302,13 @@ minimum : une seule graine ne mesure rien.
 - **`ajouterEntite` destructure une LISTE FERMÉE.** Un champ passé par
   l'appelant et absent de cette liste disparaît en silence. L'ajouter, c'est
   l'ajouter aux DEUX endroits.
-- **BigInt reste obligatoire** pour les points de recherche : le plafond du
-  barème tient largement, mais le produit complet atteint encore 5,2 × 10²¹.
 - Un montage veut un **type** d'obstacle : `infanterie`, `vehicule` ou
   `les_deux`. Un type inconnu fait lever `creerCombat`.
+- **Changer la clé d'une fonction oblige à suivre TOUS ses appelants.**
+  `nomAffiche` est passé du camp au propriétaire, et le panneau de fin lui
+  forgeait son argument à la main : les survivants du joueur se sont affichés
+  « Meute » pendant un commit entier. Le T18 de `defense.test.js` garde la
+  régression **et le piège**.
 
 ### Sur les tests et l'outillage
 
@@ -237,10 +316,14 @@ minimum : une seule graine ne mesure rien.
   `/\bdocument\b/`. `\b` est ASCII en JavaScript : **le mot « documenté » la
   déclenche**. Écrire « consigné » dans `src/sim/`, ou corriger la garde avec
   `` new RegExp(`(?<![\p{L}\p{N}_])${mot}(?![\p{L}\p{N}_])`, 'u') ``.
+  **Toujours ouvert.**
 - **Un montage de test doit tenir dans le budget** — sinon il ne prouve rien.
-- **La multiplication flottante n'est pas associative.** Refactoriser un produit
-  « sans rien changer » peut déplacer un butin d'une unité, et six tests le
-  mesurent au champ près.
+  Huit Faucheuses au niveau 30 font 202 points pour un budget de 190.
+- **`[hidden]` ne cache rien contre un sélecteur d'id.** `#banc-arsenal` fixe
+  `display: flex` (spécificité 1,0,0) et l'emporte sur `[hidden]` (0,1,0). D'où
+  le `!important` en tête de feuille.
+- **`isDisabled()` de Playwright ne connaît pas `<option>`** — il rend toujours
+  `false`. Lire `element.disabled`.
 - **L'API GitHub est en rate-limit partagé.** Passer par
   `codeload.github.com/<repo>/tar.gz/refs/heads/main`, et pour une PR par
   `refs/pull/<n>/head`.
@@ -250,4 +333,15 @@ minimum : une seule graine ne mesure rien.
 - Ne jamais dire « l'IA » en parlant de l'adversaire : c'est **l'Ouvrage**.
 - Sur l'écran de Défense : **« engagement réduit »**, jamais « inerte ».
 - Le champ du bilan s'appelle `verrouilles` en défense et `verrouillees` à
-  l'Arsenal. Les deux grilles ne portent pas les mêmes objets.
+  l'Arsenal. Les deux grilles ne portent pas les mêmes objets, et recopier le
+  nom de l'Arsenal donne `undefined.length`.
+
+### Sur la méthode
+
+- **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
+  toutes des affirmations écrites sans mesure : l'inertie de l'artillerie
+  avancée, `depuisDefenseurs` qui « refuserait les cases interdites », le calcul
+  des points d'armée offensifs, la borne de débordement de l'économie
+  (annoncée « deux fois sous l'entier sûr », mesurée 471 fois au-dessus), la
+  marge du seuil de débit (annoncée 19 000, mesurée 19). Une grandeur qui
+  s'écrit se calcule d'abord.
