@@ -91,20 +91,29 @@ test('test 3 bis — le déterminisme tient aussi quand le PRNG est consommé da
 
 test('test 4 — src/sim/ ne contient aucune référence navigateur ni horloge système', () => {
   const racineSim = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'sim');
+
+  // ⚠ `\b` EST ASCII EN JAVASCRIPT. `/\bdocument\b/` matchait « documenté »,
+  // « documentation », « documentaire » — la frontière tombant entre le « t »
+  // et le « é ». La garde se déclenchait donc sur un commentaire français
+  // parfaitement innocent, et on avait pris l'habitude d'écrire « consigné »
+  // pour la contourner. On borne désormais par « ni lettre, ni chiffre, ni
+  // souligné », en Unicode : `documenté` passe, `document.x` est attrapé.
+  const mot = (m) => new RegExp(`(?<![\\p{L}\\p{N}_])${m}(?![\\p{L}\\p{N}_])`, 'u');
+
   const interdits = [
-    /\bwindow\b/,
-    /\bdocument\b/,
-    /\blocalStorage\b/,
-    /\bsetTimeout\b/,
-    /\bsetInterval\b/,
-    /\brequestAnimationFrame\b/,
-    /\bXMLHttpRequest\b/,
-    /\bfetch\b/,
-    /\bnavigator\b/,
+    mot('window'),
+    mot('document'),
+    mot('localStorage'),
+    mot('setTimeout'),
+    mot('setInterval'),
+    mot('requestAnimationFrame'),
+    mot('XMLHttpRequest'),
+    mot('fetch'),
+    mot('navigator'),
     /Math\s*\.\s*random/,
     /Date\s*\.\s*now/,
     /performance\s*\.\s*now/,
-    /new\s+Date\b/,
+    /new\s+Date(?![\p{L}\p{N}_])/u,
   ];
 
   const fichiers = readdirSync(racineSim, { recursive: true, withFileTypes: true })
@@ -130,4 +139,28 @@ test('test 4 — src/sim/ ne contient aucune référence navigateur ni horloge s
     interdits.some((motif) => motif.test(appat)),
     'les motifs interdits ne détectent même pas un appât évident',
   );
+
+  // Et l'inverse, qui est le défaut qu'on vient de corriger : un mot français
+  // dont un motif interdit est le préfixe ne doit PLUS rien déclencher.
+  for (const innocent of [
+    'ce comportement est documenté ci-dessus',
+    'la documentation du module',
+    'un fetchage maison', // « fetch » en préfixe
+    'le navigateur n’est pas ici', // « navigator » n’y est pas, mais « navigat » oui
+    'windows de la maison',
+  ]) {
+    const attrape = interdits.filter((motif) => motif.test(innocent));
+    assert.equal(
+      attrape.length, 0,
+      `la garde se déclenche sur « ${innocent} » : ${attrape.map(String).join(', ')}`,
+    );
+  }
+
+  // Et les vraies violations restent attrapées, mot pour mot.
+  for (const coupable of ['document.body', 'window.x', 'await fetch(url)', 'navigator.userAgent']) {
+    assert.ok(
+      interdits.some((motif) => motif.test(coupable)),
+      `la garde laisse passer « ${coupable} »`,
+    );
+  }
 });
