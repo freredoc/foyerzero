@@ -16,14 +16,29 @@
 
 import { GEOGRAPHIE } from './sites.js';
 import { ECONOMIE_NIVEAU } from './economie.js';
+import { GRILLE } from './combat.js';
 
 // ---------------------------------------------------------------------------
 // Les onze bâtiments
 // ---------------------------------------------------------------------------
 //
-// `nom.joueur` est le nom affiché. `nom.ouvrage` n'existe que pour les trois
+// `nom.joueur` est le nom affiché. `nom.ouvrage` n'existe que pour les
 // bâtiments qui ont un pendant côté Ouvrage — les autres n'en ont pas, et la
 // clé est absente plutôt que vide : `hasOwnProperty` doit pouvoir trancher.
+//
+// ⚠ ILS SONT QUATRE, pas trois. Cette ligne annonçait « trois » depuis le
+// 25/08 sans que personne ne compte : Souche, Étai, Nœud et Gangue. Corrigé et
+// MESURÉ le 26/08, et un test l'asserte désormais par `hasOwnProperty` — le
+// nombre ne pourra plus dériver en silence.
+//
+// ⚠ ET LE CINQUIÈME MANQUE. sites.js porte CINQ bâtiments de site : souche,
+// etai, noeud, gangue, terril. Le Terril n'a aucun pendant ici. Or la
+// raffinerie stocke `quartzOuScorie`, et côté Ouvrage la Gangue est le silo à
+// quartz quand le Terril est le tas de scorie : une raffinerie qui stocke de la
+// scorie devrait s'appeler Terril, pas Gangue. À arbitrer — soit la raffinerie
+// porte deux noms d'Ouvrage selon sa ressource, soit `nom.ouvrage` n'est qu'un
+// équivalent approximatif et la ligne est bonne telle quelle. Non tranché, donc
+// non modifié.
 //
 // `pv` et `reparationSec` valent au NIVEAU 1. Ils montent avec facteurMilli de
 // sim/combat.js, comme tout le reste des PV du jeu.
@@ -88,10 +103,15 @@ export const BASE_BATIMENTS = {
     classeDeCout: 'courant',
     plancherPv: true,
   },
-  usine: {
-    // « Nom TA » arbitré le 25/08 : Factory → Usine. Ethan emploie d'ailleurs
-    // déjà « usine » dans la ligne des coûts du classeur (EFFETS D28).
-    nom: { joueur: 'Usine' },
+  depotDeVehicules: {
+    // ⚠ TROIS NOMS ONT COEXISTÉ pour ce bâtiment, et c'est ce qui a fait perdre
+    // du temps : la clé disait `usine` / « Usine » (nom TA, Factory), le
+    // commentaire de COUT_NIVEAU_DEUX du même fichier disait « dépôt de
+    // véhicules », et MODELE-REPARATION-1.md §3 dit encore « atelier ».
+    // ARBITRÉ le 26/08 par Ethan : c'est **Dépôt de véhicules**, ce qui
+    // reprend le nom qu'il avait déjà donné le 24/08 (BASE-DU-JOUEUR-1.md §2).
+    // `ta` garde Factory : c'est l'équivalent, pas le nom.
+    nom: { joueur: 'Dépôt de véhicules' },
     ta: 'Factory',
     role: 'production',
     chassis: 'blinde',
@@ -205,6 +225,146 @@ export function emplacementsDuNiveau(niveau) {
 }
 
 // ---------------------------------------------------------------------------
+// Géométrie — la base du joueur EST la bande « bâtiments » de la grille
+// ---------------------------------------------------------------------------
+//
+// ARBITRÉ le 26/08 par Ethan : « la base du joueur, une base ennemie, un camp,
+// un avant-poste, c'est la même géométrie ». Il n'y a donc PAS de grille propre
+// à la base du joueur, et il ne faut surtout pas en écrire une : les
+// dimensions vivent dans GRILLE de data/combat.js, et elles y vivent seules.
+// CLAUDE.md §4 — une table fait foi par grandeur.
+//
+//   grille complète    9 colonnes × 18 rangées
+//   déploiement        rangées  1–2    les vagues y apparaissent
+//   défense            rangées  3–10   8 rangées
+//   bâtiments          rangées 11–18   8 rangées × 9 colonnes = 72 cases
+//
+// La base du joueur occupe les 72 cases de la bande « bâtiments ». Le plafond
+// d'emplacements du Chantier (40) est donc TOUJOURS le plafond mordant : il
+// reste 32 cases que le Chantier n'ouvrira jamais, même au niveau 50. Ce n'est
+// pas un défaut — c'est ce qui laisse de la place aux champs et aux passages.
+
+export const GEOMETRIE_BASE = {
+  // Références, pas copies. Un changement de GRILLE se propage tout seul.
+  premiereRangee: GRILLE.bandes.batiments.premiere,
+  derniereRangee: GRILLE.bandes.batiments.derniere,
+  premiereColonne: 1,
+  derniereColonne: GRILLE.largeur,
+};
+
+// ---------------------------------------------------------------------------
+// Champs de ressource — le socle des collecteurs
+// ---------------------------------------------------------------------------
+//
+// ARBITRÉ le 26/08 par Ethan. Un champ est une case de terrain, quartz ou
+// scorie, et il est le SOCLE d'un collecteur : seul le collecteur peut se poser
+// dessus, et c'est la seule chose qui puisse s'y poser. Le nombre de cases de
+// champ plafonne donc directement le nombre de collecteurs — DOUZE, dont cinq
+// à sept en quartz. Sur une base qui n'ouvrira jamais plus de quarante
+// emplacements, c'est un plafond qui mord.
+//
+// TIRAGE DÉTERMINISTE PAR LA POSITION. « Une base posée à un endroit aura
+// toujours les mêmes champs. » La graine du tirage est la position sur la
+// carte, pas l'horloge ni la partie : deux joueurs qui s'installeraient au même
+// endroit y trouveraient le même terrain. C'est la même discipline que le reste
+// du moteur — aucun Math.random, aucune horloge murale.
+//
+// LA FORME N'EST PAS LIBRE. Les douze cases se groupent en blocs de 1, 2 ou 3
+// cases contiguës ; un triplet est droit (I) ou coudé (L), jamais autre chose.
+// C'est ce qui fait qu'un collecteur a des voisins de même nature et que la
+// disposition se lit à l'œil.
+//
+// ⚠ JAMAIS SUR LE POURTOUR. Les champs se tiennent à l'intérieur de la bande,
+// une case de marge sur les quatre côtés. L'intérieur d'un 8 × 9 vaut donc
+// 6 × 7 = 42 cases — rangées 12 à 17, colonnes 2 à 8. (Ethan avait dit « sept
+// fois cinq » de mémoire : c'est l'intérieur d'un 9 × 7, l'orientation
+// inversée. Corrigé le 26/08, mesuré sur GRILLE.)
+//
+// ⚠ CE QUI N'EST PAS ENCORE ARBITRÉ, et qui n'est donc PAS écrit ici :
+//   - ce qu'un champ de quartz fait au collecteur qui s'y pose. L'hypothèse
+//     naturelle est qu'il décide de sa ressource — DEBITS.collecteur produit
+//     `quartzOuScorie` et ne tire aucun bonus d'un champ voisin, ce qui colle.
+//     Mais elle n'est pas confirmée, donc elle n'est pas codée.
+//   - si un collecteur gagne quelque chose par case de champ ADJACENTE, comme
+//     la centrale gagne 60/h par champ de scorie voisin.
+//   - si le redéploiement du joueur (Chantier détruit, 20 cases vers le bas)
+//     retire les champs. La position change, donc le tirage change : ça
+//     découle, mais ça n'est pas dit.
+
+export const CHAMPS = {
+  /** Cases de champ posées dans une base, toutes ressources confondues. */
+  total: 12,
+
+  /**
+   * Les trois répartitions possibles des douze cases. Le tirage en choisit une.
+   * La somme vaut `total` dans les trois cas, et un test l'asserte.
+   */
+  repartitions: [
+    { quartz: 5, scorie: 7 },
+    { quartz: 6, scorie: 6 },
+    { quartz: 7, scorie: 5 },
+  ],
+
+  /** Tailles de bloc admises, en cases contiguës. */
+  taillesBloc: [1, 2, 3],
+
+  /**
+   * Formes admises pour un bloc de trois : droit ou coudé. Un bloc de deux n'a
+   * qu'une forme (le domino), un bloc d'un non plus — la contrainte ne porte
+   * que sur les triplets.
+   */
+  formesTriplet: ['droit', 'coude'],
+
+  /** Cases de marge laissées libres sur chaque bord de la bande. */
+  margeBord: 1,
+
+  /**
+   * Ce qui peut se poser sur une case de champ. Liste fermée, et volontairement
+   * une liste : si un jour un second bâtiment y a droit, il s'ajoute ici et
+   * nulle part ailleurs.
+   */
+  posableDessus: ['collecteur'],
+};
+
+/**
+ * Bornes de la zone où les champs ont le droit de tomber : la bande des
+ * bâtiments, moins la marge de bord. Calculée depuis GRILLE, jamais écrite en
+ * dur — c'est tout l'intérêt de la faire passer par une fonction.
+ * @returns {{ premiereRangee: number, derniereRangee: number,
+ *   premiereColonne: number, derniereColonne: number, nombre: number }}
+ */
+export function zoneDesChamps() {
+  const m = CHAMPS.margeBord;
+  const premiereRangee = GEOMETRIE_BASE.premiereRangee + m;
+  const derniereRangee = GEOMETRIE_BASE.derniereRangee - m;
+  const premiereColonne = GEOMETRIE_BASE.premiereColonne + m;
+  const derniereColonne = GEOMETRIE_BASE.derniereColonne - m;
+  return {
+    premiereRangee,
+    derniereRangee,
+    premiereColonne,
+    derniereColonne,
+    nombre:
+      (derniereRangee - premiereRangee + 1) * (derniereColonne - premiereColonne + 1),
+  };
+}
+
+/**
+ * La case (rangee, colonne) est-elle dans la base du joueur ?
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {boolean}
+ */
+export function estDansLaBase(rangee, colonne) {
+  return (
+    rangee >= GEOMETRIE_BASE.premiereRangee
+    && rangee <= GEOMETRIE_BASE.derniereRangee
+    && colonne >= GEOMETRIE_BASE.premiereColonne
+    && colonne <= GEOMETRIE_BASE.derniereColonne
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Réparation — une seule ligne neuve
 // ---------------------------------------------------------------------------
 //
@@ -235,6 +395,12 @@ export const REPARATION_BASE_JOUEUR = {
 //
 //   majeur   8 → 10 → 20 → 80 → 440 → 1 440 → 4 400 → 12 800 → 35 200 → …
 //   courant  5 → …    modeste  3 → …    mineur  2 → …
+//
+// ⚠ La ligne « courant » ci-dessous était le SEUL endroit du fichier à écrire
+// « dépôt de véhicules » quand la clé du bâtiment disait `usine`. Elle avait
+// raison — c'est la clé qui a été corrigée le 26/08, pas elle. Un test asserte
+// maintenant que les quatre classes couvrent exactement les onze bâtiments,
+// pour que la prochaine divergence tombe au lieu de dormir dans un commentaire.
 
 export const COUT_NIVEAU_DEUX = {
   majeur: 8, // chantier, centre de commandement, QG de défense
@@ -313,6 +479,18 @@ export const VOISINAGE = { rayon: 1, casesMax: 8 };
 // D'ABSENCE TOLÉRÉE. C'est le rôle qu'il a récupéré des colis abandonnés : il
 // borne ce qui s'accumule pendant qu'on ne joue pas. On l'écrit donc en heures,
 // et la capacité s'en déduit :
+//
+// ⚠ LES COLIS SONT MORTS — reconfirmé par Ethan le 26/08 : « ils sont bien
+// abandonnés, tous les bâtiments font de la production continue ». Il n'y a
+// donc plus qu'un seul canal de production dans le jeu, et le pack/colis n'en
+// est plus un. Deux conséquences à solder, aucune ici :
+//   - `params.colis` de data/params.js et le bloc colis de tickEconomie /
+//     rattrapageEconomie sont un RELIQUAT du lot 1. Ils tournent encore et
+//     quatre tests les gardent : les retirer est un lot à part entière, pas un
+//     effet de bord.
+//   - BASE-DU-JOUEUR-1.md §3 affirme l'inverse (« le couple pack + flux continu
+//     + voisinage est déjà implémenté »). Ce document est du 24/08 et de rang 4 :
+//     il a un jour de retard sur l'arbitrage. Ne pas le suivre sur ce point.
 //
 //   capacité(niveau) = autonomieHeures × débitPropre(niveau du bâtiment)
 //
