@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PARAMS } from '../src/data/params.js';
-import { TICKS_PAR_SECONDE } from '../src/sim/clock.js';
+import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import {
   SAVE_VERSION,
   creerEtat,
@@ -14,9 +14,9 @@ import {
   charger,
   migrer,
 } from '../src/sim/state.js';
-import { fluxMilliParTick } from '../src/sim/economy.js';
+import { debitMilliParHeure, DEBIT_MILLI_PAR_HEURE_MAX } from '../src/sim/economy.js';
+import { creerRng, entier } from '../src/sim/rng.js';
 
-const TICKS_PAR_HEURE = 3600 * TICKS_PAR_SECONDE;
 
 /**
  * Montage du test 11 : un état volontairement hétérogène —
@@ -41,11 +41,11 @@ function etatDeReference() {
 test('test 11 — rattrapage analytique identique à la simulation tick par tick (1 h, 24 h, 72 h)', () => {
   // Le montage doit contenir les deux régimes, sinon le test ne prouve rien :
   // au moins un stock qui sature pendant la fenêtre, au moins un qui non.
-  const fluxQuartz =
-    fluxMilliParTick(etatDeReference().batiments[0], PARAMS) +
-    fluxMilliParTick(etatDeReference().batiments[1], PARAMS);
+  const quartzParHeure =
+    debitMilliParHeure(etatDeReference().batiments[0], PARAMS) +
+    debitMilliParHeure(etatDeReference().batiments[1], PARAMS);
   assert.ok(
-    137_000 + fluxQuartz * TICKS_PAR_HEURE < PARAMS.stockage.capaciteMilli,
+    137_000 + quartzParHeure < PARAMS.stockage.capaciteMilli,
     'montage cassé : le quartz sature dès la première heure',
   );
 
@@ -91,6 +91,52 @@ test('test 11 bis — le rattrapage traverse correctement un colis en cours de f
   assert.equal(b.colis.progresTicks, 1234 + 4530 - 3000, 'progrès résiduel faux');
 });
 
+test('rattrapage — une très longue absence reste exacte au bit près (contrôle BigInt)', () => {
+  // Ce que le test 11 ne peut PAS atteindre : une fenêtre qu'on ne peut pas
+  // simuler tick par tick. Le rattrapage y décompose nbTicks en heures pleines
+  // + reste ; la seule référence disponible est l'arithmétique exacte, donc
+  // BigInt. Cinq cents tirages déterministes, graine fixe.
+  const rng = creerRng(20260826);
+  const TPH = TICKS_PAR_HEURE;
+  let plusGrandIntermediaire = 0;
+
+  for (let i = 0; i < 500; i++) {
+    // Débits jusqu'au millième du seuil exact, absences jusqu'à dix ans à 10 Hz.
+    const debit = entier(rng, 1, Math.floor(DEBIT_MILLI_PAR_HEURE_MAX / 1000));
+    const residuDepart = entier(rng, 0, TPH - 1);
+    const nbTicks = entier(rng, 0, 3_200_000_000);
+
+    // Référence : arithmétique exacte, sans décomposition.
+    const total = BigInt(residuDepart) + BigInt(nbTicks) * BigInt(debit);
+    const gainAttendu = total / BigInt(TPH);
+    const residuAttendu = total % BigInt(TPH);
+
+    // Ce que fait le moteur.
+    const heuresPleines = Math.floor(nbTicks / TPH);
+    const ticksRestants = nbTicks - heuresPleines * TPH;
+    const cumulPartiel = residuDepart + ticksRestants * debit;
+    plusGrandIntermediaire = Math.max(plusGrandIntermediaire, cumulPartiel);
+    const report = Math.floor(cumulPartiel / TPH);
+    const residuObtenu = cumulPartiel - report * TPH;
+    const gainObtenu = BigInt(heuresPleines) * BigInt(debit) + BigInt(report);
+
+    assert.equal(gainObtenu, gainAttendu, `gain faux au tirage ${i}`);
+    assert.equal(BigInt(residuObtenu), residuAttendu, `résidu faux au tirage ${i}`);
+  }
+
+  // Le seuil DEBIT_MILLI_PAR_HEURE_MAX doit tenir sa promesse : aucun entier
+  // intermédiaire du rattrapage n'a quitté les entiers sûrs.
+  assert.ok(
+    plusGrandIntermediaire <= Number.MAX_SAFE_INTEGER,
+    `intermédiaire ${plusGrandIntermediaire} au-dessus de l'entier sûr`,
+  );
+  // Et le montage doit avoir réellement chargé la mule, sinon il ne prouve rien.
+  assert.ok(
+    plusGrandIntermediaire > 1e12,
+    `montage trop léger : plus grand intermédiaire ${plusGrandIntermediaire}`,
+  );
+});
+
 test('sérialisation — sauvegarder en pleine partie, recharger, poursuivre : trajectoires identiques', () => {
   const continu = creerEtat(555, PARAMS);
   for (let t = 0; t < 5000; t++) tickJeu(continu, PARAMS);
@@ -130,6 +176,9 @@ test('test 12 — une sauvegarde de version N−1 se charge sans perte', () => {
   // Les champs apparus en v1 ont reçu leur valeur par défaut.
   assert.equal(etat.horloge.residuMs, 0);
   assert.equal(etat.batiments[0].voisinsQualifiants, 0);
+  // Celui apparu en v2 aussi : la chaîne 0 → 1 → 2 a bien été parcourue en
+  // entier, pas seulement son premier maillon.
+  assert.equal(etat.batiments[0].residuFlux, 0, 'la migration v1 → v2 n’a pas été appliquée');
 
   // L'état migré est fonctionnel : la boucle tourne dessus sans erreur.
   tickJeu(etat, PARAMS);

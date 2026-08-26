@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PARAMS } from '../src/data/params.js';
+import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import {
   ratioCout,
   ratioProduction,
@@ -12,7 +13,7 @@ import {
   coutNiveau,
   bonusAdjacenceRelatif,
   poidsAdjacence,
-  fluxMilliParTick,
+  debitMilliParHeure,
   intervalleColisTicks,
   tickEconomie,
 } from '../src/sim/economy.js';
@@ -102,7 +103,13 @@ function etatUnBatiment(type, niveau, voisins) {
   return {
     ressources: { quartzMilli: 0, scorieMilli: 0 },
     batiments: [
-      { type, niveau, voisinsQualifiants: voisins, colis: { enAttente: 0, progresTicks: 0 } },
+      {
+        type,
+        niveau,
+        voisinsQualifiants: voisins,
+        colis: { enAttente: 0, progresTicks: 0 },
+        residuFlux: 0,
+      },
     ],
   };
 }
@@ -129,16 +136,18 @@ test('test 9 — saturation des colis : 2 en attente après 10 min, toujours 2 a
 });
 
 test('test 10 — adjacence constante : même bonus au niveau 1 et au niveau 12, poids 50 % puis ≈ 11 %', () => {
-  // Au niveau du tick : le supplément apporté par 2 voisins est identique
-  // au niveau 1 et au niveau 12.
-  const bonusTickNiveau1 =
-    fluxMilliParTick({ type: 'foreuse', niveau: 1, voisinsQualifiants: 2 }, PARAMS) -
-    fluxMilliParTick({ type: 'foreuse', niveau: 1, voisinsQualifiants: 0 }, PARAMS);
-  const bonusTickNiveau12 =
-    fluxMilliParTick({ type: 'foreuse', niveau: 12, voisinsQualifiants: 2 }, PARAMS) -
-    fluxMilliParTick({ type: 'foreuse', niveau: 12, voisinsQualifiants: 0 }, PARAMS);
-  assert.equal(bonusTickNiveau1, bonusTickNiveau12, 'le bonus d’adjacence dépend du niveau');
-  assert.ok(bonusTickNiveau1 > 0, 'bonus d’adjacence nul : le montage ne teste rien');
+  // Au niveau du débit : le supplément apporté par 2 voisins est identique
+  // au niveau 1 et au niveau 12. C'est l'arrondi SÉPARÉ du bonus qui le
+  // garantit — le replier dans le même Math.round que la production le ferait
+  // dériver d'une milli-unité par niveau.
+  const bonusDebitNiveau1 =
+    debitMilliParHeure({ type: 'foreuse', niveau: 1, voisinsQualifiants: 2 }, PARAMS) -
+    debitMilliParHeure({ type: 'foreuse', niveau: 1, voisinsQualifiants: 0 }, PARAMS);
+  const bonusDebitNiveau12 =
+    debitMilliParHeure({ type: 'foreuse', niveau: 12, voisinsQualifiants: 2 }, PARAMS) -
+    debitMilliParHeure({ type: 'foreuse', niveau: 12, voisinsQualifiants: 0 }, PARAMS);
+  assert.equal(bonusDebitNiveau1, bonusDebitNiveau12, 'le bonus d’adjacence dépend du niveau');
+  assert.ok(bonusDebitNiveau1 > 0, 'bonus d’adjacence nul : le montage ne teste rien');
 
   // Au niveau de la courbe : bonus relatif constant, plafonné à 2 voisins.
   assert.equal(bonusAdjacenceRelatif(2, PARAMS), 1.0, '2 voisins × 0,5 × P(1) devrait faire 1,0');
@@ -159,21 +168,63 @@ test('test 10 — adjacence constante : même bonus au niveau 1 et au niveau 12,
   assert.ok(poids12 < poids1, 'le poids de l’adjacence devrait décroître avec le niveau');
 });
 
-test('flux continu — la production par tick suit P(n) et sature au stockage plein', () => {
-  // P(4) ≈ 2,2918 → round(2,2918 × 20) = 46 milli/tick pour une foreuse niveau 4.
-  const flux = fluxMilliParTick({ type: 'foreuse', niveau: 4, voisinsQualifiants: 0 }, PARAMS);
+test('débit horaire — la production suit P(n) et l’erreur d’arrondi par tick est nulle', () => {
+  // P(4) ≈ 2,2918 → round(2,2918 × 720 000) = 1 650 094 milli/h niveau 4.
+  const debit = debitMilliParHeure({ type: 'foreuse', niveau: 4, voisinsQualifiants: 0 }, PARAMS);
   assert.equal(
-    flux,
-    Math.round(productionRelative(4, PARAMS) * PARAMS.fluxContinu.baseMilliParTickNiveau1),
+    debit,
+    Math.round(productionRelative(4, PARAMS) * PARAMS.fluxContinu.baseMilliParHeureNiveau1),
   );
 
-  // Saturation : un état presque plein s'arrête exactement à la capacité.
+  // Le montage ne prouve quelque chose QUE si le débit ne tombe pas rond sur
+  // un tick : sinon il n'y a pas de résidu à mesurer.
+  assert.notEqual(debit % TICKS_PAR_HEURE, 0, 'débit divisible : le test ne mesure aucun résidu');
+
+  // Une heure de ticks produit EXACTEMENT le débit horaire, au milli près,
+  // et referme son résidu. C'est tout l'objet du lot.
   const etat = etatUnBatiment('foreuse', 4, 0);
-  etat.ressources.quartzMilli = PARAMS.stockage.capaciteMilli - flux - 1;
-  tickEconomie(etat, PARAMS);
-  assert.equal(etat.ressources.quartzMilli, PARAMS.stockage.capaciteMilli - 1);
-  tickEconomie(etat, PARAMS);
-  assert.equal(etat.ressources.quartzMilli, PARAMS.stockage.capaciteMilli, 'pas saturé à la capacité');
-  tickEconomie(etat, PARAMS);
-  assert.equal(etat.ressources.quartzMilli, PARAMS.stockage.capaciteMilli, 'le stock déborde la capacité');
+  for (let t = 0; t < TICKS_PAR_HEURE; t++) tickEconomie(etat, PARAMS);
+  assert.equal(etat.ressources.quartzMilli, debit, 'une heure de ticks ≠ un débit horaire');
+  assert.equal(etat.batiments[0].residuFlux, 0, 'résidu non nul après une heure pleine');
+
+  // Et à chaque instant intermédiaire, pas seulement au bout : le stock vaut
+  // la part entière exacte de la production cumulée, le résidu reste borné.
+  const partiel = etatUnBatiment('foreuse', 4, 0);
+  for (let t = 1; t <= 250; t++) {
+    tickEconomie(partiel, PARAMS);
+    assert.equal(
+      partiel.ressources.quartzMilli,
+      Math.floor((t * debit) / TICKS_PAR_HEURE),
+      `stock faux au tick ${t}`,
+    );
+    const r = partiel.batiments[0].residuFlux;
+    assert.ok(r >= 0 && r < TICKS_PAR_HEURE, `résidu hors bornes au tick ${t} : ${r}`);
+  }
+
+  // Témoin de l'ancien régime : arrondir le débit AU TICK coûtait 0,36 % à ce
+  // niveau, en permanence. Seuil calculé sur le montage, pas deviné.
+  const ancienParTick = Math.round(debit / TICKS_PAR_HEURE);
+  const perte = Math.abs(ancienParTick * TICKS_PAR_HEURE - debit) / debit;
+  assert.ok(perte > 0.003, `montage sans intérêt : l’ancien arrondi ne coûtait que ${perte}`);
+});
+
+test('saturation — le stock s’arrête à la capacité, le résidu continue d’avancer', () => {
+  const etat = etatUnBatiment('foreuse', 4, 0);
+  etat.ressources.quartzMilli = PARAMS.stockage.capaciteMilli - 100;
+  for (let t = 0; t < 5000; t++) {
+    tickEconomie(etat, PARAMS);
+    assert.ok(
+      etat.ressources.quartzMilli <= PARAMS.stockage.capaciteMilli,
+      `le stock déborde la capacité au tick ${t}`,
+    );
+  }
+  assert.equal(
+    etat.ressources.quartzMilli,
+    PARAMS.stockage.capaciteMilli,
+    'pas saturé à la capacité',
+  );
+  // Le résidu, lui, n'a pas été gelé par la saturation — c'est ce qui rend le
+  // rattrapage analytique exact, et le retirer casserait le test 11.
+  const r = etat.batiments[0].residuFlux;
+  assert.ok(r >= 0 && r < TICKS_PAR_HEURE, `résidu hors bornes après saturation : ${r}`);
 });
