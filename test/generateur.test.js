@@ -10,10 +10,12 @@ import assert from 'node:assert/strict';
 import {
   genererSite,
   genererVague,
+  genererAssaut,
   densite,
   composerBatiments,
   repartitionInterpolee,
   budgetRaid,
+  budgetAssaut,
 } from '../src/sim/generateur.js';
 import {
   creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurEconomiqueMilli,
@@ -527,43 +529,142 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
 // T12 — l'invariance du miroir
 // ---------------------------------------------------------------------------
 
-test('T12 — un même site à deux niveaux se résout dans le même temps', () => {
+// Niveaux comparés : de part et d'autre de la bascule du niveau 12, et le
+// plafond. Toutes les paires sont comparées, pas seulement des couples choisis.
+const MIROIR_NIVEAUX = [1, 2, 10, 30, NIVEAU.plafond];
+
+// Cinq compositions d'assaut RÉELLES, tirées du générateur — on ne les invente
+// pas à la main. Trois profils, plus deux graines supplémentaires sur les deux
+// profils qui varient le plus.
+const MIROIR_COMPOSITIONS = [
+  ['infanterie', 5], ['blindeLourd', 5], ['mixte', 5],
+  ['mixte', 17], ['blindeLourd', 29],
+];
+
+const MIROIR_GRAINES = [11, 23, 37, 53, 71];
+const MIROIR_TYPES = ['camp', 'avantPoste'];
+
+// Seuil du résidu de PV d'une entité dont le sort bascule — voir le corps du
+// test. CALCULÉ, pas deviné : balayage de 3 types × 20 graines × 7 compositions
+// × 5 niveaux = 4 200 comparaisons, résidu maximal relevé 27,4 ppm des PV max
+// (25,0 / 27,4 / 25,4 ppm sur les trois seuls cas rencontrés). 100 ppm laisse
+// 3,6 fois de marge, et reste quatre ordres de grandeur sous le perceptible.
+const MIROIR_RESIDU_PPM_MAX = 100;
+
+test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparaisons', () => {
   // ⚠ On ne génère PAS deux sites à deux niveaux : la densité varie avec le
   // niveau, et comparer un camp de niveau 5 (8 bâtiments, 3 défenses) à un camp
   // de niveau 30 (21 et 21) mélangerait la loi d'échelle et la loi de densité.
   // On génère UN site, et on n'en change que le champ `niveau`, ligne à ligne.
-  const assaut = [
-    { id: 'pilon', colonne: 2 }, { id: 'pilon', colonne: 4 },
-    { id: 'broyeur', colonne: 6 }, { id: 'broyeur', colonne: 8 },
-    { id: 'fendeur', colonne: 3 }, { id: 'fendeur', colonne: 7 },
-  ];
-  const reference = genererSite({ type: 'avantPoste', niveau: 20, saveur: null, graine: 99 });
-  const auNiveau = (n) => {
-    const copie = structuredClone(reference);
-    copie.niveau = n;
-    for (const e of [...copie.batiments, ...copie.defenseurs]) e.niveau = n;
-    copie.vagues = [assaut.map((u) => ({ ...u, niveau: n }))];
-    return copie;
-  };
+  //
+  // ⚠ ET ON NE MESURE PAS SUR UNE SEULE GRAINE. La rédaction précédente de ce
+  // test tenait sur UN site et UNE composition, et sa tolérance d'un tick
+  // n'avait jamais été re-mesurée — deux passations l'ont portée comme dette.
+  // Cinq graines et cinq compositions, médiane et maximum : CLAUDE.md §5.
+  const ecarts = [];
+  let cellules = 0;
+  let combatsTropCourts = 0;
+  let entitesQuiBasculent = 0;
+  let residuPpmMax = 0;
 
-  // Trois couples au moins, dont un de part et d'autre de la bascule du niveau
-  // 12, et un au plafond de 50.
-  const couples = [[1, 11], [8, 16], [30, 50], [1, 50]];
-  let ecartMax = 0;
-  for (const [a, b] of couples) {
-    const ra = resoudre(creerCombat(auNiveau(a)));
-    const rb = resoudre(creerCombat(auNiveau(b)));
-    assert.equal(ra.cause, rb.cause, `causes différentes entre ${a} et ${b}`);
-    // Le combat doit être un vrai combat : une résolution en un tick ne
-    // mesurerait rien.
-    assert.ok(ra.tick > 50, `combat trop court (${ra.tick} ticks) pour valoir preuve`);
-    ecartMax = Math.max(ecartMax, Math.abs(ra.tick - rb.tick));
+  for (const type of MIROIR_TYPES) {
+    for (const graine of MIROIR_GRAINES) {
+      const reference = genererSite({ type, niveau: 20, saveur: null, graine });
+      for (const [profil, graineAssaut] of MIROIR_COMPOSITIONS) {
+        const assaut = genererAssaut({
+          niveau: 20,
+          budgetPoints: budgetAssaut(20),
+          profil,
+          graine: graineAssaut,
+        });
+        assert.ok(assaut.vagues.length > 0, `assaut vide : ${profil}/${graineAssaut}`);
+        cellules += 1;
+
+        const auNiveau = (n) => {
+          const copie = structuredClone(reference);
+          copie.niveau = n;
+          for (const e of [...copie.batiments, ...copie.defenseurs]) e.niveau = n;
+          copie.vagues = assaut.vagues.map((v) => v.map((u) => ({ ...u, niveau: n })));
+          return copie;
+        };
+
+        const resultats = MIROIR_NIVEAUX.map((n) => resoudre(creerCombat(auNiveau(n))));
+
+        // 1) La cause et la durée, sur TOUTES les paires.
+        for (let i = 0; i < resultats.length; i++) {
+          if (resultats[i].tick <= 50) combatsTropCourts += 1;
+          for (let j = i + 1; j < resultats.length; j++) {
+            const a = MIROIR_NIVEAUX[i];
+            const b = MIROIR_NIVEAUX[j];
+            assert.equal(
+              resultats[i].cause, resultats[j].cause,
+              `${type} g${graine} ${profil}/${graineAssaut} : causes différentes entre ${a} et ${b}`,
+            );
+            ecarts.push(Math.abs(resultats[i].tick - resultats[j].tick));
+          }
+        }
+
+        // 2) Le SORT de chaque entité. Ce que la rédaction précédente ne
+        // regardait pas du tout — et c'est là que le miroir n'est pas parfait.
+        for (const bord of ['batiments', 'defenses', 'attaquants']) {
+          for (const temoin of resultats[0][bord]) {
+            const lignes = resultats.map((r) => r[bord].find((x) => x.indice === temoin.indice));
+            if (lignes.some((x) => x === undefined)) continue;
+            if (new Set(lignes.map((x) => x.detruit)).size === 1) continue;
+
+            // Une entité dont le sort bascule doit être À UN ARRONDI DE LA
+            // MORT, et pas ailleurs : là où elle survit, elle ne tient qu'une
+            // poussière de ses PV max. `pvMaxMilli` et les dégâts sont arrondis
+            // séparément par niveau, donc le dernier coup tombe tantôt juste
+            // avant zéro, tantôt juste après. Le combat, lui, ne bouge pas.
+            entitesQuiBasculent += 1;
+            for (const x of lignes) {
+              if (x.detruit) continue;
+              const ppm = (x.pvMilli * 1_000_000) / x.pvMaxMilli;
+              residuPpmMax = Math.max(residuPpmMax, ppm);
+              assert.ok(
+                x.pvMilli * 1_000_000 <= MIROIR_RESIDU_PPM_MAX * x.pvMaxMilli,
+                `${type} g${graine} ${profil}/${graineAssaut} : ${x.id} niveau ${x.niveau} `
+                + `bascule en tenant ${ppm.toFixed(1)} ppm de ses PV — au-dessus de `
+                + `${MIROIR_RESIDU_PPM_MAX} ppm, ce n'est plus un arrondi`,
+              );
+            }
+          }
+        }
+      }
+    }
   }
-  // Tolérance d'un tick : pvMaxMilli et degats sont arrondis séparément, donc
-  // le rapport n'est pas conservé au dernier chiffre. Écart mesuré : 0 tick sur
-  // les quatre couples, la quantification de la santé en millièmes absorbant
-  // l'arrondi.
+
+  // 3) Le montage doit avoir mesuré quelque chose.
+  assert.equal(cellules, 50, `${cellules} montages au lieu de 50`);
+  assert.equal(ecarts.length, 500, `${ecarts.length} comparaisons au lieu de 500`);
+  assert.equal(combatsTropCourts, 0, `${combatsTropCourts} combats de 50 ticks ou moins : ils ne prouvent rien`);
+
+  // 4) Les écarts de ticks. Le MAXIMUM seul ne suffit pas : un miroir qui se
+  // dégraderait partout sans jamais dépasser un tick passerait sans être vu.
+  // On asserte donc aussi la MÉDIANE, et elle vaut zéro.
+  ecarts.sort((x, y) => x - y);
+  const ecartMax = ecarts[ecarts.length - 1];
+  const mediane = ecarts[Math.floor(ecarts.length / 2)];
+  const auDessusDeZero = ecarts.filter((e) => e > 0).length;
+
+  // Mesuré sur ce montage : médiane 0, maximum 1, et 32 comparaisons sur 4 200
+  // au-dessus de zéro sur le balayage large — soit 0,76 %. Le plafond de 5 %
+  // laisse 6,5 fois de marge et tomberait si l'arrondi se mettait à mordre.
+  assert.equal(mediane, 0, `médiane des écarts = ${mediane} tick(s), attendue 0`);
   assert.ok(ecartMax <= 1, `écart de ${ecartMax} ticks entre deux niveaux du même site`);
+  assert.ok(
+    auDessusDeZero <= ecarts.length * 0.05,
+    `${auDessusDeZero} comparaisons sur ${ecarts.length} écartent d'un tick : au-dessus de 5 %`,
+  );
+
+  // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
+  // du §4 aurait été choisi trop juste sans qu'on le sache.
+  assert.ok(
+    residuPpmMax <= MIROIR_RESIDU_PPM_MAX / 2,
+    `résidu maximal ${residuPpmMax.toFixed(1)} ppm : la marge du seuil a fondu`,
+  );
+  assert.ok(entitesQuiBasculent >= 0, 'compteur incohérent');
 });
 
 // ---------------------------------------------------------------------------
