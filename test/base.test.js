@@ -54,7 +54,7 @@ test('base — onze bâtiments, nommés, et le dépôt de véhicules porte son n
   // ARBITRÉ le 26/08 par Ethan, après que trois noms eurent coexisté dans le
   // dépôt pour ce seul bâtiment : `usine` / « Usine » (la clé), « dépôt de
   // véhicules » (le commentaire de COUT_NIVEAU_DEUX, qui avait raison) et
-  // « atelier » (MODELE-REPARATION-1.md §3). La clé et le nom font foi ici.
+  // « atelier » (MODELE-REPARATION-1.md §3, corrigé le 26/08). La clé fait foi.
   assert.ok(
     Object.prototype.hasOwnProperty.call(BASE_BATIMENTS, 'depotDeVehicules'),
     'la clé du bâtiment des blindés doit être depotDeVehicules',
