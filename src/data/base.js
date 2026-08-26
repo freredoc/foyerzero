@@ -26,19 +26,30 @@ import { GRILLE } from './combat.js';
 // bâtiments qui ont un pendant côté Ouvrage — les autres n'en ont pas, et la
 // clé est absente plutôt que vide : `hasOwnProperty` doit pouvoir trancher.
 //
-// ⚠ ILS SONT QUATRE, pas trois. Cette ligne annonçait « trois » depuis le
-// 25/08 sans que personne ne compte : Souche, Étai, Nœud et Gangue. Corrigé et
-// MESURÉ le 26/08, et un test l'asserte désormais par `hasOwnProperty` — le
-// nombre ne pourra plus dériver en silence.
+// ⚠ ILS SONT TROIS — Souche, Étai, Nœud — et l'histoire de ce nombre mérite
+// d'être lue avant de le changer :
+//   25/08  la ligne annonce « trois » ; la table en porte QUATRE.
+//   26/08  le décompte tombe : quatre. La ligne est corrigée en « quatre ».
+//   26/08  Ethan arbitre que le quatrième n'existe pas — la raffinerie n'a pas
+//          de pendant. La table repasse à trois, et la ligne avec.
+// Les deux corrections étaient justes à leur date. La première réparait un
+// décompte, la seconde une donnée. Ce n'est pas un aller-retour.
 //
-// ⚠ ET LE CINQUIÈME MANQUE. sites.js porte CINQ bâtiments de site : souche,
-// etai, noeud, gangue, terril. Le Terril n'a aucun pendant ici. Or la
-// raffinerie stocke `quartzOuScorie`, et côté Ouvrage la Gangue est le silo à
-// quartz quand le Terril est le tas de scorie : une raffinerie qui stocke de la
-// scorie devrait s'appeler Terril, pas Gangue. À arbitrer — soit la raffinerie
-// porte deux noms d'Ouvrage selon sa ressource, soit `nom.ouvrage` n'est qu'un
-// équivalent approximatif et la ligne est bonne telle quelle. Non tranché, donc
-// non modifié.
+// LE RENVOI SE VÉRIFIE DANS LES DEUX SENS. `sites.js` porte l'appariement de
+// l'autre côté : `BATIMENTS.souche.ta` vaut « Chantier de construction »,
+// `etai.ta` « Complexe de défense », `noeud.ta` « Collecteur ». Les trois
+// bouclent sur `nom.joueur` d'ici. `gangue.ta` vaut « Silo de tiberium » et
+// `terril.ta` « Silo de cristal » : ni l'un ni l'autre ne renvoie vers la
+// raffinerie, et c'est cette non-boucle qui a révélé l'appariement de trop.
+// Un test croise les deux tables ; il tombera si quelqu'un en ajoute un sans
+// l'écrire des deux côtés.
+//
+// ⚠ ATTENTION AU CHAMP `ta`, IL NE VEUT PAS DIRE LA MÊME CHOSE ICI ET LÀ-BAS.
+// Dans ce fichier, `ta` est le nom Tiberium Alliances en anglais (« Factory »,
+// « Harvester »). Dans `sites.js`, `ta` porte le nom FRANÇAIS du pendant
+// joueur, et le nom TA anglais est en commentaire de fin de ligne. Deux
+// fichiers, un même nom de champ, deux contenus : ne pas les comparer entre
+// eux sans le savoir.
 //
 // `pv` et `reparationSec` valent au NIVEAU 1. Ils montent avec facteurMilli de
 // sim/combat.js, comme tout le reste des PV du jeu.
@@ -157,12 +168,32 @@ export const BASE_BATIMENTS = {
     plancherPv: true,
   },
   raffinerie: {
-    // ⚠ « Raffinerie » nomme aussi la Gangue de site (BASE-DU-JOUEUR-1.md §5.1).
-    // Collision laissée en l'état : arbitrée sans importance le 25/08.
-    nom: { joueur: 'Raffinerie', ouvrage: 'Gangue' },
+    // ⚠ PAS DE `nom.ouvrage`, ET C'EST UN ARBITRAGE, pas un oubli.
+    // Ce fichier lui a porté `ouvrage: 'Gangue'` du 25 au 26/08. C'était faux,
+    // et sites.js le disait déjà : `BATIMENTS.gangue.ta` vaut « Silo de
+    // tiberium », pas « Raffinerie » — le seul des quatre appariements dont le
+    // renvoi ne bouclait pas. Un test croisé le garde maintenant.
+    //
+    // POURQUOI L'APPARIEMENT N'EXISTE PAS. Ethan, le 26/08 : « ce n'est pas
+    // vraiment du parallèle, ce n'est pas le miroir ». Côté Ouvrage, le
+    // stockage est DEUX bâtiments — Gangue pour le quartz, Terril pour la
+    // scorie — parce que c'est du BUTIN, et qu'un butin de quartz n'est pas un
+    // butin de scorie. Côté joueur c'est UN bâtiment qui tient les deux. Un
+    // vers deux : aucun nom ne convient, et en choisir un serait faux la moitié
+    // du temps.
+    nom: { joueur: 'Raffinerie' },
     ta: 'Tiberium Silo',
     role: 'stockage',
-    ressource: 'quartzOuScorie',
+    // ⚠ `quartzEtScorie`, PAS `quartzOuScorie` — et la nuance porte tout.
+    // Le collecteur produit l'un OU l'autre : le champ sous lui tranche, et il
+    // ne fera jamais les deux. La raffinerie tient les deux À LA FOIS, et
+    // `capaciteDuNiveau` s'applique À CHACUNE séparément : une raffinerie qui
+    // affiche 100 stocke 100 de quartz ET 100 de scorie, pas 100 en tout.
+    // Arbitré le 26/08. Deux chaînes distinctes parce que deux sens distincts —
+    // les écrire pareil, c'est se préparer à additionner deux capacités qui ne
+    // s'additionnent pas.
+    ressource: 'quartzEtScorie',
+    capaciteParRessource: true,
     pv: 1000,
     reparationSec: 42,
     unique: false,
@@ -281,17 +312,39 @@ export const GEOMETRIE_BASE = {
 // fois cinq » de mémoire : c'est l'intérieur d'un 9 × 7, l'orientation
 // inversée. Corrigé le 26/08, mesuré sur GRILLE.)
 //
+// ARBITRÉ le 26/08 par Ethan : **ASYMÉTRIE VOULUE**. Le Collecteur ne touche
+// AUCUN bonus par champ de ressource voisin. Le champ sous lui décide de ce
+// qu'il produit, et c'est tout ce que le terrain lui donne.
+//
+// Ce n'est pas un trou laissé ouvert, c'est une décision, et elle a une raison
+// mécanique : la production suit ×1,25 par niveau quand les coûts suivent
+// ×1,32. Sur les 38 niveaux qui séparent 12 de 50, une amélioration finit par
+// coûter 7,9 fois plus d'heures de production qu'au départ — c'est ce
+// décrochage qui pousse le joueur vers le raid, dont le butin suit la pente des
+// coûts (voir ECONOMIE_NIVEAU.penteProduction). Ajouter un multiplicateur de
+// terrain au Collecteur amplifierait précisément le canal qu'on a délibérément
+// laissé décrocher.
+//
+// ⚠ `champDeScorie: 60` sur la Centrale reste donc LE SEUL bonus de terrain de
+// toute la table, et ce n'est pas un oubli non plus : il est né avec
+// l'électricité, quatrième grandeur non pillable, comme son unique ancrage au
+// sol. Tout le reste est bâtiment-à-bâtiment.
+//
+// Un test asserte la forme EXACTE de `collecteur.parVoisin` : ajouter une clé
+// de terrain ici fera tomber la suite, plutôt que de glisser dans l'équilibrage
+// sans que personne ne revoie la décision.
+//
 // ⚠ CE QUI N'EST PAS ENCORE ARBITRÉ, et qui n'est donc PAS écrit ici :
-//   - si un collecteur gagne quelque chose par case de champ ADJACENTE, comme
-//     la centrale gagne 60/h par champ de scorie voisin. Le champ sous lui
-//     décide de sa RESSOURCE (arbitré, voir `ressourceDonneeParLeChamp`) ;
-//     savoir s'il en tire aussi un DÉBIT est une autre question, ouverte.
 //   - si le redéploiement du joueur (Chantier détruit, 20 cases vers le bas)
 //     retire les champs. La position change, donc le tirage change : ça
-//     découle, mais ça n'est pas dit.
-//   - le pendant Ouvrage d'une raffinerie qui stocke de la scorie. Voir
-//     l'en-tête de BASE_BATIMENTS : Gangue est le silo à quartz, Terril le tas
-//     de scorie, et la raffinerie du joueur fait les deux sous un seul nom.
+//     découle du code de sim/champs.js, mais ça n'a jamais été dit.
+//
+// ⚠ ET CE N'EST PAS LA SEULE VALEUR MANQUANTE DU PROJET — seulement la
+// dernière de DEBITS, qui est maintenant COMPLÈTE (sept valeurs). Restent
+// ouverts, ailleurs : coûts de réparation des bâtiments et des unités, plafonds
+// de stockage d'électricité, taux d'accumulation et plafond de la réserve de
+// temps de réparation, formule du dépassement de l'heure quand les défenses
+// passent le niveau du Complexe. Voir l'onglet TROUS du classeur.
 
 export const CHAMPS = {
   /** Cases de champ posées dans une base, toutes ressources confondues. */
@@ -565,6 +618,15 @@ export const STOCKAGE = {
  * Elle vaut l'autonomie voulue multipliée par le débit propre du PRODUCTEUR
  * apparié, pris au même niveau — la raffinerie se règle sur le collecteur,
  * l'accumulateur sur la centrale.
+ *
+ * ⚠ POUR LA RAFFINERIE, C'EST UNE CAPACITÉ PAR RESSOURCE, PAS UN TOTAL.
+ * Elle stocke le quartz ET la scorie, chacun jusqu'à ce plafond : une
+ * raffinerie qui rend 2 880 tient 2 880 de quartz et 2 880 de scorie, soit
+ * 5 760 unités en tout. Arbitré le 26/08. L'accumulateur n'a qu'une ressource,
+ * donc la question ne se pose pas pour lui — et c'est justement pour ça que la
+ * fonction ne peut pas rendre « le total » sans mentir sur l'un des deux.
+ * `BASE_BATIMENTS[id].capaciteParRessource` dit lequel est concerné.
+ *
  * @param {'raffinerie'|'accumulateur'} id
  * @param {number} niveau
  * @returns {number} arrondi à l'entier, une seule fois, à la fin.
