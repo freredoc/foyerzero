@@ -4,9 +4,10 @@
 > modèle premium), en 128 × 128, sans générateur Python.
 >
 > Se lit avec `FICHE-STYLE.md` (le style fait foi) et `INVENTAIRE-SPRITES.md`
-> (la liste fait foi). Ce document-ci ne dit ni quoi dessiner ni comment
-> dessiner : il dit **comment le demander** pour que ce qui sort soit
-> utilisable dans le jeu sans retouche manuelle.
+> (la liste fait foi, et ses amendements A1 à A7 priment sur la fiche là où ils
+> la contredisent). Ce document-ci ne dit ni quoi dessiner ni comment dessiner :
+> il dit **comment le demander** pour que ce qui sort soit utilisable dans le jeu
+> sans retouche manuelle.
 >
 > **Le §2 est le seul bloc à copier-coller.** Tout le reste est pour Ethan.
 
@@ -24,55 +25,77 @@ n'en garantit aucune, et il faut les récupérer autrement.
 | **Transparence** | Le modèle dessine un fond, ou un damier « transparent » en dur, ou une ombre au sol. | fond magenta imposé, §2 · détourage, §4 |
 
 Ce que le modèle apporte en échange — silhouettes plus riches, matière, variété
-de terrain — vaut l'échange, mais **pas sans le conditionnement du §4**. Sans
-lui, ce ne sont pas des sprites, ce sont des illustrations.
+de terrain, et une vue à 75° qu'il tient bien mieux que le zénithal strict —
+vaut l'échange, mais **pas sans le conditionnement du §4**. Sans lui, ce ne sont
+pas des sprites, ce sont des illustrations.
 
 ---
 
 ## 2. Le contrat de style — à coller en PREMIER message de chaque conversation
 
 Une conversation par lot. Ce bloc en tête, puis un prompt par image. Ne pas le
-résumer, ne pas le raccourcir : c'est en le tronquant qu'on récupère des
-sprites hors palette trois heures plus tard.
+résumer, ne pas le raccourcir : c'est en le tronquant qu'on récupère des sprites
+hors palette trois heures plus tard.
 
 ---
 
 ```
-Tu produis des sprites pour un jeu vidéo 2D en vue de dessus. Ce ne sont pas
-des illustrations : ce sont des éléments graphiques découpés qui seront
-affichés à 40 pixels de côté sur un écran de téléphone. Tout ce qui n'est pas
-lisible à 40 pixels est du travail perdu.
+Tu produis des sprites pour un jeu vidéo 2D de stratégie. Ce ne sont pas des
+illustrations : ce sont des éléments graphiques découpés qui seront affichés à
+40 pixels de côté sur un écran de téléphone. Tout ce qui n'est pas lisible à
+40 pixels est du travail perdu.
 
 FORMAT DE SORTIE — obligatoire, pour chaque image
 1. Image carrée 1024 × 1024.
 2. Elle représente une grille de 32 × 32 gros pixels carrés. Chaque gros pixel
    fait exactement 32 × 32 pixels réels, il est d'une seule couleur pleine, et
    il est aligné sur la grille. Aucun détail ne peut être plus petit qu'un gros
-   pixel.
+   pixel. C'est du pixel art à gros pixels, pas un rendu lisse pixellisé après
+   coup.
 3. Aucun anticrénelage, aucun lissage, aucun dégradé, aucune transparence
    partielle. Les bords sont en escalier, francs, nets.
 4. Fond : magenta pur #FF00FF, uni, sur toute la surface non occupée par le
    sujet. Rien d'autre sur le fond : pas de sol, pas de socle, pas d'ombre
    portée, pas de vignette, pas de cadre, pas de damier.
-5. Aucun texte, aucun chiffre, aucune lettre, aucun logo, aucune signature,
-   aucune légende, aucune flèche, aucune annotation.
+5. Aucun texte, aucun chiffre, aucune lettre, aucun logo, aucun emblème, aucune
+   signature, aucune légende, aucune flèche, aucune annotation.
 6. Un seul sujet par image, centré. Pas de planche, pas de variantes côte à
    côte, pas de vue éclatée.
-7. Marge vide d'au moins 2 gros pixels sur les quatre bords.
+
+TAILLE DANS LA CASE — obligatoire, c'est une contrainte dure
+Le sujet ENTIER — y compris son canon, son antenne, sa face visible — tient
+dans un carré centré de 28 × 28 gros pixels au milieu de la grille de 32 × 32.
+Il reste donc au moins 2 gros pixels entièrement vides sur les quatre bords.
+Rien ne touche le bord, rien ne dépasse, rien n'est coupé par le cadre. Le jeu
+affiche ces sprites dans des cases jointives : un pixel qui dépasse mord sur la
+case du voisin.
 
 VUE — obligatoire
-Vue strictement zénithale, caméra à la verticale exacte au-dessus du sujet.
-On ne voit aucun côté, aucune façade, aucun horizon. Une caisse de véhicule est
-un rectangle vu du dessus, pas une caisse en perspective. Aucune inclinaison,
-aucun point de fuite, aucun effet d'isométrie.
+Vue de dessus légèrement inclinée : la caméra est à 75 degrés au-dessus de
+l'horizontale, presque à la verticale mais pas tout à fait. On voit très
+majoritairement le DESSUS des objets, plus une amorce de leur face basse, celle
+qui regarde le bas de l'image.
+
+La face visible d'un objet occupe environ un quart de sa hauteur réelle. Elle
+est peinte dans un ton plus sombre que le dessus — non pas parce qu'une lumière
+la frappe, mais parce que c'est une face.
+
+Ce n'est PAS de l'isométrie. La grille reste carrée et droite : un toit carré se
+dessine comme un carré droit, pas comme un losange. Aucune rotation de 45
+degrés, aucune fuite vers un point, aucun horizon, aucune ligne convergente.
+Un objet plat reste strictement vu de dessus, sans aucune face visible.
 
 ÉCLAIRAGE — obligatoire
-Il n'y a pas de source de lumière dans la scène. Les sprites seront tournés
-dans tous les sens par le jeu : un éclairage « venant d'en haut à gauche »
-devient faux dès la première rotation. Le seul écart de valeur autorisé est
-fonctionnel : l'AVANT d'une entité (vers le haut de l'image) est peint dans un
-ton clair, l'ARRIÈRE dans un ton sombre, parce que c'est l'avant et l'arrière —
-pas parce qu'un soleil les frappe.
+Il n'y a pas de source de lumière dans la scène. Certains sprites seront tournés
+d'un quart de tour ou retournés par le jeu : un éclairage « venant d'en haut à
+gauche » devient faux dès la première rotation. Aucun reflet, aucune brillance,
+aucune zone claire ponctuelle, aucune lumière rasante.
+
+Deux écarts de valeur seulement sont autorisés, et ils sont fonctionnels :
+  – l'AVANT d'une entité (vers le haut de l'image) est peint dans un ton clair,
+    l'ARRIÈRE dans un ton sombre, parce que c'est l'avant et l'arrière ;
+  – la face basse visible est plus sombre que le dessus, parce que c'est une
+    face.
 
 PALETTE — fermée, aucune couleur en dehors
 Camp du joueur, châssis kaki désaturé, 5 tons :
@@ -115,7 +138,7 @@ ARMEMENT — la longueur et le nombre de tubes disent la cible
   contre structures / aéronefs : un tube fin, moyen
   artillerie : le même tube, rallongé de moitié
 Le canon reste court : il confirme la direction, il ne la porte pas. Un canon
-qui fait la moitié de l'image est un refus.
+qui fait la moitié de l'image est un refus. Et il compte dans les 28 × 28.
 
 ORIENTATION — trois signaux qui se cumulent, aucun ne suffit seul
   1. l'avant (haut) est dans un ton clair, l'arrière dans un ton sombre
@@ -126,12 +149,16 @@ INTERDITS ABSOLUS
   – Toute reprise de Command & Conquer, de Tiberium Alliances, de Warhammer,
     de StarCraft : ni cristal vert qui pousse, ni char à double canon
     reconnaissable, ni logo de faction, ni silhouette empruntée.
-  – Tout emblème militaire réel : étoile, croix, cocarde, drapeau, insigne.
+  – Tout emblème : aigle, étoile, croix, cocarde, drapeau, blason, insigne,
+    écusson. Aucune surface du sprite ne porte de marque.
   – Toute couleur hors de la palette ci-dessus.
   – Toute couleur d'accent employée pour autre chose que la cible.
-  – Perspective, inclinaison, profondeur, reflet, brillance spéculaire.
-  – Ombre portée, effet de lueur, particules, étincelles, fumée, explosion.
+  – Isométrie, point de fuite, horizon, inclinaison de la grille, profondeur.
+  – Reflet, brillance, lueur, particules, étincelles, fumée, explosion, ombre
+    portée.
   – Style « cartoon », contour noir épais uniforme, aplat brillant façon icône.
+  – Rivets, boulons, échelles, tuyauterie fine, panneaux de tôle détaillés :
+    tout ce détail est plus petit qu'un gros pixel et disparaît à 40 pixels.
 
 Réponds uniquement par l'image. Pas de commentaire, pas de description, pas de
 proposition de variante.
@@ -141,31 +168,40 @@ proposition de variante.
 
 ## 3. Le gabarit d'un prompt unitaire
 
-Après le contrat, chaque image se demande sur le même patron. Cinq champs, dans
+Après le contrat, chaque image se demande sur le même patron. Six champs, dans
 cet ordre, et rien de plus — l'ordre compte, le modèle pondère le début.
 
 ```
 [CAMP]    joueur (kaki) | Ouvrage (rampe X)
-[CHÂSSIS] tourelle | véhicule | infanterie | structure | tuile
-[TAILLE]  empreinte en gros pixels, sur 32
+[CHÂSSIS] tourelle | véhicule | infanterie | structure | tuile | pictogramme
+[RÉGIME]  A plat (0 px de face) | B épaisseur (1–2 px) | C volume (4–7 px)
+[TAILLE]  empreinte en gros pixels, sur 32, tout compris
 [ACCENT]  blanc | rouge | jaune | aucun
 [SUJET]   trois à cinq phrases, silhouette d'abord, détail ensuite
 ```
+
+Le champ `[RÉGIME]` est celui qu'on oublie, et c'est le plus coûteux à rater —
+il fixe la hauteur de face visible, donc le seul endroit où l'inclinaison à 75°
+se manifeste. Le tableau complet est à l'amendement A7 de
+`INVENTAIRE-SPRITES.md` ; en une ligne : **A pour le sol, B pour les quatorze
+unités, C pour tout ce qui ne bouge jamais.**
 
 Exemple complet, à recopier tel quel :
 
 ```
 [CAMP] joueur, rampe kaki
 [CHÂSSIS] tourelle
-[TAILLE] empreinte 24 × 24 gros pixels, centrée
+[RÉGIME] C — volume, face basse visible sur 5 gros pixels de haut
+[TAILLE] 24 × 24 gros pixels au total, face comprise, centrée
 [ACCENT] rouge (#8A1E17 / #E43E32)
-[SUJET] Une tourelle défensive fixe, vue du dessus. Socle carré plein en métal
-moyen #3E454C occupant toute l'empreinte, avec un anneau rouge large courant
-sur tout son pourtour. Au centre, un dôme rond kaki #4E5742 qui ne dépasse pas
-60 % de la largeur du socle, plus clair sur sa moitié avant. Un tube unique
-épais en métal clair #68727E part du dôme vers le haut et dépasse le socle de
-quatre gros pixels ; sa bouche est #E43E32. À l'arrière du socle, une bande
-sombre et deux évents #1E2124.
+[SUJET] Une tourelle défensive fixe, vue de dessus à 75 degrés. Socle carré
+plein en métal moyen #3E454C, avec un anneau rouge large courant sur tout son
+pourtour. Sous le socle, sa face basse en #1E2124 sur cinq gros pixels de haut,
+sans aucun détail. Au centre, un dôme rond kaki #4E5742 qui ne dépasse pas 60 %
+de la largeur du socle, plus clair sur sa moitié avant. Un tube unique épais en
+métal clair #68727E part du dôme vers le haut et dépasse le dôme de quatre gros
+pixels sans atteindre le bord de l'image ; sa bouche est #E43E32. À l'arrière du
+socle, une bande sombre et deux évents #1E2124.
 ```
 
 **Ce qui fait échouer un prompt**, systématiquement, dans l'ordre de fréquence :
@@ -173,10 +209,12 @@ sombre et deux évents #1E2124.
 1. Décrire une intention (« une tourelle menaçante ») au lieu d'une géométrie
    (« un socle carré et un dôme rond »). Le modèle comble par du style.
 2. Oublier de nommer le fond. Il en invente un.
-3. Demander deux choses dans une image (« la tourelle et sa version longue
+3. Oublier `[RÉGIME]`. Il dessine une maquette en 3/4 à 45°.
+4. Demander deux choses dans une image (« la tourelle et sa version longue
    portée »). Il produit une planche.
-4. Laisser un mot de vocabulaire militaire chargé (« mammouth », « artillerie
-   lourde de siège »). Il rappelle une silhouette existante.
+5. Laisser un mot de vocabulaire militaire chargé (« mammouth », « artillerie
+   lourde de siège »). Il rappelle une silhouette existante — et il ajoute un
+   emblème.
 
 ---
 
@@ -200,17 +238,39 @@ Le résultat est un PNG 128 × 128 RGBA, 19 couleurs maximum, bords francs :
 exactement ce que la fiche décrit, obtenu par l'autre bout.
 
 **Aucune de ces trois opérations ne se fait à la main sur 158 fichiers.** Elles
-tiennent dans une page HTML autonome, sans dépendance, sur le modèle de
-`archipel-map-editor.html` : glisser-déposer les images d'un lot, elle renvoie
-les PNG conditionnés et renommés. C'est le seul outil que ce pipeline demande,
-et il n'y a pas de version « on fera sans ».
+sont implémentées dans **`tools/conditionneur.html`** : page autonome, sans
+dépendance ni réseau, sur le modèle de `archipel-map-editor.html`. On l'ouvre
+dans le navigateur du téléphone, on choisit les images d'un lot, elle rend un ZIP
+de PNG conditionnés et renommés.
 
-Contrôle après conditionnement, deux vérifications qui prennent dix secondes :
+Réglages, une fois par lot :
 
-- compter les couleurs du PNG final — si le compte dépasse 19, la
-  quantification a été sautée ;
-- afficher le PNG à 40 px et à 128 px côte à côte — si la silhouette ne se lit
-  plus à 40 px, le sprite est à refaire, quelle que soit sa beauté à 128.
+| Réglage | À mettre sur |
+|---|---|
+| **Palette** | *Joueur seul* pour les lots joueur · *+ rampe A* ou *B* pour l'Ouvrage · *les deux* uniquement pour le jet d'essai du §6 |
+| **Régime** | *Entité* partout, sauf le lot 1 où c'est *Tuile* (pas de détourage, pas de contrôle de bordure) |
+| **Échantillonnage** | *Majorité* par défaut. *Centre* seulement si le modèle a produit une grille de gros pixels parfaitement alignée et qu'on veut la respecter au pixel |
+| **Rognage** | 3 px. À monter si un liséré rose subsiste sur les aperçus — il ne sert qu'au détourage, et son effet est faible en mode *Majorité*, qui absorbe le liséré tout seul |
+| **Préfixe** | `off_o` pour un lot d'unités ennemies, `def_j` pour les défenses joueur, etc. Il s'ajoute devant le nom du fichier d'origine |
+
+Elle produit les contrôles elle-même, en pastilles vertes ou rouges sous chaque
+aperçu, et les recopie dans un `CONTROLE.txt` à l'intérieur du ZIP :
+
+- **bordure vide** — les 2 gros pixels de marge sont-ils réellement transparents
+  sur les quatre côtés (c'est le contrôle de non-dépassement d'A7, mesuré et non
+  jugé à l'œil) ;
+- **emprise en gros pixels** — et l'alerte si elle passe 28 × 28 ;
+- **nombre de couleurs** après quantification ;
+- pour une tuile, qu'elle soit pleine et sans trou.
+
+Le dépliant « Lisibilité à 40 px et transformations » sous chaque sprite donne
+les vignettes qui manquaient : à 40 px sur fond clair, à 40 px sur fond sombre,
+puis tournée d'un quart de tour, d'un demi-tour et en miroir vertical. Ce sont
+exactement les points 4 et 8 de la grille du §6, et ils se lisent d'un coup.
+
+Ce qu'elle **ne** fait pas, et ne fera pas : juger. Un sprite peut sortir avec
+quatre pastilles vertes et être à refaire parce qu'il ressemble à autre chose ou
+que sa face fait 6 px au lieu de 2. Les points 7 et 9 du §6 restent à l'œil.
 
 ---
 
@@ -248,11 +308,12 @@ terrains (croûte, vasière), et lue comme « abandonné » alors que l'Ouvrage 
 actif — l'inverse exact de l'intention.
 
 **Le jet doit produire la même entité dans les deux rampes**, côte à côte au
-moment de la comparaison, sur un pylône et sur un marcheur — une structure et
-une unité, parce que les deux ne se jugent pas pareil. Critère d'arbitrage,
-dans cet ordre : (1) est-ce qu'on distingue un marcheur ennemi d'un véhicule
-joueur en un dixième de seconde à 40 px, (2) est-ce que l'accent rouge et
-l'accent jaune restent lisibles dessus, (3) est-ce que ça a l'air actif.
+moment de la comparaison, sur un pylône et sur un marcheur — une structure
+(régime C) et une unité (régime B), parce que les deux ne se jugent pas pareil.
+Critère d'arbitrage, dans cet ordre : (1) est-ce qu'on distingue un marcheur
+ennemi d'un véhicule joueur en un dixième de seconde à 40 px, (2) est-ce que
+l'accent rouge et l'accent jaune restent lisibles dessus, (3) est-ce que ça a
+l'air actif.
 
 ### 5.2 Dette 2 — le Dard, forme volante de l'Ouvrage
 
@@ -272,7 +333,11 @@ aéronefs (`crecelle`, `busard`, `frappeur`, `enclume`) en faisant varier la
 taille du moyeu et le nombre de modules — trois pour les 10 points, cinq pour
 `enclume` à 15 points.
 
-Sans elle, la Batterie, le Harpon et tout l'anti-aérien du joueur n'ont
+Un aéronef reste en **régime B**, comme les autres unités : ce n'est pas parce
+qu'il vole qu'il gagne du volume. Son altitude se lit au seul décalage de son
+ombre au rendu (§6 de la fiche), pas dans le sprite.
+
+Sans cette forme, la Batterie, le Harpon et tout l'anti-aérien du joueur n'ont
 littéralement rien à viser : c'est la dette la plus urgente des cinq.
 
 ### 5.3 Dettes 4 et 5 — corrections de lisibilité
@@ -282,9 +347,9 @@ littéralement rien à viser : c'est la dette la plus urgente des cinq.
 - **Marcheur** : pattes de 2 gros pixels d'épaisseur minimum, plus courtes que
   dans l'étalon v4, trois pattes radiales, corps nettement plus massif que les
   pattes. Le défaut à corriger : à 40 px, il se confond avec le pylône.
-- **Infanterie joueur** : le casque de chaque figure entièrement dans la
-  couleur d'accent, pas un point au centre. C'est le seul endroit où l'escouade
-  porte son code couleur.
+- **Infanterie joueur** : le casque de chaque figure entièrement dans la couleur
+  d'accent, pas un point au centre. C'est le seul endroit où l'escouade porte
+  son code couleur.
 - **Tourelle** : dôme ≤ 60 % de la largeur du socle, anneau d'accent visible sur
   tout le pourtour. Le défaut à corriger : le dôme mange le socle et l'anneau
   disparaît.
@@ -294,34 +359,41 @@ littéralement rien à viser : c'est la dette la plus urgente des cinq.
 ## 6. Le jet d'essai — sept images, et rien d'autre avant
 
 Objectif : solder les dettes 1, 2, 4 et 5 en une seule passe, sur les entités
-qui les portent. Aucun lot ne démarre avant validation de ce jet.
+qui les portent, **et valider l'inclinaison à 75°** — c'est le paramètre le plus
+neuf et celui sur lequel le modèle dérivera le plus.
 
-| # | Image | Ce qu'elle tranche |
-|---|---|---|
-| 1 | Pylône de l'Ouvrage, **rampe A** | dette 1, sur une structure |
-| 2 | Pylône de l'Ouvrage, **rampe B** | dette 1, comparaison |
-| 3 | Marcheur (`off_o_fendeur`), **rampe A**, pattes corrigées | dettes 1 et 4 |
-| 4 | Marcheur (`off_o_fendeur`), **rampe B**, pattes corrigées | dettes 1 et 4 |
-| 5 | Dard générique, rampe retenue par Ethan à l'œil sur 1–4 | dette 2 |
-| 6 | `off_j_meute` — escouade joueur, casques blancs pleins | dette 5 |
-| 7 | `def_j_creneau` — tourelle joueur anti-véhicule, socle dégagé | dette 5 |
+| # | Image | Régime | Ce qu'elle tranche |
+|---|---|---|---|
+| 1 | Pylône de l'Ouvrage, **rampe A** | C | dette 1 sur une structure · le flanc à 4–7 px |
+| 2 | Pylône de l'Ouvrage, **rampe B** | C | dette 1, comparaison |
+| 3 | Marcheur (`off_o_fendeur`), **rampe A**, pattes corrigées | B | dettes 1 et 4 · le flanc à 1–2 px |
+| 4 | Marcheur (`off_o_fendeur`), **rampe B**, pattes corrigées | B | dettes 1 et 4 |
+| 5 | Dard générique, rampe retenue par Ethan à l'œil sur 1–4 | B | dette 2 |
+| 6 | `off_j_meute` — escouade joueur, casques blancs pleins | B | dette 5 · l'infanterie supporte-t-elle 75° |
+| 7 | `def_j_creneau` — tourelle joueur anti-véhicule, socle dégagé | C | dette 5 |
 
-Les sept passent par le conditionnement du §4 **avant** d'être jugées : une
-image jugée en 1024 anticrénelée ne dit rien de ce que le jeu affichera.
+Les sept passent par le conditionnement du §4 **avant** d'être jugées : une image
+jugée en 1024 anticrénelée ne dit rien de ce que le jeu affichera.
 
 Grille de validation d'un jet, dans l'ordre. Un seul non = on refait, on ne
 retouche pas.
 
 1. Le fond est-il intégralement détouré, sans liseré rose ?
 2. Le sprite tient-il en 19 couleurs après quantification ?
-3. La silhouette se lit-elle à 40 px, sur fond clair **et** sur fond sombre ?
-4. L'accent se voit-il à 40 px ?
-5. L'avant est-il identifiable sans le canon ?
-6. Le sprite reste-t-il juste tourné de 90° et de 180° ?
-7. Est-ce qu'il ressemble à quelque chose de déjà vu ailleurs ?
+3. **La bordure de 8 px est-elle entièrement vide sur les quatre côtés ?**
+4. La silhouette se lit-elle à 40 px, sur fond clair **et** sur fond sombre ?
+5. L'accent se voit-il à 40 px ?
+6. L'avant est-il identifiable sans le canon ?
+7. Le régime est-il tenu — 0, 1–2, ou 4–7 px de face visible, pas plus ?
+8. **Régime B seulement** : le sprite reste-t-il acceptable tourné d'un quart de
+   tour et retourné ?
+9. Est-ce qu'il ressemble à quelque chose de déjà vu ailleurs ?
 
-Le point 6 est nouveau et c'est le plus facile à rater : il suffit d'un reflet
-en haut à gauche pour que tout le lot soit à refaire.
+Les points 3, 7 et 8 sont les nouveaux, et ce sont les trois faciles à rater. Le
+7 en particulier : le modèle a une pente naturelle vers le 3/4 à 45°, il ira
+vers 60° dès qu'on le laisse faire, et un lot entier peut sortir avec une face
+deux fois trop haute sans que ça choque image par image. Ça ne se voit qu'en les
+posant côte à côte sur la grille.
 
 ---
 
@@ -330,10 +402,11 @@ en haut à gauche pour que tout le lot soit à refaire.
 Le contrat du §2 couvre tout le monde. Ces additions se collent **après** le
 gabarit du §3, par lot.
 
-### Lot 1 — terrain (29)
+### Lot 1 — terrain (29) · régime A
 
 ```
 [CHÂSSIS] tuile
+[RÉGIME] A — plat, strictement vu de dessus, aucune face visible
 [TAILLE] la tuile occupe les 32 × 32 gros pixels, bord à bord, sans marge
 [ACCENT] aucun
 ```
@@ -345,17 +418,20 @@ terrain diffèrent par la disposition, jamais par la teinte ; contraste interne
 faible — c'est un fond, il passera sous des unités et ne doit pas les
 concurrencer.*
 
-⚠ La marge de 2 gros pixels **ne s'applique pas** aux tuiles : c'est le seul cas
-du projet où le sujet touche les bords, et c'est obligatoire.
+⚠ Le terrain est le **seul** lot qui échappe aux deux contraintes fortes : pas de
+marge (il va bord à bord) et pas d'inclinaison (le sol est plat, une tuile
+inclinée ne se raccorde plus à sa voisine). Le dire explicitement dans le
+prompt, sinon le modèle ajoute un relief en 3/4 et le pavage se met à onduler.
 
 ⚠ `tile_croute` (la scorie) : dépôt vitrifié laissé par l'expansion de
 l'Ouvrage. **Jamais un cristal vert qui pousse.** C'est le point exact où la
 reprise de C&C se réintroduit sans qu'on la voie.
 
-### Lots 3 et 4 — unités et défenses (46)
+### Lots 3 et 4 — unités (28, régime B) et défenses (18, régime C)
 
 Tableau de paramètres, à recopier champ par champ dans le gabarit. `points`
-donne l'empreinte, `specialite` donne l'accent, `chassis` donne la forme.
+donne l'empreinte (échelle A6), `specialite` donne l'accent, `chassis` donne la
+forme.
 
 | Clé | Châssis | Accent | Points | Empreinte |
 |---|---|---|---|---|
@@ -374,51 +450,75 @@ donne l'empreinte, `specialite` donne l'accent, `chassis` donne la forme.
 | `frappeur` | aéronef | jaune | 10 | 24 × 24 |
 | `enclume` | aéronef | jaune | 15 | 28 × 28 |
 
-**Amendement A6 à `FICHE-STYLE.md` §7.** La fiche annonce 20 / 26 / 30 pour
-5 / 10 / 15 points. Avec la marge de 2 gros pixels sur les quatre bords
-(amendement A4), le maximum absolu est 28 : une empreinte de 30 déborde dès la
-première rotation. L'échelle devient **18 / 24 / 28**, ce qui creuse en plus
-l'écart entre 5 et 10 points — la fiche le demandait et 20 vs 26 ne le donnait
-pas.
+Les quatorze sont en **régime B — face visible de 1 à 2 gros pixels, jamais
+plus**. C'est la contrepartie exacte de la rotation à 90° et du miroir : la
+caméra ne tourne pas avec l'objet, donc toute face dessinée en bas se retrouve
+sur le côté après un quart de tour. À 2 px sur 32, l'erreur vaut 6 % de la case
+et personne ne la verra ; à 6 px, tout le monde.
+
+Une empreinte de 28 × 28 (les trois unités à 15 points) est **au maximum
+absolu** : il n'y a plus un seul gros pixel de jeu, canon compris. Le rappeler
+dans ces trois prompts-là.
 
 Côté Ouvrage, le châssis se traduit dans l'autre grammaire, et c'est cette
 traduction qui porte toute l'opposition : *infanterie → essaim* (plus de
 figures, plus petites, identiques, sans casque distinct — l'accent passe sur le
-corps), *véhicule → marcheur* (pas de chenilles : trois pattes radiales,
-corps massif au centre), *tourelle et structure → pylône* (colonne à modules
-empilés, symétrie radiale, aucun angle droit), *aéronef → Dard* (§5.2).
+corps), *véhicule → marcheur* (pas de chenilles : trois pattes radiales, corps
+massif au centre), *tourelle et structure → pylône* (colonne à modules empilés,
+symétrie radiale, aucun angle droit), *aéronef → Dard* (§5.2).
 
-Les défenses monolithiques du lot 4 ajoutent : *l'entité est ancrée au sol,
-elle ne se déplace pas ; le merlon et les deux barrières ne portent aucun tube ;
-le merlon ne porte aucun accent.*
+Les défenses du lot 4 sont en **régime C** : elles sont ancrées, rien ne les
+transforme, elles peuvent prendre 4 à 7 gros pixels de face. Additions : *l'entité
+est fixée au sol, elle ne se déplace pas ; le merlon et les deux barrières ne
+portent aucun tube ; le merlon ne porte aucun accent.*
+
+⚠ Les trois artilleries (`faucheuse`, `mortier`, `harpon`) sont des **véhicules
+de forme** mais des **défenses de fonction** : châssis véhicule, régime C. C'est
+le seul endroit du projet où les deux axes divergent, et c'est volontaire —
+elles ne bougent jamais.
 
 ### Lot 5 — bâtiments (16) et états (7)
 
-Additions : *un bâtiment occupe une case entière et son empreinte est carrée ;
-il n'a pas d'avant ni d'arrière, donc pas de gradient fonctionnel — sa lecture
-vient de sa silhouette en plan ; toit vu du dessus, jamais de façade ; aucune
-cheminée fumante, aucune lumière allumée.*
+Régime C, le plus généreux : ce sont les seules entités du jeu qui ont une
+vraie hauteur, et l'inclinaison à 75° est là pour elles avant tout.
 
-Les trois surcouches de dégâts se demandent différemment et méritent leur
-propre conversation : *fond magenta, et sur ce fond uniquement les marques de
+Additions : *un bâtiment occupe une case entière et son empreinte est carrée ;
+il n'a pas d'avant ni d'arrière, donc pas de gradient avant/arrière — sa lecture
+vient de sa silhouette en plan et de sa face basse ; toit vu de dessus, face
+basse sur 4 à 7 gros pixels, aucune autre face ; aucune cheminée fumante, aucune
+lumière allumée, aucun panneau détaillé.*
+
+Arithmétique à respecter, et c'est elle qui cadre les prompts : emprise du toit
++ hauteur de face ≤ 28. Un bâtiment de 22 × 22 avec 6 px de face fait 22 de
+large et 28 de haut : c'est la limite exacte.
+
+Les trois surcouches de dégâts sont en **régime A** et méritent leur propre
+conversation : *fond magenta, et sur ce fond uniquement les marques de
 destruction — suie noire, brèches ouvertes sur du noir, tôles arrachées, gravats
 — disposées de façon dispersée et asymétrique, en laissant au moins la moitié de
-la surface vide. Aucun bâtiment, aucune forme reconnaissable : c'est un calque
-qui se posera par-dessus n'importe quel bâtiment.* Progression à tenir entre
-elles : silhouette intacte → silhouette entamée → moitié éventrée.
+la surface vide. Aucun bâtiment, aucune forme reconnaissable, aucune face,
+aucun volume : c'est un calque plat qui se posera par-dessus n'importe quel
+bâtiment.* Progression à tenir entre elles : silhouette intacte → silhouette
+entamée → moitié éventrée.
 
-### Lots 6 et 7 — carte et interface (54)
+Les quatre ruines, elles, sont en régime C : un tas de décombres a du volume.
 
-Les marqueurs de carte et les icônes d'interface **ne sont pas en vue de
-dessus** : ce sont des pictogrammes. Le contrat du §2 s'applique pour le format,
-la palette et les interdits, mais la clause de vue zénithale saute. Il faut le
-dire explicitement dans le prompt, sinon le modèle produit des icônes en
-perspective au milieu d'un lot top-down :
+### Lots 6 et 7 — carte (13) et interface (41)
+
+Les marqueurs de carte suivent le régime C comme les bâtiments : ils
+représentent des installations vues de dessus et la carte est la même vue que le
+combat.
+
+Les icônes d'interface, en revanche, **ne sont pas en vue de dessus du tout** :
+ce sont des pictogrammes. Le contrat du §2 s'applique pour le format, la palette
+et les interdits, mais les clauses de vue et de régime sautent. Il faut le dire
+explicitement dans le prompt, sinon le modèle produit des icônes inclinées au
+milieu d'un lot cohérent :
 
 ```
 Exception à la vue : cette image est un pictogramme d'interface, pas un objet
-vu du dessus. Silhouette pleine, frontale, symétrique, un seul niveau de
-lecture, aucune profondeur.
+vu de dessus. Silhouette pleine, frontale, symétrique, un seul niveau de
+lecture, aucune inclinaison, aucune face visible, aucune profondeur.
 ```
 
 Addition pour les icônes : *forme pleine, aucun contour ajouté, aucun cercle de
@@ -429,34 +529,47 @@ noire.*
 
 ## 8. Pièges connus du médium — la liste qui évite de refaire un lot
 
-1. **La dérive de lot.** À la vingtième image d'une conversation, le modèle
-   dérive vers son style par défaut : détails plus fins, contours plus mous,
-   couleurs plus riches. **Recoller le contrat du §2 toutes les dix images**, et
-   ne jamais faire un lot entier d'une traite sans regarder.
-2. **La cohérence est plus fragile que la qualité.** Vingt sprites très beaux et
+1. **Il glisse vers le 3/4.** C'est sa pente naturelle, et elle est forte : le
+   zénithal strict est ce qu'il rate le plus, le 3/4 à 45° ce qu'il fait le
+   mieux. Sans rappel, 75° devient 60° puis 45° au fil d'un lot. **Le seul
+   contrôle fiable est de poser les sprites finis côte à côte** : image par
+   image, la dérive ne choque pas.
+2. **La dérive de lot, en général.** À la vingtième image d'une conversation, le
+   modèle dérive vers son style par défaut : détails plus fins, contours plus
+   mous, couleurs plus riches. **Recoller le contrat du §2 toutes les dix
+   images**, et ne jamais faire un lot entier d'une traite sans regarder.
+3. **La cohérence est plus fragile que la qualité.** Vingt sprites très beaux et
    inégaux valent moins que vingt sprites moyens et homogènes. Le jeu se lit par
    comparaison entre entités, pas entité par entité.
-3. **Il ajoute du sol.** Dès qu'on décrit un objet posé, il dessine ce sur quoi
+4. **Il remplit la case.** Un sujet qui touche les bords est son réflexe de
+   cadrage. La contrainte des 28 × 28 doit être répétée dans chaque prompt, pas
+   seulement dans le contrat, et vérifiée mécaniquement au §4.
+5. **Il ajoute du sol.** Dès qu'on décrit un objet posé, il dessine ce sur quoi
    il est posé. Le rappel « fond magenta uni, rien d'autre » va dans presque
    chaque prompt.
-4. **Il n'entend pas « gros pixel ».** Si les sorties sont lisses, écrire
+6. **Il ajoute un emblème.** Dès qu'un objet est militaire, il y colle un aigle,
+   une étoile ou un blason sur la plus grande surface plane. C'est automatique,
+   et c'est un interdit dur du projet.
+7. **Il n'entend pas « gros pixel ».** Si les sorties sont lisses, écrire
    explicitement « chaque carré de 32 × 32 pixels est d'une seule couleur »
    plutôt que « pixel art », qui est devenu un mot de style et non de format.
-5. **Il équilibre les couleurs.** Un sprite qui ne devrait porter qu'un accent
+8. **Il équilibre les couleurs.** Un sprite qui ne devrait porter qu'un accent
    rouge en reçoit un second, vert ou bleu, « pour l'équilibre ». C'est le
    défaut le plus insidieux, parce que le résultat est joli et faux : il casse la
    seule règle que le joueur doit apprendre.
-6. **Il ne sait pas répéter une pièce.** La grammaire de l'Ouvrage — le même
+9. **Il ne sait pas répéter une pièce.** La grammaire de l'Ouvrage — le même
    module répété — lui demande un effort constant ; sans rappel, chaque unité
    ennemie devient un objet unique et l'Ouvrage cesse de se lire comme une
    installation qui s'auto-réplique.
-7. **Ne jamais lui demander de corriger une image.** Une retouche renvoie une
-   image régénérée, donc hors palette et hors cohérence. On corrige le prompt et
-   on relance.
+10. **Ne jamais lui demander de corriger une image.** Une retouche renvoie une
+    image régénérée, donc hors palette et hors cohérence. On corrige le prompt
+    et on relance.
 
 ---
 
-*v1 — 26/08/2026. Écrit après les arbitrages d'Ethan sur `INVENTAIRE-SPRITES.md`
-§2.4, §3.4, §5.3, §5.4 et §6.2. Le pipeline Python de `FICHE-STYLE.md` §10 est
-remplacé par ce document ; le §11 de la fiche reste en vigueur et c'est le §4
-ci-dessus qui le fait respecter.*
+*v2 — 26/08/2026. Réécrit après l'arbitrage sur la vue : top-down haut à 75°,
+non-dépassement de case absolu, trois régimes d'inclinaison, rotation limitée aux
+véhicules (90°) et miroir limité à l'infanterie. Voir les amendements A4, A6 et
+A7 d'`INVENTAIRE-SPRITES.md`, dont A7 modifie le §1.1 de `FICHE-STYLE.md`. Le
+pipeline Python du §10 de la fiche est remplacé par ce document ; le §11 reste en
+vigueur et c'est le §4 ci-dessus qui le fait respecter.*

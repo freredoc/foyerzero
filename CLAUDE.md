@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot RAFFINERIE), à confronter :** `npm test` →
-**198 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot DISPOSITION), à confronter :** `npm test` →
+**213 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -110,9 +110,10 @@ src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
 
-src/sim/                simulation déterministe, sans DOM — 8 fichiers
+src/sim/                simulation déterministe, sans DOM — 9 fichiers
   rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
+  disposition.js        validation, voisinage TYPÉ, débits d'une base posée
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -122,10 +123,10 @@ src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   19 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   20 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  champs  cible  clock  combat  defense
-  documentation  donnees  economy  generateur  grille  rendu  repli  rng
-  roster  state
+  disposition  documentation  donnees  economy  generateur  grille  rendu
+  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES de ce fichier-ci sont assertés contre
     le disque. Ajouter un test ou un fichier sans mettre §0 et §2 à jour rend
     la suite ROUGE. C'est voulu — §2 a menti deux fois, §0 quatre.
@@ -309,6 +310,21 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   RÉFÉRENCE ; en écrire une seconde, même identique, casserait la propagation.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
+- **`sim/disposition.js` compte les voisins et calcule les débits**, et il ne
+  fait QUE ça : il ne pose rien, ne retire rien, ne corrige rien.
+  `problemesDeDisposition` rend une LISTE de défauts — tous, pas le premier — et
+  ne lève JAMAIS pour une faute de jeu. Elle ne lève que pour une faute de
+  programme (structure absente, indice hors liste). C'est « rien ne se retire en
+  silence » (§4) appliqué : on signale au joueur, il purge.
+  ⚠ **Aucun plafond de voisins autre que la géométrie.** Le lot 1 plafonnait à
+  deux (`params.adjacence.maxVoisins`) ; ce modèle-ci compte les huit cases.
+  Confondre les deux divise la production par quatre.
+  ⚠ **L'arrondi se fait PAR TYPE de voisin, puis se multiplie.** Arrondir la
+  somme donne 281 là où le jeu dit 282 (centrale niveau 3, trois champs) — un
+  écart d'une unité qui se creuse ensuite, et un test le mesure exprès.
+  ⚠ **Une disposition se décrit comme un site de l'Ouvrage** :
+  `{ id, rangee, colonne, niveau }`, un bâtiment par case. C'est déjà la forme
+  que produit `placerBatiments` du générateur — même géométrie, même écriture.
 - **Le tirage des champs vit dans `sim/champs.js`.** `champsDeLaBase(rangée,
   colonne)` rend le terrain, fonction de la SEULE position. Deux règles y sont
   DÉDUITES et non dictées, et il faut le savoir avant de les changer : deux

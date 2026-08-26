@@ -18,10 +18,13 @@
 
 ## 0. Total, d'un coup d'œil
 
-> **v2 — 26/08/2026.** Tous les arbitrages du §2.4, §3.4, §4.2, §5.3, §5.4 et
-> §6.2 sont tranchés. Le pipeline change : les sprites ne sont plus composés en
-> Python mais **générés par modèle d'image**, en 128 × 128, selon
-> `BRIEF-SPRITES-IA.md`. Les conséquences sont reportées dans chaque lot.
+> **v3 — 26/08/2026.** Tous les arbitrages du §2.4, §3.4, §4.2, §5.3, §5.4 et
+> §6.2 sont tranchés. Deux bascules de fond :
+> **(1)** le pipeline n'est plus la composition Python mais la **génération par
+> modèle d'image** en 128 × 128, selon `BRIEF-SPRITES-IA.md` ;
+> **(2)** la vue n'est plus strictement zénithale mais **top-down haut, ~75°**,
+> avec **non-dépassement de case absolu** (amendement A7). Le nombre de fichiers
+> ne change pas ; ce qui change, c'est ce que chaque fichier doit contenir.
 
 | Lot | Contenu | Fichiers |
 |---|---|---|
@@ -53,8 +56,11 @@ réapparaître dans un devis.
 
 La convention actuelle n'a **aucun axe propriétaire**. Or la règle centrale du
 projet est que le joueur et l'Ouvrage ne partagent ni palette ni grammaire de
-formes : `off_meute.png` ne peut pas désigner deux sprites. Trois amendements,
-à valider avant la première génération.
+formes : `off_meute.png` ne peut pas désigner deux sprites. **Sept amendements**,
+tous tranchés le 26/08, à reporter dans `FICHE-STYLE.md` avant la première
+génération. Les quatre derniers (A4 à A7) ne portent plus sur le nommage mais
+sur le rendu, et A7 modifie le §1.1 de la fiche — son premier principe non
+négociable.
 
 **A1 — axe propriétaire, en deuxième position.**
 
@@ -83,14 +89,81 @@ cases** : sans rotation, il faudrait une quinzaine de variantes par terrain pour
 que le pavage ne se voie pas. Avec rotation, quatre variantes en donnent seize
 apparentes.
 
-**A4 — rotation libre des entités au rendu.** [tranché 26/08]
-Conséquence du §3.4. La vue est **strictement zénithale** et le gradient
-avant/arrière du §5 est attaché à l'objet, pas à une source de lumière de
-scène : un sprite tourné de 90° ou de 180° reste physiquement juste. L'interdit
-du §11 devient : *aucune SECONDE ORIENTATION DESSINÉE*. La rotation au rendu, elle,
-est libre. **Contrepartie obligatoire, à inscrire dans la fiche §2 :** la marge de
-2 px logiques passe du seul bord haut aux **quatre bords**, sans quoi une entité
-tournée déborde sur la case voisine.
+**A4 — deux transformations au rendu, et seulement deux.** [tranché 26/08, restreint]
+Conséquence du §3.4, resserrée par le passage à 75° (A7). La rotation n'est plus
+libre : seules deux transformations sont autorisées, parce que seules deux
+restent justes quand la caméra est inclinée.
+
+| Qui | Transformation | Interdit |
+|---|---|---|
+| Véhicules (mobiles) | **rotation par pas de 90°** | toute rotation intermédiaire |
+| Infanterie | **miroir vertical** (≡ 180°, les figures étant symétriques gauche/droite) | rotation à 90° |
+| Tout le reste — bâtiments, défenses ancrées, POI, obstacles, icônes | **aucune** | — |
+
+L'interdit du §11 devient : *aucune SECONDE ORIENTATION DESSINÉE*. On ne produit
+jamais un second fichier pour la même entité tournée ; on ne tourne au rendu que
+ce qui figure dans ce tableau.
+
+**A6 — l'échelle des empreintes devient 18 / 24 / 28.** [tranché 26/08]
+La fiche §7 annonçait 20 / 26 / 30 gros pixels sur 32 pour 5 / 10 / 15 points, la
+dernière valeur étant décrite comme « case débordante ». Le non-dépassement
+(A7) supprime cette possibilité, et la marge de 2 gros pixels sur les quatre
+bords plafonne à 28. Nouvelle échelle : **18 / 24 / 28**, ce qui creuse en plus
+l'écart entre 5 et 10 points — la fiche le demandait, 20 contre 26 ne le donnait
+pas.
+
+**A7 — vue top-down haute (~75°), non-dépassement absolu.** [tranché 26/08]
+Remplace le « zénithal strict » du §1.1 de la fiche. La caméra est à **75° de
+l'horizontale** (90° serait la verticale exacte) : on voit le dessus des objets
+et **une amorce de leur face basse**, rien de plus.
+
+Chiffres qui découlent de l'angle, et qui suffisent à tout régler :
+
+- la face visible d'un objet de hauteur `H` occupe `H × cos 75° ≈ H / 4` — **un
+  quart de sa hauteur** ;
+- l'emprise au sol est comprimée de `sin 75° = 0,97`, soit 3 % : **négligeable,
+  et on ne la compresse pas**. La grille reste carrée à l'écran.
+
+⚠ Ce n'est **pas** de l'isométrie. On n'incline pas la grille, on ne déforme pas
+les cases, on ne tourne pas la carte de 45°. On dessine simplement chaque sprite
+avec une amorce de flanc en bas. Si quelqu'un compresse la grille, il a compris
+autre chose que ce qui est écrit ici.
+
+**Non-dépassement.** L'intégralité du sprite — flanc compris, canon compris,
+antenne comprise — tient dans un carré centré de **28 × 28 gros pixels sur 32**.
+Aucune exception, sauf les tuiles de terrain qui font 32 × 32 bord à bord.
+Trois conséquences, toutes bonnes :
+
+1. **Aucun tri par profondeur à écrire.** Rien ne mord sur la case du dessus,
+   donc rien ne peut masquer rien. Un ordre de dessin par rangée suffit, et le
+   §1.1 de la fiche (« aucun tri par profondeur ») survit intact.
+2. **L'ancrage reste le centre de la case**, comme au §2 de la fiche.
+3. **La rotation à 90° ne fait jamais sortir un sprite de sa case**, puisque sa
+   boîte englobante tient déjà dans un carré.
+
+**Trois régimes d'inclinaison**, parce qu'un flanc généreux et une rotation ne
+peuvent pas cohabiter : la caméra ne tourne pas avec l'objet, donc un flanc
+dessiné en bas se retrouve en haut après un miroir, et de côté après un quart de
+tour.
+
+| Régime | Qui | Flanc visible | Pourquoi |
+|---|---|---|---|
+| **A — plat** | terrain, obstacles, surcouches de dégâts | **0** | c'est le sol, il n'a pas de hauteur |
+| **B — épaisseur** | les 14 unités, et elles seules | **1 à 2 px** | elles tournent et se retournent ; au-delà de 2 px l'erreur se voit |
+| **C — volume** | bâtiments, les 9 défenses ancrées, POI, marqueurs, ruines | **4 à 7 px** | rien ne les transforme, elles peuvent se payer le volume entier |
+
+Le régime B est compatible avec le gradient avant/arrière du §5, et c'est ce qui
+le sauve : le flanc dessiné en bas est **sombre**, l'arrière du gradient est
+**sombre**, les deux signaux disent la même chose. Après miroir vertical, l'avant
+pointe vers le bas et le flanc sombre remonte en haut, où est désormais
+l'arrière : toujours juste. C'est la seule raison pour laquelle l'inclinaison et
+le retournement des garnisons peuvent coexister.
+
+**Dette assumée.** Un véhicule tourné d'un quart de tour montre son amorce de
+flanc sur le côté au lieu du bas. À 2 px logiques sur 32, l'erreur est de 6 % de
+la case — présente, non gênante. C'est le prix exact de l'arbitrage, il est
+connu, et il ne se paie qu'une fois : plafonner le flanc des unités à 2 px est ce
+qui le maintient dans cette fourchette.
 
 **A5 — les défenses redeviennent monolithiques.** [tranché 26/08]
 L'export en couches (corps + tube séparés) supposait un générateur par
@@ -246,22 +319,25 @@ Huit des quatorze unités garnissent une défense (`defense.present: true`) :
 `meute`, `guetteur`, `perceurs`, `carapace`, `ratisseur`, `fendeur`, `broyeur`,
 `belier`. Dessinées vers le haut, elles tournent le dos à l'assaut.
 
-**Arbitrage : aucun sprite supplémentaire.** Le retournement se fait au rendu.
+**Arbitrage : aucun sprite supplémentaire.** Le retournement se fait au rendu,
+selon le tableau d'A4 — rotation par pas de 90° pour les véhicules, miroir
+vertical pour l'infanterie, rien pour le reste.
 
-| Châssis | Transformation | Pourquoi elle est juste |
-|---|---|---|
-| Infanterie | miroir vertical (≡ rotation 180°, les figures étant symétriques gauche/droite) | Le gradient avant/arrière du §5 s'inverse avec l'objet et reste vrai. |
-| Véhicule, tourelle | **rotation libre**, par pas de 90° pour les déplacements latéraux, continue pour la visée | Vue zénithale stricte : aucun côté d'objet n'est visible, donc rien ne se déforme en tournant. |
+Trois conditions, non négociables, sans lesquelles l'arbitrage tombe :
 
-Deux conditions, non négociables, sans lesquelles l'arbitrage tombe :
-
-1. **Marge de 2 px logiques sur les quatre bords** de tout sprite susceptible de
-   tourner — unités, défenses, véhicules. Un canon collé au bord haut déborde
-   sur la case voisine dès la première rotation.
-2. **Aucun éclairage de scène cuit dans le sprite.** Le gradient du §5 est
+1. **Boîte englobante dans un carré centré de 28 × 28** (A7). Un canon collé au
+   bord déborde sur la case voisine dès le premier quart de tour.
+2. **Flanc plafonné à 2 gros pixels** pour les quatorze unités — régime B d'A7.
+   C'est ce qui garde l'erreur de perspective sous les 6 % de la case quand
+   elles tournent.
+3. **Aucun éclairage de scène cuit dans le sprite.** Le gradient du §5 est
    fonctionnel (l'avant est clair parce que c'est l'avant), jamais directionnel
    (« le soleil vient d'en haut à gauche »). Un sprite éclairé de biais devient
    faux dès qu'il tourne. À vérifier sur chaque jet.
+
+Le flanc du régime B n'est pas un compromis subi : il est **sombre**, comme
+l'arrière du gradient, et les deux signaux se renforcent au lieu de se
+contredire, y compris après retournement. Voir A7.
 
 ---
 
@@ -619,8 +695,16 @@ chacune reviendra dans une conversation future si elle n'est pas notée ici.
   produire un second fichier pour la même entité tournée.
 - **Aucun éclairage directionnel cuit dans le sprite.** Corollaire d'A4 : un
   sprite éclairé « d'en haut à gauche » devient faux dès la première rotation.
-  Le seul gradient autorisé est fonctionnel (l'avant est clair parce que c'est
-  l'avant).
+  Les deux seuls écarts de valeur autorisés sont fonctionnels : l'avant est
+  clair parce que c'est l'avant, le flanc est sombre parce que c'est un flanc.
+- **Aucun dépassement de case.** Flanc, canon, antenne compris : tout tient dans
+  28 × 28 gros pixels sur 32 (A7). Les tuiles de terrain sont la seule exception,
+  elles font 32 × 32 bord à bord.
+- **Aucune isométrie.** L'inclinaison à 75° se dessine DANS le sprite ; la grille,
+  elle, reste carrée et non tournée. Compresser ou incliner la grille est le
+  contresens à ne pas faire.
+- **Aucun flanc au-delà de 2 gros pixels sur une unité.** Régime B d'A7 : c'est
+  la contrepartie de la rotation et du miroir.
 - **Aucune planche d'animation** tant qu'une transformation suffit. Si une
   planche devient nécessaire, l'invariant d'Archipel s'applique : **frame 0
   pixel-pour-pixel identique au sprite statique.**
@@ -638,13 +722,16 @@ chacune reviendra dans une conversation future si elle n'est pas notée ici.
   ni silhouette reconnaissable. Les noms TA de `src/data/` sont une traçabilité
   interne, **pas une référence visuelle** : `broyeur.ta === 'Mammoth'` ne
   légitime rien.
-
 - **Aucun décor de présentation.** Sol, socle, vignette, cadre, ombre au sol,
   reflet, « mise en scène » : le sprite est découpé sur fond vide et rien
   d'autre ne doit s'y trouver. Même motif : le modèle en produira par défaut.
 
 ---
 
-*v2 — 26/08/2026. Arbitrages §2.4, §3.4, §5.3, §5.4, §6.2 tranchés par Ethan ;
-amendements A4 (rotation au rendu) et A5 (défenses monolithiques) ajoutés ;
-pipeline basculé sur génération par modèle d'image, cf. `BRIEF-SPRITES-IA.md`.*
+*v3 — 26/08/2026. Arbitrages §2.4, §3.4, §5.3, §5.4, §6.2 tranchés par Ethan.
+Amendements ajoutés : A4 (deux transformations au rendu, et seulement deux),
+A5 (défenses monolithiques), A6 (empreintes 18/24/28), A7 (top-down à 75°,
+non-dépassement absolu, trois régimes d'inclinaison). Pipeline basculé sur
+génération par modèle d'image, cf. `BRIEF-SPRITES-IA.md`. A7 modifie le §1.1 de
+`FICHE-STYLE.md`, qui est son premier principe non négociable : la fiche doit
+être amendée avant la première génération, pas après.*
