@@ -25,7 +25,7 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    savoir est un lot perdu.
 
 **Référence au 26/08/2026 (après le lot ATTRIBUTION), à confronter :** `npm test` →
-**218 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**219 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
