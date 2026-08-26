@@ -282,22 +282,22 @@ export function debitDuBatiment(disposition, champs, index) {
 }
 
 /**
- * Quelle ressource ce bâtiment produit-il ?
+ * Quelle ressource ce bâtiment produit-il, quand il n'en produit qu'UNE ?
  *
- * Trois cas tranchés, un qui ne l'est pas :
+ * Trois cas sur quatre :
  *   - collecteur  → CE QU'IL Y A SOUS LUI. Le champ décide, arbitré le 26/08
  *                   (`CHAMPS.ressourceDonneeParLeChamp`). Un collecteur hors
  *                   champ rend `null` : il est mal posé, pas ambigu.
  *   - centrale    → électricité, et elle seule.
  *   - accumulateur→ électricité aussi : son bonus de voisinage EST de la
  *                   production, pas du stockage.
- *   - raffinerie  → **NON TRANCHÉ**, donc `null`. Elle produit 72/h par
- *                   collecteur voisin, mais rien ne dit de QUOI. Le plus
- *                   naturel serait « la ressource du collecteur qui l'a causé »,
- *                   ce qui ferait de sa production un mélange — et ce n'est pas
- *                   une inférence à faire à la place d'Ethan. Le détail par
- *                   voisin est dans `debitDuBatiment().parVoisin` : de quoi
- *                   trancher plus tard sans rien recalculer.
+ *   - raffinerie  → `null`, mais pour une raison DIFFÉRENTE des précédentes :
+ *                   elle en produit plusieurs à la fois. Passer par
+ *                   `productionParRessource`, qui les sépare.
+ *
+ * ⚠ `null` recouvre donc deux situations qui n'ont rien à voir — « mal posé »
+ * et « plusieurs à la fois ». C'est pour ça que cette fonction n'est plus le
+ * point d'entrée : `productionParRessource` l'est.
  *
  * @returns {string|null} 'quartz' · 'scorie' · 'electricite' · null
  */
@@ -312,4 +312,82 @@ export function ressourceProduite(disposition, champs, index) {
   const def = BASE_BATIMENTS[b.id];
   if (def?.ressource === 'electricite') return 'electricite';
   return null;
+}
+
+/**
+ * Ce que ce bâtiment produit, PAR RESSOURCE, en unités par heure.
+ *
+ * ARBITRÉ le 26/08 par Ethan, et la règle n'est pas celle qu'on croit au
+ * premier regard. Ce n'est PAS « la ressource du voisin » en général : une
+ * centrale qui touche trois champs de scorie ne produit pas de la scorie, elle
+ * produit de l'électricité. Le discriminant est le champ `ressource` de
+ * `BASE_BATIMENTS`, et c'est exactement la distinction posée le 26/08 :
+ *
+ *   `quartzOuScorie`  (collecteur)  → il A une ressource propre, celle du champ
+ *                                     sous lui. TOUT ce qu'il produit y va,
+ *                                     bonus de voisinage compris.
+ *   `electricite`     (centrale,     → pareil, tout va en électricité.
+ *                      accumulateur)
+ *   `quartzEtScorie`  (raffinerie)   → il n'a PAS de ressource propre, et pas
+ *                                     de production propre non plus. Chaque
+ *                                     voisin apporte SA ressource à lui.
+ *
+ * L'exemple d'Ethan, mot pour mot : une raffinerie de niveau 1 entourée de deux
+ * collecteurs à quartz et trois à scorie produit **144/h de quartz et 216/h de
+ * scorie** — 2 × 72 et 3 × 72, séparés, jamais additionnés.
+ *
+ * @returns {Record<string, number>} ressource → unités/h. Objet VIDE si le
+ *   bâtiment ne produit rien (le Chantier, une caserne). La clé spéciale
+ *   `indetermine` recueille ce qui n'a pas pu être attribué — un voisin
+ *   collecteur posé hors champ, par exemple. Elle ne devrait jamais apparaître
+ *   sur une disposition valide, et sa présence est un signal, pas une valeur à
+ *   sommer avec les autres.
+ */
+export function productionParRessource(disposition, champs, index) {
+  const b = disposition[index];
+  if (b === undefined) {
+    throw new RangeError(`disposition : indice ${index} hors de la liste`);
+  }
+  const def = BASE_BATIMENTS[b.id];
+  if (DEBITS[b.id] === undefined) return {};
+
+  const debit = debitDuBatiment(disposition, champs, index);
+  const production = {};
+  const verser = (ressource, montant) => {
+    if (montant === 0) return;
+    const cle_ = ressource ?? 'indetermine';
+    production[cle_] = (production[cle_] ?? 0) + montant;
+  };
+
+  // Cas 1 — le bâtiment a une ressource propre : tout y va.
+  if (def?.ressource !== 'quartzEtScorie') {
+    verser(ressourceProduite(disposition, champs, index), debit.total);
+    return production;
+  }
+
+  // Cas 2 — pas de ressource propre : chaque voisin apporte la sienne. On
+  // repasse par les voisins un par un plutôt que par les totaux de
+  // `debitDuBatiment`, parce qu'un total ne dit pas QUI l'a causé.
+  verser(ressourceProduite(disposition, champs, index), debit.propre);
+
+  const parVoisin = DEBITS[b.id].parVoisin ?? {};
+  const occupees = new Map(
+    disposition.map((autre, i) => [cle(autre.rangee, autre.colonne), i]),
+  );
+  for (const [r, c] of casesVoisines(b.rangee, b.colonne)) {
+    const i = occupees.get(cle(r, c));
+    // `i === index` est inatteignable pour la même raison que dans
+    // `voisinsQualifiants` — voir la garde commentée là-haut. Falsifié le
+    // 26/08 : la retirer ne fait tomber aucun test. Elle reste pour la même
+    // raison aussi : ne pas faire dépendre la justesse d'ici d'une propriété
+    // écrite ailleurs.
+    if (i === undefined || i === index) continue;
+    const apport = parVoisin[disposition[i].id];
+    if (apport === undefined) continue;
+    verser(
+      ressourceProduite(disposition, champs, i),
+      debitVoisinParHeure(b.id, disposition[i].id, b.niveau),
+    );
+  }
+  return production;
 }
