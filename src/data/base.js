@@ -107,7 +107,8 @@ export const BASE_BATIMENTS = {
     // ⚠ TROIS NOMS ONT COEXISTÉ pour ce bâtiment, et c'est ce qui a fait perdre
     // du temps : la clé disait `usine` / « Usine » (nom TA, Factory), le
     // commentaire de COUT_NIVEAU_DEUX du même fichier disait « dépôt de
-    // véhicules », et MODELE-REPARATION-1.md §3 dit encore « atelier ».
+    // véhicules », et MODELE-REPARATION-1.md §3 disait « atelier » (corrigé
+    // le 26/08, en même temps que ses §6.2 et §6.3).
     // ARBITRÉ le 26/08 par Ethan : c'est **Dépôt de véhicules**, ce qui
     // reprend le nom qu'il avait déjà donné le 24/08 (BASE-DU-JOUEUR-1.md §2).
     // `ta` garde Factory : c'est l'équivalent, pas le nom.
@@ -281,15 +282,16 @@ export const GEOMETRIE_BASE = {
 // inversée. Corrigé le 26/08, mesuré sur GRILLE.)
 //
 // ⚠ CE QUI N'EST PAS ENCORE ARBITRÉ, et qui n'est donc PAS écrit ici :
-//   - ce qu'un champ de quartz fait au collecteur qui s'y pose. L'hypothèse
-//     naturelle est qu'il décide de sa ressource — DEBITS.collecteur produit
-//     `quartzOuScorie` et ne tire aucun bonus d'un champ voisin, ce qui colle.
-//     Mais elle n'est pas confirmée, donc elle n'est pas codée.
 //   - si un collecteur gagne quelque chose par case de champ ADJACENTE, comme
-//     la centrale gagne 60/h par champ de scorie voisin.
+//     la centrale gagne 60/h par champ de scorie voisin. Le champ sous lui
+//     décide de sa RESSOURCE (arbitré, voir `ressourceDonneeParLeChamp`) ;
+//     savoir s'il en tire aussi un DÉBIT est une autre question, ouverte.
 //   - si le redéploiement du joueur (Chantier détruit, 20 cases vers le bas)
 //     retire les champs. La position change, donc le tirage change : ça
 //     découle, mais ça n'est pas dit.
+//   - le pendant Ouvrage d'une raffinerie qui stocke de la scorie. Voir
+//     l'en-tête de BASE_BATIMENTS : Gangue est le silo à quartz, Terril le tas
+//     de scorie, et la raffinerie du joueur fait les deux sous un seul nom.
 
 export const CHAMPS = {
   /** Cases de champ posées dans une base, toutes ressources confondues. */
@@ -324,6 +326,48 @@ export const CHAMPS = {
    * nulle part ailleurs.
    */
   posableDessus: ['collecteur'],
+
+  /**
+   * LE CHAMP DÉCIDE DE LA RESSOURCE — arbitré le 26/08 par Ethan.
+   * Un collecteur ne choisit pas ce qu'il produit : il produit ce qu'il y a
+   * sous lui. C'est ce qui donne leur poids aux cinq à sept cases de quartz
+   * d'une base — elles fixent, à la case près, combien de quartz on peut en
+   * tirer, et ce plafond-là ne se déplace qu'en déménageant.
+   * `BASE_BATIMENTS.collecteur.ressource` vaut `quartzOuScorie` justement parce
+   * que la réponse n'est pas dans la ligne du bâtiment : elle est sous lui.
+   */
+  ressourceDonneeParLeChamp: true,
+
+  /**
+   * Tentatives de placement avant abandon. Le tirage pose les blocs un par un
+   * et peut se coincer : une tentative qui échoue est intégralement rejouée
+   * avec un flux dérivé, jamais rafistolée — un rafistolage romprait le
+   * déterminisme par position.
+   *
+   * ⚠ MESURÉ, et le résultat est plus franc qu'un facteur de marge : sur les
+   * 9 000 positions de la carte (30 × 300), le tirage réussit **du premier
+   * coup, partout**. Maximum 1, médiane 1, moyenne 1,0000. Ce garde-fou ne se
+   * déclenche donc JAMAIS aux valeurs actuelles — et le dire est plus utile que
+   * d'annoncer une marge qui n'a pas de sens.
+   *
+   * Là où il commence à mordre, mesuré en saturant la zone : 24 cases sur 42
+   * demandent 2 tentatives au pire, 28 en demandent 4, 30 en demandent 9. Zéro
+   * échec jusqu'à 30/42. Douze cases sont donc très loin du point de rupture,
+   * et 64 couvre confortablement le jour où quelqu'un doublerait le compte.
+   */
+  tentativesMax: 64,
+
+  /**
+   * DÉDUIT, PAS DICTÉ — et c'est important de le savoir en le lisant.
+   * Deux blocs de MÊME ressource ne se touchent jamais par un côté. Sans cette
+   * règle, deux blocs de deux cases posés côte à côte formeraient un bloc de
+   * quatre à l'œil, et « les champs viennent par un, deux ou trois » cesserait
+   * d'être vrai à l'écran alors qu'il le resterait dans les données.
+   * Le contact en DIAGONALE reste permis : il ne fusionne rien visuellement.
+   * Deux blocs de ressources DIFFÉRENTES peuvent se toucher librement — un
+   * quartz contre une scorie reste lisible.
+   */
+  contactLateralEntreBlocsDeMemeRessource: false,
 };
 
 /**
