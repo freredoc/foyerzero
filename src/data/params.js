@@ -46,9 +46,21 @@ export const PARAMS = {
   adjacence: { facteur: 0.5, maxVoisins: 2 },
 
   // Flux continu : production de base d'un bâtiment niveau 1, en MILLI-unités
-  // par tick. Entier obligatoire : toute l'économie par tick est en arithmétique
-  // entière pour que le rattrapage analytique soit exact au bit près.
-  fluxContinu: { baseMilliParTickNiveau1: 20 },
+  // PAR HEURE. Entier obligatoire : toute l'économie par tick est en
+  // arithmétique entière pour que le rattrapage analytique soit exact au bit
+  // près.
+  //
+  // ⚠ CETTE VALEUR ÉTAIT EXPRIMÉE PAR TICK (20 milli/tick) jusqu'au lot RÉSIDU.
+  // 20 × 36 000 ticks/heure = 720 000 milli/h = 720 unités/h : le niveau 1 est
+  // rigoureusement inchangé. Ce qui change, c'est que le débit ne dépend plus
+  // de la fréquence du tick — un débit par tick devait être arrondi, et cet
+  // arrondi coûtait jusqu'à 0,71 % de production (niveau 3). Le débit horaire
+  // s'arrondit une fois par niveau, pour moins d'un millionième de pour cent
+  // au-delà du niveau 4.
+  //
+  // C'est aussi ce qui rend le passage du hors-combat à 1 Hz sans effet sur
+  // l'économie : la conversion passe par TICKS_PAR_HEURE de sim/clock.js.
+  fluxContinu: { baseMilliParHeureNiveau1: 720_000 },
 
   // Stockage : capacité par ressource, en milli-unités. Le flux continu
   // s'arrête stockage plein.

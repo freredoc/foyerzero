@@ -368,34 +368,36 @@ export const PRODUCTEUR_APPARIE = { raffinerie: 'collecteur', accumulateur: 'cen
 // Débit horaire — et pourquoi il n'est PAS exprimé par tick
 // ---------------------------------------------------------------------------
 //
-// `sim/economy.js` range aujourd'hui un débit en milli-unités PAR TICK, arrondi
-// une fois par couple (niveau, voisins). L'arrondi est cohérent — tick et
-// rattrapage lisent le même entier — mais il est gros : à 10 Hz, 240/h tombe
-// sur 6,67 milli/tick, et arrondir coûte 5 % ; 48/h coûte 25 %.
+// `sim/economy.js` rangeait un débit en milli-unités PAR TICK, arrondi une fois
+// par couple (niveau, voisins). L'arrondi était cohérent — tick et rattrapage
+// lisaient le même entier — mais il était gros : à 10 Hz, 240/h tombe sur
+// 6,67 milli/tick, et arrondir coûte 5 % ; 48/h coûte 25 %.
 //
-// LE CORRECTIF est de ne plus jamais arrondir un débit par tick. On garde le
-// débit PAR HEURE, entier, et on porte un résidu :
+// ✅ LE CORRECTIF EST EN PLACE (lot RÉSIDU). Plus aucun débit n'est arrondi par
+// tick : `sim/economy.js` range un débit PAR HEURE, entier, et chaque bâtiment
+// porte un résidu dans l'état de jeu (`residuFlux`, SAVE_VERSION 2).
 //
 //   residu += debitParHeure
 //   gain    = Math.floor(residu / TICKS_PAR_HEURE)
 //   residu  = residu % TICKS_PAR_HEURE
 //
-// L'erreur d'arrondi par tick devient EXACTEMENT NULLE, à n'importe quelle
-// fréquence. Le rattrapage reste en O(1) et reste exact au bit près :
+// L'erreur d'arrondi par tick est EXACTEMENT NULLE, à n'importe quelle
+// fréquence — c'est ce qui rend le passage du hors-combat à 1 Hz sans effet sur
+// l'économie.
 //
-//   total  = residu + N × debitParHeure
-//   gain   = Math.floor(total / TICKS_PAR_HEURE)
-//   residu = total % TICKS_PAR_HEURE
-//
-// Vérifié par tirage aléatoire : 200 couples (résidu, débit, N), pas-à-pas
-// contre formule fermée, identiques à chaque fois. Pire cas de débordement —
-// dix ans hors ligne à 1 Hz au débit du niveau 50 — reste deux fois sous
-// l'entier sûr, et le plafond de stockage borne bien avant.
-//
-// ⚠ CE CORRECTIF EST UN CHANGEMENT DE `sim/economy.js`, PAS DE CE FICHIER. Il
-// touche fluxMilliParTick, le rattrapage analytique et le format d'état. Il
-// n'est pas dans ce lot : les données ci-dessous sont écrites pour lui, et
-// restent lisibles par le code actuel en attendant.
+// ⚠ RECTIFICATIF SUR LE DÉBORDEMENT. La rédaction précédente annonçait que le
+// pire cas — dix ans hors ligne au débit du niveau 50 — restait « deux fois
+// sous l'entier sûr ». C'EST FAUX, et de loin : le produit naïf
+// `N × debitParHeure` y vaut 4,2 × 10¹⁸, soit 470 fois AU-DESSUS. Le rattrapage
+// ne calcule donc pas ce produit. Il décompose N en heures pleines + reste
+// (arithmétique modulaire) et borne les heures pleines à ce qu'il faut pour
+// saturer le stockage — au-delà le stock vaut la capacité de toute façon.
+// Les deux produits qui subsistent sont bornés, et le seuil au-delà duquel
+// l'exactitude tomberait est calculé et exporté : `DEBIT_MILLI_PAR_HEURE_MAX`,
+// soit 2,5 × 10¹¹ milli/h à 10 Hz. Le débit du niveau 50 ci-dessus — 1,345 × 10⁷
+// unités/h, le plus lourd du jeu — reste dessous d'un facteur 19 SEULEMENT.
+// La marge est réelle mais pas confortable : `rattrapageEconomie` lève si elle
+// est franchie, plutôt que de dériver en silence.
 //
 // Le seul arrondi qui subsiste est celui du débit horaire lui-même, fait une
 // fois par niveau : nul aux niveaux 1 à 3, 0,053 % au niveau 4, et sous le
