@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot ATTRIBUTION), à confronter :** `npm test` →
-**219 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot TICK), à confronter :** `npm test` →
+**234 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -110,10 +110,11 @@ src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
 
-src/sim/                simulation déterministe, sans DOM — 9 fichiers
+src/sim/                simulation déterministe, sans DOM — 10 fichiers
   rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
+  economie-base.js      le TICK : stocks, saturation, rattrapage analytique
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -123,10 +124,10 @@ src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   20 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   21 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  champs  cible  clock  combat  defense
-  disposition  documentation  donnees  economy  generateur  grille  rendu
-  repli  rng  roster  state
+  disposition  documentation  donnees  economie-base  economy  generateur
+  grille  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES de ce fichier-ci sont assertés contre
     le disque. Ajouter un test ou un fichier sans mettre §0 et §2 à jour rend
     la suite ROUGE. C'est voulu — §2 a menti deux fois, §0 quatre.
@@ -310,6 +311,28 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   RÉFÉRENCE ; en écrire une seconde, même identique, casserait la propagation.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
+- **`sim/economie-base.js` fait passer le temps**, et il vit À CÔTÉ de
+  `sim/economy.js`, il ne le remplace pas. L'ancien porte encore le modèle du
+  lot 1 et reste branché à `state.js` ; le débrancher est un lot à part qui
+  devra aussi retirer les colis et bouger `SAVE_VERSION` — une seule migration
+  pour les deux.
+  ⚠ **UN STOCK AU-DESSUS DU PLAFOND EST GELÉ, JAMAIS AMPUTÉ.** Arbitré le 26/08.
+  Perdre une raffinerie ne prend rien au joueur : le stock cesse de monter, il
+  ne tombe pas. Le plafond effectif d'un tick est `max(cap, stock)`, pas `cap`.
+  C'est « rien ne se retire en silence » appliqué au stock.
+  ⚠ **Le résidu est par (bâtiment, RESSOURCE), pas par bâtiment.** Une
+  raffinerie produit dans deux ressources à la fois ; un résidu unique les
+  mélangerait et les deux flux dériveraient sans que le total bouge.
+  ⚠ **La marge d'exactitude est de 5,47, pas de 19.** Le 19 avait été mesuré sur
+  le collecteur de niveau 50 SEUL, avant que le voisinage n'entre au modèle. Le
+  pire cas réel est un collecteur niveau 50 entouré de huit raffineries :
+  45 738 385 u/h.
+- **Un état ne se construit pas qu'avec le constructeur du module.** Les douze
+  premiers tests d'`economie-base` partaient tous de `creerEtatEconomie`, donc de
+  zéro — et depuis zéro un stock ne peut jamais dépasser sa capacité, ce qui
+  était EXACTEMENT le seul état où tick et rattrapage divergeaient. 197
+  divergences sur 300 bases, invisibles à douze tests verts. Les états HÉRITÉS
+  (sauvegarde d'avant, base amputée par un raid) se posent à la main.
 - **`sim/disposition.js` compte les voisins et calcule les débits**, et il ne
   fait QUE ça : il ne pose rien, ne retire rien, ne corrige rien.
   `problemesDeDisposition` rend une LISTE de défauts — tous, pas le premier — et
