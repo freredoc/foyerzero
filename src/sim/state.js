@@ -10,7 +10,7 @@ import { creerHorloge, tick as tickHorloge, avancerTicks } from './clock.js';
 import { tickEconomie, rattrapageEconomie } from './economy.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /**
  * @typedef {object} Etat
@@ -20,7 +20,7 @@ export const SAVE_VERSION = 1;
  * @property {{ tempsSimuleMs: number, nbTicks: number, residuMs: number }} horloge
  * @property {{ quartzMilli: number, scorieMilli: number }} ressources
  * @property {Array<{ type: string, niveau: number, voisinsQualifiants: number,
- *   colis: { enAttente: number, progresTicks: number } }>} batiments
+ *   colis: { enAttente: number, progresTicks: number }, residuFlux: number }>} batiments
  */
 
 /**
@@ -35,6 +35,9 @@ export function creerBatiment(type, niveau = 1, voisinsQualifiants = 0) {
     niveau,
     voisinsQualifiants,
     colis: { enAttente: 0, progresTicks: 0 },
+    // Reste exact de la production cumulée, en milli-unités × ticks/heure.
+    // Toujours dans [0, TICKS_PAR_HEURE[ ; voir sim/economy.js.
+    residuFlux: 0,
   };
 }
 
@@ -124,6 +127,21 @@ const MIGRATIONS = {
     if (Array.isArray(s.batiments)) {
       for (const b of s.batiments) {
         if (typeof b.voisinsQualifiants !== 'number') b.voisinsQualifiants = 0;
+      }
+    }
+  },
+
+  /**
+   * v1 → v2 : le débit se range désormais PAR HEURE et chaque bâtiment porte
+   * un résidu (sim/economy.js). Une sauvegarde v1 n'en a pas ; repartir de
+   * zéro est exact — le résidu perdu vaut moins d'une milli-unité.
+   * @param {object} s
+   */
+  1: (s) => {
+    s.version = 2;
+    if (Array.isArray(s.batiments)) {
+      for (const b of s.batiments) {
+        if (typeof b.residuFlux !== 'number') b.residuFlux = 0;
       }
     }
   },

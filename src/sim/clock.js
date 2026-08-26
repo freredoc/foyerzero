@@ -13,6 +13,14 @@ export const TICK_MS = 100;
 export const TICKS_PAR_SECONDE = 1000 / TICK_MS;
 
 /**
+ * Nombre de ticks par heure simulée. LA grandeur de conversion entre un débit
+ * exprimé PAR HEURE (les données de calibrage) et l'accumulation par tick
+ * (le moteur). Elle vit ici et nulle part ailleurs : la dériver à la main dans
+ * un test ou un module, c'est se préparer à l'oublier le jour où TICK_MS bouge.
+ */
+export const TICKS_PAR_HEURE = 3600 * TICKS_PAR_SECONDE;
+
+/**
  * @typedef {object} Horloge
  * @property {number} tempsSimuleMs Temps simulé écoulé, en ms (multiple de TICK_MS).
  * @property {number} nbTicks       Nombre de ticks exécutés depuis l'origine.
