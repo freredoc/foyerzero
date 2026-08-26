@@ -24,8 +24,10 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026, à confronter :** `npm test` → **164 pass / 0 fail**,
-`npm run build` → `dist/index.html`, **81 236 octets**, 0 référence externe.
+**Référence au 26/08/2026 (après le lot BASE-0), à confronter :** `npm test` →
+**180 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
+`src/index.src.html` n'importe toujours que `ui/banc.js`.
 
 ---
 
@@ -119,9 +121,12 @@ src/ui/                 le banc d'essai et ses éditeurs — TROIS fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   seize *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
-  arsenal  assaut  banc  cible  clock  combat  defense  donnees  economy
-  generateur  grille  rendu  repli  rng  roster  state
+test/                   dix-sept *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+  arsenal  assaut  banc  base  cible  clock  combat  defense  donnees
+  economy  generateur  grille  rendu  repli  rng  roster  state
+  ⤷ base.test.js : invariants de src/data/base.js — roster des onze, classes
+    de coût, emplacements, géométrie, champs, débits, stockage. AJOUTÉ le
+    26/08 (lot BASE-0) : le fichier vivait depuis un mois sans un seul test.
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
@@ -290,6 +295,30 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   contamination de la largeur de la grille de combat. Arbitré le 24/08.
 - Le glossaire des modules ne dit pas qui les porte. Les affectations sont dans
   `UNITES[x].module` / `moduleOuvrage`, pas dans la colonne de description.
+- **La base du joueur n'a pas de géométrie propre.** Elle EST la bande
+  `batiments` de `GRILLE` (`data/combat.js`) : rangées 11–18 × 9 colonnes,
+  72 cases. Arbitré le 26/08 — base du joueur, base de l'Ouvrage, camp et
+  avant-poste ont la même géométrie. `GEOMETRIE_BASE` de `base.js` la
+  RÉFÉRENCE ; en écrire une seconde, même identique, casserait la propagation.
+  Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
+  reste 32 cases qu'aucun niveau n'ouvrira.
+- **Les champs de ressource sont le socle des collecteurs, pas un voisinage.**
+  Douze cases par base, réparties 5/7, 6/6 ou 7/5 entre quartz et scorie, en
+  blocs de 1, 2 ou 3 cases contiguës (triplets droits ou coudés), tirées
+  déterministement depuis la POSITION sur la carte. Jamais sur le pourtour :
+  l'intérieur d'un 8 × 9 fait **6 × 7 = 42 cases**, rangées 12–17, colonnes 2–8
+  (et non 7 × 5, qui serait l'intérieur d'un 9 × 7). Seul le collecteur s'y
+  pose, donc **douze collecteurs au maximum**.
+- **Les colis du lot 1 sont morts** — reconfirmé le 26/08 : tous les bâtiments
+  font de la production continue. `params.colis` et le bloc colis de
+  `tickEconomie` / `rattrapageEconomie` sont un reliquat qui tourne encore, gardé
+  par des tests : les retirer est un lot, pas un effet de bord.
+  ⚠ `BASE-DU-JOUEUR-1.md` §3 affirme l'inverse. Il est du 24/08 et de rang 4.
+- **Le bâtiment des blindés s'appelle « Dépôt de véhicules »**, clé
+  `depotDeVehicules`. Trois noms avaient coexisté dans le dépôt — `usine` (la
+  clé), « dépôt de véhicules » (le commentaire de `COUT_NIVEAU_DEUX`, qui avait
+  raison) et « atelier » (`MODELE-REPARATION-1.md` §3, encore à corriger).
+  Arbitré le 26/08.
 - **Deux courbes, à ne jamais confondre.** `NIVEAU` (`niveaux.js`) est la courbe
   du COMBAT — pente unique 1,1 depuis le 25/08. `BUTIN` et `ECONOMIE_NIVEAU`
   portent la courbe ÉCONOMIQUE — deux régimes, 1,259 puis 1,32. `facteurMilli`
