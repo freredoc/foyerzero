@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot DISPOSITION), à confronter :** `npm test` →
-**213 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot ATTRIBUTION), à confronter :** `npm test` →
+**218 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -322,6 +322,20 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **L'arrondi se fait PAR TYPE de voisin, puis se multiplie.** Arrondir la
   somme donne 281 là où le jeu dit 282 (centrale niveau 3, trois champs) — un
   écart d'une unité qui se creuse ensuite, et un test le mesure exprès.
+  ⚠ **`productionParRessource` est le point d'entrée, pas `ressourceProduite`.**
+  Cette dernière rend `null` dans DEUX situations sans rapport — « mal posé » et
+  « plusieurs ressources à la fois ».
+  ⚠ **« La ressource du voisin » NE SE GÉNÉRALISE PAS**, et c'est le piège de
+  tout ce modèle. Une centrale qui touche trois champs de scorie produit de
+  l'ÉLECTRICITÉ, pas de la scorie. Le discriminant est `BASE_BATIMENTS[x].ressource` :
+  `quartzOuScorie` et `electricite` ont une ressource propre et tout y va, bonus
+  compris ; seule la raffinerie (`quartzEtScorie`) n'en a pas, et alors chaque
+  voisin apporte la sienne. Arbitré le 26/08 — une raffinerie niveau 1 entourée
+  de 2 collecteurs à quartz et 3 à scorie produit **144/h de quartz et 216/h de
+  scorie**, jamais 360 d'un mélange.
+  ⚠ **`indetermine` est un signal, pas une valeur.** Ce qui n'a pas pu être
+  attribué — l'apport d'un collecteur posé hors champ — y tombe plutôt que
+  d'être versé au hasard. Sur une disposition valide il n'apparaît jamais.
   ⚠ **Une disposition se décrit comme un site de l'Ouvrage** :
   `{ id, rangee, colonne, niveau }`, un bâtiment par case. C'est déjà la forme
   que produit `placerBatiments` du générateur — même géométrie, même écriture.
