@@ -23,10 +23,12 @@ import assert from 'node:assert/strict';
 
 import {
   problemesDeDisposition, dispositionValide, voisinsQualifiants,
-  debitDuBatiment, ressourceProduite, casesVoisines,
+  debitDuBatiment, ressourceProduite, productionParRessource, casesVoisines,
 } from '../src/sim/disposition.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
-import { VOISINAGE, CHAMPS, EMPLACEMENTS, emplacementsDuNiveau } from '../src/data/base.js';
+import {
+  VOISINAGE, CHAMPS, EMPLACEMENTS, BASE_BATIMENTS, emplacementsDuNiveau,
+} from '../src/data/base.js';
 
 /** Terrain de test, écrit à la main. */
 const TERRAIN = {
@@ -368,4 +370,151 @@ test('disposition — le module tient sur un terrain généré, pas seulement su
   }
   // MESURÉ : 4 terrains × 12 collecteurs = 48 poses vérifiées.
   assert.equal(posesVerifiees, 48);
+});
+
+// ---------------------------------------------------------------------------
+// Production par ressource — arbitrage du 26/08
+// ---------------------------------------------------------------------------
+
+/**
+ * Le montage de l'exemple d'Ethan, monté à la lettre : une raffinerie entourée
+ * de deux collecteurs à quartz et de trois à scorie.
+ *
+ *        col  4  5  6
+ *   rangée 14  Q  Q          les cinq champs, chacun avec son collecteur
+ *   rangée 15     R          la raffinerie, sur une case nue
+ *   rangée 16  S  S  S
+ */
+const TERRAIN_MELANGE = {
+  cases: [
+    { rangee: 14, colonne: 4, ressource: 'quartz' },
+    { rangee: 14, colonne: 5, ressource: 'quartz' },
+    { rangee: 16, colonne: 4, ressource: 'scorie' },
+    { rangee: 16, colonne: 5, ressource: 'scorie' },
+    { rangee: 16, colonne: 6, ressource: 'scorie' },
+  ],
+};
+
+function baseMelangee() {
+  return [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'raffinerie', rangee: 15, colonne: 5, niveau: 1 },
+    ...TERRAIN_MELANGE.cases.map(
+      (k) => ({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 1 }),
+    ),
+  ];
+}
+
+test('disposition — l\'exemple d\'Ethan : 144 de quartz et 216 de scorie', () => {
+  // ARBITRÉ le 26/08, cité mot pour mot : « une raffinerie niveau 1 avec
+  // 2 collecteurs quartz et 3 scories, ça fait 144/h quartz et 216/h scorie ».
+  const base = baseMelangee();
+  assert.deepEqual(problemesDeDisposition(base, TERRAIN_MELANGE), []);
+  assert.deepEqual(
+    productionParRessource(base, TERRAIN_MELANGE, 1),
+    { quartz: 144, scorie: 216 },
+  );
+
+  // Les deux ne s'additionnent PAS pour le joueur, mais leur somme doit valoir
+  // le débit brut : rien ne se perd en route, tout se sépare. C'est ce qui
+  // relie ce calcul au précédent, et ce qui tomberait si l'un dérivait.
+  const brut = debitDuBatiment(base, TERRAIN_MELANGE, 1);
+  assert.equal(brut.total, 360);
+  assert.equal(144 + 216, brut.total);
+  assert.equal(brut.propre, 0, 'une raffinerie n\'a pas de production propre');
+});
+
+test('disposition — la ressource du VOISIN ne vaut que pour la raffinerie', () => {
+  // ⚠ LA RÈGLE NE SE GÉNÉRALISE PAS, et c'est le piège de tout ce lot. Une
+  // centrale qui touche trois champs de scorie ne produit PAS de la scorie :
+  // elle produit de l'électricité. Le discriminant est `ressource` de
+  // BASE_BATIMENTS, pas la nature du voisin.
+  const avecCentrale = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },
+  ];
+  assert.deepEqual(
+    productionParRessource(avecCentrale, TERRAIN_MELANGE, 1),
+    { electricite: 300 },
+  );
+  // Le montage mesure bien quelque chose : la centrale COMPTE ces trois champs
+  // (120 + 3 × 60 = 300). Elle les compte, mais dans sa propre ressource.
+  assert.equal(voisinsQualifiants(avecCentrale, TERRAIN_MELANGE, 1).champDeScorie, 3);
+  assert.equal(debitDuBatiment(avecCentrale, TERRAIN_MELANGE, 1).total, 300);
+  assert.ok(!('scorie' in productionParRessource(avecCentrale, TERRAIN_MELANGE, 1)));
+
+  // Un collecteur non plus : son bonus de raffinerie va dans SA ressource à
+  // lui, celle du champ sous lui. 240 + 1 × 72 = 312.
+  const base = baseMelangee();
+  assert.deepEqual(productionParRessource(base, TERRAIN_MELANGE, 2), { quartz: 312 });
+  assert.deepEqual(productionParRessource(base, TERRAIN_MELANGE, 4), { scorie: 312 });
+
+  // Les trois familles se lisent dans les données, pas dans un `if` écrit ici.
+  assert.equal(BASE_BATIMENTS.collecteur.ressource, 'quartzOuScorie');
+  assert.equal(BASE_BATIMENTS.raffinerie.ressource, 'quartzEtScorie');
+  assert.equal(BASE_BATIMENTS.centrale.ressource, 'electricite');
+});
+
+test('disposition — l\'attribution suit le niveau de la RAFFINERIE, pas des collecteurs', () => {
+  // Même voisinage, raffinerie au niveau 2 : 2 × 90 et 3 × 90.
+  const n2 = baseMelangee().map((b, i) => (i === 1 ? { ...b, niveau: 2 } : b));
+  assert.deepEqual(productionParRessource(n2, TERRAIN_MELANGE, 1), { quartz: 180, scorie: 270 });
+
+  // Monter les COLLECTEURS ne change rien à ce que la raffinerie produit —
+  // c'est la règle de `debitVoisinParHeure`, vérifiée ici de bout en bout.
+  const collecteursHauts = baseMelangee().map(
+    (b) => (b.id === 'collecteur' ? { ...b, niveau: 40 } : b),
+  );
+  assert.deepEqual(
+    productionParRessource(collecteursHauts, TERRAIN_MELANGE, 1),
+    { quartz: 144, scorie: 216 },
+  );
+  // Falsifiable : les collecteurs, eux, doivent bien avoir changé.
+  assert.notEqual(
+    productionParRessource(collecteursHauts, TERRAIN_MELANGE, 2).quartz,
+    productionParRessource(baseMelangee(), TERRAIN_MELANGE, 2).quartz,
+  );
+});
+
+test('disposition — un voisin mal posé tombe dans `indetermine`, il n\'est pas inventé', () => {
+  // Un collecteur hors champ ne produit rien d'identifiable. Son apport à la
+  // raffinerie ne peut donc pas être attribué — et il ne doit surtout pas être
+  // versé au hasard dans le quartz. `indetermine` est un SIGNAL : sur une
+  // disposition valide, il n'apparaît jamais.
+  const mal = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'raffinerie', rangee: 15, colonne: 5, niveau: 1 },
+    { id: 'collecteur', rangee: 15, colonne: 4, niveau: 1 }, // case nue
+  ];
+  assert.deepEqual(productionParRessource(mal, TERRAIN_MELANGE, 1), { indetermine: 72 });
+  // Et la disposition est bien signalée comme fautive par ailleurs : les deux
+  // mécanismes se recoupent au lieu de se contredire.
+  assert.deepEqual(codes(problemesDeDisposition(mal, TERRAIN_MELANGE)), ['hors-champ']);
+
+  // Sur les dispositions valides du fichier, `indetermine` n'apparaît nulle part.
+  for (const [dispo, terrain] of [[baseMelangee(), TERRAIN_MELANGE], [baseDeReference(), TERRAIN]]) {
+    for (let i = 0; i < dispo.length; i++) {
+      assert.ok(
+        !('indetermine' in productionParRessource(dispo, terrain, i)),
+        `${dispo[i].id} produit de l'indéterminé sur une base valide`,
+      );
+    }
+  }
+});
+
+test('disposition — ce qui ne produit rien rend un objet vide, pas zéro', () => {
+  // Le Chantier, la caserne, le QG : aucune ligne dans DEBITS. Rendre `{}`
+  // plutôt que `{ quartz: 0 }` évite qu'un panneau affiche « 0 quartz/h » pour
+  // une caserne, ce qui laisserait croire qu'elle pourrait en produire.
+  const base = baseMelangee();
+  assert.deepEqual(productionParRessource(base, TERRAIN_MELANGE, 0), {});
+  assert.throws(() => productionParRessource(base, TERRAIN_MELANGE, 99), RangeError);
+
+  // Une raffinerie isolée ne produit rien non plus : pas de propre, pas de
+  // voisin. Elle rend `{}`, pas `{ quartz: 0, scorie: 0 }`.
+  const seule = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'raffinerie', rangee: 13, colonne: 7, niveau: 1 },
+  ];
+  assert.deepEqual(productionParRessource(seule, TERRAIN_MELANGE, 1), {});
 });
