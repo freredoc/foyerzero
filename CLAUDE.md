@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.16.0 · build 16.
+Dernière révision : **27/08/2026**, version 0.17.0 · build 17.
 
 ---
 
@@ -25,8 +25,8 @@ Dernière révision : **27/08/2026**, version 0.16.0 · build 16.
    savoir est un lot perdu.
 
 **Référence au 27/08/2026 (après le lot POSE-À-L'ÉCRAN), à confronter :**
-`npm test` → **291 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**133 455 octets**, 0 référence externe.
+`npm test` → **293 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**133 545 octets**, 0 référence externe.
 
 ⚠ **130 488 était faux de 814 octets** — mesuré le 27/08 au soir sur un clone
 neuf, `npm ci && npm run build`. Le nombre a été écrit avant la dernière reprise
@@ -770,6 +770,26 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   lever le TICK suivant, pas la pose — donc loin de la faute.
 
 ### Sur l'interface
+
+- ⚠⚠ **LE TEMPS VIENT DE L'HORLOGE, JAMAIS DE L'HORODATAGE D'IMAGE.** Défaut le
+  plus coûteux de l'écran, trouvé le 27/08 en essayant le jeu sur GitHub Pages.
+  La boucle mesurait l'écoulement sur les horodatages de
+  `requestAnimationFrame` : ils sont **monotones et ne courent pas pendant qu'une
+  page est gelée**. Tant qu'un `visibilitychange` encadrait le gel,
+  `reprendre()` réparait — mais **quand l'évènement ne se déclenche pas, le temps
+  est perdu pour toujours**, et sur Android c'est le cas courant, pas le cas rare.
+  ⚠ **Mesuré, pas supposé** : deux minutes de gel sans évènement produisaient
+  **0,006 unité au lieu de 8**. Ethan voyait un compteur qui n'avance que
+  pendant qu'on le regarde — « je suis parti quelques minutes et le compteur n'a
+  pas bougé ».
+  ⚠ **Le remède n'est PAS un évènement de plus.** Ajouter `pageshow`, `focus` ou
+  `resume`, c'est parier que celui-là se déclenchera toujours. `creerChronometre`
+  de `ui/session.js` ne dépend d'aucun : `requestAnimationFrame` dit QUAND
+  dessiner, l'horloge dit COMBIEN de temps a passé. Un gel manqué se répare à la
+  première image du retour, où l'écart mesuré est simplement grand.
+  ⚠ **La source de l'heure est INJECTÉE** dans le chronomètre — testable sans DOM
+  ni horloge système, et `maintenantMs` reste seule lectrice de l'horloge dans
+  tout `src/`, comme la garde §11 l'exige.
 
 - **LA PALETTE EST FERMÉE : vingt-huit teintes, plus un seul `rgba`.**
   `banc.test.js` balaie `src/render/`, `src/ui/` et `src/index.src.html` et
