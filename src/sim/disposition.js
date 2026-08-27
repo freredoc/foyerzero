@@ -202,7 +202,8 @@ export function dispositionValide(disposition, champs) {
  *   - tout autre type se compte parmi les BÂTIMENTS posés.
  *
  * ⚠ AUCUN PLAFOND AUTRE QUE LA GÉOMÉTRIE. Le lot 1 plafonnait l'adjacence à
- * deux voisins (`params.adjacence.maxVoisins`) ; ce modèle-ci ne plafonne rien
+ * deux voisins (dans `data/params.js`, retiré le 27/08) ; celui-ci ne plafonne
+ * rien
  * — les huit cases du 3 × 3 comptent toutes. Confondre les deux diviserait la
  * production par quatre dans le meilleur cas.
  *

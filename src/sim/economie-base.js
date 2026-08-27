@@ -3,13 +3,13 @@
 // C'est la dernière pièce : `sim/champs.js` donne le terrain, `sim/disposition.js`
 // donne les débits ressource par ressource, et celui-ci fait passer le temps.
 //
-// ⚠ CE MODULE NE REMPLACE PAS `sim/economy.js`, il vit à côté. L'ancien porte
+// ⚠ CE MODULE A REMPLACÉ `sim/economy.js`, qui n'existe plus. L'ancien portait
 // le modèle du lot 1 — deux types de bâtiments, courbe hyperbolique, adjacence
-// anonyme, une capacité globale — et il est encore branché à `sim/state.js` et
-// à deux fichiers de tests. Le débrancher est un lot à part, qui devra aussi
-// retirer les colis et bouger SAVE_VERSION : une seule migration pour les deux.
+// anonyme, une capacité de stockage globale. `sim/state.js` est passé sur
+// celui-ci le 26/08 (lot BASCULE, SAVE_VERSION 4), et l'ancien a été retiré le
+// 27/08 (lot ORPHELIN) avec `data/params.js` et `test/economy.test.js`.
 //
-// CE QUI EST REPRIS DE L'ANCIEN, ET QUI VAUT D'ÊTRE REPRIS
+// CE QUI A ÉTÉ REPRIS DE L'ANCIEN, ET QUI VALAIT D'ÊTRE REPRIS
 //
 // Toute l'arithmétique par tick est ENTIÈRE, en milli-unités, et le débit se
 // range PAR HEURE — jamais par tick. Chaque bâtiment porte un RÉSIDU par
@@ -52,8 +52,8 @@ export const RESSOURCES = ['quartz', 'scorie', 'electricite'];
 // ---------------------------------------------------------------------------
 //
 // Le rattrapage analytique reste dans les entiers exacts tant qu'aucun débit ne
-// dépasse ce seuil. La borne est la même que celle de `sim/economy.js` : le
-// produit le plus lourd est `residu + (nbTicks mod TICKS_PAR_HEURE) × debit`,
+// dépasse ce seuil. La borne est celle qu'avait déjà l'ancien `sim/economy.js`
+// (retiré le 27/08) : le produit le plus lourd est `residu + (nbTicks mod TICKS_PAR_HEURE) × debit`,
 // borné par TICKS_PAR_HEURE × (debit + 1).
 //
 // ⚠ MAIS LA MARGE, ELLE, N'EST PLUS CELLE QU'ON CROYAIT. `CLAUDE.md` annonçait
@@ -295,8 +295,8 @@ export function tickEconomieBase(etat, disposition, champs) {
  * Rattrapage analytique : produit en O(bâtiments × ressources) un état
  * STRICTEMENT identique à `nbTicks` appels de `tickEconomieBase`.
  *
- * Les trois arguments, repris de `sim/economy.js` parce qu'ils tiennent
- * toujours :
+ * Les trois arguments, repris de l'ancien `sim/economy.js` (retiré le 27/08)
+ * parce qu'ils tiennent toujours :
  *
  *   - RÉSIDU. Il est le reste exact de la somme cumulée, donc après N ticks le
  *     cumul vaut `residu + N × debit`. On ne calcule PAS `N × debit` : avec

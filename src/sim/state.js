@@ -171,8 +171,10 @@ const MIGRATIONS = {
 
   /**
    * v1 → v2 : le débit se range désormais PAR HEURE et chaque bâtiment porte
-   * un résidu (sim/economy.js). Une sauvegarde v1 n'en a pas ; repartir de
-   * zéro est exact — le résidu perdu vaut moins d'une milli-unité.
+   * un résidu (règle née dans l'ancien sim/economy.js, retiré le 27/08 ;
+   * elle vit maintenant dans sim/economie-base.js). Une sauvegarde v1 n'en a
+   * pas ; repartir de zéro est exact — le résidu perdu vaut moins d'une
+   * milli-unité.
    * @param {object} s
    */
   1: (s) => {
