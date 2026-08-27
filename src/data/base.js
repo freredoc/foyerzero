@@ -284,6 +284,61 @@ export const GEOMETRIE_BASE = {
   derniereColonne: GRILLE.largeur,
 };
 
+/**
+ * La case où se pose le Chantier de toute base du joueur : dernière rangée,
+ * colonne du centre.
+ *
+ * ⚠ LE NOM NE DIT NI « HAUT » NI « BAS », ET C'EST VOULU. Ethan a d'abord dit
+ * « en haut au milieu », puis précisé « 18,5 » — qui est la rangée la plus
+ * PROFONDE de la bande. Selon qu'on regarde l'écran ou les numéros de rangée,
+ * « en haut » désigne l'un ou l'autre bout, et la confusion a coûté un lot.
+ * Le nom dit donc ce que la case EST, pas où elle a l'air d'être.
+ *
+ * ⚠ LA LARGEUR EST IMPAIRE (9), donc le centre est exact : la colonne 5. Pas
+ * d'arbitraire ici, contrairement au centre de la carte monde qui, lui, tombe
+ * entre deux colonnes (voir `sim/carte.js`).
+ * @returns {{rangee: number, colonne: number}}
+ */
+export function caseDuChantier() {
+  return {
+    rangee: GEOMETRIE_BASE.derniereRangee,
+    colonne: Math.ceil((GEOMETRIE_BASE.premiereColonne + GEOMETRIE_BASE.derniereColonne) / 2),
+  };
+}
+
+/**
+ * Ce que contient TOUTE base neuve du joueur — la première comme les suivantes.
+ *
+ * ARBITRÉ le 26/08 par Ethan : « la première base est gratuite et immédiatement
+ * posée, il ouvre le jeu dans sa base », puis « toutes les bases que le joueur
+ * pose suivront la même logique : chantier niveau 1 gratuit, sur position
+ * 18,5 ». Ce n'est donc PAS un cas particulier du démarrage : c'est la règle de
+ * fondation, et la première base n'en est que la première application.
+ *
+ * POURQUOI UN SEUL BÂTIMENT SUFFIT. Le niveau 1 ne coûte rien
+ * (`ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2), donc le joueur peut poser son
+ * deuxième bâtiment tout de suite. Le Chantier niveau 1 ouvre deux emplacements
+ * et en occupe un : il en reste exactement UN, et c'est le premier vrai choix.
+ * Le tutoriel guide à partir de là.
+ *
+ * ⚠ LA RANGÉE 18 EST LE FOND, LA PLUS PROTÉGÉE. Dans `GRILLE`, les vagues
+ * arrivent aux rangées 1–2 et la défense tient 3–10 : l'assaillant progresse
+ * vers les rangées HAUTES, et la 18 est la dernière qu'il atteint parmi les
+ * huit rangées de bâtiments. C'est cohérent avec le Chantier : il est le seul
+ * sans plancher de PV, et sa perte force le redéploiement de 20 cases.
+ *
+ * ⚠ ET CETTE CASE NE PORTE JAMAIS DE CHAMP, quelle que soit la graine. Les
+ * champs se tiennent à `CHAMPS.margeBord` du pourtour, donc entre les rangées
+ * 12 et 17. La fondation est donc légale sur TOUTES les positions de la carte —
+ * ce n'est pas une chance, c'est une conséquence, et un test la vérifie sur des
+ * terrains tirés.
+ */
+export const BASE_NEUVE = {
+  id: 'chantierDeConstruction',
+  niveau: 1,
+  ...caseDuChantier(),
+};
+
 // ---------------------------------------------------------------------------
 // Champs de ressource — le socle des collecteurs
 // ---------------------------------------------------------------------------
