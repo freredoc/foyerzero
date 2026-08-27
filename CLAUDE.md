@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot COLIS), à confronter :** `npm test` →
-**233 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot CARTE), à confronter :** `npm test` →
+**238 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -110,11 +110,12 @@ src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
 
-src/sim/                simulation déterministe, sans DOM — 10 fichiers
+src/sim/                simulation déterministe, sans DOM — 11 fichiers
   rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
+  carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -124,8 +125,8 @@ src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   21 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
-  arsenal  assaut  banc  base  champs  cible  clock  combat  defense
+test/                   22 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+  arsenal  assaut  banc  base  carte  champs  cible  clock  combat  defense
   disposition  documentation  donnees  economie-base  economy  generateur
   grille  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES de ce fichier-ci sont assertés contre
@@ -327,6 +328,18 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   le collecteur de niveau 50 SEUL, avant que le voisinage n'entre au modèle. Le
   pire cas réel est un collecteur niveau 50 entouré de huit raffineries :
   45 738 385 u/h.
+- **`sim/carte.js` traduit les DISTANCES de `GEOGRAPHIE` en COORDONNÉES**, et
+  c'est le seul endroit qui a le droit de le faire. Deux conventions y vivent :
+  **rangée 1 = bord HAUT**, `hauteur` = bord bas (même sens que la grille de
+  combat) ; et le **centre d'une largeur paire est 16 sur 30**, employé par les
+  deux bouts du couloir.
+  ⚠ **Le décalage de rangée n'a pas été choisi, il a été DÉDUIT.**
+  `departJoueur` porte deux faits liés — `strate: 5` et `casesDepuisBordBas: 25`
+  — et un seul décalage les rend vrais tous les deux. Un test asserte qu'aucune
+  rangée voisine n'y arrive.
+  ⚠ **Le joueur ne démarre PAS au bord bas**, malgré la formule « tout en bas ».
+  Le bord vaudrait le niveau 0. Il démarre 25 cases plus haut : **rangée 275,
+  colonne 16, niveau 5**. La base terminale est rangée 26, colonne 16, niveau 50.
 - **Livraison : `src/` et `test/` ne voyagent JAMAIS dans la même archive.**
   Le dépôt se met à jour depuis un téléphone et le sélecteur n'affiche que les
   noms courts : `economy.js` et `economy.test.js` s'y confondent. Deux dépôts de
