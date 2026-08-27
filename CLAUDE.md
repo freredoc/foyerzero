@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot FONDATION), à confronter :** `npm test` →
-**243 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot BASCULE), à confronter :** `npm test` →
+**247 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -312,11 +312,38 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   RÉFÉRENCE ; en écrire une seconde, même identique, casserait la propagation.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
-- **`sim/economie-base.js` fait passer le temps**, et il vit À CÔTÉ de
-  `sim/economy.js`, il ne le remplace pas. L'ancien porte encore le modèle du
-  lot 1 et reste branché à `state.js` ; le débrancher est un lot à part qui
-  devra aussi retirer les colis et bouger `SAVE_VERSION` — une seule migration
-  pour les deux.
+- **`sim/state.js` tourne sur `economie-base`** depuis le 26/08.
+  `SAVE_VERSION` vaut **4**. L'état porte `position` (sur la carte),
+  `disposition` (bâtiments placés à la case) et `economie` (trois ressources).
+  ⚠ **`sim/economy.js` est désormais ORPHELIN** : plus personne ne l'importe,
+  mais `test/economy.test.js` le teste encore, et `params.batiments` /
+  `params.stockage` / `params.courbes` / `params.adjacence` ne servent plus
+  qu'à lui. Le retirer est le lot suivant.
+  ⚠ **LE TERRAIN N'EST PAS SAUVEGARDÉ.** `serialiser` l'omet, `charger` le
+  redéduit de `position`. Le recalculer par tick coûterait 71,6 µs — plus du
+  double du tick économique ; le sauvegarder créerait une SECONDE source de
+  vérité, donc une occasion de divergence muette. Un seul endroit peut mentir,
+  et c'est celui qui est écrit.
+  ⚠ **La migration 3 → 4 REFONDE, elle ne convertit pas.** Aucune
+  correspondance entre une `foreuse` sans coordonnée et un collecteur qui doit
+  se poser sur un champ. Ce qui survit : la graine, le tirage, l'horloge — le
+  TEMPS de la partie, pas son contenu. Légitime uniquement parce qu'aucune
+  sauvegarde n'existait (26/08) ; le jour où il y en aura, il faudra prévenir
+  le joueur AVANT.
+  ⚠ **`verifierEtat` LÈVE là où `problemesDeDisposition` rend une liste.** En
+  cours de partie, une disposition illégale est un fait de JEU (on la montre,
+  le joueur purge) ; au CHARGEMENT, c'est un fait de programme.
+- **Le coût du tick monte vite avec la taille de la base** — 2,0 µs à un
+  bâtiment, 21 à neuf, 108 à vingt, **280,7 à quarante**. Une base pleine coûte
+  neuf fois le chiffre longtemps cité, qui n'avait été mesuré qu'en un point.
+  2,8 ms par seconde de jeu reste acceptable, mais la croissance est
+  superlinéaire.
+  ⚠ **Conséquence sur les TESTS, pas seulement sur le jeu.** Simuler 72 h tick
+  par tick fait 2,6 millions de ticks : la suite est passée de 13 à 74 secondes
+  à la bascule. Les horizons de boucle ont été rabotés à 2 h, et les longues
+  absences se testent par COMPOSITION — rattraper deux fois vaut rattraper une
+  fois — qui est en temps constant et va jusqu'à un mois. Suite ramenée à 20 s.
+  **Une suite qu'on hésite à lancer cesse d'être lancée.**
   ⚠ **UN STOCK AU-DESSUS DU PLAFOND EST GELÉ, JAMAIS AMPUTÉ.** Arbitré le 26/08.
   Perdre une raffinerie ne prend rien au joueur : le stock cesse de monter, il
   ne tombe pas. Le plafond effectif d'un tick est `max(cap, stock)`, pas `cap`.
