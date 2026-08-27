@@ -17,6 +17,7 @@ import { DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli } from '../src/sim/economie-b
 import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerRng, entier } from '../src/sim/rng.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
+import { champsDeLaBase } from '../src/sim/champs.js';
 
 /**
  * Montage volontairement hétérogène : une base qui PRODUIT dans les trois
@@ -266,7 +267,12 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0));
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 4, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 5, 'le bump de la version des sauvegardes a été oublié');
+
+  // Le dernier maillon de la chaîne, v4 → v5, doit avoir été appliqué lui
+  // aussi : sans `fondation` le terrain ne serait dérivable de rien.
+  assert.ok(etat.fondation, 'le maillon v4 → v5 n\'a pas été appliqué');
+  assert.deepEqual(etat.fondation, etat.position, 'une base refondée n\'a jamais bougé');
 
   // ⚠ CE QUI SURVIT : LE TEMPS, PAS LE CONTENU. La migration 3 → 4 REFONDE la
   // base — il n'existe aucune correspondance entre une `foreuse` sans
@@ -330,4 +336,103 @@ test('état — une sauvegarde injouable est REFUSÉE au chargement, pas jouée 
   const ampute = JSON.parse(serialiser(etat));
   delete ampute.disposition;
   assert.throws(() => charger(JSON.stringify(ampute)));
+});
+
+// ---------------------------------------------------------------------------
+// Le terrain est gelé à la fondation — arbitrage du 27/08
+// ---------------------------------------------------------------------------
+
+test('état — le terrain suit la FONDATION, pas la position courante', () => {
+  const etat = creerEtat(4242);
+
+  // Montage falsifiable AVANT la mesure : il faut une destination dont le
+  // terrain DIFFÈRE de celui de la fondation, sinon l'égalité qu'on va
+  // asserter passerait toute seule et ne prouverait rien.
+  const depart = etat.fondation;
+  let ailleurs = null;
+  for (let d = 1; d <= 40 && ailleurs === null; d++) {
+    const candidat = { rangee: depart.rangee - d, colonne: depart.colonne };
+    const terrain = champsDeLaBase(candidat.rangee, candidat.colonne);
+    if (JSON.stringify(terrain.cases) !== JSON.stringify(etat.champs.cases)) {
+      ailleurs = candidat;
+    }
+  }
+  assert.ok(ailleurs, 'aucune case voisine ne donne un terrain différent : rien à mesurer');
+
+  const avant = JSON.stringify(etat.champs.cases);
+
+  // Le redéploiement n'existe pas encore : on simule ce qu'il fera, déplacer la
+  // base sur la carte. C'est `position` qui bouge, et elle seule.
+  etat.position = ailleurs;
+  const recharge = charger(serialiser(etat));
+
+  assert.deepEqual(recharge.fondation, depart, 'la fondation ne bouge pas');
+  assert.deepEqual(recharge.position, ailleurs, 'la position, elle, a bougé');
+  assert.equal(
+    JSON.stringify(recharge.champs.cases), avant,
+    'le terrain a suivi la position : c\'est exactement ce que l\'arbitrage du 27/08 interdit',
+  );
+  // Et le contrôle négatif : sous l'ancienne règle le terrain AURAIT changé.
+  assert.notEqual(
+    JSON.stringify(champsDeLaBase(ailleurs.rangee, ailleurs.colonne).cases), avant,
+    'la destination choisie a le même terrain : le montage ne mesure rien',
+  );
+});
+
+test('état — la fondation est SAUVEGARDÉE, le terrain toujours pas', () => {
+  const etat = creerEtat(7);
+  const brut = JSON.parse(serialiser(etat));
+
+  assert.ok(!('champs' in brut), 'le terrain ne doit pas entrer dans la sauvegarde');
+  assert.deepEqual(brut.fondation, { rangee: etat.position.rangee, colonne: etat.position.colonne });
+
+  // Une sauvegarde amputée de `fondation` est refusée au chargement : sans
+  // elle le terrain ne peut plus être reconstruit du tout.
+  //
+  // ⚠ ON ASSERTE LE MESSAGE, PAS SEULEMENT QUE ÇA LÈVE. Sans `fondation`,
+  // `charger` déréférence `undefined` et lève de toute façon — un simple
+  // `assert.throws` passerait donc même si `verifierEtat` ne surveillait plus
+  // le champ, et ne prouverait rien. La falsification l'a montré : retirer
+  // `fondation` de la liste des champs obligatoires laissait ce test vert.
+  // Ce qu'on veut, c'est le refus EXPLIQUÉ, qui nomme le champ manquant.
+  const ampute = JSON.parse(serialiser(etat));
+  delete ampute.fondation;
+  assert.throws(
+    () => charger(JSON.stringify(ampute)),
+    /champ « fondation » absent/,
+  );
+});
+
+test('état — fondation et position sont deux objets DISTINCTS à la création', () => {
+  // Partager la référence marcherait jusqu'au premier redéploiement, puis
+  // déplacerait silencieusement le terrain avec la base. C'est le genre de
+  // faute qu'aucune égalité de valeurs n'attrape.
+  const etat = creerEtat(11);
+  assert.deepEqual(etat.fondation, etat.position, 'à la fondation elles coïncident');
+  assert.notEqual(etat.fondation, etat.position, 'mais ce ne doit PAS être le même objet');
+
+  etat.position.rangee -= 20;
+  assert.notEqual(etat.fondation.rangee, etat.position.rangee, 'la fondation a suivi la position');
+});
+
+test('état — migration 4 → 5 : une sauvegarde v4 garde EXACTEMENT son terrain', () => {
+  const etat = creerEtat(31_415);
+  const v4 = JSON.parse(serialiser(etat));
+  // On fabrique une vraie v4 : version rabaissée, `fondation` absente.
+  v4.version = 4;
+  delete v4.fondation;
+
+  // Falsifiable : sous la v4 le terrain se déduisait de `position`. C'est CE
+  // terrain-là qui doit ressortir, et on le calcule à part avant de charger.
+  const terrainV4 = champsDeLaBase(v4.position.rangee, v4.position.colonne);
+  assert.ok(terrainV4.cases.length > 0, 'terrain de contrôle vide : rien à comparer');
+
+  const charge = charger(JSON.stringify(v4));
+
+  assert.equal(charge.version, SAVE_VERSION);
+  assert.deepEqual(charge.fondation, v4.position, 'la migration pose fondation = position');
+  assert.deepEqual(
+    charge.champs.cases, terrainV4.cases,
+    'la migration 4 → 5 a changé le terrain : elle ne doit RIEN perdre',
+  );
 });
