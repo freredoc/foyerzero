@@ -4,6 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Foyer Zéro — maquette UI</title>
+<!--
+  MAQUETTE. Pas un livrable, pas une source du build. Le jeu est
+  src/index.src.html. Ce fichier sert à REGARDER une décision d'interface avant
+  de l'écrire, sur un téléphone.
+
+  ⚠ RÉVISION DU 27/08/2026. La version précédente mentait sur six points, tous
+  mesurés contre les tables du dépôt :
+    — grille en 8 colonnes ; elle fait 9 (GRILLE.largeur, data/combat.js) ;
+    — une ressource « Commande » qui n'existe pas ; il y en a trois — quartz,
+      scorie, électricité (RESSOURCES, sim/economie-base.js) ;
+    — un bâtiment « Fonderie » absent des onze de data/base.js ;
+    — des unités « Fantassin », « Herse », « Vigie » qui n'existent nulle part ;
+    — « Bélier » et « Enclume » dans un panneau JOUEUR, alors que ce sont des
+      noms OUVRAGE — CLAUDE.md §4 interdit de mélanger les deux jeux de noms ;
+    — aucun champ de ressource, alors qu'ils sont le socle des collecteurs.
+
+  ⚠ PALETTE : LES QUATORZE TEINTES DE FICHE-STYLE.md, ET RIEN D'AUTRE.
+  Pas d'alpha, pas de gris intermediaire, pas de raccourci a trois chiffres.
+  C'est la regle que banc.test.js impose deja a src/ui/ et a index.src.html, et
+  la maquette s'y plie AVANT l'ecran plutot qu'apres : une maquette qui propose
+  une teinte interdite fait ecrire un ecran qui ne passera pas la garde.
+  Deux consequences visibles, et elles valent mieux que ce qu'elles remplacent :
+    — les trois bandes n'ont plus de fond propre. La fiche n'a pas trois gris
+      voisins, et le RAIL disait deja ou l'on est. Une nuance de noir ne se
+      distingue de toute facon pas sur un telephone au soleil.
+    — un champ de ressource n'est plus une teinte pale : c'est un fond kaki
+      plein, avec un lisere qui dit la ressource — os pour le quartz, ambre
+      pour la scorie.
+  ⚠ Un hex a huit chiffres passerait entre les deux motifs de la garde. Ne pas
+  s'en servir : contourner un garde-fou en silence coute plus cher que la
+  contrainte qu'il pose.
+
+  ⚠ TOUS LES CHIFFRES DE CETTE PAGE SORTENT DU MOTEUR. Terrain :
+  champsDeLaBase(275, 16), la case de départ. Disposition : onze bâtiments
+  passés à problemesDeDisposition() → aucun problème. Débits :
+  debitsMilliParHeure(). Capacités : capacitesMilli(). Niveau des bâtiments :
+  niveauDesBatiments() → 46 dixièmes, affiché 4,6. Relevé le 27/08/2026.
+-->
 <style>
 :root{
   /* Palette FICHE-STYLE.md v3 — aucune teinte hors liste */
@@ -13,10 +51,11 @@
   --ai-s:#928E80;      --ai-c:#F5F3E8;
   --av-s:#8A1E17;      --av-c:#E43E32;
   --aa-s:#A67018;      --aa-c:#F5B636;
-  --cell:45px;
+  /* 9 colonnes : rail 9 + 9 x 39 = 360. La cellule est CARRÉE. */
+  --cell:39px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{background:#000;height:100%}
+html,body{background:#161914;height:100%}
 body{
   font-family:"Roboto Condensed","Segoe UI",system-ui,sans-serif;
   display:flex;align-items:flex-start;justify-content:center;
@@ -27,7 +66,7 @@ body{
   background:var(--m-sombre);
   display:flex;flex-direction:column;
   overflow:hidden;position:relative;
-  border:1px solid #000;
+  border:1px solid var(--k-trait);
 }
 
 /* ---------- 1. ONGLETS — 40 ---------- */
@@ -39,83 +78,104 @@ body{
 .tab:last-child{border-right:0}
 .tab.on{color:var(--ai-c);background:var(--k-ombre);
         box-shadow:inset 0 -2px 0 var(--k-lum)}
+.tab.futur{color:#3E454C}
 
-/* ---------- 2. RESSOURCES — 37 ---------- */
-.res{height:37px;flex:0 0 37px;display:flex;align-items:center;
+/* ---------- 2. RESSOURCES — 44 ---------- */
+/* Trois ressources, pas quatre. Chacune montre son STOCK, sa CAPACITE et son
+   debit horaire : sans la capacite, un stock qui plafonne est illisible — et
+   un stock au-dessus du plafond est GELE, jamais ampute. */
+.res{height:44px;flex:0 0 44px;display:flex;align-items:center;
      background:var(--k-ombre);border-bottom:1px solid var(--k-trait);padding:0 6px;gap:4px}
-.r{flex:1;display:flex;flex-direction:column;justify-content:center;line-height:1}
+.r{flex:1;display:flex;flex-direction:column;justify-content:center;line-height:1.15}
+.r .ligne{display:flex;align-items:baseline;gap:3px}
 .r b{font-size:14px;font-weight:600;color:var(--ai-c);font-variant-numeric:tabular-nums}
-.r span{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--m-clair);margin-top:2px}
+.r .cap{font-size:8px;color:var(--m-clair);font-variant-numeric:tabular-nums}
+.r span.nom{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--m-clair)}
+.r .deb{font-size:8px;color:var(--k-lum);font-variant-numeric:tabular-nums}
 .r.scorie b{color:var(--aa-c)}
-.r.cmd b{color:var(--k-lum)}
+.r.elec b{color:var(--k-lum)}
 
-/* ---------- 3. POINTS D'ARMÉE — 28 ---------- */
-.army{height:28px;flex:0 0 28px;display:flex;align-items:center;gap:6px;
+/* ---------- 3. EMPLACEMENTS — 26 ---------- */
+/* Remplace la barre « points d'armee » : sur l'onglet Chantier, la ressource
+   rare n'est pas l'armee, c'est l'emplacement ouvert par le Chantier. */
+.army{height:26px;flex:0 0 26px;display:flex;align-items:center;gap:6px;
       padding:0 8px;background:var(--k-trait);border-bottom:1px solid var(--m-moyen)}
 .army .lbl{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--m-clair)}
 .bar{flex:1;height:6px;background:var(--m-sombre);position:relative;overflow:hidden}
-.bar i{position:absolute;inset:0 42% 0 0;background:var(--k-lum)}
+.bar i{position:absolute;inset:0 8.4% 0 0;background:var(--k-lum)}
 .army .val{font-size:11px;color:var(--ai-c);font-variant-numeric:tabular-nums}
 
-/* ---------- 4. CHAMP — 405 (9 rangées de 45) ---------- */
-.field{flex:0 0 405px;height:405px;position:relative;overflow:hidden;background:#0d0f0c}
+/* ---------- 4. CHAMP — tout le reste ---------- */
+.field{flex:1;position:relative;overflow:hidden;background:#161914}
 .scroll{position:absolute;inset:0;overflow-y:auto;scroll-behavior:smooth;
         scrollbar-width:none;display:flex}
 .scroll::-webkit-scrollbar{display:none}
-.rail{width:6px;flex:0 0 6px;background:var(--m-sombre)}
+.rail{width:9px;flex:0 0 9px;background:var(--m-sombre)}
 .rail div{width:100%}
-.rail .b-bat{height:360px;background:var(--k-corps)}
-.rail .b-def{height:360px;background:var(--av-s)}
-.rail .b-off{height:90px;background:var(--ai-s)}
-.grid{flex:1;display:grid;grid-template-columns:repeat(8,1fr);
+.rail .b-off{height:78px;background:var(--ai-s)}     /* rangees  1-2  */
+.rail .b-def{height:312px;background:var(--av-s)}    /* rangees  3-10 */
+.rail .b-bat{height:312px;background:var(--k-corps)} /* rangees 11-18 */
+.grid{flex:1;display:grid;grid-template-columns:repeat(9,1fr);
       grid-auto-rows:var(--cell)}
-.c{border-right:1px solid rgba(104,114,126,.16);
-   border-bottom:1px solid rgba(104,114,126,.16);
+.c{border-right:1px solid var(--k-ombre);
+   border-bottom:1px solid var(--k-ombre);
    position:relative;display:flex;align-items:center;justify-content:center}
-.c:nth-child(8n){border-right:0}
-/* bandes */
-.bat{background:#12150f}
-.def{background:#141610}
-.off{background:#171a13}
-/* jetons — carré=tourelle, vertical=véhicule, triangle=infanterie */
-.tok{width:38px;height:38px;background:var(--k-corps);
+.c:nth-child(9n){border-right:0}
+/* Aucun fond par bande : la fiche n'a pas trois gris voisins, et le RAIL dit
+   deja ou l'on est. Une bande se lit a son rail et a son bouton, pas a une
+   nuance de noir que personne ne distingue sur un telephone au soleil. */
+/* CHAMPS DE RESSOURCE — sous les batiments, jamais au-dessus. Seul le
+   collecteur peut s'y poser, et c'est le champ qui decide de sa ressource. */
+.c.champ{background:var(--k-ombre)}
+.c.champ::before{content:'';position:absolute;inset:2px;border:1px dashed}
+.c.quartz::before{border-color:var(--ai-c)}
+.c.scorie::before{border-color:var(--aa-c)}
+/* jetons */
+.tok{width:33px;height:33px;background:var(--k-corps);
      border:1px solid var(--k-trait);
      box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre);
-     position:relative}
-.tok.av{box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre),inset 0 0 0 3px var(--av-s)}
-.tok.aa{box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre),inset 0 0 0 3px var(--aa-s)}
-.tok.ai{box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre),inset 0 0 0 3px var(--ai-s)}
-.tok.veh{width:28px;height:40px}
+     position:relative;display:flex;align-items:center;justify-content:center;
+     font-size:9px;font-weight:600;color:var(--ai-c);letter-spacing:.02em}
+.tok.prod{box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre),inset 0 0 0 2px var(--ai-s)}
+.tok.mil{box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre),inset 0 0 0 2px var(--av-s)}
+.tok.pivot{box-shadow:inset 0 2px 0 var(--k-lum),inset 0 -3px 0 var(--k-ombre),inset 0 0 0 2px var(--aa-s)}
 .tok.sel{outline:2px solid var(--ai-c);outline-offset:1px}
-.lvl{position:absolute;right:1px;bottom:0;font-size:8px;color:var(--ai-c);
-     text-shadow:0 1px 0 #000;line-height:1}
-.rn{position:absolute;left:2px;top:1px;font-size:7px;color:rgba(104,114,126,.5);line-height:1}
+.lvl{position:absolute;right:0;bottom:-1px;font-size:8px;color:var(--ai-c);
+     text-shadow:0 1px 0 var(--k-trait);line-height:1;font-weight:400}
+.rn{position:absolute;left:1px;top:0;font-size:7px;color:var(--m-clair);line-height:1}
+.libre{width:11px;height:11px;border:1px dashed var(--k-clair);opacity:.6}
 
 /* ---------- 5. ACTIONS CONTEXTUELLES — 46 ---------- */
 .ctx{height:46px;flex:0 0 46px;display:flex;align-items:center;gap:5px;
      padding:0 6px;background:var(--k-ombre);border-top:1px solid var(--k-trait)}
-.ctx .who{flex:0 0 82px;line-height:1.15}
+.ctx .who{flex:0 0 100px;line-height:1.2}
 .ctx .who b{display:block;font-size:11px;color:var(--ai-c)}
-.ctx .who span{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--m-clair)}
-.btn{flex:1;height:32px;display:flex;align-items:center;justify-content:center;
-     font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+.ctx .who span{font-size:8px;letter-spacing:.04em;color:var(--m-clair)}
+.btn{flex:1;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+     font-size:10px;letter-spacing:.05em;text-transform:uppercase;line-height:1.15;
      background:var(--m-moyen);color:var(--ai-c);border:1px solid var(--k-trait);cursor:pointer}
+.btn em{font-style:normal;font-size:8px;color:var(--k-lum);letter-spacing:0;text-transform:none}
 .btn.up{background:var(--k-clair);color:var(--k-trait);font-weight:600}
+.btn.up em{color:var(--k-trait)}
 .btn.sell{background:var(--m-sombre);color:var(--m-clair)}
 
-/* ---------- 6. BANDES — 42 ---------- */
-.bands{height:42px;flex:0 0 42px;display:flex;background:var(--k-trait);
+/* ---------- 6. BANDES — 46 ---------- */
+/* Chaque bande porte SON niveau : ce sont les trois niveaux du joueur, et
+   c'est le seul endroit ou ils se lisent tous les trois d'un coup. */
+.bands{height:46px;flex:0 0 46px;display:flex;background:var(--k-trait);
        border-top:1px solid var(--m-moyen)}
 .band{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:2px;border-right:1px solid var(--m-sombre);cursor:pointer}
+      gap:1px;border-right:1px solid var(--m-sombre);cursor:pointer}
 .band:last-child{border-right:0}
 .band em{width:18px;height:3px;font-style:normal}
 .band.bat em{background:var(--k-corps)}
 .band.def em{background:var(--av-s)}
 .band.off em{background:var(--ai-s)}
 .band span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--m-clair)}
-.band.on span{color:var(--ai-c)}
+.band i{font-style:normal;font-size:11px;color:var(--m-clair);font-variant-numeric:tabular-nums}
+.band.on span,.band.on i{color:var(--ai-c)}
 .band.on{background:var(--k-ombre)}
+.band.vide i{color:#3E454C}
 
 /* ---------- 7. SLOTS — 86 ---------- */
 .slots{flex:0 0 86px;height:86px;display:grid;
@@ -124,133 +184,168 @@ body{
        border-top:1px solid var(--k-trait)}
 .slot{background:var(--k-ombre);border:1px solid var(--k-trait);
       display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:2px;position:relative;cursor:pointer}
-.slot i{width:20px;height:20px;background:var(--k-corps);
+      gap:2px;position:relative;cursor:pointer;padding:0 2px}
+.slot i{width:18px;height:18px;background:var(--k-corps);
         box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait);font-style:normal}
-.slot.av i{box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait),inset 0 0 0 2px var(--av-s)}
-.slot.aa i{box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait),inset 0 0 0 2px var(--aa-s)}
-.slot.ai i{box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait),inset 0 0 0 2px var(--ai-s)}
-.slot b{font-size:8px;color:var(--m-clair);letter-spacing:.06em;text-transform:uppercase}
+.slot.prod i{box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait),inset 0 0 0 2px var(--ai-s)}
+.slot.mil i{box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait),inset 0 0 0 2px var(--av-s)}
+.slot.pivot i{box-shadow:inset 0 1px 0 var(--k-lum),inset 0 -2px 0 var(--k-trait),inset 0 0 0 2px var(--aa-s)}
+.slot b{font-size:7px;color:var(--m-clair);letter-spacing:.03em;text-transform:uppercase;
+        text-align:center;line-height:1.05}
 .slot .cost{position:absolute;top:1px;right:3px;font-size:8px;color:var(--k-lum)}
 .slot.vide{background:transparent;border:1px dashed var(--m-moyen)}
 .slot.vide i{background:transparent;box-shadow:none}
-
-/* règle de mesure (retirable) */
-.ruler{position:absolute;left:0;top:0;width:100%;pointer-events:none;z-index:9;
-       font-size:7px;color:rgba(245,182,54,.55);display:none}
-body.mesure .ruler{display:block}
-.ruler div{position:absolute;left:2px;border-top:1px dashed rgba(245,182,54,.3);width:100%}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <!-- 1 -->
   <div class="tabs">
     <div class="tab on">Chantier</div>
-    <div class="tab">Recherche</div>
-    <div class="tab">Monde</div>
-    <div class="tab">Options</div>
+    <div class="tab futur">Recherche</div>
+    <div class="tab futur">Monde</div>
+    <div class="tab futur">Options</div>
   </div>
 
-  <!-- 2 -->
   <div class="res">
-    <div class="r"><b>18 420</b><span>Quartz</span></div>
-    <div class="r scorie"><b>6 105</b><span>Scorie</span></div>
-    <div class="r"><b>+340</b><span>Énergie</span></div>
-    <div class="r cmd"><b>187</b><span>Commande</span></div>
+    <div class="r">
+      <div class="ligne"><b>4 218</b><span class="cap">/ 7 032</span></div>
+      <div class="ligne"><span class="nom">Quartz</span><span class="deb">+2 250/h</span></div>
+    </div>
+    <div class="r scorie">
+      <div class="ligne"><b>1 655</b><span class="cap">/ 7 032</span></div>
+      <div class="ligne"><span class="nom">Scorie</span><span class="deb">+1 876/h</span></div>
+    </div>
+    <div class="r elec">
+      <div class="ligne"><b>890</b><span class="cap">/ 2 256</span></div>
+      <div class="ligne"><span class="nom">Élec.</span><span class="deb">+567/h</span></div>
+    </div>
   </div>
 
-  <!-- 3 -->
   <div class="army">
-    <span class="lbl">Points d'armée</span>
+    <span class="lbl">Emplacements</span>
     <div class="bar"><i></i></div>
-    <span class="val">58 / 100</span>
+    <span class="val">11 / 12</span>
   </div>
 
-  <!-- 4 -->
   <div class="field">
     <div class="scroll" id="scroll">
       <div class="rail">
-        <div class="b-bat"></div><div class="b-def"></div><div class="b-off"></div>
+        <div class="b-off"></div><div class="b-def"></div><div class="b-bat"></div>
       </div>
       <div class="grid" id="grid"></div>
     </div>
   </div>
 
-  <!-- 5 -->
   <div class="ctx">
-    <div class="who"><b>Fonderie</b><span>Niveau 7</span></div>
+    <div class="who"><b>Raffinerie</b><span>Niv. 5 · +176 q +352 s /h</span></div>
     <div class="btn">Réparer</div>
-    <div class="btn up">Améliorer</div>
+    <div class="btn up">Améliorer<em>vers niv. 6</em></div>
     <div class="btn sell">Démonter</div>
   </div>
 
-  <!-- 6 -->
   <div class="bands">
-    <div class="band bat on" data-y="0"><em></em><span>Chantier</span></div>
-    <div class="band def" data-y="360"><em></em><span>Défense</span></div>
-    <div class="band off" data-y="720"><em></em><span>Assaut</span></div>
+    <div class="band bat on" data-y="702"><em></em><span>Chantier</span><i>4,6</i></div>
+    <div class="band def vide" data-y="78"><em></em><span>Défense</span><i>—</i></div>
+    <div class="band off vide" data-y="0"><em></em><span>Assaut</span><i>—</i></div>
   </div>
 
-  <!-- 7 -->
-  <div class="slots">
-    <div class="slot ai"><span class="cost">5</span><i></i><b>Fantassin</b></div>
-    <div class="slot av"><span class="cost">10</span><i></i><b>Bélier</b></div>
-    <div class="slot aa"><span class="cost">10</span><i></i><b>Herse</b></div>
-    <div class="slot av"><span class="cost">15</span><i></i><b>Enclume</b></div>
-    <div class="slot ai"><span class="cost">5</span><i></i><b>Éclaireur</b></div>
-    <div class="slot aa"><span class="cost">15</span><i></i><b>Vigie</b></div>
-    <div class="slot vide"><i></i><b>—</b></div>
-    <div class="slot vide"><i></i><b>—</b></div>
-  </div>
+  <div class="slots" id="slots"></div>
 
 </div>
 
 <script>
-/* Champ : 18 rangées, numérotées 1 (bas, attaquant) → 18 (haut, le fond).
-   Bandes : 11-18 bâtiments · 3-10 défense · 1-2 déploiement. */
-const g = document.getElementById('grid');
-const OCC = {
-  '17-2':['tok','',''], '17-5':['tok','',''],
-  '15-1':['tok','',''], '15-3':['tok','sel',''], '15-6':['tok','',''],
-  '13-4':['tok','',''], '12-2':['tok','',''], '12-7':['tok','',''],
-  '9-1':['tok','av',''], '9-4':['tok','ai',''], '9-6':['tok','aa',''],
-  '7-2':['tok','av',''], '7-5':['tok','ai',''],
-  '5-3':['tok','aa',''], '5-7':['tok','av',''],
-  '2-2':['tok veh','av',''], '2-4':['tok veh','ai',''], '1-5':['tok veh','aa','']
-};
+/* Grille : 9 colonnes x 18 rangees. Rangee 1 = le bord d'ou arrivent les
+   vagues, rangee 18 = LE FOND, ou se tient le Chantier. Ne jamais dire
+   « en haut ». Bandes : 1-2 deploiement, 3-10 defense, 11-18 batiments. */
+
+/* Terrain reel de la case de depart — champsDeLaBase(275, 16). Douze cases,
+   entre les rangees 12 et 17, colonnes 2 a 8, jamais sur le pourtour. */
+const CHAMPS = [
+  [12,5,'scorie'],[13,2,'quartz'],[14,2,'quartz'],[14,3,'quartz'],
+  [14,6,'scorie'],[14,7,'scorie'],[15,5,'scorie'],[16,7,'quartz'],
+  [17,2,'scorie'],[17,3,'scorie'],[17,6,'quartz'],[17,7,'quartz']
+];
+
+/* Onze batiments, passes a problemesDeDisposition() → aucun probleme. Le
+   libelle court est un raccourci d'affichage ; le nom entier est celui de
+   data/base.js et c'est lui qui s'affiche dans le bandeau contextuel. */
+const BATIS = [
+  [18,5,'CHA','Chantier de construction',6,'pivot'],
+  [13,2,'COL','Collecteur',6,'prod'],
+  [14,2,'COL','Collecteur',6,'prod'],
+  [14,6,'COL','Collecteur',5,'prod'],
+  [14,7,'COL','Collecteur',5,'prod'],
+  [16,7,'COL','Collecteur',4,'prod'],
+  [15,6,'RAF','Raffinerie',5,'prod'],
+  [16,5,'CEN','Centrale',4,'prod'],
+  [17,5,'ACC','Accumulateur',3,'prod'],
+  [18,3,'CAS','Caserne',4,'mil'],
+  [18,7,'CPX','Complexe de défense',3,'mil']
+];
+/* Le douzieme emplacement, ouvert et encore libre. */
+const LIBRE = [18,4];
+const SELECTION = [15,6];
+
+const champDe = {}, batiDe = {};
+for (const t of CHAMPS) champDe[t[0]+'-'+t[1]] = t[2];
+for (const b of BATIS) batiDe[b[0]+'-'+b[1]] = b;
+
 let html = '';
-for (let r = 18; r >= 1; r--) {
-  const bande = r >= 11 ? 'bat' : (r >= 3 ? 'def' : 'off');
-  for (let c = 1; c <= 8; c++) {
-    const k = r + '-' + c, o = OCC[k];
-    html += '<div class="c ' + bande + '">'
-          + (c === 1 ? '<span class="rn">' + r + '</span>' : '')
-          + (o ? '<div class="' + o[0] + ' ' + o[1] + '"><span class="lvl">' + (3 + (r % 6)) + '</span></div>' : '')
-          + '</div>';
+for (let r = 1; r <= 18; r++) {
+  const bande = r <= 2 ? 'off' : (r <= 10 ? 'def' : 'bat');
+  for (let c = 1; c <= 9; c++) {
+    const k = r + '-' + c, res = champDe[k], b = batiDe[k];
+    let cls = 'c ' + bande;
+    if (res) cls += ' champ ' + res;
+    let dedans = (c === 1 ? '<span class="rn">' + r + '</span>' : '');
+    if (b) {
+      const sel = (b[0] === SELECTION[0] && b[1] === SELECTION[1]) ? ' sel' : '';
+      dedans += '<div class="tok ' + b[5] + sel + '">' + b[2]
+              + '<span class="lvl">' + b[4] + '</span></div>';
+    } else if (r === LIBRE[0] && c === LIBRE[1]) {
+      dedans += '<div class="libre"></div>';
+    }
+    html += '<div class="' + cls + '">' + dedans + '</div>';
   }
 }
-g.innerHTML = html;
+document.getElementById('grid').innerHTML = html;
 
-/* Boutons de bande = saut dans le champ, pas d'écran séparé. */
+/* Ce qu'on peut poser sur l'emplacement libre : des batiments de data/base.js,
+   sous leur vrai nom. Le cout affiche est celui du niveau 2 — le niveau 1 est
+   gratuit pour tous (COUT_NIVEAU_DEUX). */
+const POSABLES = [
+  ['Collecteur','prod',3],['Raffinerie','prod',2],
+  ['Centrale','prod',3],['Accumulateur','prod',2],
+  ['Caserne','mil',5],['Dépôt de véhicules','mil',5],
+  ['Aérodrome','mil',5],['Complexe de défense','mil',5]
+];
+document.getElementById('slots').innerHTML = POSABLES.map(function (p) {
+  return '<div class="slot ' + p[1] + '"><span class="cost">' + p[2]
+       + '</span><i></i><b>' + p[0] + '</b></div>';
+}).join('');
+
+/* Boutons de bande = saut dans le champ, pas d'ecran separe. C'est l'idee que
+   la maquette precedente apportait, et elle est gardee telle quelle. */
 const sc = document.getElementById('scroll');
-document.querySelectorAll('.band').forEach(b => {
-  b.addEventListener('click', () => {
-    document.querySelectorAll('.band').forEach(x => x.classList.remove('on'));
+document.querySelectorAll('.band').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('.band').forEach(function (x) { x.classList.remove('on'); });
     b.classList.add('on');
     sc.scrollTo({ top: +b.dataset.y });
   });
 });
-/* La bande active suit le défilement manuel. */
-sc.addEventListener('scroll', () => {
-  const y = sc.scrollTop, i = y > 600 ? 2 : (y > 240 ? 1 : 0);
+/* La bande active suit le defilement manuel. Seuils = hauteurs de bande en
+   pixels : 2 rangees puis 8, a 39 px la rangee. */
+sc.addEventListener('scroll', function () {
+  const y = sc.scrollTop, i = y > 350 ? 0 : (y > 60 ? 1 : 2);
   const bs = document.querySelectorAll('.band');
   if (!bs[i].classList.contains('on')) {
-    bs.forEach(x => x.classList.remove('on'));
+    bs.forEach(function (x) { x.classList.remove('on'); });
     bs[i].classList.add('on');
   }
 });
+sc.scrollTo({ top: 702 });
 </script>
 </body>
 </html>

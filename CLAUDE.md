@@ -145,7 +145,10 @@ test/                   22 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/build.js          src/ → dist/index.html, un seul fichier autonome
+tools/                  3 fichiers, dont un seul sert au build
+  build.js              src/ → dist/index.html, un seul fichier autonome
+  conditionneur.html    outil hors ligne, sans rapport avec le build
+  audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 .github/workflows/ci.yml   web (build + tests) · android (tests JVM + APK) · pages (main seul)
@@ -159,6 +162,15 @@ désynchronisation code/livrable est structurellement impossible.
 
 **`foyer-zero-ui.html` est une maquette**, pas un livrable ni une source du
 build. Le jeu est `src/index.src.html`.
+
+Elle est **auditée**, pas testée : `node tools/audit-maquette.mjs` confronte ses
+noms, son terrain, ses débits, ses capacités et sa palette aux tables du dépôt.
+Il ne vit PAS dans `npm run check`, et c'est délibéré — la faire garder par la
+suite ferait passer `main` au rouge pour un fichier que le joueur ne verra
+jamais. Il se lance quand on touche à la maquette, et il mourra le jour où
+l'écran de jeu aura ses propres tests. **C'est la seule exception à « un audit
+hors de `npm run check` n'existe pas »**, et elle tient parce que la maquette
+n'est pas du code livré.
 
 ### `verif.mjs` a été supprimé le 26/08 — et pourquoi
 
@@ -668,6 +680,34 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **L'API GitHub est en rate-limit partagé.** Passer par
   `codeload.github.com/<repo>/tar.gz/refs/heads/main`, et pour une PR par
   `refs/pull/<n>/head`.
+
+### Sur l'interface
+
+- **LA PALETTE EST FERMÉE : quatorze teintes, plus un seul `rgba`.**
+  `banc.test.js` balaie `src/render/`, `src/ui/` et `src/index.src.html` et
+  refuse toute couleur hors de `FICHE-STYLE.md`, ainsi que tout `rgba` autre que
+  `rgba(0,0,0,0.31)`. Aucune transparence, donc — ni tuile pâle, ni gris
+  intermédiaire.
+  ⚠ **DEUX ÉCHAPPATOIRES EXISTENT, ET ELLES SONT INTERDITES D'USAGE.** Le motif
+  de la garde est `` #[0-9A-Fa-f]{6}(?![0-9A-Za-z]) `` : un hex à **trois**
+  chiffres (`#000`) et un hex à **huit** (`#F5F3E80D`) passent tous les deux au
+  travers. S'en servir contournerait la garde en silence, ce qui coûte plus cher
+  que la contrainte qu'elle pose. `tools/audit-maquette.mjs` refuse les deux de
+  face, pour que la maquette n'apprenne pas la triche à l'écran.
+- **Ce que la contrainte a donné, le 27/08, et qui vaut mieux que ce qu'elle a
+  remplacé.** Les trois bandes de la grille n'ont plus de fond propre : la fiche
+  n'a pas trois gris voisins, le RAIL disait déjà où l'on est, et une nuance de
+  noir ne se distingue pas sur un téléphone au soleil. Un champ de ressource
+  n'est plus une teinte pâle mais un fond kaki plein, avec un liseré qui dit la
+  ressource — os pour le quartz, ambre pour la scorie.
+- **La grille de la base fait 9 colonnes.** Arbitré le 27/08 après que la
+  maquette en ait montré 8 pendant trois jours. `GRILLE.largeur` fait foi, et
+  `audit-maquette.mjs` l'asserte contre la maquette.
+- **Le banc d'essai RESTE dans le HTML livré** quand l'écran de jeu se
+  branchera, caché derrière un geste de debug — arbitré le 27/08. C'est ce que
+  T10 de `banc.test.js` exige déjà : il asserte la présence de `banc-canvas`,
+  `banc-graine`, `banc-lancer` et `banc-pas` dans `dist/index.html`. Le sortir
+  aurait mis ce test au rouge.
 
 ### Sur le vocabulaire
 
