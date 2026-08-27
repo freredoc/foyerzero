@@ -24,11 +24,15 @@ import assert from 'node:assert/strict';
 import {
   problemesDeDisposition, dispositionValide, voisinsQualifiants,
   debitDuBatiment, ressourceProduite, productionParRessource, casesVoisines,
+  dispositionNouvelleBase,
 } from '../src/sim/disposition.js';
-import { champsDeLaBase } from '../src/sim/champs.js';
+import { champsDeLaBase, ressourceDeLaCase } from '../src/sim/champs.js';
 import {
-  VOISINAGE, CHAMPS, EMPLACEMENTS, BASE_BATIMENTS, emplacementsDuNiveau,
+  VOISINAGE, CHAMPS, EMPLACEMENTS, BASE_BATIMENTS, GEOMETRIE_BASE,
+  emplacementsDuNiveau, zoneDesChamps,
 } from '../src/data/base.js';
+import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
+import { GRILLE } from '../src/data/combat.js';
 
 /** Terrain de test, écrit à la main. */
 const TERRAIN = {
@@ -517,4 +521,125 @@ test('disposition — ce qui ne produit rien rend un objet vide, pas zéro', () 
     { id: 'raffinerie', rangee: 13, colonne: 7, niveau: 1 },
   ];
   assert.deepEqual(productionParRessource(seule, TERRAIN_MELANGE, 1), {});
+});
+
+// ---------------------------------------------------------------------------
+// La fondation d'une base neuve — arbitrage du 26/08
+// ---------------------------------------------------------------------------
+
+test('disposition — toute base neuve est un Chantier niveau 1 en (18, 5)', () => {
+  // ARBITRÉ le 26/08, en deux temps : « la première base est gratuite et
+  // immédiatement posée », puis « toutes les bases que le joueur pose suivront
+  // la même logique : chantier niveau 1 gratuit, sur position 18,5 ».
+  // Ce n'est donc pas la règle du DÉMARRAGE, c'est la règle de FONDATION.
+  const dispo = dispositionNouvelleBase();
+  assert.equal(dispo.length, 1, 'un seul bâtiment à la fondation');
+  assert.deepEqual(dispo[0], {
+    id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5,
+  });
+
+  // Les deux coordonnées sont DÉRIVÉES de GEOMETRIE_BASE, pas écrites en dur :
+  // un changement de GRILLE doit les déplacer.
+  assert.equal(dispo[0].rangee, GEOMETRIE_BASE.derniereRangee);
+  assert.equal(
+    dispo[0].colonne,
+    (GEOMETRIE_BASE.premiereColonne + GEOMETRIE_BASE.derniereColonne) / 2,
+    'la largeur de 9 a un centre EXACT : pas d\'arrondi à cet endroit',
+  );
+
+  // Le niveau 1 ne coûte rien : c'est ce qui rend la fondation « gratuite »
+  // vraie au sens du modèle économique, pas seulement au sens du récit.
+  assert.ok(ECONOMIE_NIVEAU.premierNiveauPayant > 1, 'le niveau 1 doit être gratuit');
+});
+
+test('disposition — le Chantier est posé au FOND, la rangée la plus protégée', () => {
+  // ⚠ CE TEST EXISTE PARCE QUE LE CONTRAIRE A ÉTÉ CODÉ D'ABORD. « En haut »
+  // avait été lu comme la rangée 11 — celle que l'assaillant atteint en
+  // PREMIER parmi les bâtiments. Ethan a précisé « 18,5 » : c'est le FOND.
+  //
+  // L'assaillant part des rangées 1–2, traverse la défense (3–10), puis les
+  // bâtiments en montant en numéro de rangée. La 18 est donc la dernière.
+  // C'est cohérent avec ce qu'est le Chantier : le seul bâtiment sans plancher
+  // de PV, et celui dont la perte force le redéploiement.
+  const dispo = dispositionNouvelleBase();
+  assert.equal(dispo[0].rangee, GEOMETRIE_BASE.derniereRangee);
+  assert.notEqual(
+    dispo[0].rangee, GEOMETRIE_BASE.premiereRangee,
+    'le Chantier est reposé du côté exposé',
+  );
+  // Le fond est bien le côté OPPOSÉ au déploiement des vagues.
+  assert.ok(GRILLE.bandes.deploiement.premiere < GRILLE.bandes.batiments.premiere);
+  assert.ok(
+    dispo[0].rangee > GRILLE.bandes.defense.derniere,
+    'le Chantier doit être derrière la défense, pas devant',
+  );
+  // Et le seul sans plancher de PV, ce qui justifie de l'abriter.
+  assert.equal(BASE_BATIMENTS.chantierDeConstruction.plancherPv, false);
+});
+
+test('disposition — une COPIE fraîche à chaque appel, jamais la table', () => {
+  // Une disposition se modifie en jouant. Rendre la donnée de `data/base.js`
+  // elle-même laisserait une base abîmer la suivante — et comme la règle vaut
+  // pour TOUTES les bases du joueur, le défaut se propagerait de fondation en
+  // fondation au lieu de rester dans une partie.
+  const a = dispositionNouvelleBase();
+  const b = dispositionNouvelleBase();
+  assert.deepEqual(a, b);
+  assert.notEqual(a[0], b[0], 'le même objet est rendu deux fois');
+  a[0].niveau = 42;
+  assert.equal(dispositionNouvelleBase()[0].niveau, 1, 'la table a été abîmée');
+});
+
+test('disposition — il reste EXACTEMENT un emplacement libre à la fondation', () => {
+  assert.equal(emplacementsDuNiveau(1), 2);
+  assert.equal(EMPLACEMENTS.chantierOccupeUnEmplacement, true);
+  assert.equal(emplacementsDuNiveau(1) - dispositionNouvelleBase().length, 1);
+
+  // Prouvé dans les deux sens : un bâtiment de plus passe, deux ne passent pas.
+  //
+  // ⚠ LES BÂTIMENTS D'APPOINT SONT SUR LA RANGÉE 18, pas ailleurs. Une première
+  // rédaction les posait en (12,5), qui porte un champ à cette graine : le test
+  // tombait sur `champ-gache` au lieu de mesurer le plafond d'emplacements.
+  // Le pourtour de la bande est le seul endroit garanti libre de champs.
+  const champs = champsDeLaBase(275, 16);
+  const unDePlus = [
+    ...dispositionNouvelleBase(), { id: 'centrale', rangee: 18, colonne: 6, niveau: 1 },
+  ];
+  assert.deepEqual(problemesDeDisposition(unDePlus, champs), []);
+  const deuxDePlus = [...unDePlus, { id: 'caserne', rangee: 18, colonne: 7, niveau: 1 }];
+  assert.deepEqual(
+    problemesDeDisposition(deuxDePlus, champs).map((p) => p.code), ['trop-de-batiments'],
+  );
+});
+
+test('disposition — la fondation est légale sur TOUTES les graines, par construction', () => {
+  // ⚠ CE N'EST PAS UNE CHANCE. Les champs se tiennent à `CHAMPS.margeBord` du
+  // pourtour, donc entre les rangées 12 et 17. Ni la 11 ni la 18 n'en portent,
+  // quelle que soit la position sur la carte. Un test qui ne vérifierait que la
+  // position de départ du joueur ne distinguerait pas « toujours vrai » de
+  // « vrai ici » — et c'est d'autant plus important que la règle vaut désormais
+  // pour toutes les bases, donc pour des positions inconnues à l'avance.
+  assert.ok(
+    zoneDesChamps().derniereRangee < GEOMETRIE_BASE.derniereRangee,
+    'si les champs atteignaient la dernière rangée, la fondation pourrait échouer',
+  );
+
+  const { rangee: rc, colonne: cc } = dispositionNouvelleBase()[0];
+  let terrains = 0;
+  for (let r = 5; r <= 295; r += 23) {
+    for (let c = 1; c <= 30; c += 7) {
+      const champs = champsDeLaBase(r, c);
+      assert.deepEqual(
+        problemesDeDisposition(dispositionNouvelleBase(), champs), [],
+        `(${r},${c}) : la fondation devrait être légale`,
+      );
+      assert.equal(
+        ressourceDeLaCase(champs, rc, cc), null,
+        `(${r},${c}) : un champ est tombé sur la case du Chantier`,
+      );
+      terrains += 1;
+    }
+  }
+  // MESURÉ : 13 rangées × 5 colonnes = 65 terrains tirés.
+  assert.equal(terrains, 65);
 });
