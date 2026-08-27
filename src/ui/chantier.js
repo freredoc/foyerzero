@@ -30,6 +30,14 @@ import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie
 import { productionParRessource } from '../sim/disposition.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
+// ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
+// DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
+// base, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague — que
+// `ui/banc.js` entoure légitimement d'un `try`, son contrat étant de lever sur
+// un dépassement de budget, qui est un fait de JEU. Le dépôt s'est déjà fait
+// mordre par un nom court homonyme (`combat.js`, table et moteur) ; ici le
+// renommage à l'import coûte un mot et rend le garde-fou EXACT.
+import { problemesDeLaPose, poser as poserBatiment } from '../sim/state.js';
 
 // ---------------------------------------------------------------------------
 // Formatage — la seule couche qui a le droit de quitter les entiers du moteur
@@ -374,6 +382,56 @@ export function posablesDeLaBase(etat) {
     }));
 }
 
+/**
+ * Les cases où ce bâtiment peut se poser, aujourd'hui, sur cette base.
+ *
+ * ⚠ ELLES SE CALCULENT, ELLES NE SE DEVINENT PAS. On interroge
+ * `problemesDeLaPose` case par case au lieu de réimplémenter les règles ici :
+ * `sim/disposition.js` est la seule table de règles du jeu, et une seconde
+ * lecture des mêmes règles finirait par diverger de la première — sur le
+ * voisinage, sur les uniques, sur le plafond d'emplacements.
+ *
+ * ⚠ ON NE BALAIE QUE LA BANDE DES BÂTIMENTS. Les rangées de défense et de
+ * déploiement ne reçoivent aucun bâtiment : les interroger ferait répondre
+ * `hors-base` quatre-vingt-dix fois pour rien.
+ *
+ * Le coût est celui d'un GESTE, pas d'une boucle de rendu — quelques
+ * millisecondes une fois par sélection. Il n'y a donc aucune raison d'aller
+ * plus vite au prix d'une copie des règles.
+ *
+ * @param {object} etat
+ * @param {string} id
+ * @returns {Array<{rangee: number, colonne: number}>}
+ */
+export function casesPosables(etat, id) {
+  const bande = GRILLE.bandes.batiments;
+  const cases = [];
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+      if (problemesDeLaPose(etat, id, rangee, colonne).length === 0) {
+        cases.push({ rangee, colonne });
+      }
+    }
+  }
+  return cases;
+}
+
+/**
+ * Ce qu'on dit au joueur quand une pose est refusée.
+ *
+ * ⚠ LES MESSAGES DU MOTEUR SONT REPRIS TELS QUELS, jamais reformulés. Ils sont
+ * déjà écrits en français lisible — « Collecteur doit être posé sur un champ »,
+ * « deux bâtiments sur la case (14,3) » — et ils viennent de
+ * `sim/disposition.js`, qui est la seule table de règles. Une seconde
+ * formulation dans l'écran finirait par dire autre chose que la règle.
+ *
+ * @param {Array<{message: string}>} problemes
+ * @returns {string}
+ */
+export function messageDeRefus(problemes) {
+  return problemes.map((p) => p.message).join(' ; ');
+}
+
 // ---------------------------------------------------------------------------
 // Le DOM
 // ---------------------------------------------------------------------------
@@ -395,14 +453,34 @@ function cle(rangee, colonne) {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function, allerALaBande: Function}}
  */
-export function initialiserEcranChantier(doc) {
+export function initialiserEcranChantier(doc, { apresPose } = {}) {
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
 
   let selection = null; // indice dans la disposition, ou null
   let etatCourant = null;
+  // Le bâtiment que le joueur s'apprête à poser, ou null. C'est le seul mode
+  // de l'écran : quand il vaut null, toucher une case SÉLECTIONNE ; sinon,
+  // toucher une case POSE.
+  let posableChoisi = null;
   const cellules = new Map(); // « rangée:colonne » → élément
+
+  /**
+   * Le bandeau qui parle au joueur — refus de pose, plus d'emplacements,
+   * sauvegarde impossible.
+   *
+   * ⚠ IL VIT ICI PARCE QUE L'ÉLÉMENT EST DANS `#ecran-chantier`. La session
+   * l'écrivait directement, ce qui allait tant qu'elle était seule à le faire ;
+   * maintenant que la pose parle aussi, deux modules qui écrivent la même ligne
+   * sans se connaître finiraient par s'écraser l'un l'autre. Un seul
+   * propriétaire, et la session passe par lui.
+   */
+  function avis(texte) {
+    const ligne = $('chantier-avis');
+    ligne.textContent = texte;
+    ligne.hidden = texte === '';
+  }
 
   // --- la grille, construite une fois ---------------------------------------
   //
@@ -548,21 +626,62 @@ export function initialiserEcranChantier(doc) {
 
   function peindrePalette(etat) {
     bandeauPalette.textContent = '';
-    for (const posable of posablesDeLaBase(etat)) {
+    const posables = posablesDeLaBase(etat);
+    // Un unique qu'on vient de poser sort de la palette : la sélection qui le
+    // désignait n'a plus d'objet et se défait, sans quoi l'écran resterait en
+    // mode pose avec zéro case légale et sans rien dire.
+    if (posableChoisi !== null && !posables.some((p) => p.id === posableChoisi)) {
+      posableChoisi = null;
+    }
+    for (const posable of posables) {
       const emplacement = doc.createElement('button');
       emplacement.type = 'button';
       emplacement.className = `posable ${posable.famille}`;
-      // ⚠ DÉSACTIVÉ, ET ÇA DOIT SE VOIR. Un contrôle inerte qui a l'air vif fait
-      // douter le joueur de son appareil plutôt que du jeu.
-      emplacement.disabled = true;
+      emplacement.classList.toggle('actif', posable.id === posableChoisi);
       emplacement.title = `${posable.nom} — poser au niveau 1 est gratuit ; la première `
-        + `amélioration coûtera ${posable.coutPremiereAmelioration}. La pose viendra dans `
-        + 'un prochain lot.';
+        + `amélioration coûtera ${posable.coutPremiereAmelioration}.`;
       const vignette = doc.createElement('i');
       const nom = doc.createElement('b');
       nom.textContent = posable.nom;
       emplacement.append(vignette, nom);
+      emplacement.addEventListener('click', () => choisirPosable(posable.id));
       bandeauPalette.appendChild(emplacement);
+    }
+  }
+
+  /**
+   * Le joueur choisit — ou déchoisit — un bâtiment à poser.
+   * Retoucher celui qui est actif défait la sélection : c'est le seul moyen de
+   * sortir du mode pose sans poser, et il faut qu'il existe.
+   */
+  function choisirPosable(id) {
+    posableChoisi = posableChoisi === id ? null : id;
+    if (posableChoisi === null) {
+      avis('');
+      peindrePalette(etatCourant);
+      marquerCasesLegales();
+      return;
+    }
+    // ⚠ LE JOUEUR DOIT COMPRENDRE AVANT DE TOUCHER UNE CASE. Sans emplacement
+    // libre, toutes les cases sont illégales : le laisser en essayer une pour
+    // qu'on lui dise non serait le faire travailler pour rien.
+    const { poses, ouverts } = resumeDeLaBase(etatCourant).emplacements;
+    if (poses >= ouverts) {
+      avis(`${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
+        + 'construction en ouvrira d\'autres.');
+    } else {
+      avis('');
+    }
+    peindrePalette(etatCourant);
+    marquerCasesLegales();
+  }
+
+  /** Distingue à l'écran les cases où le bâtiment choisi peut se poser. */
+  function marquerCasesLegales() {
+    for (const case_ of cellules.values()) case_.classList.remove('legale');
+    if (posableChoisi === null || etatCourant === null) return;
+    for (const { rangee, colonne } of casesPosables(etatCourant, posableChoisi)) {
+      cellules.get(cle(rangee, colonne))?.classList.add('legale');
     }
   }
 
@@ -595,11 +714,53 @@ export function initialiserEcranChantier(doc) {
     if (case_ === null || etatCourant === null) return;
     const rangee = Number(case_.dataset.rangee);
     const colonne = Number(case_.dataset.colonne);
+
+    if (posableChoisi !== null) {
+      tenterLaPose(rangee, colonne);
+      return;
+    }
     const index = etatCourant.disposition.findIndex(
       (b) => b.rangee === rangee && b.colonne === colonne,
     );
     selectionner(index === -1 ? null : index);
   });
+
+  /**
+   * Pose le bâtiment choisi, ou dit pourquoi c'est refusé.
+   *
+   * ⚠ ON DEMANDE D'ABORD, ON POSE ENSUITE — ET JAMAIS DE `try` AUTOUR DE
+   * `poser`. La règle du dépôt est que `problemesDeLaPose` rend une LISTE
+   * (fait de JEU : on la montre au joueur) là où `poser` LÈVE (fait de
+   * PROGRAMME : l'écran n'aurait pas dû appeler sans regarder). Rattraper la
+   * levée reviendrait à traiter une faute de programme comme un refus
+   * ordinaire, et à masquer le jour où l'écran appellerait vraiment de travers.
+   *
+   * ⚠ POSER NE COÛTE RIEN. `ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2 : le
+   * niveau 1 est gratuit pour les onze. Il n'y a aucune ressource à prélever ni
+   * à vérifier ici.
+   */
+  function tenterLaPose(rangee, colonne) {
+    const problemes = problemesDeLaPose(etatCourant, posableChoisi, rangee, colonne);
+    if (problemes.length > 0) {
+      // La sélection RESTE : le joueur voulait poser, il a visé à côté. La lui
+      // retirer l'obligerait à la refaire pour réessayer.
+      avis(messageDeRefus(problemes));
+      return;
+    }
+
+    poserBatiment(etatCourant, posableChoisi, rangee, colonne);
+    avis('');
+    // Le bâtiment tout juste posé devient le sélectionné : c'est ce que le
+    // joueur regarde, et le bandeau contextuel en dit le niveau et le débit.
+    selection = etatCourant.disposition.length - 1;
+    peindre(etatCourant);
+    rafraichir(etatCourant);
+    // ⚠ SAUVEGARDER TOUT DE SUITE. C'est la première action irréversible du
+    // jeu ; la perdre parce que l'application a été tuée avant le prochain
+    // enregistrement périodique serait la pire façon de perdre la confiance du
+    // joueur. La session sait comment écrire, l'écran sait seulement quand.
+    if (apresPose !== undefined) apresPose(etatCourant);
+  }
 
   /**
    * Repeint ce qui ne bouge qu'en jouant : le terrain, les bâtiments, la
@@ -662,6 +823,7 @@ export function initialiserEcranChantier(doc) {
     }
 
     peindrePalette(etat);
+    marquerCasesLegales();
     // À la première peinture, le Chantier est sélectionné d'office : un bandeau
     // contextuel vide au premier regard donne un écran qui a l'air en panne, et
     // le Chantier est de toute façon ce autour de quoi la base se lit.
@@ -719,6 +881,7 @@ export function initialiserEcranChantier(doc) {
     peindre,
     rafraichir,
     allerALaBande,
+    avis,
     /** Le champ s'ouvre sur la bande des bâtiments : c'est là qu'est la base. */
     ouvrirSurLaBase() {
       // Les bâtiments occupent désormais les premières lignes d'écran : ouvrir
