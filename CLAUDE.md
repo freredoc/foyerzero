@@ -24,8 +24,8 @@ Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot HORLOGE-MURALE), à confronter :** `npm test` →
-**256 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 27/08/2026 (après le lot PALETTE-V4), à confronter :** `npm test` →
+**257 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -706,17 +706,35 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 
 ### Sur l'interface
 
-- **LA PALETTE EST FERMÉE : quatorze teintes, plus un seul `rgba`.**
+- **LA PALETTE EST FERMÉE : vingt-huit teintes, plus un seul `rgba`.**
   `banc.test.js` balaie `src/render/`, `src/ui/` et `src/index.src.html` et
   refuse toute couleur hors de `FICHE-STYLE.md`, ainsi que tout `rgba` autre que
   `rgba(0,0,0,0.31)`. Aucune transparence, donc — ni tuile pâle, ni gris
-  intermédiaire.
+  intermédiaire. Les vingt-huit : cinq de châssis kaki, cinq de sol joueur, cinq
+  d'ardoise Ouvrage, quatre d'accents de terrain, trois de métal, six d'accents
+  fonctionnels.
+  ⚠ **LA GARDE N'EN CONNAISSAIT QUE QUATORZE PENDANT UNE JOURNÉE.** `FICHE-STYLE.md`
+  est passé en v4 le 27/08 avec trois rampes de plus ; la liste de `banc.test.js`
+  se disait « transcrite » et ne l'était plus. Elle serait restée VERTE
+  indéfiniment — elle ne regarde que du code qui n'emploie pas encore ces
+  teintes — tout en refusant quatorze couleurs parfaitement légitimes au premier
+  écran qui s'en servirait.
+  ⚠ **Une transcription qui ne se confronte pas à sa source est une copie qui
+  vieillit.** La liste reste ÉCRITE — pour qu'un ajout se voie en relecture, et
+  pour qu'une faute de frappe dans la fiche n'autorise pas une couleur en
+  silence — et un test l'asserte contre le document **dans les deux sens**.
+  Même garde dans `tools/audit-maquette.mjs`.
   ⚠ **DEUX ÉCHAPPATOIRES EXISTENT, ET ELLES SONT INTERDITES D'USAGE.** Le motif
   de la garde est `` #[0-9A-Fa-f]{6}(?![0-9A-Za-z]) `` : un hex à **trois**
   chiffres (`#000`) et un hex à **huit** (`#F5F3E80D`) passent tous les deux au
   travers. S'en servir contournerait la garde en silence, ce qui coûte plus cher
   que la contrainte qu'elle pose. `tools/audit-maquette.mjs` refuse les deux de
   face, pour que la maquette n'apprenne pas la triche à l'écran.
+- **La maquette a été dessinée sous la contrainte à quatorze teintes**, avant
+  la v4 de la fiche. Elle tient, mais elle ne connaît pas encore les couleurs de
+  terrain que la fiche porte maintenant : `#9FB3C5` · `#C1CEDA` pour le quartz,
+  `#382E47` pour la scorie. À reprendre quand Ethan dira comment il veut qu'un
+  champ se lise — c'est une décision de style, et la fiche fait autorité.
 - **Ce que la contrainte a donné, le 27/08, et qui vaut mieux que ce qu'elle a
   remplacé.** Les trois bandes de la grille n'ont plus de fond propre : la fiche
   n'a pas trois gris voisins, le RAIL disait déjà où l'on est, et une nuance de
