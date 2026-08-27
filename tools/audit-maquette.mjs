@@ -105,24 +105,28 @@ ok(deb[iRaf].quartz === 176000 && deb[iRaf].scorie === 352000
 // 7. LA PALETTE, avec la règle EXACTE de banc.test.js — celle que l'écran
 // devra passer. La fiche est transcrite ici indépendamment, pour que le
 // contrôle ne valide pas la maquette avec elle-même.
-// ⚠ VINGT-HUIT TEINTES DEPUIS LA v4 DE LA FICHE (27/08). La liste est écrite,
-// puis confrontée au document juste après : une transcription qui ne se
-// confronte pas à sa source est une copie qui vieillit — celle-ci avait déjà
-// vieilli d'une journée.
-const PALETTE = ['#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72',
-  '#B87E64', '#C38C73', '#CF9A83', '#D7A995', '#E0B9A8',
-  '#0D0B12', '#231D2E', '#382E47', '#4E4160', '#6B5B80',
-  '#9FB3C5', '#C1CEDA', '#1F5160', '#5B4133',
-  '#1E2124', '#3E454C', '#68727E',
-  '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636'];
-const FICHE = new Set(PALETTE);
+// ⚠ LA PALETTE EST LUE DANS `FICHE-STYLE.md`, PLUS TRANSCRITE ICI. Elle l'a été
+// pendant une journée, et elle a pourri en une journée : la fiche est passée de
+// 28 à 33 teintes le 27/08 au soir (recolorisation du sol), `test/banc.test.js`
+// a suivi — il est dans `npm run check`, il ne pouvait pas ne pas suivre — et
+// cette copie-ci est restée à 28. **L'audit était rouge sur `main` sans que
+// personne le sache**, puisque rien ne le lance.
+//
+// C'est la démonstration de ce que `CLAUDE.md` §2 dit depuis le début : un
+// audit hors de `npm run check` n'existe pas. L'exception faite pour la
+// maquette tient — elle n'est pas du code livré — mais elle n'autorise pas à
+// DUPLIQUER une transcription dans un fichier que rien n'exécute.
+//
+// La transcription écrite, elle, reste où elle est utile : dans
+// `test/banc.test.js`, qui la confronte au document à chaque `npm run check`.
+// Ici on lit la fiche, un point c'est tout : deux copies dont une seule est
+// gardée, c'est une copie de moins qu'il n'en faut.
 const doc = readFileSync(join(RACINE, 'FICHE-STYLE.md'), 'utf8');
-const dansLaFiche = [...new Set(
+const PALETTE = [...new Set(
   [...doc.matchAll(/#[0-9A-Fa-f]{6}(?![0-9A-Za-z])/g)].map((m) => m[0].toUpperCase()),
 )];
-ok(dansLaFiche.length >= 20, `${dansLaFiche.length} teintes lues dans FICHE-STYLE.md`);
-ok(JSON.stringify([...PALETTE].sort()) === JSON.stringify([...dansLaFiche].sort()),
-  'la palette transcrite ici et celle de FICHE-STYLE.md ont divergé');
+ok(PALETTE.length >= 20, `${PALETTE.length} teintes lues dans FICHE-STYLE.md`);
+const FICHE = new Set(PALETTE);
 const teintes = [...html.matchAll(/#[0-9A-Fa-f]{6}(?![0-9A-Za-z])/g)].map((m) => m[0]);
 ok(teintes.length > 12, `${teintes.length} teintes balayées — le montage doit en voir`);
 const horsFiche = [...new Set(teintes)].filter((h) => !FICHE.has(h.toUpperCase()));
