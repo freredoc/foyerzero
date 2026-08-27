@@ -34,28 +34,34 @@ régénérée, donc hors palette. On corrige le prompt et on relance.
 
 ## 1. Vue d'ensemble
 
-**158 sprites en 60 générations**, réparties en 11 sessions, plus le jet d'essai.
-En un-par-un ce serait 165 générations : la planche divise par 2,7.
+**157 sprites en 59 générations**, réparties en 11 sessions, plus le jet d'essai.
+En un-par-un ce serait 164 générations : la planche divise par 2,8.
+
+> **[CORRIGÉ 27/08.]** Deux changements, tous deux issus de la réécriture du §2.4
+> de l'inventaire : `tile_horschamp` disparaît (S1 passe de 29/8 à **28/7**), et
+> **S10 remonte juste après S7**. Les identifiants de session ne bougent pas —
+> le journal du §13 resterait faux — c'est l'ORDRE DES LIGNES qui fait foi.
 
 | # | Session | Sprites | Générations | Dépend de |
 |---|---|---|---|---|
 | **S0** | Jet d'essai | 0 | 7 | — |
-| S1 | 27/08 | 29 | 0 | Huit générations récupérées sans régénérer. Le premier jet employait la palette des entités faute de rampe de sol — sixième dette DA, découverte à cette occasion et close le jour même. Rampe **terre cuite** arrêtée contre « sable ». Doctrine « un seul sol, sept matières ». Destination `sprites/` tranchée. Trois réserves non bloquantes. |
+| S1 | Terrain | 28 | 7 | S0 |
 | S2 | Unités joueur | 14 | 6 | S0 |
 | S3 | Unités Ouvrage | 14 | 6 | S0 (rampe validée) |
 | S4 | Défenses joueur | 9 | 4 | S2 |
 | S5 | Défenses Ouvrage | 9 | 4 | S3 |
 | S6 | Bâtiments joueur | 11 | 4 | S2 |
 | S7 | Bâtiments Ouvrage | 5 | 3 | S3 |
+| **S10** | **Carte** | **13** | **4** | **S6, S7** |
 | S8 | États de réparation | 7 | 3 | S6, S7 |
 | S9 | Obstacles | 6 | 3 | S1 |
-| S10 | Carte | 13 | 4 | S6, S7 |
 | S11 | Interface | 41 | 8 | tout le reste |
-| | **Total** | **158** | **60** | |
+| | **Total** | **157** | **59** | |
 
 Les 8 masques `tile_bord_*` ne sont pas là : ce sont des masques alpha,
 procéduraux au rendu (§2.3 de l'inventaire). `bat_o_foyer_zero.png` non plus :
-reporté (§5.3).
+reporté (§5.3). Le **fond de la carte monde** non plus : procédural au canvas,
+zéro fichier, tranché le 27/08 (§2.4 de l'inventaire).
 
 **Règle de groupement**, celle qui a produit toutes les planches ci-dessous :
 *une planche ne regroupe que des sprites qui doivent déjà se ressembler.* Jamais
@@ -97,35 +103,27 @@ la référence jointe, pas par une relance.**
 
 ---
 
-## 3. S1 — Terrain (29 sprites, 8 générations)
+## 3. S1 — Terrain (28 sprites, 7 générations)
 
 Réglages du conditionneur : régime **Tuile**, planche **2 × 2**, palette
-**Sol** (`FICHE-STYLE.md` §3, terre cuite) — surtout pas *Joueur seul*, qui est
-ce qui a raté le premier jet.
+*Joueur seul*.
 
 Le lot idéal pour la planche : quatre variantes du même terrain n'ont aucune
 échelle à tenir entre elles, elles doivent se ressembler par construction.
 Chaque planche fait 2048 × 2048 et donne `_a`, `_b`, `_c`, `_d`.
 
-- [x] P1.1 — `tile_sterile_a…d` — sol nu, le fond de tout · 27/08
-- [x] P1.2 — `tile_affleurement_a…d` — quartz 35 % · 27/08
-- [x] P1.3 — `tile_croute_a…d` — scorie 50 % · 27/08 · ⚠ couverture trop haute, §4 du rapport
-- [x] P1.4 — `tile_futaie_a…d` — bois mort 21 % · 27/08
-- [x] P1.5 — `tile_friche_a…d` — broussaille sèche · 27/08
-- [x] P1.6 — `tile_suintement_a…d` — pétrole 20 % · 27/08
-- [x] P1.7 — `tile_vasiere_a…d` — eau croupie 53 % · 27/08 · ⚠ couverture trop haute
-- [x] P1.8 — `tile_horschamp` — **1 × 1**, hors-couloir · 27/08 · ⚠ à retravailler
+- [ ] P1.1 — `tile_sterile_a…d` — vide, le fond de tout
+- [ ] P1.2 — `tile_affleurement_a…d` — quartz, cristallin blanc-gris
+- [ ] P1.3 — `tile_croute_a…d` — scorie, vitrifié sombre · **jamais un cristal vert**
+- [ ] P1.4 — `tile_futaie_a…d` — bois
+- [ ] P1.5 — `tile_friche_a…d` — broussaille
+- [ ] P1.6 — `tile_suintement_a…d` — pétrole
+- [ ] P1.7 — `tile_vasiere_a…d` — marais
 
-**S1 EST CLOSE — 29 fichiers dans `sprites/terrain/`.** Huit générations, zéro
-régénération : le premier jet du 27/08 était juste de géométrie et faux de
-couleur, et il a été récupéré par substitution ton pour ton une fois la rampe de
-sol arrêtée.
-
-⚠ **Trois réserves inscrites, aucune bloquante** : `tile_croute` et
-`tile_vasiere` couvrent la moitié de leur surface de matière, ce qui rend une
-entité de l'Ouvrage difficile à lire dessus ; `tile_horschamp` est un aplat qui
-ne dit pas encore « on ne va pas là ». Trois générations les corrigeraient.
-Détail au §4 de `RAPPORT-S1-terrain.md`.
+⚠ **P1.8 — `tile_horschamp` — SUPPRIMÉE le 27/08.** Elle ne bordait que le
+couloir de la carte monde, qui ne pave plus de tuiles. Le hors-couloir est
+devenu un traitement du fond procédural. Ne pas la régénérer si elle
+réapparaît dans une conversation.
 
 ⚠ Le terrain échappe à deux règles : pas de marge (bord à bord) et **régime A**,
 aucune face visible. Une tuile inclinée ne se raccorde plus à sa voisine.
@@ -242,7 +240,22 @@ Régime **A**, plats. Palette *Joueur seul*.
 
 ## 10. S10 — Carte (13 sprites, 4 générations)
 
+> **Se produit après S7, pas en avant-dernier** (§1). Depuis le 27/08 ces treize
+> fichiers sont **tout le visuel de la carte** : le fond, les frontières, les
+> niveaux et les halos sont procéduraux, il ne reste qu'eux et du texte.
+
 Régime **C** : la carte est la même vue que le combat.
+
+Trois règles propres à cette session, et à elle seule :
+
+1. **Se juge à 47 et à 100 px CSS**, les deux bouts mesurés du zoom (§2.4 de
+   l'inventaire), pas à la vignette de 40 px du §6 du brief.
+2. **L'emblème porte la signature de son terrain** — un camp sur de la scorie se
+   lit comme tel sans clic. La ressource se dessine DANS l'emblème, jamais à
+   côté sous forme d'un champ séparé.
+3. **La grille n'est pas tranchée.** Générer P10.1 en 32/128 ET en 64/256, les
+   comparer aux deux tailles de rendu, et trancher là — dette 3 bis du §8 de
+   l'inventaire. Les trois planches suivantes attendent ce verdict.
 
 - [ ] P10.1 — **3 × 1** — `poi_camp`, `poi_avant_poste`, `poi_base_ouvrage` — ⚠ la base doit **dire qu'elle attaque**
 - [ ] P10.2 — **3 × 1** — `poi_base_joueur`, `poi_avant_poste_joueur`, `poi_base_terminale`
@@ -310,6 +323,10 @@ seulement le refus. Le même défaut reviendra deux sessions plus tard, et sans 
 note on refera l'aller-retour.
 
 ---
+
+*v3 — 27/08/2026. Modèle de carte corrigé : S1 28/7, S10 remontée après S7,
+total 157/59, `tile_horschamp` supprimée, fond de carte procédural. Voir
+`RAPPORT-lotEMBLEME-carte-monde.md`.*
 
 *v2 — 26/08/2026. `def_j_creneau` validé, méthode du sprite de référence ajoutée
 au §0. v1 — 158 sprites, 60 générations, 11 sessions. Découpe en planches
