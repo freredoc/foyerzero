@@ -13,7 +13,7 @@ import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.j
 import { creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase } from './economie-base.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /**
  * @typedef {object} Etat
@@ -21,19 +21,39 @@ export const SAVE_VERSION = 4;
  * @property {number} graine    Graine d'origine de la partie.
  * @property {{ s: number }} rng
  * @property {{ tempsSimuleMs: number, nbTicks: number, residuMs: number }} horloge
- * @property {{ rangee: number, colonne: number }} position Sur la carte monde.
+ * @property {{ rangee: number, colonne: number }} position Sur la carte monde, AUJOURD'HUI.
+ * @property {{ rangee: number, colonne: number }} fondation Là où la base a été FONDÉE.
  * @property {Array<{ id: string, rangee: number, colonne: number, niveau: number }>} disposition
  * @property {{ ressources: Record<string, number>, residus: Array<Record<string, number>> }} economie
- * @property {object} champs DÉRIVÉ de `position` — voir `serialiser`.
+ * @property {object} champs DÉRIVÉ de `fondation` — voir `serialiser`.
  */
 
 // ---------------------------------------------------------------------------
 // Le terrain est DÉRIVÉ, pas sauvegardé
 // ---------------------------------------------------------------------------
 //
-// `champsDeLaBase` est une fonction de la seule POSITION : même case, même
-// terrain, pour toujours. Il y a donc deux façons de le traiter, et une seule
-// bonne.
+// ⚠ DÉRIVÉ DE LA FONDATION, PAS DE LA POSITION COURANTE. Arbitré par Ethan le
+// 27/08 : « une fois qu'il a posé sa base, les champs de quartz et de scorie ne
+// changent plus jamais, sinon ça casserait les collecteurs et le schéma ». Un
+// redéploiement change donc la place de la base sur la carte, mais pas son
+// terrain : le joueur ne perd jamais la disposition de ses collecteurs en se
+// repliant.
+//
+// ⚠ ET SON NIVEAU NE CHANGE PAS NON PLUS, parce qu'il n'a jamais dépendu de la
+// carte. `niveauDeLaRangee` vaut pour les sites de l'OUVRAGE, pas pour la base
+// du joueur — arbitré le 27/08. La base du joueur porte TROIS niveaux qui lui
+// sont propres, chacun une moyenne : bâtiments, défense, armée offensive. Rien
+// de tout ça ne se lit sur la carte.
+//
+// D'où DEUX positions dans l'état, et il ne faut jamais les confondre :
+//   `position`  — où la base est aujourd'hui. Donne le niveau, la carte, les
+//                 voisins de carte. Elle bouge.
+//   `fondation` — où la base a été posée. Ne sert QU'À une chose, le terrain.
+//                 Elle ne bouge jamais.
+//
+// `champsDeLaBase` est une fonction de la seule case qu'on lui passe : même
+// case, même terrain, pour toujours. Il y a donc deux façons de traiter le
+// terrain, et une seule bonne.
 //
 // LE RECALCULER À CHAQUE TICK : non. MESURÉ le 26/08 : **71,6 µs par appel**,
 // soit à 10 Hz 0,72 ms par seconde de jeu réel — plus du double du tick
@@ -45,8 +65,14 @@ export const SAVE_VERSION = 4;
 // migration ratée — et rien ne le dirait.
 //
 // RETENU : il vit dans l'état en mémoire, et `serialiser` l'OMET. La sauvegarde
-// ne porte que `position`, seule source de vérité ; `charger` en redéduit le
+// ne porte que `fondation`, seule source de vérité ; `charger` en redéduit le
 // terrain. Un seul endroit peut mentir, et c'est celui qui est écrit.
+//
+// ⚠ C'est l'arbitrage du 27/08 qui rend `fondation` NÉCESSAIRE. Tant que le
+// terrain suivait la position, `position` suffisait. Geler le terrain sans
+// sauvegarder d'où il vient aurait obligé à sauvegarder les douze cases —
+// exactement la seconde source de vérité qu'on refuse ici. Deux entiers de plus
+// suffisent, et l'invariant tient.
 
 /**
  * Crée l'état d'une partie neuve : le joueur ouvre le jeu dans sa base.
@@ -66,6 +92,10 @@ export function creerEtat(graine) {
     rng: creerRng(graine),
     horloge: creerHorloge(),
     position,
+    // À la fondation les deux coïncident, et c'est le seul instant où c'est
+    // garanti. Une COPIE, jamais la même référence : un redéploiement qui
+    // écrirait dans `position` déplacerait sinon aussi la fondation.
+    fondation: { rangee: position.rangee, colonne: position.colonne },
     disposition,
     economie: creerEtatEconomie(disposition),
     champs: champsDeLaBase(position.rangee, position.colonne),
@@ -85,11 +115,22 @@ export function creerEtat(graine) {
  *
  * @param {Etat} etat
  */
+function exigerChamp(etat, champ) {
+  if (etat[champ] === undefined) {
+    throw new Error(`etat : champ « ${champ} » absent`);
+  }
+}
+
 function verifierEtat(etat) {
-  for (const champ of ['position', 'disposition', 'economie', 'champs']) {
-    if (etat[champ] === undefined) {
-      throw new Error(`etat : champ « ${champ} » absent`);
-    }
+  // ⚠ `fondation` EST REDONDANT ICI, et la garde reste quand même. Mesuré le
+  // 27/08 par injection : retirer `fondation` de cette liste ne fait tomber
+  // aucun test, parce que `charger` l'exige déjà plus tôt et qu'il est
+  // aujourd'hui le SEUL chemin qui produise un état venu du dehors. Ce qui la
+  // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
+  // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
+  // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
+  for (const champ of ['position', 'fondation', 'disposition', 'economie', 'champs']) {
+    exigerChamp(etat, champ);
   }
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
@@ -131,7 +172,7 @@ export function rattraperJeu(etat, nbTicks) {
 /**
  * Sérialise l'état en JSON, SANS le terrain.
  *
- * Le terrain se déduit de `position` (voir plus haut) : l'écrire dans la
+ * Le terrain se déduit de `fondation` (voir plus haut) : l'écrire dans la
  * sauvegarde créerait une seconde source de vérité, donc une occasion de
  * divergence. `charger` le reconstruit.
  * @param {Etat} etat
@@ -237,6 +278,23 @@ const MIGRATIONS = {
     s.disposition = dispositionNouvelleBase();
     s.economie = creerEtatEconomie(s.disposition);
   },
+
+  /**
+   * v4 → v5 : le terrain se dérive désormais de `fondation`, pas de
+   * `position`. Arbitré le 27/08 — voir le bloc en tête de fichier.
+   *
+   * ⚠ CELLE-CI NE PERD RIEN, et c'est la première depuis la v2. Sous la v4 le
+   * terrain était calculé depuis `position` ; écrire `fondation = position`
+   * redonne donc EXACTEMENT le terrain que la sauvegarde avait. La base n'a de
+   * toute façon jamais pu bouger : le redéploiement n'existe pas encore. Le
+   * jour où il existera, cette migration restera juste pour les sauvegardes
+   * d'avant lui, et fausse pour aucune.
+   * @param {object} s
+   */
+  4: (s) => {
+    s.version = 5;
+    s.fondation = { rangee: s.position.rangee, colonne: s.position.colonne };
+  },
 };
 
 /**
@@ -273,9 +331,19 @@ export function migrer(sauvegarde) {
 export function charger(json) {
   const etat = migrer(JSON.parse(json));
   etat.rng = restaurerRng(etat.rng);
-  // Le terrain n'est pas dans la sauvegarde : il se redéduit de la position.
-  // C'est ici, et nulle part ailleurs, qu'il rentre dans l'état.
-  etat.champs = champsDeLaBase(etat.position.rangee, etat.position.colonne);
+  // ⚠ EXIGER `fondation` AVANT DE S'EN SERVIR. Sans ce garde-fou, une
+  // sauvegarde amputée du champ lèverait une TypeError sur `undefined.rangee`
+  // — trois lignes avant que `verifierEtat` ait pu nommer le champ manquant.
+  // Ça lève dans les deux cas, mais un seul des deux messages est lisible, et
+  // c'est la falsification du 27/08 qui l'a montré : le test « refusé au
+  // chargement » restait vert alors que `verifierEtat` ne surveillait plus
+  // `fondation` du tout. Ça levait, pour la mauvaise raison.
+  exigerChamp(etat, 'fondation');
+
+  // Le terrain n'est pas dans la sauvegarde : il se redéduit de la FONDATION,
+  // pas de la position courante. C'est ici, et nulle part ailleurs, qu'il
+  // rentre dans l'état.
+  etat.champs = champsDeLaBase(etat.fondation.rangee, etat.fondation.colonne);
   verifierEtat(etat);
   return etat;
 }

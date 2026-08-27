@@ -41,7 +41,14 @@ export function colonneCentre() {
 }
 
 /**
- * Niveau des sites d'une rangée de la carte.
+ * Niveau des sites de l'OUVRAGE sur une rangée de la carte.
+ *
+ * ⚠ CE NIVEAU N'EST PAS CELUI DU JOUEUR, et la confusion coûterait cher.
+ * Arbitré le 27/08 : les niveaux de la carte concernent l'Ouvrage seul. La base
+ * du joueur porte trois niveaux qui lui sont propres — bâtiments, défense,
+ * armée offensive —, chacun une MOYENNE, et aucun ne se déduit d'une rangée.
+ * Ne jamais appeler cette fonction avec la position du joueur pour en tirer
+ * « son niveau ».
  *
  * Le niveau monte de `niveauParCase` à chaque case en s'éloignant du bord BAS,
  * et se plafonne à `niveauPlafond`. Il ne descend jamais sous 1 : la rangée du
