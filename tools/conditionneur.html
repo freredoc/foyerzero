@@ -320,6 +320,38 @@ function pipeline(d, W, H, opts){
   return reduire(plein, W, H, N, opts.mode, opts.pal.length);
 }
 
+/* Familles de matières, par nom de couleur de la palette. La répartition entre
+   elles est le seul contrôle qui attrape un sprite « moche mais conforme » :
+   accent qui mange le socle, métal qui disparaît, kaki qui remplit tout. */
+const FAMILLES = {
+  accent: ["blanc sombre","blanc clair","rouge sombre","rouge clair","jaune sombre","jaune clair"],
+  metal:  ["m\u00e9tal moyen","m\u00e9tal clair"],
+  chassis:["kaki ombre","kaki corps","kaki \u00e9clair\u00e9","kaki lumi\u00e8re",
+           "A ombre","A corps","A \u00e9clair\u00e9","A lumi\u00e8re",
+           "B ombre","B corps","B \u00e9clair\u00e9","B lumi\u00e8re"]
+};
+
+/* Fourchettes tirées du sprite de référence validé (accent 18,9 %, métal 24,7 %,
+   châssis 24,8 %), élargies pour laisser respirer. */
+const FOURCHETTES = { accent:[10,30], metal:[10,45], chassis:[12,45] };
+
+/* Part de chaque famille dans la surface opaque, en pourcentage. */
+function matieres(idx, pal){
+  const compte = {accent:0, metal:0, chassis:0};
+  let total = 0;
+  for(let i=0;i<idx.length;i++){
+    const v = idx[i];
+    if(v < 0) continue;
+    total++;
+    const nom = pal[v].nom;
+    for(const f in FAMILLES) if(FAMILLES[f].indexOf(nom) >= 0) compte[f]++;
+  }
+  if(!total) return null;
+  return {accent: 100*compte.accent/total,
+          metal:  100*compte.metal/total,
+          chassis:100*compte.chassis/total};
+}
+
 /* ── Écriture ZIP, méthode « stored » (le PNG est déjà compressé) ── */
 
 const TABLE_CRC = (() => {
@@ -486,6 +518,19 @@ function conditionnerCellule(d, W, H, opts, alertes){
 
   drapeaux.push({t: utilisees.size <= pal.length ? "ok" : "ko",
                  m:`${utilisees.size} couleurs`});
+
+  // répartition des matières — hors tuiles, qui n'ont ni accent ni châssis
+  if(bb && !opts.tuile){
+    const mt = matieres(idx, pal);
+    const hors = [];
+    for(const f in FOURCHETTES){
+      const [lo,hi] = FOURCHETTES[f];
+      if(mt[f] < lo || mt[f] > hi) hors.push(f);
+    }
+    drapeaux.push({t: hors.length ? "al" : "ok",
+      m:`accent ${mt.accent.toFixed(0)} % · métal ${mt.metal.toFixed(0)} % · châssis ${mt.chassis.toFixed(0)} %`});
+    if(hors.length) drapeaux.push({t:"al", m:`équilibre : ${hors.join(", ")}`});
+  }
   for(const a of alertes) drapeaux.push(a);
 
   // 5 · rendu du PNG
