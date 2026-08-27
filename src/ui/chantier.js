@@ -118,17 +118,15 @@ export function formaterDebit(milliParHeure) {
   return `${signe}${formaterUnites(milliParHeure)}/h`;
 }
 
-/**
- * Ce que la pastille d'une vignette de pose annonce.
- *
- * ⚠ C'EST UNE CONSTANTE PARCE QUE C'EST UNE DÉCISION, pas une chaîne de plus.
- * La pastille portait `COUT_NIVEAU_DEUX` en chiffre nu — « 3 » sur un
- * Collecteur posable, qui se lit « poser coûte 3 ». Poser ne coûte RIEN : le
- * niveau 1 est gratuit pour les onze. La nommer permet d'asserter que c'est
- * bien elle que la vignette affiche, et non un nombre revenu par une autre
- * porte.
- */
-export const PASTILLE_POSE = 'gratuit';
+// ⚠ LA VIGNETTE DE POSE NE PORTE PLUS AUCUNE PASTILLE, et c'est la seconde
+// correction du même défaut. Elle a d'abord porté `COUT_NIVEAU_DEUX` en chiffre
+// nu — « 3 » sur un Collecteur, qui se lit « poser coûte 3 » alors que poser ne
+// coûte rien. Le chiffre a été remplacé par le mot « gratuit », et Ethan l'a
+// fait retirer à l'essai du 27/08 : douze vignettes qui disent toutes la même
+// chose ne disent plus rien, et la place manque à 82 px de large. Le fait reste
+// vrai et reste DIT — dans le titre de la vignette, là où on le cherche quand on
+// se pose la question. Le coût de la première amélioration, lui, est toujours
+// rendu par `posablesDeLaBase` : l'écran des améliorations l'aura sous la main.
 
 /** Un niveau absent — la Défense et l'Assaut, qui n'ont pas encore d'état. */
 export const NIVEAU_ABSENT = '—';
@@ -560,13 +558,10 @@ export function initialiserEcranChantier(doc) {
       emplacement.title = `${posable.nom} — poser au niveau 1 est gratuit ; la première `
         + `amélioration coûtera ${posable.coutPremiereAmelioration}. La pose viendra dans `
         + 'un prochain lot.';
-      const cout = doc.createElement('span');
-      cout.className = 'cout';
-      cout.textContent = PASTILLE_POSE;
       const vignette = doc.createElement('i');
       const nom = doc.createElement('b');
       nom.textContent = posable.nom;
-      emplacement.append(cout, vignette, nom);
+      emplacement.append(vignette, nom);
       bandeauPalette.appendChild(emplacement);
     }
   }
