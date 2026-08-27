@@ -28,24 +28,24 @@
 
 | Lot | Contenu | Fichiers |
 |---|---|---|
-| 1 | Terrain — 7 terrains × 4 variantes | **28** |
-| 2 | Obstacles de combat — 3 types × 2 variantes | **6** |
+| 1 | Sol de base et éléments posés — 8 sols + 4 champs + 6 obstacles | **18** |
+| 2 | *fusionné dans le lot 1 le 27/08* | — |
 | 3 | Unités offensives — 14 unités × 2 propriétaires | **28** |
 | 4 | Défenses — 9 structures × 2 propriétaires, monolithiques | **18** |
 | 5 | Bâtiments — 11 joueur + 5 Ouvrage | **16** |
 | 5 bis | États de réparation — 3 surcouches + 4 ruines | **7** |
 | 6 | Carte — 6 marqueurs + 7 POI de bonus | **13** |
 | 7 | Interface | **41** |
-| | **À générer** | **157** |
+| | **À générer** | **141** |
 
 Hors génération :
 
 | Poste | Fichiers | Pourquoi |
 |---|---|---|
-| Masques de transition `tile_bord_<dir>` | 8 | Ce sont des masques alpha, pas des images. Un modèle d'image ne sait pas les produire : à faire procéduralement au rendu (tramage ordonné sur la bordure). |
+| Masques de transition `tile_bord_<dir>` | **0** | **Supprimés 27/08.** Ils n'existaient que parce qu'on croyait à sept terrains adjacents. Sur un sol unique il n'y a rien à raccorder : le sous-problème s'évapore, il ne devient pas procédural. §2. |
 | `bat_o_foyer_zero.png` | +1 | Reporté, §5.3. |
 | Fond de la carte monde | 0 | Procédural au canvas : bruit fractal en trois teintes de la palette, déterministe sur la graine. 30 × 300 cases = 1 410 × 14 100 px CSS, aucune image ne couvre ça. Tranché 27/08, §2.4. |
-| `tile_horschamp.png` | −1 | **Supprimé 27/08.** Il ne bordait que le couloir de la carte, qui ne pave plus rien. Devient un traitement du fond procédural, §2.2. |
+| `tile_horschamp.png` | −1 | **Supprimé 27/08.** Il ne bordait que le couloir de la carte, qui ne pave plus rien. Devient un traitement du fond procédural, §2.4. |
 
 **Zéro sprite d'effet.** Impacts, explosions, éclairs de bouche, mort,
 particules, barres de PV, ombres portées : `FICHE-STYLE.md` §6 et §8 les rendent
@@ -73,8 +73,14 @@ arme_<prop>_<cible>[_r].png     arme_j_av_r.png
 bat_<prop>_<cle>.png            bat_j_caserne.png · bat_o_souche.png
 ```
 
-`<prop>` vaut `j` (joueur) ou `o` (Ouvrage). `tile_`, `obs_`, `poi_` et `ui_`
+`<prop>` vaut `j` (joueur) ou `o` (Ouvrage). `obs_`, `poi_`, `ui_` et `champ_`
 n'en portent pas : ils n'appartiennent à personne.
+
+**A8 — `tile_sol_*` porte l'axe propriétaire.** [27/08] A1 écrivait que `tile_`
+n'en portait jamais. C'était vrai tant qu'une tuile était un terrain neutre ;
+depuis la refonte du §2, il y a **un sol par camp** — `tile_sol_j_a…d.png` et
+`tile_sol_o_a…d.png`, déjà produits pour le joueur. Les éléments posés, eux,
+restent neutres et sans axe : un quartz est un quartz.
 
 **A2 — `<cle>` est la clé du fichier de données, jamais le nom affiché.**
 `off_o_meute.png` et `off_j_meute.png` sont la même ligne de `UNITES` ; le
@@ -210,80 +216,120 @@ moins (18 au lieu de 22).
 
 ---
 
-## 2. Lot 1 — Terrain (28 fichiers + 8 masques procéduraux)
+## 2. Lot 1 — Sol de base et éléments posés (18 fichiers)
 
-> **[CORRIGÉ 27/08 — la carte monde ne lit AUCUNE de ces tuiles.]** La v3 de ce
-> document ouvrait ce lot sur « la carte du monde et le sol du champ de bataille
-> lisent les mêmes fichiers ». C'est faux, et c'est de là que sortaient les 17 px
-> par case du §2.4 et le dimensionnement de tout le lot. La carte monde est un
-> **fond continu avec un emblème par case occupée** (§2.4 réécrit) : elle ne pave
-> rien. Ces 28 fichiers servent le **combat** et la **vue de base**, et rien
-> d'autre.
+> **[REFONDU 27/08 — deuxième correction de la journée, et la bonne.]**
+> Ce lot a d'abord été spécifié comme **le terrain de la carte du monde** : sept
+> matières, quatre variantes, 29 tuiles, 8 masques de transition. Il a été
+> produit en entier avant qu'on s'aperçoive qu'il servait un écran qui n'existe
+> pas. Puis il a été corrigé une première fois le matin même en « 28 tuiles pour
+> le combat et la vue de base » — c'était encore faux, et cette version-là a été
+> commitée. Voici la troisième, mesurée cette fois.
+>
+> **Le champ de bataille n'a que DEUX états de terrain.** `ressourceDeLaCase`
+> de `sim/champs.js` rend une ressource **ou `null`** : une case est nue, ou
+> elle porte un champ. La ligne était au dépôt depuis le début.
 
-Le terrain d'une case reste une **donnée** de premier plan — c'est lui qui décide
-des douze cases de champ d'une base (`sim/champs.js`) et qui nourrit
-`DEBITS.centrale.parVoisin.champDeScorie`. Un site posé sur de la croûte se
-combat toujours sur de la croûte. Ce qui change, c'est qu'à l'échelle de la
-carte cette donnée ne se lit plus dans une tuile : elle se lit dans le dessin de
-l'emblème du site, comme les cristaux d'un camp chez la référence (§6).
+| | Champ de bataille | Carte du monde |
+|---|---|---|
+| Source | `GRILLE` de `data/combat.js` | `GEOGRAPHIE.carte` de `data/sites.js` |
+| Dimensions | **9 × 18 = 162 cases** | 30 × 300 = 9 000 cases |
+| États de terrain | **deux** : nu, ou champ | sept types de site |
+| Rendu | **40 à 46 px CSS par case, toujours** | 47 à 100 px CSS |
+| Éléments posés | 12 champs + 10 obstacles | un emblème par case occupée |
+| Sert ce lot | **oui, en entier** | **non, rien** |
 
-### 2.1 Les sept terrains × quatre variantes (28)
+**L'architecture, reprise d'Archipel Industry** — les gisements de mine posés sur
+les tuiles d'île. Un **sol quasi uni** sur les 162 cases, un par camp, et
+par-dessus des **sprites plus petits** qui disent ce qu'il y a. Les éléments
+posés sont neutres et communs aux deux camps : un quartz est un quartz.
 
-Lexique arrêté en Phase 0, `FICHE-STYLE.md` §9. Les variantes se suffixent
-`_a`, `_b`, `_c`, `_d`.
+| Bande de `GRILLE` | Rangées | Contenu |
+|---|---|---|
+| Déploiement | 1–2 | sol nu |
+| Défense | 3–10 | sol nu + **10 obstacles** dispersés, 3 types |
+| Bâtiments | 11–18 | sol nu + **12 champs**, en blocs de 1 à 3 cases |
 
-| Terrain | Fichiers | Contenu | Rôle de jeu |
-|---|---|---|---|
-| Stérile | `tile_sterile_a…d.png` | vide | fond majoritaire du couloir |
-| Affleurement | `tile_affleurement_a…d.png` | **quartz** | ressource neutre, partout |
-| Croûte | `tile_croute_a…d.png` | **scorie** | dépôt de l'Ouvrage ; nourrit `DEBITS.centrale.parVoisin.champDeScorie` |
-| Futaie | `tile_futaie_a…d.png` | bois | décor / futur POI |
-| Friche | `tile_friche_a…d.png` | broussaille | décor / futur POI |
-| Suintement | `tile_suintement_a…d.png` | pétrole | décor / futur POI |
-| Vasière | `tile_vasiere_a…d.png` | marais | décor / futur POI |
+Ce que cette architecture règle, et qui justifie de tout refaire : la densité
+cesse d'être cuite dans l'image et devient un paramètre de pose ; un élément a un
+contour et se détache au lieu d'être une zone de bruit ; et **il n'y a plus rien
+à raccorder**, donc les 8 masques de transition disparaissent — ils ne
+deviennent pas procéduraux, ils cessent d'exister.
 
-⚠ Rappel du §9 : **la scorie ne dérive pas vers un cristal vert qui pousse tout
-seul.** C'est un dépôt industriel, laissé par l'extension de l'Ouvrage. C'est le
-point exact où la reprise C&C se réintroduit sans qu'on la voie.
+### 2.1 Les deux sols (8)
 
-### 2.2 [SUPPRIMÉ 27/08] Hors-couloir (0)
+`tile_sol_j_a…d.png` · `tile_sol_o_a…d.png`
 
-`tile_horschamp.png` **ne se produit plus**. Il ne bordait rien d'autre que le
-couloir de 30 de large, c'est-à-dire la carte monde, et la carte monde ne pave
-plus de tuiles. Le hors-couloir devient un **traitement procédural du fond**
-(désaturation et hachure, §2.4), à zéro fichier.
+Quatre variantes par camp, posées en damier aléatoire **avec rotation** (A3), ce
+qui donne seize apparences par camp. Régime d'inclinaison **A** : c'est le sol,
+il n'a pas de hauteur. Régime de conditionneur **Tuile** : 32 × 32 gros pixels
+bord à bord, aucun pixel transparent.
 
-C'est la seule ligne que la correction du 27/08 retire : le lot passe de 29 à
-**28** fichiers, et le total général de 158 à **157**.
+⚠ **La contrainte qui fait tout tenir, et la seule :** *l'anneau extérieur de
+2 gros pixels est entièrement du ton de sol nu.* Deux tuiles quelconques se
+rejoignent alors toujours sur une bande unie, quelles que soient leurs rotations.
+C'est ce qui a fait passer la planche 56570 — 9 × 18 cases posées au hasard,
+**aucune couture**, une première dans ce projet. Une bordure décorative visible
+au lieu d'un anneau uni est le défaut qui a fait jeter la planche jumelle.
 
-### 2.3 Masques de transition (8) — **hors génération**
+Les deux rampes de sol sont dans `FICHE-STYLE.md` §3 : terre cuite pour le
+joueur, cendre pour l'Ouvrage. **Elles doivent avoir la même clarté d'ensemble** —
+si l'une est plus sombre, elle camoufle mieux, et le camp qui l'occupe joue avec
+un avantage que personne n'a décidé.
 
-`tile_bord_n.png`, `_s.png`, `_e.png`, `_o.png`, `_ne.png`, `_no.png`,
-`_se.png`, `_so.png`.
+### 2.2 Les champs de ressource (4)
 
-Un seul jeu générique, en niveaux d'alpha, teinté au rendu par la couleur
-dominante du terrain voisin. L'alternative — un jeu complet par couple de
-terrains — coûterait 7 × 6 × 8 = 336 fichiers pour un gain que personne ne
-verra à 40 px par case.
+`champ_quartz_a.png` · `_b.png` · `champ_scorie_a.png` · `_b.png`
+*(noms proposés — aucun fichier n'existe encore ; ils ne portent pas d'axe
+propriétaire, A1, parce qu'ils n'appartiennent à personne)*
 
-⚠ **Ces masques survivent à la correction du 27/08, et il faut savoir pourquoi.**
-Ils ne servaient pas la carte : ils servent la **vue de base**, où les douze
-cases de champ de `sim/champs.js` forment des blocs de quartz et de scorie au
-milieu du stérile. Des terrains voisins et différents, il y en a toujours — la
-mosaïque a simplement changé d'échelle.
+Douze cases par base, en blocs de une à trois cases contiguës. **Un bloc doit se
+lire comme un seul gisement, pas comme trois carreaux collés.** D'où la règle de
+raccord, qui est l'inverse de celle des entités : la matière **touche le milieu
+des quatre bords** sur environ la moitié de leur longueur, et **les quatre angles
+restent vides**. Jamais un bord entièrement plein, jamais un bord entièrement
+vide.
 
-⚠ **Ces huit-là ne se génèrent pas par modèle d'image.** Ce ne sont pas des
-images mais des masques alpha : une rampe de transparence régulière, tramée sur
-la grille logique. Un générateur d'images produira une jolie texture de bord,
-inutilisable comme masque. À faire **procéduralement au rendu** (tramage
-ordonné 4 × 4 sur les 8 px logiques de bordure), ce qui les fait tomber à zéro
-fichier. Ils restent listés ici pour qu'on ne les redécouvre pas plus tard.
+⚠ Ces quatre fichiers sont donc la **seule exception à la bordure de 2 gros
+pixels vides** d'A7, avec les sols. Ce n'est pas un oubli : c'est ce qui permet à
+deux cases voisines de fusionner. Le contrôle qui le falsifie tient en une
+image : poser deux gisements côte à côte et demander si on voit un gisement ou
+deux carreaux.
 
-### 2.4 [RÉÉCRIT 27/08] La carte monde — fond continu, un emblème par case
+La scorie a droit à **2 gros pixels de relief** — c'est un dépôt refroidi, il est
+au-dessus du sol. Le quartz est strictement plat : il affleure.
+
+### 2.3 Les obstacles (6) — *ex-lot 2, absorbé ici le 27/08*
+
+`obs_infanterie_a.png` · `_b.png` · `obs_vehicule_a.png` · `_b.png` ·
+`obs_les_deux_a.png` · `_b.png`
+
+`OBSTACLES` de `combat.js` : dix cases dispersées, trois types, traversables —
+elles ralentissent (`diviseurVitesse: 2.5`) et interdisent de POSER, elles ne
+bloquent personne. L'aviation les ignore.
+
+| Type | Matière | Ce que ça doit dire |
+|---|---|---|
+| `infanterie` | fourré sec | gêne l'homme à pied, pas la chenille |
+| `vehicule` | nappe de pétrole | gêne la chenille, pas l'homme |
+| `les_deux` | chaos rocheux | gêne tout ce qui touche le sol |
+
+L'attribution matière → type a été tranchée faute d'instruction et **se défait en
+une ligne** : ce qui empêtre un homme laisse passer une chenille, ce qui fait
+patiner une chenille se contourne à pied, ce qui est haut et dur arrête les deux.
+
+Chaque obstacle est **isolé sur sa case** — ils ne se raccordent jamais entre eux,
+donc ils gardent la marge normale d'A7 : bordure de 2 gros pixels vides, emprise
+≤ 28 × 28. Deux variantes chacun : dix obstacles tirés dans trois types, sans
+variante on voit le motif au premier raid.
+
+⚠ Un obstacle **ne porte jamais de couleur d'accent** — il ne tue rien.
+
+### 2.4 [RÉÉCRIT 27/08] La carte monde — ce que ce lot ne sert PAS
 
 **Ce que disait la v3, et qui était faux.** La carte montrait entre 6 × 12 et
 24 × 48 cases, soit une case entre 68 et 17 px CSS sur 412 px de large ; elle
-pavait les tuiles du §2.1 ; il fallait une exception `imageSmoothingEnabled` en
+pavait des tuiles de terrain ; il fallait une exception `imageSmoothingEnabled` en
 dessous de 24 px. Rien de tout cela ne tient : le modèle avait été déduit d'un
 raisonnement sur le zoom, pas d'une mesure sur la référence.
 
@@ -322,8 +368,9 @@ se rouvre comme un arbitrage explicite, pas par imitation.
   aucune image ne couvre ça, et de grandes tuiles de fond auraient rouvert le
   problème de couture qu'on vient de fermer. Le hors-couloir est un traitement
   du même fond, pas une tuile (§2.2).
-- **Les tuiles du §2.1 ne s'affichent jamais sur la carte.** Combat et vue de
-  base, rien d'autre.
+- **Rien du lot 1 ne s'affiche sur la carte.** Ni les deux sols, ni les champs,
+  ni les obstacles : ils décrivent les 162 cases d'un champ de bataille, pas les
+  9 000 d'un monde.
 - **La grille 32 × 32 / fichier 128 × 128 reste la règle du projet**, et elle est
   maintenant justifiée par le seul rendu qui l'emploie : 40 px CSS au combat.
 
@@ -348,25 +395,11 @@ pour le pavage au dézoom, qui n'existe plus.
 
 ---
 
-## 3. Lots 2 et 3 — Obstacles et unités offensives (34 fichiers)
+## 3. Lot 3 — Unités offensives (28 fichiers)
 
-### 3.1 Obstacles de combat (6)
-
-`OBSTACLES` de `combat.js` : dix cases dispersées, trois types, traversables —
-elles ralentissent (`diviseurVitesse: 2.5`) et interdisent de POSER, elles ne
-bloquent personne. L'aviation les ignore.
-
-| Type | Fichiers | Ce que ça doit dire |
-|---|---|---|
-| `infanterie` | `obs_infanterie_a.png` · `_b.png` | gêne l'homme à pied, pas la chenille |
-| `vehicule` | `obs_vehicule_a.png` · `_b.png` | gêne la chenille, pas l'homme |
-| `les_deux` | `obs_les_deux_a.png` · `_b.png` | gêne tout ce qui touche le sol |
-
-Deux variantes chacune : dix obstacles tirés dans trois types, sans variante on
-voit le motif au premier raid.
-
-⚠ Un obstacle **ne porte jamais de couleur d'accent** — il ne tue rien. Le
-§11 de la fiche s'applique sans exception.
+> **[27/08]** Les 6 obstacles de combat qui occupaient le §3.1 ont rejoint le
+> lot 1 (§2.3) : ils se posent sur le sol de base, ils se génèrent avec lui, et
+> ils se jugent dans la même scène. Le lot 2 n'existe plus comme lot.
 
 ### 3.2 Les quatorze unités, dans les deux grammaires (28)
 
@@ -629,7 +662,7 @@ Si les états 2 et 3 se confondent à 40 px, la surcouche a raté son seul trava
 > Trois conséquences qui n'étaient pas dans la v3 :
 >
 > 1. **L'emblème porte la signature de son terrain.** C'est la seule chose qui
->    reste du §2.1 à l'échelle de la carte : un camp posé sur de la scorie doit
+>    reste du terrain à l'échelle de la carte : un camp posé sur de la scorie doit
 >    se lire comme tel avant qu'on clique dessus. La ressource se dessine DANS
 >    l'emblème, jamais à côté.
 > 2. **Chacun se juge à 47–100 px CSS**, pas à 40. Le protocole de contrôle du §6
@@ -667,8 +700,8 @@ lexique arrêté en Phase 0 et n'empruntent rien à C&C.
 
 | Fichier | Bonus | Lecture visuelle |
 |---|---|---|
-| `poi_veine_quartz.png` | rendement quartz | affleurement cristallin blanc-gris, même famille que `tile_affleurement` mais **concentré et net** |
-| `poi_coulee_scorie.png` | rendement scorie | dépôt vitrifié sombre, même famille que `tile_croute`, **jamais un cristal vert qui pousse** |
+| `poi_veine_quartz.png` | rendement quartz | affleurement cristallin blanc-gris, même famille que `champ_quartz` mais **concentré et net** |
+| `poi_coulee_scorie.png` | rendement scorie | dépôt vitrifié sombre, même famille que `champ_scorie`, **jamais un cristal vert qui pousse** |
 | `poi_reacteur.png` | énergie / production | cuve cylindrique éventrée, anneau de refroidissement, la seule chose émissive de la carte |
 | `poi_cantonnement.png` | bonus infanterie | baraquements bas alignés, accent **blanc** |
 | `poi_parc_roulant.png` | bonus véhicules | dalle béton, traçages, carcasses à chenilles, accent **rouge** |
@@ -692,9 +725,10 @@ règles ; les sprites, eux, ne dépendent plus de lui.
 
 `ui_quartz.png` · `ui_scorie.png` · `ui_electricite.png`
 
-Le quartz et la scorie se lisent aussi en `tile_affleurement` et `tile_croute` :
-mêmes matières, deux échelles. Elles doivent se répondre — l'icône est la tuile
-vue de près.
+Le quartz et la scorie se lisent aussi en `champ_quartz` et `champ_scorie` :
+mêmes matières, deux échelles. Elles doivent se répondre — l'icône est le
+gisement vu de près. *(Renommé le 27/08 : `tile_affleurement` et `tile_croute`
+n'existent plus, §2.)*
 
 ### 7.2 Compteurs (4)
 
@@ -759,12 +793,14 @@ l'icône signale, elle n'ampute pas.
 
 ---
 
-## 8. Dette DA — statut au 26/08
+## 8. Dette DA — statut au 27/08
 
 | # | Dette | Statut | Traitement |
 |---|---|---|---|
 | 1 | **La rampe ennemie 5 tons n'est pas inscrite dans la fiche.** | **premier jet, puis validation** | Deux rampes candidates proposées dans `BRIEF-SPRITES-IA.md` §5, générées côte à côte sur la même entité. Ethan tranche sur pièce, la gagnante entre dans `FICHE-STYLE.md` §3. |
 | 2 | **La forme volante de l'Ouvrage — le Dard — n'existe pas.** | **premier jet, puis validation** | Forme proposée au §5 du brief : trois modules identiques en triangle radial autour d'un moyeu, aucune aile portante. Bloque les quatre `off_o_*` aéronefs, donc tout l'anti-aérien du joueur. |
+| 0 | **Le lot 1 servait la mauvaise surface.** | **soldé 27/08, au prix d'un lot entier** | 29 tuiles produites pour la carte du monde alors que le besoin était le sol du combat. Cause : une phrase de couplage jamais vérifiée contre le code (§2). Règle qui en sort : **avant un lot, mesurer la surface qu'il couvre** — combien de cases, à quel rendu, vues comment. Deux minutes de `grep` dans `src/data/`. |
+| 0 bis | **Une planche isolée ne montre pas le jeu.** | **soldé 27/08** | Sept textures qui se distinguaient très bien une par une donnaient une scène où la scorie avalait les défenses de l'Ouvrage. **La composition devient un contrôle obligatoire du §6 du brief, AVANT validation d'un lot, jamais après.** |
 | 3 | **Modèle de la carte monde.** | **retranché 27/08** | §2.4 réécrit sur MESURE et non plus sur déduction : fond continu procédural, un emblème par case occupée, aucune tuile. La v3 se trompait de modèle, et c'est ce qui bloquait les sessions. |
 | 3 bis | **Grille des 13 emblèmes du lot 6.** | **ouvert — premier jet** | À 47–100 px CSS, une grille 32 donne des pixels logiques de 4,4 à 9,4 px. Garder 32/128 partout, ou une grille dédiée 48/192 ou 64/256 pour ce lot seul. Tranché sur pièce au premier jet de S10, §2.4. |
 | 4 | Marcheur : pattes trop fines, se confond avec le pylône à 40 px. | **premier jet** | Correction à imposer dans le prompt : pattes de 2 px logiques minimum, plus courtes, trois pattes radiales, corps massif. |
@@ -784,9 +820,10 @@ dépendances.
 
 0. **Jet d'essai** (§6 du brief) — sept images qui tranchent les dettes 1, 2, 4
    et 5 d'un coup. Rien d'autre ne se génère avant qu'il soit validé.
-1. **Lot 1, terrain** (28) — le sol du combat et de la vue de base — plus la
-   carte depuis le 27/08 — indépendant du reste, et le seul lot où le modèle
-   travaille sans contrainte de silhouette.
+1. **Lot 1, sol de base et éléments posés** (18) — le sol des 162 cases et ce qui
+   s'y pose. Il sert le combat et lui seul. Indépendant du reste, et le seul lot
+   où le modèle travaille sans contrainte de silhouette. **Sa validation passe
+   par une scène composée, pas par des planches isolées** (§8, dette 0 bis).
 2. **Lot 3, unités** (28) — le plus visible, et celui qui fige la rampe ennemie
    pour tous les suivants.
 3. **Lot 4, défenses** (18) — même grammaire que les unités, il en hérite.
@@ -798,8 +835,7 @@ dépendances.
    faire après les états de réparation et les obstacles.
 6. **Lot 5 bis, états de réparation** (7) — se juge SUR les bâtiments finis, pas
    dans le vide.
-7. **Lot 2, obstacles** (6) — petit, indépendant.
-8. **Lot 7, interface** (41) — en dernier : une icône de module se dessine
+7. **Lot 7, interface** (41) — en dernier : une icône de module se dessine
    d'après le module fini, une icône de châssis d'après le châssis fini.
 
 Livraison inchangée : `out/sprites/`, ZIP versionné, un lot par archive.
@@ -850,6 +886,12 @@ chacune reviendra dans une conversation future si elle n'est pas notée ici.
   ni silhouette reconnaissable. Les noms TA de `src/data/` sont une traçabilité
   interne, **pas une référence visuelle** : `broyeur.ta === 'Mammoth'` ne
   légitime rien.
+- **Aucune tuile par terrain au combat.** Le champ de bataille a DEUX états —
+  nu, ou champ posé — et `ressourceDeLaCase` est la ligne qui fait foi. Sept
+  matières de sol, c'est la carte du monde, et ce n'est pas ce lot.
+- **Aucun masque de transition.** Ils supposaient des terrains adjacents
+  différents. Sur un sol unique il n'y a rien à raccorder — ne pas les rouvrir
+  « en procédural », ils n'ont plus d'objet.
 - **Aucune tuile de terrain sur la carte monde**, et aucun fond de carte en
   fichier. Le fond est procédural (§2.4). C'est la ligne qui a coûté le plus de
   sessions : elle revient dès qu'on relit « la carte et le combat lisent les
@@ -862,6 +904,12 @@ chacune reviendra dans une conversation future si elle n'est pas notée ici.
   d'autre ne doit s'y trouver. Même motif : le modèle en produira par défaut.
 
 ---
+
+*v5 — 27/08/2026, soir. Refonte du lot 1 : le champ de bataille a deux états de
+terrain, pas sept. Sol de base 8 + champs 4 + obstacles 6 = 18 fichiers ; le
+lot 2 est absorbé ; les 8 masques de transition sont supprimés ; A8 ajouté.
+Total 157 → **141**. Voir `PASSATION-2026-08-27.md` §3, qui est la source de
+cette correction, et `RAPPORT-lotSOL-refonte-du-lot-1.md`.*
 
 *v4 — 27/08/2026. Correction du modèle de carte : §2 (ouverture), §2.2, §2.3,
 §2.4 (réécrit), §6 (requalifié), §8 (dettes 3 et 3 bis), §9 (ordre), §10. Total
