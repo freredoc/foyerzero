@@ -22,9 +22,18 @@ import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
 import {
-  capaciteDuNiveau, debitParHeure, debitVoisinParHeure, STOCKAGE,
+  BASE_BATIMENTS, capaciteDuNiveau, debitParHeure, debitVoisinParHeure, STOCKAGE,
 } from '../src/data/base.js';
 import { creerRng, entier } from '../src/sim/rng.js';
+
+// ⚠ LE CHANTIER STOCKE, DEPUIS LE 27/08. Sa poche — 50 · 50 · 40, arbitrée
+// depuis la feuille EFFETS ligne 14 — s'ajoute à toute capacité d'une base qui
+// en porte un, c'est-à-dire toutes. On la LIT dans la table plutôt que de la
+// recopier : le jour où elle bouge, ces montages suivront tout seuls, et c'est
+// exactement pourquoi ils ont dû être repris ce jour-là.
+const POCHE = BASE_BATIMENTS.chantierDeConstruction.stockagePropre;
+const pocheMilli = (r) => POCHE[r] * 1000;
+
 
 /** Le terrain de l'exemple d'Ethan : deux quartz, trois scories. */
 const TERRAIN = {
@@ -61,8 +70,13 @@ test('economie-base — la capacité suit les bâtiments posés, elle n\'est pas
   // (arbitré le 26/08, `capaciteParRessource`). Un accumulateur : 1 440
   // d'électricité. Le tout en MILLI.
   assert.deepEqual(capacitesMilli(dispo), {
-    quartz: 2_880_000, scorie: 2_880_000, electricite: 1_440_000,
+    quartz: 2_880_000 + pocheMilli('quartz'),
+    scorie: 2_880_000 + pocheMilli('scorie'),
+    electricite: 1_440_000 + pocheMilli('electricite'),
   });
+  // Falsifiable : la poche doit être NON NULLE, sinon les trois lignes
+  // ci-dessus ne prouvent rien de plus qu'avant son arrivée.
+  assert.ok(pocheMilli('quartz') > 0, 'poche nulle : le montage ne mesure rien');
   assert.equal(capaciteDuNiveau('raffinerie', 1), 2880);
   assert.equal(capaciteDuNiveau('accumulateur', 1), 1440);
 
@@ -70,19 +84,41 @@ test('economie-base — la capacité suit les bâtiments posés, elle n\'est pas
   // l'électricité. C'est ce qui prouve que la somme est bien par ressource.
   const deux = [...dispo, { id: 'raffinerie', rangee: 13, colonne: 7, niveau: 1 }];
   assert.deepEqual(capacitesMilli(deux), {
-    quartz: 5_760_000, scorie: 5_760_000, electricite: 1_440_000,
+    quartz: 5_760_000 + pocheMilli('quartz'),
+    scorie: 5_760_000 + pocheMilli('scorie'),
+    electricite: 1_440_000 + pocheMilli('electricite'),
   });
 
   // Monter une raffinerie l'augmente aussi : la capacité n'est pas un compte de
   // bâtiments, c'est une somme de niveaux.
   const montee = dispo.map((b) => (b.id === 'raffinerie' ? { ...b, niveau: 5 } : b));
   assert.ok(capacitesMilli(montee).quartz > capacitesMilli(dispo).quartz);
-  assert.equal(capacitesMilli(montee).quartz, capaciteDuNiveau('raffinerie', 5) * 1000);
+  assert.equal(
+    capacitesMilli(montee).quartz,
+    capaciteDuNiveau('raffinerie', 5) * 1000 + pocheMilli('quartz'),
+  );
 
-  // Une base sans stockage a une capacité de zéro — pas d'infini implicite.
+  // ⚠ CETTE ASSERTION A DÛ ÊTRE REPRISE LE 27/08, et pas parce qu'elle avait
+  // tort. Elle disait « une base sans bâtiment de stockage a une capacité de
+  // zéro » en le montrant sur un Chantier seul. Le Chantier porte désormais une
+  // POCHE — 50 · 50 · 40 — donc il n'illustre plus le propos. L'intention reste
+  // la même : pas d'infini implicite. On la montre sur une caserne, qui n'a ni
+  // rôle de stockage ni poche.
+  assert.deepEqual(
+    capacitesMilli([{ id: 'caserne', rangee: 18, colonne: 3, niveau: 1 }]),
+    { quartz: 0, scorie: 0, electricite: 0 },
+  );
+  // Et le Chantier seul vaut EXACTEMENT sa poche, ni plus ni moins.
   assert.deepEqual(
     capacitesMilli([{ id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 1 }]),
-    { quartz: 0, scorie: 0, electricite: 0 },
+    { quartz: pocheMilli('quartz'), scorie: pocheMilli('scorie'), electricite: pocheMilli('electricite') },
+  );
+  // La poche est PLATE : elle ne suit pas le niveau du Chantier. C'est une
+  // poche de démarrage, pas un canal de stockage — signalé comme arbitrage
+  // ouvert le 27/08.
+  assert.deepEqual(
+    capacitesMilli([{ id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 40 }]),
+    capacitesMilli([{ id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 1 }]),
   );
   assert.throws(() => capacitesMilli(null), TypeError);
 });
@@ -201,7 +237,7 @@ test('economie-base — le stock sature, le résidu continue d\'avancer', () => 
     { id: 'raffinerie', rangee: 12, colonne: 2, niveau: 1 }, // tout petit stockage
   ];
   const cap = capacitesMilli(dispo).quartz;
-  assert.equal(cap, 2_880_000);
+  assert.equal(cap, 2_880_000 + pocheMilli('quartz'));
 
   const etat = creerEtatEconomie(dispo);
   for (let t = 0; t < 200; t++) tickEconomieBase(etat, dispo, TERRAIN);
@@ -464,7 +500,10 @@ test('economie-base — un stock au-dessus du plafond est GELÉ, jamais amputé'
   // Falsifiable : le montage doit vraiment être au-dessus du plafond, sinon
   // « inchangé » ne prouverait rien.
   assert.ok(surplus > caps.quartz, 'le montage ne mesure rien si le stock tient');
-  assert.equal(caps.quartz, 2_880_000, 'une raffinerie niveau 1 : 2 880 unités');
+  assert.equal(
+    caps.quartz, 2_880_000 + pocheMilli('quartz'),
+    'une raffinerie niveau 1 (2 880) plus la poche du Chantier',
+  );
 });
 
 test('economie-base — un stock gelé ne remonte pas non plus, il reste où il est', () => {
@@ -478,7 +517,10 @@ test('economie-base — un stock gelé ne remonte pas non plus, il reste où il 
   // Des collecteurs, donc de la production ; aucune raffinerie, donc capacité
   // nulle. Un stock hérité doit rester exactement là où il est.
   const caps = capacitesMilli(dispo);
-  assert.equal(caps.quartz, 0, 'sans raffinerie, la capacité est nulle');
+  assert.equal(
+    caps.quartz, pocheMilli('quartz'),
+    'sans raffinerie, il ne reste que la poche du Chantier',
+  );
   assert.ok(
     debitsMilliParHeure(dispo, champs).some((d) => d.quartz > 0 || d.scorie > 0),
     'le montage doit produire quelque chose, sinon il ne mesure rien',

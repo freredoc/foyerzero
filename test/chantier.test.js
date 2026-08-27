@@ -16,7 +16,6 @@ import { dirname, join } from 'node:path';
 
 import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
-  PASTILLE_POSE,
   formaterEntier, formaterUnites, formaterDixiemes, formaterDebit, formaterNiveau,
   familleDuBatiment, bandeDeLaRangee, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
 } from '../src/ui/chantier.js';
@@ -227,10 +226,18 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
 
   // Les chiffres relevés indépendamment le 27/08 et gardés par
   // `tools/audit-maquette.mjs`. En milli-unités, comme le moteur les range.
+  //
+  // ⚠ LES CAPACITÉS ONT BOUGÉ DE 50 · 50 · 40 LE 27/08 AU SOIR, et c'est la
+  // POCHE du Chantier — arbitrée depuis la feuille EFFETS ligne 14. Les débits,
+  // eux, n'ont pas changé d'une unité : la poche stocke, elle ne produit pas.
+  // On l'écrit ADDITIONNÉE plutôt que fondue dans un nouveau total, pour que la
+  // ligne dise d'où vient l'écart.
+  const poche = BASE_BATIMENTS.chantierDeConstruction.stockagePropre;
+  assert.ok(poche.quartz > 0, 'poche nulle : le montage ne mesure rien');
   assert.deepEqual(resume.ressources, [
-    { cle: 'quartz', stockMilli: 0, capaciteMilli: 7_032_000, debitMilli: 2_250_000 },
-    { cle: 'scorie', stockMilli: 0, capaciteMilli: 7_032_000, debitMilli: 1_876_000 },
-    { cle: 'electricite', stockMilli: 0, capaciteMilli: 2_256_000, debitMilli: 567_000 },
+    { cle: 'quartz', stockMilli: 0, capaciteMilli: 7_032_000 + poche.quartz * 1000, debitMilli: 2_250_000 },
+    { cle: 'scorie', stockMilli: 0, capaciteMilli: 7_032_000 + poche.scorie * 1000, debitMilli: 1_876_000 },
+    { cle: 'electricite', stockMilli: 0, capaciteMilli: 2_256_000 + poche.electricite * 1000, debitMilli: 567_000 },
   ]);
   assert.deepEqual(resume.emplacements, { poses: 11, ouverts: 12 });
   assert.deepEqual(resume.niveaux, { batiments: 46, defense: null, assaut: null });
@@ -258,7 +265,7 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
   }
 
   // Ce que le joueur lit vraiment, une fois formaté.
-  assert.equal(formaterUnites(resume.ressources[0].capaciteMilli), `7${SEPARATEUR_MILLIERS}032`);
+  assert.equal(formaterUnites(resume.ressources[0].capaciteMilli), `7${SEPARATEUR_MILLIERS}082`);
   assert.equal(formaterDebit(resume.ressources[1].debitMilli), `+1${SEPARATEUR_MILLIERS}876/h`);
   assert.equal(formaterDixiemes(resume.niveaux.batiments), '4,6');
 });
@@ -473,11 +480,24 @@ test('chantier — aucune vignette de pose ne présente un coût de POSE', () =>
   // qu'Ethan n'essaie l'écran sur son téléphone.
   const source = readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8');
 
-  // La pastille annonce le fait vrai, et elle passe par la constante.
-  assert.equal(PASTILLE_POSE, 'gratuit');
+  // ⚠ LA VIGNETTE NE PORTE PLUS DE PASTILLE DU TOUT — retirée le 27/08 au soir
+  // après l'essai d'Ethan. Douze vignettes qui annoncent toutes « gratuit » ne
+  // disent plus rien, et la place manque. Ce test garde donc l'ABSENCE : ni le
+  // mot, ni un chiffre, ni une pastille d'aucune sorte.
   assert.ok(
-    /cout\.textContent\s*=\s*PASTILLE_POSE\s*;/.test(source),
-    'la pastille de la vignette ne passe plus par PASTILLE_POSE',
+    !/className\s*=\s*['`"]cout['`"]/.test(source),
+    'une pastille est revenue sur la vignette de pose',
+  );
+  assert.ok(
+    !/textContent\s*=\s*['`"]gratuit['`"]/.test(source),
+    'le mot « gratuit » est revenu dans un texte affiché',
+  );
+  // Falsifiable : le montage doit vraiment lire le fichier de la vignette.
+  assert.ok(source.includes('peindrePalette'), 'ce n\'est pas le bon fichier');
+  // Et le fait reste DIT, dans le titre — il a changé de place, pas disparu.
+  assert.ok(
+    /title\s*=[\s\S]{0,200}gratuit/.test(source),
+    'le titre de la vignette ne dit plus que poser est gratuit',
   );
 
   // Et AUCUN texte affiché n'est alimenté par le coût. Le coût reste rendu par

@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import {
   SAVE_VERSION, creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer,
+  poser, problemesDeLaPose,
 } from '../src/sim/state.js';
 import { DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli } from '../src/sim/economie-base.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
@@ -580,4 +581,118 @@ test('état — migration 5 → 6 : une sauvegarde v5 ne donne AUCUNE absence', 
   // heures. Sans ce contrôle, le zéro ci-dessus pourrait venir du montage.
   const enV6 = charger(serialiser(etat, T0), T0 + 100 * HEURE_MS);
   assert.ok(enV6.economie.ressources.quartz > 0, 'le montage ne produit rien');
+});
+
+// ---------------------------------------------------------------------------
+// Poser un bâtiment — lot POSE
+// ---------------------------------------------------------------------------
+
+test('état — poser un bâtiment de niveau 1 ne coûte RIEN', () => {
+  const etat = creerEtat(2026);
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  assert.ok(champ, 'montage : pas un seul champ de quartz');
+
+  // Falsifiable : il faut d'abord des stocks NON NULS, sinon « rien n'a été
+  // prélevé » serait vrai sur une base qui n'a rien.
+  etat.economie.ressources.quartz = 5_000_000;
+  etat.economie.ressources.scorie = 3_000_000;
+  const avant = { ...etat.economie.ressources };
+
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+
+  assert.deepEqual(etat.economie.ressources, avant, 'poser a prélevé quelque chose');
+  assert.equal(etat.disposition.length, 2);
+  assert.equal(etat.disposition[1].niveau, 1, 'une pose se fait toujours au niveau 1');
+});
+
+test('état — le résidu suit le bâtiment posé, et le tick le prouve', () => {
+  const etat = creerEtat(4242);
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+
+  // ⚠ IL FAUT DEUX EMPLACEMENTS, ET UNE BASE NEUVE N'EN A QU'UN DE LIBRE.
+  // Un collecteur seul produit 240/h dans une capacité de ZÉRO — sans
+  // raffinerie, `capacitesMilli` rend 0 et le stock ne bouge jamais. Ce test
+  // est tombé sur ce mur au premier jet, et c'est ainsi qu'a été trouvé le
+  // blocage de la base neuve (voir le rapport du lot POSE). Ici on monte le
+  // Chantier à 2 pour ouvrir la place ; ce n'est PAS ce que le jeu permet
+  // aujourd'hui, et c'est exactement le point qu'Ethan doit arbitrer.
+  etat.disposition[0].niveau = 2;
+  const nue = etat.champs.cases.some((c) => c.rangee === champ.rangee + 1 && c.colonne === champ.colonne)
+    ? { rangee: champ.rangee - 1, colonne: champ.colonne }
+    : { rangee: champ.rangee + 1, colonne: champ.colonne };
+  // ⚠ Une raffinerie ne se pose PAS sur un champ — `champ-gache` : le terrain
+  // est réservé au Collecteur. Le montage doit donc viser une case nue, et le
+  // vérifier plutôt que l'espérer.
+  assert.deepEqual(problemesDeLaPose(etat, 'raffinerie', nue.rangee, nue.colonne), []);
+  poser(etat, 'raffinerie', nue.rangee, nue.colonne);
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+
+  assert.equal(etat.economie.residus.length, etat.disposition.length);
+  // Le montage doit produire ET pouvoir stocker, sinon il ne mesure rien.
+  assert.ok(capacitesMilli(etat.disposition).quartz > 0, 'montage : capacité nulle');
+
+  // ⚠ SANS LE RÉSIDU AJOUTÉ, C'EST LE TICK QUI LÈVE, PAS LA POSE.
+  // `economie-base` asserte que les deux listes ont la même longueur : la faute
+  // apparaîtrait loin de sa cause. On la mesure donc par le tick.
+  for (let t = 0; t < TICKS_PAR_HEURE; t++) tickJeu(etat);
+  assert.ok(
+    etat.economie.ressources.quartz > 0,
+    'le collecteur posé ne produit rien : la pose n\'a pas branché le bâtiment',
+  );
+});
+
+test('état — une pose illégale est REFUSÉE, et elle dit laquelle', () => {
+  const etat = creerEtat(7);
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+
+  // Un collecteur hors d'un champ : le champ décide de sa ressource, hors champ
+  // il ne produirait rien et ne le dirait pas.
+  assert.deepEqual(
+    problemesDeLaPose(etat, 'collecteur', 11, 1).map((p) => p.code), ['hors-champ'],
+  );
+  // Un second Chantier : `unique` vaut true.
+  assert.deepEqual(
+    problemesDeLaPose(etat, 'chantierDeConstruction', 11, 1).map((p) => p.code), ['doublon'],
+  );
+  // La case du Chantier lui-même.
+  const chantier = etat.disposition[0];
+  assert.deepEqual(
+    problemesDeLaPose(etat, 'centrale', chantier.rangee, chantier.colonne).map((p) => p.code),
+    ['superposition'],
+  );
+  // Et le plafond d'emplacements : un Chantier niveau 1 en ouvre deux, il en
+  // occupe un, il reste UN. Le deuxième bâtiment passe, le troisième non.
+  assert.deepEqual(problemesDeLaPose(etat, 'centrale', 11, 1), []);
+  poser(etat, 'centrale', 11, 1);
+  assert.deepEqual(
+    problemesDeLaPose(etat, 'accumulateur', 11, 2).map((p) => p.code), ['trop-de-batiments'],
+  );
+
+  // `poser` LÈVE là où `problemesDeLaPose` rend une liste — appelée sans avoir
+  // regardé, c'est un fait de programme.
+  const avant = etat.disposition.length;
+  assert.throws(() => poser(etat, 'accumulateur', 11, 2), /pose illégale/);
+  assert.equal(etat.disposition.length, avant, 'une pose refusée ne doit rien laisser derrière');
+  assert.equal(etat.economie.residus.length, avant, 'ni résidu orphelin');
+});
+
+test('état — une base déjà bancale reste constructible', () => {
+  // ⚠ POURQUOI CE TEST. Un raid peut amputer une base, une vieille sauvegarde
+  // peut porter une disposition douteuse. Si `problemesDeLaPose` remontait les
+  // défauts PRÉEXISTANTS, toute pose deviendrait impossible et le joueur serait
+  // enfermé — alors qu'aucun de ces défauts ne vient de sa pose.
+  const etat = creerEtat(31);
+  etat.disposition[0].niveau = 5; // dix emplacements, de la place
+  const champs = etat.champs.cases.filter((c) => c.ressource === 'quartz');
+  // On abîme la base : une centrale posée sur un champ, ce qui gâche le champ.
+  etat.disposition.push({ id: 'centrale', rangee: champs[0].rangee, colonne: champs[0].colonne, niveau: 1 });
+  etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+
+  // Le montage doit vraiment être bancal, sinon le test ne mesure rien.
+  assert.ok(
+    problemesDeDisposition(etat.disposition, etat.champs).length > 0,
+    'montage : la base n\'est pas bancale, rien à filtrer',
+  );
+  // Et une pose légale reste légale malgré ça.
+  assert.deepEqual(problemesDeLaPose(etat, 'collecteur', champs[1].rangee, champs[1].colonne), []);
 });
