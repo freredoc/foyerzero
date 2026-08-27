@@ -71,6 +71,31 @@ export const BASE_BATIMENTS = {
     // Le seul bâtiment sans plancher de PV : sa chute rase la base.
     // MODELE-REPARATION-1.md §2.
     plancherPv: false,
+    // ⚠ LE CHANTIER STOCKE, ET C'EST CE QUI REND LA PARTIE JOUABLE.
+    // Arbitré par Ethan le 27/08 en pointant `FOYER-ZERO-BATIMENTS-JOUEUR.xlsx`,
+    // feuille EFFETS ligne 14 — « Stockage propre », valeur TA reprise telle
+    // quelle : 50 tibérium + 50 cristal + 40 énergie.
+    //
+    // POURQUOI ÇA COMPTE. Sans lui, une base neuve ne pouvait RIEN produire,
+    // jamais : le Chantier niveau 1 ouvre deux emplacements et en occupe un, il
+    // en reste UN, et produire en demande deux — un producteur et un stockage.
+    // Mesuré sur les quatre choix possibles, 24 h de simulation, zéro partout.
+    // Ouvrir le troisième emplacement demandait le niveau 2, qui coûte 8, que
+    // le joueur ne pouvait pas obtenir. La partie était instartable.
+    //
+    // ⚠ C'EST UN STOCKAGE PLAT, PAS UNE COURBE. Le classeur donne une valeur
+    // unique, sans progression, et c'est cohérent : 50 se laisse dépasser dès
+    // la première raffinerie (2 880 au niveau 1). C'est une POCHE DE DÉMARRAGE
+    // qui devient négligeable d'elle-même, pas un canal de stockage. Si elle
+    // devait suivre le niveau, ce serait un arbitrage à part — signalé, non
+    // décidé.
+    //
+    // ⚠ CE N'EST PAS UN BÂTIMENT DE `role: 'stockage'`. Le Chantier reste
+    // `central`. `capaciteDuNiveau` calcule une capacité comme douze heures de
+    // production du producteur APPARIÉ, et le Chantier n'en a pas. Le champ
+    // ci-dessous est un canal séparé, lu par `capacitesMilli` en plus des deux
+    // bâtiments de stockage — n'importe quel bâtiment pourra en porter un.
+    stockagePropre: { quartz: 50, scorie: 50, electricite: 40 },
   },
   centreDeCommandement: {
     nom: { joueur: 'Centre de commandement' },
