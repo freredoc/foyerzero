@@ -24,13 +24,13 @@ Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot ORPHELIN), à confronter :** `npm test` →
-**240 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 27/08/2026 (après le lot HOMONYMES), à confronter :** `npm test` →
+**241 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
-Le compte de tests a BAISSÉ de sept : le lot ORPHELIN a retiré
-`test/economy.test.js` avec le module qu'il testait. Une baisse n'est pas
-forcément une régression — mais elle se justifie, toujours.
+Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
+est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES.
+Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
 
@@ -110,7 +110,7 @@ src/data/               toutes les valeurs de calibrage — 5 fichiers ; RIEN d'
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
-  base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
+  base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
 
 src/sim/                simulation déterministe, sans DOM — 10 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
@@ -131,9 +131,11 @@ test/                   21 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   arsenal  assaut  banc  base  carte  champs  cible  clock  combat  defense
   disposition  documentation  donnees  economie-base  generateur
   grille  rendu  repli  rng  roster  state
-  ⤷ documentation.test.js : les COMPTES de ce fichier-ci sont assertés contre
-    le disque. Ajouter un test ou un fichier sans mettre §0 et §2 à jour rend
-    la suite ROUGE. C'est voulu — §2 a menti deux fois, §0 quatre.
+  ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
+    assertés contre le disque — noms de `test/` et noms de chaque dossier de
+    `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
+    rend la suite ROUGE. C'est voulu — §2 a menti deux fois, §0 quatre, et le
+    compte seul a laissé passer un écrasement le 27/08 (§6, homonymes).
   ⤷ base.test.js croise base.js et sites.js : ne pas le déplacer sans lire
     pourquoi (appariements Ouvrage, dans les deux sens).
   ⤷ base.test.js : invariants de src/data/base.js — roster des onze, classes
@@ -403,6 +405,26 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   dépôts de suite sont tombés à côté avant que la règle soit posée. Archive 1 = tout ce
   qui va dans `src/`, archive 2 = `test/` + racine. `main` est ROUGE entre les
   deux, et c'est le garde-fou qui le dit — c'est voulu.
+  ⚠ **ET UNE ARCHIVE NE PROPOSE JAMAIS DEUX DOSSIERS DE DESTINATION QUAND UN
+  NOM COURT EST AMBIGU ENTRE EUX.** Le 27/08, une archive portait `src/data/`
+  et `src/sim/` : la paire de `src/data/` est partie deux fois, une fois au bon
+  endroit et une fois dans `src/sim/`. `src/sim/base.js` est apparu, et
+  **`src/sim/combat.js` — le moteur de combat, 1 450 lignes — a été remplacé
+  par la table de données du même nom court.** Une archive plate, une seule
+  destination, aucun choix à faire : c'est ce qui a réparé.
+- **DEUX FICHIERS SANS RAPPORT PORTENT LE MÊME NOM COURT** : `combat.js` est à
+  la fois une table de `src/data/` et le moteur de `src/sim/`. C'est légitime —
+  les dossiers disent le rôle — mais ça rend tout dépôt manuel dangereux, et
+  le sélecteur d'un téléphone n'affiche que le nom court.
+  ⚠ **Le COMPTE de §2 n'a rien vu de l'écrasement** : `src/sim/` avait toujours
+  ses onze fichiers, un module de moins et un intrus de plus. Seul le BUILD est
+  tombé, et il ne tourne pas sur le téléphone. D'où le garde-fou des NOMS de
+  `src/` (lot HOMONYMES, 27/08) : `documentation.test.js` asserte désormais la
+  liste nominale de `src/data/`, `src/sim/`, `src/render/` et `src/ui/` contre
+  le disque, comme il le faisait déjà pour `test/`.
+  ⚠ **Conséquence sur la prose de §2** : les lignes de description d'un bloc de
+  `src/` ne doivent nommer aucun fichier en `.js`, elles seraient lues comme des
+  déclarations.
 - **Un état ne se construit pas qu'avec le constructeur du module.** Les douze
   premiers tests d'`economie-base` partaient tous de `creerEtatEconomie`, donc de
   zéro — et depuis zéro un stock ne peut jamais dépasser sa capacité, ce qui
