@@ -24,7 +24,7 @@
 // Aucune valeur de calibrage en dur : tout vient de data/base.js.
 
 import {
-  BASE_BATIMENTS, DEBITS, CHAMPS, VOISINAGE, EMPLACEMENTS,
+  BASE_BATIMENTS, DEBITS, CHAMPS, VOISINAGE, EMPLACEMENTS, BASE_NEUVE,
   emplacementsDuNiveau, debitParHeure, debitVoisinParHeure, estDansLaBase,
 } from '../data/base.js';
 import { ressourceDeLaCase } from './champs.js';
@@ -156,6 +156,26 @@ export function problemesDeDisposition(disposition, champs) {
   }
 
   return problemes;
+}
+
+/**
+ * La disposition d'une base neuve du joueur : un Chantier de construction
+ * niveau 1, au fond au milieu.
+ *
+ * ⚠ LE NOM DIT « NOUVELLE », PAS « INITIALE ». La règle vaut pour la première
+ * base comme pour toutes celles que le joueur posera ensuite (arbitré le
+ * 26/08). Appeler ça « initiale » ferait croire à un cas particulier du
+ * démarrage, et quelqu'un finirait par écrire une seconde fonction pour les
+ * bases suivantes.
+ *
+ * Rend une COPIE fraîche à chaque appel, jamais la table de `data/base.js` :
+ * une disposition se modifie en jouant, et rendre la donnée elle-même
+ * laisserait une base abîmer la suivante.
+ *
+ * @returns {Array<{id: string, rangee: number, colonne: number, niveau: number}>}
+ */
+export function dispositionNouvelleBase() {
+  return [{ ...BASE_NEUVE }];
 }
 
 /**
