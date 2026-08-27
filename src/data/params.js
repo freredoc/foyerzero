@@ -38,8 +38,6 @@ export const PARAMS = {
     decapeuse: { rho: RHO.producteurScorie, echelleCout: 35, ressource: 'scorie' },
   },
 
-  // Colis : un toutes les 5 minutes, 2 en attente maximum, puis arrêt.
-  colis: { intervalleMs: 5 * 60 * 1000, maxEnAttente: 2 },
 
   // Adjacence : bonus constant par voisin qualifiant, ne monte JAMAIS avec le
   // niveau. facteur × P(1), 2 voisins maximum.
