@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 import {
   montageDuBanc, executerRaidComplet, nomAffiche,
@@ -196,10 +196,9 @@ test('§11 — aucun Math.random nulle part dans src/, DOM confiné à ui/', () 
   assert.ok(fichiers.length >= 15, `montage cassé : ${fichiers.length} fichiers balayés`);
   for (const fichier of fichiers) {
     const code = sansCommentaires(readFileSync(fichier, 'utf8'));
+    // La graine est saisie ou dérivée de l'horloge au moment de fonder une
+    // partie, JAMAIS tirée : le tirage du langage n'entre nulle part.
     assert.ok(!code.includes('Math.random'), `Math.random dans ${fichier}`);
-    // La graine est saisie, jamais tirée — et l'horloge murale n'entre pas
-    // dans le banc : le temps vient des horodatages de requestAnimationFrame.
-    assert.ok(!/Date\s*\.\s*now/.test(code), `horloge murale dans ${fichier}`);
   }
   // Le DOM est confiné : render/ n'y touche jamais, ni au chargement ni après.
   for (const fichier of fichiersJs('src/render')) {
@@ -209,6 +208,135 @@ test('§11 — aucun Math.random nulle part dans src/, DOM confiné à ui/', () 
     }
   }
   assert.equal(DPR_MAX, 2, 'le buffer se plafonne à DPR 2');
+});
+
+// ---------------------------------------------------------------------------
+// §11 retournée — l'horloge murale
+// ---------------------------------------------------------------------------
+//
+// ⚠ CETTE GARDE A ÉTÉ RETOURNÉE AU LOT ÉCRAN-CHANTIER, ET VOICI POURQUOI.
+// Elle interdisait `Date.now` dans TOUT `src/`, `index.src.html` compris. Or
+// `charger(json, instantMs)` et `serialiser(etat, instantMs)` réclament
+// l'instant présent depuis la v6 du format de sauvegarde, et personne n'avait
+// le droit de le leur donner : le rattrapage hors ligne — écrit, testé, livré
+// au lot HORLOGE-MURALE — ne servait donc à rien, faute d'écran pour l'appeler.
+//
+// `CLAUDE.md` §6 décrivait d'avance la forme à lui donner, et c'est celle-ci :
+// interdiction TOTALE sur `src/sim/`, `src/data/` et `src/render/`, et
+// EXACTEMENT UNE occurrence admise dans un fichier NOMMÉ ici.
+//
+// ⚠ LE COMPTE EST ASSERTÉ, PAS BORNÉ. « Au plus une » laisserait passer zéro,
+// c'est-à-dire la disparition silencieuse du seul point d'entrée du temps réel
+// — et le jeu recommencerait à afficher les stocks d'hier soir sans qu'un seul
+// test tombe. Le verdict est isolé dans `fautesDHorloge` pour qu'on puisse le
+// FALSIFIER : on lui donne des comptes fabriqués, et on vérifie qu'il refuse
+// zéro aussi bien que deux.
+
+/**
+ * LE fichier porteur : le seul de `src/` qui ait le droit de lire l'heure du
+ * système, et il n'y a droit qu'une fois.
+ */
+const PORTEUR_HORLOGE = join('src', 'ui', 'session.js');
+
+/**
+ * Les deux façons d'obtenir l'heure murale SANS écrire le nom que la garde
+ * cherche. Interdites partout, porteur compris : s'en servir serait passer
+ * sous le garde-fou en silence, ce qui coûte plus cher que la contrainte qu'il
+ * pose. Même raisonnement que les hex à trois et à huit chiffres de la garde
+ * de palette (CLAUDE.md §6).
+ */
+const CONTOURNEMENTS = [
+  { motif: /new\s+Date\b/, nom: 'new Date' },
+  { motif: /performance\s*\.\s*timeOrigin/, nom: 'performance.timeOrigin' },
+];
+
+/** Combien de fois ce code (déjà décommenté) lit l'horloge du langage. */
+function compterHorloge(code) {
+  return (code.match(/Date\s*\.\s*now/g) ?? []).length;
+}
+
+/**
+ * Le verdict de la garde, séparé de la mesure pour être falsifiable.
+ * @param {Record<string, number>} comptes fichier → occurrences
+ * @param {string} porteur le seul fichier qui ait droit à une occurrence
+ * @returns {string[]} les fautes, liste vide si tout va bien
+ */
+function fautesDHorloge(comptes, porteur) {
+  const fautes = [];
+  if (comptes[porteur] === undefined) {
+    fautes.push(`${porteur} : le fichier porteur n'a pas été balayé`);
+  }
+  for (const [fichier, n] of Object.entries(comptes)) {
+    const attendu = fichier === porteur ? 1 : 0;
+    if (n !== attendu) {
+      fautes.push(`${fichier} : ${n} lecture(s) de l'horloge murale, ${attendu} attendue(s)`);
+    }
+  }
+  return fautes;
+}
+
+test('§11 — l\'horloge murale entre par UN fichier nommé, exactement une fois', () => {
+  // --- 1. interdiction totale là où vit la simulation ---------------------
+  for (const dossier of ['src/sim', 'src/data', 'src/render']) {
+    const fichiers = fichiersJs(dossier);
+    assert.ok(fichiers.length >= 4, `montage cassé : ${fichiers.length} fichiers dans ${dossier}/`);
+    for (const fichier of fichiers) {
+      assert.equal(
+        compterHorloge(sansCommentaires(readFileSync(fichier, 'utf8'))), 0,
+        `horloge murale dans ${fichier} — la simulation reçoit le temps, elle ne va pas le chercher`,
+      );
+    }
+  }
+
+  // --- 2. exactement une, dans le porteur ---------------------------------
+  const comptes = {};
+  for (const fichier of [...fichiersJs('src/ui'), join(RACINE, 'src', 'index.src.html')]) {
+    comptes[relative(RACINE, fichier)] = compterHorloge(
+      sansCommentaires(readFileSync(fichier, 'utf8')),
+    );
+  }
+  assert.ok(Object.keys(comptes).length >= 5, `montage cassé : ${Object.keys(comptes).length} fichiers balayés`);
+  assert.deepEqual(fautesDHorloge(comptes, PORTEUR_HORLOGE), []);
+
+  // --- 3. falsification du verdict, dans les deux sens --------------------
+  // Zéro doit tomber : c'est la disparition du point d'entrée du temps réel.
+  assert.ok(
+    fautesDHorloge({ ...comptes, [PORTEUR_HORLOGE]: 0 }, PORTEUR_HORLOGE).length > 0,
+    'zéro occurrence dans le porteur devrait être refusé',
+  );
+  // Deux doivent tomber : une seconde lecture est un second point d'entrée.
+  assert.ok(
+    fautesDHorloge({ ...comptes, [PORTEUR_HORLOGE]: 2 }, PORTEUR_HORLOGE).length > 0,
+    'deux occurrences dans le porteur devraient être refusées',
+  );
+  // Et une occurrence AILLEURS aussi, même si le porteur reste juste.
+  assert.ok(
+    fautesDHorloge({ ...comptes, [join('src', 'ui', 'banc.js')]: 1 }, PORTEUR_HORLOGE).length > 0,
+    'une occurrence hors du porteur devrait être refusée',
+  );
+  // Et un balayage qui ne voit même pas le porteur ne prouve rien.
+  assert.ok(fautesDHorloge({}, PORTEUR_HORLOGE).length > 0, 'un balayage vide devrait être refusé');
+
+  // --- 4. le compteur compte réellement -----------------------------------
+  // Assemblé à l'exécution : écrit d'une pièce, il serait lui-même une
+  // occurrence dans un fichier que ce test finira peut-être par balayer.
+  const nom = 'Date';
+  assert.equal(compterHorloge('const a = 1;'), 0);
+  assert.equal(compterHorloge(`${nom}.now();`), 1);
+  assert.equal(compterHorloge(`${nom}.now(); ${nom} . now();`), 2);
+
+  // --- 5. les contournements sont refusés partout, porteur compris --------
+  for (const fichier of [...fichiersJs('src'), join(RACINE, 'src', 'index.src.html')]) {
+    const code = sansCommentaires(readFileSync(fichier, 'utf8'));
+    for (const { motif, nom: quoi } of CONTOURNEMENTS) {
+      assert.ok(!motif.test(code), `${fichier} contourne la garde par ${quoi}`);
+    }
+  }
+  // Falsifiable : les motifs doivent attraper de vrais appâts.
+  for (const { motif, nom: quoi } of CONTOURNEMENTS) {
+    const appat = quoi === 'new Date' ? 'const t = new Date().getTime();' : 'const t = performance.timeOrigin;';
+    assert.ok(motif.test(appat), `le motif de ${quoi} n'attrape même pas un appât`);
+  }
 });
 
 test('§11 — aucune teinte hors de la palette de FICHE-STYLE.md', () => {
@@ -241,6 +369,32 @@ test('§11 — aucune teinte hors de la palette de FICHE-STYLE.md', () => {
   }
   // Le balayage doit avoir réellement vu des couleurs, sinon il ne prouve rien.
   assert.ok(trouvees > 30, `seulement ${trouvees} teintes balayées`);
+
+  // ⚠ LES DEUX ÉCHAPPATOIRES DE LA GARDE, REFUSÉES DE FACE. Le motif ci-dessus
+  // est `#[0-9A-Fa-f]{6}(?![0-9A-Za-z])` : un hex à TROIS chiffres (`#000`) et
+  // un hex à HUIT (`#F5F3E80D`, un alpha) passent tous les deux au travers.
+  // `CLAUDE.md` §6 les documente comme interdites d'usage depuis le 27/08 et
+  // `tools/audit-maquette.mjs` les refuse déjà pour la maquette — mais rien ne
+  // les refusait pour le CODE LIVRÉ, qui est pourtant le seul que le joueur
+  // verra. L'asymétrie tombe ici. Contourner un garde-fou en silence coûte plus
+  // cher que la contrainte qu'il pose.
+  const RACCOURCIS = [
+    { motif: /#[0-9A-Fa-f]{3}(?![0-9A-Fa-f])/, quoi: 'hex à trois chiffres' },
+    { motif: /#[0-9A-Fa-f]{8}(?![0-9A-Fa-f])/, quoi: 'hex à huit chiffres' },
+  ];
+  for (const fichier of fichiers) {
+    const texte = readFileSync(fichier, 'utf8');
+    for (const { motif, quoi } of RACCOURCIS) {
+      const trouve = texte.match(motif);
+      assert.equal(trouve, null, `${quoi} dans ${fichier} : ${trouve?.[0]} — invisible à la garde`);
+    }
+  }
+  // Falsifiable : les motifs doivent attraper de vrais appâts, et laisser
+  // passer les six chiffres légitimes qui sont partout dans ces fichiers.
+  assert.ok(RACCOURCIS[0].motif.test('color: #000;'), 'le motif à trois chiffres n\'attrape rien');
+  assert.ok(RACCOURCIS[1].motif.test('color: #F5F3E80D;'), 'le motif à huit chiffres n\'attrape rien');
+  assert.equal('color: #161914;'.match(RACCOURCIS[0].motif), null, 'un hex à six chiffres est refusé à tort');
+  assert.equal('color: #161914;'.match(RACCOURCIS[1].motif), null, 'un hex à six chiffres est refusé à tort');
 });
 
 test('§11 — la palette transcrite ici EST celle de FICHE-STYLE.md', () => {

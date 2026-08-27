@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
+Dernière révision : **27/08/2026**, version 0.13.0 · build 13.
 
 ---
 
@@ -24,13 +24,20 @@ Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot PALETTE-V4), à confronter :** `npm test` →
-**257 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
-0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
-`src/index.src.html` n'importe toujours que `ui/banc.js`.
+**Référence au 27/08/2026 (après le lot ÉCRAN-CHANTIER), à confronter :**
+`npm test` → **271 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**123 660 octets**, 0 référence externe.
+
+⚠ **LE HTML A BOUGÉ, POUR LA PREMIÈRE FOIS DEPUIS LE LOT RÉSIDU** — de 81 236 à
+123 660 octets, et le point d'entrée n'est plus le banc d'essai : c'est la
+session de jeu. C'est le lot ÉCRAN-CHANTIER, le premier à devoir bumper depuis
+douze lots. La borne de T10 (200 000 octets) tient encore, avec 38 % de marge.
+
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
-est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES.
-Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
+est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, et
+de quatorze au lot ÉCRAN-CHANTIER (treize pour `test/chantier.test.js`, un pour
+la garde §11 scindée en deux). Une baisse n'est pas forcément une régression,
+mais elle se justifie, toujours.
 
 ---
 
@@ -123,13 +130,20 @@ src/sim/                simulation déterministe, sans DOM — 11 fichiers
 src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
 
-src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
-  banc.js               SEUL fichier du dépôt qui touche le DOM
+src/ui/                 les deux écrans et leurs éditeurs — 5 fichiers
+  session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
+  chantier.js           l'écran de jeu : formatage PUR, puis rendu au DOM
+  banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
+  ⤷ le DOM reste confiné à ce dossier, mais il n'y a plus UN seul fichier qui y
+    touche : `banc.js` et `chantier.js` le font tous les deux, et `session.js`
+    les met en scène. La garde de `banc.test.js` porte sur le DOSSIER, pas sur
+    un nom.
 
-test/                   22 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
-  arsenal  assaut  banc  base  carte  champs  cible  clock  combat  defense
+test/                   23 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+  arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
+  defense
   disposition  documentation  donnees  economie-base  generateur
   grille  niveau-de-base  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
@@ -167,10 +181,17 @@ Elle est **auditée**, pas testée : `node tools/audit-maquette.mjs` confronte s
 noms, son terrain, ses débits, ses capacités et sa palette aux tables du dépôt.
 Il ne vit PAS dans `npm run check`, et c'est délibéré — la faire garder par la
 suite ferait passer `main` au rouge pour un fichier que le joueur ne verra
-jamais. Il se lance quand on touche à la maquette, et il mourra le jour où
-l'écran de jeu aura ses propres tests. **C'est la seule exception à « un audit
-hors de `npm run check` n'existe pas »**, et elle tient parce que la maquette
-n'est pas du code livré.
+jamais. Il se lance quand on touche à la maquette. **C'est la seule exception à
+« un audit hors de `npm run check` n'existe pas »**, et elle tient parce que la
+maquette n'est pas du code livré.
+
+⚠ **La version précédente de ce paragraphe annonçait sa mort « le jour où
+l'écran de jeu aura ses propres tests ».** Ce jour est venu le 27/08 —
+`test/chantier.test.js` existe — et l'audit ne meurt PAS. Les deux ne mesurent
+pas la même chose : `chantier.test.js` vérifie que l'écran LIT le moteur,
+`audit-maquette.mjs` vérifie que la MAQUETTE ne ment pas. Tant qu'on dessine une
+décision d'interface dans la maquette avant de l'écrire, elle a besoin de son
+garde-fou. Il mourra le jour où plus personne ne la touchera.
 
 ### `verif.mjs` a été supprimé le 26/08 — et pourquoi
 
@@ -735,6 +756,12 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   terrain que la fiche porte maintenant : `#9FB3C5` · `#C1CEDA` pour le quartz,
   `#382E47` pour la scorie. À reprendre quand Ethan dira comment il veut qu'un
   champ se lise — c'est une décision de style, et la fiche fait autorité.
+  ⚠ **L'ÉCRAN DE JEU A REPRIS LE RENDU DE LA MAQUETTE, PAS CES TROIS TEINTES**,
+  et c'est délibéré : leur emploi n'est pas arbitré, et trancher seul aurait fixé
+  la lecture d'un champ sans que personne la revoie. Le champ est donc, à
+  l'écran comme sur la maquette, un fond kaki plein avec un liseré. **Les deux
+  se reprendront ENSEMBLE** le jour de l'arbitrage — les laisser diverger
+  reviendrait à dessiner dans la maquette une décision que l'écran ignore.
 - **Ce que la contrainte a donné, le 27/08, et qui vaut mieux que ce qu'elle a
   remplacé.** Les trois bandes de la grille n'ont plus de fond propre : la fiche
   n'a pas trois gris voisins, le RAIL disait déjà où l'on est, et une nuance de
@@ -744,20 +771,47 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **La grille de la base fait 9 colonnes.** Arbitré le 27/08 après que la
   maquette en ait montré 8 pendant trois jours. `GRILLE.largeur` fait foi, et
   `audit-maquette.mjs` l'asserte contre la maquette.
-- **LE TEMPS MURAL N'A PAS ENCORE DE POINT D'ENTRÉE.** `charger` et
-  `serialiser` l'attendent en argument depuis la v6, mais personne ne le leur
-  passe : il n'y a pas encore d'écran. Le jour où il y en aura, l'appel à
-  l'horloge système sera **un seul**, dans la couche DOM, et il faudra
-  **retourner la garde §11 de `banc.test.js` en écrivant pourquoi** — elle
-  interdit aujourd'hui `Date.now` sur tout `src/`, `index.src.html` compris.
-  La bonne forme de la garde retournée : interdiction totale sur `src/sim/`,
-  `src/data/` et `src/render/`, et **exactement une** occurrence admise dans un
-  fichier nommé. Ne pas l'affaiblir avant d'avoir le site d'appel sous les yeux.
-- **Le banc d'essai RESTE dans le HTML livré** quand l'écran de jeu se
-  branchera, caché derrière un geste de debug — arbitré le 27/08. C'est ce que
-  T10 de `banc.test.js` exige déjà : il asserte la présence de `banc-canvas`,
-  `banc-graine`, `banc-lancer` et `banc-pas` dans `dist/index.html`. Le sortir
-  aurait mis ce test au rouge.
+- **LE TEMPS MURAL A SON POINT D'ENTRÉE DEPUIS LE 27/08, ET IL EST UNIQUE.**
+  `charger` et `serialiser` l'attendaient en argument depuis la v6 sans que
+  personne le leur passe ; le lot ÉCRAN-CHANTIER a branché l'écran, donc
+  **retourné la garde §11** exactement dans la forme que cette ligne annonçait.
+  Elle dit maintenant : interdiction TOTALE sur `src/sim/`, `src/data/` et
+  `src/render/` ; **exactement une** occurrence dans `src/ui/session.js`, nommé
+  dans le test. Le compte est **asserté, pas borné** — « au plus une » laisserait
+  passer zéro, c'est-à-dire la disparition silencieuse du seul point d'entrée du
+  temps réel, et le jeu réafficherait les stocks d'hier soir sans qu'un test
+  tombe. Le verdict vit dans `fautesDHorloge`, séparé de la mesure pour être
+  falsifiable : on lui donne zéro, deux, et une occurrence ailleurs, et il
+  refuse les trois.
+  ⚠ **Tout `src/` porte la fonction `maintenantMs()` et ELLE SEULE.** Ce qui a
+  besoin de l'heure l'appelle ; personne n'écrit une seconde fois le nom de
+  l'horloge du langage.
+  ⚠ **LES DEUX CONTOURNEMENTS SONT INTERDITS PARTOUT, PORTEUR COMPRIS** —
+  `new Date` et `performance.timeOrigin` donnent l'heure murale sans écrire le
+  nom que la garde cherche. Le test les refuse de face, avec un appât pour
+  chacun. Même discipline que les hex à trois et à huit chiffres de la garde de
+  palette.
+  ⚠ **DEUX CHEMINS DE RETOUR, PAS UN.** Une application TUÉE repasse par
+  `charger`, qui rattrape. Une application seulement REPLIÉE ne repasse par
+  rien : les horodatages de `requestAnimationFrame` sont monotones et ne
+  courent pas pendant qu'on ne regarde pas. D'où l'instant retenu au masquage et
+  la reprise qui rattrape la différence — sans quoi la vérification appareil
+  n° 4 échouerait pour la moitié des façons de fermer le jeu.
+- **Le banc d'essai RESTE dans le HTML livré**, caché derrière un appui long de
+  1,5 s sur le numéro de version — arbitré le 27/08, branché le même jour.
+  C'est ce que T10 de `banc.test.js` exige déjà : il asserte la présence de
+  `banc-canvas`, `banc-graine`, `banc-lancer` et `banc-pas` dans
+  `dist/index.html`. Le sortir aurait mis ce test au rouge.
+  ⚠ **`initialiserBanc` n'est appelé QU'À L'OUVERTURE**, jamais au chargement :
+  il pose des écouteurs, un ResizeObserver et une projection, et mesure son
+  canvas au câblage — un élément caché mesure zéro. Le démasquage vient donc
+  avant l'appel, et l'appel n'a lieu qu'une fois.
+- **L'écran de jeu se lit en LECTURE SEULE, et les boutons d'action sont
+  présents et désactivés.** La couche d'action n'existe pas dans `sim/` : elle
+  attend un arbitrage d'Ethan sur la part de scorie d'un coût de construction.
+  Des boutons montrés vifs mentiraient ; absents, ils feraient croire à un écran
+  fini. `select:disabled, button:disabled, option:disabled` porte l'opacité qui
+  les fait lire comme inertes, et c'est la même règle qui sert au banc.
 
 ### Sur le vocabulaire
 
