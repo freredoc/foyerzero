@@ -4,8 +4,10 @@
 > modèle premium), en 128 × 128, sans générateur Python.
 >
 > Se lit avec `FICHE-STYLE.md` (le style fait foi) et `INVENTAIRE-SPRITES.md`
-> (la liste fait foi, et ses amendements A1 à A7 priment sur la fiche là où ils
-> la contredisent). Ce document-ci ne dit ni quoi dessiner ni comment dessiner :
+> (la liste et les conventions A1 à A7 font foi). ⚠ **La clause de préséance qui
+> figurait ici est caduque depuis le 27/08** : A1 à A7 sont portés dans la fiche,
+> les deux documents ne se contredisent plus. Ce document-ci ne dit ni quoi
+> dessiner ni comment dessiner :
 > il dit **comment le demander** pour que ce qui sort soit utilisable dans le jeu
 > sans retouche manuelle.
 >
@@ -746,6 +748,11 @@ noire.*
     tenir l'empreinte totale, pas à composer l'image.
 
 ---
+
+*v5 — 27/08/2026. Dettes 1 et 2 closes (§5.1, §5.2) au terme du jet d'essai S0 :
+rampe ardoise violacée, forme du Dard arrêtée. Clause de préséance sur la fiche
+retirée — A1 à A7 y sont portés. §5.1 documente la comparaison de rampes par
+substitution ton pour ton plutôt que par seconde génération.*
 
 *v4 — 26/08/2026. Ajout du §3 ter (sprite de référence) et des pièges 11 et 12,
 tirés de la première famille produite — les tourelles du joueur.

@@ -146,7 +146,9 @@ la seule méthode du §3 ter qui n'ait pas encore été essayée sur cette famil
 1. **Les 1024 sources des références manquent au dépôt.** Le §3 ter les
    exige : c'est le PNG source qu'on joint aux frères comme moule. Seuls les 128
    conditionnés sont ici. À déposer en `art/ouvrage/ref_pylone_source.png` et
-   `art/ouvrage/ref_marcheur_source.png`.
+   `art/ouvrage/ref_marcheur_source.png` — **ces deux noms sont volontairement
+   sans cible aujourd'hui**, ce sont des fichiers à créer, pas des liens morts.
+   Idem pour le Dard : `art/ouvrage/ref_dard_source.png`.
 3. ~~**Les fourchettes de matières ne transfèrent pas à l'Ouvrage.**~~
    **RETIRÉ le 27/08 — cette affirmation était fausse.** Elle reposait sur deux
    échantillons, le pylône et le marcheur, à 59 % et 73 % de châssis. Le Dard est
@@ -168,6 +170,49 @@ la seule méthode du §3 ter qui n'ait pas encore été essayée sur cette famil
 5. **`CLAUDE.md` ne cite ni `PLAN-PRODUCTION-SPRITES.md`, ni
    `tools/conditionneur.html`, ni `art/`** au-delà de `art/etalon/`. Le fichier
    de rang 1 ignore le fichier de suivi du chantier sprite.
+
+---
+
+## 9. Remise au propre de la documentation
+
+Faite dans la foulée, à la demande d'Ethan, une fois les dettes tranchées.
+
+**`INVENTAIRE-SPRITES.md` v4.** Les sept amendements A1 à A7 cessent d'être des
+amendements en attente : ils deviennent les conventions du §1, remises dans
+l'ordre — la v3 les listait A1, A2, A3, A4, A6, A7, A5. **Les étiquettes sont
+conservées telles quelles** : elles sont citées 24 fois dans les quatre
+documents, et les renommer échangerait sept références justes contre plusieurs
+dizaines de mortes — même raison qu'au §4.6 de la passation du 26/08. Les six
+marqueurs `[TRANCHÉ 26/08]` sont repliés dans le texte des sections concernées.
+Le §8 devient un tableau des cinq dettes closes avec leur date et l'endroit où
+vit la réponse, plus le recensement des cinq sprites de référence et des trois
+écarts acceptés. Le §9 ne duplique plus le plan de production, il y renvoie.
+
+**`FICHE-STYLE.md` v4 — et c'est le vrai travail.** La v3 promettait que A1 à A7
+seraient « reportés dans la fiche avant la première génération ». La première
+génération a eu lieu le 26/08 et ils ne l'avaient pas été. Quatre sections
+réécrites :
+
+| Section | Disait | Dit |
+|---|---|---|
+| §1.1 | « vue top-down **stricte**, aucune inclinaison » | 75°, amorce de flanc, et pourquoi ce n'est pas de l'isométrie |
+| §1.2 | « jamais de rotation ni de miroir » | aucune seconde orientation **dessinée** ; rotation 90° des véhicules et miroir de l'infanterie au rendu |
+| §7 | échelle 20 / 26 / 30, « case débordante » | 18 / 24 / 28, plus le compteur de pièces |
+| §11 | deux interdits devenus faux | six interdits justes, dont le non-dépassement et le plafond de flanc |
+
+Et le bloc de queue « ⚠ Forme volante de l'Ouvrage — **MANQUANTE** » est remplacé
+par la description du Dard. La liste « Reste à inscrire (dette DA connue) » qui
+le suivait est **supprimée parce qu'elle est vide** — ses quatre entrées sont les
+dettes 1, 4 et 5, closes.
+
+**`BRIEF-SPRITES-IA.md` v5.** La clause de préséance de son en-tête — « les
+amendements A1 à A7 priment sur la fiche là où ils la contredisent » — est
+retirée. Il n'y a plus de contradiction à arbitrer.
+
+⚠ **Ce n'est pas une décision nouvelle, c'est l'exécution d'une décision du
+26/08.** Mais elle touche les deux premiers principes non négociables de la
+fiche : si l'un des quatre remplacements ne dit pas ce qu'Ethan avait tranché,
+c'est ici qu'il faut le dire, et la correction est locale.
 
 ---
 
