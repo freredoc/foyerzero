@@ -176,6 +176,65 @@ test('documentation — CLAUDE.md §2 nomme exactement les fichiers de test pré
   );
 });
 
+test('documentation — CLAUDE.md §2 nomme exactement les fichiers de src/', () => {
+  // ⚠ CE TEST EXISTE PARCE QUE LE COMPTE SEUL A LAISSÉ PASSER UN ÉCRASEMENT.
+  // Le 27/08, une archive de livraison a été déposée dans le mauvais dossier :
+  //   — `src/data/base.js` s'est retrouvé AUSSI dans `src/sim/`, où il n'a rien
+  //     à faire ;
+  //   — `src/data/combat.js` a REMPLACÉ `src/sim/combat.js`, le moteur de
+  //     combat, 1 450 lignes.
+  //
+  // Deux fichiers sans le moindre rapport portent le même nom court dans deux
+  // dossiers : `combat.js` est à la fois une table de `src/data/` et le moteur
+  // de `src/sim/`. Le sélecteur de fichiers d'un téléphone n'affiche que le nom
+  // court, et rien dans le dépôt ne disait que c'était dangereux.
+  //
+  // Le compte de §2 n'a rien vu de l'écrasement : `src/sim/` avait toujours ses
+  // onze fichiers, un module de moins et un intrus de plus. Seul le BUILD est
+  // tombé, six erreurs esbuild plus loin, et il ne tourne pas sur le téléphone.
+  // Le compte ne suffit donc pas — il faut les NOMS, comme pour `test/`.
+  //
+  // ⚠ CONSÉQUENCE SUR LA PROSE DE §2. Les lignes de description d'un bloc de
+  // `src/` ne doivent nommer AUCUN fichier en `.js` : elles seraient lues comme
+  // des déclarations. C'est une contrainte, et elle est voulue — un nom de
+  // fichier dans une description est de toute façon un renvoi qui pourrit.
+  const dossiers = ['data', 'sim', 'render', 'ui'];
+
+  for (const dossier of dossiers) {
+    const enTete = new RegExp(`^src/${dossier}/ .*— (\\d+) fichiers`, 'm');
+    const lignes = CLAUDE_MD.split('\n');
+    const debut = lignes.findIndex((l) => enTete.test(l));
+    assert.ok(debut >= 0, `CLAUDE.md §2 : ligne d'en-tête de src/${dossier}/ introuvable`);
+
+    // Les lignes de liste : deux espaces exactement, puis un nom en minuscules.
+    // Un bloc s'arrête à la première ligne qui n'en est pas une.
+    const declares = [];
+    for (let i = debut + 1; i < lignes.length; i++) {
+      if (!/^ {2}[a-z]/.test(lignes[i])) break;
+      for (const mot of lignes[i].trim().split(/\s+/)) {
+        if (/^[a-z0-9-]+\.js$/.test(mot)) declares.push(mot);
+      }
+    }
+
+    const reels = fichiersJs('src', dossier);
+
+    // Falsifiable des deux côtés : deux listes vides seraient égales.
+    assert.ok(declares.length >= 3, `${declares.length} noms lus pour src/${dossier}/`);
+    assert.ok(reels.length >= 3, `${reels.length} fichiers trouvés dans src/${dossier}/`);
+    // Et aucun doublon déclaré, sinon un nom pourrait en masquer un absent.
+    assert.equal(
+      new Set(declares).size, declares.length,
+      `CLAUDE.md §2 nomme deux fois le même fichier dans src/${dossier}/`,
+    );
+
+    assert.deepEqual(
+      [...declares].sort(), [...reels].sort(),
+      `CLAUDE.md §2 et src/${dossier}/ ne nomment pas les mêmes fichiers — `
+        + 'un module déposé dans le mauvais dossier en écrase un autre en silence',
+    );
+  }
+});
+
 test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   // ⚠ CE TEST EXISTE PARCE QUE C'EST ARRIVÉ DEUX FOIS EN DEUX LIVRAISONS.
   // Le dépôt se met à jour depuis un téléphone, fichier par fichier, et le
