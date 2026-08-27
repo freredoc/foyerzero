@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Foyer Zéro — banc d'essai</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Foyer Zéro</title>
 <style>
   /* Palette : FICHE-STYLE.md §3, aucune teinte hors de la fiche.
      Les accents fonctionnels sont réservés aux entités — l'interface
@@ -14,7 +14,7 @@
      un `display` : un id l'emporte sur la règle `[hidden]` de la feuille
      par défaut, et l'attribut n'aurait plus aucun effet. */
   [hidden] { display: none !important; }
-  html, body { height: 100%; }
+  html, body { height: 100%; overflow: hidden; }
   body {
     margin: 0;
     display: flex;
@@ -41,8 +41,8 @@
     color: #8C9A72;
   }
   header .version { color: #68727E; font-size: 0.8rem; margin-right: 8px; }
-  label { display: inline-flex; align-items: center; gap: 4px; color: #68727E; }
-  select, input, button {
+  #banc label { display: inline-flex; align-items: center; gap: 4px; color: #68727E; }
+  #banc select, #banc input, #banc button {
     background: #343A2C;
     color: #8C9A72;
     border: 1px solid #4E5742;
@@ -50,11 +50,11 @@
     padding: 4px 8px;
     font: inherit;
   }
-  input[type="number"] { width: 5em; }
-  button { cursor: pointer; }
-  button:active { background: #4E5742; }
-  button.actif { background: #6A7658; color: #161914; }
-  main {
+  #banc input[type="number"] { width: 5em; }
+  button { cursor: pointer; font: inherit; }
+  #banc button:active { background: #4E5742; }
+  #banc button.actif { background: #6A7658; color: #161914; }
+  #banc, #banc main {
     flex: 1;
     min-height: 0;
     display: flex;
@@ -145,10 +145,277 @@
   /* Le sens Défense est grisé sous le niveau 10 : encore faut-il que ça se
      VOIE. Règle générale, aucun contrôle désactivé ne doit passer pour vif. */
   select:disabled, button:disabled, option:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* =======================================================================
+     ÉCRAN CHANTIER — lot ÉCRAN-CHANTIER
+     =======================================================================
+     Mise en page et palette reprises de `foyer-zero-ui.html`, la maquette
+     arbitrée. Ce qui en DIFFÈRE, et pourquoi :
+       — la maquette travaille à 360 px de large et fige la cellule à 39 px ;
+         ici la cellule est CARRÉE par `aspect-ratio` et suit la largeur de
+         l'appareil, sinon la grille déborderait ou laisserait une marge ;
+       — le rail des bandes est la première COLONNE de la grille, et non un
+         bloc posé à côté : posé à côté, il se règle sur la hauteur visible
+         et se décale dès le premier défilement ;
+       — le nombre de colonnes et de rangées est écrit par le JS depuis
+         `GRILLE`, jamais dans cette feuille.
+
+     ⚠ Les trois bandes n'ont PAS de fond propre : la fiche n'a pas trois gris
+     voisins, le rail dit déjà où l'on est, et une nuance de noir ne se
+     distingue pas sur un téléphone au soleil. Acquis de la maquette. */
+
+  :root { --rail: 9px; }
+
+  #ecran-chantier {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: #1E2124;
+    font-family: "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
+  }
+
+  /* --- 1. onglets — 40 ---------------------------------------------------- */
+  #chantier-onglets { flex: 0 0 40px; display: flex; background: #161914; border-bottom: 1px solid #3E454C; }
+  #chantier-onglets button {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #68727E; background: transparent;
+    border: 0; border-right: 1px solid #1E2124; padding: 0;
+  }
+  #chantier-onglets button:last-child { border-right: 0; }
+  #chantier-onglets button.actif { color: #F5F3E8; background: #343A2C; box-shadow: inset 0 -2px 0 #8C9A72; }
+  /* Les trois onglets à venir : rien derrière eux, et ça doit se voir. */
+  #chantier-onglets button.futur { color: #3E454C; }
+
+  /* --- 2. ressources — 44 -------------------------------------------------- */
+  #chantier-ressources {
+    flex: 0 0 44px; display: flex; align-items: center; gap: 4px;
+    padding: 0 6px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+  .ressource { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; }
+  .ressource .ligne { display: flex; align-items: baseline; gap: 3px; }
+  .ressource b { font-size: 14px; font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  .ressource .capacite { font-size: 8px; color: #68727E; font-variant-numeric: tabular-nums; }
+  .ressource .nom { font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: #68727E; }
+  .ressource .debit { font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums; }
+  .ressource.scorie b { color: #F5B636; }
+  .ressource.electricite b { color: #8C9A72; }
+  /* Un stock saturé est GELÉ, jamais amputé (arbitré le 26/08) : il faut donc
+     que le joueur voie qu'il plafonne, sinon il croit à un compteur cassé.
+     Après les règles par ressource, pour l'emporter sur elles. */
+  .ressource b.sature { color: #E43E32; }
+
+  /* --- 3. emplacements — 26 ------------------------------------------------ */
+  #chantier-emplacements-bandeau {
+    flex: 0 0 26px; display: flex; align-items: center; gap: 6px;
+    padding: 0 8px; background: #161914; border-bottom: 1px solid #3E454C;
+  }
+  #chantier-emplacements-bandeau .lbl { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #68727E; }
+  #chantier-emplacements-bandeau .jauge { flex: 1; height: 6px; background: #1E2124; position: relative; overflow: hidden; }
+  #chantier-jauge { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #8C9A72; }
+  #chantier-emplacements { font-size: 11px; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  /* Le numéro de version porte le geste de debug : appui long de 1,5 s. La
+     sélection de texte et le menu contextuel d'Android sont désarmés dessus,
+     ils recouvriraient l'écran à l'instant même où le banc s'ouvre. */
+  #chantier-version {
+    font-size: 9px; color: #3E454C; font-variant-numeric: tabular-nums;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  #chantier-version.appui { color: #8C9A72; }
+
+  /* --- 4. champ — tout le reste -------------------------------------------- */
+  #chantier-champ { flex: 1; min-height: 0; position: relative; background: #161914; }
+  #chantier-defile { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+  #chantier-defile::-webkit-scrollbar { display: none; }
+  /* Les colonnes sont posées par le JS depuis GRILLE : `var(--rail)` puis
+     autant de fractions qu'il y a de colonnes. */
+  #chantier-grille { display: grid; align-content: start; }
+  #chantier-grille .segment.deploiement { background: #928E80; }
+  #chantier-grille .segment.defense { background: #8A1E17; }
+  #chantier-grille .segment.batiments { background: #4E5742; }
+  .case {
+    aspect-ratio: 1; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    border-right: 1px solid #343A2C; border-bottom: 1px solid #343A2C;
+  }
+  .case .numero { position: absolute; left: 1px; top: 0; font-size: 7px; color: #68727E; line-height: 1; }
+  /* Un champ de ressource n'est pas une teinte pâle — la fiche n'en a pas — mais
+     un fond kaki plein avec un liseré qui dit la ressource : os pour le quartz,
+     ambre pour la scorie. Acquis de la maquette, et il se dessine SOUS les
+     bâtiments : le champ explique ce que le collecteur produit. */
+  .case.champ { background: #343A2C; }
+  .case.champ::before { content: ''; position: absolute; inset: 2px; border: 1px dashed; }
+  .case.quartz::before { border-color: #F5F3E8; }
+  .case.scorie::before { border-color: #F5B636; }
+  .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; z-index: 1; }
+  .jeton {
+    width: 84%; height: 84%; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: #4E5742; border: 1px solid #161914;
+    box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C;
+    font-size: 9px; font-weight: 600; color: #F5F3E8; letter-spacing: 0.02em;
+  }
+  .jeton.prod { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #928E80; }
+  .jeton.mil { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #8A1E17; }
+  .jeton.pivot { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #A67018; }
+  .jeton .niveau { position: absolute; right: 0; bottom: -1px; font-size: 8px; font-weight: 400; line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914; }
+  /* Un emplacement ouvert et encore libre. Un indice, pas une interdiction. */
+  .vide { width: 30%; height: 30%; border: 1px dashed #6A7658; }
+
+  /* --- 5. contexte — 46 ---------------------------------------------------- */
+  #chantier-contexte {
+    flex: 0 0 46px; display: flex; align-items: center; gap: 5px;
+    padding: 0 6px; background: #343A2C; border-top: 1px solid #161914;
+  }
+  #chantier-contexte .qui { flex: 0 0 104px; min-width: 0; line-height: 1.2; }
+  #chantier-contexte .qui b { display: block; font-size: 11px; color: #F5F3E8; }
+  #chantier-contexte .qui span { display: block; font-size: 8px; color: #68727E; }
+  #chantier-contexte .qui b, #chantier-contexte .qui span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chantier-contexte button {
+    flex: 1; height: 34px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.15;
+    background: #3E454C; color: #F5F3E8; border: 1px solid #161914; padding: 0;
+  }
+  #chantier-contexte button em { font-style: normal; font-size: 8px; color: #8C9A72; letter-spacing: 0; text-transform: none; }
+  #chantier-contexte button.up { background: #6A7658; color: #161914; font-weight: 600; }
+  #chantier-contexte button.up em { color: #161914; }
+  #chantier-contexte button.sell { background: #1E2124; color: #68727E; }
+
+  /* --- 6. bandes — 46 ------------------------------------------------------ */
+  /* Elles FONT DÉFILER, elles ne changent pas d'écran : un assaut traverse la
+     défense pour atteindre les bâtiments, et trois écrans le feraient oublier. */
+  #chantier-bandes { flex: 0 0 46px; display: flex; background: #161914; border-top: 1px solid #3E454C; }
+  #chantier-bandes .bande {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    background: transparent; border: 0; border-right: 1px solid #1E2124; padding: 0; color: #68727E;
+  }
+  #chantier-bandes .bande:last-child { border-right: 0; }
+  #chantier-bandes .bande em { width: 18px; height: 3px; font-style: normal; }
+  #chantier-bandes .bande.batiments em { background: #4E5742; }
+  #chantier-bandes .bande.defense em { background: #8A1E17; }
+  #chantier-bandes .bande.deploiement em { background: #928E80; }
+  #chantier-bandes .bande span { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #68727E; }
+  #chantier-bandes .bande i { font-style: normal; font-size: 11px; color: #68727E; font-variant-numeric: tabular-nums; }
+  #chantier-bandes .bande.active { background: #343A2C; }
+  #chantier-bandes .bande.active span, #chantier-bandes .bande.active i { color: #F5F3E8; }
+  /* Défense et Assaut n'ont pas de niveau — l'état ne porte ni garnison ni
+     armée. Le tiret reste éteint même quand la bande est active : il ne faut
+     pas qu'un « — » en pleine lumière se lise comme une valeur. */
+  #chantier-bandes .bande.sans-niveau i { color: #3E454C; }
+
+  /* --- 7. palette — 86 ----------------------------------------------------- */
+  /* Deux rangs, autant de colonnes qu'il y a de bâtiments encore posables.
+     La maquette en montrait huit de front ; il y en a dix sur une base neuve,
+     et le bandeau défile plutôt que d'en cacher deux. */
+  #chantier-palette {
+    flex: 0 0 86px; display: grid;
+    grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; grid-auto-columns: 82px;
+    gap: 4px; padding: 5px 6px; background: #1E2124; border-top: 1px solid #161914;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  }
+  #chantier-palette::-webkit-scrollbar { display: none; }
+  .posable {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
+  }
+  .posable i { width: 18px; height: 18px; font-style: normal; background: #4E5742; box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914; }
+  .posable.prod i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #928E80; }
+  .posable.mil i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #8A1E17; }
+  .posable.pivot i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #A67018; }
+  .posable b { font-size: 7px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; text-align: center; line-height: 1.05; color: #68727E; }
+  .posable .cout { position: absolute; top: 1px; right: 3px; font-size: 8px; color: #8C9A72; }
+
+  /* --- ce qui se dit quand quelque chose ne va pas -------------------------- */
+  #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }
+  /* Une sauvegarde qu'on n'a pas su relire ne laisse pas un écran blanc, et
+     elle ne se supprime pas non plus : on montre, on propose, le joueur
+     tranche. `[hidden]` porte un `!important` en tête de feuille — sans lui,
+     ce sélecteur d'id l'emporterait et le panneau resterait affiché. */
+  #chantier-alerte {
+    position: absolute; inset: 0; z-index: 2;
+    display: flex; flex-direction: column; justify-content: center; gap: 10px;
+    padding: 18px; background: #161914;
+  }
+  #chantier-alerte h2 { margin: 0; font-size: 15px; color: #E43E32; }
+  #chantier-alerte p { margin: 0; font-size: 12px; line-height: 1.35; color: #8C9A72; }
+  #chantier-alerte-message { font-family: ui-monospace, monospace; font-size: 11px; color: #F5B636; word-break: break-word; }
+  #chantier-alerte button {
+    padding: 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #4E5742;
+  }
+  #chantier-alerte button.neuve { background: #6A7658; color: #161914; }
 </style>
 </head>
 <body>
+<!-- ==========================================================================
+     ÉCRAN CHANTIER — ce que le joueur voit en ouvrant le jeu.
+     Sept bandeaux, hauteurs fixes sauf le champ. Les listes qui dépendent des
+     tables — les trois ressources, les cases de la grille, les bandes, les
+     bâtiments posables — sont écrites par `ui/chantier.js` : rien de ce qui
+     vient de `src/data/` n'est gravé ici.
+     ========================================================================== -->
+<div id="ecran-chantier">
+
+  <div id="chantier-onglets">
+    <button type="button" class="actif">Chantier</button>
+    <button type="button" class="futur" disabled>Recherche</button>
+    <button type="button" class="futur" disabled>Monde</button>
+    <button type="button" class="futur" disabled>Options</button>
+  </div>
+
+  <div id="chantier-ressources"></div>
+
+  <div id="chantier-emplacements-bandeau">
+    <span class="lbl">Emplacements</span>
+    <div class="jauge"><i id="chantier-jauge"></i></div>
+    <span id="chantier-emplacements">—</span>
+    <span id="chantier-version">v%VERSION% b%BUILD%</span>
+  </div>
+
+  <div id="chantier-champ">
+    <div id="chantier-defile"><div id="chantier-grille"></div></div>
+  </div>
+
+  <p id="chantier-avis" hidden></p>
+
+  <div id="chantier-contexte">
+    <div class="qui">
+      <b id="chantier-selection-nom">—</b>
+      <span id="chantier-selection-detail">aucun bâtiment sélectionné</span>
+    </div>
+    <button type="button" id="chantier-reparer" disabled>Réparer</button>
+    <button type="button" class="up" id="chantier-ameliorer" disabled>Améliorer<em id="chantier-ameliorer-cible"></em></button>
+    <button type="button" class="sell" id="chantier-demonter" disabled>Démonter</button>
+  </div>
+
+  <div id="chantier-bandes"></div>
+
+  <div id="chantier-palette"></div>
+
+  <div id="chantier-alerte" hidden>
+    <h2>Sauvegarde illisible</h2>
+    <p>La partie enregistrée sur cet appareil n'a pas pu être relue&nbsp;:</p>
+    <p id="chantier-alerte-message"></p>
+    <p>Elle n'a pas été supprimée. Si vous démarrez une partie neuve, elle sera
+      mise de côté et restera récupérable.</p>
+    <button type="button" id="chantier-alerte-reessayer">Réessayer le chargement</button>
+    <button type="button" class="neuve" id="chantier-alerte-neuve">Démarrer une partie neuve</button>
+  </div>
+
+</div>
+
+<!-- ==========================================================================
+     BANC D'ESSAI — il RESTE dans le HTML livré (arbitré le 27/08), caché
+     derrière un appui long de 1,5 s sur le numéro de version. C'est aussi ce
+     que T10 exige déjà : il asserte la présence de ses contrôles dans
+     `dist/index.html`.
+     ========================================================================== -->
+<div id="banc" hidden>
 <header>
+  <button id="banc-fermer" title="revenir à l'écran de jeu">← Jeu</button>
   <h1>Foyer Zéro</h1>
   <span class="version">banc d'essai · v%VERSION% b%BUILD%</span>
   <label>type
@@ -206,11 +473,14 @@
   <p id="banc-statut">initialisation…</p>
   <div id="banc-fin" hidden></div>
 </main>
+</div>
 <script type="module">
-// Point d'entrée du bundle : le banc d'essai du lot 3A. Toute la logique vit
-// dans src/ui/banc.js — la page ne fait que l'appeler.
-import { initialiserBanc } from './ui/banc.js';
-initialiserBanc(document);
+// Point d'entrée du bundle : la session de jeu. Elle crée ou charge l'état,
+// le fait avancer, l'écrit sur le disque du téléphone, et donne l'écran
+// Chantier à peindre. Le banc d'essai du lot 3A n'est plus câblé au
+// chargement — `ui/session.js` l'ouvre à la demande, derrière un appui long.
+import { initialiserSession } from './ui/session.js';
+initialiserSession(document);
 </script>
 </body>
 </html>
