@@ -6,14 +6,14 @@
 // avant la première sauvegarde réelle, pas après coup.
 
 import { creerRng, restaurerRng } from './rng.js';
-import { creerHorloge, tick as tickHorloge, avancerTicks } from './clock.js';
+import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './clock.js';
 import { champsDeLaBase } from './champs.js';
 import { positionDepartJoueur } from './carte.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import { creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase } from './economie-base.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /**
  * @typedef {object} Etat
@@ -170,17 +170,44 @@ export function rattraperJeu(etat, nbTicks) {
 }
 
 /**
- * Sérialise l'état en JSON, SANS le terrain.
+ * Sérialise l'état en JSON, SANS le terrain et AVEC l'instant d'écriture.
  *
  * Le terrain se déduit de `fondation` (voir plus haut) : l'écrire dans la
  * sauvegarde créerait une seconde source de vérité, donc une occasion de
  * divergence. `charger` le reconstruit.
+ *
+ * ⚠ `instantSauvegardeMs` FAIT LE CHEMIN INVERSE DU TERRAIN. Le terrain vit
+ * dans l'état et sort de la sauvegarde ; l'instant vit dans la sauvegarde et
+ * n'entre JAMAIS dans l'état. Une fois la partie chargée il ne veut plus rien
+ * dire — il sera recalculé à la prochaine écriture — et le garder en mémoire
+ * inviterait quelqu'un à s'en servir comme d'une horloge.
+ *
+ * ⚠ L'INSTANT EST UN ARGUMENT, PAS UNE LECTURE. Aucun fichier de `src/` n'a le
+ * droit d'appeler l'horloge système (`banc.test.js` §11 le balaie). Le temps
+ * mural entre par la couche qui touche au DOM, et par elle seule — c'est la
+ * même discipline que `accumuler()` de `sim/clock.js`, qui reçoit une durée
+ * écoulée au lieu d'aller la chercher.
+ *
  * @param {Etat} etat
+ * @param {number} instantMs Instant d'écriture, en ms depuis l'époque.
  * @returns {string}
  */
-export function serialiser(etat) {
+export function serialiser(etat, instantMs) {
+  exigerInstant(instantMs, 'serialiser');
   const { champs, ...aSauver } = etat;
-  return JSON.stringify(aSauver);
+  return JSON.stringify({ ...aSauver, instantSauvegardeMs: instantMs });
+}
+
+/**
+ * Un instant mural doit être un entier fini positif, sinon toute la durée
+ * d'absence qu'on en tirerait serait fantaisiste.
+ * @param {number} instantMs
+ * @param {string} ou nom de la fonction appelante, pour le message
+ */
+function exigerInstant(instantMs, ou) {
+  if (!Number.isInteger(instantMs) || instantMs < 0) {
+    throw new RangeError(`${ou} : instant « ${instantMs} » — entier de ms ≥ 0 attendu`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +322,24 @@ const MIGRATIONS = {
     s.version = 5;
     s.fondation = { rangee: s.position.rangee, colonne: s.position.colonne };
   },
+
+  /**
+   * v5 → v6 : la sauvegarde porte l'instant mural de son écriture, ce qui rend
+   * le rattrapage hors ligne possible.
+   *
+   * ⚠ UNE SAUVEGARDE v5 NE DONNE AUCUNE ABSENCE, et c'est le seul choix
+   * honnête. On ne sait pas quand elle a été écrite. Lui inventer une durée
+   * fabriquerait des ressources ; lui donner l'instant du chargement en
+   * fabriquerait zéro, ce qui est faux aussi mais ne donne rien à personne.
+   * `null` dit « on ne sait pas » — `charger` l'ancre à maintenant et le joueur
+   * repart de là. C'est légitime tant qu'aucune sauvegarde ne circule (27/08) ;
+   * le jour où il y en aura, il faudra le lui dire AVANT.
+   * @param {object} s
+   */
+  5: (s) => {
+    s.version = 6;
+    s.instantSauvegardeMs = null;
+  },
 };
 
 /**
@@ -324,12 +369,30 @@ export function migrer(sauvegarde) {
 }
 
 /**
- * Charge une sauvegarde JSON : parse, migre, redéduit le terrain, vérifie.
+ * Charge une sauvegarde JSON : parse, migre, redéduit le terrain, vérifie, PUIS
+ * rattrape le temps passé hors ligne.
+ *
+ * ⚠ LE RATTRAPAGE SE FAIT ICI, PAS APRÈS. Un état chargé mais pas rattrapé ment
+ * sur l'heure qu'il est : il afficherait les stocks d'hier soir. Le seul moment
+ * où l'on connaît à la fois la sauvegarde et l'instant présent, c'est celui-ci.
+ *
+ * ⚠ UNE HORLOGE QUI RECULE NE FAIT RIEN, ELLE NE LÈVE PAS. Fuseau, NTP, joueur
+ * qui change la date : la durée écoulée peut être négative. Elle est ramenée à
+ * zéro et la partie se réancre sur l'instant présent. Refuser la sauvegarde
+ * punirait le joueur pour l'heure de son téléphone ; avancer d'une durée
+ * négative n'a pas de sens.
+ *
  * @param {string} json
+ * @param {number} instantMs Instant présent, en ms depuis l'époque.
  * @returns {Etat}
  */
-export function charger(json) {
-  const etat = migrer(JSON.parse(json));
+export function charger(json, instantMs) {
+  exigerInstant(instantMs, 'charger');
+  const brut = JSON.parse(json);
+  const etat = migrer(brut);
+  const ecrit = etat.instantSauvegardeMs;
+  // L'instant ne descend pas dans l'état : il a fait son travail ici.
+  delete etat.instantSauvegardeMs;
   etat.rng = restaurerRng(etat.rng);
   // ⚠ EXIGER `fondation` AVANT DE S'EN SERVIR. Sans ce garde-fou, une
   // sauvegarde amputée du champ lèverait une TypeError sur `undefined.rangee`
@@ -345,5 +408,16 @@ export function charger(json) {
   // rentre dans l'état.
   etat.champs = champsDeLaBase(etat.fondation.rangee, etat.fondation.colonne);
   verifierEtat(etat);
+
+  // Rattrapage hors ligne. `ecrit === null` vient d'une sauvegarde d'avant la
+  // v6 : durée inconnue, donc aucune.
+  if (ecrit !== null && ecrit !== undefined) {
+    exigerInstant(ecrit, 'charger (instant de la sauvegarde)');
+    const ecouleMs = instantMs - ecrit;
+    const dus = accumuler(etat.horloge, ecouleMs > 0 ? ecouleMs : 0);
+    if (dus > 0) {
+      rattraperJeu(etat, dus);
+    }
+  }
   return etat;
 }
