@@ -105,9 +105,24 @@ ok(deb[iRaf].quartz === 176000 && deb[iRaf].scorie === 352000
 // 7. LA PALETTE, avec la règle EXACTE de banc.test.js — celle que l'écran
 // devra passer. La fiche est transcrite ici indépendamment, pour que le
 // contrôle ne valide pas la maquette avec elle-même.
-const FICHE = new Set(['#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72',
+// ⚠ VINGT-HUIT TEINTES DEPUIS LA v4 DE LA FICHE (27/08). La liste est écrite,
+// puis confrontée au document juste après : une transcription qui ne se
+// confronte pas à sa source est une copie qui vieillit — celle-ci avait déjà
+// vieilli d'une journée.
+const PALETTE = ['#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72',
+  '#B87E64', '#C38C73', '#CF9A83', '#D7A995', '#E0B9A8',
+  '#0D0B12', '#231D2E', '#382E47', '#4E4160', '#6B5B80',
+  '#9FB3C5', '#C1CEDA', '#1F5160', '#5B4133',
   '#1E2124', '#3E454C', '#68727E',
-  '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636']);
+  '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636'];
+const FICHE = new Set(PALETTE);
+const doc = readFileSync(join(RACINE, 'FICHE-STYLE.md'), 'utf8');
+const dansLaFiche = [...new Set(
+  [...doc.matchAll(/#[0-9A-Fa-f]{6}(?![0-9A-Za-z])/g)].map((m) => m[0].toUpperCase()),
+)];
+ok(dansLaFiche.length >= 20, `${dansLaFiche.length} teintes lues dans FICHE-STYLE.md`);
+ok(JSON.stringify([...PALETTE].sort()) === JSON.stringify([...dansLaFiche].sort()),
+  'la palette transcrite ici et celle de FICHE-STYLE.md ont divergé');
 const teintes = [...html.matchAll(/#[0-9A-Fa-f]{6}(?![0-9A-Za-z])/g)].map((m) => m[0]);
 ok(teintes.length > 12, `${teintes.length} teintes balayées — le montage doit en voir`);
 const horsFiche = [...new Set(teintes)].filter((h) => !FICHE.has(h.toUpperCase()));
