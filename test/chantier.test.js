@@ -20,7 +20,7 @@ import {
   familleDuBatiment, bandeDeLaRangee, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
   casesPosables, messageDeRefus,
 } from '../src/ui/chantier.js';
-import {
+import { creerChronometre,
   CLE_SAUVEGARDE, CLE_SECOURS, SEUIL_RATTRAPAGE_TICKS, PERIODE_SAUVEGARDE_MS,
   DUREE_APPUI_DEBUG_MS, avancer,
 } from '../src/ui/session.js';
@@ -761,4 +761,55 @@ test('pose — jamais de `try` autour de `poser`, dans tout src/ui/', () => {
   assert.ok(/apresPose\s*:/.test(session), 'la session ne fournit pas de rappel de sauvegarde');
   assert.ok(/apresPose\s*:\s*\(\)\s*=>\s*sauvegarder\(\)/.test(session),
     'le rappel de la session n\'écrit pas la sauvegarde');
+});
+
+// ---------------------------------------------------------------------------
+// Le chronomètre — le temps vient de l'horloge, jamais de l'image
+// ---------------------------------------------------------------------------
+
+test('session — le chronomètre mesure le temps RÉEL, pas le temps dessiné', () => {
+  // ⚠ CE TEST GARDE LE DÉFAUT LE PLUS COÛTEUX DE L'ÉCRAN. La boucle mesurait
+  // l'écoulement sur les horodatages de `requestAnimationFrame`, qui sont
+  // monotones et ne courent PAS pendant qu'une page est gelée. Deux minutes de
+  // gel non signalé produisaient 0,006 unité au lieu de 8 — mesuré le 27/08 sur
+  // le HTML livré, et c'est exactement ce qu'Ethan voyait sur son téléphone.
+  let heure = 1_000_000;
+  const chrono = creerChronometre(() => heure);
+
+  // La première lecture ne rend RIEN : il n'y a pas encore de précédent, et
+  // rendre l'instant absolu ferait avancer le jeu de cinquante ans au premier
+  // tour.
+  assert.equal(chrono.ecoule(), 0, 'la première lecture doit être nulle');
+
+  heure += 250;
+  assert.equal(chrono.ecoule(), 250);
+  assert.equal(chrono.ecoule(), 0, 'deux lectures d\'affilée : le temps n\'a pas bougé');
+
+  // ⚠ LE GEL. Rien n'est lu pendant deux minutes — aucune image, aucun
+  // évènement — puis on revient. L'écart doit être ENTIER, sinon le temps est
+  // perdu et le joueur avec.
+  heure += 2 * 60 * 1000;
+  assert.equal(chrono.ecoule(), 120_000, 'le temps gelé doit être rendu en une fois');
+
+  // Une horloge qui recule ne rend rien, elle ne rend pas un négatif — même
+  // règle que `charger` et `avancer`.
+  heure -= 5000;
+  assert.equal(chrono.ecoule(), 0, 'une horloge qui recule ne doit rien produire');
+  heure += 400;
+  assert.equal(chrono.ecoule(), 400, 'et le chronomètre repart du bon pied');
+});
+
+test('session — la boucle ne lit PAS l\'horodatage d\'image', () => {
+  // Le garde-fou de source : `image()` recevait un horodatage et s'en servait
+  // pour mesurer le temps. Qu'il cesse de le recevoir est la moitié visible du
+  // correctif ; qu'aucun `requestAnimationFrame` ne serve de chronomètre est
+  // l'autre.
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8');
+  assert.ok(source.includes('creerChronometre'), 'le chronomètre n\'est plus utilisé');
+  assert.ok(
+    /function image\(\)/.test(source),
+    '`image` reprend un paramètre : l\'horodatage d\'image est revenu mesurer le temps',
+  );
+  // Falsifiable : le motif doit attraper la forme fautive.
+  assert.ok(!/function image\(\)/.test('function image(horodatageMs) {'), 'le motif n\'attrape rien');
 });
