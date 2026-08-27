@@ -10,7 +10,9 @@ import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './cl
 import { champsDeLaBase } from './champs.js';
 import { positionDepartJoueur } from './carte.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
-import { creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase } from './economie-base.js';
+import {
+  creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
+} from './economie-base.js';
 
 /** Version courante du format de sauvegarde. */
 export const SAVE_VERSION = 6;
@@ -167,6 +169,81 @@ export function tickJeu(etat) {
 export function rattraperJeu(etat, nbTicks) {
   avancerTicks(etat.horloge, nbTicks);
   rattrapageEconomieBase(etat.economie, etat.disposition, etat.champs, nbTicks);
+}
+
+// ---------------------------------------------------------------------------
+// Poser un bâtiment — la seule action du joueur qui n'attende aucun arbitrage
+// ---------------------------------------------------------------------------
+//
+// ⚠ POSER NE COÛTE RIEN, ET CE N'EST PAS UNE FACILITÉ. `ECONOMIE_NIVEAU.premierNiveauPayant`
+// vaut 2 : le niveau 1 est gratuit pour les onze bâtiments. Le premier coût est
+// celui du niveau 2, c'est-à-dire de la première AMÉLIORATION — et c'est elle,
+// pas la pose, qui bute sur l'arbitrage manquant (comment un coût se répartit
+// entre quartz et scorie). Améliorer et démonter ne sont donc pas ici ; poser
+// l'est, parce que rien ne l'en empêchait.
+//
+// ⚠ AUCUNE RÈGLE N'EST RÉÉCRITE ICI. La légalité d'une pose, c'est exactement la
+// légalité de la disposition qui en résulterait : `problemesDeDisposition` sait
+// déjà tout dire — case occupée, hors base, collecteur hors champ, champ gâché
+// par autre chose, exemplaire en trop d'un bâtiment `unique`, emplacements
+// dépassés. Fabriquer une seconde liste de règles ici, c'est se préparer à les
+// faire diverger. On construit la disposition CANDIDATE et on la soumet.
+//
+// ⚠ DEUX FONCTIONS, ET LA DIFFÉRENCE EST LA MÊME QU'AILLEURS. `problemesDeLaPose`
+// rend une LISTE : une pose refusée est un fait de JEU, le joueur a visé une
+// case prise, on le lui montre. `poser` LÈVE : appelée sans que l'appelant ait
+// regardé, c'est un fait de PROGRAMME.
+
+/**
+ * Ce qui empêcherait de poser ce bâtiment là, au niveau 1.
+ *
+ * @param {Etat} etat
+ * @param {string} id clé de BASE_BATIMENTS
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {Array<{code: string, message: string}>} vide si la pose est légale
+ */
+export function problemesDeLaPose(etat, id, rangee, colonne) {
+  exigerChamp(etat, 'disposition');
+  exigerChamp(etat, 'champs');
+  const candidate = [...etat.disposition, { id, rangee, colonne, niveau: 1 }];
+  // Les problèmes de la disposition ACTUELLE ne sont pas imputables à la pose :
+  // une base déjà bancale — un raid l'a amputée, une sauvegarde ancienne — ne
+  // doit pas rendre toute pose impossible en faisant remonter ses propres
+  // défauts. On ne garde que ce qui apparaît.
+  const avant = new Set(
+    problemesDeDisposition(etat.disposition, etat.champs).map((p) => `${p.code}|${p.message}`),
+  );
+  return problemesDeDisposition(candidate, etat.champs)
+    .filter((p) => !avant.has(`${p.code}|${p.message}`));
+}
+
+/**
+ * Pose un bâtiment de niveau 1 sur la case donnée.
+ *
+ * ⚠ LE RÉSIDU SUIT LE BÂTIMENT. `economie-base` tient un résidu par bâtiment et
+ * par ressource, et il asserte que les deux listes ont la même longueur. Poser
+ * sans allonger les résidus ferait lever le tick suivant — pas la pose, le tick,
+ * donc loin de la faute.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} id
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {Etat} le même état
+ */
+export function poser(etat, id, rangee, colonne) {
+  const problemes = problemesDeLaPose(etat, id, rangee, colonne);
+  if (problemes.length > 0) {
+    throw new Error(
+      `poser : pose illégale — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  etat.disposition.push({ id, rangee, colonne, niveau: 1 });
+  const residu = {};
+  for (const r of RESSOURCES) residu[r] = 0;
+  etat.economie.residus.push(residu);
+  return etat;
 }
 
 /**

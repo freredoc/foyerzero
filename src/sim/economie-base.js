@@ -106,7 +106,21 @@ export function capacitesMilli(disposition) {
 
   for (const b of disposition) {
     const def = BASE_BATIMENTS[b.id];
-    if (def === undefined || def.role !== 'stockage') continue;
+    if (def === undefined) continue;
+
+    // ⚠ LE STOCKAGE PROPRE EST UN CANAL À PART, et il se compte AVANT le
+    // filtre de rôle. Le Chantier de construction en porte un — 50 · 50 · 40,
+    // arbitré le 27/08 — alors qu'il est de rôle `central` : sans lui, une base
+    // neuve n'avait aucune capacité et ne pouvait rien accumuler, jamais.
+    // Le champ est générique : n'importe quel bâtiment pourra en porter un.
+    if (def.stockagePropre) {
+      for (const r of RESSOURCES) {
+        const brut = def.stockagePropre[r];
+        if (brut) caps[r] += brut * 1000;
+      }
+    }
+
+    if (def.role !== 'stockage') continue;
     if (!Number.isInteger(b.niveau) || b.niveau < 1) continue;
     // `PRODUCTEUR_APPARIE` porte les seuls bâtiments de stockage, et
     // `capaciteDuNiveau` lève sur tout le reste : passer par le rôle et par
