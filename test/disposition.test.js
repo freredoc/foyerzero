@@ -221,7 +221,8 @@ test('disposition — le voisinage distingue terrain et bâtiments', () => {
 });
 
 test('disposition — aucun plafond de voisins autre que la géométrie', () => {
-  // ⚠ LE MODÈLE DU LOT 1 PLAFONNAIT À DEUX (`params.adjacence.maxVoisins`).
+  // ⚠ LE MODÈLE DU LOT 1 PLAFONNAIT À DEUX VOISINS (dans `data/params.js`,
+  // retiré le 27/08 avec `sim/economy.js`).
   // Celui-ci ne plafonne rien : les huit cases comptent toutes. Confondre les
   // deux diviserait la production par quatre dans le meilleur cas — d'où ce
   // test, qui monte délibérément au-dessus de deux.
