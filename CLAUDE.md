@@ -24,8 +24,8 @@ Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot TROIS-NIVEAUX), à confronter :** `npm test` →
-**250 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 27/08/2026 (après le lot HORLOGE-MURALE), à confronter :** `npm test` →
+**256 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -330,7 +330,7 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
 - **`sim/state.js` tourne sur `economie-base`** depuis le 26/08.
-  `SAVE_VERSION` vaut **5**. L'état porte `position` (où la base est sur la
+  `SAVE_VERSION` vaut **6**. L'état porte `position` (où la base est sur la
   carte AUJOURD'HUI), `fondation` (où elle a été POSÉE), `disposition`
   (bâtiments placés à la case) et `economie` (trois ressources).
   ⚠ **LE TERRAIN EST GELÉ À LA FONDATION.** Arbitré par Ethan le 27/08 : « une
@@ -358,7 +358,30 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ils étaient **huit sur huit**, plus l'export `RHO`. Personne n'importait plus
   `data/params.js`. Une liste de morts se recompte avant d'être crue.
   ⚠ **LE TERRAIN N'EST PAS SAUVEGARDÉ.** `serialiser` l'omet, `charger` le
-  redéduit de `fondation`. Le recalculer par tick coûterait 71,6 µs — plus du
+  redéduit de `fondation`.
+  ⚠ **`instantSauvegardeMs` FAIT LE CHEMIN INVERSE** — v6, 27/08. Le terrain vit
+  dans l'état et sort de la sauvegarde ; l'instant mural vit dans la sauvegarde
+  et n'entre **jamais** dans l'état. Une fois la partie chargée il ne veut plus
+  rien dire, et le garder en mémoire inviterait quelqu'un à s'en servir comme
+  d'une horloge.
+  ⚠ **`serialiser(etat, instantMs)` ET `charger(json, instantMs)` PRENNENT
+  L'INSTANT EN ARGUMENT**, obligatoire. Aucun fichier de `src/` n'a le droit
+  d'appeler l'horloge système — `banc.test.js` §11 balaie `Date.now` sur tout
+  `src/` **et** sur `index.src.html`. Le temps mural entre par la couche qui
+  touche au DOM, et par elle seule. C'est la même discipline qu'`accumuler()`
+  de `sim/clock.js`, qui reçoit une durée au lieu d'aller la chercher.
+  ⚠ **`charger` RATTRAPE, il ne fait pas que restaurer.** Un état chargé mais
+  pas rattrapé afficherait les stocks d'hier soir. Le seul moment où l'on
+  connaît à la fois la sauvegarde et l'instant présent, c'est celui-là.
+  ⚠ **UNE HORLOGE QUI RECULE NE FAIT RIEN, ELLE NE LÈVE PAS.** Fuseau, NTP,
+  joueur qui change la date : la durée peut être négative, elle est ramenée à
+  zéro. Refuser la sauvegarde punirait le joueur pour l'heure de son téléphone.
+  ⚠ **DIX ANS D'ABSENCE SATURENT SANS DÉBORDER**, mesuré et non supposé :
+  3,15 milliards de ticks, stock exactement égal à la capacité, aucune levée.
+  Un mois et dix ans donnent le même stock — c'est la définition de saturé.
+  ⚠ **La migration 5 → 6 NE DONNE AUCUNE ABSENCE.** Une sauvegarde v5 ne dit pas
+  quand elle a été écrite ; lui inventer une durée fabriquerait des ressources.
+  `instantSauvegardeMs` y vaut `null`, et `charger` réancre sur maintenant. Le recalculer par tick coûterait 71,6 µs — plus du
   double du tick économique ; le sauvegarder créerait une SECONDE source de
   vérité, donc une occasion de divergence muette. Un seul endroit peut mentir,
   et c'est celui qui est écrit.
@@ -703,6 +726,15 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **La grille de la base fait 9 colonnes.** Arbitré le 27/08 après que la
   maquette en ait montré 8 pendant trois jours. `GRILLE.largeur` fait foi, et
   `audit-maquette.mjs` l'asserte contre la maquette.
+- **LE TEMPS MURAL N'A PAS ENCORE DE POINT D'ENTRÉE.** `charger` et
+  `serialiser` l'attendent en argument depuis la v6, mais personne ne le leur
+  passe : il n'y a pas encore d'écran. Le jour où il y en aura, l'appel à
+  l'horloge système sera **un seul**, dans la couche DOM, et il faudra
+  **retourner la garde §11 de `banc.test.js` en écrivant pourquoi** — elle
+  interdit aujourd'hui `Date.now` sur tout `src/`, `index.src.html` compris.
+  La bonne forme de la garde retournée : interdiction totale sur `src/sim/`,
+  `src/data/` et `src/render/`, et **exactement une** occurrence admise dans un
+  fichier nommé. Ne pas l'affaiblir avant d'avoir le site d'appel sous les yeux.
 - **Le banc d'essai RESTE dans le HTML livré** quand l'écran de jeu se
   branchera, caché derrière un geste de debug — arbitré le 27/08. C'est ce que
   T10 de `banc.test.js` exige déjà : il asserte la présence de `banc-canvas`,
