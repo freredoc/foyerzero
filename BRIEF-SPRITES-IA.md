@@ -276,6 +276,42 @@ pas le centre de sa cellule, la grille a glissé). Un décentrement au-delà de
 
 ---
 
+## 3 ter. Le sprite de référence — la méthode qui marche
+
+Établi le 26/08 sur les tourelles du joueur, après trois jets et deux
+allers-retours ratés. **Un prompt ne transmet pas un équilibre visuel.** Il
+transmet une géométrie, et le modèle répartit les matières comme il veut par
+dessus. La preuve, mesurée sur la même tourelle :
+
+| Jet | accent | métal | châssis | Verdict |
+|---|---|---|---|---|
+| 1 — prompt libre | **18,9 %** | **24,7 %** | **24,8 %** | validé |
+| 2 — prompt coté au gros pixel près | 26 % | **1,2 %** | 49 % | le socle a disparu |
+| 3 — avec référence jointe | 15 % | 40 % | 20 % | rattrapé |
+| 4 — correction « bande de 3 au lieu de 1 » | **42 %** | 14 % | 15 % | surcorrigé |
+
+La procédure qui en sort, et qui vaut pour les 60 générations :
+
+1. **Un sprite de référence par famille.** On en génère un seul, prompt libre,
+   jusqu'à ce qu'il soit bon. C'est le seul moment où on itère.
+2. **On joint le PNG source de 1024 aux frères**, et on énonce ce qui est
+   INTERDIT de changer avant d'énoncer ce qui change. Le modèle accepte une
+   image d'entrée : ce n'est pas une retouche, c'est un moule.
+3. **On n'énumère jamais un écart chiffré.** « La même surface que sur la
+   référence, ni plus large, ni plus fine », jamais « trois gros pixels au lieu
+   d'un ».
+4. **On décrit la référence telle qu'elle est, pas telle qu'on croit qu'elle
+   est.** L'interdit « aucune pastille autour du dôme » a failli partir alors
+   que la référence en portait : le modèle aurait lu le contraire de ce qu'il
+   voyait. Regarder l'image avant d'écrire.
+
+Ce que la référence transmet et qu'aucune phrase ne transmet : la répartition
+des matières, la densité de détail, l'équilibre entre périphérie et centre.
+`tools/conditionneur.html` la mesure désormais et l'affiche en pastille — voir
+le §4.
+
+---
+
 ## 4. Conditionnement — les trois opérations, non négociables
 
 Ce qui sort de ChatGPT n'est pas encore un sprite. Trois opérations, dans cet
@@ -319,6 +355,13 @@ aperçu, et les recopie dans un `CONTROLE.txt` à l'intérieur du ZIP :
   jugé à l'œil) ;
 - **emprise en gros pixels** — et l'alerte si elle passe 28 × 28 ;
 - **nombre de couleurs** après quantification ;
+- **répartition des matières** — accent, métal, châssis, en pourcentage de la
+  surface opaque, avec une alerte hors fourchette. C'est le contrôle qui attrape
+  le sprite « conforme mais raté » : bordure vide, emprise juste, palette
+  respectée, et pourtant un socle qui a disparu sous l'accent. Fourchettes
+  tirées du sprite de référence validé (19 / 25 / 25), élargies : accent
+  10–30 %, métal 10–45 %, châssis 12–45 %. Non appliqué aux tuiles, qui n'ont
+  ni accent ni châssis ;
 - pour une tuile, qu'elle soit pleine et sans trou.
 
 Le dépliant « Lisibilité à 40 px et transformations » sous chaque sprite donne
@@ -651,11 +694,23 @@ noire.*
    installation qui s'auto-réplique.
 10. **Ne jamais lui demander de corriger une image.** Une retouche renvoie une
     image régénérée, donc hors palette et hors cohérence. On corrige le prompt
-    et on relance.
+    et on relance. Joindre une image comme RÉFÉRENCE est autre chose et reste
+    autorisé (§3 ter).
+11. **Il surcorrige, toujours.** « Une bande de 3 gros pixels au lieu de 1 » a
+    fait passer l'accent de 15 % à 42 % de la surface — presque le triple pour
+    un facteur trois demandé sur une seule dimension. Toute consigne en « plus »
+    ou en « moins » produit le défaut inverse au coup suivant, et on fait
+    l'aller-retour indéfiniment. On ancre sur une référence, on ne gradue pas.
+12. **Plus le prompt est coté, plus l'équilibre dérape.** Donner la taille de
+    chaque pièce au gros pixel près lui fait remplir les vides : le dôme a mangé
+    le socle et le métal est tombé à 1,2 % de la surface. Les cotes servent à
+    tenir l'empreinte totale, pas à composer l'image.
 
 ---
 
-*v3 — 26/08/2026. Ajout du §3 bis (planches) et du compteur de pièces d'A6.
+*v4 — 26/08/2026. Ajout du §3 ter (sprite de référence) et des pièges 11 et 12,
+tirés de la première famille produite — les tourelles du joueur.
+v3 — 26/08/2026. Ajout du §3 bis (planches) et du compteur de pièces d'A6.
 v2 — 26/08/2026. Réécrit après l'arbitrage sur la vue : top-down haut à 75°,
 non-dépassement de case absolu, trois régimes d'inclinaison, rotation limitée aux
 véhicules (90°) et miroir limité à l'infanterie. Voir les amendements A4, A6 et

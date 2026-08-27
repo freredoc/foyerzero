@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot TICK), à confronter :** `npm test` →
-**234 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot COLIS), à confronter :** `npm test` →
+**233 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -327,6 +327,12 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   le collecteur de niveau 50 SEUL, avant que le voisinage n'entre au modèle. Le
   pire cas réel est un collecteur niveau 50 entouré de huit raffineries :
   45 738 385 u/h.
+- **Livraison : `src/` et `test/` ne voyagent JAMAIS dans la même archive.**
+  Le dépôt se met à jour depuis un téléphone et le sélecteur n'affiche que les
+  noms courts : `economy.js` et `economy.test.js` s'y confondent. Deux dépôts de
+  suite sont tombés à côté avant que la règle soit posée. Archive 1 = tout ce
+  qui va dans `src/`, archive 2 = `test/` + racine. `main` est ROUGE entre les
+  deux, et c'est le garde-fou qui le dit — c'est voulu.
 - **Un état ne se construit pas qu'avec le constructeur du module.** Les douze
   premiers tests d'`economie-base` partaient tous de `creerEtatEconomie`, donc de
   zéro — et depuis zéro un stock ne peut jamais dépasser sa capacité, ce qui
@@ -409,11 +415,18 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   l'intérieur d'un 8 × 9 fait **6 × 7 = 42 cases**, rangées 12–17, colonnes 2–8
   (et non 7 × 5, qui serait l'intérieur d'un 9 × 7). Seul le collecteur s'y
   pose, donc **douze collecteurs au maximum**.
-- **Les colis du lot 1 sont morts** — reconfirmé le 26/08 : tous les bâtiments
-  font de la production continue. `params.colis` et le bloc colis de
-  `tickEconomie` / `rattrapageEconomie` sont un reliquat qui tourne encore, gardé
-  par des tests : les retirer est un lot, pas un effet de bord.
-  ⚠ `BASE-DU-JOUEUR-1.md` §3 affirme l'inverse. Il est du 24/08 et de rang 4.
+- **Les colis n'existent plus.** Abandonnés le 25/08, reconfirmés le 26 (« tous
+  les bâtiments font de la production continue »), et RETIRÉS le 26/08 :
+  `params.colis`, `intervalleColisTicks`, les deux blocs de `economy.js`, le
+  champ `colis` de `creerBatiment` et le test 9. **`SAVE_VERSION` est passée à
+  3.**
+  ⚠ **La migration 2 → 3 SUPPRIME un champ**, ce qu'aucune autre ne faisait —
+  les deux précédentes en ajoutaient. C'était le choix délibéré : une sauvegarde
+  qui porte `colis` alors que plus une ligne ne le lit fait croire, six mois plus
+  tard, qu'il sert encore. Ce qui est retiré est un compteur mort, pas une
+  ressource du joueur.
+  ⚠ `BASE-DU-JOUEUR-1.md` §3 affirme encore l'inverse. Il est du 24/08 et de
+  rang 4.
 - **Le bâtiment des blindés s'appelle « Dépôt de véhicules »**, clé
   `depotDeVehicules`. Trois noms avaient coexisté dans le dépôt — `usine` (la
   clé), « dépôt de véhicules » (le commentaire de `COUT_NIVEAU_DEUX`, qui avait

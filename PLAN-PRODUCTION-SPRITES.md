@@ -146,7 +146,12 @@ transforme. Monolithiques (A5), le tube n'est plus un fichier séparé.
 **S4, joueur** — palette *Joueur seul*
 - [ ] P4.1 — **1 × 1** — `def_j_merlon` — mur, **aucun tube, aucun accent**
 - [ ] P4.2 — **2 × 1** — `def_j_ronce` (blanc), `def_j_herse` (rouge) — barrières, aucun tube
-- [ ] P4.3 — **3 × 1** — `def_j_casemate`, `def_j_creneau`, `def_j_batterie` — tourelles ai/av/aa
+- [~] P4.3 — **3 × 1** — `def_j_casemate`, `def_j_creneau`, `def_j_batterie` — tourelles ai/av/aa
+      · **`def_j_creneau` VALIDÉ** (26/08) — c'est **le sprite de référence de toute
+        la famille tourelle**, source 1024 à conserver. Mesuré : accent 18,9 %,
+        métal 24,7 %, châssis 24,8 %, emprise 23 × 28 gp, 10 couleurs.
+      · reste `casemate` (blanc, deux canons fins) et `batterie` (jaune, canon fin
+        incliné), à produire en planche 2 × 1 avec la référence jointe.
 - [ ] P4.4 — **3 × 1** — `def_j_faucheuse`, `def_j_mortier`, `def_j_harpon` — artilleries, **châssis véhicule**, tube rallongé de moitié
 
 **S5, Ouvrage** — palette *+ rampe*
@@ -263,7 +268,7 @@ quand la session suivante commence sur une page blanche.
 | S1 | | | | |
 | S2 | | | | |
 | S3 | | | | |
-| S4 | | | | |
+| S4 | 26/08 | 4 | 3 | `def_j_creneau` validé au 1er jet, prompt libre. Les 3 relances ont toutes échoué : prompt coté → socle mangé (métal 1,2 %), correction chiffrée → accent à 42 %. C'est de là que sortent le §3 ter et les pièges 11-12 du brief. |
 | S5 | | | | |
 | S6 | | | | |
 | S7 | | | | |
@@ -278,6 +283,7 @@ note on refera l'aller-retour.
 
 ---
 
-*v1 — 26/08/2026. 158 sprites, 60 générations, 11 sessions. Découpe en planches
+*v2 — 26/08/2026. `def_j_creneau` validé, méthode du sprite de référence ajoutée
+au §0. v1 — 158 sprites, 60 générations, 11 sessions. Découpe en planches
 établie sur la règle du §3 bis du brief : une planche ne regroupe que des sprites
 qui doivent déjà se ressembler.*
