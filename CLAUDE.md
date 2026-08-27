@@ -24,8 +24,8 @@ Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot HOMONYMES), à confronter :** `npm test` →
-**241 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 27/08/2026 (après le lot TROIS-NIVEAUX), à confronter :** `npm test` →
+**250 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -112,12 +112,13 @@ src/data/               toutes les valeurs de calibrage — 5 fichiers ; RIEN d'
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
 
-src/sim/                simulation déterministe, sans DOM — 10 fichiers
+src/sim/                simulation déterministe, sans DOM — 11 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
+  niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -127,10 +128,10 @@ src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   21 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   22 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  cible  clock  combat  defense
   disposition  documentation  donnees  economie-base  generateur
-  grille  rendu  repli  rng  roster  state
+  grille  niveau-de-base  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -317,8 +318,23 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
 - **`sim/state.js` tourne sur `economie-base`** depuis le 26/08.
-  `SAVE_VERSION` vaut **4**. L'état porte `position` (sur la carte),
-  `disposition` (bâtiments placés à la case) et `economie` (trois ressources).
+  `SAVE_VERSION` vaut **5**. L'état porte `position` (où la base est sur la
+  carte AUJOURD'HUI), `fondation` (où elle a été POSÉE), `disposition`
+  (bâtiments placés à la case) et `economie` (trois ressources).
+  ⚠ **LE TERRAIN EST GELÉ À LA FONDATION.** Arbitré par Ethan le 27/08 : « une
+  fois qu'il a posé sa base, les champs de quartz et de scorie ne changent plus
+  jamais, sinon ça casserait les collecteurs et le schéma ». Un redéploiement
+  change donc la position, mais pas les douze cases : le joueur ne perd jamais
+  la disposition de ses collecteurs en se repliant.
+  ⚠ **`position` et `fondation` ne se confondent JAMAIS.** `position` sert la
+  carte et le niveau, `fondation` ne sert QUE le terrain. Elles coïncident à la
+  création et à ce seul instant, et ce sont **deux objets distincts** : partager
+  la référence marcherait jusqu'au premier redéploiement, puis déplacerait le
+  terrain en silence. Un test l'asserte par identité, pas par valeur.
+  ⚠ **La migration 4 → 5 NE PERD RIEN** — la première dans ce cas depuis la
+  v2. Sous la v4 le terrain se déduisait de `position` ; écrire
+  `fondation = position` rend donc exactement le terrain que la sauvegarde
+  avait.
   ⚠ **`sim/economy.js` ET `src/data/params.js` N'EXISTENT PLUS** — retirés le
   27/08 (lot ORPHELIN) avec `test/economy.test.js`. Le moteur du lot 1 est
   entièrement remplacé par `sim/economie-base.js` + `sim/disposition.js` +
@@ -330,7 +346,7 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ils étaient **huit sur huit**, plus l'export `RHO`. Personne n'importait plus
   `data/params.js`. Une liste de morts se recompte avant d'être crue.
   ⚠ **LE TERRAIN N'EST PAS SAUVEGARDÉ.** `serialiser` l'omet, `charger` le
-  redéduit de `position`. Le recalculer par tick coûterait 71,6 µs — plus du
+  redéduit de `fondation`. Le recalculer par tick coûterait 71,6 µs — plus du
   double du tick économique ; le sauvegarder créerait une SECONDE source de
   vérité, donc une occasion de divergence muette. Un seul endroit peut mentir,
   et c'est celui qui est écrit.
@@ -397,8 +413,43 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   — et un seul décalage les rend vrais tous les deux. Un test asserte qu'aucune
   rangée voisine n'y arrive.
   ⚠ **Le joueur ne démarre PAS au bord bas**, malgré la formule « tout en bas ».
-  Le bord vaudrait le niveau 0. Il démarre 25 cases plus haut : **rangée 275,
-  colonne 16, niveau 5**. La base terminale est rangée 26, colonne 16, niveau 50.
+  Le bord vaudrait le niveau 0. Il démarre **rangée 275, colonne 16**, 25 cases
+  plus haut, dans une **strate 5**. La base terminale est rangée 26, colonne 16,
+  strate 50.
+  ⚠ **« STRATE 5 » N'EST PAS « BASE DE NIVEAU 5 ».** C'est le niveau des sites
+  de l'OUVRAGE à cet endroit de la carte — ce que le joueur y trouvera à
+  attaquer. Sa propre base n'a aucun niveau qui vienne de la carte. Écrire
+  « le joueur démarre au niveau 5 » est faux, et la formule a traîné dans ce
+  fichier jusqu'au 27/08.
+- **LA BASE DU JOUEUR PORTE TROIS NIVEAUX, ET CE SONT DES MOYENNES.** Arbitré
+  par Ethan le 27/08 : « les niveaux, ça concerne uniquement l'Ouvrage. Les
+  niveaux du joueur, par base, il en a trois : le niveau de ses bâtiments, le
+  niveau de sa défense et le niveau de son armée offensive. À chaque fois c'est
+  une moyenne. »
+  ⚠ **Aucun des trois ne dépend de la position sur la carte.** Ils se
+  recalculent depuis ce que le joueur a posé, et rien d'autre. Un redéploiement
+  ne les change pas.
+  ⚠ **La même règle vaut déjà côté Ouvrage** : `GEOGRAPHIE.niveauBase` de
+  `data/sites.js` dit « moyenne des niveaux de ses bâtiments » depuis le début.
+  Ce qui est neuf le 27/08, c'est qu'elle vaut aussi pour le joueur, et qu'il y
+  en a TROIS au lieu d'une.
+  ⚠ **UNE DÉCIMALE, ET SEULEMENT CE QUI EST POSÉ.** Arbitré le 27/08 : la
+  moyenne se donne à une décimale (5,8) et porte sur les bâtiments POSÉS. Un
+  emplacement vide ne compte pas pour zéro, il ne compte pas du tout ; le
+  Chantier de construction compte comme les autres.
+  ⚠ **RANGÉE EN DIXIÈMES ENTIERS** — `5,8` se range `58`, jamais en flottant.
+  Même discipline que les milli-unités de l'économie : une décimale en flottant
+  s'additionne mal et se sérialise en `5.799999999999999`. L'arrondi se fait à
+  la demie supérieure, `(somme × 20 + n) / 2n` tronqué, sans jamais quitter les
+  entiers. `sim/niveau-de-base.js`, et lui seul.
+  ⚠ **L'affichage divise par dix et montre TOUJOURS la décimale** — « 6,0 »,
+  jamais « 6 ». C'est de l'interface, ça ne descend pas dans `sim/`.
+  ⚠ **DEUX DES TROIS NE SONT PAS ÉCRITS**, et c'est délibéré. `sim/state.js` ne
+  porte que les bâtiments ; la garnison et l'armée d'assaut du joueur se
+  composent dans `ui/defense.js` et `ui/arsenal.js`, qui sont des ÉDITEURS —
+  rien de ce qu'ils produisent n'est sauvegardé. Les écrire aujourd'hui
+  reviendrait à choisir seul la forme de cet état. Ils appelleront
+  `moyenneEnDixiemes`, jamais une seconde moyenne à eux.
 - **Livraison : `src/` et `test/` ne voyagent JAMAIS dans la même archive.**
   Le dépôt se met à jour depuis un téléphone et le sélecteur n'affiche que les
   noms courts : `disposition.js` et `disposition.test.js` s'y confondent. Deux
