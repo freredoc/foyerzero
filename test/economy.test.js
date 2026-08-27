@@ -1,4 +1,7 @@
-// Tests 5 à 10 du brief : courbes, coût croisé, plancher, colis, adjacence.
+// Tests 5 à 10 du brief : courbes, coût croisé, plancher, adjacence.
+// ⚠ Le test 9 (« saturation des colis ») a été RETIRÉ le 26/08 avec les colis
+// eux-mêmes. Il ne reste pas de trou dans la numérotation du brief : le brief
+// est un document daté, pas un contrat.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -14,7 +17,6 @@ import {
   bonusAdjacenceRelatif,
   poidsAdjacence,
   debitMilliParHeure,
-  intervalleColisTicks,
   tickEconomie,
 } from '../src/sim/economy.js';
 
@@ -107,33 +109,11 @@ function etatUnBatiment(type, niveau, voisins) {
         type,
         niveau,
         voisinsQualifiants: voisins,
-        colis: { enAttente: 0, progresTicks: 0 },
         residuFlux: 0,
       },
     ],
   };
 }
-
-test('test 9 — saturation des colis : 2 en attente après 10 min, toujours 2 après 60 min', () => {
-  const etat = etatUnBatiment('foreuse', 1, 0);
-  const intervalle = intervalleColisTicks(PARAMS);
-  assert.equal(intervalle, 3000, 'un colis toutes les 5 min à 10 Hz = 3000 ticks');
-
-  // Cadence exacte : rien juste avant 5 min, un colis pile à 5 min.
-  for (let t = 0; t < intervalle - 1; t++) tickEconomie(etat, PARAMS);
-  assert.equal(etat.batiments[0].colis.enAttente, 0, 'colis apparu avant 5 min');
-  tickEconomie(etat, PARAMS);
-  assert.equal(etat.batiments[0].colis.enAttente, 1, 'pas de colis à 5 min pile');
-
-  // 10 min sans collecte : le stock plafonne à 2.
-  for (let t = intervalle; t < 6000; t++) tickEconomie(etat, PARAMS);
-  assert.equal(etat.batiments[0].colis.enAttente, 2, 'pas 2 colis après 10 min');
-
-  // 60 min sans collecte : toujours 2, et la chaîne est bien à l'arrêt.
-  for (let t = 6000; t < 36_000; t++) tickEconomie(etat, PARAMS);
-  assert.equal(etat.batiments[0].colis.enAttente, 2, 'plus de 2 colis après 60 min');
-  assert.equal(etat.batiments[0].colis.progresTicks, 0, 'la chaîne devrait être figée à l’arrêt');
-});
 
 test('test 10 — adjacence constante : même bonus au niveau 1 et au niveau 12, poids 50 % puis ≈ 11 %', () => {
   // Au niveau du débit : le supplément apporté par 2 voisins est identique

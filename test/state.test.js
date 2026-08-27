@@ -20,9 +20,12 @@ import { creerRng, entier } from '../src/sim/rng.js';
 
 /**
  * Montage du test 11 : un état volontairement hétérogène —
- * deux types de bâtiments, niveaux et voisins différents, un colis en cours,
- * un colis déjà en attente, un stock déjà entamé et un stock proche de la
- * saturation pour que le plafond de stockage soit réellement traversé.
+ * deux types de bâtiments, niveaux et voisins différents, un stock déjà entamé
+ * et un stock proche de la saturation pour que le plafond de stockage soit
+ * réellement traversé.
+ * ⚠ Il portait aussi un colis en cours et un colis en attente. Retirés le 26/08
+ * avec les colis eux-mêmes ; l'hétérogénéité qui compte pour ce test — deux
+ * ressources, deux régimes de saturation — est intacte.
  */
 function etatDeReference() {
   const etat = creerEtat(20260822, PARAMS);
@@ -31,8 +34,6 @@ function etatDeReference() {
     creerBatiment('foreuse', 6, 2), // flux fort, adjacence pleine
     creerBatiment('decapeuse', 4, 1), // produit l'autre ressource
   ];
-  etat.batiments[1].colis.progresTicks = 1234; // colis en cours
-  etat.batiments[2].colis.enAttente = 1; // un colis déjà prêt
   etat.ressources.quartzMilli = 137_000;
   etat.ressources.scorieMilli = PARAMS.stockage.capaciteMilli - 50_000; // saturera vite
   return etat;
@@ -70,25 +71,33 @@ test('test 11 — rattrapage analytique identique à la simulation tick par tick
   const temoin = etatDeReference();
   rattraperJeu(temoin, 24 * TICKS_PAR_HEURE, PARAMS);
   assert.equal(temoin.ressources.scorieMilli, PARAMS.stockage.capaciteMilli);
-  // Et les colis ont plafonné à 2 : le rattrapage a traversé l'arrêt de chaîne.
-  for (const b of temoin.batiments) {
-    assert.equal(b.colis.enAttente, PARAMS.colis.maxEnAttente);
-  }
 });
 
-test('test 11 bis — le rattrapage traverse correctement un colis en cours de fabrication', () => {
-  // Fenêtre courte et non ronde : 7 min 33 s = 4530 ticks, avec un progrès
-  // initial de 1234 ticks → un seul colis produit, progrès résiduel précis.
+test('test 11 bis — le rattrapage tombe juste sur une fenêtre NON RONDE', () => {
+  // ⚠ CE TEST PORTAIT SUR LES COLIS, et il aurait pu disparaître avec eux le
+  // 26/08. Il a été gardé parce que son montage vaut pour autre chose : le test
+  // 11 ne rattrape que des heures RONDES (1 h, 24 h, 72 h), pour lesquelles le
+  // reste de la division par TICKS_PAR_HEURE vaut zéro. C'est précisément le
+  // chemin que la formule du rattrapage traite à part. Une fenêtre non ronde
+  // est donc le seul montage qui l'emprunte.
+  //
+  // 7 min 33 s = 4 530 ticks, soit 4 530 mod 36 000 ≠ 0.
   const nbTicks = 4530;
+  assert.notEqual(nbTicks % TICKS_PAR_HEURE, 0, 'une fenêtre ronde ne mesurerait rien ici');
+
   const simule = etatDeReference();
   for (let t = 0; t < nbTicks; t++) tickJeu(simule, PARAMS);
   const analytique = etatDeReference();
   rattraperJeu(analytique, nbTicks, PARAMS);
   assert.equal(JSON.stringify(analytique), JSON.stringify(simule));
 
-  const b = simule.batiments[1];
-  assert.equal(b.colis.enAttente, 1, 'le colis en cours aurait dû aboutir');
-  assert.equal(b.colis.progresTicks, 1234 + 4530 - 3000, 'progrès résiduel faux');
+  // Et le montage doit vraiment exercer les résidus : au moins un bâtiment doit
+  // en porter un non nul, sinon la fenêtre non ronde ne prouverait rien de plus
+  // qu'une fenêtre ronde.
+  assert.ok(
+    simule.batiments.some((b) => b.residuFlux > 0),
+    'aucun résidu non nul : la fenêtre ne traverse pas de fraction d\'heure',
+  );
 });
 
 test('rattrapage — une très longue absence reste exacte au bit près (contrôle BigInt)', () => {
@@ -158,6 +167,8 @@ test('test 12 — une sauvegarde de version N−1 se charge sans perte', () => {
     horloge: { tempsSimuleMs: 250_000, nbTicks: 2500 },
     ressources: { quartzMilli: 42_000, scorieMilli: 7_000 },
     batiments: [
+      // Le champ `colis` est celui d'une vraie sauvegarde d'époque : la
+      // migration v2 → v3 doit le RETIRER, pas le recopier.
       { type: 'decapeuse', niveau: 5, colis: { enAttente: 1, progresTicks: 42 } },
     ],
   };
@@ -172,13 +183,19 @@ test('test 12 — une sauvegarde de version N−1 se charge sans perte', () => {
   assert.equal(etat.horloge.nbTicks, 2500);
   assert.deepEqual(etat.ressources, { quartzMilli: 42_000, scorieMilli: 7_000 });
   assert.equal(etat.batiments[0].niveau, 5);
-  assert.deepEqual(etat.batiments[0].colis, { enAttente: 1, progresTicks: 42 });
   // Les champs apparus en v1 ont reçu leur valeur par défaut.
   assert.equal(etat.horloge.residuMs, 0);
   assert.equal(etat.batiments[0].voisinsQualifiants, 0);
-  // Celui apparu en v2 aussi : la chaîne 0 → 1 → 2 a bien été parcourue en
+  // Celui apparu en v2 aussi : la chaîne 0 → 1 → 2 → 3 a bien été parcourue en
   // entier, pas seulement son premier maillon.
   assert.equal(etat.batiments[0].residuFlux, 0, 'la migration v1 → v2 n’a pas été appliquée');
+  // Et le dernier maillon RETIRE un champ, ce qu'aucun autre ne faisait :
+  // `hasOwnProperty` et pas `=== undefined`, la clé doit avoir disparu.
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(etat.batiments[0], 'colis'),
+    'la migration v2 → v3 n’a pas retiré les colis',
+  );
+  assert.equal(SAVE_VERSION, 3, 'le bump de la version des sauvegardes a été oublié');
 
   // L'état migré est fonctionnel : la boucle tourne dessus sans erreur.
   tickJeu(etat, PARAMS);
