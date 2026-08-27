@@ -24,8 +24,8 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot CARTE), à confronter :** `npm test` →
-**238 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 26/08/2026 (après le lot FONDATION), à confronter :** `npm test` →
+**243 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
 
@@ -328,6 +328,28 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   le collecteur de niveau 50 SEUL, avant que le voisinage n'entre au modèle. Le
   pire cas réel est un collecteur niveau 50 entouré de huit raffineries :
   45 738 385 u/h.
+- **TOUTE base neuve du joueur est un Chantier de construction niveau 1, en
+  (18, 5)** — pas seulement la première. Arbitré le 26/08 : « toutes les bases
+  que le joueur pose suivront la même logique ». `BASE_NEUVE` de `data/base.js`,
+  `dispositionNouvelleBase()` de `sim/disposition.js`, qui rend une COPIE.
+  ⚠ **Ne pas dire « base initiale ».** Le nom ferait croire à un cas particulier
+  du démarrage, et quelqu'un écrirait une seconde fonction pour les bases
+  suivantes. La première base n'est que la première application de la règle.
+  ⚠ **Un seul bâtiment suffit parce que le niveau 1 ne coûte rien**
+  (`ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2). Le Chantier ouvre deux
+  emplacements et en prend un : il en reste exactement UN, le premier vrai
+  choix. Le tutoriel guide à partir de là.
+  ⚠ **« EN HAUT » EST AMBIGU, NE PAS L'EMPLOYER.** Selon qu'on regarde l'écran
+  ou les numéros de rangée, il désigne l'un ou l'autre bout de la bande — et la
+  confusion a coûté un lot le 26/08. La rangée 18 est le **FOND** : l'assaillant
+  part des rangées 1–2 et monte en numéro, donc la 18 est la dernière qu'il
+  atteint. C'est cohérent avec le Chantier, seul bâtiment sans plancher de PV et
+  dont la perte force le redéploiement. La fonction s'appelle `caseDuChantier`,
+  jamais `caseHaute` ni `caseBasse`.
+  ⚠ **Cette case ne porte JAMAIS de champ**, quelle que soit la graine : les
+  champs se tiennent entre les rangées 12 et 17. La fondation est légale partout
+  **par construction** — ce qui compte d'autant plus que la règle vaut pour des
+  positions inconnues à l'avance. Un test le vérifie sur 65 terrains tirés.
 - **`sim/carte.js` traduit les DISTANCES de `GEOGRAPHIE` en COORDONNÉES**, et
   c'est le seul endroit qui a le droit de le faire. Deux conventions y vivent :
   **rangée 1 = bord HAUT**, `hauteur` = bord bas (même sens que la grille de
