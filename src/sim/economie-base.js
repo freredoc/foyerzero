@@ -225,13 +225,29 @@ function verifierEtat(etat, disposition) {
  * résidu, lui, continue d'avancer.
  *
  * ⚠ OUI, CAPACITÉS ET DÉBITS SONT RECALCULÉS À CHAQUE TICK, et non, ce n'est
- * pas à corriger. RE-MESURÉ le 26/08 sur une base de NEUF bâtiments (chantier,
- * raffinerie, centrale, accumulateur, cinq collecteurs, tous niveau 5), sur
- * 20 000 ticks : **30,1 µs par tick**, soit à 10 Hz **0,301 ms par seconde de
- * jeu réel** — trois centièmes de pour cent d'un cœur.
- * ⚠ Une première rédaction annonçait « 21,7 µs sur huit bâtiments ». Ce chiffre
- * ne s'est pas reproduit et sa configuration n'était pas écrite ; celui-ci l'est,
- * pour qu'on puisse le refaire. La conclusion, elle, ne bouge pas. Le gain d'un cache serait invisible et le
+ * pas à corriger — MAIS LE COÛT MONTE VITE AVEC LA TAILLE DE LA BASE, et il
+ * faut le savoir. Les deux premières rédactions n'avaient mesuré qu'un seul
+ * point, sur huit ou neuf bâtiments, et en tiraient une conclusion générale.
+ * Courbe complète, mesurée le 26/08 sur 3 000 ticks par point :
+ *
+ *    1 bâtiment      2,0 µs/tick      0,020 ms par seconde de jeu
+ *    5 bâtiments    27,7 µs/tick      0,277 ms
+ *    9 bâtiments    21,1 µs/tick      0,211 ms
+ *   20 bâtiments   108,0 µs/tick      1,080 ms
+ *   40 bâtiments   280,7 µs/tick      2,807 ms   ← base pleine
+ *
+ * Une base PLEINE coûte donc **neuf fois** ce que le chiffre cité jusqu'ici
+ * laissait croire. 2,8 ms par seconde reste acceptable — moins de trois
+ * dixièmes de pour cent d'un cœur — mais la croissance est superlinéaire :
+ * `voisinsQualifiants` reconstruit une carte des cases occupées par bâtiment.
+ * Si un jour une base dépassait la quarantaine d'emplacements, c'est CETTE
+ * courbe qu'il faudrait refaire, pas le chiffre à neuf bâtiments.
+ *
+ * ⚠ ET ÇA A UNE CONSÉQUENCE SUR LES TESTS, pas seulement sur le jeu. Simuler
+ * 72 h tick par tick fait 2,6 millions de ticks : `test/state.test.js` y passait
+ * 58 secondes, et la suite entière 74. Les horizons de boucle ont été rabotés à
+ * 2 h le 26/08, et les longues absences se testent désormais par COMPOSITION
+ * (rattraper deux fois vaut rattraper une fois), qui est en temps constant. Le gain d'un cache serait invisible et le
  * coût, lui, serait une invalidation à tenir à jour à chaque pose, chaque
  * montée de niveau, chaque destruction. C'est exactement le genre de cache qui
  * finit par mentir.

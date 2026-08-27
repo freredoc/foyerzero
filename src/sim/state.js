@@ -7,10 +7,13 @@
 
 import { creerRng, restaurerRng } from './rng.js';
 import { creerHorloge, tick as tickHorloge, avancerTicks } from './clock.js';
-import { tickEconomie, rattrapageEconomie } from './economy.js';
+import { champsDeLaBase } from './champs.js';
+import { positionDepartJoueur } from './carte.js';
+import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
+import { creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase } from './economie-base.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /**
  * @typedef {object} Etat
@@ -18,53 +21,84 @@ export const SAVE_VERSION = 3;
  * @property {number} graine    Graine d'origine de la partie.
  * @property {{ s: number }} rng
  * @property {{ tempsSimuleMs: number, nbTicks: number, residuMs: number }} horloge
- * @property {{ quartzMilli: number, scorieMilli: number }} ressources
- * @property {Array<{ type: string, niveau: number, voisinsQualifiants: number,
- *   residuFlux: number }>} batiments
+ * @property {{ rangee: number, colonne: number }} position Sur la carte monde.
+ * @property {Array<{ id: string, rangee: number, colonne: number, niveau: number }>} disposition
+ * @property {{ ressources: Record<string, number>, residus: Array<Record<string, number>> }} economie
+ * @property {object} champs DÉRIVÉ de `position` — voir `serialiser`.
  */
 
-/**
- * Crée un bâtiment initial.
- * @param {string} type Clé dans params.batiments.
- * @param {number} niveau
- * @param {number} voisinsQualifiants
- */
-export function creerBatiment(type, niveau = 1, voisinsQualifiants = 0) {
-  return {
-    type,
-    niveau,
-    voisinsQualifiants,
-    // Reste exact de la production cumulée, en milli-unités × ticks/heure.
-    // Toujours dans [0, TICKS_PAR_HEURE[ ; voir sim/economy.js.
-    residuFlux: 0,
-  };
-}
+// ---------------------------------------------------------------------------
+// Le terrain est DÉRIVÉ, pas sauvegardé
+// ---------------------------------------------------------------------------
+//
+// `champsDeLaBase` est une fonction de la seule POSITION : même case, même
+// terrain, pour toujours. Il y a donc deux façons de le traiter, et une seule
+// bonne.
+//
+// LE RECALCULER À CHAQUE TICK : non. MESURÉ le 26/08 : **71,6 µs par appel**,
+// soit à 10 Hz 0,72 ms par seconde de jeu réel — plus du double du tick
+// économique lui-même (0,30 ms/s). Ce serait tripler le coût de la boucle pour
+// une valeur qui ne peut pas changer pendant un tick.
+//
+// LE SAUVEGARDER : non plus. Il serait alors possible qu'une sauvegarde porte
+// un terrain qui ne correspond plus à sa position — par édition, par bogue, par
+// migration ratée — et rien ne le dirait.
+//
+// RETENU : il vit dans l'état en mémoire, et `serialiser` l'OMET. La sauvegarde
+// ne porte que `position`, seule source de vérité ; `charger` en redéduit le
+// terrain. Un seul endroit peut mentir, et c'est celui qui est écrit.
 
 /**
- * Crée l'état initial d'une partie.
+ * Crée l'état d'une partie neuve : le joueur ouvre le jeu dans sa base.
+ *
+ * ARBITRÉ le 26/08 : il démarre rangée 275, colonne 16 de la carte (strate 5),
+ * sur un Chantier de construction niveau 1 posé en (18, 5) de sa base.
+ *
  * @param {number} graine
- * @param {object} params
  * @returns {Etat}
  */
-export function creerEtat(graine, params) {
+export function creerEtat(graine) {
+  const position = positionDepartJoueur();
+  const disposition = dispositionNouvelleBase();
   const etat = {
     version: SAVE_VERSION,
     graine,
     rng: creerRng(graine),
     horloge: creerHorloge(),
-    ressources: { quartzMilli: 0, scorieMilli: 0 },
-    batiments: [creerBatiment('foreuse', 1, 0)],
+    position,
+    disposition,
+    economie: creerEtatEconomie(disposition),
+    champs: champsDeLaBase(position.rangee, position.colonne),
   };
-  verifierEtat(etat, params);
+  verifierEtat(etat);
   return etat;
 }
 
-/** Vérifie la cohérence structurelle d'un état (types de bâtiments connus). */
-function verifierEtat(etat, params) {
-  for (const b of etat.batiments) {
-    if (!params.batiments[b.type]) {
-      throw new Error(`etat : type de bâtiment inconnu « ${b.type} »`);
+/**
+ * Vérifie qu'un état est jouable, et dit précisément ce qui ne va pas sinon.
+ *
+ * ⚠ ELLE LÈVE, là où `problemesDeDisposition` rend une liste — et la différence
+ * est voulue. Une disposition illégale en cours de partie est un fait de JEU :
+ * on la montre au joueur, il purge. Une disposition illégale au CHARGEMENT est
+ * un fait de programme : la partie n'est pas jouable, et continuer produirait
+ * des résultats faux en silence.
+ *
+ * @param {Etat} etat
+ */
+function verifierEtat(etat) {
+  for (const champ of ['position', 'disposition', 'economie', 'champs']) {
+    if (etat[champ] === undefined) {
+      throw new Error(`etat : champ « ${champ} » absent`);
     }
+  }
+  if (etat.economie.residus.length !== etat.disposition.length) {
+    throw new Error(
+      `etat : ${etat.economie.residus.length} résidus pour ${etat.disposition.length} bâtiments`,
+    );
+  }
+  const problemes = problemesDeDisposition(etat.disposition, etat.champs);
+  if (problemes.length > 0) {
+    throw new Error(`etat : disposition injouable — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
 }
 
@@ -75,9 +109,9 @@ function verifierEtat(etat, params) {
  * @param {Etat} etat
  * @param {object} params
  */
-export function tickJeu(etat, params) {
+export function tickJeu(etat) {
   tickHorloge(etat.horloge);
-  tickEconomie(etat, params);
+  tickEconomieBase(etat.economie, etat.disposition, etat.champs);
 }
 
 /**
@@ -89,18 +123,23 @@ export function tickJeu(etat, params) {
  * @param {number} nbTicks
  * @param {object} params
  */
-export function rattraperJeu(etat, nbTicks, params) {
+export function rattraperJeu(etat, nbTicks) {
   avancerTicks(etat.horloge, nbTicks);
-  rattrapageEconomie(etat, nbTicks, params);
+  rattrapageEconomieBase(etat.economie, etat.disposition, etat.champs, nbTicks);
 }
 
 /**
- * Sérialise l'état en JSON.
+ * Sérialise l'état en JSON, SANS le terrain.
+ *
+ * Le terrain se déduit de `position` (voir plus haut) : l'écrire dans la
+ * sauvegarde créerait une seconde source de vérité, donc une occasion de
+ * divergence. `charger` le reconstruit.
  * @param {Etat} etat
  * @returns {string}
  */
 export function serialiser(etat) {
-  return JSON.stringify(etat);
+  const { champs, ...aSauver } = etat;
+  return JSON.stringify(aSauver);
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +204,37 @@ const MIGRATIONS = {
       for (const b of s.batiments) delete b.colis;
     }
   },
+
+  /**
+   * v3 → v4 : le moteur du lot 1 est remplacé. L'ancien état portait des
+   * `batiments` typés `foreuse` / `decapeuse` SANS coordonnées, et deux stocks
+   * globaux. Le nouveau porte une POSITION sur la carte, une DISPOSITION de
+   * bâtiments placés à la case, et une économie à trois ressources.
+   *
+   * ⚠ CETTE MIGRATION NE CONVERTIT RIEN, ELLE REFONDE — et c'est le seul choix
+   * honnête. Il n'existe aucune correspondance entre une `foreuse` sans
+   * coordonnée et un `collecteur` qui doit se poser sur un champ : inventer une
+   * case reviendrait à fabriquer une partie qui n'a jamais été jouée.
+   *
+   * ⚠ ELLE NE DÉTRUIT RIEN NON PLUS, PARCE QU'IL N'Y AVAIT RIEN. Ethan, le
+   * 26/08 : « aucune sauvegarde actuellement, personne ne joue, pas même moi ».
+   * Cette migration est écrite pour que la CHAÎNE reste continue — le mécanisme
+   * doit rester éprouvé — pas pour préserver des données qui n'ont jamais
+   * existé. Si un jour des sauvegardes circulent, une refondation silencieuse
+   * ne serait plus acceptable : il faudrait prévenir le joueur AVANT.
+   *
+   * Ce qui survit : la graine, l'état du tirage, l'horloge. Autrement dit le
+   * TEMPS de la partie, pas son contenu.
+   * @param {object} s
+   */
+  3: (s) => {
+    s.version = 4;
+    delete s.batiments;
+    delete s.ressources;
+    s.position = positionDepartJoueur();
+    s.disposition = dispositionNouvelleBase();
+    s.economie = creerEtatEconomie(s.disposition);
+  },
 };
 
 /**
@@ -194,14 +264,16 @@ export function migrer(sauvegarde) {
 }
 
 /**
- * Charge une sauvegarde JSON : parse, migre, restaure les invariants.
+ * Charge une sauvegarde JSON : parse, migre, redéduit le terrain, vérifie.
  * @param {string} json
- * @param {object} params
  * @returns {Etat}
  */
-export function charger(json, params) {
+export function charger(json) {
   const etat = migrer(JSON.parse(json));
   etat.rng = restaurerRng(etat.rng);
-  verifierEtat(etat, params);
+  // Le terrain n'est pas dans la sauvegarde : il se redéduit de la position.
+  // C'est ici, et nulle part ailleurs, qu'il rentre dans l'état.
+  etat.champs = champsDeLaBase(etat.position.rangee, etat.position.colonne);
+  verifierEtat(etat);
   return etat;
 }
