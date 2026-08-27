@@ -15,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  SEPARATEUR_MILLIERS, SIGLES, BANDES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
+  SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
+  PASTILLE_POSE,
   formaterEntier, formaterUnites, formaterDixiemes, formaterDebit, formaterNiveau,
   familleDuBatiment, bandeDeLaRangee, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
 } from '../src/ui/chantier.js';
@@ -24,6 +25,7 @@ import {
   DUREE_APPUI_DEBUG_MS, avancer,
 } from '../src/ui/session.js';
 import { BASE_BATIMENTS, COUT_NIVEAU_DEUX, emplacementsDuNiveau } from '../src/data/base.js';
+import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
@@ -189,6 +191,32 @@ test('chantier — les trois bandes sont lues dans GRILLE, et couvrent la grille
   }
 });
 
+test('chantier — la barre du bas porte DEUX bandes, le déploiement n\'en est plus', () => {
+  // ⚠ POURQUOI DEUX ET NON TROIS. Le lot précédent donnait un bouton « Assaut »
+  // pointant sur les rangées 1–2. Ces deux rangées sont l'endroit où les vagues
+  // PARAISSENT pendant un combat, pas celui où on les COMPOSE : le bouton
+  // promettait un éditeur et livrait du sol nu. La composition a désormais son
+  // écran, et ce raccourci-là n'existe plus.
+  assert.deepEqual(BANDES_NAVIGABLES, ['batiments', 'defense']);
+  assert.ok(!BANDES_NAVIGABLES.includes('deploiement'), 'le déploiement a repris un bouton');
+
+  // La bande, elle, EXISTE toujours : elle se dessine et se traverse en
+  // défilant. C'est le raccourci qui disparaît, pas la géométrie.
+  assert.equal(BANDES.length, 3);
+  assert.ok(BANDES.some((b) => b.cle === 'deploiement'));
+
+  // Chaque bouton renvoie à une bande réelle de la grille, et porte un nom.
+  for (const cle of BANDES_NAVIGABLES) {
+    const bande = BANDES.find((b) => b.cle === cle);
+    assert.ok(bande, `bande « ${cle} » introuvable`);
+    assert.equal(typeof bande.nom, 'string');
+    assert.ok(bande.nom.length > 0);
+  }
+  // Et plus aucune bande ne s'appelle « Assaut » : le mot désigne un écran
+  // maintenant, pas deux rangées de sol nu.
+  assert.deepEqual(BANDES.filter((b) => b.nom === 'Assaut'), []);
+});
+
 // ---------------------------------------------------------------------------
 // Ce que l'écran lit dans l'état
 // ---------------------------------------------------------------------------
@@ -274,13 +302,24 @@ test('chantier — la palette ne propose pas un unique déjà posé', () => {
     assert.ok(ids.includes(multiple), `${multiple} n'est pas unique`);
   }
 
-  // Le coût affiché est celui du NIVEAU 2 : poser ne coûte rien, le niveau 1
-  // est gratuit pour les onze.
+  // ⚠ LE CHAMP NE S'APPELLE PLUS `coutNiveauDeux`, ET LE RENOMMAGE EST LA
+  // CORRECTION. Sous l'ancien nom, la vignette de pose affichait ce nombre en
+  // chiffre nu : « 3 » sur un Collecteur posable se lit « poser coûte 3 ». Or
+  // poser ne coûte RIEN — le niveau 1 est gratuit pour les onze. Le nom dit
+  // maintenant ce que le nombre est : le coût de la PREMIÈRE AMÉLIORATION.
   for (const p of posables) {
-    assert.equal(p.coutNiveauDeux, COUT_NIVEAU_DEUX[BASE_BATIMENTS[p.id].classeDeCout]);
+    assert.equal(
+      p.coutPremiereAmelioration, COUT_NIVEAU_DEUX[BASE_BATIMENTS[p.id].classeDeCout],
+    );
     assert.equal(p.nom, BASE_BATIMENTS[p.id].nom.joueur);
-    assert.ok(p.coutNiveauDeux > 0);
+    assert.ok(p.coutPremiereAmelioration > 0);
+    // L'ancien nom ne doit pas survivre en doublon : deux champs pour le même
+    // nombre laisseraient un appelant continuer d'employer le trompeur.
+    assert.ok(!('coutNiveauDeux' in p), 'l\'ancien nom trompeur est toujours là');
   }
+  // Et le premier niveau payant est bien le DEUXIÈME : c'est ce fait qui rend
+  // l'ancien affichage faux, et il se lit dans la table, pas de mémoire.
+  assert.equal(ECONOMIE_NIVEAU.premierNiveauPayant, 2);
 
   // Sur une base NEUVE, seul le Chantier est posé : tous les autres sont
   // proposés. C'est le cas que le joueur voit à sa première ouverture.
@@ -363,7 +402,7 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     'chantier-version', 'chantier-champ', 'chantier-defile', 'chantier-grille',
     'chantier-contexte', 'chantier-selection-nom', 'chantier-selection-detail',
     'chantier-reparer', 'chantier-ameliorer', 'chantier-ameliorer-cible', 'chantier-demonter',
-    'chantier-bandes', 'chantier-palette', 'chantier-avis',
+    'chantier-bandes', 'chantier-bandes-liste', 'chantier-palette', 'chantier-avis',
     'chantier-alerte', 'chantier-alerte-message', 'chantier-alerte-neuve', 'chantier-alerte-reessayer',
   ]) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
@@ -418,4 +457,45 @@ test('chantier — un tick de jeu fait monter le stock que l\'écran affiche', (
     assert.ok(ligne.stockMilli > 0, `${ligne.cle} n'a pas bougé en une heure`);
     assert.ok(ligne.stockMilli <= ligne.capaciteMilli, `${ligne.cle} a dépassé sa capacité`);
   }
+});
+
+
+test('chantier — aucune vignette de pose ne présente un coût de POSE', () => {
+  // ⚠ CE TEST LIT LA SOURCE, ET IL FAUT DIRE POURQUOI. Ce qu'il garde est un
+  // rendu au DOM, et le dépôt n'a ni jsdom ni navigateur : la valeur affichée
+  // ne peut pas être observée ici. Ce qui PEUT l'être, c'est que le seul
+  // endroit qui écrit la pastille écrive la constante, et qu'aucun texte de
+  // vignette ne soit alimenté par le coût.
+  //
+  // Le défaut qu'il garde a déjà été livré une fois : la pastille portait
+  // `COUT_NIVEAU_DEUX` en chiffre nu, un commentaire du même fichier disait
+  // trois lignes plus haut que poser est gratuit, et personne ne l'a vu avant
+  // qu'Ethan n'essaie l'écran sur son téléphone.
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8');
+
+  // La pastille annonce le fait vrai, et elle passe par la constante.
+  assert.equal(PASTILLE_POSE, 'gratuit');
+  assert.ok(
+    /cout\.textContent\s*=\s*PASTILLE_POSE\s*;/.test(source),
+    'la pastille de la vignette ne passe plus par PASTILLE_POSE',
+  );
+
+  // Et AUCUN texte affiché n'est alimenté par le coût. Le coût reste rendu par
+  // `posablesDeLaBase` et porté par le `title` de la vignette — il n'a pas
+  // disparu, il a cessé d'être présenté comme un prix à payer pour poser.
+  const fautes = source.split('\n')
+    .filter((l) => /textContent\s*=/.test(l) && /coutPremiereAmelioration/.test(l));
+  assert.deepEqual(fautes, [], `un texte affiché porte le coût : ${fautes.join(' | ')}`);
+
+  // Falsifiable des deux côtés : le motif doit attraper la vraie régression…
+  const appat = 'cout.textContent = String(posable.coutPremiereAmelioration);';
+  assert.ok(/textContent\s*=/.test(appat) && /coutPremiereAmelioration/.test(appat),
+    'le montage n\'attraperait pas le retour du chiffre nu');
+  // …et laisser passer l'usage légitime, qui n'affiche rien de lui-même.
+  const innocent = 'const cout = posable.coutPremiereAmelioration;';
+  assert.ok(!/textContent\s*=/.test(innocent), 'la garde refuse une lecture légitime du coût');
+
+  // Le coût EST toujours accessible : on ne l'a pas supprimé, on l'a déplacé.
+  const posables = posablesDeLaBase(creerEtat(3));
+  assert.ok(posables.every((p) => p.coutPremiereAmelioration > 0));
 });

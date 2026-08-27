@@ -36,6 +36,17 @@
   s'en servir : contourner un garde-fou en silence coute plus cher que la
   contrainte qu'il pose.
 
+  ⚠ REVISION DU 27/08/2026 (soir), lot ECRAN-NAVIGATION. Deux corrections de
+  navigation, releves sur l'ecran reel essaye sur GitHub Pages :
+    — la grille est RETOURNEE : la rangee 18 tombe en premiere ligne d'ecran,
+      donc la base d'abord, puis la defense, puis les deux rangees de
+      deploiement. Le modele ne bouge pas, c'est l'affichage qui se retourne ;
+    — la barre du bas porte DEUX bandes et non trois. Le bouton « Assaut »
+      pointait sur les rangees 1-2, ou les vagues PARAISSENT pendant un combat
+      et non ou on les COMPOSE : il promettait un editeur et livrait du sol nu.
+      La composition a son propre ecran dans le jeu ; la maquette n'en porte
+      qu'un renvoi, et c'est un ecart assume — voir RAPPORT-ECRAN-NAVIGATION.md.
+
   ⚠ TOUS LES CHIFFRES DE CETTE PAGE SORTENT DU MOTEUR. Terrain :
   champsDeLaBase(275, 16), la case de départ. Disposition : onze bâtiments
   passés à problemesDeDisposition() → aucun problème. Débits :
@@ -117,6 +128,8 @@ body{
 .rail .b-bat{height:312px;background:var(--k-corps)} /* rangees 11-18 */
 .grid{flex:1;display:grid;grid-template-columns:repeat(9,1fr);
       grid-auto-rows:var(--cell)}
+/* Les cases portent leur ligne d'ecran en style : le miroir se lit dans le
+   script, pas dans un ordre d'emission qu'on devrait deviner. */
 .c{border-right:1px solid var(--k-ombre);
    border-bottom:1px solid var(--k-ombre);
    position:relative;display:flex;align-items:center;justify-content:center}
@@ -176,6 +189,13 @@ body{
 .band.on span,.band.on i{color:var(--ai-c)}
 .band.on{background:var(--k-ombre)}
 .band.vide i{color:#3E454C}
+/* Le saut vers l'ecran Offense n'est PAS une troisieme bande : un filet le
+   separe, une fleche dit qu'il emmene ailleurs, et il ne porte pas de niveau.
+   C'est ce qui manquait au bouton « Assaut », qui avait l'air d'une bande et
+   faisait defiler vers deux rangees de sol nu. */
+.saut{flex:0 0 auto;display:flex;align-items:center;padding:0 10px;
+      background:var(--k-ombre);color:var(--ai-c);border-left:2px solid var(--m-moyen);
+      font-size:10px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
 
 /* ---------- 7. SLOTS — 86 ---------- */
 .slots{flex:0 0 86px;height:86px;display:grid;
@@ -231,7 +251,7 @@ body{
   <div class="field">
     <div class="scroll" id="scroll">
       <div class="rail">
-        <div class="b-off"></div><div class="b-def"></div><div class="b-bat"></div>
+        <div class="b-bat"></div><div class="b-def"></div><div class="b-off"></div>
       </div>
       <div class="grid" id="grid"></div>
     </div>
@@ -245,9 +265,9 @@ body{
   </div>
 
   <div class="bands">
-    <div class="band bat on" data-y="702"><em></em><span>Chantier</span><i>4,6</i></div>
-    <div class="band def vide" data-y="78"><em></em><span>Défense</span><i>—</i></div>
-    <div class="band off vide" data-y="0"><em></em><span>Assaut</span><i>—</i></div>
+    <div class="band bat on" data-y="0"><em></em><span>Chantier</span><i>4,6</i></div>
+    <div class="band def vide" data-y="312"><em></em><span>Défense</span><i>—</i></div>
+    <div class="saut">Offense →</div>
   </div>
 
   <div class="slots" id="slots"></div>
@@ -306,7 +326,12 @@ for (let r = 1; r <= 18; r++) {
     } else if (r === LIBRE[0] && c === LIBRE[1]) {
       dedans += '<div class="libre"></div>';
     }
-    html += '<div class="' + cls + '">' + dedans + '</div>';
+    // MIROIR : ligne d'ecran = 18 + 1 - rangee. La rangee 18 tombe donc en
+    // premiere ligne, et la rangee 1 en derniere. Le modele ne bouge pas — la
+    // rangee 1 reste celle d'ou arrivent les vagues, c'est l'AFFICHAGE qui se
+    // retourne. Meme transformation que render/orientation.js dans le jeu.
+    const style = 'grid-column:' + c + ';grid-row:' + (19 - r);
+    html += '<div class="' + cls + '" style="' + style + '">' + dedans + '</div>';
   }
 }
 document.getElementById('grid').innerHTML = html;
@@ -338,14 +363,16 @@ document.querySelectorAll('.band').forEach(function (b) {
 /* La bande active suit le defilement manuel. Seuils = hauteurs de bande en
    pixels : 2 rangees puis 8, a 39 px la rangee. */
 sc.addEventListener('scroll', function () {
-  const y = sc.scrollTop, i = y > 350 ? 0 : (y > 60 ? 1 : 2);
+  // Deux bandes : les 8 rangees de batiments occupent les 312 premiers pixels.
+  const y = sc.scrollTop, i = y >= 300 ? 1 : 0;
   const bs = document.querySelectorAll('.band');
   if (!bs[i].classList.contains('on')) {
     bs.forEach(function (x) { x.classList.remove('on'); });
     bs[i].classList.add('on');
   }
 });
-sc.scrollTo({ top: 702 });
+// Le jeu s'ouvre sur la base, qui est desormais en tete du champ.
+sc.scrollTo({ top: 0 });
 </script>
 </body>
 </html>

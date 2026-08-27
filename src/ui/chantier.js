@@ -29,6 +29,7 @@ import { BASE_BATIMENTS, COUT_NIVEAU_DEUX, emplacementsDuNiveau, estDansLaBase }
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { productionParRessource } from '../sim/disposition.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
+import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 
 // ---------------------------------------------------------------------------
 // Formatage — la seule couche qui a le droit de quitter les entiers du moteur
@@ -117,6 +118,18 @@ export function formaterDebit(milliParHeure) {
   return `${signe}${formaterUnites(milliParHeure)}/h`;
 }
 
+/**
+ * Ce que la pastille d'une vignette de pose annonce.
+ *
+ * ⚠ C'EST UNE CONSTANTE PARCE QUE C'EST UNE DÉCISION, pas une chaîne de plus.
+ * La pastille portait `COUT_NIVEAU_DEUX` en chiffre nu — « 3 » sur un
+ * Collecteur posable, qui se lit « poser coûte 3 ». Poser ne coûte RIEN : le
+ * niveau 1 est gratuit pour les onze. La nommer permet d'asserter que c'est
+ * bien elle que la vignette affiche, et non un nombre revenu par une autre
+ * porte.
+ */
+export const PASTILLE_POSE = 'gratuit';
+
 /** Un niveau absent — la Défense et l'Assaut, qui n'ont pas encore d'état. */
 export const NIVEAU_ABSENT = '—';
 
@@ -191,10 +204,27 @@ export function familleDuBatiment(id) {
  * atteint. Le mot « haut » a coûté un lot le 26/08 et il ne se réemploie pas.
  */
 export const BANDES = [
-  { cle: 'deploiement', nom: 'Assaut', ...GRILLE.bandes.deploiement },
+  { cle: 'deploiement', nom: 'Déploiement', ...GRILLE.bandes.deploiement },
   { cle: 'defense', nom: 'Défense', ...GRILLE.bandes.defense },
   { cle: 'batiments', nom: 'Chantier', ...GRILLE.bandes.batiments },
 ];
+
+/**
+ * Les bandes qui portent un bouton dans la barre du bas, dans l'ordre où elles
+ * se lisent à l'écran : la base d'abord, sa défense ensuite.
+ *
+ * ⚠ LE DÉPLOIEMENT N'EN EST PAS, ET C'EST UNE CORRECTION. Le lot ÉCRAN-CHANTIER
+ * lui avait donné un bouton nommé « Assaut » pointant sur les rangées 1–2. Ces
+ * deux rangées sont l'endroit où les vagues PARAISSENT pendant un combat, pas
+ * celui où on les COMPOSE : le bouton promettait un éditeur et livrait du sol
+ * nu. La composition d'assaut a désormais son propre écran (`ui/offense.js`),
+ * atteint par un bouton qui, lui, mène là où il le dit.
+ *
+ * La bande elle-même reste dans `BANDES` : elle existe toujours dans la grille,
+ * elle se dessine, elle se traverse en défilant. Elle n'a simplement plus de
+ * raccourci.
+ */
+export const BANDES_NAVIGABLES = ['batiments', 'defense'];
 
 /**
  * La bande à laquelle appartient une rangée.
@@ -307,13 +337,32 @@ export function detailDuBatiment(etat, index) {
  * Les bâtiments que le joueur pourrait poser — ceux qui ne sont pas uniques, et
  * ceux qui le sont mais ne sont pas encore posés.
  *
- * ⚠ LE COÛT AFFICHÉ EST CELUI DU NIVEAU 2, pas celui de la pose. Poser ne coûte
- * rien : `ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2, le niveau 1 est gratuit
- * pour les onze. Le chiffre utile au joueur qui choisit est donc ce que la
- * PREMIÈRE amélioration lui demandera, et c'est déjà le parti de la maquette.
+ * ⚠ LE CHAMP S'APPELLE `coutPremiereAmelioration`, ET LE NOM EST LA CORRECTION.
+ * Il s'appelait `coutNiveauDeux` et la vignette l'affichait en nombre nu, dans
+ * un coin : « 3 » sur un Collecteur qu'on peut poser se lit « poser coûte 3 ».
+ * Or poser ne coûte RIEN — `ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2, le
+ * niveau 1 est gratuit pour les onze, et le fichier le savait déjà : un
+ * commentaire l'écrivait noir sur blanc trois lignes plus haut pendant que le
+ * code affichait le chiffre. Renommer le champ est ce qui empêche la
+ * confusion de revenir, parce que le point d'appel ne peut plus se tromper
+ * sans que ça se voie en relecture.
+ *
+ * ⚠ ET LE CHIFFRE A QUITTÉ LA VIGNETTE DE POSE. L'amendement laissait le choix
+ * entre le dire et le retirer ; une vignette de 82 px n'a pas la place de dire
+ * « première amélioration », et un chiffre mal légendé est exactement ce qu'on
+ * répare. Ce que la vignette annonce maintenant est le fait vrai : la pose est
+ * gratuite. Le coût reste rendu par cette fonction — le titre de la vignette le
+ * porte, et l'écran qui saura présenter les améliorations l'aura sous la main.
+ *
+ * ⚠ AUCUNE RESSOURCE N'EST NOMMÉE AVEC CE NOMBRE. `COUT_NIVEAU_DEUX` donne un
+ * nombre unique et `COUT_ELECTRICITE` une fraction du coût EN QUARTZ ; rien ne
+ * dit comment le total se répartit entre quartz et scorie depuis que le modèle
+ * du lot 1 est parti avec `data/params.js`. Écrire « 3 quartz » serait inventer
+ * une répartition qu'Ethan n'a pas arbitrée. Un nombre sans ressource, dit comme
+ * tel, est plus honnête.
  *
  * @param {object} etat
- * @returns {Array<{id: string, nom: string, famille: string, coutNiveauDeux: number}>}
+ * @returns {Array<{id: string, nom: string, famille: string, coutPremiereAmelioration: number}>}
  */
 export function posablesDeLaBase(etat) {
   const poses = new Set(etat.disposition.map((b) => b.id));
@@ -323,7 +372,7 @@ export function posablesDeLaBase(etat) {
       id,
       nom: def.nom.joueur,
       famille: familleDuBatiment(id),
-      coutNiveauDeux: COUT_NIVEAU_DEUX[def.classeDeCout],
+      coutPremiereAmelioration: COUT_NIVEAU_DEUX[def.classeDeCout],
     }));
 }
 
@@ -372,10 +421,11 @@ export function initialiserEcranChantier(doc) {
   // pas le savoir, elle travaillait à 360 px de large et à cellule fixe.
   grille.style.gridTemplateColumns = `var(--rail) repeat(${GRILLE.largeur}, 1fr)`;
   for (const bande of BANDES) {
+    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
     const segment = doc.createElement('div');
     segment.className = `segment ${bande.cle}`;
     segment.style.gridColumn = '1';
-    segment.style.gridRow = `${bande.premiere} / span ${bande.derniere - bande.premiere + 1}`;
+    segment.style.gridRow = `${premiereLigne} / span ${nbLignes}`;
     grille.appendChild(segment);
   }
   for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
@@ -386,7 +436,10 @@ export function initialiserEcranChantier(doc) {
       case_.dataset.rangee = String(rangee);
       case_.dataset.colonne = String(colonne);
       case_.style.gridColumn = String(colonne + 1);
-      case_.style.gridRow = String(rangee);
+      // ⚠ LA LIGNE D'ÉCRAN N'EST PAS LA RANGÉE. `render/orientation.js` fait la
+      // seule transformation, ici comme pour le rail : poser `gridRow = rangee`
+      // mettait la rangée 1 en premier, donc le déploiement avant la base.
+      case_.style.gridRow = String(ligneEcranDeLaRangee(rangee));
       if (colonne === 1) {
         const numero = doc.createElement('span');
         numero.className = 'numero';
@@ -430,11 +483,16 @@ export function initialiserEcranChantier(doc) {
   // parties d'une même grille : les traiter comme trois écrans ferait perdre au
   // joueur le fait qu'un assaut TRAVERSE la défense pour atteindre les
   // bâtiments.
-  const bandeauBandes = $('chantier-bandes');
+  // ⚠ LES BOUTONS DE BANDE VONT DANS LA LISTE, PAS DANS LA BARRE. La barre porte
+  // aussi le saut vers l'écran Offense, écrit dans le balisage ; y ajouter les
+  // bandes par le JS les poserait APRÈS lui, et le saut se lirait en premier.
+  // Une liste à part garde l'ordre du document égal à l'ordre de l'écran.
+  const bandeauBandes = $('chantier-bandes-liste');
   const boutonsBande = new Map();
-  // Du fond vers le bord d'où viennent les vagues : le joueur lit sa base
-  // d'abord, la menace ensuite.
-  for (const bande of [...BANDES].reverse()) {
+  // Deux boutons, dans l'ordre où les bandes se lisent maintenant à l'écran :
+  // la base d'abord, sa défense ensuite. Le déploiement n'en a plus — voir
+  // `BANDES_NAVIGABLES`.
+  for (const bande of BANDES_NAVIGABLES.map((c) => BANDES.find((b) => b.cle === c))) {
     const bouton = doc.createElement('button');
     bouton.type = 'button';
     bouton.className = `bande ${bande.cle}`;
@@ -462,7 +520,8 @@ export function initialiserEcranChantier(doc) {
   function allerALaBande(cleBande) {
     const bande = BANDES.find((b) => b.cle === cleBande);
     if (bande === undefined) throw new Error(`chantier : bande « ${cleBande} » inconnue`);
-    defile.scrollTo({ top: (bande.premiere - 1) * hauteurRangee(), behavior: 'smooth' });
+    const { premiereLigne } = ligneEcranDeLaBande(bande);
+    defile.scrollTo({ top: (premiereLigne - 1) * hauteurRangee(), behavior: 'smooth' });
     marquerBandeActive(cleBande);
   }
 
@@ -479,11 +538,11 @@ export function initialiserEcranChantier(doc) {
   defile.addEventListener('scroll', () => {
     const h = hauteurRangee();
     if (!(h > 0)) return;
-    const rangeeEnTete = Math.min(
+    const ligneEnTete = Math.min(
       GRILLE.longueur,
       Math.max(1, Math.round(defile.scrollTop / h) + 1),
     );
-    marquerBandeActive(bandeDeLaRangee(rangeeEnTete));
+    marquerBandeActive(bandeDeLaRangee(rangeeDeLaLigneEcran(ligneEnTete)));
   });
 
   // --- la palette des posables -----------------------------------------------
@@ -498,10 +557,12 @@ export function initialiserEcranChantier(doc) {
       // ⚠ DÉSACTIVÉ, ET ÇA DOIT SE VOIR. Un contrôle inerte qui a l'air vif fait
       // douter le joueur de son appareil plutôt que du jeu.
       emplacement.disabled = true;
-      emplacement.title = `${posable.nom} — la pose viendra dans un prochain lot`;
+      emplacement.title = `${posable.nom} — poser au niveau 1 est gratuit ; la première `
+        + `amélioration coûtera ${posable.coutPremiereAmelioration}. La pose viendra dans `
+        + 'un prochain lot.';
       const cout = doc.createElement('span');
       cout.className = 'cout';
-      cout.textContent = String(posable.coutNiveauDeux);
+      cout.textContent = PASTILLE_POSE;
       const vignette = doc.createElement('i');
       const nom = doc.createElement('b');
       nom.textContent = posable.nom;
@@ -644,9 +705,11 @@ export function initialiserEcranChantier(doc) {
     const remplissage = ouverts === 0 ? 0 : Math.min(100, (poses / ouverts) * 100);
     $('chantier-jauge').style.width = `${remplissage.toFixed(1)}%`;
 
+    // Chaque bouton porte SON niveau. Celui de la défense reste « — » : l'état
+    // ne porte pas de garnison, et en inventer une moyenne afficherait un
+    // chiffre faux là où le tiret dit ce qui est vrai.
     boutonsBande.get('batiments').niveau.textContent = formaterNiveau(resume.niveaux.batiments);
     boutonsBande.get('defense').niveau.textContent = formaterNiveau(resume.niveaux.defense);
-    boutonsBande.get('deploiement').niveau.textContent = formaterNiveau(resume.niveaux.assaut);
     for (const [c, { bouton }] of boutonsBande) {
       bouton.classList.toggle('sans-niveau', c !== 'batiments');
     }
@@ -663,7 +726,10 @@ export function initialiserEcranChantier(doc) {
     allerALaBande,
     /** Le champ s'ouvre sur la bande des bâtiments : c'est là qu'est la base. */
     ouvrirSurLaBase() {
-      defile.scrollTop = (GRILLE.bandes.batiments.premiere - 1) * hauteurRangee();
+      // Les bâtiments occupent désormais les premières lignes d'écran : ouvrir
+      // sur la base, c'est ouvrir en tête du champ.
+      defile.scrollTop = (ligneEcranDeLaBande(GRILLE.bandes.batiments).premiereLigne - 1)
+        * hauteurRangee();
       marquerBandeActive('batiments');
     },
   };
