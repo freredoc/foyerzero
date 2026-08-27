@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.14.0 · build 14.
+Dernière révision : **27/08/2026**, version 0.15.0 · build 15.
 
 ---
 
@@ -25,7 +25,7 @@ Dernière révision : **27/08/2026**, version 0.14.0 · build 14.
    savoir est un lot perdu.
 
 **Référence au 27/08/2026 (après le lot ÉCRAN-NAVIGATION), à confronter :**
-`npm test` → **282 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **286 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **130 488 octets**, 0 référence externe.
 
 ⚠ **LE HTML BOUGE MAINTENANT À CHAQUE LOT D'INTERFACE.** Il était figé à 81 236
@@ -442,6 +442,23 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   le collecteur de niveau 50 SEUL, avant que le voisinage n'entre au modèle. Le
   pire cas réel est un collecteur niveau 50 entouré de huit raffineries :
   45 738 385 u/h.
+- ⚠⚠ **UNE BASE NEUVE NE PEUT RIEN PRODUIRE, JAMAIS. BLOCAGE OUVERT, 27/08.**
+  Mesuré en simulant 24 h sur les quatre choix possibles, pas déduit :
+  un Chantier niveau 1 ouvre **2** emplacements et en occupe **1** — il en reste
+  **UN**. Or produire demande DEUX bâtiments : un producteur et un stockage.
+  | Le seul bâtiment posable | Production | Capacité | Après 24 h |
+  |---|---|---|---|
+  | Collecteur | 240/h de quartz | **0** | **0** |
+  | Raffinerie | — | 2 880 | **0** |
+  | Centrale | 120/h d'électricité | **0** | **0** |
+  | Accumulateur | — | 1 440 | **0** |
+  `capacitesMilli` ne compte que la raffinerie et l'accumulateur ; sans eux le
+  plafond vaut zéro, et `min(cap, stock + gain)` reste à zéro pour toujours.
+  ⚠ **ET LE VERROU SE REFERME** : ouvrir un troisième emplacement demande le
+  Chantier niveau 2, qui coûte **8** (classe majeur). Le joueur a zéro et ne
+  peut pas en obtenir. **La partie est instartable.** Ce n'est pas un défaut
+  d'écran — l'écran a raison de ne rien montrer qui monte. C'est un arbitrage
+  qui manque, et il est devant tout le reste.
 - **TOUTE base neuve du joueur est un Chantier de construction niveau 1, en
   (18, 5)** — pas seulement la première. Arbitré le 26/08 : « toutes les bases
   que le joueur pose suivront la même logique ». `BASE_NEUVE` de `data/base.js`,
@@ -729,6 +746,20 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **L'API GitHub est en rate-limit partagé.** Passer par
   `codeload.github.com/<repo>/tar.gz/refs/heads/main`, et pour une PR par
   `refs/pull/<n>/head`.
+
+- **`poser(etat, id, rangee, colonne)` et `problemesDeLaPose`** vivent dans
+  `sim/state.js` depuis le 27/08 (lot POSE). **Poser ne coûte rien** —
+  `ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2, le niveau 1 est gratuit pour les
+  onze — et c'est pourquoi la pose a pu être écrite sans attendre l'arbitrage
+  sur la répartition quartz/scorie, qui ne concerne que l'AMÉLIORATION.
+  ⚠ **Aucune règle de pose n'est réécrite.** La légalité d'une pose est celle de
+  la disposition qui en résulterait : on construit la candidate et on la soumet
+  à `problemesDeDisposition`. Une seconde liste de règles finirait par diverger.
+  ⚠ **Les défauts PRÉEXISTANTS sont filtrés.** Une base amputée par un raid
+  resterait constructible : faire remonter ses propres défauts sur chaque pose
+  enfermerait le joueur pour des fautes qui ne sont pas les siennes.
+  ⚠ **Le résidu suit le bâtiment.** Poser sans allonger `economie.residus` fait
+  lever le TICK suivant, pas la pose — donc loin de la faute.
 
 ### Sur l'interface
 
