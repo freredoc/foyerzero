@@ -19,6 +19,25 @@ import { PREREGLAGES, montagePreregle } from './prereglages-lot3a.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * La palette de `FICHE-STYLE.md`, transcrite. Vingt-huit teintes depuis la v4.
+ * Un test plus bas l'asserte contre le document, dans les deux sens.
+ */
+const PALETTE_FICHE = [
+  // châssis kaki — le joueur
+  '#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72',
+  // sol du joueur
+  '#B87E64', '#C38C73', '#CF9A83', '#D7A995', '#E0B9A8',
+  // ardoise — l'Ouvrage
+  '#0D0B12', '#231D2E', '#382E47', '#4E4160', '#6B5B80',
+  // accents de terrain
+  '#9FB3C5', '#C1CEDA', '#1F5160', '#5B4133',
+  // métal
+  '#1E2124', '#3E454C', '#68727E',
+  // accents fonctionnels
+  '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636',
+];
+
 /** Retire commentaires de ligne, de bloc et HTML avant un balayage de code. */
 function sansCommentaires(texte) {
   return texte
@@ -195,11 +214,14 @@ test('§11 — aucun Math.random nulle part dans src/, DOM confiné à ui/', () 
 test('§11 — aucune teinte hors de la palette de FICHE-STYLE.md', () => {
   // La palette de la fiche, transcrite ici indépendamment de scene.js pour
   // que le test ne valide pas le module avec lui-même.
-  const FICHE = new Set([
-    '#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72', // châssis kaki
-    '#1E2124', '#3E454C', '#68727E', //                       métal
-    '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636', // accents
-  ].map((h) => h.toUpperCase()));
+  //
+  // ⚠ VINGT-HUIT TEINTES DEPUIS LA v4 DE `FICHE-STYLE.md` (27/08). La liste en
+  // portait quatorze, et elle n'a PAS été élargie pour faire passer un lot :
+  // la fiche a gagné trois rampes complètes — le sol du joueur, l'ardoise de
+  // l'Ouvrage, les accents de terrain — et cette liste n'était plus une
+  // transcription, mais une transcription périmée. Le test suivant l'asserte
+  // contre le document, dans les deux sens, pour que ça ne se reproduise pas.
+  const FICHE = new Set(PALETTE_FICHE.map((h) => h.toUpperCase()));
   const fichiers = [
     ...fichiersJs('src/render'),
     ...fichiersJs('src/ui'),
@@ -219,6 +241,38 @@ test('§11 — aucune teinte hors de la palette de FICHE-STYLE.md', () => {
   }
   // Le balayage doit avoir réellement vu des couleurs, sinon il ne prouve rien.
   assert.ok(trouvees > 30, `seulement ${trouvees} teintes balayées`);
+});
+
+test('§11 — la palette transcrite ici EST celle de FICHE-STYLE.md', () => {
+  // ⚠ POURQUOI CE TEST EXISTE. La liste ci-dessus se disait « transcrite » et
+  // ne l'était plus : `FICHE-STYLE.md` est passé en v4 le 27/08 avec trois
+  // rampes de plus, et la garde a continué de refuser quatorze teintes
+  // parfaitement légitimes. Elle serait restée verte indéfiniment — elle ne
+  // regarde que du code qui n'emploie pas encore ces teintes.
+  //
+  // Une transcription qui ne se confronte pas à sa source n'est pas une
+  // transcription, c'est une copie qui vieillit. On garde la liste ÉCRITE —
+  // pour qu'un ajout de teinte se voie en relecture, et pour qu'une faute de
+  // frappe dans la fiche n'autorise pas une couleur en silence — et on exige
+  // qu'elle soit égale au document.
+  const doc = readFileSync(join(RACINE, 'FICHE-STYLE.md'), 'utf8');
+  const dansLaFiche = [...new Set(
+    [...doc.matchAll(/#[0-9A-Fa-f]{6}(?![0-9A-Za-z])/g)].map((m) => m[0].toUpperCase()),
+  )];
+
+  // Falsifiable des deux côtés : deux listes vides seraient égales.
+  assert.ok(dansLaFiche.length >= 20, `${dansLaFiche.length} teintes lues dans FICHE-STYLE.md`);
+  assert.ok(PALETTE_FICHE.length >= 20, `${PALETTE_FICHE.length} teintes transcrites`);
+  assert.equal(
+    new Set(PALETTE_FICHE).size, PALETTE_FICHE.length,
+    'la transcription porte deux fois la même teinte',
+  );
+
+  assert.deepEqual(
+    [...PALETTE_FICHE].map((h) => h.toUpperCase()).sort(), [...dansLaFiche].sort(),
+    'la palette transcrite dans ce fichier et celle de FICHE-STYLE.md ont divergé — '
+      + 'la fiche fait autorité sur le style, c\'est la transcription qu\'il faut reprendre',
+  );
 });
 
 // ---------------------------------------------------------------------------
