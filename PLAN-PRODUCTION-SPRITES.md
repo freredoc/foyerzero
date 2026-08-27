@@ -34,18 +34,36 @@ régénérée, donc hors palette. On corrige le prompt et on relance.
 
 ## 1. Vue d'ensemble
 
-**157 sprites en 59 générations**, réparties en 11 sessions, plus le jet d'essai.
-En un-par-un ce serait 164 générations : la planche divise par 2,8.
+**141 sprites en 60 générations**, réparties en dix sessions, plus le jet
+d'essai. En un-par-un ce serait 148 générations : la planche divise par 2,5.
 
-> **[CORRIGÉ 27/08.]** Deux changements, tous deux issus de la réécriture du §2.4
-> de l'inventaire : `tile_horschamp` disparaît (S1 passe de 29/8 à **28/7**), et
-> **S10 remonte juste après S7**. Les identifiants de session ne bougent pas —
-> le journal du §13 resterait faux — c'est l'ORDRE DES LIGNES qui fait foi.
+> **[27/08, nuit — S1 close.]** Le lot 1 a coûté **11 générations pour 18
+> fichiers**, pas 5 : la planche a échoué et le lot a été fini **une image par
+> fichier, avec des prompts de quatre lignes**. Le rendement par génération est
+> deux fois pire, le taux de rebut est bien meilleur, et le résultat est le
+> premier lot passé du premier coup. Cette leçon vaut pour les sessions
+> suivantes : ce tableau est probablement optimiste partout.
+
+> **[REFONDU 27/08 au soir — v4.]** Le lot 1 a changé d'objet : il ne décrit plus
+> le terrain de la carte du monde mais **le sol du champ de bataille et ce qu'on
+> pose dessus**. Trois conséquences sur ce tableau, toutes issues du §2 de
+> l'inventaire v5, lui-même mesuré sur `src/data/` :
+>
+> - **S1 passe de 28 sprites en 7 générations à 18 en 5.** Les sept matières et
+>   leurs quatre variantes n'existent plus : `ressourceDeLaCase` de
+>   `sim/champs.js` rend une ressource **ou `null`** — le champ de bataille n'a
+>   que deux états de terrain, nu ou champ.
+> - **S9 disparaît.** Les six obstacles sont dans S1 : même sol, même palette,
+>   même correctif de contrat. Les produire ailleurs, c'est les produire deux
+>   fois.
+> - **Les identifiants de session ne bougent toujours pas** — le journal du §13
+>   resterait faux. C'est l'ORDRE DES LIGNES qui fait foi, et S10 reste juste
+>   après S7.
 
 | # | Session | Sprites | Générations | Dépend de |
 |---|---|---|---|---|
 | **S0** | Jet d'essai | 0 | 7 | — |
-| S1 | Terrain | 28 | 7 | S0 |
+| **S1** | **Sol de base et éléments posés** | **18** | **11** | S0 |
 | S2 | Unités joueur | 14 | 6 | S0 |
 | S3 | Unités Ouvrage | 14 | 6 | S0 (rampe validée) |
 | S4 | Défenses joueur | 9 | 4 | S2 |
@@ -54,12 +72,14 @@ En un-par-un ce serait 164 générations : la planche divise par 2,8.
 | S7 | Bâtiments Ouvrage | 5 | 3 | S3 |
 | **S10** | **Carte** | **13** | **4** | **S6, S7** |
 | S8 | États de réparation | 7 | 3 | S6, S7 |
-| S9 | Obstacles | 6 | 3 | S1 |
+| ~~S9~~ | *Obstacles — absorbée dans S1* | — | — | — |
 | S11 | Interface | 41 | 8 | tout le reste |
-| | **Total** | **157** | **59** | |
+| | **Total** | **141** | **60** | |
 
-Les 8 masques `tile_bord_*` ne sont pas là : ce sont des masques alpha,
-procéduraux au rendu (§2.3 de l'inventaire). `bat_o_foyer_zero.png` non plus :
+Les 8 masques `tile_bord_*` ne sont pas là, et cette fois **ce n'est pas parce
+qu'ils seraient procéduraux** : ils n'existent plus du tout. Sur un sol unique il
+n'y a rien à raccorder — le sous-problème s'évapore (§2 de l'inventaire v5).
+`tile_horschamp` non plus, supprimée le 27/08. `bat_o_foyer_zero.png` non plus :
 reporté (§5.3). Le **fond de la carte monde** non plus : procédural au canvas,
 zéro fichier, tranché le 27/08 (§2.4 de l'inventaire).
 
@@ -103,30 +123,75 @@ la référence jointe, pas par une relance.**
 
 ---
 
-## 3. S1 — Terrain (28 sprites, 7 générations)
+## 3. S1 — Sol de base et éléments posés (18 sprites) — **CLOSE le 27/08**
 
-Réglages du conditionneur : régime **Tuile**, planche **2 × 2**, palette
-*Joueur seul*.
+> **Les cinq prompts sont écrits mot pour mot dans `PROMPTS-sol-de-base.md`.**
+> Ce §-ci dit l'ordre et l'état, il ne duplique pas les prompts : en cas de
+> divergence entre les deux, c'est le fichier de prompts qui fait foi.
 
-Le lot idéal pour la planche : quatre variantes du même terrain n'ont aucune
-échelle à tenir entre elles, elles doivent se ressembler par construction.
-Chaque planche fait 2048 × 2048 et donne `_a`, `_b`, `_c`, `_d`.
+Ce que ce lot habille : les **162 cases** de `GRILLE` (9 × 18, `data/combat.js`),
+et rien d'autre. Un sol quasi uni sur toute la surface, un par camp, et
+par-dessus des sprites plus petits — **12 cases de champ** dans la bande des
+bâtiments (rangées 11–18), **10 obstacles** dispersés dans la bande de défense
+(rangées 3–10). Rien de ce lot ne s'affiche sur la carte du monde.
 
-- [ ] P1.1 — `tile_sterile_a…d` — vide, le fond de tout
-- [ ] P1.2 — `tile_affleurement_a…d` — quartz, cristallin blanc-gris
-- [ ] P1.3 — `tile_croute_a…d` — scorie, vitrifié sombre · **jamais un cristal vert**
-- [ ] P1.4 — `tile_futaie_a…d` — bois
-- [ ] P1.5 — `tile_friche_a…d` — broussaille
-- [ ] P1.6 — `tile_suintement_a…d` — pétrole
-- [ ] P1.7 — `tile_vasiere_a…d` — marais
+⚠ **Le lot commence par un correctif de contrat** — §0 de
+`PROMPTS-sol-de-base.md`, à coller AVANT le premier prompt. Il remplace la
+palette, la clause de vue et la clause d'orientation du §2 du brief. Sans lui le
+modèle emprunte les tons d'entité : c'est exactement ce qui a coûté 32 fichiers
+au premier jet du terrain.
 
-⚠ **P1.8 — `tile_horschamp` — SUPPRIMÉE le 27/08.** Elle ne bordait que le
-couloir de la carte monde, qui ne pave plus de tuiles. Le hors-couloir est
-devenu un traitement du fond procédural. Ne pas la régénérer si elle
-réapparaît dans une conversation.
+| # | Fichiers | Régime | Découpe | État |
+|---|---|---|---|---|
+| P1.1 | `tile_sol_j_a…d` | Tuile | — | **[x] LIVRÉE 27/08** — `sprites/terrain/` |
+| P1.2 | `tile_sol_o_a…d` | Tuile | — | **[x] LIVRÉE 27/08** — recolorisation de P1.1, zéro génération |
+| P1.3 | `champ_quartz_a`·`_b` · `champ_scorie_a`·`_b` | Entité | — | **[x] LIVRÉE 27/08** — 2 jets libres, variantes par retournement |
+| P1.4 | `obs_infanterie_a`·`_b` · `obs_vehicule_a`·`_b` | Entité | — | **[x] LIVRÉE 27/08** — 4 jets libres |
+| P1.5 | `obs_les_deux_a`·`_b` | Entité | — | **[x] LIVRÉE 27/08** — 2 jets libres |
 
-⚠ Le terrain échappe à deux règles : pas de marge (bord à bord) et **régime A**,
-aucune face visible. Une tuile inclinée ne se raccorde plus à sa voisine.
+⚠ **Les deux planches de sol ne sortent pas des prompts.** Elles viennent d'un
+jet libre, recolorisé sur la rampe puis conditionné en Python. Le prompt de sol
+demandait « presque uni, 80 % d'un ton » et produisait une plaque plate ; la
+tuile gardée n'a **aucun ton dominant**. Les §1 et §2 de `PROMPTS-sol-de-base.md`
+sont corrigés en conséquence, et `RAPPORT-lotSOL-recolorisation.md` porte les
+mesures. **Le lot passe de 5 générations à 3.**
+
+Palette du conditionneur : **Sol** pour les cinq planches, rognage 3 px, seuil
+magenta 140. ⚠ La palette *Sol* n'existe pas encore dans l'outil — tourner en
+palette *aucune* et faire vérifier les tons à la main, comme pour le premier jet.
+
+Les **huit** tuiles de sol sont livrées dans `sprites/terrain/`, en 128 × 128,
+grille 32, cinq couleurs exactement, gros pixel de 4 px — vérifié fichier par
+fichier. Le contrôle décisif du §7 des prompts, les deux camps posés sur les deux
+sols, est passé : `essai/quatre-combinaisons.png`.
+
+Trois règles de raccord, qui ne valent que dans ce lot et qui se contredisent
+entre elles — c'est voulu, elles ne portent pas sur les mêmes fichiers :
+
+1. **P1.1 et P1.2 n'ont pas de marge.** Tuiles jointives, 32 × 32 gros pixels
+   bord à bord, aucun magenta. **L'anneau extérieur de 2 gros pixels est
+   entièrement du ton de sol nu** — c'est la seule chose qui empêche la couture,
+   et c'est ce qui a fait passer 56570 là où sa jumelle, bordure décorative
+   visible, a été jetée.
+2. ~~**P1.3 est l'exception inverse.**~~ ⚠ **ANNULÉ le 27/08 au soir.** Les
+   champs ne se raccordent plus : ce sont des sujets isolés, marge normale, et un
+   bloc de 2 ou 3 cases montre autant de gisements distincts. Décision d'Ethan,
+   prise sur pièce. Toute mention de « milieu des quatre bords » ailleurs dans ce
+   plan ou dans les prompts est périmée.
+3. **P1.4 et P1.5 gardent la marge normale** du contrat : 2 gros pixels vides sur
+   les quatre bords. Un obstacle est isolé sur sa case, il ne se raccorde à rien.
+
+Deux interdits qui valent pour les cinq planches :
+
+- **Aucun vert, nulle part.** Le vert est la couleur des unités du joueur : une
+  végétation verte rendrait une escouade invisible sur sa propre base. La
+  végétation de ce décor est sèche et morte.
+- **Aucune couleur d'accent sur un obstacle** — il ne tue rien.
+
+⚠ **Les 29 tuiles de l'ancienne S1 ne se commitent pas.** Elles décrivaient un
+écran qui n'existe pas. `RAPPORT-S1-terrain.md` reste au dépôt comme trace, pas
+comme instruction : son §5, son §6 et sa dernière ligne (« S1 close ») portent
+tous sur le lot périmé.
 
 ---
 
@@ -228,13 +293,15 @@ raté son seul travail.
 
 ---
 
-## 9. S9 — Obstacles (6 sprites, 3 générations)
+## 9. S9 — Obstacles — **ABSORBÉE DANS S1 le 27/08**
 
-Régime **A**, plats. Palette *Joueur seul*.
+Les six fichiers `obs_*` sortent de P1.4 et P1.5 (§3) : même sol, même palette,
+même correctif de contrat. Ce numéro n'est gardé que pour que le journal du §13
+reste lisible — **il n'y a rien à générer ici.**
 
-- [ ] P9.1 — **2 × 1** — `obs_infanterie_a`, `obs_infanterie_b`
-- [ ] P9.2 — **2 × 1** — `obs_vehicule_a`, `obs_vehicule_b`
-- [ ] P9.3 — **2 × 1** — `obs_les_deux_a`, `obs_les_deux_b`
+⚠ Si une conversation ressort « S9, six obstacles, palette *Joueur seul*, régime
+A » : c'est la v3 de ce plan. Les obstacles se font en palette *Sol*, avec le
+correctif du §0 des prompts.
 
 ---
 
@@ -306,7 +373,7 @@ quand la session suivante commence sur une page blanche.
 | Session | Date | Générations | Refusées | Notes |
 |---|---|---|---|---|
 | S0 | 27/08 | 5 | 1 | 5 cases sur 7. **Deux générations pour quatre fichiers** : la rampe B est la substitution ton pour ton de la A, 0 pixel d'écart hors rampe. Rampe A retenue sur les trois critères. Dard et `off_j_meute` validés au premier jet dans la foulée : **S0 close 7/7**. Le seul refus est un cinquième `def_j_creneau`, écarté au profit de celui du 26/08. Trois écarts au brief acceptés par Ethan — double accent sur le pylône, régime sans face mesurable, aucun module répété : voir `RAPPORT-S0-rampe-ouvrage.md` §4, ils deviennent la norme de la famille. |
-| S1 | | | | |
+| S1 | 27/08 | 8 + 3 | 7 | ⚠ **Deux lots différents sous le même nom.** L'ANCIENNE S1 a livré 29 tuiles de terrain en 8 générations, 0 régénération — lot périmé le soir même, **ne pas commiter** (`RAPPORT-S1-terrain.md`). La S1 REFONDUE a une planche sur cinq : `tile_sol_j_a…d`, génération 56570, validée au premier pavage — 9 × 18 cases posées au hasard avec rotation, **aucune couture**, une première dans ce projet. Une planche jumelle écartée, et la raison est reprenable telle quelle : bordure décorative visible au lieu de l'anneau uni de 2 gros pixels. Puis les six jets conformes au prompt de sol ont tous donné la même plaque plate : le lot a été fermé autrement, par recolorisation d'un jet libre — **8 fichiers de sol livrés, 2 planches économisées, la clause « 80 % d'un ton » retirée du prompt**. Puis les six jets conformes au prompt de sol ont tous donné la même plaque plate : le lot a été fermé autrement, par recolorisation d'un jet libre — **8 fichiers de sol livrés, la clause « 80 % d'un ton » retirée du prompt**. Les dix éléments posés ont suivi le même chemin, **une image par fichier, prompt de quatre lignes**, palette et grille rattrapées au conditionnement : 10 jets retenus, 4 écartés (versions « compactes » sans raccord), 4 sprites de validation antérieurs abandonnés. **S1 close, 18 fichiers, aucun défaut ouvert.** |
 | S2 | | | | |
 | S3 | | | | |
 | S4 | 26/08 | 4 | 3 | `def_j_creneau` validé au 1er jet, prompt libre. Les 3 relances ont toutes échoué : prompt coté → socle mangé (métal 1,2 %), correction chiffrée → accent à 42 %. C'est de là que sortent le §3 ter et les pièges 11-12 du brief. |
@@ -314,7 +381,7 @@ quand la session suivante commence sur une page blanche.
 | S6 | | | | |
 | S7 | | | | |
 | S8 | | | | |
-| S9 | | | | |
+| ~~S9~~ | — | — | — | **Absorbée dans S1** le 27/08, voir §9. |
 | S10 | | | | |
 | S11 | | | | |
 
@@ -323,6 +390,23 @@ seulement le refus. Le même défaut reviendra deux sessions plus tard, et sans 
 note on refera l'aller-retour.
 
 ---
+
+*v6 — 27/08/2026, nuit. **S1 close** : les dix éléments posés livrés, prompts
+courts et un sujet par image, conditionnement en Python. Le raccord des champs
+est obtenu par surdimension mesurée, pas par le prompt. Total 141/60. Voir
+`RAPPORT-lotP1.3-P1.5.md`.*
+
+*v5 — 27/08/2026, nuit. Grille **32** retenue pour le sol, sur pièce. Les huit
+tuiles de sol livrées sans passer par une génération de planche : recolorisation
+d'un jet libre, rampe de l'Ouvrage réalignée en clarté sur celle du joueur. S1
+passe à 3 générations restantes, total 141/52. Voir
+`RAPPORT-lotSOL-recolorisation.md`.*
+
+*v4 — 27/08/2026, soir. Lot 1 refondu : S1 n'est plus le terrain de la carte
+mais le sol du champ de bataille et les éléments posés — 18 fichiers en 5
+planches, prompts dans `PROMPTS-sol-de-base.md`. S9 absorbée dans S1. Masques de
+transition supprimés, pas rendus procéduraux. Total 141/54. Voir
+`PASSATION-2026-08-27-soir.md` §3 et l'inventaire v5 §2.*
 
 *v3 — 27/08/2026. Modèle de carte corrigé : S1 28/7, S10 remontée après S7,
 total 157/59, `tile_horschamp` supprimée, fond de carte procédural. Voir
