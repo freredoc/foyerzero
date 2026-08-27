@@ -19,6 +19,14 @@ import { creerRng, entier } from '../src/sim/rng.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 
+// ⚠ UN INSTANT MURAL FIXE, JAMAIS L'HORLOGE DE LA MACHINE. Depuis la v6,
+// `serialiser` et `charger` reçoivent l'instant présent en argument. Le prendre
+// ici sur l'horloge système rendrait la suite dépendante du moment où elle
+// tourne — exactement ce que le déterminisme du dépôt interdit. Valeur
+// arbitraire mais fixe : le 14 novembre 2023.
+const T0 = 1_700_000_000_000;
+const HEURE_MS = 3_600_000;
+
 /**
  * Montage volontairement hétérogène : une base qui PRODUIT dans les trois
  * ressources, avec un stock déjà proche de la saturation pour que le plafond
@@ -226,11 +234,11 @@ test('sérialisation — le terrain N\'EST PAS sauvegardé, il se redéduit', ()
   // créerait une seconde source de vérité, donc une occasion de divergence
   // silencieuse. `serialiser` l'omet, `charger` le reconstruit.
   const etat = etatDeReference();
-  const json = serialiser(etat);
+  const json = serialiser(etat, T0);
   assert.ok(!json.includes('"champs"'), 'le terrain est parti dans la sauvegarde');
   assert.ok(json.includes('"position"'), 'la position doit y être : c\'est la source');
 
-  const recharge = charger(json);
+  const recharge = charger(json, T0);
   assert.deepEqual(recharge.champs, etat.champs, 'le terrain redéduit diffère de l\'original');
   assert.equal(recharge.champs.cases.length, 12);
 });
@@ -241,10 +249,10 @@ test('sérialisation — sauvegarder en pleine partie, recharger, poursuivre : t
 
   const interrompu = etatDeReference();
   for (let t = 0; t < 2000; t++) tickJeu(interrompu);
-  const recharge = charger(serialiser(interrompu));
+  const recharge = charger(serialiser(interrompu, T0), T0);
   for (let t = 2000; t < 5000; t++) tickJeu(recharge);
 
-  assert.equal(serialiser(recharge), serialiser(continu));
+  assert.equal(serialiser(recharge, T0), serialiser(continu, T0));
   // Falsifiable : la partie doit avoir AVANCÉ, sinon comparer deux états
   // immobiles ne prouve rien.
   assert.ok(continu.economie.ressources.quartz > 137_000);
@@ -264,10 +272,10 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
     ],
   };
 
-  const etat = charger(JSON.stringify(v0));
+  const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 5, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 6, 'le bump de la version des sauvegardes a été oublié');
 
   // Le dernier maillon de la chaîne, v4 → v5, doit avoir été appliqué lui
   // aussi : sans `fondation` le terrain ne serait dérivable de rien.
@@ -319,23 +327,23 @@ test('état — une sauvegarde injouable est REFUSÉE au chargement, pas jouée 
   // joueur, il purge. Au CHARGEMENT, c'est un fait de programme : la partie
   // n'est pas jouable, et continuer produirait des résultats faux en silence.
   const etat = creerEtat(999);
-  const abime = JSON.parse(serialiser(etat));
+  const abime = JSON.parse(serialiser(etat, T0));
   // Un collecteur posé sur une case nue : illégal, et silencieux si on laisse
   // passer — il ne produirait simplement jamais rien.
   abime.disposition.push({ id: 'collecteur', rangee: 11, colonne: 1, niveau: 1 });
   abime.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
-  assert.throws(() => charger(JSON.stringify(abime)), /injouable/);
+  assert.throws(() => charger(JSON.stringify(abime), T0), /injouable/);
 
   // Un état dont les résidus ne comptent pas les bâtiments : refusé aussi, et
   // par un message différent — les deux fautes ne se confondent pas.
-  const desaccorde = JSON.parse(serialiser(etat));
+  const desaccorde = JSON.parse(serialiser(etat, T0));
   desaccorde.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
-  assert.throws(() => charger(JSON.stringify(desaccorde)), /résidus pour/);
+  assert.throws(() => charger(JSON.stringify(desaccorde), T0), /résidus pour/);
 
   // Et une sauvegarde amputée d'un champ entier ne passe pas non plus.
-  const ampute = JSON.parse(serialiser(etat));
+  const ampute = JSON.parse(serialiser(etat, T0));
   delete ampute.disposition;
-  assert.throws(() => charger(JSON.stringify(ampute)));
+  assert.throws(() => charger(JSON.stringify(ampute), T0));
 });
 
 // ---------------------------------------------------------------------------
@@ -364,7 +372,7 @@ test('état — le terrain suit la FONDATION, pas la position courante', () => {
   // Le redéploiement n'existe pas encore : on simule ce qu'il fera, déplacer la
   // base sur la carte. C'est `position` qui bouge, et elle seule.
   etat.position = ailleurs;
-  const recharge = charger(serialiser(etat));
+  const recharge = charger(serialiser(etat, T0), T0);
 
   assert.deepEqual(recharge.fondation, depart, 'la fondation ne bouge pas');
   assert.deepEqual(recharge.position, ailleurs, 'la position, elle, a bougé');
@@ -381,7 +389,7 @@ test('état — le terrain suit la FONDATION, pas la position courante', () => {
 
 test('état — la fondation est SAUVEGARDÉE, le terrain toujours pas', () => {
   const etat = creerEtat(7);
-  const brut = JSON.parse(serialiser(etat));
+  const brut = JSON.parse(serialiser(etat, T0));
 
   assert.ok(!('champs' in brut), 'le terrain ne doit pas entrer dans la sauvegarde');
   assert.deepEqual(brut.fondation, { rangee: etat.position.rangee, colonne: etat.position.colonne });
@@ -395,10 +403,10 @@ test('état — la fondation est SAUVEGARDÉE, le terrain toujours pas', () => {
   // le champ, et ne prouverait rien. La falsification l'a montré : retirer
   // `fondation` de la liste des champs obligatoires laissait ce test vert.
   // Ce qu'on veut, c'est le refus EXPLIQUÉ, qui nomme le champ manquant.
-  const ampute = JSON.parse(serialiser(etat));
+  const ampute = JSON.parse(serialiser(etat, T0));
   delete ampute.fondation;
   assert.throws(
-    () => charger(JSON.stringify(ampute)),
+    () => charger(JSON.stringify(ampute), T0),
     /champ « fondation » absent/,
   );
 });
@@ -417,7 +425,7 @@ test('état — fondation et position sont deux objets DISTINCTS à la création
 
 test('état — migration 4 → 5 : une sauvegarde v4 garde EXACTEMENT son terrain', () => {
   const etat = creerEtat(31_415);
-  const v4 = JSON.parse(serialiser(etat));
+  const v4 = JSON.parse(serialiser(etat, T0));
   // On fabrique une vraie v4 : version rabaissée, `fondation` absente.
   v4.version = 4;
   delete v4.fondation;
@@ -427,7 +435,7 @@ test('état — migration 4 → 5 : une sauvegarde v4 garde EXACTEMENT son terra
   const terrainV4 = champsDeLaBase(v4.position.rangee, v4.position.colonne);
   assert.ok(terrainV4.cases.length > 0, 'terrain de contrôle vide : rien à comparer');
 
-  const charge = charger(JSON.stringify(v4));
+  const charge = charger(JSON.stringify(v4), T0);
 
   assert.equal(charge.version, SAVE_VERSION);
   assert.deepEqual(charge.fondation, v4.position, 'la migration pose fondation = position');
@@ -435,4 +443,141 @@ test('état — migration 4 → 5 : une sauvegarde v4 garde EXACTEMENT son terra
     charge.champs.cases, terrainV4.cases,
     'la migration 4 → 5 a changé le terrain : elle ne doit RIEN perdre',
   );
+});
+
+// ---------------------------------------------------------------------------
+// L'horloge murale et le rattrapage hors ligne — v6, arbitrage du 27/08
+// ---------------------------------------------------------------------------
+
+/**
+ * Une base qui PRODUIT, pour que le rattrapage ait quelque chose à rattraper.
+ * Chantier au niveau 5 (dix emplacements), un collecteur sur un champ de
+ * quartz, une raffinerie à côté. Sans producteur, toutes les assertions de
+ * production ci-dessous passeraient sur du code cassé.
+ */
+function baseQuiProduit(graine) {
+  const etat = creerEtat(graine);
+  etat.disposition[0].niveau = 5;
+  const quartz = etat.champs.cases.filter((c) => c.ressource === 'quartz');
+  assert.ok(quartz.length > 0, 'montage : pas un seul champ de quartz');
+  etat.disposition.push(
+    { id: 'collecteur', rangee: quartz[0].rangee, colonne: quartz[0].colonne, niveau: 10 },
+    { id: 'raffinerie', rangee: quartz[0].rangee, colonne: quartz[0].colonne + 1, niveau: 10 },
+  );
+  etat.economie.residus.push(
+    { quartz: 0, scorie: 0, electricite: 0 },
+    { quartz: 0, scorie: 0, electricite: 0 },
+  );
+  return etat;
+}
+
+test('état — la sauvegarde porte l\'instant d\'écriture, l\'état ne le porte pas', () => {
+  const etat = creerEtat(5);
+  const brut = JSON.parse(serialiser(etat, T0));
+  assert.equal(brut.instantSauvegardeMs, T0, 'la sauvegarde doit dater son écriture');
+
+  // ⚠ LE CHEMIN INVERSE DU TERRAIN. Le terrain vit dans l'état et sort de la
+  // sauvegarde ; l'instant vit dans la sauvegarde et n'entre pas dans l'état.
+  const recharge = charger(JSON.stringify(brut), T0);
+  assert.ok(!('instantSauvegardeMs' in recharge), 'l\'instant ne descend pas dans l\'état');
+  assert.ok(!('champs' in brut), 'le terrain ne monte pas dans la sauvegarde');
+});
+
+test('état — huit heures hors ligne PRODUISENT, et autant que huit heures de ticks', () => {
+  const etat = baseQuiProduit(77);
+
+  // Falsifiable d'abord : le montage doit produire quelque chose, sinon
+  // l'égalité plus bas serait 0 === 0.
+  const uneHeure = charger(serialiser(etat, T0), T0 + HEURE_MS);
+  assert.ok(uneHeure.economie.ressources.quartz > 0, 'le montage ne produit rien');
+  assert.equal(uneHeure.horloge.nbTicks, TICKS_PAR_HEURE, 'une heure doit valoir TICKS_PAR_HEURE');
+
+  // Et il ne doit pas SATURER en huit heures, sinon la composition ci-dessous
+  // serait vraie pour une raison sans rapport — deux plafonds sont égaux.
+  const huit = charger(serialiser(etat, T0), T0 + 8 * HEURE_MS);
+  assert.ok(
+    huit.economie.ressources.quartz > uneHeure.economie.ressources.quartz,
+    'le stock sature avant huit heures : le montage ne mesure plus le rattrapage',
+  );
+
+  // Rattraper 8 h d'un coup == rattraper 5 h puis 3 h. C'est le contrôle de
+  // composition, en temps constant, du lot TICK.
+  const cinq = charger(serialiser(etat, T0), T0 + 5 * HEURE_MS);
+  const puisTrois = charger(serialiser(cinq, T0), T0 + 3 * HEURE_MS);
+  assert.deepEqual(
+    puisTrois.economie.ressources, huit.economie.ressources,
+    '5 h + 3 h doit valoir 8 h, sinon le rattrapage n\'est pas exact',
+  );
+  assert.equal(puisTrois.horloge.nbTicks, huit.horloge.nbTicks);
+});
+
+test('état — une horloge qui RECULE ne produit rien et ne lève pas', () => {
+  // Fuseau, NTP, joueur qui change la date de son téléphone. Refuser la
+  // sauvegarde le punirait pour l'heure de son appareil.
+  const etat = baseQuiProduit(88);
+  const json = serialiser(etat, T0);
+
+  const recule = charger(json, T0 - 3 * HEURE_MS);
+  assert.equal(recule.horloge.nbTicks, 0, 'une durée négative ne doit avancer de rien');
+  assert.deepEqual(recule.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+
+  // Falsifiable : le même montage, en avançant, produit bien — donc le zéro
+  // ci-dessus vient du recul et pas d'une base stérile.
+  const avance = charger(json, T0 + 3 * HEURE_MS);
+  assert.ok(avance.economie.ressources.quartz > 0, 'le montage ne produit rien');
+});
+
+test('état — dix ans d\'absence SATURENT sans lever et sans déborder', () => {
+  // Le rattrapage borne les heures pleines à ce qu'il faut pour saturer : au
+  // delà, le stock vaut la capacité de toute façon. Mesuré ici de face plutôt
+  // que supposé — 3,15 milliards de ticks.
+  const etat = baseQuiProduit(99);
+  const json = serialiser(etat, T0);
+  const dixAns = 10 * 365 * 24 * HEURE_MS;
+
+  const vieux = charger(json, T0 + dixAns);
+  assert.equal(vieux.horloge.nbTicks, (dixAns / 100), 'les ticks doivent être comptés en entier');
+
+  const plafonds = capacitesMilli(etat.disposition);
+  assert.equal(
+    vieux.economie.ressources.quartz, plafonds.quartz,
+    'dix ans doivent saturer exactement, ni moins ni plus',
+  );
+  // Falsifiable : le plafond doit être atteignable ET non nul.
+  assert.ok(plafonds.quartz > 0, 'capacité nulle : rien à saturer');
+
+  // Un mois et dix ans donnent le même stock — c'est la définition de saturé.
+  const unMois = charger(json, T0 + 30 * 24 * HEURE_MS);
+  assert.deepEqual(unMois.economie.ressources, vieux.economie.ressources);
+});
+
+test('état — un instant mural absurde est REFUSÉ des deux côtés', () => {
+  const etat = creerEtat(3);
+  for (const absurde of [undefined, null, -1, 1.5, NaN, Infinity, '1700000000000']) {
+    assert.throws(() => serialiser(etat, absurde), RangeError, `serialiser a accepté ${absurde}`);
+    assert.throws(() => charger(serialiser(etat, T0), absurde), RangeError, `charger a accepté ${absurde}`);
+  }
+  // Et une sauvegarde dont l'instant a été trafiqué ne passe pas non plus.
+  const trafique = JSON.parse(serialiser(etat, T0));
+  trafique.instantSauvegardeMs = 'hier';
+  assert.throws(() => charger(JSON.stringify(trafique), T0), RangeError);
+});
+
+test('état — migration 5 → 6 : une sauvegarde v5 ne donne AUCUNE absence', () => {
+  // On ne sait pas quand elle a été écrite. Lui inventer une durée
+  // fabriquerait des ressources.
+  const etat = baseQuiProduit(123);
+  const v5 = JSON.parse(serialiser(etat, T0));
+  v5.version = 5;
+  delete v5.instantSauvegardeMs;
+
+  const charge = charger(JSON.stringify(v5), T0 + 100 * HEURE_MS);
+  assert.equal(charge.version, SAVE_VERSION);
+  assert.equal(charge.horloge.nbTicks, 0, 'cent heures ont été fabriquées à partir de rien');
+  assert.deepEqual(charge.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+
+  // Falsifiable : la MÊME sauvegarde en v6 aurait bien rattrapé les cent
+  // heures. Sans ce contrôle, le zéro ci-dessus pourrait venir du montage.
+  const enV6 = charger(serialiser(etat, T0), T0 + 100 * HEURE_MS);
+  assert.ok(enV6.economie.ressources.quartz > 0, 'le montage ne produit rien');
 });
