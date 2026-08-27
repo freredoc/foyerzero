@@ -52,11 +52,10 @@ test('test 3 — 10 000 ticks, même graine, même état initial : états strict
   // existe ; l'import est dynamique pour que ce test désigne explicitement la
   // boucle réelle du jeu et non un montage ad hoc.
   const { creerEtat, tickJeu } = await import('../src/sim/state.js');
-  const { PARAMS } = await import('../src/data/params.js');
 
   const faireTourner = () => {
-    const etat = creerEtat(424242, PARAMS);
-    for (let i = 0; i < 10_000; i++) tickJeu(etat, PARAMS);
+    const etat = creerEtat(424242);
+    for (let i = 0; i < 10_000; i++) tickJeu(etat);
     return etat;
   };
 
@@ -66,8 +65,8 @@ test('test 3 — 10 000 ticks, même graine, même état initial : états strict
 
   // Montage falsifiable : une graine différente doit produire un état différent
   // (la graine est dans l'état), sinon la comparaison ne prouve rien.
-  const c = creerEtat(424243, PARAMS);
-  for (let i = 0; i < 10_000; i++) tickJeu(c, PARAMS);
+  const c = creerEtat(424243);
+  for (let i = 0; i < 10_000; i++) tickJeu(c);
   assert.notEqual(JSON.stringify(a), JSON.stringify(c));
 });
 
