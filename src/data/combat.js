@@ -10,8 +10,9 @@
 // Ce fichier porte les valeurs ARBITRÉES. En cas d'écart avec le classeur,
 // c'est ce fichier qui a raison. Ne jamais relire le classeur pour coder.
 //
-// Convention héritée de params.js : toutes les valeurs de calibrage vivent
-// dans src/data/, jamais en dur dans src/sim/.
+// Convention du dépôt (CLAUDE.md §4) : toutes les valeurs de calibrage vivent
+// dans src/data/, jamais en dur dans src/sim/. Elle est née dans l'ancien
+// data/params.js, retiré le 27/08 — la convention, elle, n'a pas bougé.
 
 // --- grille de combat --------------------------------------------------------
 // 9 colonnes × 18 rangées, trois bandes contiguës, aucun terrain neutre.

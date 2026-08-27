@@ -584,7 +584,7 @@ export const COUT_ELECTRICITE = {
 // raffinerie. Chacun nourrit l'autre.
 //
 // ⚠ Aucun de ces débits ne tombe rond sur un tick, et c'est SANS IMPORTANCE :
-// economy.js arrondit une fois par couple (niveau, voisins), et le tick comme
+// l'arrondi se fait une fois par couple (niveau, voisins), et le tick comme
 // le rattrapage lisent le même entier. Chercher des débits divisibles serait de
 // toute façon vain — × 1,25 vaut 5/4, il faudrait que la base contienne 4⁴⁹ en
 // facteur pour rester entière jusqu'au niveau 50.
@@ -635,11 +635,11 @@ export const VOISINAGE = { rayon: 1, casesMax: 8 };
 // ⚠ LES COLIS SONT MORTS — reconfirmé par Ethan le 26/08 : « ils sont bien
 // abandonnés, tous les bâtiments font de la production continue ». Il n'y a
 // donc plus qu'un seul canal de production dans le jeu, et le pack/colis n'en
-// est plus un. Deux conséquences à solder, aucune ici :
-//   - `params.colis` de data/params.js et le bloc colis de tickEconomie /
-//     rattrapageEconomie sont un RELIQUAT du lot 1. Ils tournent encore et
-//     quatre tests les gardent : les retirer est un lot à part entière, pas un
-//     effet de bord.
+// est plus un. Deux conséquences, toutes deux SOLDÉES depuis :
+//   - le reliquat du lot 1 — le champ colis de data/params.js et les blocs
+//     colis de tickEconomie / rattrapageEconomie — a été retiré le 26/08 (lot
+//     COLIS, SAVE_VERSION 3), et les fichiers qui le portaient l'ont été le
+//     27/08 (lot ORPHELIN).
 //   - BASE-DU-JOUEUR-1.md §3 affirme l'inverse (« le couple pack + flux continu
 //     + voisinage est déjà implémenté »). Ce document est du 24/08 et de rang 4 :
 //     il a un jour de retard sur l'arbitrage. Ne pas le suivre sur ce point.
@@ -707,14 +707,16 @@ export const PRODUCTEUR_APPARIE = { raffinerie: 'collecteur', accumulateur: 'cen
 // Débit horaire — et pourquoi il n'est PAS exprimé par tick
 // ---------------------------------------------------------------------------
 //
-// `sim/economy.js` rangeait un débit en milli-unités PAR TICK, arrondi une fois
-// par couple (niveau, voisins). L'arrondi était cohérent — tick et rattrapage
-// lisaient le même entier — mais il était gros : à 10 Hz, 240/h tombe sur
-// 6,67 milli/tick, et arrondir coûte 5 % ; 48/h coûte 25 %.
+// Le moteur du lot 1 rangeait un débit en milli-unités PAR TICK, arrondi une
+// fois par couple (niveau, voisins). L'arrondi était cohérent — tick et
+// rattrapage lisaient le même entier — mais il était gros : à 10 Hz, 240/h
+// tombe sur 6,67 milli/tick, et arrondir coûte 5 % ; 48/h coûte 25 %.
 //
 // ✅ LE CORRECTIF EST EN PLACE (lot RÉSIDU). Plus aucun débit n'est arrondi par
-// tick : `sim/economy.js` range un débit PAR HEURE, entier, et chaque bâtiment
-// porte un résidu dans l'état de jeu (`residuFlux`, SAVE_VERSION 2).
+// tick : un débit se range PAR HEURE, entier, et chaque bâtiment porte un
+// résidu dans l'état de jeu (`residuFlux`, SAVE_VERSION 2). La règle vit
+// aujourd'hui dans `sim/economie-base.js` ; `sim/economy.js`, qui l'avait
+// portée en premier, a été retiré le 27/08 (lot ORPHELIN).
 //
 //   residu += debitParHeure
 //   gain    = Math.floor(residu / TICKS_PAR_HEURE)
