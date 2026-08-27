@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
+Dernière révision : **27/08/2026**, version 0.12.0 · build 12.
 
 ---
 
@@ -24,10 +24,13 @@ Dernière révision : **26/08/2026**, version 0.12.0 · build 12.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 26/08/2026 (après le lot BASCULE), à confronter :** `npm test` →
-**247 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
+**Référence au 27/08/2026 (après le lot ORPHELIN), à confronter :** `npm test` →
+**240 pass / 0 fail**, `npm run build` → `dist/index.html`, **81 236 octets**,
 0 référence externe. Le HTML n'a pas bougé d'un octet depuis le lot RÉSIDU :
 `src/index.src.html` n'importe toujours que `ui/banc.js`.
+Le compte de tests a BAISSÉ de sept : le lot ORPHELIN a retiré
+`test/economy.test.js` avec le module qu'il testait. Une baisse n'est pas
+forcément une régression — mais elle se justifie, toujours.
 
 ---
 
@@ -97,21 +100,20 @@ pas dans le classeur.
 
 ## 2. Arborescence réelle
 
-Relevée le **26/08/2026**, fichier par fichier. **La lister quand même.**
+Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'autre n'a le droit d'en porter
-  params.js             économie du lot 1 : colis, flux continu, adjacence, stockage
+src/data/               toutes les valeurs de calibrage — 5 fichiers ; RIEN d'autre n'a le droit d'en porter
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur (aucun code ne l'importe encore)
 
-src/sim/                simulation déterministe, sans DOM — 11 fichiers
-  rng.js  clock.js  state.js  economy.js  grille.js  combat.js  generateur.js
+src/sim/                simulation déterministe, sans DOM — 10 fichiers
+  rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
@@ -125,9 +127,9 @@ src/ui/                 le banc d'essai et ses éditeurs — 3 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
 
-test/                   22 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   21 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  cible  clock  combat  defense
-  disposition  documentation  donnees  economie-base  economy  generateur
+  disposition  documentation  donnees  economie-base  generateur
   grille  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES de ce fichier-ci sont assertés contre
     le disque. Ajouter un test ou un fichier sans mettre §0 et §2 à jour rend
@@ -315,10 +317,16 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 - **`sim/state.js` tourne sur `economie-base`** depuis le 26/08.
   `SAVE_VERSION` vaut **4**. L'état porte `position` (sur la carte),
   `disposition` (bâtiments placés à la case) et `economie` (trois ressources).
-  ⚠ **`sim/economy.js` est désormais ORPHELIN** : plus personne ne l'importe,
-  mais `test/economy.test.js` le teste encore, et `params.batiments` /
-  `params.stockage` / `params.courbes` / `params.adjacence` ne servent plus
-  qu'à lui. Le retirer est le lot suivant.
+  ⚠ **`sim/economy.js` ET `src/data/params.js` N'EXISTENT PLUS** — retirés le
+  27/08 (lot ORPHELIN) avec `test/economy.test.js`. Le moteur du lot 1 est
+  entièrement remplacé par `sim/economie-base.js` + `sim/disposition.js` +
+  `data/base.js` + `data/economie.js`. Toute mention de l'un ou de l'autre
+  ailleurs dans ce fichier, dans le code ou dans un rapport est de l'HISTOIRE :
+  elle se lit au passé, et rien ne doit être recréé sous ces noms.
+  ⚠ **La passation du 26/08 annonçait quatre champs morts** — `params.batiments`,
+  `params.stockage`, `params.courbes`, `params.adjacence`. Mesuré au retrait :
+  ils étaient **huit sur huit**, plus l'export `RHO`. Personne n'importait plus
+  `data/params.js`. Une liste de morts se recompte avant d'être crue.
   ⚠ **LE TERRAIN N'EST PAS SAUVEGARDÉ.** `serialiser` l'omet, `charger` le
   redéduit de `position`. Le recalculer par tick coûterait 71,6 µs — plus du
   double du tick économique ; le sauvegarder créerait une SECONDE source de
@@ -391,8 +399,8 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   colonne 16, niveau 5**. La base terminale est rangée 26, colonne 16, niveau 50.
 - **Livraison : `src/` et `test/` ne voyagent JAMAIS dans la même archive.**
   Le dépôt se met à jour depuis un téléphone et le sélecteur n'affiche que les
-  noms courts : `economy.js` et `economy.test.js` s'y confondent. Deux dépôts de
-  suite sont tombés à côté avant que la règle soit posée. Archive 1 = tout ce
+  noms courts : `disposition.js` et `disposition.test.js` s'y confondent. Deux
+  dépôts de suite sont tombés à côté avant que la règle soit posée. Archive 1 = tout ce
   qui va dans `src/`, archive 2 = `test/` + racine. `main` est ROUGE entre les
   deux, et c'est le garde-fou qui le dit — c'est voulu.
 - **Un état ne se construit pas qu'avec le constructeur du module.** Les douze
@@ -408,8 +416,8 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   programme (structure absente, indice hors liste). C'est « rien ne se retire en
   silence » (§4) appliqué : on signale au joueur, il purge.
   ⚠ **Aucun plafond de voisins autre que la géométrie.** Le lot 1 plafonnait à
-  deux (`params.adjacence.maxVoisins`) ; ce modèle-ci compte les huit cases.
-  Confondre les deux divise la production par quatre.
+  deux voisins (dans l'ancien `data/params.js`, retiré le 27/08) ; ce modèle-ci
+  compte les huit cases. Confondre les deux divise la production par quatre.
   ⚠ **L'arrondi se fait PAR TYPE de voisin, puis se multiplie.** Arrondir la
   somme donne 281 là où le jeu dit 282 (centrale niveau 3, trois champs) — un
   écart d'une unité qui se creuse ensuite, et un test le mesure exprès.
@@ -479,9 +487,9 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   pose, donc **douze collecteurs au maximum**.
 - **Les colis n'existent plus.** Abandonnés le 25/08, reconfirmés le 26 (« tous
   les bâtiments font de la production continue »), et RETIRÉS le 26/08 :
-  `params.colis`, `intervalleColisTicks`, les deux blocs de `economy.js`, le
-  champ `colis` de `creerBatiment` et le test 9. **`SAVE_VERSION` est passée à
-  3.**
+  le champ `colis` de `params.js`, `intervalleColisTicks`, les deux blocs de
+  `economy.js`, le champ `colis` de `creerBatiment` et le test 9. **`SAVE_VERSION`
+  est passée à 3.** Les deux fichiers cités ont eux-mêmes disparu le 27/08.
   ⚠ **La migration 2 → 3 SUPPRIME un champ**, ce qu'aucune autre ne faisait —
   les deux précédentes en ajoutaient. C'était le choix délibéré : une sauvegarde
   qui porte `colis` alors que plus une ligne ne le lit fait croire, six mois plus
@@ -506,11 +514,12 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 
 ### Sur l'économie
 
-- **`sim/economy.js` range un débit PAR HEURE, jamais par tick.** Chaque
-  bâtiment porte `residuFlux` dans l'état ; l'erreur d'arrondi par tick est
-  exactement nulle, à n'importe quelle fréquence. Le nom de la fonction est
-  `debitMilliParHeure` — `fluxMilliParTick` n'existe plus, et le recréer
-  réintroduirait un arrondi qui coûtait jusqu'à 0,71 % de production.
+- **Un débit se range PAR HEURE, jamais par tick.** La règle est née dans
+  `sim/economy.js` (lot RÉSIDU) et vit désormais dans `sim/economie-base.js`,
+  qui l'a reprise telle quelle. Chaque bâtiment porte un résidu ; l'erreur
+  d'arrondi par tick est exactement nulle, à n'importe quelle fréquence. Un
+  `fluxMilliParTick` n'existe nulle part, et le recréer réintroduirait un
+  arrondi qui coûtait jusqu'à 0,71 % de production.
 - **Le rattrapage ne calcule JAMAIS `nbTicks × debit`.** Sur une longue absence
   ce produit atteint 4,2 × 10¹⁸, soit 471 fois au-dessus de l'entier sûr — la
   formule fermée « évidente » dérive en silence. Il décompose `nbTicks` en
@@ -529,10 +538,14 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   rattrapage : la composition `min(cap, min(cap, x+a)+b) = min(cap, x+a+b)` ne
   tient que si les gains sont indépendants de l'état du stock. Un test le garde,
   avec le commentaire qui dit pourquoi.
-- **`sim/economy.js` ne connaît qu'une capacité de stockage globale**
-  (`params.stockage.capaciteMilli`). La capacité par bâtiment de `data/base.js`
-  — `capaciteDuNiveau()`, ancrée sur `STOCKAGE.autonomieHeures` — n'est lue par
-  personne, comme `base.js` tout entier.
+- **Il n'y a plus de capacité de stockage GLOBALE.** Le lot 1 en avait une,
+  unique, dans l'ancien `data/params.js`. Depuis la bascule la capacité est
+  **par bâtiment et par ressource** : `capaciteDuNiveau()` de `data/base.js`,
+  ancrée sur `STOCKAGE.autonomieHeures`, lue par `sim/economie-base.js`.
+  ⚠ **Le « `base.js` n'est lu par personne » de la version précédente de cette
+  ligne était périmé** : `champs.js`, `disposition.js` et `economie-base.js`
+  l'importent tous les trois. Un fait d'orphelinage se remesure, il ne se
+  reconduit pas.
 - **BigInt reste obligatoire** pour les points de recherche : le plafond du
   barème tient largement, mais le produit complet atteint encore 5,2 × 10²¹.
 - **`butinPlein` n'est délibérément PAS refactorisé.** La multiplication
