@@ -68,16 +68,32 @@ deux coûts différents, jamais deux camps, jamais deux régimes d'inclinaison.
 Aucune planche : on y compare deux rampes, et le modèle harmonise ce qu'il met
 côte à côte. Détail au §6 du brief.
 
-- [ ] Pylône Ouvrage, **rampe A** — régime C
-- [ ] Pylône Ouvrage, **rampe B** — régime C
-- [ ] Marcheur `off_o_fendeur`, **rampe A**, pattes corrigées — régime B
-- [ ] Marcheur `off_o_fendeur`, **rampe B**, pattes corrigées — régime B
-- [ ] Dard générique, rampe retenue — régime B
-- [ ] `off_j_meute` — 3 figures, casques blancs pleins — régime B
-- [ ] `def_j_creneau` — tourelle, socle dégagé — régime C
+- [x] Pylône Ouvrage, **rampe A** — régime C · validé 27/08 · `art/ouvrage/ref_pylone.png`
+- [x] Pylône Ouvrage, **rampe B** — régime C · écarté 27/08
+- [x] Marcheur `off_o_fendeur`, **rampe A** — régime B · validé 27/08 · `art/ouvrage/ref_marcheur.png`
+- [x] Marcheur `off_o_fendeur`, **rampe B** — régime B · écarté 27/08
+- [x] Dard générique, **rampe A** — régime B · validé 27/08 · `art/ouvrage/ref_dard.png`
+- [x] `off_j_meute` — 3 figures, casques blancs pleins — régime B · validé 27/08 · `art/joueur/ref_meute.png`
+- [x] `def_j_creneau` — tourelle, socle dégagé — régime C · validé 26/08 en S4
 
-**Sortie attendue : la rampe de l'Ouvrage, écrite dans `FICHE-STYLE.md` §3.**
-Rien de S3, S5 ni S7 ne démarre avant.
+**S0 EST CLOSE — 7 sur 7, le 27/08.** Trois sorties, toutes acquises :
+
+1. **La rampe de l'Ouvrage** est l'ardoise violacée, écrite dans
+   `FICHE-STYLE.md` §3. S3, S5 et S7 sont débloqués.
+2. **La forme du Dard** est arrêtée, dette 2 close (§5.2 du brief). Les quatre
+   aéronefs de S3 s'en déclinent au compteur de pièces.
+3. **Quatre sprites de référence** au dépôt, un par famille :
+   `art/ouvrage/ref_pylone.png` (structure), `art/ouvrage/ref_marcheur.png`
+   (blindé Ouvrage), `art/ouvrage/ref_dard.png` (aéronef Ouvrage),
+   `art/joueur/ref_meute.png` (escouade joueur), plus
+   `art/def_j_creneau_source.png` (tourelle joueur) validé en S4.
+
+⚠ **`def_j_creneau` ne se régénère plus.** Un cinquième jet a été produit le
+27/08 et écarté : accent 33 %, métal 0,9 %, châssis 59 % contre 18,9 / 24,6 /
+24,8 pour le sprite validé — socle disparu, tube absent, plus un second accent
+jaune parasite sur une tourelle anti-véhicule. C'est le quatrième échec de la
+famille par le même mécanisme, les pièges 11 et 12. **La suite de P4.3 passe par
+la référence jointe, pas par une relance.**
 
 ---
 
@@ -264,7 +280,7 @@ quand la session suivante commence sur une page blanche.
 
 | Session | Date | Générations | Refusées | Notes |
 |---|---|---|---|---|
-| S0 | | | | |
+| S0 | 27/08 | 5 | 1 | 5 cases sur 7. **Deux générations pour quatre fichiers** : la rampe B est la substitution ton pour ton de la A, 0 pixel d'écart hors rampe. Rampe A retenue sur les trois critères. Dard et `off_j_meute` validés au premier jet dans la foulée : **S0 close 7/7**. Le seul refus est un cinquième `def_j_creneau`, écarté au profit de celui du 26/08. Trois écarts au brief acceptés par Ethan — double accent sur le pylône, régime sans face mesurable, aucun module répété : voir `RAPPORT-S0-rampe-ouvrage.md` §4, ils deviennent la norme de la famille. |
 | S1 | | | | |
 | S2 | | | | |
 | S3 | | | | |

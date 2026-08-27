@@ -56,6 +56,22 @@ Toutes les valeurs sont fixes. Aucune teinte hors de cette liste.
 | Éclairé | `#6A7658` |
 | Lumière | `#8C9A72` |
 
+### Ouvrage — ardoise violacée (5 tons)
+
+Arrêtée le **27/08/2026** au terme du jet d'essai S0, contre la candidate « fonte
+oxydée » écartée. Voir `RAPPORT-S0-rampe-ouvrage.md`.
+
+| Rôle | Hex |
+|---|---|
+| Contour / creux | `#0D0B12` |
+| Ombre de corps | `#231D2E` |
+| **Corps (défaut)** | `#382E47` |
+| Éclairé | `#4E4160` |
+| Lumière | `#6B5B80` |
+
+Conséquence à tenir : la scorie étant le dépôt que l'Ouvrage laisse en
+s'étendant, `tile_croute` tire vers cette rampe et **jamais vers le brun**.
+
 ### Métal — canons, chenilles, socles (3 tons)
 
 | Rôle | Hex |
@@ -86,7 +102,7 @@ Toutes les valeurs sont fixes. Aucune teinte hors de cette liste.
 Il n'y a **pas de dualité GDI/Nod**. Le joueur mène un **chantier de reprise** et élève son **contre-ouvrage** ; l'adversaire est **l'Ouvrage**, une installation d'extraction automatisée qui s'est répliquée sans supervision. Ce n'est pas une nation et ça n'a pas de chef — la grammaire de formes doit le dire : modules identiques, radial, à pattes, accent émissif. Conséquences :
 
 - La rampe kaki ci-dessus est **celle du joueur**, définitivement.
-- L'ennemi reçoit sa propre rampe 5 tons, à définir, et surtout une **grammaire de formes différente** — l'opposition doit se lire à la silhouette, pas seulement à la teinte.
+- L'ennemi reçoit sa propre rampe 5 tons — **arrêtée le 27/08, c'est l'ardoise violacée ci-dessous** — et surtout une **grammaire de formes différente** — l'opposition doit se lire à la silhouette, pas seulement à la teinte.
 - Le roster offensif est divisé par deux : **14 unités, pas 28**. Aucun miroir à équilibrer.
 - La couleur d'accent reste commune : le joueur doit lire les défenses ennemies aussi vite que les siennes.
 

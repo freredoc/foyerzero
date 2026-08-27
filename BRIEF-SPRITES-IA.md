@@ -380,7 +380,18 @@ que sa face fait 6 px au lieu de 2. Les points 7 et 9 du §6 restent à l'œil.
 Ethan a demandé un premier jet sur chacune, puis validation sur pièce. Voici ce
 que le jet doit contenir pour que la validation soit possible.
 
-### 5.1 Dette 1 — la rampe de l'Ouvrage (5 tons)
+### 5.1 Dette 1 — la rampe de l'Ouvrage (5 tons) — **CLOSE le 27/08**
+
+> **Tranché : c'est la candidate A, ardoise violacée.** Elle est écrite dans
+> `FICHE-STYLE.md` §3, qui fait foi désormais. La section ci-dessous reste pour
+> l'historique de l'arbitrage ; ne plus la lire comme une question ouverte.
+>
+> Elle gagne les trois critères, mesurés et regardés à 40 px : le rouge et le
+> jaune tranchent sur l'ardoise et se noient sur la fonte, deux tons chauds
+> voisins ; et la fonte réalise le risque que le §5.1 lui prêtait — elle a l'air
+> rouillée donc abandonnée, quand l'Ouvrage est actif. Détail dans
+> `RAPPORT-S0-rampe-ouvrage.md`.
+
 
 L'Ouvrage n'est pas une nation : c'est une installation d'extraction qui s'est
 répliquée sans supervision. Sa rampe doit trancher **à la fois** du kaki du
@@ -411,12 +422,40 @@ actif — l'inverse exact de l'intention.
 **Le jet doit produire la même entité dans les deux rampes**, côte à côte au
 moment de la comparaison, sur un pylône et sur un marcheur — une structure
 (régime C) et une unité (régime B), parce que les deux ne se jugent pas pareil.
+
+⚠ **Et « la même » veut dire la même image, pas une seconde génération.** Ce qui
+a servi à trancher le 27/08 : une seule génération par sujet, puis la seconde
+rampe obtenue par **substitution ton pour ton** de la première — vérifié à
+0 pixel d'écart hors rampe, alpha identique. Deux générations ont suffi pour
+quatre fichiers. C'est meilleur que de générer les deux : une seconde génération
+apporte du bruit de silhouette qui se confond avec l'effet de la rampe, et c'est
+précisément ce qu'on cherche à isoler. **Comparer deux rampes, c'est comparer
+deux versions du même fichier.**
 Critère d'arbitrage, dans cet ordre : (1) est-ce qu'on distingue un marcheur
 ennemi d'un véhicule joueur en un dixième de seconde à 40 px, (2) est-ce que
 l'accent rouge et l'accent jaune restent lisibles dessus, (3) est-ce que ça a
 l'air actif.
 
-### 5.2 Dette 2 — le Dard, forme volante de l'Ouvrage
+### 5.2 Dette 2 — le Dard, forme volante de l'Ouvrage — **CLOSE le 27/08**
+
+> **La forme proposée ci-dessous a été produite et validée telle quelle.**
+> Référence : `art/ouvrage/ref_dard.png`. Mesuré — accent 14 %, métal 26 %,
+> châssis 43 %, les trois familles dans les bornes ; emprise 23 × 21 gp ; tient
+> la rotation à 90°, le demi-tour et le miroir, ce que sa symétrie d'ordre 3 lui
+> donne gratuitement.
+>
+> ⚠ **C'est le premier sprite du projet où la grammaire de l'Ouvrage apparaît
+> réellement** — une pièce répétée au lieu d'un objet sculpté. Le piège 9 se bat
+> par la forme radiale à modules, pas par un rappel dans le prompt. Les quatre
+> aéronefs s'en déclinent au compteur de pièces : trois modules à 10 points,
+> cinq pour `enclume` à 15.
+>
+> ⚠ **Conséquence à accepter : un Dard n'a pas d'avant.** Le point 6 de la
+> grille du §6 — « l'avant est-il identifiable sans le canon » — **ne s'applique
+> pas à cette grammaire**, et ça ne se rattrapera sur aucun des quatre. La
+> symétrie radiale est ce qui fait la lecture « installation qui se réplique » ;
+> elle coûte l'orientation, et le §5.2 l'assumait déjà.
+
 
 Nom et intention déjà arrêtés dans la fiche : petit, rapide, isolé, l'inverse de
 l'essaim au sol, **sans aile portante**, sustentation qui doit sembler procédée
