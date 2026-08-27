@@ -102,6 +102,52 @@ export const SEUIL_RATTRAPAGE_TICKS = 600;
 export const DUREE_APPUI_DEBUG_MS = 1500;
 
 /**
+ * Un chronomètre de temps RÉEL, à source injectée.
+ *
+ * ⚠ POURQUOI IL EXISTE, ET C'EST LE DÉFAUT LE PLUS COÛTEUX DE CET ÉCRAN.
+ * La boucle mesurait le temps écoulé sur les horodatages de
+ * `requestAnimationFrame`. Ils sont MONOTONES : ils ne courent pas pendant que
+ * la page est gelée. Tant qu'un `visibilitychange` encadrait le gel, le
+ * rattrapage de `reprendre()` réparait — mais **quand l'évènement ne se
+ * déclenche pas, le temps est perdu pour toujours**. Sur Android c'est le cas
+ * courant, pas le cas rare : le système fige un onglet sans le masquer, et la
+ * restauration passe par le cache de page.
+ *
+ * Mesuré le 27/08 sur le HTML livré, deux minutes de gel sans évènement :
+ * **0,006 unité produite au lieu de 8.** C'est exactement ce qu'Ethan a vu sur
+ * son téléphone — un compteur qui n'avance que pendant qu'on le regarde.
+ *
+ * ⚠ LE REMÈDE N'EST PAS UN ÉVÈNEMENT DE PLUS. En ajouter un — `pageshow`,
+ * `focus`, `resume` — c'est parier que celui-là se déclenchera toujours. Le
+ * remède est de n'en dépendre d'AUCUN : `requestAnimationFrame` dit QUAND
+ * dessiner, l'horloge murale dit COMBIEN de temps a passé. Un gel manqué se
+ * répare alors tout seul à la première image du retour, où l'écart mesuré est
+ * simplement grand.
+ *
+ * ⚠ IL NE LIT PAS L'HEURE LUI-MÊME. La source est injectée, ce qui le rend
+ * testable sans DOM et sans horloge système — et ce qui laisse `maintenantMs`
+ * seule lectrice de l'horloge dans tout `src/`, comme la garde §11 l'exige.
+ *
+ * @param {() => number} lireInstant
+ * @returns {{ ecoule: () => number }}
+ */
+export function creerChronometre(lireInstant) {
+  let precedent = null;
+  return {
+    ecoule() {
+      const maintenant = lireInstant();
+      if (precedent === null) {
+        precedent = maintenant;
+        return 0;
+      }
+      const delta = maintenant - precedent;
+      precedent = maintenant;
+      return delta > 0 ? delta : 0;
+    },
+  };
+}
+
+/**
  * Fait avancer un état d'une durée réelle écoulée.
  *
  * ⚠ UNE DURÉE NÉGATIVE NE FAIT RIEN, ELLE NE LÈVE PAS. Fuseau, NTP, joueur qui
@@ -139,7 +185,7 @@ export function initialiserSession(doc) {
   let etat = null;
   let ecran = null;
   let idImage = null;
-  let derniereImageMs = null;
+  const chrono = creerChronometre(maintenantMs);
   let dernierAffichageMs = 0;
   let instantSuspensionMs = null;
   let derniereSauvegardeMs = 0;
@@ -194,26 +240,24 @@ export function initialiserSession(doc) {
 
   // --- la boucle -------------------------------------------------------------
 
-  function image(horodatageMs) {
+  function image() {
     idImage = fenetre.requestAnimationFrame(image);
-    if (derniereImageMs === null) {
-      derniereImageMs = horodatageMs;
-      return;
-    }
-    const ecoule = horodatageMs - derniereImageMs;
-    derniereImageMs = horodatageMs;
-    avancer(etat, ecoule);
+    // ⚠ LE TEMPS VIENT DE L'HORLOGE, PAS DE L'HORODATAGE D'IMAGE. Voir
+    // `creerChronometre` : un gel non signalé se répare ici tout seul, la
+    // première image du retour mesurant simplement un grand écart.
+    avancer(etat, chrono.ecoule());
 
     // ⚠ L'AFFICHAGE NE SUIT PAS LA SIMULATION. Le moteur tourne à 10 Hz, l'écran
     // à celle de l'appareil ; réécrire six nombres soixante fois par seconde
     // coûte du texte que personne ne lit. Un rafraîchissement par tick suffit à
     // voir les stocks monter, et c'est exactement ce que la vérification
     // appareil n° 3 demande.
-    if (horodatageMs - dernierAffichageMs >= 100) {
-      dernierAffichageMs = horodatageMs;
+    const instant = maintenantMs();
+    if (instant - dernierAffichageMs >= 100) {
+      dernierAffichageMs = instant;
       ecran.rafraichir(etat);
     }
-    if (maintenantMs() - derniereSauvegardeMs >= PERIODE_SAUVEGARDE_MS) sauvegarder();
+    if (instant - derniereSauvegardeMs >= PERIODE_SAUVEGARDE_MS) sauvegarder();
   }
 
   function demarrerBoucle() {
@@ -222,7 +266,10 @@ export function initialiserSession(doc) {
     // d'application relancerait sinon la boucle sur `undefined.horloge`, et
     // l'écran tomberait au lieu de garder sa question posée.
     if (idImage !== null || etat === null) return;
-    derniereImageMs = null;
+    // Le chronomètre repart de l'instant présent : ce qui s'est écoulé pendant
+    // l'arrêt a déjà été soldé par `reprendre()`, ou le sera par la première
+    // image si aucun évènement n'a encadré le gel.
+    chrono.ecoule();
     idImage = fenetre.requestAnimationFrame(image);
   }
 
