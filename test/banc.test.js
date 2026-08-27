@@ -20,7 +20,7 @@ import { PREREGLAGES, montagePreregle } from './prereglages-lot3a.js';
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * La palette de `FICHE-STYLE.md`, transcrite. Vingt-huit teintes depuis la v4.
+ * La palette de `FICHE-STYLE.md`, transcrite. Trente-trois teintes depuis la v5.
  * Un test plus bas l'asserte contre le document, dans les deux sens.
  */
 const PALETTE_FICHE = [
@@ -28,6 +28,10 @@ const PALETTE_FICHE = [
   '#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72',
   // sol du joueur
   '#B87E64', '#C38C73', '#CF9A83', '#D7A995', '#E0B9A8',
+  // sol de l'Ouvrage — cendre violacée, inscrite dans la fiche le 27/08 au soir.
+  // Ces cinq tons ont EXACTEMENT la clarté des cinq ci-dessus, rang par rang :
+  // c'est ce qui empêche un camp de camoufler mieux que l'autre chez lui.
+  '#8E88A4', '#9B95AE', '#A8A3B9', '#B5B1C2', '#C2BFCC',
   // ardoise — l'Ouvrage
   '#0D0B12', '#231D2E', '#382E47', '#4E4160', '#6B5B80',
   // accents de terrain
