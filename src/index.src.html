@@ -373,9 +373,19 @@
     flex: 0 0 40px; display: flex; align-items: center; gap: 8px;
     padding: 0 8px; background: #161914; border-bottom: 1px solid #3E454C;
   }
+  /* ⚠ JUMEAU DE `#chantier-bandes`. Mêmes hauteur, fond et filet : le retour
+     doit tomber sous le pouce là où l'aller l'a laissé. Si l'une des deux
+     barres change, l'autre suit — sinon le geste cesse d'être le même. */
+  #offense-barre {
+    flex: 0 0 46px; display: flex; align-items: stretch;
+    background: #161914; border-top: 1px solid #3E454C;
+  }
+  #offense-barre .vide { flex: 1; }
   #offense-vers-chantier {
-    background: #343A2C; color: #F5F3E8; border: 1px solid #4E5742;
-    padding: 4px 8px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+    padding: 0 10px; background: #343A2C; color: #F5F3E8;
+    border: 0; border-left: 2px solid #3E454C;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
   }
   #offense-tete h1 {
     margin: 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8C9A72;
@@ -491,7 +501,6 @@
 <div id="ecran-offense" hidden>
 
   <div id="offense-tete">
-    <button type="button" id="offense-vers-chantier">← Base</button>
     <h1>Offense</h1>
     <div class="chiffres">
       <span>Niv. armée <b id="offense-niveau">—</b></span>
@@ -504,6 +513,16 @@
     montrent la place qu'elle prendra.</p>
 
   <div id="offense-vagues"></div>
+
+  <!-- ⚠ LE RETOUR EST À LA PLACE EXACTE DE L'ALLER. Il était en tête d'écran ;
+       Ethan l'a relevé à l'essai du 27/08. Un aller en bas à droite et un
+       retour en tête oblige le pouce à traverser l'écran pour faire deux fois
+       le même geste. Cette barre reprend la hauteur et le filet de
+       `#chantier-bandes`, et le bouton y occupe la même place. -->
+  <div id="offense-barre">
+    <div class="vide"></div>
+    <button type="button" id="offense-vers-chantier">← Base</button>
+  </div>
 
   <div id="offense-palette"></div>
 
