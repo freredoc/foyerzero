@@ -23,6 +23,9 @@ import {
   classeDe, accentDe, NB_PRIMITIVES, listeAffichage,
 } from '../src/render/scene.js';
 import { executer } from '../src/render/canvas2d.js';
+import {
+  ligneEcranDeLaRangee, rangeeDeLaLigneEcran, ligneEcranDeLaBande,
+} from '../src/render/orientation.js';
 
 // ---------------------------------------------------------------------------
 // Montage de référence pour la scène : une entité de chaque classe visuelle.
@@ -452,4 +455,117 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
   assert.equal(compter('strokeRect'), liste.filter((p) => p.forme === 'cadre').length);
   assert.equal(compter('arc'), liste.filter((p) => p.forme === 'disque').length);
   assert.equal(compter('stroke'), liste.filter((p) => p.forme === 'ligne').length);
+});
+
+
+// ---------------------------------------------------------------------------
+// Orientation — où une rangée tombe à l'écran
+// ---------------------------------------------------------------------------
+
+test('orientation — la rangée du fond tombe en PREMIÈRE ligne d\'écran', () => {
+  // ⚠ L'ALLER-RETOUR NE SUFFIT PAS, ET C'EST LE PIÈGE DE CE TEST. L'identité
+  // (`ligne = rangee`) passerait un aller-retour parfait : elle est sa propre
+  // réciproque. Ce qu'il faut asserter, c'est la POSITION — que la rangée la
+  // plus haute en numéro occupe la ligne 1, et la rangée 1 la dernière ligne.
+  assert.equal(ligneEcranDeLaRangee(GRILLE.longueur), 1);
+  assert.equal(ligneEcranDeLaRangee(1), GRILLE.longueur);
+  // Et que ce ne soit PAS l'identité, sur une rangée qui n'est pas au milieu.
+  assert.notEqual(ligneEcranDeLaRangee(2), 2);
+
+  // L'aller-retour, ensuite : la transformation est une involution, donc elle
+  // est sa propre inverse, et les deux fonctions doivent l'être aussi.
+  for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
+    assert.equal(rangeeDeLaLigneEcran(ligneEcranDeLaRangee(rangee)), rangee);
+    assert.equal(ligneEcranDeLaRangee(rangeeDeLaLigneEcran(rangee)), rangee);
+  }
+  // Une bijection : dix-huit rangées donnent dix-huit lignes distinctes.
+  const lignes = new Set();
+  for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
+    lignes.add(ligneEcranDeLaRangee(rangee));
+  }
+  assert.equal(lignes.size, GRILLE.longueur);
+  assert.equal(Math.min(...lignes), 1);
+  assert.equal(Math.max(...lignes), GRILLE.longueur);
+
+  // Hors grille, ça lève des deux côtés : une ligne d'écran inventée
+  // désignerait une rangée qui n'existe pas.
+  assert.throws(() => ligneEcranDeLaRangee(0), /hors de/);
+  assert.throws(() => ligneEcranDeLaRangee(GRILLE.longueur + 1), /hors de/);
+  assert.throws(() => rangeeDeLaLigneEcran(0), /hors de/);
+  assert.throws(() => rangeeDeLaLigneEcran(GRILLE.longueur + 1), /hors de/);
+});
+
+test('orientation — les trois bandes se suivent : base, défense, déploiement', () => {
+  // Les bornes viennent de `GRILLE.bandes`, jamais écrites ici. Un changement
+  // de découpage doit se propager, pas faire tomber ce test sur des nombres.
+  const batiments = ligneEcranDeLaBande(GRILLE.bandes.batiments);
+  const defense = ligneEcranDeLaBande(GRILLE.bandes.defense);
+  const deploiement = ligneEcranDeLaBande(GRILLE.bandes.deploiement);
+
+  // La base occupe les premières lignes, le déploiement les dernières.
+  assert.equal(batiments.premiereLigne, 1);
+  assert.equal(deploiement.premiereLigne + deploiement.nbLignes - 1, GRILLE.longueur);
+
+  // Les trois se suivent sans trou ni recouvrement, dans cet ordre.
+  assert.equal(defense.premiereLigne, batiments.premiereLigne + batiments.nbLignes);
+  assert.equal(deploiement.premiereLigne, defense.premiereLigne + defense.nbLignes);
+  assert.equal(
+    batiments.nbLignes + defense.nbLignes + deploiement.nbLignes, GRILLE.longueur,
+  );
+
+  // ⚠ LES QUATRE FRONTIÈRES, LUES DEPUIS LA TABLE. C'est là que se voit l'erreur
+  // qu'on ne verrait pas autrement : calculer la ligne de départ d'une bande
+  // depuis sa `premiere` au lieu de sa `derniere` décale chaque bande de sa
+  // propre longueur — la défense se poserait sur les bâtiments, et le rail
+  // désignerait la mauvaise bande sans que rien ne casse.
+  const bandeDe = (rangee) => Object.entries(GRILLE.bandes)
+    .find(([, b]) => rangee >= b.premiere && rangee <= b.derniere)[0];
+  for (const [avant, apres] of [
+    [GRILLE.bandes.deploiement.derniere, GRILLE.bandes.defense.premiere],
+    [GRILLE.bandes.defense.derniere, GRILLE.bandes.batiments.premiere],
+  ]) {
+    assert.notEqual(bandeDe(avant), bandeDe(apres), `${avant}/${apres} : même bande`);
+    // À l'écran, la rangée du NUMÉRO SUPÉRIEUR est celle du DESSUS : sa ligne
+    // est la plus petite des deux.
+    assert.ok(
+      ligneEcranDeLaRangee(apres) < ligneEcranDeLaRangee(avant),
+      `la frontière ${avant}/${apres} est retournée à l'envers`,
+    );
+    // Et elles restent contiguës : une frontière ne crée pas d'interstice.
+    assert.equal(ligneEcranDeLaRangee(avant) - ligneEcranDeLaRangee(apres), 1);
+  }
+
+  // Une bande malformée lève plutôt que de rendre un span négatif.
+  assert.throws(() => ligneEcranDeLaBande({ premiere: 10, derniere: 3 }), /bornes inversées/);
+  assert.throws(() => ligneEcranDeLaBande(null), /absente ou malformée/);
+});
+
+test('orientation — le canvas et la grille CSS placent les rangées PAREIL', () => {
+  // ⚠ CE TEST EXISTE PARCE QUE LES DEUX AVAIENT DIVERGÉ. `render/projection.js`
+  // place la rangée du fond en tête du canvas depuis le lot 3A — le banc
+  // d'essai dessinait donc déjà dans le bon sens. L'écran Chantier, écrit au lot
+  // ÉCRAN-CHANTIER, posait ses cases dans l'ordre naturel de la boucle et se
+  // retrouvait retourné : déploiement d'abord, base en dernier. Personne ne l'a
+  // vu tant que les deux vues n'ont pas été regardées côte à côte.
+  //
+  // On asserte donc l'ACCORD des deux chemins, pour qu'on ne puisse plus en
+  // corriger un seul. Le canvas rend des pixels et la grille des numéros de
+  // ligne : ce qui se compare, c'est l'ORDRE.
+  const projection = calculerProjection(360, 720);
+  let precedentY = -Infinity;
+  for (let ligne = 1; ligne <= GRILLE.longueur; ligne++) {
+    const rangee = rangeeDeLaLigneEcran(ligne);
+    const y = yDeRangee(projection, rangee);
+    assert.ok(y > precedentY, `ligne ${ligne} (rangée ${rangee}) : le canvas la place plus haut`);
+    precedentY = y;
+  }
+  // Falsifiable : le montage doit voir de vrais écarts, pas dix-huit zéros.
+  assert.ok(
+    yDeRangee(projection, 1) - yDeRangee(projection, GRILLE.longueur) > 0,
+    'la projection ne sépare pas les rangées',
+  );
+  // Et les deux extrêmes, nommément : la rangée du fond est la plus proche du
+  // bord d'où l'on commence à lire, des deux côtés.
+  assert.equal(ligneEcranDeLaRangee(GRILLE.longueur), 1);
+  assert.equal(yDeRangee(projection, GRILLE.longueur), projection.margeY);
 });

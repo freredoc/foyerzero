@@ -36,6 +36,7 @@
 import { creerEtat, charger, serialiser, tickJeu, rattraperJeu } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
+import { initialiserEcranOffense } from './offense.js';
 import { initialiserBanc } from './banc.js';
 
 /**
@@ -144,6 +145,9 @@ export function initialiserSession(doc) {
   let derniereSauvegardeMs = 0;
   let sauvegardeArmee = false;
   let bancInitialise = false;
+  // Lequel des deux écrans de JEU est en scène. Le banc, lui, les remplace tous
+  // les deux et n'entre pas dans cette variable : il a sa propre porte.
+  let ecranCourant = 'chantier';
 
   // --- le magasin, qui peut ne pas exister ---------------------------------
   //
@@ -313,6 +317,26 @@ export function initialiserSession(doc) {
     }
   }
 
+  // --- les deux écrans de jeu -----------------------------------------------
+  //
+  // ⚠ LE JEU NE S'ARRÊTE PAS QUAND ON CHANGE D'ÉCRAN. `suspendre()` et
+  // `reprendre()` existent pour le BANC, qui remplace la page et n'a aucune
+  // raison de laisser tourner une base derrière lui, et pour le masquage de
+  // l'application. Les appeler ici gèlerait l'économie du joueur chaque fois
+  // qu'il va regarder ses vagues — et pire, il ne le verrait pas : au retour,
+  // le rattrapage par l'horloge murale rendrait les ressources manquantes, si
+  // bien que le défaut ne se lirait que sur un chronomètre. On se contente donc
+  // de montrer l'un et de cacher l'autre.
+
+  function montrerEcran(nom) {
+    ecranCourant = nom;
+    $('ecran-chantier').hidden = nom !== 'chantier';
+    $('ecran-offense').hidden = nom !== 'offense';
+  }
+
+  $('chantier-vers-offense').addEventListener('click', () => montrerEcran('offense'));
+  $('offense-vers-chantier').addEventListener('click', () => montrerEcran('chantier'));
+
   // --- le banc d'essai, derrière un appui long -------------------------------
   //
   // ARBITRÉ le 27/08 : le banc RESTE dans le HTML livré, caché derrière un geste
@@ -327,6 +351,7 @@ export function initialiserSession(doc) {
   function ouvrirLeBanc() {
     suspendre();
     $('ecran-chantier').hidden = true;
+    $('ecran-offense').hidden = true;
     $('banc').hidden = false;
     if (!bancInitialise) {
       // Après le démasquage, pas avant : le banc mesure son canvas au câblage,
@@ -339,7 +364,9 @@ export function initialiserSession(doc) {
 
   function fermerLeBanc() {
     $('banc').hidden = true;
-    $('ecran-chantier').hidden = false;
+    // On rend l'écran qu'on avait pris, pas systématiquement le Chantier :
+    // revenir du banc ne doit pas déplacer le joueur.
+    montrerEcran(ecranCourant);
     reprendre();
   }
 
@@ -383,5 +410,9 @@ export function initialiserSession(doc) {
   fenetre.addEventListener('pagehide', () => sauvegarder());
 
   ecran = initialiserEcranChantier(doc);
+  // L'écran Offense se construit une fois et ne se rafraîchit jamais : tant
+  // qu'aucune armée n'existe, rien de ce qu'il montre ne change avec le temps.
+  initialiserEcranOffense(doc);
+  montrerEcran('chantier');
   demarrer();
 }

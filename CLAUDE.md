@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.13.0 · build 13.
+Dernière révision : **27/08/2026**, version 0.14.0 · build 14.
 
 ---
 
@@ -24,20 +24,23 @@ Dernière révision : **27/08/2026**, version 0.13.0 · build 13.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot ÉCRAN-CHANTIER), à confronter :**
-`npm test` → **271 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**123 660 octets**, 0 référence externe.
+**Référence au 27/08/2026 (après le lot ÉCRAN-NAVIGATION), à confronter :**
+`npm test` → **282 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**130 488 octets**, 0 référence externe.
 
-⚠ **LE HTML A BOUGÉ, POUR LA PREMIÈRE FOIS DEPUIS LE LOT RÉSIDU** — de 81 236 à
-123 660 octets, et le point d'entrée n'est plus le banc d'essai : c'est la
-session de jeu. C'est le lot ÉCRAN-CHANTIER, le premier à devoir bumper depuis
-douze lots. La borne de T10 (200 000 octets) tient encore, avec 38 % de marge.
+⚠ **LE HTML BOUGE MAINTENANT À CHAQUE LOT D'INTERFACE.** Il était figé à 81 236
+octets depuis le lot RÉSIDU ; ÉCRAN-CHANTIER l'a porté à 123 785 en branchant la
+session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense. La borne
+de T10 (200 000 octets) tient, avec 35 % de marge — mais elle se surveille
+désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
-est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, et
-de quatorze au lot ÉCRAN-CHANTIER (treize pour `test/chantier.test.js`, un pour
-la garde §11 scindée en deux). Une baisse n'est pas forcément une régression,
-mais elle se justifie, toujours.
+est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de
+quatorze au lot ÉCRAN-CHANTIER (treize pour `test/chantier.test.js`, un pour la
+garde §11 scindée en deux), et de onze au lot ÉCRAN-NAVIGATION (six pour
+`test/offense.test.js`, trois d'orientation dans `test/rendu.test.js`, deux dans
+`test/chantier.test.js` — la barre à deux bandes et la pastille de pose). Une baisse n'est pas forcément une régression, mais elle se
+justifie, toujours.
 
 ---
 
@@ -127,12 +130,14 @@ src/sim/                simulation déterministe, sans DOM — 11 fichiers
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 4 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 5 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
+  orientation.js        où une rangée tombe à l'écran, et la réciproque
 
-src/ui/                 les deux écrans et leurs éditeurs — 5 fichiers
+src/ui/                 les trois écrans et leurs éditeurs — 6 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
-  chantier.js           l'écran de jeu : formatage PUR, puis rendu au DOM
+  chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
+  offense.js            l'écran des quatre vagues — coquille, rien à composer
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
@@ -141,11 +146,11 @@ src/ui/                 les deux écrans et leurs éditeurs — 5 fichiers
     les met en scène. La garde de `banc.test.js` porte sur le DOSSIER, pas sur
     un nom.
 
-test/                   23 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   24 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
-  grille  niveau-de-base  rendu  repli  rng  roster  state
+  grille  niveau-de-base  offense  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -756,6 +761,10 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   terrain que la fiche porte maintenant : `#9FB3C5` · `#C1CEDA` pour le quartz,
   `#382E47` pour la scorie. À reprendre quand Ethan dira comment il veut qu'un
   champ se lise — c'est une décision de style, et la fiche fait autorité.
+  ⚠ **LA MAQUETTE A SUIVI LE RETOURNEMENT ET LA BARRE À DEUX BANDES** (27/08 au
+  soir) — sans quoi elle aurait enseigné une navigation que le jeu ne fait plus.
+  Elle ne porte PAS l'écran Offense : elle en montre le renvoi et rien d'autre.
+  `audit-maquette.mjs` ne regarde pas la navigation et ne l'aurait pas dit.
   ⚠ **L'ÉCRAN DE JEU A REPRIS LE RENDU DE LA MAQUETTE, PAS CES TROIS TEINTES**,
   et c'est délibéré : leur emploi n'est pas arbitré, et trancher seul aurait fixé
   la lecture d'un champ sans que personne la revoie. Le champ est donc, à
@@ -806,6 +815,67 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   il pose des écouteurs, un ResizeObserver et une projection, et mesure son
   canvas au câblage — un élément caché mesure zéro. Le démasquage vient donc
   avant l'appel, et l'appel n'a lieu qu'une fois.
+- **LA GRILLE SE DESSINE À L'ENVERS DES NUMÉROS DE RANGÉE, ET C'EST VOULU.**
+  Arbitré le 27/08 au soir : la base d'abord, puis la défense, puis les deux
+  rangées de déploiement. La transformation vit dans `src/render/orientation.js`
+  et nulle part ailleurs — `ligne d'écran = GRILLE.longueur + 1 − rangée`, avec
+  sa réciproque. **Le modèle ne bouge pas** : la rangée 1 reste celle où les
+  vagues paraissent, la rangée 18 reste le fond.
+  ⚠ **ELLE EST DANS `render/` PARCE QUE LA MÊME VUE SERVIRA AU RAID.** Ethan :
+  « il faut toujours que la base, quoi qu'il arrive, joueur ou Ouvrage, soit
+  [en premier], puis défense, puis les deux petites rangées ». C'est la même
+  géométrie des deux côtés — d'où `GEOMETRIE_BASE` qui RÉFÉRENCE `GRILLE`.
+  Écrite en dur dans l'écran Chantier, elle serait recopiée pour l'écran de
+  raid, et les deux copies divergeraient.
+  ⚠ **`render/projection.js` PORTAIT DÉJÀ CETTE CONVENTION**, depuis le lot 3A :
+  `yDeRangee` vaut `margeY + (GRILLE.longueur − rangee) × tailleCase`. Le canvas
+  du banc dessinait donc dans le bon sens ; l'écran DOM du lot ÉCRAN-CHANTIER
+  était le SEUL à la contredire, parce qu'il posait ses cases dans l'ordre
+  naturel de sa boucle. Un test asserte désormais que les deux chemins
+  s'accordent, pour qu'on ne puisse plus en corriger un seul.
+  ⚠ **POUR UNE BANDE, LA LIGNE DE DÉPART SE CALCULE DEPUIS SA RANGÉE LA PLUS
+  HAUTE EN NUMÉRO.** Prendre `premiere` par symétrie apparente décale chaque
+  bande de sa propre longueur — la défense se poserait sur les bâtiments, et le
+  rail désignerait la mauvaise bande **sans que rien ne casse**.
+- **LA BARRE DU BAS PORTE DEUX BANDES, PAS TROIS.** Chantier et Défense, dans un
+  seul défilement continu : ce sont deux repères de la même grille, pas deux
+  écrans. Le jeu s'ouvre sur le Chantier.
+  ⚠ **LE BOUTON « ASSAUT » ÉTAIT UNE FAUTE, retirée le 27/08 au soir.** Il
+  pointait sur les rangées 1–2, qui sont l'endroit où les vagues PARAISSENT
+  pendant un combat — pas celui où on les COMPOSE. Il promettait un éditeur et
+  livrait du sol nu. La composition a désormais son écran, et un test refuse
+  qu'un bouton « Assaut » reparaisse dans la page.
+- **L'ÉCRAN OFFENSE EST UNE COQUILLE, ET IL SE DIT COQUILLE.** Trente-six
+  emplacements — quatre vagues de neuf, `EMPLACEMENTS_ASSAUT` — dessinés et
+  vides, niveau et budget à « — », palette présente et désactivée, et un mot qui
+  dit que la composition d'armée n'existe pas encore. L'état ne porte pas
+  d'armée ; en inventer la forme reviendrait à trancher seul.
+  ⚠ **LA PALETTE N'EST PAS FILTRÉE PAR NIVEAU.** `unitesDisponibles(niveau)` de
+  l'Arsenal ne montre que `apparition <= niveau` — mais le joueur n'a pas de
+  niveau d'armée. En choisir un pour pouvoir filtrer, c'est l'inventer.
+  ⚠ **`GRILLE.intervalleVagueSec` VAUT 5, PAS 10.** La capture de référence
+  fournie avec l'amendement affiche « +10 s » : c'est un autre jeu. La table du
+  dépôt fait foi, et un test l'asserte de face.
+  ⚠ **CHANGER D'ÉCRAN N'ARRÊTE PAS LA BOUCLE.** `suspendre()` et `reprendre()`
+  de `session.js` existent pour le BANC, qui remplace la page, et pour le
+  masquage de l'application. Les brancher sur la navigation interne gèlerait
+  l'économie — et **le défaut serait invisible** : au retour, le rattrapage par
+  l'horloge murale rendrait les ressources manquantes, si bien que le gel ne se
+  lirait que sur un chronomètre. Un test lit la source pour l'empêcher.
+- **POSER UN BÂTIMENT NE COÛTE RIEN, ET LA VIGNETTE DOIT LE DIRE.**
+  `ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2 : le niveau 1 est gratuit pour
+  les onze. Le lot ÉCRAN-CHANTIER affichait pourtant `COUT_NIVEAU_DEUX` en
+  chiffre nu dans un coin de chaque vignette — « 3 » sur un Collecteur posable
+  se lit « poser coûte 3 » — alors qu'un commentaire du même fichier écrivait
+  noir sur blanc que la pose est gratuite. La vignette annonce maintenant
+  « gratuit » ; le coût de la première amélioration vit dans son titre, et le
+  champ s'appelle `coutPremiereAmelioration`, pour que le point d'appel ne
+  puisse plus se tromper sans que ça se voie.
+  ⚠ **AUCUNE RESSOURCE N'EST NOMMÉE AVEC CE NOMBRE.** `COUT_NIVEAU_DEUX` donne
+  un nombre unique et `COUT_ELECTRICITE` une fraction du coût EN QUARTZ ; rien
+  ne dit comment le total se répartit entre quartz et scorie depuis que le
+  modèle du lot 1 est parti avec `data/params.js`. Un nombre sans ressource, dit
+  comme tel, est plus honnête qu'un « 3 quartz » faux.
 - **L'écran de jeu se lit en LECTURE SEULE, et les boutons d'action sont
   présents et désactivés.** La couche d'action n'existe pas dans `sim/` : elle
   attend un arbitrage d'Ethan sur la part de scorie d'un coût de construction.
