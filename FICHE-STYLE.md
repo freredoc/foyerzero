@@ -78,20 +78,60 @@ lot 1. **Le sol passe au-dessus des entités en clarté ; toute entité y devien
 une masse sombre.** Un sol plus rouge et plus sombre est hors de portée : au
 sRGB, le rouge profond exige la valeur basse, et la valeur basse est prise.
 
+### Sol de l'Ouvrage — cendre violacée (5 tons)
+
+Arrêtée le **27/08/2026 au soir**, en même temps que le sol du joueur et par le
+même fichier : les deux sols sont **la même texture, recolorisée rang par rang**.
+
+| Rôle | Hex |
+|---|---|
+| Creux, ravines | `#8E88A4` |
+| Ombre | `#9B95AE` |
+| **Sol nu (défaut)** | `#A8A3B9` |
+| Clair | `#B5B1C2` |
+| Poussière | `#C2BFCC` |
+
+⚠ **Ces cinq tons ont EXACTEMENT la clarté des cinq de la terre cuite**, rang par
+rang : L\* 58,1 · 62,9 · 68,0 · 73,0 · 77,9. C'est mesuré, pas approché, et c'est
+la raison d'être de la rampe : deux sols de clarté différente donnent à un camp
+un camouflage que personne n'a décidé.
+
+La teinte est celle de l'Ouvrage : la version pâle de son ardoise. Ses machines
+sont le bas de la gamme, son sol en est le haut.
+
+⚠ **Une collision à connaître : le quartz est à ΔE 7 de la poussière de cendre**
+(`#C1CEDA` contre `#C2BFCC`). Sans effet aujourd'hui — les champs ne se posent
+que dans la base du joueur, sur terre cuite, où l'écart vaut ΔE 26. Le jour où un
+champ apparaîtrait sur un sol d'Ouvrage, il lui faudrait un ton propre.
+
 ### Matières de terrain
 
-Le sol ci-dessus est **commun aux sept terrains**. Ce qui les distingue est une
-matière posée dessus, jamais une teinte de sol différente.
+Il n'y a plus sept terrains : le champ de bataille a **deux états**, sol nu ou
+champ, et **deux sols**, un par camp. Ce qui se voit par-dessus est un élément
+posé, jamais une teinte de sol différente.
 
-| Matière | Terrain | Hex |
+| Matière | Où elle sert | Hex |
 |---|---|---|
-| Quartz | `tile_affleurement` | `#9FB3C5` · `#C1CEDA` |
-| Scorie | `tile_croute` | `#382E47` (ardoise, ci-dessus) |
-| Eau croupie | `tile_vasiere` | `#1F5160` |
-| Pétrole | `tile_suintement` | `#1E2124` (métal sombre — réutilisé, un ton propre tomberait à ΔE 2 de lui) |
-| Bois mort | `tile_futaie` | `#5B4133` |
-| Broussaille sèche | `tile_friche` | aucun ton propre — le sol le plus clair, en touffes |
-| — | `tile_sterile` | aucune matière |
+| Quartz | `champ_quartz_a`·`_b` | `#9FB3C5` · `#C1CEDA`, creux `#3E454C` |
+| Scorie | `champ_scorie_a`·`_b` | `#382E47` · `#4E4160`, braises `#F5B636` |
+| Pétrole | `obs_vehicule_a`·`_b` | `#1E2124` seul |
+| Bois mort | `obs_infanterie_a`·`_b` | `#5B4133`, creux `#231D2E` |
+| Pierre | `obs_les_deux_a`·`_b` | `#3E454C` · `#68727E`, creux `#1E2124` |
+| Eau croupie | — | `#1F5160`, **inemployé** depuis la refonte du lot 1 |
+
+⚠ **`#F5B636` sur la scorie est la seule couleur d'accent du décor.** Si le
+combat s'en sert pour le feu ou les chiffres de dégâts, les deux se disputeront
+l'œil. Une version braises éteintes, corps `#1E2124`, se substitue en une ligne.
+
+⚠ Les noms `tile_affleurement`, `tile_croute`, `tile_vasiere`, `tile_suintement`,
+`tile_futaie`, `tile_friche`, `tile_sterile` appartenaient au lot de terrain
+supprimé le 27/08. Aucun de ces fichiers n'existe ni ne doit être régénéré.
+
+⚠ **AUCUN TON DE SOL NE PORTE LE CONTOUR D'UN ÉLÉMENT POSÉ.** Les tons de sol
+sont permis à l'intérieur d'une masse dont le pourtour est d'une autre matière,
+jamais sur le bord qui touche le sol : le sol porte ses cinq tons partout, et une
+silhouette peinte dans l'un d'eux disparaît. Vérifié sur les dix éléments du
+lot 1, aucun n'en porte.
 
 ⚠ **Aucun vert dans le terrain, nulle part.** Le vert est la couleur du joueur.
 Dans un décor aride la végétation est sèche : la futaie est du bois mort, la
@@ -338,6 +378,12 @@ qui fait lire l'Ouvrage comme une installation qui se réplique ; elle coûte
 l'orientation, et ça ne se rattrapera sur aucun des quatre aéronefs.
 
 ---
+
+*v5 — 27/08/2026, nuit. Rampe de sol de l'Ouvrage inscrite — cinq tons, calés
+en clarté sur ceux du joueur. Les sept terrains disparaissent du tableau des
+matières, remplacés par les six éléments posés réellement produits. Règle de
+silhouette ajoutée. La palette passe de vingt-huit à **trente-trois teintes** :
+`test/banc.test.js` et `CLAUDE.md` ont été repris dans le même commit.*
 
 *v4 — 27/08/2026. Trois choses inscrites : la rampe de l'Ouvrage au §3, la forme
 du Dard ci-dessus, et les sept conventions A1 à A7 d'`INVENTAIRE-SPRITES.md`,

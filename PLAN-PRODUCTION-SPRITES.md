@@ -143,7 +143,7 @@ au premier jet du terrain.
 
 | # | Fichiers | Régime | Découpe | État |
 |---|---|---|---|---|
-| P1.1 | `tile_sol_j_a…d` | Tuile | — | **[x] LIVRÉE 27/08** — `sprites/terrain/` |
+| P1.1 | `tile_sol_j_a…d` | Tuile | — | **[x] LIVRÉE 27/08** — `art/sprites/terrain/` |
 | P1.2 | `tile_sol_o_a…d` | Tuile | — | **[x] LIVRÉE 27/08** — recolorisation de P1.1, zéro génération |
 | P1.3 | `champ_quartz_a`·`_b` · `champ_scorie_a`·`_b` | Entité | — | **[x] LIVRÉE 27/08** — 2 jets libres, variantes par retournement |
 | P1.4 | `obs_infanterie_a`·`_b` · `obs_vehicule_a`·`_b` | Entité | — | **[x] LIVRÉE 27/08** — 4 jets libres |
@@ -160,7 +160,7 @@ Palette du conditionneur : **Sol** pour les cinq planches, rognage 3 px, seuil
 magenta 140. ⚠ La palette *Sol* n'existe pas encore dans l'outil — tourner en
 palette *aucune* et faire vérifier les tons à la main, comme pour le premier jet.
 
-Les **huit** tuiles de sol sont livrées dans `sprites/terrain/`, en 128 × 128,
+Les **huit** tuiles de sol sont livrées dans `art/sprites/terrain/`, en 128 × 128,
 grille 32, cinq couleurs exactement, gros pixel de 4 px — vérifié fichier par
 fichier. Le contrôle décisif du §7 des prompts, les deux camps posés sur les deux
 sols, est passé : `essai/quatre-combinaisons.png`.

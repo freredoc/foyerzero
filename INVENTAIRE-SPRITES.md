@@ -1,5 +1,11 @@
 # INVENTAIRE-SPRITES.md — Foyer Zéro
 
+> ⚠ **LE LOT 1 EST PRODUIT.** Les dix-huit fichiers sont au dépôt, dans
+> `art/sprites/terrain/` — et non `sprites/terrain/`, qui n'existe pas. Ce §2 se
+> lit désormais comme une trace de conception : ce qui a été fait, et sur quels
+> points la production a démenti la conception, est dit à sa place. Les mesures
+> sont dans `RAPPORT-lotSOL-recolorisation.md` et `RAPPORT-lotP1.3-P1.5.md`.
+>
 > Liste exhaustive des sprites à produire, extraite de `src/data/` le 26/08/2026.
 > À lire avec `FICHE-STYLE.md`, qui reste la référence de production ; ce
 > document-ci ne dit pas COMMENT dessiner, il dit CE QU'IL FAUT dessiner et
@@ -240,8 +246,15 @@ moins (18 au lieu de 22).
 | Sert ce lot | **oui, en entier** | **non, rien** |
 
 **L'architecture, reprise d'Archipel Industry** — les gisements de mine posés sur
-les tuiles d'île. Un **sol quasi uni** sur les 162 cases, un par camp, et
-par-dessus des **sprites plus petits** qui disent ce qu'il y a. Les éléments
+les tuiles d'île. Un **sol dense et uniforme** sur les 162 cases, un par camp, et
+par-dessus des **sprites plus petits** qui disent ce qu'il y a.
+
+⚠ **« Quasi uni » était l'erreur.** Ce document a demandé pendant une journée un
+sol à 80 % d'un seul ton ; six jets l'ont appliqué et les six ont donné une
+plaque plate. Le sol retenu n'a **aucun ton dominant** — le plus présent est à
+35 %. Ce qui rend le fond lisible n'est pas sa propreté mais le fait que son
+bruit interne, 20 points de L\*, reste six fois plus faible que l'écart qui le
+sépare des entités, 29 à 41 points. Les éléments
 posés sont neutres et communs aux deux camps : un quartz est un quartz.
 
 | Bande de `GRILLE` | Rangées | Contenu |
@@ -280,24 +293,24 @@ un avantage que personne n'a décidé.
 ### 2.2 Les champs de ressource (4)
 
 `champ_quartz_a.png` · `_b.png` · `champ_scorie_a.png` · `_b.png`
-*(noms proposés — aucun fichier n'existe encore ; ils ne portent pas d'axe
+*(livrés le 27/08 dans `art/sprites/terrain/` ; ils ne portent pas d'axe
 propriétaire, A1, parce qu'ils n'appartiennent à personne)*
 
-Douze cases par base, en blocs de une à trois cases contiguës. **Un bloc doit se
-lire comme un seul gisement, pas comme trois carreaux collés.** D'où la règle de
-raccord, qui est l'inverse de celle des entités : la matière **touche le milieu
-des quatre bords** sur environ la moitié de leur longueur, et **les quatre angles
-restent vides**. Jamais un bord entièrement plein, jamais un bord entièrement
-vide.
+Douze cases par base, en blocs de une à trois cases contiguës.
 
-⚠ Ces quatre fichiers sont donc la **seule exception à la bordure de 2 gros
-pixels vides** d'A7, avec les sols. Ce n'est pas un oubli : c'est ce qui permet à
-deux cases voisines de fusionner. Le contrôle qui le falsifie tient en une
-image : poser deux gisements côte à côte et demander si on voit un gisement ou
-deux carreaux.
+⚠ **LE RACCORD EST ANNULÉ — décision d'Ethan, 27/08 au soir, prise sur pièce.**
+Ce document a demandé pendant une journée que la matière touche le milieu des
+quatre bords pour qu'un bloc se lise comme un seul gisement. Les quatre fichiers
+livrés font l'inverse : **sujets isolés, bordure de 2 gros pixels vides comme
+tout le reste**, et un bloc de trois cases montre trois gisements distincts. Une
+case, un gisement.
 
-La scorie a droit à **2 gros pixels de relief** — c'est un dépôt refroidi, il est
-au-dessus du sol. Le quartz est strictement plat : il affleure.
+Conséquence directe : **les champs ne sont plus une exception à A7.** Les deux
+sols le restent, seuls.
+
+Le quartz est un bouquet de cristaux, `#3E454C` · `#9FB3C5` · `#C1CEDA`. La
+scorie est une masse veinée de braises, `#382E47` · `#4E4160` · `#F5B636` — la
+seule couleur d'accent du décor, à surveiller si le combat s'en sert pour le feu.
 
 ### 2.3 Les obstacles (6) — *ex-lot 2, absorbé ici le 27/08*
 

@@ -1,7 +1,20 @@
 # Sol de base et éléments posés — prompts prêts à coller
 
-27/08/2026. Cinq planches, dix-huit fichiers. Une conversation, ce fichier
-collé dans l'ordre.
+27/08/2026, **révisé le soir même (v2)**. Cinq planches, dix-huit fichiers. Une
+conversation, ce fichier collé dans l'ordre.
+
+> **CE QU'IL FAUT COLLER POUR LA SESSION EN COURS : le §0, puis le §3, puis le
+> §4, puis le §5. Ne pas coller les §1 et §2** — les huit tuiles de sol existent
+> déjà, ces deux prompts ne sont conservés que pour mémoire.
+>
+> ⚠ **Deux planches sur cinq ne se génèrent plus.** Les huit tuiles de sol
+> existent : `sprites/terrain/`. Elles ne sortent pas de ces prompts mais d'un
+> jet libre recolorisé — voir `RAPPORT-lotSOL-recolorisation.md`. Les §1 et §2
+> restent ici corrigés, pour le jour où un sol se reprendrait ; **le §0 et les
+> §3 à §5 sont, eux, en service.**
+>
+> ⚠ **La rampe de l'Ouvrage du §0 est périmée.** Les cinq tons livrés sont dans
+> `FICHE-STYLE.md` §3, 3,8 L\* plus bas que ceux écrits ci-dessous.
 
 **Ce que ce lot couvre** : le champ de bataille 9 × 18 de `GRILLE`. Un sol quasi
 uni sur les 162 cases, et par-dessus des sprites plus petits qui disent ce qu'il
@@ -29,14 +42,21 @@ PALETTE — remplace entièrement le bloc palette du contrat
 Sol du JOUEUR, terre cuite, 5 tons :
   creux #B87E64 · ombre #C38C73 · sol nu #CF9A83 · clair #D7A995 · poussière #E0B9A8
 Sol de l'OUVRAGE, cendre violacée, 5 tons :
-  creux #9892AE · ombre #A6A0B9 · sol nu #B3AEC4 · clair #BDB9CB · poussière #CAC7D4
+  creux #8E88A4 · ombre #9B95AE · sol nu #A8A3B9 · clair #B5B1C2 · poussière #C2BFCC
 Matières, à n'employer que là où le prompt le demande :
   quartz  #9FB3C5 / #C1CEDA
   scorie  #382E47 / #4E4160
   pétrole #1E2124
   bois    #5B4133
-  eau     #1F5160
+  pierre  #3E454C / #68727E, creux #1E2124
 Fond : #FF00FF.
+
+RÈGLE DE SILHOUETTE — nouvelle, et elle décide de la lisibilité
+Aucun ton de sol ne porte le CONTOUR d'un élément posé. Les cinq tons de sol
+sont permis à l'INTÉRIEUR d'une masse dont le pourtour est déjà d'une autre
+matière, jamais sur le bord qui touche le sol. Le sol n'est pas une plaque unie :
+il porte ses cinq tons partout, et une silhouette peinte dans l'un d'eux
+disparaît.
 
 Aucune autre couleur. En particulier AUCUN VERT, jamais, nulle part : le vert
 est la couleur des unités du joueur, et une broussaille verte rendrait une
@@ -85,12 +105,17 @@ Trois conséquences, obligatoires :
    traversante, ni forme qui attire l'œil. Une tuile qu'on remarque devient un
    défaut répété dix fois à l'écran.
 
-CE QUE LE SOL DOIT ÊTRE : presque uni. #CF9A83 occupe au moins 80 % de chaque
-quadrant. Le reste est un semis discret et irrégulier, jamais régulier :
-quelques plaques de #D7A995 et #E0B9A8 comme de la poussière plus claire,
-quelques creux de #C38C73, et de très rares éclats isolés de #B87E64 — des
-cailloux, pas des taches. Une variante peut porter une fine craquelure sèche de
-#C38C73, de deux ou trois gros pixels de long, jamais plus, jamais traversante.
+CE QUE LE SOL DOIT ÊTRE : une matière, pas une plaque. AUCUN TON NE DOMINE.
+Les cinq tons sont tous présents et aucun ne dépasse un tiers de la surface :
+répartition visée, mesurée sur la tuile validée, #CF9A83 35 % · #C38C73 32 % ·
+#D7A995 21 % · #B87E64 8 % · #E0B9A8 3 %. Le grain est fin, dense et sans
+direction, comme une terre sèche vue de près.
+
+⚠ CORRIGÉ LE 27/08 AU SOIR. Cette clause demandait l'inverse — « presque uni,
+80 % d'un seul ton, semis discret ». Six jets l'ont appliquée et les six ont
+donné une plaque plate avec des taches dessus. Le rendu tient à la densité, pas
+à la propreté : c'est mesuré, et c'est la seule chose qui a changé entre la
+tuile jetée et la tuile gardée.
 
 Les quatre variantes se ressemblent beaucoup. Elles ne diffèrent que par la
 position du semis. Aucune ne doit être plus sombre ou plus claire que les
@@ -136,16 +161,17 @@ CES QUATRE TUILES SONT JOINTIVES. Mêmes trois règles que la planche précéden
 3. AUCUN MOTIF RECONNAISSABLE. Ni cercle, ni spirale, ni croix, ni ligne
    traversante.
 
-CE QUE LE SOL DOIT ÊTRE : presque uni. #B3AEC4 occupe au moins 80 % de chaque
-quadrant. Le reste est un semis discret et irrégulier : quelques plaques de
-#BDB9CB et #CAC7D4 comme de la poussière plus claire, quelques creux de
-#A6A0B9, de très rares éclats isolés de #9892AE. Une variante peut porter une
-craquelure sèche de #A6A0B9, de deux ou trois gros pixels, jamais traversante.
+CE QUE LE SOL DOIT ÊTRE : une matière, pas une plaque. AUCUN TON NE DOMINE,
+même répartition que la planche 1, avec les tons de la cendre.
 
-Le grain est PLUS FIN et PLUS UNIFORME que sur la terre cuite : là où le sol du
-joueur a des cailloux et des creux, celui-ci est une poudre tassée. La
-différence entre les deux sols doit tenir à la teinte et au grain, jamais à la
-clarté d'ensemble.
+La différence entre les deux sols tient à la TEINTE SEULE, jamais à la clarté
+d'ensemble, et jamais au grain : les cinq tons de la cendre ont exactement la
+clarté des cinq de la terre cuite, rang par rang.
+
+⚠ CORRIGÉ LE 27/08 AU SOIR, comme la planche 1 — et devenu sans objet le même
+soir : ce sol a été produit par recolorisation du sol du joueur, pas généré.
+Une différence de grain entre les deux camps est désormais un DÉFAUT : c'est la
+même texture.
 
 Les quatre variantes ne diffèrent que par la position du semis. Posées côte à
 côte, on ne doit pas voir où passe la limite.
@@ -157,7 +183,12 @@ dense, vignettage.
 
 ---
 
-## 3. Planche 3 — les champs de ressource (4 fichiers)
+## 3. Planche 3 — les champs de ressource (4 fichiers) — **LIVRÉE, autrement**
+
+> ⚠ Les quatre fichiers existent, et ils ne viennent pas de ce prompt : deux jets
+> libres — un bouquet de cristaux, une masse de scories veinée de braises —
+> conditionnés en Python, variantes par retournement. Ce prompt n'a servi qu'à la
+> première tentative, écartée.
 
 Douze cases par base, en blocs de une à trois cases contiguës — un bloc doit se
 lire comme **un seul gisement**, pas comme trois carreaux collés.
@@ -172,11 +203,13 @@ Quadrant 3 et 4 — DÉPÔT DE SCORIE, deux variantes.
 Ces sprites se posent PAR-DESSUS la tuile de sol. Le fond de chaque quadrant est
 magenta #FF00FF et représente le sol qui reste visible autour du gisement.
 
-RACCORD ENTRE CASES VOISINES — obligatoire. Deux gisements peuvent occuper deux
-cases côte à côte et doivent alors se lire comme un seul. Donc : la matière
-touche le milieu des quatre bords sur environ la moitié de leur longueur, et les
-quatre ANGLES du quadrant restent en magenta. Jamais un bord entièrement plein,
-jamais un bord entièrement vide.
+SUJET ISOLÉ. Le gisement ne touche aucun bord : 2 gros pixels de magenta libres
+tout autour, comme les obstacles.
+
+⚠ CE PARAGRAPHE DEMANDAIT L'INVERSE JUSQU'AU 27/08 AU SOIR — un raccord au
+milieu des quatre bords, pour que deux cases voisines fusionnent en un seul
+gisement. Ethan l'a annulé sur pièce : une case, un gisement. Les quatre
+fichiers livrés sont isolés.
 
 QUARTZ : des éclats cristallins anguleux, à facettes droites, en #9FB3C5 avec
 des arêtes en #C1CEDA. Froid, minéral, dur. Les éclats sont de tailles
@@ -220,13 +253,16 @@ véhicule : un fantassin s'y empêtre, une chenille passe dessus.
   fouillis de lignes courtes croisées, pas une couronne. 2 gros pixels
   d'épaisseur au maximum.
 
+  ⚠ #C38C73 est aussi un ton du sol : il ne sert QU'À L'INTÉRIEUR du fouillis,
+  entouré de #5B4133. Aucune brindille claire ne touche le bord de la masse.
+
 Quadrant 3 et 4 — NAPPE DE PÉTROLE, deux variantes. Elle gêne le véhicule et pas
 l'homme à pied : ça patine sous une chenille, un fantassin la contourne.
   Une flaque noire en #1E2124, aux bords lobés et irréguliers, comme une chose
   qui s'est étalée. Strictement plate, aucune épaisseur, aucun reflet, aucune
   brillance, aucune irisation. Quelques éclaboussures détachées autour de la
-  flaque principale, de un ou deux gros pixels. Le pourtour immédiat de la
-  flaque peut porter une frange de sol imbibé en #B87E64.
+  flaque principale, de un ou deux gros pixels. Aucune frange de sol imbibé
+  autour de la flaque : elle serait peinte dans un ton de sol, donc invisible.
 
 Les deux variantes de chaque type diffèrent par la forme, pas par la taille : les
 quatre sujets occupent à peu près la même surface.
@@ -246,11 +282,12 @@ pixels sur les quatre bords.
 
 Quadrant 1 et 2 — CHAOS ROCHEUX, deux variantes. Il gêne tout ce qui touche le
 sol, l'homme comme le véhicule.
-  Des blocs de pierre anguleux et des gravats de tailles inégales, en #B87E64
-  pour les faces exposées et #C38C73 pour les éclats plus clairs, avec des
-  creux d'ombre en #5B4133 entre les blocs. Trois à cinq gros blocs, entourés de
-  débris plus petits. Ce sont des cassures franches, à arêtes droites, pas des
-  galets ronds.
+  Des blocs de PIERRE GRISE anguleux et des gravats de tailles inégales, en
+  #3E454C pour les faces exposées et #68727E pour les arêtes et les éclats
+  clairs, avec des creux d'ombre en #1E2124 entre les blocs. Trois à cinq gros
+  blocs, entourés de débris plus petits. Ce sont des cassures franches, à arêtes
+  droites, pas des galets ronds. La pierre est froide et minérale, sans aucune
+  trace de brun ni de terre.
 
   C'est le seul sujet du lot qui a du volume, et il est plafonné : 2 gros pixels
   d'amorce de face sombre sous les blocs les plus hauts, du côté du bas de
@@ -276,6 +313,11 @@ mousse, verdure, contour dessiné.
 palette *aucune* et me renvoyer l'archive : je vérifie les tons à la main comme
 pour le premier jet du terrain.
 
+⚠ **Les huit tuiles de sol n'y sont jamais passées.** Elles ont été conditionnées
+en Python — réduction 64 → 32 par moyenne puis requantification sur la rampe,
+puis écriture en 128 × 128. Vérifié fichier par fichier : 5 couleurs, toutes dans
+la rampe, gros pixel de 4 px.
+
 ---
 
 ## 7. Contrôles à faire avant de valider
@@ -288,18 +330,46 @@ pour le premier jet du terrain.
    combinaisons, aucune ne doit se fondre. C'est le contrôle qui a fait tomber le
    premier jet du terrain, et il compte double maintenant qu'il y a deux sols.
 3. **Les deux sols ont-ils la même clarté d'ensemble ?** S'ils ne diffèrent pas
-   qu'en teinte, l'un des deux camouflera mieux que l'autre.
+   qu'en teinte, l'un des deux camouflera mieux que l'autre. ✅ **PASSÉ le
+   27/08** : les deux rampes ont la même clarté rang par rang, à la décimale, et
+   les deux sols sont la même texture. Le contrôle est structurellement acquis
+   tant que les sols se dérivent l'un de l'autre.
 4. **Deux cases de gisement côte à côte** : est-ce que ça fait un gisement, ou
    deux carreaux ?
 5. **Les trois obstacles se distinguent-ils les uns des autres** à 45 px, sans
    légende ? Si le fourré et le chaos rocheux se confondent, le joueur ne saura
    pas ce qui ralentit quoi.
+6. **Les trois obstacles posés sur les DEUX sols réels**, pas sur du magenta. Le
+   sol porte ses cinq tons partout : un élément dont la silhouette emprunte un de
+   ces tons s'y dissout. Écarts mesurés le 27/08 au soir, en ΔE contre le ton de
+   sol le plus proche :
+
+   | Sujet | Sol du joueur | Sol de l'Ouvrage |
+   |---|---|---|
+   | Pétrole `#1E2124` | 56,0 | 47,7 |
+   | Scorie `#382E47` | 48,9 | 28,5 |
+   | Pierre grise `#3E454C` | 38,2 | 15,1 |
+   | Quartz `#9FB3C5` | 25,6 | **7,1** ⚠ |
+   | Pierre brune `#B87E64` — **écartée** | **0,0** ⚠ | 34,0 |
+
+   Le quartz ne pose pas de problème tant que les champs ne se posent que dans
+   la base du joueur, ce qui est le cas : `champs.js` n'est importé que par
+   `state.js` et `disposition.js`.
 
 ---
 
 ## 8. Un point que j'ai tranché faute d'instruction
 
 Il se défait en une ligne.
+
+- **La pierre du chaos rocheux passe du brun au gris** [27/08, soir]. Le prompt
+  la peignait en `#B87E64` et `#C38C73` — les deux tons qui, dans la tuile de sol
+  finalement retenue, occupent **40 % de la surface**. Un bloc de pierre y aurait
+  eu la couleur exacte du terrain sur lequel il est posé, ΔE 0. Ce n'était pas
+  faux quand le sol devait être uni à 80 % de `#CF9A83` ; ça l'est devenu le soir
+  où le sol a changé de densité. La pierre prend donc la rampe métal, mesurée à
+  ΔE 38 du sol du joueur et 15 de celui de l'Ouvrage. **Ce point-ci ne se défait
+  pas en une ligne** : le défaire, c'est remettre un obstacle invisible.
 
 - **La matière de chaque type d'obstacle.** `infanterie` → fourré sec,
   `vehicule` → nappe de pétrole, `les_deux` → chaos rocheux. Le raisonnement est

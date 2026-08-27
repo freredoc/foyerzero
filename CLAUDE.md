@@ -26,7 +26,13 @@ Dernière révision : **27/08/2026**, version 0.15.0 · build 15.
 
 **Référence au 27/08/2026 (après le lot ÉCRAN-NAVIGATION), à confronter :**
 `npm test` → **286 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**130 488 octets**, 0 référence externe.
+**131 302 octets**, 0 référence externe.
+
+⚠ **130 488 était faux de 814 octets** — mesuré le 27/08 au soir sur un clone
+neuf, `npm ci && npm run build`. Le nombre a été écrit avant la dernière reprise
+du lot ÉCRAN-NAVIGATION et personne ne l'a relevé : `dist/` n'est pas suivi par
+git, donc aucun test ne le confronte. C'est le seul chiffre de ce fichier
+qu'aucune garde ne protège.
 
 ⚠ **LE HTML BOUGE MAINTENANT À CHAQUE LOT D'INTERFACE.** Il était figé à 81 236
 octets depuis le lot RÉSIDU ; ÉCRAN-CHANTIER l'a porté à 123 785 en branchant la
