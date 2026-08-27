@@ -249,6 +249,10 @@
   .case.champ::before { content: ''; position: absolute; inset: 2px; border: 1px dashed; }
   .case.quartz::before { border-color: #F5F3E8; }
   .case.scorie::before { border-color: #F5B636; }
+  /* Une case où le bâtiment choisi PEUT se poser. Kaki lumière : distinct de
+     l'os de la sélection, qui reste plus clair et l'emporte — cette règle est
+     posée AVANT elle exprès, les deux ayant la même spécificité. */
+  .case.legale { outline: 2px solid #8C9A72; outline-offset: -2px; }
   .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; z-index: 1; }
   .jeton {
     width: 84%; height: 84%; position: relative;
@@ -328,6 +332,11 @@
   .posable.pivot i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #A67018; }
   .posable b { font-size: 7px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; text-align: center; line-height: 1.05; color: #68727E; }
   .posable .cout { position: absolute; top: 1px; right: 3px; font-size: 8px; color: #8C9A72; }
+  /* Le bâtiment que le joueur s'apprête à poser. Il faut que ça se voie d'un
+     coup d'œil : c'est ce qui explique pourquoi des cases sont cerclées. */
+  .posable.actif { background: #6A7658; }
+  .posable.actif b { color: #161914; }
+  .posable.actif i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #F5F3E8; }
 
   /* --- ce qui se dit quand quelque chose ne va pas -------------------------- */
   #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }

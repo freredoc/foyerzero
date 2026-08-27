@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.15.0 · build 15.
+Dernière révision : **27/08/2026**, version 0.16.0 · build 16.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **27/08/2026**, version 0.15.0 · build 15.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot ÉCRAN-NAVIGATION), à confronter :**
-`npm test` → **286 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**131 302 octets**, 0 référence externe.
+**Référence au 27/08/2026 (après le lot POSE-À-L'ÉCRAN), à confronter :**
+`npm test` → **291 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**133 455 octets**, 0 référence externe.
 
 ⚠ **130 488 était faux de 814 octets** — mesuré le 27/08 au soir sur un clone
 neuf, `npm ci && npm run build`. Le nombre a été écrit avant la dernière reprise
@@ -36,8 +36,9 @@ qu'aucune garde ne protège.
 
 ⚠ **LE HTML BOUGE MAINTENANT À CHAQUE LOT D'INTERFACE.** Il était figé à 81 236
 octets depuis le lot RÉSIDU ; ÉCRAN-CHANTIER l'a porté à 123 785 en branchant la
-session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense. La borne
-de T10 (200 000 octets) tient, avec 35 % de marge — mais elle se surveille
+session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense, les lots DÉMARRAGE
+et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante.
+La borne de T10 (200 000 octets) tient, avec 33 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -45,7 +46,8 @@ est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, 
 quatorze au lot ÉCRAN-CHANTIER (treize pour `test/chantier.test.js`, un pour la
 garde §11 scindée en deux), et de onze au lot ÉCRAN-NAVIGATION (six pour
 `test/offense.test.js`, trois d'orientation dans `test/rendu.test.js`, deux dans
-`test/chantier.test.js` — la barre à deux bandes et la pastille de pose). Une baisse n'est pas forcément une régression, mais elle se
+`test/chantier.test.js` — la barre à deux bandes et la pastille de pose), et de
+cinq au lot POSE-À-L'ÉCRAN, tous dans `test/chantier.test.js`. Une baisse n'est pas forcément une régression, mais elle se
 justifie, toujours.
 
 ---
@@ -913,12 +915,48 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ne dit comment le total se répartit entre quartz et scorie depuis que le
   modèle du lot 1 est parti avec `data/params.js`. Un nombre sans ressource, dit
   comme tel, est plus honnête qu'un « 3 quartz » faux.
-- **L'écran de jeu se lit en LECTURE SEULE, et les boutons d'action sont
-  présents et désactivés.** La couche d'action n'existe pas dans `sim/` : elle
-  attend un arbitrage d'Ethan sur la part de scorie d'un coût de construction.
-  Des boutons montrés vifs mentiraient ; absents, ils feraient croire à un écran
-  fini. `select:disabled, button:disabled, option:disabled` porte l'opacité qui
-  les fait lire comme inertes, et c'est la même règle qui sert au banc.
+- **LA POSE EST BRANCHÉE DEPUIS LE 27/08 ; AMÉLIORER ET DÉMONTER NE LE SONT
+  PAS.** L'écran n'est plus en lecture seule : la palette est vivante, le joueur
+  choisit un bâtiment, les cases où il peut se poser se cerclent, il touche, ça
+  se pose. Les deux autres boutons **restent présents et désactivés** — améliorer
+  attend la répartition d'un coût entre quartz et scorie, que rien n'arbitre
+  depuis le départ de `data/params.js` ; démonter attend de savoir si ça rend
+  quelque chose. Des boutons montrés vifs mentiraient ; absents, ils feraient
+  croire à un écran fini.
+  ⚠ **ON DEMANDE, PUIS ON POSE — ET JAMAIS DE `try` AUTOUR DE `poser`.**
+  `problemesDeLaPose` rend une LISTE, `poser` LÈVE, et la différence est la règle
+  du dépôt : une pose refusée est un fait de JEU qu'on montre au joueur, une
+  levée est un fait de PROGRAMME. Rattraper la levée traiterait la seconde comme
+  la première et masquerait le jour où l'écran appellerait vraiment de travers.
+  Un test balaie `src/ui/` bloc `try` par bloc `try`.
+  ⚠ **`src/ui/` PORTE DEUX FONCTIONS `poser` SANS RAPPORT** : celle de
+  `sim/state.js` (un bâtiment dans la base) et celle d'`ui/arsenal.js` (une unité
+  dans une vague). `ui/banc.js` entoure la seconde d'un `try`, et il a RAISON —
+  le contrat de l'Arsenal est de lever sur un dépassement de budget, qui est un
+  fait de jeu. D'où l'import sous le nom `poserBatiment` dans `chantier.js` :
+  sans lui, la garde accuserait le banc d'une faute qu'il ne commet pas.
+  ⚠ **LES CASES LÉGALES SE CALCULENT, ELLES NE SE DEVINENT PAS.**
+  `casesPosables` interroge `problemesDeLaPose` sur les 72 cases de la bande des
+  bâtiments — 1,5 ms, un geste et non une boucle de rendu. Réimplémenter les
+  règles dans l'écran pour aller plus vite ferait diverger une seconde lecture
+  de `sim/disposition.js`, qui est la seule table de règles. **Ne balayer QUE la
+  bande des bâtiments** : ailleurs, la réponse serait `hors-base` 90 fois.
+  ⚠ **LES MESSAGES DE REFUS SE REPRENNENT MOT POUR MOT.** Ils sont déjà écrits
+  en français lisible dans `sim/disposition.js`. Les reformuler dans l'écran
+  créerait une seconde formulation qui finirait par dire autre chose que la
+  règle.
+  ⚠ **UNE POSE SE SAUVEGARDE TOUT DE SUITE.** C'est la première action
+  irréversible du jeu ; la perdre parce que l'application a été tuée avant
+  l'enregistrement périodique serait la pire façon de perdre la confiance du
+  joueur. L'écran dit QUAND (`apresPose`), la session sait COMMENT.
+  ⚠ **POSER UN NIVEAU 1 FAIT BAISSER LE NIVEAU MOYEN**, et ça se verra à
+  l'écran : 4,6 → 4,3 en posant une raffinerie sur la base de la maquette. C'est
+  une MOYENNE, pas un total. Un test l'asserte pour qu'on ne le prenne jamais
+  pour un défaut de calcul.
+  ⚠ **LE BANDEAU D'AVIS APPARTIENT À `chantier.js`.** La session lui parle par
+  `ecran.avis()` au lieu d'écrire dans l'élément : depuis que la pose s'y exprime
+  aussi, deux modules qui l'écriraient sans se connaître s'effaceraient l'un
+  l'autre.
 
 ### Sur le vocabulaire
 

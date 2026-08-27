@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -18,19 +18,20 @@ import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
   formaterEntier, formaterUnites, formaterDixiemes, formaterDebit, formaterNiveau,
   familleDuBatiment, bandeDeLaRangee, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
+  casesPosables, messageDeRefus,
 } from '../src/ui/chantier.js';
 import {
   CLE_SAUVEGARDE, CLE_SECOURS, SEUIL_RATTRAPAGE_TICKS, PERIODE_SAUVEGARDE_MS,
   DUREE_APPUI_DEBUG_MS, avancer,
 } from '../src/ui/session.js';
-import { BASE_BATIMENTS, COUT_NIVEAU_DEUX, emplacementsDuNiveau } from '../src/data/base.js';
+import { BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, emplacementsDuNiveau } from '../src/data/base.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
-import { creerEtat, tickJeu } from '../src/sim/state.js';
+import { creerEtat, tickJeu, poser, problemesDeLaPose } from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -518,4 +519,246 @@ test('chantier — aucune vignette de pose ne présente un coût de POSE', () =>
   // Le coût EST toujours accessible : on ne l'a pas supprimé, on l'a déplacé.
   const posables = posablesDeLaBase(creerEtat(3));
   assert.ok(posables.every((p) => p.coutPremiereAmelioration > 0));
+});
+
+
+// ---------------------------------------------------------------------------
+// La pose — lot POSE-À-L'ÉCRAN
+// ---------------------------------------------------------------------------
+
+/** Les quatre grandeurs qu'une pose déplace, lues dans le moteur. */
+function quatreGrandeurs(etat) {
+  const total = {};
+  for (const r of RESSOURCES) total[r] = 0;
+  for (const parBatiment of debitsMilliParHeure(etat.disposition, etat.champs)) {
+    for (const r of RESSOURCES) total[r] += parBatiment[r] ?? 0;
+  }
+  return {
+    debitQuartz: total.quartz,
+    capaciteQuartz: capacitesMilli(etat.disposition).quartz,
+    poses: resumeDeLaBase(etat).emplacements.poses,
+    niveauDixiemes: niveauDesBatiments(etat.disposition),
+  };
+}
+
+test('pose — sur une base neuve, un Collecteur a exactement les douze champs', () => {
+  const etat = creerEtat(7);
+
+  // ⚠ LE MONTAGE S'ASSERTE AVANT DE MESURER. Sans cette ligne, « douze cases
+  // légales » serait comparé à un douze écrit de mémoire : c'est le terrain qui
+  // en porte douze, et c'est ce fait-là qui rend le nombre signifiant.
+  assert.equal(etat.champs.cases.length, CHAMPS.total);
+  assert.equal(CHAMPS.total, 12);
+
+  const legales = casesPosables(etat, 'collecteur');
+  assert.equal(legales.length, etat.champs.cases.length);
+
+  // Et ce sont EXACTEMENT les champs, pas douze cases qui se trouvent être au
+  // bon nombre. Égalité d'ensemble, dans les deux sens.
+  const cle = (c) => `${c.rangee}:${c.colonne}`;
+  assert.deepEqual(
+    legales.map(cle).sort(),
+    etat.champs.cases.map(cle).sort(),
+  );
+
+  // Falsifiable : un bâtiment qui n'est PAS lié au terrain doit en avoir un
+  // autre nombre, sinon `casesPosables` rendrait la même chose pour tout le
+  // monde et l'égalité ci-dessus ne prouverait rien.
+  const centrale = casesPosables(etat, 'centrale');
+  assert.notEqual(centrale.length, legales.length);
+  // Une centrale ne peut PAS se poser sur un champ — réservé au collecteur.
+  for (const c of centrale) {
+    assert.ok(!etat.champs.cases.some((f) => f.rangee === c.rangee && f.colonne === c.colonne),
+      `centrale proposée sur le champ (${c.rangee},${c.colonne})`);
+  }
+
+  // ⚠ SEULE LA BANDE DES BÂTIMENTS EST BALAYÉE. Une case proposée hors de la
+  // base serait refusée par `poser`, donc l'écran mentirait en la cerclant.
+  for (const c of [...legales, ...centrale]) {
+    assert.ok(c.rangee >= GRILLE.bandes.batiments.premiere
+      && c.rangee <= GRILLE.bandes.batiments.derniere, `rangée ${c.rangee} hors de la base`);
+  }
+});
+
+test('pose — une pose déplace les QUATRE grandeurs, pas une seule', () => {
+  // ⚠ LE MONTAGE EST CHOISI POUR QUE LES QUATRE BOUGENT, et ce n'est pas un
+  // détail. Sur une base NEUVE, poser un Collecteur ne change ni la capacité
+  // (il ne stocke pas) ni le niveau moyen (tout est au niveau 1) : un test
+  // écrit là-dessus passerait en n'ayant rien mesuré. Il faut une base déjà
+  // montée, de niveau moyen supérieur à 1, et un bâtiment de STOCKAGE.
+  const etat = baseDeLaMaquette();
+  const cible = { rangee: 12, colonne: 1 };
+  assert.deepEqual(problemesDeLaPose(etat, 'raffinerie', cible.rangee, cible.colonne), []);
+  assert.ok(
+    casesPosables(etat, 'raffinerie').some(
+      (c) => c.rangee === cible.rangee && c.colonne === cible.colonne,
+    ),
+    'la case retenue doit être proposée par le balayage',
+  );
+
+  const avant = quatreGrandeurs(etat);
+  poser(etat, 'raffinerie', cible.rangee, cible.colonne);
+  const apres = quatreGrandeurs(etat);
+
+  // CHACUNE des quatre a bougé. Un repeint partiel — qui rafraîchirait les
+  // stocks sans les emplacements, ou l'inverse — passerait un test qui n'en
+  // regarderait qu'une.
+  for (const grandeur of Object.keys(avant)) {
+    assert.notEqual(apres[grandeur], avant[grandeur], `${grandeur} n'a pas bougé`);
+  }
+
+  // Et dans le sens attendu, valeur par valeur.
+  assert.ok(apres.debitQuartz > avant.debitQuartz, 'la raffinerie voisine d\'un collecteur produit');
+  assert.ok(apres.capaciteQuartz > avant.capaciteQuartz, 'une raffinerie ajoute du stockage');
+  assert.equal(apres.poses, avant.poses + 1);
+});
+
+test('pose — poser un niveau 1 FAIT BAISSER le niveau moyen', () => {
+  // ⚠ C'EST CONTRE-INTUITIF, ET ÇA SE VERRA À L'ÉCRAN. Le niveau des bâtiments
+  // est une MOYENNE : ajouter un bâtiment de niveau 1 à une base qui vaut 4,6
+  // la tire vers le bas. L'asserter maintenant évite qu'on le prenne un jour
+  // pour un défaut de calcul.
+  const etat = baseDeLaMaquette();
+  const avant = niveauDesBatiments(etat.disposition);
+  assert.ok(avant > 10, `le montage doit partir d'une moyenne > 1,0 — il vaut ${avant}`);
+
+  poser(etat, 'raffinerie', 12, 1);
+  const apres = niveauDesBatiments(etat.disposition);
+
+  assert.ok(apres < avant, `la moyenne devrait baisser : ${avant} → ${apres}`);
+  assert.equal(avant, 46);
+  assert.equal(apres, 43);
+  // Ce que le joueur lit, une fois formaté.
+  assert.equal(formaterDixiemes(avant), '4,6');
+  assert.equal(formaterDixiemes(apres), '4,3');
+});
+
+test('pose — les refus reprennent les messages du moteur, mot pour mot', () => {
+  const etat = creerEtat(7);
+  // Une case sans champ, sous un Collecteur : le moteur a déjà écrit la phrase.
+  const horsChamp = casesPosables(etat, 'centrale')[0];
+  const problemes = problemesDeLaPose(etat, 'collecteur', horsChamp.rangee, horsChamp.colonne);
+  assert.ok(problemes.length > 0, 'le montage doit produire un vrai refus');
+
+  // ⚠ AUCUNE REFORMULATION. Les messages viennent de `sim/disposition.js`, qui
+  // est la seule table de règles ; une seconde formulation dans l'écran finirait
+  // par dire autre chose que la règle.
+  assert.equal(messageDeRefus(problemes), problemes.map((p) => p.message).join(' ; '));
+  for (const p of problemes) {
+    assert.ok(messageDeRefus(problemes).includes(p.message), `« ${p.message} » perdu en route`);
+  }
+  assert.match(messageDeRefus(problemes), /doit être posé sur un champ/);
+
+  // Et la case ne bouge pas : demander n'est pas poser.
+  assert.equal(etat.disposition.length, 1);
+});
+
+
+/**
+ * Les blocs `try { … }` d'un source, rendus en texte.
+ *
+ * Comptage d'accolades, sur un source déjà décommenté. C'est naïf en théorie —
+ * une accolade seule dans une chaîne le décalerait — mais l'erreur va dans le
+ * bon sens : elle ferait TOMBER le test, pas passer silencieusement. Un test
+ * qui hurle à tort se répare ; un test qui se tait à tort ne se répare jamais.
+ */
+function blocsTry(source) {
+  const blocs = [];
+  for (const m of source.matchAll(/(?<![\p{L}\p{N}_])try\s*\{/gu)) {
+    let profondeur = 0;
+    let i = m.index + m[0].length - 1;
+    for (; i < source.length; i++) {
+      if (source[i] === '{') profondeur += 1;
+      else if (source[i] === '}') {
+        profondeur -= 1;
+        if (profondeur === 0) break;
+      }
+    }
+    blocs.push(source.slice(m.index, i + 1));
+  }
+  return blocs;
+}
+
+/** Retire commentaires de ligne et de bloc avant un balayage de code. */
+function sansCommentaires(texte) {
+  return texte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+test('pose — jamais de `try` autour de `poser`, dans tout src/ui/', () => {
+  // ⚠ LA RÈGLE QUE CETTE GARDE TIENT. `problemesDeLaPose` rend une LISTE, et
+  // `poser` LÈVE : la différence est délibérée. Une pose refusée est un fait de
+  // JEU — on la montre au joueur. `poser` qui lève est un fait de PROGRAMME —
+  // l'écran n'aurait pas dû appeler sans regarder. Entourer `poser` d'un `try`
+  // reviendrait à traiter la seconde comme la première, et à masquer le jour où
+  // l'écran appellerait vraiment de travers.
+  // ⚠ LA GARDE VISE `poserBatiment`, PAS `poser`, ET IL LE FAUT. `src/ui/` porte
+  // DEUX fonctions `poser` sans rapport : celle de `sim/state.js`, qui pose un
+  // bâtiment, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague.
+  // `ui/banc.js` entoure la seconde d'un `try` — et il a RAISON : le contrat de
+  // l'Arsenal est de lever sur un dépassement de budget, qui est un fait de
+  // jeu. Une garde qui chercherait `poser(` accuserait donc le banc d'une faute
+  // qu'il ne commet pas, et pousserait à « réparer » du code juste. D'où le
+  // renommage à l'import dans `chantier.js`, qui rend ce balayage exact.
+  const MOTIF_POSER = /(?<![\p{L}\p{N}_])poserBatiment\s*\(/u;
+
+  const fichiers = readdirSync(join(RACINE, 'src', 'ui'))
+    .filter((n) => n.endsWith('.js'))
+    .map((n) => join(RACINE, 'src', 'ui', n));
+  assert.ok(fichiers.length >= 5, `montage cassé : ${fichiers.length} fichiers balayés`);
+
+  let blocsVus = 0;
+  let appelsVus = 0;
+  for (const fichier of fichiers) {
+    const code = sansCommentaires(readFileSync(fichier, 'utf8'));
+    if (MOTIF_POSER.test(code)) appelsVus += 1;
+    for (const bloc of blocsTry(code)) {
+      blocsVus += 1;
+      assert.ok(!MOTIF_POSER.test(bloc), `un try entoure poser() dans ${fichier}`);
+    }
+  }
+
+  // ⚠ DEUX FALSIFICATIONS DU MONTAGE, sans quoi « aucun bloc ne contient
+  // poser » passerait sur un balayage qui ne voit ni bloc ni appel.
+  assert.ok(blocsVus > 0, 'aucun bloc try vu : le découpage ne fonctionne pas');
+  assert.ok(appelsVus > 0, 'aucun appel à poser vu : la garde ne garde rien');
+
+  // Le découpage attrape bien un vrai appât…
+  const appat = 'try { poserBatiment(etat, \'collecteur\', 12, 3); } catch (e) { avis(e.message); }';
+  const attrapes = blocsTry(appat);
+  assert.equal(attrapes.length, 1);
+  assert.ok(MOTIF_POSER.test(attrapes[0]), 'l\'appât n\'est pas attrapé');
+  // …et laisse passer un try légitime, qui existe pour de bon dans src/ui/.
+  const innocent = 'try { magasin.setItem(CLE, texte); } catch (e) { avis(e.message); }';
+  assert.equal(blocsTry(innocent).length, 1);
+  assert.ok(!MOTIF_POSER.test(blocsTry(innocent)[0]), 'un try légitime est refusé à tort');
+  // Et le motif ne se déclenche ni sur un nom qui CONTIENT « poser », ni sur
+  // l'homonyme de l'Arsenal, que le banc a le droit d'entourer d'un try.
+  assert.ok(!MOTIF_POSER.test('problemesDeLaPose(etat, id, r, c)'));
+  assert.ok(!MOTIF_POSER.test('deposer(etat)'));
+  assert.ok(!MOTIF_POSER.test('arsenal = poser(arsenal, { vague, colonne, id });'));
+
+  // Et le renommage à l'import est bien celui de `sim/state.js` : sans ça, la
+  // garde surveillerait un nom que plus personne ne lie à la bonne fonction.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8');
+  assert.match(ecran, /import \{[^}]*poser as poserBatiment[^}]*\} from '\.\.\/sim\/state\.js'/);
+
+  // ⚠ ON DEMANDE AVANT DE POSER. La discipline entière tient à cet ordre : la
+  // liste d'abord, la pose ensuite. On vérifie que le fichier qui pose consulte
+  // aussi la légalité — sans quoi le `try` interdit plus haut aurait été
+  // remplacé par rien du tout, ce qui est pire.
+  const propre = sansCommentaires(ecran);
+  assert.ok(/(?<![\p{L}\p{N}_])problemesDeLaPose\s*\(/u.test(propre),
+    'l\'écran pose sans jamais demander si c\'est légal');
+  assert.ok(propre.indexOf('problemesDeLaPose(') < propre.indexOf('poserBatiment('),
+    'la première consultation de légalité vient APRÈS la pose');
+
+  // ⚠ ET ON SAUVEGARDE TOUT DE SUITE. La pose est la première action
+  // irréversible du jeu ; la perdre parce que l'application a été tuée avant
+  // l'enregistrement périodique serait la pire façon de perdre la confiance du
+  // joueur. Le rappel existe, et le point d'appel s'en sert.
+  assert.ok(/apresPose\s*\(/.test(propre), 'la pose ne déclenche aucune sauvegarde');
+  const session = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8'));
+  assert.ok(/apresPose\s*:/.test(session), 'la session ne fournit pas de rappel de sauvegarde');
+  assert.ok(/apresPose\s*:\s*\(\)\s*=>\s*sauvegarder\(\)/.test(session),
+    'le rappel de la session n\'écrit pas la sauvegarde');
 });

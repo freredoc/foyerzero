@@ -162,10 +162,12 @@ export function initialiserSession(doc) {
     magasin = null;
   }
 
+  // Le bandeau d'avis appartient à l'écran Chantier — c'est son élément. La
+  // session lui parle au lieu d'écrire dedans : depuis que la pose s'y exprime
+  // aussi, deux modules qui écriraient la même ligne sans se connaître
+  // finiraient par s'effacer l'un l'autre.
   function avis(texte) {
-    const ligne = $('chantier-avis');
-    ligne.textContent = texte;
-    ligne.hidden = texte === '';
+    if (ecran !== null) ecran.avis(texte);
   }
 
   function lireSauvegarde() {
@@ -409,7 +411,11 @@ export function initialiserSession(doc) {
   // l'application sans la masquer d'abord.
   fenetre.addEventListener('pagehide', () => sauvegarder());
 
-  ecran = initialiserEcranChantier(doc);
+  ecran = initialiserEcranChantier(doc, {
+    // La pose est la première action irréversible du jeu : elle s'écrit tout de
+    // suite, sans attendre l'enregistrement périodique.
+    apresPose: () => sauvegarder(),
+  });
   // L'écran Offense se construit une fois et ne se rafraîchit jamais : tant
   // qu'aucune armée n'existe, rien de ce qu'il montre ne change avec le temps.
   initialiserEcranOffense(doc);
