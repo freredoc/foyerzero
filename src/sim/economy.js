@@ -2,7 +2,7 @@
 //
 //   1. Les COURBES (flottants) : coût et production relatifs par niveau,
 //      coût croisé quartz/scorie, poids d'adjacence. Pures, sans état.
-//   2. Le TICK (entiers) : flux continu, saturation du stockage, colis.
+//   2. Le TICK (entiers) : flux continu, saturation du stockage.
 //      Toute l'arithmétique par tick est ENTIÈRE (milli-unités), condition
 //      nécessaire pour que le rattrapage analytique reproduise la simulation
 //      tick par tick au bit près (test 11).
@@ -15,7 +15,9 @@
 // Aucune valeur de calibrage en dur : tout vient de data/params.js, reçu en
 // argument. Aucune dépendance navigateur.
 
-import { TICK_MS, TICKS_PAR_HEURE } from './clock.js';
+// `TICK_MS` était importé pour l'intervalle des colis. Retiré avec eux le
+// 26/08 : un import mort finit toujours par faire croire à une dépendance.
+import { TICKS_PAR_HEURE } from './clock.js';
 
 // ---------------------------------------------------------------------------
 // Étage 1 — courbes
@@ -152,14 +154,11 @@ export function poidsAdjacence(niveau, nbVoisins, params) {
 // Étage 2 — tick (arithmétique entière)
 // ---------------------------------------------------------------------------
 
-/** Intervalle entre deux colis, en ticks (entier garanti par construction). */
-export function intervalleColisTicks(params) {
-  const ticks = params.colis.intervalleMs / TICK_MS;
-  if (!Number.isInteger(ticks)) {
-    throw new Error(`economie : intervalle de colis non multiple du tick (${ticks})`);
-  }
-  return ticks;
-}
+// ⚠ `intervalleColisTicks` VIVAIT ICI. Les colis ont été abandonnés le 25/08 et
+// reconfirmés le 26 (« tous les bâtiments font de la production continue »).
+// Retirés le 26/08 : plus qu'un seul canal de production dans le jeu.
+// Le rôle qu'ils tenaient — borner ce qui s'accumule pendant une absence — est
+// passé au STOCKAGE, qui s'écrit en heures d'autonomie (data/base.js).
 
 // ---------------------------------------------------------------------------
 // Débit horaire et résidu — pourquoi le débit n'est PAS rangé par tick
@@ -225,15 +224,13 @@ export const DEBIT_MILLI_PAR_HEURE_MAX =
  *   - chaque bâtiment fait avancer son résidu de son débit horaire, en verse
  *     la part entière dans le stock de sa ressource, saturé à la capacité de
  *     stockage (le stock s'arrête plein, le résidu continue d'avancer) ;
- *   - chaque bâtiment fait progresser son colis en cours, sauf si le maximum
- *     de colis en attente est atteint (arrêt complet de la chaîne).
+ *
+ * ⚠ Il n'y a plus de colis ici : abandonnés le 25/08, retirés le 26.
  * @param {object} etat État de jeu (voir sim/state.js).
  * @param {object} params
  */
 export function tickEconomie(etat, params) {
   const cap = params.stockage.capaciteMilli;
-  const intervalle = intervalleColisTicks(params);
-  const maxColis = params.colis.maxEnAttente;
 
   for (const b of etat.batiments) {
     const def = params.batiments[b.type];
@@ -245,14 +242,6 @@ export function tickEconomie(etat, params) {
 
     const stock = etat.ressources[cle] + gain;
     etat.ressources[cle] = stock > cap ? cap : stock;
-
-    if (b.colis.enAttente < maxColis) {
-      b.colis.progresTicks += 1;
-      if (b.colis.progresTicks >= intervalle) {
-        b.colis.enAttente += 1;
-        b.colis.progresTicks = 0;
-      }
-    }
   }
 }
 
@@ -273,10 +262,8 @@ export function tickEconomie(etat, params) {
  *     nombre d'heures pleines à ce qu'il faut pour saturer : au-delà le stock
  *     vaut cap de toute façon, et le produit n'a plus à être exact — il n'a
  *     donc plus le droit d'être grand.
- *   - Colis : tant que enAttente < max, le progrès total est progres + nbTicks ;
- *     chaque tranche d'`intervalle` produit un colis et remet le progrès à
- *     zéro ; la chaîne s'arrête dès que le maximum est atteint, progrès figé
- *     à zéro (il venait d'être remis à zéro par le colis qui a atteint le max).
+ *
+ * La troisième formule, celle des colis, a été retirée avec eux le 26/08.
  * @param {object} etat État de jeu, modifié en place.
  * @param {number} nbTicks
  * @param {object} params
@@ -286,8 +273,6 @@ export function rattrapageEconomie(etat, nbTicks, params) {
     throw new Error(`economie : rattrapage sur un nombre de ticks invalide ${nbTicks}`);
   }
   const cap = params.stockage.capaciteMilli;
-  const intervalle = intervalleColisTicks(params);
-  const maxColis = params.colis.maxEnAttente;
 
   const heuresPleines = Math.floor(nbTicks / TICKS_PAR_HEURE);
   const ticksRestants = nbTicks - heuresPleines * TICKS_PAR_HEURE;
@@ -317,17 +302,5 @@ export function rattrapageEconomie(etat, nbTicks, params) {
       debit === 0 ? 0 : Math.min(heuresPleines, Math.ceil(manque / debit));
     const stock = stockDepart + heuresUtiles * debit + reportPartiel;
     etat.ressources[cle] = stock > cap ? cap : stock;
-
-    if (b.colis.enAttente < maxColis) {
-      const progresTotal = b.colis.progresTicks + nbTicks;
-      const produits = Math.floor(progresTotal / intervalle);
-      if (produits >= maxColis - b.colis.enAttente) {
-        b.colis.enAttente = maxColis;
-        b.colis.progresTicks = 0;
-      } else {
-        b.colis.enAttente += produits;
-        b.colis.progresTicks = progresTotal - produits * intervalle;
-      }
-    }
   }
 }

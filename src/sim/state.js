@@ -10,7 +10,7 @@ import { creerHorloge, tick as tickHorloge, avancerTicks } from './clock.js';
 import { tickEconomie, rattrapageEconomie } from './economy.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /**
  * @typedef {object} Etat
@@ -20,7 +20,7 @@ export const SAVE_VERSION = 2;
  * @property {{ tempsSimuleMs: number, nbTicks: number, residuMs: number }} horloge
  * @property {{ quartzMilli: number, scorieMilli: number }} ressources
  * @property {Array<{ type: string, niveau: number, voisinsQualifiants: number,
- *   colis: { enAttente: number, progresTicks: number }, residuFlux: number }>} batiments
+ *   residuFlux: number }>} batiments
  */
 
 /**
@@ -34,7 +34,6 @@ export function creerBatiment(type, niveau = 1, voisinsQualifiants = 0) {
     type,
     niveau,
     voisinsQualifiants,
-    colis: { enAttente: 0, progresTicks: 0 },
     // Reste exact de la production cumulée, en milli-unités × ticks/heure.
     // Toujours dans [0, TICKS_PAR_HEURE[ ; voir sim/economy.js.
     residuFlux: 0,
@@ -143,6 +142,27 @@ const MIGRATIONS = {
       for (const b of s.batiments) {
         if (typeof b.residuFlux !== 'number') b.residuFlux = 0;
       }
+    }
+  },
+
+  /**
+   * v2 → v3 : les COLIS sont retirés. Abandonnés le 25/08, reconfirmés le 26 —
+   * « tous les bâtiments font de la production continue ». Le rôle qu'ils
+   * tenaient, borner ce qui s'accumule pendant une absence, est passé au
+   * stockage, qui s'écrit en heures d'autonomie.
+   *
+   * ⚠ CETTE MIGRATION SUPPRIME UN CHAMP, ce qu'aucune autre n'avait fait — les
+   * deux précédentes en AJOUTAIENT. Elle est écrite quand même, plutôt que de
+   * laisser le champ traîner : une sauvegarde qui porte `colis` alors que plus
+   * une ligne ne le lit est une invitation à croire, dans six mois, qu'il sert
+   * encore. Ce qui est retiré ici n'est pas une ressource du joueur, c'est un
+   * compteur mort — rien ne se perd.
+   * @param {object} s
+   */
+  2: (s) => {
+    s.version = 3;
+    if (Array.isArray(s.batiments)) {
+      for (const b of s.batiments) delete b.colis;
     }
   },
 };
