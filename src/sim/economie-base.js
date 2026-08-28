@@ -40,7 +40,7 @@
 
 import { TICKS_PAR_HEURE } from './clock.js';
 import {
-  BASE_BATIMENTS, PRODUCTEUR_APPARIE, capaciteDuNiveau,
+  BASE_BATIMENTS, PRODUCTEUR_APPARIE, capaciteDuNiveau, stockagePropreDuNiveau,
 } from '../data/base.js';
 import { productionParRessource } from './disposition.js';
 
@@ -109,14 +109,22 @@ export function capacitesMilli(disposition) {
     if (def === undefined) continue;
 
     // ⚠ LE STOCKAGE PROPRE EST UN CANAL À PART, et il se compte AVANT le
-    // filtre de rôle. Le Chantier de construction en porte un — 50 · 50 · 40,
-    // arbitré le 27/08 — alors qu'il est de rôle `central` : sans lui, une base
-    // neuve n'avait aucune capacité et ne pouvait rien accumuler, jamais.
-    // Le champ est générique : n'importe quel bâtiment pourra en porter un.
+    // filtre de rôle. Le Chantier de construction en porte un — 50 · 50 · 40 au
+    // niveau 1, arbitré le 27/08 — alors qu'il est de rôle `central` : sans
+    // lui, une base neuve n'avait aucune capacité et ne pouvait rien
+    // accumuler, jamais. Le champ est générique : n'importe quel bâtiment
+    // pourra en porter un.
+    //
+    // ⚠ IL SUIT LE NIVEAU DEPUIS LE 27/08 AU SOIR, et c'est pour ça qu'on passe
+    // par `stockagePropreDuNiveau` au lieu de lire le champ. Lire
+    // `def.stockagePropre` directement, comme faisait la version précédente,
+    // c'est lire le niveau 1 en croyant lire le niveau courant — une poche qui
+    // resterait à 50 pendant que tout le reste monte en 1,25.
     if (def.stockagePropre) {
+      const niveauPoche = Number.isInteger(b.niveau) && b.niveau >= 1 ? b.niveau : 1;
+      const propre = stockagePropreDuNiveau(b.id, niveauPoche);
       for (const r of RESSOURCES) {
-        const brut = def.stockagePropre[r];
-        if (brut) caps[r] += brut * 1000;
+        if (propre[r]) caps[r] += propre[r] * 1000;
       }
     }
 

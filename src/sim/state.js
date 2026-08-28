@@ -13,6 +13,8 @@ import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.j
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
 } from './economie-base.js';
+import { BASE_BATIMENTS, coutDeMontee, remboursementDuNiveau } from '../data/base.js';
+import { GEOGRAPHIE } from '../data/sites.js';
 
 /** Version courante du format de sauvegarde. */
 export const SAVE_VERSION = 6;
@@ -244,6 +246,168 @@ export function poser(etat, id, rangee, colonne) {
   for (const r of RESSOURCES) residu[r] = 0;
   etat.economie.residus.push(residu);
   return etat;
+}
+
+// ---------------------------------------------------------------------------
+// Améliorer et démolir
+// ---------------------------------------------------------------------------
+//
+// Les deux suivent la forme de `poser` : une fonction qui LISTE les problèmes,
+// une fonction qui agit et lève si la liste n'est pas vide. L'écran interroge
+// la première pour savoir s'il peut proposer le geste, et appelle la seconde.
+// Un `catch` qui rattraperait le refus serait le signe que l'écran a appelé
+// sans regarder — même discipline que pour la pose.
+//
+// ⚠ LES COÛTS SONT EN UNITÉS, LES STOCKS EN MILLI-UNITÉS. `data/base.js` rend
+// des unités, `etat.economie.ressources` en compte des milliers. La conversion
+// se fait ICI et une seule fois, par `MILLI`. Un coût comparé à un stock sans
+// conversion rend une amélioration mille fois trop chère — donc jamais
+// finançable, donc un bouton qui ne s'allume jamais, ce qui se lit comme
+// « l'arbitrage n'est pas descendu » et non comme un défaut.
+//
+// ⚠ IL N'Y A AUCUNE MINUTERIE DE CONSTRUCTION, et ce n'est pas un oubli : le
+// dépôt n'en porte nulle part, et la « réserve de temps » est encore un TROU du
+// classeur. Une montée est donc INSTANTANÉE. Le jour où une file de
+// construction est arbitrée, c'est ici qu'elle s'intercale — entre la garde et
+// la mutation — et `SAVE_VERSION` bougera.
+
+/** Le facteur entre une unité de `data/` et une milli-unité de l'état. */
+const MILLI = 1000;
+
+/**
+ * Ce qui empêche d'améliorer le bâtiment d'indice donné. Liste vide = geste
+ * possible. Chaque entrée porte un `code` lisible par l'écran et un `message`
+ * en français lisible par le joueur.
+ *
+ * @param {Etat} etat
+ * @param {number} index indice dans `etat.disposition`
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLAmelioration(etat, index) {
+  exigerChamp(etat, 'disposition');
+  exigerChamp(etat, 'economie');
+  const batiment = etat.disposition[index];
+  if (batiment === undefined) {
+    throw new RangeError(`ameliorer : indice ${index} hors de la disposition`);
+  }
+
+  const problemes = [];
+  const vise = batiment.niveau + 1;
+  if (vise > GEOGRAPHIE.niveauPlafond) {
+    problemes.push({
+      code: 'plafond',
+      message: `déjà au niveau ${GEOGRAPHIE.niveauPlafond}, le maximum`,
+    });
+    // Sans niveau visé légal, il n'y a pas de coût à calculer : s'arrêter ici
+    // plutôt que de faire lever `coutDeMontee` sur un niveau hors bornes.
+    return problemes;
+  }
+
+  const cout = coutDeMontee(batiment.id, vise);
+  for (const r of RESSOURCES) {
+    const duMilli = cout[r] * MILLI;
+    if (duMilli > etat.economie.ressources[r]) {
+      problemes.push({
+        code: `manque:${r}`,
+        message: `il manque ${LIBELLE_MANQUE(r, duMilli - etat.economie.ressources[r])}`,
+      });
+    }
+  }
+  return problemes;
+}
+
+/** Le fragment de message qui chiffre un manque, en unités entières. */
+function LIBELLE_MANQUE(ressource, manqueMilli) {
+  const nom = { quartz: 'quartz', scorie: 'scorie', electricite: 'électricité' }[ressource];
+  return `${Math.ceil(manqueMilli / MILLI)} de ${nom}`;
+}
+
+/**
+ * Monte le bâtiment d'un niveau et débite son coût.
+ *
+ * ⚠ LE DÉBIT ET LA MONTÉE SONT INDISSOCIABLES, et l'ordre importe : le coût se
+ * calcule sur le niveau VISÉ, donc avant l'incrément. L'écrire dans l'autre
+ * sens ferait payer le palier suivant.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {number} index
+ * @returns {Etat} le même état
+ */
+export function ameliorer(etat, index) {
+  const problemes = problemesDeLAmelioration(etat, index);
+  if (problemes.length > 0) {
+    throw new Error(
+      `ameliorer : impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  const batiment = etat.disposition[index];
+  const cout = coutDeMontee(batiment.id, batiment.niveau + 1);
+  for (const r of RESSOURCES) etat.economie.ressources[r] -= cout[r] * MILLI;
+  batiment.niveau += 1;
+  return etat;
+}
+
+/**
+ * Ce qui empêche de démolir le bâtiment d'indice donné.
+ *
+ * ⚠ LE CHANTIER NE SE DÉMOLIT PAS. Il ouvre les emplacements, il porte la
+ * poche, et `verifierEtat` refuse une base qui n'en a pas : le retirer rendrait
+ * la partie non chargeable. La garde est ici plutôt que dans l'écran pour que
+ * ce soit vrai quel que soit l'appelant.
+ *
+ * @param {Etat} etat
+ * @param {number} index
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLaDemolition(etat, index) {
+  exigerChamp(etat, 'disposition');
+  const batiment = etat.disposition[index];
+  if (batiment === undefined) {
+    throw new RangeError(`demolir : indice ${index} hors de la disposition`);
+  }
+  const problemes = [];
+  if (BASE_BATIMENTS[batiment.id]?.role === 'central') {
+    problemes.push({
+      code: 'central',
+      message: 'le Chantier de construction ne se démolit pas',
+    });
+  }
+  return problemes;
+}
+
+/**
+ * Retire le bâtiment et rend 90 % de tout ce qui a été investi dedans.
+ *
+ * ⚠ TROIS LISTES SONT PARALLÈLES À `disposition`, ET UNE SEULE EXISTE
+ * AUJOURD'HUI. `economie.residus` est indexée par la même position : la retirer
+ * au même indice, ou `verifierEtat` lèvera au prochain chargement — et il
+ * lèvera loin de la faute, comme le disait déjà le commentaire de `poser`. Si
+ * un lot ajoute une seconde liste parallèle, c'est ici qu'elle se retire aussi.
+ *
+ * ⚠ LE REMBOURSEMENT N'EST PAS PLAFONNÉ PAR LA CAPACITÉ, délibérément. Démolir
+ * une raffinerie fait baisser la capacité et peut porter le stock au-dessus :
+ * `economie-base` GÈLE un stock excédentaire au lieu de l'amputer — « rien ne
+ * se retire en silence », arbitré le 26/08. Écrêter ici ferait disparaître des
+ * ressources que le joueur vient de récupérer, sans rien lui dire.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {number} index
+ * @returns {{quartz: number, scorie: number, electricite: number}} le rendu, en
+ *   UNITÉS — l'écran l'annonce au joueur.
+ */
+export function demolir(etat, index) {
+  const problemes = problemesDeLaDemolition(etat, index);
+  if (problemes.length > 0) {
+    throw new Error(
+      `demolir : impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  const batiment = etat.disposition[index];
+  const rendu = remboursementDuNiveau(batiment.id, batiment.niveau);
+  for (const r of RESSOURCES) etat.economie.ressources[r] += rendu[r] * MILLI;
+  etat.disposition.splice(index, 1);
+  etat.economie.residus.splice(index, 1);
+  return rendu;
 }
 
 /**
