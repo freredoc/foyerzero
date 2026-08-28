@@ -83,12 +83,25 @@ export const BASE_BATIMENTS = {
     // Ouvrir le troisième emplacement demandait le niveau 2, qui coûte 8, que
     // le joueur ne pouvait pas obtenir. La partie était instartable.
     //
-    // ⚠ C'EST UN STOCKAGE PLAT, PAS UNE COURBE. Le classeur donne une valeur
-    // unique, sans progression, et c'est cohérent : 50 se laisse dépasser dès
-    // la première raffinerie (2 880 au niveau 1). C'est une POCHE DE DÉMARRAGE
-    // qui devient négligeable d'elle-même, pas un canal de stockage. Si elle
-    // devait suivre le niveau, ce serait un arbitrage à part — signalé, non
-    // décidé.
+    // ⚠ CES TROIS NOMBRES SONT CEUX DU NIVEAU 1, ET LA POCHE SUIT LE NIVEAU.
+    // Arbitré par Ethan le 27/08 : × 1,25 par niveau du Chantier. L'arbitrage a
+    // été posé APRÈS coup — la poche a été plate du 27/08 au matin au 27/08 au
+    // soir, et `RELEVE-TA-COURBES-2.md` §6.5 ne donne effectivement qu'une
+    // valeur unique, celle du niveau 1 de Tiberium Alliances. Elle ne dit rien
+    // d'une courbe parce que là-bas le stockage se gagne en posant des silos.
+    //
+    // ⚠ LE 1,25 NE S'ÉCRIT PAS ICI. C'est `ECONOMIE_NIVEAU.penteProduction`,
+    // celle-là même que suivent déjà la production et, par construction, la
+    // capacité des deux bâtiments de stockage — `capaciteDuNiveau` vaut douze
+    // heures de production du producteur apparié, donc elle monte en 1,25 sans
+    // que personne l'ait écrit. La poche prend la même pente PARCE QUE c'est la
+    // même grandeur : une durée d'absence tolérée, constante à niveau égal.
+    // L'écrire en dur ici ferait deux tables pour une grandeur — CLAUDE.md §4 —
+    // et le jour où la pente bougerait, la poche resterait seule en arrière.
+    //
+    // La courbe est appliquée par `stockagePropreDuNiveau`, plus bas, et par
+    // elle seule ; `capacitesMilli` de `sim/economie-base.js` l'appelle. Lire
+    // ce champ directement, c'est lire le niveau 1 sans le savoir.
     //
     // ⚠ CE N'EST PAS UN BÂTIMENT DE `role: 'stockage'`. Le Chantier reste
     // `central`. `capaciteDuNiveau` calcule une capacité comme douze heures de
@@ -595,6 +608,168 @@ export const COUT_ELECTRICITE = {
 };
 
 // ---------------------------------------------------------------------------
+// À QUELLE RESSOURCE UN COÛT SE PAIE — arbitré par Ethan le 27/08/2026
+// ---------------------------------------------------------------------------
+//
+// « TOUS les bâtiments sont en quartz, toutes les défenses et l'offense sont en
+// scorie. » Le trou est comblé : `COUT_NIVEAU_DEUX` donnait un nombre sans
+// ressource depuis que le modèle du lot 1 est parti avec `data/params.js`, et
+// c'est ce qui tenait les boutons Améliorer et Démolir désactivés à l'écran.
+//
+// ⚠ DEUX BÂTIMENTS PORTENT « DÉFENSE » DANS LEUR NOM ET COÛTENT DU QUARTZ.
+// Le QG de défense et le Complexe de défense sont des BÂTIMENTS de la base —
+// ils occupent un emplacement de la bande Chantier, ils ont des PV de bâtiment,
+// ils se posent et se montent comme les neuf autres. La règle porte sur ce
+// qu'une chose EST, pas sur le mot qui est dans son nom. Confirmé par Ethan le
+// 27/08, explicitement, sur ces deux-là. Un test l'asserte nommément : sans
+// lui, la prochaine personne qui lit « défense » routera vers la scorie.
+//
+// Les onze bâtiments de `BASE_BATIMENTS` sont donc TOUS de catégorie
+// `batiment`. La catégorie n'est pas écrite ligne par ligne : elle vaut pour la
+// table entière, et le jour où une ligne devra en sortir, c'est un champ par
+// ligne qu'il faudra ajouter — pas une exception dans une fonction.
+export const RESSOURCE_DE_COUT = {
+  batiment: 'quartz',
+  defense: 'scorie',
+  offense: 'scorie',
+};
+
+/** La catégorie de tout ce que porte `BASE_BATIMENTS`. Voir ci-dessus. */
+export const CATEGORIE_DE_COUT_DE_LA_BASE = 'batiment';
+
+// ---------------------------------------------------------------------------
+// Le coût d'une montée
+// ---------------------------------------------------------------------------
+//
+// ⚠ L'ARGUMENT EST LE NIVEAU QU'ON ATTEINT, PAS CELUI D'OÙ L'ON PART.
+// `coutDeMontee(id, 2)` est le prix du passage de 1 à 2, et il vaut
+// `COUT_NIVEAU_DEUX[classe]`. Le niveau 1 est gratuit — donc `coutDeMontee`
+// LÈVE sur 1 plutôt que de rendre zéro : un zéro se confondrait avec « rien à
+// payer, c'est bon », et l'écran l'afficherait comme un prix.
+//
+// LA CHAÎNE EST ARRONDIE À CHAQUE PALIER, et ce n'est pas un détail de style.
+// Les ratios d'`ECONOMIE_NIVEAU` restituent une table relevée : 8 → 10 → 20 →
+// 80 → 440 → 1 440 → 4 400 → 12 800 → 35 200 → 89 600 → 192 000. Ils ne sont
+// pas ronds (36/11, 55/18, 32/11, 28/11, 15/7) et le produit flottant rate la
+// table — 440 × 36/11 rend 1 439,999 999 999 999 8. Arrondir une seule fois à
+// la fin ferait diverger la chaîne dès le sixième palier. On arrondit à chaque
+// pas, et la table relevée est restituée à l'entier près. Un test la confronte
+// palier par palier.
+//
+// L'électricité ne se paie qu'à partir du niveau 3 et s'exprime en fraction du
+// coût principal — `COUT_ELECTRICITE`. Son commentaire disait « du coût en
+// quartz » : depuis l'arbitrage ci-dessus, c'est du coût dans SA ressource,
+// quartz pour un bâtiment, scorie pour une défense.
+
+/**
+ * Le coût principal d'une montée, dans l'unité de la ressource, hors
+ * électricité. Sorti à part parce que l'électricité s'en déduit.
+ * @param {string} classe une clé de `COUT_NIVEAU_DEUX`
+ * @param {number} niveau le niveau ATTEINT
+ * @returns {number} entier
+ */
+function coutPrincipal(classe, niveau) {
+  let cout = COUT_NIVEAU_DEUX[classe];
+  const { ratios, penteStable } = ECONOMIE_NIVEAU;
+  for (let n = ECONOMIE_NIVEAU.premierNiveauPayant + 1; n <= niveau; n++) {
+    const rang = n - ECONOMIE_NIVEAU.premierNiveauPayant - 1;
+    cout = Math.round(cout * (rang < ratios.length ? ratios[rang] : penteStable));
+  }
+  return cout;
+}
+
+/**
+ * Ce que coûte de porter un bâtiment de la base AU niveau donné.
+ *
+ * @param {string} id une clé de `BASE_BATIMENTS`
+ * @param {number} niveau le niveau atteint, de 2 à `niveauPlafond`
+ * @returns {{quartz: number, scorie: number, electricite: number}} en UNITÉS,
+ *   pas en milli-unités — la conversion appartient à `sim/`.
+ */
+export function coutDeMontee(id, niveau) {
+  const def = BASE_BATIMENTS[id];
+  if (def === undefined) throw new Error(`base : ${id} n'est pas un bâtiment de la base`);
+  const premier = ECONOMIE_NIVEAU.premierNiveauPayant;
+  if (!Number.isInteger(niveau) || niveau < premier || niveau > GEOGRAPHIE.niveauPlafond) {
+    throw new Error(
+      `base : niveau ${niveau} hors de ${premier}…${GEOGRAPHIE.niveauPlafond}`
+        + ` — le niveau 1 est gratuit, il ne se demande pas`,
+    );
+  }
+
+  const principal = coutPrincipal(def.classeDeCout, niveau);
+  const cout = { quartz: 0, scorie: 0, electricite: 0 };
+  cout[RESSOURCE_DE_COUT[CATEGORIE_DE_COUT_DE_LA_BASE]] = principal;
+
+  if (niveau >= COUT_ELECTRICITE.premierNiveauPayant) {
+    const { fraction } = COUT_ELECTRICITE;
+    const part = Object.prototype.hasOwnProperty.call(fraction, id) ? fraction[id] : fraction.autres;
+    cout.electricite = Math.round(part * principal);
+  }
+  return cout;
+}
+
+/**
+ * Tout ce qui a été investi pour amener un bâtiment à ce niveau, depuis la
+ * pose. Le niveau 1 étant gratuit, un bâtiment de niveau 1 a coûté ZÉRO — et
+ * c'est ce que cette fonction rend, sans lever.
+ * @param {string} id
+ * @param {number} niveau niveau actuel, de 1 à `niveauPlafond`
+ * @returns {{quartz: number, scorie: number, electricite: number}}
+ */
+export function coutCumule(id, niveau) {
+  if (BASE_BATIMENTS[id] === undefined) {
+    throw new Error(`base : ${id} n'est pas un bâtiment de la base`);
+  }
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+    throw new Error(`base : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`);
+  }
+  const total = { quartz: 0, scorie: 0, electricite: 0 };
+  for (let n = ECONOMIE_NIVEAU.premierNiveauPayant; n <= niveau; n++) {
+    const palier = coutDeMontee(id, n);
+    total.quartz += palier.quartz;
+    total.scorie += palier.scorie;
+    total.electricite += palier.electricite;
+  }
+  return total;
+}
+
+// ---------------------------------------------------------------------------
+// Démolir — arbitré par Ethan le 27/08/2026
+// ---------------------------------------------------------------------------
+//
+// « Remboursement à hauteur de 90 % de l'ensemble des ressources. » L'ensemble,
+// c'est le CUMUL depuis la pose, toutes ressources comprises, électricité
+// incluse — pas seulement le dernier palier.
+//
+// ⚠ DÉMOLIR UN BÂTIMENT DE NIVEAU 1 NE REND RIEN, et c'est cohérent, pas un
+// oubli : poser est gratuit (`premierNiveauPayant` vaut 2), donc rien n'a été
+// investi. Le joueur récupère son emplacement, pas des ressources. L'écran
+// devra le dire avant le geste, sinon il se lira comme un bug.
+//
+// L'arrondi est un PLANCHER, dans les deux sens du terme : `Math.floor` sur
+// chaque ressource. Arrondir au plus près rendrait 90 % de 5 en 5 — cinq
+// démolitions-reconstructions d'affilée deviendraient gratuites. Un remboursement
+// se perd, il ne se gagne jamais.
+export const REMBOURSEMENT_DEMOLITION = { fraction: 0.9 };
+
+/**
+ * Ce que rend la démolition d'un bâtiment à ce niveau.
+ * @param {string} id
+ * @param {number} niveau
+ * @returns {{quartz: number, scorie: number, electricite: number}} en UNITÉS
+ */
+export function remboursementDuNiveau(id, niveau) {
+  const investi = coutCumule(id, niveau);
+  const { fraction } = REMBOURSEMENT_DEMOLITION;
+  return {
+    quartz: Math.floor(investi.quartz * fraction),
+    scorie: Math.floor(investi.scorie * fraction),
+    electricite: Math.floor(investi.electricite * fraction),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Débits — production et stockage
 // ---------------------------------------------------------------------------
 //
@@ -727,6 +902,39 @@ export function capaciteDuNiveau(id, niveau) {
 
 /** Quel producteur alimente quel stockage. Les deux couples sont réciproques. */
 export const PRODUCTEUR_APPARIE = { raffinerie: 'collecteur', accumulateur: 'centrale' };
+
+/**
+ * Le stockage propre d'un bâtiment à ce niveau — la poche du Chantier.
+ *
+ * Elle part de `stockagePropre`, qui vaut au niveau 1, et suit
+ * `penteProduction`. Voir le commentaire du champ pour l'arbitrage.
+ *
+ * ⚠ ELLE REND `null`, PAS UN OBJET DE ZÉROS, pour un bâtiment qui n'en porte
+ * pas. Un objet de zéros s'additionnerait sans rien changer et serait donc
+ * correct — mais il rendrait indiscernables « ce bâtiment ne stocke pas » et
+ * « ce bâtiment stocke zéro », et le premier est une donnée absente quand le
+ * second serait une donnée fausse.
+ *
+ * @param {string} id
+ * @param {number} niveau
+ * @returns {{quartz: number, scorie: number, electricite: number}|null} en UNITÉS
+ */
+export function stockagePropreDuNiveau(id, niveau) {
+  const def = BASE_BATIMENTS[id];
+  if (def === undefined) throw new Error(`base : ${id} n'est pas un bâtiment de la base`);
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+    throw new Error(`base : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`);
+  }
+  if (!def.stockagePropre) return null;
+
+  const facteur = ECONOMIE_NIVEAU.penteProduction ** (niveau - 1);
+  const sorti = { quartz: 0, scorie: 0, electricite: 0 };
+  for (const r of Object.keys(sorti)) {
+    const base = def.stockagePropre[r];
+    if (base) sorti[r] = Math.round(base * facteur);
+  }
+  return sorti;
+}
 
 // ---------------------------------------------------------------------------
 // Débit horaire — et pourquoi il n'est PAS exprimé par tick
