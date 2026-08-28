@@ -16,7 +16,7 @@ import {
 } from './economie-base.js';
 import { BASE_BATIMENTS, coutDeMontee, remboursementDuNiveau } from '../data/base.js';
 import { GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT } from '../data/sites.js';
-import { GRILLE, UNITES } from '../data/combat.js';
+import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
@@ -883,6 +883,39 @@ export function deplacerEffectif(etat, force, index, position) {
   piece[f.axe] = position[f.axe];
   piece.colonne = position.colonne;
   return etat;
+}
+
+/**
+ * Les points d'armée engagés par une force — ce que le compteur du bandeau
+ * affiche en face du budget.
+ *
+ * ⚠ LES POINTS NE MONTENT PAS AVEC LE NIVEAU, et c'est une règle du moteur,
+ * pas un oubli : réserve, portée, vitesse, masse, cadence et points d'armée
+ * sont les grandeurs que `data/niveaux.js` ne met PAS à l'échelle. Multiplier
+ * ici par le niveau ferait qu'améliorer une unité la ferait sortir du budget.
+ *
+ * ⚠ UNE PIÈCE DÉTRUITE COMPTE ENCORE. Elle occupe sa case et son budget en
+ * attendant d'être réparée — « détruites mais pas perdues ». La décompter
+ * ferait de la destruction une façon de poser plus d'unités.
+ *
+ * @param {Etat} etat
+ * @param {string} force
+ * @returns {number} points d'armée
+ */
+export function pointsEngages(etat, force) {
+  const f = exigerForce(force);
+  exigerChamp(etat, f.champ);
+  let total = 0;
+  for (const piece of etat[f.champ]) {
+    // Une pièce de garnison est soit un ouvrage, soit une unité ; l'assaut n'a
+    // que des unités. Les deux tables portent le même champ `points`.
+    const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
+    if (ligne === undefined) {
+      throw new Error(`pointsEngages : « ${piece.id} » n'est ni une défense ni une unité`);
+    }
+    total += ligne.points;
+  }
+  return total;
 }
 
 /**

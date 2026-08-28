@@ -33,7 +33,15 @@ import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie
 import {
   debitDuBatiment, productionParRessource, voisinsQualifiants, voisinsQualifiantsParCase,
 } from '../sim/disposition.js';
-import { niveauDesBatiments } from '../sim/niveau-de-base.js';
+import {
+  niveauDesBatiments, niveauDeLaDefense, niveauDeLArmee,
+} from '../sim/niveau-de-base.js';
+// ⚠ LE BUDGET N'EST PAS RECALCULÉ ICI. Sa formule vit dans les deux ÉDITEURS,
+// qui font foi dessus depuis le lot 5 ; l'écran la LIT au lieu d'en écrire une
+// troisième. Les deux fonctions portent le même nom court dans deux modules —
+// d'où le renommage à l'import, comme pour `poser`.
+import { budgetDuNiveau as budgetOffense } from './arsenal.js';
+import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
@@ -47,6 +55,7 @@ import {
   problemesDeLAmelioration, ameliorer,
   problemesDeLaDemolition, demolir,
   problemesDuDeplacement, deplacer,
+  pointsEngages, niveauDeCommandement,
 } from '../sim/state.js';
 
 // ---------------------------------------------------------------------------
@@ -322,16 +331,22 @@ export function navigationEntreBases(etat) {
 }
 
 /**
- * Les trois contextes du compteur, et lequel porte un vrai nombre.
+ * Les trois contextes du compteur, et où chacun va chercher son nombre.
  *
- * ⚠ `chiffre` DIT SI LA GRANDEUR EXISTE, pas si elle vaut zéro. Les deux
- * contextes à `false` ne sont pas « à zéro » : ils ne sont pas comptables, faute
- * d'état à compter.
+ * ⚠ `chiffre` DIT SI LA GRANDEUR EXISTE, pas si elle vaut zéro. Les trois
+ * valent `true` DEPUIS LE 28/08 : l'état porte enfin `garnison` et `armee`,
+ * donc les points engagés existent et se comptent. Ils valaient `false` tant
+ * qu'il n'y avait rien à compter — ce n'était pas « zéro », c'était
+ * « incomptable ». Ce lot fait basculer le champ, il ne le contourne pas.
+ *
+ * ⚠ `force` DIT DANS QUELLE LISTE COMPTER, `budget` COMMENT LA BORNER. Les
+ * deux fonctions de budget viennent des éditeurs, qui font foi : le compteur
+ * ne recalcule rien.
  */
 export const CONTEXTES = {
-  batiments: { libelle: 'Emplac.', chiffre: true },
-  defense: { libelle: 'Pts déf.', chiffre: false },
-  offense: { libelle: 'Pts off.', chiffre: false },
+  batiments: { libelle: 'Emplac.', chiffre: true, force: null, budget: null },
+  defense: { libelle: 'Pts déf.', chiffre: true, force: 'garnison', budget: budgetDefense },
+  offense: { libelle: 'Pts off.', chiffre: true, force: 'armee', budget: budgetOffense },
 };
 
 /**
@@ -340,11 +355,16 @@ export const CONTEXTES = {
  * ⚠ ARBITRÉ LE 28/08 : « quand on passe en défense, le nombre d'emplacement
  * change pour celui des points de défense. Idem pour offense. »
  *
- * ⚠ ET DEUX DES TROIS VALENT « — », PARCE QUE L'ÉTAT NE LES PORTE PAS.
- * `sim/state.js` ne connaît ni garnison ni armée d'assaut : `ui/defense.js` et
- * `ui/arsenal.js` sont des ÉDITEURS dont rien n'est sauvegardé. Le LIBELLÉ
- * change, comme demandé ; la valeur reste un tiret, parce qu'inventer un
- * chiffre serait pire que de dire qu'il n'y en a pas.
+ * ⚠ LES TROIS PORTENT UN NOMBRE DEPUIS LE 28/08. Les deux derniers affichaient
+ * « — » tant que `sim/state.js` ne connaissait ni garnison ni armée ; il les
+ * porte maintenant, et le compteur les compte.
+ *
+ * ⚠⚠ C'EST LA CAPACITÉ QUI DISPARAÎT QUAND IL N'Y A PAS DE QG, PAS LA VALEUR.
+ * Zéro point engagé est un fait vrai et affichable même sans Centre de
+ * commandement ; c'est le BUDGET qui n'existe pas, faute de bâtiment d'où le
+ * lire. Afficher « 0 / 0 » ferait croire à un budget nul — donc à un plafond
+ * atteint — là où il n'y a pas de plafond du tout, seulement rien pour en
+ * fixer un. Même distinction que `null` contre zéro dans `niveauDeCommandement`.
  *
  * @param {object} etat
  * @param {'batiments'|'defense'|'offense'} contexte
@@ -353,15 +373,28 @@ export const CONTEXTES = {
 export function compteurDeContexte(etat, contexte) {
   const def = CONTEXTES[contexte];
   if (def === undefined) throw new RangeError(`chantier : contexte « ${contexte} » inconnu`);
-  if (!def.chiffre) {
-    return { libelle: def.libelle, valeur: NIVEAU_ABSENT, capacite: '', sature: false };
+
+  if (def.force === null) {
+    const { poses, ouverts } = resumeDeLaBase(etat).emplacements;
+    return {
+      libelle: def.libelle,
+      valeur: formaterEntier(poses),
+      capacite: `/ ${formaterEntier(ouverts)}`,
+      sature: poses >= ouverts,
+    };
   }
-  const { poses, ouverts } = resumeDeLaBase(etat).emplacements;
+
+  const engages = pointsEngages(etat, def.force);
+  const niveau = niveauDeCommandement(etat, def.force);
+  if (niveau === null) {
+    return { libelle: def.libelle, valeur: formaterEntier(engages), capacite: '', sature: false };
+  }
+  const budget = def.budget(niveau);
   return {
     libelle: def.libelle,
-    valeur: formaterEntier(poses),
-    capacite: `/ ${formaterEntier(ouverts)}`,
-    sature: poses >= ouverts,
+    valeur: formaterEntier(engages),
+    capacite: `/ ${formaterEntier(budget)}`,
+    sature: engages >= budget,
   };
 }
 
@@ -436,7 +469,11 @@ export const LIBELLES_RESSOURCE = {
  * }}
  */
 export function resumeDeLaBase(etat) {
-  if (!etat || !Array.isArray(etat.disposition)) {
+  // ⚠ LES TROIS LISTES SONT EXIGÉES, PAS SEULEMENT LA PREMIÈRE. Depuis que les
+  // niveaux de défense et d'armée sont réels, un état amputé de `garnison`
+  // rendrait un `TypeError` venu du fond de `sim/`, loin de l'appelant fautif.
+  if (!etat || !Array.isArray(etat.disposition)
+      || !Array.isArray(etat.garnison) || !Array.isArray(etat.armee)) {
     throw new TypeError('chantier : état de jeu absent ou malformé');
   }
   const capacites = capacitesMilli(etat.disposition);
@@ -468,13 +505,16 @@ export function resumeDeLaBase(etat) {
       poses: etat.disposition.length,
       ouverts: emplacementsDuNiveau(chantier.niveau),
     },
-    // ⚠ DEUX DES TROIS NIVEAUX SONT `null`, ET C'EST DÉLIBÉRÉ. L'état du joueur
-    // ne porte ni garnison ni armée d'assaut : `ui/defense.js` et
-    // `ui/arsenal.js` sont des ÉDITEURS, et rien de ce qu'ils produisent n'est
-    // sauvegardé. Inventer une moyenne sur des unités que l'état ne porte pas
-    // afficherait un chiffre faux ; « — » dit ce qui est vrai, c'est-à-dire
-    // qu'il n'y a rien à moyenner.
-    niveaux: { batiments: niveauDesBatiments(etat.disposition), defense: null, assaut: null },
+    // ⚠ LES TROIS NIVEAUX SONT RÉELS DEPUIS LE 28/08. Les deux derniers valaient
+    // `null` en dur tant que l'état ne portait ni garnison ni armée ; ils sont
+    // maintenant des MOYENNES, calculées par le même module et la même règle
+    // que le premier. Ils restent `null` quand rien n'est posé — ce qui est le
+    // cas de toute base neuve — et `formaterNiveau` en fait « — ».
+    niveaux: {
+      batiments: niveauDesBatiments(etat.disposition),
+      defense: niveauDeLaDefense(etat.garnison),
+      assaut: niveauDeLArmee(etat.armee),
+    },
   };
 }
 

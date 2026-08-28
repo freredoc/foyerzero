@@ -54,8 +54,13 @@ import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
+import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { budgetDuNiveau as budgetOffense } from '../src/ui/arsenal.js';
+import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
-import { creerEtat, tickJeu, poser, problemesDeLaPose } from '../src/sim/state.js';
+import {
+  creerEtat, tickJeu, poser, problemesDeLaPose, poserEffectif,
+} from '../src/sim/state.js';
 import * as moteurEtat from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 
@@ -84,7 +89,12 @@ function baseDeLaMaquette() {
   // Le montage doit être LÉGAL avant de mesurer quoi que ce soit : une
   // disposition invalide donnerait des débits qui ne veulent rien dire.
   assert.deepEqual(problemesDeDisposition(disposition, champs), []);
-  return { disposition, champs, economie: creerEtatEconomie(disposition) };
+  // ⚠ LES DEUX FORCES SONT DU MONTAGE DEPUIS LE 28/08. L'état porte
+  // `garnison` et `armee` ; un montage qui les omet n'est plus un état de jeu,
+  // et `resumeDeLaBase` le dit au lieu de lever au fond de `sim/`.
+  return {
+    disposition, champs, economie: creerEtatEconomie(disposition), garnison: [], armee: [],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -875,7 +885,12 @@ test('pose — jamais de `try` autour de `poser`, dans tout src/ui/', () => {
   // jeu. Une garde qui chercherait `poser(` accuserait donc le banc d'une faute
   // qu'il ne commet pas, et pousserait à « réparer » du code juste. D'où le
   // renommage à l'import dans `chantier.js`, qui rend ce balayage exact.
-  const MOTIF_POSER = /(?<![\p{L}\p{N}_])poserBatiment\s*\(/u;
+  // ⚠ `poserEffectif` EST ENTRÉ DANS LA GARDE LE 28/08. Il pose une unité de
+  // garnison ou d'assaut dans l'état, et il obéit au même contrat que
+  // `poserBatiment` : `problemesDeLaPoseDEffectif` rend une liste, lui LÈVE.
+  // Son nom est sans ambiguïté — aucun homonyme dans `src/ui/` — donc il
+  // entre tel quel, sans renommage à l'import.
+  const MOTIF_POSER = /(?<![\p{L}\p{N}_])(poserBatiment|poserEffectif)\s*\(/u;
 
   const fichiers = readdirSync(join(RACINE, 'src', 'ui'))
     .filter((n) => n.endsWith('.js'))
@@ -1761,17 +1776,23 @@ test('compteur — le libellé suit le contexte, et la valeur reste honnête', (
   assert.equal(batiments.capacite, '/ 2');
   assert.equal(batiments.sature, false);
 
-  // ⚠ LES DEUX AUTRES VALENT « — », ET CE N'EST PAS UN OUBLI. `sim/state.js` ne
-  // porte ni garnison ni armée d'assaut : `ui/defense.js` et `ui/arsenal.js`
-  // sont des ÉDITEURS dont rien n'est sauvegardé. Le LIBELLÉ change, comme
-  // demandé ; inventer un chiffre serait pire que le tiret.
+  // ⚠ LES DEUX AUTRES PORTENT UN NOMBRE DEPUIS LE 28/08 — ce test a changé de
+  // cible, il ne s'est pas assoupli. Ils affichaient « — » tant que
+  // `sim/state.js` ne portait ni garnison ni armée ; il les porte, donc les
+  // points engagés se comptent. Une base neuve n'a rien de posé : ZÉRO, ce qui
+  // est un fait, et non un tiret, qui disait « incomptable ».
   for (const contexte of ['defense', 'offense']) {
     const vue = compteurDeContexte(etat, contexte);
-    assert.equal(vue.valeur, NIVEAU_ABSENT, `${contexte} affiche un chiffre inventé`);
+    assert.equal(vue.valeur, '0', `${contexte} devrait compter ses points engagés`);
+    assert.notEqual(vue.valeur, NIVEAU_ABSENT);
+    // ⚠ C'EST LA CAPACITÉ QUI MANQUE, PAS LA VALEUR : aucune base neuve ne
+    // porte de Centre de commandement ni de QG de défense, donc il n'y a
+    // AUCUN budget d'où lire un plafond. « 0 / 0 » ferait croire à un plafond
+    // atteint là où il n'y en a pas.
     assert.equal(vue.capacite, '');
     assert.equal(vue.sature, false);
     assert.notEqual(vue.libelle, batiments.libelle, `${contexte} garde le libellé des bâtiments`);
-    assert.equal(CONTEXTES[contexte].chiffre, false);
+    assert.equal(CONTEXTES[contexte].chiffre, true);
   }
   assert.deepEqual(Object.keys(CONTEXTES).slice().sort(), ['batiments', 'defense', 'offense']);
   assert.throws(() => compteurDeContexte(etat, 'inconnu'), /contexte/);
@@ -2037,4 +2058,91 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
   // pas bougé : ce sont les écarts et le bloc de gauche qui ont cédé la place.
   assert.equal(Object.keys(ACTIONS).length, 4);
   assert.equal(hauteur('chantier-contexte'), 46);
+});
+
+// ---------------------------------------------------------------------------
+// Les deux compteurs qui ont cessé d'être des tirets — lot GARNISON-ET-ARMÉE
+// ---------------------------------------------------------------------------
+
+/** Une base assez grande pour porter les deux bâtiments de commandement. */
+function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2) {
+  const etat = creerEtat(20260828);
+  etat.disposition[0].niveau = 5; // dix emplacements, sinon la base est illégale
+  etat.disposition.push(
+    { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: niveauOffense },
+    { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense },
+  );
+  for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
+    etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  return etat;
+}
+
+test('compteur — la défense et l\'offense montrent un nombre dès que leur QG est posé', () => {
+  const etat = baseAvecCommandement(3, 2);
+
+  // Sans rien de posé : zéro engagé, mais un budget, donc une capacité.
+  const videOff = compteurDeContexte(etat, 'offense');
+  assert.equal(videOff.valeur, '0');
+  assert.equal(videOff.capacite, `/ ${budgetOffense(3)}`);
+  assert.equal(videOff.sature, false);
+
+  // Deux unités posées : le compteur suit, en POINTS d'armée et non en pièces.
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 }); // 5 pts
+  poserEffectif(etat, 'armee', { id: 'enclume', vague: 1, colonne: 2, niveau: 1 }); // 15 pts
+  const plein = compteurDeContexte(etat, 'offense');
+  assert.equal(plein.valeur, formaterEntier(UNITES.meute.points + UNITES.enclume.points));
+  // Falsifiable : ce n'est PAS un compte de pièces. Deux unités, vingt points.
+  assert.notEqual(plein.valeur, '2', 'le compteur compte les pièces au lieu des points');
+
+  // La garnison a son propre compteur, et il ne bouge pas quand l'armée bouge.
+  const def = compteurDeContexte(etat, 'defense');
+  assert.equal(def.valeur, '0');
+  assert.equal(def.capacite, `/ ${budgetDefense(2)}`);
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 3, colonne: 1, niveau: 1 });
+  assert.equal(compteurDeContexte(etat, 'defense').valeur, formaterEntier(DEFENSES.merlon.points));
+  assert.equal(compteurDeContexte(etat, 'offense').valeur, plein.valeur, 'les deux forces se mélangent');
+});
+
+test('compteur — la saturation se dit quand le budget est atteint, jamais avant', () => {
+  const etat = baseAvecCommandement(1, 1);
+  const budget = budgetOffense(1);
+  let engages = 0;
+  let colonne = 1;
+  while (engages + UNITES.enclume.points <= budget && colonne <= 9) {
+    poserEffectif(etat, 'armee', { id: 'enclume', vague: 1, colonne, niveau: 1 });
+    engages += UNITES.enclume.points;
+    colonne += 1;
+  }
+  // Falsifiable : le montage doit vraiment APPROCHER le budget.
+  assert.ok(engages > 0 && engages <= budget, `${engages} points pour un budget de ${budget}`);
+  const vue = compteurDeContexte(etat, 'offense');
+  assert.equal(vue.valeur, formaterEntier(engages));
+  assert.equal(vue.sature, engages >= budget);
+});
+
+test('résumé — les trois niveaux du joueur sont désormais trois moyennes', () => {
+  const etat = baseAvecCommandement();
+
+  // Rien de posé : deux des trois sont `null`, donc « — » à l'écran. C'est
+  // l'état d'une base neuve, et ce n'est pas un défaut de calcul.
+  const vide = resumeDeLaBase(etat).niveaux;
+  assert.ok(Number.isInteger(vide.batiments), 'le niveau des bâtiments existe toujours');
+  assert.equal(vide.defense, null);
+  assert.equal(vide.assaut, null);
+  assert.equal(formaterNiveau(vide.defense), NIVEAU_ABSENT);
+
+  // Deux unités de niveaux 2 et 8 : moyenne 5,0, en dixièmes entiers.
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 2 });
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 8 });
+  const plein = resumeDeLaBase(etat).niveaux;
+  assert.equal(plein.assaut, 50);
+  assert.equal(formaterNiveau(plein.assaut), '5,0');
+  // Et la défense reste absente : les trois niveaux sont indépendants.
+  assert.equal(plein.defense, null);
+
+  // ⚠ UN ÉTAT AMPUTÉ EST NOMMÉ ICI, pas au fond de `sim/`.
+  const ampute = { ...etat };
+  delete ampute.garnison;
+  assert.throws(() => resumeDeLaBase(ampute), /état de jeu absent ou malformé/);
 });

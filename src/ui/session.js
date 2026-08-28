@@ -186,6 +186,7 @@ export function initialiserSession(doc) {
   let etat = null;
   let ecran = null;
   let ecranMission = null;
+  let ecranOffense = null;
   let idImage = null;
   const chrono = creerChronometre(maintenantMs);
   let dernierAffichageMs = 0;
@@ -316,6 +317,11 @@ export function initialiserSession(doc) {
     $('chantier-alerte').hidden = true;
     ecran.peindre(etat);
     ecran.rafraichir(etat);
+    // Les deux autres écrans se peignent aussi une première fois : ils sont
+    // cachés, mais `montrerEcran` ne les repeindrait qu'à la première visite,
+    // et un écran qui n'a jamais vu l'état n'a rien à montrer si on l'ouvre
+    // avant qu'un geste ne l'ait rafraîchi.
+    if (ecranOffense !== null) ecranOffense.peindre(etat);
     ecran.ouvrirSurLaBase();
     sauvegarder();
     demarrerBoucle();
@@ -411,6 +417,11 @@ export function initialiserSession(doc) {
     // Le tutoriel se relit à l'ouverture : il a pu avancer pendant qu'on
     // regardait ailleurs, et il ne se repeint pas tant qu'il est caché.
     if (nom === 'mission' && ecranMission !== null && etat !== null) ecranMission.peindre(etat);
+    // ⚠ ET L'OFFENSE AUSSI, POUR LA MÊME RAISON. Elle a pu changer pendant
+    // qu'on regardait ailleurs — une amélioration du Centre de commandement
+    // ouvre du budget et allonge la palette — et elle ne se repeint pas tant
+    // qu'elle est cachée.
+    if (nom === 'offense' && ecranOffense !== null && etat !== null) ecranOffense.peindre(etat);
   }
 
   $('onglet-base').addEventListener('click', () => montrerEcran('chantier'));
@@ -502,9 +513,12 @@ export function initialiserSession(doc) {
     // session sait faire. Même découpage que `apresPose`.
     versEcran: (nom) => montrerEcran(nom),
   });
-  // L'écran Offense se construit une fois et ne se rafraîchit jamais : tant
-  // qu'aucune armée n'existe, rien de ce qu'il montre ne change avec le temps.
-  initialiserEcranOffense(doc);
+  // ⚠ L'ÉCRAN OFFENSE SE REPEINT MAINTENANT, ET IL ÉCRIT. Il se construisait
+  // une fois et ne se rafraîchissait jamais, « tant qu'aucune armée n'existe ».
+  // L'état en porte une depuis le lot GARNISON-ET-ARMÉE : il compose, et chaque
+  // geste s'enregistre tout de suite — composer son armée est une action que le
+  // joueur ne veut pas refaire parce que le système a tué l'application.
+  ecranOffense = initialiserEcranOffense(doc, { apresPose: () => sauvegarder() });
   ecranMission = initialiserEcranMission(doc);
   montrerEcran('chantier');
   demarrer();
