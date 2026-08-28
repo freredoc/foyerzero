@@ -1842,7 +1842,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     posableChoisi = null;
     poseEnAttente = null;
     deplacementEnCours = null;
-    ligneDeMode('');
+    // ⚠ ON REMET LE MOT DU MODE, ON NE L'EFFACE PAS. Un `ligneDeMode('')` tenait
+    // ici : l'action armée SURVIT au changement de bande, si bien que la ligne
+    // se vidait pendant que « Démolir » restait actif — et le bâtiment suivant
+    // qu'on touchait disparaissait sans un mot. C'est exactement le défaut
+    // qu'Ethan a relevé le 28/08 sur les boutons d'action, et il serait revenu
+    // par la porte du défilement.
+    ligneDeMode(actionArmee === null ? '' : MESSAGES_MODE[actionArmee]);
     peindrePalette(etatCourant);
     marquerCasesLegales();
     peindreApercu();

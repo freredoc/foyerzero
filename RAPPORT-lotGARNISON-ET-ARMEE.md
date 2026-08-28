@@ -38,9 +38,9 @@ intègre-les ». Il est donc **dans** ce lot.
 |---|---|
 | Version | **0.26.0** · `config.build` **27** |
 | `npm test` | **398 pass / 0 fail** (349 au départ, **+49**) |
-| `dist/index.html` | **179 913 octets** |
-| Delta depuis les 161 583 du brief | **+18 330** |
-| Delta depuis les 167 308 mesurés | **+12 605** |
+| `dist/index.html` | **179 928 octets** |
+| Delta depuis les 161 583 du brief | **+18 345** |
+| Delta depuis les 167 308 mesurés | **+12 620** |
 | `SAVE_VERSION` | 6 → **7** |
 | Marge sous la borne T10 (200 000) | **10 %** |
 

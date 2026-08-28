@@ -2353,8 +2353,22 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
 
   // ⚠ ET LA PALETTE SUIT LE TERRAIN. Sans ce rappel, le joueur descendrait sur
   // la bande Défense avec les vignettes des onze bâtiments sous les yeux.
-  assert.match(source, /function marquerBandeActive\([\s\S]{0,900}peindrePalette\(/,
+  assert.match(source, /function marquerBandeActive\([\s\S]{0,1200}peindrePalette\(/,
     'la palette ne se repeint plus quand on change de bande');
+
+  // ⚠ ET CHANGER DE BANDE NE VIDE PAS LA LIGNE DE MODE. L'action armée SURVIT
+  // au changement — elle s'applique à ce qu'on touche — donc effacer son
+  // message laisserait « Démolir » actif et muet, et le bâtiment suivant qu'on
+  // touche disparaîtrait sans un mot. C'est le défaut relevé par Ethan le 28/08
+  // sur les boutons d'action, qui serait revenu par la porte du défilement.
+  const corpsBande = source.slice(source.indexOf('function marquerBandeActive('));
+  const finBande = corpsBande.indexOf('\n  }');
+  const dansLaBande = corpsBande.slice(0, finBande);
+  assert.ok(dansLaBande.length > 100, 'le découpage de marquerBandeActive ne trouve rien');
+  assert.ok(!/ligneDeMode\(''\)/.test(dansLaBande),
+    'changer de bande vide la ligne de mode alors que l\'action reste armée');
+  assert.match(dansLaBande, /ligneDeMode\(actionArmee === null/,
+    'le mot du mode n\'est plus remis après un changement de bande');
 
   // Falsifiable : le montage doit trouver de vraies fonctions, sinon zéro
   // occurrence passerait pour « écrite une fois ».

@@ -26,7 +26,7 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
 
 **Référence au 28/08/2026 (après le lot GARNISON-ET-ARMÉE), à confronter :**
 `npm test` → **398 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**179 913 octets**, 0 référence externe.
+**179 928 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -43,7 +43,7 @@ bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
 QUEUE-DE-COURBE à 153 505,
 MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans,
 POSE-ET-DÉPLACEMENT à 161 583, TUTORIEL à 167 308 en ouvrant l'onglet Mission,
-GARNISON-ET-ARMÉE à 179 913 en donnant un état à la garnison et à l'armée,
+GARNISON-ET-ARMÉE à 179 928 en donnant un état à la garnison et à l'armée,
 puis en branchant l'écran Offense et la bande Défense.
 La borne de T10 (200 000 octets) tient, avec 10 % de marge — elle se resserre
 lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
