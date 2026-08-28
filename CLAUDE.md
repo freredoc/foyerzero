@@ -25,7 +25,7 @@ Dernière révision : **28/08/2026**, version 0.25.0 · build 26.
    savoir est un lot perdu.
 
 **Référence au 28/08/2026 (après le lot TUTORIEL), à confronter :**
-`npm test` → **364 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **382 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **167 308 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**

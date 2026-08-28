@@ -17,7 +17,13 @@ import {
   CODES_TOLERES_AU_CHARGEMENT,
   problemesDuDeplacement,
   deplacer,
+  FORCES, poserEffectif, retirerEffectif, deplacerEffectif,
+  problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
+  niveauDeCommandement,
 } from '../src/sim/state.js';
+import { budgetDuNiveau as budgetOffense, arsenalVide, poser as poserUnite } from '../src/ui/arsenal.js';
+import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
+import { POINTS_ARMEE } from '../src/data/sites.js';
 import { coutDeMontee, coutCumule, remboursementDuNiveau } from '../src/data/base.js';
 import {
   DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli, STOCK_DE_DEPART, creerEtatEconomie,
@@ -296,12 +302,18 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 6, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 7, 'le bump de la version des sauvegardes a été oublié');
 
-  // Le dernier maillon de la chaîne, v4 → v5, doit avoir été appliqué lui
-  // aussi : sans `fondation` le terrain ne serait dérivable de rien.
+  // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
+  // terrain ne serait dérivable de rien.
   assert.ok(etat.fondation, 'le maillon v4 → v5 n\'a pas été appliqué');
   assert.deepEqual(etat.fondation, etat.position, 'une base refondée n\'a jamais bougé');
+
+  // Et le dernier, v6 → v7 : les deux forces existent et sont VIDES. Une
+  // sauvegarde v0 ne portait évidemment aucune composition — il n'y a rien à
+  // convertir, et deux listes vides sont exactement ce que la partie avait.
+  assert.deepEqual(etat.garnison, [], 'le maillon v6 → v7 n\'a pas été appliqué');
+  assert.deepEqual(etat.armee, [], 'le maillon v6 → v7 n\'a pas été appliqué');
 
   // ⚠ CE QUI SURVIT : LE TEMPS, PAS LE CONTENU. La migration 3 → 4 REFONDE la
   // base — il n'existe aucune correspondance entre une `foreuse` sans
@@ -1068,4 +1080,352 @@ test('déplacer — une base déjà bancale reste réarrangeable', () => {
     'le montage devrait être redevenu illégal');
   assert.deepEqual(problemesDuDeplacement(etat, 1, 18, 1), [],
     'les défauts préexistants ne sont plus filtrés');
+});
+
+// ---------------------------------------------------------------------------
+// La garnison et l'armée — lot GARNISON-ET-ARMÉE, 28/08
+// ---------------------------------------------------------------------------
+//
+// CE QUE CES TESTS GARDENT :
+//   — les deux champs existent dès la base neuve, VIDES, et une liste vide est
+//     un état légal et non un trou ;
+//   — un aller-retour de sauvegarde rend le placement, les niveaux ET les
+//     dégâts, sans quoi une unité détruite ressusciterait intacte ;
+//   — le budget n'entre PAS dans `verifierEtat` : une armée trop chère est un
+//     fait de jeu, pas un fait de programme ;
+//   — un déplacement ne réordonne pas la liste.
+
+/** Une base qui porte les deux bâtiments de commandement, à des niveaux connus. */
+function etatAvecCommandement(niveauOffense = 4, niveauDefense = 6) {
+  const etat = creerEtat(20260828);
+  // ⚠ LE CHANTIER DOIT OUVRIR ASSEZ D'EMPLACEMENTS. Au niveau 1 il en ouvre
+  // DEUX et en prend un : poser les deux QG rendrait la base injouable, et le
+  // montage échouerait au chargement pour une raison sans rapport avec ce
+  // qu'il mesure. Au niveau 5 il en ouvre dix.
+  etat.disposition[0].niveau = 5;
+  // Les deux QG sont `unique: true` et ne se touchent pas — la règle
+  // « uniques-voisins » du 28/08 les sépare du Chantier posé en (18, 5).
+  etat.disposition.push(
+    { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: niveauOffense },
+    { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense },
+  );
+  for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
+    etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  return etat;
+}
+
+test('forces — une base neuve porte les deux champs, tous deux vides', () => {
+  const etat = creerEtat(7);
+  assert.deepEqual(etat.garnison, []);
+  assert.deepEqual(etat.armee, []);
+  // ⚠ VIDE N'EST PAS ABSENT. Les deux champs doivent EXISTER — c'est ce qui
+  // distingue « rien de posé » de « quelque chose a écrit l'état de travers ».
+  assert.ok(Object.prototype.hasOwnProperty.call(etat, 'garnison'));
+  assert.ok(Object.prototype.hasOwnProperty.call(etat, 'armee'));
+  // Et c'est cohérent : aucun des deux bâtiments de commandement n'est posé.
+  assert.equal(niveauDeCommandement(etat, 'garnison'), null);
+  assert.equal(niveauDeCommandement(etat, 'armee'), null);
+});
+
+test('forces — un aller-retour rend le placement, les niveaux ET les dégâts', () => {
+  const etat = etatAvecCommandement();
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 3, colonne: 1, niveau: 2 });
+  poserEffectif(etat, 'garnison', { id: 'faucheuse', rangee: 7, colonne: 9, niveau: 5 });
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 3 });
+  poserEffectif(etat, 'armee', { id: 'enclume', vague: 4, colonne: 9, niveau: 11 });
+
+  // Des dégâts écrits à la main : le moteur de combat n'existe pas encore, mais
+  // le champ doit traverser la sauvegarde.
+  etat.armee[0].degatsMilli = 690_000;
+
+  const relu = charger(serialiser(etat, T0), T0);
+  assert.deepEqual(relu.garnison, etat.garnison);
+  assert.deepEqual(relu.armee, etat.armee);
+
+  // Falsifiable : le montage doit porter des valeurs DISTINCTES, sinon deux
+  // listes de zéros seraient égales sans rien prouver.
+  assert.equal(relu.armee[0].degatsMilli, 690_000);
+  assert.equal(relu.armee[1].degatsMilli, 0);
+  assert.notEqual(relu.garnison[0].niveau, relu.garnison[1].niveau);
+  assert.equal(relu.armee[1].vague, 4);
+  assert.equal(relu.garnison[1].rangee, 7);
+});
+
+test('forces — une pièce détruite reste dans la liste après un aller-retour', () => {
+  // ARBITRÉ le 28/08 : « les unités sont détruites mais pas perdues ». Une
+  // pièce à zéro PV n'est pas retirée de la grille — elle y est, en attente de
+  // réparation. Si l'aller-retour la faisait disparaître, le joueur perdrait
+  // son armée à chaque fermeture du jeu au lieu de la réparer.
+  const etat = etatAvecCommandement();
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 2, colonne: 5, niveau: 1 });
+  poserEffectif(etat, 'armee', { id: 'broyeur', vague: 2, colonne: 6, niveau: 1 });
+  // Détruite : tous ses PV en dégâts. La table dit 700 PV au niveau 1 pour la
+  // Meute — on ne recopie pas le nombre, on le lit.
+  const pvMilli = 700 * 1000;
+  etat.armee[0].degatsMilli = pvMilli;
+
+  const relu = charger(serialiser(etat, T0), T0);
+  assert.equal(relu.armee.length, 2, 'une pièce détruite ne quitte pas la liste');
+  assert.equal(relu.armee[0].id, 'meute');
+  assert.equal(relu.armee[0].degatsMilli, pvMilli);
+  // ⚠ AUCUN PLAFOND N'EST APPLIQUÉ À L'ÉCRITURE. Des dégâts supérieurs aux PV
+  // de la table se chargent sans broncher : les borner ici ferait refuser une
+  // sauvegarde le jour où un PV baisse. Ils se bornent à la lecture.
+  etat.armee[0].degatsMilli = pvMilli * 10;
+  assert.equal(charger(serialiser(etat, T0), T0).armee[0].degatsMilli, pvMilli * 10);
+});
+
+test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
+  const etat = etatAvecCommandement();
+  poser(etat, 'raffinerie', 18, 7);
+  const v7 = JSON.parse(serialiser(etat, T0));
+
+  // On redescend la sauvegarde en v6, c'est-à-dire telle qu'elle était AVANT ce
+  // lot : pas de garnison, pas d'armée.
+  const v6 = { ...v7, version: 6 };
+  delete v6.garnison;
+  delete v6.armee;
+
+  const migre = migrer(structuredClone(v6));
+  assert.equal(migre.version, 7);
+  assert.deepEqual(migre.garnison, []);
+  assert.deepEqual(migre.armee, []);
+  // Et RIEN d'autre n'a bougé : la migration ajoute, elle ne refonde pas.
+  assert.deepEqual(migre.disposition, v7.disposition);
+  assert.deepEqual(migre.economie, v7.economie);
+  assert.deepEqual(migre.fondation, v7.fondation);
+  assert.deepEqual(migre.horloge, v7.horloge);
+
+  // Falsifiable : la disposition doit être NON TRIVIALE, sinon comparer deux
+  // listes vides ne prouverait rien.
+  assert.ok(v7.disposition.length >= 4, 'le montage ne porte pas assez de bâtiments');
+
+  // Et le chemin complet passe : une v6 se charge et se joue.
+  const charge = charger(JSON.stringify(v6), T0);
+  assert.deepEqual(charge.armee, []);
+  assert.equal(charge.disposition.length, v7.disposition.length);
+});
+
+test('forces — le chargement exige les deux champs, et accepte qu\'ils soient vides', () => {
+  const etat = etatAvecCommandement();
+
+  // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE. Une v7
+  // amputée est un fait de PROGRAMME et doit lever, en NOMMANT le champ.
+  for (const champ of ['garnison', 'armee']) {
+    const ampute = JSON.parse(serialiser(etat, T0));
+    delete ampute[champ];
+    assert.throws(
+      () => charger(JSON.stringify(ampute), T0),
+      new RegExp(`champ « ${champ} » absent`),
+      `une sauvegarde v7 sans « ${champ} » doit être refusée, et le dire`,
+    );
+  }
+  // Vides, en revanche : c'est l'état de toute base neuve.
+  assert.doesNotThrow(() => charger(serialiser(etat, T0), T0));
+
+  // Et une liste qui n'en est pas une lève aussi.
+  const tordu = JSON.parse(serialiser(etat, T0));
+  tordu.armee = { meute: 1 };
+  assert.throws(() => charger(JSON.stringify(tordu), T0), /n'est pas une liste/);
+});
+
+test('forces — le chargement refuse une pièce malformée, et dit laquelle', () => {
+  const etat = etatAvecCommandement();
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 3, colonne: 1, niveau: 2 });
+
+  const cas = [
+    [{ id: 'pilon', rangee: 4, colonne: 1, niveau: 1, degatsMilli: 0 }, /n'a pas sa place/],
+    [{ id: 'merlon', rangee: 11, colonne: 1, niveau: 1, degatsMilli: 0 }, /rangée 11 hors de/],
+    [{ id: 'merlon', rangee: 4, colonne: 99, niveau: 1, degatsMilli: 0 }, /colonne 99 hors de/],
+    [{ id: 'merlon', rangee: 4, colonne: 2, niveau: 0, degatsMilli: 0 }, /niveau 0 hors de/],
+    [{ id: 'merlon', rangee: 4, colonne: 2, niveau: 1, degatsMilli: -1 }, /dégâts/],
+    [{ id: 'merlon', rangee: 3, colonne: 1, niveau: 1, degatsMilli: 0 }, /déjà occupée/],
+  ];
+  for (const [piece, motif] of cas) {
+    const tordu = JSON.parse(serialiser(etat, T0));
+    tordu.garnison.push(piece);
+    assert.throws(() => charger(JSON.stringify(tordu), T0), motif, JSON.stringify(piece));
+  }
+  // Falsifiable : la même sauvegarde SANS la pièce fautive passe.
+  assert.doesNotThrow(() => charger(serialiser(etat, T0), T0));
+});
+
+test('forces — une composition hors budget se charge quand même', () => {
+  // ⚠⚠ C'EST VOLONTAIRE, ET C'EST LA MOITIÉ DE L'ARBITRAGE. Le budget BAISSE
+  // quand le QG est démoli ou tombe au raid, sous une armée déjà posée. Refuser
+  // le chargement rendrait la partie injouable pour une faute que le joueur n'a
+  // pas commise — la même erreur qu'aurait été de faire lever `uniques-voisins`.
+  // On SIGNALE et on propose de purger ; jamais d'amputation automatique.
+  const etat = etatAvecCommandement(1, 1);
+  const budget = budgetOffense(1);
+  let engages = 0;
+  let colonne = 1;
+  while (engages <= budget && colonne <= 9) {
+    poserEffectif(etat, 'armee', { id: 'enclume', vague: 1, colonne, niveau: 1 });
+    engages += 15; // points de l'Enclume — le montage vise le DÉPASSEMENT
+    colonne += 1;
+  }
+  // Falsifiable : le montage doit vraiment dépasser, sinon il ne mesure rien.
+  assert.ok(engages > budget, `${engages} points contre un budget de ${budget}`);
+
+  // Le QG disparaît : plus aucun budget du tout, et l'armée reste là.
+  etat.disposition = etat.disposition.filter((b) => b.id !== 'centreDeCommandement');
+  etat.economie.residus.pop();
+  assert.equal(niveauDeCommandement(etat, 'armee'), null);
+
+  const relu = charger(serialiser(etat, T0), T0);
+  assert.equal(relu.armee.length, etat.armee.length, 'rien ne se retire en silence');
+});
+
+test('forces — poser ne coûte rien, et le roster est gardé des deux côtés', () => {
+  const etat = etatAvecCommandement();
+  const avant = { ...etat.economie.ressources };
+  poserEffectif(etat, 'garnison', { id: 'casemate', rangee: 5, colonne: 5, niveau: 1 });
+  poserEffectif(etat, 'armee', { id: 'pilon', vague: 3, colonne: 3, niveau: 1 });
+  assert.deepEqual(etat.economie.ressources, avant, 'poser un effectif ne débite rien');
+
+  // Le Pilon n'a pas de rôle défensif — il a sa place en assaut, pas en garnison.
+  assert.ok(problemesDeLaPoseDEffectif(etat, 'garnison', { id: 'pilon', rangee: 4, colonne: 4, niveau: 1 })
+    .some((p) => p.code === 'inconnu'));
+  // Et un ouvrage n'a pas sa place dans une vague d'assaut.
+  assert.ok(problemesDeLaPoseDEffectif(etat, 'armee', { id: 'merlon', vague: 1, colonne: 1, niveau: 1 })
+    .some((p) => p.code === 'inconnu'));
+  assert.throws(() => poserEffectif(etat, 'armee', { id: 'merlon', vague: 1, colonne: 1, niveau: 1 }),
+    /pose illégale/);
+  // Une force inconnue lève aussi — l'appelant s'est trompé de mot.
+  assert.throws(() => poserEffectif(etat, 'infanterie', { id: 'meute', vague: 1, colonne: 1, niveau: 1 }),
+    /n'est pas une force/);
+});
+
+test('forces — déplacer ne réordonne pas la liste', () => {
+  // ⚠ TROIS PIÈCES, PAS DEUX. Le lot POSE-ET-DÉPLACEMENT est tombé dans le
+  // piège : avec deux éléments, le déplacé est le dernier et un `splice` suivi
+  // d'un `push` le remet au même indice — le test passerait sur du code cassé.
+  // On déplace donc celle du MILIEU.
+  const etat = etatAvecCommandement();
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 3, colonne: 1, niveau: 1 });
+  poserEffectif(etat, 'garnison', { id: 'casemate', rangee: 4, colonne: 2, niveau: 7 });
+  poserEffectif(etat, 'garnison', { id: 'harpon', rangee: 5, colonne: 3, niveau: 3 });
+  etat.garnison[1].degatsMilli = 12_345;
+
+  deplacerEffectif(etat, 'garnison', 1, { rangee: 9, colonne: 8 });
+
+  assert.deepEqual(etat.garnison.map((p) => p.id), ['merlon', 'casemate', 'harpon'],
+    'la liste a été réordonnée : les indices que l\'écran garde en main ne valent plus rien');
+  assert.equal(etat.garnison[1].rangee, 9);
+  assert.equal(etat.garnison[1].colonne, 8);
+  // Ce qui appartient à la pièce l'a suivie.
+  assert.equal(etat.garnison[1].niveau, 7);
+  assert.equal(etat.garnison[1].degatsMilli, 12_345);
+  // Les voisines n'ont pas bougé d'un pixel.
+  assert.deepEqual(etat.garnison[0], { id: 'merlon', rangee: 3, colonne: 1, niveau: 1, degatsMilli: 0 });
+  assert.deepEqual(etat.garnison[2], { id: 'harpon', rangee: 5, colonne: 3, niveau: 3, degatsMilli: 0 });
+});
+
+test('forces — rester sur place est légal, se superposer ne l\'est pas', () => {
+  const etat = etatAvecCommandement();
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+  poserEffectif(etat, 'armee', { id: 'busard', vague: 2, colonne: 4, niveau: 1 });
+
+  // Sur place : liste vide. Le refuser priverait le joueur de toute annulation.
+  assert.deepEqual(problemesDuDeplacementDEffectif(etat, 'armee', 1, { vague: 2, colonne: 4 }), []);
+  assert.doesNotThrow(() => deplacerEffectif(etat, 'armee', 1, { vague: 2, colonne: 4 }));
+
+  // Sur la voisine : refusé.
+  assert.ok(problemesDuDeplacementDEffectif(etat, 'armee', 1, { vague: 1, colonne: 1 })
+    .some((p) => p.code === 'superposition'));
+  assert.throws(() => deplacerEffectif(etat, 'armee', 1, { vague: 1, colonne: 1 }), /illégal/);
+  assert.throws(() => deplacerEffectif(etat, 'armee', 9, { vague: 1, colonne: 2 }), RangeError);
+});
+
+test('forces — retirer rend la pièce et ne touche pas aux ressources', () => {
+  const etat = etatAvecCommandement();
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 3, colonne: 1, niveau: 4 });
+  poserEffectif(etat, 'garnison', { id: 'ronce', rangee: 3, colonne: 2, niveau: 1 });
+  const avant = { ...etat.economie.ressources };
+
+  const rendue = retirerEffectif(etat, 'garnison', 0);
+  assert.equal(rendue.id, 'merlon');
+  assert.equal(rendue.niveau, 4);
+  assert.equal(etat.garnison.length, 1);
+  assert.equal(etat.garnison[0].id, 'ronce');
+  // ⚠ AUCUN REMBOURSEMENT — non arbitré. En inventer un serait trancher seul.
+  assert.deepEqual(etat.economie.ressources, avant);
+  assert.throws(() => retirerEffectif(etat, 'garnison', 5), RangeError);
+});
+
+// ---------------------------------------------------------------------------
+// Le budget, à la couture entre l'état et les deux éditeurs
+// ---------------------------------------------------------------------------
+
+test('forces — le budget suit le niveau du bâtiment posé, et retombe s\'il est démoli', () => {
+  const etat = etatAvecCommandement(4, 6);
+  // ⚠ UNE SEULE LECTURE DE CETTE GRANDEUR. `POINTS_ARMEE` nomme déjà le
+  // bâtiment de chaque côté ; `niveauDeCommandement` est le seul à le chercher.
+  assert.equal(POINTS_ARMEE.offense.batiment, 'centreDeCommandement');
+  assert.equal(POINTS_ARMEE.defense.batiment, 'qgDeDefense');
+  assert.equal(niveauDeCommandement(etat, 'armee'), 4);
+  assert.equal(niveauDeCommandement(etat, 'garnison'), 6);
+
+  // Le budget en découle, par la formule des éditeurs — pas par une seconde.
+  assert.equal(budgetOffense(4), POINTS_ARMEE.offense.base + POINTS_ARMEE.offense.parNiveau * 4);
+  assert.equal(budgetDefense(6), POINTS_ARMEE.defense.base + POINTS_ARMEE.defense.parNiveau * 6);
+
+  // Il MONTE avec le bâtiment.
+  const indice = etat.disposition.findIndex((b) => b.id === 'centreDeCommandement');
+  etat.disposition[indice].niveau = 9;
+  assert.equal(niveauDeCommandement(etat, 'armee'), 9);
+  assert.ok(budgetOffense(9) > budgetOffense(4), 'le budget devrait suivre le niveau');
+
+  // Et il RETOMBE quand le bâtiment part. `null`, pas zéro : il n'y a pas de
+  // budget nul, il n'y a pas de budget du tout.
+  etat.disposition.splice(indice, 1);
+  etat.economie.residus.pop();
+  assert.equal(niveauDeCommandement(etat, 'armee'), null);
+  assert.equal(niveauDeCommandement(etat, 'garnison'), 6, 'l\'autre force n\'est pas concernée');
+});
+
+test('forces — poser au-delà du budget est refusé ENTIER, pas écrêté', () => {
+  // La règle vit dans l'éditeur, qui fait foi ; ce test garde la couture.
+  const niveau = 1;
+  const budget = budgetOffense(niveau);
+  let grille = arsenalVide(niveau);
+
+  // On remplit jusqu'à ce que la pose suivante dépasse.
+  let posees = 0;
+  for (let colonne = 1; colonne <= 9; colonne += 1) {
+    try {
+      grille = poserUnite(grille, { vague: 1, colonne, id: 'meute' });
+      posees += 1;
+    } catch { break; }
+  }
+  assert.ok(posees > 0, 'le montage n\'a rien posé : il ne mesure rien');
+  assert.ok(posees < 9, `${posees} poses : le budget de ${budget} n'a jamais mordu`);
+
+  // La pose refusée n'a RIEN posé — pas « ce qui rentre ».
+  const avant = JSON.stringify(grille);
+  assert.throws(() => poserUnite(grille, { vague: 1, colonne: posees + 1, id: 'meute' }),
+    /budget/);
+  assert.equal(JSON.stringify(grille), avant, 'la grille a bougé alors que la pose était refusée');
+});
+
+test('forces — la table des forces dit tout ce qui les distingue', () => {
+  // ⚠ TABLE, PAS CONDITION. Le reste du code LIT `FORCES` au lieu de
+  // reconnaître « garnison » par son nom : un cas particulier écrit à la main
+  // serait le premier à diverger.
+  assert.deepEqual(Object.keys(FORCES).sort(), ['armee', 'garnison']);
+  assert.equal(FORCES.garnison.axe, 'rangee');
+  assert.equal(FORCES.armee.axe, 'vague');
+  assert.equal(FORCES.garnison.role, 'defense');
+  assert.equal(FORCES.armee.role, 'offense');
+  // Les deux rosters sont non vides et disjoints en nature : la garnison porte
+  // des ouvrages que l'assaut ne connaît pas, et réciproquement.
+  assert.ok(FORCES.garnison.roster.has('merlon'));
+  assert.ok(!FORCES.armee.roster.has('merlon'));
+  assert.ok(FORCES.armee.roster.has('pilon'));
+  assert.ok(!FORCES.garnison.roster.has('pilon'));
+  // 36 emplacements d'assaut, 72 de garnison — les deux géométries du brief.
+  assert.equal((FORCES.armee.axeMax - FORCES.armee.axeMin + 1) * FORCES.armee.colonneMax, 36);
+  assert.equal((FORCES.garnison.axeMax - FORCES.garnison.axeMin + 1) * FORCES.garnison.colonneMax, 72);
 });

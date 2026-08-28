@@ -77,17 +77,60 @@ export function niveauDesBatiments(disposition) {
 }
 
 // ---------------------------------------------------------------------------
-// Les deux autres niveaux — ce qui manque pour les écrire
+// Les deux autres niveaux — écrits le 28/08, quand l'état a porté la matière
 // ---------------------------------------------------------------------------
 //
-// `niveauDeLaDefense` et `niveauDeLArmeeOffensive` suivront EXACTEMENT la même
-// règle et appelleront `moyenneEnDixiemes`, sans la réécrire : trois moyennes
-// qui divergeraient seraient trois grandeurs différentes portant le même nom.
+// Ils suivent EXACTEMENT la même règle que le premier et appellent
+// `moyenneEnDixiemes` sans la réécrire : trois moyennes qui divergeraient
+// seraient trois grandeurs différentes portant le même nom.
 //
-// Ils ne sont pas ici parce que la matière n'existe pas encore : `sim/state.js`
-// ne porte que `disposition`, c'est-à-dire les bâtiments. La garnison du joueur
-// et son armée d'assaut se composent aujourd'hui dans `ui/defense.js` et
-// `ui/arsenal.js`, qui sont des ÉDITEURS — rien de ce qu'ils produisent n'est
-// sauvegardé. Écrire les deux fonctions maintenant reviendrait à choisir seul
-// la forme de cet état ; les écrire au moment où il est arbitré coûte deux
-// lignes de plus et ne devine rien.
+// ⚠⚠ UNE SEULE DIVERGENCE AVEC LEUR JUMEAU, ET ELLE EST ASSUMÉE : LA LISTE
+// VIDE. `niveauDesBatiments` LÈVE dessus, et il a raison — une base sans un
+// seul bâtiment n'existe pas, toute base neuve porte son Chantier, donc une
+// disposition vide est un fait de programme. Une garnison vide et une armée
+// vide sont au contraire l'état NORMAL de toute base neuve : ni Centre de
+// commandement ni QG de défense n'y sont posés, donc il n'y a rien à engager.
+// Lever dessus rendrait le premier affichage impossible.
+//
+// ⚠ ELLES RENDENT `null`, PAS ZÉRO, et c'est la convention que l'écran connaît
+// déjà : `formaterNiveau` de `ui/chantier.js` rend « — » sur `null` depuis le
+// lot MISE-EN-PAGE. Zéro se lirait « niveau zéro », c'est-à-dire une force
+// posée et nulle, alors qu'il n'y a rien de posé du tout. C'est la même
+// distinction que `CONTEXTES[x].chiffre` : dire si la grandeur EXISTE n'est pas
+// dire si elle vaut zéro.
+
+/**
+ * Niveau de la GARNISON, en dixièmes — moyenne des pièces posées dans la bande
+ * de défense. `null` si rien n'est posé.
+ *
+ * @param {Array<{ niveau: number }>} garnison
+ * @returns {number|null} dixièmes de niveau, ou null
+ */
+export function niveauDeLaDefense(garnison) {
+  if (!Array.isArray(garnison)) {
+    throw new TypeError('niveauDeLaDefense : une garnison est attendue');
+  }
+  if (garnison.length === 0) return null;
+  return moyenneEnDixiemes(garnison.map((p) => p.niveau));
+}
+
+/**
+ * Niveau de l'ARMÉE d'assaut, en dixièmes — moyenne des unités posées dans les
+ * quatre vagues. `null` si rien n'est posé.
+ *
+ * ⚠ UNE PIÈCE DÉTRUITE COMPTE QUAND MÊME. Elle reste dans la liste, à zéro PV,
+ * en attente de réparation — arbitré le 28/08 : « les unités sont détruites
+ * mais pas perdues ». Elle est POSÉE, donc elle entre dans la moyenne : filtrer
+ * sur les dégâts ferait monter le niveau de l'armée à mesure qu'elle se fait
+ * démolir.
+ *
+ * @param {Array<{ niveau: number }>} armee
+ * @returns {number|null} dixièmes de niveau, ou null
+ */
+export function niveauDeLArmee(armee) {
+  if (!Array.isArray(armee)) {
+    throw new TypeError('niveauDeLArmee : une armée est attendue');
+  }
+  if (armee.length === 0) return null;
+  return moyenneEnDixiemes(armee.map((p) => p.niveau));
+}
