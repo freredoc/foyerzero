@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.21.0 · build 22.
+Dernière révision : **28/08/2026**, version 0.22.0 · build 23.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.21.0 · build 22.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot STOCKAGE-ET-VOISINAGE), à confronter :**
+**Référence au 28/08/2026 (après le lot QUEUE-DE-COURBE), à confronter :**
 `npm test` → **326 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**153 506 octets**, 0 référence externe.
+**153 505 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -39,7 +39,8 @@ session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense, les
 et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante,
 AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant améliorer
 et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
-bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506.
+bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
+QUEUE-DE-COURBE à 153 505.
 La borne de T10 (200 000 octets) tient, avec 23 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
@@ -482,6 +483,9 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   en posant une raffinerie mais en la MONTANT — ses premiers paliers coûtent 2,
   3 puis 4 quartz et doublent la capacité à chaque fois, ce qui reste payable
   sous un plafond de 83. La boucle est vérifiée, pas supposée.
+  ⚠ **ET CETTE FENÊTRE SERRÉE EST VOULUE.** La mesure a été soumise à Ethan le
+  28/08 ; réponse : « c'est voulu ». Ce n'est donc pas un défaut d'équilibrage à
+  corriger au prochain lot — c'est le démarrage du jeu.
 
   ⚠ **MAIS LE PLAFOND MORD AVANT LA PREMIÈRE RAFFINERIE, ET C'EST CE QUI A ÉTÉ
   RAPPORTÉ COMME UN BOGUE.** Un Collecteur posé seul produit 240/h contre une
@@ -765,19 +769,29 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   un collecteur de même niveau : **cinq minutes au niveau 1, quarante et un ans
   au niveau 50**. L'ancienne courbe donnait 12 h partout. C'est délibéré, et
   c'est ce qui fait du stockage l'investissement qui structure la partie.
-  ⚠⚠ **ET ELLE FRÔLE LE MUR ARITHMÉTIQUE, QUE L'ANCIENNE AVAIT ÉCARTÉ.** Une
-  raffinerie de niveau 50 tient 4,75 × 10¹² unités, soit **53 % de l'entier sûr
-  à elle seule en milli** ; DEUX la dépassent. Le facteur dominant n'est pas la
-  queue mais le × 2 des dix premiers niveaux (× 512). Mesuré : même en ramenant
-  le multiplicateur du plafond à 1,10, vingt raffineries ne laissent que 2,6
-  fois de marge, contre **2 815 fois** avec l'ancienne courbe. Les quatre
-  constantes de `STOCKAGE` sont la seule chose à changer pour la redresser.
-  ⚠ **`CAPACITE_MILLI_MAX` ÉCRÊTE, IL NE LÈVE PAS** — le contraire du choix fait
-  pour `DEBIT_MILLI_PAR_HEURE_MAX`, et la différence se justifie : un débit qui
-  déborde FAUSSE le rattrapage en silence, une capacité qui déborde ne fausse
-  rien, elle borne. Lever ferait planter la partie d'un joueur qui a bien joué.
-  ⚠ **1,333 ET NON 4/3** : c'est ce qui a été écrit, les deux diffèrent de 1 %
-  au niveau 50, et ce n'est pas à nous de choisir à la place d'Ethan.
+  ⚠⚠ **SA QUEUE A ÉTÉ ÉCRASÉE LE MÊME JOUR, ET IL FAUT SAVOIR POURQUOI.** La
+  première écriture montait à × 1,333 au niveau 50 : une seule raffinerie de
+  niveau 50 valait alors 53 % de l'entier sûr de JavaScript **à elle seule**, et
+  deux le dépassaient. Ethan, mis devant la mesure : « fais au mieux pour les
+  courbes stockage mais j'aime bien le × 2 des dix premiers. Sinon écrase les
+  derniers niveaux pour que ça rentre. » Le × 2 est donc INTACT, et c'est la fin
+  de la rampe qui est descendue : de 1,333 à **1,05**.
+  ⚠ **LA CIBLE EST LA BASE LÉGALE LA PLUS GROSSE, PAS UNE BASE PLAUSIBLE** :
+  40 emplacements au niveau 50, moins le Chantier, donc **39 bâtiments de
+  stockage**. Dégénéré mais légal, et l'exactitude arithmétique ne se règle pas
+  sur ce qui est vraisemblable. Mesuré : 3,18 × 10¹⁵ milli, soit **2,8 fois de
+  marge** ; 5,5 fois à vingt raffineries, 110 fois à une seule.
+  ⚠ **ET AUCUN PALIER N'EST MORT.** Écraser n'est pas aplatir : le
+  multiplicateur descend de 1,976 au palier 11 à 1,05 au palier 50, donc le
+  dernier niveau apporte encore +5 %. Un multiplicateur de 1 aurait laissé
+  davantage de marge et rendu les derniers niveaux inutiles à acheter — un test
+  refuse les deux bouts.
+  ⚠ **`CAPACITE_MILLI_MAX` EST DÉSORMAIS UNE GARDE MORTE, ET C'EST CE QU'ON LUI
+  DEMANDE.** Il ne mord sur AUCUNE base légale, et un test l'asserte de face. Le
+  jour où il recommencerait à mordre, c'est que les données auraient dérivé.
+  ⚠ **ON ÉCRÊTE, ON NE LÈVE PAS** — le contraire du choix fait pour
+  `DEBIT_MILLI_PAR_HEURE_MAX`. Un débit qui déborde fausse le rattrapage en
+  silence ; une capacité qui déborde ne fausse rien, elle borne.
 - **BigInt reste obligatoire** pour les points de recherche : le plafond du
   barème tient largement, mais le produit complet atteint encore 5,2 × 10²¹.
 - **`butinPlein` n'est délibérément PAS refactorisé.** La multiplication

@@ -597,8 +597,8 @@ test('base — capaciteDuNiveau suit la courbe arbitrée le 28/08, palier par pa
   // l'ancienne égalité en croyant réparer une régression.
   const autonomie = (n) => capaciteDuNiveau('raffinerie', n) / debitParHeure('collecteur', n);
   assert.ok(autonomie(1) < 0.2, `autonomie de niveau 1 : ${autonomie(1)} h, moins de 12 minutes attendues`);
-  assert.ok(autonomie(50) > 10_000, 'autonomie de niveau 50 : des années attendues');
-  assert.ok(autonomie(50) / autonomie(1) > 1e5,
+  assert.ok(autonomie(50) > 1_000, 'autonomie de niveau 50 : des mois attendus');
+  assert.ok(autonomie(50) / autonomie(1) > 1e4,
     'les deux bouts de la courbe devraient être très écartés');
 
   // Un bâtiment qui n'est pas du stockage lève, plutôt que de rendre un nombre.
@@ -616,39 +616,52 @@ test('base — capaciteDuNiveau suit la courbe arbitrée le 28/08, palier par pa
   assert.deepEqual(parRole.slice().sort(), Object.keys(STOCKAGE.niveauUn).slice().sort());
 });
 
-test('base — la capacité de niveau 50 FRÔLE l\'entier sûr, et l\'écrêtage est là pour ça', () => {
-  // ⚠ CE TEST DISAIT L'INVERSE JUSQU'AU 28/08, et il avait raison à l'époque :
-  // l'ancienne courbe laissait 2 815 fois de marge. La courbe arbitrée ce
-  // jour-là n'en laisse plus, et le fait doit être ÉCRIT plutôt que découvert
-  // par un joueur dont l'économie dérive en silence.
-  const capMax = capaciteDuNiveau('raffinerie', GEOGRAPHIE.niveauPlafond);
-  const uneSeule = capMax * 1000; // en milli-unités
+test('base — la base LÉGALE la plus grosse tient dans l\'entier sûr, écrêtage compris', () => {
+  // ⚠ CE TEST A CHANGÉ DE VERDICT DEUX FOIS EN UN JOUR, ET LES DEUX FOIS IL
+  // AVAIT RAISON. Il disait « la marge est réelle » sous l'ancienne courbe
+  // (2 815 fois) ; « elle a disparu » sous la première écriture de la nouvelle
+  // (une raffinerie de niveau 50 valait 53 % de l'entier sûr à elle seule) ;
+  // il dit maintenant « elle est revenue », parce qu'Ethan a fait écraser la
+  // queue de courbe plutôt que de renoncer au × 2 des dix premiers niveaux.
+  //
+  // ⚠ LA CIBLE EST LA BASE LÉGALE LA PLUS GROSSE, PAS UNE BASE PLAUSIBLE. Au
+  // niveau 50 le Chantier ouvre 40 emplacements et en occupe un : 39 bâtiments
+  // de stockage au maximum. C'est dégénéré — une base sans production — mais
+  // parfaitement légal, et l'exactitude ne se règle pas sur le vraisemblable.
+  const parBatiment = capaciteDuNiveau('raffinerie', GEOGRAPHIE.niveauPlafond);
+  const maxStockage = emplacementsDuNiveau(GEOGRAPHIE.niveauPlafond) - 1;
+  assert.equal(maxStockage, 39, 'le montage suppose 40 emplacements moins le Chantier');
 
-  // MESURÉ : une seule raffinerie de niveau 50 occupe plus de la moitié de
-  // l'entier sûr, et deux le dépassent.
-  assert.ok(uneSeule < Number.MAX_SAFE_INTEGER,
-    'une seule raffinerie ne doit pas déjà dépasser l\'entier sûr');
-  assert.ok(2 * uneSeule > Number.MAX_SAFE_INTEGER,
-    'deux raffineries de niveau 50 devraient dépasser : si ce n\'est plus le cas, '
-    + 'la courbe a été redressée et l\'écrêtage mérite d\'être réexaminé');
+  const pire = Array.from({ length: maxStockage }, () => ({
+    id: 'raffinerie', niveau: GEOGRAPHIE.niveauPlafond,
+  }));
+  const caps = capacitesMilli(pire);
+  assert.equal(caps.quartz, maxStockage * parBatiment * 1000,
+    'la base légale maximale ne doit PAS être écrêtée');
+  assert.ok(Number.isSafeInteger(caps.quartz));
+  assert.notEqual(caps.quartz, CAPACITE_MILLI_MAX, 'l\'écrêtage mord : la courbe a redébordé');
 
-  // C'est pourquoi `capacitesMilli` écrête. Sans l'écrêtage, la somme
-  // quitterait les entiers exacts dès la deuxième raffinerie.
-  const deux = capacitesMilli([
-    { id: 'raffinerie', niveau: GEOGRAPHIE.niveauPlafond },
-    { id: 'raffinerie', niveau: GEOGRAPHIE.niveauPlafond },
-  ]);
-  assert.equal(deux.quartz, CAPACITE_MILLI_MAX);
-  assert.equal(deux.scorie, CAPACITE_MILLI_MAX);
-  assert.ok(Number.isSafeInteger(deux.quartz), 'la capacité écrêtée doit rester un entier sûr');
+  // ⚠ ET LA MARGE EST MESURÉE, PAS ESPÉRÉE. 2,8 fois au moment de l'arbitrage.
+  const marge = Number.MAX_SAFE_INTEGER / caps.quartz;
+  assert.ok(marge > 2, `marge ${marge.toFixed(1)}, plus de 2 attendue — la queue de courbe a remonté`);
 
-  // Falsifiable : l'écrêtage ne mord PAS sur une base ordinaire. Sinon il
-  // masquerait la vraie capacité de tout le monde au lieu du seul sommet.
-  const ordinaire = capacitesMilli([
-    { id: 'raffinerie', niveau: 20 }, { id: 'accumulateur', niveau: 20 },
-  ]);
-  assert.ok(ordinaire.quartz < CAPACITE_MILLI_MAX, 'une base de niveau 20 ne doit pas être écrêtée');
-  assert.ok(ordinaire.quartz > 0);
+  // ⚠ AUCUN PALIER N'EST MORT POUR AUTANT. Écraser la queue ne veut pas dire
+  // l'aplatir : le dernier niveau doit encore apporter quelque chose, sinon on
+  // vendrait au joueur une amélioration qui ne fait rien.
+  const dernier = STOCKAGE.multiplicateurAuPlafond;
+  assert.ok(dernier > 1, 'un multiplicateur ≤ 1 rendrait le dernier niveau inutile');
+  assert.ok(dernier >= 1.02, `le dernier palier n'apporte que ${((dernier - 1) * 100).toFixed(1)} %`);
+  // Et le × 2 des dix premiers niveaux est INTACT — c'est la contrainte d'Ethan.
+  assert.equal(STOCKAGE.multiplicateurAuDepart, 2);
+  assert.equal(capaciteDuNiveau('raffinerie', 10), STOCKAGE.niveauUn.raffinerie * 2 ** 9);
+
+  // L'écrêtage reste là, en dernier recours, et il fonctionne — on le montre
+  // sur une disposition qu'aucune base ne peut atteindre.
+  const impossible = Array.from({ length: 500 }, () => ({
+    id: 'raffinerie', niveau: GEOGRAPHIE.niveauPlafond,
+  }));
+  assert.equal(capacitesMilli(impossible).quartz, CAPACITE_MILLI_MAX);
+  assert.ok(Number.isSafeInteger(capacitesMilli(impossible).quartz));
 });
 
 // ---------------------------------------------------------------------------

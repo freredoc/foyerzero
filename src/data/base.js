@@ -881,17 +881,35 @@ export const VOISINAGE = { rayon: 1, casesMax: 8 };
 // que la version précédente cherchait, et c'est délibéré de la part d'Ethan —
 // le stockage devient l'investissement qui structure toute la partie.
 //
-// ⚠⚠ ET ELLE FRÔLE LE MUR ARITHMÉTIQUE, CE QUE LA PRÉCÉDENTE AVAIT ÉCARTÉ.
-// Mesuré le 28/08 : une raffinerie de niveau 50 tient 4,77 × 10¹² unités, soit
-// 4,77 × 10¹⁵ MILLI — 53 % de l'entier sûr de JavaScript à elle seule. DEUX
-// raffineries de niveau 50 le dépassent. Le facteur dominant n'est pas la
-// queue de courbe mais le × 2 des dix premiers niveaux (× 512 à lui seul) :
-// même en ramenant le multiplicateur du plafond à 1,10, vingt raffineries ne
-// laissent que 2,6 fois de marge, contre 2 815 fois aujourd'hui.
-// D'où `CAPACITE_MILLI_MAX` dans `sim/economie-base.js` : la somme des
-// capacités est ÉCRÊTÉE plutôt que laissée dériver en silence. Les quatre
-// constantes ci-dessous sont la seule chose à changer si Ethan veut redresser
-// la courbe.
+// ⚠⚠ LA QUEUE DE COURBE A ÉTÉ ÉCRASÉE POUR TENIR DANS L'ENTIER SÛR, ET C'EST
+// UN ARBITRAGE, PAS UN BRICOLAGE. La première écriture arrivait à × 1,333 au
+// niveau 50 : une seule raffinerie de niveau 50 tenait alors 4,77 × 10¹²
+// unités, soit 53 % de l'entier sûr de JavaScript à elle seule, et DEUX le
+// dépassaient. Ethan, mis devant la mesure : « fais au mieux pour les courbes
+// stockage mais j'aime bien le × 2 des dix premiers. Sinon écrase les derniers
+// niveaux pour que ça rentre. »
+//
+// Les deux contraintes sont tenues : le × 2 des dix premiers niveaux est
+// INTACT, et c'est la fin de la rampe qui descend — de 1,333 à **1,05**.
+//
+// ⚠ LA CIBLE EST LA BASE LÉGALE LA PLUS GROSSE, PAS UNE BASE PLAUSIBLE. Au
+// niveau 50 le Chantier ouvre 40 emplacements et en occupe un, donc
+// **39 bâtiments de stockage** au maximum. C'est dégénéré — une base sans
+// production — mais parfaitement légal, et l'exactitude arithmétique ne se
+// règle pas sur ce qui est vraisemblable. Mesuré à × 1,05 :
+//
+//   39 raffineries niveau 50 → 3,18 × 10¹⁵ milli, soit **2,8 fois de marge**
+//   20 raffineries niveau 50 → 1,63 × 10¹⁵ milli, soit 5,5 fois
+//    1 raffinerie  niveau 50 → 8,15 × 10¹³ milli, soit 110 fois
+//
+// ⚠ ET AUCUN PALIER N'EST MORT. Écraser la queue ne veut pas dire l'aplatir :
+// le multiplicateur descend de 1,976 au palier 11 à 1,05 au palier 50, donc le
+// dernier niveau apporte encore +5 %. Un multiplicateur de 1 aurait laissé
+// davantage de marge, et rendu les derniers niveaux inutiles à acheter.
+//
+// `CAPACITE_MILLI_MAX` de `sim/economie-base.js` reste en dernier recours — et
+// il ne mord plus sur AUCUNE base légale, ce qu'un test asserte. C'est ce qu'on
+// attend d'une garde : qu'elle soit morte tant que les données sont saines.
 
 export const STOCKAGE = {
   // La capacité au niveau 1, EN UNITÉS, par ressource concernée. Arbitrée
@@ -900,10 +918,11 @@ export const STOCKAGE = {
   // Le multiplicateur d'un palier, tant qu'on n'a pas dépassé `niveauSeuil`.
   multiplicateurAuDepart: 2,
   niveauSeuil: 10,
-  // ⚠ 1,333 ET NON 4/3, PARCE QUE C'EST CE QUI A ÉTÉ ÉCRIT. Les deux diffèrent
-  // de 1 % au niveau 50 — assez pour qu'on ne choisisse pas à la place
-  // d'Ethan. S'il voulait la fraction ronde, c'est ce nombre-ci qui change.
-  multiplicateurAuPlafond: 1.333,
+  // ⚠ C'EST LA SEULE CONSTANTE QUI A BOUGÉ POUR TENIR DANS L'ENTIER SÛR — voir
+  // le pavé ci-dessus. Elle valait 1,333 ; la faire remonter au-dessus de 1,10
+  // remet la base légale maximale au-dessus de l'entier exact, et l'écrêtage
+  // cesse d'être une garde morte pour devenir un mur de jeu.
+  multiplicateurAuPlafond: 1.05,
 };
 
 /**
