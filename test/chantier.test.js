@@ -522,10 +522,20 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   assert.ok(/\[hidden\]\s*\{[^}]*display:\s*none\s*!important/.test(html),
     'la règle [hidden] a perdu son !important');
 
-  // Les trois onglets à venir sont désactivés : un contrôle inerte qui a l'air
-  // vif fait douter le joueur de son appareil plutôt que du jeu.
-  const futurs = [...html.matchAll(/class="futur"\s+disabled/g)];
-  assert.equal(futurs.length, 3, 'Recherche, Monde et Options doivent être désactivés');
+  // Les onglets à venir sont désactivés : un contrôle inerte qui a l'air vif
+  // fait douter le joueur de son appareil plutôt que du jeu.
+  //
+  // ⚠ ILS SE NOMMENT, ILS NE SE COMPTENT PLUS. La version précédente attendait
+  // « 3 » avec un message qui disait « Recherche, Monde et Options » — Options
+  // était vivant depuis le lot MISE EN PAGE, donc le message mentait déjà. Le
+  // compte est tombé à 2 quand Mission a reçu son tutoriel, et un nombre nu
+  // n'aurait pas dit lequel des trois venait de bouger.
+  const futurs = [...html.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
+    .map((m) => m[1]);
+  assert.deepEqual(
+    futurs.slice().sort(), ['Monde', 'Recherche'],
+    'la liste des onglets morts a changé : dire lequel s\'ouvre, ou lequel est retombé',
+  );
 
   // ⚠ LES TROIS BOUTONS D'ACTION NE SONT PLUS DÉSACTIVÉS, ET C'EST LE LOT.
   // Le modèle est « armer puis toucher » : c'est le bouton qu'on touche EN
@@ -556,10 +566,14 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     'chantier-bandes-liste', 'chantier-version', 'chantier-vers-offense']) {
     assert.ok(!code.includes(demenage), `« ${demenage} » survit après le déménagement`);
   }
-  // Cinq onglets, dont trois morts : Base, Mission, Recherche, Monde, Options.
-  const ongletsMorts = [...code.matchAll(/class="futur" disabled/g)];
-  assert.equal(ongletsMorts.length, 3, 'Mission, Recherche et Monde doivent être désactivés');
-  assert.ok(/>Mission</.test(code), 'l\'onglet Mission est absent');
+  // Cinq onglets, dont DEUX morts : Base, Mission, Recherche, Monde, Options.
+  // ⚠ MISSION EST VIVANT DEPUIS LE LOT TUTORIEL. Il était le troisième mort,
+  // « bouton mort pour l'instant, futur tuto » ; le futur est arrivé. Les morts
+  // se nomment ici comme plus haut, pour qu'on lise LEQUEL a changé.
+  const ongletsMorts = [...code.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
+    .map((m) => m[1]);
+  assert.deepEqual(ongletsMorts.slice().sort(), ['Monde', 'Recherche']);
+  assert.ok(/id="onglet-mission">Mission</.test(code), 'l\'onglet Mission est absent ou muet');
   assert.ok(/id="onglet-base">Base</.test(code), 'l\'onglet ne s\'appelle plus « Base »');
   assert.ok(!/>Chantier</.test(code), 'un onglet « Chantier » traîne encore');
   // Et la grille se centre par la MISE EN PAGE, jamais par une transformation :
