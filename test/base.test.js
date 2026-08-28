@@ -28,8 +28,10 @@ import {
   emplacementsDuNiveau, capaciteDuNiveau, debitParHeure, debitVoisinParHeure,
   zoneDesChamps, estDansLaBase, coutDeMontee, coutCumule, remboursementDuNiveau,
   stockagePropreDuNiveau,
+  multiplicateurDeStockage,
 } from '../src/data/base.js';
 import { GRILLE } from '../src/data/combat.js';
+import { capacitesMilli, CAPACITE_MILLI_MAX } from '../src/sim/economie-base.js';
 import { GEOGRAPHIE, BATIMENTS } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 
@@ -170,12 +172,19 @@ test('base — la raffinerie stocke les DEUX ressources, le collecteur en produi
   );
   assert.deepEqual(porteuses, ['raffinerie']);
 
-  // Conséquence chiffrée : une raffinerie de niveau 1 tient 2 880 de chaque,
-  // soit 5 760 en tout. C'est le double de ce qu'on lirait en prenant
-  // `capaciteDuNiveau` pour un total.
+  // Conséquence chiffrée : une raffinerie de niveau 1 tient 20 de chaque, soit
+  // 40 en tout. C'est le double de ce qu'on lirait en prenant `capaciteDuNiveau`
+  // pour un total. (Le chiffre était 2 880 avant la courbe du 28/08 ; c'est la
+  // DOUBLE COMPTE qui est asserté ici, pas la valeur.)
   const parRessource = capaciteDuNiveau('raffinerie', 1);
-  assert.equal(parRessource, 2880);
-  assert.equal(parRessource * 2, 5760);
+  assert.equal(parRessource, STOCKAGE.niveauUn.raffinerie);
+  assert.equal(parRessource, 20);
+  assert.equal(parRessource * 2, 40);
+  // Et le double compte se voit là où il compte : dans la capacité de la base.
+  const base = capacitesMilli([{ id: 'raffinerie', niveau: 1 }]);
+  assert.equal(base.quartz, parRessource * 1000);
+  assert.equal(base.scorie, parRessource * 1000);
+  assert.equal(base.electricite, 0, 'une raffinerie ne stocke pas d\'électricité');
   // L'accumulateur, lui, n'a rien à doubler.
   assert.equal(BASE_BATIMENTS.accumulateur.ressource, 'electricite');
 });
@@ -529,54 +538,117 @@ test('base — les bonus de voisinage sont typés, et les deux couples réciproq
   assert.equal((2 * VOISINAGE.rayon + 1) ** 2 - 1, VOISINAGE.casesMax);
 });
 
-test('base — capaciteDuNiveau vaut exactement autonomie × débit du producteur apparié', () => {
-  // MESURÉS : raffinerie n1 = 12 × 240 = 2 880 · accumulateur n1 = 12 × 120 = 1 440
-  // · raffinerie n50 = 161 429 580, soit les 1,6 × 10⁸ annoncés par base.js.
-  assert.equal(capaciteDuNiveau('raffinerie', 1), 2880);
-  assert.equal(capaciteDuNiveau('accumulateur', 1), 1440);
-  assert.equal(capaciteDuNiveau('raffinerie', 50), 161_429_580);
+test('base — capaciteDuNiveau suit la courbe arbitrée le 28/08, palier par palier', () => {
+  // ⚠ RUPTURE ASSUMÉE. Jusqu'au 28/08 la capacité valait `autonomieHeures ×
+  // débit du producteur apparié`, si bien que l'autonomie était constante sur
+  // les cinquante niveaux. Ethan a jugé la courbe « chelou » et l'a remplacée
+  // par des chiffres absolus : 20 pour la raffinerie et 15 pour l'accumulateur
+  // au niveau 1, × 2 par palier jusqu'au dixième, puis un multiplicateur qui
+  // décroît linéairement jusqu'à 1,333 au cinquantième.
+  //
+  // Ce test-ci a été RÉÉCRIT, pas assoupli : il assertait l'ancienne égalité et
+  // il asserte maintenant la nouvelle, avec autant de points de contrôle.
+  assert.equal(capaciteDuNiveau('raffinerie', 1), STOCKAGE.niveauUn.raffinerie);
+  assert.equal(capaciteDuNiveau('accumulateur', 1), STOCKAGE.niveauUn.accumulateur);
+  assert.equal(capaciteDuNiveau('raffinerie', 1), 20);
+  assert.equal(capaciteDuNiveau('accumulateur', 1), 15);
 
-  // L'invariant de fond : le stockage suit EXACTEMENT la pente de production,
-  // donc l'autonomie est la même sur les cinquante niveaux. C'est le point de
-  // la réécriture du 25/08 — l'ancien ancrage ratait sa cible aux deux bouts.
-  for (const [stockage, producteur] of Object.entries(PRODUCTEUR_APPARIE)) {
-    for (const n of [1, 2, 10, 25, 49, 50]) {
-      assert.equal(
-        capaciteDuNiveau(stockage, n),
-        Math.round(STOCKAGE.autonomieHeures * debitParHeure(producteur, n)),
-        `${stockage} niveau ${n}`,
-      );
+  // Le régime constant : chaque palier double, jusqu'au seuil inclus.
+  for (let n = 2; n <= STOCKAGE.niveauSeuil; n++) {
+    assert.equal(multiplicateurDeStockage(n), STOCKAGE.multiplicateurAuDepart, `palier ${n}`);
+    assert.equal(
+      capaciteDuNiveau('raffinerie', n),
+      capaciteDuNiveau('raffinerie', n - 1) * 2,
+      `raffinerie niveau ${n}`,
+    );
+  }
+  // MESURÉ : 20 × 2⁹ au dixième niveau.
+  assert.equal(capaciteDuNiveau('raffinerie', 10), 10_240);
+  assert.equal(capaciteDuNiveau('accumulateur', 10), 7_680);
+
+  // Le régime linéaire : le multiplicateur décroît STRICTEMENT, et il arrive
+  // exactement sur la valeur d'arrivée au dernier niveau du jeu.
+  for (let n = STOCKAGE.niveauSeuil + 1; n <= GEOGRAPHIE.niveauPlafond; n++) {
+    assert.ok(multiplicateurDeStockage(n) < multiplicateurDeStockage(n - 1),
+      `le multiplicateur devrait décroître au palier ${n}`);
+    assert.ok(multiplicateurDeStockage(n) > 1, `le stockage recule au palier ${n}`);
+  }
+  assert.equal(
+    multiplicateurDeStockage(GEOGRAPHIE.niveauPlafond),
+    STOCKAGE.multiplicateurAuPlafond,
+  );
+  // ⚠ LE PLAFOND EST LU DANS `GEOGRAPHIE`, PAS RÉÉCRIT. Une seconde écriture
+  // du 50 ferait rater sa cible à la courbe le jour où le plafond bougerait :
+  // on l'asserte en déplaçant le regard, pas la constante.
+  assert.notEqual(multiplicateurDeStockage(GEOGRAPHIE.niveauPlafond - 1),
+    STOCKAGE.multiplicateurAuPlafond);
+
+  // La capacité est strictement croissante sur les cinquante niveaux : une
+  // amélioration ne doit jamais faire perdre du stockage.
+  for (const id of Object.keys(STOCKAGE.niveauUn)) {
+    for (let n = 2; n <= GEOGRAPHIE.niveauPlafond; n++) {
+      assert.ok(capaciteDuNiveau(id, n) > capaciteDuNiveau(id, n - 1), `${id} niveau ${n}`);
     }
   }
 
-  // Falsifiable : l'autonomie doit être non triviale, sinon l'égalité ci-dessus
-  // passerait sur n'importe quoi.
-  assert.ok(STOCKAGE.autonomieHeures > 1, 'une autonomie de 1 h ne mesurerait rien');
-  assert.equal(STOCKAGE.autonomieHeures, 12);
+  // ⚠ ET LE LIEN AVEC LE DÉBIT EST ROMPU, ce qui est le fond de l'arbitrage.
+  // L'autonomie n'est plus constante : elle vaut cinq minutes au niveau 1 et
+  // des décennies au niveau 50. On le MESURE, pour que personne ne rétablisse
+  // l'ancienne égalité en croyant réparer une régression.
+  const autonomie = (n) => capaciteDuNiveau('raffinerie', n) / debitParHeure('collecteur', n);
+  assert.ok(autonomie(1) < 0.2, `autonomie de niveau 1 : ${autonomie(1)} h, moins de 12 minutes attendues`);
+  assert.ok(autonomie(50) > 10_000, 'autonomie de niveau 50 : des années attendues');
+  assert.ok(autonomie(50) / autonomie(1) > 1e5,
+    'les deux bouts de la courbe devraient être très écartés');
 
   // Un bâtiment qui n'est pas du stockage lève, plutôt que de rendre un nombre.
   assert.throws(() => capaciteDuNiveau('collecteur', 1), /stockage/);
   assert.throws(() => capaciteDuNiveau('chantierDeConstruction', 1), /stockage/);
   assert.throws(() => capaciteDuNiveau('inexistant', 1), /stockage/);
   assert.throws(() => capaciteDuNiveau('raffinerie', 0), /hors de/);
+  assert.throws(() => capaciteDuNiveau('raffinerie', GEOGRAPHIE.niveauPlafond + 1), /hors de/);
 
   // Les deux bâtiments de rôle `stockage` sont exactement les deux clés de
-  // PRODUCTEUR_APPARIE : pas d'orphelin d'un côté ni de l'autre.
+  // PRODUCTEUR_APPARIE, ET les deux clés de STOCKAGE.niveauUn : pas d'orphelin
+  // d'un côté ni de l'autre. C'est la table qui décide, pas une liste écrite ici.
   const parRole = IDS.filter((id) => BASE_BATIMENTS[id].role === 'stockage');
-  assert.deepEqual(parRole.sort(), Object.keys(PRODUCTEUR_APPARIE).sort());
+  assert.deepEqual(parRole.slice().sort(), Object.keys(PRODUCTEUR_APPARIE).slice().sort());
+  assert.deepEqual(parRole.slice().sort(), Object.keys(STOCKAGE.niveauUn).slice().sort());
 });
 
-test('base — la capacité de niveau 50 laisse une marge réelle en milli-unités', () => {
-  // CLAUDE.md §6 : l'ancien ancrage arrivait à 1,26 fois seulement sous
-  // l'entier sûr, donc incompatible avec une boucle en micro-unités. Le
-  // nouveau doit garder de l'air. MESURÉ : vingt raffineries de niveau 50
-  // plafonnent à 3,2 × 10⁹ unités, soit ~2 790 fois de marge en milli.
-  const capMax = capaciteDuNiveau('raffinerie', 50);
-  const vingt = 20 * capMax * 1000; // en milli-unités
-  const marge = Number.MAX_SAFE_INTEGER / vingt;
-  assert.ok(marge > 1000, `marge ${marge.toFixed(0)}, plus de 1 000 attendue`);
-  // Et le montage mesure bien quelque chose : la capacité n'est pas dérisoire.
-  assert.ok(capMax > 1e8, 'la capacité de niveau 50 doit être de l\'ordre de 10⁸');
+test('base — la capacité de niveau 50 FRÔLE l\'entier sûr, et l\'écrêtage est là pour ça', () => {
+  // ⚠ CE TEST DISAIT L'INVERSE JUSQU'AU 28/08, et il avait raison à l'époque :
+  // l'ancienne courbe laissait 2 815 fois de marge. La courbe arbitrée ce
+  // jour-là n'en laisse plus, et le fait doit être ÉCRIT plutôt que découvert
+  // par un joueur dont l'économie dérive en silence.
+  const capMax = capaciteDuNiveau('raffinerie', GEOGRAPHIE.niveauPlafond);
+  const uneSeule = capMax * 1000; // en milli-unités
+
+  // MESURÉ : une seule raffinerie de niveau 50 occupe plus de la moitié de
+  // l'entier sûr, et deux le dépassent.
+  assert.ok(uneSeule < Number.MAX_SAFE_INTEGER,
+    'une seule raffinerie ne doit pas déjà dépasser l\'entier sûr');
+  assert.ok(2 * uneSeule > Number.MAX_SAFE_INTEGER,
+    'deux raffineries de niveau 50 devraient dépasser : si ce n\'est plus le cas, '
+    + 'la courbe a été redressée et l\'écrêtage mérite d\'être réexaminé');
+
+  // C'est pourquoi `capacitesMilli` écrête. Sans l'écrêtage, la somme
+  // quitterait les entiers exacts dès la deuxième raffinerie.
+  const deux = capacitesMilli([
+    { id: 'raffinerie', niveau: GEOGRAPHIE.niveauPlafond },
+    { id: 'raffinerie', niveau: GEOGRAPHIE.niveauPlafond },
+  ]);
+  assert.equal(deux.quartz, CAPACITE_MILLI_MAX);
+  assert.equal(deux.scorie, CAPACITE_MILLI_MAX);
+  assert.ok(Number.isSafeInteger(deux.quartz), 'la capacité écrêtée doit rester un entier sûr');
+
+  // Falsifiable : l'écrêtage ne mord PAS sur une base ordinaire. Sinon il
+  // masquerait la vraie capacité de tout le monde au lieu du seul sommet.
+  const ordinaire = capacitesMilli([
+    { id: 'raffinerie', niveau: 20 }, { id: 'accumulateur', niveau: 20 },
+  ]);
+  assert.ok(ordinaire.quartz < CAPACITE_MILLI_MAX, 'une base de niveau 20 ne doit pas être écrêtée');
+  assert.ok(ordinaire.quartz > 0);
 });
 
 // ---------------------------------------------------------------------------

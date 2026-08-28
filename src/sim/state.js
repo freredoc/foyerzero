@@ -133,6 +133,35 @@ function exigerChamp(etat, champ) {
   }
 }
 
+/**
+ * Les défauts de disposition qui NE FONT PAS lever au chargement.
+ *
+ * ⚠ POURQUOI CET ENSEMBLE EXISTE, ET POURQUOI IL DOIT RESTER MINUSCULE.
+ * `verifierEtat` lève là où `problemesDeDisposition` rend une liste, et c'est
+ * la bonne règle : une disposition illégale en cours de partie est un fait de
+ * JEU, au chargement c'est un fait de PROGRAMME. Mais elle a une limite qu'on
+ * a rencontrée le 28/08 : une règle AJOUTÉE APRÈS COUP rend illégales des bases
+ * qui étaient parfaitement légales quand le joueur les a construites.
+ *
+ * `uniques-voisins` est exactement ce cas. La règle « deux bâtiments uniques ne
+ * se touchent pas » a été arbitrée le 28/08 ; la base d'Ethan, mesurée sur sa
+ * capture du même jour, porte le Centre de commandement, le QG de défense et le
+ * Chantier côte à côte. La faire lever au chargement aurait rendu sa partie
+ * INJOUABLE — et pour une faute qu'il n'a pas commise.
+ *
+ * ⚠ CE N'EST PAS UNE INDULGENCE, C'EST UN REPORT. Le défaut est toujours
+ * SIGNALÉ — `problemesDeDisposition` le rend, l'écran le montre — et il
+ * interdit toujours toute NOUVELLE pose au contact d'un unique, puisque
+ * `problemesDeLaPose` ne filtre que les défauts PRÉEXISTANTS. Le joueur voit,
+ * le joueur purge. C'est « rien ne se retire en silence » (CLAUDE.md §4).
+ *
+ * ⚠ N'Y METTRE QU'UNE RÈGLE NÉE APRÈS DES SAUVEGARDES. Un code de faute
+ * structurelle — `sans-chantier`, `superposition`, `hors-base` — n'a rien à y
+ * faire : ceux-là n'ont jamais été légaux, donc aucune sauvegarde honnête ne
+ * les porte, et les tolérer ferait tourner le moteur sur un état incohérent.
+ */
+export const CODES_TOLERES_AU_CHARGEMENT = new Set(['uniques-voisins']);
+
 function verifierEtat(etat) {
   // ⚠ `fondation` EST REDONDANT ICI, et la garde reste quand même. Mesuré le
   // 27/08 par injection : retirer `fondation` de cette liste ne fait tomber
@@ -149,7 +178,10 @@ function verifierEtat(etat) {
       `etat : ${etat.economie.residus.length} résidus pour ${etat.disposition.length} bâtiments`,
     );
   }
-  const problemes = problemesDeDisposition(etat.disposition, etat.champs);
+  // ⚠ TOUS LES DÉFAUTS NE SONT PAS DES FAUTES DE PROGRAMME — voir
+  // `CODES_TOLERES_AU_CHARGEMENT` juste au-dessus.
+  const problemes = problemesDeDisposition(etat.disposition, etat.champs)
+    .filter((p) => !CODES_TOLERES_AU_CHARGEMENT.has(p.code));
   if (problemes.length > 0) {
     throw new Error(`etat : disposition injouable — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
@@ -324,10 +356,20 @@ export function problemesDeLAmelioration(etat, index) {
   return problemes;
 }
 
-/** Le fragment de message qui chiffre un manque, en unités entières. */
+/**
+ * Le fragment de message qui chiffre un manque, en unités entières.
+ *
+ * ⚠ L'ÉLISION EST PORTÉE PAR LA TABLE, pas par une règle. « de électricité »
+ * s'est affiché tel quel dans le panneau de détail jusqu'au 28/08. Écrire une
+ * règle d'élision sur la voyelle initiale marcherait pour ces trois mots-ci et
+ * se tromperait au premier nom qui commence par un h aspiré ; la préposition
+ * voyage donc AVEC le nom, une fois pour toutes.
+ */
 function LIBELLE_MANQUE(ressource, manqueMilli) {
-  const nom = { quartz: 'quartz', scorie: 'scorie', electricite: 'électricité' }[ressource];
-  return `${Math.ceil(manqueMilli / MILLI)} de ${nom}`;
+  const nom = {
+    quartz: 'de quartz', scorie: 'de scorie', electricite: 'd\'électricité',
+  }[ressource];
+  return `${Math.ceil(manqueMilli / MILLI)} ${nom}`;
 }
 
 /**

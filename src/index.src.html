@@ -288,8 +288,6 @@
   .jeton.mil { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #8A1E17; }
   .jeton.pivot { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #A67018; }
   .jeton .niveau { position: absolute; right: 0; bottom: -1px; font-size: 8px; font-weight: 400; line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914; }
-  /* Un emplacement ouvert et encore libre. Un indice, pas une interdiction. */
-  .vide { width: 30%; height: 30%; border: 1px dashed #6A7658; }
 
   /* --- le panneau de détail d'un bâtiment ----------------------------------
      ⚠ IL RÉPOND À UNE DEMANDE PRÉCISE d'Ethan, le 28/08 : « quand on clique sur
@@ -452,6 +450,13 @@
   .posable .cout { position: absolute; top: 1px; right: 3px; font-size: 8px; color: #8C9A72; }
   /* Le bâtiment que le joueur s'apprête à poser. Il faut que ça se voie d'un
      coup d'œil : c'est ce qui explique pourquoi des cases sont cerclées. */
+  /* Un unique déjà posé : présent, lisible, et manifestement hors service.
+     Arbitré le 28/08 — « griser le bouton, pas le faire disparaître ». Il reste
+     TOUCHABLE : le toucher dit pourquoi, ce qu'un bouton inerte ne fait pas. */
+  .posable.pose { background: #1E2124; border-color: #1E2124; }
+  .posable.pose b { color: #3E454C; }
+  .posable.pose i { box-shadow: inset 0 1px 0 #3E454C, inset 0 -2px 0 #161914; background: #3E454C; }
+
   .posable.actif { background: #6A7658; }
   .posable.actif b { color: #161914; }
   .posable.actif i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #F5F3E8; }

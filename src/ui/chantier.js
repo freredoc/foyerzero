@@ -27,7 +27,7 @@ import { GRILLE } from '../data/combat.js';
 import { GEOGRAPHIE } from '../data/sites.js';
 import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
-  emplacementsDuNiveau, estDansLaBase, remboursementDuNiveau,
+  emplacementsDuNiveau, remboursementDuNiveau,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { debitDuBatiment, productionParRessource, voisinsQualifiants } from '../sim/disposition.js';
@@ -483,6 +483,88 @@ export const MENTION_SATURE = 'saturé';
 // ---------------------------------------------------------------------------
 
 /**
+ * Combien de temps avant que l'amélioration soit payable, et sinon pourquoi
+ * jamais.
+ *
+ * ⚠ ETHAN, LE 28/08 : « quand l'amélioration n'est pas possible, indiquer un
+ * chronomètre. Si le stock requis est sous le seuil du stockage maximum. » La
+ * seconde phrase est la condition, et elle est essentielle : un coût plus grand
+ * que la capacité de la base n'arrivera JAMAIS, quel que soit le temps qu'on
+ * attende, et afficher un compte à rebours dessus serait mentir au joueur.
+ *
+ * Trois réponses possibles, et `null` en est une :
+ *   `null`                 — payable tout de suite, ou déjà au plafond ;
+ *   `{ cause: 'attente' }` — ça arrive, et `secondes` dit quand ;
+ *   `{ cause: 'capacite' }`— le stockage ne peut pas contenir la somme requise ;
+ *   `{ cause: 'sans-production' }` — rien ne produit cette ressource.
+ *
+ * ⚠ LE DÉLAI EST LE MAXIMUM SUR LES RESSOURCES, PAS LEUR SOMME. Les trois
+ * montent en parallèle : ce qui décide, c'est la dernière à arriver.
+ *
+ * ⚠ ET IL SE CALCULE SUR LE DÉBIT DE LA BASE, PAS DE CE BÂTIMENT. C'est toute
+ * la base qui paie l'amélioration.
+ *
+ * @param {object} etat
+ * @param {number} index
+ * @returns {{cause: string, ressource: string|null, secondes: number|null}|null}
+ */
+export function delaiAvantAmelioration(etat, index) {
+  const b = etat.disposition[index];
+  if (b === undefined) throw new RangeError(`chantier : indice ${index} hors de la disposition`);
+  const vise = b.niveau + 1;
+  if (vise > GEOGRAPHIE.niveauPlafond) return null;
+
+  const cout = coutDeMontee(b.id, vise);
+  const capacites = capacitesMilli(etat.disposition);
+  const debits = debitsMilliParHeure(etat.disposition, etat.champs);
+  const parRessource = {};
+  for (const r of RESSOURCES) parRessource[r] = 0;
+  for (const parBatiment of debits) {
+    for (const r of RESSOURCES) {
+      if (parBatiment[r] !== undefined) parRessource[r] += parBatiment[r];
+    }
+  }
+
+  let secondes = 0;
+  for (const r of RESSOURCES) {
+    const requisMilli = cout[r] * 1000;
+    if (requisMilli === 0) continue;
+    const manque = requisMilli - etat.economie.ressources[r];
+    if (manque <= 0) continue;
+    // La condition d'Ethan : au-delà de la capacité, aucune attente ne suffit.
+    if (requisMilli > capacites[r]) return { cause: 'capacite', ressource: r, secondes: null };
+    if (parRessource[r] <= 0) return { cause: 'sans-production', ressource: r, secondes: null };
+    // Le débit est PAR HEURE ; on ne quitte les entiers qu'ici, au dernier
+    // moment, et on arrondit vers le HAUT — annoncer une seconde de moins que
+    // la vérité ferait cliquer le joueur sur un refus.
+    secondes = Math.max(secondes, Math.ceil((manque * 3600) / parRessource[r]));
+  }
+  return secondes === 0 ? null : { cause: 'attente', ressource: null, secondes };
+}
+
+/**
+ * Un délai en secondes → « 3 min 12 s », « 2 h 05 », « 4 j 06 h ».
+ *
+ * ⚠ LA GRANDE UNITÉ D'ABORD, ET UNE SEULE DÉCIMALE DE PRÉCISION. « 7 412 s »
+ * est exact et illisible ; ce qu'un joueur lit, c'est un ordre de grandeur et
+ * le chiffre qui bouge.
+ *
+ * @param {number} secondes entier positif
+ * @returns {string}
+ */
+export function formaterDelai(secondes) {
+  if (!Number.isFinite(secondes) || secondes < 0) {
+    throw new RangeError(`formaterDelai : « ${secondes} » n'est pas une durée`);
+  }
+  const s = Math.ceil(secondes);
+  if (s < 60) return `${s} s`;
+  const deuxChiffres = (n) => String(n).padStart(2, '0');
+  if (s < 3600) return `${Math.floor(s / 60)} min ${deuxChiffres(s % 60)} s`;
+  if (s < 86_400) return `${Math.floor(s / 3600)} h ${deuxChiffres(Math.floor((s % 3600) / 60))}`;
+  return `${Math.floor(s / 86_400)} j ${deuxChiffres(Math.floor((s % 86_400) / 3600))} h`;
+}
+
+/**
  * Le nom lisible d'un type de voisin qualifiant.
  *
  * Les clés de `parVoisin` sont soit un identifiant de bâtiment, soit
@@ -622,6 +704,8 @@ export function apercuDuBatiment(etat, index) {
       : null,
     cout: auPlafond ? null : coutDeMontee(b.id, vise),
     problemes: problemesDeLAmelioration(etat, index),
+    // Le chronomètre demandé le 28/08. `null` quand c'est payable tout de suite.
+    delai: delaiAvantAmelioration(etat, index),
     // ⚠ CE QUE REND UNE DÉMOLITION SE DIT AVANT LE GESTE. `data/base.js` le
     // demandait noir sur blanc : « démolir un bâtiment de niveau 1 ne rend
     // rien […] l'écran devra le dire avant le geste, sinon il se lira comme un
@@ -671,6 +755,32 @@ export function formaterCout(cout) {
  *   bouton: {libelle: string, note: string}
  * }}
  */
+/**
+ * Ce qui s'écrit sous le bouton quand l'amélioration est refusée : le manque,
+ * puis le chronomètre — ou la raison pour laquelle il n'y en aura pas.
+ *
+ * ⚠ LE MESSAGE DU MOTEUR EST REPRIS MOT POUR MOT, et le délai s'y AJOUTE. Le
+ * reformuler créerait une seconde écriture de la règle ; ne montrer que le
+ * délai perdrait le chiffre qui manque, qui est ce que le joueur cherche.
+ *
+ * @param {ReturnType<typeof apercuDuBatiment>} apercu
+ * @returns {string}
+ */
+export function noteDuRefus(apercu) {
+  const manque = apercu.problemes.map((p) => p.message).join(' ; ');
+  const delai = apercu.delai;
+  if (delai === null) return manque;
+  if (delai.cause === 'attente') return `${manque} · dans ${formaterDelai(delai.secondes)}`;
+  if (delai.cause === 'capacite') {
+    // ⚠ CE CAS-LÀ N'EST PAS UNE ATTENTE, C'EST UN MUR — et c'est exactement la
+    // condition qu'Ethan a posée. Le joueur doit agrandir son stockage, pas
+    // patienter : un compte à rebours ici tournerait sans jamais arriver.
+    return `${manque} · le stockage de ${LIBELLES_RESSOURCE[delai.ressource].nom.toLowerCase()}`
+      + ' est trop petit pour ce palier';
+  }
+  return `${manque} · rien n'en produit`;
+}
+
 export function lignesDuPanneau(apercu) {
   const sections = [];
 
@@ -760,7 +870,7 @@ export function lignesDuPanneau(apercu) {
         // Le coût est dans le bouton : c'est ce qu'Ethan a demandé le 28/08 —
         // « un bouton amélioration avec les coûts induits ».
         note: apercu.problemes.length > 0
-          ? apercu.problemes.map((p) => p.message).join(' ; ')
+          ? noteDuRefus(apercu)
           : formaterCout(apercu.cout),
         possible: apercu.problemes.length === 0,
       },
@@ -801,12 +911,18 @@ export function lignesDuPanneau(apercu) {
 export function posablesDeLaBase(etat) {
   const poses = new Set(etat.disposition.map((b) => b.id));
   return Object.entries(BASE_BATIMENTS)
-    .filter(([id, def]) => !(def.unique === true && poses.has(id)))
     .map(([id, def]) => ({
       id,
       nom: def.nom.joueur,
       famille: familleDuBatiment(id),
       coutPremiereAmelioration: COUT_NIVEAU_DEUX[def.classeDeCout],
+      // ⚠ UN UNIQUE DÉJÀ POSÉ RESTE DANS LA LISTE, GRISÉ — arbitré par Ethan le
+      // 28/08 : « quand on pose un bâtiment unique, griser le bouton, pas le
+      // faire disparaître ». La palette gardait onze vignettes puis en perdait
+      // une à chaque unique posé, si bien qu'elle changeait de longueur et que
+      // les autres se déplaçaient sous le doigt. Une vignette grisée dit en
+      // plus quelque chose de vrai : ce bâtiment EXISTE et tu l'as déjà.
+      dejaPose: def.unique === true && poses.has(id),
     }));
 }
 
@@ -1140,10 +1256,12 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   function peindrePalette(etat) {
     bandeauPalette.textContent = '';
     const posables = posablesDeLaBase(etat);
-    // Un unique qu'on vient de poser sort de la palette : la sélection qui le
-    // désignait n'a plus d'objet et se défait, sans quoi l'écran resterait en
-    // mode pose avec zéro case légale et sans rien dire.
-    if (posableChoisi !== null && !posables.some((p) => p.id === posableChoisi)) {
+    // Un unique qu'on vient de poser ne quitte plus la palette, il s'y grise —
+    // mais la sélection qui le désignait n'a plus d'objet et se défait, sans
+    // quoi l'écran resterait en mode pose avec zéro case légale et sans rien
+    // dire. Le test porte donc sur `dejaPose`, plus sur l'absence.
+    if (posableChoisi !== null
+      && !posables.some((p) => p.id === posableChoisi && !p.dejaPose)) {
       posableChoisi = null;
     }
     for (const posable of posables) {
@@ -1151,8 +1269,11 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       emplacement.type = 'button';
       emplacement.className = `posable ${posable.famille}`;
       emplacement.classList.toggle('actif', posable.id === posableChoisi);
-      emplacement.title = `${posable.nom} — poser au niveau 1 est gratuit ; la première `
-        + `amélioration coûtera ${posable.coutPremiereAmelioration}.`;
+      emplacement.classList.toggle('pose', posable.dejaPose);
+      emplacement.title = posable.dejaPose
+        ? `${posable.nom} — déjà posé, et il est unique.`
+        : `${posable.nom} — poser au niveau 1 est gratuit ; la première `
+          + `amélioration coûtera ${posable.coutPremiereAmelioration}.`;
       const vignette = doc.createElement('i');
       const nom = doc.createElement('b');
       nom.textContent = posable.nom;
@@ -1168,6 +1289,15 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
    * sortir du mode pose sans poser, et il faut qu'il existe.
    */
   function choisirPosable(id) {
+    // ⚠ UNE VIGNETTE GRISÉE RÉPOND, ELLE N'EST PAS INERTE. « Un indice n'est pas
+    // une interdiction » (CLAUDE.md §4) : le joueur qui touche un unique déjà
+    // posé a le droit de savoir POURQUOI il ne se pose pas, plutôt que d'appuyer
+    // sur un bouton qui ne fait rien.
+    const vignette = posablesDeLaBase(etatCourant).find((p) => p.id === id);
+    if (vignette !== undefined && vignette.dejaPose) {
+      toast(`${vignette.nom} est unique, et il est déjà posé.`);
+      return;
+    }
     // Choisir un posable désarme l'action : un seul mode à la fois.
     if (actionArmee !== null) {
       actionArmee = null;
@@ -1566,24 +1696,15 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       case_.appendChild(jeton);
     }
 
-    // Les emplacements ouverts encore libres se montrent : c'est le seul indice
-    // de ce que le joueur POURRA faire, et un indice n'est pas une interdiction.
-    const resume = resumeDeLaBase(etat);
-    let restants = resume.emplacements.ouverts - resume.emplacements.poses;
-    const occupees = new Set(etat.disposition.map((b) => cle(b.rangee, b.colonne)));
-    for (let rangee = GRILLE.bandes.batiments.derniere;
-      rangee >= GRILLE.bandes.batiments.premiere && restants > 0; rangee--) {
-      for (let colonne = 1; colonne <= GRILLE.largeur && restants > 0; colonne++) {
-        if (!estDansLaBase(rangee, colonne)) continue;
-        if (occupees.has(cle(rangee, colonne))) continue;
-        const case_ = cellules.get(cle(rangee, colonne));
-        if (case_.classList.contains('champ')) continue;
-        const marque = doc.createElement('div');
-        marque.className = 'vide';
-        case_.appendChild(marque);
-        restants -= 1;
-      }
-    }
+    // ⚠ LES PASTILLES DE CASE LIBRE SONT PARTIES (28/08). Elles marquaient, en
+    // haut de la grille, autant de cases vides qu'il restait d'emplacements
+    // ouverts. Ethan les a fait retirer : « supprimer les petits carrés en haut
+    // à droite qui montrent place disponible bâtiment ». Elles disaient un
+    // NOMBRE en le dessinant à des endroits qui n'avaient rien à voir avec les
+    // cases réellement choisies, et le compteur « Emplac. 3 / 4 » remis dans le
+    // bandeau des ressources le dit maintenant sans mentir sur la géométrie.
+    // La grandeur reste calculée par `resumeDeLaBase` — c'est ce dessin-là qui
+    // part, pas le plafond.
 
     peindrePalette(etat);
     marquerCasesLegales();
