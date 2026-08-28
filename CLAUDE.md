@@ -25,7 +25,7 @@ Dernière révision : **28/08/2026**, version 0.25.0 · build 26.
    savoir est un lot perdu.
 
 **Référence au 28/08/2026 (après le lot TUTORIEL), à confronter :**
-`npm test` → **349 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **364 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **167 308 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
@@ -138,12 +138,13 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 5 fichiers ; RIEN d'autre n'a le droit d'en porter
+src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'autre n'a le droit d'en porter
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
+  couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
 
 src/sim/                simulation déterministe, sans DOM — 12 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
@@ -180,10 +181,11 @@ src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   25 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   26 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
+  couts-militaires
   grille  missions  niveau-de-base  offense  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de

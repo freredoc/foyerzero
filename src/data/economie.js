@@ -43,3 +43,46 @@ export const ECONOMIE_NIVEAU = {
   // le raid, dont le butin suit la pente des coûts, et non vers l'attente.
   penteProduction: 1.25,
 };
+
+// ---------------------------------------------------------------------------
+// La rampe elle-même — une seule implémentation, pour deux familles de coûts
+// ---------------------------------------------------------------------------
+//
+// ⚠ CETTE BOUCLE VIVAIT DANS `data/base.js`, EN PRIVÉ, ET ELLE Y ÉTAIT SEULE.
+// Elle est remontée ici le 28/08 quand la défense et l'offense ont reçu leurs
+// ancres : la recopier à côté aurait fait DEUX implémentations de la même
+// rampe, et la première divergence — un arrondi déplacé, un rang décalé — se
+// serait lue comme un déséquilibre de jeu, pas comme un défaut de programme.
+// Ce qui change de famille en famille, c'est l'ANCRE ; la rampe, jamais.
+//
+// L'ARRONDI SE FAIT À CHAQUE PALIER, et ce n'est pas un détail de style : les
+// ratios ci-dessus ne sont pas ronds (36/11, 55/18, 32/11, 28/11, 15/7) et le
+// produit flottant rate la table relevée — 440 × 36/11 rend 1 439,999 999 999
+// 999 8. Arrondir une seule fois à la fin ferait diverger la chaîne dès le
+// sixième palier.
+
+/**
+ * Le montant d'un palier, dans l'unité de la ressource principale, hors
+ * électricité. C'est l'ancre du niveau 2 prolongée par la courbe.
+ *
+ * ⚠ L'ARGUMENT EST LE NIVEAU QU'ON ATTEINT, PAS CELUI D'OÙ L'ON PART.
+ * `montantDuPalier(8, 2)` vaut 8 — le prix du passage de 1 à 2. La boucle ne
+ * tourne pas au niveau 2, ce qui est exactement ce qu'on veut : l'ancre EST le
+ * premier palier.
+ *
+ * Aucune borne n'est vérifiée ici — c'est le rôle de l'appelant, qui seul sait
+ * à quelle table appartient l'entité et donc quel plafond lui opposer.
+ *
+ * @param {number} ancre le coût du niveau 2, entier
+ * @param {number} niveau le niveau ATTEINT, ≥ `premierNiveauPayant`
+ * @returns {number} entier
+ */
+export function montantDuPalier(ancre, niveau) {
+  const { ratios, penteStable, premierNiveauPayant } = ECONOMIE_NIVEAU;
+  let montant = ancre;
+  for (let n = premierNiveauPayant + 1; n <= niveau; n++) {
+    const rang = n - premierNiveauPayant - 1;
+    montant = Math.round(montant * (rang < ratios.length ? ratios[rang] : penteStable));
+  }
+  return montant;
+}
