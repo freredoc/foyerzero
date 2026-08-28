@@ -223,7 +223,33 @@ export function creerEtatEconomie(disposition) {
   };
 }
 
-/** Vérifie qu'un état a la forme attendue, et le dit clairement sinon. */
+/**
+ * Ce que le joueur trouve dans sa poche à la fondation.
+ *
+ * ⚠ CE N'EST PAS UN ZÉRO DÉGUISÉ, C'EST UNE AMORCE. Arbitré par Ethan le
+ * 27/08 : une base neuve ne produit RIEN — ni collecteur, ni centrale — donc un
+ * départ à zéro laisse le joueur devant un écran où aucune action n'est
+ * payable. Le premier collecteur coûte 3 de quartz, la première centrale 3 : de
+ * quoi poser les deux et voir la boucle démarrer.
+ *
+ * ⚠ CES TROIS NOMBRES RESTENT SOUS LA POCHE DU CHANTIER — 50 · 50 · 40 au
+ * niveau 1. Un stock initial au-dessus du plafond naîtrait GELÉ : le moteur ne
+ * rabat pas un excédent, il l'immobilise, et le joueur verrait un compteur
+ * bloqué dès la première image sans comprendre pourquoi. Le test de
+ * `state.test.js` le vérifie plutôt que de faire confiance à ces valeurs.
+ *
+ * ⚠ CE N'EST PAS `creerEtatEconomie` QUI LA SERT, et l'essai inverse a été
+ * fait : huit tests sont tombés, dont deux sur les MIGRATIONS. Cette
+ * fonction-là construit la FORME d'une économie, et une v0 qu'on migre en
+ * repasse par elle — le joueur aurait touché l'amorce une seconde fois, à
+ * chaque montée de version. L'amorce appartient à la partie neuve, donc à
+ * `creerEtat`, et à elle seule.
+ */
+export const STOCK_DE_DEPART = { quartz: 30, scorie: 30, electricite: 20 };
+
+/**
+ * Vérifie qu'un état a la forme attendue, et le dit clairement sinon.
+ */
 function verifierEtat(etat, disposition) {
   if (!etat || typeof etat.ressources !== 'object' || !Array.isArray(etat.residus)) {
     throw new TypeError('economie-base : état absent ou malformé');

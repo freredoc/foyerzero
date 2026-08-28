@@ -12,6 +12,7 @@ import { positionDepartJoueur } from './carte.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
+  STOCK_DE_DEPART,
 } from './economie-base.js';
 import { BASE_BATIMENTS, coutDeMontee, remboursementDuNiveau } from '../data/base.js';
 import { GEOGRAPHIE } from '../data/sites.js';
@@ -104,6 +105,13 @@ export function creerEtat(graine) {
     economie: creerEtatEconomie(disposition),
     champs: champsDeLaBase(position.rangee, position.colonne),
   };
+  // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
+  // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
+  // départ à zéro laisse le joueur devant un écran où aucune action n'est
+  // payable. La servir dans `creerEtatEconomie` a été essayé : les MIGRATIONS
+  // repassent par elle, et une sauvegarde qu'on monte de version aurait touché
+  // l'amorce une seconde fois.
+  for (const r of RESSOURCES) etat.economie.ressources[r] = (STOCK_DE_DEPART[r] ?? 0) * 1000;
   verifierEtat(etat);
   return etat;
 }
