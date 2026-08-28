@@ -25,7 +25,9 @@
 // `foyer-zero-ui.html`, qui est une maquette et qui grave ses chiffres.
 
 import { GRILLE } from '../data/combat.js';
-import { BASE_BATIMENTS, COUT_NIVEAU_DEUX, emplacementsDuNiveau, estDansLaBase } from '../data/base.js';
+import {
+  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, emplacementsDuNiveau, estDansLaBase,
+} from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { productionParRessource } from '../sim/disposition.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
@@ -37,7 +39,11 @@ import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from 
 // un dépassement de budget, qui est un fait de JEU. Le dépôt s'est déjà fait
 // mordre par un nom court homonyme (`combat.js`, table et moteur) ; ici le
 // renommage à l'import coûte un mot et rend le garde-fou EXACT.
-import { problemesDeLaPose, poser as poserBatiment } from '../sim/state.js';
+import {
+  problemesDeLaPose, poser as poserBatiment,
+  problemesDeLAmelioration, ameliorer,
+  problemesDeLaDemolition, demolir,
+} from '../sim/state.js';
 
 // ---------------------------------------------------------------------------
 // Formatage — la seule couche qui a le droit de quitter les entiers du moteur
@@ -135,6 +141,60 @@ export function formaterDebit(milliParHeure) {
 // vrai et reste DIT — dans le titre de la vignette, là où on le cherche quand on
 // se pose la question. Le coût de la première amélioration, lui, est toujours
 // rendu par `posablesDeLaBase` : l'écran des améliorations l'aura sous la main.
+
+/**
+ * Combien de temps un message d'action reste à l'écran.
+ *
+ * ⚠ C'EST UN TOAST, PAS UN BANDEAU PERMANENT, et la distinction porte. Un refus
+ * d'action répond à un geste précis : il a un sens tant que le joueur se
+ * souvient de ce qu'il vient de toucher, et il devient du bruit ensuite. Les
+ * messages de la SESSION — sauvegarde impossible, sauvegarde illisible — sont
+ * l'inverse : ils décrivent un état qui dure, et ils ne s'effacent pas tout
+ * seuls. Les deux passent par le même élément, et c'est `avis` qui l'emporte.
+ */
+export const DUREE_TOAST_MS = 4000;
+
+/**
+ * Les trois actions du bandeau contextuel, et ce que chacune sait faire.
+ *
+ * ⚠ LE MODÈLE EST « ARMER PUIS TOUCHER », arbitré le 27/08 — l'inverse de ce
+ * qui existait. On ne sélectionne plus un bâtiment pour activer les boutons :
+ * on arme un bouton, puis on touche le bâtiment. Un seul mode à la fois, et le
+ * mode se désarme dès qu'il a servi, réussi ou non.
+ *
+ * `problemes` rend la liste du moteur ; `agir` exécute. Les deux viennent de
+ * `sim/state.js` et ne sont JAMAIS réécrites ici. `reparer` n'a pas
+ * d'équivalent moteur — voir `PAS_DE_REPARATION`.
+ */
+export const ACTIONS = {
+  reparer: { bouton: 'chantier-reparer', libelle: 'Réparer' },
+  ameliorer: {
+    bouton: 'chantier-ameliorer',
+    libelle: 'Améliorer',
+    problemes: problemesDeLAmelioration,
+    agir: ameliorer,
+  },
+  demolir: {
+    bouton: 'chantier-demolir',
+    libelle: 'Démolir',
+    problemes: problemesDeLaDemolition,
+    agir: demolir,
+  },
+};
+
+/**
+ * Ce que Réparer répond, faute de moteur.
+ *
+ * ⚠ C'EST LA SEULE PHRASE DE REFUS ÉCRITE DANS L'INTERFACE, et elle l'est parce
+ * qu'aucune règle ne la porte : `REPARATION_BASE_JOUEUR` de `data/base.js` est
+ * une table de calibrage, aucune fonction ne répare, et aucun bâtiment ne porte
+ * de dégâts. Inventer un moteur de réparation dans l'écran serait trancher seul
+ * une mécanique de jeu. Le bouton suit donc le même chemin que les deux autres
+ * — il s'arme, il se désarme — et dit ce qui est vrai : il n'y a rien à
+ * réparer. Le jour où les dégâts existeront, il n'y aura qu'une fonction à
+ * brancher ici.
+ */
+export const PAS_DE_REPARATION = 'aucun bâtiment n\'est endommagé : les dégâts n\'existent pas encore';
 
 /** Un niveau absent — la Défense et l'Assaut, qui n'ont pas encore d'état. */
 export const NIVEAU_ABSENT = '—';
@@ -464,6 +524,12 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   // de l'écran : quand il vaut null, toucher une case SÉLECTIONNE ; sinon,
   // toucher une case POSE.
   let posableChoisi = null;
+  // L'action armée, ou null. Elle et `posableChoisi` sont EXCLUSIFS : armer une
+  // action défait la palette, choisir un posable désarme l'action. Un seul mode
+  // à la fois, sinon un toucher voudrait dire deux choses.
+  let actionArmee = null;
+  let minuterieToast = null;
+  const fenetre = doc.defaultView;
   const cellules = new Map(); // « rangée:colonne » → élément
 
   /**
@@ -477,9 +543,36 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
    * propriétaire, et la session passe par lui.
    */
   function avis(texte) {
+    // Un message durable annule le toast en cours : il décrit un état, pas un
+    // geste, et il n'a pas à disparaître au bout de quatre secondes.
+    if (minuterieToast !== null) {
+      fenetre.clearTimeout(minuterieToast);
+      minuterieToast = null;
+    }
     const ligne = $('chantier-avis');
     ligne.textContent = texte;
     ligne.hidden = texte === '';
+  }
+
+  /**
+   * Un message qui répond à un geste, et qui s'efface tout seul.
+   *
+   * ⚠ IL NE S'EFFACE QUE S'IL EST ENCORE LE SIEN. Entre l'affichage et
+   * l'échéance, la session a pu écrire un message durable — sauvegarde
+   * impossible — et l'effacer serait faire disparaître une alerte que personne
+   * n'a lue.
+   */
+  function toast(texte) {
+    avis(texte);
+    if (texte === '') return;
+    minuterieToast = fenetre.setTimeout(() => {
+      minuterieToast = null;
+      const ligne = $('chantier-avis');
+      if (ligne.textContent === texte) {
+        ligne.textContent = '';
+        ligne.hidden = true;
+      }
+    }, DUREE_TOAST_MS);
   }
 
   // --- la grille, construite une fois ---------------------------------------
@@ -488,22 +581,17 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   // ne changent jamais de place, seul leur contenu bouge : reconstruire le
   // balisage à chaque image ferait perdre la sélection et le défilement.
   //
-  // ⚠ LE RAIL DES BANDES EST LA PREMIÈRE COLONNE DE CETTE MÊME GRILLE, et ce
-  // n'est pas un raccourci. Un rail posé à côté, dans un conteneur flex, se
-  // règle sur la hauteur VISIBLE de la boîte de défilement et non sur celle de
-  // la grille : dès le premier défilement il se décale, et il finit par
-  // désigner la mauvaise bande. Le rendre solidaire des rangées est ce qui
-  // garantit qu'il dit vrai à toute hauteur d'écran — la maquette ne pouvait
-  // pas le savoir, elle travaillait à 360 px de large et à cellule fixe.
-  grille.style.gridTemplateColumns = `var(--rail) repeat(${GRILLE.largeur}, 1fr)`;
-  for (const bande of BANDES) {
-    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
-    const segment = doc.createElement('div');
-    segment.className = `segment ${bande.cle}`;
-    segment.style.gridColumn = '1';
-    segment.style.gridRow = `${premiereLigne} / span ${nbLignes}`;
-    grille.appendChild(segment);
-  }
+  // ⚠ PLUS DE RAIL, ET PLUS DE GOUTTIÈRE À GAUCHE. Arbitré le 27/08 : la barre
+  // de gauche disparaît, et la grille se centre dans la largeur disponible. Les
+  // bandes se lisent aux deux boutons du bas, qui disent déjà où l'on est.
+  //
+  // ⚠ LE CENTRAGE EST UNE MISE EN PAGE, JAMAIS UNE TRANSFORMATION. Un
+  // `transform: scale()` sur le conteneur casserait la correspondance entre le
+  // doigt et la case — le dessin bougerait, pas la géométrie du pointage. On
+  // plafonne donc la largeur de la grille et on laisse les marges automatiques
+  // répartir également ce qui reste, des deux côtés.
+  grille.style.gridTemplateColumns = `repeat(${GRILLE.largeur}, minmax(0, 1fr))`;
+  grille.style.maxWidth = `calc(${GRILLE.largeur} * var(--case-max))`;
   for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
     const bande = bandeDeLaRangee(rangee);
     for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
@@ -511,17 +599,11 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       case_.className = `case ${bande}`;
       case_.dataset.rangee = String(rangee);
       case_.dataset.colonne = String(colonne);
-      case_.style.gridColumn = String(colonne + 1);
+      case_.style.gridColumn = String(colonne);
       // ⚠ LA LIGNE D'ÉCRAN N'EST PAS LA RANGÉE. `render/orientation.js` fait la
       // seule transformation, ici comme pour le rail : poser `gridRow = rangee`
       // mettait la rangée 1 en premier, donc le déploiement avant la base.
       case_.style.gridRow = String(ligneEcranDeLaRangee(rangee));
-      if (colonne === 1) {
-        const numero = doc.createElement('span');
-        numero.className = 'numero';
-        numero.textContent = String(rangee);
-        case_.appendChild(numero);
-      }
       cellules.set(cle(rangee, colonne), case_);
       grille.appendChild(case_);
     }
@@ -655,6 +737,11 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
    * sortir du mode pose sans poser, et il faut qu'il existe.
    */
   function choisirPosable(id) {
+    // Choisir un posable désarme l'action : un seul mode à la fois.
+    if (actionArmee !== null) {
+      actionArmee = null;
+      marquerBoutonsAction();
+    }
     posableChoisi = posableChoisi === id ? null : id;
     if (posableChoisi === null) {
       avis('');
@@ -665,9 +752,13 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     // ⚠ LE JOUEUR DOIT COMPRENDRE AVANT DE TOUCHER UNE CASE. Sans emplacement
     // libre, toutes les cases sont illégales : le laisser en essayer une pour
     // qu'on lui dise non serait le faire travailler pour rien.
+    // ⚠ LA SATURATION SE DIT ICI, AU CHOIX DU BÂTIMENT — plus dans un compteur.
+    // Le bandeau d'emplacements a disparu avec la barre de gauche (arbitré le
+    // 27/08), et c'était lui qui annonçait la base pleine. Le joueur doit
+    // l'apprendre AVANT de chercher une case, pas en essayant.
     const { poses, ouverts } = resumeDeLaBase(etatCourant).emplacements;
     if (poses >= ouverts) {
-      avis(`${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
+      toast(`${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
         + 'construction en ouvrira d\'autres.');
     } else {
       avis('');
@@ -676,10 +767,23 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     marquerCasesLegales();
   }
 
-  /** Distingue à l'écran les cases où le bâtiment choisi peut se poser. */
+  /**
+   * Distingue à l'écran les cases où le bâtiment choisi peut se poser.
+   *
+   * ⚠ SEUL LE COLLECTEUR EST DISTINGUÉ, arbitré le 27/08. C'est le seul
+   * bâtiment pour qui le TERRAIN décide — `CHAMPS.posableDessus` ne contient que
+   * lui. Pour les dix autres, toute case libre de la bande convient, et cercler
+   * soixante cases sur soixante-douze n'apprend rien à personne.
+   *
+   * ⚠ C'EST L'AFFICHAGE QUI DISPARAÎT, PAS LA RÈGLE. `problemesDeLaPose` est
+   * interrogée exactement comme avant au moment de poser, et une case illégale
+   * dit toujours pourquoi. Retirer la distinction en retirant la vérification
+   * aurait été un tout autre lot.
+   */
   function marquerCasesLegales() {
     for (const case_ of cellules.values()) case_.classList.remove('legale');
     if (posableChoisi === null || etatCourant === null) return;
+    if (!CHAMPS.posableDessus.includes(posableChoisi)) return;
     for (const { rangee, colonne } of casesPosables(etatCourant, posableChoisi)) {
       cellules.get(cle(rangee, colonne))?.classList.add('legale');
     }
@@ -690,12 +794,10 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   function selectionner(index) {
     selection = index;
     for (const case_ of cellules.values()) case_.classList.remove('choisie');
-    const boutons = [$('chantier-reparer'), $('chantier-ameliorer'), $('chantier-demonter')];
     if (index === null || etatCourant === null) {
       $('chantier-selection-nom').textContent = '—';
       $('chantier-selection-detail').textContent = 'aucun bâtiment sélectionné';
       $('chantier-ameliorer-cible').textContent = '';
-      for (const bouton of boutons) bouton.disabled = true;
       return;
     }
     const b = etatCourant.disposition[index];
@@ -704,9 +806,81 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     $('chantier-selection-nom').textContent = detail.nom;
     $('chantier-selection-detail').textContent = detail.detail;
     $('chantier-ameliorer-cible').textContent = `vers niv. ${b.niveau + 1}`;
-    // Ils restent désactivés : la couche d'action n'existe pas. La sélection
-    // sert à LIRE, et lire est déjà ce que ce lot promet.
-    for (const bouton of boutons) bouton.disabled = true;
+    // ⚠ LES BOUTONS NE DÉPENDENT PLUS DE LA SÉLECTION. Le modèle est « armer
+    // puis toucher » : c'est le bouton qu'on touche EN PREMIER, donc il doit
+    // être vif avant qu'un bâtiment soit choisi. La sélection ne sert plus qu'à
+    // LIRE — nom, niveau, débit — et l'action, elle, désigne sa cible du doigt.
+  }
+
+  // -------------------------------------------------------------------------
+  // Les actions : armer, puis toucher
+  // -------------------------------------------------------------------------
+
+  /** Reflète le mode courant sur les trois boutons. */
+  function marquerBoutonsAction() {
+    for (const [nom, action] of Object.entries(ACTIONS)) {
+      $(action.bouton).classList.toggle('arme', actionArmee === nom);
+    }
+  }
+
+  /**
+   * Arme — ou désarme — une action.
+   *
+   * Trois règles, toutes arbitrées le 27/08 :
+   *   — retoucher l'action armée la désarme ;
+   *   — armer une action désarme l'autre : un seul mode à la fois ;
+   *   — armer une action défait aussi la palette, pour la même raison.
+   */
+  function armer(nom) {
+    const memeQueAvant = actionArmee === nom;
+    actionArmee = memeQueAvant ? null : nom;
+    if (actionArmee !== null && posableChoisi !== null) {
+      posableChoisi = null;
+      peindrePalette(etatCourant);
+      marquerCasesLegales();
+    }
+    avis('');
+    marquerBoutonsAction();
+  }
+
+  /**
+   * Exécute l'action armée sur le bâtiment d'indice `index`.
+   *
+   * ⚠ ON DEMANDE, PUIS ON AGIT — jamais de `try` autour de `ameliorer` ou de
+   * `demolir`. Elles LÈVENT, et la levée est un fait de PROGRAMME : l'écran
+   * n'aurait pas dû appeler sans regarder. La liste rendue par `problemes…` est
+   * un fait de JEU, et c'est elle qu'on montre.
+   *
+   * ⚠ LES MESSAGES DU MOTEUR SONT REPRIS TELS QUELS. Ils sont déjà écrits en
+   * français et déjà chiffrés — « il manque 14 de quartz ». Les reformuler ici
+   * créerait une seconde formulation qui finirait par dire autre chose.
+   */
+  function executerAction(index) {
+    const nom = actionArmee;
+    const action = ACTIONS[nom];
+    // Quoi qu'il arrive, le mode se désarme : réussite comme refus.
+    actionArmee = null;
+    marquerBoutonsAction();
+
+    if (action.problemes === undefined) {
+      // Réparer : le chemin existe, il n'a rien à réparer.
+      toast(PAS_DE_REPARATION);
+      return;
+    }
+
+    const problemes = action.problemes(etatCourant, index);
+    if (problemes.length > 0) {
+      toast(messageDeRefus(problemes));
+      return;
+    }
+
+    action.agir(etatCourant, index);
+    // Une démolition retire le bâtiment : l'indice retenu ne désigne plus rien,
+    // ou pis, désigne son voisin. On le lâche plutôt que de le laisser mentir.
+    selection = nom === 'demolir' ? null : index;
+    peindre(etatCourant);
+    rafraichir(etatCourant);
+    if (apresPose !== undefined) apresPose(etatCourant);
   }
 
   grille.addEventListener('click', (evenement) => {
@@ -715,15 +889,34 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     const rangee = Number(case_.dataset.rangee);
     const colonne = Number(case_.dataset.colonne);
 
+    const index = etatCourant.disposition.findIndex(
+      (b) => b.rangee === rangee && b.colonne === colonne,
+    );
+
+    if (actionArmee !== null) {
+      // ⚠ UNE CASE VIDE DÉSARME SANS RIEN DIRE. C'est le geste « à côté du
+      // menu » : le joueur a changé d'avis, il n'a pas commis d'erreur. Un
+      // toast le gronderait pour rien.
+      if (index === -1) {
+        actionArmee = null;
+        marquerBoutonsAction();
+        return;
+      }
+      executerAction(index);
+      return;
+    }
+
     if (posableChoisi !== null) {
       tenterLaPose(rangee, colonne);
       return;
     }
-    const index = etatCourant.disposition.findIndex(
-      (b) => b.rangee === rangee && b.colonne === colonne,
-    );
     selectionner(index === -1 ? null : index);
   });
+
+  for (const nom of Object.keys(ACTIONS)) {
+    $(ACTIONS[nom].bouton).addEventListener('click', () => armer(nom));
+  }
+  marquerBoutonsAction();
 
   /**
    * Pose le bâtiment choisi, ou dit pourquoi c'est refusé.
@@ -744,22 +937,26 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     if (problemes.length > 0) {
       // La sélection RESTE : le joueur voulait poser, il a visé à côté. La lui
       // retirer l'obligerait à la refaire pour réessayer.
-      avis(messageDeRefus(problemes));
+      toast(messageDeRefus(problemes));
       return;
     }
 
     poserBatiment(etatCourant, posableChoisi, rangee, colonne);
+    // ⚠ SAUVEGARDER AVANT DE REPEINDRE, et l'ordre s'est resserré à ce lot.
+    // C'est la première action irréversible du jeu ; l'écrire d'abord la met à
+    // l'abri de tout ce qui pourrait échouer dans le repeint. La session sait
+    // comment écrire, l'écran sait seulement quand.
+    if (apresPose !== undefined) apresPose(etatCourant);
     avis('');
+    // ⚠ LA PALETTE SE DÉSÉLECTIONNE, arbitré le 27/08. Poser deux bâtiments de
+    // suite demande de rechoisir — c'est un geste de plus, contre le risque de
+    // poser par inadvertance à chaque toucher suivant.
+    posableChoisi = null;
     // Le bâtiment tout juste posé devient le sélectionné : c'est ce que le
     // joueur regarde, et le bandeau contextuel en dit le niveau et le débit.
     selection = etatCourant.disposition.length - 1;
     peindre(etatCourant);
     rafraichir(etatCourant);
-    // ⚠ SAUVEGARDER TOUT DE SUITE. C'est la première action irréversible du
-    // jeu ; la perdre parce que l'application a été tuée avant le prochain
-    // enregistrement périodique serait la pire façon de perdre la confiance du
-    // joueur. La session sait comment écrire, l'écran sait seulement quand.
-    if (apresPose !== undefined) apresPose(etatCourant);
   }
 
   /**
@@ -854,13 +1051,12 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       champs.stock.classList.toggle('sature', r.stockMilli >= r.capaciteMilli);
     }
 
-    const { poses, ouverts } = resume.emplacements;
-    $('chantier-emplacements').textContent = `${poses} / ${ouverts}`;
-    // Un dixième de pour cent suffit à une barre de six pixels de haut : sans
-    // l'arrondi, l'attribut de style porte « 91.66666666666666% » à chaque
-    // rafraîchissement, soit dix fois par seconde.
-    const remplissage = ouverts === 0 ? 0 : Math.min(100, (poses / ouverts) * 100);
-    $('chantier-jauge').style.width = `${remplissage.toFixed(1)}%`;
+    // ⚠ LE COMPTEUR D'EMPLACEMENTS A DISPARU AVEC LA BARRE DE GAUCHE (27/08).
+    // Ce qu'il disait n'est pas perdu : les emplacements ouverts restent
+    // marqués sur la grille par les pastilles de case libre, et la saturation
+    // se dit au toucher d'une vignette de la palette — au moment où elle compte,
+    // et non dans un coin que personne ne regarde. `resumeDeLaBase` continue de
+    // le calculer, et `choisirPosable` le lit.
 
     // Chaque bouton porte SON niveau. Celui de la défense reste « — » : l'état
     // ne porte pas de garnison, et en inventer une moyenne afficherait un

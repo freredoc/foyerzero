@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.18.1 · build 19.
+Dernière révision : **27/08/2026**, version 0.19.0 · build 20.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **27/08/2026**, version 0.18.1 · build 19.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot AMORCE-ET-SIGNATURE), à confronter :**
-`npm test` → **306 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**134 118 octets**, 0 référence externe.
+**Référence au 27/08/2026 (après le lot ÉCRAN-ACTIONS), à confronter :**
+`npm test` → **311 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**137 225 octets**, 0 référence externe.
 
 ⚠ **130 488 était faux de 814 octets** — mesuré le 27/08 au soir sur un clone
 neuf, `npm ci && npm run build`. Le nombre a été écrit avant la dernière reprise
@@ -37,8 +37,10 @@ qu'aucune garde ne protège.
 ⚠ **LE HTML BOUGE MAINTENANT À CHAQUE LOT D'INTERFACE.** Il était figé à 81 236
 octets depuis le lot RÉSIDU ; ÉCRAN-CHANTIER l'a porté à 123 785 en branchant la
 session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense, les lots DÉMARRAGE
-et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante.
-La borne de T10 (200 000 octets) tient, avec 33 % de marge — mais elle se surveille
+et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante,
+AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant améliorer
+et démolir.
+La borne de T10 (200 000 octets) tient, avec 31 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -935,14 +937,55 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ne dit comment le total se répartit entre quartz et scorie depuis que le
   modèle du lot 1 est parti avec `data/params.js`. Un nombre sans ressource, dit
   comme tel, est plus honnête qu'un « 3 quartz » faux.
-- **LA POSE EST BRANCHÉE DEPUIS LE 27/08 ; AMÉLIORER ET DÉMONTER NE LE SONT
-  PAS.** L'écran n'est plus en lecture seule : la palette est vivante, le joueur
-  choisit un bâtiment, les cases où il peut se poser se cerclent, il touche, ça
-  se pose. Les deux autres boutons **restent présents et désactivés** — améliorer
-  attend la répartition d'un coût entre quartz et scorie, que rien n'arbitre
-  depuis le départ de `data/params.js` ; démonter attend de savoir si ça rend
-  quelque chose. Des boutons montrés vifs mentiraient ; absents, ils feraient
-  croire à un écran fini.
+- **LES TROIS ACTIONS SONT BRANCHÉES DEPUIS LE 27/08, SUR LE MODÈLE « ARMER
+  PUIS TOUCHER ».** C'est l'INVERSE de ce qui existait : on ne sélectionne plus
+  un bâtiment pour activer les boutons, on arme un bouton puis on touche le
+  bâtiment. Quatre règles, toutes arbitrées :
+  retoucher l'action armée la désarme ; armer une action désarme l'autre ; armer
+  une action défait aussi la palette — **un seul mode à la fois** ; et toucher
+  une case VIDE désarme **sans rien dire**, comme un clic à côté d'un menu.
+  L'action se désarme dans tous les cas, réussite comme refus.
+  ⚠ **LES BOUTONS NE SONT PLUS DÉSACTIVÉS**, et ils ne peuvent plus l'être :
+  c'est le bouton qu'on touche EN PREMIER. Un test refuse qu'un `disabled`
+  revienne sur les trois, ce qui rendrait tout le modèle inatteignable au doigt.
+  ⚠ **RÉPARER N'A PAS DE MOTEUR, ET SON REFUS EST LA SEULE PHRASE ÉCRITE DANS
+  L'INTERFACE.** `REPARATION_BASE_JOUEUR` est une table de calibrage, aucune
+  fonction ne répare, aucun bâtiment ne porte de dégâts. Le bouton suit quand
+  même le chemin complet — il s'arme, il se désarme — et dit ce qui est vrai.
+  Un test asserte que `sim/state.js` n'exporte toujours rien qui répare : **il
+  est fait pour tomber** le jour où le moteur en gagne une, et dire quoi
+  brancher.
+  ⚠ **ON DEMANDE, PUIS ON AGIT — ET LA GARDE VISE AUSSI LE POINT D'APPEL
+  INDIRECT.** L'écran n'appelle pas `ameliorer(...)`, il appelle
+  `action.agir(...)` par la table `ACTIONS`. Une garde qui ne cherchait que les
+  noms directs laissait passer un `try` autour de la répartition — la seule
+  forme sous laquelle la faute se commettrait ici, et la falsification l'a
+  débusquée. Elle refuse maintenant les deux.
+- **LA POSE EST BRANCHÉE DEPUIS LE 27/08.** La palette est vivante, le joueur
+  choisit un bâtiment, il touche, ça se pose.
+  ⚠ **SEUL LE COLLECTEUR VOIT SES CASES CERCLÉES** (27/08). C'est le seul
+  bâtiment pour qui le TERRAIN décide — `CHAMPS.posableDessus` ne contient que
+  lui — et cercler soixante cases sur soixante-douze pour les dix autres
+  n'apprend rien. **C'est l'AFFICHAGE qui disparaît, pas la règle** :
+  `problemesDeLaPose` est interrogée exactement comme avant, et une case
+  illégale dit toujours pourquoi. L'écran LIT la table, il n'écrit pas
+  « collecteur » en dur — un test le garde.
+  ⚠ **LA PALETTE SE DÉSÉLECTIONNE APRÈS LA POSE** (27/08). Poser deux bâtiments
+  de suite demande de rechoisir, contre le risque de poser par inadvertance au
+  toucher suivant. Et la SAUVEGARDE passe avant le repeint, pas après.
+  ⚠ **LE COMPTEUR D'EMPLACEMENTS A DISPARU AVEC LA BARRE DE GAUCHE** (27/08).
+  Ce qu'il disait se dit maintenant au toucher d'une vignette : si la base est
+  pleine, un toast le dit AVANT que le joueur cherche une case. La grandeur
+  reste calculée par `resumeDeLaBase` — c'est l'affichage permanent qui part.
+  ⚠ **LA GRILLE SE CENTRE PAR LA MISE EN PAGE, JAMAIS PAR UNE TRANSFORMATION.**
+  Un `transform: scale()` décrocherait le doigt de la case qu'il vise : le
+  dessin bougerait, pas la géométrie du pointage. La largeur de la grille est
+  plafonnée (`--case-max`, 46 px, la borne haute mesurée par la passation du
+  27/08) et `margin-inline: auto` répartit également ce qui reste.
+  ⚠ **UN TOAST N'EST PAS UN BANDEAU.** Les refus d'action répondent à un geste
+  et s'effacent seuls ; les messages de la SESSION — sauvegarde impossible,
+  sauvegarde illisible — décrivent un état qui dure et ne s'effacent pas. Les
+  deux passent par `#chantier-avis`, et `avis()` l'emporte sur `toast()`.
   ⚠ **ON DEMANDE, PUIS ON POSE — ET JAMAIS DE `try` AUTOUR DE `poser`.**
   `problemesDeLaPose` rend une LISTE, `poser` LÈVE, et la différence est la règle
   du dépôt : une pose refusée est un fait de JEU qu'on montre au joueur, une
