@@ -208,12 +208,37 @@ tools/                  7 fichiers, dont UN SEUL sert au build — relevé le 28
     porte que sur les quatre dossiers de `src/` et sur `test/`.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
+art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
+rapports/               rapports et passations de plus de 48 h ; les récents restent à la racine
 .github/workflows/ci.yml   web (build + tests) · android (tests JVM + APK) · pages (main seul)
 ```
 
 `dist/` est un produit de build, jamais commité. Le job `pages` **rebuilde le
 HTML dans le job** et génère le manifeste à partir de CE HTML : la
 désynchronisation code/livrable est structurellement impossible.
+
+### La racine a été rangée le 28/08, et rien n'a été supprimé
+
+Trente-neuf fichiers **déplacés**, zéro retiré : vingt PNG de sprites déposés
+par erreur à la racine sont partis dans `art/sources/`, et dix-sept
+`RAPPORT-*.md` plus deux `PASSATION-*.md` de plus de 48 h dans `rapports/`.
+
+⚠ **Les vingt PNG étaient bien ORPHELINS, et ça se mesure.** Aucun des vingt
+n'est cité nulle part dans le dépôt — vérifié fichier par fichier avant de
+bouger quoi que ce soit, pas seulement dans `src/`.
+
+⚠ **QUATRE CITATIONS POINTENT VERS DES FICHIERS QUI ONT DÉMÉNAGÉ**, et elles
+tiennent : `CLAUDE.md` cite `RAPPORT-LOT-1.md` et `PASSATION-2026-08-25.md`,
+`PASSATION-2026-08-26-soir.md` cite `PASSATION-2026-08-26.md`, et
+`test/champs.test.js` cite `RAPPORT-lotCHAMPS-generateur.md`. **Les quatre sont
+de la PROSE, aucune n'est un chemin lu** — c'est ce qui a été vérifié avant le
+déplacement, et c'est pourquoi la suite est restée verte. Le jour où l'une
+devient un chemin, elle casse.
+
+⚠ **AUCUNE GARDE NE COMPTE LA RACINE.** `documentation.test.js` asserte les
+noms de `test/` et des quatre dossiers de `src/`, rien d'autre : ces deux
+dossiers-ci ne sont donc décrits que par la §2 ci-dessus, et elle a déjà menti
+deux fois.
 
 ### Un fichier de la racine qui n'est pas ce qu'il paraît
 
