@@ -24,7 +24,9 @@ import { creerChronometre,
   CLE_SAUVEGARDE, CLE_SECOURS, SEUIL_RATTRAPAGE_TICKS, PERIODE_SAUVEGARDE_MS,
   DUREE_APPUI_DEBUG_MS, avancer,
 } from '../src/ui/session.js';
-import { BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, emplacementsDuNiveau } from '../src/data/base.js';
+import {
+  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, emplacementsDuNiveau, stockagePropreDuNiveau,
+} from '../src/data/base.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
@@ -233,7 +235,23 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
   // eux, n'ont pas changé d'une unité : la poche stocke, elle ne produit pas.
   // On l'écrit ADDITIONNÉE plutôt que fondue dans un nouveau total, pour que la
   // ligne dise d'où vient l'écart.
-  const poche = BASE_BATIMENTS.chantierDeConstruction.stockagePropre;
+  //
+  // ⚠ ET ELLES ONT REBOUGÉ LE MÊME SOIR, une heure plus tard : la poche suit le
+  // niveau depuis l'arbitrage d'Ethan (× 1,25). La maquette porte un Chantier
+  // de niveau 6, donc 50 × 1,25⁵ = 153, pas 50. La ligne précédente lisait le
+  // CHAMP `stockagePropre`, qui ne porte que le niveau 1 — elle a rendu 50 pour
+  // un Chantier de niveau 6 et le test est tombé. Passer par
+  // `stockagePropreDuNiveau` est le seul moyen de ne pas relire le niveau 1.
+  const niveauDuChantier = etat.disposition
+    .find((b) => b.id === 'chantierDeConstruction').niveau;
+  const poche = stockagePropreDuNiveau('chantierDeConstruction', niveauDuChantier);
+  // Falsifiable : si la maquette repassait à un Chantier de niveau 1, la poche
+  // vaudrait de nouveau 50 et cette ligne ne distinguerait plus les deux
+  // lectures. Le montage doit être à un niveau où elles DIFFÈRENT.
+  assert.ok(
+    niveauDuChantier > 1 && poche.quartz > BASE_BATIMENTS.chantierDeConstruction.stockagePropre.quartz,
+    'la maquette doit porter un Chantier au-dessus du niveau 1, sinon la courbe n\'est pas mesurée',
+  );
   assert.ok(poche.quartz > 0, 'poche nulle : le montage ne mesure rien');
   assert.deepEqual(resume.ressources, [
     { cle: 'quartz', stockMilli: 0, capaciteMilli: 7_032_000 + poche.quartz * 1000, debitMilli: 2_250_000 },
@@ -266,7 +284,18 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
   }
 
   // Ce que le joueur lit vraiment, une fois formaté.
-  assert.equal(formaterUnites(resume.ressources[0].capaciteMilli), `7${SEPARATEUR_MILLIERS}082`);
+  //
+  // ⚠ CETTE LIGNE EST TOMBÉE AU PASSAGE DE LA POCHE À LA COURBE, et elle avait
+  // raison. Elle portait « 7 082 » — 7 032 + 50, la poche PLATE — alors que
+  // l'assertion vingt lignes plus haut était déjà passée à `poche.quartz`. Un
+  // nombre retapé à deux endroits n'en fait bouger qu'un. Le garde ci-dessous
+  // nomme la cause au lieu de laisser un écart de trois chiffres :
+  const capaciteQuartz = 7_032_000 + poche.quartz * 1000;
+  assert.equal(
+    capaciteQuartz, 7_185_000,
+    'la poche du Chantier a bougé : recalculer la ligne formatée juste en dessous',
+  );
+  assert.equal(formaterUnites(resume.ressources[0].capaciteMilli), `7${SEPARATEUR_MILLIERS}185`);
   assert.equal(formaterDebit(resume.ressources[1].debitMilli), `+1${SEPARATEUR_MILLIERS}876/h`);
   assert.equal(formaterDixiemes(resume.niveaux.batiments), '4,6');
 });

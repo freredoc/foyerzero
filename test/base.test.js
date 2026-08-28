@@ -23,9 +23,11 @@ import assert from 'node:assert/strict';
 import {
   BASE_BATIMENTS, EMPLACEMENTS, GEOMETRIE_BASE, CHAMPS, COUT_NIVEAU_DEUX,
   COUT_ELECTRICITE, DEBITS, VOISINAGE, STOCKAGE, PRODUCTEUR_APPARIE,
-  REPARATION_BASE_JOUEUR,
+  REPARATION_BASE_JOUEUR, RESSOURCE_DE_COUT, CATEGORIE_DE_COUT_DE_LA_BASE,
+  REMBOURSEMENT_DEMOLITION,
   emplacementsDuNiveau, capaciteDuNiveau, debitParHeure, debitVoisinParHeure,
-  zoneDesChamps, estDansLaBase,
+  zoneDesChamps, estDansLaBase, coutDeMontee, coutCumule, remboursementDuNiveau,
+  stockagePropreDuNiveau,
 } from '../src/data/base.js';
 import { GRILLE } from '../src/data/combat.js';
 import { GEOGRAPHIE, BATIMENTS } from '../src/data/sites.js';
@@ -614,4 +616,169 @@ test('base — l\'électricité ne se paie qu\'à partir du niveau 3, et jamais 
   // plus cher : c'est ce qui pousse à monter sa production d'énergie d'abord.
   assert.ok(COUT_ELECTRICITE.fraction.centrale < COUT_ELECTRICITE.fraction.autres);
   assert.ok(COUT_ELECTRICITE.fraction.autres < COUT_ELECTRICITE.fraction.collecteur);
+});
+
+// ---------------------------------------------------------------------------
+// Coût de montée, cumul, remboursement — arbitrés le 27/08 au soir
+// ---------------------------------------------------------------------------
+//
+// LES TROIS ARBITRAGES QUE CES TESTS GARDENT :
+//   - tous les BÂTIMENTS coûtent du quartz ; défenses et offense coûteront de
+//     la scorie, et la table le dit déjà même si rien ne la lit encore ;
+//   - la poche du Chantier suit le niveau en × 1,25 ;
+//   - démolir rend 90 % de TOUT l'investi, arrondi vers le bas.
+//
+// Chaque nombre écrit ici a été relevé en exécutant le module, jamais déduit de
+// la formule : c'est la formule qu'on teste.
+
+test('base — un bâtiment coûte du quartz, et jamais de la scorie', () => {
+  assert.equal(RESSOURCE_DE_COUT.batiment, 'quartz');
+  assert.equal(RESSOURCE_DE_COUT.defense, 'scorie');
+  assert.equal(RESSOURCE_DE_COUT.offense, 'scorie');
+  assert.equal(CATEGORIE_DE_COUT_DE_LA_BASE, 'batiment');
+
+  // Les onze, à trois niveaux : aucun ne demande de scorie, tous demandent du
+  // quartz. Une inversion de la table ferait tomber les deux moitiés.
+  for (const id of IDS) {
+    for (const niveau of [2, 5, 9]) {
+      const cout = coutDeMontee(id, niveau);
+      assert.equal(cout.scorie, 0, `${id} niv.${niveau} : la base ne coûte pas de scorie`);
+      assert.ok(cout.quartz > 0, `${id} niv.${niveau} : coût en quartz nul`);
+    }
+  }
+});
+
+test('base — la chaîne des coûts restitue la table relevée, palier par palier', () => {
+  // Relevé par exécution le 27/08. C'est exactement la suite écrite en
+  // commentaire d'`ECONOMIE_NIVEAU.ratios` — la formule la retrouve.
+  const attendus = [8, 10, 20, 80, 440, 1440];
+  const obtenus = [2, 3, 4, 5, 6, 7].map((n) => coutDeMontee('chantierDeConstruction', n).quartz);
+  assert.deepEqual(obtenus, attendus);
+
+  // Le premier palier EST la table de classe, il ne s'en déduit pas.
+  assert.equal(obtenus[0], COUT_NIVEAU_DEUX.majeur);
+  assert.equal(coutDeMontee('collecteur', 2).quartz, COUT_NIVEAU_DEUX.modeste);
+  assert.equal(coutDeMontee('raffinerie', 2).quartz, COUT_NIVEAU_DEUX.mineur);
+
+  // Falsifiable : la suite doit être STRICTEMENT croissante, sinon une chaîne
+  // qui rendrait partout le même nombre passerait les égalités ci-dessus.
+  for (let i = 1; i < obtenus.length; i++) {
+    assert.ok(obtenus[i] > obtenus[i - 1], `palier ${i + 2} non croissant`);
+  }
+});
+
+test('base — l\'électricité est une fraction du coût principal, à partir du niveau 3', () => {
+  // Les niveaux 1 et 2 n'en coûtent aucune.
+  assert.equal(coutDeMontee('chantierDeConstruction', 2).electricite, 0);
+  assert.equal(COUT_ELECTRICITE.premierNiveauPayant, 3);
+
+  // Au-delà, elle vaut la fraction du bâtiment appliquée au quartz du MÊME
+  // palier — pas du palier précédent, pas du cumul.
+  for (const id of IDS) {
+    for (const niveau of [3, 6, 11]) {
+      const cout = coutDeMontee(id, niveau);
+      const part = Object.prototype.hasOwnProperty.call(COUT_ELECTRICITE.fraction, id)
+        ? COUT_ELECTRICITE.fraction[id]
+        : COUT_ELECTRICITE.fraction.autres;
+      assert.equal(cout.electricite, Math.round(part * cout.quartz), `${id} niv.${niveau}`);
+    }
+  }
+
+  // ⚠ UNE FRACTION PEUT S'ARRONDIR À ZÉRO, et ce n'est pas un défaut : la
+  // centrale paie 10 % d'un coût de 4, soit 0,4 → 0. Relevé, pas déduit.
+  assert.equal(coutDeMontee('centrale', 3).quartz, 4);
+  assert.equal(coutDeMontee('centrale', 3).electricite, 0);
+  assert.equal(coutDeMontee('centrale', 4).electricite, 1);
+
+  // Falsifiable : le collecteur, lui, en paie franchement — sinon le test
+  // ci-dessus passerait sur un module qui rend zéro partout.
+  assert.ok(coutDeMontee('collecteur', 5).electricite > 0);
+});
+
+test('base — le niveau 1 est gratuit, et il ne se demande pas', () => {
+  for (const id of IDS) {
+    // `coutDeMontee` LÈVE plutôt que de rendre zéro : demander le prix d'un
+    // niveau gratuit est une faute d'appel, pas une réponse valide.
+    assert.throws(() => coutDeMontee(id, 1), /gratuit/);
+    assert.deepEqual(coutCumule(id, 1), { quartz: 0, scorie: 0, electricite: 0 });
+    assert.deepEqual(remboursementDuNiveau(id, 1), { quartz: 0, scorie: 0, electricite: 0 });
+  }
+});
+
+test('base — le cumul est la somme des paliers, et rien d\'autre', () => {
+  for (const id of ['chantierDeConstruction', 'collecteur', 'raffinerie']) {
+    for (const niveau of [2, 5, 8]) {
+      const somme = { quartz: 0, scorie: 0, electricite: 0 };
+      for (let n = ECONOMIE_NIVEAU.premierNiveauPayant; n <= niveau; n++) {
+        const palier = coutDeMontee(id, n);
+        for (const r of Object.keys(somme)) somme[r] += palier[r];
+      }
+      assert.deepEqual(coutCumule(id, niveau), somme, `${id} niv.${niveau}`);
+    }
+  }
+
+  // Relevé par exécution : un collecteur de niveau 5 a coûté 47 de quartz et
+  // 22 d'électricité depuis le niveau 1.
+  assert.deepEqual(coutCumule('collecteur', 5), { quartz: 47, scorie: 0, electricite: 22 });
+
+  // Falsifiable : le cumul doit dépasser STRICTEMENT le dernier palier, sinon
+  // une fonction qui ne rendrait que le dernier passerait la comparaison.
+  assert.ok(coutCumule('collecteur', 5).quartz > coutDeMontee('collecteur', 5).quartz);
+});
+
+test('base — démolir rend 90 % de l\'investi, arrondi vers le bas', () => {
+  assert.equal(REMBOURSEMENT_DEMOLITION.fraction, 0.9);
+
+  for (const id of ['chantierDeConstruction', 'collecteur', 'centrale']) {
+    for (const niveau of [2, 4, 7]) {
+      const investi = coutCumule(id, niveau);
+      const rendu = remboursementDuNiveau(id, niveau);
+      for (const r of ['quartz', 'scorie', 'electricite']) {
+        assert.equal(rendu[r], Math.floor(investi[r] * 0.9), `${id} niv.${niveau} ${r}`);
+      }
+      // ⚠ LE RENDU EST STRICTEMENT INFÉRIEUR À L'INVESTI dès qu'il y a de quoi
+      // perdre 10 %. Sans cette ligne, un remboursement à 100 % passerait
+      // toutes les égalités ci-dessus le jour où quelqu'un écrirait 1 à la
+      // place de 0,9 — l'arrondi vers le bas ne suffit pas à le trahir.
+      assert.ok(rendu.quartz < investi.quartz, `${id} niv.${niveau} : 90 % non appliqué`);
+    }
+  }
+
+  // Relevé par exécution : un collecteur de niveau 5 rend 42 et 19.
+  assert.deepEqual(remboursementDuNiveau('collecteur', 5), { quartz: 42, scorie: 0, electricite: 19 });
+});
+
+test('base — la poche du Chantier suit le niveau, et la pente n\'est écrite qu\'une fois', () => {
+  const champ = BASE_BATIMENTS.chantierDeConstruction.stockagePropre;
+  assert.deepEqual(champ, { quartz: 50, scorie: 50, electricite: 40 });
+
+  // Le champ vaut au niveau 1 — et seulement là.
+  assert.deepEqual(stockagePropreDuNiveau('chantierDeConstruction', 1), champ);
+
+  // ⚠ LA PENTE VIENT D'`ECONOMIE_NIVEAU`, elle n'est pas retapée ici. Si la
+  // production changeait de pente, la poche suivrait et ce test avec elle :
+  // c'est voulu, c'est la même grandeur.
+  for (const niveau of [2, 4, 6, 10, 25]) {
+    const facteur = ECONOMIE_NIVEAU.penteProduction ** (niveau - 1);
+    const poche = stockagePropreDuNiveau('chantierDeConstruction', niveau);
+    for (const r of ['quartz', 'scorie', 'electricite']) {
+      assert.equal(poche[r], Math.round(champ[r] * facteur), `niv.${niveau} ${r}`);
+    }
+  }
+
+  // Relevés par exécution — les deux niveaux qui servent ailleurs dans la suite.
+  assert.deepEqual(stockagePropreDuNiveau('chantierDeConstruction', 6),
+    { quartz: 153, scorie: 153, electricite: 122 });
+  assert.deepEqual(stockagePropreDuNiveau('chantierDeConstruction', 10),
+    { quartz: 373, scorie: 373, electricite: 298 });
+
+  // Falsifiable : la courbe doit MONTER dès le niveau 2, sinon un module resté
+  // plat passerait la comparaison au niveau 1 et rien d'autre ne le verrait.
+  assert.ok(stockagePropreDuNiveau('chantierDeConstruction', 2).quartz > champ.quartz);
+
+  // ⚠ ELLE REND `null`, PAS DES ZÉROS, pour un bâtiment sans poche : les dix
+  // autres n'en portent pas, et l'absence doit rester discernable d'un zéro.
+  for (const id of IDS.filter((k) => k !== 'chantierDeConstruction')) {
+    assert.equal(stockagePropreDuNiveau(id, 3), null, `${id} ne porte pas de poche`);
+  }
 });

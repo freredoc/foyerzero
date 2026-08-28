@@ -13,7 +13,9 @@ import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import {
   SAVE_VERSION, creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer,
   poser, problemesDeLaPose,
+  ameliorer, problemesDeLAmelioration, demolir, problemesDeLaDemolition,
 } from '../src/sim/state.js';
+import { coutDeMontee, coutCumule, remboursementDuNiveau } from '../src/data/base.js';
 import { DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli } from '../src/sim/economie-base.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerRng, entier } from '../src/sim/rng.js';
@@ -695,4 +697,126 @@ test('état — une base déjà bancale reste constructible', () => {
   );
   // Et une pose légale reste légale malgré ça.
   assert.deepEqual(problemesDeLaPose(etat, 'collecteur', champs[1].rangee, champs[1].colonne), []);
+});
+
+// ---------------------------------------------------------------------------
+// Améliorer et démolir — lot du 27/08 au soir
+// ---------------------------------------------------------------------------
+//
+// ⚠ CES DEUX MUTATIONS SONT LES PREMIÈRES QUI DÉPENSENT. Tout ce que le moteur
+// faisait jusqu'ici ne faisait qu'ajouter aux stocks. Les tests portent donc
+// autant sur ce qui NE bouge PAS quand l'opération est refusée que sur ce qui
+// bouge quand elle passe : un refus qui débiterait quand même serait invisible
+// à un test qui ne regarde que le verdict.
+
+/** Une base neuve avec un collecteur posé sur un vrai champ, et de quoi payer. */
+function baseAvecCollecteur(quartzMilli = 100_000_000) {
+  const etat = creerEtat(20260827);
+  const premierChamp = etat.champs.cases[0];
+  poser(etat, 'collecteur', premierChamp.rangee, premierChamp.colonne);
+  etat.economie.ressources = {
+    quartz: quartzMilli, scorie: quartzMilli, electricite: quartzMilli,
+  };
+  assert.equal(etat.disposition.length, 2);
+  assert.equal(etat.economie.residus.length, 2);
+  return etat;
+}
+
+test('état — améliorer monte d\'un niveau et débite exactement le palier', () => {
+  const etat = baseAvecCollecteur();
+  const avant = { ...etat.economie.ressources };
+  const cout = coutDeMontee('collecteur', 2);
+
+  // Falsifiable : un palier gratuit rendrait le débit indétectable.
+  assert.ok(cout.quartz > 0, 'le montage ne mesure rien : palier gratuit');
+
+  ameliorer(etat, 1);
+
+  assert.equal(etat.disposition[1].niveau, 2);
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    assert.equal(etat.economie.ressources[r], avant[r] - cout[r] * 1000, `débit en ${r}`);
+  }
+  // Le Chantier n'a pas bougé : améliorer ne touche QUE l'indice visé.
+  assert.equal(etat.disposition[0].niveau, 1);
+
+  // Deux montées d'affilée débitent deux paliers DIFFÉRENTS — sinon un module
+  // qui relirait toujours le palier 2 passerait la première assertion.
+  const apresUn = { ...etat.economie.ressources };
+  ameliorer(etat, 1);
+  assert.equal(etat.disposition[1].niveau, 3);
+  const debitDeux = apresUn.quartz - etat.economie.ressources.quartz;
+  assert.equal(debitDeux, coutDeMontee('collecteur', 3).quartz * 1000);
+  assert.notEqual(debitDeux, cout.quartz * 1000);
+});
+
+test('état — améliorer sans les ressources est REFUSÉ, et rien n\'est débité', () => {
+  const etat = baseAvecCollecteur(0);
+  const avant = { ...etat.economie.ressources };
+
+  const problemes = problemesDeLAmelioration(etat, 1);
+  assert.ok(problemes.length > 0, 'un stock à zéro doit refuser');
+  assert.ok(problemes.some((p) => p.code === 'manque:quartz'), 'le manque doit nommer la ressource');
+  // Le message CHIFFRE ce qui manque : un message qui dirait seulement
+  // « ressources insuffisantes » ne permettrait pas au joueur de viser.
+  assert.match(problemes.find((p) => p.code === 'manque:quartz').message, /\d/);
+
+  assert.throws(() => ameliorer(etat, 1), /impossible/);
+
+  // ⚠ LE CŒUR DU TEST. Un refus qui aurait déjà débité, ou déjà monté le
+  // niveau, passerait le `throws` ci-dessus sans que rien ne le dise.
+  assert.equal(etat.disposition[1].niveau, 1);
+  assert.deepEqual(etat.economie.ressources, avant);
+
+  // Et avec juste ce qu'il faut, ça passe : le refus vient bien du stock, pas
+  // d'un blocage permanent.
+  const cout = coutDeMontee('collecteur', 2);
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    etat.economie.ressources[r] = cout[r] * 1000;
+  }
+  assert.deepEqual(problemesDeLAmelioration(etat, 1), []);
+  ameliorer(etat, 1);
+  assert.equal(etat.disposition[1].niveau, 2);
+});
+
+test('état — démolir rend 90 %, retire la ligne, et retire son résidu', () => {
+  const etat = baseAvecCollecteur();
+  ameliorer(etat, 1);
+  ameliorer(etat, 1); // niveau 3, donc un investi non nul dans les deux canaux
+  const avant = { ...etat.economie.ressources };
+  const investi = coutCumule('collecteur', 3);
+  assert.ok(investi.quartz > 0 && investi.electricite > 0, 'montage sans investi mesurable');
+
+  const rendu = demolir(etat, 1);
+
+  assert.deepEqual(rendu, remboursementDuNiveau('collecteur', 3));
+  assert.ok(rendu.quartz < investi.quartz, 'le rendu doit être amputé de 10 %');
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    assert.equal(etat.economie.ressources[r], avant[r] + rendu[r] * 1000, `rendu en ${r}`);
+  }
+
+  // ⚠ LES DEUX LISTES PARALLÈLES RESTENT ALIGNÉES. `verifierEtat` refuse un
+  // état dont les résidus ne comptent pas comme la disposition, et il lèverait
+  // au prochain CHARGEMENT — donc loin de la faute.
+  assert.equal(etat.disposition.length, 1);
+  assert.equal(etat.economie.residus.length, 1);
+  assert.equal(etat.disposition[0].id, 'chantierDeConstruction');
+
+  // La sauvegarde relit l'état sans broncher : la preuve que l'alignement tient.
+  assert.doesNotThrow(() => charger(serialiser(etat, T0), T0));
+});
+
+test('état — le Chantier de construction ne se démolit pas', () => {
+  const etat = baseAvecCollecteur();
+  const problemes = problemesDeLaDemolition(etat, 0);
+  assert.ok(problemes.some((p) => p.code === 'central'), 'le Chantier doit être protégé');
+
+  assert.throws(() => demolir(etat, 0), /impossible/);
+  // Rien n'a été rendu, rien n'a été retiré.
+  assert.equal(etat.disposition.length, 2);
+  assert.equal(etat.disposition[0].id, 'chantierDeConstruction');
+
+  // Falsifiable : le collecteur du même montage, lui, se démolit — sinon le
+  // test passerait sur un module qui refuserait TOUTE démolition.
+  assert.deepEqual(problemesDeLaDemolition(etat, 1), []);
+  assert.doesNotThrow(() => demolir(etat, 1));
 });
