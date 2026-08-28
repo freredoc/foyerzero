@@ -196,6 +196,12 @@ body{
 .band.on span,.band.on i{color:var(--ai-c)}
 .band.on{background:var(--k-ombre)}
 .band.vide i{color:#3E454C}
+/* La bascule entre bases — une barre de 26 px sous les ressources. */
+.nav { flex: 0 0 26px; display: flex; align-items: center; background: #1E2124; border-bottom: 1px solid #161914; }
+.nav .fleche { flex: 0 0 44px; text-align: center; color: #8C9A72; font-size: 12px; opacity: 0.45; }
+.nav .ou { flex: 1; text-align: center; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #68727E; }
+.band.off em { background: #8A1E17; }
+
 /* Le saut vers l'ecran Offense n'est PAS une troisieme bande : un filet le
    separe, une fleche dit qu'il emmene ailleurs, et il ne porte pas de niveau.
    C'est ce qui manquait au bouton « Assaut », qui avait l'air d'une bande et
@@ -228,10 +234,19 @@ body{
 <div id="app">
 
   <div class="tabs">
-    <div class="tab on">Chantier</div>
+    <div class="tab on">Base</div>
+    <div class="tab futur">Mission</div>
     <div class="tab futur">Recherche</div>
     <div class="tab futur">Monde</div>
-    <div class="tab futur">Options</div>
+    <div class="tab">Options</div>
+  </div>
+
+  <!-- La bascule entre bases, ajoutee le 28/08. Une seule base existe : les
+       deux fleches sont eteintes et le libelle dit pourquoi. -->
+  <div class="nav">
+    <span class="fleche">◀</span>
+    <span class="ou">Base 1 / 1</span>
+    <span class="fleche">▶</span>
   </div>
 
   <div class="res">
@@ -271,10 +286,16 @@ body{
     <div class="btn sell">Démonter</div>
   </div>
 
+  <!-- ⚠ TROIS BOUTONS EGAUX, ET LA BARRE EST ENTIERE (28/08). Elle portait deux
+       bandes, le numero de version et un saut vers l'Offense separe par un
+       filet. Ethan a tranche : « les boutons base defense offense doivent
+       prendre toutes la place en bas ». Le numero de version est parti dans les
+       Options. La maquette suit, sinon elle enseignerait une navigation que le
+       jeu ne fait plus — c'est la lecon du retournement du 27/08. -->
   <div class="bands">
-    <div class="band bat on" data-y="0"><em></em><span>Chantier</span><i>4,6</i></div>
+    <div class="band bat on" data-y="0"><em></em><span>Base</span><i>4,6</i></div>
     <div class="band def vide" data-y="312"><em></em><span>Défense</span><i>—</i></div>
-    <div class="saut">Offense →</div>
+    <div class="band off vide"><em></em><span>Offense</span><i>—</i></div>
   </div>
 
   <div class="slots" id="slots"></div>

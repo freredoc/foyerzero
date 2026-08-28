@@ -21,6 +21,11 @@ import {
   delaiAvantAmelioration,
   formaterDelai,
   noteDuRefus,
+  compteurDeContexte,
+  CONTEXTES,
+  navigationEntreBases,
+  NOMBRE_DE_BASES,
+  BOUTONS_DU_BAS,
 } from '../src/ui/chantier.js';
 import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
@@ -481,11 +486,14 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // donc un `dist/index.html` à jour.
   const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
   for (const attendu of [
-    'ecran-chantier', 'chantier-onglets', 'chantier-ressources',
-    'chantier-version', 'chantier-champ', 'chantier-defile', 'chantier-grille',
+    // L'en-tête COMMUN aux trois écrans, sorti de `#ecran-chantier` le 28/08.
+    'jeu', 'ecrans', 'tete-onglets', 'onglet-base', 'onglet-options', 'ressources',
+    'navigation', 'navigation-precedente', 'navigation-suivante', 'navigation-libelle',
+    'barre-bas', 'ecran-options', 'options-version',
+    'ecran-chantier', 'chantier-champ', 'chantier-defile', 'chantier-grille',
     'chantier-contexte', 'chantier-selection-nom', 'chantier-selection-detail',
     'chantier-reparer', 'chantier-ameliorer', 'chantier-ameliorer-cible', 'chantier-demolir',
-    'chantier-bandes', 'chantier-bandes-liste', 'chantier-palette', 'chantier-avis',
+    'chantier-palette', 'chantier-avis',
     'chantier-alerte', 'chantier-alerte-message', 'chantier-alerte-neuve', 'chantier-alerte-reessayer',
     // Le panneau de détail, lot PANNEAU-ET-MARGES : son contenu vient du JS,
     // mais ses quatre points d'ancrage sont dans le balisage.
@@ -531,6 +539,23 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   for (const parti of ['chantier-emplacements', 'chantier-jauge', 'chantier-demonter']) {
     assert.ok(!html.includes(parti), `« ${parti} » devait disparaître de l'écran`);
   }
+
+  // ⚠ ET L'EN-TÊTE A DÉMÉNAGÉ, IL N'A PAS ÉTÉ DUPLIQUÉ. Les anciens
+  // identifiants ne doivent plus exister : deux bandeaux de ressources, l'un
+  // dans l'écran et l'autre au-dessus, se rempliraient chacun de leur côté et
+  // l'un des deux mentirait. On lit la page décommentée — la prose du lot
+  // raconte ce déménagement et citerait les noms partis.
+  const code = html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const demenage of ['chantier-onglets', 'chantier-ressources', 'chantier-bandes',
+    'chantier-bandes-liste', 'chantier-version', 'chantier-vers-offense']) {
+    assert.ok(!code.includes(demenage), `« ${demenage} » survit après le déménagement`);
+  }
+  // Cinq onglets, dont trois morts : Base, Mission, Recherche, Monde, Options.
+  const ongletsMorts = [...code.matchAll(/class="futur" disabled/g)];
+  assert.equal(ongletsMorts.length, 3, 'Mission, Recherche et Monde doivent être désactivés');
+  assert.ok(/>Mission</.test(code), 'l\'onglet Mission est absent');
+  assert.ok(/id="onglet-base">Base</.test(code), 'l\'onglet ne s\'appelle plus « Base »');
+  assert.ok(!/>Chantier</.test(code), 'un onglet « Chantier » traîne encore');
   // Et la grille se centre par la MISE EN PAGE, jamais par une transformation :
   // un `scale()` décrocherait le doigt de la case qu'il vise.
   assert.match(html, /#chantier-grille\s*\{[^}]*margin-inline:\s*auto/,
@@ -1630,8 +1655,11 @@ test('écran — les pastilles de case libre ont quitté la grille, pas le calcu
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
   assert.doesNotMatch(feuille, /\n\s*\.vide\s*\{/,
     'la règle de la pastille survit dans la feuille');
-  assert.match(feuille, /#offense-barre \.vide/,
-    'le remplissage de la barre Offense a été retiré par erreur');
+  // ⚠ `#offense-barre` A DISPARU AU LOT MISE EN PAGE, donc la précaution qui
+  // portait sur lui n'a plus d'objet : c'est la palette de l'Offense qui porte
+  // maintenant le seul autre usage du nom court `vide`, et il n'y en a plus.
+  assert.ok(!/#offense-barre/.test(feuille.replace(/\/\*[\s\S]*?\*\//g, '')),
+    'la barre propre à l\'écran Offense devait disparaître');
 
   // ⚠ ET LA GRANDEUR RESTE CALCULÉE ET AFFICHÉE. C'est le dessin qui part, pas
   // le plafond : le compteur d'emplacements le dit toujours.
@@ -1639,4 +1667,188 @@ test('écran — les pastilles de case libre ont quitté la grille, pas le calcu
   assert.deepEqual(resumeDeLaBase(neuve).emplacements, { poses: 1, ouverts: 2 });
   assert.match(ecran, /emplacementsPoses\.textContent\s*=/,
     'le compteur d\'emplacements a disparu avec les pastilles');
+});
+
+// ---------------------------------------------------------------------------
+// Lot MISE EN PAGE — l'en-tête commun, la barre du bas entière, les Options
+// ---------------------------------------------------------------------------
+
+test('mise en page — l\'en-tête est COMMUN aux écrans, il n\'appartient plus au Chantier', () => {
+  // ⚠ C'EST LE FOND DU LOT. Les onglets et le bandeau des ressources vivaient
+  // DANS `#ecran-chantier` : passer à l'Offense les faisait disparaître, alors
+  // qu'Ethan demandait de « garder la barre quartz scories etc et monde option
+  // dans le menu offense ». Ils en sont sortis, et tout écran à venir en hérite.
+  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const pos = (id) => html.indexOf(`id="${id}"`);
+  for (const id of ['jeu', 'tete-onglets', 'ressources', 'navigation', 'ecrans',
+    'ecran-chantier', 'ecran-offense', 'ecran-options', 'barre-bas']) {
+    assert.ok(pos(id) > 0, `« ${id} » absent de la page`);
+  }
+
+  // L'ordre du DOCUMENT est l'ordre de l'ÉCRAN : en-tête, écrans, barre du bas.
+  // Un `order` CSS ferait le même dessin et casserait la navigation au clavier
+  // comme la lecture par un lecteur d'écran.
+  assert.ok(pos('jeu') < pos('tete-onglets'), 'les onglets sont hors de la page de jeu');
+  assert.ok(pos('tete-onglets') < pos('ressources'));
+  assert.ok(pos('ressources') < pos('navigation'));
+  assert.ok(pos('navigation') < pos('ecrans'));
+  assert.ok(pos('ecrans') < pos('ecran-chantier'), 'l\'écran Chantier est hors du conteneur');
+  assert.ok(pos('ecran-chantier') < pos('barre-bas'), 'la barre du bas passe avant les écrans');
+
+  // ⚠ ET SURTOUT : les trois éléments communs sont AVANT `#ecran-chantier`,
+  // donc dehors. C'est la falsification de tout ce test — les remettre dedans
+  // les ferait repasser après, et la navigation redeviendrait celle qu'on répare.
+  for (const commun of ['tete-onglets', 'ressources', 'navigation']) {
+    assert.ok(pos(commun) < pos('ecran-chantier'),
+      `« ${commun} » est retombé dans l'écran Chantier`);
+  }
+
+  // Le jeu s'ouvre sur la Base ; les deux autres écrans partent cachés.
+  assert.match(html, /<div id="ecran-offense" hidden>/);
+  assert.match(html, /<div id="ecran-options" hidden>/);
+  assert.ok(!/<div id="ecran-chantier" hidden>/.test(html), 'l\'écran Chantier part caché');
+});
+
+test('compteur — le libellé suit le contexte, et la valeur reste honnête', () => {
+  // ⚠ ARBITRÉ LE 28/08 : « quand on passe en défense, le nombre d'emplacement
+  // change pour celui des points de défense. Idem pour offense. »
+  const etat = creerEtat(11);
+
+  const batiments = compteurDeContexte(etat, 'batiments');
+  assert.equal(batiments.libelle, 'Emplac.');
+  assert.equal(batiments.valeur, '1');
+  assert.equal(batiments.capacite, '/ 2');
+  assert.equal(batiments.sature, false);
+
+  // ⚠ LES DEUX AUTRES VALENT « — », ET CE N'EST PAS UN OUBLI. `sim/state.js` ne
+  // porte ni garnison ni armée d'assaut : `ui/defense.js` et `ui/arsenal.js`
+  // sont des ÉDITEURS dont rien n'est sauvegardé. Le LIBELLÉ change, comme
+  // demandé ; inventer un chiffre serait pire que le tiret.
+  for (const contexte of ['defense', 'offense']) {
+    const vue = compteurDeContexte(etat, contexte);
+    assert.equal(vue.valeur, NIVEAU_ABSENT, `${contexte} affiche un chiffre inventé`);
+    assert.equal(vue.capacite, '');
+    assert.equal(vue.sature, false);
+    assert.notEqual(vue.libelle, batiments.libelle, `${contexte} garde le libellé des bâtiments`);
+    assert.equal(CONTEXTES[contexte].chiffre, false);
+  }
+  assert.deepEqual(Object.keys(CONTEXTES).slice().sort(), ['batiments', 'defense', 'offense']);
+  assert.throws(() => compteurDeContexte(etat, 'inconnu'), /contexte/);
+
+  // Falsifiable : le compteur des bâtiments DOIT bouger avec la base, sinon les
+  // trois cas se ressembleraient et le test ne distinguerait rien.
+  const champ = etat.champs.cases[0];
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  const pleine = compteurDeContexte(etat, 'batiments');
+  assert.equal(pleine.valeur, '2');
+  assert.equal(pleine.sature, true, 'la base devrait être pleine après une pose');
+  assert.notEqual(pleine.valeur, batiments.valeur);
+});
+
+test('navigation — la bascule entre bases est une coquille, et elle le dit', () => {
+  // Le joueur n'a qu'UNE base : `sim/state.js` porte une seule `disposition`.
+  // Les flèches sont donc désactivées et le libellé « 1 / 1 » dit pourquoi —
+  // les rendre vives sur du vide promettrait une bascule qui n'existe pas,
+  // exactement comme le bouton « Assaut » du lot ÉCRAN-CHANTIER.
+  const vue = navigationEntreBases(creerEtat(3));
+  assert.equal(vue.libelle, 'Base 1 / 1');
+  assert.equal(vue.precedente, false);
+  assert.equal(vue.suivante, false);
+  assert.equal(NOMBRE_DE_BASES, 1);
+  assert.throws(() => navigationEntreBases(null), /état de jeu/);
+
+  // Et l'écran désarme bien les deux flèches, plutôt que de les laisser vives.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /navigation-precedente'\)\.disabled = true/);
+  assert.match(ecran, /navigation-suivante'\)\.disabled = true/);
+});
+
+test('barre du bas — trois boutons égaux, et le troisième DEMANDE l\'écran', () => {
+  // Arbitré le 28/08 : « les boutons base défense offense doivent prendre
+  // toutes la place en bas ». Le lot précédent séparait le saut vers l'Offense
+  // par un filet, précisément pour qu'il n'ait pas l'air d'une bande ; Ethan a
+  // tranché dans l'autre sens.
+  assert.equal(BOUTONS_DU_BAS.length, 3);
+  assert.deepEqual(BOUTONS_DU_BAS.map((b) => b.nom), ['Base', 'Défense', 'Offense']);
+  // Deux font défiler une bande de la MÊME grille, le troisième change d'écran.
+  assert.deepEqual(BOUTONS_DU_BAS.filter((b) => b.bande !== null).map((b) => b.bande),
+    BANDES_NAVIGABLES);
+  assert.equal(BOUTONS_DU_BAS.filter((b) => b.ecran === 'offense').length, 1);
+  for (const b of BOUTONS_DU_BAS) {
+    assert.ok(BANDES.some((x) => x.cle === b.bande) || b.bande === null, `bande inconnue : ${b.bande}`);
+  }
+
+  // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE. Changer d'écran n'est pas du ressort
+  // de `ui/chantier.js` : il le demande par `versEcran`, comme il demande
+  // l'écriture par `apresPose`. Sans ce découpage, l'écran de la base saurait
+  // ce qu'est l'écran Offense, et les deux se connaîtraient mutuellement.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /versEcran\s*!==\s*undefined/, 'l\'écran n\'appelle pas versEcran');
+  assert.ok(!/ecran-offense/.test(ecran), 'l\'écran de la base nomme l\'écran Offense en dur');
+  const session = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8'));
+  assert.match(session, /versEcran:\s*\(nom\)\s*=>\s*montrerEcran\(nom\)/,
+    'la session ne branche pas versEcran');
+});
+
+test('palette — les onze vignettes tiennent en deux rangées, sans défilement', () => {
+  // ⚠ ETHAN, LE 28/08 : « faire rentrer dans l'ui tous les bâtiments du bas,
+  // c'est-à-dire les deux rangées de boutons ». La palette avait des colonnes de
+  // 82 px et un défilement horizontal : la première vignette était coupée et
+  // deux bâtiments vivaient hors de l'écran.
+  const posables = posablesDeLaBase(creerEtat(5));
+  assert.equal(posables.length, Object.keys(BASE_BATIMENTS).length);
+  assert.equal(posables.length, 11, 'le montage suppose onze bâtiments');
+
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  // ⚠ LE NOMBRE DE COLONNES SE CALCULE, IL NE S'ÉCRIT PAS. « 6 » marcherait
+  // aujourd'hui et mentirait au douzième bâtiment.
+  assert.match(ecran, /Math\.ceil\(posables\.length \/ 2\)/,
+    'le nombre de colonnes n\'est plus déduit du nombre de bâtiments');
+  assert.match(ecran, /gridTemplateColumns = `repeat\(\$\{colonnes\}/);
+  assert.equal(Math.ceil(posables.length / 2), 6, 'onze bâtiments font six colonnes');
+
+  // Et la feuille ne défile plus horizontalement.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const bloc = feuille.slice(feuille.indexOf('#chantier-palette {'));
+  const regle = bloc.slice(0, bloc.indexOf('}'));
+  assert.ok(!/overflow-x:\s*auto/.test(regle), 'la palette défile encore horizontalement');
+  assert.match(regle, /overflow:\s*hidden/);
+  assert.ok(!/grid-auto-columns/.test(regle), 'la palette fixe encore la largeur d\'une colonne');
+});
+
+test('options — le banc reste atteignable après le déménagement de la version', () => {
+  // ⚠ C'EST LE PIÈGE DE CE LOT, ET IL EST MÉCANIQUE. Ethan a demandé que le
+  // numéro de version quitte la barre du bas, qui doit revenir entière aux trois
+  // boutons. Or ce numéro PORTE l'appui long de 1,5 s qui ouvre le banc d'essai.
+  // Le déplacer sans lui donner d'abri aurait rendu le banc inatteignable — et
+  // T10 de `banc.test.js`, qui exige ses contrôles dans le HTML livré, serait
+  // resté VERT en les gardant présents mais hors de portée du doigt.
+  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  assert.ok(html.includes('options-version'), 'le numéro de version n\'a pas d\'abri');
+  assert.ok(html.includes('ecran-options'), 'l\'écran Options n\'existe pas');
+
+  // L'onglet Options n'est PAS mort : sans lui, l'écran serait inatteignable et
+  // le banc avec.
+  const code = html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/id="onglet-options"[^>]*disabled/.test(code),
+    'l\'onglet Options est désactivé : l\'écran, et le banc, deviennent inatteignables');
+
+  // Et la session écoute bien l'appui long SUR CET ÉLÉMENT-LÀ.
+  const session = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8'));
+  assert.match(session, /const version = \$\('options-version'\)/,
+    'la session écoute encore l\'ancien élément');
+  assert.match(session, /version\.addEventListener\('pointerdown'/);
+  assert.match(session, /DUREE_APPUI_DEBUG_MS/);
+  assert.ok(!/chantier-version/.test(session), 'l\'ancien identifiant survit dans la session');
+
+  // ⚠ ET LE BANC CACHE `#jeu`, PAS LES ÉCRANS UN PAR UN. Il en nommait deux ;
+  // avec trois écrans et deux barres communes, en oublier un serait une question
+  // de temps — le banc s'ouvrirait par-dessus les onglets restés visibles.
+  assert.match(session, /\$\('jeu'\)\.hidden = true/, 'le banc ne cache plus la page de jeu');
+  assert.match(session, /\$\('jeu'\)\.hidden = false/, 'la page de jeu ne revient pas');
+  assert.ok(!/ecran-offense'\)\.hidden = true/.test(session),
+    'le banc cache encore les écrans un par un');
 });

@@ -105,14 +105,41 @@ test('offense — le budget dépend d\'un niveau que la partie ne porte pas', ()
   assert.throws(() => budgetDuNiveau(null), /hors de/);
 });
 
-test('offense — le HTML produit porte l\'écran, ses deux portes, et rien d\'actif', () => {
-  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
-  for (const attendu of [
-    'ecran-offense', 'offense-tete', 'offense-vers-chantier', 'offense-niveau',
-    'offense-points', 'offense-avis', 'offense-vagues', 'offense-palette',
-    'chantier-vers-offense',
-  ]) {
+/**
+ * Le HTML produit, commentaires HTML et CSS ôtés.
+ *
+ * ⚠ IL EN FAUT UN, ET LA LEÇON EST DÉJÀ PAYÉE. Au lot PANNEAU-ET-MARGES, une
+ * garde cherchait `viewport-fit=cover` dans le HTML brut et le trouvait dans le
+ * paragraphe qui l'explique : retirer la balise laissait le test VERT. Ici
+ * c'est le commentaire qui RACONTE la disparition de l'ancien en-tête qui
+ * ferait échouer la garde. Une garde ne doit lire que du code.
+ */
+function pageSansCommentaires() {
+  return readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+test('offense — le HTML produit porte l\'écran, et il n\'a plus d\'en-tête à lui', () => {
+  const html = pageSansCommentaires();
+  for (const attendu of ['ecran-offense', 'offense-avis', 'offense-vagues', 'offense-palette']) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
+  }
+
+  // ⚠ SON EN-TÊTE ET SA BARRE SONT PARTIS (28/08), et c'est le lot MISE EN PAGE.
+  // Il portait un titre, deux chiffres d'armée et une barre de retour jumelle de
+  // celle du Chantier. Les onglets, le bandeau des ressources et la barre du bas
+  // sont devenus COMMUNS aux trois écrans — Ethan : « garder la barre quartz
+  // scories etc et monde option dans le menu offense » — donc le retour se fait
+  // par le bouton « Base », qui est là de toute façon, et l'absence de chiffres
+  // d'armée se dit une seule fois, dans le compteur du bandeau commun.
+  for (const parti of ['offense-tete', 'offense-barre', 'offense-vers-chantier',
+    'offense-niveau', 'offense-points', 'chantier-vers-offense']) {
+    assert.ok(!html.includes(parti), `« ${parti} » devait disparaître de la page`);
+  }
+  // Et l'en-tête commun est bien là, lui.
+  for (const commun of ['tete-onglets', 'ressources', 'navigation', 'barre-bas', 'ecran-options']) {
+    assert.ok(html.includes(commun), `l'en-tête commun a perdu « ${commun} »`);
   }
   // Le jeu s'ouvre sur la Base : l'écran Offense part caché.
   assert.ok(/<div id="ecran-offense" hidden>/.test(html), 'l\'écran Offense n\'est pas caché');
@@ -127,6 +154,13 @@ test('offense — le HTML produit porte l\'écran, ses deux portes, et rien d\'a
   // un écran maintenant ; le laisser sur un bouton qui fait défiler vers deux
   // rangées de sol nu était la faute qu'on répare.
   assert.ok(!/>Assaut</.test(html), 'un bouton « Assaut » traîne encore dans la page');
+
+  // Falsifiable, dans les deux sens : le décommenteur retire la prose et rien
+  // d'autre, et le montage ne prouverait rien si la prose ne citait plus
+  // l'ancien identifiant.
+  assert.ok(pageSansCommentaires().includes('<div id="ecran-offense"'));
+  assert.ok(readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8').includes('offense-tete'),
+    'plus aucune prose ne cite l\'ancien en-tête : le décommenteur ne mesure plus rien');
 });
 
 test('offense — changer d\'écran n\'arrête PAS la boucle de jeu', () => {
@@ -140,18 +174,32 @@ test('offense — changer d\'écran n\'arrête PAS la boucle de jeu', () => {
   // murale rendrait les ressources manquantes, si bien que le gel ne se lirait
   // que sur un chronomètre. C'est exactement le genre de faute qui mérite un
   // garde-fou plutôt qu'une relecture.
+  // ⚠ LES PORTES ONT CHANGÉ DE FORME AU LOT MISE EN PAGE. Il y en avait deux,
+  // nommées une par une ; il y en a maintenant quatre — deux onglets du haut et
+  // les boutons de la barre du bas, qui passent tous par `montrerEcran`. Ce que
+  // le test garde n'a pas changé : AUCUNE d'elles ne doit toucher à
+  // `suspendre` / `reprendre`.
   const source = readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8');
   const lignesDeNavigation = source.split('\n')
-    .filter((l) => l.includes('chantier-vers-offense') || l.includes('offense-vers-chantier'));
-  assert.equal(lignesDeNavigation.length, 2, 'les deux portes doivent être câblées, une chacune');
+    .filter((l) => l.includes('montrerEcran('));
+  assert.ok(lignesDeNavigation.length >= 3,
+    `${lignesDeNavigation.length} lignes de navigation : le montage ne trouve plus les portes`);
   for (const ligne of lignesDeNavigation) {
-    assert.ok(ligne.includes('montrerEcran'), `porte non câblée : ${ligne.trim()}`);
     assert.ok(!ligne.includes('suspendre'), `la navigation gèle le jeu : ${ligne.trim()}`);
     assert.ok(!ligne.includes('reprendre'), `la navigation gèle le jeu : ${ligne.trim()}`);
   }
+  // Et la fonction elle-même ne gèle pas : on lit son corps, pas seulement les
+  // lignes qui l'appellent.
+  const corps = source.slice(source.indexOf('function montrerEcran('));
+  const fin = corps.indexOf('\n  }');
+  const dedans = corps.slice(0, fin);
+  assert.ok(!dedans.includes('suspendre'), 'montrerEcran gèle le jeu');
+  assert.ok(!dedans.includes('reprendre'), 'montrerEcran reprend le jeu');
+
   // Falsifiable : le motif doit attraper une vraie faute.
-  const appat = "$('chantier-vers-offense').addEventListener('click', () => { suspendre(); });";
-  assert.ok(appat.includes('suspendre'), 'le montage n\'attraperait pas la faute');
+  const appat = "$('onglet-base').addEventListener('click', () => { suspendre(); montrerEcran('x'); });";
+  assert.ok(appat.includes('montrerEcran(') && appat.includes('suspendre'),
+    'le montage n\'attraperait pas la faute');
 
   // Et les deux fonctions existent bien, sinon le test passerait sur un fichier
   // qui ne les a jamais eues.

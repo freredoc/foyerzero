@@ -20,7 +20,6 @@
 
 import { GRILLE, UNITES } from '../data/combat.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS } from './arsenal.js';
-import { formaterEntier, NIVEAU_ABSENT } from './chantier.js';
 
 /**
  * Le titre d'une vague, et le retard avec lequel elle part.
@@ -87,17 +86,12 @@ export function unitesDeLaPalette() {
 export function initialiserEcranOffense(doc) {
   const $ = (id) => doc.getElementById(id);
 
-  // --- en-tête : deux chiffres que l'on n'a pas, et qui le disent -----------
-  //
-  // Le niveau de l'armée offensive est l'un des trois niveaux du joueur, et
-  // c'est l'un des deux que `sim/state.js` ne porte pas. Le budget en dépend
-  // (`budgetDuNiveau` de `ui/arsenal.js` vaut `base + parNiveau × niveau`) :
-  // sans niveau, pas de budget. Les deux valent donc « — ».
-  //
-  // Les points ENGAGÉS, eux, se savent : il n'y a aucune unité, donc zéro. On
-  // l'écrit plutôt qu'un troisième tiret — c'est un fait, pas une lacune.
-  $('offense-niveau').textContent = NIVEAU_ABSENT;
-  $('offense-points').textContent = `${formaterEntier(0)} / ${NIVEAU_ABSENT}`;
+  // ⚠ L'EN-TÊTE DE CET ÉCRAN A DISPARU LE 28/08, et ses deux chiffres avec.
+  // Il portait « Niv. armée — » et « Points 0 / — » ; les onglets et le bandeau
+  // des ressources sont devenus COMMUNS aux trois écrans, et c'est le compteur
+  // de ce bandeau qui dit maintenant « Pts off. — » quand on est ici. Deux
+  // endroits pour la même absence, c'était un de trop.
+  // Voir `compteurDeContexte` dans `ui/chantier.js`.
 
   // --- les quatre vagues ----------------------------------------------------
   const corps = $('offense-vagues');

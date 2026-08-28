@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.22.0 · build 23.
+Dernière révision : **28/08/2026**, version 0.23.0 · build 24.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.22.0 · build 23.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot QUEUE-DE-COURBE), à confronter :**
-`npm test` → **326 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**153 505 octets**, 0 référence externe.
+**Référence au 28/08/2026 (après le lot MISE-EN-PAGE), à confronter :**
+`npm test` → **332 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**156 633 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -40,7 +40,8 @@ et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante,
 AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant améliorer
 et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
 bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
-QUEUE-DE-COURBE à 153 505.
+QUEUE-DE-COURBE à 153 505,
+MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans.
 La borne de T10 (200 000 octets) tient, avec 23 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
@@ -52,7 +53,8 @@ garde §11 scindée en deux), et de onze au lot ÉCRAN-NAVIGATION (six pour
 `test/chantier.test.js` — la barre à deux bandes et la pastille de pose), et de
 cinq au lot POSE-À-L'ÉCRAN et de **dix** au lot PANNEAU-ET-MARGES, tous dans
 `test/chantier.test.js`, et de **cinq** au lot STOCKAGE-ET-VOISINAGE (trois dans
-`chantier.test.js`, un dans `disposition.test.js`, un dans `state.test.js`).
+`chantier.test.js`, un dans `disposition.test.js`, un dans `state.test.js`), et de
+**six** au lot MISE-EN-PAGE, tous dans `chantier.test.js`.
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
@@ -161,6 +163,12 @@ src/ui/                 les trois écrans et leurs éditeurs — 6 fichiers
   ⤷ l'écran de la base est en LECTURE ET EN ÉCRITURE depuis le 27/08 : pose,
     amélioration, démolition, et depuis le 28/08 un panneau de détail. La ligne
     « en lecture » de son en-tête a été fausse pendant deux lots.
+  ⤷ ⚠ LA PAGE A TROIS ÉCRANS ET UN EN-TÊTE COMMUN depuis le 28/08. Les onglets,
+    le bandeau des ressources, la bascule entre bases et la barre du bas vivent
+    AU-DESSUS des écrans, dans `#jeu` : changer d'écran ne les fait plus
+    disparaître. Le fichier de la base construit tout ce chrome — il a les
+    formateurs et l'état — mais il ne change pas d'écran lui-même : il le
+    DEMANDE à la session par `versEcran`.
 
 test/                   24 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
@@ -1227,6 +1235,56 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   d'emplacements — un NOMBRE dessiné à des endroits sans rapport avec les cases
   que le joueur choisirait. « Emplac. 3 / 4 » dit la même grandeur sans mentir
   sur la géométrie.
+
+- ⚠⚠ **L'EN-TÊTE A QUITTÉ L'ÉCRAN DE LA BASE (28/08), ET C'EST STRUCTUREL.**
+  Les onglets et le bandeau des ressources vivaient DANS `#ecran-chantier` :
+  passer à l'Offense les faisait disparaître. Ethan : « garder la barre quartz
+  scories etc et monde option dans le menu offense ». Ils sont maintenant dans
+  `#jeu`, au-dessus de `#ecrans`, et tout écran à venir en hérite — même
+  raisonnement que les marges système posées sur `body`.
+  ⚠ **L'ORDRE DU DOCUMENT EST L'ORDRE DE L'ÉCRAN, jamais un `order` CSS.** Le
+  même dessin obtenu par `order` casserait la navigation au clavier et la
+  lecture par un lecteur d'écran. Un test compare les POSITIONS des identifiants
+  dans le HTML produit.
+  ⚠ **L'ÉCRAN DEMANDE, LA SESSION DÉCIDE.** `ui/chantier.js` construit la barre
+  du bas — il a les formateurs et l'état — mais un de ses trois boutons change
+  d'ÉCRAN, ce que seule la session sait faire : il appelle `versEcran`, comme il
+  appelle `apresPose` pour écrire. Un test refuse que l'écran de la base nomme
+  `ecran-offense` en dur.
+
+- ⚠⚠ **LE NUMÉRO DE VERSION A DÉMÉNAGÉ DANS LES OPTIONS, ET IL A FALLU CRÉER
+  L'ÉCRAN POUR ÇA.** Ethan voulait la barre du bas entière pour ses trois
+  boutons. Or ce numéro PORTE l'appui long de 1,5 s qui ouvre le banc d'essai :
+  le déplacer sans abri l'aurait rendu inatteignable — et **T10 de
+  `banc.test.js` serait resté VERT**, puisqu'il exige la PRÉSENCE des contrôles
+  dans le HTML, pas leur accessibilité. D'où `#ecran-options`, et l'onglet
+  Options qui cesse d'être mort.
+  ⚠ **LE BANC CACHE `#jeu`, PLUS LES ÉCRANS UN PAR UN.** Il en nommait deux ;
+  avec trois écrans et deux barres communes, en oublier un n'était qu'une
+  question de temps — le banc se serait ouvert par-dessus les onglets restés
+  visibles.
+
+- **LE COMPTEUR DU BANDEAU CHANGE DE LIBELLÉ AVEC LE CONTEXTE**, et deux de ses
+  trois valeurs sont un tiret. Arbitré le 28/08 : « quand on passe en défense, le
+  nombre d'emplacement change pour celui des points de défense. Idem pour
+  offense. » Le LIBELLÉ change ; la valeur reste « — » parce que l'état ne porte
+  ni garnison ni armée. `CONTEXTES[x].chiffre` dit si la grandeur EXISTE, pas si
+  elle vaut zéro.
+  ⚠ **L'ÉCRAN L'EMPORTE SUR LA BANDE** pour décider du contexte : sur l'Offense,
+  allumer « Base » parce que le défilement s'y était arrêté dirait au joueur
+  qu'il regarde sa base alors qu'il regarde ses vagues.
+
+- **LA PALETTE NE DÉFILE PLUS, ELLE TIENT.** Deux rangées, et le nombre de
+  colonnes se CALCULE — `Math.ceil(posables.length / 2)`. Elle avait des colonnes
+  de 82 px et un défilement horizontal : la première vignette était coupée et
+  deux bâtiments vivaient hors de l'écran. Écrire « 6 » marcherait aujourd'hui et
+  mentirait au douzième bâtiment.
+
+- **LES FLÈCHES DE BASCULE ENTRE BASES SONT UNE COQUILLE, ET ELLES LE DISENT.**
+  L'état porte UNE `disposition` : il n'y a structurellement qu'une base. Les
+  deux flèches sont désactivées et le libellé « Base 1 / 1 » dit pourquoi. Les
+  rendre vives sur du vide promettrait une bascule qui n'existe pas — la faute
+  exacte du bouton « Assaut » du lot ÉCRAN-CHANTIER.
 
 - **UN UNIQUE DÉJÀ POSÉ RESTE DANS LA PALETTE, GRISÉ.** Arbitré le 28/08 :
   « griser le bouton, pas le faire disparaître ». La palette perdait une
