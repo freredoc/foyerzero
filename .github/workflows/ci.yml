@@ -70,6 +70,18 @@ jobs:
           echo "FOYERZERO_KEYSTORE=$RUNNER_TEMP/foyerzero.jks" >> "$GITHUB_ENV"
       - name: Construire l'APK release
         run: gradle -p android :app:assembleRelease
+      # ⚠ UN APK NON SIGNÉ NE S'INSTALLE PAS, et le job passait au vert quand
+      # même : constaté le 27/08 sur l'appareil de test. Gradle nomme le
+      # fichier « app-release-unsigned.apk » dans ce cas — c'est le seul indice,
+      # et il fallait ouvrir l'artefact pour le voir. Le CI le dit maintenant.
+      - name: Refuser un APK non signé
+        run: |
+          if ls android/app/build/outputs/apk/release/*unsigned*.apk >/dev/null 2>&1; then
+            echo "::error::APK NON SIGNÉ — il ne s'installera pas. Ni les secrets"\
+              "FOYERZERO_KEYSTORE_* ni le repli de signature debug n'ont pris."
+            exit 1
+          fi
+          ls -l android/app/build/outputs/apk/release/
       - uses: actions/upload-artifact@v4
         with:
           name: foyerzero-apk
