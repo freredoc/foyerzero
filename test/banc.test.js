@@ -347,7 +347,7 @@ test('§11 — aucune teinte hors de la palette de FICHE-STYLE.md', () => {
   // La palette de la fiche, transcrite ici indépendamment de scene.js pour
   // que le test ne valide pas le module avec lui-même.
   //
-  // ⚠ VINGT-HUIT TEINTES DEPUIS LA v4 DE `FICHE-STYLE.md` (27/08). La liste en
+  // ⚠ TRENTE-TROIS TEINTES DEPUIS LA v4 DE `FICHE-STYLE.md` (27/08). La liste en
   // portait quatorze, et elle n'a PAS été élargie pour faire passer un lot :
   // la fiche a gagné trois rampes complètes — le sol du joueur, l'ardoise de
   // l'Ouvrage, les accents de terrain — et cette liste n'était plus une

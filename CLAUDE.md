@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.23.0 · build 24.
+Dernière révision : **28/08/2026**, version 0.24.0 · build 25.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.23.0 · build 24.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot MISE-EN-PAGE), à confronter :**
-`npm test` → **332 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**156 633 octets**, 0 référence externe.
+**Référence au 28/08/2026 (après le lot POSE-ET-DÉPLACEMENT), à confronter :**
+`npm test` → **338 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**161 583 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -41,7 +41,8 @@ AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant amél
 et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
 bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
 QUEUE-DE-COURBE à 153 505,
-MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans.
+MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans,
+POSE-ET-DÉPLACEMENT à 161 583.
 La borne de T10 (200 000 octets) tient, avec 23 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
@@ -54,7 +55,10 @@ garde §11 scindée en deux), et de onze au lot ÉCRAN-NAVIGATION (six pour
 cinq au lot POSE-À-L'ÉCRAN et de **dix** au lot PANNEAU-ET-MARGES, tous dans
 `test/chantier.test.js`, et de **cinq** au lot STOCKAGE-ET-VOISINAGE (trois dans
 `chantier.test.js`, un dans `disposition.test.js`, un dans `state.test.js`), et de
-**six** au lot MISE-EN-PAGE, tous dans `chantier.test.js`.
+**six** au lot MISE-EN-PAGE, tous dans `chantier.test.js`, et de **six** au lot
+POSE-ET-DÉPLACEMENT (trois dans `chantier.test.js`, deux dans `state.test.js`, un
+dans `documentation.test.js` — celui-là n'était pas au brief : il garde le compte
+de teintes annoncé par ce fichier-ci, qui venait d'être trouvé faux de cinq).
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
@@ -886,13 +890,24 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ni horloge système, et `maintenantMs` reste seule lectrice de l'horloge dans
   tout `src/`, comme la garde §11 l'exige.
 
-- **LA PALETTE EST FERMÉE : vingt-huit teintes, plus un seul `rgba`.**
+- **LA PALETTE EST FERMÉE : trente-trois teintes, plus un seul `rgba`.**
   `banc.test.js` balaie `src/render/`, `src/ui/` et `src/index.src.html` et
   refuse toute couleur hors de `FICHE-STYLE.md`, ainsi que tout `rgba` autre que
   `rgba(0,0,0,0.31)`. Aucune transparence, donc — ni tuile pâle, ni gris
-  intermédiaire. Les vingt-huit : cinq de châssis kaki, cinq de sol joueur, cinq
-  d'ardoise Ouvrage, quatre d'accents de terrain, trois de métal, six d'accents
-  fonctionnels.
+  intermédiaire. Les trente-trois : cinq de châssis kaki, cinq de sol joueur,
+  cinq de sol Ouvrage, cinq d'ardoise Ouvrage, quatre d'accents de terrain,
+  trois de métal, six d'accents fonctionnels.
+  ⚠ **CE PARAGRAPHE DISAIT « VINGT-HUIT » JUSQU'AU 28/08 AU SOIR, ET IL AVAIT
+  TORT DE CINQ.** Son énumération avait perdu une rampe entière — les cinq tons
+  du sol de l'Ouvrage — exactement comme la liste de `banc.test.js` en avait
+  perdu trois la veille. La GARDE, elle, était juste : elle porte les
+  trente-trois et un test l'égale à la fiche dans les deux sens. C'est la PROSE
+  qui avait vieilli, et rien ne la confrontait.
+  ⚠ **DÉSORMAIS SI** — `documentation.test.js` décode le nombre écrit en lettres
+  ici, somme l'énumération, et exige que les deux valent le compte de teintes
+  distinctes de `FICHE-STYLE.md`. Le total ET le détail : annoncer
+  « trente-trois » au-dessus d'une énumération qui fait vingt-huit passerait
+  sous une garde qui ne lirait que le total.
   ⚠ **LA GARDE N'EN CONNAISSAIT QUE QUATORZE PENDANT UNE JOURNÉE.** `FICHE-STYLE.md`
   est passé en v4 le 27/08 avec trois rampes de plus ; la liste de `banc.test.js`
   se disait « transcrite » et ne l'était plus. Elle serait restée VERTE
@@ -1236,6 +1251,21 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   que le joueur choisirait. « Emplac. 3 / 4 » dit la même grandeur sans mentir
   sur la géométrie.
 
+- ⚠⚠ **« TU COMPRESSES TOUT DANS L'UI » — CONSIGNE PERMANENTE D'ETHAN, 28/08.**
+  Elle est plus forte que « pas de dépassement » : **tout doit TENIR dans
+  l'écran, rien ne déborde, rien ne défile horizontalement, aucune barre n'en
+  pousse une autre hors du cadre.** Un lot qui ajoute un contrôle le fait entrer
+  dans la place existante — le bandeau contextuel est passé de trois à quatre
+  boutons sans grandir d'un pixel, ce sont les écarts et le bloc de gauche qui
+  ont cédé.
+  ⚠ **UNE GARDE LA TIENT, AUTANT QU'UN DÉPÔT SANS NAVIGATEUR LE PERMET.**
+  `chantier.test.js` somme les hauteurs fixes des six barres de la colonne de
+  jeu — 40 + 44 + 26 + 46 + 46 + 86 = **288 px** — et refuse au-delà de 320. La
+  borne se justifie : sur la dalle la plus courte encore en service (568 px de
+  haut en CSS), 320 px de chrome laissent 248 px de grille, soit cinq rangées.
+  Elle asserte aussi la LISTE des barres à hauteur fixe : une septième la fait
+  tomber, ce qui force à regarder plutôt qu'à ajouter.
+
 - ⚠⚠ **L'EN-TÊTE A QUITTÉ L'ÉCRAN DE LA BASE (28/08), ET C'EST STRUCTUREL.**
   Les onglets et le bandeau des ressources vivaient DANS `#ecran-chantier` :
   passer à l'Offense les faisait disparaître. Ethan : « garder la barre quartz
@@ -1285,6 +1315,54 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   deux flèches sont désactivées et le libellé « Base 1 / 1 » dit pourquoi. Les
   rendre vives sur du vide promettrait une bascule qui n'existe pas — la faute
   exacte du bouton « Assaut » du lot ÉCRAN-CHANTIER.
+
+- **LA POSE SE FAIT EN DEUX TOUCHERS DEPUIS LE 28/08.** Ethan : « il y a
+  d'abord un clic et le bâtiment/sprite transparent, et les flèches bonus
+  proximité s'affiche si il y en a, un deux clique pose le bâtiment ». Le
+  premier toucher MONTRE — un fantôme et les flèches — et c'est ce temps-là qui
+  rend le voisinage visible AVANT qu'on s'engage. Toucher une autre case déplace
+  l'aperçu ; toucher la même pose.
+  ⚠ **PAS DE TRANSPARENCE POUR LE FANTÔME.** La palette est fermée à
+  trente-trois teintes et ne tolère qu'un seul `rgba`, réservé à autre chose. Un
+  liseré tireté et un sigle éteint disent « pas encore là » aussi bien, sans
+  ouvrir de brèche dans la garde de palette.
+
+- **LES FLÈCHES DE VOISINAGE SE MONTRENT À TROIS MOMENTS, ET UNE SEULE FONCTION
+  LES DESSINE** : l'aperçu de pose, le bâtiment en main pendant un déplacement,
+  et l'ouverture du panneau — ce dernier demandé tel quel par Ethan. Les écrire
+  trois fois donnerait trois lectures du voisinage ; un test compte les appels.
+  ⚠ **`voisinsQualifiantsParCase` VIT DANS `sim/disposition.js`**, à côté de
+  `voisinsQualifiants` dont elle est la variante « avec les coordonnées ». Elle
+  ne dit RIEN de l'écran : ni direction, ni glyphe. Le sens de la flèche se
+  décide dans `ui/`, qui seul connaît `render/orientation.js`.
+  ⚠ **ET LE COMMENTAIRE DE CE BLOC A ÉTÉ FAUX PENDANT UNE HEURE.** Il affirmait
+  que déduire le glyphe du signe de `rangee` « retourne les huit flèches ».
+  C'est FAUX, et la falsification l'a montré : avec
+  `ligne = longueur + 1 − rangee`, les deux formules donnent le même signe, le
+  +19 se simplifiant. Passer par `ligneEcranDeLaRangee` ne corrige rien
+  aujourd'hui — ça dit qu'on raisonne en lignes d'écran, et ça restera juste si
+  la transformation cesse d'être affine. **La faute qui se commet vraiment est
+  l'inversion du signe**, et c'est elle que le test attrape.
+
+- **DÉPLACER UN BÂTIMENT EST LA SEULE ACTION À DEUX TOUCHERS**, et la table le
+  dit : `ACTIONS.deplacer.cible` vaut `true`. L'écran LIT ce champ au lieu de
+  reconnaître « deplacer » par son nom — un cas particulier écrit à la main
+  serait le premier à diverger. Un test refuse un `=== 'deplacer'` dans l'écran.
+  ⚠ **`deplacer` MODIFIE LA CASE EN PLACE, JAMAIS PAR `splice` PUIS `push`.**
+  `economie.residus` est parallèle à `disposition` : réécrire la liste dans un
+  autre ordre décalerait les résidus d'un cran et ferait produire à chaque
+  bâtiment le reste de son voisin. Le montage du test porte TROIS bâtiments
+  exprès — avec deux, le déplacé est le dernier et un `splice`/`push` le remet
+  au même indice, si bien que le test passerait sur du code cassé.
+  ⚠ **LES DÉFAUTS PRÉEXISTANTS SONT FILTRÉS, comme pour la pose, et c'est ici
+  que ça compte le plus.** Une base peut porter deux uniques voisins, tolérés au
+  chargement ; déplacer est précisément ce qui permet de la réparer. Le montage
+  déplace un bâtiment INNOCENT pendant que le défaut demeure — éloigner le
+  fautif rend la base saine, donc ne distingue pas les deux codes.
+  ⚠ **RESTER SUR PLACE EST LÉGAL.** Le refuser obligerait l'écran à connaître
+  cette exception, et priverait le joueur de toute annulation.
+  ⚠ **DÉPLACER NE COÛTE RIEN**, faute d'arbitrage. En inventer un prix serait
+  trancher seul une mécanique de jeu.
 
 - **UN UNIQUE DÉJÀ POSÉ RESTE DANS LA PALETTE, GRISÉ.** Arbitré le 28/08 :
   « griser le bouton, pas le faire disparaître ». La palette perdait une

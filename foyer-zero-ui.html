@@ -166,15 +166,23 @@ body{
 .libre{width:11px;height:11px;border:1px dashed var(--k-clair);opacity:.6}
 
 /* ---------- 5. ACTIONS CONTEXTUELLES — 46 ---------- */
-.ctx{height:46px;flex:0 0 46px;display:flex;align-items:center;gap:5px;
-     padding:0 6px;background:var(--k-ombre);border-top:1px solid var(--k-trait)}
-.ctx .who{flex:0 0 100px;line-height:1.2}
-.ctx .who b{display:block;font-size:11px;color:var(--ai-c)}
-.ctx .who span{font-size:8px;letter-spacing:.04em;color:var(--m-clair)}
-.btn{flex:1;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-     font-size:10px;letter-spacing:.05em;text-transform:uppercase;line-height:1.15;
+.ctx{height:46px;flex:0 0 46px;display:flex;align-items:center;gap:3px;
+     padding:0 4px;background:var(--k-ombre);border-top:1px solid var(--k-trait)}
+.ctx .who{flex:0 0 76px;min-width:0;line-height:1.15}
+.ctx .who b{display:block;font-size:10px;color:var(--ai-c)}
+.ctx .who span{display:block;font-size:7px;letter-spacing:.04em;color:var(--m-clair)}
+.ctx .who b,.ctx .who span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ⚠ QUATRE BOUTONS DANS 46 px, ET LA BARRE N'A PAS GRANDI (28/08). Le lot
+   POSE-ET-DEPLACEMENT a ajoute « Deplacer » entre « Ameliorer » et « Demolir » ;
+   la consigne d'Ethan — « tu compresses tout dans l'ui » — interdisait de faire
+   grandir la barre. Ce sont les ecarts, le bloc de gauche et le corps du texte
+   qui ont cede : gap 5 → 3, who 100 → 76 px, font 10 → 9 px. La maquette suit
+   l'ecran a l'identique, sans quoi elle enseignerait une barre a trois boutons
+   que le jeu ne fait plus. */
+.btn{flex:1;min-width:0;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+     font-size:9px;letter-spacing:.02em;text-transform:uppercase;line-height:1.1;padding:0 1px;
      background:var(--m-moyen);color:var(--ai-c);border:1px solid var(--k-trait);cursor:pointer}
-.btn em{font-style:normal;font-size:8px;color:var(--k-lum);letter-spacing:0;text-transform:none}
+.btn em{font-style:normal;font-size:7px;color:var(--k-lum);letter-spacing:0;text-transform:none}
 .btn.up{background:var(--k-clair);color:var(--k-trait);font-weight:600}
 .btn.up em{color:var(--k-trait)}
 .btn.sell{background:var(--m-sombre);color:var(--m-clair)}
@@ -283,7 +291,8 @@ body{
     <div class="who"><b>Raffinerie</b><span>Niv. 5 · +176 q +352 s /h</span></div>
     <div class="btn">Réparer</div>
     <div class="btn up">Améliorer<em>vers niv. 6</em></div>
-    <div class="btn sell">Démonter</div>
+    <div class="btn">Déplacer</div>
+    <div class="btn sell">Démolir</div>
   </div>
 
   <!-- ⚠ TROIS BOUTONS EGAUX, ET LA BARRE EST ENTIERE (28/08). Elle portait deux

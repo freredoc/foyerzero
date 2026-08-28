@@ -323,6 +323,82 @@ const MILLI = 1000;
  * @param {number} index indice dans `etat.disposition`
  * @returns {Array<{code: string, message: string}>}
  */
+/**
+ * Ce qui empêche de déplacer le bâtiment d'indice donné vers cette case.
+ *
+ * ⚠ AUCUNE RÈGLE N'EST RÉÉCRITE, exactement comme pour `problemesDeLaPose` : la
+ * légalité d'un déplacement est celle de la disposition qui en résulterait. On
+ * construit la candidate — le même bâtiment, la même liste, une autre case — et
+ * on la soumet à `problemesDeDisposition`. Une seconde table de règles finirait
+ * par diverger de la première, sur le voisinage ou sur les champs.
+ *
+ * ⚠ LES DÉFAUTS PRÉEXISTANTS SONT FILTRÉS, pour la même raison que la pose :
+ * une base déjà bancale doit rester réarrangeable. C'est même le cas qui compte
+ * le plus ici — depuis le 28/08 une base peut porter deux uniques voisins,
+ * tolérés au chargement, et déplacer est précisément ce qui permet de la
+ * réparer. Faire remonter le défaut sur chaque déplacement enfermerait le
+ * joueur dans la faute qu'on lui demande de corriger.
+ *
+ * ⚠ RESTER SUR PLACE EST LÉGAL, et rend une liste vide. Ce n'est pas un cas
+ * d'erreur : le joueur a le droit de reposer le bâtiment là où il était, et le
+ * refuser obligerait l'écran à connaître cette exception.
+ *
+ * @param {Etat} etat
+ * @param {number} index indice dans `etat.disposition`
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDuDeplacement(etat, index, rangee, colonne) {
+  exigerChamp(etat, 'disposition');
+  exigerChamp(etat, 'champs');
+  const batiment = etat.disposition[index];
+  if (batiment === undefined) {
+    throw new RangeError(`deplacer : indice ${index} hors de la disposition`);
+  }
+  const candidate = etat.disposition.map(
+    (b, i) => (i === index ? { ...b, rangee, colonne } : b),
+  );
+  const avant = new Set(
+    problemesDeDisposition(etat.disposition, etat.champs).map((p) => `${p.code}|${p.message}`),
+  );
+  return problemesDeDisposition(candidate, etat.champs)
+    .filter((p) => !avant.has(`${p.code}|${p.message}`));
+}
+
+/**
+ * Déplace un bâtiment vers une autre case de la base.
+ *
+ * ⚠ DÉPLACER NE COÛTE RIEN, ET CE N'EST PAS UN OUBLI. Aucun prix n'a été
+ * arbitré ; en inventer un serait trancher seul une mécanique de jeu, ce que le
+ * dépôt s'interdit. Le jour où Ethan en fixera un, il se débitera ici, au même
+ * endroit qu'`ameliorer` débite le sien.
+ *
+ * ⚠ L'INDICE NE BOUGE PAS, DONC LE RÉSIDU SUIT TOUT SEUL. `economie.residus`
+ * est parallèle à `disposition` : un déplacement qui réécrirait la liste dans
+ * un autre ordre — un `splice` puis un `push`, par exemple — décalerait les
+ * résidus d'un cran et ferait produire à chaque bâtiment le reste de son
+ * voisin. On modifie la case EN PLACE, et il n'y a rien à faire de plus.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {number} index
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {Etat} le même état
+ */
+export function deplacer(etat, index, rangee, colonne) {
+  const problemes = problemesDuDeplacement(etat, index, rangee, colonne);
+  if (problemes.length > 0) {
+    throw new Error(
+      `deplacer : déplacement illégal — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  const batiment = etat.disposition[index];
+  batiment.rangee = rangee;
+  batiment.colonne = colonne;
+  return etat;
+}
+
 export function problemesDeLAmelioration(etat, index) {
   exigerChamp(etat, 'disposition');
   exigerChamp(etat, 'economie');
