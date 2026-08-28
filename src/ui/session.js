@@ -377,14 +377,26 @@ export function initialiserSession(doc) {
   // bien que le défaut ne se lirait que sur un chronomètre. On se contente donc
   // de montrer l'un et de cacher l'autre.
 
+  // ⚠ TROIS ÉCRANS DEPUIS LE 28/08, et un en-tête COMMUN au-dessus d'eux. Les
+  // onglets, les ressources, la bascule entre bases et la barre du bas ont
+  // quitté `#ecran-chantier` : changer d'écran ne les fait plus disparaître,
+  // ce qu'Ethan demandait (« garder la barre quartz scories etc et monde option
+  // dans le menu offense »).
+  const ECRANS = ['chantier', 'offense', 'options'];
+
   function montrerEcran(nom) {
     ecranCourant = nom;
-    $('ecran-chantier').hidden = nom !== 'chantier';
-    $('ecran-offense').hidden = nom !== 'offense';
+    for (const autre of ECRANS) $(`ecran-${autre}`).hidden = autre !== nom;
+    // Les onglets du haut ET la barre du bas doivent dire où l'on est. Le
+    // premier est à la session ; le second appartient à l'écran Chantier, qui
+    // le construit — d'où l'appel, plutôt qu'une seconde écriture ici.
+    $('onglet-base').classList.toggle('actif', nom !== 'options');
+    $('onglet-options').classList.toggle('actif', nom === 'options');
+    if (ecran !== null) ecran.marquerEcran(nom);
   }
 
-  $('chantier-vers-offense').addEventListener('click', () => montrerEcran('offense'));
-  $('offense-vers-chantier').addEventListener('click', () => montrerEcran('chantier'));
+  $('onglet-base').addEventListener('click', () => montrerEcran('chantier'));
+  $('onglet-options').addEventListener('click', () => montrerEcran('options'));
 
   // --- le banc d'essai, derrière un appui long -------------------------------
   //
@@ -399,8 +411,10 @@ export function initialiserSession(doc) {
 
   function ouvrirLeBanc() {
     suspendre();
-    $('ecran-chantier').hidden = true;
-    $('ecran-offense').hidden = true;
+    // ⚠ UN SEUL ÉLÉMENT À CACHER DEPUIS LE 28/08. Le banc masquait les écrans
+    // un par un ; avec trois écrans et deux barres communes, en oublier un
+    // serait une question de temps. `#jeu` les contient tous.
+    $('jeu').hidden = true;
     $('banc').hidden = false;
     if (!bancInitialise) {
       // Après le démasquage, pas avant : le banc mesure son canvas au câblage,
@@ -413,13 +427,14 @@ export function initialiserSession(doc) {
 
   function fermerLeBanc() {
     $('banc').hidden = true;
+    $('jeu').hidden = false;
     // On rend l'écran qu'on avait pris, pas systématiquement le Chantier :
     // revenir du banc ne doit pas déplacer le joueur.
     montrerEcran(ecranCourant);
     reprendre();
   }
 
-  const version = $('chantier-version');
+  const version = $('options-version');
   let minuterieDebug = null;
   const annulerAppui = () => {
     if (minuterieDebug === null) return;
@@ -462,6 +477,11 @@ export function initialiserSession(doc) {
     // La pose est la première action irréversible du jeu : elle s'écrit tout de
     // suite, sans attendre l'enregistrement périodique.
     apresPose: () => sauvegarder(),
+    // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE. La barre du bas appartient à
+    // l'écran Chantier — c'est lui qui la construit et qui y affiche les
+    // niveaux — mais un de ses trois boutons change d'ÉCRAN, ce que seule la
+    // session sait faire. Même découpage que `apresPose`.
+    versEcran: (nom) => montrerEcran(nom),
   });
   // L'écran Offense se construit une fois et ne se rafraîchit jamais : tant
   // qu'aucune armée n'existe, rien de ce qu'il montre ne change avec le temps.

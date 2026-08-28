@@ -277,6 +277,96 @@ export const BANDES = [
 ];
 
 /**
+ * Le nombre de bases que le joueur possède.
+ *
+ * ⚠ CE N'EST PAS UNE VALEUR INVENTÉE, C'EST UN FAIT SUR L'ÉTAT. `sim/state.js`
+ * porte UNE `disposition`, une `position` et une `fondation` : il n'y a
+ * structurellement qu'une base. Les flèches de bascule ajoutées le 28/08 le
+ * disent — « 1 / 1 » — au lieu de laisser croire qu'il y en a d'autres à
+ * trouver. Le jour où l'état en portera plusieurs, ce nombre se comptera au
+ * lieu de se lire ici, et les flèches deviendront vives.
+ */
+export const NOMBRE_DE_BASES = 1;
+
+/**
+ * Ce qu'affiche la barre de bascule entre bases.
+ * @param {object} etat
+ * @returns {{libelle: string, precedente: boolean, suivante: boolean}}
+ */
+export function navigationEntreBases(etat) {
+  if (!etat || !Array.isArray(etat.disposition)) {
+    throw new TypeError('chantier : état de jeu absent ou malformé');
+  }
+  return {
+    libelle: `Base ${formaterEntier(1)} / ${formaterEntier(NOMBRE_DE_BASES)}`,
+    // Aucune bascule possible tant qu'il n'y a qu'une base. Les deux flèches
+    // sont donc DÉSACTIVÉES, ce qui est honnête : ce n'est pas un refus, c'est
+    // qu'il n'y a nulle part où aller.
+    precedente: false,
+    suivante: false,
+  };
+}
+
+/**
+ * Les trois contextes du compteur, et lequel porte un vrai nombre.
+ *
+ * ⚠ `chiffre` DIT SI LA GRANDEUR EXISTE, pas si elle vaut zéro. Les deux
+ * contextes à `false` ne sont pas « à zéro » : ils ne sont pas comptables, faute
+ * d'état à compter.
+ */
+export const CONTEXTES = {
+  batiments: { libelle: 'Emplac.', chiffre: true },
+  defense: { libelle: 'Pts déf.', chiffre: false },
+  offense: { libelle: 'Pts off.', chiffre: false },
+};
+
+/**
+ * Ce que le compteur du bandeau des ressources dit, selon ce qu'on regarde.
+ *
+ * ⚠ ARBITRÉ LE 28/08 : « quand on passe en défense, le nombre d'emplacement
+ * change pour celui des points de défense. Idem pour offense. »
+ *
+ * ⚠ ET DEUX DES TROIS VALENT « — », PARCE QUE L'ÉTAT NE LES PORTE PAS.
+ * `sim/state.js` ne connaît ni garnison ni armée d'assaut : `ui/defense.js` et
+ * `ui/arsenal.js` sont des ÉDITEURS dont rien n'est sauvegardé. Le LIBELLÉ
+ * change, comme demandé ; la valeur reste un tiret, parce qu'inventer un
+ * chiffre serait pire que de dire qu'il n'y en a pas.
+ *
+ * @param {object} etat
+ * @param {'batiments'|'defense'|'offense'} contexte
+ * @returns {{libelle: string, valeur: string, capacite: string, sature: boolean}}
+ */
+export function compteurDeContexte(etat, contexte) {
+  const def = CONTEXTES[contexte];
+  if (def === undefined) throw new RangeError(`chantier : contexte « ${contexte} » inconnu`);
+  if (!def.chiffre) {
+    return { libelle: def.libelle, valeur: NIVEAU_ABSENT, capacite: '', sature: false };
+  }
+  const { poses, ouverts } = resumeDeLaBase(etat).emplacements;
+  return {
+    libelle: def.libelle,
+    valeur: formaterEntier(poses),
+    capacite: `/ ${formaterEntier(ouverts)}`,
+    sature: poses >= ouverts,
+  };
+}
+
+/**
+ * Les trois boutons de la barre du bas, dans l'ordre où ils se touchent.
+ *
+ * ⚠ DEUX FONT DÉFILER, LE TROISIÈME CHANGE D'ÉCRAN, et ils se ressemblent —
+ * arbitré le 28/08 : « les boutons base défense offense doivent prendre toutes
+ * la place en bas ». Le lot précédent séparait le saut vers l'Offense par un
+ * filet, précisément pour qu'il n'ait pas l'air d'une bande ; Ethan a tranché
+ * dans l'autre sens. Ce qui dit où l'on est, c'est le contenu de l'écran.
+ */
+export const BOUTONS_DU_BAS = [
+  { cle: 'batiments', nom: 'Base', ecran: 'chantier', bande: 'batiments' },
+  { cle: 'defense', nom: 'Défense', ecran: 'chantier', bande: 'defense' },
+  { cle: 'offense', nom: 'Offense', ecran: 'offense', bande: null },
+];
+
+/**
  * Les bandes qui portent un bouton dans la barre du bas, dans l'ordre où elles
  * se lisent à l'écran : la base d'abord, sa défense ensuite.
  *
@@ -997,7 +1087,7 @@ function cle(rangee, colonne) {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function, allerALaBande: Function}}
  */
-export function initialiserEcranChantier(doc, { apresPose } = {}) {
+export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
@@ -1013,6 +1103,11 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   // à la fois, sinon un toucher voudrait dire deux choses.
   let actionArmee = null;
   let minuterieToast = null;
+  // Ce que le joueur regarde : l'écran, et la bande s'il est sur le Chantier.
+  // C'est ce couple qui décide du libellé du compteur et du bouton du bas qui
+  // s'allume.
+  let ecranCourant = 'chantier';
+  let bandeCourante = 'batiments';
   const fenetre = doc.defaultView;
   const cellules = new Map(); // « rangée:colonne » → élément
 
@@ -1128,7 +1223,7 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
 
   // --- les trois bandeaux de ressource ---------------------------------------
   const champsRessource = new Map();
-  const bandeauRessources = $('chantier-ressources');
+  const bandeauRessources = $('ressources');
   for (const cleRessource of RESSOURCES) {
     const bloc = doc.createElement('div');
     bloc.className = `ressource ${cleRessource}`;
@@ -1152,7 +1247,7 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     champsRessource.set(cleRessource, { stock, capacite, debit });
   }
 
-  // --- le compteur d'emplacements, remis le 28/08 -----------------------------
+  // --- le compteur, qui suit le contexte -------------------------------------
   //
   // ⚠ IL AVAIT ÉTÉ RETIRÉ AVEC LA BARRE DE GAUCHE (27/08), au motif que la
   // saturation se dirait au toucher d'une vignette. Ethan l'a redemandé à
@@ -1165,6 +1260,12 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   // exactement comme un stock plafonné — « 1 / 2 » — et c'est là que le joueur
   // regarde ce dont il dispose. Une quatrième barre pour un seul nombre
   // coûterait la hauteur d'une rangée de grille.
+  //
+  // ⚠ SON LIBELLÉ CHANGE AVEC L'ÉCRAN depuis le 28/08 — « quand on passe en
+  // défense, le nombre d'emplacement change pour celui des points de défense.
+  // Idem pour offense ». La valeur, elle, reste « — » pour ces deux-là : l'état
+  // ne porte ni garnison ni armée, et un chiffre inventé serait pire qu'un
+  // tiret. Voir `compteurDeContexte`, qui porte la règle et se teste sans DOM.
   const blocEmplacements = doc.createElement('div');
   blocEmplacements.className = 'ressource emplacements';
   const emplacementsPoses = doc.createElement('b');
@@ -1172,7 +1273,6 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   emplacementsOuverts.className = 'capacite';
   const emplacementsNom = doc.createElement('span');
   emplacementsNom.className = 'nom';
-  emplacementsNom.textContent = 'Emplac.';
   const hautEmplacements = doc.createElement('div');
   hautEmplacements.className = 'ligne';
   hautEmplacements.append(emplacementsPoses, emplacementsOuverts);
@@ -1181,6 +1281,16 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   basEmplacements.append(emplacementsNom);
   blocEmplacements.append(hautEmplacements, basEmplacements);
   bandeauRessources.appendChild(blocEmplacements);
+
+  // --- la bascule entre bases -------------------------------------------------
+  //
+  // ⚠ COQUILLE ASSUMÉE, ET QUI SE DIT TELLE. Le joueur n'a qu'UNE base — l'état
+  // porte une seule `disposition` — donc les deux flèches sont désactivées et
+  // le libellé « 1 / 1 » dit pourquoi. Les rendre vives sur du vide promettrait
+  // une bascule qui n'existe pas, ce qui est exactement ce que le bouton
+  // « Assaut » du lot ÉCRAN-CHANTIER faisait et qu'on a corrigé.
+  $('navigation-precedente').disabled = true;
+  $('navigation-suivante').disabled = true;
 
   // --- les trois boutons de bande --------------------------------------------
   //
@@ -1192,25 +1302,35 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   // aussi le saut vers l'écran Offense, écrit dans le balisage ; y ajouter les
   // bandes par le JS les poserait APRÈS lui, et le saut se lirait en premier.
   // Une liste à part garde l'ordre du document égal à l'ordre de l'écran.
-  const bandeauBandes = $('chantier-bandes-liste');
+  // ⚠ TROIS BOUTONS ÉGAUX, ET LA BARRE EST ENTIÈRE (28/08). Elle portait deux
+  // bandes, le numéro de version et un saut vers l'Offense séparé par un filet
+  // — précisément pour qu'il n'ait pas l'air d'une bande. Ethan a tranché dans
+  // l'autre sens : « les boutons base défense offense doivent prendre toutes la
+  // place en bas ». Le numéro de version a déménagé dans les Options.
+  //
+  // ⚠ DEUX FONT DÉFILER, LE TROISIÈME CHANGE D'ÉCRAN, et l'écran n'en décide
+  // pas seul : il le DEMANDE à la session par `versEcran`, qui sait ce qu'est
+  // un écran. Le même découpage que `apresPose`, pour la même raison.
+  const bandeauBandes = $('barre-bas');
   const boutonsBande = new Map();
-  // Deux boutons, dans l'ordre où les bandes se lisent maintenant à l'écran :
-  // la base d'abord, sa défense ensuite. Le déploiement n'en a plus — voir
-  // `BANDES_NAVIGABLES`.
-  for (const bande of BANDES_NAVIGABLES.map((c) => BANDES.find((b) => b.cle === c))) {
+  for (const entree of BOUTONS_DU_BAS) {
     const bouton = doc.createElement('button');
     bouton.type = 'button';
-    bouton.className = `bande ${bande.cle}`;
-    bouton.dataset.bande = bande.cle;
+    bouton.className = `bande ${entree.cle}`;
+    bouton.dataset.bande = entree.cle;
     const trait = doc.createElement('em');
     const nom = doc.createElement('span');
-    nom.textContent = bande.nom;
+    nom.textContent = entree.nom;
     const niveau = doc.createElement('i');
     niveau.textContent = NIVEAU_ABSENT;
     bouton.append(trait, nom, niveau);
-    bouton.addEventListener('click', () => allerALaBande(bande.cle));
+    bouton.addEventListener('click', () => {
+      if (versEcran !== undefined) versEcran(entree.ecran);
+      if (entree.bande !== null) allerALaBande(entree.bande);
+      else marquerBoutonDuBas();
+    });
     bandeauBandes.appendChild(bouton);
-    boutonsBande.set(bande.cle, { bouton, niveau });
+    boutonsBande.set(entree.cle, { bouton, niveau });
   }
 
   /** Hauteur d'une rangée à l'écran, mesurée et non supposée. */
@@ -1231,9 +1351,37 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   }
 
   function marquerBandeActive(cleBande) {
+    bandeCourante = cleBande;
+    marquerBoutonDuBas();
+  }
+
+  /**
+   * Allume le bouton du bas qui correspond à ce qu'on regarde.
+   *
+   * ⚠ L'ÉCRAN L'EMPORTE SUR LA BANDE. Sur l'Offense, aucune bande n'est
+   * visible : allumer « Base » parce que le défilement s'y était arrêté dirait
+   * au joueur qu'il regarde sa base alors qu'il regarde ses vagues.
+   */
+  function marquerBoutonDuBas() {
+    const actif = ecranCourant === 'chantier' ? bandeCourante : ecranCourant;
     for (const [c, { bouton }] of boutonsBande) {
-      bouton.classList.toggle('active', c === cleBande);
+      bouton.classList.toggle('active', c === actif);
     }
+    majCompteur();
+  }
+
+  /** Le compteur du bandeau des ressources, dans le contexte du moment. */
+  function majCompteur() {
+    if (etatCourant === null) return;
+    const contexte = ecranCourant === 'chantier' ? bandeCourante : ecranCourant;
+    // La bande « déploiement » n'a pas de bouton et n'a pas de compteur à elle :
+    // on retombe sur les bâtiments plutôt que de lever pour un défilement.
+    const vue = compteurDeContexte(etatCourant, CONTEXTES[contexte] === undefined ? 'batiments' : contexte);
+    emplacementsNom.textContent = vue.libelle;
+    emplacementsPoses.textContent = vue.valeur;
+    emplacementsOuverts.textContent = vue.capacite;
+    emplacementsPoses.classList.toggle('sature', vue.sature);
+    emplacementsOuverts.classList.toggle('sature', vue.sature);
   }
 
   // La bande active suit aussi le défilement à la main : les seuils se
@@ -1256,6 +1404,14 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   function peindrePalette(etat) {
     bandeauPalette.textContent = '';
     const posables = posablesDeLaBase(etat);
+    // ⚠ AUTANT DE COLONNES QU'IL EN FAUT POUR DEUX RANGÉES, et le nombre se
+    // CALCULE. Ethan : « faire rentrer dans l'ui tous les bâtiments du bas,
+    // c'est-à-dire les deux rangées de boutons ». La palette avait des colonnes
+    // de 82 px et défilait, donc la première vignette était coupée et deux
+    // bâtiments vivaient hors de l'écran. Écrire « 6 » ici marcherait
+    // aujourd'hui et mentirait au douzième bâtiment.
+    const colonnes = Math.ceil(posables.length / 2);
+    bandeauPalette.style.gridTemplateColumns = `repeat(${colonnes}, minmax(0, 1fr))`;
     // Un unique qu'on vient de poser ne quitte plus la palette, il s'y grise —
     // mais la sélection qui le désignait n'a plus d'objet et se défait, sans
     // quoi l'écran resterait en mode pose avec zéro case légale et sans rien
@@ -1749,17 +1905,16 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       champs.capacite.classList.toggle('sature', sature);
     }
 
-    const { poses, ouverts } = resume.emplacements;
-    emplacementsPoses.textContent = formaterEntier(poses);
-    emplacementsOuverts.textContent = `/ ${formaterEntier(ouverts)}`;
-    emplacementsPoses.classList.toggle('sature', poses >= ouverts);
-    emplacementsOuverts.classList.toggle('sature', poses >= ouverts);
+    majCompteur();
+    const navigation = navigationEntreBases(etat);
+    $('navigation-libelle').textContent = navigation.libelle;
 
     // Chaque bouton porte SON niveau. Celui de la défense reste « — » : l'état
     // ne porte pas de garnison, et en inventer une moyenne afficherait un
     // chiffre faux là où le tiret dit ce qui est vrai.
     boutonsBande.get('batiments').niveau.textContent = formaterNiveau(resume.niveaux.batiments);
     boutonsBande.get('defense').niveau.textContent = formaterNiveau(resume.niveaux.defense);
+    boutonsBande.get('offense').niveau.textContent = formaterNiveau(resume.niveaux.assaut);
     for (const [c, { bouton }] of boutonsBande) {
       bouton.classList.toggle('sans-niveau', c !== 'batiments');
     }
@@ -1776,6 +1931,14 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     rafraichir,
     allerALaBande,
     avis,
+    /**
+     * La session dit à l'écran quel écran est en scène ; l'écran en déduit le
+     * bouton du bas à allumer et le libellé du compteur.
+     */
+    marquerEcran(nom) {
+      ecranCourant = nom;
+      marquerBoutonDuBas();
+    },
     /** Le champ s'ouvre sur la bande des bâtiments : c'est là qu'est la base. */
     ouvrirSurLaBase() {
       // Les bâtiments occupent désormais les premières lignes d'écran : ouvrir

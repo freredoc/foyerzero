@@ -195,33 +195,60 @@
      doigt de la case qu'il vise. */
   :root { --case-max: 46px; }
 
-  #ecran-chantier {
-    flex: 1;
-    min-height: 0;
-    position: relative;
-    display: flex;
-    flex-direction: column;
+  /* La page de jeu : en-tête commun, écran du moment, barre du bas commune.
+     ⚠ `#jeu` EXISTE POUR LE BANC. Il remplaçait deux écrans nommés un par un ;
+     maintenant qu'il y en a trois et deux barres partagées, il en cache UN. */
+  #jeu {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
     background: #1E2124;
     font-family: "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
   }
+  /* Les écrans se superposent dans la même boîte : le panneau d'alerte y est
+     `absolute`, et il doit couvrir l'écran de jeu, pas la page entière. */
+  #ecrans { flex: 1; min-height: 0; position: relative; display: flex; }
+  #ecrans > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
-  /* --- 1. onglets — 40 ---------------------------------------------------- */
-  #chantier-onglets { flex: 0 0 40px; display: flex; background: #161914; border-bottom: 1px solid #3E454C; }
-  #chantier-onglets button {
+  #ecran-chantier { min-height: 0; }
+
+  /* --- 1. onglets — 40 ----------------------------------------------------
+     ⚠ ILS ONT QUITTÉ `#ecran-chantier` (28/08). Ils y vivaient, donc changer
+     d'écran les faisait disparaître — Ethan voulait les garder « dans le menu
+     offense ». Cinq maintenant : Base, Mission (mort, futur tutoriel),
+     Recherche, Monde, Options. */
+  #tete-onglets { flex: 0 0 40px; display: flex; background: #161914; border-bottom: 1px solid #3E454C; }
+  #tete-onglets button {
     flex: 1; display: flex; align-items: center; justify-content: center;
-    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
     color: #68727E; background: transparent;
     border: 0; border-right: 1px solid #1E2124; padding: 0;
   }
-  #chantier-onglets button:last-child { border-right: 0; }
-  #chantier-onglets button.actif { color: #F5F3E8; background: #343A2C; box-shadow: inset 0 -2px 0 #8C9A72; }
-  /* Les trois onglets à venir : rien derrière eux, et ça doit se voir. */
-  #chantier-onglets button.futur { color: #3E454C; }
+  #tete-onglets button:last-child { border-right: 0; }
+  #tete-onglets button.actif { color: #F5F3E8; background: #343A2C; box-shadow: inset 0 -2px 0 #8C9A72; }
+  /* Les onglets à venir : rien derrière eux, et ça doit se voir. */
+  #tete-onglets button.futur { color: #3E454C; }
 
-  /* --- 2. ressources — 44 -------------------------------------------------- */
-  #chantier-ressources {
+  /* --- 2. ressources — 44, communes elles aussi ---------------------------- */
+  #ressources {
     flex: 0 0 44px; display: flex; align-items: center; gap: 4px;
     padding: 0 6px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+
+  /* --- 3. la bascule entre bases — 26 --------------------------------------
+     ⚠ COQUILLE, ET ELLE LE DIT. Une seule base existe : les deux flèches sont
+     désactivées et le libellé « 1 / 1 » explique pourquoi. Le jour où l'état
+     portera plusieurs bases, il n'y aura qu'à les rendre vives. */
+  #navigation {
+    flex: 0 0 26px; display: flex; align-items: center;
+    background: #1E2124; border-bottom: 1px solid #161914;
+  }
+  #navigation button {
+    flex: 0 0 44px; height: 100%;
+    background: transparent; border: 0; color: #8C9A72; font-size: 12px;
+  }
+  #navigation-libelle {
+    flex: 1; min-width: 0; text-align: center;
+    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #68727E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .ressource { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; }
   .ressource .ligne { display: flex; align-items: baseline; gap: 3px; }
@@ -392,52 +419,51 @@
   }
   #chantier-contexte button.arme em { color: #161914; }
 
-  /* --- 6. bandes — 46 ------------------------------------------------------ */
-  /* Elles FONT DÉFILER, elles ne changent pas d'écran : un assaut traverse la
-     défense pour atteindre les bâtiments, et trois écrans le feraient oublier. */
-  #chantier-bandes { flex: 0 0 46px; display: flex; background: #161914; border-top: 1px solid #3E454C; }
-  #chantier-bandes-liste { flex: 1; display: flex; min-width: 0; }
-  /* Le numéro de version porte le geste de debug : appui long de 1,5 s. La
-     sélection de texte et le menu contextuel d'Android sont désarmés dessus,
-     ils recouvriraient l'écran à l'instant même où le banc s'ouvre.
-     ⚠ IL A CHANGÉ DE PLACE, PAS DE RÔLE. Il vivait dans le bandeau
-     d'emplacements, qui n'existe plus ; sans ce déménagement, le banc d'essai
-     serait devenu inatteignable. */
-  #chantier-version {
-    flex: 0 0 auto; align-self: center; padding: 0 6px;
-    font-size: 9px; color: #3E454C; font-variant-numeric: tabular-nums;
-    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
-  }
-  #chantier-version.appui { color: #8C9A72; }
-  #chantier-bandes-liste .bande {
+  /* --- 6. la barre du bas — 46, ENTIÈRE et à trois boutons égaux ------------
+     Arbitré le 28/08 : « les boutons base défense offense doivent prendre
+     toutes la place en bas ». Le numéro de version, qui occupait le milieu, a
+     déménagé dans les Options — c'est ce qui a rendu cet écran nécessaire.
+     ⚠ BASE ET DÉFENSE FONT DÉFILER, OFFENSE CHANGE D'ÉCRAN, et les trois se
+     ressemblent maintenant. C'est ce qu'Ethan veut ; ce qui dit lequel on
+     regarde, c'est le contenu, pas la forme du bouton. */
+  #barre-bas { flex: 0 0 46px; display: flex; background: #161914; border-top: 1px solid #3E454C; }
+  #barre-bas .bande {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
     background: transparent; border: 0; border-right: 1px solid #1E2124; padding: 0; color: #68727E;
   }
-  #chantier-bandes-liste .bande:last-child { border-right: 0; }
-  #chantier-bandes-liste .bande em { width: 18px; height: 3px; font-style: normal; }
-  #chantier-bandes-liste .bande.batiments em { background: #4E5742; }
-  #chantier-bandes-liste .bande.defense em { background: #8A1E17; }
-  #chantier-bandes-liste .bande.deploiement em { background: #928E80; }
-  #chantier-bandes-liste .bande span { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #68727E; }
-  #chantier-bandes-liste .bande i { font-style: normal; font-size: 11px; color: #68727E; font-variant-numeric: tabular-nums; }
-  #chantier-bandes-liste .bande.active { background: #343A2C; }
-  #chantier-bandes-liste .bande.active span, #chantier-bandes .bande.active i { color: #F5F3E8; }
+  #barre-bas .bande:last-child { border-right: 0; }
+  #barre-bas .bande em { width: 18px; height: 3px; font-style: normal; }
+  #barre-bas .bande.batiments em { background: #4E5742; }
+  #barre-bas .bande.defense em { background: #8A1E17; }
+  #barre-bas .bande.deploiement em { background: #928E80; }
+  #barre-bas .bande span { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #68727E; }
+  #barre-bas .bande i { font-style: normal; font-size: 11px; color: #68727E; font-variant-numeric: tabular-nums; }
+  #barre-bas .bande.active { background: #343A2C; }
+  #barre-bas .bande.active span, #barre-bas .bande.active i { color: #F5F3E8; }
   /* Défense et Assaut n'ont pas de niveau — l'état ne porte ni garnison ni
      armée. Le tiret reste éteint même quand la bande est active : il ne faut
      pas qu'un « — » en pleine lumière se lise comme une valeur. */
-  #chantier-bandes-liste .bande.sans-niveau i { color: #3E454C; }
+  #barre-bas .bande.sans-niveau i { color: #3E454C; }
 
   /* --- 7. palette — 86 ----------------------------------------------------- */
   /* Deux rangs, autant de colonnes qu'il y a de bâtiments encore posables.
      La maquette en montrait huit de front ; il y en a dix sur une base neuve,
      et le bandeau défile plutôt que d'en cacher deux. */
+  /* ⚠ ELLE NE DÉFILE PLUS, ELLE TIENT (28/08). Ethan : « faire rentrer dans
+     l'ui tous les bâtiments du bas, c'est-à-dire les deux rangées de boutons ».
+     Elle avait des colonnes de 82 px et un défilement horizontal, si bien que
+     la première vignette était coupée et que deux bâtiments vivaient hors de
+     l'écran. Deux rangées, autant de colonnes qu'il en faut, et chaque colonne
+     prend sa part de la largeur.
+     ⚠ LE NOMBRE DE COLONNES EST ÉCRIT PAR LE JS depuis le nombre de bâtiments
+     posables, jamais ici : onze bâtiments font six colonnes, et un douzième en
+     ferait sept sans qu'on touche à cette feuille. */
   #chantier-palette {
     flex: 0 0 86px; display: grid;
-    grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; grid-auto-columns: 82px;
-    gap: 4px; padding: 5px 6px; background: #1E2124; border-top: 1px solid #161914;
-    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    grid-template-rows: repeat(2, 1fr);
+    gap: 3px; padding: 5px 6px; background: #1E2124; border-top: 1px solid #161914;
+    overflow: hidden;
   }
-  #chantier-palette::-webkit-scrollbar { display: none; }
   .posable {
     position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
@@ -488,50 +514,16 @@
   }
   #chantier-alerte button.neuve { background: #6A7658; color: #161914; }
 
-  /* --- le passage vers l'autre écran ---------------------------------------
-     Il vit dans la barre du bas, mais il n'est PAS une troisième bande : un
-     filet le sépare, une flèche dit qu'il emmène ailleurs, et il ne porte pas
-     de ligne de niveau. C'est exactement ce qui manquait au bouton « Assaut »
-     du lot précédent, qui avait l'air d'une bande et n'en était pas une. */
-  #chantier-vers-offense {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
-    padding: 0 10px; background: #343A2C; color: #F5F3E8;
-    border: 0; border-left: 2px solid #3E454C;
-    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-  }
-
   /* =======================================================================
      ÉCRAN OFFENSE — quatre vagues de neuf, vides
-     ======================================================================= */
-  #ecran-offense {
-    flex: 1; min-height: 0; display: flex; flex-direction: column;
-    background: #1E2124;
-    font-family: "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
-  }
-  #offense-tete {
-    flex: 0 0 40px; display: flex; align-items: center; gap: 8px;
-    padding: 0 8px; background: #161914; border-bottom: 1px solid #3E454C;
-  }
-  /* ⚠ JUMEAU DE `#chantier-bandes`. Mêmes hauteur, fond et filet : le retour
-     doit tomber sous le pouce là où l'aller l'a laissé. Si l'une des deux
-     barres change, l'autre suit — sinon le geste cesse d'être le même. */
-  #offense-barre {
-    flex: 0 0 46px; display: flex; align-items: stretch;
-    background: #161914; border-top: 1px solid #3E454C;
-  }
-  #offense-barre .vide { flex: 1; }
-  #offense-vers-chantier {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
-    padding: 0 10px; background: #343A2C; color: #F5F3E8;
-    border: 0; border-left: 2px solid #3E454C;
-    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-  }
-  #offense-tete h1 {
-    margin: 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8C9A72;
-  }
-  #offense-tete .chiffres { margin-left: auto; display: flex; gap: 10px; }
-  #offense-tete .chiffres span { font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; color: #68727E; }
-  #offense-tete .chiffres b { font-size: 11px; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+     =======================================================================
+     ⚠ IL A PERDU SON EN-TÊTE ET SA BARRE (28/08), et c'est le lot. Il portait
+     un `#offense-tete` avec son titre et ses chiffres, et un `#offense-barre`
+     jumeau de celle du Chantier pour le retour. Les deux sont devenus inutiles
+     le jour où les onglets, les ressources et la barre du bas sont passés en
+     commun : le retour se fait par le bouton « Base », qui est là de toute
+     façon, et les chiffres d'armée n'existaient pas. */
+  #ecran-offense { min-height: 0; }
   /* Le mot qui dit que la composition n'existe pas encore. Il n'est pas une
      alerte — rien n'est cassé — donc il porte le métal, pas le rouge. */
   #offense-avis {
@@ -555,6 +547,36 @@
     overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
   }
   #offense-palette::-webkit-scrollbar { display: none; }
+
+  /* =======================================================================
+     ÉCRAN OPTIONS — il n'existe que depuis le 28/08, et pour une raison
+     mécanique : le numéro de version a dû quitter la barre du bas, et il porte
+     l'appui long qui ouvre le banc d'essai. Sans écran pour l'accueillir, le
+     banc devenait inatteignable.
+     ======================================================================= */
+  #ecran-options { padding: 12px; gap: 10px; overflow-y: auto; }
+  #ecran-options h2 {
+    margin: 0; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #8C9A72;
+  }
+  #ecran-options .mot { margin: 0; font-size: 11px; line-height: 1.4; color: #68727E; }
+  #ecran-options .ligne {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 8px; background: #343A2C; border: 1px solid #161914;
+  }
+  #ecran-options .ligne .nom {
+    flex: 1; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #68727E;
+  }
+  /* Le numéro de version porte le geste de debug : appui long de 1,5 s. La
+     sélection de texte et le menu contextuel d'Android sont désarmés dessus,
+     ils recouvriraient l'écran à l'instant même où le banc s'ouvre.
+     ⚠ IL A CHANGÉ DE PLACE DEUX FOIS, PAS DE RÔLE : le bandeau d'emplacements
+     d'abord, la barre du bas ensuite, les Options maintenant. Chaque fois,
+     c'est la seule porte du banc qui déménage avec lui. */
+  #options-version {
+    font-size: 12px; color: #F5F3E8; font-variant-numeric: tabular-nums;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  #options-version.appui { color: #F5B636; }
   #offense-palette .unite {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
@@ -574,110 +596,135 @@
      bâtiments posables — sont écrites par `ui/chantier.js` : rien de ce qui
      vient de `src/data/` n'est gravé ici.
      ========================================================================== -->
-<div id="ecran-chantier">
+<!-- ==========================================================================
+     LA PAGE DE JEU — un en-tête COMMUN, puis l'écran du moment, puis une barre
+     du bas commune elle aussi.
+     ⚠ CETTE STRUCTURE EST NEUVE (28/08) ET ELLE RÉPOND À UNE DEMANDE PRÉCISE.
+     Ethan : « garder la barre quartz scories etc et monde option dans le menu
+     offense ». Les onglets et les ressources vivaient DANS `#ecran-chantier` :
+     changer d'écran les faisait donc disparaître. Ils en sortent, et tout écran
+     à venir en hérite sans qu'on y pense — c'est le même raisonnement que les
+     marges système posées sur `body` au lot PANNEAU-ET-MARGES.
+     ========================================================================== -->
+<div id="jeu">
 
-  <div id="chantier-onglets">
-    <button type="button" class="actif">Chantier</button>
+  <!-- 1. les onglets — Base | Mission | Recherche | Monde | Options.
+       ⚠ MISSION EST NEUF ET MORT, et il se dit mort : Ethan le veut « entre
+       recherche et chantier », comme futur tutoriel. « Chantier » est renommé
+       « Base » au même endroit. OPTIONS, lui, N'EST PLUS MORT : c'est là que le
+       numéro de version a déménagé, donc c'est là que passe le geste qui ouvre
+       le banc d'essai. -->
+  <div id="tete-onglets">
+    <button type="button" class="actif" id="onglet-base">Base</button>
+    <button type="button" class="futur" disabled>Mission</button>
     <button type="button" class="futur" disabled>Recherche</button>
     <button type="button" class="futur" disabled>Monde</button>
-    <button type="button" class="futur" disabled>Options</button>
+    <button type="button" id="onglet-options">Options</button>
   </div>
 
-  <div id="chantier-ressources"></div>
+  <!-- 2. les ressources, et le compteur qui suit le contexte. -->
+  <div id="ressources"></div>
 
-  <div id="chantier-champ">
-    <div id="chantier-defile"><div id="chantier-grille"></div></div>
-    <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js` depuis
-         `lignesDuPanneau`, qui est pure et testée : rien de ce qui vient du
-         moteur n'est gravé ici. -->
-    <div id="chantier-panneau" hidden>
-      <div class="tete">
-        <b id="chantier-panneau-titre">—</b>
-        <button type="button" id="chantier-panneau-fermer">Fermer</button>
+  <!-- 3. la bascule entre bases.
+       ⚠ COQUILLE ASSUMÉE, ET ELLE LE DIT. Le joueur n'a qu'UNE base ; les deux
+       flèches sont donc désactivées, et le libellé « 1 / 1 » explique pourquoi
+       mieux qu'une infobulle. Le jour où l'état portera plusieurs bases, il n'y
+       aura qu'à les rendre vives. -->
+  <div id="navigation">
+    <button type="button" id="navigation-precedente" disabled>◀</button>
+    <span id="navigation-libelle">—</span>
+    <button type="button" id="navigation-suivante" disabled>▶</button>
+  </div>
+
+  <div id="ecrans">
+
+    <div id="ecran-chantier">
+
+      <div id="chantier-champ">
+        <div id="chantier-defile"><div id="chantier-grille"></div></div>
+        <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
+             depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
+             vient du moteur n'est gravé ici. -->
+        <div id="chantier-panneau" hidden>
+          <div class="tete">
+            <b id="chantier-panneau-titre">—</b>
+            <button type="button" id="chantier-panneau-fermer">Fermer</button>
+          </div>
+          <div id="chantier-panneau-corps"></div>
+          <button type="button" id="chantier-panneau-ameliorer"></button>
+        </div>
       </div>
-      <div id="chantier-panneau-corps"></div>
-      <button type="button" id="chantier-panneau-ameliorer"></button>
+
+      <p id="chantier-avis" hidden></p>
+
+      <div id="chantier-contexte">
+        <div class="qui">
+          <b id="chantier-selection-nom">—</b>
+          <span id="chantier-selection-detail">aucun bâtiment sélectionné</span>
+        </div>
+        <button type="button" id="chantier-reparer">Réparer</button>
+        <button type="button" class="up" id="chantier-ameliorer">Améliorer<em id="chantier-ameliorer-cible"></em></button>
+        <button type="button" class="sell" id="chantier-demolir">Démolir</button>
+      </div>
+
+      <div id="chantier-palette"></div>
+
     </div>
-  </div>
 
-  <p id="chantier-avis" hidden></p>
-
-  <div id="chantier-contexte">
-    <div class="qui">
-      <b id="chantier-selection-nom">—</b>
-      <span id="chantier-selection-detail">aucun bâtiment sélectionné</span>
+    <!-- ======================================================================
+         ÉCRAN OFFENSE — la composition d'un raid : quatre vagues de neuf.
+         ⚠ COQUILLE ASSUMÉE. L'état du joueur ne porte pas d'armée, donc rien ne
+         peut être composé ici aujourd'hui. Il n'a plus ni en-tête ni barre à
+         lui : les onglets, les ressources et la barre du bas sont communs, ce
+         qui est exactement ce qu'Ethan a demandé.
+         ====================================================================== -->
+    <div id="ecran-offense" hidden>
+      <p id="offense-avis">La composition d'armée n'existe pas encore : la partie
+        n'enregistre ni garnison ni armée d'assaut. Les emplacements ci-dessous
+        montrent la place qu'elle prendra.</p>
+      <div id="offense-vagues"></div>
+      <div id="offense-palette"></div>
     </div>
-    <button type="button" id="chantier-reparer">Réparer</button>
-    <button type="button" class="up" id="chantier-ameliorer">Améliorer<em id="chantier-ameliorer-cible"></em></button>
-    <button type="button" class="sell" id="chantier-demolir">Démolir</button>
+
+    <!-- ======================================================================
+         ÉCRAN OPTIONS — il n'existait pas, et il existe pour une raison
+         précise : Ethan a demandé que le numéro de version quitte la barre du
+         bas, qui doit revenir entière aux trois boutons. Or ce numéro PORTE
+         l'appui long de 1,5 s qui ouvre le banc d'essai. Le déplacer sans lui
+         donner d'abri aurait rendu le banc inatteignable, et T10 de
+         `banc.test.js` serait tombé.
+         ====================================================================== -->
+    <div id="ecran-options" hidden>
+      <h2>Options</h2>
+      <p class="mot">Rien à régler pour l'instant. Cet écran existe pour loger le
+        numéro de version, qui a quitté la barre du bas.</p>
+      <div class="ligne">
+        <span class="nom">Version</span>
+        <span id="options-version">v%VERSION% b%BUILD%</span>
+      </div>
+    </div>
+
+    <div id="chantier-alerte" hidden>
+      <h2>Sauvegarde illisible</h2>
+      <p>La partie enregistrée sur cet appareil n'a pas pu être relue&nbsp;:</p>
+      <p id="chantier-alerte-message"></p>
+      <p>Elle n'a pas été supprimée. Si vous démarrez une partie neuve, elle sera
+        mise de côté et restera récupérable.</p>
+      <button type="button" id="chantier-alerte-reessayer">Réessayer le chargement</button>
+      <button type="button" class="neuve" id="chantier-alerte-neuve">Démarrer une partie neuve</button>
+    </div>
+
   </div>
 
-  <div id="chantier-bandes">
-    <div id="chantier-bandes-liste"></div>
-    <span id="chantier-version">v%VERSION% b%BUILD%</span>
-    <button type="button" id="chantier-vers-offense">Offense →</button>
-  </div>
-
-  <div id="chantier-palette"></div>
-
-  <div id="chantier-alerte" hidden>
-    <h2>Sauvegarde illisible</h2>
-    <p>La partie enregistrée sur cet appareil n'a pas pu être relue&nbsp;:</p>
-    <p id="chantier-alerte-message"></p>
-    <p>Elle n'a pas été supprimée. Si vous démarrez une partie neuve, elle sera
-      mise de côté et restera récupérable.</p>
-    <button type="button" id="chantier-alerte-reessayer">Réessayer le chargement</button>
-    <button type="button" class="neuve" id="chantier-alerte-neuve">Démarrer une partie neuve</button>
-  </div>
+  <!-- La barre du bas, entière et à trois boutons égaux — arbitré le 28/08 :
+       « les boutons base défense offense doivent prendre toutes la place en
+       bas ». Base et Défense font DÉFILER la même grille ; Offense change
+       d'écran. Les trois se ressemblent maintenant, ce qui est ce qu'Ethan
+       veut, et le contenu de l'écran dit lequel on regarde. -->
+  <div id="barre-bas"></div>
 
 </div>
 
-<!-- ==========================================================================
-     ÉCRAN OFFENSE — la composition d'un raid : quatre vagues de neuf.
-     ⚠ COQUILLE ASSUMÉE. L'état du joueur ne porte pas d'armée, donc rien ne
-     peut être composé ici aujourd'hui. Les trente-six emplacements sont
-     dessinés et vides, le niveau et le budget valent « — », la palette est
-     présente et désactivée, et un mot le dit. Inventer un état d'armée
-     reviendrait à trancher seul une forme qu'Ethan n'a pas arbitrée.
-     Le nombre de vagues et de colonnes vient d'EMPLACEMENTS_ASSAUT ; les
-     éléments sont écrits par `ui/offense.js`.
-     ========================================================================== -->
-<div id="ecran-offense" hidden>
-
-  <div id="offense-tete">
-    <h1>Offense</h1>
-    <div class="chiffres">
-      <span>Niv. armée <b id="offense-niveau">—</b></span>
-      <span>Points <b id="offense-points">—</b></span>
-    </div>
-  </div>
-
-  <p id="offense-avis">La composition d'armée n'existe pas encore : la partie
-    n'enregistre ni garnison ni armée d'assaut. Les emplacements ci-dessous
-    montrent la place qu'elle prendra.</p>
-
-  <div id="offense-vagues"></div>
-
-  <!-- ⚠ LE RETOUR EST À LA PLACE EXACTE DE L'ALLER. Il était en tête d'écran ;
-       Ethan l'a relevé à l'essai du 27/08. Un aller en bas à droite et un
-       retour en tête oblige le pouce à traverser l'écran pour faire deux fois
-       le même geste. Cette barre reprend la hauteur et le filet de
-       `#chantier-bandes`, et le bouton y occupe la même place. -->
-  <div id="offense-barre">
-    <div class="vide"></div>
-    <button type="button" id="offense-vers-chantier">← Base</button>
-  </div>
-
-  <div id="offense-palette"></div>
-
-</div>
-
-<!-- ==========================================================================
-     BANC D'ESSAI — il RESTE dans le HTML livré (arbitré le 27/08), caché
-     derrière un appui long de 1,5 s sur le numéro de version. C'est aussi ce
-     que T10 exige déjà : il asserte la présence de ses contrôles dans
-     `dist/index.html`.
-     ========================================================================== -->
 <div id="banc" hidden>
 <header>
   <button id="banc-fermer" title="revenir à l'écran de jeu">← Jeu</button>
