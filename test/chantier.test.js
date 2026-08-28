@@ -14,6 +14,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+import { ACTIONS, PAS_DE_REPARATION, DUREE_TOAST_MS } from '../src/ui/chantier.js';
 import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
   formaterEntier, formaterUnites, formaterDixiemes, formaterDebit, formaterNiveau,
@@ -34,6 +35,7 @@ import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { creerEtat, tickJeu, poser, problemesDeLaPose } from '../src/sim/state.js';
+import * as moteurEtat from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -435,10 +437,9 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
   for (const attendu of [
     'ecran-chantier', 'chantier-onglets', 'chantier-ressources',
-    'chantier-emplacements-bandeau', 'chantier-jauge', 'chantier-emplacements',
     'chantier-version', 'chantier-champ', 'chantier-defile', 'chantier-grille',
     'chantier-contexte', 'chantier-selection-nom', 'chantier-selection-detail',
-    'chantier-reparer', 'chantier-ameliorer', 'chantier-ameliorer-cible', 'chantier-demonter',
+    'chantier-reparer', 'chantier-ameliorer', 'chantier-ameliorer-cible', 'chantier-demolir',
     'chantier-bandes', 'chantier-bandes-liste', 'chantier-palette', 'chantier-avis',
     'chantier-alerte', 'chantier-alerte-message', 'chantier-alerte-neuve', 'chantier-alerte-reessayer',
   ]) {
@@ -462,10 +463,28 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // vif fait douter le joueur de son appareil plutôt que du jeu.
   const futurs = [...html.matchAll(/class="futur"\s+disabled/g)];
   assert.equal(futurs.length, 3, 'Recherche, Monde et Options doivent être désactivés');
-  // Et les trois boutons d'action aussi, tant que la couche d'action n'existe pas.
-  for (const bouton of ['chantier-reparer', 'chantier-ameliorer', 'chantier-demonter']) {
-    assert.match(html, new RegExp(`id="${bouton}"[^>]*disabled`), `${bouton} n'est pas désactivé`);
+
+  // ⚠ LES TROIS BOUTONS D'ACTION NE SONT PLUS DÉSACTIVÉS, ET C'EST LE LOT.
+  // Le modèle est « armer puis toucher » : c'est le bouton qu'on touche EN
+  // PREMIER, donc il doit être vif avant qu'un bâtiment soit choisi. Les laisser
+  // `disabled` dans le balisage rendrait tout le lot inatteignable au doigt.
+  for (const bouton of ['chantier-reparer', 'chantier-ameliorer', 'chantier-demolir']) {
+    assert.doesNotMatch(html, new RegExp(`id="${bouton}"[^>]*disabled`),
+      `${bouton} est désactivé : le modèle « armer puis toucher » ne peut pas démarrer`);
   }
+
+  // ⚠ LE COMPTEUR D'EMPLACEMENTS A DISPARU, avec la barre de gauche. Ce test le
+  // GARDE retiré : le laisser revenir en silence ferait réapparaître un
+  // affichage que les vérifications appareil 18 et 20 ne lisent plus.
+  for (const parti of ['chantier-emplacements', 'chantier-jauge', 'chantier-demonter']) {
+    assert.ok(!html.includes(parti), `« ${parti} » devait disparaître de l'écran`);
+  }
+  // Et la grille se centre par la MISE EN PAGE, jamais par une transformation :
+  // un `scale()` décrocherait le doigt de la case qu'il vise.
+  assert.match(html, /#chantier-grille\s*\{[^}]*margin-inline:\s*auto/,
+    'la grille ne se centre plus par ses marges');
+  assert.ok(!/#chantier-grille\s*\{[^}]*transform:/.test(html),
+    'la grille est centrée par une transformation');
 
   // Le point d'entrée est la session, plus le banc : c'est ce qui garantit que
   // `initialiserBanc` n'est pas appelé au chargement.
@@ -841,4 +860,166 @@ test('session — la boucle ne lit PAS l\'horodatage d\'image', () => {
   );
   // Falsifiable : le motif doit attraper la forme fautive.
   assert.ok(!/function image\(\)/.test('function image(horodatageMs) {'), 'le motif n\'attrape rien');
+});
+
+
+// ---------------------------------------------------------------------------
+// Les actions — lot ÉCRAN-ACTIONS
+// ---------------------------------------------------------------------------
+
+test('actions — les trois boutons sont branchés sur le MOTEUR, pas sur une copie', () => {
+  // ⚠ ÉGALITÉ DE RÉFÉRENCE, PAS DE COMPORTEMENT. C'est ce qui distingue « la
+  // table appelle la fonction du moteur » de « la table appelle quelque chose
+  // qui lui ressemble ». Une réimplémentation dans l'écran — même juste le jour
+  // où elle est écrite — dériverait de `sim/state.js` à la première règle qui
+  // change, et personne ne le verrait.
+  assert.equal(ACTIONS.ameliorer.problemes, moteurEtat.problemesDeLAmelioration);
+  assert.equal(ACTIONS.ameliorer.agir, moteurEtat.ameliorer);
+  assert.equal(ACTIONS.demolir.problemes, moteurEtat.problemesDeLaDemolition);
+  assert.equal(ACTIONS.demolir.agir, moteurEtat.demolir);
+
+  // Chaque action nomme un bouton, et les trois boutons sont distincts.
+  const boutons = Object.values(ACTIONS).map((a) => a.bouton);
+  assert.equal(new Set(boutons).size, boutons.length, 'deux actions visent le même bouton');
+  for (const [nom, action] of Object.entries(ACTIONS)) {
+    assert.match(action.bouton, /^chantier-/, `${nom} vise un bouton hors de l'écran`);
+    assert.equal(typeof action.libelle, 'string');
+  }
+
+  // Falsifiable : le montage doit voir les DEUX formes d'action — celles qui
+  // ont un moteur et celle qui n'en a pas. Sinon la distinction ne prouve rien.
+  const avecMoteur = Object.values(ACTIONS).filter((a) => a.agir !== undefined);
+  const sansMoteur = Object.values(ACTIONS).filter((a) => a.agir === undefined);
+  assert.equal(avecMoteur.length, 2);
+  assert.equal(sansMoteur.length, 1);
+});
+
+test('actions — Réparer n\'a pas de moteur, et ce n\'est pas un oubli', () => {
+  // ⚠ CE TEST EST FAIT POUR TOMBER UN JOUR, ET C'EST SON INTÉRÊT. La phrase de
+  // refus de Réparer est la SEULE écrite dans l'interface — toutes les autres
+  // viennent de `sim/disposition.js` ou de `sim/state.js`. Elle n'est légitime
+  // que tant qu'aucune fonction ne répare. Le jour où le moteur en gagne une,
+  // ce test rougit et dit quoi brancher, au lieu de laisser l'écran répéter
+  // « rien n'est endommagé » devant des bâtiments abîmés.
+  for (const nom of ['reparer', 'problemesDeLaReparation', 'problemesDeLaReparation']) {
+    assert.ok(!(nom in moteurEtat), `sim/state.js exporte « ${nom} » : brancher Réparer dessus`);
+  }
+  assert.equal(ACTIONS.reparer.problemes, undefined);
+  assert.equal(ACTIONS.reparer.agir, undefined);
+
+  // La phrase dit ce qui est vrai, et ne promet rien.
+  assert.equal(typeof PAS_DE_REPARATION, 'string');
+  assert.ok(PAS_DE_REPARATION.length > 20, 'un refus doit expliquer, pas seulement refuser');
+
+  // Falsifiable dans l'autre sens : le montage doit voir de VRAIS exports, sinon
+  // « aucun nom de réparation » passerait sur un module vide.
+  assert.ok('ameliorer' in moteurEtat && 'demolir' in moteurEtat,
+    'le montage ne lit pas les exports de sim/state.js');
+
+  // Le toast a une durée bornée : ni instantané, ni permanent.
+  assert.ok(DUREE_TOAST_MS >= 1500 && DUREE_TOAST_MS <= 10_000, `${DUREE_TOAST_MS} ms`);
+});
+
+test('actions — jamais de `try` autour d\'`ameliorer` ni de `demolir`', () => {
+  // Même discipline que pour `poser`, et pour la même raison : `problemes…`
+  // rend une LISTE (fait de JEU, on la montre), `ameliorer` et `demolir` LÈVENT
+  // (fait de PROGRAMME). Rattraper la levée confondrait les deux.
+  // ⚠ LES DEUX NOMS DIRECTS NE SUFFISENT PAS, et c'est la falsification qui l'a
+  // montré : l'écran n'appelle pas `ameliorer(...)`, il appelle
+  // `action.agir(...)` par la table `ACTIONS`. Une garde qui ne cherchait que
+  // les noms directs laissait passer un `try` autour de la RÉPARTITION — la
+  // seule forme sous laquelle la faute se commettrait réellement ici. On garde
+  // donc les deux : les noms, et le point d'appel indirect.
+  const MOTIFS = [
+    { nom: 'ameliorer', motif: /(?<![\p{L}\p{N}_])ameliorer\s*\(/u },
+    { nom: 'demolir', motif: /(?<![\p{L}\p{N}_])demolir\s*\(/u },
+    { nom: 'action.agir', motif: /\.\s*agir\s*\(/u },
+    { nom: 'action.problemes', motif: /\.\s*problemes\s*\(/u },
+  ];
+  const fichiers = readdirSync(join(RACINE, 'src', 'ui'))
+    .filter((n) => n.endsWith('.js'))
+    .map((n) => join(RACINE, 'src', 'ui', n));
+
+  let blocsVus = 0;
+  for (const fichier of fichiers) {
+    const code = sansCommentaires(readFileSync(fichier, 'utf8'));
+    for (const bloc of blocsTry(code)) {
+      blocsVus += 1;
+      for (const { nom, motif } of MOTIFS) {
+        assert.ok(!motif.test(bloc), `un try entoure ${nom}() dans ${fichier}`);
+      }
+    }
+  }
+  assert.ok(blocsVus > 0, 'aucun bloc try vu : le découpage ne fonctionne pas');
+
+  // ⚠ ET ON DEMANDE AVANT D'AGIR. Retirer le `try` sans consulter la légalité
+  // serait pire que le `try` : l'écran lèverait pour de bon. On vérifie que
+  // l'écran passe par `problemes` avant `agir`, dans cet ordre.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.ok(/action\.problemes\s*\(/.test(ecran), 'l\'écran agit sans demander la légalité');
+  assert.ok(/action\.agir\s*\(/.test(ecran), 'l\'écran ne branche aucune action');
+  assert.ok(ecran.indexOf('action.problemes(') < ecran.indexOf('action.agir('),
+    'la légalité est consultée APRÈS l\'action');
+
+  // Falsifiable : les motifs attrapent un vrai appât, et laissent passer les
+  // noms qui les contiennent.
+  // Deux appâts : l'appel DIRECT et l'appel par la table. Le second est celui
+  // qui passait avant que la falsification ne le débusque.
+  for (const appat of [
+    'try { ameliorer(etat, i); } catch (e) { toast(e.message); }',
+    'try { action.agir(etatCourant, index); } catch (e) { toast(e.message); }',
+  ]) {
+    const bloc = blocsTry(appat);
+    assert.equal(bloc.length, 1, appat);
+    assert.ok(MOTIFS.some((m) => m.motif.test(bloc[0])), `appât non attrapé : ${appat}`);
+  }
+  // Et les noms qui CONTIENNENT ceux-là passent, eux.
+  assert.ok(!MOTIFS[0].motif.test('problemesDeLAmelioration(etat, i)'));
+  assert.ok(!MOTIFS[1].motif.test('problemesDeLaDemolition(etat, i)'));
+});
+
+test('actions — les cases distinguées suivent la TABLE, pas un nom écrit dans l\'écran', () => {
+  // ⚠ SEUL LE COLLECTEUR EST DISTINGUÉ (27/08), et la raison n'est pas un choix
+  // d'interface : c'est le seul bâtiment pour qui le terrain décide. La règle
+  // vit dans `CHAMPS.posableDessus`, et l'écran doit la LIRE. Écrire
+  // `=== 'collecteur'` en dur marcherait aujourd'hui et mentirait le jour où un
+  // second bâtiment gagnerait le droit de se poser sur un champ.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.ok(/CHAMPS\.posableDessus/.test(ecran),
+    'l\'écran ne lit pas CHAMPS.posableDessus pour décider quoi cercler');
+  assert.ok(!/['\"]collecteur['\"]/.test(ecran),
+    'l\'écran nomme « collecteur » en dur au lieu de lire la table');
+
+  // Et la table dit bien ce que l'écran en attend : un seul bâtiment concerné,
+  // sinon « seul le collecteur » cesserait d'être vrai sans que l'écran change.
+  assert.equal(CHAMPS.posableDessus.length, 1);
+
+  // Falsifiable : le motif d'un nom en dur doit attraper un vrai appât.
+  assert.ok(/['\"]collecteur['\"]/.test("if (posableChoisi === 'collecteur') return;"));
+});
+
+test('actions — le compteur d\'emplacements a quitté l\'écran, pas le calcul', () => {
+  // ⚠ LA BARRE DE GAUCHE ET SON COMPTEUR SONT PARTIS (27/08), et la saturation
+  // se dit maintenant au toucher d'une vignette. L'information, elle, doit
+  // rester CALCULABLE — c'est `choisirPosable` qui la lit pour décider s'il
+  // faut prévenir le joueur.
+  const neuve = creerEtat(11);
+  const { poses, ouverts } = resumeDeLaBase(neuve).emplacements;
+  assert.equal(poses, 1, 'une base neuve porte son seul Chantier');
+  assert.equal(ouverts, emplacementsDuNiveau(1));
+  assert.ok(ouverts > poses, 'une base neuve doit avoir un emplacement libre');
+
+  // Et l'écran lit bien cette grandeur-là pour prévenir de la saturation.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.ok(/poses\s*>=\s*ouverts/.test(ecran),
+    'l\'écran ne compare plus les emplacements posés aux emplacements ouverts');
+  assert.ok(/toast\s*\(/.test(ecran), 'l\'écran n\'a plus de toast pour le dire');
+
+  // Falsifiable : le montage doit voir une base qui SATURE, sinon la
+  // comparaison ne prouve rien. On remplit jusqu'au plafond du niveau 1.
+  const pleine = creerEtat(11);
+  const champ = pleine.champs.cases[0];
+  poser(pleine, 'collecteur', champ.rangee, champ.colonne);
+  const apres = resumeDeLaBase(pleine).emplacements;
+  assert.equal(apres.poses, apres.ouverts, 'la base devrait être pleine après une pose');
 });
