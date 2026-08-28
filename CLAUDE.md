@@ -25,7 +25,7 @@ Dernière révision : **28/08/2026**, version 0.25.0 · build 26.
    savoir est un lot perdu.
 
 **Référence au 28/08/2026 (après le lot TUTORIEL), à confronter :**
-`npm test` → **348 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **349 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **167 308 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
@@ -59,9 +59,10 @@ cinq au lot POSE-À-L'ÉCRAN et de **dix** au lot PANNEAU-ET-MARGES, tous dans
 POSE-ET-DÉPLACEMENT (trois dans `chantier.test.js`, deux dans `state.test.js`, un
 dans `documentation.test.js` — celui-là n'était pas au brief : il garde le compte
 de teintes annoncé par ce fichier-ci, qui venait d'être trouvé faux de cinq), et
-de **dix** au lot TUTORIEL, tous dans le nouveau `test/missions.test.js` — le
-dixième a été écrit APRÈS coup, quand la falsification a trouvé que l'écran
-recalculait la mission courante au lieu de la demander au moteur.
+de **onze** au lot TUTORIEL : dix dans le nouveau `test/missions.test.js` — le
+dixième écrit APRÈS coup, quand la falsification a trouvé que l'écran
+recalculait la mission courante au lieu de la demander au moteur — et un dans
+`donnees.test.js`, né d'une CI rouge (voir §6, « les types de `package.json` »).
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
@@ -835,6 +836,33 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   forgeait son argument à la main : les survivants du joueur se sont affichés
   « Meute » pendant un commit entier. Le T18 de `defense.test.js` garde la
   régression **et le piège**.
+
+### Sur les types de `package.json`
+
+- ⚠⚠ **`config.build` ET `version` SONT DES CHAÎNES, PAS DES NOMBRES.**
+  `android/app/build.gradle.kts` les lit `as String` — `version` directement,
+  `config.build` puis `.toInt()`. Un nombre y fait lever
+  « class java.lang.Integer cannot be cast to class java.lang.String », et le
+  build Android tombe à la CONFIGURATION, avant le moindre test.
+  ⚠ **AUCUN TEST JS NE LE VOYAIT, ET C'EST CE QUI L'A RENDU COÛTEUX.**
+  `tools/build.js` fait `pkg.config?.build ?? '0'` et l'interpole ; le workflow
+  l'interpole aussi. Les deux marchent avec l'un comme avec l'autre type. Seul
+  Kotlin s'en soucie, et **le job `android` est le seul qui ne tourne pas ici**.
+  Commis le 28/08 en réécrivant `package.json` avec un sérialiseur JSON, qui a
+  rendu `"26"` en `26`.
+  ⚠ **LA GARDE LIT LE GRADLE, ELLE NE RECOPIE PAS LA LISTE DES CHAMPS.**
+  `donnees.test.js` extrait de `build.gradle.kts` les champs coulés `as String`
+  et exige que `package.json` les porte en chaînes. Recopier « version et
+  build » aurait vieilli au premier champ ajouté ; un test refuse aussi que les
+  motifs ne trouvent plus rien, ce qui arriverait si le Gradle était reformaté.
+  ⚠ **ET LE MANIFESTE DE PAGES, LUI, VEUT UN NOMBRE.** Le workflow interpole
+  `config.build` **sans guillemets** dans `manifest.json`, et `Manifeste.analyser`
+  du module `maj` le relit `as? Long`. Les deux sont cohérents tant que la
+  chaîne est un entier décimal — ce que la garde asserte aussi.
+  ⚠ **`:maj:test` NE SUFFIT PAS À LE VÉRIFIER ICI.** Sans SDK Android,
+  `settings.gradle.kts` EXCLUT `:app`, donc `app/build.gradle.kts` n'est jamais
+  évalué : la suite Kotlin passe en local pendant que la CI tombe. Le seul
+  garde-fou exécutable ici est celui de `donnees.test.js`.
 
 ### Sur les tests et l'outillage
 

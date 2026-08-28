@@ -12,7 +12,7 @@ récompense.*
 externe. **`SAVE_VERSION` INCHANGÉE À 6** — et ce n'est pas un détail, c'est le
 cœur du lot : le tutoriel n'ajoute rien à la sauvegarde.
 
-**Suite : 338 → 348 pass / 0 fail** — dix tests ajoutés dans un fichier neuf,
+**Suite : 338 → 349 pass / 0 fail** — onze tests ajoutés,
 deux gardes existantes reprises (voir §5), aucune retirée ni assouplie.
 `audit-maquette.mjs` : **vert**.
 
@@ -152,6 +152,38 @@ l'identifiant est celui que rend `missionCourante`. Le dixième test asserte
 l'accord des deux, sur un montage bâti exprès pour distinguer les deux façons de
 choisir — le joueur pose une Centrale **avant** sa Raffinerie.
 
+## 6 bis. Une CI rouge, et le seul job qui ne tourne pas ici
+
+**Le premier push a fait rougir le job `android`**, et la faute était à moi :
+
+```
+Build file 'android/app/build.gradle.kts' line: 16
+class java.lang.Integer cannot be cast to class java.lang.String
+```
+
+J'ai bumpé `package.json` avec un sérialiseur JSON, qui a rendu `config.build`
+en **nombre** (`26`) là où c'était une **chaîne** (`"25"`). Le Gradle le lit
+`as String` puis `.toInt()`.
+
+⚠ **AUCUN TEST JS NE POUVAIT LE VOIR, ET C'EST LÀ TOUT LE SUJET.**
+`tools/build.js` fait `pkg.config?.build ?? '0'` et l'interpole ; le workflow
+l'interpole aussi. Les deux marchent avec l'un comme avec l'autre type. **Seul
+Kotlin s'en soucie, et le job `android` est le seul qui ne tourne pas ici.**
+
+⚠ **ET JE N'AI PAS PU REJOUER LA PANNE EN LOCAL.** Sans SDK Android,
+`settings.gradle.kts` **exclut** `:app` : `app/build.gradle.kts` n'est jamais
+évalué. `gradle -p android :maj:test` passe ici — 9 tests, 47 s — **sans
+toucher le fichier fautif**. Ma première « reproduction » était en fait un échec
+de résolution de plugin en `--offline`, et je l'ai dit plutôt que de la compter.
+Ce qui EST isolé et vérifié : `"26"` donne un `String` à JsonSlurper, `26` un
+`Integer`, et le second fait lever `as String`.
+
+**La garde lit le Gradle plutôt que de recopier la liste des champs** :
+`donnees.test.js` extrait les champs coulés `as String` de
+`build.gradle.kts` et exige que `package.json` les porte en chaînes. Trois
+mutations, trois rouges — dont la faute exacte de la CI, et un Gradle reformaté
+qui ne laisse plus rien à attraper (le test refuse alors de se dire vert).
+
 ## 7. Fichiers touchés
 
 | Fichier | Δ | Ce qui change |
@@ -162,6 +194,7 @@ choisir — le joueur pose une Centrale **avant** sa Raffinerie.
 | `src/index.src.html` | +45 −1 | l'onglet vivant, l'écran, ses styles |
 | `test/missions.test.js` | **neuf**, 319 l. | dix tests |
 | `test/chantier.test.js` | +22 −8 | les deux gardes d'onglets morts, nommées |
+| `test/donnees.test.js` | +50 | la garde des types de `package.json` (§6 bis) |
 | `foyer-zero-ui.html` | +4 −2 | Mission n'est plus grisée dans la maquette |
 | `CLAUDE.md` | +59 −11 | §0, §2, §6 |
 | `package.json` | +2 −2 | `version` et `config.build`, ensemble |

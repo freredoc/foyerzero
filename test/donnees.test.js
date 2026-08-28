@@ -205,3 +205,57 @@ test('données — les budgets de raid de l’Ouvrage sont monotones', () => {
   // Et il doit réellement croître, sinon « monotone » serait vrai à plat.
   assert.ok(budgets[budgets.length - 1] > budgets[0], 'les budgets ne croissent pas du tout');
 });
+
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+test('package.json — les types que le build Android exige, et qu\'aucun test JS ne voyait', () => {
+  // ⚠ CE TEST NAÎT D'UNE CI ROUGE, ET D'UNE SEULE LIGNE DE PYTHON. Le lot
+  // TUTORIEL a réécrit `package.json` avec un sérialiseur JSON, qui a rendu
+  // `config.build` sous forme de NOMBRE là où il était une CHAÎNE. Côté
+  // JavaScript, personne n'a rien vu : `tools/build.js` fait
+  // `pkg.config?.build ?? '0'` et l'interpole, le workflow l'interpole aussi.
+  // Côté Kotlin, `android/app/build.gradle.kts` fait `as String`, et le build
+  // est tombé sur « class java.lang.Integer cannot be cast to
+  // class java.lang.String » — dans le seul job qui ne tourne pas ici.
+  //
+  // Le remède n'est pas « faire attention » : c'est de faire lire au test JS
+  // ce que le fichier Gradle EXIGE, plutôt que de recopier la liste des champs.
+  const paquet = JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8'));
+  const gradle = readFileSync(join(RACINE, 'android', 'app', 'build.gradle.kts'), 'utf8');
+
+  // Les champs que le Gradle lit dans `package.json` et coule en String.
+  const versions = [...gradle.matchAll(/paquet\["([a-zA-Z]+)"\] as String/g)].map((m) => m[1]);
+  const dansConfig = [...gradle.matchAll(/\(paquet\["config"\] as Map<\*, \*>\)\["([a-zA-Z]+)"\] as String/g)]
+    .map((m) => m[1]);
+
+  // Montage falsifiable : si les motifs n'attrapent plus rien, le test ne
+  // prouve rien — et c'est justement ce qui arriverait si quelqu'un
+  // reformatait le fichier Gradle.
+  assert.ok(
+    versions.length + dansConfig.length >= 2,
+    'aucun champ lu « as String » trouvé dans build.gradle.kts : les motifs ont vieilli, '
+      + 'ce test ne garde plus rien',
+  );
+
+  for (const champ of versions) {
+    assert.equal(
+      typeof paquet[champ], 'string',
+      `package.json « ${champ} » doit être une CHAÎNE : build.gradle.kts le lit « as String »`,
+    );
+  }
+  for (const champ of dansConfig) {
+    assert.equal(
+      typeof paquet.config[champ], 'string',
+      `package.json « config.${champ} » doit être une CHAÎNE : build.gradle.kts le lit « as String »`,
+    );
+  }
+
+  // Et `config.build` reste un entier LISIBLE : le Gradle fait `.toInt()`
+  // dessus, et le manifeste de Pages l'interpole SANS guillemets — le client
+  // Android le relit alors comme un nombre JSON (`Manifeste.analyser`).
+  assert.match(paquet.config.build, /^[1-9][0-9]*$/, 'config.build n\'est pas un entier décimal');
+});
