@@ -26,6 +26,11 @@ import {
   navigationEntreBases,
   NOMBRE_DE_BASES,
   BOUTONS_DU_BAS,
+  flechesDeVoisinage,
+  GLYPHES_DE_FLECHE,
+  messageDeConfirmation,
+  messageDeDestination,
+  casesDeplacables,
 } from '../src/ui/chantier.js';
 import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
@@ -46,7 +51,8 @@ import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
-import { problemesDeDisposition } from '../src/sim/disposition.js';
+import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
+import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { creerEtat, tickJeu, poser, problemesDeLaPose } from '../src/sim/state.js';
@@ -975,7 +981,7 @@ test('session — la boucle ne lit PAS l\'horodatage d\'image', () => {
 // Les actions — lot ÉCRAN-ACTIONS
 // ---------------------------------------------------------------------------
 
-test('actions — les trois boutons sont branchés sur le MOTEUR, pas sur une copie', () => {
+test('actions — les quatre boutons sont branchés sur le MOTEUR, pas sur une copie', () => {
   // ⚠ ÉGALITÉ DE RÉFÉRENCE, PAS DE COMPORTEMENT. C'est ce qui distingue « la
   // table appelle la fonction du moteur » de « la table appelle quelque chose
   // qui lui ressemble ». Une réimplémentation dans l'écran — même juste le jour
@@ -985,8 +991,21 @@ test('actions — les trois boutons sont branchés sur le MOTEUR, pas sur une co
   assert.equal(ACTIONS.ameliorer.agir, moteurEtat.ameliorer);
   assert.equal(ACTIONS.demolir.problemes, moteurEtat.problemesDeLaDemolition);
   assert.equal(ACTIONS.demolir.agir, moteurEtat.demolir);
+  assert.equal(ACTIONS.deplacer.problemes, moteurEtat.problemesDuDeplacement);
+  assert.equal(ACTIONS.deplacer.agir, moteurEtat.deplacer);
 
-  // Chaque action nomme un bouton, et les trois boutons sont distincts.
+  // ⚠ `cible` DIT QUE L'ACTION A BESOIN D'UNE DESTINATION, et une seule en a.
+  // C'est la table qui le dit, pas un `if (nom === 'deplacer')` dans l'écran :
+  // un cas particulier écrit à la main serait le premier à diverger.
+  const aCible = Object.entries(ACTIONS).filter(([, a]) => a.cible === true);
+  assert.deepEqual(aCible.map(([nom]) => nom), ['deplacer']);
+  const ecranSource = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.ok(!/===\s*'deplacer'/.test(ecranSource),
+    'l\'écran traite « deplacer » comme un cas particulier écrit à la main');
+  assert.match(ecranSource, /ACTIONS\[actionArmee\]\.cible === true/,
+    'l\'écran ne lit pas la table pour reconnaître une action à cible');
+
+  // Chaque action nomme un bouton, et les quatre boutons sont distincts.
   const boutons = Object.values(ACTIONS).map((a) => a.bouton);
   assert.equal(new Set(boutons).size, boutons.length, 'deux actions visent le même bouton');
   for (const [nom, action] of Object.entries(ACTIONS)) {
@@ -998,7 +1017,7 @@ test('actions — les trois boutons sont branchés sur le MOTEUR, pas sur une co
   // ont un moteur et celle qui n'en a pas. Sinon la distinction ne prouve rien.
   const avecMoteur = Object.values(ACTIONS).filter((a) => a.agir !== undefined);
   const sansMoteur = Object.values(ACTIONS).filter((a) => a.agir === undefined);
-  assert.equal(avecMoteur.length, 2);
+  assert.equal(avecMoteur.length, 3);
   assert.equal(sansMoteur.length, 1);
 });
 
@@ -1043,6 +1062,11 @@ test('actions — jamais de `try` autour d\'`ameliorer` ni de `demolir`', () => 
     { nom: 'demolir', motif: /(?<![\p{L}\p{N}_])demolir\s*\(/u },
     { nom: 'action.agir', motif: /\.\s*agir\s*\(/u },
     { nom: 'action.problemes', motif: /\.\s*problemes\s*\(/u },
+    // ⚠ AJOUTÉS AU LOT POSE-ET-DÉPLACEMENT. `deplacer` lève exactement comme
+    // `ameliorer` et `demolir` ; l'oublier ici aurait laissé passer un `try`
+    // autour du seul geste neuf du lot.
+    { nom: 'deplacer', motif: /(?<![\p{L}\p{N}_])deplacer\s*\(/u },
+    { nom: 'problemesDuDeplacement', motif: /(?<![\p{L}\p{N}_])problemesDuDeplacement\s*\(/u },
   ];
   const fichiers = readdirSync(join(RACINE, 'src', 'ui'))
     .filter((n) => n.endsWith('.js'))
@@ -1076,6 +1100,7 @@ test('actions — jamais de `try` autour d\'`ameliorer` ni de `demolir`', () => 
   for (const appat of [
     'try { ameliorer(etat, i); } catch (e) { toast(e.message); }',
     'try { action.agir(etatCourant, index); } catch (e) { toast(e.message); }',
+    'try { deplacer(etat, i, r, c); } catch (e) { toast(e.message); }',
   ]) {
     const bloc = blocsTry(appat);
     assert.equal(bloc.length, 1, appat);
@@ -1851,4 +1876,151 @@ test('options — le banc reste atteignable après le déménagement de la versi
   assert.match(session, /\$\('jeu'\)\.hidden = false/, 'la page de jeu ne revient pas');
   assert.ok(!/ecran-offense'\)\.hidden = true/.test(session),
     'le banc cache encore les écrans un par un');
+});
+
+test('flèches — elles pointent vers le bâtiment, dans le sens de l\'ÉCRAN', () => {
+  // ⚠ LA GRILLE SE DESSINE À L'ENVERS DES NUMÉROS DE RANGÉE. La rangée 18 est
+  // la PREMIÈRE ligne d'écran : un voisin de rangée SUPÉRIEURE est donc PLUS
+  // HAUT, et la flèche qui le relie au bâtiment pointe vers le BAS.
+  //
+  // ⚠ ET LA FALSIFICATION A CORRIGÉ CE COMMENTAIRE. Il affirmait que déduire le
+  // glyphe du signe de `rangee` « retourne les huit flèches ». C'est FAUX :
+  // avec `ligne = longueur + 1 − rangee`, les deux formules donnent le même
+  // signe, le +19 se simplifiant. Passer par `ligneEcranDeLaRangee` ne corrige
+  // rien aujourd'hui — ça dit qu'on raisonne en lignes d'écran, et ça restera
+  // juste si la transformation cesse d'être affine. La faute qui se commet
+  // vraiment est l'INVERSION du signe, et c'est celle-là qu'on attrape.
+  const champs = champsDeLaBase(275, 16);
+  const dispo = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'centrale', rangee: 15, colonne: 4, niveau: 1 },
+    { id: 'accumulateur', rangee: 16, colonne: 4, niveau: 1 },
+  ];
+  // Le montage doit être LÉGAL, sinon les débits ne veulent rien dire.
+  assert.deepEqual(problemesDeDisposition(dispo, champs), []);
+  // …et l'accumulateur doit bien être PLUS HAUT à l'écran que la centrale.
+  assert.ok(ligneEcranDeLaRangee(16) < ligneEcranDeLaRangee(15),
+    'le montage ne mesure pas le retournement');
+
+  const surCentrale = flechesDeVoisinage(dispo, champs, 2);
+  assert.equal(surCentrale.length, 1);
+  assert.equal(surCentrale[0].rangee, 15);
+  assert.equal(surCentrale[0].glyphe, '↑',
+    'la flèche posée sous l\'accumulateur devrait pointer vers le haut');
+
+  const voisinsDeLaCentrale = flechesDeVoisinage(dispo, champs, 1);
+  const versLAccumulateur = voisinsDeLaCentrale.find((f) => f.rangee === 16);
+  assert.equal(versLAccumulateur.glyphe, '↓',
+    'la flèche posée sur l\'accumulateur devrait pointer vers le bas');
+  // Et le champ de scorie à droite pointe vers la gauche.
+  const versLeChamp = voisinsDeLaCentrale.find((f) => f.colonne === 5);
+  assert.equal(versLeChamp.glyphe, '←');
+  assert.equal(versLeChamp.libelle, 'champ de scorie');
+
+  // ⚠ LES HUIT DIRECTIONS EXISTENT, et aucune n'est un doublon : une direction
+  // sans glyphe fait LEVER plutôt que de dessiner une flèche muette.
+  assert.equal(Object.keys(GLYPHES_DE_FLECHE).length, 8);
+  assert.equal(new Set(Object.values(GLYPHES_DE_FLECHE)).size, 8);
+
+  // ⚠ LE TOTAL DES FLÈCHES EST LE BONUS DE VOISINAGE, à l'unité près. Si les deux
+  // divergeaient, l'écran montrerait un voisinage que le débit ne paie pas.
+  const debit = debitDuBatiment(dispo, champs, 1);
+  const somme = voisinsDeLaCentrale.reduce((t, f) => t + f.apportMilli, 0);
+  assert.equal(somme, (debit.total - debit.propre) * 1000);
+  assert.ok(somme > 0, 'un voisinage nul ne mesurerait rien');
+
+  // Un bâtiment sans voisinage possible n'a pas de flèche du tout.
+  assert.deepEqual(flechesDeVoisinage(dispo, champs, 0), []);
+  assert.throws(() => flechesDeVoisinage(dispo, champs, 9), /hors de la disposition/);
+
+  // ⚠ ET L'ÉCRAN LES MONTRE AUX TROIS MOMENTS ARBITRÉS : l'aperçu de pose, le
+  // bâtiment en main pendant un déplacement, et l'ouverture du panneau — cette
+  // dernière demandée telle quelle par Ethan (« faire apparaître les flèches du
+  // bâtiment concerné quand on ouvre l'onglet bâtiment »).
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const ouvrir = ecran.slice(ecran.indexOf('function ouvrirPanneau('));
+  assert.match(ouvrir.slice(0, ouvrir.indexOf('\n  }')), /peindreApercu\(\)/,
+    'ouvrir le panneau ne montre plus les flèches');
+  assert.match(ecran, /function peindreApercu\(\)/);
+  // Et une seule fonction les dessine : trois écritures donneraient trois
+  // lectures du voisinage.
+  // La déclaration ne compte pas : c'est le nombre d'APPELS qu'on borne.
+  assert.equal((ecran.match(/(?<!function )flechesDeVoisinage\(/g) ?? []).length, 1,
+    'le voisinage est dessiné à plus d\'un endroit');
+});
+
+test('pose — elle se fait en DEUX touchers, et le premier ne pose rien', () => {
+  // ⚠ ARBITRÉ LE 28/08 : « il y a d'abord un clic et le bâtiment/sprite
+  // transparent, et les flèches bonus proximité s'affiche si il y en a, un deux
+  // clique pose le bâtiment ». Le premier toucher MONTRE ; c'est ce temps-là qui
+  // rend le voisinage visible avant de s'engager.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /poseEnAttente/, 'l\'écran ne retient plus la case en aperçu');
+  // Le premier toucher SORT avant d'appeler le moteur : c'est ce `return` qui
+  // fait les deux temps.
+  assert.match(ecran, /if \(!memeCase\) \{[\s\S]{0,400}?return;/,
+    'le premier toucher ne sort plus sans poser');
+  assert.ok(ecran.indexOf('if (!memeCase)') < ecran.indexOf('poserBatiment('),
+    'la confirmation est demandée APRÈS la pose');
+
+  // Les deux messages de mode existent et disent quoi faire.
+  assert.ok(messageDeConfirmation('Raffinerie').includes('Raffinerie'));
+  assert.match(messageDeConfirmation('X'), /retouchez la même case/);
+  assert.ok(messageDeDestination('Collecteur').includes('Collecteur'));
+  assert.match(messageDeDestination('X'), /case d'arrivée/);
+  assert.deepEqual(Object.keys(MESSAGES_MODE).slice().sort(), Object.keys(ACTIONS).slice().sort());
+
+  // Falsifiable : le motif attrape bien un premier toucher qui poserait.
+  assert.ok(!/if \(!memeCase\) \{[\s\S]{0,400}?return;/.test('if (!memeCase) { poserBatiment(e); }'));
+});
+
+test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile de travers', () => {
+  // ⚠ CONSIGNE D'ETHAN, 28/08 : « tu compresses tout dans l'ui ». Elle est plus
+  // forte que « pas de dépassement » : tout doit TENIR, rien ne défile
+  // horizontalement, aucune barre n'en pousse une autre hors du cadre.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Les barres à hauteur FIXE de la colonne de jeu, nommées une par une.
+  const hauteur = (id) => {
+    const bloc = feuille.match(new RegExp(`#${id}\\s*\\{([^}]*)\\}`));
+    assert.ok(bloc, `la règle de #${id} a disparu`);
+    const f = bloc[1].match(/flex:\s*0 0 (\d+)px/);
+    assert.ok(f, `#${id} n'a plus de hauteur fixe`);
+    return Number(f[1]);
+  };
+  const barres = ['tete-onglets', 'ressources', 'navigation', 'chantier-contexte',
+    'barre-bas', 'chantier-palette'];
+  const chrome = barres.reduce((t, id) => t + hauteur(id), 0);
+
+  // MESURÉ : 40 + 44 + 26 + 46 + 46 + 86 = 288 px. La borne est à 320 : sur la
+  // dalle la plus courte encore en service (568 px de haut en CSS), 320 px de
+  // chrome laissent 248 px de grille, soit cinq rangées. En dessous, le jeu
+  // cesse d'être jouable — c'est là qu'est la limite, pas dans l'esthétique.
+  assert.equal(chrome, 288, `chrome de ${chrome} px : recalculer la borne ci-dessous`);
+  assert.ok(chrome <= 320, `${chrome} px de barres fixes, 320 au plus`);
+
+  // ⚠ ET AUCUNE BARRE DE PLUS N'ENTRE SANS QU'ON LE VOIE. `#offense-palette` est
+  // la seule autre hauteur fixe, et elle ne coexiste jamais avec celle du
+  // Chantier — c'est l'autre écran. Une septième ferait tomber ce compte.
+  const fixes = [...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
+    .map((m) => m[1]);
+  assert.deepEqual(fixes.slice().sort(), [...barres, 'offense-palette'].sort(),
+    'une barre à hauteur fixe est apparue ou a disparu : le chrome a changé');
+
+  // Le champ, lui, absorbe : il est `flex: 1` et peut rétrécir.
+  assert.match(feuille, /#chantier-champ \{[^}]*flex: 1[^}]*min-height: 0/);
+
+  // ⚠ RIEN NE DÉFILE HORIZONTALEMENT. C'est ce qui coupait la première vignette
+  // de la palette avant le lot MISE EN PAGE.
+  for (const id of barres) {
+    const bloc = feuille.match(new RegExp(`#${id}\\s*\\{([^}]*)\\}`))[1];
+    assert.ok(!/overflow-x:\s*auto/.test(bloc), `#${id} défile horizontalement`);
+    assert.ok(!/overflow-x:\s*scroll/.test(bloc), `#${id} défile horizontalement`);
+  }
+
+  // Le bandeau contextuel porte QUATRE boutons depuis ce lot, et sa hauteur n'a
+  // pas bougé : ce sont les écarts et le bloc de gauche qui ont cédé la place.
+  assert.equal(Object.keys(ACTIONS).length, 4);
+  assert.equal(hauteur('chantier-contexte'), 46);
 });

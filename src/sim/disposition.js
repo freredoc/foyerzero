@@ -296,6 +296,66 @@ export function voisinsQualifiants(disposition, champs, index) {
   return comptes;
 }
 
+/**
+ * Les voisins qualifiants d'un bâtiment, CASE PAR CASE.
+ *
+ * `voisinsQualifiants` rend des COMPTES par type — combien de raffineries,
+ * combien de champs de scorie — ce qui suffit pour calculer un débit mais pas
+ * pour le montrer. L'écran a besoin de savoir OÙ sont ces voisins, pour poser
+ * une flèche sur chacun. C'est la même règle lue au même endroit, rendue avec
+ * une case en plus : une seconde lecture du voisinage dans `ui/` finirait par
+ * diverger de celle-ci.
+ *
+ * ⚠ ELLE NE DIT RIEN DE L'ÉCRAN. Pas de direction, pas de glyphe, pas de
+ * couleur : `src/sim/` ne connaît pas le sens dans lequel la grille se dessine,
+ * et c'est `render/orientation.js` qui le sait. Ici on rend des COORDONNÉES.
+ *
+ * ⚠ UN BÂTIMENT NE SE COMPTE PAS LUI-MÊME, et la garde est la même que dans
+ * `voisinsQualifiants` : `casesVoisines` exclut déjà le centre, mais la
+ * justesse d'ici ne doit pas dépendre d'une propriété écrite ailleurs.
+ *
+ * @param {Array<object>} disposition
+ * @param {object} champs
+ * @param {number} index
+ * @returns {Array<{rangee: number, colonne: number, type: string, apportParHeure: number}>}
+ */
+export function voisinsQualifiantsParCase(disposition, champs, index) {
+  const b = disposition[index];
+  if (b === undefined) {
+    throw new RangeError(`disposition : indice ${index} hors de la liste`);
+  }
+  const parVoisin = DEBITS[b.id]?.parVoisin;
+  if (parVoisin === undefined) return [];
+
+  const occupees = new Map(
+    disposition.map((autre, i) => [cle(autre.rangee, autre.colonne), i]),
+  );
+  const trouves = [];
+  for (const [rangee, colonne] of casesVoisines(b.rangee, b.colonne)) {
+    const i = occupees.get(cle(rangee, colonne));
+    let type = null;
+    if (i !== undefined && i !== index) {
+      // Une case occupée par un bâtiment ne peut pas porter de champ qualifiant
+      // en plus : c'est le bâtiment qui compte, ou rien.
+      if (parVoisin[disposition[i].id] !== undefined) type = disposition[i].id;
+    } else if (i === undefined) {
+      const ressource = ressourceDeLaCase(champs, rangee, colonne);
+      if (ressource !== null) {
+        const attendu = `champDe${ressource[0].toUpperCase()}${ressource.slice(1)}`;
+        if (parVoisin[attendu] !== undefined) type = attendu;
+      }
+    }
+    if (type === null) continue;
+    trouves.push({
+      rangee,
+      colonne,
+      type,
+      apportParHeure: debitVoisinParHeure(b.id, type, b.niveau),
+    });
+  }
+  return trouves;
+}
+
 // ---------------------------------------------------------------------------
 // Débits
 // ---------------------------------------------------------------------------

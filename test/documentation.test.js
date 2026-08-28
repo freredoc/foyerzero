@@ -282,3 +282,91 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
       + 'src/ déposé au mauvais endroit ne serait exécuté par personne',
   );
 });
+
+// ---------------------------------------------------------------------------
+// La palette annoncée par CLAUDE.md, confrontée à FICHE-STYLE.md
+// ---------------------------------------------------------------------------
+
+/**
+ * Décode un nombre français écrit en lettres, de « un » à « quatre-vingt-dix-neuf ».
+ *
+ * Le décodeur somme les morceaux séparés par des traits d'union — « trente-trois »
+ * vaut 30 + 3 — ce qui suffit largement au seul usage qu'on en fait ici. Il rend
+ * `null` sur un mot inconnu plutôt que zéro : un mot non décodé doit faire
+ * TOMBER la garde, pas la faire passer silencieusement à côté.
+ */
+function nombreEnLettres(mot) {
+  const VALEURS = new Map([
+    ['un', 1], ['deux', 2], ['trois', 3], ['quatre', 4], ['cinq', 5], ['six', 6],
+    ['sept', 7], ['huit', 8], ['neuf', 9], ['dix', 10], ['onze', 11], ['douze', 12],
+    ['treize', 13], ['quatorze', 14], ['quinze', 15], ['seize', 16],
+    ['vingt', 20], ['vingts', 20], ['trente', 30], ['quarante', 40],
+    ['cinquante', 50], ['soixante', 60],
+  ]);
+  let total = 0;
+  for (const morceau of mot.toLowerCase().split('-')) {
+    if (morceau === 'et') continue;
+    const valeur = VALEURS.get(morceau);
+    if (valeur === undefined) return null;
+    total += valeur;
+  }
+  return total;
+}
+
+test('documentation — CLAUDE.md compte les teintes de FICHE-STYLE.md, total ET détail', () => {
+  // ⚠ POURQUOI CE TEST EXISTE. `CLAUDE.md` §6 a annoncé « vingt-huit teintes »
+  // pendant une journée entière alors que la fiche en portait trente-trois, et
+  // son énumération avait perdu une rampe complète — les cinq tons du sol de
+  // l'Ouvrage. C'est EXACTEMENT la faute que la liste de `banc.test.js` avait
+  // commise la veille, et qu'un test avait alors réparée : une transcription
+  // qui ne se confronte pas à sa source est une copie qui vieillit. La liste de
+  // code est gardée depuis le 27/08 ; la PROSE ne l'était pas, et elle a dérivé
+  // le lendemain. On garde donc les deux, contre la même source.
+  //
+  // ⚠ ET ON GARDE LE DÉTAIL AUTANT QUE LE TOTAL. Une garde qui ne lirait que le
+  // total laisserait écrire « trente-trois » au-dessus d'une énumération qui
+  // fait vingt-huit — c'est-à-dire exactement l'état dans lequel ce paragraphe
+  // a été trouvé, un total juste ne l'aurait pas sauvé.
+  const fiche = readFileSync(join(RACINE, 'FICHE-STYLE.md'), 'utf8');
+  const teintes = new Set(
+    [...fiche.matchAll(/#[0-9A-Fa-f]{6}(?![0-9A-Za-z])/g)].map((m) => m[0].toUpperCase()),
+  );
+
+  // Montage falsifiable : le décodeur doit décoder, et la fiche doit porter des
+  // teintes. Sans ces deux-là, l'égalité finale pourrait tenir sur du vide.
+  assert.equal(nombreEnLettres('vingt-huit'), 28, 'le décodeur ne décode pas');
+  assert.equal(nombreEnLettres('trente-trois'), 33, 'le décodeur ne décode pas');
+  assert.equal(nombreEnLettres('brouette'), null, 'le décodeur avale un mot inconnu');
+  assert.ok(teintes.size >= 20, `${teintes.size} teintes lues dans FICHE-STYLE.md`);
+
+  // Le total annoncé. L'ancre est la phrase de la garde, pas la prose qui
+  // l'explique : le paragraphe raconte sa propre dérive et contient donc les
+  // deux nombres, l'ancien et le bon.
+  const totalEcrit = CLAUDE_MD.match(/LA PALETTE EST FERMÉE : ([a-zà-ÿ-]+) teintes/);
+  assert.ok(totalEcrit, 'CLAUDE.md §6 n\'annonce plus de nombre de teintes');
+  assert.equal(
+    nombreEnLettres(totalEcrit[1]), teintes.size,
+    `CLAUDE.md annonce « ${totalEcrit[1]} » teintes, FICHE-STYLE.md en porte ${teintes.size}`,
+  );
+
+  // Le détail. Chaque terme de l'énumération commence par son compte en
+  // lettres ; leur somme doit valoir le même nombre.
+  const detail = CLAUDE_MD.match(/Les [a-zà-ÿ-]+ : ([^.]*)\./);
+  assert.ok(detail, 'CLAUDE.md §6 n\'énumère plus les familles de teintes');
+  const familles = detail[1].split(',').map((t) => t.trim());
+  assert.ok(familles.length >= 5, `${familles.length} familles énumérées, c'est trop peu`);
+
+  let somme = 0;
+  for (const famille of familles) {
+    const compte = nombreEnLettres(famille.split(/[\s\u00A0]/)[0]);
+    assert.ok(
+      compte !== null,
+      `« ${famille} » ne commence pas par un compte en lettres décodable`,
+    );
+    somme += compte;
+  }
+  assert.equal(
+    somme, teintes.size,
+    `l'énumération de CLAUDE.md §6 fait ${somme}, FICHE-STYLE.md porte ${teintes.size} teintes`,
+  );
+});

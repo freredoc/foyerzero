@@ -380,22 +380,45 @@
   #chantier-panneau-ameliorer.impossible { background: #3E454C; color: #F5F3E8; }
   #chantier-panneau-ameliorer.impossible .note { color: #F5B636; }
 
-  /* --- 5. contexte — 46 ---------------------------------------------------- */
-  #chantier-contexte {
-    flex: 0 0 46px; display: flex; align-items: center; gap: 5px;
-    padding: 0 6px; background: #343A2C; border-top: 1px solid #161914;
+  /* Le bâtiment FANTÔME : ce que la première touche montre avant que la seconde
+     ne pose. ⚠ PAS DE TRANSPARENCE — la palette est fermée à trente-trois
+     teintes et ne porte qu'un seul `rgba`, réservé à autre chose. Un liseré
+     tireté et un sigle éteint disent « pas encore là » aussi bien, et sans
+     ouvrir une brèche dans la garde de palette. */
+  .fantome {
+    width: 84%; height: 84%;
+    display: flex; align-items: center; justify-content: center;
+    background: #1E2124; border: 1px dashed #F5F3E8;
+    font-size: 9px; font-weight: 600; color: #8C9A72; letter-spacing: 0.02em;
   }
-  #chantier-contexte .qui { flex: 0 0 104px; min-width: 0; line-height: 1.2; }
-  #chantier-contexte .qui b { display: block; font-size: 11px; color: #F5F3E8; }
-  #chantier-contexte .qui span { display: block; font-size: 8px; color: #68727E; }
+  /* Une flèche de bonus de proximité, posée SUR la case du voisin et pointant
+     vers le bâtiment. L'ambre les distingue du liseré des champs, qui occupe
+     déjà l'os. */
+  .fleche {
+    position: absolute; right: 1px; bottom: 0;
+    font-size: 11px; line-height: 1; color: #F5B636;
+  }
+
+  /* --- 5. contexte — 46 ---------------------------------------------------- */
+  /* ⚠ QUATRE BOUTONS DEPUIS LE 28/08, ET LA BARRE NE GRANDIT PAS. Consigne
+     d'Ethan : « tu compresses tout dans l'ui ». « Déplacer » s'ajoute entre
+     Améliorer et Démolir ; ce sont le bloc de gauche et les écarts qui cèdent
+     la place, jamais la hauteur de la barre ni une seconde rangée. */
+  #chantier-contexte {
+    flex: 0 0 46px; display: flex; align-items: center; gap: 3px;
+    padding: 0 4px; background: #343A2C; border-top: 1px solid #161914;
+  }
+  #chantier-contexte .qui { flex: 0 0 76px; min-width: 0; line-height: 1.15; }
+  #chantier-contexte .qui b { display: block; font-size: 10px; color: #F5F3E8; }
+  #chantier-contexte .qui span { display: block; font-size: 7px; color: #68727E; }
   #chantier-contexte .qui b, #chantier-contexte .qui span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #chantier-contexte button {
-    flex: 1; height: 34px;
+    flex: 1; min-width: 0; height: 34px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.15;
-    background: #3E454C; color: #F5F3E8; border: 1px solid #161914; padding: 0;
+    font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; line-height: 1.1;
+    background: #3E454C; color: #F5F3E8; border: 1px solid #161914; padding: 0 1px;
   }
-  #chantier-contexte button em { font-style: normal; font-size: 8px; color: #8C9A72; letter-spacing: 0; text-transform: none; }
+  #chantier-contexte button em { font-style: normal; font-size: 7px; color: #8C9A72; letter-spacing: 0; text-transform: none; }
   #chantier-contexte button.up { background: #6A7658; color: #161914; font-weight: 600; }
   #chantier-contexte button.up em { color: #161914; }
   #chantier-contexte button.sell { background: #1E2124; color: #68727E; }
@@ -664,6 +687,7 @@
         </div>
         <button type="button" id="chantier-reparer">Réparer</button>
         <button type="button" class="up" id="chantier-ameliorer">Améliorer<em id="chantier-ameliorer-cible"></em></button>
+        <button type="button" id="chantier-deplacer">Déplacer</button>
         <button type="button" class="sell" id="chantier-demolir">Démolir</button>
       </div>
 

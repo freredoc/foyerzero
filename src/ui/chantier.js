@@ -30,7 +30,9 @@ import {
   emplacementsDuNiveau, remboursementDuNiveau,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
-import { debitDuBatiment, productionParRessource, voisinsQualifiants } from '../sim/disposition.js';
+import {
+  debitDuBatiment, productionParRessource, voisinsQualifiants, voisinsQualifiantsParCase,
+} from '../sim/disposition.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
@@ -44,6 +46,7 @@ import {
   problemesDeLaPose, poser as poserBatiment,
   problemesDeLAmelioration, ameliorer,
   problemesDeLaDemolition, demolir,
+  problemesDuDeplacement, deplacer,
 } from '../sim/state.js';
 
 // ---------------------------------------------------------------------------
@@ -174,6 +177,17 @@ export const ACTIONS = {
     libelle: 'Améliorer',
     problemes: problemesDeLAmelioration,
     agir: ameliorer,
+  },
+  // ⚠ DÉPLACER SE FAIT EN DEUX TOUCHERS, PAS UN — d'où `cible: true`. Les trois
+  // autres actions s'appliquent au bâtiment qu'on touche ; celle-ci a besoin
+  // d'un bâtiment PUIS d'une destination. La table le dit, plutôt que l'écran
+  // ne traite « déplacer » comme un cas particulier écrit à la main.
+  deplacer: {
+    bouton: 'chantier-deplacer',
+    libelle: 'Déplacer',
+    cible: true,
+    problemes: problemesDuDeplacement,
+    agir: deplacer,
   },
   demolir: {
     bouton: 'chantier-demolir',
@@ -544,7 +558,36 @@ export const MESSAGES_MODE = {
   ameliorer: 'Mode AMÉLIORER : touchez le bâtiment à améliorer. Retouchez le bouton pour annuler.',
   demolir: 'Mode DÉMOLIR : touchez le bâtiment à démolir. Retouchez le bouton pour annuler.',
   reparer: 'Mode RÉPARER : touchez le bâtiment à réparer. Retouchez le bouton pour annuler.',
+  deplacer: 'Mode DÉPLACER : touchez le bâtiment à déplacer. Retouchez le bouton pour annuler.',
 };
+
+/**
+ * Ce que dit la ligne de mode quand un bâtiment est « en main », attendant sa
+ * destination. C'est le second temps du déplacement.
+ * @param {string} nom nom joueur du bâtiment
+ * @returns {string}
+ */
+export function messageDeDestination(nom) {
+  return `Déplacement de ${nom} : touchez la case d'arrivée.`
+    + ' Retouchez le bouton pour annuler.';
+}
+
+/**
+ * Ce que dit la ligne de mode quand un bâtiment attend sa CONFIRMATION de pose.
+ *
+ * ⚠ LA POSE SE FAIT EN DEUX TOUCHERS DEPUIS LE 28/08. Ethan : « il y a d'abord
+ * un clic et le bâtiment/sprite transparent, et les flèches bonus proximité
+ * s'affichent si il y en a, un deuxième clic pose le bâtiment ». Le premier
+ * toucher ne pose donc plus rien — il MONTRE — et c'est ce qui permet de voir
+ * le voisinage avant de s'engager.
+ *
+ * @param {string} nom nom joueur du bâtiment
+ * @returns {string}
+ */
+export function messageDeConfirmation(nom) {
+  return `${nom} en aperçu : retouchez la même case pour poser,`
+    + ' une autre pour déplacer l\'aperçu.';
+}
 
 /**
  * Ce que dit la ligne de mode pendant qu'un bâtiment est choisi à la palette.
@@ -571,6 +614,73 @@ export const MENTION_SATURE = 'saturé';
 // ---------------------------------------------------------------------------
 // Le panneau de détail — ce qu'un bâtiment fait, et ce qu'il ferait plus haut
 // ---------------------------------------------------------------------------
+
+/**
+ * Les huit flèches possibles, indexées par la direction À L'ÉCRAN qui mène du
+ * voisin vers le bâtiment.
+ *
+ * ⚠ DES GLYPHES, PAS UNE ROTATION. Un `transform: rotate()` sur un marqueur
+ * dessiné dans une case serait plus court à écrire — et le dépôt refuse déjà
+ * les transformations sur la grille, parce qu'elles décrochent le doigt de la
+ * case qu'il vise. Huit caractères ne coûtent rien et ne bougent rien.
+ */
+export const GLYPHES_DE_FLECHE = {
+  '-1,0': '↑', '1,0': '↓', '0,-1': '←', '0,1': '→',
+  '-1,-1': '↖', '-1,1': '↗', '1,-1': '↙', '1,1': '↘',
+};
+
+/**
+ * Où poser une flèche de bonus de proximité, et laquelle.
+ *
+ * ⚠ ETHAN, LE 28/08 : « les flèches bonus proximité s'affichent si il y en a ».
+ * Elles se posent sur les cases VOISINES et pointent vers le bâtiment : c'est
+ * ce qui rend le voisinage visible au lieu d'être un nombre dans un panneau.
+ *
+ * ⚠ LA GÉOMÉTRIE PASSE PAR `render/orientation.js`, ET IL FAUT SAVOIR CE QUE
+ * ÇA PROTÈGE — ET CE QUE ÇA NE PROTÈGE PAS. La grille se dessine À L'ENVERS des
+ * numéros de rangée : la rangée 18 est la première LIGNE d'écran, donc un
+ * voisin de rangée supérieure est PLUS HAUT et la flèche qui le relie au
+ * bâtiment pointe vers le BAS.
+ *
+ * ⚠ MESURÉ, ET LE COMMENTAIRE PRÉCÉDENT DE CE BLOC ÉTAIT FAUX : avec la
+ * transformation actuelle — `ligne = longueur + 1 − rangee` — passer par
+ * `ligneEcranDeLaRangee` donne EXACTEMENT le même signe que `voisin.rangee −
+ * b.rangee`, puisque le +19 se simplifie. Écrire l'un ou l'autre ne change rien
+ * aujourd'hui. Ce qu'on gagne à passer par `orientation.js` n'est donc pas une
+ * correction, c'est de rester juste le jour où la transformation cesserait
+ * d'être affine — et de dire à la relecture qu'on raisonne en LIGNES D'ÉCRAN,
+ * pas en rangées. La faute qui se commet vraiment ici est l'INVERSION du signe,
+ * et c'est elle que le test attrape.
+ *
+ * ⚠ LE VOISINAGE VIENT DU MOTEUR, pas d'un second parcours du 3 × 3.
+ * `voisinsQualifiantsParCase` est la même règle que celle qui calcule le débit.
+ *
+ * @param {Array<object>} disposition
+ * @param {object} champs
+ * @param {number} index
+ * @returns {Array<{rangee: number, colonne: number, glyphe: string, libelle: string, apportMilli: number}>}
+ */
+export function flechesDeVoisinage(disposition, champs, index) {
+  const b = disposition[index];
+  if (b === undefined) throw new RangeError(`chantier : indice ${index} hors de la disposition`);
+  const ligneDuBatiment = ligneEcranDeLaRangee(b.rangee);
+  return voisinsQualifiantsParCase(disposition, champs, index).map((voisin) => {
+    // La direction qui mène du VOISIN vers le bâtiment, en lignes d'écran.
+    const dLigne = Math.sign(ligneDuBatiment - ligneEcranDeLaRangee(voisin.rangee));
+    const dColonne = Math.sign(b.colonne - voisin.colonne);
+    const glyphe = GLYPHES_DE_FLECHE[`${dLigne},${dColonne}`];
+    if (glyphe === undefined) {
+      throw new Error(`chantier : direction (${dLigne},${dColonne}) sans flèche`);
+    }
+    return {
+      rangee: voisin.rangee,
+      colonne: voisin.colonne,
+      glyphe,
+      libelle: libelleDuVoisin(voisin.type),
+      apportMilli: voisin.apportParHeure * 1000,
+    };
+  });
+}
 
 /**
  * Combien de temps avant que l'amélioration soit payable, et sinon pourquoi
@@ -1017,6 +1127,35 @@ export function posablesDeLaBase(etat) {
 }
 
 /**
+ * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ.
+ *
+ * Jumelle de `casesPosables`, et pour les mêmes raisons : on interroge
+ * `problemesDuDeplacement` case par case au lieu de réimplémenter les règles.
+ * On ne balaie que la bande des bâtiments — ailleurs la réponse serait
+ * `hors-base` quatre-vingt-dix fois.
+ *
+ * ⚠ SA PROPRE CASE EN FAIT PARTIE, et c'est voulu : reposer un bâtiment là où
+ * il était est légal, et l'exclure obligerait l'écran à traiter l'annulation
+ * comme un cas particulier.
+ *
+ * @param {object} etat
+ * @param {number} index
+ * @returns {Array<{rangee: number, colonne: number}>}
+ */
+export function casesDeplacables(etat, index) {
+  const bande = GRILLE.bandes.batiments;
+  const cases = [];
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+      if (problemesDuDeplacement(etat, index, rangee, colonne).length === 0) {
+        cases.push({ rangee, colonne });
+      }
+    }
+  }
+  return cases;
+}
+
+/**
  * Les cases où ce bâtiment peut se poser, aujourd'hui, sur cette base.
  *
  * ⚠ ELLES SE CALCULENT, ELLES NE SE DEVINENT PAS. On interroge
@@ -1108,6 +1247,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   // s'allume.
   let ecranCourant = 'chantier';
   let bandeCourante = 'batiments';
+  // La case où le bâtiment choisi est en APERÇU, en attendant la confirmation.
+  // C'est le premier des deux touchers de la pose (arbitré le 28/08).
+  let poseEnAttente = null;
+  // Le bâtiment « en main » pendant un déplacement, ou null. Le déplacement est
+  // la seule action qui demande DEUX touchers : le bâtiment, puis l'arrivée.
+  let deplacementEnCours = null;
   const fenetre = doc.defaultView;
   const cellules = new Map(); // « rangée:colonne » → élément
 
@@ -1459,11 +1604,15 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       actionArmee = null;
       marquerBoutonsAction();
     }
+    // Changer de bâtiment défait l'aperçu : il montrait l'ancien.
+    poseEnAttente = null;
+    deplacementEnCours = null;
     posableChoisi = posableChoisi === id ? null : id;
     if (posableChoisi === null) {
       ligneDeMode('');
       peindrePalette(etatCourant);
       marquerCasesLegales();
+      peindreApercu();
       return;
     }
 
@@ -1486,6 +1635,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       : messageDePose(BASE_BATIMENTS[posableChoisi].nom.joueur));
     peindrePalette(etatCourant);
     marquerCasesLegales();
+    peindreApercu();
   }
 
   /**
@@ -1501,9 +1651,78 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
    * dit toujours pourquoi. Retirer la distinction en retirant la vérification
    * aurait été un tout autre lot.
    */
+  /**
+   * Le bâtiment en aperçu et les flèches de bonus de proximité.
+   *
+   * ⚠ TROIS SITUATIONS, UNE SEULE FONCTION. Les flèches se montrent pour un
+   * bâtiment en APERÇU (pose en deux temps), pour un bâtiment EN MAIN
+   * (déplacement), et pour le bâtiment dont le PANNEAU est ouvert. Les écrire
+   * trois fois donnerait trois lectures du voisinage ; on fabrique une
+   * disposition candidate et on demande au moteur, comme partout ailleurs.
+   */
+  function peindreApercu() {
+    for (const case_ of cellules.values()) {
+      case_.querySelector('.fantome')?.remove();
+      case_.querySelector('.fleche')?.remove();
+    }
+    if (etatCourant === null) return;
+
+    let disposition = null;
+    let index = -1;
+    let fantome = null;
+
+    if (posableChoisi !== null && poseEnAttente !== null) {
+      disposition = [...etatCourant.disposition,
+        { id: posableChoisi, ...poseEnAttente, niveau: 1 }];
+      index = disposition.length - 1;
+      fantome = { ...poseEnAttente, id: posableChoisi };
+    } else if (deplacementEnCours !== null) {
+      disposition = etatCourant.disposition;
+      index = deplacementEnCours;
+    } else if (panneauOuvert && selection !== null) {
+      // ⚠ ETHAN : « faire apparaître les flèches du bâtiment concerné quand on
+      // ouvre l'onglet bâtiment ». Le panneau CHIFFRE le voisinage ; les
+      // flèches le montrent sur la grille, et les deux viennent du même calcul.
+      disposition = etatCourant.disposition;
+      index = selection;
+    }
+    if (disposition === null) return;
+
+    if (fantome !== null) {
+      const case_ = cellules.get(cle(fantome.rangee, fantome.colonne));
+      if (case_ !== undefined) {
+        const marque = doc.createElement('div');
+        marque.className = 'fantome';
+        marque.textContent = SIGLES[fantome.id];
+        case_.appendChild(marque);
+      }
+    }
+
+    for (const f of flechesDeVoisinage(disposition, etatCourant.champs, index)) {
+      const case_ = cellules.get(cle(f.rangee, f.colonne));
+      if (case_ === undefined) continue;
+      const marque = doc.createElement('div');
+      marque.className = 'fleche';
+      marque.textContent = f.glyphe;
+      marque.title = `${f.libelle} · ${formaterDebit(f.apportMilli)}`;
+      case_.appendChild(marque);
+    }
+  }
+
   function marquerCasesLegales() {
     for (const case_ of cellules.values()) case_.classList.remove('legale');
-    if (posableChoisi === null || etatCourant === null) return;
+    if (etatCourant === null) return;
+    // ⚠ PENDANT UN DÉPLACEMENT, TOUTES LES ARRIVÉES SE CERCLENT. Ici le joueur
+    // n'a pas choisi un TYPE de bâtiment mais un bâtiment PRÉCIS, et il doit
+    // voir où celui-là peut aller : la règle du collecteur ci-dessous ne
+    // s'applique pas, elle sert à ne pas cercler soixante cases identiques.
+    if (deplacementEnCours !== null) {
+      for (const { rangee, colonne } of casesDeplacables(etatCourant, deplacementEnCours)) {
+        cellules.get(cle(rangee, colonne))?.classList.add('legale');
+      }
+      return;
+    }
+    if (posableChoisi === null) return;
     if (!CHAMPS.posableDessus.includes(posableChoisi)) return;
     for (const { rangee, colonne } of casesPosables(etatCourant, posableChoisi)) {
       cellules.get(cle(rangee, colonne))?.classList.add('legale');
@@ -1559,11 +1778,16 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   function armer(nom) {
     const memeQueAvant = actionArmee === nom;
     actionArmee = memeQueAvant ? null : nom;
+    // Un bâtiment en main est lâché dès qu'on change de mode : le garder ferait
+    // que le prochain toucher le téléporterait sans qu'on l'ait redemandé.
+    deplacementEnCours = null;
     if (actionArmee !== null && posableChoisi !== null) {
       posableChoisi = null;
+      poseEnAttente = null;
       peindrePalette(etatCourant);
-      marquerCasesLegales();
     }
+    marquerCasesLegales();
+    peindreApercu();
     // ⚠ ON N'EFFACE PLUS LA LIGNE, ON Y ÉCRIT. Un `avis('')` tenait ici, et il
     // ne faisait pas que ne rien dire : il effaçait l'alerte de la session au
     // passage. Le mode s'annonce, le toast en cours suit sa propre échéance.
@@ -1623,6 +1847,14 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     const index = etatCourant.disposition.findIndex(
       (b) => b.rangee === rangee && b.colonne === colonne,
     );
+
+    // ⚠ LE DÉPLACEMENT PASSE AVANT, PARCE QU'IL A DEUX TEMPS. `ACTIONS` le dit
+    // par son champ `cible` : l'écran ne traite pas « déplacer » comme un cas
+    // particulier écrit à la main, il lit la table.
+    if (actionArmee !== null && ACTIONS[actionArmee].cible === true) {
+      tenterLeDeplacement(rangee, colonne, index);
+      return;
+    }
 
     if (actionArmee !== null) {
       // ⚠ UNE CASE VIDE DÉSARME SANS RIEN DIRE. C'est le geste « à côté du
@@ -1736,12 +1968,18 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     panneau.hidden = false;
     derniereVue = null;
     selectionner(index);
+    // ⚠ ETHAN : « faire apparaître les flèches du bâtiment concerné quand on
+    // ouvre l'onglet bâtiment ». Le panneau chiffre le voisinage, les flèches
+    // le montrent sur la grille — deux vues du même calcul.
+    peindreApercu();
   }
 
   function fermerPanneau() {
     panneauOuvert = false;
     panneau.hidden = true;
     derniereVue = null;
+    // Les flèches partent avec le panneau : elles décrivaient SON bâtiment.
+    peindreApercu();
   }
 
   // ⚠ L'ÉTAT INITIAL EST POSÉ ICI, PAS SEULEMENT DANS LE BALISAGE. Le `hidden`
@@ -1788,10 +2026,27 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     const problemes = problemesDeLaPose(etatCourant, posableChoisi, rangee, colonne);
     if (problemes.length > 0) {
       // La sélection RESTE : le joueur voulait poser, il a visé à côté. La lui
-      // retirer l'obligerait à la refaire pour réessayer.
+      // retirer l'obligerait à la refaire pour réessayer. L'aperçu, lui, tombe :
+      // il montrerait un emplacement que le joueur vient d'abandonner.
       toast(messageDeRefus(problemes));
+      poseEnAttente = null;
+      peindreApercu();
       return;
     }
+
+    // ⚠ PREMIER TOUCHER : ON MONTRE. Arbitré le 28/08 — « il y a d'abord un
+    // clic et le bâtiment en transparent, et les flèches bonus proximité
+    // s'affichent si il y en a, un deuxième clic pose le bâtiment ». C'est ce
+    // temps-là qui rend le voisinage visible AVANT de s'engager.
+    const memeCase = poseEnAttente !== null
+      && poseEnAttente.rangee === rangee && poseEnAttente.colonne === colonne;
+    if (!memeCase) {
+      poseEnAttente = { rangee, colonne };
+      ligneDeMode(messageDeConfirmation(BASE_BATIMENTS[posableChoisi].nom.joueur));
+      peindreApercu();
+      return;
+    }
+    poseEnAttente = null;
 
     poserBatiment(etatCourant, posableChoisi, rangee, colonne);
     // ⚠ SAUVEGARDER AVANT DE REPEINDRE, et l'ordre s'est resserré à ce lot.
@@ -1812,6 +2067,53 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   }
 
   /**
+   * Le déplacement, qui est la seule action à DEUX touchers : le bâtiment, puis
+   * la case d'arrivée.
+   *
+   * ⚠ ON DEMANDE, PUIS ON AGIT, ET JAMAIS DE `try` — même règle que la pose et
+   * l'amélioration : `problemesDuDeplacement` rend une LISTE (fait de jeu),
+   * `deplacer` LÈVE (fait de programme).
+   */
+  function tenterLeDeplacement(rangee, colonne, index) {
+    if (deplacementEnCours === null) {
+      // Premier toucher : quel bâtiment ? Une case vide désarme sans rien dire,
+      // comme partout ailleurs — c'est le geste « à côté du menu ».
+      if (index === -1) {
+        actionArmee = null;
+        ligneDeMode('');
+        marquerBoutonsAction();
+        return;
+      }
+      deplacementEnCours = index;
+      ligneDeMode(messageDeDestination(
+        BASE_BATIMENTS[etatCourant.disposition[index].id].nom.joueur,
+      ));
+      marquerCasesLegales();
+      peindreApercu();
+      return;
+    }
+
+    const problemes = problemesDuDeplacement(etatCourant, deplacementEnCours, rangee, colonne);
+    if (problemes.length > 0) {
+      // Le bâtiment RESTE en main : le joueur a visé à côté, il n'a pas changé
+      // d'avis. Le lui retirer l'obligerait à le rechoisir pour réessayer.
+      toast(messageDeRefus(problemes));
+      return;
+    }
+    deplacer(etatCourant, deplacementEnCours, rangee, colonne);
+    selection = deplacementEnCours;
+    deplacementEnCours = null;
+    actionArmee = null;
+    ligneDeMode('');
+    marquerBoutonsAction();
+    // Un déplacement change le voisinage, donc les débits : il s'écrit tout de
+    // suite, comme une pose.
+    if (apresPose !== undefined) apresPose(etatCourant);
+    peindre(etatCourant);
+    rafraichir(etatCourant);
+  }
+
+  /**
    * Repeint ce qui ne bouge qu'en jouant : le terrain, les bâtiments, la
    * palette. Appelée au chargement et à chaque fois que la disposition change.
    * @param {object} etat
@@ -1827,7 +2129,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     for (const case_ of cellules.values()) {
       case_.classList.remove('champ', 'quartz', 'scorie');
       case_.querySelector('.jeton')?.remove();
-      case_.querySelector('.vide')?.remove();
+      case_.querySelector('.fantome')?.remove();
+      case_.querySelector('.fleche')?.remove();
     }
 
     // ⚠ LE TERRAIN SE DESSINE SOUS LES BÂTIMENTS, JAMAIS AU-DESSUS. Un champ
@@ -1864,6 +2167,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
 
     peindrePalette(etat);
     marquerCasesLegales();
+    peindreApercu();
     // À la première peinture, le Chantier est sélectionné d'office : un bandeau
     // contextuel vide au premier regard donne un écran qui a l'air en panne, et
     // le Chantier est de toute façon ce autour de quoi la base se lit.

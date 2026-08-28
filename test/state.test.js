@@ -15,6 +15,8 @@ import {
   poser, problemesDeLaPose,
   ameliorer, problemesDeLAmelioration, demolir, problemesDeLaDemolition,
   CODES_TOLERES_AU_CHARGEMENT,
+  problemesDuDeplacement,
+  deplacer,
 } from '../src/sim/state.js';
 import { coutDeMontee, coutCumule, remboursementDuNiveau } from '../src/data/base.js';
 import {
@@ -956,4 +958,114 @@ test('état — une règle née APRÈS les sauvegardes ne rend pas une partie il
     /injouable/,
     'une superposition doit continuer de faire lever le chargement',
   );
+});
+
+test('déplacer — la règle est celle de la disposition, jamais une seconde', () => {
+  // ⚠ MÊME DISCIPLINE QUE `poser` : on construit la disposition candidate et on
+  // la soumet à `problemesDeDisposition`. Une seconde table de règles finirait
+  // par diverger de la première, sur le voisinage ou sur les champs.
+  const etat = creerEtat(4242);
+  etat.disposition[0].niveau = 6;
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  // ⚠ UN TROISIÈME BÂTIMENT, ET IL EST INDISPENSABLE. Sans lui le collecteur est
+  // le DERNIER de la liste, et un `splice` suivi d'un `push` le remettrait
+  // exactement au même indice : le test passerait sur du code qui décale tous
+  // les résidus. La falsification l'a montré.
+  poser(etat, 'caserne', 18, 1);
+  assert.equal(etat.disposition.length, 3);
+  assert.notEqual(etat.disposition.length - 1, 1, 'le bâtiment déplacé doit avoir un successeur');
+  const apres = etat.disposition[2].id;
+
+  // Vers un autre champ : légal. Vers une case sans champ : refusé, et par la
+  // MÊME règle que la pose — le message vient de `sim/disposition.js`.
+  const autre = etat.champs.cases.find((c) => c.ressource === 'quartz' && c !== champ);
+  assert.deepEqual(problemesDuDeplacement(etat, 1, autre.rangee, autre.colonne), []);
+  const horsChamp = problemesDuDeplacement(etat, 1, 16, 4);
+  assert.deepEqual(horsChamp.map((p) => p.code), ['hors-champ']);
+  assert.equal(horsChamp[0].message, problemesDeLaPose(etat, 'collecteur', 16, 4)[0].message,
+    'le refus du déplacement ne dit pas la même chose que celui de la pose');
+
+  // ⚠ RESTER SUR PLACE EST LÉGAL. Le refuser obligerait l'écran à connaître
+  // cette exception, et le joueur n'aurait aucun moyen d'annuler son geste.
+  assert.deepEqual(problemesDuDeplacement(etat, 1, champ.rangee, champ.colonne), []);
+
+  // Le geste lui-même.
+  deplacer(etat, 1, autre.rangee, autre.colonne);
+  assert.equal(etat.disposition[1].rangee, autre.rangee);
+  assert.equal(etat.disposition[1].colonne, autre.colonne);
+  assert.equal(etat.disposition[1].niveau, 1, 'un déplacement ne change pas le niveau');
+  assert.equal(etat.disposition.length, 3, 'un déplacement n\'ajoute ni ne retire rien');
+  // ⚠ ET L'ORDRE DE LA LISTE NE BOUGE PAS. C'est ce que la garde des résidus
+  // protège : `economie.residus` est parallèle à `disposition`, et réécrire la
+  // liste dans un autre ordre ferait produire à chaque bâtiment le reste de son
+  // voisin.
+  assert.equal(etat.disposition[1].id, 'collecteur', 'le bâtiment déplacé a changé d\'indice');
+  assert.equal(etat.disposition[2].id, apres, 'l\'ordre de la disposition a changé');
+
+  // ⚠ L'INDICE NE BOUGE PAS, DONC LE RÉSIDU SUIT TOUT SEUL. `economie.residus`
+  // est parallèle à `disposition` : un déplacement écrit avec un `splice` puis
+  // un `push` décalerait les résidus d'un cran et ferait produire à chaque
+  // bâtiment le reste de son voisin. Le tick suivant doit passer.
+  assert.equal(etat.economie.residus.length, etat.disposition.length);
+  tickJeu(etat);
+  assert.ok(etat.economie.ressources.quartz >= 0);
+
+  // Et il LÈVE sur un déplacement illégal, comme `poser` : un fait de PROGRAMME.
+  assert.throws(() => deplacer(etat, 1, 16, 4), /illégal/);
+  assert.throws(() => problemesDuDeplacement(etat, 99, 13, 2), /hors de la disposition/);
+});
+
+test('déplacer — une base déjà bancale reste réarrangeable', () => {
+  // ⚠ C'EST LE CAS QUI COMPTE LE PLUS. Depuis le 28/08 une base peut porter deux
+  // uniques voisins — la règle est née après des sauvegardes qui la violent, et
+  // elle est tolérée au chargement. Déplacer est précisément ce qui permet de
+  // réparer ça. Faire remonter le défaut PRÉEXISTANT sur chaque déplacement
+  // enfermerait le joueur dans la faute qu'on lui demande de corriger.
+  const etat = creerEtat(4242);
+  etat.disposition[0].niveau = 6;
+  etat.disposition.push({ id: 'centreDeCommandement', rangee: 18, colonne: 4, niveau: 1 });
+  etat.economie.residus.push({});
+
+  // Le montage est bien en faute AVANT le geste, sinon il ne mesure rien.
+  const defauts = problemesDeDisposition(etat.disposition, etat.champs);
+  assert.ok(defauts.some((p) => p.code === 'uniques-voisins'), 'le montage devrait être illégal');
+
+  // ⚠ ET C'EST UN AUTRE BÂTIMENT QU'ON DÉPLACE, PAS LE FAUTIF. La falsification
+  // l'a exigé : éloigner le Centre de commandement REND la base saine, si bien
+  // que la candidate est propre et que retirer le filtre ne se voit pas. Ce que
+  // le filtre protège, c'est le déplacement d'un bâtiment INNOCENT pendant que
+  // le défaut demeure — le cas ordinaire d'une base déjà bancale.
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  const ailleurs = etat.champs.cases.find((c) => c.ressource === 'quartz' && c !== champ);
+  assert.ok(problemesDeDisposition(etat.disposition, etat.champs)
+    .some((p) => p.code === 'uniques-voisins'), 'le défaut doit survivre à la pose');
+  assert.deepEqual(problemesDuDeplacement(etat, 2, ailleurs.rangee, ailleurs.colonne), [],
+    'un bâtiment innocent doit pouvoir bouger malgré un défaut préexistant');
+  deplacer(etat, 2, ailleurs.rangee, ailleurs.colonne);
+  assert.equal(etat.disposition[2].rangee, ailleurs.rangee);
+
+  // Et éloigner le fautif RÉPARE bel et bien la base.
+  deplacer(etat, 1, 18, 1);
+  assert.deepEqual(problemesDeDisposition(etat.disposition, etat.champs), [],
+    'le déplacement devait réparer la base');
+
+  // ⚠ ET LA RÈGLE MORD TOUJOURS SUR CE QU'ON AJOUTE. Remettre le Centre de
+  // commandement au contact du Chantier est un défaut NOUVEAU, pas préexistant :
+  // il est refusé. C'est la moitié qui fait de « toléré » autre chose
+  // qu'« effacé ».
+  assert.ok(problemesDuDeplacement(etat, 1, 18, 4).some((p) => p.code === 'uniques-voisins'),
+    'un déplacement qui CRÉE le défaut devrait être refusé');
+  assert.throws(() => deplacer(etat, 1, 18, 4), /illégal/);
+
+  // Falsifiable : le filtre des défauts préexistants est bien ce qui a permis le
+  // premier déplacement. On repose le défaut à la main — le moteur, lui, refuse
+  // de le créer — et on vérifie qu'on peut de nouveau s'en éloigner.
+  etat.disposition[1].rangee = 18;
+  etat.disposition[1].colonne = 4;
+  assert.ok(problemesDeDisposition(etat.disposition, etat.champs).length > 0,
+    'le montage devrait être redevenu illégal');
+  assert.deepEqual(problemesDuDeplacement(etat, 1, 18, 1), [],
+    'les défauts préexistants ne sont plus filtrés');
 });
