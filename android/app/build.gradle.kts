@@ -51,9 +51,20 @@ android {
 }
 
 // Signature : exclusivement depuis l'environnement (secrets CI) — jamais un
-// keystore dans le dépôt, ni en clair ni chiffré. Sans secrets, le build
-// release sort non signé : un contributeur sans secrets doit pouvoir
-// vérifier que tout compile.
+// keystore dans le dépôt, ni en clair ni chiffré.
+//
+// ⚠ SANS SECRETS, LE BUILD RELEASE SORTAIT NON SIGNÉ, ET ANDROID REFUSE
+// D'INSTALLER UN APK NON SIGNÉ. Constaté le 27/08 : l'artefact du CI était
+// inutilisable sur l'appareil de test, et rien ne le disait — le job passait au
+// vert, l'APK arrivait, l'installation échouait sans message exploitable.
+// Le repli ci-dessous signe avec la clé DEBUG d'Android, celle que le SDK
+// génère tout seul : ça ne fait pas un binaire publiable, ça fait un binaire
+// INSTALLABLE, ce qui est tout ce qu'un APK de test doit être.
+//
+// ⚠ LES DEUX CLÉS SONT INCOMPATIBLES ENTRE ELLES. Passer d'un APK signé debug
+// à un APK signé release — ou l'inverse — demande de DÉSINSTALLER d'abord :
+// Android refuse une mise à jour dont la signature a changé. Le message système
+// ne dit pas pourquoi.
 val cheminKeystore = System.getenv("FOYERZERO_KEYSTORE")
 if (!cheminKeystore.isNullOrEmpty()) {
     android.signingConfigs.create("release") {
@@ -64,6 +75,9 @@ if (!cheminKeystore.isNullOrEmpty()) {
     }
     android.buildTypes.getByName("release").signingConfig =
         android.signingConfigs.getByName("release")
+} else {
+    android.buildTypes.getByName("release").signingConfig =
+        android.signingConfigs.getByName("debug")
 }
 
 // L'APK embarque une copie du HTML buildé : première ouverture pleinement
