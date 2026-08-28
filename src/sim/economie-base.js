@@ -79,23 +79,22 @@ export const DEBIT_MILLI_PAR_HEURE_MAX =
 /**
  * Le plafond au-delà duquel une capacité cesserait d'être un entier exact.
  *
- * ⚠⚠ IL EST DEVENU MORDANT LE 28/08, ET IL NE L'ÉTAIT PAS AVANT. La courbe de
- * stockage arbitrée ce jour-là ( × 2 par niveau jusqu'au dixième, puis
- * décroissance linéaire jusqu'à × 1,333) porte une raffinerie de niveau 50 à
- * 4,75 × 10¹² unités, soit 4,75 × 10¹⁵ milli : **53 % de l'entier sûr à elle
- * seule**, et DEUX raffineries de niveau 50 le dépassent. L'ancienne courbe
- * laissait 2 815 fois de marge ; celle-ci n'en laisse plus.
+ * ⚠⚠ IL EST MORT, ET C'EST EXACTEMENT CE QU'ON LUI DEMANDE. Il a été posé le
+ * 28/08 parce que la première écriture de la courbe de stockage débordait : une
+ * raffinerie de niveau 50 valait alors 53 % de l'entier sûr à elle seule, et
+ * deux le dépassaient. La queue de courbe a été écrasée le même jour (voir le
+ * pavé de `STOCKAGE` dans `data/base.js`), et la base LÉGALE la plus grosse —
+ * 39 bâtiments de stockage au niveau 50 — tient maintenant **2,8 fois** sous
+ * l'entier exact. Cette garde ne mord donc plus sur aucune base atteignable, et
+ * un test l'asserte de face : le jour où elle recommencerait à mordre, c'est
+ * que les données auraient dérivé.
  *
  * ⚠ ON ÉCRÊTE, ON NE LÈVE PAS — et c'est le contraire du choix fait pour
- * `DEBIT_MILLI_PAR_HEURE_MAX`. La différence est que là-bas un dépassement
- * FAUSSE le rattrapage en silence, alors qu'ici il ne fausse rien : écrêter une
+ * `DEBIT_MILLI_PAR_HEURE_MAX`. La différence est qu'un débit qui déborde FAUSSE
+ * le rattrapage en silence, alors qu'ici il ne fausse rien : écrêter une
  * capacité ne fait que borner ce que le joueur peut stocker, et toutes les
  * opérations restent exactes. Lever ferait planter la partie d'un joueur qui a
  * simplement bien joué, ce qui est pire que le mur qu'on lui pose.
- *
- * ⚠ ET L'ÉCRÊTAGE N'EST PAS SILENCIEUX : la capacité est ce que le bandeau du
- * haut affiche. Un joueur qui l'atteint la voit cesser de monter, au même titre
- * qu'un stock saturé.
  */
 export const CAPACITE_MILLI_MAX = Number.MAX_SAFE_INTEGER;
 
