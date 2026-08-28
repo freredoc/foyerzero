@@ -76,6 +76,29 @@ export const RESSOURCES = ['quartz', 'scorie', 'electricite'];
 export const DEBIT_MILLI_PAR_HEURE_MAX =
   Math.floor(Number.MAX_SAFE_INTEGER / TICKS_PAR_HEURE) - 1;
 
+/**
+ * Le plafond au-delà duquel une capacité cesserait d'être un entier exact.
+ *
+ * ⚠⚠ IL EST DEVENU MORDANT LE 28/08, ET IL NE L'ÉTAIT PAS AVANT. La courbe de
+ * stockage arbitrée ce jour-là ( × 2 par niveau jusqu'au dixième, puis
+ * décroissance linéaire jusqu'à × 1,333) porte une raffinerie de niveau 50 à
+ * 4,75 × 10¹² unités, soit 4,75 × 10¹⁵ milli : **53 % de l'entier sûr à elle
+ * seule**, et DEUX raffineries de niveau 50 le dépassent. L'ancienne courbe
+ * laissait 2 815 fois de marge ; celle-ci n'en laisse plus.
+ *
+ * ⚠ ON ÉCRÊTE, ON NE LÈVE PAS — et c'est le contraire du choix fait pour
+ * `DEBIT_MILLI_PAR_HEURE_MAX`. La différence est que là-bas un dépassement
+ * FAUSSE le rattrapage en silence, alors qu'ici il ne fausse rien : écrêter une
+ * capacité ne fait que borner ce que le joueur peut stocker, et toutes les
+ * opérations restent exactes. Lever ferait planter la partie d'un joueur qui a
+ * simplement bien joué, ce qui est pire que le mur qu'on lui pose.
+ *
+ * ⚠ ET L'ÉCRÊTAGE N'EST PAS SILENCIEUX : la capacité est ce que le bandeau du
+ * haut affiche. Un joueur qui l'atteint la voit cesser de monter, au même titre
+ * qu'un stock saturé.
+ */
+export const CAPACITE_MILLI_MAX = Number.MAX_SAFE_INTEGER;
+
 // ---------------------------------------------------------------------------
 // Capacités
 // ---------------------------------------------------------------------------
@@ -142,6 +165,13 @@ export function capacitesMilli(disposition) {
     } else if (def.ressource === 'electricite') {
       caps.electricite += capacite;
     }
+  }
+  // ⚠ ÉCRÊTAGE, VOIR `CAPACITE_MILLI_MAX`. Il ne mord qu'au sommet de la courbe
+  // arbitrée le 28/08 — deux raffineries de niveau 50 — et il garantit que
+  // toutes les comparaisons `stock >= capacite` du tick restent des
+  // comparaisons d'entiers exacts.
+  for (const r of RESSOURCES) {
+    if (caps[r] > CAPACITE_MILLI_MAX) caps[r] = CAPACITE_MILLI_MAX;
   }
   return caps;
 }

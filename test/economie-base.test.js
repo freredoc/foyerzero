@@ -77,27 +77,35 @@ test('economie-base — la capacité suit les bâtiments posés, elle n\'est pas
   const dispo = base();
   assert.deepEqual(problemesDeDisposition(dispo, TERRAIN), []);
 
-  // Une raffinerie de niveau 1 : 2 880 unités de quartz ET 2 880 de scorie
-  // (arbitré le 26/08, `capaciteParRessource`). Un accumulateur : 1 440
-  // d'électricité. Le tout en MILLI.
+  // Une raffinerie de niveau 1 apporte sa capacité au quartz ET à la scorie
+  // (arbitré le 26/08, `capaciteParRessource`) ; un accumulateur, à
+  // l'électricité seule. Le tout en MILLI.
+  //
+  // ⚠ LA VALEUR SE LIT DANS `capaciteDuNiveau`, ELLE NE SE RECOPIE PLUS. Ce
+  // test portait « 2 880 » et « 1 440 » en dur, et la courbe arbitrée le 28/08
+  // les a rendus faux d'un coup. Ce qu'il MESURE n'a jamais été la valeur de la
+  // courbe — c'est `test/base.test.js` qui l'asserte, palier par palier — mais
+  // la STRUCTURE de la somme : par ressource, plus la poche du Chantier.
+  const raf = capaciteDuNiveau('raffinerie', 1) * 1000;
+  const acc = capaciteDuNiveau('accumulateur', 1) * 1000;
   assert.deepEqual(capacitesMilli(dispo), {
-    quartz: 2_880_000 + pocheMilli('quartz', NIVEAU_CHANTIER),
-    scorie: 2_880_000 + pocheMilli('scorie', NIVEAU_CHANTIER),
-    electricite: 1_440_000 + pocheMilli('electricite', NIVEAU_CHANTIER),
+    quartz: raf + pocheMilli('quartz', NIVEAU_CHANTIER),
+    scorie: raf + pocheMilli('scorie', NIVEAU_CHANTIER),
+    electricite: acc + pocheMilli('electricite', NIVEAU_CHANTIER),
   });
   // Falsifiable : la poche doit être NON NULLE, sinon les trois lignes
   // ci-dessus ne prouvent rien de plus qu'avant son arrivée.
   assert.ok(pocheMilli('quartz', NIVEAU_CHANTIER) > 0, 'poche nulle : le montage ne mesure rien');
-  assert.equal(capaciteDuNiveau('raffinerie', 1), 2880);
-  assert.equal(capaciteDuNiveau('accumulateur', 1), 1440);
+  assert.ok(raf > 0 && acc > 0, 'capacités nulles : les égalités ci-dessus passeraient sur du vide');
+  assert.notEqual(raf, acc, 'raffinerie et accumulateur doivent différer, sinon on ne les distingue pas');
 
   // Poser une seconde raffinerie double le quartz ET la scorie, sans toucher à
   // l'électricité. C'est ce qui prouve que la somme est bien par ressource.
   const deux = [...dispo, { id: 'raffinerie', rangee: 13, colonne: 7, niveau: 1 }];
   assert.deepEqual(capacitesMilli(deux), {
-    quartz: 5_760_000 + pocheMilli('quartz', NIVEAU_CHANTIER),
-    scorie: 5_760_000 + pocheMilli('scorie', NIVEAU_CHANTIER),
-    electricite: 1_440_000 + pocheMilli('electricite', NIVEAU_CHANTIER),
+    quartz: 2 * raf + pocheMilli('quartz', NIVEAU_CHANTIER),
+    scorie: 2 * raf + pocheMilli('scorie', NIVEAU_CHANTIER),
+    electricite: acc + pocheMilli('electricite', NIVEAU_CHANTIER),
   });
 
   // Monter une raffinerie l'augmente aussi : la capacité n'est pas un compte de
@@ -262,7 +270,7 @@ test('economie-base — le stock sature, le résidu continue d\'avancer', () => 
     { id: 'raffinerie', rangee: 12, colonne: 2, niveau: 1 }, // tout petit stockage
   ];
   const cap = capacitesMilli(dispo).quartz;
-  assert.equal(cap, 2_880_000 + pocheMilli('quartz', 20));
+  assert.equal(cap, capaciteDuNiveau('raffinerie', 1) * 1000 + pocheMilli('quartz', 20));
 
   const etat = creerEtatEconomie(dispo);
   for (let t = 0; t < 200; t++) tickEconomieBase(etat, dispo, TERRAIN);
@@ -474,8 +482,15 @@ test('economie-base — les fautes de programme lèvent, avec un message qui dit
     () => rattrapageEconomieBase(creerEtatEconomie(dispo), dispo, TERRAIN, 1.5),
     /nombre de ticks invalide/,
   );
-  // L'autonomie de douze heures est lue, pas réécrite ici.
-  assert.equal(STOCKAGE.autonomieHeures, 12);
+  // ⚠ `STOCKAGE.autonomieHeures` N'EXISTE PLUS. Il portait le principe « la
+  // capacité est une durée d'absence tolérée », rompu par l'arbitrage du 28/08 :
+  // la capacité est maintenant une courbe à elle. On lit donc la table neuve,
+  // et le champ mort est asserté ABSENT — le laisser traîner ferait croire, dans
+  // six mois, qu'une autonomie constante existe encore quelque part.
+  assert.equal(STOCKAGE.autonomieHeures, undefined);
+  assert.deepEqual(Object.keys(STOCKAGE.niveauUn).slice().sort(), ['accumulateur', 'raffinerie']);
+  assert.equal(STOCKAGE.multiplicateurAuDepart, 2);
+  assert.equal(STOCKAGE.niveauSeuil, 10);
 });
 
 // ---------------------------------------------------------------------------
@@ -526,8 +541,8 @@ test('economie-base — un stock au-dessus du plafond est GELÉ, jamais amputé'
   // « inchangé » ne prouverait rien.
   assert.ok(surplus > caps.quartz, 'le montage ne mesure rien si le stock tient');
   assert.equal(
-    caps.quartz, 2_880_000 + pocheMilli('quartz', NIVEAU_CHANTIER),
-    'une raffinerie niveau 1 (2 880) plus la poche du Chantier',
+    caps.quartz, capaciteDuNiveau('raffinerie', 1) * 1000 + pocheMilli('quartz', NIVEAU_CHANTIER),
+    'une raffinerie de niveau 1 plus la poche du Chantier',
   );
 });
 

@@ -14,6 +14,7 @@ import {
   SAVE_VERSION, creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer,
   poser, problemesDeLaPose,
   ameliorer, problemesDeLAmelioration, demolir, problemesDeLaDemolition,
+  CODES_TOLERES_AU_CHARGEMENT,
 } from '../src/sim/state.js';
 import { coutDeMontee, coutCumule, remboursementDuNiveau } from '../src/data/base.js';
 import {
@@ -893,4 +894,66 @@ test('état — l\'amorce paie de quoi démarrer, et c\'est vérifié sur les pr
   // Et il lui reste de quoi faire autre chose : une amorce qui financerait
   // EXACTEMENT une action laisserait le joueur bloqué juste après.
   assert.ok(etat.economie.ressources.quartz > 0, 'l\'amorce est épuisée par une seule montée');
+});
+
+test('état — une règle née APRÈS les sauvegardes ne rend pas une partie illisible', () => {
+  // ⚠ LE PROBLÈME QUE CE TEST GARDE. `verifierEtat` LÈVE là où
+  // `problemesDeDisposition` rend une liste, et c'est la bonne règle : au
+  // chargement, une disposition illégale est un fait de PROGRAMME. Mais elle a
+  // une limite qu'on a rencontrée le 28/08 : une règle AJOUTÉE APRÈS COUP rend
+  // illégales des bases qui étaient légales quand le joueur les a construites.
+  //
+  // `uniques-voisins` est ce cas exactement. La base d'Ethan, mesurée sur sa
+  // capture du 28/08, porte le Centre de commandement, le QG de défense et le
+  // Chantier côte à côte. Faire lever le chargement là-dessus aurait rendu sa
+  // partie INJOUABLE, pour une faute qu'il n'a pas commise.
+  const etat = creerEtat(4242);
+  // Le Chantier monte d'abord : à son niveau 1 il n'ouvre que deux emplacements,
+  // et le montage en réclamerait un troisième — le test mesurerait alors le
+  // plafond d'emplacements au lieu de la règle qu'il vise.
+  etat.disposition[0].niveau = 6;
+  etat.disposition.push({ id: 'centreDeCommandement', rangee: 18, colonne: 4, niveau: 1 });
+  etat.disposition.push({ id: 'qgDeDefense', rangee: 18, colonne: 6, niveau: 1 });
+  etat.economie.residus.push({}, {});
+
+  // Le montage doit VRAIMENT violer la règle, sinon il ne mesure rien.
+  const defauts = problemesDeDisposition(etat.disposition, etat.champs);
+  assert.ok(defauts.length > 0, 'le montage devrait être illégal');
+  assert.ok(defauts.every((p) => p.code === 'uniques-voisins'),
+    'le montage ne doit violer QUE la règle tolérée');
+
+  // Et il se charge quand même, avec ses trois bâtiments.
+  const instant = 1_700_000_000_000;
+  const relu = charger(serialiser(etat, instant), instant + 3_600_000);
+  assert.equal(relu.disposition.length, 3);
+
+  // ⚠ TOLÉRÉ N'EST PAS EFFACÉ. Le défaut reste SIGNALÉ — l'écran le montre — et
+  // il interdit toujours toute NOUVELLE pose au contact d'un unique, puisque
+  // `problemesDeLaPose` ne filtre que les défauts PRÉEXISTANTS.
+  assert.ok(problemesDeDisposition(relu.disposition, relu.champs).length > 0,
+    'le défaut doit rester visible après chargement');
+  assert.ok(problemesDeLaPose(relu, 'caserne', 17, 5).some((p) => p.code === 'uniques-voisins'),
+    'poser un unique au contact d\'un autre doit rester refusé');
+  assert.deepEqual(problemesDeLaPose(relu, 'centrale', 17, 5), [],
+    'un non-unique n\'est pas concerné par la règle');
+
+  // ⚠ ET L'ENSEMBLE RESTE MINUSCULE. Un code de faute STRUCTURELLE n'a rien à y
+  // faire : ceux-là n'ont jamais été légaux, donc aucune sauvegarde honnête ne
+  // les porte, et les tolérer ferait tourner le moteur sur un état incohérent.
+  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins']);
+  for (const structurel of ['sans-chantier', 'superposition', 'hors-base', 'inconnu', 'doublon']) {
+    assert.ok(!CODES_TOLERES_AU_CHARGEMENT.has(structurel),
+      `${structurel} est structurel, il ne doit jamais être toléré`);
+  }
+
+  // Falsifiable : une faute STRUCTURELLE fait toujours lever le chargement.
+  const casse = creerEtat(4242);
+  casse.disposition[0].niveau = 6;
+  casse.disposition.push({ id: 'caserne', rangee: 18, colonne: 5, niveau: 1 }); // sur le Chantier
+  casse.economie.residus.push({});
+  assert.throws(
+    () => charger(serialiser(casse, instant), instant),
+    /injouable/,
+    'une superposition doit continuer de faire lever le chargement',
+  );
 });

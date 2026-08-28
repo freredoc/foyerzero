@@ -861,18 +861,78 @@ export const VOISINAGE = { rayon: 1, casesMax: 8 };
 // lieu de 7,2 × 10¹². Vingt raffineries de niveau 50 plafonnent à 3,2 × 10⁹
 // unités, soit 2 790 fois de marge en milli-unités.
 
+// ---------------------------------------------------------------------------
+// ⚠⚠ LA COURBE CI-DESSUS EST PÉRIMÉE DEPUIS LE 28/08 — ELLE SE LIT AU PASSÉ
+// ---------------------------------------------------------------------------
+//
+// Ethan : « courbe stockage raffinerie et accumulateur chelou, on reprend ces
+// chiffres : niv 1 : 15 pour accu, 20 pour raff, amélioration × 2 jusqu'au
+// niv 10, puis courbe linéaire pour atteindre × 1,333 au niv 50 ».
+//
+// C'est une RUPTURE, pas un réglage : la capacité ne se déduit plus du débit du
+// producteur apparié. `autonomieHeures` disparaît avec le principe qu'elle
+// portait — un débit et une capacité ne partagent plus aucune constante, et
+// c'est exactement la règle §4 de CLAUDE.md (« quand deux grandeurs qui
+// partageaient une constante divergent, séparer »).
+//
+// ⚠ CE QUE LA NOUVELLE COURBE FAIT, MESURÉ ET NON DÉDUIT. L'autonomie n'est
+// plus constante : elle vaut CINQ MINUTES au niveau 1 (raffinerie 20 contre un
+// collecteur à 240/h) et QUARANTE ET UN ANS au niveau 50. C'est l'inverse de ce
+// que la version précédente cherchait, et c'est délibéré de la part d'Ethan —
+// le stockage devient l'investissement qui structure toute la partie.
+//
+// ⚠⚠ ET ELLE FRÔLE LE MUR ARITHMÉTIQUE, CE QUE LA PRÉCÉDENTE AVAIT ÉCARTÉ.
+// Mesuré le 28/08 : une raffinerie de niveau 50 tient 4,77 × 10¹² unités, soit
+// 4,77 × 10¹⁵ MILLI — 53 % de l'entier sûr de JavaScript à elle seule. DEUX
+// raffineries de niveau 50 le dépassent. Le facteur dominant n'est pas la
+// queue de courbe mais le × 2 des dix premiers niveaux (× 512 à lui seul) :
+// même en ramenant le multiplicateur du plafond à 1,10, vingt raffineries ne
+// laissent que 2,6 fois de marge, contre 2 815 fois aujourd'hui.
+// D'où `CAPACITE_MILLI_MAX` dans `sim/economie-base.js` : la somme des
+// capacités est ÉCRÊTÉE plutôt que laissée dériver en silence. Les quatre
+// constantes ci-dessous sont la seule chose à changer si Ethan veut redresser
+// la courbe.
+
 export const STOCKAGE = {
-  // ⚠ LE réglage de confort du jeu. Douze heures couvrent une nuit et la
-  // matinée qui suit. Six heures rendraient le jeu exigeant, vingt-quatre le
-  // rendraient permissif : c'est une ligne à changer, et rien d'autre.
-  autonomieHeures: 12,
+  // La capacité au niveau 1, EN UNITÉS, par ressource concernée. Arbitrée
+  // bâtiment par bâtiment : elle ne se déduit plus de rien.
+  niveauUn: { raffinerie: 20, accumulateur: 15 },
+  // Le multiplicateur d'un palier, tant qu'on n'a pas dépassé `niveauSeuil`.
+  multiplicateurAuDepart: 2,
+  niveauSeuil: 10,
+  // ⚠ 1,333 ET NON 4/3, PARCE QUE C'EST CE QUI A ÉTÉ ÉCRIT. Les deux diffèrent
+  // de 1 % au niveau 50 — assez pour qu'on ne choisisse pas à la place
+  // d'Ethan. S'il voulait la fraction ronde, c'est ce nombre-ci qui change.
+  multiplicateurAuPlafond: 1.333,
 };
 
 /**
+ * Le multiplicateur qui fait passer un stockage AU niveau donné.
+ *
+ * Deux régimes, et la bascule est au niveau `niveauSeuil` : constant avant,
+ * décroissant linéairement ensuite jusqu'à `multiplicateurAuPlafond` au dernier
+ * niveau du jeu.
+ *
+ * ⚠ LE PLAFOND VIENT DE `GEOGRAPHIE.niveauPlafond`, il ne se réécrit pas ici.
+ * Une seconde écriture du 50 ferait diverger la pente du jour où le plafond
+ * bougerait, et la courbe n'atteindrait plus sa valeur d'arrivée.
+ *
+ * @param {number} niveau le niveau ATTEINT, de 2 à `niveauPlafond`
+ * @returns {number} flottant
+ */
+export function multiplicateurDeStockage(niveau) {
+  const { multiplicateurAuDepart: depart, niveauSeuil: seuil, multiplicateurAuPlafond: fin } = STOCKAGE;
+  if (niveau <= seuil) return depart;
+  const avancement = (niveau - seuil) / (GEOGRAPHIE.niveauPlafond - seuil);
+  return depart + (fin - depart) * avancement;
+}
+
+/**
  * Capacité de stockage d'un bâtiment de stockage, à ce niveau, en UNITÉS.
- * Elle vaut l'autonomie voulue multipliée par le débit propre du PRODUCTEUR
- * apparié, pris au même niveau — la raffinerie se règle sur le collecteur,
- * l'accumulateur sur la centrale.
+ *
+ * Elle part de `STOCKAGE.niveauUn[id]` et applique un multiplicateur par
+ * palier — voir `multiplicateurDeStockage`. Elle ne dépend PLUS du débit du
+ * producteur apparié : ce lien a été rompu le 28/08.
  *
  * ⚠ POUR LA RAFFINERIE, C'EST UNE CAPACITÉ PAR RESSOURCE, PAS UN TOTAL.
  * Elle stocke le quartz ET la scorie, chacun jusqu'à ce plafond : une
@@ -882,9 +942,15 @@ export const STOCKAGE = {
  * fonction ne peut pas rendre « le total » sans mentir sur l'un des deux.
  * `BASE_BATIMENTS[id].capaciteParRessource` dit lequel est concerné.
  *
+ * ⚠ ARRONDI UNE SEULE FOIS, À LA FIN — l'inverse de `coutPrincipal`, et pour
+ * une raison précise : ce dernier RESTITUE une table relevée, palier par
+ * palier, tandis que celle-ci est définie par sa formule et n'a aucune table à
+ * retrouver. Arrondir chaque palier la ferait dériver vers le bas sans que rien
+ * ne le demande.
+ *
  * @param {'raffinerie'|'accumulateur'} id
  * @param {number} niveau
- * @returns {number} arrondi à l'entier, une seule fois, à la fin.
+ * @returns {number} entier
  */
 export function capaciteDuNiveau(id, niveau) {
   const def = BASE_BATIMENTS[id];
@@ -894,13 +960,25 @@ export function capaciteDuNiveau(id, niveau) {
   if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
     throw new Error(`base : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`);
   }
-  const producteur = PRODUCTEUR_APPARIE[id];
-  return Math.round(
-    STOCKAGE.autonomieHeures * debitParHeure(producteur, niveau),
-  );
+  const depart = STOCKAGE.niveauUn[id];
+  if (depart === undefined) {
+    throw new Error(`base : ${id} n'a pas de capacité de niveau 1 dans STOCKAGE`);
+  }
+  let capacite = depart;
+  for (let n = 2; n <= niveau; n++) capacite *= multiplicateurDeStockage(n);
+  return Math.round(capacite);
 }
 
-/** Quel producteur alimente quel stockage. Les deux couples sont réciproques. */
+/**
+ * Quel producteur alimente quel stockage. Les deux couples sont réciproques.
+ *
+ * ⚠ IL NE DÉCIDE PLUS DE LA CAPACITÉ DEPUIS LE 28/08. `capaciteDuNiveau` le
+ * lisait pour multiplier le débit du producteur par l'autonomie ; la courbe
+ * arbitrée ce jour-là a rompu ce lien, et cette table n'a plus qu'un rôle : dire
+ * QUI est apparié à qui. `sim/economie-base.js` s'en sert pour reconnaître les
+ * deux bâtiments de stockage sans en réécrire la liste, et le bonus de
+ * voisinage suit le même appariement.
+ */
 export const PRODUCTEUR_APPARIE = { raffinerie: 'collecteur', accumulateur: 'centrale' };
 
 /**

@@ -125,9 +125,14 @@ test('disposition — tous les défauts sont remontés ensemble, pas le premier'
     { id: 'licorne', rangee: 17, colonne: 2, niveau: 1 }, // id inconnu
   ];
   const p = problemesDeDisposition(sale, TERRAIN);
+  // ⚠ `uniques-voisins` APPARAÎT DEUX FOIS, ET C'EST JUSTE. La règle est née le
+  // 28/08 : le Chantier (18,5) touche le premier QG (18,6), qui touche le
+  // second (18,7). Deux paires, deux défauts — c'est exactement ce que « tous
+  // les défauts, pas le premier » veut dire.
   assert.deepEqual(
     codes(p),
-    ['champ-gache', 'doublon', 'hors-base', 'hors-champ', 'inconnu', 'niveau'],
+    ['champ-gache', 'doublon', 'hors-base', 'hors-champ', 'inconnu', 'niveau',
+      'uniques-voisins', 'uniques-voisins'],
   );
   // Chaque problème de bâtiment porte l'indice fautif : sans lui, l'écran ne
   // saurait pas lequel surligner.
@@ -157,7 +162,11 @@ test('disposition — le Chantier se compte dans ses propres emplacements', () =
   ];
   assert.deepEqual(problemesDeDisposition(auRas, TERRAIN), [], '2 bâtiments tiennent au niveau 1');
 
-  const unDeTrop = [...auRas, { id: 'caserne', rangee: 17, colonne: 4, niveau: 1 }];
+  // ⚠ LA CASERNE EST LOIN DU CHANTIER, ET C'EST DÉLIBÉRÉ DEPUIS LE 28/08. Elle
+  // était en (17,4), donc en diagonale du Chantier — deux uniques voisins, ce
+  // qui ajoute un second défaut et brouille ce que ce test mesure. Il mesure le
+  // PLAFOND D'EMPLACEMENTS, et rien d'autre : on l'isole.
+  const unDeTrop = [...auRas, { id: 'caserne', rangee: 18, colonne: 1, niveau: 1 }];
   const p = problemesDeDisposition(unDeTrop, TERRAIN);
   assert.deepEqual(codes(p), ['trop-de-batiments']);
   assert.match(p[0].message, /3 bâtiments pour 2 emplacements/);
@@ -643,4 +652,57 @@ test('disposition — la fondation est légale sur TOUTES les graines, par const
   }
   // MESURÉ : 13 rangées × 5 colonnes = 65 terrains tirés.
   assert.equal(terrains, 65);
+});
+
+test('disposition — deux bâtiments uniques ne peuvent pas être voisins', () => {
+  // ⚠ ARBITRÉ PAR ETHAN LE 28/08 : « les bâtiments uniques ne peuvent être
+  // placés à côté d'un autre bâtiment unique ». Sept des onze le sont, donc la
+  // règle force la base à s'étaler — c'est elle qui lui donne sa géométrie.
+  const uniques = Object.keys(BASE_BATIMENTS).filter((id) => BASE_BATIMENTS[id].unique === true);
+  assert.equal(uniques.length, 7, 'le montage suppose sept uniques');
+
+  // Les huit cases autour du Chantier sont interdites aux uniques, et à elles
+  // seules : on parcourt le 3 × 3 complet plutôt que d'en écrire une liste.
+  const chantier = { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 };
+  for (const [dr, dc] of [[0, 1], [0, -1], [-1, 0], [-1, 1], [-1, -1]]) {
+    const voisine = [
+      { ...chantier },
+      { id: 'caserne', rangee: 18 + dr, colonne: 5 + dc, niveau: 1 },
+    ];
+    assert.ok(
+      codes(problemesDeDisposition(voisine, TERRAIN)).includes('uniques-voisins'),
+      `(${dr},${dc}) devrait être refusé à un unique`,
+    );
+  }
+
+  // ⚠ ET LE VOISINAGE EST CELUI DE `casesVoisines`, PAS UN SECOND. Le bonus de
+  // proximité et cette interdiction doivent parler du même 3 × 3 : deux
+  // géométries pour le même mot, et le joueur en apprendrait une fausse.
+  for (const [r, c] of casesVoisines(18, 5)) {
+    if (r < GRILLE.bandes.batiments.premiere || r > GRILLE.bandes.batiments.derniere) continue;
+    if (c < 1 || c > GRILLE.largeur) continue;
+    const paire = [{ ...chantier }, { id: 'caserne', rangee: r, colonne: c, niveau: 1 }];
+    assert.ok(codes(problemesDeDisposition(paire, TERRAIN)).includes('uniques-voisins'),
+      `(${r},${c}) est voisine et devrait être refusée`);
+  }
+
+  // À deux cases, plus de conflit — sinon la règle interdirait toute la base.
+  const loin = [{ ...chantier }, { id: 'caserne', rangee: 18, colonne: 3, niveau: 1 }];
+  assert.deepEqual(problemesDeDisposition(loin, TERRAIN), []);
+
+  // Un NON-unique a le droit de coller un unique : c'est ce qui rend le
+  // voisinage productif encore jouable.
+  const centrale = [{ ...chantier }, { id: 'centrale', rangee: 17, colonne: 5, niveau: 1 }];
+  assert.deepEqual(problemesDeDisposition(centrale, TERRAIN), []);
+  assert.equal(BASE_BATIMENTS.centrale.unique, false, 'le montage perd son sens si la centrale devient unique');
+
+  // Le message nomme LES DEUX bâtiments : « X et Y sont tous deux uniques ».
+  // Sans les deux noms, le joueur ne sait pas lequel déplacer.
+  const p = problemesDeDisposition(
+    [{ ...chantier }, { id: 'qgDeDefense', rangee: 17, colonne: 4, niveau: 1 }], TERRAIN,
+  );
+  assert.equal(p.length, 1);
+  assert.match(p[0].message, /Chantier de construction/);
+  assert.match(p[0].message, /QG de défense/);
+  assert.ok(Number.isInteger(p[0].index), 'le défaut doit désigner un bâtiment');
 });

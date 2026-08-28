@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.20.0 · build 21.
+Dernière révision : **28/08/2026**, version 0.21.0 · build 22.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.20.0 · build 21.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot PANNEAU-ET-MARGES), à confronter :**
-`npm test` → **321 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**151 187 octets**, 0 référence externe.
+**Référence au 28/08/2026 (après le lot STOCKAGE-ET-VOISINAGE), à confronter :**
+`npm test` → **326 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**153 506 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -39,8 +39,8 @@ session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense, les
 et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante,
 AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant améliorer
 et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
-bâtiment et les marges des barres système.
-La borne de T10 (200 000 octets) tient, avec 24 % de marge — mais elle se surveille
+bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506.
+La borne de T10 (200 000 octets) tient, avec 23 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -50,8 +50,9 @@ garde §11 scindée en deux), et de onze au lot ÉCRAN-NAVIGATION (six pour
 `test/offense.test.js`, trois d'orientation dans `test/rendu.test.js`, deux dans
 `test/chantier.test.js` — la barre à deux bandes et la pastille de pose), et de
 cinq au lot POSE-À-L'ÉCRAN et de **dix** au lot PANNEAU-ET-MARGES, tous dans
-`test/chantier.test.js`. Une baisse n'est pas forcément une régression, mais elle
-se justifie, toujours.
+`test/chantier.test.js`, et de **cinq** au lot STOCKAGE-ET-VOISINAGE (trois dans
+`chantier.test.js`, un dans `disposition.test.js`, un dans `state.test.js`).
+Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
 
@@ -472,8 +473,15 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   | base neuve | 30 / 30 / 20 | 50 / 50 / 40 | 1 / 2 |
   | Chantier → niv. 2 (**8 quartz**) | 22 / 30 / 20 | 63 / 63 / 50 | 1 / **4** |
   | + Collecteur sur un champ | 22 / 30 / 20 | 63 / 63 / 50 | 2 / 4 |
-  | + Raffinerie voisine | 22 / 30 / 20 | **2 943** / 2 943 / 50 | 3 / 4 |
-  | après 1 h | **406** / 30 / 20 | 2 943 / … | 3 / 4 |
+  | + Raffinerie voisine | 22 / 30 / 20 | **83** / 83 / 50 | 3 / 4 |
+  | après 1 h | **83** (saturé) / 30 / 20 | 83 / 83 / 50 | 3 / 4 |
+
+  ⚠ **CE TABLEAU A ÉTÉ REMESURÉ LE 28/08 APRÈS LA NOUVELLE COURBE DE STOCKAGE,
+  ET IL EST BEAUCOUP PLUS SERRÉ QU'AVANT.** La raffinerie de niveau 1 apportait
+  2 880 de capacité ; elle en apporte **20**. L'ouverture ne se joue donc plus
+  en posant une raffinerie mais en la MONTANT — ses premiers paliers coûtent 2,
+  3 puis 4 quartz et doublent la capacité à chaque fois, ce qui reste payable
+  sous un plafond de 83. La boucle est vérifiée, pas supposée.
 
   ⚠ **MAIS LE PLAFOND MORD AVANT LA PREMIÈRE RAFFINERIE, ET C'EST CE QUI A ÉTÉ
   RAPPORTÉ COMME UN BOGUE.** Un Collecteur posé seul produit 240/h contre une
@@ -595,6 +603,26 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ne lève JAMAIS pour une faute de jeu. Elle ne lève que pour une faute de
   programme (structure absente, indice hors liste). C'est « rien ne se retire en
   silence » (§4) appliqué : on signale au joueur, il purge.
+  ⚠ **DEUX BÂTIMENTS UNIQUES NE PEUVENT PAS ÊTRE VOISINS** — arbitré le 28/08.
+  Sept des onze le sont, donc la règle force la base à s'étaler : c'est elle qui
+  lui donne sa géométrie. « À côté » est le voisinage de `casesVoisines`, les
+  huit cases — **jamais une seconde notion de voisinage** : le bonus de
+  proximité et cette interdiction doivent parler du même 3 × 3, sinon le joueur
+  apprendrait deux géométries pour le même mot.
+  ⚠⚠ **ELLE EST TOLÉRÉE AU CHARGEMENT, ET C'EST OBLIGATOIRE.** La règle est née
+  APRÈS des sauvegardes qui la violent : la base d'Ethan, mesurée sur sa capture
+  du 28/08, porte le Centre de commandement, le QG de défense et le Chantier
+  côte à côte. Faire lever `verifierEtat` là-dessus aurait rendu sa partie
+  **injouable**, pour une faute qu'il n'a pas commise. D'où
+  `CODES_TOLERES_AU_CHARGEMENT` dans `sim/state.js`.
+  ⚠ **TOLÉRÉ N'EST PAS EFFACÉ.** Le défaut reste signalé, l'écran le montre, et
+  il interdit toujours toute NOUVELLE pose au contact d'un unique — car
+  `problemesDeLaPose` ne filtre que les défauts PRÉEXISTANTS. Le joueur voit, le
+  joueur purge.
+  ⚠ **N'Y METTRE QU'UNE RÈGLE NÉE APRÈS DES SAUVEGARDES.** Un code structurel —
+  `sans-chantier`, `superposition`, `hors-base` — n'a jamais été légal, donc
+  aucune sauvegarde honnête ne le porte, et le tolérer ferait tourner le moteur
+  sur un état incohérent. Un test l'asserte de face.
   ⚠ **Aucun plafond de voisins autre que la géométrie.** Le lot 1 plafonnait à
   deux voisins (dans l'ancien `data/params.js`, retiré le 27/08) ; ce modèle-ci
   compte les huit cases. Confondre les deux divise la production par quatre.
@@ -726,6 +754,30 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ligne était périmé** : `champs.js`, `disposition.js` et `economie-base.js`
   l'importent tous les trois. Un fait d'orphelinage se remesure, il ne se
   reconduit pas.
+- ⚠⚠ **LA COURBE DE STOCKAGE A CHANGÉ DE NATURE LE 28/08, ET `autonomieHeures`
+  N'EXISTE PLUS.** Ethan a jugé l'ancienne « chelou » et l'a remplacée par des
+  chiffres absolus : **20 pour la raffinerie, 15 pour l'accumulateur au niveau
+  1, × 2 par palier jusqu'au niveau 10, puis un multiplicateur décroissant
+  linéairement jusqu'à 1,333 au niveau 50**. La capacité ne se déduit donc plus
+  du débit du producteur apparié : c'est la règle §4 appliquée — deux grandeurs
+  qui partageaient une constante ont divergé, on les a séparées.
+  ⚠ **L'AUTONOMIE N'EST PLUS CONSTANTE, ET L'ÉCART EST ÉNORME.** Mesurée face à
+  un collecteur de même niveau : **cinq minutes au niveau 1, quarante et un ans
+  au niveau 50**. L'ancienne courbe donnait 12 h partout. C'est délibéré, et
+  c'est ce qui fait du stockage l'investissement qui structure la partie.
+  ⚠⚠ **ET ELLE FRÔLE LE MUR ARITHMÉTIQUE, QUE L'ANCIENNE AVAIT ÉCARTÉ.** Une
+  raffinerie de niveau 50 tient 4,75 × 10¹² unités, soit **53 % de l'entier sûr
+  à elle seule en milli** ; DEUX la dépassent. Le facteur dominant n'est pas la
+  queue mais le × 2 des dix premiers niveaux (× 512). Mesuré : même en ramenant
+  le multiplicateur du plafond à 1,10, vingt raffineries ne laissent que 2,6
+  fois de marge, contre **2 815 fois** avec l'ancienne courbe. Les quatre
+  constantes de `STOCKAGE` sont la seule chose à changer pour la redresser.
+  ⚠ **`CAPACITE_MILLI_MAX` ÉCRÊTE, IL NE LÈVE PAS** — le contraire du choix fait
+  pour `DEBIT_MILLI_PAR_HEURE_MAX`, et la différence se justifie : un débit qui
+  déborde FAUSSE le rattrapage en silence, une capacité qui déborde ne fausse
+  rien, elle borne. Lever ferait planter la partie d'un joueur qui a bien joué.
+  ⚠ **1,333 ET NON 4/3** : c'est ce qui a été écrit, les deux diffèrent de 1 %
+  au niveau 50, et ce n'est pas à nous de choisir à la place d'Ethan.
 - **BigInt reste obligatoire** pour les points de recherche : le plafond du
   barème tient largement, mais le produit complet atteint encore 5,2 × 10²¹.
 - **`butinPlein` n'est délibérément PAS refactorisé.** La multiplication
@@ -1139,6 +1191,36 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   aujourd'hui, mais il serait la SEULE chose à le tenir fermé au démarrage : un
   attribut oublié à la prochaine reprise du HTML l'ouvrirait par-dessus la
   grille sans qu'aucun test le voie.
+
+- **LE PANNEAU PORTE UN CHRONOMÈTRE, ET SA CONDITION EST DANS L'ARBITRAGE.**
+  Ethan, 28/08 : « quand l'amélioration n'est pas possible, indiquer un
+  chronomètre. **Si le stock requis est sous le seuil du stockage maximum.** »
+  La seconde phrase porte tout : un coût plus grand que la capacité de la base
+  n'arrivera JAMAIS, et un compte à rebours dessus tournerait sans atteindre
+  zéro. `delaiAvantAmelioration` rend donc trois réponses distinctes — une
+  attente chiffrée, un mur de stockage, une ressource que rien ne produit — et
+  `null` quand c'est payable tout de suite.
+  ⚠ **LE DÉLAI EST LE MAXIMUM SUR LES RESSOURCES, PAS LEUR SOMME** : les trois
+  montent en parallèle, c'est la dernière à arriver qui décide.
+  ⚠ **ARRONDI VERS LE HAUT, ET LA FALSIFICATION L'A EXIGÉ.** Annoncer une
+  seconde de moins que la vérité ferait cliquer le joueur sur un refus. Le
+  premier montage du test tombait sur une division exacte, où `floor` et `ceil`
+  rendent le même nombre : il passait sur les deux codes, donc il ne mesurait
+  pas l'arrondi. **Un montage qui tombe rond ne mesure pas un arrondi.**
+
+- **LES PASTILLES DE CASE LIBRE SONT PARTIES (28/08), LE COMPTEUR RESTE.** Elles
+  marquaient en haut de la grille autant de cases vides qu'il restait
+  d'emplacements — un NOMBRE dessiné à des endroits sans rapport avec les cases
+  que le joueur choisirait. « Emplac. 3 / 4 » dit la même grandeur sans mentir
+  sur la géométrie.
+
+- **UN UNIQUE DÉJÀ POSÉ RESTE DANS LA PALETTE, GRISÉ.** Arbitré le 28/08 :
+  « griser le bouton, pas le faire disparaître ». La palette perdait une
+  vignette à chaque unique posé, donc elle changeait de longueur et les autres
+  se déplaçaient sous le doigt entre deux gestes.
+  ⚠ **ET LA VIGNETTE GRISÉE RÉPOND QUAND ON LA TOUCHE.** « Un indice n'est pas
+  une interdiction » (§4) : un bouton inerte n'apprend rien, un toast qui dit
+  « il est unique, et il est déjà posé » apprend la règle.
 
 ### Sur le vocabulaire
 

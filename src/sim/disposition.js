@@ -132,6 +132,41 @@ export function problemesDeDisposition(disposition, champs) {
     }
   }
 
+  // ⚠ DEUX BÂTIMENTS UNIQUES NE SE TOUCHENT PAS — arbitré par Ethan le 28/08 :
+  // « les bâtiments uniques ne peuvent être placés à côté d'un autre bâtiment
+  // unique ». Sept des onze bâtiments sont uniques ; la règle les force donc à
+  // s'étaler, et c'est ce qui donne sa géométrie à la base.
+  //
+  // ⚠ « À CÔTÉ » EST LE VOISINAGE DE `casesVoisines`, LES HUIT CASES. On ne
+  // réécrit pas une seconde notion de voisinage ici : le bonus de proximité et
+  // cette interdiction doivent parler du même 3 × 3, sinon le joueur apprendrait
+  // deux géométries différentes pour le même mot.
+  //
+  // ⚠ ET ELLE EST TOLÉRÉE AU CHARGEMENT — voir `CODES_TOLERES_AU_CHARGEMENT`
+  // dans `sim/state.js`. La règle est née APRÈS des bases qui la violent : celle
+  // d'Ethan porte le Centre de commandement, le QG de défense et le Chantier
+  // côte à côte, mesuré sur sa capture du 28/08. Faire lever `verifierEtat`
+  // là-dessus rendrait sa partie illisible, ce qui est le contraire de
+  // « rien ne se retire en silence ».
+  const uniquesPoses = disposition
+    .map((b, index) => ({ b, index }))
+    .filter(({ b }) => BASE_BATIMENTS[b.id]?.unique === true && estDansLaBase(b.rangee, b.colonne));
+  for (let i = 0; i < uniquesPoses.length; i++) {
+    for (let j = i + 1; j < uniquesPoses.length; j++) {
+      const a = uniquesPoses[i];
+      const autre = uniquesPoses[j];
+      const voisin = casesVoisines(a.b.rangee, a.b.colonne)
+        .some(([r, c]) => r === autre.b.rangee && c === autre.b.colonne);
+      if (!voisin) continue;
+      ajouter(
+        'uniques-voisins',
+        `${BASE_BATIMENTS[a.b.id].nom.joueur} et ${BASE_BATIMENTS[autre.b.id].nom.joueur} `
+          + 'sont tous deux uniques : ils ne peuvent pas être voisins',
+        autre.index,
+      );
+    }
+  }
+
   const chantiers = disposition.filter((b) => b.id === 'chantierDeConstruction');
   if (chantiers.length === 0) {
     ajouter('sans-chantier', 'aucun Chantier de construction : la base n\'existe pas');
