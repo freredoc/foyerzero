@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.18.0 · build 18.
+Dernière révision : **27/08/2026**, version 0.18.1 · build 19.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **27/08/2026**, version 0.18.0 · build 18.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot AMÉLIORER-DÉMOLIR), à confronter :**
-`npm test` → **304 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**134 019 octets**, 0 référence externe.
+**Référence au 27/08/2026 (après le lot AMORCE-ET-SIGNATURE), à confronter :**
+`npm test` → **306 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**134 118 octets**, 0 référence externe.
 
 ⚠ **130 488 était faux de 814 octets** — mesuré le 27/08 au soir sur un clone
 neuf, `npm ci && npm run build`. Le nombre a été écrit avant la dernière reprise
