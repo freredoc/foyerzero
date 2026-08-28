@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **27/08/2026**, version 0.19.0 · build 20.
+Dernière révision : **28/08/2026**, version 0.20.0 · build 21.
 
 ---
 
@@ -24,23 +24,23 @@ Dernière révision : **27/08/2026**, version 0.19.0 · build 20.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 27/08/2026 (après le lot ÉCRAN-ACTIONS), à confronter :**
-`npm test` → **311 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**137 225 octets**, 0 référence externe.
+**Référence au 28/08/2026 (après le lot PANNEAU-ET-MARGES), à confronter :**
+`npm test` → **321 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**151 187 octets**, 0 référence externe.
 
-⚠ **130 488 était faux de 814 octets** — mesuré le 27/08 au soir sur un clone
-neuf, `npm ci && npm run build`. Le nombre a été écrit avant la dernière reprise
-du lot ÉCRAN-NAVIGATION et personne ne l'a relevé : `dist/` n'est pas suivi par
-git, donc aucun test ne le confronte. C'est le seul chiffre de ce fichier
-qu'aucune garde ne protège.
+⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
+C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
+faux de 814 octets : 130 488 annoncé le 27/08 au soir, 131 302 mesurés sur un
+clone neuf. Ce nombre-ci se mesure, il ne se recopie pas.
 
 ⚠ **LE HTML BOUGE MAINTENANT À CHAQUE LOT D'INTERFACE.** Il était figé à 81 236
 octets depuis le lot RÉSIDU ; ÉCRAN-CHANTIER l'a porté à 123 785 en branchant la
 session de jeu, ÉCRAN-NAVIGATION à 130 488 en ajoutant l'écran Offense, les lots DÉMARRAGE
 et SOL à 131 302, POSE-À-L'ÉCRAN à 133 455 en rendant la palette vivante,
-AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant améliorer
-et démolir.
-La borne de T10 (200 000 octets) tient, avec 31 % de marge — mais elle se surveille
+AMORCE-ET-SIGNATURE à 134 118, ÉCRAN-ACTIONS à 137 225 en branchant améliorer
+et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
+bâtiment et les marges des barres système.
+La borne de T10 (200 000 octets) tient, avec 24 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
@@ -49,8 +49,9 @@ quatorze au lot ÉCRAN-CHANTIER (treize pour `test/chantier.test.js`, un pour la
 garde §11 scindée en deux), et de onze au lot ÉCRAN-NAVIGATION (six pour
 `test/offense.test.js`, trois d'orientation dans `test/rendu.test.js`, deux dans
 `test/chantier.test.js` — la barre à deux bandes et la pastille de pose), et de
-cinq au lot POSE-À-L'ÉCRAN, tous dans `test/chantier.test.js`. Une baisse n'est pas forcément une régression, mais elle se
-justifie, toujours.
+cinq au lot POSE-À-L'ÉCRAN et de **dix** au lot PANNEAU-ET-MARGES, tous dans
+`test/chantier.test.js`. Une baisse n'est pas forcément une régression, mais elle
+se justifie, toujours.
 
 ---
 
@@ -155,6 +156,9 @@ src/ui/                 les trois écrans et leurs éditeurs — 6 fichiers
     touche : `banc.js` et `chantier.js` le font tous les deux, et `session.js`
     les met en scène. La garde de `banc.test.js` porte sur le DOSSIER, pas sur
     un nom.
+  ⤷ l'écran de la base est en LECTURE ET EN ÉCRITURE depuis le 27/08 : pose,
+    amélioration, démolition, et depuis le 28/08 un panneau de détail. La ligne
+    « en lecture » de son en-tête a été fausse pendant deux lots.
 
 test/                   24 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
@@ -174,10 +178,14 @@ test/                   24 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  3 fichiers, dont un seul sert au build
+tools/                  7 fichiers, dont UN SEUL sert au build — relevé le 28/08,
+                        §2 en annonçait trois depuis des semaines
   build.js              src/ → dist/index.html, un seul fichier autonome
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
+  ⤷ plus quatre scripts Python de traitement de sprites, hors chaîne de build et
+    hors `npm run check`. Aucune garde ne compte ce dossier : le test de §2 ne
+    porte que sur les quatre dossiers de `src/` et sur `test/`.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 .github/workflows/ci.yml   web (build + tests) · android (tests JVM + APK) · pages (main seul)
@@ -452,23 +460,34 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   le collecteur de niveau 50 SEUL, avant que le voisinage n'entre au modèle. Le
   pire cas réel est un collecteur niveau 50 entouré de huit raffineries :
   45 738 385 u/h.
-- ⚠⚠ **UNE BASE NEUVE NE PEUT RIEN PRODUIRE, JAMAIS. BLOCAGE OUVERT, 27/08.**
-  Mesuré en simulant 24 h sur les quatre choix possibles, pas déduit :
-  un Chantier niveau 1 ouvre **2** emplacements et en occupe **1** — il en reste
-  **UN**. Or produire demande DEUX bâtiments : un producteur et un stockage.
-  | Le seul bâtiment posable | Production | Capacité | Après 24 h |
+- ⚠⚠ **LE BLOCAGE DU DÉMARRAGE EST LEVÉ — PAR L'AMORCE, ET LA CHAÎNE EST
+  MESURÉE (28/08).** Ce paragraphe annonçait « la partie est instartable » et
+  « capacité 0 » ; les deux sont **périmés**, et les garder aurait fait rouvrir
+  un arbitrage déjà rendu. Ce qui les a périmés : le lot AMORCE (30 quartz,
+  30 scorie, 20 électricité à la fondation) et la poche du Chantier
+  (`stockagePropre`, 50 · 50 · 40 au niveau 1). La chaîne, simulée et non déduite :
+
+  | Geste | Stocks | Capacités | Emplac. |
   |---|---|---|---|
-  | Collecteur | 240/h de quartz | **0** | **0** |
-  | Raffinerie | — | 2 880 | **0** |
-  | Centrale | 120/h d'électricité | **0** | **0** |
-  | Accumulateur | — | 1 440 | **0** |
-  `capacitesMilli` ne compte que la raffinerie et l'accumulateur ; sans eux le
-  plafond vaut zéro, et `min(cap, stock + gain)` reste à zéro pour toujours.
-  ⚠ **ET LE VERROU SE REFERME** : ouvrir un troisième emplacement demande le
-  Chantier niveau 2, qui coûte **8** (classe majeur). Le joueur a zéro et ne
-  peut pas en obtenir. **La partie est instartable.** Ce n'est pas un défaut
-  d'écran — l'écran a raison de ne rien montrer qui monte. C'est un arbitrage
-  qui manque, et il est devant tout le reste.
+  | base neuve | 30 / 30 / 20 | 50 / 50 / 40 | 1 / 2 |
+  | Chantier → niv. 2 (**8 quartz**) | 22 / 30 / 20 | 63 / 63 / 50 | 1 / **4** |
+  | + Collecteur sur un champ | 22 / 30 / 20 | 63 / 63 / 50 | 2 / 4 |
+  | + Raffinerie voisine | 22 / 30 / 20 | **2 943** / 2 943 / 50 | 3 / 4 |
+  | après 1 h | **406** / 30 / 20 | 2 943 / … | 3 / 4 |
+
+  ⚠ **MAIS LE PLAFOND MORD AVANT LA PREMIÈRE RAFFINERIE, ET C'EST CE QUI A ÉTÉ
+  RAPPORTÉ COMME UN BOGUE.** Un Collecteur posé seul produit 240/h contre une
+  capacité de 50 : le stock touche le plafond en **cinq minutes**, puis ne bouge
+  plus jamais. Ethan a rapporté le 28/08 « aucun bâtiment ne produit de
+  ressources » et « pas de calcul hors ligne » — c'est le même plafond, vu deux
+  fois, et le moteur avait raison dans les deux cas. Mesuré sur le HTML livré :
+  huit heures d'absence rendent exactement zéro quand le stock est saturé, ce
+  qui est la définition de saturé.
+  ⚠ **LE REMÈDE EST DE L'INTERFACE, PAS DU MOTEUR** — lot PANNEAU-ET-MARGES :
+  la capacité saturée porte maintenant le mot « saturé », et le panneau de
+  détail du Chantier annonce « emplacements 2 → 4, coût 8 quartz », ce qui rend
+  la sortie visible. Ne pas « corriger » le moteur : il n'a rien de faux.
+
 - **TOUTE base neuve du joueur est un Chantier de construction niveau 1, en
   (18, 5)** — pas seulement la première. Arbitré le 26/08 : « toutes les bases
   que le joueur pose suivront la même logique ». `BASE_NEUVE` de `data/base.js`,
@@ -1020,6 +1039,106 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   `ecran.avis()` au lieu d'écrire dans l'élément : depuis que la pose s'y exprime
   aussi, deux modules qui l'écriraient sans se connaître s'effaceraient l'un
   l'autre.
+
+- ⚠⚠ **LES BARRES SYSTÈME D'ANDROID MORDAIENT SUR L'ÉCRAN, ET LE JEU EN ÉTAIT
+  INJOUABLE.** Rapporté par Ethan le 28/08, capture à l'appui : la rangée
+  d'onglets passait sous l'horloge, la palette sous les trois boutons de
+  navigation. **En navigateur aussi**, dès que la page passe en plein écran.
+  ⚠ **LA CAUSE ÉTAIT UNE MOITIÉ DE MÉCANISME, PAS UN OUBLI ENTIER.**
+  `viewport-fit=cover` était posé depuis le premier jour — il DEMANDE
+  explicitement à dessiner sous les barres — et pas un seul
+  `env(safe-area-inset-*)` ne rendait la place. L'enveloppe vise `targetSdk 35`,
+  où l'affichage bord à bord est imposé : la WebView occupe toute la dalle.
+  ⚠ **LE CORRECTIF EST DANS LE HTML, PAS DANS L'ENVELOPPE, et c'est délibéré.**
+  Le HTML se met à jour tout seul par Pages ; corriger côté Android demanderait
+  de reconstruire et de réinstaller l'APK, et se battrait de toute façon contre
+  `viewport-fit=cover`. Les quatre côtés sont pris sur `body`, qui est le parent
+  des trois écrans : un quatrième en héritera sans qu'on y pense.
+  ⚠ **LES DEUX VONT ENSEMBLE.** `viewport-fit=cover` seul est exactement le
+  défaut ; les `env()` seuls sont inertes, car sans lui les quatre valent zéro.
+  Un test l'écrit pour qu'on ne puisse pas retirer l'un en croyant garder
+  l'autre.
+
+- ⚠⚠ **UNE CLASSE QUE LE JS BASCULE ET QUE LA FEUILLE IGNORE EST UN LOT ENTIER
+  QUI NE SE VOIT PAS.** Le lot ÉCRAN-ACTIONS posait `classList.toggle('arme')`
+  sur les trois boutons — le JavaScript était juste — et **aucune règle CSS ne
+  peignait `arme`** : armer une action ne changeait strictement rien à l'écran,
+  donc le modèle « armer puis toucher » était invisible au doigt. Livré comme ça,
+  et relevé sur appareil.
+  ⚠ **AUCUN TEST NE POUVAIT LE VOIR, ET C'EST RÉPARÉ D'UNE AUTRE MANIÈRE.** Une
+  classe sans règle n'est pas du JS faux, c'est du CSS absent, et le dépôt n'a
+  pas de navigateur. Ce qui SE teste sans navigateur, c'est la confrontation des
+  deux sources : `chantier.test.js` extrait les littéraux de
+  `classList.toggle/add` de tout `src/ui/` et exige de chacun une règle dans
+  `index.src.html`. La garde ne dit pas que le style est BEAU, elle dit qu'il
+  EXISTE — et c'est exactement ce qui manquait.
+  ⚠ **ELLE LIT LA FEUILLE DÉCOMMENTÉE.** Deux gardes de ce lot se sont d'abord
+  satisfaites de leur propre prose : celle des marges trouvait
+  `viewport-fit=cover` dans le paragraphe qui l'explique, celle du mot
+  « saturé » trouvait `MENTION_SATURE` dans sa propre déclaration. **Une garde
+  qui lit ce qu'on a écrit à son sujet ne garde rien.** Les deux ont été
+  resserrées — balise `<meta>` réelle, usage dans un `textContent =` — après
+  falsification.
+
+- **LE PANNEAU DE DÉTAIL PROJETTE AVEC LES FONCTIONS DU MOTEUR, JAMAIS AVEC UNE
+  FORMULE.** `apercuDuBatiment` fabrique la disposition CANDIDATE — la même
+  liste, ce bâtiment monté d'un niveau — et la soumet à `debitDuBatiment` et
+  `capacitesMilli`. Une projection écrite dans l'écran (« × 1,25 par niveau »)
+  serait une seconde lecture des règles, et elle aurait **déjà tort** : la poche
+  du Chantier, le voisinage et le stockage ne suivent pas la même pente, et
+  `capacitesMilli` somme des bâtiments dont un seul monte.
+  ⚠ **AU PLAFOND, TOUT LE VOLET « APRÈS » VAUT `null`, PAS ZÉRO.**
+  `coutDeMontee` et `capaciteDuNiveau` LÈVENT au-delà de `niveauPlafond` ; et un
+  « améliorer pour 0 » se lirait comme gratuit.
+  ⚠ **LE COÛT SE NOMME MAINTENANT AVEC SA RESSOURCE**, ce que le lot précédent
+  ne pouvait pas faire. `coutDeMontee` rend les trois et c'est exactement ce
+  qu'`ameliorer` débite : le panneau LIT la table. Mesuré le 28/08 sur 11
+  bâtiments × 49 paliers — **la scorie ne coûte jamais rien** (0 sur 539) et
+  l'électricité coûte à partir du niveau 3 (527 paliers). Seules les ressources
+  non nulles sont nommées : « 8 quartz · 0 scorie » enverrait chercher une
+  dépense qui n'existe pas.
+
+- **LA LIGNE D'AVIS PORTE TROIS REGISTRES, ET LA PRIORITÉ EST ÉCRITE** —
+  `session` > `toast` > `mode`, dans `ligneAAfficher`, qui est pure.
+  ⚠ **AVANT, TROIS APPELANTS ÉCRIVAIENT AU MÊME ENDROIT SANS SE CONNAÎTRE.**
+  `armer()` posait `avis('')` : armer une action effaçait donc au passage une
+  alerte de sauvegarde que personne n'avait lue. Et le MODE n'écrivait rien du
+  tout — armer « Démolir » ne disait rien, et le bâtiment suivant qu'on touchait
+  disparaissait.
+  ⚠ **LE TOAST PASSE DEVANT LE MODE, ET NON L'INVERSE.** « il manque 8 de
+  quartz » répond au doigt qui vient de se poser ; « mode Améliorer » est un
+  rappel qu'on peut relire quatre secondes plus tard.
+  ⚠ **UN MODE N'EST PAS UNE ALERTE** : métal, pas rouge. Le rouge des refus lui
+  donnerait l'air d'une panne, et le joueur chercherait ce qu'il a cassé.
+
+- **LE COMPTEUR D'EMPLACEMENTS EST REVENU (28/08), ET LE TOAST RESTE.** Il avait
+  été retiré la veille avec la barre de gauche, au motif que la saturation se
+  dirait au toucher d'une vignette. Ethan : « il n'y a plus la limite de
+  bâtiment ». **Un plafond qu'on ne découvre qu'en le heurtant n'est pas un
+  plafond, c'est une surprise.**
+  ⚠ **ET LA SATURATION SE DIT PAR UNE LIGNE DE MODE, PLUS PAR UN TOAST.** Elle
+  décrit un état qui dure aussi longtemps que le mode de pose ; en toast, elle
+  s'effaçait au bout de quatre secondes et laissait reparaître « touchez une
+  case libre » alors qu'il n'y en a aucune. Il se range avec les ressources — il se lit
+  comme un stock plafonné, « 1 / 2 » — et non dans un bandeau à lui : c'est le
+  BANDEAU qui est mort, pas le chiffre.
+
+- **LE PANNEAU S'OUVRE AU TOUCHER, PAS À LA SÉLECTION.** `peindre()` sélectionne
+  le Chantier d'office à la première image : ouvrir sur une sélection ferait
+  reparaître le panneau après chaque pose et chaque amélioration, par-dessus la
+  grille que le joueur regarde.
+  ⚠ **SON BOUTON « AMÉLIORER » AGIT DIRECTEMENT, SANS ARMER**, et ce n'est pas
+  une entorse au modèle « armer puis toucher ». Ce modèle existe parce que les
+  boutons du bandeau contextuel n'ont pas de cible ; celui-ci en a une — le
+  bâtiment dont le panneau parle — et lui demander de viser ensuite serait un
+  geste pour rien.
+  ⚠ **IL RESTE VIF QUAND C'EST IMPOSSIBLE.** « Un indice n'est pas une
+  interdiction » (§4) : le refus chiffré du moteur en apprend plus qu'un bouton
+  mort, et il faut pouvoir le lire en appuyant.
+  ⚠ **IL SE FERME EXPLICITEMENT AU CÂBLAGE.** Le `hidden` du balisage suffit
+  aujourd'hui, mais il serait la SEULE chose à le tenir fermé au démarrage : un
+  attribut oublié à la prochaine reprise du HTML l'ouvrirait par-dessus la
+  grille sans qu'aucun test le voie.
 
 ### Sur le vocabulaire
 

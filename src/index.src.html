@@ -15,8 +15,32 @@
      par défaut, et l'attribut n'aurait plus aucun effet. */
   [hidden] { display: none !important; }
   html, body { height: 100%; overflow: hidden; }
+  /* ⚠ LES BARRES SYSTÈME D'ANDROID MORDAIENT SUR L'ÉCRAN, ET LE JEU EN ÉTAIT
+     INJOUABLE (rapporté par Ethan le 28/08, capture à l'appui : la rangée
+     d'onglets passait sous l'horloge, la palette sous les trois boutons de
+     navigation).
+     La cause est une moitié de mécanisme : `viewport-fit=cover` était posé
+     depuis le début — il DEMANDE explicitement à dessiner sous les barres — et
+     aucun `env(safe-area-inset-*)` ne rendait la place. L'enveloppe vise le
+     SDK 35, où l'affichage bord à bord est imposé : la WebView occupe donc
+     toute la dalle, encoche et barre de navigation comprises.
+     ⚠ LE CORRECTIF EST ICI ET PAS CÔTÉ ANDROID, délibérément. Le HTML se met à
+     jour tout seul par Pages ; une correction dans l'enveloppe demanderait de
+     reconstruire et réinstaller l'APK, et se battrait de toute façon contre
+     `viewport-fit=cover`. Les quatre côtés sont pris — le portrait est
+     verrouillé, donc gauche et droite valent zéro aujourd'hui, mais une
+     encoche latérale ne coûte rien à prévoir.
+     ⚠ ET C'EST `body` QUI LES PORTE, PAS CHAQUE ÉCRAN. Les trois écrans — le
+     Chantier, l'Offense et le banc — sont ses enfants directs : une seule règle
+     les met tous à l'abri, et un quatrième écran en héritera sans qu'on y
+     pense. `box-sizing: border-box` est déjà posé sur `*`, donc la hauteur de
+     100 % reste juste. */
   body {
     margin: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
     display: flex;
     flex-direction: column;
     background: #161914;
@@ -207,10 +231,21 @@
   .ressource .debit { font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums; }
   .ressource.scorie b { color: #F5B636; }
   .ressource.electricite b { color: #8C9A72; }
+  /* Le compteur d'emplacements, revenu le 28/08. Il se lit comme un stock
+     plafonné — « 1 / 2 » — et se range donc avec les stocks. Il ne prend que sa
+     place : les trois ressources gardent la leur. */
+  .ressource.emplacements { flex: 0 0 auto; padding-left: 4px; border-left: 1px solid #161914; }
   /* Un stock saturé est GELÉ, jamais amputé (arbitré le 26/08) : il faut donc
      que le joueur voie qu'il plafonne, sinon il croit à un compteur cassé.
      Après les règles par ressource, pour l'emporter sur elles. */
   .ressource b.sature { color: #E43E32; }
+  /* ⚠ ET LA CAPACITÉ AUSSI, avec le MOT. La couleur seule ne suffisait pas : une
+     base neuve n'a que la poche du Chantier — 50 unités — qu'un Collecteur
+     remplit en cinq minutes, et le seul signe était un chiffre gris de huit
+     pixels qui virait au rouge. Ethan a rapporté le 28/08 « aucun bâtiment ne
+     produit de ressources » et « pas de calcul hors ligne » : c'était ce
+     plafond, vu deux fois. */
+  .ressource .capacite.sature { color: #E43E32; }
 
   /* Le bandeau d'emplacements a disparu (27/08) : il portait `poses / ouverts`
      et sa jauge, et c'est la saturation dite au toucher d'une vignette qui le
@@ -256,6 +291,70 @@
   /* Un emplacement ouvert et encore libre. Un indice, pas une interdiction. */
   .vide { width: 30%; height: 30%; border: 1px dashed #6A7658; }
 
+  /* --- le panneau de détail d'un bâtiment ----------------------------------
+     ⚠ IL RÉPOND À UNE DEMANDE PRÉCISE d'Ethan, le 28/08 : « quand on clique sur
+     un bâtiment on doit ouvrir un onglet et voir sa production détaillée, sa
+     production théorique en cas d'amélioration, un bouton amélioration avec les
+     coûts induits ».
+     ⚠ IL SE POSE SUR LE CHAMP, PAS À LA PLACE DE L'ÉCRAN. Le joueur doit garder
+     sous les yeux la case dont on lui parle : un plein écran lui ferait perdre
+     de vue le voisinage, qui est justement ce que le panneau explique. D'où le
+     bas du champ, une hauteur plafonnée, et le reste de la grille visible
+     au-dessus. */
+  #chantier-panneau {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+    max-height: 74%; overflow-y: auto; scrollbar-width: none;
+    display: flex; flex-direction: column;
+    background: #1E2124; border-top: 2px solid #4E5742;
+  }
+  #chantier-panneau::-webkit-scrollbar { display: none; }
+  #chantier-panneau .tete {
+    position: sticky; top: 0; z-index: 1;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+  #chantier-panneau-titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
+  #chantier-panneau-fermer {
+    flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
+    background: #1E2124; color: #8C9A72; border: 1px solid #161914;
+  }
+  #chantier-panneau-corps { padding: 4px 8px 8px; }
+  #chantier-panneau .section { margin-top: 6px; }
+  #chantier-panneau h3 {
+    margin: 0 0 2px; font-size: 8px; font-weight: 400;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #68727E;
+  }
+  #chantier-panneau .ligne {
+    display: flex; align-items: baseline; gap: 4px;
+    padding: 1px 0; font-size: 11px; color: #8C9A72;
+  }
+  #chantier-panneau .ligne .quoi { flex: 1; min-width: 0; }
+  #chantier-panneau .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  /* La colonne « après » se lit en kaki clair : elle n'est pas encore vraie,
+     c'est ce que l'amélioration donnerait. La distinguer de l'os du présent
+     évite qu'on la prenne pour un chiffre courant. */
+  #chantier-panneau .ligne .fleche { color: #68727E; }
+  #chantier-panneau .ligne b.apres { color: #8C9A72; }
+  /* Le détail du détail — production propre, apport de chaque type de voisin.
+     Décalé et plus petit : c'est ce qui EXPLIQUE la ligne au-dessus. */
+  #chantier-panneau .ligne.mineure { padding-left: 10px; font-size: 9px; color: #68727E; }
+  #chantier-panneau .ligne.mineure b { font-weight: 400; color: #8C9A72; }
+  #chantier-panneau-ameliorer {
+    margin: 8px; padding: 9px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+    background: #6A7658; color: #161914; border: 1px solid #161914; font-weight: 600;
+  }
+  #chantier-panneau-ameliorer .note {
+    font-style: normal; font-size: 10px; letter-spacing: 0; text-transform: none; color: #161914;
+  }
+  /* ⚠ IL RESTE VIF QUAND C'EST IMPOSSIBLE. « Un indice n'est pas une
+     interdiction » (CLAUDE.md §4) : le refus chiffré du moteur — « il manque 8
+     de quartz » — en apprend plus au joueur qu'un bouton mort, et il faut qu'il
+     puisse le lire en appuyant. */
+  #chantier-panneau-ameliorer.impossible { background: #3E454C; color: #F5F3E8; }
+  #chantier-panneau-ameliorer.impossible .note { color: #F5B636; }
+
   /* --- 5. contexte — 46 ---------------------------------------------------- */
   #chantier-contexte {
     flex: 0 0 46px; display: flex; align-items: center; gap: 5px;
@@ -275,6 +374,25 @@
   #chantier-contexte button.up { background: #6A7658; color: #161914; font-weight: 600; }
   #chantier-contexte button.up em { color: #161914; }
   #chantier-contexte button.sell { background: #1E2124; color: #68727E; }
+  /* ⚠ L'ACTION ARMÉE N'AVAIT AUCUN STYLE, ET C'EST LE DÉFAUT LE PLUS BÊTE DU LOT
+     PRÉCÉDENT. `marquerBoutonsAction()` posait déjà la classe `arme` sur le
+     bouton — le code était juste — mais aucune règle ne la peignait : armer
+     « Améliorer » ne changeait STRICTEMENT rien à l'écran. Ethan l'a relevé le
+     28/08 : « le bouton améliorer n'est pas intuitif ; lorsqu'on a appuyé
+     dessus, le laisser enfoncé ou montrer qu'il est activé. »
+     Aucun test ne pouvait le voir : le dépôt n'a pas de navigateur, et une
+     classe sans règle est du CSS absent, pas du JS faux. D'où la garde
+     ajoutée au même lot — chaque classe que l'écran bascule doit exister dans
+     cette feuille.
+     ⚠ L'AMBRE, ET PAS L'OLIVE. « Améliorer » porte déjà `up`, donc un fond
+     olive : un armement en olive plus clair ne se distinguerait pas du repos.
+     L'ambre est la seule teinte de la fiche qui tranche sur les trois boutons à
+     la fois, et le liseré d'os finit de dire « enfoncé ». */
+  #chantier-contexte button.arme {
+    background: #F5B636; color: #161914; font-weight: 600;
+    box-shadow: inset 0 0 0 2px #F5F3E8;
+  }
+  #chantier-contexte button.arme em { color: #161914; }
 
   /* --- 6. bandes — 46 ------------------------------------------------------ */
   /* Elles FONT DÉFILER, elles ne changent pas d'écran : un assaut traverse la
@@ -340,6 +458,13 @@
 
   /* --- ce qui se dit quand quelque chose ne va pas -------------------------- */
   #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }
+  /* ⚠ UN MODE N'EST PAS UNE ALERTE. « Mode DÉMOLIR : touchez le bâtiment à
+     démolir » ne signale aucune panne : il rappelle ce que le prochain toucher
+     va faire. Le rouge des refus lui donnerait l'air d'une erreur, et le joueur
+     chercherait ce qu'il a cassé. Métal, donc. Il RESTE tant que le mode dure —
+     c'est ce qu'Ethan a demandé le 28/08, « rajouter un texte à la place des
+     toasts quand mode démolir et améliorer sont en fonctionnement ». */
+  #chantier-avis.mode { background: #343A2C; color: #F5F3E8; }
   /* Une sauvegarde qu'on n'a pas su relire ne laisse pas un écran blanc, et
      elle ne se supprime pas non plus : on montre, on propose, le joueur
      tranche. `[hidden]` porte un `!important` en tête de feuille — sans lui,
@@ -457,6 +582,17 @@
 
   <div id="chantier-champ">
     <div id="chantier-defile"><div id="chantier-grille"></div></div>
+    <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js` depuis
+         `lignesDuPanneau`, qui est pure et testée : rien de ce qui vient du
+         moteur n'est gravé ici. -->
+    <div id="chantier-panneau" hidden>
+      <div class="tete">
+        <b id="chantier-panneau-titre">—</b>
+        <button type="button" id="chantier-panneau-fermer">Fermer</button>
+      </div>
+      <div id="chantier-panneau-corps"></div>
+      <button type="button" id="chantier-panneau-ameliorer"></button>
+    </div>
   </div>
 
   <p id="chantier-avis" hidden></p>

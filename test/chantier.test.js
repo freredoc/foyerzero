@@ -16,6 +16,10 @@ import { dirname, join } from 'node:path';
 
 import { ACTIONS, PAS_DE_REPARATION, DUREE_TOAST_MS } from '../src/ui/chantier.js';
 import {
+  ligneAAfficher, MESSAGES_MODE, messageDePose, MENTION_SATURE,
+  apercuDuBatiment, lignesDuPanneau, formaterCout, libelleDuVoisin,
+} from '../src/ui/chantier.js';
+import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
   formaterEntier, formaterUnites, formaterDixiemes, formaterDebit, formaterNiveau,
   familleDuBatiment, bandeDeLaRangee, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
@@ -26,8 +30,10 @@ import { creerChronometre,
   DUREE_APPUI_DEBUG_MS, avancer,
 } from '../src/ui/session.js';
 import {
-  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, emplacementsDuNiveau, stockagePropreDuNiveau,
+  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, emplacementsDuNiveau,
+  remboursementDuNiveau, stockagePropreDuNiveau,
 } from '../src/data/base.js';
+import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
@@ -442,6 +448,10 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     'chantier-reparer', 'chantier-ameliorer', 'chantier-ameliorer-cible', 'chantier-demolir',
     'chantier-bandes', 'chantier-bandes-liste', 'chantier-palette', 'chantier-avis',
     'chantier-alerte', 'chantier-alerte-message', 'chantier-alerte-neuve', 'chantier-alerte-reessayer',
+    // Le panneau de détail, lot PANNEAU-ET-MARGES : son contenu vient du JS,
+    // mais ses quatre points d'ancrage sont dans le balisage.
+    'chantier-panneau', 'chantier-panneau-titre', 'chantier-panneau-fermer',
+    'chantier-panneau-corps', 'chantier-panneau-ameliorer',
   ]) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
   }
@@ -473,9 +483,12 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
       `${bouton} est désactivé : le modèle « armer puis toucher » ne peut pas démarrer`);
   }
 
-  // ⚠ LE COMPTEUR D'EMPLACEMENTS A DISPARU, avec la barre de gauche. Ce test le
-  // GARDE retiré : le laisser revenir en silence ferait réapparaître un
-  // affichage que les vérifications appareil 18 et 20 ne lisent plus.
+  // ⚠ LE BANDEAU D'EMPLACEMENTS RESTE PARTI — le COMPTEUR, lui, est revenu.
+  // La distinction n'est pas un détail : c'est la barre de gauche et son
+  // bandeau dédié qui ont disparu le 27/08, et le chiffre a été remis le 28/08
+  // dans le bandeau des ressources, où il se lit comme un stock plafonné. Ce
+  // test garde donc le BANDEAU retiré, et le test du compteur garde le chiffre
+  // présent : les deux ensemble disent la forme exacte.
   for (const parti of ['chantier-emplacements', 'chantier-jauge', 'chantier-demonter']) {
     assert.ok(!html.includes(parti), `« ${parti} » devait disparaître de l'écran`);
   }
@@ -730,6 +743,19 @@ function blocsTry(source) {
 /** Retire commentaires de ligne et de bloc avant un balayage de code. */
 function sansCommentaires(texte) {
   return texte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+/**
+ * Le même service pour une page : commentaires HTML ET commentaires CSS.
+ *
+ * ⚠ IL EXISTE PARCE QU'UNE GARDE S'EST FAIT AVOIR PAR SON PROPRE COMMENTAIRE.
+ * Le test des marges système cherchait `viewport-fit=cover` dans le HTML
+ * produit ; le paragraphe qui EXPLIQUE la règle contient les mêmes mots, si
+ * bien que retirer la balise `<meta>` laissait le test vert. Une garde qui lit
+ * la prose au lieu du code ne garde rien.
+ */
+function sansCommentairesHtml(texte) {
+  return texte.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
 test('pose — jamais de `try` autour de `poser`, dans tout src/ui/', () => {
@@ -998,22 +1024,48 @@ test('actions — les cases distinguées suivent la TABLE, pas un nom écrit dan
   assert.ok(/['\"]collecteur['\"]/.test("if (posableChoisi === 'collecteur') return;"));
 });
 
-test('actions — le compteur d\'emplacements a quitté l\'écran, pas le calcul', () => {
-  // ⚠ LA BARRE DE GAUCHE ET SON COMPTEUR SONT PARTIS (27/08), et la saturation
-  // se dit maintenant au toucher d'une vignette. L'information, elle, doit
-  // rester CALCULABLE — c'est `choisirPosable` qui la lit pour décider s'il
-  // faut prévenir le joueur.
+test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le calcul n\'a pas bougé', () => {
+  // ⚠ IL AVAIT ÉTÉ RETIRÉ AU LOT PRÉCÉDENT, ET C'ÉTAIT UNE ERREUR. La barre de
+  // gauche est partie le 27/08 en emportant le compteur, au motif que la
+  // saturation se dirait au toucher d'une vignette. Ethan a rapporté le 28/08
+  // « il n'y a plus la limite de bâtiment » : un plafond qu'on ne découvre
+  // qu'en le heurtant n'est pas un plafond, c'est une surprise.
+  //
+  // Le toast RESTE — il dit la même grandeur au moment où elle bloque un geste
+  // — et le compteur revient dire ce dont on dispose. Les deux, pas l'un ou
+  // l'autre.
   const neuve = creerEtat(11);
   const { poses, ouverts } = resumeDeLaBase(neuve).emplacements;
   assert.equal(poses, 1, 'une base neuve porte son seul Chantier');
   assert.equal(ouverts, emplacementsDuNiveau(1));
   assert.ok(ouverts > poses, 'une base neuve doit avoir un emplacement libre');
 
-  // Et l'écran lit bien cette grandeur-là pour prévenir de la saturation.
+  // Et l'écran lit bien cette grandeur-là — pour prévenir de la saturation au
+  // toucher d'une vignette, ET pour l'afficher en permanence.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
   assert.ok(/poses\s*>=\s*ouverts/.test(ecran),
     'l\'écran ne compare plus les emplacements posés aux emplacements ouverts');
-  assert.ok(/toast\s*\(/.test(ecran), 'l\'écran n\'a plus de toast pour le dire');
+  // ⚠ ET C'EST UNE LIGNE DE MODE, PAS UN TOAST — corrigé à la relecture du
+  // 28/08. La saturation dure exactement aussi longtemps que le mode de pose ;
+  // un toast s'effaçait au bout de quatre secondes et laissait reparaître
+  // « touchez une case libre » alors qu'il n'y en a aucune.
+  assert.match(ecran, /ligneDeMode\(poses >= ouverts/,
+    'la saturation n\'est plus dite par une ligne qui dure');
+  assert.ok(/emplacementsPoses\.textContent\s*=/.test(ecran)
+    && /emplacementsOuverts\.textContent\s*=/.test(ecran),
+    'le compteur d\'emplacements n\'est plus écrit à l\'écran');
+  assert.ok(/'ressource emplacements'/.test(ecran),
+    'le compteur n\'est plus rangé avec les ressources');
+  // La feuille le peint : une classe sans règle serait un compteur invisible,
+  // qui est exactement le défaut que la garde des classes vient d'attraper.
+  // ⚠ LA BORNE N'EST PAS DÉCORATIVE : sans elle, renommer la règle en
+  // `.ressource.emplacementsX` laissait le test vert, puisque le motif se
+  // contentait du préfixe. Mesuré par falsification le 28/08.
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+  assert.match(feuille, /\.ressource\.emplacements(?![A-Za-z0-9_-])/,
+    'le compteur d\'emplacements n\'a aucun style');
+  assert.doesNotMatch('.ressource.emplacementsX { }',
+    /\.ressource\.emplacements(?![A-Za-z0-9_-])/);
 
   // Falsifiable : le montage doit voir une base qui SATURE, sinon la
   // comparaison ne prouve rien. On remplit jusqu'au plafond du niveau 1.
@@ -1022,4 +1074,383 @@ test('actions — le compteur d\'emplacements a quitté l\'écran, pas le calcul
   poser(pleine, 'collecteur', champ.rangee, champ.colonne);
   const apres = resumeDeLaBase(pleine).emplacements;
   assert.equal(apres.poses, apres.ouverts, 'la base devrait être pleine après une pose');
+});
+
+// ---------------------------------------------------------------------------
+// Lot PANNEAU-ET-MARGES — l'essai appareil du 28/08
+// ---------------------------------------------------------------------------
+
+test('marges — les barres système d\'Android ne mordent plus sur l\'écran', () => {
+  // ⚠ LE JEU ÉTAIT INJOUABLE SUR APPAREIL, et la cause était une moitié de
+  // mécanisme. `viewport-fit=cover` demande explicitement à dessiner sous les
+  // barres système ; il était posé depuis le premier jour, et aucun
+  // `env(safe-area-inset-*)` ne rendait la place. L'enveloppe vise le SDK 35,
+  // où l'affichage bord à bord est imposé : la rangée d'onglets passait donc
+  // sous l'horloge et la palette sous les trois boutons de navigation.
+  // ⚠ ON LIT LE CODE, PAS LA PROSE. La première version de ce test cherchait
+  // `viewport-fit=cover` dans le HTML brut : le paragraphe qui explique la
+  // règle contient les mêmes mots, et retirer la balise `<meta>` laissait donc
+  // le test VERT. La falsification l'a débusqué. Commentaires ôtés, la garde
+  // ne peut plus se contenter de ce qu'on a écrit à son sujet.
+  const html = sansCommentairesHtml(readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8'));
+
+  assert.match(html, /<meta[^>]*name="viewport"[^>]*viewport-fit\s*=\s*cover/,
+    'la balise viewport ne demande plus le bord à bord');
+  // Et les marges sont RENDUES, c'est-à-dire écrites dans une déclaration de
+  // remplissage — pas seulement citées quelque part.
+  for (const cote of ['top', 'bottom', 'left', 'right']) {
+    assert.match(html, new RegExp(`padding-${cote}:\\s*env\\(safe-area-inset-${cote}`),
+      `le HTML ne rend pas la marge système ${cote}`);
+  }
+
+  // ⚠ LES DEUX VONT ENSEMBLE, ET C'EST TOUT LE PIÈGE. `viewport-fit=cover` seul
+  // est exactement le défaut qu'on répare ; les `env()` seuls seraient inertes,
+  // car sans lui les quatre valent zéro. Le test l'écrit pour qu'on ne puisse
+  // pas retirer l'un en croyant garder l'autre.
+  // Falsifiable : les motifs attrapent bien ce qu'ils cherchent, et rien
+  // d'autre. Sans ça, un test qui passe ne prouverait que sa propre existence.
+  assert.doesNotMatch('<meta name="viewport" content="width=device-width">',
+    /<meta[^>]*name="viewport"[^>]*viewport-fit\s*=\s*cover/);
+  assert.doesNotMatch('padding-top: 0px;', /padding-top:\s*env\(safe-area-inset-top/);
+  // Et le décommenteur fait bien son travail : une prose qui cite la règle ne
+  // la satisfait plus.
+  assert.equal(
+    sansCommentairesHtml('<!-- viewport-fit=cover expliqué ici --><p>x</p>').includes('viewport-fit'),
+    false,
+  );
+  assert.equal(sansCommentairesHtml('/* env(safe-area-inset-top) */a{}').includes('safe-area'), false);
+});
+
+test('écran — toute classe que l\'écran bascule existe dans la feuille de style', () => {
+  // ⚠ CETTE GARDE EXISTE À CAUSE D'UN DÉFAUT LIVRÉ. Le lot ÉCRAN-ACTIONS posait
+  // `classList.toggle('arme', …)` sur les trois boutons — le JavaScript était
+  // juste — et aucune règle CSS ne peignait `arme` : armer une action ne
+  // changeait STRICTEMENT rien à l'écran, et le modèle « armer puis toucher »
+  // était donc invisible. Ethan l'a relevé sur appareil le 28/08.
+  //
+  // Aucun test ne pouvait le voir : une classe sans règle n'est pas du JS faux,
+  // c'est du CSS absent, et le dépôt n'a pas de navigateur. Ce qu'on PEUT faire
+  // sans navigateur, c'est confronter les deux sources — les classes que le
+  // code bascule, et les sélecteurs que la feuille déclare.
+  // Décommentée, pour la même raison que le test des marges : un commentaire
+  // qui NOMME une classe ne la peint pas.
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+
+  // Seuls les LITTÉRAUX sont extraits : `classList.add(champ.ressource)` passe
+  // par une variable, et la feuille ne peut pas être confrontée à ce qu'on ne
+  // connaît qu'à l'exécution.
+  const MOTIF_CLASSE = /classList\.(?:toggle|add)\(\s*'([A-Za-zÀ-ÿ0-9_-]+)'/g;
+  const basculees = new Set();
+  for (const nom of readdirSync(join(RACINE, 'src', 'ui')).filter((n) => n.endsWith('.js'))) {
+    const code = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', nom), 'utf8'));
+    for (const m of code.matchAll(MOTIF_CLASSE)) basculees.add(m[1]);
+  }
+  assert.ok(basculees.size >= 8,
+    `seulement ${basculees.size} classes basculées : l'extraction ne fonctionne pas`);
+  assert.ok(basculees.has('arme'), 'la classe du défaut d\'origine n\'est plus basculée');
+
+  for (const classe of basculees) {
+    assert.ok(new RegExp(`\\.${classe}(?![a-zA-Z0-9_-])`).test(feuille),
+      `la classe « ${classe} » est basculée par le code et n'a aucune règle dans la feuille`);
+  }
+
+  // Falsifiable, dans les deux sens : le motif d'extraction attrape un appât, et
+  // le motif de sélecteur refuse une classe absente sans se laisser abuser par
+  // un nom qui la contient.
+  const appat = "bouton.classList.toggle('sansAucuneRegle', vrai);";
+  assert.deepEqual([...appat.matchAll(MOTIF_CLASSE)].map((m) => m[1]), ['sansAucuneRegle']);
+  assert.ok(!new RegExp('\\.absente(?![a-zA-Z0-9_-])').test(feuille));
+  assert.ok(!new RegExp('\\.arm(?![a-zA-Z0-9_-])').test('.arme { color: #F5F3E8; }'),
+    'un préfixe de classe est accepté à tort');
+});
+
+test('avis — trois registres, une seule ligne, et la priorité est écrite', () => {
+  // ⚠ ILS ÉCRIVAIENT AU MÊME ENDROIT SANS SE CONNAÎTRE. Avant ce lot, `armer()`
+  // posait `avis('')` : armer une action effaçait donc au passage une alerte de
+  // sauvegarde que personne n'avait lue. Et le mode n'écrivait RIEN, ce qui
+  // était le défaut qu'Ethan a relevé.
+  assert.deepEqual(ligneAAfficher({}), { texte: '', ton: null });
+  assert.deepEqual(ligneAAfficher({ mode: 'M' }), { texte: 'M', ton: 'mode' });
+  assert.deepEqual(ligneAAfficher({ toast: 'T' }), { texte: 'T', ton: 'alerte' });
+  assert.deepEqual(ligneAAfficher({ session: 'S' }), { texte: 'S', ton: 'alerte' });
+
+  // ⚠ LE TOAST PASSE DEVANT LE MODE. « il manque 8 de quartz » répond au doigt
+  // qui vient de se poser ; « mode Améliorer » est un rappel qu'on peut relire
+  // quatre secondes plus tard. L'inverse ferait disparaître le seul message qui
+  // explique le refus.
+  assert.deepEqual(ligneAAfficher({ toast: 'T', mode: 'M' }), { texte: 'T', ton: 'alerte' });
+  // Et la session passe devant tout : elle décrit un état qui dure.
+  assert.deepEqual(ligneAAfficher({ session: 'S', toast: 'T', mode: 'M' }),
+    { texte: 'S', ton: 'alerte' });
+
+  // Les trois messages de mode existent, un par action, et ils nomment l'action.
+  assert.deepEqual(Object.keys(MESSAGES_MODE).sort(), Object.keys(ACTIONS).sort());
+  for (const [nom, texte] of Object.entries(MESSAGES_MODE)) {
+    assert.ok(texte.length > 20, `le mode ${nom} ne dit rien d'utile`);
+    assert.ok(texte.includes('Retouchez'), `le mode ${nom} ne dit pas comment en sortir`);
+  }
+  assert.ok(messageDePose('Collecteur').includes('Collecteur'));
+
+  // Et l'écran POSE bien ces lignes-là : la fonction pure ne prouve rien si
+  // personne ne l'appelle.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.ok(/ligneDeMode\([^;]*MESSAGES_MODE\[/.test(ecran),
+    'armer() n\'écrit pas la ligne de mode');
+  assert.ok(/ligneDeMode\([^;]*messageDePose\(/.test(ecran),
+    'choisir un posable n\'écrit pas la ligne de mode');
+  // ⚠ ET `avis('')` NE DOIT PLUS SERVIR À EFFACER UN MODE. Le registre de la
+  // session ne se vide que par la session.
+  assert.ok(!/armer\([\s\S]{0,400}?avis\(''\)/.test(ecran),
+    'armer() efface encore le registre de la session');
+});
+
+test('aperçu — le « si j\'améliorais » se calcule avec les MÊMES fonctions que le présent', () => {
+  // ⚠ C'EST LA RÈGLE QUI TIENT TOUT LE PANNEAU. La projection se fait en
+  // fabriquant la disposition CANDIDATE et en la soumettant aux fonctions du
+  // moteur — jamais par une formule de projection écrite dans l'écran, qui
+  // serait une seconde lecture des règles et divergerait au premier arbitrage.
+  //
+  // La preuve : l'« après » d'un bâtiment de niveau n doit être EXACTEMENT
+  // l'« avant » du même bâtiment déjà monté au niveau n+1.
+  const etat = creerEtat(12345);
+  moteurEtat.ameliorer(etat, 0);
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+
+  const avant = apercuDuBatiment(etat, 1);
+  // Le montage doit MESURER quelque chose : un collecteur qui ne produit rien
+  // rendrait toutes les égalités vraies sur du code cassé.
+  assert.ok(avant.propreMilli > 0, 'le collecteur du montage ne produit rien');
+  assert.ok(avant.propreViseMilli > avant.propreMilli, 'l\'amélioration n\'apporte rien');
+
+  moteurEtat.ameliorer(etat, 1);
+  const apres = apercuDuBatiment(etat, 1);
+  assert.equal(apres.niveau, avant.niveauVise);
+  assert.equal(apres.propreMilli, avant.propreViseMilli);
+  assert.deepEqual(
+    apres.production.map((r) => [r.cle, r.avantMilli]),
+    avant.production.map((r) => [r.cle, r.apresMilli]),
+    'la production projetée n\'est pas celle qu\'on obtient',
+  );
+  assert.deepEqual(
+    apres.capacites.map((r) => [r.cle, r.avantMilli]),
+    avant.capacites.map((r) => [r.cle, r.apresMilli]),
+    'la capacité projetée n\'est pas celle qu\'on obtient',
+  );
+});
+
+test('aperçu — au plafond, tout le volet « après » vaut null, il ne vaut pas zéro', () => {
+  // `coutDeMontee` et `capaciteDuNiveau` LÈVENT au-delà du plafond. Rendre des
+  // zéros ferait afficher « 0 » là où il faut lire « il n'y a pas de niveau
+  // suivant » — et un « améliorer pour 0 » se lirait comme gratuit.
+  const etat = creerEtat(3);
+  etat.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  const apercu = apercuDuBatiment(etat, 0);
+  assert.equal(apercu.auPlafond, true);
+  assert.equal(apercu.niveauVise, null);
+  assert.equal(apercu.cout, null);
+  for (const r of apercu.capacites) assert.equal(r.apresMilli, null);
+  assert.equal(lignesDuPanneau(apercu).bouton.libelle, 'Niveau maximum');
+  assert.equal(lignesDuPanneau(apercu).bouton.possible, false);
+
+  // Falsifiable : un niveau sous le plafond, lui, porte bien un après.
+  const dessous = creerEtat(3);
+  dessous.disposition[0].niveau = GEOGRAPHIE.niveauPlafond - 1;
+  assert.equal(apercuDuBatiment(dessous, 0).auPlafond, false);
+  assert.notEqual(apercuDuBatiment(dessous, 0).cout, null);
+});
+
+test('panneau — sur une base neuve, il dit ce qui débloque la partie', () => {
+  // ⚠ C'EST LE POINT DE TOUT LE LOT. Une base neuve a UN emplacement libre et
+  // pour tout stockage la poche du Chantier — 50 unités. Un Collecteur la
+  // remplit en cinq minutes, puis plus rien ne bouge, jamais : Ethan a rapporté
+  // le 28/08 « aucun bâtiment ne produit de ressources » et « pas de calcul
+  // hors ligne », qui sont le même plafond vu deux fois.
+  //
+  // La sortie EXISTE — améliorer le Chantier ouvre deux emplacements de plus et
+  // l'amorce la paie — mais rien à l'écran ne la montrait. Le panneau la dit.
+  const neuve = creerEtat(4242);
+  const vue = lignesDuPanneau(apercuDuBatiment(neuve, 0));
+
+  const emplacements = vue.sections.find((s) => s.titre === 'Emplacements ouverts');
+  assert.ok(emplacements !== undefined, 'le panneau du Chantier ne dit pas les emplacements');
+  assert.equal(emplacements.lignes[0].avant, formaterEntier(emplacementsDuNiveau(1)));
+  assert.equal(emplacements.lignes[0].apres, formaterEntier(emplacementsDuNiveau(2)));
+
+  const stockage = vue.sections.find((s) => s.titre === 'Stockage de la base');
+  assert.ok(stockage !== undefined, 'le panneau ne dit pas le stockage');
+  assert.ok(stockage.lignes.every((l) => l.apres !== null));
+
+  // Et l'amorce paie l'amélioration : sans ça la sortie serait dite mais fermée.
+  assert.deepEqual(apercuDuBatiment(neuve, 0).problemes, [],
+    'l\'amorce ne couvre plus l\'amélioration du Chantier');
+  assert.equal(vue.bouton.possible, true);
+  assert.equal(vue.bouton.note, formaterCout(coutDeMontee('chantierDeConstruction', 2)));
+
+  // ⚠ FALSIFIABLE, ET C'EST ICI QUE ÇA COMPTE. Le montage doit voir la base
+  // BLOQUÉE avant de dire qu'elle se débloque : on mesure qu'un seul emplacement
+  // est libre, et qu'un stock saturé le reste après une nuit entière.
+  assert.equal(emplacementsDuNiveau(1) - neuve.disposition.length, 1,
+    'une base neuve n\'a plus exactement un emplacement libre');
+  const bloquee = creerEtat(4242);
+  const champ = bloquee.champs.cases.find((c) => c.ressource === 'quartz');
+  poser(bloquee, 'collecteur', champ.rangee, champ.colonne);
+  const plafond = capacitesMilli(bloquee.disposition).quartz;
+  assert.ok(debitsMilliParHeure(bloquee.disposition, bloquee.champs)[1].quartz > 0,
+    'le collecteur du montage ne produit rien : le blocage ne serait pas mesuré');
+  for (let i = 0; i < TICKS_PAR_HEURE; i++) tickJeu(bloquee);
+  assert.equal(bloquee.economie.ressources.quartz, plafond,
+    'le montage ne sature pas : il ne mesure pas le blocage');
+  const veille = bloquee.economie.ressources.quartz;
+  moteurEtat.rattraperJeu(bloquee, TICKS_PAR_HEURE * 12);
+  assert.equal(bloquee.economie.ressources.quartz, veille,
+    'douze heures hors ligne devraient ne rien ajouter à un stock saturé');
+
+  // Et le remède est dans le panneau : améliorer le Chantier LÈVE ce plafond.
+  const apres = bloquee.disposition.map(
+    (b, i) => (i === 0 ? { ...b, niveau: 2 } : b),
+  );
+  assert.ok(capacitesMilli(apres).quartz > plafond,
+    'améliorer le Chantier ne lève pas le plafond : le panneau annoncerait une sortie qui n\'en est pas une');
+});
+
+test('panneau — le coût annoncé est celui que le moteur débite, à l\'unité près', () => {
+  // ⚠ AUCUNE RÉPARTITION N'EST INVENTÉE. Le lot ÉCRAN-ACTIONS ne pouvait
+  // annoncer qu'un nombre nu, faute de savoir dans quelle ressource il se payait.
+  // `coutDeMontee` le dit, et c'est exactement ce qu'`ameliorer` prélève : le
+  // panneau lit la table au lieu de supposer.
+  const etat = creerEtat(77);
+  const cout = coutDeMontee('chantierDeConstruction', 2);
+  const note = lignesDuPanneau(apercuDuBatiment(etat, 0)).bouton.note;
+  assert.equal(note, formaterCout(cout));
+
+  const avant = { ...etat.economie.ressources };
+  moteurEtat.ameliorer(etat, 0);
+  for (const r of RESSOURCES) {
+    assert.equal((avant[r] - etat.economie.ressources[r]) / 1000, cout[r],
+      `le débit réel en ${r} ne suit pas le coût annoncé`);
+  }
+
+  // ⚠ SEULES LES RESSOURCES NON NULLES SONT NOMMÉES, et le fait mérite d'être
+  // mesuré : la scorie ne coûte RIEN, nulle part, à aucun palier. Écrire
+  // « 8 quartz · 0 scorie » enverrait le joueur chercher une dépense qui
+  // n'existe pas.
+  assert.equal(cout.scorie, 0);
+  assert.ok(!note.includes('scorie'), 'le panneau nomme une ressource qui ne coûte rien');
+  assert.equal(formaterCout({ quartz: 8, scorie: 0, electricite: 0 }), '8 quartz');
+  assert.equal(formaterCout({ quartz: 0, scorie: 0, electricite: 0 }), 'rien');
+  // Falsifiable : une ressource non nulle DOIT être nommée.
+  assert.equal(formaterCout({ quartz: 10, scorie: 0, electricite: 3 }), '10 quartz · 3 élec.');
+});
+
+test('panneau — la production détaillée explique le chiffre qu\'elle affiche', () => {
+  // Un collecteur à 312/h ne dit pas pourquoi il ne fait pas 240. Le détail —
+  // production propre, puis apport de chaque type de voisin — est ce qui
+  // enseigne le voisinage, et c'est la seule place du jeu qui le fasse.
+  const { disposition, champs } = baseDeLaMaquette();
+  const etat = { disposition, champs, economie: creerEtatEconomie(disposition) };
+  // Le collecteur de (13,2) touche une raffinerie ? Sinon le montage ne mesure
+  // rien : on prend celui qui a le plus de voisins qualifiants.
+  const index = disposition.findIndex((b, i) => b.id === 'collecteur'
+    && apercuDuBatiment(etat, i).voisins.some((v) => v.compte > 0));
+  assert.notEqual(index, -1, 'aucun collecteur voisiné : le montage ne mesure rien');
+
+  const apercu = apercuDuBatiment(etat, index);
+  const vue = lignesDuPanneau(apercu);
+  const production = vue.sections.find((s) => s.titre === 'Production par heure');
+  assert.ok(production !== undefined);
+
+  // Le total annoncé est la somme du propre et des apports — c'est ce que le
+  // détail promet, et c'est vérifiable sans écran.
+  const totalMilli = apercu.production.reduce((s, r) => s + r.avantMilli, 0);
+  const detailMilli = apercu.propreMilli
+    + apercu.voisins.reduce((s, v) => s + v.apportMilli, 0);
+  assert.equal(totalMilli, detailMilli, 'le détail ne rend pas le total');
+
+  // ⚠ L'APPORT UNITAIRE S'AFFICHE MÊME À ZÉRO VOISIN : c'est ce qui apprend au
+  // joueur ce qu'il gagnerait à en poser un. Il ne se déduit donc PAS d'une
+  // division de l'apport total, qui vaudrait NaN.
+  for (const v of apercu.voisins) {
+    assert.ok(v.apportUnitaireMilli > 0, `l'apport unitaire de ${v.type} est nul`);
+    assert.equal(v.apportMilli, v.apportUnitaireMilli * v.compte);
+  }
+  assert.ok(production.lignes.some((l) => l.mineur === true),
+    'le détail ne se distingue pas du total');
+
+  // ⚠ AUCUNE CLÉ DE `parVoisin` NE S'AFFICHE TELLE QUELLE. Elles sont soit un
+  // identifiant de bâtiment, soit `champDe<Ressource>` — et `champDeScorie` est
+  // LE SEUL bonus de terrain de toute la table (CLAUDE.md §6). Le lire
+  // « champDeScorie » à l'écran serait montrer au joueur un nom de champ de
+  // données.
+  assert.equal(libelleDuVoisin('champDeScorie'), 'champ de scorie');
+  assert.equal(libelleDuVoisin('collecteur'), BASE_BATIMENTS.collecteur.nom.joueur);
+  assert.throws(() => libelleDuVoisin('nExistePas'), /voisin/);
+  // Et aucun libellé rendu ne laisse passer une clé brute.
+  for (const v of apercu.voisins) {
+    assert.ok(!/^champDe/.test(v.libelle), `clé brute affichée : ${v.libelle}`);
+  }
+});
+
+test('panneau — ce qu\'une démolition rend se dit AVANT le geste', () => {
+  // ⚠ `data/base.js` LE DEMANDAIT NOIR SUR BLANC : « démolir un bâtiment de
+  // niveau 1 ne rend rien […] l'écran devra le dire avant le geste, sinon il se
+  // lira comme un bug ». C'est ici que ça se dit.
+  const etat = creerEtat(9);
+  moteurEtat.ameliorer(etat, 0);
+  const champ = etat.champs.cases[0];
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+
+  const neuf = lignesDuPanneau(apercuDuBatiment(etat, 1));
+  const demolition = neuf.sections.find((s) => s.titre === 'Démolition');
+  assert.ok(demolition !== undefined, 'le panneau ne dit pas ce que rend une démolition');
+  assert.equal(demolition.lignes[0].avant, 'rien',
+    'un bâtiment de niveau 1 n\'a rien coûté : il ne rend rien');
+
+  // Falsifiable : après une amélioration, il rend quelque chose. Sinon le
+  // « rien » ci-dessus ne prouverait pas qu'on lit le remboursement.
+  moteurEtat.ameliorer(etat, 1);
+  const monte = lignesDuPanneau(apercuDuBatiment(etat, 1));
+  assert.notEqual(monte.sections.find((s) => s.titre === 'Démolition').lignes[0].avant, 'rien');
+  assert.equal(monte.sections.find((s) => s.titre === 'Démolition').lignes[0].avant,
+    formaterCout(remboursementDuNiveau('collecteur', 2)));
+
+  // Et le Chantier dit qu'il ne se démolit pas, avec le message du MOTEUR.
+  const chantier = lignesDuPanneau(apercuDuBatiment(etat, 0));
+  const ligne = chantier.sections.find((s) => s.titre === 'Démolition').lignes[0];
+  assert.equal(ligne.libelle, moteurEtat.problemesDeLaDemolition(etat, 0)[0].message);
+});
+
+test('écran — un stock saturé le DIT, il ne le laisse pas deviner à la couleur', () => {
+  // ⚠ MESURÉ, PAS SUPPOSÉ. Une base neuve avec son seul Collecteur sature en
+  // cinq minutes et ne bouge plus jamais. La seule marque était un chiffre de
+  // huit pixels qui virait au rouge, et deux rapports d'Ethan disent que ça n'a
+  // pas suffi.
+  const etat = creerEtat(4242);
+  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  const debut = resumeDeLaBase(etat).ressources.find((r) => r.cle === 'quartz');
+  assert.ok(debut.stockMilli < debut.capaciteMilli,
+    'le montage part déjà saturé : il ne mesurerait rien');
+  assert.ok(debut.debitMilli > 0, 'le montage ne produit rien : il ne saturerait jamais');
+
+  for (let i = 0; i < TICKS_PAR_HEURE; i++) tickJeu(etat);
+  const fin = resumeDeLaBase(etat).ressources.find((r) => r.cle === 'quartz');
+  assert.equal(fin.stockMilli, fin.capaciteMilli, 'le montage ne sature pas');
+
+  // L'écran écrit le mot à ce moment-là, et il le prend dans la constante.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  // ⚠ ON CHERCHE L'USAGE, PAS LA DÉCLARATION. Un simple `/MENTION_SATURE/` sur
+  // le fichier restait vert quand on retirait le mot de l'affichage : la
+  // constante est exportée en tête, et sa propre définition satisfaisait la
+  // garde. Mesuré par falsification le 28/08 — c'est la deuxième garde du lot
+  // qui se contentait d'une mention d'elle-même.
+  assert.match(ecran, /textContent\s*=[^;]*MENTION_SATURE/,
+    'l\'écran n\'écrit plus le mot dans le bandeau');
+  assert.ok(/stockMilli\s*>=\s*r\.capaciteMilli/.test(ecran),
+    'l\'écran ne compare plus le stock à sa capacité');
+  assert.ok(MENTION_SATURE.length > 0);
+  // Et la feuille peint aussi la capacité, pas seulement le nombre : c'est la
+  // capacité qui porte le mot.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  assert.ok(/\.capacite\.sature/.test(feuille), 'la capacité saturée n\'a pas de style');
 });

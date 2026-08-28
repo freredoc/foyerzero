@@ -1,13 +1,12 @@
-// L'écran Chantier — ce que le joueur voit de sa base.
+// L'écran Chantier — ce que le joueur voit de sa base, et tout ce qu'il y fait.
 //
-// EN LECTURE, et c'est un arbitrage, pas une timidité. Le joueur regarde sa
-// base, son terrain, ses stocks qui montent et ses niveaux ; il ne pose rien,
-// n'améliore rien, ne démonte rien. La couche d'action n'existe pas dans
-// `sim/` — elle attend un arbitrage d'Ethan sur la part de scorie d'un coût de
-// construction — et des boutons qui ne peuvent rien faire seraient pires
-// montrés vifs que montrés inertes. Ils sont donc PRÉSENTS et DÉSACTIVÉS : la
-// place qu'ils prendront est déjà tenue, et rien ne ment sur ce qu'on peut
-// faire aujourd'hui.
+// EN LECTURE ET EN ÉCRITURE. Le paragraphe qui tenait ici jusqu'au 28/08 disait
+// l'inverse — « il ne pose rien, n'améliore rien, ne démonte rien », « les
+// boutons sont PRÉSENTS et DÉSACTIVÉS » — et il était faux depuis deux lots :
+// la pose est branchée depuis POSE-À-L'ÉCRAN, les trois actions depuis
+// ÉCRAN-ACTIONS, et aucun bouton n'est désactivé (un test l'interdit même).
+// Un commentaire qui décrit un fichier qu'on a cessé d'écrire est pire qu'un
+// commentaire absent : on le croit.
 //
 // ⚠ CE FICHIER TOUCHE AU DOM, et il est le deuxième du dépôt dans ce cas après
 // le banc d'essai. La règle n'a pas changé : le DOM reste confiné à `src/ui/`,
@@ -25,11 +24,13 @@
 // `foyer-zero-ui.html`, qui est une maquette et qui grave ses chiffres.
 
 import { GRILLE } from '../data/combat.js';
+import { GEOGRAPHIE } from '../data/sites.js';
 import {
-  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, emplacementsDuNiveau, estDansLaBase,
+  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
+  emplacementsDuNiveau, estDansLaBase, remboursementDuNiveau,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
-import { productionParRessource } from '../sim/disposition.js';
+import { debitDuBatiment, productionParRessource, voisinsQualifiants } from '../sim/disposition.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
@@ -399,6 +400,373 @@ export function detailDuBatiment(etat, index) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Ce qui s'écrit sur la ligne d'avis — trois registres, une seule ligne
+// ---------------------------------------------------------------------------
+//
+// Le bandeau `#chantier-avis` porte maintenant TROIS sortes de messages, et ils
+// ne vivent pas au même rythme :
+//
+//   `session` — sauvegarde impossible, sauvegarde illisible. Décrit un état qui
+//               dure ; ne s'efface jamais tout seul.
+//   `toast`   — la réponse à un geste : un refus de pose, un manque de
+//               ressources. Vaut quatre secondes, puis disparaît.
+//   `mode`    — « vous êtes en mode Démolir ». Décrit ce que le prochain
+//               toucher va faire, et vit exactement aussi longtemps que le
+//               mode.
+//
+// ⚠ LES TROIS ÉCRIVAIENT AU MÊME ENDROIT SANS SE CONNAÎTRE, ET C'EST LE DÉFAUT
+// QU'ON RÉPARE. Avant ce lot, armer une action n'écrivait RIEN — le mode
+// n'existait pas comme message — et `avis('')` posé par `armer()` effaçait au
+// passage une alerte de session que personne n'avait lue. Un registre unique
+// avec une priorité écrite vaut mieux que trois appelants qui s'écrasent.
+//
+// ⚠ LE TOAST PASSE DEVANT LE MODE, ET NON L'INVERSE. « il manque 14 de quartz »
+// répond au doigt qui vient de se poser ; « mode Améliorer » est un rappel de
+// contexte que le joueur peut relire quatre secondes plus tard. Faire gagner le
+// mode ferait disparaître le seul message qui explique le refus.
+
+/**
+ * Ce que la ligne d'avis doit montrer, et de quel ton, selon les trois
+ * registres. Fonction PURE : c'est elle qui porte la règle de priorité, et
+ * c'est elle qu'un test peut interroger sans DOM.
+ *
+ * @param {{session?: string, toast?: string, mode?: string}} registres
+ * @returns {{texte: string, ton: 'alerte'|'mode'|null}}
+ */
+export function ligneAAfficher({ session = '', toast = '', mode = '' } = {}) {
+  if (session !== '') return { texte: session, ton: 'alerte' };
+  if (toast !== '') return { texte: toast, ton: 'alerte' };
+  if (mode !== '') return { texte: mode, ton: 'mode' };
+  return { texte: '', ton: null };
+}
+
+/**
+ * Ce que dit la ligne de mode pendant qu'une action est armée.
+ *
+ * ⚠ ELLES REMPLACENT UN TOAST QUI N'EXISTAIT PAS. Armer « Démolir » ne disait
+ * rien du tout : le joueur touchait un bouton, l'écran ne bougeait pas, et le
+ * bâtiment suivant qu'il touchait disparaissait. Ethan l'a relevé à l'essai du
+ * 28/08. Le mot reste tant que le mode dure — c'est la différence avec un
+ * toast, et c'est ce qui en fait un mode et non un accident.
+ */
+export const MESSAGES_MODE = {
+  ameliorer: 'Mode AMÉLIORER : touchez le bâtiment à améliorer. Retouchez le bouton pour annuler.',
+  demolir: 'Mode DÉMOLIR : touchez le bâtiment à démolir. Retouchez le bouton pour annuler.',
+  reparer: 'Mode RÉPARER : touchez le bâtiment à réparer. Retouchez le bouton pour annuler.',
+};
+
+/**
+ * Ce que dit la ligne de mode pendant qu'un bâtiment est choisi à la palette.
+ * @param {string} nom nom joueur du bâtiment
+ * @returns {string}
+ */
+export function messageDePose(nom) {
+  return `Mode POSE : touchez une case libre pour poser ${nom} (gratuit).`
+    + ' Retouchez la vignette pour annuler.';
+}
+
+/**
+ * Le mot qui accompagne une capacité atteinte.
+ *
+ * ⚠ IL EST NÉCESSAIRE, ET C'EST MESURÉ. Une base neuve n'a pour tout stockage
+ * que la poche du Chantier — 50 unités au niveau 1. Un Collecteur produit
+ * 240/h : le stock touche le plafond en cinq minutes, puis ne bouge plus
+ * JAMAIS. Ethan a rapporté le 28/08 « aucun bâtiment ne produit de
+ * ressources » et « pas de calcul hors ligne » : c'était la même chose vue deux
+ * fois, et le seul indice était un chiffre gris de huit pixels.
+ */
+export const MENTION_SATURE = 'saturé';
+
+// ---------------------------------------------------------------------------
+// Le panneau de détail — ce qu'un bâtiment fait, et ce qu'il ferait plus haut
+// ---------------------------------------------------------------------------
+
+/**
+ * Le nom lisible d'un type de voisin qualifiant.
+ *
+ * Les clés de `parVoisin` sont soit un identifiant de bâtiment, soit
+ * `champDe<Ressource>`. Aucune des deux ne s'affiche telle quelle.
+ *
+ * @param {string} type
+ * @returns {string}
+ */
+export function libelleDuVoisin(type) {
+  if (type.startsWith('champDe')) {
+    const ressource = type.slice('champDe'.length).toLowerCase();
+    const libelle = LIBELLES_RESSOURCE[ressource];
+    return `champ de ${libelle === undefined ? ressource : libelle.nom.toLowerCase()}`;
+  }
+  const def = BASE_BATIMENTS[type];
+  if (def === undefined) throw new Error(`chantier : voisin « ${type} » inconnu`);
+  return def.nom.joueur;
+}
+
+/**
+ * Tout ce que le panneau de détail dit d'un bâtiment : ce qu'il produit
+ * aujourd'hui, ce qu'il produirait un niveau plus haut, ce que ça coûte et ce
+ * qu'une démolition rendrait.
+ *
+ * ⚠ LE « SI J'AMÉLIORAIS » SE CALCULE AVEC LES MÊMES FONCTIONS QUE LE
+ * « AUJOURD'HUI », et c'est la règle qui tient tout ce module. On fabrique la
+ * disposition CANDIDATE — la même liste, ce bâtiment monté d'un niveau — et on
+ * la soumet à `debitDuBatiment` et à `capacitesMilli`. Écrire ici une formule
+ * de projection (« ×1,25 par niveau ») créerait une SECONDE lecture des règles,
+ * qui divergerait de `sim/disposition.js` au premier arbitrage — et qui aurait
+ * déjà tort aujourd'hui, puisque le voisinage et la poche du Chantier ne
+ * suivent pas la même pente.
+ *
+ * ⚠ LA CAPACITÉ ANNONCÉE EST CELLE DE LA BASE, PAS CELLE DU BÂTIMENT. C'est
+ * elle qui décide si un stock monte encore, et c'est elle que le joueur doit
+ * pouvoir comparer au « / 50 » du bandeau du haut. Une capacité propre au
+ * bâtiment se lirait comme un second plafond, alors qu'il n'y en a qu'un.
+ *
+ * ⚠ AU PLAFOND, TOUT LE VOLET « APRÈS » VAUT `null`. `coutDeMontee` LÈVE
+ * au-delà de `niveauPlafond` et `capaciteDuNiveau` aussi : rendre des zéros
+ * ferait afficher « 0 » là où il faut lire « il n'y a pas de niveau suivant ».
+ *
+ * @param {object} etat
+ * @param {number} index indice dans la disposition
+ * @returns {{
+ *   nom: string, famille: string, niveau: number, niveauVise: number|null,
+ *   auPlafond: boolean,
+ *   propreMilli: number, propreViseMilli: number|null,
+ *   voisins: Array<{type: string, libelle: string, compte: number, apportMilli: number}>,
+ *   production: Array<{cle: string, avantMilli: number, apresMilli: number|null}>,
+ *   capacites: Array<{cle: string, avantMilli: number, apresMilli: number|null}>,
+ *   emplacements: {avant: number, apres: number}|null,
+ *   cout: {quartz: number, scorie: number, electricite: number}|null,
+ *   problemes: Array<{code: string, message: string}>,
+ *   remboursement: {quartz: number, scorie: number, electricite: number},
+ *   problemesDemolition: Array<{code: string, message: string}>
+ * }}
+ */
+export function apercuDuBatiment(etat, index) {
+  const b = etat.disposition[index];
+  if (b === undefined) throw new RangeError(`chantier : indice ${index} hors de la disposition`);
+  const def = BASE_BATIMENTS[b.id];
+  const vise = b.niveau + 1;
+  const auPlafond = vise > GEOGRAPHIE.niveauPlafond;
+
+  // La disposition candidate : la même, ce bâtiment monté d'un niveau. Rien
+  // d'autre ne bouge — ni sa case, ni ses voisins, ni leurs niveaux.
+  const candidate = auPlafond ? null : etat.disposition.map(
+    (autre, i) => (i === index ? { ...autre, niveau: vise } : autre),
+  );
+
+  const avant = debitDuBatiment(etat.disposition, etat.champs, index);
+  const apres = candidate === null
+    ? null : debitDuBatiment(candidate, etat.champs, index);
+
+  const prodAvant = productionParRessource(etat.disposition, etat.champs, index);
+  const prodApres = candidate === null
+    ? null : productionParRessource(candidate, etat.champs, index);
+
+  // Les comptes de voisins se calculent UNE fois : les relire par type ferait
+  // reparcourir les huit cases autant de fois qu'il y a de types.
+  const comptes = voisinsQualifiants(etat.disposition, etat.champs, index);
+
+  const capsAvant = capacitesMilli(etat.disposition);
+  const capsApres = candidate === null ? null : capacitesMilli(candidate);
+
+  // Seules les ressources que ce bâtiment touche, aujourd'hui ou demain : les
+  // trois lignes systématiques rempliraient le panneau de tirets.
+  const production = RESSOURCES
+    .filter((cle) => (prodAvant[cle] ?? 0) !== 0 || (prodApres?.[cle] ?? 0) !== 0)
+    .map((cle) => ({
+      cle,
+      avantMilli: (prodAvant[cle] ?? 0) * 1000,
+      apresMilli: prodApres === null ? null : (prodApres[cle] ?? 0) * 1000,
+    }));
+
+  // Les capacités, elles, ne se filtrent que sur ce qui CHANGE ou ce qui n'est
+  // pas nul : une capacité qui ne bouge pas d'un niveau n'apprend rien.
+  const capacites = RESSOURCES
+    .filter((cle) => capsAvant[cle] !== 0 || (capsApres !== null && capsApres[cle] !== capsAvant[cle]))
+    .map((cle) => ({
+      cle,
+      avantMilli: capsAvant[cle],
+      apresMilli: capsApres === null ? null : capsApres[cle],
+    }));
+
+  return {
+    nom: def.nom.joueur,
+    famille: familleDuBatiment(b.id),
+    niveau: b.niveau,
+    niveauVise: auPlafond ? null : vise,
+    auPlafond,
+    propreMilli: avant.propre * 1000,
+    propreViseMilli: apres === null ? null : apres.propre * 1000,
+    // ⚠ L'APPORT UNITAIRE S'AFFICHE MÊME À ZÉRO VOISIN, et c'est le seul endroit
+    // du jeu qui enseigne le voisinage. « Raffinerie × 0 » ne dit rien ;
+    // « Raffinerie × 0, +72/h chacune » dit au joueur ce qu'il gagnerait à en
+    // poser une à côté. La valeur vient de `debitVoisinParHeure`, jamais d'une
+    // division de l'apport total — qui vaudrait NaN à zéro voisin.
+    voisins: Object.entries(avant.parVoisin)
+      .map(([type, apportMilli]) => ({
+        type,
+        libelle: libelleDuVoisin(type),
+        compte: comptes[type] ?? 0,
+        apportMilli: apportMilli * 1000,
+        apportUnitaireMilli: debitVoisinParHeure(b.id, type, b.niveau) * 1000,
+      })),
+    production,
+    capacites,
+    // Le Chantier est le seul à ouvrir des emplacements ; pour les dix autres
+    // la ligne n'aurait aucun sens et ne s'affiche pas.
+    emplacements: def.role === 'central'
+      ? {
+        avant: emplacementsDuNiveau(b.niveau),
+        apres: auPlafond ? null : emplacementsDuNiveau(vise),
+      }
+      : null,
+    cout: auPlafond ? null : coutDeMontee(b.id, vise),
+    problemes: problemesDeLAmelioration(etat, index),
+    // ⚠ CE QUE REND UNE DÉMOLITION SE DIT AVANT LE GESTE. `data/base.js` le
+    // demandait noir sur blanc : « démolir un bâtiment de niveau 1 ne rend
+    // rien […] l'écran devra le dire avant le geste, sinon il se lira comme un
+    // bug ». C'est ici que ça se dit.
+    remboursement: remboursementDuNiveau(b.id, b.niveau),
+    problemesDemolition: problemesDeLaDemolition(etat, index),
+  };
+}
+
+/**
+ * Un coût, en clair : « 8 quartz », « 440 quartz · 44 électricité ».
+ *
+ * ⚠ SEULES LES RESSOURCES NON NULLES SONT NOMMÉES. `coutDeMontee` rend
+ * toujours les trois, et deux d'entre elles valent zéro la plupart du temps —
+ * « 8 quartz · 0 scorie · 0 électricité » ferait chercher au joueur une
+ * dépense qui n'existe pas.
+ *
+ * ⚠ ET LA RÉPARTITION N'EST PAS INVENTÉE ICI. Le nombre et sa ressource
+ * viennent tous les deux de `coutDeMontee`, qui est exactement ce que
+ * `ameliorer` débite. C'est ce qui a changé depuis le lot ÉCRAN-ACTIONS, où la
+ * vignette ne pouvait annoncer qu'un nombre nu : le panneau lit la table, il ne
+ * suppose rien.
+ *
+ * @param {{quartz: number, scorie: number, electricite: number}} cout en unités
+ * @returns {string}
+ */
+export function formaterCout(cout) {
+  const morceaux = RESSOURCES
+    .filter((cle) => cout[cle] > 0)
+    .map((cle) => `${formaterEntier(cout[cle])} ${LIBELLES_RESSOURCE[cle].nom.toLowerCase()}`);
+  return morceaux.length === 0 ? 'rien' : morceaux.join(' · ');
+}
+
+/**
+ * Le contenu du panneau de détail, entièrement en chaînes prêtes à poser.
+ *
+ * ⚠ FONCTION PURE, ET C'EST TOUT L'INTÉRÊT. Le dépôt n'a ni jsdom ni
+ * navigateur : ce qui est calculé ici est asserté par `test/chantier.test.js`,
+ * et il ne reste au câblage DOM qu'à écrire des chaînes dans des éléments. Un
+ * panneau dont le contenu se composerait dans la boucle de rendu ne serait
+ * vérifiable que sur appareil, donc pas vérifiable.
+ *
+ * @param {ReturnType<typeof apercuDuBatiment>} apercu
+ * @returns {{
+ *   titre: string,
+ *   sections: Array<{titre: string, lignes: Array<{libelle: string, avant: string, apres: string|null, mineur?: boolean}>}>,
+ *   bouton: {libelle: string, note: string}
+ * }}
+ */
+export function lignesDuPanneau(apercu) {
+  const sections = [];
+
+  const production = apercu.production.map((r) => ({
+    libelle: LIBELLES_RESSOURCE[r.cle].nom,
+    avant: formaterDebit(r.avantMilli),
+    apres: r.apresMilli === null ? null : formaterDebit(r.apresMilli),
+  }));
+  // Le détail : ce que le bâtiment fait seul, puis ce que chaque type de voisin
+  // lui apporte. C'est la « production détaillée » — sans elle, un collecteur à
+  // 312/h ne dit pas pourquoi il ne fait pas 240.
+  // ⚠ UNE PRODUCTION PROPRE NULLE NE SE LIGNE PAS. La Raffinerie ne produit
+  // rien seule — tout lui vient de ses voisins — et « dont production propre :
+  // — » se lisait comme une panne au lieu de se lire comme une règle.
+  if (apercu.propreMilli !== 0) {
+    production.push({
+      libelle: 'dont production propre',
+      avant: formaterDebit(apercu.propreMilli),
+      apres: apercu.propreViseMilli === null ? null : formaterDebit(apercu.propreViseMilli),
+      mineur: true,
+    });
+  }
+  for (const v of apercu.voisins) {
+    production.push({
+      libelle: `dont ${v.libelle} × ${formaterEntier(v.compte)}`
+        + ` (${formaterDebit(v.apportUnitaireMilli)} chacun)`,
+      avant: formaterDebit(v.apportMilli),
+      apres: null,
+      mineur: true,
+    });
+  }
+  if (production.length > 0) sections.push({ titre: 'Production par heure', lignes: production });
+
+  if (apercu.capacites.length > 0) {
+    sections.push({
+      // ⚠ « DE LA BASE », ET LE MOT COMPTE. Il n'y a qu'un plafond par
+      // ressource, celui de la base entière : c'est lui qu'on lit en haut de
+      // l'écran, et c'est lui qui décide si un stock monte encore. Annoncer la
+      // capacité PROPRE du bâtiment ferait croire à un second plafond.
+      titre: 'Stockage de la base',
+      lignes: apercu.capacites.map((r) => ({
+        libelle: LIBELLES_RESSOURCE[r.cle].nom,
+        avant: formaterUnites(r.avantMilli),
+        apres: r.apresMilli === null ? null : formaterUnites(r.apresMilli),
+      })),
+    });
+  }
+
+  if (apercu.emplacements !== null) {
+    sections.push({
+      titre: 'Emplacements ouverts',
+      lignes: [{
+        libelle: 'Bâtiments posables',
+        avant: formaterEntier(apercu.emplacements.avant),
+        apres: apercu.emplacements.apres === null
+          ? null : formaterEntier(apercu.emplacements.apres),
+      }],
+    });
+  }
+
+  // ⚠ CE QUE REND UNE DÉMOLITION SE DIT AVANT LE GESTE. `data/base.js` le
+  // demandait : « démolir un bâtiment de niveau 1 ne rend rien […] l'écran
+  // devra le dire avant le geste, sinon il se lira comme un bug ».
+  sections.push({
+    titre: 'Démolition',
+    lignes: [{
+      libelle: apercu.problemesDemolition.length > 0
+        ? apercu.problemesDemolition.map((p) => p.message).join(' ; ')
+        : 'Rend',
+      avant: apercu.problemesDemolition.length > 0
+        ? '—' : formaterCout(apercu.remboursement),
+      apres: null,
+    }],
+  });
+
+  return {
+    titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
+    sections,
+    // ⚠ `possible` NE DÉSACTIVE RIEN. Il décide d'une teinte, pas d'un
+    // `disabled` : « un indice n'est pas une interdiction » (CLAUDE.md §4), et
+    // le refus chiffré du moteur — « il manque 8 de quartz » — en apprend plus
+    // au joueur qu'un bouton mort.
+    bouton: apercu.auPlafond
+      ? { libelle: 'Niveau maximum', note: '', possible: false }
+      : {
+        libelle: `Améliorer → niv. ${formaterEntier(apercu.niveauVise)}`,
+        // Le coût est dans le bouton : c'est ce qu'Ethan a demandé le 28/08 —
+        // « un bouton amélioration avec les coûts induits ».
+        note: apercu.problemes.length > 0
+          ? apercu.problemes.map((p) => p.message).join(' ; ')
+          : formaterCout(apercu.cout),
+        possible: apercu.problemes.length === 0,
+      },
+  };
+}
+
 /**
  * Les bâtiments que le joueur pourrait poser — ceux qui ne sont pas uniques, et
  * ceux qui le sont mais ne sont pas encore posés.
@@ -542,37 +910,70 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
    * sans se connaître finiraient par s'écraser l'un l'autre. Un seul
    * propriétaire, et la session passe par lui.
    */
-  function avis(texte) {
-    // Un message durable annule le toast en cours : il décrit un état, pas un
-    // geste, et il n'a pas à disparaître au bout de quatre secondes.
-    if (minuterieToast !== null) {
-      fenetre.clearTimeout(minuterieToast);
-      minuterieToast = null;
-    }
+  // ⚠ TROIS REGISTRES, UNE SEULE LIGNE. La priorité et la raison de chacun sont
+  // écrites au-dessus de `ligneAAfficher`, qui est pure et testée. Ici on ne
+  // fait que tenir l'état des trois et rendre le verdict.
+  const registres = { session: '', toast: '', mode: '' };
+
+  function rendreLigne() {
+    const { texte, ton } = ligneAAfficher(registres);
     const ligne = $('chantier-avis');
     ligne.textContent = texte;
     ligne.hidden = texte === '';
+    // Un mot de mode n'est pas une alerte : rien n'est cassé, on rappelle
+    // seulement ce que le prochain toucher va faire. Il porte donc le métal, et
+    // non le rouge des refus.
+    ligne.classList.toggle('mode', ton === 'mode');
+  }
+
+  /**
+   * Le registre de la SESSION — sauvegarde impossible, sauvegarde illisible.
+   *
+   * ⚠ IL N'EFFACE PLUS RIEN AU PASSAGE, ET C'EST UNE CORRECTION. Il écrivait
+   * directement dans l'élément, si bien qu'un `avis('')` posé par n'importe
+   * quel geste — armer une action, choisir un posable — faisait disparaître
+   * une alerte de sauvegarde que personne n'avait lue. Chaque registre ne
+   * touche plus que le sien.
+   */
+  function avis(texte) {
+    registres.session = texte;
+    rendreLigne();
   }
 
   /**
    * Un message qui répond à un geste, et qui s'efface tout seul.
    *
    * ⚠ IL NE S'EFFACE QUE S'IL EST ENCORE LE SIEN. Entre l'affichage et
-   * l'échéance, la session a pu écrire un message durable — sauvegarde
-   * impossible — et l'effacer serait faire disparaître une alerte que personne
-   * n'a lue.
+   * l'échéance, un autre refus a pu s'écrire ; effacer celui-là ferait
+   * disparaître un message que le joueur vient de recevoir.
    */
   function toast(texte) {
-    avis(texte);
+    if (minuterieToast !== null) {
+      fenetre.clearTimeout(minuterieToast);
+      minuterieToast = null;
+    }
+    registres.toast = texte;
+    rendreLigne();
     if (texte === '') return;
     minuterieToast = fenetre.setTimeout(() => {
       minuterieToast = null;
-      const ligne = $('chantier-avis');
-      if (ligne.textContent === texte) {
-        ligne.textContent = '';
-        ligne.hidden = true;
-      }
+      if (registres.toast !== texte) return;
+      registres.toast = '';
+      rendreLigne();
     }, DUREE_TOAST_MS);
+  }
+
+  /**
+   * Le registre du MODE — il vit exactement aussi longtemps que le mode.
+   *
+   * ⚠ IL N'EXISTAIT PAS, ET C'EST LE DÉFAUT QU'ETHAN A RELEVÉ LE 28/08. Armer
+   * « Démolir » ne disait rien : l'écran ne bougeait pas, et le bâtiment suivant
+   * qu'on touchait disparaissait. Le mode se dit maintenant en toutes lettres,
+   * et il le dit tant qu'il dure.
+   */
+  function ligneDeMode(texte) {
+    registres.mode = texte;
+    rendreLigne();
   }
 
   // --- la grille, construite une fois ---------------------------------------
@@ -634,6 +1035,36 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     bandeauRessources.appendChild(bloc);
     champsRessource.set(cleRessource, { stock, capacite, debit });
   }
+
+  // --- le compteur d'emplacements, remis le 28/08 -----------------------------
+  //
+  // ⚠ IL AVAIT ÉTÉ RETIRÉ AVEC LA BARRE DE GAUCHE (27/08), au motif que la
+  // saturation se dirait au toucher d'une vignette. Ethan l'a redemandé à
+  // l'essai du 28/08 — « il n'y a plus la limite de bâtiment » — et il a
+  // raison : un plafond qu'on ne découvre qu'en le heurtant n'est pas un
+  // plafond, c'est une surprise. Le toast RESTE, il ne le remplace pas ; les
+  // deux disent la même grandeur à deux moments différents.
+  //
+  // ⚠ IL SE RANGE AVEC LES RESSOURCES, PAS AILLEURS. Un emplacement se lit
+  // exactement comme un stock plafonné — « 1 / 2 » — et c'est là que le joueur
+  // regarde ce dont il dispose. Une quatrième barre pour un seul nombre
+  // coûterait la hauteur d'une rangée de grille.
+  const blocEmplacements = doc.createElement('div');
+  blocEmplacements.className = 'ressource emplacements';
+  const emplacementsPoses = doc.createElement('b');
+  const emplacementsOuverts = doc.createElement('span');
+  emplacementsOuverts.className = 'capacite';
+  const emplacementsNom = doc.createElement('span');
+  emplacementsNom.className = 'nom';
+  emplacementsNom.textContent = 'Emplac.';
+  const hautEmplacements = doc.createElement('div');
+  hautEmplacements.className = 'ligne';
+  hautEmplacements.append(emplacementsPoses, emplacementsOuverts);
+  const basEmplacements = doc.createElement('div');
+  basEmplacements.className = 'ligne';
+  basEmplacements.append(emplacementsNom);
+  blocEmplacements.append(hautEmplacements, basEmplacements);
+  bandeauRessources.appendChild(blocEmplacements);
 
   // --- les trois boutons de bande --------------------------------------------
   //
@@ -744,11 +1175,12 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     }
     posableChoisi = posableChoisi === id ? null : id;
     if (posableChoisi === null) {
-      avis('');
+      ligneDeMode('');
       peindrePalette(etatCourant);
       marquerCasesLegales();
       return;
     }
+
     // ⚠ LE JOUEUR DOIT COMPRENDRE AVANT DE TOUCHER UNE CASE. Sans emplacement
     // libre, toutes les cases sont illégales : le laisser en essayer une pour
     // qu'on lui dise non serait le faire travailler pour rien.
@@ -756,13 +1188,16 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     // Le bandeau d'emplacements a disparu avec la barre de gauche (arbitré le
     // 27/08), et c'était lui qui annonçait la base pleine. Le joueur doit
     // l'apprendre AVANT de chercher une case, pas en essayant.
+    // ⚠ LA SATURATION EST UNE LIGNE DE MODE, PAS UN TOAST — corrigé le 28/08 à
+    // la relecture. Elle décrit un état qui dure exactement aussi longtemps que
+    // le mode de pose : un toast s'effaçait au bout de quatre secondes et
+    // laissait reparaître « touchez une case libre » alors qu'il n'y en a
+    // aucune. Le message qui reste est celui qui est vrai.
     const { poses, ouverts } = resumeDeLaBase(etatCourant).emplacements;
-    if (poses >= ouverts) {
-      toast(`${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
-        + 'construction en ouvrira d\'autres.');
-    } else {
-      avis('');
-    }
+    ligneDeMode(poses >= ouverts
+      ? `${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
+        + 'construction en ouvrira d\'autres.'
+      : messageDePose(BASE_BATIMENTS[posableChoisi].nom.joueur));
     peindrePalette(etatCourant);
     marquerCasesLegales();
   }
@@ -798,6 +1233,7 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       $('chantier-selection-nom').textContent = '—';
       $('chantier-selection-detail').textContent = 'aucun bâtiment sélectionné';
       $('chantier-ameliorer-cible').textContent = '';
+      fermerPanneau();
       return;
     }
     const b = etatCourant.disposition[index];
@@ -806,6 +1242,9 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     $('chantier-selection-nom').textContent = detail.nom;
     $('chantier-selection-detail').textContent = detail.detail;
     $('chantier-ameliorer-cible').textContent = `vers niv. ${b.niveau + 1}`;
+    // Le panneau suit la sélection quand il est ouvert ; il ne s'ouvre pas de
+    // lui-même — voir `ouvrirPanneau`.
+    peindrePanneau();
     // ⚠ LES BOUTONS NE DÉPENDENT PLUS DE LA SÉLECTION. Le modèle est « armer
     // puis toucher » : c'est le bouton qu'on touche EN PREMIER, donc il doit
     // être vif avant qu'un bâtiment soit choisi. La sélection ne sert plus qu'à
@@ -839,7 +1278,10 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       peindrePalette(etatCourant);
       marquerCasesLegales();
     }
-    avis('');
+    // ⚠ ON N'EFFACE PLUS LA LIGNE, ON Y ÉCRIT. Un `avis('')` tenait ici, et il
+    // ne faisait pas que ne rien dire : il effaçait l'alerte de la session au
+    // passage. Le mode s'annonce, le toast en cours suit sa propre échéance.
+    ligneDeMode(actionArmee === null ? '' : MESSAGES_MODE[actionArmee]);
     marquerBoutonsAction();
   }
 
@@ -858,8 +1300,11 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
   function executerAction(index) {
     const nom = actionArmee;
     const action = ACTIONS[nom];
-    // Quoi qu'il arrive, le mode se désarme : réussite comme refus.
+    // Quoi qu'il arrive, le mode se désarme : réussite comme refus. Sa ligne
+    // tombe avec lui — elle décrivait ce que le prochain toucher ferait, et il
+    // vient d'avoir lieu.
     actionArmee = null;
+    ligneDeMode('');
     marquerBoutonsAction();
 
     if (action.problemes === undefined) {
@@ -899,6 +1344,7 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       // toast le gronderait pour rien.
       if (index === -1) {
         actionArmee = null;
+        ligneDeMode('');
         marquerBoutonsAction();
         return;
       }
@@ -910,13 +1356,133 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       tenterLaPose(rangee, colonne);
       return;
     }
-    selectionner(index === -1 ? null : index);
+    if (index === -1) {
+      selectionner(null);
+      return;
+    }
+    ouvrirPanneau(index);
   });
 
   for (const nom of Object.keys(ACTIONS)) {
     $(ACTIONS[nom].bouton).addEventListener('click', () => armer(nom));
   }
   marquerBoutonsAction();
+
+  // -------------------------------------------------------------------------
+  // Le panneau de détail — ce qu'un bâtiment fait, et ce qu'il ferait plus haut
+  // -------------------------------------------------------------------------
+  //
+  // ⚠ IL RÉPOND À UNE DEMANDE PRÉCISE D'ETHAN, le 28/08 : « quand on clique sur
+  // un bâtiment on doit ouvrir un onglet et voir sa production détaillée, sa
+  // production théorique en cas d'amélioration, un bouton amélioration avec les
+  // coûts induits ». Les trois y sont, et ils viennent tous du moteur.
+  //
+  // ⚠ IL S'OUVRE AU TOUCHER, PAS À LA SÉLECTION. `peindre()` sélectionne le
+  // Chantier d'office à la première image ; ouvrir sur une sélection ferait
+  // reparaître le panneau après chaque pose et après chaque amélioration, par-
+  // dessus la grille que le joueur regarde. Il s'ouvre quand on touche, il se
+  // ferme quand on touche à côté ou sur sa croix, et entre les deux il SUIT.
+  //
+  // ⚠ SON BOUTON AGIT DIRECTEMENT, SANS ARMER. « Armer puis toucher » existe
+  // parce que les boutons du bandeau contextuel n'ont pas de cible ; celui-ci
+  // en a une — le bâtiment dont le panneau parle — et lui demander de viser
+  // ensuite serait un geste pour rien.
+  const panneau = $('chantier-panneau');
+  let panneauOuvert = false;
+  // La dernière vue rendue, pour ne pas reconstruire quinze éléments dix fois
+  // par seconde. Le panneau doit quand même suivre le temps : la note du bouton
+  // passe de « il manque 8 de quartz » à « 8 quartz » quand le stock arrive, et
+  // c'est le moment le plus utile de tout l'écran.
+  let derniereVue = null;
+
+  function peindrePanneau() {
+    if (!panneauOuvert || selection === null || etatCourant === null) return;
+    const vue = lignesDuPanneau(apercuDuBatiment(etatCourant, selection));
+    const signature = JSON.stringify(vue);
+    if (signature === derniereVue) return;
+    derniereVue = signature;
+
+    $('chantier-panneau-titre').textContent = vue.titre;
+    const corps = $('chantier-panneau-corps');
+    corps.textContent = '';
+    for (const section of vue.sections) {
+      const bloc = doc.createElement('div');
+      bloc.className = 'section';
+      const titre = doc.createElement('h3');
+      titre.textContent = section.titre;
+      bloc.appendChild(titre);
+      for (const l of section.lignes) {
+        const ligne = doc.createElement('div');
+        ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
+        const quoi = doc.createElement('span');
+        quoi.className = 'quoi';
+        quoi.textContent = l.libelle;
+        const avant = doc.createElement('b');
+        avant.textContent = l.avant;
+        ligne.append(quoi, avant);
+        if (l.apres !== null) {
+          const fleche = doc.createElement('span');
+          fleche.className = 'fleche';
+          fleche.textContent = '→';
+          const apres = doc.createElement('b');
+          apres.className = 'apres';
+          apres.textContent = l.apres;
+          ligne.append(fleche, apres);
+        }
+        bloc.appendChild(ligne);
+      }
+      corps.appendChild(bloc);
+    }
+
+    const bouton = $('chantier-panneau-ameliorer');
+    bouton.textContent = '';
+    const libelle = doc.createElement('span');
+    libelle.textContent = vue.bouton.libelle;
+    const note = doc.createElement('em');
+    note.className = 'note';
+    note.textContent = vue.bouton.note;
+    bouton.append(libelle, note);
+    bouton.classList.toggle('impossible', !vue.bouton.possible);
+  }
+
+  function ouvrirPanneau(index) {
+    panneauOuvert = true;
+    panneau.hidden = false;
+    derniereVue = null;
+    selectionner(index);
+  }
+
+  function fermerPanneau() {
+    panneauOuvert = false;
+    panneau.hidden = true;
+    derniereVue = null;
+  }
+
+  // ⚠ L'ÉTAT INITIAL EST POSÉ ICI, PAS SEULEMENT DANS LE BALISAGE. Le `hidden`
+  // du HTML suffit aujourd'hui, mais il est la seule chose qui tienne le
+  // panneau fermé au premier affichage : `peindre()` sélectionne le Chantier
+  // d'office, donc `fermerPanneau()` n'est jamais appelé sur ce chemin. Un
+  // attribut oublié à la prochaine reprise du balisage ouvrirait le panneau
+  // au démarrage, par-dessus la grille, sans qu'aucun test le voie.
+  fermerPanneau();
+  $('chantier-panneau-fermer').addEventListener('click', fermerPanneau);
+
+  // ⚠ ON DEMANDE, PUIS ON AGIT — même règle que `tenterLaPose` et
+  // `executerAction`, et jamais de `try` autour d'`ameliorer`.
+  $('chantier-panneau-ameliorer').addEventListener('click', () => {
+    if (selection === null || etatCourant === null) return;
+    const problemes = problemesDeLAmelioration(etatCourant, selection);
+    if (problemes.length > 0) {
+      toast(messageDeRefus(problemes));
+      return;
+    }
+    ameliorer(etatCourant, selection);
+    // Une amélioration change les emplacements et les débits : elle s'écrit
+    // tout de suite, comme une pose.
+    if (apresPose !== undefined) apresPose(etatCourant);
+    peindre(etatCourant);
+    rafraichir(etatCourant);
+  });
 
   /**
    * Pose le bâtiment choisi, ou dit pourquoi c'est refusé.
@@ -947,7 +1513,7 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
     // l'abri de tout ce qui pourrait échouer dans le repeint. La session sait
     // comment écrire, l'écran sait seulement quand.
     if (apresPose !== undefined) apresPose(etatCourant);
-    avis('');
+    ligneDeMode('');
     // ⚠ LA PALETTE SE DÉSÉLECTIONNE, arbitré le 27/08. Poser deux bâtiments de
     // suite demande de rechoisir — c'est un geste de plus, contre le risque de
     // poser par inadvertance à chaque toucher suivant.
@@ -1041,22 +1607,32 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
 
     for (const r of resume.ressources) {
       const champs = champsRessource.get(r.cle);
+      const sature = r.stockMilli >= r.capaciteMilli;
       champs.stock.textContent = formaterUnites(r.stockMilli);
-      champs.capacite.textContent = `/ ${formaterUnites(r.capaciteMilli)}`;
-      champs.debit.textContent = formaterDebit(r.debitMilli);
       // ⚠ UN STOCK AU-DESSUS DU PLAFOND EST GELÉ, PAS AMPUTÉ (arbitré le
       // 26/08). Il faut donc que ça se VOIE, sinon le joueur croit à un bogue
       // de compteur : le nombre se marque « saturé » dès qu'il touche sa
       // capacité, et il ne descendra pas tout seul.
-      champs.stock.classList.toggle('sature', r.stockMilli >= r.capaciteMilli);
+      //
+      // ⚠ LA COULEUR NE SUFFISAIT PAS, ET C'EST MESURÉ. Une base neuve n'a que
+      // la poche du Chantier — 50 unités — et un Collecteur la remplit en cinq
+      // minutes : le compteur se fige, et le seul signe était un chiffre gris
+      // de huit pixels qui devenait rouge. Ethan a rapporté le 28/08 « aucun
+      // bâtiment ne produit de ressources » et « pas de calcul hors ligne » :
+      // c'était ce plafond, vu deux fois. Le mot s'écrit maintenant.
+      champs.capacite.textContent = sature
+        ? `/ ${formaterUnites(r.capaciteMilli)} ${MENTION_SATURE}`
+        : `/ ${formaterUnites(r.capaciteMilli)}`;
+      champs.debit.textContent = formaterDebit(r.debitMilli);
+      champs.stock.classList.toggle('sature', sature);
+      champs.capacite.classList.toggle('sature', sature);
     }
 
-    // ⚠ LE COMPTEUR D'EMPLACEMENTS A DISPARU AVEC LA BARRE DE GAUCHE (27/08).
-    // Ce qu'il disait n'est pas perdu : les emplacements ouverts restent
-    // marqués sur la grille par les pastilles de case libre, et la saturation
-    // se dit au toucher d'une vignette de la palette — au moment où elle compte,
-    // et non dans un coin que personne ne regarde. `resumeDeLaBase` continue de
-    // le calculer, et `choisirPosable` le lit.
+    const { poses, ouverts } = resume.emplacements;
+    emplacementsPoses.textContent = formaterEntier(poses);
+    emplacementsOuverts.textContent = `/ ${formaterEntier(ouverts)}`;
+    emplacementsPoses.classList.toggle('sature', poses >= ouverts);
+    emplacementsOuverts.classList.toggle('sature', poses >= ouverts);
 
     // Chaque bouton porte SON niveau. Celui de la défense reste « — » : l'état
     // ne porte pas de garnison, et en inventer une moyenne afficherait un
@@ -1071,6 +1647,7 @@ export function initialiserEcranChantier(doc, { apresPose } = {}) {
       const detail = detailDuBatiment(etat, selection);
       $('chantier-selection-detail').textContent = detail.detail;
     }
+    peindrePanneau();
   }
 
   return {
