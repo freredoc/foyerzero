@@ -16,7 +16,9 @@ import {
   ameliorer, problemesDeLAmelioration, demolir, problemesDeLaDemolition,
 } from '../src/sim/state.js';
 import { coutDeMontee, coutCumule, remboursementDuNiveau } from '../src/data/base.js';
-import { DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli } from '../src/sim/economie-base.js';
+import {
+  DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli, STOCK_DE_DEPART, creerEtatEconomie,
+} from '../src/sim/economie-base.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerRng, entier } from '../src/sim/rng.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
@@ -76,15 +78,28 @@ test('état — une partie neuve ouvre sur la base du joueur, à sa position', (
   assert.deepEqual(etat.disposition, [
     { id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5 },
   ]);
-  assert.deepEqual(etat.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+  // ⚠ L'AMORCE, arbitrée le 27/08 : 30 · 30 · 20. Elle est écrite en toutes
+  // lettres ici plutôt que relue depuis `STOCK_DE_DEPART` — un test qui relit
+  // la constante qu'il vérifie ne vérifie rien.
+  assert.deepEqual(etat.economie.ressources, { quartz: 30_000, scorie: 30_000, electricite: 20_000 });
+  assert.deepEqual(STOCK_DE_DEPART, { quartz: 30, scorie: 30, electricite: 20 });
+
+  // ⚠ ELLE TIENT SOUS LA POCHE DU CHANTIER, sinon elle naîtrait GELÉE : le
+  // moteur immobilise un excédent au lieu de le rabattre, et le joueur verrait
+  // un compteur bloqué dès la première image.
+  const plafond = capacitesMilli(etat.disposition);
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    assert.ok(etat.economie.ressources[r] < plafond[r], `l'amorce sature déjà en ${r}`);
+  }
   assert.equal(etat.champs.cases.length, 12);
 
   // ⚠ UNE BASE QUI N'A QUE SON CHANTIER NE PRODUIT RIEN, et c'est juste : ni
-  // collecteur, ni centrale. Après une heure pleine, les trois stocks sont
-  // encore à zéro. Un moteur qui produirait « un peu » de quelque chose ici
-  // serait faux, et personne ne le verrait sans cette assertion.
+  // collecteur, ni centrale. Après une heure pleine, les trois stocks valent
+  // encore l'amorce, à l'unité près. Un moteur qui produirait « un peu » de
+  // quelque chose ici serait faux, et personne ne le verrait sans cette
+  // assertion.
   for (let t = 0; t < TICKS_PAR_HEURE; t++) tickJeu(etat);
-  assert.deepEqual(etat.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+  assert.deepEqual(etat.economie.ressources, { quartz: 30_000, scorie: 30_000, electricite: 20_000 });
   assert.equal(etat.horloge.nbTicks, TICKS_PAR_HEURE);
 });
 
@@ -522,7 +537,10 @@ test('état — une horloge qui RECULE ne produit rien et ne lève pas', () => {
 
   const recule = charger(json, T0 - 3 * HEURE_MS);
   assert.equal(recule.horloge.nbTicks, 0, 'une durée négative ne doit avancer de rien');
-  assert.deepEqual(recule.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+  // ⚠ « RIEN PRODUIT » NE VEUT PLUS DIRE « ZÉRO » depuis l'amorce du 27/08 :
+  // le montage part de `creerEtat`, donc de 30 · 30 · 20. Ce qu'on vérifie est
+  // que le recul n'a RIEN CHANGÉ — comparer à l'état d'avant, pas à zéro.
+  assert.deepEqual(recule.economie.ressources, etat.economie.ressources);
 
   // Falsifiable : le même montage, en avançant, produit bien — donc le zéro
   // ci-dessus vient du recul et pas d'une base stérile.
@@ -577,7 +595,12 @@ test('état — migration 5 → 6 : une sauvegarde v5 ne donne AUCUNE absence', 
   const charge = charger(JSON.stringify(v5), T0 + 100 * HEURE_MS);
   assert.equal(charge.version, SAVE_VERSION);
   assert.equal(charge.horloge.nbTicks, 0, 'cent heures ont été fabriquées à partir de rien');
-  assert.deepEqual(charge.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+  // ⚠ ON COMPARE À L'ÉTAT D'AVANT, PAS À ZÉRO — et c'est le test qui a montré
+  // que l'amorce du 27/08 n'avait rien à faire dans `creerEtatEconomie` : une
+  // v5 qu'on monte en v6 repasse par elle, et le joueur aurait touché 30 · 30
+  // · 20 une seconde fois, à chaque montée de version. « Aucune absence »
+  // veut dire « rien n'a bougé », pas « les poches sont vides ».
+  assert.deepEqual(charge.economie.ressources, etat.economie.ressources);
 
   // Falsifiable : la MÊME sauvegarde en v6 aurait bien rattrapé les cent
   // heures. Sans ce contrôle, le zéro ci-dessus pourrait venir du montage.
@@ -819,4 +842,55 @@ test('état — le Chantier de construction ne se démolit pas', () => {
   // test passerait sur un module qui refuserait TOUTE démolition.
   assert.deepEqual(problemesDeLaDemolition(etat, 1), []);
   assert.doesNotThrow(() => demolir(etat, 1));
+});
+
+test('état — l\'amorce est SERVIE une fois, à la fondation, et jamais reservie', () => {
+  // ⚠ CE TEST EST NÉ D'UN DÉFAUT. L'amorce a d'abord été posée dans
+  // `creerEtatEconomie`. Huit tests sont tombés, dont deux sur les migrations :
+  // toute sauvegarde qu'on monte de version repasse par cette fonction, et le
+  // joueur aurait touché 30 · 30 · 20 à CHAQUE montée. Ce qui suit interdit le
+  // retour du défaut par les deux chemins qui pourraient le ramener.
+  const neuve = creerEtat(777);
+  assert.deepEqual(neuve.economie.ressources,
+    { quartz: 30_000, scorie: 30_000, electricite: 20_000 });
+
+  // 1. Une sauvegarde rechargée ne redote pas.
+  const rechargee = charger(serialiser(neuve, T0), T0);
+  assert.deepEqual(rechargee.economie.ressources, neuve.economie.ressources);
+
+  // 2. Une sauvegarde DÉPENSÉE puis rechargée garde ses poches vides.
+  const depensee = creerEtat(778);
+  for (const r of ['quartz', 'scorie', 'electricite']) depensee.economie.ressources[r] = 0;
+  const apres = charger(serialiser(depensee, T0), T0);
+  assert.deepEqual(apres.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+
+  // 3. `creerEtatEconomie`, appelée seule, rend une économie VIDE : c'est la
+  //    forme d'une économie, pas la dotation d'un joueur.
+  assert.deepEqual(creerEtatEconomie(neuve.disposition).ressources,
+    { quartz: 0, scorie: 0, electricite: 0 });
+
+  // Falsifiable : l'amorce doit être NON NULLE, sinon les trois contrôles
+  // ci-dessus passeraient sur un jeu qui ne dote personne.
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    assert.ok(STOCK_DE_DEPART[r] > 0, `amorce nulle en ${r}`);
+  }
+});
+
+test('état — l\'amorce paie de quoi démarrer, et c\'est vérifié sur les prix réels', () => {
+  // ⚠ CE QUE L'AMORCE DOIT PERMETTRE, arbitré le 27/08 : que le joueur ait une
+  // action payable dès la première image. Le vérifier sur les COÛTS RÉELS
+  // plutôt que sur les nombres 30 · 30 · 20 — si un prix montait, c'est ici
+  // que ça devrait se voir, pas dans une partie livrée injouable.
+  const etat = creerEtat(779);
+  const champ = etat.champs.cases[0];
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+
+  assert.deepEqual(problemesDeLAmelioration(etat, 1), [],
+    'l\'amorce ne paie même pas la première montée du collecteur');
+  ameliorer(etat, 1);
+  assert.equal(etat.disposition[1].niveau, 2);
+
+  // Et il lui reste de quoi faire autre chose : une amorce qui financerait
+  // EXACTEMENT une action laisserait le joueur bloqué juste après.
+  assert.ok(etat.economie.ressources.quartz > 0, 'l\'amorce est épuisée par une seule montée');
 });
