@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 
 import {
   vagueDAssaut, vaguesDAssaut, unitesDeLaPalette, vueDeLOffense,
-  SANS_COMMANDEMENT, messageEnMain,
+  SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
 } from '../src/ui/offense.js';
 import {
   creerEtat, poserEffectif, niveauDeCommandement,
@@ -337,4 +337,52 @@ test('offense — les règles de composition ne sont pas réécrites dans l\'éc
   // refusée est un fait de jeu qu'on montre ; une levée est un fait de
   // programme qu'on ne masque pas.
   assert.ok(!/try\s*\{[\s\S]*?poserEffectif/.test(source), 'un try entoure poserEffectif');
+});
+
+test('offense — une armée trop chère est SIGNALÉE, jamais amputée', () => {
+  // ⚠⚠ C'EST LA DÉCISION QUE LE BRIEF DEMANDAIT DE PRENDRE, ET ELLE EST CELLE
+  // DU DÉPÔT : `purger` ne s'applique JAMAIS toute seule. CLAUDE.md §4 —
+  // « quand le contexte bouge sous une composition déjà faite, on le SIGNALE
+  // dans le bilan et on propose de purger. Jamais d'amputation automatique. »
+  //
+  // Le cas arrive pour de bon : le budget BAISSE quand le Centre de
+  // commandement est démoli ou tombe au raid, sous une armée déjà posée.
+  const etat = baseAvecCommandement(50);
+  for (let colonne = 1; colonne <= 9; colonne += 1) {
+    poserEffectif(etat, 'armee', { id: 'enclume', vague: 1, colonne, niveau: 1 });
+  }
+  const riche = vueDeLOffense(etat);
+  assert.equal(riche.depasse, false, 'le montage dépasse déjà au niveau 50');
+  assert.equal(riche.avis, '');
+
+  // Le QG redescend au niveau 1 : le budget s'effondre sous l'armée posée.
+  const indice = etat.disposition.findIndex((b) => b.id === 'centreDeCommandement');
+  etat.disposition[indice].niveau = 1;
+  const pauvre = vueDeLOffense(etat);
+
+  // Falsifiable : le montage doit VRAIMENT dépasser, sinon il ne mesure rien.
+  assert.ok(pauvre.engages > pauvre.budget,
+    `${pauvre.engages} points pour ${pauvre.budget} : le montage ne dépasse pas`);
+  assert.equal(pauvre.depasse, true);
+  assert.equal(pauvre.avis, messageDeDepassement(pauvre.engages, pauvre.budget));
+  assert.match(pauvre.avis, /Rien n'est retiré tout seul/);
+
+  // ⚠ ET RIEN N'A ÉTÉ RETIRÉ. Les neuf unités sont toujours là, à leur place.
+  assert.equal(etat.armee.length, 9, 'des unités ont disparu toutes seules');
+  assert.equal(pauvre.vagues[0].filter((c) => c !== null).length, 9);
+});
+
+test('offense — aucun écran n\'appelle `purger` de lui-même', () => {
+  // La fonction existe dans les deux éditeurs depuis le lot 5, et elle doit
+  // rester à la main du joueur. Un appel automatique ferait disparaître sa
+  // composition sans qu'il sache laquelle est partie.
+  for (const nom of ['offense.js', 'chantier.js', 'session.js']) {
+    const source = readFileSync(join(RACINE, 'src', 'ui', nom), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!/\bpurger\s*\(/.test(source), `${nom} purge la composition tout seul`);
+  }
+  // Falsifiable : la fonction existe bien, sinon la garde ne garde rien.
+  const editeur = readFileSync(join(RACINE, 'src', 'ui', 'arsenal.js'), 'utf8');
+  assert.match(editeur, /export function purger\(/, 'purger a disparu de l\'Arsenal');
 });

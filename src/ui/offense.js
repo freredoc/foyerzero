@@ -85,6 +85,31 @@ export const SANS_COMMANDEMENT = 'Aucun Centre de commandement posé :'
   + ' il n\'y a pas encore de budget d\'armée. Posez-en un sur le Chantier.';
 
 /**
+ * Ce que l'écran dit quand l'armée coûte plus que le budget ne paie.
+ *
+ * ⚠⚠ ON SIGNALE, ON N'AMPUTE PAS — ET C'EST LA DÉCISION QUE LE BRIEF DEMANDAIT
+ * DE PRENDRE. `purger` existe dans les deux éditeurs depuis le lot 5 ; ce lot
+ * décide qu'elle ne s'applique JAMAIS toute seule. C'est CLAUDE.md §4 appliqué :
+ * « quand le contexte bouge sous une composition déjà faite — niveau descendu,
+ * obstacle apparu — on le SIGNALE dans le bilan et on propose de purger. Jamais
+ * d'amputation automatique. »
+ *
+ * Le cas arrive pour de bon : le budget BAISSE quand le Centre de commandement
+ * est démoli, ou tombe au raid, sous une armée déjà posée. Retirer d'office les
+ * unités qui dépassent ferait disparaître, sans un mot, ce que le joueur avait
+ * composé — et il ne saurait même pas laquelle est partie.
+ *
+ * @param {number} engages
+ * @param {number} budget
+ * @returns {string}
+ */
+export function messageDeDepassement(engages, budget) {
+  return `${formaterEntier(engages)} points engagés pour un budget de `
+    + `${formaterEntier(budget)} : retirez des unités, ou améliorez le Centre `
+    + 'de commandement. Rien n\'est retiré tout seul.';
+}
+
+/**
  * Ce que dit la ligne de mode quand une unité posée est « en main ».
  * @param {string} nom nom joueur de l'unité
  * @returns {string}
@@ -163,15 +188,30 @@ export function vueDeLOffense(etat) {
     };
   });
 
+  const engages = pointsEngages(etat, 'armee');
+  const budget = niveau === null ? null : budgetDuNiveau(niveau);
+  // ⚠ LE DÉPASSEMENT EST UN ÉTAT NORMAL, PAS UNE FAUTE. `verifierEtat` le laisse
+  // passer exprès — refuser le chargement rendrait la partie injouable pour une
+  // baisse de budget que le joueur n'a pas provoquée. Il se SIGNALE ici.
+  const depasse = budget !== null && engages > budget;
+
   return {
     niveau,
     niveauArmee: niveauDeLArmee(etat.armee),
-    engages: pointsEngages(etat, 'armee'),
-    budget: niveau === null ? null : budgetDuNiveau(niveau),
+    engages,
+    budget,
+    depasse,
     vagues,
     palette: unitesDeLaPalette(niveau),
-    avis: niveau === null ? SANS_COMMANDEMENT : '',
+    avis: avisDeLOffense(niveau, engages, budget, depasse),
   };
+}
+
+/** La phrase qui explique l'état du budget, ou rien s'il n'y a rien à dire. */
+function avisDeLOffense(niveau, engages, budget, depasse) {
+  if (niveau === null) return SANS_COMMANDEMENT;
+  if (depasse) return messageDeDepassement(engages, budget);
+  return '';
 }
 
 /**

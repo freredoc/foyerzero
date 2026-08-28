@@ -1364,6 +1364,18 @@ export function casesPosables(etat, id) {
 // la faute du bouton « Assaut » du lot ÉCRAN-CHANTIER, et elle ne se refait pas.
 // La composition d'assaut a son écran.
 
+// ⚠ LES DEUX GESTES DE LA GARNISON SONT NOMMÉS UNE FOIS, PUIS RÉFÉRENCÉS DEUX
+// FOIS. La table les emploie à deux endroits — le geste direct et l'action
+// armée — et les écrire deux fois aurait fait, dans le même objet, deux chemins
+// vers la même fonction. C'est petit, et c'est exactement la forme que prend une
+// divergence quand elle commence.
+const deplacerLaGarnison = (etat, index, rangee, colonne) => deplacerEffectif(
+  etat, 'garnison', index, { rangee, colonne },
+);
+const refusDuDeplacementEnGarnison = (etat, index, rangee, colonne) => (
+  problemesDuDeplacementDEffectif(etat, 'garnison', index, { rangee, colonne })
+);
+
 export const TERRAINS = {
   batiments: {
     bande: GRILLE.bandes.batiments,
@@ -1409,12 +1421,8 @@ export const TERRAINS = {
     poser: (etat, id, rangee, colonne) => poserEffectif(
       etat, 'garnison', { id, rangee, colonne, niveau: 1 },
     ),
-    problemesDuDeplacement: (etat, index, rangee, colonne) => problemesDuDeplacementDEffectif(
-      etat, 'garnison', index, { rangee, colonne },
-    ),
-    deplacer: (etat, index, rangee, colonne) => deplacerEffectif(
-      etat, 'garnison', index, { rangee, colonne },
-    ),
+    problemesDuDeplacement: refusDuDeplacementEnGarnison,
+    deplacer: deplacerLaGarnison,
     detail: (etat, index) => detailDeLaDefense(etat, index),
     // ⚠ DEUX DES QUATRE ACTIONS N'ONT PAS DE MOTEUR EN DÉFENSE, ET ELLES LE
     // DISENT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton
@@ -1434,15 +1442,7 @@ export const TERRAINS = {
         problemes: () => [],
         agir: (etat, index) => retirerEffectif(etat, 'garnison', index),
       },
-      deplacer: {
-        cible: true,
-        problemes: (etat, index, rangee, colonne) => problemesDuDeplacementDEffectif(
-          etat, 'garnison', index, { rangee, colonne },
-        ),
-        agir: (etat, index, rangee, colonne) => deplacerEffectif(
-          etat, 'garnison', index, { rangee, colonne },
-        ),
-      },
+      deplacer: { cible: true, problemes: refusDuDeplacementEnGarnison, agir: deplacerLaGarnison },
     },
     panneau: false,
   },

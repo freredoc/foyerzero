@@ -2326,6 +2326,24 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
     assert.equal(occurrences.length, 1, `${geste} est écrite ${occurrences.length} fois`);
   }
 
+  // ⚠⚠ COMPTER LES NOMS DE FONCTION NE SUFFIT PAS, ET LA FALSIFICATION L'A
+  // MONTRÉ. La première version de cette garde ne comptait que
+  // `function tenterLaPose(` : une copie déposée sous le nom
+  // `tenterLaPoseEnDefense` passait au travers, et la suite restait VERTE avec
+  // deux implémentations du même geste dans le fichier. Ce qu'il faut compter,
+  // ce sont les APPELS AU MOTEUR — une seconde implémentation qui pose vraiment
+  // doit bien appeler quelque chose. Chacun de ces points d'entrée n'a qu'UN
+  // site d'appel, et il est dans la table des terrains.
+  for (const appel of ['poserBatiment(', 'poserEffectif(', 'retirerEffectif(',
+    'deplacerEffectif(', 'problemesDeLaPoseDEffectif(', 'problemesDuDeplacementDEffectif(']) {
+    const n = source.split(appel).length - 1;
+    assert.equal(
+      n, 1,
+      `${appel} est appelé ${n} fois dans l'écran : la table des terrains doit être `
+        + 'le seul chemin vers le moteur',
+    );
+  }
+
   // Et le geste passe par la TABLE, jamais par un nom de terrain écrit à la
   // main : un cas particulier serait le premier à diverger.
   assert.match(source, /terrain\.poser\(/, 'la pose n\'appelle plus le terrain');

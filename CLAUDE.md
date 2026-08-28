@@ -25,8 +25,8 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
    savoir est un lot perdu.
 
 **Référence au 28/08/2026 (après le lot GARNISON-ET-ARMÉE), à confronter :**
-`npm test` → **396 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**179 733 octets**, 0 référence externe.
+`npm test` → **398 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**179 913 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -43,7 +43,7 @@ bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
 QUEUE-DE-COURBE à 153 505,
 MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans,
 POSE-ET-DÉPLACEMENT à 161 583, TUTORIEL à 167 308 en ouvrant l'onglet Mission,
-GARNISON-ET-ARMÉE à 179 733 en donnant un état à la garnison et à l'armée,
+GARNISON-ET-ARMÉE à 179 913 en donnant un état à la garnison et à l'armée,
 puis en branchant l'écran Offense et la bande Défense.
 La borne de T10 (200 000 octets) tient, avec 10 % de marge — elle se resserre
 lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
@@ -65,6 +65,15 @@ de **onze** au lot TUTORIEL : dix dans le nouveau `test/missions.test.js` — le
 dixième écrit APRÈS coup, quand la falsification a trouvé que l'écran
 recalculait la mission courante au lieu de la demander au moteur — et un dans
 `donnees.test.js`, né d'une CI rouge (voir §6, « les types de `package.json` »).
+et de **quarante-neuf** au lot GARNISON-ET-ARMÉE, le plus gros saut du projet :
+quinze dans le nouveau `test/couts-militaires.test.js` (l'arbitrage des coûts),
+dix-huit dans `state.test.js` et `niveau-de-base.test.js` (les deux forces, la
+migration, les deux niveaux), sept dans `offense.test.js` et neuf dans
+`chantier.test.js`. Quatre gardes de `chantier.test.js` ont CHANGÉ DE CIBLE sans
+s'assouplir — leurs littéraux sont passés dans des fonctions — et une cinquième
+a été resserrée : elle comparait deux `indexOf` sur tout le module, et une
+déclaration remontée l'a fait tomber sans qu'aucun geste ait changé.
+
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
@@ -164,7 +173,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 5 fic
 src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
-  offense.js            l'écran des quatre vagues — coquille, rien à composer
+  offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
@@ -176,6 +185,11 @@ src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
   ⤷ l'écran de la base est en LECTURE ET EN ÉCRITURE depuis le 27/08 : pose,
     amélioration, démolition, et depuis le 28/08 un panneau de détail. La ligne
     « en lecture » de son en-tête a été fausse pendant deux lots.
+  ⤷ ⚠ SES DEUX BANDES SONT ÉDITABLES depuis le lot GARNISON-ET-ARMÉE, et elles
+    partagent UN SEUL geste. La table `TERRAINS` porte la seule chose qui les
+    sépare — d'où viennent les pièces, quel roster les propose, quelles
+    fonctions du moteur on interroge. Un test compte les occurrences des
+    fonctions de geste et refuse tout cas particulier nommé à la main.
   ⤷ ⚠ LA PAGE A QUATRE ÉCRANS ET UN EN-TÊTE COMMUN depuis le 28/08. Les onglets,
     le bandeau des ressources, la bascule entre bases et la barre du bas vivent
     AU-DESSUS des écrans, dans `#jeu` : changer d'écran ne les fait plus
@@ -423,7 +437,8 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   Corollaire : le plafond d'emplacements du Chantier (40) mord toujours, il
   reste 32 cases qu'aucun niveau n'ouvrira.
 - **`sim/state.js` tourne sur `economie-base`** depuis le 26/08.
-  `SAVE_VERSION` vaut **6**. L'état porte `position` (où la base est sur la
+  `SAVE_VERSION` vaut **7** depuis le lot GARNISON-ET-ARMÉE. L'état porte
+  `position` (où la base est sur la
   carte AUJOURD'HUI), `fondation` (où elle a été POSÉE), `disposition`
   (bâtiments placés à la case) et `economie` (trois ressources).
   ⚠ **LE TERRAIN EST GELÉ À LA FONDATION.** Arbitré par Ethan le 27/08 : « une
@@ -770,6 +785,84 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   portent la courbe ÉCONOMIQUE — deux régimes, 1,259 puis 1,32. `facteurMilli`
   sert la première, `facteurEconomiqueMilli` la seconde. Un test asserte que la
   divergence est bien celle qu'on a voulue, et il tombera si on les réaligne.
+
+- ⚠⚠ **L'ÉTAT PORTE DEUX FORCES DEPUIS LE 28/08 : `garnison` ET `armee`.**
+  C'est ce qui débloquait d'un coup l'écran Offense, la bande Défense, les deux
+  compteurs du bandeau et le filtrage des palettes. Deux LISTES CREUSES, à la
+  même forme que `disposition` — un objet par pièce posée, rien pour une case
+  vide : `{ id, rangee|vague, colonne, niveau, degatsMilli }`.
+  ⚠ **`degatsMilli` ET NON `pvMilli`.** Une pièce intacte se sérialise à `0`, et
+  surtout : le jour où un PV de `data/combat.js` change, une valeur ABSOLUE
+  enregistrée peut dépasser le maximum et rendre la sauvegarde incohérente en
+  silence. Des dégâts se BORNENT à la lecture. Milli-PV parce que c'est l'unité
+  du moteur de combat.
+  ⚠ **UNE PIÈCE DÉTRUITE RESTE DANS SA CASE.** Arbitré par Ethan le 28/08 :
+  « les unités sont détruites mais pas perdues, doivent être réparées ». Elle
+  compte encore dans la moyenne de niveau ET dans les points engagés — la
+  décompter ferait de la destruction une façon de poser plus d'unités.
+  ⚠ **AUCUN TABLEAU PARALLÈLE.** Niveau et dégâts vivent DANS la pièce. C'est
+  exprès : le couplage `economie.residus` ↔ `disposition` est ce qui rend
+  `deplacer` délicat, et on ne l'a pas recréé.
+  ⚠ **LE NIVEAU EST PAR PIÈCE, MAIS RIEN NE PERMET D'EN POSER DEUX DIFFÉRENTS.**
+  Les éditeurs portent UN niveau pour toute la grille et le recopient. Le ranger
+  par pièce coûte zéro et évite une SECONDE migration le jour où la mécanique
+  sera arbitrée. Comment se choisit le niveau d'une pièce posée n'est PAS tranché.
+  ⚠⚠ **`verifierEtat` NE VÉRIFIE NI LE BUDGET NI L'APPARITION, ET C'EST VOULU.**
+  Une composition trop chère arrive pour de bon dès que le budget BAISSE — QG
+  démoli, QG tombé au raid — sous une armée déjà posée. La refuser au chargement
+  rendrait la partie injouable pour une faute que le joueur n'a pas commise,
+  exactement comme l'aurait fait `uniques-voisins`. On SIGNALE, le joueur purge.
+  ⚠⚠ **`purger` NE S'APPLIQUE JAMAIS TOUTE SEULE** — décidé à ce lot, et c'est
+  « rien ne se retire en silence » (§4) appliqué. Un test balaie `src/ui/` pour
+  qu'aucun écran ne l'appelle de lui-même. L'écran Offense affiche le
+  dépassement en toutes lettres, et dit que rien n'est retiré tout seul.
+  ⚠ **La migration 6 → 7 N'AJOUTE QUE DEUX LISTES VIDES.** Une sauvegarde v6 ne
+  porte aucune composition : il n'y a rien à convertir. C'est la migration la
+  plus sûre de la chaîne.
+
+- **`niveauDeCommandement` EST LE SEUL ENDROIT QUI LISE LE NIVEAU D'UN BUDGET.**
+  `POINTS_ARMEE` de `data/sites.js` nomme déjà le bâtiment de chaque côté —
+  Centre de commandement pour l'offense, QG de défense pour la défense — et le
+  budget comme le filtrage des palettes en découlent tous les deux.
+  ⚠ **IL REND `null`, PAS ZÉRO.** Les deux bâtiments sont `unique: true` et
+  aucun n'est dans la base neuve : tant qu'ils ne sont pas posés, il n'y a pas
+  de budget du tout, ce qui n'est pas un budget nul. « 0 / 0 » ferait croire à
+  un plafond atteint là où il n'y en a aucun.
+  ⚠ **« PAS DE BÂTIMENT, PAS DE BUDGET » N'EST PAS ARBITRÉ.** C'est le défaut
+  retenu, cohérent avec une base neuve qui ne porte qu'un Chantier. Il tient en
+  une ligne chez l'appelant, exprès : si Ethan tranche autrement, il n'y a qu'un
+  endroit à changer.
+
+- ⚠⚠ **LES COÛTS DE CONSTRUCTION DE LA DÉFENSE ET DE L'OFFENSE SONT ARBITRÉS
+  (28/08), et ils vivent dans `data/couts-militaires.js`.** Le niveau 1 est
+  gratuit des deux côtés — c'est `premierNiveauPayant`, pas une seconde
+  constante — et l'ancre du niveau 2 est donnée entité par entité. Au-delà, la
+  courbe est celle d'`ECONOMIE_NIVEAU`, la même que pour les bâtiments.
+  ⚠⚠ **LA MÊME UNITÉ NE COÛTE PAS LE MÊME PRIX EN DÉFENSE ET EN OFFENSE.**
+  Mesuré : cinq unités sur huit changent de prix selon le rôle (le Voltigeur
+  vaut 5 en assaut et 2 en garnison), trois coïncident. Il y a donc DEUX tables
+  d'ancres, jamais une seule indexée par unité — une table unique aurait paru
+  marcher sur trois cas et faussé les cinq autres en silence.
+  ⚠⚠ **LA DÉFENSE SE PAIE DANS DEUX RESSOURCES.** Les six ouvrages fixes — mur,
+  barbelés, barrière anti-char, tourelle mitrailleuse, canon anti-char, DCA — en
+  QUARTZ ; les trois artilleries et les huit unités de garnison en SCORIE. La
+  ressource est écrite LIGNE PAR LIGNE : aucune règle ne la résume sans mentir
+  sur au moins une entité. Le partage n'est pourtant pas arbitraire —
+  `data/combat.js` disait déjà que les trois artilleries sont des VÉHICULES et
+  non des structures — et un test asserte la corrélation sans l'exploiter.
+  ⚠ **`RESSOURCE_DE_COUT` A PERDU SA CLÉ `defense`, ET L'ABSENCE EST LE
+  MESSAGE.** Elle valait « scorie » depuis le 27/08, en anticipation et sans que
+  rien ne la lise ; l'arbitrage la falsifie pour six entités sur dix-sept. Un
+  test asserte son absence.
+  ⚠ **LA RAMPE DE COÛT A QUITTÉ `data/base.js` POUR `data/economie.js`**, à côté
+  de la courbe qu'elle applique. La recopier aurait fait deux implémentations du
+  même arrondi palier par palier, et la première divergence se serait lue comme
+  un déséquilibre de jeu. Ce qui change de famille en famille, c'est l'ANCRE.
+  ⚠ **L'ÉLECTRICITÉ EST LA MÊME RÈGLE QUE POUR LES BÂTIMENTS** — le quart, à
+  partir du niveau 3, par `COUT_ELECTRICITE`. C'est ce que dit
+  `RELEVE-TA-COURBES-2.md` §5 : « l'électricité vaut systématiquement le quart de
+  la monnaie principale ». Aucune fraction propre au militaire n'est arbitrée,
+  et c'est la seule lecture de ce lot qui va au-delà du message d'Ethan.
 
 ### Sur l'économie
 
@@ -1476,6 +1569,78 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **ET LA VIGNETTE GRISÉE RÉPOND QUAND ON LA TOUCHE.** « Un indice n'est pas
   une interdiction » (§4) : un bouton inerte n'apprend rien, un toast qui dit
   « il est unique, et il est déjà posé » apprend la règle.
+
+- ⚠⚠ **LES DEUX BANDES DE LA GRILLE SONT ÉDITABLES DEPUIS LE 28/08, ET ELLES
+  PARTAGENT UN SEUL GESTE.** La bande Défense était en lecture seule faute
+  d'état à écrire ; `etat.garnison` existe. Elle se compose à la palette, en
+  deux touchers, avec fantôme et déplacement gratuit — exactement le geste des
+  bâtiments. `TERRAINS` de `ui/chantier.js` porte la SEULE chose qui les sépare.
+  ⚠ **UN TEST REFUSE UNE SECONDE IMPLÉMENTATION.** Il compte les occurrences
+  des fonctions de geste et refuse tout `=== 'defense'` écrit à la main. Les
+  deux bandes vivent dans le même écran, sous le même doigt : deux
+  implémentations auraient divergé au premier ajustement, et la divergence se
+  lirait comme un bogue de jeu.
+  ⚠ **LE PANNEAU DE DÉTAIL NE S'OUVRE PAS SUR UNE PIÈCE DE GARNISON.** Il
+  chiffre production, capacité et voisinage, qu'une pièce n'a pas. La table le
+  dit par `panneau: false`, et une garde de ceinture empêche `peindrePanneau`
+  de se repeindre avec un indice qui pointe dans l'autre liste — `rafraichir`
+  passe dix fois par seconde.
+  ⚠ **DEUX PLAFONDS SANS RAPPORT, ET IL FAUT DIRE LEQUEL MORD.** Le Chantier
+  borne le NOMBRE de bâtiments par ses emplacements, le QG borne les POINTS
+  d'armée par son budget. Dire « c'est plein » sans dire de quoi enverrait le
+  joueur améliorer le mauvais bâtiment.
+  ⚠ **AMÉLIORER ET RÉPARER N'ONT PAS DE MOTEUR EN DÉFENSE, ET LE DISENT.**
+  `null` dans la table, pas un bouton inerte — « un indice n'est pas une
+  interdiction » (§4). Le COÛT d'une amélioration existe depuis l'arbitrage du
+  28/08 ; la mécanique, non : ce que gagne une unité améliorée n'est pas
+  arbitré. C'est le prochain trou à combler.
+  ⚠ **LA PALETTE SUIT LA BANDE, ET IL A FALLU LE BRANCHER.** `bandeCourante`
+  bouge à chaque évènement de défilement, mais la palette n'était repeinte que
+  par trois autres chemins : le joueur serait descendu sur la Défense avec les
+  vignettes des onze bâtiments sous les yeux. Elle se repeint au changement de
+  TERRAIN, et à lui seul — reconstruire dix-sept boutons par pixel les ferait
+  clignoter sous le doigt.
+  ⚠ **LES SIGLES DE DÉFENSE SONT DISTINCTS DE CEUX DES BÂTIMENTS.** Vingt-huit
+  en tout, tous différents : les deux se dessinent sur la MÊME grille. « CHA »
+  étant pris par le Chantier, le Chasseur porte « CHS ».
+
+- ⚠⚠ **L'ÉCRAN OFFENSE N'EST PLUS UNE COQUILLE.** Il lit `etat.armee`, il y
+  écrit, et son en-tête de fichier a été réécrit — laisser un commentaire qui
+  décrit un état révolu est la faute que ce fichier-ci nomme ailleurs.
+  ⚠ **SA GRAMMAIRE EST CELLE DU CHANTIER, ET SES MOTS VIENNENT DE LÀ.** Deux
+  touchers pour poser ; une unité posée se prend en main, puis se déplace sur
+  une case libre ou se retire en retouchant la sienne. Pas de bouton de plus :
+  la consigne « tout doit tenir dans l'écran » interdisait une septième barre.
+  ⚠ **SA PALETTE FILTRE PAR NIVEAU, CELLE DE LA DÉFENSE GRISE.** Ce n'est pas
+  une incohérence : `unitesDisponibles` de l'Arsenal RETIRE ce qui est
+  verrouillé (« une unité qu'on ne peut pas construire n'a pas à occuper
+  l'écran », lot 5A) et sa palette est seule sur son écran ; celle de la défense
+  partage la barre du bas avec celle des bâtiments, où une longueur qui change
+  déplace les vignettes sous le doigt.
+  ⚠ **L'EXPLICATION DU BUDGET ABSENT VA DANS LE REGISTRE `mode`, PAS `session`.**
+  `session` est prioritaire dans `ligneAAfficher` : il aurait masqué les refus
+  de geste dans le cas exact où ils arrivent — une armée posée puis le QG
+  démoli. Et `mode` a le bon ton : métal, pas rouge ; rien n'est cassé, il
+  manque un bâtiment.
+
+- **LE COMPTEUR DU BANDEAU PORTE UN NOMBRE DANS LES TROIS CONTEXTES.**
+  `CONTEXTES[x].chiffre` vaut `true` partout depuis le 28/08 : le champ dit si
+  la grandeur EXISTE, et les points engagés existent maintenant.
+  ⚠ **C'EST LA CAPACITÉ QUI DISPARAÎT SANS BÂTIMENT DE COMMANDEMENT, PAS LA
+  VALEUR.** Zéro point engagé est un fait vrai et affichable ; c'est le budget
+  qui n'existe pas. « 0 / 0 » ferait croire à un plafond atteint.
+  ⚠ **LE BUDGET N'EST PAS RECALCULÉ.** Sa formule vit dans les deux éditeurs, et
+  `CONTEXTES` porte la FONCTION plutôt qu'une troisième copie.
+
+- **LES TROIS NIVEAUX DU JOUEUR SONT ENFIN TROIS MOYENNES.** `resumeDeLaBase`
+  rendait `defense: null, assaut: null` en dur. `niveauDeLaDefense` et
+  `niveauDeLArmee` de `sim/niveau-de-base.js` appellent `moyenneEnDixiemes`,
+  sans la réécrire.
+  ⚠ **UNE SEULE DIVERGENCE AVEC LEUR JUMEAU : LA LISTE VIDE.**
+  `niveauDesBatiments` LÈVE dessus — une base sans bâtiment n'existe pas — mais
+  une garnison vide et une armée vide sont l'état NORMAL d'une base neuve. Les
+  deux rendent `null`, ce que `formaterNiveau` affiche « — ». Zéro se lirait
+  « niveau zéro », c'est-à-dire une force posée et nulle.
 
 ### Sur le vocabulaire
 
