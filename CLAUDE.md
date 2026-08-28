@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.25.0 · build 26.
+Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.25.0 · build 26.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot TUTORIEL), à confronter :**
-`npm test` → **390 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**167 308 octets**, 0 référence externe.
+**Référence au 28/08/2026 (après le lot GARNISON-ET-ARMÉE), à confronter :**
+`npm test` → **396 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**179 733 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -42,9 +42,11 @@ et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
 bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
 QUEUE-DE-COURBE à 153 505,
 MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans,
-POSE-ET-DÉPLACEMENT à 161 583, TUTORIEL à 167 308 en ouvrant l'onglet Mission.
-La borne de T10 (200 000 octets) tient, avec 23 % de marge — mais elle se surveille
-désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
+POSE-ET-DÉPLACEMENT à 161 583, TUTORIEL à 167 308 en ouvrant l'onglet Mission,
+GARNISON-ET-ARMÉE à 179 733 en donnant un état à la garnison et à l'armée,
+puis en branchant l'écran Offense et la bande Défense.
+La borne de T10 (200 000 octets) tient, avec 10 % de marge — elle se resserre
+lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
 est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de

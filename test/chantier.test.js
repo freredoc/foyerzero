@@ -14,7 +14,12 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { ACTIONS, PAS_DE_REPARATION, DUREE_TOAST_MS } from '../src/ui/chantier.js';
+import {
+  ACTIONS, PAS_DE_REPARATION, DUREE_TOAST_MS,
+  SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
+  TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
+} from '../src/ui/chantier.js';
+import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   ligneAAfficher, MESSAGES_MODE, messageDePose, MENTION_SATURE,
   apercuDuBatiment, lignesDuPanneau, formaterCout, libelleDuVoisin,
@@ -399,9 +404,18 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   );
 
   // Et l'écran LIT cette marque au lieu de recompter les uniques lui-même.
+  //
+  // ⚠ LA MARQUE A CHANGÉ DE NOM AU LOT GARNISON-ET-ARMÉE, PAS DE SENS. Depuis
+  // que la bande Défense est éditable, la même vignette et la même classe
+  // servent deux terrains : `verrouille` dit « celui-là, tu ne peux pas le
+  // poser maintenant » des deux côtés — un unique déjà posé au Chantier, une
+  // pièce que le niveau du QG n'a pas encore ouverte en défense. `dejaPose`
+  // reste la marque du terrain des bâtiments, et le terrain la traduit.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  assert.match(ecran, /classList\.toggle\('pose', posable\.dejaPose\)/,
+  assert.match(ecran, /classList\.toggle\('pose', posable\.verrouille\)/,
     'la palette ne grise plus la vignette d\'un unique posé');
+  assert.match(ecran, /verrouille: p\.dejaPose/,
+    'le terrain des bâtiments ne traduit plus « déjà posé » en « verrouillé »');
 
   // ⚠ LE CHAMP NE S'APPELLE PLUS `coutNiveauDeux`, ET LE RENOMMAGE EST LA
   // CORRECTION. Sous l'ancien nom, la vignette de pose affichait ce nombre en
@@ -669,8 +683,14 @@ test('chantier — aucune vignette de pose ne présente un coût de POSE', () =>
   // Falsifiable : le montage doit vraiment lire le fichier de la vignette.
   assert.ok(source.includes('peindrePalette'), 'ce n\'est pas le bon fichier');
   // Et le fait reste DIT, dans le titre — il a changé de place, pas disparu.
+  //
+  // ⚠ LE TITRE EST PASSÉ DANS UNE FONCTION AU LOT GARNISON-ET-ARMÉE, parce
+  // qu'il dit deux choses différentes selon le terrain — un coût de première
+  // amélioration pour un bâtiment, des points d'armée pour une pièce de
+  // garnison. La garde suit la phrase, pas la ligne : ce qu'elle tient, c'est
+  // que « gratuit » reste écrit quelque part dans ce que la vignette annonce.
   assert.ok(
-    /title\s*=[\s\S]{0,200}gratuit/.test(source),
+    /function titreDeLaVignette\([\s\S]{0,700}gratuit/.test(source),
     'le titre de la vignette ne dit plus que poser est gratuit',
   );
 
@@ -1185,7 +1205,17 @@ test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le cal
   // 28/08. La saturation dure exactement aussi longtemps que le mode de pose ;
   // un toast s'effaçait au bout de quatre secondes et laissait reparaître
   // « touchez une case libre » alors qu'il n'y en a aucune.
-  assert.match(ecran, /ligneDeMode\(poses >= ouverts/,
+  // ⚠ LE PLAFOND EST PASSÉ DANS UNE FONCTION AU LOT GARNISON-ET-ARMÉE, parce
+  // qu'il y en a DEUX depuis que la bande Défense est éditable, et sans
+  // rapport : le Chantier borne le NOMBRE de bâtiments par ses emplacements, le
+  // QG borne les POINTS d'armée par son budget. Dire « c'est plein » sans dire
+  // de quoi enverrait le joueur améliorer le mauvais bâtiment. Ce que la garde
+  // tient n'a pas changé : la saturation s'écrit sur la ligne de MODE, qui
+  // dure, et non dans un toast qui s'efface au bout de quatre secondes en
+  // laissant reparaître « touchez une case libre ».
+  assert.match(ecran, /function messageDuPlafond\([\s\S]{0,900}poses >= ouverts/,
+    'le plafond des emplacements n\'est plus celui que l\'écran annonce');
+  assert.match(ecran, /ligneDeMode\(messageDuPlafond\(/,
     'la saturation n\'est plus dite par une ligne qui dure');
   assert.ok(/emplacementsPoses\.textContent\s*=/.test(ecran)
     && /emplacementsOuverts\.textContent\s*=/.test(ecran),
@@ -1995,7 +2025,19 @@ test('pose — elle se fait en DEUX touchers, et le premier ne pose rien', () =>
   // fait les deux temps.
   assert.match(ecran, /if \(!memeCase\) \{[\s\S]{0,400}?return;/,
     'le premier toucher ne sort plus sans poser');
-  assert.ok(ecran.indexOf('if (!memeCase)') < ecran.indexOf('poserBatiment('),
+  // ⚠ LA GARDE PORTE SUR LE CORPS DE `tenterLaPose`, PLUS SUR LE FICHIER
+  // ENTIER — et c'est un RESSERREMENT, pas un relâchement. Elle comparait deux
+  // `indexOf` sur tout le module : la première mention de `poserBatiment` s'est
+  // trouvée remontée dans la table des terrains, bien avant la fonction, et la
+  // garde est tombée sans qu'aucun geste ait changé. Un test qui dépend de
+  // l'ordre des déclarations dans un fichier de 2 000 lignes ne mesure pas ce
+  // qu'il croit. On découpe donc la fonction et on lit dedans.
+  const corpsDePose = ecran.slice(ecran.indexOf('function tenterLaPose('));
+  const finDePose = corpsDePose.indexOf('\n  }');
+  const dansLaPose = corpsDePose.slice(0, finDePose);
+  assert.ok(dansLaPose.length > 100, 'le découpage de tenterLaPose ne trouve rien');
+  assert.ok(dansLaPose.includes('if (!memeCase)'), 'les deux touchers ont quitté la pose');
+  assert.ok(dansLaPose.indexOf('if (!memeCase)') < dansLaPose.indexOf('.poser('),
     'la confirmation est demandée APRÈS la pose');
 
   // Les deux messages de mode existent et disent quoi faire.
@@ -2145,4 +2187,158 @@ test('résumé — les trois niveaux du joueur sont désormais trois moyennes', 
   const ampute = { ...etat };
   delete ampute.garnison;
   assert.throws(() => resumeDeLaBase(ampute), /état de jeu absent ou malformé/);
+});
+
+// ---------------------------------------------------------------------------
+// La bande Défense devient éditable — lot GARNISON-ET-ARMÉE, 28/08
+// ---------------------------------------------------------------------------
+
+test('défense — les sigles couvrent le roster, et aucun ne se confond avec un autre', () => {
+  assert.deepEqual(Object.keys(SIGLES_DEFENSE).sort(), [...rosterDefensif()].sort());
+
+  // ⚠ DISTINCTS DES SIGLES DE BÂTIMENT AUSSI. Les deux se dessinent sur la
+  // MÊME grille, l'un au-dessus de l'autre : deux pièces qui portent le même
+  // sigle sont deux pièces qu'on confond à l'œil, ce que le sigle doit
+  // précisément empêcher. « CHA » est pris par le Chantier, d'où « CHS » pour
+  // le Chasseur.
+  const tous = [...Object.values(SIGLES), ...Object.values(SIGLES_DEFENSE)];
+  assert.equal(new Set(tous).size, tous.length, 'deux sigles identiques sur la même grille');
+  assert.equal(tous.length, 28, 'onze bâtiments et dix-sept pièces de garnison');
+  for (const sigle of Object.values(SIGLES_DEFENSE)) {
+    assert.match(sigle, /^[A-Z]{3}$/, `« ${sigle} » n'est pas un sigle de trois lettres`);
+  }
+
+  // Le nom qui fait foi reste celui du joueur, jamais celui de l'Ouvrage.
+  assert.equal(nomDeLaPieceDeDefense('merlon'), DEFENSES.merlon.nom.joueur);
+  assert.equal(nomDeLaPieceDeDefense('meute'), UNITES.meute.nom.joueur);
+  assert.throws(() => nomDeLaPieceDeDefense('collecteur'), /rôle en défense/);
+});
+
+test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', () => {
+  const neuve = creerEtat(11);
+  const sansQg = posablesDeLaDefense(neuve);
+  assert.equal(sansQg.length, 17);
+  assert.ok(sansQg.every((p) => p.verrouille), 'la palette est vive sans QG de défense');
+
+  // ⚠ AVEC UN QG, LES PIÈCES S'OUVRENT PAR NIVEAU D'APPARITION — et les autres
+  // RESTENT dans la palette, grisées. C'est l'arbitrage du 28/08 sur les
+  // uniques appliqué ici : « griser le bouton, pas le faire disparaître ». Une
+  // palette qui change de longueur déplace les vignettes sous le doigt.
+  const avecQg = baseAvecCommandement(3, 8);
+  const ouverte = posablesDeLaDefense(avecQg);
+  assert.equal(ouverte.length, 17, 'la palette a changé de longueur');
+  const vives = ouverte.filter((p) => !p.verrouille);
+  assert.ok(vives.length > 0, 'aucune pièce ouverte au niveau 8');
+  assert.ok(vives.length < 17, 'toutes les pièces sont ouvertes au niveau 8');
+  for (const p of ouverte) {
+    assert.equal(p.verrouille, p.apparition > 8, `${p.id} : verrou incohérent`);
+  }
+
+  // Falsifiable : monter le QG doit VRAIMENT ouvrir des pièces.
+  const haut = baseAvecCommandement(3, 50);
+  assert.ok(posablesDeLaDefense(haut).every((p) => !p.verrouille), 'le niveau 50 verrouille encore');
+});
+
+test('défense — le détail d\'une pièce dit son niveau et ses points', () => {
+  const etat = baseAvecCommandement(3, 20);
+  poserEffectif(etat, 'garnison', { id: 'faucheuse', rangee: 6, colonne: 4, niveau: 3 });
+  const vue = detailDeLaDefense(etat, 0);
+  assert.equal(vue.nom, DEFENSES.faucheuse.nom.joueur);
+  assert.equal(vue.niveau, 3);
+  assert.ok(vue.detail.includes('Niv. 3'));
+  assert.ok(vue.detail.includes(String(DEFENSES.faucheuse.points)));
+  assert.throws(() => detailDeLaDefense(etat, 4), RangeError);
+});
+
+test('défense — les deux terrains balaient CHACUN leur bande, et pas l\'autre', () => {
+  const etat = baseAvecCommandement(3, 50);
+
+  // ⚠ ON NE BALAIE QUE LA BANDE DU TERRAIN. Ailleurs la réponse serait « hors
+  // de la bande » quatre-vingt-dix fois, pour rien.
+  const casesDefense = casesPosablesDuTerrain(etat, 'defense', 'merlon');
+  assert.equal(casesDefense.length, 72, 'huit rangées de neuf, toutes libres');
+  for (const { rangee } of casesDefense) {
+    assert.ok(rangee >= GRILLE.bandes.defense.premiere && rangee <= GRILLE.bandes.defense.derniere,
+      `le balayage de la défense sort de sa bande, rangée ${rangee}`);
+  }
+
+  const casesBase = casesPosablesDuTerrain(etat, 'batiments', 'raffinerie');
+  for (const { rangee } of casesBase) {
+    assert.ok(rangee >= GRILLE.bandes.batiments.premiere,
+      `le balayage de la base sort de sa bande, rangée ${rangee}`);
+  }
+  // Les deux ensembles sont DISJOINTS : c'est ce qui fait deux terrains.
+  const enDefense = new Set(casesDefense.map((c) => `${c.rangee}:${c.colonne}`));
+  assert.ok(casesBase.every((c) => !enDefense.has(`${c.rangee}:${c.colonne}`)));
+
+  // Une pièce posée retire sa case, et le déplacement la retrouve : rester sur
+  // place est légal.
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 5, colonne: 5, niveau: 1 });
+  const apres = casesPosablesDuTerrain(etat, 'defense', 'ronce');
+  assert.equal(apres.length, 71, 'la case occupée reste posable');
+  const deplacables = casesDeplacablesDuTerrain(etat, 'defense', 0);
+  assert.equal(deplacables.length, 72, 'sa propre case doit rester une arrivée légale');
+  assert.ok(deplacables.some((c) => c.rangee === 5 && c.colonne === 5));
+});
+
+test('défense — la table des terrains dit tout ce qui les sépare, et rien de plus', () => {
+  assert.deepEqual(Object.keys(TERRAINS).sort(), ['batiments', 'defense']);
+
+  // ⚠ LE TERRAIN DES BÂTIMENTS RÉUTILISE `ACTIONS`, il ne la recopie pas.
+  // C'est la même table sous un second nom : deux copies finiraient par dire
+  // deux choses différentes d'« améliorer ».
+  assert.equal(TERRAINS.batiments.actions, ACTIONS);
+  assert.equal(TERRAINS.batiments.panneau, true);
+  assert.equal(TERRAINS.batiments.force, null);
+
+  // ⚠ DEUX ACTIONS SANS MOTEUR EN DÉFENSE, ET `null` LE DIT. Le coût d'une
+  // amélioration existe depuis l'arbitrage du 28/08, le moteur non : rien dans
+  // `sim/` ne monte une pièce de garnison. Réparer n'existe nulle part.
+  assert.equal(TERRAINS.defense.actions.ameliorer, null);
+  assert.equal(TERRAINS.defense.actions.reparer, null);
+  assert.ok(typeof TERRAINS.defense.actions.demolir.agir === 'function');
+  assert.equal(TERRAINS.defense.actions.deplacer.cible, true);
+  assert.equal(TERRAINS.defense.panneau, false);
+  assert.equal(TERRAINS.defense.force, 'garnison');
+
+  // Les deux terrains couvrent les mêmes quatre noms d'action : un bouton sans
+  // entrée ferait lever au toucher au lieu de répondre.
+  assert.deepEqual(
+    Object.keys(TERRAINS.defense.actions).sort(), Object.keys(ACTIONS).sort(),
+  );
+
+  // Et le refus se dit, il ne reste pas muet — « un indice n'est pas une
+  // interdiction » : un bouton mort n'apprend rien.
+  assert.ok(actionSansMoteur('Améliorer').includes('Améliorer'));
+  assert.match(actionSansMoteur('X'), /trancher seul/);
+});
+
+test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
+  // ⚠ C'EST L'EXIGENCE EXPLICITE DU BRIEF : « Réemployer les fonctions
+  // existantes de ui/chantier.js, pas les recopier. Un test doit refuser une
+  // seconde implémentation du geste de pose. » Les deux bandes vivent dans le
+  // même écran, sous le même doigt : deux implémentations auraient divergé au
+  // premier ajustement, et la divergence se lirait comme un bogue de jeu.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  for (const geste of ['tenterLaPose', 'tenterLeDeplacement', 'peindrePalette', 'executerAction']) {
+    const occurrences = source.match(new RegExp(`function ${geste}\\(`, 'g')) ?? [];
+    assert.equal(occurrences.length, 1, `${geste} est écrite ${occurrences.length} fois`);
+  }
+
+  // Et le geste passe par la TABLE, jamais par un nom de terrain écrit à la
+  // main : un cas particulier serait le premier à diverger.
+  assert.match(source, /terrain\.poser\(/, 'la pose n\'appelle plus le terrain');
+  assert.match(source, /terrain\.problemesDeLaPose\(/);
+  assert.ok(!/=== 'defense'/.test(source), 'un cas particulier « defense » est écrit à la main');
+  assert.ok(!/=== 'garnison'/.test(source), 'un cas particulier « garnison » est écrit à la main');
+
+  // ⚠ ET LA PALETTE SUIT LE TERRAIN. Sans ce rappel, le joueur descendrait sur
+  // la bande Défense avec les vignettes des onze bâtiments sous les yeux.
+  assert.match(source, /function marquerBandeActive\([\s\S]{0,900}peindrePalette\(/,
+    'la palette ne se repeint plus quand on change de bande');
+
+  // Falsifiable : le montage doit trouver de vraies fonctions, sinon zéro
+  // occurrence passerait pour « écrite une fois ».
+  assert.ok(source.includes('function tenterLaPose('), 'ce n\'est pas le bon fichier');
 });
