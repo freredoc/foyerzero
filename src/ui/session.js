@@ -37,6 +37,7 @@ import { creerEtat, charger, serialiser, tickJeu, rattraperJeu } from '../sim/st
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
 import { initialiserEcranOffense } from './offense.js';
+import { initialiserEcranMission } from './mission.js';
 import { initialiserBanc } from './banc.js';
 
 /**
@@ -184,6 +185,7 @@ export function initialiserSession(doc) {
 
   let etat = null;
   let ecran = null;
+  let ecranMission = null;
   let idImage = null;
   const chrono = creerChronometre(maintenantMs);
   let dernierAffichageMs = 0;
@@ -382,7 +384,18 @@ export function initialiserSession(doc) {
   // quitté `#ecran-chantier` : changer d'écran ne les fait plus disparaître,
   // ce qu'Ethan demandait (« garder la barre quartz scories etc et monde option
   // dans le menu offense »).
-  const ECRANS = ['chantier', 'offense', 'options'];
+  const ECRANS = ['chantier', 'mission', 'offense', 'options'];
+
+  // ⚠ QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN — UNE TABLE, PAS DES CONDITIONS.
+  // La version précédente écrivait « actif si ce n'est pas Options », ce qui
+  // allumait « Base » sur l'écran Mission le jour où il est arrivé. Un quatrième
+  // écran se déclare ici, et nulle part ailleurs.
+  const ONGLET_DE_L_ECRAN = {
+    chantier: 'onglet-base',
+    offense: 'onglet-base',
+    mission: 'onglet-mission',
+    options: 'onglet-options',
+  };
 
   function montrerEcran(nom) {
     ecranCourant = nom;
@@ -390,13 +403,19 @@ export function initialiserSession(doc) {
     // Les onglets du haut ET la barre du bas doivent dire où l'on est. Le
     // premier est à la session ; le second appartient à l'écran Chantier, qui
     // le construit — d'où l'appel, plutôt qu'une seconde écriture ici.
-    $('onglet-base').classList.toggle('actif', nom !== 'options');
-    $('onglet-options').classList.toggle('actif', nom === 'options');
+    const allume = ONGLET_DE_L_ECRAN[nom];
+    for (const onglet of new Set(Object.values(ONGLET_DE_L_ECRAN))) {
+      $(onglet).classList.toggle('actif', onglet === allume);
+    }
     if (ecran !== null) ecran.marquerEcran(nom);
+    // Le tutoriel se relit à l'ouverture : il a pu avancer pendant qu'on
+    // regardait ailleurs, et il ne se repeint pas tant qu'il est caché.
+    if (nom === 'mission' && ecranMission !== null && etat !== null) ecranMission.peindre(etat);
   }
 
   $('onglet-base').addEventListener('click', () => montrerEcran('chantier'));
   $('onglet-options').addEventListener('click', () => montrerEcran('options'));
+  $('onglet-mission').addEventListener('click', () => montrerEcran('mission'));
 
   // --- le banc d'essai, derrière un appui long -------------------------------
   //
@@ -486,6 +505,7 @@ export function initialiserSession(doc) {
   // L'écran Offense se construit une fois et ne se rafraîchit jamais : tant
   // qu'aucune armée n'existe, rien de ce qu'il montre ne change avec le temps.
   initialiserEcranOffense(doc);
+  ecranMission = initialiserEcranMission(doc);
   montrerEcran('chantier');
   demarrer();
 }

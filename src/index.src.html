@@ -546,6 +546,42 @@
      le jour où les onglets, les ressources et la barre du bas sont passés en
      commun : le retour se fait par le bouton « Base », qui est là de toute
      façon, et les chiffres d'armée n'existaient pas. */
+  /* --- l'écran Mission : le tutoriel ------------------------------------
+     Aucune hauteur fixe ici, délibérément : la liste défile dans l'écran, elle
+     n'ajoute pas une septième barre au chrome (la garde de `chantier.test.js`
+     tomberait, et elle aurait raison — 288 px sur 320, il n'y a pas la place).
+     Les teintes sortent toutes de FICHE-STYLE.md : kaki pour le fond, métal
+     pour le texte secondaire, ambre pour la mission en cours — le même ambre
+     qui marque une action armée, parce que c'est la même idée : « c'est ici
+     que ça se passe ». */
+  #ecran-mission { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  #ecran-mission::-webkit-scrollbar { display: none; }
+  #mission-avancement {
+    padding: 6px 8px; background: #343A2C; color: #8C9A72;
+    font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  #mission-liste { margin: 0; padding: 6px; list-style: none; display: grid; gap: 5px; }
+  .mission {
+    display: flex; gap: 7px; align-items: flex-start;
+    padding: 7px 8px; background: #343A2C; border-left: 3px solid #3E454C;
+  }
+  .mission .marque {
+    flex: 0 0 14px; text-align: center; color: #68727E;
+    font-size: 13px; line-height: 1.2;
+  }
+  .mission b { display: block; color: #F5F3E8; font-size: 11px; line-height: 1.25; }
+  .mission span:not(.marque) {
+    display: block; margin-top: 2px; color: #68727E; font-size: 9px; line-height: 1.35;
+  }
+  /* Faite : le liseré et la coche passent au kaki clair, et le titre s'éteint —
+     ce qui est derrière soi se lit encore, mais ne tire plus l'œil. */
+  .mission.faite { border-left-color: #6A7658; }
+  .mission.faite .marque { color: #8C9A72; }
+  .mission.faite b { color: #8C9A72; }
+  /* En cours : l'ambre, comme un bouton armé. Une seule ligne le porte. */
+  .mission.courante { border-left-color: #F5B636; background: #3E454C; }
+  .mission.courante b { color: #F5B636; }
+  .mission.courante span:not(.marque) { color: #F5F3E8; }
   #ecran-offense { min-height: 0; }
   /* Le mot qui dit que la composition n'existe pas encore. Il n'est pas une
      alerte — rien n'est cassé — donc il porte le métal, pas le rouge. */
@@ -639,7 +675,7 @@
        le banc d'essai. -->
   <div id="tete-onglets">
     <button type="button" class="actif" id="onglet-base">Base</button>
-    <button type="button" class="futur" disabled>Mission</button>
+    <button type="button" id="onglet-mission">Mission</button>
     <button type="button" class="futur" disabled>Recherche</button>
     <button type="button" class="futur" disabled>Monde</button>
     <button type="button" id="onglet-options">Options</button>
@@ -702,6 +738,14 @@
          lui : les onglets, les ressources et la barre du bas sont communs, ce
          qui est exactement ce qu'Ethan a demandé.
          ====================================================================== -->
+    <!-- ⚠ L'ÉCRAN DU TUTORIEL. Il ne porte AUCUNE règle : ce qui est fait ou
+         non se décide dans `sim/missions.js`, qui lit la base. Il n'a pas de
+         barre à hauteur fixe — il défile dans `#ecrans` comme les autres, et
+         ne pèse donc pas sur les 288 px de chrome que garde `chantier.test.js`. -->
+    <div id="ecran-mission" hidden>
+      <div id="mission-avancement"></div>
+      <ol id="mission-liste"></ol>
+    </div>
     <div id="ecran-offense" hidden>
       <p id="offense-avis">La composition d'armée n'existe pas encore : la partie
         n'enregistre ni garnison ni armée d'assaut. Les emplacements ci-dessous

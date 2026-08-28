@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.24.0 · build 25.
+Dernière révision : **28/08/2026**, version 0.25.0 · build 26.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.24.0 · build 25.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot POSE-ET-DÉPLACEMENT), à confronter :**
-`npm test` → **338 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**161 583 octets**, 0 référence externe.
+**Référence au 28/08/2026 (après le lot TUTORIEL), à confronter :**
+`npm test` → **349 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**167 308 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -42,7 +42,7 @@ et démolir, PANNEAU-ET-MARGES à 151 187 en ajoutant le panneau de détail d'un
 bâtiment et les marges des barres système, STOCKAGE-ET-VOISINAGE à 153 506,
 QUEUE-DE-COURBE à 153 505,
 MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans,
-POSE-ET-DÉPLACEMENT à 161 583.
+POSE-ET-DÉPLACEMENT à 161 583, TUTORIEL à 167 308 en ouvrant l'onglet Mission.
 La borne de T10 (200 000 octets) tient, avec 23 % de marge — mais elle se surveille
 désormais à chaque lot, ce qui n'était pas le cas pendant douze lots.
 
@@ -58,7 +58,11 @@ cinq au lot POSE-À-L'ÉCRAN et de **dix** au lot PANNEAU-ET-MARGES, tous dans
 **six** au lot MISE-EN-PAGE, tous dans `chantier.test.js`, et de **six** au lot
 POSE-ET-DÉPLACEMENT (trois dans `chantier.test.js`, deux dans `state.test.js`, un
 dans `documentation.test.js` — celui-là n'était pas au brief : il garde le compte
-de teintes annoncé par ce fichier-ci, qui venait d'être trouvé faux de cinq).
+de teintes annoncé par ce fichier-ci, qui venait d'être trouvé faux de cinq), et
+de **onze** au lot TUTORIEL : dix dans le nouveau `test/missions.test.js` — le
+dixième écrit APRÈS coup, quand la falsification a trouvé que l'écran
+recalculait la mission courante au lieu de la demander au moteur — et un dans
+`donnees.test.js`, né d'une CI rouge (voir §6, « les types de `package.json` »).
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
 ---
@@ -141,22 +145,24 @@ src/data/               toutes les valeurs de calibrage — 5 fichiers ; RIEN d'
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
 
-src/sim/                simulation déterministe, sans DOM — 11 fichiers
+src/sim/                simulation déterministe, sans DOM — 12 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 cases tirées de la POSITION
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
+  missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 5 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
 
-src/ui/                 les trois écrans et leurs éditeurs — 6 fichiers
+src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues — coquille, rien à composer
+  mission.js            l'écran du tutoriel — il coche, il ne décide rien
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
@@ -167,18 +173,18 @@ src/ui/                 les trois écrans et leurs éditeurs — 6 fichiers
   ⤷ l'écran de la base est en LECTURE ET EN ÉCRITURE depuis le 27/08 : pose,
     amélioration, démolition, et depuis le 28/08 un panneau de détail. La ligne
     « en lecture » de son en-tête a été fausse pendant deux lots.
-  ⤷ ⚠ LA PAGE A TROIS ÉCRANS ET UN EN-TÊTE COMMUN depuis le 28/08. Les onglets,
+  ⤷ ⚠ LA PAGE A QUATRE ÉCRANS ET UN EN-TÊTE COMMUN depuis le 28/08. Les onglets,
     le bandeau des ressources, la bascule entre bases et la barre du bas vivent
     AU-DESSUS des écrans, dans `#jeu` : changer d'écran ne les fait plus
     disparaître. Le fichier de la base construit tout ce chrome — il a les
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   24 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   25 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
-  grille  niveau-de-base  offense  rendu  repli  rng  roster  state
+  grille  missions  niveau-de-base  offense  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -831,6 +837,33 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   « Meute » pendant un commit entier. Le T18 de `defense.test.js` garde la
   régression **et le piège**.
 
+### Sur les types de `package.json`
+
+- ⚠⚠ **`config.build` ET `version` SONT DES CHAÎNES, PAS DES NOMBRES.**
+  `android/app/build.gradle.kts` les lit `as String` — `version` directement,
+  `config.build` puis `.toInt()`. Un nombre y fait lever
+  « class java.lang.Integer cannot be cast to class java.lang.String », et le
+  build Android tombe à la CONFIGURATION, avant le moindre test.
+  ⚠ **AUCUN TEST JS NE LE VOYAIT, ET C'EST CE QUI L'A RENDU COÛTEUX.**
+  `tools/build.js` fait `pkg.config?.build ?? '0'` et l'interpole ; le workflow
+  l'interpole aussi. Les deux marchent avec l'un comme avec l'autre type. Seul
+  Kotlin s'en soucie, et **le job `android` est le seul qui ne tourne pas ici**.
+  Commis le 28/08 en réécrivant `package.json` avec un sérialiseur JSON, qui a
+  rendu `"26"` en `26`.
+  ⚠ **LA GARDE LIT LE GRADLE, ELLE NE RECOPIE PAS LA LISTE DES CHAMPS.**
+  `donnees.test.js` extrait de `build.gradle.kts` les champs coulés `as String`
+  et exige que `package.json` les porte en chaînes. Recopier « version et
+  build » aurait vieilli au premier champ ajouté ; un test refuse aussi que les
+  motifs ne trouvent plus rien, ce qui arriverait si le Gradle était reformaté.
+  ⚠ **ET LE MANIFESTE DE PAGES, LUI, VEUT UN NOMBRE.** Le workflow interpole
+  `config.build` **sans guillemets** dans `manifest.json`, et `Manifeste.analyser`
+  du module `maj` le relit `as? Long`. Les deux sont cohérents tant que la
+  chaîne est un entier décimal — ce que la garde asserte aussi.
+  ⚠ **`:maj:test` NE SUFFIT PAS À LE VÉRIFIER ICI.** Sans SDK Android,
+  `settings.gradle.kts` EXCLUT `:app`, donc `app/build.gradle.kts` n'est jamais
+  évalué : la suite Kotlin passe en local pendant que la CI tombe. Le seul
+  garde-fou exécutable ici est celui de `donnees.test.js`.
+
 ### Sur les tests et l'outillage
 
 - ~~**La garde du lot 1** scannait avec `/\bdocument\b/`~~ — **corrigée le
@@ -1309,6 +1342,49 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   de 82 px et un défilement horizontal : la première vignette était coupée et
   deux bâtiments vivaient hors de l'écran. Écrire « 6 » marcherait aujourd'hui et
   mentirait au douzième bâtiment.
+
+- ⚠⚠ **L'ONGLET MISSION EST VIVANT DEPUIS LE 28/08 : C'EST LE TUTORIEL.** Il
+  était « bouton mort pour l'instant, futur tuto » dans la liste d'Ethan ; le
+  futur est arrivé. Arbitré le 28/08 : **des missions qui se cochent toutes
+  seules, sans récompense.**
+  ⚠ **UNE MISSION EST UNE QUESTION POSÉE À LA BASE, PAS UN COMPTEUR.**
+  `sim/missions.js` LIT `disposition` et `champs` et dit si le geste décrit est
+  accompli. Elle n'écrit rien, ne récompense rien, ne débloque rien. Un test
+  photographie l'état et exige qu'il soit intact après lecture.
+  ⚠ **AUCUNE PROGRESSION N'EST SAUVEGARDÉE, ET `SAVE_VERSION` RESTE À 6.**
+  Retenir « mission 3 faite » créerait une SECONDE source de vérité sur ce que
+  le joueur a construit, alors que la première — sa base — est déjà là et ne
+  peut pas mentir. Conséquence assumée et testée : démolir décoche.
+  ⚠ **LA CHAÎNE EST L'OUVERTURE MESURÉE DE §6**, pas une idée de l'ouverture :
+  Chantier au niveau 2 → Collecteur sur un champ → Raffinerie au contact →
+  monter la Raffinerie → Centrale. C'est exactement le passage où le plafond de
+  stockage mord, et où Ethan s'était arrêté en croyant que rien ne produisait.
+  ⚠ **ELLE TIENT DANS LES EMPLACEMENTS QU'ELLE FAIT OUVRIR** — quatre bâtiments
+  pour les quatre emplacements du Chantier de niveau 2, jouée par le vrai
+  moteur dans le test. Une sixième mission demandant un cinquième bâtiment
+  rendrait le tutoriel INFINISSABLE, et rien à la relecture ne le dirait.
+  ⚠ **AUCUN NOMBRE N'EST ÉCRIT EN DUR DANS LES TEXTES.** Le niveau visé vient
+  d'`ECONOMIE_NIVEAU.premierNiveauPayant`, les noms de `nom.joueur`, et le
+  niveau où l'électricité commence à coûter se **MESURE** sur `coutDeMontee` —
+  3, sur les onze bâtiments. Un test refuse tout nom de l'Ouvrage dans le
+  tutoriel, et exige que les noms du joueur y soient.
+  ⚠ **L'ÉCRAN SE PEINT À L'OUVERTURE, ET SEULEMENT LÀ.** Rien ne peut changer
+  pendant qu'on le regarde : toutes les missions portent sur ce que le joueur a
+  POSÉ ou AMÉLIORÉ, gestes qui se font sur l'écran de la base. **Ce n'est vrai
+  que tant qu'aucune mission ne lit l'ÉCONOMIE** — une mission « accumule 100
+  quartz » avancerait sous les yeux du joueur sans que rien ne se redessine.
+  Un test balaie `sim/missions.js` pour l'interdire, imports ôtés :
+  `data/economie.js` est la table des COÛTS, pas les stocks, et la première
+  version de la garde tombait sur cet import légitime.
+  ⚠ **QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN EST UNE TABLE, PLUS UNE CONDITION.**
+  `session.js` écrivait « actif si ce n'est pas Options », ce qui allumait
+  « Base » sur l'écran Mission le jour de son arrivée. `ONGLET_DE_L_ECRAN` le
+  dit, et un test exige qu'elle couvre exactement `ECRANS`.
+  ⚠ **DEUX ONGLETS MORTS RESTENT — Recherche et Monde — ET ILS SE NOMMENT.**
+  Les deux gardes qui les surveillaient les COMPTAIENT, et l'une annonçait
+  « Recherche, Monde et Options » alors qu'Options était vivant depuis le lot
+  MISE EN PAGE : le message mentait déjà. Un nombre nu ne dit pas lequel des
+  trois vient de bouger.
 
 - **LES FLÈCHES DE BASCULE ENTRE BASES SONT UNE COQUILLE, ET ELLES LE DISENT.**
   L'état porte UNE `disposition` : il n'y a structurellement qu'une base. Les
