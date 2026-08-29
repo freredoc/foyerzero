@@ -250,6 +250,13 @@ de bâtiments.
 
 **Le butin est proportionnel aux dégâts** : un bâtiment détruit à moitié paie la moitié.
 
+**Et il est proportionnel aux dégâts de CE raid-là, pas au total depuis le plein** — arbitré le
+29/08/2026. Un bâtiment entamé à la passe précédente a déjà encaissé sa part : la passe suivante
+ne paie que ce qu'elle casse, et un rasage solde **ce qui restait debout en arrivant** au lieu du
+plein nominal. Sur un site rasé en deux passes, la somme fait donc exactement sa valeur ; la règle
+d'avant la faisait dépasser de 16 % sur un avant-poste de référence, et d'autant plus qu'on
+cassait avant le coup de grâce.
+
 ### Saveurs
 
 Deux variantes de camp et d'avant-poste : **riche quartz** (75/25) ou **riche scorie**
