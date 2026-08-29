@@ -346,7 +346,10 @@
   #chantier-defile::-webkit-scrollbar { display: none; }
   /* Colonnes et largeur maximale posées par le JS depuis GRILLE : autant de
      fractions qu'il y a de colonnes, plafonnées à `--case-max`. */
-  #chantier-grille { display: grid; align-content: start; margin-inline: auto; }
+  /* `position: relative` porte le calque des traits de voisinage — voir plus
+     bas. Un enfant `absolute` d'un conteneur `grid` sort du flux : il ne
+     devient pas une case, il se cale sur la boîte entière. */
+  #chantier-grille { display: grid; align-content: start; margin-inline: auto; position: relative; }
   .case {
     aspect-ratio: 1; position: relative;
     display: flex; align-items: center; justify-content: center;
@@ -469,10 +472,24 @@
   /* Une flèche de bonus de proximité, posée SUR la case du voisin et pointant
      vers le bâtiment. L'ambre les distingue du liseré des champs, qui occupe
      déjà l'os. */
-  .fleche {
-    position: absolute; right: 1px; bottom: 0;
-    font-size: 11px; line-height: 1; color: #F5B636;
+  /* ⚠⚠ LES TRAITS DE VOISINAGE — ETHAN, LE 29/08 : « les flèches de la base
+     sont bien trop petites. Elle doit partir du centre d'une case à l'autre.
+     Trait épais. » Ce qui existait était un glyphe de 11 px dans un coin de la
+     case voisine : lisible sur une capture de bureau, invisible au doigt.
+     ⚠ LE CALQUE NE PREND AUCUN GESTE. `pointer-events: none` : sans lui, un
+     trait posé par-dessus une case avalerait le toucher qui la vise, et c'est
+     exactement la faute que le dépôt refuse depuis qu'il interdit un
+     `transform: scale()` sur la grille.
+     ⚠ ET IL PASSE AU-DESSUS DE TOUT, y compris de la case sélectionnée
+     (`z-index: 1`) : un trait qui passerait dessous serait coupé par le jeton
+     qu'il relie, donc à moitié invisible — ce qu'on vient justement de
+     corriger. */
+  #chantier-traits {
+    position: absolute; inset: 0; z-index: 2;
+    pointer-events: none; overflow: visible;
   }
+  #chantier-traits .trait { stroke: #F5B636; fill: none; }
+  #chantier-traits .pointe { fill: #F5B636; }
 
   /* --- 5. contexte — 46 ---------------------------------------------------- */
   /* ⚠ QUATRE BOUTONS DEPUIS LE 28/08, ET LA BARRE NE GRANDIT PAS. Consigne
@@ -691,17 +708,25 @@
      Chantier, pour que le même état se lise de la même façon d'un écran à
      l'autre. */
   #ecran-offense .emplacement.enmain { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* ⚠⚠ ELLE NE DÉFILE PLUS, ELLE TIENT — corrigé le 29/08. Elle avait des
+     colonnes de 82 px et un `overflow-x: auto` : tolérable tant qu'elle était
+     FILTRÉE et ne montrait que trois ou quatre unités, insupportable depuis
+     qu'elle grise et en montre quatorze. « Tu compresses tout dans l'ui »
+     (Ethan, 28/08) : rien ne défile horizontalement. Le nombre de colonnes se
+     CALCULE dans le JS depuis la longueur du roster, exactement comme celle du
+     Chantier depuis le lot MISE-EN-PAGE — l'écrire ici mentirait au prochain
+     ajout d'unité. */
   #offense-palette {
     flex: 0 0 86px; display: grid;
-    grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; grid-auto-columns: 82px;
-    gap: 4px; padding: 5px 6px; background: #1E2124; border-top: 1px solid #161914;
-    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    grid-template-rows: repeat(2, 1fr);
+    gap: 3px; padding: 5px 6px; background: #1E2124; border-top: 1px solid #161914;
+    overflow: hidden;
   }
-  #offense-palette::-webkit-scrollbar { display: none; }
   #ecran-offense .unite {
-    display: flex; flex-direction: column; justify-content: center; gap: 2px;
-    padding: 4px; background: #343A2C; border: 1px solid #161914;
-    color: #F5F3E8; font: inherit; font-size: 9px; text-align: left;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px; overflow: hidden;
+    padding: 2px 1px; background: #343A2C; border: 1px solid #161914;
+    color: #F5F3E8; font: inherit; font-size: 8px; text-align: center; line-height: 1.05;
   }
   #ecran-offense .unite:disabled { color: #68727E; }
   #ecran-offense .unite .cout { font-size: 8px; color: #8C9A72; }
@@ -745,11 +770,47 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
   }
+  /* ⚠ `overflow-wrap: anywhere` PARCE QUE LES NOMS SONT LONGS ET LA COLONNE
+     ÉTROITE. À sept colonnes sur 360 px, une vignette fait 47 px : sans point
+     de coupure, « Cuirassiers » déborde et se fait rogner par l'`overflow`
+     du parent — le joueur lit « UIRASSIER ». Vu à l'essai, pas à la relecture. */
   #offense-palette .unite b {
-    font-size: 8px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase;
+    font-size: 7px; font-weight: 400; letter-spacing: 0.02em; text-transform: uppercase;
     text-align: center; line-height: 1.05; color: #F5F3E8;
+    overflow-wrap: anywhere; hyphens: auto;
   }
   #offense-palette .unite .cout { font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums; }
+  /* ⚠ UNE VIGNETTE ÉTEINTE N'EST PAS `disabled` : elle doit répondre au toucher
+     pour DIRE ce qui la verrouille. Elle se grise donc par une classe, comme
+     l'unique déjà posé du Chantier depuis le 28/08. */
+  #offense-palette .unite.verrouillee { opacity: 0.45; }
+  #offense-palette .unite.verrouillee b { color: #68727E; }
+
+  /* La barre contextuelle de l'Offense — jumelle de `#chantier-contexte`, même
+     hauteur, mêmes quatre boutons, même modèle « armer puis toucher ». Elle ne
+     coexiste jamais avec celle du Chantier : c'est l'autre écran. */
+  #offense-contexte {
+    flex: 0 0 46px; display: flex; align-items: center; gap: 3px;
+    padding: 0 4px; background: #343A2C; border-top: 1px solid #161914;
+  }
+  #offense-contexte .qui { flex: 1; min-width: 0; line-height: 1.15; }
+  #offense-contexte .qui b { display: block; font-size: 11px; color: #F5F3E8; }
+  #offense-contexte .qui span {
+    display: block; font-size: 8px; color: #68727E;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #offense-contexte button {
+    flex: 0 0 auto; padding: 6px 6px; font-size: 9px;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    background: #1E2124; color: #8C9A72; border: 1px solid #161914;
+  }
+  #offense-contexte button.up { color: #F5F3E8; }
+  #offense-contexte button.sell { color: #E43E32; }
+  #offense-contexte button em { font-style: normal; color: #68727E; }
+  /* ⚠ LA CLASSE QUI DIT QU'UNE ACTION EST ARMÉE. Sans règle ici, le modèle
+     « armer puis toucher » serait invisible — c'est le défaut livré au lot
+     ÉCRAN-ACTIONS, relevé par Ethan sur appareil, et une garde le surveille. */
+  #offense-contexte button.arme { background: #6A7658; color: #161914; }
 </style>
 </head>
 <body>
@@ -859,6 +920,23 @@
            un refus, ou le rappel du mode en cours. Vide, elle se cache. -->
       <p id="offense-avis" hidden></p>
       <div id="offense-vagues"></div>
+      <!-- ⚠ LA BARRE CONTEXTUELLE, NEUVE AU 29/08. Ethan : « on ne peut pas
+           supprimer une unité en cliquant dessus. D'ailleurs les boutons
+           réparer, améliorer etc. n'apparaissent pas dans le menu offense. »
+           L'écran retirait bien une unité, mais en deux touchers implicites
+           qu'aucun bouton n'annonçait. C'est la barre du Chantier, aux mêmes
+           quatre boutons et au même modèle « armer puis toucher » — « Retirer »
+           plutôt que « Démolir », parce qu'on ne démolit pas des Fusiliers. -->
+      <div id="offense-contexte">
+        <div class="qui">
+          <b id="offense-selection-nom">—</b>
+          <span id="offense-selection-detail">aucune unité sélectionnée</span>
+        </div>
+        <button type="button" id="offense-reparer">Réparer</button>
+        <button type="button" class="up" id="offense-ameliorer">Améliorer<em id="offense-ameliorer-cible"></em></button>
+        <button type="button" id="offense-deplacer">Déplacer</button>
+        <button type="button" class="sell" id="offense-retirer">Retirer</button>
+      </div>
       <div id="offense-palette"></div>
     </div>
 

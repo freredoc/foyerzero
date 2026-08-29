@@ -105,8 +105,24 @@ for (const image of IMAGES_INLINE) {
 
 // --- garde offline ------------------------------------------------------------
 
+// ⚠⚠ UNE SEULE URL EST TOLÉRÉE, ET CE N'EST PAS UNE RÉFÉRENCE. L'espace de
+// noms XML du SVG — `http://www.w3.org/2000/svg` — est l'argument obligatoire
+// de `createElementNS` : sans lui, le navigateur fabrique un élément HTML nommé
+// « svg » qui ne dessine rien. C'est un IDENTIFIANT, pas une adresse : rien
+// n'est jamais téléchargé depuis là, et le HTML reste hors ligne au sens
+// strict. Le calque des traits de voisinage en a besoin depuis le 29/08.
+//
+// ⚠ ET L'EXCEPTION EST NOMMÉE, PAS ÉLARGIE. On ne retire pas la garde, on ne
+// l'assouplit pas en autorisant `w3.org` : on retire cette chaîne-là, à
+// l'identique, et tout le reste est refusé comme avant. La contourner en
+// assemblant l'URL à l'exécution aurait marché aussi — et c'est exactement ce
+// que CLAUDE.md §6 interdit pour les hex à trois chiffres : passer sous un
+// garde-fou en silence coûte plus cher que la contrainte qu'il pose.
+const NAMESPACE_SVG = 'http://www.w3.org/2000/svg';
+
 const violations = [];
-const url = html.match(/https?:\/\/[^\s"'<>]*/i);
+const horsNamespace = html.split(NAMESPACE_SVG).join('');
+const url = horsNamespace.match(/https?:\/\/[^\s"'<>]*/i);
 if (url) violations.push(`URL réseau présente dans le HTML final : « ${url[0]} »`);
 
 for (const attribut of html.matchAll(/<[^>]+\b(?:src|href)\s*=\s*["']([^"']*)["']/gi)) {

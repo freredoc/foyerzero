@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **29/08/2026**, version 0.30.0 · build 31.
+Dernière révision : **29/08/2026**, version 0.31.0 · build 32.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **29/08/2026**, version 0.30.0 · build 31.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 29/08/2026 (après le lot ÉCRAN-CARTE), à confronter :**
-`npm test` → **458 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**503 724 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot RETOURS-ETHAN), à confronter :**
+`npm test` → **467 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**512 912 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -63,7 +63,9 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : 16,0 %.
+Marge actuelle : 14,5 % — le lot RETOURS-ETHAN a porté le HTML à
+**512 912 octets** (+9 188 : le calque SVG des traits, la barre contextuelle de
+l'Offense, et les trois raisons de verrouillage des palettes).
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
 est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de
@@ -93,6 +95,13 @@ déclaration remontée l'a fait tomber sans qu'aucun geste ait changé.
 Puis de **trois** au lot CITATION (29/08), dans `donnees.test.js` : les deux
 courbes confrontées au relevé qui les a mesurées, et l'écart voulu sur les
 dégâts exigé DÉCLARÉ dans le fichier qui le commet.
+Puis de **neuf** au lot RETOURS-ETHAN (29/08), répartis sur quatre fichiers —
+deux dans `base.test.js` (le bâtiment de production par châssis, la réparation
+indexée sur le Chantier), deux dans `state.test.js` (le plafond du Chantier, la
+règle du bâtiment hors de `verifierEtat`), trois dans `chantier.test.js` (la
+géométrie du trait, son accord avec le glyphe, le calque SVG) et deux dans
+`offense.test.js` (la barre contextuelle, la palette qui ne défile plus). Aucun
+fichier neuf : les six retours d'Ethan touchent du code qui existait déjà.
 Et de **trente et un** au lot ÉCRAN-CARTE (29/08), dans deux fichiers neufs :
 treize dans `test/terrain.test.js` — le pavage, confronté à l'atlas RÉEL décodé
 sur place — et dix-huit dans `test/monde.test.js`. Deux d'entre eux ont été
@@ -576,11 +585,21 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
 
   | Geste | Stocks | Capacités | Emplac. |
   |---|---|---|---|
-  | base neuve | 30 / 30 / 20 | 50 / 50 / 40 | 1 / 2 |
-  | Chantier → niv. 2 (**8 quartz**) | 22 / 30 / 20 | 63 / 63 / 50 | 1 / **4** |
-  | + Collecteur sur un champ | 22 / 30 / 20 | 63 / 63 / 50 | 2 / 4 |
-  | + Raffinerie voisine | 22 / 30 / 20 | **83** / 83 / 50 | 3 / 4 |
-  | après 1 h | **83** (saturé) / 30 / 20 | 83 / 83 / 50 | 3 / 4 |
+  | base neuve | 30 / 30 / 20 | 50 / 50 / 40 | 1 / **3** |
+  | Chantier → niv. 2 (**8 quartz**) | 22 / 30 / 20 | 63 / 63 / 50 | 1 / **6** |
+  | + Collecteur sur un champ | 22 / 30 / 20 | 63 / 63 / 50 | 2 / 6 |
+  | + Raffinerie voisine | 22 / 30 / 20 | **83** / 83 / 50 | 3 / 6 |
+  | après 1 h | **83** (saturé) / 30 / 20 | 83 / 83 / 50 | 3 / 6 |
+
+  ⚠ **LA COLONNE DES EMPLACEMENTS A ÉTÉ REMESURÉE LE 29/08** — la table dictée
+  par Ethan ouvre 3 puis 6 emplacements là où l'ancienne courbe en ouvrait 2 puis
+  4. Les stocks et les capacités, eux, n'ont pas bougé d'une unité : c'est la
+  MÊME chaîne, avec deux bâtiments de marge en plus.
+  ⚠⚠ **ET LE PREMIER GESTE N'EST PLUS SEULEMENT LE MEILLEUR, IL EST LE SEUL.**
+  Le Chantier plafonne désormais le niveau de toute la base : tant qu'il est au
+  niveau 1, aucun autre bâtiment ne monte. Monter le Chantier était déjà la
+  première ligne de ce tableau ; c'est maintenant la seule montée payable d'une
+  partie neuve, et un test de `state.test.js` le vérifie au lieu de le supposer.
 
   ⚠ **CE TABLEAU A ÉTÉ REMESURÉ LE 28/08 APRÈS LA NOUVELLE COURBE DE STOCKAGE,
   ET IL EST BEAUCOUP PLUS SERRÉ QU'AVANT.** La raffinerie de niveau 1 apportait
@@ -1502,11 +1521,17 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   allumer « Base » parce que le défilement s'y était arrêté dirait au joueur
   qu'il regarde sa base alors qu'il regarde ses vagues.
 
-- **LA PALETTE NE DÉFILE PLUS, ELLE TIENT.** Deux rangées, et le nombre de
-  colonnes se CALCULE — `Math.ceil(posables.length / 2)`. Elle avait des colonnes
-  de 82 px et un défilement horizontal : la première vignette était coupée et
-  deux bâtiments vivaient hors de l'écran. Écrire « 6 » marcherait aujourd'hui et
-  mentirait au douzième bâtiment.
+- **LES DEUX PALETTES NE DÉFILENT PLUS, ELLES TIENNENT.** Deux rangées, et le
+  nombre de colonnes se CALCULE — `Math.ceil(longueur / 2)`. Celle du Chantier
+  avait des colonnes de 82 px et un défilement horizontal : la première vignette
+  était coupée et deux bâtiments vivaient hors de l'écran. Écrire « 6 »
+  marcherait aujourd'hui et mentirait au douzième bâtiment.
+  ⚠ **CELLE DE L'OFFENSE A SUIVI LE 29/08, ET ELLE Y ÉTAIT FORCÉE.** Elle gardait
+  ses colonnes de 82 px et son `overflow-x: auto` : tolérable tant qu'elle
+  FILTRAIT et n'en montrait que trois ou quatre, insupportable depuis qu'elle
+  grise et en montre quatorze. À sept colonnes sur 360 px la vignette fait 47 px,
+  et le libellé a besoin d'`overflow-wrap: anywhere` — sans quoi « Cuirassiers »
+  se lit « UIRASSIER ». Vu à l'essai dans un navigateur, pas à la relecture.
 
 - ⚠⚠ **L'ONGLET MISSION EST VIVANT DEPUIS LE 28/08 : C'EST LE TUTORIEL.** Il
   était « bouton mort pour l'instant, futur tuto » dans la liste d'Ethan ; le
@@ -1654,12 +1679,15 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   touchers pour poser ; une unité posée se prend en main, puis se déplace sur
   une case libre ou se retire en retouchant la sienne. Pas de bouton de plus :
   la consigne « tout doit tenir dans l'écran » interdisait une septième barre.
-  ⚠ **SA PALETTE FILTRE PAR NIVEAU, CELLE DE LA DÉFENSE GRISE.** Ce n'est pas
-  une incohérence : `unitesDisponibles` de l'Arsenal RETIRE ce qui est
-  verrouillé (« une unité qu'on ne peut pas construire n'a pas à occuper
-  l'écran », lot 5A) et sa palette est seule sur son écran ; celle de la défense
-  partage la barre du bas avec celle des bâtiments, où une longueur qui change
-  déplace les vignettes sous le doigt.
+  ⚠⚠ **SA PALETTE GRISAIT-ELLE OU FILTRAIT-ELLE ? ELLE GRISE, DEPUIS LE 29/08,
+  ET C'EST UN CHANGEMENT DE DÉCISION.** Elle RETIRAIT ce que le niveau
+  verrouille — « une unité qu'on ne peut pas construire n'a pas à occuper
+  l'écran », lot 5A. Ethan a rapporté le 29/08 deux unités « indisponibles »
+  qu'il attendait : une palette qui CACHE ne peut pas répondre à ça. Les deux
+  palettes se comportent donc enfin pareil, et le gain n'est pas cosmétique —
+  le joueur voit ce qui existe, la règle du bâtiment de production s'apprend au
+  lieu de se deviner, et la palette garde une LONGUEUR FIXE, si bien que les
+  vignettes ne se déplacent plus sous le doigt entre deux gestes.
   ⚠ **L'EXPLICATION DU BUDGET ABSENT VA DANS LE REGISTRE `mode`, PAS `session`.**
   `session` est prioritaire dans `ligneAAfficher` : il aurait masqué les refus
   de geste dans le cas exact où ils arrivent — une armée posée puis le QG
@@ -1952,6 +1980,104 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   l'appelle dix fois par seconde ; refaire la liste des sites coûte neuf hachages
   par case de la fenêtre pour redessiner exactement la même image. Le fond, lui,
   est une fonction de la graine : il ne change jamais.
+
+- ⚠⚠ **LE CHANTIER PLAFONNE LE NIVEAU DE TOUTE LA BASE** — arbitré le 29/08 par
+  Ethan : « le chantier de construction définit le niveau max des bâtiments.
+  Donc aucun bâtiment ne peut avoir un niveau supérieur à celui du chantier. »
+  C'est ce qui fait du Chantier le rythme de la partie : on ne monte plus rien
+  tant qu'il n'est pas monté lui-même. Code `plafond-chantier`, dans
+  `problemesDeLAmelioration`.
+  ⚠ **IL NE SE PLAFONNE PAS LUI-MÊME.** Il EST la référence ; lui appliquer la
+  règle le figerait à son niveau de départ, et plus rien ne monterait jamais.
+  ⚠ **ET CE N'EST PAS UNE RÈGLE DE `verifierEtat`.** C'est une règle
+  d'AMÉLIORATION : aucune sauvegarde ne devient illisible, aucune migration
+  n'est due, `SAVE_VERSION` reste à 8.
+- **LE CHANTIER DÉFINIT AUSSI LES TEMPS DE RÉPARATION** — même arbitrage.
+  `REPARATION_BASE_JOUEUR.indexeeSur` NOMME le bâtiment, comme `POINTS_ARMEE`
+  nomme déjà celui de chaque budget.
+  ⚠ **MAIS LA COURBE N'EST PAS DONNÉE, DONC ELLE N'EST PAS ÉCRITE.** Ethan a dit
+  QUI décide, pas de combien. `courbe: null`, et un test l'asserte de face :
+  inventer un barème le figerait sous l'apparence d'une donnée relevée, ce qui
+  est la faute que §6 raconte déjà pour la pente de `data/niveaux.js`.
+- ⚠⚠ **LA TABLE D'EMPLACEMENTS DU CHANTIER EST DICTÉE, NIVEAU PAR NIVEAU**
+  (29/08) : **3 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 19 · 20** pour les dix
+  premiers. Les écarts ne se résument pas — +3, +3, puis +2 six fois, puis +1
+  deux fois — et aucune expression close ne les rend. On écrit les dix.
+  ⚠ **AU-DELÀ DE DIX, RIEN N'A CHANGÉ** : un par niveau, plafond 40 au niveau 30.
+  La table rejoint l'ancienne courbe exactement au niveau 10, à 20 des deux
+  côtés, si bien que les niveaux 11 à 50 rendent les mêmes nombres qu'avant.
+  ⚠ **CE QUI A CHANGÉ POUR LE JOUEUR, C'EST LE DÉBUT DE PARTIE.** DEUX
+  emplacements libres au niveau 1 au lieu d'un, et le niveau 3 suffit aux sept
+  obligatoires là où il fallait le niveau 4.
+- ⚠⚠ **UNE UNITÉ NE SE CONSTRUIT PAS SANS SON BÂTIMENT DE PRODUCTION** — arbitré
+  le 29/08 : « Infanterie inconstructible sans caserne. Même règle pour véhicule
+  et avion. » `BATIMENT_DE_CHASSIS` de `data/base.js` porte les trois lignes ;
+  la question se pose à `batimentDeProductionManquant` de `sim/state.js`.
+  ⚠ **LA CLÉ EST LE CHÂSSIS, PAS LE NOM DE L'UNITÉ.** `UNITES[x].chassis` classe
+  déjà les quatorze en escouade / blindé / aéronef : la règle tient en trois
+  lignes, pas quatorze, et une unité qui arriverait demain en hérite.
+  ⚠ **ELLE VAUT POUR LES DEUX FORCES, ET C'EST UNE LECTURE.** Ethan a énoncé une
+  règle sur les UNITÉS, sans dire « à l'assaut » ni « en garnison » : la
+  restreindre à un écran aurait été le choix arbitraire. Les six ouvrages fixes
+  et les trois artilleries ne sont pas dans `UNITES`, n'ont pas de châssis, et ne
+  sont donc pas concernés — un mur n'a jamais eu besoin d'une caserne.
+  ⚠⚠ **ET ELLE N'EST PAS DANS `verifierEtat`, EXACTEMENT COMME LE BUDGET.** Elle
+  peut devenir fausse SOUS une composition déjà posée — la Caserne démolie, ou
+  tombée au raid — et refuser le chargement rendrait la partie injouable pour une
+  faute que le joueur n'a pas commise. On SIGNALE au geste, le joueur purge.
+  C'est aussi ce qui évite une migration.
+- **« GUARDIAN ET PALADIN INDISPONIBLES » — CE QUI A ÉTÉ FAIT, ET CE QUI NE L'A
+  PAS ÉTÉ.** Mesuré : `ratisseur` (Guardian) apparaît au niveau **18**,
+  `busard` (Paladin) au niveau **14**, et l'ancienne palette les RETIRAIT en
+  dessous. Elle les montre maintenant, éteints, avec la raison — « apparaît au
+  niveau 18 », « sans Aérodrome, pas d'avion ». **Les seuils eux-mêmes n'ont pas
+  été touchés** : ils viennent de `RELEVE-TA-ARSENAL.md` et `UNITES` fait foi
+  (§6, arbitré le 24/08). Si Ethan voulait dire que les seuils sont faux, c'est
+  un arbitrage de données qui reste à rendre.
+- ⚠⚠ **L'ÉCRAN OFFENSE A UNE BARRE CONTEXTUELLE DEPUIS LE 29/08.** Ethan : « on
+  ne peut pas supprimer une unité en cliquant dessus. D'ailleurs les boutons
+  réparer, améliorer etc. n'apparaissent pas dans le menu offense. » L'écran
+  retirait bien une unité — en DEUX touchers implicites qu'aucun bouton
+  n'annonçait. C'est la barre du Chantier, aux mêmes quatre boutons et au même
+  modèle « armer puis toucher », avec les mêmes quatre règles.
+  ⚠ **« RETIRER », PAS « DÉMOLIR ».** On ne démolit pas des Fusiliers.
+  ⚠ **RÉPARER ET AMÉLIORER N'ONT TOUJOURS PAS DE MOTEUR, ET LE DISENT.** `null`
+  dans `ACTIONS_ARMEE`, pas un bouton inerte.
+  ⚠ **ET LE CHROME DE L'OFFENSE FAIT EXACTEMENT 288 PX, comme celui du
+  Chantier** : 40 + 44 + 26 + 46 + 86 + 46. La garde de `chantier.test.js` somme
+  désormais les deux écrans.
+  ⚠ **LES MESSAGES DE REFUS NOMMENT CE DONT ILS PARLENT.** `actionSansMoteur`
+  disait « pour la défense » en dur et `PAS_DE_REPARATION` « aucun bâtiment » :
+  juste tant que la barre n'existait qu'au Chantier, faux dès qu'elle est apparue
+  à l'Offense. Le terrain donne le CONSTAT ENTIER — « aucune unité n'est
+  endommagée » — et non le seul nom : recomposer une phrase française morceau par
+  morceau a produit « aucun unité », puis « aucune unité n'est endommagé », en
+  deux essais. Les deux se sont vues à l'essai, pas à la relecture.
+- ⚠⚠ **LES FLÈCHES DE VOISINAGE SONT UN TRAIT ÉPAIS DE CENTRE À CENTRE** —
+  Ethan, 29/08 : « les flèches de la base (collecteur raffinerie) sont bien trop
+  petites. Elle doit partir du centre d'une case à l'autre. Trait épais. » Ce qui
+  existait était un GLYPHE de 11 px posé dans un coin de la case voisine :
+  lisible sur une capture de bureau, invisible au doigt sur un téléphone.
+  ⚠ **UN TRAIT RELIE DEUX CASES, IL NE PEUT DONC PAS VIVRE DANS UNE CASE.** D'où
+  un calque SVG posé sur `#chantier-grille`, dont le `viewBox` prend la CASE pour
+  unité : l'épaisseur est une fraction de case (0,16) et suit la taille de
+  l'appareil, là où un nombre de pixels serait gros sur un petit écran et maigre
+  sur un grand.
+  ⚠ **`pointer-events: none`, SANS EXCEPTION.** Un trait posé par-dessus une case
+  qui avalerait le toucher serait la même faute que le `transform: scale()` que
+  le dépôt interdit sur la grille : le doigt se décrocherait de la case qu'il
+  vise. Un test l'asserte.
+  ⚠ **LE GLYPHE SURVIT DANS L'INFOBULLE, ET UN TEST LES ACCORDE.** Le glyphe est
+  le LIBELLÉ de la flèche, le couple départ/arrivée est son DESSIN : deux
+  représentations d'un fait, donc une garde qui les compare plutôt qu'une
+  duplication laissée seule.
+- ⚠ **L'ESPACE DE NOMS SVG EST LA SEULE URL TOLÉRÉE DU LIVRABLE.**
+  `http://www.w3.org/2000/svg` est l'argument obligatoire de `createElementNS` :
+  un IDENTIFIANT, jamais une adresse — rien n'est téléchargé depuis là. La garde
+  offline de `tools/build.js` et T10 le retirent à l'identique et refusent tout
+  le reste, `w3.org` compris. **Ne pas contourner en assemblant l'URL à
+  l'exécution** : ce serait passer sous un garde-fou en silence, comme les hex à
+  trois chiffres.
 
 ### Sur le vocabulaire
 

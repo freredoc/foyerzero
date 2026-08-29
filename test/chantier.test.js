@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  ACTIONS, PAS_DE_REPARATION, DUREE_TOAST_MS,
+  ACTIONS, messagePasDeReparation, DUREE_TOAST_MS,
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE,
@@ -33,7 +33,7 @@ import {
   NOMBRE_DE_BASES,
   BOUTONS_DU_BAS,
   flechesDeVoisinage,
-  GLYPHES_DE_FLECHE,
+  GLYPHES_DE_FLECHE, traitDeVoisinage, TRAIT_VOISINAGE,
   messageDeConfirmation,
   messageDeDestination,
   casesDeplacables,
@@ -348,7 +348,13 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
     { cle: 'scorie', stockMilli: 0, capaciteMilli: capRaffinerie + poche.scorie * 1000, debitMilli: 1_876_000 },
     { cle: 'electricite', stockMilli: 0, capaciteMilli: capAccumulateur + poche.electricite * 1000, debitMilli: 567_000 },
   ]);
-  assert.deepEqual(resume.emplacements, { poses: 11, ouverts: 12 });
+  // ⚠ LE NOMBRE OUVERT SE LIT, IL NE SE RECOPIE PAS. La table d'emplacements a
+  // changé le 29/08 ; ce qui est mesuré ici est que le résumé demande la même
+  // grandeur que `data/base.js`, pas qu'elle vaille douze.
+  const niveauChantier = etat.disposition.find((b) => b.id === 'chantierDeConstruction').niveau;
+  assert.deepEqual(resume.emplacements, {
+    poses: 11, ouverts: emplacementsDuNiveau(niveauChantier),
+  });
   assert.deepEqual(resume.niveaux, { batiments: 46, defense: null, assaut: null });
 
   // Et le même résultat par le chemin direct : le résumé ne fait que recopier
@@ -488,7 +494,9 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   assert.equal(posablesDeLaBase(neuve).length, Object.keys(BASE_BATIMENTS).length);
   assert.equal(posablesDeLaBase(neuve).filter((p) => !p.dejaPose).length,
     Object.keys(BASE_BATIMENTS).length - 1, 'un seul bâtiment devrait être grisé');
-  assert.deepEqual(resumeDeLaBase(neuve).emplacements, { poses: 1, ouverts: 2 });
+  assert.deepEqual(resumeDeLaBase(neuve).emplacements, {
+    poses: 1, ouverts: emplacementsDuNiveau(1),
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1131,8 +1139,30 @@ test('actions — Réparer n\'a pas de moteur, et ce n\'est pas un oubli', () =>
   assert.equal(ACTIONS.reparer.agir, undefined);
 
   // La phrase dit ce qui est vrai, et ne promet rien.
-  assert.equal(typeof PAS_DE_REPARATION, 'string');
-  assert.ok(PAS_DE_REPARATION.length > 20, 'un refus doit expliquer, pas seulement refuser');
+  // ⚠ LE MESSAGE NOMME CE DONT IL PARLE DEPUIS LE 29/08. Il disait « aucun
+  // bâtiment n'est endommagé » en dur, y compris sur la bande de garnison et,
+  // à ce lot, sur l'écran Offense : le mot vient maintenant du terrain.
+  const constat = 'aucun bâtiment n\'est endommagé';
+  assert.equal(typeof messagePasDeReparation(constat), 'string');
+  assert.ok(messagePasDeReparation(constat).length > 20,
+    'un refus doit expliquer, pas seulement refuser');
+  // ⚠⚠ LE CONSTAT ENTIER, ET IL A FALLU DEUX ESSAIS. La première écriture ne
+  // prenait que le nom et préfixait « aucun » : « aucun unité ». La deuxième
+  // prenait le sujet accordé et gardait le verbe : « aucune unité n'est
+  // endommagé ». Les deux se sont vues À L'ESSAI, pas à la relecture — et ce
+  // test-ci les avait laissées passer avec un `aucune?` complaisant. Il exige
+  // maintenant que la phrase soit REPRISE, pas recomposée.
+  const feminin = 'aucune unité n\'est endommagée';
+  assert.ok(messagePasDeReparation(feminin).startsWith(`${feminin} `),
+    'le message recompose le constat au lieu de le reprendre');
+  assert.ok(!messagePasDeReparation(feminin).includes('bâtiment'),
+    'le message parle encore de bâtiments alors qu\'on lui parle d\'unités');
+  // Et chaque terrain porte SON constat, accordé de bout en bout.
+  for (const terrain of Object.values(TERRAINS)) {
+    assert.match(terrain.quoi, /^aucun(e?) [^ ]+ n'est endommagé\1$/,
+      `« ${terrain.quoi} » n'est pas un constat accordé`);
+    assert.ok(terrain.pourQui.length > 2, 'le terrain ne dit pas pour qui il parle');
+  }
 
   // Falsifiable dans l'autre sens : le montage doit voir de VRAIS exports, sinon
   // « aucun nom de réparation » passerait sur un module vide.
@@ -1282,11 +1312,23 @@ test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le cal
 
   // Falsifiable : le montage doit voir une base qui SATURE, sinon la
   // comparaison ne prouve rien. On remplit jusqu'au plafond du niveau 1.
+  //
+  // ⚠ IL FAUT DEUX POSES DEPUIS LE 29/08, PAS UNE. La table d'emplacements
+  // dictée par Ethan ouvre trois emplacements au niveau 1 au lieu de deux. On
+  // remplit donc jusqu'à ce que la fonction dise plein, plutôt que de compter
+  // les poses à la main : la prochaine table ne fera pas retomber ce test.
   const pleine = creerEtat(11);
-  const champ = pleine.champs.cases[0];
-  poser(pleine, 'collecteur', champ.rangee, champ.colonne);
+  const champs = pleine.champs.cases;
+  let pose = 0;
+  while (resumeDeLaBase(pleine).emplacements.poses
+    < resumeDeLaBase(pleine).emplacements.ouverts) {
+    poser(pleine, 'collecteur', champs[pose].rangee, champs[pose].colonne);
+    pose += 1;
+    assert.ok(pose <= champs.length, 'le montage ne parvient pas à remplir la base');
+  }
+  assert.ok(pose > 0, 'une base neuve était déjà pleine : le montage ne mesure rien');
   const apres = resumeDeLaBase(pleine).emplacements;
-  assert.equal(apres.poses, apres.ouverts, 'la base devrait être pleine après une pose');
+  assert.equal(apres.poses, apres.ouverts, 'la base devrait être pleine après les poses');
 });
 
 // ---------------------------------------------------------------------------
@@ -1501,10 +1543,14 @@ test('panneau — sur une base neuve, il dit ce qui débloque la partie', () => 
   assert.equal(vue.bouton.note, formaterCout(coutDeMontee('chantierDeConstruction', 2)));
 
   // ⚠ FALSIFIABLE, ET C'EST ICI QUE ÇA COMPTE. Le montage doit voir la base
-  // BLOQUÉE avant de dire qu'elle se débloque : on mesure qu'un seul emplacement
-  // est libre, et qu'un stock saturé le reste après une nuit entière.
-  assert.equal(emplacementsDuNiveau(1) - neuve.disposition.length, 1,
-    'une base neuve n\'a plus exactement un emplacement libre');
+  // ÉTROITE avant de dire qu'elle s'élargit : on mesure combien d'emplacements
+  // sont libres, et qu'un stock saturé le reste après une nuit entière.
+  //
+  // ⚠ DEUX DEPUIS LE 29/08, ET LE MUR RESTE LE MÊME. La table dictée par Ethan
+  // donne un emplacement libre de plus au niveau 1 ; ce que ce test mesure —
+  // un stock qui sature en cinq minutes et ne bouge plus — n'en dépend pas.
+  assert.equal(emplacementsDuNiveau(1) - neuve.disposition.length, 2,
+    'une base neuve n\'a plus exactement deux emplacements libres');
   const bloquee = creerEtat(4242);
   const champ = bloquee.champs.cases.find((c) => c.ressource === 'quartz');
   poser(bloquee, 'collecteur', champ.rangee, champ.colonne);
@@ -1795,7 +1841,9 @@ test('écran — les pastilles de case libre ont quitté la grille, pas le calcu
   // ⚠ ET LA GRANDEUR RESTE CALCULÉE ET AFFICHÉE. C'est le dessin qui part, pas
   // le plafond : le compteur d'emplacements le dit toujours.
   const neuve = creerEtat(11);
-  assert.deepEqual(resumeDeLaBase(neuve).emplacements, { poses: 1, ouverts: 2 });
+  assert.deepEqual(resumeDeLaBase(neuve).emplacements, {
+    poses: 1, ouverts: emplacementsDuNiveau(1),
+  });
   assert.match(ecran, /emplacementsPoses\.textContent\s*=/,
     'le compteur d\'emplacements a disparu avec les pastilles');
 });
@@ -1850,7 +1898,7 @@ test('compteur — le libellé suit le contexte, et la valeur reste honnête', (
   const batiments = compteurDeContexte(etat, 'batiments');
   assert.equal(batiments.libelle, 'Emplac.');
   assert.equal(batiments.valeur, '1');
-  assert.equal(batiments.capacite, '/ 2');
+  assert.equal(batiments.capacite, `/ ${emplacementsDuNiveau(1)}`);
   assert.equal(batiments.sature, false);
 
   // ⚠ LES DEUX AUTRES PORTENT UN NOMBRE DEPUIS LE 28/08 — ce test a changé de
@@ -1876,11 +1924,21 @@ test('compteur — le libellé suit le contexte, et la valeur reste honnête', (
 
   // Falsifiable : le compteur des bâtiments DOIT bouger avec la base, sinon les
   // trois cas se ressembleraient et le test ne distinguerait rien.
-  const champ = etat.champs.cases[0];
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  // ⚠ ON REMPLIT JUSQU'À CE QUE LA FONCTION DISE PLEIN, on ne compte pas les
+  // poses à la main : la table d'emplacements a changé le 29/08 et changera
+  // encore. Ce qui est mesuré est que le compteur SUIT la base, pas qu'il
+  // affiche deux.
+  const champs = etat.champs.cases;
+  let pose = 0;
+  while (compteurDeContexte(etat, 'batiments').sature === false) {
+    poser(etat, 'collecteur', champs[pose].rangee, champs[pose].colonne);
+    pose += 1;
+    assert.ok(pose <= champs.length, 'le montage ne parvient pas à remplir la base');
+  }
+  assert.ok(pose > 0, 'une base neuve était déjà pleine : le montage ne mesure rien');
   const pleine = compteurDeContexte(etat, 'batiments');
-  assert.equal(pleine.valeur, '2');
-  assert.equal(pleine.sature, true, 'la base devrait être pleine après une pose');
+  assert.equal(pleine.valeur, String(1 + pose));
+  assert.equal(pleine.sature, true, 'la base devrait être pleine après les poses');
   assert.notEqual(pleine.valeur, batiments.valeur);
 });
 
@@ -1988,6 +2046,127 @@ test('options — le banc reste atteignable après le déménagement de la versi
   assert.match(session, /\$\('jeu'\)\.hidden = false/, 'la page de jeu ne revient pas');
   assert.ok(!/ecran-offense'\)\.hidden = true/.test(session),
     'le banc cache encore les écrans un par un');
+});
+
+test('flèches — un TRAIT ÉPAIS de centre à centre, pas un glyphe dans un coin', () => {
+  // ⚠⚠ ETHAN, LE 29/08 : « les flèches de la base (collecteur raffinerie) sont
+  // bien trop petites. Elle doit partir du centre d'une case à l'autre. Trait
+  // épais. » Ce qui existait était un caractère de 11 px posé en bas à droite
+  // de la case voisine : lisible sur une capture de bureau, invisible au doigt.
+  //
+  // ⚠ LA GÉOMÉTRIE EST PURE ET RAISONNE EN CASES. Elle ne connaît ni pixels ni
+  // SVG : le repère a la case pour unité, et le centre de (colonne, ligne) est
+  // en (colonne − ½, ligne − ½). C'est ce qui la rend testable ici.
+  const trait = traitDeVoisinage({ ligne: 4, colonne: 3 }, { ligne: 4, colonne: 4 });
+
+  // Il PART du centre de la case de départ — c'est la demande, mot pour mot.
+  assert.equal(trait.ligne.x1, 2.5);
+  assert.equal(trait.ligne.y1, 3.5);
+  // Et il ARRIVE au centre de l'autre : la pointe y a son sommet.
+  assert.deepEqual(trait.pointe[0], [3.5, 3.5]);
+  // Le fût s'arrête à la base de la pointe, pas au sommet : sinon le bout rond
+  // dépasserait la pointe et la carte porterait un moignon.
+  assert.ok(trait.ligne.x2 < 3.5 && trait.ligne.x2 > 2.5);
+  assert.equal(trait.ligne.x2, 3.5 - TRAIT_VOISINAGE.longueurPointe);
+
+  // ⚠ ÉPAIS, ET MESURÉ EN FRACTIONS DE CASE. La case va de 30 à 46 px CSS selon
+  // l'appareil : une épaisseur en pixels serait grosse sur un petit écran et
+  // maigre sur un grand. Un dixième de case au moins — l'ancien glyphe pesait
+  // 11 px sur une case de 46, soit deux fois moins.
+  assert.equal(trait.epaisseur, TRAIT_VOISINAGE.epaisseur);
+  assert.ok(trait.epaisseur >= 0.1, `trait de ${trait.epaisseur} case : trop maigre`);
+  // La pointe est un vrai triangle, pas trois points alignés.
+  const [sommet, a, b] = trait.pointe;
+  assert.equal(trait.pointe.length, 3);
+  const aire = Math.abs((a[0] - sommet[0]) * (b[1] - sommet[1])
+    - (b[0] - sommet[0]) * (a[1] - sommet[1])) / 2;
+  assert.ok(aire > 0.01, `pointe d'aire ${aire} : elle est dégénérée`);
+
+  // Les huit directions marchent, et la longueur du fût suit la distance : une
+  // diagonale est plus longue qu'un côté, sinon elle s'arrêterait en route.
+  const droit = traitDeVoisinage({ ligne: 5, colonne: 5 }, { ligne: 4, colonne: 5 });
+  const diagonal = traitDeVoisinage({ ligne: 5, colonne: 5 }, { ligne: 4, colonne: 6 });
+  const longueur = (t) => Math.hypot(t.ligne.x2 - t.ligne.x1, t.ligne.y2 - t.ligne.y1);
+  assert.ok(longueur(diagonal) > longueur(droit),
+    'la diagonale devrait être plus longue que le côté');
+
+  // Une case et elle-même n'a pas de direction : ça LÈVE plutôt que de rendre
+  // un trait de longueur nulle, qui se dessinerait en point.
+  assert.throws(() => traitDeVoisinage({ ligne: 2, colonne: 2 }, { ligne: 2, colonne: 2 }),
+    RangeError);
+});
+
+test('flèches — le trait et le glyphe disent la MÊME direction', () => {
+  // ⚠ DEUX REPRÉSENTATIONS D'UN SEUL FAIT, DONC UNE GARDE. Le glyphe est le
+  // LIBELLÉ de la flèche — il vit dans l'infobulle du SVG — et le couple
+  // départ/arrivée est son DESSIN. Les laisser diverger montrerait un trait
+  // dans un sens et l'annoncerait dans l'autre.
+  const champs = champsDeLaBase(275, 16);
+  const dispo = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },
+    { id: 'accumulateur', rangee: 16, colonne: 5, niveau: 1 },
+  ];
+  assert.deepEqual(problemesDeDisposition(dispo, champs), []);
+
+  const fleches = flechesDeVoisinage(dispo, champs, 1);
+  assert.ok(fleches.length > 1, `${fleches.length} flèche(s) : le montage ne mesure rien`);
+  const attendu = new Map(Object.entries(GLYPHES_DE_FLECHE));
+  for (const f of fleches) {
+    const trait = traitDeVoisinage(f.depart, f.arrivee);
+    const dLigne = Math.sign(f.arrivee.ligne - f.depart.ligne);
+    const dColonne = Math.sign(f.arrivee.colonne - f.depart.colonne);
+    assert.equal(f.glyphe, attendu.get(`${dLigne},${dColonne}`),
+      'le glyphe ne décrit pas la direction du trait');
+    // Et le trait va bien dans ce sens-là, en coordonnées.
+    assert.equal(Math.sign(trait.pointe[0][1] - trait.ligne.y1), dLigne, 'trait inversé en Y');
+    assert.equal(Math.sign(trait.pointe[0][0] - trait.ligne.x1), dColonne, 'trait inversé en X');
+  }
+});
+
+test('flèches — le calque SVG est dans la page, stylé, et ne prend aucun geste', () => {
+  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  const feuille = sansCommentairesHtml(html);
+
+  // ⚠ IL EST CRÉÉ PAR LE JS, PAS ÉCRIT DANS LE BALISAGE : c'est son STYLE qui
+  // doit être dans la page, sinon le calque existerait sans se voir — la faute
+  // exacte du lot ÉCRAN-ACTIONS, où une classe basculée n'avait aucune règle.
+  assert.match(feuille, /#chantier-traits\s*\{/, 'le calque des traits n\'a aucun style');
+  assert.match(feuille, /#chantier-traits\s*\{[^}]*position:\s*absolute/);
+  // ⚠ `pointer-events: none` : sans lui, un trait posé par-dessus une case
+  // avalerait le toucher qui la vise. C'est la même règle que l'interdiction
+  // d'un `transform: scale()` sur la grille — le doigt ne se décroche pas.
+  assert.match(feuille, /#chantier-traits\s*\{[^}]*pointer-events:\s*none/,
+    'le calque des traits avale les touchers de la grille');
+  // Le parent doit le porter : un enfant `absolute` se cale sur le premier
+  // ancêtre positionné, et sans ça le calque se poserait sur toute la page.
+  assert.match(feuille, /#chantier-grille\s*\{[^}]*position:\s*relative/);
+  // Le fût et la pointe sont peints — un SVG sans `stroke` ni `fill` est vide.
+  assert.match(feuille, /#chantier-traits \.trait\s*\{[^}]*stroke:/);
+  assert.match(feuille, /#chantier-traits \.pointe\s*\{[^}]*fill:/);
+
+  // Et l'écran le construit avec le bon `viewBox` : la CASE pour unité, donc
+  // autant d'unités que la grille a de colonnes et de lignes.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /viewBox['"`],\s*`0 0 \$\{GRILLE\.largeur\} \$\{GRILLE\.longueur\}`/,
+    'le viewBox du calque ne suit plus la grille');
+  // ⚠ ET LE GLYPHE NE SE DESSINE PLUS DANS UNE CASE. Le marqueur posé en bas à
+  // droite d'une case est ce que ce lot remplace ; s'il revenait, les deux
+  // dessins se superposeraient.
+  //
+  // ⚠ LA GARDE EST BORNÉE À `peindreApercu`, ET IL LE FAUT. Une première
+  // rédaction cherchait `className = 'fleche'` dans TOUT le fichier — et
+  // tombait sur le « → » du panneau de détail, qui porte la même classe pour
+  // une raison sans rapport et garde sa règle `#chantier-panneau .ligne
+  // .fleche`. Un garde-fou qui accuse un innocent finit par être désarmé.
+  const apercu = ecran.slice(ecran.indexOf('function peindreApercu('));
+  const corpsApercu = apercu.slice(0, apercu.indexOf('\n  function ', 1));
+  assert.ok(corpsApercu.length > 200, 'le découpage de peindreApercu ne mesure rien');
+  assert.ok(!/'fleche'/.test(corpsApercu),
+    'le marqueur de flèche dans la case est revenu');
+  // Et c'est bien le calque qui est rempli à la place.
+  assert.match(corpsApercu, /traitDeVoisinage\(/, 'l\'aperçu ne dessine plus de trait');
+  assert.match(corpsApercu, /traits\.appendChild/, 'l\'aperçu n\'écrit plus dans le calque');
 });
 
 test('flèches — elles pointent vers le bâtiment, dans le sens de l\'ÉCRAN', () => {
@@ -2133,13 +2312,26 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
   assert.equal(chrome, 288, `chrome de ${chrome} px : recalculer la borne ci-dessous`);
   assert.ok(chrome <= 320, `${chrome} px de barres fixes, 320 au plus`);
 
-  // ⚠ ET AUCUNE BARRE DE PLUS N'ENTRE SANS QU'ON LE VOIE. `#offense-palette` est
-  // la seule autre hauteur fixe, et elle ne coexiste jamais avec celle du
-  // Chantier — c'est l'autre écran. Une septième ferait tomber ce compte.
+  // ⚠ ET AUCUNE BARRE DE PLUS N'ENTRE SANS QU'ON LE VOIE. Les barres de
+  // l'Offense sont les seules autres hauteurs fixes, et elles ne coexistent
+  // jamais avec celles du Chantier — c'est l'autre écran. Une de plus fait
+  // tomber ce compte, ce qui force à REGARDER plutôt qu'à ajouter.
+  const barresOffense = ['offense-contexte', 'offense-palette'];
   const fixes = [...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
     .map((m) => m[1]);
-  assert.deepEqual(fixes.slice().sort(), [...barres, 'offense-palette'].sort(),
+  assert.deepEqual(fixes.slice().sort(), [...barres, ...barresOffense].sort(),
     'une barre à hauteur fixe est apparue ou a disparu : le chrome a changé');
+
+  // ⚠ ET L'ÉCRAN OFFENSE SE MESURE AUSSI, DEPUIS QU'IL A SA BARRE CONTEXTUELLE
+  // (29/08). Il partage l'en-tête et la barre du bas ; ce qui lui est propre,
+  // ce sont sa barre contextuelle et sa palette. Le total doit tenir sous la
+  // même borne que le Chantier, sans quoi la consigne « tu compresses tout dans
+  // l'ui » serait respectée d'un côté et pas de l'autre.
+  const communes = ['tete-onglets', 'ressources', 'navigation', 'barre-bas'];
+  const chromeOffense = [...communes, ...barresOffense]
+    .reduce((t, id) => t + hauteur(id), 0);
+  assert.equal(chromeOffense, 288, `chrome Offense de ${chromeOffense} px : recalculer la borne`);
+  assert.ok(chromeOffense <= 320, `${chromeOffense} px de barres fixes sur l'Offense, 320 au plus`);
 
   // Le champ, lui, absorbe : il est `flex: 1` et peut rétrécir.
   assert.match(feuille, /#chantier-champ \{[^}]*flex: 1[^}]*min-height: 0/);
@@ -2163,13 +2355,29 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
 // ---------------------------------------------------------------------------
 
 /** Une base assez grande pour porter les deux bâtiments de commandement. */
-function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2) {
+/**
+ * Une base avec ses deux QG, et éventuellement ses trois bâtiments de production.
+ *
+ * ⚠ LES TROIS PRODUCTIONS SONT UN CHOIX DU MONTAGE DEPUIS LE 29/08. Une unité
+ * ne se construit plus sans son bâtiment — Caserne, Dépôt de véhicules,
+ * Aérodrome —, si bien qu'un montage qui les oublie mesure le verrou du
+ * BÂTIMENT là où il croit mesurer celui du niveau. On les pose donc quand le
+ * test parle de niveaux, et on les omet quand il parle du bâtiment.
+ */
+function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProduction = false) {
   const etat = creerEtat(20260828);
-  etat.disposition[0].niveau = 5; // dix emplacements, sinon la base est illégale
+  etat.disposition[0].niveau = 12; // assez d'emplacements, sinon la base est illégale
   etat.disposition.push(
     { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: niveauOffense },
     { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense },
   );
+  if (avecProduction) {
+    etat.disposition.push(
+      { id: 'caserne', rangee: 11, colonne: 3, niveau: 1 },
+      { id: 'depotDeVehicules', rangee: 11, colonne: 5, niveau: 1 },
+      { id: 'aerodrome', rangee: 13, colonne: 1, niveau: 1 },
+    );
+  }
   for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
     etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   }
@@ -2276,11 +2484,14 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   assert.equal(sansQg.length, 17);
   assert.ok(sansQg.every((p) => p.verrouille), 'la palette est vive sans QG de défense');
 
+  assert.ok(sansQg.every((p) => /QG de défense/.test(p.raison)),
+    'sans QG, la raison devrait nommer le QG de défense');
+
   // ⚠ AVEC UN QG, LES PIÈCES S'OUVRENT PAR NIVEAU D'APPARITION — et les autres
   // RESTENT dans la palette, grisées. C'est l'arbitrage du 28/08 sur les
   // uniques appliqué ici : « griser le bouton, pas le faire disparaître ». Une
   // palette qui change de longueur déplace les vignettes sous le doigt.
-  const avecQg = baseAvecCommandement(3, 8);
+  const avecQg = baseAvecCommandement(3, 8, true);
   const ouverte = posablesDeLaDefense(avecQg);
   assert.equal(ouverte.length, 17, 'la palette a changé de longueur');
   const vives = ouverte.filter((p) => !p.verrouille);
@@ -2291,8 +2502,27 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   }
 
   // Falsifiable : monter le QG doit VRAIMENT ouvrir des pièces.
-  const haut = baseAvecCommandement(3, 50);
+  const haut = baseAvecCommandement(3, 50, true);
   assert.ok(posablesDeLaDefense(haut).every((p) => !p.verrouille), 'le niveau 50 verrouille encore');
+
+  // ⚠⚠ ET LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, arbitrée
+  // le 29/08 : « infanterie inconstructible sans caserne, même règle pour
+  // véhicule et avion ». Ethan ne l'a pas restreinte à un écran, donc elle ne
+  // l'est pas. Sans les trois bâtiments, au niveau 50, seules les pièces qui
+  // ne sont PAS des unités restent posables — un mur n'a pas besoin d'une
+  // caserne.
+  const sansProduction = posablesDeLaDefense(baseAvecCommandement(3, 50, false));
+  for (const p of sansProduction) {
+    const estUneUnite = UNITES[p.id] !== undefined;
+    assert.equal(p.verrouille, estUneUnite,
+      `${p.id} : seules les unités demandent un bâtiment de production`);
+    if (estUneUnite) {
+      assert.match(p.raison, /^sans .+, pas d/, `${p.id} : la raison ne nomme pas le bâtiment`);
+    }
+  }
+  // Le montage doit voir les deux familles, sinon il ne distingue rien.
+  assert.ok(sansProduction.some((p) => UNITES[p.id] !== undefined), 'aucune unité dans le roster');
+  assert.ok(sansProduction.some((p) => UNITES[p.id] === undefined), 'aucun ouvrage fixe');
 });
 
 test('défense — le détail d\'une pièce dit son niveau et ses points', () => {
@@ -2381,8 +2611,13 @@ test('défense — la table des terrains dit tout ce qui les sépare, et rien de
 
   // Et le refus se dit, il ne reste pas muet — « un indice n'est pas une
   // interdiction » : un bouton mort n'apprend rien.
-  assert.ok(actionSansMoteur('Améliorer').includes('Améliorer'));
-  assert.match(actionSansMoteur('X'), /trancher seul/);
+  assert.ok(actionSansMoteur('Améliorer', 'la défense').includes('Améliorer'));
+  assert.match(actionSansMoteur('X', 'la défense'), /trancher seul/);
+  // ⚠ ET LE « POUR QUOI » EST OBLIGATOIRE. Il valait « la défense » en dur ;
+  // l'écran Offense affichait donc « pour la défense » à un joueur qui compose
+  // son armée. Un appel sans destinataire LÈVE plutôt que d'en inventer un.
+  assert.match(actionSansMoteur('X', 'l\'armée'), /pour l'armée/);
+  assert.throws(() => actionSansMoteur('X'), /de quoi elle parle/);
 });
 
 test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {

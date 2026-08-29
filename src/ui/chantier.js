@@ -40,7 +40,7 @@ import {
 // qui font foi dessus depuis le lot 5 ; l'écran la LIT au lieu d'en écrire une
 // troisième. Les deux fonctions portent le même nom court dans deux modules —
 // d'où le renommage à l'import, comme pour `poser`.
-import { budgetDuNiveau as budgetOffense } from './arsenal.js';
+import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
@@ -55,7 +55,7 @@ import {
   problemesDeLAmelioration, ameliorer,
   problemesDeLaDemolition, demolir,
   problemesDuDeplacement, deplacer,
-  pointsEngages, niveauDeCommandement,
+  pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
 } from '../sim/state.js';
@@ -222,7 +222,15 @@ export const ACTIONS = {
  * réparer. Le jour où les dégâts existeront, il n'y aura qu'une fonction à
  * brancher ici.
  */
-export const PAS_DE_REPARATION = 'aucun bâtiment n\'est endommagé : les dégâts n\'existent pas encore';
+export function messagePasDeReparation(constat) {
+  // ⚠⚠ LE CONSTAT ENTIER, ET IL A FALLU DEUX ESSAIS POUR L'ADMETTRE. La
+  // première écriture prenait le seul nom et préfixait « aucun » : elle rendait
+  // « aucun unité » sur l'écran Offense. La deuxième prenait le sujet accordé
+  // et gardait le verbe : elle rendait « aucune unité n'est endommagé ». Le
+  // français ne se recompose pas morceau par morceau — le terrain donne la
+  // phrase, et ce module n'ajoute que ce qui est invariable.
+  return `${constat} : les dégâts n'existent pas encore`;
+}
 
 /** Un niveau absent — la Défense et l'Assaut, qui n'ont pas encore d'état. */
 export const NIVEAU_ABSENT = '—';
@@ -752,6 +760,76 @@ export const GLYPHES_DE_FLECHE = {
 };
 
 /**
+ * La forme du trait de voisinage, en fractions de CASE.
+ *
+ * ⚠ EN FRACTIONS DE CASE, JAMAIS EN PIXELS. La grille se règle sur la largeur
+ * de l'appareil et sa case va de 30 à 46 px CSS : une épaisseur en pixels
+ * serait grosse sur un petit écran et maigre sur un grand. Le trait est dessiné
+ * dans un `viewBox` dont l'unité EST la case, donc il suit.
+ */
+export const TRAIT_VOISINAGE = {
+  epaisseur: 0.16,
+  longueurPointe: 0.34,
+  largeurPointe: 0.34,
+};
+
+/**
+ * Le trait qui relie le centre d'une case au centre d'une autre.
+ *
+ * ⚠⚠ ETHAN, LE 29/08 : « les flèches de la base sont bien trop petites. Elle
+ * doit partir du centre d'une case à l'autre. Trait épais. » Ce qui existait
+ * était un GLYPHE de 11 px posé dans un coin de la case voisine — lisible sur
+ * une capture d'écran de bureau, invisible au doigt sur un téléphone. Un trait
+ * de centre à centre dit la même chose et se voit.
+ *
+ * ⚠ LA FONCTION EST PURE ET RAISONNE EN CASES. Elle ne connaît ni pixels, ni
+ * canevas, ni SVG : elle rend des coordonnées dans un repère où l'unité est la
+ * case et où le centre de la case (colonne, ligne) est en (colonne − ½,
+ * ligne − ½). C'est ce qui la rend testable dans un dépôt sans navigateur.
+ *
+ * ⚠ ET LES COORDONNÉES SONT DES LIGNES D'ÉCRAN, PAS DES RANGÉES. La grille se
+ * dessine à l'envers des numéros de rangée ; passer une rangée ici mettrait
+ * toutes les flèches à l'envers, ce qui est la faute que ce fichier surveille
+ * depuis le lot POSE-ET-DÉPLACEMENT.
+ *
+ * @param {{ligne: number, colonne: number}} depart le VOISIN, qui apporte
+ * @param {{ligne: number, colonne: number}} arrivee le bâtiment, qui reçoit
+ * @param {{epaisseur: number, longueurPointe: number, largeurPointe: number}} [forme]
+ * @returns {{ligne: {x1: number, y1: number, x2: number, y2: number},
+ *   pointe: Array<[number, number]>, epaisseur: number}}
+ */
+export function traitDeVoisinage(depart, arrivee, forme = TRAIT_VOISINAGE) {
+  const x1 = depart.colonne - 0.5;
+  const y1 = depart.ligne - 0.5;
+  const xArrivee = arrivee.colonne - 0.5;
+  const yArrivee = arrivee.ligne - 0.5;
+  const dx = xArrivee - x1;
+  const dy = yArrivee - y1;
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) {
+    throw new RangeError('chantier : trait de voisinage entre une case et elle-même');
+  }
+  const ux = dx / distance;
+  const uy = dy / distance;
+  // La base de la pointe : le fût s'arrête là, la pointe prend le relais. Le
+  // bout rond du fût déborde d'une demi-épaisseur (0,08) — moins que la
+  // longueur de la pointe, donc il reste caché dessous.
+  const xBase = xArrivee - ux * forme.longueurPointe;
+  const yBase = yArrivee - uy * forme.longueurPointe;
+  const px = -uy * (forme.largeurPointe / 2);
+  const py = ux * (forme.largeurPointe / 2);
+  return {
+    ligne: { x1, y1, x2: xBase, y2: yBase },
+    pointe: [
+      [xArrivee, yArrivee],
+      [xBase + px, yBase + py],
+      [xBase - px, yBase - py],
+    ],
+    epaisseur: forme.epaisseur,
+  };
+}
+
+/**
  * Où poser une flèche de bonus de proximité, et laquelle.
  *
  * ⚠ ETHAN, LE 28/08 : « les flèches bonus proximité s'affichent si il y en a ».
@@ -798,6 +876,13 @@ export function flechesDeVoisinage(disposition, champs, index) {
       rangee: voisin.rangee,
       colonne: voisin.colonne,
       glyphe,
+      // ⚠ LE DÉPART ET L'ARRIVÉE SONT EN LIGNES D'ÉCRAN, comme le glyphe. Les
+      // deux disent la même direction, et un test l'asserte : le glyphe est le
+      // LIBELLÉ de la flèche — il vit dans l'infobulle — et le couple
+      // départ/arrivée est son DESSIN. Les faire diverger serait montrer un
+      // trait dans un sens et l'annoncer dans l'autre.
+      depart: { ligne: ligneEcranDeLaRangee(voisin.rangee), colonne: voisin.colonne },
+      arrivee: { ligne: ligneDuBatiment, colonne: b.colonne },
       libelle: libelleDuVoisin(voisin.type),
       apportMilli: voisin.apportParHeure * 1000,
     };
@@ -1272,15 +1357,34 @@ export function posablesDeLaDefense(etat) {
   const niveau = niveauDeCommandement(etat, 'garnison');
   return rosterDefensif().map((id) => {
     const ligne = DEFENSES[id] ?? UNITES[id];
+    // ⚠ TROIS RAISONS, DANS L'ORDRE OÙ ELLES PRIMENT — les mêmes que la palette
+    // de l'Offense depuis le 29/08, et pour la même raison : le joueur lit ce
+    // qui le bloque MAINTENANT, pas la liste de tout ce qui le bloquera.
+    let raison = null;
+    if (niveau === null) raison = 'aucun QG de défense posé';
+    else if (ligne.apparition > niveau) raison = `apparaît au niveau ${ligne.apparition}`;
+    else {
+      // ⚠⚠ LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, et c'est
+      // une LECTURE de l'arbitrage du 29/08. Ethan a dit « infanterie
+      // inconstructible sans caserne, même règle pour véhicule et avion »,
+      // sans dire « à l'assaut » : la restreindre à un écran aurait été le
+      // choix arbitraire. Les six ouvrages fixes et les trois artilleries ne
+      // sont pas dans `UNITES` — ils n'ont pas de châssis, et
+      // `batimentDeProductionManquant` rend `null` pour eux : un mur n'a jamais
+      // eu besoin d'une caserne.
+      const manque = batimentDeProductionManquant(etat, id);
+      if (manque !== null) {
+        raison = messageSansBatiment(BASE_BATIMENTS[manque].nom.joueur, UNITES[id].chassis);
+      }
+    }
     return {
       id,
       nom: ligne.nom.joueur,
       sigle: SIGLES_DEFENSE[id],
       points: ligne.points,
       apparition: ligne.apparition,
-      // Pas de QG de défense : rien n'est posable, et la palette entière est
-      // grise. Ce n'est pas un niveau zéro, c'est l'absence de niveau.
-      verrouille: niveau === null || ligne.apparition > niveau,
+      raison,
+      verrouille: raison !== null,
     };
   });
 }
@@ -1425,6 +1529,12 @@ export const TERRAINS = {
     // Le panneau de détail chiffre production, capacité et voisinage : il n'a
     // de sens que pour un bâtiment de la base.
     panneau: true,
+    // ⚠ COMMENT ON APPELLE CE QU'ON MANIPULE. Les messages de refus le nomment
+    // — « aucun bâtiment n'est endommagé », « pour la défense » — et jusqu'au
+    // 29/08 ces mots étaient écrits en dur, ce qui faisait dire « bâtiment » à
+    // la bande de garnison. Le terrain le dit, une fois.
+    quoi: 'aucun bâtiment n\'est endommagé',
+    pourQui: 'la base',
   },
   defense: {
     bande: GRILLE.bandes.defense,
@@ -1468,6 +1578,8 @@ export const TERRAINS = {
       deplacer: { cible: true, problemes: refusDuDeplacementEnGarnison, agir: deplacerLaGarnison },
     },
     panneau: false,
+    quoi: 'aucun défenseur n\'est endommagé',
+    pourQui: 'la défense',
   },
 };
 
@@ -1477,8 +1589,16 @@ export const TERRAINS = {
  * @param {string} libelle
  * @returns {string}
  */
-export function actionSansMoteur(libelle) {
-  return `${libelle} n'existe pas encore pour la défense :`
+export function actionSansMoteur(libelle, quoi) {
+  // ⚠ LE « POUR QUOI » EST UN ARGUMENT DEPUIS LE 29/08, PAS UNE CONSTANTE. Il
+  // disait « pour la défense », en dur — juste tant que la barre contextuelle
+  // n'existait qu'au Chantier. L'écran Offense a la sienne depuis ce lot, et
+  // le même message y annonçait à un joueur qui compose son ARMÉE que la
+  // DÉFENSE n'a pas de moteur. Vu en essayant l'écran, pas en le relisant.
+  if (typeof quoi !== 'string' || quoi.length === 0) {
+    throw new Error('chantier : actionSansMoteur veut savoir de quoi elle parle');
+  }
+  return `${libelle} n'existe pas encore pour ${quoi} :`
     + ' le moteur ne le fait pas, et l\'inventer serait trancher seul.';
 }
 
@@ -1710,6 +1830,21 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       grille.appendChild(case_);
     }
   }
+
+  // ⚠ UN CALQUE SVG PAR-DESSUS LA GRILLE, ET IL NE PREND AUCUN GESTE. Les
+  // traits de voisinage relient DEUX cases : ils ne peuvent donc pas vivre dans
+  // une case, ce qui est tout ce que le glyphe de 11 px savait faire. Le
+  // `viewBox` prend la CASE pour unité — autant d'unités que de colonnes et de
+  // lignes — si bien que le trait suit la taille de la case sans qu'on lise un
+  // seul pixel. `pointer-events: none` en fait un dessin et rien d'autre : le
+  // doigt continue de toucher la case qu'il vise.
+  const SVG = 'http://www.w3.org/2000/svg';
+  const traits = doc.createElementNS(SVG, 'svg');
+  traits.id = 'chantier-traits';
+  traits.setAttribute('viewBox', `0 0 ${GRILLE.largeur} ${GRILLE.longueur}`);
+  traits.setAttribute('preserveAspectRatio', 'none');
+  traits.setAttribute('aria-hidden', 'true');
+  grille.appendChild(traits);
 
   // --- les trois bandeaux de ressource ---------------------------------------
   const champsRessource = new Map();
@@ -2000,11 +2135,11 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
    * rien au joueur.
    */
   function messageVerrouille(vignette) {
-    const niveau = niveauDeCommandement(etatCourant, 'garnison');
-    return niveau === null
-      ? `${vignette.nom} demande un QG de défense : aucun n'est posé.`
-      : `${vignette.nom} apparaît au niveau ${vignette.apparition} ;`
-        + ` le QG de défense est au niveau ${niveau}.`;
+    // ⚠ LA RAISON VIENT DE LA VIGNETTE, ELLE NE SE RECALCULE PAS ICI. Elles
+    // sont trois depuis le 29/08 — pas de QG, niveau d'apparition, bâtiment de
+    // production manquant — et les redéduire dans le message aurait fait deux
+    // lectures de la même règle, dont une seule serait juste au prochain ajout.
+    return `${vignette.nom} — ${vignette.raison}.`;
   }
 
   /**
@@ -2057,7 +2192,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     if (posable.verrouille) {
       return terrain.force === null
         ? `${posable.nom} — déjà posé, et il est unique.`
-        : `${posable.nom} — verrouillé : il apparaît au niveau ${posable.apparition}.`;
+        : `${posable.nom} — ${posable.raison}.`;
     }
     return terrain.force === null
       ? `${posable.nom} — poser au niveau 1 est gratuit ; la première `
@@ -2144,8 +2279,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   function peindreApercu() {
     for (const case_ of cellules.values()) {
       case_.querySelector('.fantome')?.remove();
-      case_.querySelector('.fleche')?.remove();
     }
+    traits.textContent = '';
     if (etatCourant === null) return;
 
     let disposition = null;
@@ -2190,13 +2325,25 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     if (disposition === null) return;
 
     for (const f of flechesDeVoisinage(disposition, etatCourant.champs, index)) {
-      const case_ = cellules.get(cle(f.rangee, f.colonne));
-      if (case_ === undefined) continue;
-      const marque = doc.createElement('div');
-      marque.className = 'fleche';
-      marque.textContent = f.glyphe;
-      marque.title = `${f.libelle} · ${formaterDebit(f.apportMilli)}`;
-      case_.appendChild(marque);
+      const trait = traitDeVoisinage(f.depart, f.arrivee);
+      const fut = doc.createElementNS(SVG, 'line');
+      fut.setAttribute('x1', trait.ligne.x1);
+      fut.setAttribute('y1', trait.ligne.y1);
+      fut.setAttribute('x2', trait.ligne.x2);
+      fut.setAttribute('y2', trait.ligne.y2);
+      fut.setAttribute('stroke-width', trait.epaisseur);
+      fut.setAttribute('stroke-linecap', 'round');
+      fut.setAttribute('class', 'trait');
+      const pointe = doc.createElementNS(SVG, 'polygon');
+      pointe.setAttribute('points', trait.pointe.map(([x, y]) => `${x},${y}`).join(' '));
+      pointe.setAttribute('class', 'pointe');
+      // L'infobulle porte le glyphe : c'est la seule chose que le trait ne dit
+      // pas à voix haute, et elle reste utile au survol comme au clavier.
+      const titre = doc.createElementNS(SVG, 'title');
+      titre.textContent = `${f.glyphe} ${f.libelle} · ${formaterDebit(f.apportMilli)}`;
+      const groupe = doc.createElementNS(SVG, 'g');
+      groupe.append(titre, fut, pointe);
+      traits.appendChild(groupe);
     }
   }
 
@@ -2346,12 +2493,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // pour personne) ; `null` = ce TERRAIN-là n'en a pas, alors qu'un autre
     // pourrait. Les deux répondent, aucun des deux ne reste muet.
     if (action === null) {
-      toast(actionSansMoteur(ACTIONS[nom].libelle));
+      toast(actionSansMoteur(ACTIONS[nom].libelle, TERRAINS[terrainCible].pourQui));
       return;
     }
     if (action.problemes === undefined) {
       // Réparer : le chemin existe, il n'a rien à réparer.
-      toast(PAS_DE_REPARATION);
+      toast(messagePasDeReparation(TERRAINS[terrainCible].quoi));
       return;
     }
 
@@ -2703,8 +2850,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       case_.querySelector('.obstacle-marque')?.remove();
       case_.querySelector('.jeton')?.remove();
       case_.querySelector('.fantome')?.remove();
-      case_.querySelector('.fleche')?.remove();
     }
+    traits.textContent = '';
 
     // ⚠ LE TERRAIN SE DESSINE SOUS LES BÂTIMENTS, JAMAIS AU-DESSUS. Un champ
     // masqué par le collecteur qui l'exploite ferait disparaître de l'écran la

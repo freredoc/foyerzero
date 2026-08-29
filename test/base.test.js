@@ -24,13 +24,13 @@ import {
   BASE_BATIMENTS, EMPLACEMENTS, GEOMETRIE_BASE, CHAMPS, COUT_NIVEAU_DEUX,
   COUT_ELECTRICITE, DEBITS, VOISINAGE, STOCKAGE, PRODUCTEUR_APPARIE,
   REPARATION_BASE_JOUEUR, RESSOURCE_DE_COUT, CATEGORIE_DE_COUT_DE_LA_BASE,
-  REMBOURSEMENT_DEMOLITION,
+  REMBOURSEMENT_DEMOLITION, BATIMENT_DE_CHASSIS,
   emplacementsDuNiveau, capaciteDuNiveau, debitParHeure, debitVoisinParHeure,
   zoneDesChamps, estDansLaBase, coutDeMontee, coutCumule, remboursementDuNiveau,
   stockagePropreDuNiveau,
   multiplicateurDeStockage,
 } from '../src/data/base.js';
-import { GRILLE } from '../src/data/combat.js';
+import { GRILLE, UNITES } from '../src/data/combat.js';
 import { capacitesMilli, CAPACITE_MILLI_MAX } from '../src/sim/economie-base.js';
 import { GEOGRAPHIE, BATIMENTS } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
@@ -261,14 +261,29 @@ test('base — les quatre classes de coût couvrent exactement les onze bâtimen
 // Emplacements
 // ---------------------------------------------------------------------------
 
-test('base — emplacementsDuNiveau : deux régimes, un plafond, et le plafond mord au niveau 30', () => {
-  // MESURÉS en exécutant la fonction. Les six premiers couvrent les deux
-  // régimes et la charnière ; les trois derniers encadrent le plafond.
+test('base — emplacementsDuNiveau : une table dictée, un régime, un plafond', () => {
+  // ⚠⚠ LES DIX PREMIERS NIVEAUX SONT UNE TABLE DEPUIS LE 29/08, dictée niveau
+  // par niveau par Ethan. Ils suivaient un pas de 2 ; ils ne suivent plus
+  // aucune formule — +3, +3, puis +2 six fois, puis +1 deux fois. On les
+  // asserte donc TOUS LES DIX, pas un échantillon : c'est le seul montage qui
+  // attrape une valeur recopiée de travers au milieu de la table.
+  //
+  // ⚠ ET LA TABLE REJOINT L'ANCIENNE COURBE AU NIVEAU 10. Vingt des deux côtés,
+  // donc les niveaux 11 à 50 rendent exactement ce qu'ils rendaient avant, et
+  // les quatre derniers couples ci-dessous n'ont pas bougé d'un chiffre.
   const attendus = [
-    [1, 2], [5, 10], [9, 18], [10, 20], // pas de 2 jusqu'au dixième
-    [11, 21], [20, 30], [29, 39], // pas de 1 ensuite
-    [30, 40], [31, 40], [50, 40], // plafond
+    [1, 3], [2, 6], [3, 8], [4, 10], [5, 12], // la table, en entier
+    [6, 14], [7, 16], [8, 18], [9, 19], [10, 20],
+    [11, 21], [20, 30], [29, 39], // pas de 1 ensuite — inchangé
+    [30, 40], [31, 40], [50, 40], // plafond — inchangé
   ];
+  // Le montage lit la table plutôt que de la recopier une troisième fois : si
+  // quelqu'un change `parNiveau` sans toucher à ces couples, c'est ICI qu'on
+  // veut l'apprendre, pas dans un écran.
+  assert.deepEqual(
+    EMPLACEMENTS.parNiveau, attendus.slice(0, 10).map(([, v]) => v),
+    'la table de data/base.js et celle de ce test ont divergé',
+  );
   for (const [niveau, attendu] of attendus) {
     assert.equal(
       emplacementsDuNiveau(niveau), attendu,
@@ -296,19 +311,81 @@ test('base — emplacementsDuNiveau : deux régimes, un plafond, et le plafond m
   }
 });
 
-test('base — le Chantier occupe un emplacement, donc il en reste UN au niveau 1', () => {
+test('base — chaque châssis a son bâtiment de production, et il existe', () => {
+  // ARBITRÉ le 29/08 par Ethan : « Infanterie inconstructible sans caserne.
+  // Même règle pour véhicule et avion. »
+  //
+  // ⚠ LA TABLE EST INDEXÉE PAR CHÂSSIS, DONC ELLE DOIT LES COUVRIR TOUS. Une
+  // unité dont le châssis manquerait ici serait constructible sans rien — ou
+  // ferait lever le moteur, selon le côté par lequel on l'aborde. On croise les
+  // deux tables plutôt que de recopier une liste.
+  const chassis = new Set(Object.values(UNITES).map((u) => u.chassis));
+  assert.ok(chassis.size >= 3, `${chassis.size} châssis : le montage ne mesure rien`);
+  assert.deepEqual(
+    [...chassis].sort(), Object.keys(BATIMENT_DE_CHASSIS).sort(),
+    'un châssis d\'unité n\'a pas de bâtiment de production, ou l\'inverse',
+  );
+
+  // Et chaque bâtiment nommé EXISTE, est unique, et se dit « production ».
+  for (const [chassisNom, id] of Object.entries(BATIMENT_DE_CHASSIS)) {
+    const def = BASE_BATIMENTS[id];
+    assert.ok(def !== undefined, `${chassisNom} nomme « ${id} », qui n\'est pas un bâtiment`);
+    assert.equal(def.role, 'production', `${id} n\'est pas un bâtiment de production`);
+    assert.equal(def.unique, true, `${id} devrait être unique`);
+  }
+  // Les trois bâtiments de production sont TOUS employés : un quatrième qui
+  // n\'ouvrirait rien serait un bâtiment que le joueur pose pour rien.
+  const productions = IDS.filter((id) => BASE_BATIMENTS[id].role === 'production');
+  assert.deepEqual(
+    productions.slice().sort(), Object.values(BATIMENT_DE_CHASSIS).slice().sort(),
+    'un bâtiment de production ne débloque aucun châssis',
+  );
+});
+
+test('base — la réparation est indexée sur le Chantier, et sa courbe n\'est pas inventée', () => {
+  // ARBITRÉ le 29/08 par Ethan : « le chantier de construction […] définit
+  // aussi les temps de réparation. »
+  //
+  // ⚠ QUI DÉCIDE EST ÉCRIT ; DE COMBIEN NE L'EST PAS. Ethan a nommé le
+  // bâtiment, pas le barème. Écrire une courbe ici la figerait sous
+  // l'apparence d'une donnée relevée — c'est exactement la faute que CLAUDE.md
+  // §6 raconte pour la pente de `data/niveaux.js`, restée quatre jours à citer
+  // une source qu'on s'interdit de lire.
+  assert.equal(REPARATION_BASE_JOUEUR.mode, 'manuelle');
+  assert.ok(
+    BASE_BATIMENTS[REPARATION_BASE_JOUEUR.indexeeSur] !== undefined,
+    `« ${REPARATION_BASE_JOUEUR.indexeeSur} » n\'est pas un bâtiment de la base`,
+  );
+  assert.equal(REPARATION_BASE_JOUEUR.indexeeSur, 'chantierDeConstruction');
+  assert.equal(REPARATION_BASE_JOUEUR.courbe, null,
+    'une courbe de réparation est apparue sans arbitrage : la nommer, ou la retirer');
+  // Et la durée de BASE reste par bâtiment : c'est elle que la courbe modulera.
+  for (const id of IDS) {
+    assert.ok(Number.isFinite(BASE_BATIMENTS[id].reparationSec),
+      `${id} n\'a plus de durée de réparation propre`);
+  }
+});
+
+test('base — le Chantier occupe un emplacement, donc il en reste DEUX au niveau 1', () => {
   // L'arbitrage du 25/08 et sa conséquence, assertés ensemble : c'est ce couple
-  // qui fait que le deuxième bâtiment de la partie est un vrai choix.
+  // qui fait des premiers bâtiments de la partie de vrais choix.
+  //
+  // ⚠ IL EN RESTAIT UN JUSQU'AU 29/08. La table d'emplacements est passée de
+  // « deux par niveau » à la table dictée par Ethan, qui ouvre TROIS
+  // emplacements au niveau 1. Le début de partie est donc plus large d'un
+  // bâtiment, et c'est la conséquence voulue de la table — pas un relâchement
+  // de ce test.
   assert.equal(EMPLACEMENTS.chantierOccupeUnEmplacement, true);
   const libresNiveau1 = emplacementsDuNiveau(1) - 1;
-  assert.equal(libresNiveau1, 1, 'un seul emplacement libre au niveau 1');
+  assert.equal(libresNiveau1, 2, 'deux emplacements libres au niveau 1');
 
-  // Et il faut le niveau 4 pour poser les sept obligatoires (7 uniques, dont le
-  // Chantier lui-même) : 2 × 4 = 8 ≥ 7, alors que 2 × 3 = 6 < 7.
+  // Et il faut le niveau 3 pour poser les sept obligatoires (7 uniques, dont le
+  // Chantier lui-même) : 8 ≥ 7 au niveau 3, alors que 6 < 7 au niveau 2. Il
+  // fallait le niveau 4 sous l'ancienne courbe.
   const obligatoires = IDS.filter((id) => BASE_BATIMENTS[id].unique === true).length;
   assert.equal(obligatoires, 7);
-  assert.ok(emplacementsDuNiveau(3) < obligatoires, 'le niveau 3 ne doit pas suffire');
-  assert.ok(emplacementsDuNiveau(4) >= obligatoires, 'le niveau 4 doit suffire');
+  assert.ok(emplacementsDuNiveau(2) < obligatoires, 'le niveau 2 ne doit pas suffire');
+  assert.ok(emplacementsDuNiveau(3) >= obligatoires, 'le niveau 3 doit suffire');
 });
 
 // ---------------------------------------------------------------------------

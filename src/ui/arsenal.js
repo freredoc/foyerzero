@@ -63,9 +63,69 @@ export function budgetDuNiveau(niveau) {
  * Le sélecteur ne montre PAS les autres — il ne les grise pas. Une unité qu'on
  * ne peut pas construire n'a pas à occuper l'écran.
  */
+/**
+ * Comment le joueur appelle chaque famille de châssis.
+ *
+ * ⚠ CE SONT LES MOTS D'ETHAN, LE 29/08 : « Infanterie inconstructible sans
+ * caserne. Même règle pour véhicule et avion. » On lui rend son vocabulaire
+ * dans le message de refus plutôt que d'y écrire « escouade », qui est le nom
+ * INTERNE du châssis et n'apparaît nulle part à l'écran.
+ */
+export const FAMILLE_DE_CHASSIS = {
+  escouade: 'infanterie',
+  blinde: 'véhicule',
+  aeronef: 'avion',
+};
+
+/**
+ * Ce que la palette dit d'une unité dont le bâtiment de production manque.
+ *
+ * ⚠ LA PHRASE ÉVITE L'ARTICLE DU BÂTIMENT, ET C'EST VOULU. « une Caserne » mais
+ * « un Dépôt de véhicules » : porter le genre demanderait un champ de plus dans
+ * `BASE_BATIMENTS` pour onze bâtiments, dont trois seulement s'en serviraient.
+ * « sans Caserne » est juste des deux côtés. L'élision, elle, ne se contourne
+ * pas — « pas d'infanterie » contre « pas de véhicule » — et se fait ici.
+ *
+ * @param {string} nomBatiment nom joueur du bâtiment manquant
+ * @param {string} chassis clé de `FAMILLE_DE_CHASSIS`
+ * @returns {string}
+ */
+export function messageSansBatiment(nomBatiment, chassis) {
+  const famille = FAMILLE_DE_CHASSIS[chassis];
+  if (famille === undefined) {
+    throw new Error(`arsenal : châssis inconnu « ${chassis} »`);
+  }
+  const elide = /^[aeiouyéèêàâîïôûù]/i.test(famille) ? `d'${famille}` : `de ${famille}`;
+  return `sans ${nomBatiment}, pas ${elide}`;
+}
+
 export function unitesDisponibles(niveau) {
   verifierNiveau(niveau);
   return Object.keys(UNITES).filter((id) => UNITES[id].apparition <= niveau);
+}
+
+/**
+ * Pourquoi cette unité n'est pas encore constructible à ce niveau — ou `null`.
+ *
+ * ⚠ ELLE VIT ICI PARCE QUE LE SEUIL VIT ICI. `unitesDisponibles` est la seule
+ * lecture d'`apparition` du dépôt côté écran ; l'écran Offense a besoin de
+ * NOMMER le verrou depuis qu'il grise au lieu de filtrer, et le laisser relire
+ * `apparition` lui-même aurait fait une seconde lecture de la même règle. Un
+ * test balaie `ui/offense.js` pour que ça reste vrai.
+ *
+ * ⚠ `niveau === null` N'EST PAS UN NIVEAU ZÉRO. Sans Centre de commandement il
+ * n'y a pas de niveau d'armée du tout : parler d'un seuil reviendrait à
+ * comparer à un nombre qui n'existe pas.
+ *
+ * @param {string} id clé de `UNITES`
+ * @param {number|null} niveau niveau du Centre de commandement
+ * @returns {string|null}
+ */
+export function raisonDuVerrou(id, niveau) {
+  if (UNITES[id] === undefined) throw new Error(`arsenal : unité inconnue « ${id} »`);
+  if (niveau === null) return 'aucun Centre de commandement posé';
+  if (unitesDisponibles(niveau).includes(id)) return null;
+  return `apparaît au niveau ${UNITES[id].apparition}`;
 }
 
 /** Grille vide : 4 rangées de 9 cases, toutes libres. */
