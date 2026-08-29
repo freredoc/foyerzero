@@ -7,7 +7,7 @@
 
 import { creerRng, restaurerRng } from './rng.js';
 import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './clock.js';
-import { champsDeLaBase } from './champs.js';
+import { champsDeLaBase, obstaclesDeLaBase } from './champs.js';
 import { positionDepartJoueur } from './carte.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
@@ -130,6 +130,11 @@ export function creerEtat(graine) {
     armee: [],
     economie: creerEtatEconomie(disposition),
     champs: champsDeLaBase(position.rangee, position.colonne),
+    // ⚠ DÉRIVÉ COMME `champs`, ET STRIPPÉ COMME LUI PAR `serialiser`. Les dix
+    // obstacles sont du TERRAIN : ils se tirent de la fondation, ils ne se
+    // sauvegardent pas, et ils ne bougent jamais. Les ranger dans la sauvegarde
+    // ferait exister deux vérités pour la même case.
+    obstacles: obstaclesDeLaBase(position.rangee, position.colonne),
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -186,7 +191,15 @@ function exigerChamp(etat, champ) {
  * faire : ceux-là n'ont jamais été légaux, donc aucune sauvegarde honnête ne
  * les porte, et les tolérer ferait tourner le moteur sur un état incohérent.
  */
-export const CODES_TOLERES_AU_CHARGEMENT = new Set(['uniques-voisins']);
+// ⚠ `obstacle` A REJOINT L'ENSEMBLE LE 29/08, et pour la raison EXACTE qui
+// justifiait `uniques-voisins` : c'est une règle qui peut rendre illégale une
+// pièce posée légalement. Mieux — ou pire — ici, le terrain se REDÉDUIT à chaque
+// chargement : le jour où le tirage des obstacles changera (les deux tirages qui
+// coexistent devront se rejoindre, voir CLAUDE.md), un obstacle apparaîtra sous
+// une pièce déjà posée sans que le joueur ait touché à quoi que ce soit.
+// Le défaut reste SIGNALÉ — `problemesDeLaPoseDEffectif` le rend, l'écran le
+// montre — et toute NOUVELLE pose au même endroit est refusée.
+export const CODES_TOLERES_AU_CHARGEMENT = new Set(['uniques-voisins', 'obstacle']);
 
 function verifierEtat(etat) {
   // ⚠ `fondation` EST REDONDANT ICI, et la garde reste quand même. Mesuré le
@@ -196,7 +209,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs']) {
+  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles']) {
     exigerChamp(etat, champ);
   }
   // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
@@ -623,6 +636,14 @@ export const FORCES = {
   garnison: {
     champ: 'garnison',
     quoi: 'garnison',
+    // ⚠ SEULE LA GARNISON EST SUR LE TERRAIN, et c'est ce champ qui le dit. Ses
+    // cases SONT celles du champ de bataille, donc elles peuvent porter un
+    // obstacle. Les quatre vagues de l'armée sont une grille de COMPOSITION :
+    // leurs colonnes deviennent les couloirs du raid, mais leurs rangées ne sont
+    // pas des rangées de la grille — la bande de déploiement n'en porte d'ailleurs
+    // aucun. Reconnaître « garnison » par son nom au lieu de lire ce champ serait
+    // le premier cas particulier écrit à la main.
+    surLeTerrain: true,
     axe: 'rangee',
     // ⚠ LE LIBELLÉ N'EST PAS LA CLÉ. `axe` indexe l'objet, `axeLibelle` s'affiche :
     // les messages de refus sont repris MOT POUR MOT par l'écran, et « rangee 11 »
@@ -641,6 +662,7 @@ export const FORCES = {
   armee: {
     champ: 'armee',
     quoi: 'armée',
+    surLeTerrain: false,
     axe: 'vague',
     axeLibelle: 'vague',
     axeMin: 1,
@@ -681,7 +703,7 @@ function exigerForce(force) {
  *   pièce elle-même, quand on la vérifie ou qu'on la déplace
  * @returns {Array<{code: string, message: string}>}
  */
-function problemesDeLEffectif(force, liste, piece, indexIgnore) {
+function problemesDeLEffectif(force, liste, piece, indexIgnore, obstacles = []) {
   const f = exigerForce(force);
   const problemes = [];
 
@@ -706,6 +728,15 @@ function problemesDeLEffectif(force, liste, piece, indexIgnore) {
   );
   if (occupee) {
     problemes.push({ code: 'superposition', message: 'cette case est déjà occupée' });
+  }
+  // ⚠ « OCCUPÉE » ET « OBSTRUÉE » SONT DEUX CODES, PAS UN. Le joueur peut
+  // déplacer ce qui occupe ; il ne déplacera jamais un obstacle. Les confondre
+  // ferait dire à l'écran « cette case est déjà occupée » devant un rocher, et
+  // le joueur chercherait la pièce à retirer.
+  if (f.surLeTerrain && obstacles.some(
+    (o) => o.rangee === axe && o.colonne === piece.colonne,
+  )) {
+    problemes.push({ code: 'obstacle', message: 'cette case porte un obstacle' });
   }
   if (!Number.isInteger(piece.niveau) || piece.niveau < 1 || piece.niveau > NIVEAU.plafond) {
     problemes.push({
@@ -739,7 +770,15 @@ function verifierForce(etat, force) {
     throw new Error(`etat : « ${f.champ} » n'est pas une liste`);
   }
   for (let i = 0; i < liste.length; i += 1) {
-    const problemes = problemesDeLEffectif(force, liste, liste[i], i);
+    // ⚠ LES OBSTACLES SONT PASSÉS, ET LEUR CODE EST TOLÉRÉ JUSTE APRÈS. Voir
+    // `CODES_TOLERES_AU_CHARGEMENT` : une pièce sous un obstacle est exactement
+    // le cas d'une règle née après des sauvegardes. Elle ne peut plus se créer —
+    // `poserEffectif` la refuse — mais elle peut apparaître SANS QUE LE JOUEUR
+    // AIT RIEN FAIT le jour où le tirage des obstacles changera, puisque le
+    // terrain se redéduit à chaque chargement. Faire lever rendrait alors la
+    // partie injouable pour une faute que personne n'a commise.
+    const problemes = problemesDeLEffectif(force, liste, liste[i], i, etat.obstacles?.cases ?? [])
+      .filter((p) => !CODES_TOLERES_AU_CHARGEMENT.has(p.code));
     if (problemes.length > 0) {
       throw new Error(
         `etat : ${f.quoi} injouable — ${problemes.map((p) => p.message).join(' ; ')}`,
@@ -767,7 +806,9 @@ function verifierForce(etat, force) {
 export function problemesDeLaPoseDEffectif(etat, force, piece) {
   const f = exigerForce(force);
   exigerChamp(etat, f.champ);
-  return problemesDeLEffectif(force, etat[f.champ], { degatsMilli: 0, ...piece }, null);
+  return problemesDeLEffectif(
+    force, etat[f.champ], { degatsMilli: 0, ...piece }, null, etat.obstacles?.cases ?? [],
+  );
 }
 
 /**
@@ -849,7 +890,9 @@ export function problemesDuDeplacementDEffectif(etat, force, index, position) {
   if (piece === undefined) {
     throw new RangeError(`deplacerEffectif : indice ${index} hors de la ${f.quoi}`);
   }
-  return problemesDeLEffectif(force, etat[f.champ], { ...piece, ...position }, index);
+  return problemesDeLEffectif(
+    force, etat[f.champ], { ...piece, ...position }, index, etat.obstacles?.cases ?? [],
+  );
 }
 
 /**
@@ -973,7 +1016,11 @@ export function niveauDeCommandement(etat, force) {
  */
 export function serialiser(etat, instantMs) {
   exigerInstant(instantMs, 'serialiser');
-  const { champs, ...aSauver } = etat;
+  // ⚠ DEUX CHAMPS DÉRIVÉS SORTENT ICI, PAS UN. `obstacles` a rejoint `champs` au
+  // lot OBSTACLES : les deux se retirent du même terrain, à la même fondation, et
+  // laisser l'un dans la sauvegarde en ferait la source de vérité concurrente du
+  // tirage.
+  const { champs, obstacles, ...aSauver } = etat;
   return JSON.stringify({ ...aSauver, instantSauvegardeMs: instantMs });
 }
 
@@ -1211,6 +1258,7 @@ export function charger(json, instantMs) {
   // pas de la position courante. C'est ici, et nulle part ailleurs, qu'il
   // rentre dans l'état.
   etat.champs = champsDeLaBase(etat.fondation.rangee, etat.fondation.colonne);
+  etat.obstacles = obstaclesDeLaBase(etat.fondation.rangee, etat.fondation.colonne);
   verifierEtat(etat);
 
   // Rattrapage hors ligne. `ecrit === null` vient d'une sauvegarde d'avant la
