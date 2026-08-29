@@ -287,17 +287,27 @@ test/                   35 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  7 fichiers, dont UN SEUL sert au build — relevé le 28/08,
-                        §2 en annonçait trois depuis des semaines
+tools/                  8 fichiers, dont UN SEUL sert au build — relevé le 29/08,
+                        §2 en annonçait trois depuis des semaines, puis sept
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ plus quatre scripts Python de traitement de sprites, hors chaîne de build et
-    hors `npm run check`. Aucune garde ne compte ce dossier : le test de §2 ne
-    porte que sur les quatre dossiers de `src/` et sur `test/`.
+  ⤷ plus CINQ scripts Python de traitement de sprites, hors chaîne de build et
+    hors `npm run check`. Le dernier arrivé rejoue la chaîne des trois autres
+    depuis la racine et produit les trois grilles ; il a deux modes, l'un qui
+    n'écrit rien et compare à l'existant, l'autre qui écrit — et il n'écrase
+    JAMAIS un fichier commité qui ne se reproduit pas. Aucune garde ne compte ce
+    dossier : le test de §2 ne porte que sur les quatre dossiers de `src/` et sur
+    `test/`.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
+art/sprites/            les sprites conditionnés — NEUF dossiers de grille depuis le
+                        lot 0 du 29/08 : unité, bâtiment et terrain, chacun en
+                        128, 64 et 32, 144 fichiers en tout. Le terrain était à
+                        plat ; il a rejoint la convention des deux autres. Rien
+                        de tout ça n'entre dans le livrable aujourd'hui — aucun
+                        fichier de `src/` ne cite ces chemins.
 art/sprites/carte/      ⚠ LE SEUL DOSSIER D'IMAGES QUI ENTRE DANS LE LIVRABLE.
                         L'atlas de terrain y est LU PAR LE BUILD et inliné en
                         base64 ; son absence fait sortir le build en erreur, pas
