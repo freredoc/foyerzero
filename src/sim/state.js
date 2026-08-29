@@ -18,7 +18,9 @@ import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
   STOCK_DE_DEPART,
 } from './economie-base.js';
-import { BASE_BATIMENTS, coutDeMontee, remboursementDuNiveau } from '../data/base.js';
+import {
+  BASE_BATIMENTS, BATIMENT_DE_CHASSIS, coutDeMontee, remboursementDuNiveau,
+} from '../data/base.js';
 import { GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT } from '../data/sites.js';
 import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
@@ -487,6 +489,28 @@ export function problemesDeLAmelioration(etat, index) {
     // Sans niveau visé légal, il n'y a pas de coût à calculer : s'arrêter ici
     // plutôt que de faire lever `coutDeMontee` sur un niveau hors bornes.
     return problemes;
+  }
+
+  // ⚠⚠ LE CHANTIER PLAFONNE TOUTE LA BASE — arbitré le 29/08/2026 par Ethan :
+  // « le chantier de construction définit le niveau max des bâtiments. Donc
+  // aucun bâtiment ne peut avoir un niveau supérieur à celui du chantier. »
+  // C'est ce qui fait du Chantier le vrai rythme de la partie : on ne monte
+  // plus rien tant qu'il n'est pas monté lui-même.
+  //
+  // ⚠ ET IL NE SE PLAFONNE PAS LUI-MÊME. Il EST la référence ; lui appliquer la
+  // règle le figerait à son niveau de départ, et plus rien dans la base ne
+  // monterait jamais. Son seul plafond est celui du jeu, testé juste au-dessus.
+  const plafondDuChantier = niveauDuChantier(etat);
+  if (batiment.id !== ID_CHANTIER && vise > plafondDuChantier) {
+    problemes.push({
+      code: 'plafond-chantier',
+      message: `le ${BASE_BATIMENTS[ID_CHANTIER].nom.joueur} est au niveau `
+        + `${plafondDuChantier} : montez-le d'abord`,
+    });
+    // Le coût du niveau visé n'a pas de sens tant qu'il est interdit, mais on
+    // le calcule quand même : le joueur doit pouvoir lire les DEUX raisons
+    // d'un refus, pas seulement la première. « Un indice n'est pas une
+    // interdiction » vaut aussi pour les messages.
   }
 
   const cout = coutDeMontee(batiment.id, vise);
@@ -1008,6 +1032,70 @@ export function pointsEngages(etat, force) {
  * @param {string} force
  * @returns {number|null} le niveau du bâtiment, ou null s'il n'est pas posé
  */
+/**
+ * L'identifiant du Chantier de construction, écrit une fois dans ce fichier.
+ * `sim/disposition.js` porte déjà le même littéral pour la règle « une base a
+ * exactement un Chantier » ; ce n'est pas une seconde table, c'est le même
+ * bâtiment nommé là où il est interrogé.
+ */
+const ID_CHANTIER = 'chantierDeConstruction';
+
+/**
+ * Le niveau du Chantier de construction de la base.
+ *
+ * ⚠ IL LÈVE SI LE CHANTIER MANQUE, là où `niveauDeCommandement` rend `null`.
+ * La différence n'est pas un oubli : une base SANS Centre de commandement est
+ * un état normal — une base neuve n'en a pas — alors qu'une base sans Chantier
+ * est un fait de PROGRAMME. `problemesDeDisposition` porte le code
+ * `sans-chantier`, il n'est pas dans `CODES_TOLERES_AU_CHARGEMENT`, et aucune
+ * sauvegarde honnête ne peut en produire une.
+ *
+ * @param {object} etat
+ * @returns {number} niveau du Chantier
+ */
+export function niveauDuChantier(etat) {
+  exigerChamp(etat, 'disposition');
+  const chantier = etat.disposition.find((b) => b.id === ID_CHANTIER);
+  if (chantier === undefined) {
+    throw new Error('etat : aucun Chantier de construction dans la disposition');
+  }
+  return chantier.niveau;
+}
+
+/**
+ * Le bâtiment de production qui MANQUE pour construire cette unité, ou `null`.
+ *
+ * ARBITRÉ le 29/08/2026 par Ethan : « Infanterie inconstructible sans caserne.
+ * Même règle pour véhicule et avion. » Le châssis de l'unité désigne le
+ * bâtiment ; `BATIMENT_DE_CHASSIS` de data/base.js porte les trois lignes.
+ *
+ * ⚠ ELLE RÉPOND POUR LES DEUX FORCES, ET C'EST UNE LECTURE. Ethan a énoncé une
+ * règle sur les UNITÉS, sans dire « à l'assaut » ni « en garnison » : la
+ * restreindre à un écran aurait été le choix arbitraire, pas l'appliquer
+ * partout. Les ouvrages fixes de la défense — murs, tourelles, artilleries — ne
+ * sont pas dans `UNITES`, n'ont pas de châssis, et ne sont donc pas concernés.
+ *
+ * ⚠⚠ ET ELLE N'EST PAS DANS `verifierEtat`, exactement comme le budget. Elle
+ * peut devenir fausse SOUS une composition déjà posée — la Caserne démolie, ou
+ * tombée au raid — et refuser le chargement rendrait la partie injouable pour
+ * une faute que le joueur n'a pas commise. On SIGNALE au geste, le joueur
+ * purge. C'est aussi ce qui évite une migration : aucune sauvegarde ne change.
+ *
+ * @param {object} etat
+ * @param {string} uniteId clé de `UNITES`, ou d'un ouvrage fixe de la défense
+ * @returns {string|null} clé du bâtiment manquant dans `BASE_BATIMENTS`
+ */
+export function batimentDeProductionManquant(etat, uniteId) {
+  exigerChamp(etat, 'disposition');
+  const unite = UNITES[uniteId];
+  if (unite === undefined) return null;
+  const requis = BATIMENT_DE_CHASSIS[unite.chassis];
+  if (requis === undefined) {
+    throw new Error(`etat : châssis « ${unite.chassis} » sans bâtiment de production`);
+  }
+  return etat.disposition.some((b) => b.id === requis) ? null : requis;
+}
+
 export function niveauDeCommandement(etat, force) {
   const f = exigerForce(force);
   exigerChamp(etat, 'disposition');

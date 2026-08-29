@@ -14,12 +14,13 @@ import { dirname, join } from 'node:path';
 import {
   vagueDAssaut, vaguesDAssaut, unitesDeLaPalette, vueDeLOffense,
   SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
+  ACTIONS_ARMEE, MESSAGES_MODE_ARMEE, messageDeDestinationDUnite, messageIndisponible,
 } from '../src/ui/offense.js';
 import {
-  creerEtat, poserEffectif, niveauDeCommandement,
+  creerEtat, poser, poserEffectif, niveauDeCommandement,
 } from '../src/sim/state.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
-import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE } from '../src/data/sites.js';
+import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, UNITES } from '../src/data/combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,7 +73,7 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
   // ⚠ SANS CENTRE DE COMMANDEMENT, LA PALETTE MONTRE TOUT, ÉTEINT. Il n'y a
   // pas de niveau d'armée — pas un niveau zéro : filtrer sur un niveau inventé
   // cacherait des unités pour une mauvaise raison.
-  const palette = unitesDeLaPalette(null);
+  const palette = unitesDeLaPalette(creerEtat(7));
 
   // Toutes les unités, et rien d'autre.
   assert.deepEqual(palette.map((u) => u.id).sort(), Object.keys(UNITES).sort());
@@ -96,20 +97,153 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
     palette.map((u) => u.nom), Object.values(UNITES).map((u) => u.nom.ouvrage),
   );
 
-  // ⚠ ET ELLE EST FILTRÉE PAR NIVEAU DÈS QU'IL Y EN A UN. Ce test a changé de
-  // cible au lot GARNISON-ET-ARMÉE, il ne s'est pas assoupli : jusque-là le
-  // joueur n'avait AUCUN niveau d'armée, et en choisir un pour pouvoir filtrer
-  // aurait été l'inventer. Il en a un maintenant — celui de son Centre de
-  // commandement — et le filtre est celui de l'Arsenal, pas un second.
-  const verrouillees = palette.filter((u) => UNITES[u.id].apparition > 1);
-  assert.ok(verrouillees.length > 0, 'aucune unité verrouillée : le filtrage ne se voit pas');
+  // ⚠⚠ ELLE GRISE, ELLE NE FILTRE PLUS — CHANGEMENT DE DÉCISION DU 29/08. Ce
+  // test a changé de cible pour la seconde fois, et il ne s'est pas assoupli :
+  // il asserte MAINTENANT une propriété plus forte qu'avant, la longueur
+  // CONSTANTE de la palette. Ethan a rapporté deux unités « indisponibles »
+  // qu'il attendait ; une palette qui les CACHE ne peut pas répondre à ça, et
+  // une palette qui change de longueur déplace les vignettes sous le doigt —
+  // c'est exactement l'argument qui avait fait griser les uniques du Chantier.
+  const roster = Object.keys(UNITES).length;
+  for (const [niveau, quoi] of [[1, 'au niveau 1'], [50, 'au plafond']]) {
+    const etat = creerEtat(7);
+    etat.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+    poser(etat, 'centreDeCommandement', 12, 1);
+    etat.disposition[1].niveau = niveau;
+    const vue = unitesDeLaPalette(etat);
+    assert.equal(vue.length, roster, `la palette a changé de longueur ${quoi}`);
+  }
 
-  const auNiveauUn = unitesDeLaPalette(1);
-  assert.ok(auNiveauUn.length < palette.length, 'le filtrage par niveau ne retire rien');
-  assert.ok(auNiveauUn.every((u) => UNITES[u.id].apparition <= 1));
-  assert.ok(auNiveauUn.every((u) => u.disponible === true));
-  // Au plafond, plus rien n'est verrouillé : le filtre laisse tout passer.
-  assert.equal(unitesDeLaPalette(50).length, Object.keys(UNITES).length);
+  // Chaque unité éteinte DIT pourquoi, et chaque unité vive ne dit rien.
+  for (const u of palette) {
+    assert.equal(u.disponible, u.raison === null, `${u.nom} : disponible et raison divergent`);
+    if (!u.disponible) assert.ok(u.raison.length > 5, `${u.nom} : raison trop courte`);
+  }
+
+  // ⚠ ET LES TROIS RAISONS SE PRODUISENT VRAIMENT, dans l'ordre où elles
+  // priment. Le montage doit les voir toutes les trois, sinon deux des trois
+  // branches ne seraient jamais exécutées et le test ne prouverait rien.
+  assert.ok(palette.every((u) => /Centre de commandement/.test(u.raison)),
+    'sans QG, toutes les raisons devraient nommer le Centre de commandement');
+
+  const avecQg = creerEtat(7);
+  avecQg.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  poser(avecQg, 'centreDeCommandement', 12, 1);
+  avecQg.disposition[1].niveau = GEOGRAPHIE.niveauPlafond;
+  const sansCaserne = unitesDeLaPalette(avecQg);
+  assert.ok(sansCaserne.every((u) => !u.disponible),
+    'au plafond sans aucun bâtiment de production, rien ne doit être constructible');
+  assert.ok(sansCaserne.some((u) => /Caserne/.test(u.raison)), 'aucune unité ne réclame la Caserne');
+  assert.ok(sansCaserne.some((u) => /Dépôt de véhicules/.test(u.raison)), 'aucune ne réclame le Dépôt');
+  assert.ok(sansCaserne.some((u) => /Aérodrome/.test(u.raison)), 'aucune ne réclame l\'Aérodrome');
+
+  // Et la Caserne posée débloque EXACTEMENT l'infanterie, rien d'autre.
+  poser(avecQg, 'caserne', 12, 3);
+  const avecCaserne = unitesDeLaPalette(avecQg);
+  for (const u of avecCaserne) {
+    const infanterie = UNITES[u.id].chassis === 'escouade';
+    assert.equal(u.disponible, infanterie,
+      `${u.nom} (${UNITES[u.id].chassis}) : la Caserne ne débloque que l'infanterie`);
+  }
+
+  // Le verrou de NIVEAU se voit aussi : au niveau 1, tout ce qui apparaît plus
+  // haut le dit — et le message porte le seuil, pas un « indisponible » nu.
+  const bas = creerEtat(7);
+  bas.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  poser(bas, 'centreDeCommandement', 12, 1);
+  poser(bas, 'caserne', 12, 3);
+  const auNiveauUn = unitesDeLaPalette(bas);
+  const verrouNiveau = auNiveauUn.filter((u) => /apparaît au niveau/.test(u.raison ?? ''));
+  assert.ok(verrouNiveau.length > 0, 'aucun verrou de niveau : le montage ne mesure rien');
+  for (const u of verrouNiveau) assert.ok(UNITES[u.id].apparition > 1);
+
+  // Et le message que le joueur lit au toucher porte les DEUX : le nom de
+  // l'unité et la raison. Un « indisponible » nu n'apprendrait rien — c'est
+  // exactement ce qui manquait quand Ethan a signalé deux unités absentes.
+  const dit = messageIndisponible(verrouNiveau[0]);
+  assert.ok(dit.includes(verrouNiveau[0].nom), 'le message ne nomme pas l\'unité');
+  assert.ok(dit.includes(verrouNiveau[0].raison), 'le message ne dit pas la raison');
+});
+
+test('offense — la barre contextuelle existe, et ses quatre boutons répondent', () => {
+  // ⚠⚠ ETHAN, LE 29/08 : « on ne peut pas supprimer une unité en cliquant
+  // dessus. D'ailleurs les boutons réparer, améliorer etc. n'apparaissent pas
+  // dans le menu offense. » L'écran retirait bien une unité — mais en DEUX
+  // touchers implicites qu'aucun bouton n'annonçait.
+  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  for (const id of ['offense-contexte', 'offense-selection-nom', 'offense-selection-detail',
+    'offense-reparer', 'offense-ameliorer', 'offense-ameliorer-cible',
+    'offense-deplacer', 'offense-retirer']) {
+    assert.ok(html.includes(`id="${id}"`), `#${id} manque à la page`);
+  }
+
+  // ⚠ AUCUN N'EST DÉSACTIVÉ, ET C'EST LE MODÈLE ENTIER. « Armer puis toucher »
+  // veut dire que le bouton se touche EN PREMIER : le rendre inerte tant
+  // qu'aucune unité n'est choisie rendrait la barre inatteignable au doigt.
+  // C'est la leçon du lot ÉCRAN-ACTIONS, et elle vaut ici mot pour mot.
+  for (const action of Object.values(ACTIONS_ARMEE)) {
+    assert.doesNotMatch(html, new RegExp(`id="${action.bouton}"[^>]*disabled`),
+      `${action.bouton} est désactivé : le modèle « armer puis toucher » ne démarre pas`);
+  }
+
+  // ⚠ LA TABLE DES MESSAGES COUVRE EXACTEMENT LES ACTIONS. Une première
+  // écriture reprenait `MESSAGES_MODE` du Chantier avec un repli en `??` :
+  // « Retirer » n'y a pas de clé, et le bouton annonçait « Mode DÉPLACER :
+  // touchez le BÂTIMENT à déplacer ». Vu en essayant l'écran, pas en le
+  // relisant — d'où cette égalité, qui fait tomber la suite au prochain oubli.
+  assert.deepEqual(
+    Object.keys(MESSAGES_MODE_ARMEE).slice().sort(),
+    Object.keys(ACTIONS_ARMEE).slice().sort(),
+    'une action n\'a pas de message de mode, ou l\'inverse',
+  );
+  // Et ces messages parlent d'UNITÉS, jamais de bâtiments : ce sont deux
+  // vocabulaires, et CLAUDE.md §4 interdit de les mélanger dans une chaîne
+  // affichée.
+  for (const [nom, message] of Object.entries(MESSAGES_MODE_ARMEE)) {
+    assert.ok(!/bâtiment/i.test(message), `« ${nom} » parle de bâtiments`);
+    assert.match(message, /unité/, `« ${nom} » ne dit pas sur quoi toucher`);
+  }
+  assert.ok(!/bâtiment/i.test(messageDeDestinationDUnite('Fusiliers')));
+
+  // ⚠ RÉPARER ET AMÉLIORER N'ONT PAS DE MOTEUR, ET LA TABLE LE DIT PAR `null`.
+  // Le coût d'une amélioration existe depuis le 28/08 ; la mécanique non — ce
+  // que gagne une unité améliorée n'est pas arbitré. Le bouton s'arme quand
+  // même et répond : « un indice n'est pas une interdiction » (CLAUDE.md §4).
+  assert.equal(ACTIONS_ARMEE.reparer.agir, null);
+  assert.equal(ACTIONS_ARMEE.ameliorer.agir, null);
+  assert.equal(typeof ACTIONS_ARMEE.retirer.agir, 'function');
+  assert.equal(typeof ACTIONS_ARMEE.deplacer.agir, 'function');
+  // Déplacer se fait en DEUX touchers, et la table le dit — l'écran lit ce
+  // champ au lieu de reconnaître « deplacer » par son nom.
+  assert.equal(ACTIONS_ARMEE.deplacer.cible, true);
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  assert.ok(!/=== 'deplacer'/.test(source), 'l\'écran reconnaît « deplacer » par son nom');
+
+  // ⚠ ET « RETIRER », PAS « DÉMOLIR ». On ne démolit pas des Fusiliers.
+  assert.equal(ACTIONS_ARMEE.retirer.libelle, 'Retirer');
+  assert.ok(!/Démolir/.test(html.slice(html.indexOf('id="offense-contexte"'),
+    html.indexOf('id="offense-palette"'))), 'la barre de l\'Offense parle de démolition');
+});
+
+test('offense — la palette ne défile pas : ses colonnes se calculent', () => {
+  // ⚠ CONSIGNE D'ETHAN, 28/08 : « tu compresses tout dans l'ui ». La palette
+  // avait des colonnes de 82 px et un `overflow-x: auto` — tolérable tant
+  // qu'elle FILTRAIT et n'en montrait que trois ou quatre, insupportable depuis
+  // qu'elle grise et en montre quatorze. Vu à l'essai, sur appareil simulé.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const bloc = feuille.match(/#offense-palette\s*\{([^}]*)\}/)[1];
+  assert.ok(!/overflow-x:\s*auto/.test(bloc), 'la palette de l\'Offense défile encore');
+  assert.ok(!/grid-auto-columns/.test(bloc), 'la palette a encore des colonnes de largeur fixe');
+  assert.match(bloc, /overflow:\s*hidden/);
+
+  // ⚠ ET LE NOMBRE DE COLONNES SE CALCULE, IL NE S'ÉCRIT PAS. Écrire « 7 »
+  // marcherait aujourd'hui et mentirait à la quinzième unité.
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
+  assert.match(source, /gridTemplateColumns[^\n]*Math\.ceil\(/,
+    'le nombre de colonnes de la palette est écrit en dur');
 });
 
 test('offense — le budget vient du Centre de commandement, et de lui seul', () => {

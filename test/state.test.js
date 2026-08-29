@@ -19,12 +19,14 @@ import {
   deplacer,
   FORCES, poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
-  niveauDeCommandement,
+  niveauDeCommandement, niveauDuChantier, batimentDeProductionManquant,
 } from '../src/sim/state.js';
 import { budgetDuNiveau as budgetOffense, arsenalVide, poser as poserUnite } from '../src/ui/arsenal.js';
 import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
-import { POINTS_ARMEE } from '../src/data/sites.js';
-import { coutDeMontee, coutCumule, remboursementDuNiveau } from '../src/data/base.js';
+import { POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
+import {
+  coutDeMontee, coutCumule, remboursementDuNiveau, emplacementsDuNiveau,
+} from '../src/data/base.js';
 import {
   DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli, STOCK_DE_DEPART, creerEtatEconomie,
 } from '../src/sim/economie-base.js';
@@ -715,18 +717,24 @@ test('état — une pose illégale est REFUSÉE, et elle dit laquelle', () => {
     problemesDeLaPose(etat, 'centrale', chantier.rangee, chantier.colonne).map((p) => p.code),
     ['superposition'],
   );
-  // Et le plafond d'emplacements : un Chantier niveau 1 en ouvre deux, il en
-  // occupe un, il reste UN. Le deuxième bâtiment passe, le troisième non.
+  // Et le plafond d'emplacements. ⚠ IL MORD UN CRAN PLUS LOIN DEPUIS LE 29/08 :
+  // un Chantier de niveau 1 ouvre TROIS emplacements et en occupe un, il en
+  // reste deux. Le compte se LIT plutôt que de se réécrire — la prochaine table
+  // le déplacera encore.
+  const libres = emplacementsDuNiveau(etat.disposition[0].niveau) - etat.disposition.length;
+  assert.equal(libres, 2, 'montage : ce test mesure le plafond, il doit savoir où il est');
   assert.deepEqual(problemesDeLaPose(etat, 'centrale', 11, 1), []);
   poser(etat, 'centrale', 11, 1);
+  assert.deepEqual(problemesDeLaPose(etat, 'accumulateur', 11, 2), []);
+  poser(etat, 'accumulateur', 11, 2);
   assert.deepEqual(
-    problemesDeLaPose(etat, 'accumulateur', 11, 2).map((p) => p.code), ['trop-de-batiments'],
+    problemesDeLaPose(etat, 'aerodrome', 11, 3).map((p) => p.code), ['trop-de-batiments'],
   );
 
   // `poser` LÈVE là où `problemesDeLaPose` rend une liste — appelée sans avoir
   // regardé, c'est un fait de programme.
   const avant = etat.disposition.length;
-  assert.throws(() => poser(etat, 'accumulateur', 11, 2), /pose illégale/);
+  assert.throws(() => poser(etat, 'aerodrome', 11, 3), /pose illégale/);
   assert.equal(etat.disposition.length, avant, 'une pose refusée ne doit rien laisser derrière');
   assert.equal(etat.economie.residus.length, avant, 'ni résidu orphelin');
 });
@@ -753,6 +761,94 @@ test('état — une base déjà bancale reste constructible', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Le Chantier plafonne, et les bâtiments de production ouvrent — 29/08
+// ---------------------------------------------------------------------------
+
+test('état — le Chantier plafonne le niveau de toute la base, sauf le sien', () => {
+  // ARBITRÉ le 29/08 par Ethan : « le chantier de construction définit le
+  // niveau max des bâtiments. Donc aucun bâtiment ne peut avoir un niveau
+  // supérieur à celui du chantier. »
+  const etat = creerEtat(4242);
+  const champ = etat.champs.cases[0];
+  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  etat.economie.ressources = { quartz: 9e9, scorie: 9e9, electricite: 9e9 };
+
+  // Montage falsifiable : sans le plafond, cette montée serait payable. On le
+  // prouve en montant le Chantier d'abord, puis en revenant en arrière.
+  assert.equal(niveauDuChantier(etat), 1);
+  assert.deepEqual(
+    problemesDeLAmelioration(etat, 1).map((p) => p.code), ['plafond-chantier'],
+    'le collecteur devrait être plafonné par le Chantier',
+  );
+  assert.match(problemesDeLAmelioration(etat, 1)[0].message, /Chantier de construction/);
+  assert.throws(() => ameliorer(etat, 1), /impossible/);
+  assert.equal(etat.disposition[1].niveau, 1, 'un refus ne doit rien avoir monté');
+
+  // ⚠ LE CHANTIER NE SE PLAFONNE PAS LUI-MÊME. Il EST la référence ; lui
+  // appliquer la règle figerait la base à son niveau de départ pour toujours.
+  assert.deepEqual(problemesDeLAmelioration(etat, 0), []);
+  ameliorer(etat, 0);
+  assert.equal(niveauDuChantier(etat), 2);
+
+  // Et le plafond se lève AVEC lui, d'un cran exactement.
+  assert.deepEqual(problemesDeLAmelioration(etat, 1), []);
+  ameliorer(etat, 1);
+  assert.equal(etat.disposition[1].niveau, 2);
+  assert.deepEqual(
+    problemesDeLAmelioration(etat, 1).map((p) => p.code), ['plafond-chantier'],
+    'le collecteur devrait être bloqué à nouveau, au niveau du Chantier',
+  );
+
+  // Le plafond du JEU reste le premier à parler : à 50, c'est lui qui refuse,
+  // pas le Chantier — sinon le message enverrait monter un bâtiment déjà au bout.
+  const auBout = creerEtat(11);
+  auBout.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  assert.deepEqual(
+    problemesDeLAmelioration(auBout, 0).map((p) => p.code), ['plafond'],
+  );
+
+  // `niveauDuChantier` LÈVE sans Chantier : c'est un fait de programme, pas de
+  // jeu — `problemesDeDisposition` porte déjà `sans-chantier`, et ce code-là
+  // n'est pas toléré au chargement.
+  assert.throws(() => niveauDuChantier({ disposition: [] }), /aucun Chantier/);
+});
+
+test('état — une unité demande son bâtiment de production, et la règle n\'est pas au chargement', () => {
+  // ARBITRÉ le 29/08 par Ethan : « Infanterie inconstructible sans caserne.
+  // Même règle pour véhicule et avion. »
+  const etat = creerEtat(4242);
+  etat.disposition[0].niveau = 20;
+
+  // Les trois familles réclament leur bâtiment, nommément.
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), 'caserne');
+  assert.equal(batimentDeProductionManquant(etat, 'fendeur'), 'depotDeVehicules');
+  assert.equal(batimentDeProductionManquant(etat, 'busard'), 'aerodrome');
+  // Un ouvrage fixe n'en réclame aucun : un mur n'a jamais eu besoin d'une
+  // caserne, et `null` le dit sans lever.
+  assert.equal(batimentDeProductionManquant(etat, 'merlon'), null);
+
+  // Poser la Caserne débloque EXACTEMENT l'infanterie.
+  poser(etat, 'caserne', 11, 3);
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), null);
+  assert.equal(batimentDeProductionManquant(etat, 'fendeur'), 'depotDeVehicules');
+
+  // ⚠⚠ ET LA RÈGLE N'EST PAS DANS `verifierEtat`, EXACTEMENT COMME LE BUDGET.
+  // Elle peut devenir fausse SOUS une armée déjà posée — la Caserne démolie, ou
+  // tombée au raid — et refuser le chargement rendrait la partie injouable pour
+  // une faute que le joueur n'a pas commise. C'est aussi ce qui évite une
+  // migration : aucune sauvegarde n'a changé de forme.
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+  const index = etat.disposition.findIndex((b) => b.id === 'caserne');
+  demolir(etat, index);
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'le montage doit vraiment retirer la Caserne');
+  const json = serialiser(etat, 1_700_000_000_000);
+  const relu = charger(json, 1_700_000_000_000);
+  assert.equal(relu.armee.length, 1,
+    'une armée sans Caserne doit se recharger : elle se SIGNALE, elle ne bloque pas');
+});
+
+// ---------------------------------------------------------------------------
 // Améliorer et démolir — lot du 27/08 au soir
 // ---------------------------------------------------------------------------
 //
@@ -763,15 +859,36 @@ test('état — une base déjà bancale reste constructible', () => {
 // à un test qui ne regarde que le verdict.
 
 /** Une base neuve avec un collecteur posé sur un vrai champ, et de quoi payer. */
+/**
+ * Une base à deux bâtiments, avec de quoi payer.
+ *
+ * ⚠ LE CHANTIER Y EST MONTÉ, ET C'EST OBLIGATOIRE DEPUIS LE 29/08. Il plafonne
+ * désormais le niveau de toute la base : sous un Chantier de niveau 1, aucun
+ * autre bâtiment ne peut monter, et ces montages-ci mesurent justement des
+ * montées. On l'écrit DANS le montage plutôt que de désarmer la règle — le
+ * niveau 10 laisse de la marge à des tests qui montent jusqu'au troisième.
+ */
+const NIVEAU_CHANTIER_MONTAGE = 10;
+
 function baseAvecCollecteur(quartzMilli = 100_000_000) {
   const etat = creerEtat(20260827);
   const premierChamp = etat.champs.cases[0];
   poser(etat, 'collecteur', premierChamp.rangee, premierChamp.colonne);
+  etat.disposition[0].niveau = NIVEAU_CHANTIER_MONTAGE;
   etat.economie.ressources = {
     quartz: quartzMilli, scorie: quartzMilli, electricite: quartzMilli,
   };
   assert.equal(etat.disposition.length, 2);
   assert.equal(etat.economie.residus.length, 2);
+  // Le montage doit laisser de la place à ce qu'il mesure : un Chantier trop
+  // bas ferait tomber les montées sur `plafond-chantier` et non sur le prix.
+  // ⚠ ON ASSERTE L'ABSENCE DE CE CODE-LÀ, PAS UNE LISTE VIDE : ce montage sert
+  // aussi au test du stock à zéro, où le refus « manque:quartz » est justement
+  // ce qu'on veut mesurer.
+  assert.ok(
+    !problemesDeLAmelioration(etat, 1).some((p) => p.code === 'plafond-chantier'),
+    'montage : le Chantier plafonne la montée que ce test veut mesurer',
+  );
   return etat;
 }
 
@@ -790,7 +907,7 @@ test('état — améliorer monte d\'un niveau et débite exactement le palier', 
     assert.equal(etat.economie.ressources[r], avant[r] - cout[r] * 1000, `débit en ${r}`);
   }
   // Le Chantier n'a pas bougé : améliorer ne touche QUE l'indice visé.
-  assert.equal(etat.disposition[0].niveau, 1);
+  assert.equal(etat.disposition[0].niveau, NIVEAU_CHANTIER_MONTAGE);
 
   // Deux montées d'affilée débitent deux paliers DIFFÉRENTS — sinon un module
   // qui relirait toujours le palier 2 passerait la première assertion.
@@ -911,18 +1028,37 @@ test('état — l\'amorce paie de quoi démarrer, et c\'est vérifié sur les pr
   // action payable dès la première image. Le vérifier sur les COÛTS RÉELS
   // plutôt que sur les nombres 30 · 30 · 20 — si un prix montait, c'est ici
   // que ça devrait se voir, pas dans une partie livrée injouable.
+  //
+  // ⚠⚠ ET LA CHAÎNE A CHANGÉ D'ORDRE LE 29/08, PAS DE NATURE. Le Chantier
+  // plafonne désormais le niveau de toute la base : la PREMIÈRE montée payable
+  // d'une partie est forcément la sienne. C'était déjà le premier geste de
+  // l'ouverture mesurée de CLAUDE.md §6 ; c'en est maintenant le seul possible,
+  // et ce test le vérifie au lieu de le supposer.
   const etat = creerEtat(779);
   const champ = etat.champs.cases[0];
   poser(etat, 'collecteur', champ.rangee, champ.colonne);
 
+  // Rien d'autre que le Chantier ne peut monter tant qu'il est au niveau 1.
+  assert.deepEqual(
+    problemesDeLAmelioration(etat, 1).map((p) => p.code), ['plafond-chantier'],
+    'le collecteur devrait être plafonné par un Chantier de niveau 1',
+  );
+
+  // Et l'amorce paie SA montée à lui, qui est le vrai premier geste.
+  assert.deepEqual(problemesDeLAmelioration(etat, 0), [],
+    'l\'amorce ne paie même pas la première montée du Chantier');
+  ameliorer(etat, 0);
+  assert.equal(etat.disposition[0].niveau, 2);
+
+  // Le plafond se lève avec lui : le collecteur devient montable, et payable.
   assert.deepEqual(problemesDeLAmelioration(etat, 1), [],
-    'l\'amorce ne paie même pas la première montée du collecteur');
+    'le collecteur reste bloqué alors que le Chantier est monté');
   ameliorer(etat, 1);
   assert.equal(etat.disposition[1].niveau, 2);
 
-  // Et il lui reste de quoi faire autre chose : une amorce qui financerait
-  // EXACTEMENT une action laisserait le joueur bloqué juste après.
-  assert.ok(etat.economie.ressources.quartz > 0, 'l\'amorce est épuisée par une seule montée');
+  // Et il reste de quoi faire autre chose : une amorce qui financerait
+  // EXACTEMENT ces deux gestes laisserait le joueur bloqué juste après.
+  assert.ok(etat.economie.ressources.quartz > 0, 'l\'amorce est épuisée par l\'ouverture');
 });
 
 test('état — une règle née APRÈS les sauvegardes ne rend pas une partie illisible', () => {

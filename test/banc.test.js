@@ -445,7 +445,21 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   const chemin = join(RACINE, 'dist', 'index.html');
   const html = readFileSync(chemin, 'utf8');
 
-  assert.ok(!/https?:\/\//i.test(html), 'URL réseau dans le HTML final');
+  // ⚠⚠ UNE SEULE URL EST TOLÉRÉE, ET CE N'EST PAS UNE RÉFÉRENCE. L'espace de
+  // noms XML du SVG est l'argument obligatoire de `createElementNS` — un
+  // IDENTIFIANT, jamais une adresse : rien n'est téléchargé depuis là. Il entre
+  // au lot du 29/08 avec le calque des traits de voisinage. La garde le retire
+  // à l'identique et refuse tout le reste ; elle n'autorise PAS `w3.org`.
+  const NAMESPACE_SVG = 'http://www.w3.org/2000/svg';
+  const horsNamespace = html.split(NAMESPACE_SVG).join('');
+  assert.ok(!/https?:\/\//i.test(horsNamespace), 'URL réseau dans le HTML final');
+  // Falsifiable : la garde doit toujours attraper une vraie adresse, et même
+  // une autre adresse du MÊME domaine — l'exception porte sur une chaîne, pas
+  // sur un hôte.
+  for (const appat of ['https://cdn.example.com/a.js', 'http://www.w3.org/1999/xhtml']) {
+    assert.ok(/https?:\/\//i.test(`${appat}`.split(NAMESPACE_SVG).join('')),
+      `la garde laisserait passer ${appat}`);
+  }
   for (const [, valeur] of html.matchAll(/<[^>]+\b(?:src|href)\s*=\s*["']([^"']*)["']/gi)) {
     assert.ok(valeur.startsWith('data:') || valeur.startsWith('#'),
       `ressource externe : ${valeur}`);

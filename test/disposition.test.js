@@ -150,26 +150,34 @@ test('disposition — deux bâtiments sur la même case sont signalés', () => {
 });
 
 test('disposition — le Chantier se compte dans ses propres emplacements', () => {
-  // C'est l'arbitrage du 25/08 et il a une conséquence forte : au niveau 1 le
-  // Chantier ouvre deux emplacements et en prend un, donc il ne reste QU'UN
-  // bâtiment libre. Ne pas le compter en offrirait un gratuit.
+  // C'est l'arbitrage du 25/08 et il a une conséquence forte : le Chantier
+  // prend un des emplacements qu'il ouvre. Ne pas le compter en offrirait un
+  // gratuit.
+  //
+  // ⚠ LE NOMBRE A CHANGÉ LE 29/08, PAS LA RÈGLE. La table dictée par Ethan
+  // ouvre TROIS emplacements au niveau 1 au lieu de deux : le plafond mord donc
+  // au quatrième bâtiment, plus au troisième. Le test lit la fonction plutôt
+  // que de réécrire le chiffre, pour qu'il suive la prochaine table.
   assert.equal(EMPLACEMENTS.chantierOccupeUnEmplacement, true);
-  assert.equal(emplacementsDuNiveau(1), 2);
+  const ouvertsNiveau1 = emplacementsDuNiveau(1);
+  assert.equal(ouvertsNiveau1, 3);
 
   const auRas = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 1 },
     { id: 'centrale', rangee: 17, colonne: 5, niveau: 1 },
+    { id: 'aerodrome', rangee: 18, colonne: 8, niveau: 1 },
   ];
-  assert.deepEqual(problemesDeDisposition(auRas, TERRAIN), [], '2 bâtiments tiennent au niveau 1');
+  assert.equal(auRas.length, ouvertsNiveau1, 'le montage doit remplir la base au RAS');
+  assert.deepEqual(problemesDeDisposition(auRas, TERRAIN), [], '3 bâtiments tiennent au niveau 1');
 
-  // ⚠ LA CASERNE EST LOIN DU CHANTIER, ET C'EST DÉLIBÉRÉ DEPUIS LE 28/08. Elle
-  // était en (17,4), donc en diagonale du Chantier — deux uniques voisins, ce
-  // qui ajoute un second défaut et brouille ce que ce test mesure. Il mesure le
-  // PLAFOND D'EMPLACEMENTS, et rien d'autre : on l'isole.
+  // ⚠ LES BÂTIMENTS D'APPOINT SONT LOIN DU CHANTIER, ET C'EST DÉLIBÉRÉ DEPUIS
+  // LE 28/08. La caserne était en (17,4), donc en diagonale du Chantier — deux
+  // uniques voisins, ce qui ajoute un second défaut et brouille ce que ce test
+  // mesure. Il mesure le PLAFOND D'EMPLACEMENTS, et rien d'autre : on l'isole.
   const unDeTrop = [...auRas, { id: 'caserne', rangee: 18, colonne: 1, niveau: 1 }];
   const p = problemesDeDisposition(unDeTrop, TERRAIN);
   assert.deepEqual(codes(p), ['trop-de-batiments']);
-  assert.match(p[0].message, /3 bâtiments pour 2 emplacements/);
+  assert.match(p[0].message, /4 bâtiments pour 3 emplacements/);
 
   // Et au niveau 10, les vingt emplacements laissent passer la base de
   // référence : le plafond doit MORDRE ici et pas ailleurs.
@@ -600,25 +608,30 @@ test('disposition — une COPIE fraîche à chaque appel, jamais la table', () =
   assert.equal(dispositionNouvelleBase()[0].niveau, 1, 'la table a été abîmée');
 });
 
-test('disposition — il reste EXACTEMENT un emplacement libre à la fondation', () => {
-  assert.equal(emplacementsDuNiveau(1), 2);
+test('disposition — il reste EXACTEMENT deux emplacements libres à la fondation', () => {
+  // ⚠ IL EN RESTAIT UN JUSQU'AU 29/08. La table d'emplacements dictée par Ethan
+  // ouvre trois emplacements au niveau 1 : le début de partie gagne un bâtiment,
+  // et c'est la conséquence voulue de la table.
+  assert.equal(emplacementsDuNiveau(1), 3);
   assert.equal(EMPLACEMENTS.chantierOccupeUnEmplacement, true);
-  assert.equal(emplacementsDuNiveau(1) - dispositionNouvelleBase().length, 1);
+  assert.equal(emplacementsDuNiveau(1) - dispositionNouvelleBase().length, 2);
 
-  // Prouvé dans les deux sens : un bâtiment de plus passe, deux ne passent pas.
+  // Prouvé dans les deux sens : deux bâtiments de plus passent, trois non.
   //
   // ⚠ LES BÂTIMENTS D'APPOINT SONT SUR LA RANGÉE 18, pas ailleurs. Une première
   // rédaction les posait en (12,5), qui porte un champ à cette graine : le test
   // tombait sur `champ-gache` au lieu de mesurer le plafond d'emplacements.
   // Le pourtour de la bande est le seul endroit garanti libre de champs.
   const champs = champsDeLaBase(275, 16);
-  const unDePlus = [
-    ...dispositionNouvelleBase(), { id: 'centrale', rangee: 18, colonne: 6, niveau: 1 },
+  const auRas = [
+    ...dispositionNouvelleBase(),
+    { id: 'centrale', rangee: 18, colonne: 6, niveau: 1 },
+    { id: 'aerodrome', rangee: 18, colonne: 8, niveau: 1 },
   ];
-  assert.deepEqual(problemesDeDisposition(unDePlus, champs), []);
-  const deuxDePlus = [...unDePlus, { id: 'caserne', rangee: 18, colonne: 7, niveau: 1 }];
+  assert.deepEqual(problemesDeDisposition(auRas, champs), []);
+  const unDeTrop = [...auRas, { id: 'caserne', rangee: 18, colonne: 1, niveau: 1 }];
   assert.deepEqual(
-    problemesDeDisposition(deuxDePlus, champs).map((p) => p.code), ['trop-de-batiments'],
+    problemesDeDisposition(unDeTrop, champs).map((p) => p.code), ['trop-de-batiments'],
   );
 });
 

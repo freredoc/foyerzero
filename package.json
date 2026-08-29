@@ -1,11 +1,11 @@
 {
   "name": "foyerzero",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "private": true,
   "type": "module",
   "description": "Foyer Zéro — jeu de guerre idle solo, hors ligne, distribué comme un fichier HTML autonome (codename : chantier).",
   "config": {
-    "build": "31"
+    "build": "32"
   },
   "scripts": {
     "build": "node tools/build.js",

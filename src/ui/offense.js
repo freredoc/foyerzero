@@ -26,17 +26,20 @@
 
 import { GRILLE, UNITES } from '../data/combat.js';
 import {
-  NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau, unitesDisponibles,
+  NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau,
+  messageSansBatiment, raisonDuVerrou,
 } from './arsenal.js';
+import { BASE_BATIMENTS } from '../data/base.js';
 import {
-  pointsEngages, niveauDeCommandement,
+  pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
 } from '../sim/state.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
 import {
-  formaterEntier, ligneAAfficher, messageDeRefus,
-  messageDePose, messageDeConfirmation, DUREE_TOAST_MS,
+  formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
+  messageDePose, messageDeConfirmation,
+  messagePasDeReparation, DUREE_TOAST_MS,
 } from './chantier.js';
 
 /**
@@ -120,36 +123,127 @@ export function messageEnMain(nom) {
 }
 
 /**
- * Les unités que la palette montre à ce niveau d'armée.
+ * Le roster ENTIER, chaque unité avec la raison qui l'empêche — ou aucune.
  *
- * ⚠ LE FILTRE EST CELUI DE L'ARSENAL, PAS UN SECOND. `unitesDisponibles` ne
- * montre que `apparition <= niveau` — « une unité qu'on ne peut pas construire
- * n'a pas à occuper l'écran », décidé au lot 5A. Ce n'est PAS le cas des
- * bâtiments uniques du Chantier, qui restent grisés : là-bas la vignette
- * disparaîtrait au milieu d'une palette de longueur fixe et déplacerait les
- * autres sous le doigt ; ici la palette s'allonge en début de partie et personne
- * ne vise une vignette qui n'existe pas encore.
+ * ⚠⚠ ELLE GRISE, ELLE NE FILTRE PLUS, ET C'EST UN CHANGEMENT DE DÉCISION.
+ * Jusqu'au 29/08 cette palette RETIRAIT ce que le niveau verrouillait, au motif
+ * qu'« une unité qu'on ne peut pas construire n'a pas à occuper l'écran » (lot
+ * 5A). Ethan a rapporté le 29/08 que deux unités étaient « indisponibles »
+ * alors qu'il les attendait : une palette qui CACHE ne peut pas répondre à ça.
+ * Elle montre donc tout, éteint ce qui ne se construit pas, et DIT pourquoi au
+ * toucher. Trois gains, et aucun n'est cosmétique :
+ *   — le joueur voit ce qui existe et ce qu'il lui manque pour l'avoir ;
+ *   — la règle du bâtiment de production s'apprend au lieu de se deviner ;
+ *   — la palette garde une LONGUEUR FIXE, si bien que les vignettes ne se
+ *     déplacent plus sous le doigt entre deux gestes. C'est exactement
+ *     l'argument qui avait fait griser les uniques du Chantier le 28/08 ; les
+ *     deux palettes se comportent enfin pareil.
  *
- * ⚠ `niveau === null` MONTRE TOUT, DÉSACTIVÉ. Sans Centre de commandement il
- * n'y a pas de niveau d'armée — pas un niveau zéro. Filtrer sur un niveau
- * inventé cacherait des unités pour une mauvaise raison ; montrer le roster
- * entier, éteint, dit ce qui est vrai : rien n'est composable pour l'instant.
+ * ⚠ TROIS RAISONS, DANS CET ORDRE, ET L'ORDRE COMPTE. Pas de Centre de
+ * commandement d'abord — sans lui il n'y a pas de niveau du tout, et parler
+ * d'un seuil serait parler d'un nombre qui n'existe pas. Puis le niveau
+ * d'apparition. Puis le bâtiment de production. Le joueur lit ce qui le bloque
+ * MAINTENANT, pas la liste de tout ce qui le bloquera.
  *
  * ⚠ `nom.joueur`, JAMAIS `nom.ouvrage`. C'est un panneau du joueur : il y emploie
  * le vocabulaire d'une armée régulière (CLAUDE.md §4).
  *
- * @param {number|null} niveau niveau du Centre de commandement
- * @returns {Array<{id: string, nom: string, points: number, disponible: boolean}>}
+ * @param {object} etat état de jeu
+ * @returns {Array<{id: string, nom: string, points: number,
+ *   disponible: boolean, raison: string|null}>}
  */
-export function unitesDeLaPalette(niveau) {
-  const ids = niveau === null ? Object.keys(UNITES) : unitesDisponibles(niveau);
-  return ids.map((id) => ({
-    id,
-    nom: UNITES[id].nom.joueur,
-    points: UNITES[id].points,
-    disponible: niveau !== null,
-  }));
+export function unitesDeLaPalette(etat) {
+  const niveau = niveauDeCommandement(etat, 'armee');
+  return Object.keys(UNITES).map((id) => {
+    const unite = UNITES[id];
+    // ⚠ LE VERROU DE NIVEAU SE DEMANDE À L'ARSENAL, IL NE SE RELIT PAS ICI.
+    // `apparition` n'apparaît nulle part dans ce fichier, et un test le balaie :
+    // une seconde lecture du seuil finirait par dire autre chose que la
+    // première, et la divergence se lirait comme un déséquilibre de jeu.
+    let raison = raisonDuVerrou(id, niveau);
+    if (raison === null) {
+      const manque = batimentDeProductionManquant(etat, id);
+      if (manque !== null) {
+        raison = messageSansBatiment(BASE_BATIMENTS[manque].nom.joueur, unite.chassis);
+      }
+    }
+    return {
+      id,
+      nom: unite.nom.joueur,
+      points: unite.points,
+      disponible: raison === null,
+      raison,
+    };
+  });
 }
+
+/**
+ * Ce que la ligne d'avis dit quand on touche une vignette éteinte.
+ * @param {{nom: string, raison: string}} unite
+ * @returns {string}
+ */
+export function messageIndisponible(unite) {
+  return `${unite.nom} — ${unite.raison}.`;
+}
+
+/**
+ * Les quatre actions de la barre contextuelle de l'Offense.
+ *
+ * ⚠⚠ ELLE N'EXISTAIT PAS, ET C'EST LE RAPPORT D'ETHAN DU 29/08 : « on ne peut
+ * pas supprimer une unité en cliquant dessus. D'ailleurs les boutons réparer,
+ * améliorer etc. n'apparaissent pas dans le menu offense. » L'écran retirait
+ * bien une unité — mais en DEUX touchers implicites, sans qu'aucun bouton ne le
+ * dise. Le modèle « armer puis toucher » du Chantier est repris tel quel, avec
+ * les mêmes quatre règles : retoucher l'action armée la désarme, armer une
+ * action désarme l'autre, armer défait la palette, et toucher une case vide
+ * désarme sans rien dire.
+ *
+ * ⚠ `agir: null` N'EST PAS UN OUBLI. Réparer et Améliorer n'ont pas de moteur
+ * pour une unité — le COÛT d'une amélioration existe depuis le 28/08
+ * (`data/couts-militaires.js`), la MÉCANIQUE non : ce que gagne une unité
+ * améliorée n'est pas arbitré. Le bouton s'arme quand même et répond, parce
+ * qu'« un indice n'est pas une interdiction » (CLAUDE.md §4).
+ *
+ * ⚠ ET « RETIRER », PAS « DÉMOLIR ». On ne démolit pas des Fusiliers. Le
+ * Chantier garde « Démolir » pour ses bâtiments ; les libellés sont ici parce
+ * que c'est ici qu'on parle d'unités.
+ */
+export const MESSAGES_MODE_ARMEE = {
+  reparer: 'Mode RÉPARER : touchez l\'unité à réparer. Retouchez le bouton pour annuler.',
+  ameliorer: 'Mode AMÉLIORER : touchez l\'unité à améliorer. Retouchez le bouton pour annuler.',
+  deplacer: 'Mode DÉPLACER : touchez l\'unité à déplacer. Retouchez le bouton pour annuler.',
+  retirer: 'Mode RETIRER : touchez l\'unité à retirer. Retouchez le bouton pour annuler.',
+};
+
+/**
+ * Ce que dit la ligne de mode quand une unité est en main, attendant sa case.
+ * @param {string} nom nom joueur de l'unité
+ * @returns {string}
+ */
+export function messageDeDestinationDUnite(nom) {
+  return `Déplacement de ${nom} : touchez l'emplacement d'arrivée.`
+    + ' Retouchez le bouton pour annuler.';
+}
+
+export const ACTIONS_ARMEE = {
+  reparer: { bouton: 'offense-reparer', libelle: 'Réparer', agir: null },
+  ameliorer: { bouton: 'offense-ameliorer', libelle: 'Améliorer', agir: null },
+  deplacer: {
+    bouton: 'offense-deplacer',
+    libelle: 'Déplacer',
+    cible: true,
+    problemes: (etat, index, position) => problemesDuDeplacementDEffectif(
+      etat, 'armee', index, position,
+    ),
+    agir: (etat, index, position) => deplacerEffectif(etat, 'armee', index, position),
+  },
+  retirer: {
+    bouton: 'offense-retirer',
+    libelle: 'Retirer',
+    problemes: () => [],
+    agir: (etat, index) => retirerEffectif(etat, 'armee', index),
+  },
+};
 
 /**
  * Tout ce que l'écran Offense affiche, calculé depuis l'état seul.
@@ -202,7 +296,7 @@ export function vueDeLOffense(etat) {
     budget,
     depasse,
     vagues,
-    palette: unitesDeLaPalette(niveau),
+    palette: unitesDeLaPalette(etat),
     avis: avisDeLOffense(niveau, engages, budget, depasse),
   };
 }
@@ -237,6 +331,11 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
   let apercu = null;
   // L'indice, dans `etat.armee`, de l'unité en main pendant un déplacement.
   let enMain = null;
+  // L'action armée, ou null. Exclusive avec `choisie` : un seul mode à la fois.
+  let actionArmee = null;
+  // L'unité SÉLECTIONNÉE — celle dont la barre contextuelle parle. Elle n'arme
+  // rien : c'est le bouton qu'on touche ensuite qui décide de ce qu'on en fait.
+  let selection = null;
   let minuterieToast = null;
   // ⚠ `session` RESTE VIDE ICI, et ce n'est pas un oubli : les messages de
   // session — sauvegarde impossible, sauvegarde illisible — appartiennent à la
@@ -309,11 +408,46 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
   }
 
   /** Défait tous les modes — après une pose, un retrait, ou un geste à côté. */
+  /** Défait tous les modes — après une pose, un retrait, ou un geste à côté. */
   function desarmer() {
     choisie = null;
     apercu = null;
+    actionArmee = null;
     enMain = null;
     ligneDeMode('');
+    marquerBoutonsAction();
+  }
+
+  /** Le bouton d'une action armée s'allume ; les autres s'éteignent. */
+  function marquerBoutonsAction() {
+    for (const [nom, action] of Object.entries(ACTIONS_ARMEE)) {
+      $(action.bouton).classList.toggle('arme', actionArmee === nom);
+    }
+  }
+
+  /**
+   * Arme ou désarme une action.
+   *
+   * Les quatre règles du Chantier, reprises telles quelles : retoucher l'action
+   * armée la désarme ; armer une action désarme l'autre ; armer défait la
+   * palette — un seul mode à la fois ; et l'action se désarme dans tous les cas
+   * après un toucher, réussite comme refus.
+   */
+  function armer(nom) {
+    const suivant = actionArmee === nom ? null : nom;
+    actionArmee = suivant;
+    choisie = null;
+    apercu = null;
+    enMain = null;
+    // ⚠ PAS DE REPLI SUR UN AUTRE MESSAGE. Une première écriture reprenait
+    // `MESSAGES_MODE` du Chantier avec un `??` de secours : « Retirer » n'y a
+    // pas de clé, et le bouton annonçait « Mode DÉPLACER : touchez le BÂTIMENT
+    // à déplacer ». Vu en essayant l'écran, pas en le relisant. Une table qui
+    // ne couvre pas ses actions doit LEVER — et un test asserte que les deux
+    // jeux de clés sont les mêmes.
+    ligneDeMode(suivant === null ? '' : MESSAGES_MODE_ARMEE[suivant]);
+    marquerBoutonsAction();
+    peindre(etatCourant);
   }
 
   function choisirUnite(id) {
@@ -325,7 +459,9 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     }
     choisie = id;
     apercu = null;
+    actionArmee = null;
     enMain = null;
+    marquerBoutonsAction();
     ligneDeMode(messageDePose(UNITES[id].nom.joueur));
     peindre(etatCourant);
   }
@@ -348,11 +484,18 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
       peindre(etatCourant);
       return;
     }
-    // ⚠ LE BUDGET EST DEMANDÉ À PART, PARCE QU'IL N'EST PAS DANS `sim/`. Une
-    // composition trop chère est un fait de jeu, pas un fait de programme :
-    // `verifierEtat` ne la refuse pas, et c'est voulu — le budget BAISSE quand
-    // le QG tombe, sous une armée déjà posée. C'est donc ici, au geste, qu'on
-    // l'oppose au joueur.
+    // ⚠ LE BUDGET ET LE BÂTIMENT DE PRODUCTION SONT DEMANDÉS À PART, PARCE
+    // QU'AUCUN DES DEUX N'EST DANS `problemesDeLEffectif`. Les deux peuvent
+    // devenir faux SOUS une armée déjà posée — le QG démoli, la Caserne rasée —
+    // et `verifierEtat` les laisse passer exprès. C'est donc ici, au geste,
+    // qu'on les oppose au joueur.
+    const indisponible = unitesDeLaPalette(etatCourant).find((u) => u.id === choisie);
+    if (!indisponible.disponible) {
+      toast(messageIndisponible(indisponible));
+      desarmer();
+      peindre(etatCourant);
+      return;
+    }
     const budget = budgetDuNiveau(niveauDeCommandement(etatCourant, 'armee'));
     const apres = pointsEngages(etatCourant, 'armee') + UNITES[choisie].points;
     if (apres > budget) {
@@ -368,30 +511,66 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     if (apresPose) apresPose();
   }
 
-  /** Le second toucher d'un déplacement, ou d'un retrait. */
-  function agirSurLaPieceEnMain(vague, colonne) {
-    const piece = etatCourant.armee[enMain];
-    // Le MÊME emplacement une seconde fois : on retire.
-    if (piece.vague === vague && piece.colonne === colonne) {
-      retirerEffectif(etatCourant, 'armee', enMain);
-      desarmer();
+  /**
+   * Une action armée s'applique à l'unité touchée.
+   *
+   * ⚠ `agir: null` RÉPOND, IL NE RESTE PAS MUET. Réparer et Améliorer n'ont pas
+   * de moteur pour une unité ; le bouton s'arme, on touche, et l'écran dit ce
+   * qui manque. Un bouton inerte n'apprendrait rien.
+   */
+  function appliquerAction(index) {
+    const nom = actionArmee;
+    const action = ACTIONS_ARMEE[nom];
+    // Quoi qu'il arrive, le mode se désarme : réussite comme refus.
+    actionArmee = null;
+    ligneDeMode('');
+    marquerBoutonsAction();
+
+    if (action.agir === null) {
+      // ⚠ « L'ARMÉE », PAS « LA DÉFENSE » — et « unité », pas « bâtiment ». Les
+      // deux messages disaient l'un et l'autre en dur, ce qui allait tant que
+      // la barre contextuelle n'existait qu'au Chantier. Vu en essayant cet
+      // écran-ci, pas en le relisant.
+      toast(nom === 'reparer'
+        ? messagePasDeReparation('aucune unité n\'est endommagée')
+        : actionSansMoteur(action.libelle, 'l\'armée'));
       peindre(etatCourant);
-      if (apresPose) apresPose();
       return;
     }
-    const problemes = problemesDuDeplacementDEffectif(
-      etatCourant, 'armee', enMain, { vague, colonne },
-    );
+    if (action.cible === true) {
+      // Deux touchers : celui-ci prend la pièce en main, le suivant l'emmène.
+      enMain = index;
+      ligneDeMode(messageDeDestinationDUnite(UNITES[etatCourant.armee[index].id].nom.joueur));
+      peindre(etatCourant);
+      return;
+    }
+    const problemes = action.problemes(etatCourant, index);
     if (problemes.length > 0) {
       toast(messageDeRefus(problemes));
-      desarmer();
+      peindre(etatCourant);
+      return;
+    }
+    action.agir(etatCourant, index);
+    selection = null;
+    peindre(etatCourant);
+    if (apresPose) apresPose();
+  }
+
+  /** Le second toucher d'un déplacement. */
+  function deposerLaPieceEnMain(vague, colonne) {
+    const index = enMain;
+    const action = ACTIONS_ARMEE.deplacer;
+    enMain = null;
+    ligneDeMode('');
+    const problemes = action.problemes(etatCourant, index, { vague, colonne });
+    if (problemes.length > 0) {
+      toast(messageDeRefus(problemes));
       peindre(etatCourant);
       return;
     }
     // ⚠ DÉPLACER NE COÛTE RIEN — Ethan, 28/08 : « déplacement gratuit, comme
     // bâtiment ». Le budget ne bouge pas : la même unité change de case.
-    deplacerEffectif(etatCourant, 'armee', enMain, { vague, colonne });
-    desarmer();
+    action.agir(etatCourant, index, { vague, colonne });
     peindre(etatCourant);
     if (apresPose) apresPose();
   }
@@ -405,8 +584,10 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
       (p) => p.vague === vague && p.colonne === colonne,
     );
 
+    // Une pièce en main cherche sa destination : c'est le second temps du
+    // déplacement, et il passe avant tout le reste.
     if (enMain !== null) {
-      agirSurLaPieceEnMain(vague, colonne);
+      deposerLaPieceEnMain(vague, colonne);
       return;
     }
 
@@ -426,36 +607,73 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
       return;
     }
 
-    // Rien d'armé : toucher une unité posée la prend en main. Toucher une case
-    // vide ne dit rien — c'est le geste « à côté du menu », pas une erreur.
+    // Toucher une case VIDE désarme, sans rien dire : c'est le geste « à côté
+    // du menu », pas une erreur.
     if (occupant === -1) {
+      selection = null;
       desarmer();
       peindre(etatCourant);
       return;
     }
-    enMain = occupant;
-    ligneDeMode(messageEnMain(UNITES[etatCourant.armee[occupant].id].nom.joueur));
+
+    // Une action armée s'applique. Sinon, le toucher SÉLECTIONNE : la barre
+    // contextuelle dit alors sur quoi ses quatre boutons agiront.
+    if (actionArmee !== null) {
+      selection = occupant;
+      appliquerAction(occupant);
+      return;
+    }
+    selection = occupant;
     peindre(etatCourant);
   });
 
   palette.addEventListener('click', (evenement) => {
     const bouton = evenement.target.closest('.unite');
     if (bouton === null || etatCourant === null) return;
-    if (bouton.disabled) return;
+    // ⚠ UNE VIGNETTE ÉTEINTE RÉPOND QUAND ON LA TOUCHE. « Un indice n'est pas
+    // une interdiction » (CLAUDE.md §4) : un bouton inerte n'apprend rien, un
+    // toast qui dit « sans Caserne, pas d'infanterie » apprend la règle. C'est
+    // le geste qui manquait quand Ethan a rapporté deux unités « indisponibles »
+    // sans savoir pourquoi.
+    const unite = unitesDeLaPalette(etatCourant).find((u) => u.id === bouton.dataset.id);
+    if (!unite.disponible) {
+      toast(messageIndisponible(unite));
+      return;
+    }
     choisirUnite(bouton.dataset.id);
   });
 
-  /** Reconstruit la palette — sa longueur suit le niveau, donc elle change. */
+  for (const [nom, action] of Object.entries(ACTIONS_ARMEE)) {
+    $(action.bouton).addEventListener('click', () => {
+      if (etatCourant === null) return;
+      armer(nom);
+    });
+  }
+
+
   function peindrePalette(vue) {
     palette.textContent = '';
     vignettes.clear();
+    // ⚠ LE NOMBRE DE COLONNES SE CALCULE, IL NE S'ÉCRIT PAS. Deux rangées, et
+    // autant de colonnes qu'il en faut : écrire « 7 » marcherait aujourd'hui et
+    // mentirait à la quinzième unité. Même règle que la palette du Chantier
+    // depuis le lot MISE-EN-PAGE, et pour la même raison — rien ne défile
+    // horizontalement.
+    palette.style.gridTemplateColumns = `repeat(${Math.ceil(vue.palette.length / 2)}, minmax(0, 1fr))`;
     for (const unite of vue.palette) {
       const bouton = doc.createElement('button');
       bouton.type = 'button';
       bouton.className = 'unite';
       bouton.dataset.id = unite.id;
-      bouton.disabled = !unite.disponible;
-      bouton.title = `${unite.nom} — ${unite.points} points d'armée`;
+      // ⚠ LA VIGNETTE ÉTEINTE N'EST PAS `disabled`, ET C'EST LE POINT. Un
+      // bouton désactivé n'émet aucun clic : le joueur n'apprendrait jamais
+      // POURQUOI l'unité est hors de portée. Elle porte une classe qui la
+      // grise, et son toucher dit la raison — exactement comme les uniques déjà
+      // posés du Chantier depuis le 28/08.
+      bouton.classList.toggle('verrouillee', !unite.disponible);
+      bouton.title = unite.disponible
+        ? `${unite.nom} — ${unite.points} points d'armée`
+        : `${unite.nom} — ${unite.raison}`;
       const nom = doc.createElement('b');
       nom.textContent = unite.nom;
       const cout = doc.createElement('span');
@@ -472,6 +690,10 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
   function peindre(etat) {
     if (etat === null || etat === undefined) return;
     etatCourant = etat;
+    // ⚠ UNE SÉLECTION QUI DÉSIGNE UNE PIÈCE PARTIE MENTIRAIT, OU PIRE :
+    // désignerait sa voisine. `retirerEffectif` décale la liste, donc l'indice
+    // retenu ne vaut plus rien — on le lâche plutôt que de le laisser glisser.
+    if (selection !== null && selection >= etat.armee.length) selection = null;
     const vue = vueDeLOffense(etat);
 
     vue.vagues.forEach((vague, indice) => {
@@ -488,6 +710,7 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     });
 
     peindrePalette(vue);
+    peindreContexte(vue);
 
     // ⚠⚠ L'EXPLICATION DU BUDGET ABSENT VA DANS LE REGISTRE `mode`, PAS DANS
     // `session`, ET C'EST UNE CORRECTION FAITE AVANT LIVRAISON. Elle décrit
@@ -500,8 +723,28 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     //
     // Elle ne s'écrit que si aucun mode n'est en cours, sinon elle effacerait
     // le rappel du geste qu'on est en train de faire.
-    if (choisie === null && enMain === null) ligneDeMode(vue.avis);
+    if (choisie === null && enMain === null && actionArmee === null) ligneDeMode(vue.avis);
     else rendreLigne();
+  }
+
+  /**
+   * La barre contextuelle : de quoi on parle, et les quatre boutons.
+   *
+   * ⚠ LES BOUTONS NE SONT JAMAIS DÉSACTIVÉS. C'est le bouton qu'on touche EN
+   * PREMIER dans le modèle « armer puis toucher » : les rendre inertes tant
+   * qu'aucune unité n'est choisie rendrait toute la barre inatteignable au
+   * doigt. C'est la leçon du lot ÉCRAN-ACTIONS, et elle vaut ici mot pour mot.
+   */
+  function peindreContexte(vue) {
+    const piece = selection === null ? null : etatCourant.armee[selection];
+    $('offense-selection-nom').textContent = piece === null
+      ? '—' : UNITES[piece.id].nom.joueur;
+    $('offense-selection-detail').textContent = piece === null
+      ? 'aucune unité sélectionnée'
+      : `vague ${piece.vague} · niveau ${piece.niveau} · ${UNITES[piece.id].points} pts`;
+    $('offense-ameliorer-cible').textContent = vue.budget === null
+      ? '' : ` ${formaterEntier(vue.engages)}/${formaterEntier(vue.budget)}`;
+    marquerBoutonsAction();
   }
 
   /**
@@ -512,6 +755,12 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
   function rafraichir(etat) {
     if (etatCourant === null) peindre(etat);
   }
+
+  // ⚠ LE PANNEAU CONTEXTUEL PART VIDE, EXPLICITEMENT. Comme celui du Chantier :
+  // le balisage suffit aujourd'hui, mais il serait la SEULE chose à le tenir
+  // ainsi, et un attribut oublié à la prochaine reprise du HTML le laisserait
+  // annoncer une sélection qui n'existe pas.
+  marquerBoutonsAction();
 
   return { peindre, rafraichir, nbEmplacements: NB_EMPLACEMENTS };
 }

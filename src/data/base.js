@@ -255,26 +255,39 @@ export const BASE_BATIMENTS = {
 // Emplacements — ce que le Chantier de construction ouvre
 // ---------------------------------------------------------------------------
 //
-// Deux emplacements par niveau jusqu'au dixième, puis un seul, plafonné à
-// quarante. Le plafond tombe donc au niveau 30, et les vingt derniers niveaux
-// du Chantier n'ouvrent plus rien : ils ne servent plus qu'au temps de
-// réparation. Conséquence à voir, pas défaut à corriger.
+// ⚠⚠ LES DIX PREMIERS NIVEAUX SONT UNE TABLE, PAS UNE FORMULE — dictés niveau
+// par niveau par Ethan le 29/08/2026 :
 //
-//   niveau  1 →  2      niveau 11 → 21      niveau 30 → 40
-//   niveau  5 → 10      niveau 20 → 30      niveau 50 → 40
+//   1 → 3    2 → 6    3 → 8    4 → 10   5 → 12
+//   6 → 14   7 → 16   8 → 18   9 → 19   10 → 20
 //
-// ⚠ Sept bâtiments sont uniques et obligatoires, et le Chantier occupe un
-// emplacement. La base démarre donc à UN emplacement libre au niveau 1, et il
-// faut monter le Chantier au niveau 4 pour poser les sept obligatoires.
-// L'ordre dans lequel le joueur les pose est une vraie décision.
+// Les écarts ne se résument pas : +3, +3, puis +2 six fois, puis +1 deux fois.
+// Aucune expression close ne rend ces dix valeurs, et en chercher une aurait
+// donné une courbe « presque » juste — c'est-à-dire fausse sur deux ou trois
+// niveaux, silencieusement. On écrit les dix.
+//
+// ⚠ AU-DELÀ DE DIX, RIEN NE CHANGE : un emplacement par niveau, plafonné à
+// quarante. La table rejoint donc exactement l'ancienne courbe au niveau 10
+// (20 des deux côtés), et les niveaux 11 à 50 rendent les mêmes nombres
+// qu'avant ce lot. Le plafond tombe toujours au niveau 30, et les vingt
+// derniers niveaux du Chantier n'ouvrent plus rien : ils ne servent qu'au
+// temps de réparation.
+//
+//   niveau 11 → 21      niveau 20 → 30      niveau 30 → 40      niveau 50 → 40
+//
+// ⚠ CE QUI A CHANGÉ POUR LE JOUEUR, ET C'EST LE DÉBUT DE PARTIE. Sept bâtiments
+// sont uniques et obligatoires, et le Chantier occupe un emplacement. Il reste
+// donc DEUX emplacements libres au niveau 1 — il en restait un — et le niveau 3
+// suffit désormais aux sept obligatoires, là où il fallait le niveau 4.
 
 export const EMPLACEMENTS = {
-  parNiveauJusqua: { niveau: 10, pas: 2 },
+  /** Les dix premiers niveaux, dictés un par un. L'indice 0 est le niveau 1. */
+  parNiveau: [3, 6, 8, 10, 12, 14, 16, 18, 19, 20],
   parNiveauEnsuite: 1,
   plafond: 40,
   // Arbitré le 25/08 : le Chantier occupe lui-même un emplacement. Au niveau 1
-  // il en ouvre deux et en prend un — il reste UN emplacement libre, et le
-  // deuxième bâtiment de la partie est donc un vrai choix.
+  // il en ouvre trois et en prend un — il en reste DEUX, et les deux premiers
+  // bâtiments de la partie sont donc de vrais choix.
   chantierOccupeUnEmplacement: true,
 };
 
@@ -287,10 +300,11 @@ export function emplacementsDuNiveau(niveau) {
   if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
     throw new Error(`base : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`);
   }
-  const { parNiveauJusqua: seuil, parNiveauEnsuite, plafond } = EMPLACEMENTS;
-  const ouverts = niveau <= seuil.niveau
-    ? seuil.pas * niveau
-    : seuil.pas * seuil.niveau + parNiveauEnsuite * (niveau - seuil.niveau);
+  const { parNiveau, parNiveauEnsuite, plafond } = EMPLACEMENTS;
+  const dernier = parNiveau.length;
+  const ouverts = niveau <= dernier
+    ? parNiveau[niveau - 1]
+    : parNiveau[dernier - 1] + parNiveauEnsuite * (niveau - dernier);
   return ouverts > plafond ? plafond : ouverts;
 }
 
@@ -672,6 +686,20 @@ export const REPARATION_BASE_JOUEUR = {
   // du plancher à 1 PV — ses bâtiments survivent toujours, mais il paie pour les
   // remettre debout, là où la base de l'Ouvrage se relève seule en une heure.
   mode: 'manuelle',
+
+  // ⚠ ARBITRÉ le 29/08/2026 par Ethan : « le Chantier de construction […]
+  // définit aussi les temps de réparation. » Le bâtiment qui commande est donc
+  // NOMMÉ ici, comme `POINTS_ARMEE` nomme déjà celui de chaque budget — plutôt
+  // que d'être écrit en dur le jour où le moteur arrivera.
+  indexeeSur: 'chantierDeConstruction',
+
+  // ⚠⚠ ET LA COURBE N'EST PAS DONNÉE, DONC ELLE N'EST PAS ÉCRITE. Ethan a dit
+  // QUI décide, pas de combien. `reparationSec` de chaque bâtiment reste la
+  // durée de base ; comment le niveau du Chantier la module — division, palier,
+  // pourcentage — reste à arbitrer. Inventer un barème ici le figerait sous
+  // l'apparence d'une donnée relevée, ce qui est exactement la faute que
+  // CLAUDE.md §6 raconte pour la pente de `data/niveaux.js`.
+  courbe: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -1094,6 +1122,34 @@ export function capaciteDuNiveau(id, niveau) {
  * voisinage suit le même appariement.
  */
 export const PRODUCTEUR_APPARIE = { raffinerie: 'collecteur', accumulateur: 'centrale' };
+
+// ---------------------------------------------------------------------------
+// Ce qu'il faut avoir posé pour construire une unité
+// ---------------------------------------------------------------------------
+//
+// ARBITRÉ le 29/08/2026 par Ethan : « Infanterie inconstructible sans caserne.
+// Même règle pour véhicule et avion. »
+//
+// ⚠ LA CLÉ EST LE CHÂSSIS, PAS LE NOM DE L'UNITÉ. `UNITES[x].chassis` de
+// data/combat.js classe déjà les quatorze unités en trois familles — escouade,
+// blindé, aéronef — et les trois bâtiments de production existent depuis le
+// lot BASE-0. La règle est donc une TABLE DE TROIS LIGNES, pas quatorze : une
+// unité qui arriverait demain hérite de la règle sans qu'on y pense.
+//
+// ⚠ ELLE NE CONCERNE QUE LES UNITÉS. Les six ouvrages fixes et les trois
+// artilleries de la défense ne sont pas dans `UNITES` et n'ont pas de châssis :
+// un mur n'a jamais eu besoin d'une caserne.
+//
+// ⚠ ET CE N'EST PAS UNE RÈGLE DE `verifierEtat`. Comme le budget, elle peut
+// devenir fausse SOUS une composition déjà posée — le joueur démolit sa
+// Caserne, ou elle tombe au raid — et refuser le chargement rendrait la partie
+// injouable pour une faute qu'il n'a pas commise. Elle s'oppose au GESTE, et
+// c'est `sim/state.js` qui répond à la question.
+export const BATIMENT_DE_CHASSIS = {
+  escouade: 'caserne',
+  blinde: 'depotDeVehicules',
+  aeronef: 'aerodrome',
+};
 
 /**
  * Le stockage propre d'un bâtiment à ce niveau — la poche du Chantier.
