@@ -31,6 +31,7 @@ import {
   coutDUnRaid, manquePourPayer, payer, distanceTchebychev, basesDuJoueur,
 } from './points-attaque.js';
 import { siteDeLaCase } from './site-de-la-case.js';
+import { annulerLaReparation } from './reparation.js';
 import { montageCourant, enregistrerLeRaid } from './site-entame.js';
 import {
   creerCombat, resoudre, butin, pointsRecherche, facteurMilli, TICKS_MAX_COMBAT,
@@ -220,6 +221,12 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // c'est ce qui fait du choix de cible une décision. Payer au retour ferait de
   // l'échec une répétition gratuite.
   payer(etat.attaque, cout);
+  // ⚠ LE BONUS DE RÉPARATION NE SE MET PAS EN BANQUE. Ethan, le 29/08 : « les
+  // points de réparation bonus disparaissent si on refait un raid avec la même
+  // armée ». Ce qui a déjà été rendu reste rendu — `annulerLaReparation` avance
+  // d'abord — mais le temps restant est perdu, et la scorie payée ne se
+  // rembourse pas.
+  annulerLaReparation(etat);
 
   const montage = montageCourant(etat, site);
   const { vagues, indices } = composerLesVagues(etat);

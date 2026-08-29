@@ -20,6 +20,7 @@ import {
   sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
 } from './site-entame.js';
 import { creerRecherche } from './raid.js';
+import { avancerLaReparation, problemesDeLaReparationEnCours } from './reparation.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
@@ -34,7 +35,7 @@ import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 /**
  * @typedef {object} Etat
@@ -176,6 +177,9 @@ export function creerEtat(graine) {
     // BigInt — le barème dépasse l'entier sûr dès le niveau 39 — et
     // `JSON.stringify` lève sur un BigInt. Voir `sim/raid.js`.
     recherche: creerRecherche(),
+    // ⚠ `null` VEUT DIRE « AUCUNE RÉPARATION EN COURS », et c'est un état, pas
+    // une absence. Une base neuve n'a pas d'armée, donc rien à réparer.
+    reparation: null,
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -271,6 +275,10 @@ function verifierEtat(etat) {
   if (defautsSites.length > 0) {
     throw new Error(`etat : sites entamés injouables — ${defautsSites.join(' ; ')}`);
   }
+  const defautsReparation = problemesDeLaReparationEnCours(etat.reparation ?? null);
+  if (defautsReparation.length > 0) {
+    throw new Error(`etat : réparation injouable — ${defautsReparation.join(' ; ')}`);
+  }
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
       `etat : ${etat.economie.residus.length} résidus pour ${etat.disposition.length} bâtiments`,
@@ -298,6 +306,7 @@ export function tickJeu(etat) {
   resoudreSatellites(etat);
   avancerPointsAttaque(etat, 1);
   reparerLesSites(etat);
+  avancerLaReparation(etat);
 }
 
 /**
@@ -329,6 +338,10 @@ export function rattraperJeu(etat, nbTicks) {
   // réparation ne lit que l'horloge courante, donc mille ticks d'un coup
   // réparent ce que mille ticks un par un auraient réparé.
   reparerLesSites(etat);
+  // ⚠ MÊME FORME QUE LES TROIS AUTRES : un seul appel. La réparation se
+  // recalcule depuis les dégâts de DÉPART et l'horloge courante, jamais par
+  // soustractions successives — c'est ce qui rend les deux chemins identiques.
+  avancerLaReparation(etat);
 }
 
 // ---------------------------------------------------------------------------
@@ -1505,6 +1518,19 @@ const MIGRATIONS = {
   11: (s) => {
     s.version = 12;
     s.recherche = { pointsMilli: '0' };
+  },
+
+  /**
+   * v12 → v13 : la réparation en cours, ou son absence.
+   *
+   * ⚠ `null`, PAS UN OBJET VIDE. Une sauvegarde v12 n'avait aucun moyen de
+   * lancer une réparation, donc il n'y en a pas une en cours ; et `null` est
+   * l'état que `avancerLaReparation` reconnaît pour ne rien faire.
+   * @param {object} s
+   */
+  12: (s) => {
+    s.version = 13;
+    s.reparation = null;
   },
 };
 
