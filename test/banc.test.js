@@ -454,9 +454,23 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   for (const attendu of ['banc-canvas', 'banc-graine', 'banc-lancer', 'banc-pas']) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
   }
-  // Taille consignée au rapport ; borne large pour attraper une explosion.
+  // ⚠ CE QUE CETTE BORNE GARDE, ET CE QU'ELLE NE GARDE PAS. Elle ne dit RIEN
+  // d'un budget : ce que T10 tient vraiment, c'est l'assertion du dessus — le
+  // HTML ne référence rien d'extérieur —, et celle-là ne bouge pas. La taille
+  // n'est qu'un ordre de grandeur, là pour attraper une explosion : un bundle
+  // parti en boucle, une image dupliquée cent fois, un `data:` qui entre deux
+  // fois. Elle se RELÈVE quand une ressource entre légitimement, et le lot le
+  // dit ; elle ne se relève jamais pour faire passer un lot qui déborde sans
+  // raison.
+  //
+  // ⚠ ELLE EST PASSÉE DE 200 000 À 600 000 AU LOT ÉCRAN-CARTE. L'atlas de
+  // terrain — 64 tuiles, 224 548 octets — entre en base64 dans le HTML, soit
+  // environ 299 000 octets à lui seul. C'est la première ressource binaire du
+  // livrable, et c'est le prix de l'offline : une image inlinée pèse un tiers
+  // de plus qu'un fichier, et un fichier à côté serait une référence externe.
+  // Mesuré au lot : 503 724 octets, dont 299 400 pour l'atlas.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 200_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 600_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

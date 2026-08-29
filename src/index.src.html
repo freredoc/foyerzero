@@ -119,6 +119,67 @@
   }
   #banc-tick th { color: #68727E; position: sticky; top: 0; background: #1E2124; }
 
+  /* =======================================================================
+     ÉCRAN MONDE — lot ÉCRAN-CARTE
+     =======================================================================
+     ⚠ AUCUNE BARRE À HAUTEUR FIXE ICI, ET C'EST VOULU. La consigne d'Ethan —
+     « tu compresses tout dans l'ui » — se garde par un test qui somme les
+     hauteurs `flex: 0 0 Npx` de la colonne de jeu et refuse la septième barre.
+     Les deux contrôles de zoom et le panneau de site se POSENT sur la carte,
+     en `absolute` : ils ne prennent rien à personne, et le chrome fixe ne bouge
+     pas d'un pixel. */
+  #ecran-monde { min-height: 0; }
+  #monde-champ { flex: 1; min-height: 0; position: relative; background: #161914; }
+  /* ⚠ `touch-action: none` : sans lui, le navigateur avale le glissement pour
+     faire défiler la page, et la carte ne suit plus le doigt. Le canevas est
+     dimensionné en pixels PHYSIQUES par le JS — les crans de `ZOOM_CARTE` sont
+     en pixels physiques par case — et étiré à la boîte par le CSS. */
+  #monde-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    display: block; touch-action: none;
+  }
+  #monde-outils {
+    position: absolute; right: 8px; top: 8px; z-index: 2;
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 6px;
+    background: #1E2124; border: 1px solid #343A2C;
+  }
+  #monde-outils button {
+    width: 28px; height: 28px; padding: 0;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+    font-size: 15px; line-height: 1;
+  }
+  #monde-echelle {
+    font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #68727E; white-space: nowrap;
+  }
+  /* Le panneau d'un site — même grammaire que celui du Chantier : il se pose
+     sur le champ, il ne le remplace pas. Le joueur doit garder sous les yeux
+     l'endroit de la carte dont on lui parle. */
+  #monde-panneau {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+    max-height: 60%; overflow-y: auto; scrollbar-width: none;
+    display: flex; flex-direction: column;
+    background: #1E2124; border-top: 2px solid #4E5742;
+  }
+  #monde-panneau::-webkit-scrollbar { display: none; }
+  #monde-panneau .tete {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+  #monde-panneau-titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
+  #monde-panneau-fermer {
+    flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
+    background: #1E2124; color: #8C9A72; border: 1px solid #161914;
+  }
+  #monde-panneau-corps { padding: 4px 8px 8px; }
+  #monde-panneau .ligne {
+    display: flex; align-items: baseline; gap: 4px;
+    padding: 1px 0; font-size: 11px; color: #8C9A72;
+  }
+  #monde-panneau .ligne .quoi { flex: 1; min-width: 0; }
+  #monde-panneau .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+
   /* --- Arsenal, lot 5A --- */
   #banc-arsenal {
     padding: 6px 8px;
@@ -712,16 +773,16 @@
 <div id="jeu">
 
   <!-- 1. les onglets — Base | Mission | Recherche | Monde | Options.
-       ⚠ MISSION EST NEUF ET MORT, et il se dit mort : Ethan le veut « entre
-       recherche et chantier », comme futur tutoriel. « Chantier » est renommé
-       « Base » au même endroit. OPTIONS, lui, N'EST PLUS MORT : c'est là que le
-       numéro de version a déménagé, donc c'est là que passe le geste qui ouvre
-       le banc d'essai. -->
+       ⚠ IL N'EN RESTE QU'UN DE MORT, ET IL SE NOMME : Recherche. Mission a reçu
+       son tutoriel le 28/08, Options loge le numéro de version et le geste qui
+       ouvre le banc d'essai, et MONDE s'ouvre à ce lot-ci sur la carte. Un test
+       les nomme plutôt que de les compter : un nombre nu ne dit pas lequel des
+       trois vient de bouger. -->
   <div id="tete-onglets">
     <button type="button" class="actif" id="onglet-base">Base</button>
     <button type="button" id="onglet-mission">Mission</button>
     <button type="button" class="futur" disabled>Recherche</button>
-    <button type="button" class="futur" disabled>Monde</button>
+    <button type="button" id="onglet-monde">Monde</button>
     <button type="button" id="onglet-options">Options</button>
   </div>
 
@@ -799,6 +860,37 @@
       <p id="offense-avis" hidden></p>
       <div id="offense-vagues"></div>
       <div id="offense-palette"></div>
+    </div>
+
+    <!-- ======================================================================
+         ÉCRAN MONDE — la carte, ses sites, et le doigt qui la promène.
+         ⚠ L'ATLAS DE TERRAIN VIT ICI, DANS UNE IMAGE CACHÉE. Le build y injecte
+         les 64 tuiles en `data:` — le HTML ne référence rien d'extérieur, et
+         c'est non négociable. Une image en `display: none` se charge et se
+         décode quand même ; `ui/monde.js` la relit une fois, à la première
+         ouverture de la carte, et n'y touche plus.
+         ⚠ AUCUN BOUTON D'ACTION DANS LE PANNEAU. Il dit ce qu'on sait d'un
+         site — type, niveau, distance, position — et rien d'autre : le raid
+         n'existe pas. Promettre « Attaquer » serait refaire la faute du bouton
+         « Assaut » du lot ÉCRAN-CHANTIER.
+         ====================================================================== -->
+    <div id="ecran-monde" hidden>
+      <img id="monde-atlas" alt="" hidden src="%ATLAS_TERRAIN%">
+      <div id="monde-champ">
+        <canvas id="monde-canvas"></canvas>
+        <div id="monde-outils">
+          <button type="button" id="monde-zoom-moins" title="reculer">−</button>
+          <button type="button" id="monde-zoom-plus" title="approcher">+</button>
+          <span id="monde-echelle">—</span>
+        </div>
+        <div id="monde-panneau" hidden>
+          <div class="tete">
+            <b id="monde-panneau-titre">—</b>
+            <button type="button" id="monde-panneau-fermer">Fermer</button>
+          </div>
+          <div id="monde-panneau-corps"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ======================================================================

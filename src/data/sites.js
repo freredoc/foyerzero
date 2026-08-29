@@ -399,6 +399,94 @@ export const ZOOM_CARTE = {
   grilleEmbleme: 64,
 };
 
+// --- le pavage du fond de carte ----------------------------------------------
+// Le fond de la carte n'est PAS une case répétée : c'est un semis de tuiles
+// posées sur un réseau plus serré qu'une case, chacune décalée, tournée,
+// éventuellement retournée, et fondue dans les autres par un masque. C'est ce
+// qui fait disparaître la grille — aucune tuile n'est alignée sur une case,
+// donc aucun bord ne se répète à intervalle régulier.
+//
+// ⚠ LE PAS EST PLUS PETIT QUE LA TUILE, ET C'EST CE QUI BOUCHE LES TROUS. Le
+// masque tombe à zéro au bord d'une tuile : à 84 px de pas avec du décalage,
+// des pixels ne sont couverts par AUCUNE tuile et rendent du noir. À 56 px, la
+// tuile de 128 déborde de 72 px sur ses voisines et la couverture ne peut plus
+// s'annuler. Le rendu garde tout de même un plancher — jamais de noir, la
+// teinte moyenne — parce qu'une garde qui ne mord jamais coûte moins cher
+// qu'un carré noir livré.
+//
+// ⚠ LE DÉCALAGE EST UNE FRACTION DU PAS, PAS UN NOMBRE DE PIXELS. Écrit en
+// pixels, il faudrait le reprendre le jour où le pas bouge, et personne n'y
+// penserait : le semis se remettrait à s'aligner sans qu'un test tombe.
+export const TERRAIN_CARTE = {
+  /** Pas du réseau de pose, en pixels SOURCE. Une case en fait 128. */
+  pasSourcePx: 56,
+
+  /** Décalage maximal du centre d'une tuile, en fraction du pas, sur chaque axe. */
+  decalageFraction: 0.4,
+
+  /** Côté d'une dalle de rendu, en pixels ÉCRAN. */
+  dalleCotePx: 512,
+
+  /** Nombre de dalles gardées en cache, la plus ancienne employée cédant sa place. */
+  dallesEnCache: 30,
+
+  // Les deux rampes de cinq teintes de `FICHE-STYLE.md` §3, du creux à la
+  // poussière. ⚠ ELLES ONT LA MÊME CLARTÉ RANG PAR RANG — L* 58,1 · 62,9 ·
+  // 68,0 · 73,0 · 77,9 —, ce qui est la raison d'être de la seconde : deux sols
+  // de clarté différente donneraient à un camp un camouflage que personne n'a
+  // décidé. Repeindre à index CONSTANT ne touche donc ni au contraste ni à la
+  // lisibilité de ce qui se pose dessus. ⚠ Et jamais un voile de couleur
+  // globale à la place : il écraserait le relief et perdrait la garantie.
+  rampes: {
+    joueur: ['#B87E64', '#C38C73', '#CF9A83', '#D7A995', '#E0B9A8'],
+    ouvrage: ['#8E88A4', '#9B95AE', '#A8A3B9', '#B5B1C2', '#C2BFCC'],
+  },
+
+  // Les quatre seuils qui découpent le résultat de l'accumulation en cinq
+  // teintes d'égale surface.
+  //
+  // ⚠⚠ ILS SONT MESURÉS, ET ILS NE SE DEVINENT PAS. L'atlas est exactement
+  // équilibré — 20,0 % de sa surface par index, mesuré — mais la SORTIE ne l'est
+  // pas : elle est la somme pondérée d'environ cinq tuiles, donc à peu près
+  // gaussienne là où l'atlas est uniforme. Prendre les seuils de l'atlas
+  // (0,5 · 1,5 · 2,5 · 3,5) donnerait 14 % aux teintes extrêmes et 28 % à celle
+  // du milieu. Ceux-ci sont les quintiles de la sortie elle-même, relevés sur
+  // 2 949 120 pixels — quatre crans × cinq graines × quatre endroits de la
+  // carte. Les quatre crans s'accordent à 0,05 près, ce qui est ce qu'il fallait
+  // vérifier : un jeu de seuils par cran serait un jeu de seuils de trop. Un
+  // test refait la mesure et exige 20 % ± 2 par teinte.
+  //
+  // ⚠ ET ILS SONT GLOBAUX, PAS PAR DALLE. La formule dit « par quantiles de
+  // luminance sur la dalle » ; des seuils calculés dalle par dalle feraient
+  // deux découpages différents de part et d'autre d'un bord, donc une couture
+  // visible — et casseraient l'invariant qui compte le plus ici, celui qui veut
+  // qu'une zone rendue en une dalle soit identique à la même rendue en quatre.
+  seuilsDeTeinte: [0.660, 1.586, 2.444, 3.363],
+
+  /** Au-dessus de cette part d'Ouvrage, le pixel prend la rampe de l'Ouvrage. */
+  seuilOuvrage: 0.5,
+};
+
+// --- gabarits d'emblèmes ------------------------------------------------------
+// ⚠ CE SONT DES GABARITS, ET ILS LE DISENT. Les treize emblèmes du lot 6 sont
+// spécifiés par `INVENTAIRE-SPRITES.md` et AUCUN fichier n'est produit. En
+// attendant, un site se dessine comme un carré arrondi tenu par un bord et une
+// lettre — ce qui est lisible à tous les crans et ne prétend pas être l'image
+// définitive.
+//
+// ⚠ LE BORD ROUGE EST RÉSERVÉ AUX BASES DE L'OUVRAGE, et c'est une information
+// de JEU, pas un choix de style : ce sont les seules qui attaquent le joueur —
+// `TYPES_SITE.base.attaqueLeJoueur` le dit déjà. Camp et avant-poste sont en
+// ambre parce qu'ils sont du butin, pas une menace. Un test croise les deux
+// tables plutôt que de recopier la liste.
+export const EMBLEMES_CARTE = {
+  base: { fond: '#231D2E', bord: '#E43E32', lettre: 'B', nom: 'Base de l\'Ouvrage' },
+  camp: { fond: '#231D2E', bord: '#F5B636', lettre: 'C', nom: 'Camp' },
+  avantPoste: { fond: '#231D2E', bord: '#F5B636', lettre: 'A', nom: 'Avant-poste' },
+  baseJoueur: { fond: '#4E5742', bord: '#F5F3E8', lettre: 'J', nom: 'Votre base' },
+  baseTerminale: { fond: '#382E47', bord: '#F5F3E8', lettre: 'T', nom: 'Base terminale' },
+};
+
 // --- disposition des défenses ------------------------------------------------
 // ARBITRÉ au lot 2B. Le texte de SITES-DENSITE annonçait 7/9, mais ses deux
 // exemples chiffrés — camp 5 à 1 rangée et 33 %, avant-poste 40 à 6 rangées et

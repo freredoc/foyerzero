@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
+Dernière révision : **29/08/2026**, version 0.30.0 · build 31.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 29/08/2026 (après le lot SATELLITES), à confronter :**
-`npm test` → **427 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**188 451 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot ÉCRAN-CARTE), à confronter :**
+`npm test` → **458 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**503 724 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -49,11 +49,21 @@ CARTE (données) à 181 014 — le seul lot depuis longtemps qui ne touche pas
 l'interface, d'où le +1 086 : c'est un module de simulation et deux tables.
 OBSTACLES à 183 645, en les branchant dans l'état et en les dessinant,
 SATELLITES à 188 451 — de la simulation pure, aucun écran.
-La borne de T10 (200 000 octets) tient, avec 5,8 % de marge — elle se resserre
-lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
-⚠ **ET L'ÉCRAN DE LA CARTE N'EST PAS ENCORE DEDANS.** Il porte un canevas,
-quatre crans de zoom, le défilement au doigt et la pose des tuiles : c'est lui
-qui décidera si la borne se relève ou si les sprites sortent du HTML.
+
+⚠⚠ **ET LE LOT ÉCRAN-CARTE A TOUT CHANGÉ D'ÉCHELLE : 503 724 OCTETS.** Le saut
+est de +315 273, dont **299 400 pour le seul atlas de terrain** — 64 tuiles,
+224 548 octets de PNG, inlinés en base64 par `tools/build.js`. C'est la première
+ressource BINAIRE du livrable, et c'est le prix de l'offline : une image en
+`data:` pèse un tiers de plus qu'un fichier, et un fichier à côté serait une
+référence externe, ce que le build refuse.
+
+⚠ **LA BORNE DE T10 EST PASSÉE DE 200 000 À 600 000 OCTETS**, et elle a changé
+de sens en même temps. Ce que T10 tient VRAIMENT, c'est que le HTML ne référence
+rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'est
+qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
+boucle, une image entrée deux fois. Elle se relève quand une ressource entre
+légitimement, et le lot le dit ; jamais pour faire passer un débordement.
+Marge actuelle : 16,0 %.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
 est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de
@@ -83,6 +93,14 @@ déclaration remontée l'a fait tomber sans qu'aucun geste ait changé.
 Puis de **trois** au lot CITATION (29/08), dans `donnees.test.js` : les deux
 courbes confrontées au relevé qui les a mesurées, et l'écart voulu sur les
 dégâts exigé DÉCLARÉ dans le fichier qui le commet.
+Et de **trente et un** au lot ÉCRAN-CARTE (29/08), dans deux fichiers neufs :
+treize dans `test/terrain.test.js` — le pavage, confronté à l'atlas RÉEL décodé
+sur place — et dix-huit dans `test/monde.test.js`. Deux d'entre eux ont été
+resserrés APRÈS coup, la falsification les ayant trouvés verts sur du code
+cassé : celui qui cherchait `ecranMonde.masquer()` n'importe où passait sur un
+appel enfermé dans un `if (false)`, et celui qui comparait deux dalles par
+`deepEqual` mettait cent secondes à dire « rouge » sur 65 536 pixels — un test
+qu'on n'attend pas ne se relance pas.
 
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
@@ -178,15 +196,17 @@ src/sim/                simulation déterministe, sans DOM — 14 fichiers
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 5 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 6 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
+  terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
 
-src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
+src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
+  monde.js              l'écran de la carte : canevas, quatre crans, défilement au doigt
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
@@ -202,18 +222,19 @@ src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
     sépare — d'où viennent les pièces, quel roster les propose, quelles
     fonctions du moteur on interroge. Un test compte les occurrences des
     fonctions de geste et refuse tout cas particulier nommé à la main.
-  ⤷ ⚠ LA PAGE A QUATRE ÉCRANS ET UN EN-TÊTE COMMUN depuis le 28/08. Les onglets,
+  ⤷ ⚠ LA PAGE A CINQ ÉCRANS ET UN EN-TÊTE COMMUN — quatre depuis le 28/08, cinq
+    depuis le lot ÉCRAN-CARTE, qui a ouvert l'onglet Monde. Les onglets,
     le bandeau des ressources, la bascule entre bases et la barre du bas vivent
     AU-DESSUS des écrans, dans `#jeu` : changer d'écran ne les fait plus
     disparaître. Le fichier de la base construit tout ce chrome — il a les
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   28 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   30 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
-  couts-militaires  peuplement  satellites
+  couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
@@ -230,7 +251,7 @@ test/                   28 fichiers *.test.js (node:test) ; prereglages-lot3a.js
 
 tools/                  7 fichiers, dont UN SEUL sert au build — relevé le 28/08,
                         §2 en annonçait trois depuis des semaines
-  build.js              src/ → dist/index.html, un seul fichier autonome
+  build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
   ⤷ plus quatre scripts Python de traitement de sprites, hors chaîne de build et
@@ -239,6 +260,11 @@ tools/                  7 fichiers, dont UN SEUL sert au build — relevé le 28
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
+art/sprites/carte/      ⚠ LE SEUL DOSSIER D'IMAGES QUI ENTRE DANS LE LIVRABLE.
+                        L'atlas de terrain y est LU PAR LE BUILD et inliné en
+                        base64 ; son absence fait sortir le build en erreur, pas
+                        rendre une carte noire. Le second fichier est l'image de
+                        contrôle du pavage, citée par le rapport du lot.
 rapports/               rapports et passations de plus de 48 h ; les récents restent à la racine
 .github/workflows/ci.yml   web (build + tests) · android (tests JVM + APK) · pages (main seul)
 ```
@@ -1796,6 +1822,136 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   au déménagement**, parce que la spec §10 indexe l'avant-poste sur « le rayon et
   la PRÉSENCE du joueur ». Si Ethan veut qu'ils restent, c'est
   `planifierSatellites` qui change, et elle seule.
+
+- ⚠⚠ **LE FOND DE CARTE N'EST PAS DE LA COMPOSITION ALPHA, ET C'EST TOUT LE LOT
+  ÉCRAN-CARTE.** Le pavage accumule à la main dans un `Float32Array` et rend
+  `μ + (Σ wᵢ·(tᵢ − μ)) / √(Σ wᵢ²)`. `drawImage` avec `globalAlpha` calcule
+  `Σwᵢtᵢ / Σwᵢ`, ce qui divise l'écart-type par √N : le fond devient plat.
+  Mesuré sur le dépôt, écart-type de luminance d'une dalle — **19,6 avec la
+  formule contre 15,1 en alpha ordinaire**, aux quatre crans. Le chemin alpha
+  existe dans le module sous une option, et il n'existe QUE pour que le test le
+  mesure : sans lui, « ce n'est pas de l'alpha » serait une opinion.
+  ⚠ **LE RACCOURCI A ÉTÉ ESSAYÉ ET IL NE MARCHE PAS** : composer en alpha puis
+  répartir par quintiles amplifie le bruit au lieu de rendre le relief.
+- **L'ATLAS EST DÉJÀ QUINTILÉ, LA SORTIE NE L'EST PAS.** Mesuré : les cinq
+  indices de `atlas-terrain-64.png` couvrent 20,0 % de sa surface chacun, moyenne
+  2,000, écart-type √2. Mais la SORTIE est la somme pondérée d'environ cinq
+  tuiles, donc à peu près gaussienne : découper avec les seuils de l'atlas
+  (0,5 · 1,5 · 2,5 · 3,5) donnerait 14 % aux teintes extrêmes et 28 % au milieu.
+  `TERRAIN_CARTE.seuilsDeTeinte` porte les quintiles de la sortie, relevés sur
+  2 949 120 pixels, et un test refait la mesure — 20 % ± 2 par teinte.
+  ⚠ **ET LES SEUILS SONT GLOBAUX, PAS PAR DALLE.** Le brief dit « par quantiles
+  sur la dalle » ; des seuils calculés dalle par dalle feraient deux découpages
+  différents de part et d'autre d'un bord, donc une couture — et casseraient
+  l'invariant qui compte le plus, celui qui veut qu'une zone rendue en une dalle
+  soit identique à la même rendue en quatre. C'est le seul écart au brief du lot,
+  et il est mesuré : les quatre crans s'accordent à 0,05 près sur ces seuils.
+- **L'INDICE DE TEINTE EST LA LUMINANCE, À UNE TRANSFORMATION AFFINE PRÈS.**
+  L'atlas est indexé sur la rampe du joueur ; ses cinq tons ont des clartés
+  régulières (L* 58,1 · 62,9 · 68,0 · 73,0 · 77,9, pas de 4,95 ± 0,15). La
+  formule et les quantiles étant invariants par transformation affine, travailler
+  sur l'indice 0–4 donne EXACTEMENT le même découpage qu'une luminance en 0–255,
+  pour un quart du travail. Et c'est ce qui permet aux deux rampes de partager le
+  même atlas : le camp choisit la rampe, l'indice ne bouge pas.
+- **`hachageBrut` EST LE HACHAGE DE `sim/peuplement.js`, RENDU EN ENTIER.**
+  `hachageDeCase` le divise par 2³² ; le pavage a besoin de BITS. En écrire un
+  second aurait mis deux tirages voisins dans le dépôt, tous deux « FNV, à peu
+  près », dont un seul serait testé.
+  ⚠ **UN HACHAGE FAIT TRENTE-DEUX BITS, ET ILS SE COMPTENT AVANT DE SE
+  DÉCOUPER.** Le pavage veut deux décalages (16 bits chacun), un numéro de tuile
+  (6), une rotation (2), un miroir (1) et un tirage d'appartenance : quarante-neuf
+  bits. D'où DEUX sels. Lire un champ dans `h >>> 29` n'en laisse que trois, donc
+  une valeur toujours minuscule — c'est la faute qui faisait basculer *toutes* les
+  tuiles du même côté pendant la maquette, et elle s'est vue à l'œil, pas par
+  relecture. Un test mesure la distribution de chaque champ, avec l'appât qui va
+  avec.
+- **LE PAS DU RÉSEAU EST PLUS PETIT QUE LA TUILE, ET C'EST CE QUI BOUCHE LES
+  TROUS.** 56 px source pour une tuile de 128. Le masque tombe à zéro au bord
+  d'une tuile : à 84 px de pas, des pixels ne sont couverts par AUCUNE tuile et le
+  fond rend du noir. `rendreDalle` rend `couvertureMin` — le plus petit `Σw` de la
+  dalle — pour qu'un test puisse mesurer que le plancher NE MORD PAS. Mesuré :
+  0,165 au plus bas, sur quatre crans et trois graines.
+  ⚠ **ET C'EST CETTE MESURE QUI GARDE, PAS « AUCUN PIXEL NOIR ».** Falsifié : à
+  84 px de pas, la garde `Σw ≤ 0` rend la teinte moyenne, donc l'image n'a
+  TOUJOURS aucun pixel noir et le test des couleurs reste vert. Seule la
+  couverture tombe à zéro, et c'est elle qui le dit.
+- **LA PART D'OUVRAGE DU SOL EST UNE PROPOSITION, PAS UN ARBITRAGE.** Une tuile
+  est de l'Ouvrage avec la probabilité `(niveau(rangée du centre) − 1) / 49`, puis
+  chaque pixel prend la rampe de la majorité pondérée. Mesuré : 0,0 % au bord bas,
+  **4,2 % à la rangée de départ du joueur**, 47,7 % au milieu, 100 % dès la
+  rangée 50. Elle vit dans `data/` avec ce commentaire, et une ligne suffit à la
+  changer.
+
+- ⚠⚠ **L'ONGLET MONDE EST VIVANT DEPUIS LE LOT ÉCRAN-CARTE (29/08), ET IL NE
+  RESTE QU'UN ONGLET MORT : RECHERCHE.** L'écran porte un canevas, quatre crans
+  de zoom, le défilement au doigt, le pavage du fond et les emblèmes des sites.
+  Il ne calcule AUCUNE donnée de jeu : les bases de l'Ouvrage viennent de
+  `basesDeLaFenetre`, les camps de `satellites.presents`, le niveau d'une rangée
+  de `sim/carte.js`, les bornes et les crans de `data/sites.js`.
+  ⚠ **`basesDeLaFenetre` REND UNE FENÊTRE, PAS LA CARTE.** Elle rogne d'elle-même
+  sur les bords et se rappelle à chaque changement de vue. Ne jamais l'appeler
+  sur les 9 300 cases : au cran le plus large la fenêtre en fait moins de 1 500.
+  ⚠⚠ **ET LE NIVEAU DU JOUEUR N'EST PAS CELUI DE SA RANGÉE.** Le panneau de sa
+  base affiche « — trois moyennes, sur l'écran Base », jamais le niveau de la
+  rangée 275. C'est la faute que `sim/carte.js` existe pour empêcher, et un test
+  refuse que ce nombre apparaisse dans cette ligne.
+- **LE PANNEAU D'UN SITE NE PORTE AUCUN BOUTON D'ACTION, ET C'EST UNE RÈGLE.**
+  Type, niveau, distance, position — et rien d'autre : le raid n'existe pas. Un
+  bouton « Attaquer » serait le bouton « Assaut » du lot ÉCRAN-CHANTIER, qui
+  promettait un éditeur et livrait du sol nu. Un test balaie le bloc du panneau
+  dans le HTML PRODUIT et exige qu'il n'y ait que « Fermer ».
+- **LES EMBLÈMES SONT DES GABARITS, ET ILS LE DISENT.** Les treize emblèmes du
+  lot 6 sont spécifiés par `INVENTAIRE-SPRITES.md` et aucun fichier n'existe : un
+  site se dessine en carré arrondi, bord, lettre, et la lettre n'apparaît qu'à
+  partir de 40 px CSS par case.
+  ⚠ **LE BORD ROUGE EST RÉSERVÉ À CE QUI ATTAQUE LE JOUEUR**, et c'est une
+  information de jeu. Un test croise `EMBLEMES_CARTE` et `TYPES_SITE` :
+  l'ensemble des bords rouges DOIT être exactement celui des
+  `attaqueLeJoueur`. Camp et avant-poste sont en ambre parce qu'ils sont du
+  butin, pas une menace.
+- **L'ÉCRAN N'AJOUTE AUCUNE BARRE À HAUTEUR FIXE**, et c'est la consigne « tu
+  compresses tout dans l'UI » appliquée. Les deux boutons de zoom et le panneau
+  de site se POSENT sur la carte, en `absolute` : le chrome fixe reste à 288 px et
+  sa garde ne bouge pas. Le canevas porte `touch-action: none`, sans quoi le
+  navigateur avale le glissement pour faire défiler la page.
+- **LE DÉFILEMENT SE GARDE EN FLOTTANT, LE DESSIN SE FAIT EN ENTIERS.** Un
+  `drawImage` à une position fractionnaire rééchantillonne la dalle et rend le
+  pixel art flou. Arrondir la position de vue elle-même perdrait un demi-pixel par
+  évènement de glissement, et la carte traînerait derrière le doigt.
+  ⚠ **ET CE QUI TIENT ENTIER SE CENTRE, IL NE SE COLLE PAS À GAUCHE.** Au cran le
+  plus large les 31 colonnes tiennent dans 331 px CSS sur les 360 d'un téléphone :
+  borner à zéro laisserait une bande vide d'un seul côté, ce qui se lit comme un
+  bord de carte qui n'existe pas.
+- **UNE DALLE COÛTE CHER, ET LE CACHE N'EST PAS « FENÊTRE + MARGE ».** Une dalle
+  de 512 demande 1,37 million d'accumulations — mesuré à **19 ms ici, dans Node,
+  et non sur l'appareil**. Le cache garde trente dalles, à éviction de la moins
+  récemment employée, et se VIDE au changement de cran : une dalle est un rendu à
+  un cran donné. Avec une marge plutôt qu'un cache, chaque franchissement de bord
+  referait près de 7 000 poses de tuile, puis encore au retour.
+  ⚠ **AU PLUS DEUX DALLES PAR IMAGE.** Un défilement qui traverse un bord en
+  réclame trois d'un coup ; les calculer dans la même image ferait un à-coup de
+  trois fois 19 ms. Ce qui manque se peint de la teinte MOYENNE de son camp —
+  jamais du noir — et se complète à l'image suivante.
+- ⚠ **LE TEMPS DE RENDU D'UNE DALLE SUR L'APPAREIL N'A PAS ÉTÉ MESURÉ**, et le
+  brief le demandait. Il n'y a pas d'appareil ici, et un test appareil non exécuté
+  se déclare non exécuté (§3). Si les 30 ms sont dépassées sur le téléphone, le
+  curseur à tourner est `TERRAIN_CARTE.dalleCotePx` — 512 → 256 divise l'à-coup
+  par quatre à travail total constant, et il faut alors monter `dallesEnCache` de
+  30 à 64 pour tenir la même fenêtre. Le pas du réseau est le MAUVAIS curseur : il
+  décide de la couverture, donc du noir.
+- **L'ATLAS SE DÉCODE À LA PREMIÈRE OUVERTURE DE LA CARTE, PAS AU DÉMARRAGE.**
+  Un million de pixels à relire coûte quelques millisecondes ; les dépenser au
+  lancement pour un écran que le joueur n'ouvrira peut-être pas retarderait
+  l'affichage de sa base. Même raisonnement qu'`initialiserBanc`.
+  ⚠ **ET LA CARTE SE RETIRE DE LA SCÈNE QUAND ON LA QUITTE.** C'est le seul écran
+  qui porte une boucle à lui. `montrerEcran` appelle `masquer()` sur tout autre
+  écran ; un test exige la branche `else` NUE — sa première version cherchait le
+  nom de l'appel n'importe où, et une falsification qui l'enfermait dans un
+  `if (false)` passait au vert.
+- **`rafraichir` NE REDESSINE QUE SI LES SATELLITES ONT BOUGÉ.** La session
+  l'appelle dix fois par seconde ; refaire la liste des sites coûte neuf hachages
+  par case de la fenêtre pour redessiner exactement la même image. Le fond, lui,
+  est une fonction de la graine : il ne change jamais.
 
 ### Sur le vocabulaire
 
