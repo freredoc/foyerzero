@@ -16,6 +16,10 @@ import { positionDepartJoueur } from './carte.js';
 import {
   creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise, basesDuJoueur,
 } from './points-attaque.js';
+import {
+  sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
+} from './site-entame.js';
+import { creerRecherche } from './raid.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
@@ -30,7 +34,7 @@ import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 12;
 
 /**
  * @typedef {object} Etat
@@ -162,6 +166,16 @@ export function creerEtat(graine) {
     // pas d'armée, donc le plafond de départ est celui de base : 100 points,
     // dix raids courts en réserve.
     attaque: creerPointsAttaque(),
+    // ⚠ DEUX CHAMPS VIDES, ET DEUX FAITS QUE LA GRAINE NE PEUT PAS RENDRE : ce
+    // que le joueur a cassé et n'a pas fini, et les bases qu'il a rasées. Le
+    // reste de la carte se recalcule ; ces deux-là sont de l'HISTOIRE, au même
+    // titre que `satellites`.
+    sitesEntames: sitesEntamesVides(),
+    basesRasees: [],
+    // ⚠ UNE CHAÎNE DÉCIMALE, PAS UN NOMBRE. Le compteur de recherche est un
+    // BigInt — le barème dépasse l'entier sûr dès le niveau 39 — et
+    // `JSON.stringify` lève sur un BigInt. Voir `sim/raid.js`.
+    recherche: creerRecherche(),
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -240,7 +254,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites', 'attaque']) {
+  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites', 'attaque', 'sitesEntames', 'basesRasees', 'recherche']) {
     exigerChamp(etat, champ);
   }
   // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
@@ -252,6 +266,10 @@ function verifierEtat(etat) {
   const defautsSatellites = problemesDesSatellites(etat.satellites);
   if (defautsSatellites.length > 0) {
     throw new Error(`etat : satellites injouables — ${defautsSatellites.join(' ; ')}`);
+  }
+  const defautsSites = problemesDesSitesEntames(etat.sitesEntames);
+  if (defautsSites.length > 0) {
+    throw new Error(`etat : sites entamés injouables — ${defautsSites.join(' ; ')}`);
   }
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
@@ -279,6 +297,7 @@ export function tickJeu(etat) {
   tickEconomieBase(etat.economie, etat.disposition, etat.champs);
   resoudreSatellites(etat);
   avancerPointsAttaque(etat, 1);
+  reparerLesSites(etat);
 }
 
 /**
@@ -306,6 +325,10 @@ export function rattraperJeu(etat, nbTicks) {
   // test compare les deux chemins sur un plafond qui ne divise pas le
   // diviseur — c'est le seul montage où une implémentation naïve diverge.
   avancerPointsAttaque(etat, nbTicks);
+  // ⚠ MÊME RAISON QUE LES SATELLITES : un seul appel, pas une boucle. La
+  // réparation ne lit que l'horloge courante, donc mille ticks d'un coup
+  // réparent ce que mille ticks un par un auraient réparé.
+  reparerLesSites(etat);
 }
 
 // ---------------------------------------------------------------------------
@@ -1452,6 +1475,36 @@ const MIGRATIONS = {
       ? plafondVise(basesDuJoueur(s))
       : plafondDuNiveau(null);
     s.attaque = { points: plafond, plafond, residu: 0 };
+  },
+
+  /**
+   * v10 → v11 : ce que le joueur a entamé et n'a pas fini, et les bases qu'il a
+   * rasées.
+   *
+   * ⚠ DEUX TABLES VIDES, ET C'EST EXACT. Une sauvegarde v10 a été écrite avant
+   * qu'un raid puisse laisser quoi que ce soit derrière lui : aucun site n'a été
+   * entamé, aucune base n'a été rasée. Elle ajoute, comme les v6 → v7 et
+   * v9 → v10, sans rien convertir et sans rien perdre.
+   * @param {object} s
+   */
+  10: (s) => {
+    s.version = 11;
+    s.sitesEntames = {};
+    s.basesRasees = [];
+  },
+
+  /**
+   * v11 → v12 : le compteur de points de recherche.
+   *
+   * ⚠ ZÉRO EN CHAÎNE, PAS EN NOMBRE. Une sauvegarde v11 n'a jamais rangé de
+   * points — ils se calculaient et n'allaient nulle part —, donc il n'y a rien à
+   * convertir ; mais la forme compte dès la première écriture, sinon la première
+   * addition ferait `0 + 12n` et lèverait sur un mélange de types.
+   * @param {object} s
+   */
+  11: (s) => {
+    s.version = 12;
+    s.recherche = { pointsMilli: '0' };
   },
 };
 
