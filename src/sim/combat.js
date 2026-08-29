@@ -1445,7 +1445,21 @@ export function pointsRecherche(resultat, montage) {
   let total = 0n;
   for (const d of resultat.defenses) {
     const bareme = POINTS_RECHERCHE.parCible[d.id];
-    if (bareme === undefined || d.pvPerdusMilli === 0) continue;
+    if (bareme === undefined) continue;
+    // ⚠ CE QUE CE RAID-CI A CASSÉ, PAS CE QUE LA CIBLE A PERDU DEPUIS SON PLEIN.
+    // Même arbitrage que le butin, rendu par Ethan le 29/08 : « tu tapes une
+    // défense à qui il reste cinquante pour cent, tu l'achèves, tu n'es pas
+    // censé avoir le double ; tu as cinquante plus cinquante ». Lire
+    // `pvPerdusMilli` faisait marquer 50 % à la première passe puis 100 % à la
+    // seconde, soit 150 % pour une cible qui n'a qu'une vie. Sur un site intact
+    // les deux quantités coïncident, donc les raids de référence ne bougent pas.
+    //
+    // ⚠ ET UNE CIBLE RÉPARÉE REMARQUE, c'est voulu et c'est la même phrase :
+    // « sauf si elle est réparée ». Ses PV de départ sont revenus au plein, donc
+    // la casser à nouveau est un travail à nouveau.
+    const perduIci = d.pvInitialMilli === undefined
+      ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli;
+    if (perduIci <= 0) continue;
     const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
     // zéro : sur des grandeurs positives, c'est exactement le plancher voulu.
@@ -1453,7 +1467,7 @@ export function pointsRecherche(resultat, montage) {
     // il est placé là, avec l'autre division, pour que TOUS les produits se
     // fassent avant la moindre troncature.
     total += (BigInt(bareme) * BigInt(facteurEconomiqueMilli(d.niveau)) * facteur
-      * BigInt(d.pvPerdusMilli)) / (BigInt(d.pvMaxMilli) * mille);
+      * BigInt(perduIci)) / (BigInt(d.pvMaxMilli) * mille);
   }
   return total;
 }
