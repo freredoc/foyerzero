@@ -25,6 +25,8 @@ import { GRILLE, UNITES, DEFENSES, MODULES, COLONNES_DEGATS } from '../src/data/
 import {
   BATIMENTS, DENSITE, GARNISON, VAGUES, POINTS_RECHERCHE, RAID_OUVRAGE,
 } from '../src/data/sites.js';
+import { NIVEAU } from '../src/data/niveaux.js';
+import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 
 test('données — les colonnes de dégâts sont exactement COLONNES_DEGATS', () => {
   let mesurees = 0;
@@ -258,4 +260,88 @@ test('package.json — les types que le build Android exige, et qu\'aucun test J
   // dessus, et le manifeste de Pages l'interpole SANS guillemets — le client
   // Android le relit alors comme un nombre JSON (`Manifeste.analyser`).
   assert.match(paquet.config.build, /^[1-9][0-9]*$/, 'config.build n\'est pas un entier décimal');
+});
+
+// ---------------------------------------------------------------------------
+// Les deux courbes, confrontées à leur relevé — 29/08
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE TEST EXISTE PARCE QU'UNE CITATION A COÛTÉ UNE SESSION ENTIÈRE.
+// L'en-tête de `data/niveaux.js` a annoncé pendant quatre jours que sa pente
+// venait d'un « onglet COURBE du classeur FOYER-ZERO-BATIMENTS-JOUEUR.xlsx » —
+// c'est-à-dire d'une source que le §1 du CLAUDE.md interdit de lire pour coder
+// et déclare périmée. La source était donc INVÉRIFIABLE, la pente a eu l'air
+// inventée, et il a fallu remonter toute la piste pour retrouver qu'elle était
+// MESURÉE — dans `RELEVE-TA-COURBES-2.md`, qui est au dépôt depuis le 24/08.
+//
+// Corriger les mots ne suffisait pas : la prochaine session aurait cru un
+// commentaire, comme celle-ci l'a fait. C'est la règle du dépôt appliquée —
+// « une transcription qui ne se confronte pas à sa source est une copie qui
+// vieillit » — la même que pour la palette (`banc.test.js` contre
+// `FICHE-STYLE.md`) et pour les types de `package.json` (contre le Gradle).
+
+/**
+ * Les facteurs « ×n,nn » d'une ligne du tableau des cinq lois, désignée par un
+ * morceau de son premier libellé.
+ */
+function loiDuReleve(nom) {
+  const doc = readFileSync(join(RACINE, 'RELEVE-TA-COURBES-2.md'), 'utf8');
+  const ligne = doc.split('\n').find((l) => l.startsWith('|') && l.includes(nom));
+  assert.ok(ligne, `RELEVE-TA-COURBES-2.md : plus de ligne « ${nom} » dans le tableau des lois`);
+  const facteurs = [...ligne.matchAll(/×(\d+,\d+)/g)].map((m) => Number(m[1].replace(',', '.')));
+  assert.ok(facteurs.length > 0, `ligne « ${nom} » : aucun facteur lisible`);
+  return facteurs;
+}
+
+test('données — la courbe de COMBAT est celle que le relevé a mesurée', () => {
+  // Le relevé : « Points de vie (unités) | ×1,10 | unique, 1→50 | 0,02 % ».
+  const [pv] = loiDuReleve('Points de vie');
+  assert.equal(pv, 1.1);
+  assert.equal(NIVEAU.penteHaute, pv, 'la pente du combat a quitté sa mesure');
+  assert.equal(NIVEAU.penteBasse, pv);
+  // « régime unique » : les deux pentes coïncident, et le drapeau le dit.
+  assert.equal(NIVEAU.deuxRegimes, false);
+
+  // Falsifiable : le montage doit vraiment LIRE le document, pas se contenter
+  // d'une constante. Une ligne absente ferait tomber `loiDuReleve`, et un
+  // facteur différent ferait tomber l'égalité ci-dessus.
+  assert.notEqual(pv, ECONOMIE_NIVEAU.penteStable, 'les deux courbes se sont réalignées');
+});
+
+test('données — la courbe ÉCONOMIQUE est celle que le relevé a mesurée', () => {
+  // Le relevé : « Coût d'amélioration — bâtiments et unités | ×1,32 ».
+  const [cout] = loiDuReleve('Coût d\'amélioration');
+  assert.equal(cout, 1.32);
+  assert.equal(
+    ECONOMIE_NIVEAU.penteStable, cout,
+    'la pente des coûts a quitté sa mesure — elle vaut pour les bâtiments ET les unités',
+  );
+});
+
+test('données — l\'écart voulu sur les DÉGÂTS est déclaré, pas subi', () => {
+  // ⚠ LE RELEVÉ MESURE DEUX FACTEURS SUR CETTE LIGNE : ×1,10 puis, amorti,
+  // ×1,086 à partir du niveau 11. Le code garde 1,1 pour les dégâts comme pour
+  // les PV, et c'est DÉLIBÉRÉ : PV et dégâts doivent partager la même courbe,
+  // sinon un combat à niveaux égaux cesse d'être identique à lui-même.
+  const degats = loiDuReleve('| Dégâts');
+  assert.deepEqual(degats, [1.1, 1.086], 'la ligne des dégâts du relevé a changé');
+
+  // Ce que la garde tient : l'écart doit rester ÉCRIT dans le fichier qui le
+  // commet. Un écart documenté est une décision ; le même écart sans un mot est
+  // une approximation que personne ne saura relire.
+  const source = readFileSync(join(RACINE, 'src', 'data', 'niveaux.js'), 'utf8');
+  assert.ok(
+    source.includes('1,086'),
+    'niveaux.js ne dit plus qu\'il s\'écarte des dégâts mesurés par le relevé',
+  );
+  assert.ok(
+    source.includes('RELEVE-TA-COURBES-2.md'),
+    'niveaux.js ne cite plus le document qui porte sa mesure',
+  );
+  // ⚠ ET IL NE CITE PLUS LE CLASSEUR COMME SOURCE. C'est la faute d'origine :
+  // le CLAUDE.md §1 interdit de lire un `.xlsx` pour coder.
+  assert.ok(
+    !/SOURCE[\s\S]{0,200}\.xlsx/.test(source),
+    'niveaux.js cite de nouveau un classeur comme source',
+  );
 });
