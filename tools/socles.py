@@ -10,12 +10,15 @@ rouge, puis 23,6 % de jaune. La forme donne la portée : M1 et M3 sont carrés
 Douze socles, un par défense à tourelle, ce qui recoupe exactement les douze
 tourelles du lot 1.
 
-⚠ Les deux planches `socles_*_tourelles_connexions_3x4` ne sont PAS traitées
-ici : leurs 12 cellules sont 4 rangées identiques de trois pièces — un carré à
-accent blanc, une pièce LARGE de 341 px à accent rouge, un carré à accent jaune.
-Les quatre rangées ne diffèrent que par la hauteur (148, 150, 150, 143 px) et de
-deux points d'accent. Ce que représentent ces quatre rangées n'est pas
-déductible ; voir le rapport.
+⚠ Les deux planches `socles_*_tourelles_connexions_3x4` sont traitées à part,
+par `tools/connexions.py` : elles portent les mêmes trois socles dans leurs
+quatre états de connexion, et elles demandent une coupe par gouttière que ce
+fichier-ci ne fait pas.
+
+CORRECTION du 29/08 : le rapport du lot 3 décrivait dans ces planches « une
+pièce large de 341 px » au centre. Elle n'existe pas. C'était la colonne de
+gauche qui débordait dans la suivante, la coupe en tiers tombant à 341 alors que
+la matière court jusqu'à 388. Voir `tools/connexions.py`.
 """
 import sys, os
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
