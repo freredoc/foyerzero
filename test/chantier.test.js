@@ -18,6 +18,7 @@ import {
   ACTIONS, PAS_DE_REPARATION, DUREE_TOAST_MS,
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
+  SIGLES_OBSTACLE, LIBELLES_OBSTACLE,
 } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
@@ -54,7 +55,7 @@ import {
 } from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
-import { GRILLE } from '../src/data/combat.js';
+import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
@@ -2300,8 +2301,23 @@ test('défense — les deux terrains balaient CHACUN leur bande, et pas l\'autre
 
   // ⚠ ON NE BALAIE QUE LA BANDE DU TERRAIN. Ailleurs la réponse serait « hors
   // de la bande » quatre-vingt-dix fois, pour rien.
+  // ⚠ SOIXANTE-DEUX ET NON SOIXANTE-DOUZE DEPUIS LE LOT OBSTACLES. Les dix
+  // obstacles vivent tous dans la bande de défense, et une case obstruée n'est
+  // pas posable. Le nombre se CALCULE — 72 moins le compte de la table — au lieu
+  // d'être réécrit : le jour où `OBSTACLES.nombre` bougera, ce test suivra au
+  // lieu de tomber.
   const casesDefense = casesPosablesDuTerrain(etat, 'defense', 'merlon');
-  assert.equal(casesDefense.length, 72, 'huit rangées de neuf, toutes libres');
+  const rangeesDefense = GRILLE.bandes.defense.derniere - GRILLE.bandes.defense.premiere + 1;
+  const libres = rangeesDefense * GRILLE.largeur - etat.obstacles.cases.length;
+  assert.equal(libres, 62, 'le montage doit porter les dix obstacles, sinon il ne mesure rien');
+  assert.equal(casesDefense.length, libres, 'huit rangées de neuf, moins les obstacles');
+  // Et aucune case posable ne porte d'obstacle — la soustraction ci-dessus
+  // pourrait tomber juste en retirant les mauvaises cases.
+  const obstrues = new Set(etat.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  for (const c of casesDefense) {
+    assert.ok(!obstrues.has(`${c.rangee}:${c.colonne}`),
+      `case posable en (${c.rangee}, ${c.colonne}), qui porte un obstacle`);
+  }
   for (const { rangee } of casesDefense) {
     assert.ok(rangee >= GRILLE.bandes.defense.premiere && rangee <= GRILLE.bandes.defense.derniere,
       `le balayage de la défense sort de sa bande, rangée ${rangee}`);
@@ -2318,12 +2334,13 @@ test('défense — les deux terrains balaient CHACUN leur bande, et pas l\'autre
 
   // Une pièce posée retire sa case, et le déplacement la retrouve : rester sur
   // place est légal.
-  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 5, colonne: 5, niveau: 1 });
+  const libre = casesDefense[0];
+  poserEffectif(etat, 'garnison', { ...libre, id: 'merlon', niveau: 1 });
   const apres = casesPosablesDuTerrain(etat, 'defense', 'ronce');
-  assert.equal(apres.length, 71, 'la case occupée reste posable');
+  assert.equal(apres.length, libres - 1, 'la case occupée sort des posables');
   const deplacables = casesDeplacablesDuTerrain(etat, 'defense', 0);
-  assert.equal(deplacables.length, 72, 'sa propre case doit rester une arrivée légale');
-  assert.ok(deplacables.some((c) => c.rangee === 5 && c.colonne === 5));
+  assert.equal(deplacables.length, libres, 'sa propre case doit rester une arrivée légale');
+  assert.ok(deplacables.some((c) => c.rangee === libre.rangee && c.colonne === libre.colonne));
 });
 
 test('défense — la table des terrains dit tout ce qui les sépare, et rien de plus', () => {
@@ -2418,4 +2435,19 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
   // Falsifiable : le montage doit trouver de vraies fonctions, sinon zéro
   // occurrence passerait pour « écrite une fois ».
   assert.ok(source.includes('function tenterLaPose('), 'ce n\'est pas le bon fichier');
+});
+
+test('obstacles — l\'écran les dessine, et il sait dire qui ils ralentissent', () => {
+  // ⚠ LES DEUX TABLES DOIVENT COUVRIR `OBSTACLES.types`, DANS LES DEUX SENS. Un
+  // type ajouté à la table de combat sans sigle ici dessinerait « undefined »
+  // dans la case, et personne ne le verrait avant l'appareil.
+  assert.deepEqual(Object.keys(SIGLES_OBSTACLE).sort(), [...OBSTACLES.types].sort());
+  assert.deepEqual(Object.keys(LIBELLES_OBSTACLE).sort(), [...OBSTACLES.types].sort());
+
+  // Un sigle par type, tous distincts : deux types qui partagent une lettre ne
+  // se distingueraient pas à l'écran.
+  const sigles = Object.values(SIGLES_OBSTACLE);
+  assert.equal(new Set(sigles).size, sigles.length);
+  for (const s of sigles) assert.equal(s.length, 1, `« ${s} » n'est pas une lettre`);
+  for (const l of Object.values(LIBELLES_OBSTACLE)) assert.ok(l.length > 8);
 });

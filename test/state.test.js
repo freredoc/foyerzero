@@ -31,7 +31,8 @@ import {
 import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerRng, entier } from '../src/sim/rng.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
-import { champsDeLaBase } from '../src/sim/champs.js';
+import { champsDeLaBase, obstaclesDeLaBase } from '../src/sim/champs.js';
+import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 
 // ⚠ UN INSTANT MURAL FIXE, JAMAIS L'HORLOGE DE LA MACHINE. Depuis la v6,
 // `serialiser` et `charger` reçoivent l'instant présent en argument. Le prendre
@@ -954,7 +955,13 @@ test('état — une règle née APRÈS les sauvegardes ne rend pas une partie il
   // ⚠ ET L'ENSEMBLE RESTE MINUSCULE. Un code de faute STRUCTURELLE n'a rien à y
   // faire : ceux-là n'ont jamais été légaux, donc aucune sauvegarde honnête ne
   // les porte, et les tolérer ferait tourner le moteur sur un état incohérent.
-  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins']);
+  // ⚠ `obstacle` L'A REJOINT LE 29/08, et pour la même raison exactement : une
+  // pièce de garnison peut se retrouver SOUS un obstacle sans que le joueur ait
+  // rien fait, puisque le terrain se redéduit à chaque chargement et que le
+  // tirage des obstacles bougera encore. Ce n'est pas une faute structurelle —
+  // la pièce est bien formée, elle est juste mal placée — et elle reste
+  // SIGNALÉE : toute nouvelle pose au même endroit est refusée.
+  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins', 'obstacle']);
   for (const structurel of ['sans-chantier', 'superposition', 'hors-base', 'inconnu', 'doublon']) {
     assert.ok(!CODES_TOLERES_AU_CHARGEMENT.has(structurel),
       `${structurel} est structurel, il ne doit jamais être toléré`);
@@ -1428,4 +1435,106 @@ test('forces — la table des forces dit tout ce qui les distingue', () => {
   // 36 emplacements d'assaut, 72 de garnison — les deux géométries du brief.
   assert.equal((FORCES.armee.axeMax - FORCES.armee.axeMin + 1) * FORCES.armee.colonneMax, 36);
   assert.equal((FORCES.garnison.axeMax - FORCES.garnison.axeMin + 1) * FORCES.garnison.colonneMax, 72);
+});
+
+// ---------------------------------------------------------------------------
+// Obstacles — du terrain, pas de la sauvegarde
+// ---------------------------------------------------------------------------
+
+test('obstacles — ils sont dérivés, omis de la sauvegarde, et redéduits au chargement', () => {
+  const etat = creerEtat(4242);
+  assert.equal(etat.obstacles.cases.length, OBSTACLES.nombre);
+
+  const json = serialiser(etat, T0);
+  assert.ok(!json.includes('"obstacles"'), 'les obstacles sont partis dans la sauvegarde');
+  // Falsifiable : la même sauvegarde doit bien contenir ce qui les PRODUIT.
+  assert.ok(json.includes('"fondation"'), 'la fondation doit y être : c\'est la source');
+
+  const relu = charger(json, T0);
+  assert.deepEqual(relu.obstacles, etat.obstacles, 'les obstacles redéduits diffèrent');
+
+  // ⚠ ILS SUIVENT LA FONDATION, comme les champs. Une base qui se déplace
+  // emporte son terrain — arbitré le 27/08 pour les champs, le 29/08 pour les
+  // obstacles (« la base garde sa disposition »).
+  const avant = JSON.stringify(etat.obstacles.cases);
+  etat.position = { rangee: etat.fondation.rangee - 12, colonne: etat.fondation.colonne };
+  const apres = charger(serialiser(etat, T0), T0);
+  assert.equal(JSON.stringify(apres.obstacles.cases), avant, 'les obstacles ont suivi la position');
+  // Contrôle négatif : la destination a bien d'AUTRES obstacles.
+  assert.notEqual(
+    JSON.stringify(obstaclesDeLaBase(etat.position.rangee, etat.position.colonne).cases), avant,
+    'la destination porte les mêmes obstacles : le montage ne mesure rien',
+  );
+});
+
+test('obstacles — une pièce de garnison ne se pose pas dessus, une unité d\'assaut s\'en moque', () => {
+  const etat = creerEtat(4242);
+  const o = etat.obstacles.cases[0];
+
+  const refus = problemesDeLaPoseDEffectif(
+    etat, 'garnison', { id: 'merlon', rangee: o.rangee, colonne: o.colonne, niveau: 1 },
+  );
+  assert.deepEqual(refus.map((p) => p.code), ['obstacle']);
+  // ⚠ LE MESSAGE COMPTE : l'écran le reprend mot pour mot. « Déjà occupée »
+  // enverrait le joueur chercher une pièce à retirer.
+  assert.equal(refus[0].message, 'cette case porte un obstacle');
+  assert.throws(
+    () => poserEffectif(etat, 'garnison', { id: 'merlon', rangee: o.rangee, colonne: o.colonne, niveau: 1 }),
+    /obstacle/,
+  );
+
+  // La case d'à côté, elle, accepte — sinon on aurait mesuré un refus général.
+  const libre = { rangee: o.rangee, colonne: o.colonne };
+  for (let c = 1; c <= GRILLE.largeur; c += 1) {
+    const prise = etat.obstacles.cases.some((x) => x.rangee === o.rangee && x.colonne === c);
+    if (!prise) { libre.colonne = c; break; }
+  }
+  assert.deepEqual(
+    problemesDeLaPoseDEffectif(etat, 'garnison', { id: 'merlon', ...libre, niveau: 1 }), [],
+  );
+
+  // ⚠ ET L'ARMÉE N'EST PAS CONCERNÉE. Ses vagues ne sont pas des rangées de la
+  // grille : la règle se lit dans `FORCES[x].surLeTerrain`, pas sur le nom de la
+  // force. Une vague qui porte le même numéro qu'une rangée obstruée doit
+  // rester posable.
+  assert.equal(FORCES.armee.surLeTerrain, false);
+  assert.equal(FORCES.garnison.surLeTerrain, true);
+  const surLaMemeVague = etat.obstacles.cases.filter((x) => x.rangee <= FORCES.armee.axeMax);
+  assert.ok(surLaMemeVague.length > 0, 'aucun obstacle sur un numéro de vague : rien à mesurer');
+  for (const x of surLaMemeVague) {
+    assert.deepEqual(
+      problemesDeLaPoseDEffectif(
+        etat, 'armee', { id: 'meute', vague: x.rangee, colonne: x.colonne, niveau: 1 },
+      ),
+      [],
+      `l'armée refuse la vague ${x.rangee} : elle a lu une règle de terrain`,
+    );
+  }
+});
+
+test('obstacles — une pièce déjà sous un obstacle ne rend pas la partie illisible', () => {
+  // ⚠ CE CAS NE PEUT PLUS SE CRÉER PAR LE JEU, et c'est pour ça qu'il faut le
+  // fabriquer à la main. Il apparaîtra tout seul le jour où le tirage des
+  // obstacles changera : le terrain se redéduit à chaque chargement, donc un
+  // obstacle peut se poser sous une pièce posée légalement la veille.
+  const etat = creerEtat(4242);
+  const o = etat.obstacles.cases[0];
+  etat.garnison.push({
+    id: 'merlon', rangee: o.rangee, colonne: o.colonne, niveau: 1, degatsMilli: 0,
+  });
+
+  const relu = charger(serialiser(etat, T0), T0);
+  assert.equal(relu.garnison.length, 1, 'la pièce ne doit pas être retirée en silence');
+
+  // Toléré ne veut pas dire effacé : le défaut reste visible, et toute NOUVELLE
+  // pose au même endroit reste refusée.
+  const refus = problemesDeLaPoseDEffectif(
+    relu, 'garnison', { id: 'ronce', rangee: o.rangee, colonne: o.colonne, niveau: 1 },
+  );
+  assert.ok(refus.some((p) => p.code === 'obstacle'), 'la règle doit rester active après chargement');
+
+  // Falsifiable : une faute STRUCTURELLE, elle, fait toujours lever.
+  const casse = creerEtat(4242);
+  casse.garnison.push({ id: 'merlon', rangee: 99, colonne: 5, niveau: 1, degatsMilli: 0 });
+  assert.throws(() => charger(serialiser(casse, T0), T0), /injouable/);
 });
