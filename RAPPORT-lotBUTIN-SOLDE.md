@@ -93,11 +93,19 @@ de la lire figée. Deux soustractions valent mieux qu'un champ qui ment.
 ## 6. Ce qui reste ouvert
 
 1. ⚠ **Les points de recherche ont le même défaut, et il n'est PAS corrigé.**
-   `pointsRecherche` verse un barème **par défense endommagée**, à plat : une
-   défense égratignée à la première passe et achevée à la seconde marque deux
-   fois. Comme les défenses d'un site à Étai debout se réparent en une heure,
-   c'est une boucle de ferme. La règle n'a pas été touchée parce que ton
-   arbitrage portait sur le butin ; dis-moi si elle doit suivre.
+   `pointsRecherche` lit `pvPerdusMilli`, c'est-à-dire la perte **depuis le
+   plein** : une défense entamée à la première passe et achevée à la seconde
+   marque une fois et demie. La règle n'a pas été touchée parce que l'arbitrage
+   d'Ethan portait sur le butin.
+
+   ⚠⚠ **CORRECTION DU 29/08 AU SOIR, ET ELLE PORTE SUR CE RAPPORT-CI.** Ce
+   paragraphe disait d'abord « un barème à plat, par défense endommagée », donc
+   un DOUBLE comptage. C'était faux : le barème est proportionnel à la fraction
+   de PV détruits depuis le lot RECHERCHE, et la faute est un excès d'une
+   demi-part, pas d'une part entière. L'erreur vient d'une lecture du
+   COMMENTAIRE — « barème par défense détruite » — au lieu du calcul, qui
+   multiplie bien par `pvPerdusMilli / pvMaxMilli` trois lignes plus bas.
+   Corrigé par le lot RECHERCHE-AU-PRORATA.
 2. **Une base de l'Ouvrage se refarme**, elle. Tout revient en une heure, donc le
    butin aussi : casser 50 %, encaisser 50 %, attendre une heure, recommencer.
    C'est cohérent avec « une base se prend d'un coup ou pas du tout » et avec le

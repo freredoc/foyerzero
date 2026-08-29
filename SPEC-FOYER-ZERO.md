@@ -280,7 +280,13 @@ infanterie ou plus structure que la moyenne.
 ## 9. Points de recherche
 
 Barème par défense détruite, **au niveau 1**, **×2 par niveau**, **+20 % si le module de la
-cible est débloqué**, et **proportionnel au pourcentage de PV détruits**.
+cible est débloqué**, et **proportionnel au pourcentage de PV détruits — par CE raid-là**.
+
+⚠ **Par ce raid-là**, arbitré le 29/08/2026, même règle que le butin : « tu tapes une défense à
+qui il reste cinquante pour cent, tu l'achèves, tu n'es pas censé avoir le double ; tu as
+cinquante plus cinquante ». Une cible entamée à la passe précédente a déjà marqué sa part.
+**Sauf si elle est réparée** : l'Étai debout rend leurs PV aux défenses survivantes en une heure,
+et les casser à nouveau est un travail à nouveau.
 
 | Cible | Points | Cible | Points |
 |---|---|---|---|
