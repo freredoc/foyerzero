@@ -15,7 +15,7 @@
 // l'ancrage la rendait inutilisable aux deux bouts. Voir la section Stockage.
 
 import { GEOGRAPHIE } from './sites.js';
-import { ECONOMIE_NIVEAU } from './economie.js';
+import { ECONOMIE_NIVEAU, montantDuPalier } from './economie.js';
 import { GRILLE } from './combat.js';
 
 // ---------------------------------------------------------------------------
@@ -628,9 +628,24 @@ export const COUT_ELECTRICITE = {
 // `batiment`. La catégorie n'est pas écrite ligne par ligne : elle vaut pour la
 // table entière, et le jour où une ligne devra en sortir, c'est un champ par
 // ligne qu'il faudra ajouter — pas une exception dans une fonction.
+//
+// ⚠⚠ LA CLÉ `defense` A QUITTÉ CETTE TABLE LE 28/08, ET SON ABSENCE EST LE
+// MESSAGE. L'arbitrage du 27/08 anticipait « toutes les défenses et l'offense
+// sont en scorie » ; celui du 28/08 a chiffré la défense entité par entité, et
+// il la SÉPARE en deux : les six ouvrages fixes — mur, barbelés, barrière
+// anti-char, tourelle mitrailleuse, canon anti-char, DCA — se paient en
+// QUARTZ, les trois artilleries et les huit unités de garnison en scorie. Une
+// clé unique ne peut plus dire la vérité pour la défense : elle est donc dite
+// ligne par ligne dans `data/couts-militaires.js`, qui fait foi. La laisser
+// ici, même juste pour la majorité, aurait donné une réponse fausse pour six
+// entités à quiconque l'interroge sans lire plus loin. Un test asserte son
+// ABSENCE, pas seulement la valeur des deux autres.
+//
+// `offense`, elle, reste vraie sans exception : les quatorze unités d'assaut
+// se paient toutes en scorie, et l'arbitrage du 28/08 le confirme entité par
+// entité.
 export const RESSOURCE_DE_COUT = {
   batiment: 'quartz',
-  defense: 'scorie',
   offense: 'scorie',
 };
 
@@ -647,36 +662,17 @@ export const CATEGORIE_DE_COUT_DE_LA_BASE = 'batiment';
 // LÈVE sur 1 plutôt que de rendre zéro : un zéro se confondrait avec « rien à
 // payer, c'est bon », et l'écran l'afficherait comme un prix.
 //
-// LA CHAÎNE EST ARRONDIE À CHAQUE PALIER, et ce n'est pas un détail de style.
-// Les ratios d'`ECONOMIE_NIVEAU` restituent une table relevée : 8 → 10 → 20 →
-// 80 → 440 → 1 440 → 4 400 → 12 800 → 35 200 → 89 600 → 192 000. Ils ne sont
-// pas ronds (36/11, 55/18, 32/11, 28/11, 15/7) et le produit flottant rate la
-// table — 440 × 36/11 rend 1 439,999 999 999 999 8. Arrondir une seule fois à
-// la fin ferait diverger la chaîne dès le sixième palier. On arrondit à chaque
-// pas, et la table relevée est restituée à l'entier près. Un test la confronte
-// palier par palier.
+// LA RAMPE N'EST PLUS ICI — elle est dans `data/economie.js`, avec la courbe
+// qu'elle applique, depuis que la défense et l'offense ont reçu leurs propres
+// ancres le 28/08. Ce fichier ne fournit plus que l'ANCRE d'un bâtiment, la
+// classe de coût ; l'arrondi palier par palier et sa raison sont expliqués
+// là-bas. La table relevée — 8 → 10 → 20 → 80 → 440 → 1 440 → 4 400 → 12 800 →
+// 35 200 → 89 600 → 192 000 — reste confrontée palier par palier par un test.
 //
 // L'électricité ne se paie qu'à partir du niveau 3 et s'exprime en fraction du
 // coût principal — `COUT_ELECTRICITE`. Son commentaire disait « du coût en
 // quartz » : depuis l'arbitrage ci-dessus, c'est du coût dans SA ressource,
 // quartz pour un bâtiment, scorie pour une défense.
-
-/**
- * Le coût principal d'une montée, dans l'unité de la ressource, hors
- * électricité. Sorti à part parce que l'électricité s'en déduit.
- * @param {string} classe une clé de `COUT_NIVEAU_DEUX`
- * @param {number} niveau le niveau ATTEINT
- * @returns {number} entier
- */
-function coutPrincipal(classe, niveau) {
-  let cout = COUT_NIVEAU_DEUX[classe];
-  const { ratios, penteStable } = ECONOMIE_NIVEAU;
-  for (let n = ECONOMIE_NIVEAU.premierNiveauPayant + 1; n <= niveau; n++) {
-    const rang = n - ECONOMIE_NIVEAU.premierNiveauPayant - 1;
-    cout = Math.round(cout * (rang < ratios.length ? ratios[rang] : penteStable));
-  }
-  return cout;
-}
 
 /**
  * Ce que coûte de porter un bâtiment de la base AU niveau donné.
@@ -697,7 +693,7 @@ export function coutDeMontee(id, niveau) {
     );
   }
 
-  const principal = coutPrincipal(def.classeDeCout, niveau);
+  const principal = montantDuPalier(COUT_NIVEAU_DEUX[def.classeDeCout], niveau);
   const cout = { quartz: 0, scorie: 0, electricite: 0 };
   cout[RESSOURCE_DE_COUT[CATEGORIE_DE_COUT_DE_LA_BASE]] = principal;
 

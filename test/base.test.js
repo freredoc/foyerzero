@@ -708,8 +708,8 @@ test('base — l\'électricité ne se paie qu\'à partir du niveau 3, et jamais 
 // ---------------------------------------------------------------------------
 //
 // LES TROIS ARBITRAGES QUE CES TESTS GARDENT :
-//   - tous les BÂTIMENTS coûtent du quartz ; défenses et offense coûteront de
-//     la scorie, et la table le dit déjà même si rien ne la lit encore ;
+//   - tous les BÂTIMENTS coûtent du quartz ; l'offense coûte de la scorie ; la
+//     DÉFENSE, elle, se paie dans les deux — voir couts-militaires.test.js ;
 //   - la poche du Chantier suit le niveau en × 1,25 ;
 //   - démolir rend 90 % de TOUT l'investi, arrondi vers le bas.
 //
@@ -718,9 +718,19 @@ test('base — l\'électricité ne se paie qu\'à partir du niveau 3, et jamais 
 
 test('base — un bâtiment coûte du quartz, et jamais de la scorie', () => {
   assert.equal(RESSOURCE_DE_COUT.batiment, 'quartz');
-  assert.equal(RESSOURCE_DE_COUT.defense, 'scorie');
   assert.equal(RESSOURCE_DE_COUT.offense, 'scorie');
   assert.equal(CATEGORIE_DE_COUT_DE_LA_BASE, 'batiment');
+  // ⚠ LA CLÉ `defense` A ÉTÉ RETIRÉE LE 28/08, ET CE TEST NE S'EST PAS
+  // ASSOUPLI — il a changé de cible. Elle valait « scorie » depuis le 27/08, en
+  // anticipation et sans que rien ne la lise. L'arbitrage du 28/08 a chiffré la
+  // défense entité par entité et l'a falsifiée pour six ouvrages sur dix-sept :
+  // mur, barbelés, barrière anti-char, tourelle mitrailleuse, canon anti-char
+  // et DCA se paient en QUARTZ. Une clé unique ne peut plus dire vrai, donc la
+  // ressource se dit ligne par ligne dans `data/couts-militaires.js`.
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(RESSOURCE_DE_COUT, 'defense'), false,
+    'la défense se paie dans deux ressources — une clé unique mentirait pour six entités',
+  );
 
   // Les onze, à trois niveaux : aucun ne demande de scorie, tous demandent du
   // quartz. Une inversion de la table ferait tomber les deux moitiés.

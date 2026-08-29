@@ -6,7 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { moyenneEnDixiemes, niveauDesBatiments } from '../src/sim/niveau-de-base.js';
+import {
+  moyenneEnDixiemes, niveauDesBatiments, niveauDeLaDefense, niveauDeLArmee,
+} from '../src/sim/niveau-de-base.js';
 import { dispositionNouvelleBase } from '../src/sim/disposition.js';
 import { creerRng, entier } from '../src/sim/rng.js';
 
@@ -105,4 +107,69 @@ test('niveau — une base sans bâtiment LÈVE, elle ne vaut pas zéro', () => {
   assert.throws(() => moyenneEnDixiemes([5, undefined]), RangeError);
   assert.throws(() => moyenneEnDixiemes('5'), TypeError);
   assert.throws(() => niveauDesBatiments(null), TypeError);
+});
+
+// ---------------------------------------------------------------------------
+// Les deux autres niveaux — lot GARNISON-ET-ARMÉE, 28/08
+// ---------------------------------------------------------------------------
+
+test('niveau — la défense et l\'armée suivent EXACTEMENT la règle des bâtiments', () => {
+  // Trois moyennes qui divergeraient seraient trois grandeurs différentes
+  // portant le même nom. On les compare sur les mêmes niveaux, terme à terme.
+  const niveaux = [3, 4, 4, 9, 12];
+  const attendu = moyenneEnDixiemes(niveaux);
+  assert.equal(attendu, 64, '32/5 = 6,4');
+
+  const garnison = niveaux.map((niveau, i) => (
+    { id: 'merlon', rangee: 3, colonne: i + 1, niveau, degatsMilli: 0 }
+  ));
+  const armee = niveaux.map((niveau, i) => (
+    { id: 'meute', vague: 1, colonne: i + 1, niveau, degatsMilli: 0 }
+  ));
+
+  assert.equal(niveauDeLaDefense(garnison), attendu);
+  assert.equal(niveauDeLArmee(armee), attendu);
+  assert.equal(niveauDesBatiments(niveaux.map((niveau) => ({ niveau }))), attendu);
+
+  // Falsifiable : la moyenne ne doit PAS être entière, sinon l'arrondi au
+  // dixième ne serait jamais mis à l'épreuve.
+  assert.notEqual(attendu % 10, 0, 'le montage tombe rond : il ne mesure pas la décimale');
+});
+
+test('niveau — une force vide rend `null`, elle ne lève pas et ne vaut pas zéro', () => {
+  // ⚠ LA SEULE DIVERGENCE ASSUMÉE AVEC LEUR JUMEAU. Une base sans bâtiment
+  // n'existe pas, donc `niveauDesBatiments` LÈVE ; une base sans garnison et
+  // sans armée est l'état NORMAL d'une base neuve, donc les deux autres rendent
+  // une valeur qui dit « rien de posé ».
+  assert.equal(niveauDeLaDefense([]), null);
+  assert.equal(niveauDeLArmee([]), null);
+  assert.throws(() => niveauDesBatiments([]), RangeError);
+
+  // ⚠ `null`, PAS ZÉRO. Zéro se lirait « niveau zéro », c'est-à-dire une force
+  // posée et nulle, alors qu'il n'y a rien de posé du tout.
+  assert.notEqual(niveauDeLaDefense([]), 0);
+  assert.notEqual(niveauDeLArmee([]), 0);
+
+  // Et une seule pièce suffit à faire exister la grandeur.
+  assert.equal(niveauDeLArmee([{ niveau: 1 }]), 10);
+});
+
+test('niveau — une pièce détruite compte quand même dans la moyenne', () => {
+  // Elle reste POSÉE — arbitré le 28/08, « détruites mais pas perdues ». La
+  // filtrer sur ses dégâts ferait MONTER le niveau de l'armée à mesure qu'elle
+  // se fait démolir, ce qui serait exactement à l'envers.
+  const armee = [
+    { id: 'meute', vague: 1, colonne: 1, niveau: 2, degatsMilli: 700_000 },
+    { id: 'meute', vague: 1, colonne: 2, niveau: 8, degatsMilli: 0 },
+  ];
+  assert.equal(niveauDeLArmee(armee), 50, '2 et 8 font 5,0 — la détruite compte');
+
+  // Falsifiable : sans la détruite, la moyenne serait tout autre.
+  assert.equal(niveauDeLArmee(armee.slice(1)), 80);
+});
+
+test('niveau — les deux refusent autre chose qu\'une liste', () => {
+  assert.throws(() => niveauDeLaDefense(undefined), TypeError);
+  assert.throws(() => niveauDeLArmee(null), TypeError);
+  assert.throws(() => niveauDeLArmee([{ niveau: 0 }]), RangeError);
 });

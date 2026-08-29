@@ -15,10 +15,13 @@ import {
   STOCK_DE_DEPART,
 } from './economie-base.js';
 import { BASE_BATIMENTS, coutDeMontee, remboursementDuNiveau } from '../data/base.js';
-import { GEOGRAPHIE } from '../data/sites.js';
+import { GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT } from '../data/sites.js';
+import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
+import { NIVEAU } from '../data/niveaux.js';
+import { rosterDefensif } from '../data/couts-militaires.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 /**
  * @typedef {object} Etat
@@ -29,8 +32,23 @@ export const SAVE_VERSION = 6;
  * @property {{ rangee: number, colonne: number }} position Sur la carte monde, AUJOURD'HUI.
  * @property {{ rangee: number, colonne: number }} fondation Là où la base a été FONDÉE.
  * @property {Array<{ id: string, rangee: number, colonne: number, niveau: number }>} disposition
+ * @property {Array<Effectif>} garnison Les défenses posées dans la bande de défense.
+ * @property {Array<Effectif>} armee    Les unités posées dans les quatre vagues.
  * @property {{ ressources: Record<string, number>, residus: Array<Record<string, number>> }} economie
  * @property {object} champs DÉRIVÉ de `fondation` — voir `serialiser`.
+ */
+
+/**
+ * Une pièce posée, de garnison ou d'armée. `rangee` pour la garnison, `vague`
+ * pour l'armée — l'autre clé est absente, jamais nulle.
+ *
+ * @typedef {object} Effectif
+ * @property {string} id
+ * @property {number} [rangee] garnison seulement
+ * @property {number} [vague]  armée seulement
+ * @property {number} colonne
+ * @property {number} niveau
+ * @property {number} degatsMilli Dégâts subis, en MILLI-PV. Zéro = intacte.
  */
 
 // ---------------------------------------------------------------------------
@@ -102,6 +120,14 @@ export function creerEtat(graine) {
     // écrirait dans `position` déplacerait sinon aussi la fondation.
     fondation: { rangee: position.rangee, colonne: position.colonne },
     disposition,
+    // ⚠ VIDES, ET C'EST UN ÉTAT NORMAL — pas un trou à combler. Une base neuve
+    // ne porte qu'un Chantier : ni Centre de commandement ni QG de défense,
+    // donc aucun budget, donc rien à poser. Les deux listes sont CREUSES, à la
+    // même forme que `disposition` : un objet par pièce posée, rien pour une
+    // case vide. Une grille pleine ferait porter 108 `null` à la sauvegarde et
+    // imposerait une seconde convention de lecture dans le même fichier.
+    garnison: [],
+    armee: [],
     economie: creerEtatEconomie(disposition),
     champs: champsDeLaBase(position.rangee, position.colonne),
   };
@@ -170,9 +196,15 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'economie', 'champs']) {
+  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs']) {
     exigerChamp(etat, champ);
   }
+  // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
+  // toute la raison d'être de ces deux lignes. Une sauvegarde v7 sans `armee`
+  // est un fait de PROGRAMME — quelque chose l'a écrite de travers. Une armée
+  // VIDE est parfaitement légale : c'est l'état de toute base neuve, et le
+  // rester tant que le Centre de commandement n'est pas posé.
+  for (const force of Object.keys(FORCES)) verifierForce(etat, force);
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
       `etat : ${etat.economie.residus.length} résidus pour ${etat.disposition.length} bâtiments`,
@@ -536,6 +568,386 @@ export function demolir(etat, index) {
   return rendu;
 }
 
+// ---------------------------------------------------------------------------
+// La garnison et l'armée — les deux forces du joueur
+// ---------------------------------------------------------------------------
+//
+// ARBITRÉ par Ethan le 28/08/2026 : « Les unités sont détruites mais pas
+// perdues, doivent être réparées avec temps de réparation arbitré par caserne /
+// usine / aérodrome. On garde le placement dans les 36 cases, déplacement
+// gratuit, comme bâtiment. »
+//
+// Ce qui s'en déduit, et rien de plus :
+//   — une unité détruite RESTE dans sa case, à zéro, en attente de réparation.
+//     Elle n'est pas retirée de la liste. C'est le plancher de
+//     `MODELE-REPARATION-1.md` §2 — « plancher 1 PV, ne meurt pas vraiment » ;
+//   — le placement est une donnée de SAUVEGARDE, pas une composition jetable
+//     qu'on referait à chaque raid ;
+//   — déplacer ne coûte rien, comme pour un bâtiment.
+//
+// ⚠ VOCABULAIRE : `garnison` et `armee`, jamais `defenses` ni `unites`. Ces
+// deux derniers sont déjà les noms des TABLES de `data/combat.js` et prêteraient
+// à confusion à chaque relecture. Une pièce posée, de l'un ou l'autre côté,
+// s'appelle un EFFECTIF — c'est ce mot qui nomme les fonctions ci-dessous.
+//
+// ⚠⚠ `degatsMilli` ET NON `pvMilli`, et le choix se justifie deux fois. Une
+// pièce intacte se sérialise alors à `0`, ce qui est le cas courant. Et surtout :
+// le jour où un PV de `data/combat.js` change, une valeur ABSOLUE enregistrée
+// peut dépasser le maximum et rendre la sauvegarde incohérente en silence,
+// alors que des dégâts se BORNENT à la lecture. Milli-PV parce que c'est l'unité
+// du moteur de combat — deux unités feraient un arrondi à chaque passage.
+//
+// ⚠⚠ AUCUN TABLEAU PARALLÈLE. `economie.residus` est indexé sur `disposition`,
+// et c'est ce couplage qui rend `deplacer` délicat — mutation en place, jamais
+// `splice` puis `push`. Il n'est recréé ni pour la garnison ni pour l'armée :
+// tout ce qui appartient à une pièce se range DANS la pièce. C'est pourquoi le
+// niveau et les dégâts sont des champs de l'effectif et non deux listes de plus.
+//
+// ⚠ LE NIVEAU EST PAR PIÈCE, MAIS RIEN NE PERMET ENCORE D'EN POSER DEUX
+// DIFFÉRENTS. Les deux éditeurs portent UN niveau pour toute la grille et le
+// recopient sur chaque pièce ; ce lot conserve ce comportement. Le ranger par
+// pièce dès maintenant coûte zéro et évite une SECONDE migration le jour où la
+// mécanique sera arbitrée. Comment se choisit le niveau d'une pièce posée n'est
+// pas tranché — ne pas l'inventer ici.
+
+/**
+ * Ce qui distingue les deux forces, et rien d'autre. Le reste du code lit cette
+ * table au lieu de reconnaître « garnison » par son nom : un cas particulier
+ * écrit à la main serait le premier à diverger.
+ *
+ * `axe` est la clé de position propre à la force — `rangee` pour la garnison,
+ * qui vit dans la bande de défense de la grille, `vague` pour l'armée, dont les
+ * quatre vagues ne sont pas des rangées de terrain mais des rangs d'entrée.
+ */
+export const FORCES = {
+  garnison: {
+    champ: 'garnison',
+    quoi: 'garnison',
+    axe: 'rangee',
+    // ⚠ LE LIBELLÉ N'EST PAS LA CLÉ. `axe` indexe l'objet, `axeLibelle` s'affiche :
+    // les messages de refus sont repris MOT POUR MOT par l'écran, et « rangee 11 »
+    // sans accent trahirait qu'une clé de code a fui jusque sous les yeux du joueur.
+    axeLibelle: 'rangée',
+    axeMin: GRILLE.bandes.defense.premiere,
+    axeMax: GRILLE.bandes.defense.derniere,
+    colonneMax: GRILLE.largeur,
+    // La clé de `POINTS_ARMEE`, qui nomme le bâtiment d'où vient le budget.
+    role: 'defense',
+    // Les neuf ouvrages plus les unités qui ont un rôle défensif. La liste se
+    // LIT dans les tables (`data/couts-militaires.js`), elle ne se recopie pas :
+    // un test croise déjà cette lecture avec celle de l'écran de défense.
+    roster: new Set(rosterDefensif()),
+  },
+  armee: {
+    champ: 'armee',
+    quoi: 'armée',
+    axe: 'vague',
+    axeLibelle: 'vague',
+    axeMin: 1,
+    axeMax: EMPLACEMENTS_ASSAUT.vagues,
+    colonneMax: EMPLACEMENTS_ASSAUT.parVague,
+    role: 'offense',
+    roster: new Set(Object.keys(UNITES)),
+  },
+};
+
+function exigerForce(force) {
+  if (FORCES[force] === undefined) {
+    throw new Error(`etat : « ${force} » n'est pas une force — garnison ou armee`);
+  }
+  return FORCES[force];
+}
+
+/**
+ * Les défauts STRUCTURELS d'un effectif : ce qui empêcherait la sauvegarde
+ * d'être relue, pas ce qui empêcherait le joueur de jouer.
+ *
+ * ⚠⚠ LE BUDGET N'EST PAS ICI, ET SON ABSENCE EST DÉLIBÉRÉE. Une composition qui
+ * dépasse son budget est un fait de JEU, pas un fait de programme : elle arrive
+ * pour de bon dès que le budget BAISSE — QG démoli, QG tombé au raid — sous une
+ * armée déjà posée. La refuser au chargement rendrait la partie illisible pour
+ * une faute que le joueur n'a pas commise, exactement comme `uniques-voisins`
+ * l'aurait fait le 28/08. On le SIGNALE et on propose de purger ; jamais
+ * d'amputation automatique (CLAUDE.md §4).
+ *
+ * ⚠ NI L'APPARITION, POUR LA MÊME RAISON. Un niveau de commandement qui
+ * redescend verrouille des unités déjà posées ; c'est `purger` des éditeurs qui
+ * s'en occupe, sur demande du joueur.
+ *
+ * @param {string} force 'garnison' ou 'armee'
+ * @param {Array<Effectif>} liste la force entière, pour la superposition
+ * @param {Effectif} piece
+ * @param {number|null} indexIgnore indice à ne pas compter comme voisin — la
+ *   pièce elle-même, quand on la vérifie ou qu'on la déplace
+ * @returns {Array<{code: string, message: string}>}
+ */
+function problemesDeLEffectif(force, liste, piece, indexIgnore) {
+  const f = exigerForce(force);
+  const problemes = [];
+
+  if (!f.roster.has(piece.id)) {
+    problemes.push({ code: 'inconnu', message: `« ${piece.id} » n'a pas sa place en ${f.quoi}` });
+  }
+  const axe = piece[f.axe];
+  if (!Number.isInteger(axe) || axe < f.axeMin || axe > f.axeMax) {
+    problemes.push({
+      code: 'hors-grille',
+      message: `${f.axeLibelle} ${axe} hors de ${f.axeMin}…${f.axeMax}`,
+    });
+  }
+  if (!Number.isInteger(piece.colonne) || piece.colonne < 1 || piece.colonne > f.colonneMax) {
+    problemes.push({
+      code: 'hors-grille',
+      message: `colonne ${piece.colonne} hors de 1…${f.colonneMax}`,
+    });
+  }
+  const occupee = liste.some(
+    (autre, i) => i !== indexIgnore && autre[f.axe] === axe && autre.colonne === piece.colonne,
+  );
+  if (occupee) {
+    problemes.push({ code: 'superposition', message: 'cette case est déjà occupée' });
+  }
+  if (!Number.isInteger(piece.niveau) || piece.niveau < 1 || piece.niveau > NIVEAU.plafond) {
+    problemes.push({
+      code: 'niveau',
+      message: `niveau ${piece.niveau} hors de 1…${NIVEAU.plafond}`,
+    });
+  }
+  // ⚠ AUCUN PLAFOND SUR LES DÉGÂTS, ET C'EST LE POINT DE `degatsMilli`. Les
+  // borner ici exigerait de lire les PV de la table, donc de refuser une
+  // sauvegarde le jour où un PV baisse. Ils se bornent à la LECTURE, par qui
+  // calcule des PV restants — pas à l'écriture.
+  if (!Number.isInteger(piece.degatsMilli) || piece.degatsMilli < 0) {
+    problemes.push({
+      code: 'degats',
+      message: `dégâts « ${piece.degatsMilli} » — entier de milli-PV ≥ 0 attendu`,
+    });
+  }
+  return problemes;
+}
+
+/**
+ * Vérifie une force entière au chargement. LÈVE — au chargement, un effectif
+ * malformé est un fait de programme.
+ * @param {Etat} etat
+ * @param {string} force
+ */
+function verifierForce(etat, force) {
+  const f = exigerForce(force);
+  const liste = etat[f.champ];
+  if (!Array.isArray(liste)) {
+    throw new Error(`etat : « ${f.champ} » n'est pas une liste`);
+  }
+  for (let i = 0; i < liste.length; i += 1) {
+    const problemes = problemesDeLEffectif(force, liste, liste[i], i);
+    if (problemes.length > 0) {
+      throw new Error(
+        `etat : ${f.quoi} injouable — ${problemes.map((p) => p.message).join(' ; ')}`,
+      );
+    }
+  }
+}
+
+/**
+ * Ce qui empêcherait de poser cette pièce là. Liste vide = pose légale.
+ *
+ * ⚠ LES RÈGLES DE JEU NE SONT PAS ICI, ET C'EST LA MÊME FRONTIÈRE QUE PARTOUT.
+ * Budget, niveau d'apparition et occupants maximum par rangée vivent dans les
+ * deux ÉDITEURS — `ui/defense.js` et `ui/arsenal.js` — qui sont purs, déjà
+ * testés, et qui font foi là-dessus. Les recopier ici ferait deux tables de
+ * règles, et la première divergence se lirait comme un déséquilibre de jeu. Ce
+ * module garde ce que la SAUVEGARDE doit garantir ; l'appelant demande le reste
+ * à l'éditeur avant d'appeler.
+ *
+ * @param {Etat} etat
+ * @param {string} force 'garnison' ou 'armee'
+ * @param {Effectif} piece sans `degatsMilli` — une pièce posée est intacte
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLaPoseDEffectif(etat, force, piece) {
+  const f = exigerForce(force);
+  exigerChamp(etat, f.champ);
+  return problemesDeLEffectif(force, etat[f.champ], { degatsMilli: 0, ...piece }, null);
+}
+
+/**
+ * Pose une pièce. LÈVE si elle est illégale — même discipline que `poser` pour
+ * les bâtiments : une pose refusée est un fait de jeu qu'on montre au joueur,
+ * une levée est un fait de programme.
+ *
+ * ⚠ POSER NE COÛTE RIEN. `ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2 et
+ * Ethan l'a redit le 28/08 pour les unités : « une unité posée en def ou off est
+ * niveau 1 et gratuit ». Le premier prix est celui de la première AMÉLIORATION,
+ * et il vit dans `data/couts-militaires.js`.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} force
+ * @param {Effectif} piece
+ * @returns {Etat} le même état
+ */
+export function poserEffectif(etat, force, piece) {
+  const f = exigerForce(force);
+  const complete = { degatsMilli: 0, ...piece };
+  const problemes = problemesDeLaPoseDEffectif(etat, force, complete);
+  if (problemes.length > 0) {
+    throw new Error(
+      `poserEffectif : pose illégale en ${f.quoi} — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  etat[f.champ].push({
+    id: complete.id,
+    [f.axe]: complete[f.axe],
+    colonne: complete.colonne,
+    niveau: complete.niveau,
+    degatsMilli: complete.degatsMilli,
+  });
+  return etat;
+}
+
+/**
+ * Retire une pièce et la rend.
+ *
+ * ⚠ AUCUN REMBOURSEMENT, faute d'arbitrage. `REMBOURSEMENT_DEMOLITION` vaut
+ * pour les bâtiments de la base ; rien n'a été rendu pour les effectifs, et en
+ * inventer un serait trancher seul une mécanique de jeu. Le jour où Ethan en
+ * fixera un, il se crédite ici.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} force
+ * @param {number} index
+ * @returns {Effectif} la pièce retirée
+ */
+export function retirerEffectif(etat, force, index) {
+  const f = exigerForce(force);
+  exigerChamp(etat, f.champ);
+  const piece = etat[f.champ][index];
+  if (piece === undefined) {
+    throw new RangeError(`retirerEffectif : indice ${index} hors de la ${f.quoi}`);
+  }
+  etat[f.champ].splice(index, 1);
+  return piece;
+}
+
+/**
+ * Ce qui empêcherait de déplacer cette pièce vers cette case.
+ *
+ * ⚠ RESTER SUR PLACE EST LÉGAL, et rend une liste vide — d'où `indexIgnore` :
+ * la pièce ne se fait pas obstacle à elle-même. Le refuser obligerait l'écran à
+ * connaître cette exception et priverait le joueur de toute annulation.
+ *
+ * @param {Etat} etat
+ * @param {string} force
+ * @param {number} index
+ * @param {object} position la nouvelle case, `{ rangee, colonne }` ou
+ *   `{ vague, colonne }` selon la force
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDuDeplacementDEffectif(etat, force, index, position) {
+  const f = exigerForce(force);
+  exigerChamp(etat, f.champ);
+  const piece = etat[f.champ][index];
+  if (piece === undefined) {
+    throw new RangeError(`deplacerEffectif : indice ${index} hors de la ${f.quoi}`);
+  }
+  return problemesDeLEffectif(force, etat[f.champ], { ...piece, ...position }, index);
+}
+
+/**
+ * Déplace une pièce. Gratuit — Ethan, 28/08 : « déplacement gratuit, comme
+ * bâtiment ».
+ *
+ * ⚠⚠ LA CASE EST MODIFIÉE EN PLACE, JAMAIS PAR `splice` PUIS `push`. Aucune
+ * liste n'est aujourd'hui parallèle à `garnison` ni à `armee` — c'est justement
+ * ce qu'on a voulu en rangeant niveau et dégâts DANS la pièce — mais l'ordre
+ * d'une liste est de toute façon observable : il décide de l'indice que l'écran
+ * garde en main entre deux touchers d'un déplacement. Réécrire la liste dans un
+ * autre ordre ferait viser au geste suivant une pièce qui n'est plus celle-là.
+ * C'est la faute exacte que `deplacer` évite déjà pour les bâtiments.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} force
+ * @param {number} index
+ * @param {object} position
+ * @returns {Etat} le même état
+ */
+export function deplacerEffectif(etat, force, index, position) {
+  const f = exigerForce(force);
+  const problemes = problemesDuDeplacementDEffectif(etat, force, index, position);
+  if (problemes.length > 0) {
+    throw new Error(
+      `deplacerEffectif : déplacement illégal en ${f.quoi} — `
+        + problemes.map((p) => p.message).join(' ; '),
+    );
+  }
+  const piece = etat[f.champ][index];
+  piece[f.axe] = position[f.axe];
+  piece.colonne = position.colonne;
+  return etat;
+}
+
+/**
+ * Les points d'armée engagés par une force — ce que le compteur du bandeau
+ * affiche en face du budget.
+ *
+ * ⚠ LES POINTS NE MONTENT PAS AVEC LE NIVEAU, et c'est une règle du moteur,
+ * pas un oubli : réserve, portée, vitesse, masse, cadence et points d'armée
+ * sont les grandeurs que `data/niveaux.js` ne met PAS à l'échelle. Multiplier
+ * ici par le niveau ferait qu'améliorer une unité la ferait sortir du budget.
+ *
+ * ⚠ UNE PIÈCE DÉTRUITE COMPTE ENCORE. Elle occupe sa case et son budget en
+ * attendant d'être réparée — « détruites mais pas perdues ». La décompter
+ * ferait de la destruction une façon de poser plus d'unités.
+ *
+ * @param {Etat} etat
+ * @param {string} force
+ * @returns {number} points d'armée
+ */
+export function pointsEngages(etat, force) {
+  const f = exigerForce(force);
+  exigerChamp(etat, f.champ);
+  let total = 0;
+  for (const piece of etat[f.champ]) {
+    // Une pièce de garnison est soit un ouvrage, soit une unité ; l'assaut n'a
+    // que des unités. Les deux tables portent le même champ `points`.
+    const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
+    if (ligne === undefined) {
+      throw new Error(`pointsEngages : « ${piece.id} » n'est ni une défense ni une unité`);
+    }
+    total += ligne.points;
+  }
+  return total;
+}
+
+/**
+ * Le niveau du bâtiment qui commande cette force, ou `null` s'il n'est pas posé.
+ *
+ * ⚠⚠ C'EST LE SEUL ENDROIT QUI LIT CETTE GRANDEUR, ET C'EST VOULU. Le budget
+ * d'engagement et le filtrage des palettes en découlent tous les deux ;
+ * `POINTS_ARMEE` de `data/sites.js` nomme déjà le bâtiment de chaque côté —
+ * Centre de commandement pour l'offense, QG de défense pour la défense. Le lire
+ * ailleurs, ou passer un niveau à la main, ferait deux vérités sur ce que le
+ * joueur peut engager.
+ *
+ * ⚠⚠ `null` N'EST PAS ZÉRO, ET LA DIFFÉRENCE EST UN ARBITRAGE QUI MANQUE.
+ * Les deux bâtiments sont `unique: true` et AUCUN n'est dans la base neuve :
+ * tant que le joueur ne les a pas posés, il n'a ni armée ni garnison. Ce qu'un
+ * budget vaut alors n'a PAS été arbitré — le défaut retenu est « pas de
+ * bâtiment, pas de budget », cohérent avec une base neuve qui ne porte qu'un
+ * Chantier. Il tient en une ligne chez l'appelant, et c'est exprès : si Ethan
+ * tranche autrement, il n'y a qu'un endroit à changer.
+ *
+ * @param {Etat} etat
+ * @param {string} force
+ * @returns {number|null} le niveau du bâtiment, ou null s'il n'est pas posé
+ */
+export function niveauDeCommandement(etat, force) {
+  const f = exigerForce(force);
+  exigerChamp(etat, 'disposition');
+  const commandant = POINTS_ARMEE[f.role].batiment;
+  const batiment = etat.disposition.find((b) => b.id === commandant);
+  return batiment === undefined ? null : batiment.niveau;
+}
+
 /**
  * Sérialise l'état en JSON, SANS le terrain et AVEC l'instant d'écriture.
  *
@@ -706,6 +1118,31 @@ const MIGRATIONS = {
   5: (s) => {
     s.version = 6;
     s.instantSauvegardeMs = null;
+  },
+
+  /**
+   * v6 → v7 : l'état porte enfin la GARNISON et l'ARMÉE du joueur. Jusqu'ici
+   * les deux se composaient dans `ui/defense.js` et `ui/arsenal.js`, qui sont
+   * des éditeurs dont la sortie n'était sauvegardée nulle part — d'où l'écran
+   * Offense resté coquille, les compteurs bloqués à « — » et la bande Défense
+   * en lecture seule.
+   *
+   * ⚠ ELLE NE PERD RIEN ET N'INVENTE RIEN. Une sauvegarde v6 ne porte aucune
+   * composition : il n'y a rien à convertir, et deux listes VIDES sont
+   * exactement ce que la partie avait. C'est la migration la plus sûre de la
+   * chaîne — elle ajoute, comme les v0 → v1 et v1 → v2.
+   *
+   * ⚠ ELLE N'APPELLE NI `creerEtat` NI `creerEtatEconomie`, et ce n'est pas un
+   * détail de style : les migrations traversent l'économie, et c'est ce qui a
+   * fait tomber huit tests au lot AMORCE-ET-SIGNATURE quand la dotation de
+   * départ y avait été placée. Une migration écrit les champs qu'elle ajoute, à
+   * la main, et rien d'autre.
+   * @param {object} s
+   */
+  6: (s) => {
+    s.version = 7;
+    s.garnison = [];
+    s.armee = [];
   },
 };
 

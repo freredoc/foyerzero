@@ -11,7 +11,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { vagueDAssaut, vaguesDAssaut, unitesDeLaPalette } from '../src/ui/offense.js';
+import {
+  vagueDAssaut, vaguesDAssaut, unitesDeLaPalette, vueDeLOffense,
+  SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
+} from '../src/ui/offense.js';
+import {
+  creerEtat, poserEffectif, niveauDeCommandement,
+} from '../src/sim/state.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE } from '../src/data/sites.js';
 import { GRILLE, UNITES } from '../src/data/combat.js';
@@ -63,10 +69,14 @@ test('offense — les vagues suivantes partent décalées, de l\'intervalle de l
 });
 
 test('offense — la palette porte le roster entier, sous les noms du JOUEUR', () => {
-  const palette = unitesDeLaPalette();
+  // ⚠ SANS CENTRE DE COMMANDEMENT, LA PALETTE MONTRE TOUT, ÉTEINT. Il n'y a
+  // pas de niveau d'armée — pas un niveau zéro : filtrer sur un niveau inventé
+  // cacherait des unités pour une mauvaise raison.
+  const palette = unitesDeLaPalette(null);
 
   // Toutes les unités, et rien d'autre.
   assert.deepEqual(palette.map((u) => u.id).sort(), Object.keys(UNITES).sort());
+  assert.ok(palette.every((u) => u.disponible === false), 'la palette est vive sans budget');
   assert.ok(palette.length > 10, `${palette.length} unités : le montage ne mesure rien`);
 
   // ⚠ `nom.joueur`, JAMAIS `nom.ouvrage`. C'est un panneau du joueur, qui emploie
@@ -86,23 +96,36 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
     palette.map((u) => u.nom), Object.values(UNITES).map((u) => u.nom.ouvrage),
   );
 
-  // ⚠ LA PALETTE N'EST PAS FILTRÉE PAR NIVEAU, et c'est délibéré.
-  // `unitesDisponibles(niveau)` de l'Arsenal ne montre que `apparition <= niveau`
-  // — mais le joueur n'A PAS de niveau d'armée, c'est l'un des deux que `sim/`
-  // ne porte pas. En choisir un pour pouvoir filtrer reviendrait à l'inventer.
+  // ⚠ ET ELLE EST FILTRÉE PAR NIVEAU DÈS QU'IL Y EN A UN. Ce test a changé de
+  // cible au lot GARNISON-ET-ARMÉE, il ne s'est pas assoupli : jusque-là le
+  // joueur n'avait AUCUN niveau d'armée, et en choisir un pour pouvoir filtrer
+  // aurait été l'inventer. Il en a un maintenant — celui de son Centre de
+  // commandement — et le filtre est celui de l'Arsenal, pas un second.
   const verrouillees = palette.filter((u) => UNITES[u.id].apparition > 1);
   assert.ok(verrouillees.length > 0, 'aucune unité verrouillée : le filtrage ne se voit pas');
+
+  const auNiveauUn = unitesDeLaPalette(1);
+  assert.ok(auNiveauUn.length < palette.length, 'le filtrage par niveau ne retire rien');
+  assert.ok(auNiveauUn.every((u) => UNITES[u.id].apparition <= 1));
+  assert.ok(auNiveauUn.every((u) => u.disponible === true));
+  // Au plafond, plus rien n'est verrouillé : le filtre laisse tout passer.
+  assert.equal(unitesDeLaPalette(50).length, Object.keys(UNITES).length);
 });
 
-test('offense — le budget dépend d\'un niveau que la partie ne porte pas', () => {
-  // Le budget se CALCULE, mais seulement si on a un niveau — et on n'en a pas.
-  // C'est pour ça que l'en-tête affiche « — » plutôt qu'un nombre : il n'y a
-  // aucune valeur juste à mettre là.
+test('offense — le budget vient du Centre de commandement, et de lui seul', () => {
   assert.equal(budgetDuNiveau(1), POINTS_ARMEE.offense.base + POINTS_ARMEE.offense.parNiveau);
   assert.ok(budgetDuNiveau(50) > budgetDuNiveau(1), 'le budget doit dépendre du niveau');
-  // Et il n'existe aucun niveau par défaut à lui passer : la fonction refuse.
+  // Aucun niveau par défaut n'existe : la fonction refuse zéro et null.
   assert.throws(() => budgetDuNiveau(0), /hors de/);
   assert.throws(() => budgetDuNiveau(null), /hors de/);
+
+  // ⚠ ET C'EST L'ÉTAT QUI DIT S'IL Y EN A UN. Une base neuve ne porte pas de
+  // Centre de commandement — il est `unique` et absent de `BASE_NEUVE` — donc
+  // il n'y a pas de budget du tout, ce qui n'est pas un budget nul.
+  const neuve = creerEtat(5);
+  assert.equal(niveauDeCommandement(neuve, 'armee'), null);
+  assert.equal(vueDeLOffense(neuve).budget, null);
+  assert.equal(vueDeLOffense(neuve).avis, SANS_COMMANDEMENT);
 });
 
 /**
@@ -145,10 +168,14 @@ test('offense — le HTML produit porte l\'écran, et il n\'a plus d\'en-tête �
   assert.ok(/<div id="ecran-offense" hidden>/.test(html), 'l\'écran Offense n\'est pas caché');
   assert.ok(!/<div id="ecran-chantier" hidden>/.test(html), 'l\'écran Chantier part caché');
 
-  // Un mot dit que la composition n'existe pas encore — sans quoi trente-six
-  // cases vides passeraient pour un écran cassé plutôt que pour une place tenue.
-  assert.ok(/La composition d'armée n'existe pas encore/.test(html),
-    'rien ne dit que la composition d\'armée n\'existe pas');
+  // ⚠ LE MOT GRAVÉ A DISPARU, ET C'EST LE LOT GARNISON-ET-ARMÉE. La page
+  // affirmait « La composition d'armée n'existe pas encore » ; elle existe.
+  // La ligne est maintenant ÉCRITE PAR L'ÉCRAN, qui y met ce qui est vrai à cet
+  // instant — d'où un paragraphe VIDE et caché dans le balisage.
+  assert.ok(!/La composition d'armée n'existe pas encore/.test(html),
+    'la page affirme encore que la composition d\'armée n\'existe pas');
+  assert.ok(/<p id="offense-avis" hidden><\/p>/.test(html),
+    'la ligne d\'avis de l\'Offense doit partir vide et cachée');
 
   // ⚠ LA BARRE DU BAS NE PROPOSE PLUS « ASSAUT » comme une bande. Le mot désigne
   // un écran maintenant ; le laisser sur un bouton qui fait défiler vers deux
@@ -205,4 +232,157 @@ test('offense — changer d\'écran n\'arrête PAS la boucle de jeu', () => {
   // qui ne les a jamais eues.
   assert.ok(/function suspendre\(/.test(source));
   assert.ok(/function reprendre\(/.test(source));
+});
+
+// ---------------------------------------------------------------------------
+// L'écran compose — lot GARNISON-ET-ARMÉE, 28/08
+// ---------------------------------------------------------------------------
+
+/** Une base qui porte un Centre de commandement, donc un budget d'armée. */
+function baseAvecCommandement(niveau = 12) {
+  const etat = creerEtat(20260828);
+  etat.disposition[0].niveau = 5; // dix emplacements
+  etat.disposition.push({ id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau });
+  etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  return etat;
+}
+
+test('offense — la vue lit l\'armée de l\'état, case par case', () => {
+  const etat = baseAvecCommandement();
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 3, niveau: 2 });
+  poserEffectif(etat, 'armee', { id: 'fendeur', vague: 4, colonne: 9, niveau: 6 });
+
+  const vue = vueDeLOffense(etat);
+  assert.equal(vue.vagues.length, NB_VAGUES);
+  assert.ok(vue.vagues.every((v) => v.length === NB_COLONNES));
+
+  // ⚠ UNE VAGUE VIDE GARDE SON RANG. La vague 2 laissée vide ne doit pas
+  // décaler la 3 : le rang décide de l'instant où la vague entre en jeu.
+  assert.equal(vue.vagues[1].filter((c) => c !== null).length, 0);
+  assert.equal(vue.vagues[0][2].id, 'meute');
+  assert.equal(vue.vagues[0][2].nom, UNITES.meute.nom.joueur);
+  assert.equal(vue.vagues[0][2].niveau, 2);
+  assert.equal(vue.vagues[3][8].id, 'fendeur');
+  // L'indice rend la pièce retrouvable dans `etat.armee` — c'est ce qui permet
+  // de la déplacer ou de la retirer sans la rechercher par coordonnées.
+  assert.equal(etat.armee[vue.vagues[3][8].index].id, 'fendeur');
+
+  // Les points engagés et le budget, tous deux réels.
+  assert.equal(vue.engages, UNITES.meute.points + UNITES.fendeur.points);
+  assert.equal(vue.budget, budgetDuNiveau(12));
+  assert.equal(vue.avis, '', 'l\'écran s\'excuse alors qu\'il a un budget');
+  // Le niveau de l'armée est la moyenne de ce qui est posé : 2 et 6 font 4,0.
+  assert.equal(vue.niveauArmee, 40);
+
+  // Falsifiable : une base sans armée doit rendre autre chose.
+  const vide = vueDeLOffense(baseAvecCommandement());
+  assert.equal(vide.engages, 0);
+  assert.equal(vide.niveauArmee, null);
+  assert.notEqual(vide.vagues[0][2], vue.vagues[0][2]);
+});
+
+test('offense — l\'écran refuse un état malformé au lieu de rendre du vide', () => {
+  assert.throws(() => vueDeLOffense(null), /état de jeu absent ou malformé/);
+  const ampute = { ...creerEtat(3) };
+  delete ampute.armee;
+  assert.throws(() => vueDeLOffense(ampute), /état de jeu absent ou malformé/);
+});
+
+test('offense — le mot « en main » nomme l\'unité, en vocabulaire joueur', () => {
+  const phrase = messageEnMain(UNITES.meute.nom.joueur);
+  assert.ok(phrase.includes(UNITES.meute.nom.joueur));
+  assert.ok(!phrase.includes(UNITES.meute.nom.ouvrage), 'un nom de l\'Ouvrage a fui à l\'écran');
+  // Les deux issues du second toucher sont annoncées : déplacer, ou retirer.
+  assert.ok(/déplacer/.test(phrase) && /retirer/.test(phrase), phrase);
+});
+
+test('offense — l\'écran ne grave aucune constante de grille', () => {
+  // ⚠ NI 4, NI 9, NI 36. Ils viennent d'`EMPLACEMENTS_ASSAUT` par
+  // `ui/arsenal.js` ; une seconde table dirait un jour autre chose. La garde
+  // lit la source décommentée : les commentaires citent les nombres exprès.
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+  for (const grave of ['36', 'EMPLACEMENTS_ASSAUT']) {
+    assert.ok(!source.includes(grave), `« ${grave} » est gravé dans l'écran Offense`);
+  }
+  // Les deux constantes viennent bien de l'Arsenal, importées et non réécrites.
+  assert.match(source, /NB_VAGUES/);
+  assert.match(source, /NB_COLONNES/);
+  assert.match(source, /from '\.\/arsenal\.js'/);
+
+  // Falsifiable : le décommenteur doit vraiment retirer de la prose, sinon la
+  // garde lirait ses propres commentaires — la faute du lot PANNEAU-ET-MARGES.
+  const brute = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
+  assert.ok(brute.length > source.length, 'le décommenteur ne retire rien');
+  assert.ok(brute.includes('trente-six') || brute.includes('quatre vagues'),
+    'plus aucune prose ne cite les nombres : la falsification ne mesure rien');
+});
+
+test('offense — les règles de composition ne sont pas réécrites dans l\'écran', () => {
+  // ⚠ L'ÉCRAN INTERROGE, IL NE TRANCHE PAS. Budget, apparition et occupation
+  // vivent dans `ui/arsenal.js` et `sim/state.js`. Une seconde table de règles
+  // écrite pour la commodité d'un rendu finirait par dire autre chose.
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+  // Il demande avant d'agir, des deux côtés.
+  assert.match(source, /problemesDeLaPoseDEffectif/);
+  assert.match(source, /problemesDuDeplacementDEffectif/);
+  // Et il ne relit pas `apparition` lui-même : c'est le filtre de l'Arsenal.
+  assert.ok(!source.includes('apparition'), 'l\'écran refait le filtrage par niveau');
+  // ⚠ JAMAIS DE `try` AUTOUR D'UNE POSE — même règle qu'au Chantier. Une pose
+  // refusée est un fait de jeu qu'on montre ; une levée est un fait de
+  // programme qu'on ne masque pas.
+  assert.ok(!/try\s*\{[\s\S]*?poserEffectif/.test(source), 'un try entoure poserEffectif');
+});
+
+test('offense — une armée trop chère est SIGNALÉE, jamais amputée', () => {
+  // ⚠⚠ C'EST LA DÉCISION QUE LE BRIEF DEMANDAIT DE PRENDRE, ET ELLE EST CELLE
+  // DU DÉPÔT : `purger` ne s'applique JAMAIS toute seule. CLAUDE.md §4 —
+  // « quand le contexte bouge sous une composition déjà faite, on le SIGNALE
+  // dans le bilan et on propose de purger. Jamais d'amputation automatique. »
+  //
+  // Le cas arrive pour de bon : le budget BAISSE quand le Centre de
+  // commandement est démoli ou tombe au raid, sous une armée déjà posée.
+  const etat = baseAvecCommandement(50);
+  for (let colonne = 1; colonne <= 9; colonne += 1) {
+    poserEffectif(etat, 'armee', { id: 'enclume', vague: 1, colonne, niveau: 1 });
+  }
+  const riche = vueDeLOffense(etat);
+  assert.equal(riche.depasse, false, 'le montage dépasse déjà au niveau 50');
+  assert.equal(riche.avis, '');
+
+  // Le QG redescend au niveau 1 : le budget s'effondre sous l'armée posée.
+  const indice = etat.disposition.findIndex((b) => b.id === 'centreDeCommandement');
+  etat.disposition[indice].niveau = 1;
+  const pauvre = vueDeLOffense(etat);
+
+  // Falsifiable : le montage doit VRAIMENT dépasser, sinon il ne mesure rien.
+  assert.ok(pauvre.engages > pauvre.budget,
+    `${pauvre.engages} points pour ${pauvre.budget} : le montage ne dépasse pas`);
+  assert.equal(pauvre.depasse, true);
+  assert.equal(pauvre.avis, messageDeDepassement(pauvre.engages, pauvre.budget));
+  assert.match(pauvre.avis, /Rien n'est retiré tout seul/);
+
+  // ⚠ ET RIEN N'A ÉTÉ RETIRÉ. Les neuf unités sont toujours là, à leur place.
+  assert.equal(etat.armee.length, 9, 'des unités ont disparu toutes seules');
+  assert.equal(pauvre.vagues[0].filter((c) => c !== null).length, 9);
+});
+
+test('offense — aucun écran n\'appelle `purger` de lui-même', () => {
+  // La fonction existe dans les deux éditeurs depuis le lot 5, et elle doit
+  // rester à la main du joueur. Un appel automatique ferait disparaître sa
+  // composition sans qu'il sache laquelle est partie.
+  for (const nom of ['offense.js', 'chantier.js', 'session.js']) {
+    const source = readFileSync(join(RACINE, 'src', 'ui', nom), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!/\bpurger\s*\(/.test(source), `${nom} purge la composition tout seul`);
+  }
+  // Falsifiable : la fonction existe bien, sinon la garde ne garde rien.
+  const editeur = readFileSync(join(RACINE, 'src', 'ui', 'arsenal.js'), 'utf8');
+  assert.match(editeur, /export function purger\(/, 'purger a disparu de l\'Arsenal');
 });

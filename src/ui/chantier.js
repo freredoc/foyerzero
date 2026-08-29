@@ -33,7 +33,15 @@ import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie
 import {
   debitDuBatiment, productionParRessource, voisinsQualifiants, voisinsQualifiantsParCase,
 } from '../sim/disposition.js';
-import { niveauDesBatiments } from '../sim/niveau-de-base.js';
+import {
+  niveauDesBatiments, niveauDeLaDefense, niveauDeLArmee,
+} from '../sim/niveau-de-base.js';
+// ⚠ LE BUDGET N'EST PAS RECALCULÉ ICI. Sa formule vit dans les deux ÉDITEURS,
+// qui font foi dessus depuis le lot 5 ; l'écran la LIT au lieu d'en écrire une
+// troisième. Les deux fonctions portent le même nom court dans deux modules —
+// d'où le renommage à l'import, comme pour `poser`.
+import { budgetDuNiveau as budgetOffense } from './arsenal.js';
+import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
@@ -47,7 +55,12 @@ import {
   problemesDeLAmelioration, ameliorer,
   problemesDeLaDemolition, demolir,
   problemesDuDeplacement, deplacer,
+  pointsEngages, niveauDeCommandement,
+  poserEffectif, retirerEffectif, deplacerEffectif,
+  problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
 } from '../sim/state.js';
+import { DEFENSES, UNITES } from '../data/combat.js';
+import { rosterDefensif } from '../data/couts-militaires.js';
 
 // ---------------------------------------------------------------------------
 // Formatage — la seule couche qui a le droit de quitter les entiers du moteur
@@ -258,6 +271,61 @@ export const SIGLES = {
 };
 
 /**
+ * Le sigle de trois lettres porté par le jeton d'une pièce de garnison.
+ *
+ * ⚠ MÊME RAISON QUE POUR LES BÂTIMENTS, ET MÊME PIÈGE. « Mur de défense » et
+ * « Mirador » donneraient tous deux « MIR » ou « MUR » selon la troncature, et
+ * deux pièces qui portent le même sigle sur la grille sont deux pièces qu'on
+ * confond à l'œil. La table est donc écrite à la main, et un test asserte
+ * qu'elle couvre exactement le roster défensif et que les dix-sept sigles sont
+ * distincts — de ceux des bâtiments compris, les deux se dessinant sur la même
+ * grille, l'un au-dessus de l'autre.
+ *
+ * ⚠ CE N'EST PAS UNE VALEUR DE CALIBRAGE. Le nom qui fait foi reste
+ * `nom.joueur` de `data/combat.js`, et c'est lui qui s'affiche en toutes
+ * lettres dans le bandeau contextuel.
+ */
+export const SIGLES_DEFENSE = {
+  merlon: 'MUR',
+  ronce: 'BAR',
+  herse: 'HER',
+  casemate: 'MIT',
+  creneau: 'CAC',
+  batterie: 'DCA',
+  faucheuse: 'MIR',
+  mortier: 'ART',
+  harpon: 'SAM',
+  meute: 'FUS',
+  guetteur: 'VOL',
+  perceurs: 'GRE',
+  carapace: 'CUI',
+  ratisseur: 'ECL',
+  // ⚠ « CHS » ET NON « CHA » : le Chantier de construction porte déjà « CHA »,
+  // et les deux jetons se dessinent sur la même grille.
+  fendeur: 'CHS',
+  belier: 'PIO',
+  broyeur: 'PER',
+};
+
+/**
+ * Le nom joueur d'une pièce de garnison, quelle que soit la table d'où elle
+ * vient. Les ouvrages sont dans `DEFENSES`, les unités dans `UNITES`, et les
+ * deux portent la même forme `nom.joueur`.
+ *
+ * ⚠ `nom.joueur`, JAMAIS `nom.ouvrage` — le joueur emploie le vocabulaire d'une
+ * armée régulière, l'Ouvrage celui des outils et des bêtes. Les mélanger dans
+ * une chaîne affichée est interdit (CLAUDE.md §4).
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+export function nomDeLaPieceDeDefense(id) {
+  const ligne = DEFENSES[id] ?? UNITES[id];
+  if (ligne === undefined) throw new Error(`chantier : « ${id} » n'a pas de rôle en défense`);
+  return ligne.nom.joueur;
+}
+
+/**
  * La famille visuelle d'un bâtiment — ce qui décide de la couleur de son liseré.
  *
  * DÉDUITE DU RÔLE, jamais écrite bâtiment par bâtiment : une seconde liste des
@@ -322,16 +390,22 @@ export function navigationEntreBases(etat) {
 }
 
 /**
- * Les trois contextes du compteur, et lequel porte un vrai nombre.
+ * Les trois contextes du compteur, et où chacun va chercher son nombre.
  *
- * ⚠ `chiffre` DIT SI LA GRANDEUR EXISTE, pas si elle vaut zéro. Les deux
- * contextes à `false` ne sont pas « à zéro » : ils ne sont pas comptables, faute
- * d'état à compter.
+ * ⚠ `chiffre` DIT SI LA GRANDEUR EXISTE, pas si elle vaut zéro. Les trois
+ * valent `true` DEPUIS LE 28/08 : l'état porte enfin `garnison` et `armee`,
+ * donc les points engagés existent et se comptent. Ils valaient `false` tant
+ * qu'il n'y avait rien à compter — ce n'était pas « zéro », c'était
+ * « incomptable ». Ce lot fait basculer le champ, il ne le contourne pas.
+ *
+ * ⚠ `force` DIT DANS QUELLE LISTE COMPTER, `budget` COMMENT LA BORNER. Les
+ * deux fonctions de budget viennent des éditeurs, qui font foi : le compteur
+ * ne recalcule rien.
  */
 export const CONTEXTES = {
-  batiments: { libelle: 'Emplac.', chiffre: true },
-  defense: { libelle: 'Pts déf.', chiffre: false },
-  offense: { libelle: 'Pts off.', chiffre: false },
+  batiments: { libelle: 'Emplac.', chiffre: true, force: null, budget: null },
+  defense: { libelle: 'Pts déf.', chiffre: true, force: 'garnison', budget: budgetDefense },
+  offense: { libelle: 'Pts off.', chiffre: true, force: 'armee', budget: budgetOffense },
 };
 
 /**
@@ -340,11 +414,16 @@ export const CONTEXTES = {
  * ⚠ ARBITRÉ LE 28/08 : « quand on passe en défense, le nombre d'emplacement
  * change pour celui des points de défense. Idem pour offense. »
  *
- * ⚠ ET DEUX DES TROIS VALENT « — », PARCE QUE L'ÉTAT NE LES PORTE PAS.
- * `sim/state.js` ne connaît ni garnison ni armée d'assaut : `ui/defense.js` et
- * `ui/arsenal.js` sont des ÉDITEURS dont rien n'est sauvegardé. Le LIBELLÉ
- * change, comme demandé ; la valeur reste un tiret, parce qu'inventer un
- * chiffre serait pire que de dire qu'il n'y en a pas.
+ * ⚠ LES TROIS PORTENT UN NOMBRE DEPUIS LE 28/08. Les deux derniers affichaient
+ * « — » tant que `sim/state.js` ne connaissait ni garnison ni armée ; il les
+ * porte maintenant, et le compteur les compte.
+ *
+ * ⚠⚠ C'EST LA CAPACITÉ QUI DISPARAÎT QUAND IL N'Y A PAS DE QG, PAS LA VALEUR.
+ * Zéro point engagé est un fait vrai et affichable même sans Centre de
+ * commandement ; c'est le BUDGET qui n'existe pas, faute de bâtiment d'où le
+ * lire. Afficher « 0 / 0 » ferait croire à un budget nul — donc à un plafond
+ * atteint — là où il n'y a pas de plafond du tout, seulement rien pour en
+ * fixer un. Même distinction que `null` contre zéro dans `niveauDeCommandement`.
  *
  * @param {object} etat
  * @param {'batiments'|'defense'|'offense'} contexte
@@ -353,15 +432,28 @@ export const CONTEXTES = {
 export function compteurDeContexte(etat, contexte) {
   const def = CONTEXTES[contexte];
   if (def === undefined) throw new RangeError(`chantier : contexte « ${contexte} » inconnu`);
-  if (!def.chiffre) {
-    return { libelle: def.libelle, valeur: NIVEAU_ABSENT, capacite: '', sature: false };
+
+  if (def.force === null) {
+    const { poses, ouverts } = resumeDeLaBase(etat).emplacements;
+    return {
+      libelle: def.libelle,
+      valeur: formaterEntier(poses),
+      capacite: `/ ${formaterEntier(ouverts)}`,
+      sature: poses >= ouverts,
+    };
   }
-  const { poses, ouverts } = resumeDeLaBase(etat).emplacements;
+
+  const engages = pointsEngages(etat, def.force);
+  const niveau = niveauDeCommandement(etat, def.force);
+  if (niveau === null) {
+    return { libelle: def.libelle, valeur: formaterEntier(engages), capacite: '', sature: false };
+  }
+  const budget = def.budget(niveau);
   return {
     libelle: def.libelle,
-    valeur: formaterEntier(poses),
-    capacite: `/ ${formaterEntier(ouverts)}`,
-    sature: poses >= ouverts,
+    valeur: formaterEntier(engages),
+    capacite: `/ ${formaterEntier(budget)}`,
+    sature: engages >= budget,
   };
 }
 
@@ -436,7 +528,11 @@ export const LIBELLES_RESSOURCE = {
  * }}
  */
 export function resumeDeLaBase(etat) {
-  if (!etat || !Array.isArray(etat.disposition)) {
+  // ⚠ LES TROIS LISTES SONT EXIGÉES, PAS SEULEMENT LA PREMIÈRE. Depuis que les
+  // niveaux de défense et d'armée sont réels, un état amputé de `garnison`
+  // rendrait un `TypeError` venu du fond de `sim/`, loin de l'appelant fautif.
+  if (!etat || !Array.isArray(etat.disposition)
+      || !Array.isArray(etat.garnison) || !Array.isArray(etat.armee)) {
     throw new TypeError('chantier : état de jeu absent ou malformé');
   }
   const capacites = capacitesMilli(etat.disposition);
@@ -468,13 +564,16 @@ export function resumeDeLaBase(etat) {
       poses: etat.disposition.length,
       ouverts: emplacementsDuNiveau(chantier.niveau),
     },
-    // ⚠ DEUX DES TROIS NIVEAUX SONT `null`, ET C'EST DÉLIBÉRÉ. L'état du joueur
-    // ne porte ni garnison ni armée d'assaut : `ui/defense.js` et
-    // `ui/arsenal.js` sont des ÉDITEURS, et rien de ce qu'ils produisent n'est
-    // sauvegardé. Inventer une moyenne sur des unités que l'état ne porte pas
-    // afficherait un chiffre faux ; « — » dit ce qui est vrai, c'est-à-dire
-    // qu'il n'y a rien à moyenner.
-    niveaux: { batiments: niveauDesBatiments(etat.disposition), defense: null, assaut: null },
+    // ⚠ LES TROIS NIVEAUX SONT RÉELS DEPUIS LE 28/08. Les deux derniers valaient
+    // `null` en dur tant que l'état ne portait ni garnison ni armée ; ils sont
+    // maintenant des MOYENNES, calculées par le même module et la même règle
+    // que le premier. Ils restent `null` quand rien n'est posé — ce qui est le
+    // cas de toute base neuve — et `formaterNiveau` en fait « — ».
+    niveaux: {
+      batiments: niveauDesBatiments(etat.disposition),
+      defense: niveauDeLaDefense(etat.garnison),
+      assaut: niveauDeLArmee(etat.armee),
+    },
   };
 }
 
@@ -1127,6 +1226,60 @@ export function posablesDeLaBase(etat) {
 }
 
 /**
+ * Ce que le joueur peut poser en garnison, et ce qui l'en empêche.
+ *
+ * ⚠ LE ROSTER SE LIT, IL NE SE RECOPIE PAS. `rosterDefensif` de
+ * `data/couts-militaires.js` dit qui a un rôle en défense — les neuf ouvrages,
+ * plus les unités dont `defense.present` vaut `true` — et un test croise déjà
+ * cette lecture avec celle de `ui/defense.js`. En écrire une troisième ici
+ * ferait diverger la palette du moteur au premier changement de roster.
+ *
+ * ⚠ UNE PIÈCE VERROUILLÉE RESTE DANS LA PALETTE, GRISÉE — même arbitrage que
+ * pour les bâtiments uniques du Chantier, le 28/08 : « griser le bouton, pas le
+ * faire disparaître ». C'est la différence avec la palette de l'écran Offense,
+ * où le filtrage RETIRE : là-bas la palette est seule sur son écran et
+ * s'allonge en début de partie ; ici elle partage la barre du bas avec celle
+ * des bâtiments, et une palette qui change de longueur déplace les vignettes
+ * sous le doigt entre deux gestes.
+ *
+ * @param {object} etat
+ * @returns {Array<{id, nom, sigle, points, verrouille, apparition}>}
+ */
+export function posablesDeLaDefense(etat) {
+  const niveau = niveauDeCommandement(etat, 'garnison');
+  return rosterDefensif().map((id) => {
+    const ligne = DEFENSES[id] ?? UNITES[id];
+    return {
+      id,
+      nom: ligne.nom.joueur,
+      sigle: SIGLES_DEFENSE[id],
+      points: ligne.points,
+      apparition: ligne.apparition,
+      // Pas de QG de défense : rien n'est posable, et la palette entière est
+      // grise. Ce n'est pas un niveau zéro, c'est l'absence de niveau.
+      verrouille: niveau === null || ligne.apparition > niveau,
+    };
+  });
+}
+
+/**
+ * Ce que le bandeau contextuel dit d'une pièce de garnison sélectionnée.
+ * @param {object} etat
+ * @param {number} index indice dans `etat.garnison`
+ */
+export function detailDeLaDefense(etat, index) {
+  const piece = etat.garnison[index];
+  if (piece === undefined) throw new RangeError(`chantier : indice ${index} hors de la garnison`);
+  const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
+  return {
+    nom: ligne.nom.joueur,
+    niveau: piece.niveau,
+    detail: `Niv. ${piece.niveau} · ${formaterEntier(ligne.points)} pts`,
+  };
+}
+
+/**
+ * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ./**
  * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ.
  *
  * Jumelle de `casesPosables`, et pour les mêmes raisons : on interroge
@@ -1189,7 +1342,169 @@ export function casesPosables(etat, id) {
   return cases;
 }
 
+// ---------------------------------------------------------------------------
+// Les deux terrains éditables de la grille — UNE table, pas deux écrans
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LA BANDE DÉFENSE EST ÉDITABLE DEPUIS LE 28/08, ET ELLE PARTAGE LE GESTE DU
+// CHANTIER. Elle était en lecture seule faute d'état à écrire ; `etat.garnison`
+// existe depuis le lot GARNISON-ET-ARMÉE. Ce qui suit est la SEULE différence
+// entre les deux bandes : d'où viennent les pièces, quel roster les propose, et
+// quelles fonctions du moteur on interroge. Tout le reste — les deux touchers,
+// le fantôme, la ligne de mode, le désarmement, le repeint — est écrit une fois
+// et lit cette table.
+//
+// ⚠ C'EST EXACTEMENT CE QUE LE BRIEF INTERDIT DE RECOPIER. Une seconde
+// implémentation du geste de pose, écrite pour la défense, aurait divergé de la
+// première au premier ajustement — et les deux vivent dans le même écran, sous
+// le même doigt. Un test refuse qu'elle apparaisse.
+//
+// ⚠ LA BANDE « DÉPLOIEMENT » N'EN EST PAS. Les rangées 1–2 sont l'endroit où
+// les vagues PARAISSENT pendant un combat, pas celui où on les compose — c'est
+// la faute du bouton « Assaut » du lot ÉCRAN-CHANTIER, et elle ne se refait pas.
+// La composition d'assaut a son écran.
+
+// ⚠ LES DEUX GESTES DE LA GARNISON SONT NOMMÉS UNE FOIS, PUIS RÉFÉRENCÉS DEUX
+// FOIS. La table les emploie à deux endroits — le geste direct et l'action
+// armée — et les écrire deux fois aurait fait, dans le même objet, deux chemins
+// vers la même fonction. C'est petit, et c'est exactement la forme que prend une
+// divergence quand elle commence.
+const deplacerLaGarnison = (etat, index, rangee, colonne) => deplacerEffectif(
+  etat, 'garnison', index, { rangee, colonne },
+);
+const refusDuDeplacementEnGarnison = (etat, index, rangee, colonne) => (
+  problemesDuDeplacementDEffectif(etat, 'garnison', index, { rangee, colonne })
+);
+
+export const TERRAINS = {
+  batiments: {
+    bande: GRILLE.bandes.batiments,
+    // `null` = les bâtiments de la base, qui ne sont pas une « force ».
+    force: null,
+    pieces: (etat) => etat.disposition,
+    posables: (etat) => posablesDeLaBase(etat).map((p) => ({
+      ...p, sigle: SIGLES[p.id], verrouille: p.dejaPose,
+    })),
+    nomDe: (id) => BASE_BATIMENTS[id].nom.joueur,
+    sigleDe: (id) => SIGLES[id],
+    familleDe: familleDuBatiment,
+    problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(etat, id, rangee, colonne),
+    poser: (etat, id, rangee, colonne) => poserBatiment(etat, id, rangee, colonne),
+    problemesDuDeplacement: (etat, index, rangee, colonne) => (
+      problemesDuDeplacement(etat, index, rangee, colonne)
+    ),
+    deplacer: (etat, index, rangee, colonne) => deplacer(etat, index, rangee, colonne),
+    detail: (etat, index) => detailDuBatiment(etat, index),
+    // ⚠ LE TERRAIN DES BÂTIMENTS RÉUTILISE `ACTIONS` TELLE QUELLE, il n'en
+    // recopie pas le contenu : c'est la même table, sous un second nom. La
+    // dupliquer ferait deux vérités sur ce qu'améliorer veut dire.
+    actions: ACTIONS,
+    // Le panneau de détail chiffre production, capacité et voisinage : il n'a
+    // de sens que pour un bâtiment de la base.
+    panneau: true,
+  },
+  defense: {
+    bande: GRILLE.bandes.defense,
+    force: 'garnison',
+    pieces: (etat) => etat.garnison,
+    posables: posablesDeLaDefense,
+    nomDe: nomDeLaPieceDeDefense,
+    sigleDe: (id) => SIGLES_DEFENSE[id],
+    // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
+    // décide de la couleur du liseré, et la fiche de style n'a pas de teinte
+    // libre pour distinguer un mur d'une tourelle. Le sigle, lui, les distingue
+    // déjà. Ouvrir une teinte serait une décision de style, pas de code.
+    familleDe: () => 'mil',
+    problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPoseDEffectif(
+      etat, 'garnison', { id, rangee, colonne, niveau: 1 },
+    ),
+    poser: (etat, id, rangee, colonne) => poserEffectif(
+      etat, 'garnison', { id, rangee, colonne, niveau: 1 },
+    ),
+    problemesDuDeplacement: refusDuDeplacementEnGarnison,
+    deplacer: deplacerLaGarnison,
+    detail: (etat, index) => detailDeLaDefense(etat, index),
+    // ⚠ DEUX DES QUATRE ACTIONS N'ONT PAS DE MOTEUR EN DÉFENSE, ET ELLES LE
+    // DISENT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton
+    // au lieu de le rendre inerte — « un indice n'est pas une interdiction »
+    // (CLAUDE.md §4).
+    //   `ameliorer` — le COÛT existe depuis l'arbitrage du 28/08
+    //     (`data/couts-militaires.js`), le moteur non : rien dans `sim/` ne
+    //     monte une pièce de garnison d'un niveau, et ce que gagne une unité
+    //     améliorée n'est pas arbitré. L'inventer serait trancher seul.
+    //   `reparer`  — même situation que pour les bâtiments : une table de
+    //     calibrage, aucune fonction. Les dégâts, eux, existent enfin
+    //     (`degatsMilli`), donc ce trou-là est le prochain à se combler.
+    actions: {
+      ameliorer: null,
+      reparer: null,
+      demolir: {
+        problemes: () => [],
+        agir: (etat, index) => retirerEffectif(etat, 'garnison', index),
+      },
+      deplacer: { cible: true, problemes: refusDuDeplacementEnGarnison, agir: deplacerLaGarnison },
+    },
+    panneau: false,
+  },
+};
+
 /**
+ * Ce qu'une action répond quand le terrain qu'on édite n'a pas de moteur pour
+ * elle. Le bouton reste vif et il PARLE — un bouton mort n'apprend rien.
+ * @param {string} libelle
+ * @returns {string}
+ */
+export function actionSansMoteur(libelle) {
+  return `${libelle} n'existe pas encore pour la défense :`
+    + ' le moteur ne le fait pas, et l\'inventer serait trancher seul.';
+}
+
+/**
+ * Les cases d'un terrain où cette pièce peut se poser.
+ *
+ * ⚠ ELLES SE CALCULENT, ELLES NE SE DEVINENT PAS — et c'est la même règle des
+ * deux côtés. On interroge le moteur case par case au lieu de réimplémenter les
+ * règles ici. On ne balaie QUE la bande du terrain : ailleurs la réponse serait
+ * « hors de la bande » quatre-vingt-dix fois.
+ *
+ * @param {object} etat
+ * @param {string} terrain clé de `TERRAINS`
+ * @param {string} id
+ * @returns {Array<{rangee: number, colonne: number}>}
+ */
+export function casesPosablesDuTerrain(etat, terrain, id) {
+  const { bande, problemesDeLaPose: refus } = TERRAINS[terrain];
+  const cases = [];
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+      if (refus(etat, id, rangee, colonne).length === 0) cases.push({ rangee, colonne });
+    }
+  }
+  return cases;
+}
+
+/**
+ * Les cases d'un terrain où la pièce d'indice donné peut être déplacée.
+ * Sa propre case en fait partie : rester sur place est légal.
+ *
+ * @param {object} etat
+ * @param {string} terrain clé de `TERRAINS`
+ * @param {number} index
+ * @returns {Array<{rangee: number, colonne: number}>}
+ */
+export function casesDeplacablesDuTerrain(etat, terrain, index) {
+  const { bande, problemesDuDeplacement: refus } = TERRAINS[terrain];
+  const cases = [];
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+      if (refus(etat, index, rangee, colonne).length === 0) cases.push({ rangee, colonne });
+    }
+  }
+  return cases;
+}
+
+/**
+ * Ce qu'on dit au joueur quand une pose est refusée./**
  * Ce qu'on dit au joueur quand une pose est refusée.
  *
  * ⚠ LES MESSAGES DU MOTEUR SONT REPRIS TELS QUELS, jamais reformulés. Ils sont
@@ -1231,7 +1546,14 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
 
-  let selection = null; // indice dans la disposition, ou null
+  let selection = null; // indice dans la liste du terrain sélectionné, ou null
+  // ⚠ UN INDICE SEUL NE SUFFIT PLUS DEPUIS QUE LA BANDE DÉFENSE EST ÉDITABLE.
+  // `selection` indexe `disposition` OU `garnison` ; sans le terrain à côté,
+  // l'indice 2 désignerait le troisième bâtiment aussi bien que le troisième
+  // mur, et l'écran afficherait l'un en croyant montrer l'autre. Même
+  // raisonnement pour la pièce en main pendant un déplacement.
+  let terrainSelection = 'batiments';
+  let terrainDeplacement = 'batiments';
   let etatCourant = null;
   // Le bâtiment que le joueur s'apprête à poser, ou null. C'est le seul mode
   // de l'écran : quand il vaut null, toucher une case SÉLECTIONNE ; sinon,
@@ -1496,8 +1818,40 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   }
 
   function marquerBandeActive(cleBande) {
+    const avant = terrainCourant();
     bandeCourante = cleBande;
     marquerBoutonDuBas();
+
+    // ⚠⚠ LA PALETTE SUIT LE TERRAIN, ET SANS CETTE LIGNE ELLE NE LE SUIVAIT
+    // PAS. `bandeCourante` bouge à chaque évènement de défilement ; la palette,
+    // elle, n'était repeinte que par `peindre`, `choisirPosable` et `armer`.
+    // Le joueur serait donc descendu sur la bande Défense avec les vignettes
+    // des onze bâtiments sous les yeux, et le premier toucher aurait posé —
+    // ou plutôt refusé de poser — un collecteur dans sa ligne de défense.
+    //
+    // ⚠ ET ELLE NE SE REPEINT QUE QUAND LE TERRAIN CHANGE, pas à chaque pixel :
+    // reconstruire dix-sept boutons par évènement de défilement les ferait
+    // clignoter sous le doigt.
+    if (etatCourant === null || terrainCourant() === avant) return;
+
+    // Changer de terrain défait le mode en cours. La vignette choisie
+    // appartenait à l'autre palette et la pièce en main à l'autre liste : les
+    // garder ferait viser, au toucher suivant, quelque chose que le joueur ne
+    // regarde plus. L'ACTION armée, elle, survit — elle s'applique à ce qu'on
+    // touche, et `executerAction` reçoit le terrain de la case.
+    posableChoisi = null;
+    poseEnAttente = null;
+    deplacementEnCours = null;
+    // ⚠ ON REMET LE MOT DU MODE, ON NE L'EFFACE PAS. Un `ligneDeMode('')` tenait
+    // ici : l'action armée SURVIT au changement de bande, si bien que la ligne
+    // se vidait pendant que « Démolir » restait actif — et le bâtiment suivant
+    // qu'on touchait disparaissait sans un mot. C'est exactement le défaut
+    // qu'Ethan a relevé le 28/08 sur les boutons d'action, et il serait revenu
+    // par la porte du défilement.
+    ligneDeMode(actionArmee === null ? '' : MESSAGES_MODE[actionArmee]);
+    peindrePalette(etatCourant);
+    marquerCasesLegales();
+    peindreApercu();
   }
 
   /**
@@ -1513,6 +1867,32 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       bouton.classList.toggle('active', c === actif);
     }
     majCompteur();
+  }
+
+  /**
+   * Le terrain que le joueur édite en ce moment : la bande où il se trouve, si
+   * elle est éditable.
+   *
+   * ⚠ LA BANDE « DÉPLOIEMENT » RETOMBE SUR LES BÂTIMENTS. Elle n'a pas de
+   * palette à elle — les rangées 1–2 sont l'endroit où les vagues PARAISSENT,
+   * pas celui où on les compose — et lever pour un simple défilement serait
+   * hors de proportion.
+   */
+  function terrainCourant() {
+    return TERRAINS[bandeCourante] === undefined ? 'batiments' : bandeCourante;
+  }
+
+  /**
+   * Le terrain auquel appartient une rangée touchée.
+   *
+   * ⚠ IL NE SE DEVINE PAS AVEC DES NOMBRES. `bandeDeLaRangee` lit `GRILLE`, et
+   * c'est la seule table qui dise où commence et où finit chaque bande. Écrire
+   * « rangee <= 10 » ici marcherait aujourd'hui et mentirait au jour où la
+   * grille change de proportions.
+   */
+  function terrainDeLaRangee(rangee) {
+    const bande = bandeDeLaRangee(rangee);
+    return TERRAINS[bande] === undefined ? 'batiments' : bande;
   }
 
   /** Le compteur du bandeau des ressources, dans le contexte du moment. */
@@ -1548,7 +1928,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
 
   function peindrePalette(etat) {
     bandeauPalette.textContent = '';
-    const posables = posablesDeLaBase(etat);
+    // ⚠ LA PALETTE SUIT LE TERRAIN, ET C'EST LA MÊME FONCTION QUI LA DESSINE.
+    // Sur la bande Défense elle propose les dix-sept pièces de garnison, sur
+    // celle du Chantier les onze bâtiments. Une seconde fonction de dessin
+    // aurait divergé au premier ajustement de vignette.
+    const terrain = TERRAINS[terrainCourant()];
+    const posables = terrain.posables(etat);
     // ⚠ AUTANT DE COLONNES QU'IL EN FAUT POUR DEUX RANGÉES, et le nombre se
     // CALCULE. Ethan : « faire rentrer dans l'ui tous les bâtiments du bas,
     // c'est-à-dire les deux rangées de boutons ». La palette avait des colonnes
@@ -1562,19 +1947,20 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // quoi l'écran resterait en mode pose avec zéro case légale et sans rien
     // dire. Le test porte donc sur `dejaPose`, plus sur l'absence.
     if (posableChoisi !== null
-      && !posables.some((p) => p.id === posableChoisi && !p.dejaPose)) {
+      && !posables.some((p) => p.id === posableChoisi && !p.verrouille)) {
       posableChoisi = null;
     }
     for (const posable of posables) {
       const emplacement = doc.createElement('button');
       emplacement.type = 'button';
-      emplacement.className = `posable ${posable.famille}`;
+      emplacement.className = `posable ${terrain.familleDe(posable.id)}`;
       emplacement.classList.toggle('actif', posable.id === posableChoisi);
-      emplacement.classList.toggle('pose', posable.dejaPose);
-      emplacement.title = posable.dejaPose
-        ? `${posable.nom} — déjà posé, et il est unique.`
-        : `${posable.nom} — poser au niveau 1 est gratuit ; la première `
-          + `amélioration coûtera ${posable.coutPremiereAmelioration}.`;
+      // ⚠ LA CLASSE RESTE `pose`, POUR LES DEUX TERRAINS. Elle peint le grisé,
+      // et le grisé dit la même chose des deux côtés : « celui-là, tu ne peux
+      // pas le poser maintenant ». Un unique déjà posé au Chantier, une pièce
+      // verrouillée par le niveau du QG en défense.
+      emplacement.classList.toggle('pose', posable.verrouille);
+      emplacement.title = titreDeLaVignette(terrain, posable);
       const vignette = doc.createElement('i');
       const nom = doc.createElement('b');
       nom.textContent = posable.nom;
@@ -1582,6 +1968,79 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       emplacement.addEventListener('click', () => choisirPosable(posable.id));
       bandeauPalette.appendChild(emplacement);
     }
+  }
+
+  /**
+   * Pourquoi une pièce de garnison est verrouillée. Le message NOMME le niveau
+   * qui l'ouvrirait, ou dit qu'il n'y a pas de QG du tout — « un indice n'est
+   * pas une interdiction » : une vignette grise qui ne répond rien n'apprend
+   * rien au joueur.
+   */
+  function messageVerrouille(vignette) {
+    const niveau = niveauDeCommandement(etatCourant, 'garnison');
+    return niveau === null
+      ? `${vignette.nom} demande un QG de défense : aucun n'est posé.`
+      : `${vignette.nom} apparaît au niveau ${vignette.apparition} ;`
+        + ` le QG de défense est au niveau ${niveau}.`;
+  }
+
+  /**
+   * Ce qui plafonne le terrain courant, ou `null` s'il reste de la place.
+   *
+   * ⚠ DEUX PLAFONDS SANS RAPPORT, ET IL FAUT DIRE LEQUEL MORD. Le Chantier
+   * borne le NOMBRE de bâtiments par ses emplacements ; la défense borne les
+   * POINTS d'armée par le budget du QG. Dire « c'est plein » sans dire de quoi
+   * enverrait le joueur améliorer le mauvais bâtiment.
+   *
+   * ⚠ ET C'EST UNE LIGNE DE MODE, PAS UN TOAST — corrigé le 28/08. Elle décrit
+   * un état qui dure aussi longtemps que le mode de pose ; en toast, elle
+   * s'effaçait au bout de quatre secondes et laissait reparaître « touchez une
+   * case libre » alors qu'il n'y en a aucune.
+   */
+  function messageDuPlafond(terrain) {
+    if (terrain.force === null) {
+      const { poses, ouverts } = resumeDeLaBase(etatCourant).emplacements;
+      return poses >= ouverts
+        ? `${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
+          + 'construction en ouvrira d\'autres.'
+        : null;
+    }
+    const niveau = niveauDeCommandement(etatCourant, terrain.force);
+    if (niveau === null) return 'Aucun QG de défense posé : il n\'y a pas de budget de garnison.';
+    const budget = budgetDefense(niveau);
+    const engages = pointsEngages(etatCourant, terrain.force);
+    return engages >= budget
+      ? `${formaterEntier(engages)} points engagés pour un budget de `
+        + `${formaterEntier(budget)} : améliorer le QG de défense en ouvrira d'autres.`
+      : null;
+  }
+
+  /**
+   * Ce que le titre d'une vignette annonce, selon le terrain.
+   *
+   * ⚠ POSER NE COÛTE RIEN DES DEUX CÔTÉS, et les deux le disent. Le niveau 1
+   * est gratuit pour les onze bâtiments (`premierNiveauPayant` vaut 2) et Ethan
+   * l'a redit le 28/08 pour les unités : « une unité posée en def ou off est
+   * niveau 1 et gratuit ». Ce que le titre porte, c'est ce que coûtera la
+   * SUITE — un nombre pour un bâtiment, des points d'armée pour une pièce de
+   * garnison, qui se paient sur le budget et non sur les stocks.
+   */
+  function titreDeLaVignette(terrain, posable) {
+    // ⚠ LE TERRAIN EST PASSÉ, IL NE SE DEVINE PAS. Une première écriture
+    // distinguait les deux cas sur `posable.points === undefined` — c'est-à-dire
+    // sur la FORME de l'objet, pas sur ce qu'il est. Le jour où une vignette de
+    // bâtiment porterait des points pour une raison sans rapport, elle aurait
+    // basculé de titre toute seule.
+    if (posable.verrouille) {
+      return terrain.force === null
+        ? `${posable.nom} — déjà posé, et il est unique.`
+        : `${posable.nom} — verrouillé : il apparaît au niveau ${posable.apparition}.`;
+    }
+    return terrain.force === null
+      ? `${posable.nom} — poser au niveau 1 est gratuit ; la première `
+        + `amélioration coûtera ${posable.coutPremiereAmelioration}.`
+      : `${posable.nom} — ${formaterEntier(posable.points)} points d'armée, `
+        + 'poser au niveau 1 est gratuit.';
   }
 
   /**
@@ -1594,9 +2053,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // une interdiction » (CLAUDE.md §4) : le joueur qui touche un unique déjà
     // posé a le droit de savoir POURQUOI il ne se pose pas, plutôt que d'appuyer
     // sur un bouton qui ne fait rien.
-    const vignette = posablesDeLaBase(etatCourant).find((p) => p.id === id);
-    if (vignette !== undefined && vignette.dejaPose) {
-      toast(`${vignette.nom} est unique, et il est déjà posé.`);
+    const terrain = TERRAINS[terrainCourant()];
+    const vignette = terrain.posables(etatCourant).find((p) => p.id === id);
+    if (vignette !== undefined && vignette.verrouille) {
+      toast(terrain.force === null
+        ? `${vignette.nom} est unique, et il est déjà posé.`
+        : messageVerrouille(vignette));
       return;
     }
     // Choisir un posable désarme l'action : un seul mode à la fois.
@@ -1628,11 +2090,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // le mode de pose : un toast s'effaçait au bout de quatre secondes et
     // laissait reparaître « touchez une case libre » alors qu'il n'y en a
     // aucune. Le message qui reste est celui qui est vrai.
-    const { poses, ouverts } = resumeDeLaBase(etatCourant).emplacements;
-    ligneDeMode(poses >= ouverts
-      ? `${poses} bâtiments pour ${ouverts} emplacements : améliorer le Chantier de `
-        + 'construction en ouvrira d\'autres.'
-      : messageDePose(BASE_BATIMENTS[posableChoisi].nom.joueur));
+    ligneDeMode(messageDuPlafond(terrain) ?? messageDePose(terrain.nomDe(posableChoisi)));
     peindrePalette(etatCourant);
     marquerCasesLegales();
     peindreApercu();
@@ -1670,33 +2128,43 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     let disposition = null;
     let index = -1;
     let fantome = null;
+    // ⚠ LES FLÈCHES DE VOISINAGE N'EXISTENT QUE POUR LES BÂTIMENTS. Le bonus de
+    // proximité est une grandeur de `sim/disposition.js`, qui ne connaît que la
+    // base : une pièce de garnison n'en porte aucun. Le FANTÔME, lui, se
+    // dessine des deux côtés — c'est lui qui fait les deux touchers.
+    let terrainDuFantome = terrainCourant();
 
     if (posableChoisi !== null && poseEnAttente !== null) {
-      disposition = [...etatCourant.disposition,
-        { id: posableChoisi, ...poseEnAttente, niveau: 1 }];
-      index = disposition.length - 1;
       fantome = { ...poseEnAttente, id: posableChoisi };
+      if (terrainDuFantome === 'batiments') {
+        disposition = [...etatCourant.disposition,
+          { id: posableChoisi, ...poseEnAttente, niveau: 1 }];
+        index = disposition.length - 1;
+      }
     } else if (deplacementEnCours !== null) {
-      disposition = etatCourant.disposition;
-      index = deplacementEnCours;
-    } else if (panneauOuvert && selection !== null) {
+      terrainDuFantome = terrainDeplacement;
+      if (terrainDeplacement === 'batiments') {
+        disposition = etatCourant.disposition;
+        index = deplacementEnCours;
+      }
+    } else if (panneauOuvert && selection !== null && terrainSelection === 'batiments') {
       // ⚠ ETHAN : « faire apparaître les flèches du bâtiment concerné quand on
       // ouvre l'onglet bâtiment ». Le panneau CHIFFRE le voisinage ; les
       // flèches le montrent sur la grille, et les deux viennent du même calcul.
       disposition = etatCourant.disposition;
       index = selection;
     }
-    if (disposition === null) return;
-
     if (fantome !== null) {
       const case_ = cellules.get(cle(fantome.rangee, fantome.colonne));
       if (case_ !== undefined) {
         const marque = doc.createElement('div');
         marque.className = 'fantome';
-        marque.textContent = SIGLES[fantome.id];
+        marque.textContent = TERRAINS[terrainDuFantome].sigleDe(fantome.id);
         case_.appendChild(marque);
       }
     }
+
+    if (disposition === null) return;
 
     for (const f of flechesDeVoisinage(disposition, etatCourant.champs, index)) {
       const case_ = cellules.get(cle(f.rangee, f.colonne));
@@ -1717,14 +2185,27 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // voir où celui-là peut aller : la règle du collecteur ci-dessous ne
     // s'applique pas, elle sert à ne pas cercler soixante cases identiques.
     if (deplacementEnCours !== null) {
-      for (const { rangee, colonne } of casesDeplacables(etatCourant, deplacementEnCours)) {
+      const cases = casesDeplacablesDuTerrain(etatCourant, terrainDeplacement, deplacementEnCours);
+      for (const { rangee, colonne } of cases) {
         cellules.get(cle(rangee, colonne))?.classList.add('legale');
       }
       return;
     }
     if (posableChoisi === null) return;
+    // ⚠ ON NE CERCLE QUE QUAND ÇA APPREND QUELQUE CHOSE, ET LA RÈGLE VAUT DES
+    // DEUX CÔTÉS. Seul le Collecteur a un terrain qui décide pour lui
+    // (`CHAMPS.posableDessus` ne contient que lui) ; pour tous les autres,
+    // toute case libre de la bande convient, et en cercler soixante sur
+    // soixante-douze n'apprend rien. Une pièce de garnison est dans ce cas :
+    // sa bande est vide au départ, donc le cerclage y désignerait les
+    // soixante-douze cases à la fois.
+    //
+    // ⚠ C'EST L'AFFICHAGE QUI SE TAIT, PAS LA RÈGLE. Le moteur est interrogé
+    // exactement comme avant au moment de poser, et une case illégale dit
+    // toujours pourquoi.
     if (!CHAMPS.posableDessus.includes(posableChoisi)) return;
-    for (const { rangee, colonne } of casesPosables(etatCourant, posableChoisi)) {
+    const terrain = terrainCourant();
+    for (const { rangee, colonne } of casesPosablesDuTerrain(etatCourant, terrain, posableChoisi)) {
       cellules.get(cle(rangee, colonne))?.classList.add('legale');
     }
   }
@@ -1741,12 +2222,28 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       fermerPanneau();
       return;
     }
-    const b = etatCourant.disposition[index];
-    const detail = detailDuBatiment(etatCourant, index);
+    const terrain = TERRAINS[terrainSelection];
+    const b = terrain.pieces(etatCourant)[index];
+    // ⚠ UN INDICE SURVIT MAL À UN CHANGEMENT DE TERRAIN. Il vaut mieux ne rien
+    // sélectionner que de désigner la troisième pièce de la mauvaise liste.
+    if (b === undefined) {
+      selection = null;
+      selectionner(null);
+      return;
+    }
+    const detail = terrain.detail(etatCourant, index);
     cellules.get(cle(b.rangee, b.colonne))?.classList.add('choisie');
     $('chantier-selection-nom').textContent = detail.nom;
     $('chantier-selection-detail').textContent = detail.detail;
-    $('chantier-ameliorer-cible').textContent = `vers niv. ${b.niveau + 1}`;
+    // ⚠ « VERS NIV. N+1 » NE S'ÉCRIT QUE LÀ OÙ AMÉLIORER EXISTE. Sur une pièce
+    // de garnison, le moteur ne monte rien : annoncer un niveau visé promettrait
+    // un geste que le bouton refuse ensuite.
+    $('chantier-ameliorer-cible').textContent = terrain.actions.ameliorer === null
+      ? '' : `vers niv. ${b.niveau + 1}`;
+    // ⚠ ET LE PANNEAU SE FERME SI LE TERRAIN N'EN A PAS. Sans ça, un panneau
+    // resté ouvert sur un bâtiment se repeindrait avec un indice qui pointe
+    // maintenant dans la garnison : il chiffrerait la production d'un mur.
+    if (!terrain.panneau) fermerPanneau();
     // Le panneau suit la sélection quand il est ouvert ; il ne s'ouvre pas de
     // lui-même — voir `ouvrirPanneau`.
     peindrePanneau();
@@ -1807,9 +2304,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
    * français et déjà chiffrés — « il manque 14 de quartz ». Les reformuler ici
    * créerait une seconde formulation qui finirait par dire autre chose.
    */
-  function executerAction(index) {
+  function executerAction(index, terrainCible) {
     const nom = actionArmee;
-    const action = ACTIONS[nom];
+    // ⚠ L'ACTION VIENT DU TERRAIN, PAS D'UNE TABLE UNIQUE. Améliorer un
+    // bâtiment et retirer un mur ne passent pas par les mêmes fonctions du
+    // moteur ; `TERRAINS[x].actions` dit lesquelles, et le terrain des
+    // bâtiments y met `ACTIONS` telle quelle, sans la recopier.
+    const action = TERRAINS[terrainCible].actions[nom];
     // Quoi qu'il arrive, le mode se désarme : réussite comme refus. Sa ligne
     // tombe avec lui — elle décrivait ce que le prochain toucher ferait, et il
     // vient d'avoir lieu.
@@ -1817,6 +2318,14 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     ligneDeMode('');
     marquerBoutonsAction();
 
+    // ⚠ `null` N'EST PAS `undefined` ICI, ET LA DISTINCTION PORTE UN SENS.
+    // `undefined` = l'action n'a de moteur nulle part (Réparer, qui n'existe
+    // pour personne) ; `null` = ce TERRAIN-là n'en a pas, alors qu'un autre
+    // pourrait. Les deux répondent, aucun des deux ne reste muet.
+    if (action === null) {
+      toast(actionSansMoteur(ACTIONS[nom].libelle));
+      return;
+    }
     if (action.problemes === undefined) {
       // Réparer : le chemin existe, il n'a rien à réparer.
       toast(PAS_DE_REPARATION);
@@ -1830,8 +2339,9 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     }
 
     action.agir(etatCourant, index);
-    // Une démolition retire le bâtiment : l'indice retenu ne désigne plus rien,
-    // ou pis, désigne son voisin. On le lâche plutôt que de le laisser mentir.
+    // Une démolition retire la pièce : l'indice retenu ne désigne plus rien,
+    // ou pis, désigne sa voisine. On le lâche plutôt que de le laisser mentir.
+    terrainSelection = terrainCible;
     selection = nom === 'demolir' ? null : index;
     peindre(etatCourant);
     rafraichir(etatCourant);
@@ -1844,7 +2354,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     const rangee = Number(case_.dataset.rangee);
     const colonne = Number(case_.dataset.colonne);
 
-    const index = etatCourant.disposition.findIndex(
+    // ⚠ LA CASE TOUCHÉE DIT DANS QUELLE LISTE CHERCHER. Depuis que la bande
+    // Défense est éditable, l'occupant d'une case est un bâtiment OU une pièce
+    // de garnison selon la bande — chercher dans `disposition` partout
+    // renverrait « case vide » sur tout un mur de défense.
+    const terrainTouche = terrainDeLaRangee(rangee);
+    const index = TERRAINS[terrainTouche].pieces(etatCourant).findIndex(
       (b) => b.rangee === rangee && b.colonne === colonne,
     );
 
@@ -1866,7 +2381,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
         marquerBoutonsAction();
         return;
       }
-      executerAction(index);
+      executerAction(index, terrainTouche);
       return;
     }
 
@@ -1878,7 +2393,17 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       selectionner(null);
       return;
     }
-    ouvrirPanneau(index);
+    terrainSelection = terrainTouche;
+    // ⚠ LE PANNEAU NE S'OUVRE QUE POUR UN BÂTIMENT, ET C'EST LA TABLE QUI LE
+    // DIT. Il chiffre production, capacité, voisinage et coût d'amélioration :
+    // une pièce de garnison n'a rien de tout ça, et lui ouvrir un panneau vide
+    // ferait croire à un écran cassé. Le bandeau contextuel, lui, dit son nom,
+    // son niveau et ses points — c'est tout ce qu'il y a à dire.
+    if (TERRAINS[terrainTouche].panneau) {
+      ouvrirPanneau(index);
+      return;
+    }
+    selectionner(index);
   });
 
   for (const nom of Object.keys(ACTIONS)) {
@@ -1915,6 +2440,10 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
 
   function peindrePanneau() {
     if (!panneauOuvert || selection === null || etatCourant === null) return;
+    // Garde de ceinture : `selectionner` ferme déjà le panneau sur un terrain
+    // qui n'en a pas, mais `rafraichir` passe ici dix fois par seconde et une
+    // seule image peinte avec le mauvais indice suffirait à mentir.
+    if (!TERRAINS[terrainSelection].panneau) return;
     const vue = lignesDuPanneau(apercuDuBatiment(etatCourant, selection));
     const signature = JSON.stringify(vue);
     if (signature === derniereVue) return;
@@ -2023,7 +2552,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
    * à vérifier ici.
    */
   function tenterLaPose(rangee, colonne) {
-    const problemes = problemesDeLaPose(etatCourant, posableChoisi, rangee, colonne);
+    // ⚠ LE TERRAIN VIENT DE LA PALETTE, PAS DE LA CASE TOUCHÉE. C'est la
+    // vignette choisie qui dit ce qu'on pose ; si le doigt tombe dans l'autre
+    // bande, le moteur refuse et DIT pourquoi — « hors de la base » d'un côté,
+    // « rangée hors de 3…10 » de l'autre. Deviner le terrain d'après la case
+    // poserait un mur à la place d'un collecteur sur un simple défilement.
+    const terrain = TERRAINS[terrainCourant()];
+    const problemes = terrain.problemesDeLaPose(etatCourant, posableChoisi, rangee, colonne);
     if (problemes.length > 0) {
       // La sélection RESTE : le joueur voulait poser, il a visé à côté. La lui
       // retirer l'obligerait à la refaire pour réessayer. L'aperçu, lui, tombe :
@@ -2042,13 +2577,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       && poseEnAttente.rangee === rangee && poseEnAttente.colonne === colonne;
     if (!memeCase) {
       poseEnAttente = { rangee, colonne };
-      ligneDeMode(messageDeConfirmation(BASE_BATIMENTS[posableChoisi].nom.joueur));
+      ligneDeMode(messageDeConfirmation(terrain.nomDe(posableChoisi)));
       peindreApercu();
       return;
     }
     poseEnAttente = null;
 
-    poserBatiment(etatCourant, posableChoisi, rangee, colonne);
+    terrain.poser(etatCourant, posableChoisi, rangee, colonne);
     // ⚠ SAUVEGARDER AVANT DE REPEINDRE, et l'ordre s'est resserré à ce lot.
     // C'est la première action irréversible du jeu ; l'écrire d'abord la met à
     // l'abri de tout ce qui pourrait échouer dans le repeint. La session sait
@@ -2059,9 +2594,10 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // suite demande de rechoisir — c'est un geste de plus, contre le risque de
     // poser par inadvertance à chaque toucher suivant.
     posableChoisi = null;
-    // Le bâtiment tout juste posé devient le sélectionné : c'est ce que le
+    // La pièce tout juste posée devient la sélectionnée : c'est ce que le
     // joueur regarde, et le bandeau contextuel en dit le niveau et le débit.
-    selection = etatCourant.disposition.length - 1;
+    terrainSelection = terrainCourant();
+    selection = terrain.pieces(etatCourant).length - 1;
     peindre(etatCourant);
     rafraichir(etatCourant);
   }
@@ -2084,23 +2620,34 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
         marquerBoutonsAction();
         return;
       }
+      // ⚠ ICI LE TERRAIN VIENT DE LA CASE, ET NON DE LA PALETTE. Le joueur
+      // désigne une pièce PRÉCISE du doigt : c'est la bande où elle se trouve
+      // qui dit dans quelle liste elle vit, et c'est cette liste-là qu'il
+      // faudra modifier au second toucher.
+      terrainDeplacement = terrainDeLaRangee(rangee);
       deplacementEnCours = index;
       ligneDeMode(messageDeDestination(
-        BASE_BATIMENTS[etatCourant.disposition[index].id].nom.joueur,
+        TERRAINS[terrainDeplacement].nomDe(
+          TERRAINS[terrainDeplacement].pieces(etatCourant)[index].id,
+        ),
       ));
       marquerCasesLegales();
       peindreApercu();
       return;
     }
 
-    const problemes = problemesDuDeplacement(etatCourant, deplacementEnCours, rangee, colonne);
+    const terrain = TERRAINS[terrainDeplacement];
+    const problemes = terrain.problemesDuDeplacement(
+      etatCourant, deplacementEnCours, rangee, colonne,
+    );
     if (problemes.length > 0) {
       // Le bâtiment RESTE en main : le joueur a visé à côté, il n'a pas changé
       // d'avis. Le lui retirer l'obligerait à le rechoisir pour réessayer.
       toast(messageDeRefus(problemes));
       return;
     }
-    deplacer(etatCourant, deplacementEnCours, rangee, colonne);
+    terrain.deplacer(etatCourant, deplacementEnCours, rangee, colonne);
+    terrainSelection = terrainDeplacement;
     selection = deplacementEnCours;
     deplacementEnCours = null;
     actionArmee = null;
@@ -2125,7 +2672,9 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // désignerait un AUTRE bâtiment — pas une case vide, ce qui se verrait,
     // mais le voisin, ce qui ne se verrait pas. On le laisse tomber plutôt que
     // de le laisser mentir.
-    if (selection !== null && selection >= etat.disposition.length) selection = null;
+    if (selection !== null && selection >= TERRAINS[terrainSelection].pieces(etat).length) {
+      selection = null;
+    }
     for (const case_ of cellules.values()) {
       case_.classList.remove('champ', 'quartz', 'scorie');
       case_.querySelector('.jeton')?.remove();
@@ -2142,17 +2691,23 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       case_.classList.add('champ', champ.ressource);
     }
 
-    for (const b of etat.disposition) {
-      const case_ = cellules.get(cle(b.rangee, b.colonne));
-      if (case_ === undefined) continue;
-      const jeton = doc.createElement('div');
-      jeton.className = `jeton ${familleDuBatiment(b.id)}`;
-      jeton.textContent = SIGLES[b.id];
-      const niveau = doc.createElement('span');
-      niveau.className = 'niveau';
-      niveau.textContent = String(b.niveau);
-      jeton.appendChild(niveau);
-      case_.appendChild(jeton);
+    // ⚠ LES DEUX TERRAINS SE DESSINENT PAR LA MÊME BOUCLE. Les bâtiments dans
+    // leur bande, la garnison dans la sienne, avec le sigle et la famille que
+    // leur terrain leur donne. Une seconde boucle écrite pour la défense aurait
+    // divergé au premier ajustement de jeton.
+    for (const terrain of Object.values(TERRAINS)) {
+      for (const b of terrain.pieces(etat)) {
+        const case_ = cellules.get(cle(b.rangee, b.colonne));
+        if (case_ === undefined) continue;
+        const jeton = doc.createElement('div');
+        jeton.className = `jeton ${terrain.familleDe(b.id)}`;
+        jeton.textContent = terrain.sigleDe(b.id);
+        const niveau = doc.createElement('span');
+        niveau.className = 'niveau';
+        niveau.textContent = String(b.niveau);
+        jeton.appendChild(niveau);
+        case_.appendChild(jeton);
+      }
     }
 
     // ⚠ LES PASTILLES DE CASE LIBRE SONT PARTIES (28/08). Elles marquaient, en
@@ -2173,6 +2728,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // le Chantier est de toute façon ce autour de quoi la base se lit.
     if (selection === null) {
       const chantier = etat.disposition.findIndex((b) => b.id === 'chantierDeConstruction');
+      terrainSelection = 'batiments';
       selection = chantier === -1 ? null : chantier;
     }
     selectionner(selection);
