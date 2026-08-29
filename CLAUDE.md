@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 29/08/2026 (après le lot CARTE — données), à confronter :**
-`npm test` → **411 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**181 014 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot OBSTACLES), à confronter :**
+`npm test` → **415 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**183 645 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -47,7 +47,8 @@ GARNISON-ET-ARMÉE à 179 928 en donnant un état à la garnison et à l'armée,
 puis en branchant l'écran Offense et la bande Défense,
 CARTE (données) à 181 014 — le seul lot depuis longtemps qui ne touche pas
 l'interface, d'où le +1 086 : c'est un module de simulation et deux tables.
-La borne de T10 (200 000 octets) tient, avec 9,5 % de marge — elle se resserre
+OBSTACLES à 183 645, en les branchant dans l'état et en les dessinant.
+La borne de T10 (200 000 octets) tient, avec 8,2 % de marge — elle se resserre
 lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
 ⚠ **ET L'ÉCRAN DE LA CARTE N'EST PAS ENCORE DEDANS.** Il porte un canevas,
 quatre crans de zoom, le défilement au doigt et la pose des tuiles : c'est lui
@@ -1720,6 +1721,32 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   celui de `obstaclesDeLaBase` part de la CASE (donc tient d'une instance à
   l'autre, ce qu'Ethan a arbitré pour les camps successifs). Les deux devront se
   rejoindre le jour où un site de l'Ouvrage saura d'où il est.
+
+- **LES OBSTACLES SONT DANS L'ÉTAT, ET ILS N'Y SONT PAS SAUVEGARDÉS** — lot
+  OBSTACLES, 29/08. `etat.obstacles` est dérivé de la FONDATION comme `champs`,
+  et `serialiser` retire les deux. Aucune migration : la sauvegarde n'a pas
+  changé d'un octet, `SAVE_VERSION` reste à 7.
+  ⚠ **SEULE LA GARNISON EST SUR LE TERRAIN**, et `FORCES[x].surLeTerrain` le dit.
+  Les cases de la garnison SONT celles du champ de bataille ; les quatre vagues
+  de l'armée sont une grille de COMPOSITION, dont les rangées ne sont pas des
+  rangées de la grille. Reconnaître « garnison » par son nom serait le premier
+  cas particulier écrit à la main — un test pose une unité sur chaque numéro de
+  vague qui coïncide avec une rangée obstruée et exige qu'elle passe.
+  ⚠ **`obstacle` ET `superposition` SONT DEUX CODES.** Le joueur déplace ce qui
+  occupe ; il ne déplacera jamais un rocher. « Cette case est déjà occupée »
+  devant un obstacle l'enverrait chercher une pièce à retirer.
+  ⚠ **`obstacle` EST TOLÉRÉ AU CHARGEMENT.** Le cas ne peut plus se créer par le
+  jeu, mais il apparaîtra tout seul le jour où le tirage des obstacles changera :
+  le terrain se REDÉDUIT à chaque chargement, donc un obstacle peut se poser sous
+  une pièce posée légalement la veille. Même raisonnement que `uniques-voisins`.
+  ⚠ **LA BANDE DE DÉFENSE N'A PLUS 72 CASES POSABLES MAIS 62.** Le budget maximal
+  y tient encore — 290 points, défenseur le moins cher à 5, donc 58 pièces au
+  plus — mais la marge est passée de 14 à 4 cases. Le test le CALCULE au lieu de
+  réécrire 62 : le jour où `OBSTACLES.nombre` bougera, il suivra.
+  ⚠ **LES OBSTACLES NE COMPTENT PAS DANS LES SIX OCCUPANTS PAR RANGÉE.** C'est
+  pour ça que `OBSTACLES_DE_BASE.maxParRangee` vaut 2 : neuf colonnes moins deux
+  en laissent sept, donc les six restent atteignables partout. Les faire compter
+  serait l'autre solution ; ce n'est pas celle-là qui a été retenue.
 
 ### Sur le vocabulaire
 
