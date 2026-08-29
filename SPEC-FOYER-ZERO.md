@@ -74,14 +74,32 @@ comme Ouvrage.
 | | Départ | Niveau 50 | Formule |
 |---|---|---|---|
 | Plafond | 100 | 600 | `100 + 10 × niveau` |
-| Régénération | 20 / h | 120 / h | `20 + 2 × niveau` |
+| Régénération | 20 / h | 120 / h | **20 % du plafond**, quel qu'il soit — soit `20 + 2 × niveau` |
 
-Niveau retenu : celui de **la base la plus élevée du joueur**.
+Niveau retenu : le **niveau d'ARMÉE le plus élevé du joueur**, en dixièmes — donc 1 point de
+plafond par dixième, et une armée moyenne au niveau 5,8 vaut 158.
+
+**Le plafond est à CLIQUET** : il monte avec l'armée et ne redescend jamais, même si l'armée est
+entièrement démantelée. Les points ne peuvent donc jamais dépasser le plafond.
+
+**Le joueur démarre le plein**, et une sauvegarde qui n'avait pas encore de points en reçoit un
+plein elle aussi : personne n'ouvre le jeu devant une jauge vide.
 
 **Coût d'un raid :** 10 points, plus la distance — **+1 par case** en territoire allié, **+3 par
-case** en territoire ennemi ou neutre. Rayon maximal 10, donc 40 points au plus loin.
+case** en territoire ennemi ou neutre. Rayon maximal 10, donc 40 points au plus loin. Le
+territoire allié est l'**union des zones d'influence** de toutes les bases du joueur, rayon 2 ;
+la distance, elle, se mesure depuis la base qui attaque, en Tchebychev. À rayon 2, le tarif à +1
+ne couvre que les cases à 1 et 2 : le raid bon marché coûte 11 ou 12, et rien entre 13 et 18
+n'existe.
 
 Au départ : 5 raids en réserve, un par heure. En fin de course : 15 raids, trois par heure.
+Cinq heures pour faire le plein, à tous les niveaux.
+
+⚠ **LA FORMULE A CHANGÉ DE FORME LE 29/08, PAS DE DÉBIT.** `20 + 2 × niveau` VAUT exactement
+20 % du plafond à tous les niveaux ; c'est cette lecture qui est codée, parce qu'elle tient en
+un nombre et qu'elle dit la propriété qui compte — le plein en cinq heures, quel que soit le
+plafond. Un 10 % a été dicté puis retiré le même soir. Le taux se change en un seul endroit :
+`POINTS_ATTAQUE.regenerationParHeure.partDuPlafondPourCent`.
 
 ### Points d'armée — le plafond de composition
 

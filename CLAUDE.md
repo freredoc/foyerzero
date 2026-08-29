@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **29/08/2026**, version 0.32.0 · build 33.
+Dernière révision : **29/08/2026**, version 0.33.0 · build 34.
 
 ---
 
@@ -23,10 +23,22 @@ Dernière révision : **29/08/2026**, version 0.32.0 · build 33.
 4. `npm ci && npm run check` **avant de toucher quoi que ce soit**, et consigner
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
+5. ⚠ **AVANT DE DEMANDER UN ARBITRAGE À ETHAN, CHERCHER LA RÉPONSE DANS LE
+   DÉPÔT.** `src/data/` porte toutes les valeurs de calibrage,
+   `SPEC-FOYER-ZERO.md` la règle, les `RELEVE-TA-*.md` d'où elle vient. Le
+   29/08, quatre questions ont été posées à Ethan sur les points d'attaque :
+   **trois avaient déjà leur réponse dans `POINTS_ATTAQUE` et dans la §3 de la
+   spec** — le plafond, le barème du raid et le nom même de la grandeur —, et la
+   quatrième a fait remplacer une valeur juste par une autre, retirée le soir
+   même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
+   question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
+   assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 29/08/2026 (après le lot TUTORIEL-EN-BAS), à confronter :**
-`npm test` → **476 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**523 905 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot POINTS-D'ATTAQUE), à confronter :**
+`npm test` → **491 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**525 733 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+**+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
+lui.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -203,7 +215,7 @@ src/data/               toutes les valeurs de calibrage — 7 fichiers ; RIEN d'
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
 
-src/sim/                simulation déterministe, sans DOM — 14 fichiers
+src/sim/                simulation déterministe, sans DOM — 15 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -212,6 +224,7 @@ src/sim/                simulation déterministe, sans DOM — 14 fichiers
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
+  points-attaque.js     le régulateur de session : plafond à cliquet, barème du raid, territoire
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 6 fichiers
@@ -248,12 +261,12 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   30 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   31 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
-  grille  missions  niveau-de-base  offense  rendu  repli  rng  roster  state
+  grille  missions  niveau-de-base  offense  points-attaque  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
