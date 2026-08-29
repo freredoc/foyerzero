@@ -512,6 +512,12 @@ function ajouterEntite(
     rangeeMilli: milliDepuisCase(rangee),
     pvMilli: pv,
     pvMaxMilli,
+    // ⚠ LES PV DE DÉPART DE CE COMBAT-CI, ET ILS NE VALENT PAS TOUJOURS
+    // `pvMaxMilli`. Un site entamé se monte avec le `pvMilli` que la passe
+    // précédente lui a laissé ; sans cette trace, le butin de la seconde passe
+    // repaierait les dégâts de la première. C'est de la comptabilité, pas du
+    // combat : rien dans la boucle ne la lit.
+    pvInitialMilli: pv,
     // Les deux seules grandeurs de combat qui suivent le niveau. Elles vivent
     // sur l'entité, pas sur le profil : deux entités du même identifiant
     // peuvent être à deux niveaux différents sur la même grille.
@@ -1252,6 +1258,11 @@ function ligneResultat(e) {
     pvMaxMilli: e.pvMaxMilli,
     pvMilli: e.pvMilli,
     pvPerdusMilli: e.pvMaxMilli - e.pvMilli,
+    // ⚠ CE QUE CE RAID-CI A FAIT, distinct de ce que la pièce a perdu DEPUIS
+    // SON PLEIN. Les deux coïncident sur un site intact, et divergent dès la
+    // seconde passe.
+    pvInitialMilli: e.pvInitialMilli,
+    pvPerdusIciMilli: e.pvInitialMilli - e.pvMilli,
     detruit: !e.vivant,
     module: profil(e).moduleDefense ?? null,
   };
@@ -1351,9 +1362,10 @@ export function butinPlein(niveau, indice) {
 }
 
 /**
- * Butin d'un raid, proportionnel aux dégâts subis par chaque bâtiment — sauf
- * si la Souche est tombée : sa destruction rase le site et livre tout, quel
- * que soit l'état des autres bâtiments.
+ * Butin d'un raid, proportionnel aux dégâts que CE raid a faits — et, si la
+ * Souche est tombée, augmenté de tout ce qui était encore debout en arrivant.
+ * Sur un site intact les deux règles coïncident avec les anciennes ; sur un site
+ * entamé, elles empêchent de payer deux fois les mêmes dégâts.
  * @returns {{ quartz: number, scorie: number }} entiers.
  */
 export function butin(resultat, montage) {
@@ -1365,7 +1377,30 @@ export function butin(resultat, montage) {
     // Le niveau du BÂTIMENT, plus celui du site : une base mêle deux niveaux
     // adjacents, et chacun paie le sien.
     const plein = butinPlein(b.niveau, p.indiceButin);
-    const gagne = rase ? plein : (plein * b.pvPerdusMilli) / b.pvMaxMilli;
+    // ⚠ « LIVRE CE QUI RESTE À LIVRER », ARBITRÉ PAR ETHAN LE 29/08. Un bâtiment
+    // entamé à la passe précédente a DÉJÀ payé ce qu'on lui avait pris : il ne
+    // le repaie pas. Le raid encaisse donc ce que LUI a fait — `pvPerdusIci` —,
+    // et un rasage livre ce qui était encore debout en arrivant, pas le plein
+    // nominal. Sur deux passes, la somme fait exactement la valeur du site ; la
+    // règle d'avant la faisait dépasser de 16 % sur un rasage en deux temps, et
+    // d'autant plus qu'on cassait avant le coup de grâce.
+    //
+    // ⚠ LE CAS INTACT EST TRAITÉ À PART, ET CE N'EST PAS UNE OPTIMISATION.
+    // `plein × pvInitial / pvMax` vaut mathématiquement `plein` quand les deux
+    // sont égaux, mais pas en flottant : le produit intermédiaire déplace le
+    // dernier chiffre. Six tests mesurent ce butin AU CHAMP PRÈS sur des sites
+    // intacts, et c'est cette ligne qui les laisse exacts.
+    const intact = (b.pvInitialMilli ?? b.pvMaxMilli) >= b.pvMaxMilli;
+    // ⚠ RECALCULÉ ICI, PAS LU DANS `pvPerdusIciMilli`. La ligne porte le champ,
+    // mais il est FIGÉ à la construction du résultat : un appelant qui abîme une
+    // ligne après coup — c'est ce que font les montages de test — le laisserait
+    // à zéro et le butin tomberait à zéro sans rien dire. Deux soustractions ne
+    // valent pas ce risque.
+    const perduIci = b.pvInitialMilli === undefined
+      ? b.pvPerdusMilli : b.pvInitialMilli - b.pvMilli;
+    let gagne;
+    if (rase) gagne = intact ? plein : (plein * b.pvInitialMilli) / b.pvMaxMilli;
+    else gagne = (plein * perduIci) / b.pvMaxMilli;
     quartz += gagne * p.ressource.quartz;
     scorie += gagne * p.ressource.scorie;
   }

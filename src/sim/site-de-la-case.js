@@ -33,7 +33,7 @@ import { UNITES, DEFENSES } from '../data/combat.js';
 import { estSurLaCarte, niveauDeLaRangee } from './carte.js';
 import { estBaseOuvrage, hachageBrut } from './peuplement.js';
 import { genererSite } from './generateur.js';
-import { butin } from './combat.js';
+import { butin, creerCombat, construireResultat } from './combat.js';
 import { basesDuJoueur, distanceTchebychev } from './points-attaque.js';
 
 /** Sel du tirage qui ne dépend que de la CASE : la saveur, et le terrain. */
@@ -154,6 +154,12 @@ export function siteDeLaCase(etat, rangee, colonne) {
     };
   }
 
+  // ⚠ UNE BASE RASÉE NE REVIENT PAS. Elle est DÉRIVÉE de la graine, donc rien
+  // ne l'empêcherait de reparaître au prochain calcul : c'est la liste des
+  // rasées qui porte le seul fait que la graine ne peut pas connaître.
+  // `TYPES_SITE.base.respawn` vaut `false`, et la §10 de la spec le redit.
+  if ((etat.basesRasees ?? []).includes(`${rangee}:${colonne}`)) return null;
+
   if (estBaseOuvrage(etat.graine, rangee, colonne)) {
     return {
       type: 'base',
@@ -236,31 +242,45 @@ export function forceDeLaDefense(defenseurs) {
  * Ce que le site rend SI TOUT TOMBE — les « ressources récupérables » du
  * mini-onglet.
  *
- * ⚠ ELLE PASSE PAR `butin`, ELLE NE REFAIT PAS LE CALCUL. Un site rasé par la
- * Souche livre tout, quel que soit l'état du reste : c'est exactement la branche
- * `cause === 'souche'` de `sim/combat.js`, où les PV ne sont plus lus. Réécrire
- * ici la somme des `butinPlein` donnerait un second barème du butin, et le
- * mini-onglet finirait par annoncer autre chose que ce que le raid verse.
+ * ⚠ ELLE PASSE PAR `butin`, ELLE NE REFAIT PAS LE CALCUL. Réécrire ici la somme
+ * des `butinPlein` donnerait un second barème, et le mini-onglet finirait par
+ * annoncer autre chose que ce que le raid verse.
+ *
+ * ⚠ ELLE MONTE UN COMBAT POUR LE DEMANDER, et ce n'est pas un détour. Depuis
+ * l'arbitrage du 29/08 — « livre ce qui reste à livrer » —, un rasage ne paie
+ * plus le plein nominal mais ce qui était encore DEBOUT en arrivant. La réponse
+ * dépend donc des PV du montage, que seul `creerCombat` sait mettre à l'échelle
+ * du niveau. Sur un site entamé, le nombre annoncé baisse à mesure que le joueur
+ * l'use : c'est ce qu'il lui reste à prendre, pas ce que le site valait neuf.
  *
  * @param {object} montage
  * @returns {{quartz: number, scorie: number}}
  */
 export function butinSiToutTombe(montage) {
-  return butin({ cause: 'souche', batiments: montage.batiments, defenses: [] }, montage);
+  const resultat = construireResultat(creerCombat({ ...montage, vagues: [] }));
+  resultat.cause = 'souche';
+  return butin(resultat, montage);
 }
 
 /**
  * Le mini-onglet, en une fonction : tout ce que le joueur voit au premier
  * toucher sur une cible.
  *
+ * ⚠ LE MONTAGE PEUT ÊTRE FOURNI, et c'est ce qui permet à `sim/site-entame.js`
+ * de résumer un site ENTAMÉ sans écrire un second résumé. Sans lui, le
+ * mini-onglet annoncerait toujours le site intact — donc un butin que le joueur
+ * ne ramènera pas, puisqu'il a déjà cassé la moitié des bâtiments à la
+ * première passe.
+ *
  * @param {number} graine
  * @param {object} identite
+ * @param {object} [montage] le montage COURANT ; à défaut, le site intact
  * @returns {{type: string, niveau: number, saveur: string|null, rangee: number,
  *   colonne: number, batiments: number, defenseurs: number,
  *   butinSiToutTombe: {quartz: number, scorie: number}, forceDeLaDefense: number}}
  */
-export function resumeDuSite(graine, identite) {
-  const montage = montageDuSite(graine, identite);
+export function resumeDuSite(graine, identite, montageFourni = null) {
+  const montage = montageFourni ?? montageDuSite(graine, identite);
   return {
     type: identite.type,
     niveau: identite.niveau,
