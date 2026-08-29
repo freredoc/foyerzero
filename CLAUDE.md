@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 29/08/2026 (après le lot OBSTACLES), à confronter :**
-`npm test` → **415 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**183 645 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot SATELLITES), à confronter :**
+`npm test` → **427 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**188 451 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -47,8 +47,9 @@ GARNISON-ET-ARMÉE à 179 928 en donnant un état à la garnison et à l'armée,
 puis en branchant l'écran Offense et la bande Défense,
 CARTE (données) à 181 014 — le seul lot depuis longtemps qui ne touche pas
 l'interface, d'où le +1 086 : c'est un module de simulation et deux tables.
-OBSTACLES à 183 645, en les branchant dans l'état et en les dessinant.
-La borne de T10 (200 000 octets) tient, avec 8,2 % de marge — elle se resserre
+OBSTACLES à 183 645, en les branchant dans l'état et en les dessinant,
+SATELLITES à 188 451 — de la simulation pure, aucun écran.
+La borne de T10 (200 000 octets) tient, avec 5,8 % de marge — elle se resserre
 lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
 ⚠ **ET L'ÉCRAN DE LA CARTE N'EST PAS ENCORE DEDANS.** Il porte un canevas,
 quatre crans de zoom, le défilement au doigt et la pose des tuiles : c'est lui
@@ -166,10 +167,11 @@ src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
 
-src/sim/                simulation déterministe, sans DOM — 13 fichiers
+src/sim/                simulation déterministe, sans DOM — 14 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
+  satellites.js         camps et avant-poste du joueur : de l'HISTOIRE, donc sauvegardée
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
@@ -207,11 +209,11 @@ src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   27 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   28 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
-  couts-militaires  peuplement
+  couts-militaires  peuplement  satellites
   grille  missions  niveau-de-base  offense  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
@@ -1747,6 +1749,53 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   pour ça que `OBSTACLES_DE_BASE.maxParRangee` vaut 2 : neuf colonnes moins deux
   en laissent sept, donc les six restent atteignables partout. Les faire compter
   serait l'autre solution ; ce n'est pas celle-là qui a été retenue.
+
+- **LES SATELLITES SONT DE L'HISTOIRE, PAS UNE FONCTION** — lot SATELLITES,
+  29/08. `sim/peuplement.js` recalcule les bases de l'Ouvrage à partir de la
+  graine ; `etat.satellites` ne peut pas se recalculer, parce qu'il dépend de ce
+  que le joueur a FAIT — où il s'est posé, quand, combien de fois il a rasé le
+  même camp. C'est le premier champ du dépôt qui porte de l'histoire, et il est
+  SAUVEGARDÉ. `SAVE_VERSION` passe à **8**.
+  ⚠ **AUCUN TIRAGE NE PASSE PAR `etat.rng`, ET C'EST UNE CONTRAINTE DE
+  CORRECTION.** `rattraperJeu` est ANALYTIQUE : il avance de mille ticks d'un
+  coup là où `tickJeu` en fait mille. La graine d'une apparition se dérive donc
+  de la partie et du NUMÉRO D'INSTANCE, qui sont les mêmes des deux côtés.
+  ⚠⚠ **ET LE TEST DES DEUX CHEMINS NE TIENT PAS CETTE RÈGLE — MESURÉ.** Remplacer
+  la graine dérivée par `etat.rng` laissait la suite ENTIÈREMENT VERTE : rien
+  d'autre ne consomme le flux pendant un tick aujourd'hui, donc les deux chemins
+  le consomment identiquement. C'est un test DÉDIÉ qui la mesure, en comparant
+  l'état du flux avant et après une apparition. Trois des quatre falsifications
+  de ce lot sont passées vertes au premier essai ; les trois tests qui les
+  attrapent ont été écrits après.
+  ⚠ **`resoudreSatellites` NE BOUCLE PAS PAR TICK**, elle ne lit que l'horloge
+  courante. C'est ce qui la rend compatible avec le rattrapage — et c'est aussi
+  pourquoi elle ne peut RIEN faire qui dépende de l'instant précis d'une
+  apparition. Le jour où ce sera nécessaire, cette équivalence tombe.
+  ⚠ **LE NUMÉRO D'INSTANCE EST TOUT LE JOURNAL, ET IL TIENT DANS UN ENTIER.** Le
+  terrain d'un camp se dérive de la CASE, ses bâtiments de la case ET de
+  l'instance : deux camps successifs au même endroit ont les mêmes champs et une
+  autre disposition, ce qu'Ethan a arbitré le 29/08. Stocker les bâtiments serait
+  ranger ce qu'on sait recalculer. ⚠ Le compteur ne se remet JAMAIS à zéro, pas
+  même à un déménagement — un test refuse un `presents[].instance` au-delà de
+  `prochaineInstance`, qui est la forme que prendrait cette faute.
+  ⚠ **UNE ATTENTE NON SATISFAITE SE REPORTE, ELLE NE SE PERD PAS.** Un anneau
+  saturé de bases de l'Ouvrage est possible ; jeter l'attente ferait disparaître
+  un camp en silence.
+  ⚠ **LA MIGRATION 7 → 8 PROGRAMME, ELLE NE POSE PAS.** Poser d'office mettrait
+  trois sites sur la carte à l'instant du chargement, en sautant les cinq minutes
+  arbitrées, et le joueur les verrait apparaître pendant qu'il regarde ailleurs.
+  Elle compte l'échéance depuis `horloge.nbTicks` de la SAUVEGARDE, pas depuis
+  zéro : sinon une partie vieille de deux heures verrait paraître ses trois
+  satellites au chargement.
+
+- **DEUX CHOSES NE SONT PAS ARBITRÉES DANS CE LOT, et le code le dit** : le
+  DÉLAI et la CASE d'un respawn. Ethan a dit « respawn automatique », sans plus.
+  Retenu : le même délai de cinq minutes et un nouveau tirage dans l'anneau —
+  c'est le même mécanisme rejoué. Les deux tiennent en une ligne chacun.
+  Troisième lecture plutôt qu'arbitrage : **les anciens satellites disparaissent
+  au déménagement**, parce que la spec §10 indexe l'avant-poste sur « le rayon et
+  la PRÉSENCE du joueur ». Si Ethan veut qu'ils restent, c'est
+  `planifierSatellites` qui change, et elle seule.
 
 ### Sur le vocabulaire
 
