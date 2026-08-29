@@ -254,11 +254,19 @@ export const POINTS_RECHERCHE = {
 };
 
 // --- géographie --------------------------------------------------------------
-// Couloir 30 de large × 300 de haut, format téléphone. Le « 9 » de la §10 de la
+// Couloir 31 de large × 300 de haut, format téléphone. Le « 9 » de la §10 de la
 // spec était une contamination de la largeur de la grille de combat : arbitré
-// le 24/08, la carte fait bien 30 × 300.
+// le 24/08, la carte est un couloir étroit et haut.
+//
+// ⚠ LA LARGEUR EST PASSÉE DE 30 À 31 LE 29/08, ET C'EST UN CHANGEMENT QUI NE
+// DÉPLACE RIEN. Une largeur paire n'a pas de centre : `colonneCentre()` devait
+// trancher entre 15 et 16, et avait retenu 16. Avec 31, 16 EST le centre — la
+// fonction rend le même nombre, le départ du joueur (275, 16) et la base
+// terminale ne bougent pas d'une case, et le commentaire qui expliquait
+// l'arbitraire du choix devient sans objet. La colonne ajoutée est la 31e.
+// Passer à 29 aurait déplacé le centre en 15, donc TOUT ce qui est déjà arbitré.
 export const GEOGRAPHIE = {
-  carte: { largeur: 30, hauteur: 300 },
+  carte: { largeur: 31, hauteur: 300 },
   departJoueur: { strate: 5, casesDepuisBordBas: 25 },
   niveauParCase: 0.2,
   niveauPlafond: 50,
@@ -272,6 +280,123 @@ export const GEOGRAPHIE = {
   blocageApresAttaqueHeures: 1,
   blocageApresRasageHeures: 24,
   avantPostesParBaseJoueur: { min: 1, max: 2, niveauRelatif: 1, renouvelables: true },
+};
+
+// --- peuplement de la carte --------------------------------------------------
+// ARBITRÉ le 29/08/2026 par Ethan : « dans un carré de 12×12, il y a environ 12
+// bases ouvrage », « aucune base ouvrage et joueur ne peuvent être côte à côte
+// avec une autre base ouvrage joueur, 8 cases autour », « disposition
+// irrégulière », et « spawn des bases ouvrage de part et d'autre du joueur,
+// base de niveau 1 à 10, à au moins 15 cases du joueur ».
+//
+// ⚠ `probabiliteCandidate` N'EST PAS LA DENSITÉ, et confondre les deux ferait
+// poser presque deux fois trop de bases. C'est la probabilité qu'une case soit
+// CANDIDATE ; l'exclusion des huit voisines en élimine ensuite une partie. La
+// valeur a été MESURÉE sur quatre graines, pas choisie — moyenne des fenêtres
+// 12×12 entièrement hors de la garde :
+//
+//     p      0,10   0,12   0,14   0,16   0,20
+//     bases   9,9   11,1   12,1   12,8   14,0
+//
+// Un test refait la mesure. ⚠ ET IL LA FAIT HORS DE LA GARDE : une fenêtre prise
+// dans le rayon de quinze cases autour du départ porte zéro base, par
+// construction. La compter ferait tomber la moyenne à 10,8 et donnerait
+// l'impression que le réglage est faux alors qu'il est juste.
+//
+// ⚠ « ENVIRON 12 » EST UNE MOYENNE, ET L'ÉCART EST LARGE. Sur les fenêtres hors
+// garde, le compte va de 4 à 20. C'est le prix de la disposition irrégulière,
+// préférée le 29/08 à un pavage régulier qui aurait donné un compte presque
+// constant. Un test borne la moyenne, jamais une fenêtre isolée.
+//
+// ⚠ LA GARDE SE MESURE DEPUIS LA POSITION DE DÉPART, QUI EST FIXE. C'est ce qui
+// permet au peuplement de rester entièrement DÉRIVÉ : si la garde suivait la
+// base du joueur, les bases apparaîtraient et disparaîtraient à chaque
+// redéploiement, et il faudrait les journaliser. Le joueur qui se déplace
+// s'approche des bases ; les bases ne s'écartent pas de lui.
+//
+// ⚠ ET 15, C'EST EXACTEMENT LA DEMI-LARGEUR DU COULOIR. Le joueur part en
+// colonne 16 sur 31 : une base à 15 cases peut donc se tenir presque sur sa
+// rangée, pourvu qu'elle soit contre un bord. Elle ne l'attaque pas — le rayon
+// d'attaque vaut 10 — mais elle est visible dès le premier écran. C'est le sens
+// de « de part et d'autre » : la garde est une distance de Tchebychev, pas un
+// nombre de rangées.
+export const PEUPLEMENT = {
+  /** Probabilité qu'une case soit candidate, AVANT exclusion des voisines. */
+  probabiliteCandidate: 0.14,
+
+  /** Ce que la probabilité ci-dessus est censée produire, et que le test mesure. */
+  basesParDouzeCarre: 12,
+
+  /** Tolérance de la mesure : la moyenne doit tomber dans 12 ± 1. */
+  toleranceMesure: 1,
+
+  /**
+   * Aucune base de l'Ouvrage à moins de cette distance de la position de
+   * DÉPART du joueur. Distance de Tchebychev — le maximum des deux écarts.
+   */
+  gardeAutourDuDepart: 15,
+
+  /**
+   * Le niveau d'une base n'est PAS tiré : il se lit sur sa rangée, comme
+   * partout. « De niveau 1 à 10 » sort donc tout seul des rangées basses, sans
+   * aucune règle supplémentaire. Ce champ ne sert qu'à documenter que la
+   * question a été posée et qu'elle n'appelait pas de code.
+   */
+  niveauDUneBase: 'celui de sa rangée — voir niveauDeLaRangee()',
+};
+
+// --- satellites d'une base du joueur -----------------------------------------
+// ARBITRÉ le 29/08/2026 : « 5 min après la pose d'une base joueur ou déplacement
+// d'une base joueur, 2 camps et 1 avant-poste ouvrage apparaissent. Respawn
+// automatique en cas de destruction camp/AP. » Puis : « camp dans le rayon
+// d'influence de la base, 1 à 2 cases », « avant-poste : de 2 à 5 cases ».
+//
+// ⚠ CECI REMPLACE le « 1 à 2 avant-postes par base du joueur » de la §10 de la
+// spec, et `GEOGRAPHIE.avantPostesParBaseJoueur` qui le transcrit. Les deux
+// restent au fichier tant que la spec n'est pas repliée, mais c'est CETTE table
+// qui fait foi — un test croise les deux et signale la divergence plutôt que de
+// la laisser dormir.
+//
+// ⚠ CES SITES NE SONT PAS SUR LA CARTE, ILS SUIVENT LE JOUEUR. Ils ne se
+// dérivent donc pas de la graine seule : leur existence dépend de l'histoire de
+// la partie, et c'est le JOURNAL qui les portera. Rien ici ne les pose ; cette
+// table dit seulement combien, où, et au bout de combien de temps.
+export const SATELLITES = {
+  camps: { nombre: 2, anneau: { min: 1, max: 2 } },
+  avantPostes: { nombre: 1, anneau: { min: 2, max: 5 } },
+
+  /** Cinq minutes après la pose ou le déplacement de la base. */
+  delaiApparitionSec: 300,
+
+  /** Un camp ou un avant-poste détruit réapparaît, sans intervention. */
+  respawnAutomatique: true,
+};
+
+// --- crans de zoom de la carte -----------------------------------------------
+// ARBITRÉ le 29/08/2026, après mesure. Les crans sont donnés en pixels
+// PHYSIQUES par case, jamais en pixels CSS : la taille CSS se déduit en
+// divisant par `devicePixelRatio`, qui n'est pas une valeur de calibrage.
+//
+// ⚠ POURQUOI CES QUATRE-LÀ ET PAS D'AUTRES. Une tuile de terrain fait 128 px et
+// un emblème est dessiné sur une grille logique de 64. Les quatre crans sont
+// des puissances de deux : à chacun, la tuile ET l'emblème restent à un facteur
+// d'échelle ENTIER, ce qui est la seule façon de ne pas brouiller du pixel art.
+// Un cran intermédiaire à 192 px conviendrait à l'emblème (×3) et pas à la
+// tuile (×1,5). Un test le vérifie sur les quatre.
+//
+// ⚠ LE CRAN LE PLUS BAS EST UNE VUE STRATÉGIQUE, PAS UNE CARTE LUE DE LOIN. À
+// 32 px physiques, l'emblème vaut 10,7 px CSS sur un appareil à DPR 3 : une
+// pastille. C'est aussi le seul cran qui montre les 31 colonnes à la fois —
+// 31 × 10,7 = 331 px CSS, sous les 360 d'un téléphone de 1080 px à DPR 3.
+export const ZOOM_CARTE = {
+  /** Pixels physiques par case, du plus large au plus serré. */
+  crans: [32, 64, 128, 256],
+
+  /** Côté d'une tuile de terrain, en pixels. */
+  pixelsParTuile: 128,
+
+  /** Côté de la grille logique d'un emblème, en pixels. */
+  grilleEmbleme: 64,
 };
 
 // --- disposition des défenses ------------------------------------------------

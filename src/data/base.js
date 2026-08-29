@@ -516,6 +516,105 @@ export const CHAMPS = {
   contactLateralEntreBlocsDeMemeRessource: false,
 };
 
+// --- le terrain de la PREMIÈRE base -------------------------------------------
+// ARBITRÉ le 29/08/2026. Ethan a DESSINÉ le terrain de sa base de départ, case
+// par case, et il est ici tel quel.
+//
+// ⚠ POURQUOI UNE TABLE ET PAS UNE GRAINE. La question a été posée dans l'autre
+// sens — « changer le seed de la 1re base » — et la réponse est MESURÉE : le
+// terrain ne dépend pas de la graine du monde mais de la seule POSITION, donc
+// changer la graine n'aurait rien changé. Et le dessin n'est atteignable par
+// AUCUNE position : les 9 300 cases de la carte ont été balayées, elles rendent
+// 9 300 terrains distincts, aucun n'est celui-ci, le plus proche en diffère de
+// neuf cases. Une table est donc la seule voie honnête.
+//
+// ⚠ ELLE NE VAUT QUE POUR LA PREMIÈRE BASE, et « première » se lit à la
+// FONDATION, pas à la position. Le terrain est gelé à la fondation depuis le
+// 27/08 ; il voyage avec la base au redéploiement, et il lui survit au rasage
+// (arbitré le 29/08 : « la base garde sa disposition »). La fondation initiale
+// ne change donc jamais, et cette table est servie pour toujours. C'est aussi
+// ce qui donne au champ `fondation` son seul rôle actuel : il n'est plus une
+// position sur la carte, il est l'IDENTITÉ du terrain.
+//
+// ⚠ LE DESSIN RESPECTE LES RÈGLES DU TIRAGE, ET UN TEST LE VÉRIFIE plutôt que
+// de le croire : douze cases, réparties 6/6, toutes dans la zone (rangées 12 à
+// 17, colonnes 2 à 8), aucun bloc de plus de trois, et jamais deux blocs de même
+// ressource au contact par un côté. Une table dispensée des règles serait la
+// première à les contredire.
+//
+//        123456789
+//    3   XXIXXXVXX      I obstacle infanterie
+//    4   XXXXDXXXX      V obstacle véhicule
+//    5   XVXXXXXXX      D obstacle les deux
+//    6   XXXXXIXXD
+//    7   XXXVXXXXX      Q champ de quartz
+//    8   XXXXXXXIX      S champ de scorie
+//    9   XDXXXXXXX
+//   10   XXXXXVXXX
+//   ————————————————
+//   11   XXXXXXXXX
+//   12   XQXXSXSXX
+//   13   XXXXXXXXX
+//   14   XQXSXXXQX
+//   15   XXXSXSXXX
+//   16   XSXXXXXXX
+//   17   XQXXXXQQX
+//   18   XXXXCXXXX      C Chantier de construction, posé par dispositionNouvelleBase
+export const TERRAIN_INITIAL = {
+  champs: [
+    { rangee: 12, colonne: 2, ressource: 'quartz' },
+    { rangee: 12, colonne: 5, ressource: 'scorie' },
+    { rangee: 12, colonne: 7, ressource: 'scorie' },
+    { rangee: 14, colonne: 2, ressource: 'quartz' },
+    { rangee: 14, colonne: 4, ressource: 'scorie' },
+    { rangee: 14, colonne: 8, ressource: 'quartz' },
+    { rangee: 15, colonne: 4, ressource: 'scorie' },
+    { rangee: 15, colonne: 6, ressource: 'scorie' },
+    { rangee: 16, colonne: 2, ressource: 'scorie' },
+    { rangee: 17, colonne: 2, ressource: 'quartz' },
+    { rangee: 17, colonne: 7, ressource: 'quartz' },
+    { rangee: 17, colonne: 8, ressource: 'quartz' },
+  ],
+  repartition: { quartz: 6, scorie: 6 },
+  obstacles: [
+    { rangee: 3, colonne: 3, type: 'infanterie' },
+    { rangee: 3, colonne: 7, type: 'vehicule' },
+    { rangee: 4, colonne: 5, type: 'les_deux' },
+    { rangee: 5, colonne: 2, type: 'vehicule' },
+    { rangee: 6, colonne: 6, type: 'infanterie' },
+    { rangee: 6, colonne: 9, type: 'les_deux' },
+    { rangee: 7, colonne: 4, type: 'vehicule' },
+    { rangee: 8, colonne: 8, type: 'infanterie' },
+    { rangee: 9, colonne: 2, type: 'les_deux' },
+    { rangee: 10, colonne: 6, type: 'vehicule' },
+  ],
+};
+
+// --- obstacles d'une base -----------------------------------------------------
+// ARBITRÉ le 29/08/2026 : « obstacles seulement en défense, réparti au hasard »,
+// et « oui le joueur a des obstacles comme ouvrage ».
+//
+// ⚠ LE NOMBRE ET LES TYPES NE SONT PAS DUPLIQUÉS ICI. Ils vivent dans
+// `OBSTACLES` de `data/combat.js`, qui est la table du champ de bataille — dix
+// obstacles, trois types. En écrire une seconde ferait diverger la base du
+// joueur et les sites de l'Ouvrage, qui doivent obéir à la même règle.
+//
+// ⚠ DEUX CONTRAINTES DE POSE, ET ELLES SE DÉDUISENT DU RESTE DU JEU.
+// Deux obstacles au plus par rangée : une rangée de neuf cases doit pouvoir
+// porter les six occupants que `DISPOSITION_DEFENSES.occupantsMaxParRangee`
+// autorise, et neuf moins deux en laisse sept. Trois obstacles rendraient la
+// règle des six inatteignable sur cette rangée, en silence.
+// Et jamais deux obstacles au contact par un côté : collés, ils ne font plus un
+// obstacle mais un mur — or le mur est une DÉFENSE, avec ses points et ses PV.
+// Le contact en diagonale reste permis, comme pour les champs.
+export const OBSTACLES_DE_BASE = {
+  maxParRangee: 2,
+  contactLateral: false,
+
+  /** Mêmes tentatives que les champs, et pour la même raison. */
+  tentativesMax: 64,
+};
+
 /**
  * Bornes de la zone où les champs ont le droit de tomber : la bande des
  * bâtiments, moins la marge de bord. Calculée depuis GRILLE, jamais écrite en
