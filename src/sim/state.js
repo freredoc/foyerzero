@@ -8,6 +8,10 @@
 import { creerRng, restaurerRng } from './rng.js';
 import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './clock.js';
 import { champsDeLaBase, obstaclesDeLaBase } from './champs.js';
+import {
+  satellitesVides, planifierSatellites, resoudreSatellites, problemesDesSatellites,
+  TICKS_APPARITION,
+} from './satellites.js';
 import { positionDepartJoueur } from './carte.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
@@ -21,7 +25,7 @@ import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /**
  * @typedef {object} Etat
@@ -135,6 +139,11 @@ export function creerEtat(graine) {
     // sauvegardent pas, et ils ne bougent jamais. Les ranger dans la sauvegarde
     // ferait exister deux vérités pour la même case.
     obstacles: obstaclesDeLaBase(position.rangee, position.colonne),
+    // ⚠ SAUVEGARDÉS, EUX. Les camps et l'avant-poste dépendent de ce que le
+    // joueur a fait — où il s'est posé, quand, combien de fois il a rasé le même
+    // camp —, pas de la seule graine. C'est le premier champ du dépôt qui porte
+    // de l'HISTOIRE plutôt qu'un état instantané.
+    satellites: satellitesVides(),
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -143,6 +152,10 @@ export function creerEtat(graine) {
   // repassent par elle, et une sauvegarde qu'on monte de version aurait touché
   // l'amorce une seconde fois.
   for (const r of RESSOURCES) etat.economie.ressources[r] = (STOCK_DE_DEPART[r] ?? 0) * 1000;
+  // La base vient d'être posée : les trois apparitions sont dues dans cinq
+  // minutes. Elles ne PARAISSENT pas ici — une base neuve est seule, et c'est
+  // exactement ce que le joueur doit voir en ouvrant la partie.
+  planifierSatellites(etat);
   verifierEtat(etat);
   return etat;
 }
@@ -209,7 +222,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles']) {
+  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites']) {
     exigerChamp(etat, champ);
   }
   // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
@@ -218,6 +231,10 @@ function verifierEtat(etat) {
   // VIDE est parfaitement légale : c'est l'état de toute base neuve, et le
   // rester tant que le Centre de commandement n'est pas posé.
   for (const force of Object.keys(FORCES)) verifierForce(etat, force);
+  const defautsSatellites = problemesDesSatellites(etat.satellites);
+  if (defautsSatellites.length > 0) {
+    throw new Error(`etat : satellites injouables — ${defautsSatellites.join(' ; ')}`);
+  }
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
       `etat : ${etat.economie.residus.length} résidus pour ${etat.disposition.length} bâtiments`,
@@ -242,6 +259,7 @@ function verifierEtat(etat) {
 export function tickJeu(etat) {
   tickHorloge(etat.horloge);
   tickEconomieBase(etat.economie, etat.disposition, etat.champs);
+  resoudreSatellites(etat);
 }
 
 /**
@@ -256,6 +274,13 @@ export function tickJeu(etat) {
 export function rattraperJeu(etat, nbTicks) {
   avancerTicks(etat.horloge, nbTicks);
   rattrapageEconomieBase(etat.economie, etat.disposition, etat.champs, nbTicks);
+  // ⚠ UN SEUL APPEL, PAS UNE BOUCLE, ET C'EST CE QUI REND LES DEUX CHEMINS
+  // ÉQUIVALENTS. `resoudreSatellites` ne lit que l'horloge courante : mille
+  // ticks d'un coup font paraître exactement ce que mille ticks un par un
+  // auraient fait paraître. Le jour où une apparition dépendra de l'instant
+  // PRÉCIS où elle tombe, cette ligne cessera d'être juste — et le test des deux
+  // chemins le dira.
+  resoudreSatellites(etat);
 }
 
 // ---------------------------------------------------------------------------
@@ -1190,6 +1215,43 @@ const MIGRATIONS = {
     s.version = 7;
     s.garnison = [];
     s.armee = [];
+  },
+
+  /**
+   * v7 → v8 : la table des satellites — les deux camps et l'avant-poste qui
+   * suivent la base du joueur.
+   *
+   * ⚠ ELLE PROGRAMME LES TROIS APPARITIONS, elle ne les fait pas paraître. Une
+   * sauvegarde v7 a été écrite avant que les satellites existent : sa base n'a
+   * jamais rien eu autour d'elle. Les poser d'office mettrait trois sites sur la
+   * carte à l'instant du chargement, sans les cinq minutes qu'Ethan a arbitrées
+   * — et le joueur les verrait apparaître pendant qu'il regarde ailleurs. Les
+   * programmer, c'est traiter le chargement comme ce qu'il est de son point de
+   * vue : le moment où sa base entre dans un monde qui a maintenant des voisins.
+   *
+   * ⚠ ELLE LIT `s.horloge.nbTicks`, ET IL FAUT QU'IL SOIT LÀ. Toutes les
+   * sauvegardes depuis la v1 le portent — la v0 → v1 crée l'horloge —, donc la
+   * chaîne le garantit. Le `?? 0` couvre le cas d'une v7 écrite à la main, pas
+   * un cas réel.
+   *
+   * ⚠ ELLE N'APPELLE PAS `planifierSatellites`, pour la raison de la migration
+   * précédente : une migration écrit les champs qu'elle ajoute, à la main. La
+   * fonction lit `etat.satellites`, qui n'existe pas encore au moment où elle
+   * serait appelée.
+   * @param {object} s
+   */
+  7: (s) => {
+    s.version = 8;
+    const du = (s.horloge?.nbTicks ?? 0) + TICKS_APPARITION;
+    s.satellites = {
+      presents: [],
+      attentes: [
+        { type: 'camp', tickDu: du },
+        { type: 'camp', tickDu: du },
+        { type: 'avantPoste', tickDu: du },
+      ],
+      prochaineInstance: 1,
+    };
   },
 };
 
