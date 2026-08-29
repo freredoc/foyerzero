@@ -292,7 +292,14 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
-  assert.deepEqual(r.butin, { quartz: 2766, scorie: 922 });
+  //
+  // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
+  // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
+  // le relevé TA et n'était lu par personne. Rien d'autre ne bouge — ni la
+  // cause, ni le tick, ni les survivants : le multiplicateur s'applique APRÈS le
+  // combat, il ne change pas un seul tir. Les raids sur camp, eux, ne bougent
+  // pas d'une unité, leur facteur valant 1.
+  assert.deepEqual(r.butin, { quartz: 8992, scorie: 2997 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 0);
 });
 

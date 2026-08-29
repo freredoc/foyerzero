@@ -321,7 +321,14 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
   assert.equal(budgetes[0].nbTicks, 429);
-  assert.equal(budgetes[0].butin.quartz, 237);
+  //
+  // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
+  // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
+  // le relevé TA et n'était lu par personne. Rien d'autre ne bouge — ni la
+  // cause, ni le tick, ni les survivants : le multiplicateur s'applique APRÈS le
+  // combat, il ne change pas un seul tir. Les raids sur camp, eux, ne bougent
+  // pas d'une unité, leur facteur valant 1.
+  assert.equal(budgetes[0].butin.quartz, 772);
   assert.equal(budgetes[1].cause, 'attaquants');
   assert.equal(budgetes[1].nbTicks, 409);
   assert.equal(budgetes[2].cause, 'attaquants');

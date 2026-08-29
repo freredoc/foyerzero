@@ -17,7 +17,7 @@ import { creerEtat, rattraperJeu, pointsEngages } from '../src/sim/state.js';
 import { basesDeLaFenetre, hachageBrut } from '../src/sim/peuplement.js';
 import { niveauDeLaRangee } from '../src/sim/carte.js';
 import { butin } from '../src/sim/combat.js';
-import { GEOGRAPHIE } from '../src/data/sites.js';
+import { GEOGRAPHIE, TYPES_SITE } from '../src/data/sites.js';
 
 /** Une partie dont les trois satellites sont parus. */
 function partieAvecSatellites(graine = 2026) {
@@ -251,6 +251,37 @@ test('résumé — la force de la défense se compte comme celle du joueur', () 
 
   // Une pièce inconnue est un fait de programme, pas un zéro silencieux.
   assert.throws(() => forceDeLaDefense([{ id: 'lancePierres' }]), /n'est ni une défense ni une unité/);
+});
+
+test('butin — un avant-poste paie 3,25 fois un camp, une base paie comme un camp', () => {
+  // ⚠ MONTAGE FALSIFIABLE, ET LE PREMIER JET NE L'ÉTAIT PAS. Comparer un camp à
+  // un avant-poste de même niveau ne mesure PAS le multiplicateur : ils n'ont
+  // pas le même nombre de bâtiments — 16 contre 24 au niveau 20 —, si bien que
+  // le rapport mesuré valait 5,05 et non 3,25. Ce qui isole le facteur, c'est
+  // de payer LE MÊME SITE deux fois, en ne changeant que son type.
+  const g = 2026;
+  const montage = montageDuSite(g, {
+    type: 'camp', niveau: 20, saveur: null, instance: 1, rangee: 200, colonne: 10,
+  });
+  const paye = (type) => {
+    const b = butinSiToutTombe({ ...montage, type });
+    return b.quartz + b.scorie;
+  };
+  const camp = paye('camp');
+  assert.ok(camp > 0, 'montage sans mordant : ce site ne rapporte rien');
+
+  const facteur = TYPES_SITE.avantPoste.multiplicateurButin;
+  assert.equal(facteur, 3.25, 'le multiplicateur de la table a bougé');
+  assert.ok(Math.abs(paye('avantPoste') / camp - facteur) < 0.001,
+    `rapport mesuré ${(paye('avantPoste') / camp).toFixed(4)}`);
+
+  // ⚠ ET UNE BASE PORTE `null`, QUI VAUT 1 — pas zéro. Le lire comme un zéro
+  // rendrait toute base sans butin, ce qu'aucun test ne dirait autrement.
+  assert.equal(TYPES_SITE.base.multiplicateurButin, null);
+  assert.equal(paye('base'), camp, 'une base ne paie pas comme un camp de même bâti');
+  // Un montage sans type non plus : c'est ce qui laisse les raids de référence
+  // écrits à la main exacts.
+  assert.equal(paye(undefined), camp);
 });
 
 test('résumé — un site de haut niveau pèse plus lourd qu\'un site de bas niveau', () => {

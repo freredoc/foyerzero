@@ -406,7 +406,12 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // dans les DEUX sens — A perd 26 % de butin, B en gagne 6 %. Un allongement
     // uniforme n'aurait pas fait ça. Les obstacles cantonnés à la bande de
     // défense changent QUI meurt et QUAND, pas seulement la durée.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 429, butin: { quartz: 237, scorie: 79 }, survivants: 3 },
+    // ⚠ LOT MULTIPLICATEUR (29/08) : A est un AVANT-POSTE, son butin est
+    // multiplié par 3,25 — 237 → 772, 79 → 257. B et C sont des camps et ne
+    // bougent pas d'une unité : c'est la meilleure preuve que le multiplicateur
+    // ne touche que ce qu'il doit toucher. Ni les causes, ni les trois ticks,
+    // ni les comptes de survivants ne changent : il s'applique après le combat.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 429, butin: { quartz: 772, scorie: 257 }, survivants: 3 },
     { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 409, butin: { quartz: 37_221, scorie: 12_407 }, survivants: 8 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
