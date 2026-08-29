@@ -57,6 +57,7 @@ import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { satellitesVides } from '../src/sim/satellites.js';
+import { creerPointsAttaque } from '../src/sim/points-attaque.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
@@ -142,6 +143,10 @@ function baseDeLaMaquette() {
     // un montage qui l'omet n'est plus un état de jeu. Le message le dit au lieu
     // de lever une TypeError au fond de `sim/`.
     satellites: satellitesVides(),
+    // ⚠ ET LES POINTS D'ATTAQUE DEPUIS LE 29/08 AU SOIR, pour la raison exacte
+    // qui a fait entrer les satellites le matin : `tickJeu` les lit, et un
+    // montage qui les omet n'est plus un état de jeu.
+    attaque: creerPointsAttaque(),
   };
 }
 
