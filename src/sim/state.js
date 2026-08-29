@@ -13,6 +13,9 @@ import {
   TICKS_APPARITION,
 } from './satellites.js';
 import { positionDepartJoueur } from './carte.js';
+import {
+  creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise, basesDuJoueur,
+} from './points-attaque.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
@@ -27,7 +30,7 @@ import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 /**
  * @typedef {object} Etat
@@ -153,6 +156,12 @@ export function creerEtat(graine) {
     // DÉCISION du joueur, et aucune base ne l'exprime — c'est de l'histoire, au
     // même titre que `satellites`, donc ça se garde.
     tutoriel: { ferme: false },
+    // ⚠ LE PLEIN, PAS ZÉRO, et c'est un arbitrage d'Ethan du 29/08 : « au tout
+    // début du jeu, on lui donne immédiatement le plein — c'est frustrant de
+    // démarrer le jeu puis d'attendre que ça se remplisse ». Une base neuve n'a
+    // pas d'armée, donc le plafond de départ est celui de base : 100 points,
+    // dix raids courts en réserve.
+    attaque: creerPointsAttaque(),
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -231,7 +240,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites']) {
+  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites', 'attaque']) {
     exigerChamp(etat, champ);
   }
   // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
@@ -269,6 +278,7 @@ export function tickJeu(etat) {
   tickHorloge(etat.horloge);
   tickEconomieBase(etat.economie, etat.disposition, etat.champs);
   resoudreSatellites(etat);
+  avancerPointsAttaque(etat, 1);
 }
 
 /**
@@ -290,6 +300,12 @@ export function rattraperJeu(etat, nbTicks) {
   // PRÉCIS où elle tombe, cette ligne cessera d'être juste — et le test des deux
   // chemins le dira.
   resoudreSatellites(etat);
+  // ⚠ MÊME RAISON, MÊME FORME : un seul appel de n ticks, pas une boucle. Le
+  // résidu de `regenerer` porte la fraction de point non acquise, si bien que
+  // `plafond × n + résidu` est le numérateur EXACT de n ticks d'un coup. Un
+  // test compare les deux chemins sur un plafond qui ne divise pas le
+  // diviseur — c'est le seul montage où une implémentation naïve diverge.
+  avancerPointsAttaque(etat, nbTicks);
 }
 
 // ---------------------------------------------------------------------------
@@ -1406,6 +1422,36 @@ const MIGRATIONS = {
   8: (s) => {
     s.version = 9;
     s.tutoriel = { ferme: false };
+  },
+
+  /**
+   * v9 → v10 : les POINTS D'ATTAQUE — le régulateur de session. Une sauvegarde
+   * v9 a été écrite avant qu'un raid coûte quoi que ce soit.
+   *
+   * ⚠ ELLE DONNE LE PLEIN, comme une partie neuve, et c'est le même arbitrage
+   * du 29/08 : le joueur ne doit pas ouvrir sa partie devant une jauge vide
+   * qu'il faudra regarder se remplir. Il n'y a d'ailleurs rien à convertir —
+   * la sauvegarde ne porte aucune grandeur d'où des points pourraient venir.
+   *
+   * ⚠ LE PLAFOND SE CALCULE SUR L'ARMÉE SAUVEGARDÉE, pas sur la valeur de
+   * base : un joueur v9 qui avait déjà monté son armée mérite son plafond, et
+   * le cliquet ne pourra plus le lui rendre après coup s'il la démantèle.
+   *
+   * ⚠ ELLE APPELLE DEUX FONCTIONS DE `sim/points-attaque.js`, ET C'EST PERMIS.
+   * La règle de la chaîne — « une migration écrit les champs qu'elle ajoute, à
+   * la main » — vise `creerEtat` et `creerEtatEconomie`, qui ÉCRIVENT dans
+   * l'état et que les migrations traversent deux fois (lot AMORCE-ET-SIGNATURE,
+   * huit tests tombés). `plafondVise` et `plafondDuNiveau` ne sont que des
+   * lectures pures ; recopier ici la moyenne des niveaux d'armée créerait la
+   * seconde table que CLAUDE.md §4 interdit.
+   * @param {object} s
+   */
+  9: (s) => {
+    s.version = 10;
+    const plafond = Array.isArray(s.armee)
+      ? plafondVise(basesDuJoueur(s))
+      : plafondDuNiveau(null);
+    s.attaque = { points: plafond, plafond, residu: 0 };
   },
 };
 
