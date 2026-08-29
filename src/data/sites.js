@@ -173,12 +173,33 @@ export const RAID_OUVRAGE = {
 };
 
 // --- points d'attaque et points d'armée --------------------------------------
+// ⚠ CETTE TABLE N'A CHANGÉ DE VALEUR NULLE PART LE 29/08, et c'est le fait le
+// plus utile à retenir du lot POINTS-D'ATTAQUE : le plafond, la régénération, le
+// coût du raid et le rayon disaient déjà, depuis le relevé de Tiberium
+// Alliances, ce qu'Ethan a redicté ce jour-là. Deux choses seulement ont bougé,
+// et aucune n'est un nombre :
+//   — LE NIVEAU RETENU. C'était « la base la plus élevée du joueur », c'est
+//     désormais LE NIVEAU D'ARMÉE le plus élevé, en dixièmes, donc 1 point de
+//     plafond par dixième : une armée moyenne au niveau 5,8 vaut 158, chiffre
+//     donné par Ethan lui-même.
+//   — LA FORME DE LA RÉGÉNÉRATION, pas son débit. `20 + 2 × niveau` EST
+//     exactement 20 % du plafond, à tous les niveaux — 100 → 20, 600 → 120 —, et
+//     c'est cette lecture-là qui est écrite ici parce qu'elle tient en un
+//     nombre et qu'elle dit la propriété qui compte : le plein se fait en cinq
+//     heures, quel que soit le plafond. Un 10 % dicté le 29/08 a été essayé
+//     puis retiré le même soir, la table ayant raison.
+// Et une chose est venue s'ajouter : LE PLAFOND EST À CLIQUET. Il ne redescend
+// jamais, même si l'armée est démantelée. Le cliquet ne se range pas ici — ce
+// n'est pas une valeur de calibrage mais une règle —, il vit dans
+// `sim/points-attaque.js`.
 export const POINTS_ATTAQUE = {
-  // Niveau retenu : celui de la base la plus élevée du joueur.
+  // Niveau retenu : le NIVEAU D'ARMÉE le plus élevé du joueur, en dixièmes.
   plafond: { base: 100, parNiveau: 10 }, // 100 → 600
-  regenerationParHeure: { base: 20, parNiveau: 2 }, // 20 → 120
+  regenerationParHeure: { partDuPlafondPourCent: 20 }, // 20 → 120, plein en 5 h
   coutRaid: { fixe: 10, parCaseAllie: 1, parCaseEnnemiOuNeutre: 3 },
-  rayonMaximal: 10, // donc 40 points au plus loin
+  // ⚠ PAS DE `rayonMaximal` ICI. Il en portait un, à 10, qui doublait
+  // `GEOGRAPHIE.rayonAttaque` juste en dessous. Une seule table par grandeur :
+  // le barème lit le rayon là-bas, et 40 points au plus loin s'en déduit.
 };
 
 // Plafond d'unités CONSTRUCTIBLES PAR BASE, pas par raid. Chaque budget est
