@@ -196,6 +196,31 @@ export const APRES_RAID = {
   reparationDefensesHeures: 1,
 };
 
+// --- réparation de l'armée ----------------------------------------------------
+// Transcrit de `RELEVE-TA-COURBES-2.md` §4, où la formule restitue les sept
+// points de la série Caserne à 0,02 %, et de `MODELE-ECONOMIQUE.md` §7 pour le
+// parallélisme des réservoirs.
+//
+//     T(L, C) = base_unité × 1,15^(L−1) / D(C)
+//     D(C)    = 1,09^(min(C,12)−1) × 1,12^max(C−12, 0)
+//
+// ⚠ LA BASE PAR UNITÉ N'EST PAS ICI : elle est déjà dans `data/combat.js`, champ
+// `reparation`, en secondes — 441 pour les Fusiliers, 1 605 pour l'Enclume. Elle
+// n'est PAS proportionnelle aux PV, c'est une donnée par unité.
+//
+// ⚠ LA RUPTURE DU DIVISEUR EST AU NIVEAU 12, PAS AU 11. Quatre autres systèmes
+// changent de régime au 11 ; celui-ci fait exception, et le relevé le mesure.
+export const REPARATION = {
+  penteNiveauUnite: 1.15,
+  diviseurBatiment: { penteBasse: 1.09, penteHaute: 1.12, niveauRupture: 12 },
+  // ⚠ CE NOMBRE-CI EST LE SEUL DU BLOC QUI NE VIENNE PAS D'UN RELEVÉ.
+  // `MODELE-REPARATION-1.md` §3 dit que le coût se paie en scorie et qu'il est
+  // indexé sur le niveau de l'unité, « et rien d'autre » — sans donner d'ancre.
+  // Retenu : réparer une unité DE FOND EN COMBLE coûte ce que sa dernière montée
+  // a coûté. À arbitrer.
+  partDuCoutDeMontee: 1,
+};
+
 // --- points d'attaque et points d'armée --------------------------------------
 // ⚠ CETTE TABLE N'A CHANGÉ DE VALEUR NULLE PART LE 29/08, et c'est le fait le
 // plus utile à retenir du lot POINTS-D'ATTAQUE : le plafond, la régénération, le
