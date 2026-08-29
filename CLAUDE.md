@@ -25,7 +25,7 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
    savoir est un lot perdu.
 
 **Référence au 28/08/2026 (après le lot GARNISON-ET-ARMÉE), à confronter :**
-`npm test` → **398 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **401 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **179 928 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
@@ -73,6 +73,9 @@ migration, les deux niveaux), sept dans `offense.test.js` et neuf dans
 s'assouplir — leurs littéraux sont passés dans des fonctions — et une cinquième
 a été resserrée : elle comparait deux `indexOf` sur tout le module, et une
 déclaration remontée l'a fait tomber sans qu'aucun geste ait changé.
+Puis de **trois** au lot CITATION (29/08), dans `donnees.test.js` : les deux
+courbes confrontées au relevé qui les a mesurées, et l'écart voulu sur les
+dégâts exigé DÉCLARÉ dans le fichier qui le commet.
 
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
@@ -1651,6 +1654,23 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   nom de l'Arsenal donne `undefined.length`.
 
 ### Sur la méthode
+
+- ⚠⚠ **UNE CITATION QUI RENVOIE À UNE SOURCE QU'ON S'INTERDIT DE LIRE NE VAUT
+  PAS MIEUX QUE PAS DE CITATION.** L'en-tête de `data/niveaux.js` a annoncé
+  pendant quatre jours que sa pente venait d'un « onglet COURBE du classeur
+  FOYER-ZERO-BATIMENTS-JOUEUR.xlsx ». Or §1 interdit de lire un `.xlsx` pour
+  coder et déclare celui-ci périmé. La source était donc INVÉRIFIABLE : la
+  pente 1,1 a eu l'air inventée, et la session du 29/08 a conclu — à tort — que
+  le code contredisait un arbitrage d'Ethan. Elle était en fait **mesurée**,
+  dans `RELEVE-TA-COURBES-2.md` §0, au dépôt depuis le 24/08.
+  ⚠ **CORRIGER LES MOTS N'AURAIT PAS SUFFI.** La prochaine session aurait cru
+  un commentaire, comme celle-ci l'a fait. Trois tests de `donnees.test.js`
+  confrontent désormais `NIVEAU` et `ECONOMIE_NIVEAU` au tableau des cinq lois
+  du relevé, et exigent que l'écart voulu sur les dégâts (×1,086 mesuré, 1,1
+  codé, pour tenir le miroir) reste ÉCRIT dans le fichier qui le commet.
+  ⚠ **`data/base.js` ET `data/economie.js` CITENT ENCORE LE CLASSEUR.** Ce
+  n'est pas la même faute — Ethan l'a pointé lui-même pour ces deux-là — mais
+  le jour où l'une de ces valeurs sera contestée, la piste sera aussi courte.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie
