@@ -18,21 +18,23 @@ et lui seul.
 
 | Grandeur | Valeur mesurée le 29/08 au soir |
 |---|---|
-| Version | **0.39.0 · build 40** |
-| `npm run check` | **535 pass / 0 fail** |
-| `dist/index.html` | **529 105 octets** |
-| `SAVE_VERSION` | **12** |
-| `src/sim/` | 18 fichiers |
+| Version | **0.40.0 · build 41** |
+| `npm run check` | **548 pass / 0 fail** |
+| `dist/index.html` | **530 268 octets** |
+| `SAVE_VERSION` | **13** |
+| `src/sim/` | 19 fichiers |
 | Onglet mort restant | **Recherche**, et lui seul |
 
-**Sept lots livrés dans la journée**, tous en simulation pure, aucun écran :
+**Huit lots livrés dans la journée**, tous en simulation pure, aucun écran :
 POINTS-D'ATTAQUE, SITE-D'UNE-CASE, SITE-ENTAMÉ, BUTIN-SOLDÉ,
-RECHERCHE-AU-PRORATA, MULTIPLICATEUR, ACTE-DE-RAID. Chacun a son
+RECHERCHE-AU-PRORATA, MULTIPLICATEUR, ACTE-DE-RAID, RÉPARATION. Chacun a son
 `RAPPORT-lot*.md` à la racine.
 
-**La boucle du raid est refermée** : `executerRaid` paie, compose l'assaut depuis
-l'armée posée, résout, verse le butin, range la recherche, marque le site et
-ramène les unités abîmées.
+**La boucle du raid est refermée, réparation comprise** : `executerRaid` paie,
+compose l'assaut depuis l'armée posée, résout, verse le butin, range la
+recherche, marque le site et ramène les unités abîmées ; `lancerLaReparation`
+les remet sur pied, quatre réservoirs en parallèle, coût additif et temps au
+maximum.
 
 ---
 
@@ -52,6 +54,9 @@ ramène les unités abîmées.
 5. **Multiplicateur d'avant-poste** — le ×3,25 de la table est enfin appliqué.
 6. **Ordre de travail** — l'acte de raid, puis cette passation. Ensuite : les
    sprites et les écrans.
+7. **Réparation de l'armée** — les réservoirs en parallèle, dictés au mot près :
+   « si je répare complètement mes véhicules, j'ai 20 minutes d'infanterie
+   gratuites ». C'était déjà dans `MODELE-ECONOMIQUE.md` §7.
 
 ---
 
@@ -125,10 +130,13 @@ dessus. Se relit par `BigInt(x)`, **jamais** par `Number(x)`.
    premier toucher pour le mini-onglet, second pour entrer dans la cible.
    `resumeCourant` de `sim/site-entame.js` rend EXACTEMENT le contenu du
    mini-onglet.
-3. **La réparation du joueur** — bâtiments, unités, défenses. Le raid abîme
-   l'armée sans donner le moyen de la remettre sur pied.
-   `MODELE-REPARATION-1.md` §3 et §4 portent tout le modèle, réserve de temps
-   comprise. **Aucun arbitrage à demander avant de commencer.**
+3. **La réparation des BÂTIMENTS et de la DÉFENSE.** L'armée est faite ; les
+   deux autres régimes de `MODELE-REPARATION-1.md` §3 ne le sont pas — le
+   Chantier commande le temps des bâtiments, le Complexe de défense répare tout
+   gratuitement en une heure, joueur comme Ouvrage. **Aucun arbitrage à demander
+   avant de commencer.**
+   ⚠ Et **`REPARATION.partDuCoutDeMontee`** attend un arbitrage : réparer une
+   unité de fond en comble coûte aujourd'hui ce que sa dernière montée a coûté.
 4. **L'arbre de recherche.** `FOYER-ZERO-RECHERCHE.xlsx` porte les coûts de
    déblocage ; **aucun n'est en code**. Son LISEZ-MOI dit que la cadence reste à
    caler, et `ARBRE-RECHERCHE.md` §4 pose six questions, dont « les modules

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **29/08/2026**, version 0.39.0 · build 40.
+Dernière révision : **29/08/2026**, version 0.40.0 · build 41.
 
 ---
 
@@ -34,13 +34,13 @@ Dernière révision : **29/08/2026**, version 0.39.0 · build 40.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 29/08/2026 (après le lot ACTE-DE-RAID), à confronter :**
-`npm test` → **535 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**529 105 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+**Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
+`npm test` → **548 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**530 268 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
-réparation dans le tick. BUTIN-SOLDÉ, +237 ; RECHERCHE-AU-PRORATA, +57 ; MULTIPLICATEUR, +52 ; ACTE-DE-RAID, +158.
+réparation dans le tick. BUTIN-SOLDÉ, +237 ; RECHERCHE-AU-PRORATA, +57 ; MULTIPLICATEUR, +52 ; ACTE-DE-RAID, +158 ; RÉPARATION, +1 163.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -217,7 +217,7 @@ src/data/               toutes les valeurs de calibrage — 7 fichiers ; RIEN d'
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
 
-src/sim/                simulation déterministe, sans DOM — 18 fichiers
+src/sim/                simulation déterministe, sans DOM — 19 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -230,6 +230,7 @@ src/sim/                simulation déterministe, sans DOM — 18 fichiers
   site-de-la-case.js    une case de la carte → un site jouable : deux graines, saveur, résumé
   site-entame.js        l'après-raid : planchers, ce qui reste debout, ce qui repousse
   raid.js               l'acte : payer, partir, encaisser, revenir abîmé
+  reparation.js         les quatre réservoirs, en parallèle : coût additif, temps au maximum
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 6 fichiers
@@ -266,13 +267,13 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   34 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   35 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
-  roster  site-de-la-case  site-entame  state
+  reparation  roster  site-de-la-case  site-entame  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
