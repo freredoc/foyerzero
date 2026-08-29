@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **29/08/2026**, version 0.37.0 · build 38.
+Dernière révision : **29/08/2026**, version 0.38.0 · build 39.
 
 ---
 
@@ -34,13 +34,13 @@ Dernière révision : **29/08/2026**, version 0.37.0 · build 38.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 29/08/2026 (après le lot RECHERCHE-AU-PRORATA), à confronter :**
-`npm test` → **523 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**528 895 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+**Référence au 29/08/2026 (après le lot MULTIPLICATEUR), à confronter :**
+`npm test` → **524 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**528 947 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
-réparation dans le tick. BUTIN-SOLDÉ, +237 ; RECHERCHE-AU-PRORATA, +57.
+réparation dans le tick. BUTIN-SOLDÉ, +237 ; RECHERCHE-AU-PRORATA, +57 ; MULTIPLICATEUR, +52.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été

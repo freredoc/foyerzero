@@ -326,7 +326,7 @@ niveaux de progression pour un échelon d'arbre. Voir `FOYER-ZERO-RECHERCHE.xlsx
 
 | | Camp | Avant-poste | Base |
 |---|---|---|---|
-| Butin par bâtiment | ×1 | **×3 à 3,5** | — |
+| Butin par bâtiment | ×1 | **×3,25** | — (donc ×1) |
 | Attaque le joueur | non | non | **oui** |
 | Indexé sur | **niveau du joueur** | **rayon + présence du joueur** | rayon |
 | Bâtiment détruit | définitif | définitif | réparé en 1 h |
