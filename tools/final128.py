@@ -1,4 +1,4 @@
-import sys; sys.path.insert(0,'/home/claude/work')
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import ImageFile as _IF; _IF.LOAD_TRUNCATED_IMAGES=True
 from cond import est_fond, eroder, reduire, boite
 from PIL import Image

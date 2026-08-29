@@ -2,7 +2,7 @@
 Les trois recoivent DEUX bandes identiques, aux memes coordonnees absolues,
 meme largeur et meme rythme. Aucune forme inventee : kaki contour et kaki ombre
 sont deja dans les trois sprites."""
-import sys; sys.path.insert(0,'/home/claude/work')
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cond import *
 import numpy as np, itertools
 
