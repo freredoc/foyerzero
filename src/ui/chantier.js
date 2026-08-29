@@ -256,6 +256,29 @@ export function formaterNiveau(dixiemes) {
  * s'affiche dans le bandeau contextuel. Un test asserte que cette table couvre
  * exactement les onze bâtiments et que les onze sigles sont distincts.
  */
+/**
+ * Ce qu'un obstacle ralentit, en une lettre et en toutes lettres.
+ *
+ * ⚠ LES CLÉS SONT CELLES DE `OBSTACLES.types`, ET UN TEST L'ASSERTE dans les
+ * deux sens. Un type ajouté à la table de combat sans sigle ici dessinerait
+ * « undefined » dans la case, et personne ne le verrait avant l'appareil.
+ *
+ * ⚠ ET LE SIGLE DIT CE QUI EST RALENTI, PAS CE QU'EST L'OBSTACLE. Le joueur n'a
+ * rien à faire de savoir si c'est un rocher ou une carcasse : ce qu'il décide
+ * avec, c'est par où faire passer son assaut.
+ */
+export const SIGLES_OBSTACLE = {
+  infanterie: 'I',
+  vehicule: 'V',
+  les_deux: 'X',
+};
+
+export const LIBELLES_OBSTACLE = {
+  infanterie: 'ralentit l\'infanterie',
+  vehicule: 'ralentit les véhicules',
+  les_deux: 'ralentit tout ce qui roule et tout ce qui marche',
+};
+
 export const SIGLES = {
   chantierDeConstruction: 'CHA',
   centreDeCommandement: 'CDC',
@@ -2676,7 +2699,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       selection = null;
     }
     for (const case_ of cellules.values()) {
-      case_.classList.remove('champ', 'quartz', 'scorie');
+      case_.classList.remove('champ', 'quartz', 'scorie', 'obstacle');
+      case_.querySelector('.obstacle-marque')?.remove();
       case_.querySelector('.jeton')?.remove();
       case_.querySelector('.fantome')?.remove();
       case_.querySelector('.fleche')?.remove();
@@ -2689,6 +2713,23 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       const case_ = cellules.get(cle(champ.rangee, champ.colonne));
       if (case_ === undefined) continue;
       case_.classList.add('champ', champ.ressource);
+    }
+
+    // ⚠ LES OBSTACLES SE DESSINENT, ET CE N'EST PAS DÉCORATIF. Une case où rien
+    // ne peut se poser DOIT se voir : sans ça le joueur touche, reçoit un refus,
+    // et n'a aucun moyen de savoir laquelle des soixante-douze cases est
+    // interdite avant de les avoir toutes essayées. C'est « un indice n'est pas
+    // une interdiction » pris par l'autre bout — ici le refus existe déjà, c'est
+    // l'indice qui manquait.
+    for (const o of etat.obstacles.cases) {
+      const case_ = cellules.get(cle(o.rangee, o.colonne));
+      if (case_ === undefined) continue;
+      case_.classList.add('obstacle');
+      const marque = doc.createElement('div');
+      marque.className = 'obstacle-marque';
+      marque.textContent = SIGLES_OBSTACLE[o.type];
+      marque.title = LIBELLES_OBSTACLE[o.type];
+      case_.appendChild(marque);
     }
 
     // ⚠ LES DEUX TERRAINS SE DESSINENT PAR LA MÊME BOUCLE. Les bâtiments dans
