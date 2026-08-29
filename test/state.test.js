@@ -32,6 +32,10 @@ import { problemesDeDisposition } from '../src/sim/disposition.js';
 import { creerRng, entier } from '../src/sim/rng.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
 import { champsDeLaBase, obstaclesDeLaBase } from '../src/sim/champs.js';
+import {
+  TICKS_APPARITION, satellitesVides, planifierSatellites, resoudreSatellites,
+  detruireSatellite, casesDeLAnneau, ANNEAUX,
+} from '../src/sim/satellites.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 
 // ⚠ UN INSTANT MURAL FIXE, JAMAIS L'HORLOGE DE LA MACHINE. Depuis la v6,
@@ -303,7 +307,7 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 7, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 8, 'le bump de la version des sauvegardes a été oublié');
 
   // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
   // terrain ne serait dérivable de rien.
@@ -315,6 +319,16 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   // convertir, et deux listes vides sont exactement ce que la partie avait.
   assert.deepEqual(etat.garnison, [], 'le maillon v6 → v7 n\'a pas été appliqué');
   assert.deepEqual(etat.armee, [], 'le maillon v6 → v7 n\'a pas été appliqué');
+
+  // Et v7 → v8 : les satellites sont PROGRAMMÉS, pas posés. Une sauvegarde v0
+  // n'a jamais eu de voisins ; les faire paraître à l'instant du chargement
+  // sauterait les cinq minutes arbitrées le 29/08.
+  assert.deepEqual(etat.satellites.presents, [], 'le maillon v7 → v8 pose au lieu de programmer');
+  assert.equal(etat.satellites.attentes.length, 3, 'deux camps et un avant-poste');
+  assert.deepEqual(
+    etat.satellites.attentes.map((a) => a.type).sort(),
+    ['avantPoste', 'camp', 'camp'],
+  );
 
   // ⚠ CE QUI SURVIT : LE TEMPS, PAS LE CONTENU. La migration 3 → 4 REFONDE la
   // base — il n'existe aucune correspondance entre une `foreuse` sans
@@ -1193,16 +1207,27 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   const v6 = { ...v7, version: 6 };
   delete v6.garnison;
   delete v6.armee;
+  // ⚠ ET `satellites` AUSSI, DEPUIS LE 29/08. Une v6 ne le portait pas non plus,
+  // et le laisser ferait migrer une sauvegarde qui n'a jamais existé.
+  delete v6.satellites;
 
   const migre = migrer(structuredClone(v6));
-  assert.equal(migre.version, 7);
+  assert.equal(migre.version, 8, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
   assert.deepEqual(migre.garnison, []);
   assert.deepEqual(migre.armee, []);
+  assert.deepEqual(migre.satellites.presents, []);
+  assert.equal(migre.satellites.attentes.length, 3);
   // Et RIEN d'autre n'a bougé : la migration ajoute, elle ne refonde pas.
   assert.deepEqual(migre.disposition, v7.disposition);
   assert.deepEqual(migre.economie, v7.economie);
   assert.deepEqual(migre.fondation, v7.fondation);
   assert.deepEqual(migre.horloge, v7.horloge);
+  // ⚠ ET LES ÉCHÉANCES SE COMPTENT DEPUIS L'HORLOGE DE LA SAUVEGARDE, pas depuis
+  // zéro. Une partie vieille de deux heures verrait sinon ses trois satellites
+  // paraître à l'instant même du chargement.
+  for (const a of migre.satellites.attentes) {
+    assert.equal(a.tickDu, v7.horloge.nbTicks + TICKS_APPARITION);
+  }
 
   // Falsifiable : la disposition doit être NON TRIVIALE, sinon comparer deux
   // listes vides ne prouverait rien.

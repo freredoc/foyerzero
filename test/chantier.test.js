@@ -56,6 +56,7 @@ import {
 import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
+import { satellitesVides } from '../src/sim/satellites.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
@@ -136,6 +137,11 @@ function baseDeLaMaquette() {
   // et `resumeDeLaBase` le dit au lieu de lever au fond de `sim/`.
   return {
     disposition, champs, economie: creerEtatEconomie(disposition), garnison: [], armee: [],
+    // ⚠ LA TABLE DES SATELLITES EST DU MONTAGE DEPUIS LE 29/08, pour la raison
+    // exacte qui a fait entrer les deux forces la veille : `tickJeu` la lit, et
+    // un montage qui l'omet n'est plus un état de jeu. Le message le dit au lieu
+    // de lever une TypeError au fond de `sim/`.
+    satellites: satellitesVides(),
   };
 }
 
