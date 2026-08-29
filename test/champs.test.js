@@ -13,18 +13,24 @@
 // deux se toucher, la reconstruction verrait un bloc de quatre et les tests
 // tomberaient — c'est exactement ce qu'on veut.
 //
-// Les seuils sont MESURÉS sur les 9 000 positions de la carte réelle
-// (30 × 300), pas devinés. Voir RAPPORT-lotCHAMPS-generateur.md.
+// Les seuils sont MESURÉS sur les positions de la carte réelle, pas devinés.
+// Voir RAPPORT-lotCHAMPS-generateur.md. ⚠ Elles étaient 9 000 (30 × 300) jusqu'au
+// 29/08 ; la carte fait 31 colonnes depuis, donc 9 300 — les tests lisent
+// `GEOGRAPHIE.carte`, ils n'ont pas eu à changer.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   champsDeLaBase, graineDePosition, decouperEnBlocs,
-  blocsDuTerrain, categorieDuBloc, ressourceDeLaCase,
+  blocsDuTerrain, categorieDuBloc, ressourceDeLaCase, obstaclesDeLaBase,
 } from '../src/sim/champs.js';
-import { CHAMPS, zoneDesChamps, estDansLaBase } from '../src/data/base.js';
+import {
+  CHAMPS, zoneDesChamps, estDansLaBase, TERRAIN_INITIAL, OBSTACLES_DE_BASE,
+} from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
+import { GRILLE, OBSTACLES } from '../src/data/combat.js';
+import { positionDepartJoueur } from '../src/sim/carte.js';
 import { creerRng } from '../src/sim/rng.js';
 
 const ZONE = zoneDesChamps();
@@ -333,5 +339,165 @@ test('champs — le collecteur est le seul à pouvoir s\'y poser, et le champ d�
   // il tient à ce module : si le générateur en posait treize, il se déplacerait.
   for (const [r, c] of positions(31)) {
     assert.equal(champsDeLaBase(r, c).cases.length, CHAMPS.total);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Le terrain de la PREMIÈRE base — une table, pas un tirage
+// ---------------------------------------------------------------------------
+
+test('terrain initial — la table obéit aux mêmes règles que le tirage', () => {
+  // ⚠ UNE TABLE DISPENSÉE DES RÈGLES SERAIT LA PREMIÈRE À LES CONTREDIRE. Le
+  // dessin d'Ethan est transcrit à la main : rien ne garantit a priori qu'il
+  // respecte la zone, les tailles de bloc et le non-contact. On le vérifie donc
+  // exactement comme un terrain tiré, avec la MÊME lecture indépendante par
+  // composantes connexes.
+  const { champs, repartition } = TERRAIN_INITIAL;
+
+  assert.equal(champs.length, CHAMPS.total);
+  const compte = { quartz: 0, scorie: 0 };
+  for (const k of champs) compte[k.ressource] += 1;
+  assert.deepEqual(compte, repartition, 'la répartition annoncée ne compte pas les cases');
+  assert.ok(
+    CHAMPS.repartitions.some((r) => r.quartz === repartition.quartz && r.scorie === repartition.scorie),
+    `répartition ${repartition.quartz}/${repartition.scorie} hors des trois admises`,
+  );
+
+  // Dans la zone, jamais sur le pourtour.
+  for (const k of champs) {
+    assert.ok(
+      k.rangee >= ZONE.premiereRangee && k.rangee <= ZONE.derniereRangee
+        && k.colonne >= ZONE.premiereColonne && k.colonne <= ZONE.derniereColonne,
+      `champ en (${k.rangee}, ${k.colonne}) hors de la zone`,
+    );
+  }
+
+  // Blocs RECONSTRUITS, jamais déclarés.
+  const blocs = blocsDuTerrain({ cases: champs });
+  for (const bloc of blocs) {
+    assert.ok(bloc.cases.length <= 3, `bloc de ${bloc.cases.length} cases`);
+    assert.ok(CHAMPS.taillesBloc.includes(bloc.cases.length));
+    if (bloc.cases.length === 3) {
+      assert.ok(CHAMPS.formesTriplet.includes(categorieDuBloc(bloc.cases)));
+    }
+  }
+  // Falsifiable : sans blocs, la boucle ne mesure rien.
+  assert.ok(blocs.length >= 5, `${blocs.length} blocs seulement`);
+});
+
+test('terrain initial — la position de départ est servie par la table, les autres par le tirage', () => {
+  const depart = positionDepartJoueur();
+  const initial = champsDeLaBase(depart.rangee, depart.colonne);
+
+  // `tentatives` à zéro dit « aucun tirage n'a eu lieu ». C'est ce qui distingue
+  // une table d'un tirage réussi du premier coup.
+  assert.equal(initial.tentatives, 0);
+  assert.deepEqual(initial.cases, TERRAIN_INITIAL.champs);
+  assert.deepEqual(initial.repartition, TERRAIN_INITIAL.repartition);
+
+  // ⚠ ET C'EST UNE COPIE, pas la table elle-même. Rendre la référence laisserait
+  // n'importe quel appelant modifier le terrain de toutes les parties à venir.
+  initial.cases[0].ressource = 'scorie';
+  assert.notEqual(TERRAIN_INITIAL.champs[0].ressource, 'scorie', 'la table a été mutée');
+
+  // La case d'à côté, elle, est tirée — sinon la dérogation ne serait pas une
+  // dérogation mais la règle.
+  const voisine = champsDeLaBase(depart.rangee, depart.colonne + 1);
+  assert.ok(voisine.tentatives >= 1);
+  assert.notDeepEqual(voisine.cases, TERRAIN_INITIAL.champs);
+});
+
+// ---------------------------------------------------------------------------
+// Obstacles — bande de défense seulement
+// ---------------------------------------------------------------------------
+
+/** Les mêmes contrôles pour un jeu d'obstacles, d'où qu'il vienne. */
+function verifierObstacles(cases, ou) {
+  const bande = GRILLE.bandes.defense;
+  assert.equal(cases.length, OBSTACLES.nombre, `${ou} : compte`);
+
+  const vues = new Set();
+  const parRangee = new Map();
+  for (const o of cases) {
+    assert.ok(
+      o.rangee >= bande.premiere && o.rangee <= bande.derniere,
+      `${ou} : obstacle en rangée ${o.rangee}, hors de la bande de défense`,
+    );
+    assert.ok(o.colonne >= 1 && o.colonne <= GRILLE.largeur, `${ou} : colonne ${o.colonne}`);
+    assert.ok(OBSTACLES.types.includes(o.type), `${ou} : type « ${o.type} »`);
+    const cle = `${o.rangee}:${o.colonne}`;
+    assert.ok(!vues.has(cle), `${ou} : deux obstacles en ${cle}`);
+    vues.add(cle);
+    parRangee.set(o.rangee, (parRangee.get(o.rangee) ?? 0) + 1);
+  }
+
+  // Deux par rangée au plus : neuf colonnes moins deux en laissent sept, donc
+  // les six occupants de `DISPOSITION_DEFENSES` restent atteignables partout.
+  for (const [rangee, n] of parRangee) {
+    assert.ok(n <= OBSTACLES_DE_BASE.maxParRangee, `${ou} : ${n} obstacles en rangée ${rangee}`);
+  }
+
+  // Jamais deux au contact par un côté : collés, ils font un mur, et le mur est
+  // une DÉFENSE, avec ses points et ses PV.
+  for (const o of cases) {
+    for (const [dr, dc] of [[0, 1], [1, 0]]) {
+      assert.ok(
+        !vues.has(`${o.rangee + dr}:${o.colonne + dc}`),
+        `${ou} : obstacles collés en (${o.rangee}, ${o.colonne})`,
+      );
+    }
+  }
+}
+
+test('obstacles — la table initiale obéit aux règles de pose', () => {
+  verifierObstacles(TERRAIN_INITIAL.obstacles, 'TERRAIN_INITIAL');
+  // Et elle ne mord sur aucun champ — ce qui est garanti par les bandes, mais
+  // le jour où quelqu'un déplacera un obstacle à la main, c'est cette ligne qui
+  // le rattrapera.
+  const champs = new Set(TERRAIN_INITIAL.champs.map((k) => `${k.rangee}:${k.colonne}`));
+  for (const o of TERRAIN_INITIAL.obstacles) {
+    assert.ok(!champs.has(`${o.rangee}:${o.colonne}`), `obstacle sur un champ en (${o.rangee}, ${o.colonne})`);
+  }
+});
+
+test('obstacles — tirés de la position, dans la bande de défense, et stables', () => {
+  const depart = positionDepartJoueur();
+
+  // La première base porte la table, comme pour les champs et sous la même clé.
+  const initial = obstaclesDeLaBase(depart.rangee, depart.colonne);
+  assert.equal(initial.tentatives, 0);
+  assert.deepEqual(initial.cases, TERRAIN_INITIAL.obstacles);
+
+  // Ailleurs, un tirage — vérifié sur un échantillon de la carte réelle.
+  const { largeur, hauteur } = GEOGRAPHIE.carte;
+  let tires = 0;
+  let maxTentatives = 0;
+  for (let r = 3; r <= hauteur; r += 37) {
+    for (let c = 1; c <= largeur; c += 5) {
+      if (r === depart.rangee && c === depart.colonne) continue;
+      const o = obstaclesDeLaBase(r, c);
+      verifierObstacles(o.cases, `(${r}, ${c})`);
+      maxTentatives = Math.max(maxTentatives, o.tentatives);
+      tires += 1;
+    }
+  }
+  assert.ok(tires > 40, `${tires} positions balayées : l'échantillon ne mesure rien`);
+  assert.ok(
+    maxTentatives < OBSTACLES_DE_BASE.tentativesMax,
+    `${maxTentatives} tentatives au pire, le plafond est ${OBSTACLES_DE_BASE.tentativesMax}`,
+  );
+
+  // Fonction de la position, et de rien d'autre.
+  assert.deepEqual(obstaclesDeLaBase(100, 7), obstaclesDeLaBase(100, 7));
+  assert.notDeepEqual(obstaclesDeLaBase(100, 7), obstaclesDeLaBase(100, 8));
+
+  // ⚠ ET LES OBSTACLES NE SUIVENT PAS LE FLUX DES CHAMPS. Si les deux tirages
+  // partageaient leur graine, changer le nombre de champs déplacerait tous les
+  // obstacles. Deux positions dont les champs sont identiques n'existent pas, on
+  // vérifie donc l'indépendance autrement : les obstacles d'une position ne se
+  // déduisent pas de ses champs, ils tombent dans une bande où aucun champ ne va.
+  const champs = champsDeLaBase(100, 7).cases.map((k) => `${k.rangee}:${k.colonne}`);
+  for (const o of obstaclesDeLaBase(100, 7).cases) {
+    assert.ok(!champs.includes(`${o.rangee}:${o.colonne}`));
   }
 });

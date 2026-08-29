@@ -283,7 +283,12 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   const r = executerRaidComplet(parametres);
   assert.equal(r.cause, 'attaquants', 'la cause n\'est plus l\'expiration');
   assert.ok(r.nbTicks < 900, `${r.nbTicks} ticks, il en fallait moins de 900`);
-  assert.equal(r.nbTicks, 315);
+  // Lot CARTE (29/08) : 305, et le butin baisse de 26 321 à 24 796. Les dix
+  // obstacles sont cantonnés à la bande de défense, donc l'infanterie s'y
+  // attarde et y meurt plus vite qu'elle n'atteint les bâtiments. Les sept
+  // survivants et le fait qu'au moins une unité soit RENTRÉE — ce que ce test
+  // existe pour tenir — ne bougent ni l'un ni l'autre.
+  assert.equal(r.nbTicks, 305);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -297,7 +302,7 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // Lot COURBE : 26 321 au lieu de 26 319. DEUX unités de quartz. Le tick 315,
   // la cause et les sept survivants sont bit pour bit les mêmes sous une courbe
   // 4 500 fois plus plate — c'est l'invariance en miroir qui se montre.
-  assert.deepEqual(r.butin, { quartz: 26_321, scorie: 8773 });
+  assert.deepEqual(r.butin, { quartz: 24_796, scorie: 8265 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 7);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),

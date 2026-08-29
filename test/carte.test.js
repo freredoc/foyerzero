@@ -80,11 +80,22 @@ test('carte — le niveau monte en s\'éloignant du bord bas, et se plafonne', (
   assert.throws(() => niveauDeLaRangee(12.5), RangeError);
 });
 
-test('carte — le centre d\'une largeur PAIRE est tranché une seule fois', () => {
-  // 30 colonnes : il n'y a pas de centre exact. Ce qui compte n'est pas lequel
-  // des deux, c'est que le départ du joueur et la base terminale emploient LE
-  // MÊME — la carte est un couloir, ses deux bouts doivent être alignés.
-  assert.equal(GEOGRAPHIE.carte.largeur % 2, 0, 'largeur impaire : ce test ne mesure plus rien');
+test('carte — le centre est EXACT depuis que la largeur est impaire', () => {
+  // ⚠ CE TEST A CHANGÉ DE SENS LE 29/08, ET C'EST LE POINT. Il s'appelait « le
+  // centre d'une largeur PAIRE est tranché une seule fois » et commençait par
+  // exiger `largeur % 2 === 0` : à 30 colonnes il n'y a pas de centre, il fallait
+  // choisir entre 15 et 16, et tout ce que le test pouvait vérifier c'est que
+  // les deux bouts du couloir employaient LE MÊME choix.
+  //
+  // À 31, le centre existe : c'est (31 + 1) / 2 = 16, exactement ce que la
+  // fonction rendait déjà. Le passage de 30 à 31 n'a donc déplacé NI le départ
+  // du joueur NI la base terminale — c'est la raison pour laquelle 31 a été
+  // retenu plutôt que 29, qui aurait mis le centre en 15 et déplacé les deux.
+  //
+  // On asserte maintenant l'égalité au centre exact, ce qui est strictement plus
+  // fort : l'ancienne version acceptait 15 comme 16.
+  assert.equal(GEOGRAPHIE.carte.largeur % 2, 1, 'largeur paire : le centre exact n\'existe plus');
+  assert.equal(colonneCentre(), (GEOGRAPHIE.carte.largeur + 1) / 2);
   assert.equal(colonneCentre(), 16);
   assert.equal(positionDepartJoueur().colonne, colonneCentre());
   assert.equal(positionBaseTerminale().colonne, colonneCentre());
@@ -92,7 +103,9 @@ test('carte — le centre d\'une largeur PAIRE est tranché une seule fois', () 
   // Le centre doit être sur la carte, et à peu près au milieu : à une colonne
   // près des deux bords, la moitié de la largeur.
   assert.ok(colonneCentre() >= 1 && colonneCentre() <= GEOGRAPHIE.carte.largeur);
-  assert.ok(Math.abs(colonneCentre() - GEOGRAPHIE.carte.largeur / 2) <= 1);
+  // Autant de colonnes à gauche qu'à droite : c'est ce que « centre exact » veut
+  // dire, et une largeur paire ne peut pas le satisfaire.
+  assert.equal(colonneCentre() - 1, GEOGRAPHIE.carte.largeur - colonneCentre());
 });
 
 test('carte — la base terminale est au bout du couloir, au plafond de niveau', () => {

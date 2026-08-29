@@ -83,8 +83,44 @@ const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
  * Une base NEUVE ne servirait à rien pour ça : un seul Chantier, zéro débit,
  * zéro capacité. Toutes les égalités passeraient sur du code cassé.
  */
+// Le terrain de la maquette, TRANSCRIT et non plus dérivé.
+//
+// ⚠ IL ÉTAIT RENDU PAR `champsDeLaBase(275, 16)` JUSQU'AU 29/08, et c'est ce
+// qui l'a fait tomber : la position de départ est désormais servie par
+// `TERRAIN_INITIAL`, le dessin arbitré par Ethan, qui ne porte pas de champ sous
+// les cinq collecteurs de la maquette. Les chiffres relevés le 27/08 ont été
+// mesurés sur CE terrain-ci ; les recalculer sur un autre ne vérifierait plus la
+// maquette, ça vérifierait le nouveau tirage.
+//
+// ⚠ ET C'EST PLUS JUSTE AINSI. Une maquette est un RELEVÉ : son terrain fait
+// partie de ce qui a été observé, il n'a pas à se re-dériver à chaque lot. La
+// version dérivée liait ces mesures au générateur, si bien qu'un changement de
+// tirage cassait des assertions qui ne parlaient pas de tirage.
+const CHAMPS_DE_LA_MAQUETTE = {
+  repartition: { quartz: 6, scorie: 6 },
+  cases: [
+    { rangee: 12, colonne: 5, ressource: 'scorie' },
+    { rangee: 13, colonne: 2, ressource: 'quartz' },
+    { rangee: 14, colonne: 2, ressource: 'quartz' },
+    { rangee: 14, colonne: 3, ressource: 'quartz' },
+    { rangee: 14, colonne: 6, ressource: 'scorie' },
+    { rangee: 14, colonne: 7, ressource: 'scorie' },
+    { rangee: 15, colonne: 5, ressource: 'scorie' },
+    { rangee: 16, colonne: 7, ressource: 'quartz' },
+    { rangee: 17, colonne: 2, ressource: 'scorie' },
+    { rangee: 17, colonne: 3, ressource: 'scorie' },
+    { rangee: 17, colonne: 6, ressource: 'quartz' },
+    { rangee: 17, colonne: 7, ressource: 'quartz' },
+  ],
+  tentatives: 1,
+};
+
 function baseDeLaMaquette() {
-  const champs = champsDeLaBase(275, 16);
+  const champs = {
+    repartition: { ...CHAMPS_DE_LA_MAQUETTE.repartition },
+    cases: CHAMPS_DE_LA_MAQUETTE.cases.map((k) => ({ ...k })),
+    tentatives: CHAMPS_DE_LA_MAQUETTE.tentatives,
+  };
   const disposition = [
     ['chantierDeConstruction', 18, 5, 6], ['collecteur', 13, 2, 6], ['collecteur', 14, 2, 6],
     ['collecteur', 14, 6, 5], ['collecteur', 14, 7, 5], ['collecteur', 16, 7, 4],
@@ -1955,11 +1991,19 @@ test('flèches — elles pointent vers le bâtiment, dans le sens de l\'ÉCRAN',
   // rien aujourd'hui — ça dit qu'on raisonne en lignes d'écran, et ça restera
   // juste si la transformation cesse d'être affine. La faute qui se commet
   // vraiment est l'INVERSION du signe, et c'est celle-là qu'on attrape.
+  // ⚠ COLONNE 5 ET NON 4 DEPUIS LE 29/08 : `TERRAIN_INITIAL` porte un champ de
+  // scorie en (15, 4), et la centrale posée dessus rendait « champ-gache » —
+  // le montage cessait d'être légal, donc de mesurer le sens des flèches.
+  // ⚠ ET LA COLONNE 3, ESSAYÉE D'ABORD, MESURAIT AUTRE CHOSE SANS LE DIRE : le
+  // champ de (16, 2) devenait voisin en DIAGONALE de la centrale, si bien que
+  // le `find` sur la rangée 16 rendait le champ au lieu de l'accumulateur et
+  // l'assertion lisait « ↘ » là où elle croyait lire l'accumulateur. La colonne
+  // 5 laisse la rangée 16 vide de champs autour de la centrale.
   const champs = champsDeLaBase(275, 16);
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
-    { id: 'centrale', rangee: 15, colonne: 4, niveau: 1 },
-    { id: 'accumulateur', rangee: 16, colonne: 4, niveau: 1 },
+    { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },
+    { id: 'accumulateur', rangee: 16, colonne: 5, niveau: 1 },
   ];
   // Le montage doit être LÉGAL, sinon les débits ne veulent rien dire.
   assert.deepEqual(problemesDeDisposition(dispo, champs), []);
@@ -1977,8 +2021,9 @@ test('flèches — elles pointent vers le bâtiment, dans le sens de l\'ÉCRAN',
   const versLAccumulateur = voisinsDeLaCentrale.find((f) => f.rangee === 16);
   assert.equal(versLAccumulateur.glyphe, '↓',
     'la flèche posée sur l\'accumulateur devrait pointer vers le bas');
-  // Et le champ de scorie à droite pointe vers la gauche.
-  const versLeChamp = voisinsDeLaCentrale.find((f) => f.colonne === 5);
+  // Et le champ de scorie à droite pointe vers la gauche. Il est en (15, 6)
+  // depuis que la centrale a glissé en colonne 5.
+  const versLeChamp = voisinsDeLaCentrale.find((f) => f.colonne === 6);
   assert.equal(versLeChamp.glyphe, '←');
   assert.equal(versLeChamp.libelle, 'champ de scorie');
 

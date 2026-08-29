@@ -297,27 +297,40 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // Série 1 — bâtiments convertis, assaut FIGÉ du lot 3A. C'est la ligne du §2
   // du brief, reproduite au tick près : elle valide la conversion des PV
   // isolément, avant que le budget ne vienne s'y ajouter.
+  //
+  // ⚠ LOT CARTE (29/08) : LES SIX TICKS ONT BOUGÉ, LES TROIS CAUSES NON. Les dix
+  // obstacles sont cantonnés à la bande de DÉFENSE — arbitré par Ethan — donc
+  // tous sur le chemin de l'assaut au lieu de la moitié. A s'allonge beaucoup
+  // (321 → 669), B un peu (583 → 608), et C raccourcit (551 → 524) parce qu'il
+  // perd ses unités plus tôt qu'il n'aurait fini.
+  //
+  // ⚠ ET B RASE TOUJOURS LA SOUCHE, ce que j'ai cru un instant démenti. Une
+  // première rédaction de ce bloc écrivait ici `attaquants` : c'était une
+  // mauvaise lecture de la mesure, et l'assertion l'a fait tomber au premier
+  // essai. Le contraste que ce test tient — le figé rase, le budgété non — est
+  // intact.
   const figes = cas.map((c) => resoudre(creerCombat(montagePreregle(parametres(c)))));
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 321);
+  assert.equal(figes[0].tick, 669);
   assert.equal(figes[1].cause, 'souche');
-  assert.equal(figes[1].tick, 583);
+  assert.equal(figes[1].tick, 608);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 551);
+  assert.equal(figes[2].tick, 524);
 
   // Série 2 — assauts BUDGÉTÉS. B ne rase plus la Souche.
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
-  assert.equal(budgetes[0].nbTicks, 434);
-  assert.equal(budgetes[0].butin.quartz, 320);
+  assert.equal(budgetes[0].nbTicks, 429);
+  assert.equal(budgetes[0].butin.quartz, 237);
   assert.equal(budgetes[1].cause, 'attaquants');
   assert.equal(budgetes[1].nbTicks, 409);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 315);
-  // Lot COURBE : 26 321 au lieu de 26 319. Les six ticks ci-dessus — 321, 583,
-  // 551 pour les figés, 434, 409, 315 pour les budgétés — ne bougent pas d'un
-  // seul, courbe de combat divisée par 4 500 au niveau 50 comprise.
-  assert.equal(budgetes[2].butin.quartz, 26_321);
+  assert.equal(budgetes[2].nbTicks, 305);
+  // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
+  // courbe de combat divisée par 4 500 au niveau 50.
+  // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
+  // ticks au lieu de 315 — et non parce que les dégâts ont changé.
+  assert.equal(budgetes[2].butin.quartz, 24_796);
 
   // La raison du renversement de B, vérifiée et non supposée : le préréglage
   // figé alignait au niveau 15 deux unités que le joueur ne peut pas posséder,

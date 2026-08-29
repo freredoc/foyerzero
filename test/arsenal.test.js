@@ -527,7 +527,9 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   const r = executerRaidComplet({
     type: 'camp', niveau: 15, saveur: 'richeQuartz', graine: 1, assaut: 'infanterie',
   });
-  assert.equal(r.nbTicks, 315);
+  // Lot CARTE : 305 au lieu de 315. Les obstacles ne se dispersent plus que dans
+  // la bande de défense, et ce raid-ci s'y épuise dix ticks plus tôt.
+  assert.equal(r.nbTicks, 305);
   assert.equal(r.cause, 'attaquants');
 });
 

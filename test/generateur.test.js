@@ -370,6 +370,16 @@ test('T9 — dix obstacles, hors de la bande de déploiement, sous personne', ()
         o.rangee > deploiement.derniere,
         `obstacle en rangée ${o.rangee} — ${JSON.stringify(params)}`,
       );
+      // ⚠ ET DANS LA BANDE DE DÉFENSE, DEPUIS LE 29/08. Ethan : « obstacles
+      // seulement en défense, réparti au hasard ». Ils couvraient les rangées 3
+      // à 18. L'assertion ci-dessus ne suffit PAS à le tenir — la bande des
+      // bâtiments est elle aussi au-delà du déploiement — et c'est cette
+      // ligne-ci qui porte la règle.
+      assert.ok(
+        o.rangee >= GRILLE.bandes.defense.premiere && o.rangee <= GRILLE.bandes.defense.derniere,
+        `obstacle en rangée ${o.rangee}, hors de la bande de défense `
+          + `— ${JSON.stringify(params)}`,
+      );
       assert.ok(OBSTACLES.types.includes(o.type));
       const cle = cleCase(o.rangee, o.colonne);
       assert.ok(!cases.has(cle), 'deux obstacles sur la même case');

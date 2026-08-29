@@ -278,14 +278,22 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // au niveau 15 un Broyeur (débloqué au 28) et un Pilon (au 32), que le budget
   // refuse désormais. Ce que ce test tient est inchangé depuis le lot 3C : le
   // raid ne se termine pas faute de mieux.
+  //
+  // Lot CARTE (29/08) : `attaquants` au tick 313, et plus AUCUN survivant. Les
+  // dix obstacles sont cantonnés à la bande de défense : l'assaut lourd s'y
+  // fait retenir plus longtemps sous le feu, il y laisse les deux unités qui
+  // rentraient à la base, et le raid se termine plus tôt faute de combattants.
+  // Le butin monte pourtant — 2 766 contre 2 655 — parce que ces deux unités-là
+  // ont tiré avant de tomber. Ce que ce test tient est inchangé depuis le lot
+  // 3C : le raid ne se termine pas faute de mieux.
   assert.notEqual(r.cause, 'duree', 'le raid ne doit plus expirer faute de mieux');
   assert.equal(r.cause, 'attaquants');
-  assert.equal(r.nbTicks, 383);
+  assert.equal(r.nbTicks, 313);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
-  assert.deepEqual(r.butin, { quartz: 2655, scorie: 885 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 2);
+  assert.deepEqual(r.butin, { quartz: 2766, scorie: 922 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -358,8 +366,30 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // concluent d'eux-mêmes aux ticks 1084 et 1964, par `attaquants`. Ce sont des
   // combats trop longs, pas des combats sans issue — un fait à remonter, pas à
   // corriger en douce. Voir le rapport.
-  assert.deepEqual(expires.sort(), ['blindeLourd/base/11', 'infanterie/base/11'],
-    'deux raids touchent le plafond de 900, et par dépassement de délai');
+  //
+  // ⚠ LOT CARTE (29/08) : ILS SONT QUATRE, ET LE COUPABLE EST LE TERRAIN. Les
+  // dix obstacles ne se dispersent plus sur les rangées 3 à 18 mais sur les
+  // huit rangées de DÉFENSE seules — arbitré par Ethan. Leur densité y double,
+  // et ils sont désormais TOUS sur le chemin de l'assaut, là où la moitié
+  // d'entre eux ralentissait auparavant une traversée déjà gagnée. Les raids
+  // s'allongent, mécaniquement.
+  //
+  // La liste change des deux côtés, et c'est cohérent : `infanterie/base/11` en
+  // SORT — il se conclut maintenant au tick 861, sous le plafond — pendant que
+  // trois autres y entrent. Un simple allongement uniforme n'aurait fait
+  // qu'ajouter.
+  //
+  // Aucun des quatre n'est un gel, vérifié comme la fois précédente en portant
+  // `dureeMaxCombatSec` à 600 : ils se concluent tous par `attaquants`, aux
+  // ticks 1080 (blindeLourd/camp/2), 4645 (blindeLourd/base/11), 948
+  // (mixte/camp/11) et 2019 (mixte/base/11). Le 4645 est à remonter : 464
+  // secondes de combat, c'est cinq fois le plafond, et ce n'est plus un
+  // dépassement, c'est un autre régime.
+  assert.deepEqual(
+    expires.sort(),
+    ['blindeLourd/base/11', 'blindeLourd/camp/2', 'mixte/base/11', 'mixte/camp/11'],
+    'quatre raids touchent le plafond de 900, et par dépassement de délai',
+  );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');
   assert.equal(dcaSteriles, 0, 'la DCA ne vise plus rien qu\'elle ne puisse abattre');
