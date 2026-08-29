@@ -309,7 +309,7 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 12, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 13, 'le bump de la version des sauvegardes a été oublié');
 
   // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
   // terrain ne serait dérivable de rien.
@@ -1353,10 +1353,11 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   delete v6.satellites;
 
   const migre = migrer(structuredClone(v6));
-  assert.equal(migre.version, 12, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
+  assert.equal(migre.version, 13, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
   assert.equal(migre.attaque.plafond, 100, 'le maillon v9 → v10 manque');
   assert.deepEqual(migre.sitesEntames, {}, 'le maillon v10 → v11 manque');
   assert.deepEqual(migre.recherche, { pointsMilli: '0' }, 'le maillon v11 → v12 manque');
+  assert.equal(migre.reparation, null, 'le maillon v12 → v13 manque');
   assert.deepEqual(migre.tutoriel, { ferme: false }, 'le maillon v8 → v9 manque');
   assert.deepEqual(migre.garnison, []);
   assert.deepEqual(migre.armee, []);

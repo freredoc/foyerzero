@@ -152,6 +152,7 @@ function baseDeLaMaquette() {
     sitesEntames: {},
     basesRasees: [],
     recherche: { pointsMilli: '0' },
+    reparation: null,
   };
 }
 

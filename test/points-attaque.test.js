@@ -271,13 +271,19 @@ test('état — le cliquet traverse la sauvegarde, points compris', () => {
 });
 
 test('migration — v9 → v10 donne le plein, et le plafond de l\'armée sauvegardée', () => {
-  assert.equal(SAVE_VERSION, 10, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ CE TEST NE GARDE PAS LE NUMÉRO DE `SAVE_VERSION`, ET IL L'A GARDÉ UN
+  // TEMPS. Il l'asserta à 10, puis le lot SITE-ENTAMÉ a ajouté un maillon et ce
+  // fichier-ci est devenu rouge pour une raison qui ne le regardait pas. La
+  // garde du numéro appartient au maillon le plus RÉCENT de la chaîne, une
+  // seule fois ; ici, on vérifie que le maillon v9 → v10 fait son travail et que
+  // la chaîne va jusqu'au bout, quel que soit son bout.
+  assert.ok(SAVE_VERSION >= 10, 'le maillon v9 → v10 n\'est plus dans la chaîne');
 
   // Une v9 qui avait déjà une armée : elle mérite son plafond, et le cliquet ne
   // pourra plus le lui rendre après coup.
   const v9 = { version: 9, armee: [{ id: 'fusiliers', niveau: 6 }, { id: 'fusiliers', niveau: 5 }] };
   const migre = migrer(structuredClone(v9));
-  assert.equal(migre.version, 10);
+  assert.equal(migre.version, SAVE_VERSION);
   assert.deepEqual(migre.attaque, { points: 155, plafond: 155, residu: 0 }, '5,5 → 155');
 
   // Une v9 sans armée retombe sur le plafond de base, plein lui aussi.

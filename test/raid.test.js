@@ -263,9 +263,12 @@ test('rasage — le satellite disparaît et son remplaçant est programmé', () 
 });
 
 test('état — le compteur de recherche se migre depuis une v11', () => {
-  assert.equal(SAVE_VERSION, 12, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois —
+  // trois fichiers l'ont apprise à leurs dépens. Ici on vérifie que le maillon
+  // v11 → v12 est dans la chaîne, et que la chaîne va jusqu'au bout.
+  assert.ok(SAVE_VERSION >= 12, 'le maillon v11 → v12 n\'est plus dans la chaîne');
   const migre = migrer({ version: 11 });
-  assert.equal(migre.version, 12);
+  assert.equal(migre.version, SAVE_VERSION);
   assert.deepEqual(migre.recherche, { pointsMilli: '0' });
   assert.equal(typeof migre.recherche.pointsMilli, 'string', 'un nombre ne traverserait pas');
 });
