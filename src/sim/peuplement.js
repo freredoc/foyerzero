@@ -52,8 +52,34 @@ import { estSurLaCarte, positionDepartJoueur } from './carte.js';
  * @returns {number} réel de [0, 1[
  */
 export function hachageDeCase(graine, rangee, colonne, sel) {
+  return hachageBrut(graine, rangee, colonne, sel) / 0x100000000;
+}
+
+/**
+ * Le même hachage, rendu ENTIER sur 32 bits non signés.
+ *
+ * ⚠ IL EXISTE POUR QUE PERSONNE N'EN ÉCRIVE UN SECOND. Le pavage du fond de
+ * carte (`render/terrain.js`) a besoin de plusieurs CHAMPS par nœud — un
+ * décalage sur chaque axe, un numéro de tuile, une rotation, un miroir, un
+ * tirage d'appartenance —, donc de bits, pas d'un réel de [0, 1[. Réécrire une
+ * seconde famille de hachage pour ça aurait donné deux tirages voisins dans le
+ * dépôt, tous deux « FNV, à peu près », dont un seul serait testé.
+ *
+ * ⚠ ET LES BITS SE COMPTENT AVANT DE SE DÉCOUPER. Il y en a TRENTE-DEUX, pas
+ * un de plus : lire un champ dans `h >>> 29` n'en laisse que trois, donc une
+ * valeur toujours minuscule — la faute a été commise pendant la maquette et
+ * faisait basculer *toutes* les tuiles du même côté. Un champ qui n'a pas assez
+ * de bits se tire d'un second hachage salé, jamais du même en le pressant.
+ *
+ * @param {number} graine graine de la partie
+ * @param {number} a
+ * @param {number} b
+ * @param {number} sel
+ * @returns {number} entier de [0, 2³²[
+ */
+export function hachageBrut(graine, a, b, sel) {
   let h = 0x811c9dc5;
-  for (const v of [graine, rangee, colonne, sel]) {
+  for (const v of [graine, a, b, sel]) {
     h = Math.imul(h ^ (v & 0xffff), 0x01000193) >>> 0;
     h = Math.imul(h ^ ((v >>> 16) & 0xffff), 0x01000193) >>> 0;
   }
@@ -62,7 +88,7 @@ export function hachageDeCase(graine, rangee, colonne, sel) {
   h ^= h >>> 15;
   h = Math.imul(h, 0x2c1b3c6d) >>> 0;
   h ^= h >>> 12;
-  return (h >>> 0) / 0x100000000;
+  return h >>> 0;
 }
 
 /**

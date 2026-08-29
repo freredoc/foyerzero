@@ -597,10 +597,13 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // était vivant depuis le lot MISE EN PAGE, donc le message mentait déjà. Le
   // compte est tombé à 2 quand Mission a reçu son tutoriel, et un nombre nu
   // n'aurait pas dit lequel des trois venait de bouger.
+  //
+  // ⚠ IL N'EN RESTE QU'UN DEPUIS LE LOT ÉCRAN-CARTE : Recherche. Monde s'est
+  // ouvert sur la carte, comme Mission s'était ouvert sur le tutoriel.
   const futurs = [...html.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
     .map((m) => m[1]);
   assert.deepEqual(
-    futurs.slice().sort(), ['Monde', 'Recherche'],
+    futurs.slice().sort(), ['Recherche'],
     'la liste des onglets morts a changé : dire lequel s\'ouvre, ou lequel est retombé',
   );
 
@@ -633,13 +636,14 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     'chantier-bandes-liste', 'chantier-version', 'chantier-vers-offense']) {
     assert.ok(!code.includes(demenage), `« ${demenage} » survit après le déménagement`);
   }
-  // Cinq onglets, dont DEUX morts : Base, Mission, Recherche, Monde, Options.
-  // ⚠ MISSION EST VIVANT DEPUIS LE LOT TUTORIEL. Il était le troisième mort,
-  // « bouton mort pour l'instant, futur tuto » ; le futur est arrivé. Les morts
-  // se nomment ici comme plus haut, pour qu'on lise LEQUEL a changé.
+  // Cinq onglets, dont UN SEUL mort : Base, Mission, Recherche, Monde, Options.
+  // ⚠ MISSION S'EST OUVERT AU LOT TUTORIEL, MONDE AU LOT ÉCRAN-CARTE. Les deux
+  // étaient « morts pour l'instant » ; il ne reste que Recherche. Les morts se
+  // nomment ici comme plus haut, pour qu'on lise LEQUEL a changé.
   const ongletsMorts = [...code.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
     .map((m) => m[1]);
-  assert.deepEqual(ongletsMorts.slice().sort(), ['Monde', 'Recherche']);
+  assert.deepEqual(ongletsMorts.slice().sort(), ['Recherche']);
+  assert.ok(/id="onglet-monde">Monde</.test(code), 'l\'onglet Monde est absent ou muet');
   assert.ok(/id="onglet-mission">Mission</.test(code), 'l\'onglet Mission est absent ou muet');
   assert.ok(/id="onglet-base">Base</.test(code), 'l\'onglet ne s\'appelle plus « Base »');
   assert.ok(!/>Chantier</.test(code), 'un onglet « Chantier » traîne encore');

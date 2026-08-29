@@ -38,6 +38,7 @@ import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
 import { initialiserEcranOffense } from './offense.js';
 import { initialiserEcranMission } from './mission.js';
+import { initialiserEcranMonde } from './monde.js';
 import { initialiserBanc } from './banc.js';
 
 /**
@@ -187,6 +188,7 @@ export function initialiserSession(doc) {
   let ecran = null;
   let ecranMission = null;
   let ecranOffense = null;
+  let ecranMonde = null;
   let idImage = null;
   const chrono = creerChronometre(maintenantMs);
   let dernierAffichageMs = 0;
@@ -259,6 +261,12 @@ export function initialiserSession(doc) {
     if (instant - dernierAffichageMs >= 100) {
       dernierAffichageMs = instant;
       ecran.rafraichir(etat);
+      // ⚠ LA CARTE AUSSI, ET ELLE SEULE PARMI LES AUTRES ÉCRANS. Les satellites
+      // paraissent cinq minutes après la pose d'une base : c'est la seule chose
+      // de ces écrans-là qui change SANS que le joueur touche à rien, et elle
+      // se verrait apparaître sous ses yeux. `rafraichir` ne fait rien quand la
+      // carte n'est pas en scène.
+      if (ecranMonde !== null) ecranMonde.rafraichir(etat);
     }
     if (instant - derniereSauvegardeMs >= PERIODE_SAUVEGARDE_MS) sauvegarder();
   }
@@ -385,12 +393,14 @@ export function initialiserSession(doc) {
   // bien que le défaut ne se lirait que sur un chronomètre. On se contente donc
   // de montrer l'un et de cacher l'autre.
 
-  // ⚠ TROIS ÉCRANS DEPUIS LE 28/08, et un en-tête COMMUN au-dessus d'eux. Les
+  // ⚠ CINQ ÉCRANS DEPUIS LE LOT ÉCRAN-CARTE, et un en-tête COMMUN au-dessus
+  // d'eux. Le Monde était le dernier onglet mort à s'ouvrir avec Mission ; il
+  // ne reste que Recherche. Les
   // onglets, les ressources, la bascule entre bases et la barre du bas ont
   // quitté `#ecran-chantier` : changer d'écran ne les fait plus disparaître,
   // ce qu'Ethan demandait (« garder la barre quartz scories etc et monde option
   // dans le menu offense »).
-  const ECRANS = ['chantier', 'mission', 'offense', 'options'];
+  const ECRANS = ['chantier', 'mission', 'offense', 'monde', 'options'];
 
   // ⚠ QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN — UNE TABLE, PAS DES CONDITIONS.
   // La version précédente écrivait « actif si ce n'est pas Options », ce qui
@@ -400,6 +410,7 @@ export function initialiserSession(doc) {
     chantier: 'onglet-base',
     offense: 'onglet-base',
     mission: 'onglet-mission',
+    monde: 'onglet-monde',
     options: 'onglet-options',
   };
 
@@ -422,11 +433,22 @@ export function initialiserSession(doc) {
     // ouvre du budget et allonge la palette — et elle ne se repeint pas tant
     // qu'elle est cachée.
     if (nom === 'offense' && ecranOffense !== null && etat !== null) ecranOffense.peindre(etat);
+    // ⚠ ET LA CARTE SE MET EN SCÈNE ET SE RETIRE, LES DEUX. Elle est le seul
+    // écran qui porte une boucle à lui : les dalles du fond se calculent deux
+    // par image tant qu'il en manque. La laisser tourner derrière un autre
+    // écran ferait travailler l'appareil pour des pixels que personne ne
+    // regarde — et un canevas caché mesure zéro, donc elle ne saurait même pas
+    // quoi calculer.
+    if (ecranMonde !== null) {
+      if (nom === 'monde' && etat !== null) ecranMonde.peindre(etat);
+      else ecranMonde.masquer();
+    }
   }
 
   $('onglet-base').addEventListener('click', () => montrerEcran('chantier'));
   $('onglet-options').addEventListener('click', () => montrerEcran('options'));
   $('onglet-mission').addEventListener('click', () => montrerEcran('mission'));
+  $('onglet-monde').addEventListener('click', () => montrerEcran('monde'));
 
   // --- le banc d'essai, derrière un appui long -------------------------------
   //
@@ -441,6 +463,11 @@ export function initialiserSession(doc) {
 
   function ouvrirLeBanc() {
     suspendre();
+    // ⚠ ET LA CARTE SE RETIRE AUSSI. Le banc cache `#jeu` sans passer par
+    // `montrerEcran` : sans cette ligne, la boucle de complétion des dalles
+    // continuerait de calculer derrière lui, pour un canevas que plus personne
+    // ne regarde. `fermerLeBanc` la remet en scène par `montrerEcran`.
+    if (ecranMonde !== null) ecranMonde.masquer();
     // ⚠ UN SEUL ÉLÉMENT À CACHER DEPUIS LE 28/08. Le banc masquait les écrans
     // un par un ; avec trois écrans et deux barres communes, en oublier un
     // serait une question de temps. `#jeu` les contient tous.
@@ -520,6 +547,7 @@ export function initialiserSession(doc) {
   // joueur ne veut pas refaire parce que le système a tué l'application.
   ecranOffense = initialiserEcranOffense(doc, { apresPose: () => sauvegarder() });
   ecranMission = initialiserEcranMission(doc);
+  ecranMonde = initialiserEcranMonde(doc);
   montrerEcran('chantier');
   demarrer();
 }

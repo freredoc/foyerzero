@@ -5,14 +5,16 @@
 //     transitive ; fonctionne sans réseau une fois `npm ci` passé ;
 //   - TOUT est inliné : le HTML final ne référence aucune ressource externe,
 //     et le build SORT EN ERREUR s'il en détecte une — l'offline est non
-//     négociable ;
+//     négociable. Les IMAGES aussi : l'atlas de terrain de la carte entre en
+//     `data:` à la place de son marqueur, et son absence est une erreur de
+//     build, pas une carte muette ;
 //   - dist/ est un produit de build : jamais commité.
 //
 // Le point d'entrée JS est le <script type="module"> inline de
 // src/index.src.html : il est extrait, bundlé avec esbuild (résolution des
 // imports relatifs depuis src/), puis réinjecté inline en IIFE.
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -73,6 +75,33 @@ let html = htmlSource
   .replaceAll('%BUILD%', build)
   // Les commentaires HTML ne portent rien dans le livrable.
   .replace(/<!--[\s\S]*?-->/g, '');
+
+// --- les images inlinées ------------------------------------------------------
+//
+// ⚠ ELLES N'ENTRENT PAS PAR ESBUILD, ET C'EST DÉLIBÉRÉ. Un `import` de PNG
+// obligerait `src/ui/` à porter une extension que `node --test` ne sait pas
+// charger : le module de la carte deviendrait intestable ici, alors que tout ce
+// qui n'est pas le DOM l'est. Le HTML porte donc un marqueur, ce build met le
+// `data:` dedans, et l'écran relit l'image par son identifiant — du DOM
+// ordinaire.
+//
+// ⚠ ET UN MARQUEUR SANS FICHIER EST UNE ERREUR, PAS UN AVERTISSEMENT. Livrer
+// une carte au fond noir parce qu'un PNG a été oublié dans une archive est
+// exactement le genre de panne qui se découvre sur l'appareil.
+
+const IMAGES_INLINE = [
+  { marqueur: '%ATLAS_TERRAIN%', chemin: ['art', 'sprites', 'carte', 'atlas-terrain-64.png'], type: 'image/png' },
+];
+
+for (const image of IMAGES_INLINE) {
+  if (!html.includes(image.marqueur)) continue;
+  const chemin = join(racine, ...image.chemin);
+  if (!existsSync(chemin)) {
+    echec(`${image.marqueur} attend ${image.chemin.join('/')}, qui est absent du dépôt`);
+  }
+  const donnees = readFileSync(chemin).toString('base64');
+  html = html.replaceAll(image.marqueur, `data:${image.type};base64,${donnees}`);
+}
 
 // --- garde offline ------------------------------------------------------------
 
