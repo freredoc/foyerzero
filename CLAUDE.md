@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **29/08/2026**, version 0.31.0 · build 32.
+Dernière révision : **29/08/2026**, version 0.32.0 · build 33.
 
 ---
 
@@ -24,9 +24,9 @@ Dernière révision : **29/08/2026**, version 0.31.0 · build 32.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 29/08/2026 (après le lot RETOURS-ETHAN), à confronter :**
-`npm test` → **467 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**512 912 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot TUTORIEL-EN-BAS), à confronter :**
+`npm test` → **476 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**523 905 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -63,9 +63,9 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : 14,5 % — le lot RETOURS-ETHAN a porté le HTML à
-**512 912 octets** (+9 188 : le calque SVG des traits, la barre contextuelle de
-l'Offense, et les trois raisons de verrouillage des palettes).
+Marge actuelle : 12,7 % — le lot TUTORIEL-EN-BAS a porté le HTML à
+**523 905 octets** (+10 993 : les dix-sept missions dictées, la mini-fenêtre du
+bas, le compteur par objectif et le bouton de réouverture de l'onglet Mission).
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
 est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de
@@ -102,6 +102,14 @@ règle du bâtiment hors de `verifierEtat`), trois dans `chantier.test.js` (la
 géométrie du trait, son accord avec le glyphe, le calque SVG) et deux dans
 `offense.test.js` (la barre contextuelle, la palette qui ne défile plus). Aucun
 fichier neuf : les six retours d'Ethan touchent du code qui existait déjà.
+Puis de **neuf** au lot TUTORIEL-EN-BAS (29/08), tous dans
+`test/missions.test.js` — le fichier a été RÉÉCRIT, pas allongé : dix tests
+portaient la chaîne de cinq missions du 28/08, dix-neuf portent celle de
+dix-sept dictée le 29. Deux d'entre eux ont été RESSERRÉS après falsification :
+celui des emplacements passait VERT sur une chaîne devenue injouable, parce
+qu'il ne mesurait que le montage écrit dans le test et pas la table de
+`data/missions.js` — il lit maintenant la CHAÎNE ; et celui de la mise en page a
+changé de cible en même temps que la fenêtre quittait `position: absolute`.
 Et de **trente et un** au lot ÉCRAN-CARTE (29/08), dans deux fichiers neufs :
 treize dans `test/terrain.test.js` — le pavage, confronté à l'atlas RÉEL décodé
 sur place — et dix-huit dans `test/monde.test.js`. Deux d'entre eux ont été
@@ -186,13 +194,14 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'autre n'a le droit d'en porter
+src/data/               toutes les valeurs de calibrage — 7 fichiers ; RIEN d'autre n'a le droit d'en porter
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
+  missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
 
 src/sim/                simulation déterministe, sans DOM — 14 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
@@ -2078,6 +2087,126 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   le reste, `w3.org` compris. **Ne pas contourner en assemblant l'URL à
   l'exécution** : ce serait passer sous un garde-fou en silence, comme les hex à
   trois chiffres.
+
+- ⚠⚠ **LE TUTORIEL A UNE MINI-FENÊTRE EN BAS DE L'ÉCRAN DE LA BASE, ET ELLE EST
+  DANS LE FLUX.** Ethan, 29/08 : « faire apparaître les missions en bas au début
+  du jeu, au-dessus des boutons améliorer etc. Sous la forme d'une mini fenêtre.
+  Texte court, compteur d'objectif. Le joueur peut quitter le tuto grâce à une
+  croix comme n'importe quelle fenêtre. Il le retrouve dans l'onglet mission. »
+  ⚠⚠ **ÉCRITE EN `position: absolute`, ELLE AVALAIT LE TOUCHER — MESURÉ, PAS
+  SUPPOSÉ.** Posée sur `#chantier-champ` comme le panneau de détail, elle
+  couvrait le bas de la grille : dans un navigateur, `elementFromPoint` sur la
+  première case légale rendait `#tuto-objectifs`, et **poser un Collecteur était
+  devenu impossible** — c'est-à-dire la première mission du tutoriel que la
+  fenêtre venait d'annoncer. C'est la faute que le dépôt interdit déjà au calque
+  des traits (`pointer-events: none`) et au `transform: scale()` de la grille.
+  Elle PREND donc sa place : `#chantier-champ` est une colonne, `#chantier-defile`
+  absorbe ce qui reste, la grille se fait plus courte et défile.
+  ⚠ **ELLE N'EST PAS UNE SEPTIÈME BARRE**, et la nuance porte la consigne « tu
+  compresses tout dans l'UI ». Sa hauteur vaut une, deux ou trois lignes
+  d'objectif — `flex: 0 0 auto`, jamais `0 0 Npx` — donc elle n'entre pas dans
+  les 288 px de chrome, et elle disparaît quand le tutoriel est fini. La garde
+  des 288 px énumère les hauteurs FIXES et serait restée muette : c'est un test
+  de `missions.test.js` qui tient celle-là.
+  ⚠ **LE PANNEAU DE DÉTAIL PASSE TOUJOURS DEVANT**, puisqu'il est en `absolute`
+  dans le même champ : il répond à un geste, la fenêtre est un rappel permanent.
+  ⚠ **LES DEUX VUES VIVENT DANS `ui/mission.js`**, la mini-fenêtre et l'onglet.
+  Les écrire séparément aurait donné deux formatages du même compteur.
+  ⚠ **ET LE TITRE NE SE RÉPÈTE PAS AU-DESSUS DE SES PROPRES OBJECTIFS.** Le
+  titre est COMPOSÉ des libellés d'objectif ; l'écrire puis les lister donnait
+  « Collecteur sur quartz / Collecteur sur quartz 0 / 1 ». Vu à l'essai dans un
+  navigateur, pas à la relecture.
+
+- ⚠⚠ **LA CHAÎNE DU TUTORIEL EST DICTÉE, ET ELLE VIT DANS `data/missions.js`.**
+  Dix-sept missions données par Ethan le 29/08, avec leurs niveaux visés et
+  leurs comptes : c'est du CALIBRAGE, donc §4 le veut dans `src/data/`.
+  `sim/missions.js` les INTERPRÈTE et ne porte aucun de ces nombres — un test
+  balaie le moteur et refuse tout identifiant ou nom de la chaîne.
+  ⚠ **LE TITRE D'UNE MISSION N'EST ÉCRIT NULLE PART**, il est composé des
+  libellés de ses objectifs, eux-mêmes tirés de `nom.joueur` et des niveaux de
+  la table. Seules les missions sans moteur portent un libellé de la main
+  d'Ethan : il n'y a rien à en dériver. Un test l'asserte dans les deux sens.
+  ⚠ **LE COMPTEUR EST PAR OBJECTIF, ET SON DÉNOMINATEUR PEUT BOUGER.** « chaque
+  bâtiment au niveau 5 » compte les bâtiments POSÉS : poser du neuf le fait
+  monter, donc DÉCOCHE une mission de mise à niveau déjà faite. C'est « rien
+  n'est mémorisé » vu de l'autre côté, pas un défaut de calcul — la chaîne le
+  fait vraiment, entre les missions 7 et 8.
+  ⚠ **ELLE TIENT EXACTEMENT DANS SES EMPLACEMENTS, SANS UNE CASE DE MARGE** :
+  douze bâtiments pour les douze qu'un Chantier de niveau 5 ouvre. Une mission
+  de plus rendrait le tutoriel infinissable.
+  ⚠⚠ **ET LA GARDE QUI LE VÉRIFIE EST PASSÉE VERTE SUR DU CODE CASSÉ, AU PREMIER
+  ESSAI.** Elle jouait un montage écrit à la main dans le test : ajouter deux
+  bâtiments à `data/missions.js` ne le changeait pas, donc elle ne voyait rien.
+  Elle lit maintenant la CHAÎNE — ce que les objectifs exigent depuis le début
+  contre ce que les Chantiers déjà demandés ont ouvert. **Un montage écrit à la
+  main ne garde que lui-même.**
+
+- ⚠⚠ **QUATRE MISSIONS N'ONT PAS DE MOTEUR, ET ELLES LE DISENT DE FACE.**
+  Détruire un camp, se rapprocher des bases de l'Ouvrage, détruire une base,
+  construire une seconde base : le raid, le redéploiement et la seconde base
+  n'existent pas dans le dépôt au 29/08. Les taire aurait amputé la feuille de
+  route d'Ethan ; les compter aurait donné un compteur qui n'atteint jamais son
+  plafond, c'est-à-dire le tutoriel infinissable que §6 nomme déjà.
+  ⚠ **ELLES SONT AFFICHÉES, MARQUÉES `⋯`, ET SANS COMPTEUR.** « 0 / 1 » sur une
+  ligne qu'aucun geste ne peut cocher se lirait comme un retard du joueur.
+  ⚠ **LE DÉNOMINATEUR EST CELUI DES VÉRIFIABLES — 13 SUR 17** — et il grandira
+  tout seul le jour où le raid arrivera : c'est la ligne de `data/missions.js`
+  qui change, et rien d'autre.
+
+- ⚠⚠ **LA CHAÎNE DEMANDE DES PIÈCES QUE SES PROPRES NIVEAUX N'OUVRENT PAS, ET
+  C'EST MESURÉ.** L'Éclaireur (`ratisseur`) apparaît au niveau **18** du Centre
+  de commandement, que la chaîne ne fait monter qu'au **7** ; le Mur de défense
+  (`merlon`) au **6** et la Tourelle mitrailleuse (`casemate`) au **8** du QG de
+  défense, que la chaîne ne fait monter qu'au **5**. Le joueur PEUT y arriver —
+  rien ne l'empêche de monter plus haut — mais le tutoriel ne le lui dit pas.
+  ⚠ **LES SEUILS N'ONT PAS ÉTÉ TOUCHÉS.** `UNITES` et `DEFENSES` font foi (§6,
+  arbitré le 24/08) ; les baisser serait un arbitrage de données, et il reste à
+  rendre. C'est la même tension que « Guardien et Paladin indisponibles » du lot
+  RETOURS-ETHAN, vue une deuxième fois.
+  ⚠ **CE QUI A ÉTÉ FAIT À LA PLACE : LE TUTORIEL LE DIT.** Chaque mission
+  d'effectif porte des PRÉREQUIS dérivés — l'apparition lue dans la table et le
+  bâtiment de production lu dans `BATIMENT_DE_CHASSIS` — au lieu de laisser le
+  joueur chercher pourquoi sa palette reste grise. Le jour où Ethan descend un
+  seuil, la phrase suit toute seule, et un test l'asserte contre les tables.
+
+- ⚠⚠ **`SAVE_VERSION` VAUT 9 : L'ÉTAT PORTE `tutoriel`, ET CE N'EST PAS DE LA
+  PROGRESSION.** Ce qui est FAIT se recalcule depuis la base à chaque demande et
+  n'est écrit nulle part — c'est la règle du 28/08, intacte. Ce qui est écrit,
+  c'est « j'ai quitté le tuto » : une décision du joueur qu'aucune base ne peut
+  exprimer, donc de l'histoire, au même titre que `satellites`.
+  ⚠ **LA MIGRATION 8 → 9 AJOUTE `{ ferme: false }` ET RIEN D'AUTRE.** Une
+  sauvegarde v8 n'a jamais eu de croix à cliquer ; la déclarer fermée priverait
+  son joueur du tutoriel pour un geste qu'il n'a pas fait. Même genre que la
+  v6 → v7 : elle ajoute un champ neuf avec sa valeur neutre.
+  ⚠ **`tutorielEstFerme` LÈVE SI LE CHAMP MANQUE**, elle ne rend pas `false` par
+  défaut : un défaut par tolérance rouvrirait la fenêtre au joueur qui l'a
+  fermée, sans que rien ne le dise.
+  ⚠ **L'ÉCRAN N'ÉCRIT PAS DANS L'ÉTAT** : `reglerTutoriel` est dans
+  `sim/state.js`, comme `poser` et `ameliorer`. Deux vues touchent ce champ — la
+  croix et le bouton de l'onglet Mission — et sans elle chacune l'aurait écrit
+  de son côté.
+  ⚠ **ROUVRIR CHANGE D'ÉCRAN.** Rouvrir en restant sur l'onglet Mission ne
+  montrerait rien : la fenêtre redemandée est en bas d'un AUTRE écran, et le
+  joueur croirait le bouton mort.
+
+- **LA MINI-FENÊTRE SE RAFRAÎCHIT À CHAQUE IMAGE, L'ONGLET À L'OUVERTURE.** La
+  différence est voulue : l'onglet, on l'ouvre exprès, et rien ne bouge pendant
+  qu'on le regarde ; la fenêtre est sous les yeux du joueur PENDANT qu'il pose.
+  ⚠ **MAIS ELLE NE SE RECONSTRUIT QUE QUAND SON CONTENU CHANGE.** `rafraichir`
+  passe dix fois par seconde ; refaire les nœuds à chaque passage les ferait
+  clignoter sous le doigt. `signatureDuTutoriel` décide, et elle porte les
+  LIBELLÉS et pas seulement l'identifiant de la mission — un dénominateur qui
+  bouge sans changer de mission serait resté figé à l'écran.
+  ⚠ **ET UN SEUL POINT D'APPEL RAFRAÎCHIT L'ÉCRAN DE LA BASE ET SA FENÊTRE.**
+  `rafraichirLaBase` de `session.js` : les trois instants sont les mêmes — chaque
+  image, un retour de veille, un chargement — et trois paires d'appels côte à
+  côte finissent toujours par n'en être plus que deux.
+
+- **LE LIBELLÉ N'EST PAS LA CLÉ, ET LES TROIS MOYENNES L'ONT RAPPELÉ.** Les
+  objectifs de niveau moyen affichaient « armee en moyenne au niveau 6,0 » — la
+  clé de code, sans accent, sous les yeux du joueur. Même faute qu'`axe` contre
+  `axeLibelle` dans `data/combat.js`, et elle ne se voit qu'à l'écran : un test
+  balaie désormais tous les textes du tutoriel et refuse les clés connues.
 
 ### Sur le vocabulaire
 

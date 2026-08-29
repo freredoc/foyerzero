@@ -33,11 +33,13 @@
 // refuse les deux formes de face, comme la garde de palette refuse les hex à
 // trois et à huit chiffres.
 
-import { creerEtat, charger, serialiser, tickJeu, rattraperJeu } from '../sim/state.js';
+import {
+  creerEtat, charger, serialiser, tickJeu, rattraperJeu, reglerTutoriel,
+} from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
 import { initialiserEcranOffense } from './offense.js';
-import { initialiserEcranMission } from './mission.js';
+import { initialiserEcranMission, initialiserMiniTutoriel } from './mission.js';
 import { initialiserEcranMonde } from './monde.js';
 import { initialiserBanc } from './banc.js';
 
@@ -189,6 +191,7 @@ export function initialiserSession(doc) {
   let ecranMission = null;
   let ecranOffense = null;
   let ecranMonde = null;
+  let miniTutoriel = null;
   let idImage = null;
   const chrono = creerChronometre(maintenantMs);
   let dernierAffichageMs = 0;
@@ -260,7 +263,7 @@ export function initialiserSession(doc) {
     const instant = maintenantMs();
     if (instant - dernierAffichageMs >= 100) {
       dernierAffichageMs = instant;
-      ecran.rafraichir(etat);
+      rafraichirLaBase();
       // ⚠ LA CARTE AUSSI, ET ELLE SEULE PARMI LES AUTRES ÉCRANS. Les satellites
       // paraissent cinq minutes après la pose d'une base : c'est la seule chose
       // de ces écrans-là qui change SANS que le joueur touche à rien, et elle
@@ -269,6 +272,21 @@ export function initialiserSession(doc) {
       if (ecranMonde !== null) ecranMonde.rafraichir(etat);
     }
     if (instant - derniereSauvegardeMs >= PERIODE_SAUVEGARDE_MS) sauvegarder();
+  }
+
+  /**
+   * Repeint ce qui bouge sans que le joueur change d'écran : l'écran de la base
+   * et la mini-fenêtre du tutoriel qui y est posée.
+   *
+   * ⚠ UN SEUL POINT D'APPEL POUR LES DEUX. Ils se rafraîchissent aux trois
+   * mêmes instants — chaque image, un retour de veille, un chargement — et
+   * trois paires d'appels côte à côte finissent toujours par n'en être plus que
+   * deux : le compteur du tutoriel serait resté figé après un retour de veille,
+   * et rien à la relecture ne l'aurait dit.
+   */
+  function rafraichirLaBase() {
+    ecran.rafraichir(etat);
+    if (miniTutoriel !== null) miniTutoriel.rafraichir(etat);
   }
 
   function demarrerBoucle() {
@@ -312,7 +330,7 @@ export function initialiserSession(doc) {
     if (instantSuspensionMs !== null) {
       avancer(etat, maintenantMs() - instantSuspensionMs);
       instantSuspensionMs = null;
-      ecran.rafraichir(etat);
+      rafraichirLaBase();
     }
     demarrerBoucle();
   }
@@ -324,7 +342,7 @@ export function initialiserSession(doc) {
     sauvegardeArmee = true;
     $('chantier-alerte').hidden = true;
     ecran.peindre(etat);
-    ecran.rafraichir(etat);
+    rafraichirLaBase();
     // Les deux autres écrans se peignent aussi une première fois : ils sont
     // cachés, mais `montrerEcran` ne les repeindrait qu'à la première visite,
     // et un écran qui n'a jamais vu l'état n'a rien à montrer si on l'ouvre
@@ -546,7 +564,29 @@ export function initialiserSession(doc) {
   // geste s'enregistre tout de suite — composer son armée est une action que le
   // joueur ne veut pas refaire parce que le système a tué l'application.
   ecranOffense = initialiserEcranOffense(doc, { apresPose: () => sauvegarder() });
-  ecranMission = initialiserEcranMission(doc);
+  // ⚠ LES DEUX VUES DU TUTORIEL SE CÂBLENT ENSEMBLE, et chacune agit sur
+  // l'autre : la croix ferme la mini-fenêtre, le bouton de l'onglet Mission la
+  // rouvre. Écrire dans l'état est le travail de `sim/state.js` ; l'enregistrer
+  // tout de suite est celui de la session — un choix du joueur perdu parce que
+  // le système a tué l'application est exactement ce que `apresPose` évite déjà.
+  miniTutoriel = initialiserMiniTutoriel(doc, {
+    surFermeture: () => {
+      reglerTutoriel(etat, true);
+      sauvegarder();
+      rafraichirLaBase();
+    },
+  });
+  ecranMission = initialiserEcranMission(doc, {
+    // ⚠ ON ROUVRE ET ON Y VA. Rouvrir en restant sur l'onglet Mission ne
+    // montrerait rien au joueur : la fenêtre qu'il vient de redemander est en
+    // bas d'un AUTRE écran, et il croirait le bouton mort.
+    surReouverture: () => {
+      reglerTutoriel(etat, false);
+      sauvegarder();
+      rafraichirLaBase();
+      montrerEcran('chantier');
+    },
+  });
   ecranMonde = initialiserEcranMonde(doc);
   montrerEcran('chantier');
   demarrer();

@@ -27,7 +27,7 @@ import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /**
  * @typedef {object} Etat
@@ -146,6 +146,13 @@ export function creerEtat(graine) {
     // camp —, pas de la seule graine. C'est le premier champ du dépôt qui porte
     // de l'HISTOIRE plutôt qu'un état instantané.
     satellites: satellitesVides(),
+    // ⚠ LA SEULE CHOSE QUE LE TUTORIEL SAUVEGARDE, ET CE N'EST PAS SA
+    // PROGRESSION. Ce qui est fait ou non se recalcule depuis la base à chaque
+    // demande (`sim/missions.js`) : la base est la première source de vérité et
+    // elle ne peut pas mentir. « J'ai quitté le tuto », en revanche, est une
+    // DÉCISION du joueur, et aucune base ne l'exprime — c'est de l'histoire, au
+    // même titre que `satellites`, donc ça se garde.
+    tutoriel: { ferme: false },
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -1105,6 +1112,48 @@ export function niveauDeCommandement(etat, force) {
 }
 
 /**
+ * Le joueur a-t-il quitté le tutoriel ?
+ *
+ * ⚠ CE N'EST PAS UNE PROGRESSION, ET LA DISTINCTION PORTE TOUT LE CHOIX DE LE
+ * SAUVEGARDER. Ce qui est FAIT se relit dans la base à chaque demande
+ * (`sim/missions.js`) et n'est écrit nulle part ; ce qui est ici, c'est le seul
+ * fait que la base ne peut pas exprimer — un geste du joueur sur une croix.
+ *
+ * ⚠ ELLE LÈVE SI LE CHAMP MANQUE, elle ne rend pas `false` par défaut. Une
+ * sauvegarde migrée le porte toujours ; son absence serait un fait de PROGRAMME,
+ * et un défaut par tolérance rouvrirait la fenêtre au joueur qui l'a fermée
+ * sans que rien ne le dise.
+ *
+ * @param {Etat} etat
+ * @returns {boolean}
+ */
+export function tutorielEstFerme(etat) {
+  exigerChamp(etat, 'tutoriel');
+  return etat.tutoriel.ferme === true;
+}
+
+/**
+ * Ferme ou rouvre la mini-fenêtre du tutoriel.
+ *
+ * ⚠ L'ÉCRAN N'ÉCRIT PAS DANS L'ÉTAT LUI-MÊME. C'est la même frontière que pour
+ * `poser` ou `ameliorer` : `src/ui/` demande, `sim/state.js` écrit. Sans cette
+ * fonction, deux écrans — la mini-fenêtre et l'onglet Mission — toucheraient le
+ * même champ chacun de son côté.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {boolean} ferme
+ * @returns {Etat} le même état
+ */
+export function reglerTutoriel(etat, ferme) {
+  exigerChamp(etat, 'tutoriel');
+  if (typeof ferme !== 'boolean') {
+    throw new TypeError(`etat : tutoriel fermé « ${ferme} » — booléen attendu`);
+  }
+  etat.tutoriel.ferme = ferme;
+  return etat;
+}
+
+/**
  * Sérialise l'état en JSON, SANS le terrain et AVEC l'instant d'écriture.
  *
  * Le terrain se déduit de `fondation` (voir plus haut) : l'écrire dans la
@@ -1340,6 +1389,23 @@ const MIGRATIONS = {
       ],
       prochaineInstance: 1,
     };
+  },
+
+  /**
+   * v8 → v9 : la mini-fenêtre du tutoriel, et le fait que le joueur l'ait
+   * fermée ou non.
+   *
+   * ⚠ ELLE N'AJOUTE PAS DE PROGRESSION, ET C'EST TOUT L'ÉCART. Une sauvegarde
+   * v8 porte déjà tout ce qu'il faut pour SAVOIR où en est le tutoriel : sa
+   * base. Ce qu'elle ne porte pas, c'est le choix de ne plus voir la fenêtre —
+   * et `false` est la bonne valeur pour une partie qui n'a jamais eu de croix à
+   * cliquer. Elle est donc du même genre que la v6 → v7 : elle ajoute un champ
+   * neuf avec sa valeur neutre, sans rien convertir et sans rien perdre.
+   * @param {object} s
+   */
+  8: (s) => {
+    s.version = 9;
+    s.tutoriel = { ferme: false };
   },
 };
 

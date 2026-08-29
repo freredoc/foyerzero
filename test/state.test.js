@@ -309,7 +309,7 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 8, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 9, 'le bump de la version des sauvegardes a été oublié');
 
   // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
   // terrain ne serait dérivable de rien.
@@ -331,6 +331,11 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
     etat.satellites.attentes.map((a) => a.type).sort(),
     ['avantPoste', 'camp', 'camp'],
   );
+
+  // Et v8 → v9 : la mini-fenêtre du tutoriel est OUVERTE. Une sauvegarde v0
+  // n'a jamais eu de croix à cliquer ; la déclarer fermée priverait son joueur
+  // du tutoriel pour un geste qu'il n'a pas fait.
+  assert.deepEqual(etat.tutoriel, { ferme: false }, 'le maillon v8 → v9 n\'a pas été appliqué');
 
   // ⚠ CE QUI SURVIT : LE TEMPS, PAS LE CONTENU. La migration 3 → 4 REFONDE la
   // base — il n'existe aucune correspondance entre une `foreuse` sans
@@ -1348,7 +1353,8 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   delete v6.satellites;
 
   const migre = migrer(structuredClone(v6));
-  assert.equal(migre.version, 8, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
+  assert.equal(migre.version, 9, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
+  assert.deepEqual(migre.tutoriel, { ferme: false }, 'le maillon v8 → v9 manque');
   assert.deepEqual(migre.garnison, []);
   assert.deepEqual(migre.armee, []);
   assert.deepEqual(migre.satellites.presents, []);
