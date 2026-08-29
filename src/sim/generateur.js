@@ -339,14 +339,31 @@ function ordonnerDefenses(liste) {
 }
 
 /**
- * Disperse les obstacles. Hors de la bande de déploiement — un obstacle en
- * rangée 1 ou 2 mangerait un emplacement d'apparition, le moteur refusant une
- * unité posée dessus — et sur aucune case déjà occupée.
+ * Disperse les obstacles dans la bande de DÉFENSE, et sur aucune case déjà
+ * occupée.
+ *
+ * ⚠ ILS COUVRAIENT LES RANGÉES 3 À 18 JUSQU'AU 29/08. Ethan : « obstacles
+ * seulement en défense, réparti au hasard ». Le motif est un motif de jeu : un
+ * obstacle dans la bande des bâtiments mange un emplacement de construction,
+ * c'est-à-dire une décision d'urbanisme, alors qu'un obstacle dans la bande de
+ * défense ralentit l'assaillant, c'est-à-dire une décision tactique.
+ *
+ * ⚠ CE N'EST PLUS QU'UNE MOITIÉ DE CE MODULE. Ces obstacles-ci se tirent de la
+ * graine du SITE, donc changent à chaque instance. `obstaclesDeLaBase` de
+ * sim/champs.js les tire de la CASE, donc les garde d'une instance à l'autre —
+ * ce qu'Ethan a arbitré le 29/08 pour les camps successifs. Les deux devront se
+ * rejoindre le jour où un site de l'Ouvrage saura d'où il est ; ce n'est pas
+ * fait, et le savoir vaut mieux que de le découvrir.
+ *
+ * ⚠ LA BANDE DE DÉPLOIEMENT RESTE EXCLUE, mais elle l'est maintenant DEUX FOIS —
+ * par elle-même et parce qu'elle n'est pas la bande de défense. Le test T9 qui
+ * l'assertait continue de passer sans rien mesurer de nouveau : c'est
+ * l'assertion sur la bande de défense, ajoutée le 29/08, qui porte la règle.
  */
 function placerObstacles(rng, casesPrises) {
   const libres = [];
   for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
-    if (estDansLaBande(rangee, 'deploiement')) continue;
+    if (!estDansLaBande(rangee, 'defense')) continue;
     for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
       if (!casesPrises.has(cleCase(rangee, colonne))) libres.push({ rangee, colonne });
     }

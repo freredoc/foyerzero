@@ -19,7 +19,11 @@
 // Aucune valeur de calibrage en dur : tout vient de data/base.js.
 
 import { creerRng, entier, choisir, melanger } from './rng.js';
-import { CHAMPS, zoneDesChamps } from '../data/base.js';
+import {
+  CHAMPS, zoneDesChamps, TERRAIN_INITIAL, OBSTACLES_DE_BASE,
+} from '../data/base.js';
+import { GRILLE, OBSTACLES } from '../data/combat.js';
+import { positionDepartJoueur } from './carte.js';
 
 // ---------------------------------------------------------------------------
 // Formes — un bloc est une liste d'écarts par rapport à son ancre
@@ -275,6 +279,21 @@ export function graineDePosition(rangeeCarte, colonneCarte) {
  *   cases dans un ordre différent seraient déclarées divergentes à tort.
  */
 export function champsDeLaBase(rangeeCarte, colonneCarte) {
+  // ⚠ LA PREMIÈRE BASE EST SERVIE PAR UNE TABLE, ET C'EST LA SEULE DÉROGATION.
+  // Voir `TERRAIN_INITIAL` de data/base.js : le dessin d'Ethan n'est atteignable
+  // par aucune position de la carte, mesuré sur les 9 300. La position de départ
+  // est fixe et unique, elle sert donc de clé — et comme le terrain est gelé à
+  // la fondation, une base redéployée ou rasée garde cette table pour toujours.
+  if (estLaPositionDeDepart(rangeeCarte, colonneCarte)) {
+    return {
+      repartition: { ...TERRAIN_INITIAL.repartition },
+      cases: TERRAIN_INITIAL.champs.map((k) => ({ ...k })),
+      // Zéro dit « aucun tirage n'a eu lieu ». Écrire 1 ferait passer une table
+      // pour un tirage réussi du premier coup, et la mesure de `tentativesMax`
+      // compterait une position qui n'en est pas une.
+      tentatives: 0,
+    };
+  }
   const graine = graineDePosition(rangeeCarte, colonneCarte);
   const zone = zoneDesChamps();
 
@@ -370,4 +389,116 @@ export function categorieDuBloc(cases) {
   const memeRangee = cases.every((k) => k.rangee === cases[0].rangee);
   const memeColonne = cases.every((k) => k.colonne === cases[0].colonne);
   return memeRangee || memeColonne ? 'droit' : 'coude';
+}
+
+// ---------------------------------------------------------------------------
+// Obstacles — la bande de DÉFENSE, et elle seule
+// ---------------------------------------------------------------------------
+//
+// ARBITRÉ le 29/08/2026 : « obstacles seulement en défense, réparti au hasard »
+// et « oui le joueur a des obstacles comme ouvrage ». Ils sont donc du TERRAIN,
+// au même titre que les champs : tirés de la POSITION, gelés à la fondation,
+// identiques pour deux sites successifs posés sur la même case.
+//
+// ⚠ CE N'EST PAS LE MÊME TIRAGE QUE CELUI DU GÉNÉRATEUR DE SITES. `placerObstacles`
+// de sim/generateur.js pose les obstacles d'un site de l'Ouvrage à partir de la
+// graine du SITE, après les bâtiments et les défenses, sur les cases restées
+// libres. Ici il n'y a rien à éviter : la bande de défense est vide quand le
+// terrain se tire, et c'est au contraire la garnison qui devra éviter les
+// obstacles. Les deux devront fusionner le jour où un site de l'Ouvrage tirera
+// son terrain de sa case — c'est le pendant de « deux camps sur la même case ont
+// les mêmes champs et les mêmes obstacles », et ce n'est pas fait ici.
+//
+// ⚠ LA GRAINE EST DÉCALÉE DE CELLE DES CHAMPS. Réemployer `graineDePosition`
+// telle quelle ferait tirer les obstacles dans le même flux que les champs :
+// changer le nombre de champs déplacerait alors tous les obstacles, et deux
+// grandeurs sans rapport seraient soudées. Le décalage est le même mélange que
+// celui des tentatives, avec une constante différente.
+
+/** La case est-elle celle où le joueur a fondé sa première base ? */
+function estLaPositionDeDepart(rangeeCarte, colonneCarte) {
+  const depart = positionDepartJoueur();
+  return rangeeCarte === depart.rangee && colonneCarte === depart.colonne;
+}
+
+/** Les cases de la bande de défense, dans l'ordre de lecture. */
+function casesDeLaBandeDeDefense() {
+  const bande = GRILLE.bandes.defense;
+  const cases = [];
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+      cases.push({ rangee, colonne });
+    }
+  }
+  return cases;
+}
+
+/**
+ * Une tentative de pose des dix obstacles. Rend la liste, ou `null` si le
+ * tirage s'est coincé — la tentative se rejoue alors en entier, comme pour les
+ * champs, jamais à moitié.
+ *
+ * @param {{s: number}} rng
+ * @returns {Array<{rangee: number, colonne: number, type: string}>|null}
+ */
+function uneTentativeDObstacles(rng) {
+  const libres = melanger(rng, casesDeLaBandeDeDefense());
+  const posees = [];
+  const prises = new Set();
+  const parRangee = new Map();
+
+  for (const k of libres) {
+    if (posees.length === OBSTACLES.nombre) break;
+    const compte = parRangee.get(k.rangee) ?? 0;
+    if (compte >= OBSTACLES_DE_BASE.maxParRangee) continue;
+    if (!OBSTACLES_DE_BASE.contactLateral) {
+      const colle = cotes(k.rangee, k.colonne)
+        .some(([vr, vc]) => prises.has(cle(vr, vc)));
+      if (colle) continue;
+    }
+    prises.add(cle(k.rangee, k.colonne));
+    parRangee.set(k.rangee, compte + 1);
+    posees.push({
+      rangee: k.rangee,
+      colonne: k.colonne,
+      type: OBSTACLES.types[entier(rng, 0, OBSTACLES.types.length - 1)],
+    });
+  }
+  return posees.length === OBSTACLES.nombre ? posees : null;
+}
+
+/**
+ * Les obstacles de la base située à cette position de la carte.
+ *
+ * Rend TOUJOURS les mêmes obstacles pour la même position, exactement comme
+ * `champsDeLaBase` rend toujours les mêmes champs. La première base est servie
+ * par `TERRAIN_INITIAL`, pour la même raison et sous la même clé.
+ *
+ * @param {number} rangeeCarte
+ * @param {number} colonneCarte
+ * @returns {{cases: Array<{rangee: number, colonne: number, type: string}>,
+ *   tentatives: number}}
+ *   `cases` est triée par rangée puis colonne — l'ordre du tirage ne doit
+ *   transparaître nulle part.
+ */
+export function obstaclesDeLaBase(rangeeCarte, colonneCarte) {
+  if (estLaPositionDeDepart(rangeeCarte, colonneCarte)) {
+    return {
+      cases: TERRAIN_INITIAL.obstacles.map((k) => ({ ...k })),
+      tentatives: 0,
+    };
+  }
+  const graine = graineDePosition(rangeeCarte, colonneCarte);
+  for (let n = 1; n <= OBSTACLES_DE_BASE.tentativesMax; n++) {
+    const rng = creerRng((graine ^ Math.imul(n, 0x85ebca6b)) >>> 0);
+    const posees = uneTentativeDObstacles(rng);
+    if (posees !== null) {
+      posees.sort((a, b) => (a.rangee - b.rangee) || (a.colonne - b.colonne));
+      return { cases: posees, tentatives: n };
+    }
+  }
+  throw new Error(
+    `champs : aucun jeu d'obstacles trouvé en ${OBSTACLES_DE_BASE.tentativesMax} tentatives `
+      + `pour la position (${rangeeCarte}, ${colonneCarte})`,
+  );
 }
