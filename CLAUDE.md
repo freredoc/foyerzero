@@ -24,9 +24,9 @@ Dernière révision : **28/08/2026**, version 0.26.0 · build 27.
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
 
-**Référence au 28/08/2026 (après le lot GARNISON-ET-ARMÉE), à confronter :**
-`npm test` → **401 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**179 928 octets**, 0 référence externe.
+**Référence au 29/08/2026 (après le lot CARTE — données), à confronter :**
+`npm test` → **411 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**181 014 octets**, 0 référence externe.
 
 ⚠ **`dist/` N'EST PAS SUIVI PAR GIT, DONC AUCUN TEST NE CONFRONTE CE NOMBRE.**
 C'est le seul chiffre de ce fichier qu'aucune garde ne protège, et il a déjà été
@@ -44,9 +44,14 @@ QUEUE-DE-COURBE à 153 505,
 MISE-EN-PAGE à 156 633 en sortant l'en-tête des écrans,
 POSE-ET-DÉPLACEMENT à 161 583, TUTORIEL à 167 308 en ouvrant l'onglet Mission,
 GARNISON-ET-ARMÉE à 179 928 en donnant un état à la garnison et à l'armée,
-puis en branchant l'écran Offense et la bande Défense.
-La borne de T10 (200 000 octets) tient, avec 10 % de marge — elle se resserre
+puis en branchant l'écran Offense et la bande Défense,
+CARTE (données) à 181 014 — le seul lot depuis longtemps qui ne touche pas
+l'interface, d'où le +1 086 : c'est un module de simulation et deux tables.
+La borne de T10 (200 000 octets) tient, avec 9,5 % de marge — elle se resserre
 lot après lot, et c'est le premier chiffre à regarder au prochain lot d'interface.
+⚠ **ET L'ÉCRAN DE LA CARTE N'EST PAS ENCORE DEDANS.** Il porte un canevas,
+quatre crans de zoom, le défilement au doigt et la pose des tuiles : c'est lui
+qui décidera si la borne se relève ou si les sprites sortent du HTML.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
 est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de
@@ -160,9 +165,10 @@ src/data/               toutes les valeurs de calibrage — 6 fichiers ; RIEN d'
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
 
-src/sim/                simulation déterministe, sans DOM — 12 fichiers
+src/sim/                simulation déterministe, sans DOM — 13 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
-  champs.js             terrain d'une base : 12 cases tirées de la POSITION
+  champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
+  peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
@@ -200,11 +206,11 @@ src/ui/                 les quatre écrans et leurs éditeurs — 7 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   26 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   27 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
-  couts-militaires
+  couts-militaires  peuplement
   grille  missions  niveau-de-base  offense  rendu  repli  rng  roster  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
@@ -428,8 +434,13 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   `UNITES` : **`UNITES` fait foi**, arbitré le 24/08. Il n'existe **pas** de
   champ `defense.apparition` — l'asserter par `hasOwnProperty`, jamais par
   `!== undefined` sur une valeur calculée.
-- La carte fait **30 × 300**, pas 9 × 300 : le « 9 » de la §10 de la spec est une
+- La carte fait **31 × 300**, pas 9 × 300 : le « 9 » de la §10 de la spec est une
   contamination de la largeur de la grille de combat. Arbitré le 24/08.
+  ⚠ **ELLE FAISAIT 30 JUSQU'AU 29/08.** Une largeur paire n'a pas de centre :
+  `colonneCentre()` devait trancher entre 15 et 16, et avait retenu 16. À 31,
+  16 EST le centre — la fonction rend le même nombre, le départ du joueur
+  (275, 16) et la base terminale ne bougent pas d'une case. 29 aurait mis le
+  centre en 15, donc déplacé tout ce qui était déjà arbitré.
 - Le glossaire des modules ne dit pas qui les porte. Les affectations sont dans
   `UNITES[x].module` / `moduleOuvrage`, pas dans la colonne de description.
 - **La base du joueur n'a pas de géométrie propre.** Elle EST la bande
@@ -1644,6 +1655,71 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   une garnison vide et une armée vide sont l'état NORMAL d'une base neuve. Les
   deux rendent `null`, ce que `formaterNiveau` affiche « — ». Zéro se lirait
   « niveau zéro », c'est-à-dire une force posée et nulle.
+
+- **LA CARTE EST DÉRIVÉE, PAS STOCKÉE** — lot CARTE, 29/08. Une base de
+  l'Ouvrage est une FONCTION de la graine et de la case : `estBaseOuvrage` de
+  `sim/peuplement.js`. Neuf mille trois cents cases pèseraient plus que tout le
+  reste de la sauvegarde réunie. Ce qui se journalisera plus tard, ce sont les
+  ÉCARTS — un site rasé, un camp qui réapparaît —, jamais la carte.
+  ⚠ **LA RÈGLE DES 8 CASES EST LOCALE.** Une case candidate devient une base si
+  son hachage DOMINE celui de ses huit voisines candidates : deux voisines ne
+  peuvent donc pas gagner ensemble, et le contact est impossible **par
+  construction**, sans jamais parcourir la carte. Neuf hachages par case au lieu
+  d'un, et zéro passe globale.
+  ⚠ **DEUX SELS, ET ILS DOIVENT RESTER INDÉPENDANTS.** Le sel 0 dit « candidate »,
+  le sel 1 départage. S'ils rendaient la même valeur, la case la plus susceptible
+  d'être candidate serait aussi celle qui gagne ses duels, et les bases se
+  regrouperaient au lieu de se répartir. Un test compte les collisions et exige
+  zéro.
+  ⚠ **LA DENSITÉ SE MESURE HORS DE LA GARDE.** Une fenêtre 12×12 prise dans les
+  quinze cases autour du départ porte zéro base par construction ; les compter
+  fait tomber la moyenne de 12,2 à 10,8 et donne l'impression d'un réglage faux.
+  ⚠ **ET LA GARDE SE MESURE DEPUIS LE DÉPART, QUI EST FIXE** — pas depuis la base
+  du joueur. Si elle le suivait, les bases apparaîtraient et disparaîtraient à
+  chaque redéploiement, et il faudrait toutes les journaliser. Le joueur
+  s'approche des bases ; les bases ne s'écartent pas de lui.
+
+- **LE TERRAIN DE LA PREMIÈRE BASE EST UNE TABLE** — `TERRAIN_INITIAL` de
+  `data/base.js`, dessiné par Ethan le 29/08. La question était posée dans
+  l'autre sens (« changer le seed de la 1re base ») et la réponse est MESURÉE :
+  le terrain ne dépend pas de la graine du monde mais de la seule POSITION, et le
+  dessin n'est atteignable par AUCUNE des 9 300 positions — le plus proche en
+  diffère de neuf cases.
+  ⚠ **LA CLÉ EST LA FONDATION, PAS LA POSITION COURANTE.** Le terrain est gelé à
+  la fondation, il voyage avec la base au redéploiement, et il lui survit au
+  rasage (« la base garde sa disposition », 29/08). La fondation initiale ne
+  change donc jamais, et la table est servie pour toujours. C'est aussi ce qui
+  donne à `fondation` son seul rôle actuel : il n'est plus une position sur la
+  carte, il est l'IDENTITÉ du terrain. Il redeviendra une position le jour d'une
+  deuxième base, et sera alors un champ PAR base — ne pas le supprimer en le
+  croyant orphelin.
+  ⚠ **`tentatives: 0` DIT « TABLE ».** Écrire 1 ferait passer une table pour un
+  tirage réussi du premier coup, et la mesure de `tentativesMax` compterait une
+  position qui n'en est pas une.
+  ⚠ **LA TABLE EST SOUMISE AUX MÊMES RÈGLES QUE LE TIRAGE**, et un test les lui
+  applique — zone, tailles de bloc reconstruites par composantes connexes,
+  non-contact entre blocs de même ressource. Une table dispensée des règles serait
+  la première à les contredire.
+
+- **LES OBSTACLES SONT DANS LA BANDE DE DÉFENSE, ET NULLE PART AILLEURS** —
+  arbitré le 29/08. Ils couvraient les rangées 3 à 18. Le motif est un motif de
+  jeu : un obstacle chez les bâtiments mange un emplacement de construction, un
+  obstacle en défense ralentit l'assaillant.
+  ⚠ **CE CHANGEMENT A DÉPLACÉ SEPT CONSTANTES DE COMBAT MESURÉES**, dans les deux
+  sens — le raid T4 de `cible.test.js` passe de 383 à 313 ticks, le raid A de
+  `roster.test.js` perd 26 % de butin pendant que B en gagne 6 %. Un allongement
+  uniforme n'aurait pas fait ça : dix obstacles sur 72 cases au lieu de 144, tous
+  sur le chemin de l'assaut, changent QUI meurt et QUAND.
+  ⚠ **ET QUATRE RAIDS SUR 54 TOUCHENT MAINTENANT LE PLAFOND DE 90 SECONDES**, au
+  lieu de deux. Aucun n'est un gel — vérifié en portant `dureeMaxCombatSec` à
+  600, ils se concluent tous par `attaquants`. Mais l'un d'eux demande **4 645
+  ticks, soit 464 secondes** : ce n'est plus un dépassement, c'est un autre
+  régime, et c'est à remonter.
+  ⚠ **DEUX TIRAGES D'OBSTACLES COEXISTENT**, et il faut le savoir : celui du
+  générateur de sites part de la graine du SITE (donc change à chaque instance),
+  celui de `obstaclesDeLaBase` part de la CASE (donc tient d'une instance à
+  l'autre, ce qu'Ethan a arbitré pour les camps successifs). Les deux devront se
+  rejoindre le jour où un site de l'Ouvrage saura d'où il est.
 
 ### Sur le vocabulaire
 
