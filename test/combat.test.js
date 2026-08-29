@@ -736,6 +736,18 @@ test('T12 — un bâtiment à moitié détruit paie la moitié', () => {
 // T13 — points de recherche
 // ---------------------------------------------------------------------------
 
+/**
+ * Abaisse une ligne de résultat de `perdus` milli-PV, comme le moteur l'aurait
+ * fait pendant la passe. Les TROIS compteurs bougent ensemble ; n'en bouger que
+ * deux ferait tomber le calcul à zéro sans rien dire.
+ */
+function abimerLigne(ligne, perdus) {
+  ligne.pvMilli -= perdus;
+  ligne.pvPerdusMilli = ligne.pvMaxMilli - ligne.pvMilli;
+  ligne.pvPerdusIciMilli = ligne.pvInitialMilli - ligne.pvMilli;
+  ligne.detruit = ligne.pvMilli <= 0;
+}
+
 test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points', () => {
   const montage = {
     niveau: 3,
@@ -750,7 +762,16 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
     // dépend que du niveau de la cible et de la FRACTION détruite, jamais de
     // ses PV absolus. La moitié d'un Merlon reste la moitié d'un Merlon, que
     // ses PV valent 2 000 000, 3 170 000 ou 2 420 000 milli-PV.
-    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, pvMilli: 1_210_000 }],
+    //
+    // ⚠ SEUIL DÉPLACÉ UNE TROISIÈME FOIS, LOT RECHERCHE-AU-PRORATA (29/08). Le
+    // Merlon se monte désormais PLEIN, et c'est la ligne de résultat qu'on
+    // abaisse à 50 % après coup. Le monter à moitié comme avant décrivait un
+    // Merlon DÉJÀ à moitié cassé EN ARRIVANT, et depuis l'arbitrage d'Ethan ce
+    // n'est plus la même chose : un raid ne marque que ce qu'il casse LUI, donc
+    // un Merlon monté à 50 % et laissé tranquille rapporte zéro — il a été payé
+    // à la passe précédente. Ce que le test veut dire, « détruit à 50 % »,
+    // s'écrit donc maintenant en abaissant le RÉSULTAT.
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
     // = 17 000 000, hors de sa portée² de 2 250 000. Rien ne bouge en un tick.
@@ -763,7 +784,13 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
   const merlon = resultat.defenses.find(parId('merlon'));
   assert.equal(facteurMilli(3), 1210);
   assert.equal(merlon.pvMaxMilli, 2000 * 1210);
+  // Personne ne l'a touché en un tick : c'est le montage qui pose les dégâts,
+  // et il les pose comme le moteur les aurait posés — PV, perte totale, perte
+  // de cette passe-ci.
+  assert.equal(merlon.pvPerdusMilli, 0, 'le montage a changé sans qu\'on le sache');
+  abimerLigne(merlon, 1_210_000);
   assert.equal(merlon.pvPerdusMilli, 1_210_000);
+  assert.equal(merlon.pvPerdusIciMilli, 1_210_000);
   assert.equal(merlon.niveau, 3, 'le niveau de l\'entité, plus celui du site');
 
   // ⚠ LOT RECHERCHE (25/08/2026). Le barème ne double plus par niveau : il suit
@@ -785,6 +812,7 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
   const avecModule = { ...montage, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } };
   const etatModule = creerCombat(avecModule);
   const resultatModule = resoudre(etatModule, { maxTicks: 1 });
+  abimerLigne(resultatModule.defenses.find(parId('merlon')), 1_210_000);
   assert.equal(pointsRecherche(resultatModule, avecModule), 1902n);
 
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.

@@ -16,7 +16,9 @@ import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION,
 } from '../src/sim/state.js';
 import { siteDeLaCase, montageDuSite } from '../src/sim/site-de-la-case.js';
-import { creerCombat, construireResultat, resoudre, butin } from '../src/sim/combat.js';
+import {
+  creerCombat, construireResultat, resoudre, butin, pointsRecherche,
+} from '../src/sim/combat.js';
 import { genererAssaut } from '../src/sim/generateur.js';
 import { APRES_RAID } from '../src/data/sites.js';
 
@@ -335,6 +337,67 @@ test('butin — une pièce entamée ne repaie pas ce qu\'elle a déjà payé', (
   }
   // Falsifiable : le site doit valoir quelque chose, sinon tout ça vaut 0 = 0.
   assert.ok(valeur.quartz > 1000);
+});
+
+test('recherche — cinquante pour cent plus cinquante pour cent, pas le double', () => {
+  // ⚠ LA PHRASE D'ETHAN, MESURÉE : « tu tapes une défense à qui il reste
+  // cinquante pour cent, tu l'achèves, tu n'es pas censé avoir le double ; tu as
+  // cinquante plus cinquante ». On casse donc la moitié d'une garnison, on
+  // range, puis on achève ce qui reste — et la somme des deux passes doit valoir
+  // ce qu'une passe unique aurait rendu en la détruisant d'un coup.
+  const etat = partie();
+  const id = avantPoste(etat);
+  const intact = montageDuSite(etat.graine, id);
+
+  const toutes = (part) => {
+    const d = {};
+    for (let i = 0; i < intact.defenseurs.length; i += 1) d[i] = part;
+    return d;
+  };
+
+  // La référence : tout détruit en une seule passe.
+  const dUnCoup = pointsRecherche(resultatSur(intact, { defenses: toutes(0) }), intact);
+  assert.ok(dUnCoup > 0n, 'montage sans mordant : cette garnison ne rapporte rien');
+
+  // Passe 1 : la moitié des PV de chaque défense.
+  const un = pointsRecherche(resultatSur(intact, { defenses: toutes(0.5) }), intact);
+  enregistrerLeRaid(etat, id, resultatSur(intact, { defenses: toutes(0.5) }));
+
+  // Passe 2 : on achève ce qui reste, monté à ses PV rangés.
+  const reste = montageCourant(etat, id);
+  const deux = pointsRecherche(resultatSur(reste, { defenses: toutes(0) }), reste);
+
+  // ⚠ L'ÉGALITÉ EST À LA TRONCATURE PRÈS, une par cible et par passe : la
+  // division BigInt tronque vers zéro, donc deux moitiés peuvent rendre un
+  // milli-point de moins que le tout. Ce qui est asserté, c'est qu'on ne
+  // DÉPASSE jamais — la règle d'avant rendait une fois et demie.
+  assert.ok(un + deux <= dUnCoup, `${un} + ${deux} dépasse ${dUnCoup}`);
+  assert.ok(un + deux > (dUnCoup * 99n) / 100n, `${un} + ${deux} contre ${dUnCoup}`);
+  assert.ok(un > 0n && deux > 0n, 'une des deux passes n\'a rien rapporté');
+});
+
+test('recherche — une cible RÉPARÉE remarque, et c\'est voulu', () => {
+  // « Sauf si elle est réparée. » L'Étai debout rend leurs PV aux défenses
+  // survivantes en une heure ; les casser à nouveau est un travail à nouveau.
+  const etat = partie();
+  const id = avantPoste(etat);
+  const intact = montageDuSite(etat.graine, id);
+
+  const un = pointsRecherche(resultatSur(intact, { defenses: { 1: 0.5 } }), intact);
+  enregistrerLeRaid(etat, id, resultatSur(intact, { defenses: { 1: 0.5 } }));
+  assert.ok(un > 0n);
+
+  // Avant l'heure, la cible est encore à moitié : l'achever ne rend que l'autre
+  // moitié.
+  const avant = montageCourant(etat, id);
+  const entamee = pointsRecherche(resultatSur(avant, { defenses: { 1: 0 } }), avant);
+
+  // Après l'heure, elle est pleine : la casser rend le plein.
+  rattraperJeu(etat, TICKS_REPARATION_DEFENSES);
+  const apres = montageCourant(etat, id);
+  const reparee = pointsRecherche(resultatSur(apres, { defenses: { 1: 0 } }), apres);
+
+  assert.ok(reparee > entamee, `réparée ${reparee}, entamée ${entamee}`);
 });
 
 test('butin — un site rasé en deux passes rend EXACTEMENT ce qu\'il vaut', () => {

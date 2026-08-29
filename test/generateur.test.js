@@ -756,18 +756,29 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   //
   // Cas concret : un Broyeur de niveau 50 ayant perdu 180 308 053 milli-PV sur
   // 213 438 000.
+  //
+  // ⚠ IL SE MONTE PLEIN ET SE FAIT ABAISSER APRÈS, depuis le lot
+  // RECHERCHE-AU-PRORATA (29/08). Le monter déjà entamé décrivait un Broyeur
+  // cassé À LA PASSE PRÉCÉDENTE, qui ne rapporte plus rien à celle-ci — les
+  // points suivent désormais ce que le raid casse LUI. Le nombre mesuré, lui,
+  // n'a pas bougé d'une unité : c'est le même Broyeur, les mêmes 180 308 053
+  // milli-PV, le même produit intermédiaire hors de l'entier sûr.
   const perdus = 180_308_053;
   const montage = {
     niveau: 50,
     saveur: null,
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau: 50 }],
-    defenseurs: [{ id: 'broyeur', rangee: 3, colonne: 5, pvMilli: 2000 * facteur - perdus, niveau: 50 }],
+    defenseurs: [{ id: 'broyeur', rangee: 3, colonne: 5, niveau: 50 }],
     vagues: [[{ id: 'meute', colonne: 1, niveau: 50 }]],
     modulesDebloques: { ouvrage: [], joueur: [] },
   };
   const resultat = resoudre(creerCombat(montage), { maxTicks: 1 });
   const broyeur = resultat.defenses.find((d) => d.id === 'broyeur');
+  assert.equal(broyeur.pvPerdusMilli, 0, 'un tick n\'aurait pas dû l\'entamer');
+  broyeur.pvMilli -= perdus;
+  broyeur.pvPerdusMilli = broyeur.pvMaxMilli - broyeur.pvMilli;
+  broyeur.pvPerdusIciMilli = broyeur.pvInitialMilli - broyeur.pvMilli;
   assert.equal(broyeur.pvPerdusMilli, perdus);
 
   const fe = BigInt(facteurEconomiqueMilli(50));
