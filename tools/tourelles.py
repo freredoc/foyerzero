@@ -57,6 +57,26 @@ CELLULES = [
     ('def_o_faucheuse', True),  ('def_o_mortier',  True),  ('def_o_harpon',    True),
 ]
 
+# --- pose de la tourelle sur son socle -------------------------------------
+# Arbitré par Ethan le 29/08 : la base de la tourelle occupe 45 % de la largeur
+# de la tuile. Mesuré sur planche d'échelles, entre 15 % (le creux du socle) et
+# 70 % (la tourelle déborde).
+REMPLISSAGE = 0.45
+# Repli pour l'Ouvrage, dont la base ne se mesure pas : on cale son étendue sur
+# celle que la règle des 45 % donne au joueur, soit 63 % de la tuile.
+ETENDUE_OUVRAGE = 0.634
+# Le logement n'est pas au centre de la tuile, et son décalage dépend de la
+# FAMILLE de socle, pas du camp. Mesuré sur les douze socles, en pixels de la
+# grille 128, écart horizontal partout sous 0,7 px donc ignoré :
+#   socles de tourelle joueur   -7,7 / -6,1 / -7,1   ->  -7,0
+#   socles d'artillerie joueur  +8,5 / +8,8 / +8,7   ->  +8,7
+#   socles de tourelle Ouvrage  +2,7 / +3,1 / +2,5   ->  +2,8
+#   socles d'artillerie Ouvrage +14,5 / +14,0 / +13,9 -> +14,1
+DECALAGE = {'def_j_casemate': -7.0, 'def_j_creneau': -7.0, 'def_j_batterie': -7.0,
+            'def_j_faucheuse': 8.7, 'def_j_mortier': 8.7, 'def_j_harpon': 8.7,
+            'def_o_casemate': 2.8, 'def_o_creneau': 2.8, 'def_o_batterie': 2.8,
+            'def_o_faucheuse': 14.1, 'def_o_mortier': 14.1, 'def_o_harpon': 14.1}
+
 MERLONS = [('merlons_j_connexions_2x2.png', 'def_j_merlon', False),
            ('merlons_o_connexions_2x2.png', 'def_o_merlon', True)]
 # Arbitrage du 28/08 : les murs ne se raccordent qu'à l'est et à l'ouest.
@@ -99,15 +119,55 @@ def recadrer_pivot(im, px, py, demi):
     return out
 
 
+def diametre_base(m):
+    """Diamètre du plus grand disque inscrit : la base de la tourelle."""
+    return 2.0 * nd.distance_transform_edt(m).max()
+
+
 def serie(k):
-    """Les seize orientations d'une tourelle, toile commune, pivot au centre."""
+    """Les seize orientations d'une tourelle, posées sur le logement du socle.
+
+    La toile n'est plus dimensionnée sur l'étendue des seize mais sur le
+    REMPLISSAGE voulu : la base de la tourelle doit occuper 45 % de la largeur
+    de la tuile. La toile est donc commune aux seize par construction, et le
+    pivot y est placé sur le logement du socle, pas au centre.
+    """
+    nom_def = CELLULES[k][0]
+    dy = DECALAGE[nom_def] / 128.0
     brut = []
     for nom, ind in ORIENTATIONS:
         im = cellule(planche(ind), k)
         px, py, m = pivot(im)
-        brut.append((nom, im, px, py, demi_portee(im, px, py, m)))
-    demi = max(b[4] for b in brut)          # une seule toile pour les seize
-    return [(nom, recadrer_pivot(im, px, py, demi)) for nom, im, px, py, _ in brut]
+        ys, xs = np.where(m)
+        cheby = max(abs(xs - px).max(), abs(ys - py).max())   # demi-côté carré
+        brut.append((nom, im, px, py, diametre_base(m), cheby))
+    # La base se mesure par le disque inscrit. Ça ne vaut que si la matière
+    # est plus épaisse que le disque qu'on cherche — vrai pour le joueur, dont
+    # l'épaisseur médiane est de 12 à 14 px, faux pour l'Ouvrage, dessiné en
+    # filigrane à 3 px. Là-bas le disque inscrit mesure l'épaisseur du trait et
+    # la mise à l'échelle explose : l'étendue passait à 98 % de la tuile contre
+    # 63 % côté joueur, et 119 sprites sur 192 débordaient.
+    # On retombe donc sur l'étendue pour l'Ouvrage, calée sur le ratio que la
+    # règle des 45 % produit côté joueur.
+    if CELLULES[k][1]:                       # camp Ouvrage
+        # Aucune règle d'échelle ne tient sur ces sprites : mise à l'échelle sur
+        # le disque inscrit, l'étendue passe à 98 % de la tuile et 119 sprites
+        # sur 192 débordent ; sur l'étendue, elle tombe à 26 % et des sprites
+        # sortent vides. On garde donc le cadrage du lot 1 — toile commune sur
+        # la portée maximale — en attendant que l'art soit redessiné. Voir le §
+        # « filigrane » du rapport.
+        cote = int(np.ceil(max(demi_portee(im, px, py, ~est_fond(np.array(im.convert('RGB')).astype(int)))
+                               for _, im, px, py, _, _ in brut))) * 2 + 1
+    else:
+        base = float(np.mean([b[4] for b in brut]))
+        cote = int(round(base / REMPLISSAGE))
+    out = []
+    for nom, im, px, py, _, _ in brut:
+        toile = Image.new('RGBA', (cote, cote), (255, 0, 255, 255))
+        toile.paste(im, (int(round(cote * 0.5 - px)),
+                         int(round(cote * (0.5 + dy) - py))))
+        out.append((nom, toile))
+    return out
 
 
 def noyau(k, mode):
