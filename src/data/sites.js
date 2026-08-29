@@ -20,7 +20,9 @@ export const BATIMENTS = {
     nom: 'Souche', ta: 'Chantier de construction',
     unique: true, part: null, indiceButin: 1, pv: 5500, // Construction Yard
     ressource: { quartz: 1, scorie: 0 },
-    // Sa destruction rase le site et livre tout.
+    // Sa destruction rase le site et livre CE QUI RESTE À LIVRER — arbitré par
+    // Ethan le 29/08/2026. Un bâtiment déjà entamé a déjà payé sa part ; le
+    // rasage solde le reste, il ne repaie pas le plein nominal.
     raseLeSite: true,
   },
   etai: {
@@ -170,6 +172,28 @@ export const RAID_OUVRAGE = {
   // redéploiement 20 cases vers le bas, tout à réparer, ressources stockées
   // perdues. Sanction la plus lourde du jeu, réversible sans être indolore.
   sanctionRasage: { redeploiementCases: 20, perteRessourcesStockees: true },
+};
+
+// --- après-raid : planchers et réparation -------------------------------------
+// Transcrit de `MODELE-REPARATION-1.md`, dicté par Ethan le 24/08/2026. Ce
+// document REMPLACE le plancher de 1 % et la réparation de 70 % de la spec.
+//
+// ⚠ LE PLANCHER EST PLAT, ET LA RAISON EST MÉCANIQUE : les dégâts d'une pièce
+// sont proportionnels à ses PV restants. Une Casemate à 1 % de 350 PV tire
+// encore cinq fois plus fort qu'à 1 PV. À 1 PV, c'est un sac à points de vie,
+// littéralement — ce qui est exactement le rôle voulu.
+//
+// ⚠ QUI PLANCHE ET QUI MEURT NE SE RANGE PAS ICI, parce que ce n'est pas une
+// valeur : c'est une règle par type de site, et elle vit dans
+// `sim/site-entame.js`. En deux mots : sur une BASE tout planche sauf la
+// Souche ; dans un camp ou un avant-poste, rien ne planche et tout ce qui tombe
+// est perdu pour toujours.
+export const APRES_RAID = {
+  plancherPvMilli: 1000, // 1 PV plat — et 1 PV vaut 1 000 milli-PV
+  // L'horloge de l'Étai, qui répare les défenses SURVIVANTES d'un camp ou d'un
+  // avant-poste. Celle d'une base entière est `TYPES_SITE.base.reparationHeures`
+  // — deux sujets différents, la même heure aujourd'hui.
+  reparationDefensesHeures: 1,
 };
 
 // --- points d'attaque et points d'armée --------------------------------------
