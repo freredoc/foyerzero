@@ -147,6 +147,11 @@ function baseDeLaMaquette() {
     // qui a fait entrer les satellites le matin : `tickJeu` les lit, et un
     // montage qui les omet n'est plus un état de jeu.
     attaque: creerPointsAttaque(),
+    // ⚠ ET LES SITES ENTAMÉS, pour la même raison que les trois d'avant :
+    // `tickJeu` les lit, un montage qui les omet n'est plus un état de jeu.
+    sitesEntames: {},
+    basesRasees: [],
+    recherche: { pointsMilli: '0' },
   };
 }
 

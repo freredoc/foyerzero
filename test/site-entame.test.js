@@ -246,7 +246,11 @@ test('réparation — les deux chemins d\'avancement réparent pareil', () => {
 });
 
 test('état — les sites entamés traversent la sauvegarde, et la v10 se migre', () => {
-  assert.equal(SAVE_VERSION, 11, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ CE TEST NE GARDE PAS LE NUMÉRO — la leçon du lot SITE-ENTAMÉ, appliquée à
+  // lui-même : la garde du numéro appartient au maillon le plus RÉCENT, une
+  // seule fois. Ici on vérifie que le maillon v10 → v11 existe et que la chaîne
+  // va jusqu'au bout, quel que soit son bout.
+  assert.ok(SAVE_VERSION >= 11, 'le maillon v10 → v11 n\'est plus dans la chaîne');
 
   const etat = partie();
   const id = avantPoste(etat);
@@ -260,7 +264,7 @@ test('état — les sites entamés traversent la sauvegarde, et la v10 se migre'
 
   // Une v10 n'a jamais rien entamé : deux tables vides, et rien de converti.
   const migre = migrer({ version: 10 });
-  assert.equal(migre.version, 11);
+  assert.equal(migre.version, SAVE_VERSION);
   assert.deepEqual(migre.sitesEntames, {});
   assert.deepEqual(migre.basesRasees, []);
 });
