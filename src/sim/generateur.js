@@ -434,6 +434,12 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
   const obstacles = placerObstacles(rng, casesPrises);
 
   return {
+    // ⚠ LE TYPE VOYAGE AVEC LE MONTAGE DEPUIS LE LOT MULTIPLICATEUR (29/08), et
+    // il ne sert qu'à UNE chose : `butin` a besoin de savoir s'il paie un camp,
+    // un avant-poste ou une base, puisque `TYPES_SITE[x].multiplicateurButin`
+    // diffère de l'un à l'autre. Rien dans la boucle de combat ne le lit — un
+    // avant-poste ne se bat pas autrement qu'un camp.
+    type,
     niveau,
     saveur: saveur ?? null,
     obstacles,

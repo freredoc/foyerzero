@@ -35,7 +35,7 @@
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import {
-  BATIMENTS, BUTIN, SAVEURS, POINTS_RECHERCHE, GEOGRAPHIE,
+  BATIMENTS, BUTIN, SAVEURS, POINTS_RECHERCHE, GEOGRAPHIE, TYPES_SITE,
 } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
 import {
@@ -1412,7 +1412,26 @@ export function butin(resultat, montage) {
     quartz = somme * saveur.quartz;
     scorie = somme * saveur.scorie;
   }
-  return { quartz: Math.floor(quartz), scorie: Math.floor(scorie) };
+  // ⚠ LE MULTIPLICATEUR DE TYPE, APPLIQUÉ EN DERNIER — et il ne l'était PAS
+  // AVANT LE 29/08. `TYPES_SITE.avantPoste.multiplicateurButin` valait 3,25 dans
+  // la table depuis le relevé de Tiberium Alliances, et personne ne le lisait :
+  // un avant-poste rapportait donc autant qu'un camp de même niveau, et 10 % de
+  // moins qu'une base, alors que son rôle déclaré est « revenu ». C'est ce qui
+  // fait que le joueur préfère un avant-poste à une base, et sans lui la
+  // géographie économique du jeu n'existait pas.
+  //
+  // ⚠ `null` VEUT DIRE « PAS DE MULTIPLICATEUR », PAS ZÉRO. Une base porte
+  // `multiplicateurButin: null` — le tiret de la §10 de la spec —, et c'est un
+  // facteur 1. Le lire comme un zéro rendrait toute base sans butin.
+  //
+  // ⚠ UN MONTAGE SANS `type` VAUT 1, et c'est ce qui laisse les raids de
+  // référence exacts : les montages écrits à la main dans les tests n'en
+  // portent pas, et `× 1` est exact en IEEE 754 — pas approché, exact.
+  const facteurType = TYPES_SITE[montage.type]?.multiplicateurButin ?? 1;
+  return {
+    quartz: Math.floor(quartz * facteurType),
+    scorie: Math.floor(scorie * facteurType),
+  };
 }
 
 /**
