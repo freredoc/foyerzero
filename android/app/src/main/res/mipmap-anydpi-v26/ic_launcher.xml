@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- ⚠ LE PREMIER PLAN EST PASSÉ DU VECTORIEL AU PIXEL ART le 30/08/2026. Il
+     portait `@drawable/icone_premier_plan`, un creuset dessiné en <path> —
+     provisoire posé avec l'enveloppe. La scène du jeu le remplace, produite par
+     `tools/icone.py` aux cinq densités depuis `art/sources/icone_appli.png`.
+     La forme du fichier, elle, n'a pas bougé : un fond en couleur, un premier
+     plan en drawable. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/icone_fond" />
-    <foreground android:drawable="@drawable/icone_premier_plan" />
+    <foreground android:drawable="@mipmap/ic_launcher_premier_plan" />
 </adaptive-icon>

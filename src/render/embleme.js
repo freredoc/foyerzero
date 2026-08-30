@@ -26,7 +26,7 @@
 // fait donc entièrement du côté du DESSIN, ici.
 
 import { ATLAS } from '../data/atlas.js';
-import { ZOOM_CARTE } from '../data/sites.js';
+import { ZOOM_CARTE, GEOGRAPHIE } from '../data/sites.js';
 import { existeDansAtlas } from './sprite.js';
 
 /** La famille d'atlas où vivent les emblèmes. */
@@ -64,10 +64,15 @@ export const SPRITES_GROSSE_BASE = {
  * (`sim/site-de-la-case.js`), donc deux camps successifs au même endroit portent
  * le même emblème.
  *
- * ⚠⚠ `baseTerminale` PREND L'EMBLÈME DE BASE OUVRAGE DU DERNIER PALIER, faute de
- * sprite propre. **Ce n'est pas satisfaisant** — elle se confondra avec une base
- * de niveau 45 — et c'est un candidat naturel pour la grosse base 3 × 3. Posé au
- * rapport, non décidé ici.
+ * ⚠⚠ `baseTerminale` N'A PLUS DE NOM D'EMBLÈME, ET ELLE LÈVE. Arbitré par Ethan
+ * le 30/08 : « la base terminale c'est la base en hexagone, sur 9 tuiles monde. »
+ * Elle prenait `site_base_o_n9` et se confondait exactement avec une base de
+ * l'Ouvrage au dernier palier ; elle se dessine maintenant par
+ * `dessinerGrosseBase(3, …)`, comme une emprise de neuf cases.
+ *
+ * ⚠ ELLE LÈVE PLUTÔT QUE DE RENDRE L'ANCIEN NOM. Un appelant oublié doit se
+ * VOIR : rendre `site_base_o_n9` par compatibilité laisserait la terminale
+ * dessinée deux fois, en petit sous son hexagone, et rien ne le dirait.
  *
  * @param {string} type clé d'`EMBLEMES_CARTE`
  * @param {number} palier 1…9, de `palierDeNiveau`
@@ -80,14 +85,38 @@ export function spriteDuSite(type, palier, saveur) {
   }
   if (type === 'base') return `site_base_o_n${palier}`;
   if (type === 'baseJoueur') return `site_base_j_n${palier}`;
-  // La terminale est une base de l'Ouvrage, et la plus haute qui soit.
-  if (type === 'baseTerminale') return `site_base_o_n9`;
+  if (type === 'baseTerminale') {
+    throw new RangeError(
+      'emblème : la base terminale se dessine en hexagone 3 × 3 par '
+      + '`dessinerGrosseBase`, elle n\'a pas de sprite d\'une case',
+    );
+  }
   if (type === 'camp' || type === 'avantPoste') {
     if (saveur === 'richeQuartz') return `site_quartz_n${palier}`;
     if (saveur === 'richeScorie') return `site_scorie_n${palier}`;
     throw new RangeError(`emblème : « ${type} » sans saveur — reçu « ${saveur} »`);
   }
   throw new RangeError(`emblème : type de site inconnu « ${type} »`);
+}
+
+/**
+ * Combien de cases de côté un type de site occupe — `null` s'il en tient une.
+ *
+ * ⚠⚠ LA TABLE VIT ICI, PAS DANS L'ÉCRAN. `ui/monde.js` demande plutôt que de
+ * reconnaître `baseTerminale` par son nom : un `=== 'baseTerminale'` écrit à la
+ * main dans la boucle de dessin serait le premier cas particulier à diverger, et
+ * le dépôt refuse déjà cette forme ailleurs — un test de `chantier.test.js`
+ * interdit un `=== 'deplacer'` dans son écran pour la même raison.
+ *
+ * ⚠ LA 2 × 2 N'EST DÉLIBÉRÉMENT ASSOCIÉE À AUCUN TYPE. Ethan, 30/08 : « la base
+ * 2 × 2 sera pour autre chose. » Elle reste pré-branchée — nommée, vérifiée
+ * contre l'art — et sans emploi. Lui en inventer un serait trancher à sa place.
+ *
+ * @param {string} type clé d'`EMBLEMES_CARTE`
+ * @returns {number|null}
+ */
+export function cotesDuSite(type) {
+  return type === 'baseTerminale' ? 3 : null;
 }
 
 /**
@@ -111,7 +140,21 @@ export function empriseDeLaGrosseBase(cotes, site) {
   // Impair : le carré se centre, donc il déborde de (cotes − 1) / 2 de chaque
   // côté. Pair : la case EST le coin, donc aucun débordement vers le haut.
   const recul = (cotes - 1) % 2 === 0 ? (cotes - 1) / 2 : 0;
-  return { rangee: site.rangee - recul, colonne: site.colonne - recul, cotes };
+  const rangee = site.rangee - recul;
+  const colonne = site.colonne - recul;
+  // ⚠⚠ UN CARRÉ QUI DÉBORDE LA CARTE LÈVE, IL NE SE ROGNE PAS. La base terminale
+  // tient largement — rangées 25 à 27, colonnes 15 à 17 sur une carte de
+  // 300 × 31, mesuré —, mais c'est une propriété de sa POSITION, pas de la
+  // fonction. Le jour où une grosse base se poserait au bord, un carré rogné en
+  // silence dessinerait une base tronquée que personne ne saurait expliquer.
+  if (rangee < 1 || rangee + cotes - 1 > GEOGRAPHIE.carte.hauteur
+    || colonne < 1 || colonne + cotes - 1 > GEOGRAPHIE.carte.largeur) {
+    throw new RangeError(
+      `emblème : une base de ${cotes} cases en (${site.rangee}, ${site.colonne}) `
+      + `déborde la carte de ${GEOGRAPHIE.carte.hauteur} × ${GEOGRAPHIE.carte.largeur}`,
+    );
+  }
+  return { rangee, colonne, cotes };
 }
 
 /**

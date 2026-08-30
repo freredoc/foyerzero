@@ -41,22 +41,35 @@ Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot CARTE-EMBLÈMES), à confronter :**
-`npm test` → **608 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 229 274 octets**, 0 référence externe. CARTE-EMBLÈMES a coûté **+155 204
-octets**, dont **152 443 d'images** : l'atlas `carte` (43 sprites, 115 405 o en
-base64) et les deux grosses bases hors atlas (37 038 o). **La borne T10 est
-passée de 1 150 000 à 1 300 000**, marge 70 726, soit 5,4 % — elle monte parce
-qu'une ressource entre légitimement, jamais pour faire passer un débordement.
+**Référence au 30/08/2026 (après le lot FINITIONS), à confronter :**
+`npm test` → **619 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 230 416 octets**, 0 référence externe.
+⚠ **FINITIONS A COÛTÉ +1 142 OCTETS ALORS QU'IL DEVAIT EN RENDRE.** Il retire
+les lettres de la carte et leur seuil, mais il branche l'hexagone de la base
+terminale — chargement, attente de décodage, table des côtés — et le câblage
+pèse plus que la lettre retirée. Mesuré, pas estimé.
+`python3 tools/verifier.py` → **1 370 identiques · 2 différents (les deux
+déclarés) · 0 nouveau · 0 MANQUANT**, verdict VERT, en 127 s : le terrain est
+devenu une SOURCE DÉCLARÉE (arbitrage d'Ethan du 30/08), et les 56 manquants du
+lot CHAÎNE-VÉRIFIÉE sont soldés.
+Auparavant, CARTE-EMBLÈMES avait coûté **+155 204 octets**, dont **152 443
+d'images** : l'atlas `carte` (43 sprites, 115 405 o en base64) et les deux
+grosses bases hors atlas (37 038 o). **La borne T10 est passée de 1 150 000 à
+1 300 000**, marge 69 584 après FINITIONS, soit 5,4 % — elle monte parce qu'une
+ressource entre légitimement, jamais pour faire passer un débordement.
 Auparavant, CHAÎNE-VÉRIFIÉE n'avait touché ni `src/` ni `test/` : le HTML était
 ressorti identique à l'octet, SHA-256 compris, donc **sa version n'avait PAS été
 bumpée**, et la référence était 600 pass / 1 074 070 octets / 0.46.0 · build 47.
 `python3 tools/verifier.py` → **1 370 identiques · 2 différents (les deux
 déclarés) · 0 nouveau · 56 MANQUANTS**, en 125 s, code de sortie **1**.
-⚠ **CE 1 EST LE VERDICT, PAS UNE PANNE**, et il se lit au §6 : les 56 manquants
-sont 54 tuiles de terrain qu'aucun outil ne reproduit plus et 2 fichiers de
-`carte/` livrés à la main. Aucun n'a été « corrigé » — c'est un arbitrage
-d'Ethan, pas une décision de lot. STRUCTURES-AU-COMBAT a coûté
+⚠ **CES 56 MANQUANTS SONT SOLDÉS DEPUIS LE LOT FINITIONS**, par un arbitrage
+d'Ethan et non par une correction : « déclarer le terrain comme une source ».
+`SOURCES_DECLAREES` de `tools/verifier.py` porte les 54 tuiles et les 2 fichiers
+de `carte/`, chacun avec sa raison — et **l'assertion inverse**, qui fait tomber
+le vérificateur le jour où un outil se remet à produire l'un d'eux.
+⚠ **LE PRIX EST ÉCRIT DANS LA TABLE** : un futur changement de palette ne pourra
+pas être appliqué au terrain automatiquement, les planches d'origine ayant été
+supprimées par la migration qui les a consommées. STRUCTURES-AU-COMBAT a coûté
 **+832 octets** — aucun atlas ajouté, aucun sprite : c'est du code, et c'est un
 DÉPLACEMENT de code. Le lot RÉPARATION avait laissé la référence à 593 tests et
 1 073 238 octets. Le lot POINTS-D'ATTAQUE a coûté
@@ -388,13 +401,14 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   38 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   39 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
-  accent  rendu-pose  reparation  roster  site-de-la-case  site-entame  sprite  state
+  accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
+  sprite  state
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -415,8 +429,9 @@ test/                   38 fichiers *.test.js (node:test) ; deux fichiers n'en s
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  21 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08
-                        au lot CHAÎNE-VÉRIFIÉE, fichier par fichier.
+tools/                  22 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08
+                        au lot FINITIONS, fichier par fichier. Le vingt-deuxième
+                        est `icone.py`, qui produit l'icône de l'application.
                         ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
                         DIX-SEPT, et le dix-sept était déjà faux de deux quand il a
                         été écrit : le disque en portait dix-neuf. La chaîne de
@@ -429,7 +444,7 @@ tools/                  21 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les DIX-HUIT autres sont du Python, hors chaîne de build et hors
+  ⤷ les DIX-NEUF autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
       • ONZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
         `art/sprites/` ;
@@ -437,7 +452,9 @@ tools/                  21 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
         plus le portage de la coupe 1024 ;
       • DEUX SCRIPTS HISTORIQUES à usage unique, dont les chemins pointent vers
         une machine qui n'existe plus : ils se lisent au passé ;
-      • le COUSEUR d'atlas, le module de CHEMINS et le VÉRIFICATEUR.
+      • le COUSEUR d'atlas, le module de CHEMINS, le VÉRIFICATEUR, et
+        l'outil d'ICÔNE — qui écrit dans `android/`, donc hors du périmètre du
+        vérificateur : c'est un angle mort assumé, dit au rapport de FINITIONS.
   ⤷ ⚠⚠ LA DESTINATION DES ONZE PRODUCTEURS EST DÉROUTABLE DEPUIS LE 30/08, et
     c'est ce qui rend la chaîne vérifiable. Chacun portait sa propre ligne vers
     `art/sprites/` ; ils demandent maintenant ce dossier au module de chemins,

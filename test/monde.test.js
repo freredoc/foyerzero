@@ -10,12 +10,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  CRANS, CRAN_PAR_DEFAUT, CSS_MINI_LETTRE, DALLES_PAR_IMAGE,
+  CRANS, CRAN_PAR_DEFAUT, DALLES_PAR_IMAGE,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, creerCacheDalles, indicesDeTeinte, teinteDAttente,
   palierDuSite,
@@ -26,7 +26,7 @@ import {
 } from '../src/data/sites.js';
 import {
   spriteDuSite, SPRITES_POI, SPRITES_GROSSE_BASE, nomsPreBranches,
-  empriseDeLaGrosseBase, dessinerGrosseBase, FAMILLE,
+  empriseDeLaGrosseBase, dessinerGrosseBase, FAMILLE, cotesDuSite,
 } from '../src/render/embleme.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { ATLAS } from '../src/data/atlas.js';
@@ -445,7 +445,18 @@ test('emblèmes — le bord rouge est réservé à ce qui attaque le joueur', ()
   for (const type of Object.keys(TYPES_SITE)) {
     assert.ok(EMBLEMES_CARTE[type] !== undefined, `aucun gabarit pour le site « ${type} »`);
   }
-  assert.ok(CSS_MINI_LETTRE > 0);
+  // ⚠⚠ `assert.ok(CSS_MINI_LETTRE > 0)` ÉTAIT ICI, ET IL EST RETIRÉ AVEC SA
+  // CONSTANTE. Arbitré par Ethan le 30/08 : « on enlève les lettres quoi qu'il
+  // arrive » — plus de lettre sur la carte, donc plus de seuil, donc plus rien à
+  // asserter dessus. Ce n'est pas un assouplissement : le test voisin exige
+  // maintenant que ni la constante ni le `fillText` ne reparaissent.
+  //
+  // ⚠ LE CHAMP `lettre`, LUI, RESTE, ET SES DEUX ASSERTIONS AVEC. Ses lecteurs
+  // ont été cherchés avant d'y toucher : `nom` en a TROIS et ils sont vivants —
+  // le panneau de site et son titre —, donc la table ne bouge pas ; `lettre` est
+  // la seule désignation courte des cinq types, et un panneau futur la
+  // reprendra. Le supprimer serait détruire de l'information pour économiser
+  // cinq caractères.
 });
 
 test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est inliné', () => {
@@ -596,9 +607,16 @@ test('emblèmes — le palier de la base du joueur vient de ses BÂTIMENTS, pas 
 });
 
 test('emblèmes — chaque site de la fenêtre résout un sprite qui est dans l\'atlas', () => {
-  // Balayage direct : les cinq types × les deux saveurs × les neuf paliers.
+  // Balayage direct : les types D'UNE CASE × les deux saveurs × les neuf paliers.
+  //
+  // ⚠⚠ LA TERMINALE EST SORTIE DU BALAYAGE, ET ELLE Y EST REMPLACÉE PAR UNE
+  // LEVÉE. Elle prenait `site_base_o_n9` et se confondait exactement avec une
+  // base de l'Ouvrage au dernier palier ; depuis l'arbitrage du 30/08 elle se
+  // dessine en hexagone sur neuf cases, et `spriteDuSite` LÈVE pour elle — un
+  // appelant oublié doit se voir, pas retomber sur l'ancien nom.
   const noms = new Set();
   for (const type of Object.keys(EMBLEMES_CARTE)) {
+    if (cotesDuSite(type) !== null) continue;
     for (const saveur of ['richeQuartz', 'richeScorie']) {
       for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
         const nom = spriteDuSite(type, palier, saveur);
@@ -609,18 +627,20 @@ test('emblèmes — chaque site de la fenêtre résout un sprite qui est dans l\
     }
   }
   // ⚠ FALSIFIABLE : une fonction qui rendrait toujours le même nom passerait
-  // toutes les assertions ci-dessus. Le compte est **36** : 9 `site_base_o_n*`,
-  // 9 `site_base_j_n*`, 9 `site_quartz_n*` et 9 `site_scorie_n*`.
+  // toutes les assertions ci-dessus. Le compte est **36**, RECOMPTÉ et non
+  // recopié : 9 `site_base_o_n*`, 9 `site_base_j_n*`, 9 `site_quartz_n*` et
+  // 9 `site_scorie_n*`.
   //
-  // ⚠⚠ LA TERMINALE N'AJOUTE AUCUN NOM, ET C'EST LE DÉFAUT QUE LE BRIEF POSE.
-  // Elle prend `site_base_o_n9` faute de sprite propre, donc elle se confond
-  // avec une base de l'Ouvrage du dernier palier. Ce test le CHIFFRE plutôt que
-  // de le laisser passer inaperçu : le jour où elle gagnera son dessin — la
-  // grosse base 3 × 3 en est le candidat naturel —, ce 36 deviendra 37 et
-  // quelqu'un relira ce paragraphe. **C'est un arbitrage d'Ethan.**
+  // ⚠⚠ IL VALAIT DÉJÀ 36 AVANT CE LOT, ET POUR UNE AUTRE RAISON. La terminale
+  // partageait alors `site_base_o_n9` — elle n'ajoutait donc aucun nom tout en
+  // étant balayée ; elle est maintenant HORS du balayage, et le total ne bouge
+  // pas. Deux causes différentes pour le même nombre : c'est exactement le genre
+  // de coïncidence qui ferait croire qu'un test n'a pas bougé, d'où ce
+  // paragraphe et l'assertion de levée ci-dessous.
   assert.equal(noms.size, 36, `${noms.size} noms distincts composés`);
-  assert.equal(spriteDuSite('baseTerminale', 1, null), spriteDuSite('base', 9, null),
-    'la terminale a gagné un dessin propre — mettre le compte ci-dessus à jour');
+  assert.equal(new Set(Object.keys(EMBLEMES_CARTE)).size - 1,
+    Object.keys(EMBLEMES_CARTE).filter((t) => cotesDuSite(t) === null).length,
+    'un second type de site couvre plusieurs cases — recompter le balayage');
 
   // Et par la VRAIE liste de sites, celle que l'écran dessine.
   const etat = creerEtat(4242);
@@ -629,6 +649,7 @@ test('emblèmes — chaque site de la fenêtre résout un sprite qui est dans l\
   }));
   assert.ok(sites.length > 1, `${sites.length} site(s) dans la fenêtre : le balayage ne mesure rien`);
   for (const site of sites) {
+    if (cotesDuSite(site.type) !== null) continue;
     const nom = spriteDuSite(site.type, palierDuSite(site, etat), site.saveur);
     assert.ok(existeDansAtlas(FAMILLE, nom),
       `site ${site.type} en (${site.rangee}, ${site.colonne}) → « ${nom} », absent`);
@@ -757,4 +778,128 @@ test('emblèmes — `ZOOM_CARTE` est la source des échelles, et le dessin la su
   // d'une cellule d'emblème ; c'est elle que `celluleDuSprite` doit rendre.
   assert.equal(ZOOM_CARTE.grilleEmbleme, ATLAS[FAMILLE] === undefined ? null : 64,
     'la grille d\'emblème ne correspond plus à la grille de couture');
+});
+
+// ---------------------------------------------------------------------------
+// L'hexagone et les lettres — lot FINITIONS
+// ---------------------------------------------------------------------------
+
+test('terminale — elle se dessine sur neuf cases, une base ordinaire sur une', () => {
+  // ⚠ ARBITRÉ PAR ETHAN LE 30/08 : « la base terminale c'est la base en
+  // hexagone, sur 9 tuiles monde. »
+  //
+  // ⚠ FALSIFIABLE : on asserte D'ABORD qu'une base ORDINAIRE n'occupe qu'une
+  // case. Sans ce témoin, une fonction qui rendrait 3 pour tout le monde
+  // passerait l'assertion qui suit.
+  assert.equal(cotesDuSite('base'), null, 'une base de l\'Ouvrage occupe plus d\'une case');
+  assert.equal(cotesDuSite('camp'), null);
+  assert.equal(cotesDuSite('avantPoste'), null);
+  assert.equal(cotesDuSite('baseJoueur'), null);
+  assert.equal(cotesDuSite('baseTerminale'), 3, 'la terminale n\'est plus une 3 × 3');
+
+  // La primitive rendue couvre bien neuf cases et porte le bon nom.
+  const site = positionBaseTerminale();
+  for (const cran of ZOOM_CARTE.crans) {
+    const d = dessinerGrosseBase(3, site, cran, { x: 0, y: 0 });
+    assert.equal(d.nom, SPRITES_GROSSE_BASE[3], `cran ${cran} : mauvais sprite`);
+    assert.equal(d.cote, cran * 3, `cran ${cran} : ${d.cote} px de côté au lieu de ${cran * 3}`);
+  }
+
+  // ⚠ ET LA 2 × 2 RESTE SANS EMPLOI. Ethan : « la base 2 × 2 sera pour autre
+  // chose. » Aucun type de site ne la demande.
+  const cotesDemandes = Object.keys(EMBLEMES_CARTE).map(cotesDuSite).filter((c) => c !== null);
+  assert.deepEqual(cotesDemandes, [3], 'un type de site demande une grosse base autre que la 3 × 3');
+});
+
+test('terminale — `spriteDuSite` LÈVE pour elle, elle ne retombe pas sur l\'ancien nom', () => {
+  // ⚠ ELLE PRENAIT `site_base_o_n9` ET SE CONFONDAIT EXACTEMENT avec une base de
+  // l'Ouvrage au dernier palier. Rendre l'ancien nom par compatibilité la
+  // dessinerait deux fois — en petit sous son hexagone — et rien ne le dirait.
+  for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
+    assert.throws(() => spriteDuSite('baseTerminale', palier, null), /hexagone/,
+      `palier ${palier} : la terminale rend encore un nom d'emblème`);
+  }
+  // Témoin : les autres types en rendent toujours un.
+  assert.doesNotThrow(() => spriteDuSite('base', 9, null));
+  assert.doesNotThrow(() => spriteDuSite('baseJoueur', 1, null));
+});
+
+test('terminale — son emprise tient dans la carte, et déborder LÈVE', () => {
+  const site = positionBaseTerminale();
+  const e = empriseDeLaGrosseBase(3, site);
+  // Mesuré : rangées 25 à 27, colonnes 15 à 17, sur une carte de 300 × 31.
+  assert.ok(e.rangee >= 1 && e.rangee + 2 <= GEOGRAPHIE.carte.hauteur,
+    `l'emprise sort de la carte en rangée : ${e.rangee}…${e.rangee + 2}`);
+  assert.ok(e.colonne >= 1 && e.colonne + 2 <= GEOGRAPHIE.carte.largeur,
+    `l'emprise sort de la carte en colonne : ${e.colonne}…${e.colonne + 2}`);
+
+  // ⚠⚠ ET C'EST UNE PROPRIÉTÉ DE SA POSITION, PAS DE LA FONCTION. Poussée au
+  // bord, elle LÈVE plutôt que de rogner : un carré tronqué en silence
+  // dessinerait une base que personne ne saurait expliquer.
+  for (const bord of [
+    { rangee: 1, colonne: 16 },
+    { rangee: GEOGRAPHIE.carte.hauteur, colonne: 16 },
+    { rangee: 26, colonne: 1 },
+    { rangee: 26, colonne: GEOGRAPHIE.carte.largeur },
+  ]) {
+    assert.throws(() => empriseDeLaGrosseBase(3, bord), /déborde la carte/,
+      `(${bord.rangee}, ${bord.colonne}) ne lève pas`);
+  }
+  // Témoin : une case d'un cran à l'intérieur, elle, passe.
+  assert.doesNotThrow(() => empriseDeLaGrosseBase(3, { rangee: 2, colonne: 2 }));
+});
+
+test('carte — plus aucune lettre n\'est dessinée, à aucun cran', () => {
+  const source = lire('src', 'ui', 'monde.js');
+  const nu = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+  // ⚠⚠ ARBITRÉ PAR ETHAN LE 30/08 : « on enlève les lettres quoi qu'il arrive. »
+  // Pas de seuil, pas de cran, pas de condition.
+  //
+  // ⚠ LE BALAYAGE LIT LA SOURCE DÉCOMMENTÉE, et c'est la cinquième fois que le
+  // dépôt en a besoin — après `viewport-fit=cover`, `MENTION_SATURE`,
+  // `etat.rng` et `campChaine`. Le commentaire qui EXPLIQUE le retrait nomme
+  // `CSS_MINI_LETTRE` ; une garde qui lit ce qu'on a écrit à son sujet ne garde
+  // rien.
+  assert.doesNotMatch(nu, /fillText/, 'l\'écran Monde dessine encore du texte sur la carte');
+  assert.doesNotMatch(nu, /CSS_MINI_LETTRE/, '`CSS_MINI_LETTRE` est revenue dans le code');
+  assert.doesNotMatch(nu, /\.lettre/, 'le champ `lettre` est relu par l\'écran');
+
+  // ⚠ L'APPÂT : le décommentage doit encore reconnaître la vraie faute. Sans
+  // lui, un motif trop gourmand rendrait les trois lignes ci-dessus muettes.
+  const decommente = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.match(decommente('ctx.fillText(x); // fillText'), /fillText/);
+  assert.doesNotMatch(decommente('// CSS_MINI_LETTRE est partie'), /CSS_MINI_LETTRE/);
+
+  // ⚠⚠ ET IL Y EN AVAIT BIEN AVANT, sinon ce test ne mesurerait rien. Le champ
+  // `lettre` est TOUJOURS dans les données — c'est la seule désignation courte
+  // des cinq types, et un panneau futur la reprendra —, il n'est simplement plus
+  // lu par la carte.
+  for (const [type, e] of Object.entries(EMBLEMES_CARTE)) {
+    assert.match(e.lettre, /^[A-Z]$/, `${type} a perdu sa lettre`);
+  }
+  assert.equal(new Set(Object.values(EMBLEMES_CARTE).map((e) => e.lettre)).size,
+    Object.keys(EMBLEMES_CARTE).length, 'deux types partagent une lettre');
+});
+
+test('carte — `CSS_MINI_LETTRE` n\'existe plus nulle part dans `src/`', () => {
+  const fichiers = [];
+  const parcourir = (dossier) => {
+    for (const e of readdirSync(dossier, { withFileTypes: true })) {
+      const p = join(dossier, e.name);
+      if (e.isDirectory()) parcourir(p);
+      else if (e.name.endsWith('.js') || e.name.endsWith('.html')) fichiers.push(p);
+    }
+  };
+  parcourir(join(RACINE, 'src'));
+  assert.ok(fichiers.length > 30, `${fichiers.length} fichiers balayés : le parcours ne voit rien`);
+
+  let hors = 0;
+  for (const p of fichiers) {
+    const nu = readFileSync(p, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').replace(/<!--[\s\S]*?-->/g, '');
+    assert.doesNotMatch(nu, /CSS_MINI_LETTRE/, `${p} la nomme encore`);
+    hors += 1;
+  }
+  assert.equal(hors, fichiers.length);
 });

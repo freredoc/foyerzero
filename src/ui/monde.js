@@ -31,7 +31,9 @@ import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
 import { saveurDeLaCase } from '../sim/site-de-la-case.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
-import { spriteDuSite, FAMILLE } from '../render/embleme.js';
+import {
+  spriteDuSite, FAMILLE, cotesDuSite, dessinerGrosseBase, SPRITES_GROSSE_BASE,
+} from '../render/embleme.js';
 import { celluleDuSprite } from '../render/sprite.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 
@@ -40,14 +42,6 @@ export const CRANS = ZOOM_CARTE.crans;
 
 /** Le cran sur lequel la carte s'ouvre : celui qui montre le plus. */
 export const CRAN_PAR_DEFAUT = 0;
-
-/**
- * À partir de quelle taille de case, en pixels CSS, l'emblème porte sa lettre.
- *
- * En dessous, la pastille reste — c'est la couleur du bord qui dit ce qu'elle
- * est —, mais une lettre de six pixels ne se lit pas et fait une tache.
- */
-export const CSS_MINI_LETTRE = 40;
 
 /**
  * Combien de dalles au plus se calculent dans une même image.
@@ -399,6 +393,12 @@ export function initialiserEcranMonde(doc) {
   // attendait déjà son atlas de terrain de cette façon ; on suit le précédent.
   let emblemes = null;
   let emblemesDemandes = false;
+  // ⚠ LA GROSSE BASE EST UNE IMAGE À PART, PAS UNE CELLULE D'ATLAS. Elle couvre
+  // trois cases de côté, donc 192 px à la grille 64, quand `coudre` exige des
+  // cellules carrées à la taille de case — `tools/atlas.py` l'exclut nommément.
+  // Elle voyage donc par son propre marqueur, et s'attend comme l'atlas.
+  let grossesBases = null;
+  let grossesBasesDemandees = false;
 
   const cran = () => CRANS[cranIndex];
 
@@ -450,6 +450,29 @@ export function initialiserEcranMonde(doc) {
       return;
     }
     emblemes = image;
+    dessiner();
+  }
+
+  /**
+   * Les grosses bases, par leur côté en cases — même attente que l'atlas.
+   *
+   * ⚠ SEULE LA 3 × 3 EST EMPLOYÉE AUJOURD'HUI, et la 2 × 2 est chargée quand
+   * même : elle est dans le fichier livré de toute façon — elle y pèse 15 134
+   * octets —, et l'attendre ici évite qu'un futur emploi redécouvre le décodage.
+   */
+  function chargerGrossesBases() {
+    if (grossesBases !== null || grossesBasesDemandees) return;
+    grossesBasesDemandees = true;
+    const images = { 2: $('monde-base-2x2'), 3: $('monde-base-3x3') };
+    const enAttente = Object.values(images)
+      .filter((im) => !im.complete || im.naturalWidth === 0);
+    if (enAttente.length > 0) {
+      enAttente[0].addEventListener('load', () => {
+        grossesBasesDemandees = false; chargerGrossesBases();
+      }, { once: true });
+      return;
+    }
+    grossesBases = images;
     dessiner();
   }
 
@@ -583,22 +606,26 @@ export function initialiserEcranMonde(doc) {
    * gabarit reste en REPLI tant que l'image n'est pas décodée — une image
    * dessinée trop tôt est blanche, et un carré vaut mieux qu'un trou.
    *
-   * ⚠ LA LETTRE RESTE, ET SON SEUIL NE BOUGE PAS. `CSS_MINI_LETTRE` existe
-   * depuis le lot ÉCRAN-CARTE et vaut 40 px CSS : à `devicePixelRatio` 2, les
-   * deux crans les plus SERRÉS (128 et 256 px physiques) la portent, les deux
-   * plus larges non. C'est exactement le comportement voulu — un emblème vaut
-   * 10,7 px CSS au cran le plus large, où une lettre ferait une tache. **Aucun
-   * second seuil n'a été créé** ; celui-là a été cherché et trouvé.
+   * ⚠⚠ PLUS AUCUNE LETTRE, À AUCUN ZOOM. Arbitré par Ethan le 30/08 : « on
+   * enlève les lettres quoi qu'il arrive. » Ce n'est pas un seuil abaissé, c'est
+   * la lettre qui part — `CSS_MINI_LETTRE` est partie avec, faute de lecteur.
+   * Le champ `lettre` d'`EMBLEMES_CARTE`, lui, RESTE : c'est la seule
+   * désignation courte des cinq types de site, et un panneau futur la
+   * reprendra. Le supprimer serait détruire de l'information pour économiser
+   * cinq caractères.
    *
    * ⚠ L'ÉCHELLE SE LIT DANS `ZOOM_CARTE`. Un emblème est dessiné à la taille
    * d'une case, quelle que soit la grille source : `drawImage` met la cellule de
    * `grilleEmbleme` pixels à `taille` pixels, et le rapport suit tout seul le
    * jour où un cran bougera.
+   *
+   * ⚠⚠ ET LA BASE TERMINALE NE PASSE PAS PAR ICI. Elle couvre neuf cases ; son
+   * dessin a besoin de l'origine de la vue et du cran, que cette fonction-ci ne
+   * reçoit pas. `dessiner` la dérive par `cotesDuSite`, qui est une TABLE du
+   * module de rendu — pas un `=== 'baseTerminale'` écrit à la main dans la
+   * boucle, qui serait le premier cas particulier à diverger.
    */
   function dessinerEmbleme(site, x, y, taille) {
-    const embleme = EMBLEMES_CARTE[site.type];
-    const trait = Math.max(1, Math.round(taille / 16));
-
     if (emblemes !== null) {
       const cellule = celluleDuSprite(FAMILLE, spriteDuSite(
         site.type, palierDuSite(site, etatCourant), site.saveur,
@@ -610,6 +637,8 @@ export function initialiserEcranMonde(doc) {
       );
     } else {
       // Repli d'attente : le gabarit du lot ÉCRAN-CARTE, tel quel.
+      const embleme = EMBLEMES_CARTE[site.type];
+      const trait = Math.max(1, Math.round(taille / 16));
       const marge = Math.max(1, Math.round(taille / 8));
       const cote = taille - marge * 2;
       const rayon = Math.max(1, Math.round(cote / 5));
@@ -629,13 +658,25 @@ export function initialiserEcranMonde(doc) {
         ctx.strokeRect(x + marge, y + marge, cote, cote);
       }
     }
+  }
 
-    if (taille / (fenetre.devicePixelRatio || 1) < CSS_MINI_LETTRE) return;
-    ctx.fillStyle = embleme.bord;
-    ctx.font = `600 ${Math.round(taille * 0.45)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(embleme.lettre, x + taille / 2, y + taille / 2 + trait / 2);
+  /**
+   * Une base qui couvre plusieurs cases — l'hexagone de la terminale.
+   *
+   * ⚠ L'EMPRISE SE DEMANDE À `render/embleme.js`, elle ne se calcule pas ici.
+   * Une 3 × 3 se centre sur sa case ; le module lève si le carré débordait la
+   * carte, plutôt que de le rogner en silence.
+   *
+   * ⚠ ET LE REPLI EST L'EMBLÈME D'UNE CASE. Tant que l'image n'est pas décodée,
+   * mieux vaut un gabarit à la bonne place qu'un trou de neuf cases.
+   */
+  function dessinerGrosse(site, cotes, ox, oy, pas) {
+    if (grossesBases === null) {
+      dessinerEmbleme(site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas);
+      return;
+    }
+    const d = dessinerGrosseBase(cotes, site, pas, { x: ox, y: oy });
+    ctx.drawImage(grossesBases[cotes], d.x, d.y, d.cote, d.cote);
   }
 
   function dessiner() {
@@ -649,6 +690,14 @@ export function initialiserEcranMonde(doc) {
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
     }));
     for (const site of sitesAffiches) {
+      // ⚠ LE NOMBRE DE CASES SE DEMANDE, IL NE SE RECONNAÎT PAS. `cotesDuSite`
+      // rend `null` pour ce qui tient dans une case ; ajouter une seconde grosse
+      // base sera une ligne dans `render/embleme.js`, pas ici.
+      const cotes = cotesDuSite(site.type);
+      if (cotes !== null) {
+        dessinerGrosse(site, cotes, ox, oy, pas);
+        continue;
+      }
       dessinerEmbleme(
         site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas,
       );
@@ -775,6 +824,7 @@ export function initialiserEcranMonde(doc) {
     empreinteSatellites = `${etat.satellites.presents.length}:${etat.satellites.prochaineInstance}`;
     chargerAtlas();
     chargerEmblemes();
+    chargerGrossesBases();
     dimensionner();
     if (premiere) centrerSur(etat.position);
     majBoutons();
