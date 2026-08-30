@@ -60,7 +60,7 @@ COTE = 64
 # Le slug est ASCII parce qu'il devient un nom de fichier, un marqueur de build
 # et une clé JavaScript ; « bâtiment » ne peut être aucun des trois sans risque.
 FAMILLES = {
-    'bâtiment': ('batiment', 16),
+    'bâtiment': ('batiment', 34),   # 16 intacts + 16 détruits + 2 ruines, lot 10 du 30/08
     'terrain': ('terrain', 18),
 }
 
