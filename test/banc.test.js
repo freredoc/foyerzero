@@ -483,8 +483,16 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // livrable, et c'est le prix de l'offline : une image inlinée pèse un tiers
   // de plus qu'un fichier, et un fichier à côté serait une référence externe.
   // Mesuré au lot : 503 724 octets, dont 299 400 pour l'atlas.
+  //
+  // ⚠ RELEVÉE À 700 000 AU LOT RUINES, le 30/08. L'atlas de bâtiment passe de
+  // 16 à 34 sprites — les seize états détruits et les deux ruines rejoignent
+  // les seize intacts —, sa grille de 4×4 à 6×6, et son poids inliné de 27 000
+  // à 57 489 octets. Mesuré après le lot : 608 040 octets. La marge restante
+  // est d'environ 90 000 octets, soit un atlas de plus de la taille de celui
+  // des bâtiments : la prochaine famille cousue la fera reculer à nouveau, et
+  // ce sera à dire dans son lot.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 600_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 700_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------
