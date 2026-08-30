@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.43.0 · build 44.
+Dernière révision : **30/08/2026**, version 0.44.0 · build 45.
 
 ---
 
@@ -35,8 +35,8 @@ Dernière révision : **30/08/2026**, version 0.43.0 · build 44.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **578 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**608 040 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+`npm test` → **582 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**859 646 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
@@ -77,8 +77,18 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : **13,1 %** — la borne est passée à 700 000 au lot RUINES, et
-le lot PRODUCTION a porté le HTML à **608 040 octets** : l'atlas des bâtiments
+Marge actuelle : **4,5 %** — la borne est passée à 900 000 au lot
+BRANCHEMENT-DÉFENSE, qui a porté le HTML à **859 646 octets** en faisant entrer
+`defense` (204 sprites en 15 × 14, la grille la plus dense du dépôt) et `socle`
+(36 en 6 × 6), soit **243 364 octets de base64**.
+⚠⚠ **ET IL NE RESTE QUE 40 354 OCTETS.** Les trois familles encore non cousues —
+unite, tourelle-unite, carte — pèsent bien au-delà : le prochain lot qui en fait
+entrer une devra relever la borne EN ÉCRIVANT POURQUOI. Une piste mesurée si le
+poids devient un problème : découper les atlas par CAMP en plus de la famille
+épargnerait 80 068 octets — mais c'est un second axe dans l'index pour un écran
+de raid qui n'existe pas, et c'est un arbitrage d'Ethan.
+Auparavant, la borne était passée à 700 000 au lot RUINES, et
+le lot PRODUCTION avait porté le HTML à 608 040 octets : l'atlas des bâtiments
 passe de 16 à 34 sprites, sa grille de 4×4 à 6×6, et son poids inliné de 27 278 à
 **57 489 octets**. Auparavant, le lot PREMIÈRE-COUCHE avait porté le HTML à
 581 125 octets, et le lot BÂTIMENTS-1024 l'a RAMENÉ à **577 357** : les seize
@@ -2354,6 +2364,40 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   supprimer d'abord, écrire ensuite. Dans l'autre ordre, la commande sort autant
   de lignes `ÉCART` qu'il y a de fichiers et n'écrit rien — vérifié le 30/08 :
   50 `ÉCART`, et `git status` ne montrait pas une seule modification.
+
+- ⚠⚠ **LA BOUSSOLE DE `sim/rendu-pose.js` A PORTÉ DEUX NORDS CONTRADICTOIRES,
+  ET LES DEUX ÉTAIENT GARDÉS.** Corrigé le 30/08 au lot BRANCHEMENT-DÉFENSE.
+  `orientationVers` posait que le nord est la rangée DÉCROISSANTE ;
+  `ORIENTATION_PAR_DEFAUT` fait regarder la garnison au SUD, or elle fait face au
+  déploiement, donc aux rangées 1 et 2, donc aux rangées décroissantes. Les deux
+  ne pouvaient pas être vrais ensemble : **une tourelle au repos visait juste et
+  se retournait à 180° dès qu'elle acquérait une cible.**
+  ⚠ **MESURÉ, PAS SOUPÇONNÉ** : une garnison en rangée 5 visant un assaillant en
+  rangée 2 rendait `n`, quand `render/orientation.js` pose la cible en ligne
+  d'écran 17 contre 14 pour le tireur — donc PLUS BAS. Les trois montages du
+  brief se sont reproduits à l'identique.
+  ⚠ **LE NORD EST LA RANGÉE CROISSANTE**, c'est-à-dire la rangée 18, le fond de
+  la base, la première ligne d'écran. Ce sens rend trois choses vraies EN MÊME
+  TEMPS : la garnison au repos regarde au sud vers l'assaut, l'armée au repos
+  regarde au nord vers la base qu'elle attaque, et le sprite `_s` pointe vers le
+  bas de l'image comme vers le bas de l'écran. `ORIENTATION_PAR_DEFAUT` n'a pas
+  bougé — c'est lui qui avait raison.
+  ⚠⚠ **CE QUI A LAISSÉ PASSER LA CONTRADICTION, C'EST L'ABSENCE D'UN TEST QUI
+  CROISE LES DEUX MODULES.** Chacun était juste séparément et gardé séparément.
+  Le test existe désormais : il ne connaît aucune valeur d'orientation, il
+  compare un SENS à une ligne d'écran, et il resterait vrai si les seize noms
+  changeaient. **Deux modules justes séparément peuvent être faux ensemble.**
+  ⚠ **AUCUN APPELANT DE PRODUCTION N'A ÉTÉ TOUCHÉ, ET C'EST MESURÉ** : au moment
+  du correctif, rien hors du fichier de test n'appelait la boussole — ni le
+  résolveur de combat, ni le banc. `ui/chantier.js` en est le premier appelant.
+
+- **UN CROCHET PEUT ÊTRE INVOQUÉ PAR UN COMMENTAIRE SANS AVOIR JAMAIS EXISTÉ.**
+  Le commentaire de `.jeton.sprite` dans `index.src.html` renvoyait à
+  `TERRAINS[x].familleAtlas` : **zéro occurrence dans tout le dépôt**, le champ
+  s'appelle `spriteDe`. Écrit au lot PREMIÈRE-COUCHE, relevé au lot
+  BRANCHEMENT-DÉFENSE. Un commentaire qui nomme une chose inexistante envoie
+  chercher un mécanisme qu'on ne trouvera pas — et aucune garde ne lit les
+  commentaires.
 
 ### Sur le vocabulaire
 

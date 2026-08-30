@@ -44,8 +44,9 @@ import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
 import { ATLAS } from '../data/atlas.js';
-import { fondDuSprite } from '../render/sprite.js';
+import { existeDansAtlas, fondDuSprite } from '../render/sprite.js';
 import { suffixeDeVariante } from '../render/variante.js';
+import { liaisonDuMur, liaisonDuSocle, orientationDeLaPiece } from '../sim/rendu-pose.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
 // base, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague — que
@@ -301,6 +302,56 @@ export const SIGLES_OBSTACLE = {
  */
 export function spriteDuBatiment(id) {
   return `bat_j_${id.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`)}`;
+}
+
+/**
+ * Les couches de sprite d'une pièce de garnison, de la plus HAUTE à la plus basse.
+ *
+ * ⚠ LE TYPE DÉCIDE, PAS L'IDENTIFIANT. `DEFENSES[id].type` dit exactement ce
+ * qu'il faut savoir — un mur porte une liaison, une barrière ne porte rien, une
+ * tourelle porte une orientation ET un socle. Reconnaître les neuf pièces par
+ * leur nom serait neuf cas particuliers à tenir à jour ; une dixième défense
+ * héritera de sa famille sans qu'on y touche.
+ *
+ * ⚠ L'ORIENTATION VIENT DE `orientationDeLaPiece`, JAMAIS D'UN `'s'` ÉCRIT ICI.
+ * Sur l'écran Chantier il n'y a pas de combat, donc pas de cible, donc la valeur
+ * par défaut — mais c'est le moteur qui la donne, et l'écran de raid, où les
+ * cibles existent, n'aura rien à réécrire.
+ *
+ * ⚠ ET LE SOCLE SE DEMANDE À L'ATLAS, IL NE SE DÉDUIT PAS D'UNE LISTE. Six
+ * défenses portent une tourelle, trois seulement ont des socles de liaison : la
+ * planche des trois artilleries n'existe pas. `existeDansAtlas` fait retomber
+ * les trois autres sur leur socle de base, et le jour où la planche arrive elles
+ * prennent leurs liaisons sans qu'une ligne change ici.
+ *
+ * @param {object} piece pièce posée, `{ id, rangee, colonne, niveau }`
+ * @param {object} etat état de la partie — la garnison ENTIÈRE sert au chaînage
+ * @returns {{famille: string, nom: string}[]} au moins une couche
+ */
+export function couchesDeLaDefense(piece, etat) {
+  const type = DEFENSES[piece.id]?.type;
+  if (type === undefined) {
+    throw new RangeError(`chantier : « ${piece.id} » n'est pas une pièce de défense`);
+  }
+  const garnison = etat.garnison;
+
+  // Un mur ne porte ni orientation ni socle : c'est le raccord qui le dessine.
+  if (type === 'mur') {
+    return [{ famille: 'defense', nom: `def_j_${piece.id}_${liaisonDuMur(garnison, piece)}` }];
+  }
+  // Une barrière blesse au contact : ni tourelle à tourner, ni socle à poser.
+  if (type === 'barriere') {
+    return [{ famille: 'defense', nom: `def_j_${piece.id}` }];
+  }
+
+  const orientation = orientationDeLaPiece('garnison', piece, null);
+  const liaison = liaisonDuSocle(garnison, piece);
+  const socleLie = `socle_def_j_${piece.id}_${liaison}`;
+  const socle = existeDansAtlas('socle', socleLie) ? socleLie : `socle_def_j_${piece.id}`;
+  return [
+    { famille: 'defense', nom: `def_j_${piece.id}_${orientation}` },
+    { famille: 'socle', nom: socle },
+  ];
 }
 
 /**
@@ -1554,12 +1605,17 @@ export const TERRAINS = {
     })),
     nomDe: (id) => BASE_BATIMENTS[id].nom.joueur,
     sigleDe: (id) => SIGLES[id],
-    // ⚠ LE SPRITE DU JETON, OU `null` SI LA BANDE N'EN A PAS ENCORE. C'est la
-    // SEULE chose qui sépare les deux bandes à la peinture, et elle est dans la
-    // table pour la même raison que `panneau` et `cible` : un `=== 'defense'`
-    // écrit à la main dans la boucle serait le premier cas particulier à
-    // diverger, et un test refuse déjà cette forme-là.
-    spriteDe: spriteDuBatiment,
+    // ⚠ LES COUCHES DU JETON, DE LA PLUS HAUTE À LA PLUS BASSE. C'est la SEULE
+    // chose qui sépare les deux bandes à la peinture, et elle est dans la table
+    // pour la même raison que `panneau` et `cible` : un `=== 'defense'` écrit à
+    // la main dans la boucle serait le premier cas particulier à diverger, et un
+    // test refuse déjà cette forme-là.
+    //
+    // ⚠ UNE LISTE, MÊME POUR UNE SEULE COUCHE. Le bâtiment n'en a qu'une ; la
+    // défense en a deux — la tourelle et son socle. Rendre tantôt un nom, tantôt
+    // une liste obligerait l'appelant à connaître la différence, ce qui est
+    // exactement le cas particulier qu'on refuse.
+    spriteDe: (piece) => [{ famille: 'batiment', nom: spriteDuBatiment(piece.id) }],
     familleDe: familleDuBatiment,
     problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(etat, id, rangee, colonne),
     poser: (etat, id, rangee, colonne) => poserBatiment(etat, id, rangee, colonne),
@@ -1589,16 +1645,16 @@ export const TERRAINS = {
     posables: posablesDeLaDefense,
     nomDe: nomDeLaPieceDeDefense,
     sigleDe: (id) => SIGLES_DEFENSE[id],
-    // ⚠ `null` : LA DÉFENSE N'ENTRE PAS DANS LA PREMIÈRE COUCHE, ET CE N'EST PAS
-    // UN OUBLI. Ses sprites existent — deux cents dans `art/sprites/defense/` —
-    // mais ils portent SEIZE orientations, et rien dans l'état ne dit
-    // l'orientation d'une pièce posée : `sim/state.js` et `data/combat.js` n'ont
-    // ni orientation, ni azimut, ni cap. Leurs quatre socles de liaison
-    // (`_est`, `_ouest`, `_isole`, `_traversant`) supposent en plus une règle de
-    // chaînage entre merlons voisins qui n'existe pas davantage. Deux règles de
-    // MODÈLE à écrire avant, pas pendant un lot d'écran. En attendant, le jeton
-    // de garnison garde son fond uni et son sigle, exactement comme la veille.
-    spriteDe: null,
+    // ⚠ LA DÉFENSE EST BRANCHÉE DEPUIS LE 30/08, ET LE COMMENTAIRE QUI DISAIT LE
+    // CONTRAIRE EST PARTI AVEC LE `null`. Il affirmait que « rien dans l'état ne
+    // dit l'orientation d'une pièce posée » et qu'aucune « règle de chaînage »
+    // n'existait : `sim/rendu-pose.js` fait les deux depuis, et un commentaire
+    // qui décrit un manque comblé envoie chercher un travail déjà fait.
+    //
+    // ⚠ LA GARNISON ENTIÈRE EST PASSÉE, PAS LA CASE. `liaisonDuMur` et
+    // `liaisonDuSocle` regardent les VOISINS pour décider d'un raccord : leur
+    // donner la seule pièce les priverait de ce qu'ils viennent chercher.
+    spriteDe: couchesDeLaDefense,
     // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
     // décide de la couleur du liseré, et la fiche de style n'a pas de teinte
     // libre pour distinguer un mur d'une tourelle. Le sigle, lui, les distingue
@@ -1748,6 +1804,59 @@ function poserFonds(case_, fonds) {
   case_.style.backgroundImage = fonds.map(() => 'var(--atlas-terrain)').join(', ');
   case_.style.backgroundSize = fonds.map((f) => f.taille).join(', ');
   case_.style.backgroundPosition = fonds.map((f) => f.position).join(', ');
+}
+
+/**
+ * La variable CSS qui porte chaque atlas cousu.
+ *
+ * ⚠ ELLE EST ICI ET PAS DANS LA FEUILLE, parce que c'est le JS qui sait
+ * maintenant de quelle famille vient chaque couche. `.jeton.sprite` fixait
+ * `background-image: var(--atlas-batiment)` en dur, ce qui marchait tant qu'une
+ * seule famille était branchée ; un jeton de garnison en porte DEUX, de deux
+ * atlas différents.
+ */
+const VARIABLE_DATLAS = {
+  batiment: 'var(--atlas-batiment)',
+  terrain: 'var(--atlas-terrain)',
+  defense: 'var(--atlas-defense)',
+  socle: 'var(--atlas-socle)',
+};
+
+/**
+ * Empile des couches de sprite en fond d'un élément, la première par-dessus.
+ *
+ * ⚠ LES TROIS LISTES CSS DOIVENT AVOIR LA MÊME LONGUEUR, ET C'EST ASSERTÉ.
+ * `background-image`, `background-size` et `background-position` se lisent en
+ * parallèle ; une liste plus courte que les autres SE RÉPÈTE en silence, si bien
+ * qu'un socle prendrait le cadrage de la tourelle et dessinerait le mauvais
+ * morceau d'atlas. Rien à l'écran ne dirait que c'est une faute de longueur.
+ *
+ * @param {HTMLElement} element
+ * @param {{famille: string, nom: string}[]} couches de la plus haute à la plus basse
+ */
+function poserCouches(element, couches) {
+  if (!Array.isArray(couches) || couches.length === 0) {
+    throw new RangeError('chantier : une pièce sans couche de sprite');
+  }
+  const images = [];
+  const tailles = [];
+  const positions = [];
+  for (const { famille, nom } of couches) {
+    const variable = VARIABLE_DATLAS[famille];
+    if (variable === undefined) {
+      throw new RangeError(`chantier : la famille « ${famille} » n'a pas de variable CSS`);
+    }
+    const fond = fondDuSprite(famille, nom);
+    images.push(variable);
+    tailles.push(fond.taille);
+    positions.push(fond.position);
+  }
+  if (images.length !== tailles.length || images.length !== positions.length) {
+    throw new RangeError('chantier : les trois listes de fond n\'ont pas la même longueur');
+  }
+  element.style.backgroundImage = images.join(', ');
+  element.style.backgroundSize = tailles.join(', ');
+  element.style.backgroundPosition = positions.join(', ');
 }
 
 /**
@@ -3041,14 +3150,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
         jeton.className = `jeton ${terrain.familleDe(b.id)}`;
         // ⚠ LE TERRAIN DÉCIDE, PAS LE NOM DE LA BANDE. `spriteDe` vaut `null`
         // tant qu'une famille n'est pas branchée : la bande garde alors son
-        // sigle, ce qui est exactement ce que fait la défense aujourd'hui.
+        // sigle. Les deux bandes sont branchées depuis le 30/08 ; la porte reste
+        // ouverte pour la troisième, quelle qu'elle soit.
         if (terrain.spriteDe === null) {
           jeton.textContent = terrain.sigleDe(b.id);
         } else {
           jeton.classList.add('sprite');
-          const fond = fondDuSprite('batiment', terrain.spriteDe(b.id));
-          jeton.style.backgroundSize = fond.taille;
-          jeton.style.backgroundPosition = fond.position;
+          poserCouches(jeton, terrain.spriteDe(b, etat));
           jeton.title = terrain.nomDe(b.id);
         }
         const niveau = doc.createElement('span');
