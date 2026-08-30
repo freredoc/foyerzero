@@ -343,7 +343,7 @@ test/                   37 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  16 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08.
+tools/                  17 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08.
                         §2 en annonçait trois, puis sept, puis huit : le huit était
                         déjà faux avant ce lot-ci, la chaîne de production graphique
                         ayant apporté ses scripts sans que personne ne recompte.
@@ -364,12 +364,23 @@ tools/                  16 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
-art/sprites/            les sprites conditionnés — NEUF dossiers de grille depuis le
-                        lot 0 du 29/08 : unité, bâtiment et terrain, chacun en
-                        128, 64 et 32, 144 fichiers en tout. Le terrain était à
-                        plat ; il a rejoint la convention des deux autres. Rien
-                        de tout ça n'entre dans le livrable aujourd'hui — aucun
-                        fichier de `src/` ne cite ces chemins.
+art/sprites/            les sprites conditionnés — VINGT-QUATRE dossiers de grille
+                        et 1 585 fichiers, recomptés le 30/08. Huit familles en
+                        128, 64 et 32 : unité, bâtiment, terrain, defense,
+                        tourelle-unite, socle, carte, effet.
+                        ⤷ ⚠ CE BLOC A ANNONCÉ « NEUF DOSSIERS, 144 FICHIERS »
+                          PENDANT TROIS LOTS. Aucune garde ne compte ce dossier —
+                          `documentation.test.js` ne porte que sur `test/` et les
+                          quatre dossiers de `src/` —, donc rien ne le corrige
+                          tout seul. Le recompter à chaque lot qui y touche est
+                          la seule chose qui le tienne, comme pour `tools/`.
+                        ⤷ ⚠ `effet/` EST LE SEUL DOSSIER HORS DES DEUX RAMPES :
+                          les explosions portent leur propre palette de seize
+                          teintes. Voir `INVENTAIRE-SPRITES.md` §8, amendé le
+                          30/08, et `tools/effets.py`.
+                        ⤷ seuls `carte/` et les deux atlas de la racine entrent
+                          dans le livrable ; le reste n'est cité par aucun
+                          fichier de `src/`.
 art/sprites/carte/      ⚠ LE SEUL DOSSIER D'IMAGES QUI ENTRE DANS LE LIVRABLE.
                         L'atlas de terrain y est LU PAR LE BUILD et inliné en
                         base64 ; son absence fait sortir le build en erreur, pas
