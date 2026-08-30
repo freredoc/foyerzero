@@ -3,9 +3,14 @@
 **Lot** RENOMMAGE-SOURCES · **Date** 30/08/2026 · **Branche** `claude/sprite-9j4llk`
 **Base** `origin/main` à `a596936` (la PR #29 étant mergée, la branche est repartie de `main`)
 
-Sept planches d'`art/sources/` renommées, et les quatre citations qui les
-suivaient. Aucun pixel produit, aucun sprite touché : `art/sprites/` compte
-toujours **1 469** fichiers, tous identiques à l'octet.
+Sept planches d'`art/sources/` renommées, et les citations qui les suivaient.
+Aucun sprite existant n'a bougé d'un octet ; le renommage a en revanche RÉPARÉ
+l'outil du lot 7, dont les **66 sprites** entrent au dépôt par la même
+occasion. `art/sprites/` passe de 1 469 à **1 535** fichiers.
+
+Deux arbitrages d'Ethan du 30/08 sont intégrés : le `_v2` du trio de dos est
+retiré, et les 66 sprites du lot 7 sont commités. Les §5.1 et §5.2 qui les
+posaient en questions ouvertes sont donc clos dans ce même document.
 
 ---
 
@@ -14,7 +19,7 @@ toujours **1 469** fichiers, tous identiques à l'octet.
 | Ancien nom | Nouveau nom | D'où vient le nom |
 |---|---|---|
 | `off_o_guetteurs_fouisseur_face.png` | `off_o_guetteur_fouisseur_face.png` | le `s` de trop, signalé par `RAPPORT-lot7` §6.1 ; s'accorde maintenant avec `off_o_guetteur_fouisseur_dos.png` |
-| `off_meute_perceurs_carapace_dos_v2.png` | `off_o_meute_perceurs_carapace_dos_v2.png` | le `o_` manquant ; toutes les autres planches de l'Ouvrage le portent |
+| `off_meute_perceurs_carapace_dos_v2.png` | `off_o_meute_perceurs_carapace_dos.png` | le `o_` manquant, et le `_v2` retiré sur arbitrage d'Ethan (30/08) : c'est le nom que `RAPPORT-lot7` §1 demandait |
 | `file_000000001bc481f4bc55bdc2cd396d26.png` | `def_o_merlon.png` | `INVENTAIRE-SPRITES.md` §4.2 : `def_<prop>_<clé>.png`, et `merlon` est la clé de `DEFENSES` |
 | `file_0000000077f0820a88f6a88415d71d25.png` | `S10_base_ouvrage_3x3_finale.png` | famille `S10_` des emblèmes de site ; `3x3` est l'emprise en cases, vocabulaire déjà employé par `emblemes.py` (`base_o_3x3`) |
 | `ChatGPT Image 28 août 2026, 21_16_42.png` | `S10_base_ouvrage_2x2.png` | idem, `base_o_2x2` |
@@ -59,7 +64,7 @@ chaînes de caractères dans deux tables ; aucune ligne de logique n'a changé.
 
 `tools/unites_ouvrage.py` — table `PLANCHES` :
 - `off_o_guetteurs_fouisseur_face.png` → `off_o_guetteur_fouisseur_face.png`
-- `off_o_meute_perceurs_carapace_dos.png` → `off_o_meute_perceurs_carapace_dos_v2.png`
+- `off_o_meute_perceurs_carapace_dos.png` → **inchangée** : le fichier porte enfin ce nom
 
 ### ⚠ La quatrième citation ne suivait pas un renommage : elle RÉPARE
 
@@ -79,9 +84,14 @@ depuis l'historique git (objet `f714031`, 2172 × 724) et demandée sous le nom
 **Le fichier renommé mesure 2172 × 724**, exactement la planche décrite — c'est
 la même, et c'est vérifié, pas supposé.
 
-Le `_v2` est conservé parce qu'il est ce qui a été demandé ; c'est donc l'outil
-qui vient au fichier, et non l'inverse. **Voir §5.1** : ce suffixe est le seul
-point du lot qui mériterait un mot d'Ethan.
+Le `_v2` a d'abord été conservé, puis **retiré sur arbitrage d'Ethan le 30/08**.
+Conséquence : la ligne de `unites_ouvrage.py` qui nomme cette planche redevient
+exactement celle de `main`, et c'est le FICHIER qui vient au nom attendu. Le
+seul écart restant entre cette branche et `main` dans cet outil est la ligne du
+guetteur.
+
+Ce sont donc **trois** citations qui suivent un renommage, et une quatrième qui
+n'a pas eu à bouger — le renommage l'a rendue juste.
 
 ---
 
@@ -108,7 +118,8 @@ python3 tools/unites_ouvrage.py   →   66 fichiers écrits
 **66**, le compte exact annoncé par `RAPPORT-lot7` §5. L'outil passe de « tombe
 à la première planche » à « produit tout ce qu'il annonce ».
 
-⚠ **Ces 66 fichiers ont été RETIRÉS avant de commiter** — voir §5.2.
+**Et ces 66 fichiers sont COMMITÉS**, sur arbitrage d'Ethan le 30/08 — ils
+l'avaient d'abord été retirés comme hors périmètre. Détail en §3.5.
 
 ### 3.3 La suite et le livrable
 
@@ -120,7 +131,38 @@ dist/index.html           →   530 268 octets
 Inchangés tous les deux. `src/` et `test/` n'ont pas été touchés, donc ni
 `version` ni `config.build` ne sont bumpés (`CLAUDE.md` §5).
 
-### 3.4 Aucun outil ne balaie `art/sources/` au hasard
+### 3.4 Les 66 sprites du lot 7, mesurés ici
+
+Répartition sur le disque, comptée et non estimée :
+
+| Grille | total `unite/` | dont `off_o_` |
+|---|---:|---:|
+| 128 | 36 | 22 |
+| 64 | 36 | 22 |
+| 32 | 36 | 22 |
+
+**22 par grille = 14 en attaque + 8 en défense**, exactement la répartition de
+`RAPPORT-lot7` §4. Les six unités sans version de défense sont bien absentes des
+`_def` : `fouisseurs`, `pilon` et les quatre aéronefs — `busard`, `crecelle`,
+`enclume`, `frappeur`.
+
+`art/sprites/` passe de 1 469 à **1 535** fichiers.
+
+Deux contrôles refaits ici plutôt que repris du rapport du lot 7 :
+
+| Contrôle | Mesuré ce jour | Annoncé par `RAPPORT-lot7` §5 |
+|---|---|---|
+| Couleurs hors de la rampe de l'Ouvrage (19 teintes) | **0** sur les 66 | 0 |
+| Occupation en 32 | **19,8 % de moyenne, 11,5 % au minimum** | 20,0 % et 12,8 % |
+
+⚠ **L'occupation que je mesure est légèrement plus basse que celle annoncée.**
+Je compte les pixels d'alpha non nul sur toute la toile ; le rapport du lot 7 ne
+dit pas quelle définition il emploie, et une mesure sur la boîte englobante ou
+un seuil d'alpha différent expliquerait l'écart. Ce n'est pas une régression —
+rien n'a changé dans la chaîne de production entre les deux mesures — mais je
+donne mon chiffre plutôt que de recopier le sien.
+
+### 3.5 Aucun outil ne balaie `art/sources/` au hasard
 
 Vérifié : le seul `os.listdir` de `tools/` est celui de `tourelles.py`, filtré
 sur le préfixe `T%02d_`. Aucun des sept nouveaux noms ne commence par `T` suivi
@@ -146,27 +188,16 @@ par ce lot**. Il reste écrit là où il a été relevé.
 
 ## 5. Points laissés ouverts
 
-### 5.1 Le `_v2` du trio de dos — une question d'un mot
+### 5.1 et 5.2 — TRANCHÉS le 30/08
 
-`off_o_meute_perceurs_carapace_dos_v2.png` est le seul de la famille à porter un
-suffixe de version : sa face s'appelle `off_o_meute_perceurs_carapace_face.png`,
-sans `_v2`, et les huit autres planches d'unités de l'Ouvrage n'en portent pas
-non plus. `RAPPORT-lot7` la demandait sous `off_o_meute_perceurs_carapace_dos.png`.
+Les deux points que ce rapport laissait ouverts ont reçu leur réponse d'Ethan le
+jour même, et le lot les porte :
 
-Le `_v2` a été **gardé**, parce que retirer un morceau de nom qu'on n'a pas
-demandé de retirer serait décider à la place d'Ethan. S'il le veut ôté, c'est un
-`git mv` et une ligne de `unites_ouvrage.py` — le même geste que ce lot.
-
-### 5.2 Les 66 sprites du lot 7 ne sont toujours pas au dépôt
-
-`art/sprites/unite/` porte 14 fichiers par grille, tous côté joueur. Les 22
-unités de l'Ouvrage que `RAPPORT-lot7` décrit et contrôle n'y sont pas — l'outil
-qui les produit était cassé, ce qui explique probablement l'absence.
-
-Il fonctionne maintenant. **Les 66 fichiers ont quand même été retirés du
-commit** : ce lot-ci est un renommage, et faire entrer 66 sprites au passage
-serait élargir de moi-même le périmètre demandé. Un mot d'Ethan suffit à les
-faire entrer — la production est déjà vérifiée ci-dessus.
+1. **Le `_v2` est retiré.** `off_o_meute_perceurs_carapace_dos.png`, le nom que
+   `RAPPORT-lot7` §1 demandait, et le seul de la famille qui n'ait plus de
+   suffixe de version en trop.
+2. **Les 66 sprites du lot 7 entrent au dépôt.** `art/sprites/unite/` passe de
+   14 à 36 fichiers par grille. Mesures en §3.4.
 
 ### 5.3 `fouisseur` au singulier reste incohérent avec la clé de données
 
