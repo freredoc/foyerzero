@@ -35,7 +35,7 @@ Dernière révision : **30/08/2026**, version 0.42.0 · build 43.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **560 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **578 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **577 357 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
@@ -260,7 +260,7 @@ src/data/               toutes les valeurs de calibrage — 8 fichiers ; RIEN d'
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 19 fichiers
+src/sim/                simulation déterministe, sans DOM — 20 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -275,6 +275,7 @@ src/sim/                simulation déterministe, sans DOM — 19 fichiers
   raid.js               l'acte : payer, partir, encaisser, revenir abîmé
   reparation.js         les quatre réservoirs, en parallèle : coût additif, temps au maximum
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
+  rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 8 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -322,13 +323,13 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   36 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   37 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
-  reparation  roster  site-de-la-case  site-entame  sprite  state
+  rendu-pose  reparation  roster  site-de-la-case  site-entame  sprite  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -342,7 +343,7 @@ test/                   36 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  15 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08.
+tools/                  16 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08.
                         §2 en annonçait trois, puis sept, puis huit : le huit était
                         déjà faux avant ce lot-ci, la chaîne de production graphique
                         ayant apporté ses scripts sans que personne ne recompte.
