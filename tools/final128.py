@@ -63,13 +63,31 @@ PV={'chantier_de_construction':5500,'centre_de_commandement':3000,'qg_de_defense
  'collecteur':1500,'raffinerie':1000,'accumulateur':1000,
  'souche':5500,'etai':2500,'noeud':1500,'gangue':1000,'terril':1000}
 def cible(pv): return round(16+(28-16)*(math.sqrt(pv)-math.sqrt(1000))/(math.sqrt(5500)-math.sqrt(1000)))
-B=[('P6_1_bat_j_chantier_de_construction.png',1,1,[['chantier_de_construction']]),
-   ('P6_2_QG_joueur.png',2,1,[['centre_de_commandement','qg_de_defense']]),
-   ('P6_3_production_joueur.png',2,2,[['caserne','usine'],['aerodrome','complexe_de_defense']]),
-   ('P6_4_flux_joueur.png',2,2,[['centrale','accumulateur'],['collecteur','raffinerie']]),
-   ('P7_1_bat_o_souche.png',1,1,[['souche']]),
-   ('P7_2_bat_o_etai.png',1,1,[['etai']]),
-   ('P7_3_noeud_gangue_terril.png',3,1,[['noeud','gangue','terril']])]
+# Les seize bâtiments, sur les planches sources « 1024 » — bascule arbitrée par
+# Ethan le 30/08/2026. La série précédente (P6_1…P6_4, P7_1…P7_3) reste au dépôt
+# et n'est plus citée : `art/sources/` n'est jamais amputé, rien n'y est un
+# produit, tout y est un original.
+#
+# Mesuré sur la grille 64, chaîne officielle des deux côtés : la V2 atteint
+# l'emprise visée sur 16 sujets sur 16 — la V1 était sous la cible sur 8, jusqu'à
+# 24 gros pixels pour 32 visés — et `gangue`/`terril` passent de 2 % à 45 %
+# d'écart de silhouette, ce qui solde le défaut n° 4 du 27/08, « le même
+# bâtiment ».
+#
+# ⚠ LE `-2` DE LA PLANCHE P3 N'EST PAS UNE COQUILLE : c'est le seul exemplaire
+# présent au dépôt.
+#
+# ⚠ ET `usine` RESTE LA CLÉ D'INDEX, comme avant : elle devient
+# `bat_j_depot_de_vehicules` au moment de l'écriture. C'est `PV` qui le dit, et
+# `PV` n'est pas touchée par cette bascule.
+B=[('P1_caserne_depot_aerodrome_1024.png',1,3,[['caserne'],['usine'],['aerodrome']]),
+   ('P2_chantier_qg_complexe_centre_1024.png',2,2,
+        [['chantier_de_construction','qg_de_defense'],
+         ['complexe_de_defense','centre_de_commandement']]),
+   ('P3_raffinerie_collecteur_centrale_accumulateur_1024-2.png',2,2,
+        [['raffinerie','collecteur'],['centrale','accumulateur']]),
+   ('P4_souche_etai_1024.png',1,2,[['souche'],['etai']]),
+   ('P5_gangue_noeud_terril_1024.png',1,3,[['gangue'],['noeud'],['terril']])]
 OUV={'souche','etai','noeud','gangue','terril'}
 
 if __name__=='__main__':
