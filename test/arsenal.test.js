@@ -381,10 +381,28 @@ test('T8 — les 14 unités se dessinent à l\'identique dans l\'Arsenal et sur 
     assert.equal(deLArsenal.length, nb, `${id} : ${nb} primitives attendues dans l'Arsenal`);
     assert.deepEqual(deLArsenal, duChamp, `${id} : le dessin diverge entre l'Arsenal et le champ`);
 
-    // Et l'accent est bien celui de la colonne dominante, comme au champ.
+    // ⚠⚠ L'ACCENT N'APPARAÎT PLUS SUR L'UNITÉ DEPUIS LE LOT UNITÉS-AU-COMBAT,
+    // ET C'EST UNE PERTE D'INFORMATION DE JEU, PAS UN DÉTAIL DE STYLE. Cette
+    // ligne assertait que la teinte claire de la colonne dominante — « ambre
+    // vise les véhicules » — paraissait sur le dessin. Un sprite ne porte pas de
+    // couleur : ses pixels viennent de l'atlas.
+    //
+    // L'assertion n'est pas retirée, elle est RETOURNÉE : on exige maintenant
+    // qu'aucune couleur d'accent ne paraisse, ce qui fait tomber ce test le jour
+    // où quelqu'un rajoutera un bandeau d'accent sans que la décision soit
+    // prise. `accentDe` reste vraie et testée par T6 ; c'est son AFFICHAGE sur
+    // l'unité qui a disparu, et il ne survit que dans la légende.
+    //
+    // ⚠ À TRANCHER PAR ETHAN, et écrit au rapport du lot : soit l'accent revient
+    // en troisième couche — un bandeau mince par-dessus le sprite —, soit le
+    // joueur lit désormais le type d'une unité à sa SILHOUETTE et l'accent reste
+    // un outil de légende. Les deux se tiennent ; ce lot n'a pas tranché seul.
     const accent = accentDe('unite', id);
-    assert.ok(deLArsenal.some((p) => p.couleur === accent.clair),
-      `${id} : l'accent ${accent.colonne} n'apparaît pas`);
+    assert.ok(accent !== null, `${id} : une unité a toujours un accent calculé`);
+    assert.ok(!deLArsenal.some((p) => p.couleur === accent.clair),
+      `${id} : un accent reparaît sur le dessin — décision à prendre, voir le lot`);
+    assert.ok(deLArsenal.every((p) => p.forme === 'sprite'),
+      `${id} : l'unité n'est pas dessinée en sprites`);
   }
 
   // Aucune teinte hors de FICHE-STYLE.md, sur une grille bien remplie.

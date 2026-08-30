@@ -268,6 +268,49 @@ export function initialiserBanc(doc) {
   const canvas = $('banc-canvas');
   const ctx = canvas.getContext('2d');
 
+  // ⚠⚠ LE PIXEL ART NE SE LISSE PAS, ET LA DÉCISION EST ICI. Sans cette ligne,
+  // un sprite de 64 px mis à l'échelle d'une case devient flou : le navigateur
+  // interpole. C'est l'équivalent d'`image-rendering: pixelated` côté DOM, et
+  // elle se pose chez CELUI QUI CRÉE LE CONTEXTE — `render/canvas2d.js` ne prend
+  // aucune décision de dessin, c'est tout son contrat, et `render/scene.js` ne
+  // voit jamais de contexte.
+  ctx.imageSmoothingEnabled = false;
+
+  /**
+   * Les atlas du champ de bataille, par famille — ce que `canvas2d` passe à
+   * `drawImage`.
+   *
+   * ⚠ LA CLÉ EST LE SLUG DE `tools/atlas.py`, DONC `tourelle_unite` À SOULIGNÉ,
+   * quand l'identifiant HTML garde son tiret. Les deux ne se ressemblent qu'à
+   * l'œil : le slug devient une clé JavaScript, l'identifiant reste du HTML.
+   */
+  const atlas = {
+    unite: $('atlas-unite'),
+    chassis: $('atlas-chassis'),
+    tourelle_unite: $('atlas-tourelle-unite'),
+  };
+
+  /**
+   * Les trois atlas sont-ils décodés ?
+   *
+   * ⚠⚠ UNE IMAGE DESSINÉE AVANT SON DÉCODAGE EST BLANCHE, ET LE DÉFAUT NE SE
+   * REPRODUIT QU'AU PREMIER CHARGEMENT. Une fois l'image en cache, tout marche,
+   * et personne ne revoit le bogue — c'est le pire genre. `naturalWidth === 0`
+   * est le signal fiable ; `complete` seul vaut `true` sur une image en erreur.
+   * Même garde que `chargerAtlas` de `ui/monde.js`, pour la même raison.
+   */
+  function atlasPrets() {
+    return Object.values(atlas).every((i) => i.complete && i.naturalWidth > 0);
+  }
+
+  // Un redessin quand chaque atlas arrive : la première image du banc peut
+  // précéder le décodage, et rien ne la redemanderait autrement.
+  for (const image of Object.values(atlas)) {
+    if (!image.complete || image.naturalWidth === 0) {
+      image.addEventListener('load', () => dessiner(), { once: true });
+    }
+  }
+
   // --- état du banc ---------------------------------------------------------
   let etat = null;
   let montage = null;
@@ -316,22 +359,27 @@ export function initialiserBanc(doc) {
 
   function dessiner() {
     if (!projection) return;
+    // ⚠ RIEN NE SE DESSINE TANT QUE LES TROIS ATLAS NE SONT PAS DÉCODÉS. Les
+    // quatre listes portent des sprites d'unité — le champ, la composition
+    // d'assaut, celle de défense — et `canvas2d` LÈVE sur une famille absente.
+    // L'écouteur `load` posé plus haut rappelle `dessiner` dès l'arrivée.
+    if (!atlasPrets()) return;
     if (legendeOuverte) {
-      executer(ctx, listeLegende(projection));
+      executer(ctx, listeLegende(projection), atlas);
       return;
     }
     if (arsenalOuvert) {
       executer(ctx, listeArsenal(arsenal, projection,
-        bilan(arsenal).indices.map((i) => i.colonne)));
+        bilan(arsenal).indices.map((i) => i.colonne)), atlas);
       return;
     }
     if (defenseOuverte) {
-      executer(ctx, listeDefense(defense, projection, bilanDefense(defense).indices));
+      executer(ctx, listeDefense(defense, projection, bilanDefense(defense).indices), atlas);
       return;
     }
     if (!etat) return;
     executer(ctx, listeAffichage(etat, projection, precedentes,
-      etat.termine ? 0 : alphaMilli(accumulateur, vitesse)));
+      etat.termine ? 0 : alphaMilli(accumulateur, vitesse)), atlas);
   }
 
   function basculerLegende() {

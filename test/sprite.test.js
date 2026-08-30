@@ -23,9 +23,11 @@ import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { celluleDuSprite, existeDansAtlas, fondDuSprite } from '../src/render/sprite.js';
 import { variante, suffixeDeVariante, SEL_VARIANTE } from '../src/render/variante.js';
 import { couchesDeLaDefense, spriteDuBatiment } from '../src/ui/chantier.js';
+import { couchesDeLUnite } from '../src/render/scene.js';
+import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
-import { DEFENSES, GRILLE } from '../src/data/combat.js';
+import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
 import { tirer } from '../src/sim/rng.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,7 +44,10 @@ const SPRITES = join(RACINE, 'art', 'sprites');
  * liste à tenir à jour, et c'est elle qui a dû être reprise au lot
  * BRANCHEMENT-DÉFENSE quand `defense` et `socle` sont entrées.
  */
-const DOSSIER_EXCEPTION = { batiment: 'bâtiment' };
+const DOSSIER_EXCEPTION = {
+  batiment: 'bâtiment', //        l'accent ne passe pas dans un slug ASCII
+  tourelle_unite: 'tourelle-unite', // le tiret ne passe pas dans une clé JS
+};
 const dossierDeLaFamille = (slug) => DOSSIER_EXCEPTION[slug] ?? slug;
 
 /** Le code d'un module, sa prose ôtée — voir le dernier test pour le pourquoi. */
@@ -474,4 +479,194 @@ test('sprite — la ronce et la herse n\'ont ni socle ni orientation', () => {
   assert.equal(couchesTourelle[1].famille, 'socle', 'le socle doit être la couche BASSE');
   assert.match(couchesTourelle[0].nom, /_(n|s|e|o)[a-z]*$/,
     'la tourelle ne porte plus de suffixe d\'orientation');
+});
+
+// ---------------------------------------------------------------------------
+// Les unités au combat — lot UNITÉS-AU-COMBAT
+// ---------------------------------------------------------------------------
+
+test('sprite — les ancres de coque transcrites sont identiques au JSON du disque', () => {
+  // ⚠ UNE TRANSCRIPTION QUI NE SE CONFRONTE PAS À SA SOURCE EST UNE COPIE QUI
+  // VIEILLIT. `src/data/ancres-chassis.js` est écrit à la main parce que le
+  // build n'inline pas de JSON et que `scene.js` ne lit aucun fichier ; c'est ce
+  // test qui rend la divergence impossible.
+  const json = JSON.parse(readFileSync(join(SPRITES, 'ancres-chassis.json'), 'utf8'));
+  const cles = Object.keys(json).sort();
+
+  assert.ok(cles.length > 0, 'le JSON des ancres est vide : le test ne mesure rien');
+  assert.deepEqual(Object.keys(ANCRES_CHASSIS).sort(), cles,
+    'la transcription et le JSON ne portent pas les mêmes coques');
+
+  for (const cle of cles) {
+    // ⚠ LES VALEURS SIGNÉES, PAS LEUR VALEUR ABSOLUE. Un signe inversé décalerait
+    // les dix tourelles du même côté, ce qui a l'air d'un choix d'art et n'en est
+    // pas un.
+    assert.deepEqual(ANCRES_CHASSIS[cle], json[cle], `ancre « ${cle} » divergente`);
+  }
+
+  // ⚠⚠ NEUF `y_pct` SUR DIX SONT NÉGATIFS, PAS LES DIX. Le brief du lot
+  // annonçait les dix ; mesuré, `off_j_fendeur_chassis_def` vaut **+1,0**. Un
+  // test qui asserterait « toutes négatives » serait donc faux, et pire, il
+  // inviterait à « corriger » une donnée juste. On asserte le fait mesuré.
+  const positifs = cles.filter((c) => json[c].y_pct >= 0);
+  assert.deepEqual(positifs, ['off_j_fendeur_chassis_def'],
+    'la liste des y_pct non négatifs a changé — remesurer avant de conclure');
+
+  // Et une seule ancre n'est pas mesurée sur l'image, ce que `tools/chassis.py`
+  // annonce par « 10 ancres dont 9 mesurées ».
+  assert.equal(cles.filter((c) => !json[c].mesure).length, 1);
+});
+
+test('sprite — les ancres posent la tourelle DANS la coque', () => {
+  // Pour chacune des dix coques, le disque de la tourelle reste dans la boîte de
+  // la coque. Sans ça, une tourelle déborderait de son blindé.
+  const COTE = 100; // une coque de 100 unités : les pourcentages se lisentdirectement
+  let verifiees = 0;
+  for (const [cle, a] of Object.entries(ANCRES_CHASSIS)) {
+    const rayon = (COTE * a.diametre_pct) / 200;
+    const cx = COTE / 2 + (COTE * a.x_pct) / 100;
+    const cy = COTE / 2 + (COTE * a.y_pct) / 100;
+    assert.ok(cx - rayon >= 0 && cx + rayon <= COTE,
+      `${cle} : la tourelle déborde horizontalement (${(cx - rayon).toFixed(1)}…${(cx + rayon).toFixed(1)})`);
+    assert.ok(cy - rayon >= 0 && cy + rayon <= COTE,
+      `${cle} : la tourelle déborde verticalement (${(cy - rayon).toFixed(1)}…${(cy + rayon).toFixed(1)})`);
+    verifiees += 1;
+  }
+  assert.equal(verifiees, 10, 'les dix coques n\'ont pas été vérifiées');
+
+  // ⚠ FALSIFIABLE : un décalage volontaire de 200 % en sortirait. Sans cet
+  // appât, une boîte trop large accepterait n'importe quelle ancre.
+  const fautif = { diametre_pct: 30, x_pct: 200, y_pct: 0 };
+  const rayonFautif = (COTE * fautif.diametre_pct) / 200;
+  const cxFautif = COTE / 2 + (COTE * fautif.x_pct) / 100;
+  assert.ok(!(cxFautif - rayonFautif >= 0 && cxFautif + rayonFautif <= COTE),
+    'le montage accepterait une tourelle hors de la coque');
+});
+
+test('sprite — chaque unité des deux camps résout des noms qui sont dans l\'atlas', () => {
+  const ids = Object.keys(UNITES);
+  assert.equal(ids.length, 14, 'le roster des unités a changé de taille');
+
+  let couchesVues = 0;
+  for (const id of ids) {
+    for (const proprietaire of ['joueur', 'ouvrage']) {
+      for (const camp of ['attaque', 'defense']) {
+        const couches = couchesDeLUnite({ genre: 'unite', id, proprietaire, camp, rangee: 5, colonne: 5 });
+        assert.ok(Array.isArray(couches) && couches.length > 0,
+          `${id} ${proprietaire} ${camp} : aucune couche`);
+        for (const { famille, nom } of couches) {
+          assert.ok(existeDansAtlas(famille, nom),
+            `${id} ${proprietaire} ${camp} demande ${famille}/${nom}, absent de l'atlas`);
+          couchesVues += 1;
+        }
+      }
+    }
+  }
+  assert.ok(couchesVues >= 14 * 4, `${couchesVues} couches : le balayage n'a pas tout vu`);
+
+  // Ce qui n'est pas une unité n'a pas de couche : les structures gardent leur
+  // géométrie, les bâtiments sont hors du lot.
+  assert.equal(couchesDeLUnite({ genre: 'defense', id: 'merlon', proprietaire: 'joueur', camp: 'defense' }), null);
+  assert.equal(couchesDeLUnite({ genre: 'batiment', id: 'gangue', proprietaire: 'ouvrage', camp: 'defense' }), null);
+});
+
+test('sprite — le blindé du joueur rend DEUX couches, la coque SOUS la tourelle', () => {
+  const blindes = Object.keys(UNITES).filter((id) => UNITES[id].chassis === 'blinde');
+  assert.ok(blindes.length > 0, 'aucun blindé au roster : le test ne mesure rien');
+
+  for (const id of blindes) {
+    const joueur = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque', rangee: 5, colonne: 5 });
+    assert.equal(joueur.length, 2, `${id} joueur : ${joueur.length} couche(s) au lieu de 2`);
+
+    // ⚠ L'ORDRE SE MESURE PAR LES INDICES, PAS PAR LA PRÉSENCE. Les deux couches
+    // seraient là dans l'ordre inverse aussi, et la tourelle passerait sous sa
+    // coque sans qu'une assertion de présence le voie.
+    const iCoque = joueur.findIndex((c) => c.famille === 'chassis');
+    const iTourelle = joueur.findIndex((c) => c.famille === 'tourelle_unite');
+    assert.ok(iCoque >= 0 && iTourelle >= 0, `${id} : une des deux familles manque`);
+    assert.ok(iCoque < iTourelle, `${id} : la tourelle est dessinée SOUS sa coque`);
+    assert.ok(joueur[iTourelle].ancre, `${id} : la tourelle n'a pas d'ancre`);
+
+    // ⚠ ET LE BLINDÉ DE L'OUVRAGE N'EN A QU'UNE : sa tourelle est cuite dans la
+    // coque, ses 240 sprites ont été retirés au lot PRODUCTION.
+    const ouvrage = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'ouvrage', camp: 'attaque', rangee: 5, colonne: 5 });
+    assert.equal(ouvrage.length, 1, `${id} Ouvrage : la tourelle détachée est revenue`);
+    assert.equal(ouvrage[0].famille, 'unite');
+  }
+});
+
+test('sprite — la pose suit la FORCE, pas le camp ni le propriétaire', () => {
+  // ⚠ D'ABORD : CHOISIR UNE UNITÉ QUI A VRAIMENT UNE POSE `_def`, sinon le test
+  // passerait sur une égalité triviale — les deux forces rendraient le même nom
+  // faute de variante, et on ne mesurerait rien.
+  const avecPose = Object.keys(UNITES).filter(
+    (id) => existeDansAtlas('unite', `off_o_${id}_def`) && UNITES[id].chassis !== 'blinde',
+  );
+  assert.ok(avecPose.length > 0, 'aucune unité de l\'Ouvrage n\'a de pose de défense');
+  const id = avecPose[0];
+
+  const assaut = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'ouvrage', camp: 'attaque' });
+  const garnison = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'ouvrage', camp: 'defense' });
+  assert.notEqual(assaut[0].nom, garnison[0].nom, `${id} : les deux forces rendent le même nom`);
+  assert.equal(garnison[0].nom, `off_o_${id}_def`);
+  assert.equal(assaut[0].nom, `off_o_${id}`);
+
+  // ⚠ ET LE PROPRIÉTAIRE NE DÉCIDE QUE DE LA LETTRE. CLAUDE.md §4 : « la clé est
+  // le PROPRIÉTAIRE, pas le camp — le joueur peut défendre ». Une unité du
+  // joueur qui défend prend la pose `_def` elle aussi, si elle existe.
+  const duJoueur = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'defense' });
+  assert.match(duJoueur[0].nom, /^off_j_/, 'le propriétaire ne décide plus de la lettre');
+});
+
+test('sprite — les unités à pose de défense sont exactement les huit mesurées', () => {
+  // ⚠⚠ CE TEST FIGE UNE COÏNCIDENCE D'AUJOURD'HUI, ET IL EST FAIT POUR ROUGIR.
+  // Huit des quatorze unités de l'Ouvrage ont une pose `_def`, six ne l'ont pas.
+  // Le rendu, lui, s'adapte tout seul — il LIT l'atlas par `existeDansAtlas` au
+  // lieu de porter cette liste. Le jour où les six manquantes seront dessinées,
+  // ce test tombe et quelqu'un relit le lot au lieu de découvrir la nouveauté
+  // six mois plus tard.
+  const avec = Object.keys(UNITES).filter((id) => existeDansAtlas('unite', `off_o_${id}_def`)).sort();
+  const sans = Object.keys(UNITES).filter((id) => !existeDansAtlas('unite', `off_o_${id}_def`)).sort();
+
+  assert.ok(avec.length > 0 && sans.length > 0,
+    'les deux groupes ne sont pas non vides : le test ne mesure rien');
+  assert.deepEqual(avec,
+    ['belier', 'broyeur', 'carapace', 'fendeur', 'guetteur', 'meute', 'perceurs', 'ratisseur'],
+    'la liste des poses de défense a changé — le trou d\'art se comble, relire le lot');
+  assert.deepEqual(sans,
+    ['busard', 'crecelle', 'enclume', 'fouisseurs', 'frappeur', 'pilon']);
+
+  // Et la liste n'est écrite NULLE PART dans le code de rendu.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'render', 'scene.js'), 'utf8'));
+  for (const id of avec) {
+    assert.ok(!source.includes(`'${id}'`) && !source.includes(`"${id}"`),
+      `« ${id} » est écrit en dur dans scene.js — la liste doit se lire dans l'atlas`);
+  }
+});
+
+test('sprite — la tourelle du blindé suit sa cible, et retombe au défaut sans elle', () => {
+  const id = Object.keys(UNITES).find((u) => UNITES[u].chassis === 'blinde');
+  const tireur = { genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque', rangee: 8, colonne: 5 };
+
+  // ⚠ D'ABORD : LES DEUX AZIMUTS TOMBENT-ILS DANS DES SECTEURS DIFFÉRENTS ?
+  // Deux cibles trop proches en angle rendraient la même orientation, et le test
+  // passerait sur une boussole bloquée.
+  const nord = { rangee: 16, colonne: 5 };
+  const est = { rangee: 8, colonne: 9 };
+  const nomDeLaTourelle = (cible) => couchesDeLUnite(tireur, cible)[1].nom;
+
+  const versNord = nomDeLaTourelle(nord);
+  const versEst = nomDeLaTourelle(est);
+  assert.notEqual(versNord, versEst, 'deux azimuts distincts rendent la même orientation');
+  assert.match(versNord, /_n$/, 'une cible vers la rangée 18 doit rendre le nord');
+  assert.match(versEst, /_e$/, 'une cible à droite doit rendre l\'est');
+
+  // Sans cible, la valeur par défaut de la force — juste depuis le correctif de
+  // boussole du lot BRANCHEMENT-DÉFENSE : l'armée au repos regarde au nord.
+  assert.equal(nomDeLaTourelle(null), `off_j_${id}_n`);
+  assert.equal(
+    couchesDeLUnite({ ...tireur, camp: 'defense' }, null)[1].nom,
+    `off_j_${id}_s`,
+    'la garnison au repos doit regarder au sud, vers le déploiement',
+  );
 });

@@ -506,8 +506,20 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // par CAMP en plus de la famille épargnerait 80 068 octets à ce lot-ci — mais
   // c'est un second axe dans l'index pour un écran de raid qui n'existe pas
   // encore, et c'est un arbitrage d'Ethan, pas une optimisation à prendre seul.
+  //
+  // ⚠ RELEVÉE À 1 150 000 AU LOT UNITÉS-AU-COMBAT, le 30/08. Les trois dernières
+  // familles entrent en `data:` — `unite` (36 sprites, 66 861 o), `chassis`
+  // (10, 20 429 o) et `tourelle-unite` (80, 120 774 o), soit **208 064 octets de
+  // base64** mesurés par `tools/atlas.py`. Mesuré après le lot :
+  // **1 073 238 octets**, marge 76 762, soit 6,7 %.
+  //
+  // ⚠⚠ LES SEPT FAMILLES SONT DÉSORMAIS TOUTES COUSUES, sauf `carte` et `effet`
+  // — la première attend trois arbitrages d'Ethan, la seconde un événement de
+  // mort que le moteur ne publie pas. Le livrable a donc atteint sa taille de
+  // croisière : la prochaine hausse ne viendra plus d'un atlas d'unité mais de
+  // ces deux-là, et elle devra dire pourquoi, comme les trois précédentes.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 900_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 1_150_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------
