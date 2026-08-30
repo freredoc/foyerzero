@@ -46,7 +46,7 @@ import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from 
 import { ATLAS } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite } from '../render/sprite.js';
 import { suffixeDeVariante } from '../render/variante.js';
-import { liaisonDuMur, liaisonDuSocle, orientationDeLaPiece } from '../sim/rendu-pose.js';
+import { couchesDeLEntite } from '../render/scene.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
 // base, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague — que
@@ -285,74 +285,6 @@ export const SIGLES_OBSTACLE = {
   les_deux: 'X',
 };
 
-/**
- * Le nom d'atlas du sprite d'un bâtiment du joueur.
- *
- * ⚠ LA RÈGLE EST MÉCANIQUE, ET C'EST POUR ÇA QU'IL N'Y A PAS DE TABLE. Les
- * onze identifiants sont en camelCase (`chantierDeConstruction`), les onze
- * fichiers en minuscules à souligné (`bat_j_chantier_de_construction`) : une
- * table de onze lignes serait une SECONDE vérité, et la première à diverger le
- * jour où un douzième bâtiment entrerait au dépôt. Les onze correspondances ont
- * été vérifiées une par une contre l'atlas cousu, et `test/sprite.test.js` les
- * revérifie en balayant `BASE_BATIMENTS` — il rougit le jour où un bâtiment
- * arrive sans son sprite, ce qui est exactement ce qu'on lui demande.
- *
- * @param {string} id clé de `BASE_BATIMENTS`
- * @returns {string} nom du sprite dans la famille `batiment`
- */
-export function spriteDuBatiment(id) {
-  return `bat_j_${id.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`)}`;
-}
-
-/**
- * Les couches de sprite d'une pièce de garnison, de la plus HAUTE à la plus basse.
- *
- * ⚠ LE TYPE DÉCIDE, PAS L'IDENTIFIANT. `DEFENSES[id].type` dit exactement ce
- * qu'il faut savoir — un mur porte une liaison, une barrière ne porte rien, une
- * tourelle porte une orientation ET un socle. Reconnaître les neuf pièces par
- * leur nom serait neuf cas particuliers à tenir à jour ; une dixième défense
- * héritera de sa famille sans qu'on y touche.
- *
- * ⚠ L'ORIENTATION VIENT DE `orientationDeLaPiece`, JAMAIS D'UN `'s'` ÉCRIT ICI.
- * Sur l'écran Chantier il n'y a pas de combat, donc pas de cible, donc la valeur
- * par défaut — mais c'est le moteur qui la donne, et l'écran de raid, où les
- * cibles existent, n'aura rien à réécrire.
- *
- * ⚠ ET LE SOCLE SE DEMANDE À L'ATLAS, IL NE SE DÉDUIT PAS D'UNE LISTE. Six
- * défenses portent une tourelle, trois seulement ont des socles de liaison : la
- * planche des trois artilleries n'existe pas. `existeDansAtlas` fait retomber
- * les trois autres sur leur socle de base, et le jour où la planche arrive elles
- * prennent leurs liaisons sans qu'une ligne change ici.
- *
- * @param {object} piece pièce posée, `{ id, rangee, colonne, niveau }`
- * @param {object} etat état de la partie — la garnison ENTIÈRE sert au chaînage
- * @returns {{famille: string, nom: string}[]} au moins une couche
- */
-export function couchesDeLaDefense(piece, etat) {
-  const type = DEFENSES[piece.id]?.type;
-  if (type === undefined) {
-    throw new RangeError(`chantier : « ${piece.id} » n'est pas une pièce de défense`);
-  }
-  const garnison = etat.garnison;
-
-  // Un mur ne porte ni orientation ni socle : c'est le raccord qui le dessine.
-  if (type === 'mur') {
-    return [{ famille: 'defense', nom: `def_j_${piece.id}_${liaisonDuMur(garnison, piece)}` }];
-  }
-  // Une barrière blesse au contact : ni tourelle à tourner, ni socle à poser.
-  if (type === 'barriere') {
-    return [{ famille: 'defense', nom: `def_j_${piece.id}` }];
-  }
-
-  const orientation = orientationDeLaPiece('garnison', piece, null);
-  const liaison = liaisonDuSocle(garnison, piece);
-  const socleLie = `socle_def_j_${piece.id}_${liaison}`;
-  const socle = existeDansAtlas('socle', socleLie) ? socleLie : `socle_def_j_${piece.id}`;
-  return [
-    { famille: 'defense', nom: `def_j_${piece.id}_${orientation}` },
-    { famille: 'socle', nom: socle },
-  ];
-}
 
 /**
  * Combien de variantes de dessin porte chaque famille de terrain.
@@ -1615,7 +1547,17 @@ export const TERRAINS = {
     // défense en a deux — la tourelle et son socle. Rendre tantôt un nom, tantôt
     // une liste obligerait l'appelant à connaître la différence, ce qui est
     // exactement le cas particulier qu'on refuse.
-    spriteDe: (piece) => [{ famille: 'batiment', nom: spriteDuBatiment(piece.id) }],
+    //
+    // ⚠⚠ ET LE NOM SE DEMANDE À `render/scene.js`, IL NE SE DÉRIVE PLUS ICI. Cet
+    // écran portait `spriteDuBatiment`, qui écrivait `bat_j_` EN DUR : correct
+    // tant que seul le joueur avait des bâtiments dessinés, faux dès que le
+    // champ de bataille en dessine ceux de l'Ouvrage. Deux dérivations du même
+    // nom, dont une seule connaît le propriétaire, c'est la seconde vérité que
+    // ce lot existe pour retirer — la règle camelCase → serpent est montée avec
+    // la fonction, elle n'a pas été recopiée.
+    spriteDe: (piece) => couchesDeLEntite(
+      { genre: 'batiment', id: piece.id, proprietaire: 'joueur', camp: 'defense' },
+    ),
     familleDe: familleDuBatiment,
     problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(etat, id, rangee, colonne),
     poser: (etat, id, rangee, colonne) => poserBatiment(etat, id, rangee, colonne),
@@ -1654,7 +1596,16 @@ export const TERRAINS = {
     // ⚠ LA GARNISON ENTIÈRE EST PASSÉE, PAS LA CASE. `liaisonDuMur` et
     // `liaisonDuSocle` regardent les VOISINS pour décider d'un raccord : leur
     // donner la seule pièce les priverait de ce qu'ils viennent chercher.
-    spriteDe: couchesDeLaDefense,
+    // ⚠⚠ LA FONCTION A DÉMÉNAGÉ DANS `render/scene.js` AU LOT
+    // STRUCTURES-AU-COMBAT, et cet écran la CONSOMME au lieu de la porter. Elle
+    // y vivait seule ; le champ de bataille et l'éditeur Défense dessinaient les
+    // mêmes casemates en primitives géométriques. En garder une copie ici serait
+    // la seconde vérité que le déplacement existe pour retirer.
+    spriteDe: (piece, etat) => couchesDeLEntite(
+      { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
+        rangee: piece.rangee, colonne: piece.colonne },
+      { voisines: etat.garnison },
+    ),
     // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
     // décide de la couleur du liseré, et la fiche de style n'a pas de teinte
     // libre pour distinguer un mur d'une tourelle. Le sigle, lui, les distingue
@@ -1831,8 +1782,17 @@ const VARIABLE_DATLAS = {
  * qu'un socle prendrait le cadrage de la tourelle et dessinerait le mauvais
  * morceau d'atlas. Rien à l'écran ne dirait que c'est une faute de longueur.
  *
+ * ⚠⚠ L'ENTRÉE VA DU PLUS BAS AU PLUS HAUT, LA SORTIE CSS L'INVERSE. C'est le
+ * piège du lot STRUCTURES-AU-COMBAT : `render/scene.js` rend ses couches dans
+ * l'ordre du CANEVAS — on peint du fond vers le dessus, donc la dernière est
+ * au-dessus — quand `background-image` dessine la PREMIÈRE par-dessus. Unifier
+ * les deux sans inverser ici aurait mis le socle par-dessus la tourelle, et rien
+ * dans la suite ne l'aurait dit : les deux noms seraient présents, dans le
+ * mauvais ordre. L'inversion se fait UNE fois, ici, à l'endroit où l'on compose
+ * les trois listes.
+ *
  * @param {HTMLElement} element
- * @param {{famille: string, nom: string}[]} couches de la plus haute à la plus basse
+ * @param {{famille: string, nom: string}[]} couches de la plus BASSE à la plus haute
  */
 function poserCouches(element, couches) {
   if (!Array.isArray(couches) || couches.length === 0) {
@@ -1841,7 +1801,7 @@ function poserCouches(element, couches) {
   const images = [];
   const tailles = [];
   const positions = [];
-  for (const { famille, nom } of couches) {
+  for (const { famille, nom } of [...couches].reverse()) {
     const variable = VARIABLE_DATLAS[famille];
     if (variable === undefined) {
       throw new RangeError(`chantier : la famille « ${famille} » n'a pas de variable CSS`);

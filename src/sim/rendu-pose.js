@@ -187,12 +187,23 @@ export const SE_LIE_AU_MUR = new Set([
 ]);
 
 /**
- * Le camp joueur chaîne, le camp Ouvrage non.
+ * Le PROPRIÉTAIRE joueur chaîne, l'Ouvrage non.
  *
- * @param {string} camp `joueur` ou `ouvrage`
+ * ⚠⚠ ELLE S'APPELAIT `campChaine`, ET C'ÉTAIT UN NOM FAUX. Son paramètre est
+ * comparé à `joueur` et `ouvrage` — ce sont des PROPRIÉTAIRES. CLAUDE.md §4 est
+ * explicite : « `camp` désigne un côté de la grille, `proprietaire` désigne à qui
+ * c'est. Le joueur peut défendre. » Un camp vaut `attaque` ou `defense`.
+ *
+ * ⚠ L'AMBIGUÏTÉ NE COÛTAIT RIEN TANT QU'UN SEUL APPELANT PASSAIT LA VALEUR PAR
+ * DÉFAUT. Le lot STRUCTURES-AU-COMBAT en ajoute qui passent une vraie valeur, et
+ * c'est exactement le moment où la confusion mordrait : passer `e.camp` au lieu
+ * d'`e.proprietaire` compilerait, ne lèverait pas, et ferait chaîner le mauvais
+ * côté. Renommée avant d'ajouter le premier de ces appelants.
+ *
+ * @param {string} proprietaire `joueur` ou `ouvrage`
  */
-export function campChaine(camp) {
-  return camp === 'joueur';
+export function proprietaireChaine(proprietaire) {
+  return proprietaire === 'joueur';
 }
 
 /**
@@ -200,11 +211,12 @@ export function campChaine(camp) {
  *
  * @param {Array<{ id: string, rangee: number, colonne: number }>} garnison
  * @param {{ rangee: number, colonne: number }} mur
- * @param {string} [camp]
+ * @param {string} [proprietaire] `joueur` ou `ouvrage` — PAS un camp, voir
+ *   `proprietaireChaine`
  * @returns {'isole'|'est'|'ouest'|'traversant'}
  */
-export function liaisonDuMur(garnison, mur, camp = 'joueur') {
-  if (!campChaine(camp)) return 'isole';
+export function liaisonDuMur(garnison, mur, proprietaire = 'joueur') {
+  if (!proprietaireChaine(proprietaire)) return 'isole';
   // Les bords de grille ne comptent pas comme des voisines : un mur en colonne 1
   // n'a pas de raccord à l'ouest, il est simplement au bord.
   const voisine = (dc) => {
@@ -232,11 +244,12 @@ export function liaisonDuMur(garnison, mur, camp = 'joueur') {
  *
  * @param {Array<{ id: string, rangee: number, colonne: number }>} garnison
  * @param {{ rangee: number, colonne: number }} tourelle
- * @param {string} [camp]
+ * @param {string} [proprietaire] `joueur` ou `ouvrage` — PAS un camp, voir
+ *   `proprietaireChaine`
  * @returns {'isole'|'est'|'ouest'|'traversant'}
  */
-export function liaisonDuSocle(garnison, tourelle, camp = 'joueur') {
-  if (!campChaine(camp)) return 'isole';
+export function liaisonDuSocle(garnison, tourelle, proprietaire = 'joueur') {
+  if (!proprietaireChaine(proprietaire)) return 'isole';
   const merlon = (dc) => {
     const colonne = tourelle.colonne + dc;
     if (colonne < 1 || colonne > GRILLE.largeur) return false;

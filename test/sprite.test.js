@@ -22,16 +22,40 @@ import { fileURLToPath } from 'node:url';
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { celluleDuSprite, existeDansAtlas, fondDuSprite } from '../src/render/sprite.js';
 import { variante, suffixeDeVariante, SEL_VARIANTE } from '../src/render/variante.js';
-import { couchesDeLaDefense, spriteDuBatiment } from '../src/ui/chantier.js';
-import { couchesDeLUnite } from '../src/render/scene.js';
+import { couchesDeLEntite, listeAffichage } from '../src/render/scene.js';
 import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
+import { TERRAINS } from '../src/ui/chantier.js';
+import { BATIMENTS } from '../src/data/sites.js';
+import { ORIENTATION_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
+import { creerCombat } from '../src/sim/combat.js';
+import { calculerProjection } from '../src/render/projection.js';
 import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
 import { tirer } from '../src/sim/rng.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SPRITES = join(RACINE, 'art', 'sprites');
+
+// ⚠⚠ LES TROIS GENRES PASSENT PAR LE MÊME POINT D'ENTRÉE DEPUIS LE LOT
+// STRUCTURES-AU-COMBAT. Ce fichier appelait `couchesDeLaDefense` de
+// `src/ui/chantier.js`, `spriteDuBatiment` du même écran et `couchesDeLUnite` de
+// `src/render/scene.js` — trois portes pour une question. Les trois fonctions
+// ont DÉMÉNAGÉ dans `scene.js` derrière `couchesDeLEntite`, et le champ de
+// bataille les lit désormais aussi ; les garder joignables séparément aurait
+// laissé au test des chemins que le jeu n'emprunte plus.
+//
+// Ces trois raccourcis ne recalculent RIEN : ils composent le descripteur, et
+// c'est tout. Aucune assertion de ce fichier n'a été retirée ni assouplie.
+const couchesDeLaDefense = (piece, etat) => couchesDeLEntite(
+  { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
+    rangee: piece.rangee, colonne: piece.colonne },
+  { voisines: etat.garnison },
+);
+const couchesDeLUnite = (d, cible = null) => couchesDeLEntite(d, { cible });
+const spriteDuBatiment = (id) => couchesDeLEntite(
+  { genre: 'batiment', id, proprietaire: 'joueur', camp: 'defense' },
+)[0].nom;
 
 /**
  * Le dossier source d'une famille cousue — le slug ASCII n'est pas le dossier.
@@ -417,8 +441,18 @@ test('sprite — la ronce et la herse n\'ont ni socle ni orientation', () => {
   assert.ok(tourelle !== undefined, 'le montage ne porte aucune tourelle');
   const couchesTourelle = couchesDeLaDefense(tourelle, etat);
   assert.equal(couchesTourelle.length, 2, 'une tourelle doit porter sa couche et son socle');
-  assert.equal(couchesTourelle[1].famille, 'socle', 'le socle doit être la couche BASSE');
-  assert.match(couchesTourelle[0].nom, /_(n|s|e|o)[a-z]*$/,
+  // ⚠⚠ LES DEUX INDICES ONT ÉCHANGÉ, L'EXIGENCE EST LA MÊME : le socle est la
+  // couche BASSE, la tourelle la haute. La liste se rendait de la plus HAUTE à
+  // la plus basse — l'ordre des couches CSS, où la première ligne de
+  // `background-image` se dessine au-dessus —, elle se rend maintenant dans
+  // l'ordre du canvas, où la dernière est au-dessus. Le point d'entrée sert les
+  // deux appelants ; c'est `poserCouches` de l'écran qui retourne la liste, une
+  // fois, et un commentaire l'y explique. Une tourelle par-dessus son socle et
+  // un socle par-dessus sa tourelle portent les MÊMES DEUX NOMS : sans cette
+  // paire d'assertions, l'inversion n'aurait fait tomber aucun test.
+  assert.equal(couchesTourelle[0].famille, 'socle', 'le socle doit être la couche BASSE');
+  assert.equal(couchesTourelle[1].famille, 'defense', 'la tourelle doit être la couche HAUTE');
+  assert.match(couchesTourelle[1].nom, /_(n|s|e|o)[a-z]*$/,
     'la tourelle ne porte plus de suffixe d\'orientation');
 });
 
@@ -505,10 +539,25 @@ test('sprite — chaque unité des deux camps résout des noms qui sont dans l\'
   }
   assert.ok(couchesVues >= 14 * 4, `${couchesVues} couches : le balayage n'a pas tout vu`);
 
-  // Ce qui n'est pas une unité n'a pas de couche : les structures gardent leur
-  // géométrie, les bâtiments sont hors du lot.
-  assert.equal(couchesDeLUnite({ genre: 'defense', id: 'merlon', proprietaire: 'joueur', camp: 'defense' }), null);
-  assert.equal(couchesDeLUnite({ genre: 'batiment', id: 'gangue', proprietaire: 'ouvrage', camp: 'defense' }), null);
+  // ⚠⚠ CES DEUX LIGNES ASSERTAIENT `null` ET ELLES ONT ÉTÉ RETOURNÉES, PAS
+  // RETIRÉES. Elles disaient « les structures gardent leur géométrie, les
+  // bâtiments sont hors du lot », ce qui était vrai des DEUX lots précédents et
+  // faux de celui-ci : `couchesDeLEntite` répond maintenant aux trois genres,
+  // et c'est tout l'objet du lot STRUCTURES-AU-COMBAT. Un `null` qui reviendrait
+  // ici rendrait une casemate invisible au combat.
+  const merlon = couchesDeLEntite(
+    { genre: 'defense', id: 'merlon', proprietaire: 'joueur', camp: 'defense', rangee: 5, colonne: 5 },
+    { voisines: [] },
+  );
+  assert.ok(Array.isArray(merlon) && merlon.length > 0, 'le merlon n\'a plus de couche');
+  const gangue = couchesDeLEntite(
+    { genre: 'batiment', id: 'gangue', proprietaire: 'ouvrage', camp: 'defense' },
+  );
+  assert.ok(Array.isArray(gangue) && gangue.length > 0, 'la gangue n\'a plus de couche');
+  // Et le genre inconnu, lui, rend toujours `null` : c'est le repli de la
+  // légende, qui n'a pas d'identifiant à résoudre. Sans ce témoin, une fonction
+  // qui rendrait TOUJOURS une liste passerait les deux lignes ci-dessus.
+  assert.equal(couchesDeLEntite({ genre: 'vignette', id: null, proprietaire: 'joueur', camp: 'defense' }), null);
 });
 
 test('sprite — le blindé du joueur rend DEUX couches, la coque SOUS la tourelle', () => {
@@ -610,4 +659,378 @@ test('sprite — la tourelle du blindé suit sa cible, et retombe au défaut san
     `off_j_${id}_s`,
     'la garnison au repos doit regarder au sud, vers le déploiement',
   );
+});
+
+// ---------------------------------------------------------------------------
+// Les structures au combat — lot STRUCTURES-AU-COMBAT
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE QUE CE BLOC GARDE : un objet, un dessin. Avant ce lot, une casemate se
+// dessinait de TROIS façons — en sprites sur l'écran Chantier, en primitives
+// géométriques dans l'éditeur Défense, en primitives au combat —, et aucun test
+// ne pouvait le voir, chacun des trois chemins étant juste séparément. C'est la
+// famille de défauts que CLAUDE.md nomme désormais : « deux modules justes
+// séparément peuvent être faux ensemble ».
+
+/** Les seize bâtiments : les onze du joueur, les cinq de l'Ouvrage. */
+const BATIMENTS_ET_PROPRIETAIRE = [
+  ...Object.keys(BASE_BATIMENTS).map((id) => ({ id, proprietaire: 'joueur' })),
+  ...Object.keys(BATIMENTS).map((id) => ({ id, proprietaire: 'ouvrage' })),
+];
+
+test('T8 étendue — une structure se dessine à l\'identique sur l\'écran Chantier et au combat', () => {
+  // ⚠ T8 D'`arsenal.test.js` NE COUVRAIT QUE LES QUATORZE UNITÉS. Le même
+  // argument vaut mot pour mot pour les défenses et les bâtiments : sans quoi le
+  // joueur apprendrait un vocabulaire visuel dans l'éditeur et en découvrirait un
+  // autre au combat. Ce test-ci l'étend, et il est fait pour tomber le jour où
+  // quelqu'un réécrirait le calcul dans l'écran « pour aller plus vite ».
+  const etat = garnisonComplete();
+  assert.equal(etat.garnison.length, Object.keys(DEFENSES).length,
+    'le montage ne porte pas les neuf défenses');
+
+  let comparees = 0;
+  for (const piece of etat.garnison) {
+    // Le chemin de l'ÉCRAN : la table de terrain, telle que la boucle de peinture
+    // l'interroge — `terrain.spriteDe(b, etat)`.
+    const ecran = TERRAINS.defense.spriteDe(piece, etat);
+    // Le chemin du CHAMP : le descripteur que `listeAffichage` compose, au même
+    // propriétaire et au même contexte.
+    const champ = couchesDeLEntite(
+      { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
+        rangee: piece.rangee, colonne: piece.colonne },
+      { voisines: etat.garnison, cible: null },
+    );
+    // ⚠ FALSIFIABILITÉ, PREMIÈRE MOITIÉ : deux listes vides seraient égales.
+    assert.ok(Array.isArray(ecran) && ecran.length > 0, `« ${piece.id} » : l'écran ne rend rien`);
+    assert.deepEqual(champ, ecran, `« ${piece.id} » se dessine autrement au combat`);
+
+    // ⚠ FALSIFIABILITÉ, SECONDE MOITIÉ : une fonction qui rendrait TOUJOURS la
+    // même chose passerait l'égalité ci-dessus. Le propriétaire doit peser.
+    const ouvrage = couchesDeLEntite(
+      { genre: 'defense', id: piece.id, proprietaire: 'ouvrage', camp: 'defense',
+        rangee: piece.rangee, colonne: piece.colonne },
+      { voisines: etat.garnison, cible: null },
+    );
+    assert.notDeepEqual(ouvrage, ecran,
+      `« ${piece.id} » : le propriétaire ne change rien au dessin`);
+    comparees += 1;
+  }
+  assert.equal(comparees, 9, `${comparees} défenses comparées au lieu de neuf`);
+
+  // Les seize bâtiments, même confrontation. L'écran ne connaît que les onze du
+  // joueur — c'est SA bande — et les cinq de l'Ouvrage n'existent qu'au combat.
+  for (const id of Object.keys(BASE_BATIMENTS)) {
+    const ecran = TERRAINS.batiments.spriteDe({ id, rangee: 18, colonne: 5, niveau: 1 }, etat);
+    const champ = couchesDeLEntite(
+      { genre: 'batiment', id, proprietaire: 'joueur', camp: 'defense' },
+    );
+    assert.ok(Array.isArray(ecran) && ecran.length > 0, `« ${id} » : l'écran ne rend rien`);
+    assert.deepEqual(champ, ecran, `« ${id} » se dessine autrement au combat`);
+    assert.notDeepEqual(
+      couchesDeLEntite({ genre: 'batiment', id, proprietaire: 'ouvrage', camp: 'defense' }),
+      ecran, `« ${id} » : le propriétaire ne change rien au dessin`,
+    );
+  }
+});
+
+test('couches — les trois genres en rendent, et `null` reste réservé à la légende', () => {
+  // ⚠ AVANT CE LOT, DEUX GENRES SUR TROIS RENDAIENT `null`, et c'était le
+  // symptôme : ce qui n'a pas de couche se dessine en géométrie. La légende est
+  // la seule qui garde ce droit, et elle ne passe par ce point d'entrée que pour
+  // s'en voir refuser l'accès — `ENTREES_LEGENDE` liste des couples classe ×
+  // accent, sans identifiant à résoudre.
+  const etat = garnisonComplete();
+  let vues = 0;
+  for (const proprietaire of ['joueur', 'ouvrage']) {
+    for (const id of Object.keys(UNITES)) {
+      for (const camp of ['attaque', 'defense']) {
+        const c = couchesDeLEntite(
+          { genre: 'unite', id, proprietaire, camp, rangee: 5, colonne: 5 }, {},
+        );
+        assert.ok(Array.isArray(c) && c.length > 0, `unite ${id} ${proprietaire} ${camp}`);
+        vues += 1;
+      }
+    }
+    for (const id of Object.keys(DEFENSES)) {
+      const c = couchesDeLEntite(
+        { genre: 'defense', id, proprietaire, camp: 'defense', rangee: 5, colonne: 5 },
+        { voisines: etat.garnison },
+      );
+      assert.ok(Array.isArray(c) && c.length > 0, `defense ${id} ${proprietaire}`);
+      vues += 1;
+    }
+  }
+  for (const { id, proprietaire } of BATIMENTS_ET_PROPRIETAIRE) {
+    const c = couchesDeLEntite({ genre: 'batiment', id, proprietaire, camp: 'defense' });
+    assert.ok(Array.isArray(c) && c.length > 0, `batiment ${id} ${proprietaire}`);
+    vues += 1;
+  }
+  // 14 unités × 2 camps × 2 propriétaires + 9 défenses × 2 + 16 bâtiments.
+  assert.equal(vues, 14 * 2 * 2 + 9 * 2 + 16, `${vues} descripteurs balayés`);
+
+  // Le témoin : un genre sans identifiant résoluble rend toujours `null`. Sans
+  // lui, une fonction qui rendrait TOUJOURS une liste passerait tout ce qui
+  // précède, et le repli de la légende serait mort sans qu'on le sache.
+  assert.equal(couchesDeLEntite({ genre: 'vignette', id: null, proprietaire: 'joueur', camp: 'defense' }), null);
+});
+
+test('couches — tout nom composable est dans un atlas cousu, les deux propriétaires compris', () => {
+  // ⚠⚠ C'EST LE TEST QUI FAIT SERVIR LES SPRITES DORMANTS. 125 sprites de
+  // l'Ouvrage — 102 `def_o_*`, 18 `socle_def_o_*`, 5 `bat_o_*` — étaient DANS le
+  // fichier livré et n'étaient nommés par aucune ligne de `src/`. Le brief le
+  // dit : « s'il passe du premier coup sans en toucher un seul, c'est qu'il ne
+  // balaye pas ce qu'il croit » — d'où le compte de noms d'Ouvrage, asserté.
+  const RANGEE = 5;
+  const COLONNE = 5;
+  // Les quatre voisinages qui produisent les quatre liaisons, et rien d'autre :
+  // ils se construisent, ils ne se nomment pas. Écrire les suffixes à la main
+  // ferait balayer ce que le test croit, et non ce que le code compose.
+  const VOISINAGES = [
+    [],
+    [{ id: 'merlon', rangee: RANGEE, colonne: COLONNE + 1 }],
+    [{ id: 'merlon', rangee: RANGEE, colonne: COLONNE - 1 }],
+    [{ id: 'merlon', rangee: RANGEE, colonne: COLONNE - 1 },
+      { id: 'merlon', rangee: RANGEE, colonne: COLONNE + 1 }],
+  ];
+  // Seize azimuts réguliers : la cible est POSÉE, l'orientation se calcule.
+  const CIBLES = Array.from({ length: 16 }, (_, k) => {
+    const a = (k * 2 * Math.PI) / 16;
+    return { rangee: RANGEE + Math.cos(a) * 10, colonne: COLONNE + Math.sin(a) * 10 };
+  });
+
+  const noms = new Set();
+  for (const id of Object.keys(DEFENSES)) {
+    for (const proprietaire of ['joueur', 'ouvrage']) {
+      for (const voisinage of VOISINAGES) {
+        for (const cible of CIBLES) {
+          const couches = couchesDeLEntite(
+            { genre: 'defense', id, proprietaire, camp: 'defense', rangee: RANGEE, colonne: COLONNE },
+            { voisines: [{ id, rangee: RANGEE, colonne: COLONNE }, ...voisinage], cible },
+          );
+          for (const { famille, nom } of couches) {
+            assert.ok(existeDansAtlas(famille, nom),
+              `${id}/${proprietaire} demande ${famille}/${nom}, absent de l'atlas cousu`);
+            assert.doesNotThrow(() => fondDuSprite(famille, nom));
+            noms.add(`${famille}/${nom}`);
+          }
+        }
+      }
+    }
+  }
+  for (const { id, proprietaire } of BATIMENTS_ET_PROPRIETAIRE) {
+    for (const { famille, nom } of couchesDeLEntite(
+      { genre: 'batiment', id, proprietaire, camp: 'defense' },
+    )) {
+      assert.ok(existeDansAtlas(famille, nom), `${id}/${proprietaire} : ${famille}/${nom} absent`);
+      noms.add(`${famille}/${nom}`);
+    }
+  }
+
+  // ⚠ LE BALAYAGE SE MESURE, IL NE SE SUPPOSE PAS. Les seize orientations et les
+  // quatre liaisons doivent réellement produire des noms distincts : sans ce
+  // compte, une composition qui ignorerait la cible passerait toutes les
+  // assertions ci-dessus en ne nommant que seize sprites.
+  assert.equal(noms.size, 238, `${noms.size} noms distincts composés`);
+
+  // ⚠⚠ ET LE COMPTE QUI FAIT LE LOT : les noms de l'OUVRAGE désormais atteints.
+  // Ils étaient zéro avant — aucune ligne de `src/` ne les nommait — et le
+  // fichier livré les portait déjà.
+  const ouvrage = [...noms].filter((n) => /\/(def_o_|socle_def_o_|bat_o_)/.test(n));
+  assert.equal(ouvrage.length, 110, `${ouvrage.length} sprites de l'Ouvrage atteints`);
+
+  // ⚠ LES QUINZE QUI RESTENT DORMANTS SE NOMMENT, plutôt que d'être un reste.
+  // Douze le sont par ARBITRAGE — l'Ouvrage ne chaîne pas (Ethan, 30/08), donc
+  // ses socles et ses merlons raccordés ne peuvent pas être demandés — et trois
+  // par une conséquence mesurable : les socles NUS des trois tourelles de
+  // contact du joueur ne servent jamais, leurs quatre variantes raccordées
+  // couvrant les quatre liaisons, `isole` compris. Ce n'est pas un défaut, c'est
+  // le repli d'`existeDansAtlas` qui ne mord pas là où la planche est complète.
+  const dormants = [
+    ...ATLAS.defense.noms.map((n) => `defense/${n}`),
+    ...ATLAS.socle.noms.map((n) => `socle/${n}`),
+  ].filter((n) => !noms.has(n));
+  assert.deepEqual(dormants.sort(), [
+    'defense/def_o_merlon_est',
+    'defense/def_o_merlon_ouest',
+    'defense/def_o_merlon_traversant',
+    'socle/socle_def_j_batterie',
+    'socle/socle_def_j_casemate',
+    'socle/socle_def_j_creneau',
+    'socle/socle_def_o_batterie',
+    'socle/socle_def_o_batterie_est',
+    'socle/socle_def_o_batterie_ouest',
+    'socle/socle_def_o_batterie_traversant',
+    'socle/socle_def_o_casemate',
+    'socle/socle_def_o_casemate_est',
+    'socle/socle_def_o_casemate_ouest',
+    'socle/socle_def_o_casemate_traversant',
+    'socle/socle_def_o_creneau',
+    'socle/socle_def_o_creneau_est',
+    'socle/socle_def_o_creneau_ouest',
+    'socle/socle_def_o_creneau_traversant',
+  ].sort(), 'la liste des sprites hors d\'atteinte a changé — dire pourquoi');
+});
+
+test('couches — le chaînage suit les vivantes, MESURÉ SUR LA LISTE D\'AFFICHAGE', () => {
+  // ⚠⚠ CE TEST A ÉTÉ RÉÉCRIT APRÈS FALSIFICATION, ET LA RÉÉCRITURE A TROUVÉ UN
+  // DÉFAUT. Sa première version appelait `couchesDeLEntite` avec une liste de
+  // voisines ÉCRITE À LA MAIN : retirer `visible(e)` du filtre de
+  // `listeAffichage` la laissait VERTE. C'est le défaut que CLAUDE.md nomme
+  // déjà — « un montage écrit à la main ne garde que lui-même » —, et en
+  // passant par la vraie liste d'affichage on a découvert que le chaînage était
+  // MORT au combat : les voisines portaient `e.rangee`, qui vaut `undefined`
+  // sur une entité (le moteur range `rangeeMilli`), donc aucune comparaison de
+  // rangée ne pouvait réussir. Deux merlons côte à côte se rejoignaient sur
+  // l'écran Chantier et pas au combat.
+  //
+  // ⚠ IL FAUT UN COMBAT OÙ LE JOUEUR DÉFEND, sans quoi rien n'est observable :
+  // l'Ouvrage ne chaîne pas (arbitré le 30/08), et un site de l'Ouvrage est le
+  // seul défenseur que le jeu produise aujourd'hui. `proprietaireDefense` existe
+  // dans le montage de `creerCombat` depuis le lot 3A ; c'est ce qui permet de
+  // mesurer dès maintenant un chemin que le raid empruntera plus tard.
+  //
+  // ⚠ ET LE MONTAGE NE PORTE AUCUN BÂTIMENT, délibérément : `creerCombat` ne
+  // connaît que les cinq bâtiments de l'Ouvrage, et en poser un sous un
+  // propriétaire joueur demanderait `bat_j_gangue`, qui n'existe pas. La levée
+  // est le bon comportement — « une unité invisible est un défaut qu'on doit
+  // voir » — et ce n'est pas ce test-ci qui l'éprouve.
+  const bande = GRILLE.bandes.defense;
+  const montage = {
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    batiments: [],
+    defenseurs: [
+      { id: 'merlon', rangee: bande.premiere, colonne: 4 },
+      { id: 'merlon', rangee: bande.premiere, colonne: 5 },
+    ],
+    vagues: [[{ id: 'meute', colonne: 9 }]],
+    modulesDebloques: { ouvrage: [], joueur: [] },
+  };
+  const etat = creerCombat(montage);
+  const projection = calculerProjection(412, 900);
+  const murs = (liste) => liste
+    .filter((p) => p.forme === 'sprite' && p.nom.includes('merlon'))
+    .map((p) => p.nom)
+    .sort();
+
+  // ⚠ FALSIFIABLE : on asserte D'ABORD que les deux se lient. Deux merlons qui
+  // ne se rejoindraient jamais rendraient `isole` avant comme après, et la
+  // comparaison ci-dessous passerait sur du code mort.
+  const avant = murs(listeAffichage(etat, projection, null, 0));
+  assert.deepEqual(avant, ['def_j_merlon_est', 'def_j_merlon_ouest'],
+    `${avant.join(' ')} : les deux merlons ne se lient pas au combat`);
+
+  // La colonne 4 tombe. Le survivant n'est plus raccordé à une ruine.
+  const mort = etat.entites.find((e) => e.id === 'merlon' && e.colonne === 4);
+  assert.ok(mort !== undefined, 'le montage n\'a pas produit le merlon de la colonne 4');
+  mort.vivant = false;
+  const apres = murs(listeAffichage(etat, projection, null, 0));
+  assert.deepEqual(apres, ['def_j_merlon_isole'],
+    `${apres.join(' ')} : le survivant reste raccordé à une ruine`);
+});
+
+test('couches — l\'Ouvrage ne chaîne pas, et le joueur dans la même case chaîne', () => {
+  const RANGEE = 5;
+  const voisines = [
+    { id: 'merlon', rangee: RANGEE, colonne: 4 },
+    { id: 'casemate', rangee: RANGEE, colonne: 5 },
+    { id: 'merlon', rangee: RANGEE, colonne: 6 },
+  ];
+  const couches = (piece, proprietaire) => couchesDeLEntite(
+    { genre: 'defense', id: piece.id, proprietaire, camp: 'defense',
+      rangee: piece.rangee, colonne: piece.colonne },
+    { voisines },
+  );
+
+  // ⚠ FALSIFIABLE : le témoin joueur d'abord. Un montage qui ne lierait rien
+  // rendrait `isole` des deux côtés et le test passerait sur du code cassé.
+  const murJoueur = couches(voisines[0], 'joueur')[0].nom;
+  const socleJoueur = couches(voisines[1], 'joueur')[0].nom;
+  assert.doesNotMatch(murJoueur, /_isole$/, `« ${murJoueur} » : le mur du joueur ne chaîne pas`);
+  assert.match(socleJoueur, /_(est|ouest|traversant)$/,
+    `« ${socleJoueur} » : le socle du joueur ne porte pas d'amorce`);
+
+  // Mêmes voisines, propriétaire Ouvrage : tout est isolé. Arbitré le 30/08.
+  assert.match(couches(voisines[0], 'ouvrage')[0].nom, /^def_o_merlon_isole$/);
+  assert.match(couches(voisines[1], 'ouvrage')[0].nom, /^socle_def_o_casemate_isole$/);
+});
+
+test('couches — la tourelle du champ vise sa cible, et deux azimuts donnent deux sprites', () => {
+  const piece = { id: 'casemate', rangee: 5, colonne: 5 };
+  const nomVers = (cible) => couchesDeLEntite(
+    { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
+      rangee: piece.rangee, colonne: piece.colonne },
+    { voisines: [piece], cible },
+  )[1].nom;
+
+  // Deux cibles à deux azimuts nettement distincts — l'une vers la rangée 18
+  // (le fond, le nord), l'autre vers le déploiement (le sud).
+  const versLeFond = nomVers({ rangee: 15, colonne: 5 });
+  const versLAssaut = nomVers({ rangee: 2, colonne: 5 });
+  assert.equal(versLeFond, 'def_j_casemate_n');
+  assert.equal(versLAssaut, 'def_j_casemate_s');
+  assert.notEqual(versLeFond, versLAssaut, 'la tourelle ne suit pas sa cible');
+
+  // Sans cible, c'est le défaut de la garnison — le sud, vers l'assaut. Ce
+  // témoin est ce qui a manqué au 30/08 : la boussole et ce défaut se
+  // contredisaient, et chacun était gardé de son côté.
+  assert.equal(nomVers(null), `def_j_casemate_${ORIENTATION_PAR_DEFAUT.garnison}`);
+  assert.equal(nomVers(null), versLAssaut,
+    'le repos et la cible au sud ne donnent pas le même sprite : la boussole a redivergé');
+});
+
+test('couches — le renommage propriétaire est complet dans tout `src/`', () => {
+  // ⚠ `camp` DÉSIGNE UN CÔTÉ DE LA GRILLE, `proprietaire` DÉSIGNE À QUI C'EST
+  // (CLAUDE.md §4). Tant qu'un seul appelant passait la valeur par défaut,
+  // l'ambiguïté ne coûtait rien ; ce lot ajoute des appelants qui passent une
+  // vraie valeur, et passer `e.camp` au lieu d'`e.proprietaire` compilerait,
+  // ne lèverait pas, et ferait chaîner le mauvais côté.
+  const fichiers = [];
+  const parcourir = (dossier) => {
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = join(dossier, entree.name);
+      if (entree.isDirectory()) parcourir(chemin);
+      else if (entree.name.endsWith('.js')) fichiers.push(chemin);
+    }
+  };
+  parcourir(join(RACINE, 'src'));
+  assert.ok(fichiers.length > 30, `${fichiers.length} fichiers balayés : le parcours ne voit rien`);
+
+  //
+  // ⚠⚠ LE BALAYAGE LIT LA SOURCE DÉCOMMENTÉE, ET IL A FALLU LE RESSERRER : la
+  // première version tombait sur `rendu-pose.js`, dont le commentaire RACONTE le
+  // renommage — « elle s'appelait `campChaine` ». C'est la quatrième fois que le
+  // dépôt commet cette faute-là, après `viewport-fit=cover`, `MENTION_SATURE` et
+  // `etat.rng` : une garde qui lit ce qu'on a écrit à son sujet ne garde rien.
+  // Ici elle accusait au lieu d'absoudre, mais la cause est la même.
+  const sansCommentaires = (texte) => texte
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+
+  // ⚠ L'APPÂT : le motif doit encore reconnaître la vraie faute. Sans lui, un
+  // décommentage trop gourmand rendrait la garde muette pour toujours.
+  assert.match(sansCommentaires('const x = campChaine(p); // campChaine'), /campChaine/);
+  assert.doesNotMatch(sansCommentaires('// elle s\'appelait campChaine'), /campChaine/);
+
+  let decommentes = 0;
+  for (const chemin of fichiers) {
+    const source = sansCommentaires(readFileSync(chemin, 'utf8'));
+    assert.doesNotMatch(source, /campChaine/, `${chemin} nomme encore \`campChaine\``);
+    decommentes += 1;
+  }
+  assert.equal(decommentes, fichiers.length);
+
+  // Et les deux fonctions de liaison ne prennent plus un paramètre nommé `camp`.
+  const rendu = readFileSync(join(RACINE, 'src', 'sim', 'rendu-pose.js'), 'utf8');
+  assert.match(rendu, /export function proprietaireChaine\(proprietaire\)/);
+  for (const fonction of ['liaisonDuMur', 'liaisonDuSocle']) {
+    const motif = new RegExp(`export function ${fonction}\\([^)]*\\)`);
+    const signature = rendu.match(motif);
+    assert.ok(signature !== null, `${fonction} a disparu`);
+    assert.doesNotMatch(signature[0], /\bcamp\b/, `${signature[0]} : le paramètre s'appelle encore camp`);
+    assert.match(signature[0], /proprietaire/, `${signature[0]} : le paramètre ne dit pas propriétaire`);
+  }
 });

@@ -38,7 +38,7 @@ import { positionInterpolee } from './interpolation.js';
 import { celluleDuSprite, existeDansAtlas } from './sprite.js';
 import { COTE_SPRITE } from '../data/atlas.js';
 import { ANCRES_CHASSIS } from '../data/ancres-chassis.js';
-import { orientationDeLaPiece } from '../sim/rendu-pose.js';
+import { liaisonDuMur, liaisonDuSocle, orientationDeLaPiece } from '../sim/rendu-pose.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
 
@@ -137,19 +137,30 @@ export function accentDe(genre, id) {
  * première fois qu'une entrée de `NB_PRIMITIVES` dépend d'autre chose que de la
  * classe, et c'est écrit ici pour qu'on ne l'apprenne pas en comptant faux.
  *
- * ⚠ LES STRUCTURES N'ONT PAS BOUGÉ. Leurs sprites vivent dans les atlas
- * `defense` et `socle`, branchés au DOM au lot BRANCHEMENT-DÉFENSE ; `scene.js`
- * n'en dessine pas encore, et elles gardent leur géométrie.
+ * ⚠⚠ ET LES STRUCTURES ONT SUIVI AU LOT STRUCTURES-AU-COMBAT. Le paragraphe qui
+ * était ici disait « elles gardent leur géométrie », et il était vrai pendant
+ * deux lots : leurs sprites étaient cousus et branchés au DOM, mais `scene.js`
+ * n'en dessinait pas. Une casemate se dessinait donc en sprites sur l'écran
+ * Chantier et en quatre primitives géométriques au combat — le même objet, deux
+ * dessins. Les quatre classes de structure et le bâtiment émettent maintenant
+ * leurs couches, comme les unités.
+ *
+ * ⚠ CETTE TABLE DIT LE CHAMP ET LES ÉDITEURS, PAS LA LÉGENDE. La légende garde
+ * légitimement le vocabulaire géométrique — `ENTREES_LEGENDE` liste des couples
+ * classe × accent, sans identifiant, donc sans sprite possible — et ses
+ * vignettes émettent toujours 6, 4, 3, 2, 3, 4, 5 et 2 primitives. Compter une
+ * vignette avec cette table-ci donnerait faux ; c'est `dessinerVignette` qui
+ * dit ce qu'elle vaut, et T7 bis qui refuse qu'un `sprite` y entre.
  */
 export const NB_PRIMITIVES = {
   escouade: 1, //  le sprite de l'unité, pose d'attaque ou de défense
   blinde: 2, //    coque + tourelle orientable — CÔTÉ JOUEUR ; l'Ouvrage en a 1
   aeronef: 1, //   le sprite de l'unité
-  mur: 2, //       socle + contour net
-  barriere: 3, //  socle bas + contour + cœur d'accent
-  tourelle: 4, //  socle + contour + anneau d'accent + dôme rond
-  artillerie: 5, // tourelle + tube rallongé vers le haut
-  batiment: 2, //  carré plein pleine case + contour
+  mur: 1, //       le merlon seul, raccordé à ses voisines par son nom
+  barriere: 1, //  ni orientation, ni socle
+  tourelle: 2, //  socle (raccordé si l'atlas le porte) + tourelle orientée
+  artillerie: 2, // même paire que la tourelle
+  batiment: 1, //  le sprite du bâtiment, propriétaire compris
 };
 
 // --- géométrie des formes ----------------------------------------------------
@@ -354,7 +365,7 @@ function nomAvecPose(famille, base, force) {
  * @param {{rangee: number, colonne: number}|null} cible position AFFICHÉE de sa cible
  * @returns {{famille: string, nom: string, ancre?: object}[]|null}
  */
-export function couchesDeLUnite(d, cible = null) {
+function couchesDeLUnite(d, cible = null) {
   if (d.genre !== 'unite') return null;
   const classe = classeDe(d.genre, d.id);
   const c = lettreDuProprietaire(d.proprietaire);
@@ -384,6 +395,106 @@ export function couchesDeLUnite(d, cible = null) {
       ancre: ANCRES_CHASSIS[coque] ?? null,
     },
   ];
+}
+
+/**
+ * Les couches d'une pièce de défense, de la plus BASSE à la plus haute.
+ *
+ * ⚠⚠ ELLE A ÉTÉ DÉPLACÉE DEPUIS `src/ui/chantier.js`, PAS RECOPIÉE. Elle y
+ * vivait sous le nom `couchesDeLaDefense` et ne servait qu'à l'écran Chantier ;
+ * le champ de bataille et l'éditeur Défense dessinaient les mêmes objets en
+ * primitives géométriques. En écrire un second exemplaire ici aurait fait DEUX
+ * vérités sur ce qu'est une casemate, et la première à diverger au premier
+ * ajustement — c'est « une seule table fait foi par grandeur » (CLAUDE.md §4).
+ *
+ * ⚠⚠ L'ORDRE EST DU PLUS BAS AU PLUS HAUT, ET IL A ÉTÉ INVERSÉ AU DÉPLACEMENT.
+ * `couchesDeLaDefense` rendait la couche la plus HAUTE en premier, parce que le
+ * CSS `background-image` dessine la première par-dessus. Le canevas fait
+ * l'inverse : il peint dans l'ordre de la liste, donc la DERNIÈRE est au-dessus.
+ * Unifier sans le voir aurait mis le socle par-dessus la tourelle. C'est
+ * `ui/chantier.js` qui inverse maintenant, une fois, à l'endroit où il compose
+ * ses trois listes CSS.
+ *
+ * ⚠ AU COMBAT, LE CHAÎNAGE SUIT LES VIVANTES. `liaisonDuMur` lit les voisines
+ * qu'on lui passe : quand une tourelle meurt, le merlon d'à côté repasse à
+ * `isole` à l'image suivante. C'est le comportement VOULU — un mur ne reste pas
+ * raccordé à une ruine — et non un effet de bord du branchement.
+ *
+ * @param {{genre: string, id: string, proprietaire: string}} d
+ * @param {{cible: object|null, voisines: Array}} contexte
+ * @returns {{famille: string, nom: string}[]}
+ */
+function couchesDeLaDefense(d, contexte) {
+  const type = DEFENSES[d.id]?.type;
+  if (type === undefined) {
+    throw new RangeError(`scene : « ${d.id} » n'est pas une pièce de défense`);
+  }
+  const c = lettreDuProprietaire(d.proprietaire);
+  const voisines = contexte.voisines ?? [];
+  const piece = { id: d.id, rangee: d.rangee ?? 0, colonne: d.colonne ?? 0 };
+
+  // Un mur ne porte ni orientation ni socle : c'est le raccord qui le dessine.
+  if (type === 'mur') {
+    const liaison = liaisonDuMur(voisines, piece, d.proprietaire);
+    return [{ famille: 'defense', nom: `def_${c}_${d.id}_${liaison}` }];
+  }
+  // Une barrière blesse au contact : ni tourelle à tourner, ni socle à poser.
+  if (type === 'barriere') {
+    return [{ famille: 'defense', nom: `def_${c}_${d.id}` }];
+  }
+
+  // ⚠ LE SOCLE À LIAISON N'EXISTE QUE POUR LES TROIS TOURELLES DE CONTACT : la
+  // planche des trois artilleries n'a pas été dessinée. On DEMANDE à l'atlas au
+  // lieu de porter une liste de trois noms — le jour où la planche arrive, elles
+  // prennent leurs liaisons sans qu'une ligne change ici.
+  const liaison = liaisonDuSocle(voisines, piece, d.proprietaire);
+  const socleLie = `socle_def_${c}_${d.id}_${liaison}`;
+  const socle = existeDansAtlas('socle', socleLie) ? socleLie : `socle_def_${c}_${d.id}`;
+  const orientation = orientationDeLaPiece('garnison', piece, contexte.cible ?? null);
+  return [
+    { famille: 'socle', nom: socle },
+    { famille: 'defense', nom: `def_${c}_${d.id}_${orientation}` },
+  ];
+}
+
+/**
+ * Les couches d'un bâtiment — une seule.
+ *
+ * ⚠ LA CONVERSION camelCase → SERPENT EST UN NO-OP SUR LES IDENTIFIANTS DE
+ * L'OUVRAGE : `souche`, `etai`, `noeud`, `gangue`, `terril` sont déjà en
+ * minuscules. UNE SEULE RÈGLE pour les deux camps, donc, et aucune table de
+ * correspondance — qui serait la seconde vérité que ce lot existe pour retirer.
+ */
+function couchesDuBatiment(d) {
+  const c = lettreDuProprietaire(d.proprietaire);
+  const serpent = d.id.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`);
+  return [{ famille: 'batiment', nom: `bat_${c}_${serpent}` }];
+}
+
+/**
+ * LE point d'entrée des couches de sprite — un seul, pour les cinq appelants.
+ *
+ * ⚠⚠ AVANT CE LOT, UNE CASEMATE SE DESSINAIT DE TROIS FAÇONS : en sprites sur
+ * l'écran Chantier, en primitives géométriques dans l'éditeur Défense, et en
+ * primitives au combat. C'est exactement ce que T8 existe pour empêcher — « sans
+ * quoi le joueur apprendrait un vocabulaire visuel dans l'éditeur et en
+ * découvrirait un autre au combat » — mais T8 ne couvrait que les unités.
+ *
+ * ⚠ IL REND `null` POUR LA LÉGENDE SEULE, et c'est légitime : `ENTREES_LEGENDE`
+ * liste des couples CLASSE × ACCENT, pas des objets nommés, et un descripteur
+ * sans `id` résoluble n'a aucun sprite. Partout ailleurs, `null` est devenu
+ * impossible, et un test l'asserte.
+ *
+ * @param {{genre: string, id: string, proprietaire: string, camp: string,
+ *          rangee?: number, colonne?: number}} d
+ * @param {{cible?: object|null, voisines?: Array}} [contexte]
+ * @returns {{famille: string, nom: string}[]|null} du plus BAS au plus haut
+ */
+export function couchesDeLEntite(d, contexte = {}) {
+  if (d.genre === 'unite') return couchesDeLUnite(d, contexte.cible ?? null);
+  if (d.genre === 'defense') return couchesDeLaDefense(d, contexte);
+  if (d.genre === 'batiment') return couchesDuBatiment(d);
+  return null;
 }
 
 /**
@@ -431,9 +542,13 @@ function dessinerEntite(liste, x, y, t, classe, camp, accent, couches = null) {
   // dispatch unique. Assouplir le test aurait été retirer le garde-fou qui
   // venait de faire son travail.
   //
-  // `couches` reste `null` pour les STRUCTURES : leurs sprites vivent dans les
-  // atlas `defense` et `socle`, branchés au DOM au lot précédent, et scene.js
-  // n'en dessine pas encore. Elles gardent leurs primitives géométriques.
+  // ⚠⚠ ET `couches` NE VAUT PLUS `null` QUE POUR LA LÉGENDE, depuis le lot
+  // STRUCTURES-AU-COMBAT. Les défenses et les bâtiments gardaient leurs
+  // primitives géométriques au combat pendant que l'écran Chantier les
+  // dessinait en sprites : le même objet, deux dessins. Les cinq fonctions
+  // géométriques restent JOIGNABLES — c'est `dessinerVignette` qui les
+  // atteint, et elle seule : `ENTREES_LEGENDE` liste des couples classe ×
+  // accent sans identifiant, donc sans sprite possible.
   if (couches !== null) { dessinerCouches(liste, x, y, t, couches); return; }
   if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
   else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, camp, accent);
@@ -502,6 +617,30 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
   const xDe = (e) => xDeColonne(projection, e.colonne);
   const yDe = (e) => yDeRangeeMilli(projection, positions.get(e.indice));
 
+  // ⚠⚠ LE CHAÎNAGE DES MURS SUIT LES VIVANTES, ET C'EST VOULU. `liaisonDuMur`
+  // lit cette liste : une tourelle qui meurt en sort, et le merlon d'à côté
+  // repasse à `isole` à l'image suivante. Un mur ne reste pas raccordé à une
+  // ruine. La liste se calcule UNE fois — la relire par entité ferait un balayage
+  // quadratique sur une scène de cent défenses.
+  //
+  // ⚠⚠ LA RANGÉE AFFICHÉE, ET C'EST UN DÉFAUT MESURÉ, PAS UNE PRÉCAUTION. Cette
+  // liste portait `e.rangee`, qui n'existe PAS sur une entité de combat : le
+  // moteur range `rangeeMilli`, et `e.rangee` vaut `undefined`. Le chaînage
+  // comparait donc `undefined === 3` pour chaque voisine et rendait `isole`
+  // partout — deux merlons côte à côte ne se rejoignaient pas au combat, alors
+  // qu'ils se rejoignent sur l'écran Chantier. Le même objet, deux dessins :
+  // exactement ce que ce lot existe pour retirer, et le premier montage du test
+  // ne pouvait pas le voir, parce qu'il écrivait ses voisines à la main.
+  // C'est la même faute que la cible passée au lot précédent, vue une deuxième
+  // fois : une entité de combat ne se lit pas comme une pièce d'éditeur.
+  const defensesVivantes = etat.entites
+    .filter((e) => visible(e) && e.genre === 'defense')
+    .map((e) => ({
+      id: e.id,
+      rangee: (positions.get(e.indice) ?? e.rangeeMilli) / 1000,
+      colonne: e.colonne,
+    }));
+
   /**
    * La position AFFICHÉE de la cible d'une entité, ou `null` si elle n'en a pas.
    *
@@ -538,7 +677,7 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
       const x = xDe(e);
       const y = yDe(e);
       dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
-        accentDe(e.genre, e.id), couchesDeLUnite({
+        accentDe(e.genre, e.id), couchesDeLEntite({
           genre: e.genre,
           id: e.id,
           proprietaire: e.proprietaire,
@@ -548,7 +687,7 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
           // faux depuis la bonne.
           rangee: (positions.get(e.indice) ?? e.rangeeMilli) / 1000,
           colonne: e.colonne,
-        }, cibleAffichee(e)));
+        }, { cible: cibleAffichee(e), voisines: defensesVivantes }));
     }
   }
 
@@ -802,7 +941,7 @@ export function listeArsenal(grille, projection, colonnesEnFile = []) {
       const id = grille.cases[indice][colonne - 1];
       if (id === null) continue;
       dessinerEntite(liste, x, y, t, classeDe('unite', id), 'attaque', accentDe('unite', id),
-        couchesDeLUnite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque' }));
+        couchesDeLEntite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque' }));
     }
   }
   return liste;
@@ -853,6 +992,19 @@ export function listeDefense(grille, projection, casesMarquees = []) {
 
   // Les huit rangées, la 3 en bas de l'écran comme sur le champ — l'assaut
   // monte, et la grille se lit dans le sens où il la traverse.
+  // ⚠ LA GRILLE MÊLE DÉFENSES ET UNITÉS, ET SEULES LES DÉFENSES CHAÎNENT. On
+  // reconstitue donc les voisines depuis les indices — rangée et colonne — au
+  // lieu de passer la grille brute, que `liaisonDuMur` ne saurait pas lire.
+  const voisines = [];
+  for (let indice = 0; indice < nbRangees; indice += 1) {
+    for (let colonne = 1; colonne <= grille.cases[indice].length; colonne += 1) {
+      const id = grille.cases[indice][colonne - 1];
+      if (id !== null && DEFENSES[id] !== undefined) {
+        voisines.push({ id, rangee: premiereRangee + indice, colonne });
+      }
+    }
+  }
+
   for (let indice = 0; indice < nbRangees; indice += 1) {
     const rangee = premiereRangee + indice;
     const y = yDeRangee(projection, rangee);
@@ -863,7 +1015,10 @@ export function listeDefense(grille, projection, casesMarquees = []) {
       if (id === null) continue;
       const genre = DEFENSES[id] !== undefined ? 'defense' : 'unite';
       dessinerEntite(liste, x, y, t, classeDe(genre, id), 'defense', accentDe(genre, id),
-        couchesDeLUnite({ genre, id, proprietaire: 'joueur', camp: 'defense' }));
+        couchesDeLEntite(
+          { genre, id, proprietaire: 'joueur', camp: 'defense', rangee, colonne },
+          { voisines },
+        ));
     }
   }
 

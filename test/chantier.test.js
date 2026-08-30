@@ -2767,9 +2767,31 @@ test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
   // tourelle en porte deux — elle-même et son socle — venues de deux atlas
   // différents ; rendre tantôt un nom, tantôt une liste obligerait l'appelant à
   // connaître la différence, c'est-à-dire le cas particulier qu'on refuse.
-  assert.match(ecran, /spriteDe: \(piece\) => \[\{ famille: 'batiment'/,
-    'le terrain des bâtiments ne rend plus une liste de couches');
-  assert.match(ecran, /spriteDe: couchesDeLaDefense/, 'la défense n\'a plus de couches');
+  //
+  // ⚠⚠ LES DEUX BANDES DEMANDENT LEURS COUCHES À `render/scene.js` DEPUIS LE LOT
+  // STRUCTURES-AU-COMBAT, ET C'EST L'EXIGENCE QUI S'EST RESSERRÉE, PAS QUI S'EST
+  // ASSOUPLIE. Ce test exigeait `spriteDe: couchesDeLaDefense` — une fonction
+  // que cet écran PORTAIT — et `[{ famille: 'batiment'` écrit sur place, avec
+  // `bat_j_` en dur dans `spriteDuBatiment`. Les deux sont montées dans
+  // `scene.js`, où le champ de bataille les lit aussi : une casemate se
+  // dessinait de trois façons, un bâtiment de l'Ouvrage était inatteignable.
+  // Exiger le POINT D'ENTRÉE UNIQUE interdit ce que les deux formes d'avant
+  // laissaient passer — une seconde dérivation du nom, ici.
+  assert.equal((ecran.match(/couchesDeLEntite\(/g) ?? []).length, 2,
+    'le nombre d\'appels à `couchesDeLEntite` a changé — une pose par bande');
+  assert.match(ecran, /import \{ couchesDeLEntite \} from '\.\.\/render\/scene\.js'/,
+    'l\'écran ne consomme plus le point d\'entrée des couches');
+  assert.match(ecran, /genre: 'batiment', id: piece\.id/,
+    'le terrain des bâtiments ne demande plus ses couches au point d\'entrée');
+  assert.match(ecran, /genre: 'defense', id: piece\.id/,
+    'la défense ne demande plus ses couches au point d\'entrée');
+  // ⚠ ET AUCUNE DES DEUX NE SE RECALCULE ICI. C'est la moitié qui compte : un
+  // écran qui appelle le point d'entrée ET garde sa propre dérivation à côté
+  // aurait deux vérités, dont une seule serait branchée.
+  assert.doesNotMatch(ecran, /couchesDeLaDefense/,
+    'le calcul des couches de défense est revenu dans l\'écran');
+  assert.doesNotMatch(ecran, /bat_j_|`bat_\$\{/,
+    'le nom de sprite d\'un bâtiment se dérive de nouveau dans l\'écran');
   assert.doesNotMatch(ecran, /spriteDe: null/,
     'une bande se redéclare sans sprite — si c\'est voulu, le dire ici');
   // La porte reste ouverte pour une bande à venir qui n'aurait pas de sprite :
@@ -2787,8 +2809,8 @@ test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
 
   // ⚠ ET LA RÈGLE DU NOM EST MÉCANIQUE, PAS UNE TABLE DE ONZE LIGNES. Une table
   // serait une seconde vérité, et la première à diverger au douzième bâtiment.
-  assert.match(ecran, /function spriteDuBatiment\(id\)[\s\S]{0,200}?replace\(/,
-    '`spriteDuBatiment` ne dérive plus le nom de l\'identifiant');
+  // Elle est montée dans `render/scene.js` avec la fonction : c'est
+  // `test/sprite.test.js` qui l'asserte désormais, sur `couchesDuBatiment`.
   assert.doesNotMatch(ecran, /chantierDeConstruction: 'bat_j_/,
     'une table de correspondance sprite est apparue');
 });
