@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.49.0 · build 50.
+Dernière révision : **30/08/2026**, version 0.50.0 · build 51.
 
 ---
 
@@ -41,9 +41,9 @@ Dernière révision : **30/08/2026**, version 0.49.0 · build 50.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot SPRITES-ET-ZOOM), à confronter :**
-`npm test` → **634 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 242 496 octets**, 0 référence externe.
+**Référence au 30/08/2026 (après le lot RECHERCHE), à confronter :**
+`npm test` → **651 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 245 588 octets**, 0 référence externe.
 ⚠ **SPRITES-ET-ZOOM A COÛTÉ +12 080 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.**
 C'est du code et de la feuille : le sol de la base est découpé dans l'atlas du
 MONDE, qui était déjà au livrable depuis ÉCRAN-CARTE. La borne de T10 n'a donc
@@ -317,8 +317,10 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 9 fichiers ; RIEN d'autre n'a le droit d'en porter
-  combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
+src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d'autre n'a le droit d'en porter
+  combat.js             grille, unités, défenses, QUI porte quel module, ciblage, écrasement, obstacles
+  modules.js            ce que FAIT chaque module : libellé, description d'Ethan, état de câblage
+  recherche.js          l'arbre de recherche du joueur — la SEULE porte qui ouvre une pièce
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
@@ -345,7 +347,7 @@ src/data/               toutes les valeurs de calibrage — 9 fichiers ; RIEN d'
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 20 fichiers
+src/sim/                simulation déterministe, sans DOM — 21 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -361,6 +363,11 @@ src/sim/                simulation déterministe, sans DOM — 20 fichiers
   reparation.js         les quatre réservoirs, en parallèle : coût additif, temps au maximum
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
+  recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
+  ⤷ ⚠ DEUX `recherche.js`, UN DANS `data/` ET UN DANS `sim/`, et c'est le motif
+    déjà en place pour `combat.js` et `missions.js` : la TABLE d'un côté, le
+    MOTEUR de l'autre. Un import qui se trompe de dossier ne compile pas — les
+    exports n'ont aucun nom en commun.
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 9 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -429,14 +436,14 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   39 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   40 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state
+  sprite  state  recherche
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

@@ -36,6 +36,12 @@ unités portées par la même ligne. Lecture confirmée : c'est un dictionnaire,
 affectation. Les affectations sont en colonne 19, et elles suivent TA fidèlement (Bélier =
 fumigène comme le Pitbull, Crécelle = EMP comme l'Orca).
 
+⚠ **RELEVÉ DE CLASSEUR, ET LE DÉPÔT NE DIT PLUS « fumigène ».** Arbitrage 4 du
+30/08 : le module que ce classeur nomme « fumigène » désactive une **infanterie**
+— c'était le flashbang. Il s'appelle `flashbang` dans `src/data/modules.js`, et
+le fumigène anti-**structure** de TA n'est pas transposé. La lecture ci-dessus
+reste exacte pour le classeur ; c'est le code qui a tranché.
+
 ---
 
 ## B. BLOQUANT

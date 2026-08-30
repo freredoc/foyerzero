@@ -796,10 +796,17 @@ l'éditeur de garnison et l'indice de couverture.
 
 ### 7.5 Les quatorze modules (14)
 
-Un par entrée de `MODULES`. Ce sont les cartes de l'arbre de recherche.
+Un par entrée de `MODULES` — la table vit dans `src/data/modules.js` depuis le
+lot RECHERCHE, elle était dans `src/data/combat.js` avant. Ce sont les cartes de
+l'arbre de recherche.
+
+⚠ **`fumigene` A ÉTÉ RENOMMÉ `flashbang` LE 30/08/2026** (arbitrage 4). Aucun de
+ces quatorze sprites n'est produit à ce jour : l'écran Recherche du lot du même
+nom affiche un **glyphe** sous chaque pièce, pas une vignette — une vignette vide
+se lirait comme un sprite manquant.
 
 ```
-ui_module_fumigene.png              ui_module_camouflage.png
+ui_module_flashbang.png             ui_module_camouflage.png
 ui_module_emp.png                   ui_module_munition_speciale.png
 ui_module_tir_de_barrage.png        ui_module_vol_de_vie.png
 ui_module_booster.png               ui_module_pv_plus_vingt.png

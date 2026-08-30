@@ -22,6 +22,7 @@ import { couchesDeLEntite } from '../src/render/scene.js';
 import {
   creerEtat, poser, poserEffectif, niveauDeCommandement,
 } from '../src/sim/state.js';
+import { acquisesDe } from '../src/sim/recherche.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, UNITES } from '../src/data/combat.js';
@@ -136,11 +137,23 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
   const sansCaserne = unitesDeLaPalette(avecQg);
   assert.ok(sansCaserne.every((u) => !u.disponible),
     'au plafond sans aucun bâtiment de production, rien ne doit être constructible');
+  // ⚠ ET LES TROIS RAISONS DE BÂTIMENT SE PRODUISENT ENCORE APRÈS LE LOT
+  // RECHERCHE, parce que les trois pièces GRATUITES en offense sont une de
+  // chaque châssis : Fusiliers (escouade), Éclaireur (blindé), Épervier
+  // (aéronef). Si les gratuites changeaient, ces trois assertions tomberaient —
+  // ce qui est le bon comportement : elles mesureraient alors le verrou de
+  // recherche en croyant mesurer celui du bâtiment.
   assert.ok(sansCaserne.some((u) => /Caserne/.test(u.raison)), 'aucune unité ne réclame la Caserne');
   assert.ok(sansCaserne.some((u) => /Dépôt de véhicules/.test(u.raison)), 'aucune ne réclame le Dépôt');
   assert.ok(sansCaserne.some((u) => /Aérodrome/.test(u.raison)), 'aucune ne réclame l\'Aérodrome');
 
   // Et la Caserne posée débloque EXACTEMENT l'infanterie, rien d'autre.
+  //
+  // ⚠ TOUT L'ARBRE EST ACHETÉ POUR CE BLOC, et c'est ce qui le rend concluant :
+  // sans ça, une unité indisponible le serait pour DEUX raisons à la fois, et
+  // l'assertion ne dirait plus laquelle. On isole le verrou du bâtiment en
+  // levant celui de la recherche.
+  avecQg.recherche.acquises.offense = Object.keys(UNITES).sort();
   poser(avecQg, 'caserne', 12, 3);
   const avecCaserne = unitesDeLaPalette(avecQg);
   for (const u of avecCaserne) {
@@ -149,16 +162,24 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
       `${u.nom} (${UNITES[u.id].chassis}) : la Caserne ne débloque que l'infanterie`);
   }
 
-  // Le verrou de NIVEAU se voit aussi : au niveau 1, tout ce qui apparaît plus
-  // haut le dit — et le message porte le seuil, pas un « indisponible » nu.
+  // ⚠⚠ LE TROISIÈME VERROU A CHANGÉ DE NATURE AU LOT RECHERCHE, PAS DE RANG.
+  // C'était « apparaît au niveau N » ; c'est désormais la recherche, et le
+  // message ne porte plus de nombre — le coût vit dans l'écran Recherche, le
+  // redire ici en ferait une seconde lecture de la même table.
   const bas = creerEtat(7);
   bas.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   poser(bas, 'centreDeCommandement', 12, 1);
   poser(bas, 'caserne', 12, 3);
   const auNiveauUn = unitesDeLaPalette(bas);
-  const verrouNiveau = auNiveauUn.filter((u) => /apparaît au niveau/.test(u.raison ?? ''));
-  assert.ok(verrouNiveau.length > 0, 'aucun verrou de niveau : le montage ne mesure rien');
-  for (const u of verrouNiveau) assert.ok(UNITES[u.id].apparition > 1);
+  const verrouNiveau = auNiveauUn.filter((u) => /se débloque par la recherche/.test(u.raison ?? ''));
+  assert.ok(verrouNiveau.length > 0, 'aucun verrou de recherche : le montage ne mesure rien');
+  // Aucune de celles-là n'est acquise en début de partie — et les gratuites,
+  // elles, ne portent PAS ce verrou. Sans cette seconde moitié, un filtre qui
+  // verrouillerait tout passerait aussi.
+  const acquises = acquisesDe(bas, 'offense');
+  for (const u of verrouNiveau) assert.ok(!acquises.includes(u.id), `${u.id} est pourtant acquis`);
+  assert.ok(auNiveauUn.some((u) => acquises.includes(u.id) && !/recherche/.test(u.raison ?? '')),
+    'même les gratuites portent le verrou de recherche');
 
   // Et le message que le joueur lit au toucher porte les DEUX : le nom de
   // l'unité et la raison. Un « indisponible » nu n'apprendrait rien — c'est

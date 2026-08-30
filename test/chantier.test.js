@@ -2377,7 +2377,8 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
  * BÂTIMENT là où il croit mesurer celui du niveau. On les pose donc quand le
  * test parle de niveaux, et on les omet quand il parle du bâtiment.
  */
-function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProduction = false) {
+function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProduction = false,
+  acquisesDefense = null) {
   const etat = creerEtat(20260828);
   etat.disposition[0].niveau = 12; // assez d'emplacements, sinon la base est illégale
   etat.disposition.push(
@@ -2394,6 +2395,10 @@ function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProducti
   for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
     etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   }
+  // ⚠ DEPUIS LE LOT RECHERCHE, C'EST L'ACHAT QUI OUVRE, PAS LE NIVEAU. Un
+  // montage qui veut mesurer autre chose que ce verrou-là doit donc dire ce
+  // qu'il a acheté ; `null` laisse les gratuites d'une partie neuve.
+  if (acquisesDefense !== null) etat.recherche.acquises.defense = [...acquisesDefense].sort();
   return etat;
 }
 
@@ -2500,23 +2505,32 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   assert.ok(sansQg.every((p) => /QG de défense/.test(p.raison)),
     'sans QG, la raison devrait nommer le QG de défense');
 
-  // ⚠ AVEC UN QG, LES PIÈCES S'OUVRENT PAR NIVEAU D'APPARITION — et les autres
-  // RESTENT dans la palette, grisées. C'est l'arbitrage du 28/08 sur les
-  // uniques appliqué ici : « griser le bouton, pas le faire disparaître ». Une
-  // palette qui change de longueur déplace les vignettes sous le doigt.
-  const avecQg = baseAvecCommandement(3, 8, true);
+  // ⚠⚠ CE BLOC A CHANGÉ DE PORTE AU LOT RECHERCHE, PAS D'INTENTION. Les pièces
+  // s'ouvraient par NIVEAU D'APPARITION ; elles s'ouvrent désormais par ACHAT
+  // (arbitrage d'Ethan du 30/08). Ce qui ne change pas — et qui est le vrai
+  // sujet du test — c'est que les autres RESTENT dans la palette, grisées :
+  // arbitrage du 28/08 sur les uniques, « griser le bouton, pas le faire
+  // disparaître ». Une palette qui change de longueur déplace les vignettes
+  // sous le doigt.
+  const achetees = ['merlon', 'meute', 'casemate', 'herse'];
+  const avecQg = baseAvecCommandement(3, 8, true, achetees);
   const ouverte = posablesDeLaDefense(avecQg);
   assert.equal(ouverte.length, 17, 'la palette a changé de longueur');
   const vives = ouverte.filter((p) => !p.verrouille);
-  assert.ok(vives.length > 0, 'aucune pièce ouverte au niveau 8');
-  assert.ok(vives.length < 17, 'toutes les pièces sont ouvertes au niveau 8');
+  assert.ok(vives.length > 0, 'aucune pièce ouverte alors que quatre sont achetées');
+  assert.ok(vives.length < 17, 'toutes les pièces sont ouvertes');
   for (const p of ouverte) {
-    assert.equal(p.verrouille, p.apparition > 8, `${p.id} : verrou incohérent`);
+    assert.equal(p.verrouille, !achetees.includes(p.id), `${p.id} : verrou incohérent`);
   }
 
-  // Falsifiable : monter le QG doit VRAIMENT ouvrir des pièces.
-  const haut = baseAvecCommandement(3, 50, true);
-  assert.ok(posablesDeLaDefense(haut).every((p) => !p.verrouille), 'le niveau 50 verrouille encore');
+  // Falsifiable : acheter tout le roster doit VRAIMENT tout ouvrir.
+  const haut = baseAvecCommandement(3, 50, true, rosterDefensif());
+  assert.ok(posablesDeLaDefense(haut).every((p) => !p.verrouille),
+    'tout le roster acheté et la palette verrouille encore');
+  // ⚠ ET LE NIVEAU, LUI, N'OUVRE PLUS RIEN : c'est le renversement du lot.
+  const niveauSeul = baseAvecCommandement(3, 50, true);
+  assert.ok(posablesDeLaDefense(niveauSeul).some((p) => p.verrouille),
+    'le niveau 50 seul ouvre encore des pièces');
 
   // ⚠⚠ ET LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, arbitrée
   // le 29/08 : « infanterie inconstructible sans caserne, même règle pour
@@ -2524,7 +2538,9 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   // l'est pas. Sans les trois bâtiments, au niveau 50, seules les pièces qui
   // ne sont PAS des unités restent posables — un mur n'a pas besoin d'une
   // caserne.
-  const sansProduction = posablesDeLaDefense(baseAvecCommandement(3, 50, false));
+  const sansProduction = posablesDeLaDefense(
+    baseAvecCommandement(3, 50, false, rosterDefensif()),
+  );
   for (const p of sansProduction) {
     const estUneUnite = UNITES[p.id] !== undefined;
     assert.equal(p.verrouille, estUneUnite,

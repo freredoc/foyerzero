@@ -259,7 +259,11 @@ test('raid — un nouveau raid ABANDONNE la réparation en cours', () => {
 });
 
 test('état — la réparation en cours traverse la sauvegarde', () => {
-  assert.equal(SAVE_VERSION, 13, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois.
+  // Elle vivait ici quand v12 → v13 était le dernier ; elle est passée à
+  // `state.test.js` avec le maillon v13 → v14 du lot RECHERCHE. Ce qui reste à
+  // vérifier ici, c'est que NOTRE maillon est toujours dans la chaîne.
+  assert.ok(SAVE_VERSION >= 13, 'le maillon v12 → v13 n\'est plus dans la chaîne');
   const etat = partieOutillee();
   abimee(etat, 'meute', 0.8, 4);
   lancerLaReparation(etat);

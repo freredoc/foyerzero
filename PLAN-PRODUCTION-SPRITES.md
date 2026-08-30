@@ -341,7 +341,7 @@ de module se dessine d'après le module fini.
 - [ ] P11.2 — **2 × 2** — `ui_point_attaque`, `ui_point_armee_offense`, `ui_point_armee_defense`, `ui_point_recherche` — ⚠ les deux points d'armée sont **non fongibles**, ils ne doivent pas se ressembler
 - [ ] P11.3 — **3 × 2** — `ui_cible_ai/av/aa` + `ui_chassis_escouade/blinde/aeronef`
 - [ ] P11.4 — **2 × 2** — `ui_categorie_mur/barriere/tourelle/artillerie`
-- [ ] P11.5 — **4 × 2** — modules 1–8 : `fumigene`, `camouflage`, `emp`, `munition_speciale`, `tir_de_barrage`, `vol_de_vie`, `booster`, `pv_plus_vingt`
+- [ ] P11.5 — **4 × 2** — modules 1–8 : `flashbang`, `camouflage`, `emp`, `munition_speciale`, `tir_de_barrage`, `vol_de_vie`, `booster`, `pv_plus_vingt` — ⚠ `fumigene` A ÉTÉ RENOMMÉ `flashbang` le 30/08 (arbitrage 4) ; il n'y a toujours que **quatorze** modules
 - [ ] P11.6 — **3 × 2** — modules 9–14 : `garnison`, `rayon_mini_moins_un`, `ecraseur`, `rayon_plus_un`, `auto_reparation`, `bouclier`
 - [ ] P11.7 — **3 × 2** — `ui_pv`, `ui_degats`, `ui_butin`, `ui_reparation`, `ui_temps`, `ui_niveau`
 - [ ] P11.8 — **2 × 2** — `ui_verrou`, `ui_emplacement`, `ui_vague`, `ui_budget`

@@ -73,6 +73,15 @@ mesurables. C'est ce ratio qui sert à reconstruire les quatre premiers coûts.
 seul nom de « fumigène ». Le premier neutralise une **structure**, le second une **infanterie**.
 Il faut deux noms.
 
+> ⚠⚠ **TRANCHÉ LE 30/08/2026 PAR ETHAN, ARBITRAGE 4 DU LOT RECHERCHE : UN SEUL
+> MODULE, NOMMÉ `flashbang`.** Le relevé ci-dessus reste vrai *de Tiberium
+> Alliances* — c'est notre **transposition** qui tranche. Le « fumigène » de
+> notre classeur de calibrage désactive une **infanterie** : c'était déjà le
+> flashbang sous un autre nom. Le fumigène anti-**structure** de TA n'a jamais
+> été transposé, et ne l'est toujours pas. Le dépôt ne porte donc plus qu'un
+> `flashbang`, dans `src/data/modules.js` ; `data/combat.js` le donne à la
+> Meute et au Bélier.
+
 Le coût de montée du Transport de l'Épervier — 270 M — vaut **neuf fois** celui du même module
 sur l'Éclaireur. Le module n'a donc pas un prix propre : il est indexé sur le châssis qui le
 porte.
@@ -266,7 +275,7 @@ progression : c'est le déplacement qui ouvre le farm.
 |---|---|
 | 1 | **Les modules ont-ils des niveaux**, comme dans TA, ou sont-ils un déblocage unique ? Un système de niveaux double la taille de l'arbre |
 | 2 | Le coût d'acquisition d'un module est-il indexé sur son unité ? Le Transport de l'Épervier coûte neuf fois celui de l'Éclaireur |
-| 3 | Fumigène et Flashbang sont **deux modules distincts** — il faut deux noms dans le classeur |
+| 3 | ~~Fumigène et Flashbang sont **deux modules distincts** — il faut deux noms dans le classeur~~ — **TRANCHÉ le 30/08 (arbitrage 4)** : un seul module, `flashbang`. Le fumigène anti-structure de TA n'est pas transposé. Voir le §1 |
 | 4 | La recherche coûte-t-elle uniquement des points, ou aussi de la scorie ? |
 | 5 | La Batterie doit être accessible avant le niveau 25 — réordonner l'arbre, ou lisser le pic d'aviation |
 | 6 | Combien de bases au total sur une run ? Le coût de la troisième et de la quatrième en dépend |

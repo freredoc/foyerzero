@@ -22,6 +22,7 @@ import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, GEOMETRIE_BASE, coutDeMontee, emplacementsDuNiveau,
 } from '../src/data/base.js';
 import { GRILLE, UNITES, DEFENSES } from '../src/data/combat.js';
+import { ARBRE_RECHERCHE } from '../src/data/recherche.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GEOGRAPHIE, POINTS_ARMEE } from '../src/data/sites.js';
 import { CHAINE_TUTORIEL, FAMILLES_OBJECTIF } from '../src/data/missions.js';
@@ -378,24 +379,40 @@ test('missions — aucune clé de code ne fuit dans un libellé lu par le joueur
 // -- les prérequis, mesurés --------------------------------------------------
 
 test('missions — les prérequis d\'une pièce se MESURENT sur les tables', () => {
-  // ⚠ CE QUE CE TEST REND VISIBLE : la chaîne demande deux Éclaireurs et deux
-  // Tourelles, mais ne fait monter le Centre de commandement qu'au niveau 7 et
-  // le QG de défense qu'au niveau 5 — sous les niveaux d'apparition de ces
-  // pièces. Le tutoriel le DIT au joueur, en lisant `UNITES` et `DEFENSES`, au
-  // lieu de le laisser chercher pourquoi sa palette reste grise. Le jour où
-  // Ethan descend un seuil, la phrase suit toute seule.
+  // ⚠⚠ CE TEST A CHANGÉ DE MESURE AU LOT RECHERCHE, PAS D'INTENTION. Il
+  // vérifiait que le tutoriel DIT le niveau d'apparition, lu dans `UNITES` et
+  // `DEFENSES` ; la recherche seule ouvre désormais les pièces, donc il vérifie
+  // que le tutoriel dit le COÛT, lu dans `ARBRE_RECHERCHE`. Dans les deux cas :
+  // la phrase se MESURE sur la table, elle n'y est pas recopiée, et le jour où
+  // Ethan réétalonne, elle suit toute seule.
+  //
+  // ⚠ ET LA TENSION QUE CE TEST RENDAIT VISIBLE A DISPARU. La chaîne demandait
+  // deux Éclaireurs alors qu'elle ne montait le Centre de commandement qu'au
+  // niveau 7, sous l'apparition de l'Éclaireur. `ratisseur` est GRATUIT en
+  // offense : le tutoriel dit « déjà débloqué », et la branche à zéro se mesure
+  // ci-dessous plutôt que de se supposer.
   const lignes = etatDesMissions(baseNeuve());
+  let gratuites = 0;
+  let payantes = 0;
 
   for (const m of CHAINE_TUTORIEL) {
     for (const o of m.objectifs.filter((x) => x.famille === 'effectif')) {
       const dits = lignes.find((l) => l.id === m.id).prerequis;
-      const source = DEFENSES[o.id] ?? UNITES[o.id];
       const commandant = BASE_BATIMENTS[POINTS_ARMEE[
         o.force === 'garnison' ? 'defense' : 'offense'].batiment].nom.joueur;
-      assert.ok(
-        dits.some((d) => d.includes(`niveau ${source.apparition}`) && d.includes(commandant)),
-        `${m.id} : l'apparition mesurée (${source.apparition}) n'est pas dite — ${dits.join(' / ')}`,
-      );
+      const branche = o.force === 'garnison' ? 'defense' : 'offense';
+      const prix = ARBRE_RECHERCHE[branche][o.id].unite;
+      if (prix === 0) {
+        gratuites += 1;
+        assert.ok(dits.some((d) => d.includes('déjà débloqué')),
+          `${m.id} : ${o.id} est gratuit, la phrase ne le dit pas — ${dits.join(' / ')}`);
+      } else {
+        payantes += 1;
+        assert.ok(
+          dits.some((d) => d.includes(`${prix} points`) && d.includes(commandant)),
+          `${m.id} : le coût mesuré (${prix}) n'est pas dit — ${dits.join(' / ')}`,
+        );
+      }
       const chassis = UNITES[o.id]?.chassis;
       if (chassis !== undefined) {
         const requis = BASE_BATIMENTS[BATIMENT_DE_CHASSIS[chassis]].nom.joueur;
@@ -408,6 +425,19 @@ test('missions — les prérequis d\'une pièce se MESURENT sur les tables', () 
   // Falsifiable : au moins une mission porte vraiment des prérequis, sinon la
   // boucle ci-dessus ne mesure rien.
   assert.ok(lignes.some((l) => l.prerequis.length > 0), 'aucun prérequis n\'a été calculé');
+  // ⚠⚠ MESURÉ, PAS SUPPOSÉ : LES TROIS OBJECTIFS D'EFFECTIF DE LA CHAÎNE SONT
+  // GRATUITS SOUS LA NOUVELLE RÈGLE — Éclaireur (offense), Merlon et Casemate
+  // (défense). Le tutoriel est donc franchissable avec ZÉRO point de recherche,
+  // et la tension « deux Éclaireurs pour un Centre de commandement au niveau 7 »
+  // n'existe plus.
+  //
+  // ⚠ CONSÉQUENCE À CONNAÎTRE : la branche « payante » de `prerequisDe` n'est
+  // exercée par AUCUNE mission aujourd'hui. Ce n'est pas un trou de test, c'est
+  // un fait de contenu — et le jour où la chaîne demandera une pièce payante,
+  // l'assertion ci-dessous tombera et forcera à le regarder.
+  assert.equal(gratuites, 3, `${gratuites} objectif(s) d'effectif gratuit(s), 3 attendus`);
+  assert.equal(payantes, 0,
+    `${payantes} objectif(s) payant(s) : la chaîne a changé, vérifier la phrase du coût`);
   // Et un ouvrage fixe n'en a pas — un mur n'a jamais eu besoin d'une caserne.
   const defense = lignes.find((l) => l.id === 'premiere-ligne-de-defense');
   assert.ok(defense.prerequis.every((d) => !d.includes('Caserne')));

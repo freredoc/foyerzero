@@ -76,20 +76,28 @@ export function budgetDuNiveau(niveau) {
 }
 
 /**
- * Ce que le joueur peut poser à ce niveau : les DEFENSES, plus les UNITES qui
- * ont un rôle défensif. Dans les deux cas `apparition <= niveau`.
+ * Ce que le joueur peut poser : les DEFENSES et les UNITES à rôle défensif que
+ * la RECHERCHE a ouvertes.
  *
- * ⚠ UNE SEULE TABLE D'APPARITION FAIT FOI, celle des lignes elles-mêmes. Il
- * n'existe PAS de champ `defense.apparition` — `UNITES[x].defense` ne porte que
- * `present`, `cible` et `module`. Le classeur CIBLAGE-DEFENSE en propose un qui
- * diverge ; il a été écarté le 24/08.
+ * ⚠⚠ CE N'EST PLUS UN NIVEAU. Arbitré par Ethan le 30/08 : la recherche seule
+ * ouvre les pièces. L'ancienne table d'apparition — dont le commentaire disait
+ * qu'elle « fait foi » — est redevenue une table de l'OUVRAGE, lue par
+ * `sim/generateur.js` pour peupler ses sites. Le champ `defense.apparition`
+ * n'existe toujours pas, et la question ne se pose plus.
+ *
+ * ⚠ `acquises === null` VEUT DIRE « AUCUN FILTRE », pas « rien d'acquis ». Le
+ * banc monte des garnisons hors partie, sans état de recherche.
+ *
+ * @param {string[]|null} acquises identifiants ouverts, ou `null` pour tout
+ * @returns {string[]}
  */
-export function defensesDisponibles(niveau) {
-  verifierNiveau(niveau);
-  return [
-    ...Object.keys(DEFENSES).filter((id) => DEFENSES[id].apparition <= niveau),
-    ...Object.keys(UNITES).filter((id) => aUnRoleDefensif(id) && UNITES[id].apparition <= niveau),
+export function defensesDisponibles(acquises) {
+  const tout = [
+    ...Object.keys(DEFENSES),
+    ...Object.keys(UNITES).filter((id) => aUnRoleDefensif(id)),
   ];
+  if (acquises === null || acquises === undefined) return tout;
+  return tout.filter((id) => acquises.includes(id));
 }
 
 /**
@@ -99,8 +107,13 @@ export function defensesDisponibles(niveau) {
  * OPTIONNELLE et ne préjuge de rien : le moteur refuse un défenseur posé sur un
  * obstacle, et les obstacles d'un site sont tirés par graine. Le jour où la base
  * du joueur aura les siens, ils entreront par là.
+ *
+ * ⚠ `acquises` SUIT LE MÊME CHEMIN QU'`interdites`, et c'est pour ça qu'il est
+ * là : un contexte dérivé de la partie, porté DANS l'état de l'éditeur, pour que
+ * `poser`, `bilan` et `purger` restent des fonctions pures d'un seul argument.
+ * `null` = aucun filtre (le banc), `[]` = rien d'acquis.
  */
-export function defenseVide(niveau, obstacles = []) {
+export function defenseVide(niveau, obstacles = [], acquises = null) {
   verifierNiveau(niveau);
   const interdites = new Set();
   for (const o of obstacles) {
@@ -111,6 +124,7 @@ export function defenseVide(niveau, obstacles = []) {
   return {
     niveau,
     interdites: [...interdites],
+    acquises,
     cases: Array.from({ length: NB_RANGEES }, () => Array.from({ length: NB_COLONNES }, () => null)),
   };
 }
@@ -120,6 +134,7 @@ function copier(etat) {
   return {
     niveau: etat.niveau,
     interdites: [...etat.interdites],
+    acquises: etat.acquises ?? null,
     cases: etat.cases.map((rangee) => [...rangee]),
   };
 }
@@ -155,11 +170,8 @@ export function poser(etat, { rangee, colonne, id }) {
   if (!aUnRoleDefensif(id)) {
     throw new Error(`defense : défenseur « ${id} » n'a pas de rôle en défense`);
   }
-  if (ligne(id).apparition > etat.niveau) {
-    throw new Error(
-      `defense : ${id} est verrouillé au niveau ${etat.niveau} `
-      + `(apparition ${ligne(id).apparition})`,
-    );
+  if (!defensesDisponibles(etat.acquises ?? null).includes(id)) {
+    throw new Error(`defense : ${id} n'est pas débloqué par la recherche`);
   }
   if (etat.interdites.includes(`${rangee},${colonne}`)) {
     throw new Error(`defense : la case (${rangee}, ${colonne}) porte un obstacle`);
@@ -320,9 +332,14 @@ export function indicesDeCouverture(etat) {
  * Trois défauts possibles, et AUCUN ne peut naître d'une pose — `poser` les
  * refuse tous les trois. Ils naissent d'un changement du contexte SOUS une
  * composition déjà faite :
- *   `verrouilles`        — le niveau est descendu sous l'apparition d'une pièce
+ *   `verrouilles`        — une pièce posée n'est plus ouverte par la recherche
  *   `depassementBudget`  — le niveau est descendu, le budget avec lui
  *   `surObstacle`        — la graine a changé, un obstacle est apparu dessous
+ *
+ * ⚠ `verrouilles` NE NAÎT PLUS D'UN NIVEAU QUI DESCEND. Rien ne se
+ * dé-recherche : un achat est définitif. Ce qui reste — et qui justifie de
+ * garder la garde — c'est une sauvegarde trafiquée ou un identifiant retiré des
+ * données. Le supprimer laisserait ces deux cas passer en silence.
  *
  * Le banc doit les dire et proposer de purger, jamais retirer en silence.
  *
@@ -331,6 +348,7 @@ export function indicesDeCouverture(etat) {
  * sans broncher une pièce verrouillée ou un budget dépassé.
  */
 export function bilan(etat) {
+  const ouvertes = defensesDisponibles(etat.acquises ?? null);
   const budgetPoints = budgetDuNiveau(etat.niveau);
   const pointsEngages = pointsDe(etat.cases);
   const verrouilles = [];
@@ -344,9 +362,7 @@ export function bilan(etat) {
     for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
       const id = etat.cases[rangee - PREMIERE_RANGEE][colonne - 1];
       if (id === null) continue;
-      if (ligne(id).apparition > etat.niveau) {
-        verrouilles.push({ rangee, colonne, id, apparition: ligne(id).apparition });
-      }
+      if (!ouvertes.includes(id)) verrouilles.push({ rangee, colonne, id });
       if (etat.interdites.includes(`${rangee},${colonne}`)) {
         surObstacle.push({ rangee, colonne, id });
       }
@@ -379,12 +395,13 @@ export function bilan(etat) {
  */
 export function purger(etat) {
   let suivant = copier(etat);
+  const ouvertes = defensesDisponibles(suivant.acquises ?? null);
   const budget = budgetDuNiveau(suivant.niveau);
   for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
     for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
       const id = suivant.cases[rangee - PREMIERE_RANGEE][colonne - 1];
       if (id === null) continue;
-      if (ligne(id).apparition > suivant.niveau
+      if (!ouvertes.includes(id)
         || suivant.interdites.includes(`${rangee},${colonne}`)) {
         suivant.cases[rangee - PREMIERE_RANGEE][colonne - 1] = null;
       }

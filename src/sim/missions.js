@@ -35,6 +35,7 @@ import { UNITES, DEFENSES } from '../data/combat.js';
 import { ECONOMIE_NIVEAU } from '../data/economie.js';
 import { GEOGRAPHIE, POINTS_ARMEE } from '../data/sites.js';
 import { CHAINE_TUTORIEL, FAMILLES_OBJECTIF } from '../data/missions.js';
+import { ARBRE_RECHERCHE } from '../data/recherche.js';
 import { ressourceDeLaCase } from './champs.js';
 import { FORCES } from './state.js';
 import { niveauDesBatiments, niveauDeLaDefense, niveauDeLArmee } from './niveau-de-base.js';
@@ -195,19 +196,21 @@ function resoudre(etat, o) {
 // -- ce qu'il faut avoir pour seulement pouvoir essayer -----------------------
 
 /**
- * Les conditions DÉRIVÉES qu'une mission suppose sans les dire : le niveau
- * d'apparition d'une pièce et le bâtiment qui la produit.
+ * Les conditions DÉRIVÉES qu'une mission suppose sans les dire : ce qui ouvre
+ * une pièce, et le bâtiment qui la produit.
  *
- * ⚠ ELLES SE MESURENT, ELLES NE S'ÉCRIVENT PAS. `UNITES` et `DEFENSES` font foi
- * sur l'apparition (CLAUDE.md §6, arbitré le 24/08) et `BATIMENT_DE_CHASSIS`
- * sur le bâtiment de production (29/08). Les recopier dans le texte du
- * tutoriel les figerait : le jour où Ethan descend un seuil, la phrase suivrait
- * toute seule.
+ * ⚠ ELLES SE MESURENT, ELLES NE S'ÉCRIVENT PAS. `ARBRE_RECHERCHE` fait foi sur
+ * le coût (lot RECHERCHE, 30/08) et `BATIMENT_DE_CHASSIS` sur le bâtiment de
+ * production (29/08). Recopier un prix dans le texte du tutoriel le figerait :
+ * un réétalonnage de l'arbre doit être UNE ligne de `data/recherche.js`, et la
+ * phrase suit toute seule.
  *
- * ⚠ ET C'EST CE QUI REND VISIBLE UNE TENSION RÉELLE. La chaîne demande deux
- * Éclaireurs alors qu'elle ne fait monter le Centre de commandement qu'au
- * niveau 7 ; l'Éclaireur, lui, apparaît bien plus haut. Le tutoriel le DIT au
- * lieu de laisser le joueur chercher pourquoi sa palette reste grise.
+ * ⚠ LA TENSION QUE CE BLOC RENDAIT VISIBLE A DISPARU D'ELLE-MÊME. La chaîne
+ * demande deux Éclaireurs alors qu'elle ne monte le Centre de commandement
+ * qu'au niveau 7, et l'Éclaireur apparaissait bien plus haut. Sous la nouvelle
+ * règle, `ratisseur` est GRATUIT en offense : le niveau n'entre plus, la
+ * tension n'existe plus, et la phrase le dit — « déjà débloqué » plutôt qu'un
+ * seuil hors d'atteinte.
  */
 function prerequisDe(objectif) {
   if (objectif.famille !== 'effectif') return [];
@@ -215,7 +218,14 @@ function prerequisDe(objectif) {
   const ligne = DEFENSES[objectif.id] ?? UNITES[objectif.id];
   if (ligne === undefined) throw new RangeError(`missions : pièce « ${objectif.id} » inconnue`);
   const commandant = nomBatiment(POINTS_ARMEE[force.role].batiment);
-  const dits = [`${nomPiece(objectif.id)} apparaît au niveau ${ligne.apparition} du ${commandant}`];
+  const prix = ARBRE_RECHERCHE[force.role]?.[objectif.id]?.unite;
+  if (prix === undefined) {
+    throw new RangeError(`missions : « ${objectif.id} » absent de l'arbre ${force.role}`);
+  }
+  const dits = [prix === 0
+    ? `${nomPiece(objectif.id)} est déjà débloqué : il ne reste qu'à le poser`
+    : `${nomPiece(objectif.id)} se débloque par la recherche (${prix} points), `
+      + `et se pose depuis le ${commandant}`];
   // Les ouvrages fixes n'ont pas de châssis : un mur n'a jamais eu besoin d'une
   // caserne. C'est `UNITES` qui porte le châssis, pas `DEFENSES`.
   const chassis = UNITES[objectif.id]?.chassis;

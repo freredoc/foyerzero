@@ -147,27 +147,29 @@ test('T2 — une pose qui dépasserait le budget est refusée, pas tronquée', (
 // ---------------------------------------------------------------------------
 
 test('T3 — seules les unités débloquées sont proposées, et posables', () => {
-  // Apparitions : Meute 0, Perceurs 4, Carapace 8, Crécelle 10. Le Fendeur
-  // n'arrive qu'au 12.
-  assert.deepEqual(unitesDisponibles(10), ['meute', 'perceurs', 'carapace', 'crecelle']);
-  assert.equal(UNITES.fendeur.apparition, 12);
-  assert.equal(unitesDisponibles(40).length, 14, 'les quatorze au niveau 40');
-  assert.deepEqual(unitesDisponibles(50).sort(), Object.keys(UNITES).sort());
-  // Au niveau 1, une seule.
-  assert.deepEqual(unitesDisponibles(1), ['meute']);
+  // ⚠⚠ CE TEST A CHANGÉ DE PORTE AU LOT RECHERCHE, PAS D'INTENTION. Il
+  // asserait `apparition <= niveau` ; Ethan a tranché le 30/08 que la recherche
+  // SEULE ouvre les pièces. La question posée reste la même : ce que la palette
+  // propose est-il exactement ce que le joueur peut poser ?
+  const ouvertes = ['meute', 'perceurs', 'carapace', 'crecelle'];
+  assert.deepEqual(unitesDisponibles(ouvertes), ouvertes);
+  assert.deepEqual(unitesDisponibles([]), [], 'rien d\'acquis devrait tout fermer');
+  assert.equal(unitesDisponibles(Object.keys(UNITES)).length, 14, 'les quatorze une fois tout acheté');
+  // ⚠ `null` N'EST PAS `[]` : c'est le banc, qui monte hors partie et voit tout.
+  assert.deepEqual(unitesDisponibles(null).sort(), Object.keys(UNITES).sort());
 
-  // Le sélecteur ne GRISE pas les verrouillées : elles ne figurent pas.
-  for (const niveau of [1, 10, 25, 40]) {
-    for (const id of unitesDisponibles(niveau)) {
-      assert.ok(UNITES[id].apparition <= niveau, `${id} ne devrait pas être proposée`);
-    }
-  }
+  // L'ordre rendu est celui des données, pas celui de la liste reçue : la
+  // palette ne doit pas se réordonner sous le doigt entre deux achats.
+  assert.deepEqual(unitesDisponibles(['crecelle', 'meute']), ['meute', 'crecelle']);
 
-  const etat = arsenalVide(10);
+  const etat = arsenalVide(10, ouvertes);
   assert.throws(() => poser(etat, { vague: 1, colonne: 1, id: 'fendeur' }),
-    /fendeur est verrouillée au niveau 10 \(apparition 12\)/);
+    /fendeur n'est pas débloquée par la recherche/);
   assert.throws(() => poser(etat, { vague: 1, colonne: 1, id: 'chimere' }),
     /unité inconnue/);
+  // Et une unité ouverte passe : sans ça le refus ci-dessus pourrait venir
+  // d'ailleurs.
+  assert.doesNotThrow(() => poser(etat, { vague: 1, colonne: 1, id: 'meute' }));
 });
 
 // ---------------------------------------------------------------------------
@@ -408,7 +410,9 @@ test('T8 — les 14 unités se dessinent à l\'identique dans l\'Arsenal et sur 
 
   // Aucune teinte hors de FICHE-STYLE.md, sur une grille bien remplie.
   let pleine = arsenalVide(50);
-  const ids = unitesDisponibles(50);
+  // `null` = aucun filtre de recherche : ce test-ci mesure des PIXELS, pas une
+  // porte, et il lui faut les quatorze unités.
+  const ids = unitesDisponibles(null);
   for (let i = 0; i < 20; i += 1) {
     pleine = poser(pleine, {
       vague: Math.floor(i / NB_COLONNES) + 1, colonne: (i % NB_COLONNES) + 1, id: ids[i % ids.length],
@@ -474,28 +478,40 @@ test('T9 — 36 emplacements, et le 37e est refusé budget ou non', () => {
 // Changement de niveau — §5 du brief
 // ---------------------------------------------------------------------------
 
-test('§5 — baisser le niveau ne retire jamais rien en silence', () => {
-  let etat = arsenalVide(15);
+test('§5 — un contexte qui bouge ne retire jamais rien en silence', () => {
+  // ⚠⚠ CE TEST A CHANGÉ DE DÉCLENCHEUR AU LOT RECHERCHE, PAS D'INTENTION.
+  // Il partait d'un niveau qui descend sous l'apparition d'une pièce ; RIEN NE
+  // SE DÉ-RECHERCHE, un achat est définitif. Ce qui reste — et ce que la garde
+  // tient toujours — c'est une composition dont une pièce n'est PLUS ouverte :
+  // sauvegarde trafiquée, identifiant retiré des données. Le second cas, le
+  // budget qui baisse avec le Centre de commandement, est inchangé.
+  let etat = arsenalVide(15, ['meute', 'fendeur']);
   etat = poser(etat, { vague: 1, colonne: 1, id: 'meute' });
-  etat = poser(etat, { vague: 1, colonne: 2, id: 'fendeur' }); // apparition 12
+  etat = poser(etat, { vague: 1, colonne: 2, id: 'fendeur' });
   assert.ok(bilan(etat).valide);
 
-  // Au niveau 10, le Fendeur est verrouillé — et il est TOUJOURS LÀ.
-  const bas = avecNiveau(etat, 10);
-  const b = bilan(bas);
+  // Le Fendeur disparaît des acquises — et il est TOUJOURS LÀ sur la grille.
+  const ampute = { ...etat, acquises: ['meute'] };
+  const b = bilan(ampute);
   assert.equal(b.valide, false);
   assert.deepEqual(b.verrouillees.map((v) => v.id), ['fendeur']);
   assert.equal(b.emplacementsOccupes, 2, 'rien n\'a été retiré en silence');
-  assert.equal(enVagues(bas).flat().length, 2);
+  assert.equal(enVagues(ampute).flat().length, 2);
 
   // La purge, elle, est explicite — et ne retire que ce qu'il faut.
-  const purge = purger(bas);
+  const purge = purger(ampute);
   assert.deepEqual(enVagues(purge).flat().map((u) => u.id), ['meute']);
   assert.ok(bilan(purge).valide);
 
+  // ⚠ ET BAISSER LE NIVEAU NE VERROUILLE PLUS RIEN : c'est le renversement du
+  // lot, et il s'asserte ici plutôt que de se supposer.
+  const bas = avecNiveau(etat, 10);
+  assert.deepEqual(bilan(bas).verrouillees, [],
+    'un niveau qui descend referme encore des pièces');
+
   // Dépassement de budget seul : au niveau 50 on remplit, au niveau 1 tout
   // dépasse. La purge ramène sous le budget sans rien casser.
-  let riche = arsenalVide(50);
+  let riche = arsenalVide(50, ['meute']);
   for (let colonne = 1; colonne <= 9; colonne += 1) {
     riche = poser(riche, { vague: 1, colonne, id: 'meute' });
   }
@@ -504,7 +520,7 @@ test('§5 — baisser le niveau ne retire jamais rien en silence', () => {
   assert.equal(bp.depassementBudget, true);
   assert.equal(bp.pointsEngages, 45);
   assert.equal(bp.budgetPoints, 25);
-  assert.equal(bp.verrouillees.length, 0, 'la Meute n\'est verrouillée à aucun niveau');
+  assert.equal(bp.verrouillees.length, 0, 'la Meute est acquise, elle ne peut pas être verrouillée');
   const nettoye = purger(pauvre);
   assert.ok(bilan(nettoye).valide);
   assert.equal(bilan(nettoye).pointsEngages, 25);

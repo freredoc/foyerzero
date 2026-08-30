@@ -33,9 +33,10 @@ import { GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT } from '../data/sites.js'
 import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
+import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 /**
  * @typedef {object} Etat
@@ -1531,6 +1532,58 @@ const MIGRATIONS = {
   12: (s) => {
     s.version = 13;
     s.reparation = null;
+  },
+
+  /**
+   * v13 → v14 : la recherche ouvre les pièces, et elle seule.
+   *
+   * ⚠⚠ CELLE-CI DONNE, LÀ OÙ TOUTES SES VOISINES NE CONVERTISSENT RIEN — et
+   * c'est la seule façon de ne rien retirer au joueur. Jusqu'à la v13, ce qu'on
+   * pouvait poser dépendait du NIVEAU du bâtiment commandant : `apparition <=
+   * niveau`. Une sauvegarde v13 porte donc une garnison et une armée composées
+   * sous cette règle. Poser les seules gratuites verrouillerait rétroactivement
+   * tout ce que le joueur a déjà sur sa grille, et `bilan` le lui dirait au
+   * premier écran — une pièce payée, posée, et soudain illégale.
+   *
+   * La migration OFFRE donc exactement ce que l'ancienne règle autorisait :
+   * tout ce dont l'`apparition` était atteinte au niveau du bâtiment commandant.
+   * Sa situation est reproduite au poil, et rien ne se dé-recherche ensuite.
+   *
+   * ⚠ AUCUN MODULE, LES DEUX LISTES VIDES. Aucun module n'a jamais été acquis
+   * avant ce lot, et aucun n'avait d'effet : en offrir serait inventer un achat
+   * que le joueur n'a pas fait.
+   *
+   * ⚠ BÂTIMENT ABSENT → LES GRATUITES SEULEMENT. `niveauDeCommandement` rend
+   * `null` quand le Centre de commandement ou le QG de garnison n'est pas posé.
+   * Sous l'ancienne règle, sans bâtiment il n'y avait ni budget ni pièce
+   * posable ; les gratuites suffisent donc à reproduire cet état, et elles sont
+   * ce qu'une partie neuve aurait de toute façon.
+   * @param {object} s
+   */
+  13: (s) => {
+    s.version = 14;
+    const pointsMilli = s.recherche?.pointsMilli ?? '0';
+    const offertes = (branche, force) => {
+      // ⚠ TOLÉRANT À UNE SAUVEGARDE SANS `disposition`. La chaîne de migrations
+      // remonte depuis la v0, et rien ne garantit la forme d'un objet à
+      // mi-parcours. Sans disposition il n'y a pas de bâtiment commandant, donc
+      // pas de niveau : c'est exactement le cas « bâtiment absent ».
+      const niveau = Array.isArray(s.disposition) ? niveauDeCommandement(s, force) : null;
+      const ouvertes = niveau === null ? [] : Object.keys(ARBRE_RECHERCHE[branche])
+        .filter((id) => (DEFENSES[id] ?? UNITES[id]).apparition <= niveau);
+      // ⚠ UNION AVEC LES GRATUITES, ET CE N'EST PAS UNE GÉNÉROSITÉ. À bas niveau
+      // l'ancienne règle donnait MOINS que ce qu'une partie neuve reçoit
+      // aujourd'hui : au niveau 4, elle n'ouvrait que la Meute et les Perceurs,
+      // alors que l'Éclaireur et l'Épervier sont désormais gratuits. Sans cette
+      // union, un joueur qui recharge aurait moins qu'un joueur qui recommence,
+      // et devrait aller cliquer « acheter » à zéro point pour rattraper.
+      return [...new Set([...ouvertes, ...gratuitesDe(branche)])].sort();
+    };
+    s.recherche = {
+      pointsMilli,
+      acquises: { offense: offertes('offense', 'armee'), defense: offertes('defense', 'garnison') },
+      modules: { offense: [], defense: [] },
+    };
   },
 };
 

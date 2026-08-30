@@ -97,11 +97,12 @@ test('couts-militaires — la défense couvre exactement le roster défensif', (
   assert.deepEqual(Object.keys(COUT_NIVEAU_DEUX_DEFENSE).sort(), [...roster].sort());
 
   // ⚠ ET C'EST BIEN LE MÊME ROSTER QUE CELUI DE L'ÉCRAN. `ui/defense.js` filtre
-  // en plus par niveau d'apparition ; au plafond, le filtre ne retire rien, et
-  // les deux lectures de « qui a un rôle en défense » doivent coïncider. Sans
-  // ce croisement, les deux pourraient diverger sans qu'un test tombe.
+  // en plus par ce que la RECHERCHE a ouvert (lot RECHERCHE, 30/08 — c'était le
+  // niveau d'apparition jusque-là) ; sans filtre, les deux lectures de « qui a
+  // un rôle en défense » doivent coïncider. Sans ce croisement, les deux
+  // pourraient diverger sans qu'un test tombe.
   assert.deepEqual(
-    [...defensesDisponibles(NIVEAU.plafond)].sort(), [...roster].sort(),
+    [...defensesDisponibles(null)].sort(), [...roster].sort(),
     'le roster des coûts et celui de l\'écran de défense ont divergé',
   );
 });

@@ -79,14 +79,25 @@ volants.
 
 Améliorations **permanentes**, appliquées à toutes les unités du type concerné.
 
+⚠ **« Fumigène » A ÉTÉ RENOMMÉ `flashbang` LE 30/08/2026** (arbitrage 4 du lot
+RECHERCHE). Ce module-ci désactivait déjà une **infanterie** : c'était le
+flashbang sous un autre nom. Le fumigène anti-**structure** de Tiberium
+Alliances n'a jamais été transposé — voir `ARBRE-RECHERCHE.md` §1.
+
+⚠ **L'ÉCRASEUR EST LE SEUL DONT L'EFFET EST ÉCRIT DANS LE MOTEUR** (lot
+RECHERCHE). Les treize autres s'affichent avec leur description et leur coût,
+et **ne s'achètent pas** : `src/data/modules.js` porte `cable: false`, et
+`sim/recherche.js` refuse la vente par le code `effetNonCable`. Prendre les
+points du joueur contre rien serait un vol.
+
 | Module | Effet |
 |---|---|
-| **Fumigène** | désactive une infanterie 5 s, une fois par raid. Effet −20 % si la cible est de niveau supérieur |
+| **Flashbang** | désactive une infanterie 5 s, une fois par raid. Effet −20 % si la cible est de niveau supérieur |
 | **EMP** | désactive un véhicule 5 s, une fois par raid. Même pénalité de niveau |
 | **Tir de barrage** | 30 % des dégâts sur les structures voisines |
 | **Booster** | après avoir été blessée, vitesse ×10 pendant 3 s, une fois par raid |
 | **Garnison** | embarque une infanterie, la débarque derrière la ligne ou à la destruction du porteur, sans pénalité |
-| **Écraseur** | force les murs — 10 % de dégâts par seconde — et masse ×2 pour l'écrasement |
+| **Écraseur** | force les **structures défensives** — 10 % de dégâts par seconde — et masse ×2 pour l'écrasement |
 | **Auto-réparation** | répare 20 % des PV manquants après le raid, indépendamment du QG |
 | **Bouclier** | encaisse les dégâts des alliés dans un rayon de 2,5. PV du bouclier = 100 % des PV du porteur |
 | **Camouflage** | invisible pour la défense ; sort du camouflage si une cible de prédilection entre à portée |

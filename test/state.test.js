@@ -24,6 +24,8 @@ import {
 import { budgetDuNiveau as budgetOffense, arsenalVide, poser as poserUnite } from '../src/ui/arsenal.js';
 import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
+import { gratuitesDe, ARBRE_RECHERCHE } from '../src/data/recherche.js';
+import { UNITES, DEFENSES } from '../src/data/combat.js';
 import {
   coutDeMontee, coutCumule, remboursementDuNiveau, emplacementsDuNiveau,
 } from '../src/data/base.js';
@@ -309,7 +311,7 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 13, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 14, 'le bump de la version des sauvegardes a été oublié');
 
   // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
   // terrain ne serait dérivable de rien.
@@ -1353,11 +1355,39 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   delete v6.satellites;
 
   const migre = migrer(structuredClone(v6));
-  assert.equal(migre.version, 13, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
+  assert.equal(migre.version, 14, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
   assert.equal(migre.attaque.plafond, 100, 'le maillon v9 → v10 manque');
   assert.deepEqual(migre.sitesEntames, {}, 'le maillon v10 → v11 manque');
-  assert.deepEqual(migre.recherche, { pointsMilli: '0' }, 'le maillon v11 → v12 manque');
+  assert.equal(migre.recherche.pointsMilli, '0', 'le maillon v11 → v12 manque');
   assert.equal(migre.reparation, null, 'le maillon v12 → v13 manque');
+  // ⚠⚠ LE MAILLON v13 → v14 OFFRE, LÀ OÙ TOUTES LES AUTRES NE CONVERTISSENT
+  // RIEN — et ce qu'il offre est EXACTEMENT ce que l'ancienne règle autorisait.
+  // Ce montage porte un Centre de commandement au niveau 4 et un QG de défense
+  // au niveau 6 : l'attendu se RECALCULE sur `apparition`, il ne se recopie pas.
+  // Le poser en dur ferait un test qui suit le patch au lieu de le mesurer.
+  //
+  // ⚠ L'UNION AVEC LES GRATUITES EST DANS L'ATTENDU, et elle compte : au
+  // niveau 4, l'ancienne règle n'ouvrait que la Meute et les Perceurs, alors
+  // qu'une partie NEUVE reçoit aussi l'Éclaireur et l'Épervier. Sans elle, un
+  // joueur qui recharge aurait moins qu'un joueur qui recommence.
+  const ancienneRegle = (branche, niveau) => [...new Set([
+    ...Object.keys(ARBRE_RECHERCHE[branche])
+      .filter((id) => (DEFENSES[id] ?? UNITES[id]).apparition <= niveau),
+    ...gratuitesDe(branche),
+  ])].sort();
+  assert.deepEqual(migre.recherche.acquises,
+    { offense: ancienneRegle('offense', 4), defense: ancienneRegle('defense', 6) },
+    'le maillon v13 → v14 manque, ou il n\'offre pas ce que l\'ancienne règle donnait');
+  // ⚠ ET IL DONNE AU MOINS UNE PIÈCE PAYANTE, sinon l'assertion ci-dessus
+  // passerait pour une migration qui poserait bêtement les gratuites.
+  for (const branche of ['offense', 'defense']) {
+    assert.ok(
+      migre.recherche.acquises[branche].some((id) => ARBRE_RECHERCHE[branche][id].unite > 0),
+      `montage sans mordant : la branche ${branche} n'a reçu que des gratuites`,
+    );
+  }
+  assert.deepEqual(migre.recherche.modules, { offense: [], defense: [] },
+    'la migration a offert des modules jamais achetés');
   assert.deepEqual(migre.tutoriel, { ferme: false }, 'le maillon v8 → v9 manque');
   assert.deepEqual(migre.garnison, []);
   assert.deepEqual(migre.armee, []);
