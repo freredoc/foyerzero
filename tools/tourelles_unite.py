@@ -29,6 +29,7 @@ La validation est donc visuelle et différée : voir --fluidite.
 import sys, os, argparse
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 
 from PIL import Image
 import numpy as np
@@ -38,7 +39,7 @@ from final128 import pal, conditionner, ecrire
 from tourelles import pivot, demi_portee, recadrer_pivot
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites', 'tourelle-unite')
+DST = dossier_sprites('tourelle-unite')
 GRILLES = (128, 64, 32)
 
 BLINDES = ['ratisseur', 'fendeur', 'belier', 'broyeur', 'pilon']

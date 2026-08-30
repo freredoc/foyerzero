@@ -37,13 +37,14 @@ peine de paraître d'un autre jeu posée à côté.
 import sys, os
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 from PIL import Image
 import numpy as np
 from cond import est_fond
 from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites', 'defense')
+DST = dossier_sprites('defense')
 GRILLES = (128, 64, 32)
 EMPRISE = 28          # gros pixels sur une grille de 32 — voir l'en-tête
 

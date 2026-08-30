@@ -114,6 +114,14 @@ const IMAGES_INLINE = [
   // parce que `tools/atlas.py` en fait aussi une clé JavaScript. Le dossier
   // source, lui, garde son tiret : `art/sprites/tourelle-unite/`.
   { marqueur: '%ATLAS_TOURELLE_UNITE%', chemin: ['art', 'sprites', 'atlas-tourelle_unite-64.png'], type: 'image/png' },
+  // ⚠⚠ LES DEUX GROSSES BASES VOYAGENT HORS ATLAS, CHACUNE DANS SON MARQUEUR.
+  // À la grille 64 elles mesurent 128×128 et 192×192 — elles couvrent 2×2 et
+  // 3×3 cases —, et `tools/atlas.py` exige `COTE × COTE` pour coudre. Un atlas
+  // d'un seul sprite ne coud rien de toute façon. Même forme que
+  // `%ATLAS_TERRAIN%`, l'atlas du fond de carte, qui est hors des sept aussi.
+  { marqueur: '%ATLAS_CARTE%', chemin: ['art', 'sprites', 'atlas-carte-64.png'], type: 'image/png' },
+  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_2x2.png'], type: 'image/png' },
+  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_3x3.png'], type: 'image/png' },
 ];
 
 for (const image of IMAGES_INLINE) {

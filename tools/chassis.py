@@ -34,6 +34,7 @@ dixième est interpolée et signalée comme telle.
 import sys, os, json
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 
 from PIL import Image
 import numpy as np
@@ -42,8 +43,8 @@ from cond import est_fond
 from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites', 'chassis')
-ANCRES = os.path.join(RACINE, 'art', 'sprites', 'ancres-chassis.json')
+DST = dossier_sprites('chassis')
+ANCRES = dossier_sprites('ancres-chassis.json')
 GRILLES = (128, 64, 32)
 EMPRISE = 24                      # même emprise que les blindés de la table U
 

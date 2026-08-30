@@ -12,6 +12,7 @@ faire confiance aux grilles produites pour la première fois.
 import sys, os, math, hashlib, argparse, shutil
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 
 from PIL import ImageFile as _IF; _IF.LOAD_TRUNCATED_IMAGES = True
 from PIL import Image
@@ -22,7 +23,7 @@ from align_chenilles import aligner
 from retirer_appendice import corriger as retirer_appendice
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites')
+DST = dossier_sprites()
 GRILLES = (128, 64, 32)
 
 # --- les deux passes de retouche que final128.py ne fait pas -----------------

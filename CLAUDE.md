@@ -23,7 +23,14 @@ Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
 4. `npm ci && npm run check` **avant de toucher quoi que ce soit**, et consigner
    le compte de tests obtenu. Un lot qui démarre sur une base rouge sans le
    savoir est un lot perdu.
-5. ⚠ **AVANT DE DEMANDER UN ARBITRAGE À ETHAN, CHERCHER LA RÉPONSE DANS LE
+5. **SI LE LOT TOUCHE À L'ART** — `art/sources/`, `art/sprites/` ou un outil de
+   `tools/` —, lancer aussi `python3 tools/verifier.py` et consigner son verdict.
+   Il dit si la chaîne produit encore, à l'octet, les sprites qui sont au dépôt,
+   et c'est la seule chose qui le dise : `npm run check` était VERT le 30/08
+   pendant que six PNG d'emblème contredisaient l'outil qui les fabrique.
+   ⚠ **Pas aux autres lots.** Il prend deux minutes ; une consigne qu'on
+   n'applique pas en affaiblit d'autres.
+6. ⚠ **AVANT DE DEMANDER UN ARBITRAGE À ETHAN, CHERCHER LA RÉPONSE DANS LE
    DÉPÔT.** `src/data/` porte toutes les valeurs de calibrage,
    `SPEC-FOYER-ZERO.md` la règle, les `RELEVE-TA-*.md` d'où elle vient. Le
    29/08, quatre questions ont été posées à Ethan sur les points d'attaque :
@@ -34,9 +41,22 @@ Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot STRUCTURES-AU-COMBAT), à confronter :**
-`npm test` → **600 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 074 070 octets**, 0 référence externe. STRUCTURES-AU-COMBAT a coûté
+**Référence au 30/08/2026 (après le lot CARTE-EMBLÈMES), à confronter :**
+`npm test` → **608 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 229 274 octets**, 0 référence externe. CARTE-EMBLÈMES a coûté **+155 204
+octets**, dont **152 443 d'images** : l'atlas `carte` (43 sprites, 115 405 o en
+base64) et les deux grosses bases hors atlas (37 038 o). **La borne T10 est
+passée de 1 150 000 à 1 300 000**, marge 70 726, soit 5,4 % — elle monte parce
+qu'une ressource entre légitimement, jamais pour faire passer un débordement.
+Auparavant, CHAÎNE-VÉRIFIÉE n'avait touché ni `src/` ni `test/` : le HTML était
+ressorti identique à l'octet, SHA-256 compris, donc **sa version n'avait PAS été
+bumpée**, et la référence était 600 pass / 1 074 070 octets / 0.46.0 · build 47.
+`python3 tools/verifier.py` → **1 370 identiques · 2 différents (les deux
+déclarés) · 0 nouveau · 56 MANQUANTS**, en 125 s, code de sortie **1**.
+⚠ **CE 1 EST LE VERDICT, PAS UNE PANNE**, et il se lit au §6 : les 56 manquants
+sont 54 tuiles de terrain qu'aucun outil ne reproduit plus et 2 fichiers de
+`carte/` livrés à la main. Aucun n'a été « corrigé » — c'est un arbitrage
+d'Ethan, pas une décision de lot. STRUCTURES-AU-COMBAT a coûté
 **+832 octets** — aucun atlas ajouté, aucun sprite : c'est du code, et c'est un
 DÉPLACEMENT de code. Le lot RÉPARATION avait laissé la référence à 593 tests et
 1 073 238 octets. Le lot POINTS-D'ATTAQUE a coûté
@@ -311,12 +331,23 @@ src/sim/                simulation déterministe, sans DOM — 20 fichiers
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 8 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 9 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
+  embleme.js            quel dessin porte un site de la carte : palier, saveur, emprise
+  ⤷ ⚠⚠ AU SINGULIER, ET CE N'EST PAS NÉGOCIABLE. `tools/emblemes.py` produit les
+    sprites que ce module nomme ; un sélecteur de téléphone n'affiche que les
+    noms courts, et deux fichiers qui ne diffèrent que par un `s` final sont
+    exactement l'accident du 27/08 où le moteur de combat a été écrasé (§6,
+    homonymes).
+  ⤷ ⚠ IL PORTE LE PRÉ-BRANCHEMENT DES NEUF SPRITES QUE RIEN NE DESSINE — les
+    sept POI et les deux grosses bases. Le modèle ne produit aucun POI et une
+    base ne connaît pas sa taille ; ajouter ces types à `EMBLEMES_CARTE` écrirait
+    dans la table du MODÈLE une entrée que le modèle ne produit pas. Le
+    pré-branchement se fait donc entièrement du côté du DESSIN.
   ⤷ ⚠⚠ LE LECTEUR D'ATLAS NE PORTE PAS LE NOM COURT DE SA PROPRE SOURCE, et ce
     n'est pas négociable : la table qu'il lit vit dans `src/data/` sous un nom
     que le sélecteur d'un téléphone afficherait à l'identique. C'est exactement
@@ -384,10 +415,13 @@ test/                   38 fichiers *.test.js (node:test) ; deux fichiers n'en s
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  17 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08.
-                        §2 en annonçait trois, puis sept, puis huit : le huit était
-                        déjà faux avant ce lot-ci, la chaîne de production graphique
-                        ayant apporté ses scripts sans que personne ne recompte.
+tools/                  21 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08
+                        au lot CHAÎNE-VÉRIFIÉE, fichier par fichier.
+                        ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
+                        DIX-SEPT, et le dix-sept était déjà faux de deux quand il a
+                        été écrit : le disque en portait dix-neuf. La chaîne de
+                        production graphique apporte ses scripts sans que personne
+                        ne recompte, et ce lot-ci en ajoute deux — d'où vingt et un.
                         ⚠ AUCUNE GARDE NE COMPTE CE DOSSIER — le test de §2 ne porte
                         que sur les quatre dossiers de src/ et sur test/ —, et c'est
                         exactement pourquoi il dérive. Le recompter à chaque lot qui
@@ -395,13 +429,27 @@ tools/                  17 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ plus CINQ scripts Python de traitement de sprites, hors chaîne de build et
-    hors `npm run check`. Le dernier arrivé rejoue la chaîne des trois autres
-    depuis la racine et produit les trois grilles ; il a deux modes, l'un qui
-    n'écrit rien et compare à l'existant, l'autre qui écrit — et il n'écrase
-    JAMAIS un fichier commité qui ne se reproduit pas. Aucune garde ne compte ce
-    dossier : le test de §2 ne porte que sur les quatre dossiers de `src/` et sur
-    `test/`.
+  ⤷ les DIX-HUIT autres sont du Python, hors chaîne de build et hors
+    `npm run check`. Ils se répartissent en quatre rôles :
+      • ONZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
+        `art/sprites/` ;
+      • DEUX BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
+        plus le portage de la coupe 1024 ;
+      • DEUX SCRIPTS HISTORIQUES à usage unique, dont les chemins pointent vers
+        une machine qui n'existe plus : ils se lisent au passé ;
+      • le COUSEUR d'atlas, le module de CHEMINS et le VÉRIFICATEUR.
+  ⤷ ⚠⚠ LA DESTINATION DES ONZE PRODUCTEURS EST DÉROUTABLE DEPUIS LE 30/08, et
+    c'est ce qui rend la chaîne vérifiable. Chacun portait sa propre ligne vers
+    `art/sprites/` ; ils demandent maintenant ce dossier au module de chemins,
+    qui honore la variable d'environnement `FZ_SPRITES`. **La SOURCE, elle, n'est
+    PAS déroutable** — la dérouter aussi ferait tourner le vérificateur sur un
+    dossier vide, et il rendrait « tout va bien » sur rien.
+  ⤷ ⚠ LE COUSEUR D'ATLAS RESTE À PART, délibérément : il écrit aussi
+    `src/data/atlas.js`, qui n'est pas un sprite, et il porte déjà son propre
+    mode de vérification. Le vérificateur l'APPELLE au lieu de le dérouter.
+  ⤷ ⚠ ET LE VÉRIFICATEUR N'ÉCRIT JAMAIS DANS `art/sprites/`. C'est son invariant
+    le plus important — un contrôle qui écrit là où il compare est un piège — et
+    il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
@@ -476,9 +524,18 @@ Elle est **auditée**, pas testée : `node tools/audit-maquette.mjs` confronte s
 noms, son terrain, ses débits, ses capacités et sa palette aux tables du dépôt.
 Il ne vit PAS dans `npm run check`, et c'est délibéré — la faire garder par la
 suite ferait passer `main` au rouge pour un fichier que le joueur ne verra
-jamais. Il se lance quand on touche à la maquette. **C'est la seule exception à
+jamais. Il se lance quand on touche à la maquette. **C'est l'une des DEUX
+exceptions à
 « un audit hors de `npm run check` n'existe pas »**, et elle tient parce que la
 maquette n'est pas du code livré.
+
+⚠ **LA SECONDE EST `tools/verifier.py`** (30/08), et elle tient pour la même
+raison : ce qu'elle garde n'est pas du code livré non plus, c'est la
+correspondance entre un outil et les fichiers qu'il a produits. Elle est en
+Python, hors de la chaîne de build ; l'entrer dans `npm run check` demanderait
+une dépendance Python à la CI, ce qui est un changement d'architecture. Voir §3.
+**Il n'y en a pas de troisième**, et la prochaine devra dire pourquoi elle n'est
+pas un test.
 
 ⚠ **La version précédente de ce paragraphe annonçait sa mort « le jour où
 l'écran de jeu aura ses propres tests ».** Ce jour est venu le 27/08 —
@@ -518,6 +575,38 @@ d'extérieur. L'offline est non négociable.
 dépendance de développement, et ce n'est pas un oubli. Ce qui touche le DOM ne
 s'automatise donc pas ici : ça se teste sur appareil, et un test appareil non
 exécuté se déclare **non exécuté**, jamais passé.
+
+### La chaîne graphique — hors de `npm run check`, et pour une raison
+
+```
+python3 tools/verifier.py             # toute la chaîne, ~2 min
+python3 tools/verifier.py --outil emblemes   # un seul outil, pour itérer
+```
+
+⚠ **ELLE N'ENTRE PAS DANS `npm run check`, ET C'EST DÉLIBÉRÉ.** Les outils sont
+en Python, hors de la chaîne de build ; y ajouter une dépendance Python serait un
+changement d'architecture, et la CI n'en a pas. C'est **la seconde exception** à
+« un audit hors de `npm run check` n'existe pas », après `audit-maquette.mjs`, et
+elle tient pour la même raison : ce qu'elle garde n'est pas du code livré, c'est
+la correspondance entre un outil et ce qu'il a produit.
+
+⚠ **CE QU'ELLE RÉPOND :** la chaîne produit-elle encore, à l'octet, les 1 429
+sprites du dépôt ? Le 30/08, la réponse était **non** — `tools/emblemes.py` avait
+été corrigé et ses six PNG n'avaient pas été régénérés, `npm run check` était
+vert, et rien ne pouvait le voir. Le vérificateur déroute `FZ_SPRITES` sur un
+dossier temporaire, rejoue les onze producteurs dedans, et compare. **Il n'écrit
+jamais dans `art/sprites/`.**
+
+⚠ **QUATRE CATÉGORIES, ET « MANQUANT » SE LIT DANS LE SENS DE LA CHAÎNE** : c'est
+le dépôt qui porte le fichier et aucun outil qui le produit — un orphelin, pas un
+trou. Son symétrique, « nouveau », est ce que la chaîne produit et que le dépôt
+n'a pas. `planches.py` n'en connaît que trois ; celle qui manquait est la plus
+utile, et c'est elle qui aurait vu les 240 tourelles de blindé de l'Ouvrage si
+elles étaient restées au dépôt après le lot PRODUCTION.
+
+⚠ **DEUX MINUTES, MESURÉES.** C'est le prix de onze outils rejoués en entier.
+Un contrôle qu'on n'a pas la patience de lancer ne protège de rien : il se lance
+aux lots qui touchent à l'art, pas à chaque lot.
 
 ---
 

@@ -1102,6 +1102,18 @@
          ====================================================================== -->
     <div id="ecran-monde" hidden>
       <img id="monde-atlas" alt="" hidden src="%ATLAS_TERRAIN%">
+      <!-- ⚠⚠ LES EMBLÈMES DE LA CARTE, ET LES DEUX GROSSES BASES HORS ATLAS.
+           Les 43 emblèmes tiennent dans un atlas 7 × 7 ; les deux grosses bases
+           couvrent 2 × 2 et 3 × 3 cases, donc 128 et 192 pixels de côté à la
+           grille 64, et aucun atlas ne peut les coudre — `tools/atlas.py` exige
+           des cellules carrées à la taille de case, et il les exclut nommément
+           en assertant qu'elles ne le sont PAS.
+           ⚠ LES DEUX DERNIÈRES SONT PRÉ-BRANCHÉES : rien ne les dessine
+           aujourd'hui, le modèle ne sachant pas qu'une base peut faire plus
+           d'une case. Elles pèsent 37 038 octets et le rapport le dit. -->
+      <img id="monde-emblemes" alt="" hidden src="%ATLAS_CARTE%">
+      <img id="monde-base-2x2" alt="" hidden src="%BASE_O_2X2%">
+      <img id="monde-base-3x3" alt="" hidden src="%BASE_O_3X3%">
       <!-- ⚠⚠ LES ATLAS DU CHAMP DE BATAILLE SONT DES `<img>`, PAS DES VARIABLES
            CSS, et c'est `drawImage` qui l'impose : il veut un
            `HTMLImageElement`, pas une URL. Les atlas du DOM — bâtiment, terrain,

@@ -28,11 +28,12 @@ la matière court jusqu'à 388. Voir `tools/connexions.py`.
 import sys, os
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 from PIL import Image
 from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites', 'socle')
+DST = dossier_sprites('socle')
 GRILLES = (128, 64, 32)
 EMPRISE = 28          # gros pixels sur une grille de 32, comme les gros bâtiments
 

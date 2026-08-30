@@ -28,13 +28,14 @@ ce que donnerait un doublon. Le nom de fichier tranche, la mesure non.
 import sys, os
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 from PIL import Image
 import numpy as np
 from cond import est_fond
 from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites', 'unite')
+DST = dossier_sprites('unite')
 GRILLES = (128, 64, 32)
 
 # Emprise en gros pixels sur une grille de 32, reprise de la table U de

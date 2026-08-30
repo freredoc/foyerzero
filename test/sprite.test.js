@@ -93,6 +93,65 @@ function tailleDuPng(chemin) {
   return { largeur: octets.readUInt32BE(16), hauteur: octets.readUInt32BE(20) };
 }
 
+/**
+ * Les fichiers que `tools/atlas.py` exclut de la couture, LUS dans l'outil.
+ *
+ * ⚠⚠ RECOPIER LA LISTE ICI SERAIT UNE SECONDE VÉRITÉ, et la première à diverger.
+ * L'outil est la source : un lot qui ajoute une exclusion sans toucher à ce
+ * fichier-ci doit continuer de passer, et un lot qui en RETIRE une doit faire
+ * tomber la garde de l'index. C'est la même discipline que la palette de
+ * `banc.test.js`, transcrite puis confrontée à `FICHE-STYLE.md`.
+ *
+ * ⚠ ET LE PARSE S'ASSERTE. Un reformatage de `FAMILLES` qui ferait rendre une
+ * table vide rendrait la garde muette : on exige d'avoir trouvé autant d'entrées
+ * que l'index porte de familles.
+ */
+function exclusionsDeLOutil() {
+  const source = readFileSync(join(RACINE, 'tools', 'atlas.py'), 'utf8');
+  const bloc = source.match(/^FAMILLES = \{$([\s\S]*?)^\}$/m);
+  assert.ok(bloc !== null, '`FAMILLES` est introuvable dans tools/atlas.py');
+  const parFamille = {};
+  for (const ligne of bloc[1].split('\n')) {
+    const m = ligne.match(/^\s*'([^']+)':\s*\('([^']+)',\s*(\d+),\s*\(([^)]*)\)/);
+    if (m === null) continue;
+    parFamille[m[2]] = [...m[4].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  }
+  assert.equal(Object.keys(parFamille).length, Object.keys(ATLAS).length,
+    'le parse de FAMILLES ne trouve pas autant d\'entrées que l\'index a de familles');
+  return parFamille;
+}
+
+test('sprite — une exclusion de couture existe sur le disque et n\'est pas cousable', () => {
+  // ⚠⚠ UNE EXCLUSION SE JUSTIFIE DANS LES DEUX SENS, sans quoi elle devient un
+  // moyen de faire disparaître un sprite cassé. Le fichier exclu doit EXISTER —
+  // sinon la ligne est morte — et il doit être d'une taille que `coudre` refuse
+  // — sinon son exclusion n'a plus de raison d'être. `tools/atlas.py` fait la
+  // même vérification de son côté ; celle-ci la refait depuis le dépôt, en
+  // JavaScript, pour qu'un lot qui n'aurait pas relancé l'outil la voie quand
+  // même.
+  const exclusions = exclusionsDeLOutil();
+  const exclus = Object.entries(exclusions).flatMap(([slug, noms]) => noms.map((n) => [slug, n]));
+
+  // ⚠ FALSIFIABLE : sans cette ligne, une table vide passerait la boucle.
+  assert.equal(exclus.length, 2,
+    `${exclus.length} exclusions — si le compte a changé, dire pourquoi ici`);
+
+  for (const [slug, nom] of exclus) {
+    const chemin = join(SPRITES, dossierDeLaFamille(slug), String(COTE_SPRITE), `${nom}.png`);
+    assert.ok(existsSync(chemin), `« ${nom} » est exclu mais absent du disque — ligne morte`);
+    const { largeur, hauteur } = tailleDuPng(chemin);
+    assert.ok(largeur !== COTE_SPRITE || hauteur !== COTE_SPRITE,
+      `« ${nom} » mesure ${largeur}×${hauteur} : il pourrait être cousu, son exclusion n'a plus lieu d'être`);
+  }
+
+  // Et le témoin : un sprite NON exclu de la même famille EST cousable. Sans
+  // lui, une famille dont tous les fichiers seraient hors gabarit passerait.
+  const temoin = join(SPRITES, 'carte', String(COTE_SPRITE), 'poi_reacteur.png');
+  const t = tailleDuPng(temoin);
+  assert.deepEqual([t.largeur, t.hauteur], [COTE_SPRITE, COTE_SPRITE],
+    'le témoin n\'est pas à la taille de case : le test ne mesure plus rien');
+});
+
 test('sprite — l\'index dit exactement ce que le disque porte', () => {
   // Recalculé en JS depuis le dossier réel, avec le même tri que l'outil :
   // `sorted` sur le nom de fichier, en points de code. `localeCompare` rangerait
@@ -103,9 +162,16 @@ test('sprite — l\'index dit exactement ce que le disque porte', () => {
     const dossier = dossierDeLaFamille(slug);
     assert.ok(existsSync(join(SPRITES, dossier, String(COTE_SPRITE))),
       `famille « ${slug} » : le dossier source ${dossier}/${COTE_SPRITE} est introuvable`);
+    // ⚠ LES EXCLUSIONS SE RETIRENT DU DISQUE AVANT LA COMPARAISON, et elles se
+    // LISENT dans l'outil — voir `exclusionsDeLOutil`. Sans elles, la famille
+    // `carte` serait rouge pour toujours : le disque en porte 45, l'index 43,
+    // les deux grosses bases n'étant pas carrées à la taille de case. Le test
+    // voisin vérifie que chaque exclusion est légitime, dans les deux sens.
+    const exclus = new Set(exclusionsDeLOutil()[slug] ?? []);
     const attendus = readdirSync(join(SPRITES, dossier, String(COTE_SPRITE)))
       .filter((n) => n.endsWith('.png'))
       .map((n) => n.slice(0, -4))
+      .filter((n) => !exclus.has(n))
       .sort();
 
     // ⚠ SANS CETTE LIGNE, DEUX LISTES VIDES SERAIENT ÉGALES. Un dossier
