@@ -51,7 +51,7 @@ PLANCHES = [
     ('off_o_crecelle_busard_frappeur.png',    'aeronef',  ['crecelle', 'busard', 'frappeur'], ''),
     ('off_o_enclume.png',                     'aeronef',  ['enclume'], ''),
     ('off_o_meute_perceurs_carapace_face.png', 'escouade', ['meute', 'perceurs', 'carapace'], '_def'),
-    ('off_o_guetteurs_fouisseur_face.png',    'escouade', ['guetteur', 'fouisseurs'], '_def'),
+    ('off_o_guetteur_fouisseur_face.png',     'escouade', ['guetteur', 'fouisseurs'], '_def'),
     ('off_o_ratisseur_fendeur_belier_face.png', 'blinde', ['ratisseur', 'fendeur', 'belier'], '_def'),
     ('off_o_broyeur_pilon_face.png',          'blinde',   ['broyeur', 'pilon'], '_def'),
 ]

@@ -55,8 +55,8 @@ PLANCHES = [
      ['ressource_a', 'ressource_b', 'reacteur']),
     ('P10.4_poi_bonus_64-256.png',              2, 2, False, 'poi_bonus',
      ['a', 'b', 'c', 'd']),
-    ('ChatGPT Image 28 août 2026, 21_16_42.png', 1, 1, True, 'base_o_2x2', ['']),
-    ('file_0000000077f0820a88f6a88415d71d25.png', 1, 1, True, 'base_o_3x3', ['']),
+    ('S10_base_ouvrage_2x2.png',                 1, 1, True, 'base_o_2x2', ['']),
+    ('S10_base_ouvrage_3x3_finale.png',          1, 1, True, 'base_o_3x3', ['']),
 ]
 
 
