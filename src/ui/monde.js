@@ -24,10 +24,16 @@
 // bouton « Assaut » du lot ÉCRAN-CHANTIER, retiré le 27/08, et elle ne se refait
 // pas. Un test balaie le panneau pour qu'aucun bouton d'action n'y entre.
 
-import { GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE } from '../data/sites.js';
+import {
+  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, palierDeNiveau,
+} from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
+import { saveurDeLaCase } from '../sim/site-de-la-case.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
+import { spriteDuSite, FAMILLE } from '../render/embleme.js';
+import { celluleDuSprite } from '../render/sprite.js';
+import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
 export const CRANS = ZOOM_CARTE.crans;
@@ -147,11 +153,31 @@ export function sitesDeLaFenetre(etat, fenetre) {
     && colonne >= fenetre.premiereColonne
     && colonne <= fenetre.derniereColonne;
 
+  // ⚠⚠ LA SAVEUR SE DEMANDE, ELLE NE SE RECALCULE PAS. `saveurDeLaCase` est pure
+  // et testée depuis le lot SITE-D'UNE-CASE ; en écrire une seconde lecture ici
+  // ferait deux vérités sur ce qu'un camp contient, et la divergence se lirait
+  // comme un bogue de jeu. C'est ce qui manquait pour que les dix-huit
+  // `site_quartz_n*` et `site_scorie_n*` servent : cette fonction-ci ne
+  // transportait que type, rangée, colonne et niveau.
+  //
+  // ⚠ ELLE EST DE LA CASE, PAS DE L'INSTANCE — deux camps successifs au même
+  // endroit sont riches de la même chose (arbitré le 29/08). On ne l'accroche
+  // donc à aucun identifiant de satellite.
+  //
+  // ⚠ ET LES TROIS SITES DE TYPE « BASE » LA DEMANDENT AUSSI, sous le type que
+  // le MODÈLE connaît. `TYPES_SITE` n'a que camp, avantPoste et base : ni
+  // `baseJoueur` ni `baseTerminale` n'y sont, et les deux sont des bases. Leur
+  // passer `'base'` laisse la règle de `saveurDeLaCase` décider — elle rend
+  // `null` —, là où écrire `saveur: null` à la main serait une quatrième
+  // affirmation sur une question qui a déjà sa réponse.
+  const saveur = (rangee, colonne, type) => saveurDeLaCase(etat.graine, rangee, colonne, type);
+
   const sites = basesDeLaFenetre(etat.graine, fenetre).map((base) => ({
     type: 'base',
     rangee: base.rangee,
     colonne: base.colonne,
     niveau: niveauDeLaRangee(base.rangee),
+    saveur: saveur(base.rangee, base.colonne, 'base'),
   }));
 
   for (const satellite of etat.satellites.presents) {
@@ -161,6 +187,7 @@ export function sitesDeLaFenetre(etat, fenetre) {
       rangee: satellite.rangee,
       colonne: satellite.colonne,
       niveau: satellite.niveau,
+      saveur: saveur(satellite.rangee, satellite.colonne, satellite.type),
     });
   }
 
@@ -171,6 +198,7 @@ export function sitesDeLaFenetre(etat, fenetre) {
       rangee: terminale.rangee,
       colonne: terminale.colonne,
       niveau: niveauDeLaRangee(terminale.rangee),
+      saveur: saveur(terminale.rangee, terminale.colonne, 'base'),
     });
   }
 
@@ -181,9 +209,39 @@ export function sitesDeLaFenetre(etat, fenetre) {
       rangee: etat.position.rangee,
       colonne: etat.position.colonne,
       niveau: null,
+      saveur: saveur(etat.position.rangee, etat.position.colonne, 'base'),
     });
   }
   return sites;
+}
+
+/**
+ * Le palier d'emblème d'un site affiché — 1 à 9.
+ *
+ * ⚠⚠ LA BASE DU JOUEUR PORTE `niveau: null`, ET SON PALIER NE PEUT PAS SE LIRE
+ * SUR SA RANGÉE. `niveauDeLaRangee` donne le niveau des sites de l'OUVRAGE à cet
+ * endroit ; l'employer ici serait exactement la faute que `sim/carte.js` existe
+ * pour empêcher, et que l'en-tête de ce fichier nomme déjà.
+ *
+ * ⚠ RETENU : LE NIVEAU DE SES BÂTIMENTS, et c'est un CHOIX RÉVERSIBLE — le seul
+ * point de ce lot qu'Ethan n'a pas arbitré. Le joueur en a trois (bâtiments,
+ * défense, armée) ; celui des bâtiments est ce qu'une base montre de loin, et
+ * c'est aussi celui que l'écran Base affiche en premier. Les deux autres tiennent
+ * en une ligne d'ici.
+ *
+ * ⚠ IL EST EN DIXIÈMES ENTIERS — `moyenneEnDixiemes` — et s'arrondit avant de
+ * chercher un palier. Une base neuve n'a qu'un Chantier de niveau 1, donc 10 :
+ * l'arrondi au plus proche donne 1, et `palierDeNiveau` lève sous 1.
+ *
+ * @param {{type: string, niveau: number|null}} site
+ * @param {object} etat
+ * @returns {number} 1…9
+ */
+export function palierDuSite(site, etat) {
+  if (site.niveau !== null) return palierDeNiveau(site.niveau);
+  const dixiemes = niveauDesBatiments(etat.disposition);
+  const niveau = Math.max(1, Math.round(dixiemes / 10));
+  return palierDeNiveau(niveau);
 }
 
 /**
@@ -314,6 +372,12 @@ export function initialiserEcranMonde(doc) {
   const $ = (id) => doc.getElementById(id);
   const canvas = $('monde-canvas');
   const ctx = canvas.getContext('2d');
+  // ⚠⚠ PAS DE LISSAGE. Un emblème de 64 px source posé sur une case de 32 ou de
+  // 256 px physiques serait interpolé, et le pixel art rendrait flou. C'est la
+  // décision de `ui/banc.js` reprise ici, chez celui qui CRÉE le contexte —
+  // `render/` n'en prend aucune. Les dalles de fond, elles, sont déjà à
+  // l'échelle et n'en souffrent pas.
+  ctx.imageSmoothingEnabled = false;
   const panneau = $('monde-panneau');
   const panneauTitre = $('monde-panneau-titre');
   const panneauCorps = $('monde-panneau-corps');
@@ -329,6 +393,12 @@ export function initialiserEcranMonde(doc) {
   const cache = creerCacheDalles(TERRAIN_CARTE.dallesEnCache);
   let sitesAffiches = [];
   let empreinteSatellites = null;
+  // ⚠ L'IMAGE DES EMBLÈMES, ATTENDUE AVANT LE PREMIER DESSIN. Une image dessinée
+  // avant décodage est BLANCHE, et le défaut ne se reproduit qu'au tout premier
+  // chargement — donc jamais en essai, toujours chez le joueur. `monde.js`
+  // attendait déjà son atlas de terrain de cette façon ; on suit le précédent.
+  let emblemes = null;
+  let emblemesDemandes = false;
 
   const cran = () => CRANS[cranIndex];
 
@@ -360,6 +430,26 @@ export function initialiserEcranMonde(doc) {
     atlas = creerAtlas(
       indicesDeTeinte(rvba), ZOOM_CARTE.pixelsParTuile, image.naturalWidth,
     );
+    dessiner();
+  }
+
+  /**
+   * L'atlas des emblèmes, attendu puis gardé.
+   *
+   * ⚠ CONTRAIREMENT À L'ATLAS DE TERRAIN, IL NE SE DÉCODE PAS EN PIXELS. Le fond
+   * de carte a besoin de lire ses tuiles pour les accumuler ; un emblème se
+   * découpe et se pose par `drawImage`, qui prend l'`<img>` telle quelle. Il n'y
+   * a donc ni canevas tampon ni `getImageData` — seulement l'attente du décodage.
+   */
+  function chargerEmblemes() {
+    if (emblemes !== null || emblemesDemandes) return;
+    emblemesDemandes = true;
+    const image = $('monde-emblemes');
+    if (!image.complete || image.naturalWidth === 0) {
+      image.addEventListener('load', () => { emblemesDemandes = false; chargerEmblemes(); }, { once: true });
+      return;
+    }
+    emblemes = image;
     dessiner();
   }
 
@@ -485,37 +575,64 @@ export function initialiserEcranMonde(doc) {
   }
 
   /**
-   * Un emblème : carré arrondi, bord, lettre.
+   * Un emblème : son sprite, et sa lettre au-dessus du seuil.
    *
-   * ⚠ CE SONT DES GABARITS, ET ILS LE DISENT. Les treize emblèmes du lot 6 sont
-   * spécifiés par `INVENTAIRE-SPRITES.md` et aucun fichier n'existe. La lettre
-   * n'apparaît qu'au-delà de `CSS_MINI_LETTRE` pixels CSS : plus petite, elle
-   * fait une tache et n'apprend rien de plus que la couleur du bord.
+   * ⚠⚠ LE SPRITE A REMPLACÉ LE CARRÉ ARRONDI AU LOT CARTE-EMBLÈMES. Le
+   * commentaire qui était ici disait que « aucun fichier n'existe » : les
+   * quarante-cinq sont au dépôt depuis le lot 6, et aucun n'était branché. Le
+   * gabarit reste en REPLI tant que l'image n'est pas décodée — une image
+   * dessinée trop tôt est blanche, et un carré vaut mieux qu'un trou.
+   *
+   * ⚠ LA LETTRE RESTE, ET SON SEUIL NE BOUGE PAS. `CSS_MINI_LETTRE` existe
+   * depuis le lot ÉCRAN-CARTE et vaut 40 px CSS : à `devicePixelRatio` 2, les
+   * deux crans les plus SERRÉS (128 et 256 px physiques) la portent, les deux
+   * plus larges non. C'est exactement le comportement voulu — un emblème vaut
+   * 10,7 px CSS au cran le plus large, où une lettre ferait une tache. **Aucun
+   * second seuil n'a été créé** ; celui-là a été cherché et trouvé.
+   *
+   * ⚠ L'ÉCHELLE SE LIT DANS `ZOOM_CARTE`. Un emblème est dessiné à la taille
+   * d'une case, quelle que soit la grille source : `drawImage` met la cellule de
+   * `grilleEmbleme` pixels à `taille` pixels, et le rapport suit tout seul le
+   * jour où un cran bougera.
    */
   function dessinerEmbleme(site, x, y, taille) {
     const embleme = EMBLEMES_CARTE[site.type];
-    const marge = Math.max(1, Math.round(taille / 8));
-    const cote = taille - marge * 2;
-    const rayon = Math.max(1, Math.round(cote / 5));
     const trait = Math.max(1, Math.round(taille / 16));
-    ctx.fillStyle = embleme.fond;
-    ctx.lineWidth = trait;
-    ctx.strokeStyle = embleme.bord;
-    // `roundRect` n'existe que depuis Chrome 99. L'enveloppe vise bien plus
-    // haut, mais un gabarit d'attente n'est pas ce pour quoi on veut faire
-    // tomber tout un écran sur un appareil ancien : à défaut, un carré net.
-    if (typeof ctx.roundRect === 'function') {
-      ctx.beginPath();
-      ctx.roundRect(x + marge, y + marge, cote, cote, rayon);
-      ctx.fill();
-      ctx.stroke();
+
+    if (emblemes !== null) {
+      const cellule = celluleDuSprite(FAMILLE, spriteDuSite(
+        site.type, palierDuSite(site, etatCourant), site.saveur,
+      ));
+      ctx.drawImage(
+        emblemes,
+        cellule.x, cellule.y, cellule.cote, cellule.cote,
+        Math.round(x), Math.round(y), taille, taille,
+      );
     } else {
-      ctx.fillRect(x + marge, y + marge, cote, cote);
-      ctx.strokeRect(x + marge, y + marge, cote, cote);
+      // Repli d'attente : le gabarit du lot ÉCRAN-CARTE, tel quel.
+      const marge = Math.max(1, Math.round(taille / 8));
+      const cote = taille - marge * 2;
+      const rayon = Math.max(1, Math.round(cote / 5));
+      ctx.fillStyle = embleme.fond;
+      ctx.lineWidth = trait;
+      ctx.strokeStyle = embleme.bord;
+      // `roundRect` n'existe que depuis Chrome 99. L'enveloppe vise bien plus
+      // haut, mais un gabarit d'attente n'est pas ce pour quoi on veut faire
+      // tomber tout un écran sur un appareil ancien : à défaut, un carré net.
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(x + marge, y + marge, cote, cote, rayon);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(x + marge, y + marge, cote, cote);
+        ctx.strokeRect(x + marge, y + marge, cote, cote);
+      }
     }
+
     if (taille / (fenetre.devicePixelRatio || 1) < CSS_MINI_LETTRE) return;
     ctx.fillStyle = embleme.bord;
-    ctx.font = `600 ${Math.round(cote * 0.6)}px system-ui, sans-serif`;
+    ctx.font = `600 ${Math.round(taille * 0.45)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(embleme.lettre, x + taille / 2, y + taille / 2 + trait / 2);
@@ -657,6 +774,7 @@ export function initialiserEcranMonde(doc) {
     visible = true;
     empreinteSatellites = `${etat.satellites.presents.length}:${etat.satellites.prochaineInstance}`;
     chargerAtlas();
+    chargerEmblemes();
     dimensionner();
     if (premiere) centrerSur(etat.position);
     majBoutons();

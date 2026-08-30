@@ -549,6 +549,51 @@ export const TERRAIN_CARTE = {
 // `TYPES_SITE.base.attaqueLeJoueur` le dit déjà. Camp et avant-poste sont en
 // ambre parce qu'ils sont du butin, pas une menace. Un test croise les deux
 // tables plutôt que de recopier la liste.
+// --- les paliers d'emblème ----------------------------------------------------
+// ⚠⚠ ARBITRÉ PAR ETHAN LE 30/08 : « Emblème de 1 à 9, 10 à 14, 15 à 19 etc.
+// 9 sprites. » Le premier palier couvre neuf niveaux, les suivants cinq.
+//
+// ⚠ ELLE SE CALCULE, ELLE NE SE TABULE PAS. Une table de cinquante lignes serait
+// une SECONDE vérité sur la même règle — celle que CLAUDE.md §4 interdit — et la
+// première à diverger le jour où le plafond de niveau bougerait.
+//
+// ⚠⚠ ET LA NEUVIÈME BANDE ABSORBE LE 50. Huit bandes de cinq après le premier
+// palier s'arrêteraient à 49 ; or `niveauDeLaRangee` rend 50 pour TOUTES les
+// rangées de 1 à 50 — mesuré —, donc un site de niveau 50 n'aurait pas
+// d'emblème. La borne haute est le niveau maximum, pas 49. **Un site sans
+// emblème est le seul résultat exclu** ; si Ethan veut autre chose, c'est lui
+// qui tranche, et c'est cette ligne-ci qui change.
+export const PALIERS_EMBLEME = {
+  /** Le dernier niveau du premier palier — celui qui en couvre neuf. */
+  premierPalierJusqua: 9,
+  /** Largeur de chaque bande suivante. */
+  largeurDeBande: 5,
+  /** Combien de paliers en tout — le nombre de sprites `n1`…`n9`. */
+  nombre: 9,
+};
+
+/**
+ * Le palier d'emblème d'un niveau de site — de 1 à 9.
+ *
+ * ⚠ ELLE LÈVE HORS DE 1…50 plutôt que de rendre un palier par défaut. Un niveau
+ * hors bornes est une faute de programme, pas un fait de jeu : le masquer
+ * dessinerait le mauvais emblème sans que rien ne le dise.
+ *
+ * @param {number} niveau 1…`GEOGRAPHIE.niveauPlafond`
+ * @returns {number} 1…9
+ */
+export function palierDeNiveau(niveau) {
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+    throw new RangeError(
+      `emblème : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`,
+    );
+  }
+  const { premierPalierJusqua, largeurDeBande, nombre } = PALIERS_EMBLEME;
+  if (niveau <= premierPalierJusqua) return 1;
+  const palier = 2 + Math.floor((niveau - premierPalierJusqua - 1) / largeurDeBande);
+  return palier > nombre ? nombre : palier;
+}
+
 export const EMBLEMES_CARTE = {
   base: { fond: '#231D2E', bord: '#E43E32', lettre: 'B', nom: 'Base de l\'Ouvrage' },
   camp: { fond: '#231D2E', bord: '#F5B636', lettre: 'C', nom: 'Camp' },

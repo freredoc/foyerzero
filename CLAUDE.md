@@ -41,11 +41,16 @@ Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot CHAÎNE-VÉRIFIÉE), à confronter :**
-`npm test` → **600 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 074 070 octets**, 0 référence externe. CHAÎNE-VÉRIFIÉE n'a touché ni `src/`
-ni `test/` : le HTML ressort identique à l'octet, SHA-256 compris, donc **la
-version n'a PAS été bumpée** — elle reste 0.46.0 · build 47.
+**Référence au 30/08/2026 (après le lot CARTE-EMBLÈMES), à confronter :**
+`npm test` → **608 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 229 274 octets**, 0 référence externe. CARTE-EMBLÈMES a coûté **+155 204
+octets**, dont **152 443 d'images** : l'atlas `carte` (43 sprites, 115 405 o en
+base64) et les deux grosses bases hors atlas (37 038 o). **La borne T10 est
+passée de 1 150 000 à 1 300 000**, marge 70 726, soit 5,4 % — elle monte parce
+qu'une ressource entre légitimement, jamais pour faire passer un débordement.
+Auparavant, CHAÎNE-VÉRIFIÉE n'avait touché ni `src/` ni `test/` : le HTML était
+ressorti identique à l'octet, SHA-256 compris, donc **sa version n'avait PAS été
+bumpée**, et la référence était 600 pass / 1 074 070 octets / 0.46.0 · build 47.
 `python3 tools/verifier.py` → **1 370 identiques · 2 différents (les deux
 déclarés) · 0 nouveau · 56 MANQUANTS**, en 125 s, code de sortie **1**.
 ⚠ **CE 1 EST LE VERDICT, PAS UNE PANNE**, et il se lit au §6 : les 56 manquants
@@ -326,12 +331,23 @@ src/sim/                simulation déterministe, sans DOM — 20 fichiers
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 8 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 9 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
+  embleme.js            quel dessin porte un site de la carte : palier, saveur, emprise
+  ⤷ ⚠⚠ AU SINGULIER, ET CE N'EST PAS NÉGOCIABLE. `tools/emblemes.py` produit les
+    sprites que ce module nomme ; un sélecteur de téléphone n'affiche que les
+    noms courts, et deux fichiers qui ne diffèrent que par un `s` final sont
+    exactement l'accident du 27/08 où le moteur de combat a été écrasé (§6,
+    homonymes).
+  ⤷ ⚠ IL PORTE LE PRÉ-BRANCHEMENT DES NEUF SPRITES QUE RIEN NE DESSINE — les
+    sept POI et les deux grosses bases. Le modèle ne produit aucun POI et une
+    base ne connaît pas sa taille ; ajouter ces types à `EMBLEMES_CARTE` écrirait
+    dans la table du MODÈLE une entrée que le modèle ne produit pas. Le
+    pré-branchement se fait donc entièrement du côté du DESSIN.
   ⤷ ⚠⚠ LE LECTEUR D'ATLAS NE PORTE PAS LE NOM COURT DE SA PROPRE SOURCE, et ce
     n'est pas négociable : la table qu'il lit vit dans `src/data/` sous un nom
     que le sélecteur d'un téléphone afficherait à l'identique. C'est exactement

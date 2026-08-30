@@ -18,10 +18,19 @@ import {
   CRANS, CRAN_PAR_DEFAUT, CSS_MINI_LETTRE, DALLES_PAR_IMAGE,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, creerCacheDalles, indicesDeTeinte, teinteDAttente,
+  palierDuSite,
 } from '../src/ui/monde.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE,
+  palierDeNiveau, PALIERS_EMBLEME,
 } from '../src/data/sites.js';
+import {
+  spriteDuSite, SPRITES_POI, SPRITES_GROSSE_BASE, nomsPreBranches,
+  empriseDeLaGrosseBase, dessinerGrosseBase, FAMILLE,
+} from '../src/render/embleme.js';
+import { existeDansAtlas } from '../src/render/sprite.js';
+import { ATLAS } from '../src/data/atlas.js';
+import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
@@ -505,4 +514,247 @@ test('session — l\'écran Monde est déclaré, allumé, et retiré quand on le
     'la carte ne se met plus en scène quand on l\'ouvre');
   assert.ok(/ecranMonde\.rafraichir\(etat\)/.test(session),
     'la carte ne se rafraîchit pas : les satellites paraîtraient sans qu\'elle le voie');
+});
+
+// ---------------------------------------------------------------------------
+// Les emblèmes — lot CARTE-EMBLÈMES
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE QUE CE BLOC GARDE : que chaque site de la carte résolve un dessin qui
+// EXISTE. Les 45 sprites de `art/sprites/carte/` étaient au dépôt depuis le lot
+// 6 et aucun n'était branché ; l'écran dessinait un carré de couleur et une
+// lettre, et rien ne pouvait dire que l'art et le code parlaient du même objet.
+
+test('paliers — les huit bornes de la règle, et neuf paliers distincts sur cinquante niveaux', () => {
+  // ⚠ ARBITRÉ PAR ETHAN LE 30/08 : « Emblème de 1 à 9, 10 à 14, 15 à 19 etc.
+  // 9 sprites. » Les bornes sont celles du brief, recopiées comme un contrat.
+  const BORNES = [[1, 1], [9, 1], [10, 2], [14, 2], [15, 3], [44, 8], [45, 9], [50, 9]];
+  for (const [niveau, palier] of BORNES) {
+    assert.equal(palierDeNiveau(niveau), palier, `niveau ${niveau}`);
+  }
+
+  // ⚠⚠ SANS CETTE MOITIÉ, UNE FONCTION CONSTANTE PASSERAIT LES BORNES UNE À UNE.
+  // Le compte des paliers distincts est ce qui mesure la RÈGLE, pas ses points.
+  const vus = new Set();
+  for (let n = 1; n <= GEOGRAPHIE.niveauPlafond; n += 1) vus.add(palierDeNiveau(n));
+  assert.equal(vus.size, PALIERS_EMBLEME.nombre,
+    `${vus.size} paliers distincts sur les ${GEOGRAPHIE.niveauPlafond} niveaux`);
+  assert.deepEqual([...vus].sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+  // ⚠ ET LA NEUVIÈME BANDE ABSORBE LE 50. Huit bandes de cinq après le premier
+  // palier s'arrêteraient à 49 ; or `niveauDeLaRangee` rend 50 pour toutes les
+  // rangées de 1 à 50, donc de tels sites existent. **Un site sans emblème est
+  // le seul résultat exclu.**
+  const niveauxReels = new Set();
+  for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) niveauxReels.add(niveauDeLaRangee(r));
+  assert.ok(niveauxReels.has(GEOGRAPHIE.niveauPlafond),
+    'aucune rangée n\'atteint le plafond : la neuvième bande ne prouverait rien');
+  for (const n of niveauxReels) assert.doesNotThrow(() => palierDeNiveau(n), `niveau ${n}`);
+});
+
+test('paliers — hors de 1…50, ça lève', () => {
+  for (const mauvais of [0, -1, GEOGRAPHIE.niveauPlafond + 1, 3.5, NaN, null, undefined]) {
+    assert.throws(() => palierDeNiveau(mauvais), /hors de/, `« ${mauvais} » passe`);
+  }
+  // Témoin : les bornes valides ne lèvent pas, sinon une fonction qui lève
+  // toujours passerait la boucle ci-dessus.
+  assert.doesNotThrow(() => palierDeNiveau(1));
+  assert.doesNotThrow(() => palierDeNiveau(GEOGRAPHIE.niveauPlafond));
+});
+
+test('emblèmes — le palier de la base du joueur vient de ses BÂTIMENTS, pas de sa rangée', () => {
+  // ⚠⚠ C'EST LA FAUTE QUE `sim/carte.js` EXISTE POUR EMPÊCHER, et l'en-tête de
+  // `ui/monde.js` la nomme déjà : `niveauDeLaRangee` donne le niveau des sites de
+  // l'OUVRAGE à cet endroit de la carte. La base du joueur porte TROIS niveaux
+  // qui lui sont propres, chacun une moyenne de ce qu'il a posé, et aucun ne se
+  // déduit d'une position.
+  //
+  // ⚠⚠ ET LE MONTAGE DOIT SÉPARER LES DEUX LECTURES, sans quoi il ne mesure
+  // rien. À la rangée de DÉPART — 275, niveau 5, palier 1 — une base neuve donne
+  // aussi le palier 1 : les deux lectures coïncident, et une version qui lirait
+  // la rangée passerait. Mesuré, pas supposé. On place donc la base là où la
+  // rangée donnerait le palier 9.
+  const etat = creerEtat(4242);
+  etat.position = { rangee: 50, colonne: 16 };
+  const parLaRangee = palierDeNiveau(niveauDeLaRangee(50));
+  const site = { type: 'baseJoueur', rangee: 50, colonne: 16, niveau: null, saveur: null };
+  const rendu = palierDuSite(site, etat);
+
+  assert.equal(parLaRangee, 9, 'la rangée 50 ne donne plus le palier 9 : le montage ne sépare rien');
+  assert.notEqual(rendu, parLaRangee,
+    'le palier de la base du joueur suit sa rangée — c\'est le niveau de l\'Ouvrage, pas le sien');
+  assert.equal(rendu, 1, 'une base neuve n\'a qu\'un Chantier de niveau 1, donc le palier 1');
+
+  // ⚠ ET IL SUIT BIEN LES BÂTIMENTS. Sans ce second montage, une fonction qui
+  // rendrait toujours 1 passerait les trois lignes ci-dessus.
+  const monte = creerEtat(4242);
+  monte.position = { rangee: 50, colonne: 16 };
+  for (const b of monte.disposition) b.niveau = 30;
+  assert.equal(palierDuSite(site, monte), palierDeNiveau(30),
+    'monter les bâtiments ne change pas le palier : il ne les lit pas');
+  assert.notEqual(palierDuSite(site, monte), rendu);
+});
+
+test('emblèmes — chaque site de la fenêtre résout un sprite qui est dans l\'atlas', () => {
+  // Balayage direct : les cinq types × les deux saveurs × les neuf paliers.
+  const noms = new Set();
+  for (const type of Object.keys(EMBLEMES_CARTE)) {
+    for (const saveur of ['richeQuartz', 'richeScorie']) {
+      for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
+        const nom = spriteDuSite(type, palier, saveur);
+        assert.ok(existeDansAtlas(FAMILLE, nom),
+          `${type}/${saveur}/n${palier} demande « ${nom} », absent de l'atlas`);
+        noms.add(nom);
+      }
+    }
+  }
+  // ⚠ FALSIFIABLE : une fonction qui rendrait toujours le même nom passerait
+  // toutes les assertions ci-dessus. Le compte est **36** : 9 `site_base_o_n*`,
+  // 9 `site_base_j_n*`, 9 `site_quartz_n*` et 9 `site_scorie_n*`.
+  //
+  // ⚠⚠ LA TERMINALE N'AJOUTE AUCUN NOM, ET C'EST LE DÉFAUT QUE LE BRIEF POSE.
+  // Elle prend `site_base_o_n9` faute de sprite propre, donc elle se confond
+  // avec une base de l'Ouvrage du dernier palier. Ce test le CHIFFRE plutôt que
+  // de le laisser passer inaperçu : le jour où elle gagnera son dessin — la
+  // grosse base 3 × 3 en est le candidat naturel —, ce 36 deviendra 37 et
+  // quelqu'un relira ce paragraphe. **C'est un arbitrage d'Ethan.**
+  assert.equal(noms.size, 36, `${noms.size} noms distincts composés`);
+  assert.equal(spriteDuSite('baseTerminale', 1, null), spriteDuSite('base', 9, null),
+    'la terminale a gagné un dessin propre — mettre le compte ci-dessus à jour');
+
+  // Et par la VRAIE liste de sites, celle que l'écran dessine.
+  const etat = creerEtat(4242);
+  const sites = sitesDeLaFenetre(etat, fenetreVisible({
+    x: 0, y: 0, largeur: 1200, hauteur: 1600, cran: CRANS[0],
+  }));
+  assert.ok(sites.length > 1, `${sites.length} site(s) dans la fenêtre : le balayage ne mesure rien`);
+  for (const site of sites) {
+    const nom = spriteDuSite(site.type, palierDuSite(site, etat), site.saveur);
+    assert.ok(existeDansAtlas(FAMILLE, nom),
+      `site ${site.type} en (${site.rangee}, ${site.colonne}) → « ${nom} », absent`);
+  }
+});
+
+test('emblèmes — la saveur voyage jusqu\'au sprite, et elle vient de la case', () => {
+  // ⚠⚠ IL FAUT DEUX CASES DE SAVEURS DIFFÉRENTES, ET IL FAUT L'ASSERTER AVANT.
+  // Sans ça, le test passerait sur une coïncidence de graine : deux cases de
+  // même saveur donneraient deux fois le même sprite et l'égalité serait vraie
+  // pour la mauvaise raison.
+  const GRAINE = 4242;
+  let quartz = null;
+  let scorie = null;
+  for (let r = 100; r <= 260 && (quartz === null || scorie === null); r += 1) {
+    for (let c = 1; c <= 31; c += 1) {
+      const s = saveurDeLaCase(GRAINE, r, c, 'camp');
+      if (s === 'richeQuartz' && quartz === null) quartz = { rangee: r, colonne: c };
+      if (s === 'richeScorie' && scorie === null) scorie = { rangee: r, colonne: c };
+    }
+  }
+  assert.ok(quartz !== null && scorie !== null, 'le balayage n\'a pas trouvé les deux saveurs');
+
+  const nomQuartz = spriteDuSite('camp', 5, saveurDeLaCase(GRAINE, quartz.rangee, quartz.colonne, 'camp'));
+  const nomScorie = spriteDuSite('camp', 5, saveurDeLaCase(GRAINE, scorie.rangee, scorie.colonne, 'camp'));
+  assert.notEqual(nomQuartz, nomScorie,
+    'deux saveurs différentes donnent le même sprite : la saveur ne voyage pas');
+  assert.equal(nomQuartz, 'site_quartz_n5');
+  assert.equal(nomScorie, 'site_scorie_n5');
+
+  // ⚠⚠ ET IL FAUT DES SATELLITES POSÉS, SANS QUOI LE MONTAGE NE MESURE RIEN.
+  // Une partie neuve n'en a AUCUN — `creerEtat` les met en attente, à 3 000
+  // ticks. Le premier jet de ce test bouclait donc sur des bases seules, dont la
+  // saveur est `null` des deux côtés : remplacer la saveur d'un satellite par
+  // une constante, ou la lire sur la mauvaise rangée, le laissait VERT. C'est la
+  // faute que CLAUDE.md nomme déjà — « un montage écrit à la main ne garde que
+  // lui-même » —, et les deux camps ci-dessous sont posés À LA MAIN, comme un
+  // état HÉRITÉ, ce que le dépôt autorise explicitement pour cette raison.
+  const etat = creerEtat(GRAINE);
+  etat.satellites.presents.push(
+    { type: 'camp', rangee: quartz.rangee, colonne: quartz.colonne, niveau: 5, instance: 1 },
+    { type: 'camp', rangee: scorie.rangee, colonne: scorie.colonne, niveau: 5, instance: 2 },
+  );
+  const fenetreLarge = {
+    premiereRangee: 1, derniereRangee: GEOGRAPHIE.carte.hauteur,
+    premiereColonne: 1, derniereColonne: GEOGRAPHIE.carte.largeur,
+  };
+  const sites = sitesDeLaFenetre(etat, fenetreLarge);
+  assert.ok(sites.length > 0, 'aucun site : le contrôle ne mesure rien');
+
+  // ⚠ LE TÉMOIN QUI MANQUAIT : au moins un site porte une saveur NON nulle, et
+  // les deux saveurs sont représentées. Sans lui, tout ce qui suit comparerait
+  // `null` à `null`.
+  const saveursVues = new Set(sites.map((x) => x.saveur));
+  assert.ok(saveursVues.has('richeQuartz') && saveursVues.has('richeScorie'),
+    `saveurs vues : ${[...saveursVues].join(', ')} — le montage ne porte pas les deux`);
+  for (const site of sites) {
+    const attendu = saveurDeLaCase(
+      etat.graine, site.rangee, site.colonne,
+      site.type === 'camp' || site.type === 'avantPoste' ? site.type : 'base',
+    );
+    assert.equal(site.saveur, attendu, `saveur divergente en (${site.rangee}, ${site.colonne})`);
+  }
+
+  // Le témoin : `sitesDeLaFenetre` porte bien le champ. Sans lui, `undefined`
+  // égalerait `undefined` pour les bases et le test passerait sur du vide.
+  for (const site of sites) {
+    assert.ok(Object.prototype.hasOwnProperty.call(site, 'saveur'),
+      `le site ${site.type} ne porte pas de champ « saveur »`);
+  }
+});
+
+test('emblèmes — les neuf pré-branchés sont joignables, pas seulement présents', () => {
+  // ⚠⚠ RIEN NE LES DESSINE, ET C'EST DIT. Le modèle ne produit aucun site de
+  // type POI, et une base ne connaît pas sa taille — `sim/peuplement.js` pose
+  // des bases d'UNE case. Ce test est ce qui empêche l'art de pourrir en
+  // attendant son modèle : le jour où le modèle en produira, SEUL le modèle
+  // changera.
+  assert.equal(SPRITES_POI.length, 7, `${SPRITES_POI.length} POI — le compte a changé`);
+  assert.equal(Object.keys(SPRITES_GROSSE_BASE).length, 2);
+  assert.equal(nomsPreBranches().length, 9);
+
+  // Les sept POI sont DANS l'atlas.
+  for (const nom of SPRITES_POI) {
+    assert.ok(existeDansAtlas(FAMILLE, nom), `« ${nom} » n'est pas dans l'atlas`);
+  }
+
+  // ⚠ LES DEUX GROSSES BASES N'Y SONT PAS, ET C'EST LE POINT. Elles ne sont pas
+  // carrées à la taille de case, donc `coudre` les refuse ; elles voyagent par
+  // leur propre marqueur. Leur joignabilité se mesure sur le DISQUE.
+  for (const nom of Object.values(SPRITES_GROSSE_BASE)) {
+    assert.ok(!existeDansAtlas(FAMILLE, nom),
+      `« ${nom} » est dans l'atlas : il n'a plus besoin de son marqueur`);
+    const chemin = join(RACINE, 'art', 'sprites', 'carte', '64', `${nom}.png`);
+    assert.ok(readFileSync(chemin).length > 0, `« ${nom} » est absent du disque`);
+  }
+
+  // Et leur emprise. Une 3 × 3 se centre ; une 2 × 2 n'a pas de centre, donc la
+  // case du site est son coin HAUT-GAUCHE — choix réversible, dit au rapport.
+  assert.deepEqual(empriseDeLaGrosseBase(3, { rangee: 10, colonne: 10 }),
+    { rangee: 9, colonne: 9, cotes: 3 });
+  assert.deepEqual(empriseDeLaGrosseBase(2, { rangee: 10, colonne: 10 }),
+    { rangee: 10, colonne: 10, cotes: 2 });
+  assert.throws(() => empriseDeLaGrosseBase(4, { rangee: 1, colonne: 1 }), /grosse base/);
+});
+
+test('emblèmes — `ZOOM_CARTE` est la source des échelles, et le dessin la suit', () => {
+  // ⚠ CE TEST TOMBE SI UN CRAN CHANGE DANS LES DONNÉES SANS QUE LE DESSIN SUIVE.
+  // Les nombres ne sont pas recopiés : ils se LISENT dans `ZOOM_CARTE`.
+  assert.ok(ZOOM_CARTE.crans.length > 1, 'un seul cran : l\'échelle ne mesure rien');
+  assert.equal(CRANS, ZOOM_CARTE.crans, 'l\'écran a recopié les crans au lieu de les lire');
+
+  for (const cran of ZOOM_CARTE.crans) {
+    const d = dessinerGrosseBase(3, { rangee: 10, colonne: 10 }, cran, { x: 0, y: 0 });
+    // Une grosse base couvre `cotes` cases, donc `cran × cotes` pixels de côté.
+    assert.equal(d.cote, cran * 3, `cran ${cran} : côté ${d.cote}`);
+    // Et elle se pose à son coin, en pixels ENTIERS — un `drawImage` à une
+    // position fractionnaire rééchantillonne et rend le pixel art flou.
+    assert.ok(Number.isInteger(d.x) && Number.isInteger(d.y), `cran ${cran} : coin non entier`);
+    assert.equal(d.x, (10 - 1 - 1) * cran, `cran ${cran} : la 3 × 3 ne se centre pas`);
+  }
+  // Un cran hors table est refusé : le dessin ne s'invente pas une échelle.
+  assert.throws(() => dessinerGrosseBase(3, { rangee: 10, colonne: 10 }, 99, { x: 0, y: 0 }), /cran/);
+
+  // ⚠ ET LA GRILLE SOURCE EST LUE, ELLE AUSSI. `grilleEmbleme` dit la taille
+  // d'une cellule d'emblème ; c'est elle que `celluleDuSprite` doit rendre.
+  assert.equal(ZOOM_CARTE.grilleEmbleme, ATLAS[FAMILLE] === undefined ? null : 64,
+    'la grille d\'emblème ne correspond plus à la grille de couture');
 });

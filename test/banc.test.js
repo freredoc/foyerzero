@@ -513,13 +513,29 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // base64** mesurés par `tools/atlas.py`. Mesuré après le lot :
   // **1 073 238 octets**, marge 76 762, soit 6,7 %.
   //
-  // ⚠⚠ LES SEPT FAMILLES SONT DÉSORMAIS TOUTES COUSUES, sauf `carte` et `effet`
-  // — la première attend trois arbitrages d'Ethan, la seconde un événement de
-  // mort que le moteur ne publie pas. Le livrable a donc atteint sa taille de
-  // croisière : la prochaine hausse ne viendra plus d'un atlas d'unité mais de
-  // ces deux-là, et elle devra dire pourquoi, comme les trois précédentes.
+  // ⚠⚠ RELEVÉE À 1 300 000 AU LOT CARTE-EMBLÈMES, le 30/08, ET LA PRÉCÉDENTE
+  // LIGNE ANNONÇAIT DÉJÀ CETTE HAUSSE : « la prochaine ne viendra plus d'un
+  // atlas d'unité mais de `carte` et d'`effet` ». C'est `carte` qui entre.
+  // Trois ressources, mesurées par `tools/atlas.py` et par le disque :
+  //   • l'atlas `carte`, 43 sprites en 7 × 7 — 86 554 o, **115 405 en base64** ;
+  //   • `base_o_2x2`, 128 × 128, hors atlas — 11 351 o, **15 134 en base64** ;
+  //   • `base_o_3x3`, 192 × 192, hors atlas — 16 428 o, **21 904 en base64**.
+  // Soit **152 443 octets** d'images, plus le code qui les pose. Mesuré après le
+  // lot : **1 229 274 octets**, marge 70 726, soit 5,4 %.
+  //
+  // ⚠ LES DEUX GROSSES BASES SONT HORS ATLAS PARCE QU'ELLES NE SONT PAS CARRÉES
+  // À LA TAILLE DE CASE — 2 × 2 et 3 × 3 cases —, et `tools/atlas.py` les exclut
+  // nommément EN ASSERTANT qu'elles ne le sont pas. Elles pèsent 37 038 octets
+  // pour un pré-branchement que rien ne dessine encore ; c'est écrit au rapport
+  // du lot, avec ce que ça achète et ce que ça coûte.
+  //
+  // ⚠ IL NE RESTE QU'`effet`, qui attend un événement de mort que le moteur ne
+  // publie pas. Elle sera la dernière hausse de cette série, et elle devra dire
+  // pourquoi, comme les quatre précédentes. **On ne rogne jamais un atlas pour
+  // passer sous la borne** (CLAUDE.md §5) : c'est la borne qui monte, et le lot
+  // qui l'écrit.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 1_150_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 1_300_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

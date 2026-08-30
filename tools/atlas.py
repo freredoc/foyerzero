@@ -59,37 +59,64 @@ COTE = 64
 #
 # Le slug est ASCII parce qu'il devient un nom de fichier, un marqueur de build
 # et une clé JavaScript ; « bâtiment » ne peut être aucun des trois sans risque.
+# ⚠⚠ TROIS CHAMPS PAR ENTRÉE DEPUIS LE LOT CARTE-EMBLÈMES : slug, effectif COUSU,
+# et les fichiers EXCLUS de la couture. Le troisième est explicite et vaut `()`
+# partout ailleurs — un champ optionnel aurait laissé croire qu'une famille sans
+# exclusion n'a pas eu à en décider.
 FAMILLES = {
-    'bâtiment': ('batiment', 34),   # 16 intacts + 16 détruits + 2 ruines, lot 10 du 30/08
-    'terrain': ('terrain', 18),
-    'defense': ('defense', 204),    # 9 pièces × orientations et liaisons, deux camps
-    'socle': ('socle', 36),         # les socles des tourelles, deux camps
-    'unite': ('unite', 36),         # les 14 unités des deux camps, poses d'attaque et de défense
-    'chassis': ('chassis', 10),     # les coques de blindé du JOUEUR seul, attaque et défense
+    'bâtiment': ('batiment', 34, ()),   # 16 intacts + 16 détruits + 2 ruines, lot 10 du 30/08
+    'terrain': ('terrain', 18, ()),
+    'defense': ('defense', 204, ()),    # 9 pièces × orientations et liaisons, deux camps
+    'socle': ('socle', 36, ()),         # les socles des tourelles, deux camps
+    'unite': ('unite', 36, ()),         # les 14 unités des deux camps, poses d'attaque et de défense
+    'chassis': ('chassis', 10, ()),     # les coques de blindé du JOUEUR seul, attaque et défense
     # ⚠ LE SLUG PREND UN SOULIGNÉ, PAS UN TIRET : il devient une clé JavaScript,
     # et `ATLAS['tourelle-unite']` s'écrirait mais `ATLAS.tourelle-unite` non.
-    'tourelle-unite': ('tourelle_unite', 80),  # 5 blindés joueur × 16 orientations
+    'tourelle-unite': ('tourelle_unite', 80, ()),  # 5 blindés joueur × 16 orientations
+    # ⚠⚠ 43 COUSUS SUR 45 SUR LE DISQUE. Les deux grosses bases de l'Ouvrage
+    # mesurent 128×128 et 192×192 à la grille 64 — elles couvrent 2×2 et 3×3
+    # cases — et `coudre` exige `COTE × COTE` : les laisser entrer ferait sortir
+    # l'outil en erreur. Elles voyagent chacune dans son propre marqueur, comme
+    # l'atlas de terrain de la carte du monde. Un atlas d'un seul sprite ne coud
+    # rien.
+    'carte': ('carte', 43, ('base_o_2x2', 'base_o_3x3')),
 }
 
-# Les familles restantes, pour mémoire, avec leur effectif relevé le 30/08 :
-#   socle 36 · defense 200 · unite 36 · tourelle-unite 160 · carte 45
 
-
-def sprites_de(dossier, effectif):
+def sprites_de(dossier, effectif, exclus):
     """Les chemins d'une famille, dans l'ordre qui fait l'index.
 
     L'ordre est celui de `sorted` sur le nom de fichier — points de code, pas
     locale : le tri d'une locale française rangerait `off_o_belier_def` et
     `off_o_belier` autrement selon la machine, et l'index cesserait d'être
     reproductible.
+
+    ⚠⚠ UNE EXCLUSION SE JUSTIFIE DANS LES DEUX SENS. Le fichier exclu doit
+    EXISTER et ne doit PAS être `COTE × COTE` : sans cette seconde moitié, une
+    exclusion deviendrait un moyen de faire disparaître un sprite cassé, ou de
+    laisser pourrir un nom qui ne désigne plus rien. Même discipline que les
+    écarts permanents de `planches.py` et de `verifier.py`.
     """
     chemin = os.path.join(SPRITES, dossier, str(COTE))
     if not os.path.isdir(chemin):
         echec(f'{dossier}/{COTE} est absent du dépôt')
-    noms = sorted(n[:-4] for n in os.listdir(chemin) if n.endswith('.png'))
+    tous = sorted(n[:-4] for n in os.listdir(chemin) if n.endswith('.png'))
+    for nom in exclus:
+        if nom not in tous:
+            echec(
+                f'{dossier}/{COTE} : « {nom} » est exclu de la couture mais absent du disque.\n'
+                f"  Une exclusion qui ne désigne rien est une ligne morte : la retirer."
+            )
+        taille = Image.open(os.path.join(chemin, nom + '.png')).size
+        if taille == (COTE, COTE):
+            echec(
+                f'{dossier}/{COTE} : « {nom} » mesure {COTE}×{COTE} et pourrait donc être cousu.\n'
+                f"  Son exclusion n'a plus de raison d'être : retirer sa ligne de FAMILLES."
+            )
+    noms = [n for n in tous if n not in exclus]
     if len(noms) != effectif:
         echec(
-            f'{dossier}/{COTE} porte {len(noms)} sprites, {effectif} attendus.\n'
+            f'{dossier}/{COTE} porte {len(noms)} sprites cousables, {effectif} attendus.\n'
             f"  Ce n'est pas un incident à contourner : si l'ajout est voulu, "
             f"corriger l'effectif dans FAMILLES et relire l'index produit."
         )
@@ -164,8 +191,8 @@ def main():
 
     familles = {}
     identiques = differents = nouveaux = 0
-    for dossier, (slug, effectif) in FAMILLES.items():
-        noms, chemin = sprites_de(dossier, effectif)
+    for dossier, (slug, effectif, exclus) in FAMILLES.items():
+        noms, chemin = sprites_de(dossier, effectif, exclus)
         octets, colonnes, rangees = coudre(noms, chemin)
         familles[slug] = (colonnes, rangees, noms)
         sortie = os.path.join(SPRITES, f'atlas-{slug}-{COTE}.png')
