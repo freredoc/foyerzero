@@ -53,10 +53,34 @@ Hors génération :
 | Fond de la carte monde | 0 | Procédural au canvas : bruit fractal en trois teintes de la palette, déterministe sur la graine. 30 × 300 cases = 1 410 × 14 100 px CSS, aucune image ne couvre ça. Tranché 27/08, §2.4. |
 | `tile_horschamp.png` | −1 | **Supprimé 27/08.** Il ne bordait que le couloir de la carte, qui ne pave plus rien. Devient un traitement du fond procédural, §2.4. |
 
-**Zéro sprite d'effet.** Impacts, explosions, éclairs de bouche, mort,
-particules, barres de PV, ombres portées : `FICHE-STYLE.md` §6 et §8 les rendent
-en primitives. Ne rien produire pour eux, et ne pas laisser cette ligne
+**Presque zéro sprite d'effet.** Impacts, éclairs de bouche, mort, particules,
+barres de PV, ombres portées : `FICHE-STYLE.md` §6 et §8 les rendent en
+primitives. Ne rien produire pour eux, et ne pas laisser cette ligne
 réapparaître dans un devis.
+
+⚠⚠ **AMENDÉ LE 30/08 : LES EXPLOSIONS SONT LA SEULE EXCEPTION, ET ELLES SONT
+PRODUITES.** Ce paragraphe disait « zéro » et interdisait les explosions avec
+tout le reste. Ethan a tranché l'inverse après avoir déposé trois planches, et
+`tools/effets.py` en tire douze sprites — trois familles de quatre images —
+dans `art/sprites/effet/`, aux trois grilles.
+
+⚠ **CE QUI N'A PAS CHANGÉ, ET QUI COMPTE AUTANT.** Les autres effets restent
+procéduraux : impacts, éclairs de bouche, mort, particules, traînées, barres de
+PV, ombres portées. L'exception porte sur les EXPLOSIONS seules, parce qu'un
+souffle qui grandit puis retombe en quatre images ne se rend pas en primitives ;
+un impact ponctuel, si.
+
+⚠ **LES PROJECTILES NE SONT PAS DANS L'EXCEPTION.**
+`art/sources/roquettes_2x2_1254x1254.png` est au dépôt et reste NON DÉCOUPÉ —
+écarté par Ethan le 30/08, en même temps qu'il tranchait pour les explosions.
+La distinction est délibérée : ne pas la lire comme un oubli.
+
+⚠ **ET LEUR PALETTE N'EST PAS CELLE DU JEU.** Une explosion est orange et jaune ;
+la passer dans la rampe kaki ou celle de l'Ouvrage la détruirait. Chaque famille
+porte SA palette de seize teintes, prise sur son propre dessin. C'est le seul
+endroit du dépôt où des pixels sortent des deux rampes, et c'est la raison pour
+laquelle la garde de palette de `banc.test.js` ne les voit pas : elle balaie du
+CODE — `src/render/`, `src/ui/`, `index.src.html` —, jamais des PNG.
 
 ---
 
@@ -860,8 +884,9 @@ Livraison inchangée : `out/sprites/`, ZIP versionné, un lot par archive.
 Liste défensive : chacune de ces lignes a une raison écrite quelque part, et
 chacune reviendra dans une conversation future si elle n'est pas notée ici.
 
-- **Aucun sprite d'effet.** Impacts, explosions, éclairs de bouche, mort,
-  particules, traînées : §8, tout est procédural.
+- **Aucun sprite d'effet, SAUF les explosions** — amendé le 30/08, voir §8.
+  Impacts, éclairs de bouche, mort, particules, traînées : procéduraux, comme
+  avant. Les explosions sont produites, les projectiles ne le sont pas.
 - **Aucune ombre portée.** Elle n'est plus cuite dans le sprite depuis la v4 du
   générateur ; elle se trace au rendu, et son décalage est le seul signal
   d'altitude (§6).

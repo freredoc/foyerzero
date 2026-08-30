@@ -15,6 +15,11 @@ par `tools/connexions.py` : elles portent les mêmes trois socles dans leurs
 quatre états de connexion, et elles demandent une coupe par gouttière que ce
 fichier-ci ne fait pas.
 
+BASCULE du 30/08 : les deux planches de l'Ouvrage passent à leur V2, arbitrée
+par Ethan. Les V1 restent au dépôt — `art/sources/` n'est jamais amputé, rien
+n'y est un produit, tout y est un original — mais plus rien ne les cite. Côté
+joueur, M1 et M2 ne bougent pas : aucune V2 n'a été dessinée pour elles.
+
 CORRECTION du 29/08 : le rapport du lot 3 décrivait dans ces planches « une
 pièce large de 341 px » au centre. Elle n'existe pas. C'était la colonne de
 gauche qui débordait dans la suivante, la coupe en tiers tombant à 341 alors que
@@ -34,8 +39,8 @@ EMPRISE = 28          # gros pixels sur une grille de 32, comme les gros bâtime
 PLANCHES = [
     ('M1_socles_j_tourelles_3.png',    False, ['def_j_casemate', 'def_j_creneau', 'def_j_batterie']),
     ('M2_socles_j_artilleries_3.png',  False, ['def_j_faucheuse', 'def_j_mortier', 'def_j_harpon']),
-    ('M3_socles_o_tourelles_3.png',    True,  ['def_o_casemate', 'def_o_creneau', 'def_o_batterie']),
-    ('M4_socles_o_artilleries_3.png',  True,  ['def_o_faucheuse', 'def_o_mortier', 'def_o_harpon']),
+    ('M3_socles_o_tourelles_3_v2.png',   True, ['def_o_casemate', 'def_o_creneau', 'def_o_batterie']),
+    ('M4_socles_o_artilleries_3_v2.png', True, ['def_o_faucheuse', 'def_o_mortier', 'def_o_harpon']),
 ]
 
 n = 0

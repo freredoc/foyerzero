@@ -55,6 +55,42 @@ APPENDICE = set()
 # elle. En 64 et en 128 la caisse est assez large pour que les chenilles se
 # lisent d'elles-mêmes ; aucune retouche n'y est appliquée.
 CHENILLES = {'off_j_ratisseur', 'off_j_fendeur', 'off_j_belier'}
+#
+# ⚠⚠ LES DEUX `ÉCART` SONT ÉLUCIDÉS, ET ILS RESTENT — arbitré par Ethan le
+# 30/08 : « on garde les commités ». `unite/32/off_j_ratisseur.png` et
+# `unite/32/off_j_belier.png` ne se reproduisent pas depuis cette chaîne, et
+# ce n'est PAS un défaut de la passe ci-dessus. Mesuré, en grille 32 :
+#
+#   sprite            écarts DANS la caisse (col 9–22)   HORS caisse
+#   off_j_ratisseur                                 93             0
+#   off_j_belier                                    96             0
+#
+# LES CHENILLES SE REPRODUISENT À L'OCTET. Le zéro de la colonne de droite est
+# le fait qui compte : les bandes que `aligner` dessine, aux colonnes 7-8 et
+# 23-24, sont identiques dans les deux versions. `CX0..CX1` est le cadre de la
+# CAISSE, pas celui des chenilles — s'y tromper fait accuser cette passe d'une
+# faute qu'elle ne commet pas, et c'est l'erreur qui a été faite le 30/08 au
+# matin avant qu'on mesure.
+#
+# TROIS HYPOTHÈSES ONT ÉTÉ POSÉES ET RÉFUTÉES, chiffres à l'appui, pour qu'on
+# ne les repose pas :
+#   1. une autre planche source — `art/sources/` porte DEUX copies des blindés,
+#      `P2_3_…` (citée par final128) et `P2.3_…`, réellement différentes. La
+#      seconde donne 225 à 238 px d'écart, bien PIRE que les 93/96. Ce n'est
+#      pas la source.
+#   2. des fichiers antérieurs à cette passe — sans `aligner` l'écart monte à
+#      149 et 150, et le fendeur passe de 0 à 65. La passe RAPPROCHE du
+#      commité ; elle est juste et nécessaire.
+#   3. une autre érosion — balayée de 0 à 6. Le fendeur touche 0 exactement à
+#      3, la valeur du code ; les deux autres plafonnent à 88–93, jamais 0.
+#
+# CONCLUSION : ces deux fichiers ont été RETOUCHÉS À LA MAIN, ou produits par
+# une étape qui n'existe plus. C'est exactement le cas que l'invariant de
+# `main` prévoit — « on n'écrase JAMAIS un fichier existant qui ne se reproduit
+# pas ». Les deux `ÉCART` ne sont donc plus une dette : ce sont deux fichiers
+# dont la provenance est hors chaîne, et le garde-fou fait son travail en les
+# protégeant. Ne pas « corriger » la passe pour les faire rentrer, et ne pas
+# les régénérer : le dessin commité est plus propre, comparé à l'œil le 30/08.
 
 
 # `usine` est le nom mort du bâtiment : src/data/base.js dit `depotDeVehicules`
