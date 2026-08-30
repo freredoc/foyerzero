@@ -212,9 +212,21 @@ prochain qui y touche recompte.
    nommée, non découpée.
 3. **Trois v1 dorment dans `art/sources/`** — M3, M4 et P5.2 — que plus rien ne
    cite. Elles restent par la règle « `art/sources/` n'est jamais amputé ».
-4. **Les deux `ÉCART` de `planches.py`** — mesurés dans ce lot, voir la réponse
-   faite à Ethan : 9,1 % et 9,4 % des pixels de `off_j_ratisseur` et
-   `off_j_belier` en grille 32, tous dans le cadre des chenilles.
+4. **Les deux `ÉCART` de `planches.py` ne sont plus un point ouvert.** Élucidés
+   et arbitrés le 30/08 — « on garde les commités » —, la mesure est consignée
+   dans l'en-tête de `tools/planches.py`, à côté de la passe accusée.
+
+   ⚠ **Et une affirmation faite le matin même était fausse** : j'avais dit que
+   les écarts étaient « tous dans le cadre des chenilles ». `CX0..CX1` est le
+   cadre de la CAISSE ; les chenilles, elles, se reproduisent **à l'octet** —
+   0 écart hors caisse sur les deux fichiers. La passe était accusée d'une
+   faute qu'elle ne commet pas.
+
+   Trois hypothèses posées et réfutées : l'autre copie de la planche source
+   (225–238 px d'écart, pire), des fichiers antérieurs à la passe (sans elle
+   l'écart monte à 149/150), une autre érosion (balayée de 0 à 6, plancher à
+   88–93). Les deux fichiers ont été retouchés à la main, et le garde-fou de
+   `planches.py` fait son travail en refusant de les écraser.
 5. **Les châssis sans tourelle** — `P3.3`, `P3.4` et les cinq
    `off_j_*_chassis_face_profil` — restent le dernier lot d'unités non traité,
    et sans eux les 160 tourelles d'unité n'ont pas de caisse à porter.
