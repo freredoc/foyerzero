@@ -89,8 +89,22 @@ let html = htmlSource
 // une carte au fond noir parce qu'un PNG a été oublié dans une archive est
 // exactement le genre de panne qui se découvre sur l'appareil.
 
+// ⚠ AUCUN MARQUEUR N'EST PRÉFIXE D'UN AUTRE, ET C'EST LE `%` FINAL QUI LE TIENT.
+// `%ATLAS_TERRAIN%` et `%ATLAS_TERRAIN_BASE%` partagent quatorze caractères ;
+// sans le `%` de fin, le premier `replaceAll` mangerait la tête du second et
+// laisserait un `_BASE%` orphelin dans le HTML — la garde offline n'y verrait
+// rien, et l'écran afficherait la carte du monde sous les bâtiments. Vérifié :
+// aucune des trois chaînes complètes n'est préfixe d'une autre.
+//
+// ⚠ ET ON N'EN DÉCLARE PAS « POUR PLUS TARD ». Les cinq familles restantes —
+// socle, defense, unite, tourelle-unite, carte — ne sont pas cousues : les
+// inscrire ici ferait cinq entrées mortes, et la garde « marqueur sans fichier »
+// ne les verrait jamais, puisqu'elle ne regarde que les marqueurs PRÉSENTS dans
+// le HTML. Chaque famille entre avec le lot qui la consomme.
 const IMAGES_INLINE = [
   { marqueur: '%ATLAS_TERRAIN%', chemin: ['art', 'sprites', 'carte', 'atlas-terrain-64.png'], type: 'image/png' },
+  { marqueur: '%ATLAS_BATIMENT%', chemin: ['art', 'sprites', 'atlas-batiment-64.png'], type: 'image/png' },
+  { marqueur: '%ATLAS_TERRAIN_BASE%', chemin: ['art', 'sprites', 'atlas-terrain-64.png'], type: 'image/png' },
 ];
 
 for (const image of IMAGES_INLINE) {

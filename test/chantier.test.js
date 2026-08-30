@@ -2707,3 +2707,112 @@ test('obstacles — l\'écran les dessine, et il sait dire qui ils ralentissent'
   for (const s of sigles) assert.equal(s.length, 1, `« ${s} » n'est pas une lettre`);
   for (const l of Object.values(LIBELLES_OBSTACLE)) assert.ok(l.length > 8);
 });
+
+// ---------------------------------------------------------------------------
+// Le lot PREMIÈRE-COUCHE : les sprites entrent à l'écran
+// ---------------------------------------------------------------------------
+
+test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas', () => {
+  // ⚠ GARDE DE TEXTE, comme ses voisines : le dépôt n'a ni jsdom ni navigateur,
+  // ce qui touche le DOM ne s'automatise pas ici (CLAUDE.md §3). Ce qu'on PEUT
+  // confronter sans navigateur, c'est que l'écran demande son sol au module
+  // d'atlas plutôt que de composer un nom de fichier à la main.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  assert.match(ecran, /from '\.\.\/render\/sprite\.js'/,
+    'l\'écran ne lit plus l\'atlas par `render/sprite.js`');
+  assert.match(ecran, /from '\.\.\/render\/variante\.js'/,
+    'l\'écran ne tire plus sa variante par `render/variante.js`');
+
+  // Le sol est posé sur TOUTES les cases, donc dans une boucle sur `cellules`,
+  // et non sur les seules cases qui portent quelque chose.
+  assert.match(ecran, /for \(const case_ of cellules\.values\(\)\)[\s\S]{0,400}?fondDuTerrain\('tile_sol_j'/,
+    'le sol n\'est pas posé sur l\'ensemble des cases');
+
+  // ⚠ ET IL EST UN FOND, PAS UN ENFANT. Un `createElement` par case ferait 162
+  // nœuds à créer et à retirer à chaque geste — et il faudrait penser à les
+  // retirer, ce que la boucle de remise à zéro ne fait pas.
+  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundImage/,
+    'les couches de fond ne passent plus par `poserFonds`');
+  assert.doesNotMatch(ecran, /createElement\('div'\)[\s\S]{0,120}?className = 'sol'/,
+    'le sol est redevenu un élément enfant');
+
+  // Les trois couches de terrain viennent du même point d'appel : une seconde
+  // façon de nommer un sprite de terrain finirait par nommer autrement.
+  assert.equal((ecran.match(/fondDuTerrain\(/g) ?? []).length, 4,
+    'le nombre d\'appels à `fondDuTerrain` a changé — trois poses plus sa définition');
+});
+
+test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  // ⚠ LE SIGLE DU JETON POSÉ SUR LA GRILLE PART, `SIGLES` ET `sigleDe` RESTENT.
+  // La palette de pose s'en sert (`sigle: SIGLES[p.id]`), le fantôme d'aperçu
+  // aussi, et la bande de défense en dépend ENTIÈREMENT — ses seize orientations
+  // ne sont pas branchables. Les retirer casserait trois choses pour en corriger
+  // une seule.
+  assert.match(ecran, /sigle: SIGLES\[p\.id\]/, '`SIGLES` a disparu de la palette de pose');
+  assert.match(ecran, /sigleDe: \(id\) => SIGLES\[id\]/, '`sigleDe` a disparu du terrain des bâtiments');
+  assert.match(ecran, /sigleDe: \(id\) => SIGLES_DEFENSE\[id\]/, '`sigleDe` a disparu du terrain de défense');
+
+  // Le jeton demande son sprite au TERRAIN, jamais à un nom de bande écrit à la
+  // main : c'est la même discipline que `panneau` et `cible`, et un test voisin
+  // refuse déjà un `=== 'defense'` dans cet écran.
+  assert.match(ecran, /spriteDe: spriteDuBatiment/, 'le terrain des bâtiments n\'a plus de sprite');
+  assert.match(ecran, /spriteDe: null/, 'la défense ne se déclare plus sans sprite');
+  assert.match(ecran, /if \(terrain\.spriteDe === null\)[\s\S]{0,200}?sigleDe\(b\.id\)/,
+    'la bande sans sprite ne retombe plus sur son sigle');
+  assert.match(ecran, /classList\.add\('sprite'\)/, 'le jeton ne porte plus la classe du sprite');
+
+  // ⚠ ET LA RÈGLE DU NOM EST MÉCANIQUE, PAS UNE TABLE DE ONZE LIGNES. Une table
+  // serait une seconde vérité, et la première à diverger au douzième bâtiment.
+  assert.match(ecran, /function spriteDuBatiment\(id\)[\s\S]{0,200}?replace\(/,
+    '`spriteDuBatiment` ne dérive plus le nom de l\'identifiant');
+  assert.doesNotMatch(ecran, /chantierDeConstruction: 'bat_j_/,
+    'une table de correspondance sprite est apparue');
+});
+
+test('écran — l\'obstacle perd son fond, il garde la lettre qui dit qui est ralenti', () => {
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+
+  // ⚠ LA LETTRE EST LA SEULE INFORMATION DE JEU QUE PORTE UN OBSTACLE — qui est
+  // ralenti. Un dessin ne la dit pas : le joueur n'a pas à savoir si c'est un
+  // rocher ou une carcasse, il décide par où faire passer son assaut.
+  assert.match(ecran, /marque\.className = 'obstacle-marque'/, 'la lettre de l\'obstacle a disparu');
+  assert.match(ecran, /marque\.textContent = SIGLES_OBSTACLE\[o\.type\]/,
+    'la lettre ne vient plus de `SIGLES_OBSTACLE`');
+  assert.match(feuille, /\.obstacle-marque\s*\{/, 'la lettre n\'a plus de règle dans la feuille');
+
+  // Le fond uni et le liseré, eux, sont remplacés par le sprite.
+  assert.doesNotMatch(feuille, /\.case\.obstacle\s*\{\s*background:/,
+    'la case d\'obstacle porte de nouveau un fond uni sous son sprite');
+  assert.match(ecran, /fondDuTerrain\(`obs_\$\{o\.type\}`/, 'l\'obstacle ne reçoit plus son sprite');
+
+  // Et le champ garde sa ressource dans le nom du sprite : `champ_quartz_a`,
+  // jamais un sprite unique recolorisé, que l'atlas ne porte pas.
+  assert.match(ecran, /fondDuTerrain\(`champ_\$\{champ\.ressource\}`/,
+    'le champ ne reçoit plus le sprite de sa ressource');
+});
+
+test('écran — les deux atlas entrent par une variable CSS, et le pixel art ne se lisse pas', () => {
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+
+  // ⚠ LES MARQUEURS SONT CEUX DU BUILD, ET `%ATLAS_TERRAIN%` ÉTAIT DÉJÀ PRIS
+  // par l'atlas de la carte du monde — d'où `%ATLAS_TERRAIN_BASE%`.
+  assert.match(feuille, /--atlas-batiment: url\('%ATLAS_BATIMENT%'\)/,
+    'la variable de l\'atlas des bâtiments a disparu');
+  assert.match(feuille, /--atlas-terrain: url\('%ATLAS_TERRAIN_BASE%'\)/,
+    'la variable de l\'atlas de terrain a disparu');
+
+  // ⚠ SANS `pixelated`, UN PIXEL ART AGRANDI EN FRACTIONNAIRE DEVIENT FLOU. Une
+  // case fait ~42 px CSS pour un sprite de 64 : le navigateur interpole.
+  assert.match(feuille, /\.case\s*\{[^}]*image-rendering: pixelated/,
+    'les cases lissent leur sprite');
+  assert.match(feuille, /\.jeton\.sprite\s*\{[^}]*image-rendering: pixelated/,
+    'les jetons lissent leur sprite');
+
+  // ⚠ ET LA CASE RESTE CARRÉE. Une cellule d'atlas de 64×64 dans un cadre
+  // rectangulaire écraserait tous les sprites, et rien ici ne le dirait.
+  assert.match(feuille, /\.case\s*\{[^}]*aspect-ratio: 1/, 'la case n\'est plus carrée');
+});
