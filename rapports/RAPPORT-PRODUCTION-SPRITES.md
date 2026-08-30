@@ -151,9 +151,10 @@ n'inline qu'UN seul chemin d'image, écrit en dur —
 
 ### 4.1 `planches.py` rend `88 / 2 / 0` au lieu de `56 / 2 / 86`
 
-**Cause : le lot 0 était déjà commité sur la branche avant le début de cette
+**Cause : le lot 0 était déjà commité SUR `main` avant le début de cette
 session.** Le commit `0da97e0` « lot 0 — les trois grilles de l'existant » et les
-téléversements qui l'ont suivi portent déjà :
+téléversements qui l'ont suivi sont dans `origin/main` (`cde179f`), qui porte
+déjà :
 
 - les trois grilles `unite/{128,64,32}` et `bâtiment/{128,64,32}` — 90 fichiers ;
 - le terrain rangé sous `terrain/{128,64,32}` au lieu de la racine à plat ;
@@ -174,10 +175,18 @@ Vérifié explicitement : un `--verifier` lancé AVANT toute écriture rendait d
 ### 4.2 Le diff ne porte aucune suppression, là où le brief en annonce 20
 
 Même cause. Les 18 tuiles de terrain qui quittent la racine et les 2
-`bat_j_usine.png` remplacés ont été **déplacés et supprimés dans les commits
-antérieurs de cette branche**. Ils sont bien absents de `main`, donc la PR les
-portera — mais ils ne sont pas de mon fait et n'apparaissent pas dans mes
-commits.
+`bat_j_usine.png` remplacés ont été **déplacés et supprimés avant cette session,
+et `main` les porte déjà**. Ils ne sont donc ni dans mon commit ni dans la PR :
+il n'y a plus rien à supprimer.
+
+⚠ **Une première rédaction de ce paragraphe affirmait l'inverse** — « ils sont
+bien absents de `main`, donc la PR les portera ». C'était faux, et la faute
+mérite d'être écrite parce qu'elle se refera : la référence LOCALE `main` de
+l'image de travail datait d'avant le lot 0, si bien que `git log main..HEAD`
+listait cinquante commits qui sont en réalité tous mergés. **Un `main` local ne
+dit rien tant qu'il n'a pas été fetché** ; c'est `origin/main` qui fait foi, et
+il vaut `cde179f`. Corrigé après avoir lu la base réelle de la PR, qui ne compte
+qu'UN commit et 1 331 fichiers.
 
 ### 4.3 Les deux fichiers joints étaient déjà au dépôt
 
@@ -244,6 +253,7 @@ identique.
 
 ## 7. Ce que porte le commit
 
+- **UN seul commit**, `8781c76`, sur une base `origin/main` à `cde179f`.
 - **1 323 fichiers ajoutés** — les 1 469 du disque moins les 146 déjà commités.
 - **7 renommages** — les six rapports de lot nommés par le brief, plus
   `RAPPORT-lot6-emblemes.md`, de la racine vers `rapports/`.
