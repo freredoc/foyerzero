@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -234,4 +235,110 @@ test('sprite — une peinture complète ne consomme pas `etat.rng`', () => {
   assert.ok(source.includes('hachageBrut'), 'le décommentage a mangé le code du module');
   assert.ok(/\betat\.rng\b/.test(sansCommentaires('const x = etat.rng; // rien')),
     'le motif ne reconnaît pas la faute qu\'il cherche');
+});
+
+/**
+ * Les pixels d'un PNG 8 bits RVBA non entrelacé — le seul format que
+ * `tools/atlas.py` produise, et celui de tous les sprites conditionnés.
+ *
+ * Il LÈVE sur tout ce qu'il ne sait pas faire plutôt que de rendre une image
+ * approchée : un atlas mal décodé ferait tomber la garde suivante sur un défaut
+ * qui n'existe pas. Même discipline que le décodeur de `terrain.test.js`, qui
+ * lit les PNG INDEXÉS de la carte du monde — les deux formats ne se recouvrent
+ * pas, d'où deux lecteurs et non un lecteur à tout faire.
+ */
+function decoderRgba(chemin) {
+  const octets = readFileSync(chemin);
+  assert.equal(octets.readUInt32BE(0), 0x89504e47, `${chemin} n'est pas un PNG`);
+  let position = 8;
+  let largeur = 0;
+  let hauteur = 0;
+  const morceaux = [];
+  while (position < octets.length) {
+    const taille = octets.readUInt32BE(position);
+    const nom = octets.toString('ascii', position + 4, position + 8);
+    const corps = octets.subarray(position + 8, position + 8 + taille);
+    if (nom === 'IHDR') {
+      largeur = corps.readUInt32BE(0);
+      hauteur = corps.readUInt32BE(4);
+      assert.equal(corps[8], 8, `${chemin} : profondeur de bits inattendue`);
+      assert.equal(corps[9], 6, `${chemin} : ce n'est plus du RVBA`);
+      assert.equal(corps[12], 0, `${chemin} : entrelacement non géré`);
+    } else if (nom === 'IDAT') morceaux.push(Buffer.from(corps));
+    else if (nom === 'IEND') break;
+    position += 12 + taille;
+  }
+  const brut = inflateSync(Buffer.concat(morceaux));
+  const bpp = 4;
+  const pas = largeur * bpp;
+  const pixels = Buffer.alloc(hauteur * pas);
+  for (let y = 0; y < hauteur; y++) {
+    const filtre = brut[y * (pas + 1)];
+    const ligne = brut.subarray(y * (pas + 1) + 1, y * (pas + 1) + 1 + pas);
+    for (let x = 0; x < pas; x++) {
+      const a = x >= bpp ? pixels[y * pas + x - bpp] : 0;
+      const b = y > 0 ? pixels[(y - 1) * pas + x] : 0;
+      const c = x >= bpp && y > 0 ? pixels[(y - 1) * pas + x - bpp] : 0;
+      let v = ligne[x];
+      if (filtre === 1) v += a;
+      else if (filtre === 2) v += b;
+      else if (filtre === 3) v += (a + b) >> 1;
+      else if (filtre === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      } else assert.equal(filtre, 0, `${chemin} : filtre ${filtre} inconnu`);
+      pixels[y * pas + x] = v & 0xff;
+    }
+  }
+  return { largeur, hauteur, pixels };
+}
+
+test('sprite — l\'atlas cousu porte les pixels des sprites d\'aujourd\'hui', () => {
+  // ⚠⚠ CETTE GARDE EXISTE À CAUSE D'UN DÉFAUT QUI A FAILLI ÊTRE LIVRÉ, et elle
+  // a été écrite le jour où il s'est produit. Le lot BÂTIMENTS-1024 régénère les
+  // seize sprites de `art/sprites/bâtiment/64/` ; l'atlas, lui, est un FICHIER
+  // COMMITÉ, et il ne se recoud pas tout seul.
+  //
+  // Mesuré ce jour-là : avec les sprites régénérés et l'atlas d'hier,
+  // `npm run check` restait à **559 pass / 0 fail** et `dist/index.html` ne
+  // bougeait pas d'un octet — le jeu aurait affiché l'ANCIEN dessin pendant que
+  // le dépôt portait le nouveau, sans qu'une seule assertion tombe.
+  //
+  // ⚠ ET AUCUNE DES GARDES EXISTANTES NE POUVAIT LE VOIR. `src/data/atlas.js` ne
+  // porte que des NOMS, et ce lot n'en renomme aucun : l'index restait exact,
+  // la géométrie restait exacte, les onze bâtiments se résolvaient toujours.
+  // Seuls les PIXELS avaient divergé. C'est pour ça que celle-ci les compare.
+  for (const [slug, table] of Object.entries(ATLAS)) {
+    const dossier = DOSSIER_DE_LA_FAMILLE[slug];
+    const atlas = decoderRgba(join(SPRITES, `atlas-${slug}-${COTE_SPRITE}.png`));
+
+    let comparees = 0;
+    for (const [rang, nom] of table.noms.entries()) {
+      const source = decoderRgba(join(SPRITES, dossier, String(COTE_SPRITE), `${nom}.png`));
+      assert.equal(source.largeur, COTE_SPRITE, `${nom} n'est pas au format de la grille`);
+      const { colonne, rangee } = celluleDuSprite(slug, nom);
+
+      for (let y = 0; y < COTE_SPRITE; y++) {
+        const debutAtlas = ((rangee * COTE_SPRITE + y) * atlas.largeur + colonne * COTE_SPRITE) * 4;
+        const ligneAtlas = atlas.pixels.subarray(debutAtlas, debutAtlas + COTE_SPRITE * 4);
+        const ligneSource = source.pixels.subarray(y * COTE_SPRITE * 4, (y + 1) * COTE_SPRITE * 4);
+        assert.ok(ligneAtlas.equals(ligneSource),
+          `atlas-${slug} : la cellule (${colonne}, ${rangee}) ne porte plus les pixels de `
+          + `« ${nom} », ligne ${y} — relancer « python3 tools/atlas.py --ecrire »`);
+      }
+      comparees += 1;
+    }
+    assert.equal(comparees, table.noms.length, `${slug} : toutes les cellules n'ont pas été comparées`);
+  }
+
+  // ⚠ FALSIFIABLE : le décodeur rend bien des pixels, et deux sprites DIFFÉRENTS
+  // se distinguent. Sans ça, un décodeur qui rendrait partout du vide ferait
+  // passer la boucle ci-dessus sur n'importe quel atlas.
+  const a = decoderRgba(join(SPRITES, 'bâtiment', '64', 'bat_j_collecteur.png'));
+  const b = decoderRgba(join(SPRITES, 'bâtiment', '64', 'bat_j_chantier_de_construction.png'));
+  assert.ok(a.pixels.some((v) => v !== 0), 'le décodeur rend une image vide');
+  assert.ok(!a.pixels.equals(b.pixels), 'le décodeur ne distingue pas deux sprites');
 });

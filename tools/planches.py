@@ -29,12 +29,24 @@ GRILLES = (128, 64, 32)
 # Elles ne sont pas décoratives : sans elles, sept sprites sur cinquante-huit
 # ne se reproduisent pas, et ce sont les commités qui ont raison.
 #
-# APPENDICE — l'Accumulateur et la Raffinerie occupent la moitié droite de
-# P6_4_flux_joueur.png, dont la coupe en quarts tombe dans la matière de la
-# colonne de gauche (occupée jusqu'à x=707 alors que la coupe est à x=615).
-# Le bloc parasite arrive donc dans la cellule sous forme de composante
-# détachée ; on l'efface et on recentre. Vaut pour les trois grilles.
-APPENDICE = {'bat_j_accumulateur', 'bat_j_raffinerie'}
+# APPENDICE — VIDE DEPUIS LA BASCULE SUR LES PLANCHES « 1024 » (30/08/2026), et
+# ce n'est pas un nettoyage cosmétique : la passe FAIT LEVER sur la V2.
+#
+# Elle existait pour la V1 seule. L'Accumulateur et la Raffinerie occupaient la
+# moitié droite de `P6_4_flux_joueur.png`, dont la coupe en quarts tombait dans
+# la matière de la colonne de gauche — occupée jusqu'à x=707 alors que la coupe
+# était à x=615 : un bloc parasite arrivait dans la cellule sous forme de
+# composante détachée, qu'on effaçait avant de recentrer.
+#
+# ⚠ SUR LA V2 LES DEUX SUJETS SORTENT D'UN SEUL TENANT, et
+# `retirer_appendice.corriger` porte un `assert n == 2` qui LÈVE sur une
+# composante unique. Y laisser les deux noms ne ferait donc pas une passe
+# inutile, ça ferait planter le script.
+#
+# ⚠ ET LE COMMENTAIRE EST RÉÉCRIT PLUTÔT QUE LAISSÉ EN PLACE : un commentaire
+# qui décrit un mécanisme retiré est pire que pas de commentaire — il envoie
+# chercher un traitement qui n'a plus lieu.
+APPENDICE = set()
 #
 # CHENILLES — les trois blindés à 10 points reçoivent deux bandes de chenille
 # identiques, aux mêmes coordonnées absolues. Le cadre est écrit en dur en

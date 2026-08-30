@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.41.0 · build 42.
+Dernière révision : **30/08/2026**, version 0.42.0 · build 43.
 
 ---
 
@@ -35,8 +35,8 @@ Dernière révision : **30/08/2026**, version 0.41.0 · build 42.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **559 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**581 125 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+`npm test` → **560 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**577 357 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
@@ -77,8 +77,11 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : **3,1 %** — le lot PREMIÈRE-COUCHE a porté le HTML à
-**581 125 octets**. Le lot TUTORIEL-EN-BAS l'avait mené à 523 905 (+10 993 : les
+Marge actuelle : **3,8 %** — le lot PREMIÈRE-COUCHE avait porté le HTML à
+581 125 octets, et le lot BÂTIMENTS-1024 l'a RAMENÉ à **577 357** : les seize
+bâtiments de la V2 se compressent mieux, l'atlas passant de 23 285 à 20 459
+octets. Une bascule d'illustration peut donc rendre des octets, et celle-ci en a
+rendu 3 768. Le lot TUTORIEL-EN-BAS l'avait mené à 523 905 (+10 993 : les
 dix-sept missions dictées, la mini-fenêtre du bas, le compteur par objectif et le
 bouton de réouverture de l'onglet Mission), puis la boucle du raid à 530 268.
 
@@ -2295,6 +2298,38 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   clé de code, sans accent, sous les yeux du joueur. Même faute qu'`axe` contre
   `axeLibelle` dans `data/combat.js`, et elle ne se voit qu'à l'écran : un test
   balaie désormais tous les textes du tutoriel et refuse les clés connues.
+
+### Sur les sprites et les atlas
+
+- ⚠⚠ **UN ATLAS EST UN FICHIER COMMITÉ, IL NE SE RECOUD PAS TOUT SEUL — ET SA
+  PÉREMPTION EST MUETTE.** Le lot BÂTIMENTS-1024 (30/08) a régénéré les seize
+  sprites de `art/sprites/bâtiment/64/` ; `art/sprites/atlas-batiment-64.png`,
+  lui, porte des PIXELS, et il est resté celui de la veille. **Mesuré, pas
+  supposé** : dans cet état, `npm run check` rendait **559 pass / 0 fail** et
+  `dist/index.html` ne bougeait pas d'un octet. Le jeu aurait affiché l'ANCIEN
+  dessin pendant que le dépôt portait le nouveau.
+  ⚠ **AUCUNE GARDE EXISTANTE NE POUVAIT LE VOIR, et il faut savoir pourquoi.**
+  `src/data/atlas.js` ne porte que des NOMS, et une bascule d'illustration n'en
+  renomme aucun : l'index restait exact, la géométrie restait exacte, les onze
+  bâtiments se résolvaient toujours. Seuls les pixels avaient divergé.
+  ⚠ **D'OÙ LA GARDE QUI LES COMPARE.** `test/sprite.test.js` décode l'atlas et
+  chaque sprite source, et exige que la cellule du rang `i` soit le sprite
+  `noms[i]`, ligne par ligne. Falsifiée en remettant l'atlas de la veille sous
+  les sprites du jour : elle tombe, et elle est la SEULE à tomber.
+  ⚠ **LA RÈGLE QUI EN DÉCOULE : tout lot qui touche à `art/sprites/<famille>/64/`
+  relance `python3 tools/atlas.py --ecrire`**, et le HTML change, donc la version
+  se bumpe. Les autres grilles — 32 et 128 — ne sont cousues dans aucun atlas
+  aujourd'hui et ne déclenchent rien.
+- **`art/sources/` N'EST JAMAIS AMPUTÉ.** Aucun fichier, aucune série. Les sept
+  planches de la V1 des bâtiments restent au dépôt alors que plus une ligne ne
+  les cite : elles sont la seule trace de ce qui a produit les fichiers qu'on a
+  effacés. Rien dans ce dossier n'est un produit, tout y est un original — c'est
+  ce qui le distingue de `art/sprites/`, qui est entièrement reproductible.
+- **`planches.py` N'ÉCRASE JAMAIS UN FICHIER QUI NE SE REPRODUIT PAS**, et c'est
+  un garde-fou, pas une gêne. Une bascule de source se fait donc en DEUX temps :
+  supprimer d'abord, écrire ensuite. Dans l'autre ordre, la commande sort autant
+  de lignes `ÉCART` qu'il y a de fichiers et n'écrit rien — vérifié le 30/08 :
+  50 `ÉCART`, et `git status` ne montrait pas une seule modification.
 
 ### Sur le vocabulaire
 
