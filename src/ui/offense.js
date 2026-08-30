@@ -35,6 +35,7 @@ import {
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
 } from '../sim/state.js';
+import { acquisesDe } from '../sim/recherche.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
 // ⚠⚠ LE MÊME POINT D'ENTRÉE QUE LA GRILLE DU CHANTIER ET QUE LE CHAMP DE
 // BATAILLE. `couchesDeLEntite` est LE dispatch des couches de sprite depuis le
@@ -166,13 +167,15 @@ export function messageEnMain(nom) {
  */
 export function unitesDeLaPalette(etat) {
   const niveau = niveauDeCommandement(etat, 'armee');
+  const ouvertes = acquisesDe(etat, 'offense');
   return Object.keys(UNITES).map((id) => {
     const unite = UNITES[id];
-    // ⚠ LE VERROU DE NIVEAU SE DEMANDE À L'ARSENAL, IL NE SE RELIT PAS ICI.
-    // `apparition` n'apparaît nulle part dans ce fichier, et un test le balaie :
-    // une seconde lecture du seuil finirait par dire autre chose que la
-    // première, et la divergence se lirait comme un déséquilibre de jeu.
-    let raison = raisonDuVerrou(id, niveau);
+    // ⚠ LE VERROU SE DEMANDE À L'ARSENAL, IL NE SE RELIT PAS ICI. Ni
+    // `apparition` (qui n'ouvre plus rien depuis le lot RECHERCHE) ni la liste
+    // des acquises n'apparaissent en clair dans ce fichier, et un test le
+    // balaie : une seconde lecture de la règle finirait par dire autre chose que
+    // la première, et la divergence se lirait comme un déséquilibre de jeu.
+    let raison = raisonDuVerrou(id, niveau, ouvertes);
     if (raison === null) {
       const manque = batimentDeProductionManquant(etat, id);
       if (manque !== null) {

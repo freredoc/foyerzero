@@ -593,6 +593,13 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     // mais ses quatre points d'ancrage sont dans le balisage.
     'chantier-panneau', 'chantier-panneau-titre', 'chantier-panneau-fermer',
     'chantier-panneau-corps', 'chantier-panneau-ameliorer',
+    // L'écran Recherche, lot RECHERCHE : son onglet, ses trois panneaux et les
+    // deux ancres que `ui/recherche.js` remplit. Même rôle que ci-dessus — le
+    // JS écrit tout le contenu, un identifiant renommé d'un seul côté laisserait
+    // l'écran muet sans qu'aucun test ne le dise.
+    'onglet-recherche', 'ecran-recherche', 'recherche-tete', 'recherche-points',
+    'recherche-pastilles', 'recherche-panneaux',
+    'recherche-offense', 'recherche-defense', 'recherche-special',
   ]) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
   }
@@ -613,20 +620,23 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // Les onglets à venir sont désactivés : un contrôle inerte qui a l'air vif
   // fait douter le joueur de son appareil plutôt que du jeu.
   //
-  // ⚠ ILS SE NOMMENT, ILS NE SE COMPTENT PLUS. La version précédente attendait
-  // « 3 » avec un message qui disait « Recherche, Monde et Options » — Options
-  // était vivant depuis le lot MISE EN PAGE, donc le message mentait déjà. Le
-  // compte est tombé à 2 quand Mission a reçu son tutoriel, et un nombre nu
-  // n'aurait pas dit lequel des trois venait de bouger.
-  //
-  // ⚠ IL N'EN RESTE QU'UN DEPUIS LE LOT ÉCRAN-CARTE : Recherche. Monde s'est
-  // ouvert sur la carte, comme Mission s'était ouvert sur le tutoriel.
-  const futurs = [...html.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
-    .map((m) => m[1]);
-  assert.deepEqual(
-    futurs.slice().sort(), ['Recherche'],
-    'la liste des onglets morts a changé : dire lequel s\'ouvre, ou lequel est retombé',
-  );
+  // ⚠⚠ PLUS AUCUN ONGLET MORT DEPUIS LE LOT RECHERCHE (30/08), et la garde a
+  // CHANGÉ DE FORME pour le dire. Elle listait les boutons `class="futur"
+  // disabled` et attendait `['Recherche']` ; une liste attendue VIDE aurait été
+  // vraie aussi le jour où quelqu'un écrirait un onglet mort SANS la classe —
+  // et la classe vient justement de disparaître de la feuille de style, faute
+  // de porteur. On asserte donc le POSITIF, sur les cinq boutons de la barre :
+  // chacun porte un identifiant (donc quelque chose l'écoute) et aucun n'est
+  // éteint. Un onglet mort de plus tombe, quelle que soit la façon de l'écrire.
+  const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/);
+  assert.ok(barre, 'la barre d\'onglets a disparu');
+  const onglets = [...barre[1].matchAll(/<button[^>]*>[^<]*</g)].map((m) => m[0]);
+  assert.equal(onglets.length, 5, 'la barre ne porte plus cinq onglets');
+  for (const onglet of onglets) {
+    assert.match(onglet, /\sid="onglet-[a-z]+"/, `onglet sans identifiant : ${onglet}`);
+    assert.ok(!/\sdisabled/.test(onglet), `onglet désactivé : ${onglet}`);
+    assert.ok(!/class="[^"]*\bfutur\b/.test(onglet), `onglet encore « futur » : ${onglet}`);
+  }
 
   // ⚠ LES TROIS BOUTONS D'ACTION NE SONT PLUS DÉSACTIVÉS, ET C'EST LE LOT.
   // Le modèle est « armer puis toucher » : c'est le bouton qu'on touche EN
@@ -657,15 +667,19 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     'chantier-bandes-liste', 'chantier-version', 'chantier-vers-offense']) {
     assert.ok(!code.includes(demenage), `« ${demenage} » survit après le déménagement`);
   }
-  // Cinq onglets, dont UN SEUL mort : Base, Mission, Recherche, Monde, Options.
-  // ⚠ MISSION S'EST OUVERT AU LOT TUTORIEL, MONDE AU LOT ÉCRAN-CARTE. Les deux
-  // étaient « morts pour l'instant » ; il ne reste que Recherche. Les morts se
-  // nomment ici comme plus haut, pour qu'on lise LEQUEL a changé.
+  // Cinq onglets, et AUCUN mort : Base, Mission, Recherche, Monde, Options.
+  // ⚠ MISSION S'EST OUVERT AU LOT TUTORIEL, MONDE AU LOT ÉCRAN-CARTE, RECHERCHE
+  // À CELUI-CI (30/08) — c'était le dernier. La liste attendue devient donc
+  // vide ; la garde qui compte vraiment est celle du haut de ce fichier, qui
+  // exige un identifiant sur les cinq boutons. Ici on garde la forme ancienne
+  // pour lire le passage de `['Recherche']` à `[]` dans le diff du lot.
   const ongletsMorts = [...code.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
     .map((m) => m[1]);
-  assert.deepEqual(ongletsMorts.slice().sort(), ['Recherche']);
+  assert.deepEqual(ongletsMorts.slice().sort(), []);
   assert.ok(/id="onglet-monde">Monde</.test(code), 'l\'onglet Monde est absent ou muet');
   assert.ok(/id="onglet-mission">Mission</.test(code), 'l\'onglet Mission est absent ou muet');
+  assert.ok(/id="onglet-recherche">Recherche</.test(code),
+    'l\'onglet Recherche est absent ou muet');
   assert.ok(/id="onglet-base">Base</.test(code), 'l\'onglet ne s\'appelle plus « Base »');
   assert.ok(!/>Chantier</.test(code), 'un onglet « Chantier » traîne encore');
   // Et la grille se centre par la MISE EN PAGE, jamais par une transformation :
@@ -2377,7 +2391,8 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
  * BÂTIMENT là où il croit mesurer celui du niveau. On les pose donc quand le
  * test parle de niveaux, et on les omet quand il parle du bâtiment.
  */
-function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProduction = false) {
+function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProduction = false,
+  acquisesDefense = null) {
   const etat = creerEtat(20260828);
   etat.disposition[0].niveau = 12; // assez d'emplacements, sinon la base est illégale
   etat.disposition.push(
@@ -2394,6 +2409,10 @@ function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProducti
   for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
     etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   }
+  // ⚠ DEPUIS LE LOT RECHERCHE, C'EST L'ACHAT QUI OUVRE, PAS LE NIVEAU. Un
+  // montage qui veut mesurer autre chose que ce verrou-là doit donc dire ce
+  // qu'il a acheté ; `null` laisse les gratuites d'une partie neuve.
+  if (acquisesDefense !== null) etat.recherche.acquises.defense = [...acquisesDefense].sort();
   return etat;
 }
 
@@ -2500,23 +2519,32 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   assert.ok(sansQg.every((p) => /QG de défense/.test(p.raison)),
     'sans QG, la raison devrait nommer le QG de défense');
 
-  // ⚠ AVEC UN QG, LES PIÈCES S'OUVRENT PAR NIVEAU D'APPARITION — et les autres
-  // RESTENT dans la palette, grisées. C'est l'arbitrage du 28/08 sur les
-  // uniques appliqué ici : « griser le bouton, pas le faire disparaître ». Une
-  // palette qui change de longueur déplace les vignettes sous le doigt.
-  const avecQg = baseAvecCommandement(3, 8, true);
+  // ⚠⚠ CE BLOC A CHANGÉ DE PORTE AU LOT RECHERCHE, PAS D'INTENTION. Les pièces
+  // s'ouvraient par NIVEAU D'APPARITION ; elles s'ouvrent désormais par ACHAT
+  // (arbitrage d'Ethan du 30/08). Ce qui ne change pas — et qui est le vrai
+  // sujet du test — c'est que les autres RESTENT dans la palette, grisées :
+  // arbitrage du 28/08 sur les uniques, « griser le bouton, pas le faire
+  // disparaître ». Une palette qui change de longueur déplace les vignettes
+  // sous le doigt.
+  const achetees = ['merlon', 'meute', 'casemate', 'herse'];
+  const avecQg = baseAvecCommandement(3, 8, true, achetees);
   const ouverte = posablesDeLaDefense(avecQg);
   assert.equal(ouverte.length, 17, 'la palette a changé de longueur');
   const vives = ouverte.filter((p) => !p.verrouille);
-  assert.ok(vives.length > 0, 'aucune pièce ouverte au niveau 8');
-  assert.ok(vives.length < 17, 'toutes les pièces sont ouvertes au niveau 8');
+  assert.ok(vives.length > 0, 'aucune pièce ouverte alors que quatre sont achetées');
+  assert.ok(vives.length < 17, 'toutes les pièces sont ouvertes');
   for (const p of ouverte) {
-    assert.equal(p.verrouille, p.apparition > 8, `${p.id} : verrou incohérent`);
+    assert.equal(p.verrouille, !achetees.includes(p.id), `${p.id} : verrou incohérent`);
   }
 
-  // Falsifiable : monter le QG doit VRAIMENT ouvrir des pièces.
-  const haut = baseAvecCommandement(3, 50, true);
-  assert.ok(posablesDeLaDefense(haut).every((p) => !p.verrouille), 'le niveau 50 verrouille encore');
+  // Falsifiable : acheter tout le roster doit VRAIMENT tout ouvrir.
+  const haut = baseAvecCommandement(3, 50, true, rosterDefensif());
+  assert.ok(posablesDeLaDefense(haut).every((p) => !p.verrouille),
+    'tout le roster acheté et la palette verrouille encore');
+  // ⚠ ET LE NIVEAU, LUI, N'OUVRE PLUS RIEN : c'est le renversement du lot.
+  const niveauSeul = baseAvecCommandement(3, 50, true);
+  assert.ok(posablesDeLaDefense(niveauSeul).some((p) => p.verrouille),
+    'le niveau 50 seul ouvre encore des pièces');
 
   // ⚠⚠ ET LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, arbitrée
   // le 29/08 : « infanterie inconstructible sans caserne, même règle pour
@@ -2524,7 +2552,9 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   // l'est pas. Sans les trois bâtiments, au niveau 50, seules les pièces qui
   // ne sont PAS des unités restent posables — un mur n'a pas besoin d'une
   // caserne.
-  const sansProduction = posablesDeLaDefense(baseAvecCommandement(3, 50, false));
+  const sansProduction = posablesDeLaDefense(
+    baseAvecCommandement(3, 50, false, rosterDefensif()),
+  );
   for (const p of sansProduction) {
     const estUneUnite = UNITES[p.id] !== undefined;
     assert.equal(p.verrouille, estUneUnite,

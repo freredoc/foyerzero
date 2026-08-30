@@ -37,13 +37,24 @@ import {
   creerCombat, resoudre, butin, pointsRecherche, facteurMilli, TICKS_MAX_COMBAT,
 } from './combat.js';
 import { GEOGRAPHIE } from '../data/sites.js';
+import { creerAcquises, modulesDebloquesDuJoueur } from './recherche.js';
 
 /** Un millier — l'échelle des milli-PV et des milli-unités. */
 const MILLE = 1000;
 
-/** L'état neuf du compteur de recherche. Voir `RECHERCHE_EN_CHAINE`. */
+/**
+ * L'état neuf de la recherche : le compteur, et ce qui est déjà acquis.
+ *
+ * ⚠ LE COMPTEUR RESTE ICI, LES ACQUISES VIENNENT DE `sim/recherche.js`. Le lot
+ * RECHERCHE ne touche pas à la façon dont les points ENTRENT — c'est
+ * `pointsRecherche` qui les fabrique, ligne 253 — il ajoute une SORTIE. Les deux
+ * moitiés se composent ici, à un seul endroit, pour qu'une partie neuve et une
+ * sauvegarde migrée aient exactement la même forme.
+ *
+ * Voir `RECHERCHE_EN_CHAINE` juste dessous pour la raison de la chaîne décimale.
+ */
 export function creerRecherche() {
-  return { pointsMilli: '0' };
+  return { pointsMilli: '0', ...creerAcquises() };
 }
 
 // ⚠ LES POINTS DE RECHERCHE SE RANGENT EN CHAÎNE DÉCIMALE, PAS EN NOMBRE, et
@@ -228,7 +239,23 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // rembourse pas.
   annulerLaReparation(etat);
 
-  const montage = montageCourant(etat, site);
+  // ⚠ LES MODULES DU JOUEUR ENTRENT PAR LE MONTAGE, JAMAIS PAR L'ÉTAT LU AU VOL.
+  // Le combat est déterministe et rejouable : tout ce qui gouverne la boucle
+  // doit être dans le montage, qui est sérialisé. Un raid rejoué depuis une
+  // sauvegarde doit rendre le même résultat au tick près.
+  //
+  // ⚠ `joueur`, PAS `ouvrage`. `pointsRecherche` lit `modulesDebloques.ouvrage`
+  // pour majorer les points de 20 % sur une cible dont le module est débloqué :
+  // c'est le camp d'en face et une autre grandeur. Les confondre ferait payer au
+  // joueur les modules de l'Ouvrage.
+  const montageSite = montageCourant(etat, site);
+  const montage = {
+    ...montageSite,
+    modulesDebloques: {
+      ouvrage: montageSite.modulesDebloques?.ouvrage ?? [],
+      joueur: modulesDebloquesDuJoueur(etat),
+    },
+  };
   const { vagues, indices } = composerLesVagues(etat);
   const resultat = resoudre(
     creerCombat({ ...montage, vagues }),

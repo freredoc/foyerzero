@@ -412,7 +412,11 @@ export function initialiserBanc(doc) {
   }
 
   function majPalette() {
-    const disponibles = unitesDisponibles(arsenal.niveau);
+    // ⚠ LE BANC N'A PAS D'ÉTAT DE RECHERCHE, ET C'EST VOULU. Il monte des
+    // compositions HORS partie, pour mesurer l'équilibrage : le brider par les
+    // achats d'un joueur qui n'existe pas y interdirait la moitié du roster.
+    // `null` = aucun filtre, et c'est ce que porte `arsenal.acquises` ici.
+    const disponibles = unitesDisponibles(arsenal.acquises ?? null);
     if (uniteChoisie !== null && !disponibles.includes(uniteChoisie)) uniteChoisie = null;
     $('banc-palette').innerHTML = disponibles.map((id) => {
       const u = UNITES[id];
@@ -539,7 +543,8 @@ export function initialiserBanc(doc) {
 
 
   function majPaletteDefense() {
-    const disponibles = defensesDisponibles(defense.niveau);
+    // Même raison qu'à `majPalette` : le banc voit tout le roster.
+    const disponibles = defensesDisponibles(defense.acquises ?? null);
     if (defenseurChoisi !== null && !disponibles.includes(defenseurChoisi)) defenseurChoisi = null;
     $('banc-palette-defense').innerHTML = disponibles.map((id) => {
       const ligne = DEFENSES[id] ?? UNITES[id];

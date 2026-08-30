@@ -19,6 +19,7 @@ import { distanceTchebychev } from '../src/sim/points-attaque.js';
 import { etatDuSite } from '../src/sim/site-entame.js';
 import { capacitesMilli } from '../src/sim/economie-base.js';
 import { APRES_RAID, GEOGRAPHIE } from '../src/data/sites.js';
+import { gratuitesDe } from '../src/data/recherche.js';
 
 /** Une partie dont les satellites sont parus, avec une armée posée. */
 function partieArmee(graine = 2026, unites = 6, niveau = 1) {
@@ -269,6 +270,13 @@ test('état — le compteur de recherche se migre depuis une v11', () => {
   assert.ok(SAVE_VERSION >= 12, 'le maillon v11 → v12 n\'est plus dans la chaîne');
   const migre = migrer({ version: 11 });
   assert.equal(migre.version, SAVE_VERSION);
-  assert.deepEqual(migre.recherche, { pointsMilli: '0' });
+  assert.equal(migre.recherche.pointsMilli, '0');
   assert.equal(typeof migre.recherche.pointsMilli, 'string', 'un nombre ne traverserait pas');
+  // ⚠ ET LE MAILLON v13 → v14 A COMPLÉTÉ LA FORME. Une sauvegarde v11 n'a ni
+  // Centre de commandement ni QG — `migrer` reçoit ici un objet quasi vide —,
+  // donc la migration ne pose que les GRATUITES. Asserter la seule présence des
+  // champs laisserait passer une migration qui les crée vides.
+  assert.deepEqual(migre.recherche.acquises,
+    { offense: gratuitesDe('offense').sort(), defense: gratuitesDe('defense').sort() });
+  assert.deepEqual(migre.recherche.modules, { offense: [], defense: [] });
 });

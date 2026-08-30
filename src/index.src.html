@@ -330,8 +330,11 @@
   /* --- 1. onglets — 40 ----------------------------------------------------
      ⚠ ILS ONT QUITTÉ `#ecran-chantier` (28/08). Ils y vivaient, donc changer
      d'écran les faisait disparaître — Ethan voulait les garder « dans le menu
-     offense ». Cinq maintenant : Base, Mission (mort, futur tutoriel),
-     Recherche, Monde, Options. */
+     offense ». Cinq : Base, Mission, Recherche, Monde, Options — et tous VIVANTS
+     depuis le lot RECHERCHE (30/08). La règle `button.futur`, qui éteignait le
+     libellé d'un onglet mort, est partie avec le dernier d'entre eux : elle
+     n'avait plus de porteur, et une classe sans style se réécrit sans qu'on
+     s'aperçoive qu'elle ne fait rien. */
   #tete-onglets { flex: 0 0 40px; display: flex; background: #161914; border-bottom: 1px solid #3E454C; }
   #tete-onglets button {
     flex: 1; display: flex; align-items: center; justify-content: center;
@@ -342,7 +345,6 @@
   #tete-onglets button:last-child { border-right: 0; }
   #tete-onglets button.actif { color: #F5F3E8; background: #343A2C; box-shadow: inset 0 -2px 0 #8C9A72; }
   /* Les onglets à venir : rien derrière eux, et ça doit se voir. */
-  #tete-onglets button.futur { color: #3E454C; }
 
   /* --- 2. ressources — 44, communes elles aussi ---------------------------- */
   #ressources {
@@ -998,6 +1000,85 @@
   #offense-avis.mode { background: #343A2C; color: #F5F3E8; }
 
   /* =======================================================================
+     ÉCRAN RECHERCHE — un en-tête fixe, trois panneaux sur un rail
+     =======================================================================
+     ⚠⚠ L'ACCROCHAGE EST SUR LE RAIL, ET LUI SEUL. `scroll-snap-type` posé plus
+     haut — sur `#ecrans` ou sur `body` — accrocherait aussi les écrans qui ne
+     défilent pas horizontalement, et la page entière prendrait une barre de
+     défilement latérale. C'est la faute que les marges système du lot
+     PANNEAU-ET-MARGES ont déjà coûtée une fois.
+     ⚠ CHAQUE PANNEAU DÉFILE VERTICALEMENT CHEZ LUI. Dix-sept pièces et leurs
+     modules ne tiennent pas sur un écran de 320 : sans `overflow-y` ici, c'est
+     le RAIL qui grandirait, et l'accrochage horizontal sauterait.
+     Les teintes sortent de FICHE-STYLE.md, comme celles de l'écran Mission :
+     kaki pour les fonds, métal pour le secondaire, ambre pour ce qui est armé. */
+  #ecran-recherche { min-height: 0; }
+  #recherche-tete {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+  #recherche-points {
+    flex: 1; min-width: 0; color: #F5B636;
+    font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+  }
+  #recherche-pastilles { flex: 0 0 auto; display: flex; gap: 3px; }
+  #recherche-pastilles button {
+    padding: 3px 8px; font: inherit; font-size: 9px; letter-spacing: 0.06em;
+    text-transform: uppercase; background: #1E2124; color: #68727E;
+    border: 1px solid #3E454C;
+  }
+  #recherche-pastilles button.actif { background: #4E5742; color: #F5F3E8; border-color: #6A7658; }
+  #recherche-panneaux {
+    flex: 1; min-height: 0; display: flex;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; scrollbar-width: none;
+  }
+  #recherche-panneaux::-webkit-scrollbar { display: none; }
+  #recherche-panneaux .panneau {
+    flex: 0 0 100%; min-width: 0; scroll-snap-align: start;
+    overflow-y: auto; scrollbar-width: none;
+    padding: 6px; display: grid; gap: 5px; align-content: start;
+  }
+  #recherche-panneaux .panneau::-webkit-scrollbar { display: none; }
+  #ecran-recherche .piece {
+    background: #343A2C; border-left: 3px solid #3E454C; padding: 6px 7px;
+  }
+  #ecran-recherche .piece.acquise { border-left-color: #6A7658; }
+  #ecran-recherche .rangee { display: flex; align-items: center; gap: 7px; }
+  #ecran-recherche .rangee b {
+    flex: 1; min-width: 0; color: #F5F3E8; font-size: 11px; line-height: 1.2;
+  }
+  /* La vignette : même découpe d'atlas que la palette de l'Offense — le JS pose
+     les trois listes de fond, la feuille ne fixe que la taille et le lissage. */
+  #ecran-recherche .sprite {
+    flex: 0 0 28px; height: 28px; image-rendering: pixelated;
+    background-repeat: no-repeat;
+  }
+  /* Un module n'a pas de sprite : une pastille tient sa place, à la même
+     largeur, pour que les deux rangées s'alignent. */
+  #ecran-recherche .pastille {
+    flex: 0 0 28px; height: 28px; display: flex; align-items: center;
+    justify-content: center; color: #8C9A72; font-size: 13px;
+  }
+  #ecran-recherche .acheter {
+    flex: 0 0 auto; padding: 4px 8px; font: inherit; font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    background: #1E2124; color: #F5F3E8; border: 1px solid #4E5742;
+  }
+  #ecran-recherche .acheter:disabled { color: #68727E; border-color: #3E454C; }
+  #ecran-recherche .acheter.acquis { color: #8C9A72; border-color: #6A7658; }
+  /* Armé : l'ambre du Chantier, pour « le prochain toucher engage ». */
+  #ecran-recherche .acheter.arme { background: #F5B636; color: #161914; border-color: #F5B636; }
+  #ecran-recherche .prix {
+    flex: 0 0 auto; color: #8C9A72; font-size: 10px; font-variant-numeric: tabular-nums;
+  }
+  /* Le module, EN RETRAIT sous sa pièce : il lui appartient. */
+  #ecran-recherche .module { margin: 4px 0 0 12px; border-left: 1px solid #4E5742; padding-left: 6px; }
+  #ecran-recherche .module b { font-size: 10px; color: #8C9A72; }
+  #ecran-recherche .description { margin-top: 2px; color: #68727E; font-size: 9px; line-height: 1.35; }
+  #ecran-recherche .raison { margin-top: 2px; color: #F5B636; font-size: 9px; line-height: 1.3; }
+
+  /* =======================================================================
      ÉCRAN OPTIONS — il n'existe que depuis le 28/08, et pour une raison
      mécanique : le numéro de version a dû quitter la barre du bas, et il porte
      l'appui long qui ouvre le banc d'essai. Sans écran pour l'accueillir, le
@@ -1104,15 +1185,18 @@
 <div id="jeu">
 
   <!-- 1. les onglets — Base | Mission | Recherche | Monde | Options.
-       ⚠ IL N'EN RESTE QU'UN DE MORT, ET IL SE NOMME : Recherche. Mission a reçu
-       son tutoriel le 28/08, Options loge le numéro de version et le geste qui
-       ouvre le banc d'essai, et MONDE s'ouvre à ce lot-ci sur la carte. Un test
-       les nomme plutôt que de les compter : un nombre nu ne dit pas lequel des
-       trois vient de bouger. -->
+       ⚠⚠ IL N'EN RESTE AUCUN DE MORT, ET C'EST NEUF (30/08). Mission a reçu son
+       tutoriel le 28/08, Monde sa carte au lot ÉCRAN-CARTE, et RECHERCHE s'ouvre
+       à ce lot-ci : c'était le dernier. Le test qui les gardait NOMMAIT le mort
+       plutôt que de le compter — il attend maintenant une liste VIDE, ce qui est
+       la seule forme qui ne se satisfasse pas d'un onglet mort de plus.
+       ⚠ ET IL RESTE UNE COQUILLE DANS CETTE PAGE, PLUS BAS : la bascule entre
+       bases. Elle se déclare telle quelle à sa place — ne pas lire « aucun
+       onglet mort » comme « plus rien de mort ». -->
   <div id="tete-onglets">
     <button type="button" class="actif" id="onglet-base">Base</button>
     <button type="button" id="onglet-mission">Mission</button>
-    <button type="button" class="futur" disabled>Recherche</button>
+    <button type="button" id="onglet-recherche">Recherche</button>
     <button type="button" id="onglet-monde">Monde</button>
     <button type="button" id="onglet-options">Options</button>
   </div>
@@ -1208,6 +1292,33 @@
            bouton qui ne fait rien apprend une fausse règle. -->
       <button type="button" id="mission-rouvrir" hidden>Réafficher en bas de l'écran</button>
       <ol id="mission-liste"></ol>
+    </div>
+    <!-- ======================================================================
+         ÉCRAN RECHERCHE — l'arbre du joueur, et lui seul décide de ce qu'on
+         peut poser (lot RECHERCHE, 30/08).
+         ⚠⚠ TROIS PANNEAUX SUR UN RAIL, PAS TROIS ÉCRANS. Ils défilent
+         horizontalement avec accrochage ; l'indicateur du haut commande le rail
+         ET le suit. Trois `hidden` alternés auraient donné le même dessin sans
+         le geste — et c'est le geste qu'Ethan a demandé.
+         ⚠ LE DÉFILEMENT HORIZONTAL EST SUR LE RAIL, JAMAIS SUR `body`. Une
+         barre horizontale sur la page entière décrocherait l'en-tête commun et
+         la barre du bas de leurs marges système (lot PANNEAU-ET-MARGES).
+         ⚠ LES TROIS PANNEAUX SONT VIDES ICI. `ui/recherche.js` les remplit
+         depuis `data/recherche.js` : aucun prix, aucun nom de pièce et aucune
+         description de module n'est gravé dans cette page. -->
+    <div id="ecran-recherche" hidden>
+      <div id="recherche-tete">
+        <span id="recherche-points">—</span>
+        <!-- L'indicateur de position. Ses trois boutons sont écrits par le JS,
+             qui connaît déjà l'ordre des panneaux : les graver ici en ferait
+             une seconde liste, à retrier au prochain onglet. -->
+        <div id="recherche-pastilles"></div>
+      </div>
+      <div id="recherche-panneaux">
+        <section id="recherche-offense" class="panneau"></section>
+        <section id="recherche-defense" class="panneau"></section>
+        <section id="recherche-special" class="panneau"></section>
+      </div>
     </div>
     <div id="ecran-offense" hidden>
       <!-- ⚠ CE PARAGRAPHE ÉTAIT GRAVÉ DANS LA PAGE, ET IL DISAIT QUE LA

@@ -121,14 +121,19 @@ test('T2 — le budget refuse en entier, et les 72 emplacements ne plafonnent ja
 // T3 — la disponibilité, et une seule table d'apparition
 // ---------------------------------------------------------------------------
 
-test('T3 — la disponibilité suit apparition, et une seule table fait foi', () => {
-  // Niveau 1 : la Meute seule (apparition 0). Niveau 6 : + Perceurs (4) et
-  // Merlon (6). Niveau 32 : les 9 défenses et les 8 unités défensives = 17.
-  assert.equal(defensesDisponibles(1).length, 1);
-  assert.equal(defensesDisponibles(6).length, 3);
-  assert.equal(defensesDisponibles(32).length, 17);
-  assert.equal(defensesDisponibles(50).length, 17);
-  assert.deepEqual(defensesDisponibles(1), ['meute']);
+test('T3 — la disponibilité suit la recherche, et une seule table fait foi', () => {
+  // ⚠⚠ CE TEST A CHANGÉ DE PORTE AU LOT RECHERCHE, PAS D'INTENTION. Il asserait
+  // `apparition <= niveau` ; la recherche seule ouvre désormais les pièces
+  // (arbitrage d'Ethan du 30/08). La question reste : la palette propose-t-elle
+  // exactement ce que le joueur a acheté ?
+  assert.deepEqual(defensesDisponibles(['meute']), ['meute']);
+  assert.deepEqual(defensesDisponibles([]), [], 'rien d\'acquis devrait tout fermer');
+  assert.equal(defensesDisponibles(['meute', 'perceurs', 'merlon']).length, 3);
+  // ⚠ `null` N'EST PAS `[]` : c'est le banc, qui monte hors partie et voit tout.
+  assert.equal(defensesDisponibles(null).length, 17);
+  // Les défenses sortent avant les unités, dans l'ordre des tables — la palette
+  // ne doit pas se réordonner sous le doigt entre deux achats.
+  assert.deepEqual(defensesDisponibles(['meute', 'merlon']), ['merlon', 'meute']);
 
   // Huit unités ont un rôle défensif, six n'en ont pas.
   const avec = Object.keys(UNITES).filter((id) => UNITES[id].defense.present === true);
@@ -175,7 +180,9 @@ test('T4 — les bornes de la bande viennent de la table, pas de littéraux', ()
 
 test('T5 — sur les cinquante niveaux, ce que rend l\'éditeur passe le moteur', () => {
   for (let niveau = 1; niveau <= NIVEAU.plafond; niveau += 1) {
-    const dispo = defensesDisponibles(niveau);
+    // `null` = tout le roster : ce test-ci mesure que TOUT ce que l'éditeur
+    // accepte passe le moteur, pas ce que la recherche a ouvert.
+    const dispo = defensesDisponibles(null);
     let e = defenseVide(niveau);
     // Remplir au budget avec ce qui est disponible, en respectant la règle des
     // six par rangée. On s'arrête quand plus rien ne rentre.
@@ -346,26 +353,41 @@ test('T10 — l\'éditeur ne produit jamais un montage que le moteur refuserait'
 // T11 — la descente de niveau, et la purge
 // ---------------------------------------------------------------------------
 
-test('T11 — descendre de niveau ne retire rien en silence ; purger le fait sur demande', () => {
-  let e = defenseVide(30);
-  e = poser(e, { rangee: 3, colonne: 1, id: 'mortier' }); // apparition 30
-  e = poser(e, { rangee: 4, colonne: 1, id: 'merlon' }); // apparition 6
+test('T11 — un contexte qui bouge ne retire rien en silence ; purger le fait sur demande', () => {
+  // ⚠⚠ CE TEST A CHANGÉ DE DÉCLENCHEUR AU LOT RECHERCHE, PAS D'INTENTION. Il
+  // partait d'un niveau qui descend sous l'apparition d'une pièce ; RIEN NE SE
+  // DÉ-RECHERCHE, un achat est définitif. Ce qui reste — et ce que la garde
+  // tient toujours — c'est une pièce posée qui n'est PLUS ouverte : sauvegarde
+  // trafiquée, ou identifiant retiré des données.
+  let e = defenseVide(30, [], ['mortier', 'merlon']);
+  e = poser(e, { rangee: 3, colonne: 1, id: 'mortier' });
+  e = poser(e, { rangee: 4, colonne: 1, id: 'merlon' });
   assert.ok(bilan(e).valide);
 
-  // Descendre au niveau 10 : le Mortier devient verrouillé, RIEN n'est retiré.
-  const bas = avecNiveau(e, 10);
-  const b = bilan(bas);
-  assert.equal(b.emplacementsOccupes, 2, 'la descente ne retire rien');
+  // Le Mortier disparaît des acquises : il devient verrouillé, RIEN n'est retiré.
+  const ampute = { ...e, acquises: ['merlon'] };
+  const b = bilan(ampute);
+  assert.equal(b.emplacementsOccupes, 2, 'la perte d\'un acquis ne retire rien');
   assert.equal(b.verrouilles.length, 1);
   assert.equal(b.verrouilles[0].id, 'mortier');
-  assert.equal(b.verrouilles[0].apparition, 30);
   assert.ok(!b.valide);
 
   // Purger, sur demande explicite : le Mortier part, le Merlon reste.
-  const purge = purger(bas);
+  const purge = purger(ampute);
   assert.equal(bilan(purge).emplacementsOccupes, 1);
   assert.equal(enDefenseurs(purge)[0].id, 'merlon');
   assert.ok(bilan(purge).valide);
+
+  // ⚠ ET BAISSER LE NIVEAU NE VERROUILLE PLUS RIEN : c'est le renversement du
+  // lot, et il s'asserte ici plutôt que de se supposer. Seul le BUDGET suit.
+  const bas = avecNiveau(e, 1);
+  assert.deepEqual(bilan(bas).verrouilles, [],
+    'un niveau qui descend referme encore des pièces');
+  // MESURÉ : Mortier 30 + Merlon 5 = 35 points, pour un budget de 45 au niveau 1
+  // et 90 au niveau 30. Le budget SUIT le niveau, et lui seul.
+  assert.equal(bilan(bas).budgetPoints, 45);
+  assert.ok(bilan(bas).budgetPoints < bilan(e).budgetPoints,
+    'montage sans mordant : le budget ne bouge pas avec le niveau');
 });
 
 // ---------------------------------------------------------------------------

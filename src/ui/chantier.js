@@ -67,6 +67,7 @@ import {
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
 } from '../sim/state.js';
+import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES } from '../data/combat.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 
@@ -1397,10 +1398,11 @@ export function posablesDeLaBase(etat) {
  * sous le doigt entre deux gestes.
  *
  * @param {object} etat
- * @returns {Array<{id, nom, sigle, points, verrouille, apparition}>}
+ * @returns {Array<{id, nom, sigle, points, raison, verrouille}>}
  */
 export function posablesDeLaDefense(etat) {
   const niveau = niveauDeCommandement(etat, 'garnison');
+  const ouvertes = acquisesDe(etat, 'defense');
   return rosterDefensif().map((id) => {
     const ligne = DEFENSES[id] ?? UNITES[id];
     // ⚠ TROIS RAISONS, DANS L'ORDRE OÙ ELLES PRIMENT — les mêmes que la palette
@@ -1408,7 +1410,16 @@ export function posablesDeLaDefense(etat) {
     // qui le bloque MAINTENANT, pas la liste de tout ce qui le bloquera.
     let raison = null;
     if (niveau === null) raison = 'aucun QG de défense posé';
-    else if (ligne.apparition > niveau) raison = `apparaît au niveau ${ligne.apparition}`;
+    // ⚠ LA DEUXIÈME RAISON A CHANGÉ DE NATURE, PAS DE RANG. C'était
+    // `apparition > niveau` jusqu'au lot RECHERCHE ; c'est désormais la
+    // recherche, et elle seule. L'ordre des trois ne bouge PAS : sans QG il n'y
+    // a ni budget ni pièce, et le message doit dire ce qui bloque MAINTENANT.
+    //
+    // ⚠ ET LA TROISIÈME PRIME TOUJOURS SUR RIEN. L'Épervier est gratuit en
+    // offense mais reste verrouillé au démarrage faute d'aérodrome : c'est
+    // `batimentDeProductionManquant` qui doit le dire, pas « se débloque par la
+    // recherche ». L'ordre le garantit — l'y intervertir mentirait au joueur.
+    else if (!ouvertes.includes(id)) raison = 'se débloque par la recherche';
     else {
       // ⚠⚠ LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, et c'est
       // une LECTURE de l'arbitrage du 29/08. Ethan a dit « infanterie
@@ -1428,7 +1439,6 @@ export function posablesDeLaDefense(etat) {
       nom: ligne.nom.joueur,
       sigle: SIGLES_DEFENSE[id],
       points: ligne.points,
-      apparition: ligne.apparition,
       raison,
       verrouille: raison !== null,
     };

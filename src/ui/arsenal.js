@@ -58,12 +58,6 @@ export function budgetDuNiveau(niveau) {
 }
 
 /**
- * Les unités que le joueur peut poser à ce niveau : `apparition <= niveau`.
- *
- * Le sélecteur ne montre PAS les autres — il ne les grise pas. Une unité qu'on
- * ne peut pas construire n'a pas à occuper l'écran.
- */
-/**
  * Comment le joueur appelle chaque famille de châssis.
  *
  * ⚠ CE SONT LES MOTS D'ETHAN, LE 29/08 : « Infanterie inconstructible sans
@@ -99,47 +93,87 @@ export function messageSansBatiment(nomBatiment, chassis) {
   return `sans ${nomBatiment}, pas ${elide}`;
 }
 
-export function unitesDisponibles(niveau) {
-  verifierNiveau(niveau);
-  return Object.keys(UNITES).filter((id) => UNITES[id].apparition <= niveau);
+/**
+ * Les unités que le joueur peut poser : celles que la RECHERCHE a ouvertes.
+ *
+ * ⚠⚠ CE N'EST PLUS UN NIVEAU. Jusqu'au lot RECHERCHE, la porte était
+ * `apparition <= niveau` du Centre de commandement ; Ethan a tranché le 30/08 :
+ * « oui la recherche seule permet de poser des pièces », « non » au niveau seul,
+ * « non » aux deux. `apparition` est redevenue une table de l'OUVRAGE, lue par
+ * `sim/generateur.js` et par aucun chemin du joueur.
+ *
+ * ⚠ `acquises === null` VEUT DIRE « AUCUN FILTRE », et ce n'est pas la même
+ * chose que la liste vide. Le banc (`ui/banc.js`) monte des compositions hors
+ * partie, sans état de recherche : lui imposer une liste vide lui interdirait
+ * de poser quoi que ce soit. La liste VIDE, elle, veut bien dire « rien
+ * d'acquis ».
+ *
+ * @param {string[]|null} acquises identifiants ouverts, ou `null` pour tout
+ * @returns {string[]}
+ */
+export function unitesDisponibles(acquises) {
+  if (acquises === null || acquises === undefined) return Object.keys(UNITES);
+  return Object.keys(UNITES).filter((id) => acquises.includes(id));
 }
 
 /**
  * Pourquoi cette unité n'est pas encore constructible à ce niveau — ou `null`.
  *
- * ⚠ ELLE VIT ICI PARCE QUE LE SEUIL VIT ICI. `unitesDisponibles` est la seule
- * lecture d'`apparition` du dépôt côté écran ; l'écran Offense a besoin de
+ * ⚠ ELLE VIT ICI PARCE QUE LA PORTE VIT ICI. `unitesDisponibles` est la seule
+ * lecture de l'ouverture du dépôt côté écran ; l'écran Offense a besoin de
  * NOMMER le verrou depuis qu'il grise au lieu de filtrer, et le laisser relire
- * `apparition` lui-même aurait fait une seconde lecture de la même règle. Un
- * test balaie `ui/offense.js` pour que ça reste vrai.
+ * la règle lui-même en ferait une seconde lecture. Un test balaie
+ * `ui/offense.js` pour que ça reste vrai.
  *
- * ⚠ `niveau === null` N'EST PAS UN NIVEAU ZÉRO. Sans Centre de commandement il
- * n'y a pas de niveau d'armée du tout : parler d'un seuil reviendrait à
- * comparer à un nombre qui n'existe pas.
+ * ⚠ `niveau === null` N'EST PAS UN NIVEAU ZÉRO, ET CETTE RAISON PRIME TOUJOURS.
+ * Sans Centre de commandement il n'y a pas de budget d'armée du tout : dire
+ * « se débloque par la recherche » à un joueur qui n'a pas encore de QG
+ * l'enverrait acheter là où il doit d'abord construire.
+ *
+ * ⚠ LE MESSAGE NE PORTE PLUS DE NOMBRE. Le coût vit dans l'écran Recherche ; le
+ * redire ici ferait deux lectures de la même table, et deux endroits à corriger
+ * au premier réétalonnage.
  *
  * @param {string} id clé de `UNITES`
  * @param {number|null} niveau niveau du Centre de commandement
+ * @param {string[]|null} acquises identifiants ouverts par la recherche
  * @returns {string|null}
  */
-export function raisonDuVerrou(id, niveau) {
+export function raisonDuVerrou(id, niveau, acquises = null) {
   if (UNITES[id] === undefined) throw new Error(`arsenal : unité inconnue « ${id} »`);
   if (niveau === null) return 'aucun Centre de commandement posé';
-  if (unitesDisponibles(niveau).includes(id)) return null;
-  return `apparaît au niveau ${UNITES[id].apparition}`;
+  if (unitesDisponibles(acquises).includes(id)) return null;
+  return 'se débloque par la recherche';
 }
 
-/** Grille vide : 4 rangées de 9 cases, toutes libres. */
-export function arsenalVide(niveau) {
+/**
+ * Grille vide : 4 rangées de 9 cases, toutes libres.
+ *
+ * ⚠ `acquises` VOYAGE DANS L'ÉTAT DE L'ÉDITEUR, comme `interdites` de
+ * `ui/defense.js` avant lui. `poser`, `bilan` et `purger` sont des fonctions
+ * pures qui ne connaissent pas la partie : leur passer l'état de recherche à
+ * chaque appel multiplierait les signatures. Le porter dans l'état est le motif
+ * déjà en place pour les obstacles, et il a fait ses preuves.
+ *
+ * @param {number} niveau
+ * @param {string[]|null} [acquises] ouvertures de la recherche, `null` = aucun filtre
+ */
+export function arsenalVide(niveau, acquises = null) {
   verifierNiveau(niveau);
   return {
     niveau,
+    acquises,
     cases: Array.from({ length: NB_VAGUES }, () => Array.from({ length: NB_COLONNES }, () => null)),
   };
 }
 
 /** Copie profonde : chaque opération rend un NOUVEL état, jamais une mutation. */
 function copier(etat) {
-  return { niveau: etat.niveau, cases: etat.cases.map((rangee) => [...rangee]) };
+  return {
+    niveau: etat.niveau,
+    acquises: etat.acquises ?? null,
+    cases: etat.cases.map((rangee) => [...rangee]),
+  };
 }
 
 /** Somme des points engagés. */
@@ -164,11 +198,8 @@ export function poser(etat, { vague, colonne, id }) {
   if (UNITES[id] === undefined) {
     throw new Error(`arsenal : unité inconnue « ${id} »`);
   }
-  if (UNITES[id].apparition > etat.niveau) {
-    throw new Error(
-      `arsenal : ${id} est verrouillée au niveau ${etat.niveau} `
-      + `(apparition ${UNITES[id].apparition})`,
-    );
+  if (!unitesDisponibles(etat.acquises ?? null).includes(id)) {
+    throw new Error(`arsenal : ${id} n'est pas débloquée par la recherche`);
   }
   if (etat.cases[vague - 1][colonne - 1] !== null) {
     throw new Error(`arsenal : la case (vague ${vague}, colonne ${colonne}) est occupée`);
@@ -240,7 +271,15 @@ export function depuisVagues(vagues, niveau) {
 /** Change le niveau SANS toucher à la composition — c'est `bilan` qui jugera. */
 export function avecNiveau(etat, niveau) {
   verifierNiveau(niveau);
-  return { niveau, cases: etat.cases.map((rangee) => [...rangee]) };
+  // ⚠ `acquises` SUIT LE CHANGEMENT DE NIVEAU SANS BOUGER. Rien ne se
+  // dé-recherche : baisser le Centre de commandement rétrécit le BUDGET, il ne
+  // referme aucune pièce. Le perdre ici ferait passer l'état à « aucun filtre »
+  // et rendrait `verrouillees` toujours vide.
+  return {
+    niveau,
+    acquises: etat.acquises ?? null,
+    cases: etat.cases.map((rangee) => [...rangee]),
+  };
 }
 
 /**
@@ -298,10 +337,17 @@ export function indicesDeFile(etat) {
  * L'état de la composition en un coup d'œil.
  *
  * `verrouillees` et `depassementBudget` ne peuvent pas naître d'une pose — elle
- * les refuse — mais d'un CHANGEMENT DE NIVEAU vers le bas. Le banc doit alors
- * le dire et proposer de purger, jamais retirer des unités en silence.
+ * les refuse. Le banc doit alors le dire et proposer de purger, jamais retirer
+ * des unités en silence.
+ *
+ * ⚠ CE N'EST PLUS « LE NIVEAU EST DESCENDU », ET LA GARDE RESTE QUAND MÊME.
+ * RIEN NE SE DÉ-RECHERCHE : un achat est définitif. `verrouillees` naît
+ * désormais d'une sauvegarde trafiquée, d'un identifiant retiré des données, ou
+ * d'un budget qui rétrécit avec le Centre de commandement. Le retirer laisserait
+ * ces trois cas passer en silence.
  */
 export function bilan(etat) {
+  const ouvertes = unitesDisponibles(etat.acquises ?? null);
   const budgetPoints = budgetDuNiveau(etat.niveau);
   const pointsEngages = pointsDe(etat.cases);
   const verrouillees = [];
@@ -311,9 +357,7 @@ export function bilan(etat) {
       const id = etat.cases[vague - 1][colonne - 1];
       if (id === null) continue;
       emplacementsOccupes += 1;
-      if (UNITES[id].apparition > etat.niveau) {
-        verrouillees.push({ vague, colonne, id, apparition: UNITES[id].apparition });
-      }
+      if (!ouvertes.includes(id)) verrouillees.push({ vague, colonne, id });
     }
   }
   const depassementBudget = pointsEngages > budgetPoints;
@@ -331,16 +375,17 @@ export function bilan(etat) {
   };
 }
 
-/** Retire tout ce que le niveau courant n'autorise plus : unités verrouillées,
+/** Retire tout ce qui n'est plus autorisé : unités verrouillées,
  * puis les plus chères jusqu'à retomber dans le budget. N'est appelée que sur
  * demande explicite du joueur — jamais en silence. */
 export function purger(etat) {
   let suivant = copier(etat);
+  const ouvertes = unitesDisponibles(suivant.acquises ?? null);
   const budget = budgetDuNiveau(suivant.niveau);
   for (let vague = 1; vague <= NB_VAGUES; vague += 1) {
     for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
       const id = suivant.cases[vague - 1][colonne - 1];
-      if (id !== null && UNITES[id].apparition > suivant.niveau) {
+      if (id !== null && !ouvertes.includes(id)) {
         suivant.cases[vague - 1][colonne - 1] = null;
       }
     }

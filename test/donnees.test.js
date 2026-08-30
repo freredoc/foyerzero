@@ -21,7 +21,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRILLE, UNITES, DEFENSES, MODULES, COLONNES_DEGATS } from '../src/data/combat.js';
+import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
+// ⚠ `MODULES` A DÉMÉNAGÉ au lot RECHERCHE : `data/combat.js` dit QUI porte quel
+// module, `data/modules.js` dit CE QUE fait ce module. Une seule table pour une
+// seule grandeur, CLAUDE.md §4.
+import { MODULES } from '../src/data/modules.js';
 import {
   BATIMENTS, DENSITE, GARNISON, VAGUES, POINTS_RECHERCHE, RAID_OUVRAGE,
 } from '../src/data/sites.js';
@@ -93,9 +97,16 @@ test('données — tout module référencé est défini dans MODULES', () => {
     verifier(d.moduleJoueur, `défense ${id} (joueur)`);
     verifier(d.moduleOuvrage, `défense ${id} (ouvrage)`);
   }
-  // MESURÉ : 42 références vers 14 modules définis. Le montage a donc bien
+  // MESURÉ : 44 références vers 14 modules définis. Le montage a donc bien
   // parcouru les deux tables et les trois emplacements de chaque unité.
-  assert.equal(references, 42, `${references} modules référencés, 42 attendus`);
+  //
+  // ⚠ C'ÉTAIT 42 AVANT LE LOT RECHERCHE, et les deux références de plus sont un
+  // CORRECTIF DE DONNÉES, pas un ajout : `meute.defense.module` et
+  // `perceurs.defense.module` valaient `null` parce que la colonne « Module en
+  // défense (si différent) » de CIBLAGE-DEFENSE est VIDE pour ces deux-là —
+  // elle disait « le même qu'en offense », le dépôt l'avait lue « aucun ». Voir
+  // §3.3 du brief et les commentaires posés dans `data/combat.js`.
+  assert.equal(references, 44, `${references} modules référencés, 44 attendus`);
   assert.equal(Object.keys(MODULES).length, 14, 'le glossaire des modules a changé de taille');
 });
 

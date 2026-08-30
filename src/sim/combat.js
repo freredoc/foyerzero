@@ -229,6 +229,11 @@ function profilUnite(id, u) {
     // courante — une unité montée déjà entamée garde le même plancher.
     plancherReserve: Math.floor((u.reserve * GRILLE.plancherReservePct) / 100),
     moduleDefense: u.defense.module,
+    // ⚠ LE MODULE OFFENSIF EST DISTINCT DE `moduleDefense`, et il n'entrait pas
+    // dans le profil avant le lot RECHERCHE — rien ne le lisait. L'Écraseur le
+    // lit maintenant. Les deux coexistent parce qu'une pièce porte souvent deux
+    // modules différents selon le côté de la grille où elle se trouve.
+    module: u.module,
     presentEnDefense: u.defense.present === true,
   };
 }
@@ -270,6 +275,8 @@ function profilDefense(id, d) {
     // Le site appartient à l'Ouvrage : c'est son module qui compte pour les
     // points de recherche.
     moduleDefense: d.moduleOuvrage,
+    // Une structure ne se déplace pas : elle ne force rien.
+    module: null,
     presentEnDefense: true,
   };
 }
@@ -296,6 +303,7 @@ function profilBatiment(id, b) {
     reserveMax: 0,
     plancherReserve: 0,
     moduleDefense: null,
+    module: null,
     presentEnDefense: false,
     indiceButin: b.indiceButin,
     ressource: b.ressource,
@@ -1030,8 +1038,71 @@ function doitSArreter(etat, e, p) {
  * derrière une infanterie dans la même colonne gâche le blindé, puisqu'aucune
  * unité ne change jamais de colonne.
  */
-function peutEcraser(e, p, occupante, po) {
-  return occupante.camp !== e.camp && po.ecrasable && p.masse > po.masse;
+function peutEcraser(etat, e, p, occupante, po) {
+  return occupante.camp !== e.camp && po.ecrasable && masseEffective(etat, e, p, po) > po.masse;
+}
+
+/**
+ * Le module de cette entité est-il acquis par SON propriétaire ?
+ *
+ * ⚠ TROIS CONDITIONS, ET AUCUNE N'EST DE TROP. La pièce doit PORTER le module
+ * (`data/combat.js`), son propriétaire doit l'avoir ACHETÉ (`modulesDebloques`),
+ * et l'on regarde la liste de CE camp-là. Sans la troisième, un joueur qui
+ * achète l'Écraseur l'offrirait aux Fendeurs de l'Ouvrage en face de lui.
+ *
+ * ⚠ ET `modulesDebloques.ouvrage` NE SERT PAS ICI. Il majore les points de
+ * recherche de 20 % sur une cible dont le module est débloqué — une autre
+ * grandeur, dans l'autre sens. Voir `pointsRecherche`.
+ */
+function moduleActif(etat, e, p, nom) {
+  if (p.module !== nom) return false;
+  const liste = etat.modulesDebloques?.[e.proprietaire];
+  return Array.isArray(liste) && liste.includes(nom);
+}
+
+/**
+ * La masse d'une entité pour l'écrasement — DOUBLÉE contre une escouade quand
+ * l'Écraseur est acquis.
+ *
+ * ⚠⚠ CET EFFET EST NUL AVEC LES MASSES D'AUJOURD'HUI, ET C'EST NORMAL. Les
+ * blindés valent 5, 10 ou 20 ; les escouades valent toutes 1. Un blindé écrase
+ * déjà toute escouade, doublé ou non — aucun montage ne sépare les deux
+ * comportements. La règle s'écrit quand même : elle mordra le jour où une
+ * escouade prendra de la masse, et l'écrire plus tard demanderait de retrouver
+ * la phrase d'Ethan. **Ne pas croire qu'un test la couvre.**
+ */
+function masseEffective(etat, e, p, po) {
+  if (po.colonneMatrice !== 'escouade') return p.masse;
+  return moduleActif(etat, e, p, 'ecraseur') ? p.masse * 2 : p.masse;
+}
+
+/** Le pourcentage des PV MAXIMAUX qu'une unité à Écraseur retire par tick. */
+const ECRASEUR_PCT_PAR_TICK = 1;
+
+/**
+ * L'entité qu'une unité à Écraseur est en train de FORCER — ou `undefined`.
+ *
+ * ⚠ SUR LES PV MAXIMAUX, PAS SUR LES PV RESTANTS. Sur les restants, une
+ * structure ne tomberait jamais : chaque tick n'en retire qu'un centième et il
+ * en reste toujours. Sur les maximaux, **toute structure tombe en 10 s
+ * exactement**, quelle que soit sa taille — c'est ce que dit la phrase d'Ethan
+ * du 30/08, et c'est la seule lecture qui termine.
+ *
+ * ⚠ LES STRUCTURES SEULEMENT, PAS LES BÂTIMENTS. « Forcer les structures
+ * défensives » : un mur, une herse, une tourelle. Les bâtiments de site sont du
+ * butin, pas un obstacle, et rien ne les met en travers d'une colonne.
+ *
+ * ⚠ `degatsParcours` N'ENTRE PAS ICI. C'est une autre grandeur, en PV ABSOLUS,
+ * toujours non câblée après ce lot. Ne pas la confondre avec les 10 %.
+ */
+function structureForcee(etat, e, p, occupation, caseDestination) {
+  if (e.camp !== 'attaque' || !p.bloquant) return undefined;
+  if (!moduleActif(etat, e, p, 'ecraseur')) return undefined;
+  const indice = occupantDe(occupation, caseDestination, e.colonne);
+  if (indice === undefined) return undefined;
+  const occupante = etat.entites[indice];
+  if (occupante.camp === e.camp || occupante.genre !== 'defense') return undefined;
+  return occupante;
 }
 
 /**
@@ -1054,7 +1125,7 @@ function peutAvancer(etat, e, p, occupation, rangee, caseDestination) {
   const indiceOccupante = occupantDe(occupation, caseDestination, e.colonne);
   if (indiceOccupante === undefined) return true;
   const occupante = etat.entites[indiceOccupante];
-  return peutEcraser(e, p, occupante, profil(occupante));
+  return peutEcraser(etat, e, p, occupante, profil(occupante));
 }
 
 /**
@@ -1116,12 +1187,27 @@ function deplacement(etat) {
     const progresse = !arrete
       && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
 
+    // ÉCRASEUR — forcer la structure qui barre la colonne.
+    //
+    // ⚠ AVANT LE REPLI, ET AVANT LE `continue` DE L'ARRÊT. « En plus de ses
+    // tirs ordinaires » : une unité arrêtée pour tirer sur le mur le force
+    // AUSSI, et une unité qui force n'est pas inutile — sans ce calcul ici,
+    // `TICKS_AVANT_REPLI` (30) la ferait rentrer à la base bien avant les
+    // 100 ticks qu'il faut pour ouvrir la brèche.
+    const forcee = progresse
+      ? undefined
+      : structureForcee(etat, e, p, occupation, caseDestination);
+    if (forcee !== undefined) {
+      const degats = Math.max(1, Math.floor((forcee.pvMaxMilli * ECRASEUR_PCT_PAR_TICK) / 100));
+      forcee.pvMilli = Math.max(0, forcee.pvMilli - degats);
+    }
+
     // REPLI. Une unité offensive qui ne peut ni avancer ni nuire pendant
     // TICKS_AVANT_REPLI ticks consécutifs rentre à la base : elle sort du champ
     // sans être détruite, et compte parmi les survivants. Le compteur se remet
     // à zéro dès qu'une des deux conditions cesse d'être vraie — un blocage est
     // souvent transitoire.
-    if (progresse || nuit(e)) {
+    if (progresse || nuit(e) || forcee !== undefined) {
       e.ticksInutiles = 0;
     } else {
       e.ticksInutiles += 1;
@@ -1163,7 +1249,7 @@ function deplacement(etat) {
     }
     const occupante = etat.entites[indiceOccupante];
     const po = profil(occupante);
-    if (peutEcraser(e, p, occupante, po)) {
+    if (peutEcraser(etat, e, p, occupante, po)) {
       occupante.pvMilli = 0;
       occupante.vivant = false;
       occupante.ecrase = true;
@@ -1172,7 +1258,9 @@ function deplacement(etat) {
       poser(occupation, caseDestination, e.colonne, e.indice);
       e.rangeeMilli = destinationMilli;
     }
-    // Masse égale ou inférieure : blocage, aucune avance.
+    // Masse égale ou inférieure : blocage, aucune avance. La structure forcée,
+    // elle, a déjà encaissé ses 1 % plus haut : elle tombera, et l'unité
+    // avancera au tick suivant — `retirerLesMorts` passe avant `deplacement`.
   }
 }
 

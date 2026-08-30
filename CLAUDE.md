@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.49.0 · build 50.
+Dernière révision : **30/08/2026**, version 0.50.0 · build 51.
 
 ---
 
@@ -41,13 +41,15 @@ Dernière révision : **30/08/2026**, version 0.49.0 · build 50.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot SPRITES-ET-ZOOM), à confronter :**
-`npm test` → **634 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 242 496 octets**, 0 référence externe.
-⚠ **SPRITES-ET-ZOOM A COÛTÉ +12 080 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.**
-C'est du code et de la feuille : le sol de la base est découpé dans l'atlas du
-MONDE, qui était déjà au livrable depuis ÉCRAN-CARTE. La borne de T10 n'a donc
-pas bougé — marge **57 504 octets**, 4,4 %.
+**Référence au 30/08/2026 (après le lot RECHERCHE), à confronter :**
+`npm test` → **658 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 259 092 octets**, 0 référence externe.
+⚠ **RECHERCHE A COÛTÉ +16 596 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.** C'est du
+code, de la feuille et un écran de plus ; l'arbre réemploie les sprites d'unité
+et d'ouvrage qui étaient au livrable depuis SPRITES-ET-ZOOM. La borne de T10 n'a
+pas bougé — marge **40 908 octets**, 3,1 %.
+⚠ **ET LA MARGE SE RESSERRE : 4,4 % au lot précédent, 3,1 % ici.** Le prochain
+atlas ne tiendra pas ; c'est la borne qu'il faudra rouvrir, pas la contourner.
 ⚠⚠ **ET IL A RETOURNÉ LE COUPLAGE DES ATLAS PARTAGÉS. VOIR §6.** Quatre d'entre
 eux servent à la fois en fond CSS et en `drawImage` ; les déclarer aux deux
 endroits les inlinerait DEUX fois — 507 464 octets mesurés. La déclaration vit
@@ -317,8 +319,10 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 9 fichiers ; RIEN d'autre n'a le droit d'en porter
-  combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
+src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d'autre n'a le droit d'en porter
+  combat.js             grille, unités, défenses, QUI porte quel module, ciblage, écrasement, obstacles
+  modules.js            ce que FAIT chaque module : libellé, description d'Ethan, état de câblage
+  recherche.js          l'arbre de recherche du joueur — la SEULE porte qui ouvre une pièce
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
@@ -345,7 +349,7 @@ src/data/               toutes les valeurs de calibrage — 9 fichiers ; RIEN d'
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 20 fichiers
+src/sim/                simulation déterministe, sans DOM — 21 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -361,6 +365,11 @@ src/sim/                simulation déterministe, sans DOM — 20 fichiers
   reparation.js         les quatre réservoirs, en parallèle : coût additif, temps au maximum
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
+  recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
+  ⤷ ⚠ DEUX `recherche.js`, UN DANS `data/` ET UN DANS `sim/`, et c'est le motif
+    déjà en place pour `combat.js` et `missions.js` : la TABLE d'un côté, le
+    MOTEUR de l'autre. Un import qui se trompe de dossier ne compile pas — les
+    exports n'ont aucun nom en commun.
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 9 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -400,12 +409,13 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 9 fic
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
+src/ui/                 les six écrans et leurs éditeurs — 9 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
   monde.js              l'écran de la carte : canevas, quatre crans, défilement au doigt
+  recherche.js          l'arbre du joueur : trois panneaux sur un rail, achat en deux touchers
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
@@ -429,14 +439,14 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   39 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   40 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state
+  sprite  state  recherche
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -2799,6 +2809,27 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **`data/base.js` ET `data/economie.js` CITENT ENCORE LE CLASSEUR.** Ce
   n'est pas la même faute — Ethan l'a pointé lui-même pour ces deux-là — mais
   le jour où l'une de ces valeurs sera contestée, la piste sera aussi courte.
+
+- **LA RECHERCHE SEULE OUVRE LES PIÈCES** — 30/08, lot RECHERCHE, arbitrages 1
+  à 3 d'Ethan. `apparition` redevient une table de l'OUVRAGE : elle dit ce que
+  `sim/generateur.js` peuple sur ses sites, et **plus aucun chemin du joueur ne
+  la lit** — un test balaie `ui/arsenal.js`, `ui/defense.js`, `ui/chantier.js` et
+  `ui/offense.js` pour l'exiger. Ce qui se pose se lit dans
+  `etat.recherche.acquises`, écrit par `sim/recherche.js`.
+  ⚠ **NI LE NIVEAU SEUL, NI LE NIVEAU *ET* LA RECHERCHE.** Les deux ont été
+  proposés et refusés : le niveau du Centre de commandement ne borne plus que le
+  BUDGET d'armée, jamais le catalogue. Une pièce déjà posée ne se verrouille donc
+  plus quand un bâtiment redescend de niveau.
+  ⚠ **UNE PIÈCE S'ACHÈTE DEUX FOIS, UNE PAR BRANCHE**, comme dans Tiberium
+  Alliances : le Chasseur coûte 300 000 en offense et 135 000 en défense, et
+  l'un n'ouvre pas l'autre.
+  ⚠ **TREIZE MODULES SUR QUATORZE S'AFFICHENT ET NE S'ACHÈTENT PAS.**
+  `data/modules.js` porte un drapeau `cable` par module ; `sim/recherche.js`
+  refuse l'achat par le code `effetNonCable`. Prendre les points du joueur
+  contre un effet qui n'existe pas serait un vol. Seul l'Écraseur est câblé.
+  ⚠ **L'ÉCRAN ACHÈTE EN DEUX TOUCHERS.** Le premier arme le bouton, le second
+  paie ; toucher ailleurs désarme, et une peinture désarme tout. Deux milliards
+  et demi de points ne partent pas sur un frôlement.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie

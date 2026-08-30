@@ -136,8 +136,12 @@ export const UNITES = {
     reserve: 70, masse: 1, comportementAerien: null,
     degats: { infanterie: 22, vehicule: 11, structureOuAviation: 7 },
     degatsParcours: 0, reparation: 441,
-    module: 'fumigene', moduleOuvrage: null,
-    defense: { present: true, cible: 'antiInfanterie', module: null },
+    module: 'flashbang', moduleOuvrage: null,
+    // ⚠ « SI DIFFÉRENT » NE VEUT PAS DIRE « AUCUN ». La colonne « Module en
+    // défense (si différent) » de CIBLAGE-DEFENSE est VIDE pour la Meute : elle
+    // dit « le même qu'en offense », et le dépôt l'avait lue comme une absence.
+    // Corrigé au lot RECHERCHE, où le prix d'un module sans module n'a pas de sens.
+    defense: { present: true, cible: 'antiInfanterie', module: 'flashbang' },
     apparition: 0, apparitionModule: 20,
   },
   guetteur: {
@@ -161,7 +165,9 @@ export const UNITES = {
     degats: { infanterie: 5, vehicule: 12, structureOuAviation: 25 },
     degatsParcours: 0, reparation: 441,
     module: 'tirDeBarrage', moduleOuvrage: null,
-    defense: { present: true, cible: 'antiAerien', module: null },
+    // Même correction que la Meute : la colonne vide de CIBLAGE-DEFENSE disait
+    // « identique à l'offense », pas « aucun module ». Voir data/modules.js.
+    defense: { present: true, cible: 'antiAerien', module: 'tirDeBarrage' },
     apparition: 4, apparitionModule: 22,
   },
   fouisseurs: {
@@ -226,8 +232,8 @@ export const UNITES = {
     reserve: 250, masse: 5, comportementAerien: null,
     degats: { infanterie: 7, vehicule: 12, structureOuAviation: 25 },
     degatsParcours: 7, reparation: 972,
-    module: 'fumigene', moduleOuvrage: null,
-    defense: { present: true, cible: 'antiAerien', module: 'fumigene' },
+    module: 'flashbang', moduleOuvrage: null,
+    defense: { present: true, cible: 'antiAerien', module: 'flashbang' },
     apparition: 16, apparitionModule: 32,
   },
   pilon: {
@@ -396,25 +402,13 @@ export const DEFENSES = {
 };
 
 // --- modules -----------------------------------------------------------------
-// Améliorations PERMANENTES, appliquées à toutes les unités du type concerné.
-// Glossaire : ce dictionnaire ne dit pas qui les porte — les affectations sont
-// dans UNITES.module / moduleOuvrage et DEFENSES.moduleJoueur / moduleOuvrage.
-export const MODULES = {
-  fumigene: 'Désactive une infanterie 5 s, une fois par raid. Effet −20 % si la cible est de niveau supérieur.',
-  emp: 'Désactive un véhicule 5 s, une fois par raid. Même pénalité de niveau.',
-  tirDeBarrage: 'Inflige 30 % des dégâts aux structures voisines.',
-  booster: 'Après avoir été blessée, vitesse ×10 pendant 3 s, une fois par raid.',
-  garnison: "Embarque une infanterie et la débarque derrière la ligne, ou à la destruction du porteur, sans pénalité.",
-  ecraseur: 'Force les murs — 10 % de dégâts par seconde — et masse ×2 pour l’écrasement.',
-  autoReparation: 'Répare 20 % des PV manquants après le raid, indépendamment du QG.',
-  bouclier: 'Encaisse les dégâts des alliés dans un rayon de 2,5. PV du bouclier = 100 % des PV du porteur.',
-  camouflage: 'Invisible pour la défense ; sort du camouflage si une cible de prédilection entre à portée.',
-  munitionSpeciale: 'Ajoute 0,2 à la matrice contre la cible de prédilection.',
-  volDeVie: 'Convertit 20 % des dégâts infligés en PV.',
-  pvPlusVingt: 'Ajoute 20 % de PV.',
-  rayonMiniMoinsUn: 'Réduit la portée minimale de 1.',
-  rayonPlusUn: "Ajoute 1 de portée.",
-};
+// ⚠⚠ LE GLOSSAIRE A DÉMÉNAGÉ DANS `data/modules.js` AU LOT RECHERCHE, ET IL N'EN
+// RESTE PAS DE COPIE ICI. Il portait une paraphrase d'une ligne par module, sans
+// un seul nombre ; l'écran Recherche a besoin des définitions chiffrées, et deux
+// tables pour une même grandeur sont ce que CLAUDE.md §4 refuse. Ce fichier
+// garde ce qui lui appartient : QUI porte quel module — `UNITES[x].module`,
+// `moduleOuvrage`, `defense.module`, `DEFENSES[x].moduleJoueur`, `moduleOuvrage`.
+// Le glossaire ne l'a jamais dit, et il le disait lui-même.
 
 // --- écrasement --------------------------------------------------------------
 // Un seul seuil, trois cas : masse supérieure → écrasement, donc pas de blocage.
