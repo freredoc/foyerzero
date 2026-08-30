@@ -593,6 +593,13 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     // mais ses quatre points d'ancrage sont dans le balisage.
     'chantier-panneau', 'chantier-panneau-titre', 'chantier-panneau-fermer',
     'chantier-panneau-corps', 'chantier-panneau-ameliorer',
+    // L'écran Recherche, lot RECHERCHE : son onglet, ses trois panneaux et les
+    // deux ancres que `ui/recherche.js` remplit. Même rôle que ci-dessus — le
+    // JS écrit tout le contenu, un identifiant renommé d'un seul côté laisserait
+    // l'écran muet sans qu'aucun test ne le dise.
+    'onglet-recherche', 'ecran-recherche', 'recherche-tete', 'recherche-points',
+    'recherche-pastilles', 'recherche-panneaux',
+    'recherche-offense', 'recherche-defense', 'recherche-special',
   ]) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
   }
@@ -613,20 +620,23 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // Les onglets à venir sont désactivés : un contrôle inerte qui a l'air vif
   // fait douter le joueur de son appareil plutôt que du jeu.
   //
-  // ⚠ ILS SE NOMMENT, ILS NE SE COMPTENT PLUS. La version précédente attendait
-  // « 3 » avec un message qui disait « Recherche, Monde et Options » — Options
-  // était vivant depuis le lot MISE EN PAGE, donc le message mentait déjà. Le
-  // compte est tombé à 2 quand Mission a reçu son tutoriel, et un nombre nu
-  // n'aurait pas dit lequel des trois venait de bouger.
-  //
-  // ⚠ IL N'EN RESTE QU'UN DEPUIS LE LOT ÉCRAN-CARTE : Recherche. Monde s'est
-  // ouvert sur la carte, comme Mission s'était ouvert sur le tutoriel.
-  const futurs = [...html.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
-    .map((m) => m[1]);
-  assert.deepEqual(
-    futurs.slice().sort(), ['Recherche'],
-    'la liste des onglets morts a changé : dire lequel s\'ouvre, ou lequel est retombé',
-  );
+  // ⚠⚠ PLUS AUCUN ONGLET MORT DEPUIS LE LOT RECHERCHE (30/08), et la garde a
+  // CHANGÉ DE FORME pour le dire. Elle listait les boutons `class="futur"
+  // disabled` et attendait `['Recherche']` ; une liste attendue VIDE aurait été
+  // vraie aussi le jour où quelqu'un écrirait un onglet mort SANS la classe —
+  // et la classe vient justement de disparaître de la feuille de style, faute
+  // de porteur. On asserte donc le POSITIF, sur les cinq boutons de la barre :
+  // chacun porte un identifiant (donc quelque chose l'écoute) et aucun n'est
+  // éteint. Un onglet mort de plus tombe, quelle que soit la façon de l'écrire.
+  const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/);
+  assert.ok(barre, 'la barre d\'onglets a disparu');
+  const onglets = [...barre[1].matchAll(/<button[^>]*>[^<]*</g)].map((m) => m[0]);
+  assert.equal(onglets.length, 5, 'la barre ne porte plus cinq onglets');
+  for (const onglet of onglets) {
+    assert.match(onglet, /\sid="onglet-[a-z]+"/, `onglet sans identifiant : ${onglet}`);
+    assert.ok(!/\sdisabled/.test(onglet), `onglet désactivé : ${onglet}`);
+    assert.ok(!/class="[^"]*\bfutur\b/.test(onglet), `onglet encore « futur » : ${onglet}`);
+  }
 
   // ⚠ LES TROIS BOUTONS D'ACTION NE SONT PLUS DÉSACTIVÉS, ET C'EST LE LOT.
   // Le modèle est « armer puis toucher » : c'est le bouton qu'on touche EN
@@ -657,15 +667,19 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
     'chantier-bandes-liste', 'chantier-version', 'chantier-vers-offense']) {
     assert.ok(!code.includes(demenage), `« ${demenage} » survit après le déménagement`);
   }
-  // Cinq onglets, dont UN SEUL mort : Base, Mission, Recherche, Monde, Options.
-  // ⚠ MISSION S'EST OUVERT AU LOT TUTORIEL, MONDE AU LOT ÉCRAN-CARTE. Les deux
-  // étaient « morts pour l'instant » ; il ne reste que Recherche. Les morts se
-  // nomment ici comme plus haut, pour qu'on lise LEQUEL a changé.
+  // Cinq onglets, et AUCUN mort : Base, Mission, Recherche, Monde, Options.
+  // ⚠ MISSION S'EST OUVERT AU LOT TUTORIEL, MONDE AU LOT ÉCRAN-CARTE, RECHERCHE
+  // À CELUI-CI (30/08) — c'était le dernier. La liste attendue devient donc
+  // vide ; la garde qui compte vraiment est celle du haut de ce fichier, qui
+  // exige un identifiant sur les cinq boutons. Ici on garde la forme ancienne
+  // pour lire le passage de `['Recherche']` à `[]` dans le diff du lot.
   const ongletsMorts = [...code.matchAll(/<button[^>]*class="futur"[^>]*disabled[^>]*>([^<]*)</g)]
     .map((m) => m[1]);
-  assert.deepEqual(ongletsMorts.slice().sort(), ['Recherche']);
+  assert.deepEqual(ongletsMorts.slice().sort(), []);
   assert.ok(/id="onglet-monde">Monde</.test(code), 'l\'onglet Monde est absent ou muet');
   assert.ok(/id="onglet-mission">Mission</.test(code), 'l\'onglet Mission est absent ou muet');
+  assert.ok(/id="onglet-recherche">Recherche</.test(code),
+    'l\'onglet Recherche est absent ou muet');
   assert.ok(/id="onglet-base">Base</.test(code), 'l\'onglet ne s\'appelle plus « Base »');
   assert.ok(!/>Chantier</.test(code), 'un onglet « Chantier » traîne encore');
   // Et la grille se centre par la MISE EN PAGE, jamais par une transformation :

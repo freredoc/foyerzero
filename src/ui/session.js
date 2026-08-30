@@ -41,6 +41,7 @@ import { initialiserEcranChantier } from './chantier.js';
 import { initialiserEcranOffense } from './offense.js';
 import { initialiserEcranMission, initialiserMiniTutoriel } from './mission.js';
 import { initialiserEcranMonde } from './monde.js';
+import { initialiserEcranRecherche } from './recherche.js';
 import { initialiserBanc } from './banc.js';
 
 /**
@@ -267,6 +268,7 @@ export function initialiserSession(doc) {
   let ecranMission = null;
   let ecranOffense = null;
   let ecranMonde = null;
+  let ecranRecherche = null;
   let miniTutoriel = null;
   let idImage = null;
   const chrono = creerChronometre(maintenantMs);
@@ -487,14 +489,14 @@ export function initialiserSession(doc) {
   // bien que le défaut ne se lirait que sur un chronomètre. On se contente donc
   // de montrer l'un et de cacher l'autre.
 
-  // ⚠ CINQ ÉCRANS DEPUIS LE LOT ÉCRAN-CARTE, et un en-tête COMMUN au-dessus
-  // d'eux. Le Monde était le dernier onglet mort à s'ouvrir avec Mission ; il
-  // ne reste que Recherche. Les
-  // onglets, les ressources, la bascule entre bases et la barre du bas ont
-  // quitté `#ecran-chantier` : changer d'écran ne les fait plus disparaître,
-  // ce qu'Ethan demandait (« garder la barre quartz scories etc et monde option
-  // dans le menu offense »).
-  const ECRANS = ['chantier', 'mission', 'offense', 'monde', 'options'];
+  // ⚠ SIX ÉCRANS DEPUIS LE LOT RECHERCHE, et un en-tête COMMUN au-dessus d'eux.
+  // Mission s'est ouvert le 28/08, le Monde au lot ÉCRAN-CARTE, et RECHERCHE à
+  // celui-ci : plus aucun onglet n'est mort. Les onglets, les ressources, la
+  // bascule entre bases et la barre du bas ont quitté `#ecran-chantier` :
+  // changer d'écran ne les fait plus disparaître, ce qu'Ethan demandait
+  // (« garder la barre quartz scories etc et monde option dans le menu
+  // offense »).
+  const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options'];
 
   // ⚠ QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN — UNE TABLE, PAS DES CONDITIONS.
   // La version précédente écrivait « actif si ce n'est pas Options », ce qui
@@ -504,6 +506,7 @@ export function initialiserSession(doc) {
     chantier: 'onglet-base',
     offense: 'onglet-base',
     mission: 'onglet-mission',
+    recherche: 'onglet-recherche',
     monde: 'onglet-monde',
     options: 'onglet-options',
   };
@@ -527,6 +530,13 @@ export function initialiserSession(doc) {
     // ouvre du budget et allonge la palette — et elle ne se repeint pas tant
     // qu'elle est cachée.
     if (nom === 'offense' && ecranOffense !== null && etat !== null) ecranOffense.peindre(etat);
+    // ⚠ ET LA RECHERCHE AUSSI, ET POUR ELLE C'EST LE CŒUR DU SUJET. Les points
+    // MONTENT pendant qu'on regarde ailleurs — chaque raid en rapporte — et un
+    // arbre peint à la construction afficherait pour toujours le compteur du
+    // démarrage, donc des boutons refusés dont le joueur a les moyens.
+    if (nom === 'recherche' && ecranRecherche !== null && etat !== null) {
+      ecranRecherche.peindre(etat);
+    }
     // ⚠ ET LA CARTE SE MET EN SCÈNE ET SE RETIRE, LES DEUX. Elle est le seul
     // écran qui porte une boucle à lui : les dalles du fond se calculent deux
     // par image tant qu'il en manque. La laisser tourner derrière un autre
@@ -542,6 +552,7 @@ export function initialiserSession(doc) {
   $('onglet-base').addEventListener('click', () => montrerEcran('chantier'));
   $('onglet-options').addEventListener('click', () => montrerEcran('options'));
   $('onglet-mission').addEventListener('click', () => montrerEcran('mission'));
+  $('onglet-recherche').addEventListener('click', () => montrerEcran('recherche'));
   $('onglet-monde').addEventListener('click', () => montrerEcran('monde'));
 
   // --- le banc d'essai, derrière un appui long -------------------------------
@@ -667,6 +678,10 @@ export function initialiserSession(doc) {
       montrerEcran('chantier');
     },
   });
+  // ⚠ L'ACHAT S'ENREGISTRE TOUT DE SUITE. Dépenser deux milliards de points est
+  // exactement le genre de geste qu'un joueur ne veut pas refaire parce que le
+  // système a tué l'application — même raisonnement que `apresPose`.
+  ecranRecherche = initialiserEcranRecherche(doc, { apresAchat: () => sauvegarder() });
   ecranMonde = initialiserEcranMonde(doc);
   montrerEcran('chantier');
   demarrer();

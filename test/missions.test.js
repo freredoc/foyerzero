@@ -713,16 +713,21 @@ test('missions — l\'onglet est vivant, et chaque écran allume le sien', () =>
   assert.deepEqual(couverts.slice().sort(), ecrans.slice().sort(),
     'la table des onglets ne couvre plus exactement les écrans');
 
-  // ⚠ UN SEUL ONGLET MORT RESTE, ET IL SE NOMME. Compter les morts ne dit pas
-  // lequel vient de bouger.
-  for (const vivant of ['mission', 'monde', 'options', 'chantier']) {
+  // ⚠ PLUS AUCUN ONGLET MORT DEPUIS LE LOT RECHERCHE (30/08) — et `recherche`
+  // entre dans cette liste-ci, qui nomme les écrans que la table doit couvrir.
+  for (const vivant of ['mission', 'monde', 'options', 'chantier', 'recherche']) {
     assert.ok(couverts.includes(vivant), `l'écran ${vivant} n'est plus dans la table`);
   }
-  // ⚠ IL N'EN RESTE QU'UN, ET IL SE RECONNAÎT À SA CLASSE, PAS À UN
-  // IDENTIFIANT : un onglet mort n'en a pas, puisque rien ne l'écoute.
+  // ⚠ ET LA LISTE ATTENDUE EST VIDE. Elle valait `['Recherche']` : un onglet
+  // mort se reconnaissait à sa classe, pas à un identifiant, puisque rien ne
+  // l'écoutait. Le dernier vient de s'ouvrir. `test/chantier.test.js` tient la
+  // garde POSITIVE — les cinq boutons portent un identifiant et aucun n'est
+  // désactivé —, celle-ci garde la trace du dernier mort qui s'en va.
   const morts = [...html.matchAll(/<button[^>]*class="futur"[^>]*>([^<]*)</g)].map((m) => m[1]);
-  assert.deepEqual(morts, ['Recherche'],
+  assert.deepEqual(morts, [],
     `onglets morts : ${morts.join(', ')} — la liste a changé, dire lequel`);
+  assert.ok(html.includes('id="onglet-recherche"'), 'l\'onglet Recherche a disparu');
+  assert.ok(html.includes('id="ecran-recherche"'), 'l\'écran Recherche a disparu');
 
   // Et la marque des missions à venir est distincte des deux autres.
   assert.notEqual(MARQUE_A_VENIR, '✔');

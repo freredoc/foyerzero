@@ -42,12 +42,14 @@ Dernière révision : **30/08/2026**, version 0.50.0 · build 51.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 30/08/2026 (après le lot RECHERCHE), à confronter :**
-`npm test` → **651 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 245 588 octets**, 0 référence externe.
-⚠ **SPRITES-ET-ZOOM A COÛTÉ +12 080 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.**
-C'est du code et de la feuille : le sol de la base est découpé dans l'atlas du
-MONDE, qui était déjà au livrable depuis ÉCRAN-CARTE. La borne de T10 n'a donc
-pas bougé — marge **57 504 octets**, 4,4 %.
+`npm test` → **658 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 259 092 octets**, 0 référence externe.
+⚠ **RECHERCHE A COÛTÉ +16 596 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.** C'est du
+code, de la feuille et un écran de plus ; l'arbre réemploie les sprites d'unité
+et d'ouvrage qui étaient au livrable depuis SPRITES-ET-ZOOM. La borne de T10 n'a
+pas bougé — marge **40 908 octets**, 3,1 %.
+⚠ **ET LA MARGE SE RESSERRE : 4,4 % au lot précédent, 3,1 % ici.** Le prochain
+atlas ne tiendra pas ; c'est la borne qu'il faudra rouvrir, pas la contourner.
 ⚠⚠ **ET IL A RETOURNÉ LE COUPLAGE DES ATLAS PARTAGÉS. VOIR §6.** Quatre d'entre
 eux servent à la fois en fond CSS et en `drawImage` ; les déclarer aux deux
 endroits les inlinerait DEUX fois — 507 464 octets mesurés. La déclaration vit
@@ -407,12 +409,13 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 9 fic
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
+src/ui/                 les six écrans et leurs éditeurs — 9 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
   monde.js              l'écran de la carte : canevas, quatre crans, défilement au doigt
+  recherche.js          l'arbre du joueur : trois panneaux sur un rail, achat en deux touchers
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
@@ -2806,6 +2809,27 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **`data/base.js` ET `data/economie.js` CITENT ENCORE LE CLASSEUR.** Ce
   n'est pas la même faute — Ethan l'a pointé lui-même pour ces deux-là — mais
   le jour où l'une de ces valeurs sera contestée, la piste sera aussi courte.
+
+- **LA RECHERCHE SEULE OUVRE LES PIÈCES** — 30/08, lot RECHERCHE, arbitrages 1
+  à 3 d'Ethan. `apparition` redevient une table de l'OUVRAGE : elle dit ce que
+  `sim/generateur.js` peuple sur ses sites, et **plus aucun chemin du joueur ne
+  la lit** — un test balaie `ui/arsenal.js`, `ui/defense.js`, `ui/chantier.js` et
+  `ui/offense.js` pour l'exiger. Ce qui se pose se lit dans
+  `etat.recherche.acquises`, écrit par `sim/recherche.js`.
+  ⚠ **NI LE NIVEAU SEUL, NI LE NIVEAU *ET* LA RECHERCHE.** Les deux ont été
+  proposés et refusés : le niveau du Centre de commandement ne borne plus que le
+  BUDGET d'armée, jamais le catalogue. Une pièce déjà posée ne se verrouille donc
+  plus quand un bâtiment redescend de niveau.
+  ⚠ **UNE PIÈCE S'ACHÈTE DEUX FOIS, UNE PAR BRANCHE**, comme dans Tiberium
+  Alliances : le Chasseur coûte 300 000 en offense et 135 000 en défense, et
+  l'un n'ouvre pas l'autre.
+  ⚠ **TREIZE MODULES SUR QUATORZE S'AFFICHENT ET NE S'ACHÈTENT PAS.**
+  `data/modules.js` porte un drapeau `cable` par module ; `sim/recherche.js`
+  refuse l'achat par le code `effetNonCable`. Prendre les points du joueur
+  contre un effet qui n'existe pas serait un vol. Seul l'Écraseur est câblé.
+  ⚠ **L'ÉCRAN ACHÈTE EN DEUX TOUCHERS.** Le premier arme le bouton, le second
+  paie ; toucher ailleurs désarme, et une peinture désarme tout. Deux milliards
+  et demi de points ne partent pas sur un frôlement.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie

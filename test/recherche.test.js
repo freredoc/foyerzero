@@ -23,6 +23,11 @@ import {
 } from '../src/sim/state.js';
 import { bilan as bilanArmee, arsenalVide } from '../src/ui/arsenal.js';
 import { bilan as bilanDefense, defenseVide, defensesDisponibles } from '../src/ui/defense.js';
+import { ATLAS } from '../src/data/atlas.js';
+import {
+  initialiserEcranRecherche, lignesDeRecherche, lignesSpeciales, couchesDeLaPiece,
+  PANNEAUX, LIBELLE_CONFIRMER,
+} from '../src/ui/recherche.js';
 
 /** Un état neuf, migré au format courant, avec un compteur qu'on peut charger. */
 function partie(pointsMilli = '0') {
@@ -522,4 +527,335 @@ test('T13 — l\'Écraseur du JOUEUR ne touche pas les points de recherche', () 
     { ...base, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } });
   assert.equal(avecOuvrage, (sansJoueur * 12n) / 10n,
     `le bonus de l'Ouvrage ne vaut pas +20 % : ${sansJoueur} → ${avecOuvrage}`);
+});
+
+// ---------------------------------------------------------------------------
+// T14 — T15 : l'écran et son onglet
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ IL N'Y A PAS DE DOM DANS CE DÉPÔT — esbuild est la seule dépendance de
+// développement, et aucun test n'a jamais rendu un écran. Les écrans se testent
+// donc en DEUX morceaux : leur étage PUR (ce qu'il y a à afficher) et le
+// balisage produit. Ici les deux ne suffisaient pas : l'achat en deux touchers
+// est un comportement du DOM, et le laisser hors test aurait rendu livrable un
+// bouton qui paie au premier toucher. Le faux document ci-dessous est donc
+// écrit à la main — une soixantaine de lignes, juste assez pour que
+// `initialiserEcranRecherche` s'exécute pour de vrai et qu'un clic soit un clic.
+//
+// ⚠ IL N'IMITE QUE CE QUE L'ÉCRAN EMPLOIE. Un faux document complet serait une
+// seconde implémentation du navigateur, avec ses propres bogues ; celui-ci
+// LÈVE sur ce qu'il ne connaît pas, si bien qu'une méthode nouvelle employée
+// par l'écran fait tomber le test au lieu de passer en silence.
+
+/** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
+function faireElement(tag) {
+  const classes = new Set();
+  const ecouteurs = {};
+  let texte = '';
+  const el = {
+    tagName: tag.toUpperCase(),
+    type: '',
+    disabled: false,
+    hidden: false,
+    children: [],
+    style: {},
+    clientWidth: 0,
+    scrollLeft: 0,
+    classList: {
+      add: (...n) => { for (const c of n) classes.add(c); },
+      remove: (...n) => { for (const c of n) classes.delete(c); },
+      contains: (c) => classes.has(c),
+      toggle: (c, force) => {
+        const veut = force === undefined ? !classes.has(c) : force;
+        if (veut) classes.add(c); else classes.delete(c);
+        return veut;
+      },
+    },
+    get className() { return [...classes].join(' '); },
+    set className(v) {
+      classes.clear();
+      for (const c of String(v).split(/\s+/)) if (c !== '') classes.add(c);
+    },
+    // ⚠ ÉCRIRE `textContent` VIDE LES ENFANTS, comme dans un vrai document.
+    // C'est exactement ce dont `peindre` se sert pour ne pas empiler deux fois
+    // le même arbre : un faux qui garderait les enfants ferait passer un écran
+    // qui double à chaque peinture.
+    get textContent() { return texte + el.children.map((c) => c.textContent).join(''); },
+    set textContent(v) { texte = String(v); el.children.length = 0; },
+    appendChild(n) { el.children.push(n); return n; },
+    append(...n) { el.children.push(...n); },
+    addEventListener(type, fn) { (ecouteurs[type] ??= []).push(fn); },
+    click() { for (const fn of ecouteurs.click ?? []) fn(); },
+    scrollTo() {},
+  };
+  return el;
+}
+
+const IDS_DE_L_ECRAN = [
+  'recherche-points', 'recherche-pastilles', 'recherche-panneaux',
+  'recherche-offense', 'recherche-defense', 'recherche-special',
+];
+
+/** Le faux document, et les nœuds nommés que le balisage fournit. */
+function fauxDocument() {
+  const parId = new Map();
+  for (const id of IDS_DE_L_ECRAN) parId.set(id, faireElement('div'));
+  return {
+    getElementById(id) {
+      if (!parId.has(id)) throw new Error(`faux document : « ${id} » absent du balisage`);
+      return parId.get(id);
+    },
+    createElement: (tag) => faireElement(tag),
+  };
+}
+
+/** Toutes les lignes `.piece` d'un panneau, à plat. */
+function piecesDuPanneau(doc, nom) {
+  return doc.getElementById(`recherche-${nom}`).children;
+}
+
+/** Le bouton d'achat d'une rangée. */
+function boutonDe(rangee) {
+  const bouton = rangee.children.find((c) => c.tagName === 'BUTTON');
+  assert.ok(bouton, 'cette rangée n\'a pas de bouton');
+  return bouton;
+}
+
+test('T15 — les trois panneaux portent l\'arbre entier, dans l\'ordre de la table', () => {
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  ecran.peindre(partie('0'));
+
+  // MESURÉ : 14 + 17 + 4. Les comptes viennent des tables, pas d'un nombre
+  // recopié : c'est ce qui fera tomber le test si une pièce entre dans l'arbre
+  // sans entrer dans l'écran.
+  assert.equal(piecesDuPanneau(doc, 'offense').length, Object.keys(ARBRE_RECHERCHE.offense).length);
+  assert.equal(piecesDuPanneau(doc, 'defense').length, Object.keys(ARBRE_RECHERCHE.defense).length);
+  assert.equal(piecesDuPanneau(doc, 'offense').length, 14);
+  assert.equal(piecesDuPanneau(doc, 'defense').length, 17);
+  assert.equal(piecesDuPanneau(doc, 'special').length, Object.keys(SPECIAL).length);
+  assert.equal(piecesDuPanneau(doc, 'special').length, 4);
+
+  // ⚠ L'ORDRE EST CELUI DE LA TABLE, ET RIEN NE LE TRIE. Arbitrage 7 : « l'ordre
+  // d'affichage est libre, il n'y a pas de prérequis entre pièces ». MONTAGE QUI
+  // LE FAIT TOMBER : ajouter un `.sort()` sur les lignes de `lignesDeRecherche`,
+  // ou trier par prix dans l'écran — l'arbre se réorganiserait sous le doigt du
+  // joueur à chaque achat.
+  for (const branche of BRANCHES) {
+    assert.deepEqual(
+      lignesDeRecherche(partie('0'), branche).map((l) => l.id),
+      Object.keys(ARBRE_RECHERCHE[branche]),
+      `l'ordre du panneau ${branche} n'est plus celui de la table`,
+    );
+  }
+
+  // Chaque pièce porte SA rangée de module, en retrait — aucune n'en manque
+  // aujourd'hui, et le jour où l'une n'en aura plus, la rangée disparaîtra
+  // plutôt que d'afficher un module vide.
+  for (const branche of BRANCHES) {
+    let avecModule = 0;
+    for (const bloc of piecesDuPanneau(doc, branche)) {
+      const mod = bloc.children.filter((c) => c.className.includes('module'));
+      assert.ok(mod.length <= 1, 'deux rangées de module sous une pièce');
+      avecModule += mod.length;
+    }
+    assert.equal(avecModule, Object.keys(ARBRE_RECHERCHE[branche]).length,
+      `des pièces de ${branche} n'affichent pas leur module`);
+  }
+
+  // ⚠ ET REPEINDRE NE DOUBLE PAS. MONTAGE QUI LE FAIT TOMBER : retirer le
+  // `panneau.textContent = ''` de `peindre` — l'écran se repeint à CHAQUE
+  // ouverture d'onglet, donc l'arbre aurait grossi à chaque visite.
+  ecran.peindre(partie('0'));
+  assert.equal(piecesDuPanneau(doc, 'offense').length, 14, 'la peinture empile au lieu de remplacer');
+});
+
+test('T15 — les sprites nommés par l\'écran existent tous dans les atlas', () => {
+  // ⚠ SANS CE TEST, UN NOM DE SPRITE FAUX NE SE VERRAIT QU'À L'ŒIL, DANS UN
+  // NAVIGATEUR. `poserCouches` lève sur une famille inconnue mais `fondDuSprite`
+  // lève, lui, sur un NOM inconnu — et rien de tout cela ne tourne dans un test
+  // sans DOM. On croise donc les noms avec l'atlas, des deux côtés.
+  // MONTAGE QUI LE FAIT TOMBER : écrire `def_j_<id>_n` au lieu de `_s`, ou
+  // oublier que le Merlon, la Herse et la Ronce n'ont pas d'orientation.
+  for (const branche of BRANCHES) {
+    for (const ligne of lignesDeRecherche(partie('0'), branche)) {
+      assert.equal(ligne.couches.length, 1, `${ligne.id} : une seule couche attendue`);
+      const { famille, nom } = ligne.couches[0];
+      assert.ok(ATLAS[famille], `famille d'atlas inconnue : ${famille}`);
+      assert.ok(ATLAS[famille].noms.includes(nom),
+        `${branche}/${ligne.id} : le sprite « ${nom} » n'est pas dans l'atlas ${famille}`);
+      // Et la lettre est celle du JOUEUR : `off_o_…` est le vocabulaire de
+      // l'Ouvrage, interdit dans un écran du joueur (CLAUDE.md §4).
+      assert.ok(nom.startsWith('off_j_') || nom.startsWith('def_j_'),
+        `${nom} n'est pas un sprite du joueur`);
+    }
+  }
+  // Les trois ouvrages sans tourelle prennent bien leur nom à eux.
+  assert.deepEqual(couchesDeLaPiece('merlon'), [{ famille: 'defense', nom: 'def_j_merlon_isole' }]);
+  assert.deepEqual(couchesDeLaPiece('herse'), [{ famille: 'defense', nom: 'def_j_herse' }]);
+  assert.deepEqual(couchesDeLaPiece('ronce'), [{ famille: 'defense', nom: 'def_j_ronce' }]);
+  assert.deepEqual(couchesDeLaPiece('casemate'), [{ famille: 'defense', nom: 'def_j_casemate_s' }]);
+  assert.deepEqual(couchesDeLaPiece('meute'), [{ famille: 'unite', nom: 'off_j_meute' }]);
+  assert.throws(() => couchesDeLaPiece('raffinerie'), RangeError);
+});
+
+test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  const etat = partie('0');
+  ecran.peindre(etat);
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const blocs = piecesDuPanneau(doc, 'offense');
+  const bloc = (id) => blocs[ids.indexOf(id)];
+  const rangeeDe = (b) => b.children.find((c) => c.className === 'rangee');
+
+  // Une gratuite est ACQUISE dès la création, et son bouton le dit sans être un
+  // refus. MONTAGE QUI LE FAIT TOMBER : traiter « déjà acquis » comme une
+  // raison de blocage — le joueur lirait un reproche là où il n'y a qu'un état.
+  const gratuite = boutonDe(rangeeDe(bloc('meute')));
+  assert.equal(gratuite.textContent, 'Acquis');
+  assert.ok(gratuite.disabled, 'une pièce acquise se rachète');
+  assert.ok(gratuite.classList.contains('acquis'));
+
+  // Une payante sans le sou est refusée, et la ligne PORTE la raison — un
+  // bouton `disabled` n'émet aucun clic, donc aucun toast ne pourrait la dire.
+  const cher = bloc('enclume');
+  assert.ok(boutonDe(rangeeDe(cher)).disabled);
+  const raison = cher.children.find((c) => c.className === 'raison');
+  assert.ok(raison, 'la ligne refusée ne dit pas pourquoi');
+  assert.match(raison.textContent, /il manque/);
+  // ⚠ L'ESPACE DES MILLIERS EST FINE ET INSÉCABLE (U+202F), et elle s'écrit en
+  // échappement : tapée au clavier, l'assertion dépendrait de l'éditeur qui a
+  // enregistré ce fichier.
+  assert.match(raison.textContent, /120\u202f000\u202f000/);
+
+  // Le module d'une pièce NON acquise accumule ses deux refus.
+  const modBloc = bloc('enclume').children.find((c) => c.className === 'module');
+  const modRaison = modBloc.children.find((c) => c.className === 'raison');
+  assert.match(modRaison.textContent, /la pièce doit être débloquée avant son module/);
+  assert.match(modRaison.textContent, /n'a pas encore d'effet en jeu/);
+
+  // ⚠ ET L'ÉCRASEUR EST LE SEUL QUI NE PORTE PAS CE SECOND REFUS. C'est le seul
+  // module câblé du lot ; les treize autres s'affichent et ne s'achètent pas,
+  // parce que prendre les points du joueur contre rien serait un vol.
+  const ecraseur = bloc('fendeur').children.find((c) => c.className === 'module');
+  const ecraseurRaison = ecraseur.children.find((c) => c.className === 'raison');
+  assert.ok(!/n'a pas encore d'effet en jeu/.test(ecraseurRaison.textContent),
+    'l\'Écraseur est déclaré sans effet alors qu\'il est câblé');
+});
+
+test('T15 — l\'achat se fait en DEUX touchers, et le premier ne paie rien', () => {
+  const doc = fauxDocument();
+  let enregistrements = 0;
+  const ecran = initialiserEcranRecherche(doc, { apresAchat: () => { enregistrements += 1; } });
+  // De quoi payer le Pionnier (12 500 points) et rien de plus.
+  const etat = partie(String(12_500n * 1000n));
+  ecran.peindre(etat);
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const rangee = piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]
+    .children.find((c) => c.className === 'rangee');
+  const bouton = boutonDe(rangee);
+  assert.equal(bouton.textContent, '12\u202f500');
+
+  // Premier toucher : le bouton s'arme, RIEN n'est débité, rien n'est acquis.
+  // MONTAGE QUI LE FAIT TOMBER : appeler `acheter` dès le premier clic — deux
+  // milliards et demi de points partiraient sur un frôlement, sans retour.
+  bouton.click();
+  assert.equal(bouton.textContent, LIBELLE_CONFIRMER);
+  assert.ok(bouton.classList.contains('arme'));
+  assert.equal(etat.recherche.pointsMilli, String(12_500n * 1000n));
+  assert.ok(!estAcquise(etat, 'offense', 'belier'));
+  assert.equal(enregistrements, 0);
+
+  // Second toucher sur le MÊME bouton : il paie.
+  bouton.click();
+  assert.ok(estAcquise(etat, 'offense', 'belier'));
+  assert.equal(etat.recherche.pointsMilli, '0');
+  assert.equal(enregistrements, 1, 'l\'achat ne s\'est pas enregistré');
+});
+
+test('T15 — toucher un AUTRE bouton désarme le premier', () => {
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  // De quoi payer les deux premières payantes de l'offense.
+  const etat = partie(String(1_000_000n * 1000n));
+  ecran.peindre(etat);
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const blocs = piecesDuPanneau(doc, 'offense');
+  const boutonDeLaPiece = (id) => boutonDe(
+    blocs[ids.indexOf(id)].children.find((c) => c.className === 'rangee'),
+  );
+  const belier = boutonDeLaPiece('belier');
+  const perceurs = boutonDeLaPiece('perceurs');
+
+  belier.click();
+  assert.equal(belier.textContent, LIBELLE_CONFIRMER);
+  // ⚠ LE SECOND TOUCHER PORTE SUR UNE AUTRE LIGNE : il arme celle-ci et
+  // DÉSARME l'autre. MONTAGE QUI LE FAIT TOMBER : garder l'armement par bouton
+  // au lieu d'un seul armement pour l'écran — le joueur laisserait derrière lui
+  // une traînée de boutons armés, dont un frôlement paierait n'importe lequel.
+  perceurs.click();
+  assert.equal(perceurs.textContent, LIBELLE_CONFIRMER);
+  assert.equal(belier.textContent, '12\u202f500', 'le premier bouton est resté armé');
+  assert.ok(!estAcquise(etat, 'offense', 'belier'));
+  assert.ok(!estAcquise(etat, 'offense', 'perceurs'));
+
+  // Et l'indicateur de position désarme lui aussi : changer de panneau n'est
+  // pas une confirmation.
+  const pastilles = doc.getElementById('recherche-pastilles');
+  assert.equal(pastilles.children.length, PANNEAUX.length);
+  pastilles.children[1].click();
+  assert.equal(perceurs.textContent, '200\u202f000', 'changer de panneau garde un bouton armé');
+});
+
+test('T15 — l\'en-tête montre les points, et une peinture désarme tout', () => {
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  const etat = partie(String(1_234_567n * 1000n + 999n));
+  ecran.peindre(etat);
+  // ⚠ LE COMPTEUR TRONQUE. MONTAGE QUI LE FAIT TOMBER : arrondir au point
+  // supérieur — l'écran annoncerait 1 234 568 points dépensables alors que le
+  // moteur en refuserait le dernier, et le joueur toucherait un bouton mort.
+  assert.equal(doc.getElementById('recherche-points').textContent, '1\u202f234\u202f567 points');
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const bouton = boutonDe(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]
+    .children.find((c) => c.className === 'rangee'));
+  bouton.click();
+  assert.equal(bouton.textContent, LIBELLE_CONFIRMER);
+  // ⚠ REPEINDRE DÉTRUIT LES NŒUDS ARMÉS. Garder la référence donnerait un
+  // armement qui pointe un bouton absent de la page — et le toucher suivant
+  // paierait sur un écran que le joueur ne voit plus.
+  ecran.peindre(etat);
+  const neuf = boutonDe(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]
+    .children.find((c) => c.className === 'rangee'));
+  assert.equal(neuf.textContent, '12\u202f500');
+  neuf.click();
+  assert.ok(!estAcquise(etat, 'offense', 'belier'), 'le premier toucher a payé après une peinture');
+});
+
+test('T15 — l\'onglet Spécial s\'affiche et ne s\'achète pas', () => {
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  ecran.peindre(partie(String(10n ** 15n)));
+  // ⚠ AUCUN BOUTON, MÊME AVEC DE QUOI PAYER MILLE FOIS. Les quatre lignes n'ont
+  // pas de moteur ; leur donner un bouton prendrait les points contre rien.
+  // MONTAGE QUI LE FAIT TOMBER : réutiliser `boutonDAchat` pour la deuxième
+  // base, dont le classeur donne pourtant un prix.
+  for (const bloc of piecesDuPanneau(doc, 'special')) {
+    const rangee = bloc.children.find((c) => c.className === 'rangee');
+    assert.ok(!rangee.children.some((c) => c.tagName === 'BUTTON'),
+      'une ligne du panneau Spécial porte un bouton d\'achat');
+    const raison = bloc.children.find((c) => c.className === 'raison');
+    assert.match(raison.textContent, /pas encore de moteur/);
+  }
+  // Trois lignes sur quatre n'ont même pas de prix retenu : elles affichent un
+  // tiret, jamais un zéro qui se lirait « gratuit ».
+  const prix = lignesSpeciales().map((l) => l.prix);
+  assert.equal(prix.filter((p) => p === '—').length, 3);
+  assert.equal(prix.filter((p) => p !== '—').length, 1);
+  assert.ok(prix.includes('2\u202f000\u202f000'), 'la deuxième base a perdu son prix');
 });

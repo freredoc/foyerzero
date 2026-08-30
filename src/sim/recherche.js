@@ -54,6 +54,23 @@ function grouper(n) {
   return signe + sortie;
 }
 
+/**
+ * Des milli-points en points ENTIERS groupés — ce que l'en-tête de l'écran
+ * Recherche affiche, et ce que les prix de l'arbre emploient.
+ *
+ * ⚠ ELLE TRONQUE, ELLE N'ARRONDIT PAS. Afficher « 300 000 » alors qu'il en
+ * manque 400 milli laisserait le joueur toucher un bouton qui refuse : le
+ * compteur doit dire ce qui est DÉPENSABLE, jamais un point de plus. C'est
+ * l'arbitrage inverse de celui du message « il manque … », qui arrondit au
+ * point SUPÉRIEUR pour la même raison — les deux vont dans le sens du refus.
+ *
+ * @param {bigint} pointsMilli
+ * @returns {string}
+ */
+export function formaterPoints(pointsMilli) {
+  return grouper(pointsMilli / MILLE);
+}
+
 function exigerBranche(branche) {
   if (ARBRE_RECHERCHE[branche] === undefined) {
     throw new RangeError(`recherche : branche inconnue « ${branche} »`);
