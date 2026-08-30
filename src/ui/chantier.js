@@ -43,6 +43,9 @@ import {
 import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
+import { ATLAS } from '../data/atlas.js';
+import { fondDuSprite } from '../render/sprite.js';
+import { suffixeDeVariante } from '../render/variante.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
 // base, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague — que
@@ -280,6 +283,43 @@ export const SIGLES_OBSTACLE = {
   vehicule: 'V',
   les_deux: 'X',
 };
+
+/**
+ * Le nom d'atlas du sprite d'un bâtiment du joueur.
+ *
+ * ⚠ LA RÈGLE EST MÉCANIQUE, ET C'EST POUR ÇA QU'IL N'Y A PAS DE TABLE. Les
+ * onze identifiants sont en camelCase (`chantierDeConstruction`), les onze
+ * fichiers en minuscules à souligné (`bat_j_chantier_de_construction`) : une
+ * table de onze lignes serait une SECONDE vérité, et la première à diverger le
+ * jour où un douzième bâtiment entrerait au dépôt. Les onze correspondances ont
+ * été vérifiées une par une contre l'atlas cousu, et `test/sprite.test.js` les
+ * revérifie en balayant `BASE_BATIMENTS` — il rougit le jour où un bâtiment
+ * arrive sans son sprite, ce qui est exactement ce qu'on lui demande.
+ *
+ * @param {string} id clé de `BASE_BATIMENTS`
+ * @returns {string} nom du sprite dans la famille `batiment`
+ */
+export function spriteDuBatiment(id) {
+  return `bat_j_${id.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`)}`;
+}
+
+/**
+ * Combien de variantes de dessin porte chaque famille de terrain.
+ *
+ * ⚠ CES NOMBRES SE LISENT DANS L'ATLAS, ILS NE S'ÉCRIVENT PAS ICI. Le sol a
+ * quatre dessins (`tile_sol_j_a` … `_d`), les champs et les obstacles en ont
+ * deux. Les compter depuis les noms cousus fait suivre la table toute seule le
+ * jour où une cinquième variante entrera — et fait rougir `sprite.test.js` si
+ * l'atlas et l'écran cessent de s'accorder.
+ *
+ * @param {string} prefixe début du nom des sprites de la famille
+ * @returns {number} au moins 1
+ */
+export function nombreDeVariantes(prefixe) {
+  const n = ATLAS.terrain.noms.filter((nom) => nom.startsWith(`${prefixe}_`)).length;
+  if (n < 1) throw new RangeError(`chantier : aucune variante pour « ${prefixe} »`);
+  return n;
+}
 
 export const LIBELLES_OBSTACLE = {
   infanterie: 'ralentit l\'infanterie',
@@ -1514,6 +1554,12 @@ export const TERRAINS = {
     })),
     nomDe: (id) => BASE_BATIMENTS[id].nom.joueur,
     sigleDe: (id) => SIGLES[id],
+    // ⚠ LE SPRITE DU JETON, OU `null` SI LA BANDE N'EN A PAS ENCORE. C'est la
+    // SEULE chose qui sépare les deux bandes à la peinture, et elle est dans la
+    // table pour la même raison que `panneau` et `cible` : un `=== 'defense'`
+    // écrit à la main dans la boucle serait le premier cas particulier à
+    // diverger, et un test refuse déjà cette forme-là.
+    spriteDe: spriteDuBatiment,
     familleDe: familleDuBatiment,
     problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(etat, id, rangee, colonne),
     poser: (etat, id, rangee, colonne) => poserBatiment(etat, id, rangee, colonne),
@@ -1543,6 +1589,16 @@ export const TERRAINS = {
     posables: posablesDeLaDefense,
     nomDe: nomDeLaPieceDeDefense,
     sigleDe: (id) => SIGLES_DEFENSE[id],
+    // ⚠ `null` : LA DÉFENSE N'ENTRE PAS DANS LA PREMIÈRE COUCHE, ET CE N'EST PAS
+    // UN OUBLI. Ses sprites existent — deux cents dans `art/sprites/defense/` —
+    // mais ils portent SEIZE orientations, et rien dans l'état ne dit
+    // l'orientation d'une pièce posée : `sim/state.js` et `data/combat.js` n'ont
+    // ni orientation, ni azimut, ni cap. Leurs quatre socles de liaison
+    // (`_est`, `_ouest`, `_isole`, `_traversant`) supposent en plus une règle de
+    // chaînage entre merlons voisins qui n'existe pas davantage. Deux règles de
+    // MODÈLE à écrire avant, pas pendant un lot d'écran. En attendant, le jeton
+    // de garnison garde son fond uni et son sigle, exactement comme la veille.
+    spriteDe: null,
     // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
     // décide de la couleur du liseré, et la fiche de style n'a pas de teinte
     // libre pour distinguer un mur d'une tourelle. Le sigle, lui, les distingue
@@ -1670,6 +1726,74 @@ export function messageDeRefus(problemes) {
 /** Clé d'une case. */
 function cle(rangee, colonne) {
   return `${rangee}:${colonne}`;
+}
+
+/**
+ * Empile des cellules d'atlas en fond d'une case, la première par-dessus.
+ *
+ * CSS accepte plusieurs couches de fond : `background-image: A, B` dessine A
+ * AU-DESSUS de B, et les listes `background-size` et `background-position`
+ * suivent le même ordre. C'est ce qui permet de poser un champ sur son sol sans
+ * un second élément par case — et donc sans un nœud de plus à créer et à
+ * détruire dix fois par seconde.
+ *
+ * ⚠ TOUTES LES COUCHES VIENNENT DU MÊME ATLAS DE TERRAIN, d'où le même
+ * `var(--atlas-terrain)` répété. La variable est définie une fois sur `:root` :
+ * la base64 n'est pas recopiée, c'est le nom qui l'est.
+ *
+ * @param {HTMLElement} case_
+ * @param {{taille: string, position: string}[]} fonds de la plus haute à la plus basse
+ */
+function poserFonds(case_, fonds) {
+  case_.style.backgroundImage = fonds.map(() => 'var(--atlas-terrain)').join(', ');
+  case_.style.backgroundSize = fonds.map((f) => f.taille).join(', ');
+  case_.style.backgroundPosition = fonds.map((f) => f.position).join(', ');
+}
+
+/**
+ * Les couches déjà posées sur une case, pour en remettre une par-dessus.
+ *
+ * ⚠ ON RELIT CE QU'ON A ÉCRIT PLUTÔT QUE DE RECOMPOSER LA PILE. Le sol est posé
+ * sur les cent soixante-deux cases avant que les champs et les obstacles ne
+ * sachent où ils tombent ; recalculer sa variante au moment d'empiler
+ * dupliquerait l'appel à `suffixeDeVariante`, donc créerait une seconde
+ * occasion de le calculer autrement.
+ *
+ * @param {HTMLElement} case_
+ * @returns {{taille: string, position: string}[]}
+ */
+function fondsPoses(case_) {
+  const tailles = case_.style.backgroundSize.split(', ').filter(Boolean);
+  const positions = case_.style.backgroundPosition.split(', ').filter(Boolean);
+  return tailles.map((taille, i) => ({ taille, position: positions[i] }));
+}
+
+/**
+ * Le sprite de terrain d'une case, variante comprise.
+ *
+ * ⚠ LE COMPTE DE VARIANTES SE PREND SUR LE PRÉFIXE EXACT, JAMAIS SUR UN VOISIN.
+ * Mesurer les variantes du quartz pour les appliquer à la scorie marcherait
+ * aujourd'hui — les deux en ont deux — et se tromperait en silence le jour où
+ * l'une des deux en gagnerait une troisième : la case tirerait dans un intervalle
+ * plus court que ce que l'atlas porte, et le dessin en trop ne paraîtrait jamais.
+ *
+ * ⚠ ET LE COMPTE EST MÉMORISÉ. `peindre` balaie 162 cases ; y filtrer les
+ * dix-huit noms de l'atlas ferait près de trois mille comparaisons par geste
+ * pour un nombre qui ne change jamais de la vie du programme.
+ *
+ * @param {string} prefixe début du nom, sans la lettre de variante
+ * @param {number} graine
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {{taille: string, position: string}}
+ */
+const comptesDeVariantes = new Map();
+function fondDuTerrain(prefixe, graine, rangee, colonne) {
+  if (!comptesDeVariantes.has(prefixe)) {
+    comptesDeVariantes.set(prefixe, nombreDeVariantes(prefixe));
+  }
+  const nombre = comptesDeVariantes.get(prefixe);
+  return fondDuSprite('terrain', `${prefixe}_${suffixeDeVariante(graine, rangee, colonne, nombre)}`);
 }
 
 /**
@@ -2853,6 +2977,24 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     }
     traits.textContent = '';
 
+    // ⚠ LE SOL EST UN FOND, PAS UN ENFANT — RIEN À CRÉER, RIEN À RETIRER AU
+    // REPEINT. Cent soixante-deux nœuds créés et détruits à chaque geste
+    // seraient cent soixante-deux occasions de faire clignoter la grille sous le
+    // doigt, et il faudrait les retirer dans la boucle de remise à zéro
+    // ci-dessus — donc s'en souvenir. Un fond se réécrit, il ne se nettoie pas.
+    // Mesuré ici : 25,8 µs pour les 162 cases, sur un geste et non sur une image.
+    //
+    // ⚠ ET LA VARIANTE NE SE TIRE PAS, ELLE SE CALCULE. `variante()` est une
+    // fonction pure de la graine et de la case : deux peintures successives
+    // rendent le même sol, et `etat.rng` — le flux de la SIMULATION — n'est pas
+    // touché. Y prendre un tirage décalerait tout ce que le moteur tire
+    // ensuite, et la partie cesserait de se rejouer à l'identique.
+    for (const case_ of cellules.values()) {
+      const rangee = Number(case_.dataset.rangee);
+      const colonne = Number(case_.dataset.colonne);
+      poserFonds(case_, [fondDuTerrain('tile_sol_j', etat.graine, rangee, colonne)]);
+    }
+
     // ⚠ LE TERRAIN SE DESSINE SOUS LES BÂTIMENTS, JAMAIS AU-DESSUS. Un champ
     // masqué par le collecteur qui l'exploite ferait disparaître de l'écran la
     // seule chose qui explique ce que ce collecteur produit.
@@ -2860,6 +3002,10 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       const case_ = cellules.get(cle(champ.rangee, champ.colonne));
       if (case_ === undefined) continue;
       case_.classList.add('champ', champ.ressource);
+      poserFonds(case_, [
+        fondDuTerrain(`champ_${champ.ressource}`, etat.graine, champ.rangee, champ.colonne),
+        ...fondsPoses(case_),
+      ]);
     }
 
     // ⚠ LES OBSTACLES SE DESSINENT, ET CE N'EST PAS DÉCORATIF. Une case où rien
@@ -2872,6 +3018,10 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       const case_ = cellules.get(cle(o.rangee, o.colonne));
       if (case_ === undefined) continue;
       case_.classList.add('obstacle');
+      poserFonds(case_, [
+        fondDuTerrain(`obs_${o.type}`, etat.graine, o.rangee, o.colonne),
+        ...fondsPoses(case_),
+      ]);
       const marque = doc.createElement('div');
       marque.className = 'obstacle-marque';
       marque.textContent = SIGLES_OBSTACLE[o.type];
@@ -2889,7 +3039,18 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
         if (case_ === undefined) continue;
         const jeton = doc.createElement('div');
         jeton.className = `jeton ${terrain.familleDe(b.id)}`;
-        jeton.textContent = terrain.sigleDe(b.id);
+        // ⚠ LE TERRAIN DÉCIDE, PAS LE NOM DE LA BANDE. `spriteDe` vaut `null`
+        // tant qu'une famille n'est pas branchée : la bande garde alors son
+        // sigle, ce qui est exactement ce que fait la défense aujourd'hui.
+        if (terrain.spriteDe === null) {
+          jeton.textContent = terrain.sigleDe(b.id);
+        } else {
+          jeton.classList.add('sprite');
+          const fond = fondDuSprite('batiment', terrain.spriteDe(b.id));
+          jeton.style.backgroundSize = fond.taille;
+          jeton.style.backgroundPosition = fond.position;
+          jeton.title = terrain.nomDe(b.id);
+        }
         const niveau = doc.createElement('span');
         niveau.className = 'niveau';
         niveau.textContent = String(b.niveau);

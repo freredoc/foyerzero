@@ -255,6 +255,19 @@
      reste des deux côtés — jamais un `transform: scale()`, qui décrocherait le
      doigt de la case qu'il vise. */
   :root { --case-max: 46px; }
+  /* Les deux atlas de la première couche, inlinés en `data:` par tools/build.js.
+     Ils vivent sur `:root` parce que trois règles les emploient — le sol des
+     cases, le terrain posé dessus, le jeton d'un bâtiment — et qu'une URL en
+     base64 recopiée trois fois pèserait trois fois.
+
+     ⚠ LA GARDE OFFLINE DU BUILD ACCEPTE `url('data:…')` ET REFUSE TOUT LE
+     RESTE — son motif est `url\(\s*(?!["']?data:)`. Les marqueurs ci-dessous
+     sont remplacés AVANT que la garde ne passe, si bien qu'elle ne voit que du
+     `data:`. Ça tient sur le papier ; c'est le build qui le prouve. */
+  :root {
+    --atlas-batiment: url('%ATLAS_BATIMENT%');
+    --atlas-terrain: url('%ATLAS_TERRAIN_BASE%');
+  }
 
   /* La page de jeu : en-tête commun, écran du moment, barre du bas commune.
      ⚠ `#jeu` EXISTE POUR LE BANC. Il remplaçait deux écrans nommés un par un ;
@@ -353,10 +366,23 @@
      bas. Un enfant `absolute` d'un conteneur `grid` sort du flux : il ne
      devient pas une case, il se cale sur la boîte entière. */
   #chantier-grille { display: grid; align-content: start; margin-inline: auto; position: relative; }
+  /* ⚠ `aspect-ratio: 1` NE SE TOUCHE PAS. Une case carrée est ce qui fait qu'une
+     cellule d'atlas de 64×64 tombe dans un cadre de même proportion : la rendre
+     rectangulaire écraserait tous les sprites, et rien dans la suite ne le
+     dirait — le dépôt n'a pas de navigateur.
+
+     ⚠ `image-rendering: pixelated` EST OBLIGATOIRE, PAS COSMÉTIQUE. Une case
+     fait ~42 px CSS pour un sprite de 64 : sans lui, le navigateur interpole et
+     un pixel art réduit en fractionnaire devient flou.
+
+     Le sol vient d'un `background-image` posé par le JS depuis `render/sprite.js`
+     — jamais d'une classe par variante, qui en ferait quatre à écrire ici puis
+     deux de plus pour chaque famille à venir. */
   .case {
     aspect-ratio: 1; position: relative;
     display: flex; align-items: center; justify-content: center;
     border-right: 1px solid #343A2C; border-bottom: 1px solid #343A2C;
+    background-repeat: no-repeat; image-rendering: pixelated;
   }
   /* Un champ de ressource n'est pas une teinte pâle — la fiche n'en a pas — mais
      un fond kaki plein avec un liseré qui dit la ressource : os pour le quartz,
@@ -372,11 +398,17 @@
      quelqu'un lira les deux règles côte à côte, et il faut qu'elles se
      distinguent à la lecture comme à l'écran. La lettre dit QUI est ralenti :
      c'est la seule information de jeu que porte un obstacle. */
-  .case.obstacle { background: #5B4133; }
-  .case.obstacle::before {
-    content: ''; position: absolute; inset: 2px; border: 1px solid #928E80;
-  }
-  .obstacle-marque {
+  /* ⚠ LE FOND ET LE LISERÉ SONT PARTIS AU LOT PREMIÈRE-COUCHE, LA LETTRE RESTE.
+     Le dessin dit maintenant qu'il y a un obstacle ; il ne dit pas QUI est
+     ralenti, et c'est la seule information de JEU que porte un obstacle. Un
+     sprite ne se lit pas « infanterie » ou « véhicule ». */
+  /* ⚠ LA LETTRE EST PORTÉE PAR LA CASE D'OBSTACLE, ET LE SÉLECTEUR LE DIT.
+     Depuis que le fond et le liseré sont partis, `obstacle` ne peint plus rien
+     par elle-même : c'est ce sélecteur-ci qui lui garde un rôle réel dans la
+     feuille, plutôt qu'une règle décorative écrite pour satisfaire la garde des
+     classes. La classe reste le marqueur DOM d'une case obstruée, et la lettre
+     n'apparaît que là. */
+  .case.obstacle .obstacle-marque {
     position: absolute; right: 2px; bottom: 1px;
     font-size: 8px; font-weight: 600; line-height: 1; color: #C2BFCC;
   }
@@ -395,6 +427,21 @@
   .jeton.prod { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #928E80; }
   .jeton.mil { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #8A1E17; }
   .jeton.pivot { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #A67018; }
+  /* ⚠ LE FOND UNI ET LE SIGLE PARTENT, LE CADRE DE FAMILLE ET LE NIVEAU RESTENT.
+     Le sprite dit CE QU'EST le bâtiment ; il ne dit ni son niveau, ni sa famille
+     de coût — prod, mil, pivot —, qui sont deux informations de jeu.
+
+     ⚠ ET LA CLASSE EST PORTÉE PAR LE JETON DU BÂTIMENT SEUL. La bande de défense
+     partage cette boucle de peinture, et ses seize orientations ne sont pas
+     branchables aujourd'hui : rien dans l'état ne porte l'orientation d'une
+     pièce posée. Ses jetons gardent donc le fond uni et leur sigle, et c'est
+     `TERRAINS[x].familleAtlas` qui les sépare — jamais un nom écrit à la main. */
+  .jeton.sprite {
+    background-color: transparent;
+    background-image: var(--atlas-batiment);
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+  }
   .jeton .niveau { position: absolute; right: 0; bottom: -1px; font-size: 8px; font-weight: 400; line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914; }
 
   /* --- le panneau de détail d'un bâtiment ----------------------------------

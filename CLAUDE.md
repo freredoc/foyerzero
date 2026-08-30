@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **29/08/2026**, version 0.40.0 · build 41.
+Dernière révision : **30/08/2026**, version 0.41.0 · build 42.
 
 ---
 
@@ -35,8 +35,8 @@ Dernière révision : **29/08/2026**, version 0.40.0 · build 41.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **548 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**530 268 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+`npm test` → **559 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**581 125 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
@@ -77,9 +77,26 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : 12,7 % — le lot TUTORIEL-EN-BAS a porté le HTML à
-**523 905 octets** (+10 993 : les dix-sept missions dictées, la mini-fenêtre du
-bas, le compteur par objectif et le bouton de réouverture de l'onglet Mission).
+Marge actuelle : **3,1 %** — le lot PREMIÈRE-COUCHE a porté le HTML à
+**581 125 octets**. Le lot TUTORIEL-EN-BAS l'avait mené à 523 905 (+10 993 : les
+dix-sept missions dictées, la mini-fenêtre du bas, le compteur par objectif et le
+bouton de réouverture de l'onglet Mission), puis la boucle du raid à 530 268.
+
+⚠⚠ **ET LE LOT PREMIÈRE-COUCHE A MANGÉ LA MOITIÉ DE CE QUI RESTAIT : +50 857.**
+Deux atlas de sprites entrent en `data:` — **45 111 octets de base64** pour les
+16 bâtiments et les 18 tuiles de terrain —, le reste étant le code qui les pose.
+C'est la deuxième et la troisième ressource BINAIRE du livrable, après l'atlas de
+la carte du monde, et c'est encore le prix de l'offline.
+
+⚠⚠ **LA BORNE DE 600 000 N'A PAS ÉTÉ TOUCHÉE, ET LA MARGE EST MAINTENANT MINCE.**
+18 875 octets, soit 3,1 % : les cinq familles de sprites NON cousues — socle,
+defense, unite, tourelle-unite, carte, 477 sprites — ne tiendront pas dedans.
+Mesuré le 30/08 par `tools/atlas.py` lui-même : sept atlas pèsent **697 898
+octets en base64**, à eux seuls. Le prochain lot qui en fait entrer une devra
+donc relever la borne EN ÉCRIVANT POURQUOI, jamais rogner un atlas pour passer
+dessous. C'est la règle §5 — « baisser une borne pour faire passer un lot :
+jamais » — prise par l'autre bout : une ressource qui entre légitimement fait
+monter la borne, et le lot le dit.
 
 Le compte de tests a BAISSÉ de sept au lot ORPHELIN — `test/economy.test.js`
 est parti avec le module qu'il testait — puis remonté d'un au lot HOMONYMES, de
@@ -132,6 +149,20 @@ cassé : celui qui cherchait `ecranMonde.masquer()` n'importe où passait sur un
 appel enfermé dans un `if (false)`, et celui qui comparait deux dalles par
 `deepEqual` mettait cent secondes à dire « rouge » sur 65 536 pixels — un test
 qu'on n'attend pas ne se relance pas.
+
+Et de **onze** au lot PREMIÈRE-COUCHE (30/08) : sept dans le nouveau
+`test/sprite.test.js` — l'index confronté au disque, la géométrie confrontée aux
+en-têtes des PNG cousus, la formule de cadrage REFAITE plutôt que recopiée, la
+levée sur un nom absent, les onze bâtiments résolus, la variante stable et
+bornée, et le flux de la simulation intact après une peinture — et quatre dans
+`chantier.test.js`. **Aucune assertion existante n'a été retirée ni assouplie**,
+et le compte de `chantier.test.js` est passé de 583 à 609.
+⚠ Une garde de ce lot est passée VERTE sur du code cassé au premier essai, et
+elle a été resserrée : celle qui refuse `etat.rng` dans `variante.js` tombait sur
+le COMMENTAIRE du module, qui nomme `etat.rng` pour dire qu'il n'y touche pas.
+C'est la troisième fois que le dépôt commet cette faute-là — après
+`viewport-fit=cover` et `MENTION_SATURE`. Elle lit maintenant la source
+décommentée, et un appât prouve que le motif reconnaît encore la vraie faute.
 
 Une baisse n'est pas forcément une régression, mais elle se justifie, toujours.
 
@@ -208,7 +239,7 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 7 fichiers ; RIEN d'autre n'a le droit d'en porter
+src/data/               toutes les valeurs de calibrage — 8 fichiers ; RIEN d'autre n'a le droit d'en porter
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
@@ -216,6 +247,15 @@ src/data/               toutes les valeurs de calibrage — 7 fichiers ; RIEN d'
   base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
+  atlas.js              l'index des atlas de sprites — ⚠ GÉNÉRÉ, voir ci-dessous
+  ⤷ ⚠⚠ `atlas.js` EST ÉCRIT PAR `tools/atlas.py`, PAS À LA MAIN. Sa première
+    ligne le déclare généré, et elle reste. Il dit ce que chaque atlas contient
+    et dans quel ordre — rien que les noms cousus et la géométrie de la grille,
+    AUCUNE coordonnée : la cellule d'un sprite se calcule de son rang, et écrire
+    les paires de nombres ici ferait deux calculs qui peuvent diverger. Le
+    régénérer : `python3 tools/atlas.py --ecrire`. Un test le confronte au
+    contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
+    soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
 src/sim/                simulation déterministe, sans DOM — 19 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
@@ -233,10 +273,22 @@ src/sim/                simulation déterministe, sans DOM — 19 fichiers
   reparation.js         les quatre réservoirs, en parallèle : coût additif, temps au maximum
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 6 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 8 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
+  sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
+  variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
+  ⤷ ⚠⚠ LE LECTEUR D'ATLAS NE PORTE PAS LE NOM COURT DE SA PROPRE SOURCE, et ce
+    n'est pas négociable : la table qu'il lit vit dans `src/data/` sous un nom
+    que le sélecteur d'un téléphone afficherait à l'identique. C'est exactement
+    l'accident du 27/08 où le moteur de combat a été écrasé (§6, homonymes).
+  ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
+    est celui de la SIMULATION : y prendre un tirage pour choisir une texture
+    décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se
+    rejouer à l'identique. Le module salue le hachage de `sim/peuplement.js`,
+    sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
+    relevant l'état du flux avant et après une peinture complète.
 
 src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
@@ -267,13 +319,13 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   35 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   36 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
-  reparation  roster  site-de-la-case  site-entame  state
+  reparation  roster  site-de-la-case  site-entame  sprite  state
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -287,8 +339,14 @@ test/                   35 fichiers *.test.js (node:test) ; prereglages-lot3a.js
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  8 fichiers, dont UN SEUL sert au build — relevé le 29/08,
-                        §2 en annonçait trois depuis des semaines, puis sept
+tools/                  15 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08.
+                        §2 en annonçait trois, puis sept, puis huit : le huit était
+                        déjà faux avant ce lot-ci, la chaîne de production graphique
+                        ayant apporté ses scripts sans que personne ne recompte.
+                        ⚠ AUCUNE GARDE NE COMPTE CE DOSSIER — le test de §2 ne porte
+                        que sur les quatre dossiers de src/ et sur test/ —, et c'est
+                        exactement pourquoi il dérive. Le recompter à chaque lot qui
+                        y touche est la seule chose qui le tienne.
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
