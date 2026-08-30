@@ -201,16 +201,28 @@ test('T3 — alpha 0 : précédent · alpha 1000 : courant · alpha 500 : milieu
 
   const avecInstantane = listeAffichage(etat, proj, precedentes, 500);
   const sansInstantane = listeAffichage(etat, proj, [], 500);
-  // La première primitive kakiCorps est la figure de tête de l'escouade,
-  // posée à floor(45/10) = 4 px sous le bord haut de sa case.
+  // ⚠ LA SONDE A CHANGÉ AU LOT UNITÉS-AU-COMBAT, PAS LE SUJET DU TEST. Elle
+  // lisait l'ordonnée de la figure de tête de l'escouade — une primitive
+  // `kakiCorps` posée 4 px sous le bord de la case. L'escouade est maintenant UN
+  // sprite qui couvre la case entière : la figure n'existe plus, et le `find`
+  // rendait `undefined`. Ce que T3 mesure — l'interpolation — est intact, et les
+  // deux ordonnées attendues sont recalculées, pas assouplies.
+  //
   // Interpolé : position affichée 2000 + floor(60 × 500/1000) = 2030 →
-  // y de case = margeY + floor((18000 − 2030) × 45/1000) = margeY + 718,
-  // figure à margeY + 722.
+  // y de case = margeY + floor((18000 − 2030) × 45/1000) = margeY + 718.
   // Sans instantané (le Meute est « nouveau ») : position COURANTE 2060 →
-  // y de case = margeY + floor(717,3) = margeY + 717, figure à margeY + 721.
-  const yCorps = (liste) => liste.find((p) => p.couleur === PALETTE.kakiCorps).y;
-  assert.equal(yCorps(avecInstantane) - proj.margeY, 722);
-  assert.equal(yCorps(sansInstantane) - proj.margeY, 721);
+  // y de case = margeY + floor(717,3) = margeY + 717.
+  // L'écart d'UN pixel entre les deux est ce que le test mesure ; il était de
+  // un pixel avant, il l'est encore.
+  const ySprite = (liste) => {
+    const p = liste.find((q) => q.forme === 'sprite' && q.famille === 'unite');
+    assert.ok(p !== undefined, 'la scène ne porte pas de sprite d\'unité : la sonde ne mesure rien');
+    return p.y;
+  };
+  assert.equal(ySprite(avecInstantane) - proj.margeY, 718);
+  assert.equal(ySprite(sansInstantane) - proj.margeY, 717);
+  assert.notEqual(ySprite(avecInstantane), ySprite(sansInstantane),
+    'les deux chemins rendent la même ordonnée : l\'interpolation ne se mesure plus');
 
   // Les PV ne s'interpolent JAMAIS : la barre de PV a la même largeur de
   // remplissage à alpha 0 et à alpha 999 du même tick.
@@ -269,18 +281,26 @@ test('T5 — composition et ordre de dessin stables', () => {
   //   fond 1 + obstacle 1
   //   + gangue (batiment 2) + casemate (tourelle 4) + merlon (mur 2)
   //   + ronce (barriere 3) + faucheuse (artillerie 5)
-  //   + meute (escouade 6) + fendeur (blinde 4) + crecelle (aeronef 3)
+  //   + meute (escouade 1) + fendeur (blinde 2) + crecelle (aeronef 1)
   //   + barres de PV : 8 vivants × 2 = 16
   //   + barres de réserve : 3 attaquants × 2 = 6
   //   + traits de tir : 0 (personne n'a tiré au tick 0)
-  // = 1 + 1 + 2 + 4 + 2 + 3 + 5 + 6 + 4 + 3 + 16 + 6 = 53.
+  // = 1 + 1 + 2 + 4 + 2 + 3 + 5 + 1 + 2 + 1 + 16 + 6 = 44.
+  //
+  // ⚠ LE COMPTE EST PASSÉ DE 53 À 44 AU LOT UNITÉS-AU-COMBAT, et la BAISSE est
+  // le fait : les trois classes d'unité émettaient 6, 4 et 3 primitives
+  // géométriques, elles émettent maintenant 1, 2 et 1 — un sprite chacune, deux
+  // pour le blindé du joueur qui porte sa tourelle à part. Les structures, elles,
+  // n'ont pas bougé d'une primitive. Le nombre se LIT dans `NB_PRIMITIVES`, il
+  // n'est pas recopié : la ligne ci-dessous tomberait si la table changeait sans
+  // que ce commentaire suive.
   const attendu = 1 + 1
     + NB_PRIMITIVES.batiment + NB_PRIMITIVES.tourelle + NB_PRIMITIVES.mur
     + NB_PRIMITIVES.barriere + NB_PRIMITIVES.artillerie
     + NB_PRIMITIVES.escouade + NB_PRIMITIVES.blinde + NB_PRIMITIVES.aeronef
     + 8 * 2 + 3 * 2;
-  assert.equal(attendu, 53);
-  assert.equal(liste.length, 53);
+  assert.equal(attendu, 44);
+  assert.equal(liste.length, 44);
 
   // L'ordre de dessin est stable et normatif : fond, obstacles, bâtiments,
   // structures, unités, barres, traits — une barre ne passe jamais sous une
@@ -294,7 +314,11 @@ test('T5 — composition et ordre de dessin stables', () => {
   // première unité, qui vient avant la première barre.
   const indexOu = (predicat) => liste.findIndex(predicat);
   const iBatiment = indexOu((p) => p.forme === 'rect' && p.couleur === PALETTE.metalMoyen);
-  const iUnite = indexOu((p) => p.couleur === PALETTE.kakiCorps);
+  // ⚠ LA SONDE DES UNITÉS EST PASSÉE AU SPRITE, l'ordre testé n'a pas bougé.
+  // Elle cherchait la teinte de corps kaki, qu'une unité n'émet plus depuis le
+  // lot UNITÉS-AU-COMBAT. Ce que T5 asserte — bâtiments, puis structures, puis
+  // unités, puis barres — est intact.
+  const iUnite = indexOu((p) => p.forme === 'sprite');
   const iBarre = indexOu((p) => p.couleur === COULEUR_BARRE_PV);
   assert.ok(iBatiment > 1 && iBatiment < iUnite, 'bâtiments avant unités');
   assert.ok(iUnite < iBarre, 'unités avant barres');
@@ -389,12 +413,26 @@ test('T6 — l\'accent est la colonne dominante, dans les trois teintes de la fi
   ]);
   const etat = creerCombat(montageDeScene());
   const proj = calculerProjection(412, 900);
+  // ⚠ UN SPRITE NE PORTE PAS DE COULEUR, ET C'EST NORMAL : ses pixels viennent
+  // de l'atlas, pas de la palette. La garde ne les compte donc pas — mais elle
+  // ASSERTE qu'elle en a vu, sinon un jour où toute la scène passerait aux
+  // sprites elle ne mesurerait plus rien tout en restant verte.
+  let peints = 0;
+  let sprites = 0;
   for (let t = 0; t < 40 && !etat.termine; t++) {
     tick(etat);
     for (const p of listeAffichage(etat, proj, null, 0)) {
+      if (p.forme === 'sprite') {
+        assert.equal(p.couleur, undefined, 'un sprite ne doit pas porter de couleur');
+        sprites += 1;
+        continue;
+      }
       assert.ok(admises.has(p.couleur), `teinte hors palette : ${p.couleur}`);
+      peints += 1;
     }
   }
+  assert.ok(sprites > 0, 'la scène ne porte aucun sprite : le saut ci-dessus cache tout');
+  assert.ok(peints > 0, 'la scène ne porte aucune primitive colorée : la garde ne mesure rien');
 });
 
 // ---------------------------------------------------------------------------
@@ -402,11 +440,27 @@ test('T6 — l\'accent est la colonne dominante, dans les trois teintes de la fi
 // ---------------------------------------------------------------------------
 
 /** Contexte enregistreur : note chaque appel et chaque affectation de style. */
+/**
+ * L'atlas des tests : un objet quelconque, parce que l'enregistreur ne décode
+ * rien. `executer` ne fait que le passer à `drawImage` — c'est ce qui permet de
+ * tester le chemin des sprites sans DOM ni image.
+ */
+const FAUSSE_IMAGE = { estUneFausseImage: true };
+const ATLAS_FACTICE = {
+  unite: FAUSSE_IMAGE,
+  chassis: FAUSSE_IMAGE,
+  tourelle_unite: FAUSSE_IMAGE,
+  batiment: FAUSSE_IMAGE,
+  terrain: FAUSSE_IMAGE,
+  defense: FAUSSE_IMAGE,
+  socle: FAUSSE_IMAGE,
+};
+
 function creerEnregistreur() {
   const appels = [];
   const enregistreur = { appels };
   for (const methode of ['fillRect', 'strokeRect', 'beginPath', 'arc', 'fill',
-    'moveTo', 'lineTo', 'stroke']) {
+    'moveTo', 'lineTo', 'stroke', 'drawImage']) {
     enregistreur[methode] = (...args) => appels.push([methode, ...args]);
   }
   for (const propriete of ['fillStyle', 'strokeStyle', 'lineWidth']) {
@@ -424,16 +478,31 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
     { forme: 'cadre', x: 5, y: 6, l: 7, h: 8, couleur: '#343A2C', epaisseur: 2 },
     { forme: 'disque', x: 9, y: 10, rayon: 11, couleur: 'rgba(0,0,0,0.31)' },
     { forme: 'ligne', x1: 1, y1: 2, x2: 3, y2: 4, couleur: '#F5B636', epaisseur: 2 },
-  ]);
+    // ⚠ LA PRIMITIVE OUVERTE AU LOT UNITÉS-AU-COMBAT. Elle porte son rectangle
+    // SOURCE — `sx sy sl sh` — parce que le découpage dans l'atlas est un calcul
+    // de position, et que ce module-ci n'en fait aucun : `scene.js` le fait une
+    // fois, `canvas2d` recopie les huit nombres dans `drawImage`.
+    { forme: 'sprite', famille: 'unite', nom: 'off_j_meute', sx: 64, sy: 0, sl: 64, sh: 64, x: 12, y: 13, l: 14, h: 15 },
+  ], { unite: FAUSSE_IMAGE });
   // La séquence exacte, appel pour appel : rect → 2, cadre → 3, disque → 4,
-  // ligne → 6, soit 15 entrées. Ni plus, ni moins, ni réordonnées.
+  // ligne → 6, sprite → 1, soit 16 entrées. Ni plus, ni moins, ni réordonnées.
   assert.deepEqual(enregistreur.appels, [
     ['fillStyle', '#161914'], ['fillRect', 1, 2, 3, 4],
     ['strokeStyle', '#343A2C'], ['lineWidth', 2], ['strokeRect', 5, 6, 7, 8],
     ['fillStyle', 'rgba(0,0,0,0.31)'], ['beginPath'], ['arc', 9, 10, 11, 0, 2 * Math.PI], ['fill'],
     ['strokeStyle', '#F5B636'], ['lineWidth', 2], ['beginPath'],
     ['moveTo', 1, 2], ['lineTo', 3, 4], ['stroke'],
+    ['drawImage', FAUSSE_IMAGE, 64, 0, 64, 64, 12, 13, 14, 15],
   ]);
+
+  // ⚠ UNE PRIMITIVE `sprite` SANS SON ATLAS LÈVE, ET LE MESSAGE NOMME LA
+  // FAMILLE. Une unité invisible est un défaut qu'on doit voir à la première
+  // image, pas un trou que personne ne remarque. Le témoin est au-dessus : la
+  // MÊME primitive, avec l'atlas, vient de passer.
+  const seule = [{ forme: 'sprite', famille: 'unite', nom: 'off_j_meute', sx: 0, sy: 0, sl: 64, sh: 64, x: 0, y: 0, l: 8, h: 8 }];
+  assert.throws(() => executer(creerEnregistreur(), seule), /famille d'atlas « unite »/);
+  assert.throws(() => executer(creerEnregistreur(), seule, {}), /famille d'atlas « unite »/);
+  assert.doesNotThrow(() => executer(creerEnregistreur(), seule, { unite: FAUSSE_IMAGE }));
 
   // Une forme inconnue lève : l'exécutant ne rattrape pas, il refuse.
   assert.throws(
@@ -449,12 +518,18 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
   tick(etat);
   const liste = listeAffichage(etat, calculerProjection(412, 900), null, 0);
   const reel = creerEnregistreur();
-  executer(reel, liste);
+  executer(reel, liste, ATLAS_FACTICE);
   const compter = (nom) => reel.appels.filter(([n]) => n === nom).length;
   assert.equal(compter('fillRect'), liste.filter((p) => p.forme === 'rect').length);
   assert.equal(compter('strokeRect'), liste.filter((p) => p.forme === 'cadre').length);
   assert.equal(compter('arc'), liste.filter((p) => p.forme === 'disque').length);
   assert.equal(compter('stroke'), liste.filter((p) => p.forme === 'ligne').length);
+  // ⚠ ET AUTANT DE `drawImage` QUE DE PRIMITIVES `sprite`. Sans cette ligne, la
+  // forme ouverte au lot UNITÉS-AU-COMBAT échapperait au comptage qui fait tout
+  // l'intérêt de T7.
+  assert.equal(compter('drawImage'), liste.filter((p) => p.forme === 'sprite').length);
+  assert.ok(liste.some((p) => p.forme === 'sprite'),
+    'la scène ne porte aucun sprite : le comptage ci-dessus ne mesure rien');
 });
 
 

@@ -22,6 +22,10 @@ import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { BATIMENTS } from '../data/sites.js';
 import { xDeColonne, yDeRangeeMilli, yDeRangee } from './projection.js';
 import { positionInterpolee } from './interpolation.js';
+import { celluleDuSprite, existeDansAtlas } from './sprite.js';
+import { COTE_SPRITE } from '../data/atlas.js';
+import { ANCRES_CHASSIS } from '../data/ancres-chassis.js';
+import { orientationDeLaPiece } from '../sim/rendu-pose.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
 
@@ -104,10 +108,28 @@ export function accentDe(genre, id) {
  * Nombre de primitives émises par entité vivante, par classe — la table que
  * T5 assied. Les barres (2 par barre) et les traits de tir (1) s'y ajoutent.
  */
+/**
+ * ⚠⚠ LES TROIS CLASSES D'UNITÉ SONT PASSÉES AUX SPRITES AU LOT UNITÉS-AU-COMBAT.
+ * Elles émettaient 6, 4 et 3 primitives géométriques ; elles en émettent
+ * maintenant UNE — le sprite —, sauf le blindé du JOUEUR qui en émet DEUX, sa
+ * coque et sa tourelle orientable.
+ *
+ * ⚠ `blinde: 2` VAUT POUR LE JOUEUR, ET LE BLINDÉ DE L'OUVRAGE EN ÉMET UN SEUL.
+ * Sa tourelle est cuite dans la coque — arbitré le 30/08 —, et ses quatre-vingts
+ * sprites de tourelle ont été retirés au lot PRODUCTION. Cette table dit donc le
+ * cas du joueur, qui est celui de l'Arsenal et de la composition ; une scène qui
+ * mêle les deux camps se compte entité par entité, pas par cette table. C'est la
+ * première fois qu'une entrée de `NB_PRIMITIVES` dépend d'autre chose que de la
+ * classe, et c'est écrit ici pour qu'on ne l'apprenne pas en comptant faux.
+ *
+ * ⚠ LES STRUCTURES N'ONT PAS BOUGÉ. Leurs sprites vivent dans les atlas
+ * `defense` et `socle`, branchés au DOM au lot BRANCHEMENT-DÉFENSE ; `scene.js`
+ * n'en dessine pas encore, et elles gardent leur géométrie.
+ */
 export const NB_PRIMITIVES = {
-  escouade: 6, //  3 figures en triangle pointe en haut × (corps + casque d'accent)
-  blinde: 4, //    2 chenilles claires + caisse allongée verticalement + bandeau d'accent
-  aeronef: 3, //   ombre portée décalée + corps fin + bandeau d'accent
+  escouade: 1, //  le sprite de l'unité, pose d'attaque ou de défense
+  blinde: 2, //    coque + tourelle orientable — CÔTÉ JOUEUR ; l'Ouvrage en a 1
+  aeronef: 1, //   le sprite de l'unité
   mur: 2, //       socle + contour net
   barriere: 3, //  socle bas + contour + cœur d'accent
   tourelle: 4, //  socle + contour + anneau d'accent + dôme rond
@@ -126,6 +148,42 @@ const texte = (x, y, contenu, couleur, taille) =>
 const cadre = (x, y, l, h, couleur, epaisseur) => ({ forme: 'cadre', x, y, l, h, couleur, epaisseur });
 const disque = (x, y, rayon, couleur) => ({ forme: 'disque', x, y, rayon, couleur });
 const ligne = (x1, y1, x2, y2, couleur, epaisseur) => ({ forme: 'ligne', x1, y1, x2, y2, couleur, epaisseur });
+
+/**
+ * Une cellule d'atlas posée à l'écran — la primitive ouverte au lot
+ * UNITÉS-AU-COMBAT.
+ *
+ * ⚠⚠ CE MODULE RESTE PUR : la primitive est une DONNÉE, au même titre que
+ * `rect` ou `disque`. Aucune image n'entre ici, aucun contexte : c'est
+ * `canvas2d.js` qui appellera `drawImage`, et lui seul.
+ *
+ * ⚠ ELLE PORTE SON RECTANGLE SOURCE, ET C'EST DÉLIBÉRÉ. `drawImage` a besoin de
+ * savoir OÙ découper dans l'atlas ; faire ce calcul dans `canvas2d.js`
+ * l'obligerait à lire l'index des atlas et à multiplier un rang par un côté —
+ * c'est-à-dire à prendre une décision de position, ce que ce module-là n'a
+ * jamais fait pour aucune autre forme. Les quatre nombres se calculent ici, une
+ * fois, et `canvas2d` les recopie dans `drawImage` sans rien savoir.
+ *
+ * `nom` est conservé alors que rien ne le lit au dessin : il rend la primitive
+ * LISIBLE dans un test et dans un débogage, où « le sprite en (192, 64) » ne dit
+ * rien et « off_j_belier_chassis » dit tout.
+ */
+const sprite = (famille, nom, x, y, l, h) => {
+  const { colonne, rangee } = celluleDuSprite(famille, nom);
+  return {
+    forme: 'sprite',
+    famille,
+    nom,
+    sx: colonne * COTE_SPRITE,
+    sy: rangee * COTE_SPRITE,
+    sl: COTE_SPRITE,
+    sh: COTE_SPRITE,
+    x,
+    y,
+    l,
+    h,
+  };
+};
 
 /** Ton de corps d'un camp : kaki du joueur, métal de l'Ouvrage (provisoire). */
 function corpsDe(camp) {
@@ -203,6 +261,134 @@ function dessinerStructure(liste, x, y, t, classe, accent) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Les couches de sprite d'une unité — lot UNITÉS-AU-COMBAT
+// ---------------------------------------------------------------------------
+
+/** La lettre de camp d'un nom de sprite : le PROPRIÉTAIRE, jamais le côté. */
+function lettreDuProprietaire(proprietaire) {
+  return proprietaire === 'joueur' ? 'j' : 'o';
+}
+
+/**
+ * La force d'une entité au combat : `armee` si elle attaque, `garnison` sinon.
+ *
+ * ⚠⚠ C'EST LA FORCE QUI DÉCIDE DE LA POSE, PAS LE CAMP NI LE PROPRIÉTAIRE.
+ * CLAUDE.md §4 : « la clé est le PROPRIÉTAIRE, pas le camp — le joueur peut
+ * défendre ». Une unité qui défend prend la pose `_def` — chenilles à
+ * l'horizontale, pour un engin qui se déplace latéralement — qu'elle soit du
+ * joueur ou de l'Ouvrage. Le propriétaire, lui, ne décide que de la LETTRE.
+ */
+function forceDuCamp(camp) {
+  return camp === 'attaque' ? 'armee' : 'garnison';
+}
+
+/**
+ * Le nom d'unité à employer, pose de défense comprise si elle existe.
+ *
+ * ⚠⚠ LA LISTE DES POSES DE DÉFENSE NE S'ÉCRIT PAS, ELLE SE LIT DANS L'ATLAS.
+ * Mesuré le 30/08 : huit des quatorze unités de l'Ouvrage ont une pose `_def`,
+ * six ne l'ont pas. Écrire ces huit noms dans le code serait une seconde vérité,
+ * et la première à diverger le jour où les six manquantes seront dessinées —
+ * `existeDansAtlas` fait qu'il n'y aura alors RIEN à changer. C'est exactement
+ * la règle appliquée aux socles de liaison au lot précédent, et pour la même
+ * raison. Un test fige la coïncidence d'aujourd'hui et rougira ce jour-là.
+ */
+function nomAvecPose(famille, base, force) {
+  const defensif = `${base}_def`;
+  return force === 'garnison' && existeDansAtlas(famille, defensif) ? defensif : base;
+}
+
+/**
+ * Les couches de sprite d'une entité d'unité, de la plus BASSE à la plus haute.
+ *
+ * Rend `null` pour tout ce qui n'est pas une unité : les structures gardent
+ * leurs primitives géométriques, et les bâtiments sont hors de ce lot.
+ *
+ * ⚠ LE BLINDÉ DU JOUEUR EST LE SEUL À DEUX COUCHES. Sa coque et sa tourelle sont
+ * deux sprites, la tourelle tournant vers sa cible. Le blindé de l'OUVRAGE n'en
+ * a qu'une : sa tourelle est cuite dans la coque — arbitré le 30/08, et ses
+ * quatre-vingts sprites de tourelle ont été retirés au lot PRODUCTION. Ne pas
+ * chercher `off_o_*_chassis`, il n'en existe pas.
+ *
+ * ⚠⚠ ELLE PREND UN DESCRIPTEUR, PAS UNE ENTITÉ DE COMBAT, et c'est ce qui
+ * permet aux QUATRE listes de partager le même dessin. `listeAffichage` a des
+ * entités ; la légende et l'Arsenal n'ont qu'un identifiant. Exiger une entité
+ * ici aurait obligé les deux dernières à garder le chemin géométrique, et le
+ * joueur aurait appris un vocabulaire visuel dans l'éditeur pour en découvrir un
+ * autre au combat — ce que le dispatch unique existe précisément pour empêcher,
+ * et ce qu'un test (T8) asserte depuis le lot 5A.
+ *
+ * ⚠ LE DESCRIPTEUR PORTE LA POSITION AFFICHÉE, PAS L'ENTITÉ. Une entité de
+ * combat range son ordonnée dans `rangeeMilli`, en millièmes de rangée ;
+ * `orientationVers` attend des rangées. Lui passer l'entité telle quelle rendait
+ * `NaN` — trouvé par T6, qui a levé « orientationDeLAngle : NaN n'est pas un
+ * angle » au premier essai. La position est donc explicite, et c'est l'appelant
+ * qui la convertit : lui seul sait s'il veut celle du tick ou l'interpolée.
+ *
+ * @param {{genre: string, id: string, proprietaire: string, camp: string,
+ *          rangee?: number, colonne?: number}} d
+ * @param {{rangee: number, colonne: number}|null} cible position AFFICHÉE de sa cible
+ * @returns {{famille: string, nom: string, ancre?: object}[]|null}
+ */
+export function couchesDeLUnite(d, cible = null) {
+  if (d.genre !== 'unite') return null;
+  const classe = classeDe(d.genre, d.id);
+  const c = lettreDuProprietaire(d.proprietaire);
+  const force = forceDuCamp(d.camp);
+
+  if (classe !== 'blinde' || c === 'o') {
+    return [{ famille: 'unite', nom: nomAvecPose('unite', `off_${c}_${d.id}`, force) }];
+  }
+
+  // Blindé du joueur : la coque, puis la tourelle orientée par-dessus.
+  const coque = nomAvecPose('chassis', `off_j_${d.id}_chassis`, force);
+  const orientation = orientationDeLaPiece(
+    force,
+    { rangee: d.rangee ?? 0, colonne: d.colonne ?? 0 },
+    cible,
+  );
+  return [
+    { famille: 'chassis', nom: coque },
+    {
+      // ⚠ LE SOULIGNÉ, PAS LE TIRET. Le dossier source est
+      // `art/sprites/tourelle-unite/`, mais `tools/atlas.py` en fait un SLUG
+      // ASCII qui devient une clé JavaScript : `ATLAS.tourelle_unite`. Écrit
+      // avec un tiret ici au premier essai — T6 a levé « famille absente de
+      // l'atlas » et a nommé les sept familles cousues, ce qui a dit la faute.
+      famille: 'tourelle_unite',
+      nom: `off_j_${d.id}_${orientation}`,
+      ancre: ANCRES_CHASSIS[coque] ?? null,
+    },
+  ];
+}
+
+/**
+ * Pose les couches d'une unité dans sa case.
+ *
+ * ⚠ LA TOURELLE SUIT L'ANCRE DE SA COQUE, pas le centre de la case. Les trois
+ * nombres d'`ANCRES_CHASSIS` sont des POURCENTAGES de la coque — mesurés sur
+ * l'image par `tools/chassis.py` —, donc valables aux trois grilles. Sans eux,
+ * la tourelle se poserait au centre géométrique et flotterait à côté du logement
+ * sur les dix coques.
+ */
+function dessinerCouches(liste, x, y, t, couches) {
+  for (const couche of couches) {
+    if (!couche.ancre) {
+      liste.push(sprite(couche.famille, couche.nom, x, y, t, t));
+      continue;
+    }
+    const { diametre_pct: d, x_pct: dx, y_pct: dy } = couche.ancre;
+    const cote = Math.max(1, Math.round((t * d) / 100));
+    liste.push(sprite(
+      couche.famille, couche.nom,
+      Math.round(x + t / 2 + (t * dx) / 100 - cote / 2),
+      Math.round(y + t / 2 + (t * dy) / 100 - cote / 2),
+      cote, cote,
+    ));
+  }
+}
+
 /**
  * LE dispatch de formes — un seul, pour les trois listes d'affichage.
  *
@@ -212,7 +398,20 @@ function dessinerStructure(liste, x, y, t, classe, accent) {
  * vocabulaire visuel dans l'éditeur et en découvrir un autre au combat. Aucune
  * de ces fonctions ne redéfinit ni forme ni couleur en propre.
  */
-function dessinerEntite(liste, x, y, t, classe, camp, accent) {
+function dessinerEntite(liste, x, y, t, classe, camp, accent, couches = null) {
+  // ⚠⚠ LES QUATRE LISTES PASSENT AUX SPRITES ENSEMBLE, ET CE N'EST PAS UN
+  // ÉLARGISSEMENT GRATUIT. Le premier jet de ce lot ne branchait que le champ de
+  // bataille : T8 est tombé, et il avait RAISON — il asserte depuis le lot 5A
+  // que « les 14 unités se dessinent à l'identique dans l'Arsenal et sur le
+  // champ », faute de quoi le joueur apprendrait un vocabulaire visuel dans
+  // l'éditeur pour en découvrir un autre au combat. C'est la raison d'être de ce
+  // dispatch unique. Assouplir le test aurait été retirer le garde-fou qui
+  // venait de faire son travail.
+  //
+  // `couches` reste `null` pour les STRUCTURES : leurs sprites vivent dans les
+  // atlas `defense` et `socle`, branchés au DOM au lot précédent, et scene.js
+  // n'en dessine pas encore. Elles gardent leurs primitives géométriques.
+  if (couches !== null) { dessinerCouches(liste, x, y, t, couches); return; }
   if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
   else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, camp, accent);
   else if (classe === 'blinde') dessinerBlinde(liste, x, y, t, camp, accent);
@@ -280,6 +479,35 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
   const xDe = (e) => xDeColonne(projection, e.colonne);
   const yDe = (e) => yDeRangeeMilli(projection, positions.get(e.indice));
 
+  /**
+   * La position AFFICHÉE de la cible d'une entité, ou `null` si elle n'en a pas.
+   *
+   * ⚠⚠ L'INTERPOLÉE, PAS CELLE DU TICK — DÉCISION MESURÉE. `rendu-pose.js` dit
+   * en tête que l'angle est CONTINU : une tourelle change de sprite plusieurs
+   * fois pendant qu'une cible se rapproche. Viser la position du tick ferait
+   * pointer la tourelle vers là où la cible ÉTAIT, pendant que le joueur la voit
+   * ailleurs — un décalage d'autant plus visible que le canon est long.
+   *
+   * ⚠ ET LE SCINTILLEMENT A ÉTÉ MESURÉ AVANT DE TRANCHER, pas supposé : une
+   * approche de neuf rangées ne traverse que **trois** sprites — 0,33 changement
+   * par rangée — et le pire cas, un passage à une colonne d'écart, en traverse
+   * sept sur quatre rangées. C'est loin de tout ce qui clignoterait. Si l'essai
+   * appareil contredisait cette mesure, le repli est la position du tick, et il
+   * tient dans cette fonction-ci.
+   *
+   * La position du TIREUR est interpolée elle aussi, par `positions` : viser
+   * juste depuis une case fausse rendrait le même décalage.
+   */
+  const cibleAffichee = (e) => {
+    if (e.cibleIndice === null || e.cibleIndice === undefined) return null;
+    const cible = etat.entites[e.cibleIndice];
+    if (cible === undefined || !visible(cible)) return null;
+    return {
+      rangee: (positions.get(cible.indice) ?? cible.rangeeMilli) / 1000,
+      colonne: cible.colonne,
+    };
+  };
+
   // 3. Bâtiments — 4. structures — 5. unités.
   for (const genreVoulu of ['batiment', 'defense', 'unite']) {
     for (const e of etat.entites) {
@@ -287,7 +515,17 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
       const x = xDe(e);
       const y = yDe(e);
       dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
-        accentDe(e.genre, e.id));
+        accentDe(e.genre, e.id), couchesDeLUnite({
+          genre: e.genre,
+          id: e.id,
+          proprietaire: e.proprietaire,
+          camp: e.camp,
+          // ⚠ LA RANGÉE AFFICHÉE, INTERPOLÉE COMME CELLE DE LA CIBLE. Viser
+          // juste depuis une case fausse rendrait le même décalage que viser
+          // faux depuis la bonne.
+          rangee: (positions.get(e.indice) ?? e.rangeeMilli) / 1000,
+          colonne: e.colonne,
+        }, cibleAffichee(e)));
     }
   }
 
@@ -393,7 +631,21 @@ export const ENTREES_LEGENDE = [
   { classe: 'batiment', accent: null },
 ];
 
-/** Dessine une entité de classe et d'accent donnés, comme sur le champ. */
+/**
+ * Dessine une entité de classe et d'accent donnés, comme sur le champ.
+ *
+ * ⚠⚠ LA LÉGENDE GARDE SA GÉOMÉTRIE, ET CE N'EST PAS UN OUBLI DU LOT
+ * UNITÉS-AU-COMBAT. Elle n'a PAS d'identifiant d'unité : `ENTREES_LEGENDE` liste
+ * des couples CLASSE × ACCENT — « escouade à accent véhicule » —, pas des
+ * Fusiliers ni des Béliers. Aucun sprite ne peut représenter une classe
+ * abstraite, et surtout aucun ne porte l'ACCENT, qui est précisément ce que la
+ * légende explique : trois teintes par classe, la colonne de dégâts dominante.
+ *
+ * Les vignettes restent donc le vocabulaire GÉOMÉTRIQUE, et c'est cohérent —
+ * elles disent « ce qui est rond tire loin, ce qui est ambre vise les
+ * véhicules », pas « voici un Bélier ». Le jour où la légende devra montrer des
+ * unités nommées, elle passera aux sprites en gagnant un `id` par entrée.
+ */
 function dessinerVignette(liste, x, y, t, classe, camp, colonneAccent) {
   const accent = colonneAccent === null ? null
     : { colonne: colonneAccent, ...PALETTE.accents[colonneAccent] };
@@ -526,7 +778,8 @@ export function listeArsenal(grille, projection, colonnesEnFile = []) {
       liste.push(cadre(x, y, t, t, PALETTE.kakiOmbre, 1));
       const id = grille.cases[indice][colonne - 1];
       if (id === null) continue;
-      dessinerEntite(liste, x, y, t, classeDe('unite', id), 'attaque', accentDe('unite', id));
+      dessinerEntite(liste, x, y, t, classeDe('unite', id), 'attaque', accentDe('unite', id),
+        couchesDeLUnite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque' }));
     }
   }
   return liste;
@@ -586,7 +839,8 @@ export function listeDefense(grille, projection, casesMarquees = []) {
       const id = grille.cases[indice][colonne - 1];
       if (id === null) continue;
       const genre = DEFENSES[id] !== undefined ? 'defense' : 'unite';
-      dessinerEntite(liste, x, y, t, classeDe(genre, id), 'defense', accentDe(genre, id));
+      dessinerEntite(liste, x, y, t, classeDe(genre, id), 'defense', accentDe(genre, id),
+        couchesDeLUnite({ genre, id, proprietaire: 'joueur', camp: 'defense' }));
     }
   }
 

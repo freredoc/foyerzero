@@ -1102,6 +1102,15 @@
          ====================================================================== -->
     <div id="ecran-monde" hidden>
       <img id="monde-atlas" alt="" hidden src="%ATLAS_TERRAIN%">
+      <!-- ⚠⚠ LES ATLAS DU CHAMP DE BATAILLE SONT DES `<img>`, PAS DES VARIABLES
+           CSS, et c'est `drawImage` qui l'impose : il veut un
+           `HTMLImageElement`, pas une URL. Les atlas du DOM — bâtiment, terrain,
+           defense, socle — restent en `var(--atlas-…)` parce qu'ils servent de
+           `background-image` ; ceux-ci passent par un canevas.
+           Le précédent est `monde-atlas`, en place depuis l'écran de la carte. -->
+      <img id="atlas-unite" alt="" hidden src="%ATLAS_UNITE%">
+      <img id="atlas-chassis" alt="" hidden src="%ATLAS_CHASSIS%">
+      <img id="atlas-tourelle-unite" alt="" hidden src="%ATLAS_TOURELLE_UNITE%">
       <div id="monde-champ">
         <canvas id="monde-canvas"></canvas>
         <div id="monde-outils">

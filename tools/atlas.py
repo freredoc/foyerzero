@@ -64,6 +64,11 @@ FAMILLES = {
     'terrain': ('terrain', 18),
     'defense': ('defense', 204),    # 9 pièces × orientations et liaisons, deux camps
     'socle': ('socle', 36),         # les socles des tourelles, deux camps
+    'unite': ('unite', 36),         # les 14 unités des deux camps, poses d'attaque et de défense
+    'chassis': ('chassis', 10),     # les coques de blindé du JOUEUR seul, attaque et défense
+    # ⚠ LE SLUG PREND UN SOULIGNÉ, PAS UN TIRET : il devient une clé JavaScript,
+    # et `ATLAS['tourelle-unite']` s'écrirait mais `ATLAS.tourelle-unite` non.
+    'tourelle-unite': ('tourelle_unite', 80),  # 5 blindés joueur × 16 orientations
 }
 
 # Les familles restantes, pour mémoire, avec leur effectif relevé le 30/08 :

@@ -12,10 +12,23 @@
 
 /**
  * Exécute une liste d'affichage.
+ *
+ * ⚠ `atlas` EST OPTIONNEL, ET UNE PRIMITIVE `sprite` SANS LUI **LÈVE**. Une
+ * liste qui n'en contient aucune s'exécute sans atlas, comme avant. Mais une
+ * famille manquante ne se saute PAS en silence : une unité invisible est un
+ * défaut qu'on doit voir à la première image, pas un trou que personne ne
+ * remarque. C'est la même règle que `fondDuSprite`, qui lève sur un nom absent.
+ *
+ * ⚠ ET CE MODULE NE DÉCIDE TOUJOURS RIEN. La branche `sprite` appelle
+ * `drawImage` avec les six nombres que la primitive porte — ni choix de nom, ni
+ * calcul de position, ni lissage. `imageSmoothingEnabled` est une décision, elle
+ * se pose chez celui qui crée le contexte.
+ *
  * @param {object} ctx   Contexte 2D (ou enregistreur compatible).
  * @param {Array<object>} liste Primitives produites par scene.js.
+ * @param {Record<string, CanvasImageSource>} [atlas] Une image par famille.
  */
-export function executer(ctx, liste) {
+export function executer(ctx, liste, atlas = null) {
   for (const p of liste) {
     switch (p.forme) {
       case 'rect':
@@ -41,6 +54,16 @@ export function executer(ctx, liste) {
         ctx.textBaseline = 'middle';
         ctx.fillText(p.texte, p.x, p.y);
         break;
+      case 'sprite': {
+        const image = atlas === null ? undefined : atlas[p.famille];
+        if (image === undefined) {
+          throw new Error(
+            `canvas2d : la famille d'atlas « ${p.famille} » manque pour « ${p.nom} »`,
+          );
+        }
+        ctx.drawImage(image, p.sx, p.sy, p.sl, p.sh, p.x, p.y, p.l, p.h);
+        break;
+      }
       case 'ligne':
         ctx.strokeStyle = p.couleur;
         ctx.lineWidth = p.epaisseur;

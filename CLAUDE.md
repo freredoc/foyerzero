@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.44.0 · build 45.
+Dernière révision : **30/08/2026**, version 0.45.0 · build 46.
 
 ---
 
@@ -35,8 +35,8 @@ Dernière révision : **30/08/2026**, version 0.44.0 · build 45.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **582 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**859 646 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+`npm test` → **589 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 073 238 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
@@ -77,8 +77,14 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : **4,5 %** — la borne est passée à 900 000 au lot
-BRANCHEMENT-DÉFENSE, qui a porté le HTML à **859 646 octets** en faisant entrer
+Marge actuelle : **6,7 %** — la borne est passée à 1 150 000 au lot
+UNITÉS-AU-COMBAT, qui a porté le HTML à **1 073 238 octets** en faisant entrer
+les trois dernières familles d'unité : `unite` (36 sprites, 66 861 o de base64),
+`chassis` (10, 20 429 o) et `tourelle-unite` (80, 120 774 o), soit **208 064
+octets**. Les sept familles sont désormais toutes cousues, sauf `carte` et
+`effet` — la première attend trois arbitrages, la seconde un événement de mort
+que le moteur ne publie pas.
+Auparavant, la borne était passée à 900 000 au lot BRANCHEMENT-DÉFENSE, qui a porté le HTML à **859 646 octets** en faisant entrer
 `defense` (204 sprites en 15 × 14, la grille la plus dense du dépôt) et `socle`
 (36 en 6 × 6), soit **243 364 octets de base64**.
 ⚠⚠ **ET IL NE RESTE QUE 40 354 OCTETS.** Les trois familles encore non cousues —
@@ -255,7 +261,7 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 8 fichiers ; RIEN d'autre n'a le droit d'en porter
+src/data/               toutes les valeurs de calibrage — 9 fichiers ; RIEN d'autre n'a le droit d'en porter
   combat.js             grille, unités, défenses, modules, ciblage, écrasement, obstacles
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
@@ -264,6 +270,16 @@ src/data/               toutes les valeurs de calibrage — 8 fichiers ; RIEN d'
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
   atlas.js              l'index des atlas de sprites — ⚠ GÉNÉRÉ, voir ci-dessous
+  ancres-chassis.js     où se pose la tourelle sur chaque coque de blindé du joueur
+  ⤷ ⚠⚠ `ancres-chassis.js` EST UNE TRANSCRIPTION À LA MAIN de
+    `art/sprites/ancres-chassis.json`, et un test les confronte — clés et valeurs
+    SIGNÉES. Le JSON est mesuré par `tools/chassis.py` sur les images ; il ne peut
+    pas entrer dans le livrable, `tools/build.js` n'inlinant que des images et
+    `render/scene.js` ne lisant aucun fichier. Une transcription qui ne se
+    confronte pas à sa source est une copie qui vieillit.
+  ⤷ ⚠ NEUF `y_pct` SUR DIX SONT NÉGATIFS, PAS LES DIX — `off_j_fendeur_chassis_def`
+    vaut +1,0. Le brief du lot annonçait les dix : mesuré, c'est faux. Un test qui
+    asserterait « toutes négatives » inviterait à corriger une donnée juste.
   ⤷ ⚠⚠ `atlas.js` EST ÉCRIT PAR `tools/atlas.py`, PAS À LA MAIN. Sa première
     ligne le déclare généré, et elle reste. Il dit ce que chaque atlas contient
     et dans quel ordre — rien que les noms cousus et la géométrie de la grille,
@@ -2398,6 +2414,36 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   BRANCHEMENT-DÉFENSE. Un commentaire qui nomme une chose inexistante envoie
   chercher un mécanisme qu'on ne trouvera pas — et aucune garde ne lit les
   commentaires.
+
+- ⚠⚠ **`render/scene.js` A UNE PRIMITIVE `sprite` DEPUIS LE 30/08, ET IL RESTE
+  PUR.** C'est un OBJET, au même titre que `rect` ou `disque` : aucune image
+  n'entre dans ce module, aucun contexte. `canvas2d.js` gagne une branche qui
+  appelle `drawImage` et rien d'autre.
+  ⚠ **LA PRIMITIVE PORTE SON RECTANGLE SOURCE — `sx sy sl sh`.** Le brief la
+  donnait sans ; mais découper dans l'atlas est un CALCUL DE POSITION, et
+  `canvas2d.js` n'en fait aucun pour aucune autre forme. Le calcul se fait une
+  fois dans `scene.js`, et l'exécutant recopie huit nombres.
+  ⚠ **`executer(ctx, liste, atlas)` LÈVE sur une famille absente**, il ne saute
+  pas en silence : une unité invisible est un défaut qu'on doit voir.
+  ⚠ **`imageSmoothingEnabled = false` EST DANS `ui/banc.js`**, chez celui qui
+  crée le contexte — c'est une décision, et `canvas2d.js` n'en prend aucune.
+- ⚠⚠ **LES UNITÉS PERDENT LEUR ACCENT À L'ÉCRAN, ET C'EST UNE PERTE
+  D'INFORMATION DE JEU.** Une escouade émettait six primitives dont un casque à
+  la teinte de sa colonne de dégâts dominante — « ambre vise les véhicules » ;
+  elle émet maintenant UN sprite, qui ne porte pas de couleur. `accentDe` reste
+  juste et testée, mais son affichage sur l'unité a disparu ; il ne survit que
+  dans la légende. **Non tranché par le lot** : soit l'accent revient en couche
+  mince par-dessus le sprite, soit le joueur lit le type à la silhouette. Un test
+  d'`arsenal.test.js` est RETOURNÉ pour tomber si un accent reparaît sans
+  décision.
+- **LA LÉGENDE GARDE SA GÉOMÉTRIE, ET LÉGITIMEMENT.** `ENTREES_LEGENDE` liste des
+  couples CLASSE × ACCENT — « escouade à accent véhicule » —, pas des unités
+  nommées : elle n'a aucun identifiant à résoudre, et surtout c'est l'ACCENT
+  qu'elle explique, ce qu'un sprite ne porte pas. L'Arsenal et la composition de
+  défense, eux, ont des identifiants et sont passés aux sprites avec le champ —
+  T8 l'exige depuis le lot 5A, et il est tombé au premier jet qui l'oubliait.
+  **Deux modules justes séparément peuvent être faux ensemble**, et c'est encore
+  un test croisé qui l'a dit.
 
 ### Sur le vocabulaire
 
