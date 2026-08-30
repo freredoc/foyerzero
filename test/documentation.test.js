@@ -273,7 +273,16 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   // Et le symétrique : aucun module de PRODUCTION ne doit traîner dans test/.
   // C'est l'autre moitié de l'accident, celle du 26/08 au matin. Un fichier de
   // test/ qui n'est ni un `.test.js` ni un préréglage connu est suspect.
-  const connus = new Set(['prereglages-lot3a.js']);
+  // ⚠ LA LISTE EST NOMMÉE, PAS UN MOTIF. Un fichier non cité échoue toujours,
+  // ce qui est tout l'objet de la garde : elle attrape un module de PRODUCTION
+  // déposé ici par erreur. Une aide de test partagée y entre par son nom, avec
+  // sa raison, et rien d'autre ne passe.
+  //   `prereglages-lot3a.js`  — les montages du banc d'essai
+  //   `png-rgba.js`           — le décodeur PNG, extrait de `sprite.test.js` au
+  //                             lot ACCENT-CONFRONTÉ quand un SECOND test en a
+  //                             eu besoin ; le dupliquer aurait donné deux
+  //                             décodeurs voisins dont un seul serait éprouvé.
+  const connus = new Set(['prereglages-lot3a.js', 'png-rgba.js']);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));
   assert.deepEqual(

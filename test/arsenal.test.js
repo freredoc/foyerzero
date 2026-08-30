@@ -381,26 +381,27 @@ test('T8 — les 14 unités se dessinent à l\'identique dans l\'Arsenal et sur 
     assert.equal(deLArsenal.length, nb, `${id} : ${nb} primitives attendues dans l'Arsenal`);
     assert.deepEqual(deLArsenal, duChamp, `${id} : le dessin diverge entre l'Arsenal et le champ`);
 
-    // ⚠⚠ L'ACCENT N'APPARAÎT PLUS SUR L'UNITÉ DEPUIS LE LOT UNITÉS-AU-COMBAT,
-    // ET C'EST UNE PERTE D'INFORMATION DE JEU, PAS UN DÉTAIL DE STYLE. Cette
-    // ligne assertait que la teinte claire de la colonne dominante — « ambre
-    // vise les véhicules » — paraissait sur le dessin. Un sprite ne porte pas de
-    // couleur : ses pixels viennent de l'atlas.
+    // ⚠⚠ LA LISTE D'AFFICHAGE NE PORTE AUCUNE COULEUR D'ACCENT, DÉLIBÉRÉMENT —
+    // ET CE N'EST PAS UNE PERTE D'INFORMATION. Arbitré par Ethan le 30/08, après
+    // mesure : l'accent vit dans les PIXELS DU SPRITE, et
+    // `test/accent.test.js` l'asserte contre `accentDe`, sprite par sprite.
+    // Mesuré à la grille 64 : l'accent dominant du dessin est celui de la table
+    // quatorze fois sur quatorze pour les unités entières du joueur.
     //
-    // L'assertion n'est pas retirée, elle est RETOURNÉE : on exige maintenant
-    // qu'aucune couleur d'accent ne paraisse, ce qui fait tomber ce test le jour
-    // où quelqu'un rajoutera un bandeau d'accent sans que la décision soit
-    // prise. `accentDe` reste vraie et testée par T6 ; c'est son AFFICHAGE sur
-    // l'unité qui a disparu, et il ne survit que dans la légende.
+    // ⚠ LA PHRASE QUI ÉTAIT ICI ÉTAIT FAUSSE, et c'est elle qui a fait croire à
+    // une perte : elle disait « un sprite ne porte pas de couleur : ses pixels
+    // viennent de l'atlas ». La PRIMITIVE ne porte pas de couleur ; les PIXELS,
+    // si — et ce sont exactement les six teintes d'accent de la fiche.
     //
-    // ⚠ À TRANCHER PAR ETHAN, et écrit au rapport du lot : soit l'accent revient
-    // en troisième couche — un bandeau mince par-dessus le sprite —, soit le
-    // joueur lit désormais le type d'une unité à sa SILHOUETTE et l'accent reste
-    // un outil de légende. Les deux se tiennent ; ce lot n'a pas tranché seul.
+    // ⚠ UN BANDEAU D'ACCENT AJOUTÉ ICI FERAIT DIRE DEUX FOIS LA MÊME CHOSE, à
+    // deux endroits qui pourraient diverger. La troisième couche n'est pas
+    // ouverte, et cette assertion la refuse : elle tombera si quelqu'un en
+    // rajoute une sans que la décision soit reprise.
     const accent = accentDe('unite', id);
     assert.ok(accent !== null, `${id} : une unité a toujours un accent calculé`);
     assert.ok(!deLArsenal.some((p) => p.couleur === accent.clair),
-      `${id} : un accent reparaît sur le dessin — décision à prendre, voir le lot`);
+      `${id} : un bandeau d'accent reparaît — l'accent vit dans les pixels du `
+      + 'sprite, voir test/accent.test.js');
     assert.ok(deLArsenal.every((p) => p.forme === 'sprite'),
       `${id} : l'unité n'est pas dessinée en sprites`);
   }

@@ -35,7 +35,7 @@ Dernière révision : **30/08/2026**, version 0.45.0 · build 46.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **589 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **593 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 073 238 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
@@ -352,13 +352,20 @@ src/ui/                 les cinq écrans et leurs éditeurs — 8 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   37 fichiers *.test.js (node:test) ; prereglages-lot3a.js n'est PAS un test
+test/                   38 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
-  rendu-pose  reparation  roster  site-de-la-case  site-entame  sprite  state
+  accent  rendu-pose  reparation  roster  site-de-la-case  site-entame  sprite  state
+  ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
+    la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
+    la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
+    `prereglages-lot3a.js` porte les montages du banc ; `png-rgba.js` porte le
+    décodeur PNG RVBA, extrait de `sprite.test.js` au lot ACCENT-CONFRONTÉ quand
+    un SECOND test en a eu besoin — le dupliquer aurait donné deux décodeurs
+    voisins dont un seul serait éprouvé.
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour

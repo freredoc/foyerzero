@@ -13,10 +13,23 @@
 // de la spec §4 le dit. Aucune quatrième teinte d'accent n'existe.
 //
 // Aucune teinte hors de la palette de la fiche. Les tons de camp : le kaki est
-// la rampe DU JOUEUR (fiche §3), et la rampe ennemie 5 tons est une dette DA
-// « à définir » — en attendant, l'Ouvrage est dessiné dans la rampe MÉTAL de
-// la même palette (« anodisé sombre », dit la fiche du Dard). Provisoire,
-// consigné au rapport ; aucune teinte n'est inventée.
+// la rampe DU JOUEUR (fiche §3).
+//
+// ⚠ LA « DETTE DA À DÉFINIR » DE LA RAMPE ENNEMIE EST SOLDÉE PAR L'ART, ET CE
+// COMMENTAIRE DISAIT ENCORE LE CONTRAIRE. L'Ouvrage n'est plus « dessiné dans la
+// rampe MÉTAL en attendant » : ses sprites sont VIOLETS. Mesuré le 30/08 sur
+// `off_o_ratisseur` à la grille 64 — `#382E47` (279 px), `#231D2E` (173),
+// `#4E4160` (146), `#6B5B80` (14) dominent, et il ne reste du métal que
+// `#3E454C`, DEUX pixels sur 751. Le brief du lot disait « pas une de ses neuf
+// teintes n'est du métal » : mesuré, c'est faux d'un cheveu, et c'est écrit ici
+// plutôt que recopié.
+//
+// ⚠ CE QUI SUBSISTE DE LA RAMPE MÉTAL POUR L'OUVRAGE, C'EST LA LÉGENDE, et elle
+// seule. `corpsDe` a toujours des appelants — `dessinerEscouade`,
+// `dessinerBlinde` et `dessinerAeronef` servent les vignettes de
+// `listeLegende`, qui restent GÉOMÉTRIQUES faute d'identifiant d'unité à
+// résoudre. Le code n'est donc pas mort ; c'est sa portée qui a rétréci, du
+// champ de bataille à la légende.
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { BATIMENTS } from '../data/sites.js';
@@ -36,7 +49,9 @@ export const PALETTE = {
   kakiCorps: '#4E5742',
   kakiEclaire: '#6A7658',
   kakiLumiere: '#8C9A72',
-  // Métal (3 tons) — canons, chenilles, socles ; et rampe provisoire de l'Ouvrage.
+  // Métal (3 tons) — canons, chenilles, socles ; et ton de camp de l'Ouvrage
+  // DANS LA LÉGENDE seule, depuis que ses unités sont dessinées en sprites.
+  // Voir l'en-tête : la rampe ennemie n'est plus une dette, l'art l'a tranchée.
   metalSombre: '#1E2124',
   metalMoyen: '#3E454C',
   metalClair: '#68727E',
@@ -185,7 +200,15 @@ const sprite = (famille, nom, x, y, l, h) => {
   };
 };
 
-/** Ton de corps d'un camp : kaki du joueur, métal de l'Ouvrage (provisoire). */
+/**
+ * Ton de corps d'un camp : kaki du joueur, métal de l'Ouvrage.
+ *
+ * ⚠ IL NE SERT PLUS QU'À LA LÉGENDE. Au combat, dans l'Arsenal et dans la
+ * composition de défense, les unités sont des sprites depuis le lot
+ * UNITÉS-AU-COMBAT ; seules les vignettes de `listeLegende` passent encore par
+ * les primitives géométriques, faute d'identifiant d'unité à résoudre. Ce n'est
+ * donc pas du code mort — c'est du code dont la portée a rétréci.
+ */
 function corpsDe(camp) {
   return camp === 'attaque' ? PALETTE.kakiCorps : PALETTE.metalMoyen;
 }
