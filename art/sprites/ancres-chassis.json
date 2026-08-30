@@ -1,0 +1,62 @@
+{
+  "off_j_belier_chassis": {
+    "diametre_pct": 29.2,
+    "mesure": true,
+    "x_pct": -0.6,
+    "y_pct": -8.1
+  },
+  "off_j_belier_chassis_def": {
+    "diametre_pct": 24.0,
+    "mesure": true,
+    "x_pct": 6.0,
+    "y_pct": -1.0
+  },
+  "off_j_broyeur_chassis": {
+    "diametre_pct": 50.2,
+    "mesure": true,
+    "x_pct": -0.1,
+    "y_pct": -6.9
+  },
+  "off_j_broyeur_chassis_def": {
+    "diametre_pct": 38.7,
+    "mesure": true,
+    "x_pct": -5.6,
+    "y_pct": -0.3
+  },
+  "off_j_fendeur_chassis": {
+    "diametre_pct": 18.5,
+    "mesure": true,
+    "x_pct": -1.3,
+    "y_pct": -15.1
+  },
+  "off_j_fendeur_chassis_def": {
+    "diametre_pct": 16.7,
+    "mesure": true,
+    "x_pct": -15.9,
+    "y_pct": 1.0
+  },
+  "off_j_pilon_chassis": {
+    "diametre_pct": 42.0,
+    "mesure": false,
+    "x_pct": -0.5,
+    "y_pct": -10.7
+  },
+  "off_j_pilon_chassis_def": {
+    "diametre_pct": 41.6,
+    "mesure": true,
+    "x_pct": -8.1,
+    "y_pct": -3.1
+  },
+  "off_j_ratisseur_chassis": {
+    "diametre_pct": 29.7,
+    "mesure": true,
+    "x_pct": -0.3,
+    "y_pct": -13.3
+  },
+  "off_j_ratisseur_chassis_def": {
+    "diametre_pct": 24.8,
+    "mesure": true,
+    "x_pct": -15.2,
+    "y_pct": -2.0
+  }
+}
