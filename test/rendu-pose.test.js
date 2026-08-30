@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import {
   ORIENTATIONS, ORIENTATION_PAR_DEFAUT, SE_LIE_AU_MUR, LIAISONS,
   orientationDeLAngle, orientationVers, orientationDeLaPiece, PORTEE_AVEC_TOURELLE,
-  liaisonDuMur, liaisonDuSocle, campChaine,
+  liaisonDuMur, liaisonDuSocle, proprietaireChaine,
 } from '../src/sim/rendu-pose.js';
 import { GRILLE, DEFENSES } from '../src/data/combat.js';
 import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
@@ -157,10 +157,10 @@ test('la ronce et la herse ont une portée mais pas de tourelle, donc ne lient p
   assert.ok(!SE_LIE_AU_MUR.has('merlon_inexistant'));
 });
 
-test('les quatre états de liaison, et le camp Ouvrage n’en lit qu’un', () => {
+test('les quatre états de liaison, et le propriétaire Ouvrage n’en lit qu’un', () => {
   assert.deepEqual(LIAISONS, ['isole', 'est', 'ouest', 'traversant']);
-  assert.ok(campChaine('joueur'));
-  assert.ok(!campChaine('ouvrage'));
+  assert.ok(proprietaireChaine('joueur'));
+  assert.ok(!proprietaireChaine('ouvrage'));
 });
 
 const rangee = GRILLE.bandes.defense.premiere;
@@ -202,7 +202,7 @@ test('le bord de grille n’est pas une voisine', () => {
   assert.equal(liaisonDuMur([droite], droite), 'isole');
 });
 
-test('le camp Ouvrage reste isolé quelles que soient ses voisines', () => {
+test('le propriétaire Ouvrage reste isolé quelles que soient ses voisines', () => {
   const mur = { id: 'merlon', rangee, colonne: 4 };
   const garnison = [
     mur,

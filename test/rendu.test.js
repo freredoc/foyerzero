@@ -279,28 +279,32 @@ test('T5 — composition et ordre de dessin stables', () => {
 
   // Composition au tick 0, comptée classe par classe (table NB_PRIMITIVES) :
   //   fond 1 + obstacle 1
-  //   + gangue (batiment 2) + casemate (tourelle 4) + merlon (mur 2)
-  //   + ronce (barriere 3) + faucheuse (artillerie 5)
+  //   + gangue (batiment 1) + casemate (tourelle 2) + merlon (mur 1)
+  //   + ronce (barriere 1) + faucheuse (artillerie 2)
   //   + meute (escouade 1) + fendeur (blinde 2) + crecelle (aeronef 1)
   //   + barres de PV : 8 vivants × 2 = 16
   //   + barres de réserve : 3 attaquants × 2 = 6
   //   + traits de tir : 0 (personne n'a tiré au tick 0)
-  // = 1 + 1 + 2 + 4 + 2 + 3 + 5 + 1 + 2 + 1 + 16 + 6 = 44.
+  // = 1 + 1 + 1 + 2 + 1 + 1 + 2 + 1 + 2 + 1 + 16 + 6 = 35.
   //
-  // ⚠ LE COMPTE EST PASSÉ DE 53 À 44 AU LOT UNITÉS-AU-COMBAT, et la BAISSE est
-  // le fait : les trois classes d'unité émettaient 6, 4 et 3 primitives
-  // géométriques, elles émettent maintenant 1, 2 et 1 — un sprite chacune, deux
-  // pour le blindé du joueur qui porte sa tourelle à part. Les structures, elles,
-  // n'ont pas bougé d'une primitive. Le nombre se LIT dans `NB_PRIMITIVES`, il
-  // n'est pas recopié : la ligne ci-dessous tomberait si la table changeait sans
-  // que ce commentaire suive.
+  // ⚠ LE COMPTE EST PASSÉ DE 53 À 44 AU LOT UNITÉS-AU-COMBAT, PUIS DE 44 À 35 AU
+  // LOT STRUCTURES-AU-COMBAT, et les deux BAISSES sont le fait. Les trois
+  // classes d'unité émettaient 6, 4 et 3 primitives géométriques ; les quatre
+  // classes de structure et le bâtiment en émettaient 2, 3, 4, 5 et 2. Toutes
+  // émettent maintenant leurs COUCHES — une, sauf le blindé du joueur, la
+  // tourelle et l'artillerie, qui en portent deux.
+  //
+  // ⚠ CE TEST AVAIT RAISON DE TOMBER, et c'est pour ça qu'on le recalcule au
+  // lieu de l'assouplir : il mesure exactement la chose que le lot change. Le
+  // nombre se LIT dans `NB_PRIMITIVES`, il n'est pas recopié — la ligne
+  // ci-dessous tomberait si la table changeait sans que ce commentaire suive.
   const attendu = 1 + 1
     + NB_PRIMITIVES.batiment + NB_PRIMITIVES.tourelle + NB_PRIMITIVES.mur
     + NB_PRIMITIVES.barriere + NB_PRIMITIVES.artillerie
     + NB_PRIMITIVES.escouade + NB_PRIMITIVES.blinde + NB_PRIMITIVES.aeronef
     + 8 * 2 + 3 * 2;
-  assert.equal(attendu, 44);
-  assert.equal(liste.length, 44);
+  assert.equal(attendu, 35);
+  assert.equal(liste.length, 35);
 
   // L'ordre de dessin est stable et normatif : fond, obstacles, bâtiments,
   // structures, unités, barres, traits — une barre ne passe jamais sous une
@@ -313,14 +317,25 @@ test('T5 — composition et ordre de dessin stables', () => {
   // Le bâtiment vient avant la première structure, qui vient avant la
   // première unité, qui vient avant la première barre.
   const indexOu = (predicat) => liste.findIndex(predicat);
-  const iBatiment = indexOu((p) => p.forme === 'rect' && p.couleur === PALETTE.metalMoyen);
-  // ⚠ LA SONDE DES UNITÉS EST PASSÉE AU SPRITE, l'ordre testé n'a pas bougé.
-  // Elle cherchait la teinte de corps kaki, qu'une unité n'émet plus depuis le
-  // lot UNITÉS-AU-COMBAT. Ce que T5 asserte — bâtiments, puis structures, puis
-  // unités, puis barres — est intact.
-  const iUnite = indexOu((p) => p.forme === 'sprite');
+  // ⚠ LES DEUX SONDES SONT PASSÉES AU SPRITE, L'ORDRE TESTÉ N'A PAS BOUGÉ. Celle
+  // des unités a suivi au lot UNITÉS-AU-COMBAT, celle des bâtiments à ce lot-ci :
+  // elle cherchait un `rect` en `metalMoyen`, que `dessinerBatiment` émettait et
+  // qu'un bâtiment n'émet plus au combat. Ce que T5 asserte — bâtiments, puis
+  // structures, puis unités, puis barres — est intact, et il est même plus
+  // exigeant : les trois genres se distinguent maintenant par la FAMILLE
+  // d'atlas de leur sprite, qui est une information de jeu et non une teinte.
+  const iBatiment = indexOu((p) => p.forme === 'sprite' && p.famille === 'batiment');
+  const iStructure = indexOu((p) => p.forme === 'sprite'
+    && (p.famille === 'defense' || p.famille === 'socle'));
+  const iUnite = indexOu((p) => p.forme === 'sprite'
+    && (p.famille === 'unite' || p.famille === 'chassis'));
   const iBarre = indexOu((p) => p.couleur === COULEUR_BARRE_PV);
-  assert.ok(iBatiment > 1 && iBatiment < iUnite, 'bâtiments avant unités');
+  // Le montage doit porter les trois genres, sans quoi l'ordre ne mesure rien.
+  assert.ok(iBatiment > 1, 'aucun bâtiment dans la scène : l\'ordre ne prouve rien');
+  assert.ok(iStructure > 1, 'aucune structure dans la scène : l\'ordre ne prouve rien');
+  assert.ok(iUnite > 1, 'aucune unité dans la scène : l\'ordre ne prouve rien');
+  assert.ok(iBatiment < iStructure, 'bâtiments avant structures');
+  assert.ok(iStructure < iUnite, 'structures avant unités');
   assert.ok(iUnite < iBarre, 'unités avant barres');
 
   // Après un tick, les tireurs ajoutent leurs traits, TOUS en queue de liste.

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.45.0 · build 46.
+Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
 
 ---
 
@@ -34,9 +34,12 @@ Dernière révision : **30/08/2026**, version 0.45.0 · build 46.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
-`npm test` → **593 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 073 238 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+**Référence au 30/08/2026 (après le lot STRUCTURES-AU-COMBAT), à confronter :**
+`npm test` → **600 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 074 070 octets**, 0 référence externe. STRUCTURES-AU-COMBAT a coûté
+**+832 octets** — aucun atlas ajouté, aucun sprite : c'est du code, et c'est un
+DÉPLACEMENT de code. Le lot RÉPARATION avait laissé la référence à 593 tests et
+1 073 238 octets. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
@@ -77,7 +80,9 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : **6,7 %** — la borne est passée à 1 150 000 au lot
+Marge actuelle : **6,6 %** (75 930 octets) — la borne N'A PAS BOUGÉ au lot
+STRUCTURES-AU-COMBAT, et c'est le fait : il n'a fait entrer aucune ressource, il
+a retiré une duplication. La borne est passée à 1 150 000 au lot
 UNITÉS-AU-COMBAT, qui a porté le HTML à **1 073 238 octets** en faisant entrer
 les trois dernières familles d'unité : `unite` (36 sprites, 66 861 o de base64),
 `chassis` (10, 20 429 o) et `tourelle-unite` (80, 120 774 o), soit **208 064
@@ -2451,6 +2456,59 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   T8 l'exige depuis le lot 5A, et il est tombé au premier jet qui l'oubliait.
   **Deux modules justes séparément peuvent être faux ensemble**, et c'est encore
   un test croisé qui l'a dit.
+
+- ⚠⚠ **UN OBJET, UN DESSIN : LES STRUCTURES ONT REJOINT LES UNITÉS LE 30/08.**
+  Une casemate se dessinait de TROIS façons — en sprites sur l'écran Chantier,
+  en primitives géométriques dans l'éditeur Défense, en primitives au combat —
+  et aucun test ne pouvait le voir, chacun des trois chemins étant juste
+  séparément. `couchesDeLEntite(d, contexte)` de `render/scene.js` est désormais
+  LE point d'entrée des trois genres, et les cinq appelants y passent :
+  `listeAffichage`, `listeArsenal`, `listeDefense`, `listeLegende` et
+  `ui/chantier.js`.
+  ⚠ **LE GESTE EST UN DÉPLACEMENT, PAS UNE ADDITION.** `couchesDeLaDefense`
+  vivait dans `ui/chantier.js` et `spriteDuBatiment` aussi, ce dernier écrivant
+  `bat_j_` EN DUR : correct tant que seul le joueur avait des bâtiments
+  dessinés, faux dès que le champ dessine ceux de l'Ouvrage. Les deux sont
+  MONTÉES dans `scene.js` ; en garder une copie dans l'écran aurait été la
+  seconde vérité que le lot existe pour retirer.
+  ⚠ **LES DEUX ORDRES DE COUCHE SONT INVERSES, ET L'INVERSION SE FAIT UNE FOIS.**
+  `couchesDeLEntite` rend de la plus BASSE à la plus haute — l'ordre du canvas,
+  où la dernière est au-dessus. Une liste `background-image` CSS dessine sa
+  PREMIÈRE ligne au-dessus : `poserCouches` de `ui/chantier.js` retourne donc la
+  liste, et lui seul. Unifier sans retourner aurait mis le socle par-dessus la
+  tourelle **avec les mêmes deux noms**, donc sans faire tomber un seul test —
+  d'où les deux assertions d'indice de `sprite.test.js`.
+  ⚠ **`NB_PRIMITIVES` DIT LE CHAMP ET LES ÉDITEURS, PAS LA LÉGENDE.** Les
+  structures émettent 1, 1, 2 et 2 couches là où elles émettaient 2, 3, 4 et 5
+  primitives ; la légende, elle, garde la géométrie et ses anciens comptes. T5
+  de `rendu.test.js` est passé de 44 à 35 — il avait RAISON de tomber, il mesure
+  exactement ce que le lot change.
+  ⚠⚠ **ET LE CHAÎNAGE DES MURS ÉTAIT MORT AU COMBAT, MESURÉ.** La liste des
+  voisines que composait `listeAffichage` portait `e.rangee`, qui n'existe pas
+  sur une entité — le moteur range `rangeeMilli`. Chaque comparaison de rangée
+  échouait, tout rendait `isole`, et deux merlons côte à côte se rejoignaient
+  sur l'écran Chantier sans se rejoindre au combat. **Le premier montage du test
+  ne pouvait pas le voir** : il écrivait ses voisines à la main, et retirer
+  `visible(e)` du filtre le laissait vert. Il passe maintenant par
+  `listeAffichage` et par un combat où `proprietaireDefense` vaut `joueur` —
+  sans quoi rien n'est observable, l'Ouvrage ne chaînant pas. **Un montage écrit
+  à la main ne garde que lui-même**, pour la deuxième fois en trois lots.
+  ⚠ **110 DES 125 SPRITES DORMANTS SONT DEVENUS ATTEIGNABLES**, compté et non
+  estimé. Les quinze qui restent se nomment dans `sprite.test.js` : douze par
+  ARBITRAGE — l'Ouvrage ne chaîne pas, ses socles et merlons raccordés ne
+  peuvent pas être demandés — et trois par conséquence, les socles NUS des trois
+  tourelles de contact du joueur ne servant jamais, leurs quatre variantes
+  raccordées couvrant les quatre liaisons, `isole` compris.
+  ⚠ **AUCUNE FONCTION GÉOMÉTRIQUE N'EST DEVENUE MORTE, ET C'EST MESURÉ.**
+  `dessinerStructure`, `dessinerBatiment`, `dessinerEscouade`, `dessinerBlinde`
+  et `dessinerAeronef` restent joignables par `dessinerVignette` : la légende
+  émet 120 primitives et zéro sprite. Rien n'a donc été retiré — le nettoyage
+  annoncé par le brief n'avait pas lieu d'être.
+  ⚠ **UN COMBAT OÙ LE JOUEUR DÉFEND NE PEUT PORTER AUCUN BÂTIMENT.**
+  `creerCombat` ne connaît que les cinq de l'Ouvrage ; en poser un sous un
+  propriétaire joueur demande `bat_j_gangue`, qui n'existe pas, et le rendu
+  LÈVE. C'est le bon comportement — « une unité invisible est un défaut qu'on
+  doit voir » — et c'est le trou que le raid sur la base du joueur comblera.
 
 ### Sur le vocabulaire
 
