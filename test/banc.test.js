@@ -491,8 +491,23 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // est d'environ 90 000 octets, soit un atlas de plus de la taille de celui
   // des bâtiments : la prochaine famille cousue la fera reculer à nouveau, et
   // ce sera à dire dans son lot.
+  //
+  // ⚠ RELEVÉE À 900 000 AU LOT BRANCHEMENT-DÉFENSE, le 30/08. Deux familles de
+  // plus entrent en `data:` — `defense`, 204 sprites en 15 × 14, la grille la
+  // plus dense du dépôt, et `socle`, 36 en 6 × 6 —, soit **243 364 octets de
+  // base64** mesurés par `tools/atlas.py`. Mesuré après le lot :
+  // **859 646 octets**, et la marge restante n'est que de 40 354, soit 4,5 %.
+  //
+  // ⚠ LA MARGE EST MAINTENANT TROP MINCE POUR UNE FAMILLE DE PLUS. Les trois
+  // qui restent non cousues — unite, tourelle-unite, carte — pèsent bien
+  // au-delà. Le prochain lot qui en fait entrer une DEVRA relever la borne en
+  // écrivant pourquoi, jamais rogner un atlas pour passer dessous (CLAUDE.md
+  // §5). Une piste mesurée si le poids devient un problème : découper les atlas
+  // par CAMP en plus de la famille épargnerait 80 068 octets à ce lot-ci — mais
+  // c'est un second axe dans l'index pour un écran de raid qui n'existe pas
+  // encore, et c'est un arbitrage d'Ethan, pas une optimisation à prendre seul.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 700_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 900_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

@@ -49,6 +49,38 @@ function exigerFamille(famille) {
 }
 
 /**
+ * Ce nom est-il cousu dans cet atlas ?
+ *
+ * ⚠⚠ C'EST UNE QUESTION, PAS UN ACCÈS, ET C'EST POUR ÇA QU'ELLE NE LÈVE PAS.
+ * `celluleDuSprite` et `fondDuSprite` lèvent sur un nom absent, et gardent ce
+ * comportement : un sprite qu'on croit poser et qui manque doit se voir à la
+ * première ouverture de l'écran. Celle-ci sert à l'appelant qui a un CHOIX à
+ * faire — poser la variante si elle existe, retomber sur la forme de base
+ * sinon — et pour qui l'absence est une réponse, pas une faute.
+ *
+ * ⚠ ELLE EXISTE PARCE QUE L'ART EST INCOMPLET, ET DÉLIBÉRÉMENT. Six défenses du
+ * joueur portent une tourelle, trois seulement ont des socles de liaison : la
+ * planche `socles_j_tourelles_connexions_3x4.png` est un 3 × 4 — trois
+ * tourelles, quatre états — et il n'en existe pas pour les trois artilleries.
+ * L'écran LIT donc l'atlas au lieu de porter une liste de trois noms : le jour
+ * où la planche arrive et où les outils tournent, les artilleries prennent leurs
+ * liaisons SANS QU'UNE LIGNE DE CODE CHANGE. Une liste écrite à la main serait
+ * la première à diverger, et il faudrait se souvenir de la modifier.
+ *
+ * ⚠ UNE FAMILLE INCONNUE REND `false`, elle ne lève pas non plus. La question
+ * « ce sprite est-il là » a une réponse même quand la famille n'est pas cousue,
+ * et c'est « non ».
+ *
+ * @param {string} famille clé de `ATLAS`
+ * @param {string} nom nom du sprite, sans son `.png`
+ * @returns {boolean}
+ */
+export function existeDansAtlas(famille, nom) {
+  const table = ATLAS[famille];
+  return table !== undefined && table.noms.includes(nom);
+}
+
+/**
  * La cellule d'un sprite, en colonne et rangée de son atlas.
  *
  * La couture remplit ligne par ligne, dans l'ordre de `noms` : le rang `i` tombe

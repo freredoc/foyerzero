@@ -55,7 +55,15 @@ const PAS = 360 / ORIENTATIONS.length;
  * Quantifie un angle en degrés vers l'une des seize orientations.
  *
  * L'angle est compté HORAIRE DEPUIS LE NORD, comme les noms de sprite : 0 vise
- * le haut de la grille, 90 la droite, 180 le bas.
+ * la RANGÉE 18 — le fond de la base, qui est la PREMIÈRE ligne d'écran —, 90 la
+ * droite, 180 le déploiement.
+ *
+ * ⚠ LE MOT QUI DÉSIGNE LE SOMMET NE S'EMPLOIE PAS ICI. Selon qu'on regarde
+ * l'écran ou les numéros de rangée, il désigne l'un ou l'autre bout de la bande,
+ * et la confusion a coûté un lot le 26/08 — `render/orientation.js` l'explique
+ * en tête. On dit « la rangée 18 », « le fond », ou « la première ligne
+ * d'écran », trois choses non ambiguës. Ce commentaire disait « le haut de la
+ * grille » et il a contribué au défaut de boussole corrigé le 30/08.
  *
  * ⚠ `Math.round` et non `Math.floor`. Arrondir vers le bas décalerait chaque
  * secteur d'un demi-pas et ferait viser une tourelle 11° à côté de sa cible en
@@ -75,8 +83,25 @@ export function orientationDeLAngle(degres) {
 /**
  * Orientation d'un tireur vers sa cible.
  *
- * Les deux positions sont en coordonnées de grille : la rangée croît vers le
- * BAS, d'où le `-` sur l'écart de rangée pour que le nord soit zéro.
+ * ⚠⚠ LE NORD EST LA RANGÉE CROISSANTE, ET C'EST UN CORRECTIF DU 30/08.
+ * Ce module portait DEUX conventions de nord qui se contredisaient, et les deux
+ * étaient figées par des tests voisins : `orientationVers` posait que le nord
+ * est la rangée DÉCROISSANTE, quand `ORIENTATION_PAR_DEFAUT` fait regarder la
+ * garnison au sud — c'est-à-dire vers le déploiement, donc vers les rangées 1
+ * et 2, donc vers les rangées décroissantes. Une tourelle au repos visait juste
+ * et se retournait à 180° dès qu'elle acquérait une cible.
+ *
+ * Mesuré avant correction : une garnison en rangée 5 visant un assaillant en
+ * rangée 2 rendait `n`, alors que `render/orientation.js` pose la cible en ligne
+ * d'écran 17 contre 14 pour le tireur — donc PLUS BAS à l'écran.
+ *
+ * C'est `ORIENTATION_PAR_DEFAUT` qui avait raison, et il n'a pas bougé. Le nord
+ * est la rangée 18 — le fond de la base, la première ligne d'écran. Ce sens rend
+ * trois choses vraies EN MÊME TEMPS : la garnison au repos regarde au sud, vers
+ * l'assaut ; l'armée au repos regarde au nord, vers la base qu'elle attaque ; et
+ * le sprite `_s` pointe vers le bas de l'image comme vers le bas de l'écran.
+ *
+ * D'où `atan2(dc, dr)` et non `atan2(dc, -dr)`.
  *
  * @param {{ rangee: number, colonne: number }} tireur
  * @param {{ rangee: number, colonne: number }} cible
@@ -89,7 +114,7 @@ export function orientationVers(tireur, cible, defaut = 'n') {
   // Même case : il n'y a pas d'angle. Rendre `n` au lieu de le signaler ferait
   // pointer la pièce au nord sans qu'on sache pourquoi.
   if (dr === 0 && dc === 0) return defaut;
-  return orientationDeLAngle((Math.atan2(dc, -dr) * 180) / Math.PI);
+  return orientationDeLAngle((Math.atan2(dc, dr) * 180) / Math.PI);
 }
 
 /**

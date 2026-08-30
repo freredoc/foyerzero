@@ -29,6 +29,7 @@ import {
   liaisonDuMur, liaisonDuSocle, campChaine,
 } from '../src/sim/rendu-pose.js';
 import { GRILLE, DEFENSES } from '../src/data/combat.js';
+import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
 import { creerEtat, poserEffectif } from '../src/sim/state.js';
 
 // ---------------------------------------------------------------------------
@@ -88,13 +89,31 @@ test('un angle hors de zéro à trois-cent-soixante est ramené', () => {
   assert.equal(orientationDeLAngle(-90), 'o');
 });
 
-test('la rangée croît vers le bas, donc le nord est la rangée décroissante', () => {
+test('le nord est la rangée CROISSANTE — le fond de la base, première ligne d\'écran', () => {
+  // ⚠⚠ CE TEST A ÉTÉ RETOURNÉ LE 30/08, ET IL AFFIRMAIT L'INVERSE. Il posait
+  // que « le nord est la rangée décroissante », ce qui contredisait le test
+  // voisin sur `ORIENTATION_PAR_DEFAUT` — la garnison regarde au sud, or elle
+  // fait face au déploiement, donc aux rangées 1 et 2, donc aux rangées
+  // DÉCROISSANTES. Les deux ne pouvaient pas être vrais ensemble : une tourelle
+  // au repos visait juste et se retournait à 180° dès qu'elle acquérait une
+  // cible.
+  //
+  // C'est `ORIENTATION_PAR_DEFAUT` qui avait raison, et il n'a pas bougé d'un
+  // caractère. C'est le signe d'`orientationVers` qui est corrigé.
+  //
+  // ⚠ CE N'EST PAS UN ASSOUPLISSEMENT — CLAUDE.md §5 autorise « retourner un
+  // garde-fou en écrivant pourquoi ». Le compte d'assertions ne baisse pas : il
+  // monte, l'est et l'ouest étant conservés tels quels puisque le correctif ne
+  // touche que l'écart de RANGÉE.
   const tireur = { rangee: 10, colonne: 5 };
-  assert.equal(orientationVers(tireur, { rangee: 5, colonne: 5 }), 'n');
-  assert.equal(orientationVers(tireur, { rangee: 15, colonne: 5 }), 's');
+  assert.equal(orientationVers(tireur, { rangee: 15, colonne: 5 }), 'n');
+  assert.equal(orientationVers(tireur, { rangee: 5, colonne: 5 }), 's');
   assert.equal(orientationVers(tireur, { rangee: 10, colonne: 9 }), 'e');
   assert.equal(orientationVers(tireur, { rangee: 10, colonne: 1 }), 'o');
-  assert.equal(orientationVers(tireur, { rangee: 5, colonne: 10 }), 'ne');
+  assert.equal(orientationVers(tireur, { rangee: 5, colonne: 10 }), 'se');
+  // L'est et l'ouest ne dépendent pas du correctif : les asserter des deux
+  // côtés dit que le retournement n'a pas débordé sur l'axe des colonnes.
+  assert.equal(orientationVers(tireur, { rangee: 15, colonne: 10 }), 'ne');
 });
 
 test('sans cible, la garnison regarde au sud et l’armée au nord', () => {
@@ -234,4 +253,60 @@ test('poser une pièce avec une orientation ne la sauvegarde pas', () => {
     Object.keys(posee).sort(),
     ['colonne', 'degatsMilli', 'id', 'niveau', 'rangee'],
   );
+});
+
+// ---------------------------------------------------------------------------
+// La boussole confrontée au sens d'affichage
+// ---------------------------------------------------------------------------
+
+test('la boussole s\'accorde à l\'écran — la composante verticale suit la ligne', () => {
+  // ⚠⚠ C'EST L'ABSENCE DE CE TEST-LÀ QUI A LAISSÉ PASSER LA CONTRADICTION.
+  // `rendu-pose.js` et `render/orientation.js` portaient chacun un sens, tous
+  // deux gardés, et RIEN ne les confrontait : le premier disait que le nord est
+  // la rangée décroissante, le second que la rangée 18 se dessine en première
+  // ligne. Deux modules justes séparément, faux ensemble.
+  //
+  // Ce test ne connaît aucune valeur d'orientation : il compare un SENS à un
+  // autre. Il resterait vrai si les seize noms changeaient.
+  const verticale = (o) => (o.startsWith('n') ? 'haut' : o.startsWith('s') ? 'bas' : 'aucune');
+
+  const cas = [
+    ['garnison vers l\'assaut', { rangee: 5, colonne: 5 }, { rangee: 2, colonne: 5 }],
+    ['garnison vers le déploiement', { rangee: 5, colonne: 5 }, { rangee: 1, colonne: 5 }],
+    ['armée vers la base', { rangee: 2, colonne: 5 }, { rangee: 15, colonne: 5 }],
+    ['tourelle du fond vers l\'avant', { rangee: 10, colonne: 3 }, { rangee: 3, colonne: 3 }],
+  ];
+
+  for (const [quoi, tireur, cible] of cas) {
+    const ligneTireur = ligneEcranDeLaRangee(tireur.rangee);
+    const ligneCible = ligneEcranDeLaRangee(cible.rangee);
+
+    // ⚠ D'ABORD : LE MONTAGE MESURE-T-IL QUELQUE CHOSE ? Deux pièces sur la
+    // même ligne d'écran ne diraient rien du sens vertical, et la comparaison
+    // ci-dessous passerait sur n'importe quel code.
+    assert.notEqual(ligneCible, ligneTireur, `${quoi} : les deux lignes d'écran sont égales`);
+
+    const attendu = ligneCible > ligneTireur ? 'bas' : 'haut';
+    const rendu = verticale(orientationVers(tireur, cible));
+    assert.equal(rendu, attendu,
+      `${quoi} : la cible est en ligne ${ligneCible} contre ${ligneTireur} pour le tireur, `
+      + `donc vers le ${attendu} de l'écran, et la boussole rend « ${rendu} »`);
+  }
+
+  // Et les deux ORIENTATIONS PAR DÉFAUT s'accordent au même sens : au repos, la
+  // garnison fait face au déploiement, l'armée fait face à la base.
+  const bandeDefense = GRILLE.bandes.defense;
+  const garnison = { rangee: bandeDefense.premiere, colonne: 5 };
+  const versLAssaut = { rangee: 1, colonne: 5 };
+  assert.ok(ligneEcranDeLaRangee(versLAssaut.rangee) > ligneEcranDeLaRangee(garnison.rangee),
+    'le déploiement doit se dessiner plus bas que la bande de défense');
+  assert.equal(verticale(ORIENTATION_PAR_DEFAUT.garnison), 'bas',
+    'la garnison au repos doit regarder vers le bas de l\'écran');
+  assert.equal(verticale(ORIENTATION_PAR_DEFAUT.armee), 'haut',
+    'l\'armée au repos doit regarder vers le haut de l\'écran');
+
+  // Falsifiable : le lecteur de composante verticale distingue bien les trois
+  // cas, sinon toutes les assertions ci-dessus compareraient « aucune » à
+  // « aucune ».
+  assert.deepEqual([verticale('n'), verticale('s'), verticale('e')], ['haut', 'bas', 'aucune']);
 });

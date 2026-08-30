@@ -90,6 +90,7 @@ let html = htmlSource
 // exactement le genre de panne qui se découvre sur l'appareil.
 
 // ⚠ AUCUN MARQUEUR N'EST PRÉFIXE D'UN AUTRE, ET C'EST LE `%` FINAL QUI LE TIENT.
+// Revérifié le 30/08 sur les CINQ marqueurs, les deux atlas de défense entrant.
 // `%ATLAS_TERRAIN%` et `%ATLAS_TERRAIN_BASE%` partagent quatorze caractères ;
 // sans le `%` de fin, le premier `replaceAll` mangerait la tête du second et
 // laisserait un `_BASE%` orphelin dans le HTML — la garde offline n'y verrait
@@ -105,6 +106,8 @@ const IMAGES_INLINE = [
   { marqueur: '%ATLAS_TERRAIN%', chemin: ['art', 'sprites', 'carte', 'atlas-terrain-64.png'], type: 'image/png' },
   { marqueur: '%ATLAS_BATIMENT%', chemin: ['art', 'sprites', 'atlas-batiment-64.png'], type: 'image/png' },
   { marqueur: '%ATLAS_TERRAIN_BASE%', chemin: ['art', 'sprites', 'atlas-terrain-64.png'], type: 'image/png' },
+  { marqueur: '%ATLAS_DEFENSE%', chemin: ['art', 'sprites', 'atlas-defense-64.png'], type: 'image/png' },
+  { marqueur: '%ATLAS_SOCLE%', chemin: ['art', 'sprites', 'atlas-socle-64.png'], type: 'image/png' },
 ];
 
 for (const image of IMAGES_INLINE) {

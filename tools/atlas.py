@@ -62,6 +62,8 @@ COTE = 64
 FAMILLES = {
     'bâtiment': ('batiment', 34),   # 16 intacts + 16 détruits + 2 ruines, lot 10 du 30/08
     'terrain': ('terrain', 18),
+    'defense': ('defense', 204),    # 9 pièces × orientations et liaisons, deux camps
+    'socle': ('socle', 36),         # les socles des tourelles, deux camps
 }
 
 # Les familles restantes, pour mémoire, avec leur effectif relevé le 30/08 :

@@ -2747,22 +2747,43 @@ test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
 
   // ⚠ LE SIGLE DU JETON POSÉ SUR LA GRILLE PART, `SIGLES` ET `sigleDe` RESTENT.
-  // La palette de pose s'en sert (`sigle: SIGLES[p.id]`), le fantôme d'aperçu
-  // aussi, et la bande de défense en dépend ENTIÈREMENT — ses seize orientations
-  // ne sont pas branchables. Les retirer casserait trois choses pour en corriger
-  // une seule.
+  // La palette de pose s'en sert (`sigle: SIGLES[p.id]`), et le fantôme d'aperçu
+  // aussi. Les retirer casserait deux choses pour en corriger une seule.
+  //
+  // ⚠ LA RAISON A CHANGÉ AU LOT BRANCHEMENT-DÉFENSE, PAS L'EXIGENCE. Ce
+  // commentaire disait que la bande de défense « en dépend ENTIÈREMENT, ses
+  // seize orientations n'étant pas branchables » : elles le sont depuis le
+  // 30/08, et son jeton porte maintenant un sprite. `SIGLES_DEFENSE` reste
+  // néanmoins, pour sa palette.
   assert.match(ecran, /sigle: SIGLES\[p\.id\]/, '`SIGLES` a disparu de la palette de pose');
   assert.match(ecran, /sigleDe: \(id\) => SIGLES\[id\]/, '`sigleDe` a disparu du terrain des bâtiments');
   assert.match(ecran, /sigleDe: \(id\) => SIGLES_DEFENSE\[id\]/, '`sigleDe` a disparu du terrain de défense');
 
-  // Le jeton demande son sprite au TERRAIN, jamais à un nom de bande écrit à la
+  // Le jeton demande ses COUCHES au TERRAIN, jamais à un nom de bande écrit à la
   // main : c'est la même discipline que `panneau` et `cible`, et un test voisin
   // refuse déjà un `=== 'defense'` dans cet écran.
-  assert.match(ecran, /spriteDe: spriteDuBatiment/, 'le terrain des bâtiments n\'a plus de sprite');
-  assert.match(ecran, /spriteDe: null/, 'la défense ne se déclare plus sans sprite');
+  //
+  // ⚠ `spriteDe` REND UNE LISTE DEPUIS LE 30/08, même pour une seule couche. Une
+  // tourelle en porte deux — elle-même et son socle — venues de deux atlas
+  // différents ; rendre tantôt un nom, tantôt une liste obligerait l'appelant à
+  // connaître la différence, c'est-à-dire le cas particulier qu'on refuse.
+  assert.match(ecran, /spriteDe: \(piece\) => \[\{ famille: 'batiment'/,
+    'le terrain des bâtiments ne rend plus une liste de couches');
+  assert.match(ecran, /spriteDe: couchesDeLaDefense/, 'la défense n\'a plus de couches');
+  assert.doesNotMatch(ecran, /spriteDe: null/,
+    'une bande se redéclare sans sprite — si c\'est voulu, le dire ici');
+  // La porte reste ouverte pour une bande à venir qui n'aurait pas de sprite :
+  // le retour au sigle est toujours écrit, il n'est simplement plus emprunté.
   assert.match(ecran, /if \(terrain\.spriteDe === null\)[\s\S]{0,200}?sigleDe\(b\.id\)/,
     'la bande sans sprite ne retombe plus sur son sigle');
   assert.match(ecran, /classList\.add\('sprite'\)/, 'le jeton ne porte plus la classe du sprite');
+
+  // ⚠ LES TROIS LISTES CSS SE COMPTENT. `background-image`, `-size` et
+  // `-position` se lisent en parallèle ; une liste plus courte SE RÉPÈTE en
+  // silence, et le socle prendrait le cadrage de la tourelle.
+  assert.match(ecran, /function poserCouches\(element, couches\)/, '`poserCouches` a disparu');
+  assert.match(ecran, /images\.length !== tailles\.length \|\| images\.length !== positions\.length/,
+    'les trois listes de fond ne sont plus comptées');
 
   // ⚠ ET LA RÈGLE DU NOM EST MÉCANIQUE, PAS UNE TABLE DE ONZE LIGNES. Une table
   // serait une seconde vérité, et la première à diverger au douzième bâtiment.

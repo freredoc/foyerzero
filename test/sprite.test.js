@@ -14,24 +14,36 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
-import { celluleDuSprite, fondDuSprite } from '../src/render/sprite.js';
+import { celluleDuSprite, existeDansAtlas, fondDuSprite } from '../src/render/sprite.js';
 import { variante, suffixeDeVariante, SEL_VARIANTE } from '../src/render/variante.js';
-import { spriteDuBatiment } from '../src/ui/chantier.js';
+import { couchesDeLaDefense, spriteDuBatiment } from '../src/ui/chantier.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
-import { creerEtat } from '../src/sim/state.js';
+import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
+import { DEFENSES, GRILLE } from '../src/data/combat.js';
 import { tirer } from '../src/sim/rng.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SPRITES = join(RACINE, 'art', 'sprites');
 
-/** Le dossier source d'une famille cousue — le slug ASCII n'est pas le dossier. */
-const DOSSIER_DE_LA_FAMILLE = { batiment: 'bâtiment', terrain: 'terrain' };
+/**
+ * Le dossier source d'une famille cousue — le slug ASCII n'est pas le dossier.
+ *
+ * ⚠ LA RÈGLE EST « LE DOSSIER PORTE LE NOM DU SLUG », ET LES EXCEPTIONS SEULES
+ * S'ÉCRIVENT. `tools/atlas.py` translittère le dossier en slug ASCII parce que
+ * celui-ci devient un nom de fichier, un marqueur de build et une clé
+ * JavaScript ; la seule famille où les deux diffèrent aujourd'hui est
+ * « bâtiment », à cause de son accent. Énumérer les quatre à la main ferait une
+ * liste à tenir à jour, et c'est elle qui a dû être reprise au lot
+ * BRANCHEMENT-DÉFENSE quand `defense` et `socle` sont entrées.
+ */
+const DOSSIER_EXCEPTION = { batiment: 'bâtiment' };
+const dossierDeLaFamille = (slug) => DOSSIER_EXCEPTION[slug] ?? slug;
 
 /** Le code d'un module, sa prose ôtée — voir le dernier test pour le pourquoi. */
 function sansCommentaires(texte) {
@@ -59,8 +71,9 @@ test('sprite — l\'index dit exactement ce que le disque porte', () => {
   assert.ok(Object.keys(ATLAS).length >= 2, 'moins de deux familles cousues');
 
   for (const [slug, table] of Object.entries(ATLAS)) {
-    const dossier = DOSSIER_DE_LA_FAMILLE[slug];
-    assert.ok(dossier !== undefined, `famille « ${slug} » sans dossier source connu`);
+    const dossier = dossierDeLaFamille(slug);
+    assert.ok(existsSync(join(SPRITES, dossier, String(COTE_SPRITE))),
+      `famille « ${slug} » : le dossier source ${dossier}/${COTE_SPRITE} est introuvable`);
     const attendus = readdirSync(join(SPRITES, dossier, String(COTE_SPRITE)))
       .filter((n) => n.endsWith('.png'))
       .map((n) => n.slice(0, -4))
@@ -312,7 +325,7 @@ test('sprite — l\'atlas cousu porte les pixels des sprites d\'aujourd\'hui', (
   // la géométrie restait exacte, les onze bâtiments se résolvaient toujours.
   // Seuls les PIXELS avaient divergé. C'est pour ça que celle-ci les compare.
   for (const [slug, table] of Object.entries(ATLAS)) {
-    const dossier = DOSSIER_DE_LA_FAMILLE[slug];
+    const dossier = dossierDeLaFamille(slug);
     const atlas = decoderRgba(join(SPRITES, `atlas-${slug}-${COTE_SPRITE}.png`));
 
     let comparees = 0;
@@ -341,4 +354,124 @@ test('sprite — l\'atlas cousu porte les pixels des sprites d\'aujourd\'hui', (
   const b = decoderRgba(join(SPRITES, 'bâtiment', '64', 'bat_j_chantier_de_construction.png'));
   assert.ok(a.pixels.some((v) => v !== 0), 'le décodeur rend une image vide');
   assert.ok(!a.pixels.equals(b.pixels), 'le décodeur ne distingue pas deux sprites');
+});
+
+// ---------------------------------------------------------------------------
+// Le branchement de la garnison
+// ---------------------------------------------------------------------------
+
+/**
+ * Une garnison qui porte les neuf défenses, posée sur des cases LÉGALES.
+ *
+ * ⚠ LES CASES SE CHERCHENT, ELLES NE S'ÉCRIVENT PAS. La bande de défense porte
+ * des obstacles tirés de la fondation : une colonne écrite en dur tombe sur un
+ * rocher selon la graine, et le montage échoue pour une raison qui n'a rien à
+ * voir avec ce qu'il mesure.
+ */
+function garnisonComplete(graine = 7) {
+  let etat = creerEtat(graine);
+  const bande = GRILLE.bandes.defense;
+  for (const id of Object.keys(DEFENSES)) {
+    let pose = false;
+    for (let r = bande.premiere; r <= bande.derniere && !pose; r++) {
+      for (let c = 1; c <= GRILLE.largeur && !pose; c++) {
+        const piece = { id, rangee: r, colonne: c, niveau: 1 };
+        if (problemesDeLaPoseDEffectif(etat, 'garnison', piece).length === 0) {
+          etat = poserEffectif(etat, 'garnison', piece);
+          pose = true;
+        }
+      }
+    }
+    assert.ok(pose, `le montage n'a pas su poser « ${id} »`);
+  }
+  return etat;
+}
+
+test('sprite — les socles à liaison sont exactement les défenses de type tourelle', () => {
+  // ⚠⚠ CE TEST FIGE UNE COÏNCIDENCE D'AUJOURD'HUI, ET IL EST FAIT POUR ROUGIR.
+  // Six défenses du joueur portent une tourelle ; trois seulement ont des socles
+  // de liaison. Ce n'est pas un manque d'outil mais un manque de SOURCE :
+  // `tools/connexions.py` coupe `socles_j_tourelles_connexions_3x4.png`, un
+  // 3 × 4 — trois tourelles, quatre états — et il n'existe pas de planche pour
+  // les trois artilleries.
+  //
+  // Le jour où Ethan dessine cette planche et où les outils tournent, ce test
+  // TOMBE. C'est ce qu'on veut : quelqu'un relira ce paragraphe au lieu de
+  // découvrir la nouveauté six mois plus tard. Le rendu, lui, s'adapte tout seul
+  // — il LIT l'atlas par `existeDansAtlas` au lieu de porter une liste.
+  const avecLiaison = [];
+  const sansLiaison = [];
+  for (const [id, def] of Object.entries(DEFENSES)) {
+    if (!existeDansAtlas('socle', `socle_def_j_${id}`)) continue;
+    (existeDansAtlas('socle', `socle_def_j_${id}_est`) ? avecLiaison : sansLiaison).push(id);
+  }
+
+  // ⚠ D'ABORD : LES DEUX GROUPES SONT-ILS NON VIDES ? Deux listes vides
+  // seraient égales à deux autres listes vides, et le test ne mesurerait rien.
+  assert.ok(avecLiaison.length > 0, 'aucun socle à liaison — l\'atlas n\'est pas celui qu\'on croit');
+  assert.ok(sansLiaison.length > 0, 'tous les socles ont des liaisons — le trou d\'art est comblé, relire le lot');
+
+  const tourelles = Object.keys(DEFENSES).filter((id) => DEFENSES[id].type === 'tourelle');
+  const artilleries = Object.keys(DEFENSES).filter((id) => DEFENSES[id].type === 'artillerie');
+  assert.deepEqual(avecLiaison.sort(), [...tourelles].sort(),
+    'les socles à liaison ne sont plus exactement les défenses de type tourelle');
+  assert.deepEqual(sansLiaison.sort(), [...artilleries].sort(),
+    'les socles sans liaison ne sont plus exactement les artilleries');
+});
+
+test('sprite — chaque pièce de garnison résout toutes ses couches dans un atlas', () => {
+  const etat = garnisonComplete();
+  assert.equal(etat.garnison.length, Object.keys(DEFENSES).length,
+    'le montage ne porte pas les neuf défenses');
+
+  let couchesVues = 0;
+  for (const piece of etat.garnison) {
+    const couches = couchesDeLaDefense(piece, etat);
+
+    // ⚠ SANS CETTE LIGNE, UNE FONCTION QUI REND `[]` PASSERAIT la boucle
+    // ci-dessous sans lever, et le test serait vert sur un écran vide.
+    assert.ok(Array.isArray(couches) && couches.length > 0,
+      `« ${piece.id} » ne rend aucune couche`);
+
+    for (const { famille, nom } of couches) {
+      assert.ok(existeDansAtlas(famille, nom),
+        `« ${piece.id} » demande ${famille}/${nom}, absent de l'atlas cousu`);
+      // Et le cadrage se calcule vraiment : `existeDansAtlas` ne ment pas.
+      assert.doesNotThrow(() => fondDuSprite(famille, nom));
+      couchesVues += 1;
+    }
+  }
+  // Neuf pièces : trois à une couche (le mur et les deux barrières) et six à
+  // deux (tourelle ou artillerie, plus son socle). Le compte se calcule.
+  const attendu = Object.values(DEFENSES)
+    .reduce((n, d) => n + (d.type === 'tourelle' || d.type === 'artillerie' ? 2 : 1), 0);
+  assert.equal(couchesVues, attendu, `${couchesVues} couches posées pour ${attendu} attendues`);
+});
+
+test('sprite — la ronce et la herse n\'ont ni socle ni orientation', () => {
+  // Elles blessent au CONTACT : rien à tourner, rien à poser dessous. Un
+  // suffixe d'orientation sur leur nom voudrait dire qu'on les traite comme des
+  // tourelles, et l'atlas n'en porte qu'un seul sprite chacune.
+  const etat = garnisonComplete();
+  const barrieres = etat.garnison.filter((p) => DEFENSES[p.id].type === 'barriere');
+  assert.ok(barrieres.length >= 2, 'le montage ne porte pas les deux barrières');
+
+  for (const piece of barrieres) {
+    const couches = couchesDeLaDefense(piece, etat);
+    assert.equal(couches.length, 1, `« ${piece.id} » porte ${couches.length} couches au lieu d'une`);
+    assert.equal(couches[0].famille, 'defense');
+    assert.equal(couches[0].nom, `def_j_${piece.id}`,
+      `« ${piece.id} » porte un suffixe qu'une barrière ne devrait pas avoir`);
+  }
+
+  // ⚠ TÉMOIN : une tourelle du MÊME montage en porte deux, elle. Sans lui, une
+  // fonction qui rendrait toujours une seule couche passerait les assertions
+  // ci-dessus.
+  const tourelle = etat.garnison.find((p) => DEFENSES[p.id].type === 'tourelle');
+  assert.ok(tourelle !== undefined, 'le montage ne porte aucune tourelle');
+  const couchesTourelle = couchesDeLaDefense(tourelle, etat);
+  assert.equal(couchesTourelle.length, 2, 'une tourelle doit porter sa couche et son socle');
+  assert.equal(couchesTourelle[1].famille, 'socle', 'le socle doit être la couche BASSE');
+  assert.match(couchesTourelle[0].nom, /_(n|s|e|o)[a-z]*$/,
+    'la tourelle ne porte plus de suffixe d\'orientation');
 });
