@@ -497,9 +497,9 @@ tools/                  22 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 161 fichiers à la
-                        racine, 424 en comptant `carte/`. RECOMPTÉ le 30/08 au
-                        lot SPRITES-S11.
+art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à la
+                        racine, 428 en comptant `carte/`. RECOMPTÉ le 30/08 au
+                        lot BORDS-DE-BASE.
                         ⚠ CETTE LIGNE ANNONÇAIT 87 « depuis le RANGEMENT », et
                           elle était fausse de 61 : le disque en portait 148
                           avant ce lot-ci. Aucune garde ne compte ce dossier —

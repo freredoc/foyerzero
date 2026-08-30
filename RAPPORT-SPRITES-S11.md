@@ -1,8 +1,10 @@
-# RAPPORT — lot SPRITES-S11 — 30/08/2026 au soir
+# RAPPORT — lots SPRITES-S11 et BORDS-DE-BASE — 30/08/2026 au soir
 
-Dépôt des sources d'interface livrées par Ethan
-(`FoyerZero_S11_UI_complet_v1.zip`). **Ce lot ne fait que POSER des originaux
-dans `art/sources/`** — aucune ligne de `src/`, aucun test, aucun outil.
+Dépôt des sources livrées par Ethan en deux envois —
+`FoyerZero_S11_UI_complet_v1.zip` (l'interface) puis
+`foyer_zero_bords_base_joueur_ouvrage.zip` (les bords de base). **Ces lots ne
+font que POSER des originaux dans `art/sources/`** — aucune ligne de `src/`,
+aucun test, aucun outil.
 
 | Grandeur | Valeur |
 |---|---|
@@ -10,15 +12,15 @@ dans `art/sources/`** — aucune ligne de `src/`, aucun test, aucun outil.
 | `npm run check` | **634 pass / 0 fail** |
 | `dist/index.html` | **1 242 496 octets — identique à l'OCTET**, SHA-256 compris |
 | `python3 tools/verifier.py` | **VERT** — 1 370 identiques · 2 différents (déclarés) · 0 nouveau · 0 MANQUANT |
-| `art/sources/` | 148 → **161** fichiers à la racine (424 en comptant `carte/`) |
+| `art/sources/` | 148 → **165** fichiers à la racine (428 en comptant `carte/`) |
 
 ---
 
-## 1. Ce qui est entré
+## 1. Ce qui est entré — l'interface (premier envoi)
 
 Treize fichiers, tous à la racine d'`art/sources/`, aucun écrasement — vérifié
 fichier par fichier avant la copie, la commande s'arrêtant à la première
-collision.
+collision. Les quatre planches de bords sont au §2.
 
 **Les neuf planches du lot 7** (`INVENTAIRE-SPRITES.md` §7), toutes en
 1024 × 1024, RVB 8 bits, fond magenta comme le reste du dossier :
@@ -50,38 +52,41 @@ un pixel art. C'est la seule lecture que j'ai faite du contenu ; elle n'est pas
 arbitrée.
 
 **Le manifeste**, renommé `S11_UI_CONTENU.txt` — le `CONTENU.txt` de l'archive
-aurait été, à la racine d'un dossier de 161 fichiers, un titre qui ne dit pas de
+aurait été, à la racine d'un dossier de 165 fichiers, un titre qui ne dit pas de
 quoi il parle.
 
 ---
 
-## 2. ⚠⚠ CE QUI N'EST PAS ARRIVÉ : LES MURS
+## 2. Les bords de base — arrivés au second envoi
 
-Ethan demande aussi « des murs pour faire le contour des bases », et les quatre
-images sont bien dans le message — angles et segments, en deux matières (brique
-ocre et pierre mauve), avec leurs variantes horizontale, verticale et les quatre
-coins.
+⚠ **CE PARAGRAPHE DISAIT « CE QUI N'EST PAS ARRIVÉ ».** Les quatre planches
+étaient d'abord dans le message sous forme d'IMAGES et non de fichiers : une
+image jointe arrive en pixels, pas en octets sur le disque, et `art/sources/` ne
+porte que des originaux — y déposer une reconstitution aurait été pire que de ne
+rien déposer. Le second envoi a réglé la question, et le paragraphe est réécrit
+plutôt que gardé pour l'histoire : il décrirait un manque qui n'existe plus.
 
-**Mais elles ne sont pas des FICHIERS.** Le seul téléversement de la session est
-`FoyerZero_S11_UI_complet_v1.zip`, et il ne contient que les treize fichiers
-ci-dessus. Vérifié :
+Quatre planches de 2048 × 2048, RVB 8 bits, fond magenta, **deux matières × deux
+rôles** :
 
-```
-ls /root/.claude/uploads/<session>/   → le zip, et lui seul
-find / -name "*.png" -newermt "-6 hours"  → rien d'autre
-```
+| Fichier | Matière | Contenu |
+|---|---|---|
+| `base_bords_joueur_angles_2x2.png` | terre cuite | les quatre angles |
+| `base_bords_joueur_murs_2x2.png` | terre cuite | les segments droits |
+| `base_bords_ouvrage_angles_2x2.png` | ardoise | les quatre angles |
+| `base_bords_ouvrage_murs_2x2.png` | ardoise | les segments droits |
 
-Une image jointe à un message est visible, elle n'est pas déposée sur le disque :
-je ne peux pas la recopier dans `art/sources/` sans la reconstituer, c'est-à-dire
-sans en fabriquer une approximation à la place de l'original. **`art/sources/`
-ne porte que des originaux** — c'est ce qui le distingue d'`art/sprites/`, qui
-est entièrement reproductible — donc y déposer une reconstitution serait pire
-que de ne rien déposer.
+⚠ **LES DEUX MATIÈRES SONT LES DEUX RAMPES DE `FICHE-STYLE.md`**, et ce n'est pas
+une coïncidence à vérifier plus tard : le jeu de bords du joueur est en terre
+cuite — la rampe « sol joueur », celle-là même que partagent le sol de la base et
+le fond de la carte depuis le lot SPRITES-ET-ZOOM — et celui de l'Ouvrage en
+ardoise mauve. Les contours se poseront donc sur leur propre sol sans jurer.
 
-**Il suffit de les renvoyer dans une archive**, comme les planches S11, et je les
-pose dans la même minute.
-
----
+⚠ **NI T NI CROIX, ET C'EST ARBITRÉ.** Ethan : « pas besoin de t ou croix c'est
+juste pour le contour de la base ». Un contour rectangulaire n'a que des angles
+et des segments ; les jonctions n'auraient servi qu'à un mur INTÉRIEUR, qui
+n'existe pas. **Ne pas les réclamer plus tard sans un besoin réel** — c'est une
+décision, pas un oubli.
 
 ## 3. Pourquoi la version n'est PAS bumpée
 
@@ -114,13 +119,14 @@ une mise à jour à tous les appareils pour un fichier identique.
 | MANQUANTS | **0** |
 
 C'est **exactement le verdict du lot FINITIONS**, ce qui est le résultat attendu :
-aucun outil ne lit les planches P11 aujourd'hui.
+aucun outil ne lit les planches P11 ni les quatre planches de bords aujourd'hui.
 
 ⚠ **ET LE « 0 NOUVEAU » EST LA MESURE QUI COMPTE ICI.** `planches.py` lit
 `art/sources/` ; si sa sélection avait été un balayage du dossier plutôt qu'une
-liste, les douze planches déposées auraient produit des sprites que le dépôt n'a
+liste, les seize planches déposées auraient produit des sprites que le dépôt n'a
 pas, et le vérificateur les aurait comptés « nouveaux ». Il en compte zéro : la
 chaîne les ignore, et déposer des sources est donc bien un geste inerte.
+**Relancé après le second envoi**, il rend le même verdict.
 
 ### ⚠⚠ IL NE TOURNE PAS SUR UN CONTENEUR NEUF SANS TROIS PAQUETS
 
@@ -138,10 +144,10 @@ sinon — et parce que « deux minutes, mesurées » suppose qu'il démarre.
 
 ---
 
-## 5. Ce qui reste à faire — la CHAÎNE, plus l'art
+## 5. Ce qui reste à faire — la CHAÎNE, pour les deux jeux
 
-L'art est là ; **rien d'autre ne l'est**. Pour qu'une icône paraisse à l'écran il
-faut, dans cet ordre :
+L'art est là ; **rien d'autre ne l'est**, ni pour l'interface ni pour les bords.
+Pour qu'une icône paraisse à l'écran il faut, dans cet ordre :
 
 1. **Un producteur** dans `tools/` — la douzième — qui découpe les neuf planches
    selon leurs grilles et conditionne en 128 · 64 · 32, comme les onze autres.
@@ -160,6 +166,17 @@ faut, dans cet ordre :
    aujourd'hui — les 3 ressources et les 4 compteurs, qui tiennent largement.
 5. **Le branchement**, écran par écran.
 
+⚠⚠ **ET LES BORDS DE BASE DEMANDENT UNE DÉCISION QUE PERSONNE N'A PRISE : OÙ
+SE POSENT-ILS ?** La grille du Chantier fait 9 × 18 cases et le contour d'une
+base en occuperait le pourtour — mais les cases du pourtour sont POSABLES
+aujourd'hui, et un bord qui les mangerait retirerait des emplacements de
+construction. Les trois lectures possibles : le bord se dessine PAR-DESSUS le
+sol sans prendre de case (décoratif, aucun effet de jeu) ; il se dessine à
+l'EXTÉRIEUR de la grille, qui gagne une marge ; ou il occupe vraiment des cases,
+ce qui change le nombre d'emplacements et donc l'équilibrage. **C'est un
+arbitrage d'Ethan, pas une lecture que je peux faire seul**, et il décide de
+tout le reste du branchement.
+
 ⚠ **LA FLÈCHE VERTE EST UN CAS À PART**, et probablement le plus rapide à
 rendre. Le trait de voisinage existe déjà — calque SVG posé sur la grille,
 `viewBox` en unités de case, depuis le lot RETOURS-ETHAN — et il est aujourd'hui
@@ -173,8 +190,8 @@ transparent : il faudra la conditionner comme les autres.
 
 | Fichier | Ce qui change |
 |---|---|
-| `art/sources/` | **+13 fichiers**, aucun retiré, aucun écrasé |
-| `CLAUDE.md` | le compte d'`art/sources/` (87 annoncé → 161 mesuré) ; les trois paquets du vérificateur |
+| `art/sources/` | **+17 fichiers** (13 d'interface, 4 de bords), aucun retiré, aucun écrasé |
+| `CLAUDE.md` | le compte d'`art/sources/` (87 annoncé → 165 mesuré) ; les trois paquets du vérificateur |
 | `RAPPORT-SPRITES-ET-ZOOM.md` | amendé : son §2 disait « les fichiers n'existent pas », ce qui cesse d'être vrai |
 
 ⚠ **RIEN DANS `src/`, RIEN DANS `test/`.** C'est ce qui rend ce lot sûr à
