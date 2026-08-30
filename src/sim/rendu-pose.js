@@ -25,7 +25,9 @@ import { GRILLE, DEFENSES } from '../data/combat.js';
 // ---------------------------------------------------------------------------
 //
 // L'ordre est HORAIRE DEPUIS LE NORD, et il fait foi : c'est celui des noms de
-// fichier des sprites, `def_j_casemate_nne`, `off_o_ratisseur_ese`, etc.
+// fichier des sprites, `def_j_casemate_nne`, `off_j_ratisseur_ese`, etc.
+// (l'exemple était `off_o_…` jusqu'au 30/08 ; le camp Ouvrage n'a plus de
+// sprite de tourelle — ses blindés la portent cuite dans la coque.)
 //
 // POURQUOI SEIZE, ET PAS HUIT NI TRENTE-DEUX. Mesuré sur la grille 9 × 18 en
 // énumérant toutes les cases atteignables : à portée 2,5 les vingt cases à

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.42.0 · build 43.
+Dernière révision : **30/08/2026**, version 0.43.0 · build 44.
 
 ---
 
@@ -36,7 +36,7 @@ Dernière révision : **30/08/2026**, version 0.42.0 · build 43.
 
 **Référence au 29/08/2026 (après le lot RÉPARATION), à confronter :**
 `npm test` → **578 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**577 357 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
+**608 040 octets**, 0 référence externe. Le lot POINTS-D'ATTAQUE a coûté
 **+1 828 octets** — de la simulation pure, aucun écran, comme SATELLITES avant
 lui. SITE-D'UNE-CASE a coûté **zéro**, faute d'appelant : `esbuild` l'élaguait.
 SITE-ENTAMÉ a fait entrer les deux d'un coup, +2 868, en branchant la
@@ -77,7 +77,10 @@ rien d'extérieur — cette assertion-là n'a pas bougé d'un mot. La taille n'e
 qu'un ordre de grandeur destiné à attraper une explosion : un bundle parti en
 boucle, une image entrée deux fois. Elle se relève quand une ressource entre
 légitimement, et le lot le dit ; jamais pour faire passer un débordement.
-Marge actuelle : **3,8 %** — le lot PREMIÈRE-COUCHE avait porté le HTML à
+Marge actuelle : **13,1 %** — la borne est passée à 700 000 au lot RUINES, et
+le lot PRODUCTION a porté le HTML à **608 040 octets** : l'atlas des bâtiments
+passe de 16 à 34 sprites, sa grille de 4×4 à 6×6, et son poids inliné de 27 278 à
+**57 489 octets**. Auparavant, le lot PREMIÈRE-COUCHE avait porté le HTML à
 581 125 octets, et le lot BÂTIMENTS-1024 l'a RAMENÉ à **577 357** : les seize
 bâtiments de la V2 se compressent mieux, l'atlas passant de 23 285 à 20 459
 octets. Une bascule d'illustration peut donc rendre des octets, et celle-ci en a
@@ -364,10 +367,19 @@ tools/                  17 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
 art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
-art/sprites/            les sprites conditionnés — VINGT-QUATRE dossiers de grille
-                        et 1 585 fichiers, recomptés le 30/08. Huit familles en
-                        128, 64 et 32 : unité, bâtiment, terrain, defense,
-                        tourelle-unite, socle, carte, effet.
+art/sprites/            les sprites conditionnés — VINGT-SEPT dossiers de grille
+                        et 1 429 fichiers, recomptés le 30/08 au lot PRODUCTION.
+                        NEUF familles en 128, 64 et 32 : unité, bâtiment,
+                        terrain, defense, tourelle-unite, socle, carte, effet,
+                        chassis.
+                        ⤷ ⚠ LE COMPTE A BAISSÉ DE 156, ET CE N'EST PAS UNE PERTE.
+                          Le lot en a AJOUTÉ 84 — 54 états détruits et ruines,
+                          30 châssis — et RETIRÉ 240 : les tourelles de blindé de
+                          l'Ouvrage, arbitrées inutiles le 30/08 parce que ses
+                          coques portent la tourelle cuite dans le dos. Mesuré
+                          sur `P3.3` et `P3.4` : leur seul creux fait 1 à 16 % de
+                          la largeur de caisse, contre 18 à 50 % côté joueur.
+                          Une baisse se justifie, elle ne se constate pas.
                         ⤷ ⚠ CE BLOC A ANNONCÉ « NEUF DOSSIERS, 144 FICHIERS »
                           PENDANT TROIS LOTS. Aucune garde ne compte ce dossier —
                           `documentation.test.js` ne porte que sur `test/` et les
