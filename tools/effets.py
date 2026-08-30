@@ -46,12 +46,13 @@ que d'inventer un palier.
 import sys, os
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 from PIL import Image
 import numpy as np
 from cond import est_fond, eroder
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites', 'effet')
+DST = dossier_sprites('effet')
 GRILLES = (128, 64, 32)
 
 # L'image la plus large de la famille occupe EMPRISE gros pixels sur une grille

@@ -20,6 +20,7 @@ l'union des seize, avec le pivot au centre exact.
 import sys, os, argparse
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
+from chemins import dossier_sprites
 
 from PIL import Image
 import numpy as np
@@ -28,7 +29,7 @@ from cond import est_fond
 from final128 import pal, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = os.path.join(RACINE, 'art', 'sprites')
+DST = dossier_sprites()
 GRILLES = (128, 64, 32)
 
 # Les seize planches, dans l'ordre de rotation horaire depuis le nord.
