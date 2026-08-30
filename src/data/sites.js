@@ -462,12 +462,47 @@ export const ZOOM_CARTE = {
   /** Pixels physiques par case, du plus large au plus serré. */
   crans: [32, 64, 128, 256],
 
-  /** Côté d'une tuile de terrain, en pixels. */
-  pixelsParTuile: 128,
+  /** Côté d'une tuile de terrain dans l'atlas, en pixels SOURCE. */
+  coteTuile: 128,
+
+  // ⚠⚠ QUATRE TUILES PAR CASE — 2 PAR AXE —, ET C'EST LE CORRECTIF DU « GROS
+  // CARRÉ MOCHE » RAPPORTÉ PAR ETHAN LE 30/08. Une tuile faisait exactement une
+  // case : une case valait donc 128 pixels source, et au cran le plus serré
+  // (256 px par case) le pavage AGRANDISSAIT sa source d'un facteur deux. Or
+  // l'art de l'atlas a un grain de 4 pixels source — mesuré, pas supposé —, si
+  // bien que ce grain se lisait à l'écran en carrés de huit pixels, alignés sur
+  // les axes. C'est ce qu'on voyait.
+  //
+  // À deux tuiles par axe, une case vaut 256 pixels source : le cran 256 tombe
+  // au rapport 1:1 et les trois autres RÉDUISENT. Plus aucun agrandissement,
+  // donc plus de carré.
+  //
+  // ⚠ ET ÇA NE COÛTE NI UN OCTET NI UNE MILLISECONDE. L'atlas ne bouge pas —
+  // c'est le MÊME fichier, lu à une autre échelle — donc la carte ne quadruple
+  // pas, ce qu'Ethan redoutait en proposant de « redécouper les planches ». Le
+  // temps de rendu ne bouge pas non plus : le pas du réseau est lui aussi en
+  // pixels source, si bien que le nombre de tuiles qui se superposent SUR UN
+  // PIXEL D'ÉCRAN vaut `(coteTuile / pasSourcePx)²` quelle que soit l'échelle.
+  // Mesuré à la livraison, pas déduit.
+  //
+  // ⚠ IL DIVISE LES CRANS, ET UN TEST L'EXIGE. Un nombre qui ne diviserait pas
+  // 32 rendrait une tuile d'écran fractionnaire au cran le plus large, donc du
+  // pixel art brouillé — exactement ce que la note des crans refuse plus haut.
+  tuilesParCase: 2,
 
   /** Côté de la grille logique d'un emblème, en pixels. */
   grilleEmbleme: 64,
 };
+
+/**
+ * Le côté d'une case de la carte, en pixels SOURCE de l'atlas de terrain.
+ *
+ * ⚠ IL SE CALCULE, IL NE S'ÉCRIT PAS. C'est le produit des deux nombres
+ * ci-dessus, et une troisième constante qui vaudrait 256 serait la seconde
+ * vérité que CLAUDE.md §4 interdit — la première à mentir le jour où l'un des
+ * deux facteurs bougera.
+ */
+export const PIXELS_SOURCE_PAR_CASE = ZOOM_CARTE.coteTuile * ZOOM_CARTE.tuilesParCase;
 
 // --- le pavage du fond de carte ----------------------------------------------
 // Le fond de la carte n'est PAS une case répétée : c'est un semis de tuiles
@@ -522,16 +557,27 @@ export const TERRAIN_CARTE = {
   // (0,5 · 1,5 · 2,5 · 3,5) donnerait 14 % aux teintes extrêmes et 28 % à celle
   // du milieu. Ceux-ci sont les quintiles de la sortie elle-même, relevés sur
   // 2 949 120 pixels — quatre crans × cinq graines × quatre endroits de la
-  // carte. Les quatre crans s'accordent à 0,05 près, ce qui est ce qu'il fallait
-  // vérifier : un jeu de seuils par cran serait un jeu de seuils de trop. Un
-  // test refait la mesure et exige 20 % ± 2 par teinte.
+  // carte. Un test refait la mesure et exige 20 % ± 2 par teinte.
+  //
+  // ⚠ RELEVÉS À NOUVEAU LE 30/08, À QUATRE TUILES PAR CASE. Passer de une tuile
+  // par case à quatre change l'échantillonnage de l'atlas, donc la distribution
+  // de la sortie : les quatre valeurs ont bougé de 0,004 à 0,026. C'est le cas
+  // que CLAUDE.md §5 autorise — « recalculer un seuil parce qu'une constante a
+  // bougé : oui » — et non un assouplissement : la tolérance du test n'a pas été
+  // touchée. Les précédents étaient 0,660 · 1,586 · 2,444 · 3,363.
+  //
+  // ⚠ ET L'ACCORD ENTRE CRANS S'EST DESSERRÉ, IL FAUT LE DIRE. Il valait 0,05 ;
+  // il vaut 0,094 au pire (premier seuil, 0,631 au cran 32 contre 0,725 au cran
+  // 256). Un jeu de seuils PAR CRAN resterait un jeu de seuils de trop — la
+  // dispersion tient dans la tolérance, et deux découpages différents feraient
+  // deux fonds différents pour la même zone.
   //
   // ⚠ ET ILS SONT GLOBAUX, PAS PAR DALLE. La formule dit « par quantiles de
   // luminance sur la dalle » ; des seuils calculés dalle par dalle feraient
   // deux découpages différents de part et d'autre d'un bord, donc une couture
   // visible — et casseraient l'invariant qui compte le plus ici, celui qui veut
   // qu'une zone rendue en une dalle soit identique à la même rendue en quatre.
-  seuilsDeTeinte: [0.660, 1.586, 2.444, 3.363],
+  seuilsDeTeinte: [0.656, 1.574, 2.418, 3.338],
 
   /** Au-dessus de cette part d'Ouvrage, le pixel prend la rampe de l'Ouvrage. */
   seuilOuvrage: 0.5,

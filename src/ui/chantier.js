@@ -24,7 +24,11 @@
 // `foyer-zero-ui.html`, qui est une maquette et qui grave ses chiffres.
 
 import { GRILLE } from '../data/combat.js';
-import { GEOGRAPHIE } from '../data/sites.js';
+// ⚠ `ZOOM_CARTE` DANS L'ÉCRAN DE LA BASE : c'est voulu. Le sol de la base est
+// découpé dans l'atlas du MONDE depuis le 30/08, et c'est la géométrie de cet
+// atlas-là — côté d'une tuile, tuiles par case — qui dit comment le découper.
+// La recopier ici en ferait une seconde vérité.
+import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
 import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
@@ -43,10 +47,10 @@ import {
 import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
-import { ATLAS } from '../data/atlas.js';
-import { existeDansAtlas, fondDuSprite } from '../render/sprite.js';
-import { suffixeDeVariante } from '../render/variante.js';
-import { couchesDeLEntite } from '../render/scene.js';
+import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
+import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
+import { suffixeDeVariante, variante } from '../render/variante.js';
+import { couchesDeLEntite, genreDeLaGarnison } from '../render/scene.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
 // base, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague — que
@@ -398,6 +402,25 @@ export function familleDuBatiment(id) {
   if (def.role === 'producteur' || def.role === 'stockage') return 'prod';
   return 'mil';
 }
+
+/**
+ * Ce que chaque famille visuelle veut dire, en toutes lettres.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE LE LISERÉ EST PARTI DE LA GRILLE (30/08). Les trois
+ * cadres de couleur étaient la seule façon de lire la famille d'un bâtiment
+ * posé ; Ethan les a fait retirer avec les autres carrés. Une information de jeu
+ * ne se supprime pas au passage d'un lot d'esthétique — elle DÉMÉNAGE, ici dans
+ * le `title` du jeton, et la palette la peint toujours. C'est la même décision
+ * qu'a prise la lettre de l'obstacle le même jour.
+ *
+ * ⚠ ET LES CLÉS SONT CELLES QUE REND `familleDuBatiment`, PAS UNE SECONDE
+ * LISTE : un test les confronte dans les deux sens.
+ */
+export const LIBELLES_FAMILLE = {
+  pivot: 'bâtiment central',
+  prod: 'économie',
+  mil: 'militaire',
+};
 
 /**
  * Les trois bandes de la grille, lues dans `GRILLE` et jamais réécrites.
@@ -1601,9 +1624,15 @@ export const TERRAINS = {
     // y vivait seule ; le champ de bataille et l'éditeur Défense dessinaient les
     // mêmes casemates en primitives géométriques. En garder une copie ici serait
     // la seconde vérité que le déplacement existe pour retirer.
+    // ⚠⚠ LE GENRE SE DEMANDE, IL NE S'ÉCRIT PAS — corrigé le 30/08. Cette
+    // fonction posait `genre: 'defense'` pour les DIX-SEPT pièces posables ; or
+    // huit d'entre elles sont des UNITÉS de garnison (`rosterDefensif` les tire
+    // de `UNITES`), et `couchesDeLEntite` LEVAIT dessus. Comme la levée part de
+    // `peindre`, poser des Fusiliers en garnison laissait l'écran de la base
+    // BLANC. Mesuré sur `main` avant ce lot : le défaut est antérieur.
     spriteDe: (piece, etat) => couchesDeLEntite(
-      { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
-        rangee: piece.rangee, colonne: piece.colonne },
+      { genre: genreDeLaGarnison(piece.id), id: piece.id, proprietaire: 'joueur',
+        camp: 'defense', rangee: piece.rangee, colonne: piece.colonne },
       { voisines: etat.garnison },
     ),
     // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
@@ -1744,15 +1773,20 @@ function cle(rangee, colonne) {
  * un second élément par case — et donc sans un nœud de plus à créer et à
  * détruire dix fois par seconde.
  *
- * ⚠ TOUTES LES COUCHES VIENNENT DU MÊME ATLAS DE TERRAIN, d'où le même
- * `var(--atlas-terrain)` répété. La variable est définie une fois sur `:root` :
- * la base64 n'est pas recopiée, c'est le nom qui l'est.
+ * ⚠⚠ CHAQUE COUCHE PORTE SON ATLAS DEPUIS LE 30/08. Cette fonction répétait
+ * `var(--atlas-terrain)` autant de fois qu'il y avait de couches, ce qui était
+ * juste tant que le sol, les champs et les obstacles venaient tous du même
+ * fichier. Le sol vient maintenant de l'atlas du MONDE — quatre cellules par
+ * case — pendant que le champ posé dessus vient toujours de celui de la base :
+ * une variable unique dessinerait le sol à la place du champ, sans qu'aucune
+ * longueur de liste ne soit fausse.
  *
  * @param {HTMLElement} case_
- * @param {{taille: string, position: string}[]} fonds de la plus haute à la plus basse
+ * @param {{image: string, taille: string, position: string}[]} fonds
+ *   de la plus haute à la plus basse
  */
 function poserFonds(case_, fonds) {
-  case_.style.backgroundImage = fonds.map(() => 'var(--atlas-terrain)').join(', ');
+  case_.style.backgroundImage = fonds.map((f) => f.image).join(', ');
   case_.style.backgroundSize = fonds.map((f) => f.taille).join(', ');
   case_.style.backgroundPosition = fonds.map((f) => f.position).join(', ');
 }
@@ -1771,6 +1805,15 @@ const VARIABLE_DATLAS = {
   terrain: 'var(--atlas-terrain)',
   defense: 'var(--atlas-defense)',
   socle: 'var(--atlas-socle)',
+  unite: 'var(--atlas-unite)',
+  chassis: 'var(--atlas-chassis)',
+  tourelle_unite: 'var(--atlas-tourelle-unite)',
+  // ⚠ `sol` N'EST PAS UNE FAMILLE COUSUE. L'atlas du monde n'est pas produit
+  // par `tools/atlas.py` et n'a pas de noms : ses cellules se désignent par
+  // leur RANG, et `fondsDuSol` passe par `fondDeCellule` au lieu de
+  // `fondDuSprite`. Il est ici parce que c'est la table des atlas de l'écran,
+  // et qu'en avoir deux serait la seconde vérité habituelle.
+  sol: 'var(--atlas-sol)',
 };
 
 /**
@@ -1791,10 +1834,18 @@ const VARIABLE_DATLAS = {
  * mauvais ordre. L'inversion se fait UNE fois, ici, à l'endroit où l'on compose
  * les trois listes.
  *
+ * ⚠⚠ IL S'EXPORTE DEPUIS LE 30/08, POUR L'ÉCRAN OFFENSE. Celui-ci pose
+ * maintenant les mêmes sprites d'unité dans ses trente-six emplacements et dans
+ * sa palette ; en écrire une seconde version là-bas aurait fait deux façons
+ * d'empiler des couches CSS, dont une seule connaîtrait l'inversion d'ordre
+ * ci-dessus — et le socle d'une pièce serait passé par-dessus sa tourelle sur
+ * un écran et pas sur l'autre. `ui/offense.js` importe déjà de ce fichier-ci
+ * (`formaterEntier`, `ligneAAfficher`, …), le précédent est en place.
+ *
  * @param {HTMLElement} element
  * @param {{famille: string, nom: string}[]} couches de la plus BASSE à la plus haute
  */
-function poserCouches(element, couches) {
+export function poserCouches(element, couches) {
   if (!Array.isArray(couches) || couches.length === 0) {
     throw new RangeError('chantier : une pièce sans couche de sprite');
   }
@@ -1832,9 +1883,15 @@ function poserCouches(element, couches) {
  * @returns {{taille: string, position: string}[]}
  */
 function fondsPoses(case_) {
+  // ⚠ LES TROIS LISTES SE RELISENT ENSEMBLE. Depuis que le sol vient d'un autre
+  // atlas que les champs, l'image fait partie de la couche : ne relire que la
+  // taille et la position remettrait les quatre couches de sol sous l'atlas de
+  // la base, qui n'a pas 256 cellules — le champ dessinerait un morceau
+  // d'obstacle, et aucune longueur de liste ne serait fausse.
+  const images = case_.style.backgroundImage.split(', ').filter(Boolean);
   const tailles = case_.style.backgroundSize.split(', ').filter(Boolean);
   const positions = case_.style.backgroundPosition.split(', ').filter(Boolean);
-  return tailles.map((taille, i) => ({ taille, position: positions[i] }));
+  return tailles.map((taille, i) => ({ image: images[i], taille, position: positions[i] }));
 }
 
 /**
@@ -1862,7 +1919,130 @@ function fondDuTerrain(prefixe, graine, rangee, colonne) {
     comptesDeVariantes.set(prefixe, nombreDeVariantes(prefixe));
   }
   const nombre = comptesDeVariantes.get(prefixe);
-  return fondDuSprite('terrain', `${prefixe}_${suffixeDeVariante(graine, rangee, colonne, nombre)}`);
+  return {
+    image: VARIABLE_DATLAS.terrain,
+    ...fondDuSprite('terrain', `${prefixe}_${suffixeDeVariante(graine, rangee, colonne, nombre)}`),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Les deux bornes du zoom de la base
+// ---------------------------------------------------------------------------
+
+/**
+ * Le côté de case le plus grand qu'on autorise, en pixels CSS.
+ *
+ * ⚠ IL SE LIT DANS L'ATLAS, IL NE SE CHOISIT PAS. `COTE_SPRITE` est la
+ * résolution à laquelle tous les sprites du dépôt sont conditionnés : à cette
+ * taille-là, un pixel de sprite vaut un pixel CSS, ce qui est la fin naturelle
+ * de la plage utile. Au-delà on agrandirait du pixel art au-dessus de sa propre
+ * définition — exactement ce que ce lot vient de retirer à la carte du monde.
+ *
+ * Ce que ça donne, mesuré sur un téléphone de 360 px CSS : la grille tient à
+ * 40 px par case, le jeton d'un bâtiment y fait 40 px de côté ; à 64, il en fait
+ * 64. Avec les 20 % de grossissement du jeton, le bâtiment passe de 34 à 64 px —
+ * c'est la réponse au « bien trop petits » d'Ethan, et le zoom en est la moitié.
+ */
+const COTE_CASE_MAX = COTE_SPRITE;
+
+/**
+ * Le côté de case à l'ouverture, LU DANS LA FEUILLE DE STYLE.
+ *
+ * ⚠⚠ IL N'EST PAS ÉCRIT ICI, ET C'EST LA RÈGLE DU FICHIER. « Aucun chiffre de
+ * calibrage ici », dit son en-tête : la taille d'une case est une décision de
+ * mise en page, elle vit dans `index.src.html` sous `--case-defaut`. L'écrire
+ * des deux côtés ferait deux vérités dont la divergence se lirait comme une
+ * grille qui s'ouvre à la mauvaise taille.
+ *
+ * ⚠ ET LE REPLI EXISTE POUR LE CAS OÙ LA VARIABLE MANQUE, pas pour se dispenser
+ * de la lire : un côté de zéro ferait une grille invisible, ce qui est pire
+ * qu'une grille à la mauvaise taille.
+ *
+ * @param {Document} doc
+ * @returns {number}
+ */
+export function coteCaseParDefaut(doc) {
+  const brut = doc.defaultView
+    ?.getComputedStyle(doc.documentElement)
+    ?.getPropertyValue('--case-defaut');
+  const lu = Number.parseFloat(brut ?? '');
+  return Number.isFinite(lu) && lu > 0 ? lu : COTE_CASE_MAX;
+}
+
+/**
+ * Le côté d'une cellule de sol dans l'atlas du monde, en pixels.
+ *
+ * ⚠ IL SE DÉDUIT, IL NE S'ÉCRIT PAS. Une tuile du monde fait `coteTuile` pixels
+ * et couvre `tuilesParCase` cases par axe ; découper au quart de tuile donne
+ * exactement la grille de 64 sur laquelle tous les sprites du dépôt sont
+ * conditionnés. Écrire 64 ici serait une troisième vérité.
+ */
+const COTE_CELLULE_SOL = ZOOM_CARTE.coteTuile / ZOOM_CARTE.tuilesParCase;
+
+/**
+ * Combien de cellules de sol par axe porte l'atlas du monde.
+ *
+ * ⚠⚠ LA TAILLE VIENT DE L'ATTRIBUT `width` DE L'IMAGE, PAS DE `naturalWidth`.
+ * `naturalWidth` vaut zéro tant que le PNG n'est pas décodé, et le sol se peint
+ * à la première image : la grille serait fausse au démarrage et juste ensuite,
+ * ce qui est la pire des deux. L'attribut, lui, est lisible dès que le balisage
+ * est analysé. Un test le confronte à l'en-tête RÉEL du fichier — une
+ * transcription qui ne se confronte pas à sa source est une copie qui vieillit.
+ *
+ * @param {Document} doc
+ * @returns {number}
+ */
+export function cellulesDeSolParAxe(doc) {
+  const image = doc.getElementById('monde-atlas');
+  const largeur = Number(image?.getAttribute('width'));
+  if (!Number.isInteger(largeur) || largeur <= 0 || largeur % COTE_CELLULE_SOL !== 0) {
+    throw new RangeError(
+      `chantier : l'atlas du monde annonce une largeur « ${image?.getAttribute('width')} », `
+        + `qui n'est pas un multiple de ${COTE_CELLULE_SOL}`,
+    );
+  }
+  return largeur / COTE_CELLULE_SOL;
+}
+
+/**
+ * Les quatre couches de sol d'une case, de la plus haute à la plus basse.
+ *
+ * L'ordre n'a aucune importance visuelle ici — les quatre quartiers ne se
+ * recouvrent pas —, mais il est fixé pour que la liste soit reproductible.
+ *
+ * @param {number} parAxe cellules de l'atlas par axe
+ * @param {number} graine
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {{image: string, taille: string, position: string}[]}
+ */
+export function fondsDuSol(parAxe, graine, rangee, colonne) {
+  const divisions = ZOOM_CARTE.tuilesParCase;
+  const cellules = parAxe * parAxe;
+  const couches = [];
+  for (let sousRangee = 0; sousRangee < divisions; sousRangee += 1) {
+    for (let sousColonne = 0; sousColonne < divisions; sousColonne += 1) {
+      const rang = variante(
+        graine,
+        rangee * divisions + sousRangee,
+        colonne * divisions + sousColonne,
+        cellules,
+      );
+      couches.push({
+        image: VARIABLE_DATLAS.sol,
+        ...fondDeCellule({
+          colonne: rang % parAxe,
+          rangee: Math.floor(rang / parAxe),
+          colonnes: parAxe,
+          rangees: parAxe,
+          divisions,
+          sousColonne,
+          sousRangee,
+        }),
+      });
+    }
+  }
+  return couches;
 }
 
 /**
@@ -2000,13 +2180,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   // de gauche disparaît, et la grille se centre dans la largeur disponible. Les
   // bandes se lisent aux deux boutons du bas, qui disent déjà où l'on est.
   //
-  // ⚠ LE CENTRAGE EST UNE MISE EN PAGE, JAMAIS UNE TRANSFORMATION. Un
-  // `transform: scale()` sur le conteneur casserait la correspondance entre le
-  // doigt et la case — le dessin bougerait, pas la géométrie du pointage. On
-  // plafonne donc la largeur de la grille et on laisse les marges automatiques
-  // répartir également ce qui reste, des deux côtés.
-  grille.style.gridTemplateColumns = `repeat(${GRILLE.largeur}, minmax(0, 1fr))`;
-  grille.style.maxWidth = `calc(${GRILLE.largeur} * var(--case-max))`;
+  // ⚠⚠ LE CENTRAGE ET LE ZOOM SONT UNE MISE EN PAGE, JAMAIS UNE TRANSFORMATION.
+  // Un `transform: scale()` sur le conteneur casserait la correspondance entre
+  // le doigt et la case — le dessin bougerait, pas la géométrie du pointage.
+  // Les colonnes font donc `--case-cote` PIXELS, une valeur que le JS écrit et
+  // que le pincement fait varier ; `margin-inline: auto` répartit ce qui reste
+  // tant que la grille tient, et le parent défile au-delà.
+  grille.style.gridTemplateColumns = `repeat(${GRILLE.largeur}, var(--case-cote))`;
   for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
     const bande = bandeDeLaRangee(rangee);
     for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
@@ -2260,6 +2440,139 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     emplacementsOuverts.classList.toggle('sature', vue.sature);
   }
 
+  // -------------------------------------------------------------------------
+  // Le zoom de la base — au doigt, et jamais par une transformation
+  // -------------------------------------------------------------------------
+  //
+  // ⚠⚠ ETHAN, 30/08 : « possibilité de zoomer sur la base, l'ui reste de même
+  // taille » et « zoom carte et base : au doigt, pas de zoom fixe avec + − ».
+  // Les deux phrases disent la même chose de deux côtés : le geste est le
+  // PINCEMENT, et ce qui grandit est le champ de jeu, pas la page.
+  //
+  // ⚠⚠ CE QUI CHANGE EST LE CÔTÉ D'UNE CASE EN PIXELS, PAS UNE ÉCHELLE. Le
+  // dépôt interdit `transform: scale()` sur cette grille depuis le lot
+  // POSE-À-L'ÉCRAN, et la raison n'a pas bougé : une transformation déplace le
+  // DESSIN sans déplacer la géométrie du pointage, si bien que le doigt cesse
+  // de tomber sur la case qu'il vise. En écrivant `--case-cote`, les cases
+  // restent des carrés que le navigateur sait localiser, et `elementFromPoint`
+  // continue de rendre la bonne — c'est ce qui fait que la pose, le
+  // déplacement et le panneau marchent toujours après un zoom.
+  //
+  // ⚠ LE PLANCHER EST LA TAILLE QUI FAIT TENIR LA GRILLE. En dessous, la grille
+  // serait plus étroite que l'écran et le zoom arrière ne montrerait que du
+  // vide : il n'y a rien de plus à voir que les neuf colonnes. Le plafond, lui,
+  // est la taille à laquelle une cellule d'atlas de 64 px atteint le 1:1 —
+  // au-delà on agrandirait du pixel art, ce que le lot du 30/08 vient
+  // précisément de retirer à la carte.
+
+  /**
+   * Le côté de case le plus petit qui ait un sens : celui qui fait tenir les
+   * colonnes dans la largeur disponible.
+   *
+   * ⚠ IL SE MESURE, IL NE SE DEVINE PAS. `clientWidth` est la largeur du
+   * conteneur SANS sa barre de défilement ; l'écrire en dur donnerait une
+   * grille trop large sur un petit écran, donc un défilement horizontal au
+   * repos — exactement ce que la consigne « tu compresses tout dans l'ui »
+   * refuse tant qu'on n'a pas zoomé exprès.
+   */
+  const COTE_CASE_DEFAUT = coteCaseParDefaut(doc);
+
+  function coteQuiTient() {
+    const large = defile.clientWidth;
+    if (!(large > 0)) return COTE_CASE_DEFAUT;
+    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / GRILLE.largeur));
+  }
+
+  /** Le côté de case appliqué en ce moment, en pixels. */
+  let coteCase = COTE_CASE_DEFAUT;
+
+  /**
+   * Applique un côté de case, borné.
+   *
+   * ⚠ ON ÉCRIT SUR `#chantier-grille`, PAS SUR `:root`. La variable déclarée
+   * dans la feuille est le DÉFAUT ; l'écrire sur la grille laisse le reste de
+   * la page — dont la palette, qui n'a rien à voir — hors de portée du zoom.
+   *
+   * @param {number} demande côté voulu, en pixels
+   * @returns {number} le côté réellement appliqué
+   */
+  function reglerCoteCase(demande) {
+    const plancher = coteQuiTient();
+    const borne = Math.min(COTE_CASE_MAX, Math.max(plancher, demande));
+    coteCase = borne;
+    grille.style.setProperty('--case-cote', `${borne}px`);
+    return borne;
+  }
+
+  /**
+   * L'écart entre deux doigts, en pixels.
+   * @param {Touch[]} deux
+   * @returns {number}
+   */
+  function ecartDesDoigts(deux) {
+    return Math.hypot(deux[0].clientX - deux[1].clientX, deux[0].clientY - deux[1].clientY);
+  }
+
+  // ⚠⚠ LE PINCEMENT DE LA BASE PASSE PAR LES ÉVÈNEMENTS TACTILES, PAS PAR LES
+  // POINTEURS, ET LA CARTE FAIT L'INVERSE. Ce n'est pas une incohérence, c'est
+  // la différence entre les deux surfaces :
+  //
+  //   — la CARTE est un canevas en `touch-action: none`. Le navigateur n'a
+  //     aucun geste à lui disputer, donc les évènements de pointeur y sont
+  //     fiables, et `ui/monde.js` s'en sert déjà pour promener la carte.
+  //
+  //   — la BASE est un conteneur qui DÉFILE NATIVEMENT. Sous
+  //     `touch-action: pan-x pan-y`, le navigateur garde le droit de faire
+  //     défiler à deux doigts : quand il prend la main, il envoie
+  //     `pointercancel` et le pincement se perd au milieu du geste. Un
+  //     `touchmove` avec `preventDefault` le lui refuse pour ce geste-là
+  //     seulement — le défilement à UN doigt reste natif, inertie comprise.
+  //
+  // Écrire les deux de la même façon aurait demandé de repeindre le défilement
+  // de la base à la main, donc de perdre l'inertie, pour aligner un mécanisme
+  // que rien n'oblige à l'être.
+  //
+  // ⚠ `{ passive: false }` EST OBLIGATOIRE : sans lui, `preventDefault` est
+  // ignoré dans un `touchmove`, et la garde ci-dessus ne garde rien.
+
+  let pincement = null;
+
+  defile.addEventListener('touchstart', (evenement) => {
+    if (evenement.touches.length !== 2) { pincement = null; return; }
+    const deux = [evenement.touches[0], evenement.touches[1]];
+    const ecart = ecartDesDoigts(deux);
+    // Un pincement qui commence les doigts joints diviserait par presque zéro.
+    if (ecart < 1) { pincement = null; return; }
+    pincement = { ecart, cote: coteCase };
+  }, { passive: false });
+
+  defile.addEventListener('touchmove', (evenement) => {
+    if (pincement === null || evenement.touches.length !== 2) return;
+    const deux = [evenement.touches[0], evenement.touches[1]];
+    // ⚠ LE FACTEUR EST LE RAPPORT DES ÉCARTS, PAS LEUR DIFFÉRENCE. Une
+    // différence de pixels zoomerait plus vite sur un grand écran que sur un
+    // petit, pour le même geste de la main — et le réglage trouvé sur un
+    // téléphone serait faux sur la tablette suivante.
+    const facteur = ecartDesDoigts(deux) / pincement.ecart;
+    reglerCoteCase(Math.round(pincement.cote * facteur));
+    // Le pincement pilote la taille ; laisser le navigateur défiler en même
+    // temps ferait glisser la grille sous les doigts pendant qu'elle grandit.
+    evenement.preventDefault();
+  }, { passive: false });
+
+  function finDuPincement(evenement) {
+    if (evenement.touches.length < 2) pincement = null;
+  }
+  defile.addEventListener('touchend', finDuPincement);
+  defile.addEventListener('touchcancel', finDuPincement);
+
+  // ⚠ LE PLANCHER SUIT LA LARGEUR DISPONIBLE. Une rotation d'écran ou
+  // l'ouverture du clavier change `clientWidth` : sans ce rappel, la grille
+  // resterait à une taille qui ne tient plus, et le joueur trouverait un
+  // défilement horizontal qu'il n'a pas demandé.
+  fenetre.addEventListener('resize', () => { reglerCoteCase(coteCase); });
+  reglerCoteCase(COTE_CASE_DEFAUT);
+
   // La bande active suit aussi le défilement à la main : les seuils se
   // déduisent de la hauteur mesurée d'une rangée, jamais d'un nombre de pixels
   // écrit en dur — la cellule est carrée, donc sa taille dépend de la largeur
@@ -2313,6 +2626,21 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
       emplacement.classList.toggle('pose', posable.verrouille);
       emplacement.title = titreDeLaVignette(terrain, posable);
       const vignette = doc.createElement('i');
+      // ⚠⚠ LA PASTILLE PORTE LE SPRITE DE LA PIÈCE — Ethan, 30/08 : « dans les
+      // barres de construction du bas (base def off) remplacer les carrés par
+      // les sprites correspondant ». C'était un carré kaki identique pour les
+      // onze bâtiments et pour les dix-sept pièces de défense.
+      //
+      // ⚠ ET IL VIENT DU MÊME POINT D'ENTRÉE QUE LA GRILLE, jamais d'un second
+      // calcul : c'est `terrain.spriteDe` que le jeton de la case emploie déjà,
+      // et une palette qui dériverait ses noms de son côté finirait par montrer
+      // autre chose que ce qu'on pose. La pièce est décrite au NIVEAU 1 — c'est
+      // ce qu'une pose fait — et sans voisines, donc un mur y paraît isolé.
+      if (terrain.spriteDe !== null) {
+        poserCouches(vignette, terrain.spriteDe(
+          { id: posable.id, rangee: 0, colonne: 0, niveau: 1 }, etat,
+        ));
+      }
       const nom = doc.createElement('b');
       nom.textContent = posable.nom;
       emplacement.append(vignette, nom);
@@ -3030,6 +3358,16 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
    */
   function peindre(etat) {
     etatCourant = etat;
+    // ⚠ LE PLANCHER SE REMESURE ICI, ET PAS SEULEMENT AU CÂBLAGE. Au moment du
+    // câblage, la mise en page n'est pas forcément faite : `clientWidth` peut
+    // valoir zéro, et on ouvrirait alors à la taille par défaut — trop large
+    // pour un téléphone étroit, donc avec un défilement horizontal que personne
+    // n'a demandé. `peindre` passe à chaque changement d'état, la mise en page
+    // y est faite, et re-régler ne coûte qu'une écriture de propriété.
+    //
+    // ⚠ ET ÇA NE DÉFAIT PAS LE ZOOM DU JOUEUR : on re-soumet le côté COURANT
+    // aux bornes, on ne revient pas au défaut.
+    reglerCoteCase(coteCase);
     // ⚠ UN INDICE DE SÉLECTION EST RELATIF À UNE DISPOSITION. Le jour où poser
     // et démonter existeront, un indice retenu d'avant la modification
     // désignerait un AUTRE bâtiment — pas une case vide, ce qui se verrait,
@@ -3038,9 +3376,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     if (selection !== null && selection >= TERRAINS[terrainSelection].pieces(etat).length) {
       selection = null;
     }
+    // ⚠ LES QUATRE CLASSES DE TERRAIN NE SE POSENT PLUS, DONC NE SE RETIRENT
+    // PLUS. `champ`, `quartz`, `scorie` et `obstacle` ne peignaient que le fond
+    // kaki, le liseré tireté et la lettre — les trois choses qu'Ethan a fait
+    // retirer le 30/08. Le `title`, lui, se réécrit à chaque peinture : le
+    // laisser traîner ferait dire « pétrole » à une case redevenue nue.
     for (const case_ of cellules.values()) {
-      case_.classList.remove('champ', 'quartz', 'scorie', 'obstacle');
-      case_.querySelector('.obstacle-marque')?.remove();
+      case_.removeAttribute('title');
       case_.querySelector('.jeton')?.remove();
       case_.querySelector('.fantome')?.remove();
     }
@@ -3058,10 +3400,11 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // rendent le même sol, et `etat.rng` — le flux de la SIMULATION — n'est pas
     // touché. Y prendre un tirage décalerait tout ce que le moteur tire
     // ensuite, et la partie cesserait de se rejouer à l'identique.
+    const parAxe = cellulesDeSolParAxe(doc);
     for (const case_ of cellules.values()) {
       const rangee = Number(case_.dataset.rangee);
       const colonne = Number(case_.dataset.colonne);
-      poserFonds(case_, [fondDuTerrain('tile_sol_j', etat.graine, rangee, colonne)]);
+      poserFonds(case_, fondsDuSol(parAxe, etat.graine, rangee, colonne));
     }
 
     // ⚠ LE TERRAIN SE DESSINE SOUS LES BÂTIMENTS, JAMAIS AU-DESSUS. Un champ
@@ -3070,7 +3413,6 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     for (const champ of etat.champs.cases) {
       const case_ = cellules.get(cle(champ.rangee, champ.colonne));
       if (case_ === undefined) continue;
-      case_.classList.add('champ', champ.ressource);
       poserFonds(case_, [
         fondDuTerrain(`champ_${champ.ressource}`, etat.graine, champ.rangee, champ.colonne),
         ...fondsPoses(case_),
@@ -3086,16 +3428,17 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     for (const o of etat.obstacles.cases) {
       const case_ = cellules.get(cle(o.rangee, o.colonne));
       if (case_ === undefined) continue;
-      case_.classList.add('obstacle');
       poserFonds(case_, [
         fondDuTerrain(`obs_${o.type}`, etat.graine, o.rangee, o.colonne),
         ...fondsPoses(case_),
       ]);
-      const marque = doc.createElement('div');
-      marque.className = 'obstacle-marque';
-      marque.textContent = SIGLES_OBSTACLE[o.type];
-      marque.title = LIBELLES_OBSTACLE[o.type];
-      case_.appendChild(marque);
+      // ⚠⚠ LA LETTRE EST PARTIE, L'INFORMATION RESTE — Ethan, 30/08 : « et les
+      // petites lettres des obstacles en défense ». Elle disait QUI est ralenti,
+      // et c'est la seule information de JEU que porte un obstacle : la
+      // supprimer tout court serait « retirer en silence » (CLAUDE.md §4). Elle
+      // passe donc dans le `title` de la case, que l'appui long rend, et les
+      // deux tables qui la produisent restent branchées.
+      case_.title = `${LIBELLES_OBSTACLE[o.type]} (${SIGLES_OBSTACLE[o.type]})`;
     }
 
     // ⚠ LES DEUX TERRAINS SE DESSINENT PAR LA MÊME BOUCLE. Les bâtiments dans
@@ -3117,7 +3460,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
         } else {
           jeton.classList.add('sprite');
           poserCouches(jeton, terrain.spriteDe(b, etat));
-          jeton.title = terrain.nomDe(b.id);
+          // ⚠ LE TITRE PORTE LA FAMILLE DEPUIS QUE LE CADRE EST PARTI. Les trois
+          // liserés — prod, mil, pivot — disaient la famille de coût sur la
+          // grille ; Ethan les a fait retirer avec les autres carrés le 30/08.
+          // L'information n'est pas détruite pour autant : elle est ici, et la
+          // palette la peint toujours. C'est « rien ne se retire en silence ».
+          jeton.title = `${terrain.nomDe(b.id)} — ${LIBELLES_FAMILLE[terrain.familleDe(b.id)]}`;
         }
         const niveau = doc.createElement('span');
         niveau.className = 'niveau';

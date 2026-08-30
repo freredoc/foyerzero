@@ -104,34 +104,81 @@ export function celluleDuSprite(famille, nom) {
 }
 
 /**
- * Le couple `background-size` / `background-position` qui cadre ce sprite.
+ * Le couple `background-size` / `background-position` qui cadre UNE cellule
+ * d'une grille, éventuellement dans un QUARTIER de l'élément.
  *
- * L'agrandissement est le compte de cellules : à 4 colonnes, l'atlas fait 400 %
- * de la largeur de la case, si bien qu'une cellule en fait exactement 100 %.
+ * ---------------------------------------------------------------------------
+ * La formule, écrite une seule fois pour tout le dépôt
+ * ---------------------------------------------------------------------------
+ *
+ * L'élément est découpé en `divisions × divisions` quartiers égaux ; on veut
+ * poser la cellule `(colonne, rangee)` dans le quartier `(sousColonne,
+ * sousRangee)`. Une cellule occupe donc `1/divisions` de l'élément sur chaque
+ * axe, ce qui fixe l'agrandissement : `background-size` vaut
+ * `colonnes × 100 / divisions` pour cent de la largeur.
  *
  * Le décalage se dit en pourcentage, et un pourcentage de `background-position`
  * ne se lit pas comme un pourcentage de largeur : il aligne le point situé à
  * P % de l'IMAGE sur le point situé à P % du CADRE. Le décalage effectif vaut
- * donc `P/100 × (largeurCadre − largeurImage)`, soit `P/100 × côté × (1 −
- * colonnes)`. Le vouloir égal à `−colonne × côté` donne
- * `P = colonne × 100 / (colonnes − 1)`, et c'est cette formule-ci. Vérifiée par
- * exécution, et un test la refait sur trois cellules plutôt que de la recopier.
+ * donc `P/100 × (largeurCadre − largeurImage)`, soit
+ * `P/100 × E × (1 − colonnes/divisions)`. Le vouloir égal à
+ * `(sousColonne − colonne) × E / divisions` donne
  *
- * ⚠ `colonnes − 1` VAUT ZÉRO DÈS QU'UNE FAMILLE TIENT SUR UNE COLONNE. Aucune
- * des deux familles cousues aujourd'hui n'est dans ce cas — 4 et 5 colonnes —
- * mais la garde s'écrit maintenant, pas le jour où elle divisera par zéro en
- * silence : un total de 1 n'a qu'une cellule, elle est déjà cadrée, et 0 % est
- * la seule réponse juste.
+ *     P = 100 × (colonne − sousColonne) / (colonnes − divisions)
+ *
+ * et c'est cette formule-ci. À `divisions = 1` et `sousColonne = 0` elle rend
+ * exactement `100 × colonne / (colonnes − 1)`, la formule d'avant : le cas
+ * d'une cellule qui remplit l'élément entier n'est pas un cas particulier, il
+ * est la valeur par défaut. Vérifiée par exécution, et un test la refait sur
+ * plusieurs cellules plutôt que de la recopier.
+ *
+ * ⚠ `colonnes − divisions` VAUT ZÉRO QUAND LA GRILLE A EXACTEMENT AUTANT DE
+ * COLONNES QUE DE QUARTIERS. L'image fait alors très précisément la largeur de
+ * l'élément, si bien qu'AUCUN pourcentage ne la déplace : la cellule `c` tombe
+ * dans le quartier `c`, et rien ne peut l'en faire bouger. On rend 0, qui est
+ * la seule valeur possible — et juste seulement si `colonne === sousColonne`.
+ * Aucune grille du dépôt n'est dans ce cas ; la garde s'écrit maintenant, pas
+ * le jour où elle divisera par zéro en silence.
+ *
+ * @param {{colonne: number, rangee: number, colonnes: number, rangees: number,
+ *   divisions?: number, sousColonne?: number, sousRangee?: number}} cellule
+ * @returns {{taille: string, position: string}} deux valeurs CSS
+ */
+export function fondDeCellule({
+  colonne, rangee, colonnes, rangees,
+  divisions = 1, sousColonne = 0, sousRangee = 0,
+}) {
+  if (!Number.isInteger(divisions) || divisions < 1) {
+    throw new RangeError(`sprite : divisions « ${divisions} » invalide`);
+  }
+  if (sousColonne < 0 || sousColonne >= divisions || sousRangee < 0 || sousRangee >= divisions) {
+    throw new RangeError(
+      `sprite : quartier (${sousColonne}, ${sousRangee}) hors d'un découpage en ${divisions}`,
+    );
+  }
+  const part = (indice, total, sous) => (
+    total === divisions ? 0 : ((indice - sous) * 100) / (total - divisions)
+  );
+  return {
+    taille: `${(colonnes * 100) / divisions}% ${(rangees * 100) / divisions}%`,
+    position: `${part(colonne, colonnes, sousColonne)}% ${part(rangee, rangees, sousRangee)}%`,
+  };
+}
+
+/**
+ * Le couple `background-size` / `background-position` qui cadre ce sprite.
+ *
+ * ⚠ IL NE PORTE PLUS LA FORMULE, IL LA DEMANDE. `fondDeCellule` la tient, pour
+ * que la pose d'un sprite NOMMÉ et celle d'une cellule prise au rang — le sol
+ * de la base, qui pioche dans l'atlas du monde et n'a pas de noms — soient le
+ * même calcul. Deux écritures de la même géométrie auraient divergé au premier
+ * ajustement, et la divergence se lirait comme un sprite qui dessine son voisin.
  *
  * @param {string} famille clé de `ATLAS`
  * @param {string} nom nom du sprite, sans son `.png`
+ * @param {{divisions?: number, sousColonne?: number, sousRangee?: number}} [quartier]
  * @returns {{taille: string, position: string}} deux valeurs CSS
  */
-export function fondDuSprite(famille, nom) {
-  const { colonne, rangee, colonnes, rangees } = celluleDuSprite(famille, nom);
-  const part = (indice, total) => (total > 1 ? (indice * 100) / (total - 1) : 0);
-  return {
-    taille: `${colonnes * 100}% ${rangees * 100}%`,
-    position: `${part(colonne, colonnes)}% ${part(rangee, rangees)}%`,
-  };
+export function fondDuSprite(famille, nom, quartier = {}) {
+  return fondDeCellule({ ...celluleDuSprite(famille, nom), ...quartier });
 }

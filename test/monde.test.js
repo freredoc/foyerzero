@@ -33,6 +33,7 @@ import { ATLAS } from '../src/data/atlas.js';
 import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
+import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,10 +60,17 @@ test('zoom — les quatre crans sont des puissances de deux et divisent tuile et
   assert.equal(CRANS.length, 4, `${CRANS.length} crans`);
   for (const cran of CRANS) {
     assert.ok(Number.isInteger(Math.log2(cran)), `${cran} n'est pas une puissance de deux`);
-    const versTuile = ZOOM_CARTE.pixelsParTuile / cran;
+    // ⚠ LA TUILE S'ÉCHELONNE SUR SA PART DE CASE, PAS SUR LA CASE ENTIÈRE.
+    // Depuis le 30/08 elle en couvre un quart : c'est `cran / tuilesParCase`
+    // qu'elle doit remplir, et le rapport à mesurer est celui-là.
+    const versTuile = ZOOM_CARTE.coteTuile / (cran / ZOOM_CARTE.tuilesParCase);
     const versEmbleme = ZOOM_CARTE.grilleEmbleme / cran;
     assert.ok(Number.isInteger(versTuile) || Number.isInteger(1 / versTuile),
       `la tuile ne s'échelonne pas entier au cran ${cran}`);
+    // ⚠ ET LE DÉCOUPAGE DOIT TOMBER JUSTE : une tuile d'écran fractionnaire
+    // brouillerait le pixel art, ce que toute cette garde existe pour empêcher.
+    assert.ok(Number.isInteger(cran / ZOOM_CARTE.tuilesParCase),
+      `${ZOOM_CARTE.tuilesParCase} tuiles par axe ne divisent pas le cran ${cran}`);
     assert.ok(Number.isInteger(versEmbleme) || Number.isInteger(1 / versEmbleme),
       `l'emblème ne s'échelonne pas entier au cran ${cran}`);
   }
@@ -71,9 +79,9 @@ test('zoom — les quatre crans sont des puissances de deux et divisent tuile et
   assert.equal(CRAN_PAR_DEFAUT, 0, 'la carte ne s\'ouvre plus sur la vue la plus large');
 
   // Falsifiable : un cran intermédiaire serait bien refusé par ce montage.
-  assert.ok(!Number.isInteger(ZOOM_CARTE.pixelsParTuile / 192)
-    && !Number.isInteger(192 / ZOOM_CARTE.pixelsParTuile),
-  'le montage accepterait un cran à 192 : il ne mesure rien');
+  const tuileA192 = ZOOM_CARTE.coteTuile / (192 / ZOOM_CARTE.tuilesParCase);
+  assert.ok(!Number.isInteger(tuileA192) && !Number.isInteger(1 / tuileA192),
+    'le montage accepterait un cran à 192 : il ne mesure rien');
 });
 
 test('zoom — au cran le plus large, les 31 colonnes tiennent dans un téléphone', () => {
@@ -312,7 +320,7 @@ test('écran — il ne nomme aucune constante de grille ni de zoom en dur', () =
   const interdits = new Map([
     [GEOGRAPHIE.carte.largeur, 'la largeur de la carte'],
     [GEOGRAPHIE.carte.hauteur, 'la hauteur de la carte'],
-    [ZOOM_CARTE.pixelsParTuile, 'le côté d\'une tuile'],
+    [ZOOM_CARTE.coteTuile, 'le côté d\'une tuile'],
     [ZOOM_CARTE.grilleEmbleme, 'la grille d\'un emblème'],
     [GEOGRAPHIE.niveauPlafond, 'le plafond de niveau'],
     [TERRAIN_CARTE.dalleCotePx, 'le côté d\'une dalle'],
@@ -459,13 +467,20 @@ test('emblèmes — le bord rouge est réservé à ce qui attaque le joueur', ()
   // cinq caractères.
 });
 
-test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est inliné', () => {
+test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est inliné UNE fois', () => {
   const html = lire('dist', 'index.html');
   for (const id of ['onglet-monde', 'ecran-monde', 'monde-atlas', 'monde-canvas',
-    'monde-champ', 'monde-outils', 'monde-zoom-moins', 'monde-zoom-plus', 'monde-echelle',
+    'monde-champ', 'monde-outils', 'monde-echelle',
     'monde-panneau', 'monde-panneau-titre', 'monde-panneau-fermer', 'monde-panneau-corps']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} manque à la page`);
   }
+  // ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08, et cette garde le tient
+  // par l'autre bout : Ethan a demandé « au doigt, pas de zoom fixe avec + − »,
+  // donc leur RETOUR est ce qu'on refuse, pas leur absence.
+  for (const id of ['monde-zoom-moins', 'monde-zoom-plus']) {
+    assert.ok(!html.includes(`id="${id}"`), `#${id} est revenu : le zoom se fait au doigt`);
+  }
+
   // L'onglet n'est plus mort.
   const onglet = html.match(/<button[^>]*id="onglet-monde"[^>]*>/)[0];
   assert.ok(!/disabled/.test(onglet), 'l\'onglet Monde est encore désactivé');
@@ -477,13 +492,64 @@ test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est i
   // n'est pas négociable : une image à côté serait une référence externe et le
   // build sortirait en erreur. Le marqueur du source ne doit plus s'y trouver.
   assert.ok(!html.includes('%ATLAS_TERRAIN%'), 'le marqueur de l\'atlas n\'a pas été remplacé');
-  const src = html.match(/<img[^>]*id="monde-atlas"[^>]*src="([^"]{0,64})/);
-  assert.ok(src, 'l\'image de l\'atlas a disparu');
-  assert.ok(src[1].startsWith('data:image/png;base64,'), `src « ${src[1]} » : l'atlas n'est pas inliné`);
-  // Et il pèse ce qu'il pèse : au moins deux cent mille octets de base64,
+
+  // ⚠⚠ IL A CHANGÉ DE PORTE LE 30/08, ET LA GARDE S'EST RESSERRÉE AVEC LUI.
+  // Il entrait par le `src` d'une image ; il entre par la variable CSS
+  // `--atlas-sol`, et c'est `garnirLesAtlas` de `ui/session.js` qui en donne
+  // l'adresse à l'image au démarrage. La raison est mesurable : le sol de la
+  // base le veut en fond CSS et le fond de carte le veut en élément, et
+  // l'écrire aux deux endroits l'aurait inliné DEUX fois — 299 400 octets pour
+  // rien. Ce test compte donc les occurrences au lieu de se contenter d'en
+  // trouver une.
+  const debut = 'data:image/png;base64,iVBOR';
+  const variable = html.match(/--atlas-sol:\s*url\(['"]?(data:image\/png;base64,[^'")]{0,64})/);
+  assert.ok(variable, '`--atlas-sol` ne porte plus l\'atlas du terrain');
+  assert.ok(variable[1].startsWith(debut), `« ${variable[1]} » n'est pas un PNG inliné`);
+
+  // Et il pèse ce qu'il pèse : au moins deux cent mille caractères de base64,
   // sinon c'est qu'un fichier vide a été inliné sans que rien ne le dise.
-  const entier = html.match(/<img[^>]*id="monde-atlas"[^>]*src="([^"]*)"/)[1];
+  const entier = html.match(/--atlas-sol:\s*url\(['"]?(data:image\/png;base64,[^'")]*)/)[1];
   assert.ok(entier.length > 200_000, `l'atlas inliné ne fait que ${entier.length} caractères`);
+
+  // ⚠⚠ ET IL N'Y EST QU'UNE FOIS. C'est l'assertion qui compte : le HTML
+  // porte huit atlas, et deux copies de celui-ci coûteraient à elles seules
+  // près de cinq fois la marge qui reste sous la borne de T10. On cherche les
+  // 64 premiers caractères de CE fichier-ci, qui l'identifient sans ambiguïté.
+  const empreinte = entier.slice(0, 64);
+  const copies = html.split(empreinte).length - 1;
+  assert.equal(copies, 1, `l'atlas du terrain est inliné ${copies} fois au lieu d'une`);
+
+  // ⚠ ET L'IMAGE QUI LE SERVIRA N'A PLUS DE `src` DANS LE FICHIER : elle le
+  // reçoit au démarrage. Un `src` écrit ici serait la seconde copie.
+  const balise = html.match(/<img[^>]*id="monde-atlas"[^>]*>/)[0];
+  assert.ok(!/\bsrc=/.test(balise), 'l\'image de l\'atlas porte de nouveau un `src` : il est inliné deux fois');
+  // ⚠ MAIS ELLE GARDE SA TAILLE DÉCLARÉE : le sol de la base la lit pour
+  // découper l'atlas, et il la lit AVANT tout décodage.
+  assert.match(balise, /width="\d+"/, 'l\'image de l\'atlas ne déclare plus sa largeur');
+});
+
+test('page — la taille déclarée de l\'atlas est celle du fichier, à l\'octet', () => {
+  // ⚠⚠ UNE TRANSCRIPTION QUI NE SE CONFRONTE PAS À SA SOURCE EST UNE COPIE QUI
+  // VIEILLIT. Le balisage annonce `width` et `height` sur l'image de l'atlas
+  // parce que le SOL DE LA BASE en a besoin de façon synchrone — `naturalWidth`
+  // vaut zéro tant que le PNG n'est pas décodé, et le sol se peint à la
+  // première image. Ces deux nombres sont donc une copie de l'en-tête du
+  // fichier, et rien d'autre ne les tiendrait à jour : le jour où l'atlas
+  // change de taille sans qu'on y touche, le sol découperait une grille qui
+  // n'existe pas et dessinerait n'importe quel morceau d'image.
+  const octets = readFileSync(join(RACINE, 'art', 'sprites', 'carte', 'atlas-terrain-64.png'));
+  assert.equal(octets.readUInt32BE(0), 0x89504e47, 'ce n\'est pas un PNG');
+  const largeur = octets.readUInt32BE(16);
+  const hauteur = octets.readUInt32BE(20);
+
+  const balise = lire('src', 'index.src.html').match(/<img[^>]*id="monde-atlas"[^>]*>/)[0];
+  assert.equal(Number(balise.match(/width="(\d+)"/)[1]), largeur,
+    'la largeur déclarée n\'est plus celle du fichier');
+  assert.equal(Number(balise.match(/height="(\d+)"/)[1]), hauteur,
+    'la hauteur déclarée n\'est plus celle du fichier');
+
+  // Falsifiable : le montage lit bien l'en-tête, pas une constante.
+  assert.ok(largeur > 0 && hauteur > 0, 'l\'en-tête n\'a pas été lu');
 });
 
 test('page — l\'écran Monde n\'ajoute aucune barre à hauteur fixe', () => {
@@ -902,4 +968,126 @@ test('carte — `CSS_MINI_LETTRE` n\'existe plus nulle part dans `src/`', () => 
     hors += 1;
   }
   assert.equal(hors, fichiers.length);
+});
+
+// ---------------------------------------------------------------------------
+// Le lot SPRITES-ET-ZOOM : le zoom se fait au doigt, et l'atlas n'entre qu'une fois
+// ---------------------------------------------------------------------------
+
+test('zoom — le pincement a remplacé les deux boutons, et il reste par CRANS', () => {
+  // ⚠⚠ ETHAN, 30/08 : « zoom carte et base : au doigt, pas de zoom fixe avec
+  // + − ». Les deux boutons sont partis du balisage et de l'écran.
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.doesNotMatch(ecran, /monde-zoom-(moins|plus)/,
+    'l\'écran Monde parle encore de ses boutons de zoom');
+
+  // ⚠⚠ ET LE ZOOM RESTE DISCRET, CE QUI N'EST PAS UN DEMI-TRAVAIL. `rendreDalle`
+  // LÈVE sur un cran hors table — `terrain.test.js` le garde de face —, et pour
+  // une raison qui tient : à chaque cran, la tuile comme l'emblème restent à un
+  // facteur d'échelle ENTIER, seule façon de ne pas brouiller du pixel art. Un
+  // zoom continu recalculerait les dalles à chaque image — 19 ms pièce, mesuré
+  // — pour rendre du flou. L'écran ne demande donc QUE des crans de la table :
+  // il change d'INDICE, il ne calcule jamais une échelle.
+  assert.match(ecran, /const suivant = cranIndex \+ pas/,
+    'le cran ne se déplace plus d\'un rang : le zoom a peut-être passé en continu');
+  assert.match(ecran, /if \(suivant < 0 \|\| suivant >= CRANS\.length\) return false/,
+    'le zoom ne s\'arrête plus aux bouts de la table des crans');
+
+  // Le seuil est la moyenne GÉOMÉTRIQUE entre deux crans qui vont du simple au
+  // double : c'est le point où le cran d'arrivée est plus proche que celui de
+  // départ. Il se lit, il ne s'écrit pas en 1.41.
+  assert.match(ecran, /const SEUIL_PINCEMENT = Math\.SQRT2/,
+    'le seuil du pincement n\'est plus la moyenne géométrique entre deux crans');
+  for (let i = 1; i < CRANS.length; i += 1) {
+    assert.equal(CRANS[i] / CRANS[i - 1], 2,
+      'les crans ne vont plus du simple au double : le seuil √2 n\'est plus le bon');
+  }
+
+  // ⚠ LE RAPPORT, PAS LA DIFFÉRENCE — même raison que sur la base.
+  assert.match(ecran, /ecartDesDoigts\(deux\) \/ pincement\.ecart/,
+    'le pincement de la carte ne se mesure plus en rapport');
+
+  // ⚠⚠ ET LE ZOOM S'ANCRE SUR LE MILIEU DES DOIGTS, PAS SUR LE CENTRE DE
+  // L'ÉCRAN. C'est la seule façon de faire grossir CE QU'ON REGARDE : ancré au
+  // centre, la case visée fuit sous les doigts, et sur une carte de 300 rangées
+  // on ne la retrouve pas.
+  assert.match(ecran, /changerDeCran\(sens, milieuDesDoigts\(deux\)\)/,
+    'le pincement ne zoome plus sur le milieu des doigts');
+  assert.match(ecran, /function changerDeCran\(pas, ancre = null\)/,
+    '`changerDeCran` ne prend plus de point d\'ancrage');
+
+  // ⚠ ET LES DOIGTS SE SUIVENT PAR IDENTIFIANT, pas par compteur : un doigt
+  // parti hors de la dalle n'émet pas toujours `pointerup`, et la carte
+  // cesserait de se promener jusqu'au rechargement.
+  assert.match(ecran, /const doigts = new Map\(\)/, 'les doigts ne se suivent plus par identifiant');
+  assert.match(ecran, /pointercancel[\s\S]{0,200}?doigts\.delete/,
+    'un doigt annulé ne se retire plus de la liste');
+
+  // ⚠ UN PINCEMENT N'OUVRE PAS DE PANNEAU. Sans ça, lever le second doigt sur
+  // un site l'ouvrirait à la fin de chaque zoom.
+  assert.match(ecran, /if \(pointeur !== null\) pointeur\.glisse = true/,
+    'un pincement peut encore se terminer par un toucher de site');
+});
+
+test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse au démarrage', () => {
+  // ⚠⚠ LE COUPLAGE A ÉTÉ RETOURNÉ LE 30/08, ET IL FAUT SAVOIR POURQUOI. Quatre
+  // atlas servent des deux côtés : en fond CSS sur des éléments du DOM — le sol
+  // de la base, les unités de l'Offense — et en `drawImage` sur un canevas, qui
+  // exige un élément. Les déclarer aux DEUX endroits les inlinerait deux fois :
+  // mesuré, 507 464 octets de base64 en trop, plus de sept fois la marge qui
+  // reste sous la borne de T10.
+  //
+  // ⚠ ET LE SENS COMPTE. On aurait pu garder le `src` dans le balisage et faire
+  // ÉCRIRE la variable par le JS : le build l'a refusé, à raison — une adresse
+  // d'image assemblée à l'exécution est indistinguable d'une vraie référence
+  // externe pour la garde offline, et la faire taire aurait été passer sous un
+  // garde-fou en silence. Dans ce sens-ci, le JS ne fait que LIRE ce que le
+  // build a écrit et vérifié.
+  const source = sansCommentaires(lire('src', 'ui', 'session.js'));
+  const balisage = lire('src', 'index.src.html');
+
+  for (const [id, variable] of Object.entries(ATLAS_DE_LA_PAGE)) {
+    assert.match(balisage, new RegExp(`--${variable.slice(2)}:\\s*url\\('%ATLAS_[A-Z_]+%'\\)`),
+      `${variable} ne porte plus de marqueur d'atlas dans la feuille`);
+    const balise = balisage.match(new RegExp(`<img[^>]*id="${id}"[^>]*>`));
+    assert.ok(balise, `l'image « ${id} » a disparu du balisage`);
+    assert.ok(!/\bsrc=/.test(balise[0]),
+      `l'image « ${id} » porte un \`src\` : son atlas est inliné deux fois`);
+  }
+  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 4);
+  assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
+  assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');
+
+  // ⚠ ON LÈVE PLUTÔT QUE DE LAISSER UNE IMAGE VIDE : un atlas absent rendrait
+  // le champ de bataille muet, et rien ne le dirait. C'est la règle
+  // d'`executer` dans `render/canvas2d.js`.
+  assert.match(source, /throw new RangeError\(`session : la variable/,
+    'une variable vide passe maintenant en silence');
+
+  // ⚠⚠ ET AUCUN `url\(` NE S'ÉCRIT DEPUIS LE JS. C'est ce qui garde la garde
+  // offline entière : le JS déballe une valeur, il n'en fabrique pas.
+  for (const nom of readdirSync(join(RACINE, 'src', 'ui')).filter((n) => n.endsWith('.js'))) {
+    const code = sansCommentaires(lire('src', 'ui', nom));
+    assert.doesNotMatch(code, /['"`]url\(/,
+      `${nom} fabrique une adresse d'image : la garde offline ne peut plus la vérifier`);
+  }
+});
+
+test('atlas — la valeur CSS se déballe, guillemets ou pas', () => {
+  // Les navigateurs ne s'accordent pas sur les guillemets que rend
+  // `getPropertyValue` : les trois formes doivent donner la même adresse.
+  const attendu = 'data:image/png;base64,iVBORw0KGgo=';
+  for (const forme of [
+    `url("${attendu}")`,
+    `url('${attendu}')`,
+    `url(${attendu})`,
+    `  url( "${attendu}" )  `,
+  ]) {
+    assert.equal(urlDeLaValeurCss(forme), attendu, `mal déballé : ${forme}`);
+  }
+  // Et ce qui n'est pas une adresse d'image rend une chaîne vide, que
+  // `garnirLesAtlas` refuse — plutôt qu'un `src` absurde posé en silence.
+  for (const rien of ['', 'none', undefined, null, 'url(']) {
+    assert.equal(urlDeLaValeurCss(rien), '');
+  }
 });

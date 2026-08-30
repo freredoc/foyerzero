@@ -94,6 +94,37 @@ export function classeDe(genre, id) {
 }
 
 /**
+ * Le genre d'une pièce de GARNISON — la bande de défense en porte deux sortes.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE LA GARNISON N'EST PAS FAITE QUE DE DÉFENSES, ET QUE
+ * L'OUBLIER FAISAIT TOMBER L'ÉCRAN. `rosterDefensif()` compose les dix-sept
+ * pièces posables à partir de DEUX tables — les neuf ouvrages et artilleries de
+ * `DEFENSES`, plus les huit unités de `UNITES` dont `defense.present` est vrai.
+ * `ui/chantier.js` demandait `genre: 'defense'` pour les dix-sept : les huit
+ * unités faisaient LEVER `couchesDeLaDefense`, et comme la levée part de
+ * `peindre`, c'est tout l'écran de la base qui restait blanc.
+ *
+ * ⚠ MESURÉ SUR `main` LE 30/08, AVANT CE LOT : poser des Fusiliers en garnison
+ * suffisait. Le défaut est donc antérieur au branchement de la palette ; ce lot
+ * ne l'a pas créé, il l'a rendu atteignable plus tôt — la palette résout
+ * maintenant un sprite pour chacune des dix-sept, donc la levée arrive au
+ * dessin de la palette et non plus à la pose.
+ *
+ * ⚠ ET LA QUESTION SE POSE À LA TABLE, PAS À UNE LISTE DE HUIT NOMS.
+ * `nomDeLaPieceDeDefense` fait déjà `DEFENSES[id] ?? UNITES[id]` : c'est la
+ * même question, et une seconde liste écrite à la main serait la première à
+ * diverger le jour où une unité gagnera ou perdra sa présence en défense.
+ *
+ * @param {string} id
+ * @returns {'defense'|'unite'}
+ */
+export function genreDeLaGarnison(id) {
+  if (DEFENSES[id] !== undefined) return 'defense';
+  if (UNITES[id] !== undefined) return 'unite';
+  throw new RangeError(`scene : « ${id} » n'a de rôle ni en défense ni dans le roster`);
+}
+
+/**
  * Accent d'une entité : la paire de teintes de sa colonne de dégâts DOMINANTE.
  * Rend null pour une entité qui ne nuit à personne (Merlon, bâtiments) — elle
  * ne tue rien, elle ne porte aucun accent.

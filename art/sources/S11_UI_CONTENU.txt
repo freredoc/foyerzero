@@ -1,0 +1,18 @@
+FOYER ZÉRO — S11 INTERFACE — PRODUCTION COMPLÈTE
+
+P11.1  Ressources : quartz, scorie, électricité
+P11.2  Points : attaque, armée offensive, armée défensive, recherche
+P11.3  Cibles AI/AV/AA et châssis escouade/blindé/aéronef
+P11.4  Catégories : mur, barrière, tourelle, artillerie
+P11.5  Modules 1–8
+P11.6  Modules 9–14
+P11.7  PV, dégâts, butin, réparation, temps, niveau
+P11.8  Verrou, emplacement, vague, budget
+P11.9  Flèches gauche/droite, grande flèche verte, plus, moins
+
+Ajouts :
+- grande flèche verte 1024 × 1024
+- grande flèche verte ×1,5 : 1024 × 1536
+- grande flèche verte ×2 : 1024 × 2048
+
+Les planches carrées ont été normalisées en 1024 × 1024 sans lissage.

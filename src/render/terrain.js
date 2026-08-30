@@ -43,7 +43,9 @@
 // dalle par dalle : deux découpages différents de part et d'autre d'un bord
 // donneraient une couture nette là où le pavage n'en a pas.
 
-import { GEOGRAPHIE, TERRAIN_CARTE, ZOOM_CARTE } from '../data/sites.js';
+import {
+  GEOGRAPHIE, TERRAIN_CARTE, ZOOM_CARTE, PIXELS_SOURCE_PAR_CASE,
+} from '../data/sites.js';
 import { hachageBrut } from '../sim/peuplement.js';
 import { niveauDeLaRangee } from '../sim/carte.js';
 
@@ -237,7 +239,7 @@ export function partOuvrageDeLaRangee(rangee) {
  * @returns {number} rangée de 1 à `GEOGRAPHIE.carte.hauteur`
  */
 export function rangeeDuPixelSource(sourceY) {
-  const brute = Math.floor(sourceY / ZOOM_CARTE.pixelsParTuile) + 1;
+  const brute = Math.floor(sourceY / PIXELS_SOURCE_PAR_CASE) + 1;
   if (brute < 1) return 1;
   return brute > GEOGRAPHIE.carte.hauteur ? GEOGRAPHIE.carte.hauteur : brute;
 }
@@ -361,10 +363,18 @@ export function rendreDalle({
     throw new RangeError(`terrain : coin de dalle non entier (${x0}, ${y0})`);
   }
 
-  // Une tuile fait exactement une case : `pixelsParTuile` est aussi le côté
-  // d'une case en pixels source. Le cran, lui, est déjà la case à l'écran.
-  const echelle = cran / ZOOM_CARTE.pixelsParTuile;
-  const tuilePx = cran;
+  // ⚠⚠ UNE TUILE NE FAIT PLUS UNE CASE, ELLE EN FAIT UN QUART — deux par axe,
+  // `ZOOM_CARTE.tuilesParCase`. Une case vaut donc `PIXELS_SOURCE_PAR_CASE`
+  // pixels source, et le cran est cette même case à l'écran : l'échelle est le
+  // rapport des deux. La tuile, elle, suit — `cran / tuilesParCase`.
+  //
+  // ⚠ C'EST CE RAPPORT QUI DÉCIDE DU GRAIN, et c'est tout le correctif du 30/08.
+  // À une tuile par case, l'échelle valait `cran / 128` et montait donc à 2 au
+  // cran le plus serré : le pavage agrandissait sa source, et le grain de 4 px
+  // de l'art se lisait en carrés de 8 px. À deux tuiles par axe elle vaut
+  // `cran / 256`, donc au plus 1 : on ne grossit plus jamais un pixel source.
+  const echelle = cran / PIXELS_SOURCE_PAR_CASE;
+  const tuilePx = cran / ZOOM_CARTE.tuilesParCase;
   const demiTuile = tuilePx / 2;
   const pasDest = TERRAIN_CARTE.pasSourcePx * echelle;
   const decalageMaxDest = TERRAIN_CARTE.pasSourcePx * TERRAIN_CARTE.decalageFraction * echelle;

@@ -20,10 +20,13 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
-import { celluleDuSprite, existeDansAtlas, fondDuSprite } from '../src/render/sprite.js';
+import {
+  celluleDuSprite, existeDansAtlas, fondDuSprite, fondDeCellule,
+} from '../src/render/sprite.js';
 import { variante, suffixeDeVariante, SEL_VARIANTE } from '../src/render/variante.js';
-import { couchesDeLEntite, listeAffichage } from '../src/render/scene.js';
+import { couchesDeLEntite, listeAffichage, genreDeLaGarnison } from '../src/render/scene.js';
 import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
+import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
 import { TERRAINS } from '../src/ui/chantier.js';
@@ -229,6 +232,80 @@ test('sprite — le pourcentage rendu décale bien de −colonne × côté', () 
   // seconde assertion, une fonction qui rendrait toujours « 0% 0% » passerait.
   assert.equal(fondDuSprite('batiment', noms[0]).position, '0% 0%');
   assert.notEqual(fondDuSprite('batiment', noms[colonnes + 2]).position, '0% 0%');
+});
+
+test('sprite — une cellule se pose aussi dans un QUARTIER, et la formule tient', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE : le sol de la base pose QUATRE cellules dans une
+  // seule case depuis le 30/08 — Ethan, « utiliser les sprites terrain monde
+  // (en 2 × 2) ». La formule du décalage n'est plus celle d'une cellule qui
+  // remplit son élément, et elle ne se recopie pas : on refait ici le calcul du
+  // NAVIGATEUR — `décalage = P/100 × (cadre − image)` — et on exige que le bord
+  // de la cellule tombe très exactement sur le bord du quartier voulu.
+  //
+  // ⚠ ET C'EST BIEN LE MÊME CALCUL QUE L'ANCIEN, PAS UN SECOND. Le dernier bloc
+  // le vérifie : à un seul quartier, la nouvelle formule rend caractère pour
+  // caractère ce que rendait celle d'avant.
+  const COTE = 48; // px, l'ordre de grandeur d'une case sur téléphone
+
+  for (const divisions of [1, 2, 3]) {
+    for (const [colonnes, rangees] of [[4, 4], [5, 4], [16, 16], [7, 7]]) {
+      for (const colonne of [0, 1, colonnes - 1]) {
+        for (const sousColonne of [0, divisions - 1]) {
+          const fond = fondDeCellule({
+            colonne, rangee: colonne, colonnes, rangees,
+            divisions, sousColonne, sousRangee: sousColonne,
+          });
+          // La taille : une cellule fait exactement 1/divisions de l'élément.
+          const [tx] = fond.taille.split(' ').map((v) => Number.parseFloat(v));
+          assert.ok(Math.abs(tx - (colonnes * 100) / divisions) < 1e-9,
+            `taille ${fond.taille} pour ${colonnes} colonnes en ${divisions}`);
+
+          const [px] = fond.position.split(' ').map((v) => Number.parseFloat(v));
+          const largeurImage = (colonnes * COTE) / divisions;
+          const decalage = (px / 100) * (COTE - largeurImage);
+          // Le bord gauche de la cellule doit tomber sur le bord du quartier.
+          const attendu = (sousColonne - colonne) * (COTE / divisions);
+          assert.ok(Math.abs(decalage - attendu) < 1e-9,
+            `${colonnes}×${divisions}, cellule ${colonne} au quartier ${sousColonne} : `
+              + `décalage ${decalage}, attendu ${attendu}`);
+        }
+      }
+    }
+  }
+
+  // ⚠ LE DÉFAUT EST L'ANCIEN COMPORTEMENT, À LA CHAÎNE PRÈS. Si la
+  // généralisation avait déplacé ne serait-ce qu'une cellule, tous les sprites
+  // déjà posés auraient bougé — et rien dans la suite ne l'aurait dit, un
+  // sprite décalé restant un sprite.
+  const { colonnes, rangees, noms } = ATLAS.batiment;
+  for (let rang = 0; rang < noms.length; rang += 1) {
+    const c = rang % colonnes;
+    const r = Math.floor(rang / colonnes);
+    const ancienne = {
+      taille: `${colonnes * 100}% ${rangees * 100}%`,
+      position: `${(c * 100) / (colonnes - 1)}% ${(r * 100) / (rangees - 1)}%`,
+    };
+    assert.deepEqual(fondDuSprite('batiment', noms[rang]), ancienne,
+      `${noms[rang]} a bougé : la généralisation a changé le cas à un quartier`);
+  }
+
+  // Falsifiable : un quartier hors du découpage est refusé, et un découpage
+  // absurde aussi. Sans ça, un `sousColonne` de 2 dans un 2 × 2 poserait la
+  // cellule hors de la case, en silence.
+  assert.throws(() => fondDeCellule({
+    colonne: 0, rangee: 0, colonnes: 4, rangees: 4, divisions: 2, sousColonne: 2,
+  }), /quartier/);
+  assert.throws(() => fondDeCellule({
+    colonne: 0, rangee: 0, colonnes: 4, rangees: 4, divisions: 0,
+  }), /divisions/);
+
+  // ⚠ ET LE CAS DÉGÉNÉRÉ REND 0 PLUTÔT QUE `Infinity`. Autant de colonnes que
+  // de quartiers : l'image fait exactement la largeur de l'élément, aucun
+  // pourcentage ne la déplace. Aucune grille du dépôt n'est dans ce cas.
+  const degenere = fondDeCellule({
+    colonne: 1, rangee: 1, colonnes: 2, rangees: 2, divisions: 2, sousColonne: 1, sousRangee: 1,
+  });
+  assert.equal(degenere.position, '0% 0%');
 });
 
 test('sprite — un nom absent lève, il ne rend pas un fond vide', () => {
@@ -1099,4 +1176,62 @@ test('couches — le renommage propriétaire est complet dans tout `src/`', () =
     assert.doesNotMatch(signature[0], /\bcamp\b/, `${signature[0]} : le paramètre s'appelle encore camp`);
     assert.match(signature[0], /proprietaire/, `${signature[0]} : le paramètre ne dit pas propriétaire`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Le lot SPRITES-ET-ZOOM : la garnison n'est pas faite QUE de défenses
+// ---------------------------------------------------------------------------
+
+test('garnison — les DIX-SEPT pièces posables se dessinent, pas seulement les neuf', () => {
+  // ⚠⚠ CE TEST NAÎT D'UN DÉFAUT QUI ÉTAIT SUR `main`, ET QUI FAISAIT ÉCRAN
+  // BLANC. `rosterDefensif()` compose la palette de garnison à partir de DEUX
+  // tables : les neuf ouvrages et artilleries de `DEFENSES`, plus les huit
+  // unités de `UNITES` dont `defense.present` est vrai. `ui/chantier.js`
+  // demandait `genre: 'defense'` pour les dix-sept ; `couchesDeLEntite` levait
+  // sur les huit unités, et comme la levée part de `peindre`, poser des
+  // Fusiliers en garnison laissait toute la base blanche.
+  //
+  // ⚠ SON VOISIN DE DESSUS NE POUVAIT PAS LE VOIR : il monte une garnison des
+  // NEUF `DEFENSES` seulement, c'est-à-dire exactement la moitié du roster qui
+  // marchait. C'est la leçon habituelle du dépôt — un montage écrit à la main
+  // ne garde que lui-même —, et la parade est de partir de la LISTE réelle.
+  const roster = rosterDefensif();
+  assert.equal(roster.length, 17, `${roster.length} pièces posables au lieu de dix-sept`);
+
+  // ⚠ ET LE MONTAGE MESURE QU'IL Y A BIEN DEUX GENRES. Si les dix-sept étaient
+  // du même genre, ce test passerait sur le code cassé qu'il existe pour
+  // attraper.
+  const genres = new Set(roster.map(genreDeLaGarnison));
+  assert.deepEqual([...genres].sort(), ['defense', 'unite'],
+    'la garnison ne porte plus qu\'un genre : ce test ne mesure plus rien');
+  assert.equal(roster.filter((id) => genreDeLaGarnison(id) === 'unite').length, 8,
+    'le compte d\'unités de garnison a changé');
+
+  // Les dix-sept résolvent des couches, et toutes sont dans un atlas cousu.
+  const etat = creerEtat(20260830);
+  for (const id of roster) {
+    const couches = TERRAINS.defense.spriteDe(
+      { id, rangee: GRILLE.bandes.defense.premiere, colonne: 3, niveau: 1 }, etat,
+    );
+    assert.ok(Array.isArray(couches) && couches.length > 0, `« ${id} » ne rend aucune couche`);
+    for (const { famille, nom } of couches) {
+      assert.ok(existeDansAtlas(famille, nom),
+        `« ${id} » demande ${famille}/${nom}, absent de l'atlas cousu`);
+      assert.doesNotThrow(() => fondDuSprite(famille, nom));
+    }
+  }
+
+  // ⚠ ET LA PALETTE LES RÉSOUT AUSSI, à la case (0, 0) qu'elle emploie : une
+  // pièce hors grille ne doit pas lever. C'est le chemin par lequel le défaut
+  // arriverait désormais en premier — la palette se peint avant toute pose.
+  for (const id of roster) {
+    assert.doesNotThrow(
+      () => TERRAINS.defense.spriteDe({ id, rangee: 0, colonne: 0, niveau: 1 }, etat),
+      `la palette lève sur « ${id} »`,
+    );
+  }
+
+  // Falsifiable de face : un identifiant qui n'est dans aucune des deux tables
+  // lève, plutôt que de rendre un genre par défaut qui dessinerait n'importe quoi.
+  assert.throws(() => genreDeLaGarnison('nexistepas'), /ni en défense ni dans le roster/);
 });

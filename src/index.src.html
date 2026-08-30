@@ -144,11 +144,6 @@
     padding: 4px 6px;
     background: #1E2124; border: 1px solid #343A2C;
   }
-  #monde-outils button {
-    width: 28px; height: 28px; padding: 0;
-    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
-    font-size: 15px; line-height: 1;
-  }
   #monde-echelle {
     font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
     color: #68727E; white-space: nowrap;
@@ -249,12 +244,27 @@
      voisins, le rail dit déjà où l'on est, et une nuance de noir ne se
      distingue pas sur un téléphone au soleil. Acquis de la maquette. */
 
-  /* ⚠ LA CELLULE EST PLAFONNÉE, PAS ZOOMÉE. La passation du 27/08 mesure la
-     case du champ de bataille entre 40 et 46 px CSS. On borne donc la largeur
-     de la GRILLE et on laisse `margin-inline: auto` répartir également ce qui
-     reste des deux côtés — jamais un `transform: scale()`, qui décrocherait le
-     doigt de la case qu'il vise. */
-  :root { --case-max: 46px; }
+  /* ⚠⚠ LA CELLULE SE ZOOME DEPUIS LE 30/08, ET TOUJOURS PAS PAR UNE
+     TRANSFORMATION. Ethan : « possibilité de zoomer sur la base, l'ui reste de
+     même taille ». Ce qui change, c'est le CÔTÉ D'UNE CASE en pixels — écrit
+     par le JS dans `--case-cote` — jamais un `transform: scale()`, qui
+     décrocherait le doigt de la case qu'il vise : le dessin bougerait, pas la
+     géométrie du pointage. Une case reste donc un carré de N pixels que le
+     navigateur sait localiser, et `elementFromPoint` continue de rendre la
+     bonne.
+
+     ⚠ ET L'UI NE BOUGE PAS AVEC ELLE. Le zoom ne touche que `#chantier-grille`,
+     qui vit dans `#chantier-defile` ; les six barres à hauteur fixe sont
+     ailleurs dans la colonne et gardent leurs 288 px. C'est exactement ce
+     qu'Ethan demande, et c'est ce qui distingue ce zoom d'un zoom de page.
+
+     `--case-defaut` est la valeur d'ouverture, celle qu'on avait avant : la
+     passation du 27/08 mesure la case du champ de bataille entre 40 et 46 px
+     CSS, et le JS ne descend jamais sous la taille qui fait tenir les neuf
+     colonnes dans la largeur disponible. */
+  /* ⚠ UN SEUL NOMBRE : `--case-cote` PART DU DÉFAUT. Les écrire tous les deux
+     à 46 ferait deux vérités, et la seconde survivrait à la première. */
+  :root { --case-defaut: 46px; --case-cote: var(--case-defaut); }
   /* Les deux atlas de la première couche, inlinés en `data:` par tools/build.js.
      Ils vivent sur `:root` parce que trois règles les emploient — le sol des
      cases, le terrain posé dessus, le jeton d'un bâtiment — et qu'une URL en
@@ -269,6 +279,37 @@
     --atlas-terrain: url('%ATLAS_TERRAIN_BASE%');
     --atlas-defense: url('%ATLAS_DEFENSE%');
     --atlas-socle: url('%ATLAS_SOCLE%');
+  }
+
+  /* ⚠⚠ QUATRE ATLAS QUI SERVENT DES DEUX CÔTÉS — EN FOND CSS ET EN `drawImage`.
+     Ils étaient déclarés sur une balise `img` porteuse du marqueur, et rien
+     d'autre, parce que le champ de bataille les donne à `drawImage`, qui veut
+     un ÉLÉMENT et pas une adresse. Depuis le 30/08 le DOM en veut aussi : le
+     sol de la base découpe l'atlas du monde, l'écran Offense pose des sprites
+     d'unité.
+
+     ⚠⚠ ET ILS N'ENTRENT QU'UNE FOIS. Écrire le marqueur ici ET dans un `<img>`
+     inlinerait le même fichier DEUX fois en base64 : mesuré sur le dépôt,
+     208 064 octets pour les trois atlas d'unité et 299 400 pour celui du
+     terrain du monde — ensemble, plus de sept fois la marge qui reste sous la
+     borne de T10. La déclaration vit donc ICI, une seule fois, et
+     `garnirLesAtlas` de `ui/session.js` recopie l'URL de la variable dans le
+     `src` des balises `img` au démarrage. Le sens du couplage est INVERSÉ par
+     rapport à ce qu'on avait, et c'est ce qui garde la garde offline intacte :
+     le JS LIT la valeur d'image que le build a écrite, il n'en fabrique jamais
+     une. Assembler une adresse d'image à l'exécution passerait sous le
+     garde-fou du build en silence, ce que CLAUDE.md §6 interdit nommément pour
+     l'espace de noms SVG et pour les hex à trois chiffres.
+
+     ⚠ ET CE PARAGRAPHE ÉVITE D'ÉCRIRE LA FONCTION CSS EN TOUTES LETTRES : la
+     garde du build lit le HTML COMMENTAIRES COMPRIS, et deux mentions en prose
+     l'ont fait tomber au premier essai. Une garde qui lit ce qu'on écrit à son
+     sujet, vue par l'autre bout. */
+  :root {
+    --atlas-sol: url('%ATLAS_TERRAIN%');
+    --atlas-unite: url('%ATLAS_UNITE%');
+    --atlas-chassis: url('%ATLAS_CHASSIS%');
+    --atlas-tourelle-unite: url('%ATLAS_TOURELLE_UNITE%');
   }
 
   /* La page de jeu : en-tête commun, écran du moment, barre du bas commune.
@@ -360,14 +401,42 @@
     flex: 1; min-height: 0; position: relative; background: #161914;
     display: flex; flex-direction: column;
   }
-  #chantier-defile { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+  /* ⚠⚠ IL DÉFILE MAINTENANT DANS LES DEUX SENS, ET C'EST LE ZOOM QUI L'EXIGE.
+     Il ne défilait qu'en hauteur, `overflow-x: hidden` : une grille plus large
+     que l'écran aurait été rognée sans qu'on puisse atteindre ses colonnes de
+     droite, donc zoomer n'aurait servi à rien.
+
+     ⚠ ET ÇA NE CONTREDIT PAS « TU COMPRESSES TOUT DANS L'UI ». La consigne
+     d'Ethan (28/08) porte sur le CHROME — les barres, la palette, ce qui ne
+     doit ni déborder ni pousser son voisin —, et la garde des 288 px continue
+     de refuser `overflow-x` sur les six barres nommées. Ici c'est le CHAMP DE
+     JEU, celui qu'Ethan vient de demander à pouvoir agrandir ; la carte du
+     monde se promène dans les deux sens depuis le lot ÉCRAN-CARTE pour la même
+     raison. Tant que la grille tient dans la largeur, rien ne défile du tout et
+     `margin-inline: auto` la centre.
+     ⚠ `touch-action: pan-x pan-y` LAISSE LE DÉFILEMENT AU NAVIGATEUR — inertie
+     comprise — et lui refuse le zoom de page. Il ne suffit pas à nous réserver
+     le pincement : sous `pan-x pan-y`, le navigateur garde le droit de faire
+     défiler à DEUX doigts, et quand il prend la main il envoie `pointercancel`.
+     C'est `ui/chantier.js` qui le lui refuse, par un `touchmove` non passif et
+     seulement quand deux doigts sont posés. */
+  #chantier-defile {
+    flex: 1; min-height: 0; overflow: auto; scrollbar-width: none;
+    touch-action: pan-x pan-y;
+  }
   #chantier-defile::-webkit-scrollbar { display: none; }
-  /* Colonnes et largeur maximale posées par le JS depuis GRILLE : autant de
-     fractions qu'il y a de colonnes, plafonnées à `--case-max`. */
+  /* Colonnes posées par le JS depuis GRILLE : autant de colonnes de
+     `--case-cote` qu'en porte la grille. `width: max-content` laisse la grille
+     prendre exactement sa taille, et `margin-inline: auto` la centre tant
+     qu'elle tient — au-delà, la marge automatique vaut zéro et le parent
+     défile. */
   /* `position: relative` porte le calque des traits de voisinage — voir plus
      bas. Un enfant `absolute` d'un conteneur `grid` sort du flux : il ne
      devient pas une case, il se cale sur la boîte entière. */
-  #chantier-grille { display: grid; align-content: start; margin-inline: auto; position: relative; }
+  #chantier-grille {
+    display: grid; align-content: start; margin-inline: auto; position: relative;
+    width: max-content;
+  }
   /* ⚠ `aspect-ratio: 1` NE SE TOUCHE PAS. Une case carrée est ce qui fait qu'une
      cellule d'atlas de 64×64 tombe dans un cadre de même proportion : la rendre
      rectangulaire écraserait tous les sprites, et rien dans la suite ne le
@@ -380,55 +449,80 @@
      Le sol vient d'un `background-image` posé par le JS depuis `render/sprite.js`
      — jamais d'une classe par variante, qui en ferait quatre à écrire ici puis
      deux de plus pour chaque famille à venir. */
+  /* ⚠⚠ PLUS AUCUN TRAIT DE GRILLE — retiré le 30/08 sur relevé d'Ethan sur
+     appareil : « enlever les carrés et les traits visibles sur la base ». Les
+     deux liserés `#343A2C` dessinaient un quadrillage par-dessus le sol, et
+     depuis que le sol est un vrai terrain c'est lui qu'ils hachaient. Ce qui
+     dit où est une case, ce sont les sprites qui s'y posent et les deux
+     surlignages `legale` et `choisie` — qui, eux, répondent à un geste.
+
+     ⚠ LA CASE RESTE UN CARRÉ DE `--case-cote`, ET C'EST TOUJOURS `aspect-ratio`
+     QUI LE TIENT. Une cellule d'atlas de 64 × 64 dans un cadre rectangulaire
+     écraserait tous les sprites, et le dépôt n'a pas de navigateur pour le dire.
+
+     ⚠ `image-rendering: pixelated` EST OBLIGATOIRE, PAS COSMÉTIQUE : sans lui
+     le navigateur interpole un pixel art réduit en fractionnaire, et tout
+     devient flou. */
   .case {
     aspect-ratio: 1; position: relative;
     display: flex; align-items: center; justify-content: center;
-    border-right: 1px solid #343A2C; border-bottom: 1px solid #343A2C;
     background-repeat: no-repeat; image-rendering: pixelated;
   }
-  /* Un champ de ressource n'est pas une teinte pâle — la fiche n'en a pas — mais
-     un fond kaki plein avec un liseré qui dit la ressource : os pour le quartz,
-     ambre pour la scorie. Acquis de la maquette, et il se dessine SOUS les
-     bâtiments : le champ explique ce que le collecteur produit. */
-  .case.champ { background: #343A2C; }
-  .case.champ::before { content: ''; position: absolute; inset: 2px; border: 1px dashed; }
-  .case.quartz::before { border-color: #F5F3E8; }
-  .case.scorie::before { border-color: #F5B636; }
-  /* Un obstacle : terre remuée, liseré PLEIN. Le tireté est déjà pris par les
-     champs, et les deux ne se rencontrent jamais — les champs vivent dans la
-     bande des bâtiments, les obstacles dans celle de la défense — mais un jour
-     quelqu'un lira les deux règles côte à côte, et il faut qu'elles se
-     distinguent à la lecture comme à l'écran. La lettre dit QUI est ralenti :
-     c'est la seule information de jeu que porte un obstacle. */
-  /* ⚠ LE FOND ET LE LISERÉ SONT PARTIS AU LOT PREMIÈRE-COUCHE, LA LETTRE RESTE.
-     Le dessin dit maintenant qu'il y a un obstacle ; il ne dit pas QUI est
-     ralenti, et c'est la seule information de JEU que porte un obstacle. Un
-     sprite ne se lit pas « infanterie » ou « véhicule ». */
-  /* ⚠ LA LETTRE EST PORTÉE PAR LA CASE D'OBSTACLE, ET LE SÉLECTEUR LE DIT.
-     Depuis que le fond et le liseré sont partis, `obstacle` ne peint plus rien
-     par elle-même : c'est ce sélecteur-ci qui lui garde un rôle réel dans la
-     feuille, plutôt qu'une règle décorative écrite pour satisfaire la garde des
-     classes. La classe reste le marqueur DOM d'une case obstruée, et la lettre
-     n'apparaît que là. */
-  .case.obstacle .obstacle-marque {
-    position: absolute; right: 2px; bottom: 1px;
-    font-size: 8px; font-weight: 600; line-height: 1; color: #C2BFCC;
-  }
+  /* ⚠⚠ LA LETTRE DE L'OBSTACLE EST PARTIE LE 30/08 — Ethan, même relevé :
+     « et les petites lettres des obstacles en défense ». Elle disait QUI est
+     ralenti, ce qu'aucun dessin ne dit ; elle n'est donc pas supprimée, elle
+     DÉMÉNAGE dans le `title` de la case, où un appui long la rend. C'est
+     « rien ne se retire en silence » (CLAUDE.md §4) : l'information reste
+     joignable, c'est le glyphe de 8 px posé dans un coin qui part.
+
+     ⚠ ET LES CLASSES `champ`, `quartz`, `scorie` ET `obstacle` SONT PARTIES
+     AVEC LEURS RÈGLES. Elles ne peignaient plus que ce qu'Ethan fait retirer —
+     le fond kaki plein, le liseré tireté, la lettre. Leur garder une règle
+     pour satisfaire la garde des classes aurait été écrire une décoration
+     pour un test ; le code ne les pose donc plus du tout, et le sprite du
+     champ ou de l'obstacle porte seul l'information visuelle. */
   /* Une case où le bâtiment choisi PEUT se poser. Kaki lumière : distinct de
      l'os de la sélection, qui reste plus clair et l'emporte — cette règle est
      posée AVANT elle exprès, les deux ayant la même spécificité. */
   .case.legale { outline: 2px solid #8C9A72; outline-offset: -2px; }
   .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; z-index: 1; }
+  /* ⚠⚠ LE JETON A GRANDI DE 20 %, ET LE FACTEUR EST ÉCRIT PLUTÔT QUE FONDU.
+     Ethan, 30/08 : « les bâtiments sont bien trop petits, surtout collecteur
+     etc. Augmenter la taille du sprite de 20 %. Pas le choix pour l'instant. »
+     Le « pas le choix pour l'instant » dit que c'est un correctif de cadrage en
+     attendant que les sprites soient redessinés plus pleins dans leur cellule :
+     `--jeton-grossissement` porte donc le facteur À PART, et le retirer se fera
+     en remettant 1 — pas en recalculant un pourcentage dont plus personne ne
+     saura d'où il vient.
+
+     84 % × 1,2 = 100,8 % : le sprite déborde de sa case de 0,4 % par côté,
+     ce qui est voulu — c'est ce qui le fait enfin toucher les bords.
+
+     ⚠⚠ ET LE CARRÉ EST PARTI — fond, bordure, relief et cadre de famille.
+     Même relevé d'Ethan : « enlever les carrés et les traits visibles sur la
+     base. Lié aux anciens bâtiments et ressources. » Ces quatre déclarations
+     sont exactement l'ancien dessin d'avant les sprites : un bloc kaki en
+     relief avec un liseré de couleur. Depuis le lot PREMIÈRE-COUCHE le sprite
+     dit ce qu'est la pièce, et le bloc ne faisait plus que l'encadrer.
+
+     ⚠ CE QUI SE PERD AVEC LE CADRE, DIT ICI PLUTÔT QUE TU : la famille de coût
+     — prod, mil, pivot — n'est plus lisible sur la grille. Elle reste dans le
+     `title` du jeton et dans la palette. Les trois classes continuent d'être
+     posées par le JS, et gardent donc une règle : elles ne peignent plus le
+     cadre, elles restent le crochet par lequel une future distinction — plus
+     discrète que trois carrés de couleur — se posera. */
   .jeton {
-    width: 84%; height: 84%; position: relative;
+    --jeton-part: 84%;
+    --jeton-grossissement: 1.2;
+    width: calc(var(--jeton-part) * var(--jeton-grossissement));
+    height: calc(var(--jeton-part) * var(--jeton-grossissement));
+    position: relative;
     display: flex; align-items: center; justify-content: center;
-    background: #4E5742; border: 1px solid #161914;
-    box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C;
     font-size: 9px; font-weight: 600; color: #F5F3E8; letter-spacing: 0.02em;
   }
-  .jeton.prod { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #928E80; }
-  .jeton.mil { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #8A1E17; }
-  .jeton.pivot { box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C, inset 0 0 0 2px #A67018; }
+  /* Les trois familles de coût. Sans cadre depuis le 30/08 : ce sont des
+     crochets, pas un dessin. */
+  .jeton.prod, .jeton.mil, .jeton.pivot { background-color: transparent; }
   /* ⚠ LE FOND UNI ET LE SIGLE PARTENT, LE CADRE DE FAMILLE ET LE NIVEAU RESTENT.
      Le sprite dit CE QU'EST la pièce ; il ne dit ni son niveau, ni sa famille de
      coût — prod, mil, pivot —, qui sont deux informations de jeu.
@@ -692,10 +786,31 @@
     position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
   }
-  .posable i { width: 18px; height: 18px; font-style: normal; background: #4E5742; box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914; }
-  .posable.prod i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #928E80; }
-  .posable.mil i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #8A1E17; }
-  .posable.pivot i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #A67018; }
+  /* ⚠⚠ LA PASTILLE DE LA VIGNETTE PORTE LE SPRITE DE LA PIÈCE — 30/08. Ethan :
+     « dans les barres de construction du bas (base def off) remplacer les
+     carrés par les sprites correspondant ». C'était un carré kaki de 18 px en
+     relief, le même pour les onze bâtiments et pour les dix-sept pièces de
+     défense : la vignette ne se distinguait que par son libellé, en 7 px.
+     Le sprite est celui de la GRILLE — `couchesDeLEntite` de `render/scene.js`,
+     le point d'entrée unique — donc le joueur reconnaît dans la palette
+     exactement ce qu'il posera.
+
+     ⚠ ELLE GRANDIT DE 18 À 26 px : un sprite de 64 px réduit à 18 n'est plus
+     lisible, et la place existe — la vignette fait 43 px de haut et ne portait
+     que la pastille et deux lignes de 7 px.
+
+     ⚠ ET LES TROIS CADRES DE FAMILLE RESTENT ICI, eux. Ils partent de la
+     GRILLE, où le sprite se suffit et où Ethan les a fait retirer ; dans la
+     palette ils sont la seule chose qui distingue les familles de coût, et une
+     vignette n'est pas une case du terrain. */
+  .posable i {
+    width: 26px; height: 26px; font-style: normal;
+    background-color: transparent; background-repeat: no-repeat;
+    image-rendering: pixelated;
+  }
+  .posable.prod i { box-shadow: inset 0 0 0 1px #928E80; }
+  .posable.mil i { box-shadow: inset 0 0 0 1px #8A1E17; }
+  .posable.pivot i { box-shadow: inset 0 0 0 1px #A67018; }
   .posable b { font-size: 7px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; text-align: center; line-height: 1.05; color: #68727E; }
   .posable .cout { position: absolute; top: 1px; right: 3px; font-size: 8px; color: #8C9A72; }
   /* Le bâtiment que le joueur s'apprête à poser. Il faut que ça se voie d'un
@@ -705,11 +820,15 @@
      TOUCHABLE : le toucher dit pourquoi, ce qu'un bouton inerte ne fait pas. */
   .posable.pose { background: #1E2124; border-color: #1E2124; }
   .posable.pose b { color: #3E454C; }
-  .posable.pose i { box-shadow: inset 0 1px 0 #3E454C, inset 0 -2px 0 #161914; background: #3E454C; }
+  /* ⚠ UN UNIQUE DÉJÀ POSÉ GARDE SON SPRITE, IL S'ÉTEINT. Le remplacer par un
+     aplat gris rendrait les onze vignettes grisées identiques entre elles, et
+     le joueur ne saurait plus laquelle il vient de poser. `opacity` est le
+     même geste que la palette de l'Offense depuis le 29/08. */
+  .posable.pose i { opacity: 0.4; box-shadow: none; }
 
   .posable.actif { background: #6A7658; }
   .posable.actif b { color: #161914; }
-  .posable.actif i { box-shadow: inset 0 1px 0 #8C9A72, inset 0 -2px 0 #161914, inset 0 0 0 2px #F5F3E8; }
+  .posable.actif i { box-shadow: inset 0 0 0 2px #F5F3E8; }
 
   /* --- ce qui se dit quand quelque chose ne va pas -------------------------- */
   #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }
@@ -815,11 +934,31 @@
     overflow: hidden; font-size: 7px; line-height: 1.1; text-align: center;
     color: #68727E; word-break: break-word;
   }
-  /* Une unité posée. Même châssis kaki que les jetons du Chantier : c'est la
-     même chose, une pièce que le joueur a placée. */
+  /* ⚠⚠ UNE UNITÉ POSÉE PORTE SON SPRITE DEPUIS LE 30/08. Ethan : « onglet
+     offense : aucun sprite unités de joueur ». L'emplacement affichait le NOM
+     de l'unité en 7 px sur un bloc kaki — deux « Fusiliers » côte à côte se
+     lisaient comme deux étiquettes, pas comme une armée. C'est le même dessin
+     que la grille du Chantier, par le même point d'entrée
+     (`couchesDeLEntite`) : le joueur compose avec les silhouettes qu'il verra
+     au combat.
+
+     ⚠ LE BLOC KAKI PART AVEC LE NOM, comme le carré du jeton de la grille : le
+     sprite dit ce qu'est la pièce. L'emplacement garde son liseré, qui dit où
+     l'on peut poser — c'est une grille de COMPOSITION, pas un terrain, et sans
+     liseré on ne verrait plus les cases vides. */
   #ecran-offense .emplacement.occupe {
-    background: #4E5742; border-style: solid; border-color: #161914; color: #F5F3E8;
-    box-shadow: inset 0 2px 0 #8C9A72, inset 0 -3px 0 #343A2C;
+    border-style: solid; border-color: #161914; color: #F5F3E8;
+  }
+  /* La pièce elle-même : un sprite d'atlas, cadré par `render/sprite.js`.
+     Il porte le même grossissement que le jeton du Chantier — Ethan a demandé
+     20 % de plus « sur le sprite », pas « sur l'écran de la base ». */
+  #ecran-offense .emplacement .piece {
+    --jeton-part: 84%;
+    --jeton-grossissement: 1.2;
+    width: calc(var(--jeton-part) * var(--jeton-grossissement));
+    height: calc(var(--jeton-part) * var(--jeton-grossissement));
+    background-color: transparent; background-repeat: no-repeat;
+    image-rendering: pixelated;
   }
   /* Le premier des deux touchers : l'unité est MONTRÉE, pas encore posée. Un
      liseré tireté et un mot éteint disent « pas encore là » — pas de
@@ -901,6 +1040,16 @@
     overflow-wrap: anywhere; hyphens: auto;
   }
   #offense-palette .unite .cout { font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums; }
+  /* ⚠ MÊME PASTILLE QUE LA PALETTE DU CHANTIER, MÊME RAISON — Ethan, 30/08 :
+     « base def off ». Les trois barres du bas montrent désormais la pièce, pas
+     un carré. Sans cadre de famille ici : une unité n'a pas de famille de coût,
+     elle a un châssis, et ce châssis se lit à la silhouette. */
+  #offense-palette .unite i {
+    width: 26px; height: 26px; font-style: normal;
+    background-color: transparent; background-repeat: no-repeat;
+    image-rendering: pixelated;
+  }
+  #offense-palette .unite.verrouillee i { opacity: 0.4; }
   /* ⚠ UNE VIGNETTE ÉTEINTE N'EST PAS `disabled` : elle doit répondre au toucher
      pour DIRE ce qui la verrouille. Elle se grise donc par une classe, comme
      l'unique déjà posé du Chantier depuis le 28/08. */
@@ -1101,7 +1250,15 @@
          « Assaut » du lot ÉCRAN-CHANTIER.
          ====================================================================== -->
     <div id="ecran-monde" hidden>
-      <img id="monde-atlas" alt="" hidden src="%ATLAS_TERRAIN%">
+      <!-- ⚠⚠ `width`/`height` NE SONT PAS DÉCORATIFS : le SOL DE LA BASE les lit.
+           Il découpe cet atlas-ci en cellules de 64 et doit connaître sa grille
+           dès la première peinture ; `naturalWidth` vaut zéro tant que le PNG
+           n'est pas décodé, donc la grille serait fausse au démarrage et juste
+           ensuite — la pire des deux. L'attribut, lui, est lisible dès que le
+           balisage est analysé. Un test le confronte à l'en-tête RÉEL du
+           fichier : une transcription qui ne se confronte pas à sa source est
+           une copie qui vieillit. -->
+      <img id="monde-atlas" alt="" hidden width="1024" height="1024">
       <!-- ⚠⚠ LES EMBLÈMES DE LA CARTE, ET LES DEUX GROSSES BASES HORS ATLAS.
            Les 43 emblèmes tiennent dans un atlas 7 × 7 ; les deux grosses bases
            couvrent 2 × 2 et 3 × 3 cases, donc 128 et 192 pixels de côté à la
@@ -1120,14 +1277,18 @@
            defense, socle — restent en `var(--atlas-…)` parce qu'ils servent de
            `background-image` ; ceux-ci passent par un canevas.
            Le précédent est `monde-atlas`, en place depuis l'écran de la carte. -->
-      <img id="atlas-unite" alt="" hidden src="%ATLAS_UNITE%">
-      <img id="atlas-chassis" alt="" hidden src="%ATLAS_CHASSIS%">
-      <img id="atlas-tourelle-unite" alt="" hidden src="%ATLAS_TOURELLE_UNITE%">
+      <img id="atlas-unite" alt="" hidden>
+      <img id="atlas-chassis" alt="" hidden>
+      <img id="atlas-tourelle-unite" alt="" hidden>
       <div id="monde-champ">
         <canvas id="monde-canvas"></canvas>
+        <!-- ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08. Ethan : « zoom
+             carte et base : au doigt, pas de zoom fixe avec + − ». Le pincement
+             les remplace sur les deux écrans, et deux cibles de 28 px qui ne
+             servent plus n'ont pas à manger le coin de la carte.
+             L'échelle, elle, RESTE : c'est le seul repère qui dise à quel cran
+             on est, et un geste continu en a plus besoin qu'un bouton. -->
         <div id="monde-outils">
-          <button type="button" id="monde-zoom-moins" title="reculer">−</button>
-          <button type="button" id="monde-zoom-plus" title="approcher">+</button>
           <span id="monde-echelle">—</span>
         </div>
         <div id="monde-panneau" hidden>
