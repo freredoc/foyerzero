@@ -20,6 +20,14 @@ LES GRILLES sont mesurées, pas supposées : 3 × 3 pour les quatre planches S10
 3 × 1 pour les POI de ressource, 2 × 2 pour les POI de bonus, 1 × 1 pour les
 deux grosses bases.
 
+⚠ NE PAS CONFONDRE LA GRILLE DE COUPE ET L'EMPRISE SUR LA CARTE. `nx × ny` dit
+combien de cellules la PLANCHE contient ; `cases` dit combien de cases de carte
+le sprite produit OCCUPE. Les deux grosses bases sont chacune une seule cellule
+de planche — d'où `1, 1` — mais elles couvrent quatre et neuf cases de carte, et
+sortent donc en `cases × N` pixels : 256 et 384 à la grille 128, 128 et 192 à la
+64, 64 et 96 à la 32. Arbitré par Ethan le 30/08 : la 2 × 2 est un gros carré,
+la 3 × 3 un hexagone.
+
 ⚠ L'ORDRE DES NEUF NIVEAUX est la lecture normale, de gauche à droite puis de
 haut en bas. Il n'est pas vérifiable par la mesure : l'occupation croît de 38 %
 sur la base du joueur et de 55 % sur les camps de quartz, ce qui va dans le bon
@@ -46,18 +54,26 @@ EMPRISE = 30          # gros pixels sur 32 : un emblème remplit sa case de cart
 
 NIVEAUX = [f'n{i}' for i in range(1, 10)]
 
+# fichier, nx, ny, ouvrage, préfixe, noms, cases occupées sur la carte
 PLANCHES = [
-    ('S10_base_joueur_64-256.png',              3, 3, False, 'site_base_j',   NIVEAUX),
-    ('S10_base_ouvrage_64-256_v2.png',          3, 3, True,  'site_base_o',   NIVEAUX),
-    ('S10_camps_avant-postes_quartz_64-256.png', 3, 3, False, 'site_quartz',  NIVEAUX),
-    ('S10_camps_avant-postes_scories_64-256.png', 3, 3, False, 'site_scorie', NIVEAUX),
+    ('S10_base_joueur_64-256.png',              3, 3, False, 'site_base_j',   NIVEAUX, 1),
+    ('S10_base_ouvrage_64-256_v2.png',          3, 3, True,  'site_base_o',   NIVEAUX, 1),
+    ('S10_camps_avant-postes_quartz_64-256.png', 3, 3, False, 'site_quartz',  NIVEAUX, 1),
+    ('S10_camps_avant-postes_scories_64-256.png', 3, 3, False, 'site_scorie', NIVEAUX, 1),
     ('P10.3_poi_ressources_reacteur_64-256.png', 3, 1, False, 'poi',
-     ['ressource_a', 'ressource_b', 'reacteur']),
+     ['ressource_a', 'ressource_b', 'reacteur'], 1),
     ('P10.4_poi_bonus_64-256.png',              2, 2, False, 'poi_bonus',
-     ['a', 'b', 'c', 'd']),
-    ('S10_base_ouvrage_2x2.png',                 1, 1, True, 'base_o_2x2', ['']),
-    ('S10_base_ouvrage_3x3_finale.png',          1, 1, True, 'base_o_3x3', ['']),
+     ['a', 'b', 'c', 'd'], 1),
+    ('S10_base_ouvrage_2x2.png',                 1, 1, True, 'base_o_2x2', [''], 2),
+    ('S10_base_ouvrage_3x3_finale.png',          1, 1, True, 'base_o_3x3', [''], 3),
 ]
+
+# ⚠ L'EMPRISE S'ÉCRIT, ELLE NE SE DÉDUIT PAS. Un septième champ absent pourrait
+# se compléter à 1 en silence ; il lèverait alors une base multi-cases ramenée à
+# une case sans que rien ne le dise. Le tuple est donc de longueur fixe, et
+# l'assertion tombe si une planche est ajoutée sans qu'on ait décidé.
+for _p in PLANCHES:
+    assert len(_p) == 7, f'{_p[0]} : emprise en cases manquante'
 
 
 def bandes(v, mini=30):
@@ -92,14 +108,18 @@ def cellules(chemin, nx, ny):
 
 
 n = 0
-for fichier, nx, ny, ouv, prefixe, noms in PLANCHES:
+for fichier, nx, ny, ouv, prefixe, noms, cases in PLANCHES:
     P = pal(ouv)
     cells = cellules(os.path.join(SRC, fichier), nx, ny)
     assert len(cells) == len(noms), f'{fichier} : {len(cells)} cellules pour {len(noms)} noms'
     for cell, suffixe in zip(cells, noms):
         nom = f'{prefixe}_{suffixe}' if suffixe else prefixe
         for N in GRILLES:
-            g = conditionner(recadrer(cell, EMPRISE * (N // 32), N), P, N)
+            # Le sprite sort en `cases × N` pixels et son emprise croît d'autant :
+            # sans quoi une grosse base tiendrait la place d'une seule case,
+            # simplement dessinée plus gros.
+            cote = cases * N
+            g = conditionner(recadrer(cell, EMPRISE * cases * (N // 32), cote), P, cote)
             d = os.path.join(DST, str(N))
             os.makedirs(d, exist_ok=True)
             ecrire(g, P, os.path.join(d, f'{nom}.png'))
