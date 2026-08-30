@@ -428,7 +428,7 @@ export function initialiserEcranMonde(doc) {
     ctxTampon.drawImage(image, 0, 0);
     const rvba = ctxTampon.getImageData(0, 0, tampon.width, tampon.height).data;
     atlas = creerAtlas(
-      indicesDeTeinte(rvba), ZOOM_CARTE.pixelsParTuile, image.naturalWidth,
+      indicesDeTeinte(rvba), ZOOM_CARTE.coteTuile, image.naturalWidth,
     );
     dessiner();
   }
@@ -502,28 +502,49 @@ export function initialiserEcranMonde(doc) {
     recadrer();
   }
 
-  function changerDeCran(pas) {
+  /**
+   * Change de cran en gardant un point de l'écran immobile.
+   *
+   * ⚠⚠ L'ANCRE N'EST PLUS FORCÉMENT LE CENTRE — c'est ce que le pincement
+   * apporte. Zoomer sur le milieu des deux doigts est la seule façon de faire
+   * grossir CE QU'ON REGARDE : ancrer au centre de l'écran ferait fuir sous les
+   * doigts la case qu'on vise, et sur une carte de 300 rangées on ne la
+   * retrouve pas. Le centre reste le défaut, pour tout appel sans ancre.
+   *
+   * @param {number} pas −1 ou +1
+   * @param {{x: number, y: number}} [ancre] point à garder fixe, en pixels du
+   *   canevas (physiques, origine au coin haut-gauche du canevas)
+   * @returns {boolean} vrai si le cran a changé
+   */
+  function changerDeCran(pas, ancre = null) {
     const suivant = cranIndex + pas;
-    if (suivant < 0 || suivant >= CRANS.length) return;
-    // Ce qui est au centre de l'écran y reste : c'est la seule façon de zoomer
-    // sans perdre ce qu'on regardait.
+    if (suivant < 0 || suivant >= CRANS.length) return false;
+    const point = ancre === null
+      ? { x: canvas.width / 2, y: canvas.height / 2 }
+      : ancre;
     const ancien = cran();
-    const centreColonne = (vueX + canvas.width / 2) / ancien;
-    const centreRangee = (vueY + canvas.height / 2) / ancien;
+    const colonne = (vueX + point.x) / ancien;
+    const rangee = (vueY + point.y) / ancien;
     cranIndex = suivant;
     // ⚠ LE CACHE SE VIDE, IL NE SE TRIE PAS. Une dalle est un rendu à un cran
     // donné ; la garder d'un cran à l'autre dessinerait l'ancienne échelle.
     cache.vider();
-    vueX = centreColonne * cran() - canvas.width / 2;
-    vueY = centreRangee * cran() - canvas.height / 2;
+    vueX = colonne * cran() - point.x;
+    vueY = rangee * cran() - point.y;
     recadrer();
     majBoutons();
     dessiner();
+    return true;
   }
 
+  /**
+   * L'échelle affichée.
+   *
+   * ⚠ ELLE A PERDU LES DEUX BOUTONS QU'ELLE ALLUMAIT (30/08) et garde son nom :
+   * ce qu'elle fait — dire où l'on en est du zoom — n'a pas changé, et c'est
+   * elle qui reste le seul repère maintenant que le geste est continu.
+   */
   function majBoutons() {
-    $('monde-zoom-moins').disabled = cranIndex === 0;
-    $('monde-zoom-plus').disabled = cranIndex === CRANS.length - 1;
     const cssParCase = cran() / (fenetre.devicePixelRatio || 1);
     $('monde-echelle').textContent = `${Math.round(cssParCase)} px / case`;
   }
@@ -716,11 +737,67 @@ export function initialiserEcranMonde(doc) {
   }
 
   // --- le doigt --------------------------------------------------------------
+  //
+  // ⚠⚠ UN DOIGT PROMÈNE, DEUX DOIGTS ZOOMENT — 30/08. Ethan : « zoom carte et
+  // base : au doigt, pas de zoom fixe avec + − ». Les deux boutons sont partis
+  // du balisage ; le pincement les remplace.
+  //
+  // ⚠⚠ LE ZOOM RESTE PAR CRANS, ET CE N'EST PAS UN DEMI-TRAVAIL. `rendreDalle`
+  // LÈVE sur un cran hors table, et pour une raison qui tient : à chaque cran,
+  // la tuile de terrain comme l'emblème restent à un facteur d'échelle ENTIER,
+  // seule façon de ne pas brouiller du pixel art (voir `ZOOM_CARTE`). Un zoom
+  // continu demanderait de recalculer les dalles à chaque image — 19 ms pièce,
+  // mesuré — pour rendre du flou. Le geste est donc continu, son EFFET est
+  // discret : on franchit un cran quand les doigts se sont écartés de √2, la
+  // moyenne géométrique entre deux crans qui vont du simple au double. C'est le
+  // point où le cran d'arrivée est plus proche que celui de départ.
+  //
+  // ⚠ ET LE POINT DE RÉFÉRENCE SE REMET À CHAQUE FRANCHISSEMENT, pour qu'un
+  // pincement continu enchaîne les crans sans qu'on relâche.
+
+  /** Écart des doigts au-delà duquel on change de cran. Voir ci-dessus. */
+  const SEUIL_PINCEMENT = Math.SQRT2;
 
   let pointeur = null;
+  // ⚠ LES POINTEURS SE SUIVENT PAR IDENTIFIANT, PAS PAR COMPTEUR. Un doigt qui
+  // quitte la dalle n'émet pas toujours `pointerup` ; un compteur qui ne
+  // redescendrait jamais laisserait l'écran convaincu qu'on pince encore, et la
+  // carte cesserait de se promener jusqu'au rechargement.
+  const doigts = new Map();
+  let pincement = null;
+
+  /** L'écart entre deux doigts, en pixels CSS. */
+  function ecartDesDoigts(deux) {
+    return Math.hypot(deux[0].x - deux[1].x, deux[0].y - deux[1].y);
+  }
+
+  /** Le milieu des deux doigts, en pixels du CANEVAS. */
+  function milieuDesDoigts(deux) {
+    const cadre = canvas.getBoundingClientRect();
+    const dpr = fenetre.devicePixelRatio || 1;
+    return {
+      x: ((deux[0].x + deux[1].x) / 2 - cadre.left) * dpr,
+      y: ((deux[0].y + deux[1].y) / 2 - cadre.top) * dpr,
+    };
+  }
+
+  /** Ouvre un pincement sur les deux doigts posés, s'ils sont deux. */
+  function ouvrirPincement() {
+    if (doigts.size !== 2) { pincement = null; return; }
+    const deux = [...doigts.values()];
+    const ecart = ecartDesDoigts(deux);
+    // Deux doigts joints donneraient un rapport qui explose au premier pixel.
+    if (ecart < 1) { pincement = null; return; }
+    pincement = { ecart };
+    // Le glissement d'un doigt ne doit pas devenir un toucher de site quand le
+    // second se lève : un pincement n'ouvre pas de panneau.
+    if (pointeur !== null) pointeur.glisse = true;
+  }
 
   canvas.addEventListener('pointerdown', (evenement) => {
     canvas.setPointerCapture(evenement.pointerId);
+    doigts.set(evenement.pointerId, { x: evenement.clientX, y: evenement.clientY });
+    if (doigts.size >= 2) { ouvrirPincement(); return; }
     pointeur = {
       id: evenement.pointerId,
       x: evenement.clientX,
@@ -732,6 +809,29 @@ export function initialiserEcranMonde(doc) {
   });
 
   canvas.addEventListener('pointermove', (evenement) => {
+    if (doigts.has(evenement.pointerId)) {
+      doigts.set(evenement.pointerId, { x: evenement.clientX, y: evenement.clientY });
+    }
+    if (pincement !== null && doigts.size === 2) {
+      const deux = [...doigts.values()];
+      const rapport = ecartDesDoigts(deux) / pincement.ecart;
+      // ⚠ LE RAPPORT DES ÉCARTS, PAS LEUR DIFFÉRENCE : une différence en pixels
+      // zoomerait plus vite sur une grande dalle que sur une petite, pour le
+      // même geste de la main.
+      if (rapport >= SEUIL_PINCEMENT || rapport <= 1 / SEUIL_PINCEMENT) {
+        const sens = rapport >= SEUIL_PINCEMENT ? 1 : -1;
+        // Le point d'ancrage se relève AVANT le changement : après, les
+        // coordonnées de vue ont déjà bougé.
+        if (changerDeCran(sens, milieuDesDoigts(deux))) {
+          pincement = { ecart: ecartDesDoigts(deux) };
+        } else {
+          // Au bout de la table, on ré-ancre quand même : sinon le rapport
+          // reste franchi et chaque image redemande un cran qui n'existe pas.
+          pincement = { ecart: ecartDesDoigts(deux) };
+        }
+      }
+      return;
+    }
     if (pointeur === null || evenement.pointerId !== pointeur.id) return;
     const dpr = fenetre.devicePixelRatio || 1;
     vueX -= (evenement.clientX - pointeur.x) * dpr;
@@ -748,6 +848,8 @@ export function initialiserEcranMonde(doc) {
   });
 
   function relacher(evenement) {
+    doigts.delete(evenement.pointerId);
+    if (doigts.size < 2) pincement = null;
     if (pointeur === null || evenement.pointerId !== pointeur.id) return;
     const aGlisse = pointeur.glisse;
     pointeur = null;
@@ -770,7 +872,11 @@ export function initialiserEcranMonde(doc) {
   }
 
   canvas.addEventListener('pointerup', relacher);
-  canvas.addEventListener('pointercancel', () => { pointeur = null; });
+  canvas.addEventListener('pointercancel', (evenement) => {
+    doigts.delete(evenement.pointerId);
+    if (doigts.size < 2) pincement = null;
+    if (pointeur !== null && evenement.pointerId === pointeur.id) pointeur = null;
+  });
 
   // --- le panneau ------------------------------------------------------------
 
@@ -796,8 +902,6 @@ export function initialiserEcranMonde(doc) {
   }
 
   $('monde-panneau-fermer').addEventListener('click', fermerPanneau);
-  $('monde-zoom-moins').addEventListener('click', () => changerDeCran(-1));
-  $('monde-zoom-plus').addEventListener('click', () => changerDeCran(1));
   // ⚠ IL SE FERME EXPLICITEMENT AU CÂBLAGE. Le `hidden` du balisage suffit
   // aujourd'hui, mais il serait la SEULE chose à le tenir fermé au démarrage :
   // un attribut oublié à la prochaine reprise du HTML l'ouvrirait par-dessus la

@@ -36,10 +36,22 @@ import {
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
 } from '../sim/state.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
+// ⚠⚠ LE MÊME POINT D'ENTRÉE QUE LA GRILLE DU CHANTIER ET QUE LE CHAMP DE
+// BATAILLE. `couchesDeLEntite` est LE dispatch des couches de sprite depuis le
+// lot STRUCTURES-AU-COMBAT ; en dériver ici un nom d'unité de plus aurait fait
+// une quatrième vérité sur ce qu'est un Fusilier, et c'est exactement ce que ce
+// dispatch existe pour empêcher.
+//
+// ⚠ ET `poserCouches` EST IMPORTÉ, PAS RECOPIÉ. Il porte l'inversion d'ordre
+// entre le canevas et `background-image` — la dernière couche est au-dessus sur
+// l'un, la première sur l'autre. Une seconde écriture qui l'oublierait mettrait
+// le socle par-dessus la tourelle sur cet écran-ci et pas sur l'autre, sans
+// qu'aucun nom soit faux. Ce fichier importe déjà de `chantier.js`.
+import { couchesDeLEntite } from '../render/scene.js';
 import {
   formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
   messageDePose, messageDeConfirmation,
-  messagePasDeReparation, DUREE_TOAST_MS,
+  messagePasDeReparation, DUREE_TOAST_MS, poserCouches,
 } from './chantier.js';
 
 /**
@@ -260,6 +272,35 @@ export const ACTIONS_ARMEE = {
  *   palette: Array<object>, avis: string
  * }}
  */
+/**
+ * Les couches de sprite d'une unité du joueur, à l'assaut.
+ *
+ * ⚠⚠ ELLE EXISTE POUR QUE LE DESCRIPTEUR NE SOIT ÉCRIT QU'UNE FOIS. Deux
+ * endroits en ont besoin — les trente-six emplacements et les quatorze
+ * vignettes de la palette — et les quatre champs qu'il porte ne sont pas
+ * anodins : `proprietaire` décide de la LETTRE du nom de sprite (`off_j_…`) et
+ * `camp` décide de la POSE. Les recopier des deux côtés, c'est se donner deux
+ * occasions d'écrire `garnison` là où il faut `attaque`, et la faute se lirait
+ * comme un blindé couché sur le flanc dans l'éditeur d'assaut.
+ *
+ * ⚠ `camp: 'attaque'` PARCE QUE C'EST UN ÉCRAN D'ASSAUT. `forceDuCamp` de
+ * `render/scene.js` en tire la force `armee`, donc la pose de marche ; la même
+ * unité en garnison prendrait `_def`, chenilles à l'horizontale. C'est bien la
+ * FORCE qui décide, pas le propriétaire — CLAUDE.md §4.
+ *
+ * ⚠ ET LA TOURELLE D'UN BLINDÉ RETOMBE SUR SON ORIENTATION PAR DÉFAUT, faute de
+ * cible : il n'y a rien à viser dans un éditeur. `couchesDeLEntite` s'en charge,
+ * on ne lui passe pas de contexte.
+ *
+ * @param {string} id identifiant d'unité
+ * @returns {{famille: string, nom: string}[]} du plus BAS au plus haut
+ */
+export function couchesDeLUniteDAssaut(id) {
+  return couchesDeLEntite({
+    genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque',
+  });
+}
+
 export function vueDeLOffense(etat) {
   if (!etat || !Array.isArray(etat.armee)) {
     throw new TypeError('offense : état de jeu absent ou malformé');
@@ -674,12 +715,19 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
       bouton.title = unite.disponible
         ? `${unite.nom} — ${unite.points} points d'armée`
         : `${unite.nom} — ${unite.raison}`;
+      // ⚠ MÊME PASTILLE QUE LA PALETTE DU CHANTIER — Ethan nomme les trois
+      // barres du bas d'un coup : « base def off ». Le sprite est celui que
+      // l'emplacement posera, par le même point d'entrée : une palette qui
+      // dériverait ses noms de son côté finirait par montrer autre chose que ce
+      // qu'on pose.
+      const vignette = doc.createElement('i');
+      poserCouches(vignette, couchesDeLUniteDAssaut(unite.id));
       const nom = doc.createElement('b');
       nom.textContent = unite.nom;
       const cout = doc.createElement('span');
       cout.className = 'cout';
       cout.textContent = `${unite.points} pts`;
-      bouton.append(nom, cout);
+      bouton.append(vignette, nom, cout);
       bouton.classList.toggle('choisie', choisie === unite.id);
       palette.appendChild(bouton);
       vignettes.set(unite.id, bouton);
@@ -701,7 +749,25 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
         const element = cellules.get(cle(indice + 1, colonneIndice + 1));
         const enApercu = apercu !== null
           && apercu.vague === indice + 1 && apercu.colonne === colonneIndice + 1;
-        element.textContent = occupant === null ? '' : occupant.nom;
+        // ⚠⚠ LE SPRITE A REMPLACÉ LE NOM — Ethan, 30/08 : « onglet offense :
+        // aucun sprite unités de joueur ». L'emplacement portait le nom de
+        // l'unité en 7 px sur un bloc kaki : deux « Fusiliers » côte à côte se
+        // lisaient comme deux étiquettes, pas comme une armée, et le joueur
+        // composait à l'aveugle des silhouettes qu'il ne verrait qu'au combat.
+        //
+        // ⚠ LE NOM N'EST PAS PERDU POUR AUTANT : il passe dans le `title`, comme
+        // la famille du jeton du Chantier et la lettre de l'obstacle le même
+        // jour. « Rien ne se retire en silence » (CLAUDE.md §4).
+        element.textContent = '';
+        if (occupant !== null) {
+          const piece = doc.createElement('div');
+          piece.className = 'piece';
+          poserCouches(piece, couchesDeLUniteDAssaut(occupant.id));
+          element.appendChild(piece);
+          element.title = `${occupant.nom} — niveau ${occupant.niveau}`;
+        } else {
+          element.removeAttribute('title');
+        }
         element.classList.toggle('occupe', occupant !== null);
         element.classList.toggle('apercu', enApercu);
         element.classList.toggle('enmain', enMain !== null && occupant !== null

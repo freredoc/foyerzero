@@ -26,7 +26,9 @@ import {
   descriptionDuNoeud, partOuvrageDeLaRangee, rangeeDuPixelSource,
   teinteDeLaValeur, NB_TEINTES, SEL_DECALAGE, SEL_FIGURE,
 } from '../src/render/terrain.js';
-import { GEOGRAPHIE, TERRAIN_CARTE, ZOOM_CARTE } from '../src/data/sites.js';
+import {
+  GEOGRAPHIE, TERRAIN_CARTE, ZOOM_CARTE, PIXELS_SOURCE_PAR_CASE,
+} from '../src/data/sites.js';
 import { niveauDeLaRangee, positionDepartJoueur } from '../src/sim/carte.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,7 +108,7 @@ function decoderAtlasIndexe(chemin) {
 }
 
 const PNG = decoderAtlasIndexe(CHEMIN_ATLAS);
-const ATLAS = creerAtlas(PNG.indices, ZOOM_CARTE.pixelsParTuile, PNG.largeur);
+const ATLAS = creerAtlas(PNG.indices, ZOOM_CARTE.coteTuile, PNG.largeur);
 
 /** Les dix couleurs des deux rampes, empaquetées pour une recherche rapide. */
 function codesDesRampes() {
@@ -145,7 +147,21 @@ function analyser(dalle) {
 test('atlas — le fichier livré est bien 64 tuiles indexées sur la rampe du joueur', () => {
   assert.equal(PNG.largeur, PNG.hauteur, 'l\'atlas n\'est pas carré');
   assert.equal(ATLAS.nombre, 64, `${ATLAS.nombre} tuiles au lieu de 64`);
-  assert.equal(ATLAS.cote, ZOOM_CARTE.pixelsParTuile);
+  assert.equal(ATLAS.cote, ZOOM_CARTE.coteTuile);
+
+  // ⚠⚠ ET UNE TUILE NE COUVRE PLUS UNE CASE, ELLE EN COUVRE UN QUART. C'est le
+  // correctif du 30/08 : à une tuile par case, le cran le plus serré
+  // AGRANDISSAIT la source d'un facteur deux, et le grain de 4 px de l'art se
+  // lisait en carrés de 8 px à l'écran. La garde porte sur ce qui compte —
+  // qu'AUCUN cran n'agrandisse — et non sur le nombre 2, qui n'en est que le
+  // moyen. Elle rougirait donc aussi bien si l'on ajoutait un cran de 512.
+  for (const cran of ZOOM_CARTE.crans) {
+    const echelle = cran / PIXELS_SOURCE_PAR_CASE;
+    assert.ok(echelle <= 1,
+      `au cran ${cran}, le pavage agrandit sa source de ×${echelle} : le grain se verra`);
+  }
+  assert.equal(PIXELS_SOURCE_PAR_CASE, ZOOM_CARTE.coteTuile * ZOOM_CARTE.tuilesParCase,
+    'le côté d\'une case en pixels source n\'est plus le produit des deux facteurs');
 
   // Sa palette EST la rampe du joueur, dans l'ordre : c'est ce qui permet de
   // travailler sur l'indice plutôt que sur une luminance, et de repeindre à
@@ -368,7 +384,7 @@ test('dalles — aucun pixel hors des deux rampes, aucun noir, et le plancher ne
   // saurait le jour où le pas s'élargirait.
   assert.ok(couverture > 0,
     `la couverture tombe à ${couverture} : le pas du réseau laisse des trous`);
-  assert.ok(TERRAIN_CARTE.pasSourcePx < ZOOM_CARTE.pixelsParTuile,
+  assert.ok(TERRAIN_CARTE.pasSourcePx < ZOOM_CARTE.coteTuile,
     'le pas du réseau a dépassé la tuile : la couverture ne peut plus être garantie');
 });
 
@@ -455,10 +471,10 @@ test('camp du sol — la part d\'Ouvrage suit le niveau : rien au départ, tout 
         const vu = analyser(rendreDalle({
           atlas: ATLAS,
           graine,
-          cran: ZOOM_CARTE.pixelsParTuile,
-          x0: k * ZOOM_CARTE.pixelsParTuile,
-          y0: (rangee - 1) * ZOOM_CARTE.pixelsParTuile,
-          cote: ZOOM_CARTE.pixelsParTuile,
+          cran: PIXELS_SOURCE_PAR_CASE,
+          x0: k * PIXELS_SOURCE_PAR_CASE,
+          y0: (rangee - 1) * PIXELS_SOURCE_PAR_CASE,
+          cote: PIXELS_SOURCE_PAR_CASE,
         }));
         ouvrage += vu.partOuvrage * vu.pixels;
         pixels += vu.pixels;
@@ -495,9 +511,9 @@ test('rangée d\'un pixel — elle se borne à la carte, elle ne lève pas', () 
   // trou noir sur toute la bordure.
   assert.equal(rangeeDuPixelSource(-5000), 1);
   assert.equal(rangeeDuPixelSource(0), 1);
-  assert.equal(rangeeDuPixelSource(ZOOM_CARTE.pixelsParTuile), 2);
+  assert.equal(rangeeDuPixelSource(PIXELS_SOURCE_PAR_CASE), 2);
   assert.equal(
-    rangeeDuPixelSource(GEOGRAPHIE.carte.hauteur * ZOOM_CARTE.pixelsParTuile * 2),
+    rangeeDuPixelSource(GEOGRAPHIE.carte.hauteur * PIXELS_SOURCE_PAR_CASE * 2),
     GEOGRAPHIE.carte.hauteur,
   );
 });

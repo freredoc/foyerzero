@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
+Dernière révision : **30/08/2026**, version 0.49.0 · build 50.
 
 ---
 
@@ -41,9 +41,27 @@ Dernière révision : **30/08/2026**, version 0.46.0 · build 47.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot FINITIONS), à confronter :**
-`npm test` → **619 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 230 416 octets**, 0 référence externe.
+**Référence au 30/08/2026 (après le lot SPRITES-ET-ZOOM), à confronter :**
+`npm test` → **634 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 242 496 octets**, 0 référence externe.
+⚠ **SPRITES-ET-ZOOM A COÛTÉ +12 080 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.**
+C'est du code et de la feuille : le sol de la base est découpé dans l'atlas du
+MONDE, qui était déjà au livrable depuis ÉCRAN-CARTE. La borne de T10 n'a donc
+pas bougé — marge **57 504 octets**, 4,4 %.
+⚠⚠ **ET IL A RETOURNÉ LE COUPLAGE DES ATLAS PARTAGÉS. VOIR §6.** Quatre d'entre
+eux servent à la fois en fond CSS et en `drawImage` ; les déclarer aux deux
+endroits les inlinerait DEUX fois — 507 464 octets mesurés. La déclaration vit
+dans la feuille, `garnirLesAtlas` de `ui/session.js` en donne l'adresse aux
+`<img>` au démarrage, et **le JS n'écrit jamais d'appel `url()`** : le build le
+refuserait, et le contourner serait passer sous un garde-fou en silence.
+⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT, ET C'ÉTAIT CONFORME** : il
+n'a touché ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+FINITIONS, ci-dessous.
+
+**Auparavant, après le lot FINITIONS :** 619 tests, `dist/index.html`
+**1 230 416 octets**. ⚠ La ligne d'historique n'écrit PAS « N pass / 0 fail » en
+gras : la garde de `documentation.test.js` cherche cette forme-là et prendrait la
+PREMIÈRE qu'elle trouve. Une seule ligne de ce fichier a le droit de la porter.
 ⚠ **FINITIONS A COÛTÉ +1 142 OCTETS ALORS QU'IL DEVAIT EN RENDRE.** Il retire
 les lettres de la carte et leur seuil, mais il branche l'hexagone de la base
 terminale — chargement, attente de décodage, table des côtés — et le câblage
@@ -365,6 +383,16 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 9 fic
     n'est pas négociable : la table qu'il lit vit dans `src/data/` sous un nom
     que le sélecteur d'un téléphone afficherait à l'identique. C'est exactement
     l'accident du 27/08 où le moteur de combat a été écrasé (§6, homonymes).
+  ⤷ ⚠⚠ `sprite.js` SAIT POSER UNE CELLULE DANS UN QUARTIER DE L'ÉLÉMENT depuis
+    le 30/08 — `fondDeCellule`, dont le cadrage plein n'est que le cas « un seul
+    quartier ». Le SOL DE LA BASE en pose quatre par case, découpées dans
+    l'atlas du MONDE. La formule est écrite une fois, et un test la refait sur
+    les deux usages plutôt que de la recopier.
+  ⤷ ⚠⚠ ET UNE NOTE `⤷` NE S'INSÈRE JAMAIS ENTRE DEUX FICHIERS D'UN BLOC. Le
+    parseur de §2, dans `documentation.test.js`, arrête le bloc à la première
+    ligne qui n'est pas « deux espaces puis une minuscule » : une note glissée
+    au milieu tronque la liste, et le test accuse alors les fichiers qui la
+    suivent d'avoir disparu. Elles vont à la FIN du bloc. Payé une fois.
   ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
     est celui de la SIMULATION : y prendre un tirage pour choisir une texture
     décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se
@@ -497,6 +525,13 @@ art/sprites/            les sprites conditionnés — VINGT-SEPT dossiers de gri
                           dans le livrable ; le reste n'est cité par aucun
                           fichier de `src/`.
 art/sprites/carte/      ⚠ LE SEUL DOSSIER D'IMAGES QUI ENTRE DANS LE LIVRABLE.
+                        ⚠⚠ ET SON ATLAS SERT DEUX ÉCRANS DEPUIS LE 30/08 : le
+                        fond de la carte ET LE SOL DE LA BASE. Sa palette EST la
+                        rampe « sol joueur » de FICHE-STYLE (les cinq mêmes
+                        teintes, vérifié sur la table PLTE), donc les deux sols
+                        sont la même matière. Le sol de la base y prend QUATRE
+                        cellules de 64 par case, ce qui n'a coûté aucun octet :
+                        l'atlas était déjà payé.
                         L'atlas de terrain y est LU PAR LE BUILD et inliné en
                         base64 ; son absence fait sortir le build en erreur, pas
                         rendre une carte noire. Le second fichier est l'image de
@@ -2615,6 +2650,106 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   propriétaire joueur demande `bat_j_gangue`, qui n'existe pas, et le rendu
   LÈVE. C'est le bon comportement — « une unité invisible est un défaut qu'on
   doit voir » — et c'est le trou que le raid sur la base du joueur comblera.
+
+- ⚠⚠ **QUATRE ATLAS SERVENT DES DEUX CÔTÉS, ET ILS NE SE DÉCLARENT QU'UNE FOIS**
+  — lot SPRITES-ET-ZOOM, 30/08. `--atlas-sol`, `--atlas-unite`,
+  `--atlas-chassis`, `--atlas-tourelle-unite` sont employés en fond CSS **et**
+  donnés à `drawImage`, qui exige un élément et pas une adresse. Les écrire dans
+  la feuille ET sur une balise `img` les inlinerait DEUX fois : **507 464 octets
+  mesurés**, plus de sept fois la marge sous la borne de T10. Vérifié par
+  falsification — remettre le `src` sur une seule image porte le livrable de
+  1 242 496 à 1 541 447 octets.
+  ⚠⚠ **LE SENS DU COUPLAGE N'EST PAS INTERCHANGEABLE.** L'autre sens — le `src`
+  dans le balisage, la variable écrite par le JS — a été essayé, et **le build
+  l'a refusé** : une adresse d'image assemblée à l'exécution est indistinguable
+  d'une vraie référence externe pour la garde offline. La faire taire aurait été
+  passer sous un garde-fou en silence, ce que §6 interdit déjà pour les hex à
+  trois chiffres et pour l'espace de noms SVG. `garnirLesAtlas` de
+  `ui/session.js` ne fait donc que **lire** ce que le build a écrit, et une
+  garde balaie `src/ui/` pour qu'aucun appel `url()` n'y soit fabriqué.
+  ⚠ **ET LA GARDE OFFLINE LIT LE HTML COMMENTAIRES COMPRIS.** Deux mentions en
+  prose de la fonction CSS — dans le commentaire qui expliquait justement
+  pourquoi on ne l'écrit pas — ont fait tomber le build. C'est « une garde qui
+  lit ce qu'on a écrit à son sujet » pris par l'autre bout.
+
+- ⚠⚠ **LA GARNISON N'EST PAS FAITE QUE DE DÉFENSES, ET L'OUBLIER FAISAIT ÉCRAN
+  BLANC** — trouvé et réparé le 30/08, mais **le défaut était sur `main`**.
+  `rosterDefensif()` compose les dix-sept pièces posables à partir de DEUX
+  tables : les neuf de `DEFENSES`, plus les **huit unités** de `UNITES` dont
+  `defense.present` est vrai. `ui/chantier.js` demandait `genre: 'defense'` pour
+  les dix-sept ; `couchesDeLEntite` lève sur les huit unités, et la levée part de
+  `peindre` — **poser des Fusiliers en garnison laissait toute la base blanche.**
+  ⚠ **AUCUN TEST NE POUVAIT LE VOIR**, et la raison est celle qu'on a déjà payée
+  deux fois : le test qui gardait la garnison montait une base des **neuf**
+  `DEFENSES`, soit exactement la moitié du roster qui marchait. **Un montage
+  écrit à la main ne garde que lui-même.** Le nouveau part de `rosterDefensif()`
+  et mesure d'abord qu'il y a bien deux genres.
+  ⚠ **LA QUESTION SE POSE À LA TABLE** : `genreDeLaGarnison` de
+  `render/scene.js` fait `DEFENSES[id] ?? UNITES[id]`, comme
+  `nomDeLaPieceDeDefense` le faisait déjà. Une liste de huit noms écrite à la
+  main serait la première à diverger.
+
+- ⚠⚠ **LE PAVAGE DE LA CARTE POSE QUATRE TUILES PAR CASE, ET C'EST GRATUIT** —
+  30/08. Ethan a rapporté un « gros carré moche » ; mesuré : l'art de l'atlas a
+  un **grain de 4 pixels source**, et comme une tuile couvrait exactement une
+  case, le cran le plus serré AGRANDISSAIT la source d'un facteur deux — le
+  grain se lisait en carrés de 8 px alignés sur les axes.
+  `ZOOM_CARTE.pixelsParTuile` est scindé en `coteTuile` (128) et `tuilesParCase`
+  (2) : une case vaut 256 pixels source, le cran 256 tombe au **1:1**, et aucun
+  cran n'agrandit plus.
+  ⚠ **NI UN OCTET NI UNE MILLISECONDE.** C'est le MÊME fichier lu à une autre
+  échelle — il n'y avait rien à « redécouper », contrairement à ce que le brief
+  supposait. Et le pas du réseau étant lui aussi en pixels source, le nombre de
+  tuiles superposées **par pixel d'écran** vaut `(coteTuile / pasSourcePx)²`
+  quelle que soit l'échelle : le coût d'une dalle ne bouge pas.
+  ⚠ **LES SEUILS DE TEINTE ONT ÉTÉ RELEVÉS À NOUVEAU** (0,656 · 1,574 · 2,418 ·
+  3,338) et l'accord entre crans est passé de 0,05 à **0,094**. La tolérance du
+  test n'a pas bougé.
+
+- ⚠⚠ **LE ZOOM DE LA BASE CHANGE LA TAILLE D'UNE CASE, JAMAIS L'ÉCHELLE DU
+  DESSIN** — 30/08. `transform: scale()` reste interdit sur cette grille pour la
+  raison de toujours : il déplace le dessin sans déplacer la géométrie du
+  pointage, et le doigt cesse de tomber sur la case qu'il vise. C'est
+  `--case-cote`, en pixels, que le JS écrit.
+  ⚠ **LES DEUX BORNES SE LISENT.** Le plancher est la taille qui fait tenir les
+  neuf colonnes, MESURÉE sur `clientWidth` ; le plafond est `COTE_SPRITE`, lu
+  dans l'atlas — au-delà on agrandirait du pixel art au-dessus de sa propre
+  définition. Le défaut d'ouverture vit dans la feuille (`--case-defaut`).
+  ⚠⚠ **ET LES DEUX PINCEMENTS N'EMPLOIENT PAS LA MÊME API, DÉLIBÉRÉMENT.** La
+  carte est un canevas en `touch-action: none` : rien ne lui dispute le geste,
+  les évènements de POINTEUR y sont fiables. La base est un conteneur qui défile
+  NATIVEMENT : sous `touch-action: pan-x pan-y` le navigateur garde le droit de
+  défiler à deux doigts, et quand il prend la main il envoie `pointercancel` —
+  le pincement se perdrait au milieu du geste. D'où un `touchmove` **non
+  passif** là-bas. ⚠ `{ passive: false }` est la moitié qui compte : sans lui
+  `preventDefault` est IGNORÉ, le code a l'air juste et le navigateur défile
+  quand même.
+  ⚠ **LE ZOOM DE LA CARTE RESTE PAR CRANS**, et ce n'est pas un demi-travail :
+  `rendreDalle` lève hors table parce qu'à chaque cran la tuile ET l'emblème
+  restent à un facteur d'échelle ENTIER. Le geste est continu, son EFFET est
+  discret — on franchit un cran à √2, la moyenne géométrique entre deux crans
+  qui vont du simple au double.
+
+- **LE SOL DE LA BASE EST DÉCOUPÉ DANS L'ATLAS DU MONDE** — 30/08, demandé par
+  Ethan (« utiliser les sprites terrain monde en 2×2 »). Sa palette EST la rampe
+  « sol joueur » de `FICHE-STYLE.md`, aux cinq teintes près : les deux sols sont
+  la même matière. Seize cellules de 64 par axe, **quatre par case**.
+  ⚠ **LA VARIANTE SE PREND SUR LA SOUS-CASE, PAS SUR LA CASE.** `variante` est
+  une fonction de (graine, rangée, colonne) : quatre appels sur les mêmes
+  coordonnées rendraient quatre fois le même quartier, et le 2 × 2 n'apporterait
+  rien. Un test le MESURE au lieu de le lire.
+
+- **CE QUI SORT DE L'ÉCRAN NE SORT PAS DU JEU** — trois retraits du 30/08, trois
+  déménagements. La lettre de l'obstacle (qui est ralenti) va dans le `title` de
+  la case ; le cadre de famille du jeton (prod · mil · pivot) dans le `title` du
+  jeton, et la palette le peint toujours ; le nom de l'unité de l'Offense dans
+  le `title` de l'emplacement. « Rien ne se retire en silence » (§4) vaut aussi
+  quand c'est Ethan qui demande le retrait : il demande un DESSIN en moins, pas
+  une donnée.
+  ⚠ **ET LES CLASSES QUI NE PEIGNENT PLUS RIEN PARTENT AVEC LEURS RÈGLES.**
+  `champ`, `quartz`, `scorie`, `obstacle` ne sont plus posées du tout : leur
+  garder une règle pour satisfaire la garde des classes aurait été écrire une
+  décoration pour un test, ce que la feuille refuse nommément.
 
 ### Sur le vocabulaire
 

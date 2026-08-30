@@ -182,6 +182,82 @@ export function avancer(etat, ecouleMs) {
  * Démarre la session dans une page qui porte le balisage attendu.
  * @param {Document} doc
  */
+// ---------------------------------------------------------------------------
+// Les atlas partagés — déclarés dans la feuille, servis aux `<img>` de la page
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ POURQUOI LE COUPLAGE VA DANS CE SENS-LÀ, ET PAS DANS L'AUTRE. Quatre atlas
+// servent des deux côtés : en `background-image` sur des éléments du DOM — le
+// sol de la base, les unités de l'écran Offense — et en `drawImage` sur un
+// canevas, qui exige un `HTMLImageElement` et pas une URL. Il faut donc que
+// chacun existe sous les deux formes, SANS entrer deux fois dans le fichier :
+// mesuré, ce serait 507 464 octets de base64 en trop, plus de sept fois la
+// marge qui reste sous la borne de T10.
+//
+// On aurait pu garder le `src` dans le balisage et faire écrire la variable par
+// le JS. C'est ce qui a été essayé, et le BUILD l'a refusé, à raison : écrire
+// `url("…")` depuis JavaScript met dans le HTML final une chaîne que la garde
+// offline ne peut pas distinguer d'une vraie référence externe, et la faire
+// taire pour ce cas-là aurait été passer sous un garde-fou en silence —
+// exactement ce que CLAUDE.md §6 interdit pour les hex à trois chiffres et
+// pour l'espace de noms SVG. Dans ce sens-ci, le JS ne fait que LIRE un `url()`
+// que le build a écrit et vérifié.
+//
+// ⚠ ET LA VALEUR SE DÉBALLE, ELLE NE SE DEVINE PAS. `getPropertyValue` rend
+// `url("data:image/png;base64,…")`, guillemets compris ou non selon le
+// navigateur : on prend ce qui est entre les parenthèses et on retire une paire
+// de guillemets si elle y est.
+
+/**
+ * Les atlas qui vivent dans la feuille et qu'un `<img>` de la page doit servir.
+ *
+ * ⚠ LA CLÉ EST L'IDENTIFIANT DE L'IMAGE, la valeur le nom de la variable. Les
+ * trois atlas d'unité gardent les identifiants qu'ils avaient : `ui/banc.js`
+ * les demande par ces noms-là depuis le lot UNITÉS-AU-COMBAT, et les renommer
+ * aurait été un second changement pour rien.
+ */
+export const ATLAS_DE_LA_PAGE = {
+  'monde-atlas': '--atlas-sol',
+  'atlas-unite': '--atlas-unite',
+  'atlas-chassis': '--atlas-chassis',
+  'atlas-tourelle-unite': '--atlas-tourelle-unite',
+};
+
+/**
+ * Extrait l'URL d'une valeur CSS `url(…)`.
+ *
+ * @param {string} valeur
+ * @returns {string} l'URL, sans les parenthèses ni les guillemets
+ */
+export function urlDeLaValeurCss(valeur) {
+  const brut = (valeur ?? '').trim();
+  const ouvre = brut.indexOf('(');
+  const ferme = brut.lastIndexOf(')');
+  if (ouvre < 0 || ferme <= ouvre) return '';
+  return brut.slice(ouvre + 1, ferme).trim().replace(/^["']|["']$/g, '');
+}
+
+/**
+ * Donne son `src` à chaque `<img>` d'atlas, depuis la variable qui le porte.
+ *
+ * ⚠ ON LÈVE PLUTÔT QUE DE LAISSER UNE IMAGE VIDE. Un atlas absent rendrait le
+ * champ de bataille muet — des unités invisibles, une carte noire — et rien ne
+ * le dirait. C'est la règle de `executer` dans `render/canvas2d.js` : « une
+ * unité invisible est un défaut qu'on doit voir ».
+ *
+ * @param {Document} doc
+ */
+export function garnirLesAtlas(doc) {
+  const style = doc.defaultView.getComputedStyle(doc.documentElement);
+  for (const [id, variable] of Object.entries(ATLAS_DE_LA_PAGE)) {
+    const image = doc.getElementById(id);
+    if (image === null) throw new RangeError(`session : l'image « ${id} » manque à la page`);
+    const source = urlDeLaValeurCss(style.getPropertyValue(variable));
+    if (source === '') throw new RangeError(`session : la variable « ${variable} » est vide`);
+    image.src = source;
+  }
+}
+
 export function initialiserSession(doc) {
   const fenetre = doc.defaultView;
   const $ = (id) => doc.getElementById(id);
@@ -547,6 +623,10 @@ export function initialiserSession(doc) {
   // soit rendue : `visibilitychange` ne suffit pas quand le système tue
   // l'application sans la masquer d'abord.
   fenetre.addEventListener('pagehide', () => sauvegarder());
+
+  // ⚠ AVANT TOUT ÉCRAN : les quatre atlas partagés doivent avoir leur `src`
+  // avant qu'un canevas ne les demande.
+  garnirLesAtlas(doc);
 
   ecran = initialiserEcranChantier(doc, {
     // La pose est la première action irréversible du jeu : elle s'écrit tout de

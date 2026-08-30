@@ -18,9 +18,11 @@ import {
   ACTIONS, messagePasDeReparation, DUREE_TOAST_MS,
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
-  SIGLES_OBSTACLE, LIBELLES_OBSTACLE,
+  SIGLES_OBSTACLE, LIBELLES_OBSTACLE, fondsDuSol, LIBELLES_FAMILLE, coteCaseParDefaut,
 } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
+import { ZOOM_CARTE } from '../src/data/sites.js';
+import { COTE_SPRITE } from '../src/data/atlas.js';
 import {
   ligneAAfficher, MESSAGES_MODE, messageDePose, MENTION_SATURE,
   apercuDuBatiment, lignesDuPanneau, formaterCout, libelleDuVoisin,
@@ -2712,7 +2714,7 @@ test('obstacles — l\'écran les dessine, et il sait dire qui ils ralentissent'
 // Le lot PREMIÈRE-COUCHE : les sprites entrent à l'écran
 // ---------------------------------------------------------------------------
 
-test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas', () => {
+test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas DU MONDE', () => {
   // ⚠ GARDE DE TEXTE, comme ses voisines : le dépôt n'a ni jsdom ni navigateur,
   // ce qui touche le DOM ne s'automatise pas ici (CLAUDE.md §3). Ce qu'on PEUT
   // confronter sans navigateur, c'est que l'écran demande son sol au module
@@ -2726,21 +2728,56 @@ test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas', () =
 
   // Le sol est posé sur TOUTES les cases, donc dans une boucle sur `cellules`,
   // et non sur les seules cases qui portent quelque chose.
-  assert.match(ecran, /for \(const case_ of cellules\.values\(\)\)[\s\S]{0,400}?fondDuTerrain\('tile_sol_j'/,
+  assert.match(ecran, /for \(const case_ of cellules\.values\(\)\)[\s\S]{0,400}?fondsDuSol\(/,
     'le sol n\'est pas posé sur l\'ensemble des cases');
 
   // ⚠ ET IL EST UN FOND, PAS UN ENFANT. Un `createElement` par case ferait 162
-  // nœuds à créer et à retirer à chaque geste — et il faudrait penser à les
-  // retirer, ce que la boucle de remise à zéro ne fait pas.
+  // nœuds à créer et à retirer à chaque geste — quatre fois plus depuis que le
+  // sol fait 2 × 2 — et il faudrait penser à les retirer, ce que la boucle de
+  // remise à zéro ne fait pas.
   assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundImage/,
     'les couches de fond ne passent plus par `poserFonds`');
   assert.doesNotMatch(ecran, /createElement\('div'\)[\s\S]{0,120}?className = 'sol'/,
     'le sol est redevenu un élément enfant');
 
-  // Les trois couches de terrain viennent du même point d'appel : une seconde
-  // façon de nommer un sprite de terrain finirait par nommer autrement.
-  assert.equal((ecran.match(/fondDuTerrain\(/g) ?? []).length, 4,
-    'le nombre d\'appels à `fondDuTerrain` a changé — trois poses plus sa définition');
+  // Les deux couches de terrain qui restent — le champ et l'obstacle — viennent
+  // du même point d'appel : une seconde façon de nommer un sprite de terrain
+  // finirait par nommer autrement.
+  assert.equal((ecran.match(/fondDuTerrain\(/g) ?? []).length, 3,
+    'le nombre d\'appels à `fondDuTerrain` a changé — deux poses plus sa définition');
+
+  // ⚠⚠ ET LE SOL NE VIENT PLUS DE L'ATLAS DE LA BASE. Ethan, 30/08 : « changer
+  // le terrain de la base. Utiliser les sprites terrain monde (en 2 × 2) ». Les
+  // quatre `tile_sol_j_*` étaient quatre dessins pour cent soixante-deux cases,
+  // et la répétition se lisait d'un coup d'œil.
+  assert.doesNotMatch(ecran, /tile_sol_j/,
+    'le sol de la base repasse par les quatre tuiles de l\'atlas de la base');
+  assert.match(ecran, /sol: 'var\(--atlas-sol\)'/,
+    'la table des atlas ne porte plus celui du sol');
+
+  // ⚠ QUATRE COUCHES, PAS UNE, et le nombre se LIT dans `ZOOM_CARTE`. L'écrire
+  // ici ferait la troisième vérité sur le découpage d'une case.
+  assert.match(ecran, /const divisions = ZOOM_CARTE\.tuilesParCase/,
+    'le découpage du sol ne suit plus la table du monde');
+  assert.equal(ZOOM_CARTE.tuilesParCase, 2, 'le sol de la base n\'est plus en 2 × 2');
+
+  // ⚠ ET LA VARIANTE SE PREND SUR LA SOUS-CASE. Sur la case, les quatre
+  // quartiers tireraient le MÊME dessin — quatre fois le même carré — et le
+  // 2 × 2 n'apporterait rien du tout. Le montage le mesure au lieu de le lire :
+  // on demande les quatre couches d'une case et on exige qu'elles diffèrent.
+  const parAxe = 16;
+  const couches = fondsDuSol(parAxe, 20260830, 14, 4);
+  assert.equal(couches.length, 4, `${couches.length} couches de sol au lieu de quatre`);
+  assert.equal(new Set(couches.map((c) => c.position)).size, 4,
+    'les quatre quartiers se posent au même endroit');
+  // Falsifiable : sur une graine et une case, deux voisines ne donnent pas le
+  // même sol — sans quoi le tirage serait constant et le test ne mesurerait rien.
+  const voisine = fondsDuSol(parAxe, 20260830, 14, 5);
+  assert.notDeepEqual(couches.map((c) => c.taille + c.position),
+    voisine.map((c) => c.taille + c.position),
+    'deux cases voisines reçoivent exactement le même sol');
+  // Et toutes viennent bien de l'atlas du monde.
+  for (const c of couches) assert.equal(c.image, 'var(--atlas-sol)');
 });
 
 test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
@@ -2779,12 +2816,24 @@ test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
   // laissaient passer — une seconde dérivation du nom, ici.
   assert.equal((ecran.match(/couchesDeLEntite\(/g) ?? []).length, 2,
     'le nombre d\'appels à `couchesDeLEntite` a changé — une pose par bande');
-  assert.match(ecran, /import \{ couchesDeLEntite \} from '\.\.\/render\/scene\.js'/,
+  // ⚠ L'IMPORT S'EST ALLONGÉ LE 30/08 — `genreDeLaGarnison` l'accompagne — et
+  // la garde vise le NOM, pas la ligne entière : elle mesurait la forme de
+  // l'import là où elle voulait mesurer la dépendance.
+  assert.match(ecran, /import \{[^}]*\bcouchesDeLEntite\b[^}]*\} from '\.\.\/render\/scene\.js'/,
     'l\'écran ne consomme plus le point d\'entrée des couches');
   assert.match(ecran, /genre: 'batiment', id: piece\.id/,
     'le terrain des bâtiments ne demande plus ses couches au point d\'entrée');
-  assert.match(ecran, /genre: 'defense', id: piece\.id/,
-    'la défense ne demande plus ses couches au point d\'entrée');
+  // ⚠⚠ L'EXIGENCE S'EST RESSERRÉE LE 30/08, ELLE NE S'EST PAS ASSOUPLIE. Elle
+  // demandait `genre: 'defense'` écrit tel quel — et c'était précisément la
+  // FAUTE : la bande de garnison porte dix-sept pièces posables, dont HUIT sont
+  // des unités de `UNITES`. `couchesDeLEntite` levait dessus, et la levée part
+  // de `peindre`, donc poser des Fusiliers en garnison laissait l'écran de la
+  // base blanc — mesuré sur `main`. Le genre se DEMANDE maintenant, et ce test
+  // refuse qu'on le réécrive en dur.
+  assert.match(ecran, /genre: genreDeLaGarnison\(piece\.id\)/,
+    'la défense ne demande plus son genre : les huit unités de garnison lèveront');
+  assert.doesNotMatch(ecran, /genre: 'defense', id: piece\.id/,
+    'le genre de la garnison est de nouveau écrit en dur pour les dix-sept');
   // ⚠ ET AUCUNE DES DEUX NE SE RECALCULE ICI. C'est la moitié qui compte : un
   // écran qui appelle le point d'entrée ET garde sa propre dérivation à côté
   // aurait deux vérités, dont une seule serait branchée.
@@ -2815,27 +2864,112 @@ test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
     'une table de correspondance sprite est apparue');
 });
 
-test('écran — l\'obstacle perd son fond, il garde la lettre qui dit qui est ralenti', () => {
+test('écran — l\'obstacle perd sa LETTRE, il ne perd pas ce qu\'elle disait', () => {
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
   const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
 
-  // ⚠ LA LETTRE EST LA SEULE INFORMATION DE JEU QUE PORTE UN OBSTACLE — qui est
-  // ralenti. Un dessin ne la dit pas : le joueur n'a pas à savoir si c'est un
-  // rocher ou une carcasse, il décide par où faire passer son assaut.
-  assert.match(ecran, /marque\.className = 'obstacle-marque'/, 'la lettre de l\'obstacle a disparu');
-  assert.match(ecran, /marque\.textContent = SIGLES_OBSTACLE\[o\.type\]/,
-    'la lettre ne vient plus de `SIGLES_OBSTACLE`');
-  assert.match(feuille, /\.obstacle-marque\s*\{/, 'la lettre n\'a plus de règle dans la feuille');
+  // ⚠⚠ ETHAN, 30/08 : « et les petites lettres des obstacles en défense ». Le
+  // glyphe de 8 px posé dans un coin de la case part avec les carrés et les
+  // traits du même relevé.
+  assert.doesNotMatch(ecran, /obstacle-marque/, 'la lettre de l\'obstacle est revenue dans l\'écran');
+  assert.doesNotMatch(feuille, /\.obstacle-marque/, 'la lettre de l\'obstacle a repris une règle');
 
-  // Le fond uni et le liseré, eux, sont remplacés par le sprite.
-  assert.doesNotMatch(feuille, /\.case\.obstacle\s*\{\s*background:/,
-    'la case d\'obstacle porte de nouveau un fond uni sous son sprite');
+  // ⚠⚠ MAIS CE QU'ELLE DISAIT RESTE JOIGNABLE, ET C'EST LA MOITIÉ QUI COMPTE.
+  // « Qui est ralenti » est la seule information de JEU que porte un obstacle,
+  // et aucun dessin ne la rend : le joueur n'a pas à deviner si un rocher
+  // arrête l'infanterie ou les véhicules. Elle passe dans le `title` de la
+  // case. C'est « rien ne se retire en silence » (CLAUDE.md §4) — le lot retire
+  // un DESSIN, pas une donnée, et les deux tables restent branchées.
+  assert.match(ecran, /case_\.title = `\$\{LIBELLES_OBSTACLE\[o\.type\]\}/,
+    'le libellé de l\'obstacle n\'est plus joignable nulle part');
+  assert.match(ecran, /SIGLES_OBSTACLE\[o\.type\]/,
+    'le sigle de l\'obstacle n\'est plus employé — la table est devenue morte');
+
+  // ⚠ ET LE `title` SE RETIRE AU REPEINT. Un titre laissé en place ferait dire
+  // « pétrole » à une case redevenue nue après un tirage d'obstacles différent.
+  assert.match(ecran, /case_\.removeAttribute\('title'\)/,
+    'le titre d\'une case ne se remet plus à zéro : il survivra à son obstacle');
+
+  // Les quatre classes de terrain partent aussi : elles ne peignaient plus que
+  // le fond kaki, le liseré tireté et la lettre. Leur garder une règle pour
+  // satisfaire la garde des classes aurait été écrire une décoration pour un
+  // test — ce que la feuille refuse nommément depuis le lot PREMIÈRE-COUCHE.
+  for (const classe of ['champ', 'obstacle']) {
+    assert.doesNotMatch(ecran, new RegExp(`classList\\.add\\('${classe}'`),
+      `la classe « ${classe} » est reposée sans qu'une règle la peigne`);
+  }
+  assert.doesNotMatch(feuille, /\.case\.champ/, 'le fond kaki du champ est revenu');
+  assert.doesNotMatch(feuille, /\.case\.obstacle/, 'le liseré de l\'obstacle est revenu');
+
+  // Le sprite, lui, reste : c'est lui qui dit qu'il y a quelque chose là.
   assert.match(ecran, /fondDuTerrain\(`obs_\$\{o\.type\}`/, 'l\'obstacle ne reçoit plus son sprite');
 
   // Et le champ garde sa ressource dans le nom du sprite : `champ_quartz_a`,
   // jamais un sprite unique recolorisé, que l'atlas ne porte pas.
   assert.match(ecran, /fondDuTerrain\(`champ_\$\{champ\.ressource\}`/,
     'le champ ne reçoit plus le sprite de sa ressource');
+});
+
+test('écran — les traits de grille et les carrés des jetons sont partis', () => {
+  // ⚠⚠ ETHAN, 30/08, SUR APPAREIL : « enlever les carrés et les traits visibles
+  // sur la base. Lié aux anciens bâtiments et ressources. » Ce test tient les
+  // trois dessins nommés, un par un, parce qu'ils sont indépendants : les
+  // retirer d'un geste et en laisser revenir un seul ne se verrait qu'à l'œil.
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+  const regleCase = feuille.match(/\.case\s*\{([^}]*)\}/)[1];
+
+  // 1. Le quadrillage. Deux liserés qui hachaient le sol.
+  assert.doesNotMatch(regleCase, /border-right|border-bottom/,
+    'la case a repris un trait de grille');
+
+  // 2. Le bloc kaki en relief du jeton, et son cadre de famille.
+  const regleJeton = feuille.match(/\.jeton\s*\{([^}]*)\}/)[1];
+  assert.doesNotMatch(regleJeton, /background:\s*#/, 'le jeton a repris un fond uni');
+  assert.doesNotMatch(regleJeton, /\bborder:/, 'le jeton a repris une bordure');
+  assert.doesNotMatch(regleJeton, /box-shadow/, 'le jeton a repris son relief');
+  for (const famille of ['prod', 'mil', 'pivot']) {
+    assert.doesNotMatch(feuille, new RegExp(`\\.jeton\\.${famille}[^}]*inset 0 0 0 2px`),
+      `le cadre de famille « ${famille} » est revenu sur la grille`);
+  }
+
+  // 3. Ce que le cadre disait n'est pas perdu : le titre du jeton le porte.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /LIBELLES_FAMILLE\[terrain\.familleDe\(b\.id\)\]/,
+    'la famille de coût n\'est plus joignable depuis la grille');
+  // ⚠ ET LA TABLE COUVRE EXACTEMENT CE QUE REND `familleDuBatiment`, dans les
+  // deux sens : une famille sans libellé afficherait « undefined » dans le
+  // titre, et un libellé sans famille serait du texte mort.
+  const familles = new Set(Object.keys(BASE_BATIMENTS).map(familleDuBatiment));
+  assert.deepEqual([...familles].sort(), Object.keys(LIBELLES_FAMILLE).sort());
+  for (const mot of Object.values(LIBELLES_FAMILLE)) assert.ok(mot.length > 3, mot);
+
+  // Falsifiable : le montage lit bien la vraie règle, pas une chaîne vide.
+  assert.match(regleCase, /aspect-ratio: 1/, 'la règle de `.case` n\'a pas été lue');
+  assert.match(regleJeton, /width:/, 'la règle de `.jeton` n\'a pas été lue');
+});
+
+test('écran — le sprite d\'un jeton a grandi de 20 %, et le facteur est écrit', () => {
+  // ⚠⚠ ETHAN, 30/08 : « les bâtiments sont bien trop petits, surtout collecteur
+  // etc. Augmenter la taille du sprite de 20 %. Pas le choix pour l'instant. »
+  // Le « pas le choix pour l'instant » dit que c'est un correctif de cadrage :
+  // le facteur vit donc À PART, et se retirera en remettant 1 — pas en
+  // recalculant un pourcentage dont plus personne ne saura d'où il vient.
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+  const regle = feuille.match(/\.jeton\s*\{([^}]*)\}/)[1];
+
+  const part = Number(regle.match(/--jeton-part:\s*([\d.]+)%/)[1]);
+  const facteur = Number(regle.match(/--jeton-grossissement:\s*([\d.]+)/)[1]);
+  assert.equal(part, 84, 'la part de case du jeton a changé sans qu\'on le dise');
+  assert.equal(facteur, 1.2, 'le grossissement demandé par Ethan n\'est plus de 20 %');
+  assert.match(regle, /width:\s*calc\(var\(--jeton-part\) \* var\(--jeton-grossissement\)\)/,
+    'la largeur du jeton ne se compose plus des deux variables');
+
+  // ⚠ ET LE MÊME GROSSISSEMENT VAUT POUR L'UNITÉ DE L'OFFENSE. Ethan a demandé
+  // 20 % « sur le sprite », pas « sur l'écran de la base » : deux tailles
+  // différentes pour la même chose se liraient comme un défaut de cadrage.
+  const piece = feuille.match(/#ecran-offense \.emplacement \.piece\s*\{([^}]*)\}/)[1];
+  assert.equal(Number(piece.match(/--jeton-grossissement:\s*([\d.]+)/)[1]), facteur,
+    'l\'unité de l\'Offense et le jeton du Chantier ne grossissent plus pareil');
 });
 
 test('écran — les deux atlas entrent par une variable CSS, et le pixel art ne se lisse pas', () => {
@@ -2858,4 +2992,160 @@ test('écran — les deux atlas entrent par une variable CSS, et le pixel art ne
   // ⚠ ET LA CASE RESTE CARRÉE. Une cellule d'atlas de 64×64 dans un cadre
   // rectangulaire écraserait tous les sprites, et rien ici ne le dirait.
   assert.match(feuille, /\.case\s*\{[^}]*aspect-ratio: 1/, 'la case n\'est plus carrée');
+});
+
+// ---------------------------------------------------------------------------
+// Le lot SPRITES-ET-ZOOM : la palette montre ce qu'on pose, la base se zoome
+// ---------------------------------------------------------------------------
+
+test('palette — la vignette porte le SPRITE de la pièce, plus un carré kaki', () => {
+  // ⚠⚠ ETHAN, 30/08 : « dans les barres de construction du bas (base def off)
+  // remplacer les carrés par les sprites correspondant ». C'était un carré de
+  // 18 px identique pour les onze bâtiments ET pour les dix-sept pièces de
+  // défense : la vignette ne se distinguait que par son libellé, en 7 px.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+
+  assert.match(ecran, /poserCouches\(vignette, terrain\.spriteDe\(/,
+    'la vignette de la palette ne porte pas le sprite de sa pièce');
+
+  // ⚠ ET IL VIENT DU TERRAIN, comme le jeton de la case : c'est ce qui garantit
+  // que la palette montre exactement ce qu'une pose posera. Une dérivation
+  // propre à la palette finirait par montrer autre chose.
+  assert.doesNotMatch(ecran, /vignette[^;]{0,80}couchesDeLEntite\(/,
+    'la palette dérive ses couches elle-même au lieu de les demander au terrain');
+
+  // Le carré kaki en relief est parti ; la pastille grandit pour qu'un sprite
+  // de 64 px y reste lisible.
+  const regle = feuille.match(/\.posable i\s*\{([^}]*)\}/)[1];
+  assert.doesNotMatch(regle, /background:\s*#/, 'la pastille a repris un fond uni');
+  assert.match(regle, /image-rendering: pixelated/, 'la pastille lisse son sprite');
+  const cote = Number(regle.match(/width:\s*(\d+)px/)[1]);
+  assert.ok(cote >= 24, `la pastille ne fait que ${cote} px : un sprite de 64 n'y tient pas`);
+
+  // ⚠ ET LES DEUX BANDES Y PASSENT. `TERRANS` porte `spriteDe` pour les deux
+  // depuis le lot BRANCHEMENT-DÉFENSE ; une palette qui n'aurait branché que
+  // les bâtiments laisserait dix-sept carrés en défense.
+  for (const [nom, terrain] of Object.entries(TERRAINS)) {
+    assert.notEqual(terrain.spriteDe, null, `la bande « ${nom} » n'a pas de sprite`);
+  }
+});
+
+test('zoom — la base se zoome par la TAILLE d\'une case, jamais par une transformation', () => {
+  // ⚠⚠ ETHAN, 30/08 : « possibilité de zoomer sur la base, l'ui reste de même
+  // taille » et « zoom carte et base : au doigt, pas de zoom fixe avec + − ».
+  //
+  // ⚠⚠ ET LE DÉPÔT INTERDIT `transform: scale()` SUR CETTE GRILLE DEPUIS LE LOT
+  // POSE-À-L'ÉCRAN, pour une raison qui n'a pas bougé : une transformation
+  // déplace le DESSIN sans déplacer la géométrie du pointage, donc le doigt
+  // cesse de tomber sur la case qu'il vise. C'est l'assertion qui compte ici —
+  // le zoom devait arriver SANS rouvrir cette faute.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+
+  assert.doesNotMatch(ecran, /transform/, 'l\'écran de la base a pris une transformation');
+  assert.doesNotMatch(feuille.match(/#chantier-grille\s*\{([^}]*)\}/)[1], /transform/,
+    'la grille de la base a pris une transformation');
+
+  // Ce qui change, c'est le côté d'une case, en pixels.
+  assert.match(ecran, /grille\.style\.setProperty\('--case-cote'/,
+    'le zoom n\'écrit plus le côté d\'une case');
+  assert.match(feuille, /#chantier-grille\s*\{[^}]*width: max-content/,
+    'la grille ne prend plus sa taille de ses colonnes');
+  assert.match(ecran, /repeat\(\$\{GRILLE\.largeur\}, var\(--case-cote\)\)/,
+    'les colonnes ne font plus `--case-cote`');
+
+  // ⚠ ET LE CHAMP DÉFILE DANS LES DEUX SENS, sans quoi zoomer ne montrerait
+  // rien de plus : les colonnes de droite seraient rognées.
+  assert.match(feuille, /#chantier-defile\s*\{[^}]*overflow: auto/,
+    'le champ de la base ne défile plus dans les deux sens');
+
+  // ⚠⚠ MAIS LE CHROME, LUI, NE DÉFILE TOUJOURS PAS. « Tu compresses tout dans
+  // l'ui » porte sur les barres, et la garde des 288 px continue de le tenir :
+  // ce test-ci vérifie seulement qu'on n'a pas ouvert la vanne sur elles.
+  for (const id of ['chantier-palette', 'chantier-contexte', 'barre-bas']) {
+    const bloc = feuille.match(new RegExp(`#${id}\\s*\\{([^}]*)\\}`))[1];
+    assert.doesNotMatch(bloc, /overflow:\s*auto/, `#${id} s'est mis à défiler`);
+  }
+});
+
+test('zoom — les deux bornes se LISENT, et le geste est un rapport', () => {
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+
+  // ⚠ LE PLAFOND VIENT DE L'ATLAS : à `COTE_SPRITE` pixels par case, un pixel
+  // de sprite vaut un pixel CSS. Au-delà on agrandirait du pixel art au-dessus
+  // de sa propre définition — ce que ce lot vient de retirer à la carte.
+  assert.match(ecran, /const COTE_CASE_MAX = COTE_SPRITE/,
+    'le plafond du zoom ne se lit plus dans l\'atlas');
+  assert.equal(COTE_SPRITE, 64, 'la grille des sprites a changé : relire le plafond du zoom');
+
+  // ⚠ LE DÉFAUT VIENT DE LA FEUILLE, pas du code : c'est une décision de mise
+  // en page, et l'écrire des deux côtés ferait deux vérités.
+  assert.match(feuille, /--case-defaut:\s*\d+px/, 'la feuille ne déclare plus le côté par défaut');
+  assert.match(ecran, /getPropertyValue\('--case-defaut'\)/,
+    'le code n\'a plus l\'air de lire le défaut dans la feuille');
+  assert.doesNotMatch(ecran, /(?<![\w.])46(?![\w.])/,
+    'le côté par défaut est recopié en dur dans l\'écran');
+
+  // ⚠ LE PLANCHER EST LA TAILLE QUI FAIT TENIR LA GRILLE, mesurée et non
+  // devinée : sous celle-là, le zoom arrière ne montrerait que du vide.
+  assert.match(ecran, /Math\.floor\(large \/ GRILLE\.largeur\)/,
+    'le plancher du zoom ne se mesure plus sur la largeur disponible');
+
+  // ⚠⚠ LE GESTE EST UN RAPPORT D'ÉCARTS, PAS UNE DIFFÉRENCE. Une différence en
+  // pixels zoomerait plus vite sur un grand écran que sur un petit, pour le
+  // même geste de la main — et le réglage trouvé sur un téléphone serait faux
+  // sur la tablette suivante.
+  assert.match(ecran, /ecartDesDoigts\(deux\) \/ pincement\.ecart/,
+    'le pincement de la base ne se mesure plus en rapport');
+
+  // ⚠⚠ ET LE GESTE PASSE PAR LES ÉVÈNEMENTS TACTILES, PAS PAR LES POINTEURS —
+  // contrairement à la carte, et pour une raison mesurable. La base est un
+  // conteneur qui DÉFILE NATIVEMENT : sous `touch-action: pan-x pan-y`, le
+  // navigateur garde le droit de faire défiler à deux doigts, et quand il prend
+  // la main il envoie `pointercancel` — le pincement se perdrait au milieu du
+  // geste. La carte, elle, est un canevas en `touch-action: none` : rien ne lui
+  // dispute le geste. Deux surfaces différentes, deux mécanismes, et c'est
+  // écrit des deux côtés.
+  assert.match(ecran, /defile\.addEventListener\('touchmove'/,
+    'le pincement de la base ne passe plus par les évènements tactiles');
+
+  // ⚠⚠ `{ passive: false }` EST LA MOITIÉ QUI COMPTE. Sans lui,
+  // `preventDefault` est IGNORÉ dans un `touchmove` : le code aurait l'air
+  // juste, le navigateur défilerait quand même, et la grille glisserait sous
+  // les doigts pendant qu'elle grandit. Rien à l'écran ne dirait que c'est
+  // l'option qui manque.
+  assert.match(ecran, /touchmove'[\s\S]{0,1200}?\{ passive: false \}/,
+    'le `touchmove` du pincement est passif : son `preventDefault` sera ignoré');
+  assert.match(ecran, /evenement\.preventDefault\(\)/,
+    'le pincement ne refuse plus le défilement au navigateur');
+
+  // ⚠ ET LE PINCEMENT SE FERME QUAND UN DOIGT PART. Sans ça, l'écran resterait
+  // convaincu qu'on pince encore et le geste suivant partirait d'un mauvais
+  // écart de référence.
+  assert.match(ecran, /if \(evenement\.touches\.length < 2\) pincement = null/,
+    'un doigt levé ne referme plus le pincement');
+});
+
+test('zoom — le défaut se lit dans la feuille, et le repli n\'est pas zéro', () => {
+  // ⚠ FALSIFIABLE, ET C'EST TOUT L'INTÉRÊT : on donne à la fonction un document
+  // truqué, et on vérifie qu'elle lit VRAIMENT la variable — puis qu'elle
+  // retombe sur une valeur utilisable quand elle manque. Un repli à zéro ferait
+  // une grille invisible, ce qui est pire qu'une grille mal dimensionnée.
+  const docAvec = {
+    documentElement: {},
+    defaultView: { getComputedStyle: () => ({ getPropertyValue: () => ' 52px ' }) },
+  };
+  assert.equal(coteCaseParDefaut(docAvec), 52);
+
+  const docSans = {
+    documentElement: {},
+    defaultView: { getComputedStyle: () => ({ getPropertyValue: () => '' }) },
+  };
+  assert.equal(coteCaseParDefaut(docSans), COTE_SPRITE, 'le repli n\'est plus le côté d\'un sprite');
+  assert.ok(coteCaseParDefaut(docSans) > 0, 'le repli rend une grille invisible');
+
+  // Et un document sans vue du tout — le cas d'un test, justement.
+  assert.ok(coteCaseParDefaut({ documentElement: {} }) > 0);
 });

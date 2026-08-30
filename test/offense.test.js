@@ -15,7 +15,10 @@ import {
   vagueDAssaut, vaguesDAssaut, unitesDeLaPalette, vueDeLOffense,
   SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
   ACTIONS_ARMEE, MESSAGES_MODE_ARMEE, messageDeDestinationDUnite, messageIndisponible,
+  couchesDeLUniteDAssaut,
 } from '../src/ui/offense.js';
+import { existeDansAtlas } from '../src/render/sprite.js';
+import { couchesDeLEntite } from '../src/render/scene.js';
 import {
   creerEtat, poser, poserEffectif, niveauDeCommandement,
 } from '../src/sim/state.js';
@@ -519,4 +522,103 @@ test('offense — aucun écran n\'appelle `purger` de lui-même', () => {
   // Falsifiable : la fonction existe bien, sinon la garde ne garde rien.
   const editeur = readFileSync(join(RACINE, 'src', 'ui', 'arsenal.js'), 'utf8');
   assert.match(editeur, /export function purger\(/, 'purger a disparu de l\'Arsenal');
+});
+
+// ---------------------------------------------------------------------------
+// Le lot SPRITES-ET-ZOOM : l'Offense cesse d'afficher des étiquettes
+// ---------------------------------------------------------------------------
+
+test('offense — une unité posée porte son SPRITE, plus son nom écrit', () => {
+  // ⚠⚠ ETHAN, 30/08 : « onglet offense : aucun sprite unités de joueur ».
+  // L'emplacement portait `occupant.nom` en 7 px sur un bloc kaki : deux
+  // « Fusiliers » côte à côte se lisaient comme deux étiquettes, et le joueur
+  // composait à l'aveugle des silhouettes qu'il ne verrait qu'au combat.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+  assert.doesNotMatch(ecran, /element\.textContent = occupant === null/,
+    'l\'emplacement réécrit le nom de l\'unité au lieu de poser son sprite');
+  assert.match(ecran, /piece\.className = 'piece'/, 'l\'unité posée n\'a plus d\'élément de sprite');
+  assert.match(ecran, /poserCouches\(piece, couchesDeLUniteDAssaut\(occupant\.id\)\)/,
+    'l\'emplacement ne pose plus les couches de l\'unité');
+
+  // ⚠ ET LE NOM N'EST PAS PERDU : il passe dans le `title`. « Rien ne se retire
+  // en silence » (CLAUDE.md §4) — le lot remplace un DESSIN, pas une donnée.
+  assert.match(ecran, /element\.title = `\$\{occupant\.nom\}/,
+    'le nom de l\'unité n\'est plus joignable nulle part');
+  assert.match(ecran, /element\.removeAttribute\('title'\)/,
+    'le titre survit à l\'unité qu\'il nommait');
+
+  // ⚠⚠ ET IL EST IMPORTÉ, PAS RÉÉCRIT. `poserCouches` porte l'inversion d'ordre
+  // entre le canevas et `background-image` ; une seconde écriture qui
+  // l'oublierait poserait le socle par-dessus la tourelle sur cet écran-ci et
+  // pas sur l'autre, sans qu'aucun nom de sprite soit faux.
+  assert.match(ecran, /poserCouches,?\s*\n?\s*\} from '\.\/chantier\.js'/,
+    '`poserCouches` n\'est plus importé du Chantier : il a peut-être été recopié');
+  assert.doesNotMatch(ecran, /function poserCouches/,
+    'l\'Offense a réécrit sa propre pose de couches');
+});
+
+test('offense — les quatorze unités résolvent toutes un sprite qui EXISTE', () => {
+  // ⚠⚠ SANS CE TEST, UNE UNITÉ MANQUANTE SE VERRAIT À L'OUVERTURE DE L'ÉCRAN,
+  // et pas avant. La palette montre les quatorze — elle GRISE au lieu de
+  // filtrer depuis le 29/08 —, donc les quatorze posent un sprite dès le
+  // premier affichage, verrouillées comprises.
+  const roster = Object.keys(UNITES);
+  assert.equal(roster.length, 14, `${roster.length} unités : le roster a changé`);
+  for (const id of roster) {
+    const couches = couchesDeLUniteDAssaut(id);
+    assert.ok(Array.isArray(couches) && couches.length >= 1, `${id} ne rend aucune couche`);
+    for (const { famille, nom } of couches) {
+      assert.ok(existeDansAtlas(famille, nom),
+        `${id} demande « ${nom} », absent de l'atlas « ${famille} »`);
+    }
+  }
+
+  // ⚠ ET C'EST LE MÊME DESCRIPTEUR QUE PARTOUT AILLEURS. Le point d'entrée
+  // unique de `render/scene.js` existe pour qu'une unité se dessine pareil dans
+  // l'éditeur et au combat ; un descripteur écrit à la main ici serait la
+  // quatrième vérité que ce dispatch existe pour empêcher.
+  for (const id of roster) {
+    assert.deepEqual(
+      couchesDeLUniteDAssaut(id),
+      couchesDeLEntite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque' }),
+      `${id} : l'écran Offense a sa propre dérivation de sprite`,
+    );
+  }
+
+  // ⚠⚠ ET LA POSE EST CELLE DE L'ASSAUT, PAS DE LA GARNISON. `camp: 'attaque'`
+  // donne la force `armee`, donc la pose de marche ; `garnison` donnerait `_def`
+  // — chenilles à l'horizontale — sur les huit unités qui en ont une. Le
+  // montage le MESURE : si aucune unité ne changeait de nom entre les deux
+  // poses, ce test ne dirait rien du choix qu'il garde.
+  const differentes = roster.filter((id) => {
+    const assaut = couchesDeLUniteDAssaut(id);
+    const garnison = couchesDeLEntite({
+      genre: 'unite', id, proprietaire: 'joueur', camp: 'defense',
+    });
+    return JSON.stringify(assaut) !== JSON.stringify(garnison);
+  });
+  assert.ok(differentes.length > 0,
+    'aucune unité ne distingue l\'assaut de la garnison : le test ne mesure rien');
+});
+
+test('offense — la palette montre la pièce, plus un carré', () => {
+  // ⚠ ETHAN NOMME LES TROIS BARRES D'UN COUP, 30/08 : « dans les barres de
+  // construction du bas (base def off) remplacer les carrés par les sprites
+  // correspondant ». Celle de l'Offense n'avait même pas de carré : elle ne
+  // portait que deux lignes de texte.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
+  assert.match(ecran, /poserCouches\(vignette, couchesDeLUniteDAssaut\(unite\.id\)\)/,
+    'la vignette de la palette ne porte pas le sprite de son unité');
+  assert.match(ecran, /bouton\.append\(vignette, nom, cout\)/,
+    'la pastille n\'est pas dans la vignette, ou pas en premier');
+
+  // Et la feuille la dessine — une classe que le JS pose et que le CSS ignore
+  // est un lot entier qui ne se voit pas (lot ÉCRAN-ACTIONS, 28/08).
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(feuille, /#offense-palette \.unite i\s*\{[^}]*image-rendering: pixelated/,
+    'la pastille de la palette de l\'Offense n\'a pas de règle, ou lisse son sprite');
 });
