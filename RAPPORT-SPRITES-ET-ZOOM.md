@@ -5,7 +5,7 @@ Répond au relevé d'Ethan du 30/08, fait sur appareil, captures à l'appui.
 | Grandeur | Avant | Après |
 |---|---|---|
 | Version | 0.48.0 · build 49 | **0.49.0 · build 50** |
-| `npm run check` | 619 pass / 0 fail | **633 pass / 0 fail** |
+| `npm run check` | 619 pass / 0 fail | **634 pass / 0 fail** |
 | `dist/index.html` | 1 230 416 o | **1 242 496 o** (+12 080) |
 | Borne de T10 | 1 300 000 | inchangée — marge **57 504 o**, 4,4 % |
 | `SAVE_VERSION` | 9 | inchangée — aucun champ d'état touché |
@@ -31,7 +31,7 @@ acquit de conscience est ce que la consigne demande.
 | 3 | Zoom carte et base au doigt, plus de `+ −` | **fait** |
 | 4 | Terrain de la base : sprites terrain monde en 2 × 2 | **fait** |
 | 5 | Carte : 4 terrains pour une tuile, gros carré moche | **fait** |
-| 6 | Implantation des sprites icône | ⚠ **IMPOSSIBLE — les fichiers n'existent pas** |
+| 6 | Implantation des sprites icône | ⚠ **art absent AU MOMENT DU LOT — arrivé depuis, voir §2** |
 | 7 | Retirer carrés, traits, lettres d'obstacle | **fait** |
 | 8 | Offense : sprites d'unité du joueur | **fait** |
 | 9 | Barres du bas (base, déf., off.) : sprites au lieu de carrés | **fait** |
@@ -40,7 +40,16 @@ acquit de conscience est ce que la consigne demande.
 
 ## 2. ⚠⚠ CE QUI N'A PAS PU ÊTRE FAIT, ET POURQUOI
 
-### Les sprites icône (demande 6) — les quarante et un fichiers n'existent pas
+### ⚠ AMENDÉ LE 30/08 AU SOIR : LES SOURCES SONT ARRIVÉES
+
+Ethan a livré `FoyerZero_S11_UI_complet_v1.zip` après la rédaction de ce
+rapport. **Les neuf planches du lot 7 sont désormais au dépôt**, dans
+`art/sources/`, plus trois flèches vertes qui n'étaient pas au brief d'origine.
+Ce qui suit décrit donc l'état AU MOMENT DU LOT, et reste vrai de ce qui manque
+encore : la CHAÎNE. Voir `RAPPORT-SPRITES-S11.md` pour ce qui est entré et ce
+qui reste à faire.
+
+### Les sprites icône (demande 6) — les quarante et un fichiers n'existaient pas
 
 Cherché avant de conclure, et pas seulement dans `src/` :
 
@@ -353,7 +362,7 @@ apprendre de ce lot.
 
 ## 10. Les tests — +14, et aucune assertion retirée
 
-619 → **633**. Le détail :
+619 → **634**. Le détail :
 
 | Fichier | + | Ce qu'ils gardent |
 |---|---|---|
@@ -415,8 +424,10 @@ exécuté se déclare non exécuté**.
 
 ## 12. Ce qui reste ouvert
 
-1. **Les 41 sprites d'interface** (§2). C'est la seule demande du 30/08 qui n'est
-   pas satisfaite, et elle attend de l'ART, pas du code.
+1. **Les 41 sprites d'interface** (§2). ⚠ **AMENDÉ le 30/08 au soir** : l'art
+   est arrivé, les neuf planches sont dans `art/sources/`. Ce qui manque n'est
+   plus l'art mais la CHAÎNE — découpe, conditionnement, couture, index, et le
+   branchement à l'écran. Voir `RAPPORT-SPRITES-S11.md`.
 2. **`foyer-zero-ui.html` est ROUGE à l'audit — et elle l'était déjà.** Vérifié
    par `git stash` : sept écarts sur `main` comme après ce lot, tous sur le
    terrain et les débits de la base dessinée dans la maquette. Ce lot n'a pas

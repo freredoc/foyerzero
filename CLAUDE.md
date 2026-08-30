@@ -497,7 +497,19 @@ tools/                  22 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 87 fichiers depuis le RANGEMENT
+art/sources/            sprites bruts, hors chaîne de build — 161 fichiers à la
+                        racine, 424 en comptant `carte/`. RECOMPTÉ le 30/08 au
+                        lot SPRITES-S11.
+                        ⚠ CETTE LIGNE ANNONÇAIT 87 « depuis le RANGEMENT », et
+                          elle était fausse de 61 : le disque en portait 148
+                          avant ce lot-ci. Aucune garde ne compte ce dossier —
+                          `documentation.test.js` ne porte que sur `test/` et
+                          les quatre dossiers de `src/` —, donc rien ne le
+                          corrige tout seul. Même dérive que `tools/` et
+                          `art/sprites/`, pour la même raison.
+                        ⚠ IL NE S'AMPUTE JAMAIS, et c'est ce qui le distingue
+                          d'`art/sprites/` : rien ici n'est un produit, tout y
+                          est un original. Un lot n'y AJOUTE que.
 art/sprites/            les sprites conditionnés — VINGT-SEPT dossiers de grille
                         et 1 429 fichiers, recomptés le 30/08 au lot PRODUCTION.
                         NEUF familles en 128, 64 et 32 : unité, bâtiment,
@@ -631,9 +643,19 @@ exécuté se déclare **non exécuté**, jamais passé.
 ### La chaîne graphique — hors de `npm run check`, et pour une raison
 
 ```
-python3 tools/verifier.py             # toute la chaîne, ~2 min
+python3 -m pip install Pillow numpy scipy    # ⚠ SANS EUX IL NE DÉMARRE PAS
+python3 tools/verifier.py                    # toute la chaîne, ~2 min
 python3 tools/verifier.py --outil emblemes   # un seul outil, pour itérer
 ```
+
+⚠⚠ **LES TROIS PAQUETS NE SONT PAS DANS L'ENVIRONNEMENT D'EXÉCUTION, ET IL FAUT
+LE SAVOIR AVANT DE CONCLURE.** `tools/planches.py` importe `PIL`, `numpy` et
+`scipy` ; sur un conteneur neuf, aucun n'est là. Le vérificateur sort alors en
+**1** dès le premier outil, avec une trace Python — il ne ment pas, mais on peut
+lire « chaîne cassée » là où il manque une dépendance. Mesuré le 30/08 au lot
+SPRITES-S11, où il a fallu trois installations pour l'amener au bout.
+⚠ Le « ~2 min » ci-dessus suppose donc qu'il DÉMARRE. Les onze outils rejoués
+prennent 110 s, la comparaison le reste.
 
 ⚠ **ELLE N'ENTRE PAS DANS `npm run check`, ET C'EST DÉLIBÉRÉ.** Les outils sont
 en Python, hors de la chaîne de build ; y ajouter une dépendance Python serait un
