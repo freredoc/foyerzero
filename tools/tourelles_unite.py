@@ -42,6 +42,22 @@ DST = os.path.join(RACINE, 'art', 'sprites', 'tourelle-unite')
 GRILLES = (128, 64, 32)
 
 BLINDES = ['ratisseur', 'fendeur', 'belier', 'broyeur', 'pilon']
+
+# ⚠ LE CAMP OUVRAGE A ÉTÉ RETIRÉ, arbitré par Ethan le 30/08. Ses blindés
+# portent une tourelle CUITE DANS LA COQUE : le dessus de leur châssis est un
+# dôme fermé, pas un anneau ouvert. Mesuré sur `P3.3` et `P3.4` par remplissage
+# de trous, le seul creux détectable fait 1 à 16 % de la largeur de caisse —
+# des échardes, pas un logement. Les coques du joueur, elles, ont un vrai trou
+# traversant de 18 à 50 %.
+#
+# Les quatre-vingts sprites de tourelle Ouvrage — 5 blindés × 16 orientations,
+# 240 fichiers sur trois grilles — n'avaient donc nulle part où se poser. Ils ne
+# sont plus produits. Les planches `tourelle_off_o_*` restent au dépôt.
+#
+# Conséquence de conception à connaître : un blindé de l'Ouvrage ne peut pas
+# suivre sa cible du canon. Sa silhouette d'attaque est figée. C'est le prix de
+# l'arbitrage, et il est assumé.
+CAMPS = [('j', False)]
 PRINCIPALES = ['n', 'ne', 'e', 'se', 's', 'so', 'o', 'no']
 INTERMEDIAIRES = ['nne', 'ene', 'ese', 'sse', 'sso', 'oso', 'ono', 'nno']
 # ordre de rotation, pour le contrôle de fluidité
@@ -102,7 +118,7 @@ def main():
         # Un ordre faux fait chuter une ou deux transitions sans toucher aux
         # autres : c'est le creux qu'on cherche, pas la moyenne.
         print(f"{'tourelle':16s} {'IoU moyen':>10s} {'IoU mini':>9s} {'transition la plus basse':>26s}")
-        for camp in ('j', 'o'):
+        for camp, _ in CAMPS:
             for cle in BLINDES:
                 S = serie(cle, camp)
                 M = {n: masque_ancre(im) for n, im in S.items()}
@@ -116,7 +132,7 @@ def main():
         return 0
 
     n = 0
-    for camp, ouv in (('j', False), ('o', True)):
+    for camp, ouv in CAMPS:
         P = pal(ouv)
         for cle in BLINDES:
             for orient, im in serie(cle, camp).items():
