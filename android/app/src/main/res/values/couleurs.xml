@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Palette de FICHE-STYLE.md : contour/creux du châssis. -->
-    <color name="icone_fond">#161914</color>
+    <!-- ⚠ GÉNÉRÉ PAR tools/icone.py — la teinte est la DOMINANTE de
+         l'icône conditionnée, pas une valeur choisie. Elle prolonge le
+         fond de la scène au-delà de son encastrement : un fond qui ne
+         le prolongerait pas ferait un carré visible sur l'écran
+         d'accueil. Régénérer : python3 tools/icone.py -->
+    <color name="icone_fond">#0D0B12</color>
 </resources>

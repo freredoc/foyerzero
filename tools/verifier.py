@@ -92,6 +92,62 @@ def est_un_atlas(rel):
     return os.path.basename(rel).startswith('atlas-') and os.path.dirname(rel) == ''
 
 
+# ---------------------------------------------------------------------------
+# Les sources déclarées
+# ---------------------------------------------------------------------------
+#
+# ⚠⚠ ARBITRÉ PAR ETHAN LE 30/08, en réponse aux 56 MANQUANTS du lot
+# CHAÎNE-VÉRIFIÉE : « déclarer le terrain comme une source ». Ces fichiers sont
+# au dépôt et AUCUN outil ne les produit — non par oubli, mais parce qu'ils SONT
+# la source. Les compter manquants ferait crier le vérificateur à chaque
+# exécution, et un contrôle qui crie toujours cesse d'être lu.
+#
+# ⚠⚠ ET LA MOITIÉ QUI REND LA TABLE HONNÊTE : chaque source déclarée doit ENCORE
+# être introuvable dans la production. Le jour où un outil se met à produire une
+# tuile de terrain, le vérificateur TOMBE, pour qu'on retire la ligne au lieu de
+# laisser une déclaration périmée couvrir un vrai produit. C'est la mécanique
+# d'`ECARTS_PERMANENTS` juste en dessous, et de `DETTES_ACCENT` dans
+# `test/accent.test.js`.
+#
+# ⚠⚠ LE PRIX DE CET ARBITRAGE, ÉCRIT ICI POUR QU'IL SOIT LU PAR CELUI QUI LE
+# PAIERA : **un futur changement de palette ne pourra pas être appliqué au
+# terrain automatiquement.** Les 54 tuiles ne se régénèrent plus — la branche
+# terrain de `planches.py` était une migration à usage unique, qui a supprimé ses
+# propres originaux. Il faudra les retoucher à la main, ou retrouver les planches.
+SOURCES_DECLAREES = {
+    'terrain/': (
+        'les 54 tuiles sont la SOURCE, pas un produit : la branche terrain de '
+        'planches.py était une migration à usage unique, déjà consommée, qui a '
+        'supprimé les planches d\'origine. ⚠ Un changement de palette ne pourra '
+        'pas leur être appliqué automatiquement.'
+    ),
+    'carte/atlas-terrain-64.png': (
+        'livré fini au lot ÉCRAN-CARTE, 224 548 octets ; tools/build.js l\'inline, '
+        'aucun outil du dépôt ne le produit'
+    ),
+    'carte/controle-pavage.png': (
+        'image de contrôle du pavage, produite une fois au lot ÉCRAN-CARTE et '
+        'citée par son rapport'
+    ),
+}
+
+
+def est_source_declaree(rel):
+    """Un chemin relatif est-il couvert par une source déclarée ?
+
+    ⚠ LE PRÉFIXE SE TERMINE PAR UNE BARRE POUR UN DOSSIER, et c'est ce qui
+    empêche `terrain/` de couvrir un hypothétique `terrain-bis/`. Un fichier se
+    déclare par son chemin exact.
+    """
+    for cle in SOURCES_DECLAREES:
+        if cle.endswith('/'):
+            if rel.startswith(cle.replace('/', os.sep)):
+                return cle
+        elif rel == cle.replace('/', os.sep):
+            return cle
+    return None
+
+
 def empreinte(chemin):
     with open(chemin, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
@@ -184,17 +240,29 @@ def main():
             commites &= produits
 
         identiques, differents, nouveaux, manquants = [], [], [], []
+        # ⚠ CE QUI EST DÉCLARÉ SOURCE ET QUI SE MET À ÊTRE PRODUIT : la
+        # déclaration est périmée, et le vérificateur doit TOMBER dessus.
+        sources_trahies = []
         for rel in sorted(produits | commites):
             ici = os.path.join(temporaire, rel)
             la = os.path.join(SPRITES, rel)
+            source = est_source_declaree(rel)
             if rel not in commites:
                 nouveaux.append(rel)
             elif rel not in produits:
-                manquants.append(rel)
+                # ⚠ UNE SOURCE DÉCLARÉE N'EST PAS UN MANQUANT. C'est tout l'objet
+                # de la table : le dépôt la porte, aucun outil ne la produit, et
+                # c'est voulu.
+                if source is None:
+                    manquants.append(rel)
             elif empreinte(ici) == empreinte(la):
                 identiques.append(rel)
+                if source is not None:
+                    sources_trahies.append((rel, source))
             else:
                 differents.append(rel)
+                if source is not None:
+                    sources_trahies.append((rel, source))
 
         # 3. les écarts déclarés, dans les deux sens
         declares = set(ECARTS_PERMANENTS)
@@ -241,7 +309,8 @@ def main():
         print('identiques : le dépôt et la chaîne s\'accordent à l\'octet')
         print('différents : les deux l\'ont, ils ne sont pas les mêmes')
         print('nouveaux   : la chaîne le produit, le dépôt ne l\'a pas')
-        print('MANQUANTS  : le dépôt le porte, aucun outil ne le produit')
+        print('MANQUANTS  : le dépôt le porte, aucun outil ne le produit —')
+        print('             hors sources déclarées, qui sont dans ce cas EXPRÈS')
         print()
         print(f'identiques à l\'octet : {len(identiques)}')
         print(f'différents           : {len(differents)}')
@@ -259,6 +328,9 @@ def main():
         for rel in reconcilies:
             print('  ⚠ ÉCART DÉCLARÉ QUI SE REPRODUIT MAINTENANT :', rel)
             print('    il n\'est plus un écart — retirer sa ligne d\'ECARTS_PERMANENTS')
+        for rel, cle in sources_trahies:
+            print('  ⚠ SOURCE DÉCLARÉE QUE LA CHAÎNE PRODUIT MAINTENANT :', rel)
+            print(f'    couverte par « {cle} » — la déclaration est périmée, retirer sa ligne')
 
         if a.outil:
             print('  (MANQUANTS non calculable pour un seul outil — voir le commentaire)')
@@ -271,7 +343,7 @@ def main():
                 print('      ' + ligne)
 
         faute = bool(differents_nus or nouveaux or manquants or reconcilies
-                     or atlas_faute or atlas_casse)
+                     or sources_trahies or atlas_faute or atlas_casse)
         print()
         print('VERDICT : la chaîne ne répond pas de ses sprites' if faute
               else 'VERDICT : la chaîne répond de ses sprites')
