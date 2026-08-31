@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **30/08/2026**, version 0.50.0 · build 51.
+Dernière révision : **31/08/2026**, version 0.51.0 · build 52.
 
 ---
 
@@ -41,15 +41,29 @@ Dernière révision : **30/08/2026**, version 0.50.0 · build 51.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 30/08/2026 (après le lot RECHERCHE), à confronter :**
-`npm test` → **658 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 259 092 octets**, 0 référence externe.
+**Référence au 31/08/2026 (après le lot MODULES-A), à confronter :**
+`npm test` → **667 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 260 325 octets**, 0 référence externe.
+⚠ **MODULES-A A COÛTÉ +1 233 OCTETS, ET C'EST DU CODE PUR.** Deux modules
+câblés — Tir de barrage, Booster —, aucune image, aucun écran neuf, aucun champ
+de sauvegarde : `SAVE_VERSION` reste à **14**. La borne de T10 n'a pas bougé —
+marge **39 675 octets**, 3,05 %.
+⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 %.** Elle ne
+descend plus que de quelques centièmes tant que les lots sont du code ; c'est le
+prochain atlas qui la fera tomber, et il faudra rouvrir la borne, pas la
+contourner.
+⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
+exactement **7 écarts**, code de sortie 1. MODULES-A n'y touche pas : le compte
+est le même avant et après, écart par écart. Le porter à 6 ou à 8 sans lot dédié
+serait une régression, dans les deux sens.
+⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT NON PLUS**, et c'était
+conforme : il ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot RECHERCHE :** 658 tests, `dist/index.html`
+**1 259 092 octets**, marge 40 908, 3,1 %.
 ⚠ **RECHERCHE A COÛTÉ +16 596 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.** C'est du
 code, de la feuille et un écran de plus ; l'arbre réemploie les sprites d'unité
-et d'ouvrage qui étaient au livrable depuis SPRITES-ET-ZOOM. La borne de T10 n'a
-pas bougé — marge **40 908 octets**, 3,1 %.
-⚠ **ET LA MARGE SE RESSERRE : 4,4 % au lot précédent, 3,1 % ici.** Le prochain
-atlas ne tiendra pas ; c'est la borne qu'il faudra rouvrir, pas la contourner.
+et d'ouvrage qui étaient au livrable depuis SPRITES-ET-ZOOM.
 ⚠⚠ **ET IL A RETOURNÉ LE COUPLAGE DES ATLAS PARTAGÉS. VOIR §6.** Quatre d'entre
 eux servent à la fois en fond CSS et en `drawImage` ; les déclarer aux deux
 endroits les inlinerait DEUX fois — 507 464 octets mesurés. La déclaration vit
@@ -2823,13 +2837,58 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **UNE PIÈCE S'ACHÈTE DEUX FOIS, UNE PAR BRANCHE**, comme dans Tiberium
   Alliances : le Chasseur coûte 300 000 en offense et 135 000 en défense, et
   l'un n'ouvre pas l'autre.
-  ⚠ **TREIZE MODULES SUR QUATORZE S'AFFICHENT ET NE S'ACHÈTENT PAS.**
+  ⚠ **TREIZE MODULES SUR QUATORZE S'AFFICHAIENT ET NE S'ACHETAIENT PAS.**
   `data/modules.js` porte un drapeau `cable` par module ; `sim/recherche.js`
   refuse l'achat par le code `effetNonCable`. Prendre les points du joueur
-  contre un effet qui n'existe pas serait un vol. Seul l'Écraseur est câblé.
+  contre un effet qui n'existe pas serait un vol. À ce lot-là, seul l'Écraseur
+  était câblé ; **depuis MODULES-A ils sont trois, et le drapeau est par
+  BRANCHE** — voir l'entrée suivante.
   ⚠ **L'ÉCRAN ACHÈTE EN DEUX TOUCHERS.** Le premier arme le bouton, le second
   paie ; toucher ailleurs désarme, et une peinture désarme tout. Deux milliards
   et demi de points ne partent pas sur un frôlement.
+
+- **UN MODULE EST CÂBLÉ PAR BRANCHE, PAS PAR MODULE** — 31/08, lot MODULES-A.
+  `data/modules.js` porte `cable: {offense, defense}` et `moduleEstCable(nom,
+  branche)` prend DEUX arguments ; une branche inconnue LÈVE. Le drapeau global
+  mentait par construction : les trois modules câblés le sont tous en offense et
+  aucun en défense, parce que le moteur ne lit `p.module` que du côté qui
+  attaque. Un drapeau unique aurait vendu au joueur, sur la ligne défense des
+  Grenadiers, un Tir de barrage qui n'aurait jamais tiré.
+  ⚠ **ET LE REFUS DIT LAQUELLE DES DEUX.** `effetNonCable` écrit « n'a pas
+  d'effet en défense » quand l'autre branche est câblée, « n'a pas encore
+  d'effet en jeu » quand aucune ne l'est. Le premier message est un fait
+  définitif, le second une attente : les confondre ferait patienter le joueur
+  devant une case qui ne s'ouvrira jamais. ⚠ Le mot vient de
+  `MOT_DE_LA_BRANCHE`, pas de la clé — `branche` vaut `defense`, sans accent, et
+  ce message part tel quel sous la ligne.
+  ⚠ **TIR DE BARRAGE : 30 % AUX VOISINS, STRUCTURES SEULEMENT, CIBLE EXCLUE.**
+  Rayon 1 en Tchebychev autour de la cible, camp adverse, genres `defense` et
+  `batiment`. ⚠ **`distanceTchebychev` de `sim/points-attaque.js` N'EST PAS
+  IMPORTÉE** : elle prend des cases entières et traînerait `clock.js` et
+  `niveau-de-base.js` dans `combat.js`, qui ne dépend que de `grille.js`.
+  ⚠ **LES ÉCLABOUSSURES PARTENT DANS LE MÊME TAMPON QUE LE TIR PRINCIPAL**, à
+  l'étape 4 : elles sont donc simultanées comme tout le reste, et un défenseur
+  tué au même tick riposte quand même. Passer par un second appel après
+  `appliquerDegats` casserait la simultanéité normative.
+  ⚠ **AUCUNE RÉSERVE N'EST CONSOMMÉE POUR ELLES.** L'étape 8 compte les tirs,
+  pas les impacts ; facturer les voisins ferait payer deux fois le même coup.
+  ⚠ **BOOSTER : ×10 PENDANT 30 TICKS, UNE SEULE FOIS PAR RAID.** Le déclencheur
+  est posé à l'étape **6 bis**, après le retrait des morts — lu avant
+  `appliquerDegats`, il raterait la blessure du tick même. ⚠ Le tick de la
+  blessure COMPTE : la fenêtre est N..N+29, pas N+1..N+30. ⚠ **`modulesActifs`
+  est la mémoire, `effetsTemporises` la fenêtre** : le marqueur n'est jamais
+  retiré, c'est lui qui interdit la seconde poussée ; l'effet, lui, expire à
+  l'étape 1.
+  ⚠ **LE ×10 S'APPLIQUE APRÈS LA RÉDUCTION D'OBSTACLE**, jamais avant : 60 → 24
+  sous obstacle → 240 boosté. L'inverse rendrait l'obstacle inopérant sous
+  boost, et le pas resterait borné par l'invariant des 1 000 milli de
+  `peutAvancer`.
+  ⚠ **MESURÉ EN RAID, PAS SUPPOSÉ** : sur huit graines, Tir de barrage rend
+  **+28,1 % de butin médian** et fait tomber 37 bâtiments sur 64 contre 27 ;
+  le Booster se déclenche à chaque raid (3 à 5 Cuirassiers sur 6) et rend
+  **−3,7 % de points médians** — il fait courir l'unité blessée droit sur la
+  défense. Un module câblé n'est pas un module rentable, et le dire est le
+  travail du rapport, pas du code.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie

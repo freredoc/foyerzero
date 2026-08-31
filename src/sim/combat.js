@@ -931,6 +931,55 @@ function degatsDeFranchissement(franchissementColonne, pvCourantMilli, pvMaxMill
   return Math.floor((franchissementColonne * ratioMilli) / MILLE);
 }
 
+/** Le pourcentage des dégâts qu'un Tir de barrage reverse à chaque voisine. */
+const BARRAGE_PCT = 30;
+
+/**
+ * TIR DE BARRAGE — « inflige 30 % des dégâts sur les structures voisines ».
+ *
+ * Chaque entité adverse de genre `defense` ou `batiment` dont la case touche
+ * celle de la cible encaisse 30 % de ce que le tireur ferait À ELLE.
+ *
+ * ⚠⚠ RECALCULÉ POUR CHAQUE VOISINE, JAMAIS REVERSÉ DEPUIS LA CIBLE. Un tir sur
+ * une escouade porte les dégâts de la colonne `escouade` ; les donner tels
+ * quels à un mur accorderait à des Grenadiers anti-véhicule une puissance
+ * anti-structure qu'aucune table ne leur reconnaît. Chaque cible a sa colonne,
+ * le barrage aussi. `degatsContre` porte déjà la santé du tireur et le plancher
+ * de réserve sur les bâtiments : il n'y a rien à rejouer ici.
+ *
+ * ⚠ VOISINE = TCHEBYCHEV 1, LA CIBLE EXCLUE — les huit cases autour d'elle.
+ * `distanceTchebychev` de `sim/points-attaque.js` ferait le calcul, mais elle
+ * prend deux cases ENTIÈRES et lève sinon, alors qu'une entité de combat porte
+ * un `rangeeMilli` ; et elle tire `clock.js` et `niveau-de-base.js` derrière
+ * elle, que le moteur de combat ne connaît pas — `combat.js` n'importe de
+ * `sim/` que `grille.js`. Deux `Math.abs` sur des cases déjà calculées ne
+ * valent pas d'élargir cette dépendance.
+ *
+ * ⚠ LES BÂTIMENTS SONT TOUCHÉS, contrairement à l'Écraseur. L'Écraseur les
+ * exclut parce qu'un bâtiment ne barre pas une colonne ; le barrage n'a pas
+ * cette raison, et l'Obusier est anti-structure : il tire dans la bande des
+ * bâtiments, où il n'y a aucune défense. L'y restreindre aux défenses ôterait
+ * tout effet au porteur le plus cher de l'arbre, à un milliard de points.
+ *
+ * ⚠ LE MÊME TIR, DONC UNE SEULE RÉSERVE. Rien n'est décompté ici et `aTire`
+ * n'est pas retouché : `consommerReserve` compte un tir par tireur, et le
+ * barrage n'est pas un second tir. Le ciblage n'est pas touché non plus — le
+ * barrage est un effet du tir, pas un choix de cible.
+ */
+function tirDeBarrage(etat, e, p, cible, ajouter) {
+  if (!moduleActif(etat, e, p, 'tirDeBarrage')) return;
+  const rangeeCible = caseDepuisMilli(cible.rangeeMilli);
+  for (const v of etat.entites) {
+    if (v.indice === cible.indice || v.camp === e.camp || !estActive(v)) continue;
+    if (v.genre !== 'defense' && v.genre !== 'batiment') continue;
+    if (Math.abs(caseDepuisMilli(v.rangeeMilli) - rangeeCible) > 1) continue;
+    if (Math.abs(v.colonne - cible.colonne) > 1) continue;
+    // Un seul `floor`, sur le produit — comme partout ailleurs dans ce moteur.
+    const degats = Math.floor((degatsContre(e, p, v) * BARRAGE_PCT) / 100);
+    if (degats > 0) ajouter(v.indice, degats);
+  }
+}
+
 /**
  * 4. Tir. Les dégâts sont calculés sur l'état de DÉBUT de tick et accumulés
  * dans un tampon : le tir est simultané, l'ordre d'itération ne peut pas
@@ -961,6 +1010,7 @@ function tir(etat) {
     if (degats === 0) continue;
     ajouter(e.cibleIndice, degats);
     e.aTire = true;
+    tirDeBarrage(etat, e, p, cible, ajouter);
   }
 
   // Franchissement : une barrière ne bloque pas, elle saigne. Dégâts par tick
@@ -1002,6 +1052,53 @@ function appliquerDegats(etat, tampon) {
     const e = etat.entites[indice];
     if (!estActive(e)) continue;
     e.pvMilli = Math.max(0, e.pvMilli - degats);
+  }
+}
+
+/** Le multiplicateur de vitesse du Booster, et sa durée — 3 s à 10 Hz. */
+const BOOSTER_FACTEUR = 10;
+const BOOSTER_TICKS = 30;
+
+/** L'entité court-elle sous Booster en ce moment ? */
+function boosterActif(e) {
+  return e.effetsTemporises.some((f) => f.nom === 'booster');
+}
+
+/**
+ * BOOSTER — « après avoir été blessée, vitesse ×10 pendant 3 s, une seule fois
+ * par raid ».
+ *
+ * ⚠⚠ APPELÉ APRÈS L'APPLICATION DES DÉGÂTS, JAMAIS AVANT. Lu avant, le tick de
+ * la blessure ne compterait pas et l'effet démarrerait avec un tick de retard :
+ * deux montages qui devraient coïncider divergeraient. Il est aussi appelé
+ * après le RETRAIT DES MORTS, pour qu'une unité tombée dans le même tampon ne
+ * déclenche pas un sprint qu'elle ne courra jamais.
+ *
+ * ⚠ « UNE SEULE FOIS PAR RAID » = UNE FOIS PAR COMBAT ET PAR ENTITÉ. Un raid
+ * EST un combat ; quatre vagues ne sont pas quatre raids. La marque vit dans
+ * `e.modulesActifs` — c'est son premier usage — et **elle n'est jamais
+ * retirée**, même après l'expiration de l'effet : une unité soignée puis
+ * reblessée ne redéclenche pas.
+ *
+ * ⚠ L'EFFET VIT DANS `e.effetsTemporises`, sous la forme que l'étape 1 sait
+ * déjà filtrer — un objet portant `finTick`. `expirerEffets` n'a AUCUNE ligne à
+ * changer. Il ne porte que des chaînes et des entiers : `serialiserEtat` trie
+ * les clés et compare le tout, une valeur non triable y casserait le
+ * déterminisme sans dire pourquoi.
+ *
+ * ⚠ TRENTE MOUVEMENTS, À PARTIR DU TICK DE LA BLESSURE INCLUS. `expirerEffets`
+ * garde ce dont le `finTick` est STRICTEMENT supérieur au tick courant : posé à
+ * `tick + 30` au tick N, l'effet couvre les déplacements des ticks N à N+29 et
+ * disparaît à l'entrée du tick N+30. C'est bien 3 s à 10 Hz.
+ */
+function declencherBoosters(etat) {
+  for (const e of etat.entites) {
+    if (e.camp !== 'attaque' || !estActive(e)) continue;
+    if (e.pvMilli >= e.pvMaxMilli) continue;
+    if (e.modulesActifs.includes('booster')) continue;
+    if (!moduleActif(etat, e, profil(e), 'booster')) continue;
+    e.modulesActifs.push('booster');
+    e.effetsTemporises.push({ nom: 'booster', finTick: etat.tick + BOOSTER_TICKS });
   }
 }
 
@@ -1175,6 +1272,20 @@ function deplacement(etat) {
     if (type !== undefined && obstacleConcerne(type, p.chassis)) {
       vitesse = p.vitesseObstacleMilli;
     }
+    // BOOSTER — ×10 APRÈS la réduction d'obstacle, sur la valeur retenue.
+    //
+    // ⚠ APPLIQUÉ AVANT, UN OBSTACLE CESSERAIT DE RALENTIR UNE UNITÉ BOOSTÉE,
+    // ce qu'aucune règle ne dit : 60 → 600 → 240 sous obstacle serait plus
+    // rapide que la vitesse nominale. Ici c'est 24 → 240, le rapport est gardé.
+    //
+    // ⚠⚠ ET IL EXISTE UN INVARIANT NON ÉCRIT QUE CE ×10 FRÔLE — voir
+    // `peutAvancer` : « aucune vitesse n'atteint 1 000 milli-cases par tick ».
+    // Les deux porteurs du Booster sont des escouades à 60, donc 600, et
+    // l'invariant tient. Il ne tient QUE PAR ACCIDENT : au Frappeur (240), 2 400
+    // ferait sauter une rangée à la destination et `peutAvancer` laisserait
+    // passer une unité À TRAVERS un mur, sans qu'aucun test n'échoue. Un test de
+    // données garde ce seuil (`recherche.test.js`, MODULES-A T6).
+    if (boosterActif(e)) vitesse *= BOOSTER_FACTEUR;
 
     const destinationMilli = e.rangeeMilli + vitesse;
     const caseDestination = caseDepuisMilli(destinationMilli);
@@ -1325,6 +1436,7 @@ export function tick(etat) {
   const tampon = tir(etat); //                   4. tir, simultané
   appliquerDegats(etat, tampon); //              5. application du tampon
   retirerLesMorts(etat); //                      6. retrait des morts
+  declencherBoosters(etat); //                   6 bis. réaction aux blessures
   deplacement(etat); //                          7. déplacement
   consommerReserve(etat); //                     8. consommation de réserve
   conditionsDeFin(etat); //                      9. conditions de fin

@@ -237,6 +237,9 @@ export function modulesDebloquesDuJoueur(etat) {
  * @param {'unite'|'module'} quoi
  * @returns {{code: string, message: string}[]}
  */
+/** Le nom de la branche tel qu'on l'écrit au joueur — la clé n'a pas d'accent. */
+const MOT_DE_LA_BRANCHE = { offense: 'offense', defense: 'défense' };
+
 export function problemesDeLAchat(etat, branche, id, quoi) {
   exigerBranche(branche);
   exigerQuoi(quoi);
@@ -262,10 +265,21 @@ export function problemesDeLAchat(etat, branche, id, quoi) {
         message: 'la pièce doit être débloquée avant son module',
       });
     }
-    if (nom !== null && !moduleEstCable(nom)) {
+    if (nom !== null && !moduleEstCable(nom, branche)) {
+      // ⚠ LE MESSAGE DIT LA BRANCHE QUAND L'AUTRE EST CÂBLÉE. « Effet à venir »
+      // sur la ligne défense pendant que la ligne offense du même module
+      // s'achète serait juste et déroutant : le joueur croirait à une attente,
+      // alors que ce module n'aura jamais d'effet de ce côté-là. Le mot vient
+      // du MOTEUR, jamais de l'écran — `ui/recherche.js` affiche ce message tel
+      // quel, sous la ligne.
+      // ⚠ LE MOT AFFICHÉ, PAS LA CLÉ : `branche` vaut `defense`, sans accent, et
+      // ce message part tel quel sous la ligne de l'écran.
+      const ailleurs = BRANCHES.some((b) => b !== branche && moduleEstCable(nom, b));
       problemes.push({
         code: 'effetNonCable',
-        message: `${MODULES[nom].libelle} n'a pas encore d'effet en jeu`,
+        message: ailleurs
+          ? `${MODULES[nom].libelle} n'a pas d'effet en ${MOT_DE_LA_BRANCHE[branche]}`
+          : `${MODULES[nom].libelle} n'a pas encore d'effet en jeu`,
       });
     }
   }
