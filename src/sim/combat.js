@@ -228,11 +228,14 @@ function profilUnite(id, u) {
     // Plancher de réserve : 10 % de la réserve NOMINALE, jamais de la réserve
     // courante — une unité montée déjà entamée garde le même plancher.
     plancherReserve: Math.floor((u.reserve * GRILLE.plancherReservePct) / 100),
-    moduleDefense: u.defense.module,
-    // ⚠ LE MODULE OFFENSIF EST DISTINCT DE `moduleDefense`, et il n'entrait pas
-    // dans le profil avant le lot RECHERCHE — rien ne le lisait. L'Écraseur le
-    // lit maintenant. Les deux coexistent parce qu'une pièce porte souvent deux
-    // modules différents selon le côté de la grille où elle se trouve.
+    // ⚠⚠ TROIS CHAMPS, TROIS SENS, ET AUCUN NOM AMBIGU. Une pièce porte
+    // jusqu'à trois modules différents : celui qu'elle emploie à l'assaut, celui
+    // qu'elle emploie en garnison CHEZ LE JOUEUR, celui qu'elle emploie en
+    // garnison CHEZ L'OUVRAGE. Un seul champ portait les deux derniers — le
+    // joueur ici, l'Ouvrage dans `profilDefense` : le même nom pour deux
+    // grandeurs, donc un lecteur sur deux qui se trompe sans le savoir.
+    moduleDefenseJoueur: u.defense.module,
+    moduleDefenseOuvrage: u.moduleOuvrage,
     module: u.module,
     presentEnDefense: u.defense.present === true,
   };
@@ -272,9 +275,10 @@ function profilDefense(id, d) {
     comportementAerien: null,
     reserveMax: 0,
     plancherReserve: 0,
-    // Le site appartient à l'Ouvrage : c'est son module qui compte pour les
-    // points de recherche.
-    moduleDefense: d.moduleOuvrage,
+    // Un ouvrage fixe n'a pas le même module selon qui le possède : la table
+    // porte les deux, le profil aussi.
+    moduleDefenseJoueur: d.moduleJoueur,
+    moduleDefenseOuvrage: d.moduleOuvrage,
     // Une structure ne se déplace pas : elle ne force rien.
     module: null,
     presentEnDefense: true,
@@ -302,7 +306,8 @@ function profilBatiment(id, b) {
     comportementAerien: null,
     reserveMax: 0,
     plancherReserve: 0,
-    moduleDefense: null,
+    moduleDefenseJoueur: null,
+    moduleDefenseOuvrage: null,
     module: null,
     presentEnDefense: false,
     indiceButin: b.indiceButin,
@@ -413,9 +418,15 @@ function profil(entite) {
   return TABLES_PROFIL[entite.genre][entite.id];
 }
 
-/** Une entité sans table de dégâts, sans portée, ou à table nulle, ne tire jamais. */
-function peutTirer(p) {
-  if (p.degatsColonne === null || p.porteeCarree === 0) return false;
+/**
+ * Une entité sans table de dégâts, sans portée, ou à table nulle, ne tire jamais.
+ *
+ * ⚠ LA PORTÉE SE LIT SUR L'ENTITÉ, PAS SUR LE PROFIL. Depuis MODULES-D elle
+ * peut varier d'une pièce à l'autre ; laisser CE lecteur-ci sur le profil
+ * donnerait une entité qui vise au-delà de sa portée sans jamais tirer.
+ */
+function peutTirer(e, p) {
+  if (p.degatsColonne === null || e.porteeCarree === 0) return false;
   return COLONNES_DEGATS.some((colonne) => p.degatsColonne[colonne] > 0);
 }
 
@@ -531,6 +542,13 @@ function ajouterEntite(
     // peuvent être à deux niveaux différents sur la même grille.
     degatsColonne,
     franchissementColonne,
+    // ⚠⚠ LA PORTÉE AUSSI, DEPUIS MODULES-D — mais elle ne suit pas le niveau,
+    // elle suit le MODULE. Deux Guetteurs de la même garnison n'ont pas le
+    // même rayon si l'un est du joueur et l'autre de l'Ouvrage ; un profil est
+    // PARTAGÉ par toutes les pièces d'un identifiant, il ne peut donc pas
+    // porter une grandeur qui varie de l'une à l'autre.
+    porteeCarree: p.porteeCarree,
+    porteeMiniCarree: p.porteeMiniCarree,
     reserve: res,
     plancherReserve: camp === 'attaque' ? p.plancherReserve : 0,
     vivant: true,
@@ -883,7 +901,7 @@ function ensembleCamoufles(etat) {
         if (c.camp === e.camp || !estActive(c)) continue;
         if (profil(c).colonneMatrice !== p.colonnePredilection) continue;
         const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
-        if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+        if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
         revele = true;
         break;
       }
@@ -906,7 +924,7 @@ function ciblage(etat) {
   for (const e of etat.entites) {
     if (!estActive(e)) continue;
     const p = profil(e);
-    if (!peutTirer(p)) {
+    if (!peutTirer(e, p)) {
       e.cibleIndice = null;
       continue;
     }
@@ -921,7 +939,7 @@ function ciblage(etat) {
       if (c.camp === e.camp || !estActive(c)) continue;
       if (masque !== null && masque.has(c.indice)) continue;
       const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
-      if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+      if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
       // UNE CIBLE VALIDE EST UNE CIBLE QU'ON PEUT BLESSER. Sans cette ligne, une
       // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
       // serre de plus près, et toute la couche anti-aérienne est inerte.
@@ -1029,7 +1047,7 @@ function cibleDeNeutralisation(etat, e, p, colonneVisee) {
     if (c.camp === e.camp || !estActive(c)) continue;
     if (profil(c).colonneMatrice !== colonneVisee) continue;
     const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
-    if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+    if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
     if (
       meilleur === null
       || d2 < meilleureDistance
@@ -1208,7 +1226,7 @@ function tir(etat) {
     if (!estActive(cible)) continue;
     const p = profil(e);
     const d2 = distanceCarree(e.rangeeMilli, e.colonne, cible.rangeeMilli, cible.colonne);
-    if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+    if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
     // Le MÊME prédicat que le ciblage — dont la réserve : le plancher porte sur
     // la nature de la cible, jamais sur la position du tireur (brief 2A §8). Sur
     // un bâtiment la réserve descend jusqu'à 0 et l'unité vidée ne tire plus ;
@@ -1411,6 +1429,17 @@ function peutEcraser(etat, e, p, occupante, po) {
 }
 
 /**
+ * Le module que cette entité emploie EN DÉFENSE — celui de son PROPRIÉTAIRE.
+ *
+ * ⚠⚠ LE DISCRIMINANT EST LE PROPRIÉTAIRE, PAS LE CAMP. Le camp dit de quel côté
+ * de la grille on est ; le propriétaire dit à qui la pièce appartient. Une même
+ * Herse rend `autoReparation` chez le joueur et `pvPlusVingt` chez l'Ouvrage.
+ */
+function moduleDeDefense(e, p) {
+  return e.proprietaire === 'joueur' ? p.moduleDefenseJoueur : p.moduleDefenseOuvrage;
+}
+
+/**
  * Le module de cette entité est-il acquis par SON propriétaire ?
  *
  * ⚠ TROIS CONDITIONS, ET AUCUNE N'EST DE TROP. La pièce doit PORTER le module
@@ -1418,12 +1447,18 @@ function peutEcraser(etat, e, p, occupante, po) {
  * et l'on regarde la liste de CE camp-là. Sans la troisième, un joueur qui
  * achète l'Écraseur l'offrirait aux Fendeurs de l'Ouvrage en face de lui.
  *
+ * ⚠⚠ ET « PORTER » DÉPEND DU CAMP. À l'assaut c'est `p.module` ; en défense
+ * c'est le module de garnison du propriétaire. Lire `p.module` des deux côtés
+ * donnait au Guetteur de garnison le Camouflage qu'il n'emploie qu'à l'assaut,
+ * et lui refusait le Rayon +1 qui est le sien.
+ *
  * ⚠ ET `modulesDebloques.ouvrage` NE SERT PAS ICI. Il majore les points de
  * recherche de 20 % sur une cible dont le module est débloqué — une autre
  * grandeur, dans l'autre sens. Voir `pointsRecherche`.
  */
 function moduleActif(etat, e, p, nom) {
-  if (p.module !== nom) return false;
+  const porte = e.camp === 'attaque' ? p.module : moduleDeDefense(e, p);
+  if (porte !== nom) return false;
   const liste = etat.modulesDebloques?.[e.proprietaire];
   return Array.isArray(liste) && liste.includes(nom);
 }
@@ -1736,7 +1771,7 @@ function ligneResultat(e) {
     pvInitialMilli: e.pvInitialMilli,
     pvPerdusIciMilli: e.pvInitialMilli - e.pvMilli,
     detruit: !e.vivant,
-    module: profil(e).moduleDefense ?? null,
+    module: moduleDeDefense(e, profil(e)) ?? null,
   };
 }
 

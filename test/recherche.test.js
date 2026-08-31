@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
@@ -2272,6 +2272,230 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
     }
   }
   assert.deepEqual(ouvertes, { offense: 12, defense: 0 });
+});
+
+// ---------------------------------------------------------------------------
+// MODULES-D — le champ qui mentait, la portée, et les quatre modules défensifs
+// ---------------------------------------------------------------------------
+
+/**
+ * Un montage de GARNISON dont on choisit le propriétaire, pour lire ce que
+ * chaque pièce déclare comme module de défense.
+ *
+ * ⚠ LE MODULE DE DÉFENSE NE SE LIT PAS DANS LE PROFIL, IL SE LIT AU RÉSULTAT.
+ * `ligneResultat` est le seul lecteur observable de `moduleDeDefense` avant
+ * qu'un module défensif ne soit câblé ; asserter le champ que le patch vient
+ * d'écrire ne prouverait rien.
+ */
+function garnisonDe(proprietaire) {
+  const montage = {
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+      { id: 'faucheuse', rangee: 9, colonne: 7, niveau: 20 },
+      { id: 'guetteur', rangee: 6, colonne: 4, niveau: 20 },
+      { id: 'carapace', rangee: 6, colonne: 6, niveau: 20 },
+      { id: 'broyeur', rangee: 7, colonne: 3, niveau: 20 },
+    ],
+    vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 40 }]],
+    proprietaireDefense: proprietaire,
+    proprietaireAttaque: proprietaire === 'joueur' ? 'ouvrage' : 'joueur',
+    modulesDebloques: { ouvrage: [], joueur: [] },
+  };
+  const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
+  const lu = {};
+  for (const d of resultat.defenses) lu[d.id] = d.module;
+  return lu;
+}
+
+test('MODULES-D T1 — `moduleDefense` a disparu de `src/`, sous ce nom-là', () => {
+  // ⚠ LE MOTIF EST BORNÉ À DROITE, ET C'EST TOUT L'ENJEU : les deux noms
+  // neufs COMMENCENT par l'ancien. Un `includes('moduleDefense')` nu trouverait
+  // `moduleDefenseJoueur` et ce test ne pourrait jamais tomber.
+  const motif = /moduleDefense(?![\p{L}\p{N}_])/gu;
+  const coupables = [];
+  for (const dossier of ['data', 'sim', 'render', 'ui']) {
+    const dir = new URL(`../src/${dossier}/`, import.meta.url);
+    for (const nom of readdirSync(dir)) {
+      const texte = readFileSync(new URL(nom, dir), 'utf8');
+      if (motif.test(texte)) coupables.push(`${dossier}/${nom}`);
+      motif.lastIndex = 0;
+    }
+  }
+  assert.deepEqual(coupables, [], 'un champ qui a menti une fois ment deux fois');
+
+  // ⚠ ET L'APPÂT PROUVE QUE LE MOTIF MORD ENCORE. Sans lui, une faute de frappe
+  // dans l'expression rendrait le balayage vert sur n'importe quelle source.
+  assert.equal(motif.test('  moduleDefense: u.defense.module,'), true);
+  motif.lastIndex = 0;
+  assert.equal(motif.test('  moduleDefenseJoueur: u.defense.module,'), false);
+  motif.lastIndex = 0;
+
+  // Les deux noms neufs, eux, sont bien là — un renommage qui les perdrait
+  // laisserait le balayage ci-dessus tout aussi vert.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  for (const nom of ['moduleDefenseJoueur', 'moduleDefenseOuvrage']) {
+    assert.equal((source.match(new RegExp(nom, 'g')) ?? []).length >= 3, true,
+      `${nom} doit être écrit sur les trois profils`);
+  }
+});
+
+test('MODULES-D T2 — le module de défense est celui du PROPRIÉTAIRE', () => {
+  const chezLOuvrage = garnisonDe('ouvrage');
+  const chezLeJoueur = garnisonDe('joueur');
+
+  // Un ouvrage fixe : la Herse rend `pvPlusVingt` à l'Ouvrage, `autoReparation`
+  // au joueur. Même pièce, même case, deux modules.
+  assert.equal(chezLOuvrage.merlon, 'pvPlusVingt');
+  assert.equal(chezLeJoueur.merlon, 'autoReparation');
+  // Une artillerie porte le MÊME des deux côtés : la table le dit, et c'est ce
+  // qui empêche de croire que la règle est « l'un ou l'autre au hasard ».
+  assert.equal(chezLOuvrage.faucheuse, 'rayonMiniMoinsUn');
+  assert.equal(chezLeJoueur.faucheuse, 'rayonMiniMoinsUn');
+
+  // Une unité de garnison : `moduleOuvrage` d'un côté, `defense.module` de
+  // l'autre. Le Guetteur n'a pas de module côté Ouvrage, et il a le Rayon +1
+  // côté joueur — c'est exactement ce que l'ancien champ inversait.
+  assert.equal(chezLOuvrage.guetteur, null);
+  assert.equal(chezLeJoueur.guetteur, 'rayonPlusUn');
+  assert.equal(chezLOuvrage.carapace, 'camouflage');
+  assert.equal(chezLeJoueur.carapace, 'emp');
+  assert.equal(chezLOuvrage.broyeur, 'volDeVie');
+  assert.equal(chezLeJoueur.broyeur, 'pvPlusVingt');
+
+  // ⚠ ET AUCUNE DES CINQ N'EST LUE COMME SON MODULE D'ASSAUT. C'est la faute
+  // qu'on retire : `guetteur.module` vaut `camouflage`, `broyeur.module` vaut
+  // `ecraseur`, et ni l'un ni l'autre n'a de rôle en garnison.
+  for (const [id, lu] of Object.entries(chezLeJoueur)) {
+    const assaut = UNITES[id]?.module;
+    if (assaut === undefined || assaut === lu) continue;
+    assert.notEqual(lu, assaut, `${id} lit encore son module d'assaut`);
+  }
+  assert.equal(UNITES.guetteur.module, 'camouflage', 'montage : la faute doit être atteignable');
+  assert.equal(UNITES.broyeur.module, 'ecraseur');
+});
+
+test('MODULES-D T3 — les modules déjà câblés tirent toujours, à l\'assaut', () => {
+  // ⚠ CE TEST PROTÈGE MODULES-A, B ET C. Le démêlage change la LECTURE du
+  // module ; s'il la changeait aussi du côté attaque, les sept modules câblés
+  // s'éteindraient tous d'un coup et aucun test de ce fichier ne dirait
+  // pourquoi. Chaque assertion ci-dessous tombe si `moduleActif` cesse de lire
+  // `p.module` en camp d'attaque.
+  const cables = Object.entries(MODULES)
+    .filter(([, m]) => m.cable.offense).map(([n]) => n).sort();
+  assert.deepEqual(cables, [
+    'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage',
+  ], 'sept modules câblés en offense — le compte EST la liste');
+
+  // Bouclier : le réservoir se pose AU MONTAGE, c'est le plus direct à lire.
+  const avecBouclier = sceneBouclier();
+  const enclume = avecBouclier.entites.find((e) => e.id === 'enclume');
+  assert.ok(enclume.bouclierMilli > 0, 'le Bouclier ne se pose plus à l\'assaut');
+  // Et il ne se pose PAS si le joueur ne l'a pas acheté : la garde est intacte.
+  const sansAchat = sceneBouclier({ modules: [] });
+  assert.equal(sansAchat.entites.find((e) => e.id === 'enclume').bouclierMilli, 0);
+
+  // Camouflage, Flashbang, EMP : le montage des trois modules de MODULES-B.
+  // ⚠ QUATRE-VINGTS TICKS, PAS QUARANTE : la Crécelle doit d'abord APPROCHER
+  // l'artillerie, seule cible `vehicule` de la scène. Mesuré — elle déclenche
+  // entre le 40ᵉ et le 80ᵉ tick, et un horizon trop court rendrait ce test
+  // rouge sur du code parfaitement sain.
+  const trois = montageTroisModules([0, 1, 2, 3, 4]);
+  for (let t = 1; t <= 80; t += 1) tick(trois);
+  const neutralisees = trois.entites.filter((e) => e.effetsTemporises.length > 0);
+  assert.ok(neutralisees.length > 0, 'plus aucune neutralisation à l\'assaut');
+  const porteurs = trois.entites.filter((e) => e.modulesActifs.length > 0).map((e) => e.id).sort();
+  assert.deepEqual(porteurs, ['belier', 'crecelle'], 'les deux porteurs doivent avoir tiré');
+
+  // Tir de barrage : la géométrie de MODULES-A T1, telle quelle — tireur en
+  // (2,5), cible en (3,5), voisine en (3,4). Les clés sont « rangée,colonne ».
+  const geometrie = (avecModule) => scene({
+    cible: { id: 'merlon', rangee: 3, colonne: 5 },
+    voisines: [{ id: 'merlon', rangee: 3, colonne: 4 }],
+    avecModule,
+  });
+  assert.ok(pertesAuPremierTick(geometrie(true)).get('3,4') > 0,
+    'le barrage n\'éclabousse plus');
+  assert.equal(pertesAuPremierTick(geometrie(false)).get('3,4'), 0,
+    'montage : sans achat, aucune éclaboussure');
+
+  // Écraseur : la masse d'un Fendeur DOUBLE contre une escouade — le seul
+  // lecteur observable est le forçage d'une structure, `structureForcee`.
+  const forcage = (modules) => {
+    const etat = creerCombat({
+      niveau: 1,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
+      defenseurs: [{ id: 'merlon', rangee: 4, colonne: 5, niveau: 1 }],
+      vagues: [[{ id: 'fendeur', colonne: 5, rangee: 3, niveau: 1 }]],
+      modulesDebloques: { ouvrage: [], joueur: modules },
+    });
+    const mur = etat.entites.find((e) => e.id === 'merlon');
+    const avant = mur.pvMilli;
+    for (let t = 1; t <= 12; t += 1) tick(etat);
+    return avant - mur.pvMilli;
+  };
+  const avecEcraseur = forcage(['ecraseur']);
+  const sansEcraseur = forcage([]);
+  assert.ok(avecEcraseur > sansEcraseur,
+    `l'Écraseur ne force plus la structure (${avecEcraseur} vs ${sansEcraseur})`);
+});
+
+/** Le montage de référence de T4 : deux unités de garnison et un ouvrage. */
+function raidDeReference(ouvrage) {
+  const montage = {
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+      { id: 'meute', rangee: 6, colonne: 4, niveau: 20 },
+      { id: 'perceurs', rangee: 6, colonne: 6, niveau: 18 },
+    ],
+    vagues: [[
+      { id: 'belier', colonne: 5, rangee: 2, niveau: 30 },
+      { id: 'belier', colonne: 4, rangee: 2, niveau: 30 },
+      { id: 'belier', colonne: 6, rangee: 2, niveau: 30 },
+    ]],
+    modulesDebloques: { ouvrage, joueur: [] },
+  };
+  const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
+  return { resultat, points: pointsRecherche(resultat, montage) };
+}
+
+test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', () => {
+  // ⚠ LE CANAL DU JEU EST VIDE, ET C'EST LUI QU'ON GÈLE. `sim/generateur.js`
+  // livre `modulesDebloques.ouvrage` à VIDE sur tous les sites : le bonus de
+  // 20 % n'est jamais accordé en partie. Le nombre ci-dessous a été mesuré des
+  // DEUX côtés du démêlage et il est identique — c'est la mesure que le rapport
+  // porte.
+  const jeu = raidDeReference([]);
+  assert.equal(jeu.points, 2059722n, 'les points du raid de référence ont bougé');
+  assert.equal(jeu.resultat.tick, 120, 'montage : le combat doit se dérouler pareil');
+
+  // ⚠ ET LE MONTAGE N'EST PAS VIDE. Le Merlon porte `pvPlusVingt` côté Ouvrage :
+  // débloquer ce module-là majore bien les points. Sans cette ligne, l'égalité
+  // ci-dessous passerait sur un barème qui ne majore jamais rien.
+  assert.equal(raidDeReference(['pvPlusVingt']).points, 2106166n);
+
+  // ⚠⚠ LA MESURE DU LOT. Avant le démêlage, la Meute et les Perceurs de
+  // l'Ouvrage étaient crédités du module de garnison DU JOUEUR — 2 291 944 et
+  // 2 193 000 mesurés sur `origin/main`. Ils portent maintenant leur
+  // `moduleOuvrage`, qui est nul : plus aucune majoration ne leur revient.
+  assert.equal(raidDeReference(['flashbang']).points, 2059722n);
+  assert.equal(raidDeReference(['tirDeBarrage']).points, 2059722n);
+  assert.equal(raidDeReference(['flashbang', 'tirDeBarrage', 'pvPlusVingt']).points, 2106166n);
+
+  // Et les deux unités de garnison rapportent bien quelque chose : sans cela,
+  // les trois égalités ci-dessus tiendraient parce que rien n'est compté.
+  const parId = new Map(jeu.resultat.defenses.map((d) => [d.id, d]));
+  for (const id of ['meute', 'perceurs']) {
+    assert.ok(parId.get(id).pvInitialMilli - parId.get(id).pvMilli > 0,
+      `montage : ${id} doit être entamée`);
+    assert.equal(parId.get(id).module, null, `${id} lit encore un module côté Ouvrage`);
+  }
 });
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
