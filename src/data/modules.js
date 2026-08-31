@@ -93,7 +93,7 @@ export const MODULES = {
   },
   autoReparation: {
     libelle: 'Auto-réparation',
-    cable: { offense: false, defense: false },
+    cable: { offense: false, defense: true },
     description: 'répare automatiquement 20 % des PV manquants après un raid, '
       + 'quel que soit le QG ou le complexe de défense',
   },
@@ -131,17 +131,17 @@ export const MODULES = {
   },
   rayonMiniMoinsUn: {
     libelle: 'Rayon minimum −1',
-    cable: { offense: false, defense: false },
+    cable: { offense: false, defense: true },
     description: 'rayon minimum réduit de 1',
   },
   pvPlusVingt: {
     libelle: 'PV +20 %',
-    cable: { offense: false, defense: false },
+    cable: { offense: false, defense: true },
     description: '20 % de PV supplémentaires',
   },
   rayonPlusUn: {
     libelle: 'Rayon +1',
-    cable: { offense: false, defense: false },
+    cable: { offense: false, defense: true },
     description: '1 rayon d\'attaque supplémentaire',
   },
 };
