@@ -284,6 +284,16 @@
     --atlas-terrain: url('%ATLAS_TERRAIN_BASE%');
     --atlas-defense: url('%ATLAS_DEFENSE%');
     --atlas-socle: url('%ATLAS_SOCLE%');
+    /* ⚠ LE MUR DE CONTOUR N'EST PAS UN ATLAS. Ses images font 512 × 64 et
+       64 × 64 — `tools/atlas.py` ne coud que des cellules carrées d'un même
+       côté —, donc chacune entre par son propre marqueur. Seul le camp du
+       joueur est ici : les cinq de l'Ouvrage sont produites et attendent
+       l'écran de raid. */
+    --mur-j-h-a: url('%MUR_J_H_A%');
+    --mur-j-v-a: url('%MUR_J_V_A%');
+    --mur-j-v-b: url('%MUR_J_V_B%');
+    --mur-j-angle-no: url('%MUR_J_ANGLE_NO%');
+    --mur-j-angle-ne: url('%MUR_J_ANGLE_NE%');
   }
 
   /* ⚠⚠ QUATRE ATLAS QUI SERVENT DES DEUX CÔTÉS — EN FOND CSS ET EN `drawImage`.
@@ -477,9 +487,53 @@
   /* `position: relative` porte le calque des traits de voisinage — voir plus
      bas. Un enfant `absolute` d'un conteneur `grid` sort du flux : il ne
      devient pas une case, il se cale sur la boîte entière. */
+  /* ⚠⚠ UNE DEMI-CASE DE MARGE TOUT AUTOUR, ET C'EST LE MUR DE CONTOUR QUI
+     L'EXIGE. Ses pièces se posent À CHEVAL sur la ligne qui borde la base
+     (arbitré le 31/08, « à cheval sur le bord ») : un mur fait une case
+     d'épaisseur et se centre sur cette ligne, donc il mord d'une demi-case de
+     chaque côté. Sans ce `padding`, la moitié extérieure sortirait de la boîte
+     et le champ se mettrait à défiler horizontalement au repos — mesuré, 414 px
+     de grille dans 360 —, ce que « tu compresses tout dans l'ui » refuse.
+     ⚠ ET `coteQuiTient` DIVISE PAR `largeur + 1`, PAS PAR `largeur` : la boîte
+     fait neuf colonnes plus deux demi-cases, donc dix cases de large. Le
+     calculer sur neuf redonnerait exactement le débordement qu'on retire. */
   #chantier-grille {
     display: grid; align-content: start; margin-inline: auto; position: relative;
     width: max-content;
+    padding: calc(var(--case-cote) / 2);
+  }
+  /* ⚠⚠ LE MUR DE CONTOUR. Il se POSE sur la grille et ne prend aucun geste :
+     `pointer-events: none`, comme le calque des traits de voisinage — un mur qui
+     avalerait le toucher d'une case du pourtour serait la faute que le dépôt
+     refuse depuis qu'il interdit un `transform: scale()` sur cette grille.
+
+     ⚠⚠ TROIS ÉTAGES, ET LE MUR EST CELUI DU MILIEU : le SOL des cases (aucun
+     `z-index`), puis le MUR, puis les JETONS et le calque des traits. C'est
+     l'ordre du document qui décidait jusqu'au 31/08, et il donnait le mur EN
+     DESSOUS de tout — donc sous le sol des cases qu'il chevauche. Mesuré dans
+     Chromium : la moitié intérieure du trait était cachée, et pas la même
+     moitié en haut qu'en bas, si bien que le mur du haut et celui du bas ne
+     montraient pas le même dessin. Invisible tant que le trait faisait un
+     huitième de case ; flagrant depuis qu'il en fait la moitié.
+
+     ⚠ UN MUR À CHEVAL RECOUVRE FORCÉMENT DU SOL, et c'est l'arbitrage d'Ethan
+     du 31/08 (« à cheval sur le bord »), pas un effet de bord. Deux des quatre
+     côtés de la base n'ont d'ailleurs AUCUNE marge où se réfugier : la bande de
+     défense commence là où celle des bâtiments finit. Ce que le mur mange, c'est
+     le quart extérieur d'une case du pourtour — son liseré de case légale
+     compris, sur ce côté-là seulement, les trois autres restant lisibles. */
+  #chantier-contour { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+  /* ⚠ LA TAILLE VIENT DU JS, EN UNITÉS DE CASE : un mur court d'un bout à
+     l'autre de son côté, un angle fait une case. `background-size: 100% 100%`
+     étire donc l'image sur la pièce — au plafond du zoom c'est le rapport 1:1,
+     l'asset faisant 512 pixels pour huit cases de 64.
+     ⚠ ET `image-rendering: pixelated` RESTE, malgré les seize couleurs : le
+     dessin est de l'art de pixel, et un lissage lui donnerait un flou que les
+     sprites voisins n'ont pas. */
+  #chantier-contour .mur {
+    position: absolute;
+    background-repeat: no-repeat; background-size: 100% 100%;
+    image-rendering: pixelated;
   }
   /* ⚠ `aspect-ratio: 1` NE SE TOUCHE PAS. Une case carrée est ce qui fait qu'une
      cellule d'atlas de 64×64 tombe dans un cadre de même proportion : la rendre
@@ -529,7 +583,16 @@
      l'os de la sélection, qui reste plus clair et l'emporte — cette règle est
      posée AVANT elle exprès, les deux ayant la même spécificité. */
   .case.legale { outline: 2px solid #8C9A72; outline-offset: -2px; }
-  .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; z-index: 1; }
+  /* ⚠ ELLE N'A PLUS DE `z-index`, ET C'EST MESURÉ AVANT D'ÊTRE RETIRÉ. Il ne
+     peignait rien : `outline-offset: -2px` tient le liseré À L'INTÉRIEUR de la
+     case, où aucune voisine ne le recouvre — montage de douze cases légales
+     autour d'une choisie, capture avec et sans, ZÉRO pixel de différence sur
+     457 600. Il coûtait en revanche cher depuis le mur : un `z-index` sur une
+     case en fait un CONTEXTE D'EMPILEMENT, donc son jeton restait prisonnier de
+     l'étage 1 et le mur lui passait dessus. Le bâtiment sélectionné — celui
+     dont on vient d'ouvrir le panneau — aurait été le seul barré par son
+     propre mur. */
+  .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
   /* ⚠⚠ LE JETON A GRANDI DE 20 %, ET LE FACTEUR EST ÉCRIT PLUTÔT QUE FONDU.
      Ethan, 30/08 : « les bâtiments sont bien trop petits, surtout collecteur
      etc. Augmenter la taille du sprite de 20 %. Pas le choix pour l'instant. »
@@ -560,7 +623,12 @@
     --jeton-grossissement: 1.2;
     width: calc(var(--jeton-part) * var(--jeton-grossissement));
     height: calc(var(--jeton-part) * var(--jeton-grossissement));
-    position: relative;
+    /* ⚠ L'ÉTAGE 2, LE MÊME QUE LE CALQUE DES TRAITS : au-dessus du mur de
+       contour, qui chevauche le quart extérieur des cases du pourtour. Le mur
+       est un décor, un bâtiment est une information de jeu — c'est lui qui
+       passe devant. Sans ce `z-index`, l'ordre du document mettrait le mur
+       par-dessus, puisque le calque est un frère des cases. */
+    position: relative; z-index: 2;
     display: flex; align-items: center; justify-content: center;
     font-size: 9px; font-weight: 600; color: #F5F3E8; letter-spacing: 0.02em;
   }
@@ -757,8 +825,14 @@
      (`z-index: 1`) : un trait qui passerait dessous serait coupé par le jeton
      qu'il relie, donc à moitié invisible — ce qu'on vient justement de
      corriger. */
+  /* ⚠⚠ IL SE CALE SUR LE CONTENU, PAS SUR LA BOÎTE. Depuis que la grille porte
+     une demi-case de `padding` pour le mur de contour, `inset: 0` désignerait la
+     boîte de padding — dix cases sur dix-neuf — alors que le `viewBox` de ce
+     SVG dit neuf sur dix-huit. Les traits de voisinage seraient étirés de 11 %
+     en largeur et de 6 % en hauteur, et rien ne le dirait : ils partiraient
+     simplement à côté des centres de case qu'ils relient. */
   #chantier-traits {
-    position: absolute; inset: 0; z-index: 2;
+    position: absolute; inset: calc(var(--case-cote) / 2); z-index: 2;
     pointer-events: none; overflow: visible;
   }
   #chantier-traits .trait { stroke: #F5B636; fill: none; }
