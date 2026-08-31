@@ -880,6 +880,9 @@ function apparitionDeVague(etat, casesPrises = null) {
   etat.enAttente = restants;
 }
 
+/** La majoration de la Munition spéciale, en pour-cent du tir nu. */
+const MUNITION_PCT = 120;
+
 /**
  * Dégâts effectifs qu'un tir de `e` porterait à `cible`, en milli-PV.
  *
@@ -896,10 +899,39 @@ function apparitionDeVague(etat, casesPrises = null) {
  *     plancher de réserve ne protège que les bâtiments : le tir sur une entité
  *     de la défense reste gratuit, donc toujours valide.
  */
-function degatsContre(e, p, cible) {
+function degatsContre(etat, e, p, cible) {
   const pc = profil(cible);
   if (pc.genre === 'batiment' && e.camp === 'attaque' && e.reserve <= 0) return 0;
-  return degatsDUnTir(e.degatsColonne[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
+  const degats = degatsDUnTir(e.degatsColonne[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
+  // MUNITION SPÉCIALE — « +0,2 sur la matrice de la cible de prédilection ».
+  //
+  // ⚠ IL N'Y A PLUS DE MATRICE, ET L'ÉQUIVALENCE EST DÉJÀ ÉTABLIE. Le lot 4A a
+  // supprimé les facteurs bornés à 0…1000 ; `colonneDominante` note, deux cents
+  // lignes plus haut, qu'elle « remplace le facteur de matrice égal à 1,0 » et
+  // que les deux lectures coïncident sur les 23 profils. Porter ce facteur de
+  // 1,0 à 1,2, c'est donc majorer de 20 % les dégâts portés dans la colonne de
+  // PRÉDILECTION, et rien d'autre : les autres colonnes ne bougent pas. Le
+  // module n'ouvre pas la pièce, il aiguise ce qu'elle fait déjà le mieux.
+  //
+  // ⚠⚠ ICI ET PAS DANS `tir`. Le tir appelle `degatsContre` DEUX fois — une
+  // pour sa cible, une par voisine du Tir de barrage — et le ciblage l'appelle
+  // en prédicat de validité. Majorer dans `tir` ne toucherait que la première.
+  // Le barrage en profite donc sans qu'une ligne l'y branche ; aucune des trois
+  // porteuses (Casemate, Batterie, Créneau) ne porte le barrage, le cas reste
+  // théorique, et un test le fige.
+  //
+  // ⚠ LE FRANCHISSEMENT DES BARRIÈRES N'EST PAS CONCERNÉ : il passe par
+  // `degatsDeFranchissement`, sa propre table en milli-PV et son propre barème.
+  // Aucune ligne d'Ethan ne l'y rattache.
+  //
+  // ⚠ `colonnePredilection` VAUT `null` pour une entité qui ne tire pas — la
+  // comparaison est donc écrite dans ce sens, jamais `p.colonnePredilection ===
+  // pc.colonneMatrice` seul, qui serait vrai si les deux valaient `null`.
+  if (p.colonnePredilection === null) return degats;
+  if (pc.colonneMatrice !== p.colonnePredilection) return degats;
+  if (!moduleActif(etat, e, p, 'munitionSpeciale')) return degats;
+  // Un seul `floor`, sur le produit, comme partout ailleurs dans ce moteur.
+  return Math.floor((degats * MUNITION_PCT) / 100);
 }
 
 /**
@@ -989,7 +1021,7 @@ function ciblage(etat) {
       // UNE CIBLE VALIDE EST UNE CIBLE QU'ON PEUT BLESSER. Sans cette ligne, une
       // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
       // serre de plus près, et toute la couche anti-aérienne est inerte.
-      if (degatsContre(e, p, c) === 0) continue;
+      if (degatsContre(etat, e, p, c) === 0) continue;
       if (
         meilleur === null
         || d2 < meilleureDistance
@@ -1015,7 +1047,7 @@ function ciblage(etat) {
       // continuerait de la viser indéfiniment, et le module serait sans effet
       // dans tous les cas où il compte le plus — celui où le camouflé est la
       // seule chose à portée.
-      if (!estActive(ancienne) || degatsContre(e, p, ancienne) === 0
+      if (!estActive(ancienne) || degatsContre(etat, e, p, ancienne) === 0
           || (masque !== null && masque.has(ancienne.indice))) {
         e.cibleIndice = null;
       }
@@ -1246,7 +1278,7 @@ function tirDeBarrage(etat, e, p, cible, ajouter) {
     if (Math.abs(caseDepuisMilli(v.rangeeMilli) - rangeeCible) > 1) continue;
     if (Math.abs(v.colonne - cible.colonne) > 1) continue;
     // Un seul `floor`, sur le produit — comme partout ailleurs dans ce moteur.
-    const degats = Math.floor((degatsContre(e, p, v) * BARRAGE_PCT) / 100);
+    const degats = Math.floor((degatsContre(etat, e, p, v) * BARRAGE_PCT) / 100);
     if (degats > 0) ajouter(v.indice, degats);
   }
 }
@@ -1288,7 +1320,7 @@ function tir(etat) {
     // sur une entité de la défense elle s'arrête au plancher et le tir continue.
     // Depuis le lot 3C le ciblage a déjà écarté les cibles à zéro dégât : ce
     // test ne peut plus mordre, et il vaut comme énoncé de l'invariant.
-    const degats = degatsContre(e, p, cible);
+    const degats = degatsContre(etat, e, p, cible);
     if (degats === 0) continue;
     ajouter(e.cibleIndice, degats);
     e.aTire = true;

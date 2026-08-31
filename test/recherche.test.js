@@ -3790,3 +3790,264 @@ test('MODULES-E T8 — le déterminisme tient, les deux branches armées', () =>
   assert.deepEqual(etatJoue.entites.find((e) => e.id === 'carapace').modulesActifs, ['booster'],
     'montage inerte : le Booster de l\'ATTAQUANT n\'est pas lu');
 });
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-F — Munition spéciale, Vol de vie, et le canal de l'Ouvrage
+//
+// Les deux derniers modules sans effet partagent une singularité : le joueur ne
+// peut pas les acheter. Aucune pièce ne les porte côté joueur — `moduleJoueur`
+// des trois tourelles vaut `autoReparation`, `module` du Broyeur vaut
+// `ecraseur` et celui de l'Enclume `bouclier`. Seul `moduleOuvrage` les cite.
+// ---------------------------------------------------------------------------
+
+/** Les deux branches vides, pour un propriétaire qui ne débloque rien. */
+const RIEN = { offense: [], defense: [] };
+
+/** La colonne dominante d'une table de dégâts, à la règle de `colonneDominante`. */
+function dominanteDe(table) {
+  if (table === null || table === undefined) return null;
+  let meilleure = null;
+  let max = 0;
+  let exAequo = false;
+  for (const colonne of ['infanterie', 'vehicule', 'structureOuAviation']) {
+    if (table[colonne] > max) {
+      max = table[colonne];
+      meilleure = colonne;
+      exAequo = false;
+    } else if (table[colonne] === max && max > 0) {
+      exAequo = true;
+    }
+  }
+  return exAequo ? 'ambigu' : meilleure;
+}
+
+/** Le corps d'une fonction de `combat.js`, de sa signature à la suivante. */
+function corpsDe(nom) {
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  const debut = source.indexOf(`function ${nom}(`);
+  assert.notEqual(debut, -1, `fonction ${nom} introuvable`);
+  const suite = source.indexOf('\nfunction ', debut + 1);
+  return source.slice(debut, suite === -1 ? source.length : suite);
+}
+
+/** Une tourelle de garnison face à une seule unité, module armé ou non. */
+function tourelleContre(porteur, cible, arme) {
+  return creerCombat({
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
+    defenseurs: [{ id: porteur, rangee: 4, colonne: 5, niveau: 1 }],
+    vagues: [[{ id: cible, colonne: 5, rangee: 3, niveau: 1 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: arme ? ['munitionSpeciale'] : [] },
+      joueur: RIEN,
+    },
+  });
+}
+
+/** Les PV que `cible` perd au PREMIER tick de la scène. */
+function perteAuPremierTick(etat, cibleId) {
+  const c = etat.entites.find((e) => e.id === cibleId);
+  const avant = c.pvMilli;
+  tick(etat);
+  return avant - c.pvMilli;
+}
+
+test('MODULES-F T1 — la Munition spéciale majore la colonne de PRÉDILECTION, et elle seule', () => {
+  // ⚠ LES TROIS PORTEUSES COUVRENT LES TROIS COLONNES, ce qui rend la grille
+  // complète : Casemate {20, 7, 8} → infanterie, Créneau {10, 35, 0} →
+  // véhicule, Batterie {0, 0, 40} → structure/aviation. Aucune colonne n'est
+  // testée par une seule porteuse, aucune porteuse par une seule colonne.
+  const CIBLE_DE_LA_COLONNE = {
+    infanterie: 'meute',            // châssis escouade
+    vehicule: 'belier',             // châssis blindé
+    structureOuAviation: 'crecelle', // châssis aéronef
+  };
+  const releve = [];
+  for (const porteur of ['casemate', 'creneau', 'batterie']) {
+    // La prédilection est LUE SUR LA DONNÉE, jamais écrite en dur : un patch
+    // qui majorerait une colonne fixe passerait une assertion codée en dur.
+    const predilection = dominanteDe(DEFENSES[porteur].degats);
+    assert.ok(predilection !== null && predilection !== 'ambigu',
+      `${porteur} : prédilection ${predilection}, la Munition spéciale y serait inerte`);
+    let majorees = 0;
+    for (const [colonne, cible] of Object.entries(CIBLE_DE_LA_COLONNE)) {
+      const nu = perteAuPremierTick(tourelleContre(porteur, cible, false), cible);
+      const arme = perteAuPremierTick(tourelleContre(porteur, cible, true), cible);
+      releve.push([porteur, colonne, nu, arme]);
+      if (colonne === predilection) {
+        assert.ok(nu > 0, `montage inerte : ${porteur} ne blesse pas ${cible}`);
+        assert.equal(arme, Math.floor((nu * 120) / 100),
+          `${porteur} → ${colonne} : la majoration n'est pas +20 % au floor près`);
+        assert.notEqual(arme, nu, `${porteur} → ${colonne} : rien n'a bougé`);
+        majorees += 1;
+      } else {
+        assert.equal(arme, nu, `${porteur} → ${colonne} : une colonne hors prédilection a bougé`);
+      }
+    }
+    assert.equal(majorees, 1, `${porteur} : ${majorees} colonnes majorées au lieu d'une`);
+  }
+  // Le relevé, en clair, pour que le rapport n'ait pas à le recopier de tête.
+  assert.deepEqual(releve, [
+    ['casemate', 'infanterie', 20000, 24000],
+    ['casemate', 'vehicule', 7000, 7000],
+    ['casemate', 'structureOuAviation', 8000, 8000],
+    ['creneau', 'infanterie', 10000, 10000],
+    ['creneau', 'vehicule', 35000, 42000],
+    ['creneau', 'structureOuAviation', 0, 0],
+    ['batterie', 'infanterie', 0, 0],
+    ['batterie', 'vehicule', 0, 0],
+    ['batterie', 'structureOuAviation', 40000, 48000],
+  ]);
+});
+
+test('MODULES-F T2 — la majoration vit dans `degatsContre`, PAS dans `tir`', () => {
+  // ⚠ ÉCART AU BRIEF, ET IL EST STRUCTUREL. Le brief demandait « un porteur
+  // fictif qui a les deux modules » pour montrer que le Tir de barrage profite
+  // de la Munition spéciale. Ce porteur ne peut pas exister : `moduleActif` lit
+  // UN SEUL nom par entité (`p.module` à l'assaut, `moduleDefense*` en
+  // garnison), les tables de profil ne sont pas exportées, et les deux modules
+  // ne cohabitent sur aucune pièce — le barrage est un module d'ATTAQUANT
+  // (il ne frappe que `defense` et `batiment`), la Munition spéciale un module
+  // de tourelle EN GARNISON. La conséquence se garde donc là où elle se décide.
+  const dansDegatsContre = corpsDe('degatsContre');
+  const dansTir = corpsDe('tir');
+  const dansBarrage = corpsDe('tirDeBarrage');
+  assert.match(dansDegatsContre, /MUNITION_PCT/,
+    'la majoration a quitté `degatsContre` : le barrage et le ciblage la perdraient');
+  assert.doesNotMatch(dansTir, /MUNITION_PCT/,
+    'la majoration est remontée dans `tir` : le barrage ne la verrait plus');
+  // Et le barrage passe bien par `degatsContre`, donc il en hérite sans qu'une
+  // ligne l'y branche. Si un jour une porteuse cumule les deux, ce sera acquis.
+  assert.match(dansBarrage, /degatsContre\(etat, e, p, v\)/,
+    'le barrage ne calcule plus ses voisines par `degatsContre`');
+
+  // La moitié mesurée : l'identité voisine = floor(direct × 30 / 100) tient.
+  // Elle ne garde pas la Munition spéciale — aucune porteuse ne cumule — mais
+  // elle garde le chemin par lequel la majoration passerait.
+  const scene = (barrage) => creerCombat({
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 3, colonne: 5, niveau: 1 },
+      { id: 'merlon', rangee: 3, colonne: 4, niveau: 1 },
+    ],
+    vagues: [[{ id: 'perceurs', colonne: 5, rangee: 2, niveau: 1 }]],
+    modulesDebloques: {
+      ouvrage: RIEN,
+      joueur: { offense: barrage ? ['tirDeBarrage'] : [], defense: [] },
+    },
+  });
+  const pertes = (barrage) => {
+    const etat = scene(barrage);
+    const murs = etat.entites.filter((e) => e.id === 'merlon');
+    const avant = murs.map((m) => m.pvMilli);
+    tick(etat);
+    return murs.map((m, i) => avant[i] - m.pvMilli);
+  };
+  const [directNu, voisineNue] = pertes(false);
+  const [direct, voisine] = pertes(true);
+  assert.ok(directNu > 0, 'montage inerte : les Perceurs ne touchent rien');
+  assert.equal(voisineNue, 0, 'la voisine encaisse sans barrage : le montage ne prouve rien');
+  assert.equal(direct, directNu, 'le barrage a changé le tir direct');
+  assert.equal(voisine, Math.floor((direct * 30) / 100),
+    'la voisine ne reçoit plus exactement 30 % du tir calculé par `degatsContre`');
+});
+
+test('MODULES-F T3 — le franchissement des barrières n\'est PAS majoré', () => {
+  // Le franchissement passe par `degatsDeFranchissement`, sa propre table en
+  // milli-PV et son propre barème. Aucune ligne d'Ethan ne l'y rattache.
+  assert.doesNotMatch(corpsDe('degatsDeFranchissement'), /MUNITION_PCT/,
+    'la Munition spéciale est entrée dans le franchissement');
+
+  // Et la mesure : une Herse franchie, `munitionSpeciale` débloqué côté Ouvrage.
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : une majoration branchée sur la LISTE
+  // débloquée au lieu du PORTEUR — la Herse ne porte pas le module (son
+  // `moduleOuvrage` est `pvPlusVingt`), mais la liste, elle, le contient ici.
+  //
+  // Le montage est celui de `generateur T14`, dont le relevé est connu au
+  // milli-PV : Herse en rangée 3, Fendeur qui entre sur la case au tick 12 et
+  // paie floor(15 000 × 920 / 1000) = 13 800 milli-PV ce tick-là.
+  const scene = (arme) => creerCombat({
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [{ id: 'gangue', rangee: 18, colonne: 1 }],
+    defenseurs: [{ id: 'herse', rangee: 3, colonne: 5 }],
+    vagues: [[{ id: 'fendeur', colonne: 5 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: arme ? ['munitionSpeciale'] : [] },
+      joueur: RIEN,
+    },
+  });
+  const franchi = (arme) => {
+    const etat = scene(arme);
+    const f = etat.entites.find((e) => e.camp === 'attaque');
+    for (let t = 0; t < 12; t += 1) tick(etat);
+    const avant = f.pvMilli;
+    tick(etat);
+    return avant - f.pvMilli;
+  };
+  const nu = franchi(false);
+  assert.equal(nu, 13_800, 'montage inerte : le Fendeur ne franchit rien, la garde ne mesure rien');
+  assert.equal(franchi(true), nu, 'le franchissement a changé avec la Munition spéciale débloquée');
+});
+
+test('MODULES-F T4 — une pièce sans prédilection ne tire pas, et rien ne compare deux `null`', () => {
+  // ⚠ LA GARDE `colonnePredilection === null` EST DÉFENSIVE, ET LE TEST LE DIT.
+  // `ciblage` n'appelle `degatsContre` qu'après `peutTirer`, qui exige une
+  // table de dégâts non nulle et au moins une colonne positive ; or
+  // `colonneDominante` ne rend `null` que dans le cas contraire. Aucun montage
+  // ne peut donc amener une entité sans prédilection à `degatsContre` comme
+  // TIREUR. Ce qui est gardable, c'est la prémisse — et elle l'est sur la donnée.
+  const sansPredilection = [];
+  for (const [id, d] of Object.entries(DEFENSES)) {
+    if (dominanteDe(d.degats) === null) sansPredilection.push(id);
+  }
+  for (const [id, u] of Object.entries(UNITES)) {
+    if (dominanteDe(u.degats) === null) sansPredilection.push(id);
+  }
+  assert.deepEqual(sansPredilection.sort(), ['herse', 'merlon', 'ronce'],
+    'la liste des pièces sans prédilection a changé : revoir la garde de `degatsContre`');
+  for (const id of sansPredilection) {
+    assert.equal(DEFENSES[id].degats, null,
+      `${id} n'a pas de prédilection MAIS porte une table : il pourrait devenir tireur`);
+  }
+
+  // (ii) Aucune cible n'a de `colonneMatrice` nulle — la colonne se lit sur le
+  // châssis pour une unité, sur le type pour une défense, en dur pour un
+  // bâtiment. Une comparaison naïve ne pourrait donc jamais apparier deux
+  // `null`. Cette garde tombe le jour où un châssis ou un type est ajouté.
+  const chassis = new Set(Object.values(UNITES).map((u) => u.chassis));
+  const types = new Set(Object.values(DEFENSES).map((d) => d.type));
+  assert.deepEqual([...chassis].sort(), ['aeronef', 'blinde', 'escouade']);
+  assert.deepEqual([...types].sort(), ['artillerie', 'barriere', 'mur', 'tourelle']);
+
+  // (iii) Les trois porteuses ont une prédilection : le module n'est inerte sur
+  // aucune d'elles.
+  for (const [id, d] of Object.entries(DEFENSES)) {
+    if (d.moduleOuvrage !== 'munitionSpeciale') continue;
+    assert.ok(dominanteDe(d.degats) !== null && dominanteDe(d.degats) !== 'ambigu',
+      `${id} porte la Munition spéciale sans prédilection : elle serait inerte`);
+  }
+
+  // (iv) Et la scène passe : un Merlon sans table, module débloqué, cent ticks.
+  const etat = creerCombat({
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 4, colonne: 5, niveau: 1 },
+      { id: 'casemate', rangee: 5, colonne: 5, niveau: 1 },
+    ],
+    vagues: [[{ id: 'meute', colonne: 5, rangee: 2, niveau: 1 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: ['munitionSpeciale'] },
+      joueur: RIEN,
+    },
+  });
+  for (let t = 1; t <= 100 && !etat.termine; t += 1) tick(etat);
+  assert.ok(etat.entites.find((e) => e.id === 'meute').pvMilli < 700000,
+    'montage inerte : la Casemate n\'a jamais tiré');
+});
