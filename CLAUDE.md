@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
+Dernière révision : **31/08/2026**, version 0.59.0 · build 60.
 
 ---
 
@@ -41,9 +41,41 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MUR-DE-CONTOUR), à confronter :**
-`npm test` → **768 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 333 691 octets**, 0 référence externe.
+**Référence au 31/08/2026 (après le lot POI), à confronter :**
+`npm test` → **792 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 339 823 octets**, 0 référence externe.
+⚠⚠ **CE LOT A COÛTÉ +6 132 OCTETS ET N'A FAIT ENTRER AUCUNE IMAGE.** Les sept
+sprites de POI étaient dans l'atlas `carte` depuis le lot CARTE-EMBLÈMES, payés
+et invisibles : ce qui entre ici, c'est le MODÈLE qui les demande. La borne T10
+NE BOUGE PAS — marge **60 177 octets, 4,30 %**.
+⚠⚠ **LE PRÉ-BRANCHEMENT DU 26/08 A TENU SA PROMESSE, ET C'EST MESURABLE.**
+`render/embleme.js` promettait : « le jour où le modèle en produira, SEUL le
+modèle changera ». Le jour est venu ; côté dessin, `spriteDuSite` a gagné DEUX
+lignes et aucun sprite n'a été retouché. L'interdiction inverse que le même
+fichier portait — « ne pas ajouter `poi_reacteur` à `EMBLEMES_CARTE` » — a été
+RÉÉCRITE, pas enjambée : un garde-fou qu'on franchit sans le récrire est un
+garde-fou qui mentira au lecteur suivant.
+⚠⚠ **SOIXANTE-DIX POI SONT GÉNÉRÉS, DESSINÉS, CLIQUABLES ET TESTÉS — ET AUCUN
+N'EST ACQUÉRABLE EN PARTIE NORMALE.** Le redéploiement n'est pas écrit (« on
+verra ça après », Ethan, 31/08). Le brief du lot annonçait « seuls les POI qui
+tombent dans les vingt-cinq cases autour de la rangée 295 / colonne 16 pourront
+être acquis » ; **mesuré sur 200 graines, il n'y en a aucun, et il ne peut pas y
+en avoir.** Les deux règles sont disjointes PAR CONSTRUCTION : un POI est hors de
+la garde, donc à quinze cases au moins du départ ; le territoire du joueur est le
+disque de rayon 2 autour de sa base, qui EST le départ tant qu'elle ne bouge pas.
+Quinze et deux ne se rencontrent jamais. `POI T24` fige le fait et **tombera le
+jour où la mobilité arrivera** — c'est ce qu'on lui demande. Lire ce lot comme
+« le système est jouable » serait faux.
+⚠ **`SAVE_VERSION` PASSE À 16** : l'état porte `poisAcquis`, une liste de paires
+`{ type, bande }`, triée. La migration 15 → 16 pose une liste VIDE et n'accorde
+rien rétroactivement — le premier tick relève de lui-même ce que le territoire
+porte.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot MUR-DE-CONTOUR :** 768 tests, `dist/index.html`
+1 333 691 octets, marge 66 309, 4,7 %.
 ⚠⚠ **CE LOT A COÛTÉ +59 311 OCTETS, DONT 52 864 D'IMAGES, ET LA BORNE T10 EST
 RELEVÉE DE 1 300 000 À 1 400 000.** C'est le douzième et dernier retour d'Ethan
 du 31/08 — « les murs contour ne sont pas là » —, et c'est le lot qui fait entrer
@@ -428,7 +460,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 22 fichiers
+src/sim/                simulation déterministe, sans DOM — 23 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -439,6 +471,7 @@ src/sim/                simulation déterministe, sans DOM — 22 fichiers
   territoire.js         les deux zones d'influence de la spec, et leurs bordures
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
   points-attaque.js     le régulateur de session : plafond à cliquet, barème du raid, territoire
+  poi.js                les soixante-dix points d'intérêt : où ils tombent, ce qu'ils donnent
   site-de-la-case.js    une case de la carte → un site jouable : deux graines, saveur, résumé
   site-entame.js        l'après-raid : planchers, ce qui reste debout, ce qui repousse
   raid.js               l'acte : payer, partir, encaisser, revenir abîmé
@@ -519,12 +552,12 @@ src/ui/                 les six écrans et leurs éditeurs — 9 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   42 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   43 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
-  grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
+  grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
@@ -3093,6 +3126,119 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   quand on est déjà à jour : le manifeste annonce le build qu'on a déjà et la
   politique anti-retour le rejette. Le compter comme un échec ferait dire
   « erreur » à une vérification réussie.
+
+- ⚠⚠ **LES SOIXANTE-DIX POI SONT DÉRIVÉS, ET SEULS LES ACQUIS SE SAUVEGARDENT** —
+  31/08, lot POI. Sept types × dix bandes de cinq niveaux ; `sim/poi.js` tire
+  leurs POSITIONS de la seule graine, comme `sim/peuplement.js` et pour la même
+  raison. Ce qui entre dans la sauvegarde, c'est le couple `{ type, bande }` de
+  chaque POI ACQUIS — de l'HISTOIRE, au même titre que `satellites`.
+  ⚠⚠ **LE POI ESQUIVE LA BASE DE L'OUVRAGE, JAMAIS L'INVERSE.**
+  `sim/peuplement.js` n'a pas changé d'une ligne et ne doit jamais connaître le
+  mot « poi » : c'est ce qui garantit qu'ajouter les POI ne déplace AUCUNE base
+  sur AUCUNE carte existante. Un test compare `estBaseOuvrage` à des comptes
+  relevés sur le fichier d'AVANT le lot, et balaie sa source.
+  ⚠ **LA GARDE EST CELLE DU PEUPLEMENT, ET SA FORME SURPREND.** Tchebychev,
+  rayon 15, autour de la rangée 295 / colonne 16, sur une carte large de 31 : les
+  rangées 273 à 280 sont ENTIÈREMENT hors garde, et sur les rangées 281 à 300
+  **seules les colonnes 1 et 31** le sont. Un POI de bande 1 tombe donc soit
+  au-dessus du joueur, soit collé à un bord — c'est le « à droite et à gauche,
+  comme les bases Ouvrage » d'Ethan, et un test le fige.
+  ⚠ **`ESSAIS_MAX` LÈVE, IL NE REND PAS `null`.** Une carte à qui il manque un POI
+  est un fait de PROGRAMME. Mesuré sur les graines 1 à 300 : **pire cas 30
+  essais**, moyenne du pire par graine 8,0 ; le plafond est à 1 000. Coût d'une
+  carte complète : **0,050 ms**.
+  ⚠ **LE BIAIS DU MODULO EST ACCEPTÉ, UNE FOIS, PAR ÉCRIT** — moins de 6 × 10⁻⁷
+  sur un domaine d'au plus 2 232. Le « corriger » déplacerait tout le monde.
+  ⚠ **SELS 2 ET 3**, la rangée et la colonne. Les sels 0 et 1 sont ceux du
+  peuplement, et un champ qui manque de bits se tire d'un second hachage salé,
+  jamais du même en le pressant.
+
+- ⚠⚠ **UN POI VAUT +10 %, FIXE, ET LES POI DE MÊME TYPE S'ADDITIONNENT** —
+  arbitré par Ethan le 31/08. Le NIVEAU d'un POI ne change pas ce qu'il donne :
+  il dit seulement où il est, donc à quel prix on va le chercher. Dix veines de
+  quartz font **+100 %, pas +159 %**.
+  ⚠ **EN POUR-CENT ENTIERS DANS LA TABLE, JAMAIS EN FACTEUR FLOTTANT.** Toute
+  l'arithmétique en aval est entière — milli-unités, milli-PV — et un `1.1` écrit
+  dans `POI` ferait diverger le rattrapage hors ligne du tick à tick.
+  ⚠⚠ **C'EST LE DÉBIT QU'ON MAJORE, ET C'EST CE QUI GARDE LES DEUX CHEMINS
+  ÉQUIVALENTS.** `debitsMilliParHeure` prend un troisième argument, à défaut vide ;
+  `tickEconomieBase` et `rattrapageEconomieBase` héritent donc de la majoration
+  par construction, sans qu'une ligne les relie. Majorer le *gain* d'un tick ou le
+  *stock* ferait diverger les deux, et la divergence serait invisible sur les
+  petits nombres.
+  ⚠ **LA BORNE `DEBIT_MILLI_PAR_HEURE_MAX` SE VÉRIFIE SUR LA VALEUR MAJORÉE.** Un
+  débit à 99 % du seuil qui passe à +100 % le franchit — c'est le cas que la borne
+  existe pour attraper.
+  ⚠ **ET LA MAJORATION NE TOUCHE PAS `capacitesMilli`.** Ethan a écrit
+  « production bonus », pas « stockage bonus » : un POI fait produire plus vite,
+  il n'agrandit aucun entrepôt. Un test balaie la fonction pour l'exiger.
+  ⚠⚠ **UN MONTAGE QUI TOMBE ROND NE MESURE PAS UN ARRONDI, POUR LA DEUXIÈME
+  FOIS.** Le test d'équivalence des deux chemins est passé VERT sur un montage à
+  +20 % : le débit du collecteur y vaut 144 000 milli/h, soit EXACTEMENT quatre
+  fois `TICKS_PAR_HEURE`, donc le résidu — le seul endroit où les deux chemins
+  peuvent diverger — retombe à zéro à chaque tick. Il est à +30 % désormais, et
+  une assertion exige que les résidus soient non nuls avant de les comparer.
+
+- ⚠⚠ **UN POI DE COMBAT ENTRE PAR LE MONTAGE, JAMAIS PAR L'ÉTAT LU AU VOL** —
+  même règle que les modules, et pour la raison qu'`executerRaid` porte déjà : le
+  combat est déterministe et rejouable, donc tout ce qui gouverne la boucle doit
+  être dans le montage, qui est sérialisé. Le champ s'appelle `majorationsPoi`, il
+  a **la même forme pour les deux propriétaires** — `{ joueur, ouvrage }`, quatre
+  clés à zéro — et `creerCombat` LÈVE sur une forme présente et fausse.
+  ⚠⚠ **`camp` ET `proprietaire` SONT DEUX CHOSES, ET LES TROIS POI OFFENSIFS
+  DEMANDENT LES DEUX.** Sans la condition de camp, les Cuirassiers que le joueur
+  met en GARNISON profiteraient d'un bonus d'assaut. La Redoute, elle, majore tout
+  ce que le joueur pose en défense, **quel que soit le genre**.
+  ⚠ **`p.chassis` VAUT `null` POUR UNE DÉFENSE ET POUR UN BÂTIMENT** : la
+  comparaison part du châssis et refuse `null`, jamais une égalité entre deux
+  valeurs qui pourraient être nulles toutes les deux.
+  ⚠ **`franchissementColonne` N'EST PAS MAJORÉ**, et c'est le précédent exact de
+  la Munition spéciale : il passe par `degatsDeFranchissement`, sa propre table en
+  milli-PV et son propre barème. Aucune ligne d'Ethan ne l'y rattache — **choix
+  réversible d'une ligne**.
+  ⚠ **ET AUCUNE DÉFENSE NE PORTE À LA FOIS DES DÉGÂTS ET DU FRANCHISSEMENT** —
+  mesuré : `ronce` et `herse` franchissent et ne frappent pas, les sept autres
+  l'inverse. Le test du franchissement a donc besoin de DEUX entités : la barrière
+  pour le témoin négatif, la tourelle pour prouver que la majoration mord dans le
+  même combat.
+
+- ⚠ **UN SATELLITE NE SE POSE PAS SUR UN POI**, et le motif est celui des bases de
+  l'Ouvrage mot pour mot : ils sont dérivés de la graine, donc ils étaient là
+  AVANT. **Conséquence assumée** : le filtre rétrécit `libres`, donc l'indice tiré
+  change, donc les FUTURES apparitions d'une partie en cours ne tombent plus aux
+  mêmes cases qu'avant le lot. Les satellites DÉJÀ POSÉS ne bougent pas — ils sont
+  dans la sauvegarde.
+
+- ⚠ **`sim/poi.js` EST LE PREMIER MODULE DE `sim/` À IMPORTER `render/`**, et il
+  faut le savoir. La direction habituelle est l'inverse — `render/terrain.js` et
+  `render/variante.js` lisent `sim/`. L'emprise de la base terminale n'existe qu'à
+  un seul endroit, `empriseDeLaGrosseBase`, et la réécrire en « ±1 » aurait été la
+  seconde vérité que tout ce module refuse par ailleurs. Il n'y a **pas de cycle
+  aujourd'hui** — `render/embleme.js` ne lit rien de `sim/` — mais le jour où il en
+  lirait, c'est cette ligne qu'il faudra défaire, en montant la géométrie dans
+  `sim/` plutôt qu'en recopiant le décalage.
+
+- ⚠ **UN POI N'EST PAS UNE CIBLE.** `TYPES_ATTAQUABLES` se dérive de `TYPES_SITE`,
+  où les POI ne sont pas ; `siteDeLaCase` ne connaît que les satellites et les
+  bases de l'Ouvrage. Un POI ne s'attaque pas, ne se défend pas, et le panneau de
+  l'écran Monde ne lui donne aucun bouton — c'est la règle que la carte porte
+  depuis le lot ÉCRAN-CARTE.
+  ⚠ **AUCUN HALO DE PROPRIÉTÉ.** `INVENTAIRE-SPRITES.md` §6.2 en décrit un ;
+  Ethan ne l'a pas demandé. Le panneau dit « acquis » ou « à prendre », et c'est
+  tout. Suite possible, pas trou.
+  ⚠ **LE `nom` D'UN POI NE S'ÉCRIT QU'UNE FOIS.** `EMBLEMES_CARTE` le LIT dans
+  `POI`, qui fait foi sur les identifiants, les noms affichés, les sprites et les
+  effets. Deux tables qui porteraient le même libellé divergeraient au premier
+  renommage, et le joueur verrait deux noms pour le même gisement.
+  ⚠⚠ **ET AUCUN N'EST ACQUÉRABLE TANT QUE LA BASE NE BOUGE PAS.** La garde du
+  peuplement écarte les POI de quinze cases du DÉPART ; le territoire du joueur
+  est le disque de rayon 2 autour de sa base, qui est le départ. Les deux
+  ensembles sont disjoints par construction, et `POI T24` le mesure case par case
+  plutôt que de le déduire. Il tombera le jour du redéploiement, et c'est ce qu'on
+  lui demande.
+  ⚠ **ET AUCUN BORD ROUGE POUR LES SEPT.** `#E43E32` est réservé à ce qui ATTAQUE
+  le joueur ; l'accent de branche — blanc, rouge, jaune — vit dans le SPRITE, pas
+  dans le gabarit de repli. Les sept lettres sont Q · S · E · N · R · P · D.
 
 ### Sur le vocabulaire
 

@@ -437,6 +437,117 @@ export const PEUPLEMENT = {
   niveauDUneBase: 'celui de sa rangée — voir niveauDeLaRangee()',
 };
 
+// --- les points d'intérêt de la carte ----------------------------------------
+// ARBITRÉ le 31/08/2026 par Ethan : « chaque POI vaut +10 %, fixe », « le niveau
+// du POI ne change pas ce qu'il donne — il dit seulement où il se trouve sur la
+// carte, donc à quel prix on va le chercher », « les POI d'un même type
+// s'additionnent », et « à partir du moment où un POI rentre dans le territoire
+// du joueur, il est acquis définitivement ». Puis, sur leur répartition : « les
+// mettre à droite et à gauche, comme les bases Ouvrage ».
+//
+// ⚠⚠ UN SEUL ENDROIT FAIT FOI. Les identifiants, les noms affichés, les sprites
+// et les effets se lisent tous ICI. `EMBLEMES_CARTE` reprend le `nom` de cette
+// table plutôt que de le récrire, et `render/embleme.js` y lit le `sprite` :
+// deux tables qui portent le même nom d'affichage divergeraient au premier
+// renommage, et le joueur verrait deux libellés pour le même gisement.
+//
+// ⚠⚠ LE BONUS EST EN POUR-CENT ENTIERS, JAMAIS EN FACTEUR FLOTTANT. Toute
+// l'arithmétique en aval est entière — milli-unités pour l'économie, milli-PV
+// pour le combat — et c'est ce qui rend le rattrapage hors ligne STRICTEMENT
+// égal au tick à tick. Un `1.1` écrit ici ferait diverger les deux chemins, et
+// la divergence serait invisible sur les petits nombres.
+//
+// ⚠ ILS S'ADDITIONNENT, ILS NE SE MULTIPLIENT PAS. Les dix veines de quartz
+// réunies font +100 %, pas +159 %. C'est dit par Ethan, et c'est aussi la seule
+// composition qui reste exacte en entiers.
+//
+// ⚠ LE NIVEAU D'UN POI N'EST PAS UN CALIBRAGE, C'EST UNE POSITION. Il n'y a donc
+// aucune courbe ici : la bande (1 à 10) se lit sur la rangée, par
+// `niveauDeLaRangee` de `sim/carte.js`, et rien d'autre ne la dit.
+//
+// ⚠ LA CORRESPONDANCE SPRITE ↔ RÔLE N'EST PAS DEVINÉE. Elle est celle
+// d'`INVENTAIRE-SPRITES.md` §6.2, confrontée aux images le 31/08 : cristal
+// blanc-gris, dépôt vitrifié à fissures orangées, cuve à anneau de
+// refroidissement, baraquements à accent blanc, dalle à accent rouge, cercle
+// d'appontage à accent jaune, enceinte massive sans accent. Les trois accents
+// suivent la règle absolue du §3 de l'inventaire — blanc = infanterie,
+// rouge = véhicule, jaune = aérien —, et c'est ce qui dit au joueur, sans texte,
+// quelle branche le POI renforce.
+export const POI = {
+  poiQuartz: {
+    nom: 'Veine de quartz',
+    sprite: 'poi_ressource_a',
+    bonusPct: 10,
+    ressource: 'quartz',
+    chassis: null,
+    defense: false,
+    libelleEffet: 'de production de quartz',
+  },
+  poiScorie: {
+    nom: 'Coulée de scorie',
+    sprite: 'poi_ressource_b',
+    bonusPct: 10,
+    ressource: 'scorie',
+    chassis: null,
+    defense: false,
+    libelleEffet: 'de production de scorie',
+  },
+  poiEnergie: {
+    nom: 'Réacteur',
+    sprite: 'poi_reacteur',
+    bonusPct: 10,
+    ressource: 'electricite',
+    chassis: null,
+    defense: false,
+    libelleEffet: 'de production d\'électricité',
+  },
+  poiCantonnement: {
+    nom: 'Cantonnement',
+    sprite: 'poi_bonus_a',
+    bonusPct: 10,
+    ressource: null,
+    chassis: 'escouade',
+    defense: false,
+    libelleEffet: 'de dégâts aux escouades à l\'assaut',
+  },
+  poiParcRoulant: {
+    nom: 'Parc roulant',
+    sprite: 'poi_bonus_b',
+    bonusPct: 10,
+    ressource: null,
+    chassis: 'blinde',
+    defense: false,
+    libelleEffet: 'de dégâts aux blindés à l\'assaut',
+  },
+  poiPlotAerien: {
+    nom: 'Plot aérien',
+    sprite: 'poi_bonus_c',
+    bonusPct: 10,
+    ressource: null,
+    chassis: 'aeronef',
+    defense: false,
+    libelleEffet: 'de dégâts aux aéronefs à l\'assaut',
+  },
+  poiRedoute: {
+    nom: 'Redoute',
+    sprite: 'poi_bonus_d',
+    bonusPct: 10,
+    ressource: null,
+    chassis: null,
+    defense: true,
+    libelleEffet: 'de dégâts à toute la défense',
+  },
+};
+
+/**
+ * Combien de niveaux de carte tient une bande de POI.
+ *
+ * ⚠ SEPT POI PAR BANDE, DIX BANDES, SOIXANTE-DIX EN TOUT — et le compte se
+ * DÉRIVE : `niveauPlafond / NIVEAUX_PAR_BANDE`. Écrire « 10 » ici en ferait une
+ * seconde vérité, la première à mentir le jour où le plafond bougera.
+ */
+export const NIVEAUX_PAR_BANDE = 5;
+
 // --- satellites d'une base du joueur -----------------------------------------
 // ARBITRÉ le 29/08/2026 : « 5 min après la pose d'une base joueur ou déplacement
 // d'une base joueur, 2 camps et 1 avant-poste ouvrage apparaissent. Respawn
@@ -687,12 +798,36 @@ export function palierDeNiveau(niveau) {
   return palier > nombre ? nombre : palier;
 }
 
+// ⚠⚠ LES SEPT POI ONT LEUR GABARIT DEPUIS LE 31/08, ET LEUR `nom` NE S'ÉCRIT
+// PAS ICI. Il se LIT dans `POI`, qui fait foi (voir son pavé) : deux tables qui
+// porteraient le même libellé divergeraient au premier renommage, et le joueur
+// verrait deux noms pour le même gisement. Le reste — fond, bord, lettre — est
+// du GABARIT DE REPLI : il ne se dessine que tant que l'atlas n'est pas décodé.
+//
+// ⚠ AUCUN BORD ROUGE, ET CE N'EST PAS UN OUBLI. `#E43E32` est réservé à ce qui
+// ATTAQUE le joueur, et un POI n'attaque pas — un test croise les deux tables et
+// tomberait. L'accent de branche (blanc, rouge, jaune) vit dans le SPRITE, pas
+// dans le bord du gabarit.
+//
+// ⚠ UN SEUL COUPLE FOND/BORD POUR LES SEPT : le métal, qui n'est ni le sol du
+// joueur ni celui de l'Ouvrage — un POI n'appartient à personne tant qu'il n'est
+// pas entré dans un territoire. Ce qui les distingue dans le repli, c'est la
+// LETTRE, et les sept sont distinctes des cinq déjà prises (B, C, A, J, T).
+const GABARIT_POI = { fond: '#3E454C', bord: '#68727E' };
+
 export const EMBLEMES_CARTE = {
   base: { fond: '#231D2E', bord: '#E43E32', lettre: 'B', nom: 'Base de l\'Ouvrage' },
   camp: { fond: '#231D2E', bord: '#F5B636', lettre: 'C', nom: 'Camp' },
   avantPoste: { fond: '#231D2E', bord: '#F5B636', lettre: 'A', nom: 'Avant-poste' },
   baseJoueur: { fond: '#4E5742', bord: '#F5F3E8', lettre: 'J', nom: 'Votre base' },
   baseTerminale: { fond: '#382E47', bord: '#F5F3E8', lettre: 'T', nom: 'Base terminale' },
+  poiQuartz: { ...GABARIT_POI, lettre: 'Q', nom: POI.poiQuartz.nom },
+  poiScorie: { ...GABARIT_POI, lettre: 'S', nom: POI.poiScorie.nom },
+  poiEnergie: { ...GABARIT_POI, lettre: 'E', nom: POI.poiEnergie.nom },
+  poiCantonnement: { ...GABARIT_POI, lettre: 'N', nom: POI.poiCantonnement.nom },
+  poiParcRoulant: { ...GABARIT_POI, lettre: 'R', nom: POI.poiParcRoulant.nom },
+  poiPlotAerien: { ...GABARIT_POI, lettre: 'P', nom: POI.poiPlotAerien.nom },
+  poiRedoute: { ...GABARIT_POI, lettre: 'D', nom: POI.poiRedoute.nom },
 };
 
 // --- disposition des défenses ------------------------------------------------

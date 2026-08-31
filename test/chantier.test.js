@@ -166,6 +166,14 @@ function baseDeLaMaquette() {
     basesRasees: [],
     recherche: { pointsMilli: '0' },
     reparation: null,
+    // ⚠ ET LES POI ACQUIS DEPUIS LE 31/08, pour la raison EXACTE des quatre
+    // champs d'avant : `tickJeu` les relève, et un montage qui les omet n'est
+    // plus un état de jeu. `graine` et `position` entrent avec eux — le relevé
+    // demande à la carte des POI ce que porte chaque case du territoire, et la
+    // carte est une fonction de la graine.
+    graine: 4242,
+    position: positionDepartJoueur(),
+    poisAcquis: [],
   };
 }
 

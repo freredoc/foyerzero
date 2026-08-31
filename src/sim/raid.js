@@ -33,6 +33,7 @@ import {
 import { siteDeLaCase } from './site-de-la-case.js';
 import { annulerLaReparation } from './reparation.js';
 import { montageCourant, enregistrerLeRaid } from './site-entame.js';
+import { majorationsDeCombat } from './poi.js';
 import {
   creerCombat, resoudre, butin, pointsRecherche, facteurMilli, TICKS_MAX_COMBAT,
 } from './combat.js';
@@ -250,6 +251,11 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // pour majorer les points de 20 % sur une cible dont le module est débloqué :
   // c'est le camp d'en face et une autre grandeur. Les confondre ferait payer au
   // joueur les modules de l'Ouvrage.
+  //
+  // ⚠ LES POI SUIVENT LA MÊME RÈGLE, ET POUR LE MÊME MOTIF. Ce que le joueur a
+  // acquis gouverne les dégâts de son assaut : ça doit être DANS le montage.
+  // `ouvrage` reste à zéro — aucun POI ne bénéficie à l'Ouvrage —, mais la forme
+  // est symétrique, comme `modulesDebloques` depuis MODULES-E.
   const montageSite = montageCourant(etat, site);
   const montage = {
     ...montageSite,
@@ -258,6 +264,7 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
         ?? { offense: [], defense: [] },
       joueur: modulesDebloquesDuJoueur(etat),
     },
+    majorationsPoi: { joueur: majorationsDeCombat(etat.poisAcquis ?? []) },
   };
   const { vagues, indices } = composerLesVagues(etat);
   const resultat = resoudre(

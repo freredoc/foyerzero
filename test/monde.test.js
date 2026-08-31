@@ -711,17 +711,31 @@ test('emblèmes — chaque site de la fenêtre résout un sprite qui est dans l\
     }
   }
   // ⚠ FALSIFIABLE : une fonction qui rendrait toujours le même nom passerait
-  // toutes les assertions ci-dessus. Le compte est **36**, RECOMPTÉ et non
-  // recopié : 9 `site_base_o_n*`, 9 `site_base_j_n*`, 9 `site_quartz_n*` et
-  // 9 `site_scorie_n*`.
+  // toutes les assertions ci-dessus. Le compte est **43**, RECOMPTÉ et non
+  // recopié : 9 `site_base_o_n*`, 9 `site_base_j_n*`, 9 `site_quartz_n*`,
+  // 9 `site_scorie_n*` et les **7 POI**, qui n'ont qu'un dessin chacun.
   //
-  // ⚠⚠ IL VALAIT DÉJÀ 36 AVANT CE LOT, ET POUR UNE AUTRE RAISON. La terminale
-  // partageait alors `site_base_o_n9` — elle n'ajoutait donc aucun nom tout en
-  // étant balayée ; elle est maintenant HORS du balayage, et le total ne bouge
-  // pas. Deux causes différentes pour le même nombre : c'est exactement le genre
-  // de coïncidence qui ferait croire qu'un test n'a pas bougé, d'où ce
-  // paragraphe et l'assertion de levée ci-dessous.
-  assert.equal(noms.size, 36, `${noms.size} noms distincts composés`);
+  // ⚠⚠ IL VALAIT 36 JUSQU'AU LOT POI, ET IL A EU RAISON DE MONTER — c'est un
+  // RECALCUL, pas un assouplissement : `EMBLEMES_CARTE` porte sept types de plus,
+  // le balayage les traverse, et le compte les compte. Un test qui serait resté à
+  // 36 aurait exigé que les POI ne résolvent aucun sprite.
+  //
+  // ⚠ ET LES SEPT NE MULTIPLIENT NI PAR SAVEUR NI PAR PALIER, ce que ce compte
+  // mesure de face : 36 + 7 et non 36 + 7 × 2 × 9. Un POI ignore son palier —
+  // l'art n'en a produit qu'un par type — et sa saveur est `null`. Si l'un des
+  // deux axes reparaissait, ce nombre-ci monterait à 162 et le dirait.
+  //
+  // ⚠⚠ IL VALAIT DÉJÀ 36 AVANT LE LOT DU 30/08, ET POUR UNE AUTRE RAISON. La
+  // terminale partageait alors `site_base_o_n9` — elle n'ajoutait donc aucun nom
+  // tout en étant balayée ; elle est maintenant HORS du balayage, et le total
+  // n'avait pas bougé. Deux causes différentes pour le même nombre : c'est
+  // exactement le genre de coïncidence qui ferait croire qu'un test n'a pas
+  // bougé, d'où ce paragraphe et l'assertion de levée ci-dessous.
+  assert.equal(noms.size, 43, `${noms.size} noms distincts composés`);
+  assert.equal(SPRITES_POI.length, 7, 'les sept POI ne sont plus sept');
+  for (const nom of SPRITES_POI) {
+    assert.ok(noms.has(nom), `le sprite « ${nom} » n'est demandé par aucun type de site`);
+  }
   assert.equal(new Set(Object.keys(EMBLEMES_CARTE)).size - 1,
     Object.keys(EMBLEMES_CARTE).filter((t) => cotesDuSite(t) === null).length,
     'un second type de site couvre plusieurs cases — recompter le balayage');

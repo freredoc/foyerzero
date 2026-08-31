@@ -418,6 +418,26 @@ function tableALEchelle(table, facteur) {
   return sortie;
 }
 
+/**
+ * La même table, majorée d'un pourcentage ENTIER.
+ *
+ * ⚠ UN SEUL `floor`, SUR LE PRODUIT — la forme déjà écrite et déjà testée de la
+ * majoration de PV du module `pvPlusVingt`. Arrondir avant de multiplier
+ * perdrait jusqu'à une unité par colonne, à chaque niveau.
+ *
+ * ⚠ ZÉRO REND LA TABLE TELLE QUELLE, à l'objet près : sans ce court-circuit, une
+ * entité sans POI verrait quand même passer ses quatre colonnes dans un `floor`
+ * — sans changement de valeur, mais pour rien.
+ */
+function tableMajoree(table, pct) {
+  if (table === null || pct === 0) return table;
+  const sortie = {};
+  for (const colonne of COLONNES_DEGATS) {
+    sortie[colonne] = Math.floor((table[colonne] * (100 + pct)) / 100);
+  }
+  return sortie;
+}
+
 const TABLES_PROFIL = {
   unite: PROFILS_UNITE,
   defense: PROFILS_DEFENSE,
@@ -504,14 +524,21 @@ function ajouterEntite(
   const facteur = facteurMilli(niveauEntite);
   // pvMaxMilli = pv × 1000 × facteurMilli / 1000 = pv × facteurMilli. Exact.
   const pvBaseMilli = (p.pvMaxMilli / MILLE) * facteur;
-  const degatsColonne = tableALEchelle(p.degatsColonne, facteur);
-  const franchissementColonne = tableALEchelle(p.franchissementColonne, facteur);
 
   // ⚠ LE PROPRIÉTAIRE SE CALCULE ICI, AVANT L'ENTITÉ. `moduleActif` en a besoin
-  // pour trancher, et la majoration de PV doit être connue avant de fixer les
-  // PV de départ. La même valeur est reprise plus bas dans le littéral.
+  // pour trancher, la majoration de PV doit être connue avant de fixer les PV de
+  // départ, et depuis le lot POI les DÉGÂTS en dépendent aussi. La même valeur
+  // est reprise plus bas dans le littéral.
   const proprietaireEntite = proprietaire ?? (camp === 'attaque' ? 'joueur' : 'ouvrage');
   const commeEntite = { camp, proprietaire: proprietaireEntite };
+  // ⚠ LES POI MAJORENT LES DÉGÂTS, PAS LE FRANCHISSEMENT. C'est le précédent
+  // exact de la Munition spéciale : le franchissement des barrières passe par
+  // `degatsDeFranchissement`, sa propre table en milli-PV et son propre barème.
+  // Aucune ligne d'Ethan ne rattache les POI au franchissement — choix réversible
+  // d'une ligne, dit comme tel au rapport du lot.
+  const pctPoi = majorationPoi(etat, commeEntite, p);
+  const degatsColonne = tableMajoree(tableALEchelle(p.degatsColonne, facteur), pctPoi);
+  const franchissementColonne = tableALEchelle(p.franchissementColonne, facteur);
   // ⚠ UN SEUL `floor`, SUR LE PRODUIT — comme partout ailleurs dans ce moteur.
   const pvMaxMilli = moduleActif(etat, commeEntite, p, 'pvPlusVingt')
     ? Math.floor((pvBaseMilli * (100 + PV_PLUS_VINGT_PCT)) / 100)
@@ -712,6 +739,18 @@ export function creerCombat(montage) {
     modulesDebloques: {
       ouvrage: modulesDunProprietaire(montage.modulesDebloques?.ouvrage, 'ouvrage'),
       joueur: modulesDunProprietaire(montage.modulesDebloques?.joueur, 'joueur'),
+    },
+    // ⚠⚠ LES POI ENTRENT PAR LE MONTAGE, JAMAIS PAR L'ÉTAT DE JEU LU AU VOL —
+    // exactement comme les modules, et pour la même raison écrite dans
+    // `executerRaid` : le combat est déterministe et rejouable, donc tout ce qui
+    // gouverne la boucle doit être dans le montage, qui est sérialisé.
+    //
+    // ⚠ ET IL EST POSÉ AVANT LA MOINDRE ENTITÉ. `ajouterEntite` le lit pour
+    // majorer les dégâts ; le remplir après monterait toutes les entités sans
+    // bonus, et rien ne le dirait.
+    majorationsPoi: {
+      ouvrage: majorationsDunProprietaire(montage.majorationsPoi?.ouvrage, 'ouvrage'),
+      joueur: majorationsDunProprietaire(montage.majorationsPoi?.joueur, 'joueur'),
     },
   };
 
@@ -1656,6 +1695,73 @@ function modulesDunProprietaire(brut, qui) {
     sortie[branche] = [...liste];
   }
   return sortie;
+}
+
+/**
+ * Recopie et VALIDE les majorations de POI d'un propriétaire.
+ *
+ * ⚠ MÊME FORME POUR LES DEUX PROPRIÉTAIRES, comme `modulesDebloques` depuis
+ * MODULES-E. Aucun POI ne bénéficie à l'Ouvrage aujourd'hui, et sa table reste
+ * donc à zéro — mais une forme asymétrique obligerait le lecteur à connaître
+ * l'exception, et le premier qui l'oublierait lirait `undefined`.
+ *
+ * ⚠ ABSENT EST PERMIS ET VAUT ZÉRO PARTOUT. Le banc, `assaut` et les montages de
+ * `combat.test.js` n'ont aucun POI à déclarer ; c'est la forme PRÉSENTE ET
+ * FAUSSE qu'on refuse, pas l'absence.
+ *
+ * ⚠ ET LES POUR-CENT SONT DES ENTIERS ≥ 0. Un flottant ferait sortir les dégâts
+ * des entiers, donc le combat du déterminisme.
+ */
+const CLES_MAJORATION_POI = ['escouade', 'blinde', 'aeronef', 'defense'];
+
+function majorationsDunProprietaire(brut, qui) {
+  const sortie = {};
+  for (const cle of CLES_MAJORATION_POI) sortie[cle] = 0;
+  if (brut === undefined || brut === null) return sortie;
+  if (Array.isArray(brut) || typeof brut !== 'object') {
+    throw new Error(
+      `combat : majorationsPoi.${qui} n'est pas un objet `
+      + `{ ${CLES_MAJORATION_POI.join(', ')} }`,
+    );
+  }
+  for (const cle of Object.keys(brut)) {
+    if (!CLES_MAJORATION_POI.includes(cle)) {
+      throw new Error(`combat : majorationsPoi.${qui} porte une clé inconnue « ${cle} »`);
+    }
+    const v = brut[cle];
+    if (!Number.isInteger(v) || v < 0) {
+      throw new Error(
+        `combat : majorationsPoi.${qui}.${cle} = ${v} — pour-cent entier ≥ 0 attendu`,
+      );
+    }
+    sortie[cle] = v;
+  }
+  return sortie;
+}
+
+/**
+ * Le pourcentage de dégâts que les POI donnent à cette entité.
+ *
+ * ⚠⚠ `camp` ET `proprietaire` SONT DEUX CHOSES, et les trois POI offensifs
+ * demandent LES DEUX. Sans la condition de camp, les Cuirassiers que le joueur
+ * met en garnison profiteraient d'un bonus d'assaut ; sans celle de
+ * propriétaire, l'Ouvrage profiterait des POI qu'il n'a pas pris.
+ *
+ * ⚠ `p.chassis` VAUT `null` POUR UNE DÉFENSE ET POUR UN BÂTIMENT. La comparaison
+ * part donc du châssis et REFUSE `null` — jamais une égalité entre deux valeurs
+ * qui pourraient être nulles toutes les deux, qui est la faute que le
+ * commentaire de `colonnePredilection` nomme déjà.
+ *
+ * ⚠ LA REDOUTE MAJORE TOUT CE QUE LE JOUEUR POSE EN DÉFENSE, quel que soit le
+ * genre — c'est ce qu'Ethan a écrit, et un bâtiment du joueur en défense en
+ * profiterait aussi le jour où sa base sera attaquée.
+ */
+function majorationPoi(etat, e, p) {
+  const table = etat.majorationsPoi?.[e.proprietaire];
+  if (table === undefined) return 0;
+  if (e.camp === 'defense') return table.defense;
+  if (typeof p.chassis !== 'string') return 0;
+  return table[p.chassis] ?? 0;
 }
 
 /**

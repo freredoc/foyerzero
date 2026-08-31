@@ -14,6 +14,7 @@ import {
   TICKS_APPARITION,
 } from './satellites.js';
 import { positionDepartJoueur } from './carte.js';
+import { releverLesPoisAcquis, majorationsDeProduction, problemesDesPoisAcquis } from './poi.js';
 import {
   creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise, basesDuJoueur,
 } from './points-attaque.js';
@@ -37,7 +38,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 /**
  * @typedef {object} Etat
@@ -52,6 +53,7 @@ export const SAVE_VERSION = 15;
  * @property {Array<Effectif>} armee    Les unités posées dans les quatre vagues.
  * @property {{ ressources: Record<string, number>, residus: Array<Record<string, number>> }} economie
  * @property {object} champs DÉRIVÉ de `fondation` — voir `serialiser`.
+ * @property {Array<{ type: string, bande: number }>} poisAcquis HISTOIRE — voir `sim/poi.js`.
  */
 
 /**
@@ -179,6 +181,17 @@ export function creerEtat(graine) {
     // BigInt — le barème dépasse l'entier sûr dès le niveau 39 — et
     // `JSON.stringify` lève sur un BigInt. Voir `sim/raid.js`.
     recherche: creerRecherche(),
+    // ⚠ DE L'HISTOIRE, DONC SAUVEGARDÉ — au même titre que `satellites` et
+    // `basesRasees`. Les soixante-dix POSITIONS de POI se recalculent depuis la
+    // graine et n'entrent jamais ici ; ce qui est ACQUIS dépend de là où le
+    // joueur est passé, et rien d'autre ne peut le dire. Une liste de paires
+    // `{ type, bande }`, triée : le couple est unique, donc soixante-dix clés
+    // possibles au plus.
+    //
+    // ⚠ VIDE À LA CRÉATION, ET LE PREMIER TICK LA REMPLIT. `creerEtat` ne relève
+    // rien lui-même : le relevé vit dans `tickJeu`, en un seul endroit, et le
+    // faire aussi ici en ferait deux.
+    poisAcquis: [],
     // ⚠ `null` VEUT DIRE « AUCUNE RÉPARATION EN COURS », et c'est un état, pas
     // une absence. Une base neuve n'a pas d'armée, donc rien à réparer.
     reparation: null,
@@ -260,7 +273,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites', 'attaque', 'sitesEntames', 'basesRasees', 'recherche']) {
+  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis']) {
     exigerChamp(etat, champ);
   }
   // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
@@ -272,6 +285,10 @@ function verifierEtat(etat) {
   const defautsSatellites = problemesDesSatellites(etat.satellites);
   if (defautsSatellites.length > 0) {
     throw new Error(`etat : satellites injouables — ${defautsSatellites.join(' ; ')}`);
+  }
+  const defautsPois = problemesDesPoisAcquis(etat.poisAcquis);
+  if (defautsPois.length > 0) {
+    throw new Error(`etat : POI acquis injouables — ${defautsPois.join(' ; ')}`);
   }
   const defautsSites = problemesDesSitesEntames(etat.sitesEntames);
   if (defautsSites.length > 0) {
@@ -304,7 +321,16 @@ function verifierEtat(etat) {
  */
 export function tickJeu(etat) {
   tickHorloge(etat.horloge);
-  tickEconomieBase(etat.economie, etat.disposition, etat.champs);
+  // ⚠ AVANT L'ÉCONOMIE, PAS APRÈS. Sinon le tick où un POI est acquis produit
+  // encore à l'ancien débit. Aujourd'hui la différence est invisible —
+  // l'acquisition est figée dès le tick 0, la base ne bougeant pas — mais
+  // l'ordre juste ne coûte rien à écrire maintenant et coûterait un bogue à
+  // trouver le jour du redéploiement.
+  releverLesPoisAcquis(etat);
+  tickEconomieBase(
+    etat.economie, etat.disposition, etat.champs,
+    majorationsDeProduction(etat.poisAcquis),
+  );
   resoudreSatellites(etat);
   avancerPointsAttaque(etat, 1);
   reparerLesSites(etat);
@@ -322,7 +348,20 @@ export function tickJeu(etat) {
  */
 export function rattraperJeu(etat, nbTicks) {
   avancerTicks(etat.horloge, nbTicks);
-  rattrapageEconomieBase(etat.economie, etat.disposition, etat.champs, nbTicks);
+  // ⚠⚠ UN SEUL APPEL, PAS UNE BOUCLE — même raisonnement que `resoudreSatellites`
+  // ci-dessous, mais pour une raison à lui : l'acquisition ne dépend QUE de
+  // `etat.position`, qu'aucun tick ne modifie. Mille ticks d'un coup acquièrent
+  // donc exactement ce que mille ticks un par un auraient acquis.
+  //
+  // ⚠ ET VOICI SA CONDITION DE RUPTURE, ÉCRITE : le jour où la base pourra se
+  // DÉPLACER en cours de rattrapage, cette ligne cessera d'être juste — le
+  // territoire aura balayé des cases que ce seul appel n'aura jamais vues. C'est
+  // le test d'équivalence des deux chemins qui doit tomber en premier.
+  releverLesPoisAcquis(etat);
+  rattrapageEconomieBase(
+    etat.economie, etat.disposition, etat.champs, nbTicks,
+    majorationsDeProduction(etat.poisAcquis),
+  );
   // ⚠ UN SEUL APPEL, PAS UNE BOUCLE, ET C'EST CE QUI REND LES DEUX CHEMINS
   // ÉQUIVALENTS. `resoudreSatellites` ne lit que l'horloge courante : mille
   // ticks d'un coup font paraître exactement ce que mille ticks un par un
@@ -1616,6 +1655,26 @@ const MIGRATIONS = {
     for (const present of presents) {
       if (present !== null && typeof present === 'object') present.tickDeReleve = echeance;
     }
+  },
+
+  /**
+   * v15 → v16 : la carte porte soixante-dix POI, et le joueur en acquiert.
+   *
+   * ⚠⚠ ELLE N'ACCORDE RIEN RÉTROACTIVEMENT, ET C'EST LE CHOIX JUSTE. Rien
+   * n'existait avant ; le PREMIER TICK relèvera de lui-même ce qui se trouve dans
+   * le territoire, donc un joueur qui a un POI sous le nez l'aura avant d'avoir
+   * vu l'écran. Accorder ici ferait le même travail plus tôt, moins bien testé,
+   * et à un endroit qui ne connaît ni la carte ni la graine.
+   *
+   * ⚠ LISTE VIDE, PAS CHAMP ABSENT. `verifierEtat` exige le champ ; une v15 ne
+   * l'a jamais eu, et la distinction est celle que le commentaire voisin porte
+   * déjà — champ absent est un fait de programme, liste vide est l'état normal
+   * d'une partie neuve.
+   * @param {object} s
+   */
+  15: (s) => {
+    s.version = 16;
+    if (!Array.isArray(s.poisAcquis)) s.poisAcquis = [];
   },
 };
 
