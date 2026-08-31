@@ -41,23 +41,27 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MODULES-E), à confronter :**
-`npm test` → **729 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 263 578 octets**, 0 référence externe.
-⚠ **MODULES-E A COÛTÉ +708 OCTETS**, et n'ajoute AUCUN module : il ferme une
-fuite de structure. `modulesDebloques` devient
-`{ joueur: { offense, defense }, ouvrage: { offense, defense } }`, et un module
-acheté dans une branche ne sert plus que dans celle-là. Aucun écran, aucun champ
-de sauvegarde : `SAVE_VERSION` reste à **14**. Marge **36 422 octets**, 2,80 %.
+**Référence au 31/08/2026 (après le lot MODULES-F), à confronter :**
+`npm test` → **731 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 264 511 octets**, 0 référence externe.
+⚠ **MODULES-F A COÛTÉ +933 OCTETS** et écrit les DEUX DERNIERS modules qui
+n'avaient aucun effet : **Munition spéciale** (+20 % sur la colonne de
+prédilection, dans `degatsContre`) et **Vol de vie** (20 % de l'ENCAISSÉ rendu
+au tireur, en deux passes). Il **arme le canal de l'Ouvrage** : `genererSite`
+remplit enfin `modulesDebloques.ouvrage.defense` depuis `apparitionModule`.
+Aucun écran, aucun champ de sauvegarde : `SAVE_VERSION` reste à **14**.
+Marge **35 489 octets**, 2,73 %.
 ⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 % ·
-2,91 % · 2,86 % · 2,80 %.** Elle ne descend plus que de quelques centièmes tant
-que les lots sont du code ; c'est le prochain atlas qui la fera tomber, et il
-faudra rouvrir la borne, pas la contourner.
+2,91 % · 2,86 % · 2,80 % · 2,73 %.** Elle ne descend plus que de quelques
+centièmes tant que les lots sont du code ; c'est le prochain atlas qui la fera
+tomber, et il faudra rouvrir la borne, pas la contourner.
 ⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
-exactement **7 écarts**, code de sortie 1. MODULES-E n'y touche pas : la sortie
+exactement **7 écarts**, code de sortie 1. MODULES-F n'y touche pas : la sortie
 est IDENTIQUE À LA LIGNE, avant et après (terrain, disposition, emplacements,
 trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié serait une
 régression, dans les deux sens.
+⚠ **IL NE RESTE QU'UN SEUL MODULE SANS EFFET : la GARNISON.** Elle est en
+attente d'arbitrage — c'est le dernier de la liste des quatorze.
 ⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT NON PLUS**, et c'était
 conforme : il ne touche ni `art/`, ni `tools/`.
 
@@ -3073,6 +3077,51 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   n'est pas un oubli : `sim/generateur.js` livre les deux listes vides sur tous
   les sites, et le jour où on les armera il faudra un barème par niveau de site,
   pas un `push` — sans quoi le premier camp venu porterait le Tir de barrage.
+  ⚠ **CE DERNIER POINT EST À MOITIÉ CADUC DEPUIS MODULES-F** : `ouvrage.defense`
+  EST armé, par `apparitionModule` et non par un `push` — voir l'entrée
+  ci-dessous. `ouvrage.offense` reste vide, et le reste.
+
+- **LE CANAL DE L'OUVRAGE EST ARMÉ, ET LES DEUX DERNIERS MODULES DE COMBAT SONT
+  ÉCRITS** — 31/08, lot MODULES-F. `genererSite` remplit
+  `modulesDebloques.ouvrage.defense` avec les `moduleOuvrage` des pièces dont
+  `apparitionModule` est atteint : **28 Camouflage, 30 Munition spéciale,
+  32 PV +20 %, 42 Rayon minimum −1 ET Vol de vie**. `offense` reste vide —
+  `moduleOuvrage` ne renseigne pas `p.module`, que lit un module d'attaquant.
+  ⚠ **TOUTES LES PIÈCES DES TABLES, pas seulement celles que le site a tirées** :
+  c'est un palier de progression de l'Ouvrage, pas une propriété de la garnison
+  du jour. Deux sites de même niveau et de graines différentes doivent débloquer
+  les mêmes modules, sinon la liste devient un effet de tirage.
+  ⚠⚠ **LE JOUEUR NE PEUT ACHETER NI L'UN NI L'AUTRE, ET LES DEUX SONT POURTANT
+  `cable: true`.** Le drapeau dit que l'EFFET EXISTE, pas qu'il est achetable :
+  les trois tourelles portent `moduleJoueur: 'autoReparation'`, le Broyeur
+  `module: 'ecraseur'` et l'Enclume `module: 'bouclier'`. **Zéro ligne nouvelle
+  à l'écran, mesuré des deux côtés du lot : 14 en offense, 17 en défense, douze
+  modules visibles, listes identiques.**
+  ⚠ **LE VOL DE VIE PORTE SUR L'ENCAISSÉ, PAS SUR LE NOMINAL** — les PV
+  réellement retirés PLUS la part qu'un Bouclier a absorbée. Un tir de 500 sur
+  une cible à 100 PV ne vole que 100 ; un tir entièrement absorbé en vole 500.
+  En priver le voleur ferait du Bouclier une contre-mesure au Vol de vie.
+  ⚠⚠ **`appliquerDegats` FAIT DEUX PASSES, ET L'ORDRE EST TOUT L'ENJEU.** La
+  passe 1 retire les PV de toutes les cibles, la passe 2 seulement rend les PV
+  volés. Soigner au fil de la passe 1 ferait dépendre le résultat de l'ordre des
+  cibles. **Un voleur tombé dans ce tampon ne se soigne pas** : `vivant` n'étant
+  écrit qu'à l'étape 6, le test porte sur `pvMilli > 0`, jamais sur `estActive`.
+  ⚠ **L'ENCAISSÉ EST SERVI PAR INDICE DE TIREUR CROISSANT, PAS AU PRORATA** —
+  le prorata demanderait un arrondi par tireur et une règle de reste. Le tampon
+  est devenu `Map<cible, Array<{tireur, degats}>>` ; **le franchissement d'une
+  barrière y range l'indice de la BARRIÈRE**, pas celui de la victime.
+  ⚠ **LE CAMOUFLAGE NE FAIT RIEN CÔTÉ OUVRAGE, ET C'EST MESURÉ.**
+  `ensembleCamoufles` s'ouvre sur `e.camp !== 'attaque'` : « invisible pour la
+  DÉFENSE » désigne un ATTAQUANT que la garnison ne voit pas. Sur un site de
+  niveau 28 qui compte quatre Carapaces, l'état sérialisé est IDENTIQUE avec et
+  sans le module. **Non symétrisé** : ce serait un changement de règle.
+  ⚠⚠ **LES POINTS DE RECHERCHE BOUGENT, ET PAS TOUJOURS DANS LE SENS ATTENDU.**
+  Mesuré sur trois graines, armée constante : **niveau 20 identique au point**
+  (rien n'est armé sous 28), **niveau 38 en HAUSSE sur 3/3**, **niveau 50 en
+  BAISSE sur 3/3**. Le bonus de +20 % de MODULES-E l'emporte tant que la
+  garnison ne gagne pas en résistance ; le Vol de vie et le Rayon minimum −1
+  renversent le solde. **Aucun barème n'a été touché** — l'arbitrage revient à
+  Ethan, et ce n'est pas une régression.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie

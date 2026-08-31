@@ -301,24 +301,25 @@ test('MODULES-A T9 — `cable` est par branche, et la fonction lève des deux c�
     assert.deepEqual(Object.keys(m.cable).sort(), ['defense', 'offense'], nom);
     for (const b of BRANCHES) assert.equal(typeof m.cable[b], 'boolean', `${nom}/${b}`);
   }
-  // MESURÉ : onze modules câblés sur quatorze — sept en offense, QUATRE EN
+  // MESURÉ : treize modules câblés sur quatorze — sept en offense, SIX EN
   // DÉFENSE. ⚠ TROIS AU LOT MODULES-A, SIX APRÈS MODULES-B, SEPT APRÈS
-  // MODULES-C, ONZE DEPUIS MODULES-D. Ce compte est la liste exacte, pas un
-  // nombre : ajouter un module câblé sans toucher cette ligne fait tomber le
-  // test, et c'est voulu — le drapeau gouverne une VENTE.
+  // MODULES-C, ONZE APRÈS MODULES-D, TREIZE DEPUIS MODULES-F. Ce compte est la
+  // liste exacte, pas un nombre : ajouter un module câblé sans toucher cette
+  // ligne fait tomber le test, et c'est voulu — le drapeau gouverne une VENTE.
   const cables = Object.entries(MODULES)
     .filter(([, m]) => m.cable.offense || m.cable.defense).map(([n]) => n).sort();
   assert.deepEqual(cables, [
     'autoReparation', 'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp',
-    'flashbang', 'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'tirDeBarrage',
+    'flashbang', 'munitionSpeciale', 'pvPlusVingt', 'rayonMiniMoinsUn',
+    'rayonPlusUn', 'tirDeBarrage', 'volDeVie',
   ]);
-  // ⚠ AUCUN DES QUATRE N'EST CÂBLÉ EN OFFENSE, et c'est la moitié qui compte :
+  // ⚠ AUCUN DES SIX N'EST CÂBLÉ EN OFFENSE, et c'est la moitié qui compte :
   // le Guetteur porte `camouflage` à l'assaut et `rayonPlusUn` en garnison. Un
   // `offense: true` de trop lui vendrait le mauvais module.
   const enDefense = Object.entries(MODULES)
     .filter(([, m]) => m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(enDefense,
-    ['autoReparation', 'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn']);
+  assert.deepEqual(enDefense, ['autoReparation', 'munitionSpeciale', 'pvPlusVingt',
+    'rayonMiniMoinsUn', 'rayonPlusUn', 'volDeVie']);
   for (const n of enDefense) assert.equal(MODULES[n].cable.offense, false, `${n} en offense`);
 });
 
@@ -1662,16 +1663,16 @@ test('MODULES-B T13 — `cable` par branche pour les trois modules', () => {
     assert.equal(moduleEstCable(nom, 'offense'), true, `${nom} en offense`);
     assert.equal(moduleEstCable(nom, 'defense'), false, `${nom} en défense`);
   }
-  // ⚠ TROIS DEPUIS MODULES-D : le Bouclier avait quitté cette liste au lot C,
-  // les quatre modules défensifs la quittent ici. Le compte est la liste, et
-  // c'est `MODULES-A T9` qui porte désormais la référence — celle-ci reste ici
-  // pour que le lot B tombe si un lot futur décâble l'un de ses trois modules
-  // sans le dire. Les trois qui restent n'ont AUCUN effet écrit : la Garnison
-  // est en attente d'arbitrage, la Munition spéciale et le Vol de vie n'ont pas
-  // encore de lot.
+  // ⚠ UN SEUL DEPUIS MODULES-F : le Bouclier avait quitté cette liste au lot C,
+  // les quatre modules défensifs au lot D, la Munition spéciale et le Vol de
+  // vie au lot F. Le compte est la liste, et c'est `MODULES-A T9` qui porte
+  // désormais la référence — celle-ci reste ici pour que le lot B tombe si un
+  // lot futur décâble l'un de ses trois modules sans le dire. Le seul qui reste
+  // est la GARNISON, en attente d'arbitrage : c'est le dernier module sans
+  // effet du catalogue.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(restants, ['garnison', 'munitionSpeciale', 'volDeVie']);
+  assert.deepEqual(restants, ['garnison']);
 
   // L'achat : cinq lignes s'ouvrent en offense, quatre refusent en défense.
   const etat = partie('999999999999999');
@@ -2307,11 +2308,12 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
   assert.equal(moduleEstCable('bouclier', 'offense'), true, 'bouclier en offense');
   assert.equal(moduleEstCable('bouclier', 'defense'), false, 'bouclier en défense');
 
-  // Les trois autres restent faux des DEUX côtés — le compte EST la liste, et
-  // c'est elle qui tombe si un lot futur câble un module sans le dire ici.
+  // ⚠ IL N'EN RESTE PLUS QU'UN — le compte EST la liste, et c'est elle qui tombe
+  // si un lot futur câble un module sans le dire ici. Elle en portait trois
+  // jusqu'à MODULES-F, qui a câblé la Munition spéciale et le Vol de vie.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(restants, ['garnison', 'munitionSpeciale', 'volDeVie']);
+  assert.deepEqual(restants, ['garnison']);
 
   // L'ACHAT, pas seulement le drapeau : une seule ligne porte le Bouclier, en
   // offense, et elle s'achète. Aucune ligne de défense ne le porte — c'est ce
@@ -4539,4 +4541,128 @@ test('MODULES-F T14 bis — le Camouflage côté Ouvrage ne fait RIEN, et c\'est
     'montage : la liste n\'est même pas sérialisée, la garde ci-dessus est creuse');
   assert.equal(pointsRecherche(avec.resultat, avec.montage),
     pointsRecherche(sans.resultat, sans.montage));
+});
+
+test('MODULES-F T15 — les deux drapeaux n\'ouvrent AUCUNE ligne à l\'écran', () => {
+  // ⚠⚠ C'EST LE POINT LE PLUS CONTRE-INTUITIF DU LOT. `cable` passe à `true`
+  // pour la Munition spéciale et le Vol de vie, et pourtant la boutique ne vend
+  // rien de nouveau : le drapeau dit que l'EFFET EXISTE, pas qu'il est
+  // achetable. Ce que le joueur peut acheter vient de `nomDuModule`, qui lit
+  // `moduleJoueur` (défenses) ou `module` (unités) — jamais `moduleOuvrage`.
+  for (const nom of ['munitionSpeciale', 'volDeVie']) {
+    assert.equal(moduleEstCable(nom, 'defense'), true, `${nom} en défense`);
+    assert.equal(moduleEstCable(nom, 'offense'), false, `${nom} en offense`);
+  }
+
+  // ZÉRO ligne de l'arbre ne porte l'un des deux noms — mesuré en parcourant
+  // l'arbre, pas de tête.
+  const portees = [];
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      const nom = nomDuModule(branche, id);
+      if (nom === 'munitionSpeciale' || nom === 'volDeVie') portees.push(`${branche}/${id}`);
+    }
+  }
+  assert.deepEqual(portees, [], 'une ligne de la boutique porte un module de l\'Ouvrage');
+
+  // ⚠ ET LA MÊME MESURE SUR L'ÉCRAN LUI-MÊME, pas seulement sur la table : c'est
+  // `lignesDeRecherche` que le joueur voit. Le compte des lignes à module est
+  // celui d'avant le lot — vingt-trois en offense, vingt-trois en défense.
+  const parBranche = {};
+  const modulesVus = new Set();
+  for (const branche of BRANCHES) {
+    const lignes = lignesDeRecherche(partie('0'), branche);
+    parBranche[branche] = lignes.filter((l) => l.module !== null).length;
+    for (const l of lignes) if (l.module !== null) modulesVus.add(l.module.nom);
+  }
+  // MESURÉ DES DEUX CÔTÉS du lot, sur `origin/main` comme ici : quatorze lignes
+  // à module en offense, dix-sept en défense. Ces nombres ne bougent pas.
+  assert.deepEqual(parBranche, { offense: 14, defense: 17 });
+  assert.equal(modulesVus.has('munitionSpeciale'), false, 'la Munition spéciale est à l\'écran');
+  assert.equal(modulesVus.has('volDeVie'), false, 'le Vol de vie est à l\'écran');
+  // Les DOUZE noms que l'écran montre vraiment — la même liste qu'avant le lot.
+  // Le compte EST la liste : un lot qui en ajouterait un sans le dire ferait
+  // tomber cette ligne.
+  assert.deepEqual([...modulesVus].sort(), [
+    'autoReparation', 'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp',
+    'flashbang', 'garnison', 'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn',
+    'tirDeBarrage',
+  ]);
+
+  // ⚠ ET LE CANAL DU JOUEUR N'EST PAS TOUCHÉ PAR CELUI DE L'OUVRAGE. C'est la
+  // garde qui protège MODULES-A à E : `genererSite` remplit une branche et une
+  // seule.
+  for (const niveau of [1, 28, 32, 42, 46, 50]) {
+    const site = genererSite({ type: 'base', niveau, saveur: null, graine: 3 });
+    assert.deepEqual(site.modulesDebloques.joueur, { offense: [], defense: [] },
+      `niveau ${niveau} : le générateur touche au canal du joueur`);
+  }
+  // Et ce que le joueur a acheté ne dépend toujours que de SES acquisitions.
+  const etat = partie('999999999999999');
+  assert.deepEqual(modulesDebloquesDuJoueur(etat), { offense: [], defense: [] });
+  acheter(etat, 'offense', 'perceurs', 'unite');
+  acheter(etat, 'offense', 'perceurs', 'module');
+  assert.deepEqual(modulesDebloquesDuJoueur(etat),
+    { offense: ['tirDeBarrage'], defense: [] });
+});
+
+test('MODULES-F T16 — le déterminisme tient avec les deux modules', () => {
+  // ⚠ LA PROJECTION EST CELLE DE MODULES-B T10, RÉUTILISÉE — pas une seconde.
+  // Elle voit les PV, le plafond, le réservoir de bouclier, la portée, la cible
+  // et les modules actifs : tout ce que ce lot peut faire bouger.
+  const scene = (ordre, modules) => {
+    const defenseurs = [
+      { id: 'casemate', rangee: 4, colonne: 5, niveau: 20 },
+      { id: 'broyeur', rangee: 6, colonne: 6, niveau: 20 },
+      { id: 'batterie', rangee: 5, colonne: 4, niveau: 20 },
+      { id: 'herse', rangee: 7, colonne: 5, niveau: 20 },
+      { id: 'creneau', rangee: 6, colonne: 4, niveau: 20 },
+    ];
+    return creerCombat({
+      niveau: 20,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+      defenseurs: ordre.map((i) => defenseurs[i]),
+      vagues: [[
+        { id: 'meute', colonne: 5, rangee: 2, niveau: 30 },
+        { id: 'belier', colonne: 4, rangee: 2, niveau: 30 },
+        { id: 'crecelle', colonne: 6, rangee: 2, niveau: 30 },
+      ]],
+      modulesDebloques: {
+        ouvrage: { offense: [], defense: modules },
+        joueur: RIEN,
+      },
+    });
+  };
+  const tous = ['munitionSpeciale', 'volDeVie'];
+  const jouer = (ordre) => {
+    const etat = scene(ordre, tous);
+    for (let t = 1; t <= 150 && !etat.termine; t += 1) tick(etat);
+    return { etat, vue: projectionCanonique(etat) };
+  };
+
+  // Bit à bit d'abord : deux exécutions du MÊME montage.
+  const a = jouer([0, 1, 2, 3, 4]);
+  assert.equal(serialiserEtat(a.etat), serialiserEtat(jouer([0, 1, 2, 3, 4]).etat));
+
+  // ⚠ LA PERMUTATION DOIT VRAIMENT PERMUTER, sinon tout ce qui suit est trivial.
+  const rangs = (e) => e.entites.map((x) => x.id).join(',');
+  assert.notEqual(rangs(a.etat), rangs(jouer([4, 3, 2, 1, 0]).etat),
+    'montage : les deux ordres sont identiques');
+  for (const ordre of [[4, 3, 2, 1, 0], [2, 0, 4, 1, 3], [1, 4, 0, 3, 2]]) {
+    assert.deepEqual(jouer(ordre).vue, a.vue, `ordre ${ordre.join('')}`);
+  }
+
+  // ⚠ ET LE MONTAGE N'EST PAS VACANT : les deux modules ont mesurablement joué.
+  // Sans ces gardes, un combat où aucun ne s'applique passerait en ne prouvant
+  // rien. On compare au même montage SANS module, au tick près.
+  const temoin = scene([0, 1, 2, 3, 4], []);
+  for (let t = 1; t <= 150 && !temoin.termine; t += 1) tick(temoin);
+  assert.notDeepEqual(projectionCanonique(temoin), a.vue,
+    'les deux modules ne changent rien à ce combat : la garde est creuse');
+  const pv = (etat, id) => etat.entites.find((e) => e.camp === 'attaque' && e.id === id).pvMilli;
+  assert.ok(pv(a.etat, 'meute') < pv(temoin, 'meute'),
+    'la Munition spéciale de la Casemate n\'a pas mordu sur l\'infanterie');
+  const voleur = (etat) => etat.entites.find((e) => e.id === 'broyeur').pvMilli;
+  assert.ok(voleur(a.etat) > voleur(temoin), 'le Vol de vie n\'a pas soigné le Broyeur');
 });
