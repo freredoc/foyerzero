@@ -58,6 +58,7 @@ import {
   obstacleConcerne,
   vitesseSousObstacle,
   TYPES_OBSTACLE,
+  MILLI_PAR_CASE,
 } from './grille.js';
 
 // ---------------------------------------------------------------------------
@@ -215,6 +216,12 @@ function profilUnite(id, u) {
     pvMaxMilli: enEntier(u.pv, MILLE, `${contexte}.pv`),
     degatsColonne: degatsUnite,
     colonnePredilection: colonneDominante(degatsUnite, contexte),
+    // ⚠ LES DEUX FORMES, ET LES DEUX SERVENT. Le carré est ce que compare
+    // `distanceCarree` ; la forme LINÉAIRE est la seule sur laquelle un module
+    // sait ajouter ou retirer une case. `porteeCarree + 1` n'ajouterait pas
+    // une case, il ajouterait un millionième de case au carré.
+    porteeMilli,
+    porteeMiniMilli,
     porteeCarree: porteeMilli * porteeMilli,
     porteeMiniCarree: porteeMiniMilli * porteeMiniMilli,
     franchissementColonne: null,
@@ -258,6 +265,8 @@ function profilDefense(id, d) {
     pvMaxMilli: enEntier(d.pv, MILLE, `${contexte}.pv`),
     degatsColonne: degatsDefense,
     colonnePredilection: colonneDominante(degatsDefense, contexte),
+    porteeMilli,
+    porteeMiniMilli,
     porteeCarree: porteeMilli * porteeMilli,
     porteeMiniCarree: porteeMiniMilli * porteeMiniMilli,
     masse: null,
@@ -295,6 +304,8 @@ function profilBatiment(id, b) {
     pvMaxMilli: enEntier(b.pv, MILLE, `${contexte}.pv`),
     degatsColonne: null,
     colonnePredilection: null,
+    porteeMilli: 0,
+    porteeMiniMilli: 0,
     porteeCarree: 0,
     porteeMiniCarree: 0,
     masse: null,
@@ -574,6 +585,21 @@ function ajouterEntite(
   // plus bas), donc `moduleActif` est appelable ici. Le poser au premier tick
   // laisserait passer un tick de tir sans la moindre protection.
   if (moduleActif(etat, entite, p, 'bouclier')) entite.bouclierMilli = pvMaxMilli;
+  // ⚠⚠ EN MILLI-CASES, PUIS AU CARRÉ — jamais l'inverse. Une case vaut 1 000
+  // milli, et `distanceCarree` compare des carrés de milli-cases : deux cases
+  // voisines sont à 1 000 000. On ajoute donc la case AVANT d'élever au carré.
+  //
+  // ⚠ ET LE PLANCHER EST À ZÉRO, AVANT LE CARRÉ. Une portée minimale négative
+  // repasserait positive en s'élevant au carré, et l'angle mort reviendrait
+  // plus grand qu'il n'était.
+  let porteeMilli = p.porteeMilli;
+  let porteeMiniMilli = p.porteeMiniMilli;
+  if (moduleActif(etat, entite, p, 'rayonPlusUn')) porteeMilli += MILLI_PAR_CASE;
+  if (moduleActif(etat, entite, p, 'rayonMiniMoinsUn')) {
+    porteeMiniMilli = Math.max(0, porteeMiniMilli - MILLI_PAR_CASE);
+  }
+  entite.porteeCarree = porteeMilli * porteeMilli;
+  entite.porteeMiniCarree = porteeMiniMilli * porteeMiniMilli;
   etat.entites.push(entite);
   return entite;
 }

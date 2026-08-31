@@ -2498,6 +2498,153 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   }
 });
 
+/**
+ * Une garnison DU JOUEUR — c'est le seul côté où les modules de ce lot vivent —
+ * et un assaillant de l'Ouvrage qu'on place où l'on veut.
+ *
+ * ⚠ LE DÉPLACEMENT EST L'ÉTAPE 7, LES DÉGÂTS L'ÉTAPE 5. On force la position de
+ * l'assaillant PUIS on joue un tick : ce qui compte est la distance d'avant.
+ */
+function sceneDePortee({ defenseur, modules = [], distanceMilli }) {
+  const etat = creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [{ ...defenseur, niveau: 10 }],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'fouisseurs', colonne: 5, rangee: 2, niveau: 10 }]],
+    modulesDebloques: { ouvrage: [], joueur: modules },
+  });
+  const garde = etat.entites.find((e) => e.camp === 'defense' && e.id === defenseur.id);
+  const assaillant = etat.entites.find((e) => e.camp === 'attaque');
+  assert.ok(garde !== undefined && assaillant !== undefined, 'montage');
+  if (distanceMilli !== undefined) assaillant.rangeeMilli = garde.rangeeMilli - distanceMilli;
+  const avant = assaillant.pvMilli;
+  const d2 = distanceCarree(garde.rangeeMilli, garde.colonne,
+    assaillant.rangeeMilli, assaillant.colonne);
+  tick(etat);
+  return { etat, garde, assaillant, d2, pertes: avant - assaillant.pvMilli };
+}
+
+test('MODULES-D T5 — la portée se lit sur l\'ENTITÉ, et TOUS ses lecteurs la lisent là', () => {
+  // Viser ET tirer : deux lecteurs distincts, deux assertions distinctes. Un
+  // seul des deux laissé sur le profil donnerait une garde qui vise sans tirer,
+  // ou qui tire sans avoir visé — le combat ne planterait pas, il serait faux.
+  const avec = sceneDePortee({
+    defenseur: { id: 'guetteur', rangee: 6, colonne: 5 },
+    modules: ['rayonPlusUn'], distanceMilli: 3000,
+  });
+  assert.equal(avec.d2, 9000000, 'montage : trois cases, au carré des milli-cases');
+  assert.notEqual(avec.garde.cibleIndice, null, '`ciblage` lit encore la portée du profil');
+  assert.ok(avec.pertes > 0, '`tir` lit encore la portée du profil');
+
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sans l'achat, la même case est hors
+  // d'atteinte. Sans cette ligne, les deux assertions ci-dessus passeraient sur
+  // une portée qui n'a jamais bougé.
+  const sans = sceneDePortee({
+    defenseur: { id: 'guetteur', rangee: 6, colonne: 5 }, distanceMilli: 3000,
+  });
+  assert.equal(sans.garde.cibleIndice, null);
+  assert.equal(sans.pertes, 0);
+
+  // ⚠⚠ QUATRE LECTEURS, PAS TROIS. Le brief en annonçait deux dans `ciblage`
+  // — la boucle des candidats et le bloc « cible conservée » — et un dans
+  // `tir` ; mesuré, le bloc « cible conservée » ne lit AUCUNE portée, et deux
+  // autres fonctions en lisent une : `ensembleCamoufles` (le rayon qui révèle
+  // un camouflé, « les mêmes que son ciblage ») et `cibleDeNeutralisation`.
+  // Aucun module ne modifie encore la portée d'un porteur de Camouflage ou
+  // d'EMP : ces deux-là se gardent à la source, faute de montage qui les
+  // sépare.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  assert.equal((source.match(/d2 > e\.porteeCarree \|\| d2 < e\.porteeMiniCarree/g) ?? []).length, 4,
+    'les quatre lecteurs de portée doivent lire l\'entité');
+  assert.equal(source.includes('d2 > p.porteeCarree'), false,
+    'un lecteur de portée est resté sur le profil');
+  // `peutTirer` est le cinquième : il décide si l'entité tire du tout.
+  assert.match(source, /function peutTirer\(e, p\) \{\n\s*if \(p\.degatsColonne === null \|\| e\.porteeCarree === 0\)/);
+});
+
+test('MODULES-D T6 — Rayon +1 ajoute UNE case, en milli-cases puis au carré', () => {
+  const sans = sceneDePortee({ defenseur: { id: 'guetteur', rangee: 6, colonne: 5 } });
+  const avec = sceneDePortee({
+    defenseur: { id: 'guetteur', rangee: 6, colonne: 5 }, modules: ['rayonPlusUn'],
+  });
+  // 2,5 case → 3,5 case. En milli-cases au carré : 2 500² puis 3 500².
+  assert.equal(sans.garde.porteeCarree, 2500 * 2500);
+  assert.equal(avec.garde.porteeCarree, 3500 * 3500);
+  // ⚠ ET SÛREMENT PAS `porteeCarree + 1`, qui rendrait 6 250 001 — un
+  // millionième de case de plus, invisible et faux.
+  assert.notEqual(avec.garde.porteeCarree, sans.garde.porteeCarree + 1);
+  // Le rayon MINIMAL, lui, ne bouge pas : le module n'en parle pas.
+  assert.equal(avec.garde.porteeMiniCarree, sans.garde.porteeMiniCarree);
+
+  // Le PROFIL reste à sa valeur nominale : c'est ce qui permet à deux Guetteurs
+  // de la même grille d'avoir deux rayons différents.
+  const gardeSansAchat = sans.etat.entites.find((e) => e.id === 'guetteur');
+  assert.equal(gardeSansAchat.porteeCarree, 2500 * 2500);
+});
+
+test('MODULES-D T7 — Rayon minimum −1 : une cible hors d\'atteinte devient touchable', () => {
+  // La Faucheuse a un angle mort de 3,5 cases. Un assaillant à 3 cases y est
+  // à l'abri ; le module ramène l'angle mort à 2,5 et le découvre.
+  const commun = { defenseur: { id: 'faucheuse', rangee: 6, colonne: 5 }, distanceMilli: 3000 };
+  const sans = sceneDePortee(commun);
+  const avec = sceneDePortee({ ...commun, modules: ['rayonMiniMoinsUn'] });
+
+  assert.equal(sans.d2, 9000000, 'montage : trois cases');
+  assert.equal(sans.garde.porteeMiniCarree, 3500 * 3500);
+  assert.equal(avec.garde.porteeMiniCarree, 2500 * 2500);
+
+  // ⚠⚠ UN NOMBRE QUI CHANGE NE SUFFIT PAS : on montre LE TIR. Sans le module,
+  // l'assaillant n'est même pas visé ; avec, il est visé ET il perd des PV.
+  assert.equal(sans.garde.cibleIndice, null, 'l\'angle mort ne protège plus');
+  assert.equal(sans.pertes, 0);
+  assert.notEqual(avec.garde.cibleIndice, null);
+  assert.ok(avec.pertes > 0, `l'artillerie ne tire toujours pas (${avec.pertes})`);
+
+  // Et la portée MAXIMALE ne bouge pas : le module ne parle que de l'angle mort.
+  assert.equal(avec.garde.porteeCarree, sans.garde.porteeCarree);
+  assert.equal(avec.garde.porteeCarree, 5500 * 5500);
+});
+
+test('MODULES-D T8 — le rayon minimum ne passe pas sous zéro', () => {
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  // ⚠ LE PLANCHER EST AVANT LE CARRÉ, ET C'EST TOUT L'ENJEU. Une portée
+  // minimale de −500 milli repasserait à 250 000 en s'élevant au carré : le
+  // module AGRANDIRAIT l'angle mort qu'il est censé réduire.
+  assert.match(source, /porteeMiniMilli = Math\.max\(0, porteeMiniMilli - MILLI_PAR_CASE\);/);
+  assert.ok(source.indexOf('Math.max(0, porteeMiniMilli') 
+    < source.indexOf('entite.porteeMiniCarree = porteeMiniMilli * porteeMiniMilli;'),
+    'le plancher doit être posé AVANT la mise au carré');
+
+  // ⚠⚠ ET AUCUNE DONNÉE NE L'ATTEINT AUJOURD'HUI — c'est mesuré, pas supposé.
+  // Les trois porteuses ont toutes un angle mort de 3,5 cases : le plancher est
+  // une garde MORTE, exactement comme `masseEffective` l'est pour l'Écraseur.
+  // Elle mordra le jour où une pièce à angle mort d'une case portera le module,
+  // et l'écrire plus tard demanderait de retrouver ce raisonnement-ci.
+  const porteuses = Object.entries(DEFENSES)
+    .filter(([, d]) => d.moduleJoueur === 'rayonMiniMoinsUn' || d.moduleOuvrage === 'rayonMiniMoinsUn')
+    .map(([id, d]) => [id, d.porteeMini]);
+  assert.deepEqual(porteuses.map(([id]) => id).sort(), ['faucheuse', 'harpon', 'mortier']);
+  for (const [id, mini] of porteuses) {
+    assert.ok(mini >= 1, `${id} a un angle mort de ${mini} case : le plancher mord maintenant`);
+  }
+  // Aucune unité de garnison ne porte le module — sinon il faudrait vérifier
+  // son angle mort aussi.
+  assert.deepEqual(
+    Object.entries(UNITES).filter(([, u]) => u.defense.module === 'rayonMiniMoinsUn'
+      || u.moduleOuvrage === 'rayonMiniMoinsUn').map(([id]) => id), [],
+  );
+
+  // Le calcul lui-même, refait ici plutôt que recopié : un angle mort d'une
+  // demi-case tombe à ZÉRO, pas à 250 000.
+  const plancher = (miniMilli) => Math.max(0, miniMilli - 1000) ** 2;
+  assert.equal(plancher(500), 0);
+  assert.equal(plancher(1000), 0);
+  assert.equal(plancher(3500), 2500 * 2500);
+});
+
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
 function faireElement(tag) {
   const classes = new Set();
