@@ -829,6 +829,61 @@ function degatsContre(e, p, cible) {
 }
 
 /**
+ * CAMOUFLAGE — « invisible pour la défense ; sort du camouflage si une cible de
+ * prédilection est à portée ».
+ *
+ * Rend l'ensemble des INDICES que le ciblage adverse doit ignorer à ce tick.
+ *
+ * ⚠⚠ CALCULÉ UNE FOIS, EN TÊTE DE `ciblage`, AVANT LA BOUCLE. Le ciblage est
+ * simultané comme le tir : il se lit sur l'état de DÉBUT de tick. Rien dans
+ * `ciblage` ne modifie aujourd'hui ce que ce prédicat lit — positions, camps,
+ * vie —, si bien qu'une évaluation au fil de la boucle rendrait les mêmes
+ * réponses ; mais elle les rendrait n fois au lieu d'une, et surtout elle
+ * cesserait d'être vraie le jour où le ciblage écrira autre chose que
+ * `cibleIndice`. La forme qui ne peut pas se tromper est celle-ci.
+ *
+ * ⚠ NI DURÉE, NI USAGE UNIQUE. L'état se recalcule intégralement à chaque
+ * tick : rien ne va dans `modulesActifs`, rien dans `effetsTemporises`. Une
+ * unité qui se recamoufle est un cas normal, pas une exception.
+ *
+ * ⚠ « À PORTÉE » EST LA PORTÉE DU CAMOUFLÉ, bornes minimale et maximale
+ * comprises — les mêmes que son ciblage. Ce n'est pas la portée de celui qui
+ * regarde : c'est l'unité qui se découvre en s'approchant de sa proie, pas le
+ * défenseur qui la débusque.
+ *
+ * ⚠ LE CAMOUFLÉ CIBLE ET TIRE NORMALEMENT. Le module change la façon dont il
+ * est VU, pas ce qu'il fait ; `doitSArreter` n'est pas touché.
+ *
+ * ⚠ ATTAQUANTS SEULEMENT. « Invisible pour la DÉFENSE » : un ouvrage camouflé
+ * serait invisible pour l'attaquant, ce que la description ne dit pas. Les deux
+ * porteurs — Guetteur et Frappeur — n'ont d'ailleurs aucun rôle défensif.
+ */
+function ensembleCamoufles(etat) {
+  const camoufles = new Set();
+  for (const e of etat.entites) {
+    if (e.camp !== 'attaque' || !estActive(e)) continue;
+    const p = profil(e);
+    if (!moduleActif(etat, e, p, 'camouflage')) continue;
+    // Une entité sans prédilection ne tire pas : rien ne peut la découvrir.
+    // Aucun porteur n'est dans ce cas aujourd'hui ; la garde évite d'avoir à
+    // le redécouvrir si l'un d'eux perdait sa table de dégâts.
+    let revele = false;
+    if (p.colonnePredilection !== null) {
+      for (const c of etat.entites) {
+        if (c.camp === e.camp || !estActive(c)) continue;
+        if (profil(c).colonneMatrice !== p.colonnePredilection) continue;
+        const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
+        if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+        revele = true;
+        break;
+      }
+    }
+    if (!revele) camoufles.add(e.indice);
+  }
+  return camoufles;
+}
+
+/**
  * 3. Ciblage : la cible valide la plus proche ; à égalité, la plus à gauche.
  * L'ordre total est complété par la rangée puis l'indice d'insertion — deux
  * cibles peuvent partager distance et colonne (au-dessus et au-dessous du
@@ -837,6 +892,7 @@ function degatsContre(e, p, cible) {
  * valide, sinon n'en a pas.
  */
 function ciblage(etat) {
+  const camoufles = ensembleCamoufles(etat);
   for (const e of etat.entites) {
     if (!estActive(e)) continue;
     const p = profil(e);
@@ -844,12 +900,16 @@ function ciblage(etat) {
       e.cibleIndice = null;
       continue;
     }
+    // Seule la DÉFENSE est aveugle au camouflage. `null` là où il n'y a rien à
+    // masquer évite un test de camp par candidat.
+    const masque = e.camp === 'defense' ? camoufles : null;
     let meilleur = null;
     let meilleureDistance = 0;
     let meilleureColonne = 0;
     let meilleureRangee = 0;
     for (const c of etat.entites) {
       if (c.camp === e.camp || !estActive(c)) continue;
+      if (masque !== null && masque.has(c.indice)) continue;
       const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
       if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
       // UNE CIBLE VALIDE EST UNE CIBLE QU'ON PEUT BLESSER. Sans cette ligne, une
@@ -875,10 +935,138 @@ function ciblage(etat) {
       // La cible conservée suit la MÊME règle : devenue insensible — réserve
       // épuisée, tireur sous 1 ‰ de vie — elle n'est plus conservée.
       const ancienne = etat.entites[e.cibleIndice];
-      if (!estActive(ancienne) || degatsContre(e, p, ancienne) === 0) {
+      // ⚠⚠ ET LE CAMOUFLAGE COMPTE ICI AUSSI, C'EST LA MOITIÉ DE L'EFFET. Ce
+      // bloc garde l'ancienne cible quand aucune nouvelle n'est trouvée : un
+      // défenseur qui visait une unité au moment où elle se recamoufle
+      // continuerait de la viser indéfiniment, et le module serait sans effet
+      // dans tous les cas où il compte le plus — celui où le camouflé est la
+      // seule chose à portée.
+      if (!estActive(ancienne) || degatsContre(e, p, ancienne) === 0
+          || (masque !== null && masque.has(ancienne.indice))) {
         e.cibleIndice = null;
       }
     }
+  }
+}
+
+/**
+ * FLASHBANG et EMP — « désactive une infanterie / un véhicule à portée pendant
+ * 5 s, une seule fois par raid, effet −20 % sur une unité de niveau n+1 ».
+ *
+ * ⚠⚠ UN SEUL MÉCANISME, DEUX ENTRÉES DE TABLE. Les deux modules ne diffèrent
+ * QUE par la colonne de matrice visée. Deux fonctions jumelles seraient deux
+ * barèmes pour une même grandeur — ce que les conventions du dépôt refusent — et
+ * la première correction d'équilibrage n'en toucherait qu'une.
+ */
+const NEUTRALISATION = {
+  flashbang: 'infanterie',
+  emp: 'vehicule',
+};
+
+/** 5 s à 10 Hz, et la pénalité par niveau d'écart, en pour cent. */
+const NEUTRALISATION_TICKS = 50;
+const NEUTRALISATION_PENALITE_PCT = 20;
+
+/** L'entité est-elle désactivée en ce moment ? */
+function estNeutralisee(e) {
+  return e.effetsTemporises.some((f) => f.nom === 'neutralise');
+}
+
+/**
+ * La durée de neutralisation, en ticks — 0 si la cible est trop haute.
+ *
+ * ⚠ LE −20 % PORTE SUR LA DURÉE (arbitrage 1 d'Ethan, 31/08). La description
+ * dit « effet −20 % sur une unité de niveau n+1 » sans nommer la grandeur ; les
+ * deux lectures possibles étaient la durée et la portée, et c'est la durée.
+ *
+ * ⚠ SOUSTRACTIVE, PAS MULTIPLICATIVE, ET PLANCHER À ZÉRO. 50 · 40 · 30 · 20 ·
+ * 10 · 0 : l'effet s'éteint franchement à +5 niveaux. Une forme multiplicative
+ * (×0,8 par cran) rendrait 32 à +2 au lieu de 30, et ne toucherait jamais zéro
+ * — une neutralisation d'un tick contre une cible de vingt niveaux au-dessus
+ * serait absurde.
+ */
+function ticksDeNeutralisation(porteur, cible) {
+  const ecart = Math.max(0, cible.niveau - porteur.niveau);
+  const pct = Math.max(0, 100 - NEUTRALISATION_PENALITE_PCT * ecart);
+  return Math.floor((NEUTRALISATION_TICKS * pct) / 100);
+}
+
+/**
+ * La cible d'une neutralisation : l'adverse active la plus proche, à portée,
+ * dont la COLONNE DE MATRICE est celle du module.
+ *
+ * ⚠⚠ CE N'EST PAS `e.cibleIndice`. La cible de TIR s'élit sur les dégâts qu'on
+ * peut lui faire (`degatsContre`) ; celle-ci s'élit sur le châssis. Les deux
+ * coïncident souvent et divergent parfois — reprendre la cible de tir donnerait
+ * un Flashbang qui « désactive » un mur dès qu'un mur est plus proche.
+ *
+ * ⚠ « INFANTERIE » ET « VÉHICULE » SE LISENT SUR LA COLONNE DE MATRICE, jamais
+ * sur le châssis brut : les trois artilleries sont des VÉHICULES sans être des
+ * blindés (voir `COLONNE_PAR_TYPE_DEFENSE`), et une lecture du châssis les
+ * mettrait hors de portée de l'EMP.
+ *
+ * ⚠ LE DÉPARTAGE EST CELUI DE `ciblage`, À LA LETTRE — distance carrée, puis
+ * colonne, puis rangée. Un autre ordre rendrait le résultat dépendant de
+ * l'ordre d'itération, et le test de déterminisme ne le dirait pas : les deux
+ * résolutions seraient stables et fausses de la même façon.
+ */
+function cibleDeNeutralisation(etat, e, p, colonneVisee) {
+  let meilleur = null;
+  let meilleureDistance = 0;
+  let meilleureColonne = 0;
+  let meilleureRangee = 0;
+  for (const c of etat.entites) {
+    if (c.camp === e.camp || !estActive(c)) continue;
+    if (profil(c).colonneMatrice !== colonneVisee) continue;
+    const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
+    if (d2 > p.porteeCarree || d2 < p.porteeMiniCarree) continue;
+    if (
+      meilleur === null
+      || d2 < meilleureDistance
+      || (d2 === meilleureDistance && c.colonne < meilleureColonne)
+      || (d2 === meilleureDistance && c.colonne === meilleureColonne
+          && c.rangeeMilli < meilleureRangee)
+    ) {
+      meilleur = c;
+      meilleureDistance = d2;
+      meilleureColonne = c.colonne;
+      meilleureRangee = c.rangeeMilli;
+    }
+  }
+  return meilleur;
+}
+
+/**
+ * 3 bis. Déclenchement des neutralisations, juste après le ciblage.
+ *
+ * ⚠ APRÈS `ciblage` ET AVANT `tir`, pour que l'effet posé à ce tick coupe le
+ * tir du MÊME tick. Posé après `tir`, la cible tirerait une fois de plus que la
+ * durée annoncée — un tick sur cinquante, invisible à l'œil et faux.
+ *
+ * ⚠⚠ UNE DURÉE NULLE NE CONSOMME PAS L'USAGE. C'est la garde la plus
+ * importante de ce bloc : poser la marque pour un effet de zéro tick gâcherait
+ * un module payé des dizaines de millions de points contre une cible qu'il ne
+ * pouvait pas toucher. Le porteur retente au tick suivant, sur une autre cible.
+ * L'ordre des trois lignes finales est donc normatif — chercher, mesurer, PUIS
+ * marquer.
+ *
+ * ⚠ LA MARQUE N'EST JAMAIS RETIRÉE, exactement comme le Booster : « une seule
+ * fois par raid » = une fois par combat et par entité.
+ */
+function declencherNeutralisations(etat) {
+  for (const e of etat.entites) {
+    if (e.camp !== 'attaque' || !estActive(e)) continue;
+    const p = profil(e);
+    const colonneVisee = NEUTRALISATION[p.module];
+    if (colonneVisee === undefined) continue;
+    if (e.modulesActifs.includes(p.module)) continue;
+    if (!moduleActif(etat, e, p, p.module)) continue;
+    const cible = cibleDeNeutralisation(etat, e, p, colonneVisee);
+    if (cible === null) continue;
+    const ticks = ticksDeNeutralisation(e, cible);
+    if (ticks === 0) continue;
+    cible.effetsTemporises.push({ nom: 'neutralise', finTick: etat.tick + ticks });
+    e.modulesActifs.push(p.module);
   }
 }
 
@@ -994,6 +1182,17 @@ function tir(etat) {
 
   for (const e of etat.entites) {
     e.aTire = false;
+    // NEUTRALISÉE — ni tir, ni barrage. `aTire` reste faux, donc la réserve
+    // n'est pas entamée et `nuit` la voit inutile ; c'est bien ce que « on ne
+    // tire pas » veut dire partout ailleurs dans ce moteur.
+    //
+    // ⚠⚠ LA GARDE EST ICI, PAS DANS `ciblage`. Une entité neutralisée GARDE sa
+    // cible et la reprend à l'expiration. Vider `cibleIndice` la ferait aussi
+    // recibler à zéro en sortant de l'effet — mais surtout `doitSArreter` lit
+    // le ciblage pour décider si une unité AVANCE : neutraliser au ciblage
+    // changerait le mouvement, ce qu'aucune description ne dit. « Désactive »
+    // = ne tire plus, rien d'autre.
+    if (estNeutralisee(e)) continue;
     if (!estActive(e) || e.cibleIndice === null) continue;
     const cible = etat.entites[e.cibleIndice];
     if (!estActive(cible)) continue;
@@ -1433,6 +1632,7 @@ export function tick(etat) {
   expirerEffets(etat); //                        1. expiration des effets
   apparitionDeVague(etat); //                    2. apparition de vague
   ciblage(etat); //                              3. ciblage
+  declencherNeutralisations(etat); //            3 bis. flashbang et EMP
   const tampon = tir(etat); //                   4. tir, simultané
   appliquerDegats(etat, tampon); //              5. application du tampon
   retirerLesMorts(etat); //                      6. retrait des morts

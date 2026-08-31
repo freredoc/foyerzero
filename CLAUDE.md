@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **31/08/2026**, version 0.51.0 · build 52.
+Dernière révision : **31/08/2026**, version 0.52.0 · build 53.
 
 ---
 
@@ -41,23 +41,28 @@ Dernière révision : **31/08/2026**, version 0.51.0 · build 52.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MODULES-A), à confronter :**
-`npm test` → **667 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 260 325 octets**, 0 référence externe.
-⚠ **MODULES-A A COÛTÉ +1 233 OCTETS, ET C'EST DU CODE PUR.** Deux modules
-câblés — Tir de barrage, Booster —, aucune image, aucun écran neuf, aucun champ
-de sauvegarde : `SAVE_VERSION` reste à **14**. La borne de T10 n'a pas bougé —
-marge **39 675 octets**, 3,05 %.
-⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 %.** Elle ne
-descend plus que de quelques centièmes tant que les lots sont du code ; c'est le
-prochain atlas qui la fera tomber, et il faudra rouvrir la borne, pas la
-contourner.
+**Référence au 31/08/2026 (après le lot MODULES-B), à confronter :**
+`npm test` → **682 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 261 788 octets**, 0 référence externe.
+⚠ **MODULES-B A COÛTÉ +1 463 OCTETS, ET C'EST DU CODE PUR.** Trois modules
+câblés — Flashbang, EMP, Camouflage —, aucune image, aucun écran neuf, aucun
+champ de sauvegarde : `SAVE_VERSION` reste à **14**. La borne de T10 n'a pas
+bougé — marge **38 212 octets**, 2,94 %.
+⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 %.**
+Elle ne descend plus que de quelques centièmes tant que les lots sont du code ;
+c'est le prochain atlas qui la fera tomber, et il faudra rouvrir la borne, pas
+la contourner.
 ⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
-exactement **7 écarts**, code de sortie 1. MODULES-A n'y touche pas : le compte
-est le même avant et après, écart par écart. Le porter à 6 ou à 8 sans lot dédié
+exactement **7 écarts**, code de sortie 1. MODULES-B n'y touche pas : les sept
+lignes `KO` sont les mêmes avant et après, mot pour mot (terrain, disposition,
+emplacements, trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié
 serait une régression, dans les deux sens.
 ⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT NON PLUS**, et c'était
 conforme : il ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot MODULES-A :** 667 tests, `dist/index.html`
+**1 260 325 octets**, marge 39 675, 3,05 %. Deux modules câblés — Tir de
+barrage, Booster — pour +1 233 octets, `SAVE_VERSION` déjà à 14.
 
 **Auparavant, après le lot RECHERCHE :** 658 tests, `dist/index.html`
 **1 259 092 octets**, marge 40 908, 3,1 %.
@@ -2889,6 +2894,75 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   **−3,7 % de points médians** — il fait courir l'unité blessée droit sur la
   défense. Un module câblé n'est pas un module rentable, et le dire est le
   travail du rapport, pas du code.
+
+- **TROIS MODULES DE PLUS, ET DEUX CROCHETS SEULEMENT** — 31/08, lot MODULES-B.
+  Flashbang, EMP et Camouflage sont câblés en **offense seulement** (`cable:
+  {offense: true, defense: false}`) ; ils ouvrent deux crochets, pas six : *une
+  entité qui ne peut plus tirer* et *une entité qu'on ne peut plus viser*.
+  ⚠ **UNE SEULE MÉCANIQUE POUR LE FLASHBANG ET L'EMP**, une table de deux
+  lignes (`NEUTRALISATION = {flashbang: 'infanterie', emp: 'vehicule'}`) et
+  aucune fonction jumelle : un test compte les occurrences dans la source pour
+  qu'aucun cas particulier ne soit nommé à la main. Deux barèmes pour une même
+  grandeur, c'est la première correction d'équilibrage qui n'en touche qu'un.
+  ⚠ **LA CIBLE EST CHOISIE SUR LA COLONNE DE MATRICE, PAS SUR `cibleIndice`.**
+  L'étape **3 bis** cherche sa propre cible, la plus proche de la colonne visée,
+  avec **le départage de `ciblage` à la lettre** (distance, puis colonne, puis
+  rangée). Prendre la cible du tir ferait dépendre la neutralisation de ce que
+  le porteur avait décidé de canarder — deux grandeurs sans rapport.
+  ⚠ **`escouade` N'EST PAS `infanterie`.** La table nomme des colonnes de
+  matrice ; les défenses n'ont pas de châssis (`chassis: null`) et les trois
+  artilleries sont des **véhicules**. Lire `chassis` au lieu de
+  `colonneMatrice` ne neutralise plus aucune défense — mesuré, six tests
+  tombent.
+  ⚠ **50 TICKS, −20 % DE DURÉE PAR NIVEAU D'ÉCART, ET LA PÉNALITÉ EST
+  ADDITIVE** (arbitrage d'Ethan : le −20 % porte sur la DURÉE). 50 · 50 · 40 ·
+  30 · 20 · 10 · 0 · 0 — à cinq niveaux d'écart la durée est nulle.
+  ⚠⚠ **ET UNE DURÉE NULLE NE CONSOMME PAS L'USAGE.** Le porteur ne pose sa
+  marque qu'après avoir calculé la durée ; l'inverse brûlerait le seul usage du
+  raid contre une cible trop haute, sans le moindre effet. Un test tombe si les
+  deux lignes sont interverties.
+  ⚠ **LA GARDE EST DANS `tir`, PAS DANS `ciblage`.** Une neutralisée **garde sa
+  cible** — elle ne tire plus, c'est tout : ni immobilisée, ni aveugle, ni
+  désarmée. Posée dans `ciblage`, `cibleIndice` retomberait à `null` et le
+  module ferait bien plus que ce qu'il dit. ⚠ Et la garde est **avant l'appel à
+  `tirDeBarrage`** : sinon les éclaboussures d'un porteur neutralisé partiraient
+  quand même.
+  ⚠ **L'ÉTAPE 3 bis EST ENTRE LE CIBLAGE ET LE TIR.** Après le tir, la
+  neutralisation ne mordrait qu'au tick suivant et le premier tir passerait.
+  ⚠ **CAMOUFLAGE : L'ENSEMBLE EST CALCULÉ UNE FOIS, EN TÊTE DE `ciblage`.** Un
+  camouflé est invisible pour la DÉFENSE tant qu'aucune entité de sa **colonne
+  de prédilection** n'est à sa portée ; il cible et tire normalement, et
+  `doitSArreter` n'est pas touché. ⚠ **Le `Set` sert DEUX fois** : dans la
+  boucle des candidats, et dans le bloc « cible conservée » — sans le second, un
+  défenseur qui visait l'unité au moment où elle se recamoufle la viserait
+  indéfiniment, et le module serait sans effet dans le cas où il compte le plus.
+  ⚠ **LE PRÉ-CALCUL N'EST PAS UNE QUESTION DE SIMULTANÉITÉ — MESURÉ.** `ciblage`
+  n'écrit que `cibleIndice`, que le prédicat de camouflage ne lit pas :
+  l'évaluer au fil de la boucle donne le MÊME résultat, et aucun test ne tombe.
+  Ce qu'on y gagne est O(n) au lieu de O(n²), et une règle qu'on lit d'un bloc.
+  Le dire autrement serait inventer une justification.
+  ⚠ **LES EFFETS S'EMPILENT, ET LE PLUS LONG FAIT FOI.** Deux porteurs qui
+  neutralisent la même cible posent DEUX `neutralise` ; `estNeutralisee` est un
+  `.some()`, donc l'échéance courte peut tomber sans lever la neutralisation.
+  Constaté en raid, figé par un test — **non demandé par le brief, et non
+  arbitré** : remplacer l'effet au lieu de l'empiler raccourcirait la
+  neutralisation en silence.
+  ⚠ **LE BOOSTER NE FRANCHIT RIEN, ET CE N'EST PAS `peutAvancer` QUI L'EN
+  EMPÊCHE** (arbitrage 2 d'Ethan, vérifié sans rien changer au code). Mesuré au
+  sabotage : `peutAvancer` forcée à `true`, la Carapace boostée reste bloquée
+  devant le mur. Cette fonction est un **pré-calcul** qui alimente `progresse`,
+  donc le compteur de repli et le forçage de l'Écraseur ; le refus d'avancer est
+  exécuté **à la fin de `deplacement`**, sur la case occupée que `peutEcraser`
+  refuse. Les deux passent par `peutEcraser` — le verdict est le même,
+  l'attribution ne l'est pas.
+  ⚠ **MESURÉ EN RAID, PAS SUPPOSÉ, ET SANS JUGEMENT DE VALEUR** : sur un
+  avant-poste réel de niveau 40, l'EMP se déclenche aux ticks 22 et 31 sur deux
+  Béliers défensifs (50 ticks sans tir chacun), le Flashbang au tick 87 sur une
+  Meute (51 ticks sans tir), et le premier Guetteur camouflé n'est visé qu'au
+  tick 60 contre le tick 26 sans le module. ⚠ **Les camps et avant-postes de
+  début de partie n'ont ni artillerie ni véhicule** : l'EMP n'y a rien à
+  neutraliser, et c'est une propriété du générateur, pas du module.
+
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie
