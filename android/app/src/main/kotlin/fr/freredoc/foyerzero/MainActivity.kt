@@ -106,8 +106,15 @@ class MainActivity : Activity() {
      * ⚠ ET `@JavascriptInterface` EST OBLIGATOIRE SUR CHACUNE. Sans
      * l'annotation, la méthode n'est pas exposée du tout depuis l'API 17 — le
      * bouton resterait muet sans qu'aucune erreur ne le dise.
+     *
+     * ⚠⚠ LA CLASSE EST PUBLIQUE, ET CE N'EST PAS UN OUBLI DE `private`.
+     * `addJavascriptInterface` énumère les méthodes annotées PAR RÉFLEXION :
+     * sous une classe non publique, elles ne sont pas atteignables et le pont
+     * est silencieusement mort. Ça compile, ça se déploie, et le bouton ne
+     * répond simplement jamais — exactement le genre de défaut que ce lot-ci
+     * existe pour retirer (une classe basculée que la feuille ignore).
      */
-    private class PontMiseAJour(private val gestionnaire: GestionnaireVersions) {
+    class PontMiseAJour(private val gestionnaire: GestionnaireVersions) {
 
         /** Lance une vérification, ou ne fait rien si une tourne déjà. */
         @JavascriptInterface
