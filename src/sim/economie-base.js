@@ -192,15 +192,39 @@ export function capacitesMilli(disposition) {
  * n'apparaît jamais — `problemesDeDisposition` est le bon endroit pour s'en
  * apercevoir, pas ici.
  *
+ * ⚠⚠ LES MAJORATIONS DE POI S'APPLIQUENT ICI, SUR LE DÉBIT, ET NULLE PART
+ * AILLEURS. `rattrapageEconomieBase` doit produire un état STRICTEMENT identique
+ * à N appels de `tickEconomieBase` — c'est écrit dans sa documentation et un test
+ * le mesure. En majorant le DÉBIT, les deux chemins héritent de la majoration par
+ * construction, sans qu'une seule ligne les relie. Majorer le *gain* d'un tick,
+ * ou le stock, ferait diverger les deux, et la divergence serait invisible sur
+ * les petits nombres.
+ *
+ * ⚠ EN POUR-CENT ENTIERS, UN SEUL `floor`, SUR LE PRODUIT — la même forme que la
+ * majoration de PV du moteur de combat. Un facteur flottant ferait sortir des
+ * entiers, donc du rattrapage exact.
+ *
+ * ⚠ LA BORNE `DEBIT_MILLI_PAR_HEURE_MAX` SE VÉRIFIE SUR LA VALEUR MAJORÉE. Un
+ * débit à 99 % du seuil qui passe à +100 % le franchit, et c'est exactement le
+ * cas que la borne existe pour attraper.
+ *
+ * ⚠ LE DÉFAUT EST VIDE, et il n'est pas là par confort : les bancs et les tests
+ * qui ne parlent pas de POI appellent à deux arguments et doivent continuer de
+ * rendre exactement ce qu'ils rendaient.
+ *
+ * @param {Record<string, number>} [majorationsPct] pour-cent ENTIERS par ressource
  * @returns {Array<Record<string, number>>} un objet par bâtiment, dans l'ordre.
  */
-export function debitsMilliParHeure(disposition, champs) {
+export function debitsMilliParHeure(disposition, champs, majorationsPct = {}) {
   return disposition.map((_, index) => {
     const brut = productionParRessource(disposition, champs, index);
     const milli = {};
     for (const r of RESSOURCES) {
       if (brut[r] === undefined || brut[r] === 0) continue;
-      const v = brut[r] * 1000;
+      const pct = majorationsPct[r] ?? 0;
+      const v = pct === 0
+        ? brut[r] * 1000
+        : Math.floor((brut[r] * 1000 * (100 + pct)) / 100);
       if (v > DEBIT_MILLI_PAR_HEURE_MAX) {
         throw new Error(
           `economie-base : débit ${v} milli/h au-dessus du seuil exact `
@@ -337,10 +361,13 @@ function verifierEtat(etat, disposition) {
  * @param {Array<object>} disposition
  * @param {object} champs
  */
-export function tickEconomieBase(etat, disposition, champs) {
+export function tickEconomieBase(etat, disposition, champs, majorationsPct = {}) {
   verifierEtat(etat, disposition);
   const caps = capacitesMilli(disposition);
-  const debits = debitsMilliParHeure(disposition, champs);
+  // ⚠ LES MAJORATIONS NE TOUCHENT PAS `capacitesMilli`. Ethan a écrit
+  // « production bonus », pas « stockage bonus » : un POI fait produire plus
+  // vite, il n'agrandit aucun entrepôt.
+  const debits = debitsMilliParHeure(disposition, champs, majorationsPct);
 
   for (let i = 0; i < disposition.length; i++) {
     const residus = etat.residus[i];
@@ -395,14 +422,17 @@ export function tickEconomieBase(etat, disposition, champs) {
  *
  * @param {object} etat modifié en place
  * @param {number} nbTicks
+ * @param {Record<string, number>} [majorationsPct] pour-cent ENTIERS par ressource
  */
-export function rattrapageEconomieBase(etat, disposition, champs, nbTicks) {
+export function rattrapageEconomieBase(etat, disposition, champs, nbTicks, majorationsPct = {}) {
   verifierEtat(etat, disposition);
   if (!Number.isInteger(nbTicks) || nbTicks < 0) {
     throw new Error(`economie-base : nombre de ticks invalide ${nbTicks}`);
   }
   const caps = capacitesMilli(disposition);
-  const debits = debitsMilliParHeure(disposition, champs);
+  // ⚠ MÊME MAJORATION, MÊME ENDROIT QUE DANS LE TICK — c'est ce qui rend les deux
+  // chemins équivalents SANS qu'une ligne les relie. Voir `debitsMilliParHeure`.
+  const debits = debitsMilliParHeure(disposition, champs, majorationsPct);
 
   const heuresPleines = Math.floor(nbTicks / TICKS_PAR_HEURE);
   const ticksRestants = nbTicks - heuresPleines * TICKS_PAR_HEURE;

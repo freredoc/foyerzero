@@ -40,6 +40,7 @@ import { NIVEAU } from '../data/niveaux.js';
 import { TICKS_PAR_SECONDE } from './clock.js';
 import { estSurLaCarte, niveauDeLaRangee } from './carte.js';
 import { estBaseOuvrage } from './peuplement.js';
+import { poiDeLaCase } from './poi.js';
 import { niveauDesBatiments } from './niveau-de-base.js';
 import { creerRng, entier } from './rng.js';
 
@@ -346,6 +347,16 @@ function poserUnSatellite(etat, type, tickDeLaPose) {
     // case. La règle des huit cases, elle, ne s'applique pas — Ethan, le 29/08 :
     // « les camps et avant-postes peuvent coller les bases ».
     if (estBaseOuvrage(etat.graine, k.rangee, k.colonne)) return false;
+    // ⚠ NI SUR UN POI, ET LE MOTIF EST LE MÊME MOT POUR MOT. Les POI sont
+    // dérivés de la graine, donc ils étaient là AVANT : un camp posé dessus
+    // ferait deux sites sur une case.
+    //
+    // ⚠ CONSÉQUENCE ASSUMÉE : le filtre rétrécit `libres`, donc l'indice tiré
+    // change, donc les FUTURES apparitions d'une partie en cours ne tombent plus
+    // aux mêmes cases qu'avant le lot POI. Les satellites DÉJÀ POSÉS ne bougent
+    // pas — ils sont dans la sauvegarde. C'est le prix de la règle, et il est dit
+    // au rapport du lot.
+    if (poiDeLaCase(etat.graine, k.rangee, k.colonne) !== null) return false;
     return !prises.has(`${k.rangee}:${k.colonne}`);
   });
   if (libres.length === 0) return null;

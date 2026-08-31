@@ -34,6 +34,7 @@ import {
   emplacementsDuNiveau, remboursementDuNiveau,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
+import { majorationsDeProduction } from '../sim/poi.js';
 import {
   debitDuBatiment, productionParRessource, voisinsQualifiants, voisinsQualifiantsParCase,
 } from '../sim/disposition.js';
@@ -828,7 +829,12 @@ export function resumeDeLaBase(etat) {
     throw new TypeError('chantier : état de jeu absent ou malformé');
   }
   const capacites = capacitesMilli(etat.disposition);
-  const debits = debitsMilliParHeure(etat.disposition, etat.champs);
+  // ⚠ LES MAJORATIONS DE POI PASSENT ICI AUSSI, ET C'EST OBLIGATOIRE. L'écran
+  // qui les oublierait afficherait un débit que le moteur ne produit pas — et
+  // le joueur lirait l'écart comme un bogue d'économie.
+  const debits = debitsMilliParHeure(
+    etat.disposition, etat.champs, majorationsDeProduction(etat.poisAcquis ?? []),
+  );
 
   const total = {};
   for (const r of RESSOURCES) total[r] = 0;
@@ -1184,7 +1190,12 @@ export function delaiAvantAmelioration(etat, index) {
 
   const cout = coutDeMontee(b.id, vise);
   const capacites = capacitesMilli(etat.disposition);
-  const debits = debitsMilliParHeure(etat.disposition, etat.champs);
+  // ⚠ LES MAJORATIONS DE POI PASSENT ICI AUSSI, ET C'EST OBLIGATOIRE. L'écran
+  // qui les oublierait afficherait un débit que le moteur ne produit pas — et
+  // le joueur lirait l'écart comme un bogue d'économie.
+  const debits = debitsMilliParHeure(
+    etat.disposition, etat.champs, majorationsDeProduction(etat.poisAcquis ?? []),
+  );
   const parRessource = {};
   for (const r of RESSOURCES) parRessource[r] = 0;
   for (const parBatiment of debits) {

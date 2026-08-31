@@ -25,10 +25,11 @@
 // pas. Un test balaie le panneau pour qu'aucun bouton d'action n'y entre.
 
 import {
-  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, palierDeNiveau,
+  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, POI, palierDeNiveau,
 } from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
+import { poisDeLaFenetre, poiEstAcquis } from '../sim/poi.js';
 import { saveurDeLaCase } from '../sim/site-de-la-case.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
 import {
@@ -176,6 +177,27 @@ export function sitesDeLaFenetre(etat, fenetre) {
     saveur: saveur(base.rangee, base.colonne, 'base'),
   }));
 
+  // ⚠⚠ APRÈS LES BASES DE L'OUVRAGE ET AVANT LES SATELLITES, ET L'ORDRE EST LE
+  // DESSIN. Un POI ne peut tomber ni sur une base de l'Ouvrage ni sous un
+  // satellite — `sim/poi.js` refuse la première, `poserUnSatellite` refuse la
+  // seconde —, donc le recouvrement n'arrive pas ; mais si la règle cessait un
+  // jour d'être vraie, mieux vaut que ce soit le SITE ATTAQUABLE qui se dessine
+  // par-dessus le gisement, et pas l'inverse.
+  //
+  // ⚠ LE CHAMP `niveau` PORTE LA BANDE (1 à 10) : c'est ce que le joueur lit
+  // comme « niveau du POI », et c'est aussi ce qui dit à quel prix on va le
+  // chercher. La `saveur` vaut `null` — un POI n'est ni riche en quartz ni riche
+  // en scorie, il EST le gisement.
+  for (const poi of poisDeLaFenetre(etat.graine, fenetre)) {
+    sites.push({
+      type: poi.type,
+      rangee: poi.rangee,
+      colonne: poi.colonne,
+      niveau: poi.bande,
+      saveur: null,
+    });
+  }
+
   for (const satellite of etat.satellites.presents) {
     if (!dedans(satellite.rangee, satellite.colonne)) continue;
     sites.push({
@@ -252,11 +274,11 @@ export function palierDuSite(site, etat) {
  * @param {{rangee: number, colonne: number}} depuis position de la base du joueur
  * @returns {Array<{quoi: string, valeur: string}>}
  */
-export function lignesDuSite(site, depuis) {
+export function lignesDuSite(site, depuis, poisAcquis = []) {
   const embleme = EMBLEMES_CARTE[site.type];
   if (embleme === undefined) throw new Error(`monde : type de site inconnu « ${site.type} »`);
   const distance = distanceEnCases(site, depuis);
-  return [
+  const lignes = [
     { quoi: 'Type', valeur: embleme.nom },
     {
       quoi: 'Niveau',
@@ -267,6 +289,24 @@ export function lignesDuSite(site, depuis) {
     { quoi: 'Distance', valeur: distance === 1 ? '1 case' : `${distance} cases` },
     { quoi: 'Position', valeur: `rangée ${site.rangee}, colonne ${site.colonne}` },
   ];
+  // ⚠⚠ DEUX LIGNES DE PLUS POUR UN POI, ET LA FONCTION RESTE PURE. Elle reçoit la
+  // LISTE DES ACQUIS, jamais l'état entier : lui passer `etat` lui donnerait accès
+  // à tout, et la première commodité prise ici serait la fin de sa pureté.
+  //
+  // ⚠ LE LIBELLÉ DU BONUS VIENT DE `POI`, il ne se recompose pas ici. Recomposer
+  // une phrase française morceau par morceau a déjà produit « aucun unité » puis
+  // « aucune unité n'est endommagé », en deux essais, au lot RETOURS-ETHAN.
+  const def = POI[site.type];
+  if (def !== undefined) {
+    lignes.push({ quoi: 'Bonus', valeur: `+${def.bonusPct} % ${def.libelleEffet}` });
+    lignes.push({
+      quoi: 'Propriété',
+      valeur: poiEstAcquis(poisAcquis, { type: site.type, bande: site.niveau })
+        ? 'acquis'
+        : 'à prendre',
+    });
+  }
+  return lignes;
 }
 
 /**
@@ -970,7 +1010,7 @@ export function initialiserEcranMonde(doc) {
   function ouvrirPanneau(site) {
     panneauTitre.textContent = EMBLEMES_CARTE[site.type].nom;
     panneauCorps.textContent = '';
-    for (const ligne of lignesDuSite(site, etatCourant.position)) {
+    for (const ligne of lignesDuSite(site, etatCourant.position, etatCourant.poisAcquis)) {
       const bloc = doc.createElement('div');
       bloc.className = 'ligne';
       const quoi = doc.createElement('span');

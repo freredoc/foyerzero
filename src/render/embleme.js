@@ -11,22 +11,31 @@
 // moteur de combat a été écrasé par la table de données du même nom court
 // (CLAUDE.md §6, homonymes).
 //
-// ⚠⚠ NEUF SPRITES SONT PRÉ-BRANCHÉS, ET IL FAUT SAVOIR CE QUE ÇA ACHÈTE. Les
-// sept POI et les deux grosses bases entrent dans le fichier livré, leurs noms
-// se résolvent par une fonction, et un test asserte que chacun est joignable.
-// **Rien ne les dessine** : le modèle ne produit aucun site de type POI, et une
-// base ne connaît pas sa taille — `sim/peuplement.js` pose des bases d'UNE case.
-// Ce que ça achète : le jour où le modèle en produira, SEUL le modèle changera.
-// Ce que ça coûte : 37 038 octets pour les deux grosses bases, payés par tous
-// les joueurs pour ce que personne ne voit encore.
+// ⚠⚠ LES SEPT POI NE SONT PLUS PRÉ-BRANCHÉS : ILS SONT BRANCHÉS. Le lot POI du
+// 31/08 a écrit le modèle qui manquait — `sim/poi.js` produit soixante-dix sites
+// de type POI, `EMBLEMES_CARTE` porte leurs sept entrées, et `spriteDuSite` les
+// résout. **Le pré-branchement du 26/08 aura tenu cinq jours et il a tenu sa
+// promesse** : le jour venu, SEUL le modèle a changé de ce côté-ci — cette
+// fonction a gagné trois lignes, et aucun sprite n'a été retouché.
 //
-// ⚠ ET ON N'INVENTE AUCUN TYPE DE SITE. Ajouter `poi_reacteur` à
-// `EMBLEMES_CARTE` écrirait dans la table du MODÈLE une entrée que le modèle ne
-// produit pas, et le prochain lot devrait la contredire. Le pré-branchement se
-// fait donc entièrement du côté du DESSIN, ici.
+// ⚠ CE COMMENTAIRE PORTAIT L'INTERDICTION INVERSE, ET ELLE EST LEVÉE. Il disait :
+// « ajouter `poi_reacteur` à `EMBLEMES_CARTE` écrirait dans la table du MODÈLE
+// une entrée que le modèle ne produit pas ». C'était vrai tant que rien ne les
+// produisait ; ça ne l'est plus. Un garde-fou qu'on enjambe sans le réécrire est
+// un garde-fou qui mentira au lecteur suivant.
+//
+// ⚠⚠ DEUX SPRITES RESTENT PRÉ-BRANCHÉS, ET IL FAUT SAVOIR CE QUE ÇA COÛTE. Les
+// deux grosses bases entrent dans le fichier livré et une seule est dessinée —
+// la 3 × 3 de la terminale. La 2 × 2 attend un emploi qu'Ethan n'a pas encore
+// donné : 37 038 octets pour les deux, payés par tous les joueurs.
+//
+// ⚠ ET LE NOM DE SPRITE D'UN POI SE LIT DANS `POI`, IL NE SE RÉÉCRIT PAS ICI. La
+// table de `data/sites.js` fait foi sur les identifiants, les noms affichés, les
+// sprites et les effets ; une seconde correspondance ici divergerait au premier
+// renommage d'image.
 
 import { ATLAS } from '../data/atlas.js';
-import { ZOOM_CARTE, GEOGRAPHIE } from '../data/sites.js';
+import { ZOOM_CARTE, GEOGRAPHIE, POI } from '../data/sites.js';
 import { existeDansAtlas, celluleDuSprite } from './sprite.js';
 
 /** La famille d'atlas où vivent les emblèmes. */
@@ -83,6 +92,12 @@ export function spriteDuSite(type, palier, saveur) {
   if (!Number.isInteger(palier) || palier < 1 || palier > 9) {
     throw new RangeError(`emblème : palier ${palier} hors de 1…9`);
   }
+  // ⚠⚠ UN POI IGNORE SON PALIER, ET C'EST UNE PROPRIÉTÉ DE L'ART, PAS UN OUBLI.
+  // Il n'y a qu'un dessin par type — pas de variante `n1`…`n9` —, et le niveau
+  // d'un POI ne dit de toute façon rien de ce qu'il donne : il dit seulement où
+  // il se trouve. Le contrôle de borne du palier reste AU-DESSUS, parce qu'il
+  // protège tous les autres types.
+  if (POI[type] !== undefined) return POI[type].sprite;
   if (type === 'base') return `site_base_o_n${palier}`;
   if (type === 'baseJoueur') return `site_base_j_n${palier}`;
   if (type === 'baseTerminale') {
