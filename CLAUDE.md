@@ -42,7 +42,7 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 31/08/2026 (après le lot MODULES-E), à confronter :**
-`npm test` → **725 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **729 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 263 578 octets**, 0 référence externe.
 ⚠ **MODULES-E A COÛTÉ +708 OCTETS**, et n'ajoute AUCUN module : il ferme une
 fuite de structure. `modulesDebloques` devient

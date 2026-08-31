@@ -19,6 +19,7 @@ import {
 import { caseDepuisMilli, distanceCarree } from '../src/sim/grille.js';
 import { executerRaid, pvMaxDeLUnite } from '../src/sim/raid.js';
 import { APRES_RAID } from '../src/data/sites.js';
+import { genererSite } from '../src/sim/generateur.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
@@ -2549,11 +2550,14 @@ function raidDeReference(ouvrage) {
 }
 
 test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', () => {
-  // ⚠ LE CANAL DU JEU EST VIDE, ET C'EST LUI QU'ON GÈLE. `sim/generateur.js`
-  // livre `modulesDebloques.ouvrage` à VIDE sur tous les sites : le bonus de
-  // 20 % n'est jamais accordé en partie. Le nombre ci-dessous a été mesuré des
-  // DEUX côtés du démêlage et il est identique — c'est la mesure que le rapport
-  // porte.
+  // ⚠ CE COMMENTAIRE DISAIT « LE CANAL DU JEU EST VIDE », ET CE N'EST PLUS VRAI
+  // DEPUIS MODULES-F. `sim/generateur.js` livrait `modulesDebloques.ouvrage` à
+  // vide sur tous les sites ; il le remplit désormais à partir de
+  // `apparitionModule`, et le bonus de 20 % EST accordé en partie dès le
+  // niveau 28. Ce test-ci n'en dépend pas : son montage est écrit à la main et
+  // ne passe pas par le générateur, donc le nombre ci-dessous ne bouge pas. Il
+  // reste ce qu'il a toujours été — la mesure du démêlage de MODULES-D, prise
+  // des DEUX côtés et identique. Le canal armé se mesure en MODULES-F T12/T14.
   const jeu = raidDeReference([]);
   assert.equal(jeu.points, 2059722n, 'les points du raid de référence ont bougé');
   assert.equal(jeu.resultat.tick, 120, 'montage : le combat doit se dérouler pareil');
@@ -4365,4 +4369,174 @@ test('MODULES-F T11 — le franchissement porte l\'indice de la BARRIÈRE', () =
   // plein — c'est bien l'ORDRE de service qui décide, pas l'absence de vol.
   const plein = scene(true, 400_000).soin - scene(false, 400_000).soin;
   assert.equal(plein, 17_124, 'montage : le Broyeur ne vole pas son plein sans débordement');
+});
+
+// --- Le canal de l'Ouvrage -------------------------------------------------
+
+test('MODULES-F T12 — le canal s\'arme au bon niveau, et `offense` reste vide', () => {
+  const canal = (niveau, graine = 7) => genererSite({
+    type: 'base', niveau, saveur: null, graine,
+  }).modulesDebloques.ouvrage;
+  // Les paliers viennent d'`apparitionModule` : 28 Carapace, 30 Casemate,
+  // 32 Merlon, 42 Faucheuse ET Broyeur. Le relevé du §1.1 du brief, refait.
+  assert.deepEqual(canal(1).defense, []);
+  assert.deepEqual(canal(27).defense, []);
+  assert.deepEqual(canal(28).defense, ['camouflage']);
+  assert.deepEqual(canal(29).defense, ['camouflage']);
+  assert.deepEqual(canal(30).defense, ['camouflage', 'munitionSpeciale']);
+  assert.deepEqual(canal(31).defense, ['camouflage', 'munitionSpeciale']);
+  assert.deepEqual(canal(32).defense, ['camouflage', 'munitionSpeciale', 'pvPlusVingt']);
+  assert.deepEqual(canal(41).defense, ['camouflage', 'munitionSpeciale', 'pvPlusVingt']);
+  assert.deepEqual(canal(42).defense,
+    ['camouflage', 'munitionSpeciale', 'pvPlusVingt', 'rayonMiniMoinsUn', 'volDeVie']);
+  assert.deepEqual(canal(46).defense,
+    ['camouflage', 'munitionSpeciale', 'pvPlusVingt', 'rayonMiniMoinsUn', 'volDeVie']);
+  assert.deepEqual(canal(50).defense,
+    ['camouflage', 'munitionSpeciale', 'pvPlusVingt', 'rayonMiniMoinsUn', 'volDeVie']);
+  // ⚠ `offense` RESTE VIDE À TOUS LES NIVEAUX. `moduleOuvrage` ne renseigne pas
+  // `p.module`, que lit un module d'ATTAQUANT : l'y verser armerait des modules
+  // sur des pièces qui ne les portent pas.
+  for (const n of [1, 27, 28, 32, 42, 46, 50]) assert.deepEqual(canal(n).offense, []);
+
+  // ⚠ LE CANAL NE DÉPEND PAS DE LA GRAINE. C'est un palier de progression de
+  // l'Ouvrage, pas une propriété de la garnison du jour : deux sites de même
+  // niveau doivent débloquer les mêmes modules, sinon la liste devient un effet
+  // de tirage et le joueur ne peut rien en apprendre.
+  for (const n of [28, 34, 46]) {
+    const attendu = canal(n, 1).defense;
+    for (const g of [2, 3, 5, 8, 13, 21]) assert.deepEqual(canal(n, g).defense, attendu);
+  }
+
+  // ⚠ ET LES PALIERS SONT LUS SUR LA DONNÉE, pas recopiés : la liste ci-dessus
+  // doit être exactement celle qu'`apparitionModule` dicte, table par table.
+  const attendus = (niveau) => {
+    const noms = new Set();
+    for (const table of [UNITES, DEFENSES]) {
+      for (const p of Object.values(table)) {
+        if (p.moduleOuvrage && p.apparitionModule <= niveau) noms.add(p.moduleOuvrage);
+      }
+    }
+    return [...noms].sort();
+  };
+  for (let n = 1; n <= 50; n += 1) assert.deepEqual(canal(n).defense, attendus(n), `niveau ${n}`);
+});
+
+test('MODULES-F T13 — un site généré entre tel quel dans `creerCombat`', () => {
+  // La forme de MODULES-E : deux propriétaires, deux branches chacun. Un site de
+  // niveau 46 porte les cinq modules — c'est le cas le plus chargé.
+  const site = genererSite({ type: 'base', niveau: 46, saveur: null, graine: 46 });
+  assert.equal(site.modulesDebloques.ouvrage.defense.length, 5, 'montage : le canal est vide');
+  const etat = creerCombat({ ...site, vagues: [[{ id: 'meute', colonne: 5 }]] });
+  assert.deepEqual(etat.modulesDebloques.ouvrage.defense, site.modulesDebloques.ouvrage.defense);
+  assert.deepEqual(etat.modulesDebloques.joueur, { offense: [], defense: [] });
+
+  // ⚠ ET L'ANCIENNE FORME PLATE LÈVE TOUJOURS. Sans cette moitié, la garde
+  // ci-dessus passerait sur un `creerCombat` qui accepte n'importe quoi.
+  const bancal = (modulesDebloques) => () => creerCombat({
+    ...site, vagues: [[{ id: 'meute', colonne: 5 }]], modulesDebloques,
+  });
+  assert.throws(bancal({ ouvrage: ['camouflage'], joueur: { offense: [], defense: [] } }),
+    /liste plate/);
+  assert.throws(bancal({ ouvrage: { defense: ['camouflage'] }, joueur: { offense: [], defense: [] } }),
+    /n'a pas de branche/);
+  assert.throws(bancal({ ouvrage: { offense: [], defense: 'camouflage' }, joueur: { offense: [], defense: [] } }),
+    /pas une liste de noms/);
+
+  // ⚠ CONSTAT, PAS UNE RÈGLE DE CE LOT : un `modulesDebloques` PLAT AU SOMMET
+  // ne lève pas, il est traité comme ABSENT — `['x'].ouvrage` vaut `undefined`,
+  // et MODULES-E a explicitement voulu qu'absent reste permis. La garde de la
+  // forme plate porte sur chaque PROPRIÉTAIRE, un cran plus bas. Rien à corriger
+  // ici : le générateur, lui, livre toujours la forme complète.
+  const plat = creerCombat({
+    ...site, vagues: [[{ id: 'meute', colonne: 5 }]], modulesDebloques: ['camouflage'],
+  });
+  assert.deepEqual(plat.modulesDebloques,
+    { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } });
+});
+
+test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au point', () => {
+  // ⚠⚠ CE TEST NE JUGE PAS L'ÉQUILIBRAGE, IL CONSTATE. Les valeurs « avant »
+  // sont celles mesurées sur `origin/main` (0.55.0 · build 56) avec la MÊME
+  // graine et la MÊME armée. On ne compense rien, on ne touche à aucun barème.
+  const ARMEE = [
+    { id: 'meute', colonne: 2 }, { id: 'meute', colonne: 4 },
+    { id: 'belier', colonne: 6 }, { id: 'crecelle', colonne: 8 },
+    { id: 'perceurs', colonne: 3 }, { id: 'perceurs', colonne: 7 },
+  ];
+  const points = (niveau, graine) => {
+    const site = genererSite({ type: 'base', niveau, saveur: null, graine });
+    const montage = { ...site, vagues: [ARMEE] };
+    return pointsRecherche(resoudre(creerCombat(montage)), montage);
+  };
+
+  // Niveau 20 : aucun module n'est armé sous 28, donc IDENTIQUE AU POINT.
+  // C'est cette moitié qui rend l'autre falsifiable — sans elle, un barème
+  // globalement gonflé passerait la moitié « en hausse » sans rien prouver.
+  assert.equal(points(20, 11), 2302652n);
+  assert.equal(points(20, 22), 1146497n);
+  assert.equal(points(20, 33), 1692238n);
+
+  // Niveau 38 : Camouflage, Munition spéciale et PV +20 % sont armés. Les points
+  // MONTENT sur les trois graines — le bonus de +20 % de MODULES-E l'emporte sur
+  // le surcroît de résistance de la garnison.
+  const avant38 = { 11: 173_605_846n, 22: 255_641_308n, 33: 286_985_226n };
+  const apres38 = { 11: 194_230_489n, 22: 276_265_951n, 33: 308_676_642n };
+  for (const g of [11, 22, 33]) {
+    assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
+    assert.ok(points(38, g) > avant38[g], `niveau 38, graine ${g} : les points n'ont pas monté`);
+  }
+
+  // ⚠ ET ILS NE MONTENT PAS PARTOUT — mesuré, rapporté, NON corrigé. Au
+  // niveau 50 le Vol de vie et le Rayon minimum −1 sont armés eux aussi : la
+  // garnison encaisse davantage, l'assaut casse moins, et les points BAISSENT
+  // sur les trois mêmes graines. Ce lot ne touche à aucun barème ; l'arbitrage
+  // d'équilibrage revient à Ethan.
+  const avant50 = { 11: 15_973_692_801n, 22: 8_318_116_000n, 33: 9_775_306_972n };
+  const apres50 = { 11: 15_325_146_868n, 22: 7_043_493_598n, 33: 8_150_073_821n };
+  for (const g of [11, 22, 33]) {
+    assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
+    assert.ok(points(50, g) < avant50[g], `niveau 50, graine ${g} : les points n'ont pas baissé`);
+  }
+});
+
+test('MODULES-F T14 bis — le Camouflage côté Ouvrage ne fait RIEN, et c\'est mesuré', () => {
+  // ⚠⚠ LE BRIEF DEMANDAIT DE LE VÉRIFIER PLUTÔT QUE DE L'ESPÉRER, ET LE VOICI.
+  // `ensembleCamoufles` s'ouvre sur `if (e.camp !== 'attaque' …) continue` :
+  // « invisible pour la DÉFENSE » désigne un ATTAQUANT que la garnison ne voit
+  // pas. Une Carapace EN GARNISON est du camp `defense` — elle n'est jamais
+  // même examinée. Le module est donc inerte de ce côté, PAR CONSTRUCTION.
+  // Le lot ne symétrise pas : ce serait un changement de règle, pas un câblage.
+  const ARMEE = [
+    { id: 'meute', colonne: 2 }, { id: 'meute', colonne: 4 },
+    { id: 'belier', colonne: 6 }, { id: 'crecelle', colonne: 8 },
+    { id: 'perceurs', colonne: 3 }, { id: 'perceurs', colonne: 7 },
+  ];
+  // Au niveau 28 le canal ne contient QUE `camouflage` : le site isole le module.
+  const site = genererSite({ type: 'base', niveau: 28, saveur: null, graine: 1028 });
+  assert.deepEqual(site.modulesDebloques.ouvrage.defense, ['camouflage'],
+    'montage : le niveau 28 n\'isole plus le Camouflage');
+  const porteurs = site.defenseurs.filter((d) => ['carapace', 'fouisseurs'].includes(d.id));
+  assert.ok(porteurs.length > 0, 'montage inerte : aucune Carapace dans cette garnison');
+
+  const jouer = (modules) => {
+    const montage = { ...site, vagues: [ARMEE],
+      modulesDebloques: { ouvrage: { offense: [], defense: modules }, joueur: RIEN } };
+    const etat = creerCombat(montage);
+    const resultat = resoudre(etat);
+    return { etat, montage, resultat };
+  };
+  const sans = jouer([]);
+  const avec = jouer(['camouflage']);
+  // ⚠ ON RETIRE `modulesDebloques` DE LA COMPARAISON : il est sérialisé dans
+  // l'état, et c'est la SEULE chose qui doit différer.
+  const sansListe = (etat) => JSON.stringify(
+    JSON.parse(serialiserEtat(etat)),
+    (cle, valeur) => (cle === 'modulesDebloques' ? undefined : valeur),
+  );
+  assert.equal(sansListe(avec.etat), sansListe(sans.etat),
+    'le Camouflage change le combat côté Ouvrage : la mesure du rapport est fausse');
+  assert.notEqual(serialiserEtat(avec.etat), serialiserEtat(sans.etat),
+    'montage : la liste n\'est même pas sérialisée, la garde ci-dessus est creuse');
+  assert.equal(pointsRecherche(avec.resultat, avec.montage),
+    pointsRecherche(sans.resultat, sans.montage));
 });
