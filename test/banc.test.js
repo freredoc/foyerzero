@@ -534,8 +534,31 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // pourquoi, comme les quatre précédentes. **On ne rogne jamais un atlas pour
   // passer sous la borne** (CLAUDE.md §5) : c'est la borne qui monte, et le lot
   // qui l'écrit.
+  //
+  // ⚠⚠ RELEVÉE À 1 400 000 AU LOT MUR-DE-CONTOUR, le 31/08, ET LA HAUSSE NE
+  // VIENT PAS D'UN ATLAS. Le mur du pourtour de la base entre en CINQ IMAGES
+  // séparées, parce qu'il ne tient pas dans une case : 512 × 64 pour un mur,
+  // 64 × 64 pour un angle, quand `tools/atlas.py` n'accepte que des cellules
+  // carrées d'un même côté. Mesuré sur le disque, camp du joueur seul —
+  //   • `bord_j_mur_h_a`, 512 × 64 — 10 250 o, **13 668 en base64** ;
+  //   • `bord_j_mur_v_a` et `_v_b`, 64 × 512 — 24 969 o, **33 292** ;
+  //   • `bord_j_angle_no` et `_ne`, 64 × 64 — 4 429 o, **5 904**.
+  // Soit **52 864 octets** d'images. Mesuré après le lot : **1 333 691 octets**,
+  // marge 66 309, soit 4,7 %.
+  //
+  // ⚠⚠ ET LA RÉSOLUTION EST UN ARBITRAGE D'ETHAN, PAS UN CHOIX DE CONFORT. Le
+  // même mur conditionné à 64 × 64 comme un sprite de case pesait 3 792 octets
+  // en tout — quatorze fois moins — et il l'a refusé de face : « mais c'est quoi
+  // cette chiasse de pixel. divise par deux l'asset original. et garde la
+  // colorisation. le mur fera 512x64. » Le prix est écrit ici pour qu'on sache
+  // ce qu'on a acheté.
+  //
+  // ⚠ LES CINQ IMAGES DE L'OUVRAGE SONT PRODUITES ET N'ENTRENT PAS, et c'est
+  // l'économie que des fichiers séparés rendent possible : 27 000 octets de plus
+  // pour zéro pixel, un atlas ayant été tout ou rien. Elles entreront avec
+  // l'écran de raid.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 1_300_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 1_400_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

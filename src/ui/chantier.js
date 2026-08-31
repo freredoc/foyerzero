@@ -584,6 +584,109 @@ function bandesDansLOrdreDeLEcran() {
 }
 
 /**
+ * La bande que les murs de contour entourent — LA BASE, et elle seule.
+ *
+ * ⚠ « MURS CONTOUR » DÉSIGNE LE POURTOUR DE LA BASE, pas celui de la grille.
+ * `GEOMETRIE_BASE` de `data/base.js` RÉFÉRENCE déjà `GRILLE.bandes.batiments` :
+ * la base du joueur EST cette bande-là. La défense se tient DEVANT le mur, les
+ * deux rangées de déploiement plus loin encore — c'est la géographie du combat,
+ * et le mur la dit.
+ */
+export const BANDE_DU_CONTOUR = 'batiments';
+
+/**
+ * Les images du mur de contour, et la variable CSS qui porte chacune.
+ *
+ * ⚠⚠ CE NE SONT PAS DES CELLULES D'ATLAS, ET C'EST LE LOT ENTIER. Un mur fait
+ * 512 × 64 et un angle 64 × 64 — arbitrage d'Ethan du 31/08, « divise par deux
+ * l'asset original […] le mur fera 512x64 » —, donc `tools/atlas.py` ne peut pas
+ * les coudre : il exige des cellules CARRÉES d'un même côté. Chaque image entre
+ * dans le livrable par son propre marqueur, comme les deux grosses bases de
+ * l'Ouvrage sur la carte du monde.
+ *
+ * ⚠ SEUL LE CAMP DU JOUEUR EST DANS LE LIVRABLE, et c'est une économie qui n'a
+ * de sens que depuis que ce sont des fichiers séparés : cinq images pèsent
+ * 39 648 octets de PNG, donc 52 864 en base64. Un atlas aurait été tout ou rien ;
+ * ici on ne paie que ce qui se dessine. Les cinq de l'Ouvrage sont PRODUITES par
+ * `tools/bords.py` et attendent l'écran de raid — le jour venu, une ligne dans
+ * cette table et une dans `tools/build.js`.
+ */
+export const VARIABLE_DU_MUR = {
+  bord_j_angle_no: 'var(--mur-j-angle-no)',
+  bord_j_angle_ne: 'var(--mur-j-angle-ne)',
+  bord_j_mur_h_a: 'var(--mur-j-h-a)',
+  bord_j_mur_v_a: 'var(--mur-j-v-a)',
+  bord_j_mur_v_b: 'var(--mur-j-v-b)',
+};
+
+/**
+ * Les cinq pièces du mur de contour, en unités de CASE depuis le coin de la
+ * grille — deux angles et trois murs, en U.
+ *
+ * ⚠⚠ LE MUR FAIT UN U, LE BAS RESTE SANS MUR — arbitrage d'Ethan, 31/08, mot
+ * pour mot. La base s'ouvre donc sur sa propre bande de défense, qui commence
+ * exactement là où la sienne finit ; c'est le seul des quatre côtés qui donne
+ * sur du terrain à soi, et le seul que l'assaillant doit franchir.
+ *
+ * ⚠⚠ LES PIÈCES SE POSENT À CHEVAL SUR LA LIGNE QUI BORDE LA BASE — arbitré le
+ * même jour (« à cheval sur le bord »). Un mur fait une case d'épaisseur et se
+ * centre sur la ligne, donc il mord d'une demi-case de chaque côté. D'où la
+ * demi-case de `padding` sur `#chantier-grille` : sans elle, la moitié
+ * extérieure sortirait de la boîte et le champ défilerait horizontalement au
+ * repos — ce que « tu compresses tout dans l'ui » refuse. Les coordonnées
+ * ci-dessous sont comptées depuis le coin de la BOÎTE DE PADDING.
+ *
+ * ⚠ CHAQUE PIÈCE COURT D'UN BOUT À L'AUTRE DE SON CÔTÉ, ET RIEN NE SE RECOUVRE.
+ * Les angles prennent une case chacun ; le mur du haut court exactement entre
+ * eux, les murs de côté exactement du bas de leur angle au bord de la base. Un
+ * pavage case par case aurait redonné le motif répété que les deux variantes
+ * existent pour éviter.
+ *
+ * ⚠ ET LES LONGUEURS NE SONT PAS ÉCRITES, ELLES SE CALCULENT. Sur la grille
+ * d'aujourd'hui elles tombent à huit cases, soit très exactement les 512 pixels
+ * de l'asset au plafond du zoom ; le jour où la base changera de taille, le
+ * `background-size: 100% 100%` de la feuille étirera l'image plutôt que de
+ * laisser un trou.
+ *
+ * @param {string} camp `j` ou `o`
+ * @returns {Array<{nom: string, x: number, y: number, l: number, h: number}>}
+ *   x, y le coin ; l, h la taille — le tout en unités de case
+ */
+export function tuilesDuContour(camp) {
+  if (camp !== 'j' && camp !== 'o') {
+    throw new RangeError(`chantier : camp de contour « ${camp} » inconnu`);
+  }
+  const bande = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
+  const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
+  // Les coins de la boîte, en unités de case depuis le coin du padding. Le
+  // contenu commence à une demi-case ; une pièce d'une case centrée sur le bord
+  // a donc son coin sur un entier.
+  const haut = premiereLigne - 1;
+  const gauche = 0;
+  const droite = GRILLE.largeur;
+  // ⚠ UN MUR DE CÔTÉ VA DU BAS DE SON ANGLE AU BORD DE LA BASE, et ce bord est à
+  // une demi-case de moins que le bas de la bande : le U s'arrête là où la base
+  // s'arrête, il ne dépasse pas dans la défense.
+  const cote = nbLignes - 0.5;
+  // ⚠ LES DEUX VARIANTES SERVENT DE PART ET D'AUTRE, ce pour quoi elles ont été
+  // dessinées : `a` est éclairée à gauche, `b` à droite. La variante `b` du mur
+  // horizontal, elle, ne sert pas — elle éclaire par le bas, donc elle est le
+  // pendant du mur que le U n'a pas.
+  return [
+    { nom: `bord_${camp}_mur_h_a`, x: gauche + 1, y: haut, l: GRILLE.largeur - 1, h: 1 },
+    { nom: `bord_${camp}_mur_v_a`, x: gauche, y: haut + 1, l: 1, h: cote },
+    { nom: `bord_${camp}_mur_v_b`, x: droite, y: haut + 1, l: 1, h: cote },
+    // ⚠ LES ANGLES SE NOMMENT PAR LE COIN QU'ILS DESSERVENT, et le nord est le
+    // HAUT DE L'ÉCRAN — pas la rangée croissante. Ce n'est pas la boussole de
+    // `sim/rendu-pose.js`, qui décrit la grille de combat et son retournement :
+    // ici on parle de ce que l'œil voit, et la planche est sa propre légende
+    // (son coin haut-gauche porte l'angle nord-ouest).
+    { nom: `bord_${camp}_angle_no`, x: gauche, y: haut, l: 1, h: 1 },
+    { nom: `bord_${camp}_angle_ne`, x: droite, y: haut, l: 1, h: 1 },
+  ];
+}
+
+/**
  * Ce que fait le bouton de bascule quand on est sur cette bande.
  *
  * ⚠⚠ ETHAN, 31/08 : « on ne doit plus passer librement de la base joueur à la
@@ -631,12 +734,29 @@ export function basculeDeBande(cleCourante) {
  * restent ATTEIGNABLES : les enfermer aurait retiré du jeu deux rangées que le
  * défilement montrait, et « rien ne se retire en silence ».
  *
+ * ⚠⚠ LE CONTENU NE COMMENCE PLUS AU HAUT DE LA GRILLE. Depuis le mur de
+ * contour, `#chantier-grille` porte une demi-case de `padding` : la première
+ * rangée est donc décalée d'autant, et l'ignorer ferait s'arrêter chaque bascule
+ * une demi-rangée trop haut — on verrait la fin de la bande précédente au lieu
+ * du début de celle qu'on a demandée. Mesuré : la bascule vers la Défense
+ * s'arrêtait à 288 px au lieu de 306.
+ *
+ * ⚠⚠ ET LE MUR NE DÉBORDE QU'AU-DESSUS DE LA BANDE QU'IL ENTOURE. Il se pose à
+ * cheval sur la ligne du bord, donc il monte d'une demi-case au-dessus de la
+ * première rangée de la base — c'est ce que `min` retire pour cette bande-là, et
+ * pour elle seule. En bas, il n'y a rien à retirer : le mur fait un U, ses bras
+ * s'arrêtent au bord de la base (arbitrage d'Ethan du 31/08).
+ *
+ * ⚠ `padding` VAUT ZÉRO PAR DÉFAUT, et c'est ce qui garde le sens d'origine :
+ * sans marge, une bande va d'une rangée à l'autre, exactement comme avant.
+ *
  * @param {string} cleBande
  * @param {number} hauteurRangee hauteur d'une rangée à l'écran, en pixels
  * @param {number} hauteurVue hauteur visible du champ, en pixels
+ * @param {number} [padding] marge de la grille, en pixels — une demi-case
  * @returns {{min: number, max: number}} bornes de `scrollTop`
  */
-export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue) {
+export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue, padding = 0) {
   if (!(hauteurRangee > 0)) {
     throw new RangeError(`chantier : hauteur de rangée « ${hauteurRangee} » invalide`);
   }
@@ -647,8 +767,14 @@ export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue) {
   const premiereLigneApres = suivante === undefined
     ? GRILLE.longueur + 1
     : suivante.premiereLigne;
-  const min = (ordre[ici].premiereLigne - 1) * hauteurRangee;
-  const bas = (premiereLigneApres - 1) * hauteurRangee;
+  // Le mur ne dépasse qu'au-dessus de la bande qu'il entoure — le U n'a pas de
+  // bas —, et sa hauteur de dépassement est très exactement celle du `padding`.
+  const murAuDessus = cleBande === BANDE_DU_CONTOUR ? padding : 0;
+  const min = padding + (ordre[ici].premiereLigne - 1) * hauteurRangee - murAuDessus;
+  // ⚠ LE BAS EST LE BAS DU CONTENU, PAS DE LA BOÎTE : la demi-case de `padding`
+  // du bas ne porte aucun dessin, et la rendre atteignable ferait défiler dans
+  // du vide.
+  const bas = padding + (premiereLigneApres - 1) * hauteurRangee;
   // ⚠ `max` NE PASSE JAMAIS SOUS `min`. Quand la bande tient entière dans la vue
   // — le cas normal au zoom d'ouverture — il n'y a rien à défiler du tout, et
   // une borne haute négative ferait remonter le champ au-dessus de sa bande.
@@ -2345,6 +2471,41 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   // seul pixel. `pointer-events: none` en fait un dessin et rien d'autre : le
   // doigt continue de toucher la case qu'il vise.
   const SVG = 'http://www.w3.org/2000/svg';
+  // ⚠⚠ LE MUR DE CONTOUR, POSÉ UNE FOIS POUR TOUTES. Ses cinq pièces ne bougent
+  // jamais : elles sont en unités de CASE et suivent `--case-cote` par `calc`,
+  // donc le zoom au doigt les emmène sans qu'on les touche. Les reconstruire à
+  // chaque peinture coûterait cinq nœuds dix fois par seconde pour dessiner
+  // exactement la même chose.
+  //
+  // ⚠ IL PEINT ENTRE LE SOL ET LES PIÈCES, et c'est la feuille qui le dit, pas
+  // l'ordre du document : `#chantier-contour` porte l'étage 1, les jetons
+  // l'étage 2. En s'en remettant à l'ordre, il passait SOUS le sol des cases
+  // qu'il chevauche, et la moitié intérieure du trait disparaissait.
+  const contour = doc.createElement('div');
+  contour.id = 'chantier-contour';
+  contour.setAttribute('aria-hidden', 'true');
+  for (const tuile of tuilesDuContour('j')) {
+    const variable = VARIABLE_DU_MUR[tuile.nom];
+    if (variable === undefined) {
+      // ⚠ ON LÈVE, ON NE SAUTE PAS. Un pan de mur absent est exactement ce que
+      // personne ne remarque : l'écran s'ouvrirait, le côté serait nu, et rien
+      // ne dirait que l'image n'est pas dans le livrable.
+      throw new RangeError(
+        `chantier : « ${tuile.nom} » n'a pas de variable CSS — l'inliner dans `
+          + 'tools/build.js et l\'ajouter à VARIABLE_DU_MUR',
+      );
+    }
+    const mur = doc.createElement('div');
+    mur.className = 'mur';
+    mur.style.left = `calc(var(--case-cote) * ${tuile.x})`;
+    mur.style.top = `calc(var(--case-cote) * ${tuile.y})`;
+    mur.style.width = `calc(var(--case-cote) * ${tuile.l})`;
+    mur.style.height = `calc(var(--case-cote) * ${tuile.h})`;
+    mur.style.backgroundImage = variable;
+    contour.appendChild(mur);
+  }
+  grille.prepend(contour);
+
   const traits = doc.createElementNS(SVG, 'svg');
   traits.id = 'chantier-traits';
   traits.setAttribute('viewBox', `0 0 ${GRILLE.largeur} ${GRILLE.longueur}`);
@@ -2464,9 +2625,34 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     boutonsBande.set(entree.cle, { bouton, niveau });
   }
 
-  /** Hauteur d'une rangée à l'écran, mesurée et non supposée. */
+  /**
+   * Hauteur d'une rangée à l'écran.
+   *
+   * ⚠⚠ ELLE NE SE MESURE PLUS SUR LA BOÎTE DE LA GRILLE, ET C'EST LE MUR DE
+   * CONTOUR QUI L'A IMPOSÉ. Elle valait `hauteur de la boîte / GRILLE.longueur` ;
+   * depuis que la grille porte une demi-case de `padding` de chaque côté, cette
+   * boîte fait DIX-NEUF cases de haut pour dix-huit rangées, et la formule
+   * rendrait 19/18 de la vraie hauteur — soit 5,6 % de trop, ce qui décalerait
+   * la bande Défense d'une demi-rangée sans que rien ne le dise.
+   *
+   * ⚠ ET LA CASE EST CARRÉE (`aspect-ratio: 1`), donc sa hauteur EST le côté que
+   * le JS vient d'écrire. On lit ce qu'on a écrit plutôt que de le remesurer :
+   * c'est exact, et ça ne dépend plus de la boîte.
+   */
   function hauteurRangee() {
-    return grille.getBoundingClientRect().height / GRILLE.longueur;
+    return coteCase;
+  }
+
+  /**
+   * La demi-case de marge que le mur de contour ajoute en haut de la grille.
+   *
+   * ⚠ ELLE ENTRE DANS LE DÉFILEMENT, ET NULLE PART AILLEURS. `bornesDeDefilement`
+   * raisonne en coordonnées de CONTENU — c'est ce qui la rend pure et testable
+   * sans DOM ; le `padding`, lui, est un fait de mise en page. On l'ajoute donc
+   * ici, au seul endroit qui convertit l'un en l'autre.
+   */
+  function paddingDeLaGrille() {
+    return coteCase / 2;
   }
 
   /**
@@ -2482,7 +2668,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // quitte, donc le ramènerait d'où il vient.
     marquerBandeActive(cleBande);
     const { premiereLigne } = ligneEcranDeLaBande(bande);
-    defile.scrollTo({ top: (premiereLigne - 1) * hauteurRangee(), behavior: 'smooth' });
+    // ⚠ ON SE POSE SUR LA BORNE BASSE DE LA BANDE, pas sur sa première rangée :
+    // c'est elle qui inclut le mur, et c'est elle que le défilement respectera
+    // ensuite. Viser la rangée ferait sauter la vue d'une demi-case au premier
+    // geste, ce qui se lit comme un à-coup.
+    const bornes = bornesDeDefilement(cleBande, hauteurRangee(), defile.clientHeight, paddingDeLaGrille());
+    defile.scrollTo({ top: bornes.min, behavior: 'smooth' });
   }
 
   function marquerBandeActive(cleBande) {
@@ -2618,7 +2809,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   function coteQuiTient() {
     const large = defile.clientWidth;
     if (!(large > 0)) return COTE_CASE_DEFAUT;
-    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / GRILLE.largeur));
+    // ⚠⚠ ON DIVISE PAR `largeur + 1`, PAS PAR `largeur`, DEPUIS LE MUR DE
+    // CONTOUR. La grille porte une demi-case de `padding` de chaque côté pour
+    // que le mur, qui se pose à cheval sur son bord, ne déborde pas de sa boîte :
+    // celle-ci fait donc neuf colonnes PLUS deux demi-cases, soit dix cases de
+    // large. Diviser par neuf redonnerait exactement le défilement horizontal au
+    // repos que ce padding existe pour éviter — mesuré, 414 px dans 360.
+    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / (GRILLE.largeur + 1)));
   }
 
   /** Le côté de case appliqué en ce moment, en pixels. */
@@ -2782,7 +2979,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     const h = hauteurRangee();
     if (!(h > 0)) return;
     if (!BANDES_NAVIGABLES.includes(bandeCourante)) return;
-    const bornes = bornesDeDefilement(bandeCourante, h, defile.clientHeight);
+    const bornes = bornesDeDefilement(bandeCourante, h, defile.clientHeight, paddingDeLaGrille());
     const borne = Math.min(bornes.max, Math.max(bornes.min, defile.scrollTop));
     if (Math.abs(borne - defile.scrollTop) < 0.5) return;
     enTrainDeBorner = true;

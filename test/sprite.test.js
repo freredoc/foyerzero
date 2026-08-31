@@ -29,7 +29,7 @@ import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
-import { TERRAINS } from '../src/ui/chantier.js';
+import { TERRAINS, tuilesDuContour } from '../src/ui/chantier.js';
 import { BATIMENTS } from '../src/data/sites.js';
 import { ORIENTATION_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
 import { creerCombat } from '../src/sim/combat.js';
@@ -307,6 +307,83 @@ test('sprite — une cellule se pose aussi dans un QUARTIER, et la formule tient
   });
   assert.equal(degenere.position, '0% 0%');
 });
+
+test('bord — les murs de contour sont des images à part, pas des cellules d\'atlas', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE, ET IL VIENT D'UN ARBITRAGE. Le mur a d'abord été
+  // conditionné comme un sprite de case — 64 × 64, quatorze teintes du dépôt,
+  // cousu dans un atlas —, et Ethan l'a refusé de face le 31/08 : « mais c'est
+  // quoi cette chiasse de pixel. divise par deux l'asset original. et garde la
+  // colorisation. le mur fera 512x64. » Ce test tient les trois moitiés de cette
+  // phrase : la TAILLE, la COLORISATION, et le fait qu'un tel format ne peut pas
+  // entrer dans un atlas à cellules carrées.
+  const dossier = join(SPRITES, 'bord');
+  const fichiers = readdirSync(dossier).filter((f) => f.endsWith('.png')).sort();
+  assert.equal(fichiers.length, 16,
+    `bord/ porte ${fichiers.length} fichiers : deux camps × (4 murs + 4 angles)`);
+  assert.ok(!existsSync(join(dossier, String(COTE_SPRITE))),
+    'bord/ a repris un dossier de grille : ses sprites ne sont pas des sprites de case');
+
+  // ⚠ ET IL N'EST PLUS DANS L'INDEX DES ATLAS. `tools/atlas.py` n'accepte que
+  // des cellules carrées d'un même côté ; l'y laisser ferait sortir l'outil en
+  // erreur, ou pire, coudre le mur de travers.
+  assert.equal(ATLAS.bord, undefined,
+    'la famille `bord` est revenue dans l\'atlas : elle n\'y tient pas');
+
+  // Les tailles, mesurées dans les en-têtes des PNG. `512 × 64` est le mot
+  // d'Ethan ; le reste s'en déduit — l'autre sens et l'angle, qui est le carré
+  // de l'épaisseur.
+  const LONG = 512;
+  const attendue = (nom) => {
+    if (nom.includes('_mur_h_')) return { largeur: LONG, hauteur: COTE_SPRITE };
+    if (nom.includes('_mur_v_')) return { largeur: COTE_SPRITE, hauteur: LONG };
+    return { largeur: COTE_SPRITE, hauteur: COTE_SPRITE };
+  };
+  let couleursMax = 0;
+  for (const fichier of fichiers) {
+    const im = decoderRgba(join(dossier, fichier));
+    const veut = attendue(fichier);
+    assert.equal(im.largeur, veut.largeur, `${fichier} fait ${im.largeur} de large`);
+    assert.equal(im.hauteur, veut.hauteur, `${fichier} fait ${im.hauteur} de haut`);
+
+    // ⚠ « GARDE LA COLORISATION » SE MESURE : les couleurs sont celles du
+    // dessin, pas les quatorze de `cond.py`. On compte les teintes opaques
+    // distinctes — un mur ramené à la palette du dépôt en porterait sept au
+    // plus, et surtout il porterait le rouge que la chaîne réserve à ce qui
+    // ATTAQUE le joueur.
+    const teintes = new Set();
+    for (let i = 0; i < im.pixels.length; i += 4) {
+      if (im.pixels[i + 3] === 0) continue;
+      teintes.add((im.pixels[i] << 16) | (im.pixels[i + 1] << 8) | im.pixels[i + 2]);
+    }
+    assert.ok(teintes.size > 7,
+      `${fichier} ne porte que ${teintes.size} teintes : la colorisation a été perdue`);
+    assert.ok(teintes.size <= 16,
+      `${fichier} porte ${teintes.size} teintes : la réduction à seize ne mord plus, `
+        + 'et le livrable paie le bruit du rendu d\'origine');
+    assert.ok(!teintes.has(0xE4 * 65536 + 0x3E * 256 + 0x32),
+      `${fichier} porte #E43E32, la teinte réservée à ce qui attaque le joueur`);
+    couleursMax = Math.max(couleursMax, teintes.size);
+
+    // ⚠ L'ALPHA RESTE BINAIRE. Le dépôt n'a aucune transparence partielle, et
+    // un bord à demi transparent se lirait comme un défaut de rendu.
+    for (let i = 3; i < im.pixels.length; i += 4) {
+      assert.ok(im.pixels[i] === 0 || im.pixels[i] === 255,
+        `${fichier} porte un alpha partiel : la réduction a laissé un halo`);
+    }
+  }
+  assert.equal(couleursMax, 16, 'aucun sprite n\'atteint les seize teintes : le montage ne mesure rien');
+
+  // ⚠ LE MUR TOMBE AU 1:1 AU PLAFOND DU ZOOM, et ce n'est pas une coïncidence
+  // qu'on impose : c'est un fait qu'on RELÈVE. 512 pixels pour 64 par case font
+  // huit cases, et le mur du haut en couvre exactement huit sur cette grille-ci.
+  // Le jour où la base changera de largeur, la feuille étirera l'image — le test
+  // dira alors que le rapport n'est plus entier, et ce sera vrai.
+  assert.equal(LONG / COTE_SPRITE, 8, 'l\'asset ne couvre plus huit cases');
+  const haut = tuilesDuContour('j').find((t) => t.nom.includes('_mur_h_'));
+  assert.equal(haut.l, LONG / COTE_SPRITE,
+    `le mur du haut couvre ${haut.l} cases pour un asset de ${LONG / COTE_SPRITE} : il sera étiré`);
+});
+
 
 test('sprite — un nom absent lève, il ne rend pas un fond vide', () => {
   // Une cellule transparente est exactement ce que personne ne remarque :

@@ -80,6 +80,12 @@ FAMILLES = {
     # l'atlas de terrain de la carte du monde. Un atlas d'un seul sprite ne coud
     # rien.
     'carte': ('carte', 43, ('base_o_2x2', 'base_o_3x3')),
+    # ⚠⚠ `bord/` N'EST PAS ICI, ET CE N'EST PAS UN OUBLI. Le mur de contour ne
+    # tient pas dans une case : ses sprites font 512 × 64, 64 × 512 et 64 × 64
+    # (arbitrage d'Ethan du 31/08, « divise par deux l'asset original […] le mur
+    # fera 512x64 »), et `coudre` exige des cellules CARRÉES de `COTE`. Ils
+    # voyagent donc chacun dans son propre marqueur de `tools/build.js`, comme
+    # les deux grosses bases de l'Ouvrage juste au-dessus.
 }
 
 

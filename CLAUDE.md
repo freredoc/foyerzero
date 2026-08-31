@@ -41,16 +41,42 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot RETOURS-DU-31), à confronter :**
-`npm test` → **764 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 274 380 octets**, 0 référence externe.
+**Référence au 31/08/2026 (après le lot MUR-DE-CONTOUR), à confronter :**
+`npm test` → **768 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 333 691 octets**, 0 référence externe.
+⚠⚠ **CE LOT A COÛTÉ +59 311 OCTETS, DONT 52 864 D'IMAGES, ET LA BORNE T10 EST
+RELEVÉE DE 1 300 000 À 1 400 000.** C'est le douzième et dernier retour d'Ethan
+du 31/08 — « les murs contour ne sont pas là » —, et c'est le lot qui fait entrer
+le mur du pourtour de la base : cinq images pour le camp du joueur, un mur du
+haut, deux murs de côté, deux angles. Marge **66 309 octets, 4,7 %**.
+⚠⚠ **ET LA RÉSOLUTION EST UN ARBITRAGE, PAS UN CHOIX DE CONFORT.** Le même mur
+conditionné comme un sprite de case — 64 × 64, quatorze teintes, cousu en atlas —
+pesait **3 792 octets en tout**, quatorze fois moins. Ethan l'a refusé de face :
+« mais c'est quoi cette chiasse de pixel. divise par deux l'asset original. et
+garde la colorisation. le mur fera 512x64. » Le prix est écrit pour qu'on sache
+ce qu'on a acheté. La marge repasse au-dessus des quatre pour cent : 4,4 % ·
+3,1 % · 3,05 % · 2,94 % · 2,91 % · 2,86 % · 2,80 % · 2,73 % · 1,97 % · **4,7 %**.
+⚠⚠ **`bord/` N'EST PLUS UNE FAMILLE COUSUE, ET NE PEUT PAS L'ÊTRE.** Ses images
+font 512 × 64, 64 × 512 et 64 × 64 ; `tools/atlas.py` n'accepte que des cellules
+CARRÉES d'un même côté. Chacune entre par son propre marqueur de
+`tools/build.js`, comme les deux grosses bases de l'Ouvrage. Le dossier n'a plus
+de sous-dossiers de grille : seize fichiers, à plat.
+⚠⚠ **LE MUR FAIT UN U — LE BAS RESTE SANS MUR**, arbitré le même jour. La base
+s'ouvre sur sa propre bande de défense, qui commence exactement là où la sienne
+finit. Il est **à cheval sur le bord** et **peint entre le SOL et les PIÈCES** :
+trois étages, arbitrés par la mesure et non par l'ordre du document — voir §6,
+« les murs de contour ».
+⚠ **`python3 tools/verifier.py` → 1 386 identiques · 2 différents (les deux
+déclarés) · 0 nouveau · 0 MANQUANT**, verdict VERT, en 131 s. Il était dû : le
+lot touche `art/sprites/` et `tools/`.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 15.** Un mur est un dessin : il ne
+touche ni l'état, ni la sauvegarde, ni une seule règle de jeu.
+
+**Auparavant, après le lot RETOURS-DU-31 :** 764 tests, `dist/index.html`
+1 274 380 octets, marge 25 620, 1,97 %.
 ⚠ **CE LOT A COÛTÉ +9 869 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.** C'est du code,
 du balisage et de la feuille : douze retours d'Ethan traités en un lot, dont
-quatre CORRECTIFS de défauts visibles. Marge **25 620 octets, 1,97 %**.
-⚠⚠ **ET LA MARGE PASSE SOUS LES DEUX POUR CENT : 4,4 % · 3,1 % · 3,05 % ·
-2,94 % · 2,91 % · 2,86 % · 2,80 % · 2,73 % · 1,97 %.** Le prochain atlas la fera
-tomber pour de bon, et il faudra ROUVRIR la borne en écrivant pourquoi, jamais
-rogner un atlas pour passer dessous.
+quatre CORRECTIFS de défauts visibles.
 ⚠⚠ **LE DÉFAUT LE PLUS GRAVE ÉTAIT MUET : LA CARTE N'AFFICHAIT AUCUN EMBLÈME.**
 `ui/monde.js` lisait `cellule.x/.y/.cote` sur ce que rend `celluleDuSprite`, qui
 rend des INDICES et jamais des pixels ; `drawImage` avec un rectangle source non
@@ -61,9 +87,8 @@ est pur, où deux gardes l'atteignent.
 ⚠ **LES DEUX BOUTS DU COULOIR ONT BOUGÉ** — départ rangée 275 → **295**,
 terminale rangée 26 → **15**, arbitrés par Ethan. La strate de départ SUIT et
 tombe à **1** : les avant-postes du début sont désormais de niveau 1.
-⚠ **`python3 tools/verifier.py` → 1 418 identiques · 2 différents (les deux
-déclarés) · 0 nouveau · 0 MANQUANT**, verdict VERT, en 118 s. Il était dû : le
-lot touche `art/sprites/` et `tools/`.
+⚠ **`python3 tools/verifier.py` y rendait déjà 1 418 identiques · 2 différents
+· 0 nouveau · 0 MANQUANT**, verdict VERT, en 118 s.
 ⚠⚠ **`node tools/audit-maquette.mjs` EST PASSÉ DE 7 ÉCARTS À UN SEUL, ET CE
 N'EST PAS UN CORRECTIF — C'EST UN EFFET DE BORD DU DÉPLACEMENT DU DÉPART.**
 Il reste ROUGE (code 1), sur « emplacements 11 / 12 », qui était déjà des sept.
@@ -523,7 +548,7 @@ test/                   42 fichiers *.test.js (node:test) ; deux fichiers n'en s
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
 tools/                  23 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 31/08
-                        au lot RETOURS-DU-31, fichier par fichier (hors
+                        au lot MUR-DE-CONTOUR, fichier par fichier (hors
                         `__pycache__`, qui est ignoré par git). Le vingt-troisième
                         est `bords.py`, qui conditionne les murs de contour.
                         ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
@@ -576,19 +601,22 @@ art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à
                         ⚠ IL NE S'AMPUTE JAMAIS, et c'est ce qui le distingue
                           d'`art/sprites/` : rien ici n'est un produit, tout y
                           est un original. Un lot n'y AJOUTE que.
-art/sprites/            les sprites conditionnés — TRENTE dossiers de grille et
-                        1 473 fichiers, recomptés le 31/08 au lot RETOURS-DU-31.
-                        DIX familles en 128, 64 et 32 : unité, bâtiment,
+art/sprites/            les sprites conditionnés — VINGT-SEPT dossiers de grille
+                        et 1 425 fichiers, recomptés le 31/08 au lot
+                        MUR-DE-CONTOUR, plus HUIT atlas à la racine et les SEIZE
+                        images à plat de `bord/`.
+                        NEUF familles en 128, 64 et 32 : unité, bâtiment,
                         terrain, defense, tourelle-unite, socle, carte, effet,
-                        chassis, bord.
-                        ⤷ ⚠⚠ `bord/` EST PRODUIT ET COUSU PAR PERSONNE, ET C'EST
-                          VOULU. Ses 48 fichiers sortent de `tools/bords.py`, le
-                          vérificateur les reproduit, et AUCUN atlas ne les
-                          coud : `tools/atlas.py` dit qu'une famille entre
-                          « QUAND LE LOT QUI CONSOMME LA FAMILLE ARRIVE, jamais
-                          avant », puisque chaque famille cousue est un `data:`
-                          de plus payé par tous les joueurs. Le branchement
-                          attend un arbitrage — voir §6, « les murs de contour ».
+                        chassis. La dixième, `bord`, n'a pas de grille.
+                        ⤷ ⚠⚠ `bord/` EST À PLAT, SANS DOSSIER DE GRILLE, ET
+                          IL N'EST DANS AUCUN ATLAS. Ses images ne tiennent pas
+                          dans une case : 512 × 64 pour un mur, 64 × 512 pour
+                          l'autre sens, 64 × 64 pour un angle — arbitrage
+                          d'Ethan du 31/08 —, quand `tools/atlas.py` n'accepte
+                          que des cellules CARRÉES d'un même côté. Les seize
+                          sortent de `tools/bords.py` ; CINQ entrent dans le
+                          livrable, celles du joueur, pour 52 864 octets de
+                          base64. Voir §6, « les murs de contour ».
                         ⤷ ⚠ LE COMPTE A BAISSÉ DE 156, ET CE N'EST PAS UNE PERTE.
                           Le lot en a AJOUTÉ 84 — 54 états détruits et ruines,
                           30 châssis — et RETIRÉ 240 : les tourelles de blindé de
@@ -2924,27 +2952,95 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   troisième : l'os borde déjà la base du joueur, le rouge borde EXACTEMENT ce qui
   attaque le joueur. Le territoire de l'Ouvrage est l'emprise de ces bases-là.
 
-- ⚠⚠ **LES MURS DE CONTOUR : L'ART EST PRODUIT, LE DESSIN NE L'EST PAS.** Ethan,
-  31/08 : « les murs contour ne sont pas là ». Les quatre planches étaient au
-  dépôt depuis le lot BORDS-DE-BASE et **aucun outil ne les lisait** — c'est le
-  producteur qui manquait, pas l'art. `tools/bords.py` le fait maintenant : 16
-  sprites par grille, 48 fichiers, reproduits par le vérificateur.
-  ⚠⚠ **CE QUI RESTE À TRANCHER EST UNE GÉOMÉTRIE, ET ELLE COÛTE CHER À DEVINER.**
-  Mesuré sur les planches : le trait d'un mur occupe `y = 448..575` sur 1024,
-  c'est-à-dire le MILIEU de sa cellule, et l'angle est au centre exact. Une tuile
-  posée sur une case dessinerait donc son mur **au milieu de la case**. Pour que
-  le mur tombe sur la ligne qui BORDE la base, la tuile doit être posée à cheval
-  sur cette ligne, donc déborder d'une demi-case — ce qui demande de donner à
-  `#chantier-grille` une marge d'une demi-case, donc de toucher `coteQuiTient`,
-  `hauteurRangee` et les bornes de `bornesDeDefilement`. C'est-à-dire exactement
-  le code que ce lot-ci vient de corriger pour le zoom et pour la bascule de
-  bande. **Les faire ensemble aurait risqué le correctif qu'Ethan peut voir.**
-  ⚠ **AUCUN ATLAS NE COUD `bord/`, ET C'EST LA RÈGLE**, pas un oubli :
-  `tools/atlas.py` dit qu'une famille entre « quand le lot qui consomme la
-  famille arrive, jamais avant ». L'atlas mesuré pèserait **4 473 octets en
-  base64** — c'est peu, mais la marge est à 1,97 %.
+- ⚠⚠ **LES MURS DE CONTOUR SONT DESSINÉS DEPUIS LE 31/08, ET ILS NE PASSENT PAS
+  PAR LA CHAÎNE DES SPRITES DE CASE.** Ethan, dans l'ordre : « les murs contour
+  ne sont pas là », « à cheval sur le bord / le brun orangé joueur le violet
+  ouvrage », puis, devant un premier conditionnement ramené à 64 × 64 : « mais
+  c'est quoi cette chiasse de pixel. divise par deux l'asset original. et garde
+  la colorisation. le mur fera 512x64. et le mur fait un U, le bas reste sans
+  mur. » Les quatre planches étaient au dépôt depuis le lot BORDS-DE-BASE ;
+  `tools/bords.py` en tire seize images, `tuilesDuContour` de `ui/chantier.js`
+  en pose cinq autour de la bande des bâtiments.
+  ⚠⚠ **UN MUR N'EST PAS UN SPRITE DE CASE, ET C'EST TOUT LE LOT.**
+  `planches.py`, `final128.py` et leurs cousins ramènent un dessin de 1 024 à une
+  case de 64, quantifié sur les quatorze teintes de `cond.py` : juste pour une
+  unité, qui doit tenir dans une case. Un mur court le long d'un côté entier, et
+  le réduire au seizième détruit le seul détail qui le fait lire comme une
+  construction. **Mesuré des deux côtés** : le mur conditionné pesait 3 792
+  octets de base64 en tout, celui-ci en pèse 52 864 — quatorze fois plus, et
+  c'est le prix que l'arbitrage a fixé.
+  ⚠ **« DIVISE PAR DEUX » SE PREND AU MOT.** La planche fait 2 048 × 2 048, donc
+  quatre cellules de 1 024 ; le trait occupe les 128 lignes CENTRALES de sa
+  cellule et l'angle le carré central de 128. Ramené d'un facteur deux : **512 ×
+  64** pour un mur, 64 × 512 pour l'autre sens, 64 × 64 pour un angle. À
+  `COTE_SPRITE` pixels par case — le plafond du zoom — un mur couvre donc HUIT
+  cases au rapport 1:1, et c'est exactement ce que le U demande sur cette
+  grille-ci.
+  ⚠ **LA FENÊTRE DE DÉCOUPE EST FIXE, ELLE NE SE MESURE PAS SUR L'IMAGE.**
+  L'étendue exacte du trait varie d'un pixel d'une cellule à l'autre
+  (`y = 448..574` sur l'une, `448..575` sur l'autre) : découper sur la boîte
+  englobante donnerait des sprites de tailles différentes, qui ne se
+  raccorderaient plus. L'outil découpe la fenêtre CENTRALE et **asserte** qu'aucun
+  pixel opaque n'en sort.
+  ⚠⚠ **« GARDE LA COLORISATION » : PAS DE PALETTE DU DÉPÔT ICI.** `quantifier` de
+  `cond.py` apparie sur les quatorze teintes de la fiche, réglées pour les unités
+  ; sur ces bruns-ci la porte du ROUGE s'ouvre et le mur ressort semé de
+  `#E43E32`, la teinte que le dépôt réserve à ce qui ATTAQUE LE JOUEUR (mesuré au
+  premier jet). Les couleurs retenues sont celles du dessin, **réduites à seize
+  PAR CAMP** — par camp et non par sprite, sinon l'angle et le mur qu'il joint ne
+  tomberaient pas sur la même teinte. Seize est un compromis mesuré : `mur_h_a`
+  pèse 6 507 octets à 8 couleurs, 10 670 à 16, 16 057 à 32, 41 790 au rendu
+  d'origine (22 000 couleurs, de l'anti-crénelage et pas une intention) ; sous
+  seize le détail des briques s'aplatit à l'œil.
+  ⚠ **LA RÉDUCTION EST ALPHA-CORRECTE.** Le fond des planches est magenta ;
+  réduire le RVB sans le prémultiplier par l'alpha ferait baver ce magenta dans
+  le liseré du mur sur toute sa longueur — invisible sur une vignette, flagrant
+  sur 512 pixels. L'alpha redevient binaire : le dépôt n'a aucune transparence
+  partielle.
+  ⚠⚠ **`bord/` N'EST DONC DANS AUCUN ATLAS, ET NE PEUT PAS L'ÊTRE.** `coudre` de
+  `tools/atlas.py` exige des cellules carrées d'un même côté. Chaque image entre
+  par son propre marqueur de `tools/build.js`, comme les deux grosses bases de
+  l'Ouvrage. **Et seul le camp du joueur entre** : cinq images, 52 864 octets de
+  base64 ; les cinq de l'Ouvrage sont produites et attendent l'écran de raid.
+  C'est une économie que seul le passage aux fichiers séparés rend possible — un
+  atlas aurait été tout ou rien.
+  ⚠⚠ **LE MUR FAIT UN U, LE BAS RESTE SANS MUR.** La base s'ouvre sur sa propre
+  bande de défense, qui commence exactement là où la sienne finit : c'est le seul
+  des quatre côtés qui donne sur du terrain à soi, et le seul que l'assaillant
+  franchit. Deux angles, trois murs, cinq nœuds — et **rien ne se recouvre** :
+  les angles prennent une case chacun, le mur du haut court exactement entre eux,
+  les murs de côté du bas de leur angle au bord de la base.
+  ⚠ **LES DEUX VARIANTES SERVENT DE PART ET D'AUTRE**, ce pour quoi elles ont été
+  dessinées : `mur_v_a` est éclairée à gauche, `mur_v_b` à droite. `mur_h_b`, qui
+  éclaire par le bas, est le pendant du mur que le U n'a pas — elle reste
+  produite et ne sert pas.
+  ⚠ **LES LONGUEURS SE CALCULENT, ELLES NE S'ÉCRIVENT PAS.** Sur cette grille
+  elles tombent à huit cases, soit très exactement les 512 pixels de l'asset au
+  plafond du zoom ; le jour où la base changera de taille, le
+  `background-size: 100% 100%` de la feuille étirera l'image plutôt que de
+  laisser un trou. Un test RELÈVE cette coïncidence au lieu de l'imposer.
+  ⚠⚠ **À CHEVAL, DONC LA GRILLE PORTE UNE DEMI-CASE DE `padding`.** Un mur fait
+  une case d'épaisseur et se centre sur la ligne du bord, donc il mord d'une
+  demi-case de chaque côté. Sans ce `padding`, la moitié extérieure sortirait de
+  la boîte et le champ défilerait horizontalement au repos (mesuré : 414 px de
+  grille dans 360). D'où aussi `coteQuiTient` qui divise par `GRILLE.largeur + 1`
+  et la marge passée à `bornesDeDefilement`.
+  ⚠⚠ **TROIS ÉTAGES, ET LE MUR EST CELUI DU MILIEU : le SOL, puis le MUR, puis
+  les JETONS et le calque des traits.** Le premier rendu s'en remettait à l'ordre
+  du document, qui mettait le calque SOUS les cases : mesuré dans Chromium, la
+  moitié intérieure du trait était cachée par le sol, et **pas la même moitié en
+  haut qu'en bas**. Invisible tant que le trait faisait un huitième de case ;
+  flagrant à la moitié.
+  ⚠ **ET `.case.choisie` A PERDU SON `z-index`, APRÈS MESURE.** Il ne peignait
+  rien — `outline-offset: -2px` tient le liseré à l'intérieur de la case, où
+  aucune voisine ne le recouvre : montage de douze cases légales autour d'une
+  choisie, capture avec et sans, **zéro pixel de différence sur 457 600**. Il
+  coûtait en revanche cher depuis le mur : un `z-index` sur une case en fait un
+  CONTEXTE D'EMPILEMENT, donc son jeton restait prisonnier de l'étage 1 et le mur
+  lui passait dessus — le bâtiment sélectionné aurait été le seul barré par son
+  propre mur.
   ⚠ **ET LE VÉRIFICATEUR CONNAÎT L'OUTIL** (`CHAINE`, dans `tools/verifier.py`).
-  Sans cette ligne, les 48 fichiers seraient comptés MANQUANTS à chaque
+  Sans cette ligne, les seize fichiers seraient comptés MANQUANTS à chaque
   exécution — « le dépôt les porte, aucun outil ne les produit », le contraire
   de la vérité.
 

@@ -108,6 +108,22 @@ const IMAGES_INLINE = [
   { marqueur: '%ATLAS_TERRAIN_BASE%', chemin: ['art', 'sprites', 'atlas-terrain-64.png'], type: 'image/png' },
   { marqueur: '%ATLAS_DEFENSE%', chemin: ['art', 'sprites', 'atlas-defense-64.png'], type: 'image/png' },
   { marqueur: '%ATLAS_SOCLE%', chemin: ['art', 'sprites', 'atlas-socle-64.png'], type: 'image/png' },
+  // ⚠⚠ LE MUR DE CONTOUR DE LA BASE — CINQ IMAGES, PAS UN ATLAS. Un mur fait
+  // 512 × 64 et un angle 64 × 64 : `tools/atlas.py` ne coud que des cellules
+  // carrées d'un même côté, donc chacune voyage dans son propre marqueur, comme
+  // les deux grosses bases de l'Ouvrage plus bas.
+  // ⚠ ET SEUL LE CAMP DU JOUEUR EST LÀ. Les cinq de l'Ouvrage sont produites par
+  // `tools/bords.py` et pèseraient 27 000 octets de plus pour zéro pixel : la
+  // base du joueur est la seule qu'un écran dessine aujourd'hui. Un atlas aurait
+  // été tout ou rien ; des fichiers séparés permettent de ne payer que ce qui
+  // se voit.
+  // ⚠ ILS NE SERVENT QU'EN FOND CSS, donc pas de balise `img` : voir
+  // `garnirLesAtlas` pour ceux qui servent AUSSI à `drawImage`.
+  { marqueur: '%MUR_J_H_A%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_h_a.png'], type: 'image/png' },
+  { marqueur: '%MUR_J_V_A%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_v_a.png'], type: 'image/png' },
+  { marqueur: '%MUR_J_V_B%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_v_b.png'], type: 'image/png' },
+  { marqueur: '%MUR_J_ANGLE_NO%', chemin: ['art', 'sprites', 'bord', 'bord_j_angle_no.png'], type: 'image/png' },
+  { marqueur: '%MUR_J_ANGLE_NE%', chemin: ['art', 'sprites', 'bord', 'bord_j_angle_ne.png'], type: 'image/png' },
   { marqueur: '%ATLAS_UNITE%', chemin: ['art', 'sprites', 'atlas-unite-64.png'], type: 'image/png' },
   { marqueur: '%ATLAS_CHASSIS%', chemin: ['art', 'sprites', 'atlas-chassis-64.png'], type: 'image/png' },
   // ⚠ LE FICHIER PORTE LE SLUG À SOULIGNÉ — `atlas-tourelle_unite-64.png` —
