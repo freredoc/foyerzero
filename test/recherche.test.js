@@ -17,6 +17,8 @@ import {
   creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin, facteurMilli,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli, distanceCarree } from '../src/sim/grille.js';
+import { executerRaid, pvMaxDeLUnite } from '../src/sim/raid.js';
+import { APRES_RAID } from '../src/data/sites.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
@@ -2754,6 +2756,101 @@ test('MODULES-D T10 — sur une pièce ENTAMÉE, seul le plafond monte', () => {
   // Et aucun bâtiment de site ne porte de module de défense — le profil des
   // bâtiments les met tous les deux à `null`, et un test le tient de face.
   assert.match(source, /genre: 'batiment',[\s\S]*?moduleDefenseJoueur: null,\n\s*moduleDefenseOuvrage: null,/);
+});
+
+/**
+ * Une partie prête à raider, avec une garnison forgée.
+ *
+ * ⚠ LA GARNISON EST FORGÉE PARCE QU'ELLE NE PEUT PAS L'ÊTRE AUTREMENT. Rien,
+ * dans tout `src/`, n'écrit `degatsMilli` sur `etat.garnison` : la base du
+ * joueur n'est jamais attaquée. L'état de départ de ce test est donc un état que
+ * le jeu ne sait pas produire — c'est assumé, et c'est précisément ce que le
+ * rapport dit en toutes lettres.
+ */
+function partieAvecGarnison(garnison, modulesDefense) {
+  const etat = creerEtat(2026);
+  rattraperJeu(etat, 3001);
+  for (let c = 1; c <= 6; c += 1) {
+    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+  }
+  etat.garnison.push(...garnison);
+  etat.recherche.modules.defense.push(...modulesDefense);
+  const camp = etat.satellites.presents.find((x) => x.type === 'camp');
+  assert.ok(camp, 'montage : aucun camp autour de la base');
+  return { etat, cible: { rangee: camp.rangee, colonne: camp.colonne } };
+}
+
+test('MODULES-D T11 — l\'Auto-réparation rend 20 % des DÉGÂTS, et seulement à qui y a droit', () => {
+  // 1 009 n'est pas un multiple de 5 : le `Math.floor` se voit.
+  const abime = 1009;
+  const { etat, cible } = partieAvecGarnison([
+    // porte le module ET il est acquis → réparée
+    { id: 'merlon', rangee: 5, colonne: 5, niveau: 1, degatsMilli: abime },
+    // porte le module mais il n'est PAS acquis → intacte
+    { id: 'ronce', rangee: 5, colonne: 6, niveau: 1, degatsMilli: abime },
+    // module acquis, mais elle porte `rayonMiniMoinsUn` → intacte
+    { id: 'faucheuse', rangee: 5, colonne: 7, niveau: 1, degatsMilli: abime },
+    // porteuse, acquise, mais sans une égratignure → rien à rendre
+    { id: 'casemate', rangee: 5, colonne: 8, niveau: 1, degatsMilli: 0 },
+  ], ['merlon', 'faucheuse', 'casemate']);
+
+  const rapport = executerRaid(etat, etat, cible);
+  assert.ok(rapport.ticks > 0, 'montage : le raid n\'a pas eu lieu');
+
+  const par = Object.fromEntries(etat.garnison.map((p) => [p.id, p.degatsMilli]));
+  // floor(1009 × 20 / 100) = 201, et non 202 : 20 % des DÉGÂTS, arrondi vers le bas.
+  assert.equal(par.merlon, abime - 201, 'le porteur acquis doit regagner 201 milli-PV');
+  // ⚠ CES TROIS-LÀ SONT LES GARDES. Retirer le contrôle `moduleEstAcquis` ferait
+  // tomber la Ronce ; retirer `nomDuModule` ferait tomber la Faucheuse ; ne pas
+  // appeler la suite du tout ferait tomber le Merlon.
+  assert.equal(par.ronce, abime, 'module non acquis : rien ne doit être rendu');
+  assert.equal(par.faucheuse, abime, 'ce n\'est pas ce module-là : rien ne doit être rendu');
+  assert.equal(par.casemate, 0, 'une pièce intacte reste à zéro');
+
+  // Et les six porteurs sont bien ceux du brief, mesurés et non supposés.
+  const porteurs = Object.keys(DEFENSES).filter((id) => nomDuModule('defense', id) === 'autoReparation');
+  assert.deepEqual(porteurs, ['merlon', 'ronce', 'herse', 'casemate', 'creneau', 'batterie']);
+});
+
+test('MODULES-D T12 — l\'ARMÉE n\'est pas touchée par la suite de garnison', () => {
+  const pvMax = pvMaxDeLUnite('meute', 1);
+  const auPlancher = pvMax - APRES_RAID.plancherPvMilli;
+  const { etat, cible } = partieAvecGarnison(
+    [{ id: 'merlon', rangee: 5, colonne: 5, niveau: 1, degatsMilli: 1009 }],
+    ['merlon'],
+  );
+  // Une septième unité déjà au plancher : `composerLesVagues` la laisse à la
+  // maison, donc `reporterLesDegats` ne la réécrit pas. Si la suite parcourait
+  // `etat.armee`, elle serait la seule pièce dont les dégâts pourraient baisser
+  // sans que le combat y soit pour quelque chose.
+  etat.armee.push({ id: 'meute', vague: 1, colonne: 9, niveau: 1, degatsMilli: auPlancher });
+
+  executerRaid(etat, etat, cible);
+
+  assert.equal(etat.garnison[0].degatsMilli, 1009 - 201, 'montage : la garnison doit être réparée');
+  const restee = etat.armee.at(-1);
+  assert.equal(restee.degatsMilli, auPlancher, 'l\'unité restée à la maison ne se soigne pas');
+  // Les unités engagées portent EXACTEMENT ce que le combat leur a laissé : une
+  // pièce au plancher a `pvMax − plancher` de dégâts, au milli-PV près. Un
+  // rabais de 20 % s'y verrait tout de suite.
+  for (const piece of etat.armee) {
+    assert.ok(piece.degatsMilli <= auPlancher, 'dégâts au-delà du plancher');
+    if (piece.degatsMilli === 0) continue;
+    assert.equal(Number.isInteger(piece.degatsMilli), true);
+  }
+
+  // ⚠ LA VRAIE RAISON POUR LAQUELLE L'ARMÉE EST HORS D'ATTEINTE, mesurée : aucune
+  // UNITÉ ne porte l'Auto-réparation en défense — les six porteurs sont tous des
+  // ouvrages de `DEFENSES`. Le jour où une unité la porterait, ce test tombe, et
+  // c'est ce qu'on veut : la suite parcourt `etat.garnison`, pas `etat.armee`.
+  const unitesPorteuses = Object.keys(UNITES)
+    .filter((id) => UNITES[id].defense?.module === 'autoReparation');
+  assert.deepEqual(unitesPorteuses, []);
+  const source = readFileSync(new URL('../src/sim/raid.js', import.meta.url), 'utf8');
+  const corps = source.slice(source.indexOf('function reparerLaGarnison('));
+  const fin = corps.slice(0, corps.indexOf('\n}'));
+  assert.match(fin, /for \(const piece of etat\.garnison\)/);
+  assert.equal(fin.includes('etat.armee'), false, 'la suite ne doit jamais nommer l\'armée');
 });
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
