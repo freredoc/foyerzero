@@ -11,7 +11,10 @@ import assert from 'node:assert/strict';
 import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
-import { creerCombat, tick, resoudre, pointsRecherche } from '../src/sim/combat.js';
+import {
+  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat,
+} from '../src/sim/combat.js';
+import { caseDepuisMilli } from '../src/sim/grille.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
@@ -209,11 +212,17 @@ test('T10 — le module exige son unité, même avec assez de points', () => {
     'montage sans mordant : ce refus-là aurait pu venir du prix');
   assert.throws(() => acheter(etat, 'offense', 'pilon', 'module'), /avant son module/);
 
-  // L'unité achetée, il ne reste que le refus de câblage — la preuve que la
-  // porte s'est bien ouverte.
+  // L'unité achetée, plus RIEN ne refuse — la preuve que la porte s'est bien
+  // ouverte.
+  //
+  // ⚠ RÉÉCRIT AU LOT MODULES-A. L'assertion d'origine attendait
+  // `['effetNonCable']` : l'Obusier porte le Tir de barrage, qui n'était câblé
+  // nulle part. Il l'est en offense depuis ce lot, et ce refus a disparu. Ce
+  // que ce test mesure — « le module exige son unité » — n'a pas changé : la
+  // liste VIDE le prouve aussi bien, et mieux, puisqu'elle ne dépend plus d'un
+  // second refus qui masquait le premier.
   acheter(etat, 'offense', 'pilon', 'unite');
-  const apres = problemesDeLAchat(etat, 'offense', 'pilon', 'module');
-  assert.deepEqual(apres.map((p) => p.code), ['effetNonCable']);
+  assert.deepEqual(problemesDeLAchat(etat, 'offense', 'pilon', 'module'), []);
 });
 
 test('T11 — un module non câblé ne se vend pas, même unité acquise et points en poche', () => {
@@ -222,26 +231,101 @@ test('T11 — un module non câblé ne se vend pas, même unité acquise et poin
   for (const branche of BRANCHES) {
     for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
       const nom = nomDuModule(branche, id);
-      if (moduleEstCable(nom)) continue;
+      if (moduleEstCable(nom, branche)) continue;
       nonCables.push(`${branche}/${id}`);
       if (!estAcquise(etat, branche, id)) acheter(etat, branche, id, 'unite');
       const codes = problemesDeLAchat(etat, branche, id, 'module').map((p) => p.code);
       assert.deepEqual(codes, ['effetNonCable'], `${branche}/${id} : ${codes.join(',')}`);
     }
   }
-  // MESURÉ : 29 lignes sur 31 portent un module non câblé — seuls le Fendeur et
-  // le Broyeur en offense portent l'Écraseur, le seul câblé du dépôt.
-  assert.equal(nonCables.length, 29, `${nonCables.length} lignes non câblées, 29 attendues`);
+  // MESURÉ : 25 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les six
+  // qui restent sont toutes en offense — le Fendeur et le Broyeur pour
+  // l'Écraseur, les Perceurs et l'Obusier pour le Tir de barrage, les
+  // Cuirassiers et les Sapeurs pour le Booster.
+  //
+  // ⚠ RÉÉCRIT AU LOT MODULES-A, DE 29 À 25, et le compte est MESURÉ, pas
+  // déduit : `moduleEstCable` prend désormais la branche, et la ligne DÉFENSE
+  // des Perceurs reste non câblée alors qu'elle porte le même module que leur
+  // ligne offense. C'est exactement ce que ce lot vend, et ce compte-là le dit.
+  assert.equal(nonCables.length, 25, `${nonCables.length} lignes non câblées, 25 attendues`);
 
-  // ⚠ CE QUI FALSIFIERAIT CE TEST : passer `cable: true` sur `flashbang`. Les
-  // lignes de la Meute et du Bélier cesseraient de rendre `effetNonCable`, et
-  // le compte tomberait. Le contre-cas est ici, en dur : l'Écraseur PASSE.
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : passer `cable.offense` à `true` sur
+  // `flashbang`. Les lignes de la Meute et du Bélier cesseraient de rendre
+  // `effetNonCable`, et le compte tomberait. Le contre-cas est ici, en dur :
+  // l'Écraseur PASSE.
   const cable = partie('999999999999999');
   acheter(cable, 'offense', 'fendeur', 'unite');
   assert.deepEqual(problemesDeLAchat(cable, 'offense', 'fendeur', 'module'), []);
   acheter(cable, 'offense', 'fendeur', 'module');
   assert.ok(moduleEstAcquis(cable, 'offense', 'fendeur'));
   assert.deepEqual(modulesDebloquesDuJoueur(cable), ['ecraseur']);
+});
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-A — le drapeau de câblage passe PAR BRANCHE
+// ---------------------------------------------------------------------------
+
+test('MODULES-A T9 — `cable` est par branche, et la fonction lève des deux côtés', () => {
+  // Le Tir de barrage est le cas qui a imposé la forme : les Perceurs le
+  // portent en offense ET en défense, et son effet est vide de sens en défense.
+  assert.equal(moduleEstCable('tirDeBarrage', 'offense'), true);
+  assert.equal(moduleEstCable('tirDeBarrage', 'defense'), false);
+  // L'Écraseur n'a aucun porteur défensif : le second drapeau est faux, et
+  // personne ne le lit — il est là pour que la table ait une forme unique.
+  assert.equal(moduleEstCable('ecraseur', 'offense'), true);
+  assert.equal(moduleEstCable('ecraseur', 'defense'), false);
+
+  // ⚠ ELLE LÈVE, elle ne rend pas `false`. Une branche mal orthographiée
+  // refuserait TOUT achat de module sans que rien ne le dise.
+  assert.throws(() => moduleEstCable('inexistant', 'offense'), /module inconnu/);
+  assert.throws(() => moduleEstCable('ecraseur', 'milieu'), /branche inconnue/);
+  assert.throws(() => moduleEstCable('ecraseur', undefined), /branche inconnue/);
+  // `toString` existe sur tout objet : sans `Object.hasOwn`, il passerait.
+  assert.throws(() => moduleEstCable('ecraseur', 'toString'), /branche inconnue/);
+
+  // Les quatorze lignes ont les DEUX clés, et rien d'autre.
+  for (const [nom, m] of Object.entries(MODULES)) {
+    assert.deepEqual(Object.keys(m.cable).sort(), ['defense', 'offense'], nom);
+    for (const b of BRANCHES) assert.equal(typeof m.cable[b], 'boolean', `${nom}/${b}`);
+  }
+  // MESURÉ : trois modules câblés sur quatorze, tous en offense, aucun en défense.
+  const cables = Object.entries(MODULES)
+    .filter(([, m]) => m.cable.offense || m.cable.defense).map(([n]) => n).sort();
+  assert.deepEqual(cables, ['booster', 'ecraseur', 'tirDeBarrage']);
+  assert.equal(Object.values(MODULES).filter((m) => m.cable.defense).length, 0,
+    'aucun module n\'est câblé en défense — le jour où il y en aura un, ce test tombe');
+});
+
+test('MODULES-A T10 — l\'achat suit le drapeau, branche par branche', () => {
+  // Assez de points et l'unité acquise DES DEUX CÔTÉS : ce qui sépare les deux
+  // lignes ne peut être que le drapeau.
+  const etat = partie('999999999999999');
+  acheter(etat, 'offense', 'perceurs', 'unite');
+  acheter(etat, 'defense', 'perceurs', 'unite');
+  assert.equal(nomDuModule('offense', 'perceurs'), 'tirDeBarrage',
+    'montage : les deux lignes portent bien le MÊME module');
+  assert.equal(nomDuModule('defense', 'perceurs'), 'tirDeBarrage');
+
+  // Offense : plus aucun refus.
+  assert.deepEqual(problemesDeLAchat(etat, 'offense', 'perceurs', 'module'), []);
+  acheter(etat, 'offense', 'perceurs', 'module');
+  assert.ok(moduleEstAcquis(etat, 'offense', 'perceurs'));
+
+  // Défense : refusé, et le message NOMME la branche — « effet à venir » aurait
+  // été juste et déroutant, la ligne offense venant d'être achetée.
+  const pb = problemesDeLAchat(etat, 'defense', 'perceurs', 'module');
+  assert.deepEqual(pb.map((p) => p.code), ['effetNonCable']);
+  // ⚠ « défense » AVEC SON ACCENT : ce message s'affiche au joueur, sous la
+  // ligne. La clé de branche, elle, s'écrit sans accent.
+  assert.equal(pb[0].message, 'Tir de barrage n\'a pas d\'effet en défense');
+  assert.throws(() => acheter(etat, 'defense', 'perceurs', 'module'), /pas d\'effet en défense/);
+
+  // Un module câblé NULLE PART garde l'autre message : celui-là est bien une
+  // attente, pas une impossibilité.
+  assert.ok(estAcquise(etat, 'offense', 'meute'), 'montage : la Meute est gratuite');
+  const pf = problemesDeLAchat(etat, 'offense', 'meute', 'module');
+  assert.deepEqual(pf.map((p) => p.code), ['effetNonCable']);
+  assert.equal(pf[0].message, 'Flashbang n\'a pas encore d\'effet en jeu');
 });
 
 test('recherche — les refus de programme lèvent, les refus de jeu se disent', () => {
@@ -527,6 +611,413 @@ test('T13 — l\'Écraseur du JOUEUR ne touche pas les points de recherche', () 
     { ...base, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } });
   assert.equal(avecOuvrage, (sansJoueur * 12n) / 10n,
     `le bonus de l'Ouvrage ne vaut pas +20 % : ${sansJoueur} → ${avecOuvrage}`);
+});
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-A — le Tir de barrage
+// ---------------------------------------------------------------------------
+
+/**
+ * Un tireur porteur du Tir de barrage face à une cible et à des voisines.
+ *
+ * ⚠ LE MERLON EST CHOISI POUR CE QU'IL NE FAIT PAS : 2 000 PV, `degats: null`,
+ * `bloque: true`. Il ne riposte jamais, donc les PV du tireur ne bougent pas et
+ * `degatsDUnTir` garde son ratio de santé à 1 000 ‰ — sans quoi la mécanique
+ * « plus une unité est blessée, moins elle tape fort » (lot 2A) ferait diverger
+ * les deux combats par un second canal.
+ */
+function scene({ cible, voisines, avecModule, tireur = 'perceurs', colonneTireur = 5 }) {
+  return creerCombat({
+    niveau: 1,
+    obstacles: [],
+    // Loin de tout : il empêche seulement le combat de s'arrêter faute de
+    // bâtiment debout. Aucune de ses cases ne touche la cible.
+    batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
+    defenseurs: [cible, ...voisines].map((d) => ({ ...d, niveau: 1 })),
+    vagues: [[{ id: tireur, colonne: colonneTireur, rangee: 2, niveau: 1 }]],
+    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['tirDeBarrage'] : [] },
+  });
+}
+
+/** Les PV perdus par chaque défenseur au bout d'UN tick, par case. */
+function pertesAuPremierTick(etat) {
+  const avant = new Map();
+  for (const e of etat.entites) {
+    if (e.camp !== 'defense') continue;
+    avant.set(`${caseDepuisMilli(e.rangeeMilli)},${e.colonne}`, e.pvMilli);
+  }
+  tick(etat);
+  const pertes = new Map();
+  for (const e of etat.entites) {
+    if (e.camp !== 'defense') continue;
+    const cle = `${caseDepuisMilli(e.rangeeMilli)},${e.colonne}`;
+    pertes.set(cle, avant.get(cle) - e.pvMilli);
+  }
+  return pertes;
+}
+
+test('MODULES-A T1 — le barrage frappe les VOISINES de la cible, et elles seules', () => {
+  // Géométrie, tireur en (2,5) :
+  //   (3,5) la cible        — la plus proche, donc élue par le ciblage
+  //   (3,4) voisine         — Tchebychev 1 de la CIBLE            → touchée
+  //   (3,7) hors de portée  — Tchebychev 2 en colonne             → intacte
+  //   (5,5) hors de portée  — Tchebychev 2 en rangée              → intacte
+  const etat = scene({
+    cible: { id: 'merlon', rangee: 3, colonne: 5 },
+    voisines: [
+      { id: 'merlon', rangee: 3, colonne: 4 },
+      { id: 'merlon', rangee: 3, colonne: 7 },
+      { id: 'merlon', rangee: 5, colonne: 5 },
+    ],
+    avecModule: true,
+  });
+  const pertes = pertesAuPremierTick(etat);
+  // ⚠ APRÈS LE TICK : `cibleIndice` est posé par l'étape 3, il est encore nul
+  // au tick 0. La cible élue est celle sur laquelle le tir direct a porté.
+  const vise = etat.entites.find((e) => e.camp === 'attaque').cibleIndice;
+  assert.equal(`${caseDepuisMilli(etat.entites[vise].rangeeMilli)},${etat.entites[vise].colonne}`,
+    '3,5', 'montage : le ciblage n\'a pas élu la case attendue');
+  const directe = pertes.get('3,5');
+  assert.ok(directe > 0, 'montage sans mordant : le tir direct ne retire rien');
+  // Les quatre murs sont identiques et à pleine vie : `degatsContre` leur rend
+  // la même valeur, et le barrage en reverse 30 %, un seul `floor`.
+  assert.equal(pertes.get('3,4'), Math.floor((directe * 30) / 100));
+  assert.equal(pertes.get('3,7'), 0, 'une case à deux colonnes a été touchée');
+  assert.equal(pertes.get('5,5'), 0, 'une case à deux rangées a été touchée');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : un rayon de 2. Les deux dernières cases
+  // perdraient des PV. Un rayon de 0 le ferait tomber aussi, par la deuxième
+  // assertion. Le contre-cas « sans le module » est ici, même géométrie.
+  const sans = pertesAuPremierTick(scene({
+    cible: { id: 'merlon', rangee: 3, colonne: 5 },
+    voisines: [{ id: 'merlon', rangee: 3, colonne: 4 }],
+    avecModule: false,
+  }));
+  assert.equal(sans.get('3,5'), directe, 'le tir direct doit être le même des deux côtés');
+  assert.equal(sans.get('3,4'), 0, 'sans le module, la voisine ne doit rien perdre');
+
+  // ⚠ « UNE STRUCTURE AMIE » N'EST PAS MONTABLE ICI, ET C'EST UN FAIT DU
+  // MOTEUR, pas un oubli : `creerCombat` range TOUS les défenseurs et TOUS les
+  // bâtiments dans le camp `defense`. Un attaquant n'a donc aucune structure
+  // alliée sur la grille. Le filtre de camp du barrage est éprouvé là où il
+  // mord vraiment — en défense, T4 ci-dessous.
+  assert.equal(etat.entites.filter((e) => e.camp === 'attaque' && e.genre !== 'unite').length, 0);
+});
+
+test('MODULES-A T2 — le barrage recalcule la COLONNE, il ne reverse pas la cible', () => {
+  // Les Grenadiers font 5 à l'infanterie et 25 à la structure (`data/combat.js`).
+  // Ils visent une escouade et un mur est voisin :
+  //   lecture naïve   → floor(5 000 × 30 / 100) = 1 500 milli-PV
+  //   lecture juste   → floor(25 000 × 30 / 100) = 7 500 milli-PV
+  // Les deux nombres diffèrent d'un facteur 5, et l'assertion dit lequel a été lu.
+  //
+  // ⚠ ET LA SECONDE ESCOUADE ÉPROUVE LE FILTRE DE GENRE : « les structures
+  // voisines », pas les unités. Elle est adverse, à Tchebychev 1 de la cible,
+  // et elle ne doit rien perdre du barrage.
+  const etat = scene({
+    cible: { id: 'meute', rangee: 3, colonne: 5 },
+    voisines: [
+      { id: 'merlon', rangee: 3, colonne: 4 },
+      { id: 'meute', rangee: 3, colonne: 6 },
+    ],
+    avecModule: true,
+  });
+  const pertes = pertesAuPremierTick(etat);
+  const surLEscouade = pertes.get('3,5');
+  const surLeMur = pertes.get('3,4');
+  assert.equal(surLEscouade, 5000, 'montage : la colonne infanterie des Grenadiers a changé');
+  assert.equal(surLeMur, 7500,
+    `le barrage a lu la colonne de la CIBLE et non celle du mur : ${surLeMur}`);
+  assert.ok(surLeMur > surLEscouade,
+    'montage sans mordant : les deux colonnes doivent différer pour que ce test prouve quelque chose');
+  assert.notEqual(surLeMur, Math.floor((surLEscouade * 30) / 100),
+    'la lecture naïve et la lecture juste donnent le même nombre — le montage ne sépare rien');
+  assert.equal(pertes.get('3,6'), 0,
+    'une UNITÉ voisine a pris le barrage — il ne vise que les structures');
+
+  // Et la contre-épreuve du montage : sans le module, le mur ET l'escouade
+  // voisine sont intacts, la cible seule encaisse.
+  const sans = pertesAuPremierTick(scene({
+    cible: { id: 'meute', rangee: 3, colonne: 5 },
+    voisines: [
+      { id: 'merlon', rangee: 3, colonne: 4 },
+      { id: 'meute', rangee: 3, colonne: 6 },
+    ],
+    avecModule: false,
+  }));
+  assert.equal(sans.get('3,5'), surLEscouade);
+  assert.equal(sans.get('3,4'), 0);
+  assert.equal(sans.get('3,6'), 0);
+});
+
+test('MODULES-A T3 — le barrage ne coûte pas une seule munition de plus', () => {
+  // Deux combats identiques, un seul drapeau de différence, la réserve du
+  // tireur relevée à CHAQUE tick.
+  const reserves = (avecModule) => {
+    const etat = scene({
+      cible: { id: 'merlon', rangee: 3, colonne: 5 },
+      voisines: [
+        { id: 'merlon', rangee: 3, colonne: 4 },
+        { id: 'merlon', rangee: 3, colonne: 6 },
+      ],
+      avecModule,
+    });
+    const tireur = etat.entites.find((e) => e.camp === 'attaque');
+    const serie = [tireur.reserve];
+    for (let t = 0; t < 40 && !etat.termine; t += 1) {
+      tick(etat);
+      serie.push(tireur.reserve);
+    }
+    return { serie, etat };
+  };
+  const avec = reserves(true);
+  const sans = reserves(false);
+  assert.deepEqual(avec.serie, sans.serie, 'le barrage a consommé de la réserve');
+  assert.ok(avec.serie[0] > avec.serie.at(-1), 'montage sans mordant : la réserve n\'a pas bougé');
+
+  // ⚠ SANS CE CONTRE-CAS, LE TEST PASSERAIT SUR UN BARRAGE INERTE. Les deux
+  // combats doivent diverger PAR AILLEURS — c'est là toute la mesure.
+  const pvVoisines = (etat) => etat.entites
+    .filter((e) => e.camp === 'defense' && e.colonne !== 5)
+    .reduce((s, e) => s + e.pvMilli, 0);
+  assert.ok(pvVoisines(avec.etat) < pvVoisines(sans.etat),
+    'les voisines n\'ont pas plus souffert avec le module : le barrage ne fait rien');
+});
+
+test('MODULES-A T4 — en DÉFENSE, le barrage n\'a rien à frapper', () => {
+  // Les Grenadiers portent le module des deux côtés, et le drapeau `cable` le
+  // refuse en défense (T9). Voici POURQUOI, mesuré : même en le forçant dans
+  // `modulesDebloques.joueur`, l'attaquant n'a ni structure ni bâtiment.
+  //
+  // ⚠ ET LE MÊME MONTAGE ÉPROUVE LE FILTRE DE CAMP, qui n'a nulle part ailleurs
+  // où mordre : le Grenadier défensif a un MUR ALLIÉ collé à sa cible. Sans le
+  // test `v.camp === e.camp`, ce mur-là prendrait le barrage de son propre
+  // camp. Aucun montage OFFENSIF ne peut le montrer — `creerCombat` range tous
+  // les défenseurs et tous les bâtiments dans le camp `defense`, si bien qu'un
+  // attaquant n'a jamais de structure alliée sur la grille.
+  //
+  // Géométrie : le Grenadier en (3,6) vise l'assaillant en (3,5) ; le mur ami
+  // est en (3,4), à Tchebychev 1 de cet assaillant.
+  const bataille = (avecModule) => {
+    const etat = creerCombat({
+      niveau: 1,
+      obstacles: [],
+      proprietaireDefense: 'joueur',
+      proprietaireAttaque: 'ouvrage',
+      batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
+      defenseurs: [
+        { id: 'perceurs', rangee: 3, colonne: 6, niveau: 1 },
+        { id: 'merlon', rangee: 3, colonne: 4, niveau: 1 },
+      ],
+      vagues: [[
+        { id: 'meute', colonne: 5, rangee: 3, niveau: 1 },
+        { id: 'ratisseur', colonne: 7, rangee: 2, niveau: 1 },
+      ]],
+      modulesDebloques: { joueur: avecModule ? ['tirDeBarrage'] : [], ouvrage: [] },
+    });
+    const serie = [];
+    const mur = [];
+    // La géométrie est relevée au PREMIER tick : passé quelques ticks les
+    // assaillants ont avancé, et celui que le Grenadier vise peut avoir changé.
+    let visee = null;
+    for (let t = 0; t < 30 && !etat.termine; t += 1) {
+      tick(etat);
+      serie.push(etat.entites.filter((e) => e.camp === 'attaque').map((e) => e.pvMilli).join(','));
+      mur.push(etat.entites.find((e) => e.id === 'merlon').pvMilli);
+      if (visee === null) {
+        const g = etat.entites.find((e) => e.id === 'perceurs' && e.camp === 'defense');
+        const c = g.cibleIndice === null ? null : etat.entites[g.cibleIndice];
+        visee = c === null ? null : {
+          camp: c.camp, colonne: c.colonne, rangee: caseDepuisMilli(c.rangeeMilli),
+        };
+      }
+    }
+    return { serie, mur, etat, visee };
+  };
+  const avec = bataille(true);
+  const sans = bataille(false);
+  assert.deepEqual(avec.serie, sans.serie,
+    'le barrage a mordu en défense — il ne devrait rien avoir à frapper');
+  assert.deepEqual(avec.mur, sans.mur,
+    'le mur ALLIÉ a encaissé le barrage de son propre camp');
+
+  // ⚠ MONTAGE FALSIFIABLE : sans ces trois lignes, un Grenadier qui ne tire
+  // jamais donnerait deux séries identiques et le test passerait à vide.
+  const grenadier = avec.etat.entites.find((e) => e.id === 'perceurs' && e.camp === 'defense');
+  assert.equal(grenadier.proprietaire, 'joueur');
+  assert.ok(avec.serie.some((l) => l !== avec.serie[0]),
+    'montage sans mordant : le Grenadier défensif n\'a blessé personne');
+  assert.equal(avec.visee?.camp, 'attaque', 'montage : le Grenadier ne vise pas un assaillant');
+  assert.ok(Math.abs(avec.visee.colonne - 4) <= 1 && Math.abs(avec.visee.rangee - 3) <= 1,
+    'montage sans mordant : le mur ami n\'est pas voisin de la cible du Grenadier');
+});
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-A — le Booster
+// ---------------------------------------------------------------------------
+
+/**
+ * Un Cuirassier qui traverse un champ d'obstacles, blessé en chemin.
+ *
+ * ⚠ LES OBSTACLES SONT LE CŒUR DU MONTAGE, PAS UN DÉCOR. Sans eux, un porteur
+ * boosté franchit la grille entière en 30 ticks — 18 rangées × 1 000 milli =
+ * exactement 30 × 600 — et la fenêtre ne tiendrait pas dans le terrain. Sous
+ * obstacle la vitesse tombe à 24, le boosté à 240, et les 30 ticks tiennent
+ * largement. Ils font en plus la seule mesure qui sépare « ×10 après la
+ * réduction d'obstacle » (240) de « ×10 avant » (600, la vitesse nominale
+ * boostée) et de « pas de boost » (24).
+ *
+ * ⚠ LE CUIRASSIER EST AU NIVEAU 20 ET SES BLESSEURS AU NIVEAU 1 : il doit
+ * survivre à toute la fenêtre pour qu'on puisse la mesurer, et être reblessé
+ * APRÈS elle pour qu'on puisse vérifier qu'il ne redéclenche pas.
+ */
+function courseAvecObstacles(avecModule) {
+  const obstacles = [];
+  for (let r = 4; r <= 17; r += 1) obstacles.push({ rangee: r, colonne: 5, type: 'infanterie' });
+  const etat = creerCombat({
+    niveau: 1,
+    obstacles,
+    batiments: [{ id: 'souche', rangee: 18, colonne: 1, niveau: 1 }],
+    defenseurs: [
+      // La Ronce blesse au passage — deux ticks de franchissement, rien de plus.
+      { id: 'ronce', rangee: 3, colonne: 5, niveau: 1 },
+      // La Casemate reprend le relais bien plus tard, APRÈS la fenêtre.
+      { id: 'casemate', rangee: 10, colonne: 7, niveau: 1 },
+    ],
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['booster'] : [] },
+  });
+  const u = etat.entites.find((e) => e.camp === 'attaque');
+  let position = u.rangeeMilli;
+  let pv = u.pvMilli;
+  const releve = [];
+  for (let t = 1; t <= 90 && !etat.termine; t += 1) {
+    tick(etat);
+    releve.push({
+      tick: t,
+      avance: u.rangeeMilli - position,
+      blessee: u.pvMilli < pv,
+      sousEffet: u.effetsTemporises.length,
+      marques: [...u.modulesActifs],
+    });
+    position = u.rangeeMilli;
+    pv = u.pvMilli;
+  }
+  return { etat, u, releve };
+}
+
+/** Le même montage, sérialisé à CHAQUE tick — pour le déterminisme. */
+function courseTracee(avecModule) {
+  const obstacles = [];
+  for (let r = 4; r <= 17; r += 1) obstacles.push({ rangee: r, colonne: 5, type: 'infanterie' });
+  const etat = creerCombat({
+    niveau: 1,
+    obstacles,
+    batiments: [{ id: 'souche', rangee: 18, colonne: 1, niveau: 1 }],
+    defenseurs: [
+      { id: 'ronce', rangee: 3, colonne: 5, niveau: 1 },
+      { id: 'casemate', rangee: 10, colonne: 7, niveau: 1 },
+    ],
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['booster'] : [] },
+  });
+  const lignes = [serialiserEtat(etat)];
+  for (let t = 1; t <= 60 && !etat.termine; t += 1) {
+    tick(etat);
+    lignes.push(serialiserEtat(etat));
+  }
+  return { etat, lignes };
+}
+
+test('MODULES-A T5 — le Booster déclenche UNE fois, dure 30 ticks, et ne revient pas', () => {
+  const { u, releve } = courseAvecObstacles(true);
+  const boostes = releve.filter((l) => l.sousEffet > 0).map((l) => l.tick);
+  const premiere = releve.find((l) => l.blessee);
+
+  // La fenêtre commence AU TICK DE LA BLESSURE — pas au suivant. C'est ce que
+  // vaut le déclenchement lu APRÈS l'application des dégâts.
+  assert.ok(premiere !== undefined, 'montage sans mordant : le Cuirassier n\'a jamais été blessé');
+  assert.equal(boostes[0], premiere.tick, 'la fenêtre ne s\'ouvre pas au tick de la blessure');
+  assert.equal(boostes.length, 30, `fenêtre de ${boostes.length} ticks au lieu de 30`);
+  assert.deepEqual(boostes, Array.from({ length: 30 }, (_, i) => boostes[0] + i),
+    'la fenêtre n\'est pas d\'un seul tenant');
+
+  // Les vitesses, en milli-cases par tick. 60 nominal, 24 sous obstacle.
+  const avanceAu = (t) => releve.find((l) => l.tick === t).avance;
+  assert.equal(avanceAu(boostes[0] - 1), 60, 'montage : avant la blessure, vitesse nominale');
+  assert.equal(avanceAu(boostes[0]), 600, 'le tick de la blessure n\'est pas boosté');
+  // ⚠ L'ASSERTION QUI SÉPARE « ×10 APRÈS L'OBSTACLE » DE « ×10 AVANT » : sous
+  // obstacle la valeur boostée vaut 240, pas 600. Écrit dans l'autre ordre, un
+  // obstacle cesserait de ralentir une unité boostée.
+  assert.equal(avanceAu(boostes.at(-1)), 240, 'sous obstacle, le boost ne vaut pas 10 × 24');
+  assert.equal(avanceAu(boostes.at(-1) + 1), 24, 'la vitesse n\'est pas retombée après la fenêtre');
+  assert.equal(240, 24 * 10);
+
+  // Reblessée APRÈS la fenêtre : aucun second déclenchement.
+  const apres = releve.filter((l) => l.tick > boostes.at(-1));
+  assert.ok(apres.some((l) => l.blessee),
+    'montage sans mordant : rien ne reblesse le Cuirassier après la fenêtre');
+  assert.ok(apres.every((l) => l.sousEffet === 0), 'le Booster a redéclenché');
+  assert.deepEqual(u.modulesActifs, ['booster'],
+    'la marque doit RESTER après l\'expiration — c\'est elle qui interdit le second');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : une marque retirée à l'expiration. La
+  // dernière assertion tomberait, et l\'avant-dernière aussi. Le contre-cas
+  // sans module est ici : aucune fenêtre, vitesse nominale du début à la fin.
+  const sans = courseAvecObstacles(false);
+  assert.ok(sans.releve.every((l) => l.sousEffet === 0 && l.marques.length === 0));
+  assert.equal(sans.releve.find((l) => l.tick === boostes[0]).avance, 60);
+  assert.ok(sans.releve.some((l) => l.blessee), 'le contre-cas doit blesser lui aussi');
+});
+
+test('MODULES-A T6 — aucun porteur du Booster ne franchit 1 000 milli-cases par tick', () => {
+  // ⚠⚠ CE TEST NE PORTE PAS SUR CE LOT, ET C'EST VOULU. `peutAvancer` repose
+  // sur un invariant NON ÉCRIT dans les données : « aucune vitesse n'atteint
+  // 1 000 milli-cases par tick », c'est-à-dire que la case de destination ne
+  // saute jamais une rangée. Le Booster multiplie par 10. Ses deux porteurs
+  // d'aujourd'hui sont des escouades à 60 — 600, l'invariant tient. Il tiendra
+  // encore sous obstacle, plus lent. Mais il ne tient QUE PAR ACCIDENT : donner
+  // le Booster au Frappeur (240) donnerait 2 400, la destination sauterait une
+  // rangée, et une unité passerait À TRAVERS un mur sans qu'aucun autre test
+  // n'échoue. Ce test-ci tombe ce jour-là.
+  const porteurs = Object.entries(UNITES).filter(([, u]) => u.module === 'booster');
+  assert.equal(porteurs.length, 2, `${porteurs.length} porteurs du Booster, 2 attendus`);
+  assert.deepEqual(porteurs.map(([id]) => id).sort(), ['carapace', 'fouisseurs']);
+  for (const [id, u] of porteurs) {
+    assert.ok(u.vitesse * 10 < 1000,
+      `${id} : ${u.vitesse} × 10 = ${u.vitesse * 10} ≥ 1 000 — `
+      + 'la destination saute une rangée et `peutAvancer` ne protège plus rien');
+  }
+  // Le seuil est celui de `peutAvancer`, et la marge se dit : 600 sur 1 000.
+  assert.equal(Math.max(...porteurs.map(([, u]) => u.vitesse * 10)), 600);
+});
+
+test('MODULES-A T8 — le déterminisme tient avec le Booster actif', () => {
+  // Deux résolutions du MÊME montage, comparées au caractère près. Ce qui
+  // pourrait le rompre : un objet à clés non triables dans `effetsTemporises`,
+  // ou une valeur `undefined` que `JSON.stringify` avale.
+  //
+  // ⚠ LA TRACE EST PRISE À CHAQUE TICK, pas seulement à la fin : la fenêtre du
+  // Booster a expiré depuis longtemps au dernier tick, et un état final ne
+  // porterait plus aucun `finTick` à comparer.
+  const trace = (avecModule) => {
+    const { etat, lignes } = courseTracee(avecModule);
+    return { lignes, fin: serialiserEtat(etat) };
+  };
+  const a = trace(true);
+  const b = trace(true);
+  assert.deepEqual(a.lignes, b.lignes, 'deux résolutions identiques divergent tick à tick');
+  assert.equal(a.fin, b.fin, 'deux résolutions identiques divergent à l\'arrivée');
+
+  // ⚠ MONTAGE FALSIFIABLE : la trace doit CONTENIR l'effet, sinon elle ne
+  // compare rien de neuf.
+  assert.ok(a.lignes.some((l) => l.includes('"finTick"')),
+    'la trace ne porte aucun effet temporisé');
+  assert.ok(a.lignes.some((l) => l.includes('"booster"')),
+    'la trace ne porte aucune marque de module');
+  // Et elle diffère de celle du même montage sans le module : le Booster est
+  // bien dans l'état comparé.
+  assert.notDeepEqual(a.lignes, trace(false).lignes);
 });
 
 // ---------------------------------------------------------------------------

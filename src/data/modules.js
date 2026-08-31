@@ -22,7 +22,13 @@
 // Un module dont l'effet n'est pas écrit s'affiche avec sa description et son
 // coût, et ne s'achète pas : prendre les points du joueur contre rien serait un
 // vol. `sim/recherche.js` refuse l'achat par le code `effetNonCable`, et un
-// test le vérifie sur les treize qui ne le sont pas encore.
+// test le vérifie sur toutes les lignes qui ne le sont pas encore.
+//
+// ⚠⚠ ET IL EST PAR BRANCHE — `{ offense, defense }` — DEPUIS LE LOT MODULES-A.
+// Une même pièce porte souvent un module de chaque côté de la grille, et un
+// effet peut être écrit d'un côté et vide de sens de l'autre : le Tir de
+// barrage frappe les structures voisines de la cible, or l'attaquant n'en a
+// aucune. Voir `moduleEstCable` en bas de fichier.
 //
 // ⚠ IL N'Y A PAS DE `fumigene`, ET CE N'EST PAS UN OUBLI. Arbitrage d'Ethan du
 // 30/08 : un seul module, nommé `flashbang`. Le « fumigène » du classeur de
@@ -32,30 +38,39 @@
 export const MODULES = {
   flashbang: {
     libelle: 'Flashbang',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'désactive une infanterie à portée pendant 5 s, une seule fois '
       + 'par raid, effet −20 % sur une unité de niveau n+1',
   },
   emp: {
     libelle: 'EMP',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'désactive un véhicule à portée pendant 5 s, une seule fois par '
       + 'raid, effet −20 % sur une unité de niveau n+1',
   },
   tirDeBarrage: {
     libelle: 'Tir de barrage',
-    cable: false,
+    // ⚠ CÂBLÉ EN OFFENSE SEULEMENT, ET C'EST UNE DÉCISION, PAS UN OUBLI. Les
+    // Perceurs portent ce module des deux côtés (`data/combat.js`), mais en
+    // DÉFENSE l'attaquant n'a ni structure ni bâtiment sur la grille : l'effet
+    // serait rigoureusement nul, et vendre 200 000 000 de points contre rien
+    // est exactement ce que ce drapeau existe pour empêcher.
+    cable: { offense: true, defense: false },
     description: 'inflige 30 % des dégâts sur les structures voisines',
   },
   booster: {
     libelle: 'Booster',
-    cable: false,
+    // ⚠ CÂBLÉ EN OFFENSE SEULEMENT. Ses deux porteurs — Sapeurs et Cuirassiers
+    // — n'ont aucun rôle défensif dans `data/combat.js`, et le moteur ne
+    // déplace de toute façon que le camp `attaque` : l'effet n'aurait aucun
+    // support de l'autre côté.
+    cable: { offense: true, defense: false },
     description: 'après avoir été blessée, vitesse de déplacement multipliée par '
       + '10 pendant 3 s, une seule fois par raid',
   },
   garnison: {
     libelle: 'Garnison',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'peut embarquer une infanterie dans le véhicule ; elle débarque '
       + 'derrière le véhicule s\'il a traversé la défense, ou s\'il est détruit — '
       + 'dans ce cas, pas de pénalité sur l\'infanterie',
@@ -64,69 +79,81 @@ export const MODULES = {
     libelle: 'Écraseur',
     // ⚠ LE SEUL CÂBLÉ, ET C'EST LE LOT RECHERCHE QUI L'A ÉCRIT. Voir
     // `forcerLesStructures` et `peutEcraser` dans `sim/combat.js`.
-    cable: true,
+    cable: { offense: true, defense: false },
     description: 'le véhicule peut forcer les structures défensives : il leur '
       + 'inflige automatiquement 10 % de dégâts par seconde. Masse ×2 contre '
       + 'l\'infanterie',
   },
   autoReparation: {
     libelle: 'Auto-réparation',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'répare automatiquement 20 % des PV manquants après un raid, '
       + 'quel que soit le QG ou le complexe de défense',
   },
   bouclier: {
     libelle: 'Bouclier',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'encaisse tous les dégâts subis par les alliés sous le bouclier, '
       + 'rayon 2,5 ; le bouclier a des PV équivalents à 100 % des siens',
   },
   camouflage: {
     libelle: 'Camouflage',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'invisible pour la défense ; sort du camouflage si une cible de '
       + 'prédilection est à portée',
   },
   munitionSpeciale: {
     libelle: 'Munition spéciale',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: '+0,2 sur la matrice de la cible de prédilection',
   },
   volDeVie: {
     libelle: 'Vol de vie',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'convertit 20 % des dégâts infligés en PV',
   },
   rayonMiniMoinsUn: {
     libelle: 'Rayon minimum −1',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: 'rayon minimum réduit de 1',
   },
   pvPlusVingt: {
     libelle: 'PV +20 %',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: '20 % de PV supplémentaires',
   },
   rayonPlusUn: {
     libelle: 'Rayon +1',
-    cable: false,
+    cable: { offense: false, defense: false },
     description: '1 rayon d\'attaque supplémentaire',
   },
 };
 
 /**
- * L'effet de ce module est-il écrit dans le moteur ?
+ * L'effet de ce module est-il écrit dans le moteur, DE CE CÔTÉ-LÀ de la grille ?
  *
- * ⚠ ELLE LÈVE SUR UN NOM INCONNU, elle ne rend pas `false`. Un module absent de
- * la table est un fait de PROGRAMME — `test/donnees.test.js` croise déjà les
- * deux tables dans les deux sens — et répondre « pas câblé » masquerait une
- * faute de frappe sous un refus d'achat parfaitement plausible.
+ * ⚠⚠ LE DRAPEAU EST PAR BRANCHE DEPUIS LE LOT MODULES-A, et c'est le Tir de
+ * barrage qui l'a imposé. Les Perceurs le portent en offense ET en défense ;
+ * son effet frappe les structures voisines de la cible, et l'attaquant n'en a
+ * aucune sur la grille. Un drapeau unique aurait vendu le module défensif
+ * 200 000 000 de points contre un effet rigoureusement nul.
+ *
+ * ⚠ ELLE LÈVE SUR UN NOM INCONNU **ET SUR UNE BRANCHE INCONNUE**, elle ne rend
+ * pas `false`. Un module absent de la table est un fait de PROGRAMME —
+ * `test/donnees.test.js` croise déjà les deux tables dans les deux sens — et
+ * répondre « pas câblé » masquerait une faute de frappe sous un refus d'achat
+ * parfaitement plausible. Une branche mal orthographiée ferait exactement la
+ * même chose, en pire : elle refuserait TOUT achat de module.
  *
  * @param {string} nom clé de `MODULES`
+ * @param {'offense'|'defense'} branche côté de la grille
  * @returns {boolean}
  */
-export function moduleEstCable(nom) {
+export function moduleEstCable(nom, branche) {
   const ligne = MODULES[nom];
   if (ligne === undefined) throw new RangeError(`modules : module inconnu « ${nom} »`);
-  return ligne.cable === true;
+  if (!Object.hasOwn(ligne.cable, branche)) {
+    throw new RangeError(`modules : branche inconnue « ${branche} »`);
+  }
+  return ligne.cable[branche] === true;
 }

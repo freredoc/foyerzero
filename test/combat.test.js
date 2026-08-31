@@ -971,16 +971,54 @@ test('T15 — chacun des cas de refus lève, en nommant l\'entité fautive', () 
 // Contrôles de cohérence de l'API
 // ---------------------------------------------------------------------------
 
-test('§11 — l\'état porte dès 2A les champs que le lot 2C remplira', () => {
+test('§11 — `modulesActifs` et `effetsTemporises` ne se remplissent QUE sous module câblé', () => {
+  // ⚠⚠ RÉÉCRIT AU LOT MODULES-A, ET C'EST UNE BORNE PLUS FORTE, PAS PLUS
+  // FAIBLE. Les quatre assertions d'origine exigeaient que ces deux champs
+  // restent VIDES pour toute entité, avant et après 200 ticks — « les modules
+  // restent inertes en 2A ». Ils ne le sont plus : le Booster est le premier
+  // module à les employer. L'intention est gardée en la SÉPARANT en deux —
+  // vides tant qu'aucun module câblé n'est en jeu, remplis quand il y en a un.
+  // Un test qui n'aurait gardé que la première moitié passerait encore
+  // aujourd'hui, et ne prouverait plus rien du second usage.
   const etat = creerCombat(montageRiche());
   for (const e of etat.entites) {
-    assert.deepEqual(e.modulesActifs, [], `${e.id} : modulesActifs doit exister et rester vide`);
-    assert.deepEqual(e.effetsTemporises, [], `${e.id} : effetsTemporises doit exister et rester vide`);
+    assert.deepEqual(e.modulesActifs, [], `${e.id} : modulesActifs doit exister et partir vide`);
+    assert.deepEqual(e.effetsTemporises, [], `${e.id} : effetsTemporises doit exister et partir vide`);
   }
+  // `montageRiche` ne débloque AUCUN module côté joueur — l'Ouvrage y a
+  // `pvPlusVingt` et `munitionSpeciale`, tous deux non câblés.
   jouer(etat, 200);
   for (const e of etat.entites) {
-    assert.deepEqual(e.modulesActifs, [], 'les modules restent inertes en 2A');
-    assert.deepEqual(e.effetsTemporises, [], 'les effets temporisés restent inertes en 2A');
+    assert.deepEqual(e.modulesActifs, [], `${e.id} : aucun module câblé, rien à marquer`);
+    assert.deepEqual(e.effetsTemporises, [], `${e.id} : aucun module câblé, aucun effet`);
+  }
+
+  // Et le contre-cas, sans lequel la moitié haute passerait sur un moteur qui
+  // n'écrit JAMAIS dans ces deux champs : un Cuirassier à Booster, blessé au
+  // passage d'une Ronce.
+  const boostee = creerCombat({
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 18, colonne: 1, niveau: 1 }],
+    defenseurs: [{ id: 'ronce', rangee: 3, colonne: 5, niveau: 1 }],
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: ['booster'] },
+  });
+  const cuirassier = entite(boostee, parId('carapace'));
+  jouer(boostee, 25);
+  assert.deepEqual(cuirassier.modulesActifs, ['booster'], 'le Booster n\'a pas marqué son porteur');
+  assert.equal(cuirassier.effetsTemporises.length, 1, 'le Booster n\'a posé aucun effet');
+  const effet = cuirassier.effetsTemporises[0];
+  // ⚠ QUE DES CHAÎNES ET DES ENTIERS : `serialiserEtat` trie les clés et
+  // compare le tout ; une valeur non triable y romprait le déterminisme.
+  assert.deepEqual(Object.keys(effet).sort(), ['finTick', 'nom']);
+  assert.equal(typeof effet.nom, 'string');
+  assert.ok(Number.isInteger(effet.finTick));
+  // La Ronce ne blesse pas les autres : eux restent vides.
+  for (const e of boostee.entites) {
+    if (e === cuirassier) continue;
+    assert.deepEqual(e.modulesActifs, [], `${e.id} : marqué sans porter de module câblé`);
+    assert.deepEqual(e.effetsTemporises, [], `${e.id} : effet posé sans module câblé`);
   }
 });
 
