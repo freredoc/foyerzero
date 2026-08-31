@@ -1279,7 +1279,7 @@ function tirDeBarrage(etat, e, p, cible, ajouter) {
     if (Math.abs(v.colonne - cible.colonne) > 1) continue;
     // Un seul `floor`, sur le produit — comme partout ailleurs dans ce moteur.
     const degats = Math.floor((degatsContre(etat, e, p, v) * BARRAGE_PCT) / 100);
-    if (degats > 0) ajouter(v.indice, degats);
+    if (degats > 0) ajouter(v.indice, degats, e.indice);
   }
 }
 
@@ -1287,12 +1287,22 @@ function tirDeBarrage(etat, e, p, cible, ajouter) {
  * 4. Tir. Les dégâts sont calculés sur l'état de DÉBUT de tick et accumulés
  * dans un tampon : le tir est simultané, l'ordre d'itération ne peut pas
  * influer. Le franchissement des barrières est compté ici, du même tampon.
- * @returns {Map<number, number>} indice d'entité → dégâts milli-PV cumulés.
+ *
+ * ⚠ LE TAMPON GARDE LA TRACE DU TIREUR, et pas seulement le total. Le Vol de
+ * vie rend au TIREUR une part de ce que la cible a ENCAISSÉ ; un total anonyme
+ * par cible ne dit pas à qui rendre. Chaque coup est donc rangé à part. Le
+ * total par cible reste la somme des coups, dans l'ordre d'insertion, qui suit
+ * `etat.entites` : la somme est exacte, entière, et l'ordre ne peut pas varier.
+ *
+ * @returns {Map<number, Array<{tireur: number, degats: number}>>} indice de
+ *   cible → les coups qu'elle prend ce tick, en milli-PV.
  */
 function tir(etat) {
   const tampon = new Map();
-  const ajouter = (indice, degats) => {
-    tampon.set(indice, (tampon.get(indice) ?? 0) + degats);
+  const ajouter = (indice, degats, tireur) => {
+    const coups = tampon.get(indice);
+    if (coups === undefined) tampon.set(indice, [{ tireur, degats }]);
+    else coups.push({ tireur, degats });
   };
 
   for (const e of etat.entites) {
@@ -1322,7 +1332,7 @@ function tir(etat) {
     // test ne peut plus mordre, et il vaut comme énoncé de l'invariant.
     const degats = degatsContre(etat, e, p, cible);
     if (degats === 0) continue;
-    ajouter(e.cibleIndice, degats);
+    ajouter(e.cibleIndice, degats, e.indice);
     e.aTire = true;
     tirDeBarrage(etat, e, p, cible, ajouter);
   }
@@ -1342,6 +1352,11 @@ function tir(etat) {
       if (!estActive(e) || e.camp !== 'attaque') continue;
       const b = barrieres.get(cleCase(caseDepuisMilli(e.rangeeMilli), e.colonne));
       if (b === undefined) continue;
+      // ⚠ LE TIREUR EST LA BARRIÈRE. Le franchissement passe par le même
+      // tampon que les tirs ; sans indice, cette ligne serait la seule sans
+      // origine et le Vol de vie devrait la traiter à part. Aucune barrière ne
+      // porte le module aujourd'hui — la ligne est correcte, pas seulement
+      // commode.
       ajouter(
         e.indice,
         degatsDeFranchissement(
@@ -1349,6 +1364,7 @@ function tir(etat) {
           b.pvMilli,
           b.pvMaxMilli,
         ),
+        b.indice,
       );
     }
   }
@@ -1392,11 +1408,14 @@ function appliquerDegats(etat, tampon) {
   // recouvrement, c'est le plus petit indice qui encaisse d'abord.
   const boucliers = etat.entites.filter((b) => b.bouclierMilli > 0);
 
-  for (const [indice, degats] of entrees) {
+  for (const [indice, coups] of entrees) {
     const e = etat.entites[indice];
     if (!estActive(e)) continue;
 
-    let reste = degats;
+    // Le total encaissable par la cible, coups compris — la somme est entière
+    // et l'ordre d'insertion, donc elle ne peut pas varier d'une passe à l'autre.
+    let reste = 0;
+    for (const coup of coups) reste += coup.degats;
     for (const b of boucliers) {
       if (reste <= 0) break;
       // Un bouclier vidé plus tôt dans CE tick ne protège plus.
