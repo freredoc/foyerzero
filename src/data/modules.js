@@ -99,7 +99,12 @@ export const MODULES = {
   },
   bouclier: {
     libelle: 'Bouclier',
-    cable: { offense: false, defense: false },
+    // ⚠ CÂBLÉ EN OFFENSE SEULEMENT, ET C'EST UN CONSTAT, PAS UN ARBITRAGE :
+    // l'Enclume est le SEUL porteur (`data/combat.js`), son `module` vaut
+    // `bouclier` et son `moduleOuvrage` vaut `volDeVie`. Aucun profil ne porte
+    // `bouclier` côté défense — le câbler là ouvrirait une ligne d'achat sans
+    // aucune pièce derrière.
+    cable: { offense: true, defense: false },
     description: 'encaisse tous les dégâts subis par les alliés sous le bouclier, '
       + 'rayon 2,5 ; le bouclier a des PV équivalents à 100 % des siens',
   },

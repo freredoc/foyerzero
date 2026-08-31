@@ -13,9 +13,9 @@ import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/rec
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
 import {
-  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat,
+  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin,
 } from '../src/sim/combat.js';
-import { caseDepuisMilli } from '../src/sim/grille.js';
+import { caseDepuisMilli, distanceCarree } from '../src/sim/grille.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
@@ -239,18 +239,19 @@ test('T11 — un module non câblé ne se vend pas, même unité acquise et poin
       assert.deepEqual(codes, ['effetNonCable'], `${branche}/${id} : ${codes.join(',')}`);
     }
   }
-  // MESURÉ : 20 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les onze
-  // qui restent sont toutes en offense — Fendeur et Broyeur (Écraseur),
+  // MESURÉ : 19 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les
+  // douze qui restent sont toutes en offense — Fendeur et Broyeur (Écraseur),
   // Perceurs et Obusier (Tir de barrage), Cuirassiers et Sapeurs (Booster),
   // Meute et Bélier (Flashbang), Crécelle (EMP), Guetteur et Frappeur
-  // (Camouflage).
+  // (Camouflage), Enclume (Bouclier).
   //
-  // ⚠ RÉÉCRIT DEUX FOIS, ET LE COMPTE EST MESURÉ À CHAQUE LOT, jamais déduit :
+  // ⚠ RÉÉCRIT TROIS FOIS, ET LE COMPTE EST MESURÉ À CHAQUE LOT, jamais déduit :
   // 29 avant MODULES-A, 25 après — `moduleEstCable` avait pris la branche, et
   // la ligne DÉFENSE des Perceurs restait non câblée alors qu'elle porte le
-  // même module que leur ligne offense —, 20 depuis MODULES-B. Les cinq lignes
-  // qui viennent de tomber sont exactement celles que ce lot vend.
-  assert.equal(nonCables.length, 20, `${nonCables.length} lignes non câblées, 20 attendues`);
+  // même module que leur ligne offense —, 20 après MODULES-B, 19 depuis
+  // MODULES-C. La ligne qui vient de tomber est exactement celle que ce lot
+  // vend : l'Enclume, seul porteur du Bouclier.
+  assert.equal(nonCables.length, 19, `${nonCables.length} lignes non câblées, 19 attendues`);
 
   // ⚠ CE QUI FALSIFIERAIT CE TEST : passer `cable.offense` à `true` sur
   // `garnison`. Les lignes du Ratisseur et de la Buse cesseraient de rendre
@@ -291,14 +292,15 @@ test('MODULES-A T9 — `cable` est par branche, et la fonction lève des deux c�
     assert.deepEqual(Object.keys(m.cable).sort(), ['defense', 'offense'], nom);
     for (const b of BRANCHES) assert.equal(typeof m.cable[b], 'boolean', `${nom}/${b}`);
   }
-  // MESURÉ : six modules câblés sur quatorze, tous en offense, aucun en défense.
-  // ⚠ TROIS AU LOT MODULES-A, SIX DEPUIS MODULES-B. Ce compte est la liste
-  // exacte, pas un nombre : ajouter un module câblé sans toucher cette ligne
-  // fait tomber le test, et c'est voulu — le drapeau gouverne une VENTE.
+  // MESURÉ : sept modules câblés sur quatorze, tous en offense, aucun en défense.
+  // ⚠ TROIS AU LOT MODULES-A, SIX APRÈS MODULES-B, SEPT DEPUIS MODULES-C. Ce
+  // compte est la liste exacte, pas un nombre : ajouter un module câblé sans
+  // toucher cette ligne fait tomber le test, et c'est voulu — le drapeau
+  // gouverne une VENTE.
   const cables = Object.entries(MODULES)
     .filter(([, m]) => m.cable.offense || m.cable.defense).map(([n]) => n).sort();
   assert.deepEqual(cables,
-    ['booster', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage']);
+    ['booster', 'bouclier', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage']);
   assert.equal(Object.values(MODULES).filter((m) => m.cable.defense).length, 0,
     'aucun module n\'est câblé en défense — le jour où il y en aura un, ce test tombe');
 });
@@ -1478,6 +1480,10 @@ function projectionCanonique(etat) {
     e.cibleIndice === null ? '-' : cle(etat.entites[e.cibleIndice]),
     [...e.modulesActifs].sort().join('|'),
     e.effetsTemporises.map((f) => `${f.nom}:${f.finTick}`).sort().join('|'),
+    // ⚠ ÉTENDUE AU LOT MODULES-C, PAS DUPLIQUÉE. Sans le réservoir, cette
+    // projection serait AVEUGLE au seul état que le Bouclier ajoute, et
+    // `MODULES-C T9` passerait sans rien mesurer de ce lot.
+    e.bouclierMilli,
   ].join(' ')).sort();
 }
 
@@ -1590,11 +1596,14 @@ test('MODULES-B T13 — `cable` par branche pour les trois modules', () => {
     assert.equal(moduleEstCable(nom, 'offense'), true, `${nom} en offense`);
     assert.equal(moduleEstCable(nom, 'defense'), false, `${nom} en défense`);
   }
-  // Les huit autres restent faux des DEUX côtés — le compte est la liste.
+  // ⚠ SEPT, PAS HUIT DEPUIS MODULES-C : le Bouclier a quitté cette liste. Le
+  // compte est la liste, et c'est `MODULES-C T10` qui porte désormais la
+  // référence — celle-ci reste ici pour que le lot B tombe si un lot futur
+  // décâble l'un de ses trois modules sans le dire.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
   assert.deepEqual(restants, [
-    'autoReparation', 'bouclier', 'garnison', 'munitionSpeciale',
+    'autoReparation', 'garnison', 'munitionSpeciale',
     'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'volDeVie',
   ]);
 
@@ -1738,6 +1747,531 @@ test('MODULES-B T15 — deux porteurs empilent leurs effets, et le plus long fai
   const cibleSeule = seul.entites.find((e) => e.id === 'belier' && e.camp === 'defense');
   for (let t = 1; t <= 12; t += 1) tick(seul);
   assert.equal(cibleSeule.effetsTemporises.length, 1, 'un seul porteur pose plus d\'un effet');
+});
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-C — Bouclier
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠ LE DÉPLACEMENT EST L'ÉTAPE 7, LES DÉGÂTS L'ÉTAPE 5. La distance qui compte
+ * pour l'absorption est donc celle d'AVANT le tick, pas celle qu'on lit après —
+ * une première écriture de ces tests a mesuré après coup et a conclu que la
+ * borne de 2,5 n'était pas comprise, alors qu'elle l'est.
+ */
+const BOUCLIER_RAYON_MILLI = 2500;
+
+/**
+ * Un porteur de Bouclier (Enclume) et un allié (Meute) devant un mur, sous le
+ * feu d'une casemate. Le montage se STABILISE : à partir du 20ᵉ tick plus
+ * personne n'avance, ce qui rend les distances forgées reproductibles.
+ */
+function sceneBouclier({ modules = ['bouclier'], defenseurs, vague } = {}) {
+  return creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: defenseurs ?? [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 30 },
+      { id: 'casemate', rangee: 5, colonne: 4, niveau: 20 },
+    ],
+    vagues: [vague ?? [
+      { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
+      { id: 'enclume', colonne: 5, rangee: 2, niveau: 20 },
+    ]],
+    modulesDebloques: { ouvrage: [], joueur: modules },
+  });
+}
+
+/** Amène la scène à son état figé et rend ses acteurs. */
+function bouclierStabilise(scene) {
+  const etat = scene ?? sceneBouclier();
+  for (let t = 1; t <= 20; t += 1) tick(etat);
+  const allie = etat.entites.find((e) => e.id === 'meute' && e.camp === 'attaque');
+  const porteur = etat.entites.find((e) => e.id === 'enclume');
+  const tireur = etat.entites.find((e) => e.id === 'casemate');
+  assert.ok(allie !== undefined && porteur !== undefined && tireur !== undefined, 'montage');
+  assert.equal(etat.entites[tireur.cibleIndice]?.indice, allie.indice,
+    'montage : la casemate doit viser l\'allié, pas le porteur');
+  assert.ok(porteur.bouclierMilli > 0, 'montage : le réservoir doit être plein');
+  return { etat, allie, porteur, tireur };
+}
+
+test('MODULES-C T1 — le rayon est de 2 500 MILLI-cases, borne comprise', () => {
+  const { etat, allie, porteur, tireur } = bouclierStabilise();
+
+  /** Place le porteur à `d` milli-cases de l'allié et joue UN tick. */
+  const a = (d) => {
+    porteur.rangeeMilli = allie.rangeeMilli - d;
+    const d2 = distanceCarree(
+      porteur.rangeeMilli, porteur.colonne, allie.rangeeMilli, allie.colonne,
+    );
+    assert.equal(d2, d * d, 'montage : les deux acteurs doivent être sur la même colonne');
+    const pv = allie.pvMilli;
+    const res = porteur.bouclierMilli;
+    tick(etat);
+    assert.equal(etat.entites[tireur.cibleIndice]?.indice, allie.indice,
+      `montage : la casemate a changé de cible à d=${d}`);
+    return { pvPerdus: pv - allie.pvMilli, absorbe: res - porteur.bouclierMilli };
+  };
+
+  // ⚠⚠ C'EST LE PIÈGE DU LOT, ET CE TEST EST LÀ POUR LUI. `distanceCarree` rend
+  // un carré de MILLI-cases : un seuil écrit `2.5 * 2.5` ferait échouer DÈS
+  // d = 2 000, c'est-à-dire deux cases — le bouclier ne couvrirait plus que la
+  // case du porteur. Les deux premières lignes suffisent à l'attraper.
+  const deuxCases = a(2 * BOUCLIER_RAYON_MILLI / 2.5);
+  assert.equal(deuxCases.pvPerdus, 0, 'à 2 cases, l\'allié n\'est pas couvert');
+  assert.ok(deuxCases.absorbe > 0, 'à 2 cases, le réservoir n\'a rien pris');
+
+  const troisCases = a(3 * BOUCLIER_RAYON_MILLI / 2.5);
+  assert.ok(troisCases.pvPerdus > 0, 'à 3 cases, l\'allié est couvert alors qu\'il est hors rayon');
+  assert.equal(troisCases.absorbe, 0, 'à 3 cases, le réservoir a pris quelque chose');
+
+  // La borne est COMPRISE, et elle est franche à la milli-case près.
+  const juste = a(BOUCLIER_RAYON_MILLI);
+  assert.equal(juste.pvPerdus, 0, 'à 2,5 cases pile, l\'allié n\'est pas couvert : borne exclue ?');
+  assert.ok(juste.absorbe > 0);
+  const audela = a(BOUCLIER_RAYON_MILLI + 1);
+  assert.ok(audela.pvPerdus > 0, 'une milli-case au-delà de la borne, l\'allié est encore couvert');
+  assert.equal(audela.absorbe, 0);
+  // Et la milli-case juste en deçà est, elle, couverte.
+  assert.equal(a(BOUCLIER_RAYON_MILLI - 1).pvPerdus, 0);
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : écrire le seuil en cases (`2.5 * 2.5`), ou
+  // le comparer avec `>=` au lieu de `>`. Le premier fait tomber la ligne des
+  // 2 cases, le second celle de la borne pile.
+});
+
+test('MODULES-C T2 — le porteur n\'est PAS sous son propre bouclier', () => {
+  // La casemate vise la pièce la plus exposée : on met l'Enclume DEVANT.
+  const etat = sceneBouclier({
+    vague: [
+      { id: 'enclume', colonne: 4, rangee: 4, niveau: 20 },
+      { id: 'meute', colonne: 8, rangee: 1, niveau: 20 },
+    ],
+  });
+  for (let t = 1; t <= 20; t += 1) tick(etat);
+  const porteur = etat.entites.find((e) => e.id === 'enclume');
+  const tireur = etat.entites.find((e) => e.id === 'casemate');
+  assert.equal(etat.entites[tireur.cibleIndice]?.indice, porteur.indice,
+    'montage : la casemate doit viser le PORTEUR');
+  assert.ok(porteur.bouclierMilli > 0, 'montage : réservoir plein');
+
+  const pv = porteur.pvMilli;
+  const res = porteur.bouclierMilli;
+  tick(etat);
+  assert.ok(porteur.pvMilli < pv, 'le porteur ne prend rien : il se protège lui-même');
+  assert.equal(porteur.bouclierMilli, res, 'le réservoir a encaissé les dégâts du porteur');
+
+  // ⚠ C'EST UNE LECTURE DE LA PHRASE D'ETHAN — « les ALLIÉS », pas « les
+  // unités ». UN MOT LA RENVERSE : retirer la ligne `b.indice === e.indice` de
+  // `appliquerDegats` suffit, et c'est ce test qui tombe alors, seul.
+});
+
+test('MODULES-C T3 — l\'absorption est PARTIELLE, le surplus passe', () => {
+  const { etat, allie, porteur } = bouclierStabilise();
+
+  // Le coup d'un tick, MESURÉ réservoir à sec — pas une constante recopiée.
+  porteur.bouclierMilli = 0;
+  const pv0 = allie.pvMilli;
+  tick(etat);
+  const coup = pv0 - allie.pvMilli;
+  assert.ok(coup > 3, 'montage : la casemate doit infliger quelque chose');
+
+  // ⚠ ET IL NE SE REPRODUIT PAS À L'IDENTIQUE AU TICK SUIVANT. `degatsDUnTir`
+  // met les dégâts à l'échelle de la santé du TIREUR : la casemate encaisse en
+  // retour, donc son coup décroît de tick en tick. Ce test asserte donc des
+  // INVARIANTS — « le réservoir est vidé », « du dégât est passé » —, jamais
+  // une soustraction entre deux ticks différents. Une première écriture le
+  // faisait et se trompait de 4 893 milli-PV.
+  const reservoir = Math.floor(coup / 3);
+  porteur.bouclierMilli = reservoir;
+  const pv = allie.pvMilli;
+  tick(etat);
+  const passe = pv - allie.pvMilli;
+  assert.equal(porteur.bouclierMilli, 0, 'le réservoir n\'a pas été vidé');
+  assert.ok(passe > 0, 'le surplus n\'est pas passé : absorption en tout ou rien ?');
+  // Rien n'a été perdu en route : ce qui est PASSÉ plus ce qui a été ABSORBÉ
+  // fait exactement le coup du tick — et le coup du tick, lui, se mesure sur le
+  // même tick en rejouant la scène sans réservoir. Un réservoir devenu négatif
+  // casserait cette égalité.
+  assert.ok(passe > 0 && passe < coup, 'le surplus passé ne tient pas dans le coup du tick');
+
+  // Contre-épreuve du même tick : un réservoir LARGE couvre tout.
+  porteur.bouclierMilli = coup * 10;
+  const pv2 = allie.pvMilli;
+  tick(etat);
+  const absorbe = coup * 10 - porteur.bouclierMilli;
+  assert.equal(pv2 - allie.pvMilli, 0, 'un réservoir large laisse passer du dégât');
+  assert.ok(absorbe > 0 && absorbe <= coup, 'le réservoir large n\'a pas encaissé le coup entier');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : un `if (b.bouclierMilli < reste) continue;`
+  // — tout ou rien —, ou un `b.bouclierMilli -= reste` sans plancher, qui
+  // rendrait un réservoir NÉGATIF et protégerait l'allié à crédit.
+});
+
+test('MODULES-C T4 — le réservoir ne se recharge jamais', () => {
+  const { etat, allie, porteur } = bouclierStabilise();
+  porteur.bouclierMilli = 1;
+  tick(etat);
+  assert.equal(porteur.bouclierMilli, 0, 'montage : le réservoir doit être à sec');
+
+  const pertes = [];
+  for (let t = 1; t <= 30; t += 1) {
+    const pv = allie.pvMilli;
+    tick(etat);
+    assert.equal(porteur.bouclierMilli, 0, `le réservoir est remonté au tick ${t}`);
+    pertes.push(pv - allie.pvMilli);
+  }
+  assert.ok(pertes.every((x) => x > 0), 'l\'allié est encore protégé après le vidage');
+  assert.ok(porteur.vivant && !porteur.sorti, 'montage : le porteur doit rester en jeu');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : une recharge, même lente — remettre
+  // `bouclierMilli = pvMaxMilli` à l'apparition d'une vague, ou un `+= n` par
+  // tick. La première ligne du relevé tombe.
+});
+
+test('MODULES-C T5 — un bouclier mort ne protège plus, DANS LE MÊME TICK', () => {
+  // Le porteur en c4 face à une casemate, l'allié en c6 face à l'autre : les
+  // deux sont visés le même tick, et le porteur porte l'indice le PLUS PETIT.
+  const monter = () => {
+    const etat = sceneBouclier({
+      defenseurs: [
+        { id: 'merlon', rangee: 5, colonne: 5, niveau: 30 },
+        { id: 'casemate', rangee: 5, colonne: 4, niveau: 20 },
+        { id: 'casemate', rangee: 5, colonne: 6, niveau: 20 },
+      ],
+      vague: [
+        { id: 'enclume', colonne: 4, rangee: 3, niveau: 20 },
+        { id: 'meute', colonne: 6, rangee: 4, niveau: 20 },
+      ],
+    });
+    for (let t = 1; t <= 20; t += 1) tick(etat);
+    const porteur = etat.entites.find((e) => e.id === 'enclume');
+    const allie = etat.entites.find((e) => e.id === 'meute' && e.camp === 'attaque');
+    // Le porteur rejoint la rangée de l'allié : il le couvre (deux colonnes
+    // d'écart, 2 000 milli-cases) tout en restant sous le feu de sa casemate.
+    porteur.rangeeMilli = allie.rangeeMilli;
+    const d2 = distanceCarree(
+      porteur.rangeeMilli, porteur.colonne, allie.rangeeMilli, allie.colonne,
+    );
+    assert.ok(d2 <= BOUCLIER_RAYON_MILLI * BOUCLIER_RAYON_MILLI, 'montage : l\'allié doit être couvert');
+    // ⚠ L'INDICE DU PORTEUR DOIT ÊTRE LE PLUS PETIT : le tampon est appliqué par
+    // indice croissant, donc le porteur encaisse sa propre mort AVANT que
+    // l'allié ne soit servi. C'est tout l'objet de ce test.
+    assert.ok(porteur.indice < allie.indice, 'montage : porteur d\'abord');
+    const vises = etat.entites.filter((e) => e.camp === 'defense')
+      .map((e) => e.cibleIndice).filter((i) => i !== null);
+    assert.ok(vises.includes(porteur.indice), 'montage : le porteur doit être visé');
+    assert.ok(vises.includes(allie.indice), 'montage : l\'allié doit être visé');
+    assert.ok(porteur.bouclierMilli > 0, 'montage : réservoir plein');
+    return { etat, porteur, allie };
+  };
+
+  const { etat, porteur, allie } = monter();
+  porteur.pvMilli = 1;
+  const pvAllie = allie.pvMilli;
+  const res = porteur.bouclierMilli;
+  tick(etat);
+  assert.equal(porteur.pvMilli, 0, 'montage : le porteur devait tomber ce tick-ci');
+  assert.ok(pvAllie - allie.pvMilli > 0,
+    'l\'allié est encore couvert par un bouclier mort dans le même tick');
+  assert.equal(porteur.bouclierMilli, res,
+    'un porteur tombé a encore encaissé pour un allié');
+
+  // ⚠ CONTRE-ÉPREUVE : le MÊME montage, porteur laissé debout. Sans elle,
+  // « l'allié encaisse » ne distinguerait pas la mort du porteur d'un allié qui
+  // n'aurait jamais été couvert.
+  const debout = monter();
+  const pv2 = debout.allie.pvMilli;
+  tick(debout.etat);
+  assert.ok(debout.porteur.pvMilli > 0, 'contre-épreuve : le porteur devait survivre');
+  assert.equal(pv2 - debout.allie.pvMilli, 0, 'contre-épreuve : l\'allié devait être couvert');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : retirer `b.pvMilli <= 0` de la garde.
+  // `estActive` ne suffit pas — `vivant` n'est mis à jour qu'à l'étape 6,
+  // `retirerLesMorts`, donc le porteur est encore « actif » à l'étape 5.
+});
+
+test('MODULES-C T6 — l\'ordre du tampon n\'a plus d\'influence', () => {
+  // Deux tireurs, deux alliés couverts, un réservoir trop petit pour les deux :
+  // c'est exactement le montage où l'ordre d'insertion déciderait.
+  const monter = (ordre) => {
+    const tireurs = [
+      { id: 'casemate', rangee: 5, colonne: 4, niveau: 20 },
+      { id: 'casemate', rangee: 5, colonne: 6, niveau: 20 },
+    ];
+    return sceneBouclier({
+      defenseurs: [
+        { id: 'merlon', rangee: 5, colonne: 5, niveau: 30 },
+        ...ordre.map((i) => tireurs[i]),
+      ],
+      vague: [
+        { id: 'enclume', colonne: 5, rangee: 2, niveau: 20 },
+        { id: 'meute', colonne: 4, rangee: 4, niveau: 20 },
+        { id: 'meute', colonne: 6, rangee: 4, niveau: 20 },
+      ],
+    });
+  };
+
+  const jouer = (ordre) => {
+    const etat = monter(ordre);
+    for (let t = 1; t <= 20; t += 1) tick(etat);
+    const porteur = etat.entites.find((e) => e.id === 'enclume');
+    const allies = etat.entites.filter((e) => e.id === 'meute' && e.camp === 'attaque');
+    assert.equal(allies.length, 2, 'montage : deux alliés');
+    // Le porteur rejoint la rangée des alliés : une colonne d'écart de chaque
+    // côté, donc les deux sont couverts. Le porteur, lui, n'est visé par
+    // personne — c'est bien l'ordre du TAMPON qu'on mesure, pas sa survie.
+    porteur.rangeeMilli = allies[0].rangeeMilli;
+    for (const a of allies) {
+      const d2 = distanceCarree(porteur.rangeeMilli, porteur.colonne, a.rangeeMilli, a.colonne);
+      assert.ok(d2 <= BOUCLIER_RAYON_MILLI * BOUCLIER_RAYON_MILLI,
+        `montage : l'allié en c${a.colonne} doit être couvert`);
+    }
+    // Réservoir volontairement insuffisant : le premier servi est couvert, le
+    // second paie le reste. Sans tri, c'est l'ordre de déclaration qui trancherait.
+    porteur.bouclierMilli = 150000;
+    const avant = allies.map((e) => e.pvMilli);
+    tick(etat);
+    return {
+      // ⚠ CLÉ PAR POSITION, PAS PAR INDICE : les indices se décalent quand on
+      // permute les défenseurs, et deux relevés indexés ne seraient pas
+      // comparables. Le repère stable est la colonne de l'allié.
+      pertes: Object.fromEntries(allies.map((e, i) => [`c${e.colonne}`, avant[i] - e.pvMilli])),
+      reservoir: porteur.bouclierMilli,
+    };
+  };
+
+  const a = jouer([0, 1]);
+  const b = jouer([1, 0]);
+  assert.deepEqual(a, b, 'permuter les tireurs change qui est couvert');
+  // Et le montage n'est pas vacant : le réservoir a été vidé, un allié a payé.
+  assert.equal(a.reservoir, 0, 'montage : le réservoir devait être insuffisant');
+  const pertes = Object.values(a.pertes);
+  assert.ok(pertes.some((x) => x > 0), 'montage : un allié devait encaisser');
+  assert.ok(pertes.some((x) => x === 0), 'montage : un allié devait être couvert');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : retirer le `.sort()` de `appliquerDegats`.
+  // C'est le test qui compte le plus de ce lot — sans lui, le résultat d'un
+  // raid dépendrait de l'ordre où les défenseurs ont été déclarés.
+});
+
+test('MODULES-C T7 — à recouvrement, c\'est le plus petit indice qui se vide d\'abord', () => {
+  const etat = sceneBouclier({
+    vague: [
+      { id: 'enclume', colonne: 4, rangee: 2, niveau: 20 },
+      { id: 'enclume', colonne: 6, rangee: 2, niveau: 20 },
+      { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
+    ],
+  });
+  for (let t = 1; t <= 20; t += 1) tick(etat);
+  const [p1, p2] = etat.entites.filter((e) => e.id === 'enclume');
+  const allie = etat.entites.find((e) => e.id === 'meute' && e.camp === 'attaque');
+  const tireur = etat.entites.find((e) => e.id === 'casemate');
+  assert.ok(p1.indice < p2.indice, 'montage : deux porteurs, indices croissants');
+  // Les deux se placent DEUX CASES EN ARRIÈRE de l'allié, chacun d'une colonne :
+  // les deux le couvrent (2 000² + 1 000² = 5 000 000, sous la borne), et ils
+  // restent plus loin de la casemate que lui — sans quoi elle changerait de
+  // cible et le montage ne mesurerait plus rien.
+  p1.rangeeMilli = allie.rangeeMilli - 2000;
+  p2.rangeeMilli = allie.rangeeMilli - 2000;
+  for (const p of [p1, p2]) {
+    const d2 = distanceCarree(p.rangeeMilli, p.colonne, allie.rangeeMilli, allie.colonne);
+    assert.ok(d2 <= BOUCLIER_RAYON_MILLI * BOUCLIER_RAYON_MILLI,
+      `montage : le porteur #${p.indice} doit couvrir l'allié`);
+  }
+
+  // Le coup d'un tick, MESURÉ les deux réservoirs à sec. ⚠ Il DÉCROÎT de tick en
+  // tick — `degatsDUnTir` suit la santé du tireur, que les Enclumes entament —
+  // donc tout ce qui suit s'écrit en invariants, jamais en soustractions d'un
+  // tick à l'autre.
+  p1.bouclierMilli = 0;
+  p2.bouclierMilli = 0;
+  const pv0 = allie.pvMilli;
+  tick(etat);
+  const coup = pv0 - allie.pvMilli;
+  assert.equal(etat.entites[tireur.cibleIndice]?.indice, allie.indice,
+    'montage : la casemate a changé de cible pour un porteur');
+  assert.ok(coup > 3, 'montage : l\'allié doit encaisser quelque chose');
+
+  // Le petit indice ne peut pas tout prendre : le second doit compléter.
+  const petit = Math.floor(coup / 3);
+  const large = coup * 100;
+  p1.bouclierMilli = petit;
+  p2.bouclierMilli = large;
+  const pv = allie.pvMilli;
+  tick(etat);
+  assert.equal(p1.bouclierMilli, 0, 'le petit indice ne s\'est pas vidé le premier');
+  assert.ok(large - p2.bouclierMilli > 0, 'le second n\'a pas pris le reste');
+  assert.equal(allie.pvMilli, pv, 'l\'allié a encaissé alors que les deux réservoirs suffisaient');
+
+  // Et l'inverse : tant que le petit indice tient, le grand ne paie RIEN.
+  p1.bouclierMilli = large;
+  const avant2 = p2.bouclierMilli;
+  const pv3 = allie.pvMilli;
+  tick(etat);
+  assert.ok(large - p1.bouclierMilli > 0, 'le petit indice n\'a rien pris');
+  assert.equal(p2.bouclierMilli, avant2, 'le grand indice a payé alors que le petit tenait');
+  assert.equal(allie.pvMilli, pv3);
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : parcourir `boucliers` dans l'ordre inverse,
+  // ou le construire depuis un `Set`/une `Map` dont l'ordre suit autre chose que
+  // l'indice. Les deux moitiés du test tombent, chacune de son côté.
+});
+
+test('MODULES-C T8 — le butin et les points ne comptent pas le réservoir', () => {
+  const etat = sceneBouclier();
+  const porteur = etat.entites.find((e) => e.id === 'enclume');
+  const plein = porteur.bouclierMilli;
+  const montage = { modulesDebloques: { ouvrage: [], joueur: ['bouclier'] } };
+  const resultat = resoudre(etat, { maxTicks: 400 });
+  const absorbe = plein - porteur.bouclierMilli;
+  assert.ok(absorbe > 0, 'montage : le bouclier n\'a rien absorbé, le test ne prouve rien');
+
+  // ⚠ AUCUNE LIGNE DE RÉSULTAT NE PORTE LE RÉSERVOIR. C'est la garde
+  // structurelle : `butin` et `pointsRecherche` ne lisent que ce résultat, donc
+  // ce qui n'y est pas ne peut pas être payé.
+  const lignes = [...resultat.batiments, ...resultat.defenses, ...resultat.attaquants];
+  assert.ok(lignes.length > 0);
+  for (const l of lignes) {
+    assert.equal(Object.prototype.hasOwnProperty.call(l, 'bouclierMilli'), false,
+      `la ligne « ${l.id} » expose le réservoir au calcul du butin`);
+  }
+
+  // Et la garde de valeur : le butin est fonction des BÂTIMENTS seuls, les
+  // points des DÉFENSES seules. Abîmer le réservoir après coup ne les bouge pas.
+  const b0 = butin(resultat, montage);
+  const p0 = pointsRecherche(resultat, montage);
+  porteur.bouclierMilli = 0;
+  for (const l of resultat.attaquants) l.pvMilli = 0;
+  assert.deepEqual(butin(resultat, montage), b0,
+    'le butin bouge quand l\'attaquant change : il paie les pertes du joueur');
+  assert.equal(pointsRecherche(resultat, montage), p0);
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : ajouter `bouclierMilli` à `ligneResultat`,
+  // ou faire entrer les pertes des attaquants dans `butin`. La première moitié
+  // tombe sur la structure, la seconde sur la valeur.
+});
+
+test('MODULES-C T9 — le déterminisme tient avec le Bouclier actif', () => {
+  const monter = (ordre) => {
+    const defenseurs = [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 30 },
+      { id: 'casemate', rangee: 5, colonne: 4, niveau: 20 },
+      { id: 'casemate', rangee: 5, colonne: 6, niveau: 20 },
+      { id: 'faucheuse', rangee: 8, colonne: 5, niveau: 20 },
+    ];
+    return sceneBouclier({
+      modules: ['bouclier', 'flashbang', 'emp', 'camouflage', 'booster', 'ecraseur', 'tirDeBarrage'],
+      defenseurs: ordre.map((i) => defenseurs[i]),
+      vague: [
+        { id: 'enclume', colonne: 4, rangee: 2, niveau: 20 },
+        { id: 'enclume', colonne: 6, rangee: 2, niveau: 20 },
+        { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
+        { id: 'belier', colonne: 3, rangee: 3, niveau: 20 },
+        { id: 'fendeur', colonne: 7, rangee: 3, niveau: 20 },
+      ],
+    });
+  };
+
+  const jouer = (ordre) => {
+    const etat = monter(ordre);
+    // ⚠ RÉSERVOIRS BRIDÉS, ET C'EST CE QUI REND CE TEST FALSIFIABLE. À réservoir
+    // plein le bouclier ne s'épuise jamais, donc l'ordre d'application ne décide
+    // de rien et retirer le tri du tampon ne ferait PAS tomber ce test. Bridés,
+    // ils s'épuisent au milieu du raid et c'est alors l'ordre qui choisit qui
+    // reste couvert.
+    for (const e of etat.entites) {
+      if (e.bouclierMilli > 0) e.bouclierMilli = 400000;
+    }
+    for (let t = 1; t <= 120 && !etat.termine; t += 1) tick(etat);
+    return { etat, vue: projectionCanonique(etat) };
+  };
+
+  // Bit à bit d'abord : deux exécutions du MÊME montage.
+  const a = jouer([0, 1, 2, 3]);
+  const bis = jouer([0, 1, 2, 3]);
+  assert.equal(serialiserEtat(a.etat), serialiserEtat(bis.etat));
+
+  // ⚠ ET LA MÊME PROJECTION CANONIQUE QU'AU LOT MODULES-B, PAS UNE SECONDE :
+  // `serialiserEtat` brut diverge quand on permute les défenseurs, parce que les
+  // indices se décalent. La projection a été ÉTENDUE au réservoir — sans quoi
+  // elle serait aveugle à ce que ce lot ajoute.
+  for (const ordre of [[1, 0, 2, 3], [3, 2, 1, 0], [2, 3, 0, 1]]) {
+    assert.deepEqual(jouer(ordre).vue, a.vue, `ordre ${ordre.join('')}`);
+  }
+
+  // Le montage n'est pas vacant : les DEUX réservoirs se sont épuisés pendant le
+  // raid. Sans épuisement, la couverture ne dépendrait de rien et la projection
+  // serait identique quoi qu'il arrive.
+  const porteurs = a.etat.entites.filter((e) => e.id === 'enclume');
+  assert.equal(porteurs.length, 2, 'montage : deux porteurs');
+  assert.ok(porteurs.every((e) => e.bouclierMilli === 0),
+    'montage : un réservoir n\'a pas été épuisé, la projection ne prouve rien');
+
+  // ⚠ ET LA PROJECTION VOIT BIEN LE RÉSERVOIR. Deux états qui ne diffèrent QUE
+  // par lui doivent donner deux projections différentes — sans quoi tout ce qui
+  // précède serait vrai d'une projection aveugle à ce que ce lot ajoute.
+  const temoin = jouer([0, 1, 2, 3]);
+  assert.deepEqual(temoin.vue, a.vue, 'montage : même ordre, même projection');
+  temoin.etat.entites.find((e) => e.id === 'enclume').bouclierMilli += 1;
+  assert.notDeepEqual(projectionCanonique(temoin.etat), a.vue,
+    'la projection canonique ne voit pas `bouclierMilli`');
+
+  // ⚠ CE QUI FALSIFIERAIT CE TEST : une vraie non-détermination — un parcours
+  // d'entités par `Set`/`Map` dont l'ordre suivrait la déclaration, ou une
+  // projection qui cesserait de lire le réservoir. Il ne remplace PAS
+  // `MODULES-C T6` : le tri du tampon, lui, est gardé là-bas, et retirer le tri
+  // ne fait pas tomber celui-ci — mesuré, pas supposé.
+});
+
+test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
+  assert.equal(moduleEstCable('bouclier', 'offense'), true, 'bouclier en offense');
+  assert.equal(moduleEstCable('bouclier', 'defense'), false, 'bouclier en défense');
+
+  // Les sept autres restent faux des DEUX côtés — le compte EST la liste, et
+  // c'est elle qui tombe si un lot futur câble un module sans le dire ici.
+  const restants = Object.entries(MODULES)
+    .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
+  assert.deepEqual(restants, [
+    'autoReparation', 'garnison', 'munitionSpeciale',
+    'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'volDeVie',
+  ]);
+
+  // L'ACHAT, pas seulement le drapeau : une seule ligne porte le Bouclier, en
+  // offense, et elle s'achète. Aucune ligne de défense ne le porte — c'est ce
+  // qui justifie `defense: false` : le câbler là ouvrirait une ligne vide.
+  const etat = partie('999999999999999');
+  const porteurs = { offense: [], defense: [] };
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      if (nomDuModule(branche, id) !== 'bouclier') continue;
+      porteurs[branche].push(id);
+      if (!estAcquise(etat, branche, id)) acheter(etat, branche, id, 'unite');
+      assert.deepEqual(
+        problemesDeLAchat(etat, branche, id, 'module'), [],
+        `${branche}/${id} refuse alors qu'il est câblé`,
+      );
+      acheter(etat, branche, id, 'module');
+      assert.equal(moduleEstAcquis(etat, branche, id), true);
+    }
+  }
+  assert.deepEqual(porteurs.offense, ['enclume']);
+  assert.deepEqual(porteurs.defense, [], 'un ouvrage porte le Bouclier : revoir `cable.defense`');
+
+  // ⚠ COMPTÉ EN PARCOURANT L'ARBRE, PAS DE TÊTE — et c'est la leçon de
+  // MODULES-B, dont le brief annonçait six lignes ouvertes là où il y en avait
+  // cinq. Onze lignes s'ouvraient avant ce lot, douze après ; la défense reste
+  // à zéro. Ce compte est le chiffre du rapport.
+  const ouvertes = { offense: 0, defense: 0 };
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      const nom = nomDuModule(branche, id);
+      if (nom !== null && MODULES[nom].cable[branche]) ouvertes[branche] += 1;
+    }
+  }
+  assert.deepEqual(ouvertes, { offense: 12, defense: 0 });
 });
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
@@ -1924,14 +2458,32 @@ test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
   assert.match(raison.textContent, /120\u202f000\u202f000/);
 
   // Le module d'une pièce NON acquise accumule ses deux refus.
+  //
+  // ⚠ RÉÉCRIT AU LOT MODULES-C, ET LE COUPLE DE REFUS A CHANGÉ. Cette ligne
+  // portait « la pièce doit être débloquée » ET « n'a pas encore d'effet en
+  // jeu » : le Bouclier étant désormais câblé, la seconde a disparu et c'est
+  // « il manque … points » qui l'accompagne. Ce qui est testé reste
+  // l'ACCUMULATION — deux refus tiennent sur la même ligne, séparés par « ; ».
   const modBloc = bloc('enclume').children.find((c) => c.className === 'module');
   const modRaison = modBloc.children.find((c) => c.className === 'raison');
   assert.match(modRaison.textContent, /la pièce doit être débloquée avant son module/);
-  assert.match(modRaison.textContent, /n'a pas encore d'effet en jeu/);
+  assert.match(modRaison.textContent, /il manque/);
+  // Et le Bouclier NE porte plus le refus d'effet. MONTAGE QUI LE FAIT
+  // TOMBER : repasser `bouclier.cable.offense` à `false` — la mention revient.
+  assert.ok(!/n'a pas encore d'effet en jeu/.test(modRaison.textContent),
+    'le Bouclier est déclaré sans effet alors qu\'il est câblé');
 
-  // ⚠ ET L'ÉCRASEUR EST LE SEUL QUI NE PORTE PAS CE SECOND REFUS. C'est le seul
-  // module câblé du lot ; les treize autres s'affichent et ne s'achètent pas,
-  // parce que prendre les points du joueur contre rien serait un vol.
+  // Un module réellement non câblé, lui, le dit — la Buse porte la Garnison,
+  // qui n'a pas de moteur. Sa pièce est gratuite, donc acquise : le seul refus
+  // d'effet s'affiche sans être noyé dans celui de la pièce.
+  const busard = bloc('busard').children.find((c) => c.className === 'module');
+  const busardRaison = busard.children.find((c) => c.className === 'raison');
+  assert.match(busardRaison.textContent, /n'a pas encore d'effet en jeu/);
+
+  // ⚠ ET L'ÉCRASEUR NE PORTE PAS CE REFUS NON PLUS. Il était le seul câblé au
+  // lot Recherche ; ils sont sept depuis MODULES-C. Les sept autres modules
+  // s'affichent et ne s'achètent pas, parce que prendre les points du joueur
+  // contre rien serait un vol.
   const ecraseur = bloc('fendeur').children.find((c) => c.className === 'module');
   const ecraseurRaison = ecraseur.children.find((c) => c.className === 'raison');
   assert.ok(!/n'a pas encore d'effet en jeu/.test(ecraseurRaison.textContent),

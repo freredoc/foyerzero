@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **31/08/2026**, version 0.52.0 · build 53.
+Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
 
 ---
 
@@ -41,24 +41,27 @@ Dernière révision : **31/08/2026**, version 0.52.0 · build 53.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MODULES-B), à confronter :**
-`npm test` → **682 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 261 788 octets**, 0 référence externe.
-⚠ **MODULES-B A COÛTÉ +1 463 OCTETS, ET C'EST DU CODE PUR.** Trois modules
-câblés — Flashbang, EMP, Camouflage —, aucune image, aucun écran neuf, aucun
-champ de sauvegarde : `SAVE_VERSION` reste à **14**. La borne de T10 n'a pas
-bougé — marge **38 212 octets**, 2,94 %.
-⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 %.**
-Elle ne descend plus que de quelques centièmes tant que les lots sont du code ;
-c'est le prochain atlas qui la fera tomber, et il faudra rouvrir la borne, pas
-la contourner.
+**Référence au 31/08/2026 (après le lot MODULES-C), à confronter :**
+`npm test` → **692 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 262 193 octets**, 0 référence externe.
+⚠ **MODULES-C A COÛTÉ +405 OCTETS.** Un seul module câblé — le Bouclier —,
+aucune image, aucun écran neuf, aucun champ de sauvegarde : `SAVE_VERSION` reste
+à **14**. La borne de T10 n'a pas bougé — marge **37 807 octets**, 2,91 %.
+⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 % ·
+2,91 %.** Elle ne descend plus que de quelques centièmes tant que les lots sont
+du code ; c'est le prochain atlas qui la fera tomber, et il faudra rouvrir la
+borne, pas la contourner.
 ⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
-exactement **7 écarts**, code de sortie 1. MODULES-B n'y touche pas : les sept
-lignes `KO` sont les mêmes avant et après, mot pour mot (terrain, disposition,
-emplacements, trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié
-serait une régression, dans les deux sens.
+exactement **7 écarts**, code de sortie 1. MODULES-C n'y touche pas : la sortie
+est IDENTIQUE À LA LIGNE, avant et après (terrain, disposition, emplacements,
+trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié serait une
+régression, dans les deux sens.
 ⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT NON PLUS**, et c'était
 conforme : il ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot MODULES-B :** 683 tests, `dist/index.html`
+**1 261 788 octets**, marge 38 212, 2,94 %. Trois modules câblés — Flashbang,
+EMP, Camouflage — pour +1 463 octets, `SAVE_VERSION` déjà à 14.
 
 **Auparavant, après le lot MODULES-A :** 667 tests, `dist/index.html`
 **1 260 325 octets**, marge 39 675, 3,05 %. Deux modules câblés — Tir de
@@ -1374,6 +1377,32 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   forgeait son argument à la main : les survivants du joueur se sont affichés
   « Meute » pendant un commit entier. Le T18 de `defense.test.js` garde la
   régression **et le piège**.
+- ⚠⚠ **`distanceCarree` REND UN CARRÉ DE MILLI-CASES, PAS DE CASES.** Deux
+  cases voisines sont à **1 000 000**, pas à 1. Un rayon de 2,5 cases s'écrit
+  donc `2500 * 2500`, jamais `2.5 * 2.5` : la seconde forme passe `node
+  --check`, passe le build, et réduit la portée à la case du porteur sans
+  qu'aucune erreur ne le dise. C'est le piège que MODULES-C a désamorcé, et
+  `MODULES-C T1` le tient à la milli-case près.
+- ⚠ **LE DÉPLACEMENT EST L'ÉTAPE 7, LES DÉGÂTS L'ÉTAPE 5.** La position qui
+  compte pour tout ce que fait `appliquerDegats` est celle d'**avant** le tick.
+  Une première écriture des tests de MODULES-C a mesuré après coup et a conclu,
+  à tort, que la borne du rayon était exclue.
+- ⚠ **LES DÉGÂTS D'UN TIR SUIVENT LA SANTÉ DU TIREUR** (`degatsDUnTir` :
+  `degatsColonne × pvCourant / pvMax`). Un défenseur qu'on entame frappe moins
+  fort au tick suivant : **un montage de test ne doit jamais soustraire les
+  mesures de deux ticks différents.** Coûté 4 893 milli-PV d'écart inexpliqué à
+  MODULES-C avant d'être compris.
+- ⚠ **LE TAMPON DE `tir` EST UNE `Map`, ET SON ORDRE EST CELUI D'INSERTION.**
+  Il était SANS EFFET tant que chaque cible ne touchait que ses propres PV.
+  Depuis MODULES-C il porte un **réservoir partagé** — le Bouclier —, donc
+  `appliquerDegats` **trie par indice de cible croissant** avant d'appliquer.
+  Tout mécanisme futur qui partage une ressource entre plusieurs cibles doit
+  passer par ce tri, sinon le résultat d'un raid dépendra de l'ordre où les
+  défenseurs ont été déclarés. `MODULES-C T6` le garde.
+- ⚠ **`estActive` NE VOIT PAS UN MORT DU TICK COURANT.** `vivant` n'est écrit
+  qu'à l'étape 6, `retirerLesMorts` : pendant toute l'étape 5, une entité à
+  zéro PV est encore « active ». Qui a besoin de « mort maintenant » doit tester
+  `pvMilli <= 0` **en plus**.
 
 ### Sur les types de `package.json`
 

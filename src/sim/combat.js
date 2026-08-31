@@ -542,10 +542,20 @@ function ajouterEntite(
     ticksInutiles: 0,
     cibleIndice: null,
     aTire: false,
+    // Réservoir du module Bouclier ; 0 si la pièce ne le porte pas. Un entier,
+    // comme les autres champs : `serialiserEtat` le voit, il entre donc dans la
+    // comparaison de déterminisme. Il ne se recharge jamais et ne survit pas au
+    // raid — aucune sauvegarde ne le lit, `SAVE_VERSION` ne bouge pas.
+    bouclierMilli: 0,
     // Lot 2C : ces deux champs restent vides et inertes en 2A.
     modulesActifs: [],
     effetsTemporises: [],
   };
+  // ⚠ LE RÉSERVOIR EST POSÉ AU MONTAGE, PAS AU PREMIER TICK. `creerCombat`
+  // remplit `etat.modulesDebloques` AVANT de monter la moindre entité (voir
+  // plus bas), donc `moduleActif` est appelable ici. Le poser au premier tick
+  // laisserait passer un tick de tir sans la moindre protection.
+  if (moduleActif(etat, entite, p, 'bouclier')) entite.bouclierMilli = pvMaxMilli;
   etat.entites.push(entite);
   return entite;
 }
@@ -1241,16 +1251,78 @@ function tir(etat) {
 }
 
 /**
+ * Rayon du module Bouclier, en MILLI-CASES AU CARRÉ.
+ *
+ * ⚠⚠ 2 500 × 2 500, ET SURTOUT PAS 2,5 × 2,5. `distanceCarree` rend un carré de
+ * MILLI-cases : deux cases voisines sont à 1 000 000, pas à 1. Une comparaison
+ * à `6.25` passerait `node --check`, passerait le build, et le bouclier ne
+ * couvrirait plus que la case du porteur — sans qu'aucune erreur ne le dise.
+ *
+ * ⚠ LA BORNE EST COMPRISE : une case pile à 2,5 est protégée. C'est pour cela
+ * que le rejet s'écrit `d2 > BOUCLIER_RAYON_CARRE` et non `>=`.
+ */
+const BOUCLIER_RAYON_CARRE = 2500 * 2500;
+
+/**
  * 5. Application du tampon. Le seul plancher de PV est 0 : toute entité,
  * défense comprise, se détruit à 0 et sort de la grille. Le plancher de 1 %
  * de la spec §2 est un plancher d'APRÈS-RAID, écrit par le lot 2B ; le moteur
  * rapporte les PV bruts et ne plafonne rien.
  */
 function appliquerDegats(etat, tampon) {
-  for (const [indice, degats] of tampon) {
+  // ⚠ LE TAMPON EST UNE `Map`, ET SON ORDRE D'ITÉRATION EST L'ORDRE
+  // D'INSERTION — donc l'ordre où les tireurs ont été déclarés. Tant que
+  // chaque cible ne touchait que ses propres PV, cet ordre était SANS EFFET :
+  // les soustractions sont indépendantes, elles commutent. Le Bouclier casse
+  // cette indifférence, parce qu'il introduit un RÉSERVOIR PARTAGÉ entre
+  // plusieurs cibles : selon qui passe le premier, ce n'est pas le même allié
+  // qui est couvert et pas le même qui prend le reste. L'ordre d'itération ne
+  // doit jamais décider de cela — on trie donc par indice de cible croissant,
+  // qui est la seule clé stable de l'état.
+  const entrees = [...tampon].sort((a, b) => a[0] - b[0]);
+
+  // Les porteurs d'un réservoir non vide, INDICE CROISSANT. Ce sont des
+  // références vives, pas une copie : les réservoirs se vident au fil de la
+  // boucle et la suivante doit le voir. L'ordre est celui du §1.1.6 — à
+  // recouvrement, c'est le plus petit indice qui encaisse d'abord.
+  const boucliers = etat.entites.filter((b) => b.bouclierMilli > 0);
+
+  for (const [indice, degats] of entrees) {
     const e = etat.entites[indice];
     if (!estActive(e)) continue;
-    e.pvMilli = Math.max(0, e.pvMilli - degats);
+
+    let reste = degats;
+    for (const b of boucliers) {
+      if (reste <= 0) break;
+      // Un bouclier vidé plus tôt dans CE tick ne protège plus.
+      if (b.bouclierMilli <= 0) continue;
+      // ⚠ UN BOUCLIER MORT NE PROTÈGE PLUS, CE TICK-CI COMPRIS. Le tampon est
+      // simultané, mais son application est SÉQUENTIELLE : si le porteur est
+      // tombé quelques entrées plus haut, ce qui suit n'est plus couvert.
+      // `estActive` ne suffit PAS pour ce cas : `vivant` n'est mis à jour qu'à
+      // l'étape 6, `retirerLesMorts`, donc un porteur à zéro PV serait encore
+      // « actif » jusqu'à la fin de l'étape 5. D'où le second test.
+      if (!estActive(b) || b.pvMilli <= 0) continue;
+      // ⚠ LE PORTEUR N'EST PAS SOUS SON PROPRE BOUCLIER. Lecture de la phrase
+      // d'Ethan — « les ALLIÉS », pas « les unités ». L'y inclure lui donnerait
+      // deux fois ses PV. C'est la SEULE ligne à retirer si l'arbitrage tombe
+      // dans l'autre sens.
+      if (b.indice === e.indice) continue;
+      // « Allié » = MÊME CAMP, et c'est la notion que tout le moteur emploie :
+      // chaque test d'ennemi s'y écrit `c.camp === e.camp`. `proprietaire` dit
+      // à qui la pièce appartient, pas de quel côté de la grille elle se bat.
+      if (b.camp !== e.camp) continue;
+      const d2 = distanceCarree(b.rangeeMilli, b.colonne, e.rangeeMilli, e.colonne);
+      if (d2 > BOUCLIER_RAYON_CARRE) continue;
+
+      // Absorption PARTIELLE : le réservoir prend ce qu'il peut, le reste
+      // passe. Pas de tout-ou-rien. Il ne se recharge jamais.
+      const pris = Math.min(b.bouclierMilli, reste);
+      b.bouclierMilli -= pris;
+      reste -= pris;
+    }
+
+    e.pvMilli = Math.max(0, e.pvMilli - reste);
   }
 }
 
