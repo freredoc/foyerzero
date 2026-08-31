@@ -17,12 +17,13 @@ import assert from 'node:assert/strict';
 import {
   TICKS_APPARITION, ANNEAUX, satellitesVides, planifierSatellites,
   resoudreSatellites, detruireSatellite, casesDeLAnneau, niveauDuSatellite,
-  problemesDesSatellites,
+  problemesDesSatellites, TICKS_DUREE_DE_VIE, TICKS_SURSIS, prolongerApresAttaque,
 } from '../src/sim/satellites.js';
 import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger,
 } from '../src/sim/state.js';
 import { SATELLITES, TYPES_SITE, GEOGRAPHIE } from '../src/data/sites.js';
+import { niveauDeLaRangee } from '../src/sim/carte.js';
 import { TICKS_PAR_SECONDE } from '../src/sim/clock.js';
 import { estSurLaCarte } from '../src/sim/carte.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
@@ -211,10 +212,27 @@ test('satellites — le camp suit le niveau du JOUEUR, l\'avant-poste celui de l
   const rng = creerRng(1);
 
   assert.equal(niveauDuSatellite('camp', etat, rng), 12);
-  // La rangée de départ vaut 5 : l'avant-poste tombe dans 4…6, jamais 12.
+
+  // ⚠⚠ LA BANDE ATTENDUE SE DÉRIVE DE LA RANGÉE, ELLE NE S'ÉCRIT PLUS. Ce test
+  // portait « 4…6 » en dur, parce que la rangée de départ valait la strate 5.
+  // Le 31/08, Ethan a rapproché le départ du bord bas (275 → 295) : la strate
+  // est tombée à 1 et l'assertion avec, alors qu'elle ne mesure pas la position
+  // — elle mesure que l'avant-poste suit la RANGÉE et le camp le JOUEUR.
+  const strate = niveauDeLaRangee(etat.position.rangee);
   const niveaux = new Set();
   for (let i = 0; i < 50; i += 1) niveaux.add(niveauDuSatellite('avantPoste', etat, rng));
-  for (const n of niveaux) assert.ok(n >= 4 && n <= 6, `avant-poste de niveau ${n}, attendu 4…6`);
+  for (const n of niveaux) {
+    assert.ok(Math.abs(n - strate) <= 1,
+      `avant-poste de niveau ${n}, attendu ${strate} ± 1`);
+  }
+  // ⚠ ET LE MONTAGE DOIT DISTINGUER LES DEUX RÈGLES : si la strate valait 12,
+  // les deux rendraient le même nombre et le test ne prouverait rien.
+  assert.notEqual(strate, 12, 'le montage ne sépare plus le niveau du joueur de celui de la rangée');
+
+  // ⚠ LE ±1 SE MESURE, MAIS IL SE HEURTE AU PLANCHER. `niveauDuSatellite` ne
+  // descend jamais sous 1 : à la strate 1, la bande utile est {1, 2}, pas trois
+  // valeurs. Exiger plus d'une valeur reste vrai, et c'est ce qui compte — la
+  // règle tire encore.
   assert.ok(niveaux.size > 1, 'le ±1 ne tire jamais : la règle est figée');
 
   // Et les deux tables se croisent : un type de satellite doit être un type de
@@ -331,4 +349,166 @@ test('satellites — jamais sur une base de l\'Ouvrage, même quand il y en a da
     }
   }
   assert.deepEqual(sur, [], `${sur.length} satellites posés sur une base de l'Ouvrage`);
+});
+
+// ---------------------------------------------------------------------------
+// LA RELÈVE — un satellite qu'on ignore finit par changer de place (31/08)
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN A DEMANDÉ DE VÉRIFIER, ET LA RÉPONSE ÉTAIT NON. Avant ce lot, un
+// satellite posé ne bougeait JAMAIS : `planifierSatellites` le programmait,
+// `resoudreSatellites` le posait, et plus rien ne le touchait. Seule une
+// destruction en raid le faisait réapparaître ailleurs.
+
+/** Avance jusqu'au tick voulu, tick par tick. */
+function jusqua(etat, tick) {
+  while (etat.horloge.nbTicks < tick) tickJeu(etat);
+  return etat;
+}
+
+test('relève — un satellite ignoré change de place, et pas avant l\'heure', () => {
+  const etat = creerEtat(31_082_026);
+  jusqua(etat, TICKS_APPARITION);
+  assert.equal(etat.satellites.presents.length, 3, 'montage : les trois doivent être là');
+
+  const avant = etat.satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`);
+  const echeances = etat.satellites.presents.map((s) => s.tickDeReleve);
+  for (const t of echeances) {
+    assert.ok(Number.isInteger(t), 'un satellite posé sans échéance ne sera jamais relevé');
+  }
+  // ⚠ L'ÉCHÉANCE SE COMPTE DEPUIS LA POSE, pas depuis la fondation.
+  assert.deepEqual([...new Set(echeances)], [TICKS_APPARITION + TICKS_DUREE_DE_VIE]);
+
+  // Une minute avant : rien n'a bougé. C'est la moitié qui prouve que le test
+  // mesure une DATE et pas simplement « ça finit par changer ».
+  jusqua(etat, TICKS_APPARITION + TICKS_DUREE_DE_VIE - 1);
+  assert.deepEqual(
+    etat.satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`), avant,
+    'un satellite a été relevé AVANT son échéance',
+  );
+
+  // À l'échéance, il quitte la carte et une attente le remplace.
+  jusqua(etat, TICKS_APPARITION + TICKS_DUREE_DE_VIE);
+  assert.equal(etat.satellites.presents.length, 0, 'les trois devaient être relevés ensemble');
+  assert.equal(etat.satellites.attentes.length, 3, 'la relève ne reprogramme pas');
+
+  // Puis ils reparaissent — ailleurs, et sous de nouvelles instances.
+  jusqua(etat, TICKS_APPARITION + TICKS_DUREE_DE_VIE + TICKS_APPARITION);
+  assert.equal(etat.satellites.presents.length, 3);
+  const apres = etat.satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`);
+  assert.notDeepEqual(apres.slice().sort(), avant.slice().sort(),
+    'les trois sont revenus exactement aux mêmes cases : le tirage ne dépend pas de l\'instance');
+  // ⚠ CHAQUE RELÈVE EST UNE INSTANCE NEUVE : c'est ce qui donne au camp une
+  // disposition de bâtiments différente (arbitré le 29/08), et c'est aussi ce
+  // qui empêche le tirage de rendre deux fois la même case.
+  assert.ok(etat.satellites.presents.every((s) => s.instance > 3));
+});
+
+test('relève — un satellite ATTAQUÉ gagne du temps, compté depuis le raid', () => {
+  const etat = creerEtat(31_082_026);
+  jusqua(etat, TICKS_APPARITION);
+  const cible = etat.satellites.presents[0];
+  const echeanceInitiale = cible.tickDeReleve;
+
+  // On avance jusqu'à la veille de sa relève, puis on l'attaque.
+  jusqua(etat, echeanceInitiale - 100);
+  const tickDuRaid = etat.horloge.nbTicks;
+  assert.ok(prolongerApresAttaque(etat, cible, tickDuRaid), 'le satellite n\'a pas été trouvé');
+
+  // ⚠ LE SURSIS SE COMPTE DEPUIS LE RAID. Un camp attaqué à sa dernière minute
+  // doit gagner du temps — sinon la règle ne sert pas dans le cas où elle
+  // compte, celui où le joueur revient sur un site qu'il a entamé.
+  assert.equal(cible.tickDeReleve, tickDuRaid + TICKS_DUREE_DE_VIE + TICKS_SURSIS);
+  assert.ok(cible.tickDeReleve > echeanceInitiale, 'l\'attaque n\'a rien allongé');
+
+  // Et il est toujours là bien après l'échéance qu'il aurait eue sans le raid.
+  jusqua(etat, echeanceInitiale + TICKS_SURSIS);
+  assert.ok(
+    etat.satellites.presents.some((s) => s.instance === cible.instance),
+    'le satellite attaqué a été relevé malgré son sursis',
+  );
+
+  // ⚠⚠ ET LE SURSIS NE RACCOURCIT JAMAIS UNE VIE. Le cas se construit : il faut
+  // une échéance DÉJÀ plus lointaine que ce que le raid donnerait. Un raid
+  // ordinaire allonge toujours — `raid + vie + sursis` dépasse forcément une
+  // échéance posée à `pose + vie`, puisque le raid vient après la pose. La
+  // faute qu'on garde est donc un appel DÉSORDONNÉ dans le temps, la seule
+  // forme sous laquelle l'écrasement se commettrait.
+  const loin = cible.tickDeReleve;
+  assert.equal(prolongerApresAttaque(etat, cible, 0), false,
+    'un raid antidaté a raccourci la vie d\'un satellite');
+  assert.equal(cible.tickDeReleve, loin);
+
+  // L'appât : le même appel, à sa vraie date, allonge bien.
+  assert.equal(prolongerApresAttaque(etat, cible, etat.horloge.nbTicks), true);
+  assert.ok(cible.tickDeReleve > loin);
+
+  // Un satellite absent ne fait pas lever : le raid se résout sur un montage.
+  assert.equal(
+    prolongerApresAttaque(etat, { rangee: 1, colonne: 1, instance: 9999 }, 0), false,
+  );
+});
+
+test('relève — les deux chemins d\'avancement rendent le MÊME état', () => {
+  // ⚠⚠ C'EST LA GARDE LA PLUS IMPORTANTE DU LOT. `resoudreSatellites` ne lisait
+  // que l'horloge courante, et l'en-tête du module disait : « le jour où elle
+  // dépendra de l'instant précis d'une apparition, cette équivalence tombe ».
+  // La relève en dépend — un satellite posé à T meurt à T + durée. La boucle
+  // par ÉVÈNEMENT est ce qui la rétablit ; ce test est ce qui le prouve.
+  //
+  // L'horizon couvre plusieurs relèves complètes : sous une seule, le rattrapage
+  // et la boucle coïncideraient par accident.
+  const horizon = TICKS_APPARITION + 3 * (TICKS_DUREE_DE_VIE + TICKS_APPARITION) + 500;
+  const parBoucle = creerEtat(20_260_831);
+  const parSaut = creerEtat(20_260_831);
+
+  for (let i = 0; i < horizon; i += 1) tickJeu(parBoucle);
+  rattraperJeu(parSaut, horizon);
+
+  // D'abord : le montage mesure-t-il quelque chose ? Sans plusieurs relèves,
+  // l'égalité ne dirait rien.
+  assert.ok(parBoucle.satellites.prochaineInstance > 6,
+    `montage sans mordant : seulement ${parBoucle.satellites.prochaineInstance - 1} poses`);
+
+  assert.deepEqual(
+    parSaut.satellites, parBoucle.satellites,
+    'le rattrapage analytique et la boucle par tick divergent sur les satellites',
+  );
+  // ⚠ ET LE FLUX DE L'ÉTAT N'A PAS ÉTÉ CONSOMMÉ DIFFÉREMMENT. C'est la faute que
+  // le module interdit depuis le 29/08 : une graine dérivée de `etat.rng`
+  // passerait l'égalité ci-dessus tant que rien d'autre ne tire.
+  assert.deepEqual(parSaut.rng, parBoucle.rng);
+});
+
+test('relève — dix ans d\'absence se rattrapent, et on mesure ce que ça coûte', () => {
+  // ⚠ LA BOUCLE AVANCE PAR ÉVÈNEMENT, JAMAIS PAR TICK. Dix ans font 3,15
+  // milliards de ticks ; ce qui compte, c'est le nombre de RELÈVES — une par
+  // durée de vie. Sans cette propriété, le chargement d'une vieille partie
+  // gèlerait le téléphone, et c'est exactement le piège que CLAUDE.md §6 décrit
+  // pour le rattrapage économique.
+  const dixAns = 10 * 365 * 24 * 3600 * 10;
+  const etat = creerEtat(7);
+  const t0 = process.hrtime.bigint();
+  rattraperJeu(etat, dixAns);
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+
+  // ⚠ ON COMPTE PRÉSENTS **ET** ATTENTES, PAS LES SEULS PRÉSENTS. Un cycle vaut
+  // `vie + apparition` ; selon l'instant où l'on rouvre la partie, les trois
+  // peuvent être posés ou entre deux relèves. Dix ans tombent d'ailleurs
+  // EXACTEMENT sur une frontière de cycle — mesuré — et exiger trois présents
+  // ferait tomber ce test pour une raison qui n'en est pas une.
+  assert.equal(
+    etat.satellites.presents.length + etat.satellites.attentes.length, 3,
+    'un satellite s\'est perdu en route',
+  );
+  // Le compteur d'instances dit combien de relèves ont vraiment eu lieu : c'est
+  // ce qui prouve que la boucle a fait le travail au lieu de le sauter.
+  const cycles = Math.floor(dixAns / (TICKS_DUREE_DE_VIE + TICKS_APPARITION));
+  assert.ok(etat.satellites.prochaineInstance > cycles,
+    `${etat.satellites.prochaineInstance - 1} poses pour ${cycles} cycles attendus`);
+
+  // ⚠ LE SEUIL EST LARGE EXPRÈS : il n'est pas là pour mesurer la machine, il
+  // est là pour attraper un retour à une boucle par TICK, qui serait mille fois
+  // plus lente. Mesuré ici à ~600 ms pour dix ans.
+  assert.ok(ms < 10_000, `${ms.toFixed(0)} ms pour dix ans : la boucle avance par tick`);
 });

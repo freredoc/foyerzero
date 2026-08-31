@@ -46,6 +46,12 @@ import { creerRng, entier } from './rng.js';
 /** Le délai d'apparition, en ticks — cinq minutes. */
 export const TICKS_APPARITION = SATELLITES.delaiApparitionSec * TICKS_PAR_SECONDE;
 
+/** Combien de temps un satellite qu'on laisse tranquille reste où il est. */
+export const TICKS_DUREE_DE_VIE = SATELLITES.dureeDeVieSec * TICKS_PAR_SECONDE;
+
+/** Ce qu'un raid lui achète en plus, compté depuis le raid. */
+export const TICKS_SURSIS = SATELLITES.sursisApresAttaqueSec * TICKS_PAR_SECONDE;
+
 /**
  * Les deux types, avec leur anneau et leur nombre.
  *
@@ -191,13 +197,28 @@ export function detruireSatellite(etat, index) {
 }
 
 /**
- * Fait paraître les satellites dont l'heure est venue.
+ * Fait paraître les satellites dont l'heure est venue, et relève ceux dont le
+ * temps est écoulé.
  *
- * ⚠ APPELÉE PAR LES DEUX CHEMINS D'AVANCEMENT, ET SANS BOUCLE PAR TICK. Elle ne
- * regarde que l'horloge courante : mille ticks d'un coup font paraître
- * exactement ce que mille ticks un par un auraient fait paraître. C'est ce qui
- * la rend compatible avec le rattrapage analytique — et c'est aussi pourquoi
- * elle ne peut RIEN faire qui dépende de l'instant précis de l'apparition.
+ * ⚠⚠ ELLE BOUCLE MAINTENANT SUR LES ÉVÈNEMENTS, ET C'EST LE JOUR QUE L'EN-TÊTE
+ * DE CE MODULE ANNONÇAIT. Elle disait : « elle ne peut RIEN faire qui dépende de
+ * l'instant précis d'une apparition — le jour où ce sera nécessaire, cette
+ * équivalence tombe ». La relève en dépend : un satellite posé à T meurt à
+ * T + durée, donc il faut savoir QUAND il a été posé, pas seulement qu'il l'a
+ * été. La boucle rend l'équivalence des deux chemins non plus gratuite mais
+ * CONSTRUITE : on rejoue les évènements dans l'ordre, à leur date.
+ *
+ * ⚠ ELLE AVANCE PAR ÉVÈNEMENT, JAMAIS PAR TICK. Le pas est la prochaine
+ * échéance, pas le tick suivant : une absence de dix ans ne coûte donc pas
+ * 3,15 milliards d'itérations mais une par relève. **Mesuré, pas estimé** : une
+ * pose d'avant-poste coûte 13,3 µs, donc dix ans à six heures de vie — 14 600
+ * relèves de trois satellites — coûtent **581 ms**, une fois, au chargement. Un
+ * mois d'absence en coûte 7.
+ *
+ * ⚠ ET L'ORDRE À L'INTÉRIEUR D'UN TICK EST FIXÉ : les relèves d'abord, les
+ * apparitions ensuite. Sans cet ordre, un satellite relevé et un autre attendu
+ * au même tick se disputeraient une case selon l'ordre où on les traite, et deux
+ * chemins d'avancement rendraient deux cartes.
  *
  * @param {object} etat modifié en place
  * @returns {number} nombre de satellites parus
@@ -211,33 +232,108 @@ export function resoudreSatellites(etat) {
     throw new Error('satellites : champ « satellites » absent de l\'état');
   }
   const maintenant = etat.horloge.nbTicks;
-  const restent = [];
   let parus = 0;
-  // ⚠ L'ORDRE EST CELUI DE LA FILE, PAS CELUI DES ÉCHÉANCES. Deux attentes dues
-  // au même tick doivent paraître dans l'ordre où elles ont été programmées,
-  // sinon deux chemins d'avancement rendraient les mêmes satellites dans deux
-  // ordres, et `serialiser` les déclarerait différents.
-  for (const attente of etat.satellites.attentes) {
-    if (attente.tickDu > maintenant) {
-      restent.push(attente);
-      continue;
+  // ⚠⚠ LES ATTENTES QU'ON N'A PAS PU SATISFAIRE SORTENT DE LA BOUCLE, ELLES NE
+  // SE REPROGRAMMENT PAS. Un anneau plein est un état du MONDE, pas un délai :
+  // l'attente doit repartir dès qu'une place se libère, ce qui peut être au tick
+  // suivant. Lui donner une nouvelle échéance la ferait attendre cinq minutes de
+  // plus pour rien — et un test le mesure.
+  //
+  // ⚠ ET ELLES DOIVENT QUITTER `attentes` PENDANT LA BOUCLE, sinon `retenir`
+  // reprendrait indéfiniment la même échéance déjà passée : la boucle ne
+  // terminerait pas. Elles y reviennent à la sortie, avec leur `tickDu`
+  // d'origine intact.
+  const reportees = [];
+
+  for (;;) {
+    // La prochaine date à laquelle quelque chose se passe, si elle est passée.
+    let quand = null;
+    const retenir = (t) => {
+      if (t > maintenant) return;
+      if (quand === null || t < quand) quand = t;
+    };
+    for (const attente of etat.satellites.attentes) retenir(attente.tickDu);
+    // ⚠ UNE SAUVEGARDE PEUT NE PAS PORTER `tickDeReleve` — la migration l'ajoute,
+    // mais un satellite forgé par un test n'en a pas. On ne relève alors pas :
+    // mieux vaut un satellite immortel qu'une boucle sur `NaN`.
+    for (const present of etat.satellites.presents) {
+      if (Number.isInteger(present.tickDeReleve)) retenir(present.tickDeReleve);
     }
-    const pose = poserUnSatellite(etat, attente.type);
-    // Aucune case libre dans l'anneau : on ne perd pas l'attente, on la reporte.
-    // Le cas est possible — un anneau saturé de bases de l'Ouvrage — et perdre
-    // l'attente ferait disparaître un camp en silence.
-    if (pose === null) restent.push(attente);
-    else parus += 1;
+    if (quand === null) break;
+
+    // 1. LES RELÈVES. Le satellite s'en va et une attente le remplace : c'est
+    //    exactement ce que fait une destruction, et c'est voulu — « change de
+    //    spawn » veut dire qu'il reparaît ailleurs, pas qu'il disparaît.
+    const restants = [];
+    for (const present of etat.satellites.presents) {
+      if (Number.isInteger(present.tickDeReleve) && present.tickDeReleve <= quand) {
+        etat.satellites.attentes.push({ type: present.type, tickDu: quand + TICKS_APPARITION });
+      } else {
+        restants.push(present);
+      }
+    }
+    etat.satellites.presents = restants;
+
+    // 2. LES APPARITIONS dues à ce tick.
+    // ⚠ L'ORDRE EST CELUI DE LA FILE, PAS CELUI DES ÉCHÉANCES. Deux attentes
+    // dues au même tick doivent paraître dans l'ordre où elles ont été
+    // programmées, sinon deux chemins d'avancement rendraient les mêmes
+    // satellites dans deux ordres, et `serialiser` les déclarerait différents.
+    const enAttente = [];
+    for (const attente of etat.satellites.attentes) {
+      if (attente.tickDu > quand) { enAttente.push(attente); continue; }
+      const pose = poserUnSatellite(etat, attente.type, quand);
+      // Aucune case libre dans l'anneau : on ne perd pas l'attente, on la met
+      // de côté. Le cas est possible — un anneau saturé de bases de l'Ouvrage —
+      // et perdre l'attente ferait disparaître un camp en silence.
+      if (pose === null) reportees.push(attente);
+      else parus += 1;
+    }
+    etat.satellites.attentes = enAttente;
   }
-  etat.satellites.attentes = restent;
+  etat.satellites.attentes.push(...reportees);
   return parus;
+}
+
+/**
+ * Un raid vient de toucher ce satellite : il gagne du temps.
+ *
+ * ⚠⚠ ETHAN, 31/08 : « un camp / avant-poste attaqué reste plus longtemps, je
+ * dirais quelques heures de plus, avant d'être respawn ». Le sursis se compte
+ * DEPUIS LE RAID, pas depuis la pose : un camp attaqué à sa dernière minute doit
+ * gagner du temps, sinon la règle ne sert pas dans le cas où elle compte — celui
+ * où le joueur revient sur un site qu'il a entamé.
+ *
+ * ⚠ ELLE NE RACCOURCIT JAMAIS UNE VIE. Un satellite frais a déjà une échéance
+ * plus lointaine que `raid + vie + sursis` ne le donnerait ; écraser sans
+ * comparer punirait le joueur qui attaque tôt.
+ *
+ * ⚠ ET ELLE NE LÈVE PAS SI LE SATELLITE A DISPARU. Comme `enregistrerLeRaid`, ce
+ * module ne peut pas garantir qu'il est encore là : le raid se résout sur un
+ * montage, pas sur la table.
+ *
+ * @param {object} etat modifié en place
+ * @param {{rangee: number, colonne: number, instance: number}} identite
+ * @param {number} tickDuRaid
+ * @returns {boolean} vrai si un satellite a été prolongé
+ */
+export function prolongerApresAttaque(etat, identite, tickDuRaid) {
+  const present = etat.satellites?.presents?.find(
+    (s) => s.rangee === identite.rangee && s.colonne === identite.colonne
+      && s.instance === identite.instance,
+  );
+  if (present === undefined) return false;
+  const echeance = tickDuRaid + TICKS_DUREE_DE_VIE + TICKS_SURSIS;
+  if (Number.isInteger(present.tickDeReleve) && present.tickDeReleve >= echeance) return false;
+  present.tickDeReleve = echeance;
+  return true;
 }
 
 /**
  * Tire une case libre de l'anneau et y pose un satellite.
  * @returns {object|null} le satellite posé, ou null si l'anneau est plein
  */
-function poserUnSatellite(etat, type) {
+function poserUnSatellite(etat, type, tickDeLaPose) {
   const anneau = ANNEAUX[type];
   if (anneau === undefined) throw new Error(`satellites : type inconnu « ${type} »`);
   const instance = etat.satellites.prochaineInstance;
@@ -261,6 +357,14 @@ function poserUnSatellite(etat, type) {
     colonne: choisie.colonne,
     niveau: niveauDuSatellite(type, etat, rng),
     instance,
+    // ⚠⚠ L'ÉCHÉANCE SE COMPTE DEPUIS LE TICK DE LA POSE, JAMAIS DEPUIS
+    // `etat.horloge.nbTicks`. Les deux coïncident quand on avance tick par
+    // tick ; ils DIVERGENT au rattrapage, qui saute mille ticks d'un coup et
+    // pose alors, en une fois, ce que mille ticks auraient posé à des instants
+    // différents. Lire l'horloge courante ici ferait donc vivre plus longtemps
+    // les satellites d'une partie rechargée que ceux d'une partie restée
+    // ouverte — et les deux chemins cesseraient de rendre le même état.
+    tickDeReleve: tickDeLaPose + TICKS_DUREE_DE_VIE,
   };
   etat.satellites.presents.push(satellite);
   etat.satellites.prochaineInstance = instance + 1;
@@ -297,6 +401,11 @@ export function problemesDesSatellites(satellites) {
     }
     if (!Number.isInteger(s.instance) || s.instance < 1) {
       problemes.push(`instance « ${s.instance} » — entier ≥ 1 attendu`);
+    }
+    // ⚠ L'ÉCHÉANCE DE RELÈVE EST STRUCTURELLE DEPUIS LA v15 : sans elle, un
+    // satellite ne serait jamais relevé, et rien à l'écran ne le dirait.
+    if (!Number.isInteger(s.tickDeReleve) || s.tickDeReleve < 0) {
+      problemes.push(`échéance de relève « ${s.tickDeReleve} » — entier de ticks ≥ 0 attendu`);
     }
     // ⚠ DEUX SATELLITES SUR UNE CASE, C'EST UN FAIT DE PROGRAMME. Le tirage les
     // évite ; s'il en reste, c'est que la sauvegarde a été écrite de travers.

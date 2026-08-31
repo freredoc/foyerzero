@@ -643,3 +643,43 @@ test('offense — la palette montre la pièce, plus un carré', () => {
   assert.match(feuille, /#offense-palette \.unite i\s*\{[^}]*image-rendering: pixelated/,
     'la pastille de la palette de l\'Offense n\'a pas de règle, ou lisse son sprite');
 });
+
+test('offense — le compteur de points n\'est pas dans le bouton Améliorer', () => {
+  // ⚠⚠ CE QU'ETHAN A VU LE 31/08 : « dans le menu offense, il y a le compteur
+  // armée dans le bouton améliorer ». L'`<em>` du bouton recevait
+  // « engagés / budget » — la grandeur du BANDEAU, affichée une seconde fois,
+  // dans un bouton dont le libellé ne la nomme pas. Mesuré dans Chromium avec
+  // un Centre de commandement posé : le bouton disait « Améliorer 0/25 ».
+  //
+  // ⚠ LA RÈGLE EST CELLE DU CHANTIER, MOT POUR MOT : cet `<em>` dit ce que
+  // l'amélioration VISE, et il ne s'écrit QUE là où améliorer existe.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+
+  const ligne = ecran.split('\n').filter((l) => l.includes('offense-ameliorer-cible'));
+  assert.equal(ligne.length, 1, 'un seul point d\'écriture pour cet `<em>`');
+  assert.ok(!/engages|budget/.test(ligne[0]),
+    `le compteur de points est reparti dans le bouton Améliorer : ${ligne[0].trim()}`);
+
+  // ⚠ ET LA RAISON POUR LAQUELLE IL RESTE VIDE EST DANS LA TABLE, pas dans une
+  // constante à part : améliorer n'a pas de moteur en offense. Le jour où il en
+  // aura un, `agir` cessera d'être `null` et la ligne écrira le niveau visé —
+  // ce test-ci n'aura pas à changer.
+  assert.equal(ACTIONS_ARMEE.ameliorer.agir, null,
+    'améliorer a gagné un moteur : vérifier ce que le bouton annonce désormais');
+});
+
+test('offense — le bandeau du haut porte toujours, lui, les points engagés', () => {
+  // La contre-épreuve du test précédent : on retire le compteur du BOUTON, donc
+  // il faut prouver qu'il reste ailleurs. Sans ça, « ne plus l'afficher » aurait
+  // été une réponse valable à Ethan, et elle aurait perdu une information de jeu.
+  // ⚠ `CONTEXTES` d'`ui/chantier.js` porte la fonction qui la calcule, et le
+  // bandeau la lit dans les trois contextes depuis le 28/08.
+  const chantier = readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  const bloc = chantier.slice(chantier.indexOf('CONTEXTES'), chantier.indexOf('CONTEXTES') + 2200);
+  assert.match(bloc, /offense/, 'le contexte Offense a disparu du bandeau');
+  assert.match(bloc, /chiffre:\s*true/, 'le bandeau n\'affiche plus de nombre');
+});

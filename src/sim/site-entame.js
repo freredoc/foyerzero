@@ -44,7 +44,7 @@
 
 import { TYPES_SITE, APRES_RAID, BATIMENTS } from '../data/sites.js';
 import { TICKS_PAR_HEURE } from './clock.js';
-import { detruireSatellite } from './satellites.js';
+import { detruireSatellite, prolongerApresAttaque } from './satellites.js';
 import { montageDuSite, resumeDuSite } from './site-de-la-case.js';
 
 /** Le bâtiment dont la chute rase le site, et celui qui répare les défenses. */
@@ -166,6 +166,17 @@ export function enregistrerLeRaid(etat, identite, resultat) {
 
   if (neDitRien(entree)) delete etat.sitesEntames[cle];
   else etat.sitesEntames[cle] = entree;
+
+  // ⚠⚠ UN SATELLITE ATTAQUÉ GAGNE DU TEMPS — Ethan, 31/08. Sans ça, un camp
+  // qu'on vient d'entamer pouvait être relevé la minute suivante, et le joueur
+  // retrouvait un site neuf à la place de celui qu'il avait à moitié rasé.
+  //
+  // ⚠ ELLE EST APPELÉE MÊME QUAND LE RAID « NE DIT RIEN » — c'est-à-dire quand
+  // rien n'est resté endommagé. Le joueur a quand même attaqué : ce qui achète
+  // le sursis est le RAID, pas les dégâts qu'il a laissés.
+  if (identite.type !== 'base') {
+    prolongerApresAttaque(etat, identite, etat.horloge.nbTicks);
+  }
   return { rase: false };
 }
 

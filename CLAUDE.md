@@ -41,29 +41,51 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MODULES-F), à confronter :**
-`npm test` → **731 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 264 511 octets**, 0 référence externe.
-⚠ **MODULES-F A COÛTÉ +933 OCTETS** et écrit les DEUX DERNIERS modules qui
-n'avaient aucun effet : **Munition spéciale** (+20 % sur la colonne de
-prédilection, dans `degatsContre`) et **Vol de vie** (20 % de l'ENCAISSÉ rendu
-au tireur, en deux passes). Il **arme le canal de l'Ouvrage** : `genererSite`
-remplit enfin `modulesDebloques.ouvrage.defense` depuis `apparitionModule`.
-Aucun écran, aucun champ de sauvegarde : `SAVE_VERSION` reste à **14**.
-Marge **35 489 octets**, 2,73 %.
-⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 % ·
-2,91 % · 2,86 % · 2,80 % · 2,73 %.** Elle ne descend plus que de quelques
-centièmes tant que les lots sont du code ; c'est le prochain atlas qui la fera
-tomber, et il faudra rouvrir la borne, pas la contourner.
-⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
-exactement **7 écarts**, code de sortie 1. MODULES-F n'y touche pas : la sortie
-est IDENTIQUE À LA LIGNE, avant et après (terrain, disposition, emplacements,
-trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié serait une
-régression, dans les deux sens.
-⚠ **IL NE RESTE QU'UN SEUL MODULE SANS EFFET : la GARNISON.** Elle est en
-attente d'arbitrage — c'est le dernier de la liste des quatorze.
-⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT NON PLUS**, et c'était
-conforme : il ne touche ni `art/`, ni `tools/`.
+**Référence au 31/08/2026 (après le lot RETOURS-DU-31), à confronter :**
+`npm test` → **764 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 274 380 octets**, 0 référence externe.
+⚠ **CE LOT A COÛTÉ +9 869 OCTETS ET N'A FAIT ENTRER AUCUN ATLAS.** C'est du code,
+du balisage et de la feuille : douze retours d'Ethan traités en un lot, dont
+quatre CORRECTIFS de défauts visibles. Marge **25 620 octets, 1,97 %**.
+⚠⚠ **ET LA MARGE PASSE SOUS LES DEUX POUR CENT : 4,4 % · 3,1 % · 3,05 % ·
+2,94 % · 2,91 % · 2,86 % · 2,80 % · 2,73 % · 1,97 %.** Le prochain atlas la fera
+tomber pour de bon, et il faudra ROUVRIR la borne en écrivant pourquoi, jamais
+rogner un atlas pour passer dessous.
+⚠⚠ **LE DÉFAUT LE PLUS GRAVE ÉTAIT MUET : LA CARTE N'AFFICHAIT AUCUN EMBLÈME.**
+`ui/monde.js` lisait `cellule.x/.y/.cote` sur ce que rend `celluleDuSprite`, qui
+rend des INDICES et jamais des pixels ; `drawImage` avec un rectangle source non
+fini NE DESSINE RIEN ET NE LÈVE PAS. Mesuré dans Chromium : 88 appels, 88
+rectangles non finis. La géométrie est descendue dans `render/embleme.js`, qui
+est pur, où deux gardes l'atteignent.
+⚠ **`SAVE_VERSION` PASSE À 15** : les satellites portent une date de relève.
+⚠ **LES DEUX BOUTS DU COULOIR ONT BOUGÉ** — départ rangée 275 → **295**,
+terminale rangée 26 → **15**, arbitrés par Ethan. La strate de départ SUIT et
+tombe à **1** : les avant-postes du début sont désormais de niveau 1.
+⚠ **`python3 tools/verifier.py` → 1 418 identiques · 2 différents (les deux
+déclarés) · 0 nouveau · 0 MANQUANT**, verdict VERT, en 118 s. Il était dû : le
+lot touche `art/sprites/` et `tools/`.
+⚠⚠ **`node tools/audit-maquette.mjs` EST PASSÉ DE 7 ÉCARTS À UN SEUL, ET CE
+N'EST PAS UN CORRECTIF — C'EST UN EFFET DE BORD DU DÉPLACEMENT DU DÉPART.**
+Il reste ROUGE (code 1), sur « emplacements 11 / 12 », qui était déjà des sept.
+Les six autres — terrain, disposition légale, trois débits, raffinerie — ont
+disparu ENSEMBLE parce qu'ils dérivent tous de `champsDeLaBase(275, 16)` : cette
+position était le DÉPART, donc servie par la table `TERRAIN_INITIAL`, qui ne
+porte pas de champ sous les cinq collecteurs de la maquette. La table a suivi la
+base en rangée 295 ; `(275, 16)` redonne donc le TIRAGE, c'est-à-dire exactement
+le terrain sur lequel la maquette avait été relevée avant le 29/08.
+⚠ **MESURÉ, PAS DÉDUIT** : `champsDeLaBase(295, 16)` rend la table
+(`tentatives: 0`), `champsDeLaBase(275, 16)` rend un tirage (`tentatives: 1`).
+⚠ **NE PAS LIRE ÇA COMME « LA MAQUETTE EST REVENUE À JOUR ».** Elle n'a pas
+bougé ; c'est sa RÉFÉRENCE qui a cessé d'être surchargée. Le jour où le départ
+rebougera, les six écarts reviendront ou non selon la case — et l'audit dira la
+vérité dans les deux cas.
+⚠ **IL RESTE UN SEUL MODULE SANS EFFET : la GARNISON**, toujours en attente
+d'arbitrage — c'est le dernier de la liste des quatorze.
+
+**Auparavant, après le lot MODULES-F :** 731 tests, `dist/index.html`
+1 264 511 octets, marge 35 489, 2,73 %. Les deux derniers modules de combat —
+Munition spéciale et Vol de vie — et le canal de l'Ouvrage armé par
+`apparitionModule`. `SAVE_VERSION` à 14.
 
 **Auparavant, après le lot MODULES-C :** 702 tests, `dist/index.html`
 **1 262 193 octets**, marge 37 807, 2,91 %. Un module câblé — le Bouclier —
@@ -381,7 +403,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 21 fichiers
+src/sim/                simulation déterministe, sans DOM — 22 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -389,6 +411,7 @@ src/sim/                simulation déterministe, sans DOM — 21 fichiers
   disposition.js        validation, voisinage TYPÉ, débits d'une base posée
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
+  territoire.js         les deux zones d'influence de la spec, et leurs bordures
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
   points-attaque.js     le régulateur de session : plafond à cliquet, barème du raid, territoire
   site-de-la-case.js    une case de la carte → un site jouable : deux graines, saveur, résumé
@@ -471,14 +494,14 @@ src/ui/                 les six écrans et leurs éditeurs — 9 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   40 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   42 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche
+  sprite  state  recherche  maj  territoire
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -499,9 +522,10 @@ test/                   40 fichiers *.test.js (node:test) ; deux fichiers n'en s
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  22 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 30/08
-                        au lot FINITIONS, fichier par fichier. Le vingt-deuxième
-                        est `icone.py`, qui produit l'icône de l'application.
+tools/                  23 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 31/08
+                        au lot RETOURS-DU-31, fichier par fichier (hors
+                        `__pycache__`, qui est ignoré par git). Le vingt-troisième
+                        est `bords.py`, qui conditionne les murs de contour.
                         ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
                         DIX-SEPT, et le dix-sept était déjà faux de deux quand il a
                         été écrit : le disque en portait dix-neuf. La chaîne de
@@ -514,10 +538,10 @@ tools/                  22 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les DIX-NEUF autres sont du Python, hors chaîne de build et hors
+  ⤷ les VINGT autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
-      • ONZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
-        `art/sprites/` ;
+      • DOUZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
+        `art/sprites/` — le douzième est `bords.py`, entré le 31/08 ;
       • DEUX BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
         plus le portage de la coupe 1024 ;
       • DEUX SCRIPTS HISTORIQUES à usage unique, dont les chemins pointent vers
@@ -552,11 +576,19 @@ art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à
                         ⚠ IL NE S'AMPUTE JAMAIS, et c'est ce qui le distingue
                           d'`art/sprites/` : rien ici n'est un produit, tout y
                           est un original. Un lot n'y AJOUTE que.
-art/sprites/            les sprites conditionnés — VINGT-SEPT dossiers de grille
-                        et 1 429 fichiers, recomptés le 30/08 au lot PRODUCTION.
-                        NEUF familles en 128, 64 et 32 : unité, bâtiment,
+art/sprites/            les sprites conditionnés — TRENTE dossiers de grille et
+                        1 473 fichiers, recomptés le 31/08 au lot RETOURS-DU-31.
+                        DIX familles en 128, 64 et 32 : unité, bâtiment,
                         terrain, defense, tourelle-unite, socle, carte, effet,
-                        chassis.
+                        chassis, bord.
+                        ⤷ ⚠⚠ `bord/` EST PRODUIT ET COUSU PAR PERSONNE, ET C'EST
+                          VOULU. Ses 48 fichiers sortent de `tools/bords.py`, le
+                          vérificateur les reproduit, et AUCUN atlas ne les
+                          coud : `tools/atlas.py` dit qu'une famille entre
+                          « QUAND LE LOT QUI CONSOMME LA FAMILLE ARRIVE, jamais
+                          avant », puisque chaque famille cousue est un `data:`
+                          de plus payé par tous les joueurs. Le branchement
+                          attend un arbitrage — voir §6, « les murs de contour ».
                         ⤷ ⚠ LE COMPTE A BAISSÉ DE 156, ET CE N'EST PAS UNE PERTE.
                           Le lot en a AJOUTÉ 84 — 54 états détruits et ruines,
                           30 châssis — et RETIRÉ 240 : les tourelles de blindé de
@@ -844,7 +876,7 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **ELLE FAISAIT 30 JUSQU'AU 29/08.** Une largeur paire n'a pas de centre :
   `colonneCentre()` devait trancher entre 15 et 16, et avait retenu 16. À 31,
   16 EST le centre — la fonction rend le même nombre, le départ du joueur
-  (275, 16) et la base terminale ne bougent pas d'une case. 29 aurait mis le
+  (275, 16 à l'époque) et la base terminale ne bougent pas d'une case. 29 aurait mis le
   centre en 15, donc déplacé tout ce qui était déjà arbitré.
 - Le glossaire des modules ne dit pas qui les porte. Les affectations sont dans
   `UNITES[x].module` / `moduleOuvrage`, pas dans la colonne de description.
@@ -1023,9 +1055,29 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   — et un seul décalage les rend vrais tous les deux. Un test asserte qu'aucune
   rangée voisine n'y arrive.
   ⚠ **Le joueur ne démarre PAS au bord bas**, malgré la formule « tout en bas ».
-  Le bord vaudrait le niveau 0. Il démarre **rangée 275, colonne 16**, 25 cases
-  plus haut, dans une **strate 5**. La base terminale est rangée 26, colonne 16,
+  Le bord vaudrait le niveau 0. Il démarre **rangée 295, colonne 16**, cinq cases
+  plus haut, dans une **strate 1**. La base terminale est rangée 15, colonne 16,
   strate 50.
+  ⚠⚠ **LES DEUX ONT BOUGÉ LE 31/08, ET C'EST UN ARBITRAGE D'ETHAN** — « décaler
+  la base du joueur de 25 cases vers le bas et base terminale 25 cases vers le
+  haut », lu, après confrontation des deux conventions de rangée, « comptés
+  depuis mon bord : 295 et 15 ». Le départ était rangée 275 (strate 5), la
+  terminale rangée 26. Les deux bouts du couloir sont maintenant contre leurs
+  bords, et le couloir fait 280 cases au lieu de 249.
+  ⚠ **LA STRATE N'A PAS ÉTÉ CHOISIE, ELLE SUIT** : `round(5 × 0,2)` plafonné à 1.
+  Écrire 5 dans `GEOGRAPHIE` ferait mentir la table sur ce que le joueur trouve
+  autour de lui — les avant-postes du début sont désormais de niveau 1, les camps
+  restent indexés sur le niveau du joueur.
+  ⚠ **ET LA TERMINALE NE PEUT PAS MONTER PLUS HAUT QUE LA RANGÉE 2** : son
+  hexagone couvre 3 × 3 cases et `empriseDeLaGrosseBase` LÈVE quand le carré
+  déborde la carte — une levée dans la boucle de dessin viderait tout l'écran
+  Monde. La rangée 15 tient largement.
+  ⚠ **CINQ TESTS ONT EU RAISON DE TOMBER, ET AUCUN NE MESURAIT UNE POSITION.**
+  Trois portaient `champsDeLaBase(275, 16)` en dur — ils voulaient le terrain de
+  DÉPART, servi par `TERRAIN_INITIAL`, et ils le DEMANDENT maintenant. Un
+  quatrième cherchait un avant-poste à une case écrite à la main. Le cinquième
+  envoyait six Meutes sur un camp dont la létalité tenait au dessin de la case.
+  Un montage qui écrit une coordonnée ne garde que lui-même.
   ⚠ **« STRATE 5 » N'EST PAS « BASE DE NIVEAU 5 ».** C'est le niveau des sites
   de l'OUVRAGE à cet endroit de la carte — ce que le joueur y trouvera à
   attaquer. Sa propre base n'a aucun niveau qui vienne de la carte. Écrire
@@ -2314,7 +2366,7 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   sur les 9 300 cases : au cran le plus large la fenêtre en fait moins de 1 500.
   ⚠⚠ **ET LE NIVEAU DU JOUEUR N'EST PAS CELUI DE SA RANGÉE.** Le panneau de sa
   base affiche « — trois moyennes, sur l'écran Base », jamais le niveau de la
-  rangée 275. C'est la faute que `sim/carte.js` existe pour empêcher, et un test
+  rangée 295. C'est la faute que `sim/carte.js` existe pour empêcher, et un test
   refuse que ce nombre apparaisse dans cette ligne.
 - **LE PANNEAU D'UN SITE NE PORTE AUCUN BOUTON D'ACTION, ET C'EST UNE RÈGLE.**
   Type, niveau, distance, position — et rien d'autre : le raid n'existe pas. Un
@@ -2840,6 +2892,111 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   `champ`, `quartz`, `scorie`, `obstacle` ne sont plus posées du tout : leur
   garder une règle pour satisfaire la garde des classes aurait été écrire une
   décoration pour un test, ce que la feuille refuse nommément.
+
+- ⚠⚠ **LES TERRITOIRES SONT DESSINÉS DEPUIS LE 31/08, ET RIEN N'A ÉTÉ INVENTÉ
+  POUR ÇA.** La règle était dans la spec depuis le début : §10 porte « zone
+  d'influence joueur : rayon 2, fixe » et « ennemie : rayon 3 », §8 précise que
+  « le territoire allié est l'union des zones d'influence de toutes les bases du
+  joueur ». `sim/territoire.js` en tire une carte d'occupation, `ui/monde.js`
+  trace les côtés exposés. **Chercher la réponse dans le dépôt avant de demander
+  un arbitrage a payé ici** : la question n'avait pas à être posée.
+  ⚠ **SEULS LES CÔTÉS EXPOSÉS SE DESSINENT, JAMAIS UN REMPLISSAGE.** Ethan : « cf
+  screenshots, seuls les bordures sont dessinés ». Et mesuré : l'Ouvrage tient
+  **100 % des rangées au-dessus de la garde de départ** — un aplat noierait
+  l'écran. Ce qu'on voit, c'est la frontière du no man's land autour du joueur.
+  ⚠⚠ **LA CARTE D'OCCUPATION DÉBORDE D'UNE CASE CE QU'ELLE REND**, et c'est la
+  seule faute que ce module puisse commettre : sans anneau de contexte, la
+  voisine hors tableau se lit « neutre » et le bord de la VUE devient une
+  frontière — un cadre qui suit le défilement. **Le premier montage du test ne
+  le voyait pas** : à rayon 3 autour du joueur, le carré 5 × 5 tient entier avec
+  une case de marge. Il regarde maintenant un rayon 1, au cœur du territoire, et
+  exige ZÉRO bordure.
+  ⚠⚠ **LE JOUEUR L'EMPORTE PAR UN GARDE-FOU, PLUS PAR L'ORDRE DES BOUCLES.**
+  L'Ouvrage était peint d'abord et le joueur par-dessus : la priorité tenait à
+  l'ordre, et on pouvait retirer le `if (occupant[i] === JOUEUR) continue` sans
+  qu'un test tombe — mesuré. Le joueur est peint EN PREMIER désormais, et c'est
+  le refus d'écraser qui décide.
+  ⚠ **DEUX LECTURES, PAS DES ARBITRAGES, et le code les nomme** : le joueur
+  l'emporte sur le recouvrement, et seules les BASES de l'Ouvrage projettent son
+  influence (pas les camps ni les avant-postes, qui sont du butin qui suit le
+  joueur). Chacune tient en une ligne.
+  ⚠ **LES DEUX TEINTES VIENNENT D'`EMBLEMES_CARTE`**, elles n'en inventent pas de
+  troisième : l'os borde déjà la base du joueur, le rouge borde EXACTEMENT ce qui
+  attaque le joueur. Le territoire de l'Ouvrage est l'emprise de ces bases-là.
+
+- ⚠⚠ **LES MURS DE CONTOUR : L'ART EST PRODUIT, LE DESSIN NE L'EST PAS.** Ethan,
+  31/08 : « les murs contour ne sont pas là ». Les quatre planches étaient au
+  dépôt depuis le lot BORDS-DE-BASE et **aucun outil ne les lisait** — c'est le
+  producteur qui manquait, pas l'art. `tools/bords.py` le fait maintenant : 16
+  sprites par grille, 48 fichiers, reproduits par le vérificateur.
+  ⚠⚠ **CE QUI RESTE À TRANCHER EST UNE GÉOMÉTRIE, ET ELLE COÛTE CHER À DEVINER.**
+  Mesuré sur les planches : le trait d'un mur occupe `y = 448..575` sur 1024,
+  c'est-à-dire le MILIEU de sa cellule, et l'angle est au centre exact. Une tuile
+  posée sur une case dessinerait donc son mur **au milieu de la case**. Pour que
+  le mur tombe sur la ligne qui BORDE la base, la tuile doit être posée à cheval
+  sur cette ligne, donc déborder d'une demi-case — ce qui demande de donner à
+  `#chantier-grille` une marge d'une demi-case, donc de toucher `coteQuiTient`,
+  `hauteurRangee` et les bornes de `bornesDeDefilement`. C'est-à-dire exactement
+  le code que ce lot-ci vient de corriger pour le zoom et pour la bascule de
+  bande. **Les faire ensemble aurait risqué le correctif qu'Ethan peut voir.**
+  ⚠ **AUCUN ATLAS NE COUD `bord/`, ET C'EST LA RÈGLE**, pas un oubli :
+  `tools/atlas.py` dit qu'une famille entre « quand le lot qui consomme la
+  famille arrive, jamais avant ». L'atlas mesuré pèserait **4 473 octets en
+  base64** — c'est peu, mais la marge est à 1,97 %.
+  ⚠ **ET LE VÉRIFICATEUR CONNAÎT L'OUTIL** (`CHAINE`, dans `tools/verifier.py`).
+  Sans cette ligne, les 48 fichiers seraient comptés MANQUANTS à chaque
+  exécution — « le dépôt les porte, aucun outil ne les produit », le contraire
+  de la vérité.
+
+- ⚠⚠ **LES SATELLITES SE RELÈVENT DEPUIS LE 31/08, ET LA VÉRIFICATION DEMANDÉE
+  AVAIT POUR RÉPONSE « NON ».** Ethan : « vérifier que les camps et avant-poste
+  change de spawn aléatoirement si personne ne les attaque ». Avant ce lot, un
+  satellite posé ne bougeait JAMAIS ; seule une destruction en raid le faisait
+  reparaître ailleurs. Six heures de vie, quatre heures de sursis quand il est
+  attaqué — **les deux durées sont un CHOIX, pas une mesure** : Ethan a donné le
+  sens (« quelques heures de plus ») et pas les nombres.
+  ⚠⚠ **`resoudreSatellites` BOUCLE MAINTENANT PAR ÉVÈNEMENT, ET C'EST LE JOUR QUE
+  SON EN-TÊTE ANNONÇAIT.** Elle disait : « elle ne peut RIEN faire qui dépende de
+  l'instant précis d'une apparition — le jour où ce sera nécessaire, cette
+  équivalence tombe ». La relève en dépend. L'équivalence des deux chemins
+  d'avancement n'est donc plus gratuite, elle est CONSTRUITE : on rejoue les
+  évènements à leur date.
+  ⚠ **ELLE AVANCE PAR ÉVÈNEMENT, JAMAIS PAR TICK**, et c'est ce qui la rend
+  payable. Mesuré : une pose d'avant-poste coûte 13,3 µs, donc dix ans d'absence
+  — 14 600 relèves de trois satellites — coûtent **581 ms**, une fois, au
+  chargement ; un mois en coûte 7.
+  ⚠ **L'ÉCHÉANCE SE COMPTE DEPUIS LE TICK DE LA POSE, jamais depuis
+  `etat.horloge.nbTicks`.** Les deux coïncident tick par tick et DIVERGENT au
+  rattrapage, qui pose en une fois ce que mille ticks auraient posé à des
+  instants différents.
+  ⚠ **UNE ATTENTE QU'ON NE PEUT PAS SATISFAIRE SORT DE LA BOUCLE, elle ne se
+  reprogramme pas.** Un anneau plein est un état du MONDE, pas un délai : lui
+  donner une nouvelle échéance la ferait attendre cinq minutes de plus pour rien.
+  Mais elle doit QUITTER `attentes` pendant la boucle, sinon la même échéance
+  déjà passée serait reprise indéfiniment et la boucle ne terminerait pas.
+  ⚠ **LE SURSIS SE COMPTE DEPUIS LE RAID, et il ne raccourcit jamais une vie.**
+  La faute qui se commettrait vraiment est un appel DÉSORDONNÉ dans le temps ;
+  un raid ordinaire allonge toujours, puisqu'il vient après la pose.
+
+- ⚠⚠ **UN PONT JAVASCRIPT EXISTE DANS L'ENVELOPPE DEPUIS LE 31/08, ET IL RETOURNE
+  UNE DÉCISION ÉCRITE.** `MainActivity` disait « aucune interface JS native :
+  chaque pont serait une surface d'attaque ». Ethan a demandé un bouton
+  « vérifier maj » dans les Options ; **la page ne PEUT pas le faire seule** —
+  `tools/build.js` refuse toute URL dans le HTML produit, et §6 interdit
+  d'assembler l'adresse à l'exécution pour passer dessous.
+  ⚠ **CE QUI REND CE PONT ACCEPTABLE TIENT EN QUATRE LIGNES, ET IL FAUT QU'ELLES
+  RESTENT VRAIES** : la WebView ne charge que le HTML autonome fourni en mémoire ;
+  toute navigation et toute sous-requête sont refusées ; les DEUX méthodes
+  exposées ne prennent AUCUN argument, donc rien venu de la page ne traverse ;
+  elles ne rendent qu'une phrase et un entier, jamais une adresse.
+  ⚠ **LA DÉCISION ET LA FORMULATION VIVENT DANS `:maj`, PAS DANS `:app`.** Sans
+  SDK Android, `settings.gradle.kts` EXCLUT `:app` : ce qui vit là-bas n'est
+  compilé par personne ici et la CI ne le voit pas non plus. `EtatMiseAJour` est
+  donc testé en JVM, et `:app` ne garde que le transport et le pont.
+  ⚠ **UN REFUS « RETOUR EN ARRIÈRE » N'EST PAS UNE PANNE**, c'est le cas NORMAL
+  quand on est déjà à jour : le manifeste annonce le build qu'on a déjà et la
+  politique anti-retour le rejette. Le compter comme un échec ferait dire
+  « erreur » à une vérification réussie.
 
 ### Sur le vocabulaire
 

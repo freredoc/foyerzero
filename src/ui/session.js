@@ -259,6 +259,53 @@ export function garnirLesAtlas(doc) {
   }
 }
 
+/**
+ * Ce que la ligne de mise à jour affiche quand l'enveloppe Android n'est pas là.
+ *
+ * ⚠ ELLE DIT POURQUOI, PAS « INDISPONIBLE ». Un joueur qui ouvre le jeu dans un
+ * navigateur n'a pas d'installation à mettre à jour : il recharge la page et il
+ * a la dernière version. Le lui dire vaut mieux qu'un bouton mort.
+ */
+export const MAJ_SANS_PONT = 'Dans un navigateur, rechargez la page : '
+  + 'la vérification automatique n\'existe que dans l\'application.';
+
+/** Entre deux lectures de l'état d'une vérification qui tourne. */
+export const MAJ_PERIODE_MS = 1000;
+
+/**
+ * Lit l'état rendu par le pont de mise à jour de l'enveloppe Android.
+ *
+ * ⚠⚠ IL NE FAIT JAMAIS CONFIANCE À CE QU'IL REÇOIT. Le pont rend une chaîne ;
+ * une version d'enveloppe plus ancienne que cette page peut rendre autre chose
+ * que ce qu'on attend, ou rien du tout — c'est exactement le cas d'un joueur
+ * dont l'APK date d'avant ce lot et dont le HTML s'est mis à jour tout seul par
+ * Pages, ce qui est le fonctionnement NORMAL du projet. Une exception ici
+ * tomberait au milieu du câblage de l'écran Options.
+ *
+ * ⚠ ET LE REPLI EST UNE PHRASE, PAS UN CHAMP VIDE. Une ligne blanche se lirait
+ * comme un bouton sans effet.
+ *
+ * @param {string} brut le JSON rendu par le pont
+ * @returns {{etape: string, build: number|null, message: string}}
+ */
+export function lireEtatDeMaj(brut) {
+  const repli = { etape: 'INCONNUE', build: null, message: 'État de mise à jour illisible.' };
+  if (typeof brut !== 'string' || brut === '') return repli;
+  let lu;
+  try {
+    lu = JSON.parse(brut);
+  } catch {
+    return repli;
+  }
+  if (lu === null || typeof lu !== 'object') return repli;
+  const message = typeof lu.message === 'string' && lu.message !== '' ? lu.message : repli.message;
+  return {
+    etape: typeof lu.etape === 'string' ? lu.etape : repli.etape,
+    build: Number.isFinite(lu.build) ? lu.build : null,
+    message,
+  };
+}
+
 export function initialiserSession(doc) {
   const fenetre = doc.defaultView;
   const $ = (id) => doc.getElementById(id);
@@ -537,6 +584,11 @@ export function initialiserSession(doc) {
     if (nom === 'recherche' && ecranRecherche !== null && etat !== null) {
       ecranRecherche.peindre(etat);
     }
+    // ⚠ ET LA LIGNE DE MISE À JOUR SE RELIT À L'OUVERTURE DES OPTIONS. La
+    // vérification automatique part au LANCEMENT, bien avant que le joueur ouvre
+    // cet écran : sans ce rappel, il y trouverait un tiret alors que le verdict
+    // est tombé depuis longtemps, et il croirait la ligne morte.
+    if (nom === 'options') suivreLaMaj();
     // ⚠ ET LA CARTE SE MET EN SCÈNE ET SE RETIRE, LES DEUX. Elle est le seul
     // écran qui porte une boucle à lui : les dalles du fond se calculent deux
     // par image tant qu'il en manque. La laisser tourner derrière un autre
@@ -595,6 +647,63 @@ export function initialiserSession(doc) {
     montrerEcran(ecranCourant);
     reprendre();
   }
+
+  // --- la vérification de mise à jour ---------------------------------------
+  //
+  // ⚠⚠ LA PAGE NE TÉLÉCHARGE RIEN, ET ELLE NE LE PEUT PAS. `tools/build.js`
+  // refuse tout `https?://` dans le HTML produit, et CLAUDE.md §6 interdit
+  // d'assembler l'adresse à l'exécution pour passer sous la garde. L'adresse du
+  // manifeste, l'allowlist et l'empreinte vivent donc dans l'enveloppe Android,
+  // qui les porte déjà ; ici on ne fait que DEMANDER et LIRE.
+  //
+  // ⚠ ET HORS DE L'ENVELOPPE, LE PONT N'EXISTE PAS. Dans un navigateur, la ligne
+  // le dit en toutes lettres plutôt que de laisser un bouton sans effet — « un
+  // indice n'est pas une interdiction », et un bouton muet n'apprend rien.
+  const majEtat = $('options-maj-etat');
+  const majBouton = $('options-maj-verifier');
+  let majMinuterie = null;
+
+  function pontDeMaj() {
+    const pont = fenetre.FoyerZeroMaj;
+    if (pont === undefined || pont === null) return null;
+    return typeof pont.verifier === 'function' && typeof pont.etat === 'function' ? pont : null;
+  }
+
+  function afficherEtatDeMaj() {
+    const pont = pontDeMaj();
+    if (pont === null) {
+      majEtat.textContent = MAJ_SANS_PONT;
+      majBouton.disabled = false;
+      return false;
+    }
+    const lu = lireEtatDeMaj(pont.etat());
+    majEtat.textContent = lu.message;
+    // ⚠ LE BOUTON SE RETIRE DU GESTE PENDANT LA VÉRIFICATION, IL NE DISPARAÎT
+    // PAS : la ligne bougerait sous le doigt. Et il revient dans tous les cas —
+    // succès comme échec —, sinon un réseau absent le figerait pour de bon.
+    majBouton.disabled = lu.etape === 'EN_COURS';
+    return lu.etape === 'EN_COURS';
+  }
+
+  function suivreLaMaj() {
+    if (majMinuterie !== null) {
+      fenetre.clearTimeout(majMinuterie);
+      majMinuterie = null;
+    }
+    if (!afficherEtatDeMaj()) return;
+    // ⚠ ON INTERROGE, ON N'ATTEND PAS D'ÊTRE RAPPELÉ. Le pont ne rend que des
+    // valeurs : lui faire rappeler la page demanderait de lui passer une
+    // fonction, donc d'ouvrir le sens qu'on a précisément refusé (voir
+    // `MainActivity`). Une seconde entre deux lectures suffit largement.
+    majMinuterie = fenetre.setTimeout(suivreLaMaj, MAJ_PERIODE_MS);
+  }
+
+  majBouton.addEventListener('click', () => {
+    const pont = pontDeMaj();
+    if (pont === null) { afficherEtatDeMaj(); return; }
+    pont.verifier();
+    suivreLaMaj();
+  });
 
   const version = $('options-version');
   let minuterieDebug = null;

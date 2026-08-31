@@ -484,7 +484,13 @@ test('camp du sol — la part d\'Ouvrage suit le niveau : rien au départ, tout 
   };
 
   const depart = positionDepartJoueur().rangee;
-  const rangees = [GEOGRAPHIE.carte.hauteur, depart, 200, 150, 100, 26];
+  // ⚠ LE BORD BAS A QUITTÉ L'ÉCHANTILLON LE 31/08, ET C'EST UN FAIT, PAS UN
+  // ASSOUPLISSEMENT. Le départ est passé de la rangée 275 à la 295, donc dans la
+  // zone où `niveauDeLaRangee` PLAFONNE PAR LE BAS : la rangée 300 et la 295
+  // valent toutes deux 1, et une suite « strictement croissante » ne peut pas
+  // contenir les deux. On garde le DÉPART, qui est ce que le test veut dire
+  // (« rien au départ »), et on retire le bord, qui n'ajoutait plus de mesure.
+  const rangees = [depart, 200, 150, 100, 26];
   const parts = rangees.map(partMesuree);
 
   // Croissante à mesure que le niveau monte.
@@ -495,14 +501,21 @@ test('camp du sol — la part d\'Ouvrage suit le niveau : rien au départ, tout 
       `la part d'Ouvrage descend de la rangée ${rangees[i - 1]} à ${rangees[i]} : `
         + `${parts[i - 1].toFixed(3)} → ${parts[i].toFixed(3)}`);
   }
-  // ~0 au départ du joueur, ~1 au bout.
-  assert.ok(parts[1] < 0.1, `au départ du joueur, ${(100 * parts[1]).toFixed(1)} % d'Ouvrage`);
+  // ~0 au départ du joueur, ~1 au bout. ⚠ L'INDICE EST 0 DEPUIS QUE LE BORD BAS
+  // A QUITTÉ L'ÉCHANTILLON : le départ est maintenant la PREMIÈRE rangée mesurée.
+  assert.ok(parts[0] < 0.1, `au départ du joueur, ${(100 * parts[0]).toFixed(1)} % d'Ouvrage`);
   assert.equal(parts[parts.length - 1], 1, 'la base terminale n\'est pas entièrement en sol d\'Ouvrage');
 
   // La formule elle-même, aux deux bouts, sans passer par le rendu.
   assert.equal(partOuvrageDeLaRangee(GEOGRAPHIE.carte.hauteur), 0);
   assert.equal(partOuvrageDeLaRangee(26), 1);
-  assert.ok(partOuvrageDeLaRangee(depart) > 0 && partOuvrageDeLaRangee(depart) < 0.1);
+  // ⚠⚠ ET LE DÉPART VAUT EXACTEMENT ZÉRO DEPUIS LE 31/08, plus « un peu plus que
+  // zéro ». La part vaut `(niveau − 1) / 49` ; la rangée 295 est au plancher de
+  // niveau, donc la part y est nulle. L'ancienne assertion exigeait `> 0`, ce
+  // qui était vrai à la rangée 275 (strate 5) et ne l'est plus. Le titre du test
+  // — « rien au départ » — n'a jamais été aussi littéral.
+  assert.equal(partOuvrageDeLaRangee(depart), 0,
+    'le sol du départ n\'est plus entièrement celui du joueur');
 });
 
 test('rangée d\'un pixel — elle se borne à la carte, elle ne lève pas', () => {

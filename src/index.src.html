@@ -138,15 +138,20 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     display: block; touch-action: none;
   }
+  /* ⚠ ELLE NE PORTE PLUS QUE LE RETOUR À LA BASE depuis que l'échelle est
+     partie (31/08). Son cadre plein servait à poser un chiffre lisible sur le
+     terrain ; le bouton, lui, porte déjà le sien, et un second cadre autour
+     ferait un liseré double sur le coin de la carte. */
   #monde-outils {
     position: absolute; right: 8px; top: 8px; z-index: 2;
     display: flex; align-items: center; gap: 4px;
-    padding: 4px 6px;
-    background: #1E2124; border: 1px solid #343A2C;
   }
-  #monde-echelle {
-    font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
-    color: #68727E; white-space: nowrap;
+  /* Le retour à la base. Même habillage que le « Fermer » du panneau : ce lot
+     n'invente pas un troisième style de bouton pour cet écran. */
+  #monde-recentrer {
+    flex: 0 0 auto; padding: 4px 8px; font-size: 10px;
+    letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
   }
   /* Le panneau d'un site — même grammaire que celui du Chantier : il se pose
      sur le champ, il ne le remplace pas. Le joueur doit garder sous les yeux
@@ -402,6 +407,43 @@
   #chantier-champ {
     flex: 1; min-height: 0; position: relative; background: #161914;
     display: flex; flex-direction: column;
+  }
+  /* L'enveloppe du champ qui défile : elle ne sert qu'à ancrer le bouton de
+     bascule, qui doit rester immobile pendant que la grille défile sous lui.
+     ⚠ ELLE ABSORBE, elle n'a pas de hauteur propre — voir le balisage. */
+  /* ⚠ ELLE EST UNE COLONNE FLEX, ET CE N'EST PAS DÉCORATIF. `#chantier-defile`
+     porte `flex: 1; min-height: 0` pour prendre la hauteur restante et défiler
+     dedans ; sous un parent en `block`, ces deux déclarations ne s'appliquent
+     pas et il prend la hauteur de son CONTENU. Mesuré au moment de l'erreur :
+     `clientHeight` et `scrollHeight` valaient 720 tous les deux — la grille
+     entière s'affichait, plus rien ne défilait, et les bornes de bande n'avaient
+     plus rien à borner. */
+  /* Le bouton de vérification des mises à jour. Même habillage que les autres
+     boutons pleins de la page : ce lot n'invente pas un style de plus. */
+  #options-maj-verifier {
+    margin-top: 10px; padding: 8px 12px; font-size: 12px;
+    background: #3E454C; color: #F5F3E8; border: 1px solid #161914;
+  }
+  /* Une vérification qui tourne : le bouton se retire du geste, sans disparaître
+     — sinon la ligne bougerait sous le doigt. */
+  #options-maj-verifier[disabled] { background: #1E2124; color: #68727E; }
+
+  #chantier-vue {
+    flex: 1; min-height: 0; position: relative;
+    display: flex; flex-direction: column;
+  }
+  /* ⚠⚠ LA BASCULE BASE ↔ DÉFENSE, EN BAS À DROITE (Ethan, 31/08). Elle se POSE
+     sur le champ : pas de septième barre, donc le chrome fixe reste à 288 px et
+     sa garde ne bouge pas — c'est « tu compresses tout dans l'ui ».
+     ⚠ 40 px DE CÔTÉ : une cible au doigt, comme la croix du tutoriel en fait
+     28. Elle est seule dans son coin, elle peut se permettre d'être plus large.
+     ⚠ ET ELLE EST AU-DESSUS DE LA GRILLE MAIS SOUS LE PANNEAU DE DÉTAIL, qui
+     répond à un geste et doit passer devant tout. */
+  #chantier-bascule-bande {
+    position: absolute; right: 6px; bottom: 6px; z-index: 2;
+    width: 40px; height: 40px; padding: 0;
+    font-size: 16px; line-height: 1;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
   }
   /* ⚠⚠ IL DÉFILE MAINTENANT DANS LES DEUX SENS, ET C'EST LE ZOOM QUI L'EXIGE.
      Il ne défilait qu'en hauteur, `overflow-x: hidden` : une grille plus large
@@ -664,15 +706,41 @@
   #chantier-panneau-ameliorer.impossible .note { color: #F5B636; }
 
   /* Le bâtiment FANTÔME : ce que la première touche montre avant que la seconde
-     ne pose. ⚠ PAS DE TRANSPARENCE — la palette est fermée à trente-trois
-     teintes et ne porte qu'un seul `rgba`, réservé à autre chose. Un liseré
-     tireté et un sigle éteint disent « pas encore là » aussi bien, et sans
-     ouvrir une brèche dans la garde de palette. */
+     ne pose.
+
+     ⚠⚠ IL PORTE LE SPRITE DEPUIS LE 31/08, ET C'ÉTAIT UN CARRÉ. Ethan :
+     « lorsque le bâtiment est grisé avant de le poser, le jeu affiche encore un
+     carré au lieu du sprite ». Le sigle sur fond plein datait du 28/08 — la
+     grille ne portait alors AUCUN sprite, et trois lettres étaient tout ce
+     qu'on savait dessiner. Depuis le lot PREMIÈRE-COUCHE, la case d'à côté
+     montre le vrai bâtiment : le fantôme était devenu le seul carré de l'écran,
+     et il ne disait plus ce qu'on allait poser.
+
+     ⚠ CE QUI RESTE, C'EST LE LISERÉ TIRETÉ — c'est lui qui dit « pas encore
+     là », et il n'a jamais eu besoin du fond. ⚠ PAS DE TRANSPARENCE POUR
+     AUTANT : la palette est fermée à trente-trois teintes et ne tolère qu'un
+     seul `rgba`, réservé à autre chose. Le fond n'est pas rendu translucide, il
+     est RETIRÉ — le terrain se voit dessous, ce qui est exactement le rendu
+     qu'aura la case une fois posée.
+
+     ⚠ ET LE SIGLE NE SORT PAS DU JEU, il passe dans le `title` de la case, comme
+     la lettre de l'obstacle et le cadre de famille du jeton (CLAUDE.md §6,
+     « ce qui sort de l'écran ne sort pas du jeu »).
+
+     ⚠ LA GÉOMÉTRIE EST CELLE DU JETON, ET ELLE SE LIT SUR LUI. Un fantôme à
+     84 % sous un jeton à 84 % × 1,2 ferait grandir le bâtiment au moment où on
+     le pose : les deux variables sont les mêmes, donc le dessin ne bouge pas
+     d'un pixel entre le premier et le second toucher. */
   .fantome {
-    width: 84%; height: 84%;
+    width: calc(var(--jeton-part) * var(--jeton-grossissement));
+    height: calc(var(--jeton-part) * var(--jeton-grossissement));
+    --jeton-part: 84%;
+    --jeton-grossissement: 1.2;
     display: flex; align-items: center; justify-content: center;
-    background: #1E2124; border: 1px dashed #F5F3E8;
-    font-size: 9px; font-weight: 600; color: #8C9A72; letter-spacing: 0.02em;
+    border: 1px dashed #F5F3E8;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
   }
   /* Une flèche de bonus de proximité, posée SUR la case du voisin et pointant
      vers le bâtiment. L'ambre les distingue du liseré des champs, qui occupe
@@ -1220,7 +1288,28 @@
     <div id="ecran-chantier">
 
       <div id="chantier-champ">
-        <div id="chantier-defile"><div id="chantier-grille"></div></div>
+        <!-- ⚠⚠ UNE ENVELOPPE AUTOUR DU CHAMP QUI DÉFILE, ET ELLE EXISTE POUR UNE
+             SEULE RAISON : porter le bouton de bascule sans qu'il défile avec la
+             grille. Un enfant `absolute` d'un conteneur qui défile suit son
+             contenu ; il faut donc un parent positionné qui, lui, ne défile pas.
+             ⚠ ELLE N'AJOUTE PAS DE HAUTEUR FIXE. `flex: 1` et `min-height: 0` :
+             elle absorbe, comme le champ qui la contient. La garde des 288 px
+             énumère les barres à `flex: 0 0 Npx` et ne la voit pas — c'est
+             voulu, elle n'est pas une barre. -->
+        <div id="chantier-vue">
+          <div id="chantier-defile"><div id="chantier-grille"></div></div>
+          <!-- ⚠⚠ LA BASCULE ENTRE LA BASE ET SA DÉFENSE — Ethan, 31/08 : « on ne
+               doit plus passer librement de la base joueur à la def joueur. On
+               rajoute un bouton avec une flèche en bas à droite. » Le défilement
+               traversait les deux bandes d'un trait : la palette changeait sous
+               le doigt au milieu d'un geste, et on se retrouvait en défense sans
+               l'avoir demandé.
+               ⚠ SON GLYPHE EST ÉCRIT PAR LE JS, PAS ICI. Le sens de la flèche se
+               déduit des lignes d'écran (`basculeDeBande`) : le graver dans le
+               balisage serait juste aujourd'hui et faux le jour où la grille
+               changerait de sens — ce qui est déjà arrivé une fois. -->
+          <button type="button" id="chantier-bascule-bande">▼</button>
+        </div>
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
              vient du moteur n'est gravé ici. -->
@@ -1400,7 +1489,25 @@
              L'échelle, elle, RESTE : c'est le seul repère qui dise à quel cran
              on est, et un geste continu en a plus besoin qu'un bouton. -->
         <div id="monde-outils">
-          <span id="monde-echelle">—</span>
+          <!-- ⚠⚠ L'ÉCHELLE A QUITTÉ L'ÉCRAN — Ethan, 31/08 : « enlever les
+               pixel/case du haut », capture à l'appui, « en haut à droite ».
+               C'était ce `11 PX / CASE` posé sur le coin de la carte : un chiffre
+               qui ne sert à rien pour jouer, sur l'écran où l'on veut justement
+               voir le terrain.
+               ⚠ ELLE NE SORT PAS DU JEU POUR AUTANT, elle passe dans le `title`
+               de cette boîte — comme la lettre de l'obstacle et le cadre de
+               famille du jeton avant elle (CLAUDE.md §6). Ethan demande un
+               DESSIN en moins, pas une donnée. -->
+          <!-- ⚠⚠ RETROUVER SA BASE — Ethan, 31/08 : « toujours une possibilité de
+               revenir sur sa base quand on se balade sur la carte ». La carte
+               fait 300 rangées et ne se recentre qu'à la PREMIÈRE ouverture,
+               délibérément (revenir de force à chaque visite ferait perdre
+               l'endroit qu'on regardait). Sans ce bouton, un joueur parti au
+               loin n'avait aucun moyen de rentrer autrement qu'en défilant.
+               ⚠ IL SE POSE SUR LA CARTE, IL N'AJOUTE PAS DE BARRE. Le chrome
+               fixe reste à 288 px, comme les deux boutons de zoom l'ont fait
+               avant lui — c'est la consigne « tu compresses tout dans l'ui ». -->
+          <button type="button" id="monde-recentrer">Ma base</button>
         </div>
         <div id="monde-panneau" hidden>
           <div class="tete">
@@ -1422,12 +1529,27 @@
          ====================================================================== -->
     <div id="ecran-options" hidden>
       <h2>Options</h2>
-      <p class="mot">Rien à régler pour l'instant. Cet écran existe pour loger le
-        numéro de version, qui a quitté la barre du bas.</p>
+      <p class="mot">Cet écran loge le numéro de version, qui a quitté la barre du
+        bas, et la vérification de mise à jour.</p>
       <div class="ligne">
         <span class="nom">Version</span>
         <span id="options-version">v%VERSION% b%BUILD%</span>
       </div>
+      <!-- ⚠⚠ LA VÉRIFICATION DE MISE À JOUR — Ethan, 31/08 : « auto update pour
+           foyer zéro. Bouton vérifier maj dans option. » L'auto-update EXISTAIT
+           déjà (`android/app/.../MiseAJour.kt`, à chaque lancement) ; ce qui
+           manquait, c'est qu'il soit MUET et qu'on ne puisse pas le relancer.
+           ⚠⚠ AUCUNE ADRESSE ICI, ET C'EST NON NÉGOCIABLE. `tools/build.js`
+           refuse tout `https?://` dans le HTML produit, et CLAUDE.md §6 interdit
+           d'assembler l'adresse à l'exécution pour passer sous la garde. La page
+           ne télécharge donc RIEN : elle demande à l'enveloppe Android, qui
+           porte déjà l'adresse et l'allowlist. Hors de l'enveloppe — un
+           navigateur —, le pont n'existe pas et la ligne le dit. -->
+      <div class="ligne">
+        <span class="nom">Mise à jour</span>
+        <span id="options-maj-etat">—</span>
+      </div>
+      <button type="button" id="options-maj-verifier">Vérifier les mises à jour</button>
     </div>
 
     <div id="chantier-alerte" hidden>

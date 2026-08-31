@@ -811,8 +811,23 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     $('offense-selection-detail').textContent = piece === null
       ? 'aucune unité sélectionnée'
       : `vague ${piece.vague} · niveau ${piece.niveau} · ${UNITES[piece.id].points} pts`;
-    $('offense-ameliorer-cible').textContent = vue.budget === null
-      ? '' : ` ${formaterEntier(vue.engages)}/${formaterEntier(vue.budget)}`;
+    // ⚠⚠ LE COMPTEUR DE POINTS D'ARMÉE N'A RIEN À FAIRE DANS UN BOUTON D'ACTION,
+    // et il y était. Cet `<em>` est le pendant de celui du Chantier, qui écrit
+    // « vers niv. N+1 » : il dit ce que l'amélioration VISE. Y ranger
+    // « engagés / budget » mettait la grandeur du BANDEAU dans le bouton, à deux
+    // endroits à la fois, et sous un libellé qui ne la nomme pas — Ethan l'a
+    // relevé le 31/08 (« il y a le compteur armée dans le bouton améliorer »).
+    //
+    // ⚠ ET IL RESTE VIDE PLUTÔT QUE DE DIRE AUTRE CHOSE. C'est la règle déjà
+    // écrite au Chantier : « vers niv. N+1 » ne s'écrit QUE là où améliorer
+    // existe. `ACTIONS_ARMEE.ameliorer.agir` vaut `null` — le moteur ne monte
+    // aucune unité —, donc annoncer un niveau visé promettrait un geste que le
+    // bouton refuse ensuite.
+    //
+    // ⚠ LA GRANDEUR N'EST PAS PERDUE : le bandeau du haut la porte dans les
+    // trois contextes depuis le 28/08, et c'est lui qui la nomme (« PTS OFF. »).
+    $('offense-ameliorer-cible').textContent = ACTIONS_ARMEE.ameliorer.agir === null
+      ? '' : `vers niv. ${piece === null ? '' : piece.niveau + 1}`;
     marquerBoutonsAction();
   }
 

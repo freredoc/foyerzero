@@ -32,10 +32,12 @@ import { basesDeLaFenetre } from '../sim/peuplement.js';
 import { saveurDeLaCase } from '../sim/site-de-la-case.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
 import {
-  spriteDuSite, FAMILLE, cotesDuSite, dessinerGrosseBase, SPRITES_GROSSE_BASE,
+  cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
 } from '../render/embleme.js';
-import { celluleDuSprite } from '../render/sprite.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
+import {
+  territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
+} from '../sim/territoire.js';
 
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
 export const CRANS = ZOOM_CARTE.crans;
@@ -343,6 +345,37 @@ export function indicesDeTeinte(rvba) {
   return indices;
 }
 
+/**
+ * La couleur du trait de frontière de chaque camp.
+ *
+ * ⚠⚠ ELLES REPRENNENT LA SÉMANTIQUE DÉJÀ POSÉE PAR `EMBLEMES_CARTE`, elles n'en
+ * inventent pas une seconde. L'os `#F5F3E8` y borde la base du joueur ; le rouge
+ * `#E43E32` y borde EXACTEMENT ce qui attaque le joueur — « le bord rouge est
+ * réservé à ce qui attaque le joueur », dit la table, et un test croise déjà cet
+ * ensemble avec `attaqueLeJoueur`. Le territoire de l'Ouvrage est précisément
+ * l'emprise de ces bases-là : lui donner une troisième couleur apprendrait au
+ * joueur un second code pour la même chose.
+ *
+ * ⚠ LES DEUX SONT DANS LA PALETTE FERMÉE de `FICHE-STYLE.md` — la garde de
+ * `banc.test.js` balaie ce fichier et refuse toute teinte hors des trente-trois.
+ */
+export const TEINTES_TERRITOIRE = {
+  [JOUEUR]: '#F5F3E8',
+  [OUVRAGE]: '#E43E32',
+};
+
+/**
+ * L'épaisseur d'un trait de frontière, en pixels physiques.
+ *
+ * ⚠ ELLE SUIT LE CRAN, elle ne s'écrit pas en pixels. Un nombre fixe serait un
+ * fil au cran 256 et un pâté au cran 32 — c'est le même raisonnement que
+ * l'épaisseur des traits de voisinage du Chantier, qui est une fraction de case.
+ * Le plancher à 1 existe parce qu'un trait de moins d'un pixel ne se dessine pas.
+ */
+export function epaisseurDeFrontiere(cran) {
+  return Math.max(1, Math.round(cran / 16));
+}
+
 /** La teinte du milieu d'une rampe : ce qu'on peint tant qu'une dalle manque. */
 export function teinteDAttente(rangee) {
   const rampe = partOuvrageDeLaRangee(rangee) >= TERRAIN_CARTE.seuilOuvrage
@@ -538,15 +571,21 @@ export function initialiserEcranMonde(doc) {
   }
 
   /**
-   * L'échelle affichée.
+   * L'échelle — qui ne se DESSINE plus, mais qui se lit encore.
    *
-   * ⚠ ELLE A PERDU LES DEUX BOUTONS QU'ELLE ALLUMAIT (30/08) et garde son nom :
-   * ce qu'elle fait — dire où l'on en est du zoom — n'a pas changé, et c'est
-   * elle qui reste le seul repère maintenant que le geste est continu.
+   * ⚠⚠ ELLE A QUITTÉ L'ÉCRAN LE 31/08. Ethan : « enlever les pixel/case du
+   * haut », capture à l'appui, « en haut à droite ». C'était ce `11 PX / CASE`
+   * posé sur le coin de la carte. Elle avait perdu ses deux boutons le 30/08 et
+   * gardait son nom ; elle perd maintenant son texte et garde sa fonction.
+   *
+   * ⚠ CE QUI SORT DE L'ÉCRAN NE SORT PAS DU JEU (CLAUDE.md §6) : la valeur passe
+   * dans le `title` de la boîte d'outils. Ethan demande un DESSIN en moins, pas
+   * une donnée — c'est ce que le dépôt a déjà fait de la lettre de l'obstacle et
+   * du cadre de famille du jeton.
    */
   function majBoutons() {
     const cssParCase = cran() / (fenetre.devicePixelRatio || 1);
-    $('monde-echelle').textContent = `${Math.round(cssParCase)} px / case`;
+    $('monde-outils').title = `${Math.round(cssParCase)} px / case`;
   }
 
   // --- le dessin -------------------------------------------------------------
@@ -648,14 +687,17 @@ export function initialiserEcranMonde(doc) {
    */
   function dessinerEmbleme(site, x, y, taille) {
     if (emblemes !== null) {
-      const cellule = celluleDuSprite(FAMILLE, spriteDuSite(
-        site.type, palierDuSite(site, etatCourant), site.saveur,
-      ));
-      ctx.drawImage(
-        emblemes,
-        cellule.x, cellule.y, cellule.cote, cellule.cote,
-        Math.round(x), Math.round(y), taille, taille,
+      // ⚠⚠ LA GÉOMÉTRIE SE DEMANDE, ELLE NE SE CALCULE PLUS ICI. Ces six lignes
+      // lisaient `cellule.x`, `cellule.y` et `cellule.cote` sur ce que rend
+      // `celluleDuSprite` — qui rend des INDICES (`colonne`, `rangee`) et jamais
+      // des pixels. Les trois valaient `undefined`, et `drawImage` avec un
+      // rectangle source non fini NE DESSINE RIEN ET NE LÈVE PAS : la carte
+      // s'ouvrait vide de tout emblème, base du joueur comprise. Le calcul vit
+      // désormais dans `render/embleme.js`, où un test l'atteint.
+      const d = dessinerEmblemeDUneCase(
+        site, palierDuSite(site, etatCourant), x, y, taille,
       );
+      ctx.drawImage(emblemes, d.sx, d.sy, d.sCote, d.sCote, d.x, d.y, d.cote, d.cote);
     } else {
       // Repli d'attente : le gabarit du lot ÉCRAN-CARTE, tel quel.
       const embleme = EMBLEMES_CARTE[site.type];
@@ -700,6 +742,50 @@ export function initialiserEcranMonde(doc) {
     ctx.drawImage(grossesBases[cotes], d.x, d.y, d.cote, d.cote);
   }
 
+  /**
+   * Les frontières de territoire — Ethan, 31/08 : « afficher les territoires sur
+   * la carte. Cf screenshots, seuls les bordures sont dessinés. »
+   *
+   * ⚠⚠ SEULS LES CÔTÉS EXPOSÉS SE DESSINENT, JAMAIS LE REMPLISSAGE. Une case
+   * peinte couvrirait le terrain, qui est ce qu'on est venu regarder — et sur
+   * cette carte-ci l'Ouvrage tient 100 % des rangées au-dessus de la garde de
+   * départ (mesuré), donc un aplat noierait l'écran entier.
+   *
+   * ⚠ ELLES PASSENT SOUS LES EMBLÈMES. Un trait par-dessus une base couperait le
+   * seul dessin qui dit ce qu'il y a là.
+   *
+   * ⚠ ET LES DEUX CAMPS SE DESSINENT L'UN APRÈS L'AUTRE, groupés par couleur :
+   * changer `strokeStyle` à chaque segment coûterait un changement d'état de
+   * contexte par case, là où la fenêtre en compte des dizaines.
+   */
+  function dessinerFrontieres(ox, oy, pas) {
+    const carte = territoireDeLaFenetre(etatCourant, fenetreVisible({
+      x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
+    }));
+    const bords = bordsDuTerritoire(carte);
+    if (bords.length === 0) return;
+    const epaisseur = epaisseurDeFrontiere(pas);
+    ctx.lineWidth = epaisseur;
+    // ⚠ LE TRAIT SE POSE SUR LA LIGNE DE LA CASE, donc à un demi-pixel près : un
+    // `strokeRect` centre le trait sur le chemin, et un chemin sur un entier
+    // rendrait un trait à cheval, donc flou. On décale d'une demi-épaisseur.
+    const demi = epaisseur / 2;
+    for (const camp of [OUVRAGE, JOUEUR]) {
+      ctx.strokeStyle = TEINTES_TERRITOIRE[camp];
+      ctx.beginPath();
+      for (const bord of bords) {
+        if (bord.camp !== camp) continue;
+        const x = (bord.colonne - 1) * pas - ox;
+        const y = (bord.rangee - 1) * pas - oy;
+        if (bord.nord) { ctx.moveTo(x, y + demi); ctx.lineTo(x + pas, y + demi); }
+        if (bord.sud) { ctx.moveTo(x, y + pas - demi); ctx.lineTo(x + pas, y + pas - demi); }
+        if (bord.ouest) { ctx.moveTo(x + demi, y); ctx.lineTo(x + demi, y + pas); }
+        if (bord.est) { ctx.moveTo(x + pas - demi, y); ctx.lineTo(x + pas - demi, y + pas); }
+      }
+      ctx.stroke();
+    }
+  }
+
   function dessiner() {
     if (etatCourant === null || canvas.width === 0) return;
     const ox = origineX();
@@ -707,6 +793,7 @@ export function initialiserEcranMonde(doc) {
     const restent = dessinerFond(ox, oy);
 
     const pas = cran();
+    dessinerFrontieres(ox, oy, pas);
     sitesAffiches = sitesDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
     }));
@@ -900,6 +987,26 @@ export function initialiserEcranMonde(doc) {
   function fermerPanneau() {
     panneau.hidden = true;
   }
+
+  // ⚠⚠ REVENIR SUR SA BASE — Ethan, 31/08. La vue ne se recentre qu'à la
+  // PREMIÈRE ouverture de la carte, et c'est délibéré (voir `peindre`) : y
+  // revenir de force à chaque visite ferait perdre l'endroit qu'on regardait.
+  // Le corollaire, c'est qu'un joueur parti à trente rangées de chez lui n'avait
+  // aucun moyen de rentrer — sinon défiler à l'aveugle sur une carte de 300
+  // rangées. Ce bouton est ce moyen, et il ne fait QUE ça.
+  //
+  // ⚠ IL RECENTRE, IL NE CHANGE PAS DE CRAN. Ramener aussi le zoom au défaut
+  // ferait deux gestes en un et retirerait au joueur le cran qu'il avait choisi.
+  //
+  // ⚠ ET IL FERME LE PANNEAU. Il restait ouvert sur le site qu'on regardait
+  // avant de partir, donc sur un site qui n'est plus sous les yeux : il
+  // décrirait un endroit que la carte ne montre plus.
+  $('monde-recentrer').addEventListener('click', () => {
+    if (etatCourant === null) return;
+    fermerPanneau();
+    centrerSur(etatCourant.position);
+    dessiner();
+  });
 
   $('monde-panneau-fermer').addEventListener('click', fermerPanneau);
   // ⚠ IL SE FERME EXPLICITEMENT AU CÂBLAGE. Le `hidden` du balisage suffit

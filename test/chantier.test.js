@@ -19,6 +19,7 @@ import {
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, fondsDuSol, LIBELLES_FAMILLE, coteCaseParDefaut,
+  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, basculeDeBande, bornesDeDefilement,
 } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { ZOOM_CARTE } from '../src/data/sites.js';
@@ -61,7 +62,8 @@ import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { satellitesVides } from '../src/sim/satellites.js';
 import { creerPointsAttaque } from '../src/sim/points-attaque.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
-import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
+import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orientation.js';
+import { positionDepartJoueur } from '../src/sim/carte.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
@@ -75,6 +77,14 @@ import * as moteurEtat from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// ⚠⚠ LA POSITION DE DÉPART SE DEMANDE, ELLE NE S'ÉCRIT PLUS. Ces montages
+// portaient `champsDeLaBase(275, 16)` en dur : le 31/08, Ethan a rapproché le
+// départ du bord bas (rangée 295), et les trois tests sont tombés d'un coup —
+// non parce qu'ils mesuraient une position, mais parce qu'ils avaient besoin du
+// terrain de DÉPART, celui de `TERRAIN_INITIAL`, qui n'est servi que là. En le
+// dérivant, ils suivent le prochain déplacement sans qu'on y pense.
+const DEPART = positionDepartJoueur();
 
 /**
  * La base de la maquette : onze bâtiments sur le terrain de la case de départ.
@@ -2128,7 +2138,7 @@ test('flèches — le trait et le glyphe disent la MÊME direction', () => {
   // LIBELLÉ de la flèche — il vit dans l'infobulle du SVG — et le couple
   // départ/arrivée est son DESSIN. Les laisser diverger montrerait un trait
   // dans un sens et l'annoncerait dans l'autre.
-  const champs = champsDeLaBase(275, 16);
+  const champs = champsDeLaBase(DEPART.rangee, DEPART.colonne);
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },
@@ -2216,7 +2226,7 @@ test('flèches — elles pointent vers le bâtiment, dans le sens de l\'ÉCRAN',
   // le `find` sur la rangée 16 rendait le champ au lieu de l'accumulateur et
   // l'assertion lisait « ↘ » là où elle croyait lire l'accumulateur. La colonne
   // 5 laisse la rangée 16 vide de champs autour de la centrale.
-  const champs = champsDeLaBase(275, 16);
+  const champs = champsDeLaBase(DEPART.rangee, DEPART.colonne);
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },
@@ -3178,4 +3188,222 @@ test('zoom — le défaut se lit dans la feuille, et le repli n\'est pas zéro',
 
   // Et un document sans vue du tout — le cas d'un test, justement.
   assert.ok(coteCaseParDefaut({ documentElement: {} }) > 0);
+});
+
+test('fantôme — il porte le sprite de la pièce, plus un carré à sigle', () => {
+  // ⚠⚠ CE QU'ETHAN A VU LE 31/08 : « lorsque le bâtiment est grisé avant de le
+  // poser, le jeu affiche encore un carré au lieu du sprite ». Le fantôme était
+  // un `div` à fond plein portant trois lettres — juste au 28/08, quand la
+  // grille ne dessinait AUCUN sprite, faux depuis le lot PREMIÈRE-COUCHE : la
+  // case voisine montre le vrai bâtiment, et le fantôme était devenu le dernier
+  // carré de l'écran.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  // Le bloc qui fabrique le fantôme, isolé sur sa classe.
+  const debut = ecran.indexOf("marque.className = 'fantome'");
+  assert.ok(debut > 0, 'le fantôme ne se fabrique plus sous ce nom');
+  const bloc = ecran.slice(debut, debut + 700);
+
+  assert.match(bloc, /poserCouches\(marque,/,
+    'le fantôme ne pose pas de sprite : il redessinerait un carré');
+  assert.match(bloc, /spriteDe/,
+    'le sprite du fantôme doit venir de `terrain.spriteDe`, comme la case et la vignette');
+  // ⚠ ET LE SIGLE NE DOIT PLUS ÊTRE DESSINÉ. Il n'est pas perdu — il passe dans
+  // le `title` —, mais un `textContent` le remettrait par-dessus le sprite.
+  assert.ok(!/marque\.textContent\s*=/.test(bloc),
+    'le sigle est redessiné sur le fantôme, par-dessus le sprite');
+  assert.match(bloc, /marque\.title\s*=/,
+    'le sigle doit survivre dans le `title` — ce qui sort de l\'écran ne sort pas du jeu');
+});
+
+test('fantôme — sa règle CSS ne peut plus le remplir d\'un aplat', () => {
+  const feuille = sansCommentairesHtml(
+    readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'),
+  );
+  const regle = feuille.match(/\.fantome\s*\{([^}]*)\}/);
+  assert.ok(regle, 'la classe `fantome` n\'a plus de règle');
+  const corps = regle[1];
+
+  // ⚠ LE FOND N'EST PAS RENDU TRANSLUCIDE, IL EST RETIRÉ. La palette est fermée
+  // à trente-trois teintes et ne tolère qu'un seul `rgba` (CLAUDE.md §6) : un
+  // aplat semi-transparent aurait ouvert une brèche dans la garde de palette.
+  assert.match(corps, /background-color:\s*transparent/,
+    'le fantôme reprend un fond plein, qui cache le sprite');
+  assert.ok(!/background:\s*#/.test(corps),
+    'un raccourci `background: #…` remet un aplat ET efface le sprite posé en ligne');
+  assert.match(corps, /image-rendering:\s*pixelated/,
+    'sans lui le sprite du fantôme est interpolé, donc flou');
+  // ⚠ LE LISERÉ TIRETÉ RESTE : c'est LUI qui dit « pas encore là ».
+  assert.match(corps, /border:[^;]*dashed/,
+    'le liseré tireté est ce qui distingue un fantôme d\'un bâtiment posé');
+
+  // ⚠ ET SA TAILLE EST CELLE DU JETON, VARIABLES COMPRISES. Un fantôme à 84 %
+  // sous un jeton à 84 % × 1,2 ferait grandir le bâtiment au second toucher.
+  const jeton = feuille.match(/\.jeton\s*\{([^}]*)\}/);
+  assert.ok(jeton, '`.jeton` n\'a plus de règle');
+  for (const variable of ['--jeton-part', '--jeton-grossissement']) {
+    const valeur = (bloc) => bloc.match(new RegExp(`${variable}:\\s*([^;]+);`))?.[1].trim();
+    assert.ok(valeur(corps) !== undefined, `le fantôme ne déclare pas ${variable}`);
+    assert.equal(valeur(corps), valeur(jeton[1]),
+      `${variable} diverge entre le fantôme et le jeton : la pièce changerait de taille en se posant`);
+  }
+});
+
+test('zoom de la base — la plage est assez large pour qu\'un geste se voie', () => {
+  // ⚠⚠ ETHAN, 31/08 : « le zoom de la base est chelou, très lent ». Mesuré dans
+  // Chromium sur 360 px CSS : le plancher vaut 40, le plafond valait 64. Toute
+  // la plage tenait donc dans 1,6×, et depuis l'ouverture à 46 il suffisait
+  // d'écarter les doigts de 39 % pour buter en haut. Le facteur n'était pas en
+  // cause — c'est le rapport des écarts, donc la main donne sa proportion — la
+  // PLAGE l'était.
+  assert.ok(ZOOM_BASE_MULTIPLE_MAX >= 2,
+    'le plafond est retombé sur la définition des sprites : le zoom ne zoomera plus');
+  assert.equal(COTE_CASE_MAX, COTE_SPRITE * ZOOM_BASE_MULTIPLE_MAX);
+
+  // ⚠ LE MULTIPLE EST ENTIER, ET C'EST CE QUI GARDE LE PIXEL ART NET. Au
+  // plafond, un pixel de sprite vaut un nombre ENTIER de pixels CSS ; avec
+  // `image-rendering: pixelated`, l'agrandissement ne peut pas interpoler. Un
+  // plafond à 1,5 × 64 = 96 passerait ce test-ci s'il ne portait que sur la
+  // taille, et rendrait du flou.
+  assert.ok(Number.isInteger(ZOOM_BASE_MULTIPLE_MAX),
+    'un multiple fractionnaire agrandit le pixel art en interpolant');
+
+  // La plage réellement obtenue sur le plus petit téléphone encore en service :
+  // 9 colonnes dans 360 px CSS donnent un plancher de 40.
+  const plancher = Math.floor(360 / GRILLE.largeur);
+  assert.ok(COTE_CASE_MAX / plancher >= 3,
+    `plage de ${(COTE_CASE_MAX / plancher).toFixed(1)}× seulement — le geste ne se verra pas`);
+});
+
+test('zoom de la base — au repos la grille TIENT, et le zoom du joueur survit', () => {
+  // ⚠⚠ LE SECOND DÉFAUT, TROUVÉ EN MESURANT LE PREMIER. `reglerCoteCase` était
+  // appelée une seule fois, au câblage — quand `#chantier-defile` n'a pas encore
+  // de boîte et que `clientWidth` vaut zéro. La grille restait donc à
+  // `--case-defaut` (46 px) : 9 × 46 = 414 px dans 360, deux colonnes hors de
+  // l'écran et un défilement horizontal AU REPOS, ce que « tu compresses tout
+  // dans l'ui » refuse. Mesuré dans Chromium avant et après : 414 px puis 360.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  assert.match(ecran, /new fenetre\.ResizeObserver\([^)]*\)[\s\S]{0,80}\.observe\(defile\)/,
+    'rien ne remesure la largeur du champ : la grille ne peut plus tenir toute seule');
+
+  // ⚠ ET LES DEUX RÈGLES SE DÉPARTAGENT PAR UN DRAPEAU, pas par un choix fait
+  // une fois pour toutes. Tant que le joueur n'a pas pincé, la grille suit la
+  // largeur ; dès qu'il a pincé, on rejoue SON côté — un zoom effacé par une
+  // rotation d'écran serait pire que pas de zoom du tout.
+  assert.match(ecran, /zoomRegleParLeJoueur\s*=\s*true/,
+    'le pincement ne marque plus que le joueur a réglé le zoom lui-même');
+  assert.match(ecran, /zoomRegleParLeJoueur\s*\?\s*coteCase\s*:\s*coteQuiTient\(\)/,
+    'le suivi de largeur ne départage plus le zoom du joueur et la taille qui tient');
+
+  // L'appât : la forme fautive — réappliquer le DÉFAUT — ne doit plus se lire.
+  assert.ok(!/reglerCoteCase\(COTE_CASE_DEFAUT\)/.test(ecran),
+    'la grille s\'ouvre encore au défaut de la feuille, sans regarder la largeur');
+});
+
+test('bandes — le défilement ne franchit plus la frontière base / défense', () => {
+  // ⚠⚠ ETHAN, 31/08 : « on ne doit plus passer librement de la base joueur à la
+  // def joueur ». Le défilement lisait la ligne en tête et changeait de bande
+  // tout seul : la palette se reconstruisait au milieu d'un geste, et on
+  // arrivait en défense sans l'avoir demandé.
+  const h = 40;
+  const vue = 364;
+  const bat = bornesDeDefilement('batiments', h, vue);
+  const def = bornesDeDefilement('defense', h, vue);
+
+  // ⚠ D'ABORD : LE MONTAGE MESURE-T-IL QUELQUE CHOSE ? Deux bandes qui se
+  // recouvriraient rendraient ce test vrai sans rien prouver.
+  assert.ok(bat.min < def.min, 'les deux bandes se confondent : le test ne mesure rien');
+
+  // La bande des bâtiments ne peut pas descendre dans la défense.
+  assert.ok(bat.max < def.min + 1,
+    `depuis les bâtiments on atteint ${bat.max}, alors que la défense commence à ${def.min}`);
+  // Et la défense ne peut pas remonter dans les bâtiments.
+  assert.ok(def.min >= bat.max, 'la défense laisse remonter jusque dans les bâtiments');
+
+  // ⚠ LES DEUX RANGÉES DE DÉPLOIEMENT RESTENT ATTEIGNABLES, et c'est délibéré :
+  // elles n'ont pas de bouton, donc les enfermer sous la défense les aurait
+  // retirées du jeu — « rien ne se retire en silence ». La borne basse de la
+  // défense va jusqu'au bout de la grille.
+  const basDeLaGrille = GRILLE.longueur * h;
+  assert.equal(def.max, basDeLaGrille - vue,
+    'le déploiement n\'est plus atteignable en défilant depuis la défense');
+
+  // ⚠ ET UNE BANDE QUI TIENT ENTIÈRE NE DÉFILE PAS DU TOUT — `max` ne passe
+  // jamais sous `min`, sans quoi le champ remonterait au-dessus de sa bande.
+  const large = bornesDeDefilement('batiments', h, 5000);
+  assert.equal(large.max, large.min);
+
+  // Une bande sans bouton n'a pas de bornes : elle lève plutôt que d'en inventer.
+  assert.throws(() => bornesDeDefilement('deploiement', h, vue), /non navigable/);
+  assert.throws(() => bornesDeDefilement('batiments', 0, vue), /hauteur de rangée/);
+});
+
+test('bandes — la flèche du bouton se déduit des lignes d\'écran', () => {
+  // ⚠ LE SENS N'EST PAS ÉCRIT, IL EST CALCULÉ. La grille se dessine à l'envers
+  // des numéros de rangée (`render/orientation.js`), et elle a DÉJÀ été
+  // retournée une fois, le 27/08. Un glyphe gravé en dur pointerait alors du
+  // mauvais côté sans que rien ne tombe.
+  const versDef = basculeDeBande('batiments');
+  const versBat = basculeDeBande('defense');
+  assert.equal(versDef.cible, 'defense');
+  assert.equal(versBat.cible, 'batiments');
+
+  // La cible de l'une est le départ de l'autre : la bascule est un aller-retour.
+  assert.equal(basculeDeBande(versDef.cible).cible, 'batiments');
+
+  // ⚠ ET LE GLYPHE SUIT LA GÉOMÉTRIE, pas la table. On refait le calcul ici
+  // plutôt que de recopier « ▼ » : la bande des bâtiments porte la rangée 18,
+  // qui tombe en PREMIÈRE ligne d'écran, donc la défense est en dessous.
+  const ligneDe = (cle) => {
+    const bande = BANDES.find((b) => b.cle === cle);
+    return ligneEcranDeLaBande(bande).premiereLigne;
+  };
+  assert.ok(ligneDe('batiments') < ligneDe('defense'),
+    'la géométrie a changé : relire le sens des flèches');
+  assert.equal(versDef.glyphe, '▼', 'aller vers une bande plus basse doit descendre');
+  assert.equal(versBat.glyphe, '▲', 'aller vers une bande plus haute doit monter');
+
+  // Les libellés nomment la bande, ils ne disent pas « suivante ».
+  assert.ok(versDef.libelle.includes(BANDES.find((b) => b.cle === 'defense').nom));
+  assert.ok(versBat.libelle.includes(BANDES.find((b) => b.cle === 'batiments').nom));
+
+  // ⚠ UNE BANDE SANS BOUTON NE LAISSE PAS LE JOUEUR SANS PORTE DE SORTIE.
+  assert.ok(BANDES_NAVIGABLES.includes(basculeDeBande('deploiement').cible));
+});
+
+test('bandes — l\'écran borne au lieu de changer de bande, et le bouton existe', () => {
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  // ⚠ LA FORME FAUTIVE, NOMMÉE : le défilement ne doit plus déduire la bande de
+  // la ligne en tête. C'est exactement ce que faisait l'ancien gestionnaire.
+  assert.ok(!/marquerBandeActive\(bandeDeLaRangee\(/.test(ecran),
+    'le défilement change encore de bande tout seul');
+  assert.match(ecran, /bornesDeDefilement\(bandeCourante/,
+    'le gestionnaire de défilement ne borne pas');
+  // ⚠ ET LE GARDE-FOU DE RÉENTRANCE EST OBLIGATOIRE : écrire `scrollTop` émet un
+  // nouvel évènement `scroll`, donc la correction se rappellerait elle-même.
+  assert.match(ecran, /enTrainDeBorner/,
+    'la correction de défilement n\'a pas de garde-fou de réentrance');
+
+  // Le bouton est dans le livrable, et il porte une règle qui le pose SUR le
+  // champ — pas une septième barre.
+  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  assert.match(html, /id="chantier-bascule-bande"/, 'le bouton de bascule a disparu du livrable');
+  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
+  const regle = feuille.match(/#chantier-bascule-bande\s*\{([^}]*)\}/);
+  assert.ok(regle, 'le bouton de bascule n\'a pas de règle CSS');
+  assert.match(regle[1], /position:\s*absolute/, 'le bouton entre dans le flux : il pousse le champ');
+  assert.match(regle[1], /right:/, 'le bouton n\'est plus à droite');
+  assert.match(regle[1], /bottom:/, 'le bouton n\'est plus en bas');
+
+  // ⚠ ET SON ENVELOPPE EST UNE COLONNE FLEX. Sans `display: flex`, le
+  // `flex: 1; min-height: 0` de `#chantier-defile` ne s'applique pas : il prend
+  // la hauteur de son CONTENU, la grille entière s'affiche et plus rien ne
+  // défile. Mesuré au moment de l'erreur — clientHeight et scrollHeight à 720.
+  const vue = feuille.match(/#chantier-vue\s*\{([^}]*)\}/);
+  assert.ok(vue, '#chantier-vue n\'a pas de règle');
+  assert.match(vue[1], /display:\s*flex/, '#chantier-vue n\'est plus une colonne flex');
+  assert.match(vue[1], /flex-direction:\s*column/);
+  assert.match(vue[1], /min-height:\s*0/);
 });

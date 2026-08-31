@@ -46,7 +46,7 @@ import {
 // d'où le renommage à l'import, comme pour `poser`.
 import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
-import { ligneEcranDeLaRangee, ligneEcranDeLaBande, rangeeDeLaLigneEcran } from '../render/orientation.js';
+import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation.js';
 import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
 import { suffixeDeVariante, variante } from '../render/variante.js';
@@ -566,6 +566,94 @@ export const BOUTONS_DU_BAS = [
  * raccourci.
  */
 export const BANDES_NAVIGABLES = ['batiments', 'defense'];
+
+/**
+ * Les deux bandes navigables, DANS L'ORDRE OÙ ELLES TOMBENT À L'ÉCRAN.
+ *
+ * ⚠ L'ORDRE SE CALCULE, IL NE SE RECOPIE PAS. `BANDES_NAVIGABLES` est écrite
+ * dans l'ordre où on les nomme ; ce qui décide de « au-dessus » et « en
+ * dessous », c'est `render/orientation.js`, et lui seul. Recopier l'ordre à la
+ * main ferait pointer la flèche du mauvais côté le jour où la grille se
+ * retournerait — et la grille S'EST déjà retournée une fois, le 27/08.
+ */
+function bandesDansLOrdreDeLEcran() {
+  return BANDES
+    .filter((b) => BANDES_NAVIGABLES.includes(b.cle))
+    .map((b) => ({ ...b, ...ligneEcranDeLaBande(b) }))
+    .sort((a, b) => a.premiereLigne - b.premiereLigne);
+}
+
+/**
+ * Ce que fait le bouton de bascule quand on est sur cette bande.
+ *
+ * ⚠⚠ ETHAN, 31/08 : « on ne doit plus passer librement de la base joueur à la
+ * def joueur. On rajoute un bouton avec une flèche en bas à droite. » La bascule
+ * cesse donc d'être un défilement et devient un GESTE — ce qui veut dire qu'il
+ * faut dire vers OÙ il emmène.
+ *
+ * ⚠ LE SENS DE LA FLÈCHE SE DÉDUIT DES LIGNES D'ÉCRAN, il ne s'écrit pas. La
+ * bande des bâtiments tombe en haut, celle de la défense en dessous : aller à la
+ * défense DESCEND. Écrire « ▼ pour la défense » en dur serait juste aujourd'hui
+ * et faux le jour où la grille changerait de sens, sans que rien ne le dise.
+ *
+ * @param {string} cleCourante
+ * @returns {{cible: string, glyphe: string, libelle: string}}
+ */
+export function basculeDeBande(cleCourante) {
+  const ordre = bandesDansLOrdreDeLEcran();
+  const ici = ordre.findIndex((b) => b.cle === cleCourante);
+  // ⚠ UNE BANDE NON NAVIGABLE RENVOIE VERS LA PREMIÈRE, elle ne lève pas. Le
+  // déploiement n'a pas de bouton et n'en aura pas ; s'y trouver ne doit pas
+  // laisser le joueur sans porte de sortie.
+  const depart = ici < 0 ? -1 : ici;
+  const cible = ordre[(depart + 1) % ordre.length];
+  const descend = depart < 0 || cible.premiereLigne > ordre[depart].premiereLigne;
+  return {
+    cible: cible.cle,
+    glyphe: descend ? '▼' : '▲',
+    libelle: `Aller à ${cible.nom}`,
+  };
+}
+
+/**
+ * Jusqu'où le champ a le droit de défiler quand on regarde cette bande.
+ *
+ * ⚠⚠ C'EST CE QUI REMPLACE LE DÉFILEMENT LIBRE. Avant le 31/08, la molette
+ * traversait les trois bandes d'un trait : on passait des bâtiments à la défense
+ * sans l'avoir demandé, et la palette changeait sous le doigt au milieu du
+ * geste. Le défilement reste — il faut bien atteindre le bas d'une bande quand
+ * on a zoomé — mais il ne FRANCHIT plus une frontière.
+ *
+ * ⚠ LA BORNE BASSE D'UNE BANDE EST LE HAUT DE LA SUIVANTE **NAVIGABLE**, pas le
+ * haut de la bande suivante tout court. La défense est la dernière des deux ;
+ * sous elle il n'y a que le déploiement, qui n'a pas de bouton et n'est pas un
+ * endroit où l'on compose. Le lui rattacher est ce qui fait que ces deux rangées
+ * restent ATTEIGNABLES : les enfermer aurait retiré du jeu deux rangées que le
+ * défilement montrait, et « rien ne se retire en silence ».
+ *
+ * @param {string} cleBande
+ * @param {number} hauteurRangee hauteur d'une rangée à l'écran, en pixels
+ * @param {number} hauteurVue hauteur visible du champ, en pixels
+ * @returns {{min: number, max: number}} bornes de `scrollTop`
+ */
+export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue) {
+  if (!(hauteurRangee > 0)) {
+    throw new RangeError(`chantier : hauteur de rangée « ${hauteurRangee} » invalide`);
+  }
+  const ordre = bandesDansLOrdreDeLEcran();
+  const ici = ordre.findIndex((b) => b.cle === cleBande);
+  if (ici < 0) throw new RangeError(`chantier : bande « ${cleBande} » non navigable`);
+  const suivante = ordre[ici + 1];
+  const premiereLigneApres = suivante === undefined
+    ? GRILLE.longueur + 1
+    : suivante.premiereLigne;
+  const min = (ordre[ici].premiereLigne - 1) * hauteurRangee;
+  const bas = (premiereLigneApres - 1) * hauteurRangee;
+  // ⚠ `max` NE PASSE JAMAIS SOUS `min`. Quand la bande tient entière dans la vue
+  // — le cas normal au zoom d'ouverture — il n'y a rien à défiler du tout, et
+  // une borne haute négative ferait remonter le champ au-dessus de sa bande.
+  return { min, max: Math.max(min, bas - hauteurVue) };
+}
 
 /**
  * La bande à laquelle appartient une rangée.
@@ -1940,20 +2028,47 @@ function fondDuTerrain(prefixe, graine, rangee, colonne) {
 // ---------------------------------------------------------------------------
 
 /**
+ * De combien un sprite peut être agrandi au-delà de sa propre définition, au
+ * zoom maximal de la base.
+ *
+ * ⚠ ENTIER, OBLIGATOIREMENT. Au plafond, un pixel de sprite vaut ce nombre de
+ * pixels CSS ENTIERS ; avec `image-rendering: pixelated`, l'agrandissement ne
+ * peut alors pas interpoler. C'est le raisonnement des crans de `ZOOM_CARTE`,
+ * qui sont des puissances de deux pour la même raison — un plafond à 1,5 fois
+ * la définition rendrait du flou.
+ *
+ * ⚠ ET C'EST UNE VALEUR D'INTERFACE, PAS DE CALIBRAGE : elle ne décide de rien
+ * dans le jeu, seulement de jusqu'où le doigt peut grossir la vue. Elle vit donc
+ * ici, avec le reste du zoom, et non dans `src/data/`.
+ */
+export const ZOOM_BASE_MULTIPLE_MAX = 2;
+
+/**
  * Le côté de case le plus grand qu'on autorise, en pixels CSS.
  *
  * ⚠ IL SE LIT DANS L'ATLAS, IL NE SE CHOISIT PAS. `COTE_SPRITE` est la
- * résolution à laquelle tous les sprites du dépôt sont conditionnés : à cette
- * taille-là, un pixel de sprite vaut un pixel CSS, ce qui est la fin naturelle
- * de la plage utile. Au-delà on agrandirait du pixel art au-dessus de sa propre
- * définition — exactement ce que ce lot vient de retirer à la carte du monde.
+ * résolution à laquelle tous les sprites du dépôt sont conditionnés ; le plafond
+ * en est un MULTIPLE ENTIER, jamais un nombre écrit à la main.
  *
- * Ce que ça donne, mesuré sur un téléphone de 360 px CSS : la grille tient à
- * 40 px par case, le jeton d'un bâtiment y fait 40 px de côté ; à 64, il en fait
- * 64. Avec les 20 % de grossissement du jeton, le bâtiment passe de 34 à 64 px —
- * c'est la réponse au « bien trop petits » d'Ethan, et le zoom en est la moitié.
+ * ⚠⚠ IL VALAIT `COTE_SPRITE` TOUT COURT JUSQU'AU 31/08, ET LE ZOOM NE ZOOMAIT
+ * QUASIMENT PAS. Ethan : « le zoom de la base est chelou, très lent ». Ce n'était
+ * pas la VITESSE — le facteur est le rapport des écarts, donc un geste de la
+ * main rend exactement sa proportion —, c'était la PLAGE. Mesuré sur un
+ * téléphone de 360 px CSS : le plancher vaut 40, le plafond valait 64, soit
+ * 1,6 fois EN TOUT. Depuis l'ouverture à 46, écarter les doigts de 39 % suffisait
+ * à buter en haut et les resserrer de 13 % à buter en bas ; tout le reste du
+ * geste ne faisait plus rien, ce qui se lit exactement comme un zoom qui ne
+ * répond pas. À 128, la plage passe à 3,2 fois.
+ *
+ * ⚠ CE QU'ON PAIE, ET POURQUOI C'EST ACCEPTABLE. Au-delà de `COTE_SPRITE` on
+ * agrandit du pixel art au-dessus de sa propre définition — ce que le lot du
+ * 30/08 a précisément retiré à la carte du monde. La différence tient en deux
+ * points : le facteur reste ENTIER (voir ci-dessus), et surtout ce zoom-ci est
+ * un geste que le joueur fait exprès, quand il veut regarder une case de près,
+ * là où la carte agrandissait son fond SANS qu'on lui demande. On ne rend pas
+ * du flou par défaut : on autorise un gros plan.
  */
-const COTE_CASE_MAX = COTE_SPRITE;
+export const COTE_CASE_MAX = COTE_SPRITE * ZOOM_BASE_MULTIPLE_MAX;
 
 /**
  * Le côté de case à l'ouverture, LU DANS LA FEUILLE DE STYLE.
@@ -1976,7 +2091,15 @@ export function coteCaseParDefaut(doc) {
     ?.getComputedStyle(doc.documentElement)
     ?.getPropertyValue('--case-defaut');
   const lu = Number.parseFloat(brut ?? '');
-  return Number.isFinite(lu) && lu > 0 ? lu : COTE_CASE_MAX;
+  // ⚠⚠ LE REPLI EST `COTE_SPRITE`, PAS `COTE_CASE_MAX`, ET LES DEUX ONT CESSÉ
+  // D'ÊTRE ÉGAUX LE 31/08. Ils l'étaient tant que le plafond de zoom valait la
+  // définition d'un sprite ; depuis qu'il vaut le double, retomber sur le
+  // plafond ferait s'OUVRIR la base au zoom maximal quand la variable manque —
+  // c'est-à-dire à 128 px par case, soit trois colonnes visibles sur neuf.
+  // Le repli est une taille d'ouverture raisonnable, jamais une borne.
+  // ⚠ Un test de `chantier.test.js` tenait déjà cette égalité, et il est tombé
+  // au moment où le plafond a bougé. Il avait raison.
+  return Number.isFinite(lu) && lu > 0 ? lu : COTE_SPRITE;
 }
 
 /**
@@ -2353,15 +2476,20 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   function allerALaBande(cleBande) {
     const bande = BANDES.find((b) => b.cle === cleBande);
     if (bande === undefined) throw new Error(`chantier : bande « ${cleBande} » inconnue`);
+    // ⚠ ON MARQUE LA BANDE AVANT DE DÉFILER, ET L'ORDRE COMPTE DEPUIS LE 31/08.
+    // Le défilement est maintenant BORNÉ à la bande courante : partir avant
+    // d'avoir changé de bande ferait clamper le mouvement sur la bande qu'on
+    // quitte, donc le ramènerait d'où il vient.
+    marquerBandeActive(cleBande);
     const { premiereLigne } = ligneEcranDeLaBande(bande);
     defile.scrollTo({ top: (premiereLigne - 1) * hauteurRangee(), behavior: 'smooth' });
-    marquerBandeActive(cleBande);
   }
 
   function marquerBandeActive(cleBande) {
     const avant = terrainCourant();
     bandeCourante = cleBande;
     marquerBoutonDuBas();
+    marquerBascule();
 
     // ⚠⚠ LA PALETTE SUIT LE TERRAIN, ET SANS CETTE LIGNE ELLE NE LE SUIVAIT
     // PAS. `bandeCourante` bouge à chaque évènement de défilement ; la palette,
@@ -2497,6 +2625,20 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   let coteCase = COTE_CASE_DEFAUT;
 
   /**
+   * Le joueur a-t-il réglé le zoom lui-même ?
+   *
+   * ⚠⚠ ELLE EXISTE POUR DÉPARTAGER DEUX RÈGLES QUI SE CONTREDISENT SINON. Tant
+   * que personne n'a pincé, la grille doit TENIR dans l'écran — « tu compresses
+   * tout dans l'ui », rien ne défile horizontalement au repos. Une fois qu'on a
+   * pincé, la grille doit garder la taille demandée, même si elle déborde : un
+   * gros plan qui déborde, c'est ce qu'on a demandé.
+   *
+   * Sans ce drapeau, il fallait choisir : ou bien la rotation d'écran efface le
+   * zoom du joueur, ou bien l'ouverture déborde. Les deux ont été livrées.
+   */
+  let zoomRegleParLeJoueur = false;
+
+  /**
    * Applique un côté de case, borné.
    *
    * ⚠ ON ÉCRIT SUR `#chantier-grille`, PAS SUR `:root`. La variable déclarée
@@ -2564,6 +2706,9 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // petit, pour le même geste de la main — et le réglage trouvé sur un
     // téléphone serait faux sur la tablette suivante.
     const facteur = ecartDesDoigts(deux) / pincement.ecart;
+    // ⚠ À PARTIR D'ICI, LA LARGEUR DE L'ÉCRAN NE DÉCIDE PLUS. Le joueur a réglé
+    // le zoom : une rotation ne doit plus le lui reprendre.
+    zoomRegleParLeJoueur = true;
     reglerCoteCase(Math.round(pincement.cote * facteur));
     // Le pincement pilote la taille ; laisser le navigateur défiler en même
     // temps ferait glisser la grille sous les doigts pendant qu'elle grandit.
@@ -2580,21 +2725,88 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
   // l'ouverture du clavier change `clientWidth` : sans ce rappel, la grille
   // resterait à une taille qui ne tient plus, et le joueur trouverait un
   // défilement horizontal qu'il n'a pas demandé.
-  fenetre.addEventListener('resize', () => { reglerCoteCase(coteCase); });
-  reglerCoteCase(COTE_CASE_DEFAUT);
+  /**
+   * La taille à appliquer quand la boîte change de largeur.
+   *
+   * ⚠ TANT QUE LE JOUEUR N'A PAS PINCÉ, C'EST LA TAILLE QUI TIENT. `coteQuiTient`
+   * vaut `min(défaut, largeur / colonnes)` : sur un écran large la grille ouvre
+   * au défaut de la feuille, sur un téléphone étroit elle se resserre juste
+   * assez pour entrer. Dès qu'il a pincé, on rejoue SON côté — un zoom qui
+   * s'effacerait à la rotation de l'écran serait pire que pas de zoom.
+   */
+  const coteASuivre = () => (zoomRegleParLeJoueur ? coteCase : coteQuiTient());
+
+  fenetre.addEventListener('resize', () => { reglerCoteCase(coteASuivre()); });
+  reglerCoteCase(coteASuivre());
+
+  // ⚠⚠ ET CE PREMIER APPEL ARRIVE TROP TÔT — MESURÉ, PAS SUPPOSÉ. Au câblage,
+  // `#chantier-defile` n'a pas encore de boîte : `clientWidth` vaut zéro, donc
+  // `coteQuiTient()` retombe sur son repli, et rien ne remesure ensuite. La
+  // grille restait à `--case-defaut` (46 px) quelle que soit la largeur réelle,
+  // et sur un téléphone de 360 px CSS elle faisait 9 × 46 = 414 px : **deux
+  // colonnes vivaient hors de l'écran, et la base défilait horizontalement au
+  // repos**, ce que la consigne « tu compresses tout dans l'ui » refuse.
+  // Relevé dans Chromium le 31/08, en même temps que la plage de zoom.
+  //
+  // ⚠ UN `resize` DE FENÊTRE NE LE RATTRAPE PAS : la fenêtre, elle, ne change
+  // pas de taille entre le câblage et la première image. Ce qui change, c'est la
+  // BOÎTE de l'élément, et seul un `ResizeObserver` le voit. C'est déjà le
+  // mécanisme que `ui/monde.js` emploie pour son canevas.
+  //
+  // ⚠ IL RÉAPPLIQUE `coteCase`, PAS LE DÉFAUT. Sinon toute rotation d'écran
+  // effacerait le zoom que le joueur venait de régler au doigt.
+  if (typeof fenetre.ResizeObserver === 'function') {
+    new fenetre.ResizeObserver(() => { reglerCoteCase(coteASuivre()); }).observe(defile);
+  }
 
   // La bande active suit aussi le défilement à la main : les seuils se
   // déduisent de la hauteur mesurée d'une rangée, jamais d'un nombre de pixels
   // écrit en dur — la cellule est carrée, donc sa taille dépend de la largeur
   // de l'écran.
+  // ⚠⚠ LE DÉFILEMENT NE CHANGE PLUS DE BANDE, IL SE BORNE — Ethan, 31/08 : « on
+  // ne doit plus passer librement de la base joueur à la def joueur ». Il
+  // lisait la ligne en tête et changeait `bandeCourante` en conséquence : la
+  // palette se reconstruisait au milieu d'un geste, et on arrivait en défense
+  // sans l'avoir demandé. Il RESTE un défilement — au zoom, une bande de huit
+  // rangées ne tient plus dans le champ — mais il ne franchit plus la frontière.
+  //
+  // ⚠ ON CORRIGE `scrollTop` DIRECTEMENT, SANS `behavior: 'smooth'`. Une
+  // correction animée depuis un évènement de défilement se poursuit pendant que
+  // le doigt pousse encore, et les deux se battent.
+  //
+  // ⚠ ET LE GARDE-FOU DE RÉENTRANCE EST OBLIGATOIRE : écrire `scrollTop` émet un
+  // nouvel évènement `scroll`. Sans lui, la correction se rappellerait elle-même.
+  let enTrainDeBorner = false;
   defile.addEventListener('scroll', () => {
+    if (enTrainDeBorner) return;
     const h = hauteurRangee();
     if (!(h > 0)) return;
-    const ligneEnTete = Math.min(
-      GRILLE.longueur,
-      Math.max(1, Math.round(defile.scrollTop / h) + 1),
-    );
-    marquerBandeActive(bandeDeLaRangee(rangeeDeLaLigneEcran(ligneEnTete)));
+    if (!BANDES_NAVIGABLES.includes(bandeCourante)) return;
+    const bornes = bornesDeDefilement(bandeCourante, h, defile.clientHeight);
+    const borne = Math.min(bornes.max, Math.max(bornes.min, defile.scrollTop));
+    if (Math.abs(borne - defile.scrollTop) < 0.5) return;
+    enTrainDeBorner = true;
+    defile.scrollTop = borne;
+    // Le drapeau retombe à la prochaine boucle : l'évènement que l'écriture
+    // ci-dessus provoque n'est pas synchrone.
+    fenetre.setTimeout(() => { enTrainDeBorner = false; }, 0);
+  });
+
+  // ⚠⚠ LE BOUTON DE BASCULE, EN BAS À DROITE. C'est lui qui remplace le
+  // défilement d'une bande à l'autre. Son glyphe se DÉDUIT — `basculeDeBande`
+  // lit les lignes d'écran — pour que la flèche pointe encore du bon côté le
+  // jour où la grille changerait de sens, ce qui est déjà arrivé une fois.
+  const boutonBascule = $('chantier-bascule-bande');
+
+  function marquerBascule() {
+    const bascule = basculeDeBande(bandeCourante);
+    boutonBascule.textContent = bascule.glyphe;
+    boutonBascule.title = bascule.libelle;
+    boutonBascule.setAttribute('aria-label', bascule.libelle);
+  }
+
+  boutonBascule.addEventListener('click', () => {
+    allerALaBande(basculeDeBande(bandeCourante).cible);
   });
 
   // --- la palette des posables -----------------------------------------------
@@ -2846,9 +3058,28 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     if (fantome !== null) {
       const case_ = cellules.get(cle(fantome.rangee, fantome.colonne));
       if (case_ !== undefined) {
+        const terrain = TERRAINS[terrainDuFantome];
         const marque = doc.createElement('div');
         marque.className = 'fantome';
-        marque.textContent = TERRAINS[terrainDuFantome].sigleDe(fantome.id);
+        // ⚠⚠ LE FANTÔME PORTE LE SPRITE, PLUS UN SIGLE — 31/08. Il montrait
+        // trois lettres sur un fond plein, ce qui datait du 28/08, quand la
+        // grille ne dessinait encore aucun sprite. Depuis, la case voisine
+        // montre le vrai bâtiment : le fantôme était le dernier carré de
+        // l'écran, et il ne disait plus CE QU'ON ALLAIT POSER. Ethan l'a relevé
+        // le 31/08.
+        //
+        // ⚠ ET IL VIENT DU MÊME POINT D'ENTRÉE QUE LA CASE ET QUE LA VIGNETTE
+        // DE PALETTE — `terrain.spriteDe`, jamais un second calcul. Une
+        // troisième lecture des noms de sprite finirait par montrer, à l'aperçu,
+        // autre chose que ce que la pose dessine. La pièce est décrite au
+        // NIVEAU 1, qui est ce qu'une pose fait.
+        if (terrain.spriteDe !== null) {
+          poserCouches(marque, terrain.spriteDe({ ...fantome, niveau: 1 }, etatCourant));
+        }
+        // ⚠ LE SIGLE NE SORT PAS DU JEU, IL PASSE DANS LE `title`. C'est ce que
+        // le dépôt a déjà fait de la lettre de l'obstacle et du cadre de famille
+        // du jeton : Ethan demande un DESSIN en moins, pas une donnée.
+        marque.title = terrain.sigleDe(fantome.id);
         case_.appendChild(marque);
       }
     }

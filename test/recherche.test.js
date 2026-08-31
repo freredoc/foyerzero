@@ -424,7 +424,7 @@ test('T6 — la migration v13 → v14 ne verrouille rien de ce qui est déjà po
 
   const migre = migrer(v13);
   assert.equal(migre.version, SAVE_VERSION);
-  assert.equal(migre.version, 14);
+  assert.equal(migre.version, 15);
   assert.equal(migre.recherche.pointsMilli, '4242', 'la migration a touché au compteur');
   assert.deepEqual(migre.recherche.modules, { offense: [], defense: [] },
     'la migration a offert des modules que le joueur n\'a jamais achetés');
