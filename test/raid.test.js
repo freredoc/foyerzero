@@ -214,7 +214,28 @@ test('armée — les dégâts reviennent sur les BONNES pièces', () => {
 });
 
 test('armée — une unité détruite plancher à 1 PV et RESTE dans l\'armée', () => {
-  const etat = partieArmee(2026, 6);
+  // ⚠⚠ CE MONTAGE A PERDU SON MORDANT LE 31/08, ET IL A FALLU LE LUI RENDRE.
+  // Il envoyait six Meutes de niveau 1 sur le camp d'une base neuve, dont le
+  // niveau suit celui du JOUEUR — donc 1 lui aussi. Que quelqu'un tombe tenait
+  // alors au dessin du site, c'est-à-dire à la CASE : quand Ethan a rapproché le
+  // départ du bord bas (rangée 275 → 295), les anneaux ont suivi, le camp a
+  // changé de case, et plus personne ne mourait. Le test mesurait le hasard.
+  //
+  // ⚠ ON MONTE DONC LA BASE, PAS L'ARMÉE, et c'est la règle du jeu qui rend le
+  // montage lethal : un camp est indexé sur le niveau du JOUEUR (« le filet de
+  // sécurité, il doit rester à sa portée »). Des bâtiments au niveau 12 contre
+  // une armée au niveau 1 font une défense qui tue, où que la case tombe.
+  //
+  // ⚠ ET LA MONTÉE PRÉCÈDE LE RATTRAPAGE : le niveau d'un satellite se fixe au
+  // moment où il PARAÎT. La poser après laisserait un camp de niveau 1.
+  const etat = creerEtat(2026);
+  for (const b of etat.disposition) b.niveau = 12;
+  rattraperJeu(etat, 3001);
+  for (let c = 1; c <= 6; c += 1) {
+    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+  }
+  assert.equal(etat.satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
+
   const rapport = executerRaid(etat, etat, premierCamp(etat));
 
   assert.equal(etat.armee.length, 6, 'une pièce a été retirée de l\'armée');

@@ -471,16 +471,33 @@ test('emblèmes — le bord rouge est réservé à ce qui attaque le joueur', ()
 test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est inliné UNE fois', () => {
   const html = lire('dist', 'index.html');
   for (const id of ['onglet-monde', 'ecran-monde', 'monde-atlas', 'monde-canvas',
-    'monde-champ', 'monde-outils', 'monde-echelle',
+    'monde-champ', 'monde-outils', 'monde-recentrer',
     'monde-panneau', 'monde-panneau-titre', 'monde-panneau-fermer', 'monde-panneau-corps']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} manque à la page`);
   }
   // ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08, et cette garde le tient
   // par l'autre bout : Ethan a demandé « au doigt, pas de zoom fixe avec + − »,
   // donc leur RETOUR est ce qu'on refuse, pas leur absence.
-  for (const id of ['monde-zoom-moins', 'monde-zoom-plus']) {
-    assert.ok(!html.includes(`id="${id}"`), `#${id} est revenu : le zoom se fait au doigt`);
+  //
+  // ⚠⚠ ET L'ÉCHELLE LES A REJOINTS LE 31/08. Ethan : « enlever les pixel/case du
+  // haut », capture à l'appui, « en haut à droite ». C'était le `11 PX / CASE`
+  // posé sur le coin de la carte. Ce test EXIGEAIT sa présence ; il exige
+  // maintenant son absence, et il a eu raison de tomber au moment du retrait.
+  for (const id of ['monde-zoom-moins', 'monde-zoom-plus', 'monde-echelle']) {
+    assert.ok(!html.includes(`id="${id}"`), `#${id} est revenu sur le coin de la carte`);
   }
+
+  // ⚠ MAIS LA GRANDEUR N'EST PAS PERDUE — « ce qui sort de l'écran ne sort pas du
+  // jeu » (CLAUDE.md §6). Elle passe dans le `title` de la boîte d'outils, comme
+  // la lettre de l'obstacle et le cadre de famille du jeton avant elle. Sans
+  // cette moitié-ci, « retirer » se confondrait avec « supprimer ».
+  const ecran = lire('src', 'ui', 'monde.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  assert.match(ecran, /\$\('monde-outils'\)\.title\s*=/,
+    'l\'échelle a été supprimée au lieu d\'être déplacée dans le `title`');
+  assert.ok(!/textContent\s*=\s*`\$\{Math\.round\(cssParCase\)\}/.test(ecran),
+    'l\'échelle est redessinée à l\'écran');
 
   // L'onglet n'est plus mort.
   const onglet = html.match(/<button[^>]*id="onglet-monde"[^>]*>/)[0];

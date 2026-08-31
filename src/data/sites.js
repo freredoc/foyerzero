@@ -337,10 +337,32 @@ export const POINTS_RECHERCHE = {
 // Passer à 29 aurait déplacé le centre en 15, donc TOUT ce qui est déjà arbitré.
 export const GEOGRAPHIE = {
   carte: { largeur: 31, hauteur: 300 },
-  departJoueur: { strate: 5, casesDepuisBordBas: 25 },
+  // ⚠⚠ LE DÉPART A GLISSÉ VERS LE BORD BAS LE 31/08 — arbitré par Ethan :
+  // « décaler la base du joueur de 25 cases vers le bas », puis, une fois les
+  // deux conventions confrontées, « comptés depuis mon bord : 295 ». Il était à
+  // 25 cases du bord bas (rangée 275, strate 5) ; il est à CINQ (rangée 295).
+  //
+  // ⚠ LA STRATE SUIT, ELLE NE SE CHOISIT PAS. Elle vaut
+  // `round(casesDepuisBordBas × niveauParCase)`, plancher à 1 : 5 × 0,2 = 1. Les
+  // deux champs restent donc liés, et `test/carte.test.js` les confronte comme
+  // avant. Écrire 5 ici ferait mentir la table sur ce que le joueur trouve
+  // autour de lui.
+  //
+  // ⚠ ET LE JOUEUR NE DÉMARRE TOUJOURS PAS SUR LE BORD LUI-MÊME. Cinq cases de
+  // marge lui laissent ses anneaux de satellites — l'avant-poste va jusqu'à cinq
+  // cases — sans que la moitié tombe hors carte.
+  departJoueur: { strate: 1, casesDepuisBordBas: 5 },
   niveauParCase: 0.2,
   niveauPlafond: 50,
-  baseTerminale: { casesDepuisBordHaut: 25, colonne: 'centre' },
+  // ⚠⚠ ET LA TERMINALE EST MONTÉE D'AUTANT — même arbitrage : « base terminale
+  // 25 cases vers le haut », lue « rangée 15 ». Elle était à 25 cases du bord
+  // haut (rangée 26), elle est à QUATORZE (rangée 15).
+  //
+  // ⚠ ELLE NE PEUT PAS ALLER PLUS HAUT QUE LA RANGÉE 2, ET C'EST MESURÉ. Elle se
+  // dessine en hexagone sur 3 × 3 cases depuis le 30/08 ; `empriseDeLaGrosseBase`
+  // LÈVE quand le carré déborde la carte, et une levée dans la boucle de dessin
+  // viderait tout l'écran Monde. La rangée 15 tient largement.
+  baseTerminale: { casesDepuisBordHaut: 14, colonne: 'centre' },
   rayonInfluenceJoueur: 2, // fixe
   rayonInfluenceEnnemie: 3, // fixe
   rayonAttaque: 10, // fixe

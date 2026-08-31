@@ -844,7 +844,7 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **ELLE FAISAIT 30 JUSQU'AU 29/08.** Une largeur paire n'a pas de centre :
   `colonneCentre()` devait trancher entre 15 et 16, et avait retenu 16. À 31,
   16 EST le centre — la fonction rend le même nombre, le départ du joueur
-  (275, 16) et la base terminale ne bougent pas d'une case. 29 aurait mis le
+  (275, 16 à l'époque) et la base terminale ne bougent pas d'une case. 29 aurait mis le
   centre en 15, donc déplacé tout ce qui était déjà arbitré.
 - Le glossaire des modules ne dit pas qui les porte. Les affectations sont dans
   `UNITES[x].module` / `moduleOuvrage`, pas dans la colonne de description.
@@ -1023,9 +1023,29 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   — et un seul décalage les rend vrais tous les deux. Un test asserte qu'aucune
   rangée voisine n'y arrive.
   ⚠ **Le joueur ne démarre PAS au bord bas**, malgré la formule « tout en bas ».
-  Le bord vaudrait le niveau 0. Il démarre **rangée 275, colonne 16**, 25 cases
-  plus haut, dans une **strate 5**. La base terminale est rangée 26, colonne 16,
+  Le bord vaudrait le niveau 0. Il démarre **rangée 295, colonne 16**, cinq cases
+  plus haut, dans une **strate 1**. La base terminale est rangée 15, colonne 16,
   strate 50.
+  ⚠⚠ **LES DEUX ONT BOUGÉ LE 31/08, ET C'EST UN ARBITRAGE D'ETHAN** — « décaler
+  la base du joueur de 25 cases vers le bas et base terminale 25 cases vers le
+  haut », lu, après confrontation des deux conventions de rangée, « comptés
+  depuis mon bord : 295 et 15 ». Le départ était rangée 275 (strate 5), la
+  terminale rangée 26. Les deux bouts du couloir sont maintenant contre leurs
+  bords, et le couloir fait 280 cases au lieu de 249.
+  ⚠ **LA STRATE N'A PAS ÉTÉ CHOISIE, ELLE SUIT** : `round(5 × 0,2)` plafonné à 1.
+  Écrire 5 dans `GEOGRAPHIE` ferait mentir la table sur ce que le joueur trouve
+  autour de lui — les avant-postes du début sont désormais de niveau 1, les camps
+  restent indexés sur le niveau du joueur.
+  ⚠ **ET LA TERMINALE NE PEUT PAS MONTER PLUS HAUT QUE LA RANGÉE 2** : son
+  hexagone couvre 3 × 3 cases et `empriseDeLaGrosseBase` LÈVE quand le carré
+  déborde la carte — une levée dans la boucle de dessin viderait tout l'écran
+  Monde. La rangée 15 tient largement.
+  ⚠ **CINQ TESTS ONT EU RAISON DE TOMBER, ET AUCUN NE MESURAIT UNE POSITION.**
+  Trois portaient `champsDeLaBase(275, 16)` en dur — ils voulaient le terrain de
+  DÉPART, servi par `TERRAIN_INITIAL`, et ils le DEMANDENT maintenant. Un
+  quatrième cherchait un avant-poste à une case écrite à la main. Le cinquième
+  envoyait six Meutes sur un camp dont la létalité tenait au dessin de la case.
+  Un montage qui écrit une coordonnée ne garde que lui-même.
   ⚠ **« STRATE 5 » N'EST PAS « BASE DE NIVEAU 5 ».** C'est le niveau des sites
   de l'OUVRAGE à cet endroit de la carte — ce que le joueur y trouvera à
   attaquer. Sa propre base n'a aucun niveau qui vienne de la carte. Écrire
@@ -2314,7 +2334,7 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   sur les 9 300 cases : au cran le plus large la fenêtre en fait moins de 1 500.
   ⚠⚠ **ET LE NIVEAU DU JOUEUR N'EST PAS CELUI DE SA RANGÉE.** Le panneau de sa
   base affiche « — trois moyennes, sur l'écran Base », jamais le niveau de la
-  rangée 275. C'est la faute que `sim/carte.js` existe pour empêcher, et un test
+  rangée 295. C'est la faute que `sim/carte.js` existe pour empêcher, et un test
   refuse que ce nombre apparaisse dans cette ligne.
 - **LE PANNEAU D'UN SITE NE PORTE AUCUN BOUTON D'ACTION, ET C'EST UNE RÈGLE.**
   Type, niveau, distance, position — et rien d'autre : le raid n'existe pas. Un

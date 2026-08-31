@@ -63,6 +63,7 @@ import { satellitesVides } from '../src/sim/satellites.js';
 import { creerPointsAttaque } from '../src/sim/points-attaque.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orientation.js';
+import { positionDepartJoueur } from '../src/sim/carte.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
@@ -76,6 +77,14 @@ import * as moteurEtat from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// ⚠⚠ LA POSITION DE DÉPART SE DEMANDE, ELLE NE S'ÉCRIT PLUS. Ces montages
+// portaient `champsDeLaBase(275, 16)` en dur : le 31/08, Ethan a rapproché le
+// départ du bord bas (rangée 295), et les trois tests sont tombés d'un coup —
+// non parce qu'ils mesuraient une position, mais parce qu'ils avaient besoin du
+// terrain de DÉPART, celui de `TERRAIN_INITIAL`, qui n'est servi que là. En le
+// dérivant, ils suivent le prochain déplacement sans qu'on y pense.
+const DEPART = positionDepartJoueur();
 
 /**
  * La base de la maquette : onze bâtiments sur le terrain de la case de départ.
@@ -2129,7 +2138,7 @@ test('flèches — le trait et le glyphe disent la MÊME direction', () => {
   // LIBELLÉ de la flèche — il vit dans l'infobulle du SVG — et le couple
   // départ/arrivée est son DESSIN. Les laisser diverger montrerait un trait
   // dans un sens et l'annoncerait dans l'autre.
-  const champs = champsDeLaBase(275, 16);
+  const champs = champsDeLaBase(DEPART.rangee, DEPART.colonne);
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },
@@ -2217,7 +2226,7 @@ test('flèches — elles pointent vers le bâtiment, dans le sens de l\'ÉCRAN',
   // le `find` sur la rangée 16 rendait le champ au lieu de l'accumulateur et
   // l'assertion lisait « ↘ » là où elle croyait lire l'accumulateur. La colonne
   // 5 laisse la rangée 16 vide de champs autour de la centrale.
-  const champs = champsDeLaBase(275, 16);
+  const champs = champsDeLaBase(DEPART.rangee, DEPART.colonne);
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 15, colonne: 5, niveau: 1 },

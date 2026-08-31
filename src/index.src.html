@@ -138,15 +138,13 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     display: block; touch-action: none;
   }
+  /* ⚠ ELLE NE PORTE PLUS QUE LE RETOUR À LA BASE depuis que l'échelle est
+     partie (31/08). Son cadre plein servait à poser un chiffre lisible sur le
+     terrain ; le bouton, lui, porte déjà le sien, et un second cadre autour
+     ferait un liseré double sur le coin de la carte. */
   #monde-outils {
     position: absolute; right: 8px; top: 8px; z-index: 2;
     display: flex; align-items: center; gap: 4px;
-    padding: 4px 6px;
-    background: #1E2124; border: 1px solid #343A2C;
-  }
-  #monde-echelle {
-    font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
-    color: #68727E; white-space: nowrap;
   }
   /* Le retour à la base. Même habillage que le « Fermer » du panneau : ce lot
      n'invente pas un troisième style de bouton pour cet écran. */
@@ -1491,7 +1489,15 @@
              L'échelle, elle, RESTE : c'est le seul repère qui dise à quel cran
              on est, et un geste continu en a plus besoin qu'un bouton. -->
         <div id="monde-outils">
-          <span id="monde-echelle">—</span>
+          <!-- ⚠⚠ L'ÉCHELLE A QUITTÉ L'ÉCRAN — Ethan, 31/08 : « enlever les
+               pixel/case du haut », capture à l'appui, « en haut à droite ».
+               C'était ce `11 PX / CASE` posé sur le coin de la carte : un chiffre
+               qui ne sert à rien pour jouer, sur l'écran où l'on veut justement
+               voir le terrain.
+               ⚠ ELLE NE SORT PAS DU JEU POUR AUTANT, elle passe dans le `title`
+               de cette boîte — comme la lettre de l'obstacle et le cadre de
+               famille du jeton avant elle (CLAUDE.md §6). Ethan demande un
+               DESSIN en moins, pas une donnée. -->
           <!-- ⚠⚠ RETROUVER SA BASE — Ethan, 31/08 : « toujours une possibilité de
                revenir sur sa base quand on se balade sur la carte ». La carte
                fait 300 rangées et ne se recentre qu'à la PREMIÈRE ouverture,

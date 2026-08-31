@@ -33,6 +33,11 @@ import {
 } from '../src/data/base.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
+import { positionDepartJoueur } from '../src/sim/carte.js';
+
+// ⚠ LE TERRAIN DE DÉPART SE DEMANDE, IL NE S'ÉCRIT PLUS — voir la même note
+// dans `chantier.test.js`. La position a bougé le 31/08 (275 → 295).
+const DEPART = positionDepartJoueur();
 
 /** Terrain de test, écrit à la main. */
 const TERRAIN = {
@@ -622,7 +627,7 @@ test('disposition — il reste EXACTEMENT deux emplacements libres à la fondati
   // rédaction les posait en (12,5), qui porte un champ à cette graine : le test
   // tombait sur `champ-gache` au lieu de mesurer le plafond d'emplacements.
   // Le pourtour de la bande est le seul endroit garanti libre de champs.
-  const champs = champsDeLaBase(275, 16);
+  const champs = champsDeLaBase(DEPART.rangee, DEPART.colonne);
   const auRas = [
     ...dispositionNouvelleBase(),
     { id: 'centrale', rangee: 18, colonne: 6, niveau: 1 },

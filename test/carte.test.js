@@ -23,21 +23,30 @@ import { GEOGRAPHIE } from '../src/data/sites.js';
 test('carte — le départ du joueur tombe sur la strate arbitrée, sans réglage', () => {
   const depart = positionDepartJoueur();
 
-  // MESURÉ : rangée 275, colonne 16. Les deux faits de GEOGRAPHIE doivent être
-  // vrais EN MÊME TEMPS, et c'est ça qui vaut preuve.
+  // ⚠⚠ MESURÉ : rangée 295, colonne 16 — elle valait 275 jusqu'au 31/08, où
+  // Ethan a rapproché le départ du bord bas (« comptés depuis mon bord : 295 »).
+  // Les deux faits de GEOGRAPHIE doivent être vrais EN MÊME TEMPS, et c'est ça
+  // qui vaut preuve.
   assert.equal(
     casesDepuisBordBas(depart.rangee), GEOGRAPHIE.departJoueur.casesDepuisBordBas,
     'la distance au bord bas ne vaut plus 25',
   );
   assert.equal(
     niveauDeLaRangee(depart.rangee), GEOGRAPHIE.departJoueur.strate,
-    'la strate de départ ne vaut plus 5',
+    'la strate de départ ne vaut plus ce que GEOGRAPHIE annonce',
   );
-  assert.equal(depart.rangee, 275);
+  assert.equal(depart.rangee, 295);
   assert.equal(depart.colonne, 16);
 
   // Falsifiable : une rangée voisine ne doit PAS satisfaire les deux à la fois.
   // Sans ça, l'accord ci-dessus ne prouverait pas que le décalage est unique.
+  //
+  // ⚠ ET DEPUIS LE 31/08, C'EST LA DISTANCE SEULE QUI TRANCHE. Le départ est
+  // maintenant dans la zone où `niveauDeLaRangee` PLAFONNE PAR LE BAS : les
+  // rangées 295 à 300 valent toutes 1, donc la strate ne désigne plus une
+  // rangée unique. Ce n'est pas un affaiblissement du garde-fou — il refuse
+  // toujours qu'une voisine satisfasse les DEUX — mais il faut savoir que la
+  // moitié qui mord a changé de camp.
   for (const voisine of [depart.rangee - 1, depart.rangee + 1]) {
     const memeDistance = casesDepuisBordBas(voisine) === GEOGRAPHIE.departJoueur.casesDepuisBordBas;
     const memeStrate = niveauDeLaRangee(voisine) === GEOGRAPHIE.departJoueur.strate;
@@ -110,9 +119,10 @@ test('carte — le centre est EXACT depuis que la largeur est impaire', () => {
 
 test('carte — la base terminale est au bout du couloir, au plafond de niveau', () => {
   const bout = positionBaseTerminale();
-  // 25 cases depuis le bord HAUT, donc rangée 26.
+  // ⚠ 14 cases depuis le bord HAUT, donc rangée 15 — elle valait 26 jusqu'au
+  // 31/08, où Ethan l'a rapprochée du bord (« rangée 15 »).
   assert.equal(bout.rangee, 1 + GEOGRAPHIE.baseTerminale.casesDepuisBordHaut);
-  assert.equal(bout.rangee, 26);
+  assert.equal(bout.rangee, 15);
   assert.equal(niveauDeLaRangee(bout.rangee), GEOGRAPHIE.niveauPlafond);
 
   // Elle est bien à l'autre bout que le joueur, et de loin : le couloir doit

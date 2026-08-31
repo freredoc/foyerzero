@@ -23,6 +23,7 @@ import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger,
 } from '../src/sim/state.js';
 import { SATELLITES, TYPES_SITE, GEOGRAPHIE } from '../src/data/sites.js';
+import { niveauDeLaRangee } from '../src/sim/carte.js';
 import { TICKS_PAR_SECONDE } from '../src/sim/clock.js';
 import { estSurLaCarte } from '../src/sim/carte.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
@@ -211,10 +212,27 @@ test('satellites — le camp suit le niveau du JOUEUR, l\'avant-poste celui de l
   const rng = creerRng(1);
 
   assert.equal(niveauDuSatellite('camp', etat, rng), 12);
-  // La rangée de départ vaut 5 : l'avant-poste tombe dans 4…6, jamais 12.
+
+  // ⚠⚠ LA BANDE ATTENDUE SE DÉRIVE DE LA RANGÉE, ELLE NE S'ÉCRIT PLUS. Ce test
+  // portait « 4…6 » en dur, parce que la rangée de départ valait la strate 5.
+  // Le 31/08, Ethan a rapproché le départ du bord bas (275 → 295) : la strate
+  // est tombée à 1 et l'assertion avec, alors qu'elle ne mesure pas la position
+  // — elle mesure que l'avant-poste suit la RANGÉE et le camp le JOUEUR.
+  const strate = niveauDeLaRangee(etat.position.rangee);
   const niveaux = new Set();
   for (let i = 0; i < 50; i += 1) niveaux.add(niveauDuSatellite('avantPoste', etat, rng));
-  for (const n of niveaux) assert.ok(n >= 4 && n <= 6, `avant-poste de niveau ${n}, attendu 4…6`);
+  for (const n of niveaux) {
+    assert.ok(Math.abs(n - strate) <= 1,
+      `avant-poste de niveau ${n}, attendu ${strate} ± 1`);
+  }
+  // ⚠ ET LE MONTAGE DOIT DISTINGUER LES DEUX RÈGLES : si la strate valait 12,
+  // les deux rendraient le même nombre et le test ne prouverait rien.
+  assert.notEqual(strate, 12, 'le montage ne sépare plus le niveau du joueur de celui de la rangée');
+
+  // ⚠ LE ±1 SE MESURE, MAIS IL SE HEURTE AU PLANCHER. `niveauDuSatellite` ne
+  // descend jamais sous 1 : à la strate 1, la bande utile est {1, 2}, pas trois
+  // valeurs. Exiger plus d'une valeur reste vrai, et c'est ce qui compte — la
+  // règle tire encore.
   assert.ok(niveaux.size > 1, 'le ±1 ne tire jamais : la règle est figée');
 
   // Et les deux tables se croisent : un type de satellite doit être un type de

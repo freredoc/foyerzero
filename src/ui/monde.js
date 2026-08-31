@@ -537,15 +537,21 @@ export function initialiserEcranMonde(doc) {
   }
 
   /**
-   * L'échelle affichée.
+   * L'échelle — qui ne se DESSINE plus, mais qui se lit encore.
    *
-   * ⚠ ELLE A PERDU LES DEUX BOUTONS QU'ELLE ALLUMAIT (30/08) et garde son nom :
-   * ce qu'elle fait — dire où l'on en est du zoom — n'a pas changé, et c'est
-   * elle qui reste le seul repère maintenant que le geste est continu.
+   * ⚠⚠ ELLE A QUITTÉ L'ÉCRAN LE 31/08. Ethan : « enlever les pixel/case du
+   * haut », capture à l'appui, « en haut à droite ». C'était ce `11 PX / CASE`
+   * posé sur le coin de la carte. Elle avait perdu ses deux boutons le 30/08 et
+   * gardait son nom ; elle perd maintenant son texte et garde sa fonction.
+   *
+   * ⚠ CE QUI SORT DE L'ÉCRAN NE SORT PAS DU JEU (CLAUDE.md §6) : la valeur passe
+   * dans le `title` de la boîte d'outils. Ethan demande un DESSIN en moins, pas
+   * une donnée — c'est ce que le dépôt a déjà fait de la lettre de l'obstacle et
+   * du cadre de famille du jeton.
    */
   function majBoutons() {
     const cssParCase = cran() / (fenetre.devicePixelRatio || 1);
-    $('monde-echelle').textContent = `${Math.round(cssParCase)} px / case`;
+    $('monde-outils').title = `${Math.round(cssParCase)} px / case`;
   }
 
   // --- le dessin -------------------------------------------------------------

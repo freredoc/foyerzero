@@ -29,9 +29,20 @@ function partie(graine = 2026) {
   return etat;
 }
 
-/** L'avant-poste de la graine 2026 — niveau 6, onze bâtiments, six défenses. */
+/**
+ * L'avant-poste que la partie a fait paraître.
+ *
+ * ⚠⚠ SA CASE SE DEMANDE À L'ÉTAT, ELLE NE S'ÉCRIT PLUS. Ce montage portait
+ * `siteDeLaCase(etat, 274, 11)` en dur — une case déduite de l'ancienne position
+ * de départ. Le 31/08, Ethan a rapproché le départ du bord bas (rangée
+ * 275 → 295) : les anneaux ont suivi, la case s'est vidée, et QUATORZE tests de
+ * ce fichier sont tombés d'un coup sur un montage qui ne mesurait pas la
+ * position. Les satellites savent où ils sont ; on le leur demande.
+ */
 function avantPoste(etat) {
-  const id = siteDeLaCase(etat, 274, 11);
+  const present = etat.satellites.presents.find((s) => s.type === 'avantPoste');
+  assert.ok(present, 'montage : aucun avant-poste n\'est paru');
+  const id = siteDeLaCase(etat, present.rangee, present.colonne);
   assert.ok(id && id.type === 'avantPoste', 'montage : l\'avant-poste attendu n\'est pas là');
   return id;
 }
