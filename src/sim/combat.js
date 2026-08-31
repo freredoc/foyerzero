@@ -880,6 +880,9 @@ function apparitionDeVague(etat, casesPrises = null) {
   etat.enAttente = restants;
 }
 
+/** La majoration de la Munition spéciale, en pour-cent du tir nu. */
+const MUNITION_PCT = 120;
+
 /**
  * Dégâts effectifs qu'un tir de `e` porterait à `cible`, en milli-PV.
  *
@@ -896,10 +899,39 @@ function apparitionDeVague(etat, casesPrises = null) {
  *     plancher de réserve ne protège que les bâtiments : le tir sur une entité
  *     de la défense reste gratuit, donc toujours valide.
  */
-function degatsContre(e, p, cible) {
+function degatsContre(etat, e, p, cible) {
   const pc = profil(cible);
   if (pc.genre === 'batiment' && e.camp === 'attaque' && e.reserve <= 0) return 0;
-  return degatsDUnTir(e.degatsColonne[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
+  const degats = degatsDUnTir(e.degatsColonne[pc.colonneMatrice], e.pvMilli, e.pvMaxMilli);
+  // MUNITION SPÉCIALE — « +0,2 sur la matrice de la cible de prédilection ».
+  //
+  // ⚠ IL N'Y A PLUS DE MATRICE, ET L'ÉQUIVALENCE EST DÉJÀ ÉTABLIE. Le lot 4A a
+  // supprimé les facteurs bornés à 0…1000 ; `colonneDominante` note, deux cents
+  // lignes plus haut, qu'elle « remplace le facteur de matrice égal à 1,0 » et
+  // que les deux lectures coïncident sur les 23 profils. Porter ce facteur de
+  // 1,0 à 1,2, c'est donc majorer de 20 % les dégâts portés dans la colonne de
+  // PRÉDILECTION, et rien d'autre : les autres colonnes ne bougent pas. Le
+  // module n'ouvre pas la pièce, il aiguise ce qu'elle fait déjà le mieux.
+  //
+  // ⚠⚠ ICI ET PAS DANS `tir`. Le tir appelle `degatsContre` DEUX fois — une
+  // pour sa cible, une par voisine du Tir de barrage — et le ciblage l'appelle
+  // en prédicat de validité. Majorer dans `tir` ne toucherait que la première.
+  // Le barrage en profite donc sans qu'une ligne l'y branche ; aucune des trois
+  // porteuses (Casemate, Batterie, Créneau) ne porte le barrage, le cas reste
+  // théorique, et un test le fige.
+  //
+  // ⚠ LE FRANCHISSEMENT DES BARRIÈRES N'EST PAS CONCERNÉ : il passe par
+  // `degatsDeFranchissement`, sa propre table en milli-PV et son propre barème.
+  // Aucune ligne d'Ethan ne l'y rattache.
+  //
+  // ⚠ `colonnePredilection` VAUT `null` pour une entité qui ne tire pas — la
+  // comparaison est donc écrite dans ce sens, jamais `p.colonnePredilection ===
+  // pc.colonneMatrice` seul, qui serait vrai si les deux valaient `null`.
+  if (p.colonnePredilection === null) return degats;
+  if (pc.colonneMatrice !== p.colonnePredilection) return degats;
+  if (!moduleActif(etat, e, p, 'munitionSpeciale')) return degats;
+  // Un seul `floor`, sur le produit, comme partout ailleurs dans ce moteur.
+  return Math.floor((degats * MUNITION_PCT) / 100);
 }
 
 /**
@@ -989,7 +1021,7 @@ function ciblage(etat) {
       // UNE CIBLE VALIDE EST UNE CIBLE QU'ON PEUT BLESSER. Sans cette ligne, une
       // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
       // serre de plus près, et toute la couche anti-aérienne est inerte.
-      if (degatsContre(e, p, c) === 0) continue;
+      if (degatsContre(etat, e, p, c) === 0) continue;
       if (
         meilleur === null
         || d2 < meilleureDistance
@@ -1015,7 +1047,7 @@ function ciblage(etat) {
       // continuerait de la viser indéfiniment, et le module serait sans effet
       // dans tous les cas où il compte le plus — celui où le camouflé est la
       // seule chose à portée.
-      if (!estActive(ancienne) || degatsContre(e, p, ancienne) === 0
+      if (!estActive(ancienne) || degatsContre(etat, e, p, ancienne) === 0
           || (masque !== null && masque.has(ancienne.indice))) {
         e.cibleIndice = null;
       }
@@ -1246,8 +1278,8 @@ function tirDeBarrage(etat, e, p, cible, ajouter) {
     if (Math.abs(caseDepuisMilli(v.rangeeMilli) - rangeeCible) > 1) continue;
     if (Math.abs(v.colonne - cible.colonne) > 1) continue;
     // Un seul `floor`, sur le produit — comme partout ailleurs dans ce moteur.
-    const degats = Math.floor((degatsContre(e, p, v) * BARRAGE_PCT) / 100);
-    if (degats > 0) ajouter(v.indice, degats);
+    const degats = Math.floor((degatsContre(etat, e, p, v) * BARRAGE_PCT) / 100);
+    if (degats > 0) ajouter(v.indice, degats, e.indice);
   }
 }
 
@@ -1255,12 +1287,22 @@ function tirDeBarrage(etat, e, p, cible, ajouter) {
  * 4. Tir. Les dégâts sont calculés sur l'état de DÉBUT de tick et accumulés
  * dans un tampon : le tir est simultané, l'ordre d'itération ne peut pas
  * influer. Le franchissement des barrières est compté ici, du même tampon.
- * @returns {Map<number, number>} indice d'entité → dégâts milli-PV cumulés.
+ *
+ * ⚠ LE TAMPON GARDE LA TRACE DU TIREUR, et pas seulement le total. Le Vol de
+ * vie rend au TIREUR une part de ce que la cible a ENCAISSÉ ; un total anonyme
+ * par cible ne dit pas à qui rendre. Chaque coup est donc rangé à part. Le
+ * total par cible reste la somme des coups, dans l'ordre d'insertion, qui suit
+ * `etat.entites` : la somme est exacte, entière, et l'ordre ne peut pas varier.
+ *
+ * @returns {Map<number, Array<{tireur: number, degats: number}>>} indice de
+ *   cible → les coups qu'elle prend ce tick, en milli-PV.
  */
 function tir(etat) {
   const tampon = new Map();
-  const ajouter = (indice, degats) => {
-    tampon.set(indice, (tampon.get(indice) ?? 0) + degats);
+  const ajouter = (indice, degats, tireur) => {
+    const coups = tampon.get(indice);
+    if (coups === undefined) tampon.set(indice, [{ tireur, degats }]);
+    else coups.push({ tireur, degats });
   };
 
   for (const e of etat.entites) {
@@ -1288,9 +1330,9 @@ function tir(etat) {
     // sur une entité de la défense elle s'arrête au plancher et le tir continue.
     // Depuis le lot 3C le ciblage a déjà écarté les cibles à zéro dégât : ce
     // test ne peut plus mordre, et il vaut comme énoncé de l'invariant.
-    const degats = degatsContre(e, p, cible);
+    const degats = degatsContre(etat, e, p, cible);
     if (degats === 0) continue;
-    ajouter(e.cibleIndice, degats);
+    ajouter(e.cibleIndice, degats, e.indice);
     e.aTire = true;
     tirDeBarrage(etat, e, p, cible, ajouter);
   }
@@ -1310,6 +1352,11 @@ function tir(etat) {
       if (!estActive(e) || e.camp !== 'attaque') continue;
       const b = barrieres.get(cleCase(caseDepuisMilli(e.rangeeMilli), e.colonne));
       if (b === undefined) continue;
+      // ⚠ LE TIREUR EST LA BARRIÈRE. Le franchissement passe par le même
+      // tampon que les tirs ; sans indice, cette ligne serait la seule sans
+      // origine et le Vol de vie devrait la traiter à part. Aucune barrière ne
+      // porte le module aujourd'hui — la ligne est correcte, pas seulement
+      // commode.
       ajouter(
         e.indice,
         degatsDeFranchissement(
@@ -1317,6 +1364,7 @@ function tir(etat) {
           b.pvMilli,
           b.pvMaxMilli,
         ),
+        b.indice,
       );
     }
   }
@@ -1336,11 +1384,28 @@ function tir(etat) {
  */
 const BOUCLIER_RAYON_CARRE = 2500 * 2500;
 
+/** Le Vol de vie, en pour-cent de ce que la cible a ENCAISSÉ. */
+const VOL_PCT = 20;
+
 /**
  * 5. Application du tampon. Le seul plancher de PV est 0 : toute entité,
  * défense comprise, se détruit à 0 et sort de la grille. Le plancher de 1 %
  * de la spec §2 est un plancher d'APRÈS-RAID, écrit par le lot 2B ; le moteur
  * rapporte les PV bruts et ne plafonne rien.
+ *
+ * ⚠⚠ DEUX PASSES, ET L'ORDRE EST TOUT L'ENJEU. La passe 1 retire les PV de
+ * TOUTES les cibles ; la passe 2 seulement rend les PV volés. Soigner au fil de
+ * la passe 1 ferait dépendre le résultat de l'ordre des cibles : un voleur qui
+ * est LUI-MÊME cible plus loin dans le tampon encaisserait ses coups sur des PV
+ * déjà regonflés, et le tick cesserait d'être simultané. Un voleur tombé dans
+ * ce tampon ne se soigne donc pas — c'est la conséquence voulue, pas un effet
+ * de bord.
+ *
+ * ⚠ LE VOL PORTE SUR CE QUI A ÉTÉ ENCAISSÉ, JAMAIS SUR LE NOMINAL : les PV
+ * réellement retirés, PLUS la part qu'un Bouclier a absorbée. Un tir de 500 sur
+ * une cible à 100 PV ne vole que 100 ; un tir de 500 entièrement absorbé en
+ * vole bien 500. En priver le voleur ferait du Bouclier une contre-mesure au
+ * Vol de vie, ce qu'aucune ligne ne dit.
  */
 function appliquerDegats(etat, tampon) {
   // ⚠ LE TAMPON EST UNE `Map`, ET SON ORDRE D'ITÉRATION EST L'ORDRE
@@ -1360,11 +1425,21 @@ function appliquerDegats(etat, tampon) {
   // recouvrement, c'est le plus petit indice qui encaisse d'abord.
   const boucliers = etat.entites.filter((b) => b.bouclierMilli > 0);
 
-  for (const [indice, degats] of entrees) {
+  // PASSE 2 en attente : indice de TIREUR → milli-PV que ses cibles ont
+  // réellement encaissés ce tick. Seuls les porteurs du Vol de vie y entrent —
+  // la répartition, elle, parcourt tous les coups, sans quoi un voleur se
+  // verrait créditer les dégâts d'un voisin qui n'en porte pas.
+  const encaisseParTireur = new Map();
+
+  for (const [indice, coups] of entrees) {
     const e = etat.entites[indice];
     if (!estActive(e)) continue;
 
-    let reste = degats;
+    // Le total encaissable par la cible, coups compris — la somme est entière
+    // et l'ordre d'insertion, donc elle ne peut pas varier d'une passe à l'autre.
+    let reste = 0;
+    for (const coup of coups) reste += coup.degats;
+    const nominal = reste;
     for (const b of boucliers) {
       if (reste <= 0) break;
       // Un bouclier vidé plus tôt dans CE tick ne protège plus.
@@ -1395,7 +1470,45 @@ function appliquerDegats(etat, tampon) {
       reste -= pris;
     }
 
+    const pvAvant = e.pvMilli;
     e.pvMilli = Math.max(0, e.pvMilli - reste);
+
+    // Ce que la cible a VRAIMENT encaissé : la part absorbée par les boucliers
+    // plus les PV réellement retirés. Un surplus qui dépasse les PV restants
+    // n'est encaissé par personne, donc volé par personne.
+    const encaisse = (nominal - reste) + (pvAvant - e.pvMilli);
+    if (encaisse <= 0) continue;
+
+    // ⚠ SERVIR PAR INDICE DE TIREUR CROISSANT, PAS AU PRORATA. Le prorata
+    // demanderait un arrondi par tireur et une règle de reste — deux occasions
+    // de diverger, pour un partage que rien dans le jeu ne rend visible. Le
+    // premier tireur est servi jusqu'à son nominal, puis le suivant, jusqu'à
+    // épuisement de l'encaissé. La clé de tri est l'indice, la seule stable.
+    let aRepartir = encaisse;
+    const parIndice = [...coups].sort((x, y) => x.tireur - y.tireur);
+    for (const coup of parIndice) {
+      if (aRepartir <= 0) break;
+      const part = Math.min(coup.degats, aRepartir);
+      aRepartir -= part;
+      const t = etat.entites[coup.tireur];
+      if (t === undefined) continue;
+      const pt = profil(t);
+      if (!moduleActif(etat, t, pt, 'volDeVie')) continue;
+      encaisseParTireur.set(coup.tireur, (encaisseParTireur.get(coup.tireur) ?? 0) + part);
+    }
+  }
+
+  // PASSE 2 — les soins, une fois la passe 1 ENTIÈRE terminée.
+  for (const [tireur, encaisse] of [...encaisseParTireur].sort((a, b) => a[0] - b[0])) {
+    const t = etat.entites[tireur];
+    // ⚠ UN TIREUR À ZÉRO PV NE SE SOIGNE PAS. `estActive` ne suffit pas :
+    // `vivant` n'est écrit qu'à l'étape 6, donc un mort de CE tick y passerait
+    // encore pour actif. Le second test est le seul qui le voie.
+    if (!estActive(t) || t.pvMilli <= 0) continue;
+    // Un seul `floor`, sur le produit, comme partout ailleurs dans ce moteur.
+    const soin = Math.floor((encaisse * VOL_PCT) / 100);
+    if (soin <= 0) continue;
+    t.pvMilli = Math.min(t.pvMaxMilli, t.pvMilli + soin);
   }
 }
 

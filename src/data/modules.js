@@ -121,12 +121,20 @@ export const MODULES = {
   },
   munitionSpeciale: {
     libelle: 'Munition spéciale',
-    cable: { offense: false, defense: false },
+    // ⚠ CÂBLÉ EN DÉFENSE SEULEMENT, ET AUCUNE LIGNE NE S'OUVRE À L'ÉCRAN. Ses
+    // trois porteuses — Casemate, Batterie, Créneau — ne le citent que par
+    // `moduleOuvrage` ; leur `moduleJoueur` vaut `autoReparation`. La boutique
+    // ne vend donc rien de nouveau : le drapeau dit que l'effet EXISTE, pas
+    // qu'il est achetable. `offense` reste faux — aucune unité d'assaut ne le
+    // porte, et `degatsContre` ne le lit que sur le tireur qui le PORTE.
+    cable: { offense: false, defense: true },
     description: '+0,2 sur la matrice de la cible de prédilection',
   },
   volDeVie: {
     libelle: 'Vol de vie',
-    cable: { offense: false, defense: false },
+    // ⚠ MÊME CAS. Broyeur et Enclume le portent en `moduleOuvrage` ; côté
+    // joueur leur `module` vaut `ecraseur` et `bouclier`. Rien ne s'ouvre.
+    cable: { offense: false, defense: true },
     description: 'convertit 20 % des dégâts infligés en PV',
   },
   rayonMiniMoinsUn: {

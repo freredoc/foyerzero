@@ -406,6 +406,41 @@ function verifierParametres({ type, niveau, saveur, graine }) {
 }
 
 /**
+ * Les modules que l'Ouvrage a débloqués à un niveau de site donné.
+ *
+ * ⚠⚠ C'EST LE CANAL QUI N'AVAIT JAMAIS SERVI. `modulesDebloques.ouvrage` sortait
+ * de `genererSite` avec ses deux branches VIDES depuis le lot 2B ; cinq modules
+ * — Camouflage, Munition spéciale, PV +20 %, Rayon minimum −1, Vol de vie — ne
+ * sont portés que par `moduleOuvrage`, donc inatteignables par la boutique. Sans
+ * cette fonction, la moitié du catalogue restait décorative.
+ *
+ * ⚠ TOUTES LES PIÈCES DE LA TABLE, pas seulement celles que ce site-ci a tirées.
+ * `apparitionModule` est un palier de progression de l'Ouvrage, pas une
+ * propriété de la garnison du jour : deux sites de même niveau et de graines
+ * différentes doivent débloquer les mêmes modules, sinon la liste devient un
+ * effet de tirage et le joueur ne peut rien en apprendre.
+ *
+ * ⚠ `offense` RESTE VIDE, et ce n'est pas un oubli. Un module d'attaquant se lit
+ * sur `p.module`, que `moduleOuvrage` ne renseigne pas ; les raids de l'Ouvrage
+ * sur la base du joueur passent par un autre chemin. Y verser cette liste
+ * armerait des modules sur des pièces qui ne les portent pas.
+ *
+ * @param {number} niveau niveau du site.
+ * @returns {string[]} noms triés, sans doublon.
+ */
+function modulesOuvrageAu(niveau) {
+  const noms = new Set();
+  for (const table of [UNITES, DEFENSES]) {
+    for (const piece of Object.values(table)) {
+      if (!piece.moduleOuvrage) continue;
+      if (piece.apparitionModule > niveau) continue;
+      noms.add(piece.moduleOuvrage);
+    }
+  }
+  return [...noms].sort();
+}
+
+/**
  * Produit un montage valide pour creerCombat.
  *
  * `vagues` est vide : la force d'assaut est celle du joueur, le générateur de
@@ -447,7 +482,7 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
     defenseurs,
     vagues: [],
     modulesDebloques: {
-      ouvrage: { offense: [], defense: [] },
+      ouvrage: { offense: [], defense: modulesOuvrageAu(niveau) },
       joueur: { offense: [], defense: [] },
     },
   };
