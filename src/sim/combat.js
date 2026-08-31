@@ -1384,11 +1384,28 @@ function tir(etat) {
  */
 const BOUCLIER_RAYON_CARRE = 2500 * 2500;
 
+/** Le Vol de vie, en pour-cent de ce que la cible a ENCAISSÉ. */
+const VOL_PCT = 20;
+
 /**
  * 5. Application du tampon. Le seul plancher de PV est 0 : toute entité,
  * défense comprise, se détruit à 0 et sort de la grille. Le plancher de 1 %
  * de la spec §2 est un plancher d'APRÈS-RAID, écrit par le lot 2B ; le moteur
  * rapporte les PV bruts et ne plafonne rien.
+ *
+ * ⚠⚠ DEUX PASSES, ET L'ORDRE EST TOUT L'ENJEU. La passe 1 retire les PV de
+ * TOUTES les cibles ; la passe 2 seulement rend les PV volés. Soigner au fil de
+ * la passe 1 ferait dépendre le résultat de l'ordre des cibles : un voleur qui
+ * est LUI-MÊME cible plus loin dans le tampon encaisserait ses coups sur des PV
+ * déjà regonflés, et le tick cesserait d'être simultané. Un voleur tombé dans
+ * ce tampon ne se soigne donc pas — c'est la conséquence voulue, pas un effet
+ * de bord.
+ *
+ * ⚠ LE VOL PORTE SUR CE QUI A ÉTÉ ENCAISSÉ, JAMAIS SUR LE NOMINAL : les PV
+ * réellement retirés, PLUS la part qu'un Bouclier a absorbée. Un tir de 500 sur
+ * une cible à 100 PV ne vole que 100 ; un tir de 500 entièrement absorbé en
+ * vole bien 500. En priver le voleur ferait du Bouclier une contre-mesure au
+ * Vol de vie, ce qu'aucune ligne ne dit.
  */
 function appliquerDegats(etat, tampon) {
   // ⚠ LE TAMPON EST UNE `Map`, ET SON ORDRE D'ITÉRATION EST L'ORDRE
@@ -1408,6 +1425,12 @@ function appliquerDegats(etat, tampon) {
   // recouvrement, c'est le plus petit indice qui encaisse d'abord.
   const boucliers = etat.entites.filter((b) => b.bouclierMilli > 0);
 
+  // PASSE 2 en attente : indice de TIREUR → milli-PV que ses cibles ont
+  // réellement encaissés ce tick. Seuls les porteurs du Vol de vie y entrent —
+  // la répartition, elle, parcourt tous les coups, sans quoi un voleur se
+  // verrait créditer les dégâts d'un voisin qui n'en porte pas.
+  const encaisseParTireur = new Map();
+
   for (const [indice, coups] of entrees) {
     const e = etat.entites[indice];
     if (!estActive(e)) continue;
@@ -1416,6 +1439,7 @@ function appliquerDegats(etat, tampon) {
     // et l'ordre d'insertion, donc elle ne peut pas varier d'une passe à l'autre.
     let reste = 0;
     for (const coup of coups) reste += coup.degats;
+    const nominal = reste;
     for (const b of boucliers) {
       if (reste <= 0) break;
       // Un bouclier vidé plus tôt dans CE tick ne protège plus.
@@ -1446,7 +1470,45 @@ function appliquerDegats(etat, tampon) {
       reste -= pris;
     }
 
+    const pvAvant = e.pvMilli;
     e.pvMilli = Math.max(0, e.pvMilli - reste);
+
+    // Ce que la cible a VRAIMENT encaissé : la part absorbée par les boucliers
+    // plus les PV réellement retirés. Un surplus qui dépasse les PV restants
+    // n'est encaissé par personne, donc volé par personne.
+    const encaisse = (nominal - reste) + (pvAvant - e.pvMilli);
+    if (encaisse <= 0) continue;
+
+    // ⚠ SERVIR PAR INDICE DE TIREUR CROISSANT, PAS AU PRORATA. Le prorata
+    // demanderait un arrondi par tireur et une règle de reste — deux occasions
+    // de diverger, pour un partage que rien dans le jeu ne rend visible. Le
+    // premier tireur est servi jusqu'à son nominal, puis le suivant, jusqu'à
+    // épuisement de l'encaissé. La clé de tri est l'indice, la seule stable.
+    let aRepartir = encaisse;
+    const parIndice = [...coups].sort((x, y) => x.tireur - y.tireur);
+    for (const coup of parIndice) {
+      if (aRepartir <= 0) break;
+      const part = Math.min(coup.degats, aRepartir);
+      aRepartir -= part;
+      const t = etat.entites[coup.tireur];
+      if (t === undefined) continue;
+      const pt = profil(t);
+      if (!moduleActif(etat, t, pt, 'volDeVie')) continue;
+      encaisseParTireur.set(coup.tireur, (encaisseParTireur.get(coup.tireur) ?? 0) + part);
+    }
+  }
+
+  // PASSE 2 — les soins, une fois la passe 1 ENTIÈRE terminée.
+  for (const [tireur, encaisse] of [...encaisseParTireur].sort((a, b) => a[0] - b[0])) {
+    const t = etat.entites[tireur];
+    // ⚠ UN TIREUR À ZÉRO PV NE SE SOIGNE PAS. `estActive` ne suffit pas :
+    // `vivant` n'est écrit qu'à l'étape 6, donc un mort de CE tick y passerait
+    // encore pour actif. Le second test est le seul qui le voie.
+    if (!estActive(t) || t.pvMilli <= 0) continue;
+    // Un seul `floor`, sur le produit, comme partout ailleurs dans ce moteur.
+    const soin = Math.floor((encaisse * VOL_PCT) / 100);
+    if (soin <= 0) continue;
+    t.pvMilli = Math.min(t.pvMaxMilli, t.pvMilli + soin);
   }
 }
 

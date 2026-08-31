@@ -4051,3 +4051,318 @@ test('MODULES-F T4 — une pièce sans prédilection ne tire pas, et rien ne com
   assert.ok(etat.entites.find((e) => e.id === 'meute').pvMilli < 700000,
     'montage inerte : la Casemate n\'a jamais tiré');
 });
+
+// --- Vol de vie ------------------------------------------------------------
+//
+// Les deux porteurs sont des UNITÉS DE GARNISON — Broyeur (niveau 42) et
+// Enclume (46) —, et le module se lit sur `moduleOuvrage` : il n'est actif que
+// pour une pièce dont le propriétaire n'est PAS le joueur. Tous les montages
+// qui suivent mettent donc un Broyeur en défense, propriétaire par défaut
+// `ouvrage`, et rangent `volDeVie` dans `ouvrage.defense`.
+
+/** Un Broyeur de garnison face à une seule cible, module armé ou non. */
+function voleurContre(cible, vol, rangeeCible = 4) {
+  return creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'broyeur', rangee: 6, colonne: 5, niveau: 20 }],
+    vagues: [[{ id: cible, colonne: 5, rangee: rangeeCible, niveau: 20 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
+      joueur: RIEN,
+    },
+  });
+}
+
+test('MODULES-F T5 — le Vol de vie rend 20 % de l\'ENCAISSÉ, jamais du nominal', () => {
+  // Le Broyeur à mi-vie tire 45 870 milli-PV sur une Meute. On met la Meute à
+  // 10 000 : elle n'encaisse que 10 000, le surplus n'est encaissé par personne.
+  //   encaissé → soin floor(10 000 × 20 / 100) =  2 000
+  //   nominal  → soin floor(45 870 × 20 / 100) =  9 174
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : un vol calculé sur `coup.degats`.
+  const mesure = (vol) => {
+    const etat = voleurContre('meute', vol);
+    const b = etat.entites.find((e) => e.id === 'broyeur');
+    const m = etat.entites.find((e) => e.id === 'meute');
+    b.pvMilli = Math.floor(b.pvMaxMilli / 2);
+    m.pvMilli = 10_000;
+    const avant = b.pvMilli;
+    tick(etat);
+    return { soin: b.pvMilli - avant, restant: m.pvMilli };
+  };
+  const nu = mesure(false);
+  const arme = mesure(true);
+  assert.equal(nu.soin, 0, 'montage inerte : le Broyeur se soigne sans le module');
+  assert.equal(nu.restant, 0, 'montage inerte : la Meute n\'est pas achevée');
+  assert.equal(arme.soin, 2000, 'le vol ne porte pas sur l\'encaissé');
+  assert.notEqual(arme.soin, Math.floor((45_870 * 20) / 100), 'le vol porte sur le nominal');
+});
+
+test('MODULES-F T6 — la part absorbée par un Bouclier compte au voleur', () => {
+  // Une Enclume attaquante porte le Bouclier ; elle couvre la Meute, qui ne perd
+  // donc RIEN. Le voleur récupère quand même 20 % de ce que le réservoir a pris.
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : un vol calculé sur `pvAvant − pvAprès`
+  // seul — le soin tomberait à zéro et le Bouclier deviendrait une contre-mesure
+  // au Vol de vie, ce qu'aucune ligne d'Ethan ne dit.
+  const scene = (vol) => creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'broyeur', rangee: 6, colonne: 5, niveau: 20 }],
+    vagues: [[
+      { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
+      { id: 'enclume', colonne: 6, rangee: 4, niveau: 20 },
+    ]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
+      joueur: { offense: ['bouclier'], defense: [] },
+    },
+  });
+  const mesure = (vol) => {
+    const etat = scene(vol);
+    const b = etat.entites.find((e) => e.id === 'broyeur');
+    const m = etat.entites.find((e) => e.id === 'meute');
+    const enclume = etat.entites.find((e) => e.id === 'enclume');
+    b.pvMilli = Math.floor(b.pvMaxMilli / 2);
+    const avant = { b: b.pvMilli, m: m.pvMilli, res: enclume.bouclierMilli };
+    tick(etat);
+    return {
+      voleur: b.pvMilli - avant.b,
+      cible: avant.m - m.pvMilli,
+      absorbe: avant.res - enclume.bouclierMilli,
+    };
+  };
+  const nu = mesure(false);
+  const arme = mesure(true);
+  assert.equal(arme.cible, 0, 'montage inerte : le Bouclier n\'a pas tout absorbé');
+  assert.equal(arme.absorbe, 45_870, 'montage inerte : le réservoir n\'a rien pris');
+  // Les deux passes sont par ailleurs identiques : la différence EST le soin.
+  assert.equal(arme.voleur - nu.voleur, Math.floor((45_870 * 20) / 100));
+  assert.equal(arme.voleur - nu.voleur, 9174);
+});
+
+test('MODULES-F T7 — deux tireurs : servis par indice croissant, PAS au prorata', () => {
+  // Deux Broyeurs à mi-vie tirent 45 870 chacun sur une Meute à 60 000 : le
+  // total nominal est 91 740, l'encaissé 60 000. Par indice croissant, le
+  // premier prend 45 870 et le second les 14 130 qui restent.
+  //   indice croissant → soins 9 174 et 2 826
+  //   prorata          → soins 6 000 et 6 000
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : un partage au prorata, ou un tri par
+  // ordre d'insertion plutôt que par indice.
+  const scene = (vol) => creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'broyeur', rangee: 6, colonne: 4, niveau: 20 },
+      { id: 'broyeur', rangee: 6, colonne: 6, niveau: 20 },
+    ],
+    vagues: [[{ id: 'meute', colonne: 5, rangee: 4, niveau: 20 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
+      joueur: RIEN,
+    },
+  });
+  const mesure = (vol, pvCible) => {
+    const etat = scene(vol);
+    const bs = etat.entites.filter((e) => e.id === 'broyeur');
+    const m = etat.entites.find((e) => e.id === 'meute');
+    for (const b of bs) b.pvMilli = Math.floor(b.pvMaxMilli / 2);
+    m.pvMilli = pvCible;
+    const avant = bs.map((b) => b.pvMilli);
+    tick(etat);
+    return { soins: bs.map((b, i) => b.pvMilli - avant[i]), indices: bs.map((b) => b.indice) };
+  };
+  const soinsDe = (pv) => {
+    const nu = mesure(false, pv);
+    const arme = mesure(true, pv);
+    assert.deepEqual(arme.indices, [0, 1], 'montage : les indices ne sont pas ceux attendus');
+    return arme.soins.map((s, i) => s - nu.soins[i]);
+  };
+  assert.deepEqual(soinsDe(60_000), [9174, 2826], 'l\'encaissé n\'est pas servi par indice croissant');
+  assert.notDeepEqual(soinsDe(60_000), [6000, 6000], 'l\'encaissé est partagé au prorata');
+  // ⚠ ET LE MONTAGE N'EST PAS VACANT : sans débordement, les deux touchent leur
+  // plein. C'est bien le manque d'encaissé qui départage, pas le montage.
+  assert.deepEqual(soinsDe(91_740), [9174, 9174], 'montage : le débordement n\'existe pas');
+  assert.deepEqual(soinsDe(200_000), [9174, 9174]);
+});
+
+test('MODULES-F T8 — un voleur qui meurt au même tick ne se soigne pas', () => {
+  // Trois Béliers achèvent le Broyeur. À 220 176 milli-PV il tombe pile à zéro ;
+  // à 220 177 il survit d'un cheveu et encaisse son vol.
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : retirer le test `t.pvMilli > 0` de la
+  // passe 2. Le voleur mort ressortirait à 616 milli-PV — le soin de ce tick —
+  // et survivrait à `retirerLesMorts`.
+  const scene = (vol, pvVoleur, colonnes) => {
+    const etat = creerCombat({
+      niveau: 20,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+      defenseurs: [{ id: 'broyeur', rangee: 6, colonne: 5, niveau: 20 }],
+      vagues: [colonnes.map((c) => ({ id: 'belier', colonne: c, rangee: 5, niveau: 20 }))],
+      modulesDebloques: {
+        ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
+        joueur: RIEN,
+      },
+    });
+    const b = etat.entites.find((e) => e.id === 'broyeur');
+    b.pvMilli = pvVoleur;
+    tick(etat);
+    return { pv: b.pvMilli, vivant: b.vivant };
+  };
+  // Le cheveu au-dessus : il vit, et il a bien volé — sans quoi le cas mortel
+  // ne prouverait rien, un voleur qui ne vole pas ne se soigne pas non plus.
+  const vivantNu = scene(false, 220_177, [4, 5, 6]);
+  const vivantArme = scene(true, 220_177, [4, 5, 6]);
+  assert.equal(vivantNu.vivant, true);
+  assert.equal(vivantArme.pv - vivantNu.pv, 616, 'montage inerte : le voleur ne vole rien à ce PV');
+  // Le cheveu en dessous : il meurt, et il reste mort.
+  for (const colonnes of [[4, 5, 6], [6, 5, 4], [5, 6, 4]]) {
+    const mort = scene(true, 220_176, colonnes);
+    assert.equal(mort.pv, 0, `ordre ${colonnes.join('')} : le voleur mort s'est soigné`);
+    assert.equal(mort.vivant, false, `ordre ${colonnes.join('')} : le voleur mort est vivant`);
+  }
+  // ⚠ ÉCART AU BRIEF, MESURÉ. Le brief voulait de T8 la preuve que la passe 2
+  // suit la passe 1 ENTIÈRE. Cette preuve n'est pas atteignable avec la donnée
+  // d'aujourd'hui : le module se lit sur `moduleOuvrage`, donc tout voleur est
+  // en GARNISON, et `creerCombat` numérote les défenseurs avant les attaquants.
+  // L'entrée du voleur dans le tampon est donc TOUJOURS traitée avant celle de
+  // sa victime, et un soin posé au fil de la passe 1 arriverait de toute façon
+  // après ses propres dégâts. Ce qui reste observable — et qui est gardé
+  // ci-dessus — c'est qu'un mort du tick ne se soigne pas.
+  assert.ok(scene(true, 220_176, [4, 5, 6]).pv === 0);
+});
+
+test('MODULES-F T9 — le soin plafonne à `pvMaxMilli`', () => {
+  // Le Broyeur porte à 2,5 cases, la Meute à 1,5 : à deux cases d'écart il tire
+  // et n'est pas touché. Intact, il vole et reste à son plafond.
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : retirer le `Math.min` de la passe 2 —
+  // le Broyeur ressortirait à 12 250 348, soit 18 348 au-dessus de son plafond.
+  const etat = voleurContre('meute', true);
+  const b = etat.entites.find((e) => e.id === 'broyeur');
+  const m = etat.entites.find((e) => e.id === 'meute');
+  assert.equal(b.pvMilli, b.pvMaxMilli, 'montage : le voleur n\'est pas intact');
+  const avantM = m.pvMilli;
+  tick(etat);
+  assert.equal(m.aTire, false, 'montage : la Meute riposte, le plafond n\'est plus seul en cause');
+  assert.equal(avantM - m.pvMilli, 91_740, 'montage inerte : le Broyeur n\'a pas tiré');
+  assert.equal(b.pvMilli, b.pvMaxMilli, 'le soin a dépassé le plafond');
+  assert.equal(b.pvMilli, 12_232_000);
+});
+
+test('MODULES-F T10 — le soin n\'ajoute de ligne ni au butin ni aux points', () => {
+  // ⚠ LE BUTIN NE LIT QUE LES BÂTIMENTS, et les points ne lisent des défenses
+  // que les PV PERDUS. Le soin n'est donc pas un poste : il fait perdre MOINS,
+  // et c'est tout. Les deux moitiés le mesurent séparément.
+  assert.doesNotMatch(corpsDe('butin'), /VOL_PCT/, 'le Vol de vie est entré dans le butin');
+  assert.doesNotMatch(corpsDe('pointsRecherche'), /VOL_PCT/,
+    'le Vol de vie est entré dans les points');
+
+  const montageDe = (vol) => ({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'broyeur', rangee: 6, colonne: 5, niveau: 20 }],
+    vagues: [[
+      { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
+      { id: 'belier', colonne: 6, rangee: 4, niveau: 20 },
+    ]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
+      joueur: RIEN,
+    },
+  });
+  const jouer = (vol) => {
+    const montage = montageDe(vol);
+    const etat = creerCombat(montage);
+    const b = etat.entites.find((e) => e.id === 'broyeur');
+    b.pvMilli = Math.floor(b.pvMaxMilli / 2);
+    const resultat = resoudre(etat, { maxTicks: 4 });
+    return {
+      montage,
+      resultat,
+      pv: resultat.defenses.find((d) => d.id === 'broyeur').pvMilli,
+    };
+  };
+  const nu = jouer(false);
+  const arme = jouer(true);
+  assert.ok(arme.pv > nu.pv, 'montage inerte : le voleur ne s\'est pas soigné');
+
+  // ⚠ MÊME MONTAGE DES DEUX CÔTÉS. Les points portent DÉJÀ, depuis MODULES-E, un
+  // bonus de +20 % quand le module de la cible est débloqué : comparer deux
+  // montages différents mêlerait ce bonus au soin. On garde donc le montage armé
+  // et on ne fait varier que les PV finaux du voleur.
+  const temoin = jouer(false);
+  const cible = temoin.resultat.defenses.find((d) => d.id === 'broyeur');
+  const avant = pointsRecherche(temoin.resultat, arme.montage);
+  cible.pvMilli = arme.pv;
+  const apres = pointsRecherche(temoin.resultat, arme.montage);
+  assert.ok(apres < avant, 'le soin ne fait pas BAISSER les points : il en ajoute');
+  assert.equal(apres, pointsRecherche(arme.resultat, arme.montage),
+    'les points d\'un raid volé ne se déduisent pas de ses seuls PV finaux');
+
+  // ⚠ ET LE BUTIN IGNORE LES DÉFENSES TOUT COURT : on maltraite les PV du voleur,
+  // il ne bouge pas d'un quartz. Le montage rapporte, sans quoi l'égalité serait
+  // celle de deux zéros.
+  const plein = jouer(true);
+  const rase = resoudre(creerCombat(montageDe(true)));
+  const butinPlein = butin(rase, montageDe(true));
+  assert.ok(butinPlein.quartz > 0, 'montage inerte : ce raid ne rapporte rien');
+  const b1 = butin(plein.resultat, plein.montage);
+  plein.resultat.defenses.find((d) => d.id === 'broyeur').pvMilli = 42;
+  assert.deepEqual(butin(plein.resultat, plein.montage), b1, 'le butin lit les défenses');
+});
+
+test('MODULES-F T11 — le franchissement porte l\'indice de la BARRIÈRE', () => {
+  // Herse en indice 0, Broyeur voleur en indice 1, Bélier victime en indice 3.
+  // Le Bélier est posé SUR la Herse : il paie 91 740 de franchissement et prend
+  // 85 624 du Broyeur, soit 177 364 pour 120 000 PV. Servi par indice croissant,
+  // la Herse passe d'abord : il ne reste que 28 260 au Broyeur, donc 5 652 de soin.
+  // ⚠ CE QUI FERAIT TOMBER CETTE GARDE : un franchissement rangé sous l'indice de
+  // la VICTIME (3) ou sous `null`. Le Broyeur (1) passerait alors le premier et
+  // prendrait ses 85 624 entiers, soit 17 124 de soin — trois fois plus.
+  const scene = (vol, pvVictime) => {
+    const etat = creerCombat({
+      niveau: 20,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+      defenseurs: [
+        { id: 'herse', rangee: 5, colonne: 5, niveau: 20 },
+        { id: 'broyeur', rangee: 6, colonne: 5, niveau: 20 },
+      ],
+      vagues: [[{ id: 'belier', colonne: 5, rangee: 4, niveau: 20 }]],
+      modulesDebloques: {
+        ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
+        joueur: RIEN,
+      },
+    });
+    const herse = etat.entites.find((e) => e.id === 'herse');
+    const b = etat.entites.find((e) => e.id === 'broyeur');
+    const v = etat.entites.find((e) => e.id === 'belier');
+    b.pvMilli = Math.floor(b.pvMaxMilli / 2);
+    // Le Bélier est amené SUR la case de la Herse : il la franchit ce tick-ci.
+    v.rangeeMilli = herse.rangeeMilli;
+    v.colonne = herse.colonne;
+    v.pvMilli = pvVictime;
+    const avant = b.pvMilli;
+    tick(etat);
+    return {
+      soin: b.pvMilli - avant,
+      perte: pvVictime - v.pvMilli,
+      indices: [herse.indice, b.indice, v.indice],
+    };
+  };
+  const nu = scene(false, 120_000);
+  const arme = scene(true, 120_000);
+  assert.deepEqual(arme.indices, [0, 1, 3], 'montage : les indices ne sont pas ceux attendus');
+  assert.equal(arme.perte, 120_000, 'montage inerte : la victime n\'est pas débordée');
+  assert.equal(arme.soin - nu.soin, 5652, 'le franchissement n\'est pas rangé sous la barrière');
+  assert.notEqual(arme.soin - nu.soin, Math.floor((85_624 * 20) / 100),
+    'le franchissement est rangé sous la victime');
+
+  // ⚠ ET LE MONTAGE N'EST PAS VACANT : sans débordement, le Broyeur touche son
+  // plein — c'est bien l'ORDRE de service qui décide, pas l'absence de vol.
+  const plein = scene(true, 400_000).soin - scene(false, 400_000).soin;
+  assert.equal(plein, 17_124, 'montage : le Broyeur ne vole pas son plein sans débordement');
+});
