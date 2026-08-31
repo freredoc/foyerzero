@@ -503,19 +503,39 @@ function ajouterEntite(
   }
   const facteur = facteurMilli(niveauEntite);
   // pvMaxMilli = pv × 1000 × facteurMilli / 1000 = pv × facteurMilli. Exact.
-  const pvMaxMilli = (p.pvMaxMilli / MILLE) * facteur;
+  const pvBaseMilli = (p.pvMaxMilli / MILLE) * facteur;
   const degatsColonne = tableALEchelle(p.degatsColonne, facteur);
   const franchissementColonne = tableALEchelle(p.franchissementColonne, facteur);
+
+  // ⚠ LE PROPRIÉTAIRE SE CALCULE ICI, AVANT L'ENTITÉ. `moduleActif` en a besoin
+  // pour trancher, et la majoration de PV doit être connue avant de fixer les
+  // PV de départ. La même valeur est reprise plus bas dans le littéral.
+  const proprietaireEntite = proprietaire ?? (camp === 'attaque' ? 'joueur' : 'ouvrage');
+  const commeEntite = { camp, proprietaire: proprietaireEntite };
+  // ⚠ UN SEUL `floor`, SUR LE PRODUIT — comme partout ailleurs dans ce moteur.
+  const pvMaxMilli = moduleActif(etat, commeEntite, p, 'pvPlusVingt')
+    ? Math.floor((pvBaseMilli * (100 + PV_PLUS_VINGT_PCT)) / 100)
+    : pvBaseMilli;
 
   let pv = pvMaxMilli;
   if (pvMilli !== undefined) {
     // Forçage explicite, PRIORITAIRE sur l'échelle : c'est ce qui permet de
     // monter un état déjà entamé.
+    //
+    // ⚠⚠ ET LA BORNE EST CELLE D'AVANT LA MAJORATION. L'appelant compte en PV
+    // NOMINAUX — `pvMaxDeLUnite` et `site-entame.js` ignorent tous deux les
+    // modules —, si bien qu'un site plein se déclare à `pvBaseMilli`. Borner
+    // sur le plafond MAJORÉ laisserait passer des PV que personne ne sait
+    // produire ; borner l'entamé sur la base est ce qui le garde entamé.
     verifierEntierPositif(pvMilli, `${ou} — pvMilli`);
-    if (pvMilli === 0 || pvMilli > pvMaxMilli) {
-      throw new Error(`combat : ${ou} — pvMilli ${pvMilli} hors de 1…${pvMaxMilli}`);
+    if (pvMilli === 0 || pvMilli > pvBaseMilli) {
+      throw new Error(`combat : ${ou} — pvMilli ${pvMilli} hors de 1…${pvBaseMilli}`);
     }
-    pv = pvMilli;
+    // ⚠⚠ LES PV COURANTS NE MONTENT QUE SI LA PIÈCE EST MONTÉE PLEINE. Une
+    // pièce entamée voit son PLAFOND monter, pas sa vie : la majorer soignerait
+    // un site que le raid précédent a abîmé, et un joueur qui achète le module
+    // réparerait toutes les garnisons de la carte d'un coup.
+    pv = pvMilli === pvBaseMilli ? pvMaxMilli : pvMilli;
   }
   let res = camp === 'attaque' ? p.reserveMax : 0;
   if (reserve !== undefined) {
@@ -534,7 +554,7 @@ function ajouterEntite(
     // l'appelant et absent de cette liste disparaît en silence — c'est ce qui
     // s'est produit à la première écriture de ce lot, et deux tests l'ont
     // attrapé. Ajouter un champ ici, c'est l'ajouter AUX DEUX endroits.
-    proprietaire: proprietaire ?? (camp === 'attaque' ? 'joueur' : 'ouvrage'),
+    proprietaire: proprietaireEntite,
     genre,
     id,
     colonne,
@@ -1016,6 +1036,15 @@ const NEUTRALISATION = {
   flashbang: 'infanterie',
   emp: 'vehicule',
 };
+
+/**
+ * PV +20 % — « les PV du bâtiment de défense sont augmentés de 20 % ».
+ *
+ * ⚠ IL S'APPLIQUE AU MONTAGE, PAS AU TICK. Le plafond de PV d'une entité ne
+ * change jamais en cours de combat ; le poser une fois est aussi la seule façon
+ * d'en tenir compte dans les PV de départ.
+ */
+const PV_PLUS_VINGT_PCT = 20;
 
 /** 5 s à 10 Hz, et la pénalité par niveau d'écart, en pour cent. */
 const NEUTRALISATION_TICKS = 50;

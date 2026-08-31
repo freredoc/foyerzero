@@ -42,7 +42,7 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 31/08/2026 (après le lot MODULES-C), à confronter :**
-`npm test` → **700 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **702 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 262 193 octets**, 0 référence externe.
 ⚠ **MODULES-C A COÛTÉ +405 OCTETS.** Un seul module câblé — le Bouclier —,
 aucune image, aucun écran neuf, aucun champ de sauvegarde : `SAVE_VERSION` reste

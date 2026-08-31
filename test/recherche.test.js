@@ -12,8 +12,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { NIVEAU } from '../src/data/niveaux.js';
 import {
-  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin,
+  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin, facteurMilli,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli, distanceCarree } from '../src/sim/grille.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
@@ -2643,6 +2644,116 @@ test('MODULES-D T8 — le rayon minimum ne passe pas sous zéro', () => {
   assert.equal(plancher(500), 0);
   assert.equal(plancher(1000), 0);
   assert.equal(plancher(3500), 2500 * 2500);
+});
+
+/**
+ * Une garnison du joueur qui porte le Broyeur — seul porteur de `pvPlusVingt`
+ * côté joueur — et un Merlon témoin, qui ne le porte pas de ce côté-là.
+ */
+function sceneDePv({ modules = [], pvMilli } = {}) {
+  const broyeur = { id: 'broyeur', rangee: 6, colonne: 5, niveau: 10 };
+  const etat = creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [
+      pvMilli === undefined ? broyeur : { ...broyeur, pvMilli },
+      { id: 'merlon', rangee: 5, colonne: 4, niveau: 10 },
+    ],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'fouisseurs', colonne: 5, rangee: 2, niveau: 10 }]],
+    modulesDebloques: { ouvrage: [], joueur: modules },
+  });
+  return {
+    etat,
+    porteur: etat.entites.find((e) => e.id === 'broyeur'),
+    temoin: etat.entites.find((e) => e.id === 'merlon'),
+  };
+}
+
+test('MODULES-D T9 — PV +20 % sur une pièce montée PLEINE', () => {
+  const sans = sceneDePv();
+  const avec = sceneDePv({ modules: ['pvPlusVingt'] });
+
+  assert.equal(sans.porteur.pvMaxMilli, 4716000, 'montage : les PV nominaux ont bougé');
+  assert.equal(avec.porteur.pvMaxMilli, Math.floor((4716000 * 120) / 100));
+  assert.equal(avec.porteur.pvMaxMilli, 5659200);
+
+  // ⚠ ET LES PV COURANTS SUIVENT, parce que la pièce est montée pleine. Une
+  // pièce dont le plafond monte sans que sa vie suive arriverait au combat
+  // déjà blessée, ce que le module ne dit nulle part.
+  assert.equal(avec.porteur.pvMilli, avec.porteur.pvMaxMilli);
+  assert.equal(avec.porteur.pvInitialMilli, avec.porteur.pvMaxMilli);
+
+  // ⚠ LE TÉMOIN NE BOUGE PAS. Le Merlon porte `pvPlusVingt` côté OUVRAGE et
+  // `autoReparation` côté joueur : dans une garnison du joueur, il n'est pas
+  // concerné. Sans cette ligne, une majoration appliquée à tout le monde
+  // passerait les deux assertions ci-dessus.
+  assert.equal(avec.temoin.pvMaxMilli, sans.temoin.pvMaxMilli);
+
+  // ⚠⚠ UN SEUL `floor`, ET AUCUNE DONNÉE NE LE MESURE — c'est vérifié, pas
+  // supposé. Les quatre porteuses valent 1 000, 1 500 ou 2 000 PV nominaux, et
+  // `pv × facteurMilli` est alors toujours multiple de 100 : arrondir avant ou
+  // après la majoration rend le MÊME nombre à tous les niveaux. La garde est
+  // donc à la source, et voici le montage qui la ferait tomber — une pièce de
+  // 550 PV au niveau 4, qui n'existe pas encore.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  assert.match(source, /Math\.floor\(\(pvBaseMilli \* \(100 \+ PV_PLUS_VINGT_PCT\)\) \/ 100\)/);
+  const base550 = 550 * facteurMilli(4);
+  assert.notEqual(Math.floor((base550 * 120) / 100), Math.floor(base550 / 100) * 120);
+  for (const pv of [1000, 1500, 2000]) {
+    for (let n = 1; n <= NIVEAU.plafond; n += 1) {
+      const b = pv * facteurMilli(n);
+      assert.equal(Math.floor((b * 120) / 100), Math.floor(b / 100) * 120,
+        `pv ${pv} niveau ${n} : le nombre d'arrondis devient mesurable`);
+    }
+  }
+
+  // Et un Merlon de l'OUVRAGE, lui, est bien majoré : c'est le même module, lu
+  // de l'autre côté.
+  const chezLOuvrage = creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [{ id: 'merlon', rangee: 5, colonne: 4, niveau: 10 }],
+    vagues: [[{ id: 'meute', colonne: 5, rangee: 2, niveau: 10 }]],
+    modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] },
+  });
+  const mur = chezLOuvrage.entites.find((e) => e.id === 'merlon');
+  assert.equal(mur.pvMaxMilli, Math.floor((sans.temoin.pvMaxMilli * 120) / 100));
+});
+
+test('MODULES-D T10 — sur une pièce ENTAMÉE, seul le plafond monte', () => {
+  const base = sceneDePv().porteur.pvMaxMilli;
+  const entame = Math.floor(base / 2);
+
+  const abimee = sceneDePv({ modules: ['pvPlusVingt'], pvMilli: entame });
+  assert.equal(abimee.porteur.pvMaxMilli, 5659200, 'le plafond doit monter');
+  // ⚠⚠ LA VIE, ELLE, NE BOUGE PAS. Majorer les PV COURANTS d'une pièce entamée
+  // soignerait ce que le raid précédent a cassé : acheter le module réparerait
+  // d'un coup toutes les garnisons de la carte.
+  assert.equal(abimee.porteur.pvMilli, entame);
+  assert.equal(abimee.porteur.pvInitialMilli, entame,
+    '`pvInitialMilli` suit `pvMilli`, jamais `pvMaxMilli`');
+
+  // Montée PLEINE au sens de l'appelant — qui compte en PV NOMINAUX, sans
+  // module — les deux montent quand même. C'est la frontière de la règle.
+  const pleine = sceneDePv({ modules: ['pvPlusVingt'], pvMilli: base });
+  assert.equal(pleine.porteur.pvMilli, 5659200);
+  assert.equal(pleine.porteur.pvInitialMilli, 5659200);
+
+  // ⚠ LE BUTIN NE BOUGE PAS, ET CE N'EST PAS UNE COÏNCIDENCE : `butin` ne lit
+  // que `resultat.batiments`, et aucun bâtiment de site ne porte de module. La
+  // majoration ne peut donc pas déplacer une seule unité de quartz.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  const corps = source.slice(source.indexOf('export function butin('));
+  assert.equal(corps.slice(0, corps.indexOf('\n}')).includes('resultat.defenses'), false,
+    '`butin` lit désormais les défenses : la majoration de PV le déplacerait');
+
+  // Et aucun bâtiment de site ne porte de module de défense — le profil des
+  // bâtiments les met tous les deux à `null`, et un test le tient de face.
+  assert.match(source, /genre: 'batiment',[\s\S]*?moduleDefenseJoueur: null,\n\s*moduleDefenseOuvrage: null,/);
 });
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
