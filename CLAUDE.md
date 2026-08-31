@@ -41,23 +41,28 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MODULES-C), à confronter :**
-`npm test` → **692 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 262 193 octets**, 0 référence externe.
-⚠ **MODULES-C A COÛTÉ +405 OCTETS.** Un seul module câblé — le Bouclier —,
-aucune image, aucun écran neuf, aucun champ de sauvegarde : `SAVE_VERSION` reste
-à **14**. La borne de T10 n'a pas bougé — marge **37 807 octets**, 2,91 %.
+**Référence au 31/08/2026 (après le lot MODULES-D), à confronter :**
+`npm test` → **706 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 262 870 octets**, 0 référence externe.
+⚠ **MODULES-D A COÛTÉ +677 OCTETS**, pour QUATRE modules câblés — PV +20 %,
+Rayon +1, Rayon minimum −1, Auto-réparation — et le démêlage d'un champ qui
+mentait. Aucune image, aucun écran neuf, aucun champ de sauvegarde :
+`SAVE_VERSION` reste à **14**. Marge **37 130 octets**, 2,86 %.
 ⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 % ·
-2,91 %.** Elle ne descend plus que de quelques centièmes tant que les lots sont
-du code ; c'est le prochain atlas qui la fera tomber, et il faudra rouvrir la
-borne, pas la contourner.
+2,91 % · 2,86 %.** Elle ne descend plus que de quelques centièmes tant que les
+lots sont du code ; c'est le prochain atlas qui la fera tomber, et il faudra
+rouvrir la borne, pas la contourner.
 ⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
-exactement **7 écarts**, code de sortie 1. MODULES-C n'y touche pas : la sortie
+exactement **7 écarts**, code de sortie 1. MODULES-D n'y touche pas : la sortie
 est IDENTIQUE À LA LIGNE, avant et après (terrain, disposition, emplacements,
 trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié serait une
 régression, dans les deux sens.
 ⚠ **`tools/verifier.py` N'A PAS ÉTÉ LANCÉ À CE LOT NON PLUS**, et c'était
 conforme : il ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot MODULES-C :** 702 tests, `dist/index.html`
+**1 262 193 octets**, marge 37 807, 2,91 %. Un module câblé — le Bouclier —
+pour +405 octets, `SAVE_VERSION` déjà à 14.
 
 **Auparavant, après le lot MODULES-B :** 683 tests, `dist/index.html`
 **1 261 788 octets**, marge 38 212, 2,94 %. Trois modules câblés — Flashbang,
@@ -2992,6 +2997,45 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   début de partie n'ont ni artillerie ni véhicule** : l'EMP n'y a rien à
   neutraliser, et c'est une propriété du générateur, pas du module.
 
+- **UN CHAMP QUI VOULAIT DIRE DEUX CHOSES** — 31/08, lot MODULES-D. Le profil
+  portait un seul `moduleDefense` qui désignait **le module de garnison chez le
+  JOUEUR** sur une unité et **celui de l'OUVRAGE** sur une défense. Il est
+  scindé en `moduleDefenseJoueur` / `moduleDefenseOuvrage`, et une seule
+  fonction, `moduleDeDefense(e, p)`, choisit **sur le propriétaire**.
+  ⚠ **L'ANCIEN NOM A DISPARU, IL N'EST PAS RESTÉ EN ALIAS**, et `MODULES-D T1`
+  balaie `src/` pour l'interdire. Son motif est **borné à droite**
+  (`/moduleDefense(?![\p{L}\p{N}_])/u`) : les deux noms neufs COMMENCENT par
+  l'ancien, un `includes` nu ne pourrait jamais tomber.
+  ⚠ **LE DÉMÊLAGE SEUL N'A FAIT TOMBER AUCUN TEST**, et c'est un fait, pas un
+  soulagement : avant qu'un module défensif ne soit câblé, `moduleDeDefense`
+  n'avait qu'un lecteur observable — la ligne de résultat. Les points d'un raid
+  de référence sont **identiques au point** avant et après, sur 24 mesures. La
+  contre-épreuve montre que l'écart EXISTERAIT si `modulesDebloques.ouvrage`
+  était armé : `['flashbang']` rendait 2 291 944 points avant, 2 059 722 après.
+- **LA PORTÉE QUITTE LE PROFIL POUR L'ENTITÉ**, même lot, et **elle a QUATRE
+  lecteurs, pas trois** : `ensembleCamoufles`, `ciblage`, `cibleDeNeutralisation`
+  et `tir`, plus `peutTirer`. Un lecteur oublié donne une entité qui **vise**
+  au-delà de sa portée et ne **tire** pas.
+  ⚠ **LE CALCUL SE FAIT EN MILLI-CASES, PUIS AU CARRÉ** : `porteeMilli +
+  1000`, jamais `porteeCarree + 1` — 2 500 → 3 500 milli, donc 6 250 000 →
+  12 250 000. Et **plancher à zéro AVANT l'élévation**, sinon un rayon minimum
+  de 0 case redeviendrait positif au carré.
+- **QUATRE MODULES ÉCRITS ET INVISIBLES EN JEU, ET C'EST ASSUMÉ** — même lot.
+  `proprietaireDefense: 'joueur'` n'est écrit que par `montageDefense` de
+  `ui/banc.js`, derrière le geste de debug : la base du joueur n'est jamais
+  attaquée. Les trois modules de combat sont donc **vérifiés au banc**, pas en
+  jeu. ⚠ **ET L'AUTO-RÉPARATION EST INATTEIGNABLE, PAS SEULEMENT INVISIBLE** :
+  **rien, dans tout `src/`, n'écrit `degatsMilli` sur `etat.garnison`** — les
+  deux seuls écrivains, `reporterLesDegats` et `avancerLaReparation`, parcourent
+  `etat.armee`. La suite de raid sort au premier `continue`, et son test tourne
+  sur un **état forgé**.
+  ⚠ **PV +20 % NE MAJORE QUE LES PIÈCES MONTÉES PLEINES.** Majorer les PV
+  courants d'une pièce entamée réparerait d'un coup toutes les garnisons de la
+  carte : acheter le module deviendrait un soin. `pvInitialMilli` suit
+  `pvMilli`, jamais `pvMaxMilli`.
+  ⚠ **ET LE BUTIN NE PEUT PAS BOUGER** : `butin` ne lit que
+  `resultat.batiments`, et aucun bâtiment de site ne porte de module — les deux
+  champs du profil bâtiment sont `null`. Un test tient les deux faits de face.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie

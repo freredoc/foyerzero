@@ -808,12 +808,32 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
   assert.equal(pointsRecherche(resultat, montage), 1585n);
 
   // Avec le module de la cible débloqué (Merlon côté Ouvrage : pvPlusVingt),
-  // × 1,2 → 1 902.
+  // × 1,2 → 1 902, À FRACTION DÉTRUITE ÉGALE.
+  //
+  // ⚠⚠ ET LE MÊME DÉBLOCAGE MAJORE MAINTENANT LES PV DE LA CIBLE — lot
+  // MODULES-D. Le Merlon passe de 2 420 000 à 2 904 000 milli-PV, si bien que
+  // « la moitié » n'est plus le même nombre de PV. C'est une VRAIE interaction,
+  // pas un effet de bord : le module fait enfin ce qu'il dit.
   const avecModule = { ...montage, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } };
   const etatModule = creerCombat(avecModule);
   const resultatModule = resoudre(etatModule, { maxTicks: 1 });
-  abimerLigne(resultatModule.defenses.find(parId('merlon')), 1_210_000);
+  const merlonBoost = resultatModule.defenses.find(parId('merlon'));
+  assert.equal(merlonBoost.pvMaxMilli, 2_904_000, 'le module ne majore plus les PV');
+  abimerLigne(merlonBoost, merlonBoost.pvMaxMilli / 2);
   assert.equal(pointsRecherche(resultatModule, avecModule), 1902n);
+
+  // ⚠ LES DEUX EFFETS S'ANNULENT À DÉGÂTS ABSOLUS ÉGAUX, et c'est mesuré : un
+  // même nombre de milli-PV arrachés rapporte le MÊME nombre de points, module
+  // débloqué ou non — on casse une fraction plus petite d'une pièce plus
+  // grosse, majorée de 20 %. Le bonus ne se voit qu'au bout : détruire le
+  // Merlon ENTIER rapporte 3 170 sans le module et 3 804 avec.
+  const memeDegat = resoudre(creerCombat(avecModule), { maxTicks: 1 });
+  abimerLigne(memeDegat.defenses.find(parId('merlon')), 1_210_000);
+  assert.equal(pointsRecherche(memeDegat, avecModule), 1585n);
+  const entier = resoudre(creerCombat(avecModule), { maxTicks: 1 });
+  const aRaser = entier.defenses.find(parId('merlon'));
+  abimerLigne(aRaser, aRaser.pvMaxMilli);
+  assert.equal(pointsRecherche(entier, avecModule), 3804n);
 
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.
   assert.equal(resultat.batiments.length, 1);

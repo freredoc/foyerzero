@@ -7,15 +7,18 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { NIVEAU } from '../src/data/niveaux.js';
 import {
-  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin,
+  creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin, facteurMilli,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli, distanceCarree } from '../src/sim/grille.js';
+import { executerRaid, pvMaxDeLUnite } from '../src/sim/raid.js';
+import { APRES_RAID } from '../src/data/sites.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
@@ -239,19 +242,21 @@ test('T11 — un module non câblé ne se vend pas, même unité acquise et poin
       assert.deepEqual(codes, ['effetNonCable'], `${branche}/${id} : ${codes.join(',')}`);
     }
   }
-  // MESURÉ : 19 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les
-  // douze qui restent sont toutes en offense — Fendeur et Broyeur (Écraseur),
-  // Perceurs et Obusier (Tir de barrage), Cuirassiers et Sapeurs (Booster),
-  // Meute et Bélier (Flashbang), Crécelle (EMP), Guetteur et Frappeur
-  // (Camouflage), Enclume (Bouclier).
+  // MESURÉ : 8 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les
+  // vingt-trois qui restent sont douze en offense — Fendeur et Broyeur
+  // (Écraseur), Perceurs et Obusier (Tir de barrage), Cuirassiers et Sapeurs
+  // (Booster), Meute et Bélier (Flashbang), Crécelle (EMP), Guetteur et
+  // Frappeur (Camouflage), Enclume (Bouclier) — et ONZE EN DÉFENSE depuis
+  // MODULES-D : six ouvrages à Auto-réparation, trois à Rayon minimum −1, le
+  // Guetteur (Rayon +1) et le Broyeur (PV +20 %).
   //
   // ⚠ RÉÉCRIT TROIS FOIS, ET LE COMPTE EST MESURÉ À CHAQUE LOT, jamais déduit :
   // 29 avant MODULES-A, 25 après — `moduleEstCable` avait pris la branche, et
   // la ligne DÉFENSE des Perceurs restait non câblée alors qu'elle porte le
-  // même module que leur ligne offense —, 20 après MODULES-B, 19 depuis
-  // MODULES-C. La ligne qui vient de tomber est exactement celle que ce lot
-  // vend : l'Enclume, seul porteur du Bouclier.
-  assert.equal(nonCables.length, 19, `${nonCables.length} lignes non câblées, 19 attendues`);
+  // même module que leur ligne offense —, 20 après MODULES-B, 19 après
+  // MODULES-C, 8 depuis MODULES-D. Les onze lignes qui viennent de tomber sont
+  // exactement celles que ce lot vend, toutes en défense.
+  assert.equal(nonCables.length, 8, `${nonCables.length} lignes non câblées, 8 attendues`);
 
   // ⚠ CE QUI FALSIFIERAIT CE TEST : passer `cable.offense` à `true` sur
   // `garnison`. Les lignes du Ratisseur et de la Buse cesseraient de rendre
@@ -292,17 +297,25 @@ test('MODULES-A T9 — `cable` est par branche, et la fonction lève des deux c�
     assert.deepEqual(Object.keys(m.cable).sort(), ['defense', 'offense'], nom);
     for (const b of BRANCHES) assert.equal(typeof m.cable[b], 'boolean', `${nom}/${b}`);
   }
-  // MESURÉ : sept modules câblés sur quatorze, tous en offense, aucun en défense.
-  // ⚠ TROIS AU LOT MODULES-A, SIX APRÈS MODULES-B, SEPT DEPUIS MODULES-C. Ce
-  // compte est la liste exacte, pas un nombre : ajouter un module câblé sans
-  // toucher cette ligne fait tomber le test, et c'est voulu — le drapeau
-  // gouverne une VENTE.
+  // MESURÉ : onze modules câblés sur quatorze — sept en offense, QUATRE EN
+  // DÉFENSE. ⚠ TROIS AU LOT MODULES-A, SIX APRÈS MODULES-B, SEPT APRÈS
+  // MODULES-C, ONZE DEPUIS MODULES-D. Ce compte est la liste exacte, pas un
+  // nombre : ajouter un module câblé sans toucher cette ligne fait tomber le
+  // test, et c'est voulu — le drapeau gouverne une VENTE.
   const cables = Object.entries(MODULES)
     .filter(([, m]) => m.cable.offense || m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(cables,
-    ['booster', 'bouclier', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage']);
-  assert.equal(Object.values(MODULES).filter((m) => m.cable.defense).length, 0,
-    'aucun module n\'est câblé en défense — le jour où il y en aura un, ce test tombe');
+  assert.deepEqual(cables, [
+    'autoReparation', 'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp',
+    'flashbang', 'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'tirDeBarrage',
+  ]);
+  // ⚠ AUCUN DES QUATRE N'EST CÂBLÉ EN OFFENSE, et c'est la moitié qui compte :
+  // le Guetteur porte `camouflage` à l'assaut et `rayonPlusUn` en garnison. Un
+  // `offense: true` de trop lui vendrait le mauvais module.
+  const enDefense = Object.entries(MODULES)
+    .filter(([, m]) => m.cable.defense).map(([n]) => n).sort();
+  assert.deepEqual(enDefense,
+    ['autoReparation', 'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn']);
+  for (const n of enDefense) assert.equal(MODULES[n].cable.offense, false, `${n} en offense`);
 });
 
 test('MODULES-A T10 — l\'achat suit le drapeau, branche par branche', () => {
@@ -1484,6 +1497,10 @@ function projectionCanonique(etat) {
     // projection serait AVEUGLE au seul état que le Bouclier ajoute, et
     // `MODULES-C T9` passerait sans rien mesurer de ce lot.
     e.bouclierMilli,
+    // ⚠ ÉTENDUE UNE SECONDE FOIS AU LOT MODULES-D, pour la même raison : la
+    // portée et le plafond de PV quittent le profil pour l'entité, et sans eux
+    // `MODULES-D T14` serait aveugle aux trois modules qu'il prétend mesurer.
+    e.porteeCarree, e.porteeMiniCarree, e.pvMaxMilli,
   ].join(' ')).sort();
 }
 
@@ -1596,16 +1613,16 @@ test('MODULES-B T13 — `cable` par branche pour les trois modules', () => {
     assert.equal(moduleEstCable(nom, 'offense'), true, `${nom} en offense`);
     assert.equal(moduleEstCable(nom, 'defense'), false, `${nom} en défense`);
   }
-  // ⚠ SEPT, PAS HUIT DEPUIS MODULES-C : le Bouclier a quitté cette liste. Le
-  // compte est la liste, et c'est `MODULES-C T10` qui porte désormais la
-  // référence — celle-ci reste ici pour que le lot B tombe si un lot futur
-  // décâble l'un de ses trois modules sans le dire.
+  // ⚠ TROIS DEPUIS MODULES-D : le Bouclier avait quitté cette liste au lot C,
+  // les quatre modules défensifs la quittent ici. Le compte est la liste, et
+  // c'est `MODULES-A T9` qui porte désormais la référence — celle-ci reste ici
+  // pour que le lot B tombe si un lot futur décâble l'un de ses trois modules
+  // sans le dire. Les trois qui restent n'ont AUCUN effet écrit : la Garnison
+  // est en attente d'arbitrage, la Munition spéciale et le Vol de vie n'ont pas
+  // encore de lot.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(restants, [
-    'autoReparation', 'garnison', 'munitionSpeciale',
-    'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'volDeVie',
-  ]);
+  assert.deepEqual(restants, ['garnison', 'munitionSpeciale', 'volDeVie']);
 
   // L'achat : cinq lignes s'ouvrent en offense, quatre refusent en défense.
   const etat = partie('999999999999999');
@@ -2230,14 +2247,11 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
   assert.equal(moduleEstCable('bouclier', 'offense'), true, 'bouclier en offense');
   assert.equal(moduleEstCable('bouclier', 'defense'), false, 'bouclier en défense');
 
-  // Les sept autres restent faux des DEUX côtés — le compte EST la liste, et
+  // Les trois autres restent faux des DEUX côtés — le compte EST la liste, et
   // c'est elle qui tombe si un lot futur câble un module sans le dire ici.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(restants, [
-    'autoReparation', 'garnison', 'munitionSpeciale',
-    'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'volDeVie',
-  ]);
+  assert.deepEqual(restants, ['garnison', 'munitionSpeciale', 'volDeVie']);
 
   // L'ACHAT, pas seulement le drapeau : une seule ligne porte le Bouclier, en
   // offense, et elle s'achète. Aucune ligne de défense ne le porte — c'est ce
@@ -2262,8 +2276,8 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
 
   // ⚠ COMPTÉ EN PARCOURANT L'ARBRE, PAS DE TÊTE — et c'est la leçon de
   // MODULES-B, dont le brief annonçait six lignes ouvertes là où il y en avait
-  // cinq. Onze lignes s'ouvraient avant ce lot, douze après ; la défense reste
-  // à zéro. Ce compte est le chiffre du rapport.
+  // cinq. Onze lignes s'ouvraient avant le lot C, douze après ; MODULES-D en
+  // ouvre ONZE DE PLUS, toutes en défense. Ce compte est le chiffre du rapport.
   const ouvertes = { offense: 0, defense: 0 };
   for (const branche of BRANCHES) {
     for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
@@ -2271,7 +2285,713 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
       if (nom !== null && MODULES[nom].cable[branche]) ouvertes[branche] += 1;
     }
   }
-  assert.deepEqual(ouvertes, { offense: 12, defense: 0 });
+  assert.deepEqual(ouvertes, { offense: 12, defense: 11 });
+});
+
+// ---------------------------------------------------------------------------
+// MODULES-D — le champ qui mentait, la portée, et les quatre modules défensifs
+// ---------------------------------------------------------------------------
+
+/**
+ * Un montage de GARNISON dont on choisit le propriétaire, pour lire ce que
+ * chaque pièce déclare comme module de défense.
+ *
+ * ⚠ LE MODULE DE DÉFENSE NE SE LIT PAS DANS LE PROFIL, IL SE LIT AU RÉSULTAT.
+ * `ligneResultat` est le seul lecteur observable de `moduleDeDefense` avant
+ * qu'un module défensif ne soit câblé ; asserter le champ que le patch vient
+ * d'écrire ne prouverait rien.
+ */
+function garnisonDe(proprietaire) {
+  const montage = {
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+      { id: 'faucheuse', rangee: 9, colonne: 7, niveau: 20 },
+      { id: 'guetteur', rangee: 6, colonne: 4, niveau: 20 },
+      { id: 'carapace', rangee: 6, colonne: 6, niveau: 20 },
+      { id: 'broyeur', rangee: 7, colonne: 3, niveau: 20 },
+    ],
+    vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 40 }]],
+    proprietaireDefense: proprietaire,
+    proprietaireAttaque: proprietaire === 'joueur' ? 'ouvrage' : 'joueur',
+    modulesDebloques: { ouvrage: [], joueur: [] },
+  };
+  const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
+  const lu = {};
+  for (const d of resultat.defenses) lu[d.id] = d.module;
+  return lu;
+}
+
+test('MODULES-D T1 — `moduleDefense` a disparu de `src/`, sous ce nom-là', () => {
+  // ⚠ LE MOTIF EST BORNÉ À DROITE, ET C'EST TOUT L'ENJEU : les deux noms
+  // neufs COMMENCENT par l'ancien. Un `includes('moduleDefense')` nu trouverait
+  // `moduleDefenseJoueur` et ce test ne pourrait jamais tomber.
+  const motif = /moduleDefense(?![\p{L}\p{N}_])/gu;
+  const coupables = [];
+  for (const dossier of ['data', 'sim', 'render', 'ui']) {
+    const dir = new URL(`../src/${dossier}/`, import.meta.url);
+    for (const nom of readdirSync(dir)) {
+      const texte = readFileSync(new URL(nom, dir), 'utf8');
+      if (motif.test(texte)) coupables.push(`${dossier}/${nom}`);
+      motif.lastIndex = 0;
+    }
+  }
+  assert.deepEqual(coupables, [], 'un champ qui a menti une fois ment deux fois');
+
+  // ⚠ ET L'APPÂT PROUVE QUE LE MOTIF MORD ENCORE. Sans lui, une faute de frappe
+  // dans l'expression rendrait le balayage vert sur n'importe quelle source.
+  assert.equal(motif.test('  moduleDefense: u.defense.module,'), true);
+  motif.lastIndex = 0;
+  assert.equal(motif.test('  moduleDefenseJoueur: u.defense.module,'), false);
+  motif.lastIndex = 0;
+
+  // Les deux noms neufs, eux, sont bien là — un renommage qui les perdrait
+  // laisserait le balayage ci-dessus tout aussi vert.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  for (const nom of ['moduleDefenseJoueur', 'moduleDefenseOuvrage']) {
+    assert.equal((source.match(new RegExp(nom, 'g')) ?? []).length >= 3, true,
+      `${nom} doit être écrit sur les trois profils`);
+  }
+});
+
+test('MODULES-D T2 — le module de défense est celui du PROPRIÉTAIRE', () => {
+  const chezLOuvrage = garnisonDe('ouvrage');
+  const chezLeJoueur = garnisonDe('joueur');
+
+  // Un ouvrage fixe : la Herse rend `pvPlusVingt` à l'Ouvrage, `autoReparation`
+  // au joueur. Même pièce, même case, deux modules.
+  assert.equal(chezLOuvrage.merlon, 'pvPlusVingt');
+  assert.equal(chezLeJoueur.merlon, 'autoReparation');
+  // Une artillerie porte le MÊME des deux côtés : la table le dit, et c'est ce
+  // qui empêche de croire que la règle est « l'un ou l'autre au hasard ».
+  assert.equal(chezLOuvrage.faucheuse, 'rayonMiniMoinsUn');
+  assert.equal(chezLeJoueur.faucheuse, 'rayonMiniMoinsUn');
+
+  // Une unité de garnison : `moduleOuvrage` d'un côté, `defense.module` de
+  // l'autre. Le Guetteur n'a pas de module côté Ouvrage, et il a le Rayon +1
+  // côté joueur — c'est exactement ce que l'ancien champ inversait.
+  assert.equal(chezLOuvrage.guetteur, null);
+  assert.equal(chezLeJoueur.guetteur, 'rayonPlusUn');
+  assert.equal(chezLOuvrage.carapace, 'camouflage');
+  assert.equal(chezLeJoueur.carapace, 'emp');
+  assert.equal(chezLOuvrage.broyeur, 'volDeVie');
+  assert.equal(chezLeJoueur.broyeur, 'pvPlusVingt');
+
+  // ⚠ ET AUCUNE DES CINQ N'EST LUE COMME SON MODULE D'ASSAUT. C'est la faute
+  // qu'on retire : `guetteur.module` vaut `camouflage`, `broyeur.module` vaut
+  // `ecraseur`, et ni l'un ni l'autre n'a de rôle en garnison.
+  for (const [id, lu] of Object.entries(chezLeJoueur)) {
+    const assaut = UNITES[id]?.module;
+    if (assaut === undefined || assaut === lu) continue;
+    assert.notEqual(lu, assaut, `${id} lit encore son module d'assaut`);
+  }
+  assert.equal(UNITES.guetteur.module, 'camouflage', 'montage : la faute doit être atteignable');
+  assert.equal(UNITES.broyeur.module, 'ecraseur');
+});
+
+test('MODULES-D T3 — les modules déjà câblés tirent toujours, à l\'assaut', () => {
+  // ⚠ CE TEST PROTÈGE MODULES-A, B ET C. Le démêlage change la LECTURE du
+  // module ; s'il la changeait aussi du côté attaque, les sept modules câblés
+  // s'éteindraient tous d'un coup et aucun test de ce fichier ne dirait
+  // pourquoi. Chaque assertion ci-dessous tombe si `moduleActif` cesse de lire
+  // `p.module` en camp d'attaque.
+  const cables = Object.entries(MODULES)
+    .filter(([, m]) => m.cable.offense).map(([n]) => n).sort();
+  assert.deepEqual(cables, [
+    'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage',
+  ], 'sept modules câblés en offense — le compte EST la liste');
+
+  // Bouclier : le réservoir se pose AU MONTAGE, c'est le plus direct à lire.
+  const avecBouclier = sceneBouclier();
+  const enclume = avecBouclier.entites.find((e) => e.id === 'enclume');
+  assert.ok(enclume.bouclierMilli > 0, 'le Bouclier ne se pose plus à l\'assaut');
+  // Et il ne se pose PAS si le joueur ne l'a pas acheté : la garde est intacte.
+  const sansAchat = sceneBouclier({ modules: [] });
+  assert.equal(sansAchat.entites.find((e) => e.id === 'enclume').bouclierMilli, 0);
+
+  // Camouflage, Flashbang, EMP : le montage des trois modules de MODULES-B.
+  // ⚠ QUATRE-VINGTS TICKS, PAS QUARANTE : la Crécelle doit d'abord APPROCHER
+  // l'artillerie, seule cible `vehicule` de la scène. Mesuré — elle déclenche
+  // entre le 40ᵉ et le 80ᵉ tick, et un horizon trop court rendrait ce test
+  // rouge sur du code parfaitement sain.
+  const trois = montageTroisModules([0, 1, 2, 3, 4]);
+  for (let t = 1; t <= 80; t += 1) tick(trois);
+  const neutralisees = trois.entites.filter((e) => e.effetsTemporises.length > 0);
+  assert.ok(neutralisees.length > 0, 'plus aucune neutralisation à l\'assaut');
+  const porteurs = trois.entites.filter((e) => e.modulesActifs.length > 0).map((e) => e.id).sort();
+  assert.deepEqual(porteurs, ['belier', 'crecelle'], 'les deux porteurs doivent avoir tiré');
+
+  // Tir de barrage : la géométrie de MODULES-A T1, telle quelle — tireur en
+  // (2,5), cible en (3,5), voisine en (3,4). Les clés sont « rangée,colonne ».
+  const geometrie = (avecModule) => scene({
+    cible: { id: 'merlon', rangee: 3, colonne: 5 },
+    voisines: [{ id: 'merlon', rangee: 3, colonne: 4 }],
+    avecModule,
+  });
+  assert.ok(pertesAuPremierTick(geometrie(true)).get('3,4') > 0,
+    'le barrage n\'éclabousse plus');
+  assert.equal(pertesAuPremierTick(geometrie(false)).get('3,4'), 0,
+    'montage : sans achat, aucune éclaboussure');
+
+  // Écraseur : la masse d'un Fendeur DOUBLE contre une escouade — le seul
+  // lecteur observable est le forçage d'une structure, `structureForcee`.
+  const forcage = (modules) => {
+    const etat = creerCombat({
+      niveau: 1,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
+      defenseurs: [{ id: 'merlon', rangee: 4, colonne: 5, niveau: 1 }],
+      vagues: [[{ id: 'fendeur', colonne: 5, rangee: 3, niveau: 1 }]],
+      modulesDebloques: { ouvrage: [], joueur: modules },
+    });
+    const mur = etat.entites.find((e) => e.id === 'merlon');
+    const avant = mur.pvMilli;
+    for (let t = 1; t <= 12; t += 1) tick(etat);
+    return avant - mur.pvMilli;
+  };
+  const avecEcraseur = forcage(['ecraseur']);
+  const sansEcraseur = forcage([]);
+  assert.ok(avecEcraseur > sansEcraseur,
+    `l'Écraseur ne force plus la structure (${avecEcraseur} vs ${sansEcraseur})`);
+});
+
+/** Le montage de référence de T4 : deux unités de garnison et un ouvrage. */
+function raidDeReference(ouvrage) {
+  const montage = {
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+      { id: 'meute', rangee: 6, colonne: 4, niveau: 20 },
+      { id: 'perceurs', rangee: 6, colonne: 6, niveau: 18 },
+    ],
+    vagues: [[
+      { id: 'belier', colonne: 5, rangee: 2, niveau: 30 },
+      { id: 'belier', colonne: 4, rangee: 2, niveau: 30 },
+      { id: 'belier', colonne: 6, rangee: 2, niveau: 30 },
+    ]],
+    modulesDebloques: { ouvrage, joueur: [] },
+  };
+  const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
+  return { resultat, points: pointsRecherche(resultat, montage) };
+}
+
+test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', () => {
+  // ⚠ LE CANAL DU JEU EST VIDE, ET C'EST LUI QU'ON GÈLE. `sim/generateur.js`
+  // livre `modulesDebloques.ouvrage` à VIDE sur tous les sites : le bonus de
+  // 20 % n'est jamais accordé en partie. Le nombre ci-dessous a été mesuré des
+  // DEUX côtés du démêlage et il est identique — c'est la mesure que le rapport
+  // porte.
+  const jeu = raidDeReference([]);
+  assert.equal(jeu.points, 2059722n, 'les points du raid de référence ont bougé');
+  assert.equal(jeu.resultat.tick, 120, 'montage : le combat doit se dérouler pareil');
+
+  // ⚠ ET LE MONTAGE N'EST PAS VIDE. Le Merlon porte `pvPlusVingt` côté Ouvrage :
+  // débloquer ce module-là majore bien les points. Sans cette ligne, l'égalité
+  // ci-dessous passerait sur un barème qui ne majore jamais rien.
+  assert.equal(raidDeReference(['pvPlusVingt']).points, 2106166n);
+
+  // ⚠⚠ LA MESURE DU LOT. Avant le démêlage, la Meute et les Perceurs de
+  // l'Ouvrage étaient crédités du module de garnison DU JOUEUR — 2 291 944 et
+  // 2 193 000 mesurés sur `origin/main`. Ils portent maintenant leur
+  // `moduleOuvrage`, qui est nul : plus aucune majoration ne leur revient.
+  assert.equal(raidDeReference(['flashbang']).points, 2059722n);
+  assert.equal(raidDeReference(['tirDeBarrage']).points, 2059722n);
+  assert.equal(raidDeReference(['flashbang', 'tirDeBarrage', 'pvPlusVingt']).points, 2106166n);
+
+  // Et les deux unités de garnison rapportent bien quelque chose : sans cela,
+  // les trois égalités ci-dessus tiendraient parce que rien n'est compté.
+  const parId = new Map(jeu.resultat.defenses.map((d) => [d.id, d]));
+  for (const id of ['meute', 'perceurs']) {
+    assert.ok(parId.get(id).pvInitialMilli - parId.get(id).pvMilli > 0,
+      `montage : ${id} doit être entamée`);
+    assert.equal(parId.get(id).module, null, `${id} lit encore un module côté Ouvrage`);
+  }
+});
+
+/**
+ * Une garnison DU JOUEUR — c'est le seul côté où les modules de ce lot vivent —
+ * et un assaillant de l'Ouvrage qu'on place où l'on veut.
+ *
+ * ⚠ LE DÉPLACEMENT EST L'ÉTAPE 7, LES DÉGÂTS L'ÉTAPE 5. On force la position de
+ * l'assaillant PUIS on joue un tick : ce qui compte est la distance d'avant.
+ */
+function sceneDePortee({ defenseur, modules = [], distanceMilli }) {
+  const etat = creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [{ ...defenseur, niveau: 10 }],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'fouisseurs', colonne: 5, rangee: 2, niveau: 10 }]],
+    modulesDebloques: { ouvrage: [], joueur: modules },
+  });
+  const garde = etat.entites.find((e) => e.camp === 'defense' && e.id === defenseur.id);
+  const assaillant = etat.entites.find((e) => e.camp === 'attaque');
+  assert.ok(garde !== undefined && assaillant !== undefined, 'montage');
+  if (distanceMilli !== undefined) assaillant.rangeeMilli = garde.rangeeMilli - distanceMilli;
+  const avant = assaillant.pvMilli;
+  const d2 = distanceCarree(garde.rangeeMilli, garde.colonne,
+    assaillant.rangeeMilli, assaillant.colonne);
+  tick(etat);
+  return { etat, garde, assaillant, d2, pertes: avant - assaillant.pvMilli };
+}
+
+test('MODULES-D T5 — la portée se lit sur l\'ENTITÉ, et TOUS ses lecteurs la lisent là', () => {
+  // Viser ET tirer : deux lecteurs distincts, deux assertions distinctes. Un
+  // seul des deux laissé sur le profil donnerait une garde qui vise sans tirer,
+  // ou qui tire sans avoir visé — le combat ne planterait pas, il serait faux.
+  const avec = sceneDePortee({
+    defenseur: { id: 'guetteur', rangee: 6, colonne: 5 },
+    modules: ['rayonPlusUn'], distanceMilli: 3000,
+  });
+  assert.equal(avec.d2, 9000000, 'montage : trois cases, au carré des milli-cases');
+  assert.notEqual(avec.garde.cibleIndice, null, '`ciblage` lit encore la portée du profil');
+  assert.ok(avec.pertes > 0, '`tir` lit encore la portée du profil');
+
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sans l'achat, la même case est hors
+  // d'atteinte. Sans cette ligne, les deux assertions ci-dessus passeraient sur
+  // une portée qui n'a jamais bougé.
+  const sans = sceneDePortee({
+    defenseur: { id: 'guetteur', rangee: 6, colonne: 5 }, distanceMilli: 3000,
+  });
+  assert.equal(sans.garde.cibleIndice, null);
+  assert.equal(sans.pertes, 0);
+
+  // ⚠⚠ QUATRE LECTEURS, PAS TROIS. Le brief en annonçait deux dans `ciblage`
+  // — la boucle des candidats et le bloc « cible conservée » — et un dans
+  // `tir` ; mesuré, le bloc « cible conservée » ne lit AUCUNE portée, et deux
+  // autres fonctions en lisent une : `ensembleCamoufles` (le rayon qui révèle
+  // un camouflé, « les mêmes que son ciblage ») et `cibleDeNeutralisation`.
+  // Aucun module ne modifie encore la portée d'un porteur de Camouflage ou
+  // d'EMP : ces deux-là se gardent à la source, faute de montage qui les
+  // sépare.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  assert.equal((source.match(/d2 > e\.porteeCarree \|\| d2 < e\.porteeMiniCarree/g) ?? []).length, 4,
+    'les quatre lecteurs de portée doivent lire l\'entité');
+  assert.equal(source.includes('d2 > p.porteeCarree'), false,
+    'un lecteur de portée est resté sur le profil');
+  // `peutTirer` est le cinquième : il décide si l'entité tire du tout.
+  assert.match(source, /function peutTirer\(e, p\) \{\n\s*if \(p\.degatsColonne === null \|\| e\.porteeCarree === 0\)/);
+});
+
+test('MODULES-D T6 — Rayon +1 ajoute UNE case, en milli-cases puis au carré', () => {
+  const sans = sceneDePortee({ defenseur: { id: 'guetteur', rangee: 6, colonne: 5 } });
+  const avec = sceneDePortee({
+    defenseur: { id: 'guetteur', rangee: 6, colonne: 5 }, modules: ['rayonPlusUn'],
+  });
+  // 2,5 case → 3,5 case. En milli-cases au carré : 2 500² puis 3 500².
+  assert.equal(sans.garde.porteeCarree, 2500 * 2500);
+  assert.equal(avec.garde.porteeCarree, 3500 * 3500);
+  // ⚠ ET SÛREMENT PAS `porteeCarree + 1`, qui rendrait 6 250 001 — un
+  // millionième de case de plus, invisible et faux.
+  assert.notEqual(avec.garde.porteeCarree, sans.garde.porteeCarree + 1);
+  // Le rayon MINIMAL, lui, ne bouge pas : le module n'en parle pas.
+  assert.equal(avec.garde.porteeMiniCarree, sans.garde.porteeMiniCarree);
+
+  // Le PROFIL reste à sa valeur nominale : c'est ce qui permet à deux Guetteurs
+  // de la même grille d'avoir deux rayons différents.
+  const gardeSansAchat = sans.etat.entites.find((e) => e.id === 'guetteur');
+  assert.equal(gardeSansAchat.porteeCarree, 2500 * 2500);
+});
+
+test('MODULES-D T7 — Rayon minimum −1 : une cible hors d\'atteinte devient touchable', () => {
+  // La Faucheuse a un angle mort de 3,5 cases. Un assaillant à 3 cases y est
+  // à l'abri ; le module ramène l'angle mort à 2,5 et le découvre.
+  const commun = { defenseur: { id: 'faucheuse', rangee: 6, colonne: 5 }, distanceMilli: 3000 };
+  const sans = sceneDePortee(commun);
+  const avec = sceneDePortee({ ...commun, modules: ['rayonMiniMoinsUn'] });
+
+  assert.equal(sans.d2, 9000000, 'montage : trois cases');
+  assert.equal(sans.garde.porteeMiniCarree, 3500 * 3500);
+  assert.equal(avec.garde.porteeMiniCarree, 2500 * 2500);
+
+  // ⚠⚠ UN NOMBRE QUI CHANGE NE SUFFIT PAS : on montre LE TIR. Sans le module,
+  // l'assaillant n'est même pas visé ; avec, il est visé ET il perd des PV.
+  assert.equal(sans.garde.cibleIndice, null, 'l\'angle mort ne protège plus');
+  assert.equal(sans.pertes, 0);
+  assert.notEqual(avec.garde.cibleIndice, null);
+  assert.ok(avec.pertes > 0, `l'artillerie ne tire toujours pas (${avec.pertes})`);
+
+  // Et la portée MAXIMALE ne bouge pas : le module ne parle que de l'angle mort.
+  assert.equal(avec.garde.porteeCarree, sans.garde.porteeCarree);
+  assert.equal(avec.garde.porteeCarree, 5500 * 5500);
+});
+
+test('MODULES-D T8 — le rayon minimum ne passe pas sous zéro', () => {
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  // ⚠ LE PLANCHER EST AVANT LE CARRÉ, ET C'EST TOUT L'ENJEU. Une portée
+  // minimale de −500 milli repasserait à 250 000 en s'élevant au carré : le
+  // module AGRANDIRAIT l'angle mort qu'il est censé réduire.
+  assert.match(source, /porteeMiniMilli = Math\.max\(0, porteeMiniMilli - MILLI_PAR_CASE\);/);
+  assert.ok(source.indexOf('Math.max(0, porteeMiniMilli') 
+    < source.indexOf('entite.porteeMiniCarree = porteeMiniMilli * porteeMiniMilli;'),
+    'le plancher doit être posé AVANT la mise au carré');
+
+  // ⚠⚠ ET AUCUNE DONNÉE NE L'ATTEINT AUJOURD'HUI — c'est mesuré, pas supposé.
+  // Les trois porteuses ont toutes un angle mort de 3,5 cases : le plancher est
+  // une garde MORTE, exactement comme `masseEffective` l'est pour l'Écraseur.
+  // Elle mordra le jour où une pièce à angle mort d'une case portera le module,
+  // et l'écrire plus tard demanderait de retrouver ce raisonnement-ci.
+  const porteuses = Object.entries(DEFENSES)
+    .filter(([, d]) => d.moduleJoueur === 'rayonMiniMoinsUn' || d.moduleOuvrage === 'rayonMiniMoinsUn')
+    .map(([id, d]) => [id, d.porteeMini]);
+  assert.deepEqual(porteuses.map(([id]) => id).sort(), ['faucheuse', 'harpon', 'mortier']);
+  for (const [id, mini] of porteuses) {
+    assert.ok(mini >= 1, `${id} a un angle mort de ${mini} case : le plancher mord maintenant`);
+  }
+  // Aucune unité de garnison ne porte le module — sinon il faudrait vérifier
+  // son angle mort aussi.
+  assert.deepEqual(
+    Object.entries(UNITES).filter(([, u]) => u.defense.module === 'rayonMiniMoinsUn'
+      || u.moduleOuvrage === 'rayonMiniMoinsUn').map(([id]) => id), [],
+  );
+
+  // Le calcul lui-même, refait ici plutôt que recopié : un angle mort d'une
+  // demi-case tombe à ZÉRO, pas à 250 000.
+  const plancher = (miniMilli) => Math.max(0, miniMilli - 1000) ** 2;
+  assert.equal(plancher(500), 0);
+  assert.equal(plancher(1000), 0);
+  assert.equal(plancher(3500), 2500 * 2500);
+});
+
+/**
+ * Une garnison du joueur qui porte le Broyeur — seul porteur de `pvPlusVingt`
+ * côté joueur — et un Merlon témoin, qui ne le porte pas de ce côté-là.
+ */
+function sceneDePv({ modules = [], pvMilli } = {}) {
+  const broyeur = { id: 'broyeur', rangee: 6, colonne: 5, niveau: 10 };
+  const etat = creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [
+      pvMilli === undefined ? broyeur : { ...broyeur, pvMilli },
+      { id: 'merlon', rangee: 5, colonne: 4, niveau: 10 },
+    ],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'fouisseurs', colonne: 5, rangee: 2, niveau: 10 }]],
+    modulesDebloques: { ouvrage: [], joueur: modules },
+  });
+  return {
+    etat,
+    porteur: etat.entites.find((e) => e.id === 'broyeur'),
+    temoin: etat.entites.find((e) => e.id === 'merlon'),
+  };
+}
+
+test('MODULES-D T9 — PV +20 % sur une pièce montée PLEINE', () => {
+  const sans = sceneDePv();
+  const avec = sceneDePv({ modules: ['pvPlusVingt'] });
+
+  assert.equal(sans.porteur.pvMaxMilli, 4716000, 'montage : les PV nominaux ont bougé');
+  assert.equal(avec.porteur.pvMaxMilli, Math.floor((4716000 * 120) / 100));
+  assert.equal(avec.porteur.pvMaxMilli, 5659200);
+
+  // ⚠ ET LES PV COURANTS SUIVENT, parce que la pièce est montée pleine. Une
+  // pièce dont le plafond monte sans que sa vie suive arriverait au combat
+  // déjà blessée, ce que le module ne dit nulle part.
+  assert.equal(avec.porteur.pvMilli, avec.porteur.pvMaxMilli);
+  assert.equal(avec.porteur.pvInitialMilli, avec.porteur.pvMaxMilli);
+
+  // ⚠ LE TÉMOIN NE BOUGE PAS. Le Merlon porte `pvPlusVingt` côté OUVRAGE et
+  // `autoReparation` côté joueur : dans une garnison du joueur, il n'est pas
+  // concerné. Sans cette ligne, une majoration appliquée à tout le monde
+  // passerait les deux assertions ci-dessus.
+  assert.equal(avec.temoin.pvMaxMilli, sans.temoin.pvMaxMilli);
+
+  // ⚠⚠ UN SEUL `floor`, ET AUCUNE DONNÉE NE LE MESURE — c'est vérifié, pas
+  // supposé. Les quatre porteuses valent 1 000, 1 500 ou 2 000 PV nominaux, et
+  // `pv × facteurMilli` est alors toujours multiple de 100 : arrondir avant ou
+  // après la majoration rend le MÊME nombre à tous les niveaux. La garde est
+  // donc à la source, et voici le montage qui la ferait tomber — une pièce de
+  // 550 PV au niveau 4, qui n'existe pas encore.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  assert.match(source, /Math\.floor\(\(pvBaseMilli \* \(100 \+ PV_PLUS_VINGT_PCT\)\) \/ 100\)/);
+  const base550 = 550 * facteurMilli(4);
+  assert.notEqual(Math.floor((base550 * 120) / 100), Math.floor(base550 / 100) * 120);
+  for (const pv of [1000, 1500, 2000]) {
+    for (let n = 1; n <= NIVEAU.plafond; n += 1) {
+      const b = pv * facteurMilli(n);
+      assert.equal(Math.floor((b * 120) / 100), Math.floor(b / 100) * 120,
+        `pv ${pv} niveau ${n} : le nombre d'arrondis devient mesurable`);
+    }
+  }
+
+  // Et un Merlon de l'OUVRAGE, lui, est bien majoré : c'est le même module, lu
+  // de l'autre côté.
+  const chezLOuvrage = creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [{ id: 'merlon', rangee: 5, colonne: 4, niveau: 10 }],
+    vagues: [[{ id: 'meute', colonne: 5, rangee: 2, niveau: 10 }]],
+    modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] },
+  });
+  const mur = chezLOuvrage.entites.find((e) => e.id === 'merlon');
+  assert.equal(mur.pvMaxMilli, Math.floor((sans.temoin.pvMaxMilli * 120) / 100));
+});
+
+test('MODULES-D T10 — sur une pièce ENTAMÉE, seul le plafond monte', () => {
+  const base = sceneDePv().porteur.pvMaxMilli;
+  const entame = Math.floor(base / 2);
+
+  const abimee = sceneDePv({ modules: ['pvPlusVingt'], pvMilli: entame });
+  assert.equal(abimee.porteur.pvMaxMilli, 5659200, 'le plafond doit monter');
+  // ⚠⚠ LA VIE, ELLE, NE BOUGE PAS. Majorer les PV COURANTS d'une pièce entamée
+  // soignerait ce que le raid précédent a cassé : acheter le module réparerait
+  // d'un coup toutes les garnisons de la carte.
+  assert.equal(abimee.porteur.pvMilli, entame);
+  assert.equal(abimee.porteur.pvInitialMilli, entame,
+    '`pvInitialMilli` suit `pvMilli`, jamais `pvMaxMilli`');
+
+  // Montée PLEINE au sens de l'appelant — qui compte en PV NOMINAUX, sans
+  // module — les deux montent quand même. C'est la frontière de la règle.
+  const pleine = sceneDePv({ modules: ['pvPlusVingt'], pvMilli: base });
+  assert.equal(pleine.porteur.pvMilli, 5659200);
+  assert.equal(pleine.porteur.pvInitialMilli, 5659200);
+
+  // ⚠ LE BUTIN NE BOUGE PAS, ET CE N'EST PAS UNE COÏNCIDENCE : `butin` ne lit
+  // que `resultat.batiments`, et aucun bâtiment de site ne porte de module. La
+  // majoration ne peut donc pas déplacer une seule unité de quartz.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  const corps = source.slice(source.indexOf('export function butin('));
+  assert.equal(corps.slice(0, corps.indexOf('\n}')).includes('resultat.defenses'), false,
+    '`butin` lit désormais les défenses : la majoration de PV le déplacerait');
+
+  // Et aucun bâtiment de site ne porte de module de défense — le profil des
+  // bâtiments les met tous les deux à `null`, et un test le tient de face.
+  assert.match(source, /genre: 'batiment',[\s\S]*?moduleDefenseJoueur: null,\n\s*moduleDefenseOuvrage: null,/);
+});
+
+/**
+ * Une partie prête à raider, avec une garnison forgée.
+ *
+ * ⚠ LA GARNISON EST FORGÉE PARCE QU'ELLE NE PEUT PAS L'ÊTRE AUTREMENT. Rien,
+ * dans tout `src/`, n'écrit `degatsMilli` sur `etat.garnison` : la base du
+ * joueur n'est jamais attaquée. L'état de départ de ce test est donc un état que
+ * le jeu ne sait pas produire — c'est assumé, et c'est précisément ce que le
+ * rapport dit en toutes lettres.
+ */
+function partieAvecGarnison(garnison, modulesDefense) {
+  const etat = creerEtat(2026);
+  rattraperJeu(etat, 3001);
+  for (let c = 1; c <= 6; c += 1) {
+    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+  }
+  etat.garnison.push(...garnison);
+  etat.recherche.modules.defense.push(...modulesDefense);
+  const camp = etat.satellites.presents.find((x) => x.type === 'camp');
+  assert.ok(camp, 'montage : aucun camp autour de la base');
+  return { etat, cible: { rangee: camp.rangee, colonne: camp.colonne } };
+}
+
+test('MODULES-D T11 — l\'Auto-réparation rend 20 % des DÉGÂTS, et seulement à qui y a droit', () => {
+  // 1 009 n'est pas un multiple de 5 : le `Math.floor` se voit.
+  const abime = 1009;
+  const { etat, cible } = partieAvecGarnison([
+    // porte le module ET il est acquis → réparée
+    { id: 'merlon', rangee: 5, colonne: 5, niveau: 1, degatsMilli: abime },
+    // porte le module mais il n'est PAS acquis → intacte
+    { id: 'ronce', rangee: 5, colonne: 6, niveau: 1, degatsMilli: abime },
+    // module acquis, mais elle porte `rayonMiniMoinsUn` → intacte
+    { id: 'faucheuse', rangee: 5, colonne: 7, niveau: 1, degatsMilli: abime },
+    // porteuse, acquise, mais sans une égratignure → rien à rendre
+    { id: 'casemate', rangee: 5, colonne: 8, niveau: 1, degatsMilli: 0 },
+  ], ['merlon', 'faucheuse', 'casemate']);
+
+  const rapport = executerRaid(etat, etat, cible);
+  assert.ok(rapport.ticks > 0, 'montage : le raid n\'a pas eu lieu');
+
+  const par = Object.fromEntries(etat.garnison.map((p) => [p.id, p.degatsMilli]));
+  // floor(1009 × 20 / 100) = 201, et non 202 : 20 % des DÉGÂTS, arrondi vers le bas.
+  assert.equal(par.merlon, abime - 201, 'le porteur acquis doit regagner 201 milli-PV');
+  // ⚠ CES TROIS-LÀ SONT LES GARDES. Retirer le contrôle `moduleEstAcquis` ferait
+  // tomber la Ronce ; retirer `nomDuModule` ferait tomber la Faucheuse ; ne pas
+  // appeler la suite du tout ferait tomber le Merlon.
+  assert.equal(par.ronce, abime, 'module non acquis : rien ne doit être rendu');
+  assert.equal(par.faucheuse, abime, 'ce n\'est pas ce module-là : rien ne doit être rendu');
+  assert.equal(par.casemate, 0, 'une pièce intacte reste à zéro');
+
+  // Et les six porteurs sont bien ceux du brief, mesurés et non supposés.
+  const porteurs = Object.keys(DEFENSES).filter((id) => nomDuModule('defense', id) === 'autoReparation');
+  assert.deepEqual(porteurs, ['merlon', 'ronce', 'herse', 'casemate', 'creneau', 'batterie']);
+});
+
+test('MODULES-D T12 — l\'ARMÉE n\'est pas touchée par la suite de garnison', () => {
+  const pvMax = pvMaxDeLUnite('meute', 1);
+  const auPlancher = pvMax - APRES_RAID.plancherPvMilli;
+  const { etat, cible } = partieAvecGarnison(
+    [{ id: 'merlon', rangee: 5, colonne: 5, niveau: 1, degatsMilli: 1009 }],
+    ['merlon'],
+  );
+  // Une septième unité déjà au plancher : `composerLesVagues` la laisse à la
+  // maison, donc `reporterLesDegats` ne la réécrit pas. Si la suite parcourait
+  // `etat.armee`, elle serait la seule pièce dont les dégâts pourraient baisser
+  // sans que le combat y soit pour quelque chose.
+  etat.armee.push({ id: 'meute', vague: 1, colonne: 9, niveau: 1, degatsMilli: auPlancher });
+
+  executerRaid(etat, etat, cible);
+
+  assert.equal(etat.garnison[0].degatsMilli, 1009 - 201, 'montage : la garnison doit être réparée');
+  const restee = etat.armee.at(-1);
+  assert.equal(restee.degatsMilli, auPlancher, 'l\'unité restée à la maison ne se soigne pas');
+  // Les unités engagées portent EXACTEMENT ce que le combat leur a laissé : une
+  // pièce au plancher a `pvMax − plancher` de dégâts, au milli-PV près. Un
+  // rabais de 20 % s'y verrait tout de suite.
+  for (const piece of etat.armee) {
+    assert.ok(piece.degatsMilli <= auPlancher, 'dégâts au-delà du plancher');
+    if (piece.degatsMilli === 0) continue;
+    assert.equal(Number.isInteger(piece.degatsMilli), true);
+  }
+
+  // ⚠ LA VRAIE RAISON POUR LAQUELLE L'ARMÉE EST HORS D'ATTEINTE, mesurée : aucune
+  // UNITÉ ne porte l'Auto-réparation en défense — les six porteurs sont tous des
+  // ouvrages de `DEFENSES`. Le jour où une unité la porterait, ce test tombe, et
+  // c'est ce qu'on veut : la suite parcourt `etat.garnison`, pas `etat.armee`.
+  const unitesPorteuses = Object.keys(UNITES)
+    .filter((id) => UNITES[id].defense?.module === 'autoReparation');
+  assert.deepEqual(unitesPorteuses, []);
+  const source = readFileSync(new URL('../src/sim/raid.js', import.meta.url), 'utf8');
+  const corps = source.slice(source.indexOf('function reparerLaGarnison('));
+  const fin = corps.slice(0, corps.indexOf('\n}'));
+  assert.match(fin, /for \(const piece of etat\.garnison\)/);
+  assert.equal(fin.includes('etat.armee'), false, 'la suite ne doit jamais nommer l\'armée');
+});
+
+/** Les quatre modules que ce lot câble, dans l'ordre de la table. */
+const QUATRE = ['autoReparation', 'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn'];
+
+test('MODULES-D T13 — `cable` par branche pour les quatre modules défensifs', () => {
+  // ⚠ LE DRAPEAU D'OFFENSE RESTE FAUX, ET C'EST LA MOITIÉ QUI COMPTE. Le
+  // Guetteur porte le Camouflage à l'assaut et Rayon +1 en garnison : ses deux
+  // lignes s'ouvrent, mais pour deux modules DIFFÉRENTS. Un `offense: true` de
+  // trop lui vendrait le mauvais.
+  for (const nom of QUATRE) {
+    assert.equal(moduleEstCable(nom, 'defense'), true, `${nom} en défense`);
+    assert.equal(moduleEstCable(nom, 'offense'), false, `${nom} en offense`);
+  }
+
+  // L'ACHAT, pas seulement le drapeau : chaque ligne s'ouvre pour de vrai.
+  const etat = partie('99999999999999999');
+  const ouvertes = { offense: [], defense: [] };
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      const nom = nomDuModule(branche, id);
+      if (!QUATRE.includes(nom)) continue;
+      ouvertes[branche].push(`${id}:${nom}`);
+      if (!estAcquise(etat, branche, id)) acheter(etat, branche, id, 'unite');
+      assert.deepEqual(problemesDeLAchat(etat, branche, id, 'module'), [],
+        `${branche}/${id} refuse alors qu'il est câblé`);
+      acheter(etat, branche, id, 'module');
+      assert.equal(moduleEstAcquis(etat, branche, id), true);
+    }
+  }
+  // ⚠ COMPTÉ EN PARCOURANT L'ARBRE, PAS DE TÊTE — la leçon de MODULES-B, dont le
+  // brief annonçait six lignes là où il y en avait cinq. ONZE lignes, toutes en
+  // défense, AUCUNE en offense. C'est le chiffre du rapport.
+  assert.equal(ouvertes.defense.length, 11);
+  assert.deepEqual(ouvertes.defense.sort(), [
+    'batterie:autoReparation', 'broyeur:pvPlusVingt', 'casemate:autoReparation',
+    'creneau:autoReparation', 'faucheuse:rayonMiniMoinsUn', 'guetteur:rayonPlusUn',
+    'harpon:rayonMiniMoinsUn', 'herse:autoReparation', 'merlon:autoReparation',
+    'mortier:rayonMiniMoinsUn', 'ronce:autoReparation',
+  ]);
+  assert.deepEqual(ouvertes.offense, [],
+    'une ligne d\'offense porte un des quatre : revoir `cable.offense`');
+
+  // Et le Guetteur, le cas qui a imposé la forme : deux branches, deux modules,
+  // les deux achetés sur le même état.
+  assert.equal(nomDuModule('offense', 'guetteur'), 'camouflage');
+  assert.equal(nomDuModule('defense', 'guetteur'), 'rayonPlusUn');
+  acheter(etat, 'offense', 'guetteur', 'unite');
+  acheter(etat, 'offense', 'guetteur', 'module');
+  assert.ok(moduleEstAcquis(etat, 'offense', 'guetteur'));
+  assert.ok(moduleEstAcquis(etat, 'defense', 'guetteur'));
+});
+
+/** Une garnison DU JOUEUR attaquée, défenseurs dans l'ordre demandé. */
+function garnisonAttaquee(ordre, modules) {
+  const defenseurs = [
+    { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+    { id: 'broyeur', rangee: 6, colonne: 6, niveau: 20 },
+    { id: 'guetteur', rangee: 6, colonne: 4, niveau: 20 },
+    { id: 'faucheuse', rangee: 9, colonne: 5, niveau: 20 },
+    { id: 'mortier', rangee: 10, colonne: 7, niveau: 20 },
+  ];
+  return creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: ordre.map((i) => defenseurs[i]),
+    vagues: [[
+      { id: 'belier', colonne: 5, rangee: 2, niveau: 40 },
+      { id: 'belier', colonne: 4, rangee: 2, niveau: 40 },
+      { id: 'meute', colonne: 6, rangee: 3, niveau: 40 },
+    ]],
+    // ⚠ LA BASE DU JOUEUR EST ATTAQUÉE, ET C'EST LE SEUL CHEMIN QUI L'ÉCRIT.
+    // `montageDefense` de `ui/banc.js` est aujourd'hui le seul appelant en jeu :
+    // ces trois modules sont donc câblés et INVISIBLES pour le joueur tant que
+    // les attaques sur sa base n'existent pas. Le banc, lui, les voit.
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    modulesDebloques: { ouvrage: [], joueur: modules },
+  });
+}
+
+test('MODULES-D T14 — le déterminisme tient avec les trois modules de combat', () => {
+  const tous = ['pvPlusVingt', 'rayonPlusUn', 'rayonMiniMoinsUn'];
+  const jouer = (ordre) => {
+    const etat = garnisonAttaquee(ordre, tous);
+    for (let t = 1; t <= 150 && !etat.termine; t += 1) tick(etat);
+    return { etat, vue: projectionCanonique(etat) };
+  };
+
+  // Bit à bit d'abord : deux exécutions du MÊME montage.
+  const a = jouer([0, 1, 2, 3, 4]);
+  assert.equal(serialiserEtat(a.etat), serialiserEtat(jouer([0, 1, 2, 3, 4]).etat));
+
+  // ⚠ LA PERMUTATION DOIT VRAIMENT PERMUTER, sinon tout ce qui suit est trivial.
+  const rangs = (e) => e.entites.map((x) => x.id).join(',');
+  const b = jouer([4, 3, 2, 1, 0]);
+  assert.notEqual(rangs(a.etat), rangs(b.etat), 'montage : les deux ordres sont identiques');
+  for (const ordre of [[4, 3, 2, 1, 0], [2, 0, 4, 1, 3], [1, 4, 0, 3, 2]]) {
+    assert.deepEqual(jouer(ordre).vue, a.vue, `ordre ${ordre.join('')}`);
+  }
+
+  // ⚠ ET LE MONTAGE N'EST PAS VACANT : les trois modules ont mesurablement joué.
+  // Sans ces trois gardes, un combat où aucun ne s'applique passerait le test en
+  // ne prouvant rien. Les valeurs sont celles du banc, au milli près.
+  const temoin = garnisonAttaquee([0, 1, 2, 3, 4], []);
+  const par = (etat, id) => etat.entites.find((e) => e.camp === 'defense' && e.id === id);
+  assert.equal(par(temoin, 'broyeur').pvMaxMilli, 12232000);
+  assert.equal(par(a.etat, 'broyeur').pvMaxMilli, 14678400, 'PV +20 % n\'a pas joué');
+  assert.equal(par(temoin, 'guetteur').porteeCarree, 2500 * 2500);
+  assert.equal(par(a.etat, 'guetteur').porteeCarree, 3500 * 3500, 'Rayon +1 n\'a pas joué');
+  assert.equal(par(temoin, 'faucheuse').porteeMiniCarree, 3500 * 3500);
+  assert.equal(par(a.etat, 'faucheuse').porteeMiniCarree, 2500 * 2500,
+    'Rayon minimum −1 n\'a pas joué');
+  // Et la garnison a bien tiré : le combat a eu lieu, il ne s'est pas figé.
+  const visent = a.etat.entites.filter((e) => e.camp === 'defense' && e.cibleIndice !== null);
+  assert.equal(visent.length >= 3, true, 'montage : la garnison n\'a rien visé');
+
+  // ⚠ ET LA PROJECTION VOIT BIEN CE QUE CE LOT AJOUTE. Deux états qui ne
+  // diffèrent QUE par la portée doivent donner deux projections différentes —
+  // sans quoi tout ce qui précède serait vrai d'une projection aveugle.
+  const decale = jouer([0, 1, 2, 3, 4]);
+  assert.deepEqual(decale.vue, a.vue, 'montage : même ordre, même projection');
+  par(decale.etat, 'guetteur').porteeCarree += 1;
+  assert.notDeepEqual(projectionCanonique(decale.etat), a.vue,
+    'la projection est aveugle à la portée : elle ne mesure pas ce lot');
+  const bis = jouer([0, 1, 2, 3, 4]);
+  par(bis.etat, 'broyeur').pvMaxMilli += 1;
+  assert.notDeepEqual(projectionCanonique(bis.etat), a.vue,
+    'la projection est aveugle au plafond de PV');
 });
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */

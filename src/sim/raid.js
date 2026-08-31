@@ -37,7 +37,9 @@ import {
   creerCombat, resoudre, butin, pointsRecherche, facteurMilli, TICKS_MAX_COMBAT,
 } from './combat.js';
 import { GEOGRAPHIE } from '../data/sites.js';
-import { creerAcquises, modulesDebloquesDuJoueur } from './recherche.js';
+import {
+  creerAcquises, modulesDebloquesDuJoueur, moduleEstAcquis, nomDuModule,
+} from './recherche.js';
 
 /** Un millier — l'échelle des milli-PV et des milli-unités. */
 const MILLE = 1000;
@@ -285,6 +287,9 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // --- l'armée revient abîmée -----------------------------------------------
   const degats = reporterLesDegats(etat, resultat, indices);
 
+  // --- la garnison à Auto-réparation se recolle -----------------------------
+  reparerLaGarnison(etat);
+
   return {
     cible: site,
     cout,
@@ -298,6 +303,44 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
     unitesAuPlancher: degats.auPlancher,
     pointsRestants: etat.attaque.points,
   };
+}
+
+/** Part des dégâts qu'un ouvrage à Auto-réparation regagne au retour d'un raid. */
+const AUTO_REPARATION_PCT = 20;
+
+/**
+ * Les ouvrages de garnison à Auto-réparation regagnent 20 % de leurs dégâts.
+ *
+ * ⚠ AUCUN CODE N'ÉCRIT `degatsMilli` SUR LA GARNISON AUJOURD'HUI. Mesuré : les
+ * deux seuls écrivains sont `reporterLesDegats` ici même et `avancerLaReparation`
+ * dans `sim/reparation.js`, et tous deux parcourent `etat.armee`. La base du
+ * joueur n'étant jamais attaquée, une pièce de garnison est toujours à zéro et
+ * la boucle sort au premier `continue`. L'effet est donc ÉCRIT ET INATTEIGNABLE
+ * EN JEU tant que les attaques sur la base n'existent pas — c'est assumé, pas un
+ * oubli, et c'est ce que le test vérifie sur un état forgé.
+ *
+ * ⚠ DEUX CONTRÔLES, ET IL FAUT LES DEUX. `nomDuModule` dit QUEL module la ligne
+ * porte, `moduleEstAcquis` dit si le joueur l'a payé POUR CETTE LIGNE. Le second
+ * seul rendrait la réparation à toute défense achetée ; le premier seul la
+ * rendrait sans l'avoir payée.
+ *
+ * ⚠ 20 % DES DÉGÂTS, PAS DES PV MAX, et un seul `Math.floor`. Une pièce peu
+ * abîmée regagne peu ; le reste se soigne par la réparation ordinaire.
+ *
+ * @param {object} etat modifié en place
+ * @returns {number} milli-PV rendus, tous ouvrages confondus
+ */
+function reparerLaGarnison(etat) {
+  let rendus = 0;
+  for (const piece of etat.garnison) {
+    if (piece.degatsMilli <= 0) continue;
+    if (nomDuModule('defense', piece.id) !== 'autoReparation') continue;
+    if (!moduleEstAcquis(etat, 'defense', piece.id)) continue;
+    const rendu = Math.floor((piece.degatsMilli * AUTO_REPARATION_PCT) / 100);
+    piece.degatsMilli -= rendu;
+    rendus += rendu;
+  }
+  return rendus;
 }
 
 /**
