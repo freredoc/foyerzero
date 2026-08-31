@@ -446,7 +446,10 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
     batiments,
     defenseurs,
     vagues: [],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: [], defense: [] },
+    },
   };
 }
 

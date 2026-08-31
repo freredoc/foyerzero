@@ -98,7 +98,7 @@ test('T1 — une Batterie vise l\'aéronef lointain, pas l\'infanterie collée',
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'batterie', rangee: 5, colonne: 5 }],
     vagues: [[{ id: 'meute', rangee: 4, colonne: 5 }, { id: 'crecelle', rangee: 4, colonne: 6 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   assert.deepEqual(DEFENSES.batterie.degats, {
     infanterie: 0, vehicule: 0, structureOuAviation: 40,
@@ -171,7 +171,7 @@ test('T2 — une colonne de dégâts nulle disqualifie la cible, si proche soit-
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 5, colonne: 5 }, { id: 'merlon', rangee: 5, colonne: 6 }],
     vagues: [[{ id: 'frappeur', rangee: 4, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   jouer(offense, 1);
   assert.equal(cibleDe(offense, trouver(offense, 'frappeur')), 'merlon');
@@ -199,7 +199,7 @@ test('T2 — une colonne de dégâts nulle disqualifie la cible, si proche soit-
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'harpon', rangee: 8, colonne: 5 }],
     vagues: [[{ id: 'fendeur', rangee: 4, colonne: 5 }, { id: 'crecelle', rangee: 4, colonne: 7 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   jouer(defense, 1);
   assert.equal(cibleDe(defense, trouver(defense, 'harpon')), 'crecelle');
@@ -222,7 +222,7 @@ test('T3 — à réserve nulle, le bâtiment sort du jeu et la défense y reste'
     batiments: [{ id: 'gangue', rangee: 12, colonne: 5 }],
     defenseurs: [{ id: 'casemate', rangee: 10, colonne: 5 }],
     vagues: [[{ id: 'perceurs', rangee: 11, colonne: 5, reserve }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
 
   // À réserve 0 : le plancher ne protège que les bâtiments, le tir sur la
@@ -420,7 +420,7 @@ test('T6 — la réserve épuisée fait CHANGER de cible, pas conserver l\'ancie
     batiments: [{ id: 'gangue', rangee: 12, colonne: 5 }],
     defenseurs: [{ id: 'casemate', rangee: 10, colonne: 4 }],
     vagues: [[{ id: 'perceurs', rangee: 11, colonne: 5, reserve: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   const grenadier = trouver(etat, 'perceurs');
 

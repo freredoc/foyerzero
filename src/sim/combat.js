@@ -710,8 +710,8 @@ export function creerCombat(montage) {
     vagues: [],
     enAttente: [],
     modulesDebloques: {
-      ouvrage: [...(montage.modulesDebloques?.ouvrage ?? [])],
-      joueur: [...(montage.modulesDebloques?.joueur ?? [])],
+      ouvrage: modulesDunProprietaire(montage.modulesDebloques?.ouvrage, 'ouvrage'),
+      joueur: modulesDunProprietaire(montage.modulesDebloques?.joueur, 'joueur'),
     },
   };
 
@@ -1495,6 +1495,57 @@ function moduleDeDefense(e, p) {
 }
 
 /**
+ * Le camp d'une entité, traduit en BRANCHE d'achat.
+ *
+ * ⚠⚠ `camp` ET `branche` NE PORTENT PAS LES MÊMES MOTS, ET C'EST TOUT L'INTÉRÊT
+ * DE CETTE TABLE. Le camp vaut `attaque` ou `defense` ; la branche d'achat vaut
+ * `offense` ou `defense`. Le second terme coïncide, le premier NON. Une
+ * indexation directe par `e.camp` rendrait `undefined` pour toute entité
+ * attaquante — et `undefined?.includes` ne lève pas, il vaut `undefined` : TOUS
+ * les modules offensifs s'éteindraient EN SILENCE.
+ */
+const BRANCHE_DU_CAMP = { attaque: 'offense', defense: 'defense' };
+
+/** Les deux branches d'achat, dans l'ordre de `data/recherche.js`. */
+const BRANCHES_MODULE = ['offense', 'defense'];
+
+/**
+ * Recopie et VALIDE les modules débloqués d'un propriétaire.
+ *
+ * ⚠ LA FORME PLATE LÈVE, ELLE NE SE RÉPARE PAS. Jusqu'au lot MODULES-E, un
+ * propriétaire portait UN tableau de noms, et les quatre noms qui existent des
+ * deux côtés — `flashbang`, `tirDeBarrage`, `emp`, `garnison` — fuyaient d'une
+ * branche à l'autre. Accepter encore un tableau laisserait un appelant oublié
+ * fuir exactement comme avant, sans que personne ne le sache.
+ *
+ * ⚠ ABSENT RESTE PERMIS, et ce n'est pas la même chose. De nombreux montages —
+ * mesuré : ceux d'`assaut`, de `banc`, de `site-entame` et onze de
+ * `combat.test.js` — n'ont aucun module à déclarer. C'est la forme PRÉSENTE ET
+ * FAUSSE qu'on refuse, pas l'absence.
+ */
+function modulesDunProprietaire(brut, qui) {
+  if (brut === undefined || brut === null) return { offense: [], defense: [] };
+  if (Array.isArray(brut) || typeof brut !== 'object') {
+    throw new Error(
+      `combat : modulesDebloques.${qui} est une liste plate — il faut `
+      + '{ offense: [...], defense: [...] } depuis le lot MODULES-E',
+    );
+  }
+  const sortie = {};
+  for (const branche of BRANCHES_MODULE) {
+    const liste = brut[branche];
+    if (liste === undefined) {
+      throw new Error(`combat : modulesDebloques.${qui} n'a pas de branche « ${branche} »`);
+    }
+    if (!Array.isArray(liste) || liste.some((n) => typeof n !== 'string')) {
+      throw new Error(`combat : modulesDebloques.${qui}.${branche} n'est pas une liste de noms`);
+    }
+    sortie[branche] = [...liste];
+  }
+  return sortie;
+}
+
+/**
  * Le module de cette entité est-il acquis par SON propriétaire ?
  *
  * ⚠ TROIS CONDITIONS, ET AUCUNE N'EST DE TROP. La pièce doit PORTER le module
@@ -1510,11 +1561,16 @@ function moduleDeDefense(e, p) {
  * ⚠ ET `modulesDebloques.ouvrage` NE SERT PAS ICI. Il majore les points de
  * recherche de 20 % sur une cible dont le module est débloqué — une autre
  * grandeur, dans l'autre sens. Voir `pointsRecherche`.
+ *
+ * ⚠⚠ QUATRIÈME CONDITION DEPUIS MODULES-E : LA BRANCHE D'ACHAT. Quatre noms
+ * existent des deux côtés de l'arbre, et une liste plate ne pouvait pas les
+ * distinguer — acheter le Tir de barrage à l'assaut l'offrait aux Perceurs de
+ * la garnison, dont la ligne de défense n'est même pas en vente.
  */
 function moduleActif(etat, e, p, nom) {
   const porte = e.camp === 'attaque' ? p.module : moduleDeDefense(e, p);
   if (porte !== nom) return false;
-  const liste = etat.modulesDebloques?.[e.proprietaire];
+  const liste = etat.modulesDebloques?.[e.proprietaire]?.[BRANCHE_DU_CAMP[e.camp]];
   return Array.isArray(liste) && liste.includes(nom);
 }
 
@@ -2022,7 +2078,15 @@ export function pointsRecherche(resultat, montage) {
   );
   const neutre = BigInt(MILLE);
   const mille = BigInt(MILLE);
-  const debloques = new Set(montage.modulesDebloques?.ouvrage ?? []);
+  // ⚠ LA BRANCHE `defense`, ET PAS `offense`. Le bonus porte sur le module qu'une
+  // pièce de GARNISON emploie ; lire l'offense ici referait, côté liste, le
+  // mensonge que MODULES-D a démêlé côté profil.
+  //
+  // ⚠ ET `montage.proprietaireDefense`, PAS `'ouvrage'` EN DUR. Le banc monte
+  // des combats où le joueur défend, et c'est le seul chemin qui exercera ce
+  // code le jour où les attaques sur la base existeront.
+  const quiDefend = montage.proprietaireDefense ?? 'ouvrage';
+  const debloques = new Set(montage.modulesDebloques?.[quiDefend]?.defense ?? []);
   let total = 0n;
   for (const d of resultat.defenses) {
     const bareme = POINTS_RECHERCHE.parCible[d.id];

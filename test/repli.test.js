@@ -45,7 +45,7 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
     vagues: [[{ id: 'fendeur', rangee: 1, colonne: 5 }, { id: 'meute', rangee: 2, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(allie);
   const fendeur = etat.entites.find((e) => e.id === 'fendeur');
@@ -74,7 +74,7 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'fendeur', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const combat = creerCombat(ennemi);
   const attaquant = combat.entites.find((e) => e.camp === 'attaque');
@@ -139,7 +139,7 @@ test('T3 — une unité qui ne peut plus rien faire rentre à la base', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
     vagues: [[{ id: 'meute', colonne: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const meute = etat.entites.find((e) => e.camp === 'attaque');
@@ -208,7 +208,7 @@ test('T4 — un blocage transitoire remet le compteur à zéro', () => {
       { id: 'meute', rangee: 18, colonne: 5 },
       { id: 'fendeur', rangee: 17, colonne: 5 },
     ]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const bloqueur = etat.entites.find((e) => e.id === 'meute');
@@ -253,7 +253,7 @@ test('T5 — nuire suffit à rester, même bloqué contre un mur', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const meute = etat.entites.find((e) => e.camp === 'attaque');
@@ -460,7 +460,7 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
 
@@ -491,7 +491,7 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
     vagues: [[{ id: 'meute', colonne: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   jouer(seul, 272);
   const isole = seul.entites.find((e) => e.camp === 'attaque');

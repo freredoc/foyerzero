@@ -472,7 +472,7 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
       batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau }],
       defenseurs: genre === 'defense' ? [{ id, rangee: 3, colonne: 5, niveau }] : [],
       vagues: genre === 'unite' ? [[{ id, colonne: 5, niveau }]] : [],
-      modulesDebloques: { ouvrage: [], joueur: [] },
+      modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
     };
     const etat = creerCombat(montage);
     return etat.entites.find((e) => e.id === id);
@@ -519,7 +519,7 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
       batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau }],
       defenseurs: [],
       vagues: [[{ id: 'meute', colonne: 1, niveau }]],
-      modulesDebloques: { ouvrage: [], joueur: [] },
+      modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
     };
     const etat = creerCombat(montage);
     const meute = etat.entites.find((e) => e.camp === 'attaque');
@@ -771,7 +771,7 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau: 50 }],
     defenseurs: [{ id: 'broyeur', rangee: 3, colonne: 5, niveau: 50 }],
     vagues: [[{ id: 'meute', colonne: 1, niveau: 50 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const resultat = resoudre(creerCombat(montage), { maxTicks: 1 });
   const broyeur = resultat.defenses.find((d) => d.id === 'broyeur');
@@ -846,7 +846,7 @@ test('T14 — le coût du franchissement, ligne à ligne', () => {
       batiments: [{ id: 'gangue', rangee: 18, colonne: 1 }],
       defenseurs: [{ id: barriere, rangee: 3, colonne: 5 }],
       vagues: [[{ id: unite, colonne: 5 }]],
-      modulesDebloques: { ouvrage: [], joueur: [] },
+      modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
     };
     const etat = creerCombat(montage);
     const attaquant = etat.entites.find((e) => e.camp === 'attaque');
@@ -937,7 +937,7 @@ test('T16 — un montage sans niveau par entité se comporte comme au lot 2A', (
     batiments: [{ id: 'gangue', rangee: 11, colonne: 5 }],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   for (const e of etat.entites) assert.equal(e.niveau, 1, `${e.id} hérite du niveau du site`);

@@ -1050,7 +1050,7 @@ test('couches — le chaînage suit les vivantes, MESURÉ SUR LA LISTE D\'AFFICH
       { id: 'merlon', rangee: bande.premiere, colonne: 5 },
     ],
     vagues: [[{ id: 'meute', colonne: 9 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const projection = calculerProjection(412, 900);

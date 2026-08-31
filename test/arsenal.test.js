@@ -29,7 +29,7 @@ const socle = (vagues) => ({
   batiments: [{ id: 'gangue', rangee: 18, colonne: 1 }],
   defenseurs: [],
   vagues,
-  modulesDebloques: { ouvrage: [], joueur: [] },
+  modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
 });
 
 // ---------------------------------------------------------------------------

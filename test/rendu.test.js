@@ -48,7 +48,7 @@ function montageDeScene() {
       { id: 'fendeur', colonne: 4 }, //  blindé
       { id: 'crecelle', colonne: 6 }, // aéronef
     ]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
 }
 
@@ -187,7 +187,7 @@ test('T3 — alpha 0 : précédent · alpha 1000 : courant · alpha 500 : milieu
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     defenseurs: [],
     vagues: [[{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   // Ordre d'insertion du moteur : bâtiments d'abord, puis la vague — la
