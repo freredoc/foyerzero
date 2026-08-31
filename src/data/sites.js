@@ -440,6 +440,31 @@ export const SATELLITES = {
 
   /** Un camp ou un avant-poste détruit réapparaît, sans intervention. */
   respawnAutomatique: true,
+
+  // --- la relève : un satellite qu'on ignore finit par changer de place -------
+  // ARBITRÉ le 31/08/2026 par Ethan : « vérifier que les camps et avant-poste
+  // change de spawn aléatoirement si personne ne les attaque ; un camp /
+  // avant-poste attaqué, lui, reste plus longtemps — je dirais quelques heures
+  // de plus — avant d'être respawn ».
+  //
+  // ⚠ LA VÉRIFICATION A ÉTÉ FAITE, ET LA RÉPONSE ÉTAIT NON : avant ce lot, un
+  // satellite posé ne bougeait JAMAIS. `planifierSatellites` les programmait une
+  // fois, `resoudreSatellites` les posait, et plus rien ne les touchait — seule
+  // une destruction en raid les faisait réapparaître ailleurs.
+  //
+  // ⚠⚠ LES DEUX DURÉES SONT UN CHOIX, PAS UNE MESURE, ET IL FAUT LE SAVOIR.
+  // Ethan a donné le SENS (« quelques heures de plus ») et pas les nombres. Six
+  // heures de vie tiennent la promesse « si tu l'ignores, il bouge » sans que la
+  // carte s'agite sous les yeux du joueur ; quatre heures de sursis sont les
+  // « quelques heures » de la consigne. Les deux se changent d'une ligne, et le
+  // rapport du lot le dit comme tel.
+  //
+  // ⚠ LE SURSIS SE COMPTE DEPUIS LE RAID, PAS DEPUIS LA POSE. « Reste plus
+  // longtemps avant d'être respawn » parle du moment où on l'a attaqué : un camp
+  // attaqué à sa dernière minute de vie doit gagner du temps, sinon la règle ne
+  // sert précisément pas dans le cas où le joueur y revient.
+  dureeDeVieSec: 21600, // 6 h
+  sursisApresAttaqueSec: 14400, // 4 h de plus, comptées depuis le raid
 };
 
 // --- crans de zoom de la carte -----------------------------------------------

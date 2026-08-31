@@ -27,7 +27,7 @@
 
 import { ATLAS } from '../data/atlas.js';
 import { ZOOM_CARTE, GEOGRAPHIE } from '../data/sites.js';
-import { existeDansAtlas } from './sprite.js';
+import { existeDansAtlas, celluleDuSprite } from './sprite.js';
 
 /** La famille d'atlas où vivent les emblèmes. */
 export const FAMILLE = 'carte';
@@ -184,6 +184,54 @@ export function dessinerGrosseBase(cotes, site, cran, origine) {
     x: Math.round((emprise.colonne - 1) * cran - origine.x),
     y: Math.round((emprise.rangee - 1) * cran - origine.y),
     cote: cran * emprise.cotes,
+  };
+}
+
+/**
+ * La primitive de dessin d'un emblème d'UNE case — source ET destination.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE L'ÉCRAN CALCULAIT CETTE GÉOMÉTRIE LUI-MÊME, ET SE
+ * TROMPAIT EN SILENCE. `ui/monde.js` lisait `cellule.x`, `cellule.y` et
+ * `cellule.cote` sur ce que rend `celluleDuSprite` — qui rend `colonne`,
+ * `rangee`, `colonnes` et `rangees`, c'est-à-dire des INDICES de cellule et
+ * jamais des pixels. Les trois valeurs valaient donc `undefined`, et
+ * `drawImage` avec un rectangle source non fini **ne dessine rien et ne lève
+ * pas** : la carte s'ouvrait avec son fond, ses bases de l'Ouvrage, ses camps
+ * et la base du joueur tous absents. Mesuré dans Chromium avant correction —
+ * 88 appels à `drawImage`, 88 rectangles sources non finis.
+ *
+ * ⚠ D'OÙ LE DÉPLACEMENT ICI, ET PAS UNE LIGNE CORRIGÉE LÀ-BAS. L'en-tête de ce
+ * module promet depuis le lot CARTE-EMBLÈMES qu'il rend « des NOMS de sprite et
+ * une géométrie » ; `dessinerGrosseBase` le fait déjà. L'emblème d'une case
+ * était le seul à faire son calcul dans l'écran, donc le seul qu'aucun test ne
+ * pouvait atteindre — le dépôt n'a pas de navigateur. Ramené ici, il se mesure.
+ *
+ * ⚠ LE CÔTÉ DE LA CELLULE SE LIT DANS `ZOOM_CARTE.grilleEmbleme`, il ne se
+ * recopie pas : c'est la grille logique sur laquelle les emblèmes sont
+ * conditionnés, et elle vit déjà dans la table de calibrage.
+ *
+ * @param {{type: string, saveur: string|null}} site
+ * @param {number} palier 1…9, de `palierDeNiveau`
+ * @param {number} x abscisse de destination, en pixels
+ * @param {number} y ordonnée de destination, en pixels
+ * @param {number} taille côté de destination, en pixels
+ * @returns {{nom: string, sx: number, sy: number, sCote: number,
+ *   x: number, y: number, cote: number}}
+ */
+export function dessinerEmblemeDUneCase(site, palier, x, y, taille) {
+  const nom = spriteDuSite(site.type, palier, site.saveur);
+  const cellule = celluleDuSprite(FAMILLE, nom);
+  const sCote = ZOOM_CARTE.grilleEmbleme;
+  return {
+    nom,
+    sx: cellule.colonne * sCote,
+    sy: cellule.rangee * sCote,
+    sCote,
+    // ⚠ ENTIERS, comme la grosse base : un `drawImage` à une position
+    // fractionnaire rééchantillonne et rend le pixel art flou.
+    x: Math.round(x),
+    y: Math.round(y),
+    cote: taille,
   };
 }
 

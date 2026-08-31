@@ -471,14 +471,14 @@ src/ui/                 les six écrans et leurs éditeurs — 9 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   40 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   41 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  raid  rendu  repli  rng
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche
+  sprite  state  recherche  maj
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

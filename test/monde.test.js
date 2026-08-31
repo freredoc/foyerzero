@@ -27,6 +27,7 @@ import {
 import {
   spriteDuSite, SPRITES_POI, SPRITES_GROSSE_BASE, nomsPreBranches,
   empriseDeLaGrosseBase, dessinerGrosseBase, FAMILLE, cotesDuSite,
+  dessinerEmblemeDUneCase,
 } from '../src/render/embleme.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { ATLAS } from '../src/data/atlas.js';
@@ -1090,4 +1091,119 @@ test('atlas — la valeur CSS se déballe, guillemets ou pas', () => {
   for (const rien of ['', 'none', undefined, null, 'url(']) {
     assert.equal(urlDeLaValeurCss(rien), '');
   }
+});
+
+// ---------------------------------------------------------------------------
+// L'EMBLÈME D'UNE CASE — le défaut du 31/08, et les deux gardes qui le tiennent
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE QUI S'EST PASSÉ. `ui/monde.js` lisait `cellule.x`, `cellule.y` et
+// `cellule.cote` sur ce que rend `celluleDuSprite`, qui rend `colonne`,
+// `rangee`, `colonnes` et `rangees` — des INDICES, jamais des pixels. Les trois
+// valaient `undefined` ; `drawImage` avec un rectangle source non fini NE
+// DESSINE RIEN ET NE LÈVE PAS. La carte s'ouvrait donc avec son fond et
+// AUCUN emblème — ni les bases de l'Ouvrage, ni les camps, ni celle du joueur.
+// Rapporté par Ethan (« pas de base sur la carte »), reproduit dans Chromium :
+// 88 appels, 88 rectangles sources non finis.
+//
+// ⚠ AUCUN TEST NE POUVAIT LE VOIR, et c'est ça qu'on répare ici. Le calcul
+// vivait dans l'écran, donc derrière le DOM que le dépôt ne sait pas monter. Il
+// est descendu dans `render/embleme.js`, qui est pur — et les deux gardes
+// ci-dessous mesurent les deux moitiés de la faute : que la primitive rende des
+// NOMBRES FINIS, et que l'écran ne refasse plus le calcul lui-même.
+
+test('emblème — la primitive d\'une case rend un rectangle source FINI', () => {
+  // ⚠ LE MONTAGE PART DE L'ATLAS RÉEL, pas d'un site écrit à la main : c'est ce
+  // qui fait qu'il couvre les quarante et un noms d'une case, et pas trois.
+  const cotes = ZOOM_CARTE.grilleEmbleme;
+  const cas = [];
+  for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
+    cas.push({ site: { type: 'base', saveur: null }, palier });
+    cas.push({ site: { type: 'baseJoueur', saveur: null }, palier });
+    cas.push({ site: { type: 'camp', saveur: 'richeQuartz' }, palier });
+    cas.push({ site: { type: 'avantPoste', saveur: 'richeScorie' }, palier });
+  }
+  assert.ok(cas.length >= 36, 'le montage doit couvrir les neuf paliers');
+
+  for (const { site, palier } of cas) {
+    const d = dessinerEmblemeDUneCase(site, palier, 12.7, -3.4, 32);
+    // Le cœur de la garde : SIX nombres finis. C'est exactement ce qui manquait.
+    for (const champ of ['sx', 'sy', 'sCote', 'x', 'y', 'cote']) {
+      assert.ok(Number.isFinite(d[champ]),
+        `${site.type} palier ${palier} : « ${champ} » vaut ${d[champ]}`);
+    }
+    // Et le rectangle source tombe DANS l'atlas, sur une cellule entière.
+    assert.equal(d.sCote, cotes);
+    assert.equal(d.sx % cotes, 0);
+    assert.equal(d.sy % cotes, 0);
+    assert.ok(d.sx >= 0 && d.sx < ATLAS[FAMILLE].colonnes * cotes);
+    assert.ok(d.sy >= 0 && d.sy < ATLAS[FAMILLE].rangees * cotes);
+    // La destination s'arrondit — un `drawImage` fractionnaire rend du flou.
+    assert.ok(Number.isInteger(d.x) && Number.isInteger(d.y));
+  }
+
+  // ⚠ L'APPÂT. Sans lui, la garde passerait sur une primitive qui rendrait
+  // n'importe quels nombres : on vérifie qu'elle DÉSIGNE bien la cellule du nom
+  // qu'elle annonce, en refaisant le calcul depuis le rang dans l'atlas.
+  const d = dessinerEmblemeDUneCase({ type: 'camp', saveur: 'richeScorie' }, 4, 0, 0, 64);
+  const rang = ATLAS[FAMILLE].noms.indexOf('site_scorie_n4');
+  assert.ok(rang >= 0);
+  assert.equal(d.nom, 'site_scorie_n4');
+  assert.equal(d.sx, (rang % ATLAS[FAMILLE].colonnes) * cotes);
+  assert.equal(d.sy, Math.floor(rang / ATLAS[FAMILLE].colonnes) * cotes);
+});
+
+test('emblème — l\'écran ne recalcule plus la cellule lui-même', () => {
+  const source = lire('src', 'ui', 'monde.js');
+  // ⚠ ON LIT LA SOURCE DÉCOMMENTÉE. Le commentaire qui raconte le défaut nomme
+  // `celluleDuSprite` et `cellule.x` : une garde qui lirait ce qu'on a écrit à
+  // son sujet ne garderait rien. C'est la leçon de `viewport-fit=cover` et de
+  // `MENTION_SATURE` (CLAUDE.md §6), payée deux fois déjà.
+  const nue = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+
+  assert.ok(!/celluleDuSprite/.test(nue),
+    'monde.js ne doit plus appeler celluleDuSprite : la géométrie vient de render/embleme.js');
+  assert.ok(!/cellule\.(x|y|cote)\b/.test(nue),
+    'monde.js lit un champ de pixels sur une cellule, qui n\'en porte pas');
+  assert.ok(/dessinerEmblemeDUneCase/.test(nue),
+    'monde.js doit demander sa géométrie à render/embleme.js');
+
+  // L'appât : le motif reconnaît-il encore la vraie faute ?
+  const faute = 'const c = celluleDuSprite(F, n); ctx.drawImage(i, c.x, c.y, c.cote, c.cote);';
+  assert.ok(/celluleDuSprite/.test(faute) && /cellule\.(x|y|cote)\b/.test(faute.replace(/\bc\./g, 'cellule.')));
+});
+
+test('monde — un bouton ramène toujours à la base du joueur', () => {
+  // ⚠⚠ ETHAN, 31/08 : « toujours une possibilité de revenir sur sa base quand on
+  // se balade sur la carte ». La vue ne se recentre qu'à la PREMIÈRE ouverture —
+  // et ça reste vrai, c'est délibéré : revenir de force à chaque visite ferait
+  // perdre l'endroit qu'on regardait. Le corollaire, c'est qu'il fallait une
+  // porte de sortie, et il n'y en avait aucune sur 300 rangées.
+  const html = lire('dist', 'index.html');
+  assert.match(html, /id="monde-recentrer"/,
+    'le bouton de retour à la base a disparu du livrable');
+
+  const ecran = lire('src', 'ui', 'monde.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  const debut = ecran.indexOf("$('monde-recentrer')");
+  assert.ok(debut > 0, 'rien ne câble le bouton de retour');
+  const bloc = ecran.slice(debut, debut + 320);
+  assert.match(bloc, /centrerSur\(etatCourant\.position\)/,
+    'le bouton doit recentrer sur la position du joueur, pas sur autre chose');
+  // ⚠ IL NE TOUCHE PAS AU ZOOM : ramener aussi le cran ferait deux gestes en un
+  // et retirerait au joueur celui qu'il venait de choisir.
+  assert.ok(!/changerDeCran|cranIndex/.test(bloc),
+    'le retour à la base ne doit pas changer le cran de zoom');
+
+  // ⚠ ET IL N'AJOUTE PAS DE BARRE À HAUTEUR FIXE. Le chrome de l'écran est déjà
+  // à son plafond ; le bouton se POSE sur la carte, comme le panneau et
+  // l'échelle. La règle CSS de la boîte qui le porte doit rester `absolute`.
+  const feuille = html.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const outils = feuille.match(/#monde-outils\s*\{([^}]*)\}/);
+  assert.ok(outils, '#monde-outils n\'a plus de règle');
+  assert.match(outils[1], /position:\s*absolute/,
+    'la boîte d\'outils de la carte est passée dans le flux : elle mange la carte');
 });

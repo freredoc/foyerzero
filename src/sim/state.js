@@ -10,6 +10,7 @@ import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './cl
 import { champsDeLaBase, obstaclesDeLaBase } from './champs.js';
 import {
   satellitesVides, planifierSatellites, resoudreSatellites, problemesDesSatellites,
+  TICKS_DUREE_DE_VIE,
   TICKS_APPARITION,
 } from './satellites.js';
 import { positionDepartJoueur } from './carte.js';
@@ -36,7 +37,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 /**
  * @typedef {object} Etat
@@ -1584,6 +1585,37 @@ const MIGRATIONS = {
       acquises: { offense: offertes('offense', 'armee'), defense: offertes('defense', 'garnison') },
       modules: { offense: [], defense: [] },
     };
+  },
+
+  /**
+   * v14 → v15 : les satellites ont une DATE DE RELÈVE.
+   *
+   * ⚠⚠ ETHAN, 31/08 : « vérifier que les camps et avant-poste change de spawn
+   * aléatoirement si personne ne les attaque ». Avant ce lot, un satellite posé
+   * ne bougeait jamais : il n'avait donc aucune échéance à sauvegarder. Une v14
+   * en porte de parfaitement valides, simplement immortels.
+   *
+   * ⚠ ELLE COMPTE DEPUIS MAINTENANT, PAS DEPUIS LA POSE. La sauvegarde ne dit
+   * pas quand chaque satellite a été posé — l'information n'a jamais été écrite,
+   * et l'inventer serait fabriquer un passé. Leur donner une vie pleine à
+   * partir du chargement est le choix le plus doux : personne ne voit ses camps
+   * disparaître en ouvrant sa partie, ce qui est exactement ce que la migration
+   * v7 → v8 refusait déjà pour l'apparition.
+   *
+   * ⚠ ET ELLE TOLÈRE UNE TABLE ABSENTE OU MALFORMÉE. La chaîne remonte depuis la
+   * v0 ; rien ne garantit la forme d'un objet à mi-parcours, et une migration
+   * qui lève laisse le joueur devant « sauvegarde illisible » pour un champ
+   * qu'elle était censée réparer.
+   * @param {object} s
+   */
+  14: (s) => {
+    s.version = 15;
+    const presents = s.satellites?.presents;
+    if (!Array.isArray(presents)) return;
+    const echeance = (s.horloge?.nbTicks ?? 0) + TICKS_DUREE_DE_VIE;
+    for (const present of presents) {
+      if (present !== null && typeof present === 'object') present.tickDeReleve = echeance;
+    }
   },
 };
 

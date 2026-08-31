@@ -32,9 +32,8 @@ import { basesDeLaFenetre } from '../sim/peuplement.js';
 import { saveurDeLaCase } from '../sim/site-de-la-case.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
 import {
-  spriteDuSite, FAMILLE, cotesDuSite, dessinerGrosseBase, SPRITES_GROSSE_BASE,
+  cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
 } from '../render/embleme.js';
-import { celluleDuSprite } from '../render/sprite.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
@@ -648,14 +647,17 @@ export function initialiserEcranMonde(doc) {
    */
   function dessinerEmbleme(site, x, y, taille) {
     if (emblemes !== null) {
-      const cellule = celluleDuSprite(FAMILLE, spriteDuSite(
-        site.type, palierDuSite(site, etatCourant), site.saveur,
-      ));
-      ctx.drawImage(
-        emblemes,
-        cellule.x, cellule.y, cellule.cote, cellule.cote,
-        Math.round(x), Math.round(y), taille, taille,
+      // ⚠⚠ LA GÉOMÉTRIE SE DEMANDE, ELLE NE SE CALCULE PLUS ICI. Ces six lignes
+      // lisaient `cellule.x`, `cellule.y` et `cellule.cote` sur ce que rend
+      // `celluleDuSprite` — qui rend des INDICES (`colonne`, `rangee`) et jamais
+      // des pixels. Les trois valaient `undefined`, et `drawImage` avec un
+      // rectangle source non fini NE DESSINE RIEN ET NE LÈVE PAS : la carte
+      // s'ouvrait vide de tout emblème, base du joueur comprise. Le calcul vit
+      // désormais dans `render/embleme.js`, où un test l'atteint.
+      const d = dessinerEmblemeDUneCase(
+        site, palierDuSite(site, etatCourant), x, y, taille,
       );
+      ctx.drawImage(emblemes, d.sx, d.sy, d.sCote, d.sCote, d.x, d.y, d.cote, d.cote);
     } else {
       // Repli d'attente : le gabarit du lot ÉCRAN-CARTE, tel quel.
       const embleme = EMBLEMES_CARTE[site.type];
@@ -900,6 +902,26 @@ export function initialiserEcranMonde(doc) {
   function fermerPanneau() {
     panneau.hidden = true;
   }
+
+  // ⚠⚠ REVENIR SUR SA BASE — Ethan, 31/08. La vue ne se recentre qu'à la
+  // PREMIÈRE ouverture de la carte, et c'est délibéré (voir `peindre`) : y
+  // revenir de force à chaque visite ferait perdre l'endroit qu'on regardait.
+  // Le corollaire, c'est qu'un joueur parti à trente rangées de chez lui n'avait
+  // aucun moyen de rentrer — sinon défiler à l'aveugle sur une carte de 300
+  // rangées. Ce bouton est ce moyen, et il ne fait QUE ça.
+  //
+  // ⚠ IL RECENTRE, IL NE CHANGE PAS DE CRAN. Ramener aussi le zoom au défaut
+  // ferait deux gestes en un et retirerait au joueur le cran qu'il avait choisi.
+  //
+  // ⚠ ET IL FERME LE PANNEAU. Il restait ouvert sur le site qu'on regardait
+  // avant de partir, donc sur un site qui n'est plus sous les yeux : il
+  // décrirait un endroit que la carte ne montre plus.
+  $('monde-recentrer').addEventListener('click', () => {
+    if (etatCourant === null) return;
+    fermerPanneau();
+    centrerSur(etatCourant.position);
+    dessiner();
+  });
 
   $('monde-panneau-fermer').addEventListener('click', fermerPanneau);
   // ⚠ IL SE FERME EXPLICITEMENT AU CÂBLAGE. Le `hidden` du balisage suffit
