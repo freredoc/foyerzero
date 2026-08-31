@@ -187,7 +187,7 @@ export function acquisesDe(etat, branche) {
 }
 
 /**
- * Les NOMS de modules que le joueur a achetés, toutes branches confondues.
+ * Les NOMS de modules que le joueur a achetés, **branche par branche**.
  *
  * C'est ce qui remplit `montage.modulesDebloques.joueur` dans `sim/raid.js`.
  *
@@ -195,25 +195,28 @@ export function acquisesDe(etat, branche) {
  * recherche de 20 % et appartient au camp d'en face. Les confondre ferait payer
  * au joueur les modules de l'Ouvrage.
  *
- * ⚠ L'UNION DES DEUX BRANCHES EST VOULUE, et elle est sans danger aujourd'hui :
- * le seul module câblé, l'Écraseur, n'existe qu'en offense (Fendeur et Broyeur)
- * — en défense le Broyeur porte `pvPlusVingt`. Un nom venu de la branche défense
- * n'a donc aucun lecteur. Le jour où un module câblé existera des deux côtés, il
- * faudra choisir la branche selon le camp du montage.
+ * ⚠ PLUS D'UNION DEPUIS LE LOT MODULES-E. Elle aplatissait les deux branches en
+ * un seul tableau, et **quatre noms existent des deux côtés** de l'arbre —
+ * `flashbang`, `tirDeBarrage`, `emp`, `garnison`. Acheter le Tir de barrage à
+ * l'assaut l'offrait donc aux Perceurs de la garnison, dont la ligne de défense
+ * n'est même pas en vente. Un `Set` par branche, et `moduleActif` choisit celle
+ * du camp de l'entité.
  *
  * @param {object} etat
- * @returns {string[]} noms de modules, triés, sans doublon
+ * @returns {{offense: string[], defense: string[]}} noms triés, sans doublon
  */
 export function modulesDebloquesDuJoueur(etat) {
   exigerEtat(etat);
-  const noms = new Set();
+  const parBranche = {};
   for (const branche of BRANCHES) {
+    const noms = new Set();
     for (const id of etat.recherche.modules[branche]) {
       const nom = nomDuModule(branche, id);
       if (nom !== null) noms.add(nom);
     }
+    parBranche[branche] = [...noms].sort();
   }
-  return [...noms].sort();
+  return parBranche;
 }
 
 /**

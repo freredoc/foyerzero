@@ -41,19 +41,20 @@ Dernière révision : **31/08/2026**, version 0.53.0 · build 54.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot MODULES-D), à confronter :**
-`npm test` → **706 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 262 870 octets**, 0 référence externe.
-⚠ **MODULES-D A COÛTÉ +677 OCTETS**, pour QUATRE modules câblés — PV +20 %,
-Rayon +1, Rayon minimum −1, Auto-réparation — et le démêlage d'un champ qui
-mentait. Aucune image, aucun écran neuf, aucun champ de sauvegarde :
-`SAVE_VERSION` reste à **14**. Marge **37 130 octets**, 2,86 %.
+**Référence au 31/08/2026 (après le lot MODULES-E), à confronter :**
+`npm test` → **714 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 263 578 octets**, 0 référence externe.
+⚠ **MODULES-E A COÛTÉ +708 OCTETS**, et n'ajoute AUCUN module : il ferme une
+fuite de structure. `modulesDebloques` devient
+`{ joueur: { offense, defense }, ouvrage: { offense, defense } }`, et un module
+acheté dans une branche ne sert plus que dans celle-là. Aucun écran, aucun champ
+de sauvegarde : `SAVE_VERSION` reste à **14**. Marge **36 422 octets**, 2,80 %.
 ⚠ **ET LA MARGE CONTINUE DE SE RESSERRER : 4,4 % · 3,1 % · 3,05 % · 2,94 % ·
-2,91 % · 2,86 %.** Elle ne descend plus que de quelques centièmes tant que les
-lots sont du code ; c'est le prochain atlas qui la fera tomber, et il faudra
-rouvrir la borne, pas la contourner.
+2,91 % · 2,86 % · 2,80 %.** Elle ne descend plus que de quelques centièmes tant
+que les lots sont du code ; c'est le prochain atlas qui la fera tomber, et il
+faudra rouvrir la borne, pas la contourner.
 ⚠ **`node tools/audit-maquette.mjs` EST ROUGE ET IL L'ÉTAIT DÉJÀ**, avec
-exactement **7 écarts**, code de sortie 1. MODULES-D n'y touche pas : la sortie
+exactement **7 écarts**, code de sortie 1. MODULES-E n'y touche pas : la sortie
 est IDENTIQUE À LA LIGNE, avant et après (terrain, disposition, emplacements,
 trois débits, raffinerie). Le porter à 6 ou à 8 sans lot dédié serait une
 régression, dans les deux sens.
@@ -3036,6 +3037,42 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **ET LE BUTIN NE PEUT PAS BOUGER** : `butin` ne lit que
   `resultat.batiments`, et aucun bâtiment de site ne porte de module — les deux
   champs du profil bâtiment sont `null`. Un test tient les deux faits de face.
+
+- **UN MODULE ACHETÉ DANS UNE BRANCHE NE SERT QUE DANS CELLE-LÀ** — 31/08, lot
+  MODULES-E. `modulesDebloquesDuJoueur` faisait l'**union** des deux branches, et
+  **quatre noms existent des deux côtés de l'arbre** — `flashbang`,
+  `tirDeBarrage`, `emp`, `garnison`. Le montage devient
+  `modulesDebloques: { joueur: { offense, defense }, ouvrage: { offense, defense } }`,
+  **la même forme pour les deux propriétaires**, et `creerCombat` **LÈVE** sur
+  une liste plate en nommant le propriétaire.
+  ⚠⚠ **`camp` ET `branche` NE PORTENT PAS LES MÊMES MOTS, ET C'EST LE PIÈGE.**
+  Le camp vaut `attaque` ou `defense`, la branche `offense` ou `defense` : le
+  second terme coïncide, le premier NON. Une indexation par `e.camp` rendrait
+  `undefined`, `undefined?.includes` ne lève pas — **tous les modules offensifs
+  s'éteindraient EN SILENCE, et la moitié défensive continuerait de passer**.
+  D'où la table nommée `BRANCHE_DU_CAMP`, sur le modèle de `BATIMENT_DE_CHASSIS`.
+  ⚠ **LE SENS DE LA FUITE N'ÉTAIT PAS CELUI QU'ON CROYAIT** — le brief, et mon
+  propre rapport MODULES-D, annonçaient « le module DÉFENSE des Perceurs (200 M)
+  débloque le Tir de barrage pour l'Obusier en OFFENSE (1 G) ». **Cet achat-là
+  lève** : `cable.tirDeBarrage.defense` vaut `false` depuis MODULES-A. Les quatre
+  noms sont câblés en **offense seulement** — la fuite partait de l'offense vers
+  la garnison, jamais l'inverse. Trois cas réellement atteignables : `flashbang`
+  (Meute, 10 M), `tirDeBarrage` (Perceurs, 24 M), `emp` (Crécelle, 150 M).
+  ⚠ **ET ELLE N'AVAIT AUCUN EFFET OBSERVABLE EN COMBAT** : `flashbang` et `emp`
+  ne sont lus que dans `declencherNeutralisations`, gardée au camp `attaque` ;
+  `tirDeBarrage` est bien lu en défense mais son éclaboussure ne vise que les
+  genres `defense` et `batiment`. **Ce lot est structurel et préventif, pas un
+  correctif d'équilibrage** — le dire autrement serait se vanter d'un effet nul.
+  ⚠ **`pointsRecherche` LIT LA BRANCHE `defense` DU `montage.proprietaireDefense`**,
+  jamais `'ouvrage'` en dur : quand la base du joueur est attaquée, c'est SA
+  liste qui majore. Trois relevés au point sur le raid de référence — 2 059 722
+  nu, 2 471 666 la bonne branche du bon propriétaire, 2 059 722 pour l'autre
+  branche COMME pour l'autre propriétaire.
+  ⚠ **`ouvrage.offense` ET `ouvrage.defense` EXISTENT ET SONT VIDES**, et les
+  armer activerait d'un coup TOUS les modules câblés du côté de l'Ouvrage. Ce
+  n'est pas un oubli : `sim/generateur.js` livre les deux listes vides sur tous
+  les sites, et le jour où on les armera il faudra un barème par niveau de site,
+  pas un `push` — sans quoi le premier camp venu porterait le Tir de barrage.
 
 - **Vérifier avant d'affirmer.** Les erreurs les plus coûteuses du projet sont
   toutes des affirmations écrites sans mesure : l'inertie de l'artillerie

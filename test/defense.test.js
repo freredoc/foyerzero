@@ -36,7 +36,7 @@ function socle(defenseurs, niveau = 30) {
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     defenseurs,
     vagues: [[{ id: 'meute', colonne: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
 }
 

@@ -330,7 +330,7 @@ test('T4 — au niveau 50, le Frappeur reste loin sous l\'entier sûr', () => {
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau: 50 }],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, niveau: 50 }],
     vagues: [[{ id: 'frappeur', rangee: 2, colonne: 5, niveau: 50 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   const merlon = etat.entites.find((e) => e.id === 'merlon');
   const avant = merlon.pvMilli;

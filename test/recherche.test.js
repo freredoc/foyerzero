@@ -267,7 +267,10 @@ test('T11 — un module non câblé ne se vend pas, même unité acquise et poin
   assert.deepEqual(problemesDeLAchat(cable, 'offense', 'fendeur', 'module'), []);
   acheter(cable, 'offense', 'fendeur', 'module');
   assert.ok(moduleEstAcquis(cable, 'offense', 'fendeur'));
-  assert.deepEqual(modulesDebloquesDuJoueur(cable), ['ecraseur']);
+  // ⚠ ET IL RESTE DANS SA BRANCHE — lot MODULES-E. L'union des deux branches
+  // aurait rendu la même liste des deux côtés.
+  assert.deepEqual(modulesDebloquesDuJoueur(cable),
+    { offense: ['ecraseur'], defense: [] });
 });
 
 // ---------------------------------------------------------------------------
@@ -471,7 +474,10 @@ function duel(structure, avecEcraseur, attaquant = 'fendeur') {
     batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
     defenseurs: [{ id: structure, rangee: 5, colonne: 5, niveau: 1 }],
     vagues: [[{ id: attaquant, colonne: 5, niveau: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: avecEcraseur ? ['ecraseur'] : [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: avecEcraseur ? ['ecraseur'] : [], defense: [] },
+    },
   });
 }
 
@@ -585,7 +591,10 @@ test('T12 — sans le module acquis, ou sur une pièce qui ne le porte pas, rien
     batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
     defenseurs: [{ id: 'merlon', rangee: 5, colonne: 5, niveau: 1 }],
     vagues: [[{ id: 'fendeur', colonne: 5, niveau: 1 }]],
-    modulesDebloques: { ouvrage: ['ecraseur'], joueur: [] },
+    modulesDebloques: {
+      ouvrage: { offense: ['ecraseur'], defense: [] },
+      joueur: { offense: [], defense: [] },
+    },
   });
   const mur = etat.entites.find((e) => e.id === 'merlon');
   const temoin = pvParTick('merlon', false);
@@ -628,9 +637,12 @@ test('T13 — l\'Écraseur du JOUEUR ne touche pas les points de recherche', () 
   const base = { niveau: 1, defenseurs: [], batiments: [], vagues: [] };
 
   const sansJoueur = pointsRecherche(resultat,
-    { ...base, modulesDebloques: { ouvrage: [], joueur: [] } });
+    { ...base, modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } } });
   const avecJoueur = pointsRecherche(resultat,
-    { ...base, modulesDebloques: { ouvrage: [], joueur: ['ecraseur', 'pvPlusVingt'] } });
+    { ...base, modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['ecraseur'], defense: ['pvPlusVingt'] },
+    } });
   assert.equal(avecJoueur, sansJoueur,
     'les modules du JOUEUR majorent les points : la confusion du §6.3 est là');
   assert.ok(sansJoueur > 0n, 'montage sans mordant : ce raid ne rapporte aucun point');
@@ -638,7 +650,10 @@ test('T13 — l\'Écraseur du JOUEUR ne touche pas les points de recherche', () 
   // ⚠ ET LE BONUS DE 20 % EST BIEN VIVANT, sinon l'égalité ci-dessus passerait
   // pour un barème mort. Le Merlon porte `pvPlusVingt` côté OUVRAGE.
   const avecOuvrage = pointsRecherche(resultat,
-    { ...base, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } });
+    { ...base, modulesDebloques: {
+      ouvrage: { offense: [], defense: ['pvPlusVingt'] },
+      joueur: { offense: [], defense: [] },
+    } });
   assert.equal(avecOuvrage, (sansJoueur * 12n) / 10n,
     `le bonus de l'Ouvrage ne vaut pas +20 % : ${sansJoueur} → ${avecOuvrage}`);
 });
@@ -665,7 +680,10 @@ function scene({ cible, voisines, avecModule, tireur = 'perceurs', colonneTireur
     batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
     defenseurs: [cible, ...voisines].map((d) => ({ ...d, niveau: 1 })),
     vagues: [[{ id: tireur, colonne: colonneTireur, rangee: 2, niveau: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['tirDeBarrage'] : [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: avecModule ? ['tirDeBarrage'] : [], defense: [] },
+    },
   });
 }
 
@@ -843,7 +861,10 @@ test('MODULES-A T4 — en DÉFENSE, le barrage n\'a rien à frapper', () => {
         { id: 'meute', colonne: 5, rangee: 3, niveau: 1 },
         { id: 'ratisseur', colonne: 7, rangee: 2, niveau: 1 },
       ]],
-      modulesDebloques: { joueur: avecModule ? ['tirDeBarrage'] : [], ouvrage: [] },
+      modulesDebloques: {
+        joueur: { offense: avecModule ? ['tirDeBarrage'] : [], defense: [] },
+        ouvrage: { offense: [], defense: [] },
+      },
     });
     const serie = [];
     const mur = [];
@@ -915,7 +936,10 @@ function courseAvecObstacles(avecModule) {
       { id: 'casemate', rangee: 10, colonne: 7, niveau: 1 },
     ],
     vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['booster'] : [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: avecModule ? ['booster'] : [], defense: [] },
+    },
   });
   const u = etat.entites.find((e) => e.camp === 'attaque');
   let position = u.rangeeMilli;
@@ -949,7 +973,10 @@ function courseTracee(avecModule) {
       { id: 'casemate', rangee: 10, colonne: 7, niveau: 1 },
     ],
     vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['booster'] : [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: avecModule ? ['booster'] : [], defense: [] },
+    },
   });
   const lignes = [serialiserEtat(etat)];
   for (let t = 1; t <= 60 && !etat.termine; t += 1) {
@@ -1098,7 +1125,10 @@ function sceneNeutralisation({ module = 'flashbang', niveauCible = 20, modules }
       { id: 'guetteur', rangee: 4, colonne: 6, niveau: niveauCible },
     ],
     vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: modules ?? [module] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: modules ?? [module], defense: [] },
+    },
   });
 }
 
@@ -1185,7 +1215,10 @@ test('MODULES-B T2 — l\'EMP désactive un véhicule, artilleries comprises', (
       // vide.
       { id: 'carapace', colonne: 5, rangee: 8, niveau: 20 },
     ]],
-    modulesDebloques: { ouvrage: [], joueur: ['emp'] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['emp'], defense: [] },
+    },
   });
   const faucheuse = parId(etat, 'faucheuse');
   const tirs = ticksDeTir(etat, ['faucheuse', 'casemate', 'guetteur'], 12);
@@ -1300,7 +1333,10 @@ test('MODULES-B T7 — une neutralisée ne fait pas non plus de Tir de barrage',
       { id: 'merlon', rangee: 4, colonne: 6, niveau: 20 },
     ],
     vagues: [[{ id: 'perceurs', colonne: 5, rangee: 3, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: ['tirDeBarrage'] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['tirDeBarrage'], defense: [] },
+    },
   });
 
   const temoin = monter();
@@ -1336,7 +1372,10 @@ test('MODULES-B T8 — Camouflage : invisible, révélé par sa cible de prédil
     batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
     defenseurs: [{ id: 'casemate', rangee: 4, colonne: 6, niveau: 20 }],
     vagues: [[{ id: 'guetteur', colonne: 5, rangee: 3, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['camouflage'] : [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: avecModule ? ['camouflage'] : [], defense: [] },
+    },
   });
 
   // (a) Aucune infanterie sur la grille : le Guetteur est invisible.
@@ -1375,7 +1414,10 @@ test('MODULES-B T8 — Camouflage : invisible, révélé par sa cible de prédil
       { id: 'casemate', rangee: 4, colonne: 6, niveau: 20 },
     ],
     vagues: [[{ id: 'guetteur', colonne: 5, rangee: 3, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['camouflage'] : [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: avecModule ? ['camouflage'] : [], defense: [] },
+    },
   });
 
   const etat = avecMeute(true);
@@ -1435,7 +1477,10 @@ test('MODULES-B T9 — le Booster ne franchit rien (arbitrage 2)', () => {
       ...(avecMur ? [{ id: 'merlon', rangee: 8, colonne: 5, niveau: 20 }] : []),
     ],
     vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: ['booster'] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['booster'], defense: [] },
+    },
   });
 
   const etat = monter(true);
@@ -1525,7 +1570,10 @@ function montageTroisModules(ordre) {
       { id: 'belier', colonne: 6, rangee: 2, niveau: 20 }, // flashbang
       { id: 'crecelle', colonne: 4, rangee: 2, niveau: 20 }, // emp
     ]],
-    modulesDebloques: { ouvrage: [], joueur: ['camouflage', 'flashbang', 'emp'] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['camouflage', 'flashbang', 'emp'], defense: [] },
+    },
   });
 }
 
@@ -1671,7 +1719,10 @@ test('MODULES-B T14 — le départage de la neutralisation est celui de `ciblage
       batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
       defenseurs: ordre.map((i) => positions[i]),
       vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 20 }]],
-      modulesDebloques: { ouvrage: [], joueur: ['flashbang'] },
+      modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['flashbang'], defense: [] },
+    },
     });
     if (forgerRangee !== undefined) {
       etat.entites.find((e) => e.camp === 'attaque').rangeeMilli = forgerRangee;
@@ -1730,7 +1781,10 @@ test('MODULES-B T15 — deux porteurs empilent leurs effets, et le plus long fai
       { id: 'crecelle', colonne: 5, rangee: 2, niveau: 30 }, // écart 0 → 50 ticks
       ...(avecLeSecond ? [{ id: 'crecelle', colonne: 6, rangee: 2, niveau: 28 }] : []),
     ]],
-    modulesDebloques: { ouvrage: [], joueur: ['emp'] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['emp'], defense: [] },
+    },
   });
 
   const etat = monter(true);
@@ -1796,7 +1850,10 @@ function sceneBouclier({ modules = ['bouclier'], defenseurs, vague } = {}) {
       { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
       { id: 'enclume', colonne: 5, rangee: 2, niveau: 20 },
     ]],
-    modulesDebloques: { ouvrage: [], joueur: modules },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: modules, defense: [] },
+    },
   });
 }
 
@@ -2141,7 +2198,9 @@ test('MODULES-C T8 — le butin et les points ne comptent pas le réservoir', ()
   const etat = sceneBouclier();
   const porteur = etat.entites.find((e) => e.id === 'enclume');
   const plein = porteur.bouclierMilli;
-  const montage = { modulesDebloques: { ouvrage: [], joueur: ['bouclier'] } };
+  const montage = {
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: ['bouclier'], defense: [] } },
+  };
   const resultat = resoudre(etat, { maxTicks: 400 });
   const absorbe = plein - porteur.bouclierMilli;
   assert.ok(absorbe > 0, 'montage : le bouclier n\'a rien absorbé, le test ne prouve rien');
@@ -2316,7 +2375,7 @@ function garnisonDe(proprietaire) {
     vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 40 }]],
     proprietaireDefense: proprietaire,
     proprietaireAttaque: proprietaire === 'joueur' ? 'ouvrage' : 'joueur',
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
   const lu = {};
@@ -2444,7 +2503,10 @@ test('MODULES-D T3 — les modules déjà câblés tirent toujours, à l\'assaut
       batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
       defenseurs: [{ id: 'merlon', rangee: 4, colonne: 5, niveau: 1 }],
       vagues: [[{ id: 'fendeur', colonne: 5, rangee: 3, niveau: 1 }]],
-      modulesDebloques: { ouvrage: [], joueur: modules },
+      modulesDebloques: {
+        ouvrage: { offense: [], defense: [] },
+        joueur: { offense: modules, defense: [] },
+      },
     });
     const mur = etat.entites.find((e) => e.id === 'merlon');
     const avant = mur.pvMilli;
@@ -2457,9 +2519,9 @@ test('MODULES-D T3 — les modules déjà câblés tirent toujours, à l\'assaut
     `l'Écraseur ne force plus la structure (${avecEcraseur} vs ${sansEcraseur})`);
 });
 
-/** Le montage de référence de T4 : deux unités de garnison et un ouvrage. */
-function raidDeReference(ouvrage) {
-  const montage = {
+/** Le montage de référence de T4, nu : deux unités de garnison et un ouvrage. */
+function raidDeReferenceMontage() {
+  return {
     niveau: 20,
     obstacles: [],
     batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
@@ -2473,8 +2535,15 @@ function raidDeReference(ouvrage) {
       { id: 'belier', colonne: 4, rangee: 2, niveau: 30 },
       { id: 'belier', colonne: 6, rangee: 2, niveau: 30 },
     ]],
-    modulesDebloques: { ouvrage, joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
+}
+
+/** Le même montage, la liste de l'Ouvrage — qui DÉFEND — armée. */
+function raidDeReference(ouvrage) {
+  const nu = raidDeReferenceMontage();
+  const montage = { ...nu,
+    modulesDebloques: { ...nu.modulesDebloques, ouvrage: { offense: [], defense: ouvrage } } };
   const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
   return { resultat, points: pointsRecherche(resultat, montage) };
 }
@@ -2528,7 +2597,10 @@ function sceneDePortee({ defenseur, modules = [], distanceMilli }) {
     proprietaireDefense: 'joueur',
     proprietaireAttaque: 'ouvrage',
     vagues: [[{ id: 'fouisseurs', colonne: 5, rangee: 2, niveau: 10 }]],
-    modulesDebloques: { ouvrage: [], joueur: modules },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: [], defense: modules },
+    },
   });
   const garde = etat.entites.find((e) => e.camp === 'defense' && e.id === defenseur.id);
   const assaillant = etat.entites.find((e) => e.camp === 'attaque');
@@ -2676,7 +2748,10 @@ function sceneDePv({ modules = [], pvMilli } = {}) {
     proprietaireDefense: 'joueur',
     proprietaireAttaque: 'ouvrage',
     vagues: [[{ id: 'fouisseurs', colonne: 5, rangee: 2, niveau: 10 }]],
-    modulesDebloques: { ouvrage: [], joueur: modules },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: [], defense: modules },
+    },
   });
   return {
     etat,
@@ -2731,7 +2806,10 @@ test('MODULES-D T9 — PV +20 % sur une pièce montée PLEINE', () => {
     batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
     defenseurs: [{ id: 'merlon', rangee: 5, colonne: 4, niveau: 10 }],
     vagues: [[{ id: 'meute', colonne: 5, rangee: 2, niveau: 10 }]],
-    modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: ['pvPlusVingt'] },
+      joueur: { offense: [], defense: [] },
+    },
   });
   const mur = chezLOuvrage.entites.find((e) => e.id === 'merlon');
   assert.equal(mur.pvMaxMilli, Math.floor((sans.temoin.pvMaxMilli * 120) / 100));
@@ -2940,7 +3018,10 @@ function garnisonAttaquee(ordre, modules) {
     // les attaques sur sa base n'existent pas. Le banc, lui, les voit.
     proprietaireDefense: 'joueur',
     proprietaireAttaque: 'ouvrage',
-    modulesDebloques: { ouvrage: [], joueur: modules },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: [], defense: modules },
+    },
   });
 }
 
@@ -3323,4 +3404,389 @@ test('T15 — l\'onglet Spécial s\'affiche et ne s\'achète pas', () => {
   assert.equal(prix.filter((p) => p === '—').length, 3);
   assert.equal(prix.filter((p) => p !== '—').length, 1);
   assert.ok(prix.includes('2\u202f000\u202f000'), 'la deuxième base a perdu son prix');
+});
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-E — un module acheté dans UNE branche ne sert QUE dans celle-là
+//
+// ⚠⚠ LE SENS DE LA FUITE N'EST PAS CELUI QU'ANNONÇAIT LE BRIEF, ET C'EST LA
+// MESURE QUI TRANCHE. Le brief décrivait « acheter le module DÉFENSE des
+// Perceurs (200 M) débloque le Tir de barrage pour l'Obusier en OFFENSE ». Cet
+// achat-là LÈVE : `cable.tirDeBarrage.defense` vaut `false` depuis MODULES-A,
+// donc `problemesDeLAchat` rend `effetNonCable`. Les quatre noms en collision
+// sont câblés en OFFENSE seulement — la fuite ne pouvait partir que de là.
+// Le premier test ci-dessous ferme les DEUX sens quand même : le sens
+// aujourd'hui inatteignable par la boutique le devient dès qu'un drapeau
+// `cable` bascule, et c'est exactement ce que ce lot prévient.
+// ---------------------------------------------------------------------------
+
+/** Les porteurs de chaque nom de module, par branche, RELEVÉS sur l'arbre. */
+function porteursParNom() {
+  const par = {};
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      const nom = nomDuModule(branche, id);
+      if (nom === null) continue;
+      (par[nom] ??= { offense: [], defense: [] })[branche].push(id);
+    }
+  }
+  return par;
+}
+
+/** Achète l'unité PUIS le module d'une ligne, et rend les listes débloquées. */
+function achatDeLaLigne(branche, id) {
+  const etat = partie('999999999999999');
+  if (problemesDeLAchat(etat, branche, id, 'unite').length === 0) {
+    acheter(etat, branche, id, 'unite');
+  }
+  const soucis = problemesDeLAchat(etat, branche, id, 'module');
+  if (soucis.length > 0) return { soucis, listes: null };
+  acheter(etat, branche, id, 'module');
+  return { soucis, listes: modulesDebloquesDuJoueur(etat) };
+}
+
+/**
+ * La scène de barrage de MODULES-A, le module rangé dans la branche demandée.
+ *
+ * ⚠ LE TIR DE BARRAGE EST LE SEUL DES QUATRE NOMS EN COLLISION DONT L'EFFET SE
+ * MESURE. `flashbang` et `emp` ne sont lus que dans `declencherNeutralisations`,
+ * gardée au camp `attaque` : un porteur EN GARNISON ne les consulte jamais, et
+ * une assertion de PV y passerait des deux côtés sans rien prouver.
+ */
+function barrageRangeDans(branche) {
+  return creerCombat({
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 15, colonne: 1, niveau: 1 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 3, colonne: 5, niveau: 1 },
+      { id: 'merlon', rangee: 3, colonne: 4, niveau: 1 },
+    ],
+    vagues: [[{ id: 'perceurs', colonne: 5, rangee: 2, niveau: 1 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: {
+        offense: branche === 'offense' ? ['tirDeBarrage'] : [],
+        defense: branche === 'defense' ? ['tirDeBarrage'] : [],
+      },
+    },
+  });
+}
+
+test('MODULES-E T1 — la fuite est fermée dans les DEUX sens', () => {
+  // SENS 1, celui que la boutique atteint : acheter en OFFENSE ne doit rien
+  // ouvrir en défense. Sous l'union, les deux listes étaient identiques.
+  const off = achatDeLaLigne('offense', 'perceurs');
+  assert.deepEqual(off.soucis, [], 'montage : la ligne offense des Perceurs doit être achetable');
+  assert.deepEqual(off.listes, { offense: ['tirDeBarrage'], defense: [] });
+
+  // SENS 2, l'autre : acheter en DÉFENSE ne doit rien ouvrir en offense.
+  const def = achatDeLaLigne('defense', 'merlon');
+  assert.deepEqual(def.soucis, [], 'montage : la ligne défense du Merlon doit être achetable');
+  assert.deepEqual(def.listes, { offense: [], defense: ['autoReparation'] });
+
+  // ⚠ ET LE MOTEUR SUIT, pas seulement la liste. Le Tir de barrage rangé dans
+  // la branche `defense` ne doit rien faire à un porteur qui ATTAQUE.
+  const bon = pertesAuPremierTick(barrageRangeDans('offense'));
+  const mauvais = pertesAuPremierTick(barrageRangeDans('defense'));
+  assert.ok(bon.get('3,5') > 0, 'montage sans mordant : le tir direct ne retire rien');
+  assert.equal(mauvais.get('3,5'), bon.get('3,5'), 'le tir direct doit être le même des deux côtés');
+  assert.ok(bon.get('3,4') > 0, 'le module rangé dans SA branche ne déclenche plus le barrage');
+  assert.equal(mauvais.get('3,4'), 0,
+    'le module rangé dans l\'AUTRE branche éclabousse encore : la fuite est ouverte');
+
+  // ⚠ CE QUI FERAIT TOMBER CE TEST : indexer `moduleActif` par `e.camp` au lieu
+  // de passer par `BRANCHE_DU_CAMP`. `modulesDebloques.joueur.attaque` vaut
+  // `undefined`, `undefined?.includes` ne lève pas — les deux relevés
+  // tomberaient à 0 et la troisième assertion sauterait. Un `?? []` posé sur la
+  // branche manquante donnerait le même effondrement silencieux.
+});
+
+test('MODULES-E T2 — les quatre collisions, une par une', () => {
+  const par = porteursParNom();
+  const collisions = Object.entries(par)
+    .filter(([, v]) => v.offense.length > 0 && v.defense.length > 0)
+    .map(([nom]) => nom).sort();
+  // ⚠ LA TABLE EST RELEVÉE, PAS RECOPIÉE. Si l'arbre gagne un cinquième nom
+  // porté des deux côtés, ce test tombe et le lot doit être repassé.
+  assert.deepEqual(collisions, ['emp', 'flashbang', 'garnison', 'tirDeBarrage']);
+
+  // Chaque collision, prise séparément : l'achat de la ligne câblée range le
+  // nom dans SA branche et laisse l'autre vide.
+  const attendu = { flashbang: 'meute', tirDeBarrage: 'perceurs', emp: 'crecelle' };
+  for (const [nom, id] of Object.entries(attendu)) {
+    assert.ok(par[nom].offense.includes(id) && par[nom].defense.length > 0,
+      `montage : ${nom} n'est plus une collision portée par ${id}`);
+    const r = achatDeLaLigne('offense', id);
+    assert.deepEqual(r.soucis, [], `${nom} : la ligne offense de ${id} n'est plus achetable`);
+    assert.deepEqual(r.listes, { offense: [nom], defense: [] },
+      `${nom} acheté en offense fuit vers la défense`);
+  }
+
+  // ⚠ `garnison` EST LA QUATRIÈME, ET ELLE N'EST CÂBLÉE NULLE PART. Aucune de
+  // ses deux lignes ne s'achète : la collision existe dans la table et ne peut
+  // pas encore fuir. Le dire vaut mieux que la faire passer sous silence.
+  assert.equal(moduleEstCable('garnison', 'offense'), false);
+  assert.equal(moduleEstCable('garnison', 'defense'), false);
+  for (const branche of BRANCHES) {
+    const r = achatDeLaLigne(branche, 'ratisseur');
+    assert.deepEqual(r.soucis.map((s) => s.code), ['effetNonCable'],
+      `garnison est devenue achetable en ${branche} : reprendre la table`);
+  }
+});
+
+test('MODULES-E T3 — les modules SANS collision ne bougent pas', () => {
+  // La garde qui protège MODULES-A à D : tout ce qui n'est porté que d'un côté
+  // doit continuer de se débloquer exactement comme avant, dans SA branche.
+  const par = porteursParNom();
+  let vus = 0;
+  for (const [nom, v] of Object.entries(par)) {
+    if (v.offense.length > 0 && v.defense.length > 0) continue;
+    const branche = v.offense.length > 0 ? 'offense' : 'defense';
+    if (!moduleEstCable(nom, branche)) continue;
+    const r = achatDeLaLigne(branche, v[branche][0]);
+    assert.deepEqual(r.soucis, [], `${nom} : ${v[branche][0]} n'est plus achetable en ${branche}`);
+    assert.deepEqual(r.listes, {
+      offense: branche === 'offense' ? [nom] : [],
+      defense: branche === 'defense' ? [nom] : [],
+    }, `${nom} n'atterrit plus dans la branche ${branche}`);
+    vus += 1;
+  }
+  // ⚠ CE QUI FERAIT TOMBER CE TEST : un `?? []` sur la branche lue par
+  // `moduleActif`, ou une union rétablie « pour compatibilité » — les huit noms
+  // se retrouveraient dans les deux listes. Le compte, lui, garde le balayage
+  // honnête : sans lui, une table vide passerait pour un succès.
+  assert.equal(vus, 8, `${vus} modules sans collision câblés, 8 attendus`);
+});
+
+test('MODULES-E T4 — la table camp→branche couvre les deux camps', () => {
+  // ⚠ LE PIÈGE DU LOT EST ICI, ET IL EST SILENCIEUX. `camp` vaut `attaque` ou
+  // `defense`, la branche vaut `offense` ou `defense` : le second terme
+  // coïncide, le premier NON. Une indexation directe par `e.camp` éteindrait
+  // TOUS les modules offensifs sans lever la moindre erreur.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  assert.match(source, /const BRANCHE_DU_CAMP = \{ attaque: 'offense', defense: 'defense' \};/,
+    'la table nommée a disparu : le ternaire est revenu');
+  assert.match(source, /BRANCHE_DU_CAMP\[e\.camp\]/,
+    '`moduleActif` ne passe plus par la table');
+  assert.doesNotMatch(source, /modulesDebloques\?\.\[e\.proprietaire\]\?\.\[e\.camp\]/,
+    'la branche est indexée par le camp : les modules offensifs sont morts');
+
+  // Et les deux camps répondent VRAIMENT, chacun par sa branche. Un module
+  // offensif sur un attaquant, un module défensif sur un défenseur, dans le
+  // MÊME combat : si la table ne rendait qu'une branche, l'un des deux serait
+  // éteint.
+  // ⚠ LA RONCE EST INDISPENSABLE : `declencherBoosters` ne marque que les
+  // porteurs BLESSÉS. Sans elle le Cuirassier traverse intact et le camp
+  // ATTAQUE ne serait pas mesuré du tout.
+  const scenePourLesDeuxCamps = (debloques) => creerCombat({
+    niveau: 10,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 10 }],
+    defenseurs: [
+      { id: 'ronce', rangee: 3, colonne: 5, niveau: 1 },
+      { id: 'merlon', rangee: 6, colonne: 5, niveau: 10 },
+    ],
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: debloques,
+  });
+  const etat = scenePourLesDeuxCamps({
+    ouvrage: { offense: [], defense: ['pvPlusVingt'] },
+    joueur: { offense: ['booster'], defense: [] },
+  });
+  const mur = etat.entites.find((e) => e.id === 'merlon');
+  const temoin = scenePourLesDeuxCamps({
+    ouvrage: { offense: [], defense: [] },
+    joueur: { offense: [], defense: [] },
+  });
+  const nu = temoin.entites.find((e) => e.id === 'merlon');
+  assert.equal(mur.pvMaxMilli, Math.floor((nu.pvMaxMilli * 120) / 100),
+    'le camp DÉFENSE ne lit plus sa branche');
+  for (let t = 1; t <= 25; t += 1) tick(etat);
+  const cuirassier = etat.entites.find((e) => e.id === 'carapace');
+  assert.deepEqual(cuirassier.modulesActifs, ['booster'],
+    'le camp ATTAQUE ne lit plus sa branche');
+});
+
+test('MODULES-E T5 — l\'ancienne forme plate LÈVE, et nomme le propriétaire', () => {
+  const base = {
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
+    defenseurs: [{ id: 'merlon', rangee: 5, colonne: 5, niveau: 1 }],
+    vagues: [[{ id: 'fendeur', colonne: 5, rangee: 2, niveau: 1 }]],
+  };
+  const vide = { offense: [], defense: [] };
+  // ⚠ ON NE RÉPARE PAS LA FORME PLATE, ON LA REFUSE. L'accepter laisserait
+  // vivre côte à côte deux formes du même montage, et la fuite reviendrait par
+  // le producteur qu'on aurait oublié de migrer.
+  assert.throws(
+    () => creerCombat({ ...base, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: vide } }),
+    /modulesDebloques\.ouvrage est une liste plate/);
+  assert.throws(
+    () => creerCombat({ ...base, modulesDebloques: { ouvrage: vide, joueur: ['ecraseur'] } }),
+    /modulesDebloques\.joueur est une liste plate/);
+  // Une branche manquante lève aussi : la forme est complète ou elle n'est pas.
+  assert.throws(
+    () => creerCombat({ ...base, modulesDebloques: { ouvrage: vide, joueur: { offense: [] } } }),
+    /modulesDebloques\.joueur n'a pas de branche « defense »/);
+  assert.throws(
+    () => creerCombat({ ...base, modulesDebloques: { ouvrage: vide, joueur: { offense: [1], defense: [] } } }),
+    /modulesDebloques\.joueur\.offense n'est pas une liste de noms/);
+
+  // ⚠ MAIS L'ABSENCE RESTE PERMISE, et ce n'est pas un oubli : onze montages de
+  // `combat.test.js`, les cinq d'`assaut` et les cinq de `site-entame` ne
+  // portent pas la clé. Les leur imposer serait un autre lot.
+  assert.doesNotThrow(() => creerCombat(base));
+  assert.doesNotThrow(() => creerCombat({ ...base, modulesDebloques: { ouvrage: vide } }));
+});
+
+test('MODULES-E T6 — les points de recherche lisent la branche DÉFENSE, au point près', () => {
+  // ⚠ MÊME RELEVÉ QU'À MODULES-D T4, ET C'EST VOULU. Ce lot ne doit déplacer
+  // aucun point : le raid de référence rend les mêmes nombres, à l'unité.
+  assert.equal(raidDeReference([]).points, 2059722n,
+    'les points du raid de référence ont bougé');
+  assert.equal(raidDeReference(['pvPlusVingt']).points, 2106166n,
+    'le bonus de 20 % de l\'Ouvrage a bougé');
+
+  // ⚠ ET C'EST BIEN `montage.proprietaireDefense` QUI DÉSIGNE LA LISTE, pas la
+  // chaîne `'ouvrage'` en dur. Le MÊME raid, la base du joueur attaquée : les
+  // points doivent alors suivre la liste DU JOUEUR, branche défense.
+  const troisNoms = ['autoReparation', 'flashbang', 'tirDeBarrage'];
+  const chezLeJoueur = (debloques) => {
+    const montage = { ...raidDeReferenceMontage(), proprietaireDefense: 'joueur',
+      proprietaireAttaque: 'ouvrage', modulesDebloques: debloques };
+    return pointsRecherche(resoudre(creerCombat(montage), { maxTicks: 600 }), montage);
+  };
+  const vide = { offense: [], defense: [] };
+  assert.equal(chezLeJoueur({ ouvrage: vide, joueur: vide }), 2059722n,
+    'le raid de référence ne rend plus le même total quand le joueur défend');
+  assert.equal(chezLeJoueur({ ouvrage: vide, joueur: { offense: [], defense: troisNoms } }),
+    2471666n, '`pointsRecherche` ne lit plus la liste du DÉFENSEUR');
+
+  // ⚠ LES DEUX CONTRE-CAS, ET ILS SONT DISTINCTS. La branche d'abord : les
+  // mêmes noms rangés en `offense` ne majorent rien. Le propriétaire ensuite :
+  // rangés chez l'Ouvrage, qui ATTAQUE ici, ils ne majorent rien non plus —
+  // c'est ce que ferait un `'ouvrage'` repris en dur.
+  assert.equal(chezLeJoueur({ ouvrage: vide, joueur: { offense: troisNoms, defense: [] } }),
+    2059722n, 'la branche offense majore les points : la fuite est ouverte');
+  assert.equal(chezLeJoueur({ ouvrage: { offense: [], defense: troisNoms }, joueur: vide }),
+    2059722n, 'la liste de l\'ATTAQUANT majore les points : le propriétaire est en dur');
+});
+
+test('MODULES-E T7 — contre-épreuve : le même nom dans l\'AUTRE branche ne rapporte rien', () => {
+  // Sans cette contre-épreuve, T6 passerait sur un barème qui ne majore jamais
+  // rien : les deux nombres seraient égaux et personne ne le verrait.
+  const montage = {
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+      { id: 'meute', rangee: 6, colonne: 4, niveau: 20 },
+      { id: 'perceurs', rangee: 6, colonne: 6, niveau: 18 },
+    ],
+    vagues: [[
+      { id: 'belier', colonne: 5, rangee: 2, niveau: 30 },
+      { id: 'belier', colonne: 4, rangee: 2, niveau: 30 },
+      { id: 'belier', colonne: 6, rangee: 2, niveau: 30 },
+    ]],
+    modulesDebloques: {
+      ouvrage: { offense: ['pvPlusVingt'], defense: [] },
+      joueur: { offense: [], defense: [] },
+    },
+  };
+  const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
+  // ⚠ LA MÊME RÉSOLUTION, LE MÊME MODULE, L'AUTRE BRANCHE : rien ne bouge, ni
+  // les PV du Merlon, ni les points. Sous l'union, ce montage rendait 2 106 166.
+  assert.equal(pointsRecherche(resultat, montage), 2059722n,
+    'la branche offense de l\'Ouvrage majore encore les points de recherche');
+  assert.equal(resultat.tick, 120, 'le combat lui-même a changé : le module a été lu');
+});
+
+test('MODULES-E T8 — le déterminisme tient, les deux branches armées', () => {
+  // La projection canonique de MODULES-B T10, réutilisée telle quelle : elle
+  // couvre déjà `modulesActifs`, `effetsTemporises`, le réservoir de bouclier,
+  // la portée et le plafond de PV.
+  const jouer = () => {
+    const etat = creerCombat({
+      niveau: 20,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+      defenseurs: [
+        { id: 'merlon', rangee: 5, colonne: 5, niveau: 20 },
+        { id: 'guetteur', rangee: 6, colonne: 6, niveau: 20 },
+      ],
+      proprietaireDefense: 'joueur',
+      proprietaireAttaque: 'ouvrage',
+      vagues: [[
+        { id: 'carapace', colonne: 5, rangee: 2, niveau: 20 },
+        { id: 'perceurs', colonne: 4, rangee: 2, niveau: 20 },
+      ]],
+      modulesDebloques: {
+        ouvrage: { offense: ['booster', 'tirDeBarrage'], defense: [] },
+        joueur: { offense: [], defense: ['autoReparation', 'rayonPlusUn'] },
+      },
+    });
+    for (let t = 1; t <= 120 && !etat.termine; t += 1) tick(etat);
+    return { vue: projectionCanonique(etat), chaine: serialiserEtat(etat) };
+  };
+  const a = jouer();
+  const b = jouer();
+  assert.deepEqual(a.vue, b.vue, 'deux parties identiques divergent');
+  assert.equal(a.chaine, b.chaine, 'la sérialisation diverge');
+  // ⚠ ET LE MONTAGE N'EST PAS INERTE : les quatre modules sont bien lus, sinon
+  // ce test comparerait deux combats nus. Le Cuirassier de l'Ouvrage attaque et
+  // porte le Booster ; le Guetteur du joueur défend et porte Rayon +1.
+  const seul = creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'guetteur', rangee: 6, colonne: 6, niveau: 20 }],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: [], defense: [] },
+    },
+  });
+  const nu = seul.entites.find((e) => e.id === 'guetteur');
+  const etatArme = creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'guetteur', rangee: 6, colonne: 6, niveau: 20 }],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: [], defense: ['rayonPlusUn'] },
+    },
+  });
+  const boostee = etatArme.entites.find((e) => e.id === 'guetteur');
+  assert.ok(boostee.porteeCarree > nu.porteeCarree,
+    'montage inerte : Rayon +1 n\'est pas lu, le déterminisme ne prouverait rien');
+
+  // ⚠⚠ ET LA MOITIÉ OFFENSIVE AUSSI, sans quoi cette garde serait AVEUGLE au
+  // piège du lot. Le camp `defense` et la branche `defense` portent le même
+  // mot : une indexation par `e.camp` rendrait la bonne liste pour le Guetteur
+  // et `undefined` pour le Cuirassier. Seul le camp ATTAQUE distingue les deux.
+  const etatJoue = creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'guetteur', rangee: 6, colonne: 6, niveau: 20 }],
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: {
+      ouvrage: { offense: ['booster'], defense: [] },
+      joueur: { offense: [], defense: [] },
+    },
+  });
+  for (let t = 1; t <= 120 && !etatJoue.termine; t += 1) tick(etatJoue);
+  assert.deepEqual(etatJoue.entites.find((e) => e.id === 'carapace').modulesActifs, ['booster'],
+    'montage inerte : le Booster de l\'ATTAQUANT n\'est pas lu');
 });

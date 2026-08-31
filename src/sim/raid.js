@@ -254,7 +254,8 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   const montage = {
     ...montageSite,
     modulesDebloques: {
-      ouvrage: montageSite.modulesDebloques?.ouvrage ?? [],
+      ouvrage: montageSite.modulesDebloques?.ouvrage
+        ?? { offense: [], defense: [] },
       joueur: modulesDebloquesDuJoueur(etat),
     },
   };

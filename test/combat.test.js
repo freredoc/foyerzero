@@ -122,7 +122,10 @@ function montageRiche() {
       [{ id: 'frappeur', colonne: 6 }, { id: 'pilon', colonne: 7 }],
       [{ id: 'broyeur', colonne: 8 }, { id: 'enclume', colonne: 9 }],
     ],
-    modulesDebloques: { ouvrage: ['pvPlusVingt', 'munitionSpeciale'], joueur: [] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: ['pvPlusVingt', 'munitionSpeciale'] },
+      joueur: { offense: [], defense: [] },
+    },
   };
 }
 
@@ -222,7 +225,7 @@ test('T3 — à distance égale, la cible retenue est la plus à gauche', () => 
       { id: 'merlon', rangee: 4, colonne: 6 },
     ],
     vagues: [[{ id: 'meute', rangee: 3, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const meute = entite(etat, (e) => e.camp === 'attaque');
@@ -262,7 +265,7 @@ test('T4 — la Faucheuse ne tire ni trop près ni trop loin', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'faucheuse', rangee: 8, colonne: 5 }],
     vagues: [[{ id: 'meute', rangee, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
 
   const cas = [
@@ -301,7 +304,7 @@ function montageMeuteContreMerlon(surchargeMeute = {}) {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'meute', colonne: 5, ...surchargeMeute }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
 }
 
@@ -362,7 +365,7 @@ test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', 
     batiments: [{ id: 'gangue', rangee: 11, colonne: 5 }],
     defenseurs: [],
     vagues: [[{ id: 'meute', rangee: 10, colonne: 5, reserve: 7 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const meute = entite(etat, (e) => e.camp === 'attaque');
@@ -414,7 +417,7 @@ test('T7 a — masse supérieure : la bloquante meurt, la mobile ne s\'arrête p
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'fendeur', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const fendeur = entite(etat, (e) => e.camp === 'attaque');
@@ -447,7 +450,7 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'fendeur', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'fendeur', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const attaquant = entite(etat, (e) => e.camp === 'attaque');
@@ -478,7 +481,7 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'belier', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'ratisseur', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const marche = creerCombat(montageMarche);
   const ratisseur = entite(marche, (e) => e.camp === 'attaque');
@@ -503,7 +506,7 @@ test('T8 — l\'obstacle divise la vitesse par 2,5 ; l\'aviation l\'ignore', () 
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
     vagues: [[{ id: 'meute', rangee: 1, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montageSol);
   const meute = entite(etat, (e) => e.camp === 'attaque');
@@ -537,7 +540,7 @@ test('T8 — l\'obstacle divise la vitesse par 2,5 ; l\'aviation l\'ignore', () 
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
     vagues: [[{ id: 'crecelle', rangee: 1, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const air = creerCombat(montageAir);
   const crecelle = entite(air, (e) => e.camp === 'attaque');
@@ -569,7 +572,7 @@ test('T9 — les quatre vagues apparaissent aux ticks 0, 50, 100 et 150', () => 
       [{ id: 'meute', colonne: 1 }],
       [{ id: 'meute', colonne: 1 }],
     ],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
 
@@ -595,7 +598,7 @@ test('T10 — une Casemate descend jusqu\'à 0, pas jusqu\'à 1 %', () => {
     // 1 000 PV. Montée à 100 000 milli-PV, soit 10 % de ses 1 000 000.
     defenseurs: [{ id: 'casemate', rangee: 3, colonne: 5, pvMilli: 100_000 }],
     vagues: [[{ id: 'fouisseurs', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const casemate = entite(etat, parId('casemate'));
@@ -655,7 +658,7 @@ function montageSouche() {
     ],
     defenseurs: [],
     vagues: [[{ id: 'pilon', rangee: 10, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
 }
 
@@ -710,7 +713,7 @@ test('T12 — un bâtiment à moitié détruit paie la moitié', () => {
     // nombre entier de ticks. Le test mesure la même chose ; seul le tireur
     // change, pour que le seuil reste rond.
     vagues: [[{ id: 'belier', rangee: 10, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   // ⚠ Seuil déplacé au lot 4B : la Gangue passe de 150 à 1 000 PV, donc la
@@ -776,7 +779,7 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
     // = 17 000 000, hors de sa portée² de 2 250 000. Rien ne bouge en un tick.
     vagues: [[{ id: 'meute', colonne: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const resultat = resoudre(etat, { maxTicks: 1 });
@@ -814,7 +817,10 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
   // MODULES-D. Le Merlon passe de 2 420 000 à 2 904 000 milli-PV, si bien que
   // « la moitié » n'est plus le même nombre de PV. C'est une VRAIE interaction,
   // pas un effet de bord : le module fait enfin ce qu'il dit.
-  const avecModule = { ...montage, modulesDebloques: { ouvrage: ['pvPlusVingt'], joueur: [] } };
+  const avecModule = { ...montage, modulesDebloques: {
+    ouvrage: { offense: [], defense: ['pvPlusVingt'] },
+    joueur: { offense: [], defense: [] },
+  } };
   const etatModule = creerCombat(avecModule);
   const resultatModule = resoudre(etatModule, { maxTicks: 1 });
   const merlonBoost = resultatModule.defenses.find(parId('merlon'));
@@ -871,7 +877,7 @@ test('T14 — un adversaire hors d\'échelle fait durer le raid jusqu\'au tick 9
     // même et le plafond de 900 mord toujours.
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, niveau: 50 }],
     vagues: [[{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const meute = entite(etat, (e) => e.camp === 'attaque');
@@ -906,7 +912,7 @@ test('T15 — chacun des cas de refus lève, en nommant l\'entité fautive', () 
     batiments: [{ id: 'gangue', rangee: 12, colonne: 4 }],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   // Le montage de référence, lui, passe.
   assert.doesNotThrow(() => creerCombat(valide));
@@ -1022,7 +1028,10 @@ test('§11 — `modulesActifs` et `effetsTemporises` ne se remplissent QUE sous 
     batiments: [{ id: 'souche', rangee: 18, colonne: 1, niveau: 1 }],
     defenseurs: [{ id: 'ronce', rangee: 3, colonne: 5, niveau: 1 }],
     vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
-    modulesDebloques: { ouvrage: [], joueur: ['booster'] },
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] },
+      joueur: { offense: ['booster'], defense: [] },
+    },
   });
   const cuirassier = entite(boostee, parId('carapace'));
   jouer(boostee, 25);
@@ -1063,7 +1072,7 @@ test('§9 — un raid ne s\'arrête pas tant qu\'il reste une vague à venir', (
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'casemate', rangee: 3, colonne: 5 }],
     vagues: [[{ id: 'meute', colonne: 5 }], [{ id: 'meute', colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   // ⚠ Seuils déplacés au lot 4A. Casemate à pleine vie : santé 1000 ‰,
@@ -1110,7 +1119,7 @@ test('§7 — une barrière ne bloque pas, elle saigne, et on en réchappe', () 
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'ronce', rangee: 3, colonne: 5 }],
     vagues: [[{ id, colonne: 5 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   const etat = creerCombat(montage('meute'));
   const meute = entite(etat, (e) => e.camp === 'attaque');
@@ -1188,7 +1197,7 @@ test('§7 — la traversante sort par le haut, la stoppeuse rentre à la base', 
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     defenseurs: [],
     vagues: [[{ id, colonne: 1 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
 
   // ⚠ Seuils déplacés au lot 4A : le Frappeur (Firehawk) vole à 240 milli/tick
@@ -1264,7 +1273,7 @@ test('§8 — passée la ligne, une unité qui tire sur la défense garde son pl
     // donc son plancher de 15 à floor(70 × 0,10) = 7. Réserve montée à 8, soit
     // un tir au-dessus du plancher.
     vagues: [[{ id: 'meute', rangee: 11, colonne: 5, reserve: 8 }]],
-    modulesDebloques: { ouvrage: [], joueur: [] },
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
   const meute = entite(etat, (e) => e.camp === 'attaque');
