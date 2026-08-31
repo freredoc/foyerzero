@@ -7,6 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
@@ -238,19 +239,21 @@ test('T11 — un module non câblé ne se vend pas, même unité acquise et poin
       assert.deepEqual(codes, ['effetNonCable'], `${branche}/${id} : ${codes.join(',')}`);
     }
   }
-  // MESURÉ : 25 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les six
-  // qui restent sont toutes en offense — le Fendeur et le Broyeur pour
-  // l'Écraseur, les Perceurs et l'Obusier pour le Tir de barrage, les
-  // Cuirassiers et les Sapeurs pour le Booster.
+  // MESURÉ : 20 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les onze
+  // qui restent sont toutes en offense — Fendeur et Broyeur (Écraseur),
+  // Perceurs et Obusier (Tir de barrage), Cuirassiers et Sapeurs (Booster),
+  // Meute et Bélier (Flashbang), Crécelle (EMP), Guetteur et Frappeur
+  // (Camouflage).
   //
-  // ⚠ RÉÉCRIT AU LOT MODULES-A, DE 29 À 25, et le compte est MESURÉ, pas
-  // déduit : `moduleEstCable` prend désormais la branche, et la ligne DÉFENSE
-  // des Perceurs reste non câblée alors qu'elle porte le même module que leur
-  // ligne offense. C'est exactement ce que ce lot vend, et ce compte-là le dit.
-  assert.equal(nonCables.length, 25, `${nonCables.length} lignes non câblées, 25 attendues`);
+  // ⚠ RÉÉCRIT DEUX FOIS, ET LE COMPTE EST MESURÉ À CHAQUE LOT, jamais déduit :
+  // 29 avant MODULES-A, 25 après — `moduleEstCable` avait pris la branche, et
+  // la ligne DÉFENSE des Perceurs restait non câblée alors qu'elle porte le
+  // même module que leur ligne offense —, 20 depuis MODULES-B. Les cinq lignes
+  // qui viennent de tomber sont exactement celles que ce lot vend.
+  assert.equal(nonCables.length, 20, `${nonCables.length} lignes non câblées, 20 attendues`);
 
   // ⚠ CE QUI FALSIFIERAIT CE TEST : passer `cable.offense` à `true` sur
-  // `flashbang`. Les lignes de la Meute et du Bélier cesseraient de rendre
+  // `garnison`. Les lignes du Ratisseur et de la Buse cesseraient de rendre
   // `effetNonCable`, et le compte tomberait. Le contre-cas est ici, en dur :
   // l'Écraseur PASSE.
   const cable = partie('999999999999999');
@@ -288,10 +291,14 @@ test('MODULES-A T9 — `cable` est par branche, et la fonction lève des deux c�
     assert.deepEqual(Object.keys(m.cable).sort(), ['defense', 'offense'], nom);
     for (const b of BRANCHES) assert.equal(typeof m.cable[b], 'boolean', `${nom}/${b}`);
   }
-  // MESURÉ : trois modules câblés sur quatorze, tous en offense, aucun en défense.
+  // MESURÉ : six modules câblés sur quatorze, tous en offense, aucun en défense.
+  // ⚠ TROIS AU LOT MODULES-A, SIX DEPUIS MODULES-B. Ce compte est la liste
+  // exacte, pas un nombre : ajouter un module câblé sans toucher cette ligne
+  // fait tomber le test, et c'est voulu — le drapeau gouverne une VENTE.
   const cables = Object.entries(MODULES)
     .filter(([, m]) => m.cable.offense || m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(cables, ['booster', 'ecraseur', 'tirDeBarrage']);
+  assert.deepEqual(cables,
+    ['booster', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage']);
   assert.equal(Object.values(MODULES).filter((m) => m.cable.defense).length, 0,
     'aucun module n\'est câblé en défense — le jour où il y en aura un, ce test tombe');
 });
@@ -322,10 +329,18 @@ test('MODULES-A T10 — l\'achat suit le drapeau, branche par branche', () => {
 
   // Un module câblé NULLE PART garde l'autre message : celui-là est bien une
   // attente, pas une impossibilité.
-  assert.ok(estAcquise(etat, 'offense', 'meute'), 'montage : la Meute est gratuite');
-  const pf = problemesDeLAchat(etat, 'offense', 'meute', 'module');
+  //
+  // ⚠ C'ÉTAIT LA MEUTE ET SON FLASHBANG JUSQU'AU LOT MODULES-B, qui vient de
+  // le câbler : la ligne rendrait désormais l'AUTRE message. Le contre-cas
+  // passe donc au Ratisseur et à sa Garnison, encore câblée nulle part. Le
+  // jour où elle le sera, ce bloc changera de pièce à son tour — c'est le
+  // signe que le test mesure le drapeau et pas une chaîne figée.
+  // ⚠ LE RATISSEUR EST GRATUIT À LA CRÉATION, comme la Meute : `acheter` y
+  // lèverait « déjà acquis ». On ASSERTE la précondition au lieu de la poser.
+  assert.ok(estAcquise(etat, 'offense', 'ratisseur'), 'montage : le Ratisseur est gratuit');
+  const pf = problemesDeLAchat(etat, 'offense', 'ratisseur', 'module');
   assert.deepEqual(pf.map((p) => p.code), ['effetNonCable']);
-  assert.equal(pf[0].message, 'Flashbang n\'a pas encore d\'effet en jeu');
+  assert.equal(pf[0].message, 'Garnison n\'a pas encore d\'effet en jeu');
 });
 
 test('recherche — les refus de programme lèvent, les refus de jeu se disent', () => {
@@ -1037,6 +1052,693 @@ test('MODULES-A T8 — le déterminisme tient avec le Booster actif', () => {
 // seconde implémentation du navigateur, avec ses propres bogues ; celui-ci
 // LÈVE sur ce qu'il ne connaît pas, si bien qu'une méthode nouvelle employée
 // par l'écran fait tomber le test au lieu de passer en silence.
+
+// ---------------------------------------------------------------------------
+// Lot MODULES-B — Flashbang, EMP, Camouflage
+// ---------------------------------------------------------------------------
+
+/**
+ * Le montage de référence des neutralisations : un porteur BLOQUÉ devant un
+ * mur, une structure qui tire à côté, et une infanterie un peu plus loin.
+ *
+ * ⚠ LE PORTEUR NE BOUGE PAS, ET C'EST LA CONDITION DE TOUTE MESURE SUR 50
+ * TICKS. Le Bélier a `structureOuAviation` pour prédilection : dès qu'il tire
+ * sur le Merlon, `doitSArreter` le fige. Un porteur qui avance sortirait de sa
+ * portée au bout d'une trentaine de ticks et la moitié des assertions
+ * mesureraient un éloignement, pas une neutralisation — c'est ce qu'une
+ * première version de ce montage a fait, avec une Meute qui avançait.
+ *
+ * ⚠ LE MERLON EST LA CIBLE DE TIR, LE GUETTEUR CELLE DU MODULE. Les deux sont
+ * à portée, le Merlon est STRICTEMENT plus proche (1e6 contre 2e6) : une
+ * implémentation qui reprendrait `e.cibleIndice` neutraliserait le mur.
+ */
+function sceneNeutralisation({ module = 'flashbang', niveauCible = 20, modules } = {}) {
+  return creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 4, colonne: 5, niveau: 20 },
+      { id: 'casemate', rangee: 4, colonne: 4, niveau: 20 },
+      { id: 'guetteur', rangee: 4, colonne: 6, niveau: niveauCible },
+    ],
+    vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: modules ?? [module] },
+  });
+}
+
+/** Les entités du montage, par identifiant. */
+function parId(etat, id) {
+  const e = etat.entites.find((x) => x.id === id);
+  assert.ok(e !== undefined, `montage : « ${id} » absent`);
+  return e;
+}
+
+/** Les ticks où chaque entité nommée a réellement tiré, sur `n` ticks. */
+function ticksDeTir(etat, ids, n) {
+  const suivies = ids.map((id) => [id, parId(etat, id)]);
+  const sortie = Object.fromEntries(ids.map((id) => [id, []]));
+  for (let i = 0; i < n; i++) {
+    tick(etat);
+    for (const [id, e] of suivies) if (e.aTire) sortie[id].push(etat.tick);
+  }
+  return sortie;
+}
+
+test('MODULES-B T1 — le Flashbang désactive une infanterie, et pas une structure', () => {
+  const etat = sceneNeutralisation();
+  const belier = parId(etat, 'belier');
+  const merlon = parId(etat, 'merlon');
+  const casemate = parId(etat, 'casemate');
+  const guetteur = parId(etat, 'guetteur');
+
+  // ⚠ L'EFFET SE LIT AU TICK 1, PAS À L'ARRIVÉE : il a expiré depuis dix ticks
+  // au tick 60, et l'y chercher ferait échouer un moteur parfaitement juste.
+  tick(etat);
+  assert.equal(belier.cibleIndice, merlon.indice,
+    'montage : le Bélier doit viser le Merlon, sinon les deux cibles coïncident');
+  assert.equal(guetteur.effetsTemporises.length, 1, 'le Guetteur n\'a pas été neutralisé');
+  assert.equal(guetteur.effetsTemporises[0].nom, 'neutralise');
+  assert.equal(guetteur.effetsTemporises[0].finTick, etat.tick + 50);
+  assert.deepEqual(merlon.effetsTemporises, [], 'le Merlon a été neutralisé : cible prise sur le tir');
+  assert.deepEqual(casemate.effetsTemporises, [], 'la Casemate a été neutralisée : filtre de colonne absent');
+  assert.deepEqual(belier.modulesActifs, ['flashbang']);
+  // ⚠ ET IL EST DÉJÀ MUET AU TICK 1. L'étape 3 bis passe AVANT le tir : posée
+  // après, la cible tirerait une fois de plus que la durée annoncée — un tick
+  // sur cinquante, invisible à l'œil et faux.
+  assert.equal(guetteur.aTire, false, 'la cible a tiré au tick de sa neutralisation');
+  assert.equal(parId(etat, 'casemate').aTire, true, 'montage : la tourelle doit tirer dès le tick 1');
+
+  // ⚠ CONTRE-CAS DU MODULE NON ACHETÉ. Sans lui, retirer le contrôle
+  // `moduleActif` ne ferait tomber aucun test de ce lot : tout Bélier
+  // neutraliserait, acheté ou non.
+  const sans = sceneNeutralisation({ modules: [] });
+  for (let i = 0; i < 5; i++) tick(sans);
+  assert.deepEqual(parId(sans, 'guetteur').effetsTemporises, [],
+    'le module agit sans avoir été acheté');
+  assert.deepEqual(parId(sans, 'belier').modulesActifs, []);
+
+  const tirs = ticksDeTir(etat, ['guetteur', 'casemate'], 59);
+  assert.equal(belier.rangeeMilli, 2000, 'montage : le Bélier a bougé, les portées ont changé');
+
+  // 50 ticks de silence, puis il tire de nouveau — c'est la preuve de
+  // NON-VACUITÉ : sans elle, un Guetteur mort ou hors de portée donnerait le
+  // même silence.
+  assert.deepEqual(tirs.guetteur, Array.from({ length: 10 }, (_, i) => 51 + i),
+    `le Guetteur a tiré aux ticks ${tirs.guetteur.join(',')}`);
+  assert.equal(tirs.casemate.length, 59, 'la structure voisine a cessé de tirer, elle aussi');
+});
+
+test('MODULES-B T2 — l\'EMP désactive un véhicule, artilleries comprises', () => {
+  // ⚠ LES TROIS ARTILLERIES SONT DES VÉHICULES SANS ÊTRE DES BLINDÉS : leur
+  // `chassis` est nul, c'est `COLONNE_PAR_TYPE_DEFENSE` qui les range en
+  // `vehicule`. Une lecture du châssis brut ne trouverait aucune cible ici.
+  const etat = creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'faucheuse', rangee: 3, colonne: 5, niveau: 20 },
+      { id: 'casemate', rangee: 3, colonne: 4, niveau: 20 },
+      { id: 'guetteur', rangee: 3, colonne: 6, niveau: 20 },
+    ],
+    vagues: [[
+      { id: 'crecelle', colonne: 5, rangee: 2, niveau: 20 },
+      // ⚠ LA FAUCHEUSE A UNE PORTÉE MINIMALE DE 3,5 : elle ne peut PAS viser la
+      // Crécelle qu'elle a sous le nez. Sans cette seconde unité au loin, elle
+      // serait muette pour une raison étrangère à l'EMP et le test passerait à
+      // vide.
+      { id: 'carapace', colonne: 5, rangee: 8, niveau: 20 },
+    ]],
+    modulesDebloques: { ouvrage: [], joueur: ['emp'] },
+  });
+  const faucheuse = parId(etat, 'faucheuse');
+  const tirs = ticksDeTir(etat, ['faucheuse', 'casemate', 'guetteur'], 12);
+
+  assert.equal(faucheuse.effetsTemporises.length, 1, 'l\'artillerie n\'a pas été neutralisée');
+  assert.deepEqual(parId(etat, 'crecelle').modulesActifs, ['emp']);
+  // La tourelle est `structureOuAviation`, l'escouade `infanterie` : ni l'une
+  // ni l'autre n'est un véhicule, et l'EMP ne les touche pas.
+  assert.deepEqual(parId(etat, 'casemate').effetsTemporises, []);
+  assert.deepEqual(parId(etat, 'guetteur').effetsTemporises, []);
+  assert.deepEqual(tirs.faucheuse, [], 'l\'artillerie neutralisée a tiré');
+  assert.equal(tirs.casemate.length, 12, 'la tourelle voisine a cessé de tirer');
+  assert.equal(tirs.guetteur.length, 12, 'l\'escouade voisine a cessé de tirer');
+});
+
+test('MODULES-B T3 — la durée suit l\'écart de niveau, par soustraction', () => {
+  // ⚠ SOUSTRACTIVE, PAS MULTIPLICATIVE. À +2 niveaux une pénalité de ×0,8 par
+  // cran rendrait floor(50 × 0,64) = 32 ; la forme retenue rend 30. Et elle
+  // atteint ZÉRO à +5, ce qu'un produit ne fait jamais.
+  const duree = (niveauCible) => {
+    const etat = sceneNeutralisation({ niveauCible });
+    tick(etat);
+    const eff = parId(etat, 'guetteur').effetsTemporises[0];
+    return eff === undefined ? 0 : eff.finTick - etat.tick;
+  };
+  assert.equal(duree(10), 50, 'une cible plus basse ne prolonge rien');
+  assert.equal(duree(20), 50);
+  assert.equal(duree(21), 40);
+  assert.equal(duree(22), 30);
+  assert.equal(duree(23), 20);
+  assert.equal(duree(24), 10);
+  assert.equal(duree(25), 0);
+  assert.equal(duree(30), 0, 'la durée ne redevient jamais négative');
+});
+
+test('MODULES-B T4 — une durée nulle ne consomme pas l\'usage', () => {
+  // C'est la garde du §3.2.3 du brief, et la plus facile à perdre : marquer le
+  // porteur AVANT de mesurer la durée gâcherait un module payé des dizaines de
+  // millions de points contre une cible qu'il ne pouvait pas toucher.
+  const etat = sceneNeutralisation({ niveauCible: 25 });
+  const belier = parId(etat, 'belier');
+  const guetteur = parId(etat, 'guetteur');
+  for (let i = 0; i < 10; i++) tick(etat);
+  assert.deepEqual(belier.modulesActifs, [], 'l\'usage a été consommé pour zéro tick');
+  assert.deepEqual(guetteur.effetsTemporises, [], 'un effet de zéro tick a été posé');
+
+  // Et le porteur retente : une cible atteignable apparaît, elle est
+  // neutralisée pleinement.
+  const arrivee = { id: 'meute', camp: 'defense', genre: 'unite', rangee: 4, colonne: 5, niveau: 20 };
+  void arrivee; // le montage direct suffit — voir ci-dessous.
+  const etat2 = sceneNeutralisation({ niveauCible: 25 });
+  // On abaisse le niveau de la cible en cours de combat : le porteur n'ayant
+  // rien consommé, il doit mordre au tick suivant.
+  for (let i = 0; i < 10; i++) tick(etat2);
+  parId(etat2, 'guetteur').niveau = 20;
+  tick(etat2);
+  assert.deepEqual(parId(etat2, 'belier').modulesActifs, ['flashbang'],
+    'le porteur n\'a pas retenté après un premier essai à zéro tick');
+  assert.equal(parId(etat2, 'guetteur').effetsTemporises[0].finTick, etat2.tick + 50);
+});
+
+test('MODULES-B T5 — une seule fois par combat, la marque ne se retire jamais', () => {
+  const etat = sceneNeutralisation();
+  const belier = parId(etat, 'belier');
+  const guetteur = parId(etat, 'guetteur');
+  for (let i = 0; i < 60; i++) tick(etat);
+  // L'effet a expiré depuis dix ticks, la cible est toujours là, à portée.
+  assert.deepEqual(guetteur.effetsTemporises, [], 'l\'effet n\'a pas expiré');
+  assert.ok(guetteur.vivant && !guetteur.sorti, 'montage : la cible doit être encore en jeu');
+  assert.deepEqual(belier.modulesActifs, ['flashbang'], 'la marque a été retirée ou doublée');
+  // Cinquante ticks de plus : toujours aucune seconde neutralisation.
+  for (let i = 0; i < 50; i++) tick(etat);
+  assert.deepEqual(guetteur.effetsTemporises, [], 'le module a redéclenché');
+  assert.deepEqual(belier.modulesActifs, ['flashbang']);
+});
+
+test('MODULES-B T6 — la neutralisée garde sa cible et la reprend', () => {
+  // ⚠ LA GARDE EST DANS `tir`, PAS DANS `ciblage`. Posée au ciblage,
+  // `cibleIndice` vaudrait `null` pendant toute la fenêtre — et `doitSArreter`
+  // lisant le ciblage, le MOUVEMENT changerait, ce qu'aucune description ne dit.
+  const etat = sceneNeutralisation();
+  const guetteur = parId(etat, 'guetteur');
+  const belier = parId(etat, 'belier');
+  tick(etat);
+  const cibleAvant = guetteur.cibleIndice;
+  assert.equal(cibleAvant, belier.indice, 'montage : le Guetteur doit viser le Bélier');
+  const cibles = [];
+  for (let i = 0; i < 49; i++) { tick(etat); cibles.push(guetteur.cibleIndice); }
+  assert.ok(cibles.every((c) => c === cibleAvant),
+    'la cible a été vidée pendant la neutralisation : la garde est au ciblage');
+  assert.equal(guetteur.aTire, false, 'la neutralisée a tiré au tick 50');
+  tick(etat); // tick 51 — l'effet a expiré à l'entrée du tick
+  assert.equal(guetteur.aTire, true, 'la neutralisée n\'a pas repris au tick 51');
+  assert.equal(guetteur.cibleIndice, cibleAvant, 'elle a reciblé au lieu de reprendre');
+});
+
+test('MODULES-B T7 — une neutralisée ne fait pas non plus de Tir de barrage', () => {
+  // ⚠⚠ CET ÉTAT N'EST PAS ATTEIGNABLE PAR LE JEU AUJOURD'HUI, ET C'EST DIT.
+  // `declencherNeutralisations` ne balaie que le camp `attaque` : seuls des
+  // DÉFENSEURS sont neutralisés, et le barrage d'un défenseur n'a aucune cible
+  // (les structures adverses n'existent pas côté attaque). L'effet est donc
+  // POSÉ À LA MAIN, sous la forme exacte que `expirerEffets` sait filtrer. Ce
+  // que ce test verrouille est la POSITION de la garde : avant l'appel à
+  // `tirDeBarrage`, pas après. Une garde placée juste après le tir principal
+  // laisserait les éclaboussures partir.
+  const monter = () => creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'casemate', rangee: 4, colonne: 5, niveau: 20 },
+      { id: 'merlon', rangee: 4, colonne: 6, niveau: 20 },
+    ],
+    vagues: [[{ id: 'perceurs', colonne: 5, rangee: 3, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: ['tirDeBarrage'] },
+  });
+
+  const temoin = monter();
+  const pvTemoin = () => parId(temoin, 'merlon').pvMilli;
+  const avant = pvTemoin();
+  tick(temoin);
+  assert.ok(pvTemoin() < avant, 'montage : sans neutralisation, le barrage doit mordre');
+
+  const etat = monter();
+  const perceurs = parId(etat, 'perceurs');
+  const merlon = parId(etat, 'merlon');
+  const casemate = parId(etat, 'casemate');
+  const pvMerlon = merlon.pvMilli;
+  const pvCasemate = casemate.pvMilli;
+  // ⚠ `finTick` STRICTEMENT AU-DELÀ DU TICK OBSERVÉ. `expirerEffets` est
+  // l'étape 1 : posé à `finTick: 1`, l'effet serait balayé avant le tir du
+  // tick 1 et le test passerait à vide, sur un moteur sans aucune garde.
+  perceurs.effetsTemporises.push({ nom: 'neutralise', finTick: 2 });
+  tick(etat);
+  assert.equal(perceurs.effetsTemporises.length, 1, 'montage : l\'effet a expiré avant le tir');
+  assert.equal(merlon.pvMilli, pvMerlon, 'la voisine a encaissé un barrage de neutralisée');
+  assert.equal(casemate.pvMilli, pvCasemate, 'la cible a encaissé un tir de neutralisée');
+  assert.equal(perceurs.aTire, false);
+});
+
+test('MODULES-B T8 — Camouflage : invisible, révélé par sa cible de prédilection, puis relâché', () => {
+  // Le Guetteur porte le Camouflage et sa colonne de prédilection est
+  // l'infanterie. Trois phases, trois montages qui ne diffèrent que d'un
+  // détail, et chacune a son contre-montage.
+  const seul = (avecModule) => creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'casemate', rangee: 4, colonne: 6, niveau: 20 }],
+    vagues: [[{ id: 'guetteur', colonne: 5, rangee: 3, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['camouflage'] : [] },
+  });
+
+  // (a) Aucune infanterie sur la grille : le Guetteur est invisible.
+  const invisible = seul(true);
+  const gInvisible = parId(invisible, 'guetteur');
+  const casInvisible = parId(invisible, 'casemate');
+  const pv0 = gInvisible.pvMilli;
+  for (let i = 0; i < 5; i += 1) {
+    tick(invisible);
+    assert.equal(casInvisible.cibleIndice, null, `t${invisible.tick} : la tourelle vise un camouflé`);
+  }
+  assert.equal(gInvisible.pvMilli, pv0, 'le camouflé a encaissé des dégâts');
+
+  // ⚠ CONTRE-MONTAGE OBLIGATOIRE : sans le module, la MÊME scène doit donner
+  // l'inverse. Sans lui, « cibleIndice null » prouverait seulement que la
+  // tourelle ne porte pas.
+  const visible = seul(false);
+  const gVisible = parId(visible, 'guetteur');
+  const casVisible = parId(visible, 'casemate');
+  for (let i = 0; i < 5; i += 1) tick(visible);
+  assert.equal(casVisible.cibleIndice, gVisible.indice, 'témoin : la tourelle devrait viser');
+  assert.ok(gVisible.pvMilli < pv0, 'témoin : le non-camouflé devrait encaisser');
+
+  // (b) et (c) Une Meute d'infanterie entre à portée : le Camouflage tombe.
+  // Elle meurt sous les tirs du Guetteur, qui se recamoufle — et la tourelle
+  // le lâche.
+  const avecMeute = (avecModule) => creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      // ⚠ La Meute est en colonne 5, PLUS PROCHE que la tourelle : c'est elle
+      // que le Guetteur vise, et comme c'est sa colonne de prédilection il
+      // s'immobilise (`doitSArreter`). Le montage ne dérive pas.
+      { id: 'meute', rangee: 4, colonne: 5, niveau: 1 },
+      { id: 'casemate', rangee: 4, colonne: 6, niveau: 20 },
+    ],
+    vagues: [[{ id: 'guetteur', colonne: 5, rangee: 3, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: avecModule ? ['camouflage'] : [] },
+  });
+
+  const etat = avecMeute(true);
+  const g = parId(etat, 'guetteur');
+  const cas = parId(etat, 'casemate');
+  const meute = parId(etat, 'meute');
+  tick(etat);
+  // (b) Révélé dès le premier tick : la Meute est à portée.
+  assert.equal(cas.cibleIndice, g.indice, 'révélé par une cible de prédilection à portée');
+  assert.ok(g.pvMilli < pv0, 'un révélé encaisse');
+
+  let mortAu = 0;
+  for (let i = 0; i < 4; i += 1) {
+    tick(etat);
+    if (!meute.vivant && mortAu === 0) mortAu = etat.tick;
+    assert.equal(cas.cibleIndice, g.indice, `t${etat.tick} : la tourelle a lâché trop tôt`);
+  }
+  assert.equal(mortAu, 5, 'montage : la Meute doit mourir au tick 5');
+
+  // (c) Recamouflé : la tourelle le lâche au tick suivant, et cesse de mordre.
+  // ⚠ C'EST LA GARDE DU BLOC « CIBLE CONSERVÉE ». Un patch qui n'emploierait
+  // le `Set` que dans la boucle des candidats garderait la cible acquise.
+  const pvAuLache = g.pvMilli;
+  tick(etat);
+  assert.equal(cas.cibleIndice, null, 'la tourelle garde un camouflé comme cible conservée');
+  for (let i = 0; i < 4; i += 1) tick(etat);
+  assert.equal(g.pvMilli, pvAuLache, 'le recamouflé encaisse encore');
+
+  // Contre-montage : sans le module, la tourelle ne lâche jamais.
+  const temoin = avecMeute(false);
+  const gT = parId(temoin, 'guetteur');
+  const casT = parId(temoin, 'casemate');
+  for (let i = 0; i < 5; i += 1) tick(temoin);
+  const pvT = gT.pvMilli;
+  tick(temoin);
+  assert.equal(casT.cibleIndice, gT.indice, 'témoin : la tourelle devrait garder sa cible');
+  assert.ok(gT.pvMilli < pvT, 'témoin : elle devrait continuer à mordre');
+});
+
+test('MODULES-B T9 — le Booster ne franchit rien (arbitrage 2)', () => {
+  // ⚠⚠ CE TEST NE PORTE PAS SUR CE LOT. Il verrouille un comportement qui
+  // existe déjà et qu'Ethan a confirmé le 31/08/2026 : le Booster accélère, il
+  // ne traverse pas. Aucune ligne de `deplacement` n'a été touchée pour lui.
+  //
+  // ⚠ ET CE N'EST PAS `peutAvancer` QUI REFUSE, MESURÉ AU SABOTAGE. Forcée à
+  // `true`, la fonction ne fait franchir aucun mur : elle alimente `progresse`,
+  // donc le repli et le forçage de l'Écraseur. Le refus d'avancer est exécuté à
+  // la FIN de `deplacement`, sur la case occupée que `peutEcraser` refuse. Ce
+  // test tombe quand ce bloc-là est contourné, pas quand `peutAvancer` l'est.
+  const monter = (avecMur) => creerCombat({
+    niveau: 1,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 18, colonne: 1, niveau: 1 }],
+    defenseurs: [
+      // La Ronce blesse au passage : c'est elle qui ouvre la fenêtre du Booster.
+      { id: 'ronce', rangee: 3, colonne: 5, niveau: 1 },
+      ...(avecMur ? [{ id: 'merlon', rangee: 8, colonne: 5, niveau: 20 }] : []),
+    ],
+    vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
+    modulesDebloques: { ouvrage: [], joueur: ['booster'] },
+  });
+
+  const etat = monter(true);
+  const u = etat.entites.find((e) => e.camp === 'attaque');
+  const mur = parId(etat, 'merlon');
+  let sousEffetAuBlocage = null;
+  let precedent = u.rangeeMilli;
+  for (let t = 1; t <= 48 && !etat.termine; t += 1) {
+    tick(etat);
+    if (u.rangeeMilli === precedent && sousEffetAuBlocage === null) {
+      sousEffetAuBlocage = u.effetsTemporises.length;
+    }
+    precedent = u.rangeeMilli;
+  }
+  // Le mur est en rangée 8 : la boostée s'arrête en rangée 7 et n'en sort pas.
+  assert.equal(caseDepuisMilli(u.rangeeMilli), 7, 'la boostée a dépassé la rangée du mur');
+  assert.ok(u.rangeeMilli < 8000, `rangeeMilli ${u.rangeeMilli} : le mur est franchi`);
+  assert.ok(mur.vivant, 'montage : le mur doit tenir tout le relevé');
+  // ⚠ ET LE BLOCAGE A LIEU PENDANT LA FENÊTRE, pas après elle. Sans cette
+  // assertion, un moteur qui franchirait le mur à ×10 puis s'arrêterait plus
+  // loin passerait le test.
+  assert.equal(sousEffetAuBlocage, 1, 'la boostée n\'était pas sous effet au moment du blocage');
+
+  // ⚠ TÉMOIN : le MÊME montage sans le mur. Sans lui, « rangée 7 » prouverait
+  // seulement que 48 ticks ne suffisent pas à aller plus loin.
+  const libre = monter(false);
+  const v = libre.entites.find((e) => e.camp === 'attaque');
+  for (let t = 1; t <= 48 && !libre.termine; t += 1) tick(libre);
+  assert.ok(v.rangeeMilli > 8000,
+    `témoin : sans mur la boostée devrait dépasser 8 000, elle est à ${v.rangeeMilli}`);
+
+  // Le second volet de l'arbitrage — « ralenti par les obstacles » — est mesuré
+  // par MODULES-A T5 (240 sous obstacle, et non 600). On en garde ici le seul
+  // rapport, qui est ce que l'arbitrage énonce : le ×10 s'applique APRÈS.
+  const carapace = UNITES.carapace;
+  assert.equal(carapace.vitesse, 60);
+  assert.equal((carapace.vitesse / 2.5) * 10, 240, 'le ×10 sous obstacle ne vaut pas 240');
+});
+
+/**
+ * Projection CANONIQUE d'un état : indépendante de l'ordre de déclaration.
+ *
+ * ⚠ ÉCART AU BRIEF, MESURÉ. Le §6 propose de comparer `serialiserEtat` après
+ * permutation des défenseurs. C'EST IMPOSSIBLE, et déjà sur `main` sans aucun
+ * camouflage : permuter deux défenseurs permute leurs `indice`, or l'état les
+ * porte (`entites` est un tableau, `cibleIndice` un rang dans ce tableau). Deux
+ * résolutions identiques rendent donc deux chaînes différentes. Ce qui doit
+ * être identique, c'est le RÉSULTAT : chaque entité, désignée par son identité
+ * et non par son rang, dans le même état — cible comprise, réécrite en identité.
+ */
+function projectionCanonique(etat) {
+  const cle = (e) => `${e.id}@${e.camp}`;
+  return etat.entites.map((e) => [
+    cle(e), e.colonne, e.rangeeMilli, e.pvMilli, e.vivant ? 1 : 0,
+    e.cibleIndice === null ? '-' : cle(etat.entites[e.cibleIndice]),
+    [...e.modulesActifs].sort().join('|'),
+    e.effetsTemporises.map((f) => `${f.nom}:${f.finTick}`).sort().join('|'),
+  ].join(' ')).sort();
+}
+
+/** Le montage des trois modules à la fois, défenseurs dans l'ordre demandé. */
+function montageTroisModules(ordre) {
+  const defenseurs = [
+    { id: 'casemate', rangee: 4, colonne: 6, niveau: 20 },
+    { id: 'meute', rangee: 4, colonne: 5, niveau: 1 },
+    { id: 'merlon', rangee: 5, colonne: 4, niveau: 20 },
+    { id: 'ronce', rangee: 6, colonne: 7, niveau: 1 },
+    // ⚠ L'ARTILLERIE EST LA COLONNE `vehicule` : sans elle l'EMP n'a rien à
+    // neutraliser et le montage ne prouverait rien sur deux modules sur trois.
+    { id: 'faucheuse', rangee: 9, colonne: 5, niveau: 20 },
+  ];
+  return creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: ordre.map((i) => defenseurs[i]),
+    vagues: [[
+      { id: 'guetteur', colonne: 5, rangee: 3, niveau: 20 }, // camouflage
+      { id: 'belier', colonne: 6, rangee: 2, niveau: 20 }, // flashbang
+      { id: 'crecelle', colonne: 4, rangee: 2, niveau: 20 }, // emp
+    ]],
+    modulesDebloques: { ouvrage: [], joueur: ['camouflage', 'flashbang', 'emp'] },
+  });
+}
+
+test('MODULES-B T10 — le ciblage ne dépend pas de l\'ordre de déclaration', () => {
+  const a = montageTroisModules([0, 1, 2, 3, 4]);
+  const b = montageTroisModules([4, 3, 2, 1, 0]);
+
+  // ⚠ MONTAGE : la permutation doit VRAIMENT permuter. Sans cette garde, deux
+  // montages identiques donneraient trivialement le même résultat.
+  const rangs = (etat) => etat.entites.map((e) => e.id).join(',');
+  assert.notEqual(rangs(a), rangs(b), 'montage : les deux ordres sont identiques');
+
+  for (let t = 0; t < 60; t += 1) { tick(a); tick(b); }
+  assert.deepEqual(projectionCanonique(a), projectionCanonique(b),
+    'le résultat dépend de l\'ordre de déclaration des défenseurs');
+
+  // ⚠ ET LES TROIS MODULES ONT BIEN JOUÉ. Sans ces trois gardes, un montage où
+  // aucun module ne se déclenche passerait le test en ne prouvant rien.
+  const marques = a.entites.flatMap((e) => e.modulesActifs).sort();
+  assert.deepEqual(marques, ['emp', 'flashbang'],
+    'montage : le Flashbang et l\'EMP doivent s\'être déclenchés');
+  const neutralisees = a.entites.filter((e) => e.effetsTemporises.some((f) => f.nom === 'neutralise'));
+  assert.equal(neutralisees.length, 1, 'montage : une entité doit être neutralisée');
+  // Le Camouflage : la Meute a bien fini par viser le Guetteur camouflé — donc
+  // la révélation a joué, donc le `Set` a été consulté.
+  const meute = a.entites.find((e) => e.id === 'meute' && e.camp === 'defense');
+  const guetteur = a.entites.find((e) => e.id === 'guetteur');
+  assert.equal(meute.cibleIndice, guetteur.indice, 'montage : le Camouflage n\'a pas été exercé');
+});
+
+test('MODULES-B T11 — le déterminisme tient avec les trois modules', () => {
+  const trace = () => {
+    const etat = montageTroisModules([0, 1, 2, 3, 4]);
+    const lignes = [];
+    for (let t = 0; t < 60; t += 1) { tick(etat); lignes.push(serialiserEtat(etat)); }
+    return lignes;
+  };
+  const un = trace();
+  const deux = trace();
+  assert.equal(un.length, 60);
+  for (let t = 0; t < 60; t += 1) {
+    assert.equal(un[t], deux[t], `divergence au tick ${t + 1}`);
+  }
+  // ⚠ CE QUE CE TEST GARDE VRAIMENT : `effetsTemporises` ne contient que des
+  // entiers et des chaînes. `serialiserEtat` passe par `normaliser`, qui trie
+  // les clés ; un objet non triable ou une référence y ferait diverger deux
+  // résolutions pourtant identiques. La preuve est ici : l'effet posé par la
+  // neutralisation est bien dans la chaîne.
+  assert.ok(un.at(-1).includes('neutralise'),
+    'montage : aucune neutralisation n\'apparaît dans l\'état sérialisé');
+});
+
+test('MODULES-B T12 — un seul mécanisme pour les deux modules', () => {
+  // ⚠ LE COMPTE EST SUR LA SOURCE, et il refuse un cas particulier nommé à la
+  // main. Deux fonctions jumelles seraient deux barèmes pour une grandeur : la
+  // première correction d'équilibrage n'en toucherait qu'une.
+  const source = readFileSync(new URL('../src/sim/combat.js', import.meta.url), 'utf8');
+  // ⚠ LES COMMENTAIRES DE FIN DE LIGNE COMPTENT AUSSI. La ligne de `tick()` qui
+  // annonce l'étape 3 bis nomme les deux modules en clair : un filtre qui ne
+  // retire que les lignes COMMENÇANT par `//` la laisserait passer, et le test
+  // accuserait un doublon qui n'existe pas. Mesuré : il l'a fait.
+  const sansCommentaires = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+
+  // La table est la SEULE à nommer les deux modules, et elle les nomme une fois.
+  for (const nom of ['flashbang', 'emp']) {
+    const n = (sansCommentaires.match(new RegExp(`(?<![\\p{L}\\p{N}_'])${nom}(?![\\p{L}\\p{N}_])`, 'gu')) ?? []).length;
+    assert.equal(n, 1, `« ${nom} » apparaît ${n} fois dans le code de combat, 1 attendue`);
+  }
+  // Et une seule fonction de déclenchement, une seule de durée, une seule de cible.
+  for (const f of ['declencherNeutralisations', 'ticksDeNeutralisation', 'cibleDeNeutralisation']) {
+    const n = (sansCommentaires.match(new RegExp(`function ${f}\\(`, 'g')) ?? []).length;
+    assert.equal(n, 1, `${f} déclarée ${n} fois`);
+  }
+  // Falsifiable : le motif doit savoir compter quand il y en a deux.
+  const appat = 'const x = flashbang; const y = flashbang;';
+  assert.equal((appat.match(/(?<![\p{L}\p{N}_'])flashbang(?![\p{L}\p{N}_])/gu) ?? []).length, 2);
+  // Et le filtre de commentaires doit mordre sur une fin de ligne.
+  assert.equal('const t = 1; // flashbang'.replace(/\/\/.*$/, '').includes('flashbang'), false);
+});
+
+test('MODULES-B T13 — `cable` par branche pour les trois modules', () => {
+  for (const nom of ['flashbang', 'emp', 'camouflage']) {
+    assert.equal(moduleEstCable(nom, 'offense'), true, `${nom} en offense`);
+    assert.equal(moduleEstCable(nom, 'defense'), false, `${nom} en défense`);
+  }
+  // Les huit autres restent faux des DEUX côtés — le compte est la liste.
+  const restants = Object.entries(MODULES)
+    .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
+  assert.deepEqual(restants, [
+    'autoReparation', 'bouclier', 'garnison', 'munitionSpeciale',
+    'pvPlusVingt', 'rayonMiniMoinsUn', 'rayonPlusUn', 'volDeVie',
+  ]);
+
+  // L'achat : cinq lignes s'ouvrent en offense, quatre refusent en défense.
+  const etat = partie('999999999999999');
+  const ouvertes = [];
+  const refusees = [];
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      const nom = nomDuModule(branche, id);
+      if (!['flashbang', 'emp', 'camouflage'].includes(nom)) continue;
+      if (!estAcquise(etat, branche, id)) acheter(etat, branche, id, 'unite');
+      const pb = problemesDeLAchat(etat, branche, id, 'module');
+      if (branche === 'offense') {
+        assert.deepEqual(pb, [], `${branche}/${id} refuse alors qu'il est câblé`);
+        acheter(etat, branche, id, 'module');
+        ouvertes.push(`${branche}/${id}`);
+      } else {
+        assert.deepEqual(pb.map((x) => x.code), ['effetNonCable'], `${branche}/${id}`);
+        // ⚠ LA MENTION NOMME LA BRANCHE, avec son accent : l'autre branche du
+        // même module vient d'être achetée, « effet à venir » serait faux.
+        assert.equal(pb[0].message, `${MODULES[nom].libelle} n'a pas d'effet en défense`);
+        refusees.push(`${branche}/${id}`);
+      }
+    }
+  }
+  // ⚠ MESURÉ, PAS REPRIS DU BRIEF : il annonce « six lignes qui s'ouvrent »,
+  // il y en a CINQ. Les porteurs sont la Meute et le Bélier (Flashbang), la
+  // Crécelle (EMP), le Guetteur et le Frappeur (Camouflage).
+  assert.deepEqual(ouvertes.sort(), [
+    'offense/belier', 'offense/crecelle', 'offense/frappeur',
+    'offense/guetteur', 'offense/meute',
+  ]);
+  assert.deepEqual(refusees.sort(), [
+    'defense/belier', 'defense/carapace', 'defense/fendeur', 'defense/meute',
+  ]);
+});
+
+test('MODULES-B T14 — le départage de la neutralisation est celui de `ciblage`, à la lettre', () => {
+  // ⚠ MESURÉ APRÈS COUP : sans ce test, RETIRER les deux lignes de départage de
+  // `cibleDeNeutralisation` ne faisait tomber aucun test — la cible aurait été
+  // celle que l'ordre de déclaration présente la première. C'était le seul trou
+  // de la matrice de falsification.
+  const aEgaleDistance = (ordre, positions, forgerRangee) => {
+    const etat = creerCombat({
+      niveau: 20,
+      obstacles: [],
+      batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+      defenseurs: ordre.map((i) => positions[i]),
+      vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 20 }]],
+      modulesDebloques: { ouvrage: [], joueur: ['flashbang'] },
+    });
+    if (forgerRangee !== undefined) {
+      etat.entites.find((e) => e.camp === 'attaque').rangeeMilli = forgerRangee;
+    }
+    tick(etat);
+    const touchees = etat.entites.filter(
+      (e) => e.effetsTemporises.some((f) => f.nom === 'neutralise'),
+    );
+    assert.equal(touchees.length, 1, 'montage : une seule neutralisée attendue');
+    return touchees[0];
+  };
+
+  // 1) Même distance, colonnes différentes → la PLUS PETITE colonne.
+  const parColonne = [
+    { id: 'meute', rangee: 4, colonne: 4, niveau: 20 },
+    { id: 'meute', rangee: 4, colonne: 6, niveau: 20 },
+  ];
+  for (const ordre of [[0, 1], [1, 0]]) {
+    const v = aEgaleDistance(ordre, parColonne);
+    assert.equal(v.colonne, 4, `ordre ${ordre.join('')} : la colonne 6 a été retenue`);
+  }
+
+  // 2) Même distance, même colonne → la PLUS PETITE rangée.
+  //
+  // ⚠ POSITION FORGÉE, ET C'EST DIT. Un attaquant se déploie en rangée 1-2 et
+  // les défenses en 3-10 : il n'est jamais À ÉGALE DISTANCE de deux défenses
+  // d'une même colonne dans une partie réelle. Le départage existe quand même,
+  // il est celui de `ciblage`, et rien d'autre qu'une position posée à la main
+  // ne peut l'exercer aujourd'hui.
+  const parRangee = [
+    { id: 'meute', rangee: 4, colonne: 5, niveau: 20 },
+    { id: 'meute', rangee: 8, colonne: 5, niveau: 20 },
+  ];
+  for (const ordre of [[0, 1], [1, 0]]) {
+    const v = aEgaleDistance(ordre, parRangee, 6000);
+    assert.equal(v.rangeeMilli, 4000, `ordre ${ordre.join('')} : la rangée 8 a été retenue`);
+  }
+});
+
+test('MODULES-B T15 — deux porteurs empilent leurs effets, et le plus long fait foi', () => {
+  // ⚠ COMPORTEMENT CONSTATÉ EN RAID, PAS DEMANDÉ PAR LE BRIEF. Deux porteurs
+  // peuvent neutraliser la MÊME cible : `declencherNeutralisations` empile un
+  // second `neutralise` au lieu d'en remplacer un. C'est sans danger —
+  // `estNeutralisee` est un `.some()`, donc le plus long fait foi — mais ce
+  // n'est écrit nulle part, et une implémentation qui « remplacerait » l'effet
+  // raccourcirait silencieusement la neutralisation. Ce test fige ce qui est.
+  const monter = (avecLeSecond) => creerCombat({
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 4, colonne: 5, niveau: 30 },
+      { id: 'belier', rangee: 4, colonne: 6, niveau: 30 },
+    ],
+    vagues: [[
+      { id: 'crecelle', colonne: 5, rangee: 2, niveau: 30 }, // écart 0 → 50 ticks
+      ...(avecLeSecond ? [{ id: 'crecelle', colonne: 6, rangee: 2, niveau: 28 }] : []),
+    ]],
+    modulesDebloques: { ouvrage: [], joueur: ['emp'] },
+  });
+
+  const etat = monter(true);
+  const cible = etat.entites.find((e) => e.id === 'belier' && e.camp === 'defense');
+  const fin = (n) => cible.effetsTemporises.map((f) => f.finTick).sort((a, b) => a - b)[n];
+  let tirs = 0;
+  const relevé = {};
+  for (let t = 1; t <= 60; t += 1) {
+    tick(etat);
+    if (cible.aTire) tirs += 1;
+    relevé[t] = { n: cible.effetsTemporises.length, tirs };
+  }
+  assert.ok(cible.vivant, 'montage : la cible doit survivre au relevé');
+
+  // Les deux effets se sont bien empilés, avec des échéances DIFFÉRENTES —
+  // 30 ticks pour le porteur de niveau 28, 50 pour celui de niveau 30.
+  assert.equal(relevé[12].n, 2, 'les deux effets ne se sont pas empilés');
+  // L'échéance courte tombe la première, la longue reste.
+  assert.equal(relevé[35].n, 2);
+  assert.equal(relevé[36].n, 1, 'l\'échéance courte n\'a pas expiré seule');
+  assert.equal(relevé[58].n, 1, 'l\'échéance longue est tombée avec la courte');
+  assert.equal(relevé[59].n, 0);
+  // Et la cible est restée muette TOUT du long, y compris après l'expiration de
+  // la courte : c'est le `.some()` d'`estNeutralisee`.
+  assert.equal(relevé[5].tirs, 5, 'montage : la cible doit tirer avant d\'être neutralisée');
+  assert.equal(relevé[58].tirs, 5, 'la cible a repris le tir pendant l\'effet long');
+
+  // ⚠ CONTRE-MONTAGE : un seul porteur ne pose qu'UN effet. Sans lui,
+  // « deux effets » ne distinguerait pas l'empilement d'un doublon de montage.
+  const seul = monter(false);
+  const cibleSeule = seul.entites.find((e) => e.id === 'belier' && e.camp === 'defense');
+  for (let t = 1; t <= 12; t += 1) tick(seul);
+  assert.equal(cibleSeule.effetsTemporises.length, 1, 'un seul porteur pose plus d\'un effet');
+});
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
 function faireElement(tag) {

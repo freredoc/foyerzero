@@ -38,13 +38,20 @@
 export const MODULES = {
   flashbang: {
     libelle: 'Flashbang',
-    cable: { offense: false, defense: false },
+    // ⚠ CÂBLÉ EN OFFENSE SEULEMENT — lot MODULES-B. `declencherNeutralisations`
+    // ne balaie que le camp `attaque`, comme le Booster : la Meute et le Bélier
+    // portent aussi ce module en défense (`data/combat.js`), mais rien ne le
+    // lirait de ce côté-là. Le drapeau refuse la vente plutôt que de la laisser
+    // passer contre un effet qui n'existe pas.
+    cable: { offense: true, defense: false },
     description: 'désactive une infanterie à portée pendant 5 s, une seule fois '
       + 'par raid, effet −20 % sur une unité de niveau n+1',
   },
   emp: {
     libelle: 'EMP',
-    cable: { offense: false, defense: false },
+    // ⚠ MÊME RAISON QUE LE FLASHBANG, et les mêmes deux lignes défense
+    // refusées : la Carapace et le Fendeur le portent en défense.
+    cable: { offense: true, defense: false },
     description: 'désactive un véhicule à portée pendant 5 s, une seule fois par '
       + 'raid, effet −20 % sur une unité de niveau n+1',
   },
@@ -98,7 +105,12 @@ export const MODULES = {
   },
   camouflage: {
     libelle: 'Camouflage',
-    cable: { offense: false, defense: false },
+    // ⚠ CÂBLÉ EN OFFENSE SEULEMENT, ET ICI LE MOT « DÉFENSE » EST DANS L'EFFET
+    // LUI-MÊME : « invisible POUR LA DÉFENSE ». Une pièce camouflée du côté
+    // défense serait invisible pour… l'attaquant, ce que la description ne dit
+    // pas. Ses deux porteurs — Guetteur et Frappeur — n'ont d'ailleurs aucun
+    // rôle défensif dans `data/combat.js`.
+    cable: { offense: true, defense: false },
     description: 'invisible pour la défense ; sort du camouflage si une cible de '
       + 'prédilection est à portée',
   },
