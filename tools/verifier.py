@@ -56,6 +56,11 @@ CHAINE = [
     ('effets',          []),
     ('chassis',         []),
     ('ruines',          []),
+    # ⚠ LES MURS DE CONTOUR — 31/08. Leurs 48 fichiers sont au dépôt et AUCUN
+    # atlas ne les coud encore : sans cette ligne, le vérificateur les compterait
+    # MANQUANTS à chaque exécution, c'est-à-dire « le dépôt les porte, aucun
+    # outil ne les produit » — exactement le contraire de la vérité.
+    ('bords',           []),
 ]
 
 # ---------------------------------------------------------------------------

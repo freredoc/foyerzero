@@ -35,6 +35,9 @@ import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
 } from '../render/embleme.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
+import {
+  territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
+} from '../sim/territoire.js';
 
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
 export const CRANS = ZOOM_CARTE.crans;
@@ -340,6 +343,37 @@ export function indicesDeTeinte(rvba) {
     indices[k] = meilleur;
   }
   return indices;
+}
+
+/**
+ * La couleur du trait de frontière de chaque camp.
+ *
+ * ⚠⚠ ELLES REPRENNENT LA SÉMANTIQUE DÉJÀ POSÉE PAR `EMBLEMES_CARTE`, elles n'en
+ * inventent pas une seconde. L'os `#F5F3E8` y borde la base du joueur ; le rouge
+ * `#E43E32` y borde EXACTEMENT ce qui attaque le joueur — « le bord rouge est
+ * réservé à ce qui attaque le joueur », dit la table, et un test croise déjà cet
+ * ensemble avec `attaqueLeJoueur`. Le territoire de l'Ouvrage est précisément
+ * l'emprise de ces bases-là : lui donner une troisième couleur apprendrait au
+ * joueur un second code pour la même chose.
+ *
+ * ⚠ LES DEUX SONT DANS LA PALETTE FERMÉE de `FICHE-STYLE.md` — la garde de
+ * `banc.test.js` balaie ce fichier et refuse toute teinte hors des trente-trois.
+ */
+export const TEINTES_TERRITOIRE = {
+  [JOUEUR]: '#F5F3E8',
+  [OUVRAGE]: '#E43E32',
+};
+
+/**
+ * L'épaisseur d'un trait de frontière, en pixels physiques.
+ *
+ * ⚠ ELLE SUIT LE CRAN, elle ne s'écrit pas en pixels. Un nombre fixe serait un
+ * fil au cran 256 et un pâté au cran 32 — c'est le même raisonnement que
+ * l'épaisseur des traits de voisinage du Chantier, qui est une fraction de case.
+ * Le plancher à 1 existe parce qu'un trait de moins d'un pixel ne se dessine pas.
+ */
+export function epaisseurDeFrontiere(cran) {
+  return Math.max(1, Math.round(cran / 16));
 }
 
 /** La teinte du milieu d'une rampe : ce qu'on peint tant qu'une dalle manque. */
@@ -708,6 +742,50 @@ export function initialiserEcranMonde(doc) {
     ctx.drawImage(grossesBases[cotes], d.x, d.y, d.cote, d.cote);
   }
 
+  /**
+   * Les frontières de territoire — Ethan, 31/08 : « afficher les territoires sur
+   * la carte. Cf screenshots, seuls les bordures sont dessinés. »
+   *
+   * ⚠⚠ SEULS LES CÔTÉS EXPOSÉS SE DESSINENT, JAMAIS LE REMPLISSAGE. Une case
+   * peinte couvrirait le terrain, qui est ce qu'on est venu regarder — et sur
+   * cette carte-ci l'Ouvrage tient 100 % des rangées au-dessus de la garde de
+   * départ (mesuré), donc un aplat noierait l'écran entier.
+   *
+   * ⚠ ELLES PASSENT SOUS LES EMBLÈMES. Un trait par-dessus une base couperait le
+   * seul dessin qui dit ce qu'il y a là.
+   *
+   * ⚠ ET LES DEUX CAMPS SE DESSINENT L'UN APRÈS L'AUTRE, groupés par couleur :
+   * changer `strokeStyle` à chaque segment coûterait un changement d'état de
+   * contexte par case, là où la fenêtre en compte des dizaines.
+   */
+  function dessinerFrontieres(ox, oy, pas) {
+    const carte = territoireDeLaFenetre(etatCourant, fenetreVisible({
+      x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
+    }));
+    const bords = bordsDuTerritoire(carte);
+    if (bords.length === 0) return;
+    const epaisseur = epaisseurDeFrontiere(pas);
+    ctx.lineWidth = epaisseur;
+    // ⚠ LE TRAIT SE POSE SUR LA LIGNE DE LA CASE, donc à un demi-pixel près : un
+    // `strokeRect` centre le trait sur le chemin, et un chemin sur un entier
+    // rendrait un trait à cheval, donc flou. On décale d'une demi-épaisseur.
+    const demi = epaisseur / 2;
+    for (const camp of [OUVRAGE, JOUEUR]) {
+      ctx.strokeStyle = TEINTES_TERRITOIRE[camp];
+      ctx.beginPath();
+      for (const bord of bords) {
+        if (bord.camp !== camp) continue;
+        const x = (bord.colonne - 1) * pas - ox;
+        const y = (bord.rangee - 1) * pas - oy;
+        if (bord.nord) { ctx.moveTo(x, y + demi); ctx.lineTo(x + pas, y + demi); }
+        if (bord.sud) { ctx.moveTo(x, y + pas - demi); ctx.lineTo(x + pas, y + pas - demi); }
+        if (bord.ouest) { ctx.moveTo(x + demi, y); ctx.lineTo(x + demi, y + pas); }
+        if (bord.est) { ctx.moveTo(x + pas - demi, y); ctx.lineTo(x + pas - demi, y + pas); }
+      }
+      ctx.stroke();
+    }
+  }
+
   function dessiner() {
     if (etatCourant === null || canvas.width === 0) return;
     const ox = origineX();
@@ -715,6 +793,7 @@ export function initialiserEcranMonde(doc) {
     const restent = dessinerFond(ox, oy);
 
     const pas = cran();
+    dessinerFrontieres(ox, oy, pas);
     sitesAffiches = sitesDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
     }));
