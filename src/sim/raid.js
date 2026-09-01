@@ -113,6 +113,21 @@ export function composerLesVagues(etat) {
 
   const indices = [];
   for (const { piece, index } of ordonnees) {
+    // ⚠⚠ « ELLE PART » EST LE DÉFAUT, ET C'EST `=== false` QUI LE DIT. Une pièce
+    // venue d'une sauvegarde v17 non migrée, ou montée par un test qui ne
+    // connaît pas le champ, porte `actif === undefined` : écrit `!piece.actif`,
+    // ce test la garderait à la maison SANS que personne l'ait demandé, et la
+    // moitié des montages du dépôt partiraient avec une armée vide. Le drapeau
+    // ne retient que ce qu'on lui a EXPLICITEMENT demandé de retenir.
+    //
+    // ⚠ ET IL PRÉCÈDE LES DEUX `push`, comme celui du plancher juste dessous.
+    // `indices` doit rester aligné sur les attaquants que le moteur rend :
+    // sauter une pièce sans sauter son indice ferait retomber les dégâts sur la
+    // MAUVAISE unité, en silence, et aucun raid de référence ne le dirait.
+    //
+    // ⚠ AVANT LE CALCUL DES PV, et c'est de la lecture, pas du résultat : une
+    // unité qui reste à la maison n'a pas besoin qu'on mesure sa santé.
+    if (piece.actif === false) continue;
     const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
     const pv = pvMax - (piece.degatsMilli ?? 0);
     // Au plancher ou en dessous : elle reste à la maison. Elle n'est pas
@@ -176,7 +191,14 @@ export function problemesDuRaid(etat, baseAttaquante, cible) {
   if (vagues.length === 0) {
     problemes.push({
       code: 'sans-armee',
-      message: 'Aucune unité en état de partir : compose ton armée ou répare-la.',
+      // ⚠ TROIS CAUSES POUR UN SEUL CODE, ET C'EST VOULU. `sans-armee` se
+      // déclenche sur une armée vide, sur une armée entièrement au plancher de
+      // PV, et depuis le 01/09 sur une armée entièrement DÉSACTIVÉE. L'écran
+      // grise un bouton et affiche une phrase : trois codes pour le même bouton
+      // grisé n'apporteraient rien, mais un message qui n'en cite que deux
+      // envoie le joueur réparer une armée qui n'a rien de cassé.
+      message: 'Aucune unité en état de partir : compose ton armée, répare-la, '
+        + 'ou réactive tes unités.',
     });
   }
   return problemes;
@@ -311,6 +333,51 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
     unitesAuPlancher: degats.auPlancher,
     pointsRestants: etat.attaque.points,
   };
+}
+
+/**
+ * Simule un raid : le même rapport qu'`executerRaid`, et l'état réel intact.
+ *
+ * ⚠⚠ UNE COPIE ET UN SEUL CHEMIN DE CODE, JAMAIS DEUX. Le découpage qui vient
+ * naturellement à l'esprit — extraire la partie pure, puis PROJETER les
+ * conséquences sans les écrire — est refusé, et la raison n'est pas un détail
+ * d'implémentation : les conséquences ne sont pas projetables sans effort.
+ * `verser` ÉCRIT dans l'économie et rend le débordement, `enregistrerLeRaid`
+ * écrit sur le site, `reporterLesDegats` écrit sur l'armée. Les reproduire en
+ * lecture seule voudrait dire tenir la même logique en DEUX exemplaires, et deux
+ * exemplaires divergent. C'est très exactement ce qui s'est passé entre
+ * `MODELE-REPARATION-1.md` §4 et `sim/reparation.js` — huit jours d'écart que
+ * rien ne pouvait voir, découverts le 01/09. On ne recommence pas.
+ *
+ * Le simulateur est donc exact PAR CONSTRUCTION, et non par vérification.
+ *
+ * ⚠ `structuredClone` EST UN CHOIX QUI SE PROUVE, PAS UN RÉFLEXE. L'état
+ * traverse déjà `serialiser`, donc il est fait de données simples ; un test le
+ * MESURE en comparant la sérialisation d'avant à celle d'après, chaîne contre
+ * chaîne. Si elles diffèrent d'un seul octet, la copie fuit.
+ *
+ * ⚠ `options` PASSE EN ENTIER. `executerRaid` y lit `maxTicks` pour borner le
+ * combat : le perdre en route changerait la borne du combat simulé, et le
+ * simulateur cesserait d'être exact — la seule propriété qu'on lui demande.
+ *
+ * @param {object} etat NON modifié
+ * @param {{position: object}} baseAttaquante
+ * @param {{rangee: number, colonne: number}} cible
+ * @param {{maxTicks?: number}} [options]
+ * @returns {object} le rapport d'`executerRaid`, plus `simule: true`
+ */
+export function simulerRaid(etat, baseAttaquante, cible, options = {}) {
+  const copie = structuredClone(etat);
+  // ⚠ LA BASE ATTAQUANTE SUIT LA COPIE QUAND C'EST LE MÊME OBJET, et c'est une
+  // ceinture, pas un correctif : `basesDuJoueur` rend `[etat]`, donc l'appelant
+  // passe aujourd'hui l'état deux fois, et `executerRaid` ne LIT que
+  // `baseAttaquante.position`. Rien ne fuit à cette heure. Mais le jour où elle
+  // écrira sur la base attaquante — le multi-bases est écrit au programme —,
+  // passer l'original ferait fuir la simulation sur l'état réel, et le test qui
+  // compare les deux sérialisations ne le verrait QUE si ce jour-là quelqu'un le
+  // relance. Une ligne maintenant vaut mieux qu'un bogue muet plus tard.
+  const base = baseAttaquante === etat ? copie : baseAttaquante;
+  return { ...executerRaid(copie, base, cible, options), simule: true };
 }
 
 /** Part des dégâts qu'un ouvrage à Auto-réparation regagne au retour d'un raid. */

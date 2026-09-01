@@ -452,9 +452,10 @@ test('RÉSERVE T10 — un raid ne touche pas aux réserves', () => {
 
 test('RÉSERVE T11 — la réserve traverse la sauvegarde, le chronomètre a disparu', () => {
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois.
-  // Elle arrive ici avec le maillon v16 → v17 ; elle vivait dans
-  // `poi.test.js` du temps où v15 → v16 était le dernier.
-  assert.equal(SAVE_VERSION, 17, 'le bump de la version des sauvegardes a été oublié');
+  // Elle a vécu ici le temps que v16 → v17 soit le dernier ; elle est passée à
+  // `raid.test.js` avec le maillon v17 → v18 du lot RAID-0. Ce qui reste à
+  // vérifier ici, c'est que NOTRE maillon est toujours dans la chaîne.
+  assert.ok(SAVE_VERSION >= 17, 'le maillon v16 → v17 n\'est plus dans la chaîne');
 
   const etat = partieOutillee();
   abimee(etat, 'meute', 0.8, 4);

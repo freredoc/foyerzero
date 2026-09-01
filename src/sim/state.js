@@ -38,7 +38,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 17;
+export const SAVE_VERSION = 18;
 
 /**
  * @typedef {object} Etat
@@ -822,6 +822,12 @@ export const FORCES = {
     axeMin: GRILLE.bandes.defense.premiere,
     axeMax: GRILLE.bandes.defense.derniere,
     colonneMax: GRILLE.largeur,
+    // ⚠ LA GARNISON NE PORTE PAS LE DRAPEAU D'ACTIVITÉ. « Actif » veut dire
+    // « part au raid » : une pièce de garnison ne part jamais, elle défend chez
+    // elle. Lui poser le champ ferait croire qu'on peut la laisser à la maison,
+    // et la migration v17 → v18 — qui ne sert que `armee` — laisserait de toute
+    // façon les deux moitiés du dépôt en désaccord.
+    porteLActivite: false,
     // La clé de `POINTS_ARMEE`, qui nomme le bâtiment d'où vient le budget.
     role: 'defense',
     // Les neuf ouvrages plus les unités qui ont un rôle défensif. La liste se
@@ -838,10 +844,28 @@ export const FORCES = {
     axeMin: 1,
     axeMax: EMPLACEMENTS_ASSAUT.vagues,
     colonneMax: EMPLACEMENTS_ASSAUT.parVague,
+    // ⚠ SEULE L'ARMÉE PORTE LE DRAPEAU D'ACTIVITÉ, et c'est ce champ qui le dit,
+    // sur le modèle exact de `surLeTerrain` ci-dessus. Reconnaître « armee » par
+    // son nom au lieu de lire ce champ serait le cas particulier écrit à la main
+    // que ce fichier refuse déjà ailleurs.
+    porteLActivite: true,
     role: 'offense',
     roster: new Set(Object.keys(UNITES)),
   },
 };
+
+/**
+ * Le défaut d'activité d'une pièce, pour la force qui porte le drapeau.
+ *
+ * ⚠ IL S'ÉTALE AVANT `...piece`, TOUJOURS : un appelant qui pose explicitement
+ * `actif: false` doit gagner. L'inverse écraserait sa demande en silence.
+ *
+ * @param {object} f la ligne de `FORCES`
+ * @returns {{actif?: boolean}}
+ */
+function defautDActivite(f) {
+  return f.porteLActivite ? { actif: true } : {};
+}
 
 function exigerForce(force) {
   if (FORCES[force] === undefined) {
@@ -977,7 +1001,8 @@ export function problemesDeLaPoseDEffectif(etat, force, piece) {
   const f = exigerForce(force);
   exigerChamp(etat, f.champ);
   return problemesDeLEffectif(
-    force, etat[f.champ], { degatsMilli: 0, ...piece }, null, etat.obstacles?.cases ?? [],
+    force, etat[f.champ], { degatsMilli: 0, ...defautDActivite(f), ...piece },
+    null, etat.obstacles?.cases ?? [],
   );
 }
 
@@ -998,19 +1023,28 @@ export function problemesDeLaPoseDEffectif(etat, force, piece) {
  */
 export function poserEffectif(etat, force, piece) {
   const f = exigerForce(force);
-  const complete = { degatsMilli: 0, ...piece };
+  const complete = { degatsMilli: 0, ...defautDActivite(f), ...piece };
   const problemes = problemesDeLaPoseDEffectif(etat, force, complete);
   if (problemes.length > 0) {
     throw new Error(
       `poserEffectif : pose illégale en ${f.quoi} — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
+  // ⚠⚠ CETTE LISTE EST FERMÉE, ET C'EST LE PIÈGE DE `ajouterEntite` (CLAUDE.md
+  // §6) SOUS UN AUTRE NOM : un champ que l'appelant passe et qui n'est pas
+  // nommé ici DISPARAÎT EN SILENCE. Poser le défaut d'activité plus haut sans
+  // l'ajouter là aurait donné une pièce active à la validation et une pièce
+  // SANS le champ dans la sauvegarde — donc active quand même, par le défaut de
+  // `composerLesVagues`, si bien que le drapeau n'aurait jamais rien retenu et
+  // qu'aucun raid de référence n'aurait bronché.
   etat[f.champ].push({
     id: complete.id,
     [f.axe]: complete[f.axe],
     colonne: complete.colonne,
     niveau: complete.niveau,
     degatsMilli: complete.degatsMilli,
+    // Normalisé en booléen : ce qui n'est pas `false` part au raid.
+    ...(f.porteLActivite ? { actif: complete.actif !== false } : {}),
   });
   return etat;
 }
@@ -1063,6 +1097,48 @@ export function problemesDuDeplacementDEffectif(etat, force, index, position) {
   return problemesDeLEffectif(
     force, etat[f.champ], { ...piece, ...position }, index, etat.obstacles?.cases ?? [],
   );
+}
+
+/**
+ * Laisse une unité d'assaut à la maison, ou la renvoie au raid.
+ *
+ * ⚠⚠ ELLE VIT ICI, ET PAS DANS L'ÉCRAN, PARCE QUE C'EST LA RÈGLE DU DÉPÔT.
+ * `reglerTutoriel` a créé le précédent : un champ de l'état se touche par une
+ * fonction de `sim/state.js`, jamais par l'écran, sinon chaque vue qui l'écrit
+ * le fait de son côté. RAID-A aura deux points d'appel — le bouton et, un jour,
+ * un « tout activer » — et ils doivent passer par la même porte.
+ *
+ * ⚠ ELLE BASCULE, ELLE NE REPOSE PAS. Retirer puis reposer la pièce donnerait
+ * le même drapeau et perdrait `degatsMilli` : une unité abîmée reviendrait
+ * intacte, ce qui ferait de la désactivation une réparation gratuite. La pièce
+ * est modifiée EN PLACE, et son indice ne bouge pas — même discipline que
+ * `deplacerEffectif` juste dessous.
+ *
+ * ⚠ LÈVE SUR UNE FORCE QUI NE PORTE PAS LE DRAPEAU. La garnison ne part jamais
+ * au raid ; lui demander de se désactiver est un fait de PROGRAMME, pas un
+ * refus de jeu, donc une levée et non une liste.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} force
+ * @param {number} index indice dans la liste de la force
+ * @param {boolean} actif
+ * @returns {Etat} le même état
+ */
+export function reglerActivite(etat, force, index, actif) {
+  const f = exigerForce(force);
+  if (!f.porteLActivite) {
+    throw new Error(`reglerActivite : la ${f.quoi} ne part pas au raid`);
+  }
+  exigerChamp(etat, f.champ);
+  if (typeof actif !== 'boolean') {
+    throw new RangeError(`reglerActivite : « ${actif} » — booléen attendu`);
+  }
+  const piece = etat[f.champ][index];
+  if (piece === undefined) {
+    throw new RangeError(`reglerActivite : indice ${index} hors de la ${f.quoi}`);
+  }
+  piece.actif = actif;
+  return etat;
 }
 
 /**
@@ -1723,6 +1799,31 @@ const MIGRATIONS = {
     s.version = 17;
     delete s.reparation;
     s.reserveReparation = reservesVides();
+  },
+
+  /**
+   * v17 → v18 : une unité d'assaut peut rester à la maison.
+   *
+   * ⚠ TOUTES ACTIVES, ET C'EST LE SEUL CHOIX JUSTE. Une sauvegarde v17 n'avait
+   * aucun moyen de désactiver quoi que ce soit : tout ce qui était posé partait
+   * au raid. Poser `actif: true` partout REPRODUIT donc au poil la situation du
+   * joueur, là où l'omettre laisserait le champ à `undefined` — actif aussi, par
+   * le défaut de `composerLesVagues`, mais alors la sauvegarde ne dirait plus ce
+   * qu'elle porte. Même genre que la v6 → v7 et la v8 → v9 : un champ neuf,
+   * servi à sa valeur neutre.
+   *
+   * ⚠ LA GARNISON N'EN REÇOIT PAS, et l'omission est le message. Le drapeau dit
+   * « part au raid » ; une pièce de garnison ne part jamais.
+   * `FORCES.garnison.porteLActivite` dit déjà non du côté de la pose, et les
+   * deux moitiés doivent s'accorder.
+   * @param {object} s
+   */
+  17: (s) => {
+    s.version = 18;
+    if (!Array.isArray(s.armee)) return;
+    for (const piece of s.armee) {
+      if (piece !== null && typeof piece === 'object') piece.actif = true;
+    }
   },
 };
 

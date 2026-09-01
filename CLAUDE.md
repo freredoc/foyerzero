@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **01/09/2026**, version 0.60.0 · build 61.
+Dernière révision : **01/09/2026**, version 0.61.0 · build 62.
 
 ---
 
@@ -41,9 +41,55 @@ Dernière révision : **01/09/2026**, version 0.60.0 · build 61.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 01/09/2026 (après le lot RÉSERVE), à confronter :**
-`npm test` → **799 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 339 813 octets**, 0 référence externe.
+**Référence au 01/09/2026 (après le lot RAID-0), à confronter :**
+`npm test` → **808 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 340 077 octets**, 0 référence externe.
+⚠ **CE LOT COÛTE +264 OCTETS ET N'OUVRE AUCUN ÉCRAN.** Il donne au moteur les
+deux choses que l'écran de raid demandera : simuler sans commettre, et laisser
+une unité à la maison. Marge T10 **59 923 octets, 4,28 %**.
+⚠⚠ **`simulerRaid` EST UNE COPIE ET UN SEUL CHEMIN DE CODE, JAMAIS DEUX.** Le
+découpage « extraire la partie pure, puis PROJETER les conséquences » a été
+refusé, et pas par confort : `verser` écrit dans l'économie, `enregistrerLeRaid`
+sur le site, `reporterLesDegats` sur l'armée. Les reproduire en lecture seule
+ferait tenir la même logique en DEUX exemplaires, et deux exemplaires divergent —
+c'est exactement la divergence réparation/document du 01/09. Le simulateur est
+donc exact **par construction**, pas par vérification.
+⚠ **`structuredClone` SE PROUVE, IL NE SE SUPPOSE PAS.** L'état traverse déjà
+`serialiser`, donc il est fait de données simples ; T2 compare la sérialisation
+d'avant à celle d'après, **chaîne contre chaîne**. Mesuré (M1) : **0,078 ms par
+copie** sur une partie avancée — 64 fois sous le seuil de 5 ms du brief.
+⚠⚠ **« ELLE PART » EST LE DÉFAUT, ET C'EST `=== false` QUI LE DIT.** Une pièce
+sans le champ — sauvegarde v17 non migrée, montage qui l'ignore — porte
+`undefined` : écrit `!piece.actif`, elle resterait à la maison sans que personne
+l'ait demandé. **Mesuré à la falsification : ce seul mot fait tomber la moitié
+de `raid.test.js`**, tous les montages du dépôt partant alors avec une armée
+vide. C'est T5 qui existe pour ça.
+⚠⚠ **LA LISTE DU `push` DE `poserEffectif` EST FERMÉE, ET LE BRIEF NE LA NOMMAIT
+PAS.** C'est le piège d'`ajouterEntite` (§6) sous un autre nom : un champ que
+l'appelant passe et qui n'est pas nommé dans ce `push` **disparaît en silence**.
+Servir le défaut plus haut sans l'ajouter là aurait donné une pièce active à la
+validation et une pièce SANS le champ dans la sauvegarde — donc active quand
+même, si bien que le drapeau n'aurait jamais rien retenu et qu'aucun raid de
+référence n'aurait bronché.
+⚠ **LES INDICES DE `composerLesVagues` DOIVENT RESTER ALIGNÉS.**
+`reporterLesDegats` LÈVE si le compte des attaquants ne tombe pas juste, mais le
+filtre doit précéder les DEUX `push` : sauter une pièce sans sauter son indice
+ferait retomber les dégâts sur la mauvaise unité.
+⚠⚠ **UNE INACTIVE COMPTE DANS `niveauDeLArmee`, ET C'EST UN EXPLOIT REFERMÉ.**
+Si elle en sortait, désactiver ses unités de bas niveau ferait monter le niveau
+d'armée, donc **le plafond de réserve de réparation** — douze heures de réserve
+en deux clics. T6 le fige, avec la contre-mesure qui prouve que le test mord.
+⚠ **`SAVE_VERSION` PASSE À 18.** La migration pose `actif: true` sur toute
+`s.armee` : une v17 n'avait aucun moyen de désactiver, donc tout partait.
+**La garnison n'en reçoit pas** — « actif » veut dire « part au raid », et
+`FORCES.garnison.porteLActivite` le dit du côté de la pose.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot RÉSERVE :**
+`npm test` → 799 pass / 0 fail, `npm run build` → `dist/index.html`,
+1 339 813 octets, 0 référence externe.
 ⚠⚠ **CE LOT REND 10 OCTETS, ET C'EST LE PREMIER DEPUIS BÂTIMENTS-1024.** Il
 remplace un chronomètre par trois compteurs : `lancerLaReparation`,
 `avancerLaReparation`, `annulerLaReparation` et `problemesDeLaReparationEnCours`
@@ -528,7 +574,7 @@ src/sim/                simulation déterministe, sans DOM — 23 fichiers
   poi.js                les soixante-dix points d'intérêt : où ils tombent, ce qu'ils donnent
   site-de-la-case.js    une case de la carte → un site jouable : deux graines, saveur, résumé
   site-entame.js        l'après-raid : planchers, ce qui reste debout, ce qui repousse
-  raid.js               l'acte : payer, partir, encaisser, revenir abîmé
+  raid.js               l'acte, et sa simulation : payer, partir, encaisser, revenir abîmé
   reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
