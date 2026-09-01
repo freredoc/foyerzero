@@ -22,7 +22,7 @@ import {
   sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
 } from './site-entame.js';
 import { creerRecherche } from './raid.js';
-import { avancerLaReparation, problemesDeLaReparationEnCours } from './reparation.js';
+import { crediterLesReserves, reservesVides, problemesDesReserves } from './reparation.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
@@ -38,7 +38,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 
 /**
  * @typedef {object} Etat
@@ -192,9 +192,21 @@ export function creerEtat(graine) {
     // rien lui-même : le relevé vit dans `tickJeu`, en un seul endroit, et le
     // faire aussi ici en ferait deux.
     poisAcquis: [],
-    // ⚠ `null` VEUT DIRE « AUCUNE RÉPARATION EN COURS », et c'est un état, pas
-    // une absence. Une base neuve n'a pas d'armée, donc rien à réparer.
-    reparation: null,
+    // ⚠⚠ LA RÉSERVE DE TEMPS DE RÉPARATION — trois stocks, un par châssis, EN
+    // TICKS. Le temps qui passe les crédite au taux 1 pour 1 ; réparer une unité
+    // débite le sien et la rend au combat sur-le-champ. Le modèle est celui de
+    // `MODELE-REPARATION-1.md` §4, dicté le 24/08 et redit par Ethan le 01/09.
+    //
+    // ⚠ À ZÉRO À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a pas
+    // d'armée, donc rien à réparer ; le premier tick commence à créditer.
+    //
+    // ⚠ ET VOICI SA CONDITION DE RUPTURE, ÉCRITE : LA RÉSERVE EST PAR BASE, pas
+    // par joueur — arbitré le 01/09, et c'est l'intérêt principal d'avoir
+    // plusieurs bases. Elle vit sur `etat` aujourd'hui uniquement parce que
+    // `basesDuJoueur(etat)` rend `[etat]` : il n'y a qu'une base, donc les deux
+    // portées se confondent. Le jour du multi-bases, ce champ devra DESCENDRE
+    // d'un cran, dans la base, et `crediterLesReserves` devra boucler dessus.
+    reserveReparation: reservesVides(),
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -294,9 +306,9 @@ function verifierEtat(etat) {
   if (defautsSites.length > 0) {
     throw new Error(`etat : sites entamés injouables — ${defautsSites.join(' ; ')}`);
   }
-  const defautsReparation = problemesDeLaReparationEnCours(etat.reparation ?? null);
-  if (defautsReparation.length > 0) {
-    throw new Error(`etat : réparation injouable — ${defautsReparation.join(' ; ')}`);
+  const defautsReserve = problemesDesReserves(etat.reserveReparation ?? null);
+  if (defautsReserve.length > 0) {
+    throw new Error(`etat : réserve de réparation injouable — ${defautsReserve.join(' ; ')}`);
   }
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
@@ -334,7 +346,7 @@ export function tickJeu(etat) {
   resoudreSatellites(etat);
   avancerPointsAttaque(etat, 1);
   reparerLesSites(etat);
-  avancerLaReparation(etat);
+  crediterLesReserves(etat, 1);
 }
 
 /**
@@ -379,10 +391,19 @@ export function rattraperJeu(etat, nbTicks) {
   // réparation ne lit que l'horloge courante, donc mille ticks d'un coup
   // réparent ce que mille ticks un par un auraient réparé.
   reparerLesSites(etat);
-  // ⚠ MÊME FORME QUE LES TROIS AUTRES : un seul appel. La réparation se
-  // recalcule depuis les dégâts de DÉPART et l'horloge courante, jamais par
-  // soustractions successives — c'est ce qui rend les deux chemins identiques.
-  avancerLaReparation(etat);
+  // ⚠ MÊME FORME QUE LES TROIS AUTRES : un seul appel de n ticks, pas une
+  // boucle. La réserve se crédite par `min(plafond, reserve + n)`, en TICKS
+  // ENTIERS : l'addition et le `min` étant exacts, n crédits de 1 donnent
+  // exactement le même nombre que n d'un coup. Créditer en secondes flottantes
+  // ferait diverger les deux chemins par accumulation d'arrondis.
+  //
+  // ⚠ ET VOICI SA CONDITION DE RUPTURE, ÉCRITE : l'équivalence tient parce que
+  // le PLAFOND NE BOUGE PAS pendant le rattrapage — il ne dépend que du niveau
+  // de l'armée, et l'armée ne se compose pas hors ligne. Le jour où elle pourra
+  // monter de niveau en cours de rattrapage, le plafond deviendra une fonction
+  // du temps et cette ligne cessera d'être juste. C'est le test d'équivalence
+  // des deux chemins qui doit tomber en premier.
+  crediterLesReserves(etat, nbTicks);
 }
 
 // ---------------------------------------------------------------------------
@@ -1675,6 +1696,33 @@ const MIGRATIONS = {
   15: (s) => {
     s.version = 16;
     if (!Array.isArray(s.poisAcquis)) s.poisAcquis = [];
+  },
+
+  /**
+   * v16 → v17 : la réparation cesse de DURER et devient un STOCK par châssis.
+   *
+   * ⚠⚠ ELLE RETIRE UN CHAMP, ce que seule la v2 → v3 avait fait avant elle, et
+   * pour la même raison : une sauvegarde qui porte `reparation` alors que plus
+   * une ligne ne le lit ferait croire, six mois plus tard, que le chronomètre
+   * existe encore. Ce qui part est un chantier en cours, pas une ressource du
+   * joueur — et sous le nouveau modèle il n'y a rien à convertir, une réparation
+   * qui durait n'ayant pas d'équivalent dans un stock.
+   *
+   * ⚠ LES TROIS RÉSERVOIRS À ZÉRO, ET RIEN DE RÉTROACTIF. Créditer le temps déjà
+   * écoulé de la partie donnerait au joueur douze heures de réserve à l'instant
+   * du chargement, pour un mécanisme qui n'existait pas quand il jouait. Le
+   * premier tick commence à créditer, comme pour une base neuve.
+   *
+   * ⚠ ET LES PV RENDUS RESTENT RENDUS : `avancerLaReparation` écrivait
+   * `degatsMilli` au fil de l'eau, donc ce que la réparation avait déjà réparé
+   * est dans `s.armee` et n'est pas touché ici. Ce qui est perdu, c'est le temps
+   * restant d'un chantier en vol — sans conséquence, le jeu n'étant pas jouable.
+   * @param {object} s
+   */
+  16: (s) => {
+    s.version = 17;
+    delete s.reparation;
+    s.reserveReparation = reservesVides();
   },
 };
 

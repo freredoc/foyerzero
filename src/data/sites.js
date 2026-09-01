@@ -219,6 +219,16 @@ export const REPARATION = {
   // Retenu : réparer une unité DE FOND EN COMBLE coûte ce que sa dernière montée
   // a coûté. À arbitrer.
   partDuCoutDeMontee: 1,
+  // ⚠⚠ LE PLAFOND DE LA RÉSERVE DE TEMPS — dicté par Ethan le 01/09/2026 :
+  // « 12 h en début de partie, +1 h par niveau d'armée ». Le temps qui passe
+  // crédite un stock par châssis, et réparer le débite ; ces deux nombres sont
+  // les seuls à changer si Ethan revoit la générosité du système.
+  //
+  // ⚠ « PAR NIVEAU », DONC PAR NIVEAU ENTIER — et `niveauDeLArmee` rend des
+  // DIXIÈMES. La division par dix se fait chez l'appelant, en bout de chaîne ;
+  // écrire 0,1 ici ferait passer une conversion d'unité pour un réglage de jeu.
+  plafondHeures: 12,
+  plafondHeuresParNiveauArmee: 1,
 };
 
 // --- points d'attaque et points d'armée --------------------------------------

@@ -676,8 +676,12 @@ test('POI T19 — `poisAcquis` traverse `serialiser` → `charger` à l\'identiq
   assert.doesNotThrow(() => charger(serialiser(creerEtat(1), T0), T0));
 });
 
-test('POI T20 — une sauvegarde v15 se charge, se joue, et ressort en v16', () => {
-  assert.equal(SAVE_VERSION, 16, 'le bump de la version des sauvegardes a été oublié');
+test('POI T20 — une sauvegarde v15 se charge, se joue, et ressort à jour', () => {
+  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois.
+  // Elle vivait ici quand v15 → v16 était le dernier ; elle est passée à
+  // `reparation.test.js` avec le maillon v16 → v17 du lot RÉSERVE. Ce qui reste
+  // à vérifier ici, c'est que NOTRE maillon est toujours dans la chaîne.
+  assert.ok(SAVE_VERSION >= 16, 'le maillon v15 → v16 n\'est plus dans la chaîne');
 
   const { etat } = partieSurLePoi(4242);
   const v15 = JSON.parse(serialiser(etat, T0));
@@ -686,12 +690,12 @@ test('POI T20 — une sauvegarde v15 se charge, se joue, et ressort en v16', () 
 
   // ⚠ LA MIGRATION N'ACCORDE RIEN RÉTROACTIVEMENT : elle pose une liste VIDE.
   const migre = migrer(JSON.parse(JSON.stringify(v15)));
-  assert.equal(migre.version, 16);
+  assert.equal(migre.version, SAVE_VERSION);
   assert.deepEqual(migre.poisAcquis, [], 'la migration a accordé un POI');
 
   // …et le PREMIER TICK relève de lui-même ce que le territoire porte.
   const charge = charger(JSON.stringify(v15), T0);
-  assert.equal(charge.version, 16);
+  assert.equal(charge.version, SAVE_VERSION);
   tickJeu(charge);
   assert.ok(charge.poisAcquis.length > 0,
     'le premier tick n\'a rien relevé — le POI sous la base a été perdu');

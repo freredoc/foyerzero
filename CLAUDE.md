@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **31/08/2026**, version 0.59.0 · build 60.
+Dernière révision : **01/09/2026**, version 0.60.0 · build 61.
 
 ---
 
@@ -41,9 +41,63 @@ Dernière révision : **31/08/2026**, version 0.59.0 · build 60.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 31/08/2026 (après le lot POI), à confronter :**
-`npm test` → **792 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 339 823 octets**, 0 référence externe.
+**Référence au 01/09/2026 (après le lot RÉSERVE), à confronter :**
+`npm test` → **799 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 339 813 octets**, 0 référence externe.
+⚠⚠ **CE LOT REND 10 OCTETS, ET C'EST LE PREMIER DEPUIS BÂTIMENTS-1024.** Il
+remplace un chronomètre par trois compteurs : `lancerLaReparation`,
+`avancerLaReparation`, `annulerLaReparation` et `problemesDeLaReparationEnCours`
+sortent, `crediterLesReserves` et quatre fonctions plus courtes entrent. La borne
+T10 NE BOUGE PAS — marge **60 187 octets, 4,30 %**.
+⚠⚠ **LE TEMPS DE RÉPARATION EST DEVENU UN STOCK, ET L'ANCIEN CODE ÉTAIT UNE
+DIVERGENCE, PAS UN CHOIX.** `MODELE-REPARATION-1.md` §4 dit depuis le **24/08**
+que le temps de réparation « est une grandeur qui s'accumule, à la manière d'un
+idle, et que toute réparation consomme ». Le module avait implémenté une
+réparation qui DURE. Personne ne l'a vu pendant huit jours **parce qu'aucun écran
+n'appelait jamais la réparation** : `npm run check` était vert, et rien ne pouvait
+le dire. Un document arbitré et son code se confrontent, ou ils divergent en
+silence.
+⚠⚠ **TROIS RÉSERVOIRS, UN PAR CHÂSSIS — ET LE PARALLÉLISME A CHANGÉ DE PORTEUR.**
+`MODELE-ECONOMIQUE.md` §7 le faisait jouer sur une DURÉE (`temps = max`) ; il n'y
+a plus de durée. Il joue maintenant sur trois stocks qui se remplissent ENSEMBLE
+et se vident SÉPARÉMENT. La phrase d'Ethan du 29/08 — « je répare complètement
+mes véhicules, j'ai 20 minutes d'infanterie gratuites » — reste vraie mot pour
+mot, et pour une raison plus simple : le temps d'infanterie n'a jamais été
+dépensé.
+⚠ **EN TICKS ENTIERS, JAMAIS EN SECONDES FLOTTANTES.** C'est ce qui rend
+`tickJeu` × n identique à `rattraperJeu(n)` : l'addition d'entiers et le `min` du
+plafond sont exacts. La condition de rupture est ÉCRITE dans les deux fichiers —
+l'équivalence tient parce que le plafond ne bouge pas hors ligne, l'armée ne se
+composant pas pendant une absence.
+⚠ **PLAFOND 12 H + 1 H PAR NIVEAU D'ARMÉE, ET `niveauDeLArmee` REND DES
+DIXIÈMES.** Les deux nombres vivent dans `REPARATION` de `data/sites.js`. Sans la
+division par dix le plafond serait **dix fois trop grand** ; un test le mesure
+avec l'appât qui va avec.
+⚠⚠ **UNE UNITÉ PEUT ÊTRE IRRÉPARABLE, ET C'EST ARBITRÉ.** Mesuré (M1) : une
+Enclume de niveau 50 avec un Aérodrome de niveau 1 coûte **1 512 409 s, soit
+420,1 h**, contre un plafond de 62 h — **6,8 fois au-dessus**. Soumis à Ethan le
+01/09, réponse : « si le joueur est stupide pour avoir une enclume 50 avec un
+aérodrome 1 c'est son problème ». **La sortie existe** : au niveau 50 de
+l'Aérodrome, le même coût tombe à 2,19 h. Le premier niveau irréparable sous un
+bâtiment de niveau 1 est le **35**. Un test fige les deux faits.
+⚠ **ET UNE SECONDE MESURE, QUI N'ÉTAIT PAS CELLE QU'ON CHERCHAIT : LA SCORIE MORD
+BIEN AVANT LE TEMPS.** `partDuCoutDeMontee` vaut 1, donc remettre à neuf cette
+même Enclume coûte **10 995 172 196 de scorie**. Le nombre était déjà marqué « à
+arbitrer » dans `REPARATION` ; il reste ouvert, et un test le fige.
+⚠ **`SAVE_VERSION` PASSE À 17**, et la migration 16 → 17 **RETIRE** un champ — ce
+que seule la v2 → v3 avait fait avant elle. `reparation` sort, les trois
+réservoirs entrent à ZÉRO : créditer le temps déjà écoulé donnerait douze heures
+de réserve pour un mécanisme qui n'existait pas quand le joueur jouait.
+⚠ **LE RAID NE TOUCHE PLUS À LA RÉPARATION.** L'arbitrage du 29/08 — « les points
+de réparation bonus disparaissent si on refait un raid » — portait sur le modèle
+à durée : il est **CADUC, pas contredit**. Il n'y a plus rien en vol à annuler.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot POI :**
+`npm test` → 792 pass / 0 fail, `npm run build` → `dist/index.html`,
+1 339 823 octets, 0 référence externe.
 ⚠⚠ **CE LOT A COÛTÉ +6 132 OCTETS ET N'A FAIT ENTRER AUCUNE IMAGE.** Les sept
 sprites de POI étaient dans l'atlas `carte` depuis le lot CARTE-EMBLÈMES, payés
 et invisibles : ce qui entre ici, c'est le MODÈLE qui les demande. La borne T10
@@ -475,7 +529,7 @@ src/sim/                simulation déterministe, sans DOM — 23 fichiers
   site-de-la-case.js    une case de la carte → un site jouable : deux graines, saveur, résumé
   site-entame.js        l'après-raid : planchers, ce qui reste debout, ce qui repousse
   raid.js               l'acte : payer, partir, encaisser, revenir abîmé
-  reparation.js         les quatre réservoirs, en parallèle : coût additif, temps au maximum
+  reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés

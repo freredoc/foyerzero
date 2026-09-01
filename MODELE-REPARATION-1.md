@@ -119,8 +119,31 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**, lot 2B
 3. ~~**Deux bâtiments sans nom Foyer Zéro**.~~ **Clos le 26/08** : le central est le **Chantier
    de construction** (Souche côté Ouvrage) et le bâtiment des blindés le **Dépôt de véhicules**,
    clé `depotDeVehicules`. Ce document disait « atelier » — corrigé au §3 le même jour.
-4. **La réserve de temps** : quatrième grandeur au même rang que quartz et scorie, ou compteur
-   interne ? Taux d'accumulation ? Plafond ?
+4. ~~**La réserve de temps** : quatrième grandeur au même rang que quartz et scorie, ou compteur
+   interne ? Taux d'accumulation ? Plafond ?~~ **Clos le 01/09/2026**, par Ethan, et implémenté
+   le jour même (lot RÉSERVE) :
+   - **Compteur interne**, pas une quatrième ressource. Il ne s'affichera que dans l'onglet
+     armée, jamais dans le bandeau de stocks.
+   - **Taux : 1 pour 1.** Une seconde écoulée crédite une seconde. Le niveau du bâtiment
+     réparateur **ne crédite rien** — il décote le coût, par `diviseurDuBatiment`, et c'est son
+     seul effet.
+   - **Plafond : 12 h, plus 1 h par niveau d'armée.** Les deux nombres vivent dans `REPARATION`
+     de `src/data/sites.js`. ⚠ `niveauDeLArmee` rend des **dixièmes** : la division par dix se
+     fait chez l'appelant.
+   - ⚠⚠ **ET IL Y EN A UN PAR CHÂSSIS** — escouade, blindé, aéronef —, ce qu'aucun document ne
+     disait avant le 01/09. C'est ce qui fait survivre le parallélisme de
+     `MODELE-ECONOMIQUE.md` §7 : les trois se remplissent ensemble et se vident séparément.
+     Concentrer ses pertes sur un châssis vide son réservoir pendant que les deux autres restent
+     pleins.
+   - ⚠ **LA RÉSERVE EST PAR BASE, pas par joueur** — neuf le 01/09, et c'est l'intérêt principal
+     d'avoir plusieurs bases. Elle vit sur `etat` tant que `basesDuJoueur` rend `[etat]`.
+   - ⚠ **RÉPARER EST INSTANTANÉ** : débit du temps, débit de la scorie et retour des PV dans le
+     même appel. Le §4 ci-dessus disait déjà « une grandeur qui s'accumule, et que toute
+     réparation consomme » ; le code, lui, avait implémenté une réparation qui DURE. C'est le
+     code qui avait divergé, pas le document.
+   - ⚠ **CE QUI RESTE OUVERT** : le §4 dit que les bâtiments de la base puisent dans **la même
+     réserve** — ce n'est **pas** implémenté, aucun écran ne les répare. De même la défense
+     gratuite sur son horloge propre. Le point 7 ci-dessous, le barème, reste ouvert lui aussi.
 5. ~~Un Complexe endommagé répare-t-il moins ?~~ **Clos le 24/08** : oui, au prorata de ses PV —
    mais **il se répare lui-même**, donc son débit s'accélère au fil de l'heure et le site revient
    entier malgré tout. C'est une récupération auto-entretenue, pas un taux fixe : la condition

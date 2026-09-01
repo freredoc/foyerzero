@@ -311,7 +311,7 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 16, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 17, 'le bump de la version des sauvegardes a été oublié');
 
   // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
   // terrain ne serait dérivable de rien.
@@ -1355,11 +1355,20 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   delete v6.satellites;
 
   const migre = migrer(structuredClone(v6));
-  assert.equal(migre.version, 16, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
+  assert.equal(migre.version, 17, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
   assert.equal(migre.attaque.plafond, 100, 'le maillon v9 → v10 manque');
   assert.deepEqual(migre.sitesEntames, {}, 'le maillon v10 → v11 manque');
   assert.equal(migre.recherche.pointsMilli, '0', 'le maillon v11 → v12 manque');
-  assert.equal(migre.reparation, null, 'le maillon v12 → v13 manque');
+  // ⚠⚠ LE MAILLON v12 → v13 EST DEVENU INOBSERVABLE EN BOUT DE CHAÎNE, et ce
+  // n'est pas un assouplissement : c'est un fait. Il posait `reparation: null` ;
+  // le maillon v16 → v17 SUPPRIME ce champ. Qu'il ait tourné ou non, la
+  // sauvegarde finit sans `reparation` — aucune assertion ne peut donc plus les
+  // distinguer, et en garder une qui ne distingue rien ferait croire qu'elle
+  // garde quelque chose. On mesure à la place ce que le DERNIER maillon laisse,
+  // qui est ce que la chaîne doit produire aujourd'hui.
+  assert.ok(!('reparation' in migre), 'le maillon v16 → v17 n\'a pas retiré le chronomètre');
+  assert.deepEqual(migre.reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 },
+    'le maillon v16 → v17 manque, ou il a crédité une réserve rétroactive');
   // ⚠⚠ LE MAILLON v13 → v14 OFFRE, LÀ OÙ TOUTES LES AUTRES NE CONVERTISSENT
   // RIEN — et ce qu'il offre est EXACTEMENT ce que l'ancienne règle autorisait.
   // Ce montage porte un Centre de commandement au niveau 4 et un QG de défense

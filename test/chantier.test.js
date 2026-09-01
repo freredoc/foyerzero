@@ -62,6 +62,7 @@ import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { satellitesVides } from '../src/sim/satellites.js';
 import { creerPointsAttaque } from '../src/sim/points-attaque.js';
+import { reservesVides } from '../src/sim/reparation.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orientation.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
@@ -165,7 +166,11 @@ function baseDeLaMaquette() {
     sitesEntames: {},
     basesRasees: [],
     recherche: { pointsMilli: '0' },
-    reparation: null,
+    // ⚠ ET LA RÉSERVE DE RÉPARATION DEPUIS LE 01/09, pour la raison EXACTE des
+    // cinq champs d'avant : `tickJeu` la crédite, et un montage qui l'omet n'est
+    // plus un état de jeu. Elle a REMPLACÉ `reparation: null` — le chronomètre a
+    // cédé la place à trois stocks de temps, un par châssis.
+    reserveReparation: reservesVides(),
     // ⚠ ET LES POI ACQUIS DEPUIS LE 31/08, pour la raison EXACTE des quatre
     // champs d'avant : `tickJeu` les relève, et un montage qui les omet n'est
     // plus un état de jeu. `graine` et `position` entrent avec eux — le relevé
