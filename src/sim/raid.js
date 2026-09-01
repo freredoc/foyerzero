@@ -31,7 +31,6 @@ import {
   coutDUnRaid, manquePourPayer, payer, distanceTchebychev, basesDuJoueur,
 } from './points-attaque.js';
 import { siteDeLaCase } from './site-de-la-case.js';
-import { annulerLaReparation } from './reparation.js';
 import { montageCourant, enregistrerLeRaid } from './site-entame.js';
 import { majorationsDeCombat } from './poi.js';
 import {
@@ -235,12 +234,13 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // c'est ce qui fait du choix de cible une décision. Payer au retour ferait de
   // l'échec une répétition gratuite.
   payer(etat.attaque, cout);
-  // ⚠ LE BONUS DE RÉPARATION NE SE MET PAS EN BANQUE. Ethan, le 29/08 : « les
-  // points de réparation bonus disparaissent si on refait un raid avec la même
-  // armée ». Ce qui a déjà été rendu reste rendu — `annulerLaReparation` avance
-  // d'abord — mais le temps restant est perdu, et la scorie payée ne se
-  // rembourse pas.
-  annulerLaReparation(etat);
+  // ⚠ LE RAID NE TOUCHE PLUS À LA RÉPARATION, ET C'EST UN ARBITRAGE, PAS UN
+  // OUBLI. Ethan, le 29/08 : « les points de réparation bonus disparaissent si
+  // on refait un raid avec la même armée » — cette phrase portait sur un modèle
+  // où la réparation DURAIT, et où un raid pouvait donc en abandonner une en
+  // vol. Depuis le 01/09 la réparation est instantanée et se paie sur une
+  // réserve : il n'y a plus rien en cours à annuler, et la réserve accumulée
+  // n'est pas un bonus mais un stock. L'arbitrage est CADUC, pas contredit.
 
   // ⚠ LES MODULES DU JOUEUR ENTRENT PAR LE MONTAGE, JAMAIS PAR L'ÉTAT LU AU VOL.
   // Le combat est déterministe et rejouable : tout ce qui gouverne la boucle
@@ -319,9 +319,11 @@ const AUTO_REPARATION_PCT = 20;
 /**
  * Les ouvrages de garnison à Auto-réparation regagnent 20 % de leurs dégâts.
  *
- * ⚠ AUCUN CODE N'ÉCRIT `degatsMilli` SUR LA GARNISON AUJOURD'HUI. Mesuré : les
- * deux seuls écrivains sont `reporterLesDegats` ici même et `avancerLaReparation`
- * dans `sim/reparation.js`, et tous deux parcourent `etat.armee`. La base du
+ * ⚠ AUCUN CODE N'ÉCRIT `degatsMilli` SUR LA GARNISON AUJOURD'HUI. Remesuré au
+ * lot RÉSERVE : les deux seuls écrivains sont `reporterLesDegats` ici même et
+ * `reparerUnePiece` dans `sim/reparation.js` — qui a remplacé
+ * `avancerLaReparation` le 01/09 —, et tous deux parcourent `etat.armee`. Un
+ * fait d'orphelinage se remesure, il ne se reconduit pas. La base du
  * joueur n'étant jamais attaquée, une pièce de garnison est toujours à zéro et
  * la boucle sort au premier `continue`. L'effet est donc ÉCRIT ET INATTEIGNABLE
  * EN JEU tant que les attaques sur la base n'existent pas — c'est assumé, pas un
