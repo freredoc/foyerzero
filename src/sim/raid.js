@@ -26,15 +26,17 @@
 
 import { APRES_RAID, TYPES_SITE } from '../data/sites.js';
 import { UNITES, GRILLE } from '../data/combat.js';
+import { reservoirsDeLArmee } from './reparation.js';
 import { RESSOURCES, capacitesMilli } from './economie-base.js';
 import {
   coutDUnRaid, manquePourPayer, payer, distanceTchebychev, basesDuJoueur,
 } from './points-attaque.js';
-import { siteDeLaCase } from './site-de-la-case.js';
+import { siteDeLaCase, montageDuSite } from './site-de-la-case.js';
 import { montageCourant, enregistrerLeRaid } from './site-entame.js';
 import { majorationsDeCombat } from './poi.js';
 import {
-  creerCombat, resoudre, butin, pointsRecherche, facteurMilli, TICKS_MAX_COMBAT,
+  creerCombat, resoudre, construireResultat, butin, pointsRecherche, facteurMilli,
+  TICKS_MAX_COMBAT,
 } from './combat.js';
 import { GEOGRAPHIE } from '../data/sites.js';
 import {
@@ -236,6 +238,169 @@ function verser(economie, capacites, ressource, gainMilli) {
 }
 
 /**
+ * Ce qui reste DEBOUT d'une liste de lignes de combat, en pour-cent entiers.
+ *
+ * ⚠ « RESTANT », PAS « DÉTRUIT » — Ethan, 01/09. Les deux disent la même chose
+ * et ne se lisent pas pareil quand on enchaîne les raids : 30 % restant se
+ * compare au raid suivant, 70 % détruit ne se compare à rien.
+ *
+ * ⚠ EN PV, PAS EN COMPTE DE PIÈCES, et c'est forcé par le cas d'un bâtiment
+ * SEUL : le Chantier de construction est unique, donc un compte n'en dirait
+ * jamais que 0 % ou 100 %. Le même barème sert donc aux quatre grandeurs.
+ *
+ * ⚠⚠ LE DÉNOMINATEUR EST LE SITE **PLEIN**, PAS CE QUI ÉTAIT ENCORE DEBOUT EN
+ * ARRIVANT — et c'est un correctif mesuré, pas une préférence. Une pièce
+ * détruite QUITTE le montage (`montageCourant` la retire, `creerCombat`
+ * refusant une entité à zéro PV) : rapporté aux seules survivantes, le
+ * pourcentage MONTAIT d'un raid à l'autre. Relevé sur onze raids d'affilée :
+ * 74 % puis 76 % après une passe qui avait pourtant détruit un bâtiment de plus.
+ * Un nombre qui grimpe quand on casse est illisible, et il ruine la seule chose
+ * qu'on demande à « restant » : se comparer au raid suivant.
+ *
+ * @param {Array<object>} lignes ce qui s'est battu
+ * @param {Array<object>} pleines la même sorte de pièces sur le site INTACT
+ * @returns {number|null} pour-cent, ou `null` s'il n'y a rien de cette sorte
+ */
+function restantPct(lignes, pleines) {
+  let max = 0;
+  for (const l of pleines) max += l.pvMaxMilli;
+  let reste = 0;
+  for (const l of lignes) reste += l.pvMilli > 0 ? l.pvMilli : 0;
+  // ⚠ `null`, PAS ZÉRO. Un site sans défense n'a pas une défense à 0 % : il n'en
+  // a pas. C'est la convention `null ≠ zéro` du dépôt, et l'écran affiche « — ».
+  if (max === 0) return null;
+  return Math.round((reste * 100) / max);
+}
+
+/** Ce qui reste debout d'un bâtiment nommé — `null` si le site n'en a pas. */
+function restantDeLId(lignes, pleines, id) {
+  const pleinesChoisies = pleines.filter((l) => l.id === id);
+  if (pleinesChoisies.length === 0) return null;
+  return restantPct(lignes.filter((l) => l.id === id), pleinesChoisies);
+}
+
+/**
+ * Ce que la réparation de l'armée va coûter, châssis par châssis.
+ *
+ * ⚠ LE POURCENTAGE EST CELUI DE LA RÉSERVE DISPONIBLE DE CE CHÂSSIS, et c'est
+ * une LECTURE, pas un arbitrage : c'est le nombre actionnable — « ça me coûtera
+ * 27 % de ma réserve escouade ». Un pourcentage des PV de l'armée dirait autre
+ * chose, et se changerait ici en une ligne.
+ *
+ * ⚠ `pctReserve` VAUT `null` SUR UNE RÉSERVE VIDE, jamais l'infini ni 100. Une
+ * division par zéro n'a pas de réponse à afficher.
+ *
+ * ⚠⚠ `sansBatiment` EXISTE PARCE QUE ZÉRO VEUT DIRE DEUX CHOSES. `reservoirsDeLArmee`
+ * saute les pièces dont le bâtiment réparateur n'est pas posé — convention
+ * `null ≠ zéro` — si bien qu'un châssis sans Caserne rend exactement le même
+ * `0 s` qu'un châssis intact. Sans ce drapeau, le panneau annoncerait « aucune
+ * réparation » à un joueur dont l'infanterie est en miettes et irréparable.
+ * Mesuré : sur une base neuve, les trois châssis rendent 0 après un vrai raid
+ * qui a bel et bien abîmé l'armée.
+ *
+ * @param {object} etat APRÈS le report des dégâts
+ * @returns {Object<string, {secondes: number, ticks: number,
+ *   pctReserve: number|null, sansBatiment: boolean}>}
+ */
+function reparationInduite(etat) {
+  const reservoirs = reservoirsDeLArmee(etat);
+  const sortie = {};
+  for (const [chassis, r] of Object.entries(reservoirs)) {
+    const reserve = etat.reserveReparation?.[chassis] ?? 0;
+    sortie[chassis] = {
+      secondes: r.secondes,
+      ticks: r.ticks,
+      pctReserve: reserve === 0 ? null : Math.round((r.ticks * 100) / reserve),
+      sansBatiment: r.niveau === null,
+    };
+  }
+  return sortie;
+}
+
+/**
+ * Le verdict du raid — trois mots, et trois seulement.
+ *
+ * ⚠ « DÉFAITE TOTALE » DÈS QU'AUCUN BÂTIMENT N'A ÉTÉ TOUCHÉ, même si toute la
+ * défense est tombée. C'est la règle d'Ethan telle quelle : une armée qui n'a
+ * griffé que la garnison n'a rien pris.
+ *
+ * ⚠ ET C'EST `pvPerdusIciMilli`, PAS `pvPerdusMilli`. Le verdict juge CE raid-ci :
+ * sur un site déjà entamé, les dégâts d'hier rendraient « victoire » une passe
+ * qui n'a rien fait du tout.
+ *
+ * ⚠ LE MOT « DÉFAITE » SANS « TOTALE » EST RÉSERVÉ À LA DÉFENSE, et n'existe pas
+ * dans ce lot : la base du joueur n'est pas encore attaquable.
+ *
+ * @param {boolean} rase
+ * @param {Array<object>} batiments
+ * @returns {'victoire-totale'|'victoire'|'defaite-totale'}
+ */
+function verdictDuRaid(rase, batiments) {
+  if (rase) return 'victoire-totale';
+  if (batiments.some((b) => b.pvPerdusIciMilli > 0)) return 'victoire';
+  return 'defaite-totale';
+}
+
+/**
+ * Le montage exact d'un raid sur ce site — ce que `creerCombat` recevra.
+ *
+ * ⚠⚠ EXTRAITE POUR QUE L'ÉCRAN REJOUE LE COMBAT SANS LE RECOMPOSER. Le déroulé
+ * visuel est un REJEU : l'état est déjà commis quand la première image
+ * s'affiche, et l'écran doit refaire tourner la boucle sur le MÊME montage. Le
+ * recomposer dans `ui/` donnerait deux montages voisins — modules, POI, PV
+ * courants — dont un seul serait éprouvé, et le rejeu divergerait du rapport
+ * sans que rien ne le dise. Un seul montage, deux appelants.
+ *
+ * ⚠ ET IL NE VOYAGE PAS DANS LE RAPPORT. Le mettre dans le rapport le ferait
+ * entrer dans les dix rapports gardés, donc dans la sauvegarde : c'est
+ * exactement ce que « ne pas stocker le combat » interdit. L'écran le demande
+ * AVANT le raid, s'en sert pour rejouer, et le jette.
+ *
+ * @param {object} etat
+ * @param {object} site identité rendue par `siteDeLaCase`
+ * @returns {object} montage prêt pour `creerCombat`
+ */
+export function montageDuRaid(etat, site) {
+  const montageSite = montageCourant(etat, site);
+  return {
+    ...montageSite,
+    modulesDebloques: {
+      ouvrage: montageSite.modulesDebloques?.ouvrage
+        ?? { offense: [], defense: [] },
+      joueur: modulesDebloquesDuJoueur(etat),
+    },
+    majorationsPoi: { joueur: majorationsDeCombat(etat.poisAcquis ?? []) },
+  };
+}
+
+/**
+ * Range un rapport dans le journal, et jette le plus ancien au-delà de la borne.
+ *
+ * ⚠ LE JOURNAL VIT DANS `raid.js` ET PAS DANS `state.js`, et ce n'est pas un
+ * choix de confort : `state.js` importe déjà `creerRecherche` d'ici, donc
+ * l'importer en retour ferait un CYCLE. Ce que `state.js` garde, c'est la
+ * création du champ et sa migration — ce qui est sa charge — et l'écriture vit
+ * chez celui qui produit le rapport.
+ *
+ * ⚠ LE PLUS ANCIEN SORT EN PREMIER, et la borne vient des DONNÉES
+ * (`APRES_RAID.rapportsGardes`). Une file, pas une pile : le journal se lit dans
+ * l'ordre où les raids ont eu lieu.
+ *
+ * ⚠ IL PORTE UN HORODATAGE DE JEU, PAS L'HEURE MURALE. Aucun fichier de `src/`
+ * n'a le droit d'appeler l'horloge système hors de `ui/session.js` — c'est la
+ * garde §11 de `banc.test.js`. `etat.horloge.nbTicks` dit quand, dans le temps
+ * de la partie, et c'est ce qui se rejoue à l'identique.
+ *
+ * @param {object} etat modifié en place
+ * @param {object} rapport
+ */
+function garderLeRapport(etat, rapport) {
+  if (!Array.isArray(etat.rapports)) etat.rapports = [];
+  etat.rapports.push({ ...rapport, tick: etat.horloge.nbTicks });
+  while (etat.rapports.length > APRES_RAID.rapportsGardes) etat.rapports.shift();
+}
+
+/**
  * Lance un raid, du paiement au retour.
  *
  * @param {object} etat modifié en place
@@ -278,16 +443,7 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // acquis gouverne les dégâts de son assaut : ça doit être DANS le montage.
   // `ouvrage` reste à zéro — aucun POI ne bénéficie à l'Ouvrage —, mais la forme
   // est symétrique, comme `modulesDebloques` depuis MODULES-E.
-  const montageSite = montageCourant(etat, site);
-  const montage = {
-    ...montageSite,
-    modulesDebloques: {
-      ouvrage: montageSite.modulesDebloques?.ouvrage
-        ?? { offense: [], defense: [] },
-      joueur: modulesDebloquesDuJoueur(etat),
-    },
-    majorationsPoi: { joueur: majorationsDeCombat(etat.poisAcquis ?? []) },
-  };
+  const montage = montageDuRaid(etat, site);
   const { vagues, indices } = composerLesVagues(etat);
   const resultat = resoudre(
     creerCombat({ ...montage, vagues }),
@@ -320,7 +476,26 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // --- la garnison à Auto-réparation se recolle -----------------------------
   reparerLaGarnison(etat);
 
-  return {
+  // ⚠ LE SITE INTACT, MONTÉ UNE FOIS, POUR SERVIR DE DÉNOMINATEUR AUX QUATRE
+  // POURCENTAGES. Même détour que `butinSiToutTombe` : on monte un combat sans
+  // vagues, uniquement pour que `creerCombat` mette les PV à l'échelle du
+  // niveau. C'est le seul endroit qui connaisse la composition PLEINE une fois
+  // le site entamé.
+  const plein = construireResultat(creerCombat({
+    ...montageDuSite(etat.graine, site), vagues: [],
+  }));
+
+  // ⚠⚠ TOUT CE QUE L'ÉCRAN DE FIN AFFICHE SE CALCULE ICI, ET NULLE PART AILLEURS.
+  // C'est toute la raison d'être de RAID-0 : `simulerRaid` appelle cette
+  // fonction-ci sur une COPIE, donc ce qui est calculé là est exact dans le
+  // simulateur PAR CONSTRUCTION. Un pourcentage calculé côté interface
+  // divergerait entre le panneau du simulateur et celui du vrai raid, et
+  // personne ne le verrait — les deux panneaux ne sont jamais à l'écran en même
+  // temps.
+  //
+  // ⚠ `reparationInduite` SE PREND APRÈS `reporterLesDegats`, et l'ordre est
+  // tout : avant, l'armée est encore intacte et le devis vaudrait zéro.
+  const rapport = {
     cible: site,
     cout,
     cause: resultat.cause,
@@ -332,7 +507,27 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
     unitesEngagees: indices.length,
     unitesAuPlancher: degats.auPlancher,
     pointsRestants: etat.attaque.points,
+    restantDefense: restantPct(resultat.defenses, plein.defenses),
+    restantBatiments: restantPct(resultat.batiments, plein.batiments),
+    // ⚠ LES CLÉS SONT LES NOMS OUVRAGE — `souche` et `etai` —, et elles ne
+    // changent jamais. C'est le LIBELLÉ affiché qui suit la faction de la base
+    // regardée : `BATIMENTS.souche.ta` vaut « Chantier de construction ».
+    restantSouche: restantDeLId(resultat.batiments, plein.batiments, 'souche'),
+    restantEtai: restantDeLId(resultat.batiments, plein.batiments, 'etai'),
+    reparationInduite: reparationInduite(etat),
+    verdict: verdictDuRaid(verdict.rase, resultat.batiments),
   };
+
+  // ⚠⚠ LE RAPPORT SE RANGE ICI, DONC LE SIMULATEUR N'EN RANGE AUCUN — et c'est
+  // gratuit. `simulerRaid` appelle cette fonction-ci sur une COPIE : le journal
+  // de la copie reçoit le rapport, celui de l'état réel n'est jamais touché.
+  // Ranger le rapport dans `simulerRaid` aurait été le seul moyen de se tromper.
+  //
+  // ⚠ ON RANGE LE RAPPORT, JAMAIS LE `resultat`. Un résultat complet porte les
+  // vagues, les positions et les PV de chaque entité : dix de ces objets
+  // rendraient la sauvegarde illisible. Mesuré : un rapport pèse 645 octets.
+  garderLeRapport(etat, rapport);
+  return rapport;
 }
 
 /**

@@ -30,7 +30,12 @@ import {
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
 import { poisDeLaFenetre, poiEstAcquis } from '../sim/poi.js';
-import { saveurDeLaCase } from '../sim/site-de-la-case.js';
+import {
+  saveurDeLaCase, siteDeLaCase, butinSiToutTombe, forceDeLaDefense,
+} from '../sim/site-de-la-case.js';
+import { montageCourant } from '../sim/site-entame.js';
+import { coutDUnRaid } from '../sim/points-attaque.js';
+import { problemesDuRaid } from '../sim/raid.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
 import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
@@ -274,7 +279,19 @@ export function palierDuSite(site, etat) {
  * @param {{rangee: number, colonne: number}} depuis position de la base du joueur
  * @returns {Array<{quoi: string, valeur: string}>}
  */
-export function lignesDuSite(site, depuis, poisAcquis = []) {
+export function ciblageDuSite(etat, site) {
+  const identite = siteDeLaCase(etat, site.rangee, site.colonne);
+  if (identite === null) return null;
+  const montage = montageCourant(etat, identite);
+  return {
+    butin: butinSiToutTombe(montage),
+    force: forceDeLaDefense(montage.defenseurs),
+    cout: coutDUnRaid(etat, etat, identite),
+    problemes: problemesDuRaid(etat, etat, identite),
+  };
+}
+
+export function lignesDuSite(site, depuis, poisAcquis = [], ciblage = null) {
   const embleme = EMBLEMES_CARTE[site.type];
   if (embleme === undefined) throw new Error(`monde : type de site inconnu « ${site.type} »`);
   const distance = distanceEnCases(site, depuis);
@@ -305,6 +322,29 @@ export function lignesDuSite(site, depuis, poisAcquis = []) {
         ? 'acquis'
         : 'à prendre',
     });
+  }
+
+  // ⚠⚠ QUATRE LIGNES DE PLUS POUR UNE CIBLE ATTAQUABLE, ET AUCUN DES TROIS
+  // NOMBRES N'EST CALCULÉ ICI. `butinSiToutTombe`, `forceDeLaDefense` et
+  // `coutDUnRaid` sont écrits et testés depuis longtemps, et n'étaient appelés
+  // par AUCUN écran ; `ciblageDuSite` les rappelle. Les refaire à la main ici
+  // donnerait un second barème, et le panneau finirait par annoncer autre chose
+  // que ce que le raid verse — c'est la faute que `butinSiToutTombe` porte déjà
+  // en garde dans son propre commentaire.
+  //
+  // ⚠ ET LA FONCTION RESTE PURE : elle REÇOIT le ciblage, elle ne va pas le
+  // chercher. Lui passer `etat` lui donnerait accès à tout, et ce fichier dit
+  // déjà, deux blocs plus haut, que la première commodité prise ici serait la
+  // fin de sa pureté.
+  //
+  // ⚠ LE BUTIN EST CELUI D'UN SITE ENTAMÉ, pas celui du site neuf : le montage
+  // vient de `montageCourant`, donc avec les PV courants. Sur une cible déjà
+  // frappée, le nombre baisse — c'est ce qu'il RESTE à prendre.
+  if (ciblage !== null) {
+    lignes.push({ quoi: 'Butin si tout tombe', valeur: `${ciblage.butin.quartz} quartz` });
+    lignes.push({ quoi: 'dont scorie', valeur: `${ciblage.butin.scorie} scorie` });
+    lignes.push({ quoi: 'Force de la défense', valeur: `${ciblage.force} points` });
+    lignes.push({ quoi: 'Coût du raid', valeur: `${ciblage.cout} points d'attaque` });
   }
   return lignes;
 }
@@ -434,7 +474,11 @@ export function teinteDAttente(rangee) {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function}}
  */
-export function initialiserEcranMonde(doc) {
+export function initialiserEcranMonde(doc, crochets = {}) {
+  // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE — même découpage que `versEcran` de
+  // l'écran Chantier. La carte sait QUELLE cible on a touchée deux fois ; seule
+  // la session sait changer d'écran.
+  const surEntreeRaid = crochets.surEntreeRaid ?? (() => {});
   const fenetre = doc.defaultView;
   const $ = (id) => doc.getElementById(id);
   const canvas = $('monde-canvas');
@@ -448,6 +492,10 @@ export function initialiserEcranMonde(doc) {
   const panneau = $('monde-panneau');
   const panneauTitre = $('monde-panneau-titre');
   const panneauCorps = $('monde-panneau-corps');
+  const panneauRefus = $('monde-panneau-refus');
+  // ⚠ QUELLE CASE LE PANNEAU DÉCRIT — c'est ce à quoi le SECOND toucher se
+  // compare. `null` quand le panneau est fermé.
+  let siteOuvert = null;
 
   let etatCourant = null;
   let atlas = null;
@@ -991,6 +1039,16 @@ export function initialiserEcranMonde(doc) {
     for (let i = sitesAffiches.length - 1; i >= 0; i -= 1) {
       const site = sitesAffiches[i];
       if (site.rangee === rangee && site.colonne === colonne) {
+        // ⚠⚠ LE SECOND TOUCHER SE COMPARE À LA CASE OUVERTE, IL NE SE COMPTE
+        // PAS. Un compteur ferait entrer au deuxième toucher n'importe où :
+        // toucher un camp puis une base voisine entrerait dans la base, que le
+        // joueur n'a regardée qu'une fois. Ce qui décide, c'est « est-ce la
+        // MÊME case que celle dont le panneau parle ».
+        if (siteOuvert !== null
+          && siteOuvert.rangee === site.rangee && siteOuvert.colonne === site.colonne) {
+          entrerDansLaCible(site);
+          return;
+        }
         ouvrirPanneau(site);
         return;
       }
@@ -1007,10 +1065,36 @@ export function initialiserEcranMonde(doc) {
 
   // --- le panneau ------------------------------------------------------------
 
+  /**
+   * ⚠⚠ `problemesDuRaid` GARDE L'ENTRÉE, ET LE PANNEAU DIT POURQUOI. C'est
+   * exactement ce pour quoi cette fonction rend une LISTE DE PHRASES plutôt
+   * qu'un booléen : l'écran doit pouvoir refuser ET expliquer. Entrer puis
+   * refuser à l'intérieur ferait faire un aller-retour pour rien.
+   */
+  function entrerDansLaCible(site) {
+    if (etatCourant === null) return;
+    const ciblage = ciblageDuSite(etatCourant, site);
+    if (ciblage === null || ciblage.problemes.length > 0) {
+      panneauRefus.textContent = ciblage === null
+        ? 'Plus rien à attaquer ici.'
+        : ciblage.problemes.map((p) => p.message).join(' ; ');
+      panneauRefus.hidden = false;
+      return;
+    }
+    fermerPanneau();
+    surEntreeRaid({ rangee: site.rangee, colonne: site.colonne });
+  }
+
   function ouvrirPanneau(site) {
+    siteOuvert = { rangee: site.rangee, colonne: site.colonne };
     panneauTitre.textContent = EMBLEMES_CARTE[site.type].nom;
     panneauCorps.textContent = '';
-    for (const ligne of lignesDuSite(site, etatCourant.position, etatCourant.poisAcquis)) {
+    // ⚠ LES TROIS NOMBRES DE CIBLAGE VIENNENT DES BRIQUES, PAS DE L'ÉCRAN.
+    const ciblage = ciblageDuSite(etatCourant, site);
+    panneauRefus.hidden = ciblage === null || ciblage.problemes.length === 0;
+    panneauRefus.textContent = ciblage === null ? ''
+      : ciblage.problemes.map((p) => p.message).join(' ; ');
+    for (const ligne of lignesDuSite(site, etatCourant.position, etatCourant.poisAcquis, ciblage)) {
       const bloc = doc.createElement('div');
       bloc.className = 'ligne';
       const quoi = doc.createElement('span');
@@ -1026,6 +1110,7 @@ export function initialiserEcranMonde(doc) {
 
   function fermerPanneau() {
     panneau.hidden = true;
+    siteOuvert = null;
   }
 
   // ⚠⚠ REVENIR SUR SA BASE — Ethan, 31/08. La vue ne se recentre qu'à la

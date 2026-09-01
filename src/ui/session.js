@@ -41,6 +41,7 @@ import { initialiserEcranChantier } from './chantier.js';
 import { initialiserEcranOffense } from './offense.js';
 import { initialiserEcranMission, initialiserMiniTutoriel } from './mission.js';
 import { initialiserEcranMonde } from './monde.js';
+import { initialiserEcranRaid } from './raid.js';
 import { initialiserEcranRecherche } from './recherche.js';
 import { initialiserBanc } from './banc.js';
 
@@ -222,6 +223,12 @@ export const ATLAS_DE_LA_PAGE = {
   'atlas-unite': '--atlas-unite',
   'atlas-chassis': '--atlas-chassis',
   'atlas-tourelle-unite': '--atlas-tourelle-unite',
+  // ⚠ LES TROIS DE L'ÉCRAN DE RAID. Ils étaient déjà dans la feuille pour le
+  // fond CSS du Chantier ; leur donner aussi une balise ne les inline pas une
+  // seconde fois, `garnirLesAtlas` ne recopiant qu'une adresse.
+  'atlas-batiment': '--atlas-batiment',
+  'atlas-defense': '--atlas-defense',
+  'atlas-socle': '--atlas-socle',
 };
 
 /**
@@ -257,6 +264,29 @@ export function garnirLesAtlas(doc) {
     if (source === '') throw new RangeError(`session : la variable « ${variable} » est vide`);
     image.src = source;
   }
+}
+
+/**
+ * Les atlas dont le champ de bataille a besoin, par le slug de `tools/atlas.py`.
+ *
+ * ⚠ LA CLÉ EST LE SLUG, DONC `tourelle_unite` À SOULIGNÉ, quand l'identifiant
+ * HTML garde son tiret. Les deux ne se ressemblent qu'à l'œil : le slug devient
+ * une clé JavaScript, l'identifiant reste du HTML. Même table que celle du banc,
+ * augmentée des trois que seul un SITE porte — un champ de bataille de l'Ouvrage
+ * a des bâtiments et des défenses, ce que le banc n'avait jamais à dessiner.
+ *
+ * @param {Document} doc
+ * @returns {Object<string, HTMLImageElement>}
+ */
+export function atlasDeLaScene(doc) {
+  return {
+    unite: doc.getElementById('atlas-unite'),
+    chassis: doc.getElementById('atlas-chassis'),
+    tourelle_unite: doc.getElementById('atlas-tourelle-unite'),
+    batiment: doc.getElementById('atlas-batiment'),
+    defense: doc.getElementById('atlas-defense'),
+    socle: doc.getElementById('atlas-socle'),
+  };
 }
 
 /**
@@ -315,6 +345,7 @@ export function initialiserSession(doc) {
   let ecranMission = null;
   let ecranOffense = null;
   let ecranMonde = null;
+  let ecranRaid = null;
   let ecranRecherche = null;
   let miniTutoriel = null;
   let idImage = null;
@@ -543,7 +574,17 @@ export function initialiserSession(doc) {
   // changer d'écran ne les fait plus disparaître, ce qu'Ethan demandait
   // (« garder la barre quartz scories etc et monde option dans le menu
   // offense »).
-  const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options'];
+  // ⚠ SEPT ÉCRANS DEPUIS LE LOT RAID-A. Le raid s'ouvre depuis la carte, par un
+  // SECOND toucher sur une cible déjà ouverte.
+  const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
+
+  // ⚠⚠ LES DEUX BANDEAUX QUE L'ÉCRAN DE RAID MASQUE — et il est le seul.
+  // Ethan, 01/09 : « on garde la barre du haut… les onglets seuls ». Le bandeau
+  // des ressources part donc, et celui des bases avec lui : « BASE 1 / 1 » est
+  // un compteur des bases DU JOUEUR, et il n'a aucun sens devant une base
+  // ennemie. Ce second retrait est une LECTURE, pas une dictée d'Ethan ; s'il
+  // le veut visible, c'est cette liste-ci qui change, et rien d'autre.
+  const CHROME_MASQUE_PAR = { raid: ['ressources', 'navigation'] };
 
   // ⚠ QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN — UNE TABLE, PAS DES CONDITIONS.
   // La version précédente écrivait « actif si ce n'est pas Options », ce qui
@@ -551,6 +592,9 @@ export function initialiserSession(doc) {
   // écran se déclare ici, et nulle part ailleurs.
   const ONGLET_DE_L_ECRAN = {
     chantier: 'onglet-base',
+    // ⚠ LE RAID S'ALLUME SUR L'ONGLET MONDE : on y vient de la carte, on y
+    // retourne. Il n'a pas d'onglet à lui — on n'y entre pas par le haut.
+    raid: 'onglet-monde',
     offense: 'onglet-base',
     mission: 'onglet-mission',
     recherche: 'onglet-recherche',
@@ -561,6 +605,12 @@ export function initialiserSession(doc) {
   function montrerEcran(nom) {
     ecranCourant = nom;
     for (const autre of ECRANS) $(`ecran-${autre}`).hidden = autre !== nom;
+    // ⚠ LE CHROME COMMUN SE MASQUE ICI, ET NULLE PART AILLEURS. `#ressources` et
+    // `#navigation` sont frères de `#ecrans` : un écran ne peut pas les cacher
+    // lui-même sans les déplacer, et les déplacer casserait l'ordre du document
+    // — donc la navigation au clavier et la lecture d'écran.
+    const masques = new Set(CHROME_MASQUE_PAR[nom] ?? []);
+    for (const bloc of ['ressources', 'navigation']) $(bloc).hidden = masques.has(bloc);
     // Les onglets du haut ET la barre du bas doivent dire où l'on est. Le
     // premier est à la session ; le second appartient à l'écran Chantier, qui
     // le construit — d'où l'appel, plutôt qu'une seconde écriture ici.
@@ -599,6 +649,11 @@ export function initialiserSession(doc) {
       if (nom === 'monde' && etat !== null) ecranMonde.peindre(etat);
       else ecranMonde.masquer();
     }
+    // ⚠ ET LE RAID SE RETIRE QUAND ON LE QUITTE, pour la raison exacte de la
+    // carte : il porte une boucle d'animation à lui, et la laisser tourner
+    // derrière un autre écran ferait travailler l'appareil pour des pixels que
+    // personne ne regarde.
+    if (ecranRaid !== null && nom !== 'raid') ecranRaid.masquer();
   }
 
   $('onglet-base').addEventListener('click', () => montrerEcran('chantier'));
@@ -791,7 +846,26 @@ export function initialiserSession(doc) {
   // exactement le genre de geste qu'un joueur ne veut pas refaire parce que le
   // système a tué l'application — même raisonnement que `apresPose`.
   ecranRecherche = initialiserEcranRecherche(doc, { apresAchat: () => sauvegarder() });
-  ecranMonde = initialiserEcranMonde(doc);
+  // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE — même découpage que `apresPose` et
+  // `versEcran` ailleurs. Le raid ÉCRIT dans l'état (réparation, activité,
+  // déplacement, et le raid lui-même) : chaque geste s'enregistre tout de suite,
+  // parce qu'un raid perdu parce que le système a tué l'application est
+  // exactement ce que `apresPose` évite déjà pour la pose.
+  ecranRaid = initialiserEcranRaid(doc, {
+    versEcran: (nom) => montrerEcran(nom),
+    apresGeste: () => sauvegarder(),
+  });
+  // ⚠ LE SECOND TOUCHER ENTRE DANS LA CIBLE, et c'est la carte qui le détecte :
+  // elle seule sait quelle case son panneau décrit. `problemesDuRaid` garde
+  // l'entrée — si la liste n'est pas vide, on n'entre pas, et le panneau dit
+  // pourquoi.
+  ecranMonde = initialiserEcranMonde(doc, {
+    surEntreeRaid: (cible) => {
+      if (etat === null || ecranRaid === null) return;
+      ecranRaid.ouvrir(etat, cible, atlasDeLaScene(doc));
+      montrerEcran('raid');
+    },
+  });
   montrerEcran('chantier');
   demarrer();
 }

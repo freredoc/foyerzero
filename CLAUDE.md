@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **01/09/2026**, version 0.61.0 · build 62.
+Dernière révision : **01/09/2026**, version 0.62.0 · build 63.
 
 ---
 
@@ -41,9 +41,64 @@ Dernière révision : **01/09/2026**, version 0.61.0 · build 62.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 01/09/2026 (après le lot RAID-0), à confronter :**
-`npm test` → **808 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**1 340 077 octets**, 0 référence externe.
+**Référence au 01/09/2026 (après le lot RAID-A), à confronter :**
+`npm test` → **820 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 370 976 octets**, 0 référence externe.
+⚠⚠ **CE LOT COÛTE +30 899 OCTETS ET OUVRE LE SEPTIÈME ÉCRAN.** Du code, du
+balisage et de la feuille — **aucune image n'entre** : les trois atlas que le
+champ de bataille demandait (bâtiment, défense, socle) étaient déjà dans la
+feuille pour le fond CSS du Chantier, et leur donner une balise `<img>` ne les
+inline pas une seconde fois. **Mesuré : 16 `data:` avant, 16 après.** Marge T10
+**29 024 octets, 2,07 %** — le prochain lot qui fait entrer une image devra
+relever la borne EN ÉCRIVANT POURQUOI.
+⚠⚠ **UN BOGUE DE MOTEUR A ÉTÉ TROUVÉ ET CORRIGÉ, ET IL ÉTAIT ANTÉRIEUR AU LOT.**
+Le **troisième raid d'affilée** sur une même cible LEVAIT — « 0 PV rangés pour 3
+pièces ». `montageCourant` régénère le site ENTIER et applique les PV rangés
+POSITION PAR POSITION ; `enregistrerLeRaid`, lui, les rangeait sur le montage qui
+venait de se battre, d'où les mortes étaient déjà retirées. Raid 1 range
+`[0,0,0]`, raid 2 se bat à zéro défenseur et range `[]`, raid 3 régénère les
+trois et n'a plus rien à leur appliquer. **Reproduit en simulation pure, sans
+interface** : aucun test n'enchaînait trois raids, et aucun écran ne savait
+attaquer — c'est l'écran qui l'a rendu atteignable, pas lui qui l'a créé.
+`reprojeter` range désormais sur la composition PLEINE. Onze raids d'affilée
+mènent maintenant au rasage.
+⚠⚠ **ET « % RESTANT » MONTAIT QUAND ON CASSAIT.** Une pièce détruite QUITTE le
+montage, donc quittait aussi le dénominateur : relevé **74 % puis 76 %** après
+une passe qui avait pourtant détruit un bâtiment de plus. Le dénominateur est
+maintenant le site **PLEIN**, monté une fois par `montageDuSite` — même détour
+que `butinSiToutTombe`. Les onze raids descendent 90 → 78 → 69 → … → 17.
+⚠⚠ **LES SIX CHAMPS DU RAPPORT SE CALCULENT DANS `executerRaid`, JAMAIS DANS
+L'ÉCRAN** — `restantDefense`, `restantBatiments`, `restantSouche`, `restantEtai`,
+`reparationInduite`, `verdict`. C'est toute la raison d'être de RAID-0 :
+`simulerRaid` appelle `executerRaid` sur une copie, donc le simulateur est exact
+**par construction**. Les DEUX panneaux de fin rendent la même fonction pure,
+`lignesDuResultat` : ils ne peuvent pas diverger.
+⚠ **`sansBatiment` EXISTE PARCE QUE ZÉRO VEUT DIRE DEUX CHOSES.** Un châssis
+intact et un châssis sans Caserne rendent tous deux `0 s` de réparation ;
+annoncer « aucune réparation » à un joueur dont l'infanterie est en miettes et
+irréparable serait un mensonge par omission.
+⚠⚠ **LE BOOT SANS TÊTE A TROUVÉ CE QU'AUCUN TEST NE POUVAIT VOIR.** Chromium est
+préinstallé dans l'environnement d'exécution ; `playwright-core` s'installe
+**hors du dépôt** — `CLAUDE.md` §3 interdit d'ajouter une dépendance de test, et
+cette règle tient. Deux défauts trouvés là : le `ResizeObserver` mesurait le
+canevas ENCORE CACHÉ (« viewport 1 × 1 »), et le bogue du troisième raid.
+⚠ **`SAVE_VERSION` PASSE À 19** : l'état garde les **dix derniers rapports, en
+tout** — la borne est dans `APRES_RAID.rapportsGardes`, jamais dans l'écran. On
+garde le RAPPORT, jamais le `resultat` : mesuré **695 octets par rapport**, un
+état passe de 1 814 à 8 765 octets. La migration 18 → 19 pose une liste vide.
+⚠ **TROIS LECTURES PRISES, ET ELLES SE CHANGENT CHACUNE EN UNE LIGNE** : le
+bandeau `#navigation` est masqué sur l'écran de raid (un compteur des bases DU
+JOUEUR n'a aucun sens devant une base ennemie) ; `reparationInduite` est un
+pourcentage **de la réserve du châssis** ; et le glisser-déposer coexiste avec
+les modes tactiles d'`ui/offense.js` sur la même grille 4 × 9 — **dette
+d'ergonomie assumée**, demandée deux fois par Ethan.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot RAID-0 :**
+`npm test` → 808 pass / 0 fail, `npm run build` → `dist/index.html`,
+1 340 077 octets, 0 référence externe.
 ⚠ **CE LOT COÛTE +264 OCTETS ET N'OUVRE AUCUN ÉCRAN.** Il donne au moteur les
 deux choses que l'écran de raid demandera : simuler sans commettre, et laisser
 une unité à la maison. Marge T10 **59 923 octets, 4,28 %**.
@@ -622,12 +677,13 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 9 fic
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les six écrans et leurs éditeurs — 9 fichiers
+src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
   monde.js              l'écran de la carte : canevas, quatre crans, défilement au doigt
+  raid.js               l'écran de raid : la cible, l'armée, le combat rejoué
   recherche.js          l'arbre du joueur : trois panneaux sur un rail, achat en deux touchers
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR

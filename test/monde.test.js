@@ -285,11 +285,24 @@ test('panneau — il dit ce qu\'on sait, et le niveau du joueur n\'est pas celui
 });
 
 test('panneau — aucun bouton d\'action, ni dans le balisage ni dans l\'écran', () => {
-  // ⚠ RIEN NE DOIT PROMETTRE CE QUI N'EXISTE PAS. Le raid n'existe pas ; un
-  // bouton « Attaquer » sur le panneau d'un site serait exactement le bouton
-  // « Assaut » du lot ÉCRAN-CHANTIER, qui pointait sur du sol nu et a été
-  // retiré. On lit la page DÉCOMMENTÉE — le commentaire du lot raconte
-  // justement cette faute et cite le mot.
+  // ⚠ RIEN NE DOIT PROMETTRE CE QUI N'EXISTE PAS. C'était écrit le 27/08 contre
+  // le bouton « Assaut » du lot ÉCRAN-CHANTIER, qui pointait sur du sol nu.
+  //
+  // ⚠⚠ AMENDÉ AU LOT RAID-A, ET IL NE S'EST PAS ASSOUPLI D'UN MOT. Le raid
+  // EXISTE maintenant, et on y entre — mais par un SECOND TOUCHER sur la cible,
+  // pas par un bouton. La liste des boutons autorisés est donc toujours
+  // exactement « Fermer », et les quatre mots promis restent interdits : ce lot
+  // n'introduit délibérément AUCUN bouton dans ce panneau, et le garde-fou
+  // continue d'interdire tout le reste.
+  //
+  // ⚠ CE QUI EST AJOUTÉ, C'EST L'AUTRE MOITIÉ DE LA RÈGLE : le panneau doit
+  // pouvoir REFUSER ET DIRE POURQUOI. `problemesDuRaid` rend une liste de
+  // phrases justement pour ça ; sans la ligne de refus, un second toucher qui
+  // n'entre pas serait un geste mort, ce qui est la faute que ce test combat,
+  // vue de l'autre côté.
+  //
+  // On lit la page DÉCOMMENTÉE — le commentaire du lot raconte justement cette
+  // faute et cite le mot.
   const html = lire('dist', 'index.html').replace(/<!--[\s\S]*?-->/g, '');
   const debut = html.indexOf('id="monde-panneau"');
   assert.ok(debut > 0, 'le panneau de site a disparu du balisage');
@@ -306,6 +319,13 @@ test('panneau — aucun bouton d\'action, ni dans le balisage ni dans l\'écran'
   }
   // Falsifiable : le découpage doit bien voir le bouton qui EST là.
   assert.ok(bloc.includes('monde-panneau-fermer'), 'le découpage du bloc ne mesure rien');
+
+  // ⚠ ET LE REFUS SE DIT. On entre au second toucher ; quand `problemesDuRaid`
+  // s'y oppose, le panneau doit l'écrire, sinon le geste serait muet.
+  assert.ok(html.includes('id="monde-panneau-refus"'),
+    'le panneau ne peut plus dire pourquoi on n\'entre pas');
+  assert.match(ecran, /problemesDuRaid/,
+    'l\'écran Monde n\'interroge plus le garde du raid');
 });
 
 // ---------------------------------------------------------------------------
@@ -1086,7 +1106,13 @@ test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse a
     assert.ok(!/\bsrc=/.test(balise[0]),
       `l'image « ${id} » porte un \`src\` : son atlas est inliné deux fois`);
   }
-  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 4);
+  // ⚠ SEPT DEPUIS LE LOT RAID-A, et les trois qui entrent ne coûtent RIEN : le
+  // bâtiment, la défense et le socle étaient déjà dans la feuille pour le fond
+  // CSS du Chantier. L'écran de raid en a besoin en `drawImage` — un champ de
+  // bataille de site porte des bâtiments et des défenses, ce que le banc n'avait
+  // jamais eu à dessiner — et c'est la boucle ci-dessus, pas ce compte, qui
+  // garde l'invariant qui compte : aucune de ces balises ne porte de `src`.
+  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7);
   assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
   assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');
 
