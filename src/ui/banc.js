@@ -268,13 +268,25 @@ export function initialiserBanc(doc) {
   const canvas = $('banc-canvas');
   const ctx = canvas.getContext('2d');
 
-  // ⚠⚠ LE PIXEL ART NE SE LISSE PAS, ET LA DÉCISION EST ICI. Sans cette ligne,
-  // un sprite de 64 px mis à l'échelle d'une case devient flou : le navigateur
-  // interpole. C'est l'équivalent d'`image-rendering: pixelated` côté DOM, et
-  // elle se pose chez CELUI QUI CRÉE LE CONTEXTE — `render/canvas2d.js` ne prend
-  // aucune décision de dessin, c'est tout son contrat, et `render/scene.js` ne
-  // voit jamais de contexte.
-  ctx.imageSmoothingEnabled = false;
+  // ⚠⚠ LE LISSAGE EST REVENU AU LOT PIXELS, ET C'EST LE PROTOCOLE QUI L'EXIGE.
+  // Il valait `false` tant que les sprites étaient quantifiés sur quatorze
+  // teintes : chaque pixel source était une décision, et l'interpolation en
+  // inventait d'autres. Ils sortent maintenant d'une réduction par FILTRE, et
+  // la case du champ de bataille n'est pas un multiple de 64 — mesuré, une case
+  // de 71 px tirée d'un sprite de 64 double SEPT colonnes sur 64 et laisse les
+  // autres simples : le même trait n'a pas la même épaisseur d'un bout à
+  // l'autre du sprite. Le lissage rend l'épaisseur constante.
+  //
+  // ⚠ LA DÉCISION RESTE CHEZ CELUI QUI CRÉE LE CONTEXTE — `render/canvas2d.js`
+  // n'en prend aucune, c'est tout son contrat, et `render/scene.js` ne voit
+  // jamais de contexte.
+  //
+  // ⚠ `ui/raid.js`, `ui/monde.js` ET LES HUIT `image-rendering: pixelated` DE
+  // LA FEUILLE PORTENT ENCORE `false`, ET C'EST UN ARBITRAGE EN ATTENTE, pas un
+  // oubli : le brief du lot ne nomme que cette ligne-ci. L'argument vaut à
+  // l'identique partout où l'échelle n'est pas entière ; il ne vaut PAS pour
+  // l'écran Monde, dont les quatre crans sont des puissances de deux.
+  ctx.imageSmoothingEnabled = true;
 
   /**
    * Les atlas du champ de bataille, par famille — ce que `canvas2d` passe à

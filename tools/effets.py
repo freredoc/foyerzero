@@ -53,7 +53,7 @@ from cond import est_fond, eroder
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('effet')
-GRILLES = (128, 64, 32)
+GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
 
 # L'image la plus large de la famille occupe EMPRISE gros pixels sur une grille
 # de 32. 30 sur 32 : une explosion couvre sa case et déborde un peu, là où un

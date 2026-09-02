@@ -10,8 +10,9 @@ déterministe — même entrée, mêmes octets — et son mode --verifier le pro
 
 Deux sorties par exécution :
 
-  art/sprites/atlas-<famille>-64.png   l'image cousue, inlinée par tools/build.js
-  src/data/atlas.js                    l'index, importé par src/render/sprite.js
+  art/sprites/atlas-<famille>-64.webp    l'image cousue, inlinée par tools/build.js
+  art/sprites/atlas-<famille>-128.webp   la même en grille 128, qu'aucun écran ne lit encore
+  src/data/atlas.js                      l'index, importé par src/render/sprite.js
 
 ⚠ LE LECTEUR S'APPELLE `sprite.js`, PAS `atlas.js`, ET C'EST UNE PRÉCAUTION DE
 DÉPÔT. Le dépôt se met à jour depuis un téléphone, dont le sélecteur n'affiche
@@ -26,13 +27,12 @@ base64 contre 719 018 pour un atlas unique et 957 205 pour les fichiers séparé
 Le découpage par FAMILLE, et pas par écran, évite qu'un sprite servant à deux
 écrans y soit deux fois.
 
-⚠ LA GRILLE EST LA 64, ARBITRÉE LE 30/08. Neuf colonnes sur ~380 px font des
-cases de ~42 px CSS, soit ~126 px physiques à DPR 3 sur le S25 FE : le 128
-serait la taille juste, le 32 serait visiblement flou, le 64 est le compromis
-tenu. ET LES TROIS GRILLES NE SONT PAS DES AGRANDISSEMENTS L'UNE DE L'AUTRE —
-sur 40 sprites tirés au sort, 2 seulement vérifient `128 == 32 × 4` au plus
-proche. Ce sont trois conditionnements indépendants ; on ne peut pas embarquer
-le 32 et l'agrandir en CSS pour retrouver le 128.
+⚠ LA GRILLE EMBARQUÉE EST LA 64, ARBITRÉE LE 30/08. Neuf colonnes sur ~380 px
+font des cases de ~42 px CSS, soit ~126 px physiques à DPR 3 sur le S25 FE : le
+128 serait la taille juste, le 64 est le compromis tenu. La 128 est cousue à
+côté depuis le lot PIXELS, et coûte 1 260 ko de dépôt pour zéro octet de
+livrable. ET LES DEUX GRILLES NE SONT PAS DES AGRANDISSEMENTS L'UNE DE L'AUTRE :
+ce sont deux conditionnements indépendants, chacun réduit depuis la source.
 
 ⚠ L'EFFECTIF DE CHAQUE FAMILLE EST ASSERTÉ, PAS DÉDUIT. La leçon du 29/08 (voir
 la passation, §4.1) : un outil qui déduit sa grille du contenu écrit sans broncher
@@ -40,14 +40,34 @@ un atlas faux. Ici, un sprite ajouté ou retiré fait SORTIR L'OUTIL EN ERREUR, 
 c'est voulu — les bâtiments détruits arriveront un jour dans `bâtiment/`, et il
 faut que ce jour-là quelqu'un décide, au lieu que l'index change tout seul.
 """
-import sys, os, io, math, argparse
+import sys, os, io, json, math, hashlib, argparse
 from PIL import Image
+
+from portes import POIDS, PORTES
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPRITES = os.path.join(RACINE, 'art', 'sprites')
 INDEX = os.path.join(RACINE, 'src', 'data', 'atlas.js')
+EMPREINTES = os.path.join(SPRITES, 'atlas-empreintes.json')
 
-COTE = 64
+# ⚠⚠ DEUX GRILLES COUSUES DEPUIS LE LOT PIXELS, UNE SEULE EMBARQUÉE. La 128 est
+# cousue pour qu'elle EXISTE le jour où un écran la demandera — elle ne coûte
+# aucun octet au livrable, seulement du dépôt. `COTE_INDEX` est la grille que
+# `src/data/atlas.js` décrit et que `tools/build.js` inline ; les deux nombres
+# doivent s'accorder, et `test/sprite.test.js` refuse qu'ils divergent.
+GRILLES = (64, 128)
+COTE_INDEX = 64
+
+# ⚠⚠ WEBP DEPUIS LE LOT PIXELS, ET C'EST LUI QUI REND LE PROTOCOLE TENABLE.
+# Les sprites ne sont plus quantifiés sur une palette fermée : ils sortent d'une
+# réduction par filtre, donc de quelques milliers de teintes au lieu de
+# quatorze. Mesuré sur les huit familles, grille 64 : 479 ko de PNG en palette
+# hier, 2 487 ko de PNG en rendu libre — ×5,2, impossible —, 490 ko en WebP q85.
+# Ce n'est pas le protocole seul qui tient dans le budget, c'est le WebP.
+FORMAT = 'WEBP'
+EXTENSION = 'webp'
+QUALITE = 85
+METHODE = 6
 
 # --- les familles cousues ----------------------------------------------------
 #
@@ -89,7 +109,7 @@ FAMILLES = {
 }
 
 
-def sprites_de(dossier, effectif, exclus):
+def sprites_de(dossier, effectif, exclus, cote):
     """Les chemins d'une famille, dans l'ordre qui fait l'index.
 
     L'ordre est celui de `sorted` sur le nom de fichier — points de code, pas
@@ -103,33 +123,33 @@ def sprites_de(dossier, effectif, exclus):
     laisser pourrir un nom qui ne désigne plus rien. Même discipline que les
     écarts permanents de `planches.py` et de `verifier.py`.
     """
-    chemin = os.path.join(SPRITES, dossier, str(COTE))
+    chemin = os.path.join(SPRITES, dossier, str(cote))
     if not os.path.isdir(chemin):
-        echec(f'{dossier}/{COTE} est absent du dépôt')
+        echec(f'{dossier}/{cote} est absent du dépôt')
     tous = sorted(n[:-4] for n in os.listdir(chemin) if n.endswith('.png'))
     for nom in exclus:
         if nom not in tous:
             echec(
-                f'{dossier}/{COTE} : « {nom} » est exclu de la couture mais absent du disque.\n'
+                f'{dossier}/{cote} : « {nom} » est exclu de la couture mais absent du disque.\n'
                 f"  Une exclusion qui ne désigne rien est une ligne morte : la retirer."
             )
         taille = Image.open(os.path.join(chemin, nom + '.png')).size
-        if taille == (COTE, COTE):
+        if taille == (cote, cote):
             echec(
-                f'{dossier}/{COTE} : « {nom} » mesure {COTE}×{COTE} et pourrait donc être cousu.\n'
+                f'{dossier}/{cote} : « {nom} » mesure {cote}×{cote} et pourrait donc être cousu.\n'
                 f"  Son exclusion n'a plus de raison d'être : retirer sa ligne de FAMILLES."
             )
     noms = [n for n in tous if n not in exclus]
     if len(noms) != effectif:
         echec(
-            f'{dossier}/{COTE} porte {len(noms)} sprites cousables, {effectif} attendus.\n'
+            f'{dossier}/{cote} porte {len(noms)} sprites cousables, {effectif} attendus.\n'
             f"  Ce n'est pas un incident à contourner : si l'ajout est voulu, "
             f"corriger l'effectif dans FAMILLES et relire l'index produit."
         )
     return noms, chemin
 
 
-def coudre(noms, chemin):
+def coudre(noms, chemin, cote):
     """L'atlas d'une famille, et sa géométrie.
 
     La grille est la plus carrée possible : `colonnes = ceil(√n)`. Les cases
@@ -139,15 +159,65 @@ def coudre(noms, chemin):
     n = len(noms)
     colonnes = math.ceil(math.sqrt(n))
     rangees = math.ceil(n / colonnes)
-    atlas = Image.new('RGBA', (colonnes * COTE, rangees * COTE), (0, 0, 0, 0))
+    atlas = Image.new('RGBA', (colonnes * cote, rangees * cote), (0, 0, 0, 0))
     for i, nom in enumerate(noms):
         sprite = Image.open(os.path.join(chemin, nom + '.png'))
-        if sprite.size != (COTE, COTE):
-            echec(f'{nom}.png mesure {sprite.size}, {COTE}×{COTE} attendu')
-        atlas.paste(sprite.convert('RGBA'), ((i % colonnes) * COTE, (i // colonnes) * COTE))
+        if sprite.size != (cote, cote):
+            echec(f'{nom}.png mesure {sprite.size}, {cote}×{cote} attendu')
+        atlas.paste(sprite.convert('RGBA'), ((i % colonnes) * cote, (i // colonnes) * cote))
     tampon = io.BytesIO()
-    atlas.save(tampon, 'PNG', optimize=True)
+    # ⚠ `exact=True` : sans lui, l'encodeur a le droit de réécrire le RGB des
+    # pixels transparents pour mieux comprimer. Les octets resteraient
+    # déterministes, mais deux sprites qui ne diffèrent que sous l'alpha
+    # deviendraient indistinguables — et le dépôt compare à l'octet.
+    atlas.save(tampon, FORMAT, quality=QUALITE, method=METHODE, exact=True)
     return tampon.getvalue(), colonnes, rangees
+
+
+def empreinte(octets):
+    return hashlib.sha256(octets).hexdigest()
+
+
+def manifeste(familles, empreintes_atlas):
+    """Ce que le côté JS doit savoir de la chaîne sans pouvoir la rejouer.
+
+    ⚠⚠ POURQUOI IL EXISTE, ET CE QU'IL REMPLACE. `test/sprite.test.js` DÉCODAIT
+    l'atlas et comparait sa cellule `i` aux pixels du sprite `i` — la garde née
+    du 30/08, quand seize sprites avaient été régénérés sous un atlas resté
+    celui de la veille, `npm run check` vert et rien pour le voir. Les atlas
+    sont passés au WebP au lot PIXELS ; Node n'a pas de décodeur WebP, et §3 du
+    CLAUDE.md interdit d'ajouter une dépendance de test.
+
+    Ce fichier porte donc les EMPREINTES : celle de chaque atlas, et celle de
+    chaque sprite source. Le test vérifie les deux sans décoder un pixel. Le
+    défaut du 30/08 tombe dedans de face — un sprite régénéré sans que l'outil
+    soit relancé fait mentir l'empreinte de la source.
+
+    ⚠ CE QU'IL NE TIENT PLUS, ET IL FAUT LE SAVOIR : la correspondance CELLULE ↔
+    SPRITE. Elle est refaite par RECONSTRUCTION, à chaque `tools/verifier.py`,
+    par `atlas.py --verifier` lui-même — donc sur les lots qui touchent à l'art,
+    plus à chaque `npm run check`. Arbitré par Ethan le 02/09, contre les deux
+    autres issues mesurées : committer aussi un PNG jamais embarqué (+1,6 Mio de
+    dépôt, deux fichiers pour une vérité, et rien qui les relie), ou rester en
+    PNG (le livrable passe de 1,58 à 2,94 Mo).
+
+    ⚠ ET IL PORTE AUSSI LES PORTES DE QUANTIFICATION, pour la même raison de
+    fond : `test/accent.test.js` classe désormais les pixels au plus proche sous
+    ces portes-là, et leurs nombres ne doivent exister qu'à un seul endroit —
+    `tools/portes.py`. Le JS n'en porte que la forme.
+    """
+    return {
+        'commentaire': 'FICHIER GÉNÉRÉ PAR tools/atlas.py — NE PAS MODIFIER À LA MAIN.',
+        'cote': COTE_INDEX,
+        'quantification': {'poids': list(POIDS), 'portes': PORTES},
+        'familles': {
+            slug: {
+                'atlas': empreintes_atlas[slug],
+                'sprites': {nom: emp for nom, emp in sprites},
+            }
+            for slug, (_c, _r, _noms, sprites) in familles.items()
+        },
+    }
 
 
 def index_js(familles):
@@ -165,11 +235,11 @@ def index_js(familles):
         "// le confronte au contenu réel de `art/sprites/` : un sprite ajouté sans que",
         "// l'outil soit relancé fait rougir la suite, il ne fait pas dessiner de travers.",
         '',
-        'export const COTE_SPRITE = %d;' % COTE,
+        'export const COTE_SPRITE = %d;' % COTE_INDEX,
         '',
         'export const ATLAS = {',
     ]
-    for slug, (colonnes, rangees, noms) in familles.items():
+    for slug, (colonnes, rangees, noms, _empreintes) in familles.items():
         lignes.append(f'  {slug}: {{')
         lignes.append(f'    colonnes: {colonnes}, rangees: {rangees},')
         lignes.append('    noms: [')
@@ -196,28 +266,34 @@ def main():
         ap.error('choisir --ecrire ou --verifier')
 
     familles = {}
+    empreintes_atlas = {}
     identiques = differents = nouveaux = 0
-    for dossier, (slug, effectif, exclus) in FAMILLES.items():
-        noms, chemin = sprites_de(dossier, effectif, exclus)
-        octets, colonnes, rangees = coudre(noms, chemin)
-        familles[slug] = (colonnes, rangees, noms)
-        sortie = os.path.join(SPRITES, f'atlas-{slug}-{COTE}.png')
-        etat = comparer(sortie, octets)
-        if etat == 'identique':
-            identiques += 1
-        elif etat == 'different':
-            differents += 1
-            print(f'  ÉCART atlas-{slug}-{COTE}.png')
-        else:
-            nouveaux += 1
-            print(f'  NOUVEAU atlas-{slug}-{COTE}.png')
-        if args.ecrire:
-            with open(sortie, 'wb') as f:
-                f.write(octets)
-        print(
-            f'{dossier:16} {len(noms):4d} sprites  '
-            f'{colonnes}×{rangees}  {len(octets):7d} o  ({len(octets) * 4 // 3} o en base64)'
-        )
+    for cote in GRILLES:
+        for dossier, (slug, effectif, exclus) in FAMILLES.items():
+            noms, chemin = sprites_de(dossier, effectif, exclus, cote)
+            octets, colonnes, rangees = coudre(noms, chemin, cote)
+            if cote == COTE_INDEX:
+                sprites = [(n, empreinte(open(os.path.join(chemin, n + '.png'), 'rb').read()))
+                           for n in noms]
+                familles[slug] = (colonnes, rangees, noms, sprites)
+                empreintes_atlas[slug] = empreinte(octets)
+            sortie = os.path.join(SPRITES, f'atlas-{slug}-{cote}.{EXTENSION}')
+            etat = comparer(sortie, octets)
+            if etat == 'identique':
+                identiques += 1
+            elif etat == 'different':
+                differents += 1
+                print(f'  ÉCART atlas-{slug}-{cote}.{EXTENSION}')
+            else:
+                nouveaux += 1
+                print(f'  NOUVEAU atlas-{slug}-{cote}.{EXTENSION}')
+            if args.ecrire:
+                with open(sortie, 'wb') as f:
+                    f.write(octets)
+            print(
+                f'{dossier:16} {cote:4d}  {len(noms):4d} sprites  '
+                f'{colonnes}×{rangees}  {len(octets):7d} o  ({len(octets) * 4 // 3} o en base64)'
+            )
 
     js = index_js(familles)
     etat = comparer(INDEX, js.encode('utf-8'))
@@ -225,6 +301,17 @@ def main():
         with open(INDEX, 'w', encoding='utf-8') as f:
             f.write(js)
     print(f'src/data/atlas.js  {etat}')
+
+    manif = json.dumps(manifeste(familles, empreintes_atlas),
+                       ensure_ascii=False, indent=2, sort_keys=True) + '\n'
+    etat_manif = comparer(EMPREINTES, manif.encode('utf-8'))
+    if args.ecrire:
+        with open(EMPREINTES, 'w', encoding='utf-8') as f:
+            f.write(manif)
+    if etat_manif != 'identique':
+        differents += 1 if etat_manif == 'different' else 0
+        nouveaux += 1 if etat_manif == 'nouveau' else 0
+    print(f'atlas-empreintes.json  {etat_manif}')
     print(f'atlas identiques : {identiques} · différents : {differents} · nouveaux : {nouveaux}')
 
 

@@ -19,12 +19,11 @@ from PIL import Image
 import numpy as np
 from cond import est_fond, eroder, reduire, boite
 from final128 import pal, quant, recadrer, conditionner, ecrire, U, B, PV, OUV, cible
-from align_chenilles import aligner
 from retirer_appendice import corriger as retirer_appendice
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites()
-GRILLES = (128, 64, 32)
+GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
 
 # --- les deux passes de retouche que final128.py ne fait pas -----------------
 # Elles ne sont pas décoratives : sans elles, sept sprites sur cinquante-huit
@@ -49,49 +48,56 @@ GRILLES = (128, 64, 32)
 # chercher un traitement qui n'a plus lieu.
 APPENDICE = set()
 #
-# CHENILLES — les trois blindés à 10 points reçoivent deux bandes de chenille
-# identiques, aux mêmes coordonnées absolues. Le cadre est écrit en dur en
-# coordonnées de grille 32 (CX0=9, CX1=22, CY0=7, CY1=23) : la passe n'a de
-# sens qu'à cette grille-là, et c'est pourquoi les 128 se reproduisent sans
-# elle. En 64 et en 128 la caisse est assez large pour que les chenilles se
-# lisent d'elles-mêmes ; aucune retouche n'y est appliquée.
-CHENILLES = {'off_j_ratisseur', 'off_j_fendeur', 'off_j_belier'}
+# CHENILLES — LA PASSE EST MORTE AU LOT PIXELS, ET DEUX FOIS PLUTÔT QU'UNE.
+# Elle dessinait deux bandes de chenille sur les trois blindés à 10 points, en
+# coordonnées de grille 32 écrites en dur (CX0=9, CX1=22, CY0=7, CY1=23) : elle
+# n'avait de sens qu'à cette grille-là, et la grille 32 est sortie de `GRILLES`.
 #
-# ⚠⚠ LES DEUX `ÉCART` SONT ÉLUCIDÉS, ET ILS RESTENT — arbitré par Ethan le
-# 30/08 : « on garde les commités ». `unite/32/off_j_ratisseur.png` et
-# `unite/32/off_j_belier.png` ne se reproduisent pas depuis cette chaîne, et
-# ce n'est PAS un défaut de la passe ci-dessus. Mesuré, en grille 32 :
+# ⚠⚠ ET ELLE SERAIT RESTÉE SANS EFFET MÊME EN 32. Elle peignait dans `g`, la
+# grille d'INDICES de palette ; depuis ce lot `ecrire` ne peint plus `g`, il
+# réduit la matière par filtre. Une passe qui retouche une grille que personne
+# ne dessine plus est un garde-fou qui ment : c'est la faute que ce dépôt nomme
+# ailleurs, « un commentaire qui annonce un futur devenu présent ».
+#
+# ⚠ `tools/align_chenilles.py` RESTE AU DÉPÔT et n'est plus appelé par personne.
+# Le retirer serait une décision d'art — les bandes qu'il dessinait pourraient
+# revenir dans la source plutôt que dans l'outil —, et ce lot n'en prend aucune.
+#
+# ⚠ LES DEUX `ÉCART` PERMANENTS DU VÉRIFICATEUR PARTENT AVEC ELLE :
+# `unite/32/off_j_ratisseur.png` et `unite/32/off_j_belier.png` étaient les deux
+# seuls fichiers du dépôt que cette chaîne ne reproduisait pas, et ils étaient
+# tous les deux en grille 32.
+#
+# CE QUI SUIT SE LIT AU PASSÉ — l'enquête du 30/08 sur ces deux fichiers, gardée
+# parce qu'elle a coûté une matinée et qu'on ne la refera pas. Ils étaient les
+# deux seuls que la chaîne ne reproduisait pas ; ils sont sortis du dépôt avec
+# la grille 32, et leurs deux lignes d'`ECARTS_PERMANENTS` avec eux.
+#
+# Mesuré à l'époque, en grille 32 :
 #
 #   sprite            écarts DANS la caisse (col 9–22)   HORS caisse
 #   off_j_ratisseur                                 93             0
 #   off_j_belier                                    96             0
 #
-# LES CHENILLES SE REPRODUISENT À L'OCTET. Le zéro de la colonne de droite est
-# le fait qui compte : les bandes que `aligner` dessine, aux colonnes 7-8 et
-# 23-24, sont identiques dans les deux versions. `CX0..CX1` est le cadre de la
-# CAISSE, pas celui des chenilles — s'y tromper fait accuser cette passe d'une
-# faute qu'elle ne commet pas, et c'est l'erreur qui a été faite le 30/08 au
-# matin avant qu'on mesure.
+# LES CHENILLES SE REPRODUISAIENT À L'OCTET. Le zéro de la colonne de droite
+# était le fait qui comptait : les bandes que `aligner` dessinait, aux colonnes
+# 7-8 et 23-24, étaient identiques dans les deux versions. `CX0..CX1` est le
+# cadre de la CAISSE, pas celui des chenilles — s'y tromper faisait accuser
+# cette passe d'une faute qu'elle ne commettait pas.
 #
-# TROIS HYPOTHÈSES ONT ÉTÉ POSÉES ET RÉFUTÉES, chiffres à l'appui, pour qu'on
-# ne les repose pas :
+# TROIS HYPOTHÈSES ONT ÉTÉ POSÉES ET RÉFUTÉES, chiffres à l'appui :
 #   1. une autre planche source — `art/sources/` porte DEUX copies des blindés,
 #      `P2_3_…` (citée par final128) et `P2.3_…`, réellement différentes. La
-#      seconde donne 225 à 238 px d'écart, bien PIRE que les 93/96. Ce n'est
-#      pas la source.
-#   2. des fichiers antérieurs à cette passe — sans `aligner` l'écart monte à
-#      149 et 150, et le fendeur passe de 0 à 65. La passe RAPPROCHE du
-#      commité ; elle est juste et nécessaire.
-#   3. une autre érosion — balayée de 0 à 6. Le fendeur touche 0 exactement à
-#      3, la valeur du code ; les deux autres plafonnent à 88–93, jamais 0.
+#      seconde donnait 225 à 238 px d'écart, bien PIRE que les 93/96.
+#   2. des fichiers antérieurs à la passe — sans `aligner` l'écart montait à
+#      149 et 150, et le fendeur passait de 0 à 65.
+#   3. une autre érosion — balayée de 0 à 6. Le fendeur touchait 0 exactement à
+#      3, la valeur du code ; les deux autres plafonnaient à 88–93, jamais 0.
 #
-# CONCLUSION : ces deux fichiers ont été RETOUCHÉS À LA MAIN, ou produits par
-# une étape qui n'existe plus. C'est exactement le cas que l'invariant de
-# `main` prévoit — « on n'écrase JAMAIS un fichier existant qui ne se reproduit
-# pas ». Les deux `ÉCART` ne sont donc plus une dette : ce sont deux fichiers
-# dont la provenance est hors chaîne, et le garde-fou fait son travail en les
-# protégeant. Ne pas « corriger » la passe pour les faire rentrer, et ne pas
-# les régénérer : le dessin commité est plus propre, comparé à l'œil le 30/08.
+# CONCLUSION D'ALORS : ces deux fichiers avaient été RETOUCHÉS À LA MAIN, ou
+# produits par une étape qui n'existait plus, et l'invariant « on n'écrase
+# JAMAIS un fichier existant qui ne se reproduit pas » les protégeait. La
+# question est close autrement : la grille où ils vivaient n'est plus produite.
 
 
 # `usine` est le nom mort du bâtiment : src/data/base.js dit `depotDeVehicules`
@@ -110,10 +116,8 @@ def produire(im, boite_cellule, emprise32, ouvrage, N, sortie, nom=''):
     """emprise32 est l'emprise visée en gros pixels sur une grille de 32."""
     P = pal(ouvrage)
     cellule = im.crop(boite_cellule)
-    g = conditionner(recadrer(cellule, emprise32 * (N // 32), N), P, N)
-    if nom in CHENILLES and N == 32:
-        g = aligner(g)
-    ecrire(g, P, sortie)
+    g, matiere = conditionner(recadrer(cellule, emprise32 * (N // 32), N), P, N)
+    ecrire(g, P, sortie, matiere)
     if nom in APPENDICE:
         retirer_appendice(sortie, sortie)
     return boite(g)
