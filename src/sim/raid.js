@@ -219,65 +219,58 @@ export function problemesDuRaid(etat, baseAttaquante, cible) {
 }
 
 /**
- * Verse une ressource dans l'économie et dit ce qui n'a pas tenu.
+ * Verse un butin ENTIER dans une base — TOUT le butin, sans plafond.
  *
- * ⚠⚠ LE BUTIN SATURE, ET CE N'EST PAS ARBITRÉ — c'est la lecture que ce lot
- * retient, et elle tient en une ligne. Trois raisons :
- *   — sans elle, les quatre bâtiments de stockage du jeu perdent la moitié de
- *     leur raison d'être ; on ne monterait plus jamais une Gangue ;
- *   — le premier camp d'une partie neuve rapporte 4 050 quartz pour une capacité
- *     de 50, soit QUATRE-VINGTS FOIS le coffre. Sans plafond, le premier raid
- *     saute les huit premiers niveaux de progression ;
- *   — « rien ne se retire en silence » n'est pas violé : on ne rogne aucun stock
- *     existant, on refuse un versement qui ne rentre pas — et le rapport le DIT,
- *     champ `butinPerdu`, pour que l'écran puisse l'écrire.
- * Le surplus DÉJÀ présent, lui, reste gelé comme l'a arbitré le 26/08 : le
- * plafond effectif est `max(capacité, stock)`, jamais moins que ce qu'on a.
+ * ⚠⚠ LE BUTIN A LE DROIT DE DÉPASSER LA CAPACITÉ DEPUIS LE LOT TRANSFERT —
+ * Ethan, 02/09. Ce commentaire disait l'inverse, et il portait trois arguments
+ * qu'il faut savoir périmés plutôt que les redécouvrir : que le stockage
+ * perdrait sa raison d'être, que le premier camp sauterait huit niveaux de
+ * progression, et que `butinPerdu` sauvait « rien ne se retire en silence ».
+ * Les deux premiers restent des faits — un camp neuf rapporte bien quatre-vingts
+ * fois le coffre — mais ils sont désormais tenus par l'AUTRE bout : le stock
+ * monte au-dessus, et **tant qu'il y est, cette ressource-là cesse d'être
+ * produite dans cette base**. Le stockage garde donc sa raison d'être ; il ne
+ * borne plus le butin, il borne la PRODUCTION.
  *
- * @returns {number} ce qui n'a pas pu entrer, en milli-unités
- */
-function verser(economie, capacites, ressource, gainMilli) {
-  const actuel = economie.ressources[ressource];
-  const cap = capacites[ressource] ?? 0;
-  const plafond = actuel > cap ? actuel : cap;
-  const place = plafond - actuel;
-  if (gainMilli <= place) {
-    economie.ressources[ressource] = actuel + gainMilli;
-    return 0;
-  }
-  economie.ressources[ressource] = plafond;
-  return gainMilli - place;
-}
-
-/**
- * Verse un butin ENTIER dans une base, et dit ce qui n'a pas tenu.
+ * ⚠⚠ LE PLAFONNEMENT N'A PAS ÉTÉ DÉPLACÉ, IL A ÉTÉ RETIRÉ, ET AVEC LUI LA
+ * FONCTION `verser` QUI LE PORTAIT. Elle rendait « ce qui n'a pas pu entrer » ;
+ * plus rien ne peut ne pas entrer, donc son reste valait toujours zéro et sa
+ * signature aurait menti. `butinPerdu` disparaît du rapport de raid pour la
+ * même raison : un champ qui vaut toujours `{}` invite à écrire un écran qui ne
+ * montrera jamais rien.
  *
- * ⚠⚠ ELLE EST SORTIE D'`executerRaid` AU LOT BASES-1, ET C'EST UN DÉPLACEMENT,
- * PAS UNE ADDITION. Fonder une base sur un camp le détruit et rend son butin
- * (§4.4) : sans cette extraction, il y aurait eu DEUX codes qui plafonnent un
- * butin et comptent ce qui déborde, et le second aurait divergé du premier au
- * premier réglage — c'est la faute que `raserLaBase` a déjà value au dépôt.
+ * ⚠ LE GEL DU SURPLUS, LUI, N'A PAS BOUGÉ D'UNE LIGNE — il est dans
+ * `economie-base.js` depuis le 26/08, dans les DEUX chemins, et ce lot n'a fait
+ * que le prouver : `tickEconomieBase` et `rattrapageEconomieBase` bornent au
+ * `max(capacité, stock)`, donc un stock au-dessus ne monte plus et n'est jamais
+ * amputé. C'est ce qui rend le dépassement tenable ici.
+ *
+ * ⚠⚠ ET C'EST BIEN L'ÉCONOMIE QUI ARRÊTE LA PRODUCTION, PAS CETTE FONCTION.
+ * Elle verse, un point c'est tout. Lui faire écrire un drapeau « saturé » ferait
+ * une seconde vérité sur un fait que le stock dit déjà tout seul.
+ *
+ * ⚠ ELLE EST SORTIE D'`executerRaid` AU LOT BASES-1, ET C'EST UN DÉPLACEMENT,
+ * PAS UNE ADDITION. Fonder une base sur un camp le détruit et rend son butin :
+ * sans cette extraction, il y aurait eu DEUX codes qui versent un butin, et le
+ * second aurait divergé du premier au premier réglage — c'est la faute que
+ * `raserLaBase` a déjà value au dépôt.
  *
  * ⚠ LA BASE QUI REÇOIT EST UN ARGUMENT, et c'est tout l'intérêt : le raid verse
- * dans la base qui attaque, la fondation dans la base qui FONDE — jamais dans
- * celle qu'on vient de poser, qui n'a aucun stockage.
+ * dans la base qui attaque, la fondation dans la base qui FONDE.
  *
  * @param {object} laBase la base qui encaisse
  * @param {object} gagne butin en unités entières, par ressource
- * @returns {{verse: object, perdu: object}} en unités entières
+ * @returns {{verse: object}} en unités entières — tout ce qui est gagné est versé
  */
 export function verserLeButin(laBase, gagne) {
-  const capacites = capacitesMilli(laBase.disposition);
   const verse = {};
-  const perdu = {};
   for (const ressource of RESSOURCES) {
     const unites = gagne[ressource] ?? 0;
     if (unites === 0) continue;
-    const resteMilli = verser(laBase.economie, capacites, ressource, unites * MILLE);
-    verse[ressource] = unites - Math.floor(resteMilli / MILLE);
-    if (resteMilli > 0) perdu[ressource] = Math.floor(resteMilli / MILLE);
+    laBase.economie.ressources[ressource] += unites * MILLE;
+    verse[ressource] = unites;
   }
-  return { verse, perdu };
+  return { verse };
 }
 
 /**
@@ -496,7 +489,7 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   );
 
   // --- le butin entre dans l'économie ---------------------------------------
-  const { verse, perdu } = verserLeButin(laBase, butin(resultat, montage));
+  const { verse } = verserLeButin(laBase, butin(resultat, montage));
 
   // --- les points de recherche se rangent -----------------------------------
   const gagnesMilli = pointsRecherche(resultat, montage);
@@ -541,8 +534,11 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
     cout,
     cause: resultat.cause,
     ticks: resultat.tick,
+    // ⚠ `butinPerdu` A DISPARU AU LOT TRANSFERT, ET IL N'A PAS ÉTÉ REMPLACÉ.
+    // Le butin ne se plafonne plus : il n'y a plus rien à perdre, donc plus
+    // rien à annoncer. Le garder à `{}` aurait invité à écrire un écran qui ne
+    // montrera jamais rien.
     butin: verse,
-    butinPerdu: perdu,
     rechercheMilli: gagnesMilli.toString(),
     rase: verdict.rase,
     unitesEngagees: indices.length,

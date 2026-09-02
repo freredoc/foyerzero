@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.68.0 · build 69.
+Dernière révision : **02/09/2026**, version 0.69.0 · build 70.
 
 ---
 
@@ -41,7 +41,81 @@ Dernière révision : **02/09/2026**, version 0.68.0 · build 69.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot PIXELS), à confronter :**
+**Référence au 02/09/2026 (après le lot TRANSFERT), à confronter :**
+`npm test` → **924 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 591 262 octets**, 0 référence externe. Coût **+9 343 octets**, aucune image
+n'entre — **16 `data:image` avant, 16 après**. Marge T10 **58 738 octets,
+3,56 %**, borne inchangée à 1 650 000.
+⚠⚠ **DEUX RÈGLES SUR LE PLAFOND DE STOCKAGE, ET ELLES SE LISENT ENSEMBLE.** Le
+butin d'un raid a désormais **le droit de dépasser** la capacité ; tant que le
+stock est au-dessus, **cette ressource-là cesse d'être produite dans cette
+base**. Le transfert entre bases, lui, est **REFUSÉ** s'il ferait déborder :
+rien ne se perd jamais. Arbitré par Ethan le 02/09.
+⚠⚠ **LA BASE DE RÉFÉRENCE DU BRIEF N'A PAS ÉTÉ RETROUVÉE, ET C'EST LE LOT PIXELS
+QUI L'EXPLIQUE ENTIÈREMENT.** Le brief était écrit après BASES-1 — 0.67.0 / 68,
+1 388 959 octets, 902 tests ; PIXELS a été mergé entre-temps. Les DEUX faits dont
+ce lot-ci dépend, eux, étaient intacts : `SAVE_VERSION` à **24** et `butinPerdu`
+dans **exactement les quatre fichiers** annoncés. PIXELS ne touche `src/` que par
+`src/ui/banc.js`. **Signalé à Ethan plutôt que traité comme un point d'arrêt.**
+⚠⚠ **`butinPerdu` DISPARAÎT, ET LE PLAFONNEMENT AVEC.** `verser` — la fonction
+privée de `raid.js` qui rabattait — est RETIRÉE, pas déplacée : elle rendait « ce
+qui n'a pas pu entrer », plus rien ne peut ne pas entrer, donc sa signature
+aurait menti. Le champ `butinPerdu` quitte le rapport de raid pour la même
+raison : un champ qui vaut toujours `{}` invite à écrire un écran qui ne montrera
+jamais rien.
+⚠⚠ **LE GEL DU SURPLUS N'A PAS ÉTÉ ÉCRIT PAR CE LOT — IL A ÉTÉ PROUVÉ.** Il est
+dans `economie-base.js` depuis le 26/08, dans les DEUX chemins ; ce lot retire ce
+qui l'empêchait. **Mesuré : `tickEconomieBase` × 4 000 et
+`rattrapageEconomieBase(4 000)` rendent des états IDENTIQUES en partant
+au-dessus du plafond, résidus compris**, le quartz gelé et la scorie encore
+productive. C'était un point d'arrêt du brief : il n'a pas été atteint.
+⚠⚠ **CINQ CHEMINS DE RAPPORT BOUGENT, ET PAS UN DE PLUS** — mesurés en rejouant
+`origin/main` et HEAD côte à côte, en profondeur : `offense.butinPerdu`,
+`offense.butin.{quartz,scorie}`, et `defense.sanction.perdu.{quartz,scorie}`. Ce
+dernier est la conséquence la moins évidente du lot, et elle est juste : un
+rasage détruit les ressources STOCKÉES, que le butin peut maintenant porter plus
+haut. La sanction détruit donc davantage.
+⚠ **LE TÉMOIN DE BASES-0 TIENT, AVEC QUINZE COUPLES DÉCLARÉS SUR 322** —
+`rapports` et `economie` à partir de la phase 7, qui est le premier raid. ⚠
+`economie` ne bouge PAS en phase 14, et c'est mesuré : la base y est rasée trois
+fois, un rasage met les stocks à zéro, et les vingt-quatre heures qui suivent
+saturent à la capacité quoi qu'un butin ait versé avant.
+⚠⚠ **AUCUN `Math.sqrt`, ET L'ARRONDI EST EXACT EN ENTIERS** :
+`round(√x) = n ⟺ (2n−1)² ≤ 4x < (2n+1)²`. **Vérifié sur les 7 879 couples de 0 à
+140 qui tombent dans les 99 cases : zéro désaccord** avec la racine flottante. La
+boucle est BORNÉE explicitement — cent tours au pire — pour qu'une position
+absurde ne la fasse pas tourner des milliards de fois.
+⚠⚠ **ÉCART DÉCLARÉ SUR T6 : « le grep reste vide » ÉTAIT IMPOSSIBLE.** Deux
+`Math.sqrt` existent depuis les lots ÉCRAN-CARTE et RETOURS-DU-31, dans le chemin
+du DESSIN — `render/terrain.js` normalise une somme pondérée, `ui/monde.js` un
+vecteur d'écran —, et le second porte déjà le commentaire qui dit pourquoi. La
+garde tient donc la doctrine d'EUCLIDE : **interdiction TOTALE dans `src/sim/` et
+`src/data/`**, liste FERMÉE et nommée ailleurs.
+⚠ **TAXE DE 1 % PAR CASE, PERDUE — elle ne va nulle part**, et un test le dit de
+face : le total des deux bases baisse d'exactement ce qui est annoncé perdu. M1,
+sur un aller-retour de 1 000 unités : **19 % perdus à 10 cases, 75 % à 50,
+99,99 % à 99**.
+⚠ **LE REFUS SE CALCULE SUR LE REÇU, PAS SUR L'ENVOYÉ**, et le plafond de la
+destination est `max(cap, stock)` comme partout depuis le 26/08 — une base déjà
+au-dessus ne peut donc **rien** recevoir.
+⚠⚠ **TROIS FALSIFICATIONS SUR QUATORZE NE MORDAIENT PAS AU PREMIER RELEVÉ**, et
+les tests qui les attrapent ont été écrits APRÈS la mesure : le refus écrit
+`>= 99` (aucun test ne faisait PASSER un transfert à 99 cases), le débordement
+comparé à l'envoyé (le montage enfermait son assertion dans un `if` jamais vrai),
+et une troisième qui s'est révélée être une mauvaise falsification —
+`max(cap,stock)−stock` et `cap−stock` bornés à zéro rendent le même nombre.
+⚠ **LA PRÉMISSE DE `fondation.js` EST TOMBÉE, LE COMPORTEMENT EST GARDÉ** : le
+butin d'un camp fondé dessus va toujours à la base QUI FONDE, mais l'argument
+(« la neuve déborderait en entier ») n'est plus valide. **DÉCISION À ROUVRIR PAR
+ETHAN** — le commentaire porte les deux côtés.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 24.** Le transfert est INSTANTANÉ :
+aucun champ persistant. **Mesuré : la sauvegarde grandit de ZÉRO octet** sur les
+vingt-cinq graines du témoin, et un test asserte qu'aucune clé n'entre dans
+l'état.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot PIXELS :**
 `npm test` → **903 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 581 919 octets**, 0 référence externe.
 ⚠⚠ **LA CHAÎNE GRAPHIQUE A CESSÉ DE FAIRE RENTRER LES PLANCHES DANS UN MOULE.**
@@ -1112,7 +1186,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 27 fichiers
+src/sim/                simulation déterministe, sans DOM — 28 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
@@ -1131,6 +1205,7 @@ src/sim/                simulation déterministe, sans DOM — 27 fichiers
   raid-ouvrage.js       l'autre sens : quand l'Ouvrage vient, ce qu'il casse, ce qu'il rase
   deplacement.js        la base bouge : portée, délai, et LE seul écrivain de `position`
   fondation.js          fonder une base de plus : où c'est permis, ce qu'on écrase, qui encaisse
+  transfert.js          envoyer des ressources d'une base à l'autre : distance, taxe, refus
   reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
@@ -1178,7 +1253,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 9 fic
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
+src/ui/                 les sept écrans et leurs éditeurs — 11 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
@@ -1186,6 +1261,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
   monde.js              l'écran de la carte : canevas, quatre crans, défilement au doigt
   raid.js               l'écran de raid : la cible, l'armée, le combat rejoué
   recherche.js          l'arbre du joueur : trois panneaux sur un rail, achat en deux touchers
+  transfert.js          le panneau de transfert : il annonce le REÇU, il ne décide de rien
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
@@ -1209,7 +1285,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   47 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
+test/                   48 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -1217,7 +1293,7 @@ test/                   47 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche  maj  territoire  bases
+  sprite  state  recherche  maj  territoire  bases  transfert
   ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

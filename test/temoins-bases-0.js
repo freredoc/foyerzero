@@ -1265,3 +1265,261 @@ export const RAPPORTS_DEPLACES_PAR_BASES_1 = {
 export const CHAMPS_AJOUTES_PAR_BASES_1 = [
   'prochaineInstanceSatellite', 'basesAutorisees', 'satellitesDetruits',
 ];
+
+/**
+ * Les couples que le lot TRANSFERT a légitimement déplacés.
+ *
+ * ⚠⚠ QUINZE COUPLES, ET PAS UN DE PLUS — sur les 322 que le témoin garde. Deux
+ * champs bougent, à partir de la phase 7, qui est le PREMIER RAID :
+ *   — `rapports`, parce que le rapport de raid a perdu `butinPerdu` ;
+ *   — `economie`, parce que le butin ne se plafonne plus et passe au-dessus.
+ * Les deux sont exactement ce que le lot fait ; tout le reste — position,
+ * fondation, champs, obstacles, disposition, garnison, armée, satellites,
+ * recherche, tutoriel, POI, sites entamés — garde l'empreinte d'AVANT.
+ *
+ * ⚠ `economie` NE BOUGE PAS EN PHASE 14, ET C'EST MESURÉ, PAS UNE LACUNE. La
+ * phase 14 joue vingt-quatre heures sous le feu de l'Ouvrage : la base y est
+ * rasée TROIS fois — position 220 → 280, soit trois bonds de vingt cases —, et
+ * un rasage met les stocks à ZÉRO. Les vingt-quatre heures qui suivent saturent
+ * la base à sa capacité — 118 000 milli, la même sur les vingt-cinq graines —,
+ * quoi qu'un butin ait pu y verser avant. `rapports`, lui, bouge encore : la
+ * liste des dix derniers rapports garde la trace du raid.
+ */
+export const DEPLACES_PAR_TRANSFERT = {
+  "p07_raidProcheApres": {
+    "rapports": "d0bddd5be6511ad8",
+    "economie": "3899b0b65f03b24d"
+  },
+  "p08_100ticks": {
+    "rapports": "d0bddd5be6511ad8",
+    "economie": "e185681daffeb193"
+  },
+  "p09_deplace": {
+    "rapports": "d0bddd5be6511ad8",
+    "economie": "e185681daffeb193"
+  },
+  "p10_montee": {
+    "rapports": "d0bddd5be6511ad8",
+    "economie": "e185681daffeb193"
+  },
+  "p11_raidOuvrageApres": {
+    "rapports": "058fb7727f0ab0f6",
+    "economie": "e185681daffeb193"
+  },
+  "p12_veilleDuRaid": {
+    "rapports": "058fb7727f0ab0f6",
+    "economie": "e185681daffeb193"
+  },
+  "p13_apresLeRaid": {
+    "rapports": "ae6c10a3cc7acc8d",
+    "economie": "9e48132e15e41325"
+  },
+  "p14_sousLeFeu": {
+    "rapports": "0b20cb72605e1d60"
+  }
+};
+
+/**
+ * Ce que TRANSFERT ajoute à la sauvegarde, en octets : **ZÉRO**.
+ *
+ * ⚠⚠ ET C'EST UNE EXIGENCE DU BRIEF, PAS UN CONSTAT AGRÉABLE. Son §2.8 pose que
+ * le transfert est INSTANTANÉ — aucun champ persistant — et que `SAVE_VERSION`
+ * ne bouge pas. Un écart non nul ici voudrait dire qu'un état a été ajouté sans
+ * qu'on s'en aperçoive. La mesure est prise en phase 5, avant tout raid : elle
+ * porte donc sur la FORME de la sauvegarde, pas sur son contenu.
+ */
+export const OCTETS_AJOUTES_PAR_TRANSFERT = 0;
+
+/**
+ * Les empreintes par graine, RECALCULÉES au lot TRANSFERT.
+ *
+ * ⚠ ELLES AGRÈGENT LES QUATORZE PHASES ET LES VINGT-TROIS CHAMPS À LA FOIS,
+ * donc les deux champs déplacés les font toutes bouger. C'est l'axe PAR CHAMP
+ * qui garde la finesse ; celui-ci ne dit plus que « telle graine a divergé ».
+ */
+export const EMPREINTES_PAR_GRAINE_TRANSFERT = {
+  "1": "67257bbff17d7fe0",
+  "2": "976f33f3e10219cb",
+  "3": "ba807857eb80fabf",
+  "4": "eda6bf0f5bccbb19",
+  "5": "0edeb6f80e0b0c48",
+  "6": "835571778a712729",
+  "7": "aeca68df31ca2515",
+  "8": "19515ba115e08c3b",
+  "9": "235089ec485e7953",
+  "10": "33bff12de99e11c4",
+  "11": "6d9adefedfa3144b",
+  "12": "31753fb0b328ade2",
+  "13": "4e953cdcfc59bef7",
+  "14": "185ed2f8f2a80af5",
+  "15": "6b9bbf0c8cddd66b",
+  "16": "68380cc8db66f171",
+  "17": "a05646d907d507d2",
+  "18": "e8e1e5fdb74c3177",
+  "19": "3211ab13543cc488",
+  "20": "5946b3533422bf4c",
+  "21": "925ffd0d7675951b",
+  "22": "544f3dab82b93043",
+  "23": "f8300c68492349fe",
+  "24": "cbff442e7571bbe5",
+  "25": "88c32de83704a3ce"
+};
+
+/**
+ * Les empreintes des DEUX rapports de raid, recalculées au lot TRANSFERT.
+ *
+ * ⚠⚠ LES CINQUANTE BOUGENT, ET C'EST POURQUOI LE TEST NE SE CONTENTE PAS
+ * D'ELLES. Un rapport qui perd une clé change d'empreinte quoi qu'il arrive :
+ * ces cinquante valeurs ne prouveraient donc RIEN sur ce qui reste. Le test
+ * asserte à côté, et structurellement, que la seule clé partie est
+ * `butinPerdu` — c'est cette assertion-là qui porte la preuve ; celles-ci ne
+ * gardent que l'avenir.
+ */
+export const RAPPORTS_TRANSFERT = {
+  "1": {
+    "raidProcheRapport": "f97175f268e34469",
+    "raidOuvrageRapport": "8153b480b0220d44"
+  },
+  "2": {
+    "raidProcheRapport": "e93508dd441ceb55",
+    "raidOuvrageRapport": "d28fda74fac6930c"
+  },
+  "3": {
+    "raidProcheRapport": "adbbe64e94ddc206",
+    "raidOuvrageRapport": "9c5b00c511279969"
+  },
+  "4": {
+    "raidProcheRapport": "67219e4be7bd9b5c",
+    "raidOuvrageRapport": "2d789bc6bc595924"
+  },
+  "5": {
+    "raidProcheRapport": "bb48a9a369a6b8a8",
+    "raidOuvrageRapport": "9c9ee2e79a5b196e"
+  },
+  "6": {
+    "raidProcheRapport": "9880de268408ba80",
+    "raidOuvrageRapport": "436e44a615513b47"
+  },
+  "7": {
+    "raidProcheRapport": "e11dda119125735c",
+    "raidOuvrageRapport": "70b14d91a2ac7d90"
+  },
+  "8": {
+    "raidProcheRapport": "8b16fe966d45b463",
+    "raidOuvrageRapport": "decbf4769fc7ae63"
+  },
+  "9": {
+    "raidProcheRapport": "860ad0e6cca13862",
+    "raidOuvrageRapport": "793fb6a4f3953d44"
+  },
+  "10": {
+    "raidProcheRapport": "8b8cd643b96ab9d0",
+    "raidOuvrageRapport": "3d4524c05a1b8cc3"
+  },
+  "11": {
+    "raidProcheRapport": "66245565b596a64f",
+    "raidOuvrageRapport": "6bda311d4b766619"
+  },
+  "12": {
+    "raidProcheRapport": "657ab24a60807e67",
+    "raidOuvrageRapport": "4e8722e38e439a62"
+  },
+  "13": {
+    "raidProcheRapport": "f4f51a62b53080db",
+    "raidOuvrageRapport": "3ddb45067867576e"
+  },
+  "14": {
+    "raidProcheRapport": "4f63a5fa3536b6ea",
+    "raidOuvrageRapport": "ca9b469ba661cc83"
+  },
+  "15": {
+    "raidProcheRapport": "5ec4e69eb479cf27",
+    "raidOuvrageRapport": "234fe0262f9332a1"
+  },
+  "16": {
+    "raidProcheRapport": "def5f032c4642449",
+    "raidOuvrageRapport": "b54c8cad87ef37c8"
+  },
+  "17": {
+    "raidProcheRapport": "9153b628a759c59e",
+    "raidOuvrageRapport": "68abfd0bbdd0d9e4"
+  },
+  "18": {
+    "raidProcheRapport": "9beb94c19abcc4b0",
+    "raidOuvrageRapport": "5cbb435339e7cc8c"
+  },
+  "19": {
+    "raidProcheRapport": "7086daafeceeb36b",
+    "raidOuvrageRapport": "09275f44a365fa3a"
+  },
+  "20": {
+    "raidProcheRapport": "3c3ddc06bdff00c9",
+    "raidOuvrageRapport": "aa6162730ab07dd5"
+  },
+  "21": {
+    "raidProcheRapport": "9814b50503c6643d",
+    "raidOuvrageRapport": "b94bd4b606500867"
+  },
+  "22": {
+    "raidProcheRapport": "feea326c6c4d5d86",
+    "raidOuvrageRapport": "087430e68044002f"
+  },
+  "23": {
+    "raidProcheRapport": "803fc8d6038bd74f",
+    "raidOuvrageRapport": "b79b2bfd3e6bdb83"
+  },
+  "24": {
+    "raidProcheRapport": "542fb4e0e5d65e18",
+    "raidOuvrageRapport": "8299391115f94b60"
+  },
+  "25": {
+    "raidProcheRapport": "6691615a1a8943a7",
+    "raidOuvrageRapport": "e005af147f522c5c"
+  }
+};
+
+/**
+ * Les clés que les DEUX rapports de raid portaient AVANT le lot TRANSFERT.
+ *
+ * ⚠⚠ RELEVÉES SUR `origin/main`, DANS UN ARBRE DÉTACHÉ, PAS RECONSTRUITES DEPUIS
+ * LE CODE D'APRÈS. Un « avant » qu'on dérive de l'« après » ne prouve rien : il
+ * dirait toujours ce qu'on veut lui faire dire. Elles servent à asserter
+ * STRUCTURELLEMENT que la seule clé partie est `butinPerdu` — là où une
+ * empreinte ne dirait que « ça a bougé ».
+ *
+ * ⚠⚠ LES DEUX SONT DES RAIDS DU JOUEUR, ET LE NOM TROMPE. `raidProche` vise le
+ * satellite le plus proche, `raidOuvrage` une BASE de l'Ouvrage : les deux
+ * passent par `executerRaid`, donc les deux portaient `butinPerdu`. Le rapport
+ * de DÉFENSE — celui que `subirUnRaid` produit quand l'Ouvrage vient — n'est pas
+ * dans ce témoin-ci, et il n'a jamais porté `butinPerdu` : l'Ouvrage ne pille
+ * pas.
+ */
+export const CLES_DU_RAPPORT_AVANT_TRANSFERT = [
+  'butin', 'butinPerdu', 'cause', 'cible', 'cout', 'pointsRestants', 'rase',
+  'rechercheMilli', 'reparationInduite', 'restantBatiments', 'restantDefense',
+  'restantEtai', 'restantSouche', 'sens', 'ticks', 'unitesAuPlancher',
+  'unitesEngagees', 'verdict',
+];
+
+/**
+ * Les CINQ chemins des rapports de raid que le lot TRANSFERT déplace, et les
+ * seuls — mesurés en rejouant `origin/main` et HEAD côte à côte sur cinq
+ * graines, puis comparés champ par champ, en profondeur.
+ *
+ * ⚠⚠ C'EST CETTE LISTE QUI PORTE LA PREUVE, PAS LES CINQUANTE EMPREINTES. Elle
+ * dit que rien d'autre n'a bougé dans un rapport de raid — ni le verdict, ni les
+ * quatre pourcentages, ni la recherche, ni le coût, ni les unités engagées.
+ *
+ * ⚠ `defense.sanction.perdu` EST LA CONSÉQUENCE LA MOINS ÉVIDENTE DU LOT, et
+ * elle est juste : un rasage détruit les ressources STOCKÉES, et le butin peut
+ * désormais les porter au-dessus du plafond. La sanction détruit donc davantage.
+ * Ce n'est pas une perte de plus : c'est la même règle appliquée à un stock plus
+ * gros.
+ */
+export const CHEMINS_DEPLACES_PAR_TRANSFERT = [
+  'defense.sanction.perdu.quartz',
+  'defense.sanction.perdu.scorie',
+  'offense.butin.quartz',
+  'offense.butin.scorie',
+  'offense.butinPerdu',
+];

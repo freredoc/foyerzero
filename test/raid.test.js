@@ -156,7 +156,12 @@ test('paiement — on paie avant de partir, et un raid raté coûte quand même'
   assert.ok(rapport.cause !== 'souche');
 });
 
-test('butin — il sature, et le rapport DIT ce qui n\'est pas rentré', () => {
+test('TRANSFERT T4 — le butin DÉPASSE la capacité, et rien ne se perd', () => {
+  // ⚠⚠ CE TEST DISAIT L'INVERSE JUSQU'AU LOT TRANSFERT — « il sature, et le
+  // rapport DIT ce qui n'est pas rentré ». Il n'est pas RETIRÉ, il est
+  // RETOURNÉ : la règle a changé le 02/09, le butin a désormais le droit de
+  // passer au-dessus du plafond, et c'est la PRODUCTION qui s'arrête tant qu'il
+  // y est. La garde mesure donc maintenant qu'il monte VRAIMENT au-dessus.
   const etat = partieArmee();
   const capacites = capacitesMilli(baseCourante(etat).disposition);
   const avant = { ...baseCourante(etat).economie.ressources };
@@ -164,31 +169,40 @@ test('butin — il sature, et le rapport DIT ce qui n\'est pas rentré', () => {
   const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
 
   // ⚠ MONTAGE FALSIFIABLE, ET IL MORD FORT : un camp de niveau 1 rapporte
-  // largement plus que le coffre d'une base neuve. Il DOIT donc y avoir de la
-  // perte, sinon ce test ne mesurerait rien.
-  assert.ok(Object.keys(rapport.butinPerdu).length > 0, 'rien n\'a débordé : montage sans mordant');
-
+  // largement plus que le coffre d'une base neuve. Le stock DOIT donc finir
+  // au-dessus, sinon ce test ne mesurerait rien.
+  let auMoinsUnDepassement = false;
   for (const r of ['quartz', 'scorie']) {
-    const cap = capacites[r];
-    assert.ok(baseCourante(etat).economie.ressources[r] <= Math.max(cap, avant[r]), `${r} au-dessus du plafond`);
-    // Ce qui est entré plus ce qui est perdu fait le butin complet — rien ne
-    // disparaît sans être compté.
-    const entre = (baseCourante(etat).economie.ressources[r] - avant[r]) / 1000;
+    const apres = baseCourante(etat).economie.ressources[r];
+    // Tout ce que le rapport annonce est VRAIMENT entré, au milli près.
+    const entre = (apres - avant[r]) / 1000;
     assert.equal(entre, rapport.butin[r] ?? 0, `${r} : le rapport ment sur ce qui est entré`);
+    if (apres > Math.max(capacites[r], avant[r])) auMoinsUnDepassement = true;
   }
+  assert.ok(auMoinsUnDepassement,
+    'aucune ressource ne dépasse son plafond : le montage ne mesure rien, ou le butin plafonne encore');
+
+  // ⚠ ET LE RAPPORT NE PORTE PLUS `butinPerdu`. Un champ qui vaudrait toujours
+  // `{}` inviterait à écrire un écran qui ne montrera jamais rien.
+  assert.equal('butinPerdu' in rapport, false, '`butinPerdu` est revenu dans le rapport');
 });
 
-test('butin — un stock DÉJÀ au-dessus du plafond n\'est pas rogné', () => {
-  // L'arbitrage du 26/08 : le surplus gèle, il ne se rabat pas. Un raid ne doit
-  // pas devenir l'occasion de le rogner.
+test('TRANSFERT T4 bis — un stock déjà au-dessus du plafond monte encore', () => {
+  // ⚠ L'arbitrage du 26/08 tient toujours — le surplus gèle, il ne se rabat
+  // pas — mais il ne suffit plus : depuis TRANSFERT, un raid doit pouvoir
+  // AJOUTER à un stock déjà au-dessus. Ce test exigeait l'inverse (« le surplus
+  // a été rogné » ET « la perte est rapportée ») ; la première moitié reste,
+  // la seconde est retournée.
   const etat = partieArmee();
   const capacites = capacitesMilli(baseCourante(etat).disposition);
   baseCourante(etat).economie.ressources.quartz = capacites.quartz * 3;
   const avant = baseCourante(etat).economie.ressources.quartz;
 
   const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
-  assert.equal(baseCourante(etat).economie.ressources.quartz, avant, 'le surplus a été rogné');
-  assert.ok((rapport.butinPerdu.quartz ?? 0) > 0, 'la perte n\'est pas rapportée');
+  const apres = baseCourante(etat).economie.ressources.quartz;
+  assert.ok(apres > avant, 'le butin n\'a rien ajouté à un stock déjà au-dessus du plafond');
+  assert.equal(apres - avant, (rapport.butin.quartz ?? 0) * 1000, 'le rapport ment sur ce qui est entré');
+  assert.ok(apres > capacites.quartz, 'le montage ne mesure rien : le stock est retombé sous le plafond');
 });
 
 test('recherche — elle s\'accumule en chaîne décimale, et reste exacte', () => {
