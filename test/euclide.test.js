@@ -296,7 +296,7 @@ test('EUCLIDE T7 — la distance de la CARTE et celle du COMBAT restent séparé
 // ---------------------------------------------------------------------------
 
 test('EUCLIDE T8 — la migration 20 → 21 vide les dégâts de site et les POI acquis', () => {
-  assert.equal(SAVE_VERSION, 21, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 22, 'le bump de la version des sauvegardes a été oublié');
 
   const v20 = JSON.parse(serialiser(creerEtat(2026), 0));
   v20.version = 20;
@@ -308,7 +308,7 @@ test('EUCLIDE T8 — la migration 20 → 21 vide les dégâts de site et les POI
   assert.ok(v20.poisAcquis.length > 0, 'le montage ne mesure rien');
 
   const migre = migrer(structuredClone(v20));
-  assert.equal(migre.version, 21);
+  assert.equal(migre.version, 22);
   assert.deepEqual(migre.sitesEntames, {}, 'les dégâts de site ont été recopiés');
   assert.deepEqual(migre.poisAcquis, [], 'les POI acquis ont été recopiés');
 
