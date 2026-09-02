@@ -33,6 +33,7 @@ import {
   lignesDeMission, libelleAvancement, compteDObjectif, vueDuTutoriel,
   signatureDuTutoriel, MARQUE_A_VENIR,
 } from '../src/ui/mission.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...c) => readFileSync(join(RACINE, ...c), 'utf8');
@@ -55,8 +56,8 @@ function baseNeuve(graine = 7) {
 
 /** Une base à qui rien ne manque : on mesure la chaîne, pas l'économie. */
 function approvisionner(etat) {
-  for (const r of Object.keys(etat.economie.ressources)) {
-    etat.economie.ressources[r] = 9_000_000_000;
+  for (const r of Object.keys(baseCourante(etat).economie.ressources)) {
+    baseCourante(etat).economie.ressources[r] = 9_000_000_000;
   }
   return etat;
 }
@@ -65,7 +66,7 @@ function poserOuLever(etat, id, ressource = null) {
   const g = GEOMETRIE_BASE;
   for (let r = g.premiereRangee; r <= g.derniereRangee; r++) {
     for (let c = g.premiereColonne; c <= g.derniereColonne; c++) {
-      if (ressource !== null && ressourceDeLaCase(etat.champs, r, c) !== ressource) continue;
+      if (ressource !== null && ressourceDeLaCase(baseCourante(etat).champs, r, c) !== ressource) continue;
       if (problemesDeLaPose(etat, id, r, c).length > 0) continue;
       poser(etat, id, r, c);
       return { rangee: r, colonne: c };
@@ -88,14 +89,14 @@ function poserGarnisonOuLever(etat, id, niveau) {
 }
 
 function monter(etat, id, niveau) {
-  for (let i = 0; i < etat.disposition.length; i++) {
-    while (etat.disposition[i].id === id && etat.disposition[i].niveau < niveau) ameliorer(etat, i);
+  for (let i = 0; i < baseCourante(etat).disposition.length; i++) {
+    while (baseCourante(etat).disposition[i].id === id && baseCourante(etat).disposition[i].niveau < niveau) ameliorer(etat, i);
   }
 }
 
 function monterTout(etat, niveau) {
-  for (let i = 0; i < etat.disposition.length; i++) {
-    while (etat.disposition[i].niveau < niveau) ameliorer(etat, i);
+  for (let i = 0; i < baseCourante(etat).disposition.length; i++) {
+    while (baseCourante(etat).disposition[i].niveau < niveau) ameliorer(etat, i);
   }
 }
 
@@ -149,8 +150,8 @@ function gestesDeLaChaine(etat) {
     }],
     ['les trois moyennes', () => {
       monterTout(etat, 7);
-      for (const p of etat.armee) p.niveau = 6;
-      for (const p of etat.garnison) p.niveau = 5;
+      for (const p of baseCourante(etat).armee) p.niveau = 6;
+      for (const p of baseCourante(etat).garnison) p.niveau = 5;
     }],
   ];
 }
@@ -198,15 +199,15 @@ test('missions — la chaîne tient dans les emplacements qu\'elle fait ouvrir',
     geste();
     const ouverts = emplacementsDuNiveau(niveauDuChantier(etat));
     assert.ok(
-      etat.disposition.length <= ouverts,
-      `après « ${quoi} » : ${etat.disposition.length} bâtiments pour ${ouverts} emplacements`,
+      baseCourante(etat).disposition.length <= ouverts,
+      `après « ${quoi} » : ${baseCourante(etat).disposition.length} bâtiments pour ${ouverts} emplacements`,
     );
   }
 
   // ⚠ MESURÉ, ET LA MARGE EST NULLE : la chaîne pose EXACTEMENT le nombre de
   // bâtiments que le Chantier de niveau 5 ouvre. Une mission de plus, ou une
   // table d'emplacements retouchée, et le tutoriel devient injouable.
-  assert.equal(etat.disposition.length, 12, 'la chaîne ne pose plus douze bâtiments');
+  assert.equal(baseCourante(etat).disposition.length, 12, 'la chaîne ne pose plus douze bâtiments');
   assert.equal(emplacementsDuNiveau(5), 12, 'la table d\'emplacements du Chantier a bougé');
 
   // ⚠⚠ ET LA MESURE CI-DESSUS NE SUFFISAIT PAS — LA FALSIFICATION L'A MONTRÉ.
@@ -239,7 +240,7 @@ test('missions — la chaîne tient dans les emplacements qu\'elle fait ouvrir',
 test('missions — elles LISENT l\'état, elles ne l\'écrivent jamais', () => {
   const etat = jouerToutLeTutoriel();
   const photo = JSON.stringify({
-    d: etat.disposition, e: etat.economie, g: etat.garnison, a: etat.armee, t: etat.tutoriel,
+    d: baseCourante(etat).disposition, e: baseCourante(etat).economie, g: baseCourante(etat).garnison, a: baseCourante(etat).armee, t: etat.tutoriel,
   });
   assert.ok(photo.length > 500, 'le montage ne photographie rien de substantiel');
 
@@ -250,7 +251,7 @@ test('missions — elles LISENT l\'état, elles ne l\'écrivent jamais', () => {
 
   assert.equal(
     JSON.stringify({
-      d: etat.disposition, e: etat.economie, g: etat.garnison, a: etat.armee, t: etat.tutoriel,
+      d: baseCourante(etat).disposition, e: baseCourante(etat).economie, g: baseCourante(etat).garnison, a: baseCourante(etat).armee, t: etat.tutoriel,
     }),
     photo,
     'une mission a modifié l\'état — elles n\'ont le droit que de le lire',
@@ -273,7 +274,7 @@ test('missions — rien n\'est mémorisé : défaire un geste décoche sa missio
   // Et côté bâtiments, la même chose.
   const avantDemolition = etatDesMissions(etat).find((m) => m.id === 'qg-et-complexe');
   assert.equal(avantDemolition.faite, true);
-  demolir(etat, etat.disposition.findIndex((b) => b.id === 'complexeDeDefense'));
+  demolir(etat, baseCourante(etat).disposition.findIndex((b) => b.id === 'complexeDeDefense'));
   assert.equal(etatDesMissions(etat).find((m) => m.id === 'qg-et-complexe').faite, false);
 });
 
@@ -526,7 +527,7 @@ test('missions — aucune ne lit l\'économie, et l\'onglet peut donc se peindre
   );
   // Falsifiable des deux côtés : le motif attrape une lecture de l'économie, et
   // le retrait des imports ne l'aveugle pas sur le corps du fichier.
-  assert.ok(/\beconomie\b/.test('const q = etat.economie.stocks.quartz;'));
+  assert.ok(/\beconomie\b/.test('const q = baseCourante(etat).economie.stocks.quartz;'));
   assert.ok(/\beconomie\b/.test('const { economie } = etat;'));
   assert.ok(source.includes('ECONOMIE_NIVEAU'), 'le retrait des imports a emporté le corps du fichier');
 });

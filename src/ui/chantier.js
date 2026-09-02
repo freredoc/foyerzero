@@ -71,6 +71,7 @@ import {
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES } from '../data/combat.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
+import { baseCourante } from '../sim/base-courante.js';
 
 // ---------------------------------------------------------------------------
 // Formatage — la seule couche qui a le droit de quitter les entiers du moteur
@@ -455,7 +456,11 @@ export const NOMBRE_DE_BASES = 1;
  * @returns {{libelle: string, precedente: boolean, suivante: boolean}}
  */
 export function navigationEntreBases(etat) {
-  if (!etat || !Array.isArray(etat.disposition)) {
+  // ⚠ L'ÉTAT SE VÉRIFIE AVANT D'ÊTRE DÉRÉFÉRENCÉ. `baseCourante(null)` lève un
+  // message qui parle de `bases` ; l'appelant, lui, a passé `null`, et c'est ça
+  // qu'il faut lui dire. Même leçon que la garde `fondation` de `charger`.
+  if (!etat || !Array.isArray(etat.bases)
+    || !Array.isArray(baseCourante(etat).disposition)) {
     throw new TypeError('chantier : état de jeu absent ou malformé');
   }
   return {
@@ -824,16 +829,24 @@ export function resumeDeLaBase(etat) {
   // ⚠ LES TROIS LISTES SONT EXIGÉES, PAS SEULEMENT LA PREMIÈRE. Depuis que les
   // niveaux de défense et d'armée sont réels, un état amputé de `garnison`
   // rendrait un `TypeError` venu du fond de `sim/`, loin de l'appelant fautif.
-  if (!etat || !Array.isArray(etat.disposition)
-      || !Array.isArray(etat.garnison) || !Array.isArray(etat.armee)) {
+  //
+  // ⚠ ET L'ENVELOPPE DE BASES SE VÉRIFIE EN PREMIER — lot BASES-0. Sans elle,
+  // `baseCourante` lèverait un message qui parle de `bases` là où l'appelant a
+  // passé `null` ou un montage amputé.
+  if (!etat || !Array.isArray(etat.bases)) {
     throw new TypeError('chantier : état de jeu absent ou malformé');
   }
-  const capacites = capacitesMilli(etat.disposition);
+  const laBase = baseCourante(etat);
+  if (!Array.isArray(laBase.disposition)
+      || !Array.isArray(laBase.garnison) || !Array.isArray(laBase.armee)) {
+    throw new TypeError('chantier : état de jeu absent ou malformé');
+  }
+  const capacites = capacitesMilli(laBase.disposition);
   // ⚠ LES MAJORATIONS DE POI PASSENT ICI AUSSI, ET C'EST OBLIGATOIRE. L'écran
   // qui les oublierait afficherait un débit que le moteur ne produit pas — et
   // le joueur lirait l'écart comme un bogue d'économie.
   const debits = debitsMilliParHeure(
-    etat.disposition, etat.champs, majorationsDeProduction(etat.poisAcquis ?? []),
+    laBase.disposition, laBase.champs, majorationsDeProduction(etat.poisAcquis ?? []),
   );
 
   const total = {};
@@ -844,7 +857,7 @@ export function resumeDeLaBase(etat) {
     }
   }
 
-  const chantier = etat.disposition.find((b) => b.id === 'chantierDeConstruction');
+  const chantier = laBase.disposition.find((b) => b.id === 'chantierDeConstruction');
   if (chantier === undefined) {
     // `verifierEtat` refuse déjà une base sans Chantier au chargement ; la garde
     // est ici pour que l'écran nomme la faute au lieu de rendre « NaN / NaN ».
@@ -854,12 +867,12 @@ export function resumeDeLaBase(etat) {
   return {
     ressources: RESSOURCES.map((cle) => ({
       cle,
-      stockMilli: etat.economie.ressources[cle],
+      stockMilli: laBase.economie.ressources[cle],
       capaciteMilli: capacites[cle],
       debitMilli: total[cle],
     })),
     emplacements: {
-      poses: etat.disposition.length,
+      poses: laBase.disposition.length,
       ouverts: emplacementsDuNiveau(chantier.niveau),
     },
     // ⚠ LES TROIS NIVEAUX SONT RÉELS DEPUIS LE 28/08. Les deux derniers valaient
@@ -868,9 +881,9 @@ export function resumeDeLaBase(etat) {
     // que le premier. Ils restent `null` quand rien n'est posé — ce qui est le
     // cas de toute base neuve — et `formaterNiveau` en fait « — ».
     niveaux: {
-      batiments: niveauDesBatiments(etat.disposition),
-      defense: niveauDeLaDefense(etat.garnison),
-      assaut: niveauDeLArmee(etat.armee),
+      batiments: niveauDesBatiments(laBase.disposition),
+      defense: niveauDeLaDefense(laBase.garnison),
+      assaut: niveauDeLArmee(laBase.armee),
     },
   };
 }
@@ -881,10 +894,11 @@ export function resumeDeLaBase(etat) {
  * @param {number} index indice dans la disposition
  */
 export function detailDuBatiment(etat, index) {
-  const b = etat.disposition[index];
+  const laBase = baseCourante(etat);
+  const b = laBase.disposition[index];
   if (b === undefined) throw new RangeError(`chantier : indice ${index} hors de la disposition`);
   const def = BASE_BATIMENTS[b.id];
-  const production = productionParRessource(etat.disposition, etat.champs, index);
+  const production = productionParRessource(laBase.disposition, laBase.champs, index);
   const morceaux = [];
   for (const r of RESSOURCES) {
     if (!production[r]) continue;
@@ -1183,18 +1197,19 @@ export function flechesDeVoisinage(disposition, champs, index) {
  * @returns {{cause: string, ressource: string|null, secondes: number|null}|null}
  */
 export function delaiAvantAmelioration(etat, index) {
-  const b = etat.disposition[index];
+  const laBase = baseCourante(etat);
+  const b = laBase.disposition[index];
   if (b === undefined) throw new RangeError(`chantier : indice ${index} hors de la disposition`);
   const vise = b.niveau + 1;
   if (vise > GEOGRAPHIE.niveauPlafond) return null;
 
   const cout = coutDeMontee(b.id, vise);
-  const capacites = capacitesMilli(etat.disposition);
+  const capacites = capacitesMilli(laBase.disposition);
   // ⚠ LES MAJORATIONS DE POI PASSENT ICI AUSSI, ET C'EST OBLIGATOIRE. L'écran
   // qui les oublierait afficherait un débit que le moteur ne produit pas — et
   // le joueur lirait l'écart comme un bogue d'économie.
   const debits = debitsMilliParHeure(
-    etat.disposition, etat.champs, majorationsDeProduction(etat.poisAcquis ?? []),
+    laBase.disposition, laBase.champs, majorationsDeProduction(etat.poisAcquis ?? []),
   );
   const parRessource = {};
   for (const r of RESSOURCES) parRessource[r] = 0;
@@ -1208,7 +1223,7 @@ export function delaiAvantAmelioration(etat, index) {
   for (const r of RESSOURCES) {
     const requisMilli = cout[r] * 1000;
     if (requisMilli === 0) continue;
-    const manque = requisMilli - etat.economie.ressources[r];
+    const manque = requisMilli - laBase.economie.ressources[r];
     if (manque <= 0) continue;
     // La condition d'Ethan : au-delà de la capacité, aucune attente ne suffit.
     if (requisMilli > capacites[r]) return { cause: 'capacite', ressource: r, secondes: null };
@@ -1303,7 +1318,8 @@ export function libelleDuVoisin(type) {
  * }}
  */
 export function apercuDuBatiment(etat, index) {
-  const b = etat.disposition[index];
+  const laBase = baseCourante(etat);
+  const b = laBase.disposition[index];
   if (b === undefined) throw new RangeError(`chantier : indice ${index} hors de la disposition`);
   const def = BASE_BATIMENTS[b.id];
   const vise = b.niveau + 1;
@@ -1311,23 +1327,23 @@ export function apercuDuBatiment(etat, index) {
 
   // La disposition candidate : la même, ce bâtiment monté d'un niveau. Rien
   // d'autre ne bouge — ni sa case, ni ses voisins, ni leurs niveaux.
-  const candidate = auPlafond ? null : etat.disposition.map(
+  const candidate = auPlafond ? null : laBase.disposition.map(
     (autre, i) => (i === index ? { ...autre, niveau: vise } : autre),
   );
 
-  const avant = debitDuBatiment(etat.disposition, etat.champs, index);
+  const avant = debitDuBatiment(laBase.disposition, laBase.champs, index);
   const apres = candidate === null
-    ? null : debitDuBatiment(candidate, etat.champs, index);
+    ? null : debitDuBatiment(candidate, laBase.champs, index);
 
-  const prodAvant = productionParRessource(etat.disposition, etat.champs, index);
+  const prodAvant = productionParRessource(laBase.disposition, laBase.champs, index);
   const prodApres = candidate === null
-    ? null : productionParRessource(candidate, etat.champs, index);
+    ? null : productionParRessource(candidate, laBase.champs, index);
 
   // Les comptes de voisins se calculent UNE fois : les relire par type ferait
   // reparcourir les huit cases autant de fois qu'il y a de types.
-  const comptes = voisinsQualifiants(etat.disposition, etat.champs, index);
+  const comptes = voisinsQualifiants(laBase.disposition, laBase.champs, index);
 
-  const capsAvant = capacitesMilli(etat.disposition);
+  const capsAvant = capacitesMilli(laBase.disposition);
   const capsApres = candidate === null ? null : capacitesMilli(candidate);
 
   // Seules les ressources que ce bâtiment touche, aujourd'hui ou demain : les
@@ -1588,7 +1604,8 @@ export function lignesDuPanneau(apercu) {
  * @returns {Array<{id: string, nom: string, famille: string, coutPremiereAmelioration: number}>}
  */
 export function posablesDeLaBase(etat) {
-  const poses = new Set(etat.disposition.map((b) => b.id));
+  const laBase = baseCourante(etat);
+  const poses = new Set(laBase.disposition.map((b) => b.id));
   return Object.entries(BASE_BATIMENTS)
     .map(([id, def]) => ({
       id,
@@ -1676,7 +1693,8 @@ export function posablesDeLaDefense(etat) {
  * @param {number} index indice dans `etat.garnison`
  */
 export function detailDeLaDefense(etat, index) {
-  const piece = etat.garnison[index];
+  const laBase = baseCourante(etat);
+  const piece = laBase.garnison[index];
   if (piece === undefined) throw new RangeError(`chantier : indice ${index} hors de la garnison`);
   const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
   return {
@@ -1789,7 +1807,7 @@ export const TERRAINS = {
     bande: GRILLE.bandes.batiments,
     // `null` = les bâtiments de la base, qui ne sont pas une « force ».
     force: null,
-    pieces: (etat) => etat.disposition,
+    pieces: (etat) => baseCourante(etat).disposition,
     posables: (etat) => posablesDeLaBase(etat).map((p) => ({
       ...p, sigle: SIGLES[p.id], verrouille: p.dejaPose,
     })),
@@ -1841,7 +1859,7 @@ export const TERRAINS = {
   defense: {
     bande: GRILLE.bandes.defense,
     force: 'garnison',
-    pieces: (etat) => etat.garnison,
+    pieces: (etat) => baseCourante(etat).garnison,
     posables: posablesDeLaDefense,
     nomDe: nomDeLaPieceDeDefense,
     sigleDe: (id) => SIGLES_DEFENSE[id],
@@ -1868,7 +1886,7 @@ export const TERRAINS = {
     spriteDe: (piece, etat) => couchesDeLEntite(
       { genre: genreDeLaGarnison(piece.id), id: piece.id, proprietaire: 'joueur',
         camp: 'defense', rangee: piece.rangee, colonne: piece.colonne },
-      { voisines: etat.garnison },
+      { voisines: baseCourante(etat).garnison },
     ),
     // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
     // décide de la couleur du liseré, et la fiche de style n'a pas de teinte
@@ -3246,21 +3264,21 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     if (posableChoisi !== null && poseEnAttente !== null) {
       fantome = { ...poseEnAttente, id: posableChoisi };
       if (terrainDuFantome === 'batiments') {
-        disposition = [...etatCourant.disposition,
+        disposition = [...baseCourante(etatCourant).disposition,
           { id: posableChoisi, ...poseEnAttente, niveau: 1 }];
         index = disposition.length - 1;
       }
     } else if (deplacementEnCours !== null) {
       terrainDuFantome = terrainDeplacement;
       if (terrainDeplacement === 'batiments') {
-        disposition = etatCourant.disposition;
+        disposition = baseCourante(etatCourant).disposition;
         index = deplacementEnCours;
       }
     } else if (panneauOuvert && selection !== null && terrainSelection === 'batiments') {
       // ⚠ ETHAN : « faire apparaître les flèches du bâtiment concerné quand on
       // ouvre l'onglet bâtiment ». Le panneau CHIFFRE le voisinage ; les
       // flèches le montrent sur la grille, et les deux viennent du même calcul.
-      disposition = etatCourant.disposition;
+      disposition = baseCourante(etatCourant).disposition;
       index = selection;
     }
     if (fantome !== null) {
@@ -3294,7 +3312,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
 
     if (disposition === null) return;
 
-    for (const f of flechesDeVoisinage(disposition, etatCourant.champs, index)) {
+    for (const f of flechesDeVoisinage(disposition, baseCourante(etatCourant).champs, index)) {
       const trait = traitDeVoisinage(f.depart, f.arrivee);
       const fut = doc.createElementNS(SVG, 'line');
       fut.setAttribute('x1', trait.ligne.x1);
@@ -3859,7 +3877,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // ⚠ LE TERRAIN SE DESSINE SOUS LES BÂTIMENTS, JAMAIS AU-DESSUS. Un champ
     // masqué par le collecteur qui l'exploite ferait disparaître de l'écran la
     // seule chose qui explique ce que ce collecteur produit.
-    for (const champ of etat.champs.cases) {
+    for (const champ of baseCourante(etat).champs.cases) {
       const case_ = cellules.get(cle(champ.rangee, champ.colonne));
       if (case_ === undefined) continue;
       poserFonds(case_, [
@@ -3874,7 +3892,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // interdite avant de les avoir toutes essayées. C'est « un indice n'est pas
     // une interdiction » pris par l'autre bout — ici le refus existe déjà, c'est
     // l'indice qui manquait.
-    for (const o of etat.obstacles.cases) {
+    for (const o of baseCourante(etat).obstacles.cases) {
       const case_ = cellules.get(cle(o.rangee, o.colonne));
       if (case_ === undefined) continue;
       poserFonds(case_, [
@@ -3941,7 +3959,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     // contextuel vide au premier regard donne un écran qui a l'air en panne, et
     // le Chantier est de toute façon ce autour de quoi la base se lit.
     if (selection === null) {
-      const chantier = etat.disposition.findIndex((b) => b.id === 'chantierDeConstruction');
+      const chantier = baseCourante(etat).disposition
+        .findIndex((b) => b.id === 'chantierDeConstruction');
       terrainSelection = 'batiments';
       selection = chantier === -1 ? null : chantier;
     }

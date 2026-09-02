@@ -47,6 +47,7 @@ import { modulesDebloquesDuJoueur } from './recherche.js';
 import { majorationsDeCombat } from './poi.js';
 import { poserLaBaseSur } from './deplacement.js';
 import { reparerLaGarnison, garderLeRapport } from './raid.js';
+import { baseCourante } from './base-courante.js';
 
 /**
  * Le sel du tirage de raid — le SIXIÈME du dépôt, et il était libre.
@@ -137,7 +138,7 @@ export function baseAttaqueALaMinute(graine, base, minute) {
  * @returns {Array<object>} identités de site, du plus proche au plus loin
  */
 export function basesAttaquantes(etat) {
-  return ciblesAPortee(etat, etat).filter(
+  return ciblesAPortee(etat, baseCourante(etat)).filter(
     (site) => TYPES_SITE[site.type]?.attaqueLeJoueur === true
       && site.niveau >= RAID_OUVRAGE.niveauMinimal,
   );
@@ -231,12 +232,13 @@ function pvCourantsMilli(pvMax, degatsMilli) {
  * @returns {object} montage prêt pour `creerCombat`
  */
 export function montageDeLaBaseDuJoueur(etat, niveauAttaquant, budgetPoints, graine) {
+  const laBase = baseCourante(etat);
   const surObstacle = new Set(
-    etat.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`),
+    laBase.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`),
   );
   const batiments = [];
   const indicesBatiments = [];
-  etat.disposition.forEach((b, index) => {
+  laBase.disposition.forEach((b, index) => {
     if (surObstacle.has(`${b.rangee}:${b.colonne}`)) return;
     const pv = pvCourantsMilli(pvMaxDuBatiment(b.id, b.niveau), b.degatsMilli);
     const ligne = {
@@ -248,7 +250,7 @@ export function montageDeLaBaseDuJoueur(etat, niveauAttaquant, budgetPoints, gra
   });
   const defenseurs = [];
   const indicesDefenseurs = [];
-  etat.garnison.forEach((p, index) => {
+  laBase.garnison.forEach((p, index) => {
     if (surObstacle.has(`${p.rangee}:${p.colonne}`)) return;
     const pv = pvCourantsMilli(pvMaxDeLaPiece(p.id, p.niveau), p.degatsMilli);
     const ligne = {
@@ -267,7 +269,7 @@ export function montageDeLaBaseDuJoueur(etat, niveauAttaquant, budgetPoints, gra
     type: 'base',
     niveau: niveauAttaquant,
     saveur: null,
-    obstacles: etat.obstacles.cases,
+    obstacles: laBase.obstacles.cases,
     batiments,
     defenseurs,
     // ⚠ UNE SEULE VAGUE, ET `genererVague` NE REND PAS UN `vagues[][]`. Il rend
@@ -406,11 +408,12 @@ function chantierTombe(disposition, indices, lignes) {
  *   perdu: object}}
  */
 function raserLaBase(etat) {
-  const rangeeAvant = etat.position.rangee;
+  const laBase = baseCourante(etat);
+  const rangeeAvant = laBase.position.rangee;
   const voulue = rangeeAvant + RAID_OUVRAGE.sanctionRasage.redeploiementCases;
   let rangeeApres = rangeeAvant;
   for (let r = rangeeAvant + 1; r <= voulue; r += 1) {
-    if (!estSurLaCarte(r, etat.position.colonne)) break;
+    if (!estSurLaCarte(r, laBase.position.colonne)) break;
     rangeeApres = r;
   }
   // ⚠⚠ L'ÉCRITURE PASSE PAR `poserLaBaseSur`, ELLE NE SE FAIT PLUS ICI — lot
@@ -428,14 +431,14 @@ function raserLaBase(etat) {
   // ⚠ LE RELEVÉ DES POI EST DÉSORMAIS FAIT PAR `poserLaBaseSur`, donc plus bas
   // dans `subirUnRaid` : le `if (rase) releverLesPoisAcquis(etat)` a disparu, il
   // ferait un second relevé qui n'ajouterait rien.
-  poserLaBaseSur(etat, rangeeApres, etat.position.colonne);
+  poserLaBaseSur(etat, rangeeApres, laBase.position.colonne);
 
   const perdu = {};
   if (RAID_OUVRAGE.sanctionRasage.perteRessourcesStockees) {
     for (const ressource of RESSOURCES) {
-      const stock = etat.economie.ressources[ressource];
+      const stock = laBase.economie.ressources[ressource];
       if (stock > 0) perdu[ressource] = Math.floor(stock / 1000);
-      etat.economie.ressources[ressource] = 0;
+      laBase.economie.ressources[ressource] = 0;
     }
   }
   return {
@@ -483,6 +486,7 @@ function raserLaBase(etat) {
  * @returns {object} le rapport de défense, tel qu'il rejoint les dix
  */
 export function subirUnRaid(etat, base, minute, options = {}) {
+  const laBase = baseCourante(etat);
   const budgetPoints = budgetRaid(base.niveau);
   // ⚠ LA GRAINE DE LA VAGUE EST CELLE DU TIRAGE, PAS UNE AUTRE. Deux passes,
   // même sel : la case, puis la minute. C'est ce qui rend la composition de la
@@ -500,7 +504,7 @@ export function subirUnRaid(etat, base, minute, options = {}) {
 
   // --- 1. les dégâts s'écrivent -------------------------------------------
   const garnisonAuPlancher = reporterSurLesPieces(
-    etat.garnison, montage.indicesDefenseurs, resultat.defenses, () => true,
+    laBase.garnison, montage.indicesDefenseurs, resultat.defenses, () => true,
   );
   // ⚠ ELLE SE POSE AU RÉSULTAT DU COMBAT, PAS À L'ÉTAT ÉCRIT — `ligne.detruit`,
   // jamais `piece.degatsMilli`. Les deux disent la même chose aujourd'hui, et
@@ -511,9 +515,9 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   // qu'un second bâtiment raserait la base —, lire l'état rendrait la base
   // inrasable en silence, tandis que lire le résultat resterait juste. Le dire
   // autrement serait inventer une justification.
-  const rase = chantierTombe(etat.disposition, montage.indicesBatiments, resultat.batiments);
+  const rase = chantierTombe(laBase.disposition, montage.indicesBatiments, resultat.batiments);
   const batimentsAuPlancher = reporterSurLesPieces(
-    etat.disposition, montage.indicesBatiments, resultat.batiments,
+    laBase.disposition, montage.indicesBatiments, resultat.batiments,
     (b) => BASE_BATIMENTS[b.id]?.plancherPv !== false,
   );
 
@@ -533,8 +537,8 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   // --- 3. la réserve de réparation se vide ---------------------------------
   const aPerduDesPv = resultat.batiments.some((b) => b.pvPerdusIciMilli > 0);
   if (aPerduDesPv) {
-    for (const chassis of Object.keys(etat.reserveReparation)) {
-      etat.reserveReparation[chassis] = 0;
+    for (const chassis of Object.keys(laBase.reserveReparation)) {
+      laBase.reserveReparation[chassis] = 0;
     }
   }
 

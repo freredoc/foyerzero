@@ -139,15 +139,20 @@ export function territoireDeLaFenetre(etat, fenetre) {
 }
 
 /**
- * Les bases du joueur — une seule aujourd'hui, et le dire ainsi le prépare.
+ * Les POSITIONS des bases du joueur — l'union de la spec §8, prise au mot.
  *
- * ⚠ `sim/state.js` porte UNE `position` : il n'y a structurellement qu'une base,
- * exactement comme `NOMBRE_DE_BASES` de `ui/chantier.js` le dit déjà. Rendre une
- * liste plutôt qu'une position évite que l'union de la spec (« toutes les bases
- * du joueur ») soit à réécrire le jour où il y en aura deux.
+ * ⚠⚠ ELLE EST DEVENUE VRAIMENT PLURIELLE AU LOT BASES-0, 02/09/2026. Elle
+ * rendait `[etat.position]` et se disait « une seule aujourd'hui, et le dire
+ * ainsi le prépare » : le jour est venu, et c'est cette fonction seule qui a
+ * changé, exactement comme annoncé. Elle rend aujourd'hui une liste d'un
+ * élément parce que `etat.bases` en porte un — pas parce qu'elle le suppose.
+ *
+ * ⚠ ELLE REND DES POSITIONS, PAS DES BASES, et son homonyme de
+ * `sim/points-attaque.js` rend des BASES. Les deux noms courts sont identiques
+ * et les deux types ne le sont pas : ne jamais importer l'un pour l'autre.
  */
 export function basesDuJoueur(etat) {
-  return [etat.position];
+  return etat.bases.map((b) => b.position);
 }
 
 /** L'occupant d'une case de la carte d'occupation, `NEUTRE` hors champ. */

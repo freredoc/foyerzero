@@ -5,6 +5,7 @@
 // AUJOURD'HUI : le numéro de version et la chaîne de migration existent
 // avant la première sauvegarde réelle, pas après coup.
 
+import { baseCourante } from './base-courante.js';
 import { creerRng, restaurerRng } from './rng.js';
 import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './clock.js';
 import { champsDeLaBase, obstaclesDeLaBase } from './champs.js';
@@ -16,7 +17,7 @@ import {
 import { positionDepartJoueur } from './carte.js';
 import { releverLesPoisAcquis, majorationsDeProduction, problemesDesPoisAcquis } from './poi.js';
 import {
-  creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise, basesDuJoueur,
+  creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise,
 } from './points-attaque.js';
 import {
   sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
@@ -43,8 +44,38 @@ import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
+// ⚠⚠ L'ACCESSEUR VIT DANS SON PROPRE MODULE, ET C'EST UNE CONTRAINTE
+// D'IMPORTS, PAS UN GOÛT. `sim/state.js` importe satellites, poi,
+// points-attaque, site-entame, raid, raid-ouvrage, reparation et — par
+// `raid-ouvrage` — deplacement : les huit modules qui ont besoin de
+// `baseCourante` sont donc ses DÉPENDANCES, et le leur faire importer d'ici
+// ferait huit cycles. Un cycle ESM se résout tant qu'on n'appelle rien au
+// chargement, mais il rend l'ordre d'évaluation des modules significatif, et
+// c'est le genre de fragilité qu'on ne découvre qu'au bundle.
+//
+// ⚠ IL EST RÉ-EXPORTÉ ICI QUAND MÊME. `state.js` est l'endroit où un lecteur va
+// le chercher, et un ré-export n'est PAS une copie : c'est la même liaison, donc
+// il ne peut pas y avoir deux implémentations qui divergent.
+export { baseCourante } from './base-courante.js';
+
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 22;
+export const SAVE_VERSION = 23;
+
+/**
+ * Les onze champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
+ *
+ * ⚠ UNE SEULE LISTE, LUE PAR LA MIGRATION ET PAR `verifierEtat`. En écrire deux
+ * ferait diverger ce que la migration DESCEND et ce que la vérification EXIGE :
+ * un champ ajouté d'un côté et pas de l'autre passerait au chargement et
+ * manquerait en jeu, ou l'inverse. `champs` et `obstacles` y sont, bien qu'ils
+ * ne soient jamais sauvegardés — la migration les traite comme absents, et
+ * `charger` les redéduit.
+ */
+export const CHAMPS_DE_BASE = Object.freeze([
+  'position', 'fondation', 'disposition', 'garnison', 'armee', 'economie',
+  'champs', 'obstacles', 'satellites', 'reserveReparation',
+  'dernierDeplacementTick',
+]);
 
 /**
  * @typedef {object} Etat
@@ -52,14 +83,27 @@ export const SAVE_VERSION = 22;
  * @property {number} graine    Graine d'origine de la partie.
  * @property {{ s: number }} rng
  * @property {{ tempsSimuleMs: number, nbTicks: number, residuMs: number }} horloge
+ * @property {Array<Base>} bases    Les bases du joueur — UNE SEULE au lot BASES-0.
+ * @property {number} baseCourante   Indice dans `bases`, jamais la base elle-même.
+ * @property {Array<{ type: string, bande: number }>} poisAcquis HISTOIRE, GLOBALE — voir `sim/poi.js`.
+ */
+
+/**
+ * Une base du joueur. Onze champs, et ils étaient tous à la racine de `etat`
+ * jusqu'au lot BASES-0 — voir `creerBase` et `baseCourante`.
+ *
+ * @typedef {object} Base
  * @property {{ rangee: number, colonne: number }} position Sur la carte monde, AUJOURD'HUI.
  * @property {{ rangee: number, colonne: number }} fondation Là où la base a été FONDÉE.
  * @property {Array<{ id: string, rangee: number, colonne: number, niveau: number }>} disposition
  * @property {Array<Effectif>} garnison Les défenses posées dans la bande de défense.
  * @property {Array<Effectif>} armee    Les unités posées dans les quatre vagues.
  * @property {{ ressources: Record<string, number>, residus: Array<Record<string, number>> }} economie
- * @property {object} champs DÉRIVÉ de `fondation` — voir `serialiser`.
- * @property {Array<{ type: string, bande: number }>} poisAcquis HISTOIRE — voir `sim/poi.js`.
+ * @property {object} champs    DÉRIVÉ de `fondation` — voir `serialiser`.
+ * @property {object} obstacles DÉRIVÉ de `fondation` — voir `serialiser`.
+ * @property {object} satellites            HISTOIRE — voir `sim/satellites.js`.
+ * @property {Record<string, number>} reserveReparation Trois stocks, en TICKS.
+ * @property {number|null} dernierDeplacementTick `null` = jamais déplacée.
  */
 
 /**
@@ -122,22 +166,25 @@ export const SAVE_VERSION = 22;
 // suffisent, et l'invariant tient.
 
 /**
- * Crée l'état d'une partie neuve : le joueur ouvre le jeu dans sa base.
+ * Une base du joueur — les onze champs qui lui appartiennent en propre.
  *
- * ARBITRÉ le 26/08 : il démarre rangée 275, colonne 16 de la carte (strate 5),
- * sur un Chantier de construction niveau 1 posé en (18, 5) de sa base.
+ * ⚠⚠ ILS ÉTAIENT À LA RACINE DE `etat` JUSQU'AU LOT BASES-0, 02/09/2026. Le
+ * dépliage ne fonde personne : `etat.bases` n'a qu'UN élément à la fin de ce
+ * lot, et le jeu se comporte exactement comme avant. Ce qu'il achète, c'est que
+ * la deuxième base ne demande plus de retoucher deux cent cinquante sites.
  *
- * @param {number} graine
- * @returns {Etat}
+ * ⚠ CE QUI RESTE GLOBAL EST DANS `creerEtat`, et le partage est arbitré :
+ * `poisAcquis` (« acquis une fois, valable partout »), `rapports` (les dix
+ * derniers EN TOUT), `attaque` (une seule réserve, dont le plafond est mérité
+ * par les ARMÉES du moment, au pluriel), `recherche` (elle se paie en points,
+ * jamais en ressources), plus la graine, le tirage, l'horloge et le tutoriel.
+ *
+ * @param {{ rangee: number, colonne: number }} position
+ * @param {Array} disposition
+ * @returns {object} une base
  */
-export function creerEtat(graine) {
-  const position = positionDepartJoueur();
-  const disposition = dispositionNouvelleBase();
-  const etat = {
-    version: SAVE_VERSION,
-    graine,
-    rng: creerRng(graine),
-    horloge: creerHorloge(),
+function creerBase(position, disposition) {
+  return {
     position,
     // À la fondation les deux coïncident, et c'est le seul instant où c'est
     // garanti. Une COPIE, jamais la même référence : un redéploiement qui
@@ -164,6 +211,54 @@ export function creerEtat(graine) {
     // camp —, pas de la seule graine. C'est le premier champ du dépôt qui porte
     // de l'HISTOIRE plutôt qu'un état instantané.
     satellites: satellitesVides(),
+    // ⚠⚠ LA RÉSERVE DE TEMPS DE RÉPARATION — trois stocks, un par châssis, EN
+    // TICKS. Le temps qui passe les crédite au taux 1 pour 1 ; réparer une unité
+    // débite le sien et la rend au combat sur-le-champ. Le modèle est celui de
+    // `MODELE-REPARATION-1.md` §4, dicté le 24/08 et redit par Ethan le 01/09.
+    //
+    // ⚠ À ZÉRO À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a pas
+    // d'armée, donc rien à réparer ; le premier tick commence à créditer.
+    //
+    // ⚠⚠ ET SA CONDITION DE RUPTURE EST ADVENUE — lot BASES-0, 02/09/2026. Ce
+    // commentaire annonçait : « la réserve est PAR BASE, pas par joueur ; elle
+    // vit sur `etat` uniquement parce qu'il n'y a qu'une base ; le jour du
+    // multi-bases, ce champ devra DESCENDRE d'un cran ». C'est fait : il est
+    // dans la base. Ce qui RESTE à faire le jour de la seconde base est écrit
+    // ici pour ne pas se perdre — `crediterLesReserves` ne crédite que la base
+    // courante, et devra boucler sur `etat.bases`. Ne jamais laisser un
+    // commentaire qui annonce un futur devenu présent (CLAUDE.md §6).
+    reserveReparation: reservesVides(),
+    // ⚠⚠ QUAND LA BASE S'EST DÉPLACÉE POUR LA DERNIÈRE FOIS — lot DÉPLACEMENT,
+    // 02/09. Un HORODATAGE de jeu, jamais un compte à rebours : un résiduel qui
+    // décroîtrait tick par tick divergerait au rattrapage, alors qu'un instant
+    // relu contre l'horloge ne dépend pas du chemin par lequel on y est arrivé.
+    //
+    // ⚠ `null`, PAS ZÉRO, ET C'EST LA MOITIÉ QUI COMPTE. Une base neuve ne s'est
+    // jamais déplacée : son premier déplacement n'attend rien. Un zéro se lirait
+    // « déplacée au tick 0 », ce qui est vrai par accident aujourd'hui — l'horloge
+    // y démarre — et cesserait de l'être le jour où une partie commencerait
+    // ailleurs. `ticksAvantProchainDeplacement` distingue les deux de face.
+    dernierDeplacementTick: null,
+  };
+}
+
+/**
+ * Crée l'état d'une partie neuve : le joueur ouvre le jeu dans sa base.
+ *
+ * ARBITRÉ le 26/08 : il démarre rangée 295, colonne 16 de la carte (strate 1),
+ * sur un Chantier de construction niveau 1 posé en (18, 5) de sa base.
+ *
+ * @param {number} graine
+ * @returns {Etat}
+ */
+export function creerEtat(graine) {
+  const position = positionDepartJoueur();
+  const disposition = dispositionNouvelleBase();
+  const etat = {
+    version: SAVE_VERSION,
+    graine,
+    rng: creerRng(graine),
+    horloge: creerHorloge(),
     // ⚠ LA SEULE CHOSE QUE LE TUTORIEL SAUVEGARDE, ET CE N'EST PAS SA
     // PROGRESSION. Ce qui est fait ou non se recalcule depuis la base à chaque
     // demande (`sim/missions.js`) : la base est la première source de vérité et
@@ -198,21 +293,6 @@ export function creerEtat(graine) {
     // rien lui-même : le relevé vit dans `tickJeu`, en un seul endroit, et le
     // faire aussi ici en ferait deux.
     poisAcquis: [],
-    // ⚠⚠ LA RÉSERVE DE TEMPS DE RÉPARATION — trois stocks, un par châssis, EN
-    // TICKS. Le temps qui passe les crédite au taux 1 pour 1 ; réparer une unité
-    // débite le sien et la rend au combat sur-le-champ. Le modèle est celui de
-    // `MODELE-REPARATION-1.md` §4, dicté le 24/08 et redit par Ethan le 01/09.
-    //
-    // ⚠ À ZÉRO À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a pas
-    // d'armée, donc rien à réparer ; le premier tick commence à créditer.
-    //
-    // ⚠ ET VOICI SA CONDITION DE RUPTURE, ÉCRITE : LA RÉSERVE EST PAR BASE, pas
-    // par joueur — arbitré le 01/09, et c'est l'intérêt principal d'avoir
-    // plusieurs bases. Elle vit sur `etat` aujourd'hui uniquement parce que
-    // `basesDuJoueur(etat)` rend `[etat]` : il n'y a qu'une base, donc les deux
-    // portées se confondent. Le jour du multi-bases, ce champ devra DESCENDRE
-    // d'un cran, dans la base, et `crediterLesReserves` devra boucler dessus.
-    reserveReparation: reservesVides(),
     // ⚠⚠ LES DIX DERNIERS RAPPORTS DE RAID, EN TOUT — arbitré par Ethan le
     // 01/09, et la borne vit dans `APRES_RAID.rapportsGardes`, jamais ici ni
     // dans l'écran. C'est de l'HISTOIRE, au même titre que `satellites` : rien
@@ -226,17 +306,15 @@ export function creerEtat(graine) {
     // ⚠ VIDE À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a attaqué
     // personne.
     rapports: [],
-    // ⚠⚠ QUAND LA BASE S'EST DÉPLACÉE POUR LA DERNIÈRE FOIS — lot DÉPLACEMENT,
-    // 02/09. Un HORODATAGE de jeu, jamais un compte à rebours : un résiduel qui
-    // décroîtrait tick par tick divergerait au rattrapage, alors qu'un instant
-    // relu contre l'horloge ne dépend pas du chemin par lequel on y est arrivé.
-    //
-    // ⚠ `null`, PAS ZÉRO, ET C'EST LA MOITIÉ QUI COMPTE. Une base neuve ne s'est
-    // jamais déplacée : son premier déplacement n'attend rien. Un zéro se lirait
-    // « déplacée au tick 0 », ce qui est vrai par accident aujourd'hui — l'horloge
-    // y démarre — et cesserait de l'être le jour où une partie commencerait
-    // ailleurs. `ticksAvantProchainDeplacement` distingue les deux de face.
-    dernierDeplacementTick: null,
+    // ⚠⚠ UNE LISTE, ET D'UN SEUL ÉLÉMENT — lot BASES-0, 02/09/2026. Le multi-bases
+    // est déplié dans la FORME, il n'est pas ouvert dans le JEU : fonder,
+    // basculer, transférer sont les lots suivants. La coquille de bascule de
+    // `index.src.html` reste donc désactivée, et son « 1 / 1 » reste vrai.
+    bases: [creerBase(position, disposition)],
+    // ⚠ L'INDICE, PAS LA BASE. Ranger l'objet ferait DEUX chemins vers la même
+    // base — la liste et le raccourci — qui divergeraient au premier
+    // `structuredClone`, la copie ne rétablissant aucune identité de référence.
+    baseCourante: 0,
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -244,7 +322,8 @@ export function creerEtat(graine) {
   // payable. La servir dans `creerEtatEconomie` a été essayé : les MIGRATIONS
   // repassent par elle, et une sauvegarde qu'on monte de version aurait touché
   // l'amorce une seconde fois.
-  for (const r of RESSOURCES) etat.economie.ressources[r] = (STOCK_DE_DEPART[r] ?? 0) * 1000;
+  const base = baseCourante(etat);
+  for (const r of RESSOURCES) base.economie.ressources[r] = (STOCK_DE_DEPART[r] ?? 0) * 1000;
   // La base vient d'être posée : les trois apparitions sont dues dans cinq
   // minutes. Elles ne PARAISSENT pas ici — une base neuve est seule, et c'est
   // exactement ce que le joueur doit voir en ouvrant la partie.
@@ -315,16 +394,49 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['position', 'fondation', 'disposition', 'garnison', 'armee', 'economie', 'champs', 'obstacles', 'satellites', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis']) {
+  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis']) {
     exigerChamp(etat, champ);
   }
+  // ⚠ LA LISTE DE BASES SE VÉRIFIE AVANT SES BASES. Sans ces deux lignes,
+  // `baseCourante` lèverait sur une sauvegarde amputée avec un message qui parle
+  // d'un indice, pas d'un champ manquant.
+  if (!Array.isArray(etat.bases) || etat.bases.length === 0) {
+    throw new Error('etat : « bases » doit être une liste d\'au moins une base');
+  }
+  if (!Number.isInteger(etat.baseCourante)
+    || etat.baseCourante < 0 || etat.baseCourante >= etat.bases.length) {
+    throw new Error(
+      `etat : base courante ${etat.baseCourante} hors de 0…${etat.bases.length - 1}`,
+    );
+  }
+  // ⚠⚠ DEUX CHAMPS DE `CHAMPS_DE_BASE` NE SONT PAS EXIGÉS ICI, ET C'EST LE
+  // COMPORTEMENT D'AVANT LE DÉPLIAGE, PAS UN OUBLI. `reserveReparation` est
+  // vérifiée quinze lignes plus bas par `problemesDesReserves`, qui rend un
+  // message qui parle de RÉSERVE — l'exiger ici la ferait échouer d'abord, sur
+  // « champ absent », et le refus cesserait de dire ce qui manque vraiment.
+  // `dernierDeplacementTick`, lui, n'a jamais été vérifié : une base qui ne
+  // l'a pas ne s'est jamais déplacée, ce que `ticksAvantProchainDeplacement`
+  // lit déjà comme `null`.
+  //
+  // ⚠ ILS SE RETIRENT DE LA LISTE COMMUNE, ils ne se recopient pas. Une seconde
+  // liste écrite à la main cesserait d'être juste au premier champ qu'une base
+  // gagnerait, et la divergence ne se verrait qu'au chargement.
+  const HORS_EXIGENCE = new Set(['reserveReparation', 'dernierDeplacementTick']);
+  for (const base of etat.bases) {
+    for (const champ of CHAMPS_DE_BASE) {
+      if (!HORS_EXIGENCE.has(champ)) exigerChamp(base, champ);
+    }
+  }
+  const base = baseCourante(etat);
   // ⚠ « CHAMP ABSENT » ET « LISTE VIDE » NE SONT PAS LA MÊME CHOSE, et c'est
   // toute la raison d'être de ces deux lignes. Une sauvegarde v7 sans `armee`
   // est un fait de PROGRAMME — quelque chose l'a écrite de travers. Une armée
   // VIDE est parfaitement légale : c'est l'état de toute base neuve, et le
   // rester tant que le Centre de commandement n'est pas posé.
-  for (const force of Object.keys(FORCES)) verifierForce(etat, force);
-  const defautsSatellites = problemesDesSatellites(etat.satellites);
+  for (const b of etat.bases) {
+    for (const force of Object.keys(FORCES)) verifierForce(b, force);
+  }
+  const defautsSatellites = problemesDesSatellites(base.satellites);
   if (defautsSatellites.length > 0) {
     throw new Error(`etat : satellites injouables — ${defautsSatellites.join(' ; ')}`);
   }
@@ -336,7 +448,7 @@ function verifierEtat(etat) {
   if (defautsSites.length > 0) {
     throw new Error(`etat : sites entamés injouables — ${defautsSites.join(' ; ')}`);
   }
-  const defautsReserve = problemesDesReserves(etat.reserveReparation ?? null);
+  const defautsReserve = problemesDesReserves(base.reserveReparation ?? null);
   if (defautsReserve.length > 0) {
     throw new Error(`etat : réserve de réparation injouable — ${defautsReserve.join(' ; ')}`);
   }
@@ -354,14 +466,14 @@ function verifierEtat(etat) {
       + `${APRES_RAID.rapportsGardes}`,
     );
   }
-  if (etat.economie.residus.length !== etat.disposition.length) {
+  if (base.economie.residus.length !== base.disposition.length) {
     throw new Error(
-      `etat : ${etat.economie.residus.length} résidus pour ${etat.disposition.length} bâtiments`,
+      `etat : ${base.economie.residus.length} résidus pour ${base.disposition.length} bâtiments`,
     );
   }
   // ⚠ TOUS LES DÉFAUTS NE SONT PAS DES FAUTES DE PROGRAMME — voir
   // `CODES_TOLERES_AU_CHARGEMENT` juste au-dessus.
-  const problemes = problemesDeDisposition(etat.disposition, etat.champs)
+  const problemes = problemesDeDisposition(base.disposition, base.champs)
     .filter((p) => !CODES_TOLERES_AU_CHARGEMENT.has(p.code));
   if (problemes.length > 0) {
     throw new Error(`etat : disposition injouable — ${problemes.map((p) => p.message).join(' ; ')}`);
@@ -387,8 +499,9 @@ export function tickJeu(etat) {
   // l'ordre juste ne coûte rien à écrire maintenant et coûterait un bogue à
   // trouver le jour du redéploiement.
   releverLesPoisAcquis(etat);
+  const base = baseCourante(etat);
   tickEconomieBase(
-    etat.economie, etat.disposition, etat.champs,
+    base.economie, base.disposition, base.champs,
     majorationsDeProduction(etat.poisAcquis),
   );
   resoudreSatellites(etat);
@@ -516,9 +629,9 @@ function avancerAnalytiquement(etat, nbTicks) {
   if (nbTicks === 0) return;
   avancerTicks(etat.horloge, nbTicks);
   // ⚠⚠ UN SEUL APPEL, PAS UNE BOUCLE — même raisonnement que `resoudreSatellites`
-  // ci-dessous, mais pour une raison à lui : l'acquisition ne dépend QUE de
-  // `etat.position`, qu'aucun tick ne modifie. Mille ticks d'un coup acquièrent
-  // donc exactement ce que mille ticks un par un auraient acquis.
+  // ci-dessous, mais pour une raison à lui : l'acquisition ne dépend QUE de la
+  // POSITION des bases, qu'aucun tick ne modifie. Mille ticks d'un coup
+  // acquièrent donc exactement ce que mille ticks un par un auraient acquis.
   //
   // ⚠⚠ ET SA CONDITION DE RUPTURE EST ADVENUE — lot RAID-B, 02/09/2026. Elle
   // annonçait : « le jour où la base pourra se DÉPLACER en cours de rattrapage,
@@ -534,8 +647,9 @@ function avancerAnalytiquement(etat, nbTicks) {
   // à chaque raid. C'est T7 qui le mesure, avec la falsification qui retire le
   // rappel : les POI de l'ancienne position survivent alors au déménagement.
   releverLesPoisAcquis(etat);
+  const base = baseCourante(etat);
   rattrapageEconomieBase(
-    etat.economie, etat.disposition, etat.champs, nbTicks,
+    base.economie, base.disposition, base.champs, nbTicks,
     majorationsDeProduction(etat.poisAcquis),
   );
   // ⚠ UN SEUL APPEL, PAS UNE BOUCLE, ET C'EST CE QUI REND LES DEUX CHEMINS
@@ -603,17 +717,18 @@ function avancerAnalytiquement(etat, nbTicks) {
  * @returns {Array<{code: string, message: string}>} vide si la pose est légale
  */
 export function problemesDeLaPose(etat, id, rangee, colonne) {
-  exigerChamp(etat, 'disposition');
-  exigerChamp(etat, 'champs');
-  const candidate = [...etat.disposition, { id, rangee, colonne, niveau: 1 }];
+  const base = baseCourante(etat);
+  exigerChamp(base, 'disposition');
+  exigerChamp(base, 'champs');
+  const candidate = [...base.disposition, { id, rangee, colonne, niveau: 1 }];
   // Les problèmes de la disposition ACTUELLE ne sont pas imputables à la pose :
   // une base déjà bancale — un raid l'a amputée, une sauvegarde ancienne — ne
   // doit pas rendre toute pose impossible en faisant remonter ses propres
   // défauts. On ne garde que ce qui apparaît.
   const avant = new Set(
-    problemesDeDisposition(etat.disposition, etat.champs).map((p) => `${p.code}|${p.message}`),
+    problemesDeDisposition(base.disposition, base.champs).map((p) => `${p.code}|${p.message}`),
   );
-  return problemesDeDisposition(candidate, etat.champs)
+  return problemesDeDisposition(candidate, base.champs)
     .filter((p) => !avant.has(`${p.code}|${p.message}`));
 }
 
@@ -645,12 +760,13 @@ export function poser(etat, id, rangee, colonne) {
   // le champ dans la sauvegarde, donc un `undefined` que `pvCourantsMilli` lit
   // comme « intact » — un bâtiment neuf est bien intact, si bien qu'AUCUN raid
   // de référence n'aurait bronché, jusqu'au premier bâtiment posé PUIS attaqué.
-  etat.disposition.push({
+  const base = baseCourante(etat);
+  base.disposition.push({
     id, rangee, colonne, niveau: 1, degatsMilli: 0,
   });
   const residu = {};
   for (const r of RESSOURCES) residu[r] = 0;
-  etat.economie.residus.push(residu);
+  base.economie.residus.push(residu);
   return etat;
 }
 
@@ -716,19 +832,20 @@ const MILLI = 1000;
  * @returns {Array<{code: string, message: string}>}
  */
 export function problemesDuDeplacement(etat, index, rangee, colonne) {
-  exigerChamp(etat, 'disposition');
-  exigerChamp(etat, 'champs');
-  const batiment = etat.disposition[index];
+  const base = baseCourante(etat);
+  exigerChamp(base, 'disposition');
+  exigerChamp(base, 'champs');
+  const batiment = base.disposition[index];
   if (batiment === undefined) {
     throw new RangeError(`deplacer : indice ${index} hors de la disposition`);
   }
-  const candidate = etat.disposition.map(
+  const candidate = base.disposition.map(
     (b, i) => (i === index ? { ...b, rangee, colonne } : b),
   );
   const avant = new Set(
-    problemesDeDisposition(etat.disposition, etat.champs).map((p) => `${p.code}|${p.message}`),
+    problemesDeDisposition(base.disposition, base.champs).map((p) => `${p.code}|${p.message}`),
   );
-  return problemesDeDisposition(candidate, etat.champs)
+  return problemesDeDisposition(candidate, base.champs)
     .filter((p) => !avant.has(`${p.code}|${p.message}`));
 }
 
@@ -759,16 +876,17 @@ export function deplacer(etat, index, rangee, colonne) {
       `deplacer : déplacement illégal — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  const batiment = etat.disposition[index];
+  const batiment = baseCourante(etat).disposition[index];
   batiment.rangee = rangee;
   batiment.colonne = colonne;
   return etat;
 }
 
 export function problemesDeLAmelioration(etat, index) {
-  exigerChamp(etat, 'disposition');
-  exigerChamp(etat, 'economie');
-  const batiment = etat.disposition[index];
+  const base = baseCourante(etat);
+  exigerChamp(base, 'disposition');
+  exigerChamp(base, 'economie');
+  const batiment = base.disposition[index];
   if (batiment === undefined) {
     throw new RangeError(`ameliorer : indice ${index} hors de la disposition`);
   }
@@ -810,10 +928,10 @@ export function problemesDeLAmelioration(etat, index) {
   const cout = coutDeMontee(batiment.id, vise);
   for (const r of RESSOURCES) {
     const duMilli = cout[r] * MILLI;
-    if (duMilli > etat.economie.ressources[r]) {
+    if (duMilli > base.economie.ressources[r]) {
       problemes.push({
         code: `manque:${r}`,
-        message: `il manque ${LIBELLE_MANQUE(r, duMilli - etat.economie.ressources[r])}`,
+        message: `il manque ${LIBELLE_MANQUE(r, duMilli - base.economie.ressources[r])}`,
       });
     }
   }
@@ -854,9 +972,10 @@ export function ameliorer(etat, index) {
       `ameliorer : impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  const batiment = etat.disposition[index];
+  const base = baseCourante(etat);
+  const batiment = base.disposition[index];
   const cout = coutDeMontee(batiment.id, batiment.niveau + 1);
-  for (const r of RESSOURCES) etat.economie.ressources[r] -= cout[r] * MILLI;
+  for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
   batiment.niveau += 1;
   return etat;
 }
@@ -874,8 +993,9 @@ export function ameliorer(etat, index) {
  * @returns {Array<{code: string, message: string}>}
  */
 export function problemesDeLaDemolition(etat, index) {
-  exigerChamp(etat, 'disposition');
-  const batiment = etat.disposition[index];
+  const base = baseCourante(etat);
+  exigerChamp(base, 'disposition');
+  const batiment = base.disposition[index];
   if (batiment === undefined) {
     throw new RangeError(`demolir : indice ${index} hors de la disposition`);
   }
@@ -916,11 +1036,12 @@ export function demolir(etat, index) {
       `demolir : impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  const batiment = etat.disposition[index];
+  const base = baseCourante(etat);
+  const batiment = base.disposition[index];
   const rendu = remboursementDuNiveau(batiment.id, batiment.niveau);
-  for (const r of RESSOURCES) etat.economie.ressources[r] += rendu[r] * MILLI;
-  etat.disposition.splice(index, 1);
-  etat.economie.residus.splice(index, 1);
+  for (const r of RESSOURCES) base.economie.ressources[r] += rendu[r] * MILLI;
+  base.disposition.splice(index, 1);
+  base.economie.residus.splice(index, 1);
   return rendu;
 }
 
@@ -1127,12 +1248,17 @@ function problemesDeLEffectif(force, liste, piece, indexIgnore, obstacles = []) 
 /**
  * Vérifie une force entière au chargement. LÈVE — au chargement, un effectif
  * malformé est un fait de programme.
- * @param {Etat} etat
+ *
+ * ⚠ ELLE PREND UNE BASE, PAS L'ÉTAT — lot BASES-0. Elle ne lit que des champs
+ * par-base ; lui passer l'état l'obligerait à choisir laquelle, alors que
+ * `verifierEtat` doit les vérifier TOUTES.
+ *
+ * @param {Base} base
  * @param {string} force
  */
-function verifierForce(etat, force) {
+function verifierForce(base, force) {
   const f = exigerForce(force);
-  const liste = etat[f.champ];
+  const liste = base[f.champ];
   if (!Array.isArray(liste)) {
     throw new Error(`etat : « ${f.champ} » n'est pas une liste`);
   }
@@ -1144,7 +1270,7 @@ function verifierForce(etat, force) {
     // AIT RIEN FAIT le jour où le tirage des obstacles changera, puisque le
     // terrain se redéduit à chaque chargement. Faire lever rendrait alors la
     // partie injouable pour une faute que personne n'a commise.
-    const problemes = problemesDeLEffectif(force, liste, liste[i], i, etat.obstacles?.cases ?? [])
+    const problemes = problemesDeLEffectif(force, liste, liste[i], i, base.obstacles?.cases ?? [])
       .filter((p) => !CODES_TOLERES_AU_CHARGEMENT.has(p.code));
     if (problemes.length > 0) {
       throw new Error(
@@ -1172,10 +1298,11 @@ function verifierForce(etat, force) {
  */
 export function problemesDeLaPoseDEffectif(etat, force, piece) {
   const f = exigerForce(force);
-  exigerChamp(etat, f.champ);
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
   return problemesDeLEffectif(
-    force, etat[f.champ], { degatsMilli: 0, ...defautDActivite(f), ...piece },
-    null, etat.obstacles?.cases ?? [],
+    force, base[f.champ], { degatsMilli: 0, ...defautDActivite(f), ...piece },
+    null, base.obstacles?.cases ?? [],
   );
 }
 
@@ -1210,7 +1337,7 @@ export function poserEffectif(etat, force, piece) {
   // SANS le champ dans la sauvegarde — donc active quand même, par le défaut de
   // `composerLesVagues`, si bien que le drapeau n'aurait jamais rien retenu et
   // qu'aucun raid de référence n'aurait bronché.
-  etat[f.champ].push({
+  baseCourante(etat)[f.champ].push({
     id: complete.id,
     [f.axe]: complete[f.axe],
     colonne: complete.colonne,
@@ -1237,12 +1364,13 @@ export function poserEffectif(etat, force, piece) {
  */
 export function retirerEffectif(etat, force, index) {
   const f = exigerForce(force);
-  exigerChamp(etat, f.champ);
-  const piece = etat[f.champ][index];
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
+  const piece = base[f.champ][index];
   if (piece === undefined) {
     throw new RangeError(`retirerEffectif : indice ${index} hors de la ${f.quoi}`);
   }
-  etat[f.champ].splice(index, 1);
+  base[f.champ].splice(index, 1);
   return piece;
 }
 
@@ -1262,13 +1390,14 @@ export function retirerEffectif(etat, force, index) {
  */
 export function problemesDuDeplacementDEffectif(etat, force, index, position) {
   const f = exigerForce(force);
-  exigerChamp(etat, f.champ);
-  const piece = etat[f.champ][index];
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
+  const piece = base[f.champ][index];
   if (piece === undefined) {
     throw new RangeError(`deplacerEffectif : indice ${index} hors de la ${f.quoi}`);
   }
   return problemesDeLEffectif(
-    force, etat[f.champ], { ...piece, ...position }, index, etat.obstacles?.cases ?? [],
+    force, base[f.champ], { ...piece, ...position }, index, base.obstacles?.cases ?? [],
   );
 }
 
@@ -1302,11 +1431,12 @@ export function reglerActivite(etat, force, index, actif) {
   if (!f.porteLActivite) {
     throw new Error(`reglerActivite : la ${f.quoi} ne part pas au raid`);
   }
-  exigerChamp(etat, f.champ);
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
   if (typeof actif !== 'boolean') {
     throw new RangeError(`reglerActivite : « ${actif} » — booléen attendu`);
   }
-  const piece = etat[f.champ][index];
+  const piece = base[f.champ][index];
   if (piece === undefined) {
     throw new RangeError(`reglerActivite : indice ${index} hors de la ${f.quoi}`);
   }
@@ -1334,6 +1464,7 @@ export function reglerActivite(etat, force, index, actif) {
  */
 export function deplacerEffectif(etat, force, index, position) {
   const f = exigerForce(force);
+  const base = baseCourante(etat);
   const problemes = problemesDuDeplacementDEffectif(etat, force, index, position);
   if (problemes.length > 0) {
     throw new Error(
@@ -1341,7 +1472,7 @@ export function deplacerEffectif(etat, force, index, position) {
         + problemes.map((p) => p.message).join(' ; '),
     );
   }
-  const piece = etat[f.champ][index];
+  const piece = base[f.champ][index];
   piece[f.axe] = position[f.axe];
   piece.colonne = position.colonne;
   return etat;
@@ -1366,9 +1497,10 @@ export function deplacerEffectif(etat, force, index, position) {
  */
 export function pointsEngages(etat, force) {
   const f = exigerForce(force);
-  exigerChamp(etat, f.champ);
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
   let total = 0;
-  for (const piece of etat[f.champ]) {
+  for (const piece of base[f.champ]) {
     // Une pièce de garnison est soit un ouvrage, soit une unité ; l'assaut n'a
     // que des unités. Les deux tables portent le même champ `points`.
     const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
@@ -1424,8 +1556,9 @@ const ID_CHANTIER = 'chantierDeConstruction';
  * @returns {number} niveau du Chantier
  */
 export function niveauDuChantier(etat) {
-  exigerChamp(etat, 'disposition');
-  const chantier = etat.disposition.find((b) => b.id === ID_CHANTIER);
+  const base = baseCourante(etat);
+  exigerChamp(base, 'disposition');
+  const chantier = base.disposition.find((b) => b.id === ID_CHANTIER);
   if (chantier === undefined) {
     throw new Error('etat : aucun Chantier de construction dans la disposition');
   }
@@ -1456,21 +1589,41 @@ export function niveauDuChantier(etat) {
  * @returns {string|null} clé du bâtiment manquant dans `BASE_BATIMENTS`
  */
 export function batimentDeProductionManquant(etat, uniteId) {
-  exigerChamp(etat, 'disposition');
+  const base = baseCourante(etat);
+  exigerChamp(base, 'disposition');
   const unite = UNITES[uniteId];
   if (unite === undefined) return null;
   const requis = BATIMENT_DE_CHASSIS[unite.chassis];
   if (requis === undefined) {
     throw new Error(`etat : châssis « ${unite.chassis} » sans bâtiment de production`);
   }
-  return etat.disposition.some((b) => b.id === requis) ? null : requis;
+  return base.disposition.some((b) => b.id === requis) ? null : requis;
 }
 
 export function niveauDeCommandement(etat, force) {
+  return niveauDeCommandementDeLaBase(baseCourante(etat), force);
+}
+
+/**
+ * Le même niveau, lu sur une BASE.
+ *
+ * ⚠⚠ ELLE EXISTE POUR LES MIGRATIONS, ET C'EST UNE VRAIE RAISON. La migration
+ * 13 → 14 interroge le niveau de commandement d'une sauvegarde v13, où la
+ * disposition est ENCORE À LA RACINE : lui faire traverser `baseCourante` la
+ * ferait lever, `bases` n'existant qu'à partir de la v23. Une migration doit
+ * tourner sur la forme de SON époque, jamais sur celle d'aujourd'hui — c'est ce
+ * que le dépliage a failli casser en silence, la chaîne complète n'étant rejouée
+ * que par un test.
+ *
+ * @param {{ disposition: Array }} base
+ * @param {string} force
+ * @returns {number|null} `null` si le bâtiment commandant n'est pas posé
+ */
+export function niveauDeCommandementDeLaBase(base, force) {
   const f = exigerForce(force);
-  exigerChamp(etat, 'disposition');
+  exigerChamp(base, 'disposition');
   const commandant = POINTS_ARMEE[f.role].batiment;
-  const batiment = etat.disposition.find((b) => b.id === commandant);
+  const batiment = base.disposition.find((b) => b.id === commandant);
   return batiment === undefined ? null : batiment.niveau;
 }
 
@@ -1545,8 +1698,13 @@ export function serialiser(etat, instantMs) {
   // lot OBSTACLES : les deux se retirent du même terrain, à la même fondation, et
   // laisser l'un dans la sauvegarde en ferait la source de vérité concurrente du
   // tirage.
-  const { champs, obstacles, ...aSauver } = etat;
-  return JSON.stringify({ ...aSauver, instantSauvegardeMs: instantMs });
+  //
+  // ⚠ ET ILS SORTENT DE CHAQUE BASE, PLUS DE LA RACINE — lot BASES-0. Le
+  // déstructurant sur `etat` ne trouverait plus rien à retirer et la sauvegarde
+  // porterait le terrain, silencieusement : c'est exactement la seconde source de
+  // vérité que ces quatre lignes existent pour empêcher.
+  const bases = etat.bases.map(({ champs, obstacles, ...reste }) => reste);
+  return JSON.stringify({ ...etat, bases, instantSauvegardeMs: instantMs });
 }
 
 /**
@@ -1795,8 +1953,12 @@ const MIGRATIONS = {
    */
   9: (s) => {
     s.version = 10;
+    // ⚠ `[s]` ET NON `basesDuJoueur(s)` — lot BASES-0. Une sauvegarde v9 porte
+    // son armée À LA RACINE : elle EST la base, au sens de `plafondVise`, et
+    // `basesDuJoueur` lèverait dessus puisqu'elle lit `s.bases`, qui n'existe
+    // qu'à partir de la v23. Une migration tourne sur la forme de SON époque.
     const plafond = Array.isArray(s.armee)
-      ? plafondVise(basesDuJoueur(s))
+      ? plafondVise([s])
       : plafondDuNiveau(null);
     s.attaque = { points: plafond, plafond, residu: 0 };
   },
@@ -1878,7 +2040,10 @@ const MIGRATIONS = {
       // remonte depuis la v0, et rien ne garantit la forme d'un objet à
       // mi-parcours. Sans disposition il n'y a pas de bâtiment commandant, donc
       // pas de niveau : c'est exactement le cas « bâtiment absent ».
-      const niveau = Array.isArray(s.disposition) ? niveauDeCommandement(s, force) : null;
+      // ⚠ LA VARIANTE « DE LA BASE », pour la même raison qu'en migration 9 :
+      // une v13 porte sa disposition à la racine, et `baseCourante` lèverait.
+      const niveau = Array.isArray(s.disposition)
+        ? niveauDeCommandementDeLaBase(s, force) : null;
       const ouvertes = niveau === null ? [] : Object.keys(ARBRE_RECHERCHE[branche])
         .filter((id) => (DEFENSES[id] ?? UNITES[id]).apparition <= niveau);
       // ⚠ UNION AVEC LES GRATUITES, ET CE N'EST PAS UNE GÉNÉROSITÉ. À bas niveau
@@ -2090,6 +2255,40 @@ const MIGRATIONS = {
     s.version = 22;
     if (s.dernierDeplacementTick === undefined) s.dernierDeplacementTick = null;
   },
+
+  /**
+   * v22 → v23 : les onze champs d'une base descendent d'un cran, dans
+   * `bases[0]`, et `baseCourante` vaut 0 — lot BASES-0, 02/09/2026.
+   *
+   * ⚠⚠ ELLE NE PERD RIEN, ET C'EST LE PREMIER DÉPLIAGE DE LA CHAÎNE. Aucune
+   * valeur n'est convertie, aucune n'est inventée : les mêmes objets changent
+   * d'adresse. Une v22 et sa v23 décrivent exactement la même partie.
+   *
+   * ⚠ `champs` ET `obstacles` NE SONT PAS RECOPIÉS, et il n'y a rien à
+   * recopier : `serialiser` les a toujours retirés de la sauvegarde, et
+   * `charger` les redéduit de `fondation` — qui, elle, voyage. Les poser ici
+   * ferait exister dans la sauvegarde le terrain que le dépôt refuse d'y mettre
+   * depuis le lot FONDATION-GELÉE.
+   *
+   * ⚠ ET LES ONZE AUTRES CHAMPS NE BOUGENT PAS. `poisAcquis` est GLOBAL — Ethan,
+   * 02/09 : « acquis une fois, valable partout » —, `rapports` porte les dix
+   * derniers EN TOUT, `attaque` est une réserve unique dont le plafond est
+   * mérité par les ARMÉES du moment, et `recherche` se paie en points et jamais
+   * en ressources. Les descendre dans la base serait un changement de RÈGLE,
+   * pas un dépliage.
+   *
+   * @param {object} s
+   */
+  22: (s) => {
+    s.version = 23;
+    const base = {};
+    for (const champ of CHAMPS_DE_BASE) {
+      if (s[champ] !== undefined) base[champ] = s[champ];
+      delete s[champ];
+    }
+    s.bases = [base];
+    s.baseCourante = 0;
+  },
 };
 
 /**
@@ -2151,13 +2350,18 @@ export function charger(json, instantMs) {
   // c'est la falsification du 27/08 qui l'a montré : le test « refusé au
   // chargement » restait vert alors que `verifierEtat` ne surveillait plus
   // `fondation` du tout. Ça levait, pour la mauvaise raison.
-  exigerChamp(etat, 'fondation');
+  if (!Array.isArray(etat.bases)) {
+    throw new Error('etat : champ « bases » absent');
+  }
+  for (const base of etat.bases) exigerChamp(base, 'fondation');
 
   // Le terrain n'est pas dans la sauvegarde : il se redéduit de la FONDATION,
   // pas de la position courante. C'est ici, et nulle part ailleurs, qu'il
-  // rentre dans l'état.
-  etat.champs = champsDeLaBase(etat.fondation.rangee, etat.fondation.colonne);
-  etat.obstacles = obstaclesDeLaBase(etat.fondation.rangee, etat.fondation.colonne);
+  // rentre dans l'état — pour CHAQUE base depuis le lot BASES-0.
+  for (const base of etat.bases) {
+    base.champs = champsDeLaBase(base.fondation.rangee, base.fondation.colonne);
+    base.obstacles = obstaclesDeLaBase(base.fondation.rangee, base.fondation.colonne);
+  }
   verifierEtat(etat);
 
   // Rattrapage hors ligne. `ecrit === null` vient d'une sauvegarde d'avant la

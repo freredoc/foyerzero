@@ -36,6 +36,8 @@ import {
   initialiserEcranRecherche, lignesDeRecherche, lignesSpeciales, couchesDeLaPiece,
   PANNEAUX, LIBELLE_CONFIRMER,
 } from '../src/ui/recherche.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 /** Un état neuf, migré au format courant, avec un compteur qu'on peut charger. */
 function partie(pointsMilli = '0') {
@@ -391,7 +393,7 @@ test('T6 — la migration v13 → v14 ne verrouille rien de ce qui est déjà po
   poserBatiment(etat, 'centreDeCommandement', 14, 1);
   poserBatiment(etat, 'qgDeDefense', 14, 3);
   for (const id of ['chantierDeConstruction', 'centreDeCommandement', 'qgDeDefense']) {
-    const b = etat.disposition.find((x) => x.id === id);
+    const b = baseCourante(etat).disposition.find((x) => x.id === id);
     assert.ok(b, `montage : ${id} absent de la disposition`);
     b.niveau = 12;
   }
@@ -406,7 +408,7 @@ test('T6 — la migration v13 → v14 ne verrouille rien de ce qui est déjà po
   assert.ok(payantes.length >= 4,
     `montage sans mordant : seulement ${payantes.length} pièce(s) payante(s) à ce niveau`);
   for (let i = 0; i < payantes.length && i < 6; i += 1) {
-    etat.armee.push({ id: payantes[i], vague: 1, colonne: i + 1, niveau: 1, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: payantes[i], vague: 1, colonne: i + 1, niveau: 1, degatsMilli: 0 });
   }
   const rangee = 4; // bande de défense : rangées 3 à 10
   const defPayantes = Object.keys(ARBRE_RECHERCHE.defense)
@@ -414,17 +416,20 @@ test('T6 — la migration v13 → v14 ne verrouille rien de ce qui est déjà po
       && ARBRE_RECHERCHE.defense[id].unite > 0);
   assert.ok(defPayantes.length >= 3, `montage sans mordant : ${defPayantes.length} défense(s) payante(s)`);
   for (let i = 0; i < defPayantes.length && i < 3; i += 1) {
-    etat.garnison.push({ id: defPayantes[i], rangee, colonne: i + 2, niveau: 1, degatsMilli: 0 });
+    baseCourante(etat).garnison.push({ id: defPayantes[i], rangee, colonne: i + 2, niveau: 1, degatsMilli: 0 });
   }
 
   // On rétrograde la sauvegarde en v13 : compteur seul, pas d'acquises.
   const v13 = JSON.parse(serialiser(etat, 2_000_000));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v13 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v13);
   v13.version = 13;
   v13.recherche = { pointsMilli: '4242' };
 
   const migre = migrer(v13);
   assert.equal(migre.version, SAVE_VERSION);
-  assert.equal(migre.version, 22);
   assert.equal(migre.recherche.pointsMilli, '4242', 'la migration a touché au compteur');
   assert.deepEqual(migre.recherche.modules, { offense: [], defense: [] },
     'la migration a offert des modules que le joueur n\'a jamais achetés');
@@ -438,14 +443,14 @@ test('T6 — la migration v13 → v14 ne verrouille rien de ce qui est déjà po
   // DÉJÀ FAITE — exactement la situation d'un joueur qui recharge sa partie.
   const remplirArmee = (acquises) => {
     const g = arsenalVide(nOff, acquises);
-    for (const p of charge.armee) g.cases[p.vague - 1][p.colonne - 1] = p.id;
+    for (const p of baseCourante(charge).armee) g.cases[p.vague - 1][p.colonne - 1] = p.id;
     return g;
   };
   assert.deepEqual(bilanArmee(remplirArmee(acquisesDe(charge, 'offense'))).verrouillees, [],
     'la migration a verrouillé des unités déjà posées');
 
   const garn = defenseVide(nDef, [], acquisesDe(charge, 'defense'));
-  for (const p of charge.garnison) garn.cases[p.rangee - 3][p.colonne - 1] = p.id;
+  for (const p of baseCourante(charge).garnison) garn.cases[p.rangee - 3][p.colonne - 1] = p.id;
   assert.deepEqual(bilanDefense(garn).verrouilles, [],
     'la migration a verrouillé des défenses déjà posées');
 
@@ -456,7 +461,7 @@ test('T6 — la migration v13 → v14 ne verrouille rien de ce qui est déjà po
   const maigre = bilanArmee(remplirArmee(gratuitesDe('offense'))).verrouillees;
   assert.ok(maigre.length > 0,
     'montage sans mordant : même les gratuites suffisaient à tout garder légal');
-  assert.equal(maigre.length, charge.armee.filter(
+  assert.equal(maigre.length, baseCourante(charge).armee.filter(
     (p) => !gratuitesDe('offense').includes(p.id),
   ).length, 'la contre-épreuve ne verrouille pas ce qu\'elle devrait');
 });
@@ -2866,11 +2871,11 @@ function partieAvecGarnison(garnison, modulesDefense) {
   const etat = creerEtat(2026);
   rattraperJeu(etat, 3001);
   for (let c = 1; c <= 6; c += 1) {
-    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }
-  etat.garnison.push(...garnison);
+  baseCourante(etat).garnison.push(...garnison);
   etat.recherche.modules.defense.push(...modulesDefense);
-  const camp = etat.satellites.presents.find((x) => x.type === 'camp');
+  const camp = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
   assert.ok(camp, 'montage : aucun camp autour de la base');
   return { etat, cible: { rangee: camp.rangee, colonne: camp.colonne } };
 }
@@ -2889,10 +2894,10 @@ test('MODULES-D T11 — l\'Auto-réparation rend 20 % des DÉGÂTS, et seulement
     { id: 'casemate', rangee: 5, colonne: 8, niveau: 1, degatsMilli: 0 },
   ], ['merlon', 'faucheuse', 'casemate']);
 
-  const rapport = executerRaid(etat, etat, cible);
+  const rapport = executerRaid(etat, baseCourante(etat), cible);
   assert.ok(rapport.ticks > 0, 'montage : le raid n\'a pas eu lieu');
 
-  const par = Object.fromEntries(etat.garnison.map((p) => [p.id, p.degatsMilli]));
+  const par = Object.fromEntries(baseCourante(etat).garnison.map((p) => [p.id, p.degatsMilli]));
   // floor(1009 × 20 / 100) = 201, et non 202 : 20 % des DÉGÂTS, arrondi vers le bas.
   assert.equal(par.merlon, abime - 201, 'le porteur acquis doit regagner 201 milli-PV');
   // ⚠ CES TROIS-LÀ SONT LES GARDES. Retirer le contrôle `moduleEstAcquis` ferait
@@ -2918,17 +2923,17 @@ test('MODULES-D T12 — l\'ARMÉE n\'est pas touchée par la suite de garnison',
   // maison, donc `reporterLesDegats` ne la réécrit pas. Si la suite parcourait
   // `etat.armee`, elle serait la seule pièce dont les dégâts pourraient baisser
   // sans que le combat y soit pour quelque chose.
-  etat.armee.push({ id: 'meute', vague: 1, colonne: 9, niveau: 1, degatsMilli: auPlancher });
+  baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: 9, niveau: 1, degatsMilli: auPlancher });
 
-  executerRaid(etat, etat, cible);
+  executerRaid(etat, baseCourante(etat), cible);
 
-  assert.equal(etat.garnison[0].degatsMilli, 1009 - 201, 'montage : la garnison doit être réparée');
-  const restee = etat.armee.at(-1);
+  assert.equal(baseCourante(etat).garnison[0].degatsMilli, 1009 - 201, 'montage : la garnison doit être réparée');
+  const restee = baseCourante(etat).armee.at(-1);
   assert.equal(restee.degatsMilli, auPlancher, 'l\'unité restée à la maison ne se soigne pas');
   // Les unités engagées portent EXACTEMENT ce que le combat leur a laissé : une
   // pièce au plancher a `pvMax − plancher` de dégâts, au milli-PV près. Un
   // rabais de 20 % s'y verrait tout de suite.
-  for (const piece of etat.armee) {
+  for (const piece of baseCourante(etat).armee) {
     assert.ok(piece.degatsMilli <= auPlancher, 'dégâts au-delà du plancher');
     if (piece.degatsMilli === 0) continue;
     assert.equal(Number.isInteger(piece.degatsMilli), true);
@@ -2944,8 +2949,8 @@ test('MODULES-D T12 — l\'ARMÉE n\'est pas touchée par la suite de garnison',
   const source = readFileSync(new URL('../src/sim/raid.js', import.meta.url), 'utf8');
   const corps = source.slice(source.indexOf('function reparerLaGarnison('));
   const fin = corps.slice(0, corps.indexOf('\n}'));
-  assert.match(fin, /for \(const piece of etat\.garnison\)/);
-  assert.equal(fin.includes('etat.armee'), false, 'la suite ne doit jamais nommer l\'armée');
+  assert.match(fin, /for \(const piece of laBase\.garnison\)/);
+  assert.equal(fin.includes('baseCourante(etat).armee'), false, 'la suite ne doit jamais nommer l\'armée');
 });
 
 /** Les quatre modules que ce lot câble, dans l'ordre de la table. */

@@ -31,6 +31,8 @@ import {
   GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE, PEUPLEMENT,
 } from '../src/data/sites.js';
 import { RAYONS, JOUEUR } from '../src/sim/territoire.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const T0 = 1_700_000_000_000;
@@ -260,7 +262,7 @@ function partieSurLePoi(graine, marge = 5) {
   const poi = liste.find(isole);
   assert.ok(poi, `graine ${graine} : aucun POI isolé à ${marge} cases`);
   const etat = creerEtat(graine);
-  etat.position = { rangee: poi.rangee, colonne: poi.colonne };
+  baseCourante(etat).position = { rangee: poi.rangee, colonne: poi.colonne };
   return { etat, poi };
 }
 
@@ -275,13 +277,13 @@ test('POI T8 — un POI dans le territoire est acquis au tick suivant, à trois 
   // le relevé lit vraiment le TERRITOIRE et ne ramasse pas toute la carte.
   assert.equal(RAYONS[JOUEUR], 2, 'le rayon d\'influence du joueur a changé — refaire la mesure');
   const loin = creerEtat(4242);
-  loin.position = { rangee: poi.rangee, colonne: poi.colonne + RAYONS[JOUEUR] + 1 };
+  baseCourante(loin).position = { rangee: poi.rangee, colonne: poi.colonne + RAYONS[JOUEUR] + 1 };
   tickJeu(loin);
   assert.deepEqual(loin.poisAcquis, [], 'un POI à trois cases a été acquis');
 
   // Falsifiable dans l'autre sens : à DEUX cases, il l'est.
   const juste = creerEtat(4242);
-  juste.position = { rangee: poi.rangee, colonne: poi.colonne + RAYONS[JOUEUR] };
+  baseCourante(juste).position = { rangee: poi.rangee, colonne: poi.colonne + RAYONS[JOUEUR] };
   tickJeu(juste);
   assert.deepEqual(juste.poisAcquis, [{ type: poi.type, bande: poi.bande }]);
 });
@@ -293,7 +295,7 @@ test('POI T9 — acquis une fois, il le reste : rien ne le retire', () => {
 
   // On repart à l'autre bout de la carte : « définitivement » veut dire que ni
   // un redéploiement, ni un raid, ni un rasage ne le retire.
-  etat.position = { rangee: 40, colonne: 3 };
+  baseCourante(etat).position = { rangee: 40, colonne: 3 };
   for (let i = 0; i < 100; i += 1) tickJeu(etat);
   assert.ok(poiEstAcquis(etat.poisAcquis, poi), 'le POI a disparu de la liste');
 
@@ -320,7 +322,7 @@ test('POI T10 — les acquis sont triés, et le tri ne dépend pas de l\'ordre d
   // Un tick relève, donc trie. La position par défaut n'ajoute rien ici.
   const avant = etat.poisAcquis.length;
   const cible = carteDesPoi(4242).liste.find((p) => p.bande === 2);
-  etat.position = { rangee: cible.rangee, colonne: cible.colonne };
+  baseCourante(etat).position = { rangee: cible.rangee, colonne: cible.colonne };
   tickJeu(etat);
   assert.ok(etat.poisAcquis.length > avant, 'montage : rien n\'a été ajouté, donc rien n\'a été trié');
   const rangs = etat.poisAcquis.map((a) => a.bande * 1000 + TYPES_POI.indexOf(a.type));
@@ -334,7 +336,7 @@ test('POI T10 — les acquis sont triés, et le tri ne dépend pas de l\'ordre d
 /** Une base neuve avec un collecteur posé sur un vrai champ de quartz. */
 function baseQuiProduit(graine = 20260826) {
   const etat = creerEtat(graine);
-  const champ = etat.champs.cases.find((k) => k.ressource === 'quartz');
+  const champ = baseCourante(etat).champs.cases.find((k) => k.ressource === 'quartz');
   assert.ok(champ, 'montage : aucun champ de quartz sous cette base');
   poser(etat, 'collecteur', champ.rangee, champ.colonne);
   return etat;
@@ -342,7 +344,7 @@ function baseQuiProduit(graine = 20260826) {
 
 test('POI T11 — trois veines de quartz font exactement +30 %, en entiers', () => {
   const etat = baseQuiProduit();
-  const nu = debitsMilliParHeure(etat.disposition, etat.champs);
+  const nu = debitsMilliParHeure(baseCourante(etat).disposition, baseCourante(etat).champs);
   const totalNu = nu.reduce((s, d) => s + (d.quartz ?? 0), 0);
   // ⚠ FALSIFIABLE : sans production, +30 % de zéro vaut zéro et le test passerait
   // sur n'importe quel code.
@@ -355,7 +357,7 @@ test('POI T11 — trois veines de quartz font exactement +30 %, en entiers', () 
   // ⚠ ILS S'ADDITIONNENT : +30, jamais ×1,1³ = +33,1.
   assert.deepEqual(pct, { quartz: 30 });
 
-  const majore = debitsMilliParHeure(etat.disposition, etat.champs, pct);
+  const majore = debitsMilliParHeure(baseCourante(etat).disposition, baseCourante(etat).champs, pct);
   const totalMajore = majore.reduce((s, d) => s + (d.quartz ?? 0), 0);
   assert.equal(totalMajore, Math.floor((totalNu * 130) / 100));
   assert.ok(Number.isInteger(totalMajore), 'le débit majoré a quitté les entiers');
@@ -397,15 +399,15 @@ test('POI T12 — équivalence tick / rattrapage AVEC majoration active', () => 
 
   // ⚠ FALSIFIABLE : la majoration doit CHANGER quelque chose, sinon les deux
   // chemins seraient comparés sur un effet nul.
-  const nu = debitsMilliParHeure(modele.disposition, modele.champs);
-  const majore = debitsMilliParHeure(modele.disposition, modele.champs, pct);
+  const nu = debitsMilliParHeure(baseCourante(modele).disposition, baseCourante(modele).champs);
+  const majore = debitsMilliParHeure(baseCourante(modele).disposition, baseCourante(modele).champs, pct);
   assert.notDeepEqual(nu, majore, 'la majoration ne change rien : le montage ne mesure rien');
-  const parTicks = creerEtatEconomie(modele.disposition);
-  const parRattrapage = creerEtatEconomie(modele.disposition);
+  const parTicks = creerEtatEconomie(baseCourante(modele).disposition);
+  const parRattrapage = creerEtatEconomie(baseCourante(modele).disposition);
   for (let i = 0; i < 1000; i += 1) {
-    tickEconomieBase(parTicks, modele.disposition, modele.champs, pct);
+    tickEconomieBase(parTicks, baseCourante(modele).disposition, baseCourante(modele).champs, pct);
   }
-  rattrapageEconomieBase(parRattrapage, modele.disposition, modele.champs, 1000, pct);
+  rattrapageEconomieBase(parRattrapage, baseCourante(modele).disposition, baseCourante(modele).champs, 1000, pct);
   assert.deepEqual(parRattrapage, parTicks, 'les deux chemins divergent sous majoration');
   assert.ok(parTicks.ressources.quartz > 0, 'montage : aucun quartz produit');
   // ⚠ ET LE RÉSIDU DOIT ÊTRE NON NUL, sinon le seul endroit où les deux chemins
@@ -426,12 +428,12 @@ test('POI T12 — équivalence tick / rattrapage AVEC majoration active', () => 
   b.poisAcquis = acquis.map((x) => ({ ...x }));
   for (let i = 0; i < 1000; i += 1) tickJeu(a);
   rattraperJeu(b, 1000);
-  assert.deepEqual(b.economie, a.economie, '`tickJeu` et `rattraperJeu` divergent sous majoration');
+  assert.deepEqual(baseCourante(b).economie, baseCourante(a).economie, '`tickJeu` et `rattraperJeu` divergent sous majoration');
 
   // ⚠ ET LA MAJORATION DOIT AVOIR MORDU SUR CE CHEMIN-LÀ AUSSI.
   const temoin = baseQuiProduit();
   for (let i = 0; i < 1000; i += 1) tickJeu(temoin);
-  assert.ok(a.economie.ressources.quartz > temoin.economie.ressources.quartz,
+  assert.ok(baseCourante(a).economie.ressources.quartz > baseCourante(temoin).economie.ressources.quartz,
     'le jeu majoré ne produit pas plus que le jeu nu');
 });
 
@@ -639,13 +641,13 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
     const etat = creerEtat(2026);
     rattraperJeu(etat, 3001);
     for (let c = 1; c <= 6; c += 1) {
-      etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+      baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
     }
     etat.poisAcquis = acquis;
     return etat;
   };
   const camp = (etat) => {
-    const s = etat.satellites.presents.find((x) => x.type === 'camp');
+    const s = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
     return { rangee: s.rangee, colonne: s.colonne };
   };
 
@@ -658,8 +660,8 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   assert.equal(majorationsDeCombat(avec.poisAcquis).escouade, 10);
   assert.equal(majorationsDeCombat(nu.poisAcquis).escouade, 0);
 
-  const rNu = executerRaid(nu, nu, camp(nu));
-  const rAvec = executerRaid(avec, avec, camp(avec));
+  const rNu = executerRaid(nu, baseCourante(nu), camp(nu));
+  const rAvec = executerRaid(avec, baseCourante(avec), camp(avec));
   // ⚠ MESURÉ SUR CE MONTAGE-CI : 378 ticks contre 376, et un site laissé dans un
   // autre état. Le BUTIN, lui, est identique — six Meutes ne renversent pas un
   // camp, et +10 % ne change pas ce qu'elles en rapportent. Asserter sur le seul
@@ -714,6 +716,10 @@ test('POI T20 — une sauvegarde v15 se charge, se joue, et ressort à jour', ()
 
   const { etat } = partieSurLePoi(4242);
   const v15 = JSON.parse(serialiser(etat, T0));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v15 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v15);
   v15.version = 15;
   delete v15.poisAcquis;
 
@@ -765,7 +771,7 @@ test('POI T21 — un satellite ne se pose jamais sur un POI', () => {
   for (const graine of GRAINES) {
     const etat = creerEtat(graine);
     rattraperJeu(etat, 3001);
-    for (const s of etat.satellites.presents) {
+    for (const s of baseCourante(etat).satellites.presents) {
       poses += 1;
       assert.equal(poiDeLaCase(graine, s.rangee, s.colonne), null,
         `graine ${graine} : un ${s.type} est posé sur un POI en (${s.rangee}, ${s.colonne})`);
@@ -826,7 +832,7 @@ test('POI T24 — en partie normale, AUCUN POI n\'est acquérable, et ce n\'est 
   // Ce test EXISTE pour que la phrase reste vraie de la bonne façon : le jour où
   // la base pourra bouger, il tombera, et c'est exactement ce qu'on veut qu'il
   // fasse — il dira que le système est devenu jouable.
-  const depart = creerEtat(1).position;
+  const depart = baseCourante(creerEtat(1)).position;
   for (let dr = -RAYONS[JOUEUR]; dr <= RAYONS[JOUEUR]; dr += 1) {
     for (let dc = -RAYONS[JOUEUR]; dc <= RAYONS[JOUEUR]; dc += 1) {
       assert.equal(horsDeLaGarde(depart.rangee + dr, depart.colonne + dc), false,

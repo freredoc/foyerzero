@@ -54,6 +54,7 @@ import {
   messageDePose, messageDeConfirmation,
   messagePasDeReparation, DUREE_TOAST_MS, poserCouches,
 } from './chantier.js';
+import { baseCourante } from '../sim/base-courante.js';
 
 /**
  * Le titre d'une vague, et le retard avec lequel elle part.
@@ -305,9 +306,13 @@ export function couchesDeLUniteDAssaut(id) {
 }
 
 export function vueDeLOffense(etat) {
-  if (!etat || !Array.isArray(etat.armee)) {
+  // ⚠ L'ENVELOPPE SE VÉRIFIE AVANT D'ÊTRE DÉRÉFÉRENCÉE — lot BASES-0, même
+  // leçon que `resumeDeLaBase` : `baseCourante(null)` lève un message qui parle
+  // de `bases`, quand l'appelant a passé `null`.
+  if (!etat || !Array.isArray(etat.bases) || !Array.isArray(baseCourante(etat).armee)) {
     throw new TypeError('offense : état de jeu absent ou malformé');
   }
+  const laBase = baseCourante(etat);
   const niveau = niveauDeCommandement(etat, 'armee');
 
   // Les quatre vagues, pleines de `null` puis remplies : une case vide garde sa
@@ -316,7 +321,7 @@ export function vueDeLOffense(etat) {
   const vagues = Array.from({ length: NB_VAGUES }, () => Array.from(
     { length: NB_COLONNES }, () => null,
   ));
-  etat.armee.forEach((piece, index) => {
+  laBase.armee.forEach((piece, index) => {
     vagues[piece.vague - 1][piece.colonne - 1] = {
       index,
       id: piece.id,
@@ -335,7 +340,7 @@ export function vueDeLOffense(etat) {
 
   return {
     niveau,
-    niveauArmee: niveauDeLArmee(etat.armee),
+    niveauArmee: niveauDeLArmee(laBase.armee),
     engages,
     budget,
     depasse,
@@ -584,7 +589,7 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     if (action.cible === true) {
       // Deux touchers : celui-ci prend la pièce en main, le suivant l'emmène.
       enMain = index;
-      ligneDeMode(messageDeDestinationDUnite(UNITES[etatCourant.armee[index].id].nom.joueur));
+      ligneDeMode(messageDeDestinationDUnite(UNITES[baseCourante(etatCourant).armee[index].id].nom.joueur));
       peindre(etatCourant);
       return;
     }
@@ -624,7 +629,7 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     if (emplacement === null || etatCourant === null) return;
     const vague = Number(emplacement.dataset.vague);
     const colonne = Number(emplacement.dataset.colonne);
-    const occupant = etatCourant.armee.findIndex(
+    const occupant = baseCourante(etatCourant).armee.findIndex(
       (p) => p.vague === vague && p.colonne === colonne,
     );
 
@@ -744,7 +749,7 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     // ⚠ UNE SÉLECTION QUI DÉSIGNE UNE PIÈCE PARTIE MENTIRAIT, OU PIRE :
     // désignerait sa voisine. `retirerEffectif` décale la liste, donc l'indice
     // retenu ne vaut plus rien — on le lâche plutôt que de le laisser glisser.
-    if (selection !== null && selection >= etat.armee.length) selection = null;
+    if (selection !== null && selection >= baseCourante(etat).armee.length) selection = null;
     const vue = vueDeLOffense(etat);
 
     vue.vagues.forEach((vague, indice) => {
@@ -805,7 +810,7 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
    * doigt. C'est la leçon du lot ÉCRAN-ACTIONS, et elle vaut ici mot pour mot.
    */
   function peindreContexte(vue) {
-    const piece = selection === null ? null : etatCourant.armee[selection];
+    const piece = selection === null ? null : baseCourante(etatCourant).armee[selection];
     $('offense-selection-nom').textContent = piece === null
       ? '—' : UNITES[piece.id].nom.joueur;
     $('offense-selection-detail').textContent = piece === null

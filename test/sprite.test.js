@@ -36,6 +36,7 @@ import { creerCombat } from '../src/sim/combat.js';
 import { calculerProjection } from '../src/render/projection.js';
 import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
 import { tirer } from '../src/sim/rng.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SPRITES = join(RACINE, 'art', 'sprites');
@@ -53,7 +54,7 @@ const SPRITES = join(RACINE, 'art', 'sprites');
 const couchesDeLaDefense = (piece, etat) => couchesDeLEntite(
   { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
     rangee: piece.rangee, colonne: piece.colonne },
-  { voisines: etat.garnison },
+  { voisines: baseCourante(etat).garnison },
 );
 const couchesDeLUnite = (d, cible = null) => couchesDeLEntite(d, { cible });
 const spriteDuBatiment = (id) => couchesDeLEntite(
@@ -611,11 +612,11 @@ test('sprite — les socles à liaison sont exactement les défenses de type tou
 
 test('sprite — chaque pièce de garnison résout toutes ses couches dans un atlas', () => {
   const etat = garnisonComplete();
-  assert.equal(etat.garnison.length, Object.keys(DEFENSES).length,
+  assert.equal(baseCourante(etat).garnison.length, Object.keys(DEFENSES).length,
     'le montage ne porte pas les neuf défenses');
 
   let couchesVues = 0;
-  for (const piece of etat.garnison) {
+  for (const piece of baseCourante(etat).garnison) {
     const couches = couchesDeLaDefense(piece, etat);
 
     // ⚠ SANS CETTE LIGNE, UNE FONCTION QUI REND `[]` PASSERAIT la boucle
@@ -643,7 +644,7 @@ test('sprite — la ronce et la herse n\'ont ni socle ni orientation', () => {
   // suffixe d'orientation sur leur nom voudrait dire qu'on les traite comme des
   // tourelles, et l'atlas n'en porte qu'un seul sprite chacune.
   const etat = garnisonComplete();
-  const barrieres = etat.garnison.filter((p) => DEFENSES[p.id].type === 'barriere');
+  const barrieres = baseCourante(etat).garnison.filter((p) => DEFENSES[p.id].type === 'barriere');
   assert.ok(barrieres.length >= 2, 'le montage ne porte pas les deux barrières');
 
   for (const piece of barrieres) {
@@ -657,7 +658,7 @@ test('sprite — la ronce et la herse n\'ont ni socle ni orientation', () => {
   // ⚠ TÉMOIN : une tourelle du MÊME montage en porte deux, elle. Sans lui, une
   // fonction qui rendrait toujours une seule couche passerait les assertions
   // ci-dessus.
-  const tourelle = etat.garnison.find((p) => DEFENSES[p.id].type === 'tourelle');
+  const tourelle = baseCourante(etat).garnison.find((p) => DEFENSES[p.id].type === 'tourelle');
   assert.ok(tourelle !== undefined, 'le montage ne porte aucune tourelle');
   const couchesTourelle = couchesDeLaDefense(tourelle, etat);
   assert.equal(couchesTourelle.length, 2, 'une tourelle doit porter sa couche et son socle');
@@ -905,11 +906,11 @@ test('T8 étendue — une structure se dessine à l\'identique sur l\'écran Cha
   // autre au combat. Ce test-ci l'étend, et il est fait pour tomber le jour où
   // quelqu'un réécrirait le calcul dans l'écran « pour aller plus vite ».
   const etat = garnisonComplete();
-  assert.equal(etat.garnison.length, Object.keys(DEFENSES).length,
+  assert.equal(baseCourante(etat).garnison.length, Object.keys(DEFENSES).length,
     'le montage ne porte pas les neuf défenses');
 
   let comparees = 0;
-  for (const piece of etat.garnison) {
+  for (const piece of baseCourante(etat).garnison) {
     // Le chemin de l'ÉCRAN : la table de terrain, telle que la boucle de peinture
     // l'interroge — `terrain.spriteDe(b, etat)`.
     const ecran = TERRAINS.defense.spriteDe(piece, etat);
@@ -918,7 +919,7 @@ test('T8 étendue — une structure se dessine à l\'identique sur l\'écran Cha
     const champ = couchesDeLEntite(
       { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
         rangee: piece.rangee, colonne: piece.colonne },
-      { voisines: etat.garnison, cible: null },
+      { voisines: baseCourante(etat).garnison, cible: null },
     );
     // ⚠ FALSIFIABILITÉ, PREMIÈRE MOITIÉ : deux listes vides seraient égales.
     assert.ok(Array.isArray(ecran) && ecran.length > 0, `« ${piece.id} » : l'écran ne rend rien`);
@@ -929,7 +930,7 @@ test('T8 étendue — une structure se dessine à l\'identique sur l\'écran Cha
     const ouvrage = couchesDeLEntite(
       { genre: 'defense', id: piece.id, proprietaire: 'ouvrage', camp: 'defense',
         rangee: piece.rangee, colonne: piece.colonne },
-      { voisines: etat.garnison, cible: null },
+      { voisines: baseCourante(etat).garnison, cible: null },
     );
     assert.notDeepEqual(ouvrage, ecran,
       `« ${piece.id} » : le propriétaire ne change rien au dessin`);
@@ -974,7 +975,7 @@ test('couches — les trois genres en rendent, et `null` reste réservé à la l
     for (const id of Object.keys(DEFENSES)) {
       const c = couchesDeLEntite(
         { genre: 'defense', id, proprietaire, camp: 'defense', rangee: 5, colonne: 5 },
-        { voisines: etat.garnison },
+        { voisines: baseCourante(etat).garnison },
       );
       assert.ok(Array.isArray(c) && c.length > 0, `defense ${id} ${proprietaire}`);
       vues += 1;

@@ -53,6 +53,7 @@ import { REPARATION } from '../data/sites.js';
 import { TICKS_PAR_SECONDE, TICKS_PAR_HEURE } from './clock.js';
 import { facteurMilli } from './combat.js';
 import { niveauDeLArmee } from './niveau-de-base.js';
+import { baseCourante } from './base-courante.js';
 
 /** Un millier — l'échelle des milli-PV et des milli-ressources. */
 const MILLE = 1000;
@@ -124,9 +125,10 @@ function pvMaxMilli(id, niveau) {
  * @returns {{id: string, niveau: number|null}}
  */
 export function batimentDuChassis(etat, chassis) {
+  const laBase = baseCourante(etat);
   const id = BATIMENT_DE_CHASSIS[chassis];
   if (id === undefined) throw new RangeError(`réparation : châssis « ${chassis} » inconnu`);
-  const pose = etat.disposition.find((b) => b.id === id);
+  const pose = laBase.disposition.find((b) => b.id === id);
   return { id, niveau: pose === undefined ? null : pose.niveau };
 }
 
@@ -170,7 +172,8 @@ export function reservesVides() {
  * @returns {number} ticks
  */
 export function plafondDeLaReserve(etat) {
-  const dixiemes = niveauDeLArmee(etat.armee) ?? 0;
+  const laBase = baseCourante(etat);
+  const dixiemes = niveauDeLArmee(laBase.armee) ?? 0;
   const heures = REPARATION.plafondHeures
     + REPARATION.plafondHeuresParNiveauArmee * (dixiemes / DIXIEMES_PAR_NIVEAU);
   return Math.floor(heures * TICKS_PAR_HEURE);
@@ -196,13 +199,14 @@ export function plafondDeLaReserve(etat) {
  * @param {number} nbTicks
  */
 export function crediterLesReserves(etat, nbTicks) {
+  const laBase = baseCourante(etat);
   if (!Number.isInteger(nbTicks) || nbTicks < 0) {
     throw new RangeError(`réparation : « ${nbTicks} » ticks — entier ≥ 0 attendu`);
   }
   const plafond = plafondDeLaReserve(etat);
   for (const chassis of CHASSIS_REPARABLES) {
-    const avant = etat.reserveReparation[chassis];
-    etat.reserveReparation[chassis] = Math.min(plafond, avant + nbTicks);
+    const avant = laBase.reserveReparation[chassis];
+    laBase.reserveReparation[chassis] = Math.min(plafond, avant + nbTicks);
   }
 }
 
@@ -225,7 +229,8 @@ export function crediterLesReserves(etat, nbTicks) {
  *   part: number, secondes: number, ticks: number, scorie: number}|null}
  */
 export function coutDeLaReparation(etat, index) {
-  const piece = etat.armee[index];
+  const laBase = baseCourante(etat);
+  const piece = laBase.armee[index];
   if (piece === undefined) throw new RangeError(`réparation : pièce « ${index} » absente`);
   const degats = piece.degatsMilli ?? 0;
   if (degats === 0) return null;
@@ -280,6 +285,7 @@ export function coutDeLaReparation(etat, index) {
  *   secondes: number, ticks: number, scorie: number, pieces: Array<object>}>}
  */
 export function reservoirsDeLArmee(etat) {
+  const laBase = baseCourante(etat);
   const sortie = {};
   for (const chassis of CHASSIS_REPARABLES) {
     sortie[chassis] = {
@@ -292,7 +298,7 @@ export function reservoirsDeLArmee(etat) {
     };
   }
 
-  for (let index = 0; index < etat.armee.length; index += 1) {
+  for (let index = 0; index < laBase.armee.length; index += 1) {
     const cout = coutDeLaReparation(etat, index);
     if (cout === null) continue;
     const reservoir = sortie[cout.chassis];
@@ -304,7 +310,7 @@ export function reservoirsDeLArmee(etat) {
     reservoir.ticks += cout.ticks;
     reservoir.scorie += cout.scorie;
     reservoir.pieces.push({
-      index, degatsDepart: etat.armee[index].degatsMilli, secondes: cout.secondes,
+      index, degatsDepart: laBase.armee[index].degatsMilli, secondes: cout.secondes,
       ticks: cout.ticks,
     });
   }
@@ -325,6 +331,7 @@ export function reservoirsDeLArmee(etat) {
  *   piecesSansBatiment: number}}
  */
 export function devisDeLaReparation(etat) {
+  const laBase = baseCourante(etat);
   const reservoirs = reservoirsDeLArmee(etat);
   let secondes = 0;
   let scorie = 0;
@@ -333,7 +340,7 @@ export function devisDeLaReparation(etat) {
     scorie += r.scorie;
   }
   let piecesSansBatiment = 0;
-  for (const piece of etat.armee) {
+  for (const piece of laBase.armee) {
     if ((piece.degatsMilli ?? 0) === 0) continue;
     if (batimentDuChassis(etat, UNITES[piece.id].chassis).niveau === null) piecesSansBatiment += 1;
   }
@@ -377,7 +384,8 @@ function direLaDuree(ticks) {
 
 /** La scorie disponible, en unités entières. */
 function scorieDisponible(etat) {
-  return Math.floor(etat.economie.ressources.scorie / MILLE);
+  const laBase = baseCourante(etat);
+  return Math.floor(laBase.economie.ressources.scorie / MILLE);
 }
 
 /**
@@ -389,6 +397,7 @@ function scorieDisponible(etat) {
  * @returns {Array<{code: string, message: string}>}
  */
 export function problemesDeLaReparationDUnePiece(etat, index) {
+  const laBase = baseCourante(etat);
   const cout = coutDeLaReparation(etat, index);
   if (cout === null) {
     return [{ code: 'rien-a-reparer', message: 'Cette unité est intacte.' }];
@@ -400,7 +409,7 @@ export function problemesDeLaReparationDUnePiece(etat, index) {
     }];
   }
   const problemes = [];
-  const reserve = etat.reserveReparation[cout.chassis];
+  const reserve = laBase.reserveReparation[cout.chassis];
   if (reserve < cout.ticks) {
     problemes.push({
       code: 'reserve-insuffisante',
@@ -437,15 +446,16 @@ export function problemesDeLaReparationDUnePiece(etat, index) {
  * @returns {{chassis: string, ticks: number, scorie: number}} ce qui a été payé
  */
 export function reparerUnePiece(etat, index) {
+  const laBase = baseCourante(etat);
   const problemes = problemesDeLaReparationDUnePiece(etat, index);
   if (problemes.length > 0) {
     throw new Error(`réparation impossible — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
   const cout = coutDeLaReparation(etat, index);
   const scorie = Math.ceil(cout.scorie);
-  etat.reserveReparation[cout.chassis] -= cout.ticks;
-  etat.economie.ressources.scorie -= scorie * MILLE;
-  etat.armee[index].degatsMilli = 0;
+  laBase.reserveReparation[cout.chassis] -= cout.ticks;
+  laBase.economie.ressources.scorie -= scorie * MILLE;
+  laBase.armee[index].degatsMilli = 0;
   return { chassis: cout.chassis, ticks: cout.ticks, scorie };
 }
 
@@ -456,6 +466,7 @@ export function reparerUnePiece(etat, index) {
  * @returns {Array<{code: string, message: string}>}
  */
 export function problemesDeToutReparer(etat) {
+  const laBase = baseCourante(etat);
   const devis = devisDeLaReparation(etat);
   if (devis.secondes === 0) {
     return [{
@@ -468,7 +479,7 @@ export function problemesDeToutReparer(etat) {
   const problemes = [];
   for (const chassis of CHASSIS_REPARABLES) {
     const demande = devis.reservoirs[chassis].ticks;
-    const reserve = etat.reserveReparation[chassis];
+    const reserve = laBase.reserveReparation[chassis];
     if (demande > reserve) {
       problemes.push({
         code: 'reserve-insuffisante',
@@ -504,11 +515,12 @@ export function problemesDeToutReparer(etat) {
  * @returns {{reparees: number, impayables: number, ticks: object, scorie: number}}
  */
 export function toutReparer(etat) {
+  const laBase = baseCourante(etat);
   const ticks = reservesVides();
   let reparees = 0;
   let impayables = 0;
   let scorie = 0;
-  for (let index = 0; index < etat.armee.length; index += 1) {
+  for (let index = 0; index < laBase.armee.length; index += 1) {
     if (coutDeLaReparation(etat, index) === null) continue;
     if (problemesDeLaReparationDUnePiece(etat, index).length > 0) {
       impayables += 1;

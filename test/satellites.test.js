@@ -29,6 +29,7 @@ import { estSurLaCarte } from '../src/sim/carte.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { creerRng, entier } from '../src/sim/rng.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const T0 = 1_700_000_000_000;
 
@@ -37,10 +38,10 @@ test('satellites — deux camps et un avant-poste, cinq minutes après la fondat
 
   // À la fondation, la base est SEULE. C'est ce que le joueur doit voir en
   // ouvrant la partie ; poser les trois d'office sauterait le délai arbitré.
-  assert.deepEqual(etat.satellites.presents, []);
-  assert.equal(etat.satellites.attentes.length, 3);
+  assert.deepEqual(baseCourante(etat).satellites.presents, []);
+  assert.equal(baseCourante(etat).satellites.attentes.length, 3);
   assert.deepEqual(
-    etat.satellites.attentes.map((a) => a.type).sort(),
+    baseCourante(etat).satellites.attentes.map((a) => a.type).sort(),
     ['avantPoste', 'camp', 'camp'],
   );
 
@@ -51,11 +52,11 @@ test('satellites — deux camps et un avant-poste, cinq minutes après la fondat
   // Une seconde avant l'échéance : toujours rien. C'est la moitié falsifiable —
   // sans elle, un code qui poserait tout au premier tick passerait la suite.
   for (let i = 0; i < TICKS_APPARITION - 1; i += 1) tickJeu(etat);
-  assert.deepEqual(etat.satellites.presents, [], 'ils paraissent avant l\'heure');
+  assert.deepEqual(baseCourante(etat).satellites.presents, [], 'ils paraissent avant l\'heure');
 
   tickJeu(etat);
-  assert.equal(etat.satellites.presents.length, 3);
-  assert.deepEqual(etat.satellites.attentes, []);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3);
+  assert.deepEqual(baseCourante(etat).satellites.attentes, []);
 });
 
 test('satellites — chacun dans son anneau, et jamais sur une base de l\'Ouvrage', () => {
@@ -63,14 +64,14 @@ test('satellites — chacun dans son anneau, et jamais sur une base de l\'Ouvrag
   for (const graine of [1, 7, 42, 1234, 99]) {
     const etat = creerEtat(graine);
     rattraperJeu(etat, TICKS_APPARITION);
-    assert.equal(etat.satellites.presents.length, 3, `graine ${graine}`);
+    assert.equal(baseCourante(etat).satellites.presents.length, 3, `graine ${graine}`);
 
     const vues = new Set();
-    for (const s of etat.satellites.presents) {
+    for (const s of baseCourante(etat).satellites.presents) {
       const anneau = ANNEAUX[s.type];
       const distance = Math.max(
-        Math.abs(s.rangee - etat.position.rangee),
-        Math.abs(s.colonne - etat.position.colonne),
+        Math.abs(s.rangee - baseCourante(etat).position.rangee),
+        Math.abs(s.colonne - baseCourante(etat).position.colonne),
       );
       assert.ok(
         distance >= anneau.min && distance <= anneau.max,
@@ -108,8 +109,8 @@ test('satellites — les deux chemins d\'avancement rendent les mêmes satellite
   for (let i = 0; i < duree; i += 1) tickJeu(parBoucle);
   rattraperJeu(parRattrapage, duree);
 
-  assert.equal(parBoucle.satellites.presents.length, 3, 'le montage ne mesure rien s\'ils n\'ont pas paru');
-  assert.deepEqual(parBoucle.satellites, parRattrapage.satellites);
+  assert.equal(baseCourante(parBoucle).satellites.presents.length, 3, 'le montage ne mesure rien s\'ils n\'ont pas paru');
+  assert.deepEqual(baseCourante(parBoucle).satellites, baseCourante(parRattrapage).satellites);
   // Et la comparaison qui attrape tout le reste avec : l'état sérialisé entier.
   assert.equal(serialiser(parBoucle, T0), serialiser(parRattrapage, T0));
 });
@@ -117,26 +118,26 @@ test('satellites — les deux chemins d\'avancement rendent les mêmes satellite
 test('satellites — un camp détruit revient, avec un NOUVEAU numéro d\'instance', () => {
   const etat = creerEtat(4242);
   rattraperJeu(etat, TICKS_APPARITION);
-  const avant = etat.satellites.presents.map((s) => s.instance);
+  const avant = baseCourante(etat).satellites.presents.map((s) => s.instance);
   assert.equal(new Set(avant).size, 3, 'les trois instances doivent être distinctes');
 
-  const detruit = { ...etat.satellites.presents[0] };
+  const detruit = { ...baseCourante(etat).satellites.presents[0] };
   detruireSatellite(etat, 0);
-  assert.equal(etat.satellites.presents.length, 2);
-  assert.equal(etat.satellites.attentes.length, 1);
-  assert.equal(etat.satellites.attentes[0].type, detruit.type);
+  assert.equal(baseCourante(etat).satellites.presents.length, 2);
+  assert.equal(baseCourante(etat).satellites.attentes.length, 1);
+  assert.equal(baseCourante(etat).satellites.attentes[0].type, detruit.type);
 
   // Il ne revient pas tout de suite.
   rattraperJeu(etat, TICKS_APPARITION - 1);
-  assert.equal(etat.satellites.presents.length, 2, 'le respawn est immédiat');
+  assert.equal(baseCourante(etat).satellites.presents.length, 2, 'le respawn est immédiat');
 
   rattraperJeu(etat, 1);
-  assert.equal(etat.satellites.presents.length, 3);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3);
 
   // ⚠ ET SON INSTANCE EST NEUVE, MÊME S'IL RETOMBE SUR LA MÊME CASE. C'est tout
   // ce qui fait qu'un camp reconstruit n'a pas la même disposition de bâtiments
   // que celui qu'on vient de raser — Ethan, le 29/08.
-  const nouveau = etat.satellites.presents[2];
+  const nouveau = baseCourante(etat).satellites.presents[2];
   assert.ok(!avant.includes(nouveau.instance), 'le numéro d\'instance a été réutilisé');
   assert.equal(nouveau.instance, Math.max(...avant) + 1);
 });
@@ -144,44 +145,44 @@ test('satellites — un camp détruit revient, avec un NOUVEAU numéro d\'instan
 test('satellites — un déplacement de base remet les trois à zéro', () => {
   const etat = creerEtat(4242);
   rattraperJeu(etat, TICKS_APPARITION);
-  const anciens = etat.satellites.presents.map((s) => `${s.rangee}:${s.colonne}`);
+  const anciens = baseCourante(etat).satellites.presents.map((s) => `${s.rangee}:${s.colonne}`);
   assert.equal(anciens.length, 3);
 
   // Le redéploiement n'existe pas encore : on simule ce qu'il fera, déplacer la
   // base, puis reprogrammer.
-  etat.position = { rangee: etat.position.rangee - 20, colonne: etat.position.colonne };
+  baseCourante(etat).position = { rangee: baseCourante(etat).position.rangee - 20, colonne: baseCourante(etat).position.colonne };
   planifierSatellites(etat);
-  assert.deepEqual(etat.satellites.presents, [], 'les anciens survivent au déménagement');
-  assert.equal(etat.satellites.attentes.length, 3);
+  assert.deepEqual(baseCourante(etat).satellites.presents, [], 'les anciens survivent au déménagement');
+  assert.equal(baseCourante(etat).satellites.attentes.length, 3);
 
   rattraperJeu(etat, TICKS_APPARITION);
-  assert.equal(etat.satellites.presents.length, 3);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3);
   // Ils sont autour de la NOUVELLE position, et le montage garantit que les deux
   // jeux de cases ne peuvent pas coïncider : vingt cases séparent les anneaux.
-  for (const s of etat.satellites.presents) {
+  for (const s of baseCourante(etat).satellites.presents) {
     assert.ok(!anciens.includes(`${s.rangee}:${s.colonne}`));
-    assert.ok(Math.abs(s.rangee - etat.position.rangee) <= ANNEAUX[s.type].max);
+    assert.ok(Math.abs(s.rangee - baseCourante(etat).position.rangee) <= ANNEAUX[s.type].max);
   }
   // Et le compteur d'instances n'est PAS remis à zéro : deux camps successifs
   // sur une même case doivent rester distinguables même après un déménagement.
-  assert.ok(etat.satellites.prochaineInstance > 4);
+  assert.ok(baseCourante(etat).satellites.prochaineInstance > 4);
 });
 
 test('satellites — ils traversent la sauvegarde', () => {
   const etat = creerEtat(4242);
   rattraperJeu(etat, TICKS_APPARITION + 10);
   const relu = charger(serialiser(etat, T0), T0);
-  assert.deepEqual(relu.satellites, etat.satellites);
+  assert.deepEqual(baseCourante(relu).satellites, baseCourante(etat).satellites);
 
   // Falsifiable : la table doit être NON TRIVIALE avant d'être comparée.
-  assert.equal(relu.satellites.presents.length, 3);
+  assert.equal(baseCourante(relu).satellites.presents.length, 3);
 
   // Une attente en cours traverse aussi — c'est elle qu'on perdrait le plus
   // facilement, puisqu'elle ne se voit nulle part.
   detruireSatellite(relu, 1);
   const relu2 = charger(serialiser(relu, T0), T0);
-  assert.equal(relu2.satellites.attentes.length, 1);
-  assert.deepEqual(relu2.satellites.attentes, relu.satellites.attentes);
+  assert.equal(baseCourante(relu2).satellites.attentes.length, 1);
+  assert.deepEqual(baseCourante(relu2).satellites.attentes, baseCourante(relu).satellites.attentes);
 });
 
 test('satellites — l\'anneau se mesure en Euclide, et il se rogne sur la carte', () => {
@@ -227,7 +228,7 @@ test('satellites — le camp suit le niveau du JOUEUR, l\'avant-poste celui de l
   // à un niveau franchement différent de celui de la rangée, sinon les deux
   // règles rendraient le même nombre et le test ne les distinguerait pas.
   const etat = creerEtat(4242);
-  for (const b of etat.disposition) b.niveau = 12;
+  for (const b of baseCourante(etat).disposition) b.niveau = 12;
   const rng = creerRng(1);
 
   assert.equal(niveauDuSatellite('camp', etat, rng), 12);
@@ -237,7 +238,7 @@ test('satellites — le camp suit le niveau du JOUEUR, l\'avant-poste celui de l
   // Le 31/08, Ethan a rapproché le départ du bord bas (275 → 295) : la strate
   // est tombée à 1 et l'assertion avec, alors qu'elle ne mesure pas la position
   // — elle mesure que l'avant-poste suit la RANGÉE et le camp le JOUEUR.
-  const strate = niveauDeLaRangee(etat.position.rangee);
+  const strate = niveauDeLaRangee(baseCourante(etat).position.rangee);
   const niveaux = new Set();
   for (let i = 0; i < 50; i += 1) niveaux.add(niveauDuSatellite('avantPoste', etat, rng));
   for (const n of niveaux) {
@@ -296,7 +297,7 @@ test('satellites — une apparition ne consomme PAS le flux de l\'état', () => 
   const avant = JSON.stringify(etat.rng);
 
   rattraperJeu(etat, TICKS_APPARITION);
-  assert.equal(etat.satellites.presents.length, 3, 'rien n\'a paru : le montage ne mesure rien');
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'rien n\'a paru : le montage ne mesure rien');
   assert.equal(
     JSON.stringify(etat.rng), avant,
     'l\'apparition a consommé etat.rng — le rattrapage analytique cesse d\'être équivalent',
@@ -314,10 +315,10 @@ test('satellites — un anneau saturé REPORTE l\'attente, il ne la perd pas', (
   // quinze cases, donc aucune base de l'Ouvrage ne les encombre. Sans ce
   // montage, jeter l'attente au lieu de la reporter restait VERT — mesuré.
   const etat = creerEtat(4242);
-  etat.satellites = satellitesVides();
+  baseCourante(etat).satellites = satellitesVides();
 
   // On sature l'anneau des camps — 1 à 2 cases — avec des occupants factices.
-  const anneau = casesDeLAnneau(etat.position, ANNEAUX.camp.min, ANNEAUX.camp.max);
+  const anneau = casesDeLAnneau(baseCourante(etat).position, ANNEAUX.camp.min, ANNEAUX.camp.max);
   // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : l'anneau des camps est passé du carré
   // creux (24 cases) au disque creux (12). Ce que cette ligne garde n'a pas
   // changé — elle prouve que le montage sature un anneau PLEIN, sans quoi
@@ -325,28 +326,28 @@ test('satellites — un anneau saturé REPORTE l\'attente, il ne la perd pas', (
   assert.equal(anneau.length, 12, 'le montage suppose un anneau complet');
   let instance = 1;
   for (const k of anneau) {
-    etat.satellites.presents.push({
+    baseCourante(etat).satellites.presents.push({
       type: 'camp', rangee: k.rangee, colonne: k.colonne, niveau: 1, instance,
     });
     instance += 1;
   }
-  etat.satellites.prochaineInstance = instance;
+  baseCourante(etat).satellites.prochaineInstance = instance;
 
-  etat.satellites.attentes = [{ type: 'camp', tickDu: 0 }];
+  baseCourante(etat).satellites.attentes = [{ type: 'camp', tickDu: 0 }];
   const parus = resoudreSatellites(etat);
 
   assert.equal(parus, 0, 'un camp est paru dans un anneau plein');
   // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : douze cases dans l'anneau, pas
   // vingt-quatre. Le compte se DÉDUIT du montage plutôt que de se réécrire — le
   // jour où le rayon de l'anneau bougera, cette ligne suivra toute seule.
-  assert.equal(etat.satellites.presents.length, anneau.length,
+  assert.equal(baseCourante(etat).satellites.presents.length, anneau.length,
     'un occupant de trop a été posé dans un anneau plein');
-  assert.equal(etat.satellites.attentes.length, 1, 'l\'attente a été perdue en silence');
+  assert.equal(baseCourante(etat).satellites.attentes.length, 1, 'l\'attente a été perdue en silence');
 
   // Et elle se satisfait dès qu'une place se libère : reportée, pas annulée.
-  etat.satellites.presents.pop();
+  baseCourante(etat).satellites.presents.pop();
   assert.equal(resoudreSatellites(etat), 1);
-  assert.deepEqual(etat.satellites.attentes, []);
+  assert.deepEqual(baseCourante(etat).satellites.attentes, []);
 });
 
 test('satellites — jamais sur une base de l\'Ouvrage, même quand il y en a dans l\'anneau', () => {
@@ -359,9 +360,9 @@ test('satellites — jamais sur une base de l\'Ouvrage, même quand il y en a da
   // Position choisie par balayage : (240, 3) sur la graine 4242 porte DIX bases
   // de l'Ouvrage dans son anneau 1–5.
   const etat = creerEtat(4242);
-  etat.position = { rangee: 240, colonne: 3 };
+  baseCourante(etat).position = { rangee: 240, colonne: 3 };
 
-  const dansLAnneau = casesDeLAnneau(etat.position, 1, 5)
+  const dansLAnneau = casesDeLAnneau(baseCourante(etat).position, 1, 5)
     .filter((k) => estBaseOuvrage(etat.graine, k.rangee, k.colonne));
   assert.ok(dansLAnneau.length >= 3, `${dansLAnneau.length} bases dans l'anneau : rien à mesurer`);
 
@@ -371,7 +372,7 @@ test('satellites — jamais sur une base de l\'Ouvrage, même quand il y en a da
   for (let n = 0; n < 60; n += 1) {
     planifierSatellites(etat);
     rattraperJeu(etat, TICKS_APPARITION);
-    for (const s2 of etat.satellites.presents) {
+    for (const s2 of baseCourante(etat).satellites.presents) {
       if (estBaseOuvrage(etat.graine, s2.rangee, s2.colonne)) sur.push(s2);
     }
   }
@@ -396,10 +397,10 @@ function jusqua(etat, tick) {
 test('relève — un satellite ignoré change de place, et pas avant l\'heure', () => {
   const etat = creerEtat(31_082_026);
   jusqua(etat, TICKS_APPARITION);
-  assert.equal(etat.satellites.presents.length, 3, 'montage : les trois doivent être là');
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'montage : les trois doivent être là');
 
-  const avant = etat.satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`);
-  const echeances = etat.satellites.presents.map((s) => s.tickDeReleve);
+  const avant = baseCourante(etat).satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`);
+  const echeances = baseCourante(etat).satellites.presents.map((s) => s.tickDeReleve);
   for (const t of echeances) {
     assert.ok(Number.isInteger(t), 'un satellite posé sans échéance ne sera jamais relevé');
   }
@@ -410,31 +411,31 @@ test('relève — un satellite ignoré change de place, et pas avant l\'heure', 
   // mesure une DATE et pas simplement « ça finit par changer ».
   jusqua(etat, TICKS_APPARITION + TICKS_DUREE_DE_VIE - 1);
   assert.deepEqual(
-    etat.satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`), avant,
+    baseCourante(etat).satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`), avant,
     'un satellite a été relevé AVANT son échéance',
   );
 
   // À l'échéance, il quitte la carte et une attente le remplace.
   jusqua(etat, TICKS_APPARITION + TICKS_DUREE_DE_VIE);
-  assert.equal(etat.satellites.presents.length, 0, 'les trois devaient être relevés ensemble');
-  assert.equal(etat.satellites.attentes.length, 3, 'la relève ne reprogramme pas');
+  assert.equal(baseCourante(etat).satellites.presents.length, 0, 'les trois devaient être relevés ensemble');
+  assert.equal(baseCourante(etat).satellites.attentes.length, 3, 'la relève ne reprogramme pas');
 
   // Puis ils reparaissent — ailleurs, et sous de nouvelles instances.
   jusqua(etat, TICKS_APPARITION + TICKS_DUREE_DE_VIE + TICKS_APPARITION);
-  assert.equal(etat.satellites.presents.length, 3);
-  const apres = etat.satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3);
+  const apres = baseCourante(etat).satellites.presents.map((s) => `${s.type}:${s.rangee}:${s.colonne}`);
   assert.notDeepEqual(apres.slice().sort(), avant.slice().sort(),
     'les trois sont revenus exactement aux mêmes cases : le tirage ne dépend pas de l\'instance');
   // ⚠ CHAQUE RELÈVE EST UNE INSTANCE NEUVE : c'est ce qui donne au camp une
   // disposition de bâtiments différente (arbitré le 29/08), et c'est aussi ce
   // qui empêche le tirage de rendre deux fois la même case.
-  assert.ok(etat.satellites.presents.every((s) => s.instance > 3));
+  assert.ok(baseCourante(etat).satellites.presents.every((s) => s.instance > 3));
 });
 
 test('relève — un satellite ATTAQUÉ gagne du temps, compté depuis le raid', () => {
   const etat = creerEtat(31_082_026);
   jusqua(etat, TICKS_APPARITION);
-  const cible = etat.satellites.presents[0];
+  const cible = baseCourante(etat).satellites.presents[0];
   const echeanceInitiale = cible.tickDeReleve;
 
   // On avance jusqu'à la veille de sa relève, puis on l'attaque.
@@ -451,7 +452,7 @@ test('relève — un satellite ATTAQUÉ gagne du temps, compté depuis le raid',
   // Et il est toujours là bien après l'échéance qu'il aurait eue sans le raid.
   jusqua(etat, echeanceInitiale + TICKS_SURSIS);
   assert.ok(
-    etat.satellites.presents.some((s) => s.instance === cible.instance),
+    baseCourante(etat).satellites.presents.some((s) => s.instance === cible.instance),
     'le satellite attaqué a été relevé malgré son sursis',
   );
 
@@ -494,11 +495,11 @@ test('relève — les deux chemins d\'avancement rendent le MÊME état', () => 
 
   // D'abord : le montage mesure-t-il quelque chose ? Sans plusieurs relèves,
   // l'égalité ne dirait rien.
-  assert.ok(parBoucle.satellites.prochaineInstance > 6,
-    `montage sans mordant : seulement ${parBoucle.satellites.prochaineInstance - 1} poses`);
+  assert.ok(baseCourante(parBoucle).satellites.prochaineInstance > 6,
+    `montage sans mordant : seulement ${baseCourante(parBoucle).satellites.prochaineInstance - 1} poses`);
 
   assert.deepEqual(
-    parSaut.satellites, parBoucle.satellites,
+    baseCourante(parSaut).satellites, baseCourante(parBoucle).satellites,
     'le rattrapage analytique et la boucle par tick divergent sur les satellites',
   );
   // ⚠ ET LE FLUX DE L'ÉTAT N'A PAS ÉTÉ CONSOMMÉ DIFFÉREMMENT. C'est la faute que
@@ -525,14 +526,14 @@ test('relève — dix ans d\'absence se rattrapent, et on mesure ce que ça coû
   // EXACTEMENT sur une frontière de cycle — mesuré — et exiger trois présents
   // ferait tomber ce test pour une raison qui n'en est pas une.
   assert.equal(
-    etat.satellites.presents.length + etat.satellites.attentes.length, 3,
+    baseCourante(etat).satellites.presents.length + baseCourante(etat).satellites.attentes.length, 3,
     'un satellite s\'est perdu en route',
   );
   // Le compteur d'instances dit combien de relèves ont vraiment eu lieu : c'est
   // ce qui prouve que la boucle a fait le travail au lieu de le sauter.
   const cycles = Math.floor(dixAns / (TICKS_DUREE_DE_VIE + TICKS_APPARITION));
-  assert.ok(etat.satellites.prochaineInstance > cycles,
-    `${etat.satellites.prochaineInstance - 1} poses pour ${cycles} cycles attendus`);
+  assert.ok(baseCourante(etat).satellites.prochaineInstance > cycles,
+    `${baseCourante(etat).satellites.prochaineInstance - 1} poses pour ${cycles} cycles attendus`);
 
   // ⚠ LE SEUIL EST LARGE EXPRÈS : il n'est pas là pour mesurer la machine, il
   // est là pour attraper un retour à une boucle par TICK, qui serait mille fois

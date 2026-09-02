@@ -21,6 +21,7 @@ import {
 } from '../src/sim/combat.js';
 import { genererAssaut } from '../src/sim/generateur.js';
 import { APRES_RAID } from '../src/data/sites.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 /** Une partie dont les trois satellites sont parus. */
 function partie(graine = 2026) {
@@ -40,7 +41,7 @@ function partie(graine = 2026) {
  * position. Les satellites savent où ils sont ; on le leur demande.
  */
 function avantPoste(etat) {
-  const present = etat.satellites.presents.find((s) => s.type === 'avantPoste');
+  const present = baseCourante(etat).satellites.presents.find((s) => s.type === 'avantPoste');
   assert.ok(present, 'montage : aucun avant-poste n\'est paru');
   const id = siteDeLaCase(etat, present.rangee, present.colonne);
   assert.ok(id && id.type === 'avantPoste', 'montage : l\'avant-poste attendu n\'est pas là');
@@ -119,12 +120,12 @@ test('enregistrer — la Souche tombée rase, et le satellite est reprogrammé',
   const etat = partie();
   const id = avantPoste(etat);
   const montage = montageDuSite(etat.graine, id);
-  const avant = etat.satellites.presents.length;
+  const avant = baseCourante(etat).satellites.presents.length;
 
   const verdict = enregistrerLeRaid(etat, id, resultatSur(montage, { cause: 'souche' }));
   assert.equal(verdict.rase, true);
-  assert.equal(etat.satellites.presents.length, avant - 1, 'le satellite est resté sur la carte');
-  assert.equal(etat.satellites.attentes.length, 1, 'le respawn n\'a pas été programmé');
+  assert.equal(baseCourante(etat).satellites.presents.length, avant - 1, 'le satellite est resté sur la carte');
+  assert.equal(baseCourante(etat).satellites.attentes.length, 1, 'le respawn n\'a pas été programmé');
   assert.equal(siteDeLaCase(etat, id.rangee, id.colonne), null, 'la case porte encore une cible');
   assert.equal(etatDuSite(etat, id), null, 'un site rasé garde une entrée de dégâts');
 });

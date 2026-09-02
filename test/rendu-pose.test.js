@@ -31,6 +31,7 @@ import {
 import { GRILLE, DEFENSES } from '../src/data/combat.js';
 import { ligneEcranDeLaRangee } from '../src/render/orientation.js';
 import { creerEtat, poserEffectif } from '../src/sim/state.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 // ---------------------------------------------------------------------------
 // 1. Les seize orientations sont atteignables — lecture du modèle
@@ -246,7 +247,7 @@ test('poser une pièce avec une orientation ne la sauvegarde pas', () => {
   poserEffectif(etat, 'garnison', {
     id: 'merlon', rangee, colonne: 4, niveau: 1, orientation: 'ese',
   });
-  const posee = etat.garnison[etat.garnison.length - 1];
+  const posee = baseCourante(etat).garnison[baseCourante(etat).garnison.length - 1];
   assert.equal(posee.orientation, undefined,
     'une orientation posée a été sauvegardée — SAVE_VERSION et la migration sont à revoir');
   assert.deepEqual(

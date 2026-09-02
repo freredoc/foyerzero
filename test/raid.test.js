@@ -33,15 +33,17 @@ import { capacitesMilli } from '../src/sim/economie-base.js';
 import { APRES_RAID, GEOGRAPHIE, BATIMENTS } from '../src/data/sites.js';
 import { GRILLE } from '../src/data/combat.js';
 import { gratuitesDe } from '../src/data/recherche.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 /** Une partie dont les satellites sont parus, avec une armée posée. */
 function partieArmee(graine = 2026, unites = 6, niveau = 1) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
   for (let c = 1; c <= unites; c += 1) {
-    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau, degatsMilli: 0 });
   }
-  assert.equal(etat.satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
   return etat;
 }
 
@@ -51,18 +53,18 @@ function premierCamp(etat) {
   // avoir été rasé — c'est le cas depuis que les tests en enchaînent onze —, et
   // un appelant doit pouvoir le dire dans son propre message plutôt que de
   // buter sur « cannot read properties of undefined ».
-  const s = etat.satellites.presents.find((x) => x.type === 'camp');
+  const s = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
   return s === undefined ? null : { rangee: s.rangee, colonne: s.colonne };
 }
 
 test('refus — les quatre raisons de ne pas partir, et chacune se dit', () => {
   const etat = partieArmee();
   const cible = premierCamp(etat);
-  assert.deepEqual(problemesDuRaid(etat, etat, cible), [], 'ce raid-là doit être possible');
+  assert.deepEqual(problemesDuRaid(etat, baseCourante(etat), cible), [], 'ce raid-là doit être possible');
 
   // Une case vide n'est pas une cible.
-  const vide = { rangee: etat.position.rangee, colonne: etat.position.colonne + 7 };
-  assert.equal(problemesDuRaid(etat, etat, vide)[0].code, 'sans-cible');
+  const vide = { rangee: baseCourante(etat).position.rangee, colonne: baseCourante(etat).position.colonne + 7 };
+  assert.equal(problemesDuRaid(etat, baseCourante(etat), vide)[0].code, 'sans-cible');
 
   // ⚠ HORS DE PORTÉE SE MESURE SUR UNE VRAIE CIBLE, et le premier jet de ce
   // test ne le faisait pas : une case lointaine et VIDE rend « sans-cible », pas
@@ -77,9 +79,9 @@ test('refus — les quatre raisons de ne pas partir, et chacune se dit', () => {
   // Tchebychev laisserait passer un montage où la cible est HORS du carré mais
   // DANS le disque — ou l'inverse —, donc un test qui attend « hors-portee » sur
   // une cible atteignable.
-  assert.equal(estAPorteeDAttaque(etat.position, loin), false);
+  assert.equal(estAPorteeDAttaque(baseCourante(etat).position, loin), false);
   assert.ok(siteDeLaCase(etat, loin.rangee, loin.colonne), 'la cible lointaine doit exister');
-  assert.equal(problemesDuRaid(etat, etat, loin)[0].code, 'hors-portee');
+  assert.equal(problemesDuRaid(etat, baseCourante(etat), loin)[0].code, 'hors-portee');
 
   // Sans points : le message dit combien il en manque, il ne dit pas « non ».
   //
@@ -90,26 +92,26 @@ test('refus — les quatre raisons de ne pas partir, et chacune se dit', () => {
   // qui garde ce que le test gardait — le message porte le CHIFFRE, pas un
   // « non ».
   etat.attaque.points = 3;
-  const cout = coutDUnRaid(etat, etat, cible);
-  const sansPoints = problemesDuRaid(etat, etat, cible);
+  const cout = coutDUnRaid(etat, baseCourante(etat), cible);
+  const sansPoints = problemesDuRaid(etat, baseCourante(etat), cible);
   assert.equal(sansPoints[0].code, 'points-insuffisants');
   assert.ok(cout > 3, 'le montage ne mesure rien : le raid est payable avec 3 points');
   assert.match(sansPoints[0].message, new RegExp(`manque ${cout - 3}\\b`), sansPoints[0].message);
 
   // Sans armée en état de partir.
   etat.attaque.points = 100;
-  etat.armee = [];
-  assert.equal(problemesDuRaid(etat, etat, cible)[0].code, 'sans-armee');
+  baseCourante(etat).armee = [];
+  assert.equal(problemesDuRaid(etat, baseCourante(etat), cible)[0].code, 'sans-armee');
   // Et `executerRaid` lève sur ce que `problemesDuRaid` refuse.
-  assert.throws(() => executerRaid(etat, etat, cible), /raid impossible/);
+  assert.throws(() => executerRaid(etat, baseCourante(etat), cible), /raid impossible/);
 });
 
 test('vagues — l\'armée posée entre dans l\'ordre, l\'unité au plancher reste', () => {
   const etat = partieArmee(2026, 0);
   // Posées dans le désordre exprès : vague 2 avant vague 1, colonnes mêlées.
-  etat.armee.push({ id: 'meute', vague: 2, colonne: 3, niveau: 1, degatsMilli: 0 });
-  etat.armee.push({ id: 'meute', vague: 1, colonne: 5, niveau: 1, degatsMilli: 0 });
-  etat.armee.push({ id: 'meute', vague: 1, colonne: 2, niveau: 1, degatsMilli: 0 });
+  baseCourante(etat).armee.push({ id: 'meute', vague: 2, colonne: 3, niveau: 1, degatsMilli: 0 });
+  baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: 5, niveau: 1, degatsMilli: 0 });
+  baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: 2, niveau: 1, degatsMilli: 0 });
 
   const { vagues, indices } = composerLesVagues(etat);
   assert.equal(vagues.length, 2, 'deux vagues posées, deux vagues montées');
@@ -121,13 +123,13 @@ test('vagues — l\'armée posée entre dans l\'ordre, l\'unité au plancher res
   // ⚠ UNE UNITÉ AU PLANCHER NE PART PAS, ET N'EST PAS RETIRÉE. Montage
   // falsifiable : on l'abîme jusqu'au plancher exact, pas au-delà.
   const pvMax = pvMaxDeLUnite('meute', 1);
-  etat.armee[1].degatsMilli = pvMax - APRES_RAID.plancherPvMilli;
+  baseCourante(etat).armee[1].degatsMilli = pvMax - APRES_RAID.plancherPvMilli;
   const apres = composerLesVagues(etat);
   assert.equal(apres.indices.length, 2, 'l\'unité au plancher est partie quand même');
-  assert.equal(etat.armee.length, 3, 'elle a été retirée de l\'armée');
+  assert.equal(baseCourante(etat).armee.length, 3, 'elle a été retirée de l\'armée');
 
   // Une unité seulement ABÎMÉE part, avec ses PV.
-  etat.armee[1].degatsMilli = Math.floor(pvMax / 2);
+  baseCourante(etat).armee[1].degatsMilli = Math.floor(pvMax / 2);
   const abimee = composerLesVagues(etat);
   assert.equal(abimee.indices.length, 3);
   assert.equal(abimee.vagues[0].find((u) => u.colonne === 5).pvMilli, pvMax - Math.floor(pvMax / 2));
@@ -141,7 +143,7 @@ test('paiement — on paie avant de partir, et un raid raté coûte quand même'
   const cible = premierCamp(etat);
   const avant = etat.attaque.points;
 
-  const rapport = executerRaid(etat, etat, cible);
+  const rapport = executerRaid(etat, baseCourante(etat), cible);
   // Le camp est dans la zone d'influence : 10 fixes + 1 par case.
   assert.ok(rapport.cout >= 11 && rapport.cout <= 12, `coût ${rapport.cout}`);
   assert.equal(etat.attaque.points, avant - rapport.cout);
@@ -156,10 +158,10 @@ test('paiement — on paie avant de partir, et un raid raté coûte quand même'
 
 test('butin — il sature, et le rapport DIT ce qui n\'est pas rentré', () => {
   const etat = partieArmee();
-  const capacites = capacitesMilli(etat.disposition);
-  const avant = { ...etat.economie.ressources };
+  const capacites = capacitesMilli(baseCourante(etat).disposition);
+  const avant = { ...baseCourante(etat).economie.ressources };
 
-  const rapport = executerRaid(etat, etat, premierCamp(etat));
+  const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
 
   // ⚠ MONTAGE FALSIFIABLE, ET IL MORD FORT : un camp de niveau 1 rapporte
   // largement plus que le coffre d'une base neuve. Il DOIT donc y avoir de la
@@ -168,10 +170,10 @@ test('butin — il sature, et le rapport DIT ce qui n\'est pas rentré', () => {
 
   for (const r of ['quartz', 'scorie']) {
     const cap = capacites[r];
-    assert.ok(etat.economie.ressources[r] <= Math.max(cap, avant[r]), `${r} au-dessus du plafond`);
+    assert.ok(baseCourante(etat).economie.ressources[r] <= Math.max(cap, avant[r]), `${r} au-dessus du plafond`);
     // Ce qui est entré plus ce qui est perdu fait le butin complet — rien ne
     // disparaît sans être compté.
-    const entre = (etat.economie.ressources[r] - avant[r]) / 1000;
+    const entre = (baseCourante(etat).economie.ressources[r] - avant[r]) / 1000;
     assert.equal(entre, rapport.butin[r] ?? 0, `${r} : le rapport ment sur ce qui est entré`);
   }
 });
@@ -180,12 +182,12 @@ test('butin — un stock DÉJÀ au-dessus du plafond n\'est pas rogné', () => {
   // L'arbitrage du 26/08 : le surplus gèle, il ne se rabat pas. Un raid ne doit
   // pas devenir l'occasion de le rogner.
   const etat = partieArmee();
-  const capacites = capacitesMilli(etat.disposition);
-  etat.economie.ressources.quartz = capacites.quartz * 3;
-  const avant = etat.economie.ressources.quartz;
+  const capacites = capacitesMilli(baseCourante(etat).disposition);
+  baseCourante(etat).economie.ressources.quartz = capacites.quartz * 3;
+  const avant = baseCourante(etat).economie.ressources.quartz;
 
-  const rapport = executerRaid(etat, etat, premierCamp(etat));
-  assert.equal(etat.economie.ressources.quartz, avant, 'le surplus a été rogné');
+  const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
+  assert.equal(baseCourante(etat).economie.ressources.quartz, avant, 'le surplus a été rogné');
   assert.ok((rapport.butinPerdu.quartz ?? 0) > 0, 'la perte n\'est pas rapportée');
 });
 
@@ -193,7 +195,7 @@ test('recherche — elle s\'accumule en chaîne décimale, et reste exacte', () 
   const etat = partieArmee();
   assert.deepEqual(etat.recherche, creerRecherche());
 
-  const un = executerRaid(etat, etat, premierCamp(etat));
+  const un = executerRaid(etat, baseCourante(etat), premierCamp(etat));
   assert.ok(BigInt(un.rechercheMilli) > 0n, 'ce raid n\'a rapporté aucune recherche');
   assert.equal(rechercheMilli(etat), BigInt(un.rechercheMilli));
 
@@ -202,7 +204,7 @@ test('recherche — elle s\'accumule en chaîne décimale, et reste exacte', () 
   // le dernier chiffre, la chaîne décimale si.
   const enorme = (BigInt(Number.MAX_SAFE_INTEGER) * 1000n + 1n).toString();
   etat.recherche.pointsMilli = enorme;
-  const deux = executerRaid(etat, etat, premierCamp(etat));
+  const deux = executerRaid(etat, baseCourante(etat), premierCamp(etat));
   assert.equal(rechercheMilli(etat), BigInt(enorme) + BigInt(deux.rechercheMilli));
   assert.ok(rechercheMilli(etat) > BigInt(Number.MAX_SAFE_INTEGER),
     'montage sans mordant : ce total tient dans un entier sûr');
@@ -223,16 +225,16 @@ test('armée — les dégâts reviennent sur les BONNES pièces', () => {
   // interdit.
   const etat = partieArmee(2026, 0);
   for (let c = 1; c <= 4; c += 1) {
-    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: c <= 2 ? 1 : 12, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: c <= 2 ? 1 : 12, degatsMilli: 0 });
   }
   const pvBas = pvMaxDeLUnite('meute', 1);
   const pvHaut = pvMaxDeLUnite('meute', 12);
   assert.ok(pvHaut > pvBas * 2, 'montage sans mordant : les deux niveaux se ressemblent trop');
 
-  const rapport = executerRaid(etat, etat, premierCamp(etat));
+  const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
   assert.equal(rapport.unitesEngagees, 4);
 
-  for (const piece of etat.armee) {
+  for (const piece of baseCourante(etat).armee) {
     const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
     assert.ok(piece.degatsMilli >= 0, 'dégâts négatifs');
     assert.ok(
@@ -241,7 +243,7 @@ test('armée — les dégâts reviennent sur les BONNES pièces', () => {
     );
   }
   // Et au moins une a souffert, sinon rien n'a été mesuré.
-  assert.ok(etat.armee.some((p) => p.degatsMilli > 0), 'personne n\'a été touché');
+  assert.ok(baseCourante(etat).armee.some((p) => p.degatsMilli > 0), 'personne n\'a été touché');
 });
 
 test('armée — une unité détruite plancher à 1 PV et RESTE dans l\'armée', () => {
@@ -260,37 +262,37 @@ test('armée — une unité détruite plancher à 1 PV et RESTE dans l\'armée',
   // ⚠ ET LA MONTÉE PRÉCÈDE LE RATTRAPAGE : le niveau d'un satellite se fixe au
   // moment où il PARAÎT. La poser après laisserait un camp de niveau 1.
   const etat = creerEtat(2026);
-  for (const b of etat.disposition) b.niveau = 12;
+  for (const b of baseCourante(etat).disposition) b.niveau = 12;
   rattraperJeu(etat, 3001);
   for (let c = 1; c <= 6; c += 1) {
-    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }
-  assert.equal(etat.satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
 
-  const rapport = executerRaid(etat, etat, premierCamp(etat));
+  const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
 
-  assert.equal(etat.armee.length, 6, 'une pièce a été retirée de l\'armée');
+  assert.equal(baseCourante(etat).armee.length, 6, 'une pièce a été retirée de l\'armée');
   assert.ok(rapport.unitesAuPlancher > 0, 'montage sans mordant : personne n\'est tombé');
   const pvMax = pvMaxDeLUnite('meute', 1);
-  const auPlancher = etat.armee.filter((p) => p.degatsMilli === pvMax - APRES_RAID.plancherPvMilli);
+  const auPlancher = baseCourante(etat).armee.filter((p) => p.degatsMilli === pvMax - APRES_RAID.plancherPvMilli);
   assert.equal(auPlancher.length, rapport.unitesAuPlancher);
   // ⚠ JAMAIS PLUS QUE LE PLANCHER : `degatsMilli === pvMax` voudrait dire zéro
   // PV, et l'unité ne pourrait plus jamais être montée.
-  for (const p of etat.armee) assert.ok(p.degatsMilli < pvMax);
+  for (const p of baseCourante(etat).armee) assert.ok(p.degatsMilli < pvMax);
 });
 
 test('deux raids — le second part sur ce que le premier a laissé', () => {
   const etat = partieArmee(2026, 6);
   const cible = premierCamp(etat);
-  const un = executerRaid(etat, etat, cible);
+  const un = executerRaid(etat, baseCourante(etat), cible);
   assert.equal(un.rase, false);
   const entamé = etatDuSite(etat, siteDeLaCase(etat, cible.rangee, cible.colonne));
   assert.ok(entamé, 'le premier raid n\'a rien laissé derrière lui');
 
   // On répare l'armée à la main — ce lot ne fait pas la réparation — et on
   // repart. Le second raid doit trouver moins de défense qu'au premier.
-  for (const p of etat.armee) p.degatsMilli = 0;
-  const deux = executerRaid(etat, etat, cible);
+  for (const p of baseCourante(etat).armee) p.degatsMilli = 0;
+  const deux = executerRaid(etat, baseCourante(etat), cible);
   assert.equal(deux.cout, un.cout, 'le prix ne dépend pas de l\'état du site');
   assert.ok(deux.ticks < un.ticks || deux.rase,
     `second raid : ${deux.ticks} ticks contre ${un.ticks}`);
@@ -301,17 +303,17 @@ test('rasage — le satellite disparaît et son remplaçant est programmé', () 
   const etat = partieArmee(2026, 0);
   for (let v = 1; v <= 4; v += 1) {
     for (let c = 1; c <= 9; c += 1) {
-      etat.armee.push({ id: 'meute', vague: v, colonne: c, niveau: 20, degatsMilli: 0 });
+      baseCourante(etat).armee.push({ id: 'meute', vague: v, colonne: c, niveau: 20, degatsMilli: 0 });
     }
   }
   const cible = premierCamp(etat);
-  const avant = etat.satellites.presents.length;
-  const rapport = executerRaid(etat, etat, cible);
+  const avant = baseCourante(etat).satellites.presents.length;
+  const rapport = executerRaid(etat, baseCourante(etat), cible);
 
   assert.equal(rapport.rase, true, `montage sans mordant : ${rapport.cause} au tick ${rapport.ticks}`);
   assert.equal(rapport.cause, 'souche');
-  assert.equal(etat.satellites.presents.length, avant - 1);
-  assert.equal(etat.satellites.attentes.length, 1, 'aucun remplaçant programmé');
+  assert.equal(baseCourante(etat).satellites.presents.length, avant - 1);
+  assert.equal(baseCourante(etat).satellites.attentes.length, 1, 'aucun remplaçant programmé');
   assert.equal(siteDeLaCase(etat, cible.rangee, cible.colonne), null);
 });
 
@@ -355,9 +357,9 @@ function partieAuMilieu(rangee = 200, graine = 2026) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
   for (let c = 1; c <= 6; c += 1) {
-    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }
-  etat.position = { rangee, colonne: 16 };
+  baseCourante(etat).position = { rangee, colonne: 16 };
   etat.attaque.points = 1_000_000;
   return etat;
 }
@@ -365,7 +367,7 @@ function partieAuMilieu(rangee = 200, graine = 2026) {
 /** Les cibles à portée d'une partie, une par niveau demandé. */
 function ciblesParNiveau(etat, niveaux) {
   const r = GEOGRAPHIE.rayonAttaque;
-  const p = etat.position;
+  const p = baseCourante(etat).position;
   const bases = basesFenetre(etat.graine, {
     premiereRangee: p.rangee - r,
     derniereRangee: p.rangee + r,
@@ -381,7 +383,7 @@ function ciblesParNiveau(etat, niveaux) {
     const trouvee = bases.find((b) => {
       const site = siteDeLaCase(etat, b.rangee, b.colonne);
       return site !== null && site.niveau === niveau
-        && problemesDuRaid(etat, etat, b).length === 0
+        && problemesDuRaid(etat, baseCourante(etat), b).length === 0
         && !sortie.some((x) => x.rangee === b.rangee && x.colonne === b.colonne);
     });
     assert.ok(trouvee, `montage : aucune cible de niveau ${niveau} à portée`);
@@ -397,8 +399,14 @@ test('RAID-0 T1 — simuler et exécuter rendent le MÊME rapport, cible par cib
   assert.equal(new Set(cibles.map((c) => c.niveau)).size, 3);
 
   for (const cible of cibles) {
-    const simule = simulerRaid(partieAuMilieu(), partieAuMilieu(), cible);
-    const reel = executerRaid(partieAuMilieu(), partieAuMilieu(), cible);
+    // ⚠ DEUX ÉTATS DISTINCTS, ET C'EST VOULU : le simulateur ne doit rien
+    // toucher, le réel doit tout toucher. Chacun reçoit SA base — depuis le lot
+    // BASES-0, `baseCourante(x)` est un élément de `x.bases`, donc passer la
+    // base de l'un à l'autre les recollerait sans qu'aucun test le dise.
+    const pourSimuler = partieAuMilieu();
+    const pourExecuter = partieAuMilieu();
+    const simule = simulerRaid(pourSimuler, baseCourante(pourSimuler), cible);
+    const reel = executerRaid(pourExecuter, baseCourante(pourExecuter), cible);
 
     assert.equal(simule.simule, true, 'le rapport simulé doit se dire simulé');
     const { simule: drapeau, ...sansDrapeau } = simule;
@@ -423,7 +431,7 @@ test('RAID-0 T2 — l\'état réel est INTACT après une simulation', () => {
   // passerait un `deepEqual` fait avant la mutation, pas une sérialisation
   // prise après.
   const avant = serialiser(etat, T_RAID0);
-  const rapport = simulerRaid(etat, etat, cible);
+  const rapport = simulerRaid(etat, baseCourante(etat), cible);
   const apres = serialiser(etat, T_RAID0);
   assert.equal(avant, apres, 'la simulation a écrit dans l\'état réel');
 
@@ -433,7 +441,7 @@ test('RAID-0 T2 — l\'état réel est INTACT après une simulation', () => {
   assert.ok(rapport.ticks > 0, 'montage sans mordant : le combat simulé n\'a pas eu lieu');
   const temoin = partieAuMilieu();
   const avantTemoin = serialiser(temoin, T_RAID0);
-  executerRaid(temoin, temoin, cible);
+  executerRaid(temoin, baseCourante(temoin), cible);
   assert.notEqual(serialiser(temoin, T_RAID0), avantTemoin,
     'montage sans mordant : même un vrai raid ne change pas l\'état');
 });
@@ -443,18 +451,18 @@ test('RAID-0 T3 — simuler ne consomme rien, pas même un point d\'attaque', ()
 
   const avecSimulation = partieAuMilieu();
   const pointsAvant = avecSimulation.attaque.points;
-  simulerRaid(avecSimulation, avecSimulation, cible);
+  simulerRaid(avecSimulation, baseCourante(avecSimulation), cible);
   assert.equal(avecSimulation.attaque.points, pointsAvant,
     'la simulation a payé des points d\'attaque');
   // ⚠ ON SIMULE PLUSIEURS FOIS, comme le joueur le fera en ajustant sa
   // composition : c'est le cas où une fuite de paiement se verrait le plus.
-  simulerRaid(avecSimulation, avecSimulation, cible);
-  simulerRaid(avecSimulation, avecSimulation, cible);
+  simulerRaid(avecSimulation, baseCourante(avecSimulation), cible);
+  simulerRaid(avecSimulation, baseCourante(avecSimulation), cible);
   assert.equal(avecSimulation.attaque.points, pointsAvant);
 
-  const apresSimulation = executerRaid(avecSimulation, avecSimulation, cible);
+  const apresSimulation = executerRaid(avecSimulation, baseCourante(avecSimulation), cible);
   const direct = partieAuMilieu();
-  const sansSimulation = executerRaid(direct, direct, cible);
+  const sansSimulation = executerRaid(direct, baseCourante(direct), cible);
   assert.deepEqual(apresSimulation, sansSimulation,
     'trois simulations ont changé ce que le vrai raid rend');
   assert.equal(avecSimulation.attaque.points, direct.attaque.points);
@@ -474,8 +482,8 @@ test('RAID-0 T4 — une pièce désactivée ne monte pas dans les vagues', () =>
   // ⚠ ELLE RESTE DANS L'ARMÉE — arbitré le 28/08 pour les unités détruites, et
   // c'est la même règle : « détruites mais pas perdues ». Ni retirée, ni
   // déplacée, ni oubliée.
-  assert.equal(etat.armee.length, 6, 'la pièce désactivée a été retirée de l\'armée');
-  assert.equal(etat.armee[2].actif, false);
+  assert.equal(baseCourante(etat).armee.length, 6, 'la pièce désactivée a été retirée de l\'armée');
+  assert.equal(baseCourante(etat).armee[2].actif, false);
 
   // Et elle repart dès qu'on la réactive.
   reglerActivite(etat, 'armee', 2, true);
@@ -490,7 +498,7 @@ test('RAID-0 T5 — une pièce SANS le champ part quand même', () => {
   // qu'aucun geste du jeu ne produit plus une pièce pareille — c'est justement
   // l'état d'une sauvegarde d'avant ce lot.
   const etat = partieAuMilieu();
-  for (const piece of etat.armee) {
+  for (const piece of baseCourante(etat).armee) {
     assert.equal(piece.actif, undefined, 'montage : les pièces ne doivent pas porter le champ');
   }
   assert.equal(composerLesVagues(etat).indices.length, 6,
@@ -498,8 +506,8 @@ test('RAID-0 T5 — une pièce SANS le champ part quand même', () => {
 
   // Et `false` est le SEUL mot qui retient : ni zéro, ni la chaîne vide.
   const bizarre = partieAuMilieu();
-  bizarre.armee[0].actif = true;
-  bizarre.armee[1].actif = undefined;
+  baseCourante(bizarre).armee[0].actif = true;
+  baseCourante(bizarre).armee[1].actif = undefined;
   assert.equal(composerLesVagues(bizarre).indices.length, 6);
 });
 
@@ -509,24 +517,30 @@ test('RAID-0 T6 — désactiver ne fait pas monter le niveau d\'armée, ni le pl
   // ferait MONTER le niveau d'armée, donc monter le plafond de réserve de
   // réparation — deux clics pour douze heures de réserve en plus.
   const etat = partieAuMilieu();
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 21 });
   // Falsifiable : les deux niveaux doivent être TRÈS différents, sinon retirer
   // le petit ne bougerait pas assez la moyenne pour se voir.
-  assert.equal(niveauDeLArmee(etat.armee), 110, 'montage : moyenne 11,0 attendue');
+  assert.equal(niveauDeLArmee(baseCourante(etat).armee), 110, 'montage : moyenne 11,0 attendue');
   const plafondAvant = plafondDeLaReserve(etat);
 
   reglerActivite(etat, 'armee', 0, false); // on laisse le niveau 1 à la maison
-  assert.equal(niveauDeLArmee(etat.armee), 110,
+  assert.equal(niveauDeLArmee(baseCourante(etat).armee), 110,
     'le niveau d\'armée a bougé : les inactives sont sorties de la moyenne');
   assert.equal(plafondDeLaReserve(etat), plafondAvant,
     'le plafond de réserve a bougé — l\'exploit est ouvert');
 
   // Et la mesure du contre-exemple : si on la RETIRAIT vraiment, ça monterait.
   // C'est ce qui prouve que le test mesure quelque chose.
-  const ampute = { ...etat, armee: etat.armee.filter((p) => p.actif !== false) };
-  assert.equal(niveauDeLArmee(ampute.armee), 210);
+  const ampute = {
+    ...etat,
+    bases: [{
+      ...baseCourante(etat),
+      armee: baseCourante(etat).armee.filter((p) => p.actif !== false),
+    }],
+  };
+  assert.equal(niveauDeLArmee(baseCourante(ampute).armee), 210);
   assert.ok(plafondDeLaReserve(ampute) > plafondAvant,
     'montage sans mordant : même en retirant la pièce, le plafond ne bouge pas');
 });
@@ -538,10 +552,10 @@ test('RAID-0 T7 — les dégâts retombent sur les BONNES pièces, une unité du
   // `pvMax` d'une autre, et l'assertion « jamais plus que ses propres PV » le
   // dirait. Avec six Meutes identiques, un décalage serait invisible.
   const etat = partieAuMilieu();
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   const roster = ['meute', 'perceurs', 'carapace', 'meute', 'perceurs'];
   roster.forEach((id, i) => {
-    etat.armee.push({ id, vague: 1, colonne: i + 1, niveau: 1, degatsMilli: 0, actif: true });
+    baseCourante(etat).armee.push({ id, vague: 1, colonne: i + 1, niveau: 1, degatsMilli: 0, actif: true });
   });
   const cible = ciblesParNiveau(etat, [18])[0];
 
@@ -551,29 +565,29 @@ test('RAID-0 T7 — les dégâts retombent sur les BONNES pièces, une unité du
   const { indices } = composerLesVagues(etat);
   assert.deepEqual(indices, [0, 1, 3, 4], 'les indices ne sautent pas la pièce inactive');
 
-  const rapport = executerRaid(etat, etat, cible);
+  const rapport = executerRaid(etat, baseCourante(etat), cible);
   assert.equal(rapport.unitesEngagees, 4);
 
   // La pièce inactive ressort EXACTEMENT comme elle est partie.
-  assert.equal(etat.armee[2].degatsMilli, 0, 'la pièce restée à la maison a été abîmée');
+  assert.equal(baseCourante(etat).armee[2].degatsMilli, 0, 'la pièce restée à la maison a été abîmée');
   // Et aucune pièce ne porte plus de dégâts que ses propres PV — ce qui
   // arriverait si les dégâts d'une grosse unité retombaient sur une petite.
-  for (const piece of etat.armee) {
+  for (const piece of baseCourante(etat).armee) {
     assert.ok(piece.degatsMilli <= pvMaxDeLUnite(piece.id, piece.niveau),
       `la pièce « ${piece.id} » porte plus de dégâts que ses PV — les indices ont glissé`);
   }
   // Falsifiable : au moins une des quatre parties doit être revenue abîmée.
-  assert.ok(etat.armee.some((p, i) => i !== 2 && p.degatsMilli > 0),
+  assert.ok(baseCourante(etat).armee.some((p, i) => i !== 2 && p.degatsMilli > 0),
     'montage sans mordant : personne n\'est revenu abîmé');
 });
 
 test('RAID-0 T8 — tout désactiver donne « sans-armee », et le message dit les trois causes', () => {
   const etat = partieAuMilieu();
   const cible = ciblesParNiveau(etat, [20])[0];
-  assert.deepEqual(problemesDuRaid(etat, etat, cible), [], 'montage : ce raid doit être possible');
+  assert.deepEqual(problemesDuRaid(etat, baseCourante(etat), cible), [], 'montage : ce raid doit être possible');
 
-  for (let i = 0; i < etat.armee.length; i += 1) reglerActivite(etat, 'armee', i, false);
-  const problemes = problemesDuRaid(etat, etat, cible);
+  for (let i = 0; i < baseCourante(etat).armee.length; i += 1) reglerActivite(etat, 'armee', i, false);
+  const problemes = problemesDuRaid(etat, baseCourante(etat), cible);
   assert.equal(problemes.length, 1);
   assert.equal(problemes[0].code, 'sans-armee');
 
@@ -585,17 +599,23 @@ test('RAID-0 T8 — tout désactiver donne « sans-armee », et le message dit l
   assert.match(message, /réactive/, 'le message ne dit pas « réactiver »');
 
   // Et `executerRaid` lève dessus, comme sur les trois autres refus.
-  assert.throws(() => executerRaid(etat, etat, cible), /raid impossible/);
+  assert.throws(() => executerRaid(etat, baseCourante(etat), cible), /raid impossible/);
 });
 
 test('RAID-0 T9 — le champ traverse la sauvegarde, et une v17 ressort toute active', () => {
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois.
   // Elle arrive ici avec le maillon v17 → v18 ; elle vivait dans
   // `reparation.test.js` du temps où v16 → v17 était le dernier.
-  assert.equal(SAVE_VERSION, 22, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ LE NUMÉRO N'EST PLUS GARDÉ ICI, ET C'EST LA RÈGLE DU DÉPÔT, PAS UN
+  // ASSOUPLISSEMENT. `points-attaque.test.js` l'écrit depuis le lot
+  // SITE-ENTAMÉ : « la garde du numéro appartient au maillon le plus RÉCENT
+  // de la chaîne, une seule fois ». Ce test-ci avait gardé le sien, et le lot
+  // BASES-0 l'aurait rendu rouge pour une raison qui ne le regarde pas. Ce
+  // qu'il vérifie vraiment, c'est que SON maillon est encore là.
+  assert.ok(SAVE_VERSION >= 18, 'le maillon v17 → 18 n\'est plus dans la chaîne');
 
   const etat = partieAuMilieu();
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 1 });
   reglerActivite(etat, 'armee', 1, false);
@@ -603,21 +623,25 @@ test('RAID-0 T9 — le champ traverse la sauvegarde, et une v17 ressort toute ac
   // ⚠ POSER DOIT DÉJÀ SERVIR LE DÉFAUT. La liste que `poserEffectif` pousse est
   // FERMÉE : un champ absent de cette liste disparaîtrait en silence, et le
   // drapeau ne retiendrait jamais rien.
-  assert.equal(etat.armee[0].actif, true, 'poserEffectif ne sert pas le défaut « actif »');
+  assert.equal(baseCourante(etat).armee[0].actif, true, 'poserEffectif ne sert pas le défaut « actif »');
 
   const recharge = charger(serialiser(etat, T_RAID0), T_RAID0);
-  assert.equal(recharge.armee[0].actif, true, 'le champ ne traverse pas la sauvegarde');
-  assert.equal(recharge.armee[1].actif, false, 'la désactivation ne traverse pas la sauvegarde');
+  assert.equal(baseCourante(recharge).armee[0].actif, true, 'le champ ne traverse pas la sauvegarde');
+  assert.equal(baseCourante(recharge).armee[1].actif, false, 'la désactivation ne traverse pas la sauvegarde');
   assert.equal(composerLesVagues(recharge).indices.length, 1);
 
   // ⚠ UNE v17 N'AVAIT AUCUN MOYEN DE DÉSACTIVER : toutes ses unités partaient,
   // donc toutes sont actives. La migration reproduit sa situation au poil.
   const v17 = JSON.parse(serialiser(etat, T_RAID0));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v17 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v17);
   v17.version = 17;
   for (const piece of v17.armee) delete piece.actif;
   const migre = migrer(structuredClone(v17));
   assert.equal(migre.version, SAVE_VERSION);
-  assert.deepEqual(migre.armee.map((p) => p.actif), [true, true],
+  assert.deepEqual(baseCourante(migre).armee.map((p) => p.actif), [true, true],
     'la migration a laissé une unité à la maison');
 
   // ⚠ ET LA GARNISON N'EN REÇOIT PAS : le drapeau dit « part au raid ».
@@ -634,7 +658,7 @@ test('RAID-0 T9 — le champ traverse la sauvegarde, et une v17 ressort toute ac
   poserEffectif(etat, 'garnison', {
     id: 'merlon', rangee: rangeeDefense, colonne: colonneLibre, niveau: 1,
   });
-  assert.equal('actif' in etat.garnison[0], false,
+  assert.equal('actif' in baseCourante(etat).garnison[0], false,
     'une pièce de garnison porte un drapeau d\'activité, qui ne veut rien dire pour elle');
   assert.throws(() => reglerActivite(etat, 'garnison', 0, false), /ne part pas au raid/);
 });
@@ -653,17 +677,17 @@ const sansCommentairesRaidA = (code) => code
 function partieJouable(graine = 2026) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
-  etat.disposition[0].niveau = 12;
+  baseCourante(etat).disposition[0].niveau = 12;
   let colonne = 1;
   for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
-    etat.disposition.push({ id, rangee: 13, colonne, niveau: 5 });
-    etat.economie.residus.push({});
+    baseCourante(etat).disposition.push({ id, rangee: 13, colonne, niveau: 5 });
+    baseCourante(etat).economie.residus.push({});
     colonne += 2;
   }
   for (let c = 1; c <= 6; c += 1) {
     poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: c, niveau: 1 });
   }
-  etat.economie.ressources.scorie = 1_000_000_000;
+  baseCourante(etat).economie.ressources.scorie = 1_000_000_000;
   etat.attaque.points = 100_000;
   crediterLesReserves(etat, plafondDeLaReserve(etat));
   return etat;
@@ -682,7 +706,7 @@ test('RAID-A T1 — le panneau tire ses trois nombres des briques, il ne les ref
   const ciblage = ciblageDuSite(etat, camp);
   assert.deepEqual(ciblage.butin, butinSiToutTombe(montage));
   assert.equal(ciblage.force, forceDeLaDefense(montage.defenseurs));
-  assert.equal(ciblage.cout, coutDUnRaid(etat, etat, site));
+  assert.equal(ciblage.cout, coutDUnRaid(etat, baseCourante(etat), site));
 
   // Falsifiable : les trois doivent valoir quelque chose, sinon l'égalité
   // tiendrait sur des zéros.
@@ -690,15 +714,15 @@ test('RAID-A T1 — le panneau tire ses trois nombres des briques, il ne les ref
     'montage sans mordant : la cible ne vaut rien');
 
   // Et les quatre lignes s'ajoutent bien à celles du site.
-  const sans = lignesDuSite(site, etat.position, etat.poisAcquis);
-  const avec = lignesDuSite(site, etat.position, etat.poisAcquis, ciblage);
+  const sans = lignesDuSite(site, baseCourante(etat).position, etat.poisAcquis);
+  const avec = lignesDuSite(site, baseCourante(etat).position, etat.poisAcquis, ciblage);
   assert.equal(avec.length, sans.length + 4, 'le panneau ne gagne pas ses quatre lignes');
   const quoi = avec.map((l) => l.quoi);
   for (const attendu of ['Butin si tout tombe', 'Force de la défense', 'Coût du raid']) {
     assert.ok(quoi.includes(attendu), `le panneau ne dit pas « ${attendu} »`);
   }
   // ⚠ ET LA FONCTION RESTE PURE : sans ciblage, elle rend ce qu'elle rendait.
-  assert.deepEqual(sans, lignesDuSite(site, etat.position, etat.poisAcquis, null));
+  assert.deepEqual(sans, lignesDuSite(site, baseCourante(etat).position, etat.poisAcquis, null));
 });
 
 test('RAID-A T2 — le second toucher se COMPARE à la case ouverte, il ne se compte pas', () => {
@@ -787,7 +811,7 @@ test('RAID-A T6 — le glisser-déposer passe par `deplacerEffectif`, pas par un
 
   // Et le refus est bien celui du moteur, sur une vraie tentative illégale.
   const etat = partieJouable();
-  const occupee = { vague: etat.armee[1].vague, colonne: etat.armee[1].colonne };
+  const occupee = { vague: baseCourante(etat).armee[1].vague, colonne: baseCourante(etat).armee[1].colonne };
   const problemes = problemesDuDeplacementDEffectif(etat, 'armee', 0, occupee);
   assert.ok(problemes.length > 0, 'poser sur une case occupée devrait être refusé');
 });
@@ -797,8 +821,8 @@ test('RAID-A T7 — les deux panneaux affichent les MÊMES nombres', () => {
   const cible = premierCamp(etat);
   // Le simulateur ne commet rien : le vrai raid part donc du même état, et les
   // deux rapports doivent être identiques champ par champ.
-  const simule = simulerRaid(etat, etat, cible);
-  const reel = executerRaid(etat, etat, cible);
+  const simule = simulerRaid(etat, baseCourante(etat), cible);
+  const reel = executerRaid(etat, baseCourante(etat), cible);
   const { simule: drapeau, ...sansDrapeau } = simule;
   assert.equal(drapeau, true);
   assert.deepEqual(sansDrapeau, reel, 'le simulateur et le vrai raid divergent');
@@ -871,15 +895,15 @@ test('RAID-A T8 — les trois verdicts, et « défense seule touchée » est une
 
   // Une armée trop faible pour entamer un bâtiment : défaite totale.
   const faible = partieJouable();
-  faible.armee = [];
+  baseCourante(faible).armee = [];
   poserEffectif(faible, 'armee', { id: 'meute', vague: 4, colonne: 1, niveau: 1 });
-  const rate = executerRaid(faible, faible, premierCamp(faible));
+  const rate = executerRaid(faible, baseCourante(faible), premierCamp(faible));
   assert.equal(rate.verdict, 'defaite-totale', 'un raid sans dégât de bâtiment n\'est pas une défaite');
   assert.equal(rate.restantBatiments, 100, 'montage : aucun bâtiment ne devait tomber');
 
   // Une armée qui entame un bâtiment : victoire.
   const bonne = partieJouable();
-  const gagne = executerRaid(bonne, bonne, premierCamp(bonne));
+  const gagne = executerRaid(bonne, baseCourante(bonne), premierCamp(bonne));
   assert.equal(gagne.verdict, 'victoire');
   assert.ok(gagne.restantBatiments < 100, 'montage : un bâtiment devait être griffé');
 
@@ -889,7 +913,7 @@ test('RAID-A T8 — les trois verdicts, et « défense seule touchée » est une
   let dernier = null;
   for (let n = 0; n < 30 && (dernier === null || !dernier.rase); n += 1) {
     acharne.attaque.points = 100_000;
-    dernier = executerRaid(acharne, acharne, cible);
+    dernier = executerRaid(acharne, baseCourante(acharne), cible);
   }
   assert.ok(dernier.rase, 'montage : le camp n\'est jamais tombé');
   assert.equal(dernier.verdict, 'victoire-totale');
@@ -899,14 +923,14 @@ test('RAID-A T9 — simuler ne range AUCUN rapport dans le journal', () => {
   const etat = partieJouable();
   const cible = premierCamp(etat);
   const avant = serialiser(etat, 4_000_000);
-  simulerRaid(etat, etat, cible);
-  simulerRaid(etat, etat, cible);
+  simulerRaid(etat, baseCourante(etat), cible);
+  simulerRaid(etat, baseCourante(etat), cible);
   // ⚠ CHAÎNE CONTRE CHAÎNE : le journal est dans la sauvegarde, donc une fuite
   // s'y verrait. Ranger le rapport simulé aurait été le seul moyen de se tromper.
   assert.equal(serialiser(etat, 4_000_000), avant, 'la simulation a écrit dans l\'état');
   assert.equal(etat.rapports.length, 0, 'la simulation a rangé un rapport');
   // Falsifiable : un VRAI raid, lui, en range un.
-  executerRaid(etat, etat, cible);
+  executerRaid(etat, baseCourante(etat), cible);
   assert.equal(etat.rapports.length, 1, 'un vrai raid ne range rien');
 });
 
@@ -927,7 +951,7 @@ test('RAID-A T10 — onze raids ne gardent que les dix derniers, le plus ancien 
     // relit donc une cible vivante à chaque tour.
     const cible = premierCamp(etat);
     assert.ok(cible, `tour ${n} : plus aucun camp à attaquer, le montage ne mesure rien`);
-    executerRaid(etat, etat, cible);
+    executerRaid(etat, baseCourante(etat), cible);
     ticks.push(etat.rapports[etat.rapports.length - 1].tick);
   }
   assert.equal(etat.rapports.length, APRES_RAID.rapportsGardes, 'la borne ne mord pas');
@@ -947,7 +971,7 @@ test('RAID-A T10 — onze raids ne gardent que les dix derniers, le plus ancien 
 test('RAID-A T11 — le journal traverse la sauvegarde, une v18 ressort à vide', () => {
   const etat = partieJouable();
   etat.attaque.points = 100_000;
-  executerRaid(etat, etat, premierCamp(etat));
+  executerRaid(etat, baseCourante(etat), premierCamp(etat));
   assert.equal(etat.rapports.length, 1);
 
   const recharge = charger(serialiser(etat, 4_000_000), 4_000_000);
@@ -956,6 +980,10 @@ test('RAID-A T11 — le journal traverse la sauvegarde, une v18 ressort à vide'
   // ⚠ UNE v18 N'AVAIT AUCUN MOYEN DE GARDER UN RAPPORT : elle n'en a pas, et
   // lui en inventer un fabriquerait un raid qui n'a pas eu lieu.
   const v18 = JSON.parse(serialiser(etat, 4_000_000));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v18 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v18);
   v18.version = 18;
   delete v18.rapports;
   const migre = migrer(structuredClone(v18));
@@ -981,7 +1009,7 @@ test('RAID-A — trois raids d\'affilée sur la même cible, et le pourcentage D
   const restants = [];
   for (let n = 0; n < 5; n += 1) {
     etat.attaque.points = 100_000;
-    restants.push(executerRaid(etat, etat, cible).restantBatiments);
+    restants.push(executerRaid(etat, baseCourante(etat), cible).restantBatiments);
   }
   assert.equal(restants.length, 5, 'un raid a levé avant le cinquième');
 

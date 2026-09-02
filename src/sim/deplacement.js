@@ -31,6 +31,7 @@ import { estSurLaCarte } from './carte.js';
 import { releverLesPoisAcquis } from './poi.js';
 import { niveauDesBatiments } from './niveau-de-base.js';
 import { distanceCarreeCases } from './points-attaque.js';
+import { baseCourante } from './base-courante.js';
 
 /** Dixièmes de niveau par niveau — `niveauDesBatiments` rend des dixièmes. */
 const DIXIEMES_PAR_NIVEAU = 10;
@@ -60,10 +61,11 @@ export const PORTEE_CARREE = DEPLACEMENT.porteeMaxCases * DEPLACEMENT.porteeMaxC
  * @returns {number} ticks, entier ≥ 0
  */
 export function delaiDeplacementTicks(etat) {
+  const laBase = baseCourante(etat);
   const { depart, niveau50 } = DEPLACEMENT.delaiHeures;
   const plancher = DIXIEMES_PAR_NIVEAU;
   const plafond = GEOGRAPHIE.niveauPlafond * DIXIEMES_PAR_NIVEAU;
-  const brut = niveauDesBatiments(etat.disposition) ?? plancher;
+  const brut = niveauDesBatiments(laBase.disposition) ?? plancher;
   const dixiemes = Math.min(plafond, Math.max(plancher, brut));
   const portee = plafond - plancher;
   const heuresMilli = (depart * (plafond - dixiemes) + niveau50 * (dixiemes - plancher));
@@ -88,7 +90,8 @@ export function delaiDeplacementTicks(etat) {
  * @returns {number} ticks restants, 0 si aucun
  */
 export function ticksAvantProchainDeplacement(etat) {
-  const dernier = etat.dernierDeplacementTick;
+  const laBase = baseCourante(etat);
+  const dernier = laBase.dernierDeplacementTick;
   if (dernier === null || dernier === undefined) return 0;
   const ecoules = etat.horloge.nbTicks - dernier;
   const du = delaiDeplacementTicks(etat);
@@ -108,6 +111,7 @@ export function ticksAvantProchainDeplacement(etat) {
  * @returns {Array<{code: string, message: string}>}
  */
 export function problemesDuDeplacement(etat, cible) {
+  const laBase = baseCourante(etat);
   const problemes = [];
   if (cible === null || typeof cible !== 'object'
     || !Number.isInteger(cible.rangee) || !Number.isInteger(cible.colonne)) {
@@ -127,7 +131,7 @@ export function problemesDuDeplacement(etat, cible) {
     return problemes;
   }
 
-  const carre = distanceCarreeCases(etat.position, cible);
+  const carre = distanceCarreeCases(laBase.position, cible);
   if (carre === 0) {
     problemes.push({
       code: 'sur-place',
@@ -217,14 +221,15 @@ function enDuree(ticks) {
  * @returns {{avant: object, apres: object, poisAjoutes: number}}
  */
 export function poserLaBaseSur(etat, rangee, colonne) {
+  const laBase = baseCourante(etat);
   if (!estSurLaCarte(rangee, colonne)) {
     throw new RangeError(
       `deplacement : (${rangee}, ${colonne}) est hors de la carte`,
     );
   }
-  const avant = { rangee: etat.position.rangee, colonne: etat.position.colonne };
-  etat.position.rangee = rangee;
-  etat.position.colonne = colonne;
+  const avant = { rangee: laBase.position.rangee, colonne: laBase.position.colonne };
+  laBase.position.rangee = rangee;
+  laBase.position.colonne = colonne;
   const poisAjoutes = releverLesPoisAcquis(etat);
   return { avant, apres: { rangee, colonne }, poisAjoutes };
 }
@@ -248,6 +253,7 @@ export function poserLaBaseSur(etat, rangee, colonne) {
  * @returns {{avant: object, apres: object, poisAjoutes: number}}
  */
 export function deplacerLaBase(etat, cible) {
+  const laBase = baseCourante(etat);
   const problemes = problemesDuDeplacement(etat, cible);
   if (problemes.length > 0) {
     throw new Error(
@@ -255,7 +261,7 @@ export function deplacerLaBase(etat, cible) {
     );
   }
   const bilan = poserLaBaseSur(etat, cible.rangee, cible.colonne);
-  etat.dernierDeplacementTick = etat.horloge.nbTicks;
+  laBase.dernierDeplacementTick = etat.horloge.nbTicks;
   return bilan;
 }
 
@@ -271,8 +277,9 @@ export function deplacerLaBase(etat, cible) {
  * @returns {Array<{rangee: number, colonne: number}>}
  */
 export function casesAtteignables(etat) {
-  const r0 = etat.position.rangee;
-  const c0 = etat.position.colonne;
+  const laBase = baseCourante(etat);
+  const r0 = laBase.position.rangee;
+  const c0 = laBase.position.colonne;
   const portee = DEPLACEMENT.porteeMaxCases;
   const cases = [];
   for (let r = r0 - portee; r <= r0 + portee; r += 1) {

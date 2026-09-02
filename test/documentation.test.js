@@ -282,7 +282,16 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   //                             lot ACCENT-CONFRONTÉ quand un SECOND test en a
   //                             eu besoin ; le dupliquer aurait donné deux
   //                             décodeurs voisins dont un seul serait éprouvé.
-  const connus = new Set(['prereglages-lot3a.js', 'png-rgba.js']);
+  //   `temoins-bases-0.js`    — les empreintes capturées AVANT le dépliage du
+  //                             lot BASES-0. Ce n'est pas un test, c'est sa
+  //                             RÉFÉRENCE, et elle ne se rafraîchit pas.
+  //   `aplatir-sauvegarde.js` — l'inverse de la migration 22 → 23, pour les
+  //                             montages qui fabriquent une sauvegarde
+  //                             d'ancienne version ; HUIT fichiers en ont eu
+  //                             besoin le même jour, comme le décodeur PNG.
+  const connus = new Set([
+    'prereglages-lot3a.js', 'png-rgba.js', 'temoins-bases-0.js', 'aplatir-sauvegarde.js',
+  ]);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));
   assert.deepEqual(

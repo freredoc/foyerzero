@@ -37,6 +37,7 @@ import { butin, creerCombat, construireResultat } from './combat.js';
 import {
   basesDuJoueur, distanceTchebychev, distanceCarreeCases, estAPorteeDAttaque,
 } from './points-attaque.js';
+import { baseCourante } from './base-courante.js';
 
 /** Sel du tirage qui ne dépend que de la CASE : la saveur, et le terrain. */
 export const SEL_TERRAIN_DU_SITE = 4;
@@ -137,6 +138,7 @@ export function saveurDeLaCase(graine, rangee, colonne, type) {
  *   rangee: number, colonne: number}|null}
  */
 export function siteDeLaCase(etat, rangee, colonne) {
+  const laBase = baseCourante(etat);
   if (!estSurLaCarte(rangee, colonne)) return null;
   const ici = { rangee, colonne };
 
@@ -144,7 +146,7 @@ export function siteDeLaCase(etat, rangee, colonne) {
     if (distanceTchebychev(base.position, ici) === 0) return null;
   }
 
-  for (const s of etat.satellites?.presents ?? []) {
+  for (const s of laBase.satellites?.presents ?? []) {
     if (s.rangee !== rangee || s.colonne !== colonne) continue;
     return {
       type: s.type,

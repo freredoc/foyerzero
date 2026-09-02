@@ -39,6 +39,7 @@ import { ARBRE_RECHERCHE } from '../data/recherche.js';
 import { ressourceDeLaCase } from './champs.js';
 import { FORCES } from './state.js';
 import { niveauDesBatiments, niveauDeLaDefense, niveauDeLArmee } from './niveau-de-base.js';
+import { baseCourante } from './base-courante.js';
 
 /** Le nom que le JOUEUR emploie pour un bâtiment. */
 function nomBatiment(id) {
@@ -92,8 +93,9 @@ function exiger(etat) {
   if (etat === null || typeof etat !== 'object') {
     throw new TypeError('missions : état attendu');
   }
+  const base = baseCourante(etat);
   for (const champ of ['disposition', 'champs', 'garnison', 'armee']) {
-    if (!Object.prototype.hasOwnProperty.call(etat, champ)) {
+    if (!Object.prototype.hasOwnProperty.call(base, champ)) {
       throw new RangeError(`missions : l'état ne porte pas « ${champ} »`);
     }
   }
@@ -112,9 +114,9 @@ function exiger(etat) {
  * nomment les trois forces dont on prend la moyenne.
  */
 const MOYENNES = {
-  batiments: { libelle: 'tes bâtiments', lire: (etat) => niveauDesBatiments(etat.disposition) },
-  defense: { libelle: 'ta défense', lire: (etat) => niveauDeLaDefense(etat.garnison) },
-  armee: { libelle: 'ton armée', lire: (etat) => niveauDeLArmee(etat.armee) },
+  batiments: { libelle: 'tes bâtiments', lire: (etat) => niveauDesBatiments(baseCourante(etat).disposition) },
+  defense: { libelle: 'ta défense', lire: (etat) => niveauDeLaDefense(baseCourante(etat).garnison) },
+  armee: { libelle: 'ton armée', lire: (etat) => niveauDeLArmee(baseCourante(etat).armee) },
 };
 
 /** Un nombre de dixièmes, tel que le joueur le lit : toujours une décimale. */
@@ -134,10 +136,11 @@ function enNiveau(dixiemes) {
 
 const OBJECTIFS = {
   batiments(etat, o) {
+    const laBase = baseCourante(etat);
     const surLaBonneCase = (b) => o.ressource === undefined
-      || ressourceDeLaCase(etat.champs, b.rangee, b.colonne) === o.ressource;
+      || ressourceDeLaCase(laBase.champs, b.rangee, b.colonne) === o.ressource;
     const niveau = o.niveau ?? 1;
-    const fait = etat.disposition
+    const fait = laBase.disposition
       .filter((b) => b.id === o.id && b.niveau >= niveau && surLaBonneCase(b)).length;
     let libelle = nomBatiment(o.id);
     if (o.ressource !== undefined) libelle += ` sur ${o.ressource}`;
@@ -146,17 +149,18 @@ const OBJECTIFS = {
   },
 
   'tous-au-niveau'(etat, o) {
+    const laBase = baseCourante(etat);
     return {
       libelle: `chaque bâtiment au niveau ${o.niveau}`,
-      fait: etat.disposition.filter((b) => b.niveau >= o.niveau).length,
-      total: etat.disposition.length,
+      fait: laBase.disposition.filter((b) => b.niveau >= o.niveau).length,
+      total: laBase.disposition.length,
     };
   },
 
   effectif(etat, o) {
     const force = FORCES[o.force];
     if (force === undefined) throw new RangeError(`missions : force « ${o.force} » inconnue`);
-    const fait = etat[force.champ]
+    const fait = baseCourante(etat)[force.champ]
       .filter((p) => p.id === o.id && p.niveau >= o.niveau).length;
     return {
       libelle: `${nomPiece(o.id)} au niveau ${o.niveau} en ${force.quoi}`,

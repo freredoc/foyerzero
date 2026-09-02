@@ -43,6 +43,7 @@ import { estBaseOuvrage } from './peuplement.js';
 import { poiDeLaCase } from './poi.js';
 import { niveauDesBatiments } from './niveau-de-base.js';
 import { creerRng, entier } from './rng.js';
+import { baseCourante } from './base-courante.js';
 
 /** Le délai d'apparition, en ticks — cinq minutes. */
 export const TICKS_APPARITION = SATELLITES.delaiApparitionSec * TICKS_PAR_SECONDE;
@@ -148,13 +149,14 @@ export function casesDeLAnneau(centre, min, max) {
  * @returns {number} entier de 1 à NIVEAU.plafond
  */
 export function niveauDuSatellite(type, etat, rng) {
+  const laBase = baseCourante(etat);
   if (type === 'camp') {
-    const dixiemes = niveauDesBatiments(etat.disposition);
+    const dixiemes = niveauDesBatiments(laBase.disposition);
     return borner(Math.round(dixiemes / 10));
   }
   // « De niveau égal au rayon ±1 » — spec §10. Le rayon, ici, c'est le niveau de
   // la rangée : la carte ne connaît pas d'autre distance.
-  const rayon = niveauDeLaRangee(etat.position.rangee);
+  const rayon = niveauDeLaRangee(laBase.position.rangee);
   return borner(rayon + entier(rng, -1, 1));
 }
 
@@ -176,12 +178,13 @@ function borner(niveau) {
  * @returns {object} le même état
  */
 export function planifierSatellites(etat) {
+  const laBase = baseCourante(etat);
   const du = etat.horloge.nbTicks + TICKS_APPARITION;
-  etat.satellites.presents = [];
-  etat.satellites.attentes = [];
+  laBase.satellites.presents = [];
+  laBase.satellites.attentes = [];
   for (const [type, anneau] of Object.entries(ANNEAUX)) {
     for (let n = 0; n < anneau.nombre; n += 1) {
-      etat.satellites.attentes.push({ type, tickDu: du });
+      laBase.satellites.attentes.push({ type, tickDu: du });
     }
   }
   return etat;
@@ -201,12 +204,13 @@ export function planifierSatellites(etat) {
  * @returns {object} le même état
  */
 export function detruireSatellite(etat, index) {
-  const present = etat.satellites.presents[index];
+  const laBase = baseCourante(etat);
+  const present = laBase.satellites.presents[index];
   if (present === undefined) {
     throw new RangeError(`satellites : aucun satellite à l'indice ${index}`);
   }
-  etat.satellites.presents.splice(index, 1);
-  etat.satellites.attentes.push({
+  laBase.satellites.presents.splice(index, 1);
+  laBase.satellites.attentes.push({
     type: present.type,
     tickDu: etat.horloge.nbTicks + TICKS_APPARITION,
   });
@@ -241,11 +245,12 @@ export function detruireSatellite(etat, index) {
  * @returns {number} nombre de satellites parus
  */
 export function resoudreSatellites(etat) {
+  const laBase = baseCourante(etat);
   // ⚠ ELLE NOMME LE CHAMP MANQUANT AU LIEU DE LEVER UNE TypeError QUATRE LIGNES
   // PLUS BAS. C'est la leçon du lot GARNISON-ET-ARMÉE, où un montage de test
   // amputé faisait tomber `resumeDeLaBase` sur `undefined.length` : ça levait
   // dans les deux cas, un seul des deux messages était lisible.
-  if (etat.satellites === undefined) {
+  if (laBase.satellites === undefined) {
     throw new Error('satellites : champ « satellites » absent de l\'état');
   }
   const maintenant = etat.horloge.nbTicks;
@@ -269,11 +274,11 @@ export function resoudreSatellites(etat) {
       if (t > maintenant) return;
       if (quand === null || t < quand) quand = t;
     };
-    for (const attente of etat.satellites.attentes) retenir(attente.tickDu);
+    for (const attente of laBase.satellites.attentes) retenir(attente.tickDu);
     // ⚠ UNE SAUVEGARDE PEUT NE PAS PORTER `tickDeReleve` — la migration l'ajoute,
     // mais un satellite forgé par un test n'en a pas. On ne relève alors pas :
     // mieux vaut un satellite immortel qu'une boucle sur `NaN`.
-    for (const present of etat.satellites.presents) {
+    for (const present of laBase.satellites.presents) {
       if (Number.isInteger(present.tickDeReleve)) retenir(present.tickDeReleve);
     }
     if (quand === null) break;
@@ -282,14 +287,14 @@ export function resoudreSatellites(etat) {
     //    exactement ce que fait une destruction, et c'est voulu — « change de
     //    spawn » veut dire qu'il reparaît ailleurs, pas qu'il disparaît.
     const restants = [];
-    for (const present of etat.satellites.presents) {
+    for (const present of laBase.satellites.presents) {
       if (Number.isInteger(present.tickDeReleve) && present.tickDeReleve <= quand) {
-        etat.satellites.attentes.push({ type: present.type, tickDu: quand + TICKS_APPARITION });
+        laBase.satellites.attentes.push({ type: present.type, tickDu: quand + TICKS_APPARITION });
       } else {
         restants.push(present);
       }
     }
-    etat.satellites.presents = restants;
+    laBase.satellites.presents = restants;
 
     // 2. LES APPARITIONS dues à ce tick.
     // ⚠ L'ORDRE EST CELUI DE LA FILE, PAS CELUI DES ÉCHÉANCES. Deux attentes
@@ -297,7 +302,7 @@ export function resoudreSatellites(etat) {
     // programmées, sinon deux chemins d'avancement rendraient les mêmes
     // satellites dans deux ordres, et `serialiser` les déclarerait différents.
     const enAttente = [];
-    for (const attente of etat.satellites.attentes) {
+    for (const attente of laBase.satellites.attentes) {
       if (attente.tickDu > quand) { enAttente.push(attente); continue; }
       const pose = poserUnSatellite(etat, attente.type, quand);
       // Aucune case libre dans l'anneau : on ne perd pas l'attente, on la met
@@ -306,9 +311,9 @@ export function resoudreSatellites(etat) {
       if (pose === null) reportees.push(attente);
       else parus += 1;
     }
-    etat.satellites.attentes = enAttente;
+    laBase.satellites.attentes = enAttente;
   }
-  etat.satellites.attentes.push(...reportees);
+  laBase.satellites.attentes.push(...reportees);
   return parus;
 }
 
@@ -335,7 +340,8 @@ export function resoudreSatellites(etat) {
  * @returns {boolean} vrai si un satellite a été prolongé
  */
 export function prolongerApresAttaque(etat, identite, tickDuRaid) {
-  const present = etat.satellites?.presents?.find(
+  const laBase = baseCourante(etat);
+  const present = laBase.satellites?.presents?.find(
     (s) => s.rangee === identite.rangee && s.colonne === identite.colonne
       && s.instance === identite.instance,
   );
@@ -351,13 +357,14 @@ export function prolongerApresAttaque(etat, identite, tickDuRaid) {
  * @returns {object|null} le satellite posé, ou null si l'anneau est plein
  */
 function poserUnSatellite(etat, type, tickDeLaPose) {
+  const laBase = baseCourante(etat);
   const anneau = ANNEAUX[type];
   if (anneau === undefined) throw new Error(`satellites : type inconnu « ${type} »`);
-  const instance = etat.satellites.prochaineInstance;
+  const instance = laBase.satellites.prochaineInstance;
   const rng = creerRng(graineDeLApparition(etat.graine, instance));
 
-  const prises = new Set(etat.satellites.presents.map((s) => `${s.rangee}:${s.colonne}`));
-  const libres = casesDeLAnneau(etat.position, anneau.min, anneau.max).filter((k) => {
+  const prises = new Set(laBase.satellites.presents.map((s) => `${s.rangee}:${s.colonne}`));
+  const libres = casesDeLAnneau(laBase.position, anneau.min, anneau.max).filter((k) => {
     // ⚠ JAMAIS SUR UNE BASE DE L'OUVRAGE. Elles sont dérivées de la graine, donc
     // elles étaient là AVANT : un camp posé dessus ferait deux sites sur une
     // case. La règle des huit cases, elle, ne s'applique pas — Ethan, le 29/08 :
@@ -393,8 +400,8 @@ function poserUnSatellite(etat, type, tickDeLaPose) {
     // ouverte — et les deux chemins cesseraient de rendre le même état.
     tickDeReleve: tickDeLaPose + TICKS_DUREE_DE_VIE,
   };
-  etat.satellites.presents.push(satellite);
-  etat.satellites.prochaineInstance = instance + 1;
+  laBase.satellites.presents.push(satellite);
+  laBase.satellites.prochaineInstance = instance + 1;
   return satellite;
 }
 

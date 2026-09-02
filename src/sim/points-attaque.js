@@ -92,21 +92,26 @@ export function plafondDuNiveau(dixiemes) {
 }
 
 /**
- * Les bases du joueur — LE point unique où le singulier d'aujourd'hui est écrit.
+ * Les bases du joueur.
  *
- * ⚠ ELLE REND UNE LISTE D'UN SEUL ÉLÉMENT, ET C'EST EXPRÈS. L'état ne porte
- * aujourd'hui qu'une base, et cette base EST l'état : `position` et `armee` sont
- * à sa racine. Tout le reste de ce module raisonne sur une LISTE de bases, si
- * bien que le jour où `etat.bases` existera, cette fonction seule changera.
+ * ⚠⚠ CETTE FONCTION SEULE A CHANGÉ AU LOT BASES-0, 02/09/2026, ET C'EST CE
+ * QU'ELLE ANNONÇAIT. Elle rendait `[etat]` — « l'état ne porte aujourd'hui
+ * qu'une base, et cette base EST l'état ; le jour où `etat.bases` existera,
+ * cette fonction seule changera ». Ce jour est celui-ci, et rien d'autre de ce
+ * module n'a bougé : tout y raisonnait déjà sur une LISTE.
+ *
+ * ⚠ ELLE REND DES BASES, PAS DES POSITIONS, et son homonyme de
+ * `sim/territoire.js` rend des POSITIONS. Deux noms courts identiques, deux
+ * types différents : ne jamais importer l'un pour l'autre.
  *
  * @param {object} etat
  * @returns {Array<{ position: { rangee: number, colonne: number }, armee: Array }>}
  */
 export function basesDuJoueur(etat) {
-  if (etat === null || typeof etat !== 'object') {
-    throw new TypeError('basesDuJoueur : état attendu');
+  if (etat === null || typeof etat !== 'object' || !Array.isArray(etat.bases)) {
+    throw new TypeError('basesDuJoueur : état attendu, portant une liste `bases`');
   }
-  return [etat];
+  return etat.bases;
 }
 
 /**
