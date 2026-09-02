@@ -399,24 +399,47 @@ export const GEOGRAPHIE = {
 // irrégulière », et « spawn des bases ouvrage de part et d'autre du joueur,
 // base de niveau 1 à 10, à au moins 15 cases du joueur ».
 //
+// ⚠⚠ LA DENSITÉ A ÉTÉ POUSSÉE AU LOT EUCLIDE (02/09/2026), ET LE « 12 » DU
+// 29/08 EST CADUC. Ethan : « ignorer le 24 bases par un carré de 12 × 12,
+// c'était une mesure mais sur un jeu périmé ; en réalité sur une partie neuve il
+// y a beaucoup plus de bases et beaucoup plus de densité. Tu conserves la règle
+// du 3 × 3 et tu augmentes la densité au maximum, je retire le maximum un peu
+// moins pour que ce soit pas un cadre parfaitement rectangulaire comme une
+// sylviculture. »
+//
 // ⚠ `probabiliteCandidate` N'EST PAS LA DENSITÉ, et confondre les deux ferait
 // poser presque deux fois trop de bases. C'est la probabilité qu'une case soit
-// CANDIDATE ; l'exclusion des huit voisines en élimine ensuite une partie. La
-// valeur a été MESURÉE sur quatre graines, pas choisie — moyenne des fenêtres
-// 12×12 entièrement hors de la garde :
+// CANDIDATE ; l'exclusion des huit voisines en élimine ensuite une partie.
 //
-//     p      0,10   0,12   0,14   0,16   0,20
-//     bases   9,9   11,1   12,1   12,8   14,0
+// ⚠⚠ ET LA RELATION SATURE — IL Y A UN PLAFOND, ET IL EST STRUCTUREL. Une case
+// est retenue si elle est un MAXIMUM LOCAL STRICT du hachage parmi ses huit
+// voisines candidates. À p = 1 toutes les cases sont candidates, et la densité
+// des maxima locaux d'un champ indépendant dans un voisinage de neuf vaut
+// exactement **1/9** : soit **16 bases par 12 × 12**, et pas une de plus, quelle
+// que soit la probabilité. Mesuré sur 120 graines, moyenne des fenêtres 12×12
+// entièrement hors de la garde :
+//
+//     p      0,14   0,25   0,30   0,35   0,45   0,50   0,60   1,00
+//     bases  11,97  14,85  15,53  15,88  16,27  16,31  16,39  16,35
+//
+// ⚠⚠ D'OÙ 0,35, ET NON LA SATURATION. C'est la dernière valeur avant que la
+// courbe ne s'aplatisse : au-delà on ne gagne plus de densité — 0,45 rend 0,4
+// base de plus que 0,35, 1,00 n'en rend aucune — on ne fait que RESSERRER le
+// semis. Et un semis resserré devient régulier : mesuré, la part des blocs 3 × 3
+// entièrement vides tombe de **22,1 % à 0,35** à **20,5 % à 0,50**, et la part
+// des bases dont le plus proche voisin est à deux cases — c'est-à-dire collé au
+// minimum permis — monte de 89,9 % à 91,4 %. C'est exactement la « sylviculture »
+// qu'Ethan refuse : un maximum de densité coûte les trous qui font une carte.
 //
 // Un test refait la mesure. ⚠ ET IL LA FAIT HORS DE LA GARDE : une fenêtre prise
 // dans le rayon de quinze cases autour du départ porte zéro base, par
-// construction. La compter ferait tomber la moyenne à 10,8 et donnerait
-// l'impression que le réglage est faux alors qu'il est juste.
+// construction. La compter ferait tomber la moyenne et donnerait l'impression
+// que le réglage est faux alors qu'il est juste.
 //
-// ⚠ « ENVIRON 12 » EST UNE MOYENNE, ET L'ÉCART EST LARGE. Sur les fenêtres hors
-// garde, le compte va de 4 à 20. C'est le prix de la disposition irrégulière,
-// préférée le 29/08 à un pavage régulier qui aurait donné un compte presque
-// constant. Un test borne la moyenne, jamais une fenêtre isolée.
+// ⚠ « ENVIRON 16 » EST UNE MOYENNE, ET L'ÉCART RESTE LARGE — écart-type 2,2 par
+// fenêtre. C'est le prix de la disposition irrégulière, préférée le 29/08 à un
+// pavage régulier qui aurait donné un compte presque constant. Un test borne la
+// moyenne, jamais une fenêtre isolée.
 //
 // ⚠ LA GARDE SE MESURE DEPUIS LA POSITION DE DÉPART, QUI EST FIXE. C'est ce qui
 // permet au peuplement de rester entièrement DÉRIVÉ : si la garde suivait la
@@ -428,21 +451,29 @@ export const GEOGRAPHIE = {
 // colonne 16 sur 31 : une base à 15 cases peut donc se tenir presque sur sa
 // rangée, pourvu qu'elle soit contre un bord. Elle ne l'attaque pas — le rayon
 // d'attaque vaut 10 — mais elle est visible dès le premier écran. C'est le sens
-// de « de part et d'autre » : la garde est une distance de Tchebychev, pas un
-// nombre de rangées.
+// de « de part et d'autre ».
+//
+// ⚠⚠ ET LA GARDE EST EUCLIDIENNE DEPUIS LE LOT EUCLIDE (02/09/2026). Cette
+// phrase disait « la garde est une distance de Tchebychev, pas un nombre de
+// rangées » ; la seconde moitié reste vraie, la première a changé en même temps
+// que la portée du raid et que les anneaux des satellites. Le carré de 31 × 31
+// est devenu un DISQUE : mesuré, **841 cases interdites deviennent 697**, donc
+// 144 cases libérées, toutes dans les diagonales, et la base la plus proche du
+// départ peut se poser à onze cases de grille au lieu de quinze.
 export const PEUPLEMENT = {
   /** Probabilité qu'une case soit candidate, AVANT exclusion des voisines. */
-  probabiliteCandidate: 0.14,
+  probabiliteCandidate: 0.35,
 
   /** Ce que la probabilité ci-dessus est censée produire, et que le test mesure. */
-  basesParDouzeCarre: 12,
+  basesParDouzeCarre: 16,
 
-  /** Tolérance de la mesure : la moyenne doit tomber dans 12 ± 1. */
+  /** Tolérance de la mesure : la moyenne doit tomber dans 16 ± 1. */
   toleranceMesure: 1,
 
   /**
    * Aucune base de l'Ouvrage à moins de cette distance de la position de
-   * DÉPART du joueur. Distance de Tchebychev — le maximum des deux écarts.
+   * DÉPART du joueur. Distance EUCLIDIENNE depuis le lot EUCLIDE — voir
+   * `horsDeLaGarde`, qui compare les carrés et ne prend jamais de racine.
    */
   gardeAutourDuDepart: 15,
 

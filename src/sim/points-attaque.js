@@ -211,13 +211,64 @@ export function avancerPointsAttaque(etat, nbTicks) {
 // ---------------------------------------------------------------------------
 
 /**
- * La distance de Tchebychev — le plus grand des deux écarts.
+ * Le CARRÉ de la distance euclidienne entre deux cases de la carte.
  *
- * ⚠ TCHEBYCHEV, PAS EUCLIDE, et c'est la cohérence avec le reste de la carte :
+ * ⚠⚠ EUCLIDE, PAS TCHEBYCHEV — ARBITRÉ PAR ETHAN LE 02/09/2026, et l'ancien
+ * commentaire de ce bloc disait exactement l'inverse. Il argumentait :
+ * « TCHEBYCHEV, PAS EUCLIDE, et c'est la cohérence avec le reste de la carte :
  * la garde de quinze cases du peuplement compte comme ça, et les anneaux des
  * satellites aussi. Une distance euclidienne rendrait une diagonale plus chère
- * qu'une ligne droite de même « rayon », ce qu'aucune autre règle du jeu ne
- * fait.
+ * qu'une ligne droite de même rayon, ce qu'aucune autre règle du jeu ne fait. »
+ *
+ * ⚠ CET ARGUMENT ÉTAIT JUSTE, ET IL EST TOMBÉ POUR UNE RAISON PRÉCISE : les
+ * TROIS règles ont changé ENSEMBLE au lot EUCLIDE — la portée du raid, la garde
+ * du peuplement et les anneaux des satellites. La cohérence qu'il défendait
+ * n'est donc pas perdue : elle a changé de métrique. Une diagonale est
+ * désormais plus loin qu'une ligne droite partout où le jeu compte une
+ * distance de CARTE, et nulle part elle ne l'est d'un seul côté.
+ *
+ * ⚠ ELLE REND LE CARRÉ, ET C'EST TOUT L'INTÉRÊT. `Math.sqrt` ferait entrer un
+ * flottant là où il n'y en avait aucun, et un arrondi à débattre avec lui. Une
+ * portée se teste `d² ≤ rayon²` : deux entiers, une comparaison exacte.
+ *
+ * ⚠⚠ ET CE N'EST PAS LA DISTANCE DU COMBAT DE `sim/grille.js`, qui porte presque le
+ * même nom. Celle-là travaille en MILLI-CASES et sert le ciblage à l'intérieur
+ * d'un combat ; deux cases voisines y sont à 1 000 000, pas à 1. Les confondre
+ * donnerait un résultat faux d'un facteur un million sans que rien ne lève.
+ * Un test tient les deux échelles séparées.
+ *
+ * @param {{ rangee: number, colonne: number }} a
+ * @param {{ rangee: number, colonne: number }} b
+ * @returns {number} (Δrangée)² + (Δcolonne)², entier
+ */
+export function distanceCarreeCases(a, b) {
+  for (const [nom, p] of [['a', a], ['b', b]]) {
+    if (p === null || typeof p !== 'object'
+      || !Number.isInteger(p.rangee) || !Number.isInteger(p.colonne)) {
+      throw new TypeError(`distanceCarreeCases : ${nom} n'est pas une case entière`);
+    }
+  }
+  const dr = a.rangee - b.rangee;
+  const dc = a.colonne - b.colonne;
+  return dr * dr + dc * dc;
+}
+
+/**
+ * La distance de Tchebychev — le plus grand des deux écarts.
+ *
+ * ⚠⚠ ELLE SURVIT AU LOT EUCLIDE, ET SON PÉRIMÈTRE S'EST RÉTRÉCI À UNE SEULE
+ * CHOSE : les ZONES D'INFLUENCE. Ce qui est passé à Euclide, ce sont les trois
+ * distances de PORTÉE — le raid, la garde du peuplement, les anneaux des
+ * satellites. Les zones d'influence, elles, ne sont pas une portée : ce sont
+ * des CARRÉS que `sim/territoire.js` peint case par case sur l'écran Monde, et
+ * que le joueur voit. Les passer à Euclide ici sans les repeindre là-bas ferait
+ * payer le tarif de proximité sur des cases que la carte ne montre pas comme
+ * siennes — la pire des divergences, celle que le joueur constate sans pouvoir
+ * l'expliquer.
+ *
+ * ⚠ ELLE SERT AUSSI À `siteDeLaCase`, MAIS POUR UNE ÉGALITÉ À ZÉRO — « cette
+ * case est-elle celle de ma base ? ». Une distance nulle est nulle dans les
+ * deux métriques : cet appel-là ne choisit rien.
  *
  * @param {{ rangee: number, colonne: number }} a
  * @param {{ rangee: number, colonne: number }} b
@@ -231,6 +282,68 @@ export function distanceTchebychev(a, b) {
     }
   }
   return Math.max(Math.abs(a.rangee - b.rangee), Math.abs(a.colonne - b.colonne));
+}
+
+/**
+ * Le rayon d'attaque, AU CARRÉ — la borne contre laquelle toute portée se teste.
+ *
+ * ⚠ CALCULÉ, JAMAIS ÉCRIT. `GEOGRAPHIE.rayonAttaque` reste la seule table qui
+ * dise 10 ; en ranger le carré dans les données ferait deux nombres à tenir
+ * d'accord.
+ */
+export const RAYON_ATTAQUE_CARRE = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAttaque;
+
+/**
+ * Cette case est-elle à portée d'attaque de cette base ?
+ *
+ * ⚠ UN SEUL ENDROIT POSE LA QUESTION, ET TOUS LES APPELANTS PASSENT PAR LUI.
+ * Trois lecteurs la posaient chacun à sa façon avant le lot EUCLIDE — le
+ * balayage de `ciblesAPortee`, le refus de `problemesDuRaid`, le panneau de
+ * l'écran Monde — et trois écritures d'une même règle finissent toujours par
+ * diverger d'un cas limite.
+ *
+ * @param {{ rangee: number, colonne: number }} depuis
+ * @param {{ rangee: number, colonne: number }} vers
+ * @returns {boolean}
+ */
+export function estAPorteeDAttaque(depuis, vers) {
+  return distanceCarreeCases(depuis, vers) <= RAYON_ATTAQUE_CARRE;
+}
+
+/**
+ * La distance en cases ENTIÈRES, arrondie au supérieur — POUR L'AFFICHAGE.
+ *
+ * ⚠⚠ ELLE NE SERT QU'À ÉCRIRE UNE PHRASE, ET JAMAIS À DÉCIDER. Aucune règle du
+ * jeu ne l'appelle : la portée se teste sur `d² ≤ rayon²`, le barème se lit sur
+ * la distance de grille. Elle existe parce qu'un refus doit dire un NOMBRE au
+ * joueur — « un indice n'est pas une interdiction » —, et que ce nombre doit
+ * être dans la métrique qui a décidé du refus. Citer la distance de grille dans
+ * un refus euclidien produirait « cette cible est à 8 cases, le rayon est de
+ * 10 », c'est-à-dire un message qui donne tort au jeu.
+ *
+ * ⚠ SANS `Math.sqrt`, ET CE N'EST PAS UNE COQUETTERIE. Une racine flottante
+ * rendrait 5,000000000000001 sur un carré parfait une fois sur mille, donc
+ * « 6 cases » là où il y en a cinq. La boucle entière est exacte par
+ * construction et coûte au plus une trentaine de tours sur cette carte.
+ *
+ * ⚠ SON PARAMÈTRE NE S'APPELLE PAS `distanceCarree`, ET CE N'EST PAS UNE
+ * COQUETTERIE : c'est le nom EXACT de la distance du COMBAT, en milli-cases.
+ * Une garde balaie ces trois modules pour qu'il n'y apparaisse jamais, et elle a
+ * attrapé ce paramètre-ci au premier jet. Un nom qui invite à la confusion la
+ * produit tôt ou tard.
+ *
+ * @param {number} carreDeLaDistance
+ * @returns {number} le plus petit entier n tel que n² ≥ carreDeLaDistance
+ */
+export function casesArrondiesAuSuperieur(carreDeLaDistance) {
+  if (!Number.isInteger(carreDeLaDistance) || carreDeLaDistance < 0) {
+    throw new RangeError(
+      `casesArrondiesAuSuperieur : « ${carreDeLaDistance} » — entier ≥ 0 attendu`,
+    );
+  }
+  let n = 0;
+  while (n * n < carreDeLaDistance) n += 1;
+  return n;
 }
 
 /**

@@ -16,6 +16,7 @@ import {
 import { creerEtat, rattraperJeu, pointsEngages } from '../src/sim/state.js';
 import { basesDeLaFenetre, hachageBrut } from '../src/sim/peuplement.js';
 import { niveauDeLaRangee } from '../src/sim/carte.js';
+import { distanceCarreeCases, estAPorteeDAttaque } from '../src/sim/points-attaque.js';
 import { butin } from '../src/sim/combat.js';
 import { GEOGRAPHIE, TYPES_SITE } from '../src/data/sites.js';
 
@@ -325,11 +326,30 @@ test('cibles — le rayon est celui de GEOGRAPHIE, et il borne vraiment', () => 
   const cibles = ciblesAPortee(etat, attaquante);
   assert.ok(cibles.length > 3, `${cibles.length} cibles : montage sans mordant`);
 
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE (02/09), ET RESSERRÉE PLUTÔT QU'ADAPTÉE.
+  // Ce test bornait en Tchebychev ; cette borne-là est désormais plus LARGE que
+  // la règle — une cible en diagonale peut être dans le carré et hors du disque.
+  // La garder aurait laissé passer exactement ce que le lot interdit. On borne
+  // donc au carré, comme le code borne, et on garde la distance de grille comme
+  // information d'affichage.
+  const depuis = { rangee: 120, colonne: 16 };
   for (const c of cibles) {
-    const d = Math.max(Math.abs(c.rangee - 120), Math.abs(c.colonne - 16));
-    assert.equal(c.distance, d, 'la distance annoncée n\'est pas celle de Tchebychev');
-    assert.ok(d <= GEOGRAPHIE.rayonAttaque, `cible à ${d} cases, hors rayon`);
+    const tchebychev = Math.max(Math.abs(c.rangee - 120), Math.abs(c.colonne - 16));
+    assert.equal(c.distance, tchebychev, 'la distance de grille annoncée est fausse');
+    assert.equal(c.distanceCarree, distanceCarreeCases(depuis, c));
+    assert.ok(estAPorteeDAttaque(depuis, c),
+      `cible en (${c.rangee}, ${c.colonne}) hors du rayon d'attaque`);
   }
+  // ⚠ ET LE COIN DU CARRÉ N'EST PLUS RENDU — c'est la moitié qui MESURE le
+  // changement. Sans elle, revenir à Tchebychev laisserait ce test vert.
+  assert.equal(
+    cibles.some((c) => distanceCarreeCases(depuis, c) > GEOGRAPHIE.rayonAttaque ** 2),
+    false,
+    'une cible du coin du carré est encore proposée',
+  );
+  // Le tri est bien celui de la distance euclidienne, du plus proche au plus loin.
+  const carres = cibles.map((c) => c.distanceCarree);
+  assert.deepEqual([...carres].sort((a, b) => a - b), carres, 'les cibles ne sont pas triées');
   // Falsifiable : au moins une cible doit être au-delà du rayon d'influence,
   // sinon le bornage ne serait jamais éprouvé.
   assert.ok(cibles.some((c) => c.distance > GEOGRAPHIE.rayonInfluenceJoueur));

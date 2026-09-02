@@ -61,27 +61,48 @@ test('peuplement — la garde est vide, et elle s\'arrête où elle le dit', () 
   const garde = PEUPLEMENT.gardeAutourDuDepart;
   const { cles } = carteEntiere(42);
 
-  // Aucune base à moins de quinze cases.
-  let plusProche = Number.POSITIVE_INFINITY;
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE (02/09) : la garde était un CARRÉ, elle
+  // est un DISQUE. Ce test mesurait l'écart de Tchebychev ; il mesure désormais
+  // le carré de la distance euclidienne, dans la métrique qui décide. Ce qu'il
+  // garde n'a pas bougé d'un mot : aucune base sous la garde, et la garde pas
+  // plus large qu'annoncée.
+  //
+  // ⚠ AU CARRÉ, PAS EN RACINE — le test compare comme le code compare, sinon il
+  // mesurerait un arrondi plutôt qu'une règle.
+  let plusProcheCarre = Number.POSITIVE_INFINITY;
   for (const cle of cles) {
     const [rangee, colonne] = cle.split(':').map(Number);
-    const ecart = Math.max(Math.abs(rangee - depart.rangee), Math.abs(colonne - depart.colonne));
-    assert.ok(ecart >= garde, `base à ${ecart} cases du départ, minimum ${garde}`);
-    plusProche = Math.min(plusProche, ecart);
+    const dr = rangee - depart.rangee;
+    const dc = colonne - depart.colonne;
+    const carre = dr * dr + dc * dc;
+    assert.ok(carre >= garde * garde,
+      `base à ${Math.sqrt(carre).toFixed(2)} cases du départ, minimum ${garde}`);
+    plusProcheCarre = Math.min(plusProcheCarre, carre);
   }
 
   // ⚠ ET LA MOITIÉ QUI COMPTE VRAIMENT : la garde ne doit pas être plus large
   // qu'annoncée. Sans cette ligne, une garde de cinquante cases passerait le
   // test précédent haut la main — et le joueur n'aurait rien à regarder. On
   // exige donc qu'une base se tienne à la distance EXACTE.
-  assert.equal(plusProche, garde, `la base la plus proche est à ${plusProche}, pas à ${garde}`);
+  // ⚠ EN EUCLIDE, LA BORNE N'EST PLUS ATTEINTE EXACTEMENT, et il faut le dire
+  // plutôt que d'assouplir. Le carré `d² ≥ 225` n'est un entier atteignable que
+  // pour les couples (dr, dc) qui le permettent : 225 tombe juste sur (15, 0) ou
+  // (9, 12), et la case la plus proche d'une carte donnée n'est pas forcément
+  // l'un de ces couples. On exige donc que la base la plus proche soit SERRÉE
+  // contre la garde — au plus une case au-delà —, ce qui garde exactement ce que
+  // l'égalité gardait : une garde de cinquante cases échouerait toujours.
+  const plusProche = Math.sqrt(plusProcheCarre);
+  assert.ok(plusProche >= garde && plusProche < garde + 1,
+    `la base la plus proche est à ${plusProche.toFixed(2)}, attendu entre ${garde} et ${garde + 1}`);
 
   // La fonction elle-même, aux deux bords : à quinze on est dehors, à quatorze
   // dedans. C'est un « au moins », pas un « plus de ».
   assert.ok(horsDeLaGarde(depart.rangee - garde, depart.colonne));
   assert.ok(!horsDeLaGarde(depart.rangee - garde + 1, depart.colonne));
-  // Tchebychev et non euclidien : quinze colonnes suffisent, quel que soit
-  // l'écart de rangée. C'est ce qui donne son sens à « de part et d'autre ».
+  // ⚠ EUCLIDE ET NON TCHEBYCHEV DEPUIS LE 02/09 : quinze colonnes d'écart
+  // suffisent quand l'écart de rangée est NUL, et c'est ce qui donne encore son
+  // sens à « de part et d'autre ». Ce qui a changé, c'est la DIAGONALE : elle
+  // sort de la garde bien plus tôt, à onze cases de grille au lieu de quinze.
   assert.ok(horsDeLaGarde(depart.rangee, depart.colonne + garde));
   assert.ok(horsDeLaGarde(depart.rangee + 1, depart.colonne + garde));
 });

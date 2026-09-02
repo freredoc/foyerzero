@@ -34,7 +34,9 @@ import { estSurLaCarte, niveauDeLaRangee } from './carte.js';
 import { estBaseOuvrage, hachageBrut } from './peuplement.js';
 import { genererSite } from './generateur.js';
 import { butin, creerCombat, construireResultat } from './combat.js';
-import { basesDuJoueur, distanceTchebychev } from './points-attaque.js';
+import {
+  basesDuJoueur, distanceTchebychev, distanceCarreeCases, estAPorteeDAttaque,
+} from './points-attaque.js';
 
 /** Sel du tirage qui ne dépend que de la CASE : la saveur, et le terrain. */
 export const SEL_TERRAIN_DU_SITE = 4;
@@ -308,18 +310,31 @@ export function resumeDuSite(graine, identite, montageFourni = null) {
  * @returns {Array<object>} identités, du plus proche au plus loin
  */
 export function ciblesAPortee(etat, baseAttaquante) {
-  const { rangee: r0, colonne: c0 } = baseAttaquante.position;
+  const depuis = baseAttaquante.position;
+  const { rangee: r0, colonne: c0 } = depuis;
   const rayon = GEOGRAPHIE.rayonAttaque;
   const trouvees = [];
   for (let r = r0 - rayon; r <= r0 + rayon; r += 1) {
     for (let c = c0 - rayon; c <= c0 + rayon; c += 1) {
       if (r === r0 && c === c0) continue;
+      // ⚠⚠ LE BALAYAGE EST UN CARRÉ, LA PORTÉE EST UN DISQUE — depuis le lot
+      // EUCLIDE. Avant lui les deux coïncidaient et ce filtre n'existait pas :
+      // les 440 cases du carré étaient toutes à portée. Il en reste 316, et les
+      // 124 coins sont désormais REFUSÉS. Sans cette ligne, l'écran Monde
+      // proposerait des cibles que `problemesDuRaid` refuserait au toucher.
+      if (!estAPorteeDAttaque(depuis, { rangee: r, colonne: c })) continue;
       const site = siteDeLaCase(etat, r, c);
       if (site === null) continue;
-      trouvees.push({ ...site, distance: Math.max(Math.abs(r - r0), Math.abs(c - c0)) });
+      // ⚠ LE TRI SE FAIT SUR LE CARRÉ, ET C'EST EXACT. La racine est croissante :
+      // ordonner par d² ordonne par d, sans jamais faire entrer un flottant.
+      trouvees.push({
+        ...site,
+        distance: distanceTchebychev(depuis, { rangee: r, colonne: c }),
+        distanceCarree: distanceCarreeCases(depuis, { rangee: r, colonne: c }),
+      });
     }
   }
-  trouvees.sort((a, b) => a.distance - b.distance
+  trouvees.sort((a, b) => a.distanceCarree - b.distanceCarree
     || a.rangee - b.rangee || a.colonne - b.colonne);
   return trouvees;
 }

@@ -27,7 +27,7 @@ import { plafondDeLaReserve, crediterLesReserves } from '../src/sim/reparation.j
 import { basesDeLaFenetre as basesFenetre } from '../src/sim/peuplement.js';
 import { siteDeLaCase } from '../src/sim/site-de-la-case.js';
 import { basesDeLaFenetre } from '../src/sim/peuplement.js';
-import { distanceTchebychev } from '../src/sim/points-attaque.js';
+import { estAPorteeDAttaque } from '../src/sim/points-attaque.js';
 import { etatDuSite, montageCourant } from '../src/sim/site-entame.js';
 import { capacitesMilli } from '../src/sim/economie-base.js';
 import { APRES_RAID, GEOGRAPHIE, BATIMENTS } from '../src/data/sites.js';
@@ -47,8 +47,12 @@ function partieArmee(graine = 2026, unites = 6, niveau = 1) {
 
 /** Le premier camp autour de la base. */
 function premierCamp(etat) {
+  // ⚠ ELLE REND `null` PLUTÔT QUE DE LEVER SUR UN `undefined`. Un camp peut
+  // avoir été rasé — c'est le cas depuis que les tests en enchaînent onze —, et
+  // un appelant doit pouvoir le dire dans son propre message plutôt que de
+  // buter sur « cannot read properties of undefined ».
   const s = etat.satellites.presents.find((x) => x.type === 'camp');
-  return { rangee: s.rangee, colonne: s.colonne };
+  return s === undefined ? null : { rangee: s.rangee, colonne: s.colonne };
 }
 
 test('refus — les quatre raisons de ne pas partir, et chacune se dit', () => {
@@ -68,15 +72,29 @@ test('refus — les quatre raisons de ne pas partir, et chacune se dit', () => {
     premiereRangee: 200, derniereRangee: 210, premiereColonne: 1, derniereColonne: 31,
   })[0];
   assert.ok(loin, 'montage : aucune base de l\'Ouvrage dans la fenêtre');
-  assert.ok(distanceTchebychev(etat.position, loin) > GEOGRAPHIE.rayonAttaque);
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : la portée se teste en ligne droite
+  // désormais, et c'est `estAPorteeDAttaque` qui décide. Mesurer ici en
+  // Tchebychev laisserait passer un montage où la cible est HORS du carré mais
+  // DANS le disque — ou l'inverse —, donc un test qui attend « hors-portee » sur
+  // une cible atteignable.
+  assert.equal(estAPorteeDAttaque(etat.position, loin), false);
   assert.ok(siteDeLaCase(etat, loin.rangee, loin.colonne), 'la cible lointaine doit exister');
   assert.equal(problemesDuRaid(etat, etat, loin)[0].code, 'hors-portee');
 
   // Sans points : le message dit combien il en manque, il ne dit pas « non ».
+  //
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE, ET AUTREMENT QU'EN RECOPIANT LE NOUVEAU
+  // NOMBRE. Le manque était figé à 9 ; le camp que `premierCamp` rend a changé de
+  // case avec les anneaux, donc le coût aussi. Le figer à nouveau le referait
+  // bouger au prochain lot qui touche la carte. Le manque se DÉDUIT du coût, ce
+  // qui garde ce que le test gardait — le message porte le CHIFFRE, pas un
+  // « non ».
   etat.attaque.points = 3;
+  const cout = coutDUnRaid(etat, etat, cible);
   const sansPoints = problemesDuRaid(etat, etat, cible);
   assert.equal(sansPoints[0].code, 'points-insuffisants');
-  assert.match(sansPoints[0].message, /manque 9/, sansPoints[0].message);
+  assert.ok(cout > 3, 'le montage ne mesure rien : le raid est payable avec 3 points');
+  assert.match(sansPoints[0].message, new RegExp(`manque ${cout - 3}\\b`), sansPoints[0].message);
 
   // Sans armée en état de partir.
   etat.attaque.points = 100;
@@ -353,7 +371,10 @@ function ciblesParNiveau(etat, niveaux) {
     derniereRangee: p.rangee + r,
     premiereColonne: Math.max(1, p.colonne - r),
     derniereColonne: p.colonne + r,
-  }).filter((b) => distanceTchebychev(p, b) <= r);
+    // ⚠ LE FILTRE SUIT LA RÈGLE, IL NE LA RÉÉCRIT PAS. Il mesurait en Tchebychev
+    // et rendait donc des cibles que `problemesDuRaid` refuse depuis le lot
+    // EUCLIDE — le montage fabriquait des cas impossibles.
+  }).filter((b) => estAPorteeDAttaque(p, b));
 
   const sortie = [];
   for (const niveau of niveaux) {
@@ -571,7 +592,7 @@ test('RAID-0 T9 — le champ traverse la sauvegarde, et une v17 ressort toute ac
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois.
   // Elle arrive ici avec le maillon v17 → v18 ; elle vivait dans
   // `reparation.test.js` du temps où v16 → v17 était le dernier.
-  assert.equal(SAVE_VERSION, 20, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 21, 'le bump de la version des sauvegardes a été oublié');
 
   const etat = partieAuMilieu();
   etat.armee = [];
@@ -891,13 +912,21 @@ test('RAID-A T9 — simuler ne range AUCUN rapport dans le journal', () => {
 
 test('RAID-A T10 — onze raids ne gardent que les dix derniers, le plus ancien sort', () => {
   const etat = partieJouable();
-  const cible = premierCamp(etat);
   const ticks = [];
   for (let n = 0; n < 11; n += 1) {
     etat.attaque.points = 100_000;
     // Un tick entre deux raids : les horodatages doivent différer, sinon
     // « le plus ancien est sorti » ne se mesurerait pas.
     tickJeu(etat);
+    // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : LA CIBLE SE RELIT À CHAQUE TOUR.
+    // Elle était prise UNE fois avant la boucle, ce qui supposait qu'un même
+    // camp survive à onze raids. Les anneaux ayant changé de forme, le camp que
+    // le montage trouve n'est plus le même, il tombe avant le onzième, et
+    // `executerRaid` lève « il n'y a rien à attaquer sur cette case ». Ce que ce
+    // test mesure est la FILE des dix rapports, pas l'endurance d'un camp : il
+    // relit donc une cible vivante à chaque tour.
+    const cible = premierCamp(etat);
+    assert.ok(cible, `tour ${n} : plus aucun camp à attaquer, le montage ne mesure rien`);
     executerRaid(etat, etat, cible);
     ticks.push(etat.rapports[etat.rapports.length - 1].tick);
   }

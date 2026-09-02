@@ -17,7 +17,7 @@ import {
   NOMBRE_DE_BANDES, TYPES_POI, ESSAIS_MAX, SEL_RANGEE, SEL_COLONNE,
 } from '../src/sim/poi.js';
 import { estBaseOuvrage, horsDeLaGarde } from '../src/sim/peuplement.js';
-import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
+import { niveauDeLaRangee, positionBaseTerminale, positionDepartJoueur } from '../src/sim/carte.js';
 import { empriseDeLaGrosseBase } from '../src/render/embleme.js';
 import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION, poser,
@@ -27,7 +27,9 @@ import {
 } from '../src/sim/economie-base.js';
 import { creerCombat } from '../src/sim/combat.js';
 import { executerRaid } from '../src/sim/raid.js';
-import { GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE } from '../src/data/sites.js';
+import {
+  GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE, PEUPLEMENT,
+} from '../src/data/sites.js';
 import { RAYONS, JOUEUR } from '../src/sim/territoire.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -144,10 +146,21 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
   // esquive la base de l'Ouvrage, jamais l'inverse : ajouter les POI ne doit
   // déplacer AUCUNE base sur AUCUNE carte existante.
   //
-  // Les six comptes ci-dessous ont été relevés sur `src/sim/peuplement.js` tel
-  // qu'il était AVANT le lot — extrait du dépôt par `git show HEAD:…` et exécuté
-  // à part. Ils ne sont donc pas une photographie du code d'aujourd'hui.
-  const REFERENCE = [[1, 748], [7, 716], [42, 732], [777, 754], [2026, 756], [4242, 756]];
+  // ⚠⚠ BASELINE REMESURÉE AU LOT EUCLIDE (02/09), ET IL FAUT DIRE CE QUE ÇA
+  // COÛTE. Les six comptes venaient d'un `peuplement.js` extrait par
+  // `git show` d'AVANT le lot POI : ils prouvaient l'indépendance en comparant à
+  // du code qui ne connaissait pas les POI. Le lot EUCLIDE a changé la garde et
+  // la densité, donc ces six nombres-là ne veulent plus rien dire, et les
+  // remesurer sur le code d'aujourd'hui les rend CIRCULAIRES — un compte relevé
+  // sur le code qu'il vérifie ne vérifie rien.
+  //
+  // ⚠ CE QUI TIENT VRAIMENT LA PROPRIÉTÉ EST DONC LA SECONDE MOITIÉ DU TEST : le
+  // balayage de la source, qui exige que `sim/peuplement.js` ne connaisse pas le
+  // mot « poi ». Elle est indépendante de toute métrique et n'a pas bougé. Les
+  // comptes ci-dessous gardent une chose plus modeste, et qui vaut quand même :
+  // que le peuplement soit STABLE d'un lot à l'autre. Le prochain lot qui les
+  // fait bouger doit dire pourquoi, comme celui-ci le fait.
+  const REFERENCE = [[1, 993], [7, 993], [42, 996], [777, 978], [2026, 984], [4242, 986]];
   for (const [graine, attendu] of REFERENCE) {
     let n = 0;
     for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) {
@@ -170,30 +183,46 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
   assert.match('import { poiDeLaCase } from "./poi.js";', /poi/i);
 });
 
-test('POI T6 — la forme de la garde : à droite et à gauche, comme les bases Ouvrage', () => {
-  // ⚠⚠ LA GARDE A UNE FORME QUI SURPREND, ET C'EST EXACTEMENT CE QU'ETHAN A
-  // DEMANDÉ : « les mettre à droite et à gauche, comme les bases Ouvrage ». Elle
-  // est de Tchebychev, rayon 15, autour du départ ; la carte n'a que 31 colonnes.
-  // Donc sur les rangées à hauteur du joueur, SEULES les colonnes 1 et 31 sont
-  // hors garde — un POI y tombe collé à un bord, jamais devant la base.
+test('POI T6 — la forme de la garde, remesurée en Euclide', () => {
+  // ⚠⚠ BASELINE REMESURÉE AU LOT EUCLIDE (02/09) : LA FORME A CHANGÉ, LA RÈGLE
+  // NON. Ce test figeait la forme CARRÉE de la garde — « sur les rangées à
+  // hauteur du joueur, SEULES les colonnes 1 et 31 sont hors garde », qui
+  // découlait de Tchebychev sur une carte large de 31. La garde est un DISQUE
+  // désormais : sur la rangée du départ, une case est hors garde dès que son
+  // écart de colonne atteint quinze, ce qui vaut encore les deux bords ; mais
+  // une case en diagonale sort bien plus tôt, et les rangées voisines s'ouvrent.
+  //
+  // Ce que le test garde est inchangé et c'est le seul point qui compte : la
+  // garde des POI est CELLE DU PEUPLEMENT, pas une distance réécrite à côté.
   const largeur = GEOGRAPHIE.carte.largeur;
-  let auBord = 0;
-  let auMilieu = 0;
+  const depart = positionDepartJoueur();
+  const garde = PEUPLEMENT.gardeAutourDuDepart;
+
+  // Aucun POI dans la garde, sur toutes les graines du montage.
+  let dedans = 0;
+  let total = 0;
   for (const graine of GRAINES) {
     for (const p of tirerLesPoi(graine)) {
-      if (p.rangee < 281) continue;
-      if (p.colonne === 1 || p.colonne === largeur) auBord += 1;
-      else auMilieu += 1;
+      total += 1;
+      const dr = p.rangee - depart.rangee;
+      const dc = p.colonne - depart.colonne;
+      if (dr * dr + dc * dc < garde * garde) dedans += 1;
     }
   }
-  assert.ok(auBord > 0, 'aucun POI à hauteur du joueur : la garde ne mesure rien');
-  assert.equal(auMilieu, 0, `${auMilieu} POI en colonnes 2…${largeur - 1} à hauteur du joueur`);
+  assert.ok(total > 0, 'aucun POI tiré : le montage ne mesure rien');
+  assert.equal(dedans, 0, `${dedans} POI sous la garde`);
 
-  // Et la garde est bien celle du peuplement, pas une distance réécrite : les
-  // rangées 273 à 280 sont ENTIÈREMENT hors garde, les suivantes ne le sont
-  // qu'aux deux bords.
-  for (let c = 1; c <= largeur; c += 1) assert.ok(horsDeLaGarde(280, c), `(280, ${c})`);
-  for (let c = 2; c < largeur; c += 1) assert.equal(horsDeLaGarde(281, c), false, `(281, ${c})`);
+  // ⚠ ET LA GARDE EST BIEN CELLE DU PEUPLEMENT. Sur la rangée du départ, quinze
+  // colonnes d'écart suffisent à en sortir ; quatorze n'y suffisent pas.
+  assert.ok(horsDeLaGarde(depart.rangee, depart.colonne - garde));
+  assert.equal(horsDeLaGarde(depart.rangee, depart.colonne - garde + 1), false);
+  // ⚠ ET LA DIAGONALE SORT PLUS TÔT — c'est très exactement ce que le passage à
+  // Euclide a changé, et l'ancienne forme carrée l'interdisait. Onze cases de
+  // grille en diagonale font 15,56 en ligne droite : dehors. Dix en font 14,14 :
+  // dedans.
+  assert.ok(horsDeLaGarde(depart.rangee - 11, depart.colonne - 11));
+  assert.equal(horsDeLaGarde(depart.rangee - 10, depart.colonne - 10), false);
+  assert.ok(largeur === 31, 'la largeur de la carte a bougé : relire ce test');
 });
 
 test('POI T7 — `ESSAIS_MAX` lève, il ne rend pas une carte amputée', () => {
@@ -700,10 +729,28 @@ test('POI T20 — une sauvegarde v15 se charge, se joue, et ressort à jour', ()
   assert.ok(charge.poisAcquis.length > 0,
     'le premier tick n\'a rien relevé — le POI sous la base a été perdu');
 
-  // ⚠ ET ELLE TOLÈRE UN CHAMP DÉJÀ LÀ : la chaîne remonte depuis la v0, rien ne
-  // garantit la forme d'un objet à mi-parcours.
+  // ⚠⚠ UNE ASSERTION A ÉTÉ RETIRÉE ICI, ET ELLE SE DÉCLARE. Elle vérifiait que
+  // la chaîne TOLÈRE un `poisAcquis` déjà présent — « la chaîne remonte depuis
+  // la v0, rien ne garantit la forme d'un objet à mi-parcours ». Le maillon
+  // v15 → v16 la respecte toujours ; c'est le maillon v20 → v21 du lot EUCLIDE
+  // qui la contredit EN BOUT DE CHAÎNE, délibérément : la carte a changé sous
+  // les sauvegardes, donc un gisement compté acquis serait désormais ailleurs,
+  // et le recopier produirait un état syntaxiquement valide et sémantiquement
+  // faux.
+  //
+  // ⚠ ET ELLE N'A PAS ÉTÉ REMPLACÉE PAR UNE VERSION « ISOLÉE » DU MAILLON. La
+  // table des migrations n'est pas exportée ; rejouer un seul maillon
+  // demanderait de la dupliquer dans le test, c'est-à-dire d'écrire une seconde
+  // chaîne qui vieillirait à côté de la vraie. Un premier jet de ce test l'avait
+  // fait avec un faux « avance d'un cran » qui ne rejouait rien : il passait sur
+  // n'importe quel code. Mieux vaut une assertion en moins, déclarée, qu'une
+  // assertion qui ne mesure rien.
+  //
+  // Ce qui est asserté à la place est le fait de ce lot : le bout de la chaîne
+  // rend une liste VIDE, quoi qu'on lui donne.
   const dejaLa = { ...v15, poisAcquis: [{ type: 'poiScorie', bande: 2 }] };
-  assert.deepEqual(migrer(dejaLa).poisAcquis, [{ type: 'poiScorie', bande: 2 }]);
+  assert.deepEqual(migrer(dejaLa).poisAcquis, [],
+    'le maillon v20 → v21 n\'a pas vidé les POI acquis');
 });
 
 // ---------------------------------------------------------------------------

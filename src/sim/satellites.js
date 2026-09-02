@@ -88,11 +88,23 @@ function graineDeLApparition(graine, instance) {
 }
 
 /**
- * Les cases d'un anneau autour d'une position, en distance de TCHEBYCHEV.
+ * Les cases d'un anneau autour d'une position, en distance EUCLIDIENNE.
  *
- * ⚠ TCHEBYCHEV ET NON EUCLIDIEN, comme la garde du peuplement. Sur une grille,
- * une case en diagonale n'est pas plus loin qu'une case droit devant : la
- * mesurer plus loin creuserait des anneaux en losange que personne n'a demandés.
+ * ⚠⚠ EUCLIDE DEPUIS LE LOT EUCLIDE (02/09/2026), ARBITRÉ PAR ETHAN. Ce
+ * commentaire disait : « TCHEBYCHEV ET NON EUCLIDIEN, comme la garde du
+ * peuplement. Sur une grille, une case en diagonale n'est pas plus loin qu'une
+ * case droit devant : la mesurer plus loin creuserait des anneaux en losange
+ * que personne n'a demandés. » Ce n'est plus un losange qu'on creuse, c'est un
+ * DISQUE — et les trois règles de distance de la carte ont basculé ensemble, si
+ * bien que l'anneau d'un satellite a exactement la forme de la portée d'un raid.
+ *
+ * ⚠ LE BALAYAGE RESTE UN CARRÉ, ET LE TEST SEUL EST UN DISQUE. Boucler sur
+ * `[-max, max]²` puis filtrer coûte le même prix qu'avant et se lit en une
+ * ligne ; chercher à ne parcourir que le disque demanderait une seconde
+ * géométrie pour économiser des cases qu'on jette de toute façon.
+ *
+ * ⚠ AU CARRÉ DES DEUX CÔTÉS, JAMAIS DE RACINE — même discipline que la garde du
+ * peuplement et que la portée du raid.
  *
  * @param {{rangee: number, colonne: number}} centre
  * @param {number} min distance minimale, incluse
@@ -101,10 +113,14 @@ function graineDeLApparition(graine, instance) {
  */
 export function casesDeLAnneau(centre, min, max) {
   const cases = [];
+  const minCarre = min * min;
+  const maxCarre = max * max;
   for (let dr = -max; dr <= max; dr += 1) {
     for (let dc = -max; dc <= max; dc += 1) {
-      const distance = Math.max(Math.abs(dr), Math.abs(dc));
-      if (distance < min || distance > max) continue;
+      // ⚠ PAS `distanceCarree` : c'est le nom de la distance du COMBAT, en
+      // milli-cases, et une garde de `euclide.test.js` refuse ce mot ici même.
+      const carreDeLaDistance = dr * dr + dc * dc;
+      if (carreDeLaDistance < minCarre || carreDeLaDistance > maxCarre) continue;
       const rangee = centre.rangee + dr;
       const colonne = centre.colonne + dc;
       if (!estSurLaCarte(rangee, colonne)) continue;
