@@ -571,7 +571,7 @@ test('RAID-0 T9 — le champ traverse la sauvegarde, et une v17 ressort toute ac
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois.
   // Elle arrive ici avec le maillon v17 → v18 ; elle vivait dans
   // `reparation.test.js` du temps où v16 → v17 était le dernier.
-  assert.equal(SAVE_VERSION, 19, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 20, 'le bump de la version des sauvegardes a été oublié');
 
   const etat = partieAuMilieu();
   etat.armee = [];

@@ -394,7 +394,7 @@ export function montageDuRaid(etat, site) {
  * @param {object} etat modifié en place
  * @param {object} rapport
  */
-function garderLeRapport(etat, rapport) {
+export function garderLeRapport(etat, rapport) {
   if (!Array.isArray(etat.rapports)) etat.rapports = [];
   etat.rapports.push({ ...rapport, tick: etat.horloge.nbTicks });
   while (etat.rapports.length > APRES_RAID.rapportsGardes) etat.rapports.shift();
@@ -496,6 +496,12 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // ⚠ `reparationInduite` SE PREND APRÈS `reporterLesDegats`, et l'ordre est
   // tout : avant, l'armée est encore intacte et le devis vaudrait zéro.
   const rapport = {
+    // ⚠ LE SENS EST ÉCRIT DES DEUX CÔTÉS DEPUIS LE LOT RAID-B. La liste des dix
+    // porte maintenant les raids que le joueur a MENÉS et ceux qu'il a SUBIS ;
+    // ne déclarer que les seconds obligerait tout lecteur à traiter l'absence du
+    // champ comme un cas, et le premier qui l'oublierait afficherait une défaite
+    // comme une victoire.
+    sens: 'offense',
     cible: site,
     cout,
     cause: resultat.cause,
@@ -581,15 +587,24 @@ const AUTO_REPARATION_PCT = 20;
 /**
  * Les ouvrages de garnison à Auto-réparation regagnent 20 % de leurs dégâts.
  *
- * ⚠ AUCUN CODE N'ÉCRIT `degatsMilli` SUR LA GARNISON AUJOURD'HUI. Remesuré au
- * lot RÉSERVE : les deux seuls écrivains sont `reporterLesDegats` ici même et
- * `reparerUnePiece` dans `sim/reparation.js` — qui a remplacé
- * `avancerLaReparation` le 01/09 —, et tous deux parcourent `etat.armee`. Un
- * fait d'orphelinage se remesure, il ne se reconduit pas. La base du
- * joueur n'étant jamais attaquée, une pièce de garnison est toujours à zéro et
- * la boucle sort au premier `continue`. L'effet est donc ÉCRIT ET INATTEIGNABLE
- * EN JEU tant que les attaques sur la base n'existent pas — c'est assumé, pas un
- * oubli, et c'est ce que le test vérifie sur un état forgé.
+ * ⚠⚠ CET EFFET EST ATTEIGNABLE EN JEU DEPUIS LE LOT RAID-B, 02/09/2026, ET CE
+ * COMMENTAIRE DISAIT L'INVERSE. Il annonçait : « aucun code n'écrit
+ * `degatsMilli` sur la garnison aujourd'hui […] l'effet est ÉCRIT ET
+ * INATTEIGNABLE EN JEU tant que les attaques sur la base n'existent pas ». Les
+ * attaques existent : `sim/raid-ouvrage.js` reporte les dégâts du raid de
+ * l'Ouvrage sur `etat.garnison`, et c'est LUI qui appelle cette fonction juste
+ * après. Un commentaire qui annonce un futur devenu présent envoie chercher un
+ * trou qui n'existe plus.
+ *
+ * ⚠ LES ÉCRIVAINS DE `degatsMilli` SUR LA GARNISON SONT DONC DEUX, et un seul
+ * parcourt `etat.armee` : `reporterSurLesPieces` de `raid-ouvrage.js` écrit sur
+ * la garnison, `reporterLesDegats` ici même sur l'armée. Un fait d'orphelinage
+ * se remesure, il ne se reconduit pas — c'est ce que ce commentaire disait déjà
+ * au lot RÉSERVE, et c'est ce qui a permis de le corriger sans le réécrire.
+ *
+ * ⚠ IL RESTE APPELÉ DEPUIS `executerRaid`, ET C'EST INTACT : un raid du joueur
+ * termine toujours par recoller sa propre garnison. Simplement, elle n'y a plus
+ * rien à recoller que dans le cas où elle a été attaquée entre-temps.
  *
  * ⚠ DEUX CONTRÔLES, ET IL FAUT LES DEUX. `nomDuModule` dit QUEL module la ligne
  * porte, `moduleEstAcquis` dit si le joueur l'a payé POUR CETTE LIGNE. Le second
@@ -602,7 +617,7 @@ const AUTO_REPARATION_PCT = 20;
  * @param {object} etat modifié en place
  * @returns {number} milli-PV rendus, tous ouvrages confondus
  */
-function reparerLaGarnison(etat) {
+export function reparerLaGarnison(etat) {
   let rendus = 0;
   for (const piece of etat.garnison) {
     if (piece.degatsMilli <= 0) continue;

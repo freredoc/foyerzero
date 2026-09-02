@@ -38,6 +38,13 @@ import {
   BATIMENTS, BUTIN, SAVEURS, POINTS_RECHERCHE, GEOGRAPHIE, TYPES_SITE,
 } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
+// ⚠⚠ LA SEULE DÉPENDANCE DE CE MOTEUR VERS LA BASE DU JOUEUR, ET ELLE EST
+// ENTRÉE LE 02/09 AVEC LE LOT RAID-B. Jusque-là le moteur ne connaissait que
+// les CINQ bâtiments de l'Ouvrage : monter un `chantierDeConstruction` levait
+// « identifiant inconnu », ce que `CLAUDE.md` §6 annonçait déjà comme « le trou
+// que le raid sur la base du joueur comblera ». Le jour est venu. L'import ne
+// crée aucun cycle : `data/base.js` ne lit que `data/`.
+import { BASE_BATIMENTS } from '../data/base.js';
 import {
   DERNIERE_RANGEE,
   enEntier,
@@ -327,6 +334,41 @@ function profilBatiment(id, b) {
   };
 }
 
+/**
+ * Le profil de combat d'un bâtiment DU JOUEUR — les onze de `data/base.js`.
+ *
+ * ⚠⚠ IL N'EN EXISTE PAS DEUX VERSIONS : c'est `profilBatiment` qu'on appelle,
+ * après avoir traduit la ligne du joueur dans le vocabulaire qu'il attend. Les
+ * deux tables ne portent pas les mêmes clés — `BATIMENTS` a `indiceButin` et
+ * `ressource`, `BASE_BATIMENTS` a `role`, `classeDeCout` et `plancherPv` — mais
+ * ce que le PROFIL demande se réduit à quatre choses : les PV, l'indice de
+ * butin, la ressource, et le drapeau de rasage. Écrire un second constructeur
+ * aurait donné deux profils de bâtiment voisins dont un seul serait éprouvé, et
+ * la première divergence se serait lue comme un bogue de combat.
+ *
+ * ⚠⚠ `indiceButin` ET `ressource` NE SONT JAMAIS LUS SUR UN BÂTIMENT DU JOUEUR,
+ * ET C'EST MESURABLE. Leur unique lecteur est `butin`, qui verse à l'ATTAQUANT ;
+ * quand l'Ouvrage attaque, le seul transfert de richesse est
+ * `RAID_OUVRAGE.sanctionRasage.perteRessourcesStockees`, qui ne passe pas par
+ * là. Leur donner un barème ici reviendrait donc à inventer un butin que rien
+ * ne verse — et à figer, sous l'apparence d'une donnée relevée, un arbitrage
+ * qu'Ethan n'a pas rendu. `indiceButin` vaut donc `null` et `ressource` un objet
+ * VIDE : les deux font lever `butinPlein` au lieu de payer en silence si
+ * quelqu'un appelait `butin` sur un combat de défense.
+ *
+ * ⚠ LE RASAGE, LUI, EST LU. `raseLeSite` est la clé que le résolveur teste pour
+ * conclure `cause: 'souche'` ; `BASE_BATIMENTS.chantierDeConstruction` la porte
+ * sous le MÊME nom que `BATIMENTS.souche`, ce qui rend cette ligne-ci muette sur
+ * la règle. Le Chantier tombé rase la base du joueur exactement comme la Souche
+ * rase un site de l'Ouvrage, sans qu'aucun code ne le redise.
+ */
+function profilBatimentJoueur(id, b) {
+  return {
+    ...profilBatiment(id, { pv: b.pv, indiceButin: null, ressource: {}, raseLeSite: b.raseLeSite }),
+    id,
+  };
+}
+
 const PROFILS_UNITE = {};
 const PROFILS_DEFENSE = {};
 const PROFILS_BATIMENT = {};
@@ -342,6 +384,23 @@ export function verifierArithmetique() {
   for (const [id, u] of Object.entries(UNITES)) PROFILS_UNITE[id] = profilUnite(id, u);
   for (const [id, d] of Object.entries(DEFENSES)) PROFILS_DEFENSE[id] = profilDefense(id, d);
   for (const [id, b] of Object.entries(BATIMENTS)) PROFILS_BATIMENT[id] = profilBatiment(id, b);
+  // ⚠ LES ONZE DU JOUEUR DANS LA MÊME TABLE, ET AUCUNE CLÉ NE SE HEURTE —
+  // mesuré : `souche`, `etai`, `noeud`, `gangue`, `terril` d'un côté,
+  // `chantierDeConstruction`, `collecteur`, … de l'autre. Une table séparée
+  // aurait obligé `TABLES_PROFIL` à porter un sixième genre, donc `profil(e)` à
+  // choisir — et un bâtiment est un bâtiment, quel que soit son propriétaire.
+  // Un test asserte l'absence de collision plutôt que de la supposer.
+  for (const [id, b] of Object.entries(BASE_BATIMENTS)) {
+    // ⚠ LA COLLISION SE CHERCHE DANS `BATIMENTS`, PAS DANS LA TABLE QU'ON
+    // REMPLIT. `verifierArithmetique` est RÉEXÉCUTABLE — un test de
+    // `grille.test.js` la rappelle —, et la table garde ce que le passage
+    // précédent y a mis : se comparer à elle-même ferait lever au deuxième
+    // appel, sur une collision de la clé avec ELLE-MÊME. Payé une fois.
+    if (Object.prototype.hasOwnProperty.call(BATIMENTS, id)) {
+      throw new Error(`combat : « ${id} » est à la fois un bâtiment de l'Ouvrage et du joueur`);
+    }
+    PROFILS_BATIMENT[id] = profilBatimentJoueur(id, b);
+  }
 
   // Les points de recherche suivent la courbe économique. Le produit le plus
   // lourd du barème est bareme × facteurEconomiqueMilli(plafond) × bonus : il

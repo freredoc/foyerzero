@@ -23,6 +23,10 @@ import {
 } from './site-entame.js';
 import { creerRecherche } from './raid.js';
 import { crediterLesReserves, reservesVides, problemesDesReserves } from './reparation.js';
+import {
+  basesAttaquantes, resoudreLaMinute, prochaineMinuteDeRaid, minuteDeLHorloge,
+  TICKS_PAR_MINUTE,
+} from './raid-ouvrage.js';
 import { dispositionNouvelleBase, problemesDeDisposition } from './disposition.js';
 import {
   creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, RESSOURCES,
@@ -40,7 +44,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 19;
+export const SAVE_VERSION = 20;
 
 /**
  * @typedef {object} Etat
@@ -361,6 +365,10 @@ function verifierEtat(etat) {
  * @param {object} params
  */
 export function tickJeu(etat) {
+  // ⚠ LA MINUTE SE PREND AVANT L'HORLOGE, ET C'EST CE QUI REND LES DEUX CHEMINS
+  // COMPARABLES. Le rattrapage fait exactement le même geste sur toute sa
+  // fenêtre : il note où il part, il avance, il résout les minutes traversées.
+  const minuteAvant = minuteDeLHorloge(etat.horloge.nbTicks);
   tickHorloge(etat.horloge);
   // ⚠ AVANT L'ÉCONOMIE, PAS APRÈS. Sinon le tick où un POI est acquis produit
   // encore à l'ancien débit. Aujourd'hui la différence est invisible —
@@ -376,6 +384,37 @@ export function tickJeu(etat) {
   avancerPointsAttaque(etat, 1);
   reparerLesSites(etat);
   crediterLesReserves(etat, 1);
+  // ⚠⚠ EN DERNIER, ET APRÈS TOUT LE RESTE. Un raid modifie la disposition, la
+  // position, l'économie et la réserve : le placer avant l'économie ferait
+  // produire le tick sur une base déjà rasée, et le rattrapage — qui découpe sa
+  // fenêtre AUX instants des raids — ne pourrait pas reproduire cet ordre-là.
+  //
+  // ⚠ ET LA LISTE DES ATTAQUANTES NE SE PREND QU'AU PASSAGE D'UNE MINUTE.
+  // `basesAttaquantes` coûte 441 lectures de case ; l'appeler à chaque tick
+  // multiplierait par cent le coût de la boucle du jeu, pour une réponse
+  // identique 599 fois sur 600.
+  resoudreLesMinutes(etat, minuteAvant, minuteDeLHorloge(etat.horloge.nbTicks));
+}
+
+/**
+ * Résout les raids de l'Ouvrage des minutes de `]minuteAvant, minuteApres]`.
+ *
+ * ⚠ LE MÊME CODE SERT LES DEUX CHEMINS, et c'est ce qui fait tenir T1. Le direct
+ * l'appelle sur une fenêtre d'une minute au plus ; le rattrapage l'appelle sur
+ * la minute exacte d'un raid qu'il vient d'aller chercher. Deux implémentations
+ * — une « par tick », une « par fenêtre » — auraient divergé au premier cas
+ * particulier, et la divergence ne se serait vue qu'au retour d'un joueur après
+ * trois jours.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {number} minuteAvant exclue
+ * @param {number} minuteApres incluse
+ */
+function resoudreLesMinutes(etat, minuteAvant, minuteApres) {
+  if (minuteApres <= minuteAvant) return;
+  for (let m = minuteAvant + 1; m <= minuteApres; m += 1) {
+    resoudreLaMinute(etat, m, basesAttaquantes(etat));
+  }
 }
 
 /**
@@ -388,16 +427,101 @@ export function tickJeu(etat) {
  * @param {object} params
  */
 export function rattraperJeu(etat, nbTicks) {
+  // ⚠⚠⚠ LE SEUL SYSTÈME DU JEU QUI NE SE RÉSOUDE PAS EN UN APPEL, ET IL FALLAIT
+  // DÉCOUPER LA FENÊTRE PLUTÔT QUE DE LE CONTOURNER — lot RAID-B, 02/09.
+  //
+  // Les cinq systèmes ci-dessous ne lisent que l'horloge courante : mille ticks
+  // d'un coup leur valent mille ticks un par un, et chacun porte sa condition de
+  // rupture écrite. Un raid de l'Ouvrage, lui, arrive à un INSTANT PRÉCIS et
+  // MODIFIE l'état pour tout ce qui suit — il vide la réserve de réparation, il
+  // peut raser la base et la DÉPLACER de vingt cases, il met les stocks à zéro.
+  // Deux raids résolus dans le désordre ne rendent pas ce que l'ordre rend.
+  //
+  // La fenêtre est donc coupée à chaque raid retenu, et chaque morceau est
+  // rattrapé par le corps analytique d'avant, inchangé. `tickJeu` × n ≡
+  // `rattraperJeu(n)` tient alors PAR CONSTRUCTION et non par vérification :
+  // c'est la même fonction qui résout les minutes des deux côtés.
+  //
+  // ⚠ CE QUI BORNE LA BOUCLE : le nombre de RAIDS RETENUS, pas le nombre de
+  // ticks. Sur 36 h avec cinq bases à portée, 10 800 tirages — un hachage
+  // chacun — pour environ sept combats. La liste des attaquantes, elle, coûte
+  // 441 lectures de case et se prend UNE fois par segment.
+  //
+  // ⚠ ET VOICI SA CONDITION DE RUPTURE, ÉCRITE : cette boucle cesserait d'être
+  // tenable le jour où `RAID_OUVRAGE.chanceParMinute` monterait d'un ordre de
+  // grandeur, ou où les bases à portée se compteraient par dizaines. Ce ne
+  // serait plus sept combats de 900 ticks mais soixante-dix, et le retour d'une
+  // absence de trois jours se paierait en secondes. C'est M1 qui le mesure.
+  exigerTicks(nbTicks);
+  let restants = nbTicks;
+  while (restants > 0) {
+    const minuteCourante = minuteDeLHorloge(etat.horloge.nbTicks);
+    const minuteFin = minuteDeLHorloge(etat.horloge.nbTicks + restants);
+    // ⚠ LA LISTE SE PREND ICI, UNE FOIS PAR SEGMENT, ET C'EST EXACT. Elle ne
+    // dépend que de la graine, de la position du joueur et des bases rasées ;
+    // aucun des trois ne bouge entre deux raids. Le jour où un satellite pourrait
+    // se poser sur une base de l'Ouvrage — `poserUnSatellite` le refuse — ou où
+    // la carte changerait au fil du temps, cette mise en cache cesserait d'être
+    // juste, et c'est T1 qui le dirait.
+    const attaquantes = basesAttaquantes(etat);
+    const minuteDuRaid = prochaineMinuteDeRaid(
+      etat.graine, attaquantes, minuteCourante, minuteFin,
+    );
+    if (minuteDuRaid === null) {
+      avancerAnalytiquement(etat, restants);
+      return;
+    }
+    // On avance JUSQU'AU premier tick de cette minute — celui-là même où le
+    // chemin direct aurait franchi la frontière et résolu le raid.
+    const jusque = minuteDuRaid * TICKS_PAR_MINUTE - etat.horloge.nbTicks;
+    avancerAnalytiquement(etat, jusque);
+    restants -= jusque;
+    resoudreLaMinute(etat, minuteDuRaid, attaquantes);
+  }
+}
+
+/** Une durée de rattrapage est un nombre entier de ticks, jamais négatif. */
+function exigerTicks(nbTicks) {
+  if (!Number.isInteger(nbTicks) || nbTicks < 0) {
+    throw new RangeError(`rattraperJeu : « ${nbTicks} » ticks — entier ≥ 0 attendu`);
+  }
+}
+
+/**
+ * Le rattrapage analytique d'un segment SANS raid — le corps d'avant RAID-B,
+ * mot pour mot.
+ *
+ * ⚠ IL N'A PAS BOUGÉ D'UNE LIGNE, ET C'EST VOULU. Les cinq conditions de rupture
+ * qu'il porte étaient justes et le restent ; ce qui a changé, c'est qu'on
+ * l'appelle plusieurs fois au lieu d'une. La composition est exacte pour chacun
+ * des cinq — c'est ce que la ligne « rattraper deux fois vaut rattraper une
+ * fois » dit déjà de l'économie, et les quatre autres se composent pour la même
+ * raison : `min` et addition d'entiers, ou lecture de l'horloge courante.
+ *
+ * @param {Etat} etat
+ * @param {number} nbTicks
+ */
+function avancerAnalytiquement(etat, nbTicks) {
+  if (nbTicks === 0) return;
   avancerTicks(etat.horloge, nbTicks);
   // ⚠⚠ UN SEUL APPEL, PAS UNE BOUCLE — même raisonnement que `resoudreSatellites`
   // ci-dessous, mais pour une raison à lui : l'acquisition ne dépend QUE de
   // `etat.position`, qu'aucun tick ne modifie. Mille ticks d'un coup acquièrent
   // donc exactement ce que mille ticks un par un auraient acquis.
   //
-  // ⚠ ET VOICI SA CONDITION DE RUPTURE, ÉCRITE : le jour où la base pourra se
-  // DÉPLACER en cours de rattrapage, cette ligne cessera d'être juste — le
-  // territoire aura balayé des cases que ce seul appel n'aura jamais vues. C'est
-  // le test d'équivalence des deux chemins qui doit tomber en premier.
+  // ⚠⚠ ET SA CONDITION DE RUPTURE EST ADVENUE — lot RAID-B, 02/09/2026. Elle
+  // annonçait : « le jour où la base pourra se DÉPLACER en cours de rattrapage,
+  // cette ligne cessera d'être juste — le territoire aura balayé des cases que ce
+  // seul appel n'aura jamais vues ». Ce jour est celui du rasage : la sanction de
+  // `RAID_OUVRAGE` redéploie la base de vingt cases vers le bas, et elle peut
+  // tomber au milieu d'une absence de trois jours.
+  //
+  // ⚠ CE QUI LA TRAITE : le rattrapage ne fait plus UN appel mais un par SEGMENT,
+  // et `subirUnRaid` rappelle lui-même `releverLesPoisAcquis` à l'instant du
+  // rasage. La ligne ci-dessous redevient donc juste au sens strict — pendant un
+  // segment, la base ne bouge pas, par construction, puisqu'un segment s'arrête
+  // à chaque raid. C'est T7 qui le mesure, avec la falsification qui retire le
+  // rappel : les POI de l'ancienne position survivent alors au déménagement.
   releverLesPoisAcquis(etat);
   rattrapageEconomieBase(
     etat.economie, etat.disposition, etat.champs, nbTicks,
@@ -503,7 +627,16 @@ export function poser(etat, id, rangee, colonne) {
       `poser : pose illégale — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  etat.disposition.push({ id, rangee, colonne, niveau: 1 });
+  // ⚠⚠ CETTE LISTE EST FERMÉE, ET C'EST LE PIÈGE QUE `CLAUDE.md` §6 NOMME DÉJÀ
+  // POUR `ajouterEntite` ET `poserEffectif`. Un champ que l'appelant croit poser
+  // et qui n'est pas nommé ICI disparaît en SILENCE. `degatsMilli` y est entré
+  // au lot RAID-B, avec `BASE_NEUVE` : l'oublier aurait donné un bâtiment sans
+  // le champ dans la sauvegarde, donc un `undefined` que `pvCourantsMilli` lit
+  // comme « intact » — un bâtiment neuf est bien intact, si bien qu'AUCUN raid
+  // de référence n'aurait bronché, jusqu'au premier bâtiment posé PUIS attaqué.
+  etat.disposition.push({
+    id, rangee, colonne, niveau: 1, degatsMilli: 0,
+  });
   const residu = {};
   for (const r of RESSOURCES) residu[r] = 0;
   etat.economie.residus.push(residu);
@@ -1867,6 +2000,32 @@ const MIGRATIONS = {
   18: (s) => {
     s.version = 19;
     if (!Array.isArray(s.rapports)) s.rapports = [];
+  },
+
+  /**
+   * v19 → v20 : les bâtiments de la base peuvent être endommagés.
+   *
+   * ⚠ À ZÉRO, ET C'EST LA SEULE VALEUR HONNÊTE. Une sauvegarde v19 n'avait aucun
+   * moyen d'abîmer un bâtiment — rien, dans tout le dépôt, n'écrivait de dégât
+   * sur la base du joueur avant le lot RAID-B, et `CLAUDE.md` §6 le disait de
+   * face. Une base v19 est donc intacte par construction : lui inventer des
+   * dégâts fabriquerait un raid qui n'a pas eu lieu, et lui laisser le champ
+   * absent ferait porter à `pvCourantsMilli` la charge de deviner.
+   *
+   * ⚠ ELLE N'AJOUTE RIEN À LA GARNISON NI À L'ARMÉE : les deux portent
+   * `degatsMilli` depuis la v7 et la v8. C'est `disposition` qui rattrape son
+   * retard, pas une troisième convention qui arrive.
+   * @param {object} s
+   */
+  19: (s) => {
+    s.version = 20;
+    if (!Array.isArray(s.disposition)) return;
+    for (const batiment of s.disposition) {
+      if (batiment !== null && typeof batiment === 'object'
+        && typeof batiment.degatsMilli !== 'number') {
+        batiment.degatsMilli = 0;
+      }
+    }
   },
 };
 
