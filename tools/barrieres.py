@@ -97,10 +97,10 @@ def main():
         for i, nom in enumerate(noms):
             cellule = im.crop((i * W // 2, 0, (i + 1) * W // 2, H))
             for N in GRILLES:
-                g = conditionner(recadrer(cellule, EMPRISE * (N // 32), N), P, N)
+                g, matiere = conditionner(recadrer(cellule, EMPRISE * (N // 32), N), P, N)
                 d = os.path.join(DST, str(N))
                 os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}.png'))
+                ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
                 n += 1
     print(f'{n} fichiers écrits')
     return 0

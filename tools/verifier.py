@@ -61,6 +61,12 @@ CHAINE = [
     # MANQUANTS à chaque exécution, c'est-à-dire « le dépôt les porte, aucun
     # outil ne les produit » — exactement le contraire de la vérité.
     ('bords',           []),
+    # ⚠⚠ LA COULEUR PASSE EN DERNIER, ET C'EST SA DÉFINITION. `couleurs.py` ne lit
+    # aucune planche : il RÉÉCRIT SUR PLACE les sprites que les onze producteurs
+    # viennent d'écrire, pour ramener chaque groupe (famille, camp, grille) à une
+    # palette adaptative d'au plus 48 teintes. Le passer plus tôt le ferait
+    # travailler sur une famille incomplète, donc sur une autre coupe médiane.
+    ('couleurs',        []),
 ]
 
 # ---------------------------------------------------------------------------

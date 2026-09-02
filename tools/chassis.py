@@ -147,10 +147,10 @@ def main():
                 raise AssertionError(f'{nom} : aucune ancre, et aucune valeur forcée')
             ancres[nom] = trouve
             for N in GRILLES:
-                g = conditionner(recadrer(cell, EMPRISE * (N // 32), N), pal(False), N)
+                g, matiere = conditionner(recadrer(cell, EMPRISE * (N // 32), N), pal(False), N)
                 d = os.path.join(DST, str(N))
                 os.makedirs(d, exist_ok=True)
-                ecrire(g, pal(False), os.path.join(d, f'{nom}.png'))
+                ecrire(g, pal(False), os.path.join(d, f'{nom}.png'), matiere)
                 n += 1
     with open(ANCRES, 'w', encoding='utf-8') as f:
         json.dump(ancres, f, ensure_ascii=False, indent=2, sort_keys=True)

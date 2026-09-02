@@ -129,6 +129,54 @@ def sprites_de(dossier, effectif, exclus):
     return noms, chemin
 
 
+# ⚠⚠ AU-DELÀ DE 255 TEINTES OPAQUES, UN ATLAS RESTE EN RVBA. L'index 0 du mode
+# `P` est réservé au transparent — c'est lui que `tRNS` désigne —, il reste donc
+# 255 places. La bascule est CONDITIONNELLE : un atlas qui déborde doit sortir
+# juste plutôt que sortir petit, et le jour où une famille passe la borne, elle
+# repart en RVBA sans que personne n'ait à s'en apercevoir.
+TEINTES_INDEXABLES = 255
+
+
+def encoder(atlas):
+    """Les octets PNG d'un atlas — palettisé quand le compte de teintes le permet.
+
+    ⚠⚠ POURQUOI. Un atlas à moins de 255 teintes n'a aucune raison de voyager en
+    RVBA : quatre octets par pixel là où un index en suffit d'un. Mesuré sur les
+    huit atlas du dépôt, sans toucher un seul pixel : **478 793 → 202 507 octets**.
+    Et ce n'est pas une compression avec perte — les pixels ressortent identiques,
+    ce que `test/sprite.test.js` mesure ligne par ligne contre les sprites sources.
+
+    ⚠ L'ALPHA EST BINAIRE DANS TOUT LE DÉPÔT, et c'est ce qui rend la bascule
+    possible : `tRNS` ne porte qu'une seule entrée, l'index 0. Un atlas à
+    transparence PARTIELLE sortirait faux ; l'outil vérifie donc l'alpha avant de
+    basculer, il ne le suppose pas.
+
+    ⚠ `carte/atlas-terrain-64.png` EST DÉJÀ INDEXÉ depuis le lot ÉCRAN-CARTE — il
+    est livré fini, hors chaîne, et `test/terrain.test.js` le décode comme tel.
+    Ce mode n'est donc pas une nouveauté pour le jeu : un `<img>` décode un PNG
+    palettisé sans rien savoir de son format.
+    """
+    tampon = io.BytesIO()
+    pixels = list(atlas.getdata())
+    alphas = {p[3] for p in pixels}
+    teintes = sorted({p[:3] for p in pixels if p[3] == 255})
+    if not alphas <= {0, 255} or len(teintes) > TEINTES_INDEXABLES:
+        atlas.save(tampon, 'PNG', optimize=True)
+        return tampon.getvalue(), None
+    # Index 0 = transparent, les teintes ensuite, dans l'ordre des points de code
+    # de leur triplet : l'atlas doit se recoudre à l'octet d'une machine à
+    # l'autre, donc rien ici ne peut dépendre d'un ordre de parcours.
+    rang = {c: i + 1 for i, c in enumerate(teintes)}
+    indexe = Image.new('P', atlas.size)
+    indexe.putdata([0 if p[3] != 255 else rang[p[:3]] for p in pixels])
+    table = [0, 0, 0]
+    for c in teintes:
+        table.extend(c)
+    indexe.putpalette(table + [0] * (768 - len(table)))
+    indexe.save(tampon, 'PNG', optimize=True, transparency=0, bits=8)
+    return tampon.getvalue(), len(teintes)
+
+
 def coudre(noms, chemin):
     """L'atlas d'une famille, et sa géométrie.
 
@@ -145,9 +193,8 @@ def coudre(noms, chemin):
         if sprite.size != (COTE, COTE):
             echec(f'{nom}.png mesure {sprite.size}, {COTE}×{COTE} attendu')
         atlas.paste(sprite.convert('RGBA'), ((i % colonnes) * COTE, (i // colonnes) * COTE))
-    tampon = io.BytesIO()
-    atlas.save(tampon, 'PNG', optimize=True)
-    return tampon.getvalue(), colonnes, rangees
+    octets, teintes = encoder(atlas)
+    return octets, colonnes, rangees, teintes
 
 
 def index_js(familles):
@@ -199,7 +246,7 @@ def main():
     identiques = differents = nouveaux = 0
     for dossier, (slug, effectif, exclus) in FAMILLES.items():
         noms, chemin = sprites_de(dossier, effectif, exclus)
-        octets, colonnes, rangees = coudre(noms, chemin)
+        octets, colonnes, rangees, teintes = coudre(noms, chemin)
         familles[slug] = (colonnes, rangees, noms)
         sortie = os.path.join(SPRITES, f'atlas-{slug}-{COTE}.png')
         etat = comparer(sortie, octets)
@@ -214,9 +261,11 @@ def main():
         if args.ecrire:
             with open(sortie, 'wb') as f:
                 f.write(octets)
+        mode = f'indexé, {teintes:3d} teintes' if teintes is not None else 'RVBA'
         print(
             f'{dossier:16} {len(noms):4d} sprites  '
             f'{colonnes}×{rangees}  {len(octets):7d} o  ({len(octets) * 4 // 3} o en base64)'
+            f'  {mode}'
         )
 
     js = index_js(familles)

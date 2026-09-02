@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.65.0 · build 66.
+Dernière révision : **02/09/2026**, version 0.66.0 · build 67.
 
 ---
 
@@ -41,7 +41,114 @@ Dernière révision : **02/09/2026**, version 0.65.0 · build 66.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot DÉPLACEMENT), à confronter :**
+**Référence au 02/09/2026 (après le lot COULEUR), à confronter :**
+`npm test` → **874 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 166 523 octets**, 0 référence externe.
+⚠⚠ **CE LOT REND 217 200 OCTETS — LE PLUS GROS ALLÈGEMENT DU DÉPÔT, DE TRÈS
+LOIN.** Le précédent record était RÉSERVE, qui rendait DIX octets. Aucune image
+n'entre — **16 `data:` avant, 16 après** —, aucun sprite ne change de silhouette
+hors ceux que la réparation du détourage répare, et le HTML passe de 1 383 723 à
+**1 166 523**. Marge T10 **233 477 octets, 16,68 %** : la borne de 1 400 000 NE
+BOUGE PAS, et il n'y a aucune raison de la baisser — elle attrape une explosion,
+elle ne récompense pas une économie.
+⚠⚠ **TROIS LOTS EN UN, ET LES TROIS SONT SÉPARABLES.** (1) SILHOUETTE répare deux
+défauts de détourage ; (2) COULEUR fait sortir les sprites de la palette fermée ;
+(3) ATLAS les écrit en PNG palettisé. Le troisième est INDÉPENDANT des deux
+autres — mesuré seul, sur les sprites d'avant : **478 793 → 202 507 octets**
+d'atlas, sans toucher un pixel.
+⚠⚠ **LA PALETTE FERMÉE EST MORTE POUR SEPT FAMILLES SUR DIX, ET IL NE RESTE QUE
+L'ACCENT.** `final128.ecrire` pose désormais la couleur RÉELLE du dessin — le
+MÉDOÏDE du bloc, jamais sa moyenne : le médoïde ne fabrique aucune teinte qui ne
+soit pas dans la planche, et il garde les bords francs. `tools/couleurs.py`,
+douzième outil et dernier de la chaîne, réduit ensuite chaque groupe (famille,
+camp, grille) par coupe médiane. **Mesuré : l'écart à la matière passe de 19,9 –
+67,6 à 9,0 – 14,9 selon le groupe.**
+⚠⚠ **ET DES DIX-NEUF TEINTES DE LA FICHE, SEULES LES SIX D'ACCENT SUBSISTENT.**
+C'est le verrou du §2.3 du brief : un gros pixel dont le VOTE désigne une des six
+teintes d'accent reçoit la teinte EXACTE, pas la matière. Mesuré sur les 1 335
+sprites des trois grilles : **zéro sprite ne tient entièrement dans la palette
+fermée, et aucune des treize teintes NON accent n'y survit nulle part.** C'est ce
+qui fait ressortir le liseré blanc, rouge et jaune, et ce qui récupère le liseré
+orange du Dépôt de véhicules que la quantification libre perdait.
+⚠⚠ **LE LOT COULEUR SEUL NE DÉPLACE NI UNE SILHOUETTE NI UN PIXEL D'ACCENT —
+MESURÉ SUR 1 387 FICHIERS, AVANT ET APRÈS `couleurs.py` : ZÉRO.**
+`test/accent.test.js` passe **sans qu'une ligne bouge**, `off_j_pilon_s` compris,
+qui doit porter 161 pixels de véhicule.
+⚠⚠ **`cond.reduire` PRENAIT SA SENTINELLE DE TRANSPARENT À `len(PAL)`, ET
+C'ÉTAIT FAUX POUR TOUT L'OUVRAGE.** `PAL` compte quatorze entrées ; un sprite de
+l'Ouvrage est quantifié sur dix-neuf, dont la quatorzième est « A contour »
+`#0D0B12`. Contour et transparent tombaient dans la MÊME case de `bincount` et le
+bloc sortait TRANSPARENT quand elle gagnait le vote — **9 336 blocs de
+`base_o_3x3` écrits transparents sans contenir un seul pixel transparent**. La
+sentinelle se PASSE désormais, et elle vaut la longueur de la palette EMPLOYÉE.
+⚠ **NE PAS LA DÉDUIRE DE `idx.max()`** : ça marche par accident tant que l'index
+le plus haut est présent dans l'image.
+⚠⚠ **ET `est_fond` PRENAIT LE VIOLET DE L'OUVRAGE POUR DU FOND, À L'INTÉRIEUR DU
+SUJET.** Sa seconde porte `c2` vise la frange magenta ; `#9161A7`, `#9667A4` et
+`#C490B1` y tombent, et l'érosion 3 transformait ensuite chaque pixel pris en
+losange de vingt-cinq. `cond.est_fond_sujet` est une fonction NEUVE qui restreint
+`c2` à la composante de fond TOUCHANT LE BORD. **`est_fond` NE CHANGE PAS** — elle
+DÉCOUPE aussi les planches, et déplacer cette porte-là déplacerait les gouttières
+et donc les cellules assertées 3 × 3, 3 × 1 et 2 × 2.
+⚠⚠ **RÉSULTAT, MESURÉ À LA GRILLE 128 : 55 940 px de transparent enfermé sur 163
+sprites de l'Ouvrage AVANT, 1 192 px sur 74 APRÈS.** Un test le tient, et il
+n'asserte SURTOUT PAS zéro : les 1 192 qui restent sont de vraies ouvertures du
+dessin, et le `chassis` du JOUEUR en porte 2 722 déjà au dépôt, dont 1 165 pour le
+seul `off_j_broyeur_chassis`.
+⚠ **LA RÉPARATION DÉPLACE DES SILHOUETTES, ET C'EST TOUT CE QU'ELLE DÉPLACE** :
+489 sprites de l'Ouvrage et 69 du joueur, ces derniers presque tous des
+`site_scorie_*` — le violet de la scorie tombait dans `c2` comme celui de
+l'Ouvrage. Conséquence : **146 sprites de la grille 64 changent de compte de
+pixels d'accent — 142 de l'Ouvrage, 4 du joueur** —, parce qu'un trou rebouché
+apporte des pixels. C'est le lot
+SILHOUETTE qui les change, jamais le lot COULEUR.
+⚠⚠ **`tools/couleurs.py` EST IDEMPOTENT PAR CONSTRUCTION, ET ÇA SE MESURE SUR LA
+DONNÉE.** Un groupe libre porte des milliers de teintes, un groupe déjà réduit en
+porte au plus 48 : le second est SAUTÉ. Sans cette garde, une seconde exécution
+réduirait 32 teintes à 16, puis encore, et l'art se dégraderait à chaque passage.
+**Vérifié : la seconde exécution ne déplace pas un octet.**
+⚠ **`K` NE SE CHOISIT PAS, IL SE MESURE** — le plus petit de 16, 24, 32, 48 qui
+ramène l'écart sous 15. Sur les 36 groupes : dix-neuf à 16, dix à 24, six à 32,
+**aucun à 48**.
+⚠⚠ **`_o` FINAL EST UNE ORIENTATION, PAS UN CAMP.** `off_j_belier_o` est le
+blindé du JOUEUR tourné vers l'ouest. Sans la garde, cinq tourelles et six
+défenses du joueur partent dans le groupe Ouvrage et y prennent sa palette
+violette : mesuré, `defense` sortait **96 / 108 au lieu de 102 / 102** et
+`tourelle-unite` **75 / 5 au lieu de 80 / 0**.
+⚠⚠ **UN ATLAS À MOINS DE 255 TEINTES N'A AUCUNE RAISON DE VOYAGER EN RVBA, ET LA
+BASCULE EST CONDITIONNELLE.** `atlas.py` écrit en mode `P` avec `tRNS` — index 0
+réservé au transparent — quand le compte le permet, et reste en RVBA sinon.
+Mesuré, le plus riche des huit est `carte` à **54 teintes** : la marge est de
+quatre fois et demie. Total **478 793 → 297 799 octets**, base64 **638 390 →
+397 065**.
+⚠ **`test/png-rgba.js` LIT DÉSORMAIS LES DEUX TYPES DE COULEUR, ET C'ÉTAIT
+OBLIGATOIRE** : il assertait `corps[9] === 6` et aurait LEVÉ sur chaque atlas
+palettisé, faisant tomber la garde qui compare l'atlas cousu à ses sprites — pour
+un défaut qui n'existe pas. Le brief du lot ne l'avait pas vu ; c'est la suite qui
+l'a dit. Il rend du RVBA des deux côtés : l'appelant compare des PIXELS, et les
+indices de deux fichiers différents ne sont pas comparables entre eux.
+⚠ **`terrain.test.js` GARDE SON LECTEUR D'INDEXÉ**, et ce n'est pas une
+duplication : il rend des INDICES et la PALETTE, parce que ce qu'il mesure est
+que les cinq teintes de l'atlas du monde sont exactement la rampe du joueur, dans
+l'ordre.
+⚠⚠ **LES DEUX ÉCARTS PERMANENTS SONT PRÉSERVÉS, ET ILS COÛTENT UNE MESURE.**
+`unite/32/off_j_ratisseur.png` et `off_j_belier.png` ont été retouchés à la main
+et Ethan a tranché le 30/08 : « on garde les commités ». Ils restent donc dans la
+palette FERMÉE quand leurs frères de 128 et de 64 passent au libre. Conséquence
+chiffrée : l'écart du groupe `unite/32 joueur` vaut **14,48 sur ce que la chaîne
+produit et 22,30 sur ce que le dépôt porte**. La grille 32 n'est cousue dans aucun
+atlas : rien de cela n'atteint l'écran.
+⚠ **TROIS FAMILLES NE SONT PAS RETRAVAILLÉES, ET ELLES RESSORTENT IDENTIQUES À
+L'OCTET** — `effet` (dessinée directement dans sa palette, jamais conditionnée),
+`terrain` (déjà libre, source déclarée) et `bord` (déjà libre depuis le 31/08,
+seize teintes par camp). Mesuré : 36 + 16 fichiers inchangés.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 22.** Aucun sprite n'entre dans une
+sauvegarde.
+⚠ **`python3 tools/verifier.py` → 1 386 identiques · 2 différents (les deux
+déclarés) · 0 nouveau · 0 MANQUANT**, verdict VERT, en 288 s. Il était dû : le lot
+touche `art/sprites/` et `tools/`.
+
+**Auparavant, après le lot DÉPLACEMENT :**
 `npm test` → **872 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 383 723 octets**, 0 référence externe.
 ⚠⚠ **CE LOT COÛTE +6 814 OCTETS ET IL DÉBLOQUE LE RESTE DU JEU.** Ethan, 02/09 :
@@ -930,9 +1037,12 @@ test/                   46 fichiers *.test.js (node:test) ; deux fichiers n'en s
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
     `prereglages-lot3a.js` porte les montages du banc ; `png-rgba.js` porte le
-    décodeur PNG RVBA, extrait de `sprite.test.js` au lot ACCENT-CONFRONTÉ quand
+    décodeur PNG, extrait de `sprite.test.js` au lot ACCENT-CONFRONTÉ quand
     un SECOND test en a eu besoin — le dupliquer aurait donné deux décodeurs
-    voisins dont un seul serait éprouvé.
+    voisins dont un seul serait éprouvé. ⚠ Il lit DEUX types de couleur depuis le
+    lot COULEUR — le RVBA et l'INDEXÉ — et rend du RVBA des deux côtés : les
+    atlas sont palettisés, et un lecteur qui LÈVERAIT dessus ferait tomber la
+    garde qui les compare à leurs sprites.
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -946,10 +1056,11 @@ test/                   46 fichiers *.test.js (node:test) ; deux fichiers n'en s
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  23 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 31/08
-                        au lot MUR-DE-CONTOUR, fichier par fichier (hors
-                        `__pycache__`, qui est ignoré par git). Le vingt-troisième
-                        est `bords.py`, qui conditionne les murs de contour.
+tools/                  24 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 02/09
+                        au lot COULEUR, fichier par fichier (hors `__pycache__`,
+                        qui est ignoré par git). Le vingt-quatrième est
+                        `couleurs.py`, qui ramène chaque groupe de sprites à une
+                        palette adaptative ; le vingt-troisième était `bords.py`.
                         ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
                         DIX-SEPT, et le dix-sept était déjà faux de deux quand il a
                         été écrit : le disque en portait dix-neuf. La chaîne de
@@ -962,10 +1073,14 @@ tools/                  23 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les VINGT autres sont du Python, hors chaîne de build et hors
-    `npm run check`. Ils se répartissent en quatre rôles :
+  ⤷ les VINGT ET UN autres sont du Python, hors chaîne de build et hors
+    `npm run check`. Ils se répartissent en cinq rôles :
       • DOUZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
         `art/sprites/` — le douzième est `bords.py`, entré le 31/08 ;
+      • UN RÉDUCTEUR de palette, `couleurs.py`, entré le 02/09 — il ne lit AUCUNE
+        planche et réécrit sur place ce que les douze viennent d'écrire, ce qui
+        en fait le seul outil de la chaîne dont l'ordre de passage soit une
+        définition : il passe DERNIER, sur des familles complètes ;
       • DEUX BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
         plus le portage de la coupe 1024 ;
       • DEUX SCRIPTS HISTORIQUES à usage unique, dont les chemins pointent vers
@@ -1145,7 +1260,7 @@ exécuté se déclare **non exécuté**, jamais passé.
 
 ```
 python3 -m pip install Pillow numpy scipy    # ⚠ SANS EUX IL NE DÉMARRE PAS
-python3 tools/verifier.py                    # toute la chaîne, ~2 min
+python3 tools/verifier.py                    # toute la chaîne, ~5 min
 python3 tools/verifier.py --outil emblemes   # un seul outil, pour itérer
 ```
 
@@ -1155,8 +1270,10 @@ LE SAVOIR AVANT DE CONCLURE.** `tools/planches.py` importe `PIL`, `numpy` et
 **1** dès le premier outil, avec une trace Python — il ne ment pas, mais on peut
 lire « chaîne cassée » là où il manque une dépendance. Mesuré le 30/08 au lot
 SPRITES-S11, où il a fallu trois installations pour l'amener au bout.
-⚠ Le « ~2 min » ci-dessus suppose donc qu'il DÉMARRE. Les onze outils rejoués
-prennent 110 s, la comparaison le reste.
+⚠ Le « ~5 min » ci-dessus suppose donc qu'il DÉMARRE. Les TREIZE outils rejoués
+prennent 260 s, la comparaison le reste. Il en prenait deux avant le lot COULEUR,
+et c'est `couleurs.py` qui a fait le reste : il relit et réécrit 1 335 fichiers.
+Mesuré le 02/09 : **288 s**.
 
 ⚠ **ELLE N'ENTRE PAS DANS `npm run check`, ET C'EST DÉLIBÉRÉ.** Les outils sont
 en Python, hors de la chaîne de build ; y ajouter une dépendance Python serait un
@@ -1165,12 +1282,12 @@ changement d'architecture, et la CI n'en a pas. C'est **la seconde exception** �
 elle tient pour la même raison : ce qu'elle garde n'est pas du code livré, c'est
 la correspondance entre un outil et ce qu'il a produit.
 
-⚠ **CE QU'ELLE RÉPOND :** la chaîne produit-elle encore, à l'octet, les 1 429
-sprites du dépôt ? Le 30/08, la réponse était **non** — `tools/emblemes.py` avait
+⚠ **CE QU'ELLE RÉPOND :** la chaîne produit-elle encore, à l'octet, les 1 388
+sprites du dépôt qu'elle prétend produire ? Le 30/08, la réponse était **non** — `tools/emblemes.py` avait
 été corrigé et ses six PNG n'avaient pas été régénérés, `npm run check` était
 vert, et rien ne pouvait le voir. Le vérificateur déroute `FZ_SPRITES` sur un
-dossier temporaire, rejoue les onze producteurs dedans, et compare. **Il n'écrit
-jamais dans `art/sprites/`.**
+dossier temporaire, rejoue les DOUZE producteurs et le réducteur de palette
+dedans, et compare. **Il n'écrit jamais dans `art/sprites/`.**
 
 ⚠ **QUATRE CATÉGORIES, ET « MANQUANT » SE LIT DANS LE SENS DE LA CHAÎNE** : c'est
 le dépôt qui porte le fichier et aucun outil qui le produit — un orphelin, pas un
@@ -1179,7 +1296,7 @@ n'a pas. `planches.py` n'en connaît que trois ; celle qui manquait est la plus
 utile, et c'est elle qui aurait vu les 240 tourelles de blindé de l'Ouvrage si
 elles étaient restées au dépôt après le lot PRODUCTION.
 
-⚠ **DEUX MINUTES, MESURÉES.** C'est le prix de onze outils rejoués en entier.
+⚠ **CINQ MINUTES, MESURÉES.** C'est le prix de treize outils rejoués en entier.
 Un contrôle qu'on n'a pas la patience de lancer ne protège de rien : il se lance
 aux lots qui touchent à l'art, pas à chaque lot.
 
@@ -3092,6 +3209,35 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   relance `python3 tools/atlas.py --ecrire`**, et le HTML change, donc la version
   se bumpe. Les autres grilles — 32 et 128 — ne sont cousues dans aucun atlas
   aujourd'hui et ne déclenchent rien.
+- ⚠⚠ **LA PALETTE FERMÉE NE VAUT PLUS QUE POUR L'ACCENT** — 02/09, lot COULEUR.
+  `final128.conditionner` rend `(g, matiere)` et `final128.ecrire` prend la
+  matière en QUATRIÈME ARGUMENT : chaque gros pixel reçoit la couleur RÉELLE du
+  dessin, prise au MÉDOÏDE du bloc. Douze sites d'appel dans onze outils ont
+  suivi.
+  ⚠ **LE MÉDOÏDE, JAMAIS LA MOYENNE.** Le médoïde est un pixel qui EXISTE dans la
+  planche : il ne fabrique aucune teinte, et il garde les bords francs là où la
+  moyenne les baverait.
+  ⚠⚠ **LES BORNES DE BLOC SONT CELLES DE `reduire`, RECOPIÉES À LA LIGNE PRÈS.**
+  `y0 = by*H//N`, `y1 = max(y0+1, (by+1)*H//N)`. Un bloc décalé d'un pixel ne se
+  verrait pas à l'œil et fausserait toute la colorisation. Elles sont écrites deux
+  fois parce que `reduire` travaille sur des INDICES et `ecrire` sur des PIXELS.
+  ⚠⚠ **UN BLOC OPAQUE SANS UN SEUL PIXEL DE MATIÈRE PREND LA TEINTE DE LA FICHE,
+  ET C'EST UN ÉCART AU BRIEF, DÉCLARÉ.** Le brief disait « prendre la moyenne du
+  bloc entier » ; mesuré, ce cas n'est produit que par `planches.aligner`, qui
+  PEINT les deux bandes de chenille des trois blindés à la grille 32 là où le
+  sujet ne s'étend pas — la moyenne du bloc entier y rendrait le MAGENTA du fond
+  de recadrage. Ces gros pixels ont été inventés par une retouche ; la fiche est
+  leur seule source. Le vote, lui, ne peut pas produire le cas : un bloc sans
+  pixel opaque sort transparent.
+  ⚠⚠ **LE VERROU D'ACCENT SE LIT SUR LES NOMS, PAS SUR SIX HEX.** Les trois
+  familles verrouillées — jaune, rouge, blanc — sont exactement les trois que
+  `final128.quant` RÉSERVE déjà par `pj`, `pr` et `pb`. Une liste de six
+  `#RRGGBB` dans `ecrire` serait une seconde vérité, qui vieillirait au premier
+  changement de fiche pendant que le gardien de `quant` dirait autre chose.
+  ⚠ **ET LA SIXIÈME PLACE DE `couleurs.py`, ELLE, PORTE LES SIX HEX** — parce
+  qu'il lit des PNG et n'a plus accès aux noms. `test/accent.test.js` les
+  confronte à `PALETTE.accents` de `src/render/scene.js`, dans les deux sens.
+
 - **`art/sources/` N'EST JAMAIS AMPUTÉ.** Aucun fichier, aucune série. Les sept
   planches de la V1 des bâtiments restent au dépôt alors que plus une ligne ne
   les cite : elles sont la seule trace de ce qui a produit les fichiers qu'on a

@@ -24,7 +24,7 @@ import {
   celluleDuSprite, existeDansAtlas, fondDuSprite, fondDeCellule,
 } from '../src/render/sprite.js';
 import { variante, suffixeDeVariante, SEL_VARIANTE } from '../src/render/variante.js';
-import { couchesDeLEntite, listeAffichage, genreDeLaGarnison } from '../src/render/scene.js';
+import { couchesDeLEntite, listeAffichage, genreDeLaGarnison, PALETTE } from '../src/render/scene.js';
 import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
@@ -1311,4 +1311,241 @@ test('garnison — les DIX-SEPT pièces posables se dessinent, pas seulement les
   // Falsifiable de face : un identifiant qui n'est dans aucune des deux tables
   // lève, plutôt que de rendre un genre par défaut qui dessinerait n'importe quoi.
   assert.throws(() => genreDeLaGarnison('nexistepas'), /ni en défense ni dans le roster/);
+});
+
+// ---------------------------------------------------------------------------
+// La couleur des sprites conditionnés — lot COULEUR
+// ---------------------------------------------------------------------------
+
+/**
+ * Les tables de `tools/couleurs.py`, LUES DANS L'OUTIL.
+ *
+ * ⚠⚠ RECOPIER LES SEPT FAMILLES ET LES SEIZE ORIENTATIONS ICI SERAIT UNE
+ * SECONDE VÉRITÉ, et la première à diverger. C'est la même discipline que
+ * `exclusionsDeLOutil` plus haut, qui lit `FAMILLES` dans `tools/atlas.py`.
+ *
+ * ⚠ ET LE PARSE S'ASSERTE. Un reformatage de l'outil qui rendrait des tables
+ * vides rendrait les deux gardes ci-dessous muettes : elles balaieraient zéro
+ * fichier et passeraient sur n'importe quel art.
+ */
+function tablesDeLOutilCouleur() {
+  const source = readFileSync(join(RACINE, 'tools', 'couleurs.py'), 'utf8');
+  const liste = (nom) => {
+    const bloc = source.match(new RegExp(`^${nom} = [({]([\\s\\S]*?)[)}]$`, 'm'));
+    assert.ok(bloc !== null, `\`${nom}\` est introuvable dans tools/couleurs.py`);
+    return [...bloc[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  };
+  const familles = liste('FAMILLES');
+  const orient = new Set(liste('ORIENT'));
+  const orientees = new Set(liste('FAMILLES_ORIENTEES'));
+  assert.equal(familles.length, 7, `${familles.length} familles lues au lieu de sept`);
+  assert.equal(orient.size, 16, `${orient.size} orientations lues au lieu de seize`);
+  assert.ok(orientees.size > 0, 'aucune famille orientée lue');
+  return { familles, orient, orientees };
+}
+
+/**
+ * Le camp d'un sprite, d'après son nom — la règle de `tools/couleurs.py`.
+ *
+ * ⚠⚠ `_o` FINAL EST UNE ORIENTATION, PAS UN CAMP. `off_j_belier_o` est le blindé
+ * du JOUEUR tourné vers l'ouest ; sans cette garde, cinq tourelles et six
+ * défenses du joueur basculeraient du côté de l'Ouvrage et la borne des trous
+ * mesurerait autre chose que ce qu'elle annonce. `ruine_o` est bien de
+ * l'Ouvrage : `bâtiment` n'est pas une famille orientée.
+ */
+function campDuSprite(nom, famille, tables) {
+  let jetons = nom.split('_');
+  if (tables.orientees.has(famille) && tables.orient.has(jetons[jetons.length - 1])) {
+    jetons = jetons.slice(0, -1);
+  }
+  return jetons.includes('o') ? 'ouvrage' : 'joueur';
+}
+
+/** Les teintes opaques distinctes d'un PNG, en entiers `0xRRGGBB`. */
+function teintesOpaques(chemin) {
+  const { pixels } = decoderRgba(chemin);
+  const teintes = new Set();
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i + 3] < 128) continue;
+    teintes.add((pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
+  }
+  return teintes;
+}
+
+/**
+ * La palette FERMÉE d'avant le lot COULEUR — les quatorze de base et les cinq de
+ * la rampe A —, transcrite de `tools/cond.py` et `tools/final128.py`.
+ *
+ * ⚠ SES SIX TEINTES D'ACCENT VIENNENT DE `PALETTE`, PAS D'UNE COPIE. C'est ce
+ * qui fait que la garde ci-dessous distingue « l'accent, qu'on VERROUILLE » de
+ * « le reste de la palette fermée, qu'on a quitté » : les deux moitiés ne
+ * peuvent pas se confondre si l'une est lue dans le module de rendu.
+ */
+const PALETTE_FERMEE = [
+  '#161914', '#343A2C', '#4E5742', '#6A7658', '#8C9A72',
+  '#1E2124', '#3E454C', '#68727E',
+  '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636',
+  '#0D0B12', '#231D2E', '#382E47', '#4E4160', '#6B5B80',
+].map((h) => parseInt(h.slice(1), 16));
+
+const TEINTES_ACCENT = Object.values(PALETTE.accents)
+  .flatMap((t) => [t.sombre, t.clair])
+  .map((h) => parseInt(h.slice(1), 16));
+
+test('couleur — les sept familles ont quitté la palette fermée, l\'accent excepté', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE. Avant le lot COULEUR, tout sprite conditionné était
+  // quantifié sur les quatorze teintes de `FICHE-STYLE.md` — dix-neuf côté
+  // Ouvrage — et la matière du dessin y perdait de 21,9 à 63,9 de distance RVB
+  // selon la famille. `final128.ecrire` rend maintenant la couleur RÉELLE du
+  // dessin par médoïde, et `tools/couleurs.py` la réduit groupe par groupe.
+  //
+  // La borne HAUTE dit que la réduction a bien eu lieu ; la borne BASSE dit que
+  // la palette fermée est bien partie. Les deux mordent, et de deux côtés
+  // opposés — sans quoi le test ne mesurerait rien.
+  const tables = tablesDeLOutilCouleur();
+  const accent = new Set(TEINTES_ACCENT);
+  assert.equal(accent.size, 6, 'les trois colonnes doivent donner six teintes d\'accent');
+  const horsAccent = PALETTE_FERMEE.filter((t) => !accent.has(t));
+  assert.equal(horsAccent.length, 13,
+    'la palette fermée ne porte plus treize teintes hors accent : la transcription a vieilli');
+
+  let mesures = 0;
+  let maximum = 0;
+  let minimum = Infinity;
+  let pire = '';
+  const survivantes = new Map();
+  for (const famille of tables.familles) {
+    const dossier = join(SPRITES, famille, String(COTE_SPRITE));
+    for (const fichier of readdirSync(dossier).filter((f) => f.endsWith('.png')).sort()) {
+      const teintes = teintesOpaques(join(dossier, fichier));
+      mesures += 1;
+
+      // BORNE HAUTE — un atlas doit tenir dans 255 teintes, et un sprite libre
+      // en porterait des milliers.
+      assert.ok(teintes.size <= 48,
+        `${famille}/${fichier} porte ${teintes.size} teintes : la réduction de `
+        + 'tools/couleurs.py ne mord plus');
+
+      // BORNE BASSE — aucun sprite ne tient ENTIÈREMENT dans la palette fermée.
+      assert.ok(![...teintes].every((t) => PALETTE_FERMEE.includes(t)),
+        `${famille}/${fichier} tient entièrement dans la palette fermée : `
+        + 'la quantification d\'avant le lot COULEUR est revenue');
+
+      for (const t of teintes) {
+        if (horsAccent.includes(t)) {
+          survivantes.set(`${famille}/${fichier}`,
+            (survivantes.get(`${famille}/${fichier}`) ?? 0) + 1);
+        }
+      }
+      if (teintes.size > maximum) { maximum = teintes.size; pire = `${famille}/${fichier}`; }
+      minimum = Math.min(minimum, teintes.size);
+    }
+  }
+
+  // ⚠⚠ ET LA MOITIÉ QUI DIT CE QUE LE LOT A VRAIMENT FAIT : des dix-neuf teintes
+  // de la palette fermée, SEULES LES SIX D'ACCENT subsistent, et elles y sont
+  // parce que `final128.ecrire` les VERROUILLE. Aucune des treize autres ne
+  // survit nulle part — c'est plus fort qu'un compte de teintes, et ça tombe
+  // sur-le-champ si quelqu'un remet la quantification fermée.
+  assert.deepEqual([...survivantes.keys()], [],
+    'des teintes NON accent de la palette fermée survivent : la matière n\'a pas été rendue');
+
+  // ⚠ FALSIFIABLE DES DEUX CÔTÉS. Le montage lit bien 445 sprites, et il en
+  // trouve au moins un qui porte plus de teintes que la rampe du joueur n'en
+  // comptait : sans cette ligne, un décodeur qui rendrait partout zéro teinte
+  // ferait passer les deux bornes.
+  assert.ok(mesures > 400, `${mesures} sprites balayés : le balayage n'a rien trouvé`);
+  assert.ok(maximum > 14,
+    `le sprite le plus riche porte ${maximum} teintes : la matière n'est pas rendue`);
+  assert.ok(minimum > 0, 'un sprite sans un seul pixel opaque a été compté');
+  assert.ok(pire.length > 0 && maximum <= 48, `${pire} : ${maximum} teintes`);
+});
+
+/**
+ * Les pixels transparents ENFERMÉS d'un sprite : les composantes 4-connexes de
+ * transparent qui ne touchent aucun bord.
+ *
+ * ⚠ QUATRE VOISINS, PAS HUIT. Une diagonale de transparent ne perce pas un
+ * sujet : la compter comme une fuite laisserait passer les losanges de 25 pixels
+ * que l'érosion 3 fabriquait autour de chaque pixel faussement détouré.
+ */
+function trousEnfermes(chemin) {
+  const { largeur, hauteur, pixels } = decoderRgba(chemin);
+  const vu = new Uint8Array(largeur * hauteur);
+  const transparent = (i) => pixels[i * 4 + 3] < 128;
+  const pile = [];
+  for (let x = 0; x < largeur; x += 1) {
+    pile.push(x, (hauteur - 1) * largeur + x);
+  }
+  for (let y = 0; y < hauteur; y += 1) {
+    pile.push(y * largeur, y * largeur + largeur - 1);
+  }
+  while (pile.length > 0) {
+    const i = pile.pop();
+    if (vu[i] || !transparent(i)) continue;
+    vu[i] = 1;
+    const x = i % largeur;
+    const y = (i - x) / largeur;
+    if (x > 0) pile.push(i - 1);
+    if (x < largeur - 1) pile.push(i + 1);
+    if (y > 0) pile.push(i - largeur);
+    if (y < hauteur - 1) pile.push(i + largeur);
+  }
+  let enfermes = 0;
+  for (let i = 0; i < largeur * hauteur; i += 1) if (transparent(i) && !vu[i]) enfermes += 1;
+  return enfermes;
+}
+
+test('couleur — la chaîne n\'enferme plus de trous dans les sprites de l\'Ouvrage', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE, ET IL VIENT D'UN DÉFAUT MESURÉ. `cond.reduire`
+  // prenait sa sentinelle de transparent à `len(PAL)` — QUATORZE — alors qu'un
+  // sprite de l'Ouvrage est quantifié sur dix-neuf teintes, dont la
+  // quatorzième est « A contour ». Contour et transparent tombaient dans la même
+  // case de `bincount`, et le bloc sortait TRANSPARENT quand elle gagnait le
+  // vote. Et `est_fond` prenait le violet clair de l'Ouvrage pour de la frange
+  // de fond, à l'intérieur du sujet, que l'érosion 3 transformait ensuite en
+  // losange de vingt-cinq pixels.
+  //
+  // Mesuré à la grille 128, sur les sprites de l'Ouvrage des sept familles :
+  // **55 940 px enfermés sur 163 sprites** avant le lot, **1 192 px sur 74**
+  // après.
+  //
+  // ⚠⚠ NE JAMAIS ASSERTER ZÉRO. Les 1 192 restants sont de vraies ouvertures du
+  // dessin — et le `chassis` du JOUEUR en porte 2 722 à lui seul, déjà au dépôt,
+  // dont 1 165 pour le seul `off_j_broyeur_chassis`. Un test à zéro serait faux,
+  // et il accuserait la chaîne d'un défaut qui est dans la planche.
+  const tables = tablesDeLOutilCouleur();
+  const GRILLE_FINE = 128;
+
+  let total = 0;
+  let sprites = 0;
+  let mesures = 0;
+  let joueur = 0;
+  for (const famille of tables.familles) {
+    const dossier = join(SPRITES, famille, String(GRILLE_FINE));
+    for (const fichier of readdirSync(dossier).filter((f) => f.endsWith('.png')).sort()) {
+      const enfermes = trousEnfermes(join(dossier, fichier));
+      mesures += 1;
+      if (campDuSprite(fichier.slice(0, -4), famille, tables) !== 'ouvrage') {
+        joueur += enfermes;
+        continue;
+      }
+      total += enfermes;
+      if (enfermes > 0) sprites += 1;
+    }
+  }
+
+  assert.ok(total <= 1500,
+    `${total} px de transparent enfermés sur ${sprites} sprites de l'Ouvrage — `
+    + 'la sentinelle de `cond.reduire` ou la porte de `cond.est_fond_sujet` a été défaite');
+
+  // ⚠ FALSIFIABLE. Le montage balaie bien tous les sprites, il sait DISTINGUER
+  // les deux camps, et il sait COMPTER un trou : le chassis du joueur en porte
+  // des milliers, et une mesure qui rendrait zéro partout ferait passer la borne
+  // ci-dessus sur n'importe quel art.
+  assert.ok(mesures > 400, `${mesures} sprites balayés : le balayage n'a rien trouvé`);
+  assert.ok(joueur > 1500,
+    `le camp du joueur ne porte que ${joueur} px enfermés : le montage ne sait pas les compter`);
+  assert.ok(trousEnfermes(join(SPRITES, 'chassis', String(GRILLE_FINE),
+    'off_j_broyeur_chassis.png')) > 500, 'le compteur de trous ne trouve rien là où il y en a');
 });

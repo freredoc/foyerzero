@@ -101,9 +101,9 @@ for fichier, chassis, unites, suffixe in PLANCHES:
         if suffixe and unite in SANS_DEFENSE:
             continue
         for N in GRILLES:
-            g = conditionner(recadrer(cell, emp * (N // 32), N), P, N)
+            g, matiere = conditionner(recadrer(cell, emp * (N // 32), N), P, N)
             d = os.path.join(DST, str(N))
             os.makedirs(d, exist_ok=True)
-            ecrire(g, P, os.path.join(d, f'off_o_{unite}{suffixe}.png'))
+            ecrire(g, P, os.path.join(d, f'off_o_{unite}{suffixe}.png'), matiere)
             n += 1
 print(f'{n} fichiers écrits')

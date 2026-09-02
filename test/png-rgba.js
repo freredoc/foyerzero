@@ -9,9 +9,20 @@
 // tous deux « PNG, à peu près », dont un seul serait éprouvé — c'est exactement
 // ce que `hachageBrut` de `sim/peuplement.js` existe pour éviter côté moteur.
 //
-// ⚠ IL NE LIT QUE LE RVBA. `terrain.test.js` porte un décodeur d'INDEXÉ pour
-// l'atlas de la carte du monde ; les deux formats ne se recouvrent pas, d'où
-// deux lecteurs et non un lecteur à tout faire qui devinerait.
+// ⚠⚠ IL LIT DEUX TYPES DE COULEUR DEPUIS LE LOT COULEUR — LE RVBA ET L'INDEXÉ —
+// ET IL REND DU RVBA DANS LES DEUX CAS. Ce n'est pas un lecteur à tout faire qui
+// devinerait : ce sont les DEUX SEULS formats que `tools/atlas.py` produise, et
+// il bascule de l'un à l'autre selon le compte de teintes. Le commentaire
+// précédent disait « il ne lit que le RVBA, les deux formats ne se recouvrent
+// pas » : depuis que les atlas sont palettisés, ils se recouvrent, et laisser ce
+// lecteur LEVER dessus aurait fait tomber la garde qui compare l'atlas cousu à
+// ses sprites — pour un défaut qui n'existe pas.
+//
+// ⚠ `terrain.test.js` GARDE SON LECTEUR, ET CE N'EST PAS UNE DUPLICATION. Il ne
+// rend pas des pixels mais des INDICES de palette, plus la palette elle-même :
+// c'est ce qu'il mesure — que les cinq teintes de l'atlas du monde sont
+// exactement la rampe du joueur, dans l'ordre. Un lecteur qui rendrait du RVBA
+// ne pourrait pas répondre à cette question-là.
 //
 // Aucune dépendance ajoutée : `node:zlib` est dans la bibliothèque standard, et
 // `esbuild` reste la seule dépendance de développement du dépôt.
@@ -21,14 +32,19 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 
 /**
- * Les pixels d'un PNG 8 bits RVBA non entrelacé — le seul format que
- * `tools/atlas.py` produise, et celui de tous les sprites conditionnés.
+ * Les pixels, en RVBA, d'un PNG 8 bits non entrelacé — RVBA (type 6) ou INDEXÉ
+ * (type 3). Ce sont les deux seuls formats que `tools/atlas.py` produise, et
+ * les sprites conditionnés sont tous du premier.
  *
  * Il LÈVE sur tout ce qu'il ne sait pas faire plutôt que de rendre une image
  * approchée : un atlas mal décodé ferait tomber la garde suivante sur un défaut
- * qui n'existe pas. Même discipline que le décodeur de `terrain.test.js`, qui
- * lit les PNG INDEXÉS de la carte du monde — les deux formats ne se recouvrent
- * pas, d'où deux lecteurs et non un lecteur à tout faire.
+ * qui n'existe pas.
+ *
+ * ⚠ UN INDEXÉ SE REND EN RVBA, PAS EN INDICES. L'appelant compare des PIXELS —
+ * une cellule d'atlas à son sprite source, un accent à sa teinte de fiche — et
+ * les indices de deux fichiers différents ne sont pas comparables entre eux.
+ * C'est aussi ce qui fait que la palettisation des atlas n'a demandé AUCUNE
+ * retouche aux gardes qui les lisent.
  */
 export function decoderRgba(chemin) {
   const octets = readFileSync(chemin);
@@ -36,6 +52,9 @@ export function decoderRgba(chemin) {
   let position = 8;
   let largeur = 0;
   let hauteur = 0;
+  let type = 6;
+  let palette = null;
+  let transparence = null;
   const morceaux = [];
   while (position < octets.length) {
     const taille = octets.readUInt32BE(position);
@@ -44,15 +63,18 @@ export function decoderRgba(chemin) {
     if (nom === 'IHDR') {
       largeur = corps.readUInt32BE(0);
       hauteur = corps.readUInt32BE(4);
+      type = corps[9];
       assert.equal(corps[8], 8, `${chemin} : profondeur de bits inattendue`);
-      assert.equal(corps[9], 6, `${chemin} : ce n'est plus du RVBA`);
+      assert.ok(type === 6 || type === 3, `${chemin} : type de couleur ${type} non géré`);
       assert.equal(corps[12], 0, `${chemin} : entrelacement non géré`);
-    } else if (nom === 'IDAT') morceaux.push(Buffer.from(corps));
+    } else if (nom === 'PLTE') palette = Buffer.from(corps);
+    else if (nom === 'tRNS') transparence = Buffer.from(corps);
+    else if (nom === 'IDAT') morceaux.push(Buffer.from(corps));
     else if (nom === 'IEND') break;
     position += 12 + taille;
   }
   const brut = inflateSync(Buffer.concat(morceaux));
-  const bpp = 4;
+  const bpp = type === 6 ? 4 : 1;
   const pas = largeur * bpp;
   const pixels = Buffer.alloc(hauteur * pas);
   for (let y = 0; y < hauteur; y++) {
@@ -76,5 +98,21 @@ export function decoderRgba(chemin) {
       pixels[y * pas + x] = v & 0xff;
     }
   }
-  return { largeur, hauteur, pixels };
+  if (type === 6) return { largeur, hauteur, pixels };
+
+  // ⚠ L'INDEXÉ SE DÉPLIE EN RVBA. `tRNS` donne l'alpha des PREMIÈRES entrées de
+  // la palette, dans l'ordre ; celles qu'il ne couvre pas sont opaques. C'est
+  // l'écriture de `tools/atlas.py`, qui réserve l'index 0 au transparent.
+  assert.ok(palette !== null, `${chemin} : indexé sans PLTE`);
+  const rvba = Buffer.alloc(hauteur * largeur * 4);
+  for (let i = 0; i < largeur * hauteur; i++) {
+    const indice = pixels[i];
+    assert.ok(indice * 3 + 2 < palette.length, `${chemin} : index ${indice} hors palette`);
+    rvba[i * 4] = palette[indice * 3];
+    rvba[i * 4 + 1] = palette[indice * 3 + 1];
+    rvba[i * 4 + 2] = palette[indice * 3 + 2];
+    rvba[i * 4 + 3] = transparence !== null && indice < transparence.length
+      ? transparence[indice] : 255;
+  }
+  return { largeur, hauteur, pixels: rvba };
 }

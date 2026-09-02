@@ -138,10 +138,10 @@ def main():
         for cle in BLINDES:
             for orient, im in serie(cle, camp).items():
                 for N in GRILLES:
-                    g = conditionner(im, P, N)
+                    g, matiere = conditionner(im, P, N)
                     d = os.path.join(DST, str(N))
                     os.makedirs(d, exist_ok=True)
-                    ecrire(g, P, os.path.join(d, f'off_{camp}_{cle}_{orient}.png'))
+                    ecrire(g, P, os.path.join(d, f'off_{camp}_{cle}_{orient}.png'), matiere)
                     n += 1
     print(f'{n} fichiers écrits')
     return 0

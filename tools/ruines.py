@@ -86,10 +86,10 @@ for fichier, nx, ny, grille in B:
             P = pal(ouv)
             emp = cible(PV[cle])
             for N in GRILLES:
-                g = conditionner(recadrer(cell, emp * (N // 32), N), P, N)
+                g, matiere = conditionner(recadrer(cell, emp * (N // 32), N), P, N)
                 d = os.path.join(DST, str(N))
                 os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}_detruit.png'))
+                ecrire(g, P, os.path.join(d, f'{nom}_detruit.png'), matiere)
                 n += 1
 
 # --- les deux ruines, camp mesuré au violet ---
@@ -110,10 +110,10 @@ for k, (nom, ouv_attendu) in enumerate(attendus):
     P = pal(ouv_attendu)
     cell = im.crop((k * W // 2, 0, (k + 1) * W // 2, im.size[1]))
     for N in GRILLES:
-        g = conditionner(recadrer(cell, 26 * (N // 32), N), P, N)
+        g, matiere = conditionner(recadrer(cell, 26 * (N // 32), N), P, N)
         d = os.path.join(DST, str(N))
         os.makedirs(d, exist_ok=True)
-        ecrire(g, P, os.path.join(d, f'{nom}.png'))
+        ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
         n += 1
 
 print(f'{n} fichiers écrits')

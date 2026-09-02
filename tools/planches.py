@@ -110,10 +110,10 @@ def produire(im, boite_cellule, emprise32, ouvrage, N, sortie, nom=''):
     """emprise32 est l'emprise visée en gros pixels sur une grille de 32."""
     P = pal(ouvrage)
     cellule = im.crop(boite_cellule)
-    g = conditionner(recadrer(cellule, emprise32 * (N // 32), N), P, N)
+    g, matiere = conditionner(recadrer(cellule, emprise32 * (N // 32), N), P, N)
     if nom in CHENILLES and N == 32:
         g = aligner(g)
-    ecrire(g, P, sortie)
+    ecrire(g, P, sortie, matiere)
     if nom in APPENDICE:
         retirer_appendice(sortie, sortie)
     return boite(g)
