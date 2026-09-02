@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { decoderRgba } from './png-rgba.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,6 +96,39 @@ function tailleDuPng(chemin) {
   assert.equal(octets.readUInt32BE(0), 0x89504e47, `${chemin} n'est pas un PNG`);
   assert.equal(octets.toString('ascii', 12, 16), 'IHDR', `${chemin} : IHDR attendu en tête`);
   return { largeur: octets.readUInt32BE(16), hauteur: octets.readUInt32BE(20) };
+}
+
+/**
+ * La taille d'un atlas WebP, LUE DANS SON EN-TÊTE.
+ *
+ * ⚠⚠ POURQUOI UN SECOND LECTEUR D'EN-TÊTE. Les atlas sont passés au WebP au lot
+ * PIXELS — les sprites ne sont plus quantifiés sur quatorze teintes, et en PNG
+ * les huit atlas pèseraient ×3,5. Les SPRITES, eux, restent des PNG : c'est ce
+ * qui laisse `decoderRgba` lire la matière partout ailleurs dans les tests.
+ *
+ * ⚠ ON NE LIT QUE L'EN-TÊTE, JAMAIS LES PIXELS. Décoder du WebP demanderait un
+ * décodeur VP8 écrit à la main, et le dépôt n'ajoute pas de dépendance de test
+ * (CLAUDE.md §3). Les trois formes de conteneur sont couvertes — `VP8X`,
+ * `VP8L`, `VP8 ` — et une quatrième fait LEVER plutôt que rendre du vide : une
+ * taille inventée ferait passer la garde ci-dessous sur n'importe quoi.
+ */
+function tailleDuWebp(chemin) {
+  const o = readFileSync(chemin);
+  assert.equal(o.toString('ascii', 0, 4), 'RIFF', `${chemin} n'est pas un RIFF`);
+  assert.equal(o.toString('ascii', 8, 12), 'WEBP', `${chemin} n'est pas un WebP`);
+  const forme = o.toString('ascii', 12, 16);
+  if (forme === 'VP8X') {
+    // 24 bits little-endian, moins un, chacun.
+    return { largeur: o.readUIntLE(24, 3) + 1, hauteur: o.readUIntLE(27, 3) + 1 };
+  }
+  if (forme === 'VP8L') {
+    const bits = o.readUInt32LE(21);
+    return { largeur: (bits & 0x3fff) + 1, hauteur: ((bits >>> 14) & 0x3fff) + 1 };
+  }
+  if (forme === 'VP8 ') {
+    return { largeur: o.readUInt16LE(26) & 0x3fff, hauteur: o.readUInt16LE(28) & 0x3fff };
+  }
+  throw new Error(`${chemin} : conteneur WebP « ${forme} » inconnu`);
 }
 
 /**
@@ -188,7 +222,7 @@ test('sprite — l\'index dit exactement ce que le disque porte', () => {
 
 test('sprite — la géométrie de l\'index correspond à l\'atlas réellement cousu', () => {
   for (const [slug, table] of Object.entries(ATLAS)) {
-    const { largeur, hauteur } = tailleDuPng(join(SPRITES, `atlas-${slug}-${COTE_SPRITE}.png`));
+    const { largeur, hauteur } = tailleDuWebp(join(SPRITES, `atlas-${slug}-${COTE_SPRITE}.webp`));
     assert.equal(largeur, table.colonnes * COTE_SPRITE,
       `atlas-${slug} : ${largeur} px de large pour ${table.colonnes} colonnes de ${COTE_SPRITE}`);
     assert.equal(hauteur, table.rangees * COTE_SPRITE,
@@ -199,6 +233,111 @@ test('sprite — la géométrie de l\'index correspond à l\'atlas réellement c
     assert.ok(cellules >= table.noms.length && cellules - table.noms.length < table.colonnes,
       `atlas-${slug} : ${cellules} cellules pour ${table.noms.length} sprites`);
   }
+});
+
+/**
+ * Les pixels transparents ENFERMÉS d'un sprite — ceux qu'aucun chemin ne relie
+ * au bord de l'image.
+ *
+ * Un remplissage depuis le bord, quatre voisins, puis la soustraction : c'est
+ * la définition même de « trou », et elle est linéaire — la suite ne peut pas
+ * se permettre un étiquetage complet sur trois cent quarante sprites.
+ */
+function trousEnfermes(chemin) {
+  const { largeur, hauteur, pixels } = decoderRgba(chemin);
+  const n = largeur * hauteur;
+  const vide = new Uint8Array(n);
+  let transparents = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (pixels[i * 4 + 3] < 128) { vide[i] = 1; transparents += 1; }
+  }
+  const vu = new Uint8Array(n);
+  const pile = [];
+  const pousser = (i) => { if (vide[i] === 1 && vu[i] === 0) { vu[i] = 1; pile.push(i); } };
+  for (let x = 0; x < largeur; x += 1) { pousser(x); pousser((hauteur - 1) * largeur + x); }
+  for (let y = 0; y < hauteur; y += 1) { pousser(y * largeur); pousser(y * largeur + largeur - 1); }
+  let atteints = 0;
+  while (pile.length > 0) {
+    const i = pile.pop();
+    atteints += 1;
+    const x = i % largeur;
+    const y = (i - x) / largeur;
+    if (x > 0) pousser(i - 1);
+    if (x < largeur - 1) pousser(i + 1);
+    if (y > 0) pousser(i - largeur);
+    if (y < hauteur - 1) pousser(i + largeur);
+  }
+  return transparents - atteints;
+}
+
+/**
+ * Les sprites de l'Ouvrage d'une grille — `_o_` est la marque du camp.
+ *
+ * ⚠ `terrain` EST ÉCARTÉE, ET PAS PAR COMMODITÉ. Ses tuiles sont une SOURCE
+ * DÉCLARÉE (`tools/verifier.py`, arbitrage du 30/08) : aucun outil ne les
+ * produit, la chaîne ne les a jamais touchées, et elles n'ont donc rien à dire
+ * sur un défaut de conditionnement. Elles portent `_o_` parce que c'est le sol
+ * de l'Ouvrage, et elles sont en RVB indexé, que `decoderRgba` refuse de face.
+ */
+const FAMILLE_HORS_CHAINE = new Set(['terrain']);
+
+function spritesDeLOuvrage(cote) {
+  const sortie = [];
+  for (const slug of Object.keys(ATLAS)) {
+    if (FAMILLE_HORS_CHAINE.has(slug)) continue;
+    const dossier = dossierDeLaFamille(slug);
+    const chemin = join(SPRITES, dossier, String(cote));
+    if (!existsSync(chemin)) continue;
+    for (const f of readdirSync(chemin)) {
+      if (f.endsWith('.png') && f.includes('_o_')) sortie.push(join(chemin, f));
+    }
+  }
+  return sortie;
+}
+
+test('sprite — les sprites de l\'Ouvrage ne sont plus percés de trous', () => {
+  // ⚠⚠ CE QUE CETTE GARDE EXISTE POUR EMPÊCHER. `cond.reduire` prenait sa
+  // sentinelle de transparence à `len(PAL)` en dur, soit 14 ; or la palette de
+  // l'Ouvrage compte DIX-NEUF teintes et son index 14 est « A contour »
+  // `#0D0B12`. Transparent et contour partageaient la même case du vote de
+  // bloc : tout bloc majoritairement contour sortait TRANSPARENT. Mesuré sur
+  // `base_o_3x3` en 128 avant le lot PIXELS, 9 336 blocs transparents sans un
+  // seul pixel transparent dedans.
+  //
+  // ⚠ ON N'ASSERTE PAS ZÉRO, ET C'EST DÉLIBÉRÉ. Le reste est de vraies
+  // ouvertures du dessin — une embrasure, un espace entre deux mâts. Asserter
+  // zéro inviterait à boucher un trou voulu pour faire passer la suite.
+  //
+  // ⚠⚠ CE QUE LA GARDE MESURE VRAIMENT, ET CE QU'ELLE NE MESURE PAS. Le brief
+  // du lot proposait de la falsifier en RENDANT la sentinelle fausse ; mesuré,
+  // ça ne marche pas, et pour une raison qui vaut d'être écrite : depuis que
+  // `ecrire` réduit la MATIÈRE par filtre, la grille d'indices `g` n'atteint
+  // plus aucun fichier — `boite(g)`, son seul consommateur, est un diagnostic
+  // dont l'appelant jette le retour. Rejoué pour de bon sur 51 sprites de
+  // l'Ouvrage : sentinelle remise à 14, **0 fichier sur 51 change d'un octet**,
+  // et le compte de trous ne bouge pas d'une unité.
+  //
+  // ⚠ LA FALSIFICATION QUI MORD EST L'AUTRE : rendre à `conditionner` la clé de
+  // fond NUE — `est_fond` au lieu d'`est_fond_sujet`, donc `c1|c2` sans la
+  // borne de la composante extérieure. Rejoué : les mêmes 51 sprites passent de
+  // **113 à 19 213 px enfermés**, et 45 fichiers sur 51 changent. C'est bien
+  // §2.2 du lot que cette garde tient, pas §2.1.
+  const trous = spritesDeLOuvrage(128).reduce((t, f) => t + trousEnfermes(f), 0);
+  assert.ok(trous <= 1500, `${trous} px transparents enfermés dans les sprites de l'Ouvrage`);
+
+  // ⚠ ET LE COMPTEUR MESURE BIEN QUELQUE CHOSE. Les châssis du JOUEUR portent
+  // leurs propres ouvertures — mesuré 2 694 px, déjà au dépôt avant ce lot —
+  // et c'est l'appât : un `trousEnfermes` qui rendrait toujours zéro ferait
+  // passer l'assertion du dessus sur n'importe quel art.
+  const chassis = readdirSync(join(SPRITES, 'chassis', '128'))
+    .filter((f) => f.endsWith('.png'))
+    .reduce((t, f) => t + trousEnfermes(join(SPRITES, 'chassis', '128', f)), 0);
+  assert.ok(chassis > 2000, `${chassis} px enfermés côté joueur : le compteur ne compte rien`);
+
+  // Et le balayage a bien trouvé les sprites : sans ça, zéro fichier donnerait
+  // zéro trou, et la garde serait verte sur un dossier vide.
+  assert.ok(spritesDeLOuvrage(128).length > 150,
+    `${spritesDeLOuvrage(128).length} sprites de l'Ouvrage : le balayage n'a rien trouvé`);
 });
 
 test('sprite — le pourcentage rendu décale bien de −colonne × côté', () => {
@@ -500,7 +639,7 @@ test('sprite — une peinture complète ne consomme pas `etat.rng`', () => {
     'le motif ne reconnaît pas la faute qu\'il cherche');
 });
 
-test('sprite — l\'atlas cousu porte les pixels des sprites d\'aujourd\'hui', () => {
+test('sprite — l\'atlas cousu répond des sprites d\'aujourd\'hui', () => {
   // ⚠⚠ CETTE GARDE EXISTE À CAUSE D'UN DÉFAUT QUI A FAILLI ÊTRE LIVRÉ, et elle
   // a été écrite le jour où il s'est produit. Le lot BÂTIMENTS-1024 régénère les
   // seize sprites de `art/sprites/bâtiment/64/` ; l'atlas, lui, est un FICHIER
@@ -511,40 +650,64 @@ test('sprite — l\'atlas cousu porte les pixels des sprites d\'aujourd\'hui', (
   // bougeait pas d'un octet — le jeu aurait affiché l'ANCIEN dessin pendant que
   // le dépôt portait le nouveau, sans qu'une seule assertion tombe.
   //
-  // ⚠ ET AUCUNE DES GARDES EXISTANTES NE POUVAIT LE VOIR. `src/data/atlas.js` ne
-  // porte que des NOMS, et ce lot n'en renomme aucun : l'index restait exact,
-  // la géométrie restait exacte, les onze bâtiments se résolvaient toujours.
-  // Seuls les PIXELS avaient divergé. C'est pour ça que celle-ci les compare.
+  // ⚠⚠ ELLE COMPARAIT LES PIXELS JUSQU'AU LOT PIXELS, ET ELLE COMPARE MAINTENANT
+  // DES EMPREINTES. Les atlas sont passés au WebP — sans lui, les huit pèseraient
+  // ×3,5 depuis que les sprites ne sont plus quantifiés sur quatorze teintes —
+  // et Node n'a pas de décodeur WebP ; §3 du CLAUDE.md interdit d'ajouter une
+  // dépendance de test, et écrire un décodeur VP8 à la main pour une garde
+  // serait pire que le mal. `tools/atlas.py` écrit donc, à côté des atlas,
+  // l'empreinte SHA-256 de chacun ET de chaque sprite source.
+  //
+  // Ce qu'elle tient encore : le défaut du 30/08 de face — un sprite régénéré
+  // sous un atlas resté d'hier fait mentir l'empreinte de la SOURCE, et un
+  // atlas retouché fait mentir la sienne.
+  //
+  // ⚠ CE QU'ELLE NE TIENT PLUS, ET IL FAUT LE SAVOIR : la correspondance
+  // CELLULE ↔ SPRITE, cellule par cellule. Elle est refaite par RECONSTRUCTION
+  // à chaque `python3 tools/verifier.py`, qui appelle `atlas.py --verifier` :
+  // l'outil recoud l'atlas depuis les sprites et compare à l'octet, ce qui est
+  // strictement plus fort — mais sur les lots qui touchent à l'art seulement,
+  // plus à chaque `npm run check`. Arbitré par Ethan le 02/09, contre les deux
+  // autres issues mesurées : committer aussi un PNG jamais embarqué (+1,6 Mio
+  // de dépôt, deux fichiers pour une vérité, et rien qui les relie), ou rester
+  // en PNG (le livrable passe de 1,58 à 2,94 Mo).
+  const manifeste = JSON.parse(readFileSync(join(SPRITES, 'atlas-empreintes.json'), 'utf8'));
+  assert.equal(manifeste.cote, COTE_SPRITE, 'le manifeste décrit une autre grille que l\'index');
+
+  const sha = (chemin) => createHash('sha256').update(readFileSync(chemin)).digest('hex');
+
+  let comparees = 0;
   for (const [slug, table] of Object.entries(ATLAS)) {
     const dossier = dossierDeLaFamille(slug);
-    const atlas = decoderRgba(join(SPRITES, `atlas-${slug}-${COTE_SPRITE}.png`));
+    const attendu = manifeste.familles[slug];
+    assert.ok(attendu !== undefined, `« ${slug} » est dans l'index et pas dans le manifeste`);
 
-    let comparees = 0;
-    for (const [rang, nom] of table.noms.entries()) {
-      const source = decoderRgba(join(SPRITES, dossier, String(COTE_SPRITE), `${nom}.png`));
-      assert.equal(source.largeur, COTE_SPRITE, `${nom} n'est pas au format de la grille`);
-      const { colonne, rangee } = celluleDuSprite(slug, nom);
+    assert.equal(sha(join(SPRITES, `atlas-${slug}-${COTE_SPRITE}.webp`)), attendu.atlas,
+      `atlas-${slug} : le fichier cousu n'est plus celui du manifeste `
+      + '— relancer « python3 tools/atlas.py --ecrire »');
 
-      for (let y = 0; y < COTE_SPRITE; y++) {
-        const debutAtlas = ((rangee * COTE_SPRITE + y) * atlas.largeur + colonne * COTE_SPRITE) * 4;
-        const ligneAtlas = atlas.pixels.subarray(debutAtlas, debutAtlas + COTE_SPRITE * 4);
-        const ligneSource = source.pixels.subarray(y * COTE_SPRITE * 4, (y + 1) * COTE_SPRITE * 4);
-        assert.ok(ligneAtlas.equals(ligneSource),
-          `atlas-${slug} : la cellule (${colonne}, ${rangee}) ne porte plus les pixels de `
-          + `« ${nom} », ligne ${y} — relancer « python3 tools/atlas.py --ecrire »`);
-      }
+    assert.deepEqual(Object.keys(attendu.sprites).sort(), [...table.noms].sort(),
+      `${slug} : le manifeste et l'index ne portent pas les mêmes sprites`);
+
+    for (const nom of table.noms) {
+      assert.equal(sha(join(SPRITES, dossier, String(COTE_SPRITE), `${nom}.png`)), attendu.sprites[nom],
+        `${dossier}/${nom}.png a changé sans que l'atlas soit recousu `
+        + '— relancer « python3 tools/atlas.py --ecrire »');
       comparees += 1;
     }
-    assert.equal(comparees, table.noms.length, `${slug} : toutes les cellules n'ont pas été comparées`);
   }
 
-  // ⚠ FALSIFIABLE : le décodeur rend bien des pixels, et deux sprites DIFFÉRENTS
-  // se distinguent. Sans ça, un décodeur qui rendrait partout du vide ferait
-  // passer la boucle ci-dessus sur n'importe quel atlas.
-  const a = decoderRgba(join(SPRITES, 'bâtiment', '64', 'bat_j_collecteur.png'));
-  const b = decoderRgba(join(SPRITES, 'bâtiment', '64', 'bat_j_chantier_de_construction.png'));
-  assert.ok(a.pixels.some((v) => v !== 0), 'le décodeur rend une image vide');
-  assert.ok(!a.pixels.equals(b.pixels), 'le décodeur ne distingue pas deux sprites');
+  // ⚠ FALSIFIABLE, ET EN DEUX TEMPS. D'abord le balayage a bien eu lieu : un
+  // manifeste vide, ou un index vide, ferait passer la boucle sans rien
+  // comparer. Ensuite l'empreinte DISTINGUE : deux sprites différents n'ont pas
+  // la même, sans quoi un `sha` qui rendrait toujours la même chaîne rendrait
+  // tout ce qui précède muet.
+  assert.ok(comparees > 400, `${comparees} sprites confrontés : le balayage n'a rien parcouru`);
+  assert.notEqual(
+    sha(join(SPRITES, 'bâtiment', '64', 'bat_j_collecteur.png')),
+    sha(join(SPRITES, 'bâtiment', '64', 'bat_j_chantier_de_construction.png')),
+    'l\'empreinte ne distingue pas deux sprites',
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -557,8 +557,27 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // l'économie que des fichiers séparés rendent possible : 27 000 octets de plus
   // pour zéro pixel, un atlas ayant été tout ou rien. Elles entreront avec
   // l'écran de raid.
+  //
+  // ⚠⚠ RELEVÉE À 1 650 000 AU LOT PIXELS, LE 02/09, ET LA HAUSSE EST LA MATIÈRE
+  // ELLE-MÊME. La chaîne ne quantifie plus les sprites sur quatorze teintes :
+  // elle réduit la source par filtre, donc chaque sprite porte quelques
+  // milliers de couleurs au lieu de quatorze. Mesuré, les huit atlas cousus :
+  //   • en PNG, rendu palette — 478 793 o, **638 390 en base64** (la veille) ;
+  //   • en PNG, rendu libre — 1 668 951 o : ×3,5, hors de question ;
+  //   • en **WebP q85**, rendu libre — 561 240 o, **748 320 en base64**.
+  // C'est le WebP qui rend le protocole tenable, pas le protocole seul. Les
+  // deux grosses bases de l'Ouvrage, elles, restent des PNG hors atlas et
+  // passent de 27 779 à 90 047 octets — 120 062 en base64 — pour la même
+  // raison, sans le remède : un atlas d'un seul sprite ne coud rien.
+  //
+  // Mesuré après le lot : **1 581 919 octets**, marge 68 081, soit 4,1 %.
+  //
+  // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
+  // borne qui monte, et le lot qui écrit pourquoi. Ce qu'elle tient VRAIMENT
+  // reste l'assertion du dessus — le HTML ne référence rien d'extérieur —, et
+  // celle-ci n'est qu'un ordre de grandeur contre une explosion.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 1_400_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 1_650_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

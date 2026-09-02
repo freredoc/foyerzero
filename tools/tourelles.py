@@ -30,7 +30,7 @@ from final128 import pal, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites()
-GRILLES = (128, 64, 32)
+GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
 
 # Les seize planches, dans l'ordre de rotation horaire depuis le nord.
 # Le nom de fichier donne l'orientation ; l'ordre ci-dessous donne l'indice.
@@ -209,10 +209,10 @@ def main():
         P = pal(ouv)
         for orient, im in serie(k):
             for N in GRILLES:
-                g = conditionner(im, P, N)
+                g, matiere = conditionner(im, P, N)
                 d = os.path.join(DST, 'defense', str(N))
                 os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}_{orient}.png'))
+                ecrire(g, P, os.path.join(d, f'{nom}_{orient}.png'), matiere)
                 n += 1
     for fichier, nom, ouv in MERLONS:
         P = pal(ouv)
@@ -222,10 +222,10 @@ def main():
             px, py, m = pivot(im)
             im = recadrer_pivot(im, px, py, demi_portee(im, px, py, m))
             for N in GRILLES:
-                g = conditionner(im, P, N)
+                g, matiere = conditionner(im, P, N)
                 d = os.path.join(DST, 'defense', str(N))
                 os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}_{conn}.png'))
+                ecrire(g, P, os.path.join(d, f'{nom}_{conn}.png'), matiere)
                 n += 1
     print(f'{n} fichiers écrits')
     return 0

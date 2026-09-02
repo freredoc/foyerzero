@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.67.0 · build 68.
+Dernière révision : **02/09/2026**, version 0.68.0 · build 69.
 
 ---
 
@@ -41,8 +41,113 @@ Dernière révision : **02/09/2026**, version 0.67.0 · build 68.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot BASES-1), à confronter :**
-`npm test` → **902 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 02/09/2026 (après le lot PIXELS), à confronter :**
+`npm test` → **903 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 581 919 octets**, 0 référence externe.
+⚠⚠ **LA CHAÎNE GRAPHIQUE A CESSÉ DE FAIRE RENTRER LES PLANCHES DANS UN MOULE.**
+Les sources sortent déjà en pixel art : `ecrire` ne peint plus une grille
+d'indices quantifiée sur quatorze teintes, il **détoure, prémultiplie, réduit en
+LANCZOS, dé-prémultiplie et coupe l'alpha sous 8**. Coût **+192 960 octets**, et
+**la borne T10 est relevée de 1 400 000 à 1 650 000** — marge **68 081 octets,
+4,13 %**. Toujours **16 `data:` avant, 16 après**, mais huit d'entre eux ont
+changé de format.
+⚠⚠ **C'EST LE WEBP QUI REND LE PROTOCOLE TENABLE, PAS LE PROTOCOLE SEUL.**
+Mesuré sur les huit atlas cousus, grille 64 : **478 793 o** en PNG quantifié la
+veille, **1 668 951 o** en PNG rendu libre — ×3,5, hors de question —,
+**561 240 o en WebP q85**. Les deux grosses bases de l'Ouvrage, elles, sont hors
+atlas et restent des PNG : elles passent de 27 779 à 90 047 octets, sans remède,
+un atlas d'un seul sprite ne cousant rien.
+⚠⚠ **LES ATLAS SONT EN `.webp`, LES SPRITES RESTENT EN `.png`, ET C'EST CE QUI
+SAUVE LES TESTS.** `decoderRgba` de `test/png-rgba.js` lit toujours la matière
+partout — accent, trous, murs de contour. Seul l'atlas est illisible côté JS.
+⚠⚠ **`tools/atlas.py` COUD DEUX GRILLES ET N'EN EMBARQUE QU'UNE.** La 128 est
+au dépôt pour le jour où un écran la demandera — **1 407 070 octets, zéro octet
+de livrable**. La grille embarquée tient dans **UNE constante de
+`tools/build.js`**, `GRILLE_ATLAS`, et un test refuse qu'elle diverge du
+`COTE_SPRITE` de l'index.
+⚠⚠ **LA GARDE DES PIXELS DE L'ATLAS EST DEVENUE UNE GARDE D'EMPREINTES, ET
+C'EST UN ARBITRAGE D'ETHAN DU 02/09.** `test/sprite.test.js` décodait l'atlas
+pour comparer sa cellule `i` au sprite `i` — la garde née de BÂTIMENTS-1024 ;
+Node n'a pas de décodeur WebP et §3 interdit d'ajouter une dépendance de test.
+`tools/atlas.py` écrit donc `art/sprites/atlas-empreintes.json` : le SHA-256 de
+chaque atlas ET de chaque sprite source. **Falsifié dans les deux sens** — un
+sprite remplacé, un atlas remplacé : la garde tombe à chaque fois.
+⚠ **CE QU'ELLE NE TIENT PLUS : la correspondance CELLULE ↔ SPRITE**, refaite par
+RECONSTRUCTION à chaque `python3 tools/verifier.py`, donc sur les lots d'art et
+non plus à chaque `npm run check`. Les deux autres issues étaient mesurées :
+committer aussi un PNG jamais embarqué (+1,6 Mio de dépôt, deux fichiers pour
+une vérité) ou rester en PNG (livrable à 2,94 Mo).
+⚠⚠ **LA SENTINELLE DE TRANSPARENCE ÉTAIT FAUSSE POUR L'OUVRAGE, ET LE LOT LA
+CORRIGE SANS QUE ÇA CHANGE UN SEUL OCTET.** `cond.reduire` prenait `TR` à
+`len(PAL)` = 14 ; la palette de l'Ouvrage en compte **19**, et son index 14 est
+« A contour » `#0D0B12` : transparent et contour partageaient la case du vote.
+`TR` est désormais un paramètre. **Mesuré : 0 fichier sur 51 change quand on
+remet 14** — depuis que `ecrire` réduit la MATIÈRE, la grille `g` n'atteint plus
+aucun fichier, et `boite(g)`, son seul consommateur, est un diagnostic dont
+l'appelant jette le retour. **La falsification que le brief proposait pour la
+garde des trous est donc impossible**, et c'est l'autre geste qui la tient.
+⚠⚠ **LA SECONDE PORTE DE `est_fond` PERÇAIT LE SUJET, ET C'EST ELLE QUI FAISAIT
+LES TROUS.** `c2` attrape le violet clair de l'Ouvrage jusqu'au MILIEU d'une
+base, et `eroder` transforme chaque pixel pris en losange de 25. `est_fond_sujet`
+la borne à la composante de fond qui TOUCHE LE BORD. **Mesuré, trous enfermés
+dans les sprites de l'Ouvrage en grille 128 : 55 865 px avant, 1 194 après** ;
+et la falsification, rejouée pour de bon, fait remonter 51 sprites de 113 à
+19 213 px.
+⚠ **`est_fond` N'A PAS ÉTÉ TOUCHÉE, ET C'ÉTAIT OBLIGATOIRE** : elle DÉCOUPE
+aussi les planches — gouttières d'`emblemes.cellules`, `bandes`, `pivot` de
+`tourelles.py`. La toucher aurait déplacé les cellules elles-mêmes.
+⚠ **LA CLÉ VERTE EST PLOMBÉE, PAS ÉPROUVÉE.** `cle_de_fond` choisit magenta ou
+vert `#00FF00` d'après les quatre coins, parce que le violet de l'Ouvrage frôle
+le magenta — distance minimale 140,0, pile sur le seuil. **Aucune source verte
+n'est au dépôt aujourd'hui**, et une qui arriverait demanderait aussi
+`recadrer`, dont le fond de remplissage est magenta en dur et qui appelle
+`est_fond` : ce sera un lot, pas une ligne.
+⚠⚠ **LA GRILLE 32 EST SORTIE — 465 FICHIERS RETIRÉS — SAUF `terrain/32`.** Ni le
+jeu ni les tests ne la lisaient. `terrain/` est une SOURCE DÉCLARÉE que la
+chaîne ne reproduit pas : ses planches d'origine ont été supprimées par la
+migration qui les a consommées, donc **ses 18 tuiles en 32 sont irrécupérables**
+et elles restent. C'est le seul écart au §3.1 du brief, et il est délibéré.
+⚠ **`ECARTS_PERMANENTS` EST VIDE POUR LA PREMIÈRE FOIS.** Ses deux lignes
+désignaient `unite/32/off_j_ratisseur.png` et `off_j_belier.png` : la grille où
+elles vivaient n'est plus produite. La passe `aligner` des chenilles meurt avec
+elles — elle ne tournait qu'en 32, et elle peignait dans `g`, que plus rien ne
+dessine. `tools/align_chenilles.py` reste au dépôt, sans appelant.
+⚠⚠ **`test/accent.test.js` NE MESURE PLUS UNE ÉGALITÉ, ET C'EST ARBITRÉ.** Il
+comptait les pixels EXACTEMENT d'une des six teintes d'accent ; après réduction
+par filtre il n'en reste aucun — mesuré, `off_j_pilon_s` passe de **161 pixels
+de véhicule à ZÉRO**. Il classe désormais chaque pixel sur la teinte la plus
+PROCHE des quatorze, sous les trois portes de `final128.quant`. **48/48
+d'accord hors dettes**, là où l'ancien n'exigeait que 30.
+⚠⚠ **ET LES SEUILS DES PORTES NE SE RETAPENT PAS EN JS, ILS SE GÉNÈRENT** —
+exigence d'Ethan, 02/09. Ils vivent dans `tools/portes.py`, `final128.quant` les
+emploie, `atlas.py` les écrit dans `atlas-empreintes.json`, le test les lit. Le
+JS ne porte que la FORME des trois conditions. **Falsifié : fermer la porte du
+rouge dans le fichier généré fait tomber les quatre tests.**
+⚠⚠ **DEUX DES QUATRE `DETTES_ACCENT` SE REFERMENT, ET L'ART N'A PAS BOUGÉ.**
+`ratisseur` et `belier`, camp `o`, rendent exactement ce que la table dit :
+**ce n'était pas l'art qui était de travers, c'était la quantification qui
+effaçait l'accent** — un pixel d'accent isolé perdait son vote de bloc contre le
+kaki autour. Les deux lignes sont retirées, comme la table l'exigeait
+d'elle-même. Il en reste deux, `broyeur j` et `pilon j`, encore violées.
+⚠ **TROIS AUTRES FORMULATIONS ONT ÉTÉ MESURÉES ET ÉCARTÉES**, dont celle
+qu'Ethan demandait d'essayer d'abord : le plus proche parmi les SIX accents
+seuls rend **40/48 au mieux**, balayé de 10 à 100 dans les deux métriques ; sans
+les portes, 46/48 — le `busard` bascule.
+⚠⚠ **LE LISSAGE REVIENT SUR UN SEUL CANEVAS, ET LES DIX AUTRES SITES ATTENDENT
+UN ARBITRAGE.** `ui/banc.js` passe à `imageSmoothingEnabled = true` : le
+protocole repose sur le filtre, et une case de 71 px tirée d'un sprite de 64
+double SEPT colonnes sur 64 en plus proche voisin. **Le brief ne nomme que cette
+ligne-là.** `ui/raid.js` porte la même à `false` avec le même argument, et la
+feuille porte **huit `image-rendering: pixelated`**. L'argument NE vaut PAS pour
+`ui/monde.js`, dont les quatre crans sont des puissances de deux.
+⚠ **`python3 tools/verifier.py` → 931 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 198,5 s. Il était dû : le lot touche `art/` et
+`tools/`. La veille, sur `main` : 1 386 · 2 · 0 · 0.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le lot ne touche ni l'état, ni
+la sauvegarde, ni une seule règle de jeu : c'est du dessin et de l'outillage.
+
+**Auparavant, après le lot BASES-1 :**
+`npm test` → 902 pass / 0 fail, `npm run build` → `dist/index.html`,
 **1 388 959 octets**, 0 référence externe.
 ⚠⚠ **CE LOT OUVRE LE MULTI-BASES, ET C'EST LE PREMIER OÙ LE JOUEUR EN A DEUX.**
 Fonder, basculer, haloter. Coût **+3 029 octets**, aucune image n'entre —
@@ -1137,10 +1242,12 @@ test/                   47 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  23 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 31/08
-                        au lot MUR-DE-CONTOUR, fichier par fichier (hors
-                        `__pycache__`, qui est ignoré par git). Le vingt-troisième
-                        est `bords.py`, qui conditionne les murs de contour.
+tools/                  24 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 02/09
+                        au lot PIXELS, fichier par fichier (hors `__pycache__`,
+                        qui est ignoré par git). Le vingt-quatrième est
+                        `portes.py`, qui porte les seuils de quantification et
+                        n'importe RIEN, pour que le couseur d'atlas puisse les
+                        lire sans traîner `scipy`.
                         ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
                         DIX-SEPT, et le dix-sept était déjà faux de deux quand il a
                         été écrit : le disque en portait dix-neuf. La chaîne de
@@ -1153,12 +1260,14 @@ tools/                  23 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les VINGT autres sont du Python, hors chaîne de build et hors
+  ⤷ les VINGT ET UN autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
       • DOUZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
         `art/sprites/` — le douzième est `bords.py`, entré le 31/08 ;
-      • DEUX BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
-        plus le portage de la coupe 1024 ;
+      • TROIS BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
+        le portage de la coupe 1024, et les SEUILS DE QUANTIFICATION depuis le
+        02/09 ; une quatrième, `align_chenilles.py`, n'a plus d'appelant depuis
+        que la grille 32 est sortie, et reste au dépôt sans être citée ;
       • DEUX SCRIPTS HISTORIQUES à usage unique, dont les chemins pointent vers
         une machine qui n'existe plus : ils se lisent au passé ;
       • le COUSEUR d'atlas, le module de CHEMINS, le VÉRIFICATEUR, et
@@ -1191,13 +1300,28 @@ art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à
                         ⚠ IL NE S'AMPUTE JAMAIS, et c'est ce qui le distingue
                           d'`art/sprites/` : rien ici n'est un produit, tout y
                           est un original. Un lot n'y AJOUTE que.
-art/sprites/            les sprites conditionnés — VINGT-SEPT dossiers de grille
-                        et 1 425 fichiers, recomptés le 31/08 au lot
-                        MUR-DE-CONTOUR, plus HUIT atlas à la racine et les SEIZE
-                        images à plat de `bord/`.
-                        NEUF familles en 128, 64 et 32 : unité, bâtiment,
-                        terrain, defense, tourelle-unite, socle, carte, effet,
-                        chassis. La dixième, `bord`, n'a pas de grille.
+art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grille
+                        et 970 fichiers, recomptés le 02/09 au lot PIXELS, plus
+                        SEIZE atlas `.webp` à la racine, DEUX fichiers générés —
+                        `ancres-chassis.json` et `atlas-empreintes.json` — et les
+                        SEIZE images à plat de `bord/`.
+                        NEUF familles en 128 et 64 : unité, bâtiment, terrain,
+                        defense, tourelle-unite, socle, carte, effet, chassis.
+                        La dixième, `bord`, n'a pas de grille.
+                        ⤷ ⚠⚠ LA GRILLE 32 EST SORTIE AU LOT PIXELS — 465
+                          fichiers retirés, ni le jeu ni les tests ne la
+                          lisaient. **SAUF `terrain/32`**, qui reste : `terrain/`
+                          est une SOURCE DÉCLARÉE, ses planches d'origine ont été
+                          supprimées par la migration qui les a consommées, donc
+                          ses 18 tuiles sont IRRÉCUPÉRABLES. `art/sprites/` est
+                          reproductible, sauf là où le vérificateur dit qu'il ne
+                          l'est pas.
+                        ⤷ ⚠⚠ LES ATLAS SONT EN `.webp`, LES SPRITES EN `.png`.
+                          Sans le WebP les huit atlas pèseraient ×3,5 depuis que
+                          la chaîne ne quantifie plus ; et sans le PNG côté
+                          sprites, `test/png-rgba.js` ne lirait plus rien —
+                          accent, trous, murs de contour. DEUX grilles sont
+                          cousues, la 64 seule est embarquée.
                         ⤷ ⚠⚠ `bord/` EST À PLAT, SANS DOSSIER DE GRILLE, ET
                           IL N'EST DANS AUCUN ATLAS. Ses images ne tiennent pas
                           dans une case : 512 × 64 pour un mur, 64 × 512 pour

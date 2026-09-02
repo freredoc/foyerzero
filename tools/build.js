@@ -102,12 +102,39 @@ let html = htmlSource
 // inscrire ici ferait cinq entrées mortes, et la garde « marqueur sans fichier »
 // ne les verrait jamais, puisqu'elle ne regarde que les marqueurs PRÉSENTS dans
 // le HTML. Chaque famille entre avec le lot qui la consomme.
+// ⚠⚠ LA GRILLE EMBARQUÉE TIENT EN UNE CONSTANTE, ET UNE SEULE. Les atlas sont
+// cousus en 64 ET en 128 depuis le lot PIXELS ; c'est ce nombre-ci qui décide
+// de celle qui entre dans le livrable. L'écrire dix fois dans la table
+// ci-dessous, ce serait dix occasions d'en oublier une, et la faute serait
+// MUETTE : le build inlinerait un atlas de 128 dont l'index dit 64, les
+// cellules seraient adressées au quart, et rien ne lèverait.
+//
+// ⚠ ET IL DOIT S'ACCORDER AVEC `COTE_SPRITE` DE `src/data/atlas.js`, que
+// `tools/atlas.py` écrit depuis son `COTE_INDEX`. Les changer ensemble est le
+// geste complet ; `test/sprite.test.js` refuse qu'ils divergent.
+const GRILLE_ATLAS = 64;
+
+// ⚠⚠ WEBP DEPUIS LE LOT PIXELS. Les sprites ne sont plus quantifiés sur quatorze
+// teintes : en PNG les huit atlas passeraient de 468 à 1 630 Kio, ×3,5. Le type
+// MIME suit le fichier — un `image/png` sur des octets WebP ferait afficher du
+// vide, sans erreur, exactement comme un rectangle source non fini.
+const atlas = (slug) => ({
+  marqueur: `%ATLAS_${slug.toUpperCase()}%`,
+  chemin: ['art', 'sprites', `atlas-${slug}-${GRILLE_ATLAS}.webp`],
+  type: 'image/webp',
+});
+
 const IMAGES_INLINE = [
   { marqueur: '%ATLAS_TERRAIN%', chemin: ['art', 'sprites', 'carte', 'atlas-terrain-64.png'], type: 'image/png' },
-  { marqueur: '%ATLAS_BATIMENT%', chemin: ['art', 'sprites', 'atlas-batiment-64.png'], type: 'image/png' },
-  { marqueur: '%ATLAS_TERRAIN_BASE%', chemin: ['art', 'sprites', 'atlas-terrain-64.png'], type: 'image/png' },
-  { marqueur: '%ATLAS_DEFENSE%', chemin: ['art', 'sprites', 'atlas-defense-64.png'], type: 'image/png' },
-  { marqueur: '%ATLAS_SOCLE%', chemin: ['art', 'sprites', 'atlas-socle-64.png'], type: 'image/png' },
+  atlas('batiment'),
+  // ⚠ LE MARQUEUR NE SE DÉDUIT PAS DU SLUG ICI : la famille s'appelle `terrain`
+  // et le marqueur `%ATLAS_TERRAIN_BASE%`, parce que `%ATLAS_TERRAIN%` est déjà
+  // pris par l'atlas du FOND DE CARTE, qui est une source déclarée et reste en
+  // PNG. Deux images sans rapport, deux noms courts voisins : voir la note sur
+  // les préfixes de marqueur juste au-dessus.
+  { ...atlas('terrain'), marqueur: '%ATLAS_TERRAIN_BASE%' },
+  atlas('defense'),
+  atlas('socle'),
   // ⚠⚠ LE MUR DE CONTOUR DE LA BASE — CINQ IMAGES, PAS UN ATLAS. Un mur fait
   // 512 × 64 et un angle 64 × 64 : `tools/atlas.py` ne coud que des cellules
   // carrées d'un même côté, donc chacune voyage dans son propre marqueur, comme
@@ -124,18 +151,18 @@ const IMAGES_INLINE = [
   { marqueur: '%MUR_J_V_B%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_v_b.png'], type: 'image/png' },
   { marqueur: '%MUR_J_ANGLE_NO%', chemin: ['art', 'sprites', 'bord', 'bord_j_angle_no.png'], type: 'image/png' },
   { marqueur: '%MUR_J_ANGLE_NE%', chemin: ['art', 'sprites', 'bord', 'bord_j_angle_ne.png'], type: 'image/png' },
-  { marqueur: '%ATLAS_UNITE%', chemin: ['art', 'sprites', 'atlas-unite-64.png'], type: 'image/png' },
-  { marqueur: '%ATLAS_CHASSIS%', chemin: ['art', 'sprites', 'atlas-chassis-64.png'], type: 'image/png' },
+  atlas('unite'),
+  atlas('chassis'),
   // ⚠ LE FICHIER PORTE LE SLUG À SOULIGNÉ — `atlas-tourelle_unite-64.png` —
   // parce que `tools/atlas.py` en fait aussi une clé JavaScript. Le dossier
   // source, lui, garde son tiret : `art/sprites/tourelle-unite/`.
-  { marqueur: '%ATLAS_TOURELLE_UNITE%', chemin: ['art', 'sprites', 'atlas-tourelle_unite-64.png'], type: 'image/png' },
+  atlas('tourelle_unite'),
   // ⚠⚠ LES DEUX GROSSES BASES VOYAGENT HORS ATLAS, CHACUNE DANS SON MARQUEUR.
   // À la grille 64 elles mesurent 128×128 et 192×192 — elles couvrent 2×2 et
   // 3×3 cases —, et `tools/atlas.py` exige `COTE × COTE` pour coudre. Un atlas
   // d'un seul sprite ne coud rien de toute façon. Même forme que
   // `%ATLAS_TERRAIN%`, l'atlas du fond de carte, qui est hors des sept aussi.
-  { marqueur: '%ATLAS_CARTE%', chemin: ['art', 'sprites', 'atlas-carte-64.png'], type: 'image/png' },
+  atlas('carte'),
   { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_2x2.png'], type: 'image/png' },
   { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_3x3.png'], type: 'image/png' },
 ];

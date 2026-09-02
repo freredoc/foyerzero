@@ -40,7 +40,7 @@ from tourelles import pivot, demi_portee, recadrer_pivot
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('tourelle-unite')
-GRILLES = (128, 64, 32)
+GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
 
 BLINDES = ['ratisseur', 'fendeur', 'belier', 'broyeur', 'pilon']
 
@@ -138,10 +138,10 @@ def main():
         for cle in BLINDES:
             for orient, im in serie(cle, camp).items():
                 for N in GRILLES:
-                    g = conditionner(im, P, N)
+                    g, matiere = conditionner(im, P, N)
                     d = os.path.join(DST, str(N))
                     os.makedirs(d, exist_ok=True)
-                    ecrire(g, P, os.path.join(d, f'off_{camp}_{cle}_{orient}.png'))
+                    ecrire(g, P, os.path.join(d, f'off_{camp}_{cle}_{orient}.png'), matiere)
                     n += 1
     print(f'{n} fichiers écrits')
     return 0

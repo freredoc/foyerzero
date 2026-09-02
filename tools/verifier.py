@@ -72,13 +72,14 @@ CHAINE = [
 # **il doit encore différer**. Le jour où l'un se remet à se reproduire, le
 # vérificateur tombe et quelqu'un vient retirer la ligne. C'est la mécanique de
 # `DETTES_ACCENT` dans `test/accent.test.js`.
-ECARTS_PERMANENTS = {
-    'unite/32/off_j_ratisseur.png':
-        'la source 1024 ne redescend pas à 32 sans retouche à la main '
-        '(passation du 30/08, §3.2.6)',
-    'unite/32/off_j_belier.png':
-        'même cas que le Ratisseur — le fichier commité fait foi',
-}
+ECARTS_PERMANENTS = {}
+# ⚠⚠ ELLE EST VIDE DEPUIS LE LOT PIXELS, ET C'EST LA TABLE QUI A TENU SA
+# PROMESSE. Elle portait `unite/32/off_j_ratisseur.png` et
+# `unite/32/off_j_belier.png` — les deux seuls fichiers du dépôt que la chaîne
+# ne reproduisait pas, arbitrés « on garde les commités » le 30/08. La grille 32
+# est sortie de `GRILLES` au lot PIXELS : les deux fichiers ont quitté le dépôt,
+# donc les deux lignes n'avaient plus rien à couvrir. Laisser une exception qui
+# ne désigne plus rien est exactement ce que la moitié inverse ci-dessus refuse.
 
 
 # ---------------------------------------------------------------------------

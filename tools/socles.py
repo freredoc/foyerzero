@@ -34,7 +34,7 @@ from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('socle')
-GRILLES = (128, 64, 32)
+GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
 EMPRISE = 28          # gros pixels sur une grille de 32, comme les gros bâtiments
 
 PLANCHES = [
@@ -52,9 +52,9 @@ for fichier, ouv, noms in PLANCHES:
     for i, nom in enumerate(noms):
         cell = im.crop((i * W // 3, 0, (i + 1) * W // 3, H))
         for N in GRILLES:
-            g = conditionner(recadrer(cell, EMPRISE * (N // 32), N), P, N)
+            g, matiere = conditionner(recadrer(cell, EMPRISE * (N // 32), N), P, N)
             d = os.path.join(DST, str(N))
             os.makedirs(d, exist_ok=True)
-            ecrire(g, P, os.path.join(d, f'socle_{nom}.png'))
+            ecrire(g, P, os.path.join(d, f'socle_{nom}.png'), matiere)
             n += 1
 print(f'{n} fichiers écrits')

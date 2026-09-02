@@ -50,7 +50,7 @@ from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('carte')
-GRILLES = (128, 64, 32)
+GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
 EMPRISE = 30          # gros pixels sur 32 : un emblème remplit sa case de carte
 
 NIVEAUX = [f'n{i}' for i in range(1, 10)]
@@ -120,9 +120,9 @@ for fichier, nx, ny, ouv, prefixe, noms, cases in PLANCHES:
             # sans quoi une grosse base tiendrait la place d'une seule case,
             # simplement dessinée plus gros.
             cote = cases * N
-            g = conditionner(recadrer(cell, EMPRISE * cases * (N // 32), cote), P, cote)
+            g, matiere = conditionner(recadrer(cell, EMPRISE * cases * (N // 32), cote), P, cote)
             d = os.path.join(DST, str(N))
             os.makedirs(d, exist_ok=True)
-            ecrire(g, P, os.path.join(d, f'{nom}.png'))
+            ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
             n += 1
 print(f'{n} fichiers écrits')

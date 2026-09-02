@@ -1,6 +1,7 @@
 # Port fidele du noyau de tools/conditionneur.html (v1)
 from PIL import Image
 import numpy as np, os, json
+from scipy import ndimage
 
 BASE = [("kaki contour","#161914"),("kaki ombre","#343A2C"),("kaki corps","#4E5742"),
  ("kaki eclaire","#6A7658"),("kaki lumiere","#8C9A72"),
@@ -20,6 +21,63 @@ def est_fond(rgb, seuil=140):
     c2 = (r>140)&(b>140)&(g < np.minimum(r,b)*0.7)
     return c1|c2
 
+MAGENTA=(255,0,255)
+VERT=(0,255,0)
+
+def cle_de_fond(rgb):
+    """Magenta ou vert, LU sur les quatre coins de l'image.
+
+    ⚠ DÉTECTION, PAS PARAMÈTRE. Le violet de l'Ouvrage frôle le magenta —
+    distance minimale mesurée 140,0, pile sur le seuil —, d'où des sources qui
+    arriveront sur fond vert `#00FF00`. Les deux clés vont coexister pendant des
+    mois : un drapeau à passer serait un drapeau à oublier sur une planche.
+
+    Les quatre coins votent par somme des distances au carré : un coin mangé par
+    le sujet ne peut pas décider seul.
+    """
+    h,w,_=rgb.shape
+    coins=np.array([rgb[0,0],rgb[0,w-1],rgb[h-1,0],rgb[h-1,w-1]],dtype=np.int32)
+    d=lambda c: int((((coins-np.array(c,dtype=np.int32))**2).sum()))
+    return VERT if d(VERT)<d(MAGENTA) else MAGENTA
+
+def est_fond_sujet(rgb, seuil=140):
+    """Le fond D'UN SUJET déjà découpé — la seconde porte bornée à l'extérieur.
+
+    ⚠⚠ ELLE NE REMPLACE PAS `est_fond`, ET NE DOIT PAS. `est_fond` sert aussi à
+    DÉCOUPER les planches — les gouttières d'`emblemes.cellules`, les `bandes`,
+    le `pivot` de `tourelles.py`. La toucher déplacerait les cellules elles-mêmes.
+    Celle-ci n'est appelée que par `final128.conditionner`, sur une cellule déjà
+    isolée, où la seule question est « quel pixel est du fond ».
+
+    ⚠⚠ LA SECONDE PORTE MANGEAIT L'INTÉRIEUR DU SUJET. `c2` attrape le violet
+    clair de l'Ouvrage, y compris au milieu d'une base, et `eroder` transforme
+    chaque pixel pris en losange de 25. Mesuré sur socles + emblèmes de
+    l'Ouvrage, trous enfermés : `c1|c2` 9 280 px, `c1` seule 51 px,
+    `c1 | (c2 ∩ extérieur)` 40 px. On la garde donc, bornée à la composante de
+    fond qui TOUCHE LE BORD : elle nettoie encore la frange, elle ne perce plus.
+    """
+    r=rgb[...,0].astype(np.int32); g=rgb[...,1].astype(np.int32); b=rgb[...,2].astype(np.int32)
+    cle=cle_de_fond(rgb)
+    if cle is VERT:
+        d=r**2+(g-255)**2+b**2
+        c1=d<seuil*seuil
+        c2=(g>140)&(g>np.maximum(r,b)*1.4)
+    else:
+        d=(r-255)**2+g**2+(b-255)**2
+        c1=d<seuil*seuil
+        c2=(r>140)&(b>140)&(g<np.minimum(r,b)*0.7)
+    if not c2.any():
+        return c1
+    brut=c1|c2
+    etiquettes,n=ndimage.label(brut)
+    if n==0:
+        return c1
+    bord=np.concatenate([etiquettes[0,:],etiquettes[-1,:],etiquettes[:,0],etiquettes[:,-1]])
+    dehors=np.zeros(n+1,dtype=bool)
+    dehors[np.unique(bord)]=True
+    dehors[0]=False
+    return c1|(c2&dehors[etiquettes])
+
 def eroder(m,n):
     for _ in range(n):
         c=m.copy()
@@ -36,10 +94,22 @@ def quantifier(rgb, mask):
     idx[~mask]=-1
     return idx
 
-def reduire(idx,N):
+def reduire(idx,N,TR):
+    """Le vote de bloc, avec la SENTINELLE de transparence donnée par l'appelant.
+
+    ⚠⚠ ELLE VALAIT `len(PAL)` EN DUR, ET C'ÉTAIT FAUX POUR L'OUVRAGE. La palette
+    de l'Ouvrage compte DIX-NEUF teintes — les quatorze de base plus les cinq
+    ardoises — et son index 14 est « A contour » `#0D0B12`. Transparent et
+    contour partageaient donc la même case du vote : un bloc majoritairement
+    contour sortait TRANSPARENT. Mesuré sur `base_o_3x3` en 128 avant le lot
+    PIXELS : 9 336 blocs transparents sans contenir un seul pixel transparent.
+
+    ⚠ NE PAS DÉDUIRE `TR` DE `idx.max()` : ça marche par accident tant que
+    l'index le plus haut est présent dans l'image, et ment le jour où il manque.
+    L'appelant connaît sa palette, il est le seul à pouvoir répondre.
+    """
     H,W=idx.shape
     out=np.full((N,N),-1,dtype=np.int16)
-    TR=len(PAL)
     for by in range(N):
         y0=by*H//N; y1=max(y0+1,(by+1)*H//N)
         for bx in range(N):
@@ -66,7 +136,7 @@ def conditionner(im, N=32, erosion=3, seuil=140):
     mask=~est_fond(rgb,seuil)
     if erosion: mask=eroder(mask,erosion)
     idx=quantifier(rgb,mask)
-    return reduire(idx,N)
+    return reduire(idx,N,len(PAL))
 
 def rendre(g, scale=4):
     N=g.shape[0]

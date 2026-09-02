@@ -1,6 +1,7 @@
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import ImageFile as _IF; _IF.LOAD_TRUNCATED_IMAGES=True
-from cond import est_fond, eroder, reduire, boite
+from cond import est_fond, est_fond_sujet, eroder, reduire, boite
+from portes import POIDS, PORTES
 from PIL import Image
 import numpy as np, os, math
 
@@ -16,11 +17,22 @@ A=[("A contour","#0D0B12"),("A ombre","#231D2E"),("A corps","#382E47"),
 def pal(ouv): return [(n,h,hexrgb(h)) for n,h in (BASE+(A if ouv else []))]
 
 def quant(flat,P):
-    PA=np.array([c for n,h,c in P],dtype=np.int32)
-    d=(2*(flat[:,0:1]-PA[:,0])**2+4*(flat[:,1:2]-PA[:,1])**2+3*(flat[:,2:3]-PA[:,2])**2)
+    """Apparie chaque pixel à une teinte de la palette, sous les trois portes.
+
+    ⚠ LES NOMBRES VIENNENT DE `tools/portes.py`, ET DE LÀ SEULEMENT. Ils étaient
+    écrits ici en littéraux ; `test/accent.test.js` en a besoin depuis le lot
+    PIXELS, et deux tables auraient divergé au premier réglage. Voir l'en-tête
+    de ce module-là pour la mécanique.
+    """
+    a,b,c=POIDS
+    PA=np.array([c_ for n,h,c_ in P],dtype=np.int32)
+    d=(a*(flat[:,0:1]-PA[:,0])**2+b*(flat[:,1:2]-PA[:,1])**2+c*(flat[:,2:3]-PA[:,2])**2)
     R,G,B=flat[:,0].astype(float),flat[:,1].astype(float),flat[:,2].astype(float)
     mx=np.maximum(np.maximum(R,G),B); mn=np.minimum(np.minimum(R,G),B); mx=np.maximum(mx,1)
-    pj=(B/mx<0.25)&(G/mx>0.55); pr=(G/mx<0.55)&(B/mx<0.55)&(R>=90); pb=((mx-mn)/mx<0.22)&(mx>=175)
+    J,Rg,Bl=PORTES['jaune'],PORTES['rouge'],PORTES['blanc']
+    pj=(B/mx<J['bleuSurMax'])&(G/mx>J['vertSurMax'])
+    pr=(G/mx<Rg['vertSurMax'])&(B/mx<Rg['bleuSurMax'])&(R>=Rg['rougeMin'])
+    pb=((mx-mn)/mx<Bl['ecartSurMax'])&(mx>=Bl['maxMin'])
     M=np.iinfo(np.int32).max
     for i,(n,_h,_c) in enumerate(P):
         if n.startswith('jaune'): d[~pj,i]=M
@@ -38,16 +50,58 @@ def recadrer(cell,cible,N):
     return out
 
 def conditionner(im,P,N,erosion=3):
+    """Rend la grille quantifiée ET la matière dont elle est tirée.
+
+    ⚠⚠ DEUX SORTIES DEPUIS LE LOT PIXELS, ET LA SIGNATURE LE DIT. `g` reste ce
+    qu'il était — les outils s'en servent ENTRE les deux appels : retrait
+    d'appendice, alignement des chenilles, mesure d'ancre de tourelle. Ce qui
+    entre, c'est `(a, fond)` : le tableau RGBA du recadré et son masque de fond,
+    que `ecrire` réduit par filtre au lieu de peindre une palette.
+
+    ⚠ PAS D'ÉTAT CACHÉ. Ranger la matière dans une globale que `ecrire` irait
+    relire marcherait tant que les appels s'enchaînent, et mentirait le jour où
+    un outil intercale un traitement entre les deux.
+    """
     a=np.array(im.convert('RGBA')); rgb=a[...,:3]; al=a[...,3]
-    m=(~est_fond(rgb))&(al>=128); m=eroder(m,erosion)
+    m=(~est_fond_sujet(rgb))&(al>=128); m=eroder(m,erosion)
     idx=np.full(m.shape,-1,dtype=np.int16)
     idx[m]=quant(rgb[m].astype(np.int32),P)
-    return reduire(idx,N)
+    return reduire(idx,N,len(P)), (a,~m)
 
-def ecrire(g,P,path):
-    N=g.shape[0]; out=np.zeros((N,N,4),np.uint8)
-    for i,(n,h,c) in enumerate(P):
-        k=(g==i); out[k,0],out[k,1],out[k,2],out[k,3]=c[0],c[1],c[2],255
+SEUIL_ALPHA=8
+
+def ecrire(g,P,path,matiere=None):
+    """Écrit le sprite : rendu palette sans matière, réduction par filtre avec.
+
+    ⚠⚠ L'ORDRE DES CINQ GESTES COMPTE, ET LA PRÉMULTIPLICATION EST CELUI QU'ON
+    OUBLIE. Sans elle, LANCZOS moyenne le magenta du fond avec le sujet et TOUS
+    les bords ressortent roses — invisible à la vignette, flagrant au zoom.
+    On met donc l'alpha à zéro sur le fond, on prémultiplie, on réduit, on
+    dé-prémultiplie, et on coupe l'alpha sous SEUIL_ALPHA.
+
+    ⚠ LE RGB EST REMIS À ZÉRO SOUS LE SEUIL. Un pixel transparent qui garde une
+    couleur est une donnée que personne ne lit et que tout encodeur paie.
+    """
+    N=g.shape[0]
+    if matiere is None:
+        out=np.zeros((N,N,4),np.uint8)
+        for i,(n,h,c) in enumerate(P):
+            k=(g==i); out[k,0],out[k,1],out[k,2],out[k,3]=c[0],c[1],c[2],255
+        Image.fromarray(out,'RGBA').save(path)
+        return
+    a,fond=matiere
+    src=a.astype(np.float64).copy()
+    src[fond,3]=0.0
+    src[...,:3]*=src[...,3:4]/255.0
+    petite=Image.fromarray(np.clip(np.rint(src),0,255).astype(np.uint8),'RGBA').resize((N,N),Image.LANCZOS)
+    r=np.array(petite).astype(np.float64)
+    al=r[...,3]
+    vif=al>=SEUIL_ALPHA
+    rgb=np.zeros((N,N,3))
+    rgb[vif]=np.clip(r[...,:3][vif]*255.0/al[vif,None],0,255)
+    out=np.zeros((N,N,4),np.uint8)
+    out[...,:3]=np.rint(rgb).astype(np.uint8)
+    out[...,3]=np.where(vif,np.rint(al),0).astype(np.uint8)
     Image.fromarray(out,'RGBA').save(path)
 
 # ---------------- unites ----------------
@@ -92,15 +146,15 @@ OUV={'souche','etai','noeud','gangue','terril'}
 
 if __name__=='__main__':
     R='/home/claude/work/LIVRAISON'
-    for d in ['unites/128','unites/32','batiments/128','batiments/32']:
+    for d in ['unites/128','batiments/128']:
         os.makedirs(f'{R}/{d}',exist_ok=True)
     print('== UNITES, grille 128 ==')
     for fn,cles,emp in U:
         im=Image.open('/home/claude/in2/'+fn); W,H=im.size; n=len(cles); cw=W//n
         for i,cle in enumerate(cles):
             P=pal(False)
-            g=conditionner(recadrer(im.crop((i*cw,0,(i+1)*cw,H)), emp*4, 128), P, 128)
-            b=boite(g); ecrire(g,P,f'{R}/unites/128/off_j_{cle}.png')
+            g,matiere=conditionner(recadrer(im.crop((i*cw,0,(i+1)*cw,H)), emp*4, 128), P, 128)
+            b=boite(g); ecrire(g,P,f'{R}/unites/128/off_j_{cle}.png',matiere)
             print(f'  off_j_{cle:12s} {b["l"]:3d}x{b["h"]:<3d} / {emp*4} vise   {len(set(int(v) for v in g.ravel() if v>=0)):3d} couleurs')
     print('== BATIMENTS, grille 128 ==')
     for fn,nx,ny,gr in B:
@@ -108,6 +162,6 @@ if __name__=='__main__':
         for j in range(ny):
             for i in range(nx):
                 cle=gr[j][i]; ouv=cle in OUV; P=pal(ouv); pref='bat_o_' if ouv else 'bat_j_'
-                g=conditionner(recadrer(im.crop((i*cw,j*ch,(i+1)*cw,(j+1)*ch)), cible(PV[cle])*4, 128), P, 128)
-                b=boite(g); ecrire(g,P,f'{R}/batiments/128/{pref}{cle}.png')
+                g,matiere=conditionner(recadrer(im.crop((i*cw,j*ch,(i+1)*cw,(j+1)*ch)), cible(PV[cle])*4, 128), P, 128)
+                b=boite(g); ecrire(g,P,f'{R}/batiments/128/{pref}{cle}.png',matiere)
                 print(f'  {pref+cle:32s} {b["l"]:3d}x{b["h"]:<3d} / {cible(PV[cle])*4} vise   {len(set(int(v) for v in g.ravel() if v>=0)):3d} couleurs')
