@@ -71,6 +71,15 @@ export const BASE_BATIMENTS = {
     // Le seul bâtiment sans plancher de PV : sa chute rase la base.
     // MODELE-REPARATION-1.md §2.
     plancherPv: false,
+    // ⚠⚠ LE MÊME NOM DE CHAMP QUE `BATIMENTS.souche.raseLeSite`, ET C'EST
+    // DÉLIBÉRÉ. Le moteur de combat lit cette clé-là sur ses cinq bâtiments de
+    // l'Ouvrage depuis toujours ; depuis le lot RAID-B il monte aussi les onze
+    // du joueur, et il la lit de la même façon. Lui donner ici un autre nom —
+    // `raseLaBase`, `pivot` — aurait obligé `profilBatiment` à connaître DEUX
+    // conventions pour une seule règle, et la seconde aurait été la première à
+    // être oubliée. C'est le pendant exact de `plancherPv: false` ci-dessus :
+    // les deux disent la même chose de deux côtés du même mécanisme.
+    raseLeSite: true,
     // ⚠ LE CHANTIER STOCKE, ET C'EST CE QUI REND LA PARTIE JOUABLE.
     // Arbitré par Ethan le 27/08 en pointant `FOYER-ZERO-BATIMENTS-JOUEUR.xlsx`,
     // feuille EFFETS ligne 14 — « Stockage propre », valeur TA reprise telle
@@ -388,6 +397,13 @@ export function caseDuChantier() {
 export const BASE_NEUVE = {
   id: 'chantierDeConstruction',
   niveau: 1,
+  // ⚠ INTACT, ET LE CHAMP EST PRÉSENT PLUTÔT QU'ABSENT. Depuis le lot RAID-B un
+  // bâtiment du joueur peut être ENDOMMAGÉ : l'Ouvrage attaque sa base. Un
+  // bâtiment neuf porte donc `degatsMilli: 0`, comme une pièce de garnison ou
+  // d'armée, et pour la même raison qu'elles — ce sont des DÉGÂTS et non des PV,
+  // si bien que le jour où `BASE_BATIMENTS[x].pv` bouge, la valeur enregistrée
+  // ne peut pas devenir incohérente avec son maximum.
+  degatsMilli: 0,
   ...caseDuChantier(),
 };
 

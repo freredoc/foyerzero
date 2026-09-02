@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **01/09/2026**, version 0.62.0 · build 63.
+Dernière révision : **02/09/2026**, version 0.63.0 · build 64.
 
 ---
 
@@ -41,7 +41,84 @@ Dernière révision : **01/09/2026**, version 0.62.0 · build 63.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 01/09/2026 (après le lot RAID-A), à confronter :**
+**Référence au 02/09/2026 (après le lot RAID-B), à confronter :**
+`npm test` → **843 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 376 307 octets**, 0 référence externe.
+⚠⚠ **CE LOT COÛTE +5 331 OCTETS, N'OUVRE AUCUN ÉCRAN, ET FAIT ARRIVER LA
+PREMIÈRE CHOSE DU JEU QUI SE PASSE PENDANT QUE LE JOUEUR NE REGARDE PAS.**
+L'Ouvrage attaque la base. Aucune image n'entre — **16 `data:` avant, 16 après**.
+Marge T10 **23 693 octets, 1,69 %** : c'est la marge la plus mince depuis
+RETOURS-DU-31, et le prochain lot qui fait entrer une image devra relever la
+borne EN ÉCRIVANT POURQUOI.
+⚠⚠ **`rattraperJeu` NE FAIT PLUS UN SEUL APPEL PAR SYSTÈME : IL DÉCOUPE SA
+FENÊTRE.** C'est le premier système du jeu qui ne s'y plie pas, et il fallait le
+dire au lieu de le contourner. Un raid arrive à un INSTANT et MODIFIE l'état pour
+les suivants — il vide la réserve de réparation, met les stocks à zéro, et peut
+DÉPLACER la base de vingt cases. Le corps analytique d'avant n'a pas bougé d'une
+ligne ; il est simplement appelé une fois par SEGMENT, et les segments s'arrêtent
+à chaque raid retenu. `tickJeu` × n ≡ `rattraperJeu(n)` tient donc PAR
+CONSTRUCTION : c'est la même fonction, `resoudreLaMinute`, qui résout des deux
+côtés. **Mesuré sur 12 h et cinq graines, rasages compris : sérialisations
+identiques au caractère.**
+⚠⚠ **LA CONDITION DE RUPTURE DE LA L. 397 EST ADVENUE, ET LE COMMENTAIRE A ÉTÉ
+RÉÉCRIT.** Il annonçait « le jour où la base pourra se DÉPLACER en cours de
+rattrapage, cette ligne cessera d'être juste ». Ce jour est celui du rasage.
+`subirUnRaid` rappelle `releverLesPoisAcquis` à l'instant du rasage, et le
+découpage fait que, pendant un segment, la base ne bouge pas — par construction.
+**Ne jamais laisser un commentaire qui annonce un futur devenu présent** : celui
+de `reparerLaGarnison` disait « ÉCRIT ET INATTEIGNABLE EN JEU », il est corrigé
+lui aussi, et un test refuse le retour de la formule.
+⚠⚠ **LE MOTEUR DE COMBAT CONNAÎT ENFIN LES ONZE BÂTIMENTS DU JOUEUR, ET C'EST
+UN ARBITRAGE D'ETHAN DU 02/09.** `src/sim/combat.js` était classé « à ne pas
+toucher » par le brief ; or `creerCombat` ne connaissait que les CINQ de
+l'Ouvrage, et monter un `chantierDeConstruction` levait « identifiant inconnu ».
+C'est le trou que §6 annonçait — « un combat où le joueur défend ne peut porter
+aucun bâtiment […] c'est le trou que le raid sur la base du joueur comblera ».
+Ethan : **« Ouvrir combat.js »**. `profilBatimentJoueur` réemploie
+`profilBatiment` au lieu d'en écrire un second ; `indiceButin` vaut `null` et
+`ressource` `{}`, parce que `butin` verse à l'ATTAQUANT et n'est jamais appelé
+sur un combat de défense — leur donner un barème aurait inventé un butin que
+rien ne verse.
+⚠ **`raseLeSite` PORTE LE MÊME NOM DES DEUX CÔTÉS.** `BATIMENTS.souche` le
+portait ; `BASE_BATIMENTS.chantierDeConstruction` le porte aussi depuis ce lot.
+Le Chantier tombé rase la base exactement comme la Souche rase un site, sans
+qu'une ligne de code ne le redise. Et il est le **seul** des onze sans plancher
+de PV : le faire plancher rendrait la base INRASABLE, et un test le tient.
+⚠⚠ **DEUX LECTURES PRISES, ET ELLES SE DÉFONT CHACUNE EN UNE LIGNE.** (1) Les
+verdicts sont vus du côté du joueur qui se défend — rasé = *défaite totale*,
+bâtiments entamés = *défaite*, rien touché = *victoire totale* ; c'est le miroir
+de `verdictDuRaid`. (2) **Un raid qui passe vide la réserve de réparation**,
+comme l'écrit `MODELE-ECONOMIQUE.md` §7 — « qui passe » voulant dire « qui a
+fait des dégâts », une attaque entièrement repoussée ne vide rien.
+⚠⚠ **UNE PIÈCE POSÉE SUR UN OBSTACLE NE FAIT PAS LEVER LE RAID, ET CE N'ÉTAIT
+PAS AU BRIEF.** `CODES_TOLERES_AU_CHARGEMENT` porte `obstacle` — le terrain se
+redéduit à chaque chargement, donc un rocher peut se poser sous une pièce placée
+légalement la veille — mais `creerCombat` REFUSE une telle pièce. Sans filtre, un
+raid de l'Ouvrage aurait LEVÉ sur un état que le jeu déclare jouable. Le montage
+porte donc deux listes d'INDICES, comme `composerLesVagues` : la pièce reste dans
+la garnison, elle ne se bat simplement pas.
+⚠⚠ **M1 : 327 ms AU PIRE, MESURÉ SUR 30 CONFIGURATIONS DE 72 H** — seuil d'arrêt
+du brief : une seconde. Le coût brut est de **12,4 ms par raid** ; ce qui borne
+le total, c'est que **le rasage est aussi le frein** : il éloigne la base de
+vingt cases, donc de ses attaquantes.
+⚠⚠ **M2 : 36,5 RAIDS PAR 24 H, SUR 150 GRAINES** — médiane 36 ou 37, min 18,
+max 58, à **1,4 % de l'espérance arithmétique**. Le brief supposait « cinq bases
+à portée » ; il y en a **entre 30 et 45**, donc sept fois plus de raids que son
+exemple. **C'est une MESURE, pas un réglage** : l'équilibrage est à Ethan seul.
+⚠ **`SAVE_VERSION` PASSE À 20** : `disposition` porte `degatsMilli`. La migration
+19 → 20 pose ZÉRO — une v19 n'avait aucun moyen d'abîmer un bâtiment, rien dans
+tout le dépôt n'écrivant de dégât sur la base du joueur avant ce lot.
+⚠ **UN BÂTIMENT ABÎMÉ N'A AUCUN EFFET DE JEU AUJOURD'HUI, ET IL FAUT LE SAVOIR.**
+Aucun lecteur de `disposition` ne lit `degatsMilli` — recensés : `state.js`,
+`chantier.js`, `missions.js`, `monde.js`, `satellites.js`, `reparation.js`,
+`raid.js`, tous sur `id`, `rangee`, `colonne`, `niveau`. Les dégâts ne comptent
+donc qu'au raid SUIVANT, et **rien ne les répare** : `REPARATION_BASE_JOUEUR.courbe`
+vaut toujours `null`. C'est le prochain trou.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot RAID-A :**
 `npm test` → **820 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 370 976 octets**, 0 référence externe.
 ⚠⚠ **CE LOT COÛTE +30 899 OCTETS ET OUVRE LE SEPTIÈME ÉCRAN.** Du code, du
@@ -615,7 +692,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 23 fichiers
+src/sim/                simulation déterministe, sans DOM — 24 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -630,6 +707,7 @@ src/sim/                simulation déterministe, sans DOM — 23 fichiers
   site-de-la-case.js    une case de la carte → un site jouable : deux graines, saveur, résumé
   site-entame.js        l'après-raid : planchers, ce qui reste debout, ce qui repousse
   raid.js               l'acte, et sa simulation : payer, partir, encaisser, revenir abîmé
+  raid-ouvrage.js       l'autre sens : quand l'Ouvrage vient, ce qu'il casse, ce qu'il rase
   reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
@@ -708,12 +786,13 @@ src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   43 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   44 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
+  raid-ouvrage
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans

@@ -557,8 +557,12 @@ test('disposition — toute base neuve est un Chantier niveau 1 en (18, 5)', () 
   // Ce n'est donc pas la règle du DÉMARRAGE, c'est la règle de FONDATION.
   const dispo = dispositionNouvelleBase();
   assert.equal(dispo.length, 1, 'un seul bâtiment à la fondation');
+  // ⚠ `degatsMilli: 0` DEPUIS LE LOT RAID-B (02/09) : un bâtiment du joueur peut
+  // désormais être endommagé, l'Ouvrage attaquant sa base. Le champ est présent
+  // et nul plutôt qu'absent — c'est ce qui évite à `pvCourantsMilli` d'avoir à
+  // deviner, et c'est la même convention que sur une pièce de garnison.
   assert.deepEqual(dispo[0], {
-    id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5,
+    id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5, degatsMilli: 0,
   });
 
   // Les deux coordonnées sont DÉRIVÉES de GEOMETRIE_BASE, pas écrites en dur :

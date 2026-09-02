@@ -93,8 +93,14 @@ test('état — une partie neuve ouvre sur la base du joueur, à sa position', (
   const etat = creerEtat(424242);
   assert.equal(etat.version, SAVE_VERSION);
   assert.deepEqual(etat.position, positionDepartJoueur());
+  // ⚠ `degatsMilli` EST ENTRÉ AU LOT RAID-B (02/09) : depuis que l'Ouvrage
+  // attaque la base, un bâtiment du joueur peut être endommagé. Un bâtiment
+  // neuf est intact, donc il porte ZÉRO — et le champ est PRÉSENT plutôt
+  // qu'absent, comme sur une pièce de garnison ou d'armée.
   assert.deepEqual(etat.disposition, [
-    { id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5 },
+    {
+      id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5, degatsMilli: 0,
+    },
   ]);
   // ⚠ L'AMORCE, arbitrée le 27/08 : 30 · 30 · 20. Elle est écrite en toutes
   // lettres ici plutôt que relue depuis `STOCK_DE_DEPART` — un test qui relit
@@ -311,7 +317,7 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
   const etat = charger(JSON.stringify(v0), T0);
 
   assert.equal(etat.version, SAVE_VERSION, 'version non mise à jour');
-  assert.equal(SAVE_VERSION, 19, 'le bump de la version des sauvegardes a été oublié');
+  assert.equal(SAVE_VERSION, 20, 'le bump de la version des sauvegardes a été oublié');
 
   // Le maillon v4 → v5 doit avoir été appliqué lui aussi : sans `fondation` le
   // terrain ne serait dérivable de rien.
@@ -360,7 +366,9 @@ test('test 12 — une sauvegarde de version 0 traverse toute la chaîne, jusqu\'
 
   // La base refondée est celle de n'importe quelle base neuve.
   assert.deepEqual(etat.disposition, [
-    { id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5 },
+    {
+      id: 'chantierDeConstruction', niveau: 1, rangee: 18, colonne: 5, degatsMilli: 0,
+    },
   ]);
   assert.deepEqual(etat.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
   assert.deepEqual(etat.position, positionDepartJoueur());
@@ -1269,9 +1277,18 @@ function etatAvecCommandement(niveauOffense = 4, niveauDefense = 6) {
   etat.disposition[0].niveau = 5;
   // Les deux QG sont `unique: true` et ne se touchent pas — la règle
   // « uniques-voisins » du 28/08 les sépare du Chantier posé en (18, 5).
+  // ⚠ `degatsMilli: 0` COMME `poser` LE POSE. Un montage écrit à la main doit
+  // ressembler à ce que le moteur produit, sinon il mesure autre chose que le
+  // jeu : sans ce champ, la migration v19 → v20 l'ajouterait ICI et la
+  // sauvegarde migrée cesserait d'être comparable à celle d'origine — pour une
+  // différence qui vient du test, pas du code.
   etat.disposition.push(
-    { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: niveauOffense },
-    { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense },
+    {
+      id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: niveauOffense, degatsMilli: 0,
+    },
+    {
+      id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense, degatsMilli: 0,
+    },
   );
   for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
     etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
@@ -1355,7 +1372,7 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   delete v6.satellites;
 
   const migre = migrer(structuredClone(v6));
-  assert.equal(migre.version, 19, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
+  assert.equal(migre.version, 20, 'la chaîne doit aller jusqu\'au bout, pas s\'arrêter à 7');
   assert.equal(migre.attaque.plafond, 100, 'le maillon v9 → v10 manque');
   assert.deepEqual(migre.sitesEntames, {}, 'le maillon v10 → v11 manque');
   assert.equal(migre.recherche.pointsMilli, '0', 'le maillon v11 → v12 manque');
@@ -1403,6 +1420,12 @@ test('forces — une sauvegarde v6 se migre en v7 sans rien perdre', () => {
   assert.deepEqual(migre.satellites.presents, []);
   assert.equal(migre.satellites.attentes.length, 3);
   // Et RIEN d'autre n'a bougé : la migration ajoute, elle ne refonde pas.
+  //
+  // ⚠ CETTE ASSERTION N'OBSERVE PAS LE MAILLON v19 → v20, et c'est un FAIT plus
+  // qu'un assouplissement : la v7 est sérialisée depuis un état RÉEL, dont les
+  // bâtiments portent déjà `degatsMilli: 0`. Ce qu'elle tient toujours, c'est
+  // que la chaîne entière n'a touché à AUCUN d'eux. Le maillon lui-même se
+  // mesure sur une v19 forgée SANS le champ — RAID-B T12.
   assert.deepEqual(migre.disposition, v7.disposition);
   assert.deepEqual(migre.economie, v7.economie);
   assert.deepEqual(migre.fondation, v7.fondation);
