@@ -445,6 +445,29 @@ export function initialiserSession(doc) {
     if (miniTutoriel !== null) miniTutoriel.rafraichir(etat);
   }
 
+  /**
+   * Tout repeindre — appelé par la BASCULE, et par elle seule.
+   *
+   * ⚠⚠ IL NE SE BRANCHE PAS SUR LA BOUCLE. `rafraichir` passe dix fois par
+   * seconde ; y repeindre les cinq écrans reconstruirait des centaines de nœuds
+   * pour rien, et l'écran Monde referait ses dalles. La bascule, elle, est un
+   * geste rare qui change ce que TOUS les écrans montrent : c'est le seul
+   * instant où l'image qu'ils gardent devient fausse d'un coup.
+   *
+   * ⚠ L'ÉCRAN DE RAID N'EST PAS DEDANS : il est ouvert sur une cible, pas sur
+   * une base, et il porte sa propre armée montée. Le repeindre au milieu d'un
+   * raid reviendrait à changer l'armée sous le joueur.
+   */
+  function rafraichirTousLesEcrans() {
+    if (etat === null) return;
+    ecran.peindre(etat);
+    rafraichirLaBase();
+    if (ecranOffense !== null) ecranOffense.peindre(etat);
+    if (ecranMission !== null) ecranMission.peindre(etat);
+    if (ecranRecherche !== null) ecranRecherche.peindre(etat);
+    if (ecranMonde !== null) ecranMonde.rafraichir(etat);
+  }
+
   function demarrerBoucle() {
     // ⚠ PAS DE BOUCLE SANS ÉTAT. Tant que le joueur n'a pas tranché devant le
     // panneau « sauvegarde illisible », `etat` vaut null : un aller-retour
@@ -855,6 +878,20 @@ export function initialiserSession(doc) {
     // niveaux — mais un de ses trois boutons change d'ÉCRAN, ce que seule la
     // session sait faire. Même découpage que `apresPose`.
     versEcran: (nom) => montrerEcran(nom),
+    // ⚠⚠ BASCULER EST UNE DÉCISION DU JOUEUR, DONC ELLE S'ÉCRIT TOUT DE SUITE.
+    // `baseCourante` gouverne ce que tous les écrans montrent ET quelle base
+    // part au raid (§4.6 : haloter et basculer sont le même geste) : la perdre
+    // parce que le système a tué l'application ferait attaquer depuis la
+    // mauvaise base au retour. Même raisonnement que `apresPose`.
+    //
+    // ⚠ ET LES AUTRES ÉCRANS SE REPEIGNENT. Chacun relit l'état à sa peinture,
+    // mais ceux qui sont déjà construits gardent l'image de l'ancienne base
+    // tant qu'on ne les redemande pas — la carte en particulier, qui ne
+    // redessine que si les satellites ont bougé.
+    apresBascule: () => {
+      sauvegarder();
+      rafraichirTousLesEcrans();
+    },
   });
   // ⚠ L'ÉCRAN OFFENSE SE REPEINT MAINTENANT, ET IL ÉCRIT. Il se construisait
   // une fois et ne se rafraîchissait jamais, « tant qu'aucune armée n'existe ».
@@ -919,6 +956,12 @@ export function initialiserSession(doc) {
     apresDeplacement: () => {
       sauvegarder();
       rafraichirLaBase();
+    },
+    // ⚠ TOUCHER UNE AUTRE DE SES BASES SUR LA CARTE LA REND COURANTE : c'est le
+    // même geste que les flèches de bascule, donc le même traitement.
+    apresBascule: () => {
+      sauvegarder();
+      rafraichirTousLesEcrans();
     },
   });
   montrerEcran('chantier');

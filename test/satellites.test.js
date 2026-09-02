@@ -165,7 +165,7 @@ test('satellites — un déplacement de base remet les trois à zéro', () => {
   }
   // Et le compteur d'instances n'est PAS remis à zéro : deux camps successifs
   // sur une même case doivent rester distinguables même après un déménagement.
-  assert.ok(baseCourante(etat).satellites.prochaineInstance > 4);
+  assert.ok(etat.prochaineInstanceSatellite > 4);
 });
 
 test('satellites — ils traversent la sauvegarde', () => {
@@ -263,29 +263,35 @@ test('satellites — le camp suit le niveau du JOUEUR, l\'avant-poste celui de l
 });
 
 test('satellites — une table malformée est refusée, une table vide ne l\'est pas', () => {
-  assert.deepEqual(problemesDesSatellites(satellitesVides()), []);
+  assert.deepEqual(problemesDesSatellites(satellitesVides(), 1), []);
 
   const hors = satellitesVides();
   hors.presents.push({
     type: 'camp', rangee: GEOGRAPHIE.carte.hauteur + 5, colonne: 3, niveau: 1, instance: 1,
   });
-  hors.prochaineInstance = 2;
-  assert.ok(problemesDesSatellites(hors).some((m) => m.includes('hors carte')));
+  assert.ok(problemesDesSatellites(hors, 2).some((m) => m.includes('hors carte')));
 
   const inconnu = satellitesVides();
   inconnu.presents.push({ type: 'forteresse', rangee: 100, colonne: 3, niveau: 1, instance: 1 });
-  inconnu.prochaineInstance = 2;
-  assert.ok(problemesDesSatellites(inconnu).some((m) => m.includes('inconnu')));
+  assert.ok(problemesDesSatellites(inconnu, 2).some((m) => m.includes('inconnu')));
 
   // ⚠ UNE INSTANCE AU-DELÀ DU COMPTEUR EST UNE FAUTE, et c'est elle qui
   // attraperait un compteur remis à zéro par erreur — la faute qui ferait
   // repartir toutes les dispositions de camps depuis le début.
+  //
+  // ⚠ LE COMPTEUR EST PASSÉ EN ARGUMENT DEPUIS BASES-1 : il est GLOBAL à la
+  // partie, plus propre à une base. C'est ce qui rend son unicité STRUCTURELLE —
+  // deux bases ne peuvent plus partir du même numéro, donc de la même graine
+  // d'apparition.
   const avance = satellitesVides();
   avance.presents.push({ type: 'camp', rangee: 100, colonne: 3, niveau: 1, instance: 9 });
-  assert.ok(problemesDesSatellites(avance).some((m) => m.includes('au-delà du compteur')));
+  assert.ok(problemesDesSatellites(avance, 2).some((m) => m.includes('au-delà du compteur')));
+  // Et un compteur absent ou nul est refusé de face.
+  assert.ok(problemesDesSatellites(satellitesVides(), 0).some((m) => m.includes('prochaine instance')));
+  assert.ok(problemesDesSatellites(satellitesVides(), undefined).some((m) => m.includes('prochaine instance')));
 
-  assert.ok(problemesDesSatellites(null).length > 0);
-  assert.ok(problemesDesSatellites({ presents: [], attentes: {} }).length > 0);
+  assert.ok(problemesDesSatellites(null, 1).length > 0);
+  assert.ok(problemesDesSatellites({ presents: [], attentes: {} }, 1).length > 0);
 });
 
 test('satellites — une apparition ne consomme PAS le flux de l\'état', () => {
@@ -331,7 +337,7 @@ test('satellites — un anneau saturé REPORTE l\'attente, il ne la perd pas', (
     });
     instance += 1;
   }
-  baseCourante(etat).satellites.prochaineInstance = instance;
+  etat.prochaineInstanceSatellite = instance;
 
   baseCourante(etat).satellites.attentes = [{ type: 'camp', tickDu: 0 }];
   const parus = resoudreSatellites(etat);
@@ -495,8 +501,8 @@ test('relève — les deux chemins d\'avancement rendent le MÊME état', () => 
 
   // D'abord : le montage mesure-t-il quelque chose ? Sans plusieurs relèves,
   // l'égalité ne dirait rien.
-  assert.ok(baseCourante(parBoucle).satellites.prochaineInstance > 6,
-    `montage sans mordant : seulement ${baseCourante(parBoucle).satellites.prochaineInstance - 1} poses`);
+  assert.ok(parBoucle.prochaineInstanceSatellite > 6,
+    `montage sans mordant : seulement ${parBoucle.prochaineInstanceSatellite - 1} poses`);
 
   assert.deepEqual(
     baseCourante(parSaut).satellites, baseCourante(parBoucle).satellites,
@@ -532,8 +538,8 @@ test('relève — dix ans d\'absence se rattrapent, et on mesure ce que ça coû
   // Le compteur d'instances dit combien de relèves ont vraiment eu lieu : c'est
   // ce qui prouve que la boucle a fait le travail au lieu de le sauter.
   const cycles = Math.floor(dixAns / (TICKS_DUREE_DE_VIE + TICKS_APPARITION));
-  assert.ok(baseCourante(etat).satellites.prochaineInstance > cycles,
-    `${baseCourante(etat).satellites.prochaineInstance - 1} poses pour ${cycles} cycles attendus`);
+  assert.ok(etat.prochaineInstanceSatellite > cycles,
+    `${etat.prochaineInstanceSatellite - 1} poses pour ${cycles} cycles attendus`);
 
   // ⚠ LE SEUIL EST LARGE EXPRÈS : il n'est pas là pour mesurer la machine, il
   // est là pour attraper un retour à une boucle par TICK, qui serait mille fois

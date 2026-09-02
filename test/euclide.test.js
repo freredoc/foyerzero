@@ -387,19 +387,29 @@ test('EUCLIDE — une seule fonction décide de la portée, et tous les lecteurs
   }
 });
 
-test('EUCLIDE — les zones d\'influence restent en Tchebychev, et c\'est une lecture', () => {
-  // ⚠⚠ LE LOT NE FAIT BASCULER QUE LES TROIS DISTANCES DE PORTÉE. Les zones
-  // d'influence — rayon 2 pour le joueur, 3 pour l'Ouvrage — sont des CARRÉS que
-  // `sim/territoire.js` peint case par case sur l'écran Monde. Les passer à
-  // Euclide dans le barème du raid sans les repeindre là-bas ferait payer le
-  // tarif de proximité sur des cases que la carte ne montre pas comme siennes.
+test('EUCLIDE — les zones d\'influence sont passées au disque, ET LES DEUX ENSEMBLE', () => {
+  // ⚠⚠ CETTE LECTURE A ÉTÉ RETOURNÉE AU LOT BASES-1, 02/09/2026, ET LE TEST
+  // NOMMAIT SA PROPRE CONDITION DE RETOURNEMENT. Il disait : « les zones
+  // d'influence restent en Tchebychev […] c'est une LECTURE, pas un arbitrage :
+  // si Ethan veut les zones en disque, ce sont `estEnTerritoireAllie` ET la
+  // boucle de `territoire.js` qui changent, ensemble. » C'est ce jour-ci, et le
+  // test garde désormais le « ENSEMBLE », qui est la seule chose qui puisse
+  // encore mal tourner.
   //
-  // C'est une LECTURE, pas un arbitrage : si Ethan veut les zones en disque, ce
-  // sont `estEnTerritoireAllie` ET la boucle de `territoire.js` qui changent,
-  // ensemble.
-  const source = decommentee('src/sim/points-attaque.js');
-  assert.match(source, /distanceTchebychev\(base\.position, cible\)/,
-    'le territoire allié ne se mesure plus en Tchebychev');
+  // ⚠ IL EST PLUS STRICT QU'AVANT, PAS PLUS LÂCHE : il vérifiait qu'UN fichier
+  // portait Tchebychev ; il vérifie maintenant que les DEUX portent le disque, et
+  // qu'aucun des deux n'est resté en arrière. Un seul des deux changé ferait
+  // payer le tarif de proximité sur des cases que la carte ne montre pas comme
+  // siennes — la divergence que le joueur constate sans pouvoir l'expliquer.
+  const barème = decommentee('src/sim/points-attaque.js');
+  const carte = decommentee('src/sim/territoire.js');
+  assert.doesNotMatch(barème, /distanceTchebychev\(base\.position, cible\)/,
+    'le territoire allié se mesure encore en Tchebychev dans le barème');
+  assert.match(barème, /distanceCarreeCases\(base\.position, cible\)/,
+    'le barème ne mesure pas le territoire au carré de la distance');
+  assert.match(carte, /dr \* dr \+ dc \* dc > rayonCarre/,
+    'la boucle de peinture ne filtre pas par le disque : la carte est restée carrée');
+
   // La diagonale à 2 est DEDANS en Tchebychev, DEHORS en Euclide : c'est
   // exactement le cas où les deux métriques divergent, et il est mesuré.
   const o = { rangee: 0, colonne: 0 };
@@ -407,4 +417,11 @@ test('EUCLIDE — les zones d\'influence restent en Tchebychev, et c\'est une le
   assert.equal(distanceTchebychev(o, diagonale), 2);
   assert.equal(distanceCarreeCases(o, diagonale), 8);
   assert.ok(distanceCarreeCases(o, diagonale) > GEOGRAPHIE.rayonInfluenceJoueur ** 2);
+
+  // ⚠ ET LE BARÈME, LUI, COMPTE TOUJOURS EN CASES DE GRILLE. C'est l'autre
+  // lecture d'EUCLIDE, celle-là INTACTE : la PORTÉE est un disque, le PRIX se
+  // compte en cases de grille, et un raid en diagonale ne renchérit pas pour la
+  // seule raison qu'il est en diagonale.
+  assert.match(barème, /distanceTchebychev\(baseAttaquante\.position, cible\)/,
+    'le barème du raid ne compte plus la distance en cases de grille');
 });

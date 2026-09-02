@@ -24,7 +24,9 @@
 // ⚠ CE MODULE NE TOUCHE NI AU DOM NI À L'ÉCRAN. Il rend des problèmes chiffrés
 // en français ; l'écran les affiche tels quels, il ne les reformule pas.
 
-import { ARBRE_RECHERCHE, gratuitesDe, BRANCHES } from '../data/recherche.js';
+import {
+  ARBRE_RECHERCHE, gratuitesDe, BRANCHES, SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE,
+} from '../data/recherche.js';
 import { UNITES, DEFENSES } from '../data/combat.js';
 import { MODULES, moduleEstCable } from '../data/modules.js';
 
@@ -87,7 +89,7 @@ function exigerEtat(etat) {
   if (etat.recherche === undefined) {
     throw new Error('recherche : champ « recherche » absent de l\'état');
   }
-  for (const champ of ['acquises', 'modules']) {
+  for (const champ of ['acquises', 'modules', 'basesAutorisees']) {
     if (etat.recherche[champ] === undefined) {
       throw new Error(
         `recherche : champ « recherche.${champ} » absent — sauvegarde non migrée ?`,
@@ -108,11 +110,19 @@ function exigerEtat(etat) {
  * ⚠ IL NE REND PAS `pointsMilli`. Ce champ appartient à `creerRecherche` de
  * `sim/raid.js` et ne change ni de nom ni de forme dans ce lot.
  *
+ * ⚠⚠ `basesAutorisees` ENTRE ICI AU LOT BASES-1, ET IL VAUT UN. C'est le nombre
+ * de bases que le joueur a le DROIT de tenir, pas le nombre qu'il tient : les
+ * deux se séparent dès qu'il achète son rang sans avoir encore choisi sa case.
+ * Il vit dans `recherche` parce qu'il est ACHETÉ — le mettre à la racine de
+ * l'état en ferait une propriété de la partie plutôt que du progrès du joueur.
+ *
  * @returns {{acquises: {offense: string[], defense: string[]},
- *            modules: {offense: string[], defense: string[]}}}
+ *            modules: {offense: string[], defense: string[]},
+ *            basesAutorisees: number}}
  */
 export function creerAcquises() {
   return {
+    basesAutorisees: 1,
     // ⚠ TRIÉES, comme toute liste rangée par `acheter`. `gratuitesDe` rend
     // l'ordre de la table ; deux sauvegardes du même joueur doivent se comparer
     // au caractère près, quelle que soit la route par laquelle une pièce est
@@ -334,5 +344,106 @@ export function acheter(etat, branche, id, quoi) {
   // Triées et sans doublon : `problemesDeLAchat` a déjà refusé le doublon, le
   // tri rend la sauvegarde comparable d'une partie à l'autre.
   liste.sort();
+  return etat;
+}
+
+// ---------------------------------------------------------------------------
+// Le nœud répétable — le droit de fonder une base de plus
+// ---------------------------------------------------------------------------
+
+/**
+ * Le rang que le PROCHAIN achat ouvrirait — 2 pour la deuxième base, et ainsi
+ * de suite.
+ *
+ * ⚠⚠ IL SE COMPTE SUR CE QUI EST ACHETÉ, PAS SUR CE QUI EST FONDÉ. Le joueur
+ * peut payer son droit et attendre pour choisir sa case ; compter les bases
+ * POSÉES lui referait payer le prix du rang 2 une seconde fois, et le rang 3 ne
+ * serait jamais atteint tant qu'il n'aurait pas fondé.
+ *
+ * @param {object} etat
+ * @returns {number}
+ */
+export function rangDeLaBaseSuivante(etat) {
+  exigerEtat(etat);
+  return etat.recherche.basesAutorisees + 1;
+}
+
+/**
+ * Le prix, en MILLI-points, du rang que le prochain achat ouvrirait.
+ *
+ * ⚠⚠ EN ENTIERS, ×5 PUIS ÷2, JAMAIS ×2,5. Le facteur vit dans `SPECIAL`, sous
+ * la forme d'une FRACTION, et c'est ce qui rend le prix exact : `2,5 ** 8`
+ * calculé en flottant puis converti en `BigInt` se met à mentir bien avant que
+ * la chaîne — qui est OUVERTE — n'y arrive. Ici tout reste entier.
+ *
+ * ⚠ L'EXACTITUDE A UNE BORNE, ET ELLE EST ÉCRITE. Le prix de départ vaut
+ * 2 000 000 000 milli, soit 2¹⁰ × 5⁹ : la division par 2 est donc exacte
+ * jusqu'au dixième rachat, c'est-à-dire jusqu'au RANG 12. Au-delà, on arrondit
+ * au milli-point SUPÉRIEUR — dans le sens du refus, comme partout ici : mieux
+ * vaut faire payer un milli-point de trop que d'en offrir un. Le rang 12
+ * coûterait déjà 4,8 × 10⁸ points, soit deux cent quarante fois le rang 2.
+ *
+ * @param {object} etat
+ * @returns {bigint} milli-points
+ */
+export function coutDeLaBaseSuivanteMilli(etat) {
+  const ligne = SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE];
+  const rachats = BigInt(rangDeLaBaseSuivante(etat) - ligne.premierRang);
+  if (rachats < 0n) {
+    throw new RangeError(`recherche : rang ${rangDeLaBaseSuivante(etat)} sous le premier rang`);
+  }
+  const numerateur = BigInt(ligne.cout) * MILLE * BigInt(ligne.facteurNumerateur) ** rachats;
+  const denominateur = BigInt(ligne.facteurDenominateur) ** rachats;
+  // Division au supérieur : `(a + b - 1) / b` sur des entiers positifs.
+  return (numerateur + denominateur - 1n) / denominateur;
+}
+
+/**
+ * Les refus de l'achat du droit de fonder — une LISTE, comme partout ici.
+ *
+ * ⚠ ELLE NE REGARDE QUE LES POINTS. Il n'y a rien d'autre à refuser : le nœud
+ * est répétable et sans prérequis, et c'est `problemesDeLaFondation` qui dit
+ * ensuite OÙ la base peut se poser. Mélanger les deux ferait refuser un ACHAT
+ * pour une raison de CARTE.
+ *
+ * @param {object} etat
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLAchatDUneBase(etat) {
+  exigerEtat(etat);
+  const du = coutDeLaBaseSuivanteMilli(etat);
+  const ai = BigInt(etat.recherche.pointsMilli);
+  if (du <= ai) return [];
+  const manque = (du - ai + MILLE - 1n) / MILLE;
+  return [{
+    code: 'pointsInsuffisants',
+    message: `il manque ${grouper(manque)} point${manque > 1n ? 's' : ''}`,
+  }];
+}
+
+/**
+ * Achète le droit de fonder une base de plus : débite, et ouvre le rang.
+ *
+ * ⚠ LE DÉBIT ET L'OUVERTURE SONT INDISSOCIABLES, comme dans `acheter`. Si l'un
+ * passait sans l'autre, le joueur paierait sans recevoir, et une sauvegarde
+ * garderait la faute.
+ *
+ * ⚠ IL NE POSE AUCUNE BASE. Acheter donne le DROIT ; fonder est un geste de
+ * carte, qui passe par `problemesDeLaFondation` et `fonderUneBase`. Les
+ * confondre obligerait l'écran Recherche à connaître une case.
+ *
+ * @param {object} etat modifié en place
+ * @returns {object} le même état
+ */
+export function acheterUneBaseDePlus(etat) {
+  const problemes = problemesDeLAchatDUneBase(etat);
+  if (problemes.length > 0) {
+    throw new Error(
+      `recherche : achat impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  const reste = BigInt(etat.recherche.pointsMilli) - coutDeLaBaseSuivanteMilli(etat);
+  etat.recherche.pointsMilli = reste.toString();
+  etat.recherche.basesAutorisees += 1;
   return etat;
 }

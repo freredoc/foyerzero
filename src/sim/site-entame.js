@@ -44,7 +44,9 @@
 
 import { TYPES_SITE, APRES_RAID, BATIMENTS } from '../data/sites.js';
 import { TICKS_PAR_HEURE } from './clock.js';
-import { detruireSatellite, prolongerApresAttaque } from './satellites.js';
+import {
+  detruireSatellite, prolongerApresAttaque, trouverSatellite,
+} from './satellites.js';
 import { montageDuSite, resumeDuSite } from './site-de-la-case.js';
 import { baseCourante } from './base-courante.js';
 
@@ -113,6 +115,38 @@ function neDitRien(entree) {
 }
 
 /**
+ * Le site disparaît de la carte : plus d'entrée d'entame, et le satellite retiré.
+ *
+ * ⚠⚠ ELLE EST SORTIE D'`enregistrerLeRaid` AU LOT BASES-1, ET C'EST UN
+ * DÉPLACEMENT. Fonder une base sur un camp le détruit aussi (§4.4), et il y
+ * aurait eu DEUX codes pour faire disparaître un site — l'un qui pense à
+ * `basesRasees`, l'autre qui l'oublie. Ce qui est COMMUN aux deux gestes, c'est
+ * l'effacement ; ce qui leur est propre reste chez chacun.
+ *
+ * ⚠⚠ ON CHERCHE DANS TOUTES LES BASES. Un satellite appartient à la base autour
+ * de laquelle il est paru, pas à celle que le joueur regarde : raser le camp de
+ * sa SECONDE base pendant que la première est courante n'aurait rien détruit, et
+ * le camp serait resté sur la carte comme si de rien n'était.
+ *
+ * ⚠ ELLE NE LÈVE PAS SI LE SATELLITE A DÉJÀ DISPARU. Le raid se résout sur un
+ * montage, pas sur la table : rien ne garantit à ce module que le satellite est
+ * encore là. Ce qui compte est qu'il ne soit plus là après.
+ *
+ * @param {object} etat modifié en place
+ * @param {object} identite le site à retirer
+ */
+export function retirerLeSite(etat, identite) {
+  exigerTable(etat);
+  delete etat.sitesEntames[cleDuSite(identite)];
+  if (identite.type === 'base') {
+    etat.basesRasees.push(`${identite.rangee}:${identite.colonne}`);
+    return;
+  }
+  const trouve = trouverSatellite(etat, identite);
+  if (trouve !== null) detruireSatellite(etat, trouve.index, trouve.base);
+}
+
+/**
  * Enregistre ce qu'un raid a laissé du site.
  *
  * ⚠ ELLE N'ÉCRIT NI LE BUTIN, NI LES POINTS, NI L'ARMÉE DU JOUEUR. Ce module
@@ -139,19 +173,7 @@ export function enregistrerLeRaid(etat, identite, resultat) {
   const cle = cleDuSite(identite);
 
   if (resultat.cause === 'souche') {
-    delete etat.sitesEntames[cle];
-    if (identite.type === 'base') {
-      etat.basesRasees.push(`${identite.rangee}:${identite.colonne}`);
-    } else {
-      const index = laBase.satellites.presents.findIndex(
-        (s) => s.rangee === identite.rangee && s.colonne === identite.colonne
-          && s.instance === identite.instance,
-      );
-      // ⚠ ELLE NE LÈVE PAS SI LE SATELLITE A DÉJÀ DISPARU. Le raid se résout
-      // sur un montage, pas sur la table : rien ne garantit à ce module que le
-      // satellite est encore là. Ce qui compte est qu'il ne soit plus là après.
-      if (index >= 0) detruireSatellite(etat, index);
-    }
+    retirerLeSite(etat, identite);
     return { rase: true };
   }
 

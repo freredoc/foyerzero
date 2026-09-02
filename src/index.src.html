@@ -1461,11 +1461,12 @@
   <!-- 2. les ressources, et le compteur qui suit le contexte. -->
   <div id="ressources"></div>
 
-  <!-- 3. la bascule entre bases.
-       ⚠ COQUILLE ASSUMÉE, ET ELLE LE DIT. Le joueur n'a qu'UNE base ; les deux
-       flèches sont donc désactivées, et le libellé « 1 / 1 » explique pourquoi
-       mieux qu'une infobulle. Le jour où l'état portera plusieurs bases, il n'y
-       aura qu'à les rendre vives. -->
+  <!-- 3. la bascule entre bases — VIVE depuis le lot BASES-1.
+       ⚠ LES DEUX FLÈCHES NAISSENT DÉSACTIVÉES, et c'est `navigationEntreBases`
+       qui les rouvre à la première peinture : une partie qui n'a qu'une base
+       n'a nulle part où aller, et le libellé « 1 / 1 » le dit mieux qu'une
+       infobulle. L'attribut du balisage n'est donc pas une coquille, c'est
+       l'état d'avant la première peinture. -->
   <div id="navigation">
     <button type="button" id="navigation-precedente" disabled>◀</button>
     <span id="navigation-libelle">—</span>
@@ -1553,10 +1554,15 @@
 
     <!-- ======================================================================
          ÉCRAN OFFENSE — la composition d'un raid : quatre vagues de neuf.
-         ⚠ COQUILLE ASSUMÉE. L'état du joueur ne porte pas d'armée, donc rien ne
-         peut être composé ici aujourd'hui. Il n'a plus ni en-tête ni barre à
-         lui : les onglets, les ressources et la barre du bas sont communs, ce
-         qui est exactement ce qu'Ethan a demandé.
+         ⚠⚠ CE COMMENTAIRE A MENTI JUSQU'AU LOT BASES-1. Il disait « COQUILLE
+         ASSUMÉE, l'état du joueur ne porte pas d'armée » : c'était vrai jusqu'au
+         28/08, et faux depuis — `etat.bases[…].armee` existe, l'écran y compose,
+         et RAID-A s'en sert pour partir en raid. Le commentaire avait survécu à
+         ce qu'il décrivait, et il envoyait chercher une coquille qui n'était
+         plus là. ⚠ Ne jamais laisser un commentaire qui décrit un état révolu.
+         ⚠ L'ÉCRAN N'A NI EN-TÊTE NI BARRE À LUI : les onglets, les ressources et
+         la barre du bas sont communs, ce qui est exactement ce qu'Ethan a
+         demandé. Son chrome fait 288 px, comme celui du Chantier.
          ====================================================================== -->
     <!-- ⚠ L'ÉCRAN DU TUTORIEL. Il ne porte AUCUNE règle : ce qui est fait ou
          non se décide dans `sim/missions.js`, qui lit la base. Il n'a pas de

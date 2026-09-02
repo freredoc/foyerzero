@@ -250,6 +250,37 @@ function verser(economie, capacites, ressource, gainMilli) {
 }
 
 /**
+ * Verse un butin ENTIER dans une base, et dit ce qui n'a pas tenu.
+ *
+ * ⚠⚠ ELLE EST SORTIE D'`executerRaid` AU LOT BASES-1, ET C'EST UN DÉPLACEMENT,
+ * PAS UNE ADDITION. Fonder une base sur un camp le détruit et rend son butin
+ * (§4.4) : sans cette extraction, il y aurait eu DEUX codes qui plafonnent un
+ * butin et comptent ce qui déborde, et le second aurait divergé du premier au
+ * premier réglage — c'est la faute que `raserLaBase` a déjà value au dépôt.
+ *
+ * ⚠ LA BASE QUI REÇOIT EST UN ARGUMENT, et c'est tout l'intérêt : le raid verse
+ * dans la base qui attaque, la fondation dans la base qui FONDE — jamais dans
+ * celle qu'on vient de poser, qui n'a aucun stockage.
+ *
+ * @param {object} laBase la base qui encaisse
+ * @param {object} gagne butin en unités entières, par ressource
+ * @returns {{verse: object, perdu: object}} en unités entières
+ */
+export function verserLeButin(laBase, gagne) {
+  const capacites = capacitesMilli(laBase.disposition);
+  const verse = {};
+  const perdu = {};
+  for (const ressource of RESSOURCES) {
+    const unites = gagne[ressource] ?? 0;
+    if (unites === 0) continue;
+    const resteMilli = verser(laBase.economie, capacites, ressource, unites * MILLE);
+    verse[ressource] = unites - Math.floor(resteMilli / MILLE);
+    if (resteMilli > 0) perdu[ressource] = Math.floor(resteMilli / MILLE);
+  }
+  return { verse, perdu };
+}
+
+/**
  * Ce qui reste DEBOUT d'une liste de lignes de combat, en pour-cent entiers.
  *
  * ⚠ « RESTANT », PAS « DÉTRUIT » — Ethan, 01/09. Les deux disent la même chose
@@ -465,17 +496,7 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   );
 
   // --- le butin entre dans l'économie ---------------------------------------
-  const gagne = butin(resultat, montage);
-  const capacites = capacitesMilli(laBase.disposition);
-  const verse = {};
-  const perdu = {};
-  for (const ressource of RESSOURCES) {
-    const unites = gagne[ressource] ?? 0;
-    if (unites === 0) continue;
-    const resteMilli = verser(laBase.economie, capacites, ressource, unites * MILLE);
-    verse[ressource] = unites - Math.floor(resteMilli / MILLE);
-    if (resteMilli > 0) perdu[ressource] = Math.floor(resteMilli / MILLE);
-  }
+  const { verse, perdu } = verserLeButin(laBase, butin(resultat, montage));
 
   // --- les points de recherche se rangent -----------------------------------
   const gagnesMilli = pointsRecherche(resultat, montage);
@@ -637,11 +658,16 @@ const AUTO_REPARATION_PCT = 20;
  * ⚠ 20 % DES DÉGÂTS, PAS DES PV MAX, et un seul `Math.floor`. Une pièce peu
  * abîmée regagne peu ; le reste se soigne par la réparation ordinaire.
  *
+ * ⚠ LA GARNISON RECOLLÉE EST CELLE DE LA BASE ATTAQUÉE, PAS DE CELLE QU'ON
+ * REGARDE — la base se passe en argument depuis BASES-1. Le défaut est la
+ * courante : c'est ce que veut `executerRaid`, où la base qui part au raid est
+ * bien celle du joueur.
+ *
  * @param {object} etat modifié en place
+ * @param {object} [laBase] la base dont on recolle la garnison
  * @returns {number} milli-PV rendus, tous ouvrages confondus
  */
-export function reparerLaGarnison(etat) {
-  const laBase = baseCourante(etat);
+export function reparerLaGarnison(etat, laBase = baseCourante(etat)) {
   let rendus = 0;
   for (const piece of laBase.garnison) {
     if (piece.degatsMilli <= 0) continue;

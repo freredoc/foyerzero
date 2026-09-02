@@ -172,8 +172,22 @@ export function reservesVides() {
  * @returns {number} ticks
  */
 export function plafondDeLaReserve(etat) {
-  const laBase = baseCourante(etat);
-  const dixiemes = niveauDeLArmee(laBase.armee) ?? 0;
+  return plafondDeLaReserveDeLaBase(baseCourante(etat));
+}
+
+/**
+ * Le même plafond, lu sur une BASE.
+ *
+ * ⚠⚠ ELLE EXISTE POUR LA BOUCLE DE `crediterLesReserves` — lot BASES-1. Le
+ * plafond dépend du niveau de l'armée de CETTE base : créditer toutes les bases
+ * au plafond de la courante donnerait à une base sans armée la réserve d'une
+ * base équipée, ou l'inverse. C'est le piège que le §5.3 du brief nomme.
+ *
+ * @param {{ armee: Array }} base
+ * @returns {number} plafond en ticks
+ */
+export function plafondDeLaReserveDeLaBase(base) {
+  const dixiemes = niveauDeLArmee(base.armee) ?? 0;
   const heures = REPARATION.plafondHeures
     + REPARATION.plafondHeuresParNiveauArmee * (dixiemes / DIXIEMES_PAR_NIVEAU);
   return Math.floor(heures * TICKS_PAR_HEURE);
@@ -199,14 +213,24 @@ export function plafondDeLaReserve(etat) {
  * @param {number} nbTicks
  */
 export function crediterLesReserves(etat, nbTicks) {
-  const laBase = baseCourante(etat);
   if (!Number.isInteger(nbTicks) || nbTicks < 0) {
     throw new RangeError(`réparation : « ${nbTicks} » ticks — entier ≥ 0 attendu`);
   }
-  const plafond = plafondDeLaReserve(etat);
-  for (const chassis of CHASSIS_REPARABLES) {
-    const avant = laBase.reserveReparation[chassis];
-    laBase.reserveReparation[chassis] = Math.min(plafond, avant + nbTicks);
+  // ⚠⚠ TOUTES LES BASES, PAS SEULEMENT LA COURANTE — lot BASES-1, 02/09/2026.
+  // C'est l'une des trois conditions de rupture que le rapport de BASES-0 avait
+  // NOMMÉES, et le commentaire de `reserveReparation` dans `sim/state.js` le
+  // disait mot pour mot : « `crediterLesReserves` devra boucler dessus ». Sans la
+  // boucle, la base qu'on ne regarde pas n'accumulerait jamais de temps de
+  // réparation, et le joueur le verrait comme un bogue d'économie.
+  //
+  // ⚠ CHACUNE À SON PROPRE PLAFOND. Il dépend du niveau de SON armée : un
+  // plafond commun ferait déborder la base sans armée et brider celle qui en a.
+  for (const base of etat.bases) {
+    const plafond = plafondDeLaReserveDeLaBase(base);
+    for (const chassis of CHASSIS_REPARABLES) {
+      const avant = base.reserveReparation[chassis];
+      base.reserveReparation[chassis] = Math.min(plafond, avant + nbTicks);
+    }
   }
 }
 

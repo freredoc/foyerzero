@@ -427,6 +427,24 @@ export const DEPLACEMENT = {
   delaiHeures: GEOGRAPHIE.delaiEntreSautsHeures,
 };
 
+/**
+ * La fondation d'une base de plus — lot BASES-1, arbitré par Ethan le 02/09.
+ *
+ * ⚠⚠ DIX CASES, COMME LE DÉPLACEMENT, ET POURTANT UNE TABLE À PART. C'est la
+ * règle §4 de `CLAUDE.md` prise à l'endroit : deux grandeurs qui partagent
+ * aujourd'hui une valeur ne sont pas la même grandeur. Le déplacement dit
+ * jusqu'où une base SAUTE, la fondation jusqu'où une base neuve peut se poser à
+ * partir des anciennes. Écrire `DEPLACEMENT.porteeMaxCases` ici ferait bouger
+ * l'une le jour où Ethan règle l'autre, et personne ne verrait pourquoi.
+ *
+ * ⚠ EUCLIDIENNE, comme tout ce qui est une PORTÉE depuis le lot EUCLIDE — au
+ * carré des deux côtés, jamais de racine.
+ */
+export const FONDATION = {
+  /** Distance maximale à la base existante la plus proche, en cases. */
+  porteeMaxCases: 10,
+};
+
 // --- peuplement de la carte --------------------------------------------------
 // ARBITRÉ le 29/08/2026 par Ethan : « dans un carré de 12×12, il y a environ 12
 // bases ouvrage », « aucune base ouvrage et joueur ne peuvent être côte à côte

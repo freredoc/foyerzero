@@ -75,23 +75,49 @@ export const BRANCHES = ['offense', 'defense'];
 /**
  * L'onglet SPÉCIAL.
  *
- * ⚠ AUCUNE DE CES QUATRE RECHERCHES N'A DE MÉCANIQUE DANS LE MOTEUR : elles
- * s'AFFICHENT et ne s'achètent pas. La deuxième base n'existe pas — l'état ne
- * porte qu'une `disposition`, et la bascule entre bases de `index.src.html` se
- * déclare « COQUILLE ASSUMÉE ». Les trois soutiens, eux, n'ont même pas de
- * coût : le classeur leur donne un NIVEAU d'apparition (« vers niv 25 / 30 /
- * 35 »), qui ne veut plus rien dire depuis que la recherche seule ouvre les
- * pièces.
+ * ⚠⚠ LA PREMIÈRE LIGNE S'ACHÈTE DEPUIS BASES-1, ET ELLE SE RACHÈTE. Les TROIS
+ * SOUTIENS, eux, n'ont toujours ni moteur ni prix : le classeur leur donne un
+ * NIVEAU d'apparition (« vers niv 25 / 30 / 35 »), qui ne veut plus rien dire
+ * depuis que la recherche seule ouvre les pièces. `cout: null` dit donc « le
+ * classeur n'a pas retenu de prix », et l'écran n'affiche aucun nombre plutôt
+ * qu'un zéro qui se lirait « gratuit ».
  *
- * `cout: null` dit donc « le classeur n'a pas retenu de prix », et l'écran
- * n'affiche aucun nombre plutôt qu'un zéro qui se lirait « gratuit ».
+ * ⚠⚠ `deuxiemeBase` A ÉTÉ RENOMMÉ `baseSupplementaire`, ET CE N'EST PAS DE LA
+ * COSMÉTIQUE. La chaîne est OUVERTE — rang 2, rang 3, rang 4… — donc
+ * « deuxième » devient FAUX au premier rachat. Un identifiant qui ment est
+ * exactement ce que ce dépôt corrige à chaque lot.
+ *
+ * ⚠⚠ LE FACTEUR EST UNE FRACTION D'ENTIERS, PAS UN FLOTTANT, ET C'EST OBLIGÉ.
+ * Le ×2,5 dicté par Ethan le 02/09 s'écrit 5 / 2 : les points de recherche sont
+ * des `BigInt` en milli, et un `2.5` flottant élevé à une puissance perdrait de
+ * la précision avant le rang 10, que la chaîne ouverte atteindra. `coutMilli`
+ * multiplie par 5 puis divise par 2, rang par rang, sans jamais quitter les
+ * entiers.
+ *
+ * ⚠ LE PRIX DE DÉPART EST CELUI DU RANG 2, ET IL N'A PAS BOUGÉ : 2 000 000, la
+ * valeur qui était déjà là. C'est `premierRang` qui dit à quel rang il
+ * s'applique — l'écrire 2 ailleurs ferait une seconde vérité.
+ *
+ * ⚠ LE ×2,5 EST PRIS SUR LA PAROLE D'ETHAN. Il cite un classeur
+ * `fz recherche.xlsx` qui n'est PAS dans le dépôt ; §1 interdit de toute façon
+ * de lire un `.xlsx` pour coder. Signalé au rapport du lot.
  */
 export const SPECIAL = {
-  deuxiemeBase: { cout: 2000000, libelle: 'Deuxième base' },
+  baseSupplementaire: {
+    cout: 2000000,
+    libelle: 'Base supplémentaire',
+    repetable: true,
+    premierRang: 2,
+    facteurNumerateur: 5,
+    facteurDenominateur: 2,
+  },
   soutienAntiVehicule: { cout: null, libelle: 'Soutien anti-véhicule' },
   soutienAntiAerien: { cout: null, libelle: 'Soutien anti-aérien' },
   soutienAntiInfanterie: { cout: null, libelle: 'Soutien anti-infanterie' },
 };
+
+/** L'identifiant du nœud répétable — nommé une fois, jamais retapé. */
+export const NOEUD_BASE_SUPPLEMENTAIRE = 'baseSupplementaire';
 
 /**
  * Les pièces gratuites d'une branche — celles dont l'unité coûte zéro.

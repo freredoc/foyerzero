@@ -184,7 +184,17 @@ test('territoire — le rayon est celui de GEOGRAPHIE, et il vaut 2', () => {
   const bases = [base(100, 10)];
   assert.equal(GEOGRAPHIE.rayonInfluenceJoueur, 2, 'arbitré le 29/08 : « on garde deux »');
 
-  assert.ok(estEnTerritoireAllie({ rangee: 102, colonne: 12 }, bases), 'la diagonale à 2 est chez soi');
+  // ⚠⚠ LA DIAGONALE À 2 N'EST PLUS CHEZ SOI — lot BASES-1, 02/09/2026, ET LA
+  // VALEUR ATTENDUE CHANGE POUR UNE RAISON ÉCRITE. La zone d'influence est passée
+  // du carré au DISQUE, des deux côtés à la fois : ici pour le barème du raid, et
+  // dans `peindre` de `sim/territoire.js` pour ce que la carte montre. (2, 2) est
+  // à 8 en distance au carré, au-delà de 4 : elle est dehors.
+  assert.ok(!estEnTerritoireAllie({ rangee: 102, colonne: 12 }, bases),
+    'la diagonale à 2 est redevenue chez soi : la zone est repassée au carré');
+  // Les cases droites, elles, ne bougent pas : c'est ce qui distingue les deux
+  // métriques, et c'est mesuré des deux côtés.
+  assert.ok(estEnTerritoireAllie({ rangee: 102, colonne: 10 }, bases), 'la case droite à 2 est chez soi');
+  assert.ok(estEnTerritoireAllie({ rangee: 101, colonne: 11 }, bases), 'la diagonale à 1 est chez soi');
   assert.ok(!estEnTerritoireAllie({ rangee: 103, colonne: 10 }, bases), 'à 3 cases on n\'y est plus');
 
   // ⚠ CONSÉQUENCE MESURÉE, et elle contredit l'exemple oral d'Ethan : un camp à

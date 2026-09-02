@@ -1070,3 +1070,198 @@ export const SCALAIRES = {
     }
   }
 };
+
+// ---------------------------------------------------------------------------
+// CE QUE LE LOT BASES-1 A LÉGITIMEMENT DÉPLACÉ — 02/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LES TÉMOINS NE SE RAFRAÎCHISSENT PAS EN BLOC, ET C'EST CE QUI LES GARDE
+// UTILES. L'en-tête l'écrit : « le jour où un lot changera légitimement un
+// comportement, il recapturera les témoins EN L'ÉCRIVANT, et dira lesquels
+// bougent et pourquoi ». Le lot BASES-1 a fait passer la zone d'influence du
+// CARRÉ au DISQUE — des deux côtés à la fois, le barème du raid et la carte —,
+// donc le prix de certains raids monte. Plutôt que de tout recapturer, les
+// couples (phase, champ) qui bougent sont NOMMÉS ici, avec leur valeur neuve.
+// Les 301 autres restent gardés contre la capture d'origine, celle de `main`
+// à 9d7d711.
+//
+// ⚠ SEPT COUPLES SUR 308, DEUX CHAMPS, ET AUCUN AVANT LA PHASE 11. `attaque`
+// bouge parce que le raid coûte plus cher ; `rapports` parce que le rapport
+// porte ce coût. Rien d'autre : ni le terrain, ni l'économie, ni les satellites,
+// ni la disposition. Le raid sur un SATELLITE, lui, ne bouge pas d'un point —
+// il est adjacent, donc dans le disque comme dans le carré.
+export const DEPLACES_PAR_BASES_1 = {
+  "p11_raidOuvrageApres": {
+    "attaque": "02aad94eb33c103d",
+    "rapports": "8ba577d2b27b8695"
+  },
+  "p12_veilleDuRaid": {
+    "attaque": "ddf0096caf4e98c4",
+    "rapports": "8ba577d2b27b8695"
+  },
+  "p13_apresLeRaid": {
+    "attaque": "d179b746c7fa85cf",
+    "rapports": "9f114364cb72e0d2"
+  },
+  "p14_sousLeFeu": {
+    "rapports": "88b120c2cedcf676"
+  }
+};
+
+
+/**
+ * Les empreintes du champ que BASES-1 AJOUTE au relevé.
+ *
+ * ⚠ ELLES SONT NEUVES, DONC ELLES NE GARDENT RIEN DE PASSÉ — et c'est la seule
+ * chose qu'on puisse dire d'elles. Ce qu'elles garderont, c'est l'avenir : le
+ * compteur global ne recule jamais, et le jour où une base neuve le remettrait
+ * à 1, ces quatorze empreintes tomberaient.
+ */
+export const EMPREINTES_DES_CHAMPS_AJOUTES = {
+  "p01_batir": {
+    "prochaineInstanceSatellite": "9c7061c2f4b13c0c",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "f46a0f0f9f1961b8"
+  },
+  "p02_6h": {
+    "prochaineInstanceSatellite": "d4cb6ebd662c97d4",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "f46a0f0f9f1961b8"
+  },
+  "p03_batiComplet": {
+    "prochaineInstanceSatellite": "e13a479c58886c75",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "f46a0f0f9f1961b8"
+  },
+  "p04_arme": {
+    "prochaineInstanceSatellite": "e13a479c58886c75",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "f46a0f0f9f1961b8"
+  },
+  "p05_18h": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "f46a0f0f9f1961b8"
+  },
+  "p06_relu": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "f46a0f0f9f1961b8"
+  },
+  "p07_raidProcheApres": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p08_100ticks": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p09_deplace": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p10_montee": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p11_raidOuvrageApres": {
+    "prochaineInstanceSatellite": "6909d921c42a6a0f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p12_veilleDuRaid": {
+    "prochaineInstanceSatellite": "fec5ed056908e055",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p13_apresLeRaid": {
+    "prochaineInstanceSatellite": "ddce3857a01d535f",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  },
+  "p14_sousLeFeu": {
+    "prochaineInstanceSatellite": "19a48b2c9ac675da",
+    "basesAutorisees": "9c7061c2f4b13c0c",
+    "satellitesDetruits": "198d07ef61659620"
+  }
+};
+
+/**
+ * Ce que BASES-1 ajoute à la sauvegarde, en octets.
+ *
+ * ⚠ SOIXANTE-SEIZE OCTETS, LES MÊMES SUR LES VINGT-CINQ GRAINES, et c'est cette
+ * uniformité qui compte : un écart qui dépendrait de la partie voudrait dire
+ * qu'un CONTENU a bougé, et pas seulement une enveloppe. Trois champs entrent —
+ * `prochaineInstanceSatellite` (qui remplace le `prochaineInstance` sorti de la
+ * base), `recherche.basesAutorisees` et `satellitesDetruits`.
+ */
+export const OCTETS_AJOUTES_PAR_BASES_1 = 76;
+
+/**
+ * Les empreintes par graine, RECALCULÉES au lot BASES-1.
+ *
+ * ⚠ CELLES-CI NE POUVAIENT PAS ÊTRE SURCHARGÉES COUPLE PAR COUPLE : elles
+ * agrègent les quatorze phases et les vingt-trois champs à la fois, donc les
+ * trois champs déplacés ou ajoutés les font toutes bouger. C'est l'axe PAR
+ * CHAMP, plus haut, qui garde la finesse ; celui-ci ne dit plus que « telle
+ * graine a divergé ».
+ */
+export const EMPREINTES_PAR_GRAINE_BASES_1 = {
+  "1": "0a6a81135a86ed5b",
+  "2": "ce82ec9fad29e16b",
+  "3": "1dcee7090b7518f0",
+  "4": "0447b1db5b424f1b",
+  "5": "69a960b03b0f57d7",
+  "6": "a066cfcdc33f3bf5",
+  "7": "095930dfa6082329",
+  "8": "0e2bfc2446ea3a17",
+  "9": "13891d93a836fc41",
+  "10": "63f2b62d08ec792d",
+  "11": "085049ef5b040b9c",
+  "12": "285a66423f095726",
+  "13": "426f4e562c386bf5",
+  "14": "d0bbeb5c206e8353",
+  "15": "8dd3830b38502fcb",
+  "16": "676b201e0f2555be",
+  "17": "383a07734037aaf0",
+  "18": "2b47ab898bac8996",
+  "19": "7c3820e266abb925",
+  "20": "c6ee47766b8f5a8f",
+  "21": "f0f4607d3340148b",
+  "22": "ed5589669e64e83d",
+  "23": "018f48b02737922f",
+  "24": "f42bbc5bfe008f3f",
+  "25": "55b7d78907cfeaf5"
+};
+
+/**
+ * Les rapports de raid sur une base de l'Ouvrage qui ont changé de prix.
+ *
+ * ⚠ TROIS GRAINES SUR VINGT-CINQ, ET C'EST LA MESURE M1 VUE DE PRÈS : sur 150
+ * graines et 5 161 cibles, 3,33 % des raids renchérissent. Ici c'est 3 sur 25,
+ * soit 12 % — la cible du témoin est la PLUS PROCHE, donc plus souvent dans la
+ * zone d'influence que la moyenne des cibles à portée. Les vingt-deux autres
+ * graines gardent leur empreinte d'origine.
+ */
+export const RAPPORTS_DEPLACES_PAR_BASES_1 = {
+  "4": "0086a152b0a6da63",
+  "15": "87232e590d358040",
+  "16": "df3c20dc390e833c"
+};
+
+/**
+ * Le champ que BASES-1 AJOUTE au relevé.
+ *
+ * ⚠⚠ IL S'AJOUTE, IL NE REMPLACE RIEN. Le compteur d'instance des satellites a
+ * quitté la base pour l'état — une seconde base qui repartirait de l'instance 1
+ * rejouerait les graines d'apparition de la première. Le relever ici est ce qui
+ * fait qu'un compteur remis à zéro, un jour, fera tomber le témoin ; ne pas le
+ * relever l'aurait laissé sortir de la garde en silence.
+ */
+export const CHAMPS_AJOUTES_PAR_BASES_1 = [
+  'prochaineInstanceSatellite', 'basesAutorisees', 'satellitesDetruits',
+];
