@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.63.0 · build 64.
+Dernière révision : **02/09/2026**, version 0.64.0 · build 65.
 
 ---
 
@@ -41,7 +41,75 @@ Dernière révision : **02/09/2026**, version 0.63.0 · build 64.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot RAID-B), à confronter :**
+**Référence au 02/09/2026 (après le lot EUCLIDE), à confronter :**
+`npm test` → **855 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 376 909 octets**, 0 référence externe.
+⚠⚠ **CE LOT NE COÛTE QUE +602 OCTETS ET IL CHANGE LA CARTE DE CHAQUE GRAINE.**
+C'est le rapport le plus déséquilibré du dépôt entre ce qu'un lot pèse et ce
+qu'il déplace : trois fonctions de distance, deux constantes, et **toutes les
+positions de toutes les bases et de tous les POI bougent**. Marge T10
+**23 091 octets, 1,65 %**.
+⚠⚠ **TROIS DISTANCES DE PORTÉE PASSENT DE TCHEBYCHEV À EUCLIDE, ET ELLES
+BASCULENT ENSEMBLE** — la portée du raid, la garde du peuplement, les anneaux
+des satellites. C'est ce « ensemble » qui sauve l'argument que l'ancien
+commentaire de `distanceTchebychev` défendait : la cohérence n'est pas perdue,
+elle a changé de métrique. **Mesuré : 316 cases à portée au lieu de 440** (les
+124 coins du carré tombent), **697 cases interdites par la garde au lieu de
+841** (144 libérées, toutes en diagonale), et la base ennemie la plus proche
+peut désormais se poser à **onze cases de grille du départ au lieu de quinze**.
+⚠⚠ **AU CARRÉ DES DEUX CÔTÉS, JAMAIS DE RACINE.** `d² ≤ rayon²` : deux entiers,
+une comparaison exacte. La seule racine du lot est `casesArrondiesAuSuperieur`,
+qui est une boucle ENTIÈRE et ne sert qu'à écrire une phrase — un refus doit
+dire un nombre, et dans la métrique qui a décidé du refus.
+⚠⚠ **LE « ×2 DU PEUPLEMENT » DU BRIEF ÉTAIT IMPOSSIBLE, ET LA BORNE EST
+MATHÉMATIQUE.** Une case est retenue si elle est un MAXIMUM LOCAL STRICT du
+hachage parmi ses huit voisines : la densité de ces maxima vaut exactement
+**1/9**, soit **16 par 12 × 12**, quelle que soit `probabiliteCandidate`. Mesuré
+sur 120 graines : p = 0,14 → 11,97 ; 0,30 → 15,53 ; 0,50 → 16,31 ; **1,00 →
+16,35**. 24 était hors d'atteinte tant que l'exclusion 3 × 3 tient. Ethan,
+02/09 : **« ignore le 24 […] tu conserves la règle du 3 × 3 et tu augmentes la
+densité au maximum, je retire le maximum un peu moins pour que ce soit pas un
+cadre parfaitement rectangulaire comme une sylviculture »**.
+⚠⚠ **D'OÙ `probabiliteCandidate: 0,35` ET `basesParDouzeCarre: 16`, ET LE
+« UN PEU MOINS » SE MESURE.** 0,35 rend 15,88, soit 97 % du plafond ; c'est la
+dernière valeur avant que la courbe ne s'aplatisse. Au-delà on ne gagne plus de
+densité — 0,45 rend 0,4 base de plus, 1,00 n'en rend aucune — **on ne fait que
+resserrer le semis** : la part des blocs 3 × 3 entièrement vides tombe de
+**22,1 % à 0,35** à **20,5 % à 0,50**, et la part des bases collées au minimum
+permis monte de 89,9 % à 91,4 %. C'est exactement la sylviculture qu'Ethan
+refuse.
+⚠ **`SAVE_VERSION` PASSE À 21, ET LA MIGRATION VIDE PLUTÔT QUE DE FAIRE
+SEMBLANT.** `sitesEntames` et `poisAcquis` désignent la carte PAR POSITION : les
+recopier donnerait un site marqué à moitié détruit là où il n'y a plus rien.
+**`basesRasees` et `satellites` ne sont PAS vidés** — le premier dit qu'une case
+ne doit plus rien rendre, le second porte de l'histoire ; les vider ferait
+reparaître une base rasée et déplacerait un camp que le joueur a vu.
+⚠ **LES SAUVEGARDES SONT PERDUES, ET C'EST ACCEPTÉ.** Ethan, 02/09 : « ignore
+problème de sauvegarde, je réinstalle le jeu, je suis le seul testeur ».
+⚠⚠ **LES ZONES D'INFLUENCE RESTENT EN TCHEBYCHEV, ET C'EST UNE LECTURE.** Rayon
+2 pour le joueur, 3 pour l'Ouvrage : ce sont des CARRÉS que `sim/territoire.js`
+PEINT case par case sur l'écran Monde. Les passer à Euclide dans le barème du
+raid sans les repeindre là-bas ferait payer le tarif de proximité sur des cases
+que la carte ne montre pas comme siennes — la pire divergence, celle que le
+joueur constate sans pouvoir l'expliquer. Si Ethan veut le disque, ce sont
+`estEnTerritoireAllie` ET la boucle de `territoire.js` qui changent, ensemble.
+⚠⚠ **LE BARÈME DU RAID GARDE LA DISTANCE DE GRILLE, ET C'EST L'AUTRE LECTURE.**
+`coutDuRaid` prend un nombre de cases ENTIER ; le passer à `ceil(√d²)`
+renchérirait toute diagonale — un raid à (7, 7) passerait de 31 à 40 points —,
+c'est-à-dire ferait bouger un nombre d'équilibrage que le §2.8 du brief
+interdisait de toucher. La PORTÉE est euclidienne, le PRIX se compte en cases de
+grille. Une ligne à changer si Ethan tranche autrement.
+⚠ **UNE ASSERTION A ÉTÉ RETIRÉE, ET ELLE SE DÉCLARE** — celle de `POI T20` qui
+vérifiait que la chaîne de migrations TOLÈRE un `poisAcquis` déjà présent. Le
+maillon v20 → v21 la contredit en bout de chaîne, délibérément. Un premier jet
+l'a remplacée par une version « isolée » du maillon qui ne rejouait rien et
+passait sur n'importe quel code : **mieux vaut une assertion en moins, déclarée,
+qu'une assertion qui ne mesure rien.**
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot RAID-B :**
 `npm test` → **843 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 376 307 octets**, 0 référence externe.
 ⚠⚠ **CE LOT COÛTE +5 331 OCTETS, N'OUVRE AUCUN ÉCRAN, ET FAIT ARRIVER LA
@@ -786,13 +854,13 @@ src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   44 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   45 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
-  raid-ouvrage
+  raid-ouvrage  euclide
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans

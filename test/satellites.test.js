@@ -184,21 +184,40 @@ test('satellites — ils traversent la sauvegarde', () => {
   assert.deepEqual(relu2.satellites.attentes, relu.satellites.attentes);
 });
 
-test('satellites — l\'anneau se mesure en Tchebychev, et il se rogne sur la carte', () => {
+test('satellites — l\'anneau se mesure en Euclide, et il se rogne sur la carte', () => {
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE (02/09), pas un comportement qui casse.
+  // L'anneau était un CARRÉ creux — 5 × 5 moins la case centrale, 24 cases ; il
+  // est devenu un DISQUE creux. Ce que le test garde est inchangé : toute case
+  // rendue est bien entre `min` et `max`, et l'anneau se rogne sur la carte au
+  // lieu de rendre des cases qui n'existent pas.
   const centre = { rangee: 100, colonne: 16 };
   const cases = casesDeLAnneau(centre, 1, 2);
-  // 5×5 moins la case centrale : 24.
-  assert.equal(cases.length, 24);
+  // Disque de rayon 2, case centrale ôtée : les quatre orthogonales à 1, les
+  // quatre diagonales à √2, les quatre orthogonales à 2. Douze.
+  assert.equal(cases.length, 12);
   for (const k of cases) {
-    const d = Math.max(Math.abs(k.rangee - centre.rangee), Math.abs(k.colonne - centre.colonne));
-    assert.ok(d >= 1 && d <= 2);
+    const d2 = (k.rangee - centre.rangee) ** 2 + (k.colonne - centre.colonne) ** 2;
+    assert.ok(d2 >= 1 && d2 <= 4, `(${k.rangee}, ${k.colonne}) : d² = ${d2}`);
   }
-  // L'anneau 2–5 : 11×11 moins 3×3.
-  assert.equal(casesDeLAnneau(centre, 2, 5).length, 121 - 9);
+  // ⚠ ET LE COIN DU CARRÉ N'Y EST PLUS. C'est la moitié qui mesure le
+  // changement : (±2, ±2) valait 2 en Tchebychev, il vaut √8 en Euclide.
+  assert.equal(cases.some((k) => Math.abs(k.rangee - 100) === 2
+    && Math.abs(k.colonne - 16) === 2), false);
+
+  // L'anneau 2–5, recompté case par case plutôt que recopié : le nombre se
+  // DÉDUIT de la règle, il ne se fige pas à la main.
+  let attendu = 0;
+  for (let dr = -5; dr <= 5; dr += 1) {
+    for (let dc = -5; dc <= 5; dc += 1) {
+      const d2 = dr * dr + dc * dc;
+      if (d2 >= 4 && d2 <= 25) attendu += 1;
+    }
+  }
+  assert.equal(casesDeLAnneau(centre, 2, 5).length, attendu);
 
   // Contre un bord, il se rogne au lieu de rendre des cases hors carte.
   const auBord = casesDeLAnneau({ rangee: 1, colonne: 1 }, 1, 2);
-  assert.ok(auBord.length < 24, 'l\'anneau au coin doit être rogné');
+  assert.ok(auBord.length < 12, 'l\'anneau au coin doit être rogné');
   for (const k of auBord) assert.ok(estSurLaCarte(k.rangee, k.colonne));
 });
 
@@ -299,7 +318,11 @@ test('satellites — un anneau saturé REPORTE l\'attente, il ne la perd pas', (
 
   // On sature l'anneau des camps — 1 à 2 cases — avec des occupants factices.
   const anneau = casesDeLAnneau(etat.position, ANNEAUX.camp.min, ANNEAUX.camp.max);
-  assert.equal(anneau.length, 24, 'le montage suppose un anneau complet');
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : l'anneau des camps est passé du carré
+  // creux (24 cases) au disque creux (12). Ce que cette ligne garde n'a pas
+  // changé — elle prouve que le montage sature un anneau PLEIN, sans quoi
+  // « reporter l'attente » ne serait jamais exercé.
+  assert.equal(anneau.length, 12, 'le montage suppose un anneau complet');
   let instance = 1;
   for (const k of anneau) {
     etat.satellites.presents.push({
@@ -313,7 +336,11 @@ test('satellites — un anneau saturé REPORTE l\'attente, il ne la perd pas', (
   const parus = resoudreSatellites(etat);
 
   assert.equal(parus, 0, 'un camp est paru dans un anneau plein');
-  assert.equal(etat.satellites.presents.length, 24, 'un vingt-cinquième occupant a été posé');
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : douze cases dans l'anneau, pas
+  // vingt-quatre. Le compte se DÉDUIT du montage plutôt que de se réécrire — le
+  // jour où le rayon de l'anneau bougera, cette ligne suivra toute seule.
+  assert.equal(etat.satellites.presents.length, anneau.length,
+    'un occupant de trop a été posé dans un anneau plein');
   assert.equal(etat.satellites.attentes.length, 1, 'l\'attente a été perdue en silence');
 
   // Et elle se satisfait dès qu'une place se libère : reportée, pas annulée.

@@ -143,16 +143,23 @@ test('vue — la fenêtre visible couvre ce qu\'on voit, plus une case de marge'
   assert.equal(decalee.derniereRangee, 12);
 });
 
-test('distance — Tchebychev, comme les anneaux et la garde du peuplement', () => {
-  // Sur une grille, une case en diagonale n'est pas plus loin qu'une case droit
-  // devant. En mesurer trois là où le jeu en compte deux ferait mentir toutes
-  // les distances du panneau — et le jeu compte déjà en Tchebychev partout.
-  assert.equal(distanceEnCases({ rangee: 10, colonne: 10 }, { rangee: 13, colonne: 13 }), 3);
+test('distance — Euclide, comme les anneaux et la garde du peuplement', () => {
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE (02/09), pas un comportement qui casse.
+  // Ce test figeait trois nombres de Tchebychev ; la métrique de la carte a
+  // changé, donc les trois nombres changent. Ce qu'il garde n'a pas bougé : le
+  // panneau doit compter dans la MÊME métrique que la portée, sans quoi il
+  // annoncerait « 8 cases » sous un rayon de 10 pour une cible que le jeu
+  // refuse.
+  //
+  // Arrondi au SUPÉRIEUR : une cible à 4,24 cases est annoncée à 5, jamais à 4.
+  assert.equal(distanceEnCases({ rangee: 10, colonne: 10 }, { rangee: 13, colonne: 13 }), 5);
   assert.equal(distanceEnCases({ rangee: 10, colonne: 10 }, { rangee: 10, colonne: 10 }), 0);
-  assert.equal(distanceEnCases({ rangee: 1, colonne: 9 }, { rangee: 5, colonne: 2 }), 7);
-  // Falsifiable : une distance euclidienne ou de Manhattan donnerait autre chose
-  // sur le premier cas — 4,24 et 6.
-  assert.notEqual(distanceEnCases({ rangee: 10, colonne: 10 }, { rangee: 13, colonne: 13 }), 6);
+  // Un carré parfait tombe juste, sans le demi-pixel d'une racine flottante.
+  assert.equal(distanceEnCases({ rangee: 0, colonne: 0 }, { rangee: 3, colonne: 4 }), 5);
+  assert.equal(distanceEnCases({ rangee: 1, colonne: 9 }, { rangee: 5, colonne: 2 }), 9);
+  // Falsifiable : Tchebychev rendrait 3 et 7 sur ces deux cas, Manhattan 6 et 11.
+  assert.notEqual(distanceEnCases({ rangee: 10, colonne: 10 }, { rangee: 13, colonne: 13 }), 3);
+  assert.notEqual(distanceEnCases({ rangee: 1, colonne: 9 }, { rangee: 5, colonne: 2 }), 7);
 });
 
 // ---------------------------------------------------------------------------
@@ -264,7 +271,9 @@ test('panneau — il dit ce qu\'on sait, et le niveau du joueur n\'est pas celui
   assert.deepEqual(lignes.map((l) => l.quoi), ['Type', 'Niveau', 'Distance', 'Position']);
   assert.equal(lignes[0].valeur, EMBLEMES_CARTE.base.nom);
   assert.equal(lignes[1].valeur, '6');
-  assert.equal(lignes[2].valeur, '5 cases');
+  // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : 5 rangées et 3 colonnes font 5,83
+  // cases en ligne droite, arrondies à 6. Tchebychev en comptait 5.
+  assert.equal(lignes[2].valeur, '6 cases');
 
   // ⚠⚠ LA BASE DU JOUEUR N'A PAS DE NIVEAU DE CARTE. Elle en porte TROIS, qui
   // sont des moyennes de ce qu'il a posé, et aucun ne se déduit d'une position.

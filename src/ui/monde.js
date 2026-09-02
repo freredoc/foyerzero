@@ -34,7 +34,9 @@ import {
   saveurDeLaCase, siteDeLaCase, butinSiToutTombe, forceDeLaDefense,
 } from '../sim/site-de-la-case.js';
 import { montageCourant } from '../sim/site-entame.js';
-import { coutDUnRaid } from '../sim/points-attaque.js';
+import {
+  coutDUnRaid, distanceCarreeCases, casesArrondiesAuSuperieur,
+} from '../sim/points-attaque.js';
 import { problemesDuRaid } from '../sim/raid.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
 import {
@@ -122,17 +124,30 @@ export function fenetreVisible(vue) {
 /**
  * Distance entre deux cases, en cases.
  *
- * TCHEBYCHEV — le maximum des deux écarts —, comme la garde du peuplement et
+ * ⚠⚠ EUCLIDE DEPUIS LE LOT EUCLIDE (02/09/2026). Ce commentaire disait :
+ * « TCHEBYCHEV — le maximum des deux écarts —, comme la garde du peuplement et
  * les anneaux des satellites. Sur une grille, une case en diagonale n'est pas
  * plus loin qu'une case droit devant ; en mesurer trois là où le jeu en compte
- * deux ferait mentir toutes les distances du panneau.
+ * deux ferait mentir toutes les distances du panneau. » Les trois règles qu'il
+ * citait ont basculé ensemble ; c'est en RESTANT à Tchebychev que ce panneau se
+ * serait mis à mentir — il aurait annoncé « 8 cases » sous un rayon de 10 pour
+ * une cible que le jeu refuse.
+ *
+ * ⚠ ARRONDIE AU SUPÉRIEUR, ET C'EST LE SEUL ARRONDI QUI NE TROMPE PAS. Une
+ * cible à 10,05 cases est hors de portée ; l'annoncer à « 10 » la ferait
+ * paraître atteignable, et le joueur chercherait ce qui cloche dans son budget.
+ * `casesArrondiesAuSuperieur` fait ce calcul sans racine flottante.
+ *
+ * ⚠ ELLE N'EST QU'UN AFFICHAGE. Ce qui DÉCIDE de la portée est
+ * `estAPorteeDAttaque`, et ce qui décide du prix est `coutDUnRaid` : cette
+ * fonction-ci ne gouverne rien, et un écran ne doit jamais gouverner une règle.
  *
  * @param {{rangee: number, colonne: number}} a
  * @param {{rangee: number, colonne: number}} b
  * @returns {number}
  */
 export function distanceEnCases(a, b) {
-  return Math.max(Math.abs(a.rangee - b.rangee), Math.abs(a.colonne - b.colonne));
+  return casesArrondiesAuSuperieur(distanceCarreeCases(a, b));
 }
 
 /**

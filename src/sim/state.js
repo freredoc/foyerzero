@@ -44,7 +44,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 20;
+export const SAVE_VERSION = 21;
 
 /**
  * @typedef {object} Etat
@@ -2026,6 +2026,42 @@ const MIGRATIONS = {
         batiment.degatsMilli = 0;
       }
     }
+  },
+
+  /**
+   * v20 → v21 : la carte a changé sous les sauvegardes — lot EUCLIDE, 02/09.
+   *
+   * ⚠⚠ ELLE VIDE, ELLE NE CONVERTIT PAS, ET C'EST LE SEUL GESTE HONNÊTE. Deux
+   * champs désignent la carte PAR POSITION : `sitesEntames` dit ce que le joueur
+   * a cassé et n'a pas fini, `poisAcquis` ce qu'il a ramassé en chemin. Le
+   * passage à Euclide et le relèvement de la densité déplacent les bases de
+   * l'Ouvrage ET les POI de chaque graine : recopier ces deux champs produirait
+   * un état syntaxiquement valide et sémantiquement FAUX — un site marqué à
+   * moitié détruit là où il n'y a plus rien, un gisement compté acquis alors
+   * qu'il est ailleurs. Une migration qui fait semblant est pire qu'une
+   * migration qui renonce, parce qu'elle ne se voit pas.
+   *
+   * ⚠ ET LA PERTE EST ACCEPTÉE, PAS SUBIE. Ethan, 02/09 : « ignore problème de
+   * sauvegarde, je réinstalle le jeu, je suis le seul testeur ». Le jour où il y
+   * aura d'autres joueurs, un lot qui déplace la carte devra les prévenir AVANT
+   * — c'est déjà ce que dit la note de la migration 3 → 4, qui refondait.
+   *
+   * ⚠ `basesRasees` N'EST PAS VIDÉ, et la nuance compte. Il ne porte pas un
+   * état de site : il porte le fait qu'une case ne doit PLUS rien rendre. Sur
+   * une case que le peuplement ne peuple plus, l'entrée devient inerte — elle
+   * n'invente rien. La vider, en revanche, ferait REPARAÎTRE une base que le
+   * joueur a rasée, ce que `TYPES_SITE.base.respawn: false` interdit.
+   *
+   * ⚠ NI `satellites`. Ils sont de l'HISTOIRE : leurs cases sont enregistrées,
+   * pas dérivées. Les anneaux ont changé de forme, donc les PROCHAINES
+   * apparitions tomberont ailleurs — mais un camp déjà posé est là où le joueur
+   * l'a vu, et le déplacer serait lui retirer quelque chose qu'il possède.
+   * @param {object} s
+   */
+  20: (s) => {
+    s.version = 21;
+    s.sitesEntames = {};
+    s.poisAcquis = [];
   },
 };
 

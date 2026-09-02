@@ -29,7 +29,8 @@ import { UNITES, GRILLE } from '../data/combat.js';
 import { reservoirsDeLArmee } from './reparation.js';
 import { RESSOURCES, capacitesMilli } from './economie-base.js';
 import {
-  coutDUnRaid, manquePourPayer, payer, distanceTchebychev, basesDuJoueur,
+  coutDUnRaid, manquePourPayer, payer, basesDuJoueur,
+  estAPorteeDAttaque, distanceCarreeCases, casesArrondiesAuSuperieur,
 } from './points-attaque.js';
 import { siteDeLaCase, montageDuSite } from './site-de-la-case.js';
 import { montageCourant, enregistrerLeRaid } from './site-entame.js';
@@ -170,12 +171,21 @@ export function problemesDuRaid(etat, baseAttaquante, cible) {
     return problemes;
   }
 
-  const distance = distanceTchebychev(baseAttaquante.position, cible);
-  if (distance > GEOGRAPHIE.rayonAttaque) {
+  // ⚠⚠ LA PORTÉE SE TESTE AU CARRÉ DEPUIS LE LOT EUCLIDE, et la question se pose
+  // à `estAPorteeDAttaque` plutôt qu'ici. `ciblesAPortee` la pose à la même
+  // fonction : deux écritures d'une même règle divergeraient sur un cas limite,
+  // et l'écran proposerait alors une cible que ce refus-ci rejetterait.
+  if (!estAPorteeDAttaque(baseAttaquante.position, cible)) {
+    // ⚠ LE NOMBRE AFFICHÉ EST DANS LA MÉTRIQUE QUI A DÉCIDÉ. Citer la distance
+    // de grille dirait « cette cible est à 8 cases, le rayon d'attaque est de
+    // 10 » pour une diagonale refusée — un message qui donne tort au jeu.
+    const cases = casesArrondiesAuSuperieur(
+      distanceCarreeCases(baseAttaquante.position, cible),
+    );
     problemes.push({
       code: 'hors-portee',
-      message: `Cette cible est à ${distance} cases : le rayon d'attaque est de `
-        + `${GEOGRAPHIE.rayonAttaque}.`,
+      message: `Cette cible est à ${cases} cases en ligne droite : le rayon `
+        + `d'attaque est de ${GEOGRAPHIE.rayonAttaque}.`,
     });
     return problemes;
   }

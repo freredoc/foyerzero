@@ -94,7 +94,14 @@ const ATTAQUANTE = {
 
 test('RAID-B T1 — tickJeu × n ≡ rattraperJeu(n), sur une fenêtre à trois raids au moins', () => {
   for (const graine of [7, 42, 101]) {
-    const ticks = 6 * TICKS_PAR_HEURE;
+    // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : la fenêtre passe de six à neuf
+    // heures. La portée est devenue un DISQUE — 316 cases au lieu de 440 —, donc
+    // il y a moins de bases attaquantes et les raids tombent plus lentement. Sur
+    // la graine 7, six heures n'en portaient plus que deux, et la précondition
+    // « au moins trois » de ce test tombait : ce n'est pas l'équivalence qui a
+    // cassé, c'est le montage qui a cessé de mesurer. Mesuré sur les trois
+    // graines : 9 h en portent 4, 10 et 10.
+    const ticks = 9 * TICKS_PAR_HEURE;
 
     const parTick = baseALaRangee(graine, 200);
     for (let i = 0; i < ticks; i += 1) tickJeu(parTick);
@@ -601,8 +608,8 @@ test('RAID-B T11 — plusieurs raids d\'une absence apparaissent tous, dans la l
 // T12 — la sauvegarde
 // ---------------------------------------------------------------------------
 
-test('RAID-B T12 — SAVE_VERSION passe à 20 et la migration pose des dégâts nuls', () => {
-  assert.equal(SAVE_VERSION, 20, 'le bump de la version des sauvegardes a été oublié');
+test('RAID-B T12 — la migration 19 → 20 pose des dégâts nuls', () => {
+  assert.equal(SAVE_VERSION, 21, 'le bump de la version des sauvegardes a été oublié');
 
   // Une v19 forgée SANS le champ — c'est ainsi qu'elles étaient toutes.
   const v19 = JSON.parse(serialiser(creerEtat(7), 0));
@@ -612,7 +619,7 @@ test('RAID-B T12 — SAVE_VERSION passe à 20 et la migration pose des dégâts 
     'le montage ne mesure rien : la v19 porte déjà le champ');
 
   const migre = migrer(structuredClone(v19));
-  assert.equal(migre.version, 20);
+  assert.equal(migre.version, 21);
   for (const b of migre.disposition) assert.equal(b.degatsMilli, 0);
 
   // Une v19 qui portait déjà un chiffre — impossible en jeu, mais la migration

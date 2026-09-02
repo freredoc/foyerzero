@@ -94,11 +94,28 @@ export function hachageBrut(graine, a, b, sel) {
 /**
  * La case est-elle assez loin de la position de DÉPART du joueur ?
  *
- * Distance de Tchebychev — le maximum des deux écarts —, parce que la carte est
- * une grille et qu'une base en diagonale n'est pas plus loin qu'une base droit
- * devant. La garde se mesure depuis le DÉPART, qui est fixe : si elle suivait la
- * base, les bases s'écarteraient à chaque redéploiement et il faudrait les
- * journaliser.
+ * ⚠⚠ EUCLIDE DEPUIS LE LOT EUCLIDE (02/09/2026), ARBITRÉ PAR ETHAN. Ce
+ * commentaire disait : « distance de Tchebychev — le maximum des deux écarts —,
+ * parce que la carte est une grille et qu'une base en diagonale n'est pas plus
+ * loin qu'une base droit devant ». La règle a changé EN MÊME TEMPS que la portée
+ * du raid et que les anneaux des satellites : la carte compte désormais une
+ * diagonale pour ce qu'elle vaut, partout, et c'est ce qui garde la cohérence
+ * que l'ancienne phrase défendait.
+ *
+ * ⚠ ET CE N'EST PAS NEUTRE : LA ZONE INTERDITE RÉTRÉCIT. Le carré de 31 × 31
+ * devient un disque — mesuré, **841 cases interdites deviennent 697**, donc
+ * **144 cases libérées**, toutes dans les diagonales. La base ennemie la plus
+ * proche peut s'installer à onze cases du départ en ligne de grille, là où il en
+ * fallait quinze. Combiné au doublement du peuplement du même lot, le début de
+ * partie durcit deux fois — c'est une conséquence chiffrée de deux décisions
+ * d'Ethan, pas un effet de bord à corriger.
+ *
+ * ⚠ AU CARRÉ DES DEUX CÔTÉS, JAMAIS DE RACINE. `d² ≥ garde²` : deux entiers,
+ * une comparaison exacte, aucun arrondi à débattre.
+ *
+ * ⚠ LA GARDE SE MESURE DEPUIS LE DÉPART, QUI EST FIXE — cette moitié-là n'a pas
+ * bougé. Si elle suivait la base, les bases s'écarteraient à chaque
+ * redéploiement et il faudrait toutes les journaliser.
  *
  * @param {number} rangee
  * @param {number} colonne
@@ -106,11 +123,10 @@ export function hachageBrut(graine, a, b, sel) {
  */
 export function horsDeLaGarde(rangee, colonne) {
   const depart = positionDepartJoueur();
-  const ecart = Math.max(
-    Math.abs(rangee - depart.rangee),
-    Math.abs(colonne - depart.colonne),
-  );
-  return ecart >= PEUPLEMENT.gardeAutourDuDepart;
+  const dr = rangee - depart.rangee;
+  const dc = colonne - depart.colonne;
+  const garde = PEUPLEMENT.gardeAutourDuDepart;
+  return dr * dr + dc * dc >= garde * garde;
 }
 
 /** Une case candidate est une case que le premier tirage retient. */
