@@ -25,7 +25,7 @@
 // pas. Un test balaie le panneau pour qu'aucun bouton d'action n'y entre.
 
 import {
-  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, POI, palierDeNiveau,
+  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, POI, palierDeNiveau, DEPLACEMENT,
 } from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
@@ -38,6 +38,10 @@ import {
   coutDUnRaid, distanceCarreeCases, casesArrondiesAuSuperieur,
 } from '../sim/points-attaque.js';
 import { problemesDuRaid } from '../sim/raid.js';
+import {
+  problemesDuDeplacement, deplacerLaBase, casesAtteignables,
+  ticksAvantProchainDeplacement,
+} from '../sim/deplacement.js';
 import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
 import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
@@ -298,11 +302,27 @@ export function ciblageDuSite(etat, site) {
   const identite = siteDeLaCase(etat, site.rangee, site.colonne);
   if (identite === null) return null;
   const montage = montageCourant(etat, identite);
+  // ⚠⚠ LES PROBLÈMES SE DEMANDENT AVANT LE COÛT, ET CE N'EST PAS UN DÉTAIL
+  // D'ORDRE — c'était un DÉFAUT, trouvé au lot DÉPLACEMENT et présent sur `main`
+  // depuis RAID-A. `coutDuRaid` LÈVE au-delà du rayon d'attaque, à raison : un
+  // raid hors de portée n'a pas de prix. Mais cette fonction-ci le demandait
+  // pour TOUT site que le panneau ouvre, et le panneau s'ouvre sur ce que la
+  // FENÊTRE montre, pas sur ce qui est à portée. Conséquence mesurée dans
+  // Chromium : toucher n'importe quel site au-delà de dix cases faisait lever
+  // `ouvrirPanneau`, donc le panneau ne s'ouvrait PAS — le joueur ne pouvait
+  // consulter aucun site lointain, sur toute la carte.
+  //
+  // ⚠ ET LE COÛT VAUT `null`, PAS ZÉRO. Un raid hors de portée n'a pas de prix ;
+  // « 0 point d'attaque » se lirait « gratuit ». C'est la convention que tout le
+  // dépôt emploie — `niveauDeCommandement` rend `null` faute de bâtiment, et son
+  // commentaire dit exactement pourquoi zéro serait un mensonge.
+  const problemes = problemesDuRaid(etat, etat, identite);
+  const horsPortee = problemes.some((p) => p.code === 'hors-portee');
   return {
     butin: butinSiToutTombe(montage),
     force: forceDeLaDefense(montage.defenseurs),
-    cout: coutDUnRaid(etat, etat, identite),
-    problemes: problemesDuRaid(etat, etat, identite),
+    cout: horsPortee ? null : coutDUnRaid(etat, etat, identite),
+    problemes,
   };
 }
 
@@ -359,7 +379,13 @@ export function lignesDuSite(site, depuis, poisAcquis = [], ciblage = null) {
     lignes.push({ quoi: 'Butin si tout tombe', valeur: `${ciblage.butin.quartz} quartz` });
     lignes.push({ quoi: 'dont scorie', valeur: `${ciblage.butin.scorie} scorie` });
     lignes.push({ quoi: 'Force de la défense', valeur: `${ciblage.force} points` });
-    lignes.push({ quoi: 'Coût du raid', valeur: `${ciblage.cout} points d'attaque` });
+    // ⚠ `null` VEUT DIRE « HORS DE PORTÉE », et la ligne le dit plutôt que
+    // d'écrire « null points d'attaque ».
+    lignes.push({
+      quoi: 'Coût du raid',
+      valeur: ciblage.cout === null
+        ? 'hors de portée' : `${ciblage.cout} points d'attaque`,
+    });
   }
   return lignes;
 }
@@ -441,6 +467,114 @@ export function indicesDeTeinte(rvba) {
 }
 
 /**
+ * Le centre d'une case, en pixels du canevas.
+ *
+ * ⚠ PUR, ET C'EST CE QUI REND LE HALO ET LA FLÈCHE TESTABLES SANS DOM. Le dépôt
+ * n'a ni jsdom ni navigateur ; une géométrie écrite dans la boucle de dessin ne
+ * se vérifie qu'à l'œil, et l'écran Monde a déjà payé ça une fois — le
+ * `drawImage` aux rectangles non finis du lot RETOURS-DU-31, qui ne dessinait
+ * rien et ne levait pas.
+ *
+ * @param {{rangee: number, colonne: number}} k
+ * @param {number} ox origine de la vue, en pixels
+ * @param {number} oy
+ * @param {number} pas côté d'une case, en pixels
+ * @returns {{x: number, y: number}}
+ */
+export function centreDeLaCase(k, ox, oy, pas) {
+  return {
+    x: (k.colonne - 1) * pas - ox + pas / 2,
+    y: (k.rangee - 1) * pas - oy + pas / 2,
+  };
+}
+
+/**
+ * Le halo qui entoure la base ATTAQUANTE — un anneau, pas un aplat.
+ *
+ * ⚠⚠ IL NE FAIT PAS LA TAILLE D'UNE CASE, IL DÉBORDE. Un cercle inscrit dans la
+ * case serait caché par l'emblème qui s'y dessine ; le halo doit se lire AUTOUR,
+ * sinon il ne dit rien de plus que la base elle-même.
+ *
+ * ⚠ SA COULEUR N'EST PAS NEUVE. `TEINTES_TERRITOIRE[JOUEUR]` est déjà l'os que
+ * `EMBLEMES_CARTE` donne au bord de la base du joueur, et que la frontière de
+ * son territoire emploie : le halo se range dans cette convention, il n'en
+ * ouvre pas une seconde. Un troisième code de couleur pour la même chose
+ * apprendrait au joueur deux langages pour un seul fait.
+ *
+ * ⚠ AVEC UNE SEULE BASE, C'EST LA SIENNE. Le multi-bases — « si on clique sur
+ * une autre base joueur, cette dernière devient halotée » — est hors périmètre :
+ * Ethan, 02/09, « il faut aussi brancher le système à plusieurs bases. Après. »
+ * Cette fonction prend donc une POSITION et non un état, pour que ce jour-là il
+ * n'y ait qu'un appelant à changer.
+ *
+ * @param {{rangee: number, colonne: number}} position
+ * @param {number} ox
+ * @param {number} oy
+ * @param {number} pas
+ * @returns {{x: number, y: number, rayon: number, epaisseur: number}}
+ */
+export function geometrieDuHalo(position, ox, oy, pas) {
+  const centre = centreDeLaCase(position, ox, oy, pas);
+  return {
+    x: centre.x,
+    y: centre.y,
+    rayon: pas * RAYON_HALO,
+    epaisseur: Math.max(1, Math.round(pas * EPAISSEUR_HALO)),
+  };
+}
+
+/** Le rayon du halo, en CASES — il déborde, sinon l'emblème le cacherait. */
+export const RAYON_HALO = 0.72;
+
+/** Son épaisseur, en cases : elle suit le cran, comme celle des frontières. */
+export const EPAISSEUR_HALO = 0.08;
+
+/**
+ * Le trait de la flèche qui va de la base halotée à la cible ouverte.
+ *
+ * ⚠ ELLE S'ARRÊTE AU BORD DES DEUX CASES, pas à leur centre. Un trait qui
+ * traverserait les deux emblèmes couperait les seuls dessins qui disent ce qu'il
+ * y a là — c'est la raison pour laquelle les frontières passent déjà SOUS les
+ * emblèmes.
+ *
+ * ⚠ ELLE REND `null` SI LES DEUX CASES SONT LA MÊME. Pas de flèche vers sa
+ * propre base : elle n'aurait ni longueur ni sens, et `Math.atan2(0, 0)` rendrait
+ * zéro sans le dire.
+ *
+ * @param {{rangee: number, colonne: number}} depuis
+ * @param {{rangee: number, colonne: number}} vers
+ * @param {number} ox
+ * @param {number} oy
+ * @param {number} pas
+ * @returns {{x1: number, y1: number, x2: number, y2: number, angle: number}|null}
+ */
+export function traitDeLaFleche(depuis, vers, ox, oy, pas) {
+  if (depuis.rangee === vers.rangee && depuis.colonne === vers.colonne) return null;
+  const a = centreDeLaCase(depuis, ox, oy, pas);
+  const b = centreDeLaCase(vers, ox, oy, pas);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const longueur = Math.sqrt(dx * dx + dy * dy);
+  // ⚠ ICI UNE RACINE EST LÉGITIME, ET IL FAUT LE DIRE : on est dans le DESSIN,
+  // en pixels, pas dans une règle de jeu. Les distances de la carte se comparent
+  // au carré depuis le lot EUCLIDE parce qu'elles décident ; celle-ci ne décide
+  // de rien, elle normalise un vecteur d'écran.
+  const marge = pas * RETRAIT_FLECHE;
+  const ux = dx / longueur;
+  const uy = dy / longueur;
+  return {
+    x1: a.x + ux * marge,
+    y1: a.y + uy * marge,
+    x2: b.x - ux * marge,
+    y2: b.y - uy * marge,
+    angle: Math.atan2(dy, dx),
+  };
+}
+
+/** Le retrait aux deux bouts de la flèche, en cases : elle ne couvre pas les emblèmes. */
+export const RETRAIT_FLECHE = 0.55;
+
+/**
  * La couleur du trait de frontière de chaque camp.
  *
  * ⚠⚠ ELLES REPRENNENT LA SÉMANTIQUE DÉJÀ POSÉE PAR `EMBLEMES_CARTE`, elles n'en
@@ -494,6 +628,12 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // l'écran Chantier. La carte sait QUELLE cible on a touchée deux fois ; seule
   // la session sait changer d'écran.
   const surEntreeRaid = crochets.surEntreeRaid ?? (() => {});
+  // ⚠ L'ÉCRAN DEMANDE, LA SESSION ÉCRIT — même partage que `apresPose` de
+  // l'écran Chantier. Un déplacement change l'état et doit être SAUVEGARDÉ tout
+  // de suite : c'est une action irréversible, et la perdre parce que
+  // l'application a été tuée serait la pire façon de perdre la confiance du
+  // joueur. L'écran ne sait pas sauvegarder ; il le demande.
+  const apresDeplacement = crochets.apresDeplacement ?? (() => {});
   const fenetre = doc.defaultView;
   const $ = (id) => doc.getElementById(id);
   const canvas = $('monde-canvas');
@@ -508,9 +648,21 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauTitre = $('monde-panneau-titre');
   const panneauCorps = $('monde-panneau-corps');
   const panneauRefus = $('monde-panneau-refus');
+  const panneauDeplacer = $('monde-panneau-deplacer');
   // ⚠ QUELLE CASE LE PANNEAU DÉCRIT — c'est ce à quoi le SECOND toucher se
   // compare. `null` quand le panneau est fermé.
   let siteOuvert = null;
+  // ⚠ LE CIBLAGE DU SITE OUVERT, RETENU UNE FOIS. La flèche le relit plutôt que
+  // de rappeler `ciblageDuSite` — qui monte un combat entier pour chiffrer le
+  // butin, à chaque image. Et surtout : deux appels pourraient diverger le jour
+  // où le coût dépendrait d'autre chose que de la distance.
+  let ciblageOuvert = null;
+  // ⚠ LE MODE DE DÉPLACEMENT SUIT LE MODÈLE « ARMER PUIS TOUCHER » DE L'ÉCRAN
+  // CHANTIER, et pas un autre : on arme au bouton, on touche une case, et
+  // toucher ailleurs désarme sans rien dire. Le joueur n'a qu'une grammaire à
+  // apprendre pour les deux écrans.
+  let modeDeplacement = false;
+  let casesDuDeplacement = [];
 
   let etatCourant = null;
   let atlas = null;
@@ -889,6 +1041,109 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     }
   }
 
+  /**
+   * Le halo autour de la base attaquante — sous les emblèmes, comme les
+   * frontières, pour ne pas couper le dessin qui dit ce qu'il y a là.
+   */
+  function dessinerHalo(ox, oy, pas) {
+    const halo = geometrieDuHalo(etatCourant.position, ox, oy, pas);
+    // Hors du canevas : rien à peindre, et un arc à des milliers de pixels
+    // coûterait quand même son chemin.
+    if (halo.x < -halo.rayon || halo.y < -halo.rayon
+      || halo.x > canvas.width + halo.rayon || halo.y > canvas.height + halo.rayon) return;
+    ctx.lineWidth = halo.epaisseur;
+    ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
+    ctx.beginPath();
+    ctx.arc(halo.x, halo.y, halo.rayon, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  /**
+   * La flèche de la base halotée vers la cible ouverte, et le coût du raid.
+   *
+   * ⚠⚠ LE COÛT EST LE MÊME OBJET QUE CELUI DU PANNEAU, PAS UN SECOND CALCUL.
+   * `ciblageOuvert` est rempli une fois par `ouvrirPanneau` ; la flèche le RELIT.
+   * Le commentaire de `ciblageDuSite` interdit déjà d'écrire un second calcul du
+   * coût, et il aurait raison de le faire ici : un panneau qui annonce 31 points
+   * au-dessus d'une flèche qui en annonce 40 est pire que pas de flèche.
+   *
+   * ⚠ PAS DE FLÈCHE AU REPOS, ni vers sa propre base. `traitDeLaFleche` rend
+   * `null` sur deux cases identiques, et il n'y a rien à dessiner sans panneau
+   * ouvert.
+   */
+  function dessinerFleche(ox, oy, pas) {
+    // ⚠ PAS DE FLÈCHE SANS PRIX. Hors de portée, `cout` vaut `null` : une flèche
+    // qui ne porterait aucun nombre n'aurait plus rien à dire, et le panneau
+    // écrit déjà « hors de portée ».
+    if (siteOuvert === null || ciblageOuvert === null || ciblageOuvert.cout === null) return;
+    const trait = traitDeLaFleche(etatCourant.position, siteOuvert, ox, oy, pas);
+    if (trait === null) return;
+    ctx.lineWidth = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+    ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
+    ctx.fillStyle = TEINTES_TERRITOIRE[JOUEUR];
+    ctx.beginPath();
+    ctx.moveTo(trait.x1, trait.y1);
+    ctx.lineTo(trait.x2, trait.y2);
+    ctx.stroke();
+
+    // La pointe : deux côtés d'un triangle, à la pointe du trait.
+    const aile = Math.max(3, pas * 0.22);
+    const ouverture = Math.PI / 7;
+    ctx.beginPath();
+    ctx.moveTo(trait.x2, trait.y2);
+    ctx.lineTo(
+      trait.x2 - aile * Math.cos(trait.angle - ouverture),
+      trait.y2 - aile * Math.sin(trait.angle - ouverture),
+    );
+    ctx.lineTo(
+      trait.x2 - aile * Math.cos(trait.angle + ouverture),
+      trait.y2 - aile * Math.sin(trait.angle + ouverture),
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Le coût, au milieu du trait.
+    const mx = (trait.x1 + trait.x2) / 2;
+    const my = (trait.y1 + trait.y2) / 2;
+    const taille = Math.max(9, Math.round(pas * 0.32));
+    ctx.font = `${taille}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const texte = `${ciblageOuvert.cout}`;
+    const large = ctx.measureText(texte).width + taille * 0.6;
+    ctx.fillStyle = '#161914';
+    ctx.fillRect(mx - large / 2, my - taille * 0.7, large, taille * 1.4);
+    ctx.fillStyle = TEINTES_TERRITOIRE[JOUEUR];
+    ctx.fillText(texte, mx, my);
+  }
+
+  /**
+   * Les cases où la base peut aller, tant que le mode est armé.
+   *
+   * ⚠ ELLES VIENNENT DE `casesAtteignables`, QUI INTERROGE LA RÈGLE. Les
+   * recalculer ici ferait une seconde liste de règles, et l'écran finirait par
+   * montrer une case que le geste refuse — c'est ce que `casesPosables` de
+   * l'écran Chantier évite déjà, avec le même commentaire.
+   *
+   * ⚠ UN LISERÉ, PAS UN APLAT. La carte est déjà pleine ; un aplat sur 316
+   * cases cacherait le terrain et les sites qu'on essaie justement de viser.
+   */
+  function dessinerCasesDuDeplacement(ox, oy, pas) {
+    if (!modeDeplacement || casesDuDeplacement.length === 0) return;
+    const epaisseur = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+    ctx.lineWidth = epaisseur;
+    ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
+    const demi = epaisseur / 2;
+    ctx.beginPath();
+    for (const k of casesDuDeplacement) {
+      const x = (k.colonne - 1) * pas - ox;
+      const y = (k.rangee - 1) * pas - oy;
+      if (x < -pas || y < -pas || x > canvas.width || y > canvas.height) continue;
+      ctx.rect(x + demi, y + demi, pas - epaisseur, pas - epaisseur);
+    }
+    ctx.stroke();
+  }
+
   function dessiner() {
     if (etatCourant === null || canvas.width === 0) return;
     const ox = origineX();
@@ -897,6 +1152,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
 
     const pas = cran();
     dessinerFrontieres(ox, oy, pas);
+    dessinerHalo(ox, oy, pas);
     sitesAffiches = sitesDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
     }));
@@ -913,6 +1169,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
         site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas,
       );
     }
+
+    // ⚠ APRÈS LES EMBLÈMES, contrairement au halo et aux frontières : la flèche
+    // DOIT se lire par-dessus, c'est tout ce qu'elle a à dire.
+    dessinerFleche(ox, oy, pas);
+    dessinerCasesDuDeplacement(ox, oy, pas);
 
     // ⚠ ON NE RELANCE PAS D'IMAGE TANT QUE L'ATLAS MANQUE. Sans lui, aucune
     // dalle ne peut se calculer : la boucle tournerait à vide soixante fois par
@@ -1050,6 +1311,13 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     const py = (evenement.clientY - cadre.top) * dpr + origineY();
     const colonne = Math.floor(px / cran()) + 1;
     const rangee = Math.floor(py / cran()) + 1;
+    // ⚠ LE MODE DE DÉPLACEMENT PREND LA MAIN AVANT TOUT LE RESTE. Sans ça,
+    // toucher une case occupée par un site ouvrirait son panneau au lieu de
+    // poser la base, et le geste armé serait avalé par le geste ordinaire.
+    if (modeDeplacement) {
+      poserLaBase({ rangee, colonne });
+      return;
+    }
     // Le dernier dessiné est celui du dessus : on le cherche donc à l'envers.
     for (let i = sitesAffiches.length - 1; i >= 0; i -= 1) {
       const site = sitesAffiches[i];
@@ -1100,12 +1368,82 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     surEntreeRaid({ rangee: site.rangee, colonne: site.colonne });
   }
 
+  /**
+   * Arme le mode de déplacement — le panneau se ferme, la carte montre où aller.
+   *
+   * ⚠ ON ARME MÊME QUAND C'EST IMPOSSIBLE, et c'est « un indice n'est pas une
+   * interdiction » (§4 de CLAUDE.md). Un bouton mort n'apprend rien ; le refus
+   * chiffré de `problemesDuDeplacement` — « il reste 3 h 20 à attendre » — en
+   * apprend davantage, et il faut pouvoir le lire en appuyant.
+   */
+  function armerLeDeplacement() {
+    if (etatCourant === null) return;
+    modeDeplacement = true;
+    casesDuDeplacement = casesAtteignables(etatCourant);
+    fermerPanneau();
+    // ⚠ LE MOT DIT CE QUI EST VRAI, ET IL SE LIT SUR `casesAtteignables`. Zéro
+    // case atteignable signifie que quelque chose s'y oppose — le délai le plus
+    // souvent —, et c'est `problemesDuDeplacement` qui sait le formuler. On lui
+    // demande sur une case VOISINE, qui est à portée par construction : ce qui
+    // reste alors dans la liste est ce qui ne dépend pas de la case.
+    panneauRefus.hidden = false;
+    panneauRefus.textContent = casesDuDeplacement.length > 0
+      ? `Touchez une case à ${DEPLACEMENT.porteeMaxCases} cases au plus.`
+      : problemesDuDeplacement(etatCourant, {
+        rangee: etatCourant.position.rangee,
+        colonne: etatCourant.position.colonne + 1,
+      }).map((p) => p.message).join(' ; ');
+    panneauTitre.textContent = 'Déplacer la base';
+    panneauCorps.textContent = '';
+    panneau.hidden = false;
+    dessiner();
+  }
+
+  function desarmerLeDeplacement() {
+    modeDeplacement = false;
+    casesDuDeplacement = [];
+    dessiner();
+  }
+
+  /**
+   * Le second temps du geste : la case touchée devient la nouvelle position.
+   *
+   * ⚠ ON DEMANDE, PUIS ON DÉPLACE — jamais un `try` autour de `deplacerLaBase`.
+   * `problemesDuDeplacement` rend une LISTE, `deplacerLaBase` LÈVE, et la
+   * différence est la règle du dépôt : un déplacement refusé est un fait de JEU
+   * qu'on montre au joueur, une levée est un fait de PROGRAMME. Rattraper la
+   * levée traiterait la seconde comme la première.
+   */
+  function poserLaBase(cible) {
+    if (etatCourant === null) return;
+    const problemes = problemesDuDeplacement(etatCourant, cible);
+    if (problemes.length > 0) {
+      panneauTitre.textContent = 'Déplacer la base';
+      panneauCorps.textContent = '';
+      panneauRefus.hidden = false;
+      panneauRefus.textContent = problemes.map((p) => p.message).join(' ; ');
+      panneau.hidden = false;
+      desarmerLeDeplacement();
+      return;
+    }
+    deplacerLaBase(etatCourant, cible);
+    desarmerLeDeplacement();
+    fermerPanneau();
+    centrerSur(etatCourant.position);
+    apresDeplacement();
+    dessiner();
+  }
+
   function ouvrirPanneau(site) {
     siteOuvert = { rangee: site.rangee, colonne: site.colonne };
     panneauTitre.textContent = EMBLEMES_CARTE[site.type].nom;
     panneauCorps.textContent = '';
     // ⚠ LES TROIS NOMBRES DE CIBLAGE VIENNENT DES BRIQUES, PAS DE L'ÉCRAN.
     const ciblage = ciblageDuSite(etatCourant, site);
+    // ⚠⚠ ET LA FLÈCHE RELIT CE MÊME OBJET. Le rappeler pour elle donnerait deux
+    // valeurs qui peuvent diverger, et le joueur verrait un prix sur la flèche
+    // et un autre dans le panneau.
+    ciblageOuvert = ciblage;
     panneauRefus.hidden = ciblage === null || ciblage.problemes.length === 0;
     panneauRefus.textContent = ciblage === null ? ''
       : ciblage.problemes.map((p) => p.message).join(' ; ');
@@ -1120,12 +1458,23 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       bloc.append(quoi, valeur);
       panneauCorps.appendChild(bloc);
     }
+    // ⚠⚠ LE BOUTON N'APPARAÎT QUE SUR SA PROPRE BASE. Sur un camp ou une base de
+    // l'Ouvrage il n'aurait aucun sens, et le panneau retomberait dans la faute
+    // qu'il combat depuis le 27/08 : promettre un geste qui n'existe pas là.
+    panneauDeplacer.hidden = site.type !== 'baseJoueur';
     panneau.hidden = false;
+    // ⚠ LA FLÈCHE NAÎT AVEC LE PANNEAU, donc l'ouverture repeint. Sans ça elle
+    // n'apparaîtrait qu'au prochain geste sur la carte — la boucle de dessin ne
+    // tourne pas au repos, `dessiner` n'est rappelée que par ce qui bouge.
+    dessiner();
   }
 
   function fermerPanneau() {
     panneau.hidden = true;
+    panneauDeplacer.hidden = true;
     siteOuvert = null;
+    ciblageOuvert = null;
+    dessiner();
   }
 
   // ⚠⚠ REVENIR SUR SA BASE — Ethan, 31/08. La vue ne se recentre qu'à la
@@ -1148,7 +1497,14 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     dessiner();
   });
 
-  $('monde-panneau-fermer').addEventListener('click', fermerPanneau);
+  $('monde-panneau-fermer').addEventListener('click', () => {
+    // ⚠ FERMER DÉSARME AUSSI. Sans ça, le mode resterait armé sous un panneau
+    // fermé, et le prochain toucher sur la carte déplacerait la base sans que
+    // rien ne l'ait annoncé.
+    desarmerLeDeplacement();
+    fermerPanneau();
+  });
+  panneauDeplacer.addEventListener('click', armerLeDeplacement);
   // ⚠ IL SE FERME EXPLICITEMENT AU CÂBLAGE. Le `hidden` du balisage suffit
   // aujourd'hui, mais il serait la SEULE chose à le tenir fermé au démarrage :
   // un attribut oublié à la prochaine reprise du HTML l'ouvrirait par-dessus la

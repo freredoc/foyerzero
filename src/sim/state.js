@@ -44,7 +44,7 @@ import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 21;
+export const SAVE_VERSION = 22;
 
 /**
  * @typedef {object} Etat
@@ -226,6 +226,17 @@ export function creerEtat(graine) {
     // ⚠ VIDE À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a attaqué
     // personne.
     rapports: [],
+    // ⚠⚠ QUAND LA BASE S'EST DÉPLACÉE POUR LA DERNIÈRE FOIS — lot DÉPLACEMENT,
+    // 02/09. Un HORODATAGE de jeu, jamais un compte à rebours : un résiduel qui
+    // décroîtrait tick par tick divergerait au rattrapage, alors qu'un instant
+    // relu contre l'horloge ne dépend pas du chemin par lequel on y est arrivé.
+    //
+    // ⚠ `null`, PAS ZÉRO, ET C'EST LA MOITIÉ QUI COMPTE. Une base neuve ne s'est
+    // jamais déplacée : son premier déplacement n'attend rien. Un zéro se lirait
+    // « déplacée au tick 0 », ce qui est vrai par accident aujourd'hui — l'horloge
+    // y démarre — et cesserait de l'être le jour où une partie commencerait
+    // ailleurs. `ticksAvantProchainDeplacement` distingue les deux de face.
+    dernierDeplacementTick: null,
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -2062,6 +2073,22 @@ const MIGRATIONS = {
     s.version = 21;
     s.sitesEntames = {};
     s.poisAcquis = [];
+  },
+
+  /**
+   * v21 → v22 : la base peut se déplacer, et l'état retient quand.
+   *
+   * ⚠ `null`, PAS ZÉRO. Une sauvegarde v21 n'avait aucun moyen de déplacer la
+   * base autrement que par un rasage, qui ne consomme pas le délai : son joueur
+   * n'a donc jamais bougé volontairement, et son premier déplacement ne doit
+   * rien attendre. Écrire `0` se lirait « déplacée au tick 0 » — vrai par
+   * accident sur une partie jeune, faux sur une partie de trois jours, où cela
+   * accorderait le déplacement sans délai pour une raison fausse.
+   * @param {object} s
+   */
+  21: (s) => {
+    s.version = 22;
+    if (s.dernierDeplacementTick === undefined) s.dernierDeplacementTick = null;
   },
 };
 

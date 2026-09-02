@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.64.0 · build 65.
+Dernière révision : **02/09/2026**, version 0.65.0 · build 66.
 
 ---
 
@@ -41,7 +41,69 @@ Dernière révision : **02/09/2026**, version 0.64.0 · build 65.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot EUCLIDE), à confronter :**
+**Référence au 02/09/2026 (après le lot DÉPLACEMENT), à confronter :**
+`npm test` → **872 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 383 723 octets**, 0 référence externe.
+⚠⚠ **CE LOT COÛTE +6 814 OCTETS ET IL DÉBLOQUE LE RESTE DU JEU.** Ethan, 02/09 :
+« tout se débloque lorsqu'on pourra bouger la base ». La base se déplace de
+**dix cases au maximum, en euclidien**, avec un délai qui va de 1 h à 24 h selon
+son niveau. Aucune image n'entre — **16 `data:` avant, 16 après**. Marge T10
+**16 277 octets, 1,16 %** : c'est la marge la plus mince du dépôt, et le
+prochain lot qui fait entrer une image devra relever la borne EN ÉCRIVANT
+POURQUOI.
+⚠⚠ **UN DÉFAUT ANTÉRIEUR AU LOT A ÉTÉ TROUVÉ ET CORRIGÉ, ET IL RENDAIT LA CARTE
+À MOITIÉ INUTILISABLE.** `ciblageDuSite` demandait le coût du raid AVANT les
+problèmes ; or `coutDuRaid` LÈVE au-delà du rayon d'attaque. Toucher n'importe
+quel site à plus de dix cases faisait donc lever `ouvrirPanneau`, et **le panneau
+ne s'ouvrait pas** — le joueur ne pouvait consulter aucun site lointain, sur
+toute la carte. **Mesuré dans Chromium : 0 panneau ouvert sur un balayage complet
+de l'écran avant, 32 après.** Le coût vaut `null` hors de portée, jamais zéro —
+« 0 point d'attaque » se lirait « gratuit ».
+⚠⚠ **UN SEUL CODE DÉPLACE LA BASE, ET C'EST `poserLaBaseSur`.** `raserLaBase`
+gardait sa propre ligne `etat.position.rangee = …` depuis RAID-B ; elle appelle
+désormais la fonction commune. Ce qui reste chez elle est ce qui lui est PROPRE :
+une seule direction, une distance fixe, et le rabotage sur le bord. Un test
+balaie `src/sim/` et exige qu'un SEUL fichier écrive `etat.position`.
+⚠⚠ **ON REFUSE, ON NE RABOTE PAS — ET LA DIFFÉRENCE EST UNE RÈGLE.** Une
+sanction n'a personne à qui répondre : elle pousse la base aussi loin qu'elle
+peut. Un déplacement voulu a deux axes et un joueur qui a DÉSIGNÉ une case : il
+obtient celle-là ou un refus motivé.
+⚠⚠ **LE TERRAIN NE SUIT PAS, ET C'EST CE QUI REND LE DÉPLACEMENT SÛR.**
+`champs` et `obstacles` dérivent de `fondation`, que ce lot ne touche jamais :
+**aucun bâtiment ne peut basculer sur un obstacle, aucun collecteur ne perd son
+champ**. Mesuré sur une base construite, avant et après : champs, obstacles,
+fondation et disposition identiques au caractère.
+⚠ **LE DÉLAI EST UN HORODATAGE, JAMAIS UN COMPTE À REBOURS** — un résiduel qui
+décroît diverge au rattrapage. Et il se lit en **DIXIÈMES** de niveau : une base
+à 25,5 attend 12,5 h ; lue en entier elle attendrait 24 h, le plafond. C'est le
+piège que `sim/reparation.js` a déjà payé avec `niveauDeLArmee`.
+⚠ **PREMIER DÉPLACEMENT : `null`, PAS ZÉRO.** Un zéro se lirait « déplacée au
+tick 0 » — vrai par accident aujourd'hui, faux sur une partie de trois jours, où
+il accorderait le déplacement sans délai pour une raison fausse.
+⚠ **UN RASAGE NE CONSOMME PAS LE DÉLAI DU JOUEUR, ET C'EST UNE LECTURE.** La
+sanction est déjà la plus lourde du jeu ; lui retirer aussi le droit de bouger le
+punirait deux fois, et l'empêcherait précisément de fuir l'endroit où il vient
+d'être rasé. Une ligne à déplacer si Ethan tranche autrement.
+⚠⚠ **DEUX GARDE-FOUS ONT ÉTÉ RESSERRÉS, PAS ASSOUPLIS, ET ILS SE DÉCLARENT.**
+(1) `monde.test.js` interdisait `fillText` PARTOUT dans l'écran Monde — la
+flèche porte un nombre, donc l'interdiction NOMME désormais son unique
+exception, `dessinerFleche`, et reste totale ailleurs : une lettre ne peut pas
+revenir sur un emblème. (2) Le panneau de site n'admettait que « Fermer » ;
+il admet « Déplacer la base », **qui n'apparaît que sur SA PROPRE base**, et les
+quatre mots promis-mais-absents restent interdits.
+⚠ **M1 : LE NOMBRE DE CIBLES NE BOUGE PAS, MAIS 60 % D'ENTRE ELLES SONT
+NEUVES.** Sur 150 graines, un saut de dix cases vers le haut fait passer les
+cibles à portée de 34,29 à 34,37 — la densité est uniforme — mais **leur niveau
+moyen monte de 20,0 à 22,0**. Ce que le déplacement achète, ce n'est pas plus de
+cibles : ce sont d'autres cibles, plus hautes.
+⚠ **`SAVE_VERSION` PASSE À 22** : l'état porte `dernierDeplacementTick`. La
+migration 21 → 22 pose `null` — une v21 n'avait aucun moyen de déplacer la base
+autrement que par un rasage, qui ne consomme pas le délai.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot EUCLIDE :**
 `npm test` → **855 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 376 909 octets**, 0 référence externe.
 ⚠⚠ **CE LOT NE COÛTE QUE +602 OCTETS ET IL CHANGE LA CARTE DE CHAQUE GRAINE.**
@@ -760,7 +822,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 24 fichiers
+src/sim/                simulation déterministe, sans DOM — 25 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
@@ -776,6 +838,7 @@ src/sim/                simulation déterministe, sans DOM — 24 fichiers
   site-entame.js        l'après-raid : planchers, ce qui reste debout, ce qui repousse
   raid.js               l'acte, et sa simulation : payer, partir, encaisser, revenir abîmé
   raid-ouvrage.js       l'autre sens : quand l'Ouvrage vient, ce qu'il casse, ce qu'il rase
+  deplacement.js        la base bouge : portée, délai, et LE seul écrivain de `position`
   reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
@@ -854,13 +917,13 @@ src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   45 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   46 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
-  raid-ouvrage  euclide
+  raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire
   ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans

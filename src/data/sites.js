@@ -386,10 +386,45 @@ export const GEOGRAPHIE = {
   rayonAttaque: 10, // fixe
   niveauBase: 'moyenne des niveaux de ses bâtiments',
   compositionBase: 'deux niveaux adjacents, répartis pour atteindre la moyenne',
+  // ⚠⚠ CE COUPLE EST LU PAR `sim/deplacement.js` DEPUIS LE LOT DÉPLACEMENT
+  // (02/09/2026), et il ne s'y recopie pas. Il vient de `SESSION-RELEVE-BUTIN.md`
+  // §0 — « délai entre deux déplacements de base : 1 h au départ → 24 h au
+  // niveau 50 » — et il dormait ici depuis, sans lecteur.
   delaiEntreSautsHeures: { depart: 1, niveau50: 24 },
   blocageApresAttaqueHeures: 1,
   blocageApresRasageHeures: 24,
   avantPostesParBaseJoueur: { min: 1, max: 2, niveauRelatif: 1, renouvelables: true },
+};
+
+// --- déplacement de la base ---------------------------------------------------
+// Ce que le joueur peut faire de sa base, et à quel rythme. Deux nombres, et
+// aucun n'est neuf : la portée vient d'Ethan le 02/09 (« 10 cases au
+// maximum »), le délai dormait dans `GEOGRAPHIE.delaiEntreSautsHeures` depuis
+// `SESSION-RELEVE-BUTIN.md` §0 sans que personne ne le lise.
+//
+// ⚠⚠ LE DÉLAI N'EST PAS RECOPIÉ ICI, IL EST RÉFÉRENCÉ. Deux tables pour une
+// grandeur, c'est une occasion de divergence, et `CLAUDE.md` §4 l'interdit :
+// « une seule table fait foi par grandeur ».
+//
+// ⚠ LA PORTÉE SE MESURE EN EUCLIDIEN, comme toute distance de portée de la
+// carte depuis le lot EUCLIDE — `d² ≤ 100`, jamais de racine. Un carré de
+// Tchebychev rendrait 440 cases atteignables là où le disque en rend 316, et
+// la diagonale à (10, 10) — 14,1 cases en ligne droite — passerait pour un
+// déplacement de dix.
+export const DEPLACEMENT = {
+  /** Distance maximale d'un déplacement, en cases, distance EUCLIDIENNE. */
+  porteeMaxCases: 10,
+
+  /**
+   * Le barème du délai, aux deux bouts, en HEURES — interpolé linéairement
+   * entre eux sur le niveau de la base.
+   *
+   * ⚠ LE NIVEAU D'UNE BASE EST LA MOYENNE DES NIVEAUX DE SES BÂTIMENTS, et
+   * `niveauDesBatiments` la rend EN DIXIÈMES. Le lire comme un entier donnerait
+   * un délai dix fois faux — c'est le piège que `sim/reparation.js` a déjà payé
+   * avec `niveauDeLArmee`.
+   */
+  delaiHeures: GEOGRAPHIE.delaiEntreSautsHeures,
 };
 
 // --- peuplement de la carte --------------------------------------------------

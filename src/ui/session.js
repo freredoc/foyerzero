@@ -760,6 +760,49 @@ export function initialiserSession(doc) {
     suivreLaMaj();
   });
 
+  // --- la remise à zéro ------------------------------------------------------
+  //
+  // ⚠⚠ LE BOUTON LE PLUS DESTRUCTEUR DU JEU, DANS L'ÉCRAN QU'ON OUVRE POUR LIRE
+  // UN NUMÉRO DE VERSION. La confirmation est en DEUX TEMPS et elle DIT CE QUI
+  // SERA PERDU — pas « êtes-vous sûr ? », qui n'apprend rien à celui qui a
+  // touché par erreur. Ce que le joueur perd n'est pas abstrait : sa base, sa
+  // carte, ses recherches payées en points, tout.
+  //
+  // ⚠ ET IL REPART PAR LE CHEMIN NORMAL. `partieNeuve` est exactement ce
+  // qu'appelle déjà le bouton de l'écran d'alerte : nouvelle graine, nouvelle
+  // fondation, tout l'état recréé par `creerEtat`. Bricoler un état à la main
+  // ici en ferait un second constructeur, qui divergerait au premier champ
+  // ajouté — c'est la faute que `dispositionNouvelleBase` évite déjà.
+  const zeroBouton = $('options-zero');
+  const zeroConfirmer = $('options-zero-confirmer');
+  const zeroAnnuler = $('options-zero-annuler');
+  const zeroAvertissement = $('options-zero-avertissement');
+
+  /** Le libellé de la confirmation — il NOMME ce qui disparaît. */
+  const AVERTISSEMENT_ZERO = 'Toute la partie sera effacée : ta base et sa '
+    + 'disposition, ta garnison, ton armée, tes recherches, ta position sur la '
+    + 'carte et les dix derniers rapports de raid. La carte sera tirée à neuf. '
+    + 'C\'est définitif, et rien n\'est mis de côté.';
+
+  function armerLaRemiseAZero(arme) {
+    zeroAvertissement.hidden = !arme;
+    zeroAvertissement.textContent = arme ? AVERTISSEMENT_ZERO : '';
+    zeroConfirmer.hidden = !arme;
+    zeroAnnuler.hidden = !arme;
+    zeroBouton.hidden = arme;
+  }
+
+  zeroBouton.addEventListener('click', () => armerLaRemiseAZero(true));
+  zeroAnnuler.addEventListener('click', () => armerLaRemiseAZero(false));
+  zeroConfirmer.addEventListener('click', () => {
+    armerLaRemiseAZero(false);
+    partieNeuve();
+    montrerEcran('chantier');
+  });
+  // ⚠ DÉSARMÉE AU CÂBLAGE, comme le panneau de l'écran Monde : le `hidden` du
+  // balisage serait la SEULE chose à tenir la confirmation fermée au démarrage.
+  armerLaRemiseAZero(false);
+
   const version = $('options-version');
   let minuterieDebug = null;
   const annulerAppui = () => {
@@ -864,6 +907,18 @@ export function initialiserSession(doc) {
       if (etat === null || ecranRaid === null) return;
       ecranRaid.ouvrir(etat, cible, atlasDeLaScene(doc));
       montrerEcran('raid');
+    },
+    // ⚠⚠ UN DÉPLACEMENT SE SAUVEGARDE TOUT DE SUITE, comme une pose. C'est une
+    // action irréversible du joueur ; la perdre parce que l'application a été
+    // tuée avant l'enregistrement périodique serait la pire façon de perdre sa
+    // confiance — c'est mot pour mot ce que `CLAUDE.md` §6 dit de la pose.
+    //
+    // ⚠ ET L'ÉCRAN DE LA BASE SE RAFRAÎCHIT AVEC. Le bandeau porte des nombres
+    // qui dépendent de la position — rien aujourd'hui, mais le niveau des sites
+    // alentour en dépendra —, et surtout le tutoriel lit la base à chaque image.
+    apresDeplacement: () => {
+      sauvegarder();
+      rafraichirLaBase();
     },
   });
   montrerEcran('chantier');

@@ -44,7 +44,8 @@ import { ciblesAPortee } from './site-de-la-case.js';
 import { estSurLaCarte } from './carte.js';
 import { RESSOURCES } from './economie-base.js';
 import { modulesDebloquesDuJoueur } from './recherche.js';
-import { majorationsDeCombat, releverLesPoisAcquis } from './poi.js';
+import { majorationsDeCombat } from './poi.js';
+import { poserLaBaseSur } from './deplacement.js';
 import { reparerLaGarnison, garderLeRapport } from './raid.js';
 
 /**
@@ -412,7 +413,22 @@ function raserLaBase(etat) {
     if (!estSurLaCarte(r, etat.position.colonne)) break;
     rangeeApres = r;
   }
-  etat.position.rangee = rangeeApres;
+  // ⚠⚠ L'ÉCRITURE PASSE PAR `poserLaBaseSur`, ELLE NE SE FAIT PLUS ICI — lot
+  // DÉPLACEMENT, 02/09. Cette fonction gardait sa propre ligne
+  // `etat.position.rangee = …` ; depuis que le joueur peut bouger sa base de
+  // lui-même, il y aurait eu DEUX codes pour déplacer la même chose, et deux
+  // codes divergent. Ce qui reste ici est ce qui est PROPRE au rasage : une
+  // seule direction, une distance fixe, et le rabotage sur le bord de carte.
+  //
+  // ⚠ ET LE RABOTAGE RESTE ICI, DÉLIBÉRÉMENT. Un déplacement voulu REFUSE une
+  // case hors carte — le joueur a désigné une case, il doit obtenir celle-là ou
+  // un refus. Une sanction n'a personne à qui répondre : elle pousse la base
+  // aussi loin qu'elle peut et s'arrête au bord.
+  //
+  // ⚠ LE RELEVÉ DES POI EST DÉSORMAIS FAIT PAR `poserLaBaseSur`, donc plus bas
+  // dans `subirUnRaid` : le `if (rase) releverLesPoisAcquis(etat)` a disparu, il
+  // ferait un second relevé qui n'ajouterait rien.
+  poserLaBaseSur(etat, rangeeApres, etat.position.colonne);
 
   const perdu = {};
   if (RAID_OUVRAGE.sanctionRasage.perteRessourcesStockees) {
@@ -502,13 +518,17 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   );
 
   // --- 2. le rasage --------------------------------------------------------
-  const sanction = rase ? raserLaBase(etat) : null;
   // ⚠⚠ ET LA RUPTURE ANNONCÉE PAR `rattraperJeu` L. 397 EST ADVENUE ICI. La base
   // vient de se DÉPLACER, donc le territoire a balayé des cases que le relevé du
   // segment précédent n'a jamais vues. Le relevé se refait sur-le-champ, à
   // l'instant du rasage — pas à la fin du rattrapage, où il manquerait les POI
   // que la base aurait dû acquérir en chemin si elle avait bougé plus tôt.
-  if (rase) releverLesPoisAcquis(etat);
+  //
+  // ⚠ IL SE FAIT DANS `poserLaBaseSur` DEPUIS LE LOT DÉPLACEMENT, et non plus
+  // par un appel séparé juste ici. C'est une propriété du DÉPLACEMENT, pas une
+  // précaution du rasage : le joueur qui bouge sa base de lui-même a exactement
+  // le même besoin, et l'oublier de son côté aurait été invisible.
+  const sanction = rase ? raserLaBase(etat) : null;
 
   // --- 3. la réserve de réparation se vide ---------------------------------
   const aPerduDesPv = resultat.batiments.some((b) => b.pvPerdusIciMilli > 0);

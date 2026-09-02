@@ -988,7 +988,25 @@ test('carte — plus aucune lettre n\'est dessinée, à aucun cran', () => {
   // `etat.rng` et `campChaine`. Le commentaire qui EXPLIQUE le retrait nomme
   // `CSS_MINI_LETTRE` ; une garde qui lit ce qu'on a écrit à son sujet ne garde
   // rien.
-  assert.doesNotMatch(nu, /fillText/, 'l\'écran Monde dessine encore du texte sur la carte');
+  // ⚠⚠ CE GARDE-FOU A ÉTÉ RESSERRÉ AU LOT DÉPLACEMENT (02/09), PAS ASSOUPLI, ET
+  // IL FAUT DIRE POURQUOI. Il interdisait `fillText` PARTOUT dans l'écran Monde.
+  // Ce qu'Ethan a arbitré le 30/08, ce sont les LETTRES DES EMBLÈMES — la
+  // désignation courte peinte sur chaque site au-delà d'un certain cran ; et il
+  // a demandé le 02/09 que la flèche d'attaque « porte le coût d'attaque »,
+  // c'est-à-dire un nombre, sur un trait qui n'existe que tant qu'un panneau est
+  // ouvert. Les deux ne parlent pas de la même chose.
+  //
+  // ⚠ L'INTERDICTION RESTE TOTALE HORS DE `dessinerFleche`. Une lettre ne peut
+  // donc pas revenir sur un emblème sans faire tomber ce test — c'est très
+  // exactement ce que la version large protégeait, et rien n'en est perdu. Ce
+  // qui change, c'est qu'elle NOMME son unique exception au lieu de l'interdire
+  // en bloc.
+  const corpsDeLaFleche = extraireFonction(nu, 'dessinerFleche');
+  assert.ok(corpsDeLaFleche.length > 200, 'la fonction `dessinerFleche` est introuvable');
+  assert.match(corpsDeLaFleche, /fillText/, 'la flèche ne porte plus le coût d\'attaque');
+  const horsFleche = nu.replace(corpsDeLaFleche, '');
+  assert.doesNotMatch(horsFleche, /fillText/,
+    'l\'écran Monde dessine du texte ailleurs que sur la flèche d\'attaque');
   assert.doesNotMatch(nu, /CSS_MINI_LETTRE/, '`CSS_MINI_LETTRE` est revenue dans le code');
   assert.doesNotMatch(nu, /\.lettre/, 'le champ `lettre` est relu par l\'écran');
 
@@ -1273,3 +1291,25 @@ test('monde — un bouton ramène toujours à la base du joueur', () => {
   assert.match(outils[1], /position:\s*absolute/,
     'la boîte d\'outils de la carte est passée dans le flux : elle mange la carte');
 });
+
+/**
+ * Le corps d'une fonction nommée, extrait d'une source décommentée.
+ *
+ * ⚠ ELLE COMPTE LES ACCOLADES, elle ne cherche pas une accolade fermante en
+ * colonne 0 : `dessinerFleche` est imbriquée dans `initialiserEcranMonde`, donc
+ * indentée, et un motif de fin de ligne y prendrait la première fonction voisine.
+ */
+function extraireFonction(source, nom) {
+  const debut = source.indexOf(`function ${nom}(`);
+  if (debut === -1) return '';
+  const ouvrante = source.indexOf('{', debut);
+  let profondeur = 0;
+  for (let i = ouvrante; i < source.length; i += 1) {
+    if (source[i] === '{') profondeur += 1;
+    else if (source[i] === '}') {
+      profondeur -= 1;
+      if (profondeur === 0) return source.slice(debut, i + 1);
+    }
+  }
+  return '';
+}

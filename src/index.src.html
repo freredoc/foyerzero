@@ -1344,6 +1344,21 @@
      ⚠ IL A CHANGÉ DE PLACE DEUX FOIS, PAS DE RÔLE : le bandeau d'emplacements
      d'abord, la barre du bas ensuite, les Options maintenant. Chaque fois,
      c'est la seule porte du banc qui déménage avec lui. */
+  /* ⚠ L'ÉCART ET LE TRAIT SONT LA PREMIÈRE DES TROIS PRÉCAUTIONS : ce bloc ne
+     doit pas se toucher par erreur depuis le bouton de mise à jour. */
+  #options-zone-danger {
+    margin-top: 24px; padding-top: 12px; border-top: 1px solid #8A1E17;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #options-zone-danger h2 { color: #E43E32; }
+  #options-zero, #options-zero-confirmer { background: #8A1E17; color: #F5F3E8; }
+  #options-zero-avertissement {
+    margin: 0; padding: 8px; font-size: 11px; line-height: 1.4;
+    color: #E43E32; background: #161914; border: 1px solid #8A1E17;
+  }
+  #monde-panneau-deplacer {
+    margin: 0 8px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
   #options-version {
     font-size: 12px; color: #F5F3E8; font-variant-numeric: tabular-nums;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
@@ -1700,13 +1715,19 @@
             <button type="button" id="monde-panneau-fermer">Fermer</button>
           </div>
           <div id="monde-panneau-corps"></div>
-      <!-- ⚠ LE REFUS D'ENTRER SE DIT ICI, ET IL EST LE SEUL TEXTE QUE LE PANNEAU
-           AJOUTE. `problemesDuRaid` rend une liste de PHRASES, et c'est pour ça
-           qu'elle en rend une : l'écran doit pouvoir refuser ET expliquer.
-           ⚠ CE N'EST PAS UN BOUTON. Le panneau n'en porte toujours qu'un seul,
-           « Fermer » — le second toucher sur la carte remplace « Attaquer », et
-           le test qui balaie ce bloc continue d'interdire tout autre bouton. -->
+      <!-- ⚠ LE REFUS D'ENTRER SE DIT ICI. `problemesDuRaid` rend une liste de
+           PHRASES, et c'est pour ça qu'elle en rend une : l'écran doit pouvoir
+           refuser ET expliquer.
+           ⚠⚠ ET LE PANNEAU PORTE DÉSORMAIS UN SECOND BOUTON, MAIS UN SEUL DE
+           PLUS, et il ne promet rien qui n'existe pas — c'est la règle que ce
+           bloc tient depuis le 27/08 contre le bouton « Assaut » du lot
+           ÉCRAN-CHANTIER. « Déplacer la base » n'apparaît que sur SA PROPRE
+           base, et le déplacement existe depuis le lot DÉPLACEMENT. On entre
+           toujours dans une cible par un SECOND TOUCHER, jamais par un bouton :
+           les quatre mots promis — Attaquer, Raider, Piller, Conquérir —
+           restent interdits, et le test le vérifie. -->
       <p id="monde-panneau-refus" hidden></p>
+      <button type="button" id="monde-panneau-deplacer" hidden>Déplacer la base</button>
         </div>
       </div>
     </div>
@@ -1810,6 +1831,28 @@
         <span id="options-maj-etat">—</span>
       </div>
       <button type="button" id="options-maj-verifier">Vérifier les mises à jour</button>
+
+      <!-- ⚠⚠ LE BOUTON LE PLUS DESTRUCTEUR DU JEU, DANS UN ÉCRAN QU'ON OUVRE
+           POUR LIRE UN NUMÉRO DE VERSION. Trois précautions, et aucune n'est
+           décorative :
+           1. IL EST EN BAS, SÉPARÉ PAR UN TRAIT ET UN ÉCART. Le doigt qui rate
+              « Vérifier les mises à jour » sur un téléphone ne doit pas pouvoir
+              tomber dessus.
+           2. IL DEMANDE CONFIRMATION EN DEUX TEMPS, et la confirmation DIT CE
+              QUI SERA PERDU — pas « êtes-vous sûr ? », qui n'apprend rien à
+              celui qui a touché par erreur.
+           3. IL REPART D'UNE PARTIE NEUVE PAR LE CHEMIN NORMAL, `partieNeuve`,
+              celui du bouton de l'écran d'alerte. Il ne « répare » rien et ne
+              bricole aucun état : nouvelle graine, nouvelle fondation. -->
+      <div id="options-zone-danger">
+        <h2>Recommencer</h2>
+        <p class="mot">Efface la partie enregistrée sur cet appareil et en
+          démarre une neuve, avec une autre carte.</p>
+        <p id="options-zero-avertissement" hidden></p>
+        <button type="button" id="options-zero">Effacer et recommencer</button>
+        <button type="button" id="options-zero-confirmer" hidden>Oui, tout effacer</button>
+        <button type="button" id="options-zero-annuler" hidden>Annuler</button>
+      </div>
     </div>
 
     <div id="chantier-alerte" hidden>
