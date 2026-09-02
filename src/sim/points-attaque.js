@@ -365,6 +365,23 @@ export function casesArrondiesAuSuperieur(carreDeLaDistance) {
  * dans ce cas il n'y a pas de problème ». Le territoire est au JOUEUR ; la
  * distance, elle, se mesure depuis la base qui part.
  *
+ * ⚠⚠ EN EUCLIDE DEPUIS LE LOT BASES-1, 02/09/2026, ET LES DEUX CÔTÉS ONT
+ * BASCULÉ ENSEMBLE. Cette fonction et la boucle `peindre` de `sim/territoire.js`
+ * portent la MÊME zone : l'une la facture, l'autre la dessine. Le lot EUCLIDE
+ * avait laissé les deux en Tchebychev — CLAUDE.md l'écrivait, et prévenait que
+ * si Ethan voulait le disque, « ce sont `estEnTerritoireAllie` ET la boucle de
+ * `territoire.js` qui changent, ensemble ». C'est ce jour-ci.
+ *
+ * ⚠ LE PRIX CHANGE, ET IL N'EST PAS COMPENSÉ. Mesuré sur 150 graines et 5 161
+ * cibles : 172 raids (3,33 %) passent de +1 à +3 par case, et le prix moyen monte
+ * de 27,945 à 28,078 points. Ce sont les cases en DIAGONALE, celles que le carré
+ * comptait chez soi et que le disque ne compte plus.
+ *
+ * ⚠ LA DISTANCE DU BARÈME, ELLE, RESTE EN CASES DE GRILLE — `coutDUnRaid`
+ * ci-dessous emploie toujours `distanceTchebychev`. C'est l'arbitrage d'EUCLIDE,
+ * intact : la PORTÉE est un disque, le PRIX se compte en cases de grille, et un
+ * raid en diagonale ne renchérit pas pour la seule raison qu'il est en diagonale.
+ *
  * @param {{ rangee: number, colonne: number }} cible
  * @param {Array<{ position: object }>} bases
  * @returns {boolean}
@@ -373,9 +390,8 @@ export function estEnTerritoireAllie(cible, bases) {
   if (!Array.isArray(bases) || bases.length === 0) {
     throw new RangeError('estEnTerritoireAllie : au moins une base est attendue');
   }
-  return bases.some(
-    (base) => distanceTchebychev(base.position, cible) <= GEOGRAPHIE.rayonInfluenceJoueur,
-  );
+  const rayonCarre = GEOGRAPHIE.rayonInfluenceJoueur * GEOGRAPHIE.rayonInfluenceJoueur;
+  return bases.some((base) => distanceCarreeCases(base.position, cible) <= rayonCarre);
 }
 
 /**

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.66.0 · build 67.
+Dernière révision : **02/09/2026**, version 0.67.0 · build 68.
 
 ---
 
@@ -41,7 +41,96 @@ Dernière révision : **02/09/2026**, version 0.66.0 · build 67.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot BASES-0), à confronter :**
+**Référence au 02/09/2026 (après le lot BASES-1), à confronter :**
+`npm test` → **902 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 388 959 octets**, 0 référence externe.
+⚠⚠ **CE LOT OUVRE LE MULTI-BASES, ET C'EST LE PREMIER OÙ LE JOUEUR EN A DEUX.**
+Fonder, basculer, haloter. Coût **+3 029 octets**, aucune image n'entre —
+**16 `data:` avant, 16 après**. ⚠⚠ **MARGE T10 : 11 041 OCTETS, 0,79 %.** C'est la
+première fois qu'elle passe sous le pour-cent, et **la borne N'A PAS ÉTÉ
+RELEVÉE** : la règle §5 veut qu'elle monte quand une RESSOURCE entre, jamais
+pour faire passer du code. Le prochain lot qui fait entrer une image devra la
+relever EN ÉCRIVANT POURQUOI ; celui qui n'en fait pas entrer devra tenir dans
+onze kilo-octets.
+⚠⚠ **`etat.bases` PEUT ENFIN EN PORTER PLUSIEURS, ET `basesAutorisees` DIT
+COMBIEN.** Le nœud `SPECIAL.deuxiemeBase` est renommé **`baseSupplementaire`** —
+« deuxième » devient faux au rang 3 — et il se RACHÈTE : `2 000 000 × 2,5^(rang−2)`
+points, chaîne OUVERTE. ⚠ **Le ×2,5 est une fraction d'entiers, 5 / 2, jamais un
+flottant** : mesuré, `Math.round(2e9 × 2,5²³)` rend **360 milli-points de moins**
+que la vérité au rang 25. Au rang 10 les deux coïncident encore — un test qui
+s'arrêterait là passerait sur le code faux.
+⚠⚠ **LE ×2,5 EST PRIS SUR LA PAROLE D'ETHAN.** Il cite un classeur
+`fz recherche.xlsx` qui n'est **PAS dans le dépôt**, et §1 interdit de toute
+façon de lire un `.xlsx` pour coder. Aucune autre valeur d'équilibrage n'a bougé.
+⚠⚠ **`territoire.js` PASSE EN EUCLIDIEN, ET LE LOT EUCLIDE L'AVAIT MANQUÉ.**
+`peindre` remplissait un CARRÉ de (2r+1)² cases sans le moindre test de
+distance : la carte peinte et le prix du raid décrivaient deux géométries.
+**Mesuré : le disque du joueur fait 13 cases au lieu de 25, celui de l'Ouvrage 29
+au lieu de 49.** M1 — sur **150 graines et 5 161 cibles**, le prix moyen d'un raid
+passe de **27,945 à 28,078 points**, soit **+0,133** ; **3,33 % des cibles**
+renchérissent, toutes en diagonale. **Rien n'a été compensé.**
+⚠⚠ **FONDER EST INTERDIT DANS LE TERRITOIRE DE L'OUVRAGE, ET LA CONSÉQUENCE SE
+MESURE.** Sur 40 graines, le nombre de cases fondables dans le disque de rayon 10
+tombe de **261 sur 317 à la rangée 295** à **190 à la 285**, **24 à la 275** et
+**moins d'une au-delà de la 270** : l'Ouvrage tient 100 % des rangées hautes.
+**Le jeu passe donc par le rasage** — une base rasée cesse de projeter son
+influence — et ce n'est pas un défaut à corriger, c'est ce que l'arbitrage
+d'Ethan produit. À relire s'il veut fonder plus haut.
+⚠⚠ **DEUX BASES DU JOUEUR PEUVENT ÊTRE ADJACENTES, ET C'EST ARBITRÉ.** Ethan,
+02/09 : fonder dans son PROPRE territoire est autorisé ; il avait d'abord appelé
+cela un exploit, puis tranché autrement. **Seule la case EXACTE d'une base
+existante est refusée** — un `=== 0` dans `problemesDeLaFondation`, à changer en
+rayon si Ethan revient dessus.
+⚠⚠ **LE BUTIN D'UN CAMP FONDÉ DESSUS VA À LA BASE QUI FONDE. LECTURE PRISE.**
+Une base neuve n'a qu'un Chantier de niveau 1 — 50 · 50 · 40 de capacité — et le
+butin d'un avant-poste la ferait déborder EN ENTIER. `verserLeButin` est sorti
+d'`executerRaid` pour que le raid et la fondation partagent UN code de
+plafonnement, `butinPerdu` compris.
+⚠⚠ **HALOTER ET BASCULER SONT LE MÊME GESTE. LECTURE PRISE.** Le halo suit
+`etat.baseCourante` ; deux notions distinctes — « la base affichée » et « la base
+qui attaque » — se désynchroniseraient à la première inattention, et le joueur
+lancerait un raid depuis une base qu'il ne regarde pas.
+⚠⚠ **LA SIXIÈME CONDITION DE RUPTURE DE `rattraperJeu` EST TRAITÉE.**
+`basesAttaquantes` interrogeait `ciblesAPortee(etat, baseCourante(etat))` : une
+seconde base aurait été un **SANCTUAIRE**, invisible pour l'Ouvrage, et rien
+n'aurait cassé. Elle rend maintenant des PAIRES, chacune portant `baseVisee`.
+⚠ **UNE BASE DE L'OUVRAGE À PORTÉE DE DEUX BASES DU JOUEUR LES ATTAQUE TOUTES
+LES DEUX, LA MÊME MINUTE. LECTURE PRISE.** `baseAttaqueALaMinute` hache la CASE
+et la minute, jamais la cible : c'est ce qui rend les tirages d'une partie à une
+seule base identiques au bit après ce lot. Lui faire choisir UNE cible demanderait
+une règle qu'Ethan n'a pas donnée.
+⚠⚠ **`siteDeLaCase` ET LA CARTE NE LISAIENT QUE LA BASE COURANTE, ET CE N'ÉTAIT
+PAS QU'UN DÉFAUT D'AFFICHAGE :** sur le camp d'une AUTRE base, `siteDeLaCase`
+rendait `null`, donc la case cessait d'être **attaquable** en même temps qu'elle
+devenait invisible. `satellitesPresents` boucle désormais sur toutes les bases.
+⚠⚠ **LES OBJECTIFS DU TUTORIEL SE MESURENT SUR LA MEILLEURE BASE, PAS SUR LA
+COURANTE — ET C'EST CE LOT QUI L'A RENDU NÉCESSAIRE.** Ils lisaient
+`baseCourante` ; dès qu'une seconde base existe, FONDER ou BASCULER faisait
+décocher les douze missions de construction d'un coup, la base neuve n'ayant
+qu'un Chantier de niveau 1. Le joueur aurait vu son tutoriel se vider pour avoir
+fait exactement ce que le tutoriel lui demandait.
+⚠⚠ **LES QUATRE MISSIONS `sans-moteur` ONT LEUR MOTEUR, ET M2 SE COMPTE :
+LE DÉNOMINATEUR PASSE DE 13 / 17 À 17 / 17.** La famille `sans-moteur` a disparu
+des données ET du moteur — la garder vide inviterait à y remettre un objectif
+plutôt qu'à lui écrire un moteur. ⚠ Les quatre gardent le libellé qu'Ethan a
+dicté, et `titreEcrit` le dit : l'écran les reconnaissait à `!verifiable`, ce qui
+était vrai par COÏNCIDENCE.
+⚠ **`SAVE_VERSION` PASSE À 24, ET LA SAUVEGARDE GRANDIT DE 76 OCTETS EXACTEMENT**
+sur les vingt-cinq graines du témoin. Trois champs entrent :
+`prochaineInstanceSatellite` (le compteur d'instance des satellites, qui quitte
+la base pour l'ÉTAT — deux bases seraient toutes deux parties de l'instance 1,
+donc du même tirage), `recherche.basesAutorisees` et `satellitesDetruits`.
+⚠⚠ **LE TÉMOIN DE BASES-0 TIENT TOUJOURS, ET LES CLÉS DÉMÉNAGÉES SONT
+SUBSTITUÉES, PAS EXEMPTÉES.** Le relevé recompose `satellites` avec son ancien
+`prochaineInstance` et `recherche` sans son `basesAutorisees` : les quatorze
+empreintes d'origine doivent **retomber justes**, ce qui prouve qu'aucun TIRAGE
+n'a bougé. Sept couples seulement sont déclarés déplacés — `attaque` et
+`rapports` à partir de la phase 11, le prix du raid ayant monté.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot BASES-0 :**
 `npm test` → **885 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 385 930 octets**, 0 référence externe.
 ⚠⚠ **CE LOT NE CHANGE AUCUN COMPORTEMENT, ET C'EST TOUT CE QU'ON LUI DEMANDE.**
@@ -918,7 +1007,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 26 fichiers
+src/sim/                simulation déterministe, sans DOM — 27 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
@@ -936,6 +1025,7 @@ src/sim/                simulation déterministe, sans DOM — 26 fichiers
   raid.js               l'acte, et sa simulation : payer, partir, encaisser, revenir abîmé
   raid-ouvrage.js       l'autre sens : quand l'Ouvrage vient, ce qu'il casse, ce qu'il rase
   deplacement.js        la base bouge : portée, délai, et LE seul écrivain de `position`
+  fondation.js          fonder une base de plus : où c'est permis, ce qu'on écrase, qui encaisse
   reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM

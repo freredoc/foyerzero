@@ -51,6 +51,8 @@ import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
 import { baseCourante } from '../sim/base-courante.js';
+import { basculerVersLaBase } from '../sim/state.js';
+import { satellitesPresents } from '../sim/satellites.js';
 
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
 export const CRANS = ZOOM_CARTE.crans;
@@ -170,7 +172,6 @@ export function distanceEnCases(a, b) {
  * @returns {Array<{type: string, rangee: number, colonne: number, niveau: number|null}>}
  */
 export function sitesDeLaFenetre(etat, fenetre) {
-  const laBase = baseCourante(etat);
   const dedans = (rangee, colonne) => rangee >= fenetre.premiereRangee
     && rangee <= fenetre.derniereRangee
     && colonne >= fenetre.premiereColonne
@@ -224,7 +225,10 @@ export function sitesDeLaFenetre(etat, fenetre) {
     });
   }
 
-  for (const satellite of laBase.satellites.presents) {
+  // ⚠ TOUTES LES BASES — lot BASES-1. Les satellites sont par base : n'afficher
+  // que ceux de la courante faisait disparaître de la carte les camps d'une
+  // autre, alors qu'ils y sont bel et bien.
+  for (const { satellite } of satellitesPresents(etat)) {
     if (!dedans(satellite.rangee, satellite.colonne)) continue;
     sites.push({
       type: satellite.type,
@@ -246,16 +250,30 @@ export function sitesDeLaFenetre(etat, fenetre) {
     });
   }
 
-  // Le joueur en dernier : c'est le seul site qu'il ne doit jamais perdre de vue.
-  if (dedans(laBase.position.rangee, laBase.position.colonne)) {
+  // ⚠ LES BASES DU JOUEUR EN DERNIER, ET TOUTES — lot BASES-1. Ce sont les seuls
+  // sites qu'il ne doit jamais perdre de vue, et il en a maintenant plusieurs.
+  //
+  // ⚠⚠ `courante` PORTE LE HALO, ET C'EST `etat.baseCourante` QUI LE DIT.
+  // **LECTURE PRISE** (§4.6 du brief) : haloter et basculer sont le MÊME geste.
+  // Un seul état, une seule vérité — deux notions distinctes, « la base
+  // affichée » et « la base qui attaque », se désynchroniseraient à la première
+  // inattention, et le joueur lancerait un raid depuis une base qu'il ne regarde
+  // pas. Si Ethan veut les séparer, c'est ce champ qui gagne une source à lui.
+  //
+  // ⚠ PAS DE SECONDE CONVENTION DE COULEUR : le halo réemploie l'os qui borde
+  // déjà la base du joueur, il n'invente aucune teinte.
+  etat.bases.forEach((base, indice) => {
+    if (!dedans(base.position.rangee, base.position.colonne)) return;
     sites.push({
       type: 'baseJoueur',
-      rangee: laBase.position.rangee,
-      colonne: laBase.position.colonne,
+      rangee: base.position.rangee,
+      colonne: base.position.colonne,
       niveau: null,
-      saveur: saveur(laBase.position.rangee, laBase.position.colonne, 'base'),
+      saveur: saveur(base.position.rangee, base.position.colonne, 'base'),
+      indiceBase: indice,
+      courante: indice === etat.baseCourante,
     });
-  }
+  });
   return sites;
 }
 
@@ -637,6 +655,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // l'application a été tuée serait la pire façon de perdre la confiance du
   // joueur. L'écran ne sait pas sauvegarder ; il le demande.
   const apresDeplacement = crochets.apresDeplacement ?? (() => {});
+  // ⚠ MÊME PARTAGE POUR LA BASCULE : l'écran écrit l'indice — c'est du jeu —,
+  // la session sauvegarde et repeint les autres écrans. Sans ce crochet, un
+  // joueur qui bascule depuis la carte reviendrait sur un Chantier montrant
+  // encore l'autre base.
+  const apresBascule = crochets.apresBascule ?? (() => {});
   const fenetre = doc.defaultView;
   const $ = (id) => doc.getElementById(id);
   const canvas = $('monde-canvas');
@@ -1438,6 +1461,21 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   }
 
   function ouvrirPanneau(site) {
+    // ⚠⚠ TOUCHER UNE AUTRE DE SES BASES LA HALOTE, ET C'EST ELLE QUI ATTAQUE —
+    // point 3 de la spec Carte, ouvert au lot BASES-1. **LECTURE PRISE** :
+    // haloter et basculer sont le MÊME geste, donc le toucher écrit
+    // `etat.baseCourante` et tous les écrans suivent. Deux notions distinctes —
+    // « la base affichée » et « la base qui attaque » — se
+    // désynchroniseraient à la première inattention, et le joueur lancerait un
+    // raid depuis une base qu'il ne regarde pas.
+    //
+    // ⚠ AVANT LE CIBLAGE, PAS APRÈS. Le prix d'un raid et la portée se comptent
+    // depuis la base COURANTE : ouvrir le panneau puis basculer afficherait le
+    // prix de l'ancienne base, et la flèche partirait du mauvais endroit.
+    if (site.indiceBase !== undefined && site.indiceBase !== etatCourant.baseCourante) {
+      basculerVersLaBase(etatCourant, site.indiceBase);
+      apresBascule();
+    }
     siteOuvert = { rangee: site.rangee, colonne: site.colonne };
     panneauTitre.textContent = EMBLEMES_CARTE[site.type].nom;
     panneauCorps.textContent = '';
@@ -1531,8 +1569,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     const premiere = etatCourant === null;
     etatCourant = etat;
     visible = true;
-    const sat = baseCourante(etat).satellites;
-    empreinteSatellites = `${sat.presents.length}:${sat.prochaineInstance}`;
+    empreinteSatellites = empreinteDeLaCarte(etat);
     chargerAtlas();
     chargerEmblemes();
     chargerGrossesBases();
@@ -1552,6 +1589,27 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   }
 
   /**
+   * Ce qui, dans l'état, oblige la carte à se redessiner.
+   *
+   * ⚠⚠ ELLE ÉTAIT ÉCRITE DEUX FOIS — dans `peindre` et dans `rafraichir` — ET
+   * LES DEUX AVAIENT DIVERGÉ. Elles lisaient `satellites.prochaineInstance`,
+   * qui a quitté la base pour l'état au lot BASES-1 : l'empreinte valait donc
+   * « N:undefined », si bien qu'un camp DÉTRUIT puis REMPLACÉ au même compte
+   * laissait la carte figée sur l'ancien.
+   *
+   * ⚠ ELLE PORTE `baseCourante`, ET C'EST CE QUI FAIT SUIVRE LE HALO. Sans lui,
+   * basculer ne redessinerait rien — la liste des satellites n'ayant pas bougé.
+   *
+   * ⚠ ET TOUTES LES BASES, pas seulement la courante : les camps d'une autre
+   * base paraissent et disparaissent sur la même carte.
+   */
+  function empreinteDeLaCarte(etat) {
+    let empreinte = `${etat.baseCourante}:${etat.prochaineInstanceSatellite}`;
+    for (const base of etat.bases) empreinte += `:${base.satellites.presents.length}`;
+    return empreinte;
+  }
+
+  /**
    * Ce qui change avec le temps : les satellites, qui paraissent cinq minutes
    * après la pose d'une base. Le fond, lui, ne bouge jamais — c'est une
    * fonction de la graine.
@@ -1564,8 +1622,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // neuf hachages par case de la fenêtre — deux mille cases au cran le plus
     // large — pour redessiner exactement la même image. Le fond, lui, est une
     // fonction de la graine : il ne change jamais.
-    const sat = baseCourante(etat).satellites;
-    const empreinte = `${sat.presents.length}:${sat.prochaineInstance}`;
+    const empreinte = empreinteDeLaCarte(etat);
     if (empreinte === empreinteSatellites) return;
     empreinteSatellites = empreinte;
     dessiner();

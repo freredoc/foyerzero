@@ -13,6 +13,7 @@ import {
   satellitesVides, planifierSatellites, resoudreSatellites, problemesDesSatellites,
   TICKS_DUREE_DE_VIE,
   TICKS_APPARITION,
+  PREMIERE_INSTANCE, ANNEAUX,
 } from './satellites.js';
 import { positionDepartJoueur } from './carte.js';
 import { releverLesPoisAcquis, majorationsDeProduction, problemesDesPoisAcquis } from './poi.js';
@@ -59,7 +60,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 23;
+export const SAVE_VERSION = 24;
 
 /**
  * Les onze champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -306,6 +307,24 @@ export function creerEtat(graine) {
     // ⚠ VIDE À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a attaqué
     // personne.
     rapports: [],
+    // ⚠⚠ LE COMPTEUR D'INSTANCE DES SATELLITES EST GLOBAL — lot BASES-1,
+    // 02/09/2026. Il vivait dans `satellites`, donc dans la BASE ; deux bases
+    // seraient toutes deux parties de l'instance 1, donc de la MÊME graine
+    // d'apparition, et leurs satellites auraient été tirés du même flux. Global,
+    // l'unicité est structurelle — et avec une seule base il rend exactement la
+    // suite 1, 2, 3… qu'elle tirait déjà, donc rien ne bouge pour l'existant.
+    prochaineInstanceSatellite: PREMIERE_INSTANCE,
+    // ⚠⚠ CE QUE LE JOUEUR A DÉTRUIT, PAR TYPE — lot BASES-1. C'est le pendant de
+    // `basesRasees` pour les satellites : un camp rasé quitte `presents` et
+    // n'entre nulle part, si bien que la partie ne saurait plus jamais qu'il a
+    // existé. Le tutoriel en a besoin pour cocher « Attaquer et détruire un
+    // camp », et c'est de l'HISTOIRE — au même titre que `basesRasees` et
+    // `poisAcquis`, qui sont sauvegardés eux aussi.
+    //
+    // ⚠ UN COMPTE, PAS UNE LISTE DE CASES. `basesRasees` retient des CASES parce
+    // qu'une base ne doit plus jamais reparaître là ; un camp, lui, reparaît —
+    // la case ne dit donc rien, seul le nombre le dit.
+    satellitesDetruits: Object.fromEntries(Object.keys(ANNEAUX).map((t) => [t, 0])),
     // ⚠⚠ UNE LISTE, ET D'UN SEUL ÉLÉMENT — lot BASES-0, 02/09/2026. Le multi-bases
     // est déplié dans la FORME, il n'est pas ouvert dans le JEU : fonder,
     // basculer, transférer sont les lots suivants. La coquille de bascule de
@@ -322,14 +341,86 @@ export function creerEtat(graine) {
   // payable. La servir dans `creerEtatEconomie` a été essayé : les MIGRATIONS
   // repassent par elle, et une sauvegarde qu'on monte de version aurait touché
   // l'amorce une seconde fois.
-  const base = baseCourante(etat);
-  for (const r of RESSOURCES) base.economie.ressources[r] = (STOCK_DE_DEPART[r] ?? 0) * 1000;
+  servirLAmorce(baseCourante(etat));
   // La base vient d'être posée : les trois apparitions sont dues dans cinq
   // minutes. Elles ne PARAISSENT pas ici — une base neuve est seule, et c'est
   // exactement ce que le joueur doit voir en ouvrant la partie.
   planifierSatellites(etat);
   verifierEtat(etat);
   return etat;
+}
+
+/**
+ * Bascule sur une autre base — lot BASES-1.
+ *
+ * ⚠⚠ ELLE ÉCRIT UN INDICE, ET C'EST TOUT CE QU'ELLE FAIT. BASES-0 a rangé
+ * l'indice plutôt que l'objet, en écrivant pourquoi : « ranger l'objet ferait
+ * DEUX chemins vers la même base, qui divergeraient au premier
+ * `structuredClone` ». Introduire ici un raccourci vers la base — même « pour
+ * la commodité de l'écran » — referait exactement ce défaut.
+ *
+ * ⚠ ELLE VIT DANS `sim/`, PAS DANS L'ÉCRAN, comme `poser` et `reglerTutoriel`.
+ * Deux vues touchent ce champ — les flèches et le halo de la carte — et sans
+ * elle chacune l'aurait écrit de son côté.
+ *
+ * ⚠ ELLE LÈVE HORS BORNES, elle ne rabote pas. L'appelant a une liste et un
+ * indice : arriver ici avec un indice impossible est un fait de PROGRAMME, et
+ * le rabattre en silence ferait basculer sur une base que personne n'a désignée.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {number} indice
+ * @returns {number} l'indice retenu
+ */
+export function basculerVersLaBase(etat, indice) {
+  if (!Number.isInteger(indice) || indice < 0 || indice >= etat.bases.length) {
+    throw new RangeError(
+      `etat : bascule vers l'indice ${indice}, hors de 0…${etat.bases.length - 1}`,
+    );
+  }
+  etat.baseCourante = indice;
+  return indice;
+}
+
+/** L'amorce, versée à toute base neuve — celle du départ comme les suivantes. */
+function servirLAmorce(base) {
+  for (const r of RESSOURCES) base.economie.ressources[r] = (STOCK_DE_DEPART[r] ?? 0) * 1000;
+}
+
+/**
+ * Ajoute une base au joueur, et rend son indice — lot BASES-1.
+ *
+ * ⚠⚠ ELLE NE DÉCIDE DE RIEN : c'est `sim/fondation.js` qui dit OÙ l'on peut
+ * fonder, ce qu'on écrase et qui encaisse le butin. Ici on FABRIQUE, par le même
+ * `creerBase` que la première base et par la même `dispositionNouvelleBase` —
+ * en écrire une seconde donnerait deux définitions de ce qu'est une base neuve.
+ *
+ * ⚠⚠ L'AMORCE EST SERVIE, ET CE N'EST PAS UNE LECTURE : c'est l'arbitrage du
+ * 26/08 appliqué. « Toutes les bases que le joueur pose suivront la même
+ * logique » — une base neuve n'est qu'un Chantier de niveau 1, et sans stock
+ * rien n'y est payable. Le transfert de ressources est le lot suivant ; sans
+ * l'amorce, une base fondée serait inerte jusque-là.
+ *
+ * ⚠ ELLE NE TOUCHE PAS À `baseCourante`. Basculer est un geste, et c'est
+ * l'appelant qui le fait — le mélanger ici ferait que fonder change d'écran
+ * sans qu'on puisse l'en empêcher.
+ *
+ * ⚠ `planifierSatellites` PREND LA BASE. Les camps paraissent dans un anneau
+ * autour de LEUR base ; les planifier sans la nommer les ferait paraître autour
+ * de la courante, c'est-à-dire ailleurs.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {{rangee: number, colonne: number}} position
+ * @returns {number} l'indice de la base ajoutée
+ */
+export function ajouterUneBase(etat, position) {
+  const base = creerBase(
+    { rangee: position.rangee, colonne: position.colonne },
+    dispositionNouvelleBase(),
+  );
+  servirLAmorce(base);
+  etat.bases.push(base);
+  planifierSatellites(etat, base);
+  return etat.bases.length - 1;
 }
 
 /**
@@ -394,7 +485,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis']) {
+  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis', 'prochaineInstanceSatellite', 'satellitesDetruits']) {
     exigerChamp(etat, champ);
   }
   // ⚠ LA LISTE DE BASES SE VÉRIFIE AVANT SES BASES. Sans ces deux lignes,
@@ -436,9 +527,14 @@ function verifierEtat(etat) {
   for (const b of etat.bases) {
     for (const force of Object.keys(FORCES)) verifierForce(b, force);
   }
-  const defautsSatellites = problemesDesSatellites(base.satellites);
-  if (defautsSatellites.length > 0) {
-    throw new Error(`etat : satellites injouables — ${defautsSatellites.join(' ; ')}`);
+  // ⚠ CHAQUE BASE, ET LE COMPTEUR GLOBAL AVEC — lot BASES-1. Les satellites sont
+  // par base, le compteur d'instance ne l'est plus : ne vérifier que la base
+  // courante laisserait passer une seconde base malformée jusqu'au premier tick.
+  for (const b of etat.bases) {
+    const defautsSatellites = problemesDesSatellites(b.satellites, etat.prochaineInstanceSatellite);
+    if (defautsSatellites.length > 0) {
+      throw new Error(`etat : satellites injouables — ${defautsSatellites.join(' ; ')}`);
+    }
   }
   const defautsPois = problemesDesPoisAcquis(etat.poisAcquis);
   if (defautsPois.length > 0) {
@@ -448,9 +544,11 @@ function verifierEtat(etat) {
   if (defautsSites.length > 0) {
     throw new Error(`etat : sites entamés injouables — ${defautsSites.join(' ; ')}`);
   }
-  const defautsReserve = problemesDesReserves(base.reserveReparation ?? null);
-  if (defautsReserve.length > 0) {
-    throw new Error(`etat : réserve de réparation injouable — ${defautsReserve.join(' ; ')}`);
+  for (const b of etat.bases) {
+    const defautsReserve = problemesDesReserves(b.reserveReparation ?? null);
+    if (defautsReserve.length > 0) {
+      throw new Error(`etat : réserve de réparation injouable — ${defautsReserve.join(' ; ')}`);
+    }
   }
   // ⚠ UNE LISTE, ET PAS PLUS LONGUE QUE LA BORNE. Un journal qui déborde est un
   // fait de PROGRAMME — rien dans le jeu ne peut l'allonger au-delà de dix — et
@@ -2288,6 +2386,58 @@ const MIGRATIONS = {
     }
     s.bases = [base];
     s.baseCourante = 0;
+  },
+
+  /**
+   * v23 → v24 : le compteur d'instance des satellites REMONTE d'un cran, de la
+   * base à l'état — lot BASES-1, 02/09/2026.
+   *
+   * ⚠⚠ ELLE NE PERD RIEN, ET LA VALEUR SE PREND AU MAXIMUM. Une v23 n'a qu'une
+   * base, donc le maximum EST son compteur ; l'écrire comme un maximum plutôt
+   * que comme `bases[0]` fait que la migration resterait juste si une v23 à
+   * plusieurs bases avait existé — et surtout dit ce qu'elle veut dire : aucun
+   * numéro déjà distribué ne doit pouvoir resservir.
+   *
+   * ⚠ LE CHAMP SORT DE CHAQUE BASE. Le laisser y traîner ferait exister deux
+   * compteurs pour une même grandeur, et le premier à mentir serait celui que
+   * personne ne lit — c'est la seconde source de vérité que ce dépôt refuse
+   * partout ailleurs.
+   *
+   * @param {object} s
+   */
+  23: (s) => {
+    s.version = 24;
+    // ⚠ UN COMPTEUR NE RECULE JAMAIS, et c'est pourquoi on part de ce qui est
+    // déjà là. Une vraie v23 ne porte pas le champ — le maximum vaut alors 1,
+    // puis celui des bases. Mais une sauvegarde fabriquée à partir d'une v24
+    // rabaissée le porte encore : l'écraser distribuerait une seconde fois des
+    // numéros déjà pris, et deux camps successifs partageraient leur tirage.
+    let maximum = Number.isInteger(s.prochaineInstanceSatellite)
+      ? s.prochaineInstanceSatellite : 1;
+    for (const base of s.bases ?? []) {
+      const n = base.satellites?.prochaineInstance;
+      if (Number.isInteger(n) && n > maximum) maximum = n;
+      if (base.satellites !== undefined) delete base.satellites.prochaineInstance;
+    }
+    s.prochaineInstanceSatellite = maximum;
+    // ⚠⚠ ET LE DROIT DE FONDER SE DÉDUIT DE CE QUI EST DÉJÀ POSÉ, PAS DE ZÉRO.
+    // Une v23 n'a qu'une base et aucun moyen d'en fonder une seconde ; mais une
+    // sauvegarde qui en porterait plusieurs — il n'y en a pas, et il pourrait y
+    // en avoir demain — se verrait retirer le droit d'avoir celles qu'elle a.
+    // On prend donc le plus grand des deux : ce qui est écrit, et ce qui est là.
+    const posees = Array.isArray(s.bases) ? s.bases.length : 1;
+    const ecrit = Number.isInteger(s.recherche?.basesAutorisees)
+      ? s.recherche.basesAutorisees : 1;
+    if (s.recherche !== undefined) {
+      s.recherche.basesAutorisees = posees > ecrit ? posees : ecrit;
+    }
+    // ⚠ À ZÉRO, ET SANS RIEN INVENTER. Une v23 ne garde aucune trace des camps
+    // que le joueur a rasés : les compter rétroactivement demanderait de deviner,
+    // et créditer d'office cocherait une mission du tutoriel que personne n'a
+    // faite. Zéro est la seule valeur honnête — le joueur recasse un camp, et
+    // c'est vite fait.
+    s.satellitesDetruits = { ...Object.fromEntries(Object.keys(ANNEAUX).map((t) => [t, 0])),
+      ...(s.satellitesDetruits ?? {}) };
   },
 };
 

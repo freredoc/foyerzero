@@ -38,6 +38,7 @@ import {
   basesDuJoueur, distanceTchebychev, distanceCarreeCases, estAPorteeDAttaque,
 } from './points-attaque.js';
 import { baseCourante } from './base-courante.js';
+import { satellitesPresents } from './satellites.js';
 
 /** Sel du tirage qui ne dépend que de la CASE : la saveur, et le terrain. */
 export const SEL_TERRAIN_DU_SITE = 4;
@@ -146,7 +147,10 @@ export function siteDeLaCase(etat, rangee, colonne) {
     if (distanceTchebychev(base.position, ici) === 0) return null;
   }
 
-  for (const s of laBase.satellites?.presents ?? []) {
+  // ⚠⚠ TOUTES LES BASES, PAS LA COURANTE — lot BASES-1. Les satellites sont par
+  // base ; n'interroger que celle qu'on regarde faisait rendre `null` sur le
+  // camp d'une autre, donc le rendait INATTAQUABLE en même temps qu'invisible.
+  for (const { satellite: s } of satellitesPresents(etat)) {
     if (s.rangee !== rangee || s.colonne !== colonne) continue;
     return {
       type: s.type,

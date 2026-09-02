@@ -47,12 +47,13 @@ test('territoire — le disque du joueur est celui de la spec, mesuré et non é
   const centre = baseCourante(etat).position;
   const carte = territoireDeLaFenetre(etat, autour(centre, 8));
 
-  // On COMPTE les cases du joueur, et on les confronte au disque de Tchebychev.
+  // On COMPTE les cases du joueur, et on les confronte au disque EUCLIDIEN.
   let compte = 0;
   for (let r = centre.rangee - 8; r <= centre.rangee + 8; r += 1) {
     for (let c = centre.colonne - 8; c <= centre.colonne + 8; c += 1) {
-      const dedans = Math.max(Math.abs(r - centre.rangee), Math.abs(c - centre.colonne))
-        <= RAYONS[JOUEUR];
+      const dr = r - centre.rangee;
+      const dc = c - centre.colonne;
+      const dedans = dr * dr + dc * dc <= RAYONS[JOUEUR] ** 2;
       const occ = occupantDeLaCase(carte, r, c);
       if (dedans) {
         assert.equal(occ, JOUEUR, `(${r}, ${c}) devrait être au joueur`);
@@ -62,11 +63,21 @@ test('territoire — le disque du joueur est celui de la spec, mesuré et non é
       }
     }
   }
-  // ⚠ TCHEBYCHEV, PAS EUCLIDIEN : un disque euclidien de rayon 2 ferait 13 cases,
-  // pas 25. Le compte est ce qui distingue les deux, et c'est pour ça qu'il est
-  // asserté plutôt que dérivé de la même formule que le code.
-  assert.equal(compte, (2 * RAYONS[JOUEUR] + 1) ** 2);
-  assert.equal(compte, 25, 'le rayon 2 de la spec ne fait plus 25 cases');
+  // ⚠⚠ EUCLIDIEN, PLUS TCHEBYCHEV — lot BASES-1, 02/09/2026, ET LA VALEUR
+  // ATTENDUE CHANGE POUR UNE RAISON ÉCRITE. Ce test disait le contraire : « un
+  // disque euclidien de rayon 2 ferait 13 cases, pas 25 ». Il avait raison sur
+  // le nombre, et le lot EUCLIDE avait laissé `territoire.js` au carré par
+  // OUBLI — son brief énumérait trois sites de bascule et celui-ci n'y était
+  // pas. Le territoire allié décide du prix d'un raid ; une zone carrée sous une
+  // portée ronde faisait que le prix affiché et la carte peinte ne décrivaient
+  // pas la même géométrie.
+  //
+  // ⚠ LE COMPTE RESTE ASSERTÉ EN DUR, et c'est ce qui distingue les deux
+  // métriques. Le dériver de la même formule que le code rendrait le test aveugle
+  // à un retour au carré.
+  assert.equal(compte, 13, 'le disque de rayon 2 ne fait plus 13 cases');
+  assert.notEqual(compte, (2 * RAYONS[JOUEUR] + 1) ** 2,
+    'le territoire est redevenu un CARRÉ de 25 cases');
 });
 
 test('territoire — le joueur l\'emporte quand les deux se recouvrent', () => {
@@ -124,10 +135,31 @@ test('territoire — les bordures ne dépendent PAS de la fenêtre qu\'on demand
   const serree = bordsDuTerritoire(territoireDeLaFenetre(etat, autour(centre, 1)));
   const large = bordsDuTerritoire(territoireDeLaFenetre(etat, autour(centre, 12)));
 
-  // ⚠ ET CE QU'ON ATTEND ICI, C'EST ZÉRO BORDURE : les neuf cases regardées sont
-  // au cœur du territoire. Une seule suffit à dire que la vue a inventé un cadre.
-  assert.deepEqual(serree, [],
-    'le bord de la FENÊTRE est compté comme une frontière : l\'anneau de contexte manque');
+  // ⚠⚠ LE MONTAGE A CHANGÉ DE FORME AU LOT BASES-1, ET C'EST OBLIGÉ. Il attendait
+  // ZÉRO bordure dans la fenêtre serrée, parce que « les neuf cases regardées sont
+  // au cœur du territoire » — vrai d'un CARRÉ de rayon 2, faux de son DISQUE : les
+  // quatre coins du 3 × 3 y touchent le dehors, donc quatre bordures sont
+  // légitimes. Le disque de rayon 2 n'a que CINQ cases strictement intérieures,
+  // en croix, et aucune fenêtre carrée plus grande qu'une case n'y tient.
+  //
+  // ⚠ CE QU'IL MESURE N'A PAS BOUGÉ D'UN POUCE, et c'est même plus strict : la
+  // fenêtre serrée doit voir EXACTEMENT ce que la large y voit. Sans l'anneau de
+  // contexte, elle invente des bordures sur son propre bord, que la large n'a
+  // pas — la comparaison tombe. On ne compare plus à une liste vide écrite à la
+  // main, on compare à la vérité.
+  const cleDe = (b) => `${b.rangee}:${b.colonne}`;
+  const dansLaFenetreSerree = new Set(serree.map(cleDe));
+  const laVerite = large.filter(
+    (b) => Math.abs(b.rangee - centre.rangee) <= 1 && Math.abs(b.colonne - centre.colonne) <= 1,
+  );
+  assert.deepEqual(
+    [...dansLaFenetreSerree].sort(), laVerite.map(cleDe).sort(),
+    'le bord de la FENÊTRE est compté comme une frontière : l\'anneau de contexte manque',
+  );
+  for (const b of serree) {
+    const vraie = laVerite.find((x) => cleDe(x) === cleDe(b));
+    assert.deepEqual(b, vraie, `(${b.rangee}, ${b.colonne}) change de côtés selon la fenêtre`);
+  }
 
   const moyenne = bordsDuTerritoire(territoireDeLaFenetre(etat, autour(centre, 3)));
   assert.ok(moyenne.length > 0, 'montage sans mordant : aucune bordure à portée');
@@ -142,33 +174,54 @@ test('territoire — les bordures ne dépendent PAS de la fenêtre qu\'on demand
   }
 });
 
-test('territoire — les côtés exposés sont ceux du carré, et rien d\'autre', () => {
+test('territoire — les côtés exposés sont ceux du DISQUE, et rien d\'autre', () => {
+  // ⚠⚠ « DU CARRÉ » DANS LE TITRE ÉTAIT EXACT JUSQU'AU LOT BASES-1, et il ne
+  // l'est plus : la zone est un disque euclidien. Les valeurs attendues changent
+  // donc, pour la raison écrite en tête de `sim/territoire.js`.
   const etat = creerEtat(GRAINE);
   const centre = baseCourante(etat).position;
   const bords = bordsDuTerritoire(territoireDeLaFenetre(etat, autour(centre, 8)))
     .filter((b) => b.camp === JOUEUR);
   const rayon = RAYONS[JOUEUR];
 
-  // Le centre du carré n'est pas une bordure : ses quatre voisines sont à lui.
+  // Le centre du disque n'est pas une bordure : ses quatre voisines sont à lui.
   assert.ok(!bords.some((b) => b.rangee === centre.rangee && b.colonne === centre.colonne),
     'le centre du territoire est compté comme une bordure');
 
-  // Les 5 × 5 moins le 3 × 3 intérieur : seize cases portent un côté.
-  assert.equal(bords.length, (2 * rayon + 1) ** 2 - (2 * rayon - 1) ** 2);
+  // ⚠ TREIZE CASES, DONT CINQ STRICTEMENT INTÉRIEURES — le centre et ses quatre
+  // voisines orthogonales, en croix. Il reste donc HUIT cases de bordure, contre
+  // seize au carré. Le nombre est écrit plutôt que dérivé : dérivé de la même
+  // formule que le code, il ne distinguerait plus le disque du carré.
+  assert.equal(bords.length, 8, 'le pourtour du disque de rayon 2 ne fait plus huit cases');
+  assert.notEqual(bords.length, (2 * rayon + 1) ** 2 - (2 * rayon - 1) ** 2,
+    'le pourtour est redevenu celui du CARRÉ');
 
-  // Un coin porte DEUX côtés, un milieu de côté n'en porte qu'UN.
-  const coin = bords.find((b) => b.rangee === centre.rangee - rayon
-    && b.colonne === centre.colonne - rayon);
-  assert.ok(coin, 'le coin nord-ouest n\'est pas une bordure');
-  assert.deepEqual(
-    { nord: coin.nord, ouest: coin.ouest, sud: coin.sud, est: coin.est },
-    { nord: true, ouest: true, sud: false, est: false },
+  // ⚠ LE COIN DU CARRÉ N'EST PLUS DANS LA ZONE : (−2, −2) est à 8 en distance au
+  // carré, au-delà de 4. C'est exactement la case que le disque retire, et le
+  // test la nomme au lieu de la supposer disparue.
+  assert.ok(
+    !bords.some((b) => b.rangee === centre.rangee - rayon && b.colonne === centre.colonne - rayon),
+    'le coin du carré est encore une bordure : la zone est restée carrée',
   );
-  const milieu = bords.find((b) => b.rangee === centre.rangee - rayon
+
+  // La pointe nord du disque porte TROIS côtés — ses voisines est et ouest sont
+  // dehors, à 5 en distance au carré.
+  const pointe = bords.find((b) => b.rangee === centre.rangee - rayon
     && b.colonne === centre.colonne);
+  assert.ok(pointe, 'la pointe nord n\'est pas une bordure');
   assert.deepEqual(
-    { nord: milieu.nord, ouest: milieu.ouest, sud: milieu.sud, est: milieu.est },
-    { nord: true, ouest: false, sud: false, est: false },
+    { nord: pointe.nord, ouest: pointe.ouest, sud: pointe.sud, est: pointe.est },
+    { nord: true, ouest: true, sud: false, est: true },
+  );
+
+  // Et la diagonale à (−1, −1), qui est DANS le disque, en porte deux — c'est
+  // elle qui joue le rôle que le coin du carré tenait.
+  const diagonale = bords.find((b) => b.rangee === centre.rangee - 1
+    && b.colonne === centre.colonne - 1);
+  assert.ok(diagonale, 'la diagonale intérieure n\'est pas une bordure');
+  assert.deepEqual(
+    { nord: diagonale.nord, ouest: diagonale.ouest, sud: diagonale.sud, est: diagonale.est },
+    { nord: true, ouest: true, sud: false, est: false },
   );
 });
 

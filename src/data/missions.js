@@ -11,12 +11,14 @@
 // l'affichage. Recopier « Collecteur » ferait une seconde orthographe, et elle
 // finirait par diverger de la première.
 //
-// ⚠ QUATRE MISSIONS N'ONT PAS DE MOTEUR, ET ELLES LE DISENT DE FACE. Le raid,
-// le redéploiement de la base et la seconde base n'existent pas dans le dépôt
-// au 29/08. Les écrire en `type: 'sans-moteur'` plutôt que de les taire garde
-// la feuille de route d'Ethan entière sous les yeux du joueur, sans jamais
-// prétendre qu'on sait les vérifier. Le jour où le moteur arrive, c'est la
-// ligne d'ici qui change — et le compteur grandit tout seul.
+// ⚠⚠ LES DIX-SEPT MISSIONS ONT TOUTES UN MOTEUR DEPUIS LE LOT BASES-1. Quatre
+// d'entre elles étaient écrites `famille: 'sans-moteur'` avec leur raison, parce
+// que le raid, le déplacement et la seconde base n'existaient pas au 29/08 : les
+// trois existent, et les quatre raisons étaient devenues fausses. Le compteur du
+// tutoriel n'est donc plus « 13 sur 17 » mais 17 sur 17 — il a grandi tout seul,
+// comme la ligne d'origine l'annonçait.
+
+import { DEPLACEMENT } from './sites.js';
 
 /**
  * Les quatre familles d'objectif. Une mission en porte une à trois ; son
@@ -27,10 +29,23 @@
  * - `tous-au-niveau` TOUS les bâtiments posés, à partir de ce niveau
  * - `effectif`      n pièces de cet identifiant dans cette force, à ce niveau
  * - `niveau-moyen`  une des trois moyennes du joueur, en DIXIÈMES
- * - `sans-moteur`   ce que le dépôt ne sait pas encore observer
+ * - `sites-detruits` n sites de ce type rasés par le joueur, depuis toujours
+ * - `bases-du-joueur` n bases fondées et tenues
+ * - `montee-vers-le-nord` une base au moins à n cases au-dessus du départ
+ *
+ * ⚠⚠ `sans-moteur` A DISPARU AU LOT BASES-1, ET C'EST TOUT L'OBJET DU §4.7. Elle
+ * portait les quatre objectifs que le dépôt ne savait pas observer — détruire un
+ * camp, se rapprocher de l'Ouvrage, détruire une base, construire une seconde
+ * base. Les quatre RAISONS écrites étaient devenues fausses : le raid existe
+ * depuis RAID-A, le déplacement depuis DÉPLACEMENT, la seconde base depuis
+ * ce lot. Le fichier annonçait lui-même la marche à suivre — « le jour où le
+ * moteur arrive, c'est la ligne d'ici qui change ». La famille est retirée avec
+ * elles : la garder vide inviterait à y remettre un objectif plutôt qu'à lui
+ * écrire un moteur.
  */
 export const FAMILLES_OBJECTIF = new Set([
-  'batiments', 'tous-au-niveau', 'effectif', 'niveau-moyen', 'sans-moteur',
+  'batiments', 'tous-au-niveau', 'effectif', 'niveau-moyen',
+  'sites-detruits', 'bases-du-joueur', 'montee-vers-le-nord',
 ]);
 
 export const CHAINE_TUTORIEL = [
@@ -108,7 +123,7 @@ export const CHAINE_TUTORIEL = [
     libelle: 'Attaquer et détruire un camp',
     explication: 'Les camps sont le butin le plus proche de toi : ils '
       + 'réapparaissent, et tu peux y revenir.',
-    objectifs: [{ famille: 'sans-moteur', raison: 'le raid n\'est pas encore écrit' }],
+    objectifs: [{ famille: 'sites-detruits', type: 'camp', nombre: 1 }],
   },
   {
     id: 'qg-et-complexe',
@@ -153,23 +168,24 @@ export const CHAINE_TUTORIEL = [
     libelle: 'Se rapprocher des bases de l\'Ouvrage',
     explication: 'Plus tu montes vers le nord de la carte, plus les sites de '
       + 'l\'Ouvrage sont de haut niveau — et plus le butin est gros.',
-    objectifs: [{
-      famille: 'sans-moteur', raison: 'le redéploiement de la base n\'est pas encore écrit',
-    }],
+    // ⚠⚠ LE NOMBRE DE CASES N'EST PAS INVENTÉ, IL EST DÉRIVÉ. Un déplacement va
+    // au plus loin à `DEPLACEMENT.porteeMaxCases` : demander cette distance,
+    // c'est demander UN saut complet vers le nord, ce qui est exactement le
+    // geste que la mission décrit. Écrire un nombre ici aurait été trancher un
+    // équilibrage qu'Ethan n'a pas donné.
+    objectifs: [{ famille: 'montee-vers-le-nord', cases: DEPLACEMENT.porteeMaxCases }],
   },
   {
     id: 'detruire-une-base-de-l-ouvrage',
     libelle: 'Détruire une base de l\'Ouvrage',
     explication: 'Une base entière, pas un camp : c\'est l\'étape qui ouvre la '
       + 'carte vers le haut.',
-    objectifs: [{ famille: 'sans-moteur', raison: 'le raid n\'est pas encore écrit' }],
+    objectifs: [{ famille: 'sites-detruits', type: 'base', nombre: 1 }],
   },
   {
     id: 'seconde-base',
     libelle: 'Construire une seconde base',
     explication: 'Deux bases produisent en parallèle, et se défendent séparément.',
-    objectifs: [{
-      famille: 'sans-moteur', raison: 'une partie ne porte encore qu\'une seule base',
-    }],
+    objectifs: [{ famille: 'bases-du-joueur', nombre: 2 }],
   },
 ];

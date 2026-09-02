@@ -215,13 +215,21 @@ function enDuree(ticks) {
  * ⚠ `fondation` N'EST PAS TOUCHÉE, et ce module ne la nomme qu'ici, pour dire
  * qu'il n'y touche pas.
  *
+ * ⚠⚠ LA BASE SE PASSE EN ARGUMENT DEPUIS BASES-1, ET LE DÉFAUT EST LA COURANTE.
+ * Un rasage ne frappe pas forcément la base que le joueur regarde : l'Ouvrage
+ * attaque celle qu'il a à portée, et l'écran peut être sur une autre. Laisser
+ * `baseCourante` décider ici aurait déplacé la MAUVAISE base, en silence — la
+ * bonne aurait gardé sa position, et le joueur aurait vu son autre base sauter
+ * de vingt cases sans raison. Le défaut sert les gestes du joueur, qui agissent
+ * toujours sur celle qu'il regarde.
+ *
  * @param {object} etat modifié en place
  * @param {number} rangee
  * @param {number} colonne
+ * @param {object} [laBase] la base à poser — la courante par défaut
  * @returns {{avant: object, apres: object, poisAjoutes: number}}
  */
-export function poserLaBaseSur(etat, rangee, colonne) {
-  const laBase = baseCourante(etat);
+export function poserLaBaseSur(etat, rangee, colonne, laBase = baseCourante(etat)) {
   if (!estSurLaCarte(rangee, colonne)) {
     throw new RangeError(
       `deplacement : (${rangee}, ${colonne}) est hors de la carte`,

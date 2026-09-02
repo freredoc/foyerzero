@@ -9,7 +9,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
-import { ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe } from '../src/data/recherche.js';
+import {
+  ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe, NOEUD_BASE_SUPPLEMENTAIRE,
+} from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
 import { NIVEAU } from '../src/data/niveaux.js';
@@ -121,14 +123,28 @@ test('T3bis — la table des modules et les données se recouvrent, dans les deu
   assert.equal(MODULES.fumigene, undefined, '« fumigene » est revenu dans la table');
 });
 
-test('recherche — l\'onglet Spécial est déclaré et sans mécanique', () => {
+test('recherche — l\'onglet Spécial : une ligne qui s\'achète, trois sans mécanique', () => {
   assert.equal(Object.keys(SPECIAL).length, 4, 'l\'onglet Spécial n\'a plus quatre lignes');
   // ⚠ `cout: null` DIT « le classeur n'a pas retenu de prix », pas « gratuit ».
   // Un zéro se lirait « à prendre », et l'écran l'afficherait comme tel.
   const sansPrix = Object.keys(SPECIAL).filter((k) => SPECIAL[k].cout === null);
   assert.deepEqual(sansPrix.sort(),
     ['soutienAntiAerien', 'soutienAntiInfanterie', 'soutienAntiVehicule']);
-  assert.equal(SPECIAL.deuxiemeBase.cout, 2000000);
+  // ⚠ LE NŒUD A CHANGÉ DE NOM AU LOT BASES-1, ET PAS DE PRIX. « deuxiemeBase »
+  // devenait faux au rang 3 ; le prix de départ, lui, est resté celui qui était
+  // déjà là. Un test qui asserte les deux dit lequel a bougé.
+  assert.equal(SPECIAL.deuxiemeBase, undefined, 'l\'ancien nom qui ment est revenu');
+  assert.equal(SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE].cout, 2000000);
+  assert.equal(SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE].repetable, true);
+  // ⚠ LE FACTEUR EST UNE FRACTION, ET LE TEST L'EXIGE ENTIÈRE. Un `facteur: 2.5`
+  // écrit ici passerait `node --check`, passerait le build, et ferait mentir le
+  // prix au rang 10 — le seul endroit où personne ne va vérifier.
+  const { facteurNumerateur, facteurDenominateur, premierRang } =
+    SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE];
+  assert.ok(Number.isInteger(facteurNumerateur) && Number.isInteger(facteurDenominateur),
+    'le facteur ×2,5 est écrit en flottant');
+  assert.equal(facteurNumerateur / facteurDenominateur, 2.5);
+  assert.equal(premierRang, 2);
 });
 
 // ---------------------------------------------------------------------------

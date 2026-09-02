@@ -218,7 +218,7 @@ test('sites — les satellites PRÉSENTS se dessinent, les attentes non', () => 
     { type: 'camp', rangee: baseCourante(etat).position.rangee + 1, colonne: baseCourante(etat).position.colonne, niveau: 3, instance: 1 },
     { type: 'avantPoste', rangee: baseCourante(etat).position.rangee - 3, colonne: baseCourante(etat).position.colonne + 2, niveau: 6, instance: 2 },
   );
-  baseCourante(etat).satellites.prochaineInstance = 3;
+  etat.prochaineInstanceSatellite = 3;
   const apres = sitesDeLaFenetre(etat, fenetre)
     .filter((s) => s.type === 'camp' || s.type === 'avantPoste');
   assert.equal(apres.length, 2, 'les satellites parus ne sont pas dessinés');

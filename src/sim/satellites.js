@@ -21,6 +21,19 @@
 // rendre les deux moitiés reproductibles ; stocker les bâtiments serait ranger
 // ce qu'on sait recalculer.
 //
+// ⚠⚠ LE COMPTEUR D'INSTANCE EST GLOBAL À LA PARTIE, PAS PROPRE À UNE BASE — lot
+// BASES-1, 02/09/2026, ET C'EST UNE CORRECTION D'UNICITÉ. Il vivait dans
+// `satellites`, donc dans la BASE ; deux bases seraient toutes deux parties de
+// l'instance 1, avec la MÊME graine d'apparition, et leurs satellites auraient
+// été tirés du même flux — même indice tiré dans deux anneaux différents, donc
+// les mêmes relèvements aux mêmes moments, au même point de la boussole. Un
+// joueur l'aurait vu sans pouvoir l'expliquer.
+//
+// ⚠ ET LA BASE UNIQUE NE BOUGE PAS D'UN BIT. Avec une seule base, le compteur
+// global rend exactement la suite 1, 2, 3… qu'elle tirait déjà. C'est ce qui
+// distingue cette forme de l'autre correction possible — mêler la FONDATION à la
+// graine —, qui aurait déplacé tous les satellites de toutes les parties.
+//
 // ⚠ AUCUN TIRAGE NE PASSE PAR `etat.rng`, et c'est une contrainte de correction,
 // pas de style. `rattraperJeu` est ANALYTIQUE : il avance de mille ticks d'un
 // coup, là où `tickJeu` en fait mille. Un tirage qui consommerait le flux de
@@ -67,10 +80,73 @@ export const ANNEAUX = {
   avantPoste: { nombre: SATELLITES.avantPostes.nombre, ...SATELLITES.avantPostes.anneau },
 };
 
-/** L'état vide, pour une base qui n'a encore rien autour d'elle. */
-export function satellitesVides() {
-  return { presents: [], attentes: [], prochaineInstance: 1 };
+/**
+ * TOUS les satellites présents, toutes bases confondues.
+ *
+ * ⚠⚠ ELLE EXISTE POUR LA MÊME RAISON QUE `trouverSatellite` — lot BASES-1. Les
+ * camps et l'avant-poste sont PAR BASE ; lire `baseCourante(etat).satellites`
+ * faisait disparaître de la carte, et du jeu, ceux d'une base que le joueur ne
+ * regardait pas. Un site invisible n'est pas seulement un défaut d'affichage :
+ * `siteDeLaCase` rend alors `null`, donc la case cesse d'être attaquable.
+ *
+ * ⚠ CHAQUE ENTRÉE PORTE SA BASE, parce que l'appelant en a besoin — pour la
+ * détruire, pour la prolonger, ou pour dire à quelle base elle se rattache. On
+ * rend l'OBJET base et non son indice : ces listes sont lues, jamais
+ * sérialisées, et le rappel ne survit pas à l'appel.
+ *
+ * @param {object} etat
+ * @returns {Array<{satellite: object, base: object, index: number}>}
+ */
+export function satellitesPresents(etat) {
+  const tous = [];
+  for (const base of etat.bases) {
+    const presents = base.satellites?.presents ?? [];
+    for (let i = 0; i < presents.length; i += 1) {
+      tous.push({ satellite: presents[i], base, index: i });
+    }
+  }
+  return tous;
 }
+
+/**
+ * Le satellite d'une identité, dans QUELLE QUE SOIT la base qui le porte.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QU'UN SATELLITE N'APPARTIENT PAS À LA BASE COURANTE —
+ * lot BASES-1. Il appartient à celle autour de laquelle il est paru. Chercher
+ * dans la seule base courante faisait qu'un raid sur le camp d'une AUTRE base ne
+ * détruisait rien et ne prolongeait rien, sans rien dire.
+ *
+ * ⚠ L'IDENTITÉ PORTE L'INSTANCE, donc elle est unique : deux camps successifs au
+ * même endroit ne se confondent pas, et le compteur global de BASES-1 garantit
+ * qu'aucun numéro ne sert deux fois dans une partie.
+ *
+ * @param {object} etat
+ * @param {{rangee: number, colonne: number, instance: number}} identite
+ * @returns {{base: object, index: number, satellite: object}|null}
+ */
+export function trouverSatellite(etat, identite) {
+  for (const base of etat.bases) {
+    const index = base.satellites?.presents?.findIndex(
+      (s) => s.rangee === identite.rangee && s.colonne === identite.colonne
+        && s.instance === identite.instance,
+    ) ?? -1;
+    if (index >= 0) return { base, index, satellite: base.satellites.presents[index] };
+  }
+  return null;
+}
+
+/**
+ * L'état vide, pour une base qui n'a encore rien autour d'elle.
+ *
+ * ⚠ PLUS DE `prochaineInstance` ICI DEPUIS BASES-1 : le compteur est GLOBAL,
+ * dans `etat.prochaineInstanceSatellite`. Voir l'en-tête.
+ */
+export function satellitesVides() {
+  return { presents: [], attentes: [] };
+}
+
+/** La valeur de départ du compteur global d'instances. */
+export const PREMIERE_INSTANCE = 1;
 
 /**
  * Graine d'une apparition. Elle ne dépend QUE de faits déjà dans l'état, et
@@ -148,8 +224,12 @@ export function casesDeLAnneau(centre, min, max) {
  * @param {{s: number}} rng flux propre à cette apparition
  * @returns {number} entier de 1 à NIVEAU.plafond
  */
-export function niveauDuSatellite(type, etat, rng) {
-  const laBase = baseCourante(etat);
+export function niveauDuSatellite(type, etat, rng, base = null) {
+  // ⚠ LA BASE EST CELLE AUTOUR DE LAQUELLE LE SATELLITE PARAÎT — lot BASES-1.
+  // Un camp est de niveau égal aux BÂTIMENTS de sa base, et un avant-poste du
+  // niveau de SA rangée : les lire sur la base courante donnerait à la seconde
+  // base des satellites calibrés sur la première.
+  const laBase = base ?? baseCourante(etat);
   if (type === 'camp') {
     const dixiemes = niveauDesBatiments(laBase.disposition);
     return borner(Math.round(dixiemes / 10));
@@ -177,8 +257,12 @@ function borner(niveau) {
  * @param {object} etat modifié en place
  * @returns {object} le même état
  */
-export function planifierSatellites(etat) {
-  const laBase = baseCourante(etat);
+export function planifierSatellites(etat, base = null) {
+  // ⚠ ELLE PLANIFIE POUR UNE BASE, ET LA BASE COURANTE EST SON DÉFAUT. Fonder
+  // appelle avec la base NEUVE, qui n'est pas encore la courante : lui faire
+  // planifier autour de la mauvaise base donnerait à la nouvelle des satellites
+  // qui ne sont pas les siens.
+  const laBase = base ?? baseCourante(etat);
   const du = etat.horloge.nbTicks + TICKS_APPARITION;
   laBase.satellites.presents = [];
   laBase.satellites.attentes = [];
@@ -203,13 +287,23 @@ export function planifierSatellites(etat) {
  * @param {number} index dans `satellites.presents`
  * @returns {object} le même état
  */
-export function detruireSatellite(etat, index) {
-  const laBase = baseCourante(etat);
+export function detruireSatellite(etat, index, base = null) {
+  const laBase = base ?? baseCourante(etat);
   const present = laBase.satellites.presents[index];
   if (present === undefined) {
     throw new RangeError(`satellites : aucun satellite à l'indice ${index}`);
   }
   laBase.satellites.presents.splice(index, 1);
+  // ⚠⚠ ON COMPTE, PARCE QUE RIEN D'AUTRE NE GARDE LA TRACE — lot BASES-1. Un
+  // camp détruit quitte `presents` et n'entre nulle part : la partie ne saurait
+  // plus jamais que le joueur en a rasé un, et le tutoriel ne pourrait pas
+  // cocher « Attaquer et détruire un camp ». `basesRasees` fait déjà exactement
+  // ça pour les BASES de l'Ouvrage, et pour la même raison.
+  //
+  // ⚠ CETTE FONCTION N'EST APPELÉE QUE PAR LE JOUEUR. La relève naturelle d'un
+  // satellite passe par `resoudreSatellites`, pas par ici : le compteur mesure
+  // donc bien des destructions, jamais des expirations.
+  etat.satellitesDetruits[present.type] = (etat.satellitesDetruits[present.type] ?? 0) + 1;
   laBase.satellites.attentes.push({
     type: present.type,
     tickDu: etat.horloge.nbTicks + TICKS_APPARITION,
@@ -245,7 +339,24 @@ export function detruireSatellite(etat, index) {
  * @returns {number} nombre de satellites parus
  */
 export function resoudreSatellites(etat) {
-  const laBase = baseCourante(etat);
+  // ⚠⚠ TOUTES LES BASES, PAS SEULEMENT LA COURANTE — lot BASES-1, 02/09/2026.
+  // C'est l'une des trois conditions de rupture que le rapport de BASES-0 avait
+  // NOMMÉES : les satellites sont par base, et cette fonction n'en résolvait
+  // qu'une. Au pluriel, les satellites de la base qu'on ne regarde pas
+  // n'auraient jamais paru, ni ne se seraient jamais relevés.
+  //
+  // ⚠ ET ELLE RESTE COMPATIBLE AVEC LE RATTRAPAGE. Chaque base avance par
+  // ÉVÈNEMENT, à sa propre date ; la boucle ne fait qu'appliquer le même corps
+  // plusieurs fois, et le compteur d'instances étant GLOBAL, l'ordre des bases
+  // décide de qui prend quel numéro. C'est déterministe : `etat.bases` est une
+  // liste dont l'ordre ne dépend que de l'ordre des fondations.
+  let parus = 0;
+  for (const base of etat.bases) parus += resoudreSatellitesDeLaBase(etat, base);
+  return parus;
+}
+
+/** La résolution d'UNE base — le corps d'avant BASES-1, inchangé. */
+function resoudreSatellitesDeLaBase(etat, laBase) {
   // ⚠ ELLE NOMME LE CHAMP MANQUANT AU LIEU DE LEVER UNE TypeError QUATRE LIGNES
   // PLUS BAS. C'est la leçon du lot GARNISON-ET-ARMÉE, où un montage de test
   // amputé faisait tomber `resumeDeLaBase` sur `undefined.length` : ça levait
@@ -304,7 +415,7 @@ export function resoudreSatellites(etat) {
     const enAttente = [];
     for (const attente of laBase.satellites.attentes) {
       if (attente.tickDu > quand) { enAttente.push(attente); continue; }
-      const pose = poserUnSatellite(etat, attente.type, quand);
+      const pose = poserUnSatellite(etat, attente.type, quand, laBase);
       // Aucune case libre dans l'anneau : on ne perd pas l'attente, on la met
       // de côté. Le cas est possible — un anneau saturé de bases de l'Ouvrage —
       // et perdre l'attente ferait disparaître un camp en silence.
@@ -340,12 +451,13 @@ export function resoudreSatellites(etat) {
  * @returns {boolean} vrai si un satellite a été prolongé
  */
 export function prolongerApresAttaque(etat, identite, tickDuRaid) {
-  const laBase = baseCourante(etat);
-  const present = laBase.satellites?.presents?.find(
-    (s) => s.rangee === identite.rangee && s.colonne === identite.colonne
-      && s.instance === identite.instance,
-  );
-  if (present === undefined) return false;
+  // ⚠⚠ ON CHERCHE DANS TOUTES LES BASES — lot BASES-1. Un satellite appartient à
+  // la base autour de laquelle il est paru, pas à celle que le joueur regarde :
+  // attaquer le camp de sa seconde base pendant que la première est courante
+  // n'aurait rien prolongé, en silence.
+  const trouve = trouverSatellite(etat, identite);
+  if (trouve === null) return false;
+  const present = trouve.satellite;
   const echeance = tickDuRaid + TICKS_DUREE_DE_VIE + TICKS_SURSIS;
   if (Number.isInteger(present.tickDeReleve) && present.tickDeReleve >= echeance) return false;
   present.tickDeReleve = echeance;
@@ -356,11 +468,10 @@ export function prolongerApresAttaque(etat, identite, tickDuRaid) {
  * Tire une case libre de l'anneau et y pose un satellite.
  * @returns {object|null} le satellite posé, ou null si l'anneau est plein
  */
-function poserUnSatellite(etat, type, tickDeLaPose) {
-  const laBase = baseCourante(etat);
+function poserUnSatellite(etat, type, tickDeLaPose, laBase) {
   const anneau = ANNEAUX[type];
   if (anneau === undefined) throw new Error(`satellites : type inconnu « ${type} »`);
-  const instance = laBase.satellites.prochaineInstance;
+  const instance = etat.prochaineInstanceSatellite;
   const rng = creerRng(graineDeLApparition(etat.graine, instance));
 
   const prises = new Set(laBase.satellites.presents.map((s) => `${s.rangee}:${s.colonne}`));
@@ -389,7 +500,7 @@ function poserUnSatellite(etat, type, tickDeLaPose) {
     type,
     rangee: choisie.rangee,
     colonne: choisie.colonne,
-    niveau: niveauDuSatellite(type, etat, rng),
+    niveau: niveauDuSatellite(type, etat, rng, laBase),
     instance,
     // ⚠⚠ L'ÉCHÉANCE SE COMPTE DEPUIS LE TICK DE LA POSE, JAMAIS DEPUIS
     // `etat.horloge.nbTicks`. Les deux coïncident quand on avance tick par
@@ -401,7 +512,7 @@ function poserUnSatellite(etat, type, tickDeLaPose) {
     tickDeReleve: tickDeLaPose + TICKS_DUREE_DE_VIE,
   };
   laBase.satellites.presents.push(satellite);
-  laBase.satellites.prochaineInstance = instance + 1;
+  etat.prochaineInstanceSatellite = instance + 1;
   return satellite;
 }
 
@@ -411,7 +522,7 @@ function poserUnSatellite(etat, type, tickDeLaPose) {
  * @param {object} satellites
  * @returns {Array<string>} messages, vide si tout va bien
  */
-export function problemesDesSatellites(satellites) {
+export function problemesDesSatellites(satellites, prochaineInstance) {
   const problemes = [];
   if (satellites === null || typeof satellites !== 'object') {
     return ['« satellites » n\'est pas une table'];
@@ -419,8 +530,13 @@ export function problemesDesSatellites(satellites) {
   for (const champ of ['presents', 'attentes']) {
     if (!Array.isArray(satellites[champ])) problemes.push(`« satellites.${champ} » n'est pas une liste`);
   }
-  if (!Number.isInteger(satellites.prochaineInstance) || satellites.prochaineInstance < 1) {
-    problemes.push(`prochaine instance « ${satellites.prochaineInstance} » — entier ≥ 1 attendu`);
+  // ⚠ LE COMPTEUR EST PASSÉ EN ARGUMENT DEPUIS BASES-1 : il est GLOBAL, donc il
+  // n'est plus dans la table qu'on valide. Le vérifier ici quand même — plutôt
+  // que de le laisser à `verifierEtat` — garde ensemble les deux moitiés d'un
+  // même invariant : aucun satellite ne peut porter une instance que le compteur
+  // n'a pas encore distribuée.
+  if (!Number.isInteger(prochaineInstance) || prochaineInstance < 1) {
+    problemes.push(`prochaine instance « ${prochaineInstance} » — entier ≥ 1 attendu`);
   }
   if (problemes.length > 0) return problemes;
 
@@ -446,9 +562,9 @@ export function problemesDesSatellites(satellites) {
     const cle = `${s.rangee}:${s.colonne}`;
     if (vues.has(cle)) problemes.push(`deux satellites en (${s.rangee}, ${s.colonne})`);
     vues.add(cle);
-    if (s.instance >= satellites.prochaineInstance) {
+    if (s.instance >= prochaineInstance) {
       problemes.push(
-        `instance ${s.instance} au-delà du compteur ${satellites.prochaineInstance}`,
+        `instance ${s.instance} au-delà du compteur ${prochaineInstance}`,
       );
     }
   }

@@ -33,13 +33,14 @@ import {
 } from '../data/base.js';
 import { UNITES, DEFENSES } from '../data/combat.js';
 import { ECONOMIE_NIVEAU } from '../data/economie.js';
-import { GEOGRAPHIE, POINTS_ARMEE } from '../data/sites.js';
+import { GEOGRAPHIE, POINTS_ARMEE, EMBLEMES_CARTE } from '../data/sites.js';
 import { CHAINE_TUTORIEL, FAMILLES_OBJECTIF } from '../data/missions.js';
 import { ARBRE_RECHERCHE } from '../data/recherche.js';
 import { ressourceDeLaCase } from './champs.js';
 import { FORCES } from './state.js';
 import { niveauDesBatiments, niveauDeLaDefense, niveauDeLArmee } from './niveau-de-base.js';
 import { baseCourante } from './base-courante.js';
+import { positionDepartJoueur } from './carte.js';
 
 /** Le nom que le JOUEUR emploie pour un bâtiment. */
 function nomBatiment(id) {
@@ -114,10 +115,29 @@ function exiger(etat) {
  * nomment les trois forces dont on prend la moyenne.
  */
 const MOYENNES = {
-  batiments: { libelle: 'tes bâtiments', lire: (etat) => niveauDesBatiments(baseCourante(etat).disposition) },
-  defense: { libelle: 'ta défense', lire: (etat) => niveauDeLaDefense(baseCourante(etat).garnison) },
-  armee: { libelle: 'ton armée', lire: (etat) => niveauDeLArmee(baseCourante(etat).armee) },
+  batiments: { libelle: 'tes bâtiments', lire: (b) => niveauDesBatiments(b.disposition) },
+  defense: { libelle: 'ta défense', lire: (b) => niveauDeLaDefense(b.garnison) },
+  armee: { libelle: 'ton armée', lire: (b) => niveauDeLArmee(b.armee) },
 };
+
+/**
+ * Les familles d'objectif qui parlent d'UNE base — les autres parlent du joueur.
+ *
+ * ⚠⚠ ELLES SE MESURENT SUR LA MEILLEURE DE SES BASES, PAS SUR LA COURANTE, ET
+ * C'EST LE LOT BASES-1 QUI L'A RENDU NÉCESSAIRE. Elles lisaient `baseCourante` ;
+ * dès qu'une seconde base existe, FONDER ou BASCULER faisait décocher les douze
+ * missions de construction d'un coup — la base neuve n'a qu'un Chantier de
+ * niveau 1. Le joueur aurait vu son tutoriel se vider pour avoir fait
+ * exactement ce que le tutoriel lui demandait.
+ *
+ * ⚠ « LA MEILLEURE » EST CELLE QUI VA LE PLUS LOIN VERS L'OBJECTIF, ratio
+ * d'abord — « chaque bâtiment au niveau 5 » n'a pas le même dénominateur d'une
+ * base à l'autre —, puis compte brut pour départager. Une somme sur toutes les
+ * bases aurait été l'autre lecture, et elle est FAUSSE ici : « chaque bâtiment
+ * au niveau 5 » se lit base par base, et une base neuve tirerait la somme vers
+ * le bas indéfiniment.
+ */
+const PAR_BASE = new Set(['batiments', 'tous-au-niveau', 'effectif', 'niveau-moyen']);
 
 /** Un nombre de dixièmes, tel que le joueur le lit : toujours une décimale. */
 function enNiveau(dixiemes) {
@@ -135,8 +155,7 @@ function enNiveau(dixiemes) {
 // le brief.
 
 const OBJECTIFS = {
-  batiments(etat, o) {
-    const laBase = baseCourante(etat);
+  batiments(laBase, o) {
     const surLaBonneCase = (b) => o.ressource === undefined
       || ressourceDeLaCase(laBase.champs, b.rangee, b.colonne) === o.ressource;
     const niveau = o.niveau ?? 1;
@@ -148,8 +167,7 @@ const OBJECTIFS = {
     return { libelle, fait: Math.min(fait, o.nombre), total: o.nombre };
   },
 
-  'tous-au-niveau'(etat, o) {
-    const laBase = baseCourante(etat);
+  'tous-au-niveau'(laBase, o) {
     return {
       libelle: `chaque bâtiment au niveau ${o.niveau}`,
       fait: laBase.disposition.filter((b) => b.niveau >= o.niveau).length,
@@ -157,10 +175,10 @@ const OBJECTIFS = {
     };
   },
 
-  effectif(etat, o) {
+  effectif(laBase, o) {
     const force = FORCES[o.force];
     if (force === undefined) throw new RangeError(`missions : force « ${o.force} » inconnue`);
-    const fait = baseCourante(etat)[force.champ]
+    const fait = laBase[force.champ]
       .filter((p) => p.id === o.id && p.niveau >= o.niveau).length;
     return {
       libelle: `${nomPiece(o.id)} au niveau ${o.niveau} en ${force.quoi}`,
@@ -169,10 +187,10 @@ const OBJECTIFS = {
     };
   },
 
-  'niveau-moyen'(etat, o) {
+  'niveau-moyen'(laBase, o) {
     const moyenne = MOYENNES[o.quoi];
     if (moyenne === undefined) throw new RangeError(`missions : moyenne « ${o.quoi} » inconnue`);
-    const dixiemes = moyenne.lire(etat);
+    const dixiemes = moyenne.lire(laBase);
     return {
       libelle: `${moyenne.libelle} en moyenne au niveau ${enNiveau(o.dixiemes)}`,
       fait: dixiemes !== null && dixiemes >= o.dixiemes ? 1 : 0,
@@ -180,21 +198,97 @@ const OBJECTIFS = {
     };
   },
 
-  // ⚠ ELLE NE SE COCHE JAMAIS, ET ELLE NE COMPTE NULLE PART. Un objectif qu'on
-  // ne sait pas observer ne doit ni s'annoncer fait, ni retenir le tutoriel :
-  // il se DIT, et la mission passe hors du compteur. C'est la seule façon de
-  // porter la feuille de route entière sans rendre le tutoriel infinissable.
-  'sans-moteur'(etat, o) {
-    return { libelle: o.raison, fait: 0, total: 1 };
+  // ⚠⚠ CE QUE LE JOUEUR A RASÉ — lot BASES-1, et c'est ce qui remplace deux des
+  // quatre `sans-moteur`. Les DEUX sources sont de l'HISTOIRE, sauvegardée :
+  // `basesRasees` retient les CASES parce qu'une base ne doit plus jamais
+  // reparaître là, `satellitesDetruits` un COMPTE parce qu'un camp reparaît et
+  // que sa case ne dit donc rien. Deux formes, une seule question.
+  //
+  // ⚠ AUCUNE DES DEUX NE DÉCROÎT, et c'est ce qui distingue cet objectif des
+  // autres : un bâtiment démoli décoche sa mission — « rien n'est mémorisé »,
+  // 28/08 —, un camp rasé reste rasé. Le tutoriel ne revient pas en arrière ici.
+  'sites-detruits'(etat, o) {
+    const fait = o.type === 'base'
+      ? etat.basesRasees.length
+      : (etat.satellitesDetruits[o.type] ?? 0);
+    return {
+      libelle: `${LIBELLE_DU_SITE[o.type] ?? o.type} détruit`,
+      fait: Math.min(fait, o.nombre),
+      total: o.nombre,
+    };
+  },
+
+  // ⚠ ELLE COMPTE CE QUE LE JOUEUR TIENT, PAS CE QU'IL A FONDÉ. Une base rasée
+  // n'est pas retirée de `etat.bases` aujourd'hui — le rasage la DÉPLACE —, donc
+  // les deux coïncident ; le jour où une base pourrait être perdue, cet objectif
+  // décocherait, ce qui est la lecture juste : la mission dit « construire une
+  // seconde base », pas « en avoir construit une un jour ».
+  'bases-du-joueur'(etat, o) {
+    return {
+      libelle: `${o.nombre} bases tenues`,
+      fait: Math.min(etat.bases.length, o.nombre),
+      total: o.nombre,
+    };
+  },
+
+  // ⚠⚠ DEPUIS LE DÉPART DE LA PARTIE, PAS DEPUIS LA FONDATION DE CHAQUE BASE.
+  // `fondation` est le point où une base a été POSÉE — pour une base fondée au
+  // nord, elle est déjà au nord, et l'objectif se cocherait sans que le joueur
+  // ait bougé. `positionDepartJoueur()` est le seul repère fixe de la partie.
+  //
+  // ⚠ LA MEILLEURE DE SES BASES COMPTE. Le joueur qui monte une base et en
+  // laisse une au sud s'est bel et bien rapproché de l'Ouvrage.
+  //
+  // ⚠ LA RANGÉE DÉCROÎT VERS LE NORD — `sim/carte.js`, rangée 1 = bord haut.
+  // L'écrire dans l'autre sens ferait cocher la mission à un joueur que
+  // l'Ouvrage vient de raser vingt cases plus bas.
+  'montee-vers-le-nord'(etat, o) {
+    const depart = positionDepartJoueur().rangee;
+    let montee = 0;
+    for (const base of etat.bases) {
+      const gagne = depart - base.position.rangee;
+      if (gagne > montee) montee = gagne;
+    }
+    return {
+      libelle: `${o.cases} cases vers le nord depuis ton point de départ`,
+      fait: Math.min(montee, o.cases),
+      total: o.cases,
+    };
   },
 };
+
+/**
+ * Le nom d'un type de site, tel que le joueur le lit.
+ *
+ * ⚠ IL VIENT D'`EMBLEMES_CARTE`, PAS D'UNE SECONDE ORTHOGRAPHE. C'est la table
+ * qui nomme déjà les sites sur la carte et dans le panneau ; en réécrire une
+ * ici donnerait deux noms pour la même chose, ce que `CLAUDE.md` §6 interdit
+ * nommément pour les POI.
+ */
+const LIBELLE_DU_SITE = Object.fromEntries(
+  Object.entries(EMBLEMES_CARTE).map(([cle, e]) => [cle, e.nom]),
+);
 
 /** Un objectif, résolu contre cet état. */
 function resoudre(etat, o) {
   if (!FAMILLES_OBJECTIF.has(o.famille)) {
     throw new RangeError(`missions : famille d'objectif « ${o.famille} » inconnue`);
   }
-  return OBJECTIFS[o.famille](etat, o);
+  const lire = OBJECTIFS[o.famille];
+  if (!PAR_BASE.has(o.famille)) return lire(etat, o);
+  let meilleur = null;
+  for (const base of etat.bases) {
+    const vu = lire(base, o);
+    if (meilleur === null || mieuxQue(vu, meilleur)) meilleur = vu;
+  }
+  return meilleur;
+}
+
+/** Ratio d'abord, compte brut pour départager — un total nul ne vaut rien. */
+function mieuxQue(a, b) {
+  const ratio = (x) => (x.total === 0 ? 0 : x.fait / x.total);
+  if (ratio(a) !== ratio(b)) return ratio(a) > ratio(b);
+  return a.fait > b.fait;
 }
 
 // -- ce qu'il faut avoir pour seulement pouvoir essayer -----------------------
@@ -250,23 +344,38 @@ function resoudreTexte(texte) {
  * Les missions, avec leur état pour CETTE base.
  *
  * `titre` est COMPOSÉ des libellés d'objectif — il n'est écrit nulle part, donc
- * il ne peut pas vieillir. Seules les missions sans moteur portent un libellé
- * de la main d'Ethan : il n'y a rien à en dériver.
+ * il ne peut pas vieillir.
+ *
+ * ⚠⚠ QUATRE MISSIONS PORTENT LE LEUR, DE LA MAIN D'ETHAN, ET `titreEcrit` LE
+ * DIT. Elles décrivent un GESTE — « Attaquer et détruire un camp » — que le
+ * compteur d'objectifs dirait beaucoup plus mal (« Camp détruit 0 / 1 »).
+ * Jusqu'au lot BASES-1 c'étaient exactement les quatre SANS MOTEUR, et l'écran
+ * les reconnaissait à ça ; elles en ont un maintenant, donc le drapeau se lit
+ * sur ce qui est vrai — un libellé écrit — et non sur ce qui l'était par
+ * coïncidence.
+ *
+ * ⚠ `verifiable` VAUT DÉSORMAIS `true` PARTOUT, et il RESTE : les deux vues et
+ * `avancement` le lisent, et le jour où une mission arrivera de nouveau sans
+ * moteur, il redeviendra utile. Le retirer obligerait à le réinventer.
  *
  * @param {object} etat
- * @returns {Array<{id, titre, explication, objectifs, fait, total, faite,
- *                  verifiable, prerequis}>}
+ * @returns {Array<{id, titre, titreEcrit, explication, objectifs, fait, total,
+ *                  faite, verifiable, prerequis}>}
  */
 export function etatDesMissions(etat) {
   exiger(etat);
   return CHAINE_TUTORIEL.map((m) => {
     const objectifs = m.objectifs.map((o) => resoudre(etat, o));
-    const verifiable = !m.objectifs.some((o) => o.famille === 'sans-moteur');
+    // ⚠ TOUTES LES FAMILLES ONT UN MOTEUR DEPUIS BASES-1 : `verifiable` vaut
+    // donc `true` partout, et il se calcule quand même — écrire `true` en dur
+    // effacerait la question au lieu d'y répondre.
+    const verifiable = m.objectifs.every((o) => FAMILLES_OBJECTIF.has(o.famille));
     const fait = objectifs.reduce((s, o) => s + o.fait, 0);
     const total = objectifs.reduce((s, o) => s + o.total, 0);
     return {
       id: m.id,
       titre: m.libelle ?? objectifs.map((o) => o.libelle).join(' · '),
+      titreEcrit: m.libelle !== undefined,
       explication: resoudreTexte(m.explication),
       objectifs,
       fait,
@@ -286,11 +395,9 @@ export function etatDesMissions(etat) {
  * Raffinerie. Le tutoriel le rattrape alors sur ce qui manque VRAIMENT, au
  * lieu de lui redemander ce qu'il a déjà fait.
  *
- * ⚠ ET IL SAUTE CE QU'IL NE SAIT PAS OBSERVER. Mettre en avant « détruis un
- * camp » alors que le raid n'existe pas arrêterait le tutoriel pour toujours à
- * la dixième ligne — la faute exacte que CLAUDE.md §6 nomme pour la chaîne
- * précédente : une mission qu'on ne peut pas finir rend le tutoriel
- * infinissable, et rien à la relecture ne le dit.
+ * ⚠ ET IL SAUTE CE QU'IL NE SAIT PAS OBSERVER. Plus rien n'est dans ce cas
+ * depuis BASES-1, mais la garde reste : mettre en avant une mission qu'aucun
+ * geste ne peut cocher arrêterait le tutoriel pour toujours à cette ligne.
  */
 export function missionCourante(etat) {
   return etatDesMissions(etat).find((m) => m.verifiable && !m.faite) ?? null;
@@ -299,9 +406,10 @@ export function missionCourante(etat) {
 /**
  * Combien de missions sont faites, sur combien de VÉRIFIABLES.
  *
- * ⚠ LE DÉNOMINATEUR EXCLUT CE QUI N'A PAS DE MOTEUR. « 13 / 17 » avec quatre
- * lignes qu'aucun geste ne peut cocher serait un compteur qui n'atteint jamais
- * son plafond. Le jour où le raid arrive, le dénominateur grandit tout seul.
+ * ⚠⚠ IL A GRANDI TOUT SEUL, ET C'EST LA MESURE M2 DU LOT BASES-1 : il valait
+ * « 13 / 17 » tant que quatre missions n'avaient pas de moteur, il vaut
+ * « 17 / 17 ». Le nombre n'est écrit nulle part — c'est la ligne ci-dessous qui
+ * le compte, et c'est pour ça qu'il a suivi sans qu'on y touche.
  */
 export function avancement(etat) {
   const verifiables = etatDesMissions(etat).filter((m) => m.verifiable);

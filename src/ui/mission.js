@@ -214,16 +214,21 @@ export function initialiserEcranMission(doc, { surReouverture } = {}) {
       // COMPOSÉ de leurs libellés : l'écrire puis les lister donnait
       // « Collecteur sur quartz / Collecteur sur quartz 0 / 1 », vu à l'essai
       // dans un navigateur et pas à la relecture. Les lignes d'objectif SONT le
-      // titre, avec leur compteur ; seule une mission sans moteur, qui n'en a
-      // aucune, garde le sien.
-      if (!m.verifiable) {
+      // titre, avec leur compteur.
+      //
+      // ⚠⚠ SAUF POUR LES QUATRE QUI PORTENT LE LEUR, DE LA MAIN D'ETHAN — et la
+      // condition a changé au lot BASES-1. L'écran les reconnaissait à `!
+      // verifiable`, ce qui était vrai par COÏNCIDENCE : c'étaient les quatre
+      // sans moteur. Elles en ont un, donc la question posée est celle qui
+      // compte — « ce titre est-il écrit, ou dérivé ? ». Sans ce changement,
+      // « Attaquer et détruire un camp » aurait disparu de l'écran au profit de
+      // « Camp détruit 0 / 1 ».
+      if (m.titreEcrit) {
         const titre = doc.createElement('b');
         titre.textContent = m.titre;
         corps.appendChild(titre);
-      } else {
-        // ⚠ LE COMPTEUR PAR OBJECTIF EST LE MÊME QUE CELUI DE LA MINI-FENÊTRE.
-        // Une mission sans moteur n'en porte pas : « 0 / 1 » sur une ligne
-        // qu'aucun geste ne peut cocher se lirait comme un retard du joueur.
+      }
+      {
         for (const o of m.objectifs) {
           const ligne = doc.createElement('div');
           ligne.className = 'objectif';

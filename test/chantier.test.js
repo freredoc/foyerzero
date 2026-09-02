@@ -34,7 +34,6 @@ import {
   compteurDeContexte,
   CONTEXTES,
   navigationEntreBases,
-  NOMBRE_DE_BASES,
   BOUTONS_DU_BAS,
   flechesDeVoisinage,
   GLYPHES_DE_FLECHE, traitDeVoisinage, TRAIT_VOISINAGE,
@@ -73,8 +72,9 @@ import { budgetDuNiveau as budgetOffense } from '../src/ui/arsenal.js';
 import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import {
-  creerEtat, tickJeu, poser, problemesDeLaPose, poserEffectif,
+  creerEtat, tickJeu, poser, problemesDeLaPose, poserEffectif, basculerVersLaBase,
 } from '../src/sim/state.js';
+import { fonderUneBase } from '../src/sim/fondation.js';
 import * as moteurEtat from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { baseCourante } from '../src/sim/base-courante.js';
@@ -2011,22 +2011,39 @@ test('compteur — le libellé suit le contexte, et la valeur reste honnête', (
   assert.notEqual(pleine.valeur, batiments.valeur);
 });
 
-test('navigation — la bascule entre bases est une coquille, et elle le dit', () => {
-  // Le joueur n'a qu'UNE base : `sim/state.js` porte une seule `disposition`.
-  // Les flèches sont donc désactivées et le libellé « 1 / 1 » dit pourquoi —
-  // les rendre vives sur du vide promettrait une bascule qui n'existe pas,
-  // exactement comme le bouton « Assaut » du lot ÉCRAN-CHANTIER.
-  const vue = navigationEntreBases(creerEtat(3));
-  assert.equal(vue.libelle, 'Base 1 / 1');
-  assert.equal(vue.precedente, false);
-  assert.equal(vue.suivante, false);
-  assert.equal(NOMBRE_DE_BASES, 1);
+test('navigation — la bascule est VIVE, et le libellé se compte', () => {
+  // ⚠⚠ CE TEST ÉTAIT L'INVERSE JUSQU'AU LOT BASES-1 : il exigeait deux flèches
+  // DÉSACTIVÉES et un `NOMBRE_DE_BASES` écrit à 1. La constante a disparu avec
+  // la coquille — elle annonçait elle-même que « le jour où l'état en portera
+  // plusieurs, ce nombre se comptera au lieu de se lire ici ».
+  //
+  // ⚠ UNE SEULE BASE : LES DEUX FLÈCHES RESTENT MORTES. Ce n'est pas un refus,
+  // c'est qu'il n'y a nulle part où aller — et c'est ce qui distingue ce test
+  // d'un simple « toujours vif », qui passerait aussi sur du code qui ne compte
+  // rien.
+  const seule = navigationEntreBases(creerEtat(3));
+  assert.equal(seule.libelle, 'Base 1 / 1');
+  assert.equal(seule.precedente, false);
+  assert.equal(seule.suivante, false);
   assert.throws(() => navigationEntreBases(null), /état de jeu/);
 
-  // Et l'écran désarme bien les deux flèches, plutôt que de les laisser vives.
+  // Deux bases : le libellé compte, les deux flèches s'ouvrent, et le numéro
+  // suit `baseCourante` — pas un 1 écrit en dur.
+  const etat = creerEtat(3);
+  etat.recherche.basesAutorisees = 2;
+  fonderUneBase(etat, { rangee: 293, colonne: 16 });
+  const deux = navigationEntreBases(etat);
+  assert.equal(deux.libelle, 'Base 2 / 2', 'le libellé ne suit pas la base courante');
+  assert.equal(deux.precedente, true);
+  assert.equal(deux.suivante, true);
+  basculerVersLaBase(etat, 0);
+  assert.equal(navigationEntreBases(etat).libelle, 'Base 1 / 2');
+
+  // Et l'écran ne désarme plus les flèches en dur : il lit la vue.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  assert.match(ecran, /navigation-precedente'\)\.disabled = true/);
-  assert.match(ecran, /navigation-suivante'\)\.disabled = true/);
+  assert.doesNotMatch(ecran, /navigation-precedente'\)\.disabled = true/);
+  assert.match(ecran, /navigation-precedente'\)\.disabled = !navigation\.precedente/);
+  assert.match(ecran, /navigation-suivante'\)\.disabled = !navigation\.suivante/);
 });
 
 test('barre du bas — trois boutons égaux, et le troisième DEMANDE l\'écran', () => {

@@ -128,20 +128,48 @@ export function baseAttaqueALaMinute(graine, base, minute) {
  * du début de partie sont là pour être attaquées, pas pour attaquer. C'est le
  * test T6, avec la falsification qui retire le filtre.
  *
- * ⚠ ELLE COÛTE 441 LECTURES DE CASE — `ciblesAPortee` balaie un carré de
- * Tchebychev de rayon 10 — donc elle ne s'appelle PAS par tick ni par minute.
+ * ⚠ ELLE COÛTE 441 LECTURES DE CASE PAR BASE — `ciblesAPortee` balaie un carré
+ * de Tchebychev de rayon 10 — donc elle ne s'appelle PAS par tick ni par minute.
  * Le direct ne la demande qu'au passage d'une minute, le rattrapage une fois par
- * segment. Sa valeur ne dépend que de la graine, de la position du joueur et des
- * bases rasées ; entre deux raids, aucun de ces trois ne bouge.
+ * segment. Sa valeur ne dépend que de la graine, des positions du joueur et des
+ * bases rasées ; entre deux raids, aucun des trois ne bouge.
+ *
+ * ⚠⚠ ELLE BOUCLE SUR TOUTES LES BASES DEPUIS BASES-1, ET C'ÉTAIT LA SIXIÈME
+ * CONDITION DE RUPTURE — celle que le rapport de BASES-0 disait « la plus
+ * profonde ». Elle interrogeait `ciblesAPortee(etat, baseCourante(etat))` : au
+ * pluriel, **seule la base que le joueur regarde aurait été attaquée**, les
+ * autres étant invisibles pour l'Ouvrage. Une seconde base aurait donc été un
+ * sanctuaire, et rien n'aurait cassé.
+ *
+ * ⚠⚠ CE QU'ELLE REND N'EST PLUS UN SITE MAIS UNE PAIRE, et le champ `baseVisee`
+ * porte l'INDICE de la base attaquée. Sans lui, `subirUnRaid` retomberait sur
+ * `baseCourante` et frapperait celle que le joueur regarde plutôt que celle qui
+ * est à portée. L'indice, et non la base elle-même : `structuredClone` et
+ * `serialiser` copient des VALEURS, donc un renvoi vers l'objet base se
+ * dédoublerait à la première copie.
+ *
+ * ⚠⚠ UNE BASE DE L'OUVRAGE À PORTÉE DE DEUX BASES DU JOUEUR LES ATTAQUE TOUTES
+ * LES DEUX, LA MÊME MINUTE. **LECTURE PRISE, à signaler.** `baseAttaqueALaMinute`
+ * hache la CASE de l'attaquante et la minute, jamais la cible : c'est ce qui rend
+ * les tirages d'une partie à une seule base identiques au bit après ce lot, et le
+ * témoin de BASES-0 le mesure. Lui faire choisir UNE cible demanderait une règle
+ * qu'Ethan n'a pas donnée — la plus proche ? la plus faible ? — et déplacerait
+ * tous les tirages existants. Si Ethan veut qu'elle n'en frappe qu'une, c'est ce
+ * `for` imbriqué qui change, et lui seul.
  *
  * @param {object} etat
- * @returns {Array<object>} identités de site, du plus proche au plus loin
+ * @returns {Array<object>} identités de site, chacune portant `baseVisee`
  */
 export function basesAttaquantes(etat) {
-  return ciblesAPortee(etat, baseCourante(etat)).filter(
-    (site) => TYPES_SITE[site.type]?.attaqueLeJoueur === true
-      && site.niveau >= RAID_OUVRAGE.niveauMinimal,
-  );
+  const paires = [];
+  for (let i = 0; i < etat.bases.length; i += 1) {
+    for (const site of ciblesAPortee(etat, etat.bases[i])) {
+      if (TYPES_SITE[site.type]?.attaqueLeJoueur !== true) continue;
+      if (site.niveau < RAID_OUVRAGE.niveauMinimal) continue;
+      paires.push({ ...site, baseVisee: i });
+    }
+  }
+  return paires;
 }
 
 /**
@@ -225,14 +253,22 @@ function pvCourantsMilli(pvMax, degatsMilli) {
  * acquis majore ce qu'il pose EN DÉFENSE — la Redoute le dit — donc
  * `majorationsPoi.joueur` est servi ; `ouvrage` reste à zéro, comme partout.
  *
+ * ⚠ LA BASE MONTÉE SE PASSE EN ARGUMENT DEPUIS BASES-1, ET LE DÉFAUT EST LA
+ * COURANTE. L'Ouvrage attaque la base qu'il a à portée, qui n'est pas forcément
+ * celle que le joueur regarde : monter `baseCourante` ferait défendre les
+ * bâtiments et la garnison d'une base qui n'est pas attaquée, puis écrire les
+ * dégâts sur elle. Le défaut sert le banc et les montages écrits à la main.
+ *
  * @param {object} etat
  * @param {number} niveauAttaquant niveau de la base de l'Ouvrage qui attaque
  * @param {number} budgetPoints points d'armée que l'Ouvrage engage
  * @param {number} graine graine de la vague, dérivée de la case et de la minute
+ * @param {object} [laBase] la base attaquée — la courante par défaut
  * @returns {object} montage prêt pour `creerCombat`
  */
-export function montageDeLaBaseDuJoueur(etat, niveauAttaquant, budgetPoints, graine) {
-  const laBase = baseCourante(etat);
+export function montageDeLaBaseDuJoueur(
+  etat, niveauAttaquant, budgetPoints, graine, laBase = baseCourante(etat),
+) {
   const surObstacle = new Set(
     laBase.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`),
   );
@@ -403,12 +439,16 @@ function chantierTombe(disposition, indices, lignes) {
  * fractions d'unité par bâtiment, invisibles et sans valeur — les remettre à
  * zéro ne punirait personne et ferait diverger le rattrapage.
  *
+ * ⚠ LA BASE RASÉE EST CELLE QUI A ÉTÉ ATTAQUÉE, PAS CELLE QU'ON REGARDE. C'est
+ * `subirUnRaid` qui la nomme ; la reprendre à `baseCourante` ici ferait
+ * descendre de vingt cases une base que personne n'a touchée.
+ *
  * @param {object} etat modifié en place
+ * @param {object} laBase la base attaquée
  * @returns {{rangeeAvant: number, rangeeApres: number, cases: number,
  *   perdu: object}}
  */
-function raserLaBase(etat) {
-  const laBase = baseCourante(etat);
+function raserLaBase(etat, laBase) {
   const rangeeAvant = laBase.position.rangee;
   const voulue = rangeeAvant + RAID_OUVRAGE.sanctionRasage.redeploiementCases;
   let rangeeApres = rangeeAvant;
@@ -431,7 +471,7 @@ function raserLaBase(etat) {
   // ⚠ LE RELEVÉ DES POI EST DÉSORMAIS FAIT PAR `poserLaBaseSur`, donc plus bas
   // dans `subirUnRaid` : le `if (rase) releverLesPoisAcquis(etat)` a disparu, il
   // ferait un second relevé qui n'ajouterait rien.
-  poserLaBaseSur(etat, rangeeApres, laBase.position.colonne);
+  poserLaBaseSur(etat, rangeeApres, laBase.position.colonne, laBase);
 
   const perdu = {};
   if (RAID_OUVRAGE.sanctionRasage.perteRessourcesStockees) {
@@ -486,7 +526,12 @@ function raserLaBase(etat) {
  * @returns {object} le rapport de défense, tel qu'il rejoint les dix
  */
 export function subirUnRaid(etat, base, minute, options = {}) {
-  const laBase = baseCourante(etat);
+  // ⚠⚠ LA BASE FRAPPÉE EST CELLE QUE `basesAttaquantes` A DÉSIGNÉE. Le champ
+  // `baseVisee` porte son indice ; à défaut — un montage écrit à la main, le
+  // banc — c'est la courante, ce qu'une partie à une seule base a toujours
+  // voulu dire. Sans lui, l'Ouvrage frapperait la base que le joueur REGARDE,
+  // et une seconde base au calme encaisserait les coups destinés à la première.
+  const laBase = etat.bases[base.baseVisee ?? etat.baseCourante];
   const budgetPoints = budgetRaid(base.niveau);
   // ⚠ LA GRAINE DE LA VAGUE EST CELLE DU TIRAGE, PAS UNE AUTRE. Deux passes,
   // même sel : la case, puis la minute. C'est ce qui rend la composition de la
@@ -496,7 +541,9 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   const deLaCase = hachageBrut(etat.graine, base.rangee, base.colonne, SEL_RAID_OUVRAGE);
   const graineDeLaVague = hachageBrut(deLaCase, minute, 1, SEL_RAID_OUVRAGE);
 
-  const montage = montageDeLaBaseDuJoueur(etat, base.niveau, budgetPoints, graineDeLaVague);
+  const montage = montageDeLaBaseDuJoueur(
+    etat, base.niveau, budgetPoints, graineDeLaVague, laBase,
+  );
   const resultat = resoudre(
     creerCombat(montage),
     { maxTicks: options.maxTicks ?? TICKS_MAX_COMBAT },
@@ -532,7 +579,7 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   // par un appel séparé juste ici. C'est une propriété du DÉPLACEMENT, pas une
   // précaution du rasage : le joueur qui bouge sa base de lui-même a exactement
   // le même besoin, et l'oublier de son côté aurait été invisible.
-  const sanction = rase ? raserLaBase(etat) : null;
+  const sanction = rase ? raserLaBase(etat, laBase) : null;
 
   // --- 3. la réserve de réparation se vide ---------------------------------
   const aPerduDesPv = resultat.batiments.some((b) => b.pvPerdusIciMilli > 0);
@@ -543,7 +590,7 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   }
 
   // --- 4. l'auto-réparation de garnison, enfin atteignable ------------------
-  const autoReparationMilli = reparerLaGarnison(etat);
+  const autoReparationMilli = reparerLaGarnison(etat, laBase);
 
   // --- 5. le rapport rejoint les dix ---------------------------------------
   const rapport = {

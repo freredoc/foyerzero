@@ -8,11 +8,29 @@
 // transcrivent, et `sim/points-attaque.js` lit déjà le premier pour le barème du
 // raid. Ce module ne fait qu'en tirer une CARTE.
 //
-// ⚠ TCHEBYCHEV, comme partout ailleurs sur cette carte — la garde du peuplement,
-// les anneaux des satellites, la distance du panneau. Sur une grille, une case
-// en diagonale n'est pas plus loin qu'une case droit devant ; en mesurer trois
-// là où le jeu en compte deux ferait un territoire en losange que personne n'a
-// demandé.
+// ⚠⚠ EUCLIDE, ET C'EST UNE CORRECTION DU LOT BASES-1, 02/09/2026. Ce module
+// annonçait « Tchebychev, comme partout ailleurs sur cette carte » — c'était vrai
+// jusqu'au lot EUCLIDE, qui a fait passer au disque la portée du raid, la garde
+// du peuplement et les anneaux des satellites. **Le brief d'EUCLIDE avait énuméré
+// trois sites, et celui-ci n'y était pas.** `peindre` remplissait donc un CARRÉ
+// de (2r+1)² cases, sans le moindre test de distance, sous une portée ronde.
+//
+// ⚠ CE N'ÉTAIT PAS COSMÉTIQUE. Le territoire allié est ce qui rend un raid moins
+// cher — +1 par case au lieu de +3, spec §8 —, et une zone carrée sous une portée
+// ronde fait que le PRIX AFFICHÉ et la CARTE PEINTE ne décrivent pas la même
+// géométrie. Mesuré : le rayon 2 du joueur passe de 25 à 13 cases, celui de
+// l'Ouvrage de 49 à 29 ; sur 150 graines et 5 161 cibles, 172 raids (3,33 %)
+// renchérissent, et le prix moyen monte de 27,945 à 28,078 points.
+//
+// ⚠⚠ ET LES DEUX CÔTÉS BASCULENT ENSEMBLE. `estEnTerritoireAllie` de
+// `sim/points-attaque.js` porte le MÊME test pour le barème du raid : en changer
+// un seul ferait payer le tarif de proximité sur des cases que la carte ne montre
+// pas comme siennes — la pire divergence, celle que le joueur constate sans
+// pouvoir l'expliquer. CLAUDE.md le disait déjà mot pour mot depuis EUCLIDE.
+//
+// ⚠ AU CARRÉ DES DEUX CÔTÉS, JAMAIS DE RACINE — `d² ≤ r²`, deux entiers, une
+// comparaison exacte. La double boucle reste, mais comme ENVELOPPE : elle borne
+// le travail, elle ne décide plus de l'appartenance.
 //
 // ⚠⚠ IL NE CALCULE JAMAIS SUR LES 9 300 CASES, ET C'EST UNE CONTRAINTE DE COÛT.
 // Savoir si une case est sous influence ennemie en interrogeant son voisinage
@@ -28,6 +46,7 @@
 
 import { GEOGRAPHIE } from '../data/sites.js';
 import { basesDeLaFenetre } from './peuplement.js';
+import { distanceCarreeCases } from './points-attaque.js';
 
 /** Ce qu'une case peut porter. Les valeurs servent d'indices, pas de noms. */
 export const NEUTRE = 0;
@@ -100,12 +119,18 @@ export function territoireDeLaFenetre(etat, fenetre) {
 
   const peindre = (centre, camp) => {
     const rayon = RAYONS[camp];
+    const rayonCarre = rayon * rayon;
     for (let dr = -rayon; dr <= rayon; dr += 1) {
       const rangee = centre.rangee + dr;
       if (rangee < r0 || rangee > r1) continue;
       for (let dc = -rayon; dc <= rayon; dc += 1) {
         const colonne = centre.colonne + dc;
         if (colonne < c0 || colonne > c1) continue;
+        // ⚠⚠ LE FILTRE EST ICI, ET LA DOUBLE BOUCLE N'EST PLUS QU'UNE ENVELOPPE.
+        // Sans cette ligne, la zone est le CARRÉ de (2r+1)² cases qu'elle était
+        // avant BASES-1 — et les coins, en diagonale, seraient alliés alors que
+        // le barème du raid les compte à l'ennemi.
+        if (dr * dr + dc * dc > rayonCarre) continue;
         const i = (rangee - r0) * largeur + (colonne - c0);
         // Le joueur l'emporte : on n'écrase jamais sa marque.
         if (occupant[i] === JOUEUR) continue;
@@ -131,8 +156,10 @@ export function territoireDeLaFenetre(etat, fenetre) {
   // falsification : on pouvait le retirer sans qu'un seul test tombe. En peignant
   // le joueur d'abord, c'est le refus d'écraser qui décide, et il se teste.
   //
-  // `etat.position` est sa seule base aujourd'hui ; le jour où il en aura
-  // plusieurs, c'est cette boucle-ci qui s'allonge, et rien d'autre.
+  // ⚠ ET LA BOUCLE EST VRAIMENT PLURIELLE DEPUIS BASES-0 : elle parcourt
+  // `etat.bases`, donc l'union de la spec §8 est prise au mot sans qu'une ligne
+  // de plus soit due. Ce commentaire annonçait « le jour où il en aura plusieurs,
+  // c'est cette boucle-ci qui s'allonge » — elle n'a pas eu à s'allonger.
   for (const base of basesDuJoueur(etat)) peindre(base, JOUEUR);
   for (const base of basesDeLaFenetre(etat.graine, elargie)) peindre(base, OUVRAGE);
   return carte;

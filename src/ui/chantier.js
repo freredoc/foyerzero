@@ -67,6 +67,7 @@ import {
   pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
+  basculerVersLaBase,
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES } from '../data/combat.js';
@@ -439,19 +440,19 @@ export const BANDES = [
 ];
 
 /**
- * Le nombre de bases que le joueur possède.
- *
- * ⚠ CE N'EST PAS UNE VALEUR INVENTÉE, C'EST UN FAIT SUR L'ÉTAT. `sim/state.js`
- * porte UNE `disposition`, une `position` et une `fondation` : il n'y a
- * structurellement qu'une base. Les flèches de bascule ajoutées le 28/08 le
- * disent — « 1 / 1 » — au lieu de laisser croire qu'il y en a d'autres à
- * trouver. Le jour où l'état en portera plusieurs, ce nombre se comptera au
- * lieu de se lire ici, et les flèches deviendront vives.
- */
-export const NOMBRE_DE_BASES = 1;
-
-/**
  * Ce qu'affiche la barre de bascule entre bases.
+ *
+ * ⚠⚠ LE NOMBRE SE COMPTE, IL NE SE LIT PLUS DANS UNE CONSTANTE — lot BASES-1.
+ * `NOMBRE_DE_BASES = 1` a disparu avec la coquille qu'il servait : il annonçait
+ * lui-même que « le jour où l'état en portera plusieurs, ce nombre se comptera
+ * au lieu de se lire ici ». Ce jour est celui-ci. Le laisser aurait fait mentir
+ * le libellé au premier `fonderUneBase`.
+ *
+ * ⚠ LES DEUX FLÈCHES BOUCLENT, ELLES NE BUTENT PAS. Avec deux bases, une flèche
+ * grisée sur trois quarts des touchers serait une gêne pour rien ; avec une
+ * seule, les deux restent désactivées, ce qui est honnête — ce n'est pas un
+ * refus, c'est qu'il n'y a nulle part où aller.
+ *
  * @param {object} etat
  * @returns {{libelle: string, precedente: boolean, suivante: boolean}}
  */
@@ -463,13 +464,11 @@ export function navigationEntreBases(etat) {
     || !Array.isArray(baseCourante(etat).disposition)) {
     throw new TypeError('chantier : état de jeu absent ou malformé');
   }
+  const combien = etat.bases.length;
   return {
-    libelle: `Base ${formaterEntier(1)} / ${formaterEntier(NOMBRE_DE_BASES)}`,
-    // Aucune bascule possible tant qu'il n'y a qu'une base. Les deux flèches
-    // sont donc DÉSACTIVÉES, ce qui est honnête : ce n'est pas un refus, c'est
-    // qu'il n'y a nulle part où aller.
-    precedente: false,
-    suivante: false,
+    libelle: `Base ${formaterEntier(etat.baseCourante + 1)} / ${formaterEntier(combien)}`,
+    precedente: combien > 1,
+    suivante: combien > 1,
   };
 }
 
@@ -2345,7 +2344,7 @@ export function fondsDuSol(parAxe, graine, rangee, colonne) {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function, allerALaBande: Function}}
  */
-export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
+export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascule } = {}) {
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
@@ -2605,13 +2604,33 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
 
   // --- la bascule entre bases -------------------------------------------------
   //
-  // ⚠ COQUILLE ASSUMÉE, ET QUI SE DIT TELLE. Le joueur n'a qu'UNE base — l'état
-  // porte une seule `disposition` — donc les deux flèches sont désactivées et
-  // le libellé « 1 / 1 » dit pourquoi. Les rendre vives sur du vide promettrait
-  // une bascule qui n'existe pas, ce qui est exactement ce que le bouton
-  // « Assaut » du lot ÉCRAN-CHANTIER faisait et qu'on a corrigé.
-  $('navigation-precedente').disabled = true;
-  $('navigation-suivante').disabled = true;
+  // ⚠⚠ VIVES DEPUIS BASES-1, ET LA COQUILLE EST PARTIE AVEC SON COMMENTAIRE.
+  // Elle disait « le jour où l'état portera plusieurs bases, il n'y aura qu'à
+  // les rendre vives » ; laisser la phrase en aurait fait un mensonge de plus.
+  //
+  // ⚠⚠ LA BASCULE ÉCRIT UN INDICE, ET RIEN D'AUTRE. `basculerVersLaBase` de
+  // `sim/state.js` pose `etat.baseCourante` ; l'écran ne garde AUCUN raccourci
+  // vers l'objet base — c'est la règle que BASES-0 a écrite en rangeant
+  // l'indice : deux chemins vers la même base divergent au premier
+  // `structuredClone`.
+  //
+  // ⚠ ELLE REPEINT TOUT, ET ELLE SAUVEGARDE. Chaque écran relit l'état à sa
+  // peinture, donc repeindre suffit à les faire suivre — mais `baseCourante`
+  // est une décision du joueur, au même titre qu'une pose : la perdre parce que
+  // l'application a été tuée serait la lui reprendre en silence.
+  for (const [bouton, pas] of [['navigation-precedente', -1], ['navigation-suivante', 1]]) {
+    $(bouton).addEventListener('click', () => {
+      if (etatCourant === null || etatCourant.bases.length < 2) return;
+      basculerVersLaBase(
+        etatCourant,
+        (etatCourant.baseCourante + pas + etatCourant.bases.length) % etatCourant.bases.length,
+      );
+      // ⚠ LA SAUVEGARDE PASSE AVANT LE REPEINT, comme pour la pose. La session
+      // sait COMMENT écrire ; l'écran dit seulement QUAND.
+      if (apresBascule !== undefined) apresBascule();
+      peindre(etatCourant);
+    });
+  }
 
   // --- les trois boutons de bande --------------------------------------------
   //
@@ -4001,6 +4020,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran } = {}) {
     majCompteur();
     const navigation = navigationEntreBases(etat);
     $('navigation-libelle').textContent = navigation.libelle;
+    $('navigation-precedente').disabled = !navigation.precedente;
+    $('navigation-suivante').disabled = !navigation.suivante;
 
     // Chaque bouton porte SON niveau. Celui de la défense reste « — » : l'état
     // ne porte pas de garnison, et en inventer une moyenne afficherait un

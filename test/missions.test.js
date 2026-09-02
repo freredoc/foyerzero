@@ -15,16 +15,17 @@ import { fileURLToPath } from 'node:url';
 import {
   creerEtat, poser, ameliorer, demolir, poserEffectif, retirerEffectif,
   problemesDeLaPose, problemesDeLaPoseDEffectif, serialiser, charger,
-  reglerTutoriel, tutorielEstFerme, niveauDuChantier,
+  reglerTutoriel, tutorielEstFerme, niveauDuChantier, rattraperJeu, basculerVersLaBase,
 } from '../src/sim/state.js';
+import { TICKS_PAR_MINUTE } from '../src/sim/raid-ouvrage.js';
 import { ressourceDeLaCase } from '../src/sim/champs.js';
 import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, GEOMETRIE_BASE, coutDeMontee, emplacementsDuNiveau,
 } from '../src/data/base.js';
 import { GRILLE, UNITES, DEFENSES } from '../src/data/combat.js';
-import { ARBRE_RECHERCHE } from '../src/data/recherche.js';
+import { ARBRE_RECHERCHE, SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE } from '../src/data/recherche.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
-import { GEOGRAPHIE, POINTS_ARMEE } from '../src/data/sites.js';
+import { GEOGRAPHIE, POINTS_ARMEE, DEPLACEMENT } from '../src/data/sites.js';
 import { CHAINE_TUTORIEL, FAMILLES_OBJECTIF } from '../src/data/missions.js';
 import {
   MISSIONS, etatDesMissions, missionCourante, avancement, premierNiveauElectrique,
@@ -34,6 +35,11 @@ import {
   signatureDuTutoriel, MARQUE_A_VENIR,
 } from '../src/ui/mission.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { retirerLeSite } from '../src/sim/site-entame.js';
+import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
+import { deplacerLaBase } from '../src/sim/deplacement.js';
+import { acheterUneBaseDePlus } from '../src/sim/recherche.js';
+import { fonderUneBase, problemesDeLaFondation } from '../src/sim/fondation.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...c) => readFileSync(join(RACINE, ...c), 'utf8');
@@ -153,12 +159,64 @@ function gestesDeLaChaine(etat) {
       for (const p of baseCourante(etat).armee) p.niveau = 6;
       for (const p of baseCourante(etat).garnison) p.niveau = 5;
     }],
+    // ⚠⚠ LES QUATRE GESTES QUE LE LOT BASES-1 REND JOUABLES. Ils passent par le
+    // MOTEUR, pas par une écriture directe dans l'état : `retirerLeSite` est ce
+    // qu'appelle un raid qui rase, `deplacerLaBase` est le geste du joueur avec
+    // ses refus, `acheterUneBaseDePlus` débite ses points et `fonderUneBase`
+    // repasse par `problemesDeLaFondation`. Écrire `etat.bases.push(...)` aurait
+    // contourné tout ce que ce lot ajoute — c'est le piège 6 du brief.
+    ['détruire un camp', () => {
+      // ⚠ LES CAMPS PARAISSENT CINQ MINUTES APRÈS LA POSE DE LA BASE : sans
+      // avancer l'horloge, `presents` est vide et le geste ne mesurerait rien.
+      // On avance par le vrai rattrapage, pas en écrivant dans `presents`.
+      rattraperJeu(etat, 6 * TICKS_PAR_MINUTE);
+      const laBase = baseCourante(etat);
+      const camp = laBase.satellites.presents.find((x) => x.type === 'camp');
+      assert.ok(camp !== undefined, 'aucun camp à détruire : le montage ne mesure rien');
+      retirerLeSite(etat, {
+        type: 'camp', rangee: camp.rangee, colonne: camp.colonne, instance: camp.instance,
+      });
+    }],
+    // ⚠ AVANT LA BASE DE L'OUVRAGE, ET C'EST UNE PROPRIÉTÉ DU JEU, PAS UN
+    // ARRANGEMENT DE TEST : la garde du peuplement tient les bases de l'Ouvrage
+    // à quinze cases du DÉPART, et le rayon d'attaque en fait dix. Au départ, le
+    // joueur n'a donc AUCUNE base à portée — il doit monter d'abord. C'est
+    // exactement ce que la mission « Se rapprocher des bases de l'Ouvrage » dit,
+    // et l'ordre de la chaîne d'Ethan le disait déjà.
+    ['monter de dix cases vers le nord', () => {
+      const laBase = baseCourante(etat);
+      deplacerLaBase(etat, {
+        rangee: laBase.position.rangee - DEPLACEMENT.porteeMaxCases,
+        colonne: laBase.position.colonne,
+      });
+    }],
+    ['détruire une base de l\'Ouvrage', () => {
+      const cible = ciblesAPortee(etat, baseCourante(etat)).find((c) => c.type === 'base');
+      assert.ok(cible !== undefined, 'aucune base à portée : le montage ne mesure rien');
+      retirerLeSite(etat, cible);
+    }],
+    ['fonder une seconde base', () => {
+      etat.recherche.pointsMilli = String(BigInt(SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE].cout) * 1000n);
+      acheterUneBaseDePlus(etat);
+      const laBase = baseCourante(etat);
+      const cible = { rangee: laBase.position.rangee + 1, colonne: laBase.position.colonne };
+      assert.deepEqual(problemesDeLaFondation(etat, cible), [],
+        'la case choisie par le montage est refusée : le geste ne mesure rien');
+      fonderUneBase(etat, cible);
+    }],
   ];
 }
 
 function jouerToutLeTutoriel(graine = 7) {
   const etat = approvisionner(baseNeuve(graine));
   for (const [, geste] of gestesDeLaChaine(etat)) geste();
+  // ⚠⚠ ON REVIENT SUR LA BASE BÂTIE. Le dernier geste FONDE, et fonder rend la
+  // base neuve courante : les tests qui suivent inspectent `disposition`,
+  // `garnison` et `armee`, qui sont VIDES sur une base qu'on vient de poser.
+  // Ce n'est pas un arrangement — c'est ce que fait un joueur qui veut revoir
+  // sa base. L'AVANCEMENT, lui, ne dépend pas de ce retour : les objectifs se
+  // mesurent sur la MEILLEURE base, et le test de la chaîne l'exige avant.
+  basculerVersLaBase(etat, 0);
   return etat;
 }
 
@@ -166,8 +224,12 @@ function jouerToutLeTutoriel(graine = 7) {
 
 test('missions — la chaîne dictée est jouable jusqu\'au bout, avec le vrai moteur', () => {
   const etat = approvisionner(baseNeuve());
-  const verifiables = CHAINE_TUTORIEL.length
-    - CHAINE_TUTORIEL.filter((m) => m.objectifs.some((o) => o.famille === 'sans-moteur')).length;
+  // ⚠⚠ LES DIX-SEPT SONT VÉRIFIABLES DEPUIS BASES-1 — c'est la mesure M2. Le
+  // dénominateur valait 13 sur 17 tant que quatre missions n'avaient pas de
+  // moteur ; il n'est plus écrit nulle part, il se COMPTE, et le lot n'a eu
+  // qu'à donner leurs moteurs pour qu'il grandisse tout seul.
+  const verifiables = CHAINE_TUTORIEL.filter((m) => m.objectifs.length > 0).length;
+  assert.equal(verifiables, CHAINE_TUTORIEL.length, 'une mission est restée sans moteur');
 
   // Le montage doit partir de zéro, sinon la progression ne mesure rien.
   assert.deepEqual(avancement(etat), { faites: 0, total: verifiables });
@@ -195,19 +257,25 @@ test('missions — la chaîne tient dans les emplacements qu\'elle fait ouvrir',
   // bâtiment de plus que le Chantier n'ouvre d'emplacements rend le tutoriel
   // INFINISSABLE, et rien à la relecture ne le dirait.
   const etat = approvisionner(baseNeuve());
+  // ⚠⚠ LA MESURE PORTE SUR LA BASE BÂTIE, PAS SUR LA COURANTE — le dernier geste
+  // de la chaîne FONDE, et la base neuve devient courante. Sans ce repère fixe,
+  // le test lirait la base vide et croirait la chaîne rétrécie à un bâtiment.
+  // Ce qu'on mesure ici est « la chaîne tient dans SES emplacements », donc
+  // ceux de la base sur laquelle elle se joue.
+  const batie = () => etat.bases[0];
   for (const [quoi, geste] of gestesDeLaChaine(etat)) {
     geste();
-    const ouverts = emplacementsDuNiveau(niveauDuChantier(etat));
+    const ouverts = emplacementsDuNiveau(batie().disposition.find((b) => b.id === 'chantierDeConstruction').niveau);
     assert.ok(
-      baseCourante(etat).disposition.length <= ouverts,
-      `après « ${quoi} » : ${baseCourante(etat).disposition.length} bâtiments pour ${ouverts} emplacements`,
+      batie().disposition.length <= ouverts,
+      `après « ${quoi} » : ${batie().disposition.length} bâtiments pour ${ouverts} emplacements`,
     );
   }
 
   // ⚠ MESURÉ, ET LA MARGE EST NULLE : la chaîne pose EXACTEMENT le nombre de
   // bâtiments que le Chantier de niveau 5 ouvre. Une mission de plus, ou une
   // table d'emplacements retouchée, et le tutoriel devient injouable.
-  assert.equal(baseCourante(etat).disposition.length, 12, 'la chaîne ne pose plus douze bâtiments');
+  assert.equal(batie().disposition.length, 12, 'la chaîne ne pose plus douze bâtiments');
   assert.equal(emplacementsDuNiveau(5), 12, 'la table d\'emplacements du Chantier a bougé');
 
   // ⚠⚠ ET LA MESURE CI-DESSUS NE SUFFISAIT PAS — LA FALSIFICATION L'A MONTRÉ.
@@ -300,32 +368,31 @@ test('missions — la mise en avant est la première NON faite, pas la suivante'
 
 // -- ce qui n'a pas encore de moteur -----------------------------------------
 
-test('missions — ce qui n\'a pas de moteur se dit, ne se coche pas, et ne bloque rien', () => {
-  // ⚠ QUATRE MISSIONS D'ETHAN ATTENDENT UN MOTEUR : deux raids, le
-  // redéploiement de la base et la seconde base. Les taire aurait amputé sa
-  // feuille de route ; les compter aurait donné un compteur qui n'atteint
-  // jamais son plafond, c'est-à-dire un tutoriel infinissable.
-  const sansMoteur = CHAINE_TUTORIEL
-    .filter((m) => m.objectifs.some((o) => o.famille === 'sans-moteur'));
-  assert.ok(sansMoteur.length > 0, 'le montage ne mesure rien si tout a un moteur');
+test('missions — les dix-sept ont un moteur, et le dénominateur a grandi tout seul', () => {
+  // ⚠⚠ CE TEST ÉTAIT L'INVERSE JUSQU'AU LOT BASES-1 : il exigeait qu'il RESTE
+  // des missions sans moteur, qu'elles ne se cochent pas et qu'elles sortent du
+  // compteur. Les quatre en ont un — c'est le §4.7 du brief —, et la famille
+  // `sans-moteur` a disparu des données comme du moteur.
+  //
+  // ⚠ C'EST LA MESURE M2, ET ELLE SE COMPTE PLUTÔT QUE DE S'ÉCRIRE : le
+  // dénominateur du tutoriel passe de 13 sur 17 à 17 sur 17.
+  assert.equal(FAMILLES_OBJECTIF.has('sans-moteur'), false,
+    'la famille sans moteur est revenue dans les données');
+  const source = readFileSync(join(RACINE, 'src', 'sim', 'missions.js'), 'utf8')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  assert.doesNotMatch(source, /'sans-moteur'\(/, 'le moteur porte encore la famille sans moteur');
 
   const etat = jouerToutLeTutoriel();
   const lignes = etatDesMissions(etat);
-
-  for (const m of sansMoteur) {
-    const ligne = lignes.find((l) => l.id === m.id);
-    assert.equal(ligne.verifiable, false, `${m.id} se dit vérifiable`);
-    assert.equal(ligne.faite, false, `${m.id} s'est cochée toute seule`);
-    // Elle porte sa RAISON, pas un compteur muet.
-    assert.ok(ligne.objectifs[0].libelle.length > 10, `${m.id} ne dit pas ce qui manque`);
+  for (const l of lignes) {
+    assert.equal(l.verifiable, true, `${l.id} se dit non vérifiable`);
   }
 
-  // Le compteur ne les compte pas, et la mise en avant les saute.
   const { faites, total } = avancement(etat);
-  assert.equal(total, CHAINE_TUTORIEL.length - sansMoteur.length);
-  assert.equal(faites, total, 'tout ce qui est vérifiable est fait dans ce montage');
-  assert.equal(missionCourante(etat), null,
-    'une mission sans moteur retient la mise en avant : le tutoriel ne finit jamais');
+  assert.equal(total, CHAINE_TUTORIEL.length, 'le dénominateur n\'est pas la chaîne entière');
+  assert.equal(total, 17, 'la chaîne d\'Ethan n\'a plus dix-sept missions');
+  assert.equal(faites, total, 'tout est fait dans ce montage');
+  assert.equal(missionCourante(etat), null, 'le tutoriel ne se termine pas');
 
   // ⚠ ET ELLE NE LA RETIENT PAS NON PLUS EN COURS DE ROUTE. Sur une base neuve,
   // la mission mise en avant doit être vérifiable — sans quoi le joueur serait
@@ -497,12 +564,36 @@ test('missions — toutes les familles d\'objectif déclarées sont connues du m
     for (const o of m.objectifs) {
       assert.ok(FAMILLES_OBJECTIF.has(o.famille), `${m.id} : famille « ${o.famille} » inconnue`);
     }
-    // ⚠ SEULES LES MISSIONS SANS MOTEUR PORTENT UN LIBELLÉ ÉCRIT À LA MAIN. Les
-    // autres composent le leur depuis les tables ; un libellé écrit sur une
-    // mission vérifiable serait un texte qui ne suit plus ses données.
-    const sansMoteur = m.objectifs.some((o) => o.famille === 'sans-moteur');
-    assert.equal(m.libelle !== undefined, sansMoteur,
-      `${m.id} : un libellé écrit à la main n'est légitime que sans moteur`);
+  }
+  // ⚠⚠ LA GARDE DU LIBELLÉ A ÉTÉ RETOURNÉE AU LOT BASES-1, PAS ASSOUPLIE. Elle
+  // disait « seules les missions SANS MOTEUR portent un libellé écrit à la
+  // main » ; les quatre sans moteur en ont un maintenant. Ce que la règle
+  // protégeait n'était pas l'absence de moteur, c'est qu'aucun NOM de bâtiment
+  // ou d'unité ne soit recopié dans un texte : recopier « Collecteur » ferait
+  // une seconde orthographe, et elle divergerait de `nom.joueur`.
+  //
+  // ⚠ LES QUATRE SONT DONC NOMMÉES, et la liste est ASSERTÉE À L'IDENTIQUE : un
+  // cinquième libellé écrit à la main fait tomber ce test, ce qui force à
+  // regarder plutôt qu'à ajouter. Les quatre décrivent un GESTE — « Attaquer et
+  // détruire un camp » — que le compteur d'objectifs dirait beaucoup plus mal.
+  const avecLibelle = CHAINE_TUTORIEL.filter((m) => m.libelle !== undefined).map((m) => m.id);
+  assert.deepEqual(avecLibelle, [
+    'detruire-un-camp',
+    'se-rapprocher-de-l-ouvrage',
+    'detruire-une-base-de-l-ouvrage',
+    'seconde-base',
+  ]);
+  // ⚠ ET AUCUN N'A LE DROIT DE NOMMER UNE PIÈCE. C'est ce que la garde d'origine
+  // défendait vraiment, et elle est ici de face plutôt que par ricochet.
+  const noms = [
+    ...Object.values(BASE_BATIMENTS).map((b) => b.nom.joueur),
+    ...Object.values(UNITES).map((u) => u.nom.joueur),
+  ];
+  for (const m of CHAINE_TUTORIEL) {
+    if (m.libelle === undefined) continue;
+    for (const nom of noms) {
+      assert.ok(!m.libelle.includes(nom), `${m.id} : « ${nom} » recopié dans un libellé`);
+    }
   }
   assert.equal(MISSIONS, CHAINE_TUTORIEL, 'MISSIONS doit rester la chaîne, pas une copie');
 });
