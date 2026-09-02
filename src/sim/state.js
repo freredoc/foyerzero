@@ -31,14 +31,16 @@ import {
 import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, coutDeMontee, remboursementDuNiveau,
 } from '../data/base.js';
-import { GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT } from '../data/sites.js';
+import {
+  GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT, APRES_RAID,
+} from '../data/sites.js';
 import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 18;
+export const SAVE_VERSION = 19;
 
 /**
  * @typedef {object} Etat
@@ -207,6 +209,19 @@ export function creerEtat(graine) {
     // portées se confondent. Le jour du multi-bases, ce champ devra DESCENDRE
     // d'un cran, dans la base, et `crediterLesReserves` devra boucler dessus.
     reserveReparation: reservesVides(),
+    // ⚠⚠ LES DIX DERNIERS RAPPORTS DE RAID, EN TOUT — arbitré par Ethan le
+    // 01/09, et la borne vit dans `APRES_RAID.rapportsGardes`, jamais ici ni
+    // dans l'écran. C'est de l'HISTOIRE, au même titre que `satellites` : rien
+    // ne permet de recalculer ce que le joueur a attaqué la semaine dernière.
+    //
+    // ⚠ DES RAPPORTS, JAMAIS DES `resultat` DE COMBAT. Un résultat porte les
+    // vagues, les positions et les PV de chaque entité tick par tick ; dix de
+    // ces objets rendraient la sauvegarde illisible. Mesuré : un rapport pèse
+    // 645 octets, dix en pèsent moins de sept kilo-octets.
+    //
+    // ⚠ VIDE À LA CRÉATION, ET C'EST L'ÉTAT NORMAL. Une base neuve n'a attaqué
+    // personne.
+    rapports: [],
   };
   // ⚠ L'AMORCE EST SERVIE ICI, ET NULLE PART AILLEURS. Arbitré le 27/08 : une
   // base neuve ne produit rien tant qu'aucun collecteur n'est posé, et un
@@ -309,6 +324,20 @@ function verifierEtat(etat) {
   const defautsReserve = problemesDesReserves(etat.reserveReparation ?? null);
   if (defautsReserve.length > 0) {
     throw new Error(`etat : réserve de réparation injouable — ${defautsReserve.join(' ; ')}`);
+  }
+  // ⚠ UNE LISTE, ET PAS PLUS LONGUE QUE LA BORNE. Un journal qui déborde est un
+  // fait de PROGRAMME — rien dans le jeu ne peut l'allonger au-delà de dix — et
+  // il grossirait la sauvegarde sans que rien ne le dise. Le CONTENU d'un
+  // rapport, lui, n'est pas vérifié : c'est de l'affichage, pas une règle, et
+  // un rapport mal formé ne rend la partie ni incohérente ni injouable.
+  if (!Array.isArray(etat.rapports)) {
+    throw new Error('etat : « rapports » n\'est pas une liste');
+  }
+  if (etat.rapports.length > APRES_RAID.rapportsGardes) {
+    throw new Error(
+      `etat : ${etat.rapports.length} rapports gardés pour une borne de `
+      + `${APRES_RAID.rapportsGardes}`,
+    );
   }
   if (etat.economie.residus.length !== etat.disposition.length) {
     throw new Error(
@@ -1824,6 +1853,20 @@ const MIGRATIONS = {
     for (const piece of s.armee) {
       if (piece !== null && typeof piece === 'object') piece.actif = true;
     }
+  },
+
+  /**
+   * v18 → v19 : l'état garde les dix derniers rapports de raid.
+   *
+   * ⚠ UNE LISTE VIDE, ET RIEN DE RÉTROACTIF. Une sauvegarde v18 n'avait aucun
+   * moyen de garder un rapport : elle n'en a pas, et lui en inventer un
+   * fabriquerait un raid qui n'a pas eu lieu. Même genre que la v15 → v16, qui
+   * posait `poisAcquis` à vide plutôt que d'accorder un POI.
+   * @param {object} s
+   */
+  18: (s) => {
+    s.version = 19;
+    if (!Array.isArray(s.rapports)) s.rapports = [];
   },
 };
 

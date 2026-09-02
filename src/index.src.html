@@ -173,12 +173,112 @@
     background: #1E2124; color: #8C9A72; border: 1px solid #161914;
   }
   #monde-panneau-corps { padding: 4px 8px 8px; }
+  /* Le refus d'entrer dans la cible — ambre, pas rouge : rien n'est cassé, il
+     manque des points d'attaque ou une armée en état de partir. */
+  #monde-panneau-refus { margin: 0; padding: 0 8px 6px; font-size: 10px; color: #8C9A72; }
   #monde-panneau .ligne {
     display: flex; align-items: baseline; gap: 4px;
     padding: 1px 0; font-size: 11px; color: #8C9A72;
   }
   #monde-panneau .ligne .quoi { flex: 1; min-width: 0; }
   #monde-panneau .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+
+  /* --- Écran de raid, lot RAID-A ---------------------------------------
+     ⚠ AUCUNE TEINTE NEUVE. La palette est fermée à trente-trois couleurs et un
+     seul rgba ; tout ce bloc réemploie celles qui servent déjà à la carte et à
+     l'Offense, pour que le même état se lise de la même façon d'un écran à
+     l'autre. */
+  #ecran-raid { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  /* La zone haute : la cible. Elle prend ce qui reste, la zone basse étant
+     dimensionnée par son contenu. */
+  #raid-cible { position: relative; flex: 1; min-height: 0; background: #161914; }
+  #raid-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  #raid-titre {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2; margin: 0;
+    padding: 3px 8px; font-size: 10px; color: #8C9A72; background: #1E2124;
+  }
+  /* ⚠ LE BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ.
+     Il est là pour qu'on ne confonde jamais une simulation avec la vraie
+     attaque — c'est la seule chose qui les distingue à l'écran. */
+  #raid-bandeau {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 4;
+    padding: 4px 8px; text-align: center; letter-spacing: 0.2em;
+    font-size: 11px; color: #161914; background: #F5B636;
+  }
+  #raid-vitesses {
+    position: absolute; bottom: 4px; left: 0; right: 0; z-index: 3;
+    display: flex; justify-content: center; gap: 4px;
+  }
+  #raid-vitesses button {
+    padding: 3px 8px; font-size: 10px;
+    background: #1E2124; color: #8C9A72; border: 1px solid #4E5742;
+  }
+  #raid-bas { flex: 0 0 auto; background: #1E2124; border-top: 2px solid #4E5742; }
+  /* ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et caché tant que le mode
+     Réparer n'est pas armé — Ethan, 01/09. */
+  #raid-tout-reparer {
+    display: block; width: calc(100% - 12px); margin: 4px 6px 0; padding: 4px;
+    font-size: 11px; background: #343A2C; color: #F5F3E8; border: 1px solid #4E5742;
+  }
+  #raid-boutons { display: flex; gap: 3px; padding: 4px 6px; }
+  #raid-boutons button {
+    flex: 1; min-width: 0; padding: 5px 2px; font-size: 9px; line-height: 1.1;
+    overflow-wrap: anywhere;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+  }
+  /* Un mode ARMÉ se voit — sans cette règle, tout le modèle « armer puis
+     toucher » serait invisible au doigt. C'est la faute du lot ÉCRAN-ACTIONS,
+     et la garde des classes existe depuis. */
+  #raid-boutons button.arme { background: #8C9A72; color: #161914; }
+  #raid-avis { margin: 0; padding: 2px 8px; font-size: 10px; color: #8C9A72; }
+  #raid-vagues { padding: 4px 6px 6px; }
+  #ecran-raid .vague { margin-bottom: 3px; }
+  #ecran-raid .emplacements { display: grid; gap: 2px; }
+  #ecran-raid .emplacement {
+    aspect-ratio: 1; background: #161914; border: 1px dashed #4E5742;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; font-size: 6px; line-height: 1.1; text-align: center;
+    color: #68727E; word-break: break-word; touch-action: none;
+  }
+  #ecran-raid .emplacement.occupe {
+    border-style: solid; border-color: #161914; color: #F5F3E8;
+  }
+  /* Une unité qu'on laisse à la maison — le drapeau `actif` de RAID-0. Elle
+     reste posée, elle ne part pas : le liseré tireté dit « pas du voyage ». */
+  #ecran-raid .emplacement.inactive { border: 1px dashed #68727E; color: #68727E; }
+  /* Une unité abîmée : elle part quand même tant qu'elle est au-dessus du
+     plancher, mais le joueur doit voir qu'elle coûtera de la réserve. */
+  #ecran-raid .emplacement.abimee { border-color: #E43E32; }
+  /* L'unité au bout du doigt pendant un glissement — os, comme la sélection du
+     Chantier et de l'Offense. */
+  #ecran-raid .emplacement.enmain { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* Les deux panneaux de résultat. Même contenu, deux tailles : petit onglet
+     pour le simulateur, plein cadre pour le vrai raid. */
+  #raid-sim, #raid-fin {
+    position: absolute; z-index: 5; overflow-y: auto; scrollbar-width: none;
+    background: #1E2124; border: 2px solid #4E5742;
+  }
+  #raid-sim { left: 8px; right: 8px; bottom: 8px; max-height: 55%; }
+  #raid-fin { top: 0; left: 0; right: 0; bottom: 0; }
+  #raid-sim h2, #raid-fin h2 {
+    margin: 0; padding: 5px 8px; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #F5F3E8; background: #343A2C;
+  }
+  #raid-sim-corps, #raid-fin-corps { padding: 4px 8px 8px; }
+  #ecran-raid .ligne {
+    display: flex; align-items: baseline; gap: 4px;
+    padding: 1px 0; font-size: 11px; color: #8C9A72;
+  }
+  #ecran-raid .ligne .quoi { flex: 1; min-width: 0; }
+  #ecran-raid .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  #raid-sim button, #raid-fin .boutons button {
+    padding: 5px 10px; margin: 0 8px 8px; font-size: 11px;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+  }
+  #raid-fin .boutons { display: flex; flex-wrap: wrap; }
+  /* Un bouton refusé se voit refusé — « ré-attaquer » peut être présent ET
+     grisé, avec sa raison : un second raid coûte encore des points. */
+  #raid-fin .boutons button[disabled] { color: #68727E; }
 
   /* --- Arsenal, lot 5A --- */
   #banc-arsenal {
@@ -1554,6 +1654,17 @@
       <img id="atlas-unite" alt="" hidden>
       <img id="atlas-chassis" alt="" hidden>
       <img id="atlas-tourelle-unite" alt="" hidden>
+      <!-- ⚠ TROIS ATLAS DE PLUS POUR L'ÉCRAN DE RAID, ET ILS NE COÛTENT RIEN.
+           Le champ de bataille d'un site porte des BÂTIMENTS et des DÉFENSES,
+           que le banc n'avait jamais eu à dessiner. Ces trois `data:` sont déjà
+           dans la feuille — l'écran Chantier les emploie en fond CSS — et
+           `garnirLesAtlas` ne fait que donner leur adresse à ces balises : le
+           livrable ne les inline pas une seconde fois. C'est exactement le
+           couplage décrit au lot SPRITES-ET-ZOOM, et l'inverse le ferait
+           grossir de 500 Kio. -->
+      <img id="atlas-batiment" alt="" hidden>
+      <img id="atlas-defense" alt="" hidden>
+      <img id="atlas-socle" alt="" hidden>
       <div id="monde-champ">
         <canvas id="monde-canvas"></canvas>
         <!-- ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08. Ethan : « zoom
@@ -1589,6 +1700,13 @@
             <button type="button" id="monde-panneau-fermer">Fermer</button>
           </div>
           <div id="monde-panneau-corps"></div>
+      <!-- ⚠ LE REFUS D'ENTRER SE DIT ICI, ET IL EST LE SEUL TEXTE QUE LE PANNEAU
+           AJOUTE. `problemesDuRaid` rend une liste de PHRASES, et c'est pour ça
+           qu'elle en rend une : l'écran doit pouvoir refuser ET expliquer.
+           ⚠ CE N'EST PAS UN BOUTON. Le panneau n'en porte toujours qu'un seul,
+           « Fermer » — le second toucher sur la carte remplace « Attaquer », et
+           le test qui balaie ce bloc continue d'interdire tout autre bouton. -->
+      <p id="monde-panneau-refus" hidden></p>
         </div>
       </div>
     </div>
@@ -1601,6 +1719,74 @@
          donner d'abri aurait rendu le banc inatteignable, et T10 de
          `banc.test.js` serait tombé.
          ====================================================================== -->
+    <!-- ======================================================================
+         ÉCRAN RAID — la cible en haut, l'armée en bas, le combat au milieu.
+         ⚠ SEPTIÈME ÉCRAN, et il s'allume sur l'onglet MONDE : on y vient de la
+         carte, par un SECOND toucher sur une cible déjà ouverte, et on y
+         retourne. Il se déclare dans `ECRANS` et `ONGLET_DE_L_ECRAN` de
+         `ui/session.js`, et nulle part ailleurs.
+         ⚠ LE BANDEAU DES RESSOURCES ET CELUI DES BASES SONT MASQUÉS ICI, la
+         rangée d'onglets RESTE — Ethan, 01/09 : « on garde la barre du haut…
+         les onglets seuls ». Le masquage est fait par `montrerEcran`, chez la
+         session : ces deux bandeaux sont du chrome commun, frères de `#ecrans`,
+         et un écran n'a pas à les déplacer.
+         ⚠ LE DÉROULÉ EST UN REJEU. L'état est commis par `executerRaid` avant
+         la première image ; l'animation ne décide de rien, et « passer » est
+         gratuit.
+         ====================================================================== -->
+    <div id="ecran-raid" hidden>
+      <div id="raid-cible">
+        <!-- Le bandeau qui couvre la vue pendant tout un déroulé SIMULÉ, pour
+             qu'on ne le confonde jamais avec la vraie attaque. -->
+        <div id="raid-bandeau" hidden>SIMULATEUR</div>
+        <p id="raid-titre"></p>
+        <canvas id="raid-canvas"></canvas>
+        <div id="raid-vitesses" hidden>
+          <button type="button" id="raid-pas">Pas à pas</button>
+          <button type="button" id="raid-vitesse-1">×1</button>
+          <button type="button" id="raid-vitesse-2">×2</button>
+          <button type="button" id="raid-vitesse-4">×4</button>
+          <button type="button" id="raid-instantane">Instantané</button>
+        </div>
+      </div>
+
+      <div id="raid-bas">
+        <!-- ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et il n'apparaît que
+             le mode Réparer armé — Ethan, 01/09. -->
+        <button type="button" id="raid-tout-reparer" hidden>Tout réparer</button>
+        <div id="raid-boutons">
+          <button type="button" id="raid-reparer">Réparer</button>
+          <button type="button" id="raid-activer">Activer</button>
+          <button type="button" id="raid-simuler">Simulateur</button>
+          <button type="button" id="raid-attaquer">Lancer l'attaque</button>
+          <button type="button" id="raid-retour-carte">Carte</button>
+          <button type="button" id="raid-retour-offense">Offense</button>
+        </div>
+        <p id="raid-avis" hidden></p>
+        <!-- Les quatre vagues de neuf. Le glisser-déposer y vit ; il passe par
+             `deplacerEffectif`, jamais par une écriture directe. -->
+        <div id="raid-vagues"></div>
+      </div>
+
+      <!-- Le petit panneau du simulateur, et le plein cadre du vrai raid. Les
+           DEUX rendent `lignesDuResultat` du même rapport : ils ne peuvent pas
+           annoncer des nombres différents. -->
+      <div id="raid-sim" hidden>
+        <h2>Simulation</h2>
+        <div id="raid-sim-corps"></div>
+        <button type="button" id="raid-sim-fermer">Fermer</button>
+      </div>
+      <div id="raid-fin" hidden>
+        <h2>Rapport de raid</h2>
+        <div id="raid-fin-corps"></div>
+        <div class="boutons">
+          <button type="button" id="raid-fin-carte">Retour à la carte</button>
+          <button type="button" id="raid-fin-base">Retour à l'armée</button>
+          <button type="button" id="raid-reattaquer" hidden>Ré-attaquer</button>
+        </div>
+      </div>
+    </div>
+
     <div id="ecran-options" hidden>
       <h2>Options</h2>
       <p class="mot">Cet écran loge le numéro de version, qui a quitté la barre du

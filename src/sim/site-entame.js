@@ -153,6 +153,21 @@ export function enregistrerLeRaid(etat, identite, resultat) {
     return { rase: true };
   }
 
+  // ⚠⚠ L'ENTRÉE SE RANGE SUR LA COMPOSITION **RÉGÉNÉRÉE**, PAS SUR CELLE QUI
+  // VIENT DE SE BATTRE — et c'est un CORRECTIF du 01/09, trouvé au boot sans
+  // tête du lot RAID-A. `montageCourant` régénère le site ENTIER puis applique
+  // ces listes POSITION PAR POSITION : elles doivent donc toujours compter une
+  // case par pièce du site plein. Or `resultat` ne porte que les pièces qui
+  // étaient encore là, les mortes ayant déjà été retirées du montage.
+  //
+  // Le troisième raid d'affilée levait donc « 0 PV rangés pour 3 pièces » :
+  // raid 1 tue les trois défenseurs et range `[0,0,0]` ; raid 2 se bat contre un
+  // site à zéro défenseur et range `[]` ; raid 3 régénère les trois et n'a plus
+  // rien à leur appliquer. Mesuré en simulation pure, sans interface — le bogue
+  // est ANTÉRIEUR à l'écran de raid, qui n'a fait que le rendre atteignable :
+  // aucun test n'enchaînait trois raids, et aucun écran ne savait attaquer.
+  const complet = montageDuSite(etat.graine, identite);
+  const avant = etatDuSite(etat, identite);
   const entree = {
     rangee: identite.rangee,
     colonne: identite.colonne,
@@ -160,8 +175,12 @@ export function enregistrerLeRaid(etat, identite, resultat) {
     type: identite.type,
     niveau: identite.niveau,
     tickDuRaid: etat.horloge.nbTicks,
-    pvBatimentsMilli: resultat.batiments.map((b) => pvApresRaid(identite.type, b)),
-    pvDefensesMilli: resultat.defenses.map((d) => pvApresRaid(identite.type, d)),
+    pvBatimentsMilli: reprojeter(
+      complet.batiments, avant?.pvBatimentsMilli ?? null, resultat.batiments, identite.type,
+    ),
+    pvDefensesMilli: reprojeter(
+      complet.defenseurs, avant?.pvDefensesMilli ?? null, resultat.defenses, identite.type,
+    ),
   };
 
   if (neDitRien(entree)) delete etat.sitesEntames[cle];
@@ -217,6 +236,37 @@ export function montageCourant(etat, identite) {
     batiments: appliquer(montage.batiments, entree.pvBatimentsMilli),
     defenseurs: appliquer(montage.defenseurs, entree.pvDefensesMilli),
   };
+}
+
+/**
+ * Range le résultat d'un raid sur la composition PLEINE du site.
+ *
+ * ⚠ UNE PIÈCE DÉJÀ MORTE RESTE MORTE, et elle ne consomme pas de ligne du
+ * résultat : elle n'était pas au combat, `appliquer` l'ayant retirée du montage.
+ * Les autres se servent dans l'ordre — `construireResultat` rend ses entités
+ * dans l'ordre du montage, et `appliquer` retire en préservant cet ordre, donc
+ * la n-ième vivante du site plein est la n-ième ligne du résultat.
+ *
+ * ⚠ ET LA SORTIE FAIT TOUJOURS LA LONGUEUR DU SITE PLEIN. C'est l'invariant que
+ * `appliquer` vérifie de l'autre côté, et le seul qui rende un site
+ * ré-attaquable indéfiniment.
+ *
+ * @param {Array<object>} pleines la composition régénérée, entière
+ * @param {Array<number|null>|null} avant ce qui était rangé avant ce raid
+ * @param {Array<object>} lignes les lignes de résultat, sans les déjà-mortes
+ * @param {string} type type de site, pour le plancher à 1 PV
+ * @returns {Array<number|null>} une case par pièce du site plein
+ */
+function reprojeter(pleines, avant, lignes, type) {
+  const sortie = [];
+  let curseur = 0;
+  for (let i = 0; i < pleines.length; i += 1) {
+    if (avant !== null && avant[i] === 0) { sortie.push(0); continue; }
+    const ligne = lignes[curseur];
+    curseur += 1;
+    sortie.push(ligne === undefined ? null : pvApresRaid(type, ligne));
+  }
+  return sortie;
 }
 
 function appliquer(pieces, pvs) {

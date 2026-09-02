@@ -194,6 +194,14 @@ export const APRES_RAID = {
   // avant-poste. Celle d'une base entière est `TYPES_SITE.base.reparationHeures`
   // — deux sujets différents, la même heure aujourd'hui.
   reparationDefensesHeures: 1,
+  // ⚠ COMBIEN DE RAPPORTS DE RAID L'ÉTAT GARDE — « les dix derniers, en tout »,
+  // arbitré par Ethan le 01/09. EN TOUT, pas par base : le jour du multi-bases,
+  // c'est cette ligne-ci qu'il faudra relire, pas l'écran.
+  //
+  // ⚠ LA BORNE VIT ICI ET PAS DANS L'ÉCRAN. Un « 10 » écrit dans `ui/` ferait
+  // deux vérités le jour où Ethan en veut vingt, et la seconde se lirait comme
+  // un bogue d'affichage.
+  rapportsGardes: 10,
 };
 
 // --- réparation de l'armée ----------------------------------------------------
