@@ -50,6 +50,7 @@ import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
+import { baseCourante } from '../sim/base-courante.js';
 
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
 export const CRANS = ZOOM_CARTE.crans;
@@ -169,6 +170,7 @@ export function distanceEnCases(a, b) {
  * @returns {Array<{type: string, rangee: number, colonne: number, niveau: number|null}>}
  */
 export function sitesDeLaFenetre(etat, fenetre) {
+  const laBase = baseCourante(etat);
   const dedans = (rangee, colonne) => rangee >= fenetre.premiereRangee
     && rangee <= fenetre.derniereRangee
     && colonne >= fenetre.premiereColonne
@@ -222,7 +224,7 @@ export function sitesDeLaFenetre(etat, fenetre) {
     });
   }
 
-  for (const satellite of etat.satellites.presents) {
+  for (const satellite of laBase.satellites.presents) {
     if (!dedans(satellite.rangee, satellite.colonne)) continue;
     sites.push({
       type: satellite.type,
@@ -245,13 +247,13 @@ export function sitesDeLaFenetre(etat, fenetre) {
   }
 
   // Le joueur en dernier : c'est le seul site qu'il ne doit jamais perdre de vue.
-  if (dedans(etat.position.rangee, etat.position.colonne)) {
+  if (dedans(laBase.position.rangee, laBase.position.colonne)) {
     sites.push({
       type: 'baseJoueur',
-      rangee: etat.position.rangee,
-      colonne: etat.position.colonne,
+      rangee: laBase.position.rangee,
+      colonne: laBase.position.colonne,
       niveau: null,
-      saveur: saveur(etat.position.rangee, etat.position.colonne, 'base'),
+      saveur: saveur(laBase.position.rangee, laBase.position.colonne, 'base'),
     });
   }
   return sites;
@@ -280,8 +282,9 @@ export function sitesDeLaFenetre(etat, fenetre) {
  * @returns {number} 1…9
  */
 export function palierDuSite(site, etat) {
+  const laBase = baseCourante(etat);
   if (site.niveau !== null) return palierDeNiveau(site.niveau);
-  const dixiemes = niveauDesBatiments(etat.disposition);
+  const dixiemes = niveauDesBatiments(laBase.disposition);
   const niveau = Math.max(1, Math.round(dixiemes / 10));
   return palierDeNiveau(niveau);
 }
@@ -316,12 +319,12 @@ export function ciblageDuSite(etat, site) {
   // « 0 point d'attaque » se lirait « gratuit ». C'est la convention que tout le
   // dépôt emploie — `niveauDeCommandement` rend `null` faute de bâtiment, et son
   // commentaire dit exactement pourquoi zéro serait un mensonge.
-  const problemes = problemesDuRaid(etat, etat, identite);
+  const problemes = problemesDuRaid(etat, baseCourante(etat), identite);
   const horsPortee = problemes.some((p) => p.code === 'hors-portee');
   return {
     butin: butinSiToutTombe(montage),
     force: forceDeLaDefense(montage.defenseurs),
-    cout: horsPortee ? null : coutDUnRaid(etat, etat, identite),
+    cout: horsPortee ? null : coutDUnRaid(etat, baseCourante(etat), identite),
     problemes,
   };
 }
@@ -1046,7 +1049,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * frontières, pour ne pas couper le dessin qui dit ce qu'il y a là.
    */
   function dessinerHalo(ox, oy, pas) {
-    const halo = geometrieDuHalo(etatCourant.position, ox, oy, pas);
+    const halo = geometrieDuHalo(baseCourante(etatCourant).position, ox, oy, pas);
     // Hors du canevas : rien à peindre, et un arc à des milliers de pixels
     // coûterait quand même son chemin.
     if (halo.x < -halo.rayon || halo.y < -halo.rayon
@@ -1076,7 +1079,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // qui ne porterait aucun nombre n'aurait plus rien à dire, et le panneau
     // écrit déjà « hors de portée ».
     if (siteOuvert === null || ciblageOuvert === null || ciblageOuvert.cout === null) return;
-    const trait = traitDeLaFleche(etatCourant.position, siteOuvert, ox, oy, pas);
+    const trait = traitDeLaFleche(baseCourante(etatCourant).position, siteOuvert, ox, oy, pas);
     if (trait === null) return;
     ctx.lineWidth = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
     ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
@@ -1390,8 +1393,8 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauRefus.textContent = casesDuDeplacement.length > 0
       ? `Touchez une case à ${DEPLACEMENT.porteeMaxCases} cases au plus.`
       : problemesDuDeplacement(etatCourant, {
-        rangee: etatCourant.position.rangee,
-        colonne: etatCourant.position.colonne + 1,
+        rangee: baseCourante(etatCourant).position.rangee,
+        colonne: baseCourante(etatCourant).position.colonne + 1,
       }).map((p) => p.message).join(' ; ');
     panneauTitre.textContent = 'Déplacer la base';
     panneauCorps.textContent = '';
@@ -1429,7 +1432,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     deplacerLaBase(etatCourant, cible);
     desarmerLeDeplacement();
     fermerPanneau();
-    centrerSur(etatCourant.position);
+    centrerSur(baseCourante(etatCourant).position);
     apresDeplacement();
     dessiner();
   }
@@ -1447,7 +1450,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauRefus.hidden = ciblage === null || ciblage.problemes.length === 0;
     panneauRefus.textContent = ciblage === null ? ''
       : ciblage.problemes.map((p) => p.message).join(' ; ');
-    for (const ligne of lignesDuSite(site, etatCourant.position, etatCourant.poisAcquis, ciblage)) {
+    for (const ligne of lignesDuSite(site, baseCourante(etatCourant).position, etatCourant.poisAcquis, ciblage)) {
       const bloc = doc.createElement('div');
       bloc.className = 'ligne';
       const quoi = doc.createElement('span');
@@ -1493,7 +1496,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   $('monde-recentrer').addEventListener('click', () => {
     if (etatCourant === null) return;
     fermerPanneau();
-    centrerSur(etatCourant.position);
+    centrerSur(baseCourante(etatCourant).position);
     dessiner();
   });
 
@@ -1528,12 +1531,13 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     const premiere = etatCourant === null;
     etatCourant = etat;
     visible = true;
-    empreinteSatellites = `${etat.satellites.presents.length}:${etat.satellites.prochaineInstance}`;
+    const sat = baseCourante(etat).satellites;
+    empreinteSatellites = `${sat.presents.length}:${sat.prochaineInstance}`;
     chargerAtlas();
     chargerEmblemes();
     chargerGrossesBases();
     dimensionner();
-    if (premiere) centrerSur(etat.position);
+    if (premiere) centrerSur(baseCourante(etat).position);
     majBoutons();
     dessiner();
   }
@@ -1560,7 +1564,8 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // neuf hachages par case de la fenêtre — deux mille cases au cran le plus
     // large — pour redessiner exactement la même image. Le fond, lui, est une
     // fonction de la graine : il ne change jamais.
-    const empreinte = `${etat.satellites.presents.length}:${etat.satellites.prochaineInstance}`;
+    const sat = baseCourante(etat).satellites;
+    const empreinte = `${sat.presents.length}:${sat.prochaineInstance}`;
     if (empreinte === empreinteSatellites) return;
     empreinteSatellites = empreinte;
     dessiner();

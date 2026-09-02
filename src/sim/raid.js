@@ -43,6 +43,7 @@ import { GEOGRAPHIE } from '../data/sites.js';
 import {
   creerAcquises, modulesDebloquesDuJoueur, moduleEstAcquis, nomDuModule,
 } from './recherche.js';
+import { baseCourante } from './base-courante.js';
 
 /** Un millier — l'échelle des milli-PV et des milli-unités. */
 const MILLE = 1000;
@@ -109,8 +110,9 @@ export function pvMaxDeLUnite(id, niveau) {
  * @returns {{vagues: Array<Array<object>>, indices: Array<number>}}
  */
 export function composerLesVagues(etat) {
+  const laBase = baseCourante(etat);
   const parVague = new Map();
-  const ordonnees = etat.armee
+  const ordonnees = laBase.armee
     .map((piece, index) => ({ piece, index }))
     .sort((a, b) => a.piece.vague - b.piece.vague || a.piece.colonne - b.piece.colonne);
 
@@ -313,10 +315,11 @@ function restantDeLId(lignes, pleines, id) {
  *   pctReserve: number|null, sansBatiment: boolean}>}
  */
 function reparationInduite(etat) {
+  const laBase = baseCourante(etat);
   const reservoirs = reservoirsDeLArmee(etat);
   const sortie = {};
   for (const [chassis, r] of Object.entries(reservoirs)) {
-    const reserve = etat.reserveReparation?.[chassis] ?? 0;
+    const reserve = laBase.reserveReparation?.[chassis] ?? 0;
     sortie[chassis] = {
       secondes: r.secondes,
       ticks: r.ticks,
@@ -420,6 +423,7 @@ export function garderLeRapport(etat, rapport) {
  * @returns {object} rapport du raid
  */
 export function executerRaid(etat, baseAttaquante, cible, options = {}) {
+  const laBase = baseCourante(etat);
   const problemes = problemesDuRaid(etat, baseAttaquante, cible);
   if (problemes.length > 0) {
     throw new Error(`raid impossible — ${problemes.map((p) => p.message).join(' ; ')}`);
@@ -462,13 +466,13 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
 
   // --- le butin entre dans l'économie ---------------------------------------
   const gagne = butin(resultat, montage);
-  const capacites = capacitesMilli(etat.disposition);
+  const capacites = capacitesMilli(laBase.disposition);
   const verse = {};
   const perdu = {};
   for (const ressource of RESSOURCES) {
     const unites = gagne[ressource] ?? 0;
     if (unites === 0) continue;
-    const resteMilli = verser(etat.economie, capacites, ressource, unites * MILLE);
+    const resteMilli = verser(laBase.economie, capacites, ressource, unites * MILLE);
     verse[ressource] = unites - Math.floor(resteMilli / MILLE);
     if (resteMilli > 0) perdu[ressource] = Math.floor(resteMilli / MILLE);
   }
@@ -579,15 +583,24 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
  */
 export function simulerRaid(etat, baseAttaquante, cible, options = {}) {
   const copie = structuredClone(etat);
-  // ⚠ LA BASE ATTAQUANTE SUIT LA COPIE QUAND C'EST LE MÊME OBJET, et c'est une
-  // ceinture, pas un correctif : `basesDuJoueur` rend `[etat]`, donc l'appelant
-  // passe aujourd'hui l'état deux fois, et `executerRaid` ne LIT que
-  // `baseAttaquante.position`. Rien ne fuit à cette heure. Mais le jour où elle
-  // écrira sur la base attaquante — le multi-bases est écrit au programme —,
-  // passer l'original ferait fuir la simulation sur l'état réel, et le test qui
-  // compare les deux sérialisations ne le verrait QUE si ce jour-là quelqu'un le
-  // relance. Une ligne maintenant vaut mieux qu'un bogue muet plus tard.
-  const base = baseAttaquante === etat ? copie : baseAttaquante;
+  // ⚠⚠ LA CEINTURE ÉCRITE AU LOT RAID-0 A SERVI, ET ELLE A CHANGÉ DE FORME AU
+  // LOT BASES-0. Elle disait : « `basesDuJoueur` rend `[etat]`, donc l'appelant
+  // passe l'état deux fois ; le jour où le multi-bases arrivera, passer
+  // l'original ferait fuir la simulation sur l'état réel ». Ce jour est celui-ci
+  // — `baseAttaquante` n'est plus JAMAIS `etat`, c'est un élément de
+  // `etat.bases` —, et la comparaison d'identité serait devenue toujours fausse.
+  // Elle n'aurait rien cassé aujourd'hui : `executerRaid` ne LIT que
+  // `baseAttaquante.position`. Elle aurait cessé de protéger EN SILENCE.
+  //
+  // ⚠ ON RETROUVE LA BASE PAR SON INDICE, jamais par identité de référence :
+  // `structuredClone` copie des valeurs et ne rétablit aucune identité, donc
+  // `copie.bases.indexOf(baseAttaquante)` rendrait −1. On cherche donc l'indice
+  // dans l'ORIGINAL, et on prend l'homologue dans la copie. Une base venue
+  // d'ailleurs — un montage de test qui forge sa propre base — n'est pas dans
+  // `etat.bases` et passe telle quelle, ce qui est le bon comportement : elle ne
+  // pointe sur rien que la simulation pourrait salir.
+  const indice = etat.bases?.indexOf(baseAttaquante) ?? -1;
+  const base = indice >= 0 ? copie.bases[indice] : baseAttaquante;
   return { ...executerRaid(copie, base, cible, options), simule: true };
 }
 
@@ -628,8 +641,9 @@ const AUTO_REPARATION_PCT = 20;
  * @returns {number} milli-PV rendus, tous ouvrages confondus
  */
 export function reparerLaGarnison(etat) {
+  const laBase = baseCourante(etat);
   let rendus = 0;
-  for (const piece of etat.garnison) {
+  for (const piece of laBase.garnison) {
     if (piece.degatsMilli <= 0) continue;
     if (nomDuModule('defense', piece.id) !== 'autoReparation') continue;
     if (!moduleEstAcquis(etat, 'defense', piece.id)) continue;
@@ -656,6 +670,7 @@ export function reparerLaGarnison(etat) {
  * l'Ouvrage, où tout ce qui tombe est perdu.
  */
 function reporterLesDegats(etat, resultat, indices) {
+  const laBase = baseCourante(etat);
   if (resultat.attaquants.length !== indices.length) {
     throw new Error(
       `raid : ${resultat.attaquants.length} attaquants rendus pour ${indices.length} engagés — `
@@ -665,7 +680,7 @@ function reporterLesDegats(etat, resultat, indices) {
   let auPlancher = 0;
   for (let i = 0; i < indices.length; i += 1) {
     const ligne = resultat.attaquants[i];
-    const piece = etat.armee[indices[i]];
+    const piece = laBase.armee[indices[i]];
     const pv = ligne.pvMilli > APRES_RAID.plancherPvMilli
       ? ligne.pvMilli : APRES_RAID.plancherPvMilli;
     if (pv === APRES_RAID.plancherPvMilli) auPlancher += 1;

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.65.0 · build 66.
+Dernière révision : **02/09/2026**, version 0.66.0 · build 67.
 
 ---
 
@@ -41,7 +41,103 @@ Dernière révision : **02/09/2026**, version 0.65.0 · build 66.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot DÉPLACEMENT), à confronter :**
+**Référence au 02/09/2026 (après le lot BASES-0), à confronter :**
+`npm test` → **885 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 385 930 octets**, 0 référence externe.
+⚠⚠ **CE LOT NE CHANGE AUCUN COMPORTEMENT, ET C'EST TOUT CE QU'ON LUI DEMANDE.**
+Il déplie l'état : les onze champs d'une base descendent d'un cran, dans
+`etat.bases[0]`, et `etat.baseCourante` vaut 0. **`etat.bases` A EXACTEMENT UN
+ÉLÉMENT À LA FIN DU LOT** — fonder, basculer, transférer sont `BASES-1` et
+`TRANSFERT`. La coquille de bascule reste désactivée et son « 1 / 1 » reste vrai.
+Coût **+2 207 octets**, aucune image n'entre — **16 `data:` avant, 16 après**.
+Marge T10 **14 070 octets, 1,00 %** : c'est la marge la plus mince du dépôt, et
+le prochain lot qui fait entrer une image devra relever la borne EN ÉCRIVANT
+POURQUOI.
+⚠⚠ **LES TÉMOINS SONT LA SEULE GARDE QUI COMPTE ICI, ET ILS SE CAPTURENT
+AVANT.** Un dépliage de deux cent cinquante sites ne se prouve pas avec des tests
+unitaires : ils sont réécrits par la même main que le code, donc ils suivent
+l'erreur qu'ils devraient attraper. `test/temoins-bases-0.js` porte les
+empreintes d'un scénario de **quatorze phases sur vingt-cinq graines**, relevées
+sur `main` à `9d7d711` avant que rien ne bouge — vingt-deux champs par phase,
+raid du joueur, raid de l'Ouvrage, rasages, sauvegarde-rechargement, et une
+fenêtre jouée tick par tick à cheval sur un raid. **Mesuré après dépliage :
+25 × 14 × 22 valeurs identiques, à deux exceptions près, toutes deux ASSERTÉES.**
+⚠⚠ **LES DEUX SEULES VALEURS QUI BOUGENT SE MESURENT, ELLES NE SONT PAS
+EXEMPTÉES.** `version` passe de 22 à 23 : le témoin recalcule son empreinte en
+SUBSTITUANT 22, et si elle retombe juste, c'est que le nombre seul a changé,
+uniformément. Et la sauvegarde grandit de **29 octets exactement**, sur les
+vingt-cinq graines — l'enveloppe `{"bases":[…],"baseCourante":0}` autour de onze
+champs qui ne changent pas. Un écart qui dépendrait de la partie voudrait dire
+qu'un CONTENU a bougé.
+⚠⚠ **LES ACCESSEURS PAR GETTER SONT INTERDITS, ET LA RAISON EST MÉCANIQUE.**
+Laisser `etat.disposition` déléguer à `etat.bases[…]` aurait fait ce lot en dix
+lignes ; mais `simulerRaid` fait `structuredClone(etat)`, et **`structuredClone`
+ne préserve pas les getters** — il copie des valeurs. La copie se retrouverait
+avec des champs plats figés, le simulateur cesserait SILENCIEUSEMENT d'être
+exact, et le test de non-fuite ne verrait rien, l'état réel restant intact. Même
+raisonnement contre `Object.defineProperty` et les `Proxy` : l'état doit rester
+**des données simples**, parce que c'est ce que `serialiser` et
+`structuredClone` supposent tous les deux. Un test balaie la source ET compare
+les deux sérialisations.
+⚠⚠ **`baseCourante` VIT DANS `src/sim/base-courante.js`, ET C'EST UNE CONTRAINTE
+D'IMPORTS.** Le brief demandait `state.js` ; or `state.js` importe satellites,
+poi, points-attaque, site-entame, raid, raid-ouvrage, reparation et — par
+`raid-ouvrage` — deplacement : les huit modules qui ont besoin de l'accesseur
+sont ses DÉPENDANCES, et le leur faire importer de là ferait huit cycles.
+**`state.js` le RÉ-EXPORTE**, donc `import { baseCourante } from './state.js'`
+marche : un ré-export n'est pas une copie, c'est la même liaison.
+⚠⚠ **DEUX MIGRATIONS TOURNAIENT SUR LA FORME D'AUJOURD'HUI, ET LE DÉPLIAGE LES
+AURAIT CASSÉES EN SILENCE.** La 9 → 10 appelait `basesDuJoueur(s)` et la 13 → 14
+`niveauDeCommandement(s)` : les deux lisent désormais `s.bases`, qui n'existe
+qu'à partir de la v23. **Une migration tourne sur la forme de SON époque**, et
+la faute ne se voyait qu'en rejouant la chaîne complète depuis une sauvegarde
+PLATE — d'où `test/aplatir-sauvegarde.js`, l'inverse du maillon 22 → 23, dont
+huit fichiers de test ont eu besoin le même jour.
+⚠ **`SAVE_VERSION` PASSE À 23, ET LA MIGRATION NE PERD RIEN.** C'est le premier
+dépliage de la chaîne : aucune valeur convertie, aucune inventée, les mêmes
+objets changent d'adresse. `champs` et `obstacles` ne sont pas recopiés — ils
+n'ont jamais été dans la sauvegarde, et `charger` les redéduit de `fondation`,
+qui voyage. **Mesuré : redérivés, ils sont identiques aux anciens**, ce qui
+confirme que le terrain est bien gelé comme trois documents l'affirment.
+⚠⚠ **ONZE CHAMPS DESCENDENT, ONZE RESTENT, ET LE PARTAGE EST ARBITRÉ.** Par
+base : `position`, `fondation`, `disposition`, `garnison`, `armee`, `economie`,
+`champs`, `obstacles`, `satellites`, `reserveReparation`,
+`dernierDeplacementTick`. Globaux : `version`, `graine`, `rng`, `horloge`,
+`tutoriel`, `recherche`, `sitesEntames`, `basesRasees`, `poisAcquis`,
+`rapports`, `attaque`. `poisAcquis` est global — Ethan, 02/09 : « acquis une
+fois, valable partout » ; `attaque` aussi, sa réserve étant unique et son
+plafond mérité par les ARMÉES du moment, au pluriel.
+⚠⚠ **LES DEUX `basesDuJoueur` ONT TENU LEUR PROMESSE, ET ELLES SEULES ONT
+CHANGÉ.** Celle de `points-attaque.js` rendait `[etat]` en annonçant « le jour où
+`etat.bases` existera, cette fonction seule changera » ; celle de
+`territoire.js` rendait `[etat.position]`. Les deux rendent aujourd'hui le vrai
+pluriel, et **rien d'autre de ces deux modules n'a bougé**. ⚠ Elles portent le
+même nom court et **PAS le même type** — l'une rend des BASES, l'autre des
+POSITIONS : ne jamais importer l'une pour l'autre.
+⚠ **LES SIGNATURES DES GESTES DU JOUEUR N'ONT PAS CHANGÉ, ET C'EST UNE DÉCISION
+À RELIRE.** Le brief demandait de faire prendre une BASE à toute fonction de
+`sim/` qui ne lit que des champs par-base. Appliqué aux fonctions INTERNES
+(`verifierForce`) ; **refusé pour l'API des gestes** — `poser`, `ameliorer`,
+`poserEffectif` et leurs voisines totalisent **220 sites d'appel de test**, et
+les réécrire dans un lot dont le critère est « rien ne change » aurait été du
+brassage qu'aucun test de ce lot ne pouvait éprouver, faute d'une seconde base.
+Elles agissent sur la base COURANTE, et `etat.baseCourante` est exactement ce
+qui la nomme. À reprendre à `BASES-1`, avec deux bases pour le mesurer.
+⚠ **LA GARDE DU NUMÉRO DE VERSION A ÉTÉ DÉPLACÉE, PAS RETIRÉE.**
+`points-attaque.test.js` écrit la règle depuis le lot SITE-ENTAMÉ : « la garde du
+numéro appartient au maillon le plus RÉCENT de la chaîne, une seule fois ».
+Quatre fichiers gardaient encore le leur à 22 et seraient devenus rouges pour une
+raison qui ne les regarde pas ; ils vérifient désormais que LEUR maillon est
+encore là. Le `assert.equal(SAVE_VERSION, 23)` vit dans `bases.test.js`.
+⚠ **UNE ASSERTION A ÉTÉ RETIRÉE, ET ELLE SE DÉCLARE** — `recherche.test.js`
+portait `migre.version === SAVE_VERSION` ET `migre.version === 22` sur deux
+lignes voisines ; la seconde étant devenue identique à la première, elle
+n'assertait plus rien.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Son dernier verdict connu reste celui de
+MUR-DE-CONTOUR, ci-dessous.
+
+**Auparavant, après le lot DÉPLACEMENT :**
 `npm test` → **872 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **1 383 723 octets**, 0 référence externe.
 ⚠⚠ **CE LOT COÛTE +6 814 OCTETS ET IL DÉBLOQUE LE RESTE DU JEU.** Ethan, 02/09 :
@@ -822,8 +918,9 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 25 fichiers
+src/sim/                simulation déterministe, sans DOM — 26 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
+  base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
   satellites.js         camps et avant-poste du joueur : de l'HISTOIRE, donc sauvegardée
@@ -917,7 +1014,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 10 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   46 fichiers *.test.js (node:test) ; deux fichiers n'en sont PAS
+test/                   47 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -925,14 +1022,18 @@ test/                   46 fichiers *.test.js (node:test) ; deux fichiers n'en s
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche  maj  territoire
-  ⤷ ⚠ DEUX FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
+  sprite  state  recherche  maj  territoire  bases
+  ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
     `prereglages-lot3a.js` porte les montages du banc ; `png-rgba.js` porte le
     décodeur PNG RVBA, extrait de `sprite.test.js` au lot ACCENT-CONFRONTÉ quand
     un SECOND test en a eu besoin — le dupliquer aurait donné deux décodeurs
-    voisins dont un seul serait éprouvé.
+    voisins dont un seul serait éprouvé. Les deux derniers sont entrés au lot
+    BASES-0 : `temoins-bases-0.js` porte les empreintes capturées AVANT le
+    dépliage — ce n'est pas un test, c'est sa RÉFÉRENCE, et elle ne se
+    rafraîchit pas —, et `aplatir-sauvegarde.js` porte l'inverse de la migration
+    22 → 23, dont HUIT fichiers ont eu besoin le même jour.
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour

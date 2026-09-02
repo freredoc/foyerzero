@@ -29,6 +29,8 @@ import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { estSurLaCarte } from '../src/sim/carte.js';
 import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
 import { poiDeLaCase, carteDesPoi } from '../src/sim/poi.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -46,10 +48,10 @@ const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 /** Une base plantée à une rangée donnée de la carte, avec bâtiments et garnison. */
 function baseALaRangee(graine, rangee, { niveau = 20, garnison = true } = {}) {
   const etat = creerEtat(graine);
-  etat.position.rangee = rangee;
-  etat.disposition[0].niveau = niveau;
+  baseCourante(etat).position.rangee = rangee;
+  baseCourante(etat).disposition[0].niveau = niveau;
 
-  const pris = new Set(etat.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  const pris = new Set(baseCourante(etat).obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
   pris.add('18:5');
   const b = GRILLE.bandes.batiments;
   for (const id of ['centreDeCommandement', 'qgDeDefense', 'caserne']) {
@@ -61,7 +63,7 @@ function baseALaRangee(graine, rangee, { niveau = 20, garnison = true } = {}) {
       }
     }
   }
-  for (const bat of etat.disposition) bat.niveau = niveau;
+  for (const bat of baseCourante(etat).disposition) bat.niveau = niveau;
 
   if (garnison) {
     const d = GRILLE.bandes.defense;
@@ -69,7 +71,7 @@ function baseALaRangee(graine, rangee, { niveau = 20, garnison = true } = {}) {
     for (let r = d.premiere; r <= d.derniere; r += 1) {
       for (let c = 1; c <= GRILLE.largeur; c += 1) {
         if (pris.has(`${r}:${c}`)) continue;
-        etat.garnison.push({
+        baseCourante(etat).garnison.push({
           id: i % 2 ? 'casemate' : 'merlon', rangee: r, colonne: c, niveau, degatsMilli: 0,
         });
         i += 1;
@@ -226,8 +228,8 @@ test('RAID-B T3 — deux raids inversés ne donnent pas le même état, et c\'es
   // mesure au lieu de le supposer : une base à moitié détruite ne se défend pas
   // comme une base intacte, donc les dégâts du second raid diffèrent.
   assert.notEqual(
-    JSON.stringify(dansLOrdre.disposition) + JSON.stringify(dansLOrdre.garnison),
-    JSON.stringify(aLEnvers.disposition) + JSON.stringify(aLEnvers.garnison),
+    JSON.stringify(baseCourante(dansLOrdre).disposition) + JSON.stringify(baseCourante(dansLOrdre).garnison),
+    JSON.stringify(baseCourante(aLEnvers).disposition) + JSON.stringify(baseCourante(aLEnvers).garnison),
     'l\'ordre des deux raids ne change rien : le montage ne mesure pas l\'ordre',
   );
 
@@ -266,8 +268,8 @@ test('RAID-B T4 — un module de défense acquis change le combat', () => {
   // mauvaise raison, ou tomberait pour une raison qui n'est pas celle qu'il
   // mesure. `rayonMiniMoinsUn`, lui, mord dans la boucle.
   const arme = baseALaRangee(7, 200);
-  for (const piece of arme.garnison) piece.id = 'faucheuse';
-  for (const piece of etat.garnison) piece.id = 'faucheuse';
+  for (const piece of baseCourante(arme).garnison) piece.id = 'faucheuse';
+  for (const piece of baseCourante(etat).garnison) piece.id = 'faucheuse';
   arme.recherche.modules.defense = [...new Set([...arme.recherche.modules.defense, 'faucheuse'])];
   const nu = montageDeLaBaseDuJoueur(etat, base.niveau, budget, 12345);
   assert.deepEqual(nu.modulesDebloques.joueur.defense, [],
@@ -296,7 +298,7 @@ test('RAID-B T4 — un module de défense acquis change le combat', () => {
 
 test('RAID-B T5 — le montage porte les positions et les PV réels de la base', () => {
   const etat = baseALaRangee(7, 200);
-  etat.disposition[1].degatsMilli = 1_000_000;
+  baseCourante(etat).disposition[1].degatsMilli = 1_000_000;
   const base = basesAttaquantes(etat)[0];
   const montage = montageDeLaBaseDuJoueur(etat, base.niveau, budgetRaid(base.niveau), 9);
 
@@ -313,11 +315,11 @@ test('RAID-B T5 — le montage porte les positions et les PV réels de la base',
   // Les positions sont celles de l'état, une par une.
   assert.deepEqual(
     montage.batiments.map((b) => `${b.id}@${b.rangee},${b.colonne},${b.niveau}`),
-    etat.disposition.map((b) => `${b.id}@${b.rangee},${b.colonne},${b.niveau}`),
+    baseCourante(etat).disposition.map((b) => `${b.id}@${b.rangee},${b.colonne},${b.niveau}`),
   );
   assert.deepEqual(
     montage.defenseurs.map((d) => `${d.id}@${d.rangee},${d.colonne}`),
-    etat.garnison.map((d) => `${d.id}@${d.rangee},${d.colonne}`),
+    baseCourante(etat).garnison.map((d) => `${d.id}@${d.rangee},${d.colonne}`),
   );
 
   // Et les PV entamés voyagent : la pièce abîmée porte `pvMilli`, les autres non.
@@ -328,7 +330,7 @@ test('RAID-B T5 — le montage porte les positions et les PV réels de la base',
 
   assert.equal(montage.proprietaireDefense, 'joueur');
   assert.equal(montage.proprietaireAttaque, 'ouvrage');
-  assert.equal(montage.obstacles, etat.obstacles.cases);
+  assert.equal(montage.obstacles, baseCourante(etat).obstacles.cases);
 });
 
 // ---------------------------------------------------------------------------
@@ -345,8 +347,8 @@ test('RAID-B T6 — une base de niveau < 10 n\'est jamais attaquante', () => {
   // vert sur du code cassé. À la rangée 255, la fenêtre porte des bases des DEUX
   // côtés du seuil, et c'est la seule forme qui mesure quelque chose.
   const etat = creerEtat(7);
-  etat.position.rangee = 255;
-  const toutes = ciblesAPortee(etat, etat).filter((s) => TYPES_SITE[s.type].attaqueLeJoueur);
+  baseCourante(etat).position.rangee = 255;
+  const toutes = ciblesAPortee(etat, baseCourante(etat)).filter((s) => TYPES_SITE[s.type].attaqueLeJoueur);
   const sousLeSeuil = toutes.filter((b) => b.niveau < RAID_OUVRAGE.niveauMinimal);
   assert.ok(sousLeSeuil.length > 0,
     'le montage ne mesure rien : aucune base sous le seuil dans la fenêtre');
@@ -389,7 +391,7 @@ test('RAID-B T7 — le rasage redéploie de 20 cases, vide les stocks, et relèv
   // d'un POI : rien avant, un POI après — c'est la falsification qui décide.
   const DEPART = { rangee: 255, colonne: 13 };
   const etat = baseALaRangee(7, 200, { niveau: 1, garnison: false });
-  etat.position = { ...DEPART };
+  baseCourante(etat).position = { ...DEPART };
   assert.deepEqual(etat.poisAcquis, [], 'le montage ne mesure rien : un POI est déjà acquis');
   assert.equal(poisAutourDe(etat, DEPART).length, 0,
     'le montage ne mesure rien : un POI est déjà sous la base AVANT le rasage');
@@ -411,26 +413,26 @@ test('RAID-B T7 — le rasage redéploie de 20 cases, vide les stocks, et relèv
   // seul des onze — et le rasage n'a de sens que s'il tombe VRAIMENT à zéro. Le
   // faire plancher comme les autres laisserait `rase` vrai (il est lu sur
   // `detruit`, avant l'écriture) et ne se verrait donc nulle part ailleurs.
-  const chantier = etat.disposition.find((b) => BASE_BATIMENTS[b.id].raseLeSite === true);
+  const chantier = baseCourante(etat).disposition.find((b) => BASE_BATIMENTS[b.id].raseLeSite === true);
   const pvMax = BASE_BATIMENTS[chantier.id].pv * 1000;
   assert.equal(chantier.degatsMilli, pvMax,
     'le Chantier a gardé un plancher de PV : la base ne serait plus vraiment rasée');
   // Les autres, eux, planchent : ils sont à réparer, pas perdus.
-  for (const b of etat.disposition) {
+  for (const b of baseCourante(etat).disposition) {
     if (BASE_BATIMENTS[b.id].plancherPv === false) continue;
     const max = BASE_BATIMENTS[b.id].pv * 1000;
     assert.ok(b.degatsMilli <= max - APRES_RAID.plancherPvMilli,
       `« ${b.id} » est tombé sous son plancher de PV`);
   }
 
-  assert.deepEqual(etat.position, arrivee, 'le redéploiement ne fait pas les vingt cases');
+  assert.deepEqual(baseCourante(etat).position, arrivee, 'le redéploiement ne fait pas les vingt cases');
   assert.equal(rapport.sanction.cases, RAID_OUVRAGE.sanctionRasage.redeploiementCases);
-  assert.deepEqual(etat.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+  assert.deepEqual(baseCourante(etat).economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
   assert.ok(rapport.sanction.perdu.quartz > 0, 'les stocks perdus ne sont pas rapportés');
 
   // ⚠ LE TERRAIN NE SUIT PAS : `fondation` ne bouge pas, donc ni les champs ni
   // les obstacles. C'est l'arbitrage du 27/08, et le rasage ne le contredit pas.
-  assert.deepEqual(etat.fondation, creerEtat(7).fondation);
+  assert.deepEqual(baseCourante(etat).fondation, baseCourante(creerEtat(7)).fondation);
 
   // ⚠ ET LE RELEVÉ DES POI EST REFAIT. La falsification est d'omettre le rappel :
   // `poisAcquis` reste alors VIDE, alors que la base est désormais posée sur un
@@ -469,15 +471,15 @@ test('RAID-B T8 — un rasage près du bord ne sort pas de la carte', () => {
   // situation la plus fréquente du jeu, pas la plus rare.
   for (const rangee of [hauteur, hauteur - 1, hauteur - 5, hauteur - 19, hauteur - 20]) {
     const etat = baseALaRangee(7, 200, { niveau: 1, garnison: false });
-    etat.position.rangee = rangee;
+    baseCourante(etat).position.rangee = rangee;
     const rapport = subirUnRaid(etat, ATTAQUANTE, 5);
     assert.equal(rapport.rase, true, `rangée ${rangee} : le montage ne mesure rien`);
-    assert.ok(etat.position.rangee <= hauteur,
-      `rangée ${rangee} : la base est sortie de la carte, en ${etat.position.rangee}`);
-    assert.equal(estSurLaCarte(etat.position.rangee, etat.position.colonne), true);
+    assert.ok(baseCourante(etat).position.rangee <= hauteur,
+      `rangée ${rangee} : la base est sortie de la carte, en ${baseCourante(etat).position.rangee}`);
+    assert.equal(estSurLaCarte(baseCourante(etat).position.rangee, baseCourante(etat).position.colonne), true);
     // À la borne, la base descend d'autant qu'elle peut — jamais moins, jamais plus.
     const voulue = rangee + RAID_OUVRAGE.sanctionRasage.redeploiementCases;
-    assert.equal(etat.position.rangee, Math.min(voulue, hauteur));
+    assert.equal(baseCourante(etat).position.rangee, Math.min(voulue, hauteur));
   }
 });
 
@@ -489,13 +491,13 @@ test('RAID-B T9 — un raid qui passe vide la réserve de réparation', () => {
   const etat = baseALaRangee(7, 200, { niveau: 1, garnison: false });
   // ⚠ ON MESURE D'ABORD QU'IL Y A QUELQUE CHOSE À VIDER. Une réserve déjà nulle
   // rendrait ce test vert sur du code qui ne la touche pas.
-  for (const chassis of Object.keys(etat.reserveReparation)) {
-    etat.reserveReparation[chassis] = 12_345;
+  for (const chassis of Object.keys(baseCourante(etat).reserveReparation)) {
+    baseCourante(etat).reserveReparation[chassis] = 12_345;
   }
   const base = basesAttaquantes(etat)[0];
   const rapport = subirUnRaid(etat, base, 5);
   assert.equal(rapport.reserveVidee, true, 'le montage ne mesure rien : le raid n\'a rien cassé');
-  assert.deepEqual(etat.reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 });
+  assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 });
 });
 
 test('RAID-B T9 bis — un raid ENTIÈREMENT repoussé ne vide rien', () => {
@@ -503,12 +505,12 @@ test('RAID-B T9 bis — un raid ENTIÈREMENT repoussé ne vide rien', () => {
   // défense qui a fait son travail serait le contraire de ce que la phrase de
   // `MODELE-ECONOMIQUE.md` §7 décrit.
   const etat = baseALaRangee(7, 200, { niveau: 50 });
-  for (const chassis of Object.keys(etat.reserveReparation)) {
-    etat.reserveReparation[chassis] = 12_345;
+  for (const chassis of Object.keys(baseCourante(etat).reserveReparation)) {
+    baseCourante(etat).reserveReparation[chassis] = 12_345;
   }
   const rapport = subirUnRaid(etat, { ...ATTAQUANTE, niveau: 10 }, 5);
   if (rapport.reserveVidee === false) {
-    assert.deepEqual(etat.reserveReparation, { escouade: 12_345, blinde: 12_345, aeronef: 12_345 });
+    assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 12_345, blinde: 12_345, aeronef: 12_345 });
     assert.equal(rapport.verdict, 'victoire-totale');
     assert.equal(rapport.restantBatiments, 100);
   } else {
@@ -536,7 +538,7 @@ test('RAID-B T10 — l\'auto-réparation de garnison est atteignable en jeu', ()
   const base = basesAttaquantes(etat)[0];
   const rapport = subirUnRaid(etat, base, 5);
 
-  const abimees = etat.garnison.filter((p) => p.degatsMilli > 0);
+  const abimees = baseCourante(etat).garnison.filter((p) => p.degatsMilli > 0);
   assert.ok(abimees.length > 0,
     'le montage ne mesure rien : aucune pièce de garnison n\'a été touchée');
   assert.ok(rapport.autoReparationMilli > 0,
@@ -609,24 +611,34 @@ test('RAID-B T11 — plusieurs raids d\'une absence apparaissent tous, dans la l
 // ---------------------------------------------------------------------------
 
 test('RAID-B T12 — la migration 19 → 20 pose des dégâts nuls', () => {
-  assert.equal(SAVE_VERSION, 22, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ LE NUMÉRO N'EST PLUS GARDÉ ICI, ET C'EST LA RÈGLE DU DÉPÔT, PAS UN
+  // ASSOUPLISSEMENT. `points-attaque.test.js` l'écrit depuis le lot
+  // SITE-ENTAMÉ : « la garde du numéro appartient au maillon le plus RÉCENT
+  // de la chaîne, une seule fois ». Ce test-ci avait gardé le sien, et le lot
+  // BASES-0 l'aurait rendu rouge pour une raison qui ne le regarde pas. Ce
+  // qu'il vérifie vraiment, c'est que SON maillon est encore là.
+  assert.ok(SAVE_VERSION >= 20, 'le maillon v19 → 20 n\'est plus dans la chaîne');
 
   // Une v19 forgée SANS le champ — c'est ainsi qu'elles étaient toutes.
   const v19 = JSON.parse(serialiser(creerEtat(7), 0));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v19 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v19);
   v19.version = 19;
   for (const b of v19.disposition) delete b.degatsMilli;
   assert.equal('degatsMilli' in v19.disposition[0], false,
     'le montage ne mesure rien : la v19 porte déjà le champ');
 
   const migre = migrer(structuredClone(v19));
-  assert.equal(migre.version, 22);
-  for (const b of migre.disposition) assert.equal(b.degatsMilli, 0);
+  assert.equal(migre.version, SAVE_VERSION);
+  for (const b of baseCourante(migre).disposition) assert.equal(b.degatsMilli, 0);
 
   // Une v19 qui portait déjà un chiffre — impossible en jeu, mais la migration
   // ne doit pas l'écraser : elle AJOUTE, elle ne refonde pas.
   const avecChiffre = structuredClone(v19);
   avecChiffre.disposition[0].degatsMilli = 42;
-  assert.equal(migrer(avecChiffre).disposition[0].degatsMilli, 42);
+  assert.equal(migrer(avecChiffre).bases[0].disposition[0].degatsMilli, 42);
 });
 
 test('RAID-B T12 bis — le rapport de défense traverse la sauvegarde', () => {
@@ -654,18 +666,18 @@ test('RAID-B — une pièce posée sur un obstacle ne fait pas lever le raid', (
   // qui LÈVERAIT là-dessus rendrait la partie injouable pour une faute que le
   // joueur n'a pas commise.
   const etat = baseALaRangee(7, 200, { niveau: 10 });
-  const roche = etat.obstacles.cases.find((o) => o.rangee >= GRILLE.bandes.defense.premiere
+  const roche = baseCourante(etat).obstacles.cases.find((o) => o.rangee >= GRILLE.bandes.defense.premiere
     && o.rangee <= GRILLE.bandes.defense.derniere);
   assert.ok(roche !== undefined, 'le montage ne mesure rien : aucun obstacle en bande de défense');
-  etat.garnison.push({
+  baseCourante(etat).garnison.push({
     id: 'merlon', rangee: roche.rangee, colonne: roche.colonne, niveau: 10, degatsMilli: 0,
   });
-  const nb = etat.garnison.length;
+  const nb = baseCourante(etat).garnison.length;
   const base = basesAttaquantes(etat)[0];
   assert.doesNotThrow(() => subirUnRaid(etat, base, 5));
   // Elle n'est PAS retirée : elle n'a simplement pas combattu.
-  assert.equal(etat.garnison.length, nb);
-  assert.equal(etat.garnison[nb - 1].degatsMilli, 0);
+  assert.equal(baseCourante(etat).garnison.length, nb);
+  assert.equal(baseCourante(etat).garnison[nb - 1].degatsMilli, 0);
 });
 
 test('RAID-B — un raid ennemi peut tomber pendant un raid du joueur, et ce n\'est pas un problème', () => {

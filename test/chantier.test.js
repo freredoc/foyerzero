@@ -77,6 +77,7 @@ import {
 } from '../src/sim/state.js';
 import * as moteurEtat from '../src/sim/state.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -150,13 +151,35 @@ function baseDeLaMaquette() {
   // ⚠ LES DEUX FORCES SONT DU MONTAGE DEPUIS LE 28/08. L'état porte
   // `garnison` et `armee` ; un montage qui les omet n'est plus un état de jeu,
   // et `resumeDeLaBase` le dit au lieu de lever au fond de `sim/`.
+  // ⚠⚠ L'ENVELOPPE DE BASES EST DU MONTAGE DEPUIS LE LOT BASES-0, 02/09/2026,
+  // pour la raison EXACTE des six champs qui l'ont précédée : les onze champs
+  // d'une base ont descendu d'un cran, et un montage qui les laisse à la racine
+  // n'est plus un état de jeu. `baseCourante` le dit au lieu de lever une
+  // TypeError au fond de `sim/`.
   return {
-    disposition, champs, economie: creerEtatEconomie(disposition), garnison: [], armee: [],
-    // ⚠ LA TABLE DES SATELLITES EST DU MONTAGE DEPUIS LE 29/08, pour la raison
-    // exacte qui a fait entrer les deux forces la veille : `tickJeu` la lit, et
-    // un montage qui l'omet n'est plus un état de jeu. Le message le dit au lieu
-    // de lever une TypeError au fond de `sim/`.
-    satellites: satellitesVides(),
+    graine: 4242,
+    baseCourante: 0,
+    bases: [{
+      disposition,
+      champs,
+      economie: creerEtatEconomie(disposition),
+      garnison: [],
+      armee: [],
+      // ⚠ LA TABLE DES SATELLITES EST DU MONTAGE DEPUIS LE 29/08, pour la raison
+      // exacte qui a fait entrer les deux forces la veille : `tickJeu` la lit, et
+      // un montage qui l'omet n'est plus un état de jeu. Le message le dit au lieu
+      // de lever une TypeError au fond de `sim/`.
+      satellites: satellitesVides(),
+      // ⚠ ET LA RÉSERVE DE RÉPARATION DEPUIS LE 01/09, pour la raison EXACTE des
+      // cinq champs d'avant : `tickJeu` la crédite, et un montage qui l'omet n'est
+      // plus un état de jeu. Elle a REMPLACÉ `reparation: null` — le chronomètre a
+      // cédé la place à trois stocks de temps, un par châssis.
+      reserveReparation: reservesVides(),
+      // ⚠ `position` EST DANS LA BASE, ELLE AUSSI : le relevé des POI demande à
+      // la carte ce que porte chaque case du territoire, et le territoire part
+      // de là où la base est.
+      position: positionDepartJoueur(),
+    }],
     // ⚠ ET LES POINTS D'ATTAQUE DEPUIS LE 29/08 AU SOIR, pour la raison exacte
     // qui a fait entrer les satellites le matin : `tickJeu` les lit, et un
     // montage qui les omet n'est plus un état de jeu.
@@ -166,18 +189,10 @@ function baseDeLaMaquette() {
     sitesEntames: {},
     basesRasees: [],
     recherche: { pointsMilli: '0' },
-    // ⚠ ET LA RÉSERVE DE RÉPARATION DEPUIS LE 01/09, pour la raison EXACTE des
-    // cinq champs d'avant : `tickJeu` la crédite, et un montage qui l'omet n'est
-    // plus un état de jeu. Elle a REMPLACÉ `reparation: null` — le chronomètre a
-    // cédé la place à trois stocks de temps, un par châssis.
-    reserveReparation: reservesVides(),
     // ⚠ ET LES POI ACQUIS DEPUIS LE 31/08, pour la raison EXACTE des quatre
     // champs d'avant : `tickJeu` les relève, et un montage qui les omet n'est
-    // plus un état de jeu. `graine` et `position` entrent avec eux — le relevé
-    // demande à la carte des POI ce que porte chaque case du territoire, et la
-    // carte est une fonction de la graine.
-    graine: 4242,
-    position: positionDepartJoueur(),
+    // plus un état de jeu. Ils sont GLOBAUX depuis le lot BASES-0 — « acquis une
+    // fois, valable partout », Ethan, 02/09.
     poisAcquis: [],
   };
 }
@@ -360,12 +375,12 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
   // CHAMP `stockagePropre`, qui ne porte que le niveau 1 — elle a rendu 50 pour
   // un Chantier de niveau 6 et le test est tombé. Passer par
   // `stockagePropreDuNiveau` est le seul moyen de ne pas relire le niveau 1.
-  const niveauDuChantier = etat.disposition
+  const niveauDuChantier = baseCourante(etat).disposition
     .find((b) => b.id === 'chantierDeConstruction').niveau;
   const capRaffinerie = capaciteDuNiveau('raffinerie',
-    etat.disposition.find((b) => b.id === 'raffinerie').niveau) * 1000;
+    baseCourante(etat).disposition.find((b) => b.id === 'raffinerie').niveau) * 1000;
   const capAccumulateur = capaciteDuNiveau('accumulateur',
-    etat.disposition.find((b) => b.id === 'accumulateur').niveau) * 1000;
+    baseCourante(etat).disposition.find((b) => b.id === 'accumulateur').niveau) * 1000;
   const poche = stockagePropreDuNiveau('chantierDeConstruction', niveauDuChantier);
   // Falsifiable : si la maquette repassait à un Chantier de niveau 1, la poche
   // vaudrait de nouveau 50 et cette ligne ne distinguerait plus les deux
@@ -388,7 +403,7 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
   // ⚠ LE NOMBRE OUVERT SE LIT, IL NE SE RECOPIE PAS. La table d'emplacements a
   // changé le 29/08 ; ce qui est mesuré ici est que le résumé demande la même
   // grandeur que `data/base.js`, pas qu'elle vaille douze.
-  const niveauChantier = etat.disposition.find((b) => b.id === 'chantierDeConstruction').niveau;
+  const niveauChantier = baseCourante(etat).disposition.find((b) => b.id === 'chantierDeConstruction').niveau;
   assert.deepEqual(resume.emplacements, {
     poses: 11, ouverts: emplacementsDuNiveau(niveauChantier),
   });
@@ -396,17 +411,17 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
 
   // Et le même résultat par le chemin direct : le résumé ne fait que recopier
   // ce que le moteur dit, il ne recalcule rien pour son compte.
-  const capacites = capacitesMilli(etat.disposition);
+  const capacites = capacitesMilli(baseCourante(etat).disposition);
   const total = {};
   for (const r of RESSOURCES) total[r] = 0;
-  for (const parBatiment of debitsMilliParHeure(etat.disposition, etat.champs)) {
+  for (const parBatiment of debitsMilliParHeure(baseCourante(etat).disposition, baseCourante(etat).champs)) {
     for (const r of RESSOURCES) total[r] += parBatiment[r] ?? 0;
   }
   for (const ligne of resume.ressources) {
     assert.equal(ligne.capaciteMilli, capacites[ligne.cle]);
     assert.equal(ligne.debitMilli, total[ligne.cle]);
   }
-  assert.equal(resume.niveaux.batiments, niveauDesBatiments(etat.disposition));
+  assert.equal(resume.niveaux.batiments, niveauDesBatiments(baseCourante(etat).disposition));
   assert.equal(resume.emplacements.ouverts, emplacementsDuNiveau(6));
 
   // Falsifiable : rien de tout ça ne doit être nul, sinon les égalités
@@ -435,7 +450,7 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
 
 test('chantier — le bandeau contextuel sépare les deux ressources d\'une raffinerie', () => {
   const etat = baseDeLaMaquette();
-  const raffinerie = etat.disposition.findIndex((b) => b.id === 'raffinerie');
+  const raffinerie = baseCourante(etat).disposition.findIndex((b) => b.id === 'raffinerie');
   assert.ok(raffinerie >= 0);
   // ⚠ 144 ET 216 NE S'ADDITIONNENT PAS, et c'est l'arbitrage du 26/08 : une
   // raffinerie tient les deux ressources à la fois. Ici, au niveau 5, c'est
@@ -447,7 +462,7 @@ test('chantier — le bandeau contextuel sépare les deux ressources d\'une raff
   assert.ok(!detail.detail.includes('528'), 'les deux ressources ont été additionnées');
 
   // Un bâtiment qui ne produit rien ne porte pas de « /h » orphelin.
-  const chantier = etat.disposition.findIndex((b) => b.id === 'chantierDeConstruction');
+  const chantier = baseCourante(etat).disposition.findIndex((b) => b.id === 'chantierDeConstruction');
   assert.equal(detailDuBatiment(etat, chantier).detail, 'Niv. 6');
   // Et le nom affiché est celui de la table, jamais le sigle du jeton.
   assert.equal(detailDuBatiment(etat, chantier).nom, BASE_BATIMENTS.chantierDeConstruction.nom.joueur);
@@ -479,7 +494,7 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   // exemplaires : c'est la propriété `unique` qui décide, pas le compte.
   for (const multiple of ['collecteur', 'raffinerie', 'centrale', 'accumulateur']) {
     assert.equal(posables.find((p) => p.id === multiple).dejaPose, false, `${multiple} n'est pas unique`);
-    assert.ok(etat.disposition.some((b) => b.id === multiple), `${multiple} devrait être posé`);
+    assert.ok(baseCourante(etat).disposition.some((b) => b.id === multiple), `${multiple} devrait être posé`);
   }
 
   // Falsifiable : sur une base NEUVE, seul le Chantier porte la marque. Un
@@ -527,7 +542,7 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   // d'une pose à l'autre, ce qui est tout l'intérêt de l'arbitrage : les
   // vignettes ne se déplacent plus sous le doigt.
   const neuve = creerEtat(7);
-  assert.equal(neuve.disposition.length, 1);
+  assert.equal(baseCourante(neuve).disposition.length, 1);
   assert.equal(posablesDeLaBase(neuve).length, Object.keys(BASE_BATIMENTS).length);
   assert.equal(posablesDeLaBase(neuve).filter((p) => !p.dejaPose).length,
     Object.keys(BASE_BATIMENTS).length - 1, 'un seul bâtiment devrait être grisé');
@@ -560,16 +575,16 @@ test('session — les deux chemins d\'avancement rendent le même état', () => 
   }
   assert.equal(avancer(parRattrapage, dureeMs), SEUIL_RATTRAPAGE_TICKS + 1000);
 
-  assert.deepEqual(parBoucle.economie, parRattrapage.economie);
+  assert.deepEqual(baseCourante(parBoucle).economie, baseCourante(parRattrapage).economie);
   assert.deepEqual(parBoucle.horloge, parRattrapage.horloge);
   // Falsifiable : le montage doit avoir réellement produit quelque chose.
-  assert.ok(parBoucle.economie.ressources.quartz > 0, 'aucune ressource produite');
+  assert.ok(baseCourante(parBoucle).economie.ressources.quartz > 0, 'aucune ressource produite');
 
   // ⚠ UNE HORLOGE QUI RECULE NE FAIT RIEN, ELLE NE LÈVE PAS. Fuseau, NTP,
   // joueur qui change la date de son téléphone : la même règle que `charger`.
-  const avant = JSON.stringify(parBoucle.economie);
+  const avant = JSON.stringify(baseCourante(parBoucle).economie);
   assert.equal(avancer(parBoucle, -100_000), 0);
-  assert.equal(JSON.stringify(parBoucle.economie), avant);
+  assert.equal(JSON.stringify(baseCourante(parBoucle).economie), avant);
 });
 
 test('session — la clé de sauvegarde ne porte PAS le numéro de format', () => {
@@ -829,14 +844,14 @@ test('chantier — aucune vignette de pose ne présente un coût de POSE', () =>
 function quatreGrandeurs(etat) {
   const total = {};
   for (const r of RESSOURCES) total[r] = 0;
-  for (const parBatiment of debitsMilliParHeure(etat.disposition, etat.champs)) {
+  for (const parBatiment of debitsMilliParHeure(baseCourante(etat).disposition, baseCourante(etat).champs)) {
     for (const r of RESSOURCES) total[r] += parBatiment[r] ?? 0;
   }
   return {
     debitQuartz: total.quartz,
-    capaciteQuartz: capacitesMilli(etat.disposition).quartz,
+    capaciteQuartz: capacitesMilli(baseCourante(etat).disposition).quartz,
     poses: resumeDeLaBase(etat).emplacements.poses,
-    niveauDixiemes: niveauDesBatiments(etat.disposition),
+    niveauDixiemes: niveauDesBatiments(baseCourante(etat).disposition),
   };
 }
 
@@ -846,18 +861,18 @@ test('pose — sur une base neuve, un Collecteur a exactement les douze champs',
   // ⚠ LE MONTAGE S'ASSERTE AVANT DE MESURER. Sans cette ligne, « douze cases
   // légales » serait comparé à un douze écrit de mémoire : c'est le terrain qui
   // en porte douze, et c'est ce fait-là qui rend le nombre signifiant.
-  assert.equal(etat.champs.cases.length, CHAMPS.total);
+  assert.equal(baseCourante(etat).champs.cases.length, CHAMPS.total);
   assert.equal(CHAMPS.total, 12);
 
   const legales = casesPosables(etat, 'collecteur');
-  assert.equal(legales.length, etat.champs.cases.length);
+  assert.equal(legales.length, baseCourante(etat).champs.cases.length);
 
   // Et ce sont EXACTEMENT les champs, pas douze cases qui se trouvent être au
   // bon nombre. Égalité d'ensemble, dans les deux sens.
   const cle = (c) => `${c.rangee}:${c.colonne}`;
   assert.deepEqual(
     legales.map(cle).sort(),
-    etat.champs.cases.map(cle).sort(),
+    baseCourante(etat).champs.cases.map(cle).sort(),
   );
 
   // Falsifiable : un bâtiment qui n'est PAS lié au terrain doit en avoir un
@@ -867,7 +882,7 @@ test('pose — sur une base neuve, un Collecteur a exactement les douze champs',
   assert.notEqual(centrale.length, legales.length);
   // Une centrale ne peut PAS se poser sur un champ — réservé au collecteur.
   for (const c of centrale) {
-    assert.ok(!etat.champs.cases.some((f) => f.rangee === c.rangee && f.colonne === c.colonne),
+    assert.ok(!baseCourante(etat).champs.cases.some((f) => f.rangee === c.rangee && f.colonne === c.colonne),
       `centrale proposée sur le champ (${c.rangee},${c.colonne})`);
   }
 
@@ -918,11 +933,11 @@ test('pose — poser un niveau 1 FAIT BAISSER le niveau moyen', () => {
   // la tire vers le bas. L'asserter maintenant évite qu'on le prenne un jour
   // pour un défaut de calcul.
   const etat = baseDeLaMaquette();
-  const avant = niveauDesBatiments(etat.disposition);
+  const avant = niveauDesBatiments(baseCourante(etat).disposition);
   assert.ok(avant > 10, `le montage doit partir d'une moyenne > 1,0 — il vaut ${avant}`);
 
   poser(etat, 'raffinerie', 12, 1);
-  const apres = niveauDesBatiments(etat.disposition);
+  const apres = niveauDesBatiments(baseCourante(etat).disposition);
 
   assert.ok(apres < avant, `la moyenne devrait baisser : ${avant} → ${apres}`);
   assert.equal(avant, 46);
@@ -949,7 +964,7 @@ test('pose — les refus reprennent les messages du moteur, mot pour mot', () =>
   assert.match(messageDeRefus(problemes), /doit être posé sur un champ/);
 
   // Et la case ne bouge pas : demander n'est pas poser.
-  assert.equal(etat.disposition.length, 1);
+  assert.equal(baseCourante(etat).disposition.length, 1);
 });
 
 
@@ -1369,7 +1384,7 @@ test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le cal
   // remplit donc jusqu'à ce que la fonction dise plein, plutôt que de compter
   // les poses à la main : la prochaine table ne fera pas retomber ce test.
   const pleine = creerEtat(11);
-  const champs = pleine.champs.cases;
+  const champs = baseCourante(pleine).champs.cases;
   let pose = 0;
   while (resumeDeLaBase(pleine).emplacements.poses
     < resumeDeLaBase(pleine).emplacements.ouverts) {
@@ -1520,7 +1535,7 @@ test('aperçu — le « si j\'améliorais » se calcule avec les MÊMES fonction
   // l'« avant » du même bâtiment déjà monté au niveau n+1.
   const etat = creerEtat(12345);
   moteurEtat.ameliorer(etat, 0);
-  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
   poser(etat, 'collecteur', champ.rangee, champ.colonne);
 
   const avant = apercuDuBatiment(etat, 1);
@@ -1550,7 +1565,7 @@ test('aperçu — au plafond, tout le volet « après » vaut null, il ne vaut p
   // zéros ferait afficher « 0 » là où il faut lire « il n'y a pas de niveau
   // suivant » — et un « améliorer pour 0 » se lirait comme gratuit.
   const etat = creerEtat(3);
-  etat.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  baseCourante(etat).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   const apercu = apercuDuBatiment(etat, 0);
   assert.equal(apercu.auPlafond, true);
   assert.equal(apercu.niveauVise, null);
@@ -1561,7 +1576,7 @@ test('aperçu — au plafond, tout le volet « après » vaut null, il ne vaut p
 
   // Falsifiable : un niveau sous le plafond, lui, porte bien un après.
   const dessous = creerEtat(3);
-  dessous.disposition[0].niveau = GEOGRAPHIE.niveauPlafond - 1;
+  baseCourante(dessous).disposition[0].niveau = GEOGRAPHIE.niveauPlafond - 1;
   assert.equal(apercuDuBatiment(dessous, 0).auPlafond, false);
   assert.notEqual(apercuDuBatiment(dessous, 0).cout, null);
 });
@@ -1600,24 +1615,24 @@ test('panneau — sur une base neuve, il dit ce qui débloque la partie', () => 
   // ⚠ DEUX DEPUIS LE 29/08, ET LE MUR RESTE LE MÊME. La table dictée par Ethan
   // donne un emplacement libre de plus au niveau 1 ; ce que ce test mesure —
   // un stock qui sature en cinq minutes et ne bouge plus — n'en dépend pas.
-  assert.equal(emplacementsDuNiveau(1) - neuve.disposition.length, 2,
+  assert.equal(emplacementsDuNiveau(1) - baseCourante(neuve).disposition.length, 2,
     'une base neuve n\'a plus exactement deux emplacements libres');
   const bloquee = creerEtat(4242);
-  const champ = bloquee.champs.cases.find((c) => c.ressource === 'quartz');
+  const champ = baseCourante(bloquee).champs.cases.find((c) => c.ressource === 'quartz');
   poser(bloquee, 'collecteur', champ.rangee, champ.colonne);
-  const plafond = capacitesMilli(bloquee.disposition).quartz;
-  assert.ok(debitsMilliParHeure(bloquee.disposition, bloquee.champs)[1].quartz > 0,
+  const plafond = capacitesMilli(baseCourante(bloquee).disposition).quartz;
+  assert.ok(debitsMilliParHeure(baseCourante(bloquee).disposition, baseCourante(bloquee).champs)[1].quartz > 0,
     'le collecteur du montage ne produit rien : le blocage ne serait pas mesuré');
   for (let i = 0; i < TICKS_PAR_HEURE; i++) tickJeu(bloquee);
-  assert.equal(bloquee.economie.ressources.quartz, plafond,
+  assert.equal(baseCourante(bloquee).economie.ressources.quartz, plafond,
     'le montage ne sature pas : il ne mesure pas le blocage');
-  const veille = bloquee.economie.ressources.quartz;
+  const veille = baseCourante(bloquee).economie.ressources.quartz;
   moteurEtat.rattraperJeu(bloquee, TICKS_PAR_HEURE * 12);
-  assert.equal(bloquee.economie.ressources.quartz, veille,
+  assert.equal(baseCourante(bloquee).economie.ressources.quartz, veille,
     'douze heures hors ligne devraient ne rien ajouter à un stock saturé');
 
   // Et le remède est dans le panneau : améliorer le Chantier LÈVE ce plafond.
-  const apres = bloquee.disposition.map(
+  const apres = baseCourante(bloquee).disposition.map(
     (b, i) => (i === 0 ? { ...b, niveau: 2 } : b),
   );
   assert.ok(capacitesMilli(apres).quartz > plafond,
@@ -1634,10 +1649,10 @@ test('panneau — le coût annoncé est celui que le moteur débite, à l\'unit�
   const note = lignesDuPanneau(apercuDuBatiment(etat, 0)).bouton.note;
   assert.equal(note, formaterCout(cout));
 
-  const avant = { ...etat.economie.ressources };
+  const avant = { ...baseCourante(etat).economie.ressources };
   moteurEtat.ameliorer(etat, 0);
   for (const r of RESSOURCES) {
-    assert.equal((avant[r] - etat.economie.ressources[r]) / 1000, cout[r],
+    assert.equal((avant[r] - baseCourante(etat).economie.ressources[r]) / 1000, cout[r],
       `le débit réel en ${r} ne suit pas le coût annoncé`);
   }
 
@@ -1657,8 +1672,11 @@ test('panneau — la production détaillée explique le chiffre qu\'elle affiche
   // Un collecteur à 312/h ne dit pas pourquoi il ne fait pas 240. Le détail —
   // production propre, puis apport de chaque type de voisin — est ce qui
   // enseigne le voisinage, et c'est la seule place du jeu qui le fasse.
-  const { disposition, champs } = baseDeLaMaquette();
-  const etat = { disposition, champs, economie: creerEtatEconomie(disposition) };
+  const { disposition, champs } = baseCourante(baseDeLaMaquette());
+  const etat = {
+    bases: [{ disposition, champs, economie: creerEtatEconomie(disposition) }],
+    baseCourante: 0,
+  };
   // Le collecteur de (13,2) touche une raffinerie ? Sinon le montage ne mesure
   // rien : on prend celui qui a le plus de voisins qualifiants.
   const index = disposition.findIndex((b, i) => b.id === 'collecteur'
@@ -1707,7 +1725,7 @@ test('panneau — ce qu\'une démolition rend se dit AVANT le geste', () => {
   // lira comme un bug ». C'est ici que ça se dit.
   const etat = creerEtat(9);
   moteurEtat.ameliorer(etat, 0);
-  const champ = etat.champs.cases[0];
+  const champ = baseCourante(etat).champs.cases[0];
   poser(etat, 'collecteur', champ.rangee, champ.colonne);
 
   const neuf = lignesDuPanneau(apercuDuBatiment(etat, 1));
@@ -1736,7 +1754,7 @@ test('écran — un stock saturé le DIT, il ne le laisse pas deviner à la coul
   // huit pixels qui virait au rouge, et deux rapports d'Ethan disent que ça n'a
   // pas suffi.
   const etat = creerEtat(4242);
-  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
   poser(etat, 'collecteur', champ.rangee, champ.colonne);
   const debut = resumeDeLaBase(etat).ressources.find((r) => r.cle === 'quartz');
   assert.ok(debut.stockMilli < debut.capaciteMilli,
@@ -1775,9 +1793,9 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
   // --- 1. le cas ordinaire : ça arrive, et on dit quand ---------------------
   const etat = creerEtat(4242);
   moteurEtat.ameliorer(etat, 0);
-  const champ = etat.champs.cases.find((c) => c.ressource === 'quartz');
+  const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
   poser(etat, 'collecteur', champ.rangee, champ.colonne);
-  etat.economie.ressources.quartz = 0;
+  baseCourante(etat).economie.ressources.quartz = 0;
 
   // Le montage doit MESURER quelque chose : un manque réel, et un débit non nul.
   assert.ok(apercuDuBatiment(etat, 0).problemes.length > 0, 'la caisse vide doit bloquer');
@@ -1792,7 +1810,7 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
   // ⚠ LE PALIER VISÉ EST CELUI D'APRÈS LE NIVEAU COURANT, et le Chantier vient
   // d'être amélioré : c'est le prix du niveau 3 qu'on attend, pas celui du 2.
   const manqueMilli = coutDeMontee(
-    'chantierDeConstruction', etat.disposition[0].niveau + 1,
+    'chantierDeConstruction', baseCourante(etat).disposition[0].niveau + 1,
   ).quartz * 1000;
   assert.equal(delai.secondes, Math.ceil((manqueMilli * 3600) / debit));
   assert.match(lignesDuPanneau(apercuDuBatiment(etat, 0)).bouton.note, /dans /);
@@ -1803,7 +1821,7 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
   // rendait alors le même nombre que `Math.ceil`. Le test passait sur les deux
   // codes, donc il ne mesurait pas l'arrondi. Un milli de plus en caisse suffit
   // à les séparer.
-  etat.economie.ressources.quartz = 1;
+  baseCourante(etat).economie.ressources.quartz = 1;
   const reste = manqueMilli - 1;
   assert.notEqual((reste * 3600) % debit, 0,
     'le montage doit tomber sur une fraction, sinon il ne mesure pas l\'arrondi');
@@ -1811,19 +1829,19 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
   assert.equal(arrondi.secondes, Math.ceil((reste * 3600) / debit));
   assert.notEqual(arrondi.secondes, Math.floor((reste * 3600) / debit),
     'arrondir vers le bas annoncerait une seconde de moins que la vérité');
-  etat.economie.ressources.quartz = 0;
+  baseCourante(etat).economie.ressources.quartz = 0;
 
   // ⚠ ET IL TOMBE À `null` DÈS QUE C'EST PAYABLE. Un chronomètre qui resterait
   // affiché sur une amélioration possible dirait au joueur d'attendre pour rien.
-  etat.economie.ressources.quartz = manqueMilli;
+  baseCourante(etat).economie.ressources.quartz = manqueMilli;
   assert.equal(delaiAvantAmelioration(etat, 0), null);
   assert.equal(lignesDuPanneau(apercuDuBatiment(etat, 0)).bouton.possible, true);
 
   // --- 2. le mur : le coût dépasse ce que la base peut contenir -------------
   const mur = creerEtat(4242);
-  mur.disposition[0].niveau = 12;
-  mur.economie.ressources.quartz = 0;
-  const capacite = capacitesMilli(mur.disposition).quartz;
+  baseCourante(mur).disposition[0].niveau = 12;
+  baseCourante(mur).economie.ressources.quartz = 0;
+  const capacite = capacitesMilli(baseCourante(mur).disposition).quartz;
   const requis = coutDeMontee('chantierDeConstruction', 13).quartz * 1000;
   assert.ok(requis > capacite, 'le montage ne mesure rien si le coût tient dans la capacité');
   const bloque = delaiAvantAmelioration(mur, 0);
@@ -1835,7 +1853,7 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
 
   // --- 3. rien ne produit : pas de mur, mais pas de durée non plus ----------
   const sec = creerEtat(4242);
-  sec.economie.ressources.quartz = 0;
+  baseCourante(sec).economie.ressources.quartz = 0;
   assert.equal(resumeDeLaBase(sec).ressources.find((r) => r.cle === 'quartz').debitMilli, 0);
   const sansDebit = delaiAvantAmelioration(sec, 0);
   assert.equal(sansDebit.cause, 'sans-production');
@@ -1844,7 +1862,7 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
 
   // --- 4. au plafond, il n'y a rien à attendre ------------------------------
   const plafond = creerEtat(4242);
-  plafond.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  baseCourante(plafond).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   assert.equal(delaiAvantAmelioration(plafond, 0), null);
 });
 
@@ -1979,7 +1997,7 @@ test('compteur — le libellé suit le contexte, et la valeur reste honnête', (
   // poses à la main : la table d'emplacements a changé le 29/08 et changera
   // encore. Ce qui est mesuré est que le compteur SUIT la base, pas qu'il
   // affiche deux.
-  const champs = etat.champs.cases;
+  const champs = baseCourante(etat).champs.cases;
   let pose = 0;
   while (compteurDeContexte(etat, 'batiments').sature === false) {
     poser(etat, 'collecteur', champs[pose].rangee, champs[pose].colonne);
@@ -2418,20 +2436,20 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
 function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProduction = false,
   acquisesDefense = null) {
   const etat = creerEtat(20260828);
-  etat.disposition[0].niveau = 12; // assez d'emplacements, sinon la base est illégale
-  etat.disposition.push(
+  baseCourante(etat).disposition[0].niveau = 12; // assez d'emplacements, sinon la base est illégale
+  baseCourante(etat).disposition.push(
     { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: niveauOffense },
     { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense },
   );
   if (avecProduction) {
-    etat.disposition.push(
+    baseCourante(etat).disposition.push(
       { id: 'caserne', rangee: 11, colonne: 3, niveau: 1 },
       { id: 'depotDeVehicules', rangee: 11, colonne: 5, niveau: 1 },
       { id: 'aerodrome', rangee: 13, colonne: 1, niveau: 1 },
     );
   }
-  for (let i = etat.economie.residus.length; i < etat.disposition.length; i += 1) {
-    etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  for (let i = baseCourante(etat).economie.residus.length; i < baseCourante(etat).disposition.length; i += 1) {
+    baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   }
   // ⚠ DEPUIS LE LOT RECHERCHE, C'EST L'ACHAT QUI OUVRE, PAS LE NIVEAU. Un
   // montage qui veut mesurer autre chose que ce verrou-là doit donc dire ce
@@ -2505,7 +2523,7 @@ test('résumé — les trois niveaux du joueur sont désormais trois moyennes', 
 
   // ⚠ UN ÉTAT AMPUTÉ EST NOMMÉ ICI, pas au fond de `sim/`.
   const ampute = { ...etat };
-  delete ampute.garnison;
+  delete ampute.bases[0].garnison;
   assert.throws(() => resumeDeLaBase(ampute), /état de jeu absent ou malformé/);
 });
 
@@ -2615,12 +2633,12 @@ test('défense — les deux terrains balaient CHACUN leur bande, et pas l\'autre
   // lieu de tomber.
   const casesDefense = casesPosablesDuTerrain(etat, 'defense', 'merlon');
   const rangeesDefense = GRILLE.bandes.defense.derniere - GRILLE.bandes.defense.premiere + 1;
-  const libres = rangeesDefense * GRILLE.largeur - etat.obstacles.cases.length;
+  const libres = rangeesDefense * GRILLE.largeur - baseCourante(etat).obstacles.cases.length;
   assert.equal(libres, 62, 'le montage doit porter les dix obstacles, sinon il ne mesure rien');
   assert.equal(casesDefense.length, libres, 'huit rangées de neuf, moins les obstacles');
   // Et aucune case posable ne porte d'obstacle — la soustraction ci-dessus
   // pourrait tomber juste en retirant les mauvaises cases.
-  const obstrues = new Set(etat.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  const obstrues = new Set(baseCourante(etat).obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
   for (const c of casesDefense) {
     assert.ok(!obstrues.has(`${c.rangee}:${c.colonne}`),
       `case posable en (${c.rangee}, ${c.colonne}), qui porte un obstacle`);

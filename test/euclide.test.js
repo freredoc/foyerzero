@@ -23,6 +23,8 @@ import {
   creerEtat, serialiser, migrer, SAVE_VERSION,
 } from '../src/sim/state.js';
 import { GEOGRAPHIE, PEUPLEMENT } from '../src/data/sites.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCES_EUCLIDE = [
@@ -296,9 +298,19 @@ test('EUCLIDE T7 — la distance de la CARTE et celle du COMBAT restent séparé
 // ---------------------------------------------------------------------------
 
 test('EUCLIDE T8 — la migration 20 → 21 vide les dégâts de site et les POI acquis', () => {
-  assert.equal(SAVE_VERSION, 22, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ LE NUMÉRO N'EST PLUS GARDÉ ICI, ET C'EST LA RÈGLE DU DÉPÔT, PAS UN
+  // ASSOUPLISSEMENT. `points-attaque.test.js` l'écrit depuis le lot
+  // SITE-ENTAMÉ : « la garde du numéro appartient au maillon le plus RÉCENT
+  // de la chaîne, une seule fois ». Ce test-ci avait gardé le sien, et le lot
+  // BASES-0 l'aurait rendu rouge pour une raison qui ne le regarde pas. Ce
+  // qu'il vérifie vraiment, c'est que SON maillon est encore là.
+  assert.ok(SAVE_VERSION >= 21, 'le maillon v20 → 21 n\'est plus dans la chaîne');
 
   const v20 = JSON.parse(serialiser(creerEtat(2026), 0));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v20 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v20);
   v20.version = 20;
   // Une v20 qui porte VRAIMENT quelque chose — sans quoi « vidé » ne se
   // distinguerait pas de « déjà vide ».
@@ -308,7 +320,7 @@ test('EUCLIDE T8 — la migration 20 → 21 vide les dégâts de site et les POI
   assert.ok(v20.poisAcquis.length > 0, 'le montage ne mesure rien');
 
   const migre = migrer(structuredClone(v20));
-  assert.equal(migre.version, 22);
+  assert.equal(migre.version, SAVE_VERSION);
   assert.deepEqual(migre.sitesEntames, {}, 'les dégâts de site ont été recopiés');
   assert.deepEqual(migre.poisAcquis, [], 'les POI acquis ont été recopiés');
 
@@ -320,7 +332,7 @@ test('EUCLIDE T8 — la migration 20 → 21 vide les dégâts de site et les POI
   avecHistoire.basesRasees = ['150:12'];
   const apres = migrer(avecHistoire);
   assert.deepEqual(apres.basesRasees, ['150:12'], 'une base rasée est réapparue');
-  assert.deepEqual(apres.satellites, v20.satellites, 'les satellites posés ont bougé');
+  assert.deepEqual(baseCourante(apres).satellites, v20.satellites, 'les satellites posés ont bougé');
 });
 
 // ---------------------------------------------------------------------------

@@ -46,6 +46,7 @@ import { TYPES_SITE, APRES_RAID, BATIMENTS } from '../data/sites.js';
 import { TICKS_PAR_HEURE } from './clock.js';
 import { detruireSatellite, prolongerApresAttaque } from './satellites.js';
 import { montageDuSite, resumeDuSite } from './site-de-la-case.js';
+import { baseCourante } from './base-courante.js';
 
 /** Le bâtiment dont la chute rase le site, et celui qui répare les défenses. */
 const ID_SOUCHE = Object.keys(BATIMENTS).find((id) => BATIMENTS[id].raseLeSite === true);
@@ -133,6 +134,7 @@ function neDitRien(entree) {
  * @returns {{rase: boolean}}
  */
 export function enregistrerLeRaid(etat, identite, resultat) {
+  const laBase = baseCourante(etat);
   exigerTable(etat);
   const cle = cleDuSite(identite);
 
@@ -141,7 +143,7 @@ export function enregistrerLeRaid(etat, identite, resultat) {
     if (identite.type === 'base') {
       etat.basesRasees.push(`${identite.rangee}:${identite.colonne}`);
     } else {
-      const index = etat.satellites.presents.findIndex(
+      const index = laBase.satellites.presents.findIndex(
         (s) => s.rangee === identite.rangee && s.colonne === identite.colonne
           && s.instance === identite.instance,
       );

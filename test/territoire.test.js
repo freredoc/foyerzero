@@ -20,6 +20,7 @@ import { TEINTES_TERRITOIRE, epaisseurDeFrontiere } from '../src/ui/monde.js';
 import { GEOGRAPHIE, EMBLEMES_CARTE, TYPES_SITE, ZOOM_CARTE } from '../src/data/sites.js';
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GRAINE = 31_082_026;
@@ -43,7 +44,7 @@ test('territoire — le disque du joueur est celui de la spec, mesuré et non é
   assert.equal(RAYONS[OUVRAGE], GEOGRAPHIE.rayonInfluenceEnnemie);
 
   const etat = creerEtat(GRAINE);
-  const centre = etat.position;
+  const centre = baseCourante(etat).position;
   const carte = territoireDeLaFenetre(etat, autour(centre, 8));
 
   // On COMPTE les cases du joueur, et on les confronte au disque de Tchebychev.
@@ -86,7 +87,7 @@ test('territoire — le joueur l\'emporte quand les deux se recouvrent', () => {
   assert.ok(chevauche, 'montage : aucune base de l\'Ouvrage sur cette graine');
 
   // On déplace le joueur au contact : les deux disques se recouvrent forcément.
-  etat.position = { rangee: chevauche.rangee, colonne: chevauche.colonne };
+  baseCourante(etat).position = { rangee: chevauche.rangee, colonne: chevauche.colonne };
   const carte = territoireDeLaFenetre(etat, autour(chevauche, 6));
 
   // D'abord : le montage mesure-t-il quelque chose ? Il faut de l'Ouvrage AUTOUR.
@@ -109,7 +110,7 @@ test('territoire — les bordures ne dépendent PAS de la fenêtre qu\'on demand
   // la VUE devient une frontière. À l'écran, ça dessine un cadre qui suit le
   // défilement. La carte d'occupation déborde donc d'une case ce qu'elle rend.
   const etat = creerEtat(GRAINE);
-  const centre = etat.position;
+  const centre = baseCourante(etat).position;
 
   // ⚠⚠ LA FENÊTRE SERRÉE DOIT COUPER DANS LE TERRITOIRE, sinon le test ne mesure
   // rien — et c'est ce qu'il faisait au premier jet. À rayon 3 autour du joueur,
@@ -143,7 +144,7 @@ test('territoire — les bordures ne dépendent PAS de la fenêtre qu\'on demand
 
 test('territoire — les côtés exposés sont ceux du carré, et rien d\'autre', () => {
   const etat = creerEtat(GRAINE);
-  const centre = etat.position;
+  const centre = baseCourante(etat).position;
   const bords = bordsDuTerritoire(territoireDeLaFenetre(etat, autour(centre, 8)))
     .filter((b) => b.camp === JOUEUR);
   const rayon = RAYONS[JOUEUR];
@@ -184,19 +185,19 @@ test('territoire — seules les BASES de l\'Ouvrage projettent son influence', (
   // On pose un camp à côté de la base, hors du disque du joueur, et on vérifie
   // qu'il ne peint RIEN. Sans ce montage, « seules les bases » serait une phrase.
   const loin = {
-    rangee: etat.position.rangee - RAYONS[JOUEUR] - 2,
-    colonne: etat.position.colonne,
+    rangee: baseCourante(etat).position.rangee - RAYONS[JOUEUR] - 2,
+    colonne: baseCourante(etat).position.colonne,
   };
   assert.ok(!estBaseOuvrage(etat.graine, loin.rangee, loin.colonne),
     'montage : la case choisie porte déjà une base de l\'Ouvrage');
-  const avant = territoireDeLaFenetre(etat, autour(etat.position, 8));
+  const avant = territoireDeLaFenetre(etat, autour(baseCourante(etat).position, 8));
   const occAvant = occupantDeLaCase(avant, loin.rangee, loin.colonne);
 
-  etat.satellites.presents.push({
+  baseCourante(etat).satellites.presents.push({
     type: 'camp', rangee: loin.rangee, colonne: loin.colonne, niveau: 1, instance: 1,
     tickDeReleve: 999_999,
   });
-  const apres = territoireDeLaFenetre(etat, autour(etat.position, 8));
+  const apres = territoireDeLaFenetre(etat, autour(baseCourante(etat).position, 8));
   assert.equal(occupantDeLaCase(apres, loin.rangee, loin.colonne), occAvant,
     'un camp a peint du territoire : seules les bases doivent le faire');
 });
@@ -205,7 +206,7 @@ test('territoire — une base du joueur, et la liste est prête pour plusieurs',
   const etat = creerEtat(GRAINE);
   const bases = basesDuJoueur(etat);
   assert.equal(bases.length, 1, 'l\'état ne porte structurellement qu\'une base');
-  assert.deepEqual(bases[0], etat.position);
+  assert.deepEqual(bases[0], baseCourante(etat).position);
 });
 
 test('territoire — une fenêtre hors carte ne lève pas et ne rend rien', () => {

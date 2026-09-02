@@ -30,6 +30,8 @@ import { REPARATION } from '../src/data/sites.js';
 import { facteurMilli } from '../src/sim/combat.js';
 import { TICKS_PAR_SECONDE, TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { niveauDeLArmee } from '../src/sim/niveau-de-base.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 /**
  * Une partie avec les trois bâtiments réparateurs posés au niveau voulu, la
@@ -49,14 +51,14 @@ function partieOutillee(niveauBatiments = 5) {
   // partie — `verifierEtat` lève au chargement, pas à la pose à la main. Les
   // cases 13,1 à 13,5 sont hors des douze champs de cette base-là, et le
   // Chantier monte pour ouvrir les emplacements.
-  etat.disposition[0].niveau = 12;
+  baseCourante(etat).disposition[0].niveau = 12;
   let colonne = 1;
   for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
-    etat.disposition.push({ id, rangee: 13, colonne, niveau: niveauBatiments });
-    etat.economie.residus.push({});
+    baseCourante(etat).disposition.push({ id, rangee: 13, colonne, niveau: niveauBatiments });
+    baseCourante(etat).economie.residus.push({});
     colonne += 2;
   }
-  etat.economie.ressources.scorie = 1_000_000_000;
+  baseCourante(etat).economie.ressources.scorie = 1_000_000_000;
   crediterLesReserves(etat, plafondDeLaReserve(etat));
   return etat;
 }
@@ -64,7 +66,7 @@ function partieOutillee(niveauBatiments = 5) {
 /** Pose une unité abîmée d'une fraction de ses PV. */
 function abimee(etat, id, part, niveau = 1, vague = 1, colonne = 1) {
   const pvMax = UNITES[id].pv * facteurMilli(niveau);
-  etat.armee.push({
+  baseCourante(etat).armee.push({
     id, vague, colonne, niveau, degatsMilli: Math.round(pvMax * part),
   });
 }
@@ -113,7 +115,7 @@ test('courbe — la série Caserne du relevé est restituée', () => {
 
 test('RÉSERVE T1 — n ticks créditent n ticks dans CHACUN des trois réservoirs', () => {
   const etat = creerEtat(2026);
-  assert.deepEqual(etat.reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 },
+  assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 },
     'une base neuve doit partir de zéro');
   // ⚠ MONTAGE FALSIFIABLE : le plafond doit être LOIN, sinon on mesurerait le
   // plafond au lieu du crédit. 12 h font 432 000 ticks, on en crédite 1 000.
@@ -121,18 +123,18 @@ test('RÉSERVE T1 — n ticks créditent n ticks dans CHACUN des trois réservoi
 
   crediterLesReserves(etat, 1000);
   for (const chassis of CHASSIS_REPARABLES) {
-    assert.equal(etat.reserveReparation[chassis], 1000, `le réservoir ${chassis} n'a pas suivi`);
+    assert.equal(baseCourante(etat).reserveReparation[chassis], 1000, `le réservoir ${chassis} n'a pas suivi`);
   }
   // Le taux est 1 pour 1, donc il s'ajoute : mille de plus font deux mille.
   crediterLesReserves(etat, 1000);
   for (const chassis of CHASSIS_REPARABLES) {
-    assert.equal(etat.reserveReparation[chassis], 2000, `le réservoir ${chassis} n'a pas suivi`);
+    assert.equal(baseCourante(etat).reserveReparation[chassis], 2000, `le réservoir ${chassis} n'a pas suivi`);
   }
   // ⚠ ET LE CRÉDIT PASSE PAR LE TICK DE JEU, pas seulement par la fonction. Un
   // crédit que `tickJeu` n'appellerait pas ne créditerait jamais rien en partie.
   const enJeu = creerEtat(2026);
   for (let i = 0; i < 50; i += 1) tickJeu(enJeu);
-  assert.equal(enJeu.reserveReparation.escouade, 50, 'tickJeu ne crédite pas la réserve');
+  assert.equal(baseCourante(enJeu).reserveReparation.escouade, 50, 'tickJeu ne crédite pas la réserve');
 });
 
 // ---------------------------------------------------------------------------
@@ -142,8 +144,8 @@ test('RÉSERVE T1 — n ticks créditent n ticks dans CHACUN des trois réservoi
 test('RÉSERVE T2 — plafond 12 h, plus 1 h par niveau d\'armée, dixièmes compris', () => {
   const etat = partieOutillee();
   // Armée vide : douze heures PILE, et pas une seconde de plus.
-  etat.armee = [];
-  assert.equal(niveauDeLArmee(etat.armee), null, 'montage : l\'armée doit être vide');
+  baseCourante(etat).armee = [];
+  assert.equal(niveauDeLArmee(baseCourante(etat).armee), null, 'montage : l\'armée doit être vide');
   assert.equal(plafondDeLaReserve(etat), REPARATION.plafondHeures * TICKS_PAR_HEURE);
   assert.equal(plafondDeLaReserve(etat), 12 * 3600 * 10, 'douze heures, en ticks');
 
@@ -151,10 +153,10 @@ test('RÉSERVE T2 — plafond 12 h, plus 1 h par niveau d\'armée, dixièmes com
   // niveau 10, pas 10 : sans la division le plafond serait de 112 h au lieu de
   // 22 h, soit DIX FOIS le supplément. Le montage prend un niveau entier pour
   // que l'attendu soit calculable à la main.
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   abimee(etat, 'meute', 0, 10, 1, 1);
   abimee(etat, 'meute', 0, 10, 1, 2);
-  assert.equal(niveauDeLArmee(etat.armee), 100, 'montage : dixièmes attendus');
+  assert.equal(niveauDeLArmee(baseCourante(etat).armee), 100, 'montage : dixièmes attendus');
   assert.equal(plafondDeLaReserve(etat), (12 + 10) * TICKS_PAR_HEURE,
     'le plafond ne suit pas le niveau d\'armée, ou il confond niveaux et dixièmes');
   assert.ok(plafondDeLaReserve(etat) < (12 + 100) * TICKS_PAR_HEURE,
@@ -162,16 +164,16 @@ test('RÉSERVE T2 — plafond 12 h, plus 1 h par niveau d\'armée, dixièmes com
 
   // ⚠ ET UN DEMI-NIVEAU COMPTE POUR UN DEMI. Deux pièces, niveaux 1 et 2 :
   // moyenne 1,5, donc 13 h 30. C'est ce qu'un arrondi intermédiaire perdrait.
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   abimee(etat, 'meute', 0, 1, 1, 1);
   abimee(etat, 'meute', 0, 2, 1, 2);
-  assert.equal(niveauDeLArmee(etat.armee), 15, 'montage : moyenne 1,5 attendue');
+  assert.equal(niveauDeLArmee(baseCourante(etat).armee), 15, 'montage : moyenne 1,5 attendue');
   assert.equal(plafondDeLaReserve(etat), Math.floor(13.5 * TICKS_PAR_HEURE));
 
   // Le crédit s'arrête au plafond, il ne le franchit pas.
-  etat.reserveReparation = reservesVides();
+  baseCourante(etat).reserveReparation = reservesVides();
   crediterLesReserves(etat, 10 ** 9);
-  assert.equal(etat.reserveReparation.escouade, plafondDeLaReserve(etat));
+  assert.equal(baseCourante(etat).reserveReparation.escouade, plafondDeLaReserve(etat));
 });
 
 // ---------------------------------------------------------------------------
@@ -186,19 +188,19 @@ test('RÉSERVE T3 — tickJeu × n rend le même état que rattraperJeu(n)', () 
   const etats = [];
   for (const parBoucle of [true, false]) {
     const etat = partieOutillee();
-    etat.reserveReparation = reservesVides();
+    baseCourante(etat).reserveReparation = reservesVides();
     if (parBoucle) for (let i = 0; i < N; i += 1) tickJeu(etat);
     else rattraperJeu(etat, N);
     etats.push(etat);
   }
-  assert.deepEqual(etats[0].reserveReparation, etats[1].reserveReparation,
+  assert.deepEqual(baseCourante(etats[0]).reserveReparation, baseCourante(etats[1]).reserveReparation,
     'boucle et rattrapage divergent sur la réserve');
   assert.deepEqual(etats[0], etats[1], 'boucle et rattrapage divergent sur l\'état');
 
   // ⚠ MONTAGE FALSIFIABLE : la réserve doit avoir réellement bougé, et rester
   // SOUS le plafond — sinon les deux chemins se retrouveraient au plafond et un
   // crédit faux passerait inaperçu.
-  assert.equal(etats[0].reserveReparation.escouade, N, 'le crédit n\'est pas de 1 par tick');
+  assert.equal(baseCourante(etats[0]).reserveReparation.escouade, N, 'le crédit n\'est pas de 1 par tick');
   assert.ok(N < plafondDeLaReserve(etats[0]), 'montage sans mordant : le plafond a écrasé les deux');
 });
 
@@ -216,7 +218,7 @@ test('RÉSERVE T4 — vider un réservoir ne touche pas les deux autres', () => 
   abimee(etat, 'enclume', 1, 1, 3, 1);      // aeronef
   crediterLesReserves(etat, plafondDeLaReserve(etat));
 
-  const avant = { ...etat.reserveReparation };
+  const avant = { ...baseCourante(etat).reserveReparation };
   // Falsifiable : les trois doivent partir du MÊME niveau, sinon « les deux
   // autres n'ont pas bougé » ne voudrait rien dire.
   assert.equal(new Set(Object.values(avant)).size, 1, 'montage : les trois doivent être égaux');
@@ -225,11 +227,11 @@ test('RÉSERVE T4 — vider un réservoir ne touche pas les deux autres', () => 
   assert.equal(paye.chassis, 'blinde');
   assert.ok(paye.ticks > 0, 'montage sans mordant : la réparation est gratuite en temps');
 
-  assert.equal(etat.reserveReparation.blinde, avant.blinde - paye.ticks,
+  assert.equal(baseCourante(etat).reserveReparation.blinde, avant.blinde - paye.ticks,
     'le réservoir des blindés n\'a pas été débité du bon montant');
-  assert.equal(etat.reserveReparation.escouade, avant.escouade,
+  assert.equal(baseCourante(etat).reserveReparation.escouade, avant.escouade,
     'réparer un blindé a entamé la réserve d\'infanterie — les trois sont fusionnés');
-  assert.equal(etat.reserveReparation.aeronef, avant.aeronef,
+  assert.equal(baseCourante(etat).reserveReparation.aeronef, avant.aeronef,
     'réparer un blindé a entamé la réserve d\'aviation — les trois sont fusionnés');
 
   // Et l'infanterie reste payable, justement parce qu'elle n'a rien dépensé.
@@ -247,17 +249,17 @@ test('RÉSERVE T5 — réparer débite le bon châssis ET rend les PV, sans atte
   assert.equal(cout.chassis, 'escouade');
   assert.ok(cout.ticks > 0 && cout.scorie > 0, 'montage sans mordant : la réparation est gratuite');
 
-  const reserveAvant = etat.reserveReparation.escouade;
-  const scorieAvant = etat.economie.ressources.scorie;
+  const reserveAvant = baseCourante(etat).reserveReparation.escouade;
+  const scorieAvant = baseCourante(etat).economie.ressources.scorie;
 
   reparerUnePiece(etat, 0);
 
   // ⚠ TOUT DANS LE MÊME APPEL : aucun tick ne s'écoule entre le débit et le
   // retour des PV. Un modèle qui ne rendrait les PV qu'au tick suivant laisserait
   // `degatsMilli` non nul ici.
-  assert.equal(etat.armee[0].degatsMilli, 0, 'les PV ne sont pas rendus dans le même appel');
-  assert.equal(etat.reserveReparation.escouade, reserveAvant - cout.ticks);
-  assert.equal(etat.economie.ressources.scorie, scorieAvant - Math.ceil(cout.scorie) * 1000);
+  assert.equal(baseCourante(etat).armee[0].degatsMilli, 0, 'les PV ne sont pas rendus dans le même appel');
+  assert.equal(baseCourante(etat).reserveReparation.escouade, reserveAvant - cout.ticks);
+  assert.equal(baseCourante(etat).economie.ressources.scorie, scorieAvant - Math.ceil(cout.scorie) * 1000);
 
   // Une pièce intacte n'a plus rien à réparer, et le refus le dit.
   assert.equal(coutDeLaReparation(etat, 0), null);
@@ -276,10 +278,10 @@ test('RÉSERVE T6 — réserve trop courte : on dit le manque, et RIEN ne bouge'
 
   // Une réserve d'un tick TROP COURTE — la borne exacte, pas une réserve vide :
   // c'est là qu'un `<` écrit `<=` passerait.
-  etat.reserveReparation.escouade = cout.ticks - 1;
-  const reserveAvant = etat.reserveReparation.escouade;
-  const scorieAvant = etat.economie.ressources.scorie;
-  const degatsAvant = etat.armee[0].degatsMilli;
+  baseCourante(etat).reserveReparation.escouade = cout.ticks - 1;
+  const reserveAvant = baseCourante(etat).reserveReparation.escouade;
+  const scorieAvant = baseCourante(etat).economie.ressources.scorie;
+  const degatsAvant = baseCourante(etat).armee[0].degatsMilli;
 
   const problemes = problemesDeLaReparationDUnePiece(etat, 0);
   assert.equal(problemes.length, 1);
@@ -291,16 +293,16 @@ test('RÉSERVE T6 — réserve trop courte : on dit le manque, et RIEN ne bouge'
   // scorie, ni les PV. Un débit partiel suivi d'un échec est le pire des trois
   // états possibles.
   assert.throws(() => reparerUnePiece(etat, 0), /réparation impossible/);
-  assert.equal(etat.reserveReparation.escouade, reserveAvant, 'le temps a été débité malgré le refus');
-  assert.equal(etat.economie.ressources.scorie, scorieAvant, 'la scorie a été débitée malgré le refus');
-  assert.equal(etat.armee[0].degatsMilli, degatsAvant, 'les PV ont été rendus malgré le refus');
+  assert.equal(baseCourante(etat).reserveReparation.escouade, reserveAvant, 'le temps a été débité malgré le refus');
+  assert.equal(baseCourante(etat).economie.ressources.scorie, scorieAvant, 'la scorie a été débitée malgré le refus');
+  assert.equal(baseCourante(etat).armee[0].degatsMilli, degatsAvant, 'les PV ont été rendus malgré le refus');
 
   // ⚠ ET LA BORNE EST BIEN LÀ : un tick de plus, et ça passe. Sans ça le test
   // passerait aussi sur un code qui refuse tout.
-  etat.reserveReparation.escouade = cout.ticks;
+  baseCourante(etat).reserveReparation.escouade = cout.ticks;
   assert.deepEqual(problemesDeLaReparationDUnePiece(etat, 0), []);
   assert.doesNotThrow(() => reparerUnePiece(etat, 0));
-  assert.equal(etat.reserveReparation.escouade, 0, 'la réparation pleine doit vider la réserve');
+  assert.equal(baseCourante(etat).reserveReparation.escouade, 0, 'la réparation pleine doit vider la réserve');
 });
 
 // ---------------------------------------------------------------------------
@@ -322,7 +324,7 @@ test('réservoirs — sans son bâtiment, un châssis ne se répare pas du tout'
   assert.match(problemesDeToutReparer(etat)[0].message, /Aucun bâtiment de réparation/);
 
   // Une armée intacte, elle, se voit dire autre chose.
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   assert.match(problemesDeToutReparer(etat)[0].message, /intacte/);
 });
 
@@ -341,7 +343,7 @@ test('RÉSERVE T7 bis — la pièce sans bâtiment se refuse par son propre code
   // Le libellé vient de la table des bâtiments, pas d'une chaîne écrite ici.
   assert.match(problemes[0].message, /Aérodrome/);
   assert.throws(() => reparerUnePiece(etat, 0), /Aérodrome/);
-  assert.ok(etat.armee[0].degatsMilli > 0, 'la pièce a été réparée sans son bâtiment');
+  assert.ok(baseCourante(etat).armee[0].degatsMilli > 0, 'la pièce a été réparée sans son bâtiment');
 });
 
 // ---------------------------------------------------------------------------
@@ -359,15 +361,15 @@ test('coût — additif, en scorie, et payé au moment où l\'on répare', () =>
   assert.ok(Math.abs(devis.scorie - Math.ceil(somme)) <= 1, `${devis.scorie} contre ${somme}`);
   assert.ok(devis.scorie > 0, 'une unité de niveau 5 n\'est pas gratuite à réparer');
 
-  const avant = etat.economie.ressources.scorie;
+  const avant = baseCourante(etat).economie.ressources.scorie;
   toutReparer(etat);
-  assert.ok(Math.abs((avant - etat.economie.ressources.scorie) - devis.scorie * 1000) <= 2000,
+  assert.ok(Math.abs((avant - baseCourante(etat).economie.ressources.scorie) - devis.scorie * 1000) <= 2000,
     'le débit en scorie ne suit pas le devis');
 
   // Sans scorie, le refus dit ce qui manque.
   const pauvre = partieOutillee();
   abimee(pauvre, 'meute', 1, 5);
-  pauvre.economie.ressources.scorie = 0;
+  baseCourante(pauvre).economie.ressources.scorie = 0;
   const refus = problemesDeToutReparer(pauvre);
   assert.equal(refus[0].code, 'scorie-insuffisante');
   assert.match(refus[0].message, /manque/);
@@ -396,7 +398,7 @@ test('RÉSERVE T9 — toutReparer répare tout le payable et compte le reste', (
   abimee(etat, 'meute', 0.5, 1, 1, 1);    // escouade — payable
   abimee(etat, 'ratisseur', 0.5, 1, 2, 1); // blinde — payable
   crediterLesReserves(etat, plafondDeLaReserve(etat));
-  etat.reserveReparation.aeronef = 0;
+  baseCourante(etat).reserveReparation.aeronef = 0;
 
   // Falsifiable : la première DOIT être impayable, les deux autres payables.
   assert.equal(problemesDeLaReparationDUnePiece(etat, 0)[0].code, 'reserve-insuffisante');
@@ -406,9 +408,9 @@ test('RÉSERVE T9 — toutReparer répare tout le payable et compte le reste', (
   const bilan = toutReparer(etat);
   assert.equal(bilan.reparees, 2, 'toutReparer s\'est arrêté à la première pièce impayable');
   assert.equal(bilan.impayables, 1);
-  assert.ok(etat.armee[0].degatsMilli > 0, 'l\'impayable a été réparée quand même');
-  assert.equal(etat.armee[1].degatsMilli, 0, 'la pièce payable n\'a pas été réparée');
-  assert.equal(etat.armee[2].degatsMilli, 0, 'la pièce payable n\'a pas été réparée');
+  assert.ok(baseCourante(etat).armee[0].degatsMilli > 0, 'l\'impayable a été réparée quand même');
+  assert.equal(baseCourante(etat).armee[1].degatsMilli, 0, 'la pièce payable n\'a pas été réparée');
+  assert.equal(baseCourante(etat).armee[2].degatsMilli, 0, 'la pièce payable n\'a pas été réparée');
 
   // Et les deux châssis payés l'ont été chacun sur SON réservoir.
   assert.ok(bilan.ticks.escouade > 0 && bilan.ticks.blinde > 0);
@@ -426,24 +428,24 @@ test('RÉSERVE T10 — un raid ne touche pas aux réserves', () => {
   // un stock, pas un bonus.
   const etat = partieOutillee();
   for (let c = 1; c <= 6; c += 1) {
-    etat.armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }
   crediterLesReserves(etat, plafondDeLaReserve(etat));
-  const avant = { ...etat.reserveReparation };
+  const avant = { ...baseCourante(etat).reserveReparation };
   // Falsifiable : la réserve doit être non nulle, sinon « elle n'a pas bougé »
   // serait vrai de n'importe quel code.
   assert.ok(avant.escouade > 0, 'montage sans mordant : la réserve est vide');
 
-  const camp = etat.satellites.presents.find((s) => s.type === 'camp');
-  executerRaid(etat, etat, { rangee: camp.rangee, colonne: camp.colonne });
-  assert.ok(etat.armee.some((p) => p.degatsMilli > 0), 'montage sans mordant : personne n\'est abîmé');
+  const camp = baseCourante(etat).satellites.presents.find((s) => s.type === 'camp');
+  executerRaid(etat, baseCourante(etat), { rangee: camp.rangee, colonne: camp.colonne });
+  assert.ok(baseCourante(etat).armee.some((p) => p.degatsMilli > 0), 'montage sans mordant : personne n\'est abîmé');
 
-  assert.deepEqual(etat.reserveReparation, avant, 'le raid a entamé la réserve de réparation');
+  assert.deepEqual(baseCourante(etat).reserveReparation, avant, 'le raid a entamé la réserve de réparation');
 
   // Et on peut réparer tout de suite après, sans rien relancer.
   const bilan = toutReparer(etat);
   assert.ok(bilan.reparees > 0, 'on ne peut pas réparer au retour du raid');
-  assert.ok(etat.reserveReparation.escouade < avant.escouade, 'réparer n\'a rien débité');
+  assert.ok(baseCourante(etat).reserveReparation.escouade < avant.escouade, 'réparer n\'a rien débité');
 });
 
 // ---------------------------------------------------------------------------
@@ -460,19 +462,23 @@ test('RÉSERVE T11 — la réserve traverse la sauvegarde, le chronomètre a dis
   const etat = partieOutillee();
   abimee(etat, 'meute', 0.8, 4);
   crediterLesReserves(etat, 12_345);
-  const attendu = { ...etat.reserveReparation };
+  const attendu = { ...baseCourante(etat).reserveReparation };
 
   const recharge = charger(serialiser(etat, 4_000_000), 4_000_000);
-  assert.deepEqual(recharge.reserveReparation, attendu, 'la réserve ne traverse pas la sauvegarde');
+  assert.deepEqual(baseCourante(recharge).reserveReparation, attendu, 'la réserve ne traverse pas la sauvegarde');
   // ⚠ DES ENTIERS RONDS, et c'est ce que « en ticks » veut dire. Un flottant
   // sérialisé se relirait `12345.000000001` et ferait diverger les deux chemins.
   for (const chassis of CHASSIS_REPARABLES) {
-    assert.ok(Number.isInteger(recharge.reserveReparation[chassis]), `${chassis} n'est pas entier`);
+    assert.ok(Number.isInteger(baseCourante(recharge).reserveReparation[chassis]), `${chassis} n'est pas entier`);
   }
 
   // ⚠ ET LE CHRONOMÈTRE N'EST PLUS LÀ. Une v16 le portait ; la migration le
   // SUPPRIME, ce que seule la v2 → v3 avait fait avant elle.
   const v16 = JSON.parse(serialiser(etat, 4_000_000));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v16 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v16);
   v16.version = 16;
   v16.reparation = { debutTick: 0, ticks: 500, scorie: 3, pieces: [] };
   delete v16.reserveReparation;
@@ -480,7 +486,7 @@ test('RÉSERVE T11 — la réserve traverse la sauvegarde, le chronomètre a dis
   const migre = migrer(structuredClone(v16));
   assert.equal(migre.version, SAVE_VERSION);
   assert.ok(!('reparation' in migre), 'la migration a laissé le chronomètre dans la sauvegarde');
-  assert.deepEqual(migre.reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 },
+  assert.deepEqual(baseCourante(migre).reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 },
     'la migration a crédité une réserve rétroactive');
 
   // Et la sauvegarde migrée se charge et se joue.
@@ -488,7 +494,7 @@ test('RÉSERVE T11 — la réserve traverse la sauvegarde, le chronomètre a dis
   assert.equal(chargee.version, SAVE_VERSION);
   assert.ok(!('reparation' in chargee));
   tickJeu(chargee);
-  assert.ok(chargee.reserveReparation.escouade > 0, 'la partie migrée ne crédite plus rien');
+  assert.ok(baseCourante(chargee).reserveReparation.escouade > 0, 'la partie migrée ne crédite plus rien');
 });
 
 test('RÉSERVE T11 bis — une réserve illisible fait lever au chargement', () => {
@@ -503,7 +509,7 @@ test('RÉSERVE T11 bis — une réserve illisible fait lever au chargement', () 
 
   // Et `verifierEtat` s'en sert : un état amputé ne se charge pas.
   const ampute = JSON.parse(serialiser(partieOutillee(), 4_000_000));
-  delete ampute.reserveReparation;
+  delete ampute.bases[0].reserveReparation;
   assert.throws(() => charger(JSON.stringify(ampute), 4_000_000), /réserve de réparation/);
 });
 
@@ -567,12 +573,12 @@ test('RÉSERVE — le niveau du bâtiment décote le coût, il ne change pas le 
     'un meilleur bâtiment ne décote pas la réparation');
 
   // Le crédit, lui, est le même des deux côtés.
-  for (const etat of [pauvre, riche]) etat.reserveReparation = reservesVides();
+  for (const etat of [pauvre, riche]) baseCourante(etat).reserveReparation = reservesVides();
   crediterLesReserves(pauvre, 1000);
   crediterLesReserves(riche, 1000);
-  assert.equal(pauvre.reserveReparation.escouade, riche.reserveReparation.escouade,
+  assert.equal(baseCourante(pauvre).reserveReparation.escouade, baseCourante(riche).reserveReparation.escouade,
     'le niveau du bâtiment est compté deux fois — il crédite ET il décote');
-  assert.equal(riche.reserveReparation.escouade, 1000, 'le crédit n\'est pas de 1 pour 1');
+  assert.equal(baseCourante(riche).reserveReparation.escouade, 1000, 'le crédit n\'est pas de 1 pour 1');
 });
 
 test('RÉSERVE M1 — le coût le plus cher atteignable dépasse le plafond, et c\'est arbitré', () => {
@@ -608,9 +614,9 @@ test('RÉSERVE M1 — le coût le plus cher atteignable dépasse le plafond, et 
   // `partDuCoutDeMontee` vaut 1, donc la remettre à neuf coûte sa dernière
   // montée, soit plus de dix milliards. Le nombre est déjà marqué « à arbitrer »
   // dans `REPARATION` ; ce test le FIGE pour qu'il ne se découvre pas en jeu.
-  outille.economie.ressources.scorie = 0;
+  baseCourante(outille).economie.ressources.scorie = 0;
   assert.equal(problemesDeLaReparationDUnePiece(outille, 0)[0].code, 'scorie-insuffisante');
-  outille.economie.ressources.scorie = Number.MAX_SAFE_INTEGER;
+  baseCourante(outille).economie.ressources.scorie = Number.MAX_SAFE_INTEGER;
   assert.deepEqual(problemesDeLaReparationDUnePiece(outille, 0), [],
     'avec le temps ET la scorie, la réparation doit passer');
 });

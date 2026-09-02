@@ -36,6 +36,7 @@ import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...chemin) => readFileSync(join(RACINE, ...chemin), 'utf8');
@@ -200,9 +201,9 @@ test('sites — les satellites PRÉSENTS se dessinent, les attentes non', () => 
   // n'ont même pas de case : les dessiner ferait paraître des camps qui
   // n'existent pas encore, et à un endroit choisi par l'écran.
   const etat = creerEtat(4242);
-  assert.ok(etat.satellites.attentes.length > 0,
+  assert.ok(baseCourante(etat).satellites.attentes.length > 0,
     'une base neuve doit avoir des attentes : le montage ne mesure rien');
-  assert.equal(etat.satellites.presents.length, 0);
+  assert.equal(baseCourante(etat).satellites.presents.length, 0);
 
   const fenetre = {
     premiereRangee: 1, derniereRangee: GEOGRAPHIE.carte.hauteur,
@@ -213,11 +214,11 @@ test('sites — les satellites PRÉSENTS se dessinent, les attentes non', () => 
   assert.deepEqual(avant, [], 'une attente est dessinée comme un site');
 
   // Les mêmes attentes, une fois PARUES, se dessinent.
-  etat.satellites.presents.push(
-    { type: 'camp', rangee: etat.position.rangee + 1, colonne: etat.position.colonne, niveau: 3, instance: 1 },
-    { type: 'avantPoste', rangee: etat.position.rangee - 3, colonne: etat.position.colonne + 2, niveau: 6, instance: 2 },
+  baseCourante(etat).satellites.presents.push(
+    { type: 'camp', rangee: baseCourante(etat).position.rangee + 1, colonne: baseCourante(etat).position.colonne, niveau: 3, instance: 1 },
+    { type: 'avantPoste', rangee: baseCourante(etat).position.rangee - 3, colonne: baseCourante(etat).position.colonne + 2, niveau: 6, instance: 2 },
   );
-  etat.satellites.prochaineInstance = 3;
+  baseCourante(etat).satellites.prochaineInstance = 3;
   const apres = sitesDeLaFenetre(etat, fenetre)
     .filter((s) => s.type === 'camp' || s.type === 'avantPoste');
   assert.equal(apres.length, 2, 'les satellites parus ne sont pas dessinés');
@@ -239,8 +240,8 @@ test('sites — la base du joueur et la base terminale se dessinent en dernier',
   const sites = sitesDeLaFenetre(etat, fenetre);
   const dernier = sites[sites.length - 1];
   assert.equal(dernier.type, 'baseJoueur', 'le joueur n\'est plus dessiné en dernier');
-  assert.equal(dernier.rangee, etat.position.rangee);
-  assert.equal(dernier.colonne, etat.position.colonne);
+  assert.equal(dernier.rangee, baseCourante(etat).position.rangee);
+  assert.equal(dernier.colonne, baseCourante(etat).position.colonne);
   assert.equal(dernier.niveau, null,
     'la base du joueur porte un niveau de carte : c\'est exactement la faute à ne pas faire');
 
@@ -699,7 +700,7 @@ test('emblèmes — le palier de la base du joueur vient de ses BÂTIMENTS, pas 
   // la rangée passerait. Mesuré, pas supposé. On place donc la base là où la
   // rangée donnerait le palier 9.
   const etat = creerEtat(4242);
-  etat.position = { rangee: 50, colonne: 16 };
+  baseCourante(etat).position = { rangee: 50, colonne: 16 };
   const parLaRangee = palierDeNiveau(niveauDeLaRangee(50));
   const site = { type: 'baseJoueur', rangee: 50, colonne: 16, niveau: null, saveur: null };
   const rendu = palierDuSite(site, etat);
@@ -712,8 +713,8 @@ test('emblèmes — le palier de la base du joueur vient de ses BÂTIMENTS, pas 
   // ⚠ ET IL SUIT BIEN LES BÂTIMENTS. Sans ce second montage, une fonction qui
   // rendrait toujours 1 passerait les trois lignes ci-dessus.
   const monte = creerEtat(4242);
-  monte.position = { rangee: 50, colonne: 16 };
-  for (const b of monte.disposition) b.niveau = 30;
+  baseCourante(monte).position = { rangee: 50, colonne: 16 };
+  for (const b of baseCourante(monte).disposition) b.niveau = 30;
   assert.equal(palierDuSite(site, monte), palierDeNiveau(30),
     'monter les bâtiments ne change pas le palier : il ne les lit pas');
   assert.notEqual(palierDuSite(site, monte), rendu);
@@ -816,7 +817,7 @@ test('emblèmes — la saveur voyage jusqu\'au sprite, et elle vient de la case'
   // lui-même » —, et les deux camps ci-dessous sont posés À LA MAIN, comme un
   // état HÉRITÉ, ce que le dépôt autorise explicitement pour cette raison.
   const etat = creerEtat(GRAINE);
-  etat.satellites.presents.push(
+  baseCourante(etat).satellites.presents.push(
     { type: 'camp', rangee: quartz.rangee, colonne: quartz.colonne, niveau: 5, instance: 1 },
     { type: 'camp', rangee: scorie.rangee, colonne: scorie.colonne, niveau: 5, instance: 2 },
   );
@@ -1275,7 +1276,11 @@ test('monde — un bouton ramène toujours à la base du joueur', () => {
   const debut = ecran.indexOf("$('monde-recentrer')");
   assert.ok(debut > 0, 'rien ne câble le bouton de retour');
   const bloc = ecran.slice(debut, debut + 320);
-  assert.match(bloc, /centrerSur\(etatCourant\.position\)/,
+  // ⚠ LE MOTIF SUIT LE CHEMIN D'ACCÈS, IL NE S'ÉLARGIT PAS. Depuis le lot
+  // BASES-0 la position vit dans la base ; `centrerSur(...)` avec n'importe
+  // quel argument passerait, `centrerSur(baseCourante(etatCourant).position)`
+  // nomme toujours exactement la position du joueur.
+  assert.match(bloc, /centrerSur\(baseCourante\(etatCourant\)\.position\)/,
     'le bouton doit recentrer sur la position du joueur, pas sur autre chose');
   // ⚠ IL NE TOUCHE PAS AU ZOOM : ramener aussi le cran ferait deux gestes en un
   // et retirerait au joueur celui qu'il venait de choisir.

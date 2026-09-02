@@ -27,6 +27,8 @@ import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { DEPLACEMENT, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE } from '../src/data/combat.js';
 import { centreDeLaCase, traitDeLaFleche, geometrieDuHalo } from '../src/ui/monde.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const T0 = 4_000_000;
@@ -41,7 +43,7 @@ function decommentee(chemin) {
 /** Une partie posée assez haut pour que la carte ait quelque chose à montrer. */
 function partie(graine = 2026, rangee = 200) {
   const etat = creerEtat(graine);
-  etat.position.rangee = rangee;
+  baseCourante(etat).position.rangee = rangee;
   return etat;
 }
 
@@ -53,7 +55,7 @@ test('DÉPLACEMENT T1 — dix cases en EUCLIDE : (10, 0) passe, (10, 10) est ref
   assert.equal(DEPLACEMENT.porteeMaxCases, 10);
   assert.equal(PORTEE_CARREE, 100);
   const etat = partie();
-  const { rangee: r, colonne: c } = etat.position;
+  const { rangee: r, colonne: c } = baseCourante(etat).position;
 
   assert.deepEqual(problemesDuDeplacement(etat, { rangee: r - 10, colonne: c }), []);
   assert.deepEqual(problemesDuDeplacement(etat, { rangee: r, colonne: c - 10 }), []);
@@ -71,7 +73,7 @@ test('DÉPLACEMENT T1 — dix cases en EUCLIDE : (10, 0) passe, (10, 10) est ref
       .some((p) => p.code === 'trop-loin'),
     true,
   );
-  assert.equal(distanceCarreeCases(etat.position, { rangee: r - 6, colonne: c - 8 }), 100);
+  assert.equal(distanceCarreeCases(baseCourante(etat).position, { rangee: r - 6, colonne: c - 8 }), 100);
 
   // Rester sur place n'est pas un déplacement.
   assert.equal(
@@ -85,7 +87,7 @@ test('DÉPLACEMENT T1 — dix cases en EUCLIDE : (10, 0) passe, (10, 10) est ref
 
 test('DÉPLACEMENT T2 — une destination hors carte est REFUSÉE, pas rabotée', () => {
   const etat = partie(7, GEOGRAPHIE.carte.hauteur - 2);
-  const hors = { rangee: GEOGRAPHIE.carte.hauteur + 3, colonne: etat.position.colonne };
+  const hors = { rangee: GEOGRAPHIE.carte.hauteur + 3, colonne: baseCourante(etat).position.colonne };
   assert.equal(estSurLaCarte(hors.rangee, hors.colonne), false,
     'le montage ne mesure rien : la case est sur la carte');
 
@@ -97,7 +99,7 @@ test('DÉPLACEMENT T2 — une destination hors carte est REFUSÉE, pas rabotée'
   // `raserLaBase`, qui rabote : le joueur a DÉSIGNÉ une case, il obtient
   // celle-là ou un refus. Une rabatte silencieuse le poserait ailleurs qu'où il
   // a touché, et il ne saurait jamais pourquoi.
-  assert.deepEqual(etat.position, { rangee: GEOGRAPHIE.carte.hauteur - 2, colonne: 16 });
+  assert.deepEqual(baseCourante(etat).position, { rangee: GEOGRAPHIE.carte.hauteur - 2, colonne: 16 });
 
   // Aucune case hors carte ne sort de `casesAtteignables`.
   for (const k of casesAtteignables(etat)) {
@@ -119,19 +121,32 @@ test('DÉPLACEMENT T3 — `raserLaBase` passe par la fonction commune, et il n\'
   // qu'en un exemplaire, c'est la ligne qui écrit `etat.position` — deux codes
   // qui déplacent la base divergeraient, et ce dépôt a déjà payé cette faute
   // deux fois.
+  // ⚠ LE MOTIF A SUIVI LE DÉPLIAGE DE BASES-0, ET IL S'EST RESSERRÉ, PAS
+  // ÉLARGI. Il cherchait `etat.position.rangee =` ; la position vit maintenant
+  // dans la base, donc il cherche `<quelque chose>.position.rangee =`. Le
+  // receveur est LIBRE — `laBase`, `base`, `etat.bases[0]` — et c'est
+  // délibéré : ce qu'on interdit, c'est d'ÉCRIRE une position de base ailleurs
+  // que dans le module qui en a le droit, quel que soit le nom du chemin.
+  // ⚠ LE RECEVEUR PEUT FINIR PAR UNE PARENTHÈSE — `baseCourante(etat).position`
+  // — autant que par une lettre. Le premier jet ne prenait que `\w` et laissait
+  // passer très exactement la forme que le dépliage a rendue la plus probable.
+  const ECRITURE = /[\w)]\.position\.(rangee|colonne)\s*=[^=]/;
   const raidOuvrage = decommentee('src/sim/raid-ouvrage.js');
-  assert.doesNotMatch(raidOuvrage, /etat\.position\.(rangee|colonne)\s*=/,
+  assert.doesNotMatch(raidOuvrage, ECRITURE,
     '`raid-ouvrage.js` écrit encore la position lui-même');
   assert.match(raidOuvrage, /poserLaBaseSur\(/,
     '`raserLaBase` n\'appelle pas la fonction commune');
 
-  // Falsifiable : le motif doit attraper l'appât.
-  assert.match('etat.position.rangee = 12;', /etat\.position\.(rangee|colonne)\s*=/);
+  // Falsifiable : le motif doit attraper l'appât, sous les deux formes.
+  assert.match('baseCourante(etat).position.rangee = 12;', ECRITURE);
+  assert.match('  laBase.position.colonne = c;', ECRITURE);
+  // Et il ne doit PAS attraper une simple lecture, ni une comparaison.
+  assert.doesNotMatch('if (laBase.position.rangee === 12) {', ECRITURE);
 
   // Et un seul fichier de `src/sim/` écrit la position.
   const ecrivains = [];
   for (const chemin of ['src/sim/deplacement.js', 'src/sim/raid-ouvrage.js', 'src/sim/state.js']) {
-    if (/etat\.position\.(rangee|colonne)\s*=/.test(decommentee(chemin))) ecrivains.push(chemin);
+    if (ECRITURE.test(decommentee(chemin))) ecrivains.push(chemin);
   }
   assert.deepEqual(ecrivains, ['src/sim/deplacement.js']);
 });
@@ -141,21 +156,21 @@ test('DÉPLACEMENT T3 bis — le comportement de `raserLaBase` n\'a pas changé'
   // bas, rabotées sur le bord, et les stocks perdus.
   for (const depart of [200, GEOGRAPHIE.carte.hauteur - 5, GEOGRAPHIE.carte.hauteur]) {
     const etat = creerEtat(7);
-    etat.position.rangee = depart;
+    baseCourante(etat).position.rangee = depart;
     const attendue = Math.min(GEOGRAPHIE.carte.hauteur, depart + 20);
     const rapport = subirUnRaid(etat, {
       type: 'base', niveau: 20, rangee: 190, colonne: 16, saveur: null, instance: 0,
     }, 5);
     assert.equal(rapport.rase, true, `départ ${depart} : le montage ne mesure rien`);
-    assert.equal(etat.position.rangee, attendue,
-      `départ ${depart} : la base est en ${etat.position.rangee}, attendu ${attendue}`);
+    assert.equal(baseCourante(etat).position.rangee, attendue,
+      `départ ${depart} : la base est en ${baseCourante(etat).position.rangee}, attendu ${attendue}`);
     assert.equal(rapport.sanction.cases, attendue - depart);
-    assert.deepEqual(etat.economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
+    assert.deepEqual(baseCourante(etat).economie.ressources, { quartz: 0, scorie: 0, electricite: 0 });
     // ⚠ ET UN RASAGE NE CONSOMME PAS LE DÉLAI DU JOUEUR. LECTURE PRISE : la
     // sanction est déjà la plus lourde du jeu ; lui retirer aussi le droit de
     // bouger le punirait deux fois, et l'empêcherait de fuir l'endroit où il
     // vient d'être rasé.
-    assert.equal(etat.dernierDeplacementTick, null,
+    assert.equal(baseCourante(etat).dernierDeplacementTick, null,
       'le rasage a consommé le délai de déplacement du joueur');
   }
 });
@@ -214,7 +229,7 @@ test('DÉPLACEMENT T5 — le terrain ne suit pas la base, et aucun bâtiment ne 
   const etat = partie(2026, 200);
   // Une base réellement construite : sans bâtiments, « aucun ne bascule » ne
   // mesurerait rien.
-  const pris = new Set(etat.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  const pris = new Set(baseCourante(etat).obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
   pris.add('18:5');
   let poses = 0;
   for (const id of ['centreDeCommandement', 'qgDeDefense', 'caserne']) {
@@ -229,32 +244,32 @@ test('DÉPLACEMENT T5 — le terrain ne suit pas la base, et aucun bâtiment ne 
   }
   assert.ok(poses >= 2, `le montage ne mesure rien : ${poses} bâtiment(s) posé(s)`);
 
-  const champsAvant = JSON.stringify(etat.champs);
-  const obstaclesAvant = JSON.stringify(etat.obstacles);
-  const fondationAvant = { ...etat.fondation };
-  const dispositionAvant = JSON.stringify(etat.disposition);
+  const champsAvant = JSON.stringify(baseCourante(etat).champs);
+  const obstaclesAvant = JSON.stringify(baseCourante(etat).obstacles);
+  const fondationAvant = { ...baseCourante(etat).fondation };
+  const dispositionAvant = JSON.stringify(baseCourante(etat).disposition);
 
-  deplacerLaBase(etat, { rangee: etat.position.rangee - 9, colonne: etat.position.colonne + 4 });
+  deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 9, colonne: baseCourante(etat).position.colonne + 4 });
 
-  assert.deepEqual(etat.fondation, fondationAvant, '`fondation` a bougé');
-  assert.equal(JSON.stringify(etat.champs), champsAvant, 'les champs ont bougé');
-  assert.equal(JSON.stringify(etat.obstacles), obstaclesAvant, 'les obstacles ont bougé');
-  assert.equal(JSON.stringify(etat.disposition), dispositionAvant, 'la disposition a bougé');
+  assert.deepEqual(baseCourante(etat).fondation, fondationAvant, '`fondation` a bougé');
+  assert.equal(JSON.stringify(baseCourante(etat).champs), champsAvant, 'les champs ont bougé');
+  assert.equal(JSON.stringify(baseCourante(etat).obstacles), obstaclesAvant, 'les obstacles ont bougé');
+  assert.equal(JSON.stringify(baseCourante(etat).disposition), dispositionAvant, 'la disposition a bougé');
 
   // ⚠ ET AUCUN BÂTIMENT N'EST SUR UN OBSTACLE — c'est la conséquence pratique du
   // terrain gelé, et le §7 du brief en fait un point d'arrêt.
-  const roches = new Set(etat.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
-  for (const b of etat.disposition) {
+  const roches = new Set(baseCourante(etat).obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  for (const b of baseCourante(etat).disposition) {
     assert.equal(roches.has(`${b.rangee}:${b.colonne}`), false,
       `« ${b.id} » est sur un obstacle après le déplacement`);
   }
 
   // ⚠ ET LE TERRAIN SURVIT À LA SAUVEGARDE, qui le redéduit de `fondation`.
   const relu = charger(serialiser(etat, T0), T0);
-  assert.equal(JSON.stringify(relu.champs), champsAvant);
-  assert.equal(JSON.stringify(relu.obstacles), obstaclesAvant);
-  assert.deepEqual(relu.fondation, fondationAvant);
-  assert.deepEqual(relu.position, etat.position);
+  assert.equal(JSON.stringify(baseCourante(relu).champs), champsAvant);
+  assert.equal(JSON.stringify(baseCourante(relu).obstacles), obstaclesAvant);
+  assert.deepEqual(baseCourante(relu).fondation, fondationAvant);
+  assert.deepEqual(baseCourante(relu).position, baseCourante(etat).position);
 });
 
 test('DÉPLACEMENT T5 bis — `sim/deplacement.js` ne lit jamais `fondation` pour en tirer un terrain', () => {
@@ -273,20 +288,29 @@ test('DÉPLACEMENT T6 — le rayon des anneaux de satellites suit la nouvelle ra
   // `niveauDeLaRangee(etat.position.rangee)`. Deux rangées assez éloignées
   // doivent donc donner deux niveaux, sinon le test ne mesure rien.
   const etat = partie(2026, 200);
-  const avant = niveauDeLaRangee(etat.position.rangee);
-  deplacerLaBase(etat, { rangee: etat.position.rangee - 10, colonne: etat.position.colonne });
-  const apres = niveauDeLaRangee(etat.position.rangee);
+  const avant = niveauDeLaRangee(baseCourante(etat).position.rangee);
+  deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 10, colonne: baseCourante(etat).position.colonne });
+  const apres = niveauDeLaRangee(baseCourante(etat).position.rangee);
   assert.notEqual(apres, avant, 'le montage ne mesure rien : le niveau de rangée n\'a pas changé');
 
   // Et l'anneau se calcule bien autour de la NOUVELLE position.
-  const anneau = casesDeLAnneau(etat.position, ANNEAUX.camp.min, ANNEAUX.camp.max);
+  const anneau = casesDeLAnneau(baseCourante(etat).position, ANNEAUX.camp.min, ANNEAUX.camp.max);
   for (const k of anneau) {
-    const d2 = distanceCarreeCases(etat.position, k);
+    const d2 = distanceCarreeCases(baseCourante(etat).position, k);
     assert.ok(d2 >= ANNEAUX.camp.min ** 2 && d2 <= ANNEAUX.camp.max ** 2);
   }
   assert.ok(anneau.length > 0);
-  // La source le dit : c'est `etat.position` qui décide, pas `fondation`.
-  assert.match(decommentee('src/sim/satellites.js'), /niveauDeLaRangee\(etat\.position\.rangee\)/);
+  // La source le dit : c'est la POSITION qui décide, pas `fondation`.
+  // ⚠ LE MOTIF A SUIVI LE DÉPLIAGE DE BASES-0 : la position vit dans la base.
+  // Il reste aussi strict — il nomme `position`, et refuserait `fondation`.
+  assert.match(
+    decommentee('src/sim/satellites.js'),
+    /niveauDeLaRangee\(laBase\.position\.rangee\)/,
+  );
+  assert.doesNotMatch(
+    decommentee('src/sim/satellites.js'),
+    /niveauDeLaRangee\(\w+\.fondation\.rangee\)/,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -296,24 +320,24 @@ test('DÉPLACEMENT T6 — le rayon des anneaux de satellites suit la nouvelle ra
 test('DÉPLACEMENT T7 — 1 h à bas niveau, 24 h au niveau 50, interpolé entre les deux', () => {
   const etat = creerEtat(7);
   // Une base neuve : un seul Chantier de niveau 1.
-  assert.equal(niveauDesBatiments(etat.disposition), 10, 'le niveau se lit en DIXIÈMES');
+  assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 10, 'le niveau se lit en DIXIÈMES');
   assert.equal(delaiDeplacementTicks(etat), 1 * TICKS_PAR_HEURE);
 
   // Au plafond.
-  etat.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
-  assert.equal(niveauDesBatiments(etat.disposition), 500);
+  baseCourante(etat).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 500);
   assert.equal(delaiDeplacementTicks(etat), 24 * TICKS_PAR_HEURE);
 
   // ⚠⚠ ET AU MILIEU, C'EST LÀ QUE LE PIÈGE DES DIXIÈMES MORD. Une base de
   // niveau 25,5 est à la moitié exacte du barème : 12,5 h. Lire
   // `niveauDesBatiments` comme un ENTIER donnerait 255, donc le plafond, donc
   // 24 h — un délai presque deux fois trop long, et dix fois trop tôt.
-  etat.disposition[0].niveau = 25;
-  etat.disposition.push({
+  baseCourante(etat).disposition[0].niveau = 25;
+  baseCourante(etat).disposition.push({
     id: 'caserne', rangee: 13, colonne: 1, niveau: 26, degatsMilli: 0,
   });
-  etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
-  assert.equal(niveauDesBatiments(etat.disposition), 255, 'moyenne de 25 et 26 : 25,5');
+  baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 255, 'moyenne de 25 et 26 : 25,5');
   const milieu = delaiDeplacementTicks(etat);
   assert.equal(milieu, Math.round(12.5 * TICKS_PAR_HEURE));
   assert.ok(milieu > 1 * TICKS_PAR_HEURE && milieu < 24 * TICKS_PAR_HEURE);
@@ -334,11 +358,11 @@ test('DÉPLACEMENT T7 — 1 h à bas niveau, 24 h au niveau 50, interpolé entre
 
 test('DÉPLACEMENT T8 — un second déplacement trop tôt est refusé, et le refus CHIFFRE l\'attente', () => {
   const etat = partie(2026, 200);
-  const cible = { rangee: etat.position.rangee - 3, colonne: etat.position.colonne };
+  const cible = { rangee: baseCourante(etat).position.rangee - 3, colonne: baseCourante(etat).position.colonne };
   deplacerLaBase(etat, cible);
-  assert.equal(etat.dernierDeplacementTick, etat.horloge.nbTicks);
+  assert.equal(baseCourante(etat).dernierDeplacementTick, etat.horloge.nbTicks);
 
-  const encore = { rangee: etat.position.rangee - 3, colonne: etat.position.colonne };
+  const encore = { rangee: baseCourante(etat).position.rangee - 3, colonne: baseCourante(etat).position.colonne };
   const problemes = problemesDuDeplacement(etat, encore);
   assert.equal(problemes.some((p) => p.code === 'delai'), true);
   // ⚠ UNE PHRASE, PAS UN BOOLÉEN. « Il reste 1 h » est une phrase ; `false` n'en
@@ -367,18 +391,18 @@ test('DÉPLACEMENT T9 — le PREMIER déplacement d\'une partie neuve n\'attend 
   // ⚠ `null`, PAS ZÉRO, et c'est la moitié qui compte. Un zéro se lirait
   // « déplacée au tick 0 » : vrai par accident aujourd'hui, faux le jour où une
   // partie commencerait ailleurs qu'au tick zéro.
-  assert.equal(etat.dernierDeplacementTick, null);
+  assert.equal(baseCourante(etat).dernierDeplacementTick, null);
   assert.equal(ticksAvantProchainDeplacement(etat), 0);
 
   // Et il n'attend pas non plus après trois jours d'absence sans avoir bougé.
   const vieux = creerEtat(7);
   rattraperJeu(vieux, 72 * TICKS_PAR_HEURE);
-  assert.equal(vieux.dernierDeplacementTick, null);
+  assert.equal(baseCourante(vieux).dernierDeplacementTick, null);
   assert.equal(ticksAvantProchainDeplacement(vieux), 0);
 
   // Falsifiable : un zéro écrit à la place de `null` ferait attendre.
   const forge = creerEtat(7);
-  forge.dernierDeplacementTick = 0;
+  baseCourante(forge).dernierDeplacementTick = 0;
   rattraperJeu(forge, 10);
   assert.ok(ticksAvantProchainDeplacement(forge) > 0,
     'le montage ne mesure rien : un horodatage à zéro n\'attend pas non plus');
@@ -419,10 +443,10 @@ test('DÉPLACEMENT T10 — la remise à zéro repart du chemin NORMAL, et rien n
   // Et le chemin normal rend bien un état neuf et jouable, graine comprise.
   const a = creerEtat(111);
   const b = creerEtat(222);
-  assert.notDeepEqual(a.position, undefined);
-  assert.deepEqual(a.position, b.position, 'toute base neuve part du même endroit');
+  assert.notDeepEqual(baseCourante(a).position, undefined);
+  assert.deepEqual(baseCourante(a).position, baseCourante(b).position, 'toute base neuve part du même endroit');
   assert.notEqual(a.graine, b.graine);
-  assert.equal(a.dernierDeplacementTick, null);
+  assert.equal(baseCourante(a).dernierDeplacementTick, null);
   assert.deepEqual(a.poisAcquis, []);
 });
 
@@ -478,24 +502,34 @@ test('DÉPLACEMENT T11 bis — la géométrie du halo et de la flèche, sans DOM
 // ---------------------------------------------------------------------------
 
 test('DÉPLACEMENT T12 — SAVE_VERSION passe à 22, et la migration pose `null`', () => {
-  assert.equal(SAVE_VERSION, 22, 'le bump de la version des sauvegardes a été oublié');
+  // ⚠ LE NUMÉRO N'EST PLUS GARDÉ ICI, ET C'EST LA RÈGLE DU DÉPÔT, PAS UN
+  // ASSOUPLISSEMENT. `points-attaque.test.js` l'écrit depuis le lot
+  // SITE-ENTAMÉ : « la garde du numéro appartient au maillon le plus RÉCENT
+  // de la chaîne, une seule fois ». Ce test-ci avait gardé le sien, et le lot
+  // BASES-0 l'aurait rendu rouge pour une raison qui ne le regarde pas. Ce
+  // qu'il vérifie vraiment, c'est que SON maillon est encore là.
+  assert.ok(SAVE_VERSION >= 22, 'le maillon v21 → 22 n\'est plus dans la chaîne');
 
   const v21 = JSON.parse(serialiser(creerEtat(7), T0));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v21 n'a jamais
+  // porté `bases` : lui en donner un ferait tourner la chaîne de migrations
+  // sur une forme qui n'a jamais existé.
+  aplatirSauvegarde(v21);
   v21.version = 21;
   delete v21.dernierDeplacementTick;
   assert.equal('dernierDeplacementTick' in v21, false, 'le montage ne mesure rien');
 
   const migre = migrer(structuredClone(v21));
-  assert.equal(migre.version, 22);
-  assert.equal(migre.dernierDeplacementTick, null,
+  assert.equal(migre.version, SAVE_VERSION);
+  assert.equal(baseCourante(migre).dernierDeplacementTick, null,
     'la migration a posé un zéro : le premier déplacement attendrait');
 
   // Le champ traverse la sauvegarde.
   const etat = partie(2026, 200);
-  deplacerLaBase(etat, { rangee: etat.position.rangee - 4, colonne: etat.position.colonne });
+  deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 4, colonne: baseCourante(etat).position.colonne });
   const relu = charger(serialiser(etat, T0), T0);
-  assert.equal(relu.dernierDeplacementTick, etat.dernierDeplacementTick);
-  assert.deepEqual(relu.position, etat.position);
+  assert.equal(baseCourante(relu).dernierDeplacementTick, baseCourante(etat).dernierDeplacementTick);
+  assert.deepEqual(baseCourante(relu).position, baseCourante(etat).position);
 });
 
 test('DÉPLACEMENT T12 bis — un déplacement n\'arrive jamais pendant un rattrapage', () => {
@@ -535,7 +569,7 @@ test('DÉPLACEMENT — un déplacement change les cibles à portée, et ça se m
     const avant = casesAtteignables(etat).length;
     assert.ok(avant > 0, 'aucune case atteignable : le montage ne mesure rien');
     const avantCibles = basesAttaquantes(etat).length;
-    deplacerLaBase(etat, { rangee: etat.position.rangee - 10, colonne: etat.position.colonne });
+    deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 10, colonne: baseCourante(etat).position.colonne });
     if (basesAttaquantes(etat).length !== avantCibles) bougees += 1;
   }
   assert.ok(bougees > 10,

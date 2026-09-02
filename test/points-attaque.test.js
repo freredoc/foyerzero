@@ -17,6 +17,7 @@ import {
 import { creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION } from '../src/sim/state.js';
 import { POINTS_ATTAQUE, GEOGRAPHIE } from '../src/data/sites.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 /** Une armée dont la moyenne vaut exactement le niveau demandé, en dixièmes. */
 function armeeAuNiveau(...niveaux) {
@@ -60,18 +61,18 @@ test('plafond — le CLIQUET : il monte, il ne redescend jamais', () => {
   const etat = creerEtat(2026);
   assert.equal(etat.attaque.plafond, 100, 'une base neuve n\'a pas d\'armée');
 
-  etat.armee = armeeAuNiveau(5, 6, 6, 6);
+  baseCourante(etat).armee = armeeAuNiveau(5, 6, 6, 6);
   tickJeu(etat);
   assert.equal(etat.attaque.plafond, 158, 'le plafond n\'a pas suivi l\'armée');
 
   // « Si tu supprimes complètement ton armée pour en refaire une autre, ça ne
   // va pas toucher au plafond » — Ethan, 29/08. Un plafond DÉRIVÉ rendrait 100.
-  etat.armee = [];
+  baseCourante(etat).armee = [];
   tickJeu(etat);
   assert.equal(etat.attaque.plafond, 158, 'le plafond a suivi l\'armée démantelée');
 
   // Et il remonte encore quand une meilleure armée arrive.
-  etat.armee = armeeAuNiveau(50);
+  baseCourante(etat).armee = armeeAuNiveau(50);
   tickJeu(etat);
   assert.equal(etat.attaque.plafond, 600);
 
@@ -189,7 +190,7 @@ test('territoire — le rayon est celui de GEOGRAPHIE, et il vaut 2', () => {
   // ⚠ CONSÉQUENCE MESURÉE, et elle contredit l'exemple oral d'Ethan : un camp à
   // trois cases coûte 19, pas 13, parce qu'à rayon 2 le tarif à +1 ne couvre
   // que les cases à 1 et 2. Le tarif bon marché ne va donc jamais au-delà de 12.
-  const etat = { position: { rangee: 100, colonne: 10 }, armee: [] };
+  const etat = { bases: [{ position: { rangee: 100, colonne: 10 }, armee: [] }], baseCourante: 0 };
   assert.equal(coutDUnRaid(etat, base(100, 10), { rangee: 103, colonne: 10 }), 19);
   assert.equal(coutDUnRaid(etat, base(100, 10), { rangee: 102, colonne: 10 }), 12);
 });
@@ -217,7 +218,7 @@ test('territoire — le singulier d\'aujourd\'hui tient en UNE fonction', () => 
   const etat = creerEtat(7);
   const bases = basesDuJoueur(etat);
   assert.equal(bases.length, 1);
-  assert.equal(bases[0].position, etat.position, 'la base d\'aujourd\'hui EST l\'état');
+  assert.equal(bases[0].position, baseCourante(etat).position, 'la base d\'aujourd\'hui EST l\'état');
 });
 
 test('payer — le manque est un nombre, et rien ne bouge quand ça manque', () => {
@@ -265,7 +266,7 @@ test('état — le cliquet traverse la sauvegarde, points compris', () => {
   // Même instant des deux côtés : aucune absence à rattraper, donc rien ne
   // régénère entre l'écriture et la lecture.
   const recharge = charger(serialiser(etat, 1_000_000), 1_000_000);
-  assert.deepEqual(recharge.armee, [], 'montage sans mordant : il reste une armée');
+  assert.deepEqual(baseCourante(recharge).armee, [], 'montage sans mordant : il reste une armée');
   assert.deepEqual(recharge.attaque, attendu, 'le champ n\'a pas survécu au tour');
   assert.equal(recharge.attaque.plafond, 600, 'le plafond acquis s\'est perdu au chargement');
 });

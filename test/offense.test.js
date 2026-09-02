@@ -26,6 +26,7 @@ import { acquisesDe } from '../src/sim/recherche.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, UNITES } from '../src/data/combat.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -111,9 +112,9 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
   const roster = Object.keys(UNITES).length;
   for (const [niveau, quoi] of [[1, 'au niveau 1'], [50, 'au plafond']]) {
     const etat = creerEtat(7);
-    etat.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+    baseCourante(etat).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
     poser(etat, 'centreDeCommandement', 12, 1);
-    etat.disposition[1].niveau = niveau;
+    baseCourante(etat).disposition[1].niveau = niveau;
     const vue = unitesDeLaPalette(etat);
     assert.equal(vue.length, roster, `la palette a changé de longueur ${quoi}`);
   }
@@ -131,9 +132,9 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
     'sans QG, toutes les raisons devraient nommer le Centre de commandement');
 
   const avecQg = creerEtat(7);
-  avecQg.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  baseCourante(avecQg).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   poser(avecQg, 'centreDeCommandement', 12, 1);
-  avecQg.disposition[1].niveau = GEOGRAPHIE.niveauPlafond;
+  baseCourante(avecQg).disposition[1].niveau = GEOGRAPHIE.niveauPlafond;
   const sansCaserne = unitesDeLaPalette(avecQg);
   assert.ok(sansCaserne.every((u) => !u.disponible),
     'au plafond sans aucun bâtiment de production, rien ne doit être constructible');
@@ -167,7 +168,7 @@ test('offense — la palette porte le roster entier, sous les noms du JOUEUR', (
   // message ne porte plus de nombre — le coût vit dans l'écran Recherche, le
   // redire ici en ferait une seconde lecture de la même table.
   const bas = creerEtat(7);
-  bas.disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  baseCourante(bas).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   poser(bas, 'centreDeCommandement', 12, 1);
   poser(bas, 'caserne', 12, 3);
   const auNiveauUn = unitesDeLaPalette(bas);
@@ -399,9 +400,9 @@ test('offense — changer d\'écran n\'arrête PAS la boucle de jeu', () => {
 /** Une base qui porte un Centre de commandement, donc un budget d'armée. */
 function baseAvecCommandement(niveau = 12) {
   const etat = creerEtat(20260828);
-  etat.disposition[0].niveau = 5; // dix emplacements
-  etat.disposition.push({ id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau });
-  etat.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  baseCourante(etat).disposition[0].niveau = 5; // dix emplacements
+  baseCourante(etat).disposition.push({ id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau });
+  baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   return etat;
 }
 
@@ -423,7 +424,7 @@ test('offense — la vue lit l\'armée de l\'état, case par case', () => {
   assert.equal(vue.vagues[3][8].id, 'fendeur');
   // L'indice rend la pièce retrouvable dans `etat.armee` — c'est ce qui permet
   // de la déplacer ou de la retirer sans la rechercher par coordonnées.
-  assert.equal(etat.armee[vue.vagues[3][8].index].id, 'fendeur');
+  assert.equal(baseCourante(etat).armee[vue.vagues[3][8].index].id, 'fendeur');
 
   // Les points engagés et le budget, tous deux réels.
   assert.equal(vue.engages, UNITES.meute.points + UNITES.fendeur.points);
@@ -441,8 +442,15 @@ test('offense — la vue lit l\'armée de l\'état, case par case', () => {
 
 test('offense — l\'écran refuse un état malformé au lieu de rendre du vide', () => {
   assert.throws(() => vueDeLOffense(null), /état de jeu absent ou malformé/);
-  const ampute = { ...creerEtat(3) };
-  delete ampute.armee;
+  // ⚠ ON AMPUTE LA BASE, PAS LA RACINE — lot BASES-0 : `armee` y a descendu.
+  // Amputer la racine ne retirerait plus rien, et le test passerait pour la
+  // mauvaise raison, ou pas du tout.
+  const etatAmpute = creerEtat(3);
+  const ampute = {
+    ...etatAmpute,
+    bases: [{ ...baseCourante(etatAmpute), armee: undefined }],
+  };
+  delete ampute.bases[0].armee;
   assert.throws(() => vueDeLOffense(ampute), /état de jeu absent ou malformé/);
 });
 
@@ -514,8 +522,8 @@ test('offense — une armée trop chère est SIGNALÉE, jamais amputée', () => 
   assert.equal(riche.avis, '');
 
   // Le QG redescend au niveau 1 : le budget s'effondre sous l'armée posée.
-  const indice = etat.disposition.findIndex((b) => b.id === 'centreDeCommandement');
-  etat.disposition[indice].niveau = 1;
+  const indice = baseCourante(etat).disposition.findIndex((b) => b.id === 'centreDeCommandement');
+  baseCourante(etat).disposition[indice].niveau = 1;
   const pauvre = vueDeLOffense(etat);
 
   // Falsifiable : le montage doit VRAIMENT dépasser, sinon il ne mesure rien.
@@ -526,7 +534,7 @@ test('offense — une armée trop chère est SIGNALÉE, jamais amputée', () => 
   assert.match(pauvre.avis, /Rien n'est retiré tout seul/);
 
   // ⚠ ET RIEN N'A ÉTÉ RETIRÉ. Les neuf unités sont toujours là, à leur place.
-  assert.equal(etat.armee.length, 9, 'des unités ont disparu toutes seules');
+  assert.equal(baseCourante(etat).armee.length, 9, 'des unités ont disparu toutes seules');
   assert.equal(pauvre.vagues[0].filter((c) => c !== null).length, 9);
 });
 

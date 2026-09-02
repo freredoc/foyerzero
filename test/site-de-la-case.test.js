@@ -19,12 +19,13 @@ import { niveauDeLaRangee } from '../src/sim/carte.js';
 import { distanceCarreeCases, estAPorteeDAttaque } from '../src/sim/points-attaque.js';
 import { butin } from '../src/sim/combat.js';
 import { GEOGRAPHIE, TYPES_SITE } from '../src/data/sites.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 /** Une partie dont les trois satellites sont parus. */
 function partieAvecSatellites(graine = 2026) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
-  assert.equal(etat.satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'montage : les satellites ne sont pas parus');
   return etat;
 }
 
@@ -107,9 +108,9 @@ test('saveur — deux saveurs, tirées de la CASE et jamais de l\'instance', () 
 
 test('site — la case du joueur n\'est pas une cible', () => {
   const etat = partieAvecSatellites();
-  assert.equal(siteDeLaCase(etat, etat.position.rangee, etat.position.colonne), null);
+  assert.equal(siteDeLaCase(etat, baseCourante(etat).position.rangee, baseCourante(etat).position.colonne), null);
   // Et une case vide non plus — sinon « pas de cible » ne voudrait rien dire.
-  assert.equal(siteDeLaCase(etat, etat.position.rangee, etat.position.colonne + 7), null);
+  assert.equal(siteDeLaCase(etat, baseCourante(etat).position.rangee, baseCourante(etat).position.colonne + 7), null);
   // Ni une case hors carte.
   assert.equal(siteDeLaCase(etat, 0, 1), null);
   assert.equal(siteDeLaCase(etat, 1, GEOGRAPHIE.carte.largeur + 1), null);
@@ -117,7 +118,7 @@ test('site — la case du joueur n\'est pas une cible', () => {
 
 test('site — un satellite posé est une cible, avec SON instance', () => {
   const etat = partieAvecSatellites();
-  for (const s of etat.satellites.presents) {
+  for (const s of baseCourante(etat).satellites.presents) {
     const site = siteDeLaCase(etat, s.rangee, s.colonne);
     assert.ok(site, `aucun site sur le satellite en (${s.rangee}, ${s.colonne})`);
     assert.equal(site.type, s.type);
@@ -127,7 +128,7 @@ test('site — un satellite posé est une cible, avec SON instance', () => {
   }
   // Falsifiable : les trois instances sont DIFFÉRENTES, sinon lire l'instance
   // ou lire une constante reviendrait au même.
-  const instances = etat.satellites.presents.map((s) => s.instance);
+  const instances = baseCourante(etat).satellites.presents.map((s) => s.instance);
   assert.equal(new Set(instances).size, 3);
 });
 
@@ -245,7 +246,7 @@ test('résumé — la force de la défense se compte comme celle du joueur', () 
   const montage = montageDuSite(g, campEn(g, 200, 10, 1, 20));
   assert.ok(montage.defenseurs.length > 5, 'montage sans mordant : trop peu de défenseurs');
 
-  etat.garnison = montage.defenseurs.map((d) => ({
+  baseCourante(etat).garnison = montage.defenseurs.map((d) => ({
     id: d.id, rangee: d.rangee, colonne: d.colonne, niveau: d.niveau, degatsMilli: 0,
   }));
   assert.equal(forceDeLaDefense(montage.defenseurs), pointsEngages(etat, 'garnison'));
@@ -301,10 +302,10 @@ test('cibles — aucune au départ, les trois satellites cinq minutes après', (
   // RIEN à attaquer avant que ses propres satellites paraissent. C'est
   // exactement le rôle « filet de sécurité » que `TYPES_SITE.camp` annonce.
   const neuve = creerEtat(2026);
-  assert.deepEqual(ciblesAPortee(neuve, neuve), []);
+  assert.deepEqual(ciblesAPortee(neuve, baseCourante(neuve)), []);
 
   const etat = partieAvecSatellites();
-  const cibles = ciblesAPortee(etat, etat);
+  const cibles = ciblesAPortee(etat, baseCourante(etat));
   assert.equal(cibles.length, 3);
   assert.deepEqual(
     cibles.map((c) => c.type).sort(), ['avantPoste', 'camp', 'camp'],

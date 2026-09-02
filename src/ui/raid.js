@@ -42,6 +42,7 @@ import {
 import { calculerProjection } from '../render/projection.js';
 import { listeAffichage } from '../render/scene.js';
 import { executer } from '../render/canvas2d.js';
+import { baseCourante } from '../sim/base-courante.js';
 
 // ---------------------------------------------------------------------------
 // Étage pur
@@ -151,12 +152,13 @@ export function lignesDuResultat(rapport) {
  * @returns {Array<{numero: number, cases: Array<null|object>}>}
  */
 export function vaguesDeLArmee(etat) {
+  const laBase = baseCourante(etat);
   const vagues = [];
   for (let numero = 1; numero <= NB_VAGUES; numero += 1) {
     const cases = new Array(NB_COLONNES).fill(null);
     vagues.push({ numero, cases });
   }
-  etat.armee.forEach((piece, index) => {
+  laBase.armee.forEach((piece, index) => {
     const v = vagues[piece.vague - 1];
     if (v === undefined || piece.colonne < 1 || piece.colonne > NB_COLONNES) return;
     const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
@@ -184,7 +186,7 @@ export function vaguesDeLArmee(etat) {
 export function vueDuRaid(etat, cible) {
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
   const problemes = site === null ? [{ code: 'sans-cible', message: 'Plus rien à attaquer ici.' }]
-    : problemesDuRaid(etat, etat, cible);
+    : problemesDuRaid(etat, baseCourante(etat), cible);
   return {
     site,
     problemes,
@@ -227,7 +229,9 @@ export const MODES_RAID = {
     libelle: 'Activer / désactiver',
     invite: 'Mode ACTIVER : touchez l\'unité à laisser à la maison, ou à renvoyer au raid.',
     problemes: () => [],
-    agir: (etat, index) => reglerActivite(etat, 'armee', index, etat.armee[index].actif === false),
+    agir: (etat, index) => reglerActivite(
+      etat, 'armee', index, baseCourante(etat).armee[index].actif === false,
+    ),
   },
 };
 
@@ -396,7 +400,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // plus rien à attaquer sinon. Et il repasse par `problemesDuRaid` : un
       // second raid coûte encore des points, et l'armée qui revient est abîmée.
       const rejouable = !rapport.rase && etatCourant !== null && cibleCourante !== null
-        && problemesDuRaid(etatCourant, etatCourant, cibleCourante).length === 0;
+        && problemesDuRaid(etatCourant, baseCourante(etatCourant), cibleCourante).length === 0;
       $('raid-reattaquer').hidden = rapport.rase;
       $('raid-reattaquer').disabled = !rejouable;
       $('raid-fin').hidden = false;
@@ -592,7 +596,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   /** Lance un raid — pour de bon, ou en simulation. */
   function lancer(simule) {
     if (etatCourant === null || cibleCourante === null) return;
-    const problemes = problemesDuRaid(etatCourant, etatCourant, cibleCourante);
+    const problemes = problemesDuRaid(etatCourant, baseCourante(etatCourant), cibleCourante);
     if (problemes.length > 0) { avis(problemes.map((p) => p.message).join(' ; ')); return; }
     desarmer();
     simulation = simule;
@@ -603,8 +607,8 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     const montage = montageDuRaid(etatCourant, site);
     const { vagues } = composerLesVagues(etatCourant);
     rapportCourant = simule
-      ? simulerRaid(etatCourant, etatCourant, cibleCourante)
-      : executerRaid(etatCourant, etatCourant, cibleCourante);
+      ? simulerRaid(etatCourant, baseCourante(etatCourant), cibleCourante)
+      : executerRaid(etatCourant, baseCourante(etatCourant), cibleCourante);
     if (!simule) apresGeste();
     peindreVagues();
     // ⚠ UN BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ,
