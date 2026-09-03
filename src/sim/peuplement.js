@@ -12,24 +12,46 @@
 // qui se journalisera plus tard, ce sont les ÉCARTS — un site rasé, un camp qui
 // réapparaît —, jamais la carte elle-même.
 //
-// ⚠⚠ LA RÈGLE DE NON-CONTACT S'EST DESSERRÉE LE 03/09/2026, ET C'ÉTAIT LE SEUL
-// MOYEN DE REMPLIR DAVANTAGE. Ethan : « on davantage remplir le monde avec des
-// bases ouvrage ». L'exclusion portait sur les HUIT voisines, et ce voisinage
-// est un PLAFOND MATHÉMATIQUE : la densité des maxima locaux d'un 3 × 3 vaut
-// exactement 1/9, soit 16 par 12 × 12, quelle que soit la probabilité — le dépôt
-// en était déjà à 15,7. Elle porte désormais sur les QUATRE voisines
-// orthogonales, dont le plafond est 1/5, soit 28,8 ; mesuré, 27,83.
+// ⚠⚠ LA CARTE S'EST REMPLIE LE 03/09/2026, ET L'EXCLUSION N'A PAS BOUGÉ D'UNE
+// CASE. Ethan : « on davantage remplir le monde avec des bases ouvrage ». La
+// première réponse a été de desserrer le voisinage aux QUATRE voisines
+// orthogonales, au motif que les huit plafonnaient la carte à 16 par 12 × 12 ;
+// Ethan l'a refusée le jour même — « je suis sûr à 100 % qu'on n'est pas obligé
+// de mettre des bases en diagonale » —, et il avait raison.
 //
-// ⚠ CE QUI RESTE VRAI : DEUX BASES NE SONT JAMAIS CÔTE À CÔTE. Elles peuvent se
-// toucher par un COIN, jamais par un côté — c'est la lettre du message du 29/08
-// (« aucune base ne peut être côte à côte »), et non plus ses « 8 cases autour ».
-// `PEUPLEMENT.contactDiagonalPermis` porte la décision, et la remettre à `false`
-// rend la carte d'avant à l'identique.
+// ⚠⚠ LE 16 ÉTAIT LE PLAFOND D'UNE SEULE PASSE, PAS CELUI DE LA RÈGLE. La
+// densité des maxima locaux d'un champ indépendant dans un voisinage de neuf
+// vaut exactement 1/9 : c'est une propriété de la SÉLECTION. La règle, elle —
+// « aucune base dans les huit cases autour » —, admet un damier au pas de deux,
+// soit 36 par 12 × 12. Entre les deux il y avait un facteur d'un peu plus de
+// deux, et il se prend en REPOSANT des bases sur ce que la première passe a
+// laissé libre.
 //
-// ⚠ LA RÈGLE RESTE APPLIQUÉE LOCALEMENT, SANS PASSE GLOBALE. Une case candidate
-// devient une base si son hachage DOMINE celui de ses voisines candidates. Deux
-// voisines candidates ne peuvent donc pas gagner toutes les deux, et le contact
-// interdit est impossible par construction — sans jamais parcourir la carte.
+// ⚠⚠ D'OÙ LES TOURS. Au tour 1, une case candidate devient une base si son
+// hachage domine celui de ses huit voisines candidates. Au tour `k`, on
+// recommence, mais seules concourent les cases qu'aucun tour précédent n'a
+// prises ni voisinées. `PEUPLEMENT.toursDePeuplement` en fixe le nombre — quatre,
+// où la densité est au point fixe à un centième près. Le résultat est un
+// ensemble indépendant MAXIMAL : plus aucune case ne pourrait être ajoutée sans
+// toucher une base.
+//
+// ⚠ ET DEUX BASES NE SE TOUCHENT JAMAIS, PAS MÊME PAR UN COIN. C'est vrai tour
+// par tour et donc vrai en tout : deux voisines candidates ne peuvent pas gagner
+// ensemble au même tour, et une case prise interdit ses huit voisines à tous les
+// tours suivants. Le message du 29/08 — « 8 cases autour » — est appliqué à la
+// lettre.
+//
+// ⚠ LA RÈGLE RESTE LOCALE, SANS AUCUNE PASSE GLOBALE, et c'est ce qui garde le
+// peuplement dérivé. Le tour `k` d'une case dépend du tour `k − 1` de ses
+// voisines : la récursion regarde donc un rayon de `toursDePeuplement` cases et
+// s'arrête là. Mesuré : 59 hachages par appel isolé contre 9 auparavant. Une
+// fenêtre d'écran de 1 240 cases passe de **0,9 à 2,4 ms** — et non à 5,5, qui
+// serait le prix d'un mémo par case ; voir `priseAUnTour`.
+//
+// ⚠⚠ ET ELLE REND EXACTEMENT CE QUE RENDRAIT LA PASSE GLOBALE — vérifié case
+// par case, 0 désaccord sur 27 900 cases et trois graines, par le test qui
+// réimplémente l'itération sur la carte entière. C'est la seule garde qui dise
+// que la récursion locale n'a pas oublié un tour.
 //
 // ⚠ CE MODULE NE POSE NI CAMP NI AVANT-POSTE. Ceux-là ne sont pas sur la carte :
 // ils suivent la base du joueur, apparaissent cinq minutes après sa pose ou son
@@ -143,13 +165,15 @@ export function horsDeLaGarde(rangee, colonne) {
 }
 
 /**
- * Les voisines dont une candidate doit dominer le hachage pour devenir une base.
+ * Les huit voisines : celles qu'une base interdit, et celles dont une candidate
+ * doit dominer le hachage pour gagner un tour.
  *
- * ⚠⚠ LA LISTE EST CALCULÉE UNE FOIS, ET C'EST ELLE QUI PORTE LA DENSITÉ. Quatre
- * voisines orthogonales quand le contact diagonal est permis, les huit sinon :
- * le plafond de densité vaut 1/(1 + n) par case, donc 28,8 par 12 × 12 contre 16.
- * Aucun autre réglage ne peut franchir ce plafond — ni la probabilité, ni la
- * garde, ni la taille de la carte.
+ * ⚠⚠ C'EST LA RÈGLE D'ETHAN DU 29/08, ET ELLE N'A JAMAIS DE VARIANTE. « Aucune
+ * base ouvrage et joueur ne peuvent être côte à côte avec une autre base ouvrage
+ * joueur — 8 cases autour. » Une liste de quatre a existé quelques heures le
+ * 03/09, le temps qu'on croie le voisinage responsable du plafond de densité ;
+ * ce n'était pas lui, c'était la passe unique. Ne pas la réintroduire pour
+ * gagner des bases : ce sont les TOURS qui les donnent.
  *
  * ⚠ ELLE NE CONTIENT JAMAIS (0, 0). Une case qui devrait dominer son propre
  * hachage ne serait JAMAIS une base : la comparaison est `>=`, donc elle
@@ -161,7 +185,6 @@ export const VOISINES_EXCLUES = (() => {
   for (let dr = -1; dr <= 1; dr += 1) {
     for (let dc = -1; dc <= 1; dc += 1) {
       if (dr === 0 && dc === 0) continue;
-      if (PEUPLEMENT.contactDiagonalPermis && dr !== 0 && dc !== 0) continue;
       liste.push([dr, dc]);
     }
   }
@@ -176,13 +199,87 @@ function estCandidate(graine, rangee, colonne) {
 }
 
 /**
+ * La case est-elle PRISE au tour `tour` ?
+ *
+ * Elle l'est si elle est candidate, encore libre à ce tour, et si son hachage
+ * domine celui de toutes ses voisines encore libres. La comparaison est stricte :
+ * à égalité — c'est-à-dire jamais, en pratique — la case perd, ce qui est le
+ * seul sens qui garantisse qu'aucune paire de voisines ne gagne ensemble.
+ *
+ * ⚠ LE MÉMO EST OBLIGATOIRE, ET IL EST PROPRE À UN APPEL. Sans lui, `libreAuTour`
+ * redemanderait les tours précédents de chaque voisine pour chacune des huit
+ * voisines : le coût partirait en 9 puissance `tour`. Avec lui, un appel isolé
+ * coûte 59 hachages, mesuré. Il ne survit PAS à l'appel — un cache partagé entre
+ * deux graines serait une source de vérité de plus, et il faudrait le vider.
+ *
+ * @param {number} graine
+ * @param {number} rangee
+ * @param {number} colonne
+ * @param {number} tour de 1 à `PEUPLEMENT.toursDePeuplement`
+ * @param {Map<string, boolean>} memo
+ * @returns {boolean}
+ */
+function priseAuTour(graine, rangee, colonne, tour, memo) {
+  const cle = `${rangee},${colonne},${tour}`;
+  const vu = memo.get(cle);
+  if (vu !== undefined) return vu;
+  let prise = false;
+  if (estCandidate(graine, rangee, colonne)
+    && libreAuTour(graine, rangee, colonne, tour, memo)) {
+    prise = true;
+    const mien = hachageDeCase(graine, rangee, colonne, 1);
+    for (const [dr, dc] of VOISINES_EXCLUES) {
+      const r = rangee + dr;
+      const c = colonne + dc;
+      if (!estCandidate(graine, r, c)) continue;
+      if (!libreAuTour(graine, r, c, tour, memo)) continue;
+      if (hachageDeCase(graine, r, c, 1) >= mien) { prise = false; break; }
+    }
+  }
+  memo.set(cle, prise);
+  return prise;
+}
+
+/**
+ * La case est-elle encore libre à l'entrée du tour `tour` ?
+ *
+ * Elle l'est si aucun tour antérieur ne l'a prise, ELLE ou l'une de ses huit
+ * voisines. C'est cette seconde moitié qui fait la règle de non-contact : une
+ * base prise au tour 1 retire ses voisines de tous les tours suivants.
+ *
+ * ⚠ LA BOUCLE VA DE 1 À `tour − 1`, JAMAIS JUSQU'À `tour`. S'y inclure ferait
+ * demander à une case si elle est prise au tour où l'on cherche justement à le
+ * savoir : récursion infinie, et la pile part avant qu'un test ne dise quoi que
+ * ce soit.
+ *
+ * @param {number} graine
+ * @param {number} rangee
+ * @param {number} colonne
+ * @param {number} tour
+ * @param {Map<string, boolean>} memo
+ * @returns {boolean}
+ */
+function libreAuTour(graine, rangee, colonne, tour, memo) {
+  for (let j = 1; j < tour; j += 1) {
+    if (priseAuTour(graine, rangee, colonne, j, memo)) return false;
+    for (const [dr, dc] of VOISINES_EXCLUES) {
+      if (priseAuTour(graine, rangee + dr, colonne + dc, j, memo)) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Y a-t-il une base de l'Ouvrage sur cette case ?
  *
- * Une case porte une base si elle est candidate et si aucune de ses voisines
- * candidates — celles de `VOISINES_EXCLUES` — ne la domine au départage. La
- * comparaison est stricte : à égalité — c'est-à-dire jamais, en pratique — la
- * case perd, ce qui est le seul sens qui garantisse qu'aucune paire ne gagne
- * ensemble.
+ * Elle en porte une si elle est prise à l'un des `toursDePeuplement` tours. Voir
+ * l'en-tête du module : la passe unique plafonnait la carte à 16 bases par
+ * 12 × 12, les tours la portent à 25,4 sans toucher à la règle de non-contact.
+ *
+ * ⚠ LE PREMIER REFUS EST UN RACCOURCI, PAS UNE RÈGLE DE PLUS. Une case non
+ * candidate n'est prise à aucun tour ; le dire ici évite d'ouvrir un mémo pour
+ * les deux tiers de la carte, et c'est mesurable — sans lui, une fenêtre d'écran
+ * coûte le double.
  *
  * @param {number} graine graine de la partie
  * @param {number} rangee
@@ -190,15 +287,29 @@ function estCandidate(graine, rangee, colonne) {
  * @returns {boolean}
  */
 export function estBaseOuvrage(graine, rangee, colonne) {
+  return priseAUnTour(graine, rangee, colonne, new Map());
+}
+
+/**
+ * Le corps de `estBaseOuvrage`, avec le mémo passé par l'appelant.
+ *
+ * ⚠ IL EXISTE POUR QUE `basesDeLaFenetre` N'EN OUVRE QU'UN SEUL. Une fenêtre
+ * d'écran demande 1 240 cases voisines les unes des autres, et leurs récursions
+ * se recouvrent presque entièrement : un mémo par case refait le même travail
+ * huit fois. Mesuré — 5,5 ms par fenêtre avec un mémo par case, 2,4 ms avec un
+ * mémo partagé.
+ *
+ * ⚠⚠ ET LE MÉMO EST PROPRE À UNE GRAINE. La clé ne porte que la case et le tour ;
+ * le partager entre deux graines rendrait la carte de la première. C'est
+ * l'appelant qui garantit l'unicité — `basesDeLaFenetre` en prend UNE en
+ * argument —, et un test compare les deux chemins case par case.
+ */
+function priseAUnTour(graine, rangee, colonne, memo) {
   if (!estCandidate(graine, rangee, colonne)) return false;
-  const mien = hachageDeCase(graine, rangee, colonne, 1);
-  for (const [dr, dc] of VOISINES_EXCLUES) {
-    const r = rangee + dr;
-    const c = colonne + dc;
-    if (!estCandidate(graine, r, c)) continue;
-    if (hachageDeCase(graine, r, c, 1) >= mien) return false;
+  for (let tour = 1; tour <= PEUPLEMENT.toursDePeuplement; tour += 1) {
+    if (priseAuTour(graine, rangee, colonne, tour, memo)) return true;
   }
-  return true;
+  return false;
 }
 
 /**
@@ -224,9 +335,10 @@ export function basesDeLaFenetre(graine, fenetre) {
   const c0 = Math.max(1, fenetre.premiereColonne);
   const c1 = Math.min(GEOGRAPHIE.carte.largeur, fenetre.derniereColonne);
   const bases = [];
+  const memo = new Map();
   for (let rangee = r0; rangee <= r1; rangee++) {
     for (let colonne = c0; colonne <= c1; colonne++) {
-      if (estBaseOuvrage(graine, rangee, colonne)) bases.push({ rangee, colonne });
+      if (priseAUnTour(graine, rangee, colonne, memo)) bases.push({ rangee, colonne });
     }
   }
   return bases;

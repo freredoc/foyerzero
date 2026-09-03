@@ -509,36 +509,52 @@ export const TRANSFERT = {
 // sylviculture. »
 //
 // ⚠ `probabiliteCandidate` N'EST PAS LA DENSITÉ, et confondre les deux ferait
-// poser presque deux fois trop de bases. C'est la probabilité qu'une case soit
-// CANDIDATE ; l'exclusion des huit voisines en élimine ensuite une partie.
+// poser presque trois fois trop de bases. C'est la probabilité qu'une case soit
+// CANDIDATE ; l'exclusion des huit voisines en élimine ensuite une partie, tour
+// après tour.
 //
-// ⚠⚠ ET LA RELATION SATURE — IL Y A UN PLAFOND, ET IL EST STRUCTUREL. Une case
-// est retenue si elle est un MAXIMUM LOCAL STRICT du hachage parmi ses huit
-// voisines candidates. À p = 1 toutes les cases sont candidates, et la densité
-// des maxima locaux d'un champ indépendant dans un voisinage de neuf vaut
-// exactement **1/9** : soit **16 bases par 12 × 12**, et pas une de plus, quelle
-// que soit la probabilité. Mesuré sur 120 graines, moyenne des fenêtres 12×12
-// entièrement hors de la garde :
+// ⚠⚠ LE « PLAFOND DE 16 » APPARTENAIT À L'ALGORITHME, PAS À LA RÈGLE — ET LA
+// DISTINCTION A COÛTÉ UN LOT. Cette section a affirmé, le 02/09 puis le 03/09,
+// que l'exclusion des huit voisines PLAFONNAIT la carte à 16 bases par 12 × 12,
+// « quelle que soit la probabilité ». C'est vrai d'une sélection en UNE passe :
+// la densité des maxima locaux d'un champ indépendant dans un voisinage de neuf
+// vaut exactement 1/9. Ce n'est PAS vrai de la règle « aucune base dans les huit
+// cases autour », dont l'empilement maximal est un damier au pas de deux, soit
+// **36 par 12 × 12**. Ethan, 03/09 : « je suis sûr à 100 % qu'on n'est pas
+// obligé de mettre des bases en diagonale. » Il avait raison.
 //
-//     p      0,14   0,25   0,30   0,35   0,45   0,50   0,60   1,00
-//     bases  11,97  14,85  15,53  15,88  16,27  16,31  16,39  16,35
+// ⚠⚠ D'OÙ LES PASSES. On repose une base sur ce qui reste libre, puis encore,
+// jusqu'à `toursDePeuplement`. Chaque tour est le même maximum local, appliqué
+// aux seules cases qu'aucun tour précédent n'a prises ni voisinées ; le résultat
+// est un ensemble indépendant MAXIMAL, et la carte remonte à 25,4 sans qu'une
+// seule paire de bases se touche, fût-ce par un coin. Mesuré, moyenne des
+// fenêtres 12 × 12 entièrement hors de la garde, sur 20 graines :
 //
-// ⚠⚠ D'OÙ 0,35, ET NON LA SATURATION. C'est la dernière valeur avant que la
-// courbe ne s'aplatisse : au-delà on ne gagne plus de densité — 0,45 rend 0,4
-// base de plus que 0,35, 1,00 n'en rend aucune — on ne fait que RESSERRER le
-// semis. Et un semis resserré devient régulier : mesuré, la part des blocs 3 × 3
-// entièrement vides tombe de **22,1 % à 0,35** à **20,5 % à 0,50**, et la part
-// des bases dont le plus proche voisin est à deux cases — c'est-à-dire collé au
-// minimum permis — monte de 89,9 % à 91,4 %. C'est exactement la « sylviculture »
-// qu'Ethan refuse : un maximum de densité coûte les trous qui font une carte.
+//     tours   1      2      3      4      5      6      8
+//     bases   16,24  23,88  25,31  25,42  25,43  25,43  25,43
+//
+//     p       0,30   0,40   0,50   0,60   0,70   0,80   0,90   1,00
+//     bases   19,09  21,50  23,28  24,52  25,42  26,13  26,83  27,28
+//
+// ⚠⚠ D'OÙ 0,70, ET C'EST ETHAN QUI L'A CHOISI SUR MESURE (03/09), entre trois
+// valeurs qui lui ont été montrées en capture. Le compromis est celui du 02/09
+// — « je retire le maximum un peu moins pour que ce soit pas un cadre
+// parfaitement rectangulaire comme une sylviculture » —, et il se chiffre : les
+// blocs 3 × 3 entièrement vides tombent de 4,7 % à p = 0,5 à **1,6 % à 0,7** et
+// à 0,0 % à p = 1. Au-delà de 0,7 la carte cesse d'avoir des trous, ce qui est
+// exactement ce qu'il refuse ; en deçà elle rend deux bases de moins.
+//
+// ⚠ ET IL RESTE ONZE CASES SOUS L'EMPILEMENT MAXIMAL. 25,4 contre 36 : la marge
+// n'est pas perdue, c'est elle qui fait l'irrégularité. Un lot qui voudrait plus
+// de densité devra dire ce qu'il fait des trous.
 //
 // Un test refait la mesure. ⚠ ET IL LA FAIT HORS DE LA GARDE : une fenêtre prise
 // dans le rayon de quinze cases autour du départ porte zéro base, par
 // construction. La compter ferait tomber la moyenne et donnerait l'impression
 // que le réglage est faux alors qu'il est juste.
 //
-// ⚠ « ENVIRON 16 » EST UNE MOYENNE, ET L'ÉCART RESTE LARGE — écart-type 2,2 par
-// fenêtre. C'est le prix de la disposition irrégulière, préférée le 29/08 à un
+// ⚠ « ENVIRON 25 » EST UNE MOYENNE, ET L'ÉCART RESTE LARGE — écart-type 1,93
+// par fenêtre, de 19 à 31 sur 40 graines. C'est le prix de la disposition irrégulière, préférée le 29/08 à un
 // pavage régulier qui aurait donné un compte presque constant. Un test borne la
 // moyenne, jamais une fenêtre isolée.
 //
@@ -562,45 +578,43 @@ export const TRANSFERT = {
 // 144 cases libérées, toutes dans les diagonales, et la base la plus proche du
 // départ peut se poser à onze cases de grille au lieu de quinze.
 export const PEUPLEMENT = {
-  // ⚠⚠ 0,45 EST LE MÊME CRITÈRE QUE 0,35, TRANSPOSÉ. Ethan, 02/09 : « tu
-  // augmentes la densité au maximum, je retire le maximum un peu moins pour que
-  // ce soit pas un cadre parfaitement rectangulaire ». 0,35 rendait **96,1 % du
-  // plafond** de l'ancienne règle ; 0,45 rend **96,2 % de la nouvelle** — 27,83
-  // sur un plafond mesuré à 28,94. Au-delà on ne gagne plus de densité, on ne
-  // fait que resserrer le semis : 0,50 rend 28,26 et 0,60 rend 28,69, pour des
-  // blocs vides qui tombent de 4,9 % à 4,1 %.
+  // ⚠⚠ 0,70 EST UN CHOIX D'ETHAN, RENDU LE 03/09 SUR MESURE ET SUR CAPTURE.
+  // Trois réglages lui ont été montrés — 23,5, 25,8 et 27,7 bases par 12 × 12,
+  // tous SANS contact diagonal —, et il a retenu le milieu. C'est le même
+  // critère que le 02/09, « un peu moins que le maximum pour que ce soit pas un
+  // cadre parfaitement rectangulaire », appliqué à une règle qui, elle, peut
+  // enfin monter : voir le bloc au-dessus pour les deux courbes.
   /** Probabilité qu'une case soit candidate, AVANT exclusion des voisines. */
-  probabiliteCandidate: 0.45,
+  probabiliteCandidate: 0.7,
 
   /** Ce que la probabilité ci-dessus est censée produire, et que le test mesure. */
-  basesParDouzeCarre: 28,
+  basesParDouzeCarre: 25,
 
-  // ⚠⚠ LE CONTACT EN DIAGONALE EST PERMIS DEPUIS LE 03/09/2026, ET C'EST LE
-  // SEUL MOYEN D'EN METTRE DAVANTAGE. Ethan : « on davantage remplir le monde
-  // avec des bases ouvrage ». Or le plafond de l'ancienne règle est
-  // MATHÉMATIQUE : une case est retenue si son hachage domine celui de ses HUIT
-  // voisines candidates, donc la densité de ces maxima vaut exactement 1/9,
-  // soit 16 par 12 × 12, quelle que soit `probabiliteCandidate` — et le dépôt
-  // était déjà à 15,7. Il n'y avait rien à gagner sur la probabilité : c'est le
-  // VOISINAGE qui plafonnait.
+  // ⚠⚠ QUATRE TOURS, ET C'EST LE POINT FIXE À UN CENTIÈME PRÈS. La suite des
+  // densités est 16,24 · 23,88 · 25,31 · 25,42 · 25,43, et elle ne bouge plus
+  // ensuite : au-delà de quatre tours il ne reste presque aucune case libre à
+  // prendre. Ce nombre est donc un PLAFOND DE TRAVAIL, pas un réglage
+  // d'équilibrage — le monter ne changerait quasiment rien à la carte, le
+  // descendre la viderait.
   //
-  // ⚠⚠ SUR QUATRE VOISINES, LE PLAFOND EST 1/5, SOIT 28,8 PAR 12 × 12 — mesuré,
-  // 28,94 au maximum de la courbe. La règle qui reste est donc littéralement
-  // celle qu'Ethan avait dictée le 29/08 : « aucune base ne peut être CÔTE À
-  // CÔTE avec une autre ». Deux bases peuvent se toucher par un COIN, jamais
-  // par un côté. **C'est une lecture, et elle se défait en remettant `false`** :
-  // le message du 29/08 disait aussi « 8 cases autour ». Le précédent est celui
-  // du joueur, à qui Ethan a ouvert le droit de fonder au contact de ses propres
-  // bases le 02/09.
-  //
-  // ⚠ ET LA CARTE DEVIENT MOINS RÉGULIÈRE, PAS PLUS — c'est l'autre moitié de
-  // l'arbitrage du 02/09 (« pas un cadre parfaitement rectangulaire comme une
-  // sylviculture »). Mesuré sur 12 graines : la part des bases collées au
-  // minimum permis tombe de **90,1 % à 63,2 %**, et les blocs 3 × 3 entièrement
-  // vides de 22,4 % à 4,9 %.
-  contactDiagonalPermis: true,
+  // ⚠ ET IL BORNE LE RAYON QUE LA RÈGLE REGARDE. Le tour `k` d'une case dépend
+  // du tour `k − 1` de ses voisines : quatre tours, quatre cases de rayon. C'est
+  // ce qui garde le peuplement DÉRIVÉ et local — aucune passe sur la carte,
+  // rien de stocké —, et c'est ce qui en fixe le coût : 59 hachages par appel
+  // isolé au lieu de 9, mesuré, et 2,4 ms pour une fenêtre d'écran contre 0,9.
+  toursDePeuplement: 4,
 
-  /** Tolérance de la mesure : la moyenne doit tomber dans 16 ± 1. */
+  // ⚠⚠ IL N'Y A PLUS DE `contactDiagonalPermis`, ET SON RETRAIT EST LA
+  // DÉCISION DU 03/09. Il a vécu quelques heures, à `true`, pour desserrer
+  // l'exclusion aux quatre voisines orthogonales : c'était la seule façon de
+  // remplir davantage TANT QUE LA SÉLECTION SE FAISAIT EN UNE PASSE. Ethan l'a
+  // refusé de face — « je suis sûr à 100 % qu'on n'est pas obligé de mettre des
+  // bases en diagonale » —, et la mesure lui a donné raison : les tours rendent
+  // la même densité sous l'exclusion des HUIT. Le laisser en place à `false`
+  // aurait laissé au dépôt un levier qui ne sert plus qu'à défaire un
+  // arbitrage ; la règle du 29/08 est de nouveau entière, et sans variante.
+
+  /** Tolérance de la mesure : la moyenne doit tomber dans 25 ± 1. */
   toleranceMesure: 1,
 
   /**

@@ -31,45 +31,77 @@ function carteEntiere(graine) {
   return { liste: bases, cles: new Set(bases.map((k) => `${k.rangee}:${k.colonne}`)) };
 }
 
-test('peuplement — aucune base de l\'Ouvrage n\'en jouxte une autre PAR UN CÔTÉ', () => {
-  // ⚠⚠ LA RÈGLE S'EST DESSERRÉE LE 03/09, ET LE TEST NE S'ASSOUPLIT PAS POUR
-  // AUTANT : il change de règle et garde la nouvelle SANS AUCUNE exception. Le
-  // contact par un CÔTÉ reste impossible — c'est la lettre du « côte à côte »
-  // du 29/08 —, le contact par un COIN est désormais permis, et c'est ce qui
-  // fait tenir 28 bases par 12 × 12 au lieu de 16.
+test('peuplement — aucune base de l\'Ouvrage n\'en jouxte une autre, PAS MÊME PAR UN COIN', () => {
+  // ⚠⚠ CETTE GARDE A ÉTÉ DESSERRÉE PUIS RESSERRÉE LE MÊME JOUR, LE 03/09, ET
+  // C'EST LA SECONDE VERSION QUI TIENT. Le matin, elle n'interdisait plus que le
+  // contact par un CÔTÉ, pour laisser passer une densité de 28 ; Ethan a refusé
+  // le procédé de face — « je suis sûr à 100 % qu'on n'est pas obligé de mettre
+  // des bases en diagonale ». Les huit cases du 29/08 sont de nouveau
+  // interdites, et la densité se prend ailleurs : dans les TOURS.
   //
-  // ⚠ ET LA MOITIÉ QUI COMPTE LE PLUS EST LA SECONDE : on exige que des
-  // diagonales EXISTENT. Sans elle, le test resterait vert sur le code d'avant —
-  // une carte sans aucun contact satisfait trivialement « pas de contact par un
-  // côté », et le desserrage pourrait être annulé sans qu'un test tombe.
-  const ORTHOGONALES = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  const DIAGONALES = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  // ⚠⚠ ET LA FALSIFIABILITÉ A CHANGÉ DE PORTEUR AVEC ELLE. « Aucun contact » est
+  // satisfait trivialement par une carte creuse : c'est la version d'AVANT le
+  // 03/09, qui posait 16 bases par 12 × 12, qui passerait ici sans broncher. Le
+  // COMPTE est donc asserté juste en dessous, et il n'est atteignable qu'en
+  // reposant des bases tour après tour.
+  const HUIT = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
   let bases = 0;
-  let enDiagonale = 0;
   for (const graine of [1, 7, 42]) {
     const { cles } = carteEntiere(graine);
     bases += cles.size;
     for (const cle of cles) {
       const [rangee, colonne] = cle.split(':').map(Number);
-      for (const [dr, dc] of ORTHOGONALES) {
+      for (const [dr, dc] of HUIT) {
         assert.ok(
           !cles.has(`${rangee + dr}:${colonne + dc}`),
-          `bases côte à côte : (${rangee}, ${colonne}) et (${rangee + dr}, ${colonne + dc})`,
+          `bases au contact : (${rangee}, ${colonne}) et (${rangee + dr}, ${colonne + dc})`,
         );
-      }
-      if (DIAGONALES.some(([dr, dc]) => cles.has(`${rangee + dr}:${colonne + dc}`))) {
-        enDiagonale += 1;
       }
     }
   }
-  // Falsifiable : une carte vide satisferait la boucle ci-dessus sans rien dire.
-  assert.ok(bases > 1500, `${bases} bases sur trois graines : le balayage ne mesure rien`);
-  // ⚠ MESURÉ : plus de la moitié des bases touchent une voisine par un coin. Le
-  // seuil est franc — 40 % — pour qu'il dise « le desserrage a bien eu lieu »
-  // sans figer une valeur d'équilibrage que le prochain réglage ferait bouger.
-  assert.ok(enDiagonale > bases * 0.4,
-    `${enDiagonale} bases sur ${bases} touchent une voisine en diagonale : `
-    + 'le contact diagonal n\'a pas été ouvert');
+  // ⚠ MESURÉ : 1 570 bases pour la graine 9, environ 4 700 sur ces trois-ci. Une
+  // sélection en UNE passe en rendrait autour de 3 000 — le seuil de 4 000 est
+  // donc franc dans les deux sens : il dit que le balayage porte sur une vraie
+  // carte, ET que les tours de peuplement ont bien eu lieu.
+  assert.ok(bases > 4000,
+    `${bases} bases sur trois graines : les tours de peuplement n'ont pas eu lieu`);
+});
+
+test('peuplement — la fenêtre et la case rendent le MÊME dessin, sur deux graines', () => {
+  // ⚠⚠ `basesDeLaFenetre` N'APPELLE PAS `estBaseOuvrage`, ET C'EST POUR ÇA QUE
+  // CE TEST EXISTE. Elle ouvre UN mémo pour toute la fenêtre, là où l'appel
+  // isolé en ouvre un par case : les récursions de 1 240 cases voisines se
+  // recouvrent presque entièrement, et le partage divise le coût par plus de
+  // deux (5,5 ms → 2,4 ms, mesuré). C'est un raccourci de performance sur le
+  // chemin le plus chaud du jeu, donc exactement le genre de chose qui peut
+  // rendre un autre dessin sans qu'aucun écran ne le dise.
+  //
+  // ⚠⚠ ET LA FAUTE QU'IL ATTRAPE EST CELLE DU MÉMO PARTAGÉ ENTRE DEUX GRAINES.
+  // La clé ne porte que la case et le tour ; un mémo qui survivrait d'un appel
+  // à l'autre rendrait la carte de la PREMIÈRE graine pour toutes les
+  // suivantes. D'où deux graines ici, dans cet ordre, et une assertion qu'elles
+  // ne portent pas la même carte.
+  const fenetre = {
+    premiereRangee: 120, derniereRangee: 180, premiereColonne: 1, derniereColonne: LARGEUR,
+  };
+  const dessins = [];
+  for (const graine of [3, 11]) {
+    const parFenetre = new Set(
+      basesDeLaFenetre(graine, fenetre).map((k) => `${k.rangee}:${k.colonne}`),
+    );
+    const parCase = new Set();
+    for (let r = fenetre.premiereRangee; r <= fenetre.derniereRangee; r += 1) {
+      for (let c = 1; c <= LARGEUR; c += 1) if (estBaseOuvrage(graine, r, c)) parCase.add(`${r}:${c}`);
+    }
+    assert.deepEqual([...parFenetre].sort(), [...parCase].sort(),
+      `graine ${graine} : la fenêtre et l'appel case par case ne s'accordent pas`);
+    // Falsifiable : deux ensembles vides s'accorderaient.
+    assert.ok(parFenetre.size > 250, `graine ${graine} : ${parFenetre.size} bases, la fenêtre ne mesure rien`);
+    dessins.push([...parFenetre].sort().join('|'));
+  }
+  // ⚠ ET LES DEUX GRAINES DOIVENT DIFFÉRER : sans cette ligne, un mémo qui
+  // survit d'un appel à l'autre passerait, les deux cartes étant alors la même.
+  assert.notEqual(dessins[0], dessins[1], 'deux graines rendent la même carte');
 });
 
 test('peuplement — la garde est vide, et elle s\'arrête où elle le dit', () => {

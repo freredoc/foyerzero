@@ -163,14 +163,19 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
   // que le peuplement soit STABLE d'un lot à l'autre. Le prochain lot qui les
   // fait bouger doit dire pourquoi, comme celui-ci le fait.
   //
-  // ⚠⚠ BASELINE REMESURÉE UNE SECONDE FOIS, LE 03/09, ET POUR UNE RAISON ÉCRITE :
-  // Ethan a demandé « davantage remplir le monde avec des bases ouvrage », et
-  // l'exclusion est passée de huit voisines à quatre. Les six comptes montent de
-  // **993 · 993 · 996 · 978 · 984 · 986** à ceux ci-dessous, soit **+72 % en
-  // moyenne** — ce qui est très exactement le rapport des deux plafonds
-  // structurels, 28,8 contre 16 (voir `EUCLIDE T5 bis`). Un compte qui aurait
-  // moins bougé aurait voulu dire que le desserrage n'a pas pris.
-  const REFERENCE = [[1, 1719], [7, 1704], [42, 1711], [777, 1662], [2026, 1667], [4242, 1682]];
+  // ⚠⚠ BASELINE REMESURÉE DEUX FOIS LE 03/09, ET LA SECONDE EST LA BONNE. Ethan
+  // a demandé « davantage remplir le monde avec des bases ouvrage » : l'exclusion
+  // est d'abord passée de huit voisines à quatre, portant les six comptes de
+  // **993 · 993 · 996 · 978 · 984 · 986** à 1 719 · 1 704 · 1 711 · 1 662 ·
+  // 1 667 · 1 682. Ethan a refusé le procédé le jour même — « je suis sûr à
+  // 100 % qu'on n'est pas obligé de mettre des bases en diagonale » —, et
+  // l'exclusion est revenue aux HUIT, la densité étant reprise par les tours de
+  // peuplement.
+  //
+  // ⚠ CE QUE LES SIX COMPTES DISENT, DONC : **+59,7 % sur le dépôt d'avant le
+  // 03/09**, et −6,6 % sur la carte à contact diagonal qui a existé quelques
+  // heures. C'est le réglage qu'Ethan a retenu sur capture, entre 23,5 et 27,7.
+  const REFERENCE = [[1, 1590], [7, 1588], [42, 1581], [777, 1569], [2026, 1571], [4242, 1572]];
   for (const [graine, attendu] of REFERENCE) {
     let n = 0;
     for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) {

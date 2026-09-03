@@ -1531,23 +1531,36 @@ export const CHEMINS_DEPLACES_PAR_TRANSFERT = [
 // ⚠⚠ TROIS RETOURS D'ETHAN, ET DEUX D'ENTRE EUX CHANGENT LA CARTE DE CHAQUE
 // GRAINE. « le territoire doit avoir 8 cases de plus, dans les angles » fait
 // passer les zones d'influence du disque à un OCTOGONE ; « on davantage remplir
-// le monde avec des bases ouvrage » fait passer l'exclusion de huit voisines à
-// quatre, donc la densité de 16 à 28 par 12 × 12. Le témoin ne se rafraîchit
-// pas en bloc : le lot NOMME ce qui bouge, et laisse le reste gardé contre la
-// référence d'avant.
+// le monde avec des bases ouvrage » fait passer la densité de 16 à 25 bases par
+// 12 × 12. Le témoin ne se rafraîchit pas en bloc : le lot NOMME ce qui bouge,
+// et laisse le reste gardé contre la référence d'avant.
 //
-// ⚠⚠ TRENTE-SEPT COUPLES SUR 322, ET PAS UN DE PLUS — mesuré, pas estimé. Ils
-// commencent tous à la phase 10 : les neuf premières phases — la construction de
-// la base, son économie, sa garnison, son armée, ET LE PREMIER RAID sur un camp
-// — sont identiques au bit. C'est ce qu'on attendait : un camp est de
-// l'HISTOIRE, pas du tirage de carte, et la garde du peuplement tient les bases
-// de l'Ouvrage à quinze cases du départ.
+// ⚠⚠ CE BLOC A ÉTÉ RELEVÉ DEUX FOIS LE MÊME JOUR, ET LA SECONDE EST LA BONNE.
+// La première densité passait par un desserrage du voisinage — quatre voisines
+// orthogonales au lieu de huit, donc deux bases pouvant se toucher par un coin ;
+// Ethan l'a refusé de face (« je suis sûr à 100 % qu'on n'est pas obligé de
+// mettre des bases en diagonale »), et la densité se prend désormais en
+// REPOSANT des bases tour après tour, sous l'exclusion des huit. Le bloc portait
+// alors 37 couples ; il en porte 41.
+//
+// ⚠⚠ QUARANTE ET UN COUPLES SUR 322, ET PAS UN DE PLUS — mesuré, pas estimé, et
+// RECONSTRUIT plutôt que complété : le relevé compare à la chaîne des lots
+// PRÉCÉDENTS, si bien qu'un couple revenu à sa valeur d'avant sort du bloc au
+// lieu d'y rester déclaré à tort. Ils commencent tous à la phase 10 : les neuf
+// premières phases — la construction de la base, son économie, sa garnison, son
+// armée, ET LE PREMIER RAID sur un camp — sont identiques au bit. C'est ce
+// qu'on attendait : un camp est de l'HISTOIRE, pas du tirage de carte, et la
+// garde du peuplement tient les bases de l'Ouvrage à quinze cases du départ.
 //
 // ⚠ ET L'ATTRIBUTION EST MESURÉE, ELLE AUSSI. En remettant la seule densité
-// d'avant — `contactDiagonalPermis: false` et `probabiliteCandidate: 0,35` —, il
-// n'en reste que **QUATORZE** : ce sont ceux de l'octogone seul — `poisAcquis`
-// dès la phase 10, `attaque` et `rapports` dès la 11. Les vingt-trois autres
-// sont ceux de la densité.
+// d'avant — `toursDePeuplement: 1` et `probabiliteCandidate: 0,35`, ce qui EST
+// exactement l'ancienne règle —, il n'en reste que **QUATORZE** : ce sont ceux
+// de l'octogone seul — `poisAcquis` dès la phase 10, `attaque` et `rapports`
+// dès la 11. Les vingt-sept autres sont ceux de la densité.
+//
+// ⚠ `armee` EST NEUF DANS CE BLOC, et il l'est pour une raison simple : une
+// carte plus dense fait tomber plus de raids de l'Ouvrage sur la base, donc les
+// pièces du joueur portent des dégâts qu'elles ne portaient pas.
 //
 // ⚠⚠ `poisAcquis` BOUGE DÈS LA PHASE 10, ET C'EST LA CONSÉQUENCE LA MOINS
 // ÉVIDENTE DU LOT. `releverLesPoisAcquis` peignait un CARRÉ plein de 25 cases
@@ -1557,81 +1570,85 @@ export const CHEMINS_DEPLACES_PAR_TRANSFERT = [
 // le barème du raid ne la facture ainsi. Il ne l'est plus.
 export const DEPLACES_PAR_RETOURS_DU_03 = {
   p10_montee: {
-    poisAcquis: 'ba52e90e2bb7d658',
+    poisAcquis: 'f51f723705b28284',
   },
   p11_raidOuvrageApres: {
-    attaque: '8c9117348b5fb1e1',
-    poisAcquis: 'ba52e90e2bb7d658',
-    rapports: '8212d804c9cc4981',
-    recherche: '960b154511441f72',
-    sitesEntames: 'e41d5af46ae76f83',
+    armee: 'b5abaf0d49e37199',
+    attaque: 'f4984906437e1949',
+    poisAcquis: 'f51f723705b28284',
+    rapports: 'f7db46a003307315',
+    recherche: 'd7b29a19f572d6df',
+    sitesEntames: 'b6f842a99d990a49',
   },
   p12_veilleDuRaid: {
-    attaque: '7be5e6862ecd70f8',
-    nbTicks: 'ebd9888b924479de',
-    poisAcquis: 'ba52e90e2bb7d658',
-    prochaineInstanceSatellite: 'c38a961ced2e55ea',
-    rapports: '8212d804c9cc4981',
-    recherche: '960b154511441f72',
-    reserveReparation: '538a25ebb4f31588',
-    satellites: '188b982a62d3a510',
-    sitesEntames: '1e763745156394c3',
+    armee: 'b5abaf0d49e37199',
+    attaque: '9a6263a1378391cd',
+    nbTicks: '59be8728ad8cf682',
+    poisAcquis: 'f51f723705b28284',
+    prochaineInstanceSatellite: '3d85eb1bd0a2bb26',
+    rapports: 'f7db46a003307315',
+    recherche: 'd7b29a19f572d6df',
+    reserveReparation: '69f55699f8500abe',
+    satellites: '25e41174b0c0934d',
+    sitesEntames: '300589c2c9f9569f',
   },
   p13_apresLeRaid: {
-    attaque: '4db47a1df81c4d71',
-    disposition: 'ee32b2f93c30f1b6',
-    economie: '5b388e4b1a008055',
-    nbTicks: '9297e442320efcc6',
-    poisAcquis: '9132f8732fd50388',
-    position: '35d94b20c6b46c36',
-    prochaineInstanceSatellite: 'c069522a7211c545',
-    rapports: '0c34d389f082fdd1',
-    recherche: '960b154511441f72',
-    reserveReparation: 'd4058392de26aeca',
-    satellites: '38558e952ac15e9e',
-    sitesEntames: 'bd3acd3dcd7b7594',
+    armee: 'b5abaf0d49e37199',
+    attaque: '0279ba1afb6e04c8',
+    disposition: '139a36a763d9a4ec',
+    economie: '0d4011bf1ab2628a',
+    nbTicks: 'eec37c44ce083ee0',
+    poisAcquis: '18c3cdc88cc178b5',
+    position: 'b6eaca06c17caf12',
+    prochaineInstanceSatellite: '2d308417886f84a8',
+    rapports: '6ce20de0331b064d',
+    recherche: 'd7b29a19f572d6df',
+    reserveReparation: 'dd61791cde902003',
+    satellites: '317120fef5a1e18d',
+    sitesEntames: 'fdf9236d8de178f9',
   },
   p14_sousLeFeu: {
-    disposition: '9e45ab5ae40f028a',
-    economie: '177c23837158953d',
-    nbTicks: '32159ea716c4714e',
-    poisAcquis: 'fdd1bb068f07df34',
-    position: '17280f9278ee4ade',
-    prochaineInstanceSatellite: '2d4afeef1c1546e8',
-    rapports: '77b1e338dff064b1',
-    recherche: '960b154511441f72',
-    reserveReparation: 'cdecbcce63d37e1e',
-    satellites: '7b93826cf1f25b0a',
+    armee: 'b5abaf0d49e37199',
+    disposition: '12fc184bd9abfeee',
+    economie: '376971834a676a70',
+    nbTicks: '10d9cbd9aaf7fc94',
+    poisAcquis: '039d47420403a00a',
+    position: '6435e24ada18c7a0',
+    prochaineInstanceSatellite: '4ab680b065ddae53',
+    rapports: '285695f8d9626eda',
+    recherche: 'd7b29a19f572d6df',
+    reserveReparation: '43f35c1d537ce878',
+    satellites: '47d3664d919165be',
   },
 };
 
 /** Les vingt-cinq empreintes par graine, après RETOURS-DU-03. */
 export const EMPREINTES_PAR_GRAINE_RETOURS_DU_03 = {
-  1: '15ace612d6c2014f',
-  2: 'd8c0d8730a1da52b',
-  3: '499a863f3dfbc55f',
-  4: '2574df05f37ac81c',
-  5: '416632aae9f9fcb5',
-  6: 'da42486683e30484',
-  7: '5a02c71f01c92139',
-  8: 'd81ad6ff91876f6c',
-  9: '3f729457eddc4387',
-  10: '93533011a74f708e',
-  11: '3633cbf2da7c34d1',
-  12: 'd8a7842d2ac12cbf',
-  13: 'b44bf50e81d3c80a',
-  14: 'b9701dae8f65143a',
-  15: 'ee4f89104ca5534e',
-  16: 'd476cd029b18757b',
-  17: 'b8b8cb23b9256568',
-  18: 'b92a4ba5ee053410',
-  19: '080ddc3c0ca40a4e',
-  20: '70fbf2cbb6aa49b8',
-  21: '64b2bc1504f858d4',
-  22: '5fbc8b71de15c716',
-  23: 'd15c664c004c130f',
-  24: '3e4f3f1b7f352bde',
-  25: '9997d43bec9dbd66',
+  1: '79e2850e546a1100',
+  2: '7e74f1b8f471ac86',
+  3: '87a1a7d00473b6df',
+  4: '8a3bd2ee877bd945',
+  5: 'b4e6c4a1b859446e',
+  6: '3af6376fc099298e',
+  7: '5a4b1162a82424ce',
+  8: '519250326ec0bc96',
+  9: '08fbd4a1ca97a5be',
+  10: '1b54c08917d84efc',
+  11: '3d993fbaea6e7fee',
+  12: 'd30e2e61fbf0fe98',
+  13: '7765dee9af9cf558',
+  14: '3ec6dd7428c7e9df',
+  15: '3021c457698fcd5e',
+  16: 'dabb11cf78c54666',
+  17: '63304f174bccb66e',
+  18: 'f7e2d1dcf9e03264',
+  19: '4d5ce8cd59ee2c3e',
+  20: '2f783ebd8711614b',
+  21: '2e705b550a4a1e66',
+  22: '4cea8436f0e83eec',
+  23: '2affb15f2ec3654f',
+  24: '9e5ee4c553b367a2',
+  25: 'e26375953a7b3c93',
 };
 
 /**
@@ -1640,148 +1657,148 @@ export const EMPREINTES_PAR_GRAINE_RETOURS_DU_03 = {
  * ⚠⚠ ET LES AUTRES NE BOUGENT PAS, CE QUI EST LA MOITIÉ QUI PROUVE. Les gestes
  * de construction, les gestes d'armement, la taille de la sauvegarde, les cases
  * atteignables, le déplacement et **tout le raid de proximité** (`raidProche`)
- * sont IDENTIQUES sur les vingt-cinq graines. Le lot ne touche ni l'économie, ni
- * la pose, ni la sauvegarde : `SAVE_VERSION` ne bouge pas et l'état ne gagne
- * aucun champ.
+ * sont IDENTIQUES sur les vingt-cinq graines — vérifié champ par champ, zéro
+ * écart. Le lot ne touche ni l'économie, ni la pose, ni la sauvegarde :
+ * `SAVE_VERSION` ne bouge pas et l'état ne gagne aucun champ.
  *
- * ⚠ `nbAttaquantes` ET `raidOuvrageNbCibles` BOUGENT SUR LES VINGT-CINQ, la
- * cible choisie sur SIX, et l'empreinte du rapport sur NEUF. C'est la signature
- * exacte d'une carte plus dense : il y a plus de bases à portée et plus de
- * cibles, mais celle que le barème retient ne change que là où une nouvelle
- * venue coûte moins cher.
+ * ⚠ `nbAttaquantes` ET `raidOuvrageNbCibles` BOUGENT SUR LES VINGT-CINQ — ils
+ * valent de 51 à 62, moyenne 56,0 —, la cible choisie change sur vingt-deux
+ * graines et l'empreinte du rapport sur vingt-trois. C'est la signature d'une
+ * carte plus dense : plus de bases à portée, plus de cibles, et une cible
+ * retenue qui change dès qu'une nouvelle venue coûte moins cher.
  */
 export const SCALAIRES_RETOURS_DU_03 = {
   1: {
-    nbAttaquantes: 68,
-    raidOuvrageNbCibles: 68,
+    nbAttaquantes: 53,
+    raidOuvrageNbCibles: 53,
     raidOuvrageCible: '201,15:base:n20',
     raidOuvrageRapport: '8153b480b0220d44',
   },
   2: {
-    nbAttaquantes: 60,
-    raidOuvrageNbCibles: 60,
-    raidOuvrageCible: '200,17:base:n20',
-    raidOuvrageRapport: 'd28fda74fac6930c',
+    nbAttaquantes: 55,
+    raidOuvrageNbCibles: 55,
+    raidOuvrageCible: '201,16:base:n20',
+    raidOuvrageRapport: 'ed3987b5a6f920a3',
   },
   3: {
-    nbAttaquantes: 59,
-    raidOuvrageNbCibles: 59,
-    raidOuvrageCible: '201,15:base:n20',
-    raidOuvrageRapport: '71caa13d97bccd11',
+    nbAttaquantes: 58,
+    raidOuvrageNbCibles: 58,
+    raidOuvrageCible: '200,15:base:n20',
+    raidOuvrageRapport: '048cc005248bf1a5',
   },
   4: {
-    nbAttaquantes: 66,
-    raidOuvrageNbCibles: 66,
-    raidOuvrageCible: '198,15:base:n20',
-    raidOuvrageRapport: 'c97efaa4a7e30175',
-  },
-  5: {
-    nbAttaquantes: 61,
-    raidOuvrageNbCibles: 61,
-    raidOuvrageCible: '201,15:base:n20',
-    raidOuvrageRapport: '9c9ee2e79a5b196e',
-  },
-  6: {
-    nbAttaquantes: 65,
-    raidOuvrageNbCibles: 65,
-    raidOuvrageCible: '199,16:base:n20',
-    raidOuvrageRapport: '2e063df951e09ccf',
-  },
-  7: {
-    nbAttaquantes: 63,
-    raidOuvrageNbCibles: 63,
-    raidOuvrageCible: '199,16:base:n20',
-    raidOuvrageRapport: '70b14d91a2ac7d90',
-  },
-  8: {
     nbAttaquantes: 57,
     raidOuvrageNbCibles: 57,
+    raidOuvrageCible: '201,16:base:n20',
+    raidOuvrageRapport: '0d51d27c6f9248e6',
+  },
+  5: {
+    nbAttaquantes: 57,
+    raidOuvrageNbCibles: 57,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '3e2cd51f045697dd',
+  },
+  6: {
+    nbAttaquantes: 52,
+    raidOuvrageNbCibles: 52,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '436e44a615513b47',
+  },
+  7: {
+    nbAttaquantes: 58,
+    raidOuvrageNbCibles: 58,
+    raidOuvrageCible: '199,15:base:n20',
+    raidOuvrageRapport: 'bd2333e1c192c974',
+  },
+  8: {
+    nbAttaquantes: 56,
+    raidOuvrageNbCibles: 56,
     raidOuvrageCible: '201,15:base:n20',
     raidOuvrageRapport: 'decbf4769fc7ae63',
   },
   9: {
-    nbAttaquantes: 70,
-    raidOuvrageNbCibles: 70,
+    nbAttaquantes: 57,
+    raidOuvrageNbCibles: 57,
     raidOuvrageCible: '199,16:base:n20',
     raidOuvrageRapport: '793fb6a4f3953d44',
   },
   10: {
-    nbAttaquantes: 56,
-    raidOuvrageNbCibles: 56,
+    nbAttaquantes: 58,
+    raidOuvrageNbCibles: 58,
     raidOuvrageCible: '200,17:base:n20',
     raidOuvrageRapport: '3d4524c05a1b8cc3',
   },
   11: {
-    nbAttaquantes: 54,
-    raidOuvrageNbCibles: 54,
-    raidOuvrageCible: '200,18:base:n20',
-    raidOuvrageRapport: '6bda311d4b766619',
+    nbAttaquantes: 52,
+    raidOuvrageNbCibles: 52,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '7d1cda57b48e32d3',
   },
   12: {
-    nbAttaquantes: 65,
-    raidOuvrageNbCibles: 65,
+    nbAttaquantes: 51,
+    raidOuvrageNbCibles: 51,
     raidOuvrageCible: '200,15:base:n20',
     raidOuvrageRapport: '4e8722e38e439a62',
   },
   13: {
-    nbAttaquantes: 61,
-    raidOuvrageNbCibles: 61,
-    raidOuvrageCible: '201,17:base:n20',
-    raidOuvrageRapport: '3ddb45067867576e',
+    nbAttaquantes: 56,
+    raidOuvrageNbCibles: 56,
+    raidOuvrageCible: '198,16:base:n20',
+    raidOuvrageRapport: '7e053a651e9d9697',
   },
   14: {
-    nbAttaquantes: 60,
-    raidOuvrageNbCibles: 60,
+    nbAttaquantes: 55,
+    raidOuvrageNbCibles: 55,
     raidOuvrageCible: '199,15:base:n20',
     raidOuvrageRapport: '6dfba7d89f0b7e94',
   },
   15: {
-    nbAttaquantes: 67,
-    raidOuvrageNbCibles: 67,
+    nbAttaquantes: 56,
+    raidOuvrageNbCibles: 56,
     raidOuvrageCible: '198,17:base:n20',
     raidOuvrageRapport: '41db38b2a8929ff7',
   },
   16: {
-    nbAttaquantes: 57,
-    raidOuvrageNbCibles: 57,
-    raidOuvrageCible: '201,17:base:n20',
-    raidOuvrageRapport: '525bb696d105065c',
+    nbAttaquantes: 55,
+    raidOuvrageNbCibles: 55,
+    raidOuvrageCible: '199,14:base:n20',
+    raidOuvrageRapport: '2225dd621f085a10',
   },
   17: {
-    nbAttaquantes: 62,
-    raidOuvrageNbCibles: 62,
+    nbAttaquantes: 59,
+    raidOuvrageNbCibles: 59,
     raidOuvrageCible: '200,15:base:n20',
     raidOuvrageRapport: '68abfd0bbdd0d9e4',
   },
   18: {
-    nbAttaquantes: 64,
-    raidOuvrageNbCibles: 64,
+    nbAttaquantes: 55,
+    raidOuvrageNbCibles: 55,
     raidOuvrageCible: '200,15:base:n20',
     raidOuvrageRapport: '5cbb435339e7cc8c',
   },
   19: {
-    nbAttaquantes: 66,
-    raidOuvrageNbCibles: 66,
-    raidOuvrageCible: '199,17:base:n20',
-    raidOuvrageRapport: 'fd6b587dbc1fa889',
+    nbAttaquantes: 53,
+    raidOuvrageNbCibles: 53,
+    raidOuvrageCible: '200,18:base:n20',
+    raidOuvrageRapport: '09275f44a365fa3a',
   },
   20: {
-    nbAttaquantes: 66,
-    raidOuvrageNbCibles: 66,
+    nbAttaquantes: 60,
+    raidOuvrageNbCibles: 60,
     raidOuvrageCible: '199,17:base:n20',
     raidOuvrageRapport: 'aa6162730ab07dd5',
   },
   21: {
-    nbAttaquantes: 53,
-    raidOuvrageNbCibles: 53,
+    nbAttaquantes: 57,
+    raidOuvrageNbCibles: 57,
     raidOuvrageCible: '199,15:base:n20',
     raidOuvrageRapport: 'b94bd4b606500867',
   },
   22: {
-    nbAttaquantes: 67,
-    raidOuvrageNbCibles: 67,
-    raidOuvrageCible: '199,16:base:n20',
-    raidOuvrageRapport: '692b67b2845b7dd2',
+    nbAttaquantes: 57,
+    raidOuvrageNbCibles: 57,
+    raidOuvrageCible: '200,14:base:n20',
+    raidOuvrageRapport: '087430e68044002f',
   },
   23: {
     nbAttaquantes: 62,
@@ -1790,14 +1807,14 @@ export const SCALAIRES_RETOURS_DU_03 = {
     raidOuvrageRapport: '3c691fd10387edd6',
   },
   24: {
-    nbAttaquantes: 65,
-    raidOuvrageNbCibles: 65,
+    nbAttaquantes: 56,
+    raidOuvrageNbCibles: 56,
     raidOuvrageCible: '200,18:base:n20',
     raidOuvrageRapport: '8299391115f94b60',
   },
   25: {
-    nbAttaquantes: 63,
-    raidOuvrageNbCibles: 63,
+    nbAttaquantes: 56,
+    raidOuvrageNbCibles: 56,
     raidOuvrageCible: '200,17:base:n20',
     raidOuvrageRapport: 'e005af147f522c5c',
   },

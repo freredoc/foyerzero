@@ -42,14 +42,16 @@ Dernière révision : **03/09/2026**, version 0.70.0 · build 71.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 03/09/2026 (après le lot RETOURS-DU-03), à confronter :**
-`npm test` → **932 pass / 0 fail**, `gradle :maj:test` → **32 tests / 0 fail**,
-`npm run build` → `dist/index.html`, **1 592 070 octets**, 0 référence externe.
-Coût **+808 octets**, aucune image n'entre — **16 `data:image` avant, 16 après**.
-Marge T10 **57 930 octets, 3,51 %**, borne inchangée à 1 650 000.
-⚠⚠ **TROIS RETOURS D'ETHAN, SANS BRIEF, ET DEUX CHANGENT LA CARTE DE CHAQUE
+`npm test` → **935 pass / 0 fail**, `gradle :maj:test` → **32 tests / 0 fail**,
+`npm run build` → `dist/index.html`, **1 592 440 octets**, 0 référence externe.
+Coût **+1 178 octets**, aucune image n'entre — **16 `data:image` avant, 16
+après**. Marge T10 **57 560 octets, 3,49 %**, borne inchangée à 1 650 000.
+⚠⚠ **QUATRE RETOURS D'ETHAN, SANS BRIEF, ET DEUX CHANGENT LA CARTE DE CHAQUE
 GRAINE.** (1) « le jeu détecte la mise à jour mais refuse de l'implantation » ;
 (2) « on davantage remplir le monde avec des bases ouvrage » ; (3) « le
-territoire doit avoir 8 cases de plus, dans les angles ».
+territoire doit avoir 8 cases de plus, dans les angles » ; puis, devant la
+capture de la carte, (4) « je suis sûr à 100 % qu'on n'est pas obligé de mettre
+des bases en diagonale ».
 ⚠⚠ **LA ZONE D'INFLUENCE EST UN OCTOGONE, ET UNE SEULE ÉCRITURE LE DIT.**
 Intersection du carré de Tchebychev de rayon `r` et du losange de Manhattan de
 rayon `r + 1` : **21 cases au rayon 2, 37 au rayon 3**, soit exactement le
@@ -69,23 +71,45 @@ non plus. **C'est un changement de RÈGLE, pas un nettoyage** — `POI T25` le n
 cibles : **118 cibles (2,29 %) passent de 16 à 12 points**, prix moyen
 **27,953 → 27,861**. Aucune autre transition — ce sont les huit cases par base
 que le rognage rend au tarif de proximité.
-⚠⚠ **LE PLAFOND DE DENSITÉ ÉTAIT MATHÉMATIQUE, ET C'EST LE VOISINAGE QUI LE
-FIXE.** La densité des maxima locaux vaut `1/(1 + n)` : **16 par 12 × 12** avec
-huit voisines, quelle que soit la probabilité — le dépôt en était à 15,7. Sur
-QUATRE voisines orthogonales le plafond est **28,8**, mesuré 29,13 à saturation.
-`contactDiagonalPermis: true`, et `probabiliteCandidate: 0,45` rend **27,83**,
-soit 96,2 % du plafond — **la même fraction que 0,35 rendait de l'ancien**.
-⚠⚠ **DEUX BASES NE SONT JAMAIS CÔTE À CÔTE, ELLES SE TOUCHENT PAR UN COIN.**
-C'est la lettre du « côte à côte » du 29/08, et non plus ses « 8 cases autour ».
-**C'est une LECTURE, et elle se défait en remettant `false`.**
-⚠ **ET LA CARTE DEVIENT MOINS RÉGULIÈRE, PAS PLUS** — l'autre moitié de
-l'arbitrage du 02/09. Bases collées au minimum permis : **90,1 % → 63,2 %** ;
-blocs 3 × 3 entièrement vides : **22,4 % → 4,9 %**. Comptes carte entière :
-**+72 % en moyenne** sur six graines, exactement le rapport des deux plafonds.
+⚠⚠ **LE « PLAFOND DE 16 » APPARTENAIT À L'ALGORITHME, PAS À LA RÈGLE, ET ETHAN
+L'A VU AVANT MOI.** Ce paragraphe a affirmé pendant une journée que l'exclusion
+des huit voisines plafonnait la carte à 16 par 12 × 12, « quelle que soit la
+probabilité », et en a tiré qu'il fallait autoriser le contact diagonal. C'est
+vrai d'une sélection en UNE PASSE — la densité des maxima locaux d'un champ
+indépendant dans un voisinage de neuf vaut exactement 1/9 — et **faux de la
+règle**, dont l'empilement maximal est un damier au pas de deux, soit **36 par
+12 × 12**. Ethan : « je suis sûr à 100 % qu'on n'est pas obligé de mettre des
+bases en diagonale. » **Une propriété d'algorithme ne se rapporte jamais comme
+une propriété de règle.**
+⚠⚠ **D'OÙ LES TOURS, ET L'EXCLUSION DES HUIT EST INTACTE.** On repose une base
+sur ce que les tours précédents ont laissé libre, `toursDePeuplement` fois. Le
+résultat est un ensemble indépendant MAXIMAL : **25,4 par 12 × 12** sans qu'une
+seule paire de bases se touche, fût-ce par un coin. `contactDiagonalPermis` est
+**RETIRÉ** de la table, pas remis à `false` — un levier qui ne sert plus qu'à
+défaire un arbitrage n'a rien à faire dans `src/data/`.
+⚠ **QUATRE TOURS, ET C'EST LE POINT FIXE** : 16,24 · 23,88 · 25,31 · 25,42 ·
+25,43 · 25,43. `probabiliteCandidate: 0,7` est le choix d'ETHAN sur capture,
+entre 23,5 · 25,8 · 27,7 qui lui ont été montrées.
+⚠⚠ **LA RÈGLE RESTE LOCALE, ET C'EST CE QUI TIENT TOUT** — aucune passe sur la
+carte, rien de stocké. Le tour `k` d'une case dépend du tour `k − 1` de ses
+voisines, donc la récursion regarde un rayon de quatre cases. Mesuré : **59
+hachages par appel isolé contre 9**, une fenêtre d'écran de 1 240 cases passe de
+**0,9 à 2,4 ms**, le scénario du témoin de 955 à 1 221 ms sur dix graines.
+⚠ **LES 2,4 ms TIENNENT À UN MÉMO PARTAGÉ SUR LA FENÊTRE** — 5,5 ms avec un mémo
+par case. Sa clé ne porte que la case et le tour : il est **propre à une
+graine**, et un test compare les deux chemins sur deux graines successives.
+⚠⚠ **ET LA CARTE EST PLUS RÉGULIÈRE QU'AVANT, PAS MOINS — À DIRE DANS CE
+SENS-LÀ.** Blocs 3 × 3 entièrement vides : **22,1 % → 1,8 %** ; bases touchant
+une voisine au minimum permis : **89,9 % → 99,6 %**. Plus de bases veut dire
+moins de trous ; « pas une sylviculture » et « remplir davantage » tirent en sens
+contraire, et 0,7 est le point qu'Ethan a choisi entre les deux — à p = 1 il ne
+reste aucun bloc vide.
+⚠ **COMPTES CARTE ENTIÈRE : +59,7 %** sur six graines. **8 325 cibles à portée**
+sur 150 graines contre 5 143, prix moyen **27,821 points**.
 ⚠⚠ **FONDER AU-DESSUS DE LA RANGÉE ~272 EST DEVENU IMPOSSIBLE, SUR 40/40
 GRAINES.** Cases fondables dans le disque de rayon 10 : **261 → 261** à la
-rangée 295, 285,4 → 270,0 à la 290, 190,0 → 173,0 à la 285, 98,8 → 83,9 à la
-280, 24,1 → 13,6 à la 275, et **0,7 → 0,0** au-delà de la 270. Les DEUX demandes
+rangée 295, 285,4 → 269,4 à la 290, 190,0 → 172,4 à la 285, 98,8 → 83,3 à la
+280, 24,1 → 13,4 à la 275, et **0,7 → 0,0** au-delà de la 270. Les DEUX demandes
 y contribuent — plus de bases, et un territoire ennemi plus large de huit cases
 chacune. Le jeu passe par le rasage, comme depuis BASES-1, mais plus franchement.
 ⚠⚠ **« RIEN À TÉLÉCHARGER » N'EST PAS « À JOUR », ET C'ÉTAIT LE DÉFAUT.**
@@ -106,27 +130,43 @@ mécanisme peut AUSSI produire la capture, et rien ici ne peut départager — i
 a pas d'appareil (§3). Inventer un correctif pour un défaut non prouvé est ce que
 §6 interdit. **Le prochain essai tranchera**, et le lot est écrit pour que sa
 réponse soit lisible.
-⚠ **LE TÉMOIN DE BASES-0 TIENT, AVEC 37 COUPLES DÉCLARÉS SUR 322**, tous à
-partir de la phase 10. ⚠⚠ **LES NEUF PREMIÈRES PHASES SONT IDENTIQUES AU BIT** —
-construction, économie, garnison, armée, ET LE PREMIER RAID sur un camp : un camp
-est de l'HISTOIRE, pas du tirage de carte. ⚠ **L'attribution est mesurée** : en
-remettant la seule densité d'avant, il n'en reste que **QUATORZE**, ceux de
-l'octogone seul.
+⚠ **LE TÉMOIN DE BASES-0 TIENT, AVEC 41 COUPLES DÉCLARÉS SUR 322**, tous à
+partir de la phase 10, et le bloc est **RECONSTRUIT** plutôt que complété : le
+relevé compare à la chaîne des lots précédents, si bien qu'un couple revenu à sa
+valeur d'avant sort du bloc au lieu d'y rester déclaré à tort.
+⚠⚠ **LES NEUF PREMIÈRES PHASES SONT IDENTIQUES AU BIT** — construction, économie,
+garnison, armée, ET LE PREMIER RAID sur un camp : un camp est de l'HISTOIRE, pas
+du tirage de carte. ⚠ **L'attribution est mesurée** : en remettant la seule
+densité d'avant — `toursDePeuplement: 1` et `probabiliteCandidate: 0,35`, ce qui
+EST l'ancienne règle —, il n'en reste que **QUATORZE**, ceux de l'octogone seul.
 ⚠ **QUATRE SCALAIRES BOUGENT, ET PAS UN DE PLUS** — `nbAttaquantes` et le nombre
-de cibles du raid lointain sur 25 graines, la cible choisie sur 6, l'empreinte du
-rapport sur 9. Gestes, sauvegarde, cases atteignables, déplacement et **tout le
-raid de proximité** : **0 / 25**.
-⚠⚠ **DEUX FALSIFICATIONS SUR SEIZE NE MORDAIENT PAS**, et les tests qui les
-attrapent ont été écrits APRÈS la mesure : le filtre des POI ne tombait que par
-le témoin — qui dit seulement « quelque chose a bougé » —, et la garde d'entiers
-de la zone ne faisait tomber AUCUN test. Sans elle, une case mal formée rend
-`NaN`, donc `false`, donc « hors du territoire » **en silence**.
+de cibles du raid lointain sur 25 graines (de 51 à 62, moyenne 56,0), la cible
+choisie sur 22, l'empreinte du rapport sur 23. Gestes, sauvegarde, cases
+atteignables, déplacement et **tout le raid de proximité** : **0 / 25**.
+⚠⚠ **VINGT-QUATRE FALSIFICATIONS EN DEUX RELEVÉS, ET VINGT-TROIS MORDENT.**
+Seize au premier — dont **deux qui ne mordaient pas** : le filtre des POI ne
+tombait que par le témoin, qui dit seulement « quelque chose a bougé », et la
+garde d'entiers de la zone ne faisait tomber AUCUN test (sans elle, une case mal
+formée rend `NaN`, donc `false`, donc « hors du territoire » **en silence**).
+Les deux tests qui les attrapent ont été écrits APRÈS la mesure.
+⚠⚠ **HUIT AU SECOND, POUR LA RÈGLE MULTI-PASSE, ET LA VINGT-QUATRIÈME NE MORD
+PAS — DÉCLARÉE, PAS CORRIGÉE.** Passer le départage de `>=` à `>` laisserait deux
+voisines au hachage EXACTEMENT égal gagner ensemble, donc se toucher. C'est
+impossible en pratique, et c'est **mesuré : 0 égalité sur 1 023 990 paires de
+voisines**, trente graines, carte entière. Un test qui ne peut tomber sur aucune
+graine ne garderait rien. Le défaut préexistait au lot.
+⚠ **ET LA GARDE QUI COMPTE LE PLUS EST `EUCLIDE T5 ter`** : elle confronte la
+règle LOCALE à une passe globale réimplémentée dans le test, case par case, sur
+27 900 cases et trois graines. Sauter le premier tour dans `libreAuTour` ne fait
+tomber qu'elle — la densité, elle, reste dans la tolérance.
 ⚠⚠ **TROIS MONTAGES SONT TOMBÉS POUR UNE RAISON QUI NE LES REGARDAIT PAS.**
 `BASES-1 T15` et `T15 bis` fondaient sur une case écrite en dur, `RAID-B T7`
 plantait la base sur une coordonnée choisie pour qu'un POI tombe après le rasage,
 et `DÉPLACEMENT T8` calculait sa cible avant un rattrapage pendant lequel
 l'Ouvrage rase désormais la base. **Un montage qui écrit une coordonnée ne garde
-que lui-même** — troisième, quatrième et cinquième fois.
+que lui-même** — troisième, quatrième et cinquième fois. ⚠ Aucun des trois n'a eu
+à être retouché quand la densité a changé de méthode le soir : ils DEMANDENT au
+moteur, donc ils suivent.
 ⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 24.** Le lot ne touche ni l'état, ni
 sa forme, ni la sauvegarde : **elle ne grandit pas d'un octet**.
 ⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot

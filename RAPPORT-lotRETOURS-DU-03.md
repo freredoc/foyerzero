@@ -8,8 +8,20 @@ Trois retours d'Ethan, le 03/09/2026, dans son ordre :
    avec chaque coin rogner (4cases) ; ouvrage idem rogner mais 7x7 donc 3 cases
    à chaque coin »
 
-Aucun brief : trois phrases et deux captures d'écran. Ce rapport dit ce qui a
-été fait, ce qui a été **mesuré**, et les quatre points qui reviennent à Ethan.
+Puis, quelques heures plus tard, devant la capture de la carte :
+
+4. « je suis sûr à 100 % qu'on n'est pas obligé de mettre des bases en
+   diagonale »
+
+Aucun brief : quatre phrases et trois captures d'écran. Ce rapport dit ce qui a
+été fait, ce qui a été **mesuré**, et les points qui reviennent à Ethan.
+
+⚠⚠ **LE §2 A ÉTÉ ÉCRIT DEUX FOIS, ET LE QUATRIÈME RETOUR EST LA RAISON.** La
+première réponse à « remplir davantage » desserrait la règle de non-contact aux
+quatre voisines orthogonales, au motif — écrit ici même, et **faux** — que
+l'exclusion des huit voisines plafonnait mathématiquement la carte à 16 bases
+par 12 × 12. Ethan a refusé le procédé ; la mesure lui a donné raison. La
+section 3 ci-dessous porte la version qui tient, et dit d'où venait l'erreur.
 
 ---
 
@@ -17,22 +29,21 @@ Aucun brief : trois phrases et deux captures d'écran. Ce rapport dit ce qui a
 
 | | avant (TRANSFERT) | après |
 | --- | ---: | ---: |
-| `npm test` | 932 pass / 0 fail | **932 pass / 0 fail** |
+| `npm test` | 932 pass / 0 fail | **935 pass / 0 fail** |
 | `gradle :maj:test` | 29 tests / 0 fail | **32 tests / 0 fail** |
-| `dist/index.html` | 1 591 262 o | **1 592 070 o** (+808) |
+| `dist/index.html` | 1 591 262 o | **1 592 440 o** (+1 178) |
 | références externes | 0 | **0** |
 | images inlinées | 16 `data:image` | **16** |
 | `SAVE_VERSION` | 24 | **24** |
-| version · build | 0.69.0 · 70 | **0.70.0 · 71** |
+| version · build | 0.69.0 · 70 | **0.70.1 · 72** |
 
-Marge T10 : **57 930 octets, 3,51 %**, borne **inchangée** à 1 650 000 — aucune
+Marge T10 : **57 560 octets, 3,49 %**, borne **inchangée** à 1 650 000 — aucune
 ressource n'entre, et §5 interdit de la relever pour du code.
 
 ⚠ **La base de référence du départ a été retrouvée en entier**, contrairement au
 lot précédent : `npm ci && npm run check` avant toute modification →
 **924 pass / 0 fail**, `dist/index.html` à 1 591 262 octets, version 0.69.0 ·
 build 70. Ce sont exactement les nombres que `CLAUDE.md` §0 annonçait.
-
 ---
 
 ## 2. §3 — le territoire devient un OCTOGONE
@@ -101,77 +112,114 @@ exactement les huit cases par base que le rognage rend au tarif de proximité.
 
 ## 3. §2 — davantage de bases de l'Ouvrage
 
-### Le plafond était MATHÉMATIQUE, pas un réglage
+### Ce qui a été affirmé le matin, et qui était faux
 
-Une case porte une base si son hachage domine celui de ses voisines candidates.
-La densité de ces maxima locaux vaut exactement **1/(1 + n)** où `n` est la
-taille du voisinage — donc **1/9, soit 16 par 12 × 12** avec les huit voisines,
-**quelle que soit `probabiliteCandidate`**. Le dépôt en était déjà à 15,7 : il
-n'y avait **rien à gagner** sur la probabilité.
+> « Le plafond est MATHÉMATIQUE : la densité des maxima locaux d'un 3 × 3 vaut
+> exactement 1/9, soit 16 par 12 × 12, quelle que soit la probabilité. Il n'y
+> avait rien à gagner sur la probabilité : c'est le VOISINAGE qui plafonnait. »
 
-Mesuré, saturation à p = 1 :
+Cette phrase a été écrite dans `src/data/sites.js`, dans `src/sim/peuplement.js`,
+dans `test/euclide.test.js` et dans le corps de la PR. Elle décrit correctement
+**un algorithme** et pas du tout **une règle** :
 
-| voisinage | plafond théorique | saturation mesurée |
+- l'algorithme était « une case est une base si son hachage domine celui de ses
+  huit voisines candidates » — une **passe unique**. La densité de ces maxima
+  locaux vaut bien 1/9 ;
+- la règle, elle, est « aucune base dans les huit cases autour ». Son empilement
+  maximal est un damier au pas de deux, soit **36 par 12 × 12**.
+
+Entre 16 et 36 il y avait un facteur 2,25 que personne n'avait cherché. Ethan :
+**« je suis sûr à 100 % qu'on n'est pas obligé de mettre des bases en
+diagonale. »**
+
+### Ce qui a été fait : des TOURS
+
+`estBaseOuvrage` ne fait plus une passe mais `PEUPLEMENT.toursDePeuplement`. Au
+tour 1, rien ne change. Au tour `k`, on rejoue le même maximum local sur les
+seules cases qu'aucun tour précédent n'a **prises ni voisinées**. Le résultat est
+un ensemble indépendant **maximal** : plus aucune case ne pourrait être ajoutée
+sans toucher une base.
+
+**Deux bases ne se touchent donc jamais, pas même par un coin** — vrai tour par
+tour, donc vrai en tout. La règle du 29/08 (« 8 cases autour ») est appliquée à
+la lettre, et `contactDiagonalPermis` a été **retiré** de la table plutôt que
+remis à `false` : un levier qui ne sert plus qu'à défaire un arbitrage n'a rien
+à faire dans `src/data/`.
+
+### La règle reste LOCALE — aucune passe sur la carte
+
+C'est le point qui conditionne tout le reste : la carte est **dérivée**, jamais
+stockée, et `basesDeLaFenetre` ne regarde qu'un écran. Le tour `k` d'une case
+dépend du tour `k − 1` de ses voisines : la récursion regarde donc un rayon de
+`toursDePeuplement` cases et s'arrête là.
+
+| | une passe | quatre tours |
 | --- | ---: | ---: |
-| huit voisines | 16,00 | 16,15 |
-| **quatre voisines** | **28,80** | **29,13** |
+| hachages par appel isolé | 9 | **59** |
+| fenêtre d'écran (1 240 cases) | 0,9 ms | **2,4 ms** |
+| carte entière (9 300 cases) | — | 37 ms |
+| scénario du témoin, 10 graines | 955 ms | **1 221 ms** (pire graine 231 ms) |
 
-C'est donc le VOISINAGE qui a été desserré. `PEUPLEMENT.contactDiagonalPermis`
-porte la décision.
+⚠ **Les 2,4 ms tiennent à un mémo PARTAGÉ sur la fenêtre.** Un mémo par case
+coûte 5,5 ms : les récursions de 1 240 cases voisines se recouvrent presque
+entièrement. `basesDeLaFenetre` en ouvre donc un seul — et comme sa clé ne porte
+que la case et le tour, il est **propre à une graine**. Un test compare les deux
+chemins sur deux graines successives, et exige qu'elles ne rendent pas la même
+carte : sans cette dernière ligne, un mémo qui survivrait d'un appel à l'autre
+passerait inaperçu.
 
-### Ce qui reste vrai, et ce qui change
+### Le réglage, et c'est Ethan qui l'a rendu
 
-⚠ **Deux bases ne sont JAMAIS côte à côte** — c'est la lettre du message du
-29/08 (« aucune base ne peut être côte à côte »), et ce n'est plus ses « 8 cases
-autour ». Elles peuvent se toucher par un **coin**, jamais par un **côté**.
+Les deux courbes, mesurées sur 20 graines, fenêtres 12 × 12 entièrement hors de
+la garde :
 
-⚠⚠ **C'est une LECTURE, et elle se défait en remettant `false`.** Le message du
-29/08 disait aussi « 8 cases autour » ; le desserrer est le seul moyen de
-répondre à « davantage remplir le monde », et j'ai retenu la moitié qui le
-permet. Le précédent existe : Ethan a ouvert au joueur le droit de fonder au
-contact de ses propres bases le 02/09.
+```
+tours   1      2      3      4      5      6      8
+bases   16,24  23,88  25,31  25,42  25,43  25,43  25,43
 
-### La probabilité — 0,45, le même critère que 0,35 transposé
+p       0,30   0,40   0,50   0,60   0,70   0,80   0,90   1,00
+bases   19,09  21,50  23,28  24,52  25,42  26,13  26,83  27,28
+```
 
-Ethan, 02/09 : « tu augmentes la densité au maximum, je retire le maximum un peu
-moins pour que ce soit pas un cadre parfaitement rectangulaire ».
+Trois réglages ont été montrés à Ethan **en capture d'écran**, tous sans contact
+diagonal : 23,5 · 25,8 · 27,7 bases par 12 × 12. Il a retenu **25,8**, d'où
+`probabiliteCandidate: 0,7`. Sur 120 graines, la mesure du test rend **25,431**,
+écart-type **1,93 par fenêtre**, de 19 à 31.
 
-| p | huit voisines | quatre voisines |
-| ---: | ---: | ---: |
-| 0,35 | 15,66 (96,1 % du plafond) | 25,53 |
-| 0,40 | 15,95 | 26,88 |
-| **0,45** | 16,22 | **27,83 (96,2 % du plafond)** |
-| 0,50 | 16,20 | 28,26 |
-| 0,60 | 16,29 | 28,69 |
-| 1,00 | 16,18 | 28,94 |
+`toursDePeuplement: 4` n'est pas un réglage d'équilibrage : c'est le **point
+fixe** à un centième près. Le monter ne change rien, le descendre vide la carte.
 
-0,45 rend **la même fraction du plafond** que 0,35 en rendait de l'ancien. Au-delà
-on ne gagne plus de densité, on ne fait que resserrer le semis.
+### La régularité, dite honnêtement
 
-### Et la carte devient MOINS régulière, pas plus
+C'est l'autre moitié de l'arbitrage du 02/09 — « pas un cadre parfaitement
+rectangulaire comme une sylviculture » —, et il faut la dire dans le bon sens :
+**la carte est plus régulière qu'avant, pas moins.** C'est le prix de la
+densité, et il n'y a pas d'échappatoire.
 
-Sur 12 graines, les deux indicateurs du 02/09 :
+| | avant (16 bases) | après (25,4) | à saturation (27,3) |
+| --- | ---: | ---: | ---: |
+| blocs 3 × 3 entièrement vides | 22,1 % | **1,8 %** | 0,0 % |
+| bases touchant une voisine au minimum permis | 89,9 % | **99,6 %** | ~100 % |
 
-| | huit · 0,35 | quatre · 0,45 |
-| --- | ---: | ---: |
-| bases collées au minimum permis | 90,1 % | **63,2 %** |
-| blocs 3 × 3 entièrement vides | 22,4 % | **4,9 %** |
+Ce que `probabiliteCandidate: 0,7` achète, c'est donc précisément le 1,8 % de
+trous qui reste : à p = 1 la carte n'en a plus un seul.
 
-C'est le contraire de la sylviculture qu'Ethan refuse : le monde est plus plein
-ET moins régulier.
+⚠ **La densité mesurée sur la carte entière est de 25,79**, contre 25,43 dans la
+fenêtre du test : la différence est un effet de bord de carte, les colonnes 1 et
+31 ayant moins de voisines. Les deux nombres décrivent la même règle.
 
-### Le compte réel, carte entière
+### Ce que ça change ailleurs
 
-| graine | avant | après | |
-| ---: | ---: | ---: | ---: |
-| 1 | 993 | 1 719 | +73 % |
-| 7 | 993 | 1 704 | +72 % |
-| 42 | 996 | 1 711 | +72 % |
-| 777 | 978 | 1 662 | +70 % |
-| 2026 | 984 | 1 667 | +69 % |
-| 4242 | 986 | 1 682 | +71 % |
-
-**+72 % en moyenne** — exactement le rapport des deux plafonds structurels.
+- **Bases de l'Ouvrage sur la carte entière**, six graines de référence :
+  993 · 993 · 996 · 978 · 984 · 986 → **1 590 · 1 588 · 1 581 · 1 569 · 1 571 ·
+  1 572**, soit **+59,7 %**.
+- **Cibles à portée**, 150 graines depuis la rangée 200 : **8 325** contre 5 143
+  à l'ancienne densité ; prix moyen d'un raid **27,821 points**.
+- **Bases attaquantes**, 25 graines du témoin : de 51 à 62, **moyenne 56,0**.
+- **Fonder au-delà de la rangée ~272 reste impossible**, sur 40/40 graines —
+  inchangé par rapport au réglage du matin. Cases fondables dans le disque de
+  rayon 10 : **261,0** à la rangée 295, 269,4 à la 290, 172,4 à la 285, 83,3 à
+  la 280, 13,4 à la 275, **0,0** au-delà de la 270.
 
 ---
 
@@ -252,12 +300,15 @@ saura où chercher.
 
 ## 5. Ce que le témoin de BASES-0 dit
 
-**37 couples sur 322**, tous à partir de la phase 10 — mesuré, pas estimé.
+**41 couples sur 322**, tous à partir de la phase 10 — mesuré, pas estimé, et le
+bloc est **reconstruit** plutôt que complété : le relevé compare à la chaîne des
+lots précédents, si bien qu'un couple revenu à sa valeur d'avant sort du bloc au
+lieu d'y rester déclaré à tort.
 
 | phase | champs déplacés |
 | --- | --- |
 | p10 montée | `poisAcquis` |
-| p11 raid Ouvrage | `attaque` `poisAcquis` `rapports` `recherche` `sitesEntames` |
+| p11 raid Ouvrage | `armee` `attaque` `poisAcquis` `rapports` `recherche` `sitesEntames` |
 | p12 veille du raid | + `nbTicks` `prochaineInstanceSatellite` `reserveReparation` `satellites` |
 | p13 après le raid | + `disposition` `economie` `position` |
 | p14 sous le feu | idem, moins `sitesEntames` |
@@ -268,9 +319,13 @@ C'est ce qu'on attend : un camp est de l'HISTOIRE, pas du tirage de carte, et la
 garde du peuplement tient les bases de l'Ouvrage à quinze cases du départ.
 
 ⚠ **L'attribution est mesurée elle aussi.** En remettant la seule densité d'avant
-(`contactDiagonalPermis: false`, `probabiliteCandidate: 0,35`), il n'en reste que
-**QUATORZE** : ce sont ceux de l'octogone seul. Les vingt-trois autres sont ceux
-de la densité.
+(`toursDePeuplement: 1`, `probabiliteCandidate: 0,35` — ce qui **est**
+exactement l'ancienne règle), il n'en reste que **QUATORZE** : ce sont ceux de
+l'octogone seul. Les vingt-sept autres sont ceux de la densité.
+
+⚠ **`armee` est neuf par rapport au relevé du matin**, et la raison est simple :
+une carte plus dense fait tomber davantage de raids de l'Ouvrage sur la base,
+donc les pièces du joueur portent des dégâts qu'elles ne portaient pas.
 
 ### Les scalaires
 
@@ -278,20 +333,20 @@ de la densité.
 | --- | ---: |
 | `nbAttaquantes` | 25 / 25 |
 | `raidOuvrage` — nombre de cibles | 25 / 25 |
-| `raidOuvrage` — cible choisie | 6 / 25 |
-| `raidOuvrage` — empreinte du rapport | 9 / 25 |
+| `raidOuvrage` — cible choisie | 22 / 25 |
+| `raidOuvrage` — empreinte du rapport | 23 / 25 |
 | gestes, sauvegarde, cases atteignables, déplacement, **tout `raidProche`** | **0 / 25** |
 
 C'est la signature exacte d'une carte plus dense : plus de bases à portée, plus
-de cibles, mais celle que le barème retient ne change que là où une nouvelle
-venue coûte moins cher. Et **la sauvegarde ne grandit pas d'un octet** : le lot
-ne touche ni l'état ni sa forme.
+de cibles, et une cible retenue qui change dès qu'une nouvelle venue coûte moins
+cher. Et **la sauvegarde ne grandit pas d'un octet** : le lot ne touche ni l'état
+ni sa forme.
 
 ---
 
 ## 6. Vérifications
 
-### Seize falsifications, sur copie fraîche — les seize mordent
+### Premier relevé — seize falsifications, les seize mordent
 
 | # | défaut injecté | tombent |
 | ---: | --- | ---: |
@@ -325,14 +380,44 @@ ne touche ni l'état ni sa forme.
   territoire » **en silence** — le raid coûterait le tarif lointain sans que rien
   ne le dise. `EUCLIDE T6 bis` la tient.
 
+⚠ **F8 et F9 sont caduques**, la décision qu'elles gardaient ayant été renversée
+le soir même. Elles sont remplacées par les huit ci-dessous.
+
+### Second relevé — la règle multi-passe, huit falsifications
+
+| # | défaut injecté | tombent |
+| ---: | --- | ---: |
+| F1 | le voisinage reperd ses diagonales (retour aux quatre) | 5 |
+| F2 | un seul tour de peuplement | 8 |
+| F3 | `libreAuTour` oublie les VOISINES prises aux tours d'avant | 4 |
+| F4 | `libreAuTour` saute le premier tour | 1 |
+| F5 | le mémo de la fenêtre survit d'un appel à l'autre | 3 |
+| F6 | le départage n'exclut plus l'égalité (`>=` → `>`) | **0** |
+| F7 | la probabilité candidate revient à 0,35 | 3 |
+| F8 | `basesParDouzeCarre` est réécrit pour coller au code | 1 |
+
+⚠⚠ **F6 NE MORD PAS, ET C'EST DÉCLARÉ PLUTÔT QUE CORRIGÉ.** Deux voisines
+candidates au hachage EXACTEMENT égal gagneraient toutes deux leur tour, donc se
+toucheraient. C'est impossible en pratique, et c'est mesuré : **0 égalité sur
+1 023 990 paires de voisines**, trente graines, carte entière. Écrire un test
+qui ne peut jamais tomber sur aucune graine ne garderait rien ; la comparaison
+stricte reste, et le commentaire du module dit pourquoi. Le défaut existait à
+l'identique avant ce lot.
+
+⚠ **F4 ne fait tomber qu'un seul test — `EUCLIDE T5 ter` — et c'est exactement
+ce qu'on lui demande.** La densité reste dans la tolérance quand on saute le
+premier tour ; seule la confrontation case par case avec la passe globale voit
+la différence. C'est la garde qui compte le plus du lot.
+
 ### Boot sans tête (Chromium, 412 × 915, sur le HTML livré)
 
 - l'écran Options rend la ligne honnête sous une vieille enveloppe (§4) ;
 - l'écran Monde dessine le territoire **en octogone** — contour relevé sur la
   capture : rangées de 3 · 5 · 5 · 5 · 3 cases, soit 21, les quatre coins
   rognés ;
-- la carte est visiblement plus dense ;
-- **zéro erreur de page**.
+- la carte est visiblement plus dense, et **aucune paire de bases ne se touche**
+  à l'œil comme au test ;
+- **zéro erreur de page**, sur les quatre variantes construites.
 
 ### Ce qui n'a pas été fait
 
@@ -347,10 +432,10 @@ sont vérifiés dans Chromium, pas sur ton téléphone.
 ## 7. Fichiers touchés
 
 **Moteur et données** — `src/data/sites.js` (`margeDiagonaleInfluence`,
-`probabiliteCandidate`, `basesParDouzeCarre`, `contactDiagonalPermis`),
+`probabiliteCandidate`, `basesParDouzeCarre`, `toursDePeuplement`),
 `src/sim/points-attaque.js` (la forme, une fois), `src/sim/territoire.js`,
 `src/sim/fondation.js`, `src/sim/poi.js`, `src/sim/peuplement.js`
-(`VOISINES_EXCLUES`).
+(`VOISINES_EXCLUES`, `priseAuTour`, `libreAuTour`, `priseAUnTour`).
 
 **Interface** — `src/ui/session.js` (`ligneDeMiseAJour`), `src/index.src.html`
 (`data-build`).
@@ -364,10 +449,10 @@ sont vérifiés dans Chromium, pas sur ton téléphone.
 `test/raid-ouvrage.test.js`, `test/deplacement.test.js`, `test/maj.test.js`,
 `test/temoins-bases-0.js`, plus les deux fichiers de test JVM.
 
-### Deux montages tombés pour une raison qui ne les regardait pas
+### Trois montages tombés pour une raison qui ne les regardait pas
 
 **Un montage qui écrit une coordonnée ne garde que lui-même** — CLAUDE.md l'écrit
-depuis le 31/08, et le dépôt l'a payé deux fois de plus aujourd'hui :
+depuis le 31/08, et le dépôt l'a payé trois fois de plus aujourd'hui :
 
 - `BASES-1 T15` et `T15 bis` fondaient sur `{ rangee: 283, colonne: 22 }` en dur.
   La carte densifiée y a mis une base de l'Ouvrage à portée : les deux tests ont
@@ -377,33 +462,40 @@ depuis le 31/08, et le dépôt l'a payé deux fois de plus aujourd'hui :
   rasage la fasse tomber sur un POI. Les POI ont bougé — ils esquivent les bases
   de l'Ouvrage. Le montage CHERCHE désormais une case qui satisfasse ses deux
   conditions.
+- `DÉPLACEMENT T8` calculait sa cible AVANT un rattrapage de plusieurs heures :
+  sur une carte dense, l'Ouvrage rase la base pendant cette fenêtre et la déplace
+  de vingt cases, si bien que le refus rendu devenait `trop-loin` — une raison
+  qui ne regarde pas ce test, qui mesure un DÉLAI. La cible se recalcule.
 
-Et `DÉPLACEMENT T8` calculait sa cible AVANT un rattrapage de plusieurs heures :
-avec 28 bases par 12 × 12, l'Ouvrage rase la base pendant cette fenêtre et la
-déplace de vingt cases, si bien que le refus rendu devenait `trop-loin` — une
-raison qui ne regarde pas ce test, qui mesure un DÉLAI. La cible se recalcule.
+⚠ **Aucun des trois n'a eu à être retouché une seconde fois** quand la densité a
+changé de méthode le soir : ils demandent au moteur au lieu d'écrire une
+coordonnée, donc ils suivent.
 
 ---
 
 ## 8. Ce qui t'appartient
 
-1. ⚠⚠ **Le contact diagonal des bases de l'Ouvrage est une LECTURE.** Ton
-   message du 29/08 disait « côte à côte — 8 cases autour » ; j'ai gardé la
-   première moitié et desserré la seconde, parce que c'est la seule façon
-   d'obtenir « davantage ». Si tu voulais garder les 8 cases, la densité est
-   **plafonnée à 16** et il n'y a rien à faire de plus.
-   `contactDiagonalPermis: false` rend la carte d'avant à l'identique.
+1. ⚠⚠ **La densité est ton choix, et il est chiffré.** Tu as retenu 25,8 bases
+   par 12 × 12 sur trois captures ; `probabiliteCandidate` porte la décision et
+   la table donne la courbe complète. Monter à 0,8 ou 0,9 rend 26,1 et 26,8 — au
+   prix des derniers trous, les blocs 3 × 3 vides passant de 1,8 % à ~0,5 %.
 
-2. ⚠⚠ **FONDER se resserre, et au-dessus de la rangée ~272 c'est devenu
+2. ⚠⚠ **La carte est plus RÉGULIÈRE qu'avant, pas moins, et c'est inévitable.**
+   Blocs 3 × 3 entièrement vides : 22,1 % → **1,8 %**. Bases touchant une
+   voisine au minimum permis : 89,9 % → **99,6 %**. Plus de bases veut dire moins
+   de trous ; « pas une sylviculture » et « remplir davantage » tirent en sens
+   contraire, et 0,7 est le point que tu as choisi entre les deux.
+
+3. ⚠⚠ **FONDER se resserre, et au-dessus de la rangée ~272 c'est devenu
    impossible.** Cases fondables dans le disque de rayon 10, sur 40 graines :
 
    | rangée de la base | avant | après |
    | ---: | ---: | ---: |
    | 295 (le départ) | 261,0 | **261,0** |
-   | 290 | 285,4 | 270,0 |
-   | 285 | 190,0 | 173,0 |
-   | 280 | 98,8 | 83,9 |
-   | 275 | 24,1 | 13,6 |
+   | 290 | 285,4 | 269,4 |
+   | 285 | 190,0 | 172,4 |
+   | 280 | 98,8 | 83,3 |
+   | 275 | 24,1 | 13,4 |
    | 270 et au-delà | 0,7 · 0,8 · 0,4 | **0,0 — sur 40/40 graines** |
 
    Fonder près du départ reste large ; c'est la dernière fissure au-dessus de la
@@ -411,12 +503,12 @@ raison qui ne regarde pas ce test, qui mesure un DÉLAI. La cible se recalcule.
    ET un territoire ennemi plus large de huit cases chacune. Le jeu passe donc
    par le rasage, comme depuis BASES-1 — mais plus franchement.
 
-3. ⚠ **Un POI dans un angle rogné n'est plus acquis.** C'est un changement de
+4. ⚠ **Un POI dans un angle rogné n'est plus acquis.** C'est un changement de
    règle, pas un nettoyage. Il rend le relevé cohérent avec ce que la carte
    dessine et avec ce que le raid facture — mais si tu préférais l'ancien carré
    plein, c'est une ligne de `sim/poi.js`.
 
-4. ⚠ **Le rollback de l'enveloppe n'est ni prouvé ni corrigé** (§4). Le prochain
+5. ⚠ **Le rollback de l'enveloppe n'est ni prouvé ni corrigé** (§4). Le prochain
    essai sur ton téléphone tranchera, et le lot est écrit pour que sa réponse
    soit lisible.
 

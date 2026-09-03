@@ -146,16 +146,20 @@ test('EUCLIDE T4 — la garde interdit 697 cases, et une base peut se poser à 1
 // T5 — la densité
 // ---------------------------------------------------------------------------
 
-test('EUCLIDE T5 — la densité tombe dans 28 ± 1 sur 120 graines', () => {
-  // ⚠⚠ LA CIBLE EST PASSÉE DE 16 À 28 LE 03/09, SUR ORDRE : « on davantage
-  // remplir le monde avec des bases ouvrage ». Ce n'est pas la probabilité qui
-  // l'a permis — elle était déjà à 97 % de son plafond — mais le VOISINAGE
-  // d'exclusion, qui passe de huit voisines à quatre. Voir T5 bis, qui mesure
-  // les deux plafonds.
-  assert.equal(PEUPLEMENT.basesParDouzeCarre, 28);
-  assert.equal(PEUPLEMENT.probabiliteCandidate, 0.45);
+test('EUCLIDE T5 — la densité tombe dans 25 ± 1 sur 120 graines', () => {
+  // ⚠⚠ LA CIBLE A BOUGÉ DEUX FOIS LE MÊME JOUR, ET LA SECONDE FOIS EST LA
+  // BONNE. 16 → 28 le matin, en desserrant l'exclusion aux quatre voisines
+  // orthogonales ; 28 → 25 le soir, en la REMETTANT aux huit et en reposant des
+  // bases tour après tour. Ethan : « je suis sûr à 100 % qu'on n'est pas obligé
+  // de mettre des bases en diagonale. » C'est T5 bis qui mesure pourquoi les
+  // deux chemins mènent à peu près au même endroit.
+  assert.equal(PEUPLEMENT.basesParDouzeCarre, 25);
+  assert.equal(PEUPLEMENT.probabiliteCandidate, 0.7);
   assert.equal(PEUPLEMENT.toleranceMesure, 1);
-  assert.equal(PEUPLEMENT.contactDiagonalPermis, true);
+  assert.equal(PEUPLEMENT.toursDePeuplement, 4);
+  // ⚠ LE LEVIER DU MATIN N'EXISTE PLUS, ET SON ABSENCE EST LE MESSAGE.
+  assert.ok(!Object.prototype.hasOwnProperty.call(PEUPLEMENT, 'contactDiagonalPermis'),
+    'contactDiagonalPermis est revenu : le voisinage peut se desserrer en silence');
 
   // ⚠ LA MESURE SE FAIT HORS DE LA GARDE. Une fenêtre prise dans le rayon de
   // quinze cases autour du départ porte zéro base par construction ; la compter
@@ -184,98 +188,181 @@ test('EUCLIDE T5 — la densité tombe dans 28 ± 1 sur 120 graines', () => {
     `densité ${moyenne.toFixed(2)} hors de ${PEUPLEMENT.basesParDouzeCarre} `
     + `± ${PEUPLEMENT.toleranceMesure}`,
   );
-  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sous l'exclusion à huit voisines, la
-  // densité ne pouvait PAS dépasser 16,2, quelle que soit la probabilité — c'est
-  // T5 bis qui le prouve. Un seuil à 20 est donc hors d'atteinte de tout le
-  // réglage précédent : sans cette ligne, un retour au voisinage d'avant
-  // passerait sous une tolérance élargie.
+  // ⚠⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sous une SEULE passe, la densité ne
+  // peut pas dépasser 16,2 quelle que soit la probabilité — c'est T5 bis qui le
+  // prouve, et c'était la carte du dépôt jusqu'au 03/09. Un seuil à 20 est donc
+  // hors d'atteinte de tout réglage à une passe : sans cette ligne, un retour à
+  // l'ancienne sélection passerait sous une tolérance élargie.
   assert.ok(moyenne > 20,
-    `densité ${moyenne.toFixed(2)} : le desserrage du voisinage n'a pas eu lieu`);
+    `densité ${moyenne.toFixed(2)} : les tours de peuplement n'ont pas eu lieu`);
 });
 
-test('EUCLIDE T5 bis — le plafond de densité est STRUCTUREL, et c\'est le VOISINAGE qui le fixe', () => {
-  // ⚠⚠ CE TEST EXISTAIT POUR QUE PERSONNE NE REPROPOSE 24 SOUS L'ANCIENNE RÈGLE.
-  // Il reste vrai mot pour mot — sous l'exclusion à HUIT voisines, 24 était et
-  // reste hors d'atteinte — et il mesure maintenant la raison pour laquelle 28
-  // est atteignable aujourd'hui : ce n'est pas la probabilité qui a changé, c'est
-  // le VOISINAGE.
-  //
-  // Une case est retenue si elle est un MAXIMUM LOCAL STRICT du hachage parmi ses
-  // voisines candidates. À probabilité 1, toutes les cases sont candidates : la
-  // densité vaut celle des maxima locaux d'un champ indépendant dans un
-  // voisinage de `1 + n`, c'est-à-dire exactement `1/(1 + n)`. Sur 144 cases,
-  // cela fait SEIZE à huit voisines et VINGT-HUIT VIRGULE HUIT à quatre.
-  //
-  // On le mesure en réimplémentant la règle avec p = 1, ce que la table ne permet
-  // pas d'exprimer, et pour les DEUX voisinages.
-  const HUIT = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
-  const QUATRE = [[-1, 0], [0, -1], [0, 1], [1, 0]];
+// ---------------------------------------------------------------------------
+// Le peuplement réimplémenté SUR LA CARTE ENTIÈRE, en passes successives.
+//
+// ⚠⚠ C'EST LA SEULE CHOSE QUI PUISSE DIRE QUE LA RÉCURSION LOCALE EST JUSTE.
+// `sim/peuplement.js` ne parcourt jamais la carte : il répond case par case, en
+// remontant les tours d'un rayon de quatre cases. Une passe globale, elle, est
+// évidente à lire — on prend, on interdit les voisines, on recommence. Les deux
+// doivent rendre le même dessin ; c'est T5 ter qui les confronte, et T5 bis qui
+// s'en sert pour mesurer les plafonds.
+// ---------------------------------------------------------------------------
+const { largeur: LARGEUR_CARTE, hauteur: HAUTEUR_CARTE } = GEOGRAPHIE.carte;
+const HUIT = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
-  // ⚠ LA LISTE DU MODULE EST CONFRONTÉE À LA TABLE, pas supposée. C'est elle qui
-  // porte la densité : une diagonale qui y reviendrait ramènerait la carte à 16
-  // sans qu'aucun autre test ne le voie.
-  assert.deepEqual(VOISINES_EXCLUES, PEUPLEMENT.contactDiagonalPermis ? QUATRE : HUIT);
-  assert.equal(VOISINES_EXCLUES.length, 4);
-  assert.ok(!VOISINES_EXCLUES.some(([dr, dc]) => dr !== 0 && dc !== 0),
-    'une diagonale est revenue dans le voisinage d\'exclusion');
+/**
+ * La carte, en passes successives sur la grille entière.
+ *
+ * @param {number} graine
+ * @param {number} p probabilité qu'une case soit candidate
+ * @param {number} tours nombre de passes
+ * @param {Array<Array<number>>} voisinage
+ * @returns {Set<string>} clés « rangée:colonne » des bases
+ */
+function carteParPasses(graine, p, tours, voisinage = HUIT) {
+  const cle = (r, c) => `${r}:${c}`;
+  const candidate = new Set();
+  for (let r = 1; r <= HAUTEUR_CARTE; r += 1) {
+    for (let c = 1; c <= LARGEUR_CARTE; c += 1) {
+      if (!horsDeLaGarde(r, c)) continue;
+      if (hachageDeCase(graine, r, c, 0) < p) candidate.add(cle(r, c));
+    }
+  }
+  const bases = new Set();
+  const interdit = new Set();
+  for (let tour = 0; tour < tours; tour += 1) {
+    const pris = [];
+    for (const k of candidate) {
+      if (bases.has(k) || interdit.has(k)) continue;
+      const [r, c] = k.split(':').map(Number);
+      const mien = hachageDeCase(graine, r, c, 1);
+      let gagne = true;
+      for (const [dr, dc] of voisinage) {
+        const v = cle(r + dr, c + dc);
+        if (!candidate.has(v) || bases.has(v) || interdit.has(v)) continue;
+        if (hachageDeCase(graine, r + dr, c + dc, 1) >= mien) { gagne = false; break; }
+      }
+      if (gagne) pris.push([r, c]);
+    }
+    if (pris.length === 0) break;
+    for (const [r, c] of pris) {
+      bases.add(cle(r, c));
+      for (const [dr, dc] of voisinage) interdit.add(cle(r + dr, c + dc));
+    }
+  }
+  return bases;
+}
+
+/** La densité par 12 × 12 d'une carte rendue en clés, hors de la garde. */
+function densiteDe(bases) {
+  let total = 0;
+  let fenetres = 0;
+  for (let r = 100; r <= 244; r += 12) {
+    for (let c = 1; c + 11 <= LARGEUR_CARTE; c += 12) {
+      for (let dr = 0; dr < 12; dr += 1) {
+        for (let dc = 0; dc < 12; dc += 1) if (bases.has(`${r + dr}:${c + dc}`)) total += 1;
+      }
+      fenetres += 1;
+    }
+  }
+  return total / fenetres;
+}
+
+test('EUCLIDE T5 bis — le plafond de 16 appartenait à la PASSE, pas à la RÈGLE', () => {
+  // ⚠⚠ CE TEST A DIT LE CONTRAIRE PENDANT UNE JOURNÉE, ET C'EST POUR ÇA QU'IL
+  // EXISTE SOUS CETTE FORME. Il affirmait que « le voisinage fixe le plafond » et
+  // que la densité valait `144 / (1 + n)` — vrai d'une SÉLECTION EN UNE PASSE,
+  // faux de la règle. Ethan : « je suis sûr à 100 % qu'on n'est pas obligé de
+  // mettre des bases en diagonale. » Les trois mesures ci-dessous sont la
+  // réponse, et elles sont faites avec la MÊME exclusion des huit voisines.
+
+  // ⚠ LA LISTE DU MODULE EST CONFRONTÉE, pas supposée : c'est elle qui porte la
+  // règle de non-contact, et une diagonale qui en sortirait rendrait la carte
+  // dense pour une raison qu'Ethan a refusée.
+  assert.deepEqual(VOISINES_EXCLUES, HUIT);
+  assert.equal(VOISINES_EXCLUES.length, 8);
   assert.ok(!VOISINES_EXCLUES.some(([dr, dc]) => dr === 0 && dc === 0),
     '(0, 0) est dans le voisinage : aucune case ne pourrait jamais être une base');
 
-  const candidate = (r, c) => estSurLaCarte(r, c) && horsDeLaGarde(r, c);
-  const saturation = (voisinage) => {
-    const estBase = (g, r, c) => {
-      if (!candidate(r, c)) return false;
-      const mien = hachageDeCase(g, r, c, 1);
-      for (const [dr, dc] of voisinage) {
-        if (!candidate(r + dr, c + dc)) continue;
-        if (hachageDeCase(g, r + dr, c + dc, 1) >= mien) return false;
-      }
-      return true;
-    };
-    const densites = [];
-    for (let g = 1; g <= 20; g += 1) {
-      let total = 0;
-      let fenetres = 0;
-      for (let r = 100; r <= 244; r += 12) {
-        for (let c = 1; c + 11 <= GEOGRAPHIE.carte.largeur; c += 12) {
-          let k = 0;
-          for (let dr = 0; dr < 12; dr += 1) {
-            for (let dc = 0; dc < 12; dc += 1) if (estBase(g, r + dr, c + dc)) k += 1;
-          }
-          total += k;
-          fenetres += 1;
-        }
-      }
-      densites.push(total / fenetres);
-    }
-    return densites.reduce((a, b) => a + b, 0) / densites.length;
-  };
+  // (1) UNE PASSE SATURE À 144/9, quelle que soit la probabilité. C'est le fait
+  //     historique — « ignore le 24 », Ethan, 02/09 — et il tient toujours.
+  const unePasse = densiteDe(carteParPasses(1, 1, 1));
+  assert.ok(Math.abs(unePasse - 144 / 9) < 0.5,
+    `une passe à p = 1 : ${unePasse.toFixed(2)}, attendu ${(144 / 9).toFixed(2)}`);
+  assert.ok(unePasse < 24 - PEUPLEMENT.toleranceMesure,
+    `24 ± 1 aurait été atteignable en une passe : ${unePasse.toFixed(2)}`);
 
-  // ⚠ LE PLAFOND N'EST PAS ÉCRIT, IL EST CALCULÉ DE LA TAILLE DU VOISINAGE —
-  // c'est ce qui fait de ce test une preuve de la STRUCTURE et non d'un nombre.
-  for (const [nom, voisinage] of [['huit', HUIT], ['quatre', QUATRE]]) {
-    const plafond = 144 / (1 + voisinage.length);
-    const mesure = saturation(voisinage);
-    assert.ok(mesure < plafond + 0.5,
-      `${nom} : saturation ${mesure.toFixed(2)}, plafond théorique ${plafond.toFixed(2)}`);
-    assert.ok(mesure > plafond - 0.5,
-      `${nom} : saturation ${mesure.toFixed(2)} loin sous son plafond ${plafond.toFixed(2)}`);
+  // (2) LES TOURS FRANCHISSENT CE PLAFOND SANS TOUCHER AU VOISINAGE. C'est la
+  //     phrase d'Ethan, mesurée.
+  const enTours = densiteDe(carteParPasses(1, 1, PEUPLEMENT.toursDePeuplement));
+  assert.ok(enTours > unePasse * 1.5,
+    `les tours ne remplissent pas : ${enTours.toFixed(2)} contre ${unePasse.toFixed(2)}`);
+
+  // (3) ET IL RESTE DE LA MARGE SOUS L'EMPILEMENT MAXIMAL. Le damier au pas de
+  //     deux est LÉGAL sous l'exclusion des huit — on le construit, on vérifie
+  //     qu'aucune paire ne se touche, et il fait 36 par 12 × 12. C'est ce qui
+  //     prouve que la règle, elle, n'a jamais plafonné à 16.
+  const damier = new Set();
+  for (let r = 2; r <= HAUTEUR_CARTE; r += 2) {
+    for (let c = 2; c <= LARGEUR_CARTE; c += 2) damier.add(`${r}:${c}`);
   }
+  for (const k of damier) {
+    const [r, c] = k.split(':').map(Number);
+    for (const [dr, dc] of HUIT) {
+      assert.ok(!damier.has(`${r + dr}:${c + dc}`), 'le damier au pas de deux se touche');
+    }
+  }
+  assert.equal(densiteDe(damier), 36);
+  assert.ok(enTours < 36, 'la carte a atteint l\'empilement maximal : plus aucun trou');
 
-  // ⚠⚠ LE FAIT HISTORIQUE TIENT : 24 ÉTAIT HORS D'ATTEINTE À HUIT VOISINES, et
-  // c'est pour cela qu'Ethan avait dit « ignore le 24 » le 02/09. Ce n'est pas la
-  // probabilité qui l'interdisait, c'était la règle du 3 × 3.
-  const aHuit = saturation(HUIT);
-  assert.ok(aHuit < 24 - PEUPLEMENT.toleranceMesure,
-    `24 ± 1 aurait été atteignable à huit voisines : saturation ${aHuit.toFixed(2)}`);
-
-  // Et la cible retenue est SOUS la saturation de la règle en vigueur — Ethan :
-  // « un peu moins pour que ce soit pas un cadre parfaitement rectangulaire ».
-  const aQuatre = saturation(QUATRE);
-  assert.ok(PEUPLEMENT.basesParDouzeCarre <= aQuatre,
+  // Et la cible retenue tient entre les deux, comme Ethan l'a choisie : au-dessus
+  // de ce qu'une passe peut rendre, sous ce que la saturation rendrait.
+  assert.ok(PEUPLEMENT.basesParDouzeCarre > unePasse,
+    'la cible tient en une passe : les tours ne servent à rien');
+  assert.ok(PEUPLEMENT.basesParDouzeCarre <= enTours,
     'la cible dépasse la saturation : elle ne sera jamais atteinte');
-  assert.ok(PEUPLEMENT.basesParDouzeCarre > aHuit,
-    'la cible tient sous l\'ancienne règle : le desserrage ne sert à rien');
+});
+
+test('EUCLIDE T5 ter — la règle LOCALE rend exactement la passe GLOBALE', () => {
+  // ⚠⚠ C'EST LA GARDE QUI COMPTE LE PLUS DE TOUT LE LOT. `estBaseOuvrage` ne
+  // parcourt jamais la carte : il remonte les tours d'un rayon de quatre cases,
+  // par récursion mémoïsée. Rien, à la relecture, ne dit qu'il n'a pas oublié un
+  // tour ou compté une voisine deux fois — sauf la comparaison, case par case,
+  // avec l'itération évidente sur la carte entière.
+  const p = PEUPLEMENT.probabiliteCandidate;
+  const tours = PEUPLEMENT.toursDePeuplement;
+  let cases = 0;
+  for (const graine of [1, 7, 42]) {
+    const globale = carteParPasses(graine, p, tours);
+    // Falsifiable : une carte vide s'accorderait avec une carte vide.
+    assert.ok(globale.size > 1200,
+      `graine ${graine} : ${globale.size} bases, la passe globale ne mesure rien`);
+    for (let r = 1; r <= HAUTEUR_CARTE; r += 1) {
+      for (let c = 1; c <= LARGEUR_CARTE; c += 1) {
+        cases += 1;
+        assert.equal(estBaseOuvrage(graine, r, c), globale.has(`${r}:${c}`),
+          `désaccord en (${r}, ${c}), graine ${graine}`);
+      }
+    }
+  }
+  assert.equal(cases, 3 * HAUTEUR_CARTE * LARGEUR_CARTE);
+});
+
+test('EUCLIDE T5 quater — quatre tours, c\'est le point fixe', () => {
+  // ⚠ `toursDePeuplement` EST UN PLAFOND DE TRAVAIL, PAS UN RÉGLAGE. Au-delà de
+  // quatre il ne reste presque plus de case libre à prendre : la densité ne bouge
+  // plus. Le descendre, en revanche, viderait la carte — d'où les deux bornes.
+  const p = PEUPLEMENT.probabiliteCandidate;
+  const t = PEUPLEMENT.toursDePeuplement;
+  const auPoint = densiteDe(carteParPasses(1, p, t));
+  const bienAuDela = densiteDe(carteParPasses(1, p, t + 6));
+  assert.ok(Math.abs(auPoint - bienAuDela) < 0.05,
+    `${t} tours rendent ${auPoint.toFixed(3)}, ${t + 6} en rendent ${bienAuDela.toFixed(3)} : `
+    + 'le point fixe n\'est pas atteint');
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : un tour de moins se voit.
+  const unDeMoins = densiteDe(carteParPasses(1, p, t - 1));
+  assert.ok(auPoint - unDeMoins > 0.05,
+    `${t - 1} tours rendent déjà ${unDeMoins.toFixed(3)} : le dernier tour ne sert à rien`);
 });
 
 // ---------------------------------------------------------------------------
