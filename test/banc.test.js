@@ -595,10 +595,21 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // sprite valait DEUX pixels CSS, il en vaut UN. `ZOOM_BASE_MULTIPLE_MAX` passe
   // de 2 à 1 dans le même geste, si bien que la plage du zoom ne bouge pas.
   //
+  // ⚠⚠ RELEVÉE À 3 400 000 AU LOT OFFENSE, LE MÊME JOUR, ET C'EST UNE IMAGE QUI
+  // ENTRE — la dix-septième `data:` du livrable, la première depuis le lot
+  // MUR-DE-CONTOUR. Ethan : « je t'ai envoyé un sprite pour combler le menu
+  // armée ou offense ». L'écran des quatre vagues montrait du vide ; il montre
+  // le bassin. Mesuré, poste par poste :
+  //   • `fond/fond_offense.webp` — 164 578 o sur le disque, **+219 440 en
+  //     base64** ; le même bassin en PNG optimisé pèse 2 099 998 o, soit
+  //     **treize fois plus**, et c'est le WebP qui rend l'image payable ;
+  //   • le balisage, la feuille et le quinconce — **+2 278 octets**.
+  // Total **+221 718**, mesuré : **3 257 192**, marge 142 808, soit 4,2 %.
+  //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 3_200_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 3_400_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

@@ -691,3 +691,78 @@ test('offense — le bandeau du haut porte toujours, lui, les points engagés', 
   assert.match(bloc, /offense/, 'le contexte Offense a disparu du bandeau');
   assert.match(bloc, /chiffre:\s*true/, 'le bandeau n\'affiche plus de nombre');
 });
+
+// ---------------------------------------------------------------------------
+// OFFENSE-03/09 — le bassin, et les neuf en quinconce
+// ---------------------------------------------------------------------------
+
+test('offense — l\'écran porte le bassin, et il est INLINÉ', () => {
+  // ⚠⚠ CE QU'ETHAN A DEMANDÉ LE 03/09 : « je t'ai envoyé un sprite pour combler
+  // le menu armée ou offense ». L'écran des quatre vagues montrait trente-six
+  // cases tiretées sur du noir, et sa moitié basse ne montrait rien du tout.
+  //
+  // ⚠ LE TEST LIT LE HTML **PRODUIT**, pas la source : c'est le seul endroit où
+  // « l'image est inlinée » veut dire quelque chose. Dans la source il n'y a
+  // qu'un marqueur, `%FOND_OFFENSE%`, que le build remplace.
+  const livrable = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  const debut = livrable.indexOf('#offense-vagues {');
+  assert.ok(debut > 0, 'la règle du fond des vagues a disparu de la feuille');
+  const regle = livrable.slice(debut, livrable.indexOf('}', debut));
+
+  assert.match(regle, /background-image:\s*url\('data:image\/webp;base64,/,
+    'le bassin n\'est plus inliné en WebP — une URL ici serait une référence externe');
+
+  // ⚠ `cover`, JAMAIS `100% 100%`. Le décor a un rapport de 0,84 et l'écran
+  // non : l'étirer déformerait des tuyaux et des grilles d'aération, que l'œil
+  // lit comme des objets. On rogne, on ne déforme pas.
+  assert.match(regle, /background-size:\s*cover/,
+    'le bassin est étiré au lieu d\'être rogné');
+  assert.doesNotMatch(regle, /background-repeat:\s*repeat/,
+    'un bassin qui se répète ferait une couture au milieu de l\'écran');
+});
+
+test('offense — les neuf sont en quinconce, et le décalage passe par la GRILLE', () => {
+  // ⚠⚠ ETHAN, 03/09 : « toujours 4 rangées de 9, mais les neuf tu les mets en
+  // quinconce pour que ça passe à peu près ». Une rangée sur deux est décalée
+  // d'une DEMI-case.
+  //
+  // ⚠⚠ ET LE DÉCALAGE NE SE FAIT PAS PAR UN `transform`. Un `translateX`
+  // déplacerait le dessin sans déplacer la géométrie du pointage, et le doigt
+  // cesserait de tomber sur l'emplacement qu'il vise — c'est exactement ce que
+  // le dépôt refuse depuis toujours sur la grille du Chantier. On compte donc
+  // en demi-colonnes.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+
+  const pose = ecran.match(/gridTemplateColumns = `repeat\(\$\{([^}]+)\}, 1fr\)`/);
+  assert.ok(pose, 'l\'écran ne pose plus le nombre de colonnes des vagues');
+
+  // ⚠ LE NOMBRE SE CALCULE, IL NE SE RECOPIE PAS. Écrire `19` passerait cette
+  // égalité aujourd'hui et mentirait le jour où une vague changerait de
+  // largeur : on exige donc que l'expression NOMME la donnée.
+  assert.match(pose[1], /NB_COLONNES/,
+    'le nombre de demi-colonnes est écrit en dur : il ne suivrait plus NB_COLONNES');
+  const demiColonnes = Function('NB_COLONNES', `return ${pose[1]};`)(NB_COLONNES);
+  assert.equal(demiColonnes, NB_COLONNES * 2 + 1,
+    `${demiColonnes} demi-colonnes pour ${NB_COLONNES} emplacements : sans la demi-case`
+    + ' de mou, la rangée décalée déborde ; avec deux, elle n\'est plus au ras du bord');
+
+  // La rangée décalée est marquée dans le balisage, pas devinée par sa place
+  // dans le document : `:nth-child` aurait lié le quinconce à la structure du
+  // DOM, qu'un titre inséré un jour aurait décalée en silence.
+  assert.match(ecran, /classList\.add\('decalee'\)/,
+    'plus rien ne marque la rangée décalée');
+  assert.doesNotMatch(ecran, /transform/,
+    'un `transform` décrocherait le doigt de l\'emplacement qu\'il vise');
+
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const bloc = feuille.slice(feuille.indexOf('#ecran-offense .emplacements'),
+    feuille.indexOf('aspect-ratio: 1', feuille.indexOf('#ecran-offense .emplacements')));
+  assert.match(bloc, /grid-column:\s*span 2/,
+    'un emplacement n\'occupe plus deux demi-colonnes');
+  assert.match(bloc, /\.decalee .emplacement:first-child \{ grid-column-start: 2/,
+    'la rangée décalée ne commence plus une demi-case plus loin');
+  assert.doesNotMatch(bloc, /repeat\(\s*\d/,
+    'le nombre de demi-colonnes est écrit dans la feuille : c\'est une seconde vérité');
+});

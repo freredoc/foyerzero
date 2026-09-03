@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.71.0 · build 73.
+Dernière révision : **03/09/2026**, version 0.72.0 · build 74.
 
 ---
 
@@ -41,8 +41,61 @@ Dernière révision : **03/09/2026**, version 0.71.0 · build 73.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot GRILLE-128), à confronter :**
-`npm test` → **939 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot OFFENSE), à confronter :**
+`npm test` → **941 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 257 192 octets**, 0 référence externe.
+⚠⚠ **L'ÉCRAN OFFENSE A UN SOL, ET C'EST LA DIX-SEPTIÈME `data:` DU LIVRABLE.**
+Ethan, 03/09 : « je t'ai envoyé un sprite pour combler le menu armée ou
+offense ». L'écran montrait trente-six cases tiretées sur du noir et une moitié
+basse vide. **Coût +221 718 octets**, dont **219 440 de base64** pour
+`fond/fond_offense.webp` et 2 278 de balisage, de feuille et de quinconce. La
+borne T10 passe de **3 200 000 à 3 400 000** — marge **142 808 octets, 4,2 %**.
+**16 `data:` avant, 17 après.**
+⚠⚠ **C'EST LE WEBP QUI REND CE DÉCOR PAYABLE, ET LE RAPPORT EST DE TREIZE.**
+Mesuré sur la même image : PNG optimisé **2 099 998 o**, **WebP q85 164 578 o**.
+Le PNG l'aurait à lui seul porté le livrable au-delà de cinq mégaoctets. Ce
+n'est pas du pixel art à teintes comptées, c'est une photographie de décor : le
+PNG n'a rien à y gagner.
+⚠ **ET IL PASSE PAR UN OUTIL, `tools/fonds.py`, POUR UNE SEULE IMAGE.** Le
+committer conditionné sans outil en aurait fait une **source déclarée** de plus
+— un fichier que personne ne sait reproduire le jour où la palette bouge. Il est
+dans `CHAINE`, donc le vérificateur le rejoue. ⚠ Il n'entre dans **aucun
+atlas** : un atlas coud des cellules CARRÉES d'un même côté, un décor de
+1149 × 1368 n'en est pas une. Il voyage par son propre marqueur de
+`tools/build.js`, comme les murs de contour et les deux grosses bases.
+⚠ **`cover`, JAMAIS `100% 100%`.** Le décor a un rapport de 0,84 et l'écran non
+: l'étirer déformerait des tuyaux et des grilles d'aération, que l'œil lit comme
+des objets. **On rogne, on ne déforme pas** — et un test refuse l'étirement
+comme la répétition.
+⚠⚠ **LES NEUF EMPLACEMENTS SONT EN QUINCONCE, ET LE DÉCALAGE PASSE PAR LA
+GRILLE.** Ethan : « toujours 4 rangées de 9, mais les neuf tu les mets en
+quinconce pour que ça passe à peu près ». Une rangée sur deux est décalée d'une
+DEMI-case. **Un `transform: translateX` était exclu** : il déplace le dessin
+sans déplacer la géométrie du pointage, et le doigt cesserait de tomber sur
+l'emplacement qu'il vise — la faute que le dépôt refuse depuis toujours sur la
+grille du Chantier. On compte donc en **demi-colonnes** : `NB_COLONNES × 2 + 1`,
+chaque emplacement en occupant deux, la rangée `decalee` commençant à la 2.
+⚠ **LA DEMI-CASE DE MOU EST LE DÉCALAGE LUI-MÊME**, et le test le mesure : avec
+`× 2` la rangée décalée déborde, avec `× 2 + 2` elle n'est plus au ras du bord.
+**Six falsifications, six chutes, une par test.**
+⚠ **LE NOMBRE DE DEMI-COLONNES N'EST PAS DANS LA FEUILLE.** `NB_COLONNES` est
+une donnée et le CSS ne sait pas la lire : c'est `ui/offense.js` qui pose
+`repeat(NB_COLONNES × 2 + 1, 1fr)`. Un test exige que l'expression **nomme** la
+donnée — écrire « 19 » passerait l'égalité aujourd'hui et mentirait le jour où
+une vague changerait de largeur — et refuse tout `repeat(` chiffré dans le bloc.
+⚠ **LA RANGÉE DÉCALÉE EST MARQUÉE, PAS DEVINÉE.** Un `:nth-child` aurait lié le
+quinconce à la structure du DOM, qu'un titre inséré un jour aurait décalée en
+silence. C'est une classe, `decalee`, donc la garde des classes de
+`chantier.test.js` exige aussi qu'elle ait une règle.
+⚠ **`python3 tools/verifier.py` → 932 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 305,7 s. Il était dû : le lot touche `art/` et
+`tools/`. Le compte passe de 931 à 932 : c'est le décor, et lui seul.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le lot ne touche ni l'état, ni
+la sauvegarde, ni une seule règle de jeu : c'est un décor et une géométrie
+d'écran.
+
+**Auparavant, après le lot GRILLE-128 :**
+`npm test` → 939 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 035 474 octets**, 0 référence externe.
 ⚠⚠ **LE JEU EMBARQUE LA GRILLE 128, ET C'EST UN ARBITRAGE D'ETHAN DU 03/09** —
 « il faut les mettre en 128 au sol, et les unités aussi ; câbler en 128, je sais
@@ -1554,9 +1607,11 @@ test/                   48 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
-                        au lot ENTRÉES, fichier par fichier (hors `__pycache__`,
-                        qui est ignoré par git). Le vingt-cinquième est
+tools/                  26 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
+                        au lot OFFENSE, fichier par fichier (hors `__pycache__`,
+                        qui est ignoré par git). Le vingt-sixième est `fonds.py`,
+                        qui conditionne les DÉCORS — pas des sprites, pas de
+                        grille, aucun atlas ; le vingt-cinquième est
                         `entrees.py`, qui dit ce que la chaîne LIT dans
                         `art/sources/` ; le vingt-quatrième est `portes.py`, qui
                         porte les seuils de quantification et n'importe RIEN,
@@ -1574,10 +1629,14 @@ tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les VINGT ET UN autres sont du Python, hors chaîne de build et hors
+  ⤷ les VINGT-TROIS autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
-      • DOUZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
-        `art/sprites/` — le douzième est `bords.py`, entré le 31/08 ;
+      • TREIZE PRODUCTEURS, qui lisent `art/sources/` et écrivent dans
+        `art/sprites/` — le douzième est `bords.py`, entré le 31/08, le
+        treizième `fonds.py`, entré le 03/09. ⚠ CE DERNIER NE PRODUIT PAS UN
+        SPRITE : un décor n'a ni case, ni grille, ni atlas, et il ne se réduit
+        pas. Il est producteur au seul sens qui compte pour le vérificateur —
+        il écrit sous `art/sprites/`, donc la chaîne doit savoir le rejouer ;
       • TROIS BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
         le portage de la coupe 1024, et les SEUILS DE QUANTIFICATION depuis le
         02/09 ; une quatrième, `align_chenilles.py`, n'a plus d'appelant depuis
@@ -1601,9 +1660,16 @@ tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à la
-                        racine, 428 en comptant `carte/`. RECOMPTÉ le 30/08 au
-                        lot BORDS-DE-BASE.
+art/sources/            sprites bruts, hors chaîne de build — 166 fichiers à la
+                        racine, 429 en comptant `carte/`. RECOMPTÉ le 03/09 au
+                        lot OFFENSE.
+                        ⚠⚠ ET IL EST DÉSORMAIS GARDÉ : `art/sources-declarees.json`
+                          classe chacun de ces fichiers en `consommees` (84) ou
+                          `dormantes` (82), et `tools/entrees.py --verifier` fait
+                          rougir la suite dès qu'un fichier entre sans être
+                          classé. C'est la seule garde de compte hors de `src/`
+                          et de `test/`. Une image qui n'est pas prête entre par
+                          `art/sourcesstandby/`, à côté.
                         ⚠ CETTE LIGNE ANNONÇAIT 87 « depuis le RANGEMENT », et
                           elle était fausse de 61 : le disque en portait 148
                           avant ce lot-ci. Aucune garde ne compte ce dossier —
@@ -1643,10 +1709,19 @@ art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grill
                         et 970 fichiers, recomptés le 02/09 au lot PIXELS, plus
                         SEIZE atlas `.webp` à la racine, DEUX fichiers générés —
                         `ancres-chassis.json` et `atlas-empreintes.json` — et les
-                        SEIZE images à plat de `bord/`.
+                        SEIZE images à plat de `bord/`, et depuis le 03/09
+                        l'unique image de `fond/`.
                         NEUF familles en 128 et 64 : unité, bâtiment, terrain,
                         defense, tourelle-unite, socle, carte, effet, chassis.
-                        La dixième, `bord`, n'a pas de grille.
+                        La dixième, `bord`, n'a pas de grille ; la onzième,
+                        `fond`, n'est même pas une famille de sprites.
+                        ⤷ ⚠⚠ `fond/` PORTE DES DÉCORS, PAS DES SPRITES — entré
+                          au lot OFFENSE. Un décor n'a ni case, ni grille, ni
+                          atlas, et il ne se réduit pas : `fond_offense.webp`
+                          fait 1149 × 1368 et sort de `tools/fonds.py` en WebP
+                          q85, pour 164 578 octets contre 2 099 998 en PNG. Il
+                          entre au livrable par son propre marqueur de
+                          `tools/build.js`, comme les murs de `bord/`.
                         ⤷ ⚠⚠ LA GRILLE 32 EST SORTIE AU LOT PIXELS — 465
                           fichiers retirés, ni le jeu ni les tests ne la
                           lisaient. **SAUF `terrain/32`**, qui reste : `terrain/`

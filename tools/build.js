@@ -165,6 +165,12 @@ const IMAGES_INLINE = [
   atlas('carte'),
   { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.png'], type: 'image/png' },
   { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.png'], type: 'image/png' },
+  // ⚠ LE FOND DU BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour
+  // combler le menu offense ». Ce n'est pas une cellule d'atlas — 1149 × 1368 —
+  // donc il voyage dans son propre marqueur, comme les murs de contour. Il pèse
+  // 164 578 o en WebP contre 2 099 998 en PNG optimisé : voir `tools/fonds.py`,
+  // qui dit pourquoi un décor n'est pas du pixel art à teintes comptées.
+  { marqueur: '%FOND_OFFENSE%', chemin: ['art', 'sprites', 'fond', 'fond_offense.webp'], type: 'image/webp' },
 ];
 
 for (const image of IMAGES_INLINE) {
