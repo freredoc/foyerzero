@@ -84,11 +84,59 @@ MERLONS = [('merlons_j_connexions_2x2.png', 'def_j_merlon', False),
 CONNEXIONS = ['isole', 'est', 'ouest', 'traversant']
 
 
+# ⚠⚠ LES SEIZE PLANCHES SE NOMMENT, ELLES NE SE CHERCHENT PLUS — lot ENTRÉES.
+# Cette table remplace un balayage d'`os.listdir` qui rendait le PREMIER fichier
+# commençant par « T01_ », « T02_ », etc. C'était le seul endroit de la chaîne où
+# DÉPOSER un fichier dans `art/sources/` changeait le résultat en silence :
+# l'ordre d'`os.listdir` n'est garanti ni alphabétique ni stable d'un système de
+# fichiers à l'autre, si bien qu'un second « T01_… » — une reprise, une variante,
+# un `_original` — aurait fait prendre l'un des deux AU HASARD, sans lever, et
+# une tourelle sur douze aurait changé sans que rien ne le signale.
+#
+# ⚠ LE DÉFAUT ÉTAIT LATENT, PAS ACTIF : il y avait exactement une planche par
+# indice au moment du lot. C'est ce qui le rendait invisible et c'est pourquoi
+# il fallait le désarmer AVANT que les images en attente n'arrivent.
+PLANCHES = {
+    1: 'T01_tourelles_12_nord.png',
+    2: 'T02_tourelles_12_nord_est.png',
+    3: 'T03_tourelles_12_est.png',
+    4: 'T04_tourelles_12_sud_est.png',
+    5: 'T05_tourelles_12_sud.png',
+    6: 'T06_tourelles_12_sud_ouest.png',
+    7: 'T07_tourelles_12_ouest.png',
+    8: 'T08_tourelles_12_nord_ouest.png',
+    9: 'T09_tourelles_12_nord_nord_est.png',
+    10: 'T10_tourelles_12_est_nord_est.png',
+    11: 'T11_tourelles_12_est_sud_est.png',
+    12: 'T12_tourelles_12_sud_sud_est.png',
+    13: 'T13_tourelles_12_sud_sud_ouest.png',
+    14: 'T14_tourelles_12_ouest_sud_ouest.png',
+    15: 'T15_tourelles_12_ouest_nord_ouest.png',
+    16: 'T16_tourelles_12_nord_nord_ouest.png',
+}
+
+
 def planche(indice):
-    for f in os.listdir(SRC):
-        if f.startswith('T%02d_' % indice) and f.endswith('.png'):
-            return os.path.join(SRC, f)
-    raise FileNotFoundError('planche T%02d absente' % indice)
+    """Le chemin de la planche d'un indice — NOMMÉE, et jamais devinée.
+
+    ⚠⚠ ET ON LÈVE SUR UNE AMBIGUÏTÉ AU LIEU DE CHOISIR. La table seule suffirait
+    à rendre l'outil déterministe ; mais elle laisserait un second « T01_… »
+    dormir au dépôt sans que personne l'apprenne, et c'est précisément ce qu'on
+    veut voir. Un homonyme fait donc SORTIR l'outil, en nommant les deux
+    fichiers : au lecteur de dire lequel compte.
+    """
+    nom = PLANCHES.get(indice)
+    if nom is None:
+        raise KeyError('aucune planche déclarée pour l\'indice %d' % indice)
+    homonymes = sorted(f for f in os.listdir(SRC)
+                       if f.startswith('T%02d_' % indice) and f.endswith('.png'))
+    if homonymes != [nom]:
+        raise FileNotFoundError(
+            'planche T%02d : le dépôt porte %r, la table déclare %r.\n'
+            "  Deux fichiers ne peuvent pas répondre au même indice — ni zéro. "
+            'Corriger PLANCHES, ou sortir le fichier de trop vers '
+            'art/sourcesstandby/.' % (indice, homonymes, nom))
+    return os.path.join(SRC, nom)
 
 
 def cellule(chemin, k, nx=3, ny=4):

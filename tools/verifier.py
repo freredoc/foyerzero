@@ -61,6 +61,20 @@ CHAINE = [
     # MANQUANTS à chaque exécution, c'est-à-dire « le dépôt les porte, aucun
     # outil ne les produit » — exactement le contraire de la vérité.
     ('bords',           []),
+    # ⚠⚠ LES ENTRÉES — 03/09, ET ELLE NE PRODUIT AUCUN SPRITE. Comme la ligne
+    # `bords` ci-dessus dit pourquoi elle est là, celle-ci dit pourquoi elle
+    # n'écrit rien : `entrees.py` OBSERVE ce que la chaîne ouvre dans
+    # `art/sources/` et le confronte à `art/sources-declarees.json`. Elle passe
+    # en DERNIER, et son dossier de sortie reste vide — le vérificateur ne doit
+    # donc pas s'attendre à lui voir produire quoi que ce soit.
+    #
+    # ⚠ ELLE REJOUE LA CHAÎNE UNE SECONDE FOIS, ET ÇA SE PAIE : mesuré sur la
+    # même machine, le vérificateur passe de **185,2 s à 291,9 s**, soit
+    # +106,7 s. C'est le prix d'une trace qui est un FAIT d'exécution et non une
+    # intention relue — et il est PLUS BAS qu'un doublement parce que la moitié
+    # du temps du vérificateur est la comparaison des 931 fichiers, qu'`entrees`
+    # ne refait pas : elle jette ce que les outils écrivent.
+    ('entrees',         ['--verifier']),
 ]
 
 # ---------------------------------------------------------------------------
