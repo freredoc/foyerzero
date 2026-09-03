@@ -12,6 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
+import { TERRAIN_CARTE } from '../src/data/sites.js';
 import { JOUEUR, OUVRAGE } from '../src/sim/territoire.js';
 import {
   spritesDeLaLimite, dessinerLimiteDUneCase, LETTRE_DU_CAMP, COTES, FAMILLE,
@@ -311,4 +312,150 @@ test('LIMITE T7 — la frontière n\'est plus un trait, et l\'épaisseur est par
   // attaquante et la flèche du raid s'en servent toujours.
   assert.match(nue, /TEINTES_TERRITOIRE\[JOUEUR\]/,
     'les teintes de territoire ne servent plus à rien — les retirer, alors');
+});
+
+// ---------------------------------------------------------------------------
+// T8 — la couleur de la frontière, et son écart au sol de la carte
+// ---------------------------------------------------------------------------
+
+/** La clarté L* d'un pixel sRGB. Elle RANGE et elle MESURE, elle ne peint pas. */
+function clarte([r, v, b]) {
+  const lin = [r, v, b].map((c) => c / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const y = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  return 116 * (y > 0.008856 ? y ** (1 / 3) : 7.787 * y + 16 / 116) - 16;
+}
+
+const hexEnRvb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+/** Les hex d'une rampe de `FICHE-STYLE.md`, dans l'ordre du creux à la lumière. */
+function rampeDeLaFiche(titre) {
+  const fiche = lire('FICHE-STYLE.md');
+  const debut = fiche.indexOf(titre);
+  assert.notEqual(debut, -1, `FICHE-STYLE.md ne porte plus la rampe « ${titre} »`);
+  const suite = fiche.slice(debut + titre.length);
+  const bloc = suite.slice(0, suite.indexOf('\n### ') === -1 ? undefined : suite.indexOf('\n### '));
+  const hex = [...bloc.matchAll(/`(#[0-9A-Fa-f]{6})`/g)].map((m) => m[1].toUpperCase());
+  assert.equal(hex.length, 5, `« ${titre} » ne porte plus cinq tons mais ${hex.length}`);
+  return hex;
+}
+
+/** Les tons OPAQUES d'un sprite de limite, du plus sombre au plus clair. */
+function tonsDuSprite(fichier) {
+  const { largeur, hauteur, pixels } = decoderRgba(join(SPRITES, fichier));
+  const vus = new Map();
+  for (let i = 0; i < largeur * hauteur; i += 1) {
+    // ⚠ SEUIL À 128, PAS « ALPHA > 0 ». `baver` étend la couleur opaque dans le
+    // transparent et `decoderRgba` dé-prémultiplie : la frange porte donc des
+    // teintes intermédiaires à alpha faible, qui ne sont pas des tons du
+    // dessin. C'est le même seuil que la garde de clé de `sprite.test.js`.
+    if (pixels[i * 4 + 3] < 128) continue;
+    const px = [pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2]];
+    vus.set(px.join(','), px);
+  }
+  return [...vus.values()].sort((a, b) => clarte(a) - clarte(b));
+}
+
+test('LIMITE T8 — la frontière porte la rampe de son camp, et elle RESSORT du sol', () => {
+  // ⚠⚠ ARBITRAGE D'ETHAN, 03/09 AU SOIR : « code couleur frontiere : vert kaki
+  // joueur et l'autre violet ouvrage / il faut que ça ressort sur le terrain. /
+  // recolorise si il le faut ». Les dessins livrés portaient OR/AMBRE pour le
+  // joueur et GRIS-BLEU PÂLE pour l'Ouvrage — ce que le rapport du lot
+  // TERRITOIRE avait relevé comme « un arbitrage qui revient à Ethan ».
+  const RAMPES = {
+    j: rampeDeLaFiche('### Châssis — kaki désaturé'),
+    o: rampeDeLaFiche('### Ouvrage — ardoise violacée'),
+  };
+
+  // ⚠⚠ LES QUATRE PREMIERS TONS DE LA RAMPE, PAS QUATRE TONS AU CHOIX, ET LE
+  // CHOIX EST MESURÉ CI-DESSOUS : prendre les tons 2 à 5 laisserait le kaki
+  // `#8C9A72` à 3,5 de clarté du sol, c'est-à-dire refaire la faute qu'on
+  // corrige. L'assertion lit la fiche, qui fait autorité sur le style, plutôt
+  // que de recopier une troisième fois quatre hex.
+  const QUATRE = 4;
+  for (const [lettre, rampe] of Object.entries(RAMPES)) {
+    const attendus = rampe.slice(0, QUATRE);
+    for (const forme of ['carre', 'trait_n', 'coin_ne', 'u_neo']) {
+      const tons = tonsDuSprite(`limite_${lettre}_${forme}.png`);
+      assert.equal(tons.length, QUATRE,
+        `limite_${lettre}_${forme} : ${tons.length} tons opaques, ${QUATRE} attendus`);
+      assert.deepEqual(tons.map((t) => t.map((c) => c.toString(16).padStart(2, '0'))
+        .join('').toUpperCase()).map((h) => `#${h}`), attendus,
+        `limite_${lettre}_${forme} : la frontière n'est pas sur la rampe de son camp`);
+    }
+  }
+
+  // ⚠⚠ ET LE SOL DE LA CARTE EST LA GRANDEUR CONTRE LAQUELLE ON MESURE, PAS UN
+  // SEUIL D'INTUITION. `TERRAIN_CARTE.rampes` porte les deux rampes de sol, dont
+  // les cinq clartés sont identiques rang par rang — FICHE-STYLE §3 le veut
+  // ainsi, « deux sols de clarté différente donnent à un camp un camouflage que
+  // personne n'a décidé ». Le sol est donc CLAIR des deux côtés, et une
+  // frontière ne s'y lit que si elle est franchement plus sombre.
+  const solsL = [...TERRAIN_CARTE.rampes.joueur, ...TERRAIN_CARTE.rampes.ouvrage]
+    .map((h) => clarte(hexEnRvb(h)));
+  const ecartAuSol = (px) => Math.min(...solsL.map((s) => Math.abs(clarte(px) - s)));
+
+  // MESURÉ sur les huit tons des deux camps : le pire écart vaut 10,2 — le kaki
+  // `#6A7658`, 11 % du dessin. La borne est à 8.
+  const BORNE = 8;
+  for (const lettre of ['j', 'o']) {
+    for (const px of tonsDuSprite(`limite_${lettre}_carre.png`)) {
+      assert.ok(ecartAuSol(px) >= BORNE,
+        `limite_${lettre} : un ton à ${ecartAuSol(px).toFixed(1)} de clarté du sol, ${BORNE} au moins`);
+    }
+  }
+
+  // ⚠⚠ ET LA BORNE N'EST PAS VACUEUSE : LES DEUX TONS QUI ONT FAIT LE RAPPORT
+  // D'ETHAN LA FRANCHISSENT. `#CD6F26` — 16,2 % de l'ancienne frontière du
+  // joueur — était à 1,5 de clarté du sol le plus sombre, et `#9FB3C5` à 8,8.
+  // Sans cette paire, « écart au moins 8 » pourrait être n'importe quel nombre.
+  assert.ok(ecartAuSol(hexEnRvb('#CD6F26')) < BORNE,
+    'l\'ancien ton or de la frontière passerait la borne : elle ne garde rien');
+  assert.ok(ecartAuSol(hexEnRvb('#9FB3C5')) < BORNE,
+    'l\'ancien ton gris-bleu de l\'Ouvrage passerait la borne : elle ne garde rien');
+
+  // ⚠⚠ ET LE DEDANS RESTE SOMBRE, LE DEHORS CLAIR — LA GARDE L'AVAIT MANQUÉ.
+  // Une première version de ce test ne comparait que l'ENSEMBLE des tons à la
+  // rampe : mesuré, renverser le rangement par clarté dans `tools/limites.py`
+  // — donc peindre la bande extérieure du creux et la bande intérieure de la
+  // lumière — la laissait ENTIÈREMENT VERTE, la permutation ne faisant pas
+  // sortir un seul ton de la rampe. Or c'est précisément ce que la frontière
+  // apporte sur un trait de deux pixels : « bande sombre côté territoire, bande
+  // claire dehors ». La garde nomme donc la propriété, et non l'ensemble.
+  //
+  // Le `carre` expose ses quatre côtés, donc son territoire est DEDANS : sa
+  // ligne logique 0 est le tout bord — dehors —, et la 1 est juste en dedans.
+  // MESURÉ : L* moyen 38,7 contre 10,0 côté joueur, 23,3 contre 4,4 côté
+  // Ouvrage. La borne est à 8, très en dessous des deux.
+  const LOGIQUE = 32;
+  const ECART_DEDANS_DEHORS = 8;
+  for (const lettre of ['j', 'o']) {
+    const { largeur, pixels } = decoderRgba(join(SPRITES, `limite_${lettre}_carre.png`));
+    const pas = largeur / LOGIQUE;
+    const moyenne = (g) => {
+      const vus = [];
+      for (let x = 0; x < LOGIQUE; x += 1) {
+        const i = ((g * pas + Math.floor(pas / 2)) * largeur + x * pas + Math.floor(pas / 2)) * 4;
+        if (pixels[i + 3] >= 128) vus.push(clarte([pixels[i], pixels[i + 1], pixels[i + 2]]));
+      }
+      assert.ok(vus.length > LOGIQUE / 2, `limite_${lettre} : la ligne logique ${g} est vide`);
+      return vus.reduce((t, v) => t + v, 0) / vus.length;
+    };
+    const dehors = moyenne(0);
+    const dedans = moyenne(1);
+    assert.ok(dehors - dedans >= ECART_DEDANS_DEHORS,
+      `limite_${lettre} : dehors L* ${dehors.toFixed(1)} contre dedans ${dedans.toFixed(1)} — `
+      + 'la bande sombre n\'est plus du côté du territoire');
+  }
+
+  // ⚠ « VERT » ET « VIOLET » SE VÉRIFIENT, ILS NE SE CROIENT PAS. Ethan a nommé
+  // deux teintes ; un rangement par clarté seule serait vrai de deux rampes
+  // grises. Le kaki a le VERT dominant, l'ardoise le BLEU — sur les quatre tons,
+  // pas seulement sur le corps.
+  for (const [r, v, b] of tonsDuSprite('limite_j_carre.png')) {
+    assert.ok(v > r && v >= b, `la frontière du joueur n'est pas verte : ${r} ${v} ${b}`);
+  }
+  for (const [r, v, b] of tonsDuSprite('limite_o_carre.png')) {
+    assert.ok(b > r && b > v, `la frontière de l'Ouvrage n'est pas violette : ${r} ${v} ${b}`);
+  }
 });

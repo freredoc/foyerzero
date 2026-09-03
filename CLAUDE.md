@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.78.0 · build 80.
+Dernière révision : **03/09/2026**, version 0.79.0 · build 81.
 
 ---
 
@@ -41,8 +41,124 @@ Dernière révision : **03/09/2026**, version 0.78.0 · build 80.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot FREEZE-ET-PALETTE), à confronter :**
-`npm test` → **966 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot ARMÉE-ET-FRONTIÈRE), à confronter :**
+`npm test` → **967 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 343 043 octets**, 0 référence externe.
+⚠⚠ **QUATRE POINTS D'ETHAN, ET LE LOT REND 10 896 OCTETS.** 03/09 au soir :
+« ui armée : une barre : d'abord l'infanterie puis véhicule et avion » · « pas de
+changement vitesse » · « "comment le joueur choisit le niveau d'une pièce" cad ? »
+· « code couleur frontiere : vert kaki joueur et l'autre violet ouvrage / il faut
+que ça ressort sur le terrain. / recolorise si il le faut ». **25 `data:` avant,
+25 après** — aucune image n'entre ni ne sort. Borne T10 **inchangée à 3 400 000**,
+marge **56 957 octets, 1,68 %** : c'est le premier lot depuis MURS qui DESSERRE la
+marge. Poste par poste : `atlas-limite-128.webp` **−11 608 octets** de base64,
+code et feuille **+712**.
+⚠⚠ **ET C'EST LA RECOLORISATION QUI REND CES OCTETS, PAS UNE ÉCONOMIE CHERCHÉE.**
+L'atlas de limites passe de **19 178 à 10 472 octets** — 45 % de moins — parce
+qu'un WebP q85 compresse quatre tons sombres et plats mieux que l'or, l'ambre et
+le gris-bleu pâle qu'il portait. **La borne ne se baisse pas parce qu'un lot
+rend.**
+⚠⚠ **LE DÉFAUT DE LA FRONTIÈRE ÉTAIT DE CLARTÉ, PAS DE TEINTE, ET IL SE MESURE.**
+Le sol de la carte est CLAIR des deux côtés : `TERRAIN_CARTE.rampes` porte deux
+rampes dont les cinq clartés valent **L\* 58,1 · 62,9 · 68,0 · 73,0 · 77,9**, rang
+par rang et à dessein. Or l'ancienne frontière portait `#CD6F26` à **1,5 de
+clarté** d'un ton de sol et `#9FB3C5` à **1,0** — soit **48 % du dessin
+invisible sur le terrain**. Ce n'était pas une affaire de goût.
+⚠⚠ **LES QUATRE TONS LES PLUS SOMBRES DE CHAQUE RAMPE, ET LE CHOIX EST MESURÉ.**
+Écart minimal au sol / écart interne dedans → dehors : **kaki 1-4 → 10,2 / 27,4**
+contre 2-5 → 3,5 / 24,4 ; **ardoise 1-4 → 28,1 / 17,7** contre 2-5 → 16,6 / 17,8.
+Les tons 1-4 gagnent des deux côtés, sur les deux rampes ; prendre les 2-5
+laisserait le kaki `#8C9A72` à 3,5 du sol, c'est-à-dire refaire la faute qu'on
+corrige. Le pire écart passe de **1,5 à 10,2 — 6,8 fois**, et les parts sont
+identiques rang par rang : c'est une correspondance, pas un redessin.
+⚠ **LE JOUEUR EST VERT PARCE QUE LA FICHE LE DIT** — « la rampe kaki est celle du
+joueur, définitivement », et « aucun vert dans le terrain, nulle part ». Aucune
+tuile de sol ne peut citer le kaki : c'est ce qui le rend lisible comme sien.
+⚠ **ON RANGE PAR CLARTÉ, PAS PAR FRÉQUENCE.** Les deux donnent le même résultat
+sur la livraison — mesuré, les quatre tons de chaque camp ont exactement les
+mêmes parts, 41,0 · 31,9 · 16,2 · 11,0 % — mais c'est l'ORDRE DES CLARTÉS qui
+porte le dedans et le dehors. Un rangement monotone le garde par construction.
+⚠⚠ **ET L'ORDRE DES TROIS GESTES N'EST PAS LIBRE : `assert_fond`, PUIS
+RECOLORISER, PUIS `baver`.** `assert_fond` travaille sur le RVB de la LIVRAISON,
+donc la recolorisation vient après lui et **aucune assertion du lot TERRITOIRE
+n'est touchée** ; `baver` vient après elle, sinon la frange garderait le RVB des
+anciennes teintes et le WebP le lisserait en un **liseré or autour d'une
+frontière kaki** — le liseré du lot MURS, dans une autre couleur.
+⚠⚠ **LA GARDE DE COULEUR A MANQUÉ LA MOITIÉ QUI COMPTE, ET LA FALSIFICATION L'A
+DÉBUSQUÉE.** Sa première version comparait l'ENSEMBLE des tons à la rampe :
+renverser le rangement par clarté — donc **inverser le dedans et le dehors** — la
+laissait entièrement verte, la permutation ne faisant sortir aucun ton de la
+rampe. Elle nomme désormais la propriété : sur `carre`, la ligne logique 0 est
+plus claire que la 1 — **L\* moyen 38,7 contre 10,0** côté joueur, 23,3 contre 4,4
+côté Ouvrage.
+⚠ **ET LA BORNE DE CONTRASTE N'EST PAS VACUEUSE** : le test asserte de face que
+`#CD6F26` et `#9FB3C5`, les deux anciens tons, seraient REFUSÉS par le même
+prédicat. Sans cette paire, « écart au moins 8 » pourrait être n'importe quel
+nombre. ⚠ Et « vert » et « violet » se vérifient aussi — un rangement par clarté
+seule serait vrai de deux rampes grises.
+⚠ **LA RAMPE SE LIT DANS `FICHE-STYLE.md`, ELLE NE SE RECOPIE PAS UNE TROISIÈME
+FOIS** — elle est déjà dans `tools/limites.py` et dans `test/banc.test.js`.
+⚠⚠ **L'ORDRE DES CHÂSSIS ÉTAIT DÉJÀ JUSTE, ET IL CESSE D'ÊTRE UNE COÏNCIDENCE.**
+Mesuré avant d'écrire une ligne : `UNITES` est déjà écrite escouades, blindés,
+aéronefs, et la palette faisait `Object.keys(UNITES).map(…)`. **Ce lot ne déplace
+donc AUCUNE vignette à l'écran.** Ce qui change est le STATUT du fait :
+`ORDRE_CHASSIS` entre dans `data/combat.js` et la palette TRIE dessus, si bien
+que le groupement tient encore le jour où une quinzième unité s'insère au mauvais
+rang.
+⚠⚠ **ET C'EST L'INVERSE D'`ORDRE_PALETTE`, ÉCRITE LE MATIN MÊME.** Là-bas aucune
+clé du roster ne disait « ce bâtiment vient tôt » : il a fallu écrire les onze
+noms à la main. Ici la clé existe depuis toujours — `UNITES[x].chassis` classe les
+quatorze — donc **on trie, on ne recopie pas**. ⚠ Le tri est STABLE : Ethan a
+donné l'ordre des TROIS châssis, pas celui des quatorze unités. ⚠ Et un châssis
+hors table LÈVE : `-1` le mettrait EN TÊTE, donc devant l'infanterie.
+⚠⚠ **LA PALETTE DE L'ARMÉE PASSE À UNE BANDE, TROISIÈME ARBITRAGE SUR LA MÊME
+LIGNE.** Le lot 5A filtrait sur des colonnes qui défilaient ; le 29/08 elle a
+cessé de filtrer, donc montré quatorze unités, donc passé à DEUX rangées. Le
+motif était juste et avait un prix qu'on ne mesurait pas — dans 86 px, deux
+rangées laissent **38 px** par vignette, une seule en laisse **76**. ⚠ La hauteur
+ne bouge pas, donc les **288 px** de chrome de l'Offense non plus. ⚠ Et la largeur
+d'une colonne quitte le JS pour la feuille : tant que la palette devait TENIR,
+seul le JS savait combien de vignettes il y avait.
+⚠⚠ **L'EXCEPTION AU DÉFILEMENT HORIZONTAL ÉTAIT INERTE POUR L'OFFENSE, TROUVÉE
+EN LA MESURANT.** La boucle de l'interdiction ne portait que sur les six barres
+du Chantier : `offense-contexte` et `offense-palette` **n'ont jamais été atteints
+par l'interdiction**, si bien qu'ajouter la palette à l'exception ne changeait
+RIEN. Une exception à une règle qui ne couvre pas la barre exceptée ne dit rien
+du tout. La boucle balaie les deux écrans désormais, et **`offense-contexte` est
+gardé pour la première fois**.
+⚠⚠ **« COMMENT LE JOUEUR CHOISIT LE NIVEAU D'UNE PIÈCE » EST UNE PHRASE DE MON
+RAPPORT, PAS UNE DEMANDE — ET ELLE SIGNALAIT UN TROU.** Le niveau est **par
+pièce** depuis le 28/08, les éditeurs en portent UN pour toute la grille et le
+recopient, le jeu pose au **niveau 1**, donc `niveauDeLArmee` et
+`niveauDeLaDefense` affichent **1,0, toujours**. Le PRIX d'une montée est arbitré
+depuis le 28/08 (`data/couts-militaires.js`) ; ce qui manque, c'est le GESTE et
+le GAIN. Trois formes possibles, chacune d'une ligne à brancher — niveau choisi
+à la pose, pièce améliorée une par une, ou niveau global de la force. **Le moteur
+est prêt pour les trois** ; la décision revient à Ethan.
+⚠⚠ **LES VITESSES : RIEN N'A ÉTÉ TOUCHÉ, ET L'ARBITRAGE FERME LE POINT.**
+« pas de changement vitesse ». Les quatre valeurs de `UNITES` — 60 · 90 · 120 ·
+240 — restent celles du §6 de `RELEVE-TA-COURBES-2.md`, ligne par ligne.
+⚠ **DOUZE FALSIFICATIONS, ONZE CHUTES, ET LA DOUZIÈME EST DÉCLARÉE** — retirer
+le `sort` de la palette laisse `offense.test.js` ENTIÈREMENT VERT, 22 pass / 0
+fail mesuré, `UNITES` étant déjà dans le bon ordre. Ce que la garde attrape est
+l'ordre lui-même et un châssis hors table ; elle tombera pour de bon à la
+quinzième unité mal rangée. **Un test qui ne peut tomber sur aucun état
+d'aujourd'hui se déclare, il ne se compte pas.**
+⚠ **UN TEST ENTRE — `LIMITE T8` — ET DEUX SONT RETOURNÉS SANS PERTE
+D'ASSERTION** : la palette de l'Offense, et l'exception au défilement.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Aucun champ n'entre dans
+l'état : un ordre d'affichage, une barre qui défile, et des pixels.
+⚠ **`python3 tools/verifier.py` → 1 005 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 329,6 s. Il était dû : le lot touche `art/` et
+`tools/`. **Le compte ne bouge pas** — la recolorisation remplace des octets, elle
+n'ajoute ni ne retire un fichier ; ce sont les cinquante-deux limites qui ont
+changé, et elles seules.
+⚠ **`python3 tools/entrees.py --verifier` → 95 consommées / 95 déclarées, 79
+dormantes / 79 déclarées**, `art/sourcesstandby/` : 34 fichiers, **0 lu**.
+Inchangé — le lot lit exactement les mêmes planches, il les peint autrement.
+
+**Auparavant, après le lot FREEZE-ET-PALETTE :**
+`npm test` → 966 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 353 939 octets**, 0 référence externe.
 ⚠⚠ **QUATRE RETOURS D'ETHAN, ET LE PREMIER EST UNE CORRECTION DE MA LECTURE.**
 03/09 : « Claude confond monter le plafond des niveaux et niveau unités » ·

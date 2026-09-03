@@ -25,7 +25,7 @@ import {
 import { acquisesDe } from '../src/sim/recherche.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
-import { GRILLE, UNITES } from '../src/data/combat.js';
+import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -252,23 +252,69 @@ test('offense — la barre contextuelle existe, et ses quatre boutons répondent
     html.indexOf('id="offense-palette"'))), 'la barre de l\'Offense parle de démolition');
 });
 
-test('offense — la palette ne défile pas : ses colonnes se calculent', () => {
-  // ⚠ CONSIGNE D'ETHAN, 28/08 : « tu compresses tout dans l'ui ». La palette
-  // avait des colonnes de 82 px et un `overflow-x: auto` — tolérable tant
-  // qu'elle FILTRAIT et n'en montrait que trois ou quatre, insupportable depuis
-  // qu'elle grise et en montre quatorze. Vu à l'essai, sur appareil simulé.
+test('offense — UNE bande qui défile, la hauteur gardée, et les châssis dans l\'ordre', () => {
+  // ⚠⚠ CETTE GARDE EST RETOURNÉE, ET C'EST LE TROISIÈME ARBITRAGE SUR LA MÊME
+  // LIGNE. Le lot 5A filtrait et n'en montrait que trois ou quatre, sur des
+  // colonnes de 82 px qui défilaient ; le 29/08 elle a cessé de filtrer, donc
+  // montré quatorze unités, donc passé à DEUX rangées qui tiennent — « tu
+  // compresses tout dans l'ui ». Le motif était juste et avait un prix qu'on ne
+  // mesurait pas : dans 86 px, deux rangées laissent 38 px par vignette, sprite
+  // et libellé compris. Ethan, 03/09 : « ui armée : une barre : d'abord
+  // l'infanterie puis véhicule et avion ». Une seule rangée en laisse 76.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
   const bloc = feuille.match(/#offense-palette\s*\{([^}]*)\}/)[1];
-  assert.ok(!/overflow-x:\s*auto/.test(bloc), 'la palette de l\'Offense défile encore');
-  assert.ok(!/grid-auto-columns/.test(bloc), 'la palette a encore des colonnes de largeur fixe');
-  assert.match(bloc, /overflow:\s*hidden/);
+  assert.match(bloc, /overflow-x:\s*auto/, 'la palette de l\'Offense ne défile pas');
+  assert.match(bloc, /grid-auto-flow:\s*column/, 'la palette n\'est pas en colonnes');
+  assert.match(bloc, /grid-template-rows:\s*1fr/, 'la palette a plus d\'une rangée');
+  assert.match(bloc, /grid-auto-columns:\s*\d+px/, 'la largeur d\'une colonne n\'est pas fixée');
+  // ⚠ ET LA HAUTEUR EST LA MOITIÉ DE LA DEMANDE — « garder la hauteur, comme ça
+  // les boutons seront gros », dit de la palette du Chantier le même jour et
+  // vrai des deux. Sans elle, les 288 px de chrome de l'Offense bougeraient.
+  assert.match(bloc, /flex:\s*0 0 86px/, 'la palette de l\'Offense a changé de hauteur');
+  // ⚠ LE DÉFILEMENT VERTICAL RESTE FERMÉ : une bande qui défilerait dans les
+  // deux sens cacherait le bas d'une vignette sans que rien ne le rende.
+  assert.match(bloc, /overflow-y:\s*hidden/);
 
-  // ⚠ ET LE NOMBRE DE COLONNES SE CALCULE, IL NE S'ÉCRIT PAS. Écrire « 7 »
-  // marcherait aujourd'hui et mentirait à la quinzième unité.
+  // ⚠⚠ ET LA LARGEUR D'UNE COLONNE QUITTE LE JS POUR LA FEUILLE. Tant que la
+  // palette devait TENIR, seul le JS savait combien de vignettes il y avait ;
+  // depuis qu'elle défile, leur nombre n'a plus à être connu de personne.
   const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
-  assert.match(source, /gridTemplateColumns[^\n]*Math\.ceil\(/,
-    'le nombre de colonnes de la palette est écrit en dur');
+  assert.ok(!/palette\.style\.gridTemplateColumns/.test(source),
+    'l\'écran pose encore les colonnes de la palette');
+
+  // ⚠⚠ LES CHÂSSIS SORTENT DANS L'ORDRE DEMANDÉ, ET LA MESURE PORTE SUR LA
+  // PALETTE, PAS SUR LA TABLE. `UNITES` est déjà écrite dans cet ordre-là —
+  // c'est mesuré ci-dessous —, donc une garde qui lirait la table serait verte
+  // même si la palette la brassait.
+  const etat = creerEtat(7);
+  baseCourante(etat).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
+  poser(etat, 'centreDeCommandement', 12, 1);
+  baseCourante(etat).disposition[1].niveau = GEOGRAPHIE.niveauPlafond;
+  const rangs = unitesDeLaPalette(etat).map((u) => ORDRE_CHASSIS.indexOf(UNITES[u.id].chassis));
+  assert.ok(rangs.every((r) => r >= 0), 'une unité de la palette a un châssis hors de l\'ordre');
+  for (let i = 1; i < rangs.length; i += 1) {
+    assert.ok(rangs[i] >= rangs[i - 1],
+      `la palette casse l'ordre des châssis au rang ${i} : ${rangs.join(' ')}`);
+  }
+  // Les trois groupes sont non vides : sans ça, la monotonie ci-dessus serait
+  // vraie d'une palette qui ne montrerait qu'un seul châssis.
+  assert.equal(new Set(rangs).size, ORDRE_CHASSIS.length);
+
+  // ⚠⚠ ET LE TRI EST L'IDENTITÉ SUR LE ROSTER D'AUJOURD'HUI — relevé, pas
+  // supposé : c'est ce qui dit que ce lot ne déplace AUCUNE vignette à l'écran.
+  // ⚠⚠ D'OÙ UNE FALSIFICATION QUI NE MORD PAS, ET ELLE SE DÉCLARE : retirer le
+  // `sort` d'`unitesDeLaPalette` laisse ce test ENTIÈREMENT VERT — mesuré, 22
+  // pass / 0 fail —, `UNITES` étant déjà écrite escouades, blindés, aéronefs.
+  // Ce que la garde attrape, c'est l'ordre lui-même : renverser `ORDRE_CHASSIS`
+  // la fait tomber, et un châssis hors de la table fait LEVER la palette. Elle
+  // tombera pour de bon le jour où quelqu'un insérera une quinzième unité au
+  // mauvais rang, et c'est précisément ce qu'on lui demande de garder.
+  assert.deepEqual(unitesDeLaPalette(etat).map((u) => u.id), Object.keys(UNITES));
+
+  // ⚠ L'ORDRE DES CHÂSSIS EST DANS `data/`, PAS DANS L'ÉCRAN. Un tableau écrit
+  // à la main dans `ui/offense.js` serait une seconde table de calibrage.
+  assert.ok(!/'escouade'/.test(source), 'l\'écran nomme un châssis en dur');
 });
 
 test('offense — le budget vient du Centre de commandement, et de lui seul', () => {

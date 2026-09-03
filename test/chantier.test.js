@@ -2458,11 +2458,21 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
   // Ethan la lève le 03/09, pour la palette SEULE : « une seule bande […] + une
   // barre de défilement. Garder la hauteur, comme ça les boutons seront gros. »
   // Ce qu'il achète est mesurable — 38 px de vignette contre 76 —, et ce qu'il
-  // paie est que la palette ne montre plus tout d'un coup. L'interdiction reste
-  // TOTALE sur les cinq autres barres : une barre de compteurs qui défile
-  // cacherait un nombre, ce qu'aucun geste ne ferait réapparaître.
-  const DEFILE_A_L_HORIZONTALE = ['chantier-palette'];
-  for (const id of barres) {
+  // paie est que la palette ne montre plus tout d'un coup. ⚠ ET L'EXCEPTION
+  // PORTE SUR LES DEUX PALETTES DEPUIS LE 03/09 AU SOIR : « ui armée : une
+  // barre ». Celle de l'Offense montre quatorze unités dans les mêmes 86 px, et
+  // la demande est mot pour mot la même. L'interdiction reste TOTALE sur les
+  // quatre autres barres : une barre de compteurs qui défile cacherait un
+  // nombre, ce qu'aucun geste ne ferait réapparaître.
+  // ⚠⚠ ET LA BOUCLE BALAIE LES DEUX ÉCRANS DEPUIS CE LOT-CI. Elle ne portait que
+  // sur `barres`, c'est-à-dire sur le Chantier : `offense-contexte` et
+  // `offense-palette` n'ont jamais été atteints par l'interdiction, si bien
+  // qu'ajouter la seconde palette à l'exception ci-dessous ne changeait RIEN —
+  // mesuré. Une exception à une règle qui ne couvre pas la barre exceptée ne
+  // dit rien du tout. Les deux barres de l'Offense entrent donc dans le
+  // balayage, l'une exceptée et l'autre gardée pour de bon.
+  const DEFILE_A_L_HORIZONTALE = ['chantier-palette', 'offense-palette'];
+  for (const id of [...barres, ...barresOffense]) {
     const bloc = feuille.match(new RegExp(`#${id}\\s*\\{([^}]*)\\}`))[1];
     if (DEFILE_A_L_HORIZONTALE.includes(id)) {
       assert.match(bloc, /overflow-x:\s*auto/, `#${id} devait défiler, et ne défile pas`);
