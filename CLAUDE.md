@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.70.1 · build 72.
+Dernière révision : **03/09/2026**, version 0.71.0 · build 73.
 
 ---
 
@@ -41,8 +41,52 @@ Dernière révision : **03/09/2026**, version 0.70.1 · build 72.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot ENTRÉES), à confronter :**
+**Référence au 03/09/2026 (après le lot GRILLE-128), à confronter :**
 `npm test` → **939 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 035 474 octets**, 0 référence externe.
+⚠⚠ **LE JEU EMBARQUE LA GRILLE 128, ET C'EST UN ARBITRAGE D'ETHAN DU 03/09** —
+« il faut les mettre en 128 au sol, et les unités aussi ; câbler en 128, je sais
+que la taille du jeu va dépasser mais tu t'en fous ». Le lot PIXELS cousait déjà
+les deux grilles sans que personne ne lise la 128 : **le geste tient donc en
+DEUX constantes**, `COTE_INDEX` de `tools/atlas.py` et `GRILLE_ATLAS` de
+`tools/build.js`, plus le chemin des deux grosses bases. Tout le reste suit —
+`src/render/sprite.js` calcule en POURCENTAGES, donc il est sans échelle.
+⚠⚠ **COÛT +1 443 034 OCTETS, ET LA BORNE T10 PASSE DE 1 650 000 À 3 200 000.**
+Poste par poste : les huit atlas **561 240 → 1 407 414 o** (+1 128 232 en
+base64) ; les deux grosses bases de l'Ouvrage, hors atlas, **90 047 → 326 146**
+(+314 799). Marge **164 526 octets, 5,1 %**. ⚠ L'atlas du FOND DE CARTE ne bouge
+pas : ses tuiles font déjà 128, et son nom en `-64` désigne la cellule du sol de
+base — quatre par case —, pas sa grille.
+⚠⚠ **`ZOOM_BASE_MULTIPLE_MAX` PASSE DE 2 À 1 DANS LE MÊME GESTE, ET LE JOUEUR NE
+VOIT RIEN CHANGER.** Le plafond vaut `COTE_SPRITE × ce nombre` : 64 × 2 = 128
+hier, 128 × 1 = **128 aujourd'hui**. La plage du zoom ne bouge pas d'un pixel ;
+ce qu'on gagne, c'est qu'au plafond un pixel de sprite vaut UN pixel CSS au lieu
+d'être doublé. Le laisser à 2 aurait porté le plafond à 256 et rouvert à
+l'envers la question de plage tranchée le 31/08.
+⚠⚠ **UNE GARDE MESURAIT UN PROXY, ET CE LOT L'A MONTRÉ.** `zoom de la base — la
+plage est assez large` exigeait `ZOOM_BASE_MULTIPLE_MAX >= 2` : vrai tant que la
+grille faisait 64, où seul un multiple de 2 portait le plafond à 128 px CSS. À
+128 le même plafond s'obtient avec 1, et **le multiple ne dit plus rien de la
+plage**. La garde nomme désormais le plafond EN PIXELS, qui est la grandeur
+qu'elle défendait.
+⚠⚠ **LES MURS DE CONTOUR SONT UNE DETTE DATÉE, CHIFFRÉE, ET ASSERTÉE ENCORE
+VIOLÉE.** Les seize `bord/` sont ceux du 31/08, taillés pour une case de 64 :
+sur une grille de 128 ils s'affichent toujours — `background-size: 100% 100%`
+les étire — mais **exactement DEUX FOIS**, donc à la moitié de la définition de
+tout ce qui les entoure. `test/sprite.test.js` porte `COTE_MUR = 64`, mesure
+l'étirement et **exige qu'il vaille 2** : le jour où les murs passent à 128, les
+deux assertions tombent et quelqu'un vient les retirer.
+⚠⚠ **ET LEUR REMPLACEMENT EST LIVRÉ, MAIS CE N'EST PAS UNE QUESTION DE TAILLE.**
+Ethan a fourni le 03/09 des **blocs pleins** — murs `4x1` de 512 × 128 et angles
+`1x1` de 128 × 128, quatre variantes par camp, sur clé magenta — là où les
+actuels sont des TRAITS à cheval sur le bord. Les poser demande de décider s'ils
+mangent une case ou s'ils ceignent la grille : c'est une géométrie, et c'est le
+lot MURS.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le lot ne touche ni l'état, ni
+la sauvegarde, ni une règle de jeu : c'est la définition des dessins.
+
+**Auparavant, après le lot ENTRÉES :**
+`npm test` → 939 pass / 0 fail, `npm run build` → `dist/index.html`,
 **1 592 440 octets**, 0 référence externe.
 ⚠⚠ **LE HTML EST IDENTIQUE À L'OCTET, SHA-256 COMPRIS, DONC LA VERSION N'A PAS
 ÉTÉ BUMPÉE** — `6f6e0cba…67e4` des deux côtés, et `src/` n'est pas touché. Le

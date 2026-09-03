@@ -2195,7 +2195,15 @@ function fondDuTerrain(prefixe, graine, rangee, colonne) {
  * dans le jeu, seulement de jusqu'où le doigt peut grossir la vue. Elle vit donc
  * ici, avec le reste du zoom, et non dans `src/data/`.
  */
-export const ZOOM_BASE_MULTIPLE_MAX = 2;
+export const ZOOM_BASE_MULTIPLE_MAX = 1;
+// ⚠⚠ IL EST PASSÉ DE 2 À 1 AU LOT GRILLE-128, ET LE JOUEUR NE VOIT AUCUNE
+// DIFFÉRENCE. Le plafond vaut `COTE_SPRITE × ce nombre` : il valait 64 × 2 =
+// 128 px CSS par case, il vaut 128 × 1 = **128, exactement le même**. Ce qui
+// change, c'est ce qu'on obtient pour ce prix — hier un sprite de 64 agrandi
+// DEUX FOIS au-dessus de sa définition, aujourd'hui un sprite de 128 rendu au
+// rapport 1:1. La plage du zoom ne bouge donc pas d'un pixel, et le flou du
+// plafond disparaît. Le laisser à 2 aurait porté le plafond à 256 et rouvert,
+// à l'envers, la question de plage tranchée le 31/08.
 
 /**
  * Le côté de case le plus grand qu'on autorise, en pixels CSS.

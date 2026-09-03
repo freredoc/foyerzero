@@ -472,11 +472,31 @@ test('bord — les murs de contour sont des images à part, pas des cellules d\'
   // Les tailles, mesurées dans les en-têtes des PNG. `512 × 64` est le mot
   // d'Ethan ; le reste s'en déduit — l'autre sens et l'angle, qui est le carré
   // de l'épaisseur.
+  //
+  // ⚠⚠ L'ÉPAISSEUR N'EST PLUS `COTE_SPRITE`, ET C'EST UNE DETTE DATÉE, PAS UN
+  // ASSOUPLISSEMENT. La grille embarquée est passée à 128 le 03/09 ; les seize
+  // murs, eux, sont encore ceux du 31/08 — taillés pour une case de 64. Ils
+  // s'affichent toujours, `background-size: 100% 100%` les étirant sur leur
+  // boîte, mais à la MOITIÉ de la définition de tout ce qui les entoure.
+  //
+  // Ethan a livré leur remplacement le même jour — des blocs pleins `4x1` de
+  // 512 × 128 et des angles `1x1` de 128 × 128, quatre variantes par camp — et
+  // ils ne sont pas de simples murs plus épais : ce sont des BLOCS, là où
+  // ceux-ci sont des traits à cheval sur le bord. Les poser demande de décider
+  // s'ils mangent une case ou s'ils ceignent la grille, ce qui est une géométrie
+  // et non une taille. C'est le lot MURS, et il vient ensuite.
+  //
+  // ⚠ L'ASSERTION INVERSE EST LÀ POUR QUE LA DETTE NE POURRISSE PAS : le jour
+  // où les murs passent à 128, `COTE_MUR` cesse d'être vrai et ce test tombe,
+  // pour qu'on vienne le retirer au lieu de le laisser mentir.
+  const COTE_MUR = 64;
+  assert.notEqual(COTE_MUR, COTE_SPRITE,
+    'les murs sont à la grille du jeu : retirer COTE_MUR et lire COTE_SPRITE');
   const LONG = 512;
   const attendue = (nom) => {
-    if (nom.includes('_mur_h_')) return { largeur: LONG, hauteur: COTE_SPRITE };
-    if (nom.includes('_mur_v_')) return { largeur: COTE_SPRITE, hauteur: LONG };
-    return { largeur: COTE_SPRITE, hauteur: COTE_SPRITE };
+    if (nom.includes('_mur_h_')) return { largeur: LONG, hauteur: COTE_MUR };
+    if (nom.includes('_mur_v_')) return { largeur: COTE_MUR, hauteur: LONG };
+    return { largeur: COTE_MUR, hauteur: COTE_MUR };
   };
   let couleursMax = 0;
   for (const fichier of fichiers) {
@@ -513,15 +533,23 @@ test('bord — les murs de contour sont des images à part, pas des cellules d\'
   }
   assert.equal(couleursMax, 16, 'aucun sprite n\'atteint les seize teintes : le montage ne mesure rien');
 
-  // ⚠ LE MUR TOMBE AU 1:1 AU PLAFOND DU ZOOM, et ce n'est pas une coïncidence
-  // qu'on impose : c'est un fait qu'on RELÈVE. 512 pixels pour 64 par case font
-  // huit cases, et le mur du haut en couvre exactement huit sur cette grille-ci.
-  // Le jour où la base changera de largeur, la feuille étirera l'image — le test
-  // dira alors que le rapport n'est plus entier, et ce sera vrai.
-  assert.equal(LONG / COTE_SPRITE, 8, 'l\'asset ne couvre plus huit cases');
+  // ⚠ LE MUR TOMBAIT AU 1:1 AU PLAFOND DU ZOOM, et ce n'était pas une
+  // coïncidence qu'on imposait : c'était un fait qu'on RELEVAIT. 512 pixels
+  // pour 64 par case font huit cases, et le mur du haut en couvre exactement
+  // huit sur cette grille-ci.
+  assert.equal(LONG / COTE_MUR, 8, 'l\'asset ne couvre plus huit cases de sa propre grille');
   const haut = tuilesDuContour('j').find((t) => t.nom.includes('_mur_h_'));
-  assert.equal(haut.l, LONG / COTE_SPRITE,
-    `le mur du haut couvre ${haut.l} cases pour un asset de ${LONG / COTE_SPRITE} : il sera étiré`);
+  assert.equal(haut.l, 8, 'le mur du haut ne couvre plus huit cases de la grille');
+
+  // ⚠⚠ ET DEPUIS LE 03/09 IL EST ÉTIRÉ EXACTEMENT DEUX FOIS, CE QUI EST LA
+  // DETTE, CHIFFRÉE. La grille embarquée est passée à 128 et le mur est resté
+  // taillé pour 64 : ses 512 pixels couvrent huit cases de 128, donc chaque
+  // pixel de l'asset en peint deux. On le MESURE au lieu de le taire, et
+  // l'assertion tombera au lot MURS — quand l'asset passera à 128, l'étirement
+  // vaudra 1 et cette ligne devra être retirée avec `COTE_MUR`.
+  const etirement = (haut.l * COTE_SPRITE) / LONG;
+  assert.equal(etirement, 2,
+    `le mur du haut est étiré ${etirement}× : ni le 2 de la dette, ni le 1 de l'asset refait`);
 });
 
 

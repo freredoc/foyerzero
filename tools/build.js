@@ -112,7 +112,7 @@ let html = htmlSource
 // ⚠ ET IL DOIT S'ACCORDER AVEC `COTE_SPRITE` DE `src/data/atlas.js`, que
 // `tools/atlas.py` écrit depuis son `COTE_INDEX`. Les changer ensemble est le
 // geste complet ; `test/sprite.test.js` refuse qu'ils divergent.
-const GRILLE_ATLAS = 64;
+const GRILLE_ATLAS = 128;
 
 // ⚠⚠ WEBP DEPUIS LE LOT PIXELS. Les sprites ne sont plus quantifiés sur quatorze
 // teintes : en PNG les huit atlas passeraient de 468 à 1 630 Kio, ×3,5. Le type
@@ -163,8 +163,8 @@ const IMAGES_INLINE = [
   // d'un seul sprite ne coud rien de toute façon. Même forme que
   // `%ATLAS_TERRAIN%`, l'atlas du fond de carte, qui est hors des sept aussi.
   atlas('carte'),
-  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_2x2.png'], type: 'image/png' },
-  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_3x3.png'], type: 'image/png' },
+  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.png'], type: 'image/png' },
+  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.png'], type: 'image/png' },
 ];
 
 for (const image of IMAGES_INLINE) {

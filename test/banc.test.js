@@ -576,8 +576,29 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // borne qui monte, et le lot qui écrit pourquoi. Ce qu'elle tient VRAIMENT
   // reste l'assertion du dessus — le HTML ne référence rien d'extérieur —, et
   // celle-ci n'est qu'un ordre de grandeur contre une explosion.
+  //
+  // ⚠⚠ RELEVÉE À 3 200 000 AU LOT GRILLE-128, LE 03/09, ET C'EST LA DÉFINITION
+  // QUI ENTRE. Ethan : « il faut les mettre en 128 au sol, et les unités aussi ;
+  // câbler en 128, je sais que la taille du jeu va dépasser mais tu t'en fous ».
+  // Le jeu embarquait la grille 64 et l'agrandissait ; il embarque désormais la
+  // 128, que `tools/atlas.py` cousait déjà depuis le lot PIXELS sans que
+  // personne la lise. Mesuré, poste par poste :
+  //   • les huit atlas — 561 240 → 1 407 414 o, soit **+1 128 232 en base64** ;
+  //   • les deux grosses bases de l'Ouvrage, hors atlas parce qu'elles ne sont
+  //     pas carrées à la case — 90 047 → 326 146 o, soit **+314 799** ;
+  //   • l'atlas du FOND DE CARTE ne bouge pas : il est déjà en tuiles de 128,
+  //     et son nom en `-64` désigne la cellule du sol de base, pas sa grille.
+  // Total **+1 443 034 octets**, mesuré après le lot : **3 035 474**, marge
+  // 164 526, soit 5,1 %.
+  //
+  // ⚠ CE QUE LE JOUEUR ACHÈTE POUR CE PRIX : au plafond du zoom, un pixel de
+  // sprite valait DEUX pixels CSS, il en vaut UN. `ZOOM_BASE_MULTIPLE_MAX` passe
+  // de 2 à 1 dans le même geste, si bien que la plage du zoom ne bouge pas.
+  //
+  // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
+  // borne qui monte, et le lot qui écrit pourquoi.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 1_650_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 3_200_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

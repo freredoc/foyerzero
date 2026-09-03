@@ -4,7 +4,7 @@
 // le confronte au contenu réel de `art/sprites/` : un sprite ajouté sans que
 // l'outil soit relancé fait rougir la suite, il ne fait pas dessiner de travers.
 
-export const COTE_SPRITE = 64;
+export const COTE_SPRITE = 128;
 
 export const ATLAS = {
   batiment: {

@@ -3167,7 +3167,14 @@ test('zoom — les deux bornes se LISENT, et le geste est un rapport', () => {
   // de sa propre définition — ce que ce lot vient de retirer à la carte.
   assert.match(ecran, /const COTE_CASE_MAX = COTE_SPRITE/,
     'le plafond du zoom ne se lit plus dans l\'atlas');
-  assert.equal(COTE_SPRITE, 64, 'la grille des sprites a changé : relire le plafond du zoom');
+  // ⚠⚠ RELU LE 03/09, LOT GRILLE-128, ET C'EST TOUT CE QUE CETTE LIGNE DEMANDE.
+  // La grille embarquée est passée de 64 à 128 ; `ZOOM_BASE_MULTIPLE_MAX` est
+  // passé de 2 à 1 EN MÊME TEMPS, si bien que le plafond vaut toujours 128 px
+  // CSS par case. Le joueur ne voit pas la plage bouger ; ce qu'il gagne, c'est
+  // qu'au plafond un pixel de sprite vaut UN pixel CSS au lieu d'être doublé.
+  assert.equal(COTE_SPRITE, 128, 'la grille des sprites a changé : relire le plafond du zoom');
+  assert.equal(COTE_SPRITE * ZOOM_BASE_MULTIPLE_MAX, 128,
+    'le plafond du zoom a bougé en pixels CSS : c\'est une décision, pas un effet de bord');
 
   // ⚠ LE DÉFAUT VIENT DE LA FEUILLE, pas du code : c'est une décision de mise
   // en page, et l'écrire des deux côtés ferait deux vérités.
@@ -3319,8 +3326,14 @@ test('zoom de la base — la plage est assez large pour qu\'un geste se voie', (
   // d'écarter les doigts de 39 % pour buter en haut. Le facteur n'était pas en
   // cause — c'est le rapport des écarts, donc la main donne sa proportion — la
   // PLAGE l'était.
-  assert.ok(ZOOM_BASE_MULTIPLE_MAX >= 2,
-    'le plafond est retombé sur la définition des sprites : le zoom ne zoomera plus');
+  //
+  // ⚠⚠ CETTE GARDE MESURAIT UN PROXY, ET LE LOT GRILLE-128 L'A MONTRÉ. Elle
+  // exigeait `ZOOM_BASE_MULTIPLE_MAX >= 2` — vrai tant que la grille faisait 64,
+  // où seul un multiple de 2 portait le plafond à 128 px CSS. À 128, le même
+  // plafond s'obtient avec un multiple de 1, et le multiple ne dit plus rien de
+  // la plage. **Ce qui compte est le plafond en PIXELS**, et il n'a pas bougé.
+  assert.equal(COTE_CASE_MAX, 128,
+    'le plafond du zoom a changé en pixels CSS : c\'est une décision de plage');
   assert.equal(COTE_CASE_MAX, COTE_SPRITE * ZOOM_BASE_MULTIPLE_MAX);
 
   // ⚠ LE MULTIPLE EST ENTIER, ET C'EST CE QUI GARDE LE PIXEL ART NET. Au
