@@ -384,11 +384,16 @@
     --atlas-terrain: url('%ATLAS_TERRAIN_BASE%');
     --atlas-defense: url('%ATLAS_DEFENSE%');
     --atlas-socle: url('%ATLAS_SOCLE%');
-    /* ⚠ LE MUR DE CONTOUR N'EST PAS UN ATLAS. Ses images font 512 × 64 et
-       64 × 64 — `tools/atlas.py` ne coud que des cellules carrées d'un même
-       côté —, donc chacune entre par son propre marqueur. Seul le camp du
-       joueur est ici : les cinq de l'Ouvrage sont produites et attendent
-       l'écran de raid. */
+    /* ⚠ LE MUR DE CONTOUR N'EST PAS UN ATLAS. Ses images font 512 × 128 et
+       128 × 128 — `tools/atlas.py` ne coud que des cellules carrées d'un même
+       côté —, donc chacune entre par son propre marqueur.
+       ⚠⚠ ET SEUL LE CAMP DU JOUEUR EST ICI, PARCE QUE SEUL LUI SE PEINT EN CSS.
+       L'écran de la base est du DOM et pose ses murs en `background-image` ;
+       celui de l'Ouvrage se regarde sur l'écran de raid, qui est un CANEVAS et
+       veut des `HTMLImageElement` pour `drawImage`. Ses six images sont donc
+       des balises `img` plus bas, avec leur marqueur en `src` — comme les deux
+       grosses bases de la carte du monde, et pour la même raison. Rien n'est
+       partagé entre les deux camps : aucune image n'entre deux fois. */
     --mur-j-mur-1: url('%MUR_J_MUR_1%');
     --mur-j-mur-2: url('%MUR_J_MUR_2%');
     --mur-j-bloc-1: url('%MUR_J_BLOC_1%');
@@ -1813,6 +1818,24 @@
       <img id="atlas-batiment" alt="" hidden>
       <img id="atlas-defense" alt="" hidden>
       <img id="atlas-socle" alt="" hidden>
+      <!-- ⚠⚠ LE MUR DE CONTOUR DE L'OUVRAGE — lot MURS-OUVRAGE, 03/09. Ethan :
+           « c'est pour le joueur et pour l'ouvrage ». La base attaquée est
+           ceinte du même U que celle du joueur, et le champ de bataille est un
+           canevas : ces six-là portent donc leur marqueur EN `src`, comme
+           `monde-base-3x3`, et non une variable CSS.
+           ⚠ IL N'Y A RIEN À PARTAGER AVEC LE CAMP DU JOUEUR : aucun de ces
+           dessins n'est employé en fond CSS, donc `garnirLesAtlas` n'a rien à
+           leur donner et le livrable ne les inline qu'une fois. Le couplage du
+           lot SPRITES-ET-ZOOM ne concerne que ce qui sert des DEUX côtés.
+           ⚠ SIX SUR HUIT. `tools/bords.py` produit quatre murs et quatre blocs
+           par camp ; le U d'une base de neuf colonnes n'a que deux créneaux de
+           mur. Un test dit lesquels, depuis `nomsDuContour('o')`. -->
+      <img id="bord-o-mur-1" alt="" hidden src="%MUR_O_MUR_1%">
+      <img id="bord-o-mur-2" alt="" hidden src="%MUR_O_MUR_2%">
+      <img id="bord-o-bloc-1" alt="" hidden src="%MUR_O_BLOC_1%">
+      <img id="bord-o-bloc-2" alt="" hidden src="%MUR_O_BLOC_2%">
+      <img id="bord-o-bloc-3" alt="" hidden src="%MUR_O_BLOC_3%">
+      <img id="bord-o-bloc-4" alt="" hidden src="%MUR_O_BLOC_4%">
       <div id="monde-champ">
         <canvas id="monde-canvas"></canvas>
         <!-- ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08. Ethan : « zoom

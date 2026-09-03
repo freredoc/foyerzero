@@ -572,6 +572,22 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   //
   // Mesuré après le lot : **1 581 919 octets**, marge 68 081, soit 4,1 %.
   //
+  // ⚠⚠ ET ELLE NE BOUGE PAS AU LOT MURS-OUVRAGE, ALORS QUE SIX IMAGES ENTRENT.
+  // Ethan, 03/09 : « c'est pour le joueur et pour l'ouvrage ». Les six pièces de
+  // l'anneau de l'Ouvrage entrent au livrable pour l'écran de raid — mesuré,
+  // poste par poste :
+  //   • six `.webp` de `bord/`, 15 436 o sur le disque, **+20 592 en base64** ;
+  //   • le module de géométrie, le balisage et le câblage — **+1 519 octets**.
+  // Total **+22 111**, mesuré : **3 250 476**, marge 149 524, soit 4,4 %. Le
+  // livrable passe de 18 `data:` à 24.
+  //
+  // ⚠ SIX, PAS HUIT — ET LE RAPPORT DU LOT MURS ANNONÇAIT HUIT. Il chiffrait
+  // « +24 010 octets de WebP, soit +32 016 en base64 », qui est le poids des
+  // QUATRE murs et des quatre blocs produits pour ce camp. L'anneau n'en pose
+  // que six : le U d'une base de neuf colonnes n'a que DEUX créneaux de mur,
+  // donc `mur_3` et `mur_4` restent au dépôt sans entrer. L'estimation était
+  // haute d'un tiers, et c'est la mesure qui fait foi.
+  //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi. Ce qu'elle tient VRAIMENT
   // reste l'assertion du dessus — le HTML ne référence rien d'extérieur —, et
@@ -605,6 +621,22 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   //     **treize fois plus**, et c'est le WebP qui rend l'image payable ;
   //   • le balisage, la feuille et le quinconce — **+2 278 octets**.
   // Total **+221 718**, mesuré : **3 257 192**, marge 142 808, soit 4,2 %.
+  //
+  // ⚠⚠ ET ELLE NE BOUGE PAS AU LOT MURS-OUVRAGE, ALORS QUE SIX IMAGES ENTRENT.
+  // Ethan, 03/09 : « c'est pour le joueur et pour l'ouvrage ». Les six pièces de
+  // l'anneau de l'Ouvrage entrent au livrable pour l'écran de raid — mesuré,
+  // poste par poste :
+  //   • six `.webp` de `bord/`, 15 436 o sur le disque, **+20 592 en base64** ;
+  //   • le module de géométrie, le balisage et le câblage — **+1 519 octets**.
+  // Total **+22 111**, mesuré : **3 250 476**, marge 149 524, soit 4,4 %. Le
+  // livrable passe de 18 `data:` à 24.
+  //
+  // ⚠ SIX, PAS HUIT — ET LE RAPPORT DU LOT MURS ANNONÇAIT HUIT. Il chiffrait
+  // « +24 010 octets de WebP, soit +32 016 en base64 », qui est le poids des
+  // QUATRE murs et des quatre blocs produits pour ce camp. L'anneau n'en pose
+  // que six : le U d'une base de neuf colonnes n'a que DEUX créneaux de mur,
+  // donc `mur_3` et `mur_4` restent au dépôt sans entrer. L'estimation était
+  // haute d'un tiers, et c'est la mesure qui fait foi.
   //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.

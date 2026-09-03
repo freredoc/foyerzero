@@ -38,6 +38,7 @@ import {
 } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
+import { nomsDuContour } from '../render/contour.js';
 import { initialiserPanneauDeTransfert } from './transfert.js';
 import { initialiserEcranOffense } from './offense.js';
 import { initialiserEcranMission, initialiserMiniTutoriel } from './mission.js';
@@ -280,7 +281,7 @@ export function garnirLesAtlas(doc) {
  * @returns {Object<string, HTMLImageElement>}
  */
 export function atlasDeLaScene(doc) {
-  return {
+  const scene = {
     unite: doc.getElementById('atlas-unite'),
     chassis: doc.getElementById('atlas-chassis'),
     tourelle_unite: doc.getElementById('atlas-tourelle-unite'),
@@ -288,6 +289,29 @@ export function atlasDeLaScene(doc) {
     defense: doc.getElementById('atlas-defense'),
     socle: doc.getElementById('atlas-socle'),
   };
+  // ⚠⚠ ET LES PIÈCES DE L'ANNEAU DE MUR, UNE FAMILLE PAR IMAGE — lot
+  // MURS-OUVRAGE. Un mur fait 512 × 128 : il n'est dans aucun atlas et ne peut
+  // pas y être, `tools/atlas.py` n'acceptant que des cellules carrées d'un même
+  // côté. La primitive `sprite` prend donc son nom pour famille, et chaque image
+  // est une famille d'une seule — ce qui est exactement ce que « hors atlas »
+  // veut dire.
+  //
+  // ⚠ LA LISTE SE DÉRIVE DE L'ANNEAU, elle ne se recopie pas : `nomsDuContour`
+  // dit ce que `tuilesDuContour` emploie vraiment, et c'est la même source que
+  // `VARIABLE_DU_MUR` côté CSS. Une liste écrite à la main serait la première à
+  // oublier une pièce le jour où la base changerait de largeur.
+  //
+  // ⚠⚠ SEUL LE CAMP DE L'OUVRAGE A DES BALISES, et c'est mesuré, pas oublié :
+  // l'écran de raid est le seul canevas qui montre une base, et il ne montre
+  // aujourd'hui que celles de l'Ouvrage. Le jour où `sim/raid-ouvrage.js` aura
+  // son écran, il demandera `bord_j_*` — qui vivent en variables CSS pour
+  // l'écran de la base et n'ont pas de balise. `getElementById` rendrait alors
+  // `null` et `executer` LÈVE, plutôt que de dessiner un mur absent : « une
+  // unité invisible est un défaut qu'on doit voir ».
+  for (const nom of nomsDuContour('o')) {
+    scene[nom] = doc.getElementById(nom.replaceAll('_', '-'));
+  }
+  return scene;
 }
 
 /**

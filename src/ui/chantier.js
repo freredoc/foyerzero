@@ -589,35 +589,32 @@ function bandesDansLOrdreDeLEcran() {
 }
 
 /**
- * La bande par laquelle le contour COMMENCE — le haut de la base.
+ * La géométrie du mur de contour vient de `render/contour.js`, et elle est
+ * RÉ-EXPORTÉE ici.
  *
- * ⚠ « MURS CONTOUR » DÉSIGNE LE POURTOUR DE LA BASE, pas celui de la grille.
- * `GEOMETRIE_BASE` de `data/base.js` RÉFÉRENCE déjà `GRILLE.bandes.batiments` :
- * la base du joueur EST cette bande-là, et c'est en haut d'elle que le mur du
- * fond court, entre ses deux coins.
- *
- * ⚠ C'EST AUSSI LA SEULE BANDE AU-DESSUS DE LAQUELLE LE MUR DÉPASSE, ce que
- * `bornesDeDefilement` lit pour ne pas couper la rangée de coins.
+ * ⚠⚠ ELLE A DÉMÉNAGÉ AU LOT MURS-OUVRAGE, ET LE RÉ-EXPORT N'EST PAS UNE COPIE.
+ * Ethan, 03/09 : « c'est pour le joueur et pour l'ouvrage » — la base de
+ * l'Ouvrage se regarde sur l'écran de RAID, qui est un canevas et passe par
+ * `render/`, lequel n'a pas le droit d'importer `ui/`. Le mur des deux écrans
+ * est donc le MÊME mur, calculé une fois. Un ré-export garde la même liaison :
+ * `import { tuilesDuContour } from './chantier.js'` marche toujours, et il n'y
+ * a pas deux listes qui puissent diverger. Même motif que `baseCourante`, que
+ * `sim/state.js` ré-exporte depuis `sim/base-courante.js`.
  */
-export const BANDE_DU_CONTOUR = 'batiments';
+export {
+  BANDE_DU_CONTOUR, BANDE_DE_FIN_DU_CONTOUR,
+  LONGUEUR_DU_MUR, NB_VARIANTES_DU_MUR, tuilesDuContour,
+} from '../render/contour.js';
+
+// ⚠ ET UN RÉ-EXPORT NE CRÉE AUCUNE LIAISON LOCALE — payé en une exécution.
+// `bornesDeDefilement`, plus bas, lit `BANDE_DU_CONTOUR` : sous le seul
+// `export … from`, le nom n'existe pas dans ce module et la fonction lève
+// « BANDE_DU_CONTOUR is not defined » au premier défilement. Ce qui sort et ce
+// qui sert se déclarent séparément.
+import { BANDE_DU_CONTOUR, tuilesDuContour, nomsDuContour } from '../render/contour.js';
 
 /**
- * La bande où le contour S'ARRÊTE — le bas de la défense.
- *
- * ⚠⚠ LES FLANCS DESCENDENT LE LONG DE LA DÉFENSE, ET C'EST UN ARBITRAGE
- * D'ETHAN DU 03/09 : « flanc sur la défense aussi ». Sa phrase précédente —
- * « les murs vont du haut de la base jusqu'à la défense et ne ferme pas en
- * bas » — avait d'abord été lue *jusqu'au bord de la base* ; elle voulait dire
- * *jusqu'au bout de la défense*. Le U enferme donc les DEUX bandes que le
- * joueur compose, et ne s'ouvre que sur les deux rangées de déploiement, par
- * lesquelles l'assaut arrive.
- *
- * ⚠ ET LE BAS RESTE SANS MUR, inchangé depuis le 31/08.
- */
-export const BANDE_DE_FIN_DU_CONTOUR = 'defense';
-
-/**
- * Les images du mur de contour, et la variable CSS qui porte chacune.
+ * Les images du mur de contour DU JOUEUR, et la variable CSS qui porte chacune.
  *
  * ⚠⚠ CE NE SONT PAS DES CELLULES D'ATLAS. Un mur fait 512 × 128 et un bloc
  * 128 × 128 ; `tools/atlas.py` exige des cellules CARRÉES d'un même côté, donc
@@ -625,143 +622,30 @@ export const BANDE_DE_FIN_DU_CONTOUR = 'defense';
  * livrable par son propre marqueur, comme les deux grosses bases de l'Ouvrage
  * sur la carte du monde et comme le fond du bassin de l'écran Offense.
  *
- * ⚠⚠ HUIT NOMS, ET PLUS CINQ : QUATRE MURS ET QUATRE BLOCS — lot MURS, 03/09.
- * La v1 nommait ses pièces par leur PLACE (`mur_h_a`, `angle_no`) parce que le
- * dessin en dépendait : un trait éclairé à gauche ne va pas à droite. La v2 est
- * faite de BLOCS vus de dessus, et ses quatre « angles » sont, mesuré et
- * regardé, quatre VARIANTES du même carré plein — aucune n'est le miroir d'une
- * autre. Un coin du U et un flanc du U sont donc le même bloc, et ce qui se
- * choisit n'est plus une orientation mais une variante.
+ * ⚠⚠ HUIT DESSINS PAR CAMP, ET L'ANNEAU N'EN POSE QUE SIX. `tools/bords.py`
+ * produit quatre murs et quatre blocs par camp ; le U d'une base de neuf
+ * colonnes n'a que DEUX créneaux de mur. Inliner les seize aurait coûté
+ * 51 000 octets de base64 pour dix dessins que rien ne dessine.
  *
- * ⚠⚠ ET LA TABLE NE PORTE QUE CE QUE L'ANNEAU POSE — SIX DESSINS SUR SEIZE.
- * `tools/bords.py` produit quatre murs et quatre blocs PAR CAMP ; le U d'une
- * base de neuf colonnes n'a que DEUX créneaux de mur, et l'Ouvrage n'a pas
- * d'écran. Inliner les seize aurait coûté 51 000 octets de base64 pour dix
- * dessins que rien ne dessine. Un test compare cette table à ce que
- * `tuilesDuContour` emploie vraiment, dans les DEUX sens : une pièce sans image
- * est un pan de mur absent, une image sans pièce est du poids pour rien.
+ * ⚠⚠ ET CELLE-CI NE PORTE QUE LE CAMP DU JOUEUR — l'écran de la base ne montre
+ * que la sienne. Le camp de l'Ouvrage se dessine sur le CANEVAS de l'écran de
+ * raid, par des balises `img` et non par des fonds CSS : voir
+ * `ATLAS_DE_LA_PAGE` de `ui/session.js`.
+ *
+ * ⚠⚠ ELLE SE DÉRIVE DE L'ANNEAU, ELLE NE S'ÉCRIT PLUS À LA MAIN — lot
+ * MURS-OUVRAGE, 03/09. Six lignes recopiées ont tenu tant qu'il n'y avait
+ * qu'un camp ; à deux, la même liste doit servir deux fois, et une seconde
+ * copie aurait été la première à oublier une pièce le jour où la base
+ * changerait de largeur. `nomsDuContour` dit ce que l'anneau emploie, et
+ * `nomCssDuMur` en fait un nom de variable. Le test des deux sens n'a rien
+ * perdu de sa force : il compare toujours la table à `tuilesDuContour`, et il
+ * tombe si la dérivation se met à mentir.
  */
-/**
- * Ce qu'un mur couvre, et combien de variantes le dessin porte.
- *
- * ⚠ LES DEUX SE MESURENT SUR L'ASSET, ET UN TEST LES CONFRONTE AUX FICHIERS :
- * un mur fait `4 × COTE_SPRITE` de large, et `bord/` porte quatre murs et
- * quatre blocs par camp. Les écrire ici et nulle part ailleurs évite qu'une
- * cinquième variante entre au dépôt sans que le mur s'en serve.
- */
-export const LONGUEUR_DU_MUR = 4;
-export const NB_VARIANTES_DU_MUR = 4;
-/**
- * Le sel du tirage des variantes du mur. Il ne sort pas d'ici et n'a aucune
- * espèce d'importance — il faut juste qu'il ne change pas.
- */
-const SEL_DU_MUR = 0x4d555253;
+export const nomCssDuMur = (nom) => `--mur-${nom.replace(/^bord_/, '').replaceAll('_', '-')}`;
 
-export const VARIABLE_DU_MUR = {
-  bord_j_mur_1: 'var(--mur-j-mur-1)',
-  bord_j_mur_2: 'var(--mur-j-mur-2)',
-  bord_j_bloc_1: 'var(--mur-j-bloc-1)',
-  bord_j_bloc_2: 'var(--mur-j-bloc-2)',
-  bord_j_bloc_3: 'var(--mur-j-bloc-3)',
-  bord_j_bloc_4: 'var(--mur-j-bloc-4)',
-};
-
-
-/**
- * Les pièces du mur de contour, en unités de CASE depuis le coin de la grille.
- *
- * ⚠⚠ LE MUR FAIT UN U, LE BAS RESTE SANS MUR — arbitrage d'Ethan du 31/08, mot
- * pour mot, et il n'a pas bougé. Ce qui a bougé le 03/09, c'est jusqu'OÙ les
- * flancs descendent : « flanc sur la défense aussi ». Le U enferme donc les
- * deux bandes que le joueur compose — bâtiments ET défense — et ne s'ouvre que
- * sur les deux rangées de déploiement, par lesquelles l'assaut arrive. C'est le
- * seul des quatre côtés sans mur, et le seul que l'assaillant franchit.
- *
- * ⚠⚠ ET LES PIÈCES NE SONT PLUS À CHEVAL : ELLES CEIGNENT — lot MURS, 03/09.
- * Ethan : « pour que ça passe bien, parce que là ça déborde ». La v1 était un
- * TRAIT centré sur la ligne du bord, donc mordant d'une demi-case de chaque
- * côté, d'où la demi-case de `padding` de la feuille. La v2 est un BLOC PLEIN :
- * il occupe une case entière et ne recouvre rien. Le contour est donc un
- * ANNEAU — la boîte fait `largeur + 2` cases de large —, et le `padding` passe
- * d'une demi-case à une case pleine. C'est une géométrie, pas une épaisseur.
- *
- * ⚠ LE HAUT SE PAVE, ET LE PAVAGE SE CALCULE. Un mur couvre quatre cases, un
- * bloc une : on pose autant de murs qu'il en tient entre les deux coins, et des
- * blocs pour le reste. Sur cette grille-ci, neuf cases entre les coins font
- * deux murs et un bloc — mais rien de tout ça n'est écrit : le jour où la base
- * changera de largeur, le pavage suivra tout seul.
- *
- * ⚠ RIEN NE SE RECOUVRE ET RIEN NE MANQUE. Les longueurs s'additionnent
- * exactement à `largeur + 2`, et un test refait cette somme au lieu de la
- * croire.
- *
- * ⚠⚠ LA VARIANTE SE TIRE DU HACHAGE, PAS D'UN COMPTEUR. Un `i % 4` donnerait
- * un damier régulier sur les seize blocs d'un flanc, ce que quatre variantes
- * existent précisément pour éviter. `variante` est pure, ne touche pas
- * `etat.rng`, et prend la POSITION de la pièce : le mur ne bouge donc pas d'une
- * peinture à l'autre.
- *
- * ⚠ ET IL NE PREND PAS LA GRAINE DE LA PARTIE, VOLONTAIREMENT. Le contour se
- * construit au CÂBLAGE de l'écran, avant qu'aucun état n'existe ; lui passer
- * une graine obligerait à le reconstruire au premier chargement, pour que le
- * mur d'un joueur diffère de celui d'un autre — ce que personne n'a demandé.
- * Le sel est une constante, et il est nommé.
- *
- * @param {string} camp `j` ou `o`
- * @returns {Array<{nom: string, x: number, y: number, l: number, h: number}>}
- *   x, y le coin ; l, h la taille — le tout en unités de case
- */
-export function tuilesDuContour(camp) {
-  if (camp !== 'j' && camp !== 'o') {
-    throw new RangeError(`chantier : camp de contour « ${camp} » inconnu`);
-  }
-  const bandeHaute = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
-  const bandeBasse = BANDES.find((b) => b.cle === BANDE_DE_FIN_DU_CONTOUR);
-  const { premiereLigne } = ligneEcranDeLaBande(bandeHaute);
-  const fin = ligneEcranDeLaBande(bandeBasse);
-  const haut = premiereLigne - 1;
-  const gauche = 0;
-  const droite = GRILLE.largeur + 1;
-  // ⚠ LA HAUTEUR DU FLANC SE CALCULE D'UN BORD À L'AUTRE, elle ne s'additionne
-  // pas bande par bande : si un jour une troisième bande se glissait entre les
-  // deux, une somme la sauterait et le mur aurait un trou.
-  const nbLignes = fin.premiereLigne + fin.nbLignes - premiereLigne;
-  const bloc = (x, y) => ({
-    nom: `bord_${camp}_bloc_${variante(SEL_DU_MUR, y, x, NB_VARIANTES_DU_MUR) + 1}`,
-    x, y, l: 1, h: 1,
-  });
-
-  const pieces = [bloc(gauche, haut), bloc(droite, haut)];
-  // Le haut, entre les deux coins : des murs de quatre cases tant qu'il en
-  // tient, puis des blocs.
-  //
-  // ⚠⚠ LA VARIANTE D'UN MUR TOURNE PAR RANG, ELLE NE SE TIRE PAS. Les blocs
-  // sont dix-huit et le hachage les mélange bien ; les murs, eux, sont DEUX sur
-  // cette grille-ci — un tirage y emploierait deux variantes sur quatre, prises
-  // au hasard, et le livrable paierait les deux autres pour rien. Le rang les
-  // prend dans l'ordre : autant de variantes que de créneaux, et pas une de
-  // plus. Le jour où la base s'élargira, la troisième entrera d'elle-même.
-  let x = gauche + 1;
-  let rang = 0;
-  while (x < droite) {
-    if (droite - x >= LONGUEUR_DU_MUR) {
-      pieces.push({
-        nom: `bord_${camp}_mur_${(rang % NB_VARIANTES_DU_MUR) + 1}`,
-        x, y: haut, l: LONGUEUR_DU_MUR, h: 1,
-      });
-      x += LONGUEUR_DU_MUR;
-      rang += 1;
-    } else {
-      pieces.push(bloc(x, haut));
-      x += 1;
-    }
-  }
-  // Les deux flancs, du bas des coins au bord de la base.
-  for (let y = haut + 1; y <= haut + nbLignes; y += 1) {
-    pieces.push(bloc(gauche, y), bloc(droite, y));
-  }
-  return pieces;
-}
+export const VARIABLE_DU_MUR = Object.fromEntries(
+  nomsDuContour('j').map((nom) => [nom, `var(${nomCssDuMur(nom)})`]),
+);
 
 /**
  * Ce que fait le bouton de bascule quand on est sur cette bande.
