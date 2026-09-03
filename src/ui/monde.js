@@ -980,10 +980,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * reprendra. Le supprimer serait détruire de l'information pour économiser
    * cinq caractères.
    *
-   * ⚠ L'ÉCHELLE SE LIT DANS `ZOOM_CARTE`. Un emblème est dessiné à la taille
-   * d'une case, quelle que soit la grille source : `drawImage` met la cellule de
-   * `grilleEmbleme` pixels à `taille` pixels, et le rapport suit tout seul le
-   * jour où un cran bougera.
+   * ⚠ L'ÉCHELLE NE S'ÉCRIT PAS ICI. Un emblème est dessiné à la taille d'une
+   * case, quelle que soit la grille source : `drawImage` met la cellule de
+   * `COTE_SPRITE` pixels à `taille` pixels, et le rapport suit tout seul le
+   * jour où un cran bougera — ou le jour où la couture change de grille, ce
+   * qui est arrivé au lot GRILLE-128 et que `render/embleme.js` raconte.
    *
    * ⚠⚠ ET LA BASE TERMINALE NE PASSE PAS PAR ICI. Elle couvre neuf cases ; son
    * dessin a besoin de l'origine de la vue et du cran, que cette fonction-ci ne

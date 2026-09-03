@@ -649,9 +649,40 @@
      défiler à DEUX doigts, et quand il prend la main il envoie `pointercancel`.
      C'est `ui/chantier.js` qui le lui refuse, par un `touchmove` non passif et
      seulement quand deux doigts sont posés. */
+  /* ⚠⚠ LE CHAMP EST TAPISSÉ DE SOL, ET C'EST PUREMENT DÉCORATIF. Ethan, 03/09,
+     capture à l'appui : « rajouter tuiles terrain afin de remplir l'ui ». La
+     grille ne fait que dix-huit rangées ; sous elle, le conteneur qui défile
+     montrait le `#161914` de `#chantier-champ` — une bande noire franche sous
+     un sol de terre. Le fond est le MÊME atlas que le sol des cases, à la MÊME
+     échelle, si bien que le raccord ne se voit pas.
+
+     ⚠ IL NE COÛTE NI UN OCTET NI UNE TEINTE. L'atlas est déjà inliné pour le
+     sol des cases, et `--sol-pave` ne fait que le mettre à l'échelle : aucune
+     image n'entre au livrable, et la palette fermée ne gagne pas une couleur.
+
+     ⚠ `local` ET NON `scroll` : le fond doit défiler AVEC la grille. Sous le
+     défaut, la terre resterait collée au cadre pendant que la base glisse
+     dessus — un effet de parallaxe que personne n'a demandé, et qui trahirait
+     que ce sol-ci n'est pas celui des cases.
+
+     ⚠⚠ ET LA COULEUR RESTE SOUS L'IMAGE. `#161914` est le fond de
+     `#chantier-champ` : si l'atlas manquait, on retomberait sur le noir d'avant
+     plutôt que sur du blanc. Un décor ne doit pas pouvoir rendre l'écran
+     illisible en tombant.
+
+     ⚠ L'ÉCHELLE VIENT DU JS, PAS D'ICI. `--sol-pave` vaut le côté d'une case
+     multiplié par le nombre de cases que l'atlas couvre, et ce nombre se MESURE
+     sur l'attribut `width` de l'image — l'écrire dans la feuille en ferait une
+     seconde vérité, que le jour d'un atlas plus grand ferait mentir. Tant que
+     le JS ne l'a pas écrite, `--sol-pave` vaut le côté d'une case : le pavage
+     est plus serré, jamais absent. */
   #chantier-defile {
     flex: 1; min-height: 0; overflow: auto; scrollbar-width: none;
     touch-action: pan-x pan-y;
+    background-image: var(--atlas-sol);
+    background-repeat: repeat;
+    background-attachment: local;
+    background-size: var(--sol-pave, var(--case-cote)) var(--sol-pave, var(--case-cote));
   }
   #chantier-defile::-webkit-scrollbar { display: none; }
   /* Colonnes posées par le JS depuis GRILLE : autant de colonnes de

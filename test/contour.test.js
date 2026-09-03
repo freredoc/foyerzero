@@ -226,12 +226,14 @@ test('CONTOUR T5 — le U ceint les deux bandes, ne recouvre rien, et ne se reco
     assert.equal(pieces.filter((p) => p.y === haut + nbLignes + 1).length, 0,
       `${camp} : le U s'est refermé en bas — l'assaut n'a plus par où entrer`);
 
-    // ⚠ LA COÏNCIDENCE SE RELÈVE, ELLE NE SE GARDE PAS. Les deux bandes sont
-    // adjacentes aujourd'hui, donc mesurer d'un bord à l'autre et additionner
-    // les bandes donnent le même nombre : cette falsification-là ne mord pas,
-    // et elle se DÉCLARE plutôt que de faire semblant. C'est elle qui tombera
-    // le jour où une bande se glisserait entre les deux.
-    assert.equal(nbLignes, ligneEcranDeLaBande(bandeHaute).nbLignes + fin.nbLignes);
+    // ⚠⚠ LA COÏNCIDENCE EST TERMINÉE — voir la même assertion, plus détaillée,
+    // dans `chantier.test.js`. Elle était déclarée « ne mordant pas » depuis le
+    // lot MURS et annonçait sa propre chute ; les flancs descendent maintenant
+    // sur le déploiement, la défense est la bande du MILIEU, et additionner les
+    // deux bandes nommées ne redonne plus la hauteur.
+    assert.notEqual(nbLignes, ligneEcranDeLaBande(bandeHaute).nbLignes + fin.nbLignes,
+      `${camp} : la somme des deux bandes nommées redonne la hauteur — le flanc `
+      + 'a cessé d\'en enjamber une troisième');
   }
 
   // Un camp inconnu LÈVE : un mur muet serait un pan de base absent.
