@@ -42,7 +42,9 @@ import {
 } from '../data/sites.js';
 import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
-import { rosterDefensif } from '../data/couts-militaires.js';
+import {
+  rosterDefensif, coutDeMonteeOffense, coutDeMonteeDefense,
+} from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
 // ⚠⚠ L'ACCESSEUR VIT DANS SON PROPRE MODULE, ET C'EST UNE CONTRAINTE
@@ -1222,6 +1224,14 @@ export const FORCES = {
     porteLActivite: false,
     // La clé de `POINTS_ARMEE`, qui nomme le bâtiment d'où vient le budget.
     role: 'defense',
+    // ⚠⚠ LE BARÈME DE MONTÉE EST DANS LA TABLE, PARCE QUE LES DEUX SONT
+    // RÉELLEMENT DIFFÉRENTS. `data/couts-militaires.js` porte DEUX ancres, et
+    // l'écart va jusqu'au rapport de 2,5 — le Voltigeur vaut 5 en assaut et 2
+    // en garnison. `ameliorerEffectif` lit donc ce champ au lieu de choisir par
+    // un `if` sur le nom de la force : le cas particulier écrit à la main
+    // serait le premier à diverger, et il paraîtrait juste sur le Percheron,
+    // qui est le seul à coûter le même prix des deux côtés.
+    coutDeMontee: coutDeMonteeDefense,
     // Les neuf ouvrages plus les unités qui ont un rôle défensif. La liste se
     // LIT dans les tables (`data/couts-militaires.js`), elle ne se recopie pas :
     // un test croise déjà cette lecture avec celle de l'écran de défense.
@@ -1242,6 +1252,7 @@ export const FORCES = {
     // que ce fichier refuse déjà ailleurs.
     porteLActivite: true,
     role: 'offense',
+    coutDeMontee: coutDeMonteeOffense,
     roster: new Set(Object.keys(UNITES)),
   },
 };
@@ -1573,6 +1584,155 @@ export function deplacerEffectif(etat, force, index, position) {
   const piece = base[f.champ][index];
   piece[f.axe] = position[f.axe];
   piece.colonne = position.colonne;
+  return etat;
+}
+
+/**
+ * Ce qui empêche de monter cette pièce d'un niveau. Liste vide = amélioration
+ * légale.
+ *
+ * ⚠⚠ LE GESTE EST CELUI DU CHANTIER, ET C'EST L'ARBITRAGE D'ETHAN DU
+ * 03/09/2026. Trois formes lui ont été soumises — niveau choisi à la pose,
+ * pièce améliorée une par une, niveau global de la force — et il a retenu la
+ * seconde. C'est le geste que le joueur connaît déjà pour ses bâtiments, il ne
+ * demande AUCUNE migration — le champ `niveau` est dans la pièce depuis la v7 —
+ * et il laisse les deux autres formes ouvertes, là où un niveau global les
+ * aurait fermées.
+ *
+ * ⚠ LE PRIX N'EST PAS INVENTÉ ICI. `data/couts-militaires.js` le porte depuis
+ * l'arbitrage du 28/08, entité par entité, dans la ressource que la table dit ;
+ * et la FONCTION qui le donne se lit dans `FORCES`, elle ne se choisit pas par
+ * un test sur le nom de la force.
+ *
+ * ⚠⚠ LE GAIN NON PLUS, ET IL EXISTAIT DÉJÀ. `facteurMilli` de
+ * `data/niveaux.js` met les PV et les dégâts à l'échelle du niveau dans
+ * `creerCombat` depuis toujours : une pièce montée se bat mieux sans qu'une
+ * seule ligne de ce lot le dise. Ce qui manquait était le GESTE, et lui seul —
+ * `poserEffectif` écrivait `niveau: 1` et rien ne le relevait, si bien que
+ * `niveauDeLArmee` et `niveauDeLaDefense` affichaient 1,0 dans toute partie.
+ *
+ * ⚠ ET LE BUDGET NE BOUGE PAS — voir `pointsEngages` : les points d'armée sont
+ * l'une des grandeurs que la courbe ne met PAS à l'échelle. Améliorer ne peut
+ * donc jamais faire sortir une composition déjà posée de son budget, et il n'y
+ * a rien à vérifier de ce côté.
+ *
+ * @param {Etat} etat
+ * @param {string} force 'garnison' ou 'armee'
+ * @param {number} index
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLAmeliorationDEffectif(etat, force, index) {
+  const f = exigerForce(force);
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
+  exigerChamp(base, 'economie');
+  const piece = base[f.champ][index];
+  if (piece === undefined) {
+    throw new RangeError(`ameliorerEffectif : indice ${index} hors de la ${f.quoi}`);
+  }
+
+  const problemes = [];
+  const vise = piece.niveau + 1;
+  if (vise > NIVEAU.plafond) {
+    // Sans niveau visé légal il n'y a pas de coût à calculer : on s'arrête ici
+    // plutôt que de faire lever le barème sur un niveau hors bornes — il lève
+    // pour de bon, exactement comme `coutDeMontee` des bâtiments.
+    return [{ code: 'plafond', message: `déjà au niveau ${NIVEAU.plafond}, le maximum` }];
+  }
+
+  // ⚠⚠ LE PLAFOND EST CELUI DU BÂTIMENT DE COMMANDEMENT, ET LA RÈGLE ÉTAIT
+  // DÉJÀ ÉCRITE DANS LA DONNÉE. `POINTS_ARMEE` de `data/sites.js` dit depuis
+  // toujours que chaque budget est adossé à son bâtiment, « QUI FIXE AUSSI LE
+  // NIVEAU MAXIMAL DES UNITÉS DE SON CÔTÉ ». Les deux éditeurs l'appliquent
+  // depuis le lot FREEZE-ET-PALETTE, sur un niveau qu'un banc leur passe ; ce
+  // lot-ci l'applique au GESTE, c'est-à-dire au seul chemin par lequel un
+  // niveau entre désormais dans une partie.
+  //
+  // ⚠ C'est le pendant exact du Chantier, qui plafonne les onze bâtiments, à
+  // une différence près : le Chantier ne se plafonne pas LUI-MÊME, étant la
+  // référence, alors qu'ici le bâtiment commandant n'est pas une pièce de la
+  // force — il est dans `disposition`. Il n'y a donc aucune exception à écrire.
+  const commandant = POINTS_ARMEE[f.role].batiment;
+  const plafond = niveauDeCommandement(etat, force);
+  if (plafond === null) {
+    // ⚠ PAS DE BÂTIMENT, PAS DE PLAFOND — DONC PAS D'AMÉLIORATION. C'est la
+    // lecture que `niveauDeCommandement` porte déjà en rendant `null` et non
+    // zéro : il n'y a pas un plafond nul, il n'y a PAS de plafond du tout.
+    // Monter une pièce sous une règle qui n'existe pas serait l'inventer, et le
+    // cas arrive pour de bon — une force posée, puis le QG démoli.
+    problemes.push({
+      code: 'sans-batiment',
+      message: `sans ${BASE_BATIMENTS[commandant].nom.joueur}, aucune pièce ne monte`,
+    });
+  } else if (vise > plafond) {
+    problemes.push({
+      code: 'plafond-commandement',
+      message: `le ${BASE_BATIMENTS[commandant].nom.joueur} est au niveau ${plafond}`
+        + ' : montez-le d\'abord',
+    });
+  }
+
+  // Le coût se calcule MÊME quand le plafond refuse : le joueur doit pouvoir
+  // lire les deux raisons d'un refus, pas seulement la première. « Un indice
+  // n'est pas une interdiction » (CLAUDE.md §4) vaut aussi pour les messages,
+  // et `problemesDeLAmelioration` fait déjà exactement ça pour les bâtiments.
+  const cout = f.coutDeMontee(piece.id, vise);
+  for (const r of RESSOURCES) {
+    const duMilli = cout[r] * MILLI;
+    if (duMilli > base.economie.ressources[r]) {
+      problemes.push({
+        code: `manque:${r}`,
+        message: `il manque ${LIBELLE_MANQUE(r, duMilli - base.economie.ressources[r])}`,
+      });
+    }
+  }
+  return problemes;
+}
+
+/**
+ * Monte une pièce d'un niveau et débite son coût. LÈVE si c'est illégal — même
+ * discipline que partout : un refus est un fait de JEU qu'on montre au joueur,
+ * une levée est un fait de PROGRAMME.
+ *
+ * ⚠ LE DÉBIT SE CALCULE SUR LE NIVEAU VISÉ, DONC AVANT L'INCRÉMENT. Même piège
+ * et même ordre qu'`ameliorer` pour les bâtiments ; l'écrire dans l'autre sens
+ * ferait payer le palier suivant, et l'écart ne se verrait qu'au bout de
+ * plusieurs niveaux.
+ *
+ * ⚠⚠ LES DÉGÂTS NE SONT PAS EFFACÉS, ET CE N'EST PAS UN OUBLI. `degatsMilli`
+ * est un ABSOLU de milli-PV, et le niveau monte les PV MAXIMUM : une pièce
+ * entamée ressort donc relativement plus saine sans qu'un seul PV lui ait été
+ * rendu. Les remettre à zéro ferait de l'amélioration un SOIN — un second
+ * mécanisme de réparation que personne n'a arbitré, et qui court-circuiterait
+ * les trois réserves de `sim/reparation.js`.
+ *
+ * ⚠ ET LE BÂTIMENT DE PRODUCTION N'EST PAS EXIGÉ. L'arbitrage du 29/08 dit
+ * « Infanterie INCONSTRUCTIBLE sans caserne » : il porte sur la CONSTRUCTION,
+ * et une pièce déjà posée l'est. Rien ne s'ouvre par là — le budget et le
+ * plafond de commandement bornent déjà le lot, et les points d'armée ne montent
+ * pas avec le niveau. Si Ethan veut l'autre lecture, c'est un
+ * `batimentDeProductionManquant` de plus dans la liste ci-dessus, et rien
+ * d'autre.
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} force
+ * @param {number} index
+ * @returns {Etat} le même état
+ */
+export function ameliorerEffectif(etat, force, index) {
+  const f = exigerForce(force);
+  const problemes = problemesDeLAmeliorationDEffectif(etat, force, index);
+  if (problemes.length > 0) {
+    throw new Error(
+      `ameliorerEffectif : impossible en ${f.quoi} — `
+        + problemes.map((p) => p.message).join(' ; '),
+    );
+  }
+  const base = baseCourante(etat);
+  const piece = base[f.champ][index];
+  const cout = f.coutDeMontee(piece.id, piece.niveau + 1);
+  for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
+  piece.niveau += 1;
   return etat;
 }
 

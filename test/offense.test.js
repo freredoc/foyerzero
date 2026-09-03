@@ -230,12 +230,23 @@ test('offense — la barre contextuelle existe, et ses quatre boutons répondent
   }
   assert.ok(!/bâtiment/i.test(messageDeDestinationDUnite('Fusiliers')));
 
-  // ⚠ RÉPARER ET AMÉLIORER N'ONT PAS DE MOTEUR, ET LA TABLE LE DIT PAR `null`.
-  // Le coût d'une amélioration existe depuis le 28/08 ; la mécanique non — ce
-  // que gagne une unité améliorée n'est pas arbitré. Le bouton s'arme quand
-  // même et répond : « un indice n'est pas une interdiction » (CLAUDE.md §4).
+  // ⚠ RÉPARER N'A PAS DE MOTEUR, ET LA TABLE LE DIT PAR `null`. Le bouton
+  // s'arme quand même et répond : « un indice n'est pas une interdiction »
+  // (CLAUDE.md §4).
   assert.equal(ACTIONS_ARMEE.reparer.agir, null);
-  assert.equal(ACTIONS_ARMEE.ameliorer.agir, null);
+
+  // ⚠⚠ AMÉLIORER EN A UN DEPUIS LE 03/09, ET CETTE ASSERTION A CHANGÉ DE CIBLE
+  // SANS S'ASSOUPLIR. Elle exigeait `agir === null`, ce qui était juste tant
+  // que rien dans `sim/` ne montait une pièce d'un niveau ; elle exige
+  // désormais la PAIRE `problemes` + `agir`, qui est la forme qu'`appliquerAction`
+  // sait consommer. Un `agir` sans `problemes` la ferait tomber, et c'est ce
+  // qui compte : sans `problemes`, l'écran lèverait au premier toucher.
+  assert.equal(typeof ACTIONS_ARMEE.ameliorer.problemes, 'function');
+  assert.equal(typeof ACTIONS_ARMEE.ameliorer.agir, 'function');
+  // ⚠ ET ELLE NE DEMANDE PAS DE SECOND TOUCHER. Poser `cible: true` ici
+  // mettrait l'unité « en main » et attendrait une destination qu'une
+  // amélioration n'a pas — l'écran LIT ce champ, il ne lit pas le nom.
+  assert.notEqual(ACTIONS_ARMEE.ameliorer.cible, true);
   assert.equal(typeof ACTIONS_ARMEE.retirer.agir, 'function');
   assert.equal(typeof ACTIONS_ARMEE.deplacer.agir, 'function');
   // Déplacer se fait en DEUX touchers, et la table le dit — l'écran lit ce
@@ -779,15 +790,27 @@ test('offense — le compteur de points n\'est pas dans le bouton Améliorer', (
 
   const ligne = ecran.split('\n').filter((l) => l.includes('offense-ameliorer-cible'));
   assert.equal(ligne.length, 1, 'un seul point d\'écriture pour cet `<em>`');
-  assert.ok(!/engages|budget/.test(ligne[0]),
-    `le compteur de points est reparti dans le bouton Améliorer : ${ligne[0].trim()}`);
+  // ⚠ ON LIT L'INSTRUCTION ENTIÈRE, PAS LA LIGNE. L'affectation tient sur deux
+  // lignes depuis que le niveau visé s'écrit pour de bon ; s'arrêter au premier
+  // saut de ligne ne montrerait que la garde et jamais ce qui est affiché,
+  // c'est-à-dire précisément la moitié que ce test existe pour voir.
+  const debutEm = ecran.indexOf('offense-ameliorer-cible');
+  const ecriture = ecran.slice(debutEm, ecran.indexOf(';', debutEm));
+  assert.ok(!/engages|budget/.test(ecriture),
+    `le compteur de points est reparti dans le bouton Améliorer : ${ecriture.trim()}`);
 
-  // ⚠ ET LA RAISON POUR LAQUELLE IL RESTE VIDE EST DANS LA TABLE, pas dans une
-  // constante à part : améliorer n'a pas de moteur en offense. Le jour où il en
-  // aura un, `agir` cessera d'être `null` et la ligne écrira le niveau visé —
-  // ce test-ci n'aura pas à changer.
-  assert.equal(ACTIONS_ARMEE.ameliorer.agir, null,
-    'améliorer a gagné un moteur : vérifier ce que le bouton annonce désormais');
+  // ⚠⚠ ET LE JOUR ANNONCÉ EST ARRIVÉ. Cette assertion était un PIÈGE POSÉ
+  // EXPRÈS le 31/08 : elle exigeait `agir === null` avec, pour message, « vérifier
+  // ce que le bouton annonce désormais ». Elle a fait exactement son travail —
+  // elle est tombée au lot qui branche le moteur, et pas avant. Ce qu'elle
+  // garde maintenant est la MOITIÉ QUI RESTAIT INVÉRIFIÉE : l'`<em>` écrit bien
+  // le niveau VISÉ, c'est-à-dire `niveau + 1` et non le niveau courant.
+  assert.equal(typeof ACTIONS_ARMEE.ameliorer.agir, 'function',
+    'améliorer a reperdu son moteur : cet `<em>` doit redevenir vide');
+  assert.match(ecriture, /niveau\s*\+\s*1/,
+    `le bouton n'annonce pas le niveau visé : ${ecriture.trim()}`);
+  assert.match(ecriture, /vers niv\./,
+    'le bouton n\'écrit plus « vers niv. » — le joueur ne sait plus ce qu\'il achète');
 });
 
 test('offense — le bandeau du haut porte toujours, lui, les points engagés', () => {
@@ -881,4 +904,45 @@ test('offense — les neuf sont en quinconce, et le décalage passe par la GRILL
     'la rangée décalée ne commence plus une demi-case plus loin, ou perd sa portée');
   assert.doesNotMatch(bloc, /repeat\(\s*\d/,
     'le nombre de demi-colonnes est écrit dans la feuille : c\'est une seconde vérité');
+});
+
+test('offense — la sélection survit à l\'amélioration, et la ligne ne dit pas une demi-phrase', () => {
+  // ⚠⚠ DEUX DÉFAUTS QUE LE BOOT SANS TÊTE A TROUVÉS, ET QUE CE LOT AVAIT
+  // INTRODUITS LUI-MÊME EN BRANCHANT LE MOTEUR. Les deux étaient invisibles
+  // tant qu'`ACTIONS_ARMEE.ameliorer.agir` valait `null`.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+
+  // (1) `appliquerAction` lâchait la sélection après N'IMPORTE QUELLE action.
+  // Sans effet tant que « Retirer » était la seule à agir — elle fait vraiment
+  // disparaître la pièce —, et faux dès qu'« Améliorer » a eu un moteur : le
+  // joueur perdait son unité de vue au moment même où il venait de la monter.
+  // Mesuré dans Chromium avant le correctif : la barre repassait à « aucune
+  // unité sélectionnée » et l'`<em>` à « vers niv. » tout seul.
+  //
+  // ⚠ ET C'EST LA TABLE QUI LE DIT, comme `cible`. Un `nom === 'retirer'` aurait
+  // été le second cas particulier écrit à la main du dépôt sur cette question.
+  assert.equal(ACTIONS_ARMEE.retirer.retireLaPiece, true);
+  for (const nom of ['ameliorer', 'reparer', 'deplacer']) {
+    assert.notEqual(ACTIONS_ARMEE[nom].retireLaPiece, true,
+      `« ${nom} » se dit destructrice : la sélection serait lâchée pour rien`);
+  }
+  assert.ok(!/=== 'retirer'/.test(ecran), 'l\'écran reconnaît « retirer » par son nom');
+  assert.match(ecran, /retireLaPiece === true/,
+    'la sélection ne lit pas la table : elle est lâchée après chaque action');
+  assert.ok(!/\n\s*selection = null;\n\s*peindre\(etatCourant\);/.test(ecran),
+    'la sélection est encore lâchée inconditionnellement après une action');
+
+  // (2) L'`<em>` interpolait le niveau visé À L'INTÉRIEUR du gabarit, si bien
+  // qu'une barre sans unité choisie annonçait « vers niv. » — une demi-phrase.
+  // La garde nomme la propriété : le gabarit ne s'écrit PAS quand il n'y a rien
+  // à viser.
+  const debutEm = ecran.indexOf('offense-ameliorer-cible');
+  const ecriture = ecran.slice(debutEm, ecran.indexOf(';', debutEm));
+  assert.match(ecriture, /piece === null/,
+    'la ligne s\'écrit sans savoir s\'il y a une unité choisie');
+  const gabarit = ecriture.slice(ecriture.indexOf('vers niv.'));
+  assert.ok(!/\?|:/.test(gabarit),
+    `le niveau visé est encore conditionnel DANS le gabarit : ${gabarit.trim()}`);
 });

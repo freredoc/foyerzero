@@ -68,6 +68,7 @@ import {
   pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
+  problemesDeLAmeliorationDEffectif, ameliorerEffectif,
   basculerVersLaBase,
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
@@ -216,6 +217,12 @@ export const ACTIONS = {
     agir: deplacer,
   },
   demolir: {
+    // ⚠ C'EST LA TABLE QUI DIT QU'UNE ACTION FAIT DISPARAÎTRE SA CIBLE, pas un
+    // nom écrit à la main. `executerAction` lâchait la sélection sur
+    // `nom === 'demolir'` : le cas particulier a tenu tant qu'il était seul, et
+    // l'écran Offense en a écrit un second le jour où « Retirer » est arrivé.
+    // Même motif que `cible`, qui dit déjà « cette action demande deux touchers ».
+    retireLaPiece: true,
     bouton: 'chantier-demolir',
     libelle: 'Démolir',
     problemes: problemesDeLaDemolition,
@@ -1863,19 +1870,31 @@ export const TERRAINS = {
     problemesDuDeplacement: refusDuDeplacementEnGarnison,
     deplacer: deplacerLaGarnison,
     detail: (etat, index) => detailDeLaDefense(etat, index),
-    // ⚠ DEUX DES QUATRE ACTIONS N'ONT PAS DE MOTEUR EN DÉFENSE, ET ELLES LE
-    // DISENT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton
-    // au lieu de le rendre inerte — « un indice n'est pas une interdiction »
+    // ⚠ UNE SEULE DES QUATRE ACTIONS N'A PLUS DE MOTEUR EN DÉFENSE, ET ELLE LE
+    // DIT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton au
+    // lieu de le rendre inerte — « un indice n'est pas une interdiction »
     // (CLAUDE.md §4).
-    //   `ameliorer` — le COÛT existe depuis l'arbitrage du 28/08
-    //     (`data/couts-militaires.js`), le moteur non : rien dans `sim/` ne
-    //     monte une pièce de garnison d'un niveau, et ce que gagne une unité
-    //     améliorée n'est pas arbitré. L'inventer serait trancher seul.
     //   `reparer`  — même situation que pour les bâtiments : une table de
     //     calibrage, aucune fonction. Les dégâts, eux, existent enfin
     //     (`degatsMilli`), donc ce trou-là est le prochain à se combler.
+    //
+    // ⚠⚠ `ameliorer` A PERDU SON `null` LE 03/09, ET LE COMMENTAIRE QUI DISAIT
+    // LE CONTRAIRE EST PARTI AVEC LUI. Il affirmait que « rien dans `sim/` ne
+    // monte une pièce de garnison d'un niveau » — vrai jusqu'à ce lot — et que
+    // « ce que gagne une unité améliorée n'est pas arbitré », ce qui était FAUX
+    // et l'avait toujours été : `facteurMilli` de `data/niveaux.js` met PV et
+    // dégâts à l'échelle du niveau dans `creerCombat` depuis le premier jour.
+    // Un commentaire qui décrit un manque comblé envoie chercher un travail
+    // déjà fait ; celui-là envoyait en plus chercher un arbitrage déjà rendu.
+    //
+    // ⚠ LA GARNISON ET L'ARMÉE PARTAGENT LE MÊME MOTEUR, à la force près : la
+    // ligne de `FORCES` porte le barème, si bien qu'aucun des deux écrans n'a
+    // de cas particulier à nommer.
     actions: {
-      ameliorer: null,
+      ameliorer: {
+        problemes: (etat, index) => problemesDeLAmeliorationDEffectif(etat, 'garnison', index),
+        agir: (etat, index) => ameliorerEffectif(etat, 'garnison', index),
+      },
       reparer: null,
       demolir: {
         problemes: () => [],
@@ -3657,10 +3676,10 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     }
 
     action.agir(etatCourant, index);
-    // Une démolition retire la pièce : l'indice retenu ne désigne plus rien,
-    // ou pis, désigne sa voisine. On le lâche plutôt que de le laisser mentir.
     terrainSelection = terrainCible;
-    selection = nom === 'demolir' ? null : index;
+    // Une action qui retire la pièce laisse un indice qui ne désigne plus rien,
+    // ou pis, désigne sa voisine. On le lâche plutôt que de le laisser mentir.
+    selection = ACTIONS[nom].retireLaPiece === true ? null : index;
     peindre(etatCourant);
     rafraichir(etatCourant);
     if (apresPose !== undefined) apresPose(etatCourant);
@@ -4174,9 +4193,24 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
       bouton.classList.toggle('sans-niveau', c !== 'batiments');
     }
 
+    // ⚠⚠ LA LIGNE DE DÉTAIL SUIT LE TERRAIN, ET ELLE NE LE FAISAIT PAS. Elle
+    // appelait `detailDuBatiment` quel que soit `terrainSelection`, donc une
+    // pièce de GARNISON sélectionnée se voyait décrite par le bâtiment de MÊME
+    // INDICE dans `disposition`. Mesuré dans Chromium sur `main` avant ce lot :
+    // un Mur de défense de niveau 1 affichait « Niv. 12 », qui est le niveau du
+    // Chantier de construction, premier de la disposition. `selectionner` écrit
+    // la bonne ligne — puis `rafraichir` passe dix fois par seconde et l'écrase
+    // en moins de cent millisecondes, si bien que personne ne voyait jamais la
+    // bonne. Le défaut date du jour où la bande Défense est devenue éditable ;
+    // c'est ce lot qui le rend visible, en donnant enfin au joueur une raison
+    // de lire ce niveau-là.
     if (selection !== null) {
-      const detail = detailDuBatiment(etat, selection);
-      $('chantier-selection-detail').textContent = detail.detail;
+      const terrain = TERRAINS[terrainSelection];
+      // ⚠ ET UN INDICE PÉRIMÉ NE FAIT PLUS LEVER DIX FOIS PAR SECONDE. Il vaut
+      // mieux ne rien sélectionner que de décrire la troisième pièce de la
+      // mauvaise liste — c'est déjà ce que fait `selectionner`.
+      if (terrain.pieces(etat)[selection] === undefined) selectionner(null);
+      else $('chantier-selection-detail').textContent = terrain.detail(etat, selection).detail;
     }
     peindrePanneau();
   }

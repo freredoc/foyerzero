@@ -2747,10 +2747,20 @@ test('défense — la table des terrains dit tout ce qui les sépare, et rien de
   assert.equal(TERRAINS.batiments.panneau, true);
   assert.equal(TERRAINS.batiments.force, null);
 
-  // ⚠ DEUX ACTIONS SANS MOTEUR EN DÉFENSE, ET `null` LE DIT. Le coût d'une
-  // amélioration existe depuis l'arbitrage du 28/08, le moteur non : rien dans
-  // `sim/` ne monte une pièce de garnison. Réparer n'existe nulle part.
-  assert.equal(TERRAINS.defense.actions.ameliorer, null);
+  // ⚠⚠ AMÉLIORER A UN MOTEUR EN DÉFENSE DEPUIS LE 03/09, ET CETTE ASSERTION A
+  // CHANGÉ DE CIBLE SANS S'ASSOUPLIR. Elle exigeait `null` — juste tant que
+  // rien dans `sim/` ne montait une pièce d'un niveau ; Ethan a arbitré le
+  // geste ce jour-là et elle exige désormais la PAIRE, qui est la forme que
+  // `executerAction` sait consommer. Un `agir` sans `problemes` la ferait
+  // tomber, et c'est ce qui compte : sans `problemes`, l'écran prend le chemin
+  // de « Réparer » et croit que l'action n'a rien à faire.
+  assert.equal(typeof TERRAINS.defense.actions.ameliorer.problemes, 'function');
+  assert.equal(typeof TERRAINS.defense.actions.ameliorer.agir, 'function');
+  // ⚠ ET ELLE NE DEMANDE PAS DE SECOND TOUCHER. Seul `deplacer` porte `cible`,
+  // et l'écran LIT ce champ : poser `cible: true` ici mettrait la pièce « en
+  // main » et attendrait une destination qu'aucune amélioration n'a.
+  assert.notEqual(TERRAINS.defense.actions.ameliorer.cible, true);
+  // Réparer, lui, n'existe toujours nulle part — et `null` le dit.
   assert.equal(TERRAINS.defense.actions.reparer, null);
   assert.ok(typeof TERRAINS.defense.actions.demolir.agir === 'function');
   assert.equal(TERRAINS.defense.actions.deplacer.cible, true);
@@ -2796,7 +2806,11 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
   // doit bien appeler quelque chose. Chacun de ces points d'entrée n'a qu'UN
   // site d'appel, et il est dans la table des terrains.
   for (const appel of ['poserBatiment(', 'poserEffectif(', 'retirerEffectif(',
-    'deplacerEffectif(', 'problemesDeLaPoseDEffectif(', 'problemesDuDeplacementDEffectif(']) {
+    'deplacerEffectif(', 'problemesDeLaPoseDEffectif(', 'problemesDuDeplacementDEffectif(',
+    // Les deux entrées du 03/09 rejoignent la liste : l'amélioration d'une
+    // pièce est un geste comme les autres, donc elle n'a qu'UN site d'appel,
+    // et il est dans la table des terrains.
+    'ameliorerEffectif(', 'problemesDeLAmeliorationDEffectif(']) {
     const n = source.split(appel).length - 1;
     assert.equal(
       n, 1,
@@ -3987,4 +4001,65 @@ test('décor — le pavage se dérive de l\'atlas, et il se règle au même endr
   assert.equal(pave.includes(cote.trim()), true,
     `--sol-pave vaut « ${pave} » et ne repart plus du côté de case « ${cote} » : `
     + 'les deux échelles ont cessé d\'en être une seule');
+});
+
+test('défense — la ligne de détail suit le TERRAIN, jamais la disposition', () => {
+  // ⚠⚠ DÉFAUT ANTÉRIEUR À CE LOT, TROUVÉ AU BOOT SANS TÊTE ET REPRODUIT SUR
+  // `main`. `rafraichir` réécrivait `#chantier-selection-detail` avec
+  // `detailDuBatiment(etat, selection)` SANS REGARDER `terrainSelection` : une
+  // pièce de garnison sélectionnée se voyait donc décrite par le bâtiment de
+  // MÊME INDICE dans `disposition`. Mesuré dans Chromium, viewport 360 × 800 :
+  // un Mur de défense de niveau 1 affichait « Niv. 12 » — le niveau du Chantier
+  // de construction, premier de la disposition — au lieu de « Niv. 1 · 5 pts ».
+  //
+  // ⚠ ET `selectionner` ÉCRIVAIT DÉJÀ LA BONNE LIGNE. C'est ce qui a caché le
+  // défaut si longtemps : la bonne valeur s'affichait, puis `rafraichir` passait
+  // dans les cent millisecondes et l'écrasait. Deux écrivains du même élément
+  // qui ne se connaissent pas — la faute exacte que `avis()` a déjà corrigée.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  // ⚠⚠ LA GARDE NOMME LA PROPRIÉTÉ : `detailDuBatiment` n'est appelée QUE par
+  // la table des terrains, qui est l'endroit où « ce terrain-là se décrit
+  // comme ça » est écrit. Tout autre site d'appel est un second chemin, et le
+  // second chemin était précisément le défaut.
+  // ⚠ ON RETIRE SA PROPRE DÉCLARATION AVANT DE COMPTER. Sans ça la garde
+  // compterait `export function detailDuBatiment(` comme un appel — c'est « une
+  // garde qui lit ce qu'on a écrit à son sujet », que le dépôt a déjà payé
+  // quatre fois. Falsifiée : elle tombe pour de bon quand on remet l'appel de
+  // `rafraichir`.
+  const sansDeclaration = ecran.replace('export function detailDuBatiment(', 'DECLARATION(');
+  const appels = sansDeclaration.split('detailDuBatiment(').length - 1;
+  assert.equal(appels, 1,
+    `detailDuBatiment est appelée ${appels} fois : la table des terrains doit être le seul chemin`);
+  const table = ecran.slice(ecran.indexOf('const TERRAINS'), ecran.indexOf('export function actionSansMoteur'));
+  assert.match(table, /detailDuBatiment/, 'la table des bâtiments ne se décrit plus elle-même');
+
+  // Et les DEUX écrivains de la ligne passent par le terrain sélectionné.
+  const lignes = ecran.split('\n')
+    .map((l, i) => ({ l, i })).filter(({ l }) => l.includes('chantier-selection-detail'));
+  assert.equal(lignes.length, 3, 'le nombre d\'écrivains de la ligne de détail a changé');
+  for (const { l, i } of lignes) {
+    if (l.includes('aucun bâtiment')) continue;
+    const voisinage = ecran.split('\n').slice(Math.max(0, i - 3), i + 1).join('\n');
+    assert.match(voisinage, /terrain\.detail\(/,
+      `la ligne ${i + 1} écrit le détail sans passer par le terrain : ${l.trim()}`);
+  }
+
+  // ⚠ LES DEUX TERRAINS SAVENT SE DÉCRIRE, ce qui est ce qui rend le chemin
+  // unique possible. Un terrain sans `detail` ferait lever dix fois par seconde.
+  for (const [nom, t] of Object.entries(TERRAINS)) {
+    assert.equal(typeof t.detail, 'function', `le terrain « ${nom} » ne sait pas se décrire`);
+  }
+
+  // ⚠⚠ ET « QUELLE ACTION FAIT DISPARAÎTRE SA CIBLE » EST DANS LA TABLE, PLUS
+  // DANS UN NOM ÉCRIT À LA MAIN. `executerAction` testait `nom === 'demolir'` :
+  // le cas particulier a tenu tant qu'il était seul, et l'écran Offense en a
+  // écrit un second le jour où « Retirer » est arrivé. Même motif que `cible`.
+  assert.equal(ACTIONS.demolir.retireLaPiece, true);
+  for (const nom of ['ameliorer', 'reparer', 'deplacer']) {
+    assert.notEqual(ACTIONS[nom].retireLaPiece, true,
+      `« ${nom} » se dit destructrice : la sélection serait lâchée pour rien`);
+  }
+  assert.ok(!/=== 'demolir'/.test(ecran), 'l\'écran reconnaît « demolir » par son nom');
+  assert.match(ecran, /retireLaPiece === true/, 'la sélection ne lit plus la table');
 });

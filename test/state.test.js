@@ -19,6 +19,7 @@ import {
   deplacer,
   FORCES, poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
+  problemesDeLAmeliorationDEffectif, ameliorerEffectif, pointsEngages,
   niveauDeCommandement, niveauDuChantier, batimentDeProductionManquant,
 } from '../src/sim/state.js';
 import { budgetDuNiveau as budgetOffense, arsenalVide, poser as poserUnite } from '../src/ui/arsenal.js';
@@ -26,7 +27,11 @@ import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { gratuitesDe, ARBRE_RECHERCHE } from '../src/data/recherche.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { coutDeMonteeOffense, coutDeMonteeDefense } from '../src/data/couts-militaires.js';
+import { NIVEAU } from '../src/data/niveaux.js';
+import { niveauDeLaDefense, niveauDeLArmee } from '../src/sim/niveau-de-base.js';
 import {
+  BASE_BATIMENTS,
   coutDeMontee, coutCumule, remboursementDuNiveau, emplacementsDuNiveau,
 } from '../src/data/base.js';
 import {
@@ -1796,4 +1801,208 @@ test('obstacles — une pièce déjà sous un obstacle ne rend pas la partie ill
   const casse = creerEtat(4242);
   baseCourante(casse).garnison.push({ id: 'merlon', rangee: 99, colonne: 5, niveau: 1, degatsMilli: 0 });
   assert.throws(() => charger(serialiser(casse, T0), T0), /injouable/);
+});
+
+// ---------------------------------------------------------------------------
+// AMÉLIORER UNE PIÈCE — arbitrage d'Ethan du 03/09/2026
+// ---------------------------------------------------------------------------
+// Trois formes lui ont été soumises : niveau choisi à la pose, pièce améliorée
+// une par une, niveau global de la force. Il a retenu la SECONDE — le geste que
+// le joueur connaît déjà pour ses bâtiments.
+//
+// ⚠ CE LOT NE FAIT QUE LE GESTE. Le PRIX était arbitré depuis le 28/08
+// (`data/couts-militaires.js`) et le GAIN existait depuis toujours
+// (`facteurMilli` met PV et dégâts à l'échelle du niveau dans `creerCombat`).
+// Ce qui manquait, c'est que `poserEffectif` écrivait `niveau: 1` et que rien
+// ne le relevait — d'où `niveauDeLArmee` et `niveauDeLaDefense` à 1,0 dans
+// toute partie du dépôt jusqu'à ce jour.
+
+/**
+ * Une case libre pour cette force, DEMANDÉE au moteur.
+ *
+ * ⚠ UN MONTAGE QUI ÉCRIT UNE COORDONNÉE NE GARDE QUE LUI-MÊME, et le dépôt l'a
+ * payé cinq fois. Le premier jet de ces tests posait en (3, 3) : sur la graine
+ * du montage, cette case porte un obstacle, et le test tombait pour une raison
+ * qui n'avait rien à voir avec ce qu'il mesure.
+ */
+function caseLibrePour(etat, force, id) {
+  const f = FORCES[force];
+  for (let axe = f.axeMin; axe <= f.axeMax; axe += 1) {
+    for (let colonne = 1; colonne <= f.colonneMax; colonne += 1) {
+      const piece = { id, [f.axe]: axe, colonne, niveau: 1 };
+      if (problemesDeLaPoseDEffectif(etat, force, piece).length === 0) return piece;
+    }
+  }
+  throw new Error(`montage : aucune case libre en ${force} pour ${id}`);
+}
+
+test('AMÉLIORER-PIÈCE — le geste monte la pièce et débite le barème de SA force', () => {
+  // ⚠⚠ LE MONTAGE MESURE QUELQUE CHOSE, ET ON LE PROUVE D'ABORD. Le Voltigeur
+  // est la meilleure sonde du dépôt : il est dans les DEUX rosters, il se paie
+  // en scorie des deux côtés, et son ancre vaut 5 en assaut contre 2 en
+  // garnison. Un moteur qui prendrait le mauvais barème rendrait donc un nombre
+  // DIFFÉRENT sur la même unité et la même ressource — ce qu'une entité au prix
+  // identique des deux côtés (le Broyeur, 12/12) ne saurait pas dire.
+  const off = coutDeMonteeOffense('guetteur', 2);
+  const def = coutDeMonteeDefense('guetteur', 2);
+  assert.notDeepEqual(off, def, 'la sonde ne discrimine plus les deux barèmes');
+
+  const etat = etatAvecCommandement(8, 8);
+  const base = baseCourante(etat);
+  for (const r of ['quartz', 'scorie', 'electricite']) base.economie.ressources[r] = 10_000_000;
+
+  poserEffectif(etat, 'garnison', caseLibrePour(etat, 'garnison', 'guetteur'));
+  poserEffectif(etat, 'armee', caseLibrePour(etat, 'armee', 'guetteur'));
+
+  // ⚠ DES DÉGÂTS ÉCRITS AVANT LA MONTÉE. `degatsMilli` est un ABSOLU de
+  // milli-PV : l'amélioration monte les PV MAXIMUM et ne rend aucun PV. Les
+  // effacer ferait de l'amélioration un SOIN, c'est-à-dire un second mécanisme
+  // de réparation que personne n'a arbitré et qui court-circuiterait les trois
+  // réserves de `sim/reparation.js`.
+  base.armee[0].degatsMilli = 4_321;
+
+  const pointsAvant = {
+    garnison: pointsEngages(etat, 'garnison'), armee: pointsEngages(etat, 'armee'),
+  };
+  const stockAvant = { ...base.economie.ressources };
+
+  assert.deepEqual(problemesDeLAmeliorationDEffectif(etat, 'garnison', 0), []);
+  ameliorerEffectif(etat, 'garnison', 0);
+  const debitGarnison = Object.fromEntries(['quartz', 'scorie', 'electricite']
+    .map((r) => [r, (stockAvant[r] - base.economie.ressources[r]) / 1000]));
+  assert.equal(base.garnison[0].niveau, 2, 'la pièce de garnison n\'est pas montée');
+  assert.deepEqual(debitGarnison, def, 'la garnison n\'a pas payé le barème de la DÉFENSE');
+
+  const stockMilieu = { ...base.economie.ressources };
+  ameliorerEffectif(etat, 'armee', 0);
+  const debitArmee = Object.fromEntries(['quartz', 'scorie', 'electricite']
+    .map((r) => [r, (stockMilieu[r] - base.economie.ressources[r]) / 1000]));
+  assert.equal(base.armee[0].niveau, 2, 'l\'unité d\'assaut n\'est pas montée');
+  assert.deepEqual(debitArmee, off, 'l\'armée n\'a pas payé le barème de l\'OFFENSE');
+
+  // Les dégâts survivent, à la milli-unité près.
+  assert.equal(base.armee[0].degatsMilli, 4_321, 'l\'amélioration a soigné la pièce');
+
+  // ⚠ ET LE BUDGET NE BOUGE PAS. Les points d'armée sont l'une des grandeurs que
+  // `data/niveaux.js` ne met PAS à l'échelle — c'est écrit dans `pointsEngages`.
+  // Améliorer ne peut donc jamais faire sortir une composition de son budget,
+  // et ce test tombera le jour où quelqu'un multiplierait les points par le
+  // niveau en croyant bien faire.
+  assert.equal(pointsEngages(etat, 'garnison'), pointsAvant.garnison);
+  assert.equal(pointsEngages(etat, 'armee'), pointsAvant.armee);
+
+  // ⚠⚠ ET C'EST LÀ QUE LE TROU SE REFERME, VU DU JOUEUR. Les deux moyennes
+  // affichaient 1,0 dans TOUTE partie du dépôt — le jeu posait au niveau 1 et
+  // rien ne le relevait. Elles sont en dixièmes entiers : 20 vaut « 2,0 ».
+  assert.equal(niveauDeLaDefense(base.garnison), 20);
+  assert.equal(niveauDeLArmee(base.armee), 20);
+});
+
+test('AMÉLIORER-PIÈCE — le plafond est le bâtiment de commandement, et sans lui rien ne monte', () => {
+  // ⚠⚠ LA RÈGLE ÉTAIT DÉJÀ ÉCRITE DANS LA DONNÉE, ET CE LOT L'APPLIQUE AU
+  // GESTE. `POINTS_ARMEE` de `data/sites.js` dit depuis toujours que chaque
+  // budget est adossé à son bâtiment, « qui fixe aussi le niveau maximal des
+  // unités de son côté ». Les deux éditeurs l'appliquaient depuis le lot
+  // FREEZE-ET-PALETTE sur un niveau qu'un banc leur passe ; ici c'est le seul
+  // chemin par lequel un niveau entre désormais dans une partie.
+
+  // (1) SANS BÂTIMENT, PAS DE PLAFOND — DONC PAS D'AMÉLIORATION. C'est la
+  // lecture que `niveauDeCommandement` porte déjà en rendant `null` et non
+  // zéro. Le cas arrive pour de bon : une force posée, puis le QG démoli.
+  const nu = creerEtat(20260903);
+  poserEffectif(nu, 'garnison', caseLibrePour(nu, 'garnison', 'merlon'));
+  assert.equal(niveauDeCommandement(nu, 'garnison'), null, 'le montage a un QG : il ne mesure rien');
+  const sansQg = problemesDeLAmeliorationDEffectif(nu, 'garnison', 0);
+  assert.ok(sansQg.some((p) => p.code === 'sans-batiment'), 'une pièce monte sans bâtiment');
+  assert.throws(() => ameliorerEffectif(nu, 'garnison', 0), /impossible/);
+
+  // (2) LE PLAFOND MORD, ET SON MESSAGE NOMME LE BÂTIMENT. Le joueur doit
+  // savoir QUOI monter d'abord.
+  const etat = etatAvecCommandement(2, 2);
+  const base = baseCourante(etat);
+  for (const r of ['quartz', 'scorie', 'electricite']) base.economie.ressources[r] = 10_000_000;
+  poserEffectif(etat, 'armee', caseLibrePour(etat, 'armee', 'guetteur'));
+
+  assert.deepEqual(problemesDeLAmeliorationDEffectif(etat, 'armee', 0), [],
+    'le niveau 2 est refusé sous un Centre de commandement de niveau 2');
+  ameliorerEffectif(etat, 'armee', 0);
+  const bute = problemesDeLAmeliorationDEffectif(etat, 'armee', 0);
+  assert.ok(bute.some((p) => p.code === 'plafond-commandement'),
+    'la pièce dépasse le niveau de son bâtiment de commandement');
+  assert.match(
+    bute.find((p) => p.code === 'plafond-commandement').message,
+    new RegExp(BASE_BATIMENTS[POINTS_ARMEE.offense.batiment].nom.joueur),
+    'le refus ne dit pas quel bâtiment monter',
+  );
+  // ⚠ ET LE PLAFOND EST BIEN CELUI DE SA FORCE, PAS DE L'AUTRE. Un moteur qui
+  // lirait le mauvais bâtiment passerait ce test-ci si les deux avaient le même
+  // niveau : on les sépare exprès.
+  base.disposition.find((b) => b.id === POINTS_ARMEE.offense.batiment).niveau = 9;
+  assert.deepEqual(problemesDeLAmeliorationDEffectif(etat, 'armee', 0), []);
+  poserEffectif(etat, 'garnison', { ...caseLibrePour(etat, 'garnison', 'merlon'), niveau: 2 });
+  assert.ok(
+    problemesDeLAmeliorationDEffectif(etat, 'garnison', 0)
+      .some((p) => p.code === 'plafond-commandement'),
+    'la garnison a hérité du plafond de l\'OFFENSE',
+  );
+
+  // (3) LES DEUX RAISONS D'UN REFUS SE LISENT ENSEMBLE. Le coût se calcule même
+  // quand le plafond refuse : « un indice n'est pas une interdiction » vaut
+  // aussi pour les messages, et c'est ce que fait déjà l'amélioration des
+  // bâtiments.
+  // ⚠ ON VIDE LES TROIS, PAS CELLE QU'ON CROIT. Le Mur de défense se paie en
+  // QUARTZ — les six ouvrages fixes sont bâtis, les unités et les artilleries
+  // roulent —, et un montage qui viderait la scorie « parce que c'est du
+  // militaire » passerait sur du code cassé.
+  for (const r of ['quartz', 'scorie', 'electricite']) base.economie.ressources[r] = 0;
+  const deux = problemesDeLAmeliorationDEffectif(etat, 'garnison', 0);
+  assert.ok(deux.some((p) => p.code === 'plafond-commandement'));
+  assert.ok(deux.some((p) => p.code.startsWith('manque:')),
+    'le manque de ressource disparaît derrière le plafond');
+
+  // (4) AU PLAFOND DU JEU, ON REND UN PROBLÈME — ON NE FAIT PAS LEVER LE
+  // BARÈME. `coutDeMontee` LÈVE au-delà de `NIVEAU.plafond` ; calculer le coût
+  // d'un niveau qui n'existe pas ferait remonter une levée là où le joueur
+  // attend une phrase.
+  const auBout = etatAvecCommandement(NIVEAU.plafond, NIVEAU.plafond);
+  poserEffectif(auBout, 'armee', {
+    ...caseLibrePour(auBout, 'armee', 'guetteur'), niveau: NIVEAU.plafond,
+  });
+  const fini = problemesDeLAmeliorationDEffectif(auBout, 'armee', 0);
+  assert.deepEqual(fini.map((p) => p.code), ['plafond'],
+    'le plafond du jeu doit être la SEULE raison, et rien ne doit lever');
+
+  // (5) UN INDICE HORS LISTE EST UN FAIT DE PROGRAMME, pas de jeu.
+  assert.throws(() => problemesDeLAmeliorationDEffectif(etat, 'armee', 99), RangeError);
+  assert.throws(() => ameliorerEffectif(etat, 'pieton', 0), /n'est pas une force/);
+});
+
+test('AMÉLIORER-PIÈCE — UN moteur pour les deux forces, et le barème vient de la table', () => {
+  // ⚠⚠ LE BARÈME SE LIT DANS `FORCES`, IL NE SE CHOISIT PAS PAR UN TEST SUR LE
+  // NOM DE LA FORCE. C'est la discipline que ce module tient déjà pour `axe`,
+  // `surLeTerrain`, `porteLActivite` et `roster` : un cas particulier écrit à
+  // la main serait le premier à diverger — et il PARAÎTRAIT juste, le Broyeur
+  // et le Percheron coûtant le même prix des deux côtés.
+  assert.equal(FORCES.garnison.coutDeMontee, coutDeMonteeDefense);
+  assert.equal(FORCES.armee.coutDeMontee, coutDeMonteeOffense);
+
+  // ⚠ ET LE MOTEUR NE NOMME NI L'UNE NI L'AUTRE. On lit le corps des deux
+  // fonctions plutôt que le fichier entier : `state.js` est plein de « garnison »
+  // et d'« armee » parfaitement légitimes, à commencer par la table ci-dessus.
+  for (const fn of [problemesDeLAmeliorationDEffectif, ameliorerEffectif]) {
+    const corps = fn.toString();
+    assert.ok(!/'garnison'|"garnison"/.test(corps),
+      `${fn.name} nomme « garnison » : le cas particulier est écrit à la main`);
+    assert.ok(!/'armee'|"armee"/.test(corps),
+      `${fn.name} nomme « armee » : le cas particulier est écrit à la main`);
+    // Il passe par la ligne de la table, et c'est ce qui le rend commun.
+    assert.match(corps, /f\.coutDeMontee\(/, `${fn.name} ne lit pas le barème dans FORCES`);
+  }
+
+  // ⚠ LA COUVERTURE EST EXHAUSTIVE, ET C'EST L'ASSERTION QUI COMPTE ICI : une
+  // troisième force ajoutée sans barème ferait lever `f.coutDeMontee` au
+  // premier toucher, loin de la faute.
+  for (const [nom, f] of Object.entries(FORCES)) {
+    assert.equal(typeof f.coutDeMontee, 'function', `la force « ${nom} » n'a pas de barème`);
+  }
 });
