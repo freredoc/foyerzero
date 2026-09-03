@@ -33,7 +33,8 @@
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { BATIMENTS } from '../data/sites.js';
-import { xDeColonne, yDeRangeeMilli, yDeRangee } from './projection.js';
+import { xDeColonne, yDeRangeeMilli, yDeRangee, yDeLigneEcran } from './projection.js';
+import { tuilesDuContour, CAMP_DU_PROPRIETAIRE } from './contour.js';
 import { positionInterpolee } from './interpolation.js';
 import { celluleDuSprite, existeDansAtlas } from './sprite.js';
 import { COTE_SPRITE } from '../data/atlas.js';
@@ -241,6 +242,80 @@ const sprite = (famille, nom, x, y, l, h) => {
     h,
   };
 };
+
+/**
+ * Une image ENTIÈRE posée à l'écran — les pièces du mur de contour.
+ *
+ * ⚠⚠ C'EST LA MÊME PRIMITIVE `sprite`, ET SEULE LA FABRIQUE DIFFÈRE. Elle
+ * porte déjà son rectangle source ; une cellule d'atlas le calcule d'un rang,
+ * une image seule le prend tout entier. Ouvrir une SECONDE forme aurait donné à
+ * `canvas2d.js` une branche de plus qui appelle exactement le même
+ * `drawImage` — et c'est justement ce que la primitive ouverte au lot
+ * UNITÉS-AU-COMBAT existe pour éviter.
+ *
+ * ⚠⚠ ET LA `famille` EST LE NOM DE L'IMAGE, parce qu'un mur n'est dans AUCUN
+ * atlas et ne peut pas y être : `tools/atlas.py` n'accepte que des cellules
+ * carrées d'un même côté, quand un mur fait 512 × 128. Chacune est donc une
+ * famille d'une seule image — ce qui est exactement ce que « hors atlas » veut
+ * dire —, et `atlasDeLaScene` de `ui/session.js` en donne la balise.
+ *
+ * ⚠ LA TAILLE SOURCE SE CALCULE SUR `COTE_SPRITE`, elle ne se lit pas sur
+ * l'image. `naturalWidth` n'existe qu'une fois l'image DÉCODÉE, et ce module
+ * est pur : il ne voit aucune balise. Un test confronte ces deux nombres aux
+ * fichiers du dépôt par `bord-empreintes.json`, ce qui est plus fort qu'une
+ * lecture à l'exécution — il tombe au dépôt, pas chez le joueur.
+ */
+const imageEntiere = (nom, x, y, l, h, casesSource) => ({
+  forme: 'sprite',
+  famille: nom,
+  nom,
+  sx: 0,
+  sy: 0,
+  sl: casesSource * COTE_SPRITE,
+  sh: COTE_SPRITE,
+  x,
+  y,
+  l,
+  h,
+});
+
+/**
+ * Les primitives du mur de contour d'une base, pour un propriétaire donné.
+ *
+ * ⚠⚠ LE MÊME MUR QUE L'ÉCRAN DE LA BASE, ET C'EST TOUT L'INTÉRÊT.
+ * `tuilesDuContour` de `render/contour.js` rend les pièces en unités de CASE ;
+ * l'écran du Chantier les pose en fonds CSS sur une grille, celui-ci en
+ * `drawImage` sur un canevas. Deux dessins, une géométrie — le contraire de la
+ * casemate qui se dessinait de trois façons avant le 30/08.
+ *
+ * ⚠ LA PROJECTION DOIT AVOIR RÉSERVÉ L'ANNEAU, sans quoi le mur déborderait sur
+ * le fond. On ne le devine pas : `projection.contour` le dit, et une projection
+ * qui ne l'a pas réservé ne rend AUCUNE pièce plutôt qu'un mur mal placé. C'est
+ * ce qui laisse le banc d'essai intact — il projette sans anneau, donc il ne
+ * dessine pas de mur, et pas une de ses mesures de pixels ne bouge.
+ *
+ * @param {string} proprietaire `joueur` ou `ouvrage`
+ * @param {object} projection
+ * @returns {Array<object>} primitives
+ */
+export function listeDuContour(proprietaire, projection) {
+  if (!projection.contour) return [];
+  const camp = CAMP_DU_PROPRIETAIRE[proprietaire];
+  if (camp === undefined) {
+    throw new RangeError(`scene : propriétaire de contour « ${proprietaire} » inconnu`);
+  }
+  const t = projection.tailleCase;
+  return tuilesDuContour(camp).map((piece) => imageEntiere(
+    piece.nom,
+    // ⚠ `xDeColonne` SERT LES COORDONNÉES 0 ET `largeur + 1` SANS RIEN SAVOIR :
+    // elle est affine, et l'anneau est replié dans la marge. Écrire ici
+    // `margeX + (x − 1) × t` en serait la copie, donc la première à diverger.
+    xDeColonne(projection, piece.x),
+    yDeLigneEcran(projection, piece.y),
+    piece.l * t, piece.h * t,
+    piece.l,
+  ));
+}
 
 /**
  * Ton de corps d'un camp : kaki du joueur, métal de l'Ouvrage.
@@ -633,6 +708,22 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0) 
 
   // 1. Fond.
   liste.push(rect(0, 0, projection.largeurPx, projection.hauteurPx, FOND));
+
+  // 1 bis. Le mur de contour de la base attaquée — lot MURS-OUVRAGE, 03/09.
+  //
+  // ⚠⚠ IL SE DESSINE APRÈS LE FOND ET AVANT TOUT LE RESTE, comme sur l'écran de
+  // la base, où les trois étages sont le SOL, puis le MUR, puis les jetons.
+  // L'ordre y avait été trouvé par la mesure : posé au-dessus, le mur barrait
+  // les pièces ; posé sous le sol, il était à moitié caché. Ici l'anneau ne
+  // recouvre aucune case de contenu — c'est ce que `projection.contour` réserve
+  // — donc l'ordre ne se voit pas ; le garder identique évite qu'on ait à le
+  // redécouvrir le jour où une pièce dépassera.
+  //
+  // ⚠ LE CAMP EST CELUI DU PROPRIÉTAIRE DE LA DÉFENSE, jamais `'ouvrage'` en
+  // dur : c'est la base ATTAQUÉE qui porte le mur, et `sim/raid-ouvrage.js`
+  // monte des combats où elle appartient au joueur. Même leçon que
+  // `pointsRecherche` du lot MODULES-E.
+  liste.push(...listeDuContour(etat.proprietaireDefense, projection));
 
   // 2. Obstacles, en aplat sombre.
   for (const o of etat.obstacles) {

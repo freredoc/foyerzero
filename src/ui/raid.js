@@ -301,7 +301,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     if (largeur <= 0 || hauteur <= 0) { projection = null; return false; }
     if (canvas.width !== largeur) canvas.width = largeur;
     if (canvas.height !== hauteur) canvas.height = hauteur;
-    projection = calculerProjection(largeur, hauteur);
+    // ⚠⚠ `1` — L'ANNEAU DU MUR, ET C'EST L'ÉCRAN QUI LE DIT. Le champ de
+    // bataille montre une BASE, et une base est ceinte : la projection réserve
+    // donc une case à gauche, à droite et en haut. La case y est plus petite
+    // qu'au banc d'essai — de 5 à 18 % selon la forme du canevas —, et c'est le
+    // prix du mur, payé là et nulle part ailleurs.
+    projection = calculerProjection(largeur, hauteur, 1);
     return true;
   }
 

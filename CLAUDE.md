@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.73.0 · build 75.
+Dernière révision : **03/09/2026**, version 0.74.0 · build 76.
 
 ---
 
@@ -41,7 +41,106 @@ Dernière révision : **03/09/2026**, version 0.73.0 · build 75.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot MURS), à confronter :**
+**Référence au 03/09/2026 (après le lot MURS-OUVRAGE), à confronter :**
+`npm test` → **950 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 250 476 octets**, 0 référence externe.
+⚠⚠ **LA BASE DE L'OUVRAGE EST CEINTE DU MÊME MUR, ET IL A FALLU DÉMÉNAGER LA
+GÉOMÉTRIE POUR ÇA.** Ethan, 03/09 : « c'est pour le joueur et pour l'ouvrage ».
+Le lot MURS avait laissé les huit murs de l'Ouvrage **produits et jamais
+dessinés**, et il avait dit pourquoi : ce qui manquait n'était pas une ligne
+dans une table, c'était un ENDROIT. Cet endroit est le canevas de l'écran de
+raid. Coût **+22 111 octets** — 20 592 de base64 pour six images, 1 519 pour le
+module, le balisage et le câblage. Borne T10 **inchangée à 3 400 000**, marge
+**149 524 octets, 4,4 %**. **18 `data:` avant, 24 après.**
+⚠⚠ **SIX IMAGES, PAS HUIT — ET LE RAPPORT DE MURS ANNONÇAIT HUIT.** Il chiffrait
+« +24 010 octets de WebP, soit +32 016 en base64 », qui est le poids des quatre
+murs et des quatre blocs produits pour ce camp. **L'anneau n'en pose que six** :
+le U d'une base de neuf colonnes n'a que DEUX créneaux de mur, exactement comme
+côté joueur. L'estimation était haute d'un tiers ; un test refuse désormais
+qu'une image soit inlinée sans que l'anneau la pose, et l'inverse.
+⚠⚠ **`tuilesDuContour` DESCEND DANS `render/contour.js`, ET C'EST LA RAISON DU
+LOT.** Elle vivait dans `ui/chantier.js` tant qu'un seul écran s'en servait ;
+l'écran de raid est un CANEVAS, donc il passe par `render/scene.js`, **qui n'a
+pas le droit d'importer `ui/`**. Retourner la flèche « juste pour un mur » aurait
+fait du moteur de rendu une dépendance de l'écran de la base. **Pas une ligne de
+la géométrie n'a changé en route**, et `ui/chantier.js` la RÉ-EXPORTE — même
+motif que `baseCourante`, ré-exporté par `sim/state.js`.
+⚠ **ET UN RÉ-EXPORT NE CRÉE AUCUNE LIAISON LOCALE — PAYÉ EN UNE EXÉCUTION.**
+`bornesDeDefilement` lit `BANDE_DU_CONTOUR` : sous le seul `export … from`, le
+nom n'existe pas dans le module et la fonction lève au premier défilement. Ce
+qui SORT et ce qui SERT se déclarent séparément.
+⚠⚠ **`calculerProjection` RÉSERVE L'ANNEAU PAR UN PARAMÈTRE QUI VAUT ZÉRO PAR
+DÉFAUT, ET LA CASE RÉTRÉCIT DE 5 À 18 %.** Une base ceinte occupe
+`GRILLE.largeur + 2` colonnes et `GRILLE.longueur + 1` lignes — jamais `+ 2` en
+hauteur : le U s'ouvre sur le déploiement. Mesuré : **45 → 37 px** sur 412 × 820
+(−17,8 %), **31 → 29** sur 360 × 560 (−6,5 %). C'est le prix du mur, et il ne se
+paie **qu'où le mur se dessine** : `ui/raid.js` passe 1, `ui/banc.js` passe 0.
+⚠⚠ **ET LA MARGE POINTE SUR LE CONTENU, PAS SUR L'ANNEAU — C'EST TOUT CE QUI
+REND CE PARAMÈTRE PAYABLE.** L'anneau est replié DANS `margeX`/`margeY`, si bien
+que `xDeColonne`, `yDeRangee`, `yDeRangeeMilli` et `caseDepuisPixels` **n'ont pas
+changé d'un caractère** : la colonne 1 tombe toujours en `margeX`. Et
+`xDeColonne` sert les coordonnées 0 et `largeur + 1` sans le savoir, étant
+affine. **Aucune mesure de pixel du dépôt ne bouge**, et un test refait l'ancienne
+formule sur cinq viewports au lieu de la recopier.
+⚠ **UN PARAMÈTRE, PAS UNE SECONDE FONCTION.** `calculerProjectionAvecContour`
+aurait mis DEUX formules de letterboxing au dépôt, dont une seule serait
+corrigée le jour d'une correction. ⚠ Et un `contour` autre que 0 ou 1 **LÈVE** :
+un `true` passé par mégarde vaudrait 1 après coercition.
+⚠⚠ **`yDeLigneEcran` ENTRE, PARCE QUE L'ANNEAU A UNE LIGNE ZÉRO QU'AUCUNE RANGÉE
+N'OCCUPE.** Le mur du fond court AU-DESSUS de la rangée `GRILLE.longueur` ;
+`yDeRangee` la refuserait, aucune rangée 19 n'existant. C'est la distinction que
+`render/orientation.js` pose depuis le 27/08 — une rangée est du MODÈLE, une
+ligne d'écran est du DESSIN. **Un test les accorde sur les dix-huit rangées** au
+lieu de croire qu'elles coïncident.
+⚠⚠ **LA PRIMITIVE `sprite` SERT TELLE QUELLE, ET LA `famille` EST LE NOM DE
+L'IMAGE.** Elle porte déjà son rectangle source depuis le lot UNITÉS-AU-COMBAT :
+une cellule d'atlas le calcule d'un rang, **une image seule le prend tout
+entier**. Ouvrir une seconde forme aurait donné à `canvas2d.js` une branche de
+plus appelant le même `drawImage`. Un mur n'est dans aucun atlas et ne peut pas
+y être — 512 × 128 contre des cellules carrées —, donc **chaque image est une
+famille d'une seule**, ce qui est exactement ce que « hors atlas » veut dire.
+⚠ **LA TAILLE SOURCE SE CALCULE SUR `COTE_SPRITE`, ELLE NE SE LIT PAS SUR
+L'IMAGE.** `naturalWidth` n'existe qu'une fois l'image décodée, et `render/` est
+pur. Un test la confronte à `bord-empreintes.json` : il tombe au dépôt, pas chez
+le joueur.
+⚠⚠ **LE CAMP EST CELUI DU `proprietaireDefense`, JAMAIS `'o'` EN DUR.**
+`sim/raid-ouvrage.js` monte des combats où la défense appartient au JOUEUR :
+écrire le camp en dur aurait passé le test de l'Ouvrage et donné un mur violet à
+la base du joueur le jour où cet écran-là s'ouvrira. **Mesuré des deux côtés**,
+et c'est la moitié joueur qui compte. Même leçon que `pointsRecherche` au lot
+MODULES-E.
+⚠ **LES DEUX CAMPS PASSENT PAR DES CHEMINS DIFFÉRENTS, ET RIEN N'EST INLINÉ DEUX
+FOIS.** Le joueur en variables CSS, l'écran de la base étant du DOM ; l'Ouvrage
+en balises `img` porteuses de leur marqueur en `src`, comme les deux grosses
+bases de la carte du monde, `drawImage` voulant un élément. **Aucun dessin n'est
+partagé**, donc le couplage du lot SPRITES-ET-ZOOM ne s'applique pas.
+⚠ **ET `VARIABLE_DU_MUR` NE S'ÉCRIT PLUS À LA MAIN : ELLE SE DÉRIVE.**
+`nomsDuContour(camp)` rend ce que l'anneau emploie vraiment, et les DEUX tables
+en sortent. **Vérifié : la table dérivée est identique à la table recopiée.** Six
+lignes recopiées tenaient à un camp ; à deux, la seconde copie aurait été la
+première à oublier une pièce.
+⚠⚠ **LE MUR EST LE DEUXIÈME ÉTAGE ICI AUSSI — fond, mur, pièces.** L'anneau ne
+recouvre aucune case de contenu, c'est ce que la projection réserve, donc
+l'ordre ne se VOIT pas ; le garder identique à celui de l'écran de la base évite
+qu'on ait à le redécouvrir par la mesure une seconde fois.
+⚠ **LE BANC N'A PAS D'ANNEAU, ET C'EST DÉCLARÉ.** Il est derrière un geste de
+debug et une douzaine de ses assertions portent des positions en pixels ; lui
+réserver l'anneau les aurait toutes déplacées pour un mur que personne ne lui a
+demandé. Un test nomme les deux appels, et il tombera le jour où on l'y met.
+⚠ **UNE GARDE A LU CE QU'ON AVAIT ÉCRIT À SON SUJET, POUR LA QUATRIÈME FOIS.**
+Celle qui refuse `etat.rng` dans `render/contour.js` tombait sur le COMMENTAIRE
+qui nomme `etat.rng` pour dire qu'il n'y touche pas — après `viewport-fit=cover`,
+`MENTION_SATURE` et `variante.js`. Elle lit la source décommentée, et un appât
+prouve qu'elle reconnaît encore la vraie faute.
+⚠ **NEUF TESTS ENTRENT DANS `test/contour.test.js`, ET LE COMPTE PASSE DE 941 À
+950.** ⚠ **`python3 tools/verifier.py` → 933 identiques · 0 différent ·
+0 nouveau · 0 MANQUANT**, verdict VERT. Il n'était PAS dû — le lot ne touche ni
+`art/`, ni un outil de la chaîne — et il a été lancé quand même parce que le lot
+fait entrer de l'art au livrable : zéro octet d'`art/` n'a bougé, et c'est ce que
+ces quatre nombres disent.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Un mur est un dessin.
+
+**Auparavant, après le lot MURS :**
 `npm test` → **941 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **3 228 365 octets**, 0 référence externe.
 ⚠⚠ **LE MUR DE CONTOUR N'EST PLUS UN TRAIT, C'EST UN ANNEAU DE BLOCS — ET LE LOT
@@ -1605,9 +1704,10 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     MOTEUR de l'autre. Un import qui se trompe de dossier ne compile pas — les
     exports n'ont aucun nom en commun.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 9 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 10 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
+  contour.js            l'anneau de mur d'une base : des pièces en unités de case
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
@@ -1636,6 +1736,16 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 9 fic
     ligne qui n'est pas « deux espaces puis une minuscule » : une note glissée
     au milieu tronque la liste, et le test accuse alors les fichiers qui la
     suivent d'avoir disparu. Elles vont à la FIN du bloc. Payé une fois.
+  ⤷ ⚠⚠ `contour.js` EST NÉ D'UN DÉMÉNAGEMENT, PAS D'UNE ÉCRITURE — lot
+    MURS-OUVRAGE, 03/09. `tuilesDuContour` vivait dans `ui/chantier.js` tant
+    qu'un seul écran s'en servait ; la base de l'OUVRAGE se regarde sur l'écran
+    de raid, qui est un canevas et passe par `render/`, lequel n'a pas le droit
+    d'importer `ui/`. Pas une ligne de la géométrie n'a changé en route, et
+    l'écran de la base la RÉ-EXPORTE — un ré-export n'est pas une copie, c'est
+    la même liaison. Même motif que `baseCourante`, ré-exporté par
+    `sim/state.js`. ⚠ ET UN RÉ-EXPORT NE CRÉE AUCUNE LIAISON LOCALE : payé en
+    une exécution, `bornesDeDefilement` levant « BANDE_DU_CONTOUR is not
+    defined » sous le seul `export … from`.
   ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
     est celui de la SIMULATION : y prendre un tirage pour choisir une texture
     décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se
@@ -1675,7 +1785,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 11 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   48 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
+test/                   49 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -1683,7 +1793,7 @@ test/                   48 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche  maj  territoire  bases  transfert
+  sprite  state  recherche  maj  territoire  bases  transfert  contour
   ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -1843,8 +1953,12 @@ art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grill
                           un bloc, quand `tools/atlas.py` n'accepte que des
                           cellules CARRÉES d'un même côté. Les seize sortent de
                           `tools/bords.py` — quatre murs et quatre blocs par
-                          camp — ; SIX entrent dans le livrable, celles que
-                          l'anneau du joueur pose, pour 22 852 octets de base64.
+                          camp — ; DOUZE entrent dans le livrable, celles que
+                          les deux anneaux posent, pour 43 176 octets de base64.
+                          ⚠ SIX PAR CAMP DEPUIS LE LOT MURS-OUVRAGE, l'écran de
+                          raid dessinant la base de l'Ouvrage : celles du joueur
+                          en variables CSS, celles de l'Ouvrage en balises `img`
+                          — un canevas veut un élément, pas une adresse.
                           Voir §6, « les murs de contour ».
                         ⤷ ⚠⚠ ET ELLES SONT EN `.webp` DEPUIS LE LOT MURS, avec
                           `bord-empreintes.json` à côté. Node n'a pas de

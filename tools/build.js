@@ -139,11 +139,11 @@ const IMAGES_INLINE = [
   // 512 × 64 et un angle 64 × 64 : `tools/atlas.py` ne coud que des cellules
   // carrées d'un même côté, donc chacune voyage dans son propre marqueur, comme
   // les deux grosses bases de l'Ouvrage plus bas.
-  // ⚠ ET SEUL LE CAMP DU JOUEUR EST LÀ. Les huit de l'Ouvrage sont produites par
-  // `tools/bords.py` et pèseraient 24 438 octets de plus pour zéro pixel : la
-  // base du joueur est la seule qu'un écran dessine aujourd'hui. Un atlas aurait
-  // été tout ou rien ; des fichiers séparés permettent de ne payer que ce qui
-  // se voit.
+  // ⚠⚠ ET LES DEUX CAMPS SONT LÀ DEPUIS LE LOT MURS-OUVRAGE, 03/09. Cette ligne
+  // disait « seul le camp du joueur », la base du joueur étant alors la seule
+  // qu'un écran dessinât ; l'écran de raid dessine celle de l'Ouvrage. Un atlas
+  // aurait été tout ou rien ; des fichiers séparés permettent de ne payer que ce
+  // qui se voit — SIX dessins sur huit par camp, et pas un de plus.
   // ⚠⚠ HUIT PIÈCES ET PLUS CINQ, EN WEBP ET PLUS EN PNG — lot MURS, 03/09. La
   // v1 était cinq TRAITS quantifiés sur seize teintes par camp ; la v2 est
   // quatre murs `4x1` et quatre BLOCS `1x1` qui gardent le rendu, comme tout ce
@@ -158,6 +158,21 @@ const IMAGES_INLINE = [
   { marqueur: '%MUR_J_BLOC_2%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_2.webp'], type: 'image/webp' },
   { marqueur: '%MUR_J_BLOC_3%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_3.webp'], type: 'image/webp' },
   { marqueur: '%MUR_J_BLOC_4%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_4.webp'], type: 'image/webp' },
+  // ⚠⚠ ET LES SIX DE L'OUVRAGE ENTRENT AU LOT MURS-OUVRAGE, 03/09. Ethan :
+  // « c'est pour le joueur et pour l'ouvrage ». La base attaquée porte le même
+  // U, sur l'écran de raid. Ceux-ci ne servent QU'À `drawImage` — voir les
+  // balises `bord-o-*` du balisage, qui portent le marqueur en `src` — donc
+  // ils ne sont dans aucune variable CSS et ne s'inlinent qu'une fois.
+  // ⚠ SIX SUR HUIT, COMME POUR LE JOUEUR : `mur_3` et `mur_4` restent produites
+  // et non employées, le U d'une base de neuf colonnes n'ayant que DEUX
+  // créneaux de mur. Un test confronte cette liste à `nomsDuContour('o')`,
+  // dans les deux sens.
+  { marqueur: '%MUR_O_MUR_1%', chemin: ['art', 'sprites', 'bord', 'bord_o_mur_1.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_O_MUR_2%', chemin: ['art', 'sprites', 'bord', 'bord_o_mur_2.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_O_BLOC_1%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_1.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_O_BLOC_2%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_2.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_O_BLOC_3%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_3.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_O_BLOC_4%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_4.webp'], type: 'image/webp' },
   atlas('unite'),
   atlas('chassis'),
   // ⚠ LE FICHIER PORTE LE SLUG À SOULIGNÉ — `atlas-tourelle_unite-64.png` —
