@@ -273,11 +273,20 @@ function trousEnfermes(chemin) {
 /**
  * Les sprites de l'Ouvrage d'une grille — `_o_` est la marque du camp.
  *
- * ⚠ `terrain` EST ÉCARTÉE, ET PAS PAR COMMODITÉ. Ses tuiles sont une SOURCE
- * DÉCLARÉE (`tools/verifier.py`, arbitrage du 30/08) : aucun outil ne les
- * produit, la chaîne ne les a jamais touchées, et elles n'ont donc rien à dire
- * sur un défaut de conditionnement. Elles portent `_o_` parce que c'est le sol
- * de l'Ouvrage, et elles sont en RVB indexé, que `decoderRgba` refuse de face.
+ * ⚠⚠ `terrain` EST ÉCARTÉE, ET LA RAISON A ÉTÉ RÉÉCRITE AU LOT
+ * MOULINETTE-TERRAIN, PARCE QU'ELLE ÉTAIT DEVENUE FAUSSE. Elle disait « aucun
+ * outil ne les produit, la chaîne ne les a jamais touchées » : c'est vrai des
+ * quatre `tile_sol_o_*` — les SEULS fichiers de la famille que ce filtre
+ * ramasse, `_o_` n'apparaissant nulle part ailleurs dans `terrain/` — et c'est
+ * FAUX de la famille depuis que `tools/terrain.py` produit ses dix champs et
+ * obstacles. Les quatre dalles restent une source déclarée de
+ * `tools/verifier.py` : leur seul original apparent est un index à cinq teintes
+ * que la migration n'a pas découpé tel quel, et elles sont en RVB indexé, que
+ * `decoderRgba` refuse de face.
+ *
+ * ⚠ ET LES DIX AUTRES NE SONT PAS LAISSÉES SANS GARDE : trois tests plus bas
+ * les mesurent — teintes, emprise, miroirs, clé — ce que ce compte de trous ne
+ * saurait pas faire sur des dessins qui n'ont pas de camp.
  */
 /**
  * ⚠⚠ `limite` EST ÉCARTÉE AUSSI, ET POUR UNE RAISON DE FORME, PAS DE CHAÎNE —
@@ -1669,4 +1678,194 @@ test('garnison — les DIX-SEPT pièces posables se dessinent, pas seulement les
   // Falsifiable de face : un identifiant qui n'est dans aucune des deux tables
   // lève, plutôt que de rendre un genre par défaut qui dessinerait n'importe quoi.
   assert.throws(() => genreDeLaGarnison('nexistepas'), /ni en défense ni dans le roster/);
+});
+
+// ---------------------------------------------------------------------------
+// La famille `terrain` — lot MOULINETTE-TERRAIN, 03/09
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE QUE CES QUATRE GARDES EXISTENT POUR EMPÊCHER. Le lot PIXELS a fait
+// cesser la quantification de toute la chaîne le 02/09 ; la famille `terrain`
+// n'y est pas passée, parce qu'elle était déclarée SOURCE et qu'aucun outil ne
+// la produisait. Elle est restée à trois teintes pendant que les huit autres en
+// portaient trois mille, et **rien dans le dépôt ne pouvait le dire** : l'index
+// était exact, la géométrie était exacte, les dix-huit noms se résolvaient.
+// Seuls les pixels avaient vieilli. C'est le même angle mort que celui de
+// BÂTIMENTS-1024, vu par l'autre bout — là, un atlas périmé sous des sprites
+// neufs ; ici, des sprites périmés sous un outil qui n'existait pas.
+
+const TERRAIN_128 = join(SPRITES, 'terrain', '128');
+const TERRAIN_64 = join(SPRITES, 'terrain', '64');
+const DESSINS_TERRAIN = [
+  'champ_quartz_a', 'champ_quartz_b', 'champ_scorie_a', 'champ_scorie_b',
+  'obs_infanterie_a', 'obs_infanterie_b', 'obs_les_deux_a', 'obs_les_deux_b',
+  'obs_vehicule_a', 'obs_vehicule_b',
+];
+const DALLES_TERRAIN = [
+  'tile_sol_j_a', 'tile_sol_j_b', 'tile_sol_j_c', 'tile_sol_j_d',
+  'tile_sol_o_a', 'tile_sol_o_b', 'tile_sol_o_c', 'tile_sol_o_d',
+];
+
+/** Les teintes RVB distinctes des pixels non transparents. */
+function teintesOpaques(image) {
+  const vues = new Set();
+  for (let i = 0; i < image.pixels.length; i += 4) {
+    if (image.pixels[i + 3] === 0) continue;
+    vues.add((image.pixels[i] << 16) | (image.pixels[i + 1] << 8) | image.pixels[i + 2]);
+  }
+  return vues.size;
+}
+
+/** L'emprise du dessin : côté du carré englobant les pixels non transparents. */
+function empriseDuSprite(image) {
+  let xMin = Infinity, xMax = -1, yMin = Infinity, yMax = -1;
+  for (let y = 0; y < image.hauteur; y += 1) {
+    for (let x = 0; x < image.largeur; x += 1) {
+      if (image.pixels[(y * image.largeur + x) * 4 + 3] === 0) continue;
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+    }
+  }
+  assert.ok(xMax >= 0, 'sprite entièrement transparent');
+  return {
+    cote: Math.max(xMax - xMin, yMax - yMin) + 1,
+    marge: Math.min(xMin, yMin, image.largeur - 1 - xMax, image.hauteur - 1 - yMax),
+  };
+}
+
+test('terrain — les dix champs et obstacles sont passés au filtre, les huit dalles non', () => {
+  // ⚠⚠ LA GARDE EST À DEUX FACES, ET C'EST CE QUI LA REND HONNÊTE. Exiger « plus
+  // de cent teintes » sur toute la famille serait faux : les huit dalles de sol
+  // sont un INDEX à cinq teintes, c'est leur nature, et `tools/verifier.py` les
+  // déclare source pour cette raison-là. On mesure donc les deux groupes
+  // séparément, et le second est aussi ferme que le premier — le jour où une
+  // dalle se met à porter mille teintes, c'est qu'on l'a passée au filtre sans
+  // décider ce que devient la rampe de l'Ouvrage, qui en est un recolorage.
+  //
+  // ⚠⚠ LE SEUIL EST À TRENTE-DEUX, ET IL SE POSE ENTRE DEUX MESURES, PAS AU
+  // JUGÉ. Relevé sur les dix après ce lot : **213 à 3 575 teintes en 128, 82 à
+  // 1 195 en 64** — la borne basse est `obs_vehicule`, une nappe de pétrole
+  // presque plate qui n'a presque pas de matière à porter. Avant ce lot, les
+  // dix en portaient **de 1 à 5**. Trente-deux est six fois au-dessus de
+  // l'ancien maximum et deux fois et demie sous le nouveau minimum ; il ne peut
+  // donc ni laisser passer une requantification, ni tomber sur un dessin plat.
+  // ⚠ La première écriture de cette garde disait cent, et elle est tombée sur
+  // les 82 du pétrole : un seuil qui ne tient pas dans l'intervalle qu'on vient
+  // soi-même de mesurer n'est pas un seuil, c'est un chiffre rond.
+  for (const [dossier, cote] of [[TERRAIN_128, 128], [TERRAIN_64, 64]]) {
+    for (const nom of DESSINS_TERRAIN) {
+      const n = teintesOpaques(decoderRgba(join(dossier, `${nom}.png`)));
+      assert.ok(n > 32,
+        `terrain/${cote}/${nom} porte ${n} teintes : la famille est retombée dans la quantification`);
+    }
+    // ⚠⚠ ET LES HUIT DALLES SE MESURENT AUSSI, MAIS PAS AUX TROIS GRILLES — LEUR
+    // TYPE DE COULEUR N'EST PAS LE MÊME PARTOUT, ET C'EST MESURÉ. Les huit sont
+    // en RVBA aux grilles 32 et 64, en RVB SANS COUCHE ALPHA à la grille 128 ;
+    // `decoderRgba` refuse le second de face. Cette incohérence n'est pas un
+    // défaut de ce lot : elle date de la migration à usage unique qui a produit
+    // ces fichiers et supprimé ses propres planches, et elle est une raison de
+    // plus de ne pas prétendre savoir les reproduire.
+    //
+    // ⚠ ON MESURE DONC LÀ OÙ ON PEUT LIRE, et c'est assez : cinq teintes, ni
+    // plus ni moins. Le jour où une dalle passe au filtre, elle en portera des
+    // centaines et cette égalité tombera — et il faudra alors décider ce que
+    // devient la rampe de l'Ouvrage, dont ces dalles-ci sont le recolorage
+    // exact, structure identique et cinq teintes substituées.
+    if (cote === 64) {
+      for (const nom of DALLES_TERRAIN) {
+        const n = teintesOpaques(decoderRgba(join(dossier, `${nom}.png`)));
+        assert.equal(n, 5,
+          `terrain/${cote}/${nom} porte ${n} teintes : une dalle de sol est un INDEX à cinq tons`);
+      }
+    }
+  }
+});
+
+test('terrain — l\'emprise des dix dessins est celle du dépôt, aux deux grilles', () => {
+  // ⚠ CETTE GARDE MESURE `EMPRISE32` DE `tools/terrain.py`, ET ELLE EST LA SEULE
+  // À LE FAIRE. Sept huitièmes de la case, centrés : 112 sur 128, 56 sur 64.
+  // C'est l'emprise que la famille portait AVANT ce lot, relevée sur les dix
+  // sprites commités — la reprendre était le seul moyen de ne pas faire grandir
+  // ni maigrir tous les champs de toutes les bases au passage. Une valeur
+  // changée dans l'outil déplacerait les dix d'un coup, et rien à l'écran ne
+  // dirait laquelle des deux est la bonne.
+  for (const [dossier, cote] of [[TERRAIN_128, 128], [TERRAIN_64, 64]]) {
+    for (const nom of DESSINS_TERRAIN) {
+      const { cote: emprise, marge } = empriseDuSprite(decoderRgba(join(dossier, `${nom}.png`)));
+      assert.equal(emprise, (cote * 7) / 8, `terrain/${cote}/${nom} : emprise ${emprise}`);
+      assert.equal(marge, cote / 16, `terrain/${cote}/${nom} : marge ${marge}`);
+    }
+  }
+});
+
+test('terrain — trois dessins sur cinq sont des miroirs, et les deux autres n\'en sont pas', () => {
+  // ⚠⚠ LES DEUX MOITIÉS COMPTENT AUTANT L'UNE QUE L'AUTRE. `champ_quartz`,
+  // `champ_scorie` et `obs_infanterie` n'ont qu'une planche saine : leur variante
+  // `b` est le miroir horizontal EXACT de `a`, comme dans l'art commité avant ce
+  // lot. `obs_les_deux` et `obs_vehicule` ont deux planches et deux vrais
+  // dessins — si l'un d'eux devenait un miroir, c'est qu'une planche aurait été
+  // perdue de la table de `tools/terrain.py` sans que personne le voie : le
+  // sprite existerait, l'atlas se coudrait, l'écran dessinerait.
+  const miroirExact = (nom) => {
+    const a = decoderRgba(join(TERRAIN_128, `${nom}_a.png`));
+    const b = decoderRgba(join(TERRAIN_128, `${nom}_b.png`));
+    for (let y = 0; y < a.hauteur; y += 1) {
+      for (let x = 0; x < a.largeur; x += 1) {
+        const ia = (y * a.largeur + x) * 4;
+        const ib = (y * a.largeur + (a.largeur - 1 - x)) * 4;
+        for (let c = 0; c < 4; c += 1) if (a.pixels[ia + c] !== b.pixels[ib + c]) return false;
+      }
+    }
+    return true;
+  };
+  for (const nom of ['champ_quartz', 'champ_scorie', 'obs_infanterie']) {
+    assert.ok(miroirExact(nom), `${nom}_b n'est plus le miroir exact de ${nom}_a`);
+  }
+  for (const nom of ['obs_les_deux', 'obs_vehicule']) {
+    assert.ok(!miroirExact(nom),
+      `${nom}_b est devenu le miroir de ${nom}_a : sa seconde planche a disparu de la table`);
+  }
+});
+
+test('terrain — le détourage ne laisse pas un pixel de clé, et la grille 32 est soldée', () => {
+  // ⚠⚠ LA CLÉ DE CES PLANCHES EST BRUITÉE, ET C'EST CE QUI REND CETTE GARDE
+  // NÉCESSAIRE. Mesuré sur les sept planches : **zéro pixel `#FF00FF` pur** —
+  // le fond va de (194, 16, 138) à (236, 11, 143) et s'assombrit jusqu'à
+  // (168, 23, 113) sous une branche. `tools/terrain.py` le rabat sur le magenta
+  // pur avant la chaîne ; si ce geste disparaissait, les pixels rabattus
+  // resteraient OPAQUES et le sprite ressortirait semé de rose.
+  //
+  // ⚠⚠ LE SEUIL EST L'ALPHA, PAS LE COMPTE, ET LA PREMIÈRE ÉCRITURE DE CETTE
+  // GARDE ÉTAIT FAUSSE. Elle exigeait zéro pixel de clé à quelque alpha que ce
+  // soit, et elle est tombée sur dix-huit pixels de `champ_quartz_a` — qui
+  // n'ont RIEN à voir avec le détourage : `ecrire` dé-prémultiplie en divisant
+  // par l'alpha, si bien qu'un pixel de frange à alpha 9 voit son arrondi
+  // amplifié jusqu'à retomber sur `#FF00FF`. Ce n'est pas propre à cette
+  // famille : mesuré sur tout `art/sprites/`, `defense` en porte 246, `unite`
+  // 58, `socle` 41 — **et ZÉRO, dans tout le dépôt, à alpha ≥ 128.** C'est
+  // cette borne-là qui est vraie, et c'est elle que le défaut franchirait : un
+  // détourage qui manque sa clé la laisse à alpha 255, pas à 9. Le pire de la
+  // famille `terrain` est à **51**.
+  for (const [dossier, cote] of [[TERRAIN_128, 128], [TERRAIN_64, 64]]) {
+    for (const nom of DESSINS_TERRAIN) {
+      const im = decoderRgba(join(dossier, `${nom}.png`));
+      let cle = 0;
+      for (let i = 0; i < im.pixels.length; i += 4) {
+        if (im.pixels[i + 3] < 128) continue;
+        if (im.pixels[i] === 255 && im.pixels[i + 1] === 0 && im.pixels[i + 2] === 255) cle += 1;
+      }
+      assert.equal(cle, 0, `terrain/${cote}/${nom} porte ${cle} pixels de clé magenta opaques`);
+    }
+  }
+
+  // ⚠⚠ ET LA GRILLE 32 NE PORTE PLUS QUE LES DALLES. Le lot PIXELS a sorti la 32
+  // de `GRILLES` partout ; `terrain/32` avait survécu au seul motif que ses
+  // tuiles étaient irrécupérables. Ce motif vient de cesser d'être vrai pour dix
+  // d'entre elles, donc elles sont retirées — un fichier qu'aucun outil ne
+  // produit et qu'aucun écran ne lit est ce que `tools/verifier.py` appelle un
+  // MANQUANT. Les huit dalles restent, et restent déclarées.
+  const restants = readdirSync(join(SPRITES, 'terrain', '32')).filter((f) => f.endsWith('.png'));
+  assert.deepEqual(restants.sort(), DALLES_TERRAIN.map((n) => `${n}.png`).sort());
 });
