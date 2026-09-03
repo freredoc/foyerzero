@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.80.0 · build 82.
+Dernière révision : **03/09/2026**, version 0.81.0 · build 83.
 
 ---
 
@@ -41,8 +41,114 @@ Dernière révision : **03/09/2026**, version 0.80.0 · build 82.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot CONTOUR-ET-ÉTIQUETTES), à confronter :**
-`npm test` → **969 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot NIVEAU-DES-PIÈCES), à confronter :**
+`npm test` → **974 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 347 583 octets**, 0 référence externe.
+⚠⚠ **ETHAN A TRANCHÉ « COMMENT LE JOUEUR CHOISIT LE NIVEAU D'UNE PIÈCE », ET LA
+RÉPONSE EST « B » — LA PIÈCE SE MONTE UNE PAR UNE, AU GESTE DU CHANTIER.** Trois
+formes lui étaient soumises : niveau choisi à la pose, pièce améliorée une par
+une, niveau global de la force. Coût **+2 116 octets**, aucune image n'entre —
+**25 `data:` avant, 25 après**. Borne T10 **inchangée à 3 400 000**, marge
+**52 417 octets, 1,54 %**.
+⚠⚠ **ET MON PROPRE RAPPORT DISAIT QU'IL MANQUAIT « LE GESTE ET LE GAIN » : LA
+MOITIÉ ÉTAIT FAUSSE.** Le gain existait DEPUIS TOUJOURS — `facteurMilli` de
+`data/niveaux.js` met PV et dégâts à l'échelle du niveau dans `creerCombat`. Le
+prix était arbitré le 28/08, le plafond écrit dans `POINTS_ARMEE` depuis
+toujours, le champ `niveau` dans la pièce depuis la v7. **Il ne manquait que le
+GESTE**, et son absence se mesurait : `poserEffectif` écrivait `niveau: 1` et
+rien ne le relevait, donc `niveauDeLArmee` et `niveauDeLaDefense` affichaient
+**1,0 dans TOUTE partie du dépôt**.
+⚠⚠ **LE BARÈME VIT DANS `FORCES`, ET CE N'EST PAS COSMÉTIQUE.**
+`FORCES.garnison.coutDeMontee` vaut `coutDeMonteeDefense`, celui de l'armée
+`coutDeMonteeOffense`. Mesuré au palier 2 sur les huit unités présentes des deux
+côtés : **le Voltigeur vaut 5 en assaut et 2 en garnison**, la Meute 2 et 1, le
+Fendeur 4 et 2 — mais **trois des huit coïncident** (Perceurs, Carapace, Broyeur).
+Un `if` sur le nom de la force aurait PARU juste. Le Voltigeur est la sonde des
+tests pour cette raison exacte : même unité, même ressource, deux nombres.
+⚠⚠ **LE PLAFOND ÉTAIT DÉJÀ ÉCRIT DANS LA DONNÉE.** `POINTS_ARMEE` dit depuis
+toujours que chaque budget est adossé à son bâtiment, « qui fixe aussi le niveau
+maximal des unités de son côté ». Les éditeurs l'appliquaient depuis
+FREEZE-ET-PALETTE ; ce lot l'applique au GESTE, seul chemin par lequel un niveau
+entre désormais dans une partie. ⚠ **Pas de bâtiment, pas de plafond, donc pas
+d'amélioration** — `niveauDeCommandement` rend `null` et non zéro, et le cas
+arrive pour de bon : une force posée, puis le QG démoli.
+⚠⚠ **L'AMÉLIORATION N'EFFACE PAS LES DÉGÂTS, ET C'EST UNE DÉCISION.**
+`degatsMilli` est un absolu de milli-PV et le niveau monte les PV MAXIMUM : une
+pièce entamée ressort relativement plus saine sans qu'un PV lui ait été rendu.
+Les remettre à zéro ferait de l'amélioration un SOIN, court-circuitant les trois
+réserves de `sim/reparation.js`.
+⚠ **ET LE BÂTIMENT DE PRODUCTION N'EST PAS EXIGÉ** : l'arbitrage du 29/08 dit
+« Infanterie INCONSTRUCTIBLE sans caserne », ce qui porte sur la construction, et
+une pièce posée l'est. Rien ne s'ouvre — le budget et le plafond bornent déjà.
+**Une ligne à ajouter si Ethan lit autrement.**
+⚠ **LE BUDGET NE PEUT PAS BOUGER, ET CE N'EST PAS CE LOT QUI LE DIT** : les
+points d'armée sont l'une des grandeurs que la courbe ne met PAS à l'échelle,
+écrit dans `pointsEngages`. Améliorer ne fait jamais sortir une composition de
+son budget.
+⚠⚠ **LE BOOT SANS TÊTE A TROUVÉ TROIS DÉFAUTS, DONT UN ANTÉRIEUR AU LOT ET
+REPRODUIT SUR `main`.** `rafraichir` réécrivait `#chantier-selection-detail` avec
+`detailDuBatiment(etat, selection)` **sans regarder `terrainSelection`** : une
+pièce de garnison se voyait décrite par le bâtiment de MÊME INDICE. Mesuré dans
+un worktree bâti sur `main` : un Mur de défense de niveau 1 affichait
+**« Niv. 12 »** — le niveau du Chantier, premier de la disposition — au lieu de
+« Niv. 1 · 5 pts ».
+⚠⚠ **ET `selectionner` ÉCRIVAIT DÉJÀ LA BONNE LIGNE — C'EST CE QUI L'A CACHÉ.**
+La bonne valeur s'affichait, puis `rafraichir` passait dans les cent
+millisecondes et l'écrasait. **Deux écrivains du même élément qui ne se
+connaissent pas**, la faute exacte qu'`avis()` a déjà corrigée. Le défaut date du
+jour où la bande Défense est devenue éditable ; c'est ce lot qui le rend visible,
+en donnant enfin au joueur une raison de lire ce niveau-là.
+⚠⚠ **LES DEUX AUTRES DÉFAUTS, CE LOT LES AVAIT INTRODUITS LUI-MÊME**, et les deux
+étaient invisibles tant qu'`agir` valait `null` : la sélection était lâchée après
+N'IMPORTE QUELLE action — donc le joueur perdait son unité de vue au moment même
+où il venait de la monter —, et l'`<em>` interpolait le niveau DANS le gabarit,
+si bien qu'une barre sans unité choisie annonçait « Améliorer **vers niv.** ».
+⚠ **ET LE CORRECTIF RETIRE UN CAS PARTICULIER AU LIEU D'EN AJOUTER UN.**
+`executerAction` testait `nom === 'demolir'` ; `retireLaPiece: true` entre dans
+les DEUX tables, sur le modèle exact de `cible`, et les deux écrans lisent le
+champ.
+⚠ **RELEVÉ FINAL AU DOIGT DANS CHROMIUM** : Défense « Niv. 1 · 5 pts » → « Niv. 2 »
+→ « Niv. 3 », bandeau 1,0 → 2,0 → 3,0 ; Offense « niveau 1 » → « niveau 2 »,
+sélection conservée, `title` suivi. Zéro erreur de page.
+⚠⚠ **M1 — CE QU'UNE MONTÉE DONNE ET CE QU'ELLE COÛTE, RELEVÉ ET NON RÉGLÉ.**
+Gain : **×1,10 au niveau 2, ×2,358 au 10, ×106,7 au 50**. Coût cumulé d'un
+Voltigeur jusqu'au niveau 10 : **32 639 de scorie en offense, 16 319 en défense**.
+⚠ **La marche est haute très tôt** — 32 639 quand une base neuve stocke 50 — et
+**aucune valeur n'a été touchée** : c'est la courbe d'`ECONOMIE_NIVEAU` sur
+l'ancre du 28/08. L'arbitrage revient à Ethan.
+⚠⚠ **M2 — LA SAUVEGARDE GRANDIT DE QUATRE OCTETS, ET LA RÉSERVE DE RÉPARATION
+SUIT.** Quatre Meutes portées de 1 à 10 : **+4 octets** (quatre `"niveau":1`
+devenus `"niveau":10`), aller-retour intact, et le plafond de réserve passe de
+**468 000 ticks (13 h) à 792 000 (22 h)** — la règle « 12 h plus une heure par
+niveau d'armée » du lot RÉSERVE, enfin atteignable. **Conséquence, pas décision.**
+⚠⚠ **VINGT FALSIFICATIONS, VINGT CHUTES — ET LA PREMIÈRE QUI « NE MORDAIT PAS »
+ÉTAIT LA MIENNE QUI ÉTAIT FAUSSE.** Elle remplaçait le texte par lui-même ;
+reprise pour de bon, elle fait tomber deux tests. **Une falsification qui ne mord
+pas se vérifie avant d'être crue** — troisième fois.
+⚠ **UNE GARDE A COMPTÉ SA PROPRE DÉFINITION**, cinquième fois du dépôt : celle
+qui exige un seul appel de `detailDuBatiment` trouvait
+`export function detailDuBatiment(`. Elle retire la déclaration avant de compter.
+⚠ **UN MONTAGE A ÉCRIT UNE COORDONNÉE, ET IL EST TOMBÉ** — cinquième fois. Il
+posait en (3, 3) ; sur la graine du montage, cette case porte un obstacle. Les
+quatre poses DEMANDENT leur case au moteur. ⚠ Et un autre vidait la scorie pour
+voir un manque sur un Mur de défense, **qui se paie en QUARTZ** : il vide les trois.
+⚠⚠ **UN PIÈGE POSÉ EXPRÈS LE 31/08 A FONCTIONNÉ.** `offense — le compteur de
+points n'est pas dans le bouton Améliorer` portait `assert.equal(…agir, null,
+'améliorer a gagné un moteur : vérifier ce que le bouton annonce désormais')`.
+Elle est tombée au lot qui branche le moteur, et pas avant. Elle garde désormais
+la moitié restée invérifiée : l'`<em>` écrit `niveau + 1`, pas le niveau courant.
+⚠ **CINQ TESTS ENTRENT — TROIS DANS `state.test.js`, UN PAR ÉCRAN — ET LE COMPTE
+PASSE DE 969 À 974.** Trois gardes existantes sont RESSERRÉES sans perdre une
+assertion : la table des terrains, la barre contextuelle de l'Offense, et l'`<em>`
+du bouton Améliorer.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Aucun champ n'entre : le champ
+`niveau` est dans la pièce depuis la v7, et c'est exactement ce que le lot
+BASES-0 avait payé d'avance.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/` — pas un octet de `art/sprites/` ne change.
+
+**Auparavant, après le lot CONTOUR-ET-ÉTIQUETTES :**
+`npm test` → 969 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 345 467 octets**, 0 référence externe.
 ⚠⚠ **TROIS RETOURS D'ETHAN SUR CAPTURES, ET LE BOOT SANS TÊTE EN A TROUVÉ UN
 QUATRIÈME QUE PERSONNE N'AVAIT DEMANDÉ.** 03/09 au soir : « le halo doit coller

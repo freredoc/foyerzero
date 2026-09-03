@@ -34,6 +34,7 @@ import {
   pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
+  problemesDeLAmeliorationDEffectif, ameliorerEffectif,
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
@@ -263,7 +264,21 @@ export function messageDeDestinationDUnite(nom) {
 
 export const ACTIONS_ARMEE = {
   reparer: { bouton: 'offense-reparer', libelle: 'Réparer', agir: null },
-  ameliorer: { bouton: 'offense-ameliorer', libelle: 'Améliorer', agir: null },
+  // ⚠⚠ AMÉLIORER A UN MOTEUR DEPUIS LE 03/09, ET LE `null` QUI TENAIT ICI EST
+  // PARTI AVEC. Il disait vrai : le COÛT existait depuis le 28/08 et rien dans
+  // `sim/` ne montait une pièce d'un niveau, si bien que `poserEffectif`
+  // écrivait `niveau: 1` et que personne ne pouvait le relever. Ethan a arbitré
+  // le geste le 03/09 — la pièce se monte une par une, comme un bâtiment.
+  //
+  // ⚠ ET IL N'A PAS DE CHAMP `cible`. Améliorer désigne la pièce qu'on touche,
+  // en UN toucher, exactement comme au Chantier ; seul `deplacer` en demande
+  // deux, et c'est son champ `cible` qui le dit, pas son nom.
+  ameliorer: {
+    bouton: 'offense-ameliorer',
+    libelle: 'Améliorer',
+    problemes: (etat, index) => problemesDeLAmeliorationDEffectif(etat, 'armee', index),
+    agir: (etat, index) => ameliorerEffectif(etat, 'armee', index),
+  },
   deplacer: {
     bouton: 'offense-deplacer',
     libelle: 'Déplacer',
@@ -276,6 +291,12 @@ export const ACTIONS_ARMEE = {
   retirer: {
     bouton: 'offense-retirer',
     libelle: 'Retirer',
+    // ⚠ LA TABLE DIT QUE CETTE ACTION FAIT DISPARAÎTRE SA CIBLE. `appliquerAction`
+    // lâchait la sélection APRÈS N'IMPORTE QUELLE action ; c'était sans effet
+    // tant que « Retirer » était la seule à en avoir une, et faux dès
+    // qu'« Améliorer » en a gagné une — le joueur perdait son unité de vue au
+    // moment précis où il venait de la monter d'un niveau.
+    retireLaPiece: true,
     problemes: () => [],
     agir: (etat, index) => retirerEffectif(etat, 'armee', index),
   },
@@ -627,7 +648,7 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
       return;
     }
     action.agir(etatCourant, index);
-    selection = null;
+    selection = action.retireLaPiece === true ? null : index;
     peindre(etatCourant);
     if (apresPose) apresPose();
   }
@@ -859,8 +880,14 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     //
     // ⚠ LA GRANDEUR N'EST PAS PERDUE : le bandeau du haut la porte dans les
     // trois contextes depuis le 28/08, et c'est lui qui la nomme (« PTS OFF. »).
-    $('offense-ameliorer-cible').textContent = ACTIONS_ARMEE.ameliorer.agir === null
-      ? '' : `vers niv. ${piece === null ? '' : piece.niveau + 1}`;
+    // ⚠ SANS SÉLECTION, LA LIGNE EST VIDE — PAS « vers niv. » TOUT SEUL. Le
+    // niveau visé était interpolé à l'intérieur du gabarit, si bien qu'une
+    // barre sans unité choisie annonçait une demi-phrase. Invisible tant
+    // qu'`agir` valait `null` et que la ligne restait vide en toute
+    // circonstance ; vu au boot sans tête dès que le moteur a été branché.
+    $('offense-ameliorer-cible').textContent
+      = (ACTIONS_ARMEE.ameliorer.agir === null || piece === null)
+        ? '' : `vers niv. ${piece.niveau + 1}`;
     marquerBoutonsAction();
   }
 
