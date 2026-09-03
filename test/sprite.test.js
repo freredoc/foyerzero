@@ -1062,6 +1062,148 @@ const BATIMENTS_ET_PROPRIETAIRE = [
   ...Object.keys(BATIMENTS).map((id) => ({ id, proprietaire: 'ouvrage' })),
 ];
 
+// ---------------------------------------------------------------------------
+// Les entrées de la chaîne — lot ENTRÉES, 03/09
+// ---------------------------------------------------------------------------
+
+const SOURCES = join(RACINE, 'art', 'sources');
+const ATTENTE = join(RACINE, 'art', 'sourcesstandby');
+
+/** Les fichiers à la RACINE d'un dossier — jamais récursif, comme `entrees.py`. */
+function fichiersDe(dossier) {
+  if (!existsSync(dossier)) return [];
+  return readdirSync(dossier, { withFileTypes: true })
+    .filter((e) => e.isFile() && !e.name.startsWith('.'))
+    .map((e) => e.name)
+    .sort();
+}
+
+/**
+ * ⚠⚠ LE MOTIF S'ASSEMBLE, IL NE S'ÉCRIT PAS. Écrit en clair, la garde plus bas
+ * se trouvait ELLE-MÊME dans son propre balayage — la faute que ce dépôt
+ * raconte déjà pour `viewport-fit=cover` et pour `MENTION_SATURE` : une garde
+ * qui lit ce qu'on a écrit à son sujet ne garde rien. Même remède que le
+ * remède que la garde des sous-tests imbriqués de `documentation.test.js` — dont
+ * le jeton n'est pas écrit ici non plus, elle le refuserait. Il est au module
+ * parce que TROIS endroits le nomment : le titre, le message d'aide et le
+ * balayage.
+ */
+const MOTIF = `--decl${'arer'}`;
+
+function declaration() {
+  const chemin = join(RACINE, 'art', 'sources-declarees.json');
+  assert.ok(existsSync(chemin),
+    `art/sources-declarees.json est absent — le produire une fois par `
+    + `« python3 tools/entrees.py ${MOTIF} », puis le commiter.`);
+  return JSON.parse(readFileSync(chemin, 'utf8'));
+}
+
+test('entrées — tout fichier d\'`art/sources/` est CLASSÉ, consommé ou dormant', () => {
+  // ⚠⚠ POURQUOI CETTE MOITIÉ EST EN JS ALORS QUE LA GARDE EST EN PYTHON.
+  // `tools/entrees.py --verifier` rejoue toute la chaîne pour savoir ce qu'elle
+  // OUVRE : c'est un fait d'exécution, il coûte deux minutes, et il ne tourne
+  // donc qu'aux lots qui touchent à l'art. Mais la question « ce fichier neuf
+  // a-t-il été classé ? » ne demande aucune trace — elle se lit sur le disque.
+  // Elle tourne donc à CHAQUE `npm run check`, et c'est elle qui empêche
+  // `art/sources/` de se remettre à pourrir entre deux lots d'art.
+  const d = declaration();
+  const consommees = d.consommees ?? [];
+  const dormantes = d.dormantes ?? [];
+  const presentes = fichiersDe(SOURCES);
+
+  // ⚠ D'ABORD : LE MONTAGE MESURE-T-IL QUELQUE CHOSE ? Deux listes vides
+  // couvriraient un dossier vide sans rien prouver, et la garde serait verte
+  // sur une déclaration effacée.
+  assert.ok(presentes.length > 100, `${presentes.length} fichiers dans art/sources/`);
+  assert.ok(consommees.length > 50, `${consommees.length} consommées déclarées : trop peu pour être vrai`);
+  assert.ok(dormantes.length > 50, `${dormantes.length} dormantes déclarées : trop peu pour être vrai`);
+
+  const doublons = consommees.filter((n) => dormantes.includes(n));
+  assert.deepEqual(doublons, [], 'un fichier ne peut pas être à la fois consommé et dormant');
+
+  const classees = [...new Set([...consommees, ...dormantes])].sort();
+  assert.deepEqual(classees, presentes,
+    'art/sources/ et sa déclaration ont divergé — une image neuve se CLASSE : '
+    + 'la consommer par un lot qui le dit, ou la laisser dans art/sourcesstandby/. '
+    + `Puis « python3 tools/entrees.py ${MOTIF} ».`);
+});
+
+test('entrées — le dossier d\'attente est dehors, et rien ne le déclare', () => {
+  assert.ok(existsSync(ATTENTE), 'art/sourcesstandby/ a disparu');
+  assert.ok(existsSync(join(ATTENTE, 'README.md')),
+    'le dossier d\'attente doit dire en une phrase qu\'aucun outil ne le lit');
+
+  // ⚠⚠ IL EST À CÔTÉ DE `art/sources/`, PAS DEDANS. Un `art/sources/attente/`
+  // serait balayé par le premier `os.listdir` qu'on ajouterait sans y penser —
+  // le mécanisme exact du défaut que ce lot désarme dans `tools/tourelles.py`.
+  assert.ok(!existsSync(join(SOURCES, 'attente')) && !existsSync(join(SOURCES, 'standby')),
+    'le dossier d\'attente est passé DANS art/sources/ : il y sera balayé un jour');
+
+  const d = declaration();
+  const enAttente = fichiersDe(ATTENTE);
+  assert.ok(enAttente.length > 1, `${enAttente.length} fichier(s) en attente : le balayage ne trouve rien`);
+  const declares = new Set([...(d.consommees ?? []), ...(d.dormantes ?? [])]);
+  const intrus = enAttente.filter((n) => declares.has(n));
+  assert.deepEqual(intrus, [],
+    'un fichier en attente est déclaré comme une source : il a été déplacé sans son lot');
+
+  // Et aucun outil ne nomme ce dossier, sauf celui qui le surveille.
+  const outils = readdirSync(join(RACINE, 'tools')).filter((f) => f.endsWith('.py') || f.endsWith('.js'));
+  // ⚠ DEUX OUTILS LE NOMMENT, ET AUCUN NE LE LIT. `entrees.py` le surveille ;
+  // `tourelles.py` y renvoie dans son message de refus, quand deux fichiers
+  // répondent au même indice de planche. Un TROISIÈME nom fait tomber la garde,
+  // pour qu'on vienne dire pourquoi plutôt que de laisser la liste vieillir.
+  const nomment = outils.filter((f) => sansCommentaires(
+    readFileSync(join(RACINE, 'tools', f), 'utf8'),
+  ).includes('sourcesstandby'));
+  assert.deepEqual(nomment, ['entrees.py', 'tourelles.py'],
+    'un outil de la chaîne nomme le dossier d\'attente hors de sa garde');
+});
+
+test(`entrées — \`${MOTIF}\` n'est jamais appelé par le chemin normal`, () => {
+  // ⚠⚠ C'EST LA MOITIÉ QUI REND TOUTE LA GARDE HONNÊTE, ET ELLE A DÉJÀ COÛTÉ UN
+  // LOT AILLEURS. Une garde qui RÉGÉNÈRE la déclaration puis la compare à ce
+  // qu'elle vient d'écrire ne peut pas échouer. La déclaration est une
+  // INTENTION commitée ; la trace est un FAIT d'exécution. Deux sources
+  // indépendantes, sinon rien.
+  const suspects = [
+    ['tools/verifier.py', readFileSync(join(RACINE, 'tools', 'verifier.py'), 'utf8')],
+    ['package.json', readFileSync(join(RACINE, 'package.json'), 'utf8')],
+    ...readdirSync(join(RACINE, 'test'))
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => [`test/${f}`, readFileSync(join(RACINE, 'test', f), 'utf8')]),
+  ];
+  for (const [nom, source] of suspects) {
+    assert.ok(!sansCommentaires(source).includes(MOTIF),
+      `${nom} appelle « ${MOTIF} » : la garde régénérerait ce qu'elle compare`);
+  }
+
+  // ⚠ FALSIFIABLE : le motif reconnaît bien la faute qu'il cherche, et le
+  // décommentage ne vide pas les fichiers qu'il balaie.
+  assert.ok(sansCommentaires(`jouer('entrees', ['${MOTIF}'])`).includes(MOTIF),
+    'le motif ne reconnaît pas un appel qu\'il doit refuser');
+  assert.ok(suspects.every(([, s]) => sansCommentaires(s).length > 100),
+    'le décommentage a mangé un fichier balayé');
+
+  // Et l'outil porte bien les DEUX modes : un mode de déclaration disparu rendrait la
+  // déclaration irreproductible sans que rien ne tombe.
+  const entrees = readFileSync(join(RACINE, 'tools', 'entrees.py'), 'utf8');
+  for (const mode of [MOTIF, '--verifier']) {
+    assert.ok(entrees.includes(mode), `tools/entrees.py a perdu le mode ${mode}`);
+  }
+});
+
+test('entrées — la garde est le DERNIER maillon de la chaîne du vérificateur', () => {
+  const source = readFileSync(join(RACINE, 'tools', 'verifier.py'), 'utf8');
+  const bloc = source.match(/^CHAINE = \[$([\s\S]*?)^\]$/m);
+  assert.ok(bloc !== null, '`CHAINE` est introuvable dans tools/verifier.py');
+  const maillons = [...bloc[1].matchAll(/^\s*\('([a-z_]+)',/gm)].map((m) => m[1]);
+  assert.ok(maillons.length > 10, `${maillons.length} maillons lus : le parse ne trouve rien`);
+  assert.equal(maillons.at(-1), 'entrees',
+    'la garde des entrées doit passer en dernier — elle observe ce que les autres ouvrent');
+  assert.equal(new Set(maillons).size, maillons.length, 'un outil est deux fois dans CHAINE');
+});
+
 test('T8 étendue — une structure se dessine à l\'identique sur l\'écran Chantier et au combat', () => {
   // ⚠ T8 D'`arsenal.test.js` NE COUVRAIT QUE LES QUATORZE UNITÉS. Le même
   // argument vaut mot pour mot pour les défenses et les bâtiments : sans quoi le

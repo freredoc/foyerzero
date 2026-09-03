@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.70.0 · build 71.
+Dernière révision : **03/09/2026**, version 0.70.1 · build 72.
 
 ---
 
@@ -41,8 +41,69 @@ Dernière révision : **03/09/2026**, version 0.70.0 · build 71.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot RETOURS-DU-03), à confronter :**
-`npm test` → **935 pass / 0 fail**, `gradle :maj:test` → **32 tests / 0 fail**,
+**Référence au 03/09/2026 (après le lot ENTRÉES), à confronter :**
+`npm test` → **939 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**1 592 440 octets**, 0 référence externe.
+⚠⚠ **LE HTML EST IDENTIQUE À L'OCTET, SHA-256 COMPRIS, DONC LA VERSION N'A PAS
+ÉTÉ BUMPÉE** — `6f6e0cba…67e4` des deux côtés, et `src/` n'est pas touché. Le
+brief demandait un bump ; la §5 de ce fichier est plus forte et dit l'inverse :
+un lot qui laisse le livrable identique pousserait une mise à jour aux appareils
+pour rien. Même cas que CHAÎNE-VÉRIFIÉE. **Version toujours 0.70.1 · build 72.**
+⚠⚠ **UN PIÈGE ARMÉ A ÉTÉ DÉSARMÉ, ET IL ÉTAIT RÉEL.** `tools/tourelles.py`
+cherchait ses seize planches par `os.listdir` et rendait le PREMIER fichier
+commençant par « T01_ », « T02_ »… C'était **le seul endroit de la chaîne où
+déposer un fichier dans `art/sources/` changeait le résultat en silence** :
+l'ordre d'`os.listdir` n'est garanti ni alphabétique ni stable. **Mesuré, pas
+supposé** : un `T01_bidon.png` déposé à côté, et `listdir` rendait
+**`T01_bidon.png`** — une tourelle sur douze aurait changé sans lever. Une table
+`PLANCHES` nomme désormais les seize, et un homonyme fait **LEVER** au lieu de
+choisir, en nommant les deux fichiers.
+⚠⚠ **`art/sources/` EST CLASSÉ : 83 CONSOMMÉES, 82 DORMANTES, 165 FICHIERS.**
+Presque la moitié du dossier dort — les `P2.x` remplacés par les `P2_x`, `M3` et
+`M4` par leurs `_v2`, les `_ancien_connecte_ECARTE`, les `_original`, les onze
+planches `P11.x` d'interface jamais câblées, les dix tourelles de blindé de
+l'Ouvrage retirées au lot PRODUCTION. **Rien ne distinguait une source vive
+d'une source morte en la regardant.**
+⚠⚠ **LA DÉCLARATION EST UNE INTENTION, LA TRACE EST UN FAIT, ET LES DEUX NE SE
+CONFONDENT JAMAIS.** `art/sources-declarees.json` est commité et produit À LA
+MAIN par `python3 tools/entrees.py --declarer` ; `--verifier` rejoue la chaîne
+sous un mouchard qui enveloppe `PIL.Image.open` et compare. **Une garde qui
+régénère ce qu'elle compare ne peut pas échouer** — un test balaie `verifier.py`,
+`package.json` et tout `test/` pour que le mode de déclaration n'y soit jamais
+appelé.
+⚠ **LE MOUCHARD PASSE PAR `sitecustomize`, PAS PAR LES OUTILS.** Python l'importe
+au démarrage de chaque processus : les treize outils n'ont pas une ligne à
+changer, et surtout **une garde qui leur demanderait de se déclarer eux-mêmes ne
+verrait pas celui qui oublie de le faire**.
+⚠⚠ **TROIS ASSERTIONS, ET LES QUATRE ONT ÉTÉ VUES ROUGIR POUR DE BON.** (1) la
+trace vaut les `consommees` — falsifiée en retirant `M1_socles_j_tourelles_3.png`
+de la déclaration, « OUVERTE ET NON DÉCLARÉE » ; (2) tout fichier d'`art/sources/`
+est classé — falsifiée avec un PNG bidon, « NI CONSOMMÉE NI DORMANTE » ; (3) rien
+de l'attente n'est lu — falsifiée en faisant ouvrir `01_milan_joueur.png` par
+`bords.py`, « LUE DANS L'ATTENTE ». Plus le piège du §1, mesuré ci-dessus.
+⚠⚠ **L'ASSERTION 2 TOURNE AUSSI EN JS, À CHAQUE `npm run check`.** Elle ne
+demande aucune trace : elle se lit sur le disque. La garde Python coûte deux
+minutes et ne tourne qu'aux lots d'art ; celle-ci empêche `art/sources/` de se
+remettre à pourrir ENTRE deux lots d'art.
+⚠ **LE VÉRIFICATEUR PASSE DE 185,2 s À 291,9 s**, `entrees` rejouant la chaîne
+une seconde fois. Moins qu'un doublement : la moitié de son temps est la
+comparaison des 931 fichiers, qu'`entrees` ne refait pas.
+⚠⚠ **LES COMPTES DU BRIEF — 84 / 80 / 164 — SE RÉCONCILIENT EXACTEMENT, ET
+L'ÉCART EST DE PÉRIMÈTRE.** `164 = 165 − S11_UI_CONTENU.txt`, qui n'est pas une
+image ; `84 = 83 + icone_appli.png`, que `tools/icone.py` LIT mais qui n'est pas
+dans `CHAINE` — il écrit dans `android/` ; `80 = 164 − 84`. Le périmètre retenu
+est plus large : **tous** les fichiers se classent, et `CHAINE` fait foi.
+⚠ **« DORMANTE » NE VEUT DONC PAS DIRE « MORTE »**, et `icone_appli.png` en est
+la preuve. Aucune source n'est supprimée sur la foi de ce classement — le lot
+CLASSE, il ne juge pas.
+⚠ **`python3 tools/verifier.py` → 931 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 291,9 s. **Zéro sprite réécrit** : c'était la
+borne du lot, et elle se lit dans ces quatre nombres.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le lot ne touche ni l'état, ni
+la sauvegarde, ni une règle de jeu, ni un pixel : c'est de l'outillage.
+
+**Auparavant, après le lot RETOURS-DU-03 :**
+`npm test` → 935 pass / 0 fail, `gradle :maj:test` → **32 tests / 0 fail**,
 `npm run build` → `dist/index.html`, **1 592 440 octets**, 0 référence externe.
 Coût **+1 178 octets**, aucune image n'entre — **16 `data:image` avant, 16
 après**. Marge T10 **57 560 octets, 3,49 %**, borne inchangée à 1 650 000.
@@ -1449,12 +1510,14 @@ test/                   48 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  24 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 02/09
-                        au lot PIXELS, fichier par fichier (hors `__pycache__`,
-                        qui est ignoré par git). Le vingt-quatrième est
-                        `portes.py`, qui porte les seuils de quantification et
-                        n'importe RIEN, pour que le couseur d'atlas puisse les
-                        lire sans traîner `scipy`.
+tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
+                        au lot ENTRÉES, fichier par fichier (hors `__pycache__`,
+                        qui est ignoré par git). Le vingt-cinquième est
+                        `entrees.py`, qui dit ce que la chaîne LIT dans
+                        `art/sources/` ; le vingt-quatrième est `portes.py`, qui
+                        porte les seuils de quantification et n'importe RIEN,
+                        pour que le couseur d'atlas puisse les lire sans traîner
+                        `scipy`.
                         ⚠ CETTE LIGNE A ANNONCÉ TROIS, PUIS SEPT, PUIS HUIT, PUIS
                         DIX-SEPT, et le dix-sept était déjà faux de deux quand il a
                         été écrit : le disque en portait dix-neuf. La chaîne de
@@ -1507,6 +1570,31 @@ art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à
                         ⚠ IL NE S'AMPUTE JAMAIS, et c'est ce qui le distingue
                           d'`art/sprites/` : rien ici n'est un produit, tout y
                           est un original. Un lot n'y AJOUTE que.
+                        ⚠⚠ ET IL EST CLASSÉ DEPUIS LE 03/09, LOT ENTRÉES. Mesuré
+                          en instrumentant `PIL.Image.open` : la chaîne en ouvre
+                          **83**, elle en ignore **82**. Le partage est commité
+                          dans `art/sources-declarees.json`, et
+                          `tools/entrees.py --verifier` le confronte à la trace
+                          d'une exécution RÉELLE. Un fichier neuf non classé
+                          fait rougir — le vérificateur ET `npm run check`.
+                        ⚠ « DORMANTE » NE VEUT PAS DIRE « MORTE » : `icone.py`
+                          lit `icone_appli.png` et n'est pas dans `CHAINE`. Rien
+                          n'est supprimé sur la foi de ce classement.
+art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images déposées
+                        par Ethan le 03/09, plus son `README.md`.
+                        ⚠⚠ AUCUN OUTIL NE LE LIT, et une garde le mesure : la
+                          troisième assertion d'`entrees.py` tombe si la chaîne
+                          y ouvre quoi que ce soit. Ne pas déplacer une image
+                          dans `art/sources/` sans un lot qui le dise et qui
+                          mette à jour `art/sources-declarees.json`.
+                        ⚠⚠ IL EST À CÔTÉ DE `art/sources/`, JAMAIS DEDANS. Un
+                          `art/sources/attente/` serait balayé par le premier
+                          `os.listdir` qu'on ajouterait sans y penser — le
+                          mécanisme EXACT du défaut de `tourelles.py` désarmé le
+                          même jour. ⚠ Et son nom a `art/sources` pour PRÉFIXE :
+                          trier les chemins à la sous-chaîne rangerait chaque
+                          image en attente parmi les sources. `entrees.py`
+                          compare le dossier PARENT, jamais le texte.
 art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grille
                         et 970 fichiers, recomptés le 02/09 au lot PIXELS, plus
                         SEIZE atlas `.webp` à la racine, DEUX fichiers générés —
