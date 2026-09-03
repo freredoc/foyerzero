@@ -1800,14 +1800,31 @@ test('terrain — l\'emprise des dix dessins est celle du dépôt, aux deux gril
   }
 });
 
-test('terrain — trois dessins sur cinq sont des miroirs, et les deux autres n\'en sont pas', () => {
-  // ⚠⚠ LES DEUX MOITIÉS COMPTENT AUTANT L'UNE QUE L'AUTRE. `champ_quartz`,
-  // `champ_scorie` et `obs_infanterie` n'ont qu'une planche saine : leur variante
-  // `b` est le miroir horizontal EXACT de `a`, comme dans l'art commité avant ce
-  // lot. `obs_les_deux` et `obs_vehicule` ont deux planches et deux vrais
-  // dessins — si l'un d'eux devenait un miroir, c'est qu'une planche aurait été
-  // perdue de la table de `tools/terrain.py` sans que personne le voie : le
-  // sprite existerait, l'atlas se coudrait, l'écran dessinerait.
+test('terrain — le miroir suit la TABLE de l\'outil, dans les deux sens', () => {
+  // ⚠⚠ CETTE GARDE A CHANGÉ DE CIBLE LE 03/09, ET ELLE S'EST RESSERRÉE. Elle
+  // écrivait à la main « ces trois-là sont des miroirs, ces deux-là non » —
+  // vrai des sept planches d'avant, faux dès qu'Ethan en livre cinq neuves, une
+  // par sprite. Une garde qui recopie l'état du jour ne peut que mentir au
+  // lot suivant ; celle-ci lit désormais la TABLE de `tools/terrain.py` et
+  // exige que le dépôt lui corresponde.
+  //
+  // ⚠⚠ ET L'INTENTION D'ORIGINE EST INTACTE, C'EST MÊME LA MOITIÉ QUI COMPTE :
+  // si une planche disparaissait de la table sans que personne le voie, le
+  // sprite existerait quand même, l'atlas se coudrait, l'écran dessinerait — et
+  // seule cette égalité tomberait. Elle est falsifiable DANS LES DEUX SENS :
+  // déclarer deux planches là où le sprite est un miroir la fait tomber, et
+  // une seule là où les deux dessins diffèrent aussi.
+  const outil = readFileSync(join(RACINE, 'tools', 'terrain.py'), 'utf8');
+  const bloc = outil.slice(outil.indexOf('PLANCHES = {'), outil.indexOf('}', outil.indexOf('PLANCHES = {')));
+  const table = new Map();
+  for (const ligne of bloc.split('\n')) {
+    const m = ligne.match(/'([a-z_]+)':\s*\[([^\]]*)\]/);
+    if (m !== null) table.set(m[1], (m[2].match(/'/g) ?? []).length / 2);
+  }
+  assert.equal(table.size, 5, `la table de l'outil porte ${table.size} sprites au lieu de cinq`);
+  for (const [nom, n] of table) {
+    assert.ok(n === 1 || n === 2, `${nom} déclare ${n} planches : une ou deux, jamais autre chose`);
+  }
   const miroirExact = (nom) => {
     const a = decoderRgba(join(TERRAIN_128, `${nom}_a.png`));
     const b = decoderRgba(join(TERRAIN_128, `${nom}_b.png`));
@@ -1820,13 +1837,31 @@ test('terrain — trois dessins sur cinq sont des miroirs, et les deux autres n\
     }
     return true;
   };
-  for (const nom of ['champ_quartz', 'champ_scorie', 'obs_infanterie']) {
-    assert.ok(miroirExact(nom), `${nom}_b n'est plus le miroir exact de ${nom}_a`);
+  // ⚠ ET LA TABLE COUVRE EXACTEMENT LES CINQ DESSINS DU DÉPÔT, ni plus ni moins :
+  // un sprite produit par personne se lirait « MANQUANT » chez le vérificateur,
+  // un sprite de plus se coudrait dans l'atlas sans qu'aucun écran le demande.
+  assert.deepEqual([...table.keys()].sort(),
+    [...new Set(DESSINS_TERRAIN.map((n) => n.replace(/_[ab]$/, '')))].sort());
+
+  for (const [nom, planches] of table) {
+    if (planches === 1) {
+      assert.ok(miroirExact(nom),
+        `${nom} n'a qu'une planche dans la table, mais ${nom}_b n'est pas le miroir de ${nom}_a`);
+    } else {
+      assert.ok(!miroirExact(nom),
+        `${nom}_b est devenu le miroir de ${nom}_a : sa seconde planche a disparu de la table`);
+    }
   }
-  for (const nom of ['obs_les_deux', 'obs_vehicule']) {
-    assert.ok(!miroirExact(nom),
-      `${nom}_b est devenu le miroir de ${nom}_a : sa seconde planche a disparu de la table`);
-  }
+
+  // ⚠⚠ ET LES CINQ SONT DES MIROIRS AUJOURD'HUI — C'EST UNE PERTE, ET ELLE SE
+  // DÉCLARE. `obs_les_deux` et `obs_vehicule` portaient DEUX vrais dessins
+  // jusqu'au 03/09 ; Ethan a livré une planche par sprite, donc leur `b` est
+  // devenu un miroir. Mélanger sa planche neuve avec l'ancien `_b` aurait mis
+  // deux modèles de rendu dans la même paire, ce qui se voit à l'écran. Le jour
+  // où il envoie les seconds dessins, la ligne de la table en porte deux et
+  // cette assertion-ci tombe — c'est ce qu'on lui demande.
+  assert.equal([...table.values()].filter((n) => n === 1).length, 5,
+    'un sprite de terrain a retrouvé une seconde planche : retirer cette assertion');
 });
 
 test('terrain — le détourage ne laisse pas un pixel de clé, et la grille 32 est soldée', () => {
@@ -1868,4 +1903,157 @@ test('terrain — le détourage ne laisse pas un pixel de clé, et la grille 32 
   // MANQUANT. Les huit dalles restent, et restent déclarées.
   const restants = readdirSync(join(SPRITES, 'terrain', '32')).filter((f) => f.endsWith('.png'));
   assert.deepEqual(restants.sort(), DALLES_TERRAIN.map((n) => `${n}.png`).sort());
+});
+
+/**
+ * CIE L*a*b* d'un RVB 8 bits — sRGB, illuminant D65.
+ *
+ * ⚠ ON NE COMPARE PAS DES COULEURS EN RVB. Deux teintes à distance euclidienne
+ * égale dans le cube RVB ne se ressemblent pas également à l'œil : le vert y
+ * pèse trois fois le bleu. La fiche de style décrit ce qu'on VOIT, donc la
+ * garde qui la confronte à l'art doit mesurer dans un espace perceptuel.
+ */
+function versLab([r, v, b]) {
+  const lin = (c) => {
+    const x = c / 255;
+    return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  const [R, V, B] = [lin(r), lin(v), lin(b)];
+  const X = (R * 0.4124 + V * 0.3576 + B * 0.1805) / 0.95047;
+  const Y = R * 0.2126 + V * 0.7152 + B * 0.0722;
+  const Z = (R * 0.0193 + V * 0.1192 + B * 0.9505) / 1.08883;
+  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const [fx, fy, fz] = [f(X), f(Y), f(Z)];
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+/** La part du sujet, en pour-cent, qui tombe à moins de `seuil` d'une des teintes. */
+function partProche(chemin, teintes, seuil = 20) {
+  const im = decoderRgba(chemin);
+  const cibles = teintes.map(versLab);
+  let sujet = 0;
+  let proches = 0;
+  for (let i = 0; i < im.pixels.length; i += 4) {
+    if (im.pixels[i + 3] < 128) continue;
+    sujet += 1;
+    const l = versLab([im.pixels[i], im.pixels[i + 1], im.pixels[i + 2]]);
+    for (const c of cibles) {
+      const d = Math.hypot(l[0] - c[0], l[1] - c[1], l[2] - c[2]);
+      if (d < seuil) { proches += 1; break; }
+    }
+  }
+  return (100 * proches) / sujet;
+}
+
+test('terrain — le quartz et la scorie retrouvent les teintes que la fiche leur RÉSERVE', () => {
+  // ⚠⚠ CETTE GARDE REFERME UN ARBITRAGE RESTÉ OUVERT DEPUIS LE LOT
+  // MOULINETTE-TERRAIN. Ce jour-là, la chaîne a cessé de REPEINDRE les sprites
+  // sur les quatorze teintes de `cond.py`, et les deux ressources ont pris la
+  // couleur de leurs planches : le quartz est ressorti VIOLET et la scorie
+  // NOIRE. `FICHE-STYLE.md` leur réservait `#9FB3C5`·`#C1CEDA` et
+  // `#382E47`·`#4E4160` ; le rapport de ce lot-là a écrit que « ces teintes
+  // décrivaient le rendu de l'ancienne moulinette, pas le dessin d'Ethan », et
+  // a laissé la question à Ethan. Ses planches du 03/09 au soir répondent : le
+  // quartz est un bleu-gris pâle, la scorie un violet sombre. **C'est la fiche
+  // qui avait raison, et c'est l'art qui la rejoint.**
+  //
+  // ⚠⚠ LES TEINTES SE LISENT DANS LA FICHE, ELLES NE SE RETAPENT PAS. Une
+  // transcription qui ne se confronte pas à sa source est une copie qui
+  // vieillit — c'est la règle que la garde de palette de `banc.test.js` tient
+  // déjà. La fiche donne une LIGNE par champ, et sa forme porte la distinction :
+  // avant la virgule le CORPS du dessin, après l'accent (« creux », « braises »).
+  const fiche = readFileSync(join(RACINE, 'FICHE-STYLE.md'), 'utf8');
+  const corps = new Map();
+  for (const ligne of fiche.split('\n')) {
+    const nom = ligne.match(/`(champ_\w+)_a`/);
+    if (nom === null) continue;
+    const cellule = ligne.split('|')[3];
+    const hexs = cellule.split(',')[0].match(/#[0-9A-Fa-f]{6}/g) ?? [];
+    corps.set(nom[1], hexs.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))));
+  }
+  assert.deepEqual([...corps.keys()].sort(), ['champ_quartz', 'champ_scorie'],
+    'la fiche ne nomme plus les deux champs par leur sprite');
+  for (const [nom, teintes] of corps) {
+    assert.equal(teintes.length, 2, `la ligne « ${nom} » de la fiche ne porte plus deux teintes de corps`);
+  }
+
+  // ⚠⚠ ET LE SEUIL SE POSE ENTRE DEUX MESURES, PAS AU JUGÉ. Part du sujet à
+  // ΔE < 20 de sa propre ligne, grille 128 : **avant ce lot 21,7 % pour le
+  // quartz et 11,4 % pour la scorie ; après, 63,7 % et 90,3 %**. Cinquante
+  // pour-cent est au-dessus des deux anciennes valeurs et sous les deux neuves ;
+  // il ne peut ni laisser passer un retour au violet, ni tomber sur l'art
+  // d'aujourd'hui. Mesuré aussi en 64 — 65,7 % et 91,9 % — et sur les DEUX
+  // variantes, le miroir ne changeant aucune couleur.
+  for (const [dossier, cote] of [[TERRAIN_128, 128], [TERRAIN_64, 64]]) {
+    for (const [nom, teintes] of corps) {
+      const autre = [...corps].filter(([k]) => k !== nom).flatMap(([, t]) => t);
+      for (const variante of ['a', 'b']) {
+        const chemin = join(dossier, `${nom}_${variante}.png`);
+        const sienne = partProche(chemin, teintes);
+        assert.ok(sienne >= 50,
+          `terrain/${cote}/${nom}_${variante} : ${sienne.toFixed(1)} % du sujet seulement `
+            + 'tombe sur les teintes que la fiche lui réserve');
+        // ⚠ ET LA CONTRE-ÉPREUVE, SANS QUOI LE SEUIL NE DIRAIT RIEN. Deux
+        // rampes sombres quelconques passeraient un simple « ≥ 50 % » ; ce
+        // qu'on veut savoir, c'est que chaque champ ressemble à SA ligne PLUS
+        // qu'à celle de l'autre. Mesuré : quartz 63,7 contre 20,2 ; scorie
+        // 90,3 contre 0,0.
+        const croisee = partProche(chemin, autre);
+        assert.ok(sienne > 2 * croisee,
+          `terrain/${cote}/${nom}_${variante} : ${sienne.toFixed(1)} % sur sa ligne contre `
+            + `${croisee.toFixed(1)} % sur l'autre — les deux champs ne se distinguent plus`);
+      }
+    }
+  }
+});
+
+test('terrain — l\'ajourage suit le DESSIN, et le compte global ne peut pas le voir', () => {
+  // ⚠⚠ LA FAMILLE `terrain` EST HORS DU COMPTE GLOBAL DES TROUS, et ce test est
+  // ce qui l'empêche d'être pour autant sans garde. `spritesDeLOuvrage` ne
+  // ramasse que les fichiers portant `_o_` : aucun sprite de terrain n'en a, ce
+  // qui est juste — un champ de quartz n'a pas de camp — mais laisse le
+  // détourage de cette famille-ci mesuré par personne. Même partage que pour
+  // `limite`, qui se mesure forme par forme dans `test/limite.test.js`.
+  //
+  // ⚠⚠ ET LA PROPRIÉTÉ N'EST PAS « ZÉRO TROU », C'EST « LE TROU SUIT LE
+  // DESSIN ». Trois des cinq dessins sont des masses pleines — des cristaux,
+  // des braises, une nappe de pétrole — et n'enferment presque rien. Les deux
+  // autres sont AJOURÉS : on voit à travers l'enchevêtrement de branches et
+  // entre les blocs de l'éboulis. Exiger zéro partout ferait tomber la suite
+  // sur de l'art parfaitement sain, et le seul moyen de la faire passer serait
+  // de boucher les trous, c'est-à-dire d'abîmer le dessin.
+  const PLEINS = ['champ_quartz', 'champ_scorie', 'obs_vehicule'];
+  const AJOURES = ['obs_infanterie', 'obs_les_deux'];
+
+  // ⚠⚠ LE SEUIL DES PLEINS A SON TÉMOIN, ET IL EST DANS L'HISTOIRE DU DÉPÔT.
+  // Avant ce lot, `champ_quartz_a` enfermait **2 591 pixels** en grille 128 —
+  // la seconde porte d'`est_fond` attrapait le violet pâle de l'ancien dessin
+  // et le perçait de part en part. Après, il en enferme **4**. La borne est à
+  // huit : deux fois la pire mesure d'aujourd'hui, et trois cent vingt fois
+  // sous le défaut qu'elle existe pour attraper.
+  for (const [dossier, cote] of [[TERRAIN_128, 128], [TERRAIN_64, 64]]) {
+    for (const nom of PLEINS) {
+      for (const variante of ['a', 'b']) {
+        const n = trousEnfermes(join(dossier, `${nom}_${variante}.png`));
+        assert.ok(n <= 8,
+          `terrain/${cote}/${nom}_${variante} enferme ${n} px : le détourage perce une masse pleine`);
+      }
+    }
+    // ⚠ ET L'AUTRE MOITIÉ EST AUSSI FERME. Un détourage qui BOUCHERAIT les
+    // ajours — un `est_fond` trop timide, une frange laissée opaque — ferait
+    // du fourré une masse et personne ne le verrait à la relecture. Mesuré :
+    // 461 et 165 en grille 128, 104 et 47 en 64. La borne est à quarante.
+    for (const nom of AJOURES) {
+      for (const variante of ['a', 'b']) {
+        const n = trousEnfermes(join(dossier, `${nom}_${variante}.png`));
+        assert.ok(n >= 40,
+          `terrain/${cote}/${nom}_${variante} n'enferme que ${n} px : le dessin ajouré s'est bouché`);
+      }
+    }
+  }
+
+  // La partition couvre exactement les cinq dessins — un sixième sprite
+  // n'aurait ni borne haute ni borne basse, et passerait sans être mesuré.
+  assert.deepEqual([...PLEINS, ...AJOURES].sort(),
+    [...new Set(DESSINS_TERRAIN.map((n) => n.replace(/_[ab]$/, '')))].sort());
 });

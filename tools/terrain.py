@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
-"""Les champs et les obstacles de la base — dix sprites, sept planches.
+"""Les champs et les obstacles de la base — dix sprites, CINQ planches.
+
+⚠⚠ CINQ PLANCHES NEUVES ONT REMPLACÉ LES SEPT ANCIENNES LE 03/09/2026 AU SOIR.
+Ethan a livré un dessin par sprite — des cristaux, des braises, un éboulis, une
+nappe de pétrole, un enchevêtrement de branches mortes — avec, pour toute
+consigne : « sprite obstacles et ressources », puis « commence par Champ et
+obstacles ». La table `PLANCHES` en porte la trace, et c'est le seul endroit du
+dépôt qui apparie ses noms à lui aux noms du jeu. Les sept anciennes restent
+dans `art/sources/`, qui ne s'ampute jamais, et redeviennent `dormantes`.
+
+⚠⚠ ET TOUT CE QUI SUIT A ÉTÉ RELU CONTRE LES PLANCHES NEUVES, PAS RECONDUIT.
+Trois affirmations de l'en-tête d'origine sont devenues FAUSSES le même jour, et
+elles sont réécrites plus bas plutôt qu'enjambées : la clé n'est plus bruitée,
+`fourre_sec_a` n'est plus écartée puisqu'elle n'est plus dans la table, et le
+code couleur des ressources ne s'écarte plus de la fiche — il y revient.
 
 Ethan, le 03/09/2026 : « il y a par exemple les champs de quartz […] il y a
 plein d'autres éléments qui sont pas passés dans la nouvelle moulinette comme tu
@@ -55,8 +69,19 @@ sont le doublement NEAREST exact des quatre de 64. Elles ne portent aucun détai
 de plus. C'est un fait à connaître le jour où quelqu'un voudra les refaire ;
 ce n'est pas une raison de les refaire aujourd'hui.
 
-⚠⚠ LA CLÉ DE CES PLANCHES N'EST PAS PURE, ET ON LA NORMALISE AVANT LA CHAÎNE.
-Mesuré : **zéro pixel `#FF00FF` sur les sept planches**. Le fond est un magenta
+⚠⚠ LA CLÉ DES CINQ PLANCHES NEUVES EST PURE, ET `normaliser_la_cle` EST DONC
+DEVENUE UNE CEINTURE. Mesuré sur les cinq : la médiane du pourtour vaut
+EXACTEMENT `#FF00FF`, et le magenta pur couvre de 49,8 % à 59,5 % de la planche.
+Surtout : **la boule de rayon `RAYON_CLE` ne prend PAS UN SEUL pixel de dessin**
+— zéro sur les cinq, à comparer aux 7 155 qu'elle prenait sur l'ancienne planche
+de quartz. Le geste reste, parce qu'il ne coûte rien et qu'il redeviendra utile
+à la première planche bruitée ; il ne fait plus rien aujourd'hui, et c'est un
+fait à connaître avant de croire qu'il protège quelque chose.
+
+⚠ CE QUI SUIT DÉCRIT LES ANCIENNES PLANCHES, ET SE LIT AU PASSÉ. Il reste ici
+parce qu'il dit POURQUOI la normalisation existe, ce qu'aucune planche saine ne
+peut plus montrer.
+Mesuré alors : **zéro pixel `#FF00FF` sur les sept planches d'origine**. Le fond est un magenta
 BRUITÉ — coins relevés entre (194, 16, 138) et (236, 11, 143) — et il
 s'assombrit là où le dessin l'ombre, jusqu'à (168, 23, 113) au creux d'un
 fourré. Deux conséquences, toutes deux constatées avant d'être corrigées :
@@ -99,17 +124,28 @@ mais MARRON-VIOLET, et des pixels franchement magenta sont posés sur les
 rameaux eux-mêmes. Regardée au pixel près, à côté de `fourre_sec_b` qui est
 nette. Aucun filtre ne rend du brun à partir du marron-violet sans inventer de
 la couleur : le fourré ressortait rose, c'est-à-dire **plus faux que l'ancien**,
-que la quantification rabattait par accident sur la rampe kaki. Elle reste au
-dépôt et redevient `dormante` ; `obs_infanterie` se produit donc comme les deux
-champs, d'une planche et de son miroir. Une ligne à remettre le jour où Ethan
-en refait un rendu propre.
+que la quantification rabattait par accident sur la rampe kaki.
 
-⚠⚠ DEUX SPRITES SUR DIX SONT DES MIROIRS DANS L'ART DU DÉPÔT, ET C'EST RELEVÉ,
-PAS DÉCIDÉ. `champ_quartz_b` est le miroir horizontal EXACT de `champ_quartz_a`
-dans les sprites commités, et `champ_scorie_b` de `champ_scorie_a` : vérifié
-pixel par pixel sur les deux grilles. C'est cette règle-là qu'`obs_infanterie`
-reprend faute de seconde planche saine ; `obs_les_deux` et `obs_vehicule`, eux,
-gardent leurs deux vrais dessins.
+⚠⚠ ET LA LIGNE ANNONCÉE A ÉTÉ REMISE — PAR UNE PLANCHE NEUVE, LE 03/09 AU SOIR.
+Ce paragraphe disait « une ligne à remettre le jour où Ethan en refait un rendu
+propre » : `fourre_sec_v2.png` EST ce rendu, et sa clé est pure. Les deux
+anciennes sortent ensemble de la table et redeviennent `dormantes`. La dette est
+soldée ; le paragraphe reste parce qu'il dit ce qu'une clé qui bave produit, et
+que c'est la seule trace de cette faute-là dans le dépôt.
+
+⚠⚠ LES CINQ SPRITES SONT DÉSORMAIS UNE PLANCHE ET SON MIROIR, ET C'EST UNE
+PERTE QU'IL FAUT DÉCLARER. Jusqu'au 03/09, `obs_les_deux` et `obs_vehicule`
+portaient DEUX vrais dessins ; Ethan a livré une planche par sprite, donc leur
+variante `b` est devenue le miroir horizontal exact de `a`, comme les trois
+autres. **Mélanger sa planche neuve avec l'ancien `_b` a été écarté de face** :
+les deux moitiés de la paire seraient sorties de deux modèles de rendu
+différents — l'un filtré, l'autre quantifié sur quatorze teintes — et l'écart se
+verrait sur la même base, côte à côte.
+
+⚠ LA TABLE EST LA SEULE VÉRITÉ LÀ-DESSUS, et un test la lit : une entrée à UNE
+planche doit produire un miroir, une entrée à DEUX doit produire deux dessins
+distincts. Le jour où Ethan envoie les seconds dessins, la ligne en porte deux
+et le miroir disparaît sans qu'une autre ligne bouge.
 
 ⚠ LE MIROIR SE PREND SUR LE SPRITE, PAS SUR LA PLANCHE. Retourner la source puis
 la réduire donnerait un `b` qui n'est plus rigoureusement le miroir de `a`, le
@@ -123,16 +159,26 @@ dix, aux deux grilles. En unités de la grille 32 dont `recadrer` se sert, cela
 fait 28. Choisir autre chose aurait fait grandir ou maigrir tous les champs de
 toutes les bases pour une raison qui n'est pas dans le message d'Ethan.
 
-⚠⚠ LES COULEURS DU JEU CHANGENT, ET C'EST LA CONSÉQUENCE À LIRE EN FACE. La
-vieille chaîne ne faisait pas que quantifier : elle REPEIGNAIT sur les quatorze
-teintes de `cond.py`. Le quartz d'Ethan est VIOLET et ressortait bleu-gris pâle ;
-sa scorie est NOIRE À VEINES ORANGE et ressortait violet sombre à veines ambre.
-Le nouveau modèle ne repeint rien — c'est sa définition —, donc les champs
-reprennent la couleur de leurs planches. `FICHE-STYLE.md` réserve `#9FB3C5` et
-`#C1CEDA` au quartz et `#382E47` à la scorie ; ces trois teintes-là décrivaient
-le rendu de l'ancienne moulinette, pas le dessin d'Ethan. C'est son art et il
-fait foi sur ce qu'il dessine — mais le code couleur des ressources n'est plus
-celui qu'il était, et personne ne l'a arbitré de face.
+⚠⚠ LE CODE COULEUR DES RESSOURCES REVIENT À LA FICHE, ET L'ARBITRAGE LAISSÉ
+OUVERT SE REFERME TOUT SEUL. Le lot MOULINETTE-TERRAIN avait relevé que la
+chaîne ne REPEIGNAIT plus, si bien que les champs prenaient la couleur de leurs
+planches : le quartz était ressorti VIOLET et la scorie NOIRE, quand
+`FICHE-STYLE.md` leur réserve `#9FB3C5`·`#C1CEDA` et `#382E47`·`#4E4160`. La
+question a été posée à Ethan et laissée ouverte trois lots durant. **Ses
+planches du 03/09 au soir y répondent en la rendant sans objet** : son quartz
+est un bleu-gris pâle, sa scorie un violet sombre.
+
+⚠ MESURÉ, PAS CONSTATÉ À L'ŒIL. Part du sujet à ΔE < 20 des teintes que la
+fiche lui réserve, grille 128 : **quartz 21,7 % avant, 63,7 % après ; scorie
+11,4 % avant, 90,3 % après**. Et la contre-épreuve tient : chaque champ
+ressemble à SA ligne plus qu'à celle de l'autre — 63,7 contre 20,2, et 90,3
+contre 0,0. `test/sprite.test.js` refait ces mesures à chaque exécution, en
+LISANT les teintes dans la fiche plutôt qu'en les retapant.
+
+⚠ ET LA FICHE AVAIT MÊME PRÉVU LES VEINES : sa ligne « Scorie » nomme
+« braises `#F5B636` », et la planche neuve en porte — 0,2 % du sujet, un filet
+d'orange dans les fissures. C'est trop mince pour asserter une part, et c'est
+noté ici pour qu'on sache que ce n'est pas un accident.
 
     python3 tools/terrain.py
 """
@@ -183,13 +229,11 @@ MARGE_MIN = 64
 # ⚠ UNE SEULE PLANCHE VEUT DIRE « ET SON MIROIR », deux planches veulent dire
 # deux dessins. C'est l'art du dépôt, mesuré, pas une règle qu'on impose.
 PLANCHES = {
-    'champ_quartz':   ['champ_quartz_cristaux.png'],
-    'champ_scorie':   ['champ_scorie_braises.png'],
-    # ⚠ `fourre_sec_a.png` EST ÉCARTÉE : sa clé a bavé dans le dessin au rendu.
-    # Voir l'en-tête. Elle reste au dépôt, et `dormante`.
-    'obs_infanterie': ['fourre_sec_b.png'],
-    'obs_les_deux':   ['chaos_rocheux_a.png', 'chaos_rocheux_b.png'],
-    'obs_vehicule':   ['nappe_petrole_a.png', 'nappe_petrole_b.png'],
+    'champ_quartz':   ['champ_quartz_cristaux_v2.png'],
+    'champ_scorie':   ['champ_scorie_braises_v2.png'],
+    'obs_infanterie': ['fourre_sec_v2.png'],
+    'obs_les_deux':   ['chaos_rocheux_v2.png'],
+    'obs_vehicule':   ['nappe_petrole_v2.png'],
 }
 
 
