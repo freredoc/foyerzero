@@ -16,7 +16,7 @@ import {
   territoireDeLaFenetre, bordsDuTerritoire, occupantDeLaCase, basesDuJoueur,
   RAYONS, NEUTRE, JOUEUR, OUVRAGE,
 } from '../src/sim/territoire.js';
-import { TEINTES_TERRITOIRE, epaisseurDeFrontiere } from '../src/ui/monde.js';
+import { TEINTES_TERRITOIRE } from '../src/ui/monde.js';
 import { GEOGRAPHIE, EMBLEMES_CARTE, TYPES_SITE, ZOOM_CARTE } from '../src/data/sites.js';
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
@@ -321,18 +321,6 @@ test('frontières — les deux teintes reprennent la sémantique des emblèmes',
   for (const teinte of Object.values(TEINTES_TERRITOIRE)) {
     assert.ok(fiche.includes(teinte), `${teinte} n'est pas dans FICHE-STYLE.md`);
   }
-});
-
-test('frontières — l\'épaisseur suit le cran, elle ne s\'écrit pas', () => {
-  // Un nombre fixe serait un fil au cran le plus serré et un pâté au plus large.
-  const epaisseurs = ZOOM_CARTE.crans.map(epaisseurDeFrontiere);
-  for (let i = 1; i < epaisseurs.length; i += 1) {
-    assert.ok(epaisseurs[i] > epaisseurs[i - 1],
-      `l'épaisseur ne suit pas le cran : ${epaisseurs.join(', ')}`);
-  }
-  // ⚠ PLANCHER À UN PIXEL : un trait plus fin ne se dessine pas du tout.
-  assert.ok(epaisseurs.every((e) => e >= 1));
-  assert.equal(epaisseurDeFrontiere(1), 1);
 });
 
 test('frontières — le calcul tient dans le budget d\'une image', () => {

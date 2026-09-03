@@ -279,7 +279,26 @@ function trousEnfermes(chemin) {
  * sur un défaut de conditionnement. Elles portent `_o_` parce que c'est le sol
  * de l'Ouvrage, et elles sont en RVB indexé, que `decoderRgba` refuse de face.
  */
-const FAMILLE_HORS_CHAINE = new Set(['terrain']);
+/**
+ * ⚠⚠ `limite` EST ÉCARTÉE AUSSI, ET POUR UNE RAISON DE FORME, PAS DE CHAÎNE —
+ * lot TERRITOIRE, 03/09. Une limite de territoire CEINT une case : ce que son
+ * trait enferme n'est pas un trou percé dedans, c'est la case elle-même.
+ * Mesuré sur les treize sprites de l'Ouvrage de la famille, grille 128 :
+ * **12 368 px enfermés**, dont **11 792 pour le seul `carre`**, qui est un
+ * rectangle fermé de bord à bord. Les compter avec les autres ferait franchir
+ * le seuil de 1 500 à une famille qui n'a aucun défaut, et le seul moyen de la
+ * faire passer serait de RELEVER le seuil — c'est-à-dire d'aveugler la garde
+ * pour les huit autres familles.
+ *
+ * ⚠⚠ ET LA FAMILLE N'EST PAS LAISSÉE SANS GARDE POUR AUTANT : `test/limite.test.js`
+ * la mesure forme par forme, ce que ce compte global ne peut pas faire. Mesuré,
+ * et c'est contre l'intuition : seuls `carre` et les quatre `u` enferment quoi
+ * que ce soit ; les quatre `trait` et les quatre `coin` sont des formes
+ * OUVERTES et enferment **exactement zéro**. C'est cette moitié-là qui garde le
+ * détourage — un `est_fond` qui percerait la bande claire d'un `trait` y
+ * ouvrirait des trous là où il ne peut pas y en avoir.
+ */
+const FAMILLE_HORS_CHAINE = new Set(['terrain', 'limite']);
 
 function spritesDeLOuvrage(cote) {
   const sortie = [];

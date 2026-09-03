@@ -588,6 +588,21 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // donc `mur_3` et `mur_4` restent au dépôt sans entrer. L'estimation était
   // haute d'un tiers, et c'est la mesure qui fait foi.
   //
+  // ⚠⚠ ET ELLE NE BOUGE PAS NON PLUS AU LOT TERRITOIRE, ALORS QU'UN ATLAS
+  // ENTIER ENTRE. Ethan, 03/09 : « je t'ai envoyé aussi un zip avec des
+  // bordures de territoire pour la carte du monde ». La frontière était un
+  // trait au `strokeStyle` depuis le 31/08 ; elle devient un dessin. Mesuré,
+  // poste par poste :
+  //   • `atlas-limite-128.webp`, 26 cellules — 19 178 o sur le disque,
+  //     **+25 572 en base64** ;
+  //   • `render/limite.js`, la balise et le câblage — **+1 104 octets**.
+  // Total **+26 676**, mesuré : **3 277 152**, marge 122 848, soit 3,6 %. Le
+  // livrable passe de 24 `data:` à 25.
+  //
+  // ⚠ VINGT-SIX CELLULES POUR DIX-NEUF KILO-OCTETS : un dessin de limite est
+  // presque tout transparent, et le WebP le sait. C'est le premier atlas du
+  // dépôt dont le poids ne se discute pas.
+  //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi. Ce qu'elle tient VRAIMENT
   // reste l'assertion du dessus — le HTML ne référence rien d'extérieur —, et
@@ -637,6 +652,21 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // que six : le U d'une base de neuf colonnes n'a que DEUX créneaux de mur,
   // donc `mur_3` et `mur_4` restent au dépôt sans entrer. L'estimation était
   // haute d'un tiers, et c'est la mesure qui fait foi.
+  //
+  // ⚠⚠ ET ELLE NE BOUGE PAS NON PLUS AU LOT TERRITOIRE, ALORS QU'UN ATLAS
+  // ENTIER ENTRE. Ethan, 03/09 : « je t'ai envoyé aussi un zip avec des
+  // bordures de territoire pour la carte du monde ». La frontière était un
+  // trait au `strokeStyle` depuis le 31/08 ; elle devient un dessin. Mesuré,
+  // poste par poste :
+  //   • `atlas-limite-128.webp`, 26 cellules — 19 178 o sur le disque,
+  //     **+25 572 en base64** ;
+  //   • `render/limite.js`, la balise et le câblage — **+1 104 octets**.
+  // Total **+26 676**, mesuré : **3 277 152**, marge 122 848, soit 3,6 %. Le
+  // livrable passe de 24 `data:` à 25.
+  //
+  // ⚠ VINGT-SIX CELLULES POUR DIX-NEUF KILO-OCTETS : un dessin de limite est
+  // presque tout transparent, et le WebP le sait. C'est le premier atlas du
+  // dépôt dont le poids ne se discute pas.
   //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.

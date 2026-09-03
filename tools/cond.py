@@ -145,3 +145,56 @@ def rendre(g, scale=4):
         m=(g==i); out[m,0]=c[0]; out[m,1]=c[1]; out[m,2]=c[2]; out[m,3]=255
     im=Image.fromarray(out,'RGBA')
     return im.resize((N*scale,N*scale),Image.NEAREST)
+
+
+# ---------------------------------------------------------------------------
+# ⚠⚠ `baver` A DÉMÉNAGÉ ICI AU LOT TERRITOIRE (03/09), DEPUIS `tools/bords.py`.
+# Elle y était née au lot MURS, quand un seul outil en avait besoin ; les
+# limites de territoire sont le second, et pour la même raison exactement — un
+# sprite presque tout transparent, encodé en WebP avec perte sur le RVB, et
+# dessiné réduit. Une seconde copie aurait été la première à ne pas recevoir la
+# correction suivante.
+#
+# ⚠ ET LE DÉMÉNAGEMENT SE PROUVE : `python3 tools/verifier.py` rejoue `bords.py`
+# et compare les seize fichiers de `bord/` À L'OCTET. S'il en sort un seul
+# « différent », c'est que la fonction n'est pas arrivée intacte.
+# ---------------------------------------------------------------------------
+
+
+def baver(rgba, passes=4):
+    """La couleur du bord DÉBORDE dans le transparent — et il le faut.
+
+    ⚠⚠ CE N'EST PAS DE LA COQUETTERIE, C'EST LE CAS NORMAL. Un mur fait 512
+    pixels pour quatre cases ; à la case par défaut de 46 px il est affiché en
+    184, donc RÉDUIT par le navigateur — le plafond du zoom, 128 px par case,
+    est le seul endroit où il tombe au 1:1. Toute réduction mélange les pixels
+    voisins, transparents COMPRIS : si leur RVB vaut zéro, le mur ressort ourlé
+    de noir sur toute sa longueur.
+
+    ⚠ ET L'ENCODAGE EN RAJOUTE. WebP avec perte stocke le RVB même là où l'alpha
+    est nul et le lisse par blocs : mesuré avant ce geste, les transparents du
+    bord haut de `mur_1` portaient (65, 0, 0) — du rouge sombre bavé depuis le
+    noir. Vu à l'œil sur un rendu de contrôle, pas à la relecture.
+
+    On étend donc la couleur opaque dans le transparent, quelques pixels : ce
+    qui bave alors, c'est la couleur du mur. **L'alpha, lui, ne bouge pas** —
+    c'est ce qui distingue ce geste d'un épaississement du sprite.
+    """
+    out = rgba.copy()
+    plein = out[..., 3] == 255
+    for _ in range(passes):
+        if plein.all():
+            break
+        somme = np.zeros((*plein.shape, 3), np.float64)
+        poids = np.zeros(plein.shape, np.float64)
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            v = np.roll(np.roll(plein, dy, 0), dx, 1)
+            c = np.roll(np.roll(out[..., :3], dy, 0), dx, 1)
+            somme[v] += c[v]
+            poids[v] += 1
+        frange = (~plein) & (poids > 0)
+        if not frange.any():
+            break
+        out[frange, 0:3] = np.rint(somme[frange] / poids[frange][..., None]).astype(np.uint8)
+        plein = plein | frange
+    return out

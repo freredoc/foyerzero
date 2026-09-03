@@ -65,6 +65,12 @@ CHAINE = [
     # aucun atlas ; il passe quand même par la chaîne pour que personne n'ait à
     # se demander, dans six mois, comment on referait ce fichier.
     ('fonds',           []),
+    # ⚠ LES LIMITES DE TERRITOIRE — 03/09. Elles SONT cousues dans un atlas, à
+    # la différence des murs juste au-dessus : leurs cellules sont carrées. La
+    # ligne reste due pour la raison ordinaire — sans elle, les 52 fichiers de
+    # `limite/` seraient comptés MANQUANTS, et les quatre planches d'`art/sources/`
+    # classées DORMANTES alors qu'un outil les consomme.
+    ('limites',         []),
     # ⚠⚠ LES ENTRÉES — 03/09, ET ELLE NE PRODUIT AUCUN SPRITE. Comme la ligne
     # `bords` ci-dessus dit pourquoi elle est là, celle-ci dit pourquoi elle
     # n'écrit rien : `entrees.py` OBSERVE ce que la chaîne ouvre dans
