@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **02/09/2026**, version 0.69.0 · build 70.
+Dernière révision : **03/09/2026**, version 0.70.0 · build 71.
 
 ---
 
@@ -41,8 +41,99 @@ Dernière révision : **02/09/2026**, version 0.69.0 · build 70.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 02/09/2026 (après le lot TRANSFERT), à confronter :**
-`npm test` → **924 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot RETOURS-DU-03), à confronter :**
+`npm test` → **932 pass / 0 fail**, `gradle :maj:test` → **32 tests / 0 fail**,
+`npm run build` → `dist/index.html`, **1 592 070 octets**, 0 référence externe.
+Coût **+808 octets**, aucune image n'entre — **16 `data:image` avant, 16 après**.
+Marge T10 **57 930 octets, 3,51 %**, borne inchangée à 1 650 000.
+⚠⚠ **TROIS RETOURS D'ETHAN, SANS BRIEF, ET DEUX CHANGENT LA CARTE DE CHAQUE
+GRAINE.** (1) « le jeu détecte la mise à jour mais refuse de l'implantation » ;
+(2) « on davantage remplir le monde avec des bases ouvrage » ; (3) « le
+territoire doit avoir 8 cases de plus, dans les angles ».
+⚠⚠ **LA ZONE D'INFLUENCE EST UN OCTOGONE, ET UNE SEULE ÉCRITURE LE DIT.**
+Intersection du carré de Tchebychev de rayon `r` et du losange de Manhattan de
+rayon `r + 1` : **21 cases au rayon 2, 37 au rayon 3**, soit exactement le
+« 5x5 avec chaque coin rogné » et le « 7x7, 3 cases à chaque coin » dictés — et
+**huit de plus que le disque des deux côtés**. Ce n'est PAS un retour sur
+EUCLIDE : la portée du raid, la garde du peuplement et les anneaux de satellites
+restent des disques. Un seul nombre à tourner, `margeDiagonaleInfluence`.
+⚠⚠ **CINQ MODULES ÉCRIVAIENT CETTE FORME, ET LE CINQUIÈME N'AVAIT JAMAIS
+FILTRÉ.** `dansLOctogoneDInfluence` de `points-attaque.js` est la seule écriture ;
+`territoire.js` (le dessin), `fondation.js` (le refus) et `poi.js`
+(l'acquisition) l'appellent. **`releverLesPoisAcquis` peignait le CARRÉ PLEIN
+depuis toujours** : un POI dans un coin était ACQUIS alors que ni la carte ne
+montre cette case comme alliée, ni le barème ne la facture ainsi. EUCLIDE avait
+énuméré trois sites sans le voir, BASES-1 en a corrigé un quatrième sans le voir
+non plus. **C'est un changement de RÈGLE, pas un nettoyage** — `POI T25` le nomme.
+⚠ **M1 — LE PRIX BAISSE, ET IL N'EST PAS COMPENSÉ.** Sur 150 graines et 5 143
+cibles : **118 cibles (2,29 %) passent de 16 à 12 points**, prix moyen
+**27,953 → 27,861**. Aucune autre transition — ce sont les huit cases par base
+que le rognage rend au tarif de proximité.
+⚠⚠ **LE PLAFOND DE DENSITÉ ÉTAIT MATHÉMATIQUE, ET C'EST LE VOISINAGE QUI LE
+FIXE.** La densité des maxima locaux vaut `1/(1 + n)` : **16 par 12 × 12** avec
+huit voisines, quelle que soit la probabilité — le dépôt en était à 15,7. Sur
+QUATRE voisines orthogonales le plafond est **28,8**, mesuré 29,13 à saturation.
+`contactDiagonalPermis: true`, et `probabiliteCandidate: 0,45` rend **27,83**,
+soit 96,2 % du plafond — **la même fraction que 0,35 rendait de l'ancien**.
+⚠⚠ **DEUX BASES NE SONT JAMAIS CÔTE À CÔTE, ELLES SE TOUCHENT PAR UN COIN.**
+C'est la lettre du « côte à côte » du 29/08, et non plus ses « 8 cases autour ».
+**C'est une LECTURE, et elle se défait en remettant `false`.**
+⚠ **ET LA CARTE DEVIENT MOINS RÉGULIÈRE, PAS PLUS** — l'autre moitié de
+l'arbitrage du 02/09. Bases collées au minimum permis : **90,1 % → 63,2 %** ;
+blocs 3 × 3 entièrement vides : **22,4 % → 4,9 %**. Comptes carte entière :
+**+72 % en moyenne** sur six graines, exactement le rapport des deux plafonds.
+⚠⚠ **FONDER AU-DESSUS DE LA RANGÉE ~272 EST DEVENU IMPOSSIBLE, SUR 40/40
+GRAINES.** Cases fondables dans le disque de rayon 10 : **261 → 261** à la
+rangée 295, 285,4 → 270,0 à la 290, 190,0 → 173,0 à la 285, 98,8 → 83,9 à la
+280, 24,1 → 13,6 à la 275, et **0,7 → 0,0** au-delà de la 270. Les DEUX demandes
+y contribuent — plus de bases, et un territoire ennemi plus large de huit cases
+chacune. Le jeu passe par le rasage, comme depuis BASES-1, mais plus franchement.
+⚠⚠ **« RIEN À TÉLÉCHARGER » N'EST PAS « À JOUR », ET C'ÉTAIT LE DÉFAUT.**
+L'écran affichait « v0.67.0 b68 » et, deux lignes plus bas, « À jour — build
+70 ». `EtatMiseAJour` lisait le build du DISQUE ; or une vérification qui aboutit
+remplace le fichier sans jamais remplacer la page qui tourne. `buildServi` entre
+dans `GestionnaireVersions`, l'étape `EN_ATTENTE_DE_RELANCE` et
+`verdictSansTelechargement` entrent dans `:maj`, testés en JVM.
+⚠⚠ **ET C'EST LA MOITIÉ JS QUI ATTEINDRA LE JOUEUR.** Le Kotlin n'arrive que par
+un nouvel APK ; le HTML arrive tout seul par Pages. `ligneDeMiseAJour` de
+`ui/session.js` compare le build que le pont annonce sur le disque à celui que
+la page porte dans son balisage (`data-build`) et réécrit la ligne. **Vérifié au
+boot sans tête sous un faux pont rendant le JSON d'AVANT le correctif** : « Build
+999 installé — relance le jeu pour l'activer (build 70 en cours) ».
+⚠⚠ **LE ROLLBACK DE L'ENVELOPPE N'EST NI PROUVÉ NI CORRIGÉ, ET C'EST DÉLIBÉRÉ.**
+Deux lancements sans `onPageFinished` écartent la version installée : ce
+mécanisme peut AUSSI produire la capture, et rien ici ne peut départager — il n'y
+a pas d'appareil (§3). Inventer un correctif pour un défaut non prouvé est ce que
+§6 interdit. **Le prochain essai tranchera**, et le lot est écrit pour que sa
+réponse soit lisible.
+⚠ **LE TÉMOIN DE BASES-0 TIENT, AVEC 37 COUPLES DÉCLARÉS SUR 322**, tous à
+partir de la phase 10. ⚠⚠ **LES NEUF PREMIÈRES PHASES SONT IDENTIQUES AU BIT** —
+construction, économie, garnison, armée, ET LE PREMIER RAID sur un camp : un camp
+est de l'HISTOIRE, pas du tirage de carte. ⚠ **L'attribution est mesurée** : en
+remettant la seule densité d'avant, il n'en reste que **QUATORZE**, ceux de
+l'octogone seul.
+⚠ **QUATRE SCALAIRES BOUGENT, ET PAS UN DE PLUS** — `nbAttaquantes` et le nombre
+de cibles du raid lointain sur 25 graines, la cible choisie sur 6, l'empreinte du
+rapport sur 9. Gestes, sauvegarde, cases atteignables, déplacement et **tout le
+raid de proximité** : **0 / 25**.
+⚠⚠ **DEUX FALSIFICATIONS SUR SEIZE NE MORDAIENT PAS**, et les tests qui les
+attrapent ont été écrits APRÈS la mesure : le filtre des POI ne tombait que par
+le témoin — qui dit seulement « quelque chose a bougé » —, et la garde d'entiers
+de la zone ne faisait tomber AUCUN test. Sans elle, une case mal formée rend
+`NaN`, donc `false`, donc « hors du territoire » **en silence**.
+⚠⚠ **TROIS MONTAGES SONT TOMBÉS POUR UNE RAISON QUI NE LES REGARDAIT PAS.**
+`BASES-1 T15` et `T15 bis` fondaient sur une case écrite en dur, `RAID-B T7`
+plantait la base sur une coordonnée choisie pour qu'un POI tombe après le rasage,
+et `DÉPLACEMENT T8` calculait sa cible avant un rattrapage pendant lequel
+l'Ouvrage rase désormais la base. **Un montage qui écrit une coordonnée ne garde
+que lui-même** — troisième, quatrième et cinquième fois.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 24.** Le lot ne touche ni l'état, ni
+sa forme, ni la sauvegarde : **elle ne grandit pas d'un octet**.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot TRANSFERT :**
+`npm test` → 932 pass / 0 fail, `npm run build` → `dist/index.html`,
 **1 591 262 octets**, 0 référence externe. Coût **+9 343 octets**, aucune image
 n'entre — **16 `data:image` avant, 16 après**. Marge T10 **58 738 octets,
 3,56 %**, borne inchangée à 1 650 000.

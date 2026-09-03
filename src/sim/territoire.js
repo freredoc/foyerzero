@@ -8,29 +8,27 @@
 // transcrivent, et `sim/points-attaque.js` lit déjà le premier pour le barème du
 // raid. Ce module ne fait qu'en tirer une CARTE.
 //
-// ⚠⚠ EUCLIDE, ET C'EST UNE CORRECTION DU LOT BASES-1, 02/09/2026. Ce module
-// annonçait « Tchebychev, comme partout ailleurs sur cette carte » — c'était vrai
-// jusqu'au lot EUCLIDE, qui a fait passer au disque la portée du raid, la garde
-// du peuplement et les anneaux des satellites. **Le brief d'EUCLIDE avait énuméré
-// trois sites, et celui-ci n'y était pas.** `peindre` remplissait donc un CARRÉ
-// de (2r+1)² cases, sans le moindre test de distance, sous une portée ronde.
+// ⚠⚠ UN OCTOGONE DEPUIS LE 03/09/2026, DICTÉ CASE PAR CASE PAR ETHAN. « le
+// territoire doit avoir 8 cases de plus, dans les angles. un carré de 5x5 avec
+// chaque coin rogné (4 cases) ; ouvrage idem rogné mais 7x7 donc 3 cases à
+// chaque coin. » Soit **21 cases pour le joueur et 37 pour l'Ouvrage**, contre
+// 13 et 29 pour les disques de BASES-1 : huit de plus des deux côtés, mesuré.
 //
-// ⚠ CE N'ÉTAIT PAS COSMÉTIQUE. Le territoire allié est ce qui rend un raid moins
-// cher — +1 par case au lieu de +3, spec §8 —, et une zone carrée sous une portée
-// ronde fait que le PRIX AFFICHÉ et la CARTE PEINTE ne décrivent pas la même
-// géométrie. Mesuré : le rayon 2 du joueur passe de 25 à 13 cases, celui de
-// l'Ouvrage de 49 à 29 ; sur 150 graines et 5 161 cibles, 172 raids (3,33 %)
-// renchérissent, et le prix moyen monte de 27,945 à 28,078 points.
+// ⚠ LA FORME A CHANGÉ TROIS FOIS, ET IL FAUT SAVOIR POURQUOI. Carré plein
+// jusqu'au 02/09 — ce module remplissait (2r+1)² cases sans le moindre test de
+// distance, sous une portée déjà ronde ; DISQUE au lot BASES-1, qui a corrigé la
+// divergence ; OCTOGONE aujourd'hui, parce que le disque coupait les angles plus
+// que ce qu'Ethan voulait voir. Ce n'est PAS un retour sur EUCLIDE : la portée du
+// raid, la garde du peuplement et les anneaux de satellites restent des disques.
 //
-// ⚠⚠ ET LES DEUX CÔTÉS BASCULENT ENSEMBLE. `estEnTerritoireAllie` de
-// `sim/points-attaque.js` porte le MÊME test pour le barème du raid : en changer
-// un seul ferait payer le tarif de proximité sur des cases que la carte ne montre
-// pas comme siennes — la pire divergence, celle que le joueur constate sans
-// pouvoir l'expliquer. CLAUDE.md le disait déjà mot pour mot depuis EUCLIDE.
+// ⚠⚠ ET LES DEUX CÔTÉS NE BASCULENT PLUS ENSEMBLE — ILS PARTAGENT LA FONCTION.
+// `dansLOctogoneDInfluence` de `sim/points-attaque.js` est appelée ICI pour le
+// dessin et par `estEnTerritoireAllie` pour le PRIX. CLAUDE.md prévenait depuis
+// EUCLIDE qu'il fallait changer les deux d'accord ; il n'y a plus qu'une écriture
+// de la forme, donc plus d'accord à tenir.
 //
-// ⚠ AU CARRÉ DES DEUX CÔTÉS, JAMAIS DE RACINE — `d² ≤ r²`, deux entiers, une
-// comparaison exacte. La double boucle reste, mais comme ENVELOPPE : elle borne
-// le travail, elle ne décide plus de l'appartenance.
+// ⚠ EN ENTIERS, SANS AUCUNE RACINE. La double boucle reste, mais comme
+// ENVELOPPE : elle borne le travail, elle ne décide plus de l'appartenance.
 //
 // ⚠⚠ IL NE CALCULE JAMAIS SUR LES 9 300 CASES, ET C'EST UNE CONTRAINTE DE COÛT.
 // Savoir si une case est sous influence ennemie en interrogeant son voisinage
@@ -46,7 +44,7 @@
 
 import { GEOGRAPHIE } from '../data/sites.js';
 import { basesDeLaFenetre } from './peuplement.js';
-import { distanceCarreeCases } from './points-attaque.js';
+import { dansLOctogoneDInfluence } from './points-attaque.js';
 
 /** Ce qu'une case peut porter. Les valeurs servent d'indices, pas de noms. */
 export const NEUTRE = 0;
@@ -56,9 +54,10 @@ export const OUVRAGE = 2;
 /**
  * Les rayons d'influence, LUS dans `GEOGRAPHIE` et jamais recopiés.
  *
- * ⚠ LE JOUEUR A LE PLUS PETIT, ET C'EST VOULU : rayon 2 contre 3. Le territoire
- * allié est ce qui rend un raid bon marché (spec §8) ; l'élargir changerait un
- * barème sans qu'on s'en aperçoive.
+ * ⚠ LE JOUEUR A LE PLUS PETIT, ET C'EST VOULU : rayon 2 contre 3, soit 21 cases
+ * contre 37 une fois les angles rognés. Le territoire allié est ce qui rend un
+ * raid bon marché (spec §8) ; l'élargir changerait un barème sans qu'on s'en
+ * aperçoive — c'est d'ailleurs ce que ce lot-ci fait, de huit cases, sur ordre.
  */
 export const RAYONS = {
   [JOUEUR]: GEOGRAPHIE.rayonInfluenceJoueur,
@@ -119,18 +118,18 @@ export function territoireDeLaFenetre(etat, fenetre) {
 
   const peindre = (centre, camp) => {
     const rayon = RAYONS[camp];
-    const rayonCarre = rayon * rayon;
     for (let dr = -rayon; dr <= rayon; dr += 1) {
       const rangee = centre.rangee + dr;
       if (rangee < r0 || rangee > r1) continue;
       for (let dc = -rayon; dc <= rayon; dc += 1) {
         const colonne = centre.colonne + dc;
         if (colonne < c0 || colonne > c1) continue;
-        // ⚠⚠ LE FILTRE EST ICI, ET LA DOUBLE BOUCLE N'EST PLUS QU'UNE ENVELOPPE.
-        // Sans cette ligne, la zone est le CARRÉ de (2r+1)² cases qu'elle était
-        // avant BASES-1 — et les coins, en diagonale, seraient alliés alors que
-        // le barème du raid les compte à l'ennemi.
-        if (dr * dr + dc * dc > rayonCarre) continue;
+        // ⚠⚠ LE FILTRE EST ICI, ET LA DOUBLE BOUCLE N'EST QU'UNE ENVELOPPE. Il
+        // n'est plus écrit sur place : il APPELLE la fonction que le barème du
+        // raid appelle aussi. Deux écritures de la même forme, c'est la
+        // divergence que CLAUDE.md nomme depuis EUCLIDE — le prix affiché et la
+        // carte peinte décrivant deux géométries.
+        if (!dansLOctogoneDInfluence(dr, dc, rayon)) continue;
         const i = (rangee - r0) * largeur + (colonne - c0);
         // Le joueur l'emporte : on n'écrase jamais sa marque.
         if (occupant[i] === JOUEUR) continue;

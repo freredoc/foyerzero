@@ -383,6 +383,28 @@ export const GEOGRAPHIE = {
   baseTerminale: { casesDepuisBordHaut: 14, colonne: 'centre' },
   rayonInfluenceJoueur: 2, // fixe
   rayonInfluenceEnnemie: 3, // fixe
+  // ⚠⚠ LA ZONE N'EST NI UN CARRÉ NI UN DISQUE : C'EST UN OCTOGONE, ET
+  // ETHAN L'A DESSINÉ CASE PAR CASE LE 03/09/2026. « le territoire doit avoir 8
+  // cases de plus, dans les angles. un carré de 5x5 avec chaque coin rogné
+  // (4 cases) ; ouvrage idem rogné mais 7x7 donc 3 cases à chaque coin. »
+  //
+  // ⚠⚠ UNE SEULE RÈGLE REND LES DEUX FORMES, ET C'EST POURQUOI ON N'ÉCRIT PAS
+  // DEUX LISTES DE COINS. La zone est l'intersection du carré de Tchebychev de
+  // rayon `r` et du losange de Manhattan de rayon `r + margeDiagonaleInfluence` :
+  //   r = 2, marge 1 → 25 − 4 = **21 cases**, UN coin retiré par angle ;
+  //   r = 3, marge 1 → 49 − 12 = **37 cases**, TROIS coins par angle.
+  // Ce sont exactement les deux figures dictées, et exactement **huit cases de
+  // plus que le disque** des deux côtés — 13 → 21 et 29 → 37 —, ce qui est le
+  // « 8 cases de plus » du message, mesuré et non supposé.
+  //
+  // ⚠ C'EST DONC UN RETOUR PARTIEL SUR LE DISQUE DU LOT BASES-1, PAS SUR EUCLIDE.
+  // La PORTÉE d'un raid, la garde du peuplement et les anneaux de satellites
+  // restent des disques ; seule la ZONE D'INFLUENCE reprend ses angles, et elle
+  // ne les reprend qu'en partie — le carré plein d'avant EUCLIDE est mort.
+  //
+  // ⚠ UN SEUL NOMBRE À TOURNER SI ETHAN REVIENT DESSUS. À 0 la zone redevient le
+  // losange de Manhattan, à `r` elle redevient le carré plein.
+  margeDiagonaleInfluence: 1,
   rayonAttaque: 10, // fixe
   niveauBase: 'moyenne des niveaux de ses bâtiments',
   compositionBase: 'deux niveaux adjacents, répartis pour atteindre la moyenne',
@@ -540,11 +562,43 @@ export const TRANSFERT = {
 // 144 cases libérées, toutes dans les diagonales, et la base la plus proche du
 // départ peut se poser à onze cases de grille au lieu de quinze.
 export const PEUPLEMENT = {
+  // ⚠⚠ 0,45 EST LE MÊME CRITÈRE QUE 0,35, TRANSPOSÉ. Ethan, 02/09 : « tu
+  // augmentes la densité au maximum, je retire le maximum un peu moins pour que
+  // ce soit pas un cadre parfaitement rectangulaire ». 0,35 rendait **96,1 % du
+  // plafond** de l'ancienne règle ; 0,45 rend **96,2 % de la nouvelle** — 27,83
+  // sur un plafond mesuré à 28,94. Au-delà on ne gagne plus de densité, on ne
+  // fait que resserrer le semis : 0,50 rend 28,26 et 0,60 rend 28,69, pour des
+  // blocs vides qui tombent de 4,9 % à 4,1 %.
   /** Probabilité qu'une case soit candidate, AVANT exclusion des voisines. */
-  probabiliteCandidate: 0.35,
+  probabiliteCandidate: 0.45,
 
   /** Ce que la probabilité ci-dessus est censée produire, et que le test mesure. */
-  basesParDouzeCarre: 16,
+  basesParDouzeCarre: 28,
+
+  // ⚠⚠ LE CONTACT EN DIAGONALE EST PERMIS DEPUIS LE 03/09/2026, ET C'EST LE
+  // SEUL MOYEN D'EN METTRE DAVANTAGE. Ethan : « on davantage remplir le monde
+  // avec des bases ouvrage ». Or le plafond de l'ancienne règle est
+  // MATHÉMATIQUE : une case est retenue si son hachage domine celui de ses HUIT
+  // voisines candidates, donc la densité de ces maxima vaut exactement 1/9,
+  // soit 16 par 12 × 12, quelle que soit `probabiliteCandidate` — et le dépôt
+  // était déjà à 15,7. Il n'y avait rien à gagner sur la probabilité : c'est le
+  // VOISINAGE qui plafonnait.
+  //
+  // ⚠⚠ SUR QUATRE VOISINES, LE PLAFOND EST 1/5, SOIT 28,8 PAR 12 × 12 — mesuré,
+  // 28,94 au maximum de la courbe. La règle qui reste est donc littéralement
+  // celle qu'Ethan avait dictée le 29/08 : « aucune base ne peut être CÔTE À
+  // CÔTE avec une autre ». Deux bases peuvent se toucher par un COIN, jamais
+  // par un côté. **C'est une lecture, et elle se défait en remettant `false`** :
+  // le message du 29/08 disait aussi « 8 cases autour ». Le précédent est celui
+  // du joueur, à qui Ethan a ouvert le droit de fonder au contact de ses propres
+  // bases le 02/09.
+  //
+  // ⚠ ET LA CARTE DEVIENT MOINS RÉGULIÈRE, PAS PLUS — c'est l'autre moitié de
+  // l'arbitrage du 02/09 (« pas un cadre parfaitement rectangulaire comme une
+  // sylviculture »). Mesuré sur 12 graines : la part des bases collées au
+  // minimum permis tombe de **90,1 % à 63,2 %**, et les blocs 3 × 3 entièrement
+  // vides de 22,4 % à 4,9 %.
+  contactDiagonalPermis: true,
 
   /** Tolérance de la mesure : la moyenne doit tomber dans 16 ± 1. */
   toleranceMesure: 1,

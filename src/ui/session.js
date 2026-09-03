@@ -317,10 +317,12 @@ export const MAJ_PERIODE_MS = 1000;
  * comme un bouton sans effet.
  *
  * @param {string} brut le JSON rendu par le pont
- * @returns {{etape: string, build: number|null, message: string}}
+ * @returns {{etape: string, build: number|null, buildServi: number|null, message: string}}
  */
 export function lireEtatDeMaj(brut) {
-  const repli = { etape: 'INCONNUE', build: null, message: 'État de mise à jour illisible.' };
+  const repli = {
+    etape: 'INCONNUE', build: null, buildServi: null, message: 'État de mise à jour illisible.',
+  };
   if (typeof brut !== 'string' || brut === '') return repli;
   let lu;
   try {
@@ -333,8 +335,49 @@ export function lireEtatDeMaj(brut) {
   return {
     etape: typeof lu.etape === 'string' ? lu.etape : repli.etape,
     build: Number.isFinite(lu.build) ? lu.build : null,
+    // ⚠ ABSENT D'UNE ENVELOPPE D'AVANT LE 03/09, ET C'EST PRÉVU : `null`, jamais
+    // zéro. Un zéro se lirait « build 0 en cours » sur l'écran d'un joueur dont
+    // l'APK est ancien.
+    buildServi: Number.isFinite(lu.buildServi) ? lu.buildServi : null,
     message,
   };
+}
+
+/**
+ * La phrase que l'écran Options affiche, à partir de l'état du pont ET du build
+ * de la page qui l'affiche.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE LE PONT SEUL NE PEUT PAS DIRE LA VÉRITÉ SUR UNE VIEILLE
+ * ENVELOPPE. Ethan, le 03/09 : « le jeu détecte la mise à jour mais refuse de
+ * l'implanter ». Sa capture montrait « v0.67.0 b68 » et, deux lignes plus bas,
+ * « À jour — build 70 » — deux nombres qui se contredisaient. La cause est dans
+ * l'enveloppe : le verdict était calculé sur le build du DISQUE, pas sur celui
+ * qui TOURNE, et une mise à jour installée qui attend une relance se lisait
+ * « à jour ». C'est corrigé côté Kotlin (`EtatMiseAJour.verdictSansTelechargement`).
+ *
+ * ⚠⚠ MAIS LE KOTLIN N'ARRIVE QUE PAR UN NOUVEL APK, ET LE HTML ARRIVE TOUT SEUL.
+ * C'est tout le sens du projet : Pages met la page à jour, l'enveloppe reste
+ * celle qu'on a installée. Cette page-ci doit donc pouvoir dire la vérité
+ * SEULE, sous l'enveloppe qu'Ethan a déjà — et elle le peut, parce qu'elle
+ * connaît son propre build et que le pont lui donne celui du disque.
+ *
+ * ⚠ ELLE EST PURE, ET C'EST CE QUI LA REND TESTABLE ICI. Le dépôt n'a ni jsdom ni
+ * navigateur (CLAUDE.md §3) : une décision écrite dans le câblage de l'écran ne
+ * se serait mesurée nulle part.
+ *
+ * @param {{etape: string, build: number|null, message: string}} lu
+ * @param {number|null} monBuild le build de CETTE page, ou `null` s'il est illisible
+ * @returns {string}
+ */
+export function ligneDeMiseAJour(lu, monBuild) {
+  if (Number.isFinite(monBuild) && Number.isFinite(lu.build) && lu.build > monBuild) {
+    // ⚠ ON NOMME LES DEUX NOMBRES ET ON DIT LE GESTE. « Build 70 installé » seul
+    // laisserait le joueur devant le même écart inexpliqué ; c'est « relance le
+    // jeu » qui transforme un constat en action.
+    return `Build ${lu.build} installé — relance le jeu pour l'activer `
+      + `(build ${monBuild} en cours).`;
+  }
+  return lu.message;
 }
 
 export function initialiserSession(doc) {
@@ -747,6 +790,13 @@ export function initialiserSession(doc) {
   const majBouton = $('options-maj-verifier');
   let majMinuterie = null;
 
+  // ⚠⚠ LE BUILD DE CETTE PAGE, LU DANS LE BALISAGE ET PAS DANS SON TEXTE.
+  // `tools/build.js` remplace `%BUILD%` aux deux endroits ; l'attribut existe
+  // pour que le JS ait un NOMBRE plutôt qu'à découper « v0.69.0 b70 ». Sans lui,
+  // la page ne saurait pas ce qu'elle est, et ne pourrait pas dire au joueur
+  // qu'une version plus récente l'attend.
+  const monBuild = Number.parseInt($('options-version').dataset.build, 10);
+
   function pontDeMaj() {
     const pont = fenetre.FoyerZeroMaj;
     if (pont === undefined || pont === null) return null;
@@ -761,7 +811,7 @@ export function initialiserSession(doc) {
       return false;
     }
     const lu = lireEtatDeMaj(pont.etat());
-    majEtat.textContent = lu.message;
+    majEtat.textContent = ligneDeMiseAJour(lu, Number.isFinite(monBuild) ? monBuild : null);
     // ⚠ LE BOUTON SE RETIRE DU GESTE PENDANT LA VÉRIFICATION, IL NE DISPARAÎT
     // PAS : la ligne bougerait sous le doigt. Et il revient dans tous les cas —
     // succès comme échec —, sinon un réseau absent le figerait pour de bon.

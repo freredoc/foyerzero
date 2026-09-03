@@ -1523,3 +1523,282 @@ export const CHEMINS_DEPLACES_PAR_TRANSFERT = [
   'offense.butin.scorie',
   'offense.butinPerdu',
 ];
+
+// ---------------------------------------------------------------------------
+// Ce que le lot RETOURS-DU-03 a légitimement déplacé (03/09/2026)
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ TROIS RETOURS D'ETHAN, ET DEUX D'ENTRE EUX CHANGENT LA CARTE DE CHAQUE
+// GRAINE. « le territoire doit avoir 8 cases de plus, dans les angles » fait
+// passer les zones d'influence du disque à un OCTOGONE ; « on davantage remplir
+// le monde avec des bases ouvrage » fait passer l'exclusion de huit voisines à
+// quatre, donc la densité de 16 à 28 par 12 × 12. Le témoin ne se rafraîchit
+// pas en bloc : le lot NOMME ce qui bouge, et laisse le reste gardé contre la
+// référence d'avant.
+//
+// ⚠⚠ TRENTE-SEPT COUPLES SUR 322, ET PAS UN DE PLUS — mesuré, pas estimé. Ils
+// commencent tous à la phase 10 : les neuf premières phases — la construction de
+// la base, son économie, sa garnison, son armée, ET LE PREMIER RAID sur un camp
+// — sont identiques au bit. C'est ce qu'on attendait : un camp est de
+// l'HISTOIRE, pas du tirage de carte, et la garde du peuplement tient les bases
+// de l'Ouvrage à quinze cases du départ.
+//
+// ⚠ ET L'ATTRIBUTION EST MESURÉE, ELLE AUSSI. En remettant la seule densité
+// d'avant — `contactDiagonalPermis: false` et `probabiliteCandidate: 0,35` —, il
+// n'en reste que **QUATORZE** : ce sont ceux de l'octogone seul — `poisAcquis`
+// dès la phase 10, `attaque` et `rapports` dès la 11. Les vingt-trois autres
+// sont ceux de la densité.
+//
+// ⚠⚠ `poisAcquis` BOUGE DÈS LA PHASE 10, ET C'EST LA CONSÉQUENCE LA MOINS
+// ÉVIDENTE DU LOT. `releverLesPoisAcquis` peignait un CARRÉ plein de 25 cases
+// sans le moindre test de forme — un défaut qui a survécu à EUCLIDE et à
+// BASES-1, tous deux venus corriger ce genre-là. Un POI dans un angle rogné
+// était donc ACQUIS alors que ni la carte ne montre cette case comme alliée, ni
+// le barème du raid ne la facture ainsi. Il ne l'est plus.
+export const DEPLACES_PAR_RETOURS_DU_03 = {
+  p10_montee: {
+    poisAcquis: 'ba52e90e2bb7d658',
+  },
+  p11_raidOuvrageApres: {
+    attaque: '8c9117348b5fb1e1',
+    poisAcquis: 'ba52e90e2bb7d658',
+    rapports: '8212d804c9cc4981',
+    recherche: '960b154511441f72',
+    sitesEntames: 'e41d5af46ae76f83',
+  },
+  p12_veilleDuRaid: {
+    attaque: '7be5e6862ecd70f8',
+    nbTicks: 'ebd9888b924479de',
+    poisAcquis: 'ba52e90e2bb7d658',
+    prochaineInstanceSatellite: 'c38a961ced2e55ea',
+    rapports: '8212d804c9cc4981',
+    recherche: '960b154511441f72',
+    reserveReparation: '538a25ebb4f31588',
+    satellites: '188b982a62d3a510',
+    sitesEntames: '1e763745156394c3',
+  },
+  p13_apresLeRaid: {
+    attaque: '4db47a1df81c4d71',
+    disposition: 'ee32b2f93c30f1b6',
+    economie: '5b388e4b1a008055',
+    nbTicks: '9297e442320efcc6',
+    poisAcquis: '9132f8732fd50388',
+    position: '35d94b20c6b46c36',
+    prochaineInstanceSatellite: 'c069522a7211c545',
+    rapports: '0c34d389f082fdd1',
+    recherche: '960b154511441f72',
+    reserveReparation: 'd4058392de26aeca',
+    satellites: '38558e952ac15e9e',
+    sitesEntames: 'bd3acd3dcd7b7594',
+  },
+  p14_sousLeFeu: {
+    disposition: '9e45ab5ae40f028a',
+    economie: '177c23837158953d',
+    nbTicks: '32159ea716c4714e',
+    poisAcquis: 'fdd1bb068f07df34',
+    position: '17280f9278ee4ade',
+    prochaineInstanceSatellite: '2d4afeef1c1546e8',
+    rapports: '77b1e338dff064b1',
+    recherche: '960b154511441f72',
+    reserveReparation: 'cdecbcce63d37e1e',
+    satellites: '7b93826cf1f25b0a',
+  },
+};
+
+/** Les vingt-cinq empreintes par graine, après RETOURS-DU-03. */
+export const EMPREINTES_PAR_GRAINE_RETOURS_DU_03 = {
+  1: '15ace612d6c2014f',
+  2: 'd8c0d8730a1da52b',
+  3: '499a863f3dfbc55f',
+  4: '2574df05f37ac81c',
+  5: '416632aae9f9fcb5',
+  6: 'da42486683e30484',
+  7: '5a02c71f01c92139',
+  8: 'd81ad6ff91876f6c',
+  9: '3f729457eddc4387',
+  10: '93533011a74f708e',
+  11: '3633cbf2da7c34d1',
+  12: 'd8a7842d2ac12cbf',
+  13: 'b44bf50e81d3c80a',
+  14: 'b9701dae8f65143a',
+  15: 'ee4f89104ca5534e',
+  16: 'd476cd029b18757b',
+  17: 'b8b8cb23b9256568',
+  18: 'b92a4ba5ee053410',
+  19: '080ddc3c0ca40a4e',
+  20: '70fbf2cbb6aa49b8',
+  21: '64b2bc1504f858d4',
+  22: '5fbc8b71de15c716',
+  23: 'd15c664c004c130f',
+  24: '3e4f3f1b7f352bde',
+  25: '9997d43bec9dbd66',
+};
+
+/**
+ * Les quatre scalaires que RETOURS-DU-03 déplace, graine par graine.
+ *
+ * ⚠⚠ ET LES AUTRES NE BOUGENT PAS, CE QUI EST LA MOITIÉ QUI PROUVE. Les gestes
+ * de construction, les gestes d'armement, la taille de la sauvegarde, les cases
+ * atteignables, le déplacement et **tout le raid de proximité** (`raidProche`)
+ * sont IDENTIQUES sur les vingt-cinq graines. Le lot ne touche ni l'économie, ni
+ * la pose, ni la sauvegarde : `SAVE_VERSION` ne bouge pas et l'état ne gagne
+ * aucun champ.
+ *
+ * ⚠ `nbAttaquantes` ET `raidOuvrageNbCibles` BOUGENT SUR LES VINGT-CINQ, la
+ * cible choisie sur SIX, et l'empreinte du rapport sur NEUF. C'est la signature
+ * exacte d'une carte plus dense : il y a plus de bases à portée et plus de
+ * cibles, mais celle que le barème retient ne change que là où une nouvelle
+ * venue coûte moins cher.
+ */
+export const SCALAIRES_RETOURS_DU_03 = {
+  1: {
+    nbAttaquantes: 68,
+    raidOuvrageNbCibles: 68,
+    raidOuvrageCible: '201,15:base:n20',
+    raidOuvrageRapport: '8153b480b0220d44',
+  },
+  2: {
+    nbAttaquantes: 60,
+    raidOuvrageNbCibles: 60,
+    raidOuvrageCible: '200,17:base:n20',
+    raidOuvrageRapport: 'd28fda74fac6930c',
+  },
+  3: {
+    nbAttaquantes: 59,
+    raidOuvrageNbCibles: 59,
+    raidOuvrageCible: '201,15:base:n20',
+    raidOuvrageRapport: '71caa13d97bccd11',
+  },
+  4: {
+    nbAttaquantes: 66,
+    raidOuvrageNbCibles: 66,
+    raidOuvrageCible: '198,15:base:n20',
+    raidOuvrageRapport: 'c97efaa4a7e30175',
+  },
+  5: {
+    nbAttaquantes: 61,
+    raidOuvrageNbCibles: 61,
+    raidOuvrageCible: '201,15:base:n20',
+    raidOuvrageRapport: '9c9ee2e79a5b196e',
+  },
+  6: {
+    nbAttaquantes: 65,
+    raidOuvrageNbCibles: 65,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '2e063df951e09ccf',
+  },
+  7: {
+    nbAttaquantes: 63,
+    raidOuvrageNbCibles: 63,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '70b14d91a2ac7d90',
+  },
+  8: {
+    nbAttaquantes: 57,
+    raidOuvrageNbCibles: 57,
+    raidOuvrageCible: '201,15:base:n20',
+    raidOuvrageRapport: 'decbf4769fc7ae63',
+  },
+  9: {
+    nbAttaquantes: 70,
+    raidOuvrageNbCibles: 70,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '793fb6a4f3953d44',
+  },
+  10: {
+    nbAttaquantes: 56,
+    raidOuvrageNbCibles: 56,
+    raidOuvrageCible: '200,17:base:n20',
+    raidOuvrageRapport: '3d4524c05a1b8cc3',
+  },
+  11: {
+    nbAttaquantes: 54,
+    raidOuvrageNbCibles: 54,
+    raidOuvrageCible: '200,18:base:n20',
+    raidOuvrageRapport: '6bda311d4b766619',
+  },
+  12: {
+    nbAttaquantes: 65,
+    raidOuvrageNbCibles: 65,
+    raidOuvrageCible: '200,15:base:n20',
+    raidOuvrageRapport: '4e8722e38e439a62',
+  },
+  13: {
+    nbAttaquantes: 61,
+    raidOuvrageNbCibles: 61,
+    raidOuvrageCible: '201,17:base:n20',
+    raidOuvrageRapport: '3ddb45067867576e',
+  },
+  14: {
+    nbAttaquantes: 60,
+    raidOuvrageNbCibles: 60,
+    raidOuvrageCible: '199,15:base:n20',
+    raidOuvrageRapport: '6dfba7d89f0b7e94',
+  },
+  15: {
+    nbAttaquantes: 67,
+    raidOuvrageNbCibles: 67,
+    raidOuvrageCible: '198,17:base:n20',
+    raidOuvrageRapport: '41db38b2a8929ff7',
+  },
+  16: {
+    nbAttaquantes: 57,
+    raidOuvrageNbCibles: 57,
+    raidOuvrageCible: '201,17:base:n20',
+    raidOuvrageRapport: '525bb696d105065c',
+  },
+  17: {
+    nbAttaquantes: 62,
+    raidOuvrageNbCibles: 62,
+    raidOuvrageCible: '200,15:base:n20',
+    raidOuvrageRapport: '68abfd0bbdd0d9e4',
+  },
+  18: {
+    nbAttaquantes: 64,
+    raidOuvrageNbCibles: 64,
+    raidOuvrageCible: '200,15:base:n20',
+    raidOuvrageRapport: '5cbb435339e7cc8c',
+  },
+  19: {
+    nbAttaquantes: 66,
+    raidOuvrageNbCibles: 66,
+    raidOuvrageCible: '199,17:base:n20',
+    raidOuvrageRapport: 'fd6b587dbc1fa889',
+  },
+  20: {
+    nbAttaquantes: 66,
+    raidOuvrageNbCibles: 66,
+    raidOuvrageCible: '199,17:base:n20',
+    raidOuvrageRapport: 'aa6162730ab07dd5',
+  },
+  21: {
+    nbAttaquantes: 53,
+    raidOuvrageNbCibles: 53,
+    raidOuvrageCible: '199,15:base:n20',
+    raidOuvrageRapport: 'b94bd4b606500867',
+  },
+  22: {
+    nbAttaquantes: 67,
+    raidOuvrageNbCibles: 67,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '692b67b2845b7dd2',
+  },
+  23: {
+    nbAttaquantes: 62,
+    raidOuvrageNbCibles: 62,
+    raidOuvrageCible: '199,16:base:n20',
+    raidOuvrageRapport: '3c691fd10387edd6',
+  },
+  24: {
+    nbAttaquantes: 65,
+    raidOuvrageNbCibles: 65,
+    raidOuvrageCible: '200,18:base:n20',
+    raidOuvrageRapport: '8299391115f94b60',
+  },
+  25: {
+    nbAttaquantes: 63,
+    raidOuvrageNbCibles: 63,
+    raidOuvrageCible: '200,17:base:n20',
+    raidOuvrageRapport: 'e005af147f522c5c',
+  },
+};

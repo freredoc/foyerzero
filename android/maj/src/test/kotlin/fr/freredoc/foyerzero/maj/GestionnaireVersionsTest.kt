@@ -4,6 +4,7 @@ import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -35,6 +36,36 @@ class GestionnaireVersionsTest {
         val g = gestionnaire()
         assertEquals(String(embarque), String(g.htmlAuDemarrage()))
         assertEquals(2, g.buildInstalle(), "sans installation, le build est celui de l'APK")
+    }
+
+    @Test
+    fun `le build SERVI et le build INSTALLE divergent des qu une maj attend une relance`() {
+        // ⚠⚠ C'EST LE DÉFAUT DU 03/09, REPRODUIT EN JVM. Ethan voyait
+        // « v0.67.0 b68 » et, deux lignes plus bas, « À jour — build 70 ». Le
+        // verdict lisait le DISQUE ; or une vérification qui aboutit remplace le
+        // fichier pendant que la page tourne, et ne remplace jamais la page.
+        val g = gestionnaire()
+        assertNull(g.buildServi(), "aucune version n'est servie avant le premier démarrage")
+
+        g.htmlAuDemarrage()
+        assertEquals(2, g.buildServi(), "c'est la copie embarquée qui tourne")
+
+        // La vérification aboutit PENDANT que la page tourne.
+        g.installerNouvelleVersion("<html>v3</html>".toByteArray(), build = 3)
+        assertEquals(3, g.buildInstalle(), "le disque porte la nouvelle version")
+        assertEquals(2, g.buildServi(), "la page qui tourne, elle, n'a pas changé")
+        assertEquals(
+            EtatMiseAJour.Etape.EN_ATTENTE_DE_RELANCE,
+            EtatMiseAJour.verdictSansTelechargement(g.buildServi()!!, g.buildInstalle()),
+        )
+
+        // Et la relance les réconcilie — c'est la seule chose qui le fasse.
+        g.htmlAuDemarrage()
+        assertEquals(3, g.buildServi())
+        assertEquals(
+            EtatMiseAJour.Etape.A_JOUR,
+            EtatMiseAJour.verdictSansTelechargement(g.buildServi()!!, g.buildInstalle()),
+        )
     }
 
     @Test

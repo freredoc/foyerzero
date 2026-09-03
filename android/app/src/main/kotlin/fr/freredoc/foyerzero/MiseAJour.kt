@@ -31,9 +31,22 @@ object MiseAJour {
     @Volatile
     private var refus: CycleMiseAJour.Refus? = null
 
-    /** L'état courant, sérialisé pour l'écran Options. */
-    fun etatJson(gestionnaire: GestionnaireVersions): String =
-        EtatMiseAJour.versJson(etape, gestionnaire.buildInstalle(), refus)
+    /**
+     * L'état courant, sérialisé pour l'écran Options.
+     *
+     * ⚠ DEUX BUILDS, PAS UN — voir `EtatMiseAJour`. Celui qui TOURNE et celui qui
+     * est POSÉ sur le disque diffèrent dès qu'une mise à jour attend une relance,
+     * et n'en donner qu'un était le défaut du 03/09.
+     *
+     * ⚠ `buildServi()` VAUT `null` AVANT TOUT DÉMARRAGE, et on retombe alors sur
+     * le disque. En pratique `MainActivity` appelle `htmlAuDemarrage()` avant de
+     * lancer la moindre vérification : ce repli ne sert qu'à ne pas inventer un
+     * zéro qui se lirait « build 0 en cours ».
+     */
+    fun etatJson(gestionnaire: GestionnaireVersions): String {
+        val installe = gestionnaire.buildInstalle()
+        return EtatMiseAJour.versJson(etape, gestionnaire.buildServi() ?: installe, installe, refus)
+    }
 
     /**
      * Lance une vérification si aucune ne tourne déjà.
@@ -79,13 +92,22 @@ object MiseAJour {
             )
             if (manifeste == null) {
                 // ⚠ UN RETOUR EN ARRIÈRE REFUSÉ N'EST PAS UNE PANNE : c'est le
-                // cas NORMAL quand on est déjà à jour — le manifeste annonce le
-                // build qu'on a déjà, et la politique anti-retour le rejette.
-                // Le compter comme un échec ferait dire « erreur » à une
-                // vérification parfaitement réussie.
+                // cas NORMAL quand le DISQUE porte déjà le build publié, et la
+                // politique anti-retour le rejette. Le compter comme un échec
+                // ferait dire « erreur » à une vérification parfaitement réussie.
+                //
+                // ⚠⚠ MAIS « RIEN À TÉLÉCHARGER » N'EST PAS « À JOUR », ET C'EST LE
+                // DÉFAUT DU 03/09. Le disque n'est pas ce qui tourne : si une
+                // version plus récente y attend une relance, le verdict est
+                // `EN_ATTENTE_DE_RELANCE`. La décision vit dans `:maj`, testée en
+                // JVM — `verdictSansTelechargement` —, jamais ici.
                 conclure(
-                    if (motif == CycleMiseAJour.Refus.RETOUR_EN_ARRIERE) EtatMiseAJour.Etape.A_JOUR
-                    else EtatMiseAJour.Etape.ECHOUEE,
+                    if (motif == CycleMiseAJour.Refus.RETOUR_EN_ARRIERE) {
+                        EtatMiseAJour.verdictSansTelechargement(
+                            gestionnaire.buildServi() ?: gestionnaire.buildInstalle(),
+                            gestionnaire.buildInstalle(),
+                        )
+                    } else EtatMiseAJour.Etape.ECHOUEE,
                     motif,
                 )
                 return

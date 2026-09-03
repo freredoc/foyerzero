@@ -12,11 +12,24 @@
 // qui se journalisera plus tard, ce sont les ÉCARTS — un site rasé, un camp qui
 // réapparaît —, jamais la carte elle-même.
 //
-// ⚠ LA RÈGLE DES 8 CASES EST APPLIQUÉE LOCALEMENT, SANS PASSE GLOBALE. Une case
-// candidate devient une base si son hachage DOMINE celui de ses huit voisines
-// candidates. Deux voisines candidates ne peuvent donc pas gagner toutes les
-// deux, et le contact est impossible par construction — sans jamais parcourir la
-// carte. Le coût est de neuf hachages par case au lieu d'un.
+// ⚠⚠ LA RÈGLE DE NON-CONTACT S'EST DESSERRÉE LE 03/09/2026, ET C'ÉTAIT LE SEUL
+// MOYEN DE REMPLIR DAVANTAGE. Ethan : « on davantage remplir le monde avec des
+// bases ouvrage ». L'exclusion portait sur les HUIT voisines, et ce voisinage
+// est un PLAFOND MATHÉMATIQUE : la densité des maxima locaux d'un 3 × 3 vaut
+// exactement 1/9, soit 16 par 12 × 12, quelle que soit la probabilité — le dépôt
+// en était déjà à 15,7. Elle porte désormais sur les QUATRE voisines
+// orthogonales, dont le plafond est 1/5, soit 28,8 ; mesuré, 27,83.
+//
+// ⚠ CE QUI RESTE VRAI : DEUX BASES NE SONT JAMAIS CÔTE À CÔTE. Elles peuvent se
+// toucher par un COIN, jamais par un côté — c'est la lettre du message du 29/08
+// (« aucune base ne peut être côte à côte »), et non plus ses « 8 cases autour ».
+// `PEUPLEMENT.contactDiagonalPermis` porte la décision, et la remettre à `false`
+// rend la carte d'avant à l'identique.
+//
+// ⚠ LA RÈGLE RESTE APPLIQUÉE LOCALEMENT, SANS PASSE GLOBALE. Une case candidate
+// devient une base si son hachage DOMINE celui de ses voisines candidates. Deux
+// voisines candidates ne peuvent donc pas gagner toutes les deux, et le contact
+// interdit est impossible par construction — sans jamais parcourir la carte.
 //
 // ⚠ CE MODULE NE POSE NI CAMP NI AVANT-POSTE. Ceux-là ne sont pas sur la carte :
 // ils suivent la base du joueur, apparaissent cinq minutes après sa pose ou son
@@ -129,6 +142,32 @@ export function horsDeLaGarde(rangee, colonne) {
   return dr * dr + dc * dc >= garde * garde;
 }
 
+/**
+ * Les voisines dont une candidate doit dominer le hachage pour devenir une base.
+ *
+ * ⚠⚠ LA LISTE EST CALCULÉE UNE FOIS, ET C'EST ELLE QUI PORTE LA DENSITÉ. Quatre
+ * voisines orthogonales quand le contact diagonal est permis, les huit sinon :
+ * le plafond de densité vaut 1/(1 + n) par case, donc 28,8 par 12 × 12 contre 16.
+ * Aucun autre réglage ne peut franchir ce plafond — ni la probabilité, ni la
+ * garde, ni la taille de la carte.
+ *
+ * ⚠ ELLE NE CONTIENT JAMAIS (0, 0). Une case qui devrait dominer son propre
+ * hachage ne serait JAMAIS une base : la comparaison est `>=`, donc elle
+ * perdrait contre elle-même, et la carte serait vide sans qu'une seule ligne
+ * n'ait l'air fausse.
+ */
+export const VOISINES_EXCLUES = (() => {
+  const liste = [];
+  for (let dr = -1; dr <= 1; dr += 1) {
+    for (let dc = -1; dc <= 1; dc += 1) {
+      if (dr === 0 && dc === 0) continue;
+      if (PEUPLEMENT.contactDiagonalPermis && dr !== 0 && dc !== 0) continue;
+      liste.push([dr, dc]);
+    }
+  }
+  return liste;
+})();
+
 /** Une case candidate est une case que le premier tirage retient. */
 function estCandidate(graine, rangee, colonne) {
   if (!estSurLaCarte(rangee, colonne)) return false;
@@ -139,10 +178,11 @@ function estCandidate(graine, rangee, colonne) {
 /**
  * Y a-t-il une base de l'Ouvrage sur cette case ?
  *
- * Une case porte une base si elle est candidate et si aucune de ses huit
- * voisines candidates ne la domine au départage. La comparaison est stricte : à
- * égalité — c'est-à-dire jamais, en pratique — la case perd, ce qui est le seul
- * sens qui garantisse qu'aucune paire ne gagne ensemble.
+ * Une case porte une base si elle est candidate et si aucune de ses voisines
+ * candidates — celles de `VOISINES_EXCLUES` — ne la domine au départage. La
+ * comparaison est stricte : à égalité — c'est-à-dire jamais, en pratique — la
+ * case perd, ce qui est le seul sens qui garantisse qu'aucune paire ne gagne
+ * ensemble.
  *
  * @param {number} graine graine de la partie
  * @param {number} rangee
@@ -152,14 +192,11 @@ function estCandidate(graine, rangee, colonne) {
 export function estBaseOuvrage(graine, rangee, colonne) {
   if (!estCandidate(graine, rangee, colonne)) return false;
   const mien = hachageDeCase(graine, rangee, colonne, 1);
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      const r = rangee + dr;
-      const c = colonne + dc;
-      if (!estCandidate(graine, r, c)) continue;
-      if (hachageDeCase(graine, r, c, 1) >= mien) return false;
-    }
+  for (const [dr, dc] of VOISINES_EXCLUES) {
+    const r = rangee + dr;
+    const c = colonne + dc;
+    if (!estCandidate(graine, r, c)) continue;
+    if (hachageDeCase(graine, r, c, 1) >= mien) return false;
   }
   return true;
 }

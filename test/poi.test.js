@@ -162,7 +162,15 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
   // comptes ci-dessous gardent une chose plus modeste, et qui vaut quand même :
   // que le peuplement soit STABLE d'un lot à l'autre. Le prochain lot qui les
   // fait bouger doit dire pourquoi, comme celui-ci le fait.
-  const REFERENCE = [[1, 993], [7, 993], [42, 996], [777, 978], [2026, 984], [4242, 986]];
+  //
+  // ⚠⚠ BASELINE REMESURÉE UNE SECONDE FOIS, LE 03/09, ET POUR UNE RAISON ÉCRITE :
+  // Ethan a demandé « davantage remplir le monde avec des bases ouvrage », et
+  // l'exclusion est passée de huit voisines à quatre. Les six comptes montent de
+  // **993 · 993 · 996 · 978 · 984 · 986** à ceux ci-dessous, soit **+72 % en
+  // moyenne** — ce qui est très exactement le rapport des deux plafonds
+  // structurels, 28,8 contre 16 (voir `EUCLIDE T5 bis`). Un compte qui aurait
+  // moins bougé aurait voulu dire que le desserrage n'a pas pris.
+  const REFERENCE = [[1, 1719], [7, 1704], [42, 1711], [777, 1662], [2026, 1667], [4242, 1682]];
   for (const [graine, attendu] of REFERENCE) {
     let n = 0;
     for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) {
@@ -818,6 +826,49 @@ test('POI T23 — un POI n\'est pas une cible : ni site attaquable, ni emprise',
       escouade: 10, blinde: 10, aeronef: 10, defense: 10,
     },
   );
+});
+
+test('POI T25 — un POI dans un ANGLE ROGNÉ n\'est pas acquis, sa voisine l\'est', () => {
+  // ⚠⚠ CE TEST NAÎT D'UN DÉFAUT QUE DEUX LOTS ONT CHERCHÉ SANS LE TROUVER.
+  // `releverLesPoisAcquis` peignait un CARRÉ plein de (2r+1)² cases, sans le
+  // moindre test de forme : un POI dans un coin était donc ACQUIS alors que ni
+  // la carte ne montre cette case comme alliée, ni le barème du raid ne la
+  // facture ainsi. EUCLIDE avait énuméré trois sites de bascule sans le voir,
+  // BASES-1 en a corrigé un quatrième sans le voir non plus. Corrigé le 03/09,
+  // en faisant passer toute la zone d'influence à l'octogone dicté par Ethan.
+  //
+  // ⚠ LE MONTAGE POSE LA BASE AUTOUR D'UN VRAI POI DE LA CARTE, il n'en
+  // fabrique pas : c'est `poiDeLaCase` qui doit décider, pas une table à nous.
+  const etat = creerEtat(3);
+  const carte = carteDesPoi(etat.graine);
+  const rayon = GEOGRAPHIE.rayonInfluenceJoueur;
+
+  // Le coin rogné : (−2, −2) depuis la base. On place donc la base en
+  // (poi.rangee + 2, poi.colonne + 2).
+  const dansLaCarte = (r, c) => r >= 1 && r <= GEOGRAPHIE.carte.hauteur
+    && c >= 1 && c <= GEOGRAPHIE.carte.largeur;
+  const poi = carte.liste.find((x) => dansLaCarte(x.rangee + rayon, x.colonne + rayon));
+  assert.ok(poi, 'montage : aucun POI ne laisse la place à une base en diagonale');
+
+  const auCoin = () => {
+    const e = creerEtat(3);
+    baseCourante(e).position = { rangee: poi.rangee + rayon, colonne: poi.colonne + rayon };
+    releverLesPoisAcquis(e);
+    return e.poisAcquis;
+  };
+  // ⚠ ET LA MOITIÉ QUI FAIT MESURER QUELQUE CHOSE : depuis l'ÉPAULE — une case
+  // plus près en colonne —, le même POI EST acquis. Sans elle, un relevé cassé
+  // qui n'acquerrait jamais rien passerait au vert.
+  const aLEpaule = () => {
+    const e = creerEtat(3);
+    baseCourante(e).position = { rangee: poi.rangee + rayon, colonne: poi.colonne + rayon - 1 };
+    releverLesPoisAcquis(e);
+    return e.poisAcquis;
+  };
+
+  assert.deepEqual(auCoin(), [], 'un POI dans un angle rogné est encore acquis');
+  assert.deepEqual(aLEpaule(), [{ type: poi.type, bande: poi.bande }],
+    'le POI n\'est pas acquis depuis l\'épaule : le montage ne mesure rien');
 });
 
 test('POI T24 — en partie normale, AUCUN POI n\'est acquérable, et ce n\'est pas un hasard', () => {

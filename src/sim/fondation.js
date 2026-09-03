@@ -19,7 +19,7 @@
 
 import { FONDATION, GEOGRAPHIE } from '../data/sites.js';
 import { estSurLaCarte } from './carte.js';
-import { distanceCarreeCases } from './points-attaque.js';
+import { distanceCarreeCases, dansLOctogoneDInfluence } from './points-attaque.js';
 import { estBaseOuvrage } from './peuplement.js';
 import { poiDeLaCase } from './poi.js';
 import { siteDeLaCase, butinSiToutTombe } from './site-de-la-case.js';
@@ -34,9 +34,6 @@ import { ajouterUneBase } from './state.js';
 /** La portée de fondation, au carré — jamais de racine (lot EUCLIDE). */
 export const PORTEE_CARREE = FONDATION.porteeMaxCases * FONDATION.porteeMaxCases;
 
-/** Le rayon d'influence d'une base de l'Ouvrage, au carré. */
-const TERRITOIRE_ENNEMI_CARRE = GEOGRAPHIE.rayonInfluenceEnnemie
-  * GEOGRAPHIE.rayonInfluenceEnnemie;
 
 /**
  * Les types de site qu'on peut détruire en fondant dessus.
@@ -157,13 +154,17 @@ export function problemesDeLaFondation(etat, cible) {
 }
 
 /**
- * La case est-elle dans le disque d'influence d'une base de l'Ouvrage ?
+ * La case est-elle dans la zone d'influence d'une base de l'Ouvrage ?
  *
- * ⚠⚠ LE DISQUE, PAS LE CARRÉ, ET LA MÊME MÉTRIQUE QUE `territoire.js`. C'est
- * tout l'objet du §4.1 : depuis ce lot, la carte peinte et la règle appliquée
- * décrivent la même géométrie. Une garde carrée ici referait exactement
- * l'incohérence qu'on vient de retirer, et le joueur verrait un refus sur une
- * case que la carte lui montre libre.
+ * ⚠⚠ LA MÊME FONCTION QUE LA CARTE, PAS LA MÊME MÉTRIQUE — LA MÊME ÉCRITURE.
+ * Ce module a porté sa propre copie de la forme : le carré jusqu'à BASES-1, puis
+ * le disque. Depuis le 03/09, la zone est un OCTOGONE et il n'y a plus qu'une
+ * écriture, `dansLOctogoneDInfluence` — celle que la carte peint et que le barème
+ * du raid facture. Une forme recopiée ici referait exactement l'incohérence qu'on
+ * a déjà retirée deux fois : un refus sur une case que la carte montre libre.
+ *
+ * ⚠ ET LE REFUS SE DURCIT DE HUIT CASES PAR BASE DE L'OUVRAGE, mécaniquement :
+ * l'octogone est plus large que le disque. C'est mesuré au rapport du lot.
  *
  * ⚠ ON BALAIE LES CENTRES POSSIBLES, PAS LA CARTE. Une base de l'Ouvrage
  * influence à trois cases : il suffit donc de regarder le carré de rayon 3
@@ -177,7 +178,7 @@ function dansUnTerritoireEnnemi(etat, cible) {
   const r = GEOGRAPHIE.rayonInfluenceEnnemie;
   for (let dr = -r; dr <= r; dr += 1) {
     for (let dc = -r; dc <= r; dc += 1) {
-      if (dr * dr + dc * dc > TERRITOIRE_ENNEMI_CARRE) continue;
+      if (!dansLOctogoneDInfluence(dr, dc, r)) continue;
       const rangee = cible.rangee + dr;
       const colonne = cible.colonne + dc;
       if (!estSurLaCarte(rangee, colonne)) continue;

@@ -31,29 +31,45 @@ function carteEntiere(graine) {
   return { liste: bases, cles: new Set(bases.map((k) => `${k.rangee}:${k.colonne}`)) };
 }
 
-test('peuplement — aucune base de l\'Ouvrage n\'en touche une autre', () => {
-  // La règle des huit cases, balayée sur la carte entière et sur trois graines.
-  // C'est la seule des quatre propriétés qui doit tenir SANS AUCUNE exception :
-  // une moyenne se discute, un contact non.
+test('peuplement — aucune base de l\'Ouvrage n\'en jouxte une autre PAR UN CÔTÉ', () => {
+  // ⚠⚠ LA RÈGLE S'EST DESSERRÉE LE 03/09, ET LE TEST NE S'ASSOUPLIT PAS POUR
+  // AUTANT : il change de règle et garde la nouvelle SANS AUCUNE exception. Le
+  // contact par un CÔTÉ reste impossible — c'est la lettre du « côte à côte »
+  // du 29/08 —, le contact par un COIN est désormais permis, et c'est ce qui
+  // fait tenir 28 bases par 12 × 12 au lieu de 16.
+  //
+  // ⚠ ET LA MOITIÉ QUI COMPTE LE PLUS EST LA SECONDE : on exige que des
+  // diagonales EXISTENT. Sans elle, le test resterait vert sur le code d'avant —
+  // une carte sans aucun contact satisfait trivialement « pas de contact par un
+  // côté », et le desserrage pourrait être annulé sans qu'un test tombe.
+  const ORTHOGONALES = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  const DIAGONALES = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
   let bases = 0;
+  let enDiagonale = 0;
   for (const graine of [1, 7, 42]) {
     const { cles } = carteEntiere(graine);
     bases += cles.size;
     for (const cle of cles) {
       const [rangee, colonne] = cle.split(':').map(Number);
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          if (dr === 0 && dc === 0) continue;
-          assert.ok(
-            !cles.has(`${rangee + dr}:${colonne + dc}`),
-            `bases en contact : (${rangee}, ${colonne}) et (${rangee + dr}, ${colonne + dc})`,
-          );
-        }
+      for (const [dr, dc] of ORTHOGONALES) {
+        assert.ok(
+          !cles.has(`${rangee + dr}:${colonne + dc}`),
+          `bases côte à côte : (${rangee}, ${colonne}) et (${rangee + dr}, ${colonne + dc})`,
+        );
+      }
+      if (DIAGONALES.some(([dr, dc]) => cles.has(`${rangee + dr}:${colonne + dc}`))) {
+        enDiagonale += 1;
       }
     }
   }
   // Falsifiable : une carte vide satisferait la boucle ci-dessus sans rien dire.
   assert.ok(bases > 1500, `${bases} bases sur trois graines : le balayage ne mesure rien`);
+  // ⚠ MESURÉ : plus de la moitié des bases touchent une voisine par un coin. Le
+  // seuil est franc — 40 % — pour qu'il dise « le desserrage a bien eu lieu »
+  // sans figer une valeur d'équilibrage que le prochain réglage ferait bouger.
+  assert.ok(enDiagonale > bases * 0.4,
+    `${enDiagonale} bases sur ${bases} touchent une voisine en diagonale : `
+    + 'le contact diagonal n\'a pas été ouvert');
 });
 
 test('peuplement — la garde est vide, et elle s\'arrête où elle le dit', () => {

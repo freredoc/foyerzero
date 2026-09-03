@@ -65,8 +65,10 @@ import {
   DEPLACES_PAR_BASES_1, EMPREINTES_DES_CHAMPS_AJOUTES,
   EMPREINTES_PAR_GRAINE_BASES_1,
   DEPLACES_PAR_TRANSFERT, OCTETS_AJOUTES_PAR_TRANSFERT,
-  EMPREINTES_PAR_GRAINE_TRANSFERT, RAPPORTS_TRANSFERT,
+  RAPPORTS_TRANSFERT,
   CLES_DU_RAPPORT_AVANT_TRANSFERT,
+  DEPLACES_PAR_RETOURS_DU_03, EMPREINTES_PAR_GRAINE_RETOURS_DU_03,
+  SCALAIRES_RETOURS_DU_03,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -80,11 +82,17 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * lot qui change un comportement NOMME ce qui bouge, et laisse tout le reste
  * gardé contre la référence d'avant.
  *
+ * ⚠⚠ TRENTE-SEPT COUPLES DE PLUS AU LOT RETOURS-DU-03, tous à partir de la
+ * phase 10 : deux des trois retours d'Ethan changent la CARTE de chaque graine —
+ * l'octogone des territoires et la densité du peuplement. Les neuf premières
+ * phases, le premier raid compris, sont identiques au bit.
+ *
  * ⚠ QUINZE COUPLES DE PLUS AU LOT TRANSFERT — `rapports` et `economie` à partir
  * de la phase 7, qui est le premier raid : le rapport a perdu `butinPerdu`, et
  * le butin ne se plafonne plus. Les surcharges s'EMPILENT, de la plus récente à
- * la plus ancienne : un couple que TRANSFERT n'a pas nommé reste gardé contre
- * BASES-1, et à défaut contre la capture d'origine.
+ * la plus ancienne : un couple que RETOURS-DU-03 n'a pas nommé reste gardé
+ * contre TRANSFERT, puis contre BASES-1, et à défaut contre la capture
+ * d'origine.
  *
  * ⚠ SEPT COUPLES DÉPLACÉS PAR BASES-1 — `attaque` et `rapports` à partir de la phase 11,
  * parce que le prix d'un raid a monté quand la zone d'influence est passée du
@@ -93,7 +101,8 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_TRANSFERT[phase]?.[champ]
+  return DEPLACES_PAR_RETOURS_DU_03[phase]?.[champ]
+    ?? DEPLACES_PAR_TRANSFERT[phase]?.[champ]
     ?? EMPREINTES_DES_CHAMPS_AJOUTES[phase]?.[champ]
     ?? DEPLACES_PAR_BASES_1[phase]?.[champ]
     ?? EMPREINTES_PAR_CHAMP[phase][champ];
@@ -445,7 +454,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_TRANSFERT[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOURS_DU_03[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -469,9 +478,22 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);
     assert.equal(x.deplacement, attendu.deplacement, `graine ${g} : déplacement`);
-    assert.equal(x.nbAttaquantes, attendu.nbAttaquantes, `graine ${g} : bases attaquantes`);
+    // ⚠⚠ QUATRE SCALAIRES SONT SURCHARGÉS PAR RETOURS-DU-03, ET LES AUTRES NON.
+    // Une carte plus dense met plus de bases à portée : `nbAttaquantes` et le
+    // nombre de cibles du raid lointain bougent sur les vingt-cinq graines. Les
+    // gestes, la sauvegarde, les cases atteignables, le déplacement et TOUT le
+    // raid de proximité restent gardés contre la capture d'origine — c'est cette
+    // moitié-là qui prouve que le lot ne touche ni l'économie ni la pose.
+    const surcharge = SCALAIRES_RETOURS_DU_03[g];
+    assert.equal(x.nbAttaquantes, surcharge.nbAttaquantes, `graine ${g} : bases attaquantes`);
     for (const [prefixe, cle] of [['p07_raidProche', 'raidProche'], ['p11_raidOuvrage', 'raidOuvrage']]) {
-      const a = attendu[cle];
+      const a = cle === 'raidOuvrage'
+        ? {
+          ...attendu[cle],
+          nbCibles: surcharge.raidOuvrageNbCibles,
+          cible: surcharge.raidOuvrageCible,
+        }
+        : attendu[cle];
       assert.equal(x[`${prefixe}NbCibles`], a.nbCibles, `graine ${g} : ${cle} — nombre de cibles`);
       assert.equal(x[`${prefixe}Cible`], a.cible, `graine ${g} : ${cle} — cible choisie`);
       assert.equal(x[`${prefixe}SimuleNeFuitPas`], a.neFuitPas, `graine ${g} : ${cle} — la simulation ne fuit pas`);
@@ -485,8 +507,15 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // ⚠ ELLES REMPLACENT `RAPPORTS_DEPLACES_PAR_BASES_1`, qui ne nommait que
       // trois graines : les vingt-deux autres étaient gardées contre la capture
       // d'origine, ce qui n'est plus possible.
+      // ⚠ LE RAPPORT DU RAID LOINTAIN CHANGE SUR NEUF GRAINES — la cible n'est
+      // plus la même sur six d'entre elles, et le prix a bougé sur les autres.
+      // Celui du raid de PROXIMITÉ, lui, reste gardé contre TRANSFERT : un camp
+      // est de l'histoire, pas du tirage de carte.
+      const attenduRapport = cle === 'raidOuvrage'
+        ? surcharge.raidOuvrageRapport
+        : RAPPORTS_TRANSFERT[g][`${cle}Rapport`];
       assert.equal(
-        empreinte(JSON.stringify(x[`${prefixe}Rapport`])), RAPPORTS_TRANSFERT[g][`${cle}Rapport`],
+        empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,
         `graine ${g} : ${cle} — le rapport de raid a changé`,
       );
       // ⚠⚠ ET VOICI LA PREUVE, STRUCTURELLE PLUTÔT QUE PAR EMPREINTE : le
@@ -820,18 +849,47 @@ function partieAvecDroit(graine = 3, rangee = 285) {
   return etat;
 }
 
+/**
+ * Une case où la fondation est PERMISE, demandée au moteur.
+ *
+ * ⚠⚠ ELLE ÉTAIT ÉCRITE EN DUR — `{ rangee: 283, colonne: 22 }` — DANS DEUX
+ * MONTAGES, ET LES DEUX SONT TOMBÉS LE 03/09. Le lot qui a densifié le
+ * peuplement et élargi les territoires a mis une base de l'Ouvrage à portée de
+ * cette case-là ; les deux tests ont alors échoué sur « fondation impossible »,
+ * c'est-à-dire pour une raison qui ne les regardait pas. **Un montage qui écrit
+ * une coordonnée ne garde que lui-même** — c'est écrit dans CLAUDE.md depuis le
+ * 31/08, et c'est la troisième fois que le dépôt le paye.
+ *
+ * ⚠ ELLE LÈVE PLUTÔT QUE DE RENDRE `null`. Un test qui continuerait sans base à
+ * fonder mesurerait une partie à une seule base et passerait au vert sans rien
+ * garder.
+ */
+function caseFondable(etat, rayon = 10) {
+  const centre = baseCourante(etat).position;
+  for (let dr = -rayon; dr <= rayon; dr += 1) {
+    for (let dc = -rayon; dc <= rayon; dc += 1) {
+      const cible = { rangee: centre.rangee + dr, colonne: centre.colonne + dc };
+      if (problemesDeLaFondation(etat, cible).length === 0) return cible;
+    }
+  }
+  throw new Error('montage : aucune case fondable autour de la base');
+}
+
 // ---------------------------------------------------------------------------
 // T1 — le territoire est ROND
 // ---------------------------------------------------------------------------
 
-test('BASES-1 T1 — le territoire est un disque, plus un carré', () => {
-  // ⚠⚠ LE LOT EUCLIDE AVAIT MANQUÉ `territoire.js` : `peindre` remplissait un
-  // carré de (2r+1)² cases SANS le moindre test de distance. Ce n'était pas
-  // cosmétique — le territoire allié est ce qui rend un raid moins cher, donc la
-  // carte peinte et le prix affiché décrivaient deux géométries différentes.
+test('BASES-1 T1 — le territoire est un OCTOGONE, ni carré ni disque', () => {
+  // ⚠⚠ LA FORME A CHANGÉ DEUX FOIS DEPUIS QUE CE TEST EXISTE, ET IL A SUIVI LES
+  // DEUX. EUCLIDE avait manqué `territoire.js` — `peindre` remplissait un carré
+  // de (2r+1)² cases sans le moindre test de distance ; BASES-1 l'a passé au
+  // disque ; Ethan, le 03/09 : « le territoire doit avoir 8 cases de plus, dans
+  // les angles ». Ce n'est pas cosmétique — le territoire allié est ce qui rend
+  // un raid moins cher, donc la carte peinte et le prix affiché doivent décrire
+  // la même géométrie.
   //
-  // ⚠ ON COMPTE LES CASES, ON N'EN REGARDE PAS UNE. Un carré de rayon 2 fait 25
-  // cases, le disque en fait 13 ; de rayon 3, 49 contre 29. Le compte est ce que
+  // ⚠ ON COMPTE LES CASES, ON N'EN REGARDE PAS UNE. Rayon 2 : 25 au carré, 13 au
+  // disque, **21** à l'octogone. Rayon 3 : 49, 29, **37**. Le compte est ce que
   // le lot change, et il ne peut pas passer par hasard.
   const etat = creerEtat(3);
   const chezMoi = baseCourante(etat).position;
@@ -854,9 +912,10 @@ test('BASES-1 T1 — le territoire est un disque, plus un carré', () => {
   // ⚠ AU DÉPART, LE JOUEUR EST SEUL : la garde du peuplement tient les bases de
   // l'Ouvrage à quinze cases, donc rien d'autre ne peint dans cette fenêtre.
   assert.equal(GEOGRAPHIE.rayonInfluenceJoueur, 2);
-  assert.equal(compter(chezMoi, 2, JOUEUR), 13,
-    'le territoire du joueur compte 25 cases : il est resté carré');
-  // La ligne droite à 2 est dedans, la diagonale à (2, 2) est dehors — 8 > 4.
+  assert.equal(compter(chezMoi, 2, JOUEUR), 21,
+    'le territoire du joueur ne compte plus 21 cases : la forme a changé');
+  // La ligne droite à 2 est dedans, l'épaule (2, 1) aussi depuis le rognage, et
+  // le coin (2, 2) est dehors — c'est la case qu'Ethan fait rogner.
   const carte = territoireDeLaFenetre(etat, {
     premiereRangee: chezMoi.rangee - 3,
     derniereRangee: chezMoi.rangee + 3,
@@ -864,6 +923,7 @@ test('BASES-1 T1 — le territoire est un disque, plus un carré', () => {
     derniereColonne: chezMoi.colonne + 3,
   });
   assert.equal(occupantDeLaCase(carte, chezMoi.rangee - 2, chezMoi.colonne), JOUEUR);
+  assert.equal(occupantDeLaCase(carte, chezMoi.rangee - 2, chezMoi.colonne - 1), JOUEUR);
   assert.equal(occupantDeLaCase(carte, chezMoi.rangee - 2, chezMoi.colonne - 2), NEUTRE);
 
   // ⚠⚠ ET POUR L'OUVRAGE, ON COMPARE CASE PAR CASE À LA RÈGLE. Compter autour
@@ -871,42 +931,61 @@ test('BASES-1 T1 — le territoire est un disque, plus un carré', () => {
   // bases de la graine 3, AUCUNE n'a ses deux diagonales à (3, 3) libres de
   // toute autre — et `basesDeLaFenetre` ignore `basesRasees`, donc on ne peut
   // pas non plus faire le vide. On mesure alors l'équivalence exacte : une case
-  // est ennemie SI ET SEULEMENT SI une base de l'Ouvrage est à trois cases ou
-  // moins **en euclidien**. C'est plus fort qu'un compte, et insensible aux
-  // recouvrements.
+  // est ennemie SI ET SEULEMENT SI une base de l'Ouvrage est dans son octogone.
+  // C'est plus fort qu'un compte, et insensible aux recouvrements.
   const R = GEOGRAPHIE.rayonInfluenceEnnemie;
   assert.equal(R, 3);
+  // ⚠⚠ LA FENÊTRE A ÉTÉ CHOISIE PAR MESURE, PAS PAR COMMODITÉ, ET ELLE DESCEND
+  // JUSQU'AU BORD DE LA GARDE. Sur une fenêtre uniquement dense — rangées 120 à
+  // 150 —, les trois formes peignent EXACTEMENT la même chose : quand les bases
+  // sont à 28 par 12 × 12, une case qui n'a aucune base dans son octogone n'en a
+  // jamais une dans un coin rogné. Les seules cases qui distinguent les formes
+  // sont contre la GARDE, vers les rangées 283–285, là où le semis s'arrête net :
+  // mesuré, une dizaine par graine dans chaque sens. La fenêtre les contient —
+  // sans elles, les deux gardes ci-dessous passeraient au vert sans rien mesurer.
   const fenetre = {
-    premiereRangee: 120, derniereRangee: 150, premiereColonne: 5, derniereColonne: 27,
+    premiereRangee: 120, derniereRangee: 300, premiereColonne: 1, derniereColonne: 31,
   };
   const zone = territoireDeLaFenetre(etat, fenetre);
-  const aPortee = (r, c, rayonCarre, tchebychev) => {
+  // ⚠ LES TROIS FORMES SONT ÉCRITES ICI, PAS IMPORTÉES. Appeler
+  // `dansLOctogoneDInfluence` rendrait le test tautologique — il passerait sur
+  // n'importe quelle forme du moment que le code et lui s'accordent.
+  const dedans = {
+    carre: () => true,
+    disque: (dr, dc) => dr * dr + dc * dc <= R * R,
+    octogone: (dr, dc) => Math.abs(dr) + Math.abs(dc) <= R + 1,
+  };
+  const aPortee = (r, c, forme) => {
     for (let dr = -R; dr <= R; dr += 1) {
       for (let dc = -R; dc <= R; dc += 1) {
-        if (!tchebychev && dr * dr + dc * dc > rayonCarre) continue;
+        if (!dedans[forme](dr, dc)) continue;
         if (estBaseOuvrage(etat.graine, r + dr, c + dc)) return true;
       }
     }
     return false;
   };
-  let ecartsDisque = 0;
-  let differencesEntreLesDeuxRegles = 0;
+  let ecartsOctogone = 0;
+  let contreLeCarre = 0;
+  let contreLeDisque = 0;
   for (let r = fenetre.premiereRangee; r <= fenetre.derniereRangee; r += 1) {
     for (let c = fenetre.premiereColonne; c <= fenetre.derniereColonne; c += 1) {
       const peint = occupantDeLaCase(zone, r, c) === OUVRAGE;
-      const disque = aPortee(r, c, R * R, false);
-      const carre = aPortee(r, c, R * R, true);
-      if (peint !== disque) ecartsDisque += 1;
-      if (disque !== carre) differencesEntreLesDeuxRegles += 1;
+      const octogone = aPortee(r, c, 'octogone');
+      if (peint !== octogone) ecartsOctogone += 1;
+      if (octogone !== aPortee(r, c, 'carre')) contreLeCarre += 1;
+      if (octogone !== aPortee(r, c, 'disque')) contreLeDisque += 1;
     }
   }
-  // ⚠ LE MONTAGE MESURE QUELQUE CHOSE : les deux règles ne disent PAS la même
-  // chose sur cette fenêtre. Sans cette ligne, une fenêtre où carré et disque
-  // coïncideraient rendrait le test vert sur le code d'avant.
-  assert.ok(differencesEntreLesDeuxRegles > 0,
-    'carré et disque coïncident sur cette fenêtre : le montage ne mesure rien');
-  assert.equal(ecartsDisque, 0,
-    `${ecartsDisque} case(s) peintes hors du disque : le territoire est resté carré`);
+  // ⚠⚠ LE MONTAGE MESURE QUELQUE CHOSE, ET DANS LES DEUX SENS. L'octogone doit
+  // se distinguer du carré ET du disque sur cette fenêtre-ci ; sans ces deux
+  // lignes, une fenêtre où les trois coïncideraient rendrait le test vert sur
+  // l'un ou l'autre des deux codes précédents.
+  assert.ok(contreLeCarre > 0,
+    'octogone et carré coïncident sur cette fenêtre : le montage ne mesure rien');
+  assert.ok(contreLeDisque > 0,
+    'octogone et disque coïncident sur cette fenêtre : le montage ne mesure rien');
+  assert.equal(ecartsOctogone, 0,
+    `${ecartsOctogone} case(s) peintes hors de l'octogone : la forme n'est pas la bonne`);
 });
 
 /** Le neutre de `occupantDeLaCase` — hors de tout territoire. */
@@ -942,11 +1021,13 @@ function basePeinteSeule(etat) {
 // T2 — le prix d'un raid suit, et SEULEMENT en conséquence
 // ---------------------------------------------------------------------------
 
-test('BASES-1 T2 — le prix d\'un raid ne change QUE dans les diagonales', () => {
-  // ⚠⚠ CE QUI EST MESURÉ : le barème n'a pas bougé d'un point. Ce qui a bougé,
-  // c'est l'ensemble des cases ALLIÉES — donc seuls les raids dont la cible
-  // était dans un coin du carré renchérissent, et ils renchérissent de la
-  // différence entre les deux tarifs, jamais d'autre chose.
+test('BASES-1 T2 — le prix d\'un raid ne change QUE dans les angles', () => {
+  // ⚠⚠ CE QUI EST MESURÉ : le barème n'a pas bougé d'un point, ni à BASES-1 ni
+  // au rognage du 03/09. Ce qui bouge à chaque fois, c'est l'ensemble des cases
+  // ALLIÉES — donc seuls les raids dont la cible est dans un angle changent de
+  // tarif, et ils changent de la différence entre les deux, jamais d'autre chose.
+  // BASES-1 les faisait renchérir (le disque retire les coins) ; l'octogone en
+  // rend huit par base au tarif de proximité.
   const etat = creerEtat(3);
   poserLaBaseSur(etat, 200, 16);
   const base = baseCourante(etat);
@@ -957,10 +1038,13 @@ test('BASES-1 T2 — le prix d\'un raid ne change QUE dans les diagonales', () =
     const dr = base.position.rangee - c.rangee;
     const dc = base.position.colonne - c.colonne;
     const distance = Math.max(Math.abs(dr), Math.abs(dc));
-    const dansLeDisque = dr * dr + dc * dc
-      <= GEOGRAPHIE.rayonInfluenceJoueur * GEOGRAPHIE.rayonInfluenceJoueur;
+    // ⚠ LA FORME EST RÉÉCRITE ICI, PAS IMPORTÉE — Tchebychev ET Manhattan, en
+    // toutes lettres. Appeler `dansLOctogoneDInfluence` rendrait le test
+    // tautologique : il passerait sur n'importe quelle zone.
+    const chezMoi = distance <= GEOGRAPHIE.rayonInfluenceJoueur
+      && Math.abs(dr) + Math.abs(dc) <= GEOGRAPHIE.rayonInfluenceJoueur + 1;
     const { fixe, parCaseAllie, parCaseEnnemiOuNeutre } = POINTS_ATTAQUE.coutRaid;
-    const attendu = fixe + distance * (dansLeDisque ? parCaseAllie : parCaseEnnemiOuNeutre);
+    const attendu = fixe + distance * (chezMoi ? parCaseAllie : parCaseEnnemiOuNeutre);
     assert.equal(coutDUnRaid(etat, base, c), attendu,
       `prix faux pour (${c.rangee}, ${c.colonne})`);
   }
@@ -1090,21 +1174,33 @@ test('BASES-1 T5 — refusé chez l\'Ouvrage, ACCEPTÉ chez soi', () => {
   // ⚠⚠ CHEZ L'OUVRAGE, C'EST NON — ET ON COMPARE CASE PAR CASE À LA RÈGLE, comme
   // à T1 et pour la même raison : la carte est trop dense pour qu'une base y
   // soit isolée. Une case est refusée SI ET SEULEMENT SI une base de l'Ouvrage
-  // est à trois cases ou moins **en euclidien**. C'est plus fort qu'un cas
-  // choisi, et insensible aux recouvrements.
-  // ⚠ LA RANGÉE EST CHOISIE POUR QUE LES DEUX RÈGLES DIVERGENT, et c'est
-  // MESURÉ : plus haut sur la carte, la densité de l'Ouvrage est telle que toute
-  // case est à trois cases d'une base — carré et disque y disent la même chose,
-  // et le test passerait sur le code d'avant. À la rangée 285, vingt-sept cases
-  // les séparent. L'assertion `separent > 0` ci-dessous le tient.
+  // est dans son OCTOGONE d'influence. C'est plus fort qu'un cas choisi, et
+  // insensible aux recouvrements.
+  //
+  // ⚠⚠ `fondation.js` PORTAIT SA PROPRE COPIE DE LA FORME, et c'est le troisième
+  // module à l'avoir fait. Depuis le 03/09 il appelle la même fonction que la
+  // carte et que le barème ; le refus s'élargit donc de huit cases par base de
+  // l'Ouvrage, mécaniquement.
+  //
+  // ⚠ LA RANGÉE EST CHOISIE POUR QUE LES RÈGLES DIVERGENT, et c'est MESURÉ :
+  // plus haut sur la carte, la densité est telle que toute case est à trois
+  // cases d'une base — les trois formes y disent la même chose, et le test
+  // passerait sur le code d'avant. L'assertion `separent > 0` le tient.
   const aupres = creerEtat(3);
   poserLaBaseSur(aupres, 285, 16);
   aupres.recherche.basesAutorisees = 2;
   const R = GEOGRAPHIE.rayonInfluenceEnnemie;
-  const proche = (r, c, tchebychev) => {
+  // Les trois formes, écrites ici et pas importées : importer la fonction du
+  // code rendrait la comparaison tautologique.
+  const formes = {
+    carre: () => true,
+    disque: (dr, dc) => dr * dr + dc * dc <= R * R,
+    octogone: (dr, dc) => Math.abs(dr) + Math.abs(dc) <= R + 1,
+  };
+  const proche = (r, c, forme) => {
     for (let dr = -R; dr <= R; dr += 1) {
       for (let dc = -R; dc <= R; dc += 1) {
-        if (!tchebychev && dr * dr + dc * dc > R * R) continue;
+        if (!formes[forme](dr, dc)) continue;
         if (estBaseOuvrage(aupres.graine, r + dr, c + dc)) return true;
       }
     }
@@ -1122,15 +1218,18 @@ test('BASES-1 T5 — refusé chez l\'Ouvrage, ACCEPTÉ chez soi', () => {
       vus += 1;
       const refuse = problemesDeLaFondation(aupres, { rangee: r, colonne: c })
         .some((p) => p.code === 'territoire-ennemi');
-      if (refuse !== proche(r, c, false)) ecarts += 1;
-      if (proche(r, c, false) !== proche(r, c, true)) separent += 1;
+      const octogone = proche(r, c, 'octogone');
+      if (refuse !== octogone) ecarts += 1;
+      if (octogone !== proche(r, c, 'disque') || octogone !== proche(r, c, 'carre')) {
+        separent += 1;
+      }
     }
   }
   assert.ok(vus > 200, 'la fenêtre est trop petite pour mesurer quoi que ce soit');
   assert.ok(separent > 0,
-    'carré et disque coïncident sur cette fenêtre : le montage ne mesure rien');
+    'les trois formes coïncident sur cette fenêtre : le montage ne mesure rien');
   assert.equal(ecarts, 0,
-    `${ecarts} case(s) refusées hors du disque : la garde de fondation est restée carrée`);
+    `${ecarts} case(s) refusées hors de l'octogone : la garde de fondation n'a pas suivi`);
 });
 
 test('BASES-1 T6 — refusé sur un POI, accepté sur un camp', () => {
@@ -1520,7 +1619,7 @@ test('BASES-1 T15 — l\'Ouvrage attaque TOUTES les bases, pas la courante', () 
   // cassé. Le montage pose donc la seconde base LOIN de la première, en pays
   // peuplé, et exige que l'Ouvrage la voie pendant qu'on regarde l'autre.
   const etat = partieAvecDroit(3, 285);
-  fonderUneBase(etat, { rangee: 283, colonne: 22 });
+  fonderUneBase(etat, caseFondable(etat));
   // ⚠⚠ ON MONTE LA SECONDE BASE EN PAYS PEUPLÉ, ET IL FAUT LE DIRE : on ne peut
   // PAS la fonder là-haut. `RAID_OUVRAGE.niveauMinimal` vaut 10 — les bases du
   // début sont là pour être attaquées, pas pour attaquer — et fonder est
@@ -1564,7 +1663,7 @@ test('BASES-1 T15 bis — les satellites de TOUTES les bases sont sur la carte',
   // défaut d'affichage : sur le camp d'une autre base, il rendait `null`, donc
   // la case cessait d'être ATTAQUABLE en même temps qu'elle devenait invisible.
   const etat = partieAvecDroit(3, 285);
-  fonderUneBase(etat, { rangee: 283, colonne: 22 });
+  fonderUneBase(etat, caseFondable(etat));
   rattraperJeu(etat, 6 * TICKS_PAR_MINUTE);
   basculerVersLaBase(etat, 0);
 
