@@ -230,12 +230,24 @@ export function butinDeLaFondation(etat, cible) {
  * distinction du dépôt : une fondation refusée est un fait de JEU qu'on montre
  * au joueur ; appeler celle-ci sans avoir regardé est un fait de PROGRAMME.
  *
- * ⚠⚠ LE BUTIN VA À LA BASE QUI FONDE, PAS À CELLE QU'ON FONDE. **LECTURE PRISE**
- * (§4.4 du brief), et elle se mesure : une base neuve n'a qu'un Chantier de
- * niveau 1, donc 50 · 50 · 40 de capacité ; y verser le butin d'un avant-poste
- * de niveau 40 le ferait déborder EN ENTIER, et `butinPerdu` annoncerait la
- * perte de la quasi-totalité. La base qui fonde, elle, est bâtie. Si Ethan veut
- * l'inverse, c'est l'argument de `verserLeButin` qui change, et rien d'autre.
+ * ⚠⚠ LE BUTIN VA À LA BASE QUI FONDE, ET SA JUSTIFICATION EST TOMBÉE AU LOT
+ * TRANSFERT — **DÉCISION À ROUVRIR PAR ETHAN**. Elle disait : « une base neuve
+ * n'a qu'un Chantier de niveau 1, donc 50 · 50 · 40 de capacité ; y verser le
+ * butin d'un avant-poste de niveau 40 le ferait déborder EN ENTIER, et
+ * `butinPerdu` annoncerait la perte de la quasi-totalité. » Depuis le 02/09 le
+ * butin **a le droit de dépasser la capacité** : il tiendrait très bien dans la
+ * base neuve, gelé au-dessus du plafond, et rien ne serait perdu.
+ *
+ * ⚠⚠ LE COMPORTEMENT N'A DONC PAS CHANGÉ, ET C'EST DÉLIBÉRÉ : le brief du lot
+ * TRANSFERT demande de garder le geste et de réécrire l'argument, pas de
+ * trancher. Ce qui reste vrai en faveur de la base qui fonde : elle est BÂTIE,
+ * donc ce qu'elle reçoit est immédiatement dépensable, et son stock ne bloque la
+ * production que des ressources déjà pleines. Ce qui parle maintenant pour la
+ * base neuve : le butin l'amorcerait bien mieux que les 30 · 30 · 20 qu'elle
+ * reçoit, au prix d'une base qui démarre avec sa production gelée.
+ * **Les deux se tiennent, et le choix appartient à Ethan.** Si l'inverse est
+ * retenu, c'est l'argument de `verserLeButin` ci-dessous qui change — `quiFonde`
+ * devient `etat.bases[indice]` —, et rien d'autre.
  *
  * ⚠ QUELLE BASE FONDE ? LA COURANTE. C'est la seule que le joueur regarde au
  * moment du geste, et c'est déjà ce que veut dire « courante » partout ailleurs.
@@ -246,7 +258,7 @@ export function butinDeLaFondation(etat, cible) {
  *
  * @param {object} etat modifié en place
  * @param {{rangee: number, colonne: number}} cible
- * @returns {{indice: number, butin: {verse: object, perdu: object}|null,
+ * @returns {{indice: number, butin: {verse: object}|null,
  *   siteDetruit: object|null}}
  */
 export function fonderUneBase(etat, cible) {

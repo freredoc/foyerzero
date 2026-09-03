@@ -445,6 +445,32 @@ export const FONDATION = {
   porteeMaxCases: 10,
 };
 
+/**
+ * Le transfert de ressources entre deux bases — lot TRANSFERT, arbitré par
+ * Ethan le 02/09.
+ *
+ * ⚠⚠ UNE TABLE À PART, ET PAS UN CHAMP DE `DEPLACEMENT` NI DE `FONDATION`.
+ * C'est la règle §4 de `CLAUDE.md` : deux grandeurs qui parlent de distance ne
+ * sont pas la même grandeur. Le déplacement dit jusqu'où une base SAUTE (10),
+ * la fondation jusqu'où on en POSE une (10), le transfert jusqu'où une
+ * ressource VOYAGE (99). Les trois se règlent séparément.
+ *
+ * ⚠ 99 EST LA BORNE DU REFUS, ET ELLE EST LIÉE À LA TAXE : à 1 % par case, une
+ * centième case ferait arriver ZÉRO. Refuser au-delà de 99 est donc la même
+ * décision que « la taxe vaut 1 % », vue par l'autre bout — les changer
+ * séparément ferait apparaître des transferts qui ne livrent rien.
+ *
+ * ⚠ EN POUR-CENT ENTIERS, JAMAIS EN FACTEUR FLOTTANT. Toute l'arithmétique en
+ * aval est entière — milli-unités — et un `0.99` écrit ici ferait diverger
+ * l'arrondi d'un envoi à l'autre.
+ */
+export const TRANSFERT = {
+  /** Ce que chaque case de distance prélève, en pour-cent de l'envoi. */
+  taxeParCasePct: 1,
+  /** Au-delà, le transfert est refusé. Distance EUCLIDIENNE, arrondie. */
+  porteeMaxCases: 99,
+};
+
 // --- peuplement de la carte --------------------------------------------------
 // ARBITRÉ le 29/08/2026 par Ethan : « dans un carré de 12×12, il y a environ 12
 // bases ouvrage », « aucune base ouvrage et joueur ne peuvent être côte à côte

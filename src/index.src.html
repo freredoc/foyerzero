@@ -468,9 +468,11 @@
   }
 
   /* --- 3. la bascule entre bases — 26 --------------------------------------
-     ⚠ COQUILLE, ET ELLE LE DIT. Une seule base existe : les deux flèches sont
-     désactivées et le libellé « 1 / 1 » explique pourquoi. Le jour où l'état
-     portera plusieurs bases, il n'y aura qu'à les rendre vives. */
+     ⚠ VIVE DEPUIS LE LOT BASES-1, et elle porte le TRANSFERT depuis celui-ci.
+     Ces quatre lignes disaient « coquille, une seule base existe » : c'était
+     vrai jusqu'au 02/09. La barre ne grandit pas d'un pixel — le bouton de
+     transfert prend la place que le libellé lui cède —, donc les 288 px de
+     chrome que garde `chantier.test.js` ne bougent pas. */
   #navigation {
     flex: 0 0 26px; display: flex; align-items: center;
     background: #1E2124; border-bottom: 1px solid #161914;
@@ -484,6 +486,73 @@
     font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
     color: #68727E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  /* ⚠ IL NAÎT CACHÉ ET NE PARAÎT QU'À DEUX BASES : un bouton de transfert sur
+     une partie qui n'en a qu'une promettrait un geste qui n'existe pas — la
+     faute du bouton « Assaut » du lot ÉCRAN-CHANTIER. */
+  #navigation-transfert {
+    flex: 0 0 auto; padding: 0 8px; height: 100%;
+    background: transparent; border: 0; border-left: 1px solid #161914;
+    color: #8C9A72; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  /* --- le panneau de transfert ---------------------------------------------
+     ⚠⚠ IL EST POSÉ SUR `#ecrans`, PAS DANS UN ÉCRAN, et c'est ce qui le rend
+     atteignable de partout : la barre de bascule qui l'ouvre vit elle aussi
+     au-dessus des écrans. Enfermé dans `#ecran-chantier`, il n'aurait rien
+     montré depuis la carte ou la recherche.
+     ⚠ IL RÉPOND À UN GESTE ET SE FERME, donc `absolute` est légitime ici —
+     contrairement à la mini-fenêtre du tutoriel, qui est PERMANENTE et a dû
+     entrer dans le flux pour cesser d'avaler le toucher des cases. */
+  #transfert-panneau {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+    max-height: 86%; overflow-y: auto; scrollbar-width: none;
+    display: flex; flex-direction: column;
+    background: #1E2124; border-top: 2px solid #4E5742;
+  }
+  #transfert-panneau::-webkit-scrollbar { display: none; }
+  #transfert-panneau .tete {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+  #transfert-titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
+  #transfert-fermer {
+    flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
+    background: #1E2124; color: #8C9A72; border: 1px solid #161914;
+  }
+  #transfert-corps { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+  #transfert-corps .rangee { display: flex; align-items: center; gap: 6px; }
+  #transfert-corps .quoi {
+    flex: 0 0 74px; font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #68727E;
+  }
+  #transfert-corps select, #transfert-corps input {
+    flex: 1; min-width: 0; padding: 5px 6px;
+    background: #161914; color: #F5F3E8; border: 1px solid #4E5742; font-size: 12px;
+  }
+  #transfert-ressources { display: flex; gap: 6px; flex: 1; }
+  #transfert-ressources button {
+    flex: 1; padding: 6px 4px; font-size: 11px;
+    background: #161914; color: #8C9A72; border: 1px solid #4E5742;
+  }
+  #transfert-ressources button.choisie { background: #4E5742; color: #F5F3E8; }
+  /* ⚠ LE REÇU EST LE CHIFFRE QUI COMPTE, DONC IL EST LE PLUS GROS. Un panneau
+     qui n'annoncerait que l'envoyé laisserait le joueur découvrir la taxe
+     après coup. */
+  #transfert-bilan {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 6px; background: #161914; border: 1px solid #4E5742;
+  }
+  #transfert-bilan .ligne { display: flex; align-items: baseline; gap: 6px; font-size: 10px; }
+  #transfert-bilan .ligne .quoi { flex: 1; color: #68727E; }
+  #transfert-bilan .ligne b { color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  #transfert-bilan .recu b { font-size: 15px; color: #8C9A72; }
+  #transfert-refus { font-size: 11px; color: #E43E32; }
+  #transfert-agir {
+    padding: 8px; font-size: 12px;
+    background: #4E5742; color: #F5F3E8; border: 1px solid #161914;
+  }
+  #transfert-agir:disabled { background: #1E2124; color: #68727E; }
+  #transfert-agir.arme { background: #F5B636; color: #161914; }
   .ressource { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; }
   .ressource .ligne { display: flex; align-items: baseline; gap: 3px; }
   .ressource b { font-size: 14px; font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
@@ -1447,9 +1516,11 @@
        à ce lot-ci : c'était le dernier. Le test qui les gardait NOMMAIT le mort
        plutôt que de le compter — il attend maintenant une liste VIDE, ce qui est
        la seule forme qui ne se satisfasse pas d'un onglet mort de plus.
-       ⚠ ET IL RESTE UNE COQUILLE DANS CETTE PAGE, PLUS BAS : la bascule entre
-       bases. Elle se déclare telle quelle à sa place — ne pas lire « aucun
-       onglet mort » comme « plus rien de mort ». -->
+       ⚠ ET IL NE RESTE PLUS DE COQUILLE DANS CETTE PAGE. Ces trois lignes en
+       annonçaient une, « la bascule entre bases, plus bas » : elle est VIVE
+       depuis le lot BASES-1, et elle ouvre le panneau de transfert depuis le lot
+       TRANSFERT. Un commentaire qui décrit un état révolu envoie chercher un
+       défaut qui n'existe plus. -->
   <div id="tete-onglets">
     <button type="button" class="actif" id="onglet-base">Base</button>
     <button type="button" id="onglet-mission">Mission</button>
@@ -1470,6 +1541,12 @@
   <div id="navigation">
     <button type="button" id="navigation-precedente" disabled>◀</button>
     <span id="navigation-libelle">—</span>
+    <!-- ⚠ LE TRANSFERT S'OUVRE D'ICI — **LECTURE PRISE**, Ethan n'a pas dit où
+         le mettre. La barre de bascule est le seul endroit de la page qui parle
+         DES BASES au pluriel ; l'onglet Base parle de celle qu'on regarde, et
+         la carte parle du monde. Il naît caché : à une seule base, il n'y a
+         nulle part où envoyer. -->
+    <button type="button" id="navigation-transfert" hidden>Transférer</button>
     <button type="button" id="navigation-suivante" disabled>▶</button>
   </div>
 
@@ -1869,6 +1946,46 @@
         mise de côté et restera récupérable.</p>
       <button type="button" id="chantier-alerte-reessayer">Réessayer le chargement</button>
       <button type="button" class="neuve" id="chantier-alerte-neuve">Démarrer une partie neuve</button>
+    </div>
+
+    <!-- ======================================================================
+         LE PANNEAU DE TRANSFERT — lot TRANSFERT, 02/09.
+         ⚠⚠ IL EST DANS `#ecrans` ET NON DANS UN ÉCRAN, parce que la barre qui
+         l'ouvre vit au-dessus des écrans : enfermé dans le Chantier, il n'aurait
+         rien montré depuis la carte.
+         ⚠⚠ L'ÉLECTRICITÉ N'EST PAS DANS LA LISTE DES RESSOURCES, ET C'EST UNE
+         ABSENCE, PAS UN GRISÉ. Un choix grisé invite à chercher comment le
+         dégriser ; une absence est plus honnête. Elle ne se transfère pas —
+         elle se produit et se consomme sur place.
+         ⚠ LE BILAN ANNONCE LE **REÇU**, pas seulement l'envoyé : sans lui, le
+         joueur découvrirait la taxe après coup.
+         ====================================================================== -->
+    <div id="transfert-panneau" hidden>
+      <div class="tete">
+        <span id="transfert-titre">Transférer</span>
+        <button type="button" id="transfert-fermer">Fermer</button>
+      </div>
+      <div id="transfert-corps">
+        <div class="rangee">
+          <span class="quoi">Depuis</span>
+          <span id="transfert-source">—</span>
+        </div>
+        <div class="rangee">
+          <span class="quoi">Vers</span>
+          <select id="transfert-destination"></select>
+        </div>
+        <div class="rangee">
+          <span class="quoi">Ressource</span>
+          <span id="transfert-ressources"></span>
+        </div>
+        <div class="rangee">
+          <span class="quoi">Quantité</span>
+          <input type="number" id="transfert-quantite" min="0" step="1" value="0">
+        </div>
+        <div id="transfert-bilan"></div>
+        <div id="transfert-refus"></div>
+        <button type="button" id="transfert-agir">Transférer</button>
+      </div>
     </div>
 
   </div>

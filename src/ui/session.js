@@ -38,6 +38,7 @@ import {
 } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
+import { initialiserPanneauDeTransfert } from './transfert.js';
 import { initialiserEcranOffense } from './offense.js';
 import { initialiserEcranMission, initialiserMiniTutoriel } from './mission.js';
 import { initialiserEcranMonde } from './monde.js';
@@ -348,6 +349,7 @@ export function initialiserSession(doc) {
   let ecranRaid = null;
   let ecranRecherche = null;
   let miniTutoriel = null;
+  let panneauTransfert = null;
   let idImage = null;
   const chrono = creerChronometre(maintenantMs);
   let dernierAffichageMs = 0;
@@ -466,6 +468,9 @@ export function initialiserSession(doc) {
     if (ecranMission !== null) ecranMission.peindre(etat);
     if (ecranRecherche !== null) ecranRecherche.peindre(etat);
     if (ecranMonde !== null) ecranMonde.rafraichir(etat);
+    // ⚠ LE PANNEAU DE TRANSFERT SUIT LA BASCULE COMME LES AUTRES : il annonce
+    // « depuis la base N », et la liste des destinations exclut la courante.
+    if (panneauTransfert !== null) panneauTransfert.peindre(etat);
   }
 
   function demarrerBoucle() {
@@ -527,6 +532,7 @@ export function initialiserSession(doc) {
     // et un écran qui n'a jamais vu l'état n'a rien à montrer si on l'ouvre
     // avant qu'un geste ne l'ait rafraîchi.
     if (ecranOffense !== null) ecranOffense.peindre(etat);
+    if (panneauTransfert !== null) panneauTransfert.peindre(etat);
     ecran.ouvrirSurLaBase();
     sauvegarder();
     demarrerBoucle();
@@ -898,6 +904,17 @@ export function initialiserSession(doc) {
   // L'état en porte une depuis le lot GARNISON-ET-ARMÉE : il compose, et chaque
   // geste s'enregistre tout de suite — composer son armée est une action que le
   // joueur ne veut pas refaire parce que le système a tué l'application.
+  // ⚠⚠ UN TRANSFERT SE SAUVEGARDE TOUT DE SUITE, comme une pose. Il est
+  // IRRÉVERSIBLE — la taxe est prise et ne se rend pas —, donc le perdre parce
+  // que le système a tué l'application serait la pire façon de perdre la
+  // confiance du joueur. Et l'écran de la base se rafraîchit avec : le bandeau
+  // des ressources porte le stock de la base courante, qui vient de changer.
+  panneauTransfert = initialiserPanneauDeTransfert(doc, {
+    apresTransfert: () => {
+      sauvegarder();
+      rafraichirLaBase();
+    },
+  });
   ecranOffense = initialiserEcranOffense(doc, { apresPose: () => sauvegarder() });
   // ⚠ LES DEUX VUES DU TUTORIEL SE CÂBLENT ENSEMBLE, et chacune agit sur
   // l'autre : la croix ferme la mini-fenêtre, le bouton de l'onglet Mission la

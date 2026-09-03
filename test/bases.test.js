@@ -55,6 +55,7 @@ import { poiDeLaCase } from '../src/sim/poi.js';
 import { GEOGRAPHIE, FONDATION, POINTS_ATTAQUE } from '../src/data/sites.js';
 import { retirerLeSite } from '../src/sim/site-entame.js';
 import { plafondDeLaReserveDeLaBase } from '../src/sim/reparation.js';
+import { capacitesMilli } from '../src/sim/economie-base.js';
 import { etatDesMissions, avancement } from '../src/sim/missions.js';
 import { CHAINE_TUTORIEL } from '../src/data/missions.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
@@ -62,7 +63,10 @@ import {
   GRAINES, PHASES, CHAMPS, CHAMPS_AJOUTES_PAR_BASES_1, EMPREINTES_PAR_CHAMP, SCALAIRES,
   VERSION_AU_TEMOIN, OCTETS_AJOUTES_PAR_LE_DEPLIAGE, OCTETS_AJOUTES_PAR_BASES_1,
   DEPLACES_PAR_BASES_1, EMPREINTES_DES_CHAMPS_AJOUTES,
-  EMPREINTES_PAR_GRAINE_BASES_1, RAPPORTS_DEPLACES_PAR_BASES_1,
+  EMPREINTES_PAR_GRAINE_BASES_1,
+  DEPLACES_PAR_TRANSFERT, OCTETS_AJOUTES_PAR_TRANSFERT,
+  EMPREINTES_PAR_GRAINE_TRANSFERT, RAPPORTS_TRANSFERT,
+  CLES_DU_RAPPORT_AVANT_TRANSFERT,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -76,14 +80,21 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * lot qui change un comportement NOMME ce qui bouge, et laisse tout le reste
  * gardé contre la référence d'avant.
  *
- * ⚠ SEPT COUPLES DÉPLACÉS — `attaque` et `rapports` à partir de la phase 11,
+ * ⚠ QUINZE COUPLES DE PLUS AU LOT TRANSFERT — `rapports` et `economie` à partir
+ * de la phase 7, qui est le premier raid : le rapport a perdu `butinPerdu`, et
+ * le butin ne se plafonne plus. Les surcharges s'EMPILENT, de la plus récente à
+ * la plus ancienne : un couple que TRANSFERT n'a pas nommé reste gardé contre
+ * BASES-1, et à défaut contre la capture d'origine.
+ *
+ * ⚠ SEPT COUPLES DÉPLACÉS PAR BASES-1 — `attaque` et `rapports` à partir de la phase 11,
  * parce que le prix d'un raid a monté quand la zone d'influence est passée du
  * carré au disque. QUATORZE AJOUTÉS, tous sur le champ neuf. Les 301 autres
  * n'ont pas le droit de bouger — `satellites` COMPRIS, dont la clé a pourtant
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return EMPREINTES_DES_CHAMPS_AJOUTES[phase]?.[champ]
+  return DEPLACES_PAR_TRANSFERT[phase]?.[champ]
+    ?? EMPREINTES_DES_CHAMPS_AJOUTES[phase]?.[champ]
     ?? DEPLACES_PAR_BASES_1[phase]?.[champ]
     ?? EMPREINTES_PAR_CHAMP[phase][champ];
 }
@@ -434,7 +445,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_BASES_1[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_TRANSFERT[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -452,7 +463,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
     // le dépliage aurait modifié un CONTENU.
     assert.equal(
       x.tailleSauvegarde,
-      attendu.tailleSauvegarde + OCTETS_AJOUTES_PAR_LE_DEPLIAGE + OCTETS_AJOUTES_PAR_BASES_1,
+      attendu.tailleSauvegarde + OCTETS_AJOUTES_PAR_LE_DEPLIAGE + OCTETS_AJOUTES_PAR_BASES_1
+        + OCTETS_AJOUTES_PAR_TRANSFERT,
       `graine ${g} : taille de la sauvegarde`,
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);
@@ -464,16 +476,27 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       assert.equal(x[`${prefixe}Cible`], a.cible, `graine ${g} : ${cle} — cible choisie`);
       assert.equal(x[`${prefixe}SimuleNeFuitPas`], a.neFuitPas, `graine ${g} : ${cle} — la simulation ne fuit pas`);
       assert.equal(x[`${prefixe}SimuleExact`], a.exact, `graine ${g} : ${cle} — la simulation est exacte`);
-      // ⚠ TROIS GRAINES SUR VINGT-CINQ ONT VU LE PRIX DE LEUR RAID SUR UNE BASE
-      // DE L'OUVRAGE MONTER AU LOT BASES-1, et elles sont NOMMÉES. Les
-      // vingt-deux autres, et TOUS les raids sur satellite, gardent l'empreinte
-      // d'origine : le satellite est adjacent, donc dans le disque comme dans
-      // le carré.
-      const attenduRapport = (cle === 'raidOuvrage' && RAPPORTS_DEPLACES_PAR_BASES_1[g])
-        ? RAPPORTS_DEPLACES_PAR_BASES_1[g] : a.rapport;
+      // ⚠⚠ LES CINQUANTE EMPREINTES DE RAPPORT ONT BOUGÉ AU LOT TRANSFERT, et
+      // c'est pour ça qu'elles ne portent plus la preuve à elles seules : un
+      // rapport qui perd une clé change d'empreinte quoi qu'il arrive. Ce qui
+      // PROUVE, c'est l'assertion structurelle ci-dessous — la seule clé partie
+      // est `butinPerdu`. Les empreintes, elles, gardent l'AVENIR.
+      //
+      // ⚠ ELLES REMPLACENT `RAPPORTS_DEPLACES_PAR_BASES_1`, qui ne nommait que
+      // trois graines : les vingt-deux autres étaient gardées contre la capture
+      // d'origine, ce qui n'est plus possible.
       assert.equal(
-        empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,
+        empreinte(JSON.stringify(x[`${prefixe}Rapport`])), RAPPORTS_TRANSFERT[g][`${cle}Rapport`],
         `graine ${g} : ${cle} — le rapport de raid a changé`,
+      );
+      // ⚠⚠ ET VOICI LA PREUVE, STRUCTURELLE PLUTÔT QUE PAR EMPREINTE : le
+      // rapport porte EXACTEMENT les clés d'avant, moins `butinPerdu`. Une
+      // seconde clé retirée — ou ajoutée — fait tomber ce test en la NOMMANT,
+      // là où une empreinte dirait seulement « ça a bougé ».
+      const clesAttendues = CLES_DU_RAPPORT_AVANT_TRANSFERT.filter((k) => k !== 'butinPerdu');
+      assert.deepEqual(
+        Object.keys(x[`${prefixe}Rapport`]).sort(), [...clesAttendues].sort(),
+        `graine ${g} : ${cle} — le rapport a gagné ou perdu une clé autre que butinPerdu`,
       );
     }
   }
@@ -1161,8 +1184,9 @@ test('BASES-1 T7 bis — le camp fondé dessus disparaît, son butin va à la ba
 
   // ⚠⚠ LE BUTIN VA À LA BASE QUI FONDE, PAS À LA NEUVE. **LECTURE PRISE.** Une
   // base neuve n'a qu'un Chantier de niveau 1 — 50 · 50 · 40 de capacité — et le
-  // butin d'un camp la ferait déborder EN ENTIER. La falsification du brief est
-  // exactement celle-là : verser dans la neuve, et tout `butinPerdu`.
+  // butin d'un camp la ferait déborder EN ENTIER. **CETTE PRÉMISSE EST TOMBÉE AU
+  // LOT TRANSFERT** — le butin a le droit de dépasser, donc il tiendrait dans la
+  // neuve — et le COMPORTEMENT est gardé tel quel, décision remontée à Ethan.
   assert.ok(
     laBase.economie.ressources.quartz > avant.quartz,
     'le butin n\'est pas arrivé dans la base qui fonde',
@@ -1171,12 +1195,21 @@ test('BASES-1 T7 bis — le camp fondé dessus disparaît, son butin va à la ba
   assert.equal(neuve.economie.ressources.quartz, 30_000,
     'la base neuve a reçu du butin : elle ne doit porter que l\'amorce');
 
-  // ⚠ LE PLAFOND MORD, ET IL SE DIT. `verserLeButin` est le MÊME code que celui
-  // du raid : il plafonne et rend `butinPerdu`.
-  assert.ok(butin.perdu.quartz > 0, 'le plafonnement ne se signale pas');
+  // ⚠⚠ LE PLAFOND NE MORD PLUS, ET C'EST LE LOT TRANSFERT. Ce bloc exigeait
+  // l'inverse — « le plafonnement ne se signale pas » sur un `butin.perdu` non
+  // vide. Il est RETOURNÉ : `verserLeButin` verse TOUT, donc le butin promis
+  // arrive en entier, et `perdu` n'existe plus.
+  assert.equal(butin.perdu, undefined, '`perdu` est revenu dans le versement');
+  assert.equal(butin.verse.quartz ?? 0, promis.quartz, 'le butin promis n\'est pas arrivé en entier');
   assert.equal(
-    (butin.verse.quartz ?? 0) + (butin.perdu.quartz ?? 0), promis.quartz,
-    'versé + perdu doit valoir le butin promis',
+    laBase.economie.ressources.quartz - avant.quartz, promis.quartz * 1000,
+    'ce qui est entré ne vaut pas le butin promis',
+  );
+  // ⚠ ET IL PASSE VRAIMENT AU-DESSUS DU PLAFOND — sans quoi ce test ne
+  // distinguerait pas les deux règles.
+  assert.ok(
+    laBase.economie.ressources.quartz > capacitesMilli(laBase.disposition).quartz,
+    'le montage ne mesure rien : le stock reste sous le plafond',
   );
 
   // ⚠ ET LE CAMP A DISPARU DE LA CARTE, comme après un rasage.
