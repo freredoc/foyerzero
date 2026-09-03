@@ -61,6 +61,10 @@ CHAINE = [
     # MANQUANTS à chaque exécution, c'est-à-dire « le dépôt les porte, aucun
     # outil ne les produit » — exactement le contraire de la vérité.
     ('bords',           []),
+    # ⚠ LES FONDS D'ÉCRAN — 03/09. Un décor n'est pas un sprite et n'entre dans
+    # aucun atlas ; il passe quand même par la chaîne pour que personne n'ait à
+    # se demander, dans six mois, comment on referait ce fichier.
+    ('fonds',           []),
     # ⚠⚠ LES ENTRÉES — 03/09, ET ELLE NE PRODUIT AUCUN SPRITE. Comme la ligne
     # `bords` ci-dessus dit pourquoi elle est là, celle-ci dit pourquoi elle
     # n'écrit rien : `entrees.py` OBSERVE ce que la chaîne ouvre dans

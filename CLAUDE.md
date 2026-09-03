@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.70.1 · build 72.
+Dernière révision : **03/09/2026**, version 0.73.0 · build 75.
 
 ---
 
@@ -41,8 +41,206 @@ Dernière révision : **03/09/2026**, version 0.70.1 · build 72.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot ENTRÉES), à confronter :**
-`npm test` → **939 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot MURS), à confronter :**
+`npm test` → **941 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 228 365 octets**, 0 référence externe.
+⚠⚠ **LE MUR DE CONTOUR N'EST PLUS UN TRAIT, C'EST UN ANNEAU DE BLOCS — ET LE LOT
+REND 28 827 OCTETS.** Ethan, 03/09 : « déjà refait les murs avec les nouveaux
+sprites, et pour que ça passe bien parce que là ça déborde ». La v1 était un
+trait `512 × 64` posé **à cheval** sur la ligne du bord, mordant d'une demi-case
+au-dedans ; la v2 est un **bloc plein** qui occupe une case entière et ne
+recouvre rien. **17 `data:` avant, 18 après**, et pourtant le livrable maigrit :
+cinq PNG sortent (52 864 en base64), six WebP entrent (**22 576**). Borne T10
+inchangée à 3 400 000, marge **171 635 octets, 5,1 %** — une borne ne se baisse
+pas parce qu'un lot rend.
+⚠⚠ **C'EST UNE GÉOMÉTRIE, PAS UNE ÉPAISSEUR, ET TROIS CHOSES BOUGENT ENSEMBLE.**
+Le `padding` de `#chantier-grille` passe d'une demi-case à **une case**, le
+diviseur de `coteQuiTient` de `largeur + 1` à **`largeur + 2`**, et
+`paddingDeLaGrille` de `coteCase / 2` à **`coteCase`**. Un test exige les trois :
+en changer une seule décale le mur du contenu, et personne ne le verrait sans
+mesurer.
+⚠⚠ **LES QUATRE « ANGLES » N'EN SONT PAS, MESURÉ ET REGARDÉ.** Le zip les nomme
+`angle_bloc_…_1x1`, mais ce sont quatre **variantes du même carré plein**, pas
+quatre orientations d'un coude : aucune n'est le miroir d'une autre — le couple
+le plus proche diffère encore de **4,4 par canal**, quand deux variantes
+quelconques diffèrent de 18 à 24. La v1 nommait ses pièces par leur PLACE
+(`mur_h_a`, `angle_no`) parce que le dessin en dépendait ; la v2 se NUMÉROTE, et
+**un coin du U et un flanc du U sont le même bloc**.
+⚠⚠ **LA COUPE LIVRÉE PAR ETHAN GARDAIT LE FOND, ET C'EST MESURÉ.** Le zip
+portait les seize sprites déjà découpés : la fenêtre fixe de l'outil **les
+reproduit au pixel près sur les seize**, ce qui prouve le cadrage — mais
+`mur_joueur_4x1_v2_1` porte **2 029 pixels de magenta pur enregistrés OPAQUES**,
+dont **493 sur la seule ligne du haut**. Un liseré `#FF00FF` aurait couru sur
+toute la longueur du mur. L'outil détoure.
+⚠ **PAR `est_fond_sujet`, PAS PAR `est_fond`** — premier emploi de cet acquis du
+lot PIXELS hors de `final128`. **Falsifié en rendant la porte nue : les trous
+enfermés dans les seize passent de 77 à 716 px**, soit 9,3 fois.
+⚠⚠ **NI RÉDUCTION NI QUANTIFICATION, ET C'EST LE WEBP QUI PAIE.** Le dessin est
+déjà à sa définition finale DANS la planche — un mur de 512 × 128 au milieu
+d'une cellule de 1024 —, donc il n'y a rien à réduire. Mesuré sur `mur_1` :
+**WebP q85 6 344 o**, q92 9 140, WebP sans perte 53 956, **PNG optimisé
+72 651**. ⚠ L'encodage est AVEC PERTE sur le RVB et SANS PERTE sur l'alpha, ce
+qui est exactement ce que l'invariant du dépôt demande.
+⚠⚠ **ET LA COULEUR DU BORD DOIT BAVER — TROUVÉ EN REGARDANT, PAS EN RELISANT.**
+Un mur fait 512 px pour quatre cases ; à la case par défaut de **46 px** il est
+affiché en 184, donc RÉDUIT — le plafond du zoom est le SEUL endroit où il tombe
+au 1:1, donc la réduction est le cas courant. Toute réduction mélange les pixels
+voisins, transparents compris : le premier jet laissait leur RVB à zéro, et le
+WebP avec perte le lissait en **(65, 0, 0)**, si bien que le mur ressortait ourlé
+d'un liseré rouge sombre sur toute sa longueur. `baver` étend la couleur opaque
+dans le transparent ; **l'alpha ne bouge pas**, ce qui distingue ce geste d'un
+épaississement. Mesuré après : `(255, 171, 154)`, la brique claire — et les
+fichiers **maigrissent de 766 octets**.
+⚠⚠ **ET LA GARDE DES TEINTES A ÉTÉ RETOURNÉE, PAS ASSOUPLIE.** Elle exigeait
+`teintes <= 16`, la marque de la quantification ; elle exige `teintes > 1000`.
+La même ligne, dans l'autre sens.
+⚠⚠ **LE MANIFESTE REMPLACE `decoderRgba` SUR LES MURS.** Node n'a pas de
+décodeur WebP et §3 interdit une dépendance de test : `tools/bords.py` écrit
+`art/sprites/bord/bord-empreintes.json` — SHA-256, taille, teintes opaques,
+transparents, trous enfermés. Même motif qu'`atlas-empreintes.json`. **Falsifié
+dans les deux sens.** ⚠ Ce qu'il ne remplace pas : le COMPTAGE des trous est
+fait par l'outil, donc il ne tourne qu'au lot d'art.
+⚠⚠ **LA V1 EST RETIRÉE, ET LE RETRAIT SE VOIT DANS LA DÉCLARATION DES SOURCES.**
+L'outil ne produit plus ses seize traits — les laisser les ferait compter
+MANQUANTS. Ses quatre planches restent dans `art/sources/`, qui ne s'ampute
+jamais, et passent de `consommees` à **`dormantes`** : c'est le premier usage de
+la garde du lot ENTRÉES sur une source RETIRÉE, et le diff dit l'histoire du lot
+en huit lignes. `art/sources/` : **166 → 170**, 84 consommées, **86 dormantes**.
+⚠ **LA DETTE DE GRILLE-128 EST SOLDÉE PARCE QU'ELLE EST TOMBÉE.** `COTE_MUR`,
+son `assert.notEqual` et la mesure de l'étirement à 2 ont disparu — c'est ce
+qu'on leur demandait.
+⚠⚠ **LES FLANCS DESCENDENT LE LONG DE LA DÉFENSE, ET C'EST UN ARBITRAGE RENDU
+PENDANT LE LOT.** « les murs vont du haut de la base **jusqu'à** la défense »
+avait d'abord été lu *jusqu'à son bord* — le U n'entourant que les bâtiments.
+Ethan, mis devant le rendu : **« flanc sur la défense aussi »**. Le U enferme
+donc les DEUX bandes que le joueur compose et ne s'ouvre que sur les deux
+rangées de DÉPLOIEMENT, par lesquelles l'assaut arrive. **37 pièces au lieu de
+21**, et zéro image de plus : ce sont les mêmes six dessins.
+⚠ **LE FLANC SE MESURE D'UN BORD À L'AUTRE, JAMAIS EN ADDITIONNANT LES BANDES.**
+Les deux formules coïncident aujourd'hui, les bandes étant adjacentes — donc
+**cette falsification-là ne mord pas, et elle se déclare** : le test relève
+l'égalité au lieu de faire semblant de la garder, et c'est elle qui tombera le
+jour où une bande se glisserait entre les deux.
+⚠⚠ **ET UN `image-rendering: pixelated` EST TOMBÉ — LE DEUXIÈME SITE, PAS LES
+HUIT.** Le lot PIXELS avait laissé « dix autres sites en attente d'arbitrage » ;
+celui du mur se tranche tout seul, parce que le lot vient de remplacer son asset :
+la v1 était quantifiée sur seize teintes, la v2 garde le rendu, et à la case par
+défaut ses 512 pixels s'affichent en 184. **Il en reste SEPT dans la feuille**,
+qui peignent tous des cellules d'atlas ; chacun demandera sa propre mesure.
+⚠ **`python3 tools/verifier.py` → **933 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 301,1 s.** Il était dû : le lot touche
+`art/` et `tools/`.
+⚠⚠ **LES HUIT MURS DE L'OUVRAGE SONT PRODUITS ET NE SONT PAS DESSINÉS, ET CE
+N'EST PAS UNE LIGNE À AJOUTER.** Ethan, 03/09 : « c'est pour le joueur et pour
+l'ouvrage ». `tuilesDuContour('o')` rend déjà leur anneau, et un test le
+vérifie ; ce qui manque est un ENDROIT. La base de l'Ouvrage n'apparaît que sur
+l'écran de raid, qui est un CANEVAS : les murs y entreraient en primitives
+`sprite`, donc avec des `<img>` et une entrée dans `ATLAS_DE_LA_PAGE` — et
+surtout `calculerProjection` divise par `GRILLE.largeur` et `GRILLE.longueur`,
+si bien qu'un anneau **rétrécit la case sur tout le champ de bataille**. C'est
+la géométrie du combat qui bouge. Coût mesuré du livrable : **+24 010 octets de
+WebP, soit +32 016 en base64**. C'est un lot.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Un mur est un dessin.
+
+**Auparavant, après le lot OFFENSE :**
+`npm test` → 941 pass / 0 fail, `npm run build` → `dist/index.html`,
+**3 257 192 octets**, 0 référence externe.
+⚠⚠ **L'ÉCRAN OFFENSE A UN SOL, ET C'EST LA DIX-SEPTIÈME `data:` DU LIVRABLE.**
+Ethan, 03/09 : « je t'ai envoyé un sprite pour combler le menu armée ou
+offense ». L'écran montrait trente-six cases tiretées sur du noir et une moitié
+basse vide. **Coût +221 718 octets**, dont **219 440 de base64** pour
+`fond/fond_offense.webp` et 2 278 de balisage, de feuille et de quinconce. La
+borne T10 passe de **3 200 000 à 3 400 000** — marge **142 808 octets, 4,2 %**.
+**16 `data:` avant, 17 après.**
+⚠⚠ **C'EST LE WEBP QUI REND CE DÉCOR PAYABLE, ET LE RAPPORT EST DE TREIZE.**
+Mesuré sur la même image : PNG optimisé **2 099 998 o**, **WebP q85 164 578 o**.
+Le PNG l'aurait à lui seul porté le livrable au-delà de cinq mégaoctets. Ce
+n'est pas du pixel art à teintes comptées, c'est une photographie de décor : le
+PNG n'a rien à y gagner.
+⚠ **ET IL PASSE PAR UN OUTIL, `tools/fonds.py`, POUR UNE SEULE IMAGE.** Le
+committer conditionné sans outil en aurait fait une **source déclarée** de plus
+— un fichier que personne ne sait reproduire le jour où la palette bouge. Il est
+dans `CHAINE`, donc le vérificateur le rejoue. ⚠ Il n'entre dans **aucun
+atlas** : un atlas coud des cellules CARRÉES d'un même côté, un décor de
+1149 × 1368 n'en est pas une. Il voyage par son propre marqueur de
+`tools/build.js`, comme les murs de contour et les deux grosses bases.
+⚠ **`cover`, JAMAIS `100% 100%`.** Le décor a un rapport de 0,84 et l'écran non
+: l'étirer déformerait des tuyaux et des grilles d'aération, que l'œil lit comme
+des objets. **On rogne, on ne déforme pas** — et un test refuse l'étirement
+comme la répétition.
+⚠⚠ **LES NEUF EMPLACEMENTS SONT EN QUINCONCE, ET LE DÉCALAGE PASSE PAR LA
+GRILLE.** Ethan : « toujours 4 rangées de 9, mais les neuf tu les mets en
+quinconce pour que ça passe à peu près ». Une rangée sur deux est décalée d'une
+DEMI-case. **Un `transform: translateX` était exclu** : il déplace le dessin
+sans déplacer la géométrie du pointage, et le doigt cesserait de tomber sur
+l'emplacement qu'il vise — la faute que le dépôt refuse depuis toujours sur la
+grille du Chantier. On compte donc en **demi-colonnes** : `NB_COLONNES × 2 + 1`,
+chaque emplacement en occupant deux, la rangée `decalee` commençant à la 2.
+⚠ **LA DEMI-CASE DE MOU EST LE DÉCALAGE LUI-MÊME**, et le test le mesure : avec
+`× 2` la rangée décalée déborde, avec `× 2 + 2` elle n'est plus au ras du bord.
+**Six falsifications, six chutes, une par test.**
+⚠ **LE NOMBRE DE DEMI-COLONNES N'EST PAS DANS LA FEUILLE.** `NB_COLONNES` est
+une donnée et le CSS ne sait pas la lire : c'est `ui/offense.js` qui pose
+`repeat(NB_COLONNES × 2 + 1, 1fr)`. Un test exige que l'expression **nomme** la
+donnée — écrire « 19 » passerait l'égalité aujourd'hui et mentirait le jour où
+une vague changerait de largeur — et refuse tout `repeat(` chiffré dans le bloc.
+⚠ **LA RANGÉE DÉCALÉE EST MARQUÉE, PAS DEVINÉE.** Un `:nth-child` aurait lié le
+quinconce à la structure du DOM, qu'un titre inséré un jour aurait décalée en
+silence. C'est une classe, `decalee`, donc la garde des classes de
+`chantier.test.js` exige aussi qu'elle ait une règle.
+⚠ **`python3 tools/verifier.py` → 932 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 305,7 s. Il était dû : le lot touche `art/` et
+`tools/`. Le compte passe de 931 à 932 : c'est le décor, et lui seul.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le lot ne touche ni l'état, ni
+la sauvegarde, ni une seule règle de jeu : c'est un décor et une géométrie
+d'écran.
+
+**Auparavant, après le lot GRILLE-128 :**
+`npm test` → 939 pass / 0 fail, `npm run build` → `dist/index.html`,
+**3 035 474 octets**, 0 référence externe.
+⚠⚠ **LE JEU EMBARQUE LA GRILLE 128, ET C'EST UN ARBITRAGE D'ETHAN DU 03/09** —
+« il faut les mettre en 128 au sol, et les unités aussi ; câbler en 128, je sais
+que la taille du jeu va dépasser mais tu t'en fous ». Le lot PIXELS cousait déjà
+les deux grilles sans que personne ne lise la 128 : **le geste tient donc en
+DEUX constantes**, `COTE_INDEX` de `tools/atlas.py` et `GRILLE_ATLAS` de
+`tools/build.js`, plus le chemin des deux grosses bases. Tout le reste suit —
+`src/render/sprite.js` calcule en POURCENTAGES, donc il est sans échelle.
+⚠⚠ **COÛT +1 443 034 OCTETS, ET LA BORNE T10 PASSE DE 1 650 000 À 3 200 000.**
+Poste par poste : les huit atlas **561 240 → 1 407 414 o** (+1 128 232 en
+base64) ; les deux grosses bases de l'Ouvrage, hors atlas, **90 047 → 326 146**
+(+314 799). Marge **164 526 octets, 5,1 %**. ⚠ L'atlas du FOND DE CARTE ne bouge
+pas : ses tuiles font déjà 128, et son nom en `-64` désigne la cellule du sol de
+base — quatre par case —, pas sa grille.
+⚠⚠ **`ZOOM_BASE_MULTIPLE_MAX` PASSE DE 2 À 1 DANS LE MÊME GESTE, ET LE JOUEUR NE
+VOIT RIEN CHANGER.** Le plafond vaut `COTE_SPRITE × ce nombre` : 64 × 2 = 128
+hier, 128 × 1 = **128 aujourd'hui**. La plage du zoom ne bouge pas d'un pixel ;
+ce qu'on gagne, c'est qu'au plafond un pixel de sprite vaut UN pixel CSS au lieu
+d'être doublé. Le laisser à 2 aurait porté le plafond à 256 et rouvert à
+l'envers la question de plage tranchée le 31/08.
+⚠⚠ **UNE GARDE MESURAIT UN PROXY, ET CE LOT L'A MONTRÉ.** `zoom de la base — la
+plage est assez large` exigeait `ZOOM_BASE_MULTIPLE_MAX >= 2` : vrai tant que la
+grille faisait 64, où seul un multiple de 2 portait le plafond à 128 px CSS. À
+128 le même plafond s'obtient avec 1, et **le multiple ne dit plus rien de la
+plage**. La garde nomme désormais le plafond EN PIXELS, qui est la grandeur
+qu'elle défendait.
+⚠⚠ **LES MURS DE CONTOUR SONT UNE DETTE DATÉE, CHIFFRÉE, ET ASSERTÉE ENCORE
+VIOLÉE.** Les seize `bord/` sont ceux du 31/08, taillés pour une case de 64 :
+sur une grille de 128 ils s'affichent toujours — `background-size: 100% 100%`
+les étire — mais **exactement DEUX FOIS**, donc à la moitié de la définition de
+tout ce qui les entoure. `test/sprite.test.js` porte `COTE_MUR = 64`, mesure
+l'étirement et **exige qu'il vaille 2** : le jour où les murs passent à 128, les
+deux assertions tombent et quelqu'un vient les retirer.
+⚠⚠ **ET LEUR REMPLACEMENT EST LIVRÉ, MAIS CE N'EST PAS UNE QUESTION DE TAILLE.**
+Ethan a fourni le 03/09 des **blocs pleins** — murs `4x1` de 512 × 128 et angles
+`1x1` de 128 × 128, quatre variantes par camp, sur clé magenta — là où les
+actuels sont des TRAITS à cheval sur le bord. Les poser demande de décider s'ils
+mangent une case ou s'ils ceignent la grille : c'est une géométrie, et c'est le
+lot MURS.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le lot ne touche ni l'état, ni
+la sauvegarde, ni une règle de jeu : c'est la définition des dessins.
+
+**Auparavant, après le lot ENTRÉES :**
+`npm test` → 939 pass / 0 fail, `npm run build` → `dist/index.html`,
 **1 592 440 octets**, 0 référence externe.
 ⚠⚠ **LE HTML EST IDENTIQUE À L'OCTET, SHA-256 COMPRIS, DONC LA VERSION N'A PAS
 ÉTÉ BUMPÉE** — `6f6e0cba…67e4` des deux côtés, et `src/` n'est pas touché. Le
@@ -1510,9 +1708,11 @@ test/                   48 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
-                        au lot ENTRÉES, fichier par fichier (hors `__pycache__`,
-                        qui est ignoré par git). Le vingt-cinquième est
+tools/                  26 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
+                        au lot OFFENSE, fichier par fichier (hors `__pycache__`,
+                        qui est ignoré par git). Le vingt-sixième est `fonds.py`,
+                        qui conditionne les DÉCORS — pas des sprites, pas de
+                        grille, aucun atlas ; le vingt-cinquième est
                         `entrees.py`, qui dit ce que la chaîne LIT dans
                         `art/sources/` ; le vingt-quatrième est `portes.py`, qui
                         porte les seuils de quantification et n'importe RIEN,
@@ -1530,10 +1730,14 @@ tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les VINGT ET UN autres sont du Python, hors chaîne de build et hors
+  ⤷ les VINGT-TROIS autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
-      • DOUZE PRODUCTEURS de sprites, qui lisent `art/sources/` et écrivent dans
-        `art/sprites/` — le douzième est `bords.py`, entré le 31/08 ;
+      • TREIZE PRODUCTEURS, qui lisent `art/sources/` et écrivent dans
+        `art/sprites/` — le douzième est `bords.py`, entré le 31/08, le
+        treizième `fonds.py`, entré le 03/09. ⚠ CE DERNIER NE PRODUIT PAS UN
+        SPRITE : un décor n'a ni case, ni grille, ni atlas, et il ne se réduit
+        pas. Il est producteur au seul sens qui compte pour le vérificateur —
+        il écrit sous `art/sprites/`, donc la chaîne doit savoir le rejouer ;
       • TROIS BIBLIOTHÈQUES qu'ils importent — la palette et le conditionnement,
         le portage de la coupe 1024, et les SEUILS DE QUANTIFICATION depuis le
         02/09 ; une quatrième, `align_chenilles.py`, n'a plus d'appelant depuis
@@ -1557,9 +1761,16 @@ tools/                  25 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 165 fichiers à la
-                        racine, 428 en comptant `carte/`. RECOMPTÉ le 30/08 au
-                        lot BORDS-DE-BASE.
+art/sources/            sprites bruts, hors chaîne de build — 170 fichiers à la
+                        racine, 433 en comptant `carte/`. RECOMPTÉ le 03/09 au
+                        lot MURS.
+                        ⚠⚠ ET IL EST DÉSORMAIS GARDÉ : `art/sources-declarees.json`
+                          classe chacun de ces fichiers en `consommees` (84) ou
+                          `dormantes` (86), et `tools/entrees.py --verifier` fait
+                          rougir la suite dès qu'un fichier entre sans être
+                          classé. C'est la seule garde de compte hors de `src/`
+                          et de `test/`. Une image qui n'est pas prête entre par
+                          `art/sourcesstandby/`, à côté.
                         ⚠ CETTE LIGNE ANNONÇAIT 87 « depuis le RANGEMENT », et
                           elle était fausse de 61 : le disque en portait 148
                           avant ce lot-ci. Aucune garde ne compte ce dossier —
@@ -1599,10 +1810,19 @@ art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grill
                         et 970 fichiers, recomptés le 02/09 au lot PIXELS, plus
                         SEIZE atlas `.webp` à la racine, DEUX fichiers générés —
                         `ancres-chassis.json` et `atlas-empreintes.json` — et les
-                        SEIZE images à plat de `bord/`.
+                        SEIZE images à plat de `bord/`, et depuis le 03/09
+                        l'unique image de `fond/`.
                         NEUF familles en 128 et 64 : unité, bâtiment, terrain,
                         defense, tourelle-unite, socle, carte, effet, chassis.
-                        La dixième, `bord`, n'a pas de grille.
+                        La dixième, `bord`, n'a pas de grille ; la onzième,
+                        `fond`, n'est même pas une famille de sprites.
+                        ⤷ ⚠⚠ `fond/` PORTE DES DÉCORS, PAS DES SPRITES — entré
+                          au lot OFFENSE. Un décor n'a ni case, ni grille, ni
+                          atlas, et il ne se réduit pas : `fond_offense.webp`
+                          fait 1149 × 1368 et sort de `tools/fonds.py` en WebP
+                          q85, pour 164 578 octets contre 2 099 998 en PNG. Il
+                          entre au livrable par son propre marqueur de
+                          `tools/build.js`, comme les murs de `bord/`.
                         ⤷ ⚠⚠ LA GRILLE 32 EST SORTIE AU LOT PIXELS — 465
                           fichiers retirés, ni le jeu ni les tests ne la
                           lisaient. **SAUF `terrain/32`**, qui reste : `terrain/`
@@ -1619,13 +1839,19 @@ art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grill
                           cousues, la 64 seule est embarquée.
                         ⤷ ⚠⚠ `bord/` EST À PLAT, SANS DOSSIER DE GRILLE, ET
                           IL N'EST DANS AUCUN ATLAS. Ses images ne tiennent pas
-                          dans une case : 512 × 64 pour un mur, 64 × 512 pour
-                          l'autre sens, 64 × 64 pour un angle — arbitrage
-                          d'Ethan du 31/08 —, quand `tools/atlas.py` n'accepte
-                          que des cellules CARRÉES d'un même côté. Les seize
-                          sortent de `tools/bords.py` ; CINQ entrent dans le
-                          livrable, celles du joueur, pour 52 864 octets de
-                          base64. Voir §6, « les murs de contour ».
+                          dans une case : 512 × 128 pour un mur, 128 × 128 pour
+                          un bloc, quand `tools/atlas.py` n'accepte que des
+                          cellules CARRÉES d'un même côté. Les seize sortent de
+                          `tools/bords.py` — quatre murs et quatre blocs par
+                          camp — ; SIX entrent dans le livrable, celles que
+                          l'anneau du joueur pose, pour 22 852 octets de base64.
+                          Voir §6, « les murs de contour ».
+                        ⤷ ⚠⚠ ET ELLES SONT EN `.webp` DEPUIS LE LOT MURS, avec
+                          `bord-empreintes.json` à côté. Node n'a pas de
+                          décodeur WebP : ce manifeste est ce que la suite JS
+                          peut encore mesurer sur elles — SHA-256, taille,
+                          teintes, transparents, trous enfermés. Même motif
+                          qu'`atlas-empreintes.json`.
                         ⤷ ⚠ LE COMPTE A BAISSÉ DE 156, ET CE N'EST PAS UNE PERTE.
                           Le lot en a AJOUTÉ 84 — 54 états détruits et ruines,
                           30 châssis — et RETIRÉ 240 : les tourelles de blindé de
@@ -3960,6 +4186,17 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **LES DEUX TEINTES VIENNENT D'`EMBLEMES_CARTE`**, elles n'en inventent pas de
   troisième : l'os borde déjà la base du joueur, le rouge borde EXACTEMENT ce qui
   attaque le joueur. Le territoire de l'Ouvrage est l'emprise de ces bases-là.
+
+- ⚠⚠ **CE PARAGRAPHE-CI EST DE L'HISTOIRE DEPUIS LE 03/09, ET IL SE LIT AU
+  PASSÉ.** Le lot MURS a remplacé les cinq TRAITS à cheval par un ANNEAU de
+  BLOCS pleins : `512 × 128` et `128 × 128` au lieu de `512 × 64` et `64 × 64`,
+  quatre murs et quatre blocs par camp au lieu de trois murs et deux angles
+  nommés par leur place, du WebP au lieu du PNG, aucune quantification au lieu
+  de seize teintes par camp, et une case pleine de `padding` au lieu d'une
+  demi-case. **Ce qui reste vrai de ce qui suit** : le U et son bas ouvert, le
+  fait que `bord/` n'entre dans aucun atlas, les trois étages du dessin, et
+  `est_fond` qui n'est pas appelée pour découper ces planches-là. Le reste
+  décrit la v1, et le §0 du 03/09 décrit la v2.
 
 - ⚠⚠ **LES MURS DE CONTOUR SONT DESSINÉS DEPUIS LE 31/08, ET ILS NE PASSENT PAS
   PAR LA CHAÎNE DES SPRITES DE CASE.** Ethan, dans l'ordre : « les murs contour

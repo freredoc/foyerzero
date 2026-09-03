@@ -20,7 +20,8 @@ import {
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, fondsDuSol, LIBELLES_FAMILLE, coteCaseParDefaut,
   COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, basculeDeBande, bornesDeDefilement,
-  tuilesDuContour, BANDE_DU_CONTOUR, VARIABLE_DU_MUR,
+  tuilesDuContour, BANDE_DU_CONTOUR, BANDE_DE_FIN_DU_CONTOUR, VARIABLE_DU_MUR,
+  LONGUEUR_DU_MUR, NB_VARIANTES_DU_MUR,
 } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { ZOOM_CARTE } from '../src/data/sites.js';
@@ -3167,7 +3168,14 @@ test('zoom — les deux bornes se LISENT, et le geste est un rapport', () => {
   // de sa propre définition — ce que ce lot vient de retirer à la carte.
   assert.match(ecran, /const COTE_CASE_MAX = COTE_SPRITE/,
     'le plafond du zoom ne se lit plus dans l\'atlas');
-  assert.equal(COTE_SPRITE, 64, 'la grille des sprites a changé : relire le plafond du zoom');
+  // ⚠⚠ RELU LE 03/09, LOT GRILLE-128, ET C'EST TOUT CE QUE CETTE LIGNE DEMANDE.
+  // La grille embarquée est passée de 64 à 128 ; `ZOOM_BASE_MULTIPLE_MAX` est
+  // passé de 2 à 1 EN MÊME TEMPS, si bien que le plafond vaut toujours 128 px
+  // CSS par case. Le joueur ne voit pas la plage bouger ; ce qu'il gagne, c'est
+  // qu'au plafond un pixel de sprite vaut UN pixel CSS au lieu d'être doublé.
+  assert.equal(COTE_SPRITE, 128, 'la grille des sprites a changé : relire le plafond du zoom');
+  assert.equal(COTE_SPRITE * ZOOM_BASE_MULTIPLE_MAX, 128,
+    'le plafond du zoom a bougé en pixels CSS : c\'est une décision, pas un effet de bord');
 
   // ⚠ LE DÉFAUT VIENT DE LA FEUILLE, pas du code : c'est une décision de mise
   // en page, et l'écrire des deux côtés ferait deux vérités.
@@ -3180,21 +3188,24 @@ test('zoom — les deux bornes se LISENT, et le geste est un rapport', () => {
   // ⚠ LE PLANCHER EST LA TAILLE QUI FAIT TENIR LA GRILLE, mesurée et non
   // devinée : sous celle-là, le zoom arrière ne montrerait que du vide.
   //
-  // ⚠⚠ ET IL DIVISE PAR `largeur + 1` DEPUIS LE MUR DE CONTOUR (31/08). La
-  // grille porte une demi-case de `padding` de chaque côté pour que les tuiles
-  // du mur, posées à cheval sur son bord, ne débordent pas de sa boîte : celle-ci
-  // fait donc dix cases de large pour neuf colonnes. Diviser par neuf redonnerait
-  // exactement le défilement horizontal au repos que ce padding existe pour
-  // éviter — c'est le défaut mesuré le 31/08 (414 px de grille dans 360).
-  assert.match(ecran, /Math\.floor\(large \/ \(GRILLE\.largeur \+ 1\)\)/,
-    'le plancher du zoom ne compte plus la demi-case du mur de chaque côté');
+  // ⚠⚠ ET IL DIVISE PAR `largeur + 2` DEPUIS QUE LE MUR EST UN ANNEAU (03/09).
+  // La v1 était un TRAIT posé à cheval sur le bord et coûtait deux DEMI-cases ;
+  // la v2 est faite de BLOCS pleins qui ceignent la grille, donc deux cases
+  // entières. Diviser par neuf redonnerait le défilement horizontal au repos que
+  // ce padding existe pour éviter — 414 px dans 360, mesuré le 31/08 —, et
+  // diviser par dix laisserait déborder une demi-case de mur de chaque côté,
+  // c'est-à-dire le « ça déborde » d'Ethan avec la moitié de son ampleur.
+  assert.match(ecran, /Math\.floor\(large \/ \(GRILLE\.largeur \+ 2\)\)/,
+    'le plancher du zoom ne compte plus la case de mur de chaque côté');
 
-  // ⚠ ET LES DEUX MOITIÉS DOIVENT S'ACCORDER : le `+ 1` du plancher n'a de sens
-  // que si la feuille pose bien une DEMI-case de chaque côté. Deux demi-cases
-  // font une case ; un `padding` d'une case entière rendrait la grille trop
-  // étroite d'une colonne, et personne ne le verrait sans mesurer.
-  assert.match(feuille, /#chantier-grille\s*\{[^}]*padding:\s*calc\(var\(--case-cote\)\s*\/\s*2\)/,
-    'la grille ne porte plus la demi-case de marge que le mur exige');
+  // ⚠ ET LES TROIS MOITIÉS DOIVENT S'ACCORDER : le `+ 2` du plancher n'a de sens
+  // que si la feuille pose bien une case ENTIÈRE de chaque côté, et que
+  // `paddingDeLaGrille` en rend autant. En changer une seule décale le mur du
+  // contenu, et personne ne le verrait sans mesurer.
+  assert.match(feuille, /#chantier-grille\s*\{[^}]*padding:\s*var\(--case-cote\)/,
+    'la grille ne porte plus la case de marge que l\'anneau exige');
+  assert.match(ecran, /function paddingDeLaGrille\(\)\s*\{\s*return coteCase;/,
+    'le padding vu par le défilement ne vaut plus une case pleine');
 
   // ⚠⚠ LE GESTE EST UN RAPPORT D'ÉCARTS, PAS UNE DIFFÉRENCE. Une différence en
   // pixels zoomerait plus vite sur un grand écran que sur un petit, pour le
@@ -3319,8 +3330,14 @@ test('zoom de la base — la plage est assez large pour qu\'un geste se voie', (
   // d'écarter les doigts de 39 % pour buter en haut. Le facteur n'était pas en
   // cause — c'est le rapport des écarts, donc la main donne sa proportion — la
   // PLAGE l'était.
-  assert.ok(ZOOM_BASE_MULTIPLE_MAX >= 2,
-    'le plafond est retombé sur la définition des sprites : le zoom ne zoomera plus');
+  //
+  // ⚠⚠ CETTE GARDE MESURAIT UN PROXY, ET LE LOT GRILLE-128 L'A MONTRÉ. Elle
+  // exigeait `ZOOM_BASE_MULTIPLE_MAX >= 2` — vrai tant que la grille faisait 64,
+  // où seul un multiple de 2 portait le plafond à 128 px CSS. À 128, le même
+  // plafond s'obtient avec un multiple de 1, et le multiple ne dit plus rien de
+  // la plage. **Ce qui compte est le plafond en PIXELS**, et il n'a pas bougé.
+  assert.equal(COTE_CASE_MAX, 128,
+    'le plafond du zoom a changé en pixels CSS : c\'est une décision de plage');
   assert.equal(COTE_CASE_MAX, COTE_SPRITE * ZOOM_BASE_MULTIPLE_MAX);
 
   // ⚠ LE MULTIPLE EST ENTIER, ET C'EST CE QUI GARDE LE PIXEL ART NET. Au
@@ -3493,87 +3510,130 @@ test('bandes — l\'écran borne au lieu de changer de bande, et le bouton exist
   assert.match(vue[1], /flex-direction:\s*column/);
   assert.match(vue[1], /min-height:\s*0/);
 });
-test('contour — le mur fait un U, et ses cinq pièces se raccordent sans trou', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE, EN TROIS ARBITRAGES D'ETHAN DU 31/08. « à cheval
-  // sur le bord » — chaque pièce est centrée sur la ligne qui borde la base ;
-  // « le mur fait un U, le bas reste sans mur » — trois côtés, deux angles ; et
-  // « le mur fera 512x64 » — une pièce court d'un bout à l'autre de son côté,
-  // au lieu d'être un pavage case par case.
-  const bande = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
-  assert.ok(bande, 'la bande que le mur entoure n\'existe plus dans BANDES');
-  const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
+test('contour — le mur fait un U, et l\'anneau se pave sans trou ni recouvrement', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE, EN DEUX ARBITRAGES D'ETHAN. Le 31/08 : « le mur
+  // fait un U, le bas reste sans mur ». Le 03/09, avec des blocs neufs : « pour
+  // que ça passe bien parce que là ça déborde ; les murs vont du haut de la
+  // base jusqu'à la défense et ne ferme pas en bas ».
+  //
+  // ⚠⚠ ET IL A CHANGÉ DE GÉOMÉTRIE, PAS DE TAILLE. La v1 posait cinq TRAITS À
+  // CHEVAL sur la ligne du bord : chaque pièce mordait d'une demi-case
+  // au-dedans. La v2 pose des BLOCS PLEINS qui CEIGNENT la grille sans rien
+  // recouvrir. Ce test asserte donc l'inverse de ce qu'il assertait : plus
+  // aucune pièce ne touche le contenu.
+  const bandeHaute = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
+  const bandeBasse = BANDES.find((b) => b.cle === BANDE_DE_FIN_DU_CONTOUR);
+  assert.ok(bandeHaute, 'la bande où le mur commence n\'existe plus dans BANDES');
+  assert.ok(bandeBasse, 'la bande où le mur s\'arrête n\'existe plus dans BANDES');
+  const { premiereLigne } = ligneEcranDeLaBande(bandeHaute);
+  const fin = ligneEcranDeLaBande(bandeBasse);
+  // ⚠⚠ LE FLANC COURT D'UN BORD À L'AUTRE — Ethan, 03/09 : « flanc sur la
+  // défense aussi ». On mesure donc du haut de la première bande au bas de la
+  // seconde, et NON la somme des deux : une somme sauterait une bande qui se
+  // glisserait un jour entre elles, et le mur aurait un trou que rien ne dirait.
+  const nbLignes = fin.premiereLigne + fin.nbLignes - premiereLigne;
 
   // Le montage mesure quelque chose : sans plusieurs colonnes et plusieurs
-  // rangées, « court d'un bout à l'autre » et « une case » se confondraient.
-  assert.ok(GRILLE.largeur > 2, `la base fait ${GRILLE.largeur} colonnes`);
-  assert.ok(nbLignes > 2, `la bande fait ${nbLignes} rangées`);
+  // rangées, « paver » et « poser une case » se confondraient — et sans DEUX
+  // bandes distinctes, « jusqu'au bas de la défense » se confondrait avec
+  // « jusqu'au bas de la base ».
+  assert.ok(GRILLE.largeur > LONGUEUR_DU_MUR, `la base fait ${GRILLE.largeur} colonnes`);
+  assert.ok(nbLignes > ligneEcranDeLaBande(bandeHaute).nbLignes,
+    'le mur ne descend pas plus bas que sa première bande : le flanc ne longe pas la défense');
+
+  // ⚠⚠ ET UNE FALSIFICATION NE MORD PAS, ELLE SE DÉCLARE. Écrire le flanc comme
+  // la SOMME des deux bandes au lieu de leur ÉTENDUE donne aujourd'hui le même
+  // nombre — les deux bandes sont adjacentes — donc aucun test ne peut les
+  // séparer sans inventer une troisième bande qui n'existe pas. On relève la
+  // coïncidence au lieu de faire semblant de la garder : le jour où une bande
+  // se glisserait entre les deux, c'est cette égalité qui tomberait, et le
+  // message dira laquelle des deux écritures est la bonne.
+  assert.equal(nbLignes, ligneEcranDeLaBande(bandeHaute).nbLignes + fin.nbLignes,
+    'une bande s\'est glissée entre les deux : le flanc se mesure d\'un BORD à '
+    + 'l\'autre, jamais en additionnant les bandes, sinon il saute celle du milieu');
 
   const pieces = tuilesDuContour('j');
-  assert.equal(pieces.length, 5, 'le mur n\'a plus trois côtés et deux angles');
+  const gauche = 0;
+  const droite = GRILLE.largeur + 1;
+  const haut = premiereLigne - 1;
 
-  // ⚠ LE BAS N'A NI MUR NI ANGLE. C'est le côté qui donne sur la bande de
-  // défense, et c'est le seul que l'assaillant franchit.
-  for (const sens of ['so', 'se']) {
-    assert.ok(!pieces.some((p) => p.nom.endsWith(`angle_${sens}`)),
-      `le U a repris son angle ${sens} : le bas doit rester sans mur`);
-  }
-  assert.equal(pieces.filter((p) => p.nom.includes('_mur_h_')).length, 1,
-    'le U a deux murs horizontaux : le bas doit rester sans mur');
-
-  // Les quatre lignes du bord, dans le repère de la boîte de padding : le
-  // contenu commence à une demi-case du coin.
-  const ligneHaut = premiereLigne - 0.5;
-  const ligneGauche = 0.5;
-  const ligneDroite = 0.5 + GRILLE.largeur;
-  const basDeLaBase = premiereLigne - 0.5 + nbLignes;
-
-  const par = (motif) => pieces.filter((p) => p.nom.includes(motif));
-  const [murHaut] = par('_mur_h_');
-  const verticaux = par('_mur_v_');
-  const angles = par('_angle_');
-  assert.equal(verticaux.length, 2);
-  assert.equal(angles.length, 2);
-
-  // ⚠ AUCUNE PIÈCE NE SORT DE LA BOÎTE DE PADDING. Elle fait une demi-case de
-  // plus que le contenu de chaque côté, et c'est exactement ce qu'il faut à des
-  // pièces posées à cheval. Une seule qui déborde, et le champ se met à défiler
-  // horizontalement au repos — ce que « tu compresses tout dans l'ui » refuse.
+  // --- 1. rien ne sort de la boîte, et rien ne touche le contenu -------------
+  //
+  // La boîte fait `largeur + 2` de large ; le CONTENU occupe [1, largeur + 1[.
+  // Une seule pièce qui y mordrait recouvrirait une case jouable, et le joueur
+  // verrait un bâtiment barré par son propre mur.
   for (const p of pieces) {
-    assert.ok(p.x >= 0 && p.x + p.l <= GRILLE.largeur + 1, `${p.nom} hors boîte en x`);
-    assert.ok(p.y >= 0 && p.y + p.h <= GRILLE.longueur + 1, `${p.nom} hors boîte en y`);
     assert.ok(p.l > 0 && p.h > 0, `${p.nom} n'a pas de surface`);
+    assert.ok(p.x >= 0 && p.x + p.l <= GRILLE.largeur + 2, `${p.nom} hors boîte en x`);
+    assert.ok(p.y >= 0 && p.y + p.h <= GRILLE.longueur + 2, `${p.nom} hors boîte en y`);
+    const surLeContenuEnX = p.x + p.l > gauche + 1 && p.x < droite;
+    const surLeContenuEnY = p.y + p.h > haut + 1;
+    assert.ok(!(surLeContenuEnX && surLeContenuEnY),
+      `${p.nom} mord sur le contenu : l'anneau ceint la grille, il ne la recouvre pas`);
   }
 
-  // ⚠ À CHEVAL : LE MILIEU DE LA PIÈCE EST SUR LA LIGNE. Une pièce fait une case
-  // d'épaisseur, donc elle mord d'une demi-case de chaque côté du bord.
-  assert.equal(murHaut.h, 1, 'le mur du haut ne fait plus une case d\'épaisseur');
-  assert.equal(murHaut.y + murHaut.h / 2, ligneHaut,
-    `le mur du haut est centré en ${murHaut.y + murHaut.h / 2}, la ligne est en ${ligneHaut}`);
-  const cotes = new Set();
-  for (const v of verticaux) {
-    assert.equal(v.l, 1, `${v.nom} ne fait plus une case d'épaisseur`);
-    const centre = v.x + v.l / 2;
-    assert.ok(centre === ligneGauche || centre === ligneDroite, `${v.nom} centré en ${centre}`);
-    cotes.add(centre);
-    // ⚠ LE U S'ARRÊTE OÙ LA BASE S'ARRÊTE : le bras descend jusqu'au bord bas de
-    // la base, pas dans la bande de défense.
-    assert.equal(v.y + v.h, basDeLaBase,
-      `${v.nom} finit en ${v.y + v.h}, le bas de la base est en ${basDeLaBase}`);
-  }
-  assert.equal(cotes.size, 2, 'les deux murs verticaux sont du même côté');
+  // --- 2. le U : trois côtés, et rien en bas --------------------------------
+  const flancGauche = pieces.filter((p) => p.x === gauche && p.y > haut);
+  const flancDroit = pieces.filter((p) => p.x === droite && p.y > haut);
+  assert.equal(flancGauche.length, nbLignes, 'le flanc gauche ne longe plus les deux bandes');
+  assert.equal(flancDroit.length, nbLignes, 'le flanc droit ne longe plus les deux bandes');
 
-  // ⚠ RIEN NE SE RECOUVRE, ET RIEN NE MANQUE. Chaque angle prend sa case ; le
-  // mur du haut court exactement entre les deux, chaque mur de côté exactement
-  // du bas de son angle au bord de la base. Un chevauchement se verrait — deux
-  // dessins semi-opaques l'un sur l'autre — et un trou aussi.
-  const parCoin = Object.fromEntries(angles.map((a) => [a.nom.slice(-2), a]));
-  assert.deepEqual(Object.keys(parCoin).sort(), ['ne', 'no']);
-  assert.equal(parCoin.no.x + parCoin.no.l, murHaut.x, 'trou entre l\'angle NO et le mur du haut');
-  assert.equal(murHaut.x + murHaut.l, parCoin.ne.x, 'trou entre le mur du haut et l\'angle NE');
-  for (const [coin, v] of [[parCoin.no, verticaux[0]], [parCoin.ne, verticaux[1]]]) {
-    assert.equal(coin.x, v.x, 'un angle et son mur de côté ne sont pas alignés');
-    assert.equal(coin.y + coin.h, v.y, 'trou entre un angle et son mur de côté');
+  // ⚠⚠ LE U S'ARRÊTE AU BAS DE LA DÉFENSE, ET IL NE SE FERME PAS. Ce qui reste
+  // dehors, ce sont les deux rangées de DÉPLOIEMENT, par lesquelles l'assaut
+  // arrive — le seul côté sans mur, et le seul que l'assaillant franchit.
+  const plusBas = Math.max(...pieces.map((p) => p.y + p.h));
+  assert.equal(plusBas, haut + 1 + nbLignes,
+    `le mur descend jusqu'en ${plusBas}, la défense s'arrête en ${haut + 1 + nbLignes}`);
+  const lignesHorsDuU = GRILLE.longueur - nbLignes;
+  assert.ok(lignesHorsDuU > 0,
+    'le U couvre toute la grille : il ne s\'ouvre plus nulle part');
+  assert.ok(!pieces.some((p) => p.y >= haut + 1 + nbLignes),
+    `le U s'est fermé sur les ${lignesHorsDuU} rangées de déploiement`);
+
+  // --- 3. le pavage : la somme retombe juste, et rien ne se recouvre ---------
+  //
+  // ⚠ ON REFAIT LE COMPTE, ON NE LE RECOPIE PAS. Un mur couvre
+  // `LONGUEUR_DU_MUR` cases, un bloc une ; la rangée du haut doit couvrir
+  // exactement `largeur + 2` unités, sans trou ni chevauchement.
+  const rangeeDuHaut = pieces.filter((p) => p.y === haut).sort((a, b) => a.x - b.x);
+  assert.equal(rangeeDuHaut.reduce((t, p) => t + p.l, 0), GRILLE.largeur + 2,
+    'la rangée du haut ne couvre plus toute la largeur de la boîte');
+  let bord = 0;
+  for (const p of rangeeDuHaut) {
+    assert.equal(p.x, bord, `trou ou recouvrement à x=${bord} : ${p.nom} commence en ${p.x}`);
+    bord = p.x + p.l;
   }
+  assert.equal(bord, GRILLE.largeur + 2);
+
+  // Les deux coins sont des BLOCS, et le haut porte au moins un mur — sans quoi
+  // le pavage se ferait case par case, ce que les murs de quatre cases existent
+  // précisément pour éviter.
+  assert.match(rangeeDuHaut[0].nom, /_bloc_\d$/, 'le coin haut-gauche n\'est plus un bloc');
+  assert.match(rangeeDuHaut.at(-1).nom, /_bloc_\d$/, 'le coin haut-droit n\'est plus un bloc');
+  assert.ok(rangeeDuHaut.some((p) => p.l === LONGUEUR_DU_MUR),
+    'le haut est pavé bloc par bloc : les murs de quatre cases ne servent plus');
+
+  // --- 4. les variantes tournent vraiment -----------------------------------
+  //
+  // ⚠ SANS ÇA, LE TIRAGE POURRAIT RENDRE TOUJOURS LA MÊME et personne ne le
+  // verrait sans regarder l'écran. L'anneau porte assez de blocs pour que les
+  // quatre soient employées.
+  const variantesDeBloc = new Set(
+    pieces.filter((p) => p.nom.includes('_bloc_')).map((p) => p.nom.slice(-1)),
+  );
+  assert.equal(variantesDeBloc.size, NB_VARIANTES_DU_MUR,
+    `${variantesDeBloc.size} variantes de bloc employées sur ${NB_VARIANTES_DU_MUR}`);
+
+  // ⚠ ET LE TIRAGE EST STABLE : deux appels rendent le même mur. Un mur qui
+  // changerait de dessin à chaque peinture scintillerait dix fois par seconde.
+  assert.deepEqual(tuilesDuContour('j'), pieces, 'le mur change d\'un appel à l\'autre');
+
+  // ⚠ ET IL NE CONSOMME PAS LE FLUX DE LA PARTIE. `variante` est pure ; s'en
+  // remettre à `etat.rng` décalerait tout ce que le moteur tire ensuite.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const corps = source.slice(source.indexOf('export function tuilesDuContour'));
+  assert.doesNotMatch(corps.slice(0, corps.indexOf('\n}')), /etat\.rng|Math\.random/,
+    'le mur tire dans le flux de la partie');
 
   // Les deux camps existent, et un camp inconnu lève plutôt que de rendre une
   // liste vide — un mur absent est exactement ce que personne ne remarque.
@@ -3582,26 +3642,40 @@ test('contour — le mur fait un U, et ses cinq pièces se raccordent sans trou'
   assert.throws(() => tuilesDuContour('x'), /camp/);
 });
 
-test('contour — l\'écran pose les cinq images, et lève sur celle qui manque', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE : que les cinq pièces aient vraiment une image dans
-  // le livrable. Le mur n'est plus un atlas — chaque fichier entre par son
-  // propre marqueur —, donc rien ne garantit plus qu'un nom rendu par
-  // `tuilesDuContour` corresponde à quelque chose. Une pièce sans image serait
-  // un pan de mur absent, c'est-à-dire exactement ce que personne ne remarque.
+test('contour — l\'écran pose les huit images, et lève sur celle qui manque', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE : que chaque pièce ait vraiment une image dans le
+  // livrable. Le mur n'est pas un atlas — chaque fichier entre par son propre
+  // marqueur —, donc rien ne garantit qu'un nom rendu par `tuilesDuContour`
+  // corresponde à quelque chose. Une pièce sans image serait un pan de mur
+  // absent, c'est-à-dire exactement ce que personne ne remarque.
+  //
+  // ⚠ ET C'EST DU WEBP DEPUIS LE LOT MURS. Le rendu n'est plus quantifié sur
+  // seize teintes par camp : les huit pièces pèseraient 467 028 octets de
+  // base64 en PNG, elles en pèsent 38 878 en WebP q85 — le même encodage que
+  // les atlas et que le fond du bassin.
   const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
-  const noms = tuilesDuContour('j').map((p) => p.nom);
-  assert.equal(new Set(noms).size, noms.length, 'deux pièces portent le même nom');
+  // ⚠ LES NOMS SE RÉPÈTENT, ET C'EST LE PRINCIPE DEPUIS LE LOT MURS : vingt et
+  // une pièces pour huit dessins. Ce qu'on exige, c'est que CHAQUE dessin
+  // employé ait son image — et que l'anneau les emploie tous les huit, sans
+  // quoi on paierait dans le livrable une variante que rien ne pose.
+  const noms = [...new Set(tuilesDuContour('j').map((p) => p.nom))];
+  assert.deepEqual(noms.slice().sort(), Object.keys(VARIABLE_DU_MUR).sort(),
+    'la table des images et ce que l\'anneau pose ont divergé : une pièce sans image '
+    + 'est un pan de mur absent, une image sans pièce est du poids pour rien');
+  // Le montage mesure quelque chose : sans plusieurs dessins, « chacun a son
+  // image » se confondrait avec « il y en a un ».
+  assert.ok(noms.length > 3, `l'anneau ne pose que ${noms.length} dessins`);
   for (const nom of noms) {
     const variable = VARIABLE_DU_MUR[nom];
     assert.ok(variable, `${nom} n'a pas de variable CSS`);
     const cle = variable.match(/var\((--[a-z0-9-]+)\)/)[1];
     // La variable existe dans le livrable, et elle porte une image INLINÉE — pas
     // une adresse, que la garde offline du build refuserait de toute façon.
-    const regle = html.match(new RegExp(`${cle}:\\s*url\\('(data:image/png;base64,[^']{200,})'\\)`));
+    const regle = html.match(new RegExp(`${cle}:\\s*url\\('(data:image/webp;base64,[^']{200,})'\\)`));
     assert.ok(regle, `${cle} n'est pas une image inlinée dans le livrable`);
   }
 
-  // ⚠ ET LE CAMP DE L'OUVRAGE N'Y EST PAS, DÉLIBÉRÉMENT : 27 000 octets pour
+  // ⚠ ET LE CAMP DE L'OUVRAGE N'Y EST PAS, DÉLIBÉRÉMENT : 24 438 octets pour
   // zéro pixel tant qu'aucun écran ne dessine sa base. L'écran LÈVE dessus au
   // lieu de sauter en silence, et le message dit quoi faire.
   for (const p of tuilesDuContour('o')) {

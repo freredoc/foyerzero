@@ -56,7 +56,17 @@ EMPREINTES = os.path.join(SPRITES, 'atlas-empreintes.json')
 # `src/data/atlas.js` décrit et que `tools/build.js` inline ; les deux nombres
 # doivent s'accorder, et `test/sprite.test.js` refuse qu'ils divergent.
 GRILLES = (64, 128)
-COTE_INDEX = 64
+# ⚠⚠ LA GRILLE EMBARQUÉE EST PASSÉE À 128 LE 03/09, ARBITRÉE PAR ETHAN — « il
+# faut les mettre en 128 au sol, et les unités aussi ; câbler en 128, je sais
+# que la taille du jeu va dépasser mais tu t'en fous ». Ce que ça achète : les
+# sprites cessent d'être agrandis au-dessus de leur définition sur une dalle à
+# DPR 3, et les nouveaux dessins arrivent 128-natifs — un mur `4x1` mesure
+# 512 × 128, soit quatre cases de 128.
+# ⚠ CE QUE ÇA COÛTE, MESURÉ : les huit atlas passent de 561 240 à 1 407 414
+# octets, soit +1 128 232 en base64 ; les deux grosses bases de l'Ouvrage, qui
+# voyagent hors atlas, de 90 047 à 326 146. Le livrable passe de 1 592 440 à
+# 3 035 471 octets.
+COTE_INDEX = 128
 
 # ⚠⚠ WEBP DEPUIS LE LOT PIXELS, ET C'EST LUI QUI REND LE PROTOCOLE TENABLE.
 # Les sprites ne sont plus quantifiés sur une palette fermée : ils sortent d'une

@@ -14,7 +14,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { decoderRgba } from './png-rgba.js';
 import { join, dirname } from 'node:path';
@@ -30,7 +30,7 @@ import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
-import { TERRAINS, tuilesDuContour } from '../src/ui/chantier.js';
+import { TERRAINS, tuilesDuContour, LONGUEUR_DU_MUR } from '../src/ui/chantier.js';
 import { BATIMENTS } from '../src/data/sites.js';
 import { ORIENTATION_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
 import { creerCombat } from '../src/sim/combat.js';
@@ -448,82 +448,115 @@ test('sprite — une cellule se pose aussi dans un QUARTIER, et la formule tient
   assert.equal(degenere.position, '0% 0%');
 });
 
-test('bord — les murs de contour sont des images à part, pas des cellules d\'atlas', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE, ET IL VIENT D'UN ARBITRAGE. Le mur a d'abord été
-  // conditionné comme un sprite de case — 64 × 64, quatorze teintes du dépôt,
-  // cousu dans un atlas —, et Ethan l'a refusé de face le 31/08 : « mais c'est
-  // quoi cette chiasse de pixel. divise par deux l'asset original. et garde la
-  // colorisation. le mur fera 512x64. » Ce test tient les trois moitiés de cette
-  // phrase : la TAILLE, la COLORISATION, et le fait qu'un tel format ne peut pas
-  // entrer dans un atlas à cellules carrées.
+test('bord — les murs de contour sont des BLOCS à part, et le manifeste en répond', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE, ET IL VIENT DE DEUX ARBITRAGES. Le 31/08, le mur
+  // avait d'abord été conditionné comme un sprite de case — 64 × 64, quatorze
+  // teintes du dépôt, cousu dans un atlas — et Ethan l'a refusé de face : « mais
+  // c'est quoi cette chiasse de pixel. divise par deux l'asset original. et
+  // garde la colorisation. » Le 03/09, il a livré des planches neuves : « déjà
+  // refait les murs avec les nouveaux sprites, et pour que ça passe bien parce
+  // que là ça déborde ».
+  //
+  // ⚠⚠ LA V2 N'EST PAS LA V1 EN PLUS GRAND. Ce sont des BLOCS PLEINS — quatre
+  // murs de quatre cases et quatre blocs d'une case par camp —, là où la v1
+  // était cinq TRAITS fins nommés par leur PLACE (`mur_h_a`, `angle_no`). Les
+  // quatre « angles » du zip ne sont pas quatre orientations d'un coude : ce
+  // sont quatre VARIANTES du même carré, mesuré et regardé, dont aucune n'est le
+  // miroir d'une autre. Ils se numérotent, donc, au lieu de se nommer.
   const dossier = join(SPRITES, 'bord');
-  const fichiers = readdirSync(dossier).filter((f) => f.endsWith('.png')).sort();
+  const fichiers = readdirSync(dossier).filter((f) => f.endsWith('.webp')).sort();
   assert.equal(fichiers.length, 16,
-    `bord/ porte ${fichiers.length} fichiers : deux camps × (4 murs + 4 angles)`);
+    `bord/ porte ${fichiers.length} fichiers : deux camps × (4 murs + 4 blocs)`);
+
+  // ⚠ LA V1 EST PARTIE AVEC SA PRODUCTION. `tools/bords.py` ne fait plus ses
+  // seize traits ; les laisser au dépôt les ferait compter MANQUANTS par le
+  // vérificateur à chaque exécution — « le dépôt les porte, aucun outil ne les
+  // fait », c'est-à-dire le contraire de la vérité.
+  assert.equal(readdirSync(dossier).filter((f) => f.endsWith('.png')).length, 0,
+    'bord/ porte encore des PNG : la v1 du mur n\'est plus produite par personne');
   assert.ok(!existsSync(join(dossier, String(COTE_SPRITE))),
     'bord/ a repris un dossier de grille : ses sprites ne sont pas des sprites de case');
 
-  // ⚠ ET IL N'EST PLUS DANS L'INDEX DES ATLAS. `tools/atlas.py` n'accepte que
-  // des cellules carrées d'un même côté ; l'y laisser ferait sortir l'outil en
-  // erreur, ou pire, coudre le mur de travers.
+  // ⚠ ET IL N'EST TOUJOURS PAS DANS L'INDEX DES ATLAS. `tools/atlas.py` n'accepte
+  // que des cellules carrées d'un même côté ; ni 512 × 128 ni un mélange de
+  // formats n'y tiennent.
   assert.equal(ATLAS.bord, undefined,
     'la famille `bord` est revenue dans l\'atlas : elle n\'y tient pas');
 
-  // Les tailles, mesurées dans les en-têtes des PNG. `512 × 64` est le mot
-  // d'Ethan ; le reste s'en déduit — l'autre sens et l'angle, qui est le carré
-  // de l'épaisseur.
-  const LONG = 512;
-  const attendue = (nom) => {
-    if (nom.includes('_mur_h_')) return { largeur: LONG, hauteur: COTE_SPRITE };
-    if (nom.includes('_mur_v_')) return { largeur: COTE_SPRITE, hauteur: LONG };
-    return { largeur: COTE_SPRITE, hauteur: COTE_SPRITE };
-  };
-  let couleursMax = 0;
+  // ⚠⚠ LE MANIFESTE EST CE QUI REMPLACE `decoderRgba` ICI, ET C'EST LE MOTIF DU
+  // DÉPÔT DEPUIS LE 02/09. Les murs sont en WebP — 6 344 octets pour `mur_1`
+  // contre 72 651 en PNG optimisé, mesuré — et Node n'a pas de décodeur WebP ;
+  // §3 interdit d'ajouter une dépendance de test. `tools/bords.py` écrit donc
+  // `bord-empreintes.json` : le SHA-256 de chaque fichier, sa taille, ses
+  // teintes opaques, ses transparents et ses trous enfermés. Le test lit, il ne
+  // décode pas.
+  const manifeste = JSON.parse(readFileSync(join(dossier, 'bord-empreintes.json'), 'utf8'));
+  const sprites = manifeste.sprites;
+  assert.equal(Object.keys(sprites).length, fichiers.length,
+    'le manifeste et le dossier ont divergé — relancer `python3 tools/bords.py`');
+
+  // ⚠ L'EMPREINTE SE VÉRIFIE, ELLE NE SE CROIT PAS. Sans ce bloc, le manifeste
+  // serait une prose que rien ne rattache aux fichiers : un sprite remplacé
+  // passerait, et c'est exactement l'accident de BÂTIMENTS-1024 sous un autre
+  // format.
   for (const fichier of fichiers) {
-    const im = decoderRgba(join(dossier, fichier));
-    const veut = attendue(fichier);
-    assert.equal(im.largeur, veut.largeur, `${fichier} fait ${im.largeur} de large`);
-    assert.equal(im.hauteur, veut.hauteur, `${fichier} fait ${im.hauteur} de haut`);
-
-    // ⚠ « GARDE LA COLORISATION » SE MESURE : les couleurs sont celles du
-    // dessin, pas les quatorze de `cond.py`. On compte les teintes opaques
-    // distinctes — un mur ramené à la palette du dépôt en porterait sept au
-    // plus, et surtout il porterait le rouge que la chaîne réserve à ce qui
-    // ATTAQUE le joueur.
-    const teintes = new Set();
-    for (let i = 0; i < im.pixels.length; i += 4) {
-      if (im.pixels[i + 3] === 0) continue;
-      teintes.add((im.pixels[i] << 16) | (im.pixels[i + 1] << 8) | im.pixels[i + 2]);
-    }
-    assert.ok(teintes.size > 7,
-      `${fichier} ne porte que ${teintes.size} teintes : la colorisation a été perdue`);
-    assert.ok(teintes.size <= 16,
-      `${fichier} porte ${teintes.size} teintes : la réduction à seize ne mord plus, `
-        + 'et le livrable paie le bruit du rendu d\'origine');
-    assert.ok(!teintes.has(0xE4 * 65536 + 0x3E * 256 + 0x32),
-      `${fichier} porte #E43E32, la teinte réservée à ce qui attaque le joueur`);
-    couleursMax = Math.max(couleursMax, teintes.size);
-
-    // ⚠ L'ALPHA RESTE BINAIRE. Le dépôt n'a aucune transparence partielle, et
-    // un bord à demi transparent se lirait comme un défaut de rendu.
-    for (let i = 3; i < im.pixels.length; i += 4) {
-      assert.ok(im.pixels[i] === 0 || im.pixels[i] === 255,
-        `${fichier} porte un alpha partiel : la réduction a laissé un halo`);
-    }
+    const nom = fichier.replace(/\.webp$/, '');
+    const dit = sprites[nom];
+    assert.ok(dit, `${nom} n'est pas dans le manifeste`);
+    const vu = createHash('sha256').update(readFileSync(join(dossier, fichier))).digest('hex');
+    assert.equal(vu, dit.sha256, `${fichier} ne correspond plus à son empreinte`);
+    assert.equal(statSync(join(dossier, fichier)).size, dit.octets, `${fichier} : taille`);
   }
-  assert.equal(couleursMax, 16, 'aucun sprite n\'atteint les seize teintes : le montage ne mesure rien');
 
-  // ⚠ LE MUR TOMBE AU 1:1 AU PLAFOND DU ZOOM, et ce n'est pas une coïncidence
-  // qu'on impose : c'est un fait qu'on RELÈVE. 512 pixels pour 64 par case font
-  // huit cases, et le mur du haut en couvre exactement huit sur cette grille-ci.
-  // Le jour où la base changera de largeur, la feuille étirera l'image — le test
-  // dira alors que le rapport n'est plus entier, et ce sera vrai.
-  assert.equal(LONG / COTE_SPRITE, 8, 'l\'asset ne couvre plus huit cases');
-  const haut = tuilesDuContour('j').find((t) => t.nom.includes('_mur_h_'));
-  assert.equal(haut.l, LONG / COTE_SPRITE,
-    `le mur du haut couvre ${haut.l} cases pour un asset de ${LONG / COTE_SPRITE} : il sera étiré`);
+  // ⚠⚠ LA TAILLE EST CELLE DE LA GRILLE DU JEU, ET LA DETTE DU 03/09 EST
+  // SOLDÉE. La v1 était taillée pour une case de 64 et s'affichait étirée deux
+  // fois depuis le passage à la 128 ; `COTE_MUR` et son assertion inverse ont
+  // disparu avec elle. Un bloc fait une case, un mur `LONGUEUR_DU_MUR` cases.
+  for (const [nom, dit] of Object.entries(sprites)) {
+    const mur = nom.includes('_mur_');
+    assert.equal(dit.hauteur, COTE_SPRITE, `${nom} fait ${dit.hauteur} de haut`);
+    assert.equal(dit.largeur, COTE_SPRITE * (mur ? LONGUEUR_DU_MUR : 1),
+      `${nom} fait ${dit.largeur} de large`);
+  }
+  assert.equal(tuilesDuContour('j').find((t) => t.l === LONGUEUR_DU_MUR).h, 1,
+    'un mur ne fait plus une case d\'épaisseur sur la grille');
+
+  // ⚠⚠ « GARDE LA COLORISATION » SE MESURE, ET LA MESURE A CHANGÉ DE SENS. La
+  // v1 était ramenée à SEIZE teintes par camp, parce qu'un PNG au rendu libre
+  // pesait 42 643 octets pour un seul mur. Depuis le lot PIXELS la chaîne ne
+  // quantifie plus rien, et c'est le WebP qui paie : on exige donc maintenant le
+  // CONTRAIRE — des milliers de teintes, pas quelques-unes.
+  for (const [nom, dit] of Object.entries(sprites)) {
+    assert.ok(dit.teintes > 1000,
+      `${nom} ne porte que ${dit.teintes} teintes : la chaîne s'est remise à quantifier`);
+  }
+
+  // ⚠⚠ LE DÉTOURAGE A MORDU, ET IL N'A PAS PERCÉ. La coupe livrée par Ethan
+  // laissait 2 029 pixels de magenta pur dans `mur_1`, dont 493 sur la seule
+  // ligne du haut : un liseré `#FF00FF` aurait couru sur toute la longueur du
+  // mur. On exige donc des transparents — le détourage a bien fait quelque
+  // chose — et presque aucun TROU ENFERMÉ, qui serait la seconde porte
+  // d'`est_fond` en train de percer le bloc.
+  for (const [nom, dit] of Object.entries(sprites)) {
+    assert.ok(dit.transparents > 0,
+      `${nom} n'a aucun pixel transparent : le fond magenta est resté dans le sprite`);
+    assert.ok(dit.trousEnfermes <= 100,
+      `${nom} enferme ${dit.trousEnfermes} px : le détourage perce le bloc`);
+  }
+  // Et le compteur compte : sans ce témoin, un `trousEnfermes` toujours nul
+  // ferait passer l'assertion du dessus sur n'importe quel détourage.
+  assert.ok(Object.values(sprites).some((d) => d.trousEnfermes > 0),
+    'aucun sprite n\'enferme le moindre pixel : le compteur de trous ne compte rien');
+
+  // ⚠ ET LE CAMP DU JOUEUR EST PROPRE, LUI. Le violet de l'Ouvrage frôle le
+  // magenta — distance minimale 140,0, pile sur le seuil de `cond.est_fond` —,
+  // donc ses blocs se font grignoter ; ceux du joueur, non, et ce sont les seuls
+  // qui entrent dans le livrable.
+  for (const [nom, dit] of Object.entries(sprites)) {
+    if (!nom.startsWith('bord_j_')) continue;
+    assert.equal(dit.trousEnfermes, 0, `${nom} enferme ${dit.trousEnfermes} px côté joueur`);
+  }
 });
-
 
 test('sprite — un nom absent lève, il ne rend pas un fond vide', () => {
   // Une cellule transparente est exactement ce que personne ne remarque :

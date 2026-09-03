@@ -589,69 +589,123 @@ function bandesDansLOrdreDeLEcran() {
 }
 
 /**
- * La bande que les murs de contour entourent — LA BASE, et elle seule.
+ * La bande par laquelle le contour COMMENCE — le haut de la base.
  *
  * ⚠ « MURS CONTOUR » DÉSIGNE LE POURTOUR DE LA BASE, pas celui de la grille.
  * `GEOMETRIE_BASE` de `data/base.js` RÉFÉRENCE déjà `GRILLE.bandes.batiments` :
- * la base du joueur EST cette bande-là. La défense se tient DEVANT le mur, les
- * deux rangées de déploiement plus loin encore — c'est la géographie du combat,
- * et le mur la dit.
+ * la base du joueur EST cette bande-là, et c'est en haut d'elle que le mur du
+ * fond court, entre ses deux coins.
+ *
+ * ⚠ C'EST AUSSI LA SEULE BANDE AU-DESSUS DE LAQUELLE LE MUR DÉPASSE, ce que
+ * `bornesDeDefilement` lit pour ne pas couper la rangée de coins.
  */
 export const BANDE_DU_CONTOUR = 'batiments';
 
 /**
- * Les images du mur de contour, et la variable CSS qui porte chacune.
+ * La bande où le contour S'ARRÊTE — le bas de la défense.
  *
- * ⚠⚠ CE NE SONT PAS DES CELLULES D'ATLAS, ET C'EST LE LOT ENTIER. Un mur fait
- * 512 × 64 et un angle 64 × 64 — arbitrage d'Ethan du 31/08, « divise par deux
- * l'asset original […] le mur fera 512x64 » —, donc `tools/atlas.py` ne peut pas
- * les coudre : il exige des cellules CARRÉES d'un même côté. Chaque image entre
- * dans le livrable par son propre marqueur, comme les deux grosses bases de
- * l'Ouvrage sur la carte du monde.
+ * ⚠⚠ LES FLANCS DESCENDENT LE LONG DE LA DÉFENSE, ET C'EST UN ARBITRAGE
+ * D'ETHAN DU 03/09 : « flanc sur la défense aussi ». Sa phrase précédente —
+ * « les murs vont du haut de la base jusqu'à la défense et ne ferme pas en
+ * bas » — avait d'abord été lue *jusqu'au bord de la base* ; elle voulait dire
+ * *jusqu'au bout de la défense*. Le U enferme donc les DEUX bandes que le
+ * joueur compose, et ne s'ouvre que sur les deux rangées de déploiement, par
+ * lesquelles l'assaut arrive.
  *
- * ⚠ SEUL LE CAMP DU JOUEUR EST DANS LE LIVRABLE, et c'est une économie qui n'a
- * de sens que depuis que ce sont des fichiers séparés : cinq images pèsent
- * 39 648 octets de PNG, donc 52 864 en base64. Un atlas aurait été tout ou rien ;
- * ici on ne paie que ce qui se dessine. Les cinq de l'Ouvrage sont PRODUITES par
- * `tools/bords.py` et attendent l'écran de raid — le jour venu, une ligne dans
- * cette table et une dans `tools/build.js`.
+ * ⚠ ET LE BAS RESTE SANS MUR, inchangé depuis le 31/08.
  */
-export const VARIABLE_DU_MUR = {
-  bord_j_angle_no: 'var(--mur-j-angle-no)',
-  bord_j_angle_ne: 'var(--mur-j-angle-ne)',
-  bord_j_mur_h_a: 'var(--mur-j-h-a)',
-  bord_j_mur_v_a: 'var(--mur-j-v-a)',
-  bord_j_mur_v_b: 'var(--mur-j-v-b)',
-};
+export const BANDE_DE_FIN_DU_CONTOUR = 'defense';
 
 /**
- * Les cinq pièces du mur de contour, en unités de CASE depuis le coin de la
- * grille — deux angles et trois murs, en U.
+ * Les images du mur de contour, et la variable CSS qui porte chacune.
  *
- * ⚠⚠ LE MUR FAIT UN U, LE BAS RESTE SANS MUR — arbitrage d'Ethan, 31/08, mot
- * pour mot. La base s'ouvre donc sur sa propre bande de défense, qui commence
- * exactement là où la sienne finit ; c'est le seul des quatre côtés qui donne
- * sur du terrain à soi, et le seul que l'assaillant doit franchir.
+ * ⚠⚠ CE NE SONT PAS DES CELLULES D'ATLAS. Un mur fait 512 × 128 et un bloc
+ * 128 × 128 ; `tools/atlas.py` exige des cellules CARRÉES d'un même côté, donc
+ * il ne peut coudre ni l'un ni l'autre ensemble. Chaque image entre dans le
+ * livrable par son propre marqueur, comme les deux grosses bases de l'Ouvrage
+ * sur la carte du monde et comme le fond du bassin de l'écran Offense.
  *
- * ⚠⚠ LES PIÈCES SE POSENT À CHEVAL SUR LA LIGNE QUI BORDE LA BASE — arbitré le
- * même jour (« à cheval sur le bord »). Un mur fait une case d'épaisseur et se
- * centre sur la ligne, donc il mord d'une demi-case de chaque côté. D'où la
- * demi-case de `padding` sur `#chantier-grille` : sans elle, la moitié
- * extérieure sortirait de la boîte et le champ défilerait horizontalement au
- * repos — ce que « tu compresses tout dans l'ui » refuse. Les coordonnées
- * ci-dessous sont comptées depuis le coin de la BOÎTE DE PADDING.
+ * ⚠⚠ HUIT NOMS, ET PLUS CINQ : QUATRE MURS ET QUATRE BLOCS — lot MURS, 03/09.
+ * La v1 nommait ses pièces par leur PLACE (`mur_h_a`, `angle_no`) parce que le
+ * dessin en dépendait : un trait éclairé à gauche ne va pas à droite. La v2 est
+ * faite de BLOCS vus de dessus, et ses quatre « angles » sont, mesuré et
+ * regardé, quatre VARIANTES du même carré plein — aucune n'est le miroir d'une
+ * autre. Un coin du U et un flanc du U sont donc le même bloc, et ce qui se
+ * choisit n'est plus une orientation mais une variante.
  *
- * ⚠ CHAQUE PIÈCE COURT D'UN BOUT À L'AUTRE DE SON CÔTÉ, ET RIEN NE SE RECOUVRE.
- * Les angles prennent une case chacun ; le mur du haut court exactement entre
- * eux, les murs de côté exactement du bas de leur angle au bord de la base. Un
- * pavage case par case aurait redonné le motif répété que les deux variantes
- * existent pour éviter.
+ * ⚠⚠ ET LA TABLE NE PORTE QUE CE QUE L'ANNEAU POSE — SIX DESSINS SUR SEIZE.
+ * `tools/bords.py` produit quatre murs et quatre blocs PAR CAMP ; le U d'une
+ * base de neuf colonnes n'a que DEUX créneaux de mur, et l'Ouvrage n'a pas
+ * d'écran. Inliner les seize aurait coûté 51 000 octets de base64 pour dix
+ * dessins que rien ne dessine. Un test compare cette table à ce que
+ * `tuilesDuContour` emploie vraiment, dans les DEUX sens : une pièce sans image
+ * est un pan de mur absent, une image sans pièce est du poids pour rien.
+ */
+/**
+ * Ce qu'un mur couvre, et combien de variantes le dessin porte.
  *
- * ⚠ ET LES LONGUEURS NE SONT PAS ÉCRITES, ELLES SE CALCULENT. Sur la grille
- * d'aujourd'hui elles tombent à huit cases, soit très exactement les 512 pixels
- * de l'asset au plafond du zoom ; le jour où la base changera de taille, le
- * `background-size: 100% 100%` de la feuille étirera l'image plutôt que de
- * laisser un trou.
+ * ⚠ LES DEUX SE MESURENT SUR L'ASSET, ET UN TEST LES CONFRONTE AUX FICHIERS :
+ * un mur fait `4 × COTE_SPRITE` de large, et `bord/` porte quatre murs et
+ * quatre blocs par camp. Les écrire ici et nulle part ailleurs évite qu'une
+ * cinquième variante entre au dépôt sans que le mur s'en serve.
+ */
+export const LONGUEUR_DU_MUR = 4;
+export const NB_VARIANTES_DU_MUR = 4;
+/**
+ * Le sel du tirage des variantes du mur. Il ne sort pas d'ici et n'a aucune
+ * espèce d'importance — il faut juste qu'il ne change pas.
+ */
+const SEL_DU_MUR = 0x4d555253;
+
+export const VARIABLE_DU_MUR = {
+  bord_j_mur_1: 'var(--mur-j-mur-1)',
+  bord_j_mur_2: 'var(--mur-j-mur-2)',
+  bord_j_bloc_1: 'var(--mur-j-bloc-1)',
+  bord_j_bloc_2: 'var(--mur-j-bloc-2)',
+  bord_j_bloc_3: 'var(--mur-j-bloc-3)',
+  bord_j_bloc_4: 'var(--mur-j-bloc-4)',
+};
+
+
+/**
+ * Les pièces du mur de contour, en unités de CASE depuis le coin de la grille.
+ *
+ * ⚠⚠ LE MUR FAIT UN U, LE BAS RESTE SANS MUR — arbitrage d'Ethan du 31/08, mot
+ * pour mot, et il n'a pas bougé. Ce qui a bougé le 03/09, c'est jusqu'OÙ les
+ * flancs descendent : « flanc sur la défense aussi ». Le U enferme donc les
+ * deux bandes que le joueur compose — bâtiments ET défense — et ne s'ouvre que
+ * sur les deux rangées de déploiement, par lesquelles l'assaut arrive. C'est le
+ * seul des quatre côtés sans mur, et le seul que l'assaillant franchit.
+ *
+ * ⚠⚠ ET LES PIÈCES NE SONT PLUS À CHEVAL : ELLES CEIGNENT — lot MURS, 03/09.
+ * Ethan : « pour que ça passe bien, parce que là ça déborde ». La v1 était un
+ * TRAIT centré sur la ligne du bord, donc mordant d'une demi-case de chaque
+ * côté, d'où la demi-case de `padding` de la feuille. La v2 est un BLOC PLEIN :
+ * il occupe une case entière et ne recouvre rien. Le contour est donc un
+ * ANNEAU — la boîte fait `largeur + 2` cases de large —, et le `padding` passe
+ * d'une demi-case à une case pleine. C'est une géométrie, pas une épaisseur.
+ *
+ * ⚠ LE HAUT SE PAVE, ET LE PAVAGE SE CALCULE. Un mur couvre quatre cases, un
+ * bloc une : on pose autant de murs qu'il en tient entre les deux coins, et des
+ * blocs pour le reste. Sur cette grille-ci, neuf cases entre les coins font
+ * deux murs et un bloc — mais rien de tout ça n'est écrit : le jour où la base
+ * changera de largeur, le pavage suivra tout seul.
+ *
+ * ⚠ RIEN NE SE RECOUVRE ET RIEN NE MANQUE. Les longueurs s'additionnent
+ * exactement à `largeur + 2`, et un test refait cette somme au lieu de la
+ * croire.
+ *
+ * ⚠⚠ LA VARIANTE SE TIRE DU HACHAGE, PAS D'UN COMPTEUR. Un `i % 4` donnerait
+ * un damier régulier sur les seize blocs d'un flanc, ce que quatre variantes
+ * existent précisément pour éviter. `variante` est pure, ne touche pas
+ * `etat.rng`, et prend la POSITION de la pièce : le mur ne bouge donc pas d'une
+ * peinture à l'autre.
+ *
+ * ⚠ ET IL NE PREND PAS LA GRAINE DE LA PARTIE, VOLONTAIREMENT. Le contour se
+ * construit au CÂBLAGE de l'écran, avant qu'aucun état n'existe ; lui passer
+ * une graine obligerait à le reconstruire au premier chargement, pour que le
+ * mur d'un joueur diffère de celui d'un autre — ce que personne n'a demandé.
+ * Le sel est une constante, et il est nommé.
  *
  * @param {string} camp `j` ou `o`
  * @returns {Array<{nom: string, x: number, y: number, l: number, h: number}>}
@@ -661,34 +715,52 @@ export function tuilesDuContour(camp) {
   if (camp !== 'j' && camp !== 'o') {
     throw new RangeError(`chantier : camp de contour « ${camp} » inconnu`);
   }
-  const bande = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
-  const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
-  // Les coins de la boîte, en unités de case depuis le coin du padding. Le
-  // contenu commence à une demi-case ; une pièce d'une case centrée sur le bord
-  // a donc son coin sur un entier.
+  const bandeHaute = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
+  const bandeBasse = BANDES.find((b) => b.cle === BANDE_DE_FIN_DU_CONTOUR);
+  const { premiereLigne } = ligneEcranDeLaBande(bandeHaute);
+  const fin = ligneEcranDeLaBande(bandeBasse);
   const haut = premiereLigne - 1;
   const gauche = 0;
-  const droite = GRILLE.largeur;
-  // ⚠ UN MUR DE CÔTÉ VA DU BAS DE SON ANGLE AU BORD DE LA BASE, et ce bord est à
-  // une demi-case de moins que le bas de la bande : le U s'arrête là où la base
-  // s'arrête, il ne dépasse pas dans la défense.
-  const cote = nbLignes - 0.5;
-  // ⚠ LES DEUX VARIANTES SERVENT DE PART ET D'AUTRE, ce pour quoi elles ont été
-  // dessinées : `a` est éclairée à gauche, `b` à droite. La variante `b` du mur
-  // horizontal, elle, ne sert pas — elle éclaire par le bas, donc elle est le
-  // pendant du mur que le U n'a pas.
-  return [
-    { nom: `bord_${camp}_mur_h_a`, x: gauche + 1, y: haut, l: GRILLE.largeur - 1, h: 1 },
-    { nom: `bord_${camp}_mur_v_a`, x: gauche, y: haut + 1, l: 1, h: cote },
-    { nom: `bord_${camp}_mur_v_b`, x: droite, y: haut + 1, l: 1, h: cote },
-    // ⚠ LES ANGLES SE NOMMENT PAR LE COIN QU'ILS DESSERVENT, et le nord est le
-    // HAUT DE L'ÉCRAN — pas la rangée croissante. Ce n'est pas la boussole de
-    // `sim/rendu-pose.js`, qui décrit la grille de combat et son retournement :
-    // ici on parle de ce que l'œil voit, et la planche est sa propre légende
-    // (son coin haut-gauche porte l'angle nord-ouest).
-    { nom: `bord_${camp}_angle_no`, x: gauche, y: haut, l: 1, h: 1 },
-    { nom: `bord_${camp}_angle_ne`, x: droite, y: haut, l: 1, h: 1 },
-  ];
+  const droite = GRILLE.largeur + 1;
+  // ⚠ LA HAUTEUR DU FLANC SE CALCULE D'UN BORD À L'AUTRE, elle ne s'additionne
+  // pas bande par bande : si un jour une troisième bande se glissait entre les
+  // deux, une somme la sauterait et le mur aurait un trou.
+  const nbLignes = fin.premiereLigne + fin.nbLignes - premiereLigne;
+  const bloc = (x, y) => ({
+    nom: `bord_${camp}_bloc_${variante(SEL_DU_MUR, y, x, NB_VARIANTES_DU_MUR) + 1}`,
+    x, y, l: 1, h: 1,
+  });
+
+  const pieces = [bloc(gauche, haut), bloc(droite, haut)];
+  // Le haut, entre les deux coins : des murs de quatre cases tant qu'il en
+  // tient, puis des blocs.
+  //
+  // ⚠⚠ LA VARIANTE D'UN MUR TOURNE PAR RANG, ELLE NE SE TIRE PAS. Les blocs
+  // sont dix-huit et le hachage les mélange bien ; les murs, eux, sont DEUX sur
+  // cette grille-ci — un tirage y emploierait deux variantes sur quatre, prises
+  // au hasard, et le livrable paierait les deux autres pour rien. Le rang les
+  // prend dans l'ordre : autant de variantes que de créneaux, et pas une de
+  // plus. Le jour où la base s'élargira, la troisième entrera d'elle-même.
+  let x = gauche + 1;
+  let rang = 0;
+  while (x < droite) {
+    if (droite - x >= LONGUEUR_DU_MUR) {
+      pieces.push({
+        nom: `bord_${camp}_mur_${(rang % NB_VARIANTES_DU_MUR) + 1}`,
+        x, y: haut, l: LONGUEUR_DU_MUR, h: 1,
+      });
+      x += LONGUEUR_DU_MUR;
+      rang += 1;
+    } else {
+      pieces.push(bloc(x, haut));
+      x += 1;
+    }
+  }
+  // Les deux flancs, du bas des coins au bord de la base.
+  for (let y = haut + 1; y <= haut + nbLignes; y += 1) {
+    pieces.push(bloc(gauche, y), bloc(droite, y));
+  }
+  return pieces;
 }
 
 /**
@@ -2195,7 +2267,15 @@ function fondDuTerrain(prefixe, graine, rangee, colonne) {
  * dans le jeu, seulement de jusqu'où le doigt peut grossir la vue. Elle vit donc
  * ici, avec le reste du zoom, et non dans `src/data/`.
  */
-export const ZOOM_BASE_MULTIPLE_MAX = 2;
+export const ZOOM_BASE_MULTIPLE_MAX = 1;
+// ⚠⚠ IL EST PASSÉ DE 2 À 1 AU LOT GRILLE-128, ET LE JOUEUR NE VOIT AUCUNE
+// DIFFÉRENCE. Le plafond vaut `COTE_SPRITE × ce nombre` : il valait 64 × 2 =
+// 128 px CSS par case, il vaut 128 × 1 = **128, exactement le même**. Ce qui
+// change, c'est ce qu'on obtient pour ce prix — hier un sprite de 64 agrandi
+// DEUX FOIS au-dessus de sa définition, aujourd'hui un sprite de 128 rendu au
+// rapport 1:1. La plage du zoom ne bouge donc pas d'un pixel, et le flou du
+// plafond disparaît. Le laisser à 2 aurait porté le plafond à 256 et rouvert,
+// à l'envers, la question de plage tranchée le 31/08.
 
 /**
  * Le côté de case le plus grand qu'on autorise, en pixels CSS.
@@ -2700,7 +2780,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
    * ici, au seul endroit qui convertit l'un en l'autre.
    */
   function paddingDeLaGrille() {
-    return coteCase / 2;
+    return coteCase;
   }
 
   /**
@@ -2857,13 +2937,14 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   function coteQuiTient() {
     const large = defile.clientWidth;
     if (!(large > 0)) return COTE_CASE_DEFAUT;
-    // ⚠⚠ ON DIVISE PAR `largeur + 1`, PAS PAR `largeur`, DEPUIS LE MUR DE
-    // CONTOUR. La grille porte une demi-case de `padding` de chaque côté pour
-    // que le mur, qui se pose à cheval sur son bord, ne déborde pas de sa boîte :
-    // celle-ci fait donc neuf colonnes PLUS deux demi-cases, soit dix cases de
-    // large. Diviser par neuf redonnerait exactement le défilement horizontal au
-    // repos que ce padding existe pour éviter — mesuré, 414 px dans 360.
-    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / (GRILLE.largeur + 1)));
+    // ⚠⚠ ON DIVISE PAR `largeur + 2`, PAS PAR `largeur`, DEPUIS QUE LE MUR EST
+    // UN ANNEAU. La v1 se posait à cheval sur le bord et coûtait deux
+    // DEMI-cases ; la v2 est faite de blocs pleins qui ceignent la grille, donc
+    // elle coûte deux cases entières. Diviser par neuf redonnerait exactement le
+    // défilement horizontal au repos que ce padding existe pour éviter, et
+    // diviser par dix laisserait déborder une demi-case de mur de chaque côté —
+    // le « ça déborde » d'Ethan, du 03/09, avec la moitié de son ampleur.
+    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / (GRILLE.largeur + 2)));
   }
 
   /** Le côté de case appliqué en ce moment, en pixels. */

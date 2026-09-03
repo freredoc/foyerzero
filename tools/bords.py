@@ -1,224 +1,281 @@
 #!/usr/bin/env python3
-"""Les murs de contour d'une base — trois segments et deux angles, deux camps.
+"""Les murs de contour d'une base — des BLOCS, deux camps, quatre variantes.
 
-Ethan, le 31/08/2026 : « les murs contour ne sont pas là », avec quatre planches
-jointes — `base_bords_{joueur,ouvrage}_{murs,angles}_2x2.png`. Puis, devant un
+Ethan, le 31/08/2026 : « les murs contour ne sont pas là », puis, devant un
 premier conditionnement ramené à 64 × 64 : « mais c'est quoi cette chiasse de
 pixel. divise par deux l'asset original. et garde la colorisation. le mur fera
 512x64. et le mur fait un U, le bas reste sans mur. »
 
-⚠⚠ CET OUTIL NE PASSE PAS PAR LA CHAÎNE DES SPRITES DE CASE, ET C'EST TOUT LE
-LOT. `planches.py`, `final128.py` et leurs cousins ramènent un dessin de 1024 à
-une case de 64, quantifié sur les quatorze teintes de `cond.py` : c'est juste
-pour une unité, qui doit tenir dans une case et se lire à trente pixels. Un mur
-de contour n'est pas dans une case — il court le long d'un côté entier — et le
-réduire au seizième détruisait le seul détail qui le fait lire comme une
-construction. Mesuré à l'œil par Ethan sur le livrable, et c'est son mot qui
-décide : « chiasse de pixel ».
+Puis, le 03/09, quatre planches neuves et une phrase : « déjà refait les murs
+avec les nouveaux sprites, et pour que ça passe bien parce que là ça déborde ;
+les murs vont du haut de la base jusqu'à la défense et ne ferme pas en bas. »
 
-⚠ « DIVISE PAR DEUX » SE PREND AU MOT. La planche fait 2048 × 2048, donc quatre
-cellules de 1024. On la ramène d'un facteur deux, et rien de plus : 512 × 64
-pour un mur, 64 × 512 pour l'autre sens, 64 × 64 pour un angle. À 64 pixels par
-case — le plafond du zoom, `COTE_SPRITE` — un mur couvre donc HUIT cases au
-rapport 1:1, et l'angle exactement une.
+⚠⚠ CE QU'ELLES CHANGENT N'EST PAS LA TAILLE, C'EST LA NATURE DU DESSIN. La v1
+était un TRAIT fin sur fond transparent, posé À CHEVAL sur la ligne du bord —
+d'où la demi-case de `padding` de la feuille, et d'où « ça déborde ». La v2 est
+un BLOC PLEIN, vu de dessus comme le reste de la base : il occupe une case
+entière et ne mord sur rien. Le contour cesse donc d'être un liseré pour devenir
+un ANNEAU de cases, ce qui est une géométrie et pas une épaisseur.
 
-⚠⚠ LA FENÊTRE EST FIXE, ELLE NE SE MESURE PAS SUR L'IMAGE. Le trait occupe les
-128 lignes centrales de sa cellule de 1024 — vérifié ci-dessous, à l'assertion
-près — mais son étendue exacte varie d'un pixel d'une cellule à l'autre (`y =
-448..574` sur l'une, `448..575` sur l'autre). Découper sur la boîte englobante
-donnerait donc des sprites de tailles différentes, qui ne se raccorderaient plus.
-On découpe la fenêtre CENTRALE, et on ASSERTE qu'aucun pixel opaque n'en sort.
+⚠⚠ ET LES QUATRE « ANGLES » N'EN SONT PAS. Le nom du zip dit
+`angle_bloc_…_1x1`, mais mesuré ET REGARDÉ : ce sont quatre VARIANTES d'un même
+bloc carré plein, pas quatre orientations d'un coude. Aucune n'est le miroir
+d'une autre (le plus proche couple, v1 et v2 retourné, diffère encore de 4,4 en
+moyenne par canal). Ils ne se nomment donc pas `no`/`ne`/`so`/`se` comme ceux de
+la v1 : ils se numérotent. Un coin de U et un flanc de U sont le MÊME bloc.
 
-⚠⚠ « GARDE LA COLORISATION » : PAS DE PALETTE DU DÉPÔT ICI. `quantifier` de
-`cond.py` apparie sur les quatorze teintes de la fiche, réglées pour les unités
-et les bâtiments ; sur les bruns de ces planches-ci la porte du ROUGE s'ouvre et
-le mur ressort semé de `#E43E32`, la teinte que le dépôt réserve à ce qui ATTAQUE
-LE JOUEUR (mesuré au premier jet). Les couleurs retenues sont donc celles du
-dessin, réduites à seize PAR CAMP.
+⚠⚠ IL N'Y A NI RÉDUCTION NI QUANTIFICATION, ET C'EST NOUVEAU. Le dessin est
+déjà à sa définition finale DANS la planche : chaque cellule de 1024 porte un
+mur de 512 × 128 ou un bloc de 128 × 128, mesuré sur les quatre planches. Il n'y
+a donc rien à réduire — et depuis le lot PIXELS (02/09) la chaîne ne ramène plus
+rien sur une palette fermée. La v1 quantifiait sur seize teintes par camp parce
+que le PNG du rendu libre pesait 42 643 octets pour un seul mur ; c'est le WebP
+qui répond à ça aujourd'hui, et il y répond mieux.
 
-⚠ SEIZE, ET C'EST UN COMPROMIS MESURÉ, pas un chiffre rond. Le rendu d'origine
-porte 22 000 couleurs distinctes — de l'anti-crénelage, pas une intention — et
-pèse 42 643 octets pour un seul mur, soit près de quatre fois la marge du
-livrable sous la borne de `banc.test.js` T10. Mesuré sur `mur_h_a` : 8 couleurs
-→ 6 507 o, 12 → 8 612, 16 → 10 670, 32 → 16 057, plein → 41 790. Sous seize, le
-détail des briques s'aplatit à l'œil ; au-dessus, on paie sans que ça se voie.
+⚠⚠ LE DÉCOUPAGE EST VÉRIFIÉ CONTRE LA LIVRAISON D'ETHAN, PAS SEULEMENT
+ASSERTÉ. Le zip portait les seize sprites déjà découpés à côté des planches :
+la COUPE faite ici les reproduit **au pixel près sur les seize**, canal par
+canal, dans l'ordre de lecture ci-dessous. C'est ce qui prouve que la fenêtre
+est la bonne, et pas seulement qu'elle est plausible.
 
-⚠ LA PALETTE EST PAR CAMP, PAS PAR SPRITE. Cinq sprites quantifiés chacun de son
-côté auraient cinq jeux de seize couleurs voisines, et les joints — l'angle
-contre le mur — ne tomberaient pas sur la même teinte. Elle se calcule sur les
-huit cellules du camp réunies.
+⚠ L'ENCODAGE, LUI, EST AVEC PERTE — et ce n'est pas la même phrase. WebP q85
+n'est exact ni sur le rouge ni sur le vert ; il l'est sur l'ALPHA, que WebP
+compresse toujours sans perte, et c'est l'alpha qui porte l'invariant du dépôt
+(« aucune transparence partielle »). Mesuré sur `mur_1` du joueur : q85
+**6 344 o**, q92 9 140, WebP sans perte 53 956, PNG optimisé 72 651. Le même
+réglage que les atlas depuis le 02/09, pour qu'il n'y ait qu'un encodage à
+connaître ici.
 
-⚠ LA RÉDUCTION EST ALPHA-CORRECTE. Le fond des planches est magenta ; réduire le
-RVB sans le prémultiplier par l'alpha ferait baver ce magenta dans le liseré du
-mur sur toute sa longueur. On prémultiplie, on réduit, on divise.
+⚠⚠ MAIS SA COUPE LAISSAIT LE FOND. Mesuré sur `mur_joueur_4x1_v2_1` : **2 029
+pixels de magenta pur**, dont 493 sur la seule ligne du haut et 323 sur celle du
+bas, enregistrés OPAQUES. Le dessin ne touche pas tout à fait les bords de sa
+boîte, et un liseré `#FF00FF` aurait couru sur toute la longueur du mur. On
+détoure, comme partout ailleurs dans la chaîne.
+
+⚠ LE DÉTOURAGE PASSE PAR `est_fond_sujet`, PAS PAR `est_fond`. La seconde porte
+d'`est_fond` attrape des teintes claires jusqu'au MILIEU d'un sujet ; bornée à
+la composante de fond qui touche le bord, elle nettoie la frange sans percer le
+bloc. C'est l'acquis du lot PIXELS, appliqué ici pour la première fois hors de
+`final128`.
+
+⚠ L'ALPHA REDEVIENT BINAIRE : le dépôt n'a aucune transparence partielle.
 
     python3 tools/bords.py
 """
-import sys, os
+import hashlib
+import json
+import os
+import sys
+
+import numpy as np
+from PIL import Image
+
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
-from chemins import dossier_sprites
-from PIL import Image
-import numpy as np
-from cond import est_fond
+from cond import est_fond_sujet  # noqa: E402
 
 SRC = os.path.join(RACINE, 'art', 'sources')
-DST = dossier_sprites('bord')
+DST = None  # servi par `chemins`, plus bas — il honore FZ_SPRITES
 
-# Le facteur de réduction, dicté par Ethan le 31/08 : « divise par deux l'asset
-# original ». Une cellule de 1024 devient 512.
-DEMI = 2
-# L'épaisseur du trait dans la cellule d'origine, MESURÉE sur les quatre
-# planches et assertée à chaque exécution : 128 lignes centrées sur 1024.
-BANDE = 128
-# Le nombre de couleurs gardées par camp — voir l'en-tête.
-COULEURS = 16
+# La cellule d'une planche 2 × 2 de 2048.
+CELLULE = 1024
+# Le dessin utile DANS la cellule, mesuré sur les quatre planches et asserté à
+# chaque exécution. Un mur fait quatre cases de long sur une de haut, un bloc
+# une case sur une.
+COTE = 128
+LONG = COTE * 4
+# Le coin haut-gauche du dessin dans sa cellule, par genre.
+FENETRE = {
+    'mur': ((CELLULE - LONG) // 2, (CELLULE - COTE) // 2, LONG, COTE),
+    'bloc': ((CELLULE - COTE) // 2, (CELLULE - COTE) // 2, COTE, COTE),
+}
 
-# planche, camp, noms des quatre cellules dans l'ordre de lecture
-# (haut-gauche, haut-droite, bas-gauche, bas-droite).
-#
-# ⚠ L'ORDRE DES ANGLES SE LIT SUR LA PLANCHE, il ne se devine pas : chaque
-# cellule porte son angle dans le coin qu'il dessert, et la planche est donc sa
-# propre légende — le coin haut-gauche de la planche porte l'angle nord-ouest.
+QUALITE = 85
+METHODE = 6
+
+# ⚠ L'ORDRE DE LECTURE EST CELUI DE LA PLANCHE, ET IL EST VÉRIFIÉ : les quatre
+# cellules lues haut-gauche, haut-droite, bas-gauche, bas-droite reproduisent
+# les variantes 1, 2, 3, 4 du zip d'Ethan, au pixel près.
+ORDRE = [(0, 0), (1, 0), (0, 1), (1, 1)]
+
 PLANCHES = [
-    ('base_bords_joueur_murs_2x2.png', 'j',
-     ['mur_h_a', 'mur_v_a', 'mur_h_b', 'mur_v_b']),
-    ('base_bords_joueur_angles_2x2.png', 'j',
-     ['angle_no', 'angle_ne', 'angle_so', 'angle_se']),
-    ('base_bords_ouvrage_murs_2x2.png', 'o',
-     ['mur_h_a', 'mur_v_a', 'mur_h_b', 'mur_v_b']),
-    ('base_bords_ouvrage_angles_2x2.png', 'o',
-     ['angle_no', 'angle_ne', 'angle_so', 'angle_se']),
+    ('base_bords_joueur_murs_4x1_v2.png', 'j', 'mur'),
+    ('base_bords_joueur_blocs_1x1_v2.png', 'j', 'bloc'),
+    ('base_bords_ouvrage_murs_4x1_v2.png', 'o', 'mur'),
+    ('base_bords_ouvrage_blocs_1x1_v2.png', 'o', 'bloc'),
 ]
 
 
-def quarts(chemin):
-    """Les quatre quarts exacts d'une planche 2 × 2.
-
-    ⚠ LA COUPE EST EN QUARTS EXACTS, PAS PAR GOUTTIÈRE. Le nom des planches dit
-    `2x2`, et la coupe par gouttière d'`emblemes.py` ne marcherait pas ici : sur
-    la planche des murs, la colonne de droite porte deux tuiles verticales qui
-    se touchent bout à bout, sans gouttière horizontale entre elles.
-    """
+def cellules(chemin):
+    """Les quatre quarts exacts d'une planche 2 × 2, dans l'ordre de lecture."""
     im = Image.open(chemin).convert('RGB')
     L, H = im.size
-    assert L % 2 == 0 and H % 2 == 0, f'{os.path.basename(chemin)} : {L}x{H} non divisible'
-    l, h = L // 2, H // 2
-    return [im.crop((i * l, j * h, (i + 1) * l, (j + 1) * h))
-            for j in range(2) for i in range(2)]
+    assert L == H == 2 * CELLULE, f'{os.path.basename(chemin)} : {L}x{H}, attendu {2*CELLULE}²'
+    return [im.crop((i * CELLULE, j * CELLULE, (i + 1) * CELLULE, (j + 1) * CELLULE))
+            for i, j in ORDRE]
 
 
-def fenetre(nom, cote):
-    """La fenêtre centrale à découper dans une cellule, selon le sens du dessin.
+def decouper(cellule, genre):
+    """La fenêtre fixe, et l'assertion qui la justifie : rien d'utile n'en sort.
 
-    Un mur horizontal traverse sa cellule et n'en occupe qu'une bande centrale
-    en hauteur ; un mur vertical l'inverse ; un angle est centré sur les deux
-    axes. Rendue en (x0, y0, x1, y1).
+    ⚠ ON NE DÉCOUPE PAS SUR LA BOÎTE ENGLOBANTE. Elle varie d'un pixel d'une
+    cellule à l'autre ; des sprites de tailles différentes ne se raccorderaient
+    plus. On découpe la fenêtre, et on VÉRIFIE qu'elle contient tout.
     """
-    marge = (cote - BANDE) // 2
-    if nom.startswith('mur_h'):
-        return (0, marge, cote, marge + BANDE)
-    if nom.startswith('mur_v'):
-        return (marge, 0, marge + BANDE, cote)
-    return (marge, marge, marge + BANDE, marge + BANDE)
+    x, y, l, h = FENETRE[genre]
+    plein = np.array(cellule)
+    utile = ~est_fond_sujet(plein)
+    dehors = utile.copy()
+    dehors[y:y + h, x:x + l] = False
+    assert not dehors.any(), (
+        f'{genre} : {int(dehors.sum())} pixels utiles hors de la fenêtre '
+        f'({x},{y})+{l}x{h} — la planche a changé de cadrage')
+    return plein[y:y + h, x:x + l]
 
 
-def rgba(cellule):
-    """La cellule en RVBA, le fond magenta des planches rendu transparent."""
-    a = np.array(cellule)
-    return a, ~est_fond(a)
+def detourer(rgb):
+    """Le fond magenta devient transparent ; l'alpha reste binaire."""
+    opaque = ~est_fond_sujet(rgb)
+    out = np.zeros((*opaque.shape, 4), np.uint8)
+    out[opaque, 0:3] = rgb[opaque]
+    out[opaque, 3] = 255
+    return baver(out)
 
 
-def reduire_de_moitie(rgb, alpha, facteur):
-    """Réduction alpha-correcte d'un facteur entier.
+def baver(rgba, passes=4):
+    """La couleur du bord DÉBORDE dans le transparent — et il le faut.
 
-    ⚠ ON PRÉMULTIPLIE AVANT DE RÉDUIRE. Sans ça, le magenta du fond entre dans
-    la moyenne des pixels de bord et le mur ressort ourlé de rose sur toute sa
-    longueur — invisible sur une vignette, flagrant sur 512 pixels.
+    ⚠⚠ CE N'EST PAS DE LA COQUETTERIE, C'EST LE CAS NORMAL. Un mur fait 512
+    pixels pour quatre cases ; à la case par défaut de 46 px il est affiché en
+    184, donc RÉDUIT par le navigateur — le plafond du zoom, 128 px par case,
+    est le seul endroit où il tombe au 1:1. Toute réduction mélange les pixels
+    voisins, transparents COMPRIS : si leur RVB vaut zéro, le mur ressort ourlé
+    de noir sur toute sa longueur.
+
+    ⚠ ET L'ENCODAGE EN RAJOUTE. WebP avec perte stocke le RVB même là où l'alpha
+    est nul et le lisse par blocs : mesuré avant ce geste, les transparents du
+    bord haut de `mur_1` portaient (65, 0, 0) — du rouge sombre bavé depuis le
+    noir. Vu à l'œil sur un rendu de contrôle, pas à la relecture.
+
+    On étend donc la couleur opaque dans le transparent, quelques pixels : ce
+    qui bave alors, c'est la couleur du mur. **L'alpha, lui, ne bouge pas** —
+    c'est ce qui distingue ce geste d'un épaississement du sprite.
     """
-    h, l = alpha.shape
-    assert h % facteur == 0 and l % facteur == 0, f'{l}x{h} non divisible par {facteur}'
-    a = alpha.astype(np.float64)
-    pre = rgb.astype(np.float64) * a[..., None]
-    bloc = (h // facteur, facteur, l // facteur, facteur)
-    somme = pre.reshape(*bloc, 3).sum(axis=(1, 3))
-    poids = a.reshape(*bloc).sum(axis=(1, 3))
-    couvert = poids > 0
-    out = np.zeros(somme.shape, np.uint8)
-    out[couvert] = np.round(somme[couvert] / poids[couvert][..., None]).astype(np.uint8)
-    # ⚠ L'ALPHA REDEVIENT BINAIRE : le dépôt n'a pas de transparence partielle,
-    # la garde de palette de `banc.test.js` ne tolère qu'un seul `rgba`, et un
-    # bord à demi transparent se lirait comme un défaut de rendu.
-    return out, (poids >= (facteur * facteur) / 2)
-
-
-def palette_du_camp(pixels):
-    """Seize couleurs tirées du dessin lui-même, par coupe médiane."""
-    n = len(pixels)
-    cote = int(np.ceil(np.sqrt(n)))
-    carre = np.zeros((cote * cote, 3), np.uint8)
-    carre[:n] = pixels
-    carre[n:] = pixels[-1]
-    im = Image.fromarray(carre.reshape(cote, cote, 3), 'RGB')
-    return im.quantize(colors=COULEURS, method=Image.MEDIANCUT, dither=Image.NONE)
-
-
-def appliquer(rgb, alpha, reference):
-    """Apparie chaque pixel opaque à la palette du camp, sans tramage."""
-    q = Image.fromarray(rgb, 'RGB').quantize(palette=reference, dither=Image.NONE)
-    plat = np.array(q.convert('RGB'))
-    out = np.zeros((*alpha.shape, 4), np.uint8)
-    out[alpha, 0:3] = plat[alpha]
-    out[alpha, 3] = 255
+    out = rgba.copy()
+    plein = out[..., 3] == 255
+    for _ in range(passes):
+        if plein.all():
+            break
+        somme = np.zeros((*plein.shape, 3), np.float64)
+        poids = np.zeros(plein.shape, np.float64)
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            v = np.roll(np.roll(plein, dy, 0), dx, 1)
+            c = np.roll(np.roll(out[..., :3], dy, 0), dx, 1)
+            somme[v] += c[v]
+            poids[v] += 1
+        frange = (~plein) & (poids > 0)
+        if not frange.any():
+            break
+        out[frange, 0:3] = np.rint(somme[frange] / poids[frange][..., None]).astype(np.uint8)
+        plein = plein | frange
     return out
 
 
-# --- 1. découper, réduire, et retenir les pixels de chaque camp --------------
-cellules = {}
-pixels_du_camp = {}
-for fichier, camp, noms in PLANCHES:
-    cells = quarts(os.path.join(SRC, fichier))
-    assert len(cells) == len(noms), f'{fichier} : {len(cells)} cellules pour {len(noms)} noms'
+def trous_enfermes(rgba):
+    """Les pixels transparents que le dessin ENFERME — un détourage qui perce.
 
-    # ⚠ LES QUATRE DOIVENT DIFFÉRER. Une planche à moitié remplie produirait des
-    # doublons que rien ne signalerait — et les deux variantes d'un mur, qui
-    # servent l'une à gauche et l'autre à droite, seraient le même dessin.
-    brutes = [np.array(c) for c in cells]
-    for a in range(len(brutes)):
-        for b in range(a + 1, len(brutes)):
-            assert not np.array_equal(brutes[a], brutes[b]), \
-                f'{fichier} : les cellules {a} et {b} sont identiques'
+    ⚠⚠ CETTE MESURE N'EXISTE QUE DANS L'OUTIL, ET IL FAUT LE SAVOIR.
+    `test/png-rgba.js` ne lit que du PNG ; les murs sont en WebP, donc la suite
+    JS ne peut pas refaire ce comptage. Il part dans le manifeste, que le test
+    LIT — même motif que les empreintes d'atlas depuis le 02/09.
+    """
+    vide = rgba[..., 3] < 128
+    h, l = vide.shape
+    vu = np.zeros_like(vide)
+    pile = [(y, x) for y in range(h) for x in (0, l - 1) if vide[y, x]]
+    pile += [(y, x) for x in range(l) for y in (0, h - 1) if vide[y, x]]
+    for y, x in pile:
+        vu[y, x] = True
+    while pile:
+        y, x = pile.pop()
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            j, i = y + dy, x + dx
+            if 0 <= j < h and 0 <= i < l and vide[j, i] and not vu[j, i]:
+                vu[j, i] = True
+                pile.append((j, i))
+    return int(vide.sum() - vu.sum())
 
-    for cell, suffixe in zip(cells, noms):
-        cote = cell.size[0]
-        assert cell.size == (cote, cote), f'{fichier}/{suffixe} : cellule non carrée'
-        plein, opaque = rgba(cell)
 
-        # ⚠⚠ L'ASSERTION QUI JUSTIFIE LA FENÊTRE FIXE : rien d'opaque n'en sort.
-        # Sans elle, un dessin qui déborderait serait rogné en silence.
-        x0, y0, x1, y1 = fenetre(suffixe, cote)
-        dehors = opaque.copy()
-        dehors[y0:y1, x0:x1] = False
-        assert not dehors.any(), \
-            (f'{fichier}/{suffixe} : {int(dehors.sum())} pixels opaques hors de la bande '
-             f'centrale de {BANDE} — la fenêtre fixe rognerait le dessin')
+def main():
+    global DST
+    from chemins import dossier_sprites
+    DST = dossier_sprites('bord')
+    os.makedirs(DST, exist_ok=True)
 
-        rgbc = plein[y0:y1, x0:x1]
-        alpc = opaque[y0:y1, x0:x1]
-        petit, masque = reduire_de_moitie(rgbc, alpc, DEMI)
-        cellules[(camp, suffixe)] = (petit, masque)
-        pixels_du_camp.setdefault(camp, []).append(petit[masque])
+    # ⚠ LE DOSSIER SE VIDE DE SES `.png`, ET C'EST LA V1 QUI PART. Ses seize
+    # traits ne sont plus produits par personne : les laisser au dépôt les
+    # ferait compter MANQUANTS par `tools/verifier.py` à chaque exécution,
+    # c'est-à-dire « le dépôt les porte, aucun outil ne les fait ».
+    for f in sorted(os.listdir(DST)):
+        if f.endswith('.png'):
+            os.remove(os.path.join(DST, f))
 
-# --- 2. une palette par camp, puis l'écriture --------------------------------
-n = 0
-os.makedirs(DST, exist_ok=True)
-for camp, morceaux in pixels_du_camp.items():
-    reference = palette_du_camp(np.concatenate(morceaux))
-    for (c, suffixe), (petit, masque) in cellules.items():
-        if c != camp:
-            continue
-        out = appliquer(petit, masque, reference)
-        chemin = os.path.join(DST, f'bord_{camp}_{suffixe}.png')
-        Image.fromarray(out, 'RGBA').save(chemin, optimize=True)
-        n += 1
-print(f'{n} fichiers écrits')
+    empreintes = {}
+    n = 0
+    for fichier, camp, genre in PLANCHES:
+        cells = cellules(os.path.join(SRC, fichier))
+
+        # ⚠ LES QUATRE DOIVENT DIFFÉRER. Une planche à moitié remplie produirait
+        # des doublons que rien ne signalerait, et les quatre variantes qui
+        # existent pour casser la répétition seraient le même dessin.
+        brutes = [np.array(c) for c in cells]
+        for a in range(len(brutes)):
+            for b in range(a + 1, len(brutes)):
+                assert not np.array_equal(brutes[a], brutes[b]), \
+                    f'{fichier} : les cellules {a + 1} et {b + 1} sont identiques'
+
+        for rang, cellule in enumerate(cells, start=1):
+            rgba = detourer(decouper(cellule, genre))
+            assert set(np.unique(rgba[..., 3])) <= {0, 255}, f'{fichier} : alpha partiel'
+
+            nom = f'bord_{camp}_{genre}_{rang}'
+            chemin = os.path.join(DST, nom + '.webp')
+            Image.fromarray(rgba, 'RGBA').save(
+                chemin, 'WEBP', quality=QUALITE, method=METHODE, exact=True)
+
+            opaques = rgba[rgba[..., 3] == 255][:, :3]
+            empreintes[nom] = {
+                'sha256': hashlib.sha256(open(chemin, 'rb').read()).hexdigest(),
+                'largeur': int(rgba.shape[1]),
+                'hauteur': int(rgba.shape[0]),
+                'teintes': len({tuple(p) for p in opaques}),
+                'transparents': int((rgba[..., 3] == 0).sum()),
+                'trousEnfermes': trous_enfermes(rgba),
+                'octets': os.path.getsize(chemin),
+            }
+            n += 1
+
+    manifeste = os.path.join(DST, 'bord-empreintes.json')
+    with open(manifeste, 'w', encoding='utf-8') as f:
+        json.dump({
+            'commentaire': (
+                'FICHIER GÉNÉRÉ par « python3 tools/bords.py ». Les murs sont en '
+                'WebP et Node n\'a pas de décodeur WebP ; ce manifeste est ce que '
+                'la suite JS peut encore mesurer sur eux. Même motif que '
+                'art/sprites/atlas-empreintes.json depuis le lot PIXELS.'),
+            'qualite': QUALITE,
+            'sprites': empreintes,
+        }, f, ensure_ascii=False, indent=1, sort_keys=True)
+        f.write('\n')
+
+    total = sum(v['octets'] for v in empreintes.values())
+    for nom in sorted(empreintes):
+        v = empreintes[nom]
+        print('  %-20s %4dx%-4d %6d o  %5d teintes  %4d trous'
+              % (nom, v['largeur'], v['hauteur'], v['octets'], v['teintes'], v['trousEnfermes']))
+    print('%d fichiers écrits, %d octets au total' % (n, total))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

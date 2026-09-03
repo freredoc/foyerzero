@@ -443,7 +443,15 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
 
     const rangee = doc.createElement('div');
     rangee.className = 'emplacements';
-    rangee.style.gridTemplateColumns = `repeat(${NB_COLONNES}, 1fr)`;
+    // ⚠⚠ EN QUINCONCE — Ethan, 03/09 : « toujours 4 rangées de 9, mais les neuf
+    // tu les mets en quinconce pour que ça passe ». Une rangée sur deux est
+    // décalée d'une DEMI-case, et le décalage se fait par la GRILLE : on pose
+    // deux fois plus de colonnes, plus une, chaque emplacement en occupant
+    // deux. Un `transform: translateX` aurait déplacé le dessin sans déplacer
+    // la géométrie du pointage — la faute que le dépôt refuse depuis toujours
+    // sur la grille du Chantier.
+    if (vague.numero % 2 === 0) rangee.classList.add('decalee');
+    rangee.style.gridTemplateColumns = `repeat(${NB_COLONNES * 2 + 1}, 1fr)`;
     for (let colonne = 1; colonne <= NB_COLONNES; colonne++) {
       const emplacement = doc.createElement('div');
       emplacement.className = 'emplacement';
@@ -456,7 +464,6 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     corps.appendChild(bloc);
   }
 
-  /** Défait tous les modes — après une pose, un retrait, ou un geste à côté. */
   /** Défait tous les modes — après une pose, un retrait, ou un geste à côté. */
   function desarmer() {
     choisie = null;

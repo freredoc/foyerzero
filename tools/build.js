@@ -112,7 +112,7 @@ let html = htmlSource
 // ⚠ ET IL DOIT S'ACCORDER AVEC `COTE_SPRITE` DE `src/data/atlas.js`, que
 // `tools/atlas.py` écrit depuis son `COTE_INDEX`. Les changer ensemble est le
 // geste complet ; `test/sprite.test.js` refuse qu'ils divergent.
-const GRILLE_ATLAS = 64;
+const GRILLE_ATLAS = 128;
 
 // ⚠⚠ WEBP DEPUIS LE LOT PIXELS. Les sprites ne sont plus quantifiés sur quatorze
 // teintes : en PNG les huit atlas passeraient de 468 à 1 630 Kio, ×3,5. Le type
@@ -139,18 +139,25 @@ const IMAGES_INLINE = [
   // 512 × 64 et un angle 64 × 64 : `tools/atlas.py` ne coud que des cellules
   // carrées d'un même côté, donc chacune voyage dans son propre marqueur, comme
   // les deux grosses bases de l'Ouvrage plus bas.
-  // ⚠ ET SEUL LE CAMP DU JOUEUR EST LÀ. Les cinq de l'Ouvrage sont produites par
-  // `tools/bords.py` et pèseraient 27 000 octets de plus pour zéro pixel : la
+  // ⚠ ET SEUL LE CAMP DU JOUEUR EST LÀ. Les huit de l'Ouvrage sont produites par
+  // `tools/bords.py` et pèseraient 24 438 octets de plus pour zéro pixel : la
   // base du joueur est la seule qu'un écran dessine aujourd'hui. Un atlas aurait
   // été tout ou rien ; des fichiers séparés permettent de ne payer que ce qui
   // se voit.
+  // ⚠⚠ HUIT PIÈCES ET PLUS CINQ, EN WEBP ET PLUS EN PNG — lot MURS, 03/09. La
+  // v1 était cinq TRAITS quantifiés sur seize teintes par camp ; la v2 est
+  // quatre murs `4x1` et quatre BLOCS `1x1` qui gardent le rendu, comme tout ce
+  // que la chaîne produit depuis le lot PIXELS. Mesuré sur `mur_1` : 6 344
+  // octets en WebP q85 contre 72 651 en PNG optimisé — le PNG aurait coûté
+  // 467 028 octets de base64 pour les huit, le WebP en coûte 38 878.
   // ⚠ ILS NE SERVENT QU'EN FOND CSS, donc pas de balise `img` : voir
   // `garnirLesAtlas` pour ceux qui servent AUSSI à `drawImage`.
-  { marqueur: '%MUR_J_H_A%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_h_a.png'], type: 'image/png' },
-  { marqueur: '%MUR_J_V_A%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_v_a.png'], type: 'image/png' },
-  { marqueur: '%MUR_J_V_B%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_v_b.png'], type: 'image/png' },
-  { marqueur: '%MUR_J_ANGLE_NO%', chemin: ['art', 'sprites', 'bord', 'bord_j_angle_no.png'], type: 'image/png' },
-  { marqueur: '%MUR_J_ANGLE_NE%', chemin: ['art', 'sprites', 'bord', 'bord_j_angle_ne.png'], type: 'image/png' },
+  { marqueur: '%MUR_J_MUR_1%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_1.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_J_MUR_2%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_2.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_J_BLOC_1%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_1.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_J_BLOC_2%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_2.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_J_BLOC_3%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_3.webp'], type: 'image/webp' },
+  { marqueur: '%MUR_J_BLOC_4%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_4.webp'], type: 'image/webp' },
   atlas('unite'),
   atlas('chassis'),
   // ⚠ LE FICHIER PORTE LE SLUG À SOULIGNÉ — `atlas-tourelle_unite-64.png` —
@@ -163,8 +170,14 @@ const IMAGES_INLINE = [
   // d'un seul sprite ne coud rien de toute façon. Même forme que
   // `%ATLAS_TERRAIN%`, l'atlas du fond de carte, qui est hors des sept aussi.
   atlas('carte'),
-  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_2x2.png'], type: 'image/png' },
-  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', '64', 'base_o_3x3.png'], type: 'image/png' },
+  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.png'], type: 'image/png' },
+  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.png'], type: 'image/png' },
+  // ⚠ LE FOND DU BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour
+  // combler le menu offense ». Ce n'est pas une cellule d'atlas — 1149 × 1368 —
+  // donc il voyage dans son propre marqueur, comme les murs de contour. Il pèse
+  // 164 578 o en WebP contre 2 099 998 en PNG optimisé : voir `tools/fonds.py`,
+  // qui dit pourquoi un décor n'est pas du pixel art à teintes comptées.
+  { marqueur: '%FOND_OFFENSE%', chemin: ['art', 'sprites', 'fond', 'fond_offense.webp'], type: 'image/webp' },
 ];
 
 for (const image of IMAGES_INLINE) {
