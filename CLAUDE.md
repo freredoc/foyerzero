@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.81.0 · build 83.
+Dernière révision : **03/09/2026**, version 0.82.0 · build 84.
 
 ---
 
@@ -41,8 +41,125 @@ Dernière révision : **03/09/2026**, version 0.81.0 · build 83.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot NIVEAU-DES-PIÈCES), à confronter :**
-`npm test` → **974 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot CHAMPS-ET-OBSTACLES), à confronter :**
+`npm test` → **976 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 361 351 octets**, 0 référence externe.
+⚠⚠ **CINQ PLANCHES NEUVES D'ETHAN REMPLACENT LES SEPT ANCIENNES, ET LE LOT TIENT
+EN CINQ LIGNES DE TABLE.** 03/09 au soir, dix images et trois lignes — « terrain
+de carte. / fond de base (supprimer mur) / sprite obstacles et ressources » —,
+puis **« commence par Champ et obstacles »**. Ce lot ne fait donc QUE la
+troisième ligne. Coût **+13 768 octets**, **25 `data:` avant, 25 après**. Borne
+T10 **inchangée à 3 400 000**, marge **38 649 octets, 1,14 %**.
+⚠⚠ **ET LES 13 768 OCTETS SONT L'ATLAS, AU DERNIER OCTET.**
+`atlas-terrain-128.webp` passe de 68 476 à 78 802 — **+10 326**, qui font
+**+13 768 en base64**, c'est-à-dire le nombre entier du livrable. **Zéro octet de
+code, zéro de feuille.** ⚠ `atlas-terrain-64.webp` grossit aussi (+2 988) et **ne
+coûte rien** : la grille embarquée est la 128 depuis GRILLE-128. ⚠ **La borne ne
+se relève pas** — aucune image n'entre, ce sont les mêmes cellules avec plus de
+matière, donc moins compressibles.
+⚠⚠ **L'ARBITRAGE DES COULEURS DE RESSOURCE SE REFERME TOUT SEUL, ET C'EST LA
+FICHE QUI AVAIT RAISON.** MOULINETTE-TERRAIN avait relevé que la chaîne ne
+REPEINT plus, si bien que le quartz ressortait VIOLET et la scorie NOIRE quand
+`FICHE-STYLE.md` leur réserve `#9FB3C5`·`#C1CEDA` et `#382E47`·`#4E4160` ; la
+question est restée ouverte trois lots. **Les planches d'Ethan y répondent en la
+rendant sans objet.** Mesuré, part du sujet à ΔE < 20 de sa propre ligne de la
+fiche, grille 128 : **quartz 21,7 % → 63,7 %, scorie 11,4 % → 90,3 %**, et la
+contre-épreuve tient — 20,2 % et 0,0 % sur la ligne de l'autre.
+⚠ **ET LA FICHE AVAIT MÊME PRÉVU LES VEINES** : sa ligne « Scorie » nomme
+« braises `#F5B636` », et la planche neuve en porte 0,2 % du sujet. Trop mince
+pour asserter une part ; noté pour qu'on sache que ce n'est pas un accident.
+⚠⚠ **LA CLÉ DES CINQ PLANCHES EST PURE, ET `normaliser_la_cle` EST DEVENUE UNE
+CEINTURE.** Médiane du pourtour exactement `#FF00FF`, magenta pur sur **49,8 % à
+59,5 %** de la planche — les sept anciennes n'en portaient **pas un pixel**.
+Surtout : la boule de `RAYON_CLE` ne prend **aucun pixel de dessin** sur les
+cinq, contre **7 155** sur l'ancienne planche de quartz. Le geste reste, il ne
+protège plus rien aujourd'hui, **et il fallait le dire** plutôt que de laisser
+croire l'inverse.
+⚠⚠ **LA DETTE DE `fourre_sec_a` EST SOLDÉE PAR UNE PLANCHE, PAS PAR UN
+CORRECTIF.** L'outil écrivait « une ligne à remettre le jour où Ethan en refait
+un rendu propre » : `fourre_sec_v2.png` EST ce rendu, et sa clé est pure.
+⚠⚠ **DEUX SPRITES PERDENT LEUR SECOND VRAI DESSIN, ET C'EST DÉCLARÉ.**
+`obs_les_deux` et `obs_vehicule` portaient DEUX planches ; Ethan en a livré UNE
+par sprite, donc leur `b` devient le miroir de `a`, comme les trois autres.
+⚠ **Mélanger sa planche neuve avec l'ancien `_b` a été écarté de face** : les
+deux moitiés de la paire seraient sorties de deux modèles de rendu différents —
+l'un filtré, l'autre quantifié sur quatorze teintes — et l'écart se verrait sur
+la même base, deux cases côte à côte. **Une ligne à changer quand il enverra les
+seconds dessins.**
+⚠⚠ **LE QUARTZ ÉTAIT PERCÉ DE 2 591 PIXELS, IL N'EN A PLUS QUE 4 — ET CE N'EST
+PAS UN CORRECTIF DE CE LOT.** La seconde porte d'`est_fond` attrapait le violet
+pâle de l'ANCIEN dessin et le perçait de part en part ; le nouveau, bleu-gris,
+ne la déclenche pas. **C'est l'art qui a changé**, et c'est mesuré pour qu'on ne
+l'attribue pas à autre chose.
+⚠ **L'EMPRISE NE BOUGE PAS** — 112 pixels de 128, 56 de 64, centrés. La changer
+aurait fait grandir ou maigrir tous les champs de toutes les bases pour une
+raison qui n'est pas dans le message d'Ethan. ⚠ Marges des planches : **68 à 96
+pixels** contre un `MARGE_MIN` de 64 — la plus faible n'a que quatre pixels de
+marge sur la borne, contre cent pour les anciennes. C'est le fourré, et ses
+branches partent dans tous les sens.
+⚠⚠ **LA GARDE DES MIROIRS A CHANGÉ DE CIBLE ET S'EST RESSERRÉE.** Elle écrivait
+à la main « ces trois-là sont des miroirs, ces deux-là non » — vrai des sept
+anciennes planches, faux le jour d'après. **Une garde qui recopie l'état du jour
+ne peut que mentir au lot suivant.** Elle LIT désormais la table de
+`tools/terrain.py` : une entrée à UNE planche doit produire un miroir, une
+entrée à DEUX deux dessins distincts. **Falsifiable dans les deux sens**, et
+l'intention d'origine est intacte — une planche perdue de la table laisserait le
+sprite exister, l'atlas se coudre, l'écran dessiner, et seule cette égalité
+tomberait.
+⚠⚠ **`terrain` ÉTAIT HORS DU COMPTE GLOBAL DES TROUS, DONC SON DÉTOURAGE
+N'ÉTAIT MESURÉ PAR PERSONNE.** `spritesDeLOuvrage` ne ramasse que les fichiers
+portant `_o_`, et aucun sprite de terrain n'en a — ce qui est juste, un champ de
+quartz n'a pas de camp. La garde neuve partage les cinq en masses PLEINES
+(≤ 8 trous) et dessins AJOURÉS (≥ 40) : **on voit à travers les branches et
+l'éboulis, c'est le dessin**. Exiger zéro partout ferait tomber la suite sur de
+l'art sain, et le seul moyen de la faire passer serait de boucher les trous.
+Même partage que pour `limite`, mesurée forme par forme.
+⚠⚠ **UNE SEPTIÈME FALSIFICATION A ÉTÉ ÉCARTÉE PARCE QU'ELLE NE MESURAIT PAS CE
+QU'ELLE PRÉTENDAIT.** Je voulais garder la bavure de clé — la faute qui a tué
+`fourre_sec_a` — par « la boule de `RAYON_CLE` ne prend pas grand-chose au-delà
+du fond ». Mesuré : **`fourre_sec_a`, l'écartée, est à 1,80 % ; `fourre_sec_v2`,
+la saine, à 3,48 %.** La métrique mesure l'AJOURAGE, pas la bavure. Elle ne
+discrimine pas, donc elle n'a pas été écrite — et la garde qui couvre vraiment
+la faute existe déjà : « le détourage ne laisse pas un pixel de clé » à
+alpha ≥ 128, qui rend **zéro** sur les dix.
+⚠ **SIX FALSIFICATIONS, SIX CHUTES** — table repointée sur les anciennes
+planches, deux planches déclarées là où le sprite est un miroir, un sprite
+retiré de la table, `EMPRISE32` changée, une masse pleine percée, les ajours
+bouchés. ⚠ Quatre d'entre elles font AUSSI tomber « l'atlas cousu répond des
+sprites d'aujourd'hui », la garde née de BÂTIMENTS-1024 : c'est ce qu'on lui
+demande.
+⚠⚠ **ET `git checkout -- art/sprites/` NE RESTAURE PAS L'ART DU LOT — IL
+RESTAURE L'INDEX**, c'est-à-dire celui d'AVANT. Quatre tests sont restés rouges
+après une restauration que je croyais faite. **L'art se restaure en relançant
+l'outil**, qui est sa seule source. Payé une fois.
+⚠ **DEUX TESTS ENTRENT, UN EST RETOURNÉ, ET LE COMPTE PASSE DE 974 À 976.**
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Un champ de quartz est un
+dessin.
+⚠ **`python3 tools/verifier.py` → 1 005 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT. Il était dû : le lot touche `art/` et `tools/`. **Le
+compte ne bouge pas** — cinq planches en remplacent sept, aucun sprite n'entre
+ni ne sort. ⚠ **Son PREMIER passage a échoué en sortie 1, et il avait raison** :
+il tournait pendant que les falsifications mutaient `art/sprites/`. Ne jamais le
+lancer sur un arbre qu'on modifie.
+⚠ **`python3 tools/entrees.py --verifier` → 93 consommées / 93 déclarées, 86
+dormantes / 86 déclarées**, `art/sources/` : **179 fichiers**, `art/sourcesstandby/`
+34 fichiers, **0 lu**. Sept planches passent de `consommees` à `dormantes`, cinq
+entrent : **le diff de `art/sources-declarees.json` raconte le lot en huit
+lignes.**
+⚠⚠ **LES DEUX AUTRES LIGNES D'ETHAN NE SONT PAS FAITES, ET LEURS PLANCHES NE
+SONT PAS AU DÉPÔT** — les faire entrer sans les consommer les ferait compter
+« non classées ». (1) **« terrain de carte »**, quatre textures de 1254 × 1254 :
+elles ne se posent PAS comme les 64 tuiles actuelles, le fond de carte étant un
+PAVAGE à somme pondérée sur un atlas indexé — c'est un lot, pas une
+substitution. (2) **« fond de base (supprimer mur) »**, une planche 887 × 1774
+qui porte le U de muraille DESSINÉ DEDANS : il faudra l'en retirer, l'anneau
+étant déjà posé par `tuilesDuContour`.
+⚠⚠ **ET LA MARGE T10 EST À 1,14 %, LA PLUS MINCE DEPUIS BASES-1.** Ces deux
+lots-là font entrer de l'image pour de bon — pas des cellules mieux dessinées.
+**Ils devront relever la borne EN ÉCRIVANT POURQUOI.**
+
+**Auparavant, après le lot NIVEAU-DES-PIÈCES :**
+`npm test` → 974 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 347 583 octets**, 0 référence externe.
 ⚠⚠ **ETHAN A TRANCHÉ « COMMENT LE JOUEUR CHOISIT LE NIVEAU D'UNE PIÈCE », ET LA
 RÉPONSE EST « B » — LA PIÈCE SE MONTE UNE PAR UNE, AU GESTE DU CHANTIER.** Trois
@@ -2676,12 +2793,15 @@ tools/                  28 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 174 fichiers à la
-                        racine, 437 en comptant `carte/`. RECOMPTÉ le 03/09 au
-                        lot TERRITOIRE.
+art/sources/            sprites bruts, hors chaîne de build — 179 fichiers à la
+                        racine, 442 en comptant `carte/`. RECOMPTÉ le 03/09 au
+                        lot CHAMPS-ET-OBSTACLES, qui en fait entrer cinq : les
+                        planches neuves des champs et des obstacles. Les sept
+                        qu'elles remplacent RESTENT — ce dossier ne s'ampute
+                        jamais — et passent en `dormantes`.
                         ⚠⚠ ET IL EST DÉSORMAIS GARDÉ : `art/sources-declarees.json`
-                          classe chacun de ces fichiers en `consommees` (95) ou
-                          `dormantes` (79), et `tools/entrees.py --verifier` fait
+                          classe chacun de ces fichiers en `consommees` (93) ou
+                          `dormantes` (86), et `tools/entrees.py --verifier` fait
                           rougir la suite dès qu'un fichier entre sans être
                           classé. C'est la seule garde de compte hors de `src/`
                           et de `test/`. Une image qui n'est pas prête entre par
