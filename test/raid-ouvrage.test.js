@@ -389,16 +389,32 @@ test('RAID-B T7 — le rasage redéploie de 20 cases, vide les stocks, et relèv
   // au hasard rendrait donc « vide == vide » et passerait VERT même si le rappel
   // de `releverLesPoisAcquis` était omis. On plante la base VINGT CASES au-dessus
   // d'un POI : rien avant, un POI après — c'est la falsification qui décide.
-  const DEPART = { rangee: 255, colonne: 13 };
+  // ⚠⚠ LA POSITION SE CHERCHE, ELLE NE S'ÉCRIT PLUS. Elle valait
+  // `{ rangee: 255, colonne: 13 }` en dur, et le lot du 03/09 — qui a densifié le
+  // peuplement — a déplacé les POI, que le tirage fait esquiver les bases de
+  // l'Ouvrage. Le montage est alors tombé sur « aucun POI après le rasage »,
+  // c'est-à-dire sur son propre garde-fou. **Un montage qui écrit une coordonnée
+  // ne garde que lui-même**, et c'est la deuxième fois de ce lot.
   const etat = baseALaRangee(7, 200, { niveau: 1, garnison: false });
+  const SAUT = RAID_OUVRAGE.sanctionRasage.redeploiementCases;
+  let DEPART = null;
+  for (let rangee = 240; rangee <= 270 && DEPART === null; rangee += 1) {
+    for (let colonne = 3; colonne <= 29; colonne += 1) {
+      const ici = { rangee, colonne };
+      const la = { rangee: rangee + SAUT, colonne };
+      if (poisAutourDe(etat, ici).length !== 0) continue;
+      if (poisAutourDe(etat, la).length === 0) continue;
+      DEPART = ici;
+      break;
+    }
+  }
+  assert.ok(DEPART !== null,
+    'montage : aucune case d\'où le rasage fasse tomber un POI sous la base');
   baseCourante(etat).position = { ...DEPART };
   assert.deepEqual(etat.poisAcquis, [], 'le montage ne mesure rien : un POI est déjà acquis');
   assert.equal(poisAutourDe(etat, DEPART).length, 0,
     'le montage ne mesure rien : un POI est déjà sous la base AVANT le rasage');
-  const arrivee = {
-    rangee: DEPART.rangee + RAID_OUVRAGE.sanctionRasage.redeploiementCases,
-    colonne: DEPART.colonne,
-  };
+  const arrivee = { rangee: DEPART.rangee + SAUT, colonne: DEPART.colonne };
   const attendus = poisAutourDe(etat, arrivee);
   assert.ok(attendus.length > 0,
     'le montage ne mesure rien : aucun POI ne tombe sous la base APRÈS le rasage');
@@ -444,14 +460,25 @@ test('RAID-B T7 — le rasage redéploie de 20 cases, vide les stocks, et relèv
   );
 });
 
-/** Les POI que le territoire d'une base couvre — rayon 2, la règle de la spec. */
+/**
+ * Les POI que le territoire d'une base couvre.
+ *
+ * ⚠⚠ LA FORME EST CELLE DE L'OCTOGONE DEPUIS LE 03/09, ET ELLE EST RÉÉCRITE ICI.
+ * Ce garde-fou comparait un CARRÉ de rayon 2 : il englobait donc les quatre
+ * coins qu'Ethan fait rogner, et le montage s'est mis à attendre un POI que
+ * `releverLesPoisAcquis` n'acquiert plus. Écrire la règle plutôt que d'importer
+ * `dansLOctogoneDInfluence` garde le test non tautologique — il tomberait si la
+ * forme du code changeait sans que celle-ci suive.
+ */
 function poisAutourDe(etat, position) {
+  const rayon = GEOGRAPHIE.rayonInfluenceJoueur;
   const trouves = [];
   for (const poi of carteDesPoi(etat.graine).liste) {
-    const d = Math.max(
-      Math.abs(poi.rangee - position.rangee), Math.abs(poi.colonne - position.colonne),
-    );
-    if (d <= 2) trouves.push({ type: poi.type, bande: poi.bande });
+    const dr = Math.abs(poi.rangee - position.rangee);
+    const dc = Math.abs(poi.colonne - position.colonne);
+    if (Math.max(dr, dc) <= rayon && dr + dc <= rayon + 1) {
+      trouves.push({ type: poi.type, bande: poi.bande });
+    }
   }
   return trouves;
 }

@@ -53,7 +53,12 @@ test('territoire — le disque du joueur est celui de la spec, mesuré et non é
     for (let c = centre.colonne - 8; c <= centre.colonne + 8; c += 1) {
       const dr = r - centre.rangee;
       const dc = c - centre.colonne;
-      const dedans = dr * dr + dc * dc <= RAYONS[JOUEUR] ** 2;
+      // ⚠ LE TEST NE RECOPIE PAS LA FORMULE DU CODE, IL LA REFAIT — Tchebychev
+      // ET Manhattan, écrits ici en toutes lettres. Appeler
+      // `dansLOctogoneDInfluence` rendrait le test tautologique : il passerait
+      // sur n'importe quelle forme, du moment que les deux côtés s'accordent.
+      const dedans = Math.max(Math.abs(dr), Math.abs(dc)) <= RAYONS[JOUEUR]
+        && Math.abs(dr) + Math.abs(dc) <= RAYONS[JOUEUR] + 1;
       const occ = occupantDeLaCase(carte, r, c);
       if (dedans) {
         assert.equal(occ, JOUEUR, `(${r}, ${c}) devrait être au joueur`);
@@ -63,21 +68,34 @@ test('territoire — le disque du joueur est celui de la spec, mesuré et non é
       }
     }
   }
-  // ⚠⚠ EUCLIDIEN, PLUS TCHEBYCHEV — lot BASES-1, 02/09/2026, ET LA VALEUR
-  // ATTENDUE CHANGE POUR UNE RAISON ÉCRITE. Ce test disait le contraire : « un
-  // disque euclidien de rayon 2 ferait 13 cases, pas 25 ». Il avait raison sur
-  // le nombre, et le lot EUCLIDE avait laissé `territoire.js` au carré par
-  // OUBLI — son brief énumérait trois sites de bascule et celui-ci n'y était
-  // pas. Le territoire allié décide du prix d'un raid ; une zone carrée sous une
-  // portée ronde faisait que le prix affiché et la carte peinte ne décrivaient
-  // pas la même géométrie.
-  //
-  // ⚠ LE COMPTE RESTE ASSERTÉ EN DUR, et c'est ce qui distingue les deux
-  // métriques. Le dériver de la même formule que le code rendrait le test aveugle
-  // à un retour au carré.
-  assert.equal(compte, 13, 'le disque de rayon 2 ne fait plus 13 cases');
+  // ⚠⚠ LE COMPTE A CHANGÉ TROIS FOIS, ET CHAQUE FOIS SUR ORDRE. 25 (carré) →
+  // 13 (disque, lot BASES-1) → **21 (octogone, Ethan le 03/09)** : « un carré de
+  // 5x5 avec chaque coin rogné (4 cases) ». Le territoire allié décide du prix
+  // d'un raid ; c'est pourquoi la valeur est écrite en dur et non dérivée — la
+  // dériver de la même formule que le code rendrait le test aveugle aux trois.
+  assert.equal(compte, 21, 'l\'octogone de rayon 2 ne fait plus 21 cases');
   assert.notEqual(compte, (2 * RAYONS[JOUEUR] + 1) ** 2,
     'le territoire est redevenu un CARRÉ de 25 cases');
+  assert.notEqual(compte, 13, 'le territoire est redevenu le DISQUE de 13 cases');
+
+  // ⚠ LES QUATRE COINS SONT ROGNÉS, ET EUX SEULS. C'est la forme dictée, prise
+  // case par case : le coin est dehors, sa voisine immédiate est dedans. Sans
+  // cette paire, un losange de Manhattan passerait le compte de 21 sans être la
+  // figure demandée.
+  for (const [dr, dc] of [[-2, -2], [-2, 2], [2, -2], [2, 2]]) {
+    assert.notEqual(occupantDeLaCase(carte, centre.rangee + dr, centre.colonne + dc), JOUEUR,
+      `le coin (${dr}, ${dc}) n'est pas rogné`);
+  }
+  // ⚠ ET LES HUIT CASES GAGNÉES SUR LE DISQUE SONT NOMMÉES, PAS SUPPOSÉES : ce
+  // sont exactement les « 8 cases de plus, dans les angles » du message.
+  const gagnees = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+  for (const [dr, dc] of gagnees) {
+    assert.ok(dr * dr + dc * dc > RAYONS[JOUEUR] ** 2,
+      `le montage ne mesure rien : (${dr}, ${dc}) était déjà dans le disque`);
+    assert.equal(occupantDeLaCase(carte, centre.rangee + dr, centre.colonne + dc), JOUEUR,
+      `la case (${dr}, ${dc}) manque à l'octogone`);
+  }
+  assert.equal(gagnees.length, 8);
 });
 
 test('territoire — le joueur l\'emporte quand les deux se recouvrent', () => {
@@ -174,54 +192,66 @@ test('territoire — les bordures ne dépendent PAS de la fenêtre qu\'on demand
   }
 });
 
-test('territoire — les côtés exposés sont ceux du DISQUE, et rien d\'autre', () => {
-  // ⚠⚠ « DU CARRÉ » DANS LE TITRE ÉTAIT EXACT JUSQU'AU LOT BASES-1, et il ne
-  // l'est plus : la zone est un disque euclidien. Les valeurs attendues changent
-  // donc, pour la raison écrite en tête de `sim/territoire.js`.
+test('territoire — les côtés exposés sont ceux de l\'OCTOGONE, et rien d\'autre', () => {
+  // ⚠⚠ LE TITRE A DIT « DU CARRÉ », PUIS « DU DISQUE », ET DIT MAINTENANT
+  // « DE L'OCTOGONE ». Les trois étaient exacts à leur date ; les valeurs
+  // attendues changent avec la forme, pour la raison écrite en tête de
+  // `sim/territoire.js`.
   const etat = creerEtat(GRAINE);
   const centre = baseCourante(etat).position;
   const bords = bordsDuTerritoire(territoireDeLaFenetre(etat, autour(centre, 8)))
     .filter((b) => b.camp === JOUEUR);
   const rayon = RAYONS[JOUEUR];
 
-  // Le centre du disque n'est pas une bordure : ses quatre voisines sont à lui.
+  // Le centre n'est pas une bordure : ses quatre voisines sont à lui.
   assert.ok(!bords.some((b) => b.rangee === centre.rangee && b.colonne === centre.colonne),
     'le centre du territoire est compté comme une bordure');
 
-  // ⚠ TREIZE CASES, DONT CINQ STRICTEMENT INTÉRIEURES — le centre et ses quatre
-  // voisines orthogonales, en croix. Il reste donc HUIT cases de bordure, contre
-  // seize au carré. Le nombre est écrit plutôt que dérivé : dérivé de la même
-  // formule que le code, il ne distinguerait plus le disque du carré.
-  assert.equal(bords.length, 8, 'le pourtour du disque de rayon 2 ne fait plus huit cases');
+  // ⚠ VINGT ET UNE CASES, DONT NEUF STRICTEMENT INTÉRIEURES — le bloc 3 × 3 du
+  // milieu au complet, là où le disque n'en avait que cinq en croix. Il reste
+  // donc DOUZE cases de bordure, contre huit sous le disque et seize au carré.
+  // Le nombre est écrit plutôt que dérivé : dérivé de la formule du code, il ne
+  // distinguerait plus les trois figures.
+  assert.equal(bords.length, 12, 'le pourtour de l\'octogone de rayon 2 ne fait plus douze cases');
   assert.notEqual(bords.length, (2 * rayon + 1) ** 2 - (2 * rayon - 1) ** 2,
     'le pourtour est redevenu celui du CARRÉ');
+  assert.notEqual(bords.length, 8, 'le pourtour est redevenu celui du DISQUE');
 
-  // ⚠ LE COIN DU CARRÉ N'EST PLUS DANS LA ZONE : (−2, −2) est à 8 en distance au
-  // carré, au-delà de 4. C'est exactement la case que le disque retire, et le
-  // test la nomme au lieu de la supposer disparue.
+  // ⚠ LE COIN RESTE DEHORS — c'est le seul point commun des trois figures qui
+  // survit : (−2, −2) est rogné, exactement comme le disque le rejetait.
   assert.ok(
     !bords.some((b) => b.rangee === centre.rangee - rayon && b.colonne === centre.colonne - rayon),
-    'le coin du carré est encore une bordure : la zone est restée carrée',
+    'le coin du carré est redevenu une bordure : la zone est repassée carrée',
   );
 
-  // La pointe nord du disque porte TROIS côtés — ses voisines est et ouest sont
-  // dehors, à 5 en distance au carré.
+  // La pointe nord ne porte plus qu'UN côté, le nord : ses voisines est et ouest
+  // sont rentrées dans la zone avec les huit cases gagnées. Sous le disque elle
+  // en portait trois — c'est la mesure qui distingue le mieux les deux formes.
   const pointe = bords.find((b) => b.rangee === centre.rangee - rayon
     && b.colonne === centre.colonne);
   assert.ok(pointe, 'la pointe nord n\'est pas une bordure');
   assert.deepEqual(
     { nord: pointe.nord, ouest: pointe.ouest, sud: pointe.sud, est: pointe.est },
-    { nord: true, ouest: true, sud: false, est: true },
+    { nord: true, ouest: false, sud: false, est: false },
   );
 
-  // Et la diagonale à (−1, −1), qui est DANS le disque, en porte deux — c'est
-  // elle qui joue le rôle que le coin du carré tenait.
-  const diagonale = bords.find((b) => b.rangee === centre.rangee - 1
+  // Et l'épaule — l'une des huit cases gagnées — porte deux côtés : le nord vers
+  // le dehors, l'ouest vers le coin rogné. C'est elle qui tient désormais le
+  // rôle que la diagonale intérieure tenait sous le disque.
+  const epaule = bords.find((b) => b.rangee === centre.rangee - rayon
     && b.colonne === centre.colonne - 1);
-  assert.ok(diagonale, 'la diagonale intérieure n\'est pas une bordure');
+  assert.ok(epaule, 'l\'épaule (−2, −1) n\'est pas une bordure');
   assert.deepEqual(
-    { nord: diagonale.nord, ouest: diagonale.ouest, sud: diagonale.sud, est: diagonale.est },
+    { nord: epaule.nord, ouest: epaule.ouest, sud: epaule.sud, est: epaule.est },
     { nord: true, ouest: true, sud: false, est: false },
+  );
+
+  // ⚠ ET LA DIAGONALE À (−1, −1) A CESSÉ D'ÊTRE UNE BORDURE, ce qui est la
+  // conséquence la moins visible du rognage : sous le disque elle était au bord,
+  // sous l'octogone ses quatre voisines sont toutes au joueur.
+  assert.ok(
+    !bords.some((b) => b.rangee === centre.rangee - 1 && b.colonne === centre.colonne - 1),
+    'la diagonale intérieure est encore une bordure : les angles ne sont pas revenus',
   );
 });
 

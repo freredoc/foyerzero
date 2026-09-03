@@ -35,6 +35,7 @@ import {
 import { niveauDeLaRangee, estSurLaCarte, positionBaseTerminale } from './carte.js';
 import { hachageBrut, horsDeLaGarde, estBaseOuvrage } from './peuplement.js';
 import { basesDuJoueur, RAYONS, JOUEUR } from './territoire.js';
+import { dansLOctogoneDInfluence } from './points-attaque.js';
 import { empriseDeLaGrosseBase } from '../render/embleme.js';
 
 /**
@@ -282,6 +283,20 @@ export function releverLesPoisAcquis(etat) {
   for (const base of basesDuJoueur(etat)) {
     for (let dr = -rayon; dr <= rayon; dr += 1) {
       for (let dc = -rayon; dc <= rayon; dc += 1) {
+        // ⚠⚠ CE FILTRE MANQUAIT DEPUIS TOUJOURS, ET IL A SURVÉCU À DEUX LOTS QUI
+        // LE CHERCHAIENT. Cette boucle peignait le CARRÉ plein de (2r+1)² cases
+        // sans le moindre test de forme : un POI dans un coin était donc ACQUIS
+        // alors que ni la carte ne montre cette case comme alliée, ni le barème
+        // du raid ne la facture ainsi. EUCLIDE a énuméré trois sites de bascule
+        // et n'a pas vu celui-ci ; BASES-1 en a corrigé un quatrième
+        // (`territoire.js`) sans le voir non plus. Il est le CINQUIÈME, trouvé le
+        // 03/09 en faisant passer toute la zone à l'octogone.
+        //
+        // ⚠ CONSÉQUENCE : un POI dans un angle rogné n'est plus acquis. C'est le
+        // comportement juste — la zone d'influence est ce que la spec §10 définit
+        // et ce que l'écran Monde dessine — mais c'est un changement de RÈGLE, pas
+        // un simple nettoyage, et il se déclare comme tel.
+        if (!dansLOctogoneDInfluence(dr, dc, rayon)) continue;
         const rangee = base.rangee + dr;
         const colonne = base.colonne + dc;
         if (!estSurLaCarte(rangee, colonne)) continue;

@@ -261,19 +261,21 @@ export function distanceCarreeCases(a, b) {
 /**
  * La distance de Tchebychev — le plus grand des deux écarts.
  *
- * ⚠⚠ ELLE SURVIT AU LOT EUCLIDE, ET SON PÉRIMÈTRE S'EST RÉTRÉCI À UNE SEULE
- * CHOSE : les ZONES D'INFLUENCE. Ce qui est passé à Euclide, ce sont les trois
- * distances de PORTÉE — le raid, la garde du peuplement, les anneaux des
- * satellites. Les zones d'influence, elles, ne sont pas une portée : ce sont
- * des CARRÉS que `sim/territoire.js` peint case par case sur l'écran Monde, et
- * que le joueur voit. Les passer à Euclide ici sans les repeindre là-bas ferait
- * payer le tarif de proximité sur des cases que la carte ne montre pas comme
- * siennes — la pire des divergences, celle que le joueur constate sans pouvoir
- * l'expliquer.
+ * ⚠⚠ CE BLOC A ANNONCÉ PENDANT UN JOUR QUE LES ZONES D'INFLUENCE ÉTAIENT SON
+ * DERNIER PÉRIMÈTRE, ET C'ÉTAIT FAUX DEPUIS BASES-1. Il écrivait : « son
+ * périmètre s'est rétréci à une seule chose : les ZONES D'INFLUENCE […] ce sont
+ * des CARRÉS que sim/territoire.js peint case par case ». BASES-1 les a fait
+ * passer au DISQUE le lendemain, des deux côtés à la fois, et ce lot-ci les fait
+ * passer à l'OCTOGONE — voir `dansLOctogoneDInfluence` ci-dessous. Le
+ * commentaire décrivait donc une géométrie que le fichier ne portait plus. **Ne
+ * jamais laisser un commentaire qui annonce un périmètre qu'on vient de lui
+ * retirer.**
  *
- * ⚠ ELLE SERT AUSSI À `siteDeLaCase`, MAIS POUR UNE ÉGALITÉ À ZÉRO — « cette
- * case est-elle celle de ma base ? ». Une distance nulle est nulle dans les
- * deux métriques : cet appel-là ne choisit rien.
+ * ⚠ CE QUI LUI RESTE SE COMPTE, ET C'EST DEUX APPELS. Le BARÈME du raid —
+ * `coutDuRaid` prend un nombre de cases de GRILLE, arbitrage d'EUCLIDE intact —
+ * et `siteDeLaCase`, pour une égalité à ZÉRO (« cette case est-elle celle de ma
+ * base ? »), qui ne choisit aucune métrique : une distance nulle est nulle dans
+ * les trois.
  *
  * @param {{ rangee: number, colonne: number }} a
  * @param {{ rangee: number, colonne: number }} b
@@ -297,6 +299,48 @@ export function distanceTchebychev(a, b) {
  * d'accord.
  */
 export const RAYON_ATTAQUE_CARRE = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAttaque;
+
+/**
+ * La case décalée de (dr, dc) est-elle dans la ZONE D'INFLUENCE de rayon donné ?
+ *
+ * ⚠⚠ C'EST LA SEULE ÉCRITURE DE CETTE FORME DANS LE DÉPÔT, ET ELLE SERT LES DEUX
+ * CÔTÉS. `estEnTerritoireAllie` la FACTURE — le tarif de raid à +1 par case au
+ * lieu de +3 —, la boucle `peindre` de `sim/territoire.js` la DESSINE. CLAUDE.md
+ * l'écrit depuis EUCLIDE : « ce sont `estEnTerritoireAllie` ET la boucle de
+ * `territoire.js` qui changent, ensemble » ; en changer un seul ferait payer le
+ * tarif de proximité sur des cases que la carte ne montre pas comme siennes.
+ * Depuis ce lot-ci il n'y a plus deux lignes à changer ensemble, il y en a UNE.
+ *
+ * ⚠⚠ UN OCTOGONE, DICTÉ CASE PAR CASE PAR ETHAN LE 03/09/2026 : « un carré de
+ * 5x5 avec chaque coin rogné (4 cases) ; ouvrage idem rogné mais 7x7 donc 3
+ * cases à chaque coin ». C'est l'intersection du carré de Tchebychev de rayon
+ * `r` et du losange de Manhattan de rayon `r + margeDiagonaleInfluence` — 21
+ * cases au rayon 2, 37 au rayon 3, soit **huit de plus que le disque des deux
+ * côtés**, ce qui est exactement le « 8 cases de plus, dans les angles » du
+ * message.
+ *
+ * ⚠ EN ENTIERS, SANS AUCUNE RACINE — deux valeurs absolues, deux comparaisons.
+ * La doctrine d'EUCLIDE tient : `src/sim/` ne prend jamais de racine.
+ *
+ * @param {number} dr écart de rangée, entier
+ * @param {number} dc écart de colonne, entier
+ * @param {number} rayon rayon de la zone, en cases
+ * @returns {boolean}
+ */
+export function dansLOctogoneDInfluence(dr, dc, rayon) {
+  // ⚠ LES ÉCARTS SE VALIDENT ICI, PARCE QU'ILS ÉTAIENT VALIDÉS AVANT. Jusqu'à ce
+  // lot, `estEnTerritoireAllie` passait par `distanceCarreeCases`, qui LÈVE sur
+  // une case non entière. Sans cette garde, une case mal formée ferait rendre
+  // `NaN` aux deux comparaisons, donc `false` — la cible sortirait du territoire
+  // en silence et le raid coûterait le tarif lointain sans que rien ne le dise.
+  if (!Number.isInteger(dr) || !Number.isInteger(dc)) {
+    throw new TypeError(`dansLOctogoneDInfluence : écarts « ${dr}, ${dc} » — entiers attendus`);
+  }
+  const ar = Math.abs(dr);
+  const ac = Math.abs(dc);
+  if (ar > rayon || ac > rayon) return false;
+  return ar + ac <= rayon + GEOGRAPHIE.margeDiagonaleInfluence;
+}
 
 /**
  * Cette case est-elle à portée d'attaque de cette base ?
@@ -365,17 +409,17 @@ export function casesArrondiesAuSuperieur(carreDeLaDistance) {
  * dans ce cas il n'y a pas de problème ». Le territoire est au JOUEUR ; la
  * distance, elle, se mesure depuis la base qui part.
  *
- * ⚠⚠ EN EUCLIDE DEPUIS LE LOT BASES-1, 02/09/2026, ET LES DEUX CÔTÉS ONT
- * BASCULÉ ENSEMBLE. Cette fonction et la boucle `peindre` de `sim/territoire.js`
- * portent la MÊME zone : l'une la facture, l'autre la dessine. Le lot EUCLIDE
- * avait laissé les deux en Tchebychev — CLAUDE.md l'écrivait, et prévenait que
- * si Ethan voulait le disque, « ce sont `estEnTerritoireAllie` ET la boucle de
- * `territoire.js` qui changent, ensemble ». C'est ce jour-ci.
+ * ⚠⚠ EN OCTOGONE DEPUIS LE 03/09/2026, ET LES DEUX CÔTÉS N'ONT PLUS À BASCULER
+ * ENSEMBLE : ILS PARTAGENT LA MÊME FONCTION. Cette fonction et la boucle
+ * `peindre` de `sim/territoire.js` portent la MÊME zone — l'une la facture,
+ * l'autre la dessine — et appellent toutes deux `dansLOctogoneDInfluence`.
+ * EUCLIDE avait laissé les deux en Tchebychev, BASES-1 les a passées au disque
+ * en changeant DEUX lignes d'accord ; il n'y en a plus qu'une à changer.
  *
- * ⚠ LE PRIX CHANGE, ET IL N'EST PAS COMPENSÉ. Mesuré sur 150 graines et 5 161
- * cibles : 172 raids (3,33 %) passent de +1 à +3 par case, et le prix moyen monte
- * de 27,945 à 28,078 points. Ce sont les cases en DIAGONALE, celles que le carré
- * comptait chez soi et que le disque ne compte plus.
+ * ⚠ LE PRIX CHANGE DANS L'AUTRE SENS, ET IL N'EST PAS COMPENSÉ. Le disque de
+ * BASES-1 avait fait passer 3,33 % des cibles de +1 à +3 par case ; l'octogone
+ * en rend une partie — huit cases par base reviennent au tarif de proximité.
+ * Voir le rapport du lot pour la mesure sur les mêmes 150 graines.
  *
  * ⚠ LA DISTANCE DU BARÈME, ELLE, RESTE EN CASES DE GRILLE — `coutDUnRaid`
  * ci-dessous emploie toujours `distanceTchebychev`. C'est l'arbitrage d'EUCLIDE,
@@ -390,8 +434,12 @@ export function estEnTerritoireAllie(cible, bases) {
   if (!Array.isArray(bases) || bases.length === 0) {
     throw new RangeError('estEnTerritoireAllie : au moins une base est attendue');
   }
-  const rayonCarre = GEOGRAPHIE.rayonInfluenceJoueur * GEOGRAPHIE.rayonInfluenceJoueur;
-  return bases.some((base) => distanceCarreeCases(base.position, cible) <= rayonCarre);
+  const rayon = GEOGRAPHIE.rayonInfluenceJoueur;
+  return bases.some((base) => dansLOctogoneDInfluence(
+    base.position.rangee - cible.rangee,
+    base.position.colonne - cible.colonne,
+    rayon,
+  ));
 }
 
 /**

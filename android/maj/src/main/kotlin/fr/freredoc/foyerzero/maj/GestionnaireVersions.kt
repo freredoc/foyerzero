@@ -30,6 +30,24 @@ class GestionnaireVersions(
     private val fichierBuild = File(repertoire, "build-installe")
     private val fichierEchecs = File(repertoire, "echecs-demarrage")
 
+    // ⚠⚠ LE BUILD RÉELLEMENT SERVI À CE LANCEMENT — ET IL N'EXISTAIT PAS.
+    // `buildInstalle()` lit le DISQUE ; or une vérification qui aboutit remplace
+    // le fichier PENDANT que la page tourne, sans jamais remplacer la page (voir
+    // `htmlAuDemarrage`). Les deux divergent donc dès qu'une mise à jour attend
+    // une relance, et c'est exactement ce qu'Ethan a vu le 03/09 : l'écran
+    // affichait « v0.67.0 b68 » sous « À jour — build 70 ». Le verdict était
+    // calculé sur le disque, donc il annonçait à jour une version qui ne tournait
+    // pas.
+    //
+    // ⚠ IL EST EN MÉMOIRE, PAS SUR LE DISQUE, et c'est délibéré : il décrit CE
+    // LANCEMENT-CI. Le persister ferait un troisième nombre à tenir d'accord avec
+    // les deux autres, et il mentirait au premier redémarrage manqué.
+    //
+    // ⚠ `@Volatile` PARCE QUE DEUX FILS LE TOUCHENT : `htmlAuDemarrage` tourne
+    // sur le fil de l'interface, la vérification sur le sien.
+    @Volatile
+    private var buildServi: Int? = null
+
     // -- lancement -----------------------------------------------------------
 
     /**
@@ -49,8 +67,22 @@ class GestionnaireVersions(
         }
         ecrireEntier(fichierEchecs, echecsConsecutifs() + 1)
         val installe = fichierInstalle
+        // ⚠ ON RETIENT CE QU'ON SERT, AU MOMENT OÙ ON LE SERT. Le relire plus
+        // tard donnerait le disque, qui peut avoir changé entre-temps — c'est
+        // précisément la divergence que ce champ existe pour dire.
+        buildServi = buildInstalle()
         return if (installe.isFile) installe.readBytes() else copieEmbarquee()
     }
+
+    /**
+     * Le build de la version qui TOURNE, ou `null` avant tout démarrage.
+     *
+     * ⚠ `null` N'EST PAS ZÉRO ET N'EST PAS `buildInstalle()`. Tant que
+     * `htmlAuDemarrage()` n'a pas été appelé, aucune version n'est servie ;
+     * répondre le disque ferait croire que la version du disque tourne, ce qui
+     * est exactement le mensonge qu'on retire.
+     */
+    fun buildServi(): Int? = buildServi
 
     /** À appeler quand la page a effectivement démarré. */
     fun signalerDemarrageReussi() {

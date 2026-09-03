@@ -16,7 +16,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { lireEtatDeMaj, MAJ_SANS_PONT, MAJ_PERIODE_MS } from '../src/ui/session.js';
+import {
+  lireEtatDeMaj, ligneDeMiseAJour, MAJ_SANS_PONT, MAJ_PERIODE_MS,
+} from '../src/ui/session.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...chemin) => readFileSync(join(RACINE, ...chemin), 'utf8');
@@ -157,4 +159,113 @@ test('maj — l\'enveloppe garde l\'adresse, et le module la décision', () => {
       `« ${methode} » n'est pas exposée au JavaScript`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Ce que la ligne AFFICHE — le retour d'Ethan du 03/09
+// ---------------------------------------------------------------------------
+
+test('MAJ — « à jour » est INTERDIT quand une version plus récente attend une relance', () => {
+  // ⚠⚠ LE DÉFAUT RAPPORTÉ, RECONSTITUÉ À L'IDENTIQUE. Ethan, 03/09 : « le jeu
+  // détecte la mise à jour mais refuse de l'implanter ». Sa capture montre
+  // « v0.67.0 b68 » et, deux lignes plus bas, « À jour — build 70 ». Les deux
+  // nombres se contredisent, et rien à l'écran n'explique l'écart.
+  //
+  // ⚠ LA CAUSE EST DANS L'ENVELOPPE : le verdict était calculé sur le build du
+  // DISQUE, pas sur celui qui TOURNE. Une mise à jour installée qui attend une
+  // relance se lisait donc « à jour ». C'est corrigé côté Kotlin — mais le
+  // Kotlin n'arrive que par un nouvel APK.
+  const vieilleEnveloppe = lireEtatDeMaj(JSON.stringify({
+    etape: 'A_JOUR', build: 70, message: 'À jour — build 70.',
+  }));
+  const ligne = ligneDeMiseAJour(vieilleEnveloppe, 68);
+  assert.doesNotMatch(ligne, /À jour/,
+    'la page répète « à jour » alors qu\'une version plus récente attend');
+  assert.match(ligne, /70/, 'la ligne ne nomme pas le build qui attend');
+  assert.match(ligne, /68/, 'la ligne ne nomme pas le build qui tourne');
+  assert.match(ligne, /relance/, 'la ligne ne dit pas quoi faire');
+});
+
+test('MAJ — la page dit la vérité SEULE, sous une enveloppe d\'avant le correctif', () => {
+  // ⚠⚠ C'EST LA MOITIÉ QUI ATTEINDRA VRAIMENT LE JOUEUR, et c'est pour ça
+  // qu'elle existe. Le HTML se met à jour tout seul par Pages ; l'enveloppe
+  // Android, elle, reste celle qui est installée. Une correction qui ne vivrait
+  // que dans `:maj` n'arriverait qu'avec un nouvel APK — c'est-à-dire jamais,
+  // pour un joueur qui ne réinstalle pas. La page doit donc pouvoir trancher
+  // avec ce que la vieille enveloppe lui donne déjà : `build`, qui est le
+  // disque, et son propre numéro, qu'elle porte dans son balisage.
+  //
+  // ⚠ ET ELLE NE S'APPUIE PAS SUR `buildServi`, QUI PEUT MANQUER. Le montage
+  // ci-dessous ne le fournit PAS — c'est exactement le JSON d'une enveloppe
+  // d'avant le 03/09.
+  const ancien = lireEtatDeMaj('{"etape":"A_JOUR","build":70,"message":"À jour — build 70."}');
+  assert.equal(ancien.buildServi, null, 'le montage ne mesure rien : le champ neuf est présent');
+  assert.match(ligneDeMiseAJour(ancien, 68), /relance/);
+});
+
+test('MAJ — la ligne ne se mêle de rien quand les deux builds coïncident', () => {
+  // ⚠ LA MOITIÉ SYMÉTRIQUE, ET ELLE COMPTE AUTANT : la page ne doit PAS réécrire
+  // un message qui est juste. Sans cette garde, « relance le jeu » s'afficherait
+  // sur une installation parfaitement à jour.
+  const ajour = lireEtatDeMaj('{"etape":"A_JOUR","build":70,"message":"À jour — build 70."}');
+  assert.equal(ligneDeMiseAJour(ajour, 70), 'À jour — build 70.');
+  // Un build du disque PLUS ANCIEN que celui qui tourne ne fait rien non plus :
+  // le cas n'arrive pas par le jeu, et envoyer relancer y ferait reculer.
+  assert.equal(ligneDeMiseAJour(ajour, 71), 'À jour — build 70.');
+  // Et les autres étapes traversent intactes.
+  for (const brut of [
+    '{"etape":"EN_COURS","build":70,"message":"Vérification en cours…"}',
+    '{"etape":"ECHOUEE","build":70,"message":"Échec : aucune réponse du réseau."}',
+  ]) {
+    const lu = lireEtatDeMaj(brut);
+    assert.equal(ligneDeMiseAJour(lu, 70), lu.message);
+  }
+});
+
+test('MAJ — un build de page illisible ne fait rien inventer', () => {
+  // ⚠ `null` ET `NaN` SONT DES CAS RÉELS : `data-build` peut manquer sur une
+  // page bricolée, et `parseInt` rend alors `NaN`. La ligne retombe sur le
+  // message du pont — jamais sur « build NaN ».
+  const lu = lireEtatDeMaj('{"etape":"A_JOUR","build":70,"message":"À jour — build 70."}');
+  assert.equal(ligneDeMiseAJour(lu, null), lu.message);
+  assert.equal(ligneDeMiseAJour(lu, Number.NaN), lu.message);
+  // Et un pont muet sur le build ne déclenche rien non plus.
+  assert.equal(ligneDeMiseAJour(lireEtatDeMaj('{"etape":"A_JOUR"}'), 68),
+    'État de mise à jour illisible.');
+});
+
+test('MAJ — le balisage porte le build en clair, et l\'écran le lit', () => {
+  // ⚠⚠ DEUX MOITIÉS DANS DEUX FICHIERS, ET RIEN D'AUTRE QU'UN TEST CROISÉ NE PEUT
+  // DIRE QU'ELLES SE PARLENT. C'est la leçon de la boussole de
+  // `sim/rendu-pose.js` : deux modules justes séparément peuvent être faux
+  // ensemble. Si `data-build` disparaissait du balisage, la comparaison
+  // retomberait silencieusement sur le message du pont — c'est-à-dire sur le
+  // défaut d'origine.
+  const html = lire('src', 'index.src.html');
+  assert.match(html, /id="options-version"[^>]*data-build="%BUILD%"/,
+    'le balisage ne porte plus le build en attribut');
+  const session = lire('src', 'ui', 'session.js');
+  assert.match(session, /options-version'\)\.dataset\.build/,
+    'l\'écran ne lit plus le build de la page');
+  assert.match(session, /ligneDeMiseAJour\(lu,/,
+    'l\'écran affiche le message du pont sans le confronter à son propre build');
+});
+
+test('MAJ — l\'enveloppe décide dans :maj, jamais dans :app', () => {
+  // ⚠⚠ SANS SDK ANDROID, `settings.gradle.kts` EXCLUT `:app` : ce qui est écrit
+  // là-bas n'est compilé ni ici ni en CI (CLAUDE.md §6). Le verdict d'une
+  // vérification qui n'a rien eu à télécharger est une DÉCISION ; elle vit donc
+  // dans `:maj`, testée en JVM, et `:app` ne fait que l'appeler.
+  const etat = lire('android', 'maj', 'src', 'main', 'kotlin', 'fr', 'freredoc',
+    'foyerzero', 'maj', 'EtatMiseAJour.kt');
+  assert.match(etat, /EN_ATTENTE_DE_RELANCE/, 'l\'état d\'attente n\'existe pas dans :maj');
+  assert.match(etat, /fun verdictSansTelechargement\(/, 'la décision n\'est pas dans :maj');
+  const app = lire('android', 'app', 'src', 'main', 'kotlin', 'fr', 'freredoc',
+    'foyerzero', 'MiseAJour.kt');
+  assert.match(app, /EtatMiseAJour\.verdictSansTelechargement\(/,
+    ':app décide au lieu de demander à :maj');
+  // ⚠ ET IL NE REFAIT PAS LA COMPARAISON DANS SON COIN — c'est la forme que
+  // prendrait la duplication, et elle divergerait au premier ajustement.
+  assert.doesNotMatch(app, /buildInstalle\(\)\s*>\s*/,
+    ':app compare les deux builds à la main');
 });

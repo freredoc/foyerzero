@@ -28,11 +28,27 @@ object EtatMiseAJour {
         /** Une vérification est partie et n'a pas rendu son verdict. */
         EN_COURS,
 
-        /** Le manifeste a été lu : la version installée est la plus récente. */
+        /** Le manifeste a été lu : la version SERVIE est la plus récente. */
         A_JOUR,
 
         /** Une version plus récente a été installée ; elle sert au prochain lancement. */
         INSTALLEE,
+
+        // ⚠⚠ CET ÉTAT MANQUAIT, ET SON ABSENCE FAISAIT MENTIR L'ÉCRAN. Une
+        // version plus récente peut être INSTALLÉE sur le disque pendant que la
+        // page qui tourne est l'ancienne — c'est le fonctionnement voulu, le jeu
+        // n'est jamais remplacé à chaud. Mais la vérification SUIVANTE lisait
+        // alors le disque, y trouvait le build du manifeste, et concluait
+        // `A_JOUR`. Ethan, le 03/09 : « le jeu détecte la mise à jour mais refuse
+        // de l'implanter » — l'écran affichait « v0.67.0 b68 » et, deux lignes
+        // plus bas, « À jour — build 70 ». Les deux nombres se contredisaient et
+        // rien n'expliquait l'écart.
+        //
+        // ⚠ IL SE DISTINGUE D'`INSTALLEE`, ET LES DEUX SONT UTILES. `INSTALLEE`
+        // dit « je viens de l'installer » ; celui-ci dit « elle est là depuis un
+        // moment et tu ne l'as toujours pas lancée ». Les confondre ferait
+        // réafficher « je viens de l'installer » à chaque vérification.
+        EN_ATTENTE_DE_RELANCE,
 
         /** La vérification n'a pas abouti — réseau, manifeste, empreinte. */
         ECHOUEE,
@@ -47,22 +63,56 @@ object EtatMiseAJour {
      * l'exécution. Le manifeste et son adresse restent donc côté Kotlin ; ce qui
      * traverse le pont, c'est une PHRASE et un numéro de build, jamais un lien.
      *
+     * ⚠⚠ DEUX BUILDS, ET C'EST TOUT LE CORRECTIF DU 03/09. Le message ne prenait
+     * que celui du DISQUE et l'annonçait comme « à jour » ; il prend maintenant
+     * aussi celui qui TOURNE, et quand les deux diffèrent il le DIT. Un seul
+     * nombre ne peut pas décrire deux fichiers.
+     *
      * @param etape où en est la vérification
-     * @param buildInstalle le build actuellement servi, ou 0 s'il est inconnu
+     * @param buildServi le build de la page qui tourne, ou 0 s'il est inconnu
+     * @param buildInstalle le build posé sur le disque, ou 0 s'il est inconnu
      * @param refus le motif quand la vérification a échoué, sinon `null`
      */
-    fun message(etape: Etape, buildInstalle: Int, refus: CycleMiseAJour.Refus?): String = when (etape) {
+    fun message(
+        etape: Etape,
+        buildServi: Int,
+        buildInstalle: Int,
+        refus: CycleMiseAJour.Refus?,
+    ): String = when (etape) {
         Etape.JAMAIS -> "Aucune vérification depuis le lancement."
         Etape.EN_COURS -> "Vérification en cours…"
-        Etape.A_JOUR -> "À jour — build $buildInstalle."
+        Etape.A_JOUR -> "À jour — build $buildServi."
         // ⚠ « AU PROCHAIN LANCEMENT » N'EST PAS UNE PRÉCAUTION DE STYLE : c'est
         // ce que fait vraiment `GestionnaireVersions`. Le jeu en cours n'est
         // JAMAIS remplacé à chaud, sans quoi la partie ouverte perdrait son
         // contexte au milieu d'un geste. Le dire évite qu'on croie le bouton
         // sans effet parce que rien ne change à l'écran.
         Etape.INSTALLEE -> "Mise à jour installée — elle sera active au prochain lancement."
+        // ⚠ LE MESSAGE NOMME LES DEUX NOMBRES, et il dit quoi FAIRE. « Build 70
+        // installé » seul laisserait le joueur devant le même écart inexpliqué
+        // que le 03/09 ; c'est « relance le jeu » qui transforme un constat en
+        // geste.
+        Etape.EN_ATTENTE_DE_RELANCE ->
+            "Build $buildInstalle installé — relance le jeu pour l'activer (build $buildServi en cours)."
         Etape.ECHOUEE -> "Échec : ${motif(refus)}."
     }
+
+    /**
+     * Le verdict d'une vérification qui n'a rien eu à télécharger.
+     *
+     * ⚠⚠ « RIEN À TÉLÉCHARGER » NE VEUT PAS DIRE « À JOUR », ET C'EST LE DÉFAUT
+     * DU 03/09 EN UNE PHRASE. Le manifeste refusé pour retour en arrière est le
+     * cas NORMAL quand le disque porte déjà le build publié — mais le disque
+     * n'est pas ce qui tourne. Si une version plus récente y attend une relance,
+     * le verdict est `EN_ATTENTE_DE_RELANCE`, pas `A_JOUR`.
+     *
+     * ⚠ ELLE EST ICI, DANS `:maj`, ET PAS DANS `:app`. Sans SDK Android,
+     * `settings.gradle.kts` EXCLUT `:app` : une décision écrite là-bas n'est
+     * compilée par personne ici et la CI ne la voit pas non plus. Ce qui se
+     * décide vit dans le module testé en JVM.
+     */
+    fun verdictSansTelechargement(buildServi: Int, buildInstalle: Int): Etape =
+        if (buildInstalle > buildServi) Etape.EN_ATTENTE_DE_RELANCE else Etape.A_JOUR
 
     /**
      * Le motif d'un refus, en clair.
@@ -86,13 +136,23 @@ object EtatMiseAJour {
      * un analyseur JSON — `Manifeste.analyser` en fait autant de son côté. Deux
      * champs et une chaîne échappée ne justifient pas d'en faire entrer une.
      *
+     * ⚠⚠ `build` GARDE SON SENS — LE DISQUE — ET `buildServi` ENTRE À CÔTÉ. Le
+     * renommer aurait fait taire la page sans qu'elle le dise : elle lit `build`
+     * depuis le premier jour, et un champ absent y devient `null`. C'est le
+     * COUPLE qui porte l'information, pas l'un des deux.
+     *
      * ⚠ ET LE MESSAGE EST ÉCHAPPÉ, sans exception. Il porte des mots français
      * choisis ici, donc aucun guillemet aujourd'hui ; le jour où un motif en
      * contiendra un, un JSON cassé ferait taire le bouton sans rien dire.
      */
-    fun versJson(etape: Etape, buildInstalle: Int, refus: CycleMiseAJour.Refus?): String {
-        val texte = echapper(message(etape, buildInstalle, refus))
-        return """{"etape":"${etape.name}","build":$buildInstalle,"message":"$texte"}"""
+    fun versJson(
+        etape: Etape,
+        buildServi: Int,
+        buildInstalle: Int,
+        refus: CycleMiseAJour.Refus?,
+    ): String {
+        val texte = echapper(message(etape, buildServi, buildInstalle, refus))
+        return """{"etape":"${etape.name}","build":$buildInstalle,"buildServi":$buildServi,"message":"$texte"}"""
     }
 
     /** L'échappement JSON minimal : ce que cette classe peut produire. */

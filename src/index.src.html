@@ -1897,7 +1897,12 @@
         bas, et la vérification de mise à jour.</p>
       <div class="ligne">
         <span class="nom">Version</span>
-        <span id="options-version">v%VERSION% b%BUILD%</span>
+        <!-- ⚠ `data-build` PORTE LE MÊME NOMBRE, EN LISIBLE PAR LE JS. La ligne
+             de mise à jour compare le build de CETTE page à celui que le pont
+             annonce sur le disque : sans lui, il faudrait découper « v0.69.0
+             b70 » à l'affichage, ce qui casserait au premier changement de
+             format. `tools/build.js` remplace les deux jetons d'un coup. -->
+        <span id="options-version" data-build="%BUILD%">v%VERSION% b%BUILD%</span>
       </div>
       <!-- ⚠⚠ LA VÉRIFICATION DE MISE À JOUR — Ethan, 31/08 : « auto update pour
            foyer zéro. Bouton vérifier maj dans option. » L'auto-update EXISTAIT

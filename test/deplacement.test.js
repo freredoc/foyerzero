@@ -379,7 +379,17 @@ test('DÉPLACEMENT T8 — un second déplacement trop tôt est refusé, et le re
   assert.equal(ticksAvantProchainDeplacement(etat), du - Math.floor(du / 2));
   rattraperJeu(etat, du);
   assert.equal(ticksAvantProchainDeplacement(etat), 0);
-  assert.deepEqual(problemesDuDeplacement(etat, encore), []);
+  // ⚠⚠ LA CIBLE SE RECALCULE ICI, ET C'EST LE 03/09 QUI L'A EXIGÉ. Elle était
+  // celle d'avant le rattrapage ; or l'Ouvrage attaque PENDANT ces heures-là, et
+  // un rasage déplace la base de vingt cases. Depuis que la carte porte 28 bases
+  // par 12 × 12 au lieu de 16, ce rasage arrive pour de bon sur cette graine :
+  // le refus rendu devenait `trop-loin` — 83 cases —, c'est-à-dire une raison qui
+  // ne regarde pas ce test. Ce qu'il mesure est le DÉLAI, pas une position.
+  const voisine = {
+    rangee: baseCourante(etat).position.rangee - 1,
+    colonne: baseCourante(etat).position.colonne,
+  };
+  assert.deepEqual(problemesDuDeplacement(etat, voisine), []);
 });
 
 // ---------------------------------------------------------------------------
