@@ -295,6 +295,35 @@ export const UNITES = {
   },
 };
 
+/**
+ * L'ordre dans lequel les trois châssis se présentent au joueur.
+ *
+ * ⚠⚠ ETHAN, 03/09/2026 : « ui armée : une barre : d'abord l'infanterie puis
+ * véhicule et avion ». C'est un ordre d'AFFICHAGE, et il porte sur le châssis —
+ * pas sur l'unité. Il vit donc ici, à côté de la clé qu'il trie.
+ *
+ * ⚠⚠ ET IL EST DÉJÀ CELUI DE `UNITES`, MESURÉ : les cinq escouades y viennent
+ * d'abord, puis les cinq blindés, puis les quatre aéronefs. Ce que cette table
+ * change à l'écran AUJOURD'HUI est donc RIEN — et c'est exactement ce qu'on lui
+ * demande. Ce qu'elle change, c'est le statut du fait : l'ordre cesse d'être
+ * une coïncidence de la table pour devenir une propriété de la palette, qui
+ * tient encore si quelqu'un insère une quinzième unité au mauvais rang.
+ *
+ * ⚠ ET C'EST L'INVERSE DE `ORDRE_PALETTE` DE `data/base.js`, ÉCRITE LA VEILLE.
+ * Là-bas, AUCUNE clé du roster ne disait « ce bâtiment vient tôt » : il a fallu
+ * écrire les onze noms à la main, faute de grandeur à trier. Ici la clé existe
+ * depuis toujours — `UNITES[x].chassis` classe les quatorze —, donc on trie, on
+ * ne recopie pas. Une seconde liste de quatorze noms serait la première à
+ * oublier une unité.
+ *
+ * ⚠ LE TRI EST STABLE, ET C'EST LA MOITIÉ QUI COMPTE. Ethan a donné l'ordre des
+ * TROIS châssis, pas celui des quatorze unités : à l'intérieur d'un groupe,
+ * l'ordre du roster fait foi. Un tri instable réordonnerait les cinq escouades
+ * entre elles sans que personne l'ait décidé.
+ */
+export const ORDRE_CHASSIS = ['escouade', 'blinde', 'aeronef'];
+
+
 // --- défenses ----------------------------------------------------------------
 // Neuf structures. Le joueur et l'Ouvrage construisent les mêmes ; seul le
 // module diffère. Les barrières ne bloquent pas : on les traverse en perdant

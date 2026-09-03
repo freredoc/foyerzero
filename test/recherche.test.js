@@ -3103,12 +3103,18 @@ test('MODULES-D T14 — le déterminisme tient avec les trois modules de combat'
 });
 
 /** Un élément assez complet pour ce que `ui/recherche.js` en fait. */
-function faireElement(tag) {
+function faireElement(tag, doc = null) {
   const classes = new Set();
   const ecouteurs = {};
   let texte = '';
   const el = {
     tagName: tag.toUpperCase(),
+    // ⚠ `dataset` ET `ownerDocument` SONT CE QUE LE FOND PARTAGÉ DEMANDE.
+    // `poserLesAtlas` d'`ui/chantier.js` retient sa classe dans `dataset` et
+    // remonte au document pour lire l'adresse de l'atlas : un faux qui ne les
+    // porte pas ferait tomber l'écran pour une raison qui ne le regarde pas.
+    dataset: {},
+    ownerDocument: doc,
     type: '',
     disabled: false,
     hidden: false,
@@ -3154,14 +3160,30 @@ const IDS_DE_L_ECRAN = [
 /** Le faux document, et les nœuds nommés que le balisage fournit. */
 function fauxDocument() {
   const parId = new Map();
-  for (const id of IDS_DE_L_ECRAN) parId.set(id, faireElement('div'));
-  return {
+  // ⚠⚠ LE FAUX PORTE CE QUE LE CODE EMPLOIE VRAIMENT, IL NE L'ÉVITE PAS. Depuis
+  // que les fonds d'atlas passent par une règle de feuille PARTAGÉE — le
+  // correctif du freeze —, l'écran a besoin d'un `head`, d'un `createTextNode`
+  // et d'une vue qui rende la valeur d'une variable CSS. Faire retomber le code
+  // sur un chemin de repli quand ces trois-là manquent aurait donné un test qui
+  // n'exerce plus le chemin livré, ce qui est la définition d'une garde qui ne
+  // garde rien.
+  const doc = {
+    head: faireElement('head'),
     getElementById(id) {
       if (!parId.has(id)) throw new Error(`faux document : « ${id} » absent du balisage`);
       return parId.get(id);
     },
-    createElement: (tag) => faireElement(tag),
+    createElement: (tag) => faireElement(tag, doc),
+    createTextNode: (texte) => ({ textContent: String(texte) }),
+    // L'adresse rendue n'est pas une vraie image, et elle n'a pas à l'être : ce
+    // que le code en fait, c'est une CLÉ — deux atlas différents doivent donner
+    // deux règles différentes, et une variable vide doit lever.
+    defaultView: {
+      getComputedStyle: () => ({ getPropertyValue: (nom) => `url("${nom}")` }),
+    },
   };
+  for (const id of IDS_DE_L_ECRAN) parId.set(id, faireElement('div', doc));
+  return doc;
 }
 
 /** Toutes les lignes `.piece` d'un panneau, à plat. */

@@ -110,6 +110,69 @@ GRILLES = (64, 128)
 # source.
 CAMPS = [('joueur', 'j'), ('ouvrage', 'o')]
 
+# ⚠⚠ LA FRONTIÈRE SE RECOLORISE SUR LA RAMPE DE SON CAMP — arbitrage d'Ethan du
+# 03/09/2026 au soir : « code couleur frontiere : vert kaki joueur et l'autre
+# violet ouvrage / il faut que ça ressort sur le terrain. / recolorise si il le
+# faut ». Les dessins livrés portaient leurs propres teintes — OR/AMBRE pour le
+# joueur, GRIS-BLEU PÂLE pour l'Ouvrage —, ce que le rapport du lot TERRITOIRE
+# avait relevé comme « un arbitrage qui revient à Ethan ». Il est rendu.
+#
+# ⚠⚠ ET CE N'EST PAS QU'UNE QUESTION DE TEINTE : C'EST UNE QUESTION DE CLARTÉ,
+# MESURÉE. Le sol de la carte est CLAIR des deux côtés — `TERRAIN_CARTE.rampes`
+# de `src/data/sites.js` porte deux rampes dont les cinq clartés sont L* 58,1 ·
+# 62,9 · 68,0 · 73,0 · 77,9, rang par rang, à dessein (FICHE-STYLE §3 : « deux
+# sols de clarté différente donnent à un camp un camouflage que personne n'a
+# décidé »). Or la frontière du joueur portait un ton à **L* 56,6** — `#CD6F26`,
+# 16,2 % de son dessin —, soit **1,5 de clarté** du sol le plus sombre : ce ton
+# était INVISIBLE sur le terrain, et c'est exactement ce qu'Ethan rapporte. Le
+# pire ton de l'Ouvrage était à 8,8.
+#
+# ⚠⚠ D'OÙ LES QUATRE TONS LES PLUS SOMBRES DE CHAQUE RAMPE, ET LE CHOIX EST
+# MESURÉ, PAS ESTHÉTIQUE. Les deux rampes de camp de FICHE-STYLE §3 en portent
+# cinq ; prendre les tons 2 à 5 laisserait le kaki `#8C9A72` à L* 61,6, donc à
+# 3,5 du sol — la faute qu'on vient de corriger, refaite. Écart minimal au sol
+# le plus sombre, mesuré sur les deux découpes :
+#
+#     rampe             tons 1-4    tons 2-5
+#     kaki joueur         10,2         3,5
+#     ardoise Ouvrage     28,1        16,6
+#
+# et l'écart INTERNE bande sombre → bande claire ne se paie pas : 27,4 contre
+# 24,4 en kaki, 17,7 contre 17,8 en ardoise. Les tons 1-4 gagnent des deux
+# côtés, sur les deux rampes.
+#
+# ⚠ LE JOUEUR EST VERT PARCE QUE FICHE-STYLE LE DIT — « la rampe kaki ci-dessus
+# est celle du joueur, définitivement », et « aucun vert dans le terrain, nulle
+# part : le vert est la couleur du joueur ». C'est ce qui rend le kaki lisible
+# comme sien sur un sol de terre cuite : aucune tuile de sol ne peut le citer.
+RAMPES = {
+    'joueur': ['#161914', '#343A2C', '#4E5742', '#6A7658'],
+    'ouvrage': ['#0D0B12', '#231D2E', '#382E47', '#4E4160'],
+}
+
+
+def rvb(h):
+    """Un hex de FICHE-STYLE en triplet d'octets."""
+    return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def clarte(px):
+    """La clarté L* d'un pixel sRGB. Sert à RANGER, jamais à peindre.
+
+    ⚠ ON RANGE PAR CLARTÉ, PAS PAR FRÉQUENCE. Les deux donneraient le même
+    résultat sur la livraison — mesuré, les quatre tons de chaque camp ont
+    exactement les mêmes parts, 41,0 · 31,9 · 16,2 · 11,0 % —, mais la
+    fréquence n'a aucun rapport avec ce qu'on veut préserver : c'est l'ORDRE
+    DES CLARTÉS qui porte le dedans et le dehors. La bande sombre est du côté
+    du territoire, la claire dehors ; un rangement monotone en clarté garde
+    cette lecture PAR CONSTRUCTION, quel que soit le dessin qui arrive.
+    """
+    lin = [c / 255 for c in px]
+    lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in lin]
+    y = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    return 116 * (y ** (1 / 3) if y > 0.008856 else 7.787 * y + 16 / 116) - 16
+
+
 # ⚠⚠ L'ORDRE DES CÔTÉS EST `n e s o`, ET IL EST CANONIQUE. C'est celui de la
 # boussole dans le sens horaire, et c'est lui qui NOMME les sprites : un ensemble
 # de côtés exposés se lit toujours dans cet ordre-là, donc `{est, nord}` s'écrit
@@ -212,13 +275,58 @@ def assert_fond(rgb, forme, camp):
     return vu
 
 
+def recoloriser(out, opaque, forme, camp):
+    """Les quatre tons du dessin passent sur les quatre tons de la rampe du camp.
+
+    ⚠⚠ EXACTEMENT QUATRE TONS, ET LE COMPTE EST ASSERTÉ AVANT LA SUBSTITUTION.
+    Une cinquième teinte — une planche anticrénelée, un dessin repris avec un
+    ton de plus — n'aurait aucune image dans la rampe : sans cette garde elle
+    passerait TELLE QUELLE, et la frontière ressortirait mi-kaki mi-or sans que
+    rien ne le dise. C'est la même discipline qu'`assert_fond` juste au-dessus :
+    on vérifie la livraison, on ne la suppose pas.
+
+    ⚠ ET LA SUBSTITUTION SE FAIT SUR UN MASQUE PRIS D'AVANCE, jamais en place.
+    Peindre ton par ton dans le tableau qu'on lit ferait qu'un ton déjà réécrit
+    puisse être relu comme un ton source — le kaki `#343A2C` de l'Ouvrage n'est
+    pas dans sa rampe, mais rien ne garantit qu'aucune rampe ne recoupera jamais
+    un ton de dessin.
+    """
+    tons = [tuple(int(c) for c in t) for t in np.unique(out[opaque, 0:3], axis=0)]
+    attendu = len(RAMPES[camp])
+    assert len(tons) == attendu, (
+        f'{camp}/{forme} : {len(tons)} tons opaques, {attendu} attendus — la planche '
+        f'a changé de palette, il n\'y a plus de correspondance rang par rang')
+    # Du plus sombre au plus clair, des deux côtés : la bande sombre du dessin
+    # prend le creux de la rampe, la bande claire prend sa lumière.
+    tons.sort(key=clarte)
+    cible = [rvb(h) for h in RAMPES[camp]]
+    assert cible == sorted(cible, key=clarte), (
+        f'{camp} : la rampe n\'est pas rangée du creux à la lumière — le rangement '
+        f'rang par rang inverserait le dedans et le dehors')
+    masques = [(out[..., 0:3] == np.array(t, np.uint8)).all(-1) & opaque for t in tons]
+    for m, t in zip(masques, cible):
+        out[m, 0:3] = t
+    return out
+
+
 def detourer(rgb, forme, camp):
-    """Le fond magenta devient transparent ; l'alpha reste binaire, puis bave."""
+    """Le fond magenta devient transparent, l'alpha reste binaire, puis on
+    recolorise et la couleur bave.
+
+    ⚠⚠ L'ORDRE DES TROIS GESTES N'EST PAS LIBRE. `assert_fond` travaille sur le
+    RVB de la LIVRAISON — c'est ce qui lui permet de mesurer que la planche est
+    sans anticrénelage —, donc la recolorisation vient APRÈS lui. Et `baver`
+    vient après elle : il étend la couleur opaque dans le transparent, donc
+    baver d'abord laisserait dans la frange le RVB des anciennes teintes, que le
+    WebP q85 de l'atlas lisserait en un liseré or autour d'une frontière kaki.
+    C'est exactement le liseré rouge sombre mesuré au lot MURS, dans l'autre
+    couleur.
+    """
     opaque = ~assert_fond(rgb, forme, camp)
     out = np.zeros((*opaque.shape, 4), np.uint8)
     out[opaque, 0:3] = rgb[opaque]
     out[opaque, 3] = 255
-    return baver(out)
+    return baver(recoloriser(out, opaque, forme, camp))
 
 
 def lignes_pleines(rgba, cote):

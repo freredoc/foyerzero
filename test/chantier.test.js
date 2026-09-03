@@ -57,6 +57,7 @@ import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, emplacementsDuNiveau,
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
+  ORDRE_PALETTE,
 } from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
@@ -2075,31 +2076,58 @@ test('barre du bas — trois boutons égaux, et le troisième DEMANDE l\'écran'
     'la session ne branche pas versEcran');
 });
 
-test('palette — les onze vignettes tiennent en deux rangées, sans défilement', () => {
-  // ⚠ ETHAN, LE 28/08 : « faire rentrer dans l'ui tous les bâtiments du bas,
-  // c'est-à-dire les deux rangées de boutons ». La palette avait des colonnes de
-  // 82 px et un défilement horizontal : la première vignette était coupée et
-  // deux bâtiments vivaient hors de l'écran.
+test('palette — UNE bande qui défile, la hauteur gardée, et l\'économie en tête', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ, PAS RETIRÉ, ET LE 28/08 AVAIT RAISON EN SON TEMPS.
+  // Il exigeait deux rangées et aucun défilement : « faire rentrer dans l'ui
+  // tous les bâtiments du bas ». Ethan tranche l'inverse le 03/09 : « faire une
+  // seule bande pour les bâtiments unités à construire + une barre de
+  // défilement. Garder la hauteur, comme ça les boutons seront gros. » La
+  // grandeur qu'on garde est la même — la HAUTEUR de la barre —, c'est la
+  // répartition dedans qui change.
   const posables = posablesDeLaBase(creerEtat(5));
   assert.equal(posables.length, Object.keys(BASE_BATIMENTS).length);
   assert.equal(posables.length, 11, 'le montage suppose onze bâtiments');
 
-  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  // ⚠ LE NOMBRE DE COLONNES SE CALCULE, IL NE S'ÉCRIT PAS. « 6 » marcherait
-  // aujourd'hui et mentirait au douzième bâtiment.
-  assert.match(ecran, /Math\.ceil\(posables\.length \/ 2\)/,
-    'le nombre de colonnes n\'est plus déduit du nombre de bâtiments');
-  assert.match(ecran, /gridTemplateColumns = `repeat\(\$\{colonnes\}/);
-  assert.equal(Math.ceil(posables.length / 2), 6, 'onze bâtiments font six colonnes');
+  // ⚠ LES QUATRE DE L'ÉCONOMIE D'ABORD, et l'ordre se lit dans la DONNÉE.
+  assert.deepEqual(posables.slice(0, 4).map((p) => p.id),
+    ['collecteur', 'raffinerie', 'centrale', 'accumulateur'],
+    'la palette ne commence plus par les quatre bâtiments d\'économie');
+  // Et c'est bien une PERMUTATION : ni un bâtiment en trop, ni un oublié.
+  assert.deepEqual([...ORDRE_PALETTE].sort(), Object.keys(BASE_BATIMENTS).sort(),
+    'ORDRE_PALETTE n\'est plus une permutation du roster');
+  assert.deepEqual(posables.map((p) => p.id), [...ORDRE_PALETTE],
+    'la palette ne suit plus ORDRE_PALETTE');
 
-  // Et la feuille ne défile plus horizontalement.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  // ⚠ LE JS NE CALCULE PLUS DE COLONNES. Tant que la palette devait TENIR, lui
+  // seul savait combien de vignettes il y avait ; maintenant qu'elle défile, la
+  // largeur est une constante d'écran. Laisser le calcul en place donnerait
+  // deux endroits qui décident de la même grandeur.
+  // ⚠ ELLE NOMME LA PALETTE, PAS LA PROPRIÉTÉ. Un `doesNotMatch` sur
+  // `gridTemplateColumns` tout court attrapait la GRILLE DES CASES, qui la pose
+  // légitimement depuis toujours : une garde qui tombe sur du code juste se
+  // fait retirer, pas resserrer, et c'est comme ça qu'on perd une garde.
+  assert.doesNotMatch(ecran, /bandeauPalette\.style\.gridTemplateColumns/,
+    'le JS pose encore les colonnes de la palette');
+  assert.doesNotMatch(ecran, /Math\.ceil\(posables\.length/,
+    'le JS calcule encore un nombre de rangées de palette');
+
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
   const bloc = feuille.slice(feuille.indexOf('#chantier-palette {'));
   const regle = bloc.slice(0, bloc.indexOf('}'));
-  assert.ok(!/overflow-x:\s*auto/.test(regle), 'la palette défile encore horizontalement');
-  assert.match(regle, /overflow:\s*hidden/);
-  assert.ok(!/grid-auto-columns/.test(regle), 'la palette fixe encore la largeur d\'une colonne');
+  assert.match(regle, /overflow-x:\s*auto/, 'la palette ne défile pas');
+  assert.match(regle, /grid-auto-flow:\s*column/, 'la palette n\'est pas en une bande');
+  assert.match(regle, /grid-template-rows:\s*1fr/, 'la palette a plus d\'une rangée');
+  assert.match(regle, /grid-auto-columns/, 'la largeur d\'une vignette n\'est pas fixée');
+
+  // ⚠⚠ ET LA HAUTEUR NE BOUGE PAS — c'est la moitié de la demande, et c'est
+  // elle qui rend les boutons gros. Une bande de 86 px moins 10 de `padding`
+  // laisse 76 px à une vignette, contre 38 quand elles étaient deux.
+  const hauteur = Number(regle.match(/flex:\s*0 0 (\d+)px/)[1]);
+  assert.equal(hauteur, 86, 'la palette a changé de hauteur : le chrome de 288 px bouge');
+  const remplissage = Number(regle.match(/padding:\s*(\d+)px/)[1]);
+  assert.equal(hauteur - 2 * remplissage, 76, 'la vignette ne fait plus 76 px de haut');
 });
 
 test('options — le banc reste atteignable après le déménagement de la version', () => {
@@ -2424,10 +2452,32 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
   // Le champ, lui, absorbe : il est `flex: 1` et peut rétrécir.
   assert.match(feuille, /#chantier-champ \{[^}]*flex: 1[^}]*min-height: 0/);
 
-  // ⚠ RIEN NE DÉFILE HORIZONTALEMENT. C'est ce qui coupait la première vignette
-  // de la palette avant le lot MISE EN PAGE.
-  for (const id of barres) {
+  // ⚠⚠ RIEN NE DÉFILE HORIZONTALEMENT, SAUF LA PALETTE, ET L'EXCEPTION SE
+  // NOMME. L'interdiction date du lot MISE EN PAGE : un défilement coupait la
+  // première vignette, et le joueur ne savait pas qu'il y avait autre chose.
+  // Ethan la lève le 03/09, pour la palette SEULE : « une seule bande […] + une
+  // barre de défilement. Garder la hauteur, comme ça les boutons seront gros. »
+  // Ce qu'il achète est mesurable — 38 px de vignette contre 76 —, et ce qu'il
+  // paie est que la palette ne montre plus tout d'un coup. ⚠ ET L'EXCEPTION
+  // PORTE SUR LES DEUX PALETTES DEPUIS LE 03/09 AU SOIR : « ui armée : une
+  // barre ». Celle de l'Offense montre quatorze unités dans les mêmes 86 px, et
+  // la demande est mot pour mot la même. L'interdiction reste TOTALE sur les
+  // quatre autres barres : une barre de compteurs qui défile cacherait un
+  // nombre, ce qu'aucun geste ne ferait réapparaître.
+  // ⚠⚠ ET LA BOUCLE BALAIE LES DEUX ÉCRANS DEPUIS CE LOT-CI. Elle ne portait que
+  // sur `barres`, c'est-à-dire sur le Chantier : `offense-contexte` et
+  // `offense-palette` n'ont jamais été atteints par l'interdiction, si bien
+  // qu'ajouter la seconde palette à l'exception ci-dessous ne changeait RIEN —
+  // mesuré. Une exception à une règle qui ne couvre pas la barre exceptée ne
+  // dit rien du tout. Les deux barres de l'Offense entrent donc dans le
+  // balayage, l'une exceptée et l'autre gardée pour de bon.
+  const DEFILE_A_L_HORIZONTALE = ['chantier-palette', 'offense-palette'];
+  for (const id of [...barres, ...barresOffense]) {
     const bloc = feuille.match(new RegExp(`#${id}\\s*\\{([^}]*)\\}`))[1];
+    if (DEFILE_A_L_HORIZONTALE.includes(id)) {
+      assert.match(bloc, /overflow-x:\s*auto/, `#${id} devait défiler, et ne défile pas`);
+      continue;
+    }
     assert.ok(!/overflow-x:\s*auto/.test(bloc), `#${id} défile horizontalement`);
     assert.ok(!/overflow-x:\s*scroll/.test(bloc), `#${id} défile horizontalement`);
   }
@@ -2805,6 +2855,52 @@ test('obstacles — l\'écran les dessine, et il sait dire qui ils ralentissent'
 // Le lot PREMIÈRE-COUCHE : les sprites entrent à l'écran
 // ---------------------------------------------------------------------------
 
+test('écran — le fond d\'atlas passe par une règle PARTAGÉE, jamais par élément', () => {
+  // ⚠⚠ C'EST LE CORRECTIF DU FREEZE, ET LA GARDE PORTE SUR LA CAUSE MESURÉE.
+  // Arriver sur l'écran de la base coûtait 3,1 s : Chromium décode l'atlas UNE
+  // FOIS PAR SUBSTITUTION DE `var()`, donc 670 fois pour 162 cases à quatre
+  // couches. Mesuré, en ne gardant que les n premières couches : 1 couche
+  // 533 ms · 2 couches 1 500 ms · 4 couches 3 133 ms — une droite à 0,78 s la
+  // couche. La même liste posée UNE fois dans une règle de feuille rend 33 ms,
+  // à capture IDENTIQUE À L'OCTET sur une partie épinglée.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  // ⚠ FALSIFIABLE : le montage doit d'abord prouver qu'il mesure quelque chose.
+  // Si plus personne ne posait de fond, toutes les interdictions ci-dessous
+  // seraient vraies sur un écran qui ne dessine rien.
+  const poses = (ecran.match(/poserLesAtlas\(/g) ?? []).length;
+  assert.ok(poses >= 4, `${poses} appels à poserLesAtlas : sa définition et ses trois poseurs`);
+
+  // LA RÉGRESSION A UNE FORME, ET C'EST CELLE-CI : une image d'atlas écrite
+  // dans le style d'un élément. Elle revenait par `poserFonds`, par
+  // `poserCouches` ou par le mur de contour — les trois passent désormais par
+  // la règle partagée.
+  assert.doesNotMatch(ecran, /style\.backgroundImage\s*=/,
+    'une image de fond est réécrite par élément : le freeze revient');
+
+  // ⚠⚠ ET L'ADRESSE SE LIT, ELLE NE S'ÉCRIT PAS. L'inliner ici la mettrait une
+  // SECONDE fois dans le livrable — 507 464 octets mesurés au lot
+  // SPRITES-ET-ZOOM — et le build refuserait une adresse assemblée à
+  // l'exécution. On demande à la page ce que `tools/build.js` y a mis, comme
+  // `garnirLesAtlas` le fait déjà pour le `src` d'une balise.
+  assert.doesNotMatch(ecran, /url\(/,
+    'l\'écran fabrique une adresse `url(` au lieu de lire celle du build');
+  assert.match(ecran, /getComputedStyle\(doc\.documentElement\)[\s\S]{0,400}?getPropertyValue\(/,
+    'l\'adresse de l\'atlas ne se lit plus sur le document');
+
+  // La séquence reste LISIBLE sur l'élément : `fondsPoses` relit ce qui a été
+  // posé pour empiler une couche de plus, et un nom de classe ne dit pas de
+  // quels atlas il est fait.
+  assert.match(ecran, /dataset\.fond\s*=/, 'la séquence d\'atlas n\'est plus retenue sur l\'élément');
+  assert.match(ecran, /function fondsPoses\(case_\)[\s\S]{0,600}?dataset\.fond/,
+    '`fondsPoses` ne relit plus la séquence là où elle est écrite');
+
+  // ⚠ UNE VARIABLE VIDE LÈVE, elle ne dessine pas du vide — même règle que
+  // `garnirLesAtlas` et qu'`executer` de `render/canvas2d.js`.
+  assert.match(ecran, /valeur === ''[\s\S]{0,200}?throw new RangeError/,
+    'une variable d\'atlas vide ne fait plus lever');
+});
+
 test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas DU MONDE', () => {
   // ⚠ GARDE DE TEXTE, comme ses voisines : le dépôt n'a ni jsdom ni navigateur,
   // ce qui touche le DOM ne s'automatise pas ici (CLAUDE.md §3). Ce qu'on PEUT
@@ -2826,8 +2922,18 @@ test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas DU MON
   // nœuds à créer et à retirer à chaque geste — quatre fois plus depuis que le
   // sol fait 2 × 2 — et il faudrait penser à les retirer, ce que la boucle de
   // remise à zéro ne fait pas.
-  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundImage/,
-    'les couches de fond ne passent plus par `poserFonds`');
+  // ⚠ LE MOT A CHANGÉ, PAS LA PROPRIÉTÉ GARDÉE. `poserFonds` écrivait
+  // `backgroundImage` en ligne ; depuis le correctif du freeze, l'image vient
+  // d'une CLASSE partagée et seules la taille et la position restent en ligne.
+  // Ce qu'on veut savoir est le même qu'avant — les couches sont un FOND, pas
+  // des enfants —, et les trois lignes ci-dessous le disent mieux que le nom de
+  // la propriété : `poserFonds` délègue l'image, et pose les deux autres.
+  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?poserLesAtlas\(/,
+    'les couches de fond ne passent plus par `poserLesAtlas`');
+  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundSize/,
+    '`poserFonds` ne pose plus la taille des couches');
+  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundPosition/,
+    '`poserFonds` ne pose plus la position des couches');
   assert.doesNotMatch(ecran, /createElement\('div'\)[\s\S]{0,120}?className = 'sol'/,
     'le sol est redevenu un élément enfant');
 

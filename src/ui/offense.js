@@ -24,7 +24,7 @@
 // `ui/chantier.js`, où elles sont déjà écrites et testées. Les reformuler ici
 // donnerait au joueur deux vocabulaires pour un seul geste.
 
-import { GRILLE, UNITES } from '../data/combat.js';
+import { GRILLE, ORDRE_CHASSIS, UNITES } from '../data/combat.js';
 import {
   NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau,
   messageSansBatiment, raisonDuVerrou,
@@ -162,6 +162,18 @@ export function messageEnMain(nom) {
  * ⚠ `nom.joueur`, JAMAIS `nom.ouvrage`. C'est un panneau du joueur : il y emploie
  * le vocabulaire d'une armée régulière (CLAUDE.md §4).
  *
+ * ⚠⚠ ET ELLE SORT GROUPÉE PAR CHÂSSIS — Ethan, 03/09 : « ui armée : une barre :
+ * d'abord l'infanterie puis véhicule et avion ». Le rang vient de
+ * `ORDRE_CHASSIS`, la clé de `UNITES[x].chassis`, et le tri est STABLE : à
+ * l'intérieur d'un groupe c'est l'ordre du roster qui fait foi, Ethan n'ayant
+ * donné l'ordre que des trois châssis. Un `sort` sur une clé numérique est
+ * stable en JS depuis ES2019, donc `map` puis `sort` suffit — pas besoin de
+ * porter l'indice.
+ *
+ * ⚠ ET LE TRI EST L'IDENTITÉ AUJOURD'HUI, MESURÉ : `UNITES` est déjà écrite
+ * dans cet ordre-là. Il ne bouge donc rien à l'écran ; ce qu'il change, c'est
+ * qu'une quinzième unité insérée au mauvais rang ne casse plus le groupement.
+ *
  * @param {object} etat état de jeu
  * @returns {Array<{id: string, nom: string, points: number,
  *   disponible: boolean, raison: string|null}>}
@@ -169,7 +181,15 @@ export function messageEnMain(nom) {
 export function unitesDeLaPalette(etat) {
   const niveau = niveauDeCommandement(etat, 'armee');
   const ouvertes = acquisesDe(etat, 'offense');
-  return Object.keys(UNITES).map((id) => {
+  const rangDuChassis = (id) => {
+    const rang = ORDRE_CHASSIS.indexOf(UNITES[id].chassis);
+    // ⚠ UN CHÂSSIS HORS TABLE LÈVE, IL NE SE RANGE PAS EN FIN DE LISTE. `-1`
+    // le mettrait EN TÊTE, donc devant l'infanterie : la palette mentirait sur
+    // l'ordre qu'Ethan a demandé, et rien ne le dirait.
+    if (rang < 0) throw new Error(`châssis inconnu de l'ordre de palette : ${UNITES[id].chassis}`);
+    return rang;
+  };
+  return Object.keys(UNITES).sort((a, b) => rangDuChassis(a) - rangDuChassis(b)).map((id) => {
     const unite = UNITES[id];
     // ⚠ LE VERROU SE DEMANDE À L'ARSENAL, IL NE SE RELIT PAS ICI. Ni
     // `apparition` (qui n'ouvre plus rien depuis le lot RECHERCHE) ni la liste
@@ -710,12 +730,13 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
   function peindrePalette(vue) {
     palette.textContent = '';
     vignettes.clear();
-    // ⚠ LE NOMBRE DE COLONNES SE CALCULE, IL NE S'ÉCRIT PAS. Deux rangées, et
-    // autant de colonnes qu'il en faut : écrire « 7 » marcherait aujourd'hui et
-    // mentirait à la quinzième unité. Même règle que la palette du Chantier
-    // depuis le lot MISE-EN-PAGE, et pour la même raison — rien ne défile
-    // horizontalement.
-    palette.style.gridTemplateColumns = `repeat(${Math.ceil(vue.palette.length / 2)}, minmax(0, 1fr))`;
+    // ⚠⚠ AUCUNE COLONNE N'EST ÉCRITE ICI, ET C'EST L'INVERSE DU LOT
+    // MISE-EN-PAGE. Tant que la palette devait TENIR, seul le JS savait combien
+    // de vignettes il y avait, donc lui seul pouvait poser le nombre de
+    // colonnes. Depuis qu'elle DÉFILE — Ethan, 03/09 : « ui armée : une barre »
+    // —, la largeur d'une colonne est une constante de la feuille et leur
+    // nombre n'a plus à être connu de personne. Même geste que la palette du
+    // Chantier, le même jour et pour la même raison.
     for (const unite of vue.palette) {
       const bouton = doc.createElement('button');
       bouton.type = 'button';
