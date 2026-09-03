@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.77.0 · build 79.
+Dernière révision : **03/09/2026**, version 0.78.0 · build 80.
 
 ---
 
@@ -41,8 +41,118 @@ Dernière révision : **03/09/2026**, version 0.77.0 · build 79.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot RETOURS-DU-03-SOIR), à confronter :**
-`npm test` → **964 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot FREEZE-ET-PALETTE), à confronter :**
+`npm test` → **966 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 353 939 octets**, 0 référence externe.
+⚠⚠ **QUATRE RETOURS D'ETHAN, ET LE PREMIER EST UNE CORRECTION DE MA LECTURE.**
+03/09 : « Claude confond monter le plafond des niveaux et niveau unités » ·
+« Ui base : faire une seule bande pour les bâtiments unités à construire + une
+barre de défilement. Garder la hauteur, comme ça les boutons seront gros. Pour
+les bâtiments, mettre le collecteur, raffinerie, centrale, accumulateur en
+1er » · « Toutes les unités n'ont pas la même vitesse de déplacement
+normalement » · « Freeze quand on arrive sur la base ou défense. depuis une
+autres fenêtres ». Coût **+2 952 octets**, aucune image n'entre — **25 `data:`
+avant, 25 après**. Borne T10 **inchangée à 3 400 000**, marge **46 061 octets,
+1,37 %** : la plus mince du dépôt.
+⚠⚠ **LE FREEZE ÉTAIT RÉEL, IL VALAIT TROIS SECONDES, ET IL SE REPRODUIT.**
+Mesuré dans Chromium, viewport 360 × 720 : arriver sur l'écran de la base depuis
+un autre écran coûtait **3 170 ms**, quatre fois de suite, quand aller sur le
+Monde en coûte 33. Ce n'était pas un coût de premier affichage.
+⚠⚠ **ET CE N'EST NI LE JS, NI CE QUE J'AVAIS LIVRÉ LA VEILLE.** Le gestionnaire
+du clic prend **0,4 ms** ; tout le reste est du RENDU. **Trois pistes mesurées
+et écartées** : le sol décoratif de `#chantier-defile` (le retirer entièrement
+laisse 3 150 ms — donc le lot RETOURS-DU-03-SOIR n'y est pour rien),
+`image-rendering: pixelated` (le passer à `auto` laisse 3 150 ms), et remplacer
+le `display: none` du masquage par `visibility: hidden` (1 533 ms — la moitié,
+pour un changement qui toucherait les sept écrans).
+⚠⚠ **LA CAUSE EST `var()` DANS `background-image`, ET ELLE SE COMPTE PAR
+OCCURRENCE.** En ne gardant que les n premières couches des 162 cases :
+**1 couche 533 ms · 2 couches 1 500 ms · 4 couches 3 133 ms** — une droite à
+**0,78 s la couche**. Chromium ne partage pas l'image entre deux substitutions
+de `var()` : il DÉCODE l'atlas une fois par couche et par élément, soit **670
+décodages** d'un fichier de 1024 × 1024 pour un seul affichage de la grille.
+Poser la même liste en `url()` littéral rend 283 ms — l'écart n'est pas la
+taille, c'est le partage.
+⚠⚠ **LE REMÈDE EST UNE RÈGLE DE FEUILLE PARTAGÉE, ET IL REND 3 170 ms → 33 ms.**
+`poserLesAtlas` mint une CLASSE par SÉQUENCE d'atlas et pose la liste d'adresses
+UNE FOIS dans une règle ; les éléments ne portent plus qu'un nom de classe. Le
+nombre de classes est celui des FORMES de pile — sol seul, sol et champ, socle
+et tourelle —, pas celui des cases.
+⚠⚠ **ET LE RENDU EST IDENTIQUE À L'OCTET, SUR UNE PARTIE ÉPINGLÉE.** Première
+comparaison : 33,4 % des octets différaient — **et c'était mon protocole**, pas
+le code : la graine change à chaque partie neuve, donc deux chargements du MÊME
+livrable diffèrent sur les 162 cases. En rejouant la même sauvegarde dans les
+deux builds : **0 case différente sur 162, captures identiques à l'octet.**
+⚠ **L'ADRESSE SE LIT, ELLE NE S'ÉCRIT PAS.** `url(` n'apparaît nulle part dans
+`ui/chantier.js` : on demande à la page ce que `tools/build.js` a mis dans la
+variable, comme `garnirLesAtlas` le fait déjà pour un `src`. L'écrire
+l'inlinerait une SECONDE fois — 507 464 octets mesurés au lot SPRITES-ET-ZOOM —
+et la poser en ligne sur chaque élément mettrait le base64 dans 670 attributs
+`style`, soit **~190 Mio** de texte dans le DOM.
+⚠ **`node --check` NE PROUVE QUE LA SYNTAXE, ET IL L'A RAPPELÉ.** La fonction de
+plafond a d'abord été insérée À L'INTÉRIEUR de `verifierNiveau` : JS valide,
+`node --check` vert, et vingt-huit tests rouges sur « is not defined ».
+⚠⚠ **LA PALETTE PASSE À UNE SEULE BANDE, ET C'EST L'INVERSE DU 28/08.** Ce
+jour-là elle était passée de colonnes défilantes à DEUX rangées qui tiennent
+(« faire rentrer dans l'ui tous les bâtiments du bas ») ; le motif était juste
+et avait un prix qu'on ne mesurait pas — dans 86 px, deux rangées laissent
+**38 px** par vignette, sprite et libellé compris, et la bande Défense en porte
+dix-sept. Une seule rangée en laisse **76**.
+⚠ **LA HAUTEUR NE BOUGE PAS, ET C'EST LA MOITIÉ DE LA DEMANDE.**
+`flex: 0 0 86px` est inchangé, donc les **288 px** de chrome que
+`chantier.test.js` somme ne bougent pas non plus.
+⚠ **ET L'INTERDICTION DE DÉFILER HORIZONTALEMENT NOMME SON EXCEPTION**, plutôt
+que d'être retirée : elle reste TOTALE sur les cinq autres barres fixes — une
+barre de compteurs qui défile cacherait un nombre que rien ne ferait
+réapparaître. La largeur d'une colonne quitte le JS pour la feuille : tant que
+la palette devait TENIR, seul le JS savait combien de vignettes il y avait.
+⚠ **`ORDRE_PALETTE` ENTRE DANS `data/base.js`, ET C'EST UNE TABLE, PAS UN TRI.**
+Collecteur, raffinerie, centrale, accumulateur d'abord — les quatre de
+l'économie, ceux que la chaîne du tutoriel demande en premier et qui étaient en
+huitième à onzième position. Aucune clé du roster ne dit « ce bâtiment vient
+tôt » ; en inventer une pour pouvoir trier ferait une donnée de calibrage qui
+n'en est pas une. Un test exige que ce soit une **permutation exacte** du
+roster, et l'ordre de `BASE_BATIMENTS` n'est pas touché — le réordonner aurait
+déplacé tout ce qui l'énumère.
+⚠⚠ **« CLAUDE CONFOND LE PLAFOND ET LE NIVEAU » — IL A RAISON, ET LA CONFUSION
+TENAIT EN UN MOT.** Les deux éditeurs portaient UN champ `niveau` qui jouait
+DEUX rôles sans le dire : argument de `budgetDuNiveau`, où il désigne le NIVEAU
+DU BÂTIMENT de commandement, et niveau écrit sur chaque pièce posée. Les deux
+coïncidaient au banc, où un seul curseur les réglait ensemble — c'est ce qui l'a
+caché.
+⚠⚠ **ET LA RÈGLE ÉTAIT DÉJÀ ÉCRITE DANS LA DONNÉE, SANS ÊTRE APPLIQUÉE.**
+`POINTS_ARMEE` de `data/sites.js` dit depuis toujours : « chaque budget est
+adossé à son bâtiment, **qui fixe aussi le niveau maximal des unités de son
+côté** ». C'est un PLAFOND, exactement comme le Chantier en pose un sur les
+bâtiments. `niveauDesPieces` entre dans les deux éditeurs, le plafond LÈVE quand
+il est franchi, et **le défaut vaut le plafond** : rien ne bouge pour un
+appelant existant.
+⚠ **CE QUI N'EST TOUJOURS PAS ARBITRÉ : COMMENT LE JOUEUR CHOISIT LE NIVEAU
+D'UNE PIÈCE.** Le jeu pose au niveau 1 et rien ne le monte. Ce lot NOMME les
+deux grandeurs et fait appliquer la borne ; il n'invente pas la mécanique.
+⚠⚠ **LES VITESSES SONT DÉJÀ DIFFÉRENCIÉES, ET ELLES MORDENT — MESURÉ.** Quatre
+valeurs dans `UNITES` : **60 (six unités) · 90 (deux) · 120 (cinq) · 240 (une)**,
+et `deplacement` ajoute `p.vitesseMilli` par tick. Mesuré sur un combat monté :
+les trois groupes avancent de **60, 90 et 120 milli-cases en un tick**, soit
+exactement la table. ⚠ Et la table est FIDÈLE au §6 de
+`RELEVE-TA-COURBES-2.md`, ligne par ligne : si six unités partagent 60, c'est
+que le relevé le dit. Les re-répartir serait un arbitrage de calibrage, et il
+revient à Ethan. **Rien n'a été touché.**
+⚠ **UNE CHOSE DU RELEVÉ N'EST PAS IMPLÉMENTÉE, ET ELLE EST SANS OBJET** : « la
+vitesse passe en ×2/3 en défense » (§3). Aucun défenseur ne bouge —
+`deplacement` écarte tout ce qui n'est pas `camp === 'attaque'` —, donc la
+transformation n'aurait rien à multiplier.
+⚠ **NEUF FALSIFICATIONS, NEUF CHUTES** — le mur repassé en style, l'adresse
+écrite au lieu d'être lue, `fondsPoses` relisant le style, la pièce reprenant le
+niveau du bâtiment, le plafond désarmé, le budget suivant la pièce, plus les
+trois de la palette.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Aucun champ n'entre dans
+l'état : un fond partagé, une barre qui défile et un paramètre d'éditeur.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le
+lot ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot RETOURS-DU-03-SOIR :**
+`npm test` → 964 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 350 987 octets**, 0 référence externe.
 ⚠⚠ **TROIS RETOURS D'ETHAN SUR CAPTURES, ET UN QUATRIÈME EN COURS DE ROUTE.**
 03/09 au soir : « 1. remplir les murs jusqu'en bas et rajouter tuiles terrain

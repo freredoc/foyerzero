@@ -32,6 +32,7 @@ import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
 import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
+  ORDRE_PALETTE,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { majorationsDeProduction } from '../sim/poi.js';
@@ -1561,7 +1562,12 @@ export function lignesDuPanneau(apercu) {
 export function posablesDeLaBase(etat) {
   const laBase = baseCourante(etat);
   const poses = new Set(laBase.disposition.map((b) => b.id));
-  return Object.entries(BASE_BATIMENTS)
+  // ⚠ L'ORDRE VIENT DE `ORDRE_PALETTE`, PAS DE LA TABLE. Ethan, 03/09 : les
+  // quatre bâtiments d'économie d'abord. Trier ici sur un critère deviné —
+  // la classe de coût, la famille — donnerait un ordre que personne n'a
+  // demandé et qui changerait au premier ajustement d'équilibrage.
+  return ORDRE_PALETTE
+    .map((id) => [id, BASE_BATIMENTS[id]])
     .map(([id, def]) => ({
       id,
       nom: def.nom.joueur,
@@ -1973,6 +1979,129 @@ function cle(rangee, colonne) {
 }
 
 /**
+ * Une CLASSE par séquence d'atlas, et une seule règle de feuille par classe.
+ *
+ * ⚠⚠ C'EST LE CORRECTIF DU FREEZE D'ETHAN, ET LA CAUSE EST MESURÉE. Arriver sur
+ * l'écran de la base depuis un autre écran coûtait **3,1 SECONDES**, à chaque
+ * fois. Profilé dans Chromium : le gestionnaire du clic prend **0,4 ms**, tout
+ * le reste est du RENDU. En vidant les fonds des cases, la bascule retombe à
+ * 33 ms — donc le coût est le fond, et rien d'autre.
+ *
+ * ⚠⚠ ET IL EST PAR OCCURRENCE DE `var()`, PAS PAR IMAGE. Mesuré en ne gardant
+ * que les n premières couches des 162 cases : **1 couche 533 ms · 2 couches
+ * 1 500 ms · 4 couches 3 133 ms** — une droite à 0,78 s la couche. Chromium ne
+ * partage pas l'image entre deux substitutions de `var()` : il la DÉCODE une
+ * fois par couche et par élément, soit 670 décodages d'un atlas de 1024 × 1024
+ * pour un seul affichage de la grille.
+ *
+ * ⚠⚠ TROIS PISTES ONT ÉTÉ MESURÉES ET ÉCARTÉES avant celle-ci, et il faut le
+ * savoir pour ne pas les rouvrir : le sol décoratif de `#chantier-defile` (le
+ * retirer entièrement laisse 3,15 s), `image-rendering: pixelated` (le passer à
+ * `auto` laisse 3,15 s), et remplacer le `display: none` du masquage d'écran
+ * par `visibility: hidden` (1,53 s — la moitié, pour un changement qui touche
+ * les sept écrans).
+ *
+ * ⚠⚠ CE QUI MARCHE : la même liste d'adresses posée UNE FOIS dans une règle de
+ * feuille, les éléments ne portant plus qu'une classe. Mesuré **3 170 ms →
+ * 33 ms**, à rendu identique. L'image est partagée, donc décodée une fois.
+ *
+ * ⚠ ET L'ADRESSE SE LIT, ELLE NE S'ÉCRIT PAS. `url(` n'apparaît nulle part dans
+ * ce fichier : on demande à la page la valeur que `tools/build.js` a mise dans
+ * la variable, exactement comme `garnirLesAtlas` le fait déjà pour le `src`
+ * d'une balise. Écrire l'adresse ici l'inlinerait une SECONDE fois — 507 464
+ * octets mesurés au lot SPRITES-ET-ZOOM — et la poser en ligne sur chaque
+ * élément mettrait le base64 dans 670 attributs `style`, soit ~190 Mio de texte
+ * dans le DOM. C'est le seul chemin qui partage sans recopier.
+ */
+const CLASSES_DE_FOND = new Map();
+const FEUILLES_DE_FOND = new WeakMap();
+
+/** La feuille de style où vivent les règles de fond, une par document. */
+function feuilleDesFonds(doc) {
+  const connue = FEUILLES_DE_FOND.get(doc);
+  if (connue !== undefined) return connue;
+  const feuille = doc.createElement('style');
+  feuille.id = 'fonds-datlas';
+  doc.head.append(feuille);
+  FEUILLES_DE_FOND.set(doc, feuille);
+  return feuille;
+}
+
+/**
+ * Le nom de la variable CSS derrière un `var(--x)`.
+ *
+ * ⚠ ELLE LIT `VARIABLE_DATLAS` À L'ENVERS PLUTÔT QUE DE PORTER UNE SECONDE
+ * TABLE de noms nus. Deux tables des mêmes atlas divergeraient au premier
+ * ajout, et la divergence se lirait comme un sprite manquant.
+ *
+ * @param {string} appel une valeur de `VARIABLE_DATLAS`
+ * @returns {string}
+ */
+function variableDeLAppel(appel) {
+  const ouvre = appel.indexOf('(');
+  const ferme = appel.lastIndexOf(')');
+  if (!appel.startsWith('var(') || ferme <= ouvre) {
+    throw new RangeError(`chantier : « ${appel} » n'est pas un appel de variable`);
+  }
+  return appel.slice(ouvre + 1, ferme).trim();
+}
+
+/**
+ * La classe qui porte cette séquence d'atlas, en la créant au besoin.
+ *
+ * ⚠ LA CLÉ EST LA SÉQUENCE ELLE-MÊME, donc le nombre de classes est celui des
+ * FORMES de pile — sol seul, sol et champ, socle et tourelle — et pas celui des
+ * cases. Une grille entière n'en demande qu'une poignée.
+ *
+ * @param {Document} doc
+ * @param {string[]} appels valeurs de `VARIABLE_DATLAS`, de la plus HAUTE à la plus basse
+ * @returns {string} le nom de la classe
+ */
+function classeDeFond(doc, appels) {
+  const cle = appels.join(', ');
+  const connue = CLASSES_DE_FOND.get(cle);
+  if (connue !== undefined) return connue;
+  const style = doc.defaultView.getComputedStyle(doc.documentElement);
+  const adresses = appels.map((appel) => {
+    const valeur = style.getPropertyValue(variableDeLAppel(appel)).trim();
+    // ⚠ ON LÈVE PLUTÔT QUE DE DESSINER DU VIDE — même règle que `garnirLesAtlas`
+    // et qu'`executer` de `render/canvas2d.js` : « une unité invisible est un
+    // défaut qu'on doit voir ».
+    if (valeur === '') {
+      throw new RangeError(`chantier : la variable « ${variableDeLAppel(appel)} » est vide`);
+    }
+    return valeur;
+  });
+  const nom = `fond-${CLASSES_DE_FOND.size}`;
+  feuilleDesFonds(doc).append(
+    doc.createTextNode(`.${nom}{background-image:${adresses.join(',')};}`),
+  );
+  CLASSES_DE_FOND.set(cle, nom);
+  return nom;
+}
+
+/**
+ * Pose la séquence d'atlas d'un élément, par sa classe.
+ *
+ * ⚠ LA SÉQUENCE RESTE LISIBLE SUR L'ÉLÉMENT, dans `dataset.fond`. `fondsPoses`
+ * relit ce qui a été posé pour empiler une couche de plus, et il le lisait dans
+ * `style.backgroundImage`, qui ne porte plus rien. Un nom de classe ne dit pas
+ * de quels atlas il est fait ; la séquence, si.
+ *
+ * @param {HTMLElement} element
+ * @param {string[]} appels de la plus HAUTE couche à la plus basse
+ */
+function poserLesAtlas(element, appels) {
+  const doc = element.ownerDocument;
+  const nom = classeDeFond(doc, appels);
+  const ancienne = element.dataset.classeFond;
+  if (ancienne !== undefined && ancienne !== nom) element.classList.remove(ancienne);
+  element.classList.add(nom);
+  element.dataset.classeFond = nom;
+  element.dataset.fond = appels.join(', ');
+}
+
+/**
  * Empile des cellules d'atlas en fond d'une case, la première par-dessus.
  *
  * CSS accepte plusieurs couches de fond : `background-image: A, B` dessine A
@@ -1994,7 +2123,7 @@ function cle(rangee, colonne) {
  *   de la plus haute à la plus basse
  */
 function poserFonds(case_, fonds) {
-  case_.style.backgroundImage = fonds.map((f) => f.image).join(', ');
+  poserLesAtlas(case_, fonds.map((f) => f.image));
   case_.style.backgroundSize = fonds.map((f) => f.taille).join(', ');
   case_.style.backgroundPosition = fonds.map((f) => f.position).join(', ');
 }
@@ -2073,7 +2202,7 @@ export function poserCouches(element, couches) {
   if (images.length !== tailles.length || images.length !== positions.length) {
     throw new RangeError('chantier : les trois listes de fond n\'ont pas la même longueur');
   }
-  element.style.backgroundImage = images.join(', ');
+  poserLesAtlas(element, images);
   element.style.backgroundSize = tailles.join(', ');
   element.style.backgroundPosition = positions.join(', ');
 }
@@ -2096,7 +2225,7 @@ function fondsPoses(case_) {
   // taille et la position remettrait les quatre couches de sol sous l'atlas de
   // la base, qui n'a pas 256 cellules — le champ dessinerait un morceau
   // d'obstacle, et aucune longueur de liste ne serait fausse.
-  const images = case_.style.backgroundImage.split(', ').filter(Boolean);
+  const images = (case_.dataset.fond ?? '').split(', ').filter(Boolean);
   const tailles = case_.style.backgroundSize.split(', ').filter(Boolean);
   const positions = case_.style.backgroundPosition.split(', ').filter(Boolean);
   return tailles.map((taille, i) => ({ image: images[i], taille, position: positions[i] }));
@@ -2529,7 +2658,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     mur.style.top = `calc(var(--case-cote) * ${tuile.y})`;
     mur.style.width = `calc(var(--case-cote) * ${tuile.l})`;
     mur.style.height = `calc(var(--case-cote) * ${tuile.h})`;
-    mur.style.backgroundImage = variable;
+    // ⚠ LE MUR PASSE PAR LA MÊME CLASSE PARTAGÉE QUE LES CASES. L'anneau pose
+    // 41 pièces depuis le lot RETOURS-DU-03-SOIR, donc 41 substitutions de
+    // `var()` de plus — mesuré à 0,78 s la couche sur 162 cases, soit environ
+    // 0,2 s ici. La règle est la même, et elle n'a aucune raison de s'arrêter
+    // aux cases.
+    poserLesAtlas(mur, [variable]);
     contour.appendChild(mur);
   }
   grille.prepend(contour);
@@ -3073,14 +3207,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     // aurait divergé au premier ajustement de vignette.
     const terrain = TERRAINS[terrainCourant()];
     const posables = terrain.posables(etat);
-    // ⚠ AUTANT DE COLONNES QU'IL EN FAUT POUR DEUX RANGÉES, et le nombre se
-    // CALCULE. Ethan : « faire rentrer dans l'ui tous les bâtiments du bas,
-    // c'est-à-dire les deux rangées de boutons ». La palette avait des colonnes
-    // de 82 px et défilait, donc la première vignette était coupée et deux
-    // bâtiments vivaient hors de l'écran. Écrire « 6 » ici marcherait
-    // aujourd'hui et mentirait au douzième bâtiment.
-    const colonnes = Math.ceil(posables.length / 2);
-    bandeauPalette.style.gridTemplateColumns = `repeat(${colonnes}, minmax(0, 1fr))`;
+    // ⚠⚠ UNE SEULE BANDE ET UN DÉFILEMENT — ARBITRÉ PAR ETHAN LE 03/09, ET
+    // C'EST L'INVERSE DU 28/08. « Faire une seule bande pour les bâtiments
+    // unités à construire + une barre de défilement. Garder la hauteur, comme
+    // ça les boutons seront gros. » Deux rangées dans 86 px donnaient des
+    // vignettes de 38 px de haut ; une seule en donne 76, et ce qui ne tient
+    // pas se défile au lieu d'être comprimé. La largeur d'une colonne et le
+    // défilement vivent donc dans la FEUILLE — plus rien à calculer ici.
     // Un unique qu'on vient de poser ne quitte plus la palette, il s'y grise —
     // mais la sélection qui le désignait n'a plus d'objet et se défait, sans
     // quoi l'écran resterait en mode pose avec zéro case légale et sans rien

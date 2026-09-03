@@ -260,6 +260,33 @@ export const BASE_BATIMENTS = {
   },
 };
 
+/**
+ * L'ordre des vignettes dans la palette du bas.
+ *
+ * ⚠⚠ ARBITRÉ PAR ETHAN LE 03/09 : « pour les bâtiments, mettre le collecteur,
+ * raffinerie, centrale, accumulateur en 1er ». Ce sont les quatre de
+ * l'ÉCONOMIE, et ce sont ceux qu'une partie neuve pose en premier : la chaîne
+ * du tutoriel les demande dans cet ordre-là, et la palette les mettait en
+ * huitième, neuvième, dixième et onzième position — au bout du défilement,
+ * derrière sept bâtiments qu'on ne peut pas encore payer.
+ *
+ * ⚠ C'EST UNE TABLE ET PAS UN TRI. Aucune clé de `BASE_BATIMENTS` ne porte
+ * « à quel point ce bâtiment vient tôt » ; en inventer une pour pouvoir trier
+ * ferait une donnée de calibrage qui n'en est pas une. L'ordre est un choix
+ * d'écran, il s'écrit comme tel — et un test exige qu'il soit une PERMUTATION
+ * exacte du roster, ni un nom en trop, ni un oublié.
+ *
+ * ⚠ ET IL NE REMPLACE PAS L'ORDRE DE `BASE_BATIMENTS`. Réordonner la table
+ * elle-même aurait déplacé tout ce qui l'énumère — le générateur, les tests, la
+ * maquette — pour une décision qui ne concerne que la barre du bas.
+ */
+export const ORDRE_PALETTE = [
+  'collecteur', 'raffinerie', 'centrale', 'accumulateur',
+  'chantierDeConstruction', 'centreDeCommandement', 'qgDeDefense',
+  'complexeDeDefense', 'caserne', 'depotDeVehicules', 'aerodrome',
+];
+
+
 // ---------------------------------------------------------------------------
 // Emplacements — ce que le Chantier de construction ouvre
 // ---------------------------------------------------------------------------

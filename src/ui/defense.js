@@ -60,6 +60,40 @@ function verifierNiveau(niveau) {
   return niveau;
 }
 
+/**
+ * Le niveau des pièces qu'on pose, borné par celui du bâtiment.
+ *
+ * ⚠⚠ ETHAN, LE 03/09 : « Claude confond monter le plafond des niveaux et niveau
+ * unités. » Il a raison, et la confusion est ici : cet éditeur portait UN seul
+ * nombre, `niveau`, qui jouait DEUX rôles sans le dire — il servait
+ * d'argument à `budgetDuNiveau`, où il désigne le NIVEAU DU BÂTIMENT de
+ * commandement, et il s'écrivait tel quel sur chaque pièce posée, où il désigne
+ * le NIVEAU DE L'UNITÉ. Les deux coïncidaient au banc, où un seul curseur les
+ * réglait ensemble, si bien que rien ne le montrait.
+ *
+ * ⚠⚠ ET LA RÈGLE ÉTAIT DÉJÀ ÉCRITE DANS LA DONNÉE, sans être appliquée nulle
+ * part. `POINTS_ARMEE` de `data/sites.js` dit depuis toujours : « Chaque budget
+ * est adossé à son bâtiment, QUI FIXE AUSSI LE NIVEAU MAXIMAL DES UNITÉS DE SON
+ * CÔTÉ. » C'est un PLAFOND, exactement comme le Chantier en pose un sur les
+ * bâtiments — pas une valeur qu'on recopie sur la pièce.
+ *
+ * ⚠ LE DÉFAUT VAUT LE PLAFOND, DONC RIEN NE BOUGE AUJOURD'HUI. Le banc règle
+ * les deux d'un curseur et continue de le faire ; le jeu pose au niveau 1, qui
+ * est sous n'importe quel plafond. Ce lot NOMME les deux grandeurs et fait
+ * appliquer la borne ; il ne décide pas COMMENT le joueur choisira le niveau
+ * d'une pièce, ce qui n'est pas arbitré.
+ */
+function verifierNiveauDesPieces(niveauDuBatiment, niveauDesPieces) {
+  verifierNiveau(niveauDesPieces);
+  if (niveauDesPieces > niveauDuBatiment) {
+    throw new Error(
+      `defense : pièce de niveau ${niveauDesPieces} sous un bâtiment de niveau `
+      + `${niveauDuBatiment} — le bâtiment fixe le PLAFOND, il ne fixe pas le niveau`,
+    );
+  }
+  return niveauDesPieces;
+}
+
 function verifierCase(rangee, colonne) {
   if (!Number.isInteger(rangee) || rangee < PREMIERE_RANGEE || rangee > DERNIERE_RANGEE) {
     throw new Error(`defense : rangée ${rangee} hors de ${PREMIERE_RANGEE}…${DERNIERE_RANGEE}`);
@@ -113,8 +147,9 @@ export function defensesDisponibles(acquises) {
  * `poser`, `bilan` et `purger` restent des fonctions pures d'un seul argument.
  * `null` = aucun filtre (le banc), `[]` = rien d'acquis.
  */
-export function defenseVide(niveau, obstacles = [], acquises = null) {
+export function defenseVide(niveau, obstacles = [], acquises = null, niveauDesPieces = niveau) {
   verifierNiveau(niveau);
+  verifierNiveauDesPieces(niveau, niveauDesPieces);
   const interdites = new Set();
   for (const o of obstacles) {
     if (o.rangee >= PREMIERE_RANGEE && o.rangee <= DERNIERE_RANGEE) {
@@ -123,6 +158,7 @@ export function defenseVide(niveau, obstacles = [], acquises = null) {
   }
   return {
     niveau,
+    niveauDesPieces,
     interdites: [...interdites],
     acquises,
     cases: Array.from({ length: NB_RANGEES }, () => Array.from({ length: NB_COLONNES }, () => null)),
@@ -133,6 +169,7 @@ export function defenseVide(niveau, obstacles = [], acquises = null) {
 function copier(etat) {
   return {
     niveau: etat.niveau,
+    niveauDesPieces: etat.niveauDesPieces,
     interdites: [...etat.interdites],
     acquises: etat.acquises ?? null,
     cases: etat.cases.map((rangee) => [...rangee]),
@@ -212,7 +249,12 @@ export function enDefenseurs(etat) {
   for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
     for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
       const id = etat.cases[rangee - PREMIERE_RANGEE][colonne - 1];
-      if (id !== null) liste.push({ id, rangee, colonne, niveau: etat.niveau });
+      // ⚠ LE NIVEAU D'UNE PIÈCE EST CELUI DES PIÈCES, PAS CELUI DU BÂTIMENT.
+      // C'est la correction d'Ethan du 03/09, et c'est le seul endroit du
+      // fichier où les deux se touchaient : le bâtiment fixe le PLAFOND, la
+      // pièce porte son propre niveau. Le défaut vaut le plafond, donc ce qui
+      // sort d'ici est identique tant que personne ne les dissocie.
+      if (id !== null) liste.push({ id, rangee, colonne, niveau: etat.niveauDesPieces });
     }
   }
   return liste;

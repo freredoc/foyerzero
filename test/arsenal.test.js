@@ -5,6 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { defenseVide } from '../src/ui/defense.js';
 
 import { UNITES, GRILLE } from '../src/data/combat.js';
 import { POINTS_ARMEE } from '../src/data/sites.js';
@@ -613,4 +614,47 @@ test('§10 — arsenal.js n\'importe ni page ni surface de dessin, et ne tire au
     const texte = sansCommentaires(readFileSync(join(racine, 'src', module), 'utf8'));
     assert.ok(!texte.includes('Math.random'), `${module} emploie Math.random`);
   }
+});
+
+test('T18 — le bâtiment fixe le PLAFOND des pièces, il ne fixe pas leur niveau', () => {
+  // ⚠⚠ ETHAN, LE 03/09 : « Claude confond monter le plafond des niveaux et
+  // niveau unités. » La confusion était réelle et tenait en un mot : l'éditeur
+  // portait UN champ `niveau` qui servait à la fois d'argument à
+  // `budgetDuNiveau` — où il désigne le NIVEAU DU BÂTIMENT de commandement — et
+  // de niveau écrit sur chaque pièce posée. Deux grandeurs, un nom.
+  //
+  // ⚠ ET LA RÈGLE ÉTAIT DÉJÀ DANS LA DONNÉE : `POINTS_ARMEE` dit « chaque
+  // budget est adossé à son bâtiment, qui fixe aussi le niveau maximal des
+  // unités de son côté ». Un PLAFOND, comme le Chantier en pose un sur les
+  // bâtiments. Elle n'était appliquée nulle part.
+
+  // FALSIFIABLE : le montage doit d'abord prouver que les deux grandeurs
+  // peuvent différer. Tant qu'un seul nombre les portait, tout ce qui suit
+  // était vrai sans rien garder.
+  const dissocie = arsenalVide(20, null, 3);
+  assert.equal(dissocie.niveau, 20, 'le niveau du bâtiment ne se retient plus');
+  assert.equal(dissocie.niveauDesPieces, 3, 'le niveau des pièces ne se retient plus');
+  assert.notEqual(dissocie.niveau, dissocie.niveauDesPieces);
+
+  // Le budget suit le BÂTIMENT, jamais la pièce.
+  assert.equal(bilan(dissocie).budgetPoints, budgetDuNiveau(20),
+    'le budget s\'est mis à suivre le niveau des pièces');
+
+  // Et la pièce posée porte SON niveau, pas celui du bâtiment.
+  const pose = poser(dissocie, { vague: 1, colonne: 1, id: 'meute' });
+  const vagues = enVagues(pose);
+  assert.equal(vagues[0][0].niveau, 3, 'la pièce porte encore le niveau du bâtiment');
+
+  // ⚠ LE DÉFAUT VAUT LE PLAFOND, DONC RIEN NE BOUGE POUR LES APPELANTS. Le banc
+  // règle les deux d'un curseur, et c'est ce qui a caché la confusion.
+  assert.equal(arsenalVide(12).niveauDesPieces, 12, 'le défaut ne vaut plus le plafond');
+  assert.equal(defenseVide(12).niveauDesPieces, 12, 'le défaut ne vaut plus le plafond');
+
+  // LE PLAFOND MORD, des deux côtés, et le message dit lequel est lequel.
+  assert.throws(() => arsenalVide(5, null, 6), /fixe le PLAFOND/,
+    'une pièce au-dessus du bâtiment passe encore en offense');
+  assert.throws(() => defenseVide(5, [], null, 6), /fixe le PLAFOND/,
+    'une pièce au-dessus du bâtiment passe encore en défense');
+  // Et l'égalité est permise : le plafond est atteint, pas dépassé.
+  assert.equal(arsenalVide(5, null, 5).niveauDesPieces, 5);
 });
