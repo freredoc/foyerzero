@@ -1796,6 +1796,15 @@
            aujourd'hui, le modèle ne sachant pas qu'une base peut faire plus
            d'une case. Elles pèsent 37 038 octets et le rapport le dit. -->
       <img id="monde-emblemes" alt="" hidden src="%ATLAS_CARTE%">
+      <!-- ⚠⚠ LES LIMITES DE TERRITOIRE — lot TERRITOIRE, 03/09. Ethan : « je
+           t'ai envoyé aussi un zip avec des bordures de territoire pour la
+           carte du monde ». La frontière était tracée au `strokeStyle` depuis le
+           31/08 ; elle est maintenant faite de sprites, qui ont un dedans et un
+           dehors. Vingt-six cellules — treize par camp — pour 19 178 octets.
+           Même chemin que l'atlas des emblèmes juste au-dessus : le marqueur en
+           `src`, parce que `drawImage` veut un élément et qu'aucune règle CSS
+           ne s'en sert. -->
+      <img id="monde-limites" alt="" hidden src="%ATLAS_LIMITE%">
       <img id="monde-base-2x2" alt="" hidden src="%BASE_O_2X2%">
       <img id="monde-base-3x3" alt="" hidden src="%BASE_O_3X3%">
       <!-- ⚠⚠ LES ATLAS DU CHAMP DE BATAILLE SONT DES `<img>`, PAS DES VARIABLES

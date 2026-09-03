@@ -313,6 +313,37 @@
         "def_o_ronce": "2e90024144edc1792ab34dee30c6f3cb6ec8094619d3440d27c50f173cebc2ea"
       }
     },
+    "limite": {
+      "atlas": "b5df6d9bbfa302a4df16d486d46dcf51c11ec1dad2f587e37cac44656eee93eb",
+      "sprites": {
+        "limite_j_carre": "5bf067a6a008169e329ad0ab4cb94b6194d6011f265c6bf3086cd4ec10a64fa8",
+        "limite_j_coin_es": "28b6b79071f02f5c41753f2590bd680abce9a42318c4f4d573a59cc81d33b349",
+        "limite_j_coin_ne": "112a6e043138c69f98ab6a6fab10d60d7b39930056354b5ff80fbae6e206cf47",
+        "limite_j_coin_no": "8e7592eb6eb5a7e35a30f87584a3788f78249d081627a9874c622dda64e4f799",
+        "limite_j_coin_so": "819eb0adb8984e30c38321967859c87989534daf9bf04e25aa979f0430f921ac",
+        "limite_j_trait_e": "035f1a03135b242bed5ad1716b82f4b71815c527f2d7e9787db5c32473f25192",
+        "limite_j_trait_n": "7f10a5c4ac7c07ed3bb092a75cf8265e0d5839c189440251ed50996cbfcd7ce3",
+        "limite_j_trait_o": "6158aed60b218a78975b5fc71ddd509548257845de714a157af51a9cb2de6eb0",
+        "limite_j_trait_s": "a4cb961f520fa2b9b88c3e80b71d09a32a9613416ae329ab76452ae11633274e",
+        "limite_j_u_eso": "019d3a2c6ace458345b4072a7ca56d954a6bed0b806fa6309ea5b75bc8adbb73",
+        "limite_j_u_neo": "6581134172141c03b4bab334348c0ff3cbd69bd5e88c43a650b0fc8ffec0d8cc",
+        "limite_j_u_nes": "9d96a99b716e02b444a59b8b81e19c84a9924a04b2fada2d8d9f849c56bfab16",
+        "limite_j_u_nso": "884f0f951ad1ed2d1bf53993cd0b1d32efb95be77d4c39c0ac2d03e6902a12b3",
+        "limite_o_carre": "c69d44a79f454df6db347beb86fb980b485bd8d49dc41255b7c10cd716eb7021",
+        "limite_o_coin_es": "9261e742a595d251964db0e1dcefd425f2a1bea3f587eaa73c1643cf741e79a3",
+        "limite_o_coin_ne": "e01184d864c5adb78f6f11c7c99fce2c0a3301746095598787858f7a1fb5cd69",
+        "limite_o_coin_no": "093a5ad595c99930a48606220abe84042fe01b2ee4125613fd5115d317f86206",
+        "limite_o_coin_so": "2ed4efac419a8a68318c3332879941e1f88a488beb20a68ab98b69a393af31d9",
+        "limite_o_trait_e": "31e9a79bbae3cdb6cab5f4b75840d6deb769ce3818b688509d06bc59a9268061",
+        "limite_o_trait_n": "c640f8e7bcf0fad866d0448b8053d7dfccab6fbccebbd1b2ce70f95fa8783d3e",
+        "limite_o_trait_o": "2ccb0b63d5e1d3cdcd008e9533b72422a795b6e1198926b553945f1144a94b7f",
+        "limite_o_trait_s": "9ba0a2d8db4806142f9bb09251e1b92a44b1ffcce804940a1f6af950b37abb85",
+        "limite_o_u_eso": "f2fdfc7b5670becd9e400a5bb572135ec45f245e7870e589b9f7a2c3ab1b7a88",
+        "limite_o_u_neo": "ee05be0b02c4950d6ed5d5ffec24a60ac9bf4e88b02a9a55018a58cfd8e80a48",
+        "limite_o_u_nes": "a1004735243d63c82537ef6d888f9de926e5badb7cd5088462799b127580a75f",
+        "limite_o_u_nso": "32833f0cc2f308ac4bb809bf341177135abcecc4d8802dfab0f6d4f59d7a6601"
+      }
+    },
     "socle": {
       "atlas": "e755589a9b6ce7465449e7876f63f6ddbebce8ef50870465a925e7467d4403c9",
       "sprites": {

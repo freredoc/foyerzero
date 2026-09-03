@@ -110,6 +110,16 @@ FAMILLES = {
     # l'atlas de terrain de la carte du monde. Un atlas d'un seul sprite ne coud
     # rien.
     'carte': ('carte', 43, ('base_o_2x2', 'base_o_3x3')),
+    # ⚠⚠ LES LIMITES DE TERRITOIRE ENTRENT AU LOT TERRITOIRE (03/09), ET ELLES
+    # SONT DANS UN ATLAS ALORS QUE LES MURS DE CONTOUR N'Y SONT PAS. La
+    # différence n'est pas de nature, elle est de FORME : un mur fait 512 × 128,
+    # une limite fait 128 × 128. `coudre` exige des cellules carrées de `COTE`,
+    # et celles-ci en sont. Treize par camp — quatre traits, quatre coins,
+    # quatre U et un carré —, donc 26.
+    # ⚠ LE COIN RENTRANT (`angle_l` du zip) N'EST PAS PRODUIT, donc pas compté :
+    # le modèle par CASE de `sim/territoire.js` forme ses coins rentrants avec
+    # deux traits pleins de cases voisines. Voir `tools/limites.py`.
+    'limite': ('limite', 26, ()),
     # ⚠⚠ `bord/` N'EST PAS ICI, ET CE N'EST PAS UN OUBLI. Le mur de contour ne
     # tient pas dans une case : ses sprites font 512 × 64, 64 × 512 et 64 × 64
     # (arbitrage d'Ethan du 31/08, « divise par deux l'asset original […] le mur

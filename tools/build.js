@@ -185,6 +185,14 @@ const IMAGES_INLINE = [
   // d'un seul sprite ne coud rien de toute façon. Même forme que
   // `%ATLAS_TERRAIN%`, l'atlas du fond de carte, qui est hors des sept aussi.
   atlas('carte'),
+  // ⚠⚠ L'ATLAS DES LIMITES DE TERRITOIRE — lot TERRITOIRE, 03/09. Il est dans un
+  // atlas alors que les murs de contour n'y sont pas, et la différence est de
+  // FORME, pas de nature : une limite fait 128 × 128, un mur 512 × 128, et
+  // `coudre` exige des cellules carrées. Vingt-six cellules pour 19 178 octets —
+  // un dessin de limite est presque tout transparent.
+  // ⚠ IL NE SERT QU'AU CANEVAS DE L'ÉCRAN MONDE, donc pas de variable CSS : sa
+  // balise porte le marqueur en `src`, comme `monde-emblemes` juste à côté.
+  atlas('limite'),
   { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.png'], type: 'image/png' },
   { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.png'], type: 'image/png' },
   // ⚠ LE FOND DU BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour

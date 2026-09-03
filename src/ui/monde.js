@@ -50,6 +50,7 @@ import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
+import { dessinerLimiteDUneCase } from '../render/limite.js';
 import { baseCourante } from '../sim/base-courante.js';
 import { basculerVersLaBase } from '../sim/state.js';
 import { satellitesPresents } from '../sim/satellites.js';
@@ -615,16 +616,21 @@ export const TEINTES_TERRITOIRE = {
 };
 
 /**
- * L'épaisseur d'un trait de frontière, en pixels physiques.
+ * ⚠⚠ `epaisseurDeFrontiere` A ÉTÉ RETIRÉE AU LOT TERRITOIRE (03/09), ET SON
+ * TEST AVEC — c'est une assertion en moins, et elle se déclare.
  *
- * ⚠ ELLE SUIT LE CRAN, elle ne s'écrit pas en pixels. Un nombre fixe serait un
- * fil au cran 256 et un pâté au cran 32 — c'est le même raisonnement que
- * l'épaisseur des traits de voisinage du Chantier, qui est une fraction de case.
- * Le plancher à 1 existe parce qu'un trait de moins d'un pixel ne se dessine pas.
+ * Elle donnait l'épaisseur, en pixels, du trait de frontière tracé au
+ * `strokeStyle` depuis le 31/08 : `max(1, round(cran / 16))`. Depuis que la
+ * frontière est faite de SPRITES, il n'y a plus de trait, donc plus d'épaisseur
+ * à faire suivre le cran — un dessin de limite est posé à la taille de la case,
+ * et son épaisseur est celle que le dessin porte. Aucun appelant de production
+ * ne la lisait plus : seul son propre test l'atteignait encore, ce qui est la
+ * définition d'une fonction morte.
+ *
+ * ⚠ `TEINTES_TERRITOIRE` RESTE, ELLE. Le halo de la base attaquante et la flèche
+ * du raid s'en servent toujours, et leur test aussi.
  */
-export function epaisseurDeFrontiere(cran) {
-  return Math.max(1, Math.round(cran / 16));
-}
+
 
 /** La teinte du milieu d'une rampe : ce qu'on peint tant qu'une dalle manque. */
 export function teinteDAttente(rangee) {
@@ -707,6 +713,12 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // attendait déjà son atlas de terrain de cette façon ; on suit le précédent.
   let emblemes = null;
   let emblemesDemandes = false;
+  // ⚠ L'ATLAS DES LIMITES S'ATTEND COMME CELUI DES EMBLÈMES, et pour la même
+  // raison : `drawImage` veut une image DÉCODÉE, et une `<img>` avant décodage
+  // est blanche. Il ne se décode pas en pixels non plus — on ne fait que
+  // découper dedans.
+  let limites = null;
+  let limitesDemandees = false;
   // ⚠ LA GROSSE BASE EST UNE IMAGE À PART, PAS UNE CELLULE D'ATLAS. Elle couvre
   // trois cases de côté, donc 192 px à la grille 64, quand `coudre` exige des
   // cellules carrées à la taille de case — `tools/atlas.py` l'exclut nommément.
@@ -764,6 +776,19 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       return;
     }
     emblemes = image;
+    dessiner();
+  }
+
+  /** L'atlas des limites de territoire — même attente, même repli. */
+  function chargerLimites() {
+    if (limites !== null || limitesDemandees) return;
+    limitesDemandees = true;
+    const image = $('monde-limites');
+    if (!image.complete || image.naturalWidth === 0) {
+      image.addEventListener('load', () => { limitesDemandees = false; chargerLimites(); }, { once: true });
+      return;
+    }
+    limites = image;
     dessiner();
   }
 
@@ -1045,25 +1070,23 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     }));
     const bords = bordsDuTerritoire(carte);
     if (bords.length === 0) return;
-    const epaisseur = epaisseurDeFrontiere(pas);
-    ctx.lineWidth = epaisseur;
-    // ⚠ LE TRAIT SE POSE SUR LA LIGNE DE LA CASE, donc à un demi-pixel près : un
-    // `strokeRect` centre le trait sur le chemin, et un chemin sur un entier
-    // rendrait un trait à cheval, donc flou. On décale d'une demi-épaisseur.
-    const demi = epaisseur / 2;
-    for (const camp of [OUVRAGE, JOUEUR]) {
-      ctx.strokeStyle = TEINTES_TERRITOIRE[camp];
-      ctx.beginPath();
-      for (const bord of bords) {
-        if (bord.camp !== camp) continue;
-        const x = (bord.colonne - 1) * pas - ox;
-        const y = (bord.rangee - 1) * pas - oy;
-        if (bord.nord) { ctx.moveTo(x, y + demi); ctx.lineTo(x + pas, y + demi); }
-        if (bord.sud) { ctx.moveTo(x, y + pas - demi); ctx.lineTo(x + pas, y + pas - demi); }
-        if (bord.ouest) { ctx.moveTo(x + demi, y); ctx.lineTo(x + demi, y + pas); }
-        if (bord.est) { ctx.moveTo(x + pas - demi, y); ctx.lineTo(x + pas - demi, y + pas); }
+    // ⚠⚠ SANS L'ATLAS, ON NE DESSINE PLUS RIEN — ET C'EST UN CHOIX, PAS UN
+    // OUBLI. L'ancien repli était le trait au `strokeStyle` ; le garder aurait
+    // fait clignoter la carte au premier affichage, une frontière au trait
+    // remplacée un dixième de seconde plus tard par une frontière au sprite. Le
+    // décodage d'un atlas de 19 Kio prend une image ou deux, et `chargerLimites`
+    // redessine quand il arrive.
+    if (limites === null) return;
+    for (const bord of bords) {
+      // ⚠ LA GÉOMÉTRIE SE DEMANDE, ELLE NE SE CALCULE PAS ICI — la règle que
+      // `monde.test.js` tient depuis le lot RETOURS-DU-31, et qui a fait tomber
+      // le premier jet de ce lot-ci.
+      const pieces = dessinerLimiteDUneCase(
+        bord.camp, bord, (bord.colonne - 1) * pas - ox, (bord.rangee - 1) * pas - oy, pas,
+      );
+      for (const d of pieces) {
+        ctx.drawImage(limites, d.sx, d.sy, d.sCote, d.sCote, d.x, d.y, d.cote, d.cote);
       }
-      ctx.stroke();
     }
   }
 
@@ -1572,6 +1595,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     empreinteSatellites = empreinteDeLaCarte(etat);
     chargerAtlas();
     chargerEmblemes();
+    chargerLimites();
     chargerGrossesBases();
     dimensionner();
     if (premiere) centrerSur(baseCourante(etat).position);

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.74.0 · build 76.
+Dernière révision : **03/09/2026**, version 0.75.0 · build 77.
 
 ---
 
@@ -41,7 +41,118 @@ Dernière révision : **03/09/2026**, version 0.74.0 · build 76.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot MURS-OUVRAGE), à confronter :**
+**Référence au 03/09/2026 (après le lot TERRITOIRE), à confronter :**
+`npm test` → **956 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 277 152 octets**, 0 référence externe.
+⚠⚠ **LA FRONTIÈRE DE TERRITOIRE N'EST PLUS UN TRAIT, C'EST UN DESSIN.** Ethan,
+03/09 : « je t'ai envoyé aussi un zip avec des bordures de territoire pour la
+carte du monde ». `ui/monde.js` traçait les côtés exposés au `strokeStyle`
+depuis le 31/08 ; ce que les sprites apportent, c'est une frontière qui a un
+DEDANS et un DEHORS — bande sombre côté territoire, bande claire dehors,
+repères tournés vers l'intérieur. **Un trait de deux pixels ne dit pas de quel
+côté on est.** Coût **+26 676 octets** — 25 572 de base64 pour l'atlas,
+1 104 pour le module, la balise et le câblage. Borne T10 **inchangée à
+3 400 000**, marge **122 848 octets, 3,6 %**. **24 `data:` avant, 25 après.**
+⚠⚠ **LES CINQ FORMES LIVRÉES NE SUIVENT PAS UNE SEULE CONVENTION, ET C'EST
+MESURÉ SUR LES VINGT IMAGES DU ZIP.** `coin`, `u` et `carre` posent leurs traits
+sur les BORDS de la case — lignes logiques 0/1 et 30/31 ; `trait` et `angle_l`
+les posent sur les MÉDIANES, 15/16. Les deux ne peuvent pas coexister : un trait
+laissé au milieu se désaligne d'une demi-case de tout `coin` qu'il rencontre, et
+la frontière se brise à chaque angle.
+⚠⚠ **ON NORMALISE `trait` SUR LA CONVENTION DES TROIS AUTRES, ET C'EST UNE
+TRANSLATION, PAS UN REDESSIN.** Quinze pixels logiques vers le bas : la bande
+sombre passe de la ligne 15 à la **30**, la claire de 16 à **31** — c'est-à-dire
+exactement le bord bas de `carre`, mesuré. Aucun pixel inventé, aucun perdu.
+⚠ **ET `assert_bord` PORTE SUR LES QUATRE FORMES, PAS SUR CELLE QU'ON A
+DÉPLACÉE.** Une garde qui ne regarderait que `trait` ne dirait pas si la
+convention qu'on lui impose est bien celle des autres — c'est-à-dire exactement
+ce qu'on veut savoir.
+⚠⚠ **LA COUPE ET LA RÉDUCTION SE VÉRIFIENT CONTRE LA LIVRAISON, PAS SUPPOSÉES.**
+La coupe de la planche 5 × 1 en cellules de 1024 reproduit les dix sprites
+livrés AU PIXEL PRÈS ; la réduction **NEAREST par huit** reproduit les dix
+sprites de 128 AU PIXEL PRÈS. La grille logique fait 32 × 32, donc 32 pixels
+réels par pixel logique à 1024 et 4 à 128, et 32/8 = 4. `verifier_reduction`
+rejoue cette égalité à chaque exécution, contre les planches de 128 qui sont au
+dépôt pour ça — « on réduit par huit » cesse d'être invérifiable.
+⚠⚠ **LE DÉTOURAGE PASSE PAR `est_fond`, PAS PAR `est_fond_sujet` — L'INVERSE DU
+LOT MURS.** `est_fond_sujet` borne le fond à la composante qui TOUCHE LE BORD ;
+ici le fond est ENFERMÉ, `carre` et `u` posant leur bande claire tout au long du
+bord de la case. **Mesuré : `est_fond_sujet` rend ZÉRO pixel sur ces deux
+formes**, ce qui les laisserait entièrement opaques, magenta compris. Un mur a
+son sujet au milieu et son fond autour ; une limite est un CADRE, et c'est le
+contraire.
+⚠ **ET `est_fond` NE PERCE RIEN ICI, CE QUI N'ALLAIT PAS DE SOI.** Sa seconde
+porte attrape des teintes claires, et ces dessins ont une bande claire. Mesuré
+sur les **trente** combinaisons — cinq formes × deux camps × trois tailles — elle
+rend EXACTEMENT les pixels magenta purs, et il n'y a **pas un seul pixel proche
+du magenta sans l'être** dans toute la livraison. `assert_fond` le vérifie à
+chaque exécution.
+⚠⚠ **`angle_l` N'EST PAS PRODUIT, ET CE N'EST PAS UN OUBLI.** C'est le coin
+RENTRANT ; or le modèle du dépôt est PAR CASE — `bordsDuTerritoire` rend quatre
+booléens par case depuis le 31/08 — et un coin rentrant y est déjà formé par
+deux traits pleins de DEUX cases voisines qui se rejoignent au sommet. **Vérifié
+en rendant un territoire d'essai à encoche avant d'écrire l'outil** : la
+frontière s'y ferme sans lui. Le produire l'aurait fait coudre et payer pour
+zéro pixel dessiné. Sa cellule reste dans la planche, qui ne s'ampute pas.
+⚠⚠ **QUATRE FORMES COUVRENT LES SEIZE CAS, ET LE CAS DES DEUX CÔTÉS OPPOSÉS N'A
+PAS DE DESSIN.** 0 côté : rien ; 1 : `trait` ; 2 adjacents : `coin` ; **2
+opposés : DEUX `trait`** ; 3 : `u` ; 4 : `carre`. Un couloir d'une case de large
+se rend exactement par deux traits face à face, chacun portant sa bande claire du
+bon côté — d'où une fonction qui rend une LISTE et non un nom. **Treize sprites
+par camp, 26 cousus, 26 employés**, vérifié dans les deux sens.
+⚠ **LES ROTATIONS SE PRODUISENT DANS L'OUTIL, PAS AU DESSIN.** Le README du zip
+le demande, et `render/canvas2d.js` n'a aucune primitive de rotation : lui en
+donner une pour quatre sprites ferait porter une transformation de contexte à
+tout le champ de bataille. Une rotation de 90° d'une image carrée est exacte.
+⚠⚠ **ET L'ATLAS EXISTE, LÀ OÙ LES MURS DE CONTOUR N'EN ONT PAS. LA DIFFÉRENCE
+EST DE FORME, PAS DE NATURE :** une limite fait 128 × 128, un mur 512 × 128, et
+`coudre` exige des cellules CARRÉES. Vingt-six cellules pour **19 178 octets** —
+un dessin de limite est presque tout transparent.
+⚠ **UNE GARDE EXISTANTE A REJETÉ LE PREMIER JET, ET ELLE AVAIT RAISON.**
+`monde.test.js` interdit à l'écran d'appeler `celluleDuSprite` depuis le lot
+RETOURS-DU-31 — elle rend des INDICES, et `drawImage` sur un rectangle non fini
+ne dessine rien ET ne lève pas. Le premier jet refaisait le calcul dans l'écran.
+La géométrie vit donc dans `render/limite.js`, comme celle des emblèmes vit dans
+`render/embleme.js`.
+⚠⚠ **`baver` DÉMÉNAGE DE `bords.py` VERS `cond.py`, ET LE DÉMÉNAGEMENT SE
+PROUVE.** Elle y était née au lot MURS quand un seul outil en avait besoin ; les
+limites sont le second, pour la même raison exactement. `verifier.py` rejoue
+`bords.py` et compare les seize fichiers de `bord/` À L'OCTET.
+⚠⚠ **`epaisseurDeFrontiere` EST RETIRÉE, ET SON TEST AVEC — UNE ASSERTION EN
+MOINS, DÉCLARÉE.** Elle donnait l'épaisseur du trait de frontière ; il n'y a plus
+de trait. **Plus aucun appelant de production ne la lisait** : seul son propre
+test l'atteignait, ce qui est la définition d'une fonction morte.
+`TEINTES_TERRITOIRE` reste — le halo et la flèche du raid s'en servent.
+⚠ **`limite` EST ÉCARTÉE DU COMPTE GLOBAL DES TROUS, ET L'EXCLUSION SE JUSTIFIE
+DANS LES DEUX SENS.** Un `carre` enferme **11 792 px** à lui seul : c'est sa
+case, pas un défaut, et les compter ferait franchir le seuil de 1 500 à une
+famille saine. `test/limite.test.js` la mesure forme par forme à la place, et
+c'est plus fort — mesuré, contre l'intuition : `trait` et `coin` sont OUVERTS et
+enferment **exactement zéro**, ce qui est la moitié qui garde le détourage.
+⚠⚠ **LES COULEURS DE LA FRONTIÈRE NE SONT PLUS CELLES DU DÉPÔT, ET C'EST UN
+ARBITRAGE QUI REVIENT À ETHAN.** `TEINTES_TERRITOIRE` posait l'os pour le joueur
+et le rouge `#E43E32` pour l'Ouvrage — que §6 réserve à CE QUI ATTAQUE LE JOUEUR,
+ce qu'un test croise avec `attaqueLeJoueur`. Les dessins livrés portent leurs
+propres teintes : **or/ambre pour le joueur, gris-bleu pâle pour l'Ouvrage**.
+C'est son art et il fait foi sur ce qu'il dessine, mais le code couleur de la
+carte n'est plus celui qu'il était, et personne ne l'a arbitré de face.
+⚠ **SEPT TESTS ENTRENT DANS `test/limite.test.js`, ET LE COMPTE PASSE DE 950 À
+956** — sept entrants, un retiré avec `epaisseurDeFrontiere`. **Sept
+falsifications, sept chutes** ; ⚠ la deuxième mord DANS L'OUTIL et non dans la
+suite JS — `assert_bord` lève à la production, donc le sprite mal normalisé
+n'atteint jamais le dépôt. C'est le bon endroit pour cette garde-là, et il
+fallait le dire plutôt que de la compter comme « ne mordant pas ».
+⚠ **`python3 tools/verifier.py` → 985 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 308,9 s. Il était dû : le lot touche `art/` et
+`tools/`. Le compte passe de 933 à 985 — les 52 limites, et rien d'autre.
+⚠⚠ **ET C'EST LUI QUI PROUVE LE DÉMÉNAGEMENT DE `baver` :** les seize fichiers
+de `bord/` sont dans les 985 identiques, donc la fonction est arrivée intacte
+dans `cond.py`. Un refactor d'outil ne se relit pas, il se rejoue.
+⚠ **`tools/entrees.py --verifier` → 88 consommées / 88 déclarées, 86 dormantes /
+86 déclarées**, et `art/sourcesstandby/` : 34 fichiers, **0 lu par la chaîne**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Une frontière est un dessin.
+
+**Auparavant, après le lot MURS-OUVRAGE :**
 `npm test` → **950 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **3 250 476 octets**, 0 référence externe.
 ⚠⚠ **LA BASE DE L'OUVRAGE EST CEINTE DU MÊME MUR, ET IL A FALLU DÉMÉNAGER LA
@@ -1704,10 +1815,11 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     MOTEUR de l'autre. Un import qui se trompe de dossier ne compile pas — les
     exports n'ont aucun nom en commun.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 10 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 11 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   contour.js            l'anneau de mur d'une base : des pièces en unités de case
+  limite.js             quel dessin porte une frontière de territoire, et où le découper
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
@@ -1746,6 +1858,15 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 10 fi
     `sim/state.js`. ⚠ ET UN RÉ-EXPORT NE CRÉE AUCUNE LIAISON LOCALE : payé en
     une exécution, `bornesDeDefilement` levant « BANDE_DU_CONTOUR is not
     defined » sous le seul `export … from`.
+  ⤷ ⚠⚠ `limite.js` REMPLACE UN TRAIT PAR UN DESSIN — lot TERRITOIRE, 03/09.
+    `ui/monde.js` traçait les frontières au `strokeStyle` depuis le 31/08 ; ce
+    que les sprites d'Ethan apportent, c'est une frontière qui a un DEDANS et un
+    DEHORS — bande sombre côté territoire, bande claire dehors, repères tournés
+    vers l'intérieur. Un trait de deux pixels ne dit pas de quel côté on est.
+    ⚠ IL PORTE AUSSI LE DÉCOUPAGE, et pas seulement le choix du nom : la garde
+    de `monde.test.js` interdit à l'écran d'appeler `celluleDuSprite` depuis le
+    lot RETOURS-DU-31, et elle a fait tomber le premier jet de ce lot-ci, qui
+    refaisait le calcul dans l'écran. Même partage que `render/embleme.js`.
   ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
     est celui de la SIMULATION : y prendre un tirage pour choisir une texture
     décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se
@@ -1785,7 +1906,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 11 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   49 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
+test/                   50 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -1793,7 +1914,7 @@ test/                   49 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche  maj  territoire  bases  transfert  contour
+  sprite  state  recherche  maj  territoire  bases  transfert  contour  limite
   ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -1818,9 +1939,12 @@ test/                   49 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  26 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
-                        au lot OFFENSE, fichier par fichier (hors `__pycache__`,
-                        qui est ignoré par git). Le vingt-sixième est `fonds.py`,
+tools/                  27 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
+                        au lot TERRITOIRE, fichier par fichier (hors `__pycache__`,
+                        qui est ignoré par git). Le vingt-septième est
+                        `limites.py`, qui conditionne les frontières de
+                        territoire de la carte du monde ; le vingt-sixième est
+                        `fonds.py`,
                         qui conditionne les DÉCORS — pas des sprites, pas de
                         grille, aucun atlas ; le vingt-cinquième est
                         `entrees.py`, qui dit ce que la chaîne LIT dans
@@ -1840,11 +1964,14 @@ tools/                  26 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les VINGT-TROIS autres sont du Python, hors chaîne de build et hors
+  ⤷ les VINGT-QUATRE autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
-      • TREIZE PRODUCTEURS, qui lisent `art/sources/` et écrivent dans
+      • QUATORZE PRODUCTEURS, qui lisent `art/sources/` et écrivent dans
         `art/sprites/` — le douzième est `bords.py`, entré le 31/08, le
-        treizième `fonds.py`, entré le 03/09. ⚠ CE DERNIER NE PRODUIT PAS UN
+        treizième `fonds.py` et le quatorzième `limites.py`, entrés le 03/09.
+        ⚠ CE DERNIER EST LE SEUL À PRODUIRE POUR UN ATLAS SANS ÊTRE UN SPRITE DE
+        CASE : une limite ceint une case, elle ne l'occupe pas — mais elle est
+        CARRÉE, ce qu'un mur de contour n'est pas, donc elle se coud. ⚠ CE DERNIER NE PRODUIT PAS UN
         SPRITE : un décor n'a ni case, ni grille, ni atlas, et il ne se réduit
         pas. Il est producteur au seul sens qui compte pour le vérificateur —
         il écrit sous `art/sprites/`, donc la chaîne doit savoir le rejouer ;
@@ -1871,11 +1998,11 @@ tools/                  26 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 170 fichiers à la
-                        racine, 433 en comptant `carte/`. RECOMPTÉ le 03/09 au
-                        lot MURS.
+art/sources/            sprites bruts, hors chaîne de build — 174 fichiers à la
+                        racine, 437 en comptant `carte/`. RECOMPTÉ le 03/09 au
+                        lot TERRITOIRE.
                         ⚠⚠ ET IL EST DÉSORMAIS GARDÉ : `art/sources-declarees.json`
-                          classe chacun de ces fichiers en `consommees` (84) ou
+                          classe chacun de ces fichiers en `consommees` (88) ou
                           `dormantes` (86), et `tools/entrees.py --verifier` fait
                           rougir la suite dès qu'un fichier entre sans être
                           classé. C'est la seule garde de compte hors de `src/`
