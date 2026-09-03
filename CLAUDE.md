@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.75.0 · build 77.
+Dernière révision : **03/09/2026**, version 0.76.0 · build 78.
 
 ---
 
@@ -41,7 +41,118 @@ Dernière révision : **03/09/2026**, version 0.75.0 · build 77.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot TERRITOIRE), à confronter :**
+**Référence au 03/09/2026 (après le lot MOULINETTE-TERRAIN), à confronter :**
+`npm test` → **960 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 348 704 octets**, 0 référence externe.
+⚠⚠ **LES CHAMPS ET LES OBSTACLES PASSENT ENFIN AU FILTRE, ET ILS ÉTAIENT LES
+SEULS QUI RESTAIENT.** Ethan, 03/09 : « passe tout les sprites non fait dans le
+nouveau modèle. terrain, champs quartz scories etc bâtiments etc ». **Mesuré
+famille par famille AVANT d'écrire une ligne**, teintes opaques distinctes en
+médiane sur la grille 128 : bâtiment 3 091, defense 2 408, unite 3 525, chassis
+4 484, socle 6 221, tourelle-unite 4 004, carte 7 456, bord 6 688 — **tous déjà
+passés au lot PIXELS**. `terrain` : **3**, minimum 1, maximum 5. Les bâtiments
+qu'Ethan nomme n'avaient donc rien à repasser, et il fallait le lui dire plutôt
+que de refaire ce qui était fait. Coût **+71 552 octets**, entièrement l'atlas
+de terrain — **25 `data:` avant, 25 après**, aucune image n'entre. Borne T10
+**inchangée à 3 400 000**, marge **51 296 octets, 1,5 %** : c'est la plus mince
+depuis BASES-1, et le prochain lot qui fait entrer une image devra la relever EN
+ÉCRIVANT POURQUOI.
+⚠⚠ **`terrain/` CESSE D'ÊTRE UNE SOURCE DÉCLARÉE POUR DIX DE SES TUILES, ET
+C'EST LA MOITIÉ INVERSE DE LA TABLE QUI L'A EXIGÉ.** `tools/verifier.py` écrit
+depuis le 30/08 : « le jour où un outil se met à produire une tuile de terrain,
+le vérificateur TOMBE, pour qu'on retire la ligne ». Ce jour est celui-ci. Le
+motif de 2026-08-30 — « la migration a supprimé ses planches d'origine » — était
+vrai des huit dalles de sol et **FAUX des dix autres** : sept planches de 1254 ×
+1254, entre 8 628 et 87 766 couleurs, dorment dans `art/sources/` depuis
+toujours. Personne ne les avait cherchées.
+⚠⚠ **LA CLÉ DE CES PLANCHES N'EST PAS PURE, ET ON LA NORMALISE EN AMONT PLUTÔT
+QUE DE DESSERRER `est_fond`.** Mesuré : **zéro pixel `#FF00FF` sur les sept** —
+le fond va de (194, 16, 138) à (236, 11, 143) et s'assombrit jusqu'à
+(168, 23, 113) sous une branche. Deux dégâts constatés : `fourre_sec_b` laissait
+**cinquante-sept mouchetures** passer pour du sujet, portant le cadrage
+**jusqu'au bord de la planche** — buisson à 85 pixels dans une case de 128 au
+lieu de 112 —, et les pixels de clé assombris restaient OPAQUES, si bien que
+l'obstacle ressortait semé de rose. `tools/terrain.py` rabat sur le magenta pur
+ce qui est à moins de 80 de la clé mesurée par MÉDIANE au pourtour, et la chaîne
+canonique n'a plus rien de particulier à savoir : **ni `est_fond`, ni `recadrer`,
+ni `conditionner` ne sont touchés**, et le vérificateur le prouve.
+⚠ **`RAYON_CLE = 80`, ET LES DEUX VOISINES SONT MESURÉES ET ÉCARTÉES.** Points
+roses résiduels, somme sur les sept planches : **r = 60 → 24 886 ; r = 80 →
+6 337 ; r = 100 → 2 421**. Mais à 100 la clé mange l'ART — le cerne violet du
+quartz est à 94,2 de sa propre clé — et le sujet du quartz tombe de 2,3 % ; à 80
+il n'en perd que 0,24 %.
+⚠⚠ **ET L'ÉROSION EST LE MAUVAIS LEVIER, MESURÉ AUSSI — C'ÉTAIT LE PREMIER
+ESSAI.** Trois pixels d'une planche de 1 254 réduite à 128 valent **trois
+dixièmes de pixel de sortie**. La porter à un pixel de sortie puis deux ne retire
+**aucun** point rose — ils ne touchent pas la frange, ils sont enfermés dans le
+dessin — et coûte **26 % puis 61 % des pixels opaques du quartz**, cerne compris.
+⚠⚠ **`fourre_sec_a` EST ÉCARTÉE, ET C'EST LA SOURCE QUI EST EN CAUSE, PAS
+L'OUTIL.** Sa clé a bavé DANS le dessin au rendu : l'ombre de ses branches n'est
+pas brune mais MARRON-VIOLET, et des pixels franchement magenta sont posés sur
+les rameaux. Regardé au pixel près, à côté de `fourre_sec_b` qui est nette.
+Aucun filtre ne rend du brun à partir du marron-violet : le fourré ressortait
+**rose, c'est-à-dire plus faux que l'ancien**, que la quantification rabattait
+par accident sur la rampe kaki. `obs_infanterie` se produit donc d'une planche et
+de son miroir, comme les deux champs. **Une ligne à remettre le jour où Ethan en
+refait un rendu propre**, et c'est le seul écart à sa demande.
+⚠⚠ **DEUX SPRITES SUR DIX SONT DES MIROIRS DANS L'ART DU DÉPÔT, ET C'EST RELEVÉ,
+PAS DÉCIDÉ.** `champ_quartz_b` est le miroir horizontal EXACT de `champ_quartz_a`
+dans les sprites commités, et `champ_scorie_b` de `champ_scorie_a` — vérifié
+pixel par pixel aux deux grilles. ⚠ Et le miroir se prend sur la SORTIE : LANCZOS
+n'est pas symétrique au pixel près sur un côté pair, donc retourner la planche
+d'abord donnerait un `b` qui n'est plus rigoureusement le miroir de `a`.
+⚠ **L'EMPRISE SE LIT SUR CE QUI EST AU DÉPÔT** — 112 pixels de 128 et 56 de 64,
+centrés, mesuré sur les dix aux deux grilles, soit 28 unités de la grille 32 dont
+`recadrer` se sert. En choisir une autre aurait fait grandir ou maigrir tous les
+champs de toutes les bases au passage.
+⚠⚠ **LES HUIT `tile_sol_*` NE SONT PAS PRODUITS, ET LE REFUS EST MESURÉ.** (1)
+leur source apparente porte EXACTEMENT les cinq teintes de la rampe « sol
+joueur » — c'est un INDEX, pas une matière ; (2) **aucune des 576 cellules de 64
+ni aucune fenêtre glissante de 64 × 64** sur ses 1 536² ne reproduit une seule
+des quatre dalles ; (3) **aucun écran ne les dessine** — le sol de la base est
+découpé dans l'atlas du MONDE depuis le 30/08. Reconstruire à l'aveugle huit
+dalles que personne ne regarde aurait été inventer de l'art. ⚠ Et leur grille 128
+n'en est pas une : c'est le **doublement NEAREST exact** de la 64.
+⚠⚠ **LES DIX AUTRES TUILES DE LA GRILLE 32 SORTENT DU DÉPÔT.** La 32 n'est
+produite par aucun outil depuis le lot PIXELS ; la seule raison de les garder
+était leur irrécupérabilité, qui vient de cesser d'être vraie. `terrain/32` ne
+porte plus que les huit dalles, et un test l'asserte.
+⚠⚠ **LES COULEURS DES RESSOURCES CHANGENT, ET C'EST UN ARBITRAGE QUI REVIENT À
+ETHAN.** La vieille chaîne ne faisait pas que quantifier : elle REPEIGNAIT sur
+les quatorze teintes de `cond.py`. Le quartz d'Ethan est **VIOLET** et ressortait
+bleu-gris pâle ; sa scorie est **NOIRE À VEINES ORANGE** et ressortait violet
+sombre à veines ambre. Le nouveau modèle ne repeint rien — c'est sa définition.
+`FICHE-STYLE.md` réserve `#9FB3C5` et `#C1CEDA` au quartz et `#382E47` à la
+scorie : ces trois teintes décrivaient le rendu de l'ancienne moulinette, pas le
+dessin d'Ethan. C'est son art et il fait foi sur ce qu'il dessine, mais le code
+couleur des ressources n'est plus celui qu'il était. **Deuxième fois en deux
+lots**, après les teintes de la frontière de territoire.
+⚠ **UN COMMENTAIRE DEVENU FAUX A ÉTÉ RÉÉCRIT, PAS ENJAMBÉ.** `sprite.test.js`
+écartait `terrain` de la garde des trous au motif qu'« aucun outil ne les
+produit » ; c'est vrai des quatre `tile_sol_o_*` — les seuls fichiers que son
+filtre `_o_` ramasse — et faux de la famille depuis ce lot.
+⚠ **QUATRE TESTS ENTRENT DANS `test/sprite.test.js`, ET LE COMPTE PASSE DE 956 À
+960.** **Six falsifications, six chutes.** ⚠ Deux d'entre elles ont mordu pour de
+bon en cours d'écriture, et les deux gardes ont été CORRIGÉES : la garde des
+teintes exigeait « plus de cent » alors que la nappe de pétrole, presque plate,
+en porte **82** à la grille 64 — un seuil qui ne tient pas dans l'intervalle
+qu'on vient soi-même de mesurer n'est pas un seuil ; et la garde de la clé
+exigeait zéro pixel magenta à quelque alpha que ce soit, alors que `ecrire`
+dé-prémultiplie en divisant par l'alpha et fait retomber des franges à alpha 9
+sur `#FF00FF` **dans tout le dépôt** — `defense` en porte 246, `unite` 58. Elle
+porte donc sur l'alpha : **zéro à alpha ≥ 128 dans tout `art/sprites/`**, et le
+pire de `terrain` est à 51.
+⚠ **`python3 tools/verifier.py` → 1 005 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 312,4 s. Il était dû : le lot touche `art/` et
+`tools/`. Le compte passe de 985 à 1 005 — les vingt tuiles qui cessent d'être
+une source déclarée pour devenir un produit, et rien d'autre.
+⚠ **`tools/entrees.py --verifier` → 95 consommées / 95 déclarées, 79 dormantes /
+79 déclarées** ; sept planches passent de `dormantes` à `consommees`, et
+`fourre_sec_a` reste dormante. `art/sourcesstandby/` : 34 fichiers, **0 lu**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Un champ de quartz est un
+dessin.
+
+**Auparavant, après le lot TERRITOIRE :**
 `npm test` → **956 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **3 277 152 octets**, 0 référence externe.
 ⚠⚠ **LA FRONTIÈRE DE TERRITOIRE N'EST PLUS UN TRAIT, C'EST UN DESSIN.** Ethan,
@@ -1939,9 +2050,11 @@ test/                   50 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  27 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
-                        au lot TERRITOIRE, fichier par fichier (hors `__pycache__`,
-                        qui est ignoré par git). Le vingt-septième est
+tools/                  28 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
+                        au lot MOULINETTE-TERRAIN, fichier par fichier (hors
+                        `__pycache__`, qui est ignoré par git). Le vingt-huitième
+                        est `terrain.py`, qui conditionne les champs de quartz et
+                        de scorie et les trois obstacles ; le vingt-septième est
                         `limites.py`, qui conditionne les frontières de
                         territoire de la carte du monde ; le vingt-sixième est
                         `fonds.py`,
@@ -1964,11 +2077,18 @@ tools/                  27 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
   build.js              src/ → dist/index.html, un seul fichier autonome, images comprises
   conditionneur.html    outil hors ligne, sans rapport avec le build
   audit-maquette.mjs    confronte foyer-zero-ui.html aux tables — À LA MAIN
-  ⤷ les VINGT-QUATRE autres sont du Python, hors chaîne de build et hors
+  ⤷ les VINGT-CINQ autres sont du Python, hors chaîne de build et hors
     `npm run check`. Ils se répartissent en quatre rôles :
-      • QUATORZE PRODUCTEURS, qui lisent `art/sources/` et écrivent dans
+      • QUINZE PRODUCTEURS, qui lisent `art/sources/` et écrivent dans
         `art/sprites/` — le douzième est `bords.py`, entré le 31/08, le
-        treizième `fonds.py` et le quatorzième `limites.py`, entrés le 03/09.
+        treizième `fonds.py`, le quatorzième `limites.py` et le quinzième
+        `terrain.py`, entrés le 03/09.
+        ⚠⚠ CE DERNIER EST LE SEUL QUI AIT RETIRÉ UNE SOURCE DÉCLARÉE : les dix
+        tuiles qu'il produit étaient couvertes par `SOURCES_DECLAREES['terrain/']`
+        depuis le 30/08, au motif que leurs planches n'existaient plus — elles
+        existaient, et elles dormaient. La déclaration s'est resserrée sur les
+        seules `tile_sol_*`. C'est la moitié inverse de la table qui a joué,
+        exactement comme elle le promettait.
         ⚠ CE DERNIER EST LE SEUL À PRODUIRE POUR UN ATLAS SANS ÊTRE UN SPRITE DE
         CASE : une limite ceint une case, elle ne l'occupe pas — mais elle est
         CARRÉE, ce qu'un mur de contour n'est pas, donc elle se coud. ⚠ CE DERNIER NE PRODUIT PAS UN
@@ -2002,8 +2122,8 @@ art/sources/            sprites bruts, hors chaîne de build — 174 fichiers à
                         racine, 437 en comptant `carte/`. RECOMPTÉ le 03/09 au
                         lot TERRITOIRE.
                         ⚠⚠ ET IL EST DÉSORMAIS GARDÉ : `art/sources-declarees.json`
-                          classe chacun de ces fichiers en `consommees` (88) ou
-                          `dormantes` (86), et `tools/entrees.py --verifier` fait
+                          classe chacun de ces fichiers en `consommees` (95) ou
+                          `dormantes` (79), et `tools/entrees.py --verifier` fait
                           rougir la suite dès qu'un fichier entre sans être
                           classé. C'est la seule garde de compte hors de `src/`
                           et de `test/`. Une image qui n'est pas prête entre par
@@ -2043,16 +2163,22 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           trier les chemins à la sous-chaîne rangerait chaque
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
-art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grille
-                        et 970 fichiers, recomptés le 02/09 au lot PIXELS, plus
-                        SEIZE atlas `.webp` à la racine, DEUX fichiers générés —
+art/sprites/            les sprites conditionnés — VINGT ET UN dossiers de grille
+                        et 1 010 fichiers, recomptés le 03/09 au lot
+                        MOULINETTE-TERRAIN, plus
+                        DIX-HUIT atlas `.webp` à la racine, DEUX fichiers générés —
                         `ancres-chassis.json` et `atlas-empreintes.json` — et les
-                        SEIZE images à plat de `bord/`, et depuis le 03/09
-                        l'unique image de `fond/`.
-                        NEUF familles en 128 et 64 : unité, bâtiment, terrain,
-                        defense, tourelle-unite, socle, carte, effet, chassis.
-                        La dixième, `bord`, n'a pas de grille ; la onzième,
-                        `fond`, n'est même pas une famille de sprites.
+                        SEIZE images à plat de `bord/` avec leur manifeste, et
+                        depuis le 03/09 l'unique image de `fond/`.
+                        DIX familles en 128 et 64 : unité, bâtiment, terrain,
+                        defense, tourelle-unite, socle, carte, effet, chassis,
+                        limite. La onzième, `bord`, n'a pas de grille ; la
+                        douzième, `fond`, n'est même pas une famille de sprites.
+                        ⚠ CE BLOC A ANNONCÉ « NEUF FAMILLES » ET « SEIZE ATLAS »
+                        APRÈS LE LOT TERRITOIRE, QUI EN AVAIT AJOUTÉ UNE DE
+                        CHAQUE : le compte de ce dossier n'est gardé par aucun
+                        test, et il dérive à chaque lot d'art. Le recompter est
+                        la seule chose qui le tienne.
                         ⤷ ⚠⚠ `fond/` PORTE DES DÉCORS, PAS DES SPRITES — entré
                           au lot OFFENSE. Un décor n'a ni case, ni grille, ni
                           atlas, et il ne se réduit pas : `fond_offense.webp`
@@ -2062,12 +2188,19 @@ art/sprites/            les sprites conditionnés — DIX-NEUF dossiers de grill
                           `tools/build.js`, comme les murs de `bord/`.
                         ⤷ ⚠⚠ LA GRILLE 32 EST SORTIE AU LOT PIXELS — 465
                           fichiers retirés, ni le jeu ni les tests ne la
-                          lisaient. **SAUF `terrain/32`**, qui reste : `terrain/`
-                          est une SOURCE DÉCLARÉE, ses planches d'origine ont été
-                          supprimées par la migration qui les a consommées, donc
-                          ses 18 tuiles sont IRRÉCUPÉRABLES. `art/sprites/` est
-                          reproductible, sauf là où le vérificateur dit qu'il ne
-                          l'est pas.
+                          lisaient. **IL N'EN RESTE QUE LES HUIT DALLES DE SOL**,
+                          dans `terrain/32`. Ce bloc a annoncé « ses 18 tuiles
+                          sont IRRÉCUPÉRABLES » jusqu'au 03/09, et c'était faux
+                          de dix : les planches des champs et des obstacles
+                          DORMAIENT dans `art/sources/`, et `tools/terrain.py`
+                          les produit désormais aux grilles 64 et 128 — donc la
+                          32 n'avait plus de raison de les porter, et elles sont
+                          retirées. Les huit dalles restent une SOURCE DÉCLARÉE,
+                          pour un motif mesuré cette fois : leur seul original
+                          apparent est un INDEX à cinq teintes qu'aucune coupe ne
+                          reproduit, et aucun écran ne les dessine.
+                          `art/sprites/` est reproductible, sauf là où le
+                          vérificateur dit qu'il ne l'est pas.
                         ⤷ ⚠⚠ LES ATLAS SONT EN `.webp`, LES SPRITES EN `.png`.
                           Sans le WebP les huit atlas pèseraient ×3,5 depuis que
                           la chaîne ne quantifie plus ; et sans le PNG côté
@@ -3091,6 +3224,12 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   travers. S'en servir contournerait la garde en silence, ce qui coûte plus cher
   que la contrainte qu'elle pose. `tools/audit-maquette.mjs` refuse les deux de
   face, pour que la maquette n'apprenne pas la triche à l'écran.
+- ⚠⚠ **LES SPRITES DE CHAMP ONT CHANGÉ DE COULEUR LE 03/09, ET C'EST LE MÊME
+  ARBITRAGE PAR L'AUTRE BOUT.** Le lot MOULINETTE-TERRAIN les a passés au filtre,
+  qui ne repeint rien : le quartz d'Ethan est **VIOLET** et sa scorie **NOIRE À
+  VEINES ORANGE**, là où l'ancienne quantification les rabattait sur la fiche.
+  Les trois teintes du paragraphe suivant décrivent donc un rendu qui n'existe
+  plus à l'écran. **À trancher avec le reste, et dans le même geste.**
 - **La maquette a été dessinée sous la contrainte à quatorze teintes**, avant
   la v4 de la fiche. Elle tient, mais elle ne connaît pas encore les couleurs de
   terrain que la fiche porte maintenant : `#9FB3C5` · `#C1CEDA` pour le quartz,

@@ -71,6 +71,15 @@ CHAINE = [
     # `limite/` seraient comptés MANQUANTS, et les quatre planches d'`art/sources/`
     # classées DORMANTES alors qu'un outil les consomme.
     ('limites',         []),
+    # ⚠⚠ LES CHAMPS ET LES OBSTACLES — 03/09, lot MOULINETTE-TERRAIN. Cette
+    # ligne-ci est la seule de la table qui RETIRE une source déclarée : les dix
+    # sprites qu'elle produit étaient couverts par `SOURCES_DECLAREES['terrain/']`
+    # depuis le 30/08, au motif que leurs planches n'existaient plus. Elles
+    # existaient — sept d'entre elles dorment dans `art/sources/` depuis toujours.
+    # La déclaration se resserre donc sur les seuls `tile_sol_*`, juste en
+    # dessous, et sa moitié inverse fera tomber le vérificateur le jour où l'on
+    # saura les reproduire aussi.
+    ('terrain',         []),
     # ⚠⚠ LES ENTRÉES — 03/09, ET ELLE NE PRODUIT AUCUN SPRITE. Comme la ligne
     # `bords` ci-dessus dit pourquoi elle est là, celle-ci dit pourquoi elle
     # n'écrit rien : `entrees.py` OBSERVE ce que la chaîne ouvre dans
@@ -144,13 +153,28 @@ def est_un_atlas(rel):
 # terrain automatiquement.** Les 54 tuiles ne se régénèrent plus — la branche
 # terrain de `planches.py` était une migration à usage unique, qui a supprimé ses
 # propres originaux. Il faudra les retoucher à la main, ou retrouver les planches.
+# ⚠⚠ ELLE S'EST RESSERRÉE LE 03/09, ET C'EST LA MOITIÉ INVERSE QUI L'A EXIGÉ.
+# La ligne `terrain/` couvrait les 54 tuiles ; `tools/terrain.py` en produit
+# désormais 20, donc la déclaration mentait sur celles-là et le vérificateur
+# tombait — exactement ce qu'on lui demande. Ce qui reste déclaré, ce sont les
+# huit dalles de sol, aux trois grilles : leur seule source apparente est un
+# INDEX à cinq teintes, aucune de ses 576 cellules ni aucune fenêtre glissante
+# ne les reproduit, et aucun écran ne les dessine depuis que le sol de la base
+# est découpé dans l'atlas du MONDE. Les dix autres tuiles de la grille 32 ont
+# été RETIRÉES du dépôt dans le même lot : la 32 n'est produite par aucun outil
+# depuis le lot PIXELS, et la seule raison de les garder était leur
+# irrécupérabilité, qui vient de cesser d'être vraie.
+_RAISON_SOL = (
+    'les huit dalles de sol sont la SOURCE, pas un produit : leur seul original '
+    'apparent est un index à cinq teintes que la migration n\'a pas découpé tel '
+    'quel, et cette migration a supprimé ce dont elle est partie. ⚠ Un '
+    'changement de palette ne pourra pas leur être appliqué automatiquement.'
+)
 SOURCES_DECLAREES = {
-    'terrain/': (
-        'les 54 tuiles sont la SOURCE, pas un produit : la branche terrain de '
-        'planches.py était une migration à usage unique, déjà consommée, qui a '
-        'supprimé les planches d\'origine. ⚠ Un changement de palette ne pourra '
-        'pas leur être appliqué automatiquement.'
-    ),
+    **{f'terrain/{grille}/{nom}.png': _RAISON_SOL
+       for grille in (32, 64, 128)
+       for nom in ('tile_sol_j_a', 'tile_sol_j_b', 'tile_sol_j_c', 'tile_sol_j_d',
+                   'tile_sol_o_a', 'tile_sol_o_b', 'tile_sol_o_c', 'tile_sol_o_d')},
     'carte/atlas-terrain-64.png': (
         'livré fini au lot ÉCRAN-CARTE, 224 548 octets ; tools/build.js l\'inline, '
         'aucun outil du dépôt ne le produit'
