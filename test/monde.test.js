@@ -17,11 +17,12 @@ import { fileURLToPath } from 'node:url';
 import {
   CRANS, CRAN_PAR_DEFAUT, DALLES_PAR_IMAGE,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
-  sitesDeLaFenetre, lignesDuSite, creerCacheDalles, indicesDeTeinte, teinteDAttente,
+  sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles, indicesDeTeinte,
+  teinteDAttente,
   palierDuSite,
 } from '../src/ui/monde.js';
 import {
-  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE,
+  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
   palierDeNiveau, PALIERS_EMBLEME,
 } from '../src/data/sites.js';
 import {
@@ -1001,6 +1002,119 @@ test('terminale — son emprise tient dans la carte, et déborder LÈVE', () => 
   assert.doesNotThrow(() => empriseDeLaGrosseBase(3, { rangee: 2, colonne: 2 }));
 });
 
+test('carte — chaque entité porte son nom et son niveau, et le seuil suit la DENSITÉ', () => {
+  // ⚠⚠ ETHAN, 03/09 : « rajouter un petit nom sur fond semi opaque + niveau en
+  // dessous de chaque entité de la carte ».
+  //
+  // ⚠ LE NOM VIENT DE LA TABLE, IL N'EST PAS RECOPIÉ. `EMBLEMES_CARTE` est déjà
+  // la source du titre du panneau de site : l'étiquette et le panneau ne peuvent
+  // donc pas se contredire.
+  for (const [type, embleme] of Object.entries(EMBLEMES_CARTE)) {
+    const lignes = lignesDeLEtiquette({ type, niveau: 7 });
+    assert.equal(lignes[0], embleme.nom, `${type} : l'étiquette n'écrit pas le nom de la table`);
+    assert.match(lignes[1], /7/, `${type} : l'étiquette n'écrit pas le niveau`);
+  }
+
+  // ⚠⚠ LA BASE DU JOUEUR N'A PAS DE LIGNE DE NIVEAU, ET C'EST LA RÈGLE, PAS UN
+  // OUBLI. Elle en a TROIS — bâtiments, défense, armée —, et aucun ne vient de
+  // sa rangée : `sitesDeLaFenetre` lui pose `niveau: null` exprès. Y écrire le
+  // niveau de la rangée serait la faute que `sim/carte.js` existe pour
+  // empêcher, et que le test du panneau refuse déjà.
+  const sienne = lignesDeLEtiquette({ type: 'baseJoueur', niveau: null });
+  assert.equal(sienne.length, 1, 'la base du joueur s\'est vu inventer un niveau');
+  assert.equal(sienne[0], EMBLEMES_CARTE.baseJoueur.nom);
+
+  // Un type inconnu LÈVE : une étiquette muette serait un site sans nom, et
+  // c'est un défaut qu'on doit voir.
+  assert.throws(() => lignesDeLEtiquette({ type: 'inexistant', niveau: 1 }), RangeError);
+
+  // ⚠⚠ ET LE SEUIL EST MESURÉ SUR CE QU'IL DÉFEND — LA DENSITÉ —, PAS SUR UN
+  // PROXY. Un test qui figerait « cssMiniParCase === 64 » serait vert quelle que
+  // soit la valeur qu'on y écrit. Celui-ci recompte les sites À L'ÉCRAN aux
+  // quatre crans, et exige que le seuil tombe là où les plaques cessent de se
+  // recouvrir.
+  const dpr = 3;
+  const canvas = { largeur: 360 * dpr, hauteur: (800 - 288) * dpr };
+  const comptes = new Map();
+  for (const cran of CRANS) {
+    let pire = 0;
+    for (const graine of [1, 2, 3]) {
+      const etat = creerEtat(graine);
+      const n = sitesDeLaFenetre(etat, fenetreVisible({
+        x: (16 - 1) * cran - canvas.largeur / 2,
+        y: (150 - 1) * cran - canvas.hauteur / 2,
+        largeur: canvas.largeur, hauteur: canvas.hauteur, cran,
+      })).length;
+      pire = Math.max(pire, n);
+    }
+    comptes.set(cran, pire);
+  }
+  // Le montage mesure bien quelque chose : la densité DOIT s'effondrer avec le
+  // zoom, sinon le seuil ne trierait rien.
+  const parCran = CRANS.map((c) => comptes.get(c));
+  for (let i = 1; i < parCran.length; i += 1) {
+    assert.ok(parCran[i] < parCran[i - 1],
+      `la densité ne baisse pas du cran ${CRANS[i - 1]} au ${CRANS[i]}`);
+  }
+  const ouverts = CRANS.filter((c) => c / dpr >= ETIQUETTE_CARTE.cssMiniParCase);
+  assert.ok(ouverts.length >= 1, 'aucun cran n\'ouvre les étiquettes');
+  const pireOuvert = Math.max(...ouverts.map((c) => comptes.get(c)));
+  const meilleurFerme = Math.min(...CRANS
+    .filter((c) => c / dpr < ETIQUETTE_CARTE.cssMiniParCase).map((c) => comptes.get(c)));
+  assert.ok(pireOuvert <= 20,
+    `${pireOuvert} sites étiquetés à l'écran : les plaques se recouvrent`);
+  assert.ok(meilleurFerme > 20,
+    `le seuil ferme un cran qui ne portait que ${meilleurFerme} sites — il est trop haut`);
+
+  // ⚠ LE SEUIL VIT DANS `src/data/`, ET L'ÉCRAN LE LIT. La première écriture le
+  // posait dans `ui/monde.js`, et la garde « aucune constante de zoom en dur »
+  // est tombée dessus : 64 est aussi un cran. Elle avait raison — un seuil
+  // d'affichage est du calibrage (§4).
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.match(ecran, /ETIQUETTE_CARTE\.cssMiniParCase/,
+    'l\'écran ne lit pas le seuil dans les données');
+  assert.match(ecran, /ETIQUETTE_CARTE\.encre/);
+
+  // ⚠⚠ ET LE CONTOUR DE LA BASE SE DESSINE APRÈS LES EMBLÈMES, COMME LES
+  // ÉTIQUETTES. C'est ce qui rend « coller la base » possible : l'emblème
+  // occupe la case ENTIÈRE — `dessinerEmblemeDUneCase` rend `cote: taille` —,
+  // donc un cadre posé sur ses bords et peint dessous est intégralement
+  // recouvert. Remis avant, le contour disparaît de l'écran sans qu'aucune
+  // autre garde ne bronche : mesuré, la falsification passait VERTE.
+  //
+  // ⚠ ON LIT L'ORDRE DANS LE CORPS DE `dessiner`, PAS DANS LE MODULE ENTIER.
+  // Comparer deux `indexOf` sur tout le fichier ferait tomber la garde le jour
+  // où une déclaration remonte — le dépôt l'a déjà payé au lot
+  // GARNISON-ET-ARMÉE.
+  const corpsDessiner = extraireFonction(ecran, 'dessiner');
+  assert.ok(corpsDessiner.length > 200, 'la fonction `dessiner` est introuvable');
+  const rangDe = (motif, quoi) => {
+    const i = corpsDessiner.search(motif);
+    assert.ok(i >= 0, `\`dessiner\` n'appelle plus ${quoi}`);
+    return i;
+  };
+  const rangEmbleme = rangDe(/dessinerEmbleme\(/, 'les emblèmes');
+  assert.ok(rangDe(/dessinerHalo\(/, 'le contour de la base') > rangEmbleme,
+    'le contour de la base repasse sous les emblèmes : il redevient invisible');
+  assert.ok(rangDe(/dessinerEtiquette\(/, 'les étiquettes') > rangEmbleme,
+    'les étiquettes repassent sous les emblèmes');
+  // La flèche, elle, était déjà après — on relève l'accord plutôt que de le
+  // supposer, les trois ayant la même raison d'être au-dessus.
+  assert.ok(rangDe(/dessinerFleche\(/, 'la flèche') > rangEmbleme);
+  // ⚠ ET LES FRONTIÈRES RESTENT DESSOUS, elles : elles ceignent des cases qui
+  // n'ont pas toutes un emblème, et couper le dessin qui dit ce qu'il y a là
+  // est très exactement ce que le lot TERRITOIRE refuse.
+  assert.ok(rangDe(/dessinerFrontieres\(/, 'les frontières') < rangEmbleme,
+    'les frontières sont passées par-dessus les emblèmes');
+
+  // ⚠⚠ ET LE FOND SEMI-OPAQUE EST LE SEUL `rgba` DU DÉPÔT, LU ET NON RETAPÉ.
+  // La garde de palette de `banc.test.js` n'en tolère qu'un ; l'écran le prend
+  // dans `render/scene.js` plutôt que d'en écrire une seconde copie.
+  assert.match(ecran, /PALETTE\.ombrePortee/,
+    'la plaque n\'emploie pas l\'ombre portée de la fiche');
+  assert.doesNotMatch(ecran, /rgba\(/, 'l\'écran Monde retape un rgba au lieu de le lire');
+});
+
 test('carte — plus aucune lettre n\'est dessinée, à aucun cran', () => {
   const source = lire('src', 'ui', 'monde.js');
   const nu = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -1026,12 +1140,27 @@ test('carte — plus aucune lettre n\'est dessinée, à aucun cran', () => {
   // exactement ce que la version large protégeait, et rien n'en est perdu. Ce
   // qui change, c'est qu'elle NOMME son unique exception au lieu de l'interdire
   // en bloc.
-  const corpsDeLaFleche = extraireFonction(nu, 'dessinerFleche');
-  assert.ok(corpsDeLaFleche.length > 200, 'la fonction `dessinerFleche` est introuvable');
-  assert.match(corpsDeLaFleche, /fillText/, 'la flèche ne porte plus le coût d\'attaque');
-  const horsFleche = nu.replace(corpsDeLaFleche, '');
-  assert.doesNotMatch(horsFleche, /fillText/,
-    'l\'écran Monde dessine du texte ailleurs que sur la flèche d\'attaque');
+  // ⚠⚠ ET IL A UNE SECONDE EXCEPTION DEPUIS LE 03/09, POUR LA MÊME RAISON QUE LA
+  // PREMIÈRE : parce qu'Ethan a demandé du texte, et que ce texte-là n'est pas
+  // la lettre. « rajouter un petit nom sur fond semi opaque + niveau en dessous
+  // de chaque entité de la carte ». Ce qu'il avait fait retirer le 30/08 était
+  // une CAPITALE peinte SUR l'emblème, qu'il fallait décoder ; ce qui entre est
+  // un NOM en toutes lettres, posé SOUS la case, avec son niveau. Les deux ne
+  // parlent pas de la même chose, exactement comme le coût de la flèche.
+  //
+  // ⚠ L'INTERDICTION RESTE TOTALE HORS DE CES DEUX FONCTIONS, et c'est elle qui
+  // continue d'empêcher la lettre de revenir sur un emblème. Elle NOMME ses
+  // exceptions ; elle n'est pas retirée.
+  const AVEC_TEXTE = ['dessinerFleche', 'dessinerEtiquette'];
+  let horsExceptions = nu;
+  for (const nom of AVEC_TEXTE) {
+    const corps = extraireFonction(nu, nom);
+    assert.ok(corps.length > 200, `la fonction \`${nom}\` est introuvable`);
+    assert.match(corps, /fillText/, `\`${nom}\` n'écrit plus de texte`);
+    horsExceptions = horsExceptions.replace(corps, '');
+  }
+  assert.doesNotMatch(horsExceptions, /fillText/,
+    'l\'écran Monde dessine du texte hors de la flèche et de l\'étiquette');
   assert.doesNotMatch(nu, /CSS_MINI_LETTRE/, '`CSS_MINI_LETTRE` est revenue dans le code');
   assert.doesNotMatch(nu, /\.lettre/, 'le champ `lettre` est relu par l\'écran');
 

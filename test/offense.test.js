@@ -317,6 +317,72 @@ test('offense — UNE bande qui défile, la hauteur gardée, et les châssis dan
   assert.ok(!/'escouade'/.test(source), 'l\'écran nomme un châssis en dur');
 });
 
+test('offense — les quatre vagues occupent tout le bassin, sans déformer les pièces', () => {
+  // ⚠⚠ ETHAN, 03/09 : « repartir les unités de l'armée en quinconce comme sur le
+  // screen pour utiliser toute la place ». Les quatre rangées s'empilaient en
+  // haut du bassin et la moitié basse restait du sol nu — c'est ce que montre sa
+  // capture. Le quinconce, lui, ne bouge pas : il était déjà là depuis le lot
+  // OFFENSE, et ce qu'il demande est la répartition VERTICALE.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const bassin = feuille.match(/#offense-vagues\s*\{([^}]*)\}/)[1];
+  assert.match(bassin, /display:\s*flex/);
+  assert.match(bassin, /flex-direction:\s*column/);
+  assert.match(bassin, /justify-content:\s*space-between/,
+    'les vagues ne se répartissent pas sur la hauteur');
+  // ⚠ ET UN ÉCART MINIMUM SUBSISTE : sur un écran court, `space-between` n'a
+  // plus de mou à distribuer, et deux vagues collées se liraient comme une.
+  assert.match(bassin, /gap:\s*\d+px/, 'les vagues peuvent se coller sur un écran court');
+
+  // ⚠⚠ ET C'EST LA MOITIÉ QUI COMPTE : LES CASES RESTENT CARRÉES. L'autre façon
+  // d'occuper la place — laisser les emplacements GRANDIR en hauteur — a été
+  // écartée par la mesure, pas par goût : `.piece` prend sa largeur ET sa
+  // hauteur en POURCENTAGE de son emplacement, donc une case haute et étroite
+  // étire le sprite. Le test lit les deux propriétés plutôt que de le croire.
+  // ⚠ LE SÉLECTEUR PORTE DEUX BLOCS — l'un pose la colonne du quinconce,
+  // l'autre le dessin — et ne lire que le premier faisait tomber ce test sur du
+  // code juste. On les joint.
+  const emplacement = [...feuille.matchAll(/#ecran-offense \.emplacement \{([^}]*)\}/g)]
+    .map((m) => m[1]).join('\n');
+  assert.match(emplacement, /aspect-ratio:\s*1/,
+    'les emplacements ne sont plus carrés : les sprites vont s\'étirer');
+  const piece = feuille.match(/#ecran-offense \.emplacement \.piece \{([^}]*)\}/)[1];
+  const largeur = piece.match(/width:\s*([^;]+);/)[1].trim();
+  const hauteur = piece.match(/height:\s*([^;]+);/)[1].trim();
+  assert.equal(largeur, hauteur,
+    'la pièce ne prend plus la même fraction en largeur et en hauteur');
+  // ⚠ ET LA FRACTION PARTAGÉE EST BIEN UN POURCENTAGE — c'est de là que vient
+  // la déformation : un pourcentage se résout sur la LARGEUR du bloc pour
+  // `width` et sur sa HAUTEUR pour `height`. En pixels, une case rectangulaire
+  // ne déformerait rien, et cette garde n'aurait plus de raison d'être.
+  assert.match(piece, /--jeton-part:\s*\d+%/,
+    'la pièce ne se mesure plus en pourcentage de sa case');
+
+  // ⚠⚠ ET LE PREMIER EMPLACEMENT FAIT LA MÊME LARGEUR QUE LES HUIT AUTRES —
+  // DÉFAUT ANTÉRIEUR AU LOT, TROUVÉ AU BOOT SANS TÊTE, PAS À LA RELECTURE.
+  // `grid-column: span 2` est le raccourci de `grid-column-start: span 2` +
+  // `grid-column-end: auto` : la règle qui posait ensuite `grid-column-start: 1`
+  // écrasait le `span 2` du START et laissait le END à `auto`, donc UNE colonne.
+  // Mesuré dans Chromium à 360 px CSS : première case 15,5 px, les huit autres
+  // 34, et 37 px perdus au bord droit. Les deux règles écrivent donc la position
+  // ET la portée d'un coup.
+  for (const regle of [/\.emplacements \.emplacement:first-child \{([^}]*)\}/,
+    /\.emplacements\.decalee \.emplacement:first-child \{([^}]*)\}/]) {
+    const bloc = feuille.match(regle)[1];
+    assert.match(bloc, /grid-column:\s*\d+ \/ span 2/,
+      `le premier emplacement perd sa portée : ${bloc.trim()}`);
+    assert.doesNotMatch(bloc, /grid-column-start/,
+      'la position seule écrase la portée — c\'est le défaut du 03/09');
+  }
+
+  // ⚠ ET UNE VAGUE NE SE LAISSE PAS ÉCRASER : sans ça, quatre vagues dans un
+  // bassin trop court rétréciraient au lieu de faire défiler, et le carré
+  // ci-dessus ne tiendrait plus.
+  const vague = feuille.match(/#ecran-offense \.vague \{([^}]*)\}/)[1];
+  assert.match(vague, /flex:\s*0 0 auto/, 'une vague peut encore se faire écraser');
+  assert.match(bassin, /overflow-y:\s*auto/, 'le bassin ne défile plus quand il déborde');
+});
+
 test('offense — le budget vient du Centre de commandement, et de lui seul', () => {
   assert.equal(budgetDuNiveau(1), POINTS_ARMEE.offense.base + POINTS_ARMEE.offense.parNiveau);
   assert.ok(budgetDuNiveau(50) > budgetDuNiveau(1), 'le budget doit dépendre du niveau');
@@ -807,8 +873,12 @@ test('offense — les neuf sont en quinconce, et le décalage passe par la GRILL
     feuille.indexOf('aspect-ratio: 1', feuille.indexOf('#ecran-offense .emplacements')));
   assert.match(bloc, /grid-column:\s*span 2/,
     'un emplacement n\'occupe plus deux demi-colonnes');
-  assert.match(bloc, /\.decalee .emplacement:first-child \{ grid-column-start: 2/,
-    'la rangée décalée ne commence plus une demi-case plus loin');
+  // ⚠ CETTE ASSERTION A CHANGÉ DE FORME LE 03/09, ET ELLE S'EST RESSERRÉE. Elle
+  // cherchait `grid-column-start: 2` — la position SEULE, qui écrasait la portée
+  // et rendait le premier emplacement deux fois trop étroit (voir le test des
+  // quatre vagues). Elle exige maintenant la position ET la portée.
+  assert.match(bloc, /\.decalee \.emplacement:first-child \{ grid-column: 2 \/ span 2/,
+    'la rangée décalée ne commence plus une demi-case plus loin, ou perd sa portée');
   assert.doesNotMatch(bloc, /repeat\(\s*\d/,
     'le nombre de demi-colonnes est écrit dans la feuille : c\'est une seconde vérité');
 });

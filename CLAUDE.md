@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.79.0 · build 81.
+Dernière révision : **03/09/2026**, version 0.80.0 · build 82.
 
 ---
 
@@ -41,8 +41,118 @@ Dernière révision : **03/09/2026**, version 0.79.0 · build 81.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot ARMÉE-ET-FRONTIÈRE), à confronter :**
-`npm test` → **967 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot CONTOUR-ET-ÉTIQUETTES), à confronter :**
+`npm test` → **969 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 345 467 octets**, 0 référence externe.
+⚠⚠ **TROIS RETOURS D'ETHAN SUR CAPTURES, ET LE BOOT SANS TÊTE EN A TROUVÉ UN
+QUATRIÈME QUE PERSONNE N'AVAIT DEMANDÉ.** 03/09 au soir : « le halo doit coller
+la base, faire son contour et clignoter » · « rajouter un petit nom sur fond
+semi opaque + niveau en dessous de chaque entité de la carte » · « repartir les
+unités de l'armée en quinconce comme sur le screen pour utiliser toute la
+place ». Coût **+2 424 octets**, aucune image n'entre — **25 `data:` avant, 25
+après**. Borne T10 **inchangée à 3 400 000**, marge **54 533 octets, 1,60 %**.
+⚠⚠ **LE PREMIER EMPLACEMENT DE CHAQUE VAGUE FAISAIT LA MOITIÉ DES HUIT AUTRES,
+DEPUIS LE LOT OFFENSE, ET C'EST UNE CASCADE CSS.** `grid-column: span 2` est le
+RACCOURCI de `grid-column-start: span 2` + `grid-column-end: auto` ; la règle
+suivante posait `grid-column-start: 1`, ce qui écrasait le `span 2` du START et
+laissait le END à `auto` — donc **UNE** colonne. Mesuré dans Chromium à 360 px
+CSS, dpr 3 : **première case 15,5 px, les huit autres 34, et 37 px perdus au
+bord droit**. Après correction : **neuf cases de 34 px, de x = 6 à x = 336**, et
+la demi-colonne qui reste EST le décalage du quinconce, comme la feuille
+l'annonçait. Ethan le voyait sur ses deux captures sans le nommer.
+⚠ **ET AUCUN TEST NE POUVAIT LE VOIR** : la garde du quinconce cherchait
+`grid-column-start: 2`, c'est-à-dire très exactement la forme fautive. Elle
+exige désormais la position ET la portée — elle s'est resserrée, elle n'a pas
+changé de cible.
+⚠⚠ **LES QUATRE VAGUES SE RÉPARTISSENT SUR TOUT LE BASSIN, ET LES CASES RESTENT
+CARRÉES.** Mesuré avant : les quatre rangées tenaient dans les 218 premiers
+pixels d'un bassin de 474, le reste était du sol nu. Après, `space-between` les
+pose à **6-53, 144-191, 283-330, 421-468**. ⚠ L'autre lecture d'« utiliser
+toute la place » — laisser les cases GRANDIR en hauteur — est écartée PAR LA
+MESURE : `.piece` prend `84 %` en largeur ET en hauteur, et un pourcentage se
+résout sur la largeur du bloc pour l'une et sur sa hauteur pour l'autre, donc
+une case haute et étroite ÉTIRE le sprite. `aspect-ratio: 1` ne bouge pas, et
+`flex: 0 0 auto` empêche une vague de se laisser écraser.
+⚠⚠ **LE HALO CESSE D'ÊTRE UN ANNEAU QUI FLOTTE : C'EST UN CADRE SUR LES BORDS DE
+LA CASE.** Il avait un rayon de 0,72 case, donc il ne touchait rien. Le motif
+écrit dans le code — « un cercle inscrit serait caché par l'emblème » — était
+VRAI, `dessinerEmblemeDUneCase` rendant `cote: taille` : la réponse n'était pas
+de déborder, c'était de **passer au-dessus**. Le contour se dessine désormais
+après les emblèmes, comme la flèche.
+⚠ **ET LE TRAIT RENTRE D'UNE DEMI-ÉPAISSEUR, ce qui n'est pas cosmétique** : un
+`strokeRect` centre son trait sur le chemin, donc posé sur le bord exact il
+mordrait sur les quatre voisines — et deux bases du joueur adjacentes, ce que
+BASES-1 autorise, se toucheraient par leur halo.
+⚠⚠ **IL CLIGNOTE SANS LIRE D'HORLOGE, ET IL NE POUVAIT PAS EN LIRE UNE.**
+`maintenantMs` est la seule lectrice du temps mural de tout `src/` et la garde
+§11 en exige EXACTEMENT une, dans `ui/session.js`. Le compteur est donc celui
+des appels que la session fait déjà — cadencés à `>= 100` ms dans `boucle()` —,
+d'où **une seconde allumé, une seconde éteint**. ⚠ Et on ne redessine qu'aux
+DEUX bascules : repeindre à chaque appel serait dix cartes par seconde pour une
+image identique neuf fois sur dix.
+⚠⚠ **MESURÉ DANS CHROMIUM, PAS ASSERTÉ** : quatre clichés à 520 ms d'écart,
+**19 195 pixels d'os quand le cadre est allumé, 315 quand il est éteint** — ces
+315 sont le texte de l'étiquette. `strokeRect` est appelé 2 fois en 2 secondes.
+⚠⚠ **LES ÉTIQUETTES SONT UN RETOUR SUR L'ARBITRAGE DU 30/08, ET IL FAUT LE LIRE
+DANS CE SENS-LÀ.** Ce qui avait été retiré ce jour-là (« on enlève les lettres
+quoi qu'il arrive »), c'était la LETTRE : une capitale peinte SUR l'emblème,
+qu'il fallait décoder. Ce qui revient est un NOM en toutes lettres, posé SOUS la
+case, avec son niveau. **`CSS_MINI_LETTRE` ne reparaît pas et le champ `lettre`
+n'est toujours lu par aucun écran** : les deux gardes qui les surveillent
+tiennent, intactes.
+⚠⚠ **LE SEUIL D'AFFICHAGE EST MESURÉ SUR LA DENSITÉ, PAS SUR LA LISIBILITÉ D'UNE
+PLAQUE ISOLÉE.** Fenêtre de 360 × 512 px CSS, vingt graines, fenêtres centrées
+sur les rangées 250, 150 et 50 : le nombre de sites À L'ÉCRAN vaut **296 au cran
+de 10,7 px CSS par case, 98 à 21,3, 33 à 42,7 et 13 à 85,3**. À 33 les plaques
+se recouvrent — c'est la capture d'Ethan ; à 13 elles ne se touchent pas :
+mesuré sur trente graines, **88 % des sites ont leur plus proche voisin à DEUX
+cases (170 px CSS) et 8,4 % à une seule (85)**, quand « Base de l'Ouvrage » fait
+une soixantaine de pixels. D'où `cssMiniParCase: 64`.
+⚠ **ET LE SEUIL EST EN PIXELS CSS, PAS EN CRANS** : les crans de `ZOOM_CARTE`
+sont en pixels PHYSIQUES, donc le même cran n'a pas la même taille apparente à
+densité d'écran différente.
+⚠⚠ **ET LA GARDE MESURE CETTE DENSITÉ-LÀ, PAS LE NOMBRE 64.** Un test qui
+figerait `cssMiniParCase === 64` serait vert quelle que soit la valeur écrite ;
+celui-ci recompte les sites aux quatre crans et exige que le seuil tombe entre
+« ≤ 20 sites étiquetés » et « le cran fermé en portait plus de 20 ». Falsifié
+dans les DEUX sens — à 40 il ouvre un cran trop dense, à 200 il ferme tout.
+⚠⚠ **`ETIQUETTE_CARTE` ENTRE DANS `data/sites.js`, ET C'EST UNE GARDE QUI L'A
+EXIGÉ.** La première écriture posait les trois nombres dans `ui/monde.js`, et
+« l'écran ne nomme aucune constante de zoom en dur » est TOMBÉE dessus : le
+seuil valait 64, et 64 est aussi un cran. Elle avait raison pour une raison
+qu'elle ne connaissait pas — un seuil d'affichage est du calibrage (§4).
+⚠ **LE NOM VIENT D'`EMBLEMES_CARTE`, QUI EST DÉJÀ LA SOURCE DU TITRE DU
+PANNEAU** : l'étiquette et le panneau ne peuvent pas se contredire. Et le fond
+semi-opaque est `PALETTE.ombrePortee`, **LU dans `render/scene.js` et non
+retapé** — la garde de palette n'en tolère qu'un dans tout le dépôt.
+⚠⚠ **LA BASE DU JOUEUR N'A PAS DE LIGNE DE NIVEAU, ET C'EST LA RÈGLE.** Elle en
+a TROIS — bâtiments, défense, armée — et aucun ne vient de sa rangée : y écrire
+le niveau de la rangée 295 serait la faute que `sim/carte.js` existe pour
+empêcher. Vérifié à l'écran : sa plaque dit « Votre base », une seule ligne.
+⚠⚠ **L'INTERDICTION DE `fillText` NOMME UNE SECONDE EXCEPTION, ELLE N'EST PAS
+RETIRÉE.** Elle était totale hors de `dessinerFleche` depuis le lot
+DÉPLACEMENT ; elle l'est désormais hors de `dessinerFleche` **et**
+`dessinerEtiquette`. Une lettre ne peut toujours pas revenir sur un emblème.
+⚠⚠ **UNE GARDE MANQUAIT, ET LA FALSIFICATION L'A DIT : RIEN NE TENAIT L'ORDRE
+DU DESSIN.** Remettre `dessinerHalo` AVANT les emblèmes fait disparaître le
+contour de l'écran, et la suite restait ENTIÈREMENT VERTE. Le test lit
+maintenant le corps de `dessiner` et exige que contour, étiquettes et flèche
+viennent après les emblèmes — et que les frontières restent AVANT, elles.
+⚠ **QUINZE FALSIFICATIONS, QUINZE CHUTES**, dont deux qui ne mordaient pas au
+premier relevé : l'ordre du dessin, qui a fait écrire la garde ci-dessus, et
+DEUX qui visaient le mauvais bloc de la feuille — le Chantier porte les mêmes
+`aspect-ratio: 1` et `--jeton-part: 84 %` que l'Offense. **Une falsification qui
+ne mord pas se vérifie avant d'être crue.**
+⚠ **UN TEST ENTRE PAR ÉCRAN — DEUX EN TOUT — ET LE COMPTE PASSE DE 967 À 969.**
+Trois gardes existantes sont RESSERRÉES sans perdre une assertion : le quinconce,
+l'interdiction de `fillText`, et la géométrie du halo.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Aucun champ n'entre dans
+l'état : un cadre, deux lignes de texte et une répartition verticale.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le
+lot ne touche ni `art/`, ni `tools/` — pas un octet de `art/sprites/` ne change.
+
+**Auparavant, après le lot ARMÉE-ET-FRONTIÈRE :**
+`npm test` → 967 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 343 043 octets**, 0 référence externe.
 ⚠⚠ **QUATRE POINTS D'ETHAN, ET LE LOT REND 10 896 OCTETS.** 03/09 au soir :
 « ui armée : une barre : d'abord l'infanterie puis véhicule et avion » · « pas de

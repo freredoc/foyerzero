@@ -25,7 +25,8 @@
 // pas. Un test balaie le panneau pour qu'aucun bouton d'action n'y entre.
 
 import {
-  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, POI, palierDeNiveau, DEPLACEMENT,
+  GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, ETIQUETTE_CARTE, POI,
+  palierDeNiveau, DEPLACEMENT,
 } from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
@@ -51,6 +52,7 @@ import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
 import { dessinerLimiteDUneCase } from '../render/limite.js';
+import { PALETTE } from '../render/scene.js';
 import { baseCourante } from '../sim/base-courante.js';
 import { basculerVersLaBase } from '../sim/state.js';
 import { satellitesPresents } from '../sim/satellites.js';
@@ -511,11 +513,21 @@ export function centreDeLaCase(k, ox, oy, pas) {
 }
 
 /**
- * Le halo qui entoure la base ATTAQUANTE — un anneau, pas un aplat.
+ * Le contour qui ÉPOUSE la base attaquante — un cadre sur les bords de sa case.
  *
- * ⚠⚠ IL NE FAIT PAS LA TAILLE D'UNE CASE, IL DÉBORDE. Un cercle inscrit dans la
- * case serait caché par l'emblème qui s'y dessine ; le halo doit se lire AUTOUR,
- * sinon il ne dit rien de plus que la base elle-même.
+ * ⚠⚠ C'ÉTAIT UN CERCLE QUI DÉBORDAIT, ET ETHAN L'A RETOURNÉ LE 03/09 : « le
+ * halo doit coller la base, faire son contour et clignoter ». L'ancien anneau
+ * avait un rayon de 0,72 case, donc il flottait AUTOUR sans rien toucher ; le
+ * motif écrit ici disait qu'un cercle inscrit « serait caché par l'emblème qui
+ * s'y dessine », et c'était vrai — l'emblème couvre la case ENTIÈRE, mesuré sur
+ * `dessinerEmblemeDUneCase`, qui rend `cote: taille`. La réponse n'est pas de
+ * déborder, c'est de PASSER AU-DESSUS : le contour se dessine désormais après
+ * les emblèmes, comme la flèche.
+ *
+ * ⚠ LE TRAIT RENTRE D'UNE DEMI-ÉPAISSEUR, et ce n'est pas cosmétique. Un
+ * `strokeRect` centre son trait sur le chemin : posé sur le bord exact de la
+ * case, la moitié du trait mordrait sur les quatre voisines, et deux bases
+ * adjacentes — ce que le lot BASES-1 autorise — se toucheraient par leur halo.
  *
  * ⚠ SA COULEUR N'EST PAS NEUVE. `TEINTES_TERRITOIRE[JOUEUR]` est déjà l'os que
  * `EMBLEMES_CARTE` donne au bord de la base du joueur, et que la frontière de
@@ -536,20 +548,87 @@ export function centreDeLaCase(k, ox, oy, pas) {
  * @returns {{x: number, y: number, rayon: number, epaisseur: number}}
  */
 export function geometrieDuHalo(position, ox, oy, pas) {
-  const centre = centreDeLaCase(position, ox, oy, pas);
+  const epaisseur = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+  const demi = epaisseur / 2;
   return {
-    x: centre.x,
-    y: centre.y,
-    rayon: pas * RAYON_HALO,
-    epaisseur: Math.max(1, Math.round(pas * EPAISSEUR_HALO)),
+    x: (position.colonne - 1) * pas - ox + demi,
+    y: (position.rangee - 1) * pas - oy + demi,
+    cote: pas - epaisseur,
+    epaisseur,
   };
 }
 
-/** Le rayon du halo, en CASES — il déborde, sinon l'emblème le cacherait. */
-export const RAYON_HALO = 0.72;
-
 /** Son épaisseur, en cases : elle suit le cran, comme celle des frontières. */
 export const EPAISSEUR_HALO = 0.08;
+
+/**
+ * La période du clignotement, en appels de `rafraichir`.
+ *
+ * ⚠⚠ LE CLIGNOTEMENT NE LIT AUCUNE HORLOGE, ET IL NE POUVAIT PAS. `maintenantMs`
+ * est la SEULE lectrice du temps mural de tout `src/`, et la garde §11 de
+ * `banc.test.js` exige EXACTEMENT une occurrence, dans `ui/session.js` : une
+ * seconde ici ferait tomber la suite. Le compteur est donc celui des appels que
+ * la session fait déjà — elle les cadence à `>= 100` millisecondes dans
+ * `boucle()`, soit dix par seconde —, si bien que dix ticks valent une seconde.
+ * Un tour complet fait donc **une seconde allumé, une seconde éteint**.
+ *
+ * ⚠ ET SA CADENCE EST LUE, PAS SUPPOSÉE : si `session.js` change son seuil, le
+ * clignotement change de vitesse et rien ne casse. C'est un rythme, pas une
+ * grandeur de jeu.
+ */
+export const PERIODE_HALO_TICKS = 10;
+
+/**
+ * Le contour est-il allumé à ce tick ? Pure, donc mesurable sans navigateur.
+ *
+ * ⚠ ELLE EST SÉPARÉE DU DESSIN EXPRÈS. Le dépôt n'a ni jsdom ni navigateur
+ * (§3) : une alternance écrite dans la boucle de rendu ne serait vérifiable
+ * qu'à l'œil, et c'est exactement ce que la géométrie du halo a déjà payé au
+ * lot RETOURS-DU-31.
+ *
+ * @param {number} tick
+ * @returns {boolean}
+ */
+export function haloAllumeAuTick(tick) {
+  return Math.floor(tick / PERIODE_HALO_TICKS) % 2 === 0;
+}
+
+/**
+ * Ce qu'une étiquette de carte écrit sous un site : son nom, puis son niveau.
+ *
+ * ⚠⚠ ETHAN, 03/09 : « rajouter un petit nom sur fond semi opaque + niveau en
+ * dessous de chaque entité de la carte ». C'est un RETOUR SUR L'ARBITRAGE DU
+ * 30/08 — « on enlève les lettres quoi qu'il arrive » —, et il faut le dire
+ * dans ce sens-là : ce qui avait été retiré, c'était la LETTRE, une
+ * désignation d'une seule capitale peinte SUR l'emblème et qu'il fallait
+ * décoder. Ce qui revient est un NOM, écrit en toutes lettres, posé SOUS la
+ * case. `CSS_MINI_LETTRE` ne reparaît pas et le champ `lettre` n'est toujours
+ * pas relu par la carte : les deux gardes qui les surveillent tiennent.
+ *
+ * ⚠ LE NOM SE LIT DANS `EMBLEMES_CARTE`, QUI LE TIENT LUI-MÊME DE `POI` POUR
+ * LES SEPT GISEMENTS. C'est déjà la source du titre du panneau de site — trois
+ * lecteurs vivants —, donc l'étiquette et le panneau ne peuvent pas se
+ * contredire. En écrire une seconde table donnerait deux noms au même endroit.
+ *
+ * ⚠⚠ ET LA BASE DU JOUEUR N'A PAS DE LIGNE DE NIVEAU, CE QUI N'EST PAS UN
+ * OUBLI. `sitesDeLaFenetre` lui pose `niveau: null` parce qu'elle en a TROIS —
+ * bâtiments, défense, armée — et qu'aucun ne vient de sa rangée : écrire ici le
+ * niveau de la rangée 295 serait très exactement la faute que `sim/carte.js`
+ * existe pour empêcher, et qu'un test de ce fichier refuse déjà dans le
+ * panneau. Une seule ligne, donc, et c'est la règle qui la donne.
+ *
+ * @param {{type: string, niveau: number|null}} site
+ * @returns {Array<string>} une ou deux lignes, jamais vides
+ */
+export function lignesDeLEtiquette(site) {
+  const embleme = EMBLEMES_CARTE[site.type];
+  if (embleme === undefined) throw new RangeError(`carte : site sans emblème « ${site.type} »`);
+  const lignes = [embleme.nom];
+  if (site.niveau !== null && site.niveau !== undefined) lignes.push(`Niveau ${site.niveau}`);
+  return lignes;
+}
+
+
 
 /**
  * Le trait de la flèche qui va de la base halotée à la cible ouverte.
@@ -707,6 +786,9 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const cache = creerCacheDalles(TERRAIN_CARTE.dallesEnCache);
   let sitesAffiches = [];
   let empreinteSatellites = null;
+  // Le compteur du clignotement — voir `PERIODE_HALO_TICKS`. Il n'avance que
+  // quand la carte est EN SCÈNE : `rafraichir` sort avant sur `!visible`.
+  let tickHalo = 0;
   // ⚠ L'IMAGE DES EMBLÈMES, ATTENDUE AVANT LE PREMIER DESSIN. Une image dessinée
   // avant décodage est BLANCHE, et le défaut ne se reproduit qu'au tout premier
   // chargement — donc jamais en essai, toujours chez le joueur. `monde.js`
@@ -1092,20 +1174,71 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   }
 
   /**
-   * Le halo autour de la base attaquante — sous les emblèmes, comme les
-   * frontières, pour ne pas couper le dessin qui dit ce qu'il y a là.
+   * L'étiquette d'un site : son nom et son niveau, sous sa case, sur une plaque.
+   *
+   * ⚠⚠ LA PLAQUE EMPLOIE `PALETTE.ombrePortee`, ET C'EST LE SEUL `rgba` DU
+   * DÉPÔT. La garde de palette de `banc.test.js` balaie `src/render/`,
+   * `src/ui/` et la feuille, et refuse tout `rgba` autre que
+   * `rgba(0,0,0,0.31)` : « fond semi opaque » n'a donc qu'une écriture
+   * possible, et on la LIT dans `render/scene.js` au lieu de la retaper — une
+   * transcription qui ne se confronte pas à sa source est une copie qui
+   * vieillit.
+   *
+   * ⚠ ELLE SE POSE SOUS LA CASE, PAS DESSUS. Par-dessus, elle masquerait
+   * l'emblème, c'est-à-dire le seul dessin qui dit ce qu'il y a là — et
+   * l'étiquette existe pour le NOMMER, pas pour le remplacer.
+   *
+   * ⚠ ET ELLE SE DESSINE APRÈS TOUS LES EMBLÈMES, dans une seconde boucle. Dans
+   * la première, la plaque d'un site serait recouverte par l'emblème du site
+   * juste en dessous de lui — mesuré : 8,4 % des sites ont un voisin à une
+   * seule case.
+   */
+  function dessinerEtiquette(site, x, y, taille) {
+    const lignes = lignesDeLEtiquette(site);
+    const police = Math.max(1, Math.round(taille * ETIQUETTE_CARTE.partPolice));
+    ctx.font = `${police}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const marge = Math.round(police * 0.5);
+    const interligne = Math.round(police * 1.25);
+    const large = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + marge * 2;
+    const haut = lignes.length * interligne + marge;
+    const cx = Math.round(x + taille / 2);
+    const hautPlaque = Math.round(y + taille);
+    ctx.fillStyle = PALETTE.ombrePortee;
+    ctx.fillRect(Math.round(cx - large / 2), hautPlaque, Math.round(large), haut);
+    ctx.fillStyle = ETIQUETTE_CARTE.encre;
+    lignes.forEach((ligne, i) => {
+      ctx.fillText(ligne, cx, hautPlaque + Math.round(marge / 2) + i * interligne);
+    });
+  }
+
+  /**
+   * Le contour de la base attaquante — PAR-DESSUS les emblèmes, et clignotant.
+   *
+   * ⚠⚠ IL EST PASSÉ AU-DESSUS, ET C'EST FORCÉ PAR « COLLER LA BASE ». Tant que
+   * le halo débordait, le dessiner sous l'emblème n'en cachait rien ; un cadre
+   * posé sur les bords de la case, lui, est intégralement recouvert —
+   * `dessinerEmblemeDUneCase` rend `cote: taille`, donc l'emblème occupe la
+   * case entière. Les frontières, elles, restent dessous : elles ceignent des
+   * cases qui n'ont pas toutes un emblème, et couper un dessin qui dit ce qu'il
+   * y a là serait la faute que le lot TERRITOIRE nomme déjà.
+   *
+   * ⚠ ÉTEINT, ON NE DESSINE RIEN — on ne peint pas un cadre transparent. La
+   * palette du dépôt est fermée à trente-trois teintes et ne tolère qu'un seul
+   * `rgba`, réservé à l'ombre portée ; un halo qui s'estomperait demanderait une
+   * transparence de plus, donc une brèche dans la garde de palette.
    */
   function dessinerHalo(ox, oy, pas) {
+    if (!haloAllumeAuTick(tickHalo)) return;
     const halo = geometrieDuHalo(baseCourante(etatCourant).position, ox, oy, pas);
-    // Hors du canevas : rien à peindre, et un arc à des milliers de pixels
-    // coûterait quand même son chemin.
-    if (halo.x < -halo.rayon || halo.y < -halo.rayon
-      || halo.x > canvas.width + halo.rayon || halo.y > canvas.height + halo.rayon) return;
+    // Hors du canevas : rien à peindre, et un chemin à des milliers de pixels
+    // coûterait quand même son tracé.
+    if (halo.x + halo.cote < 0 || halo.y + halo.cote < 0
+      || halo.x > canvas.width || halo.y > canvas.height) return;
     ctx.lineWidth = halo.epaisseur;
     ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
-    ctx.beginPath();
-    ctx.arc(halo.x, halo.y, halo.rayon, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.strokeRect(halo.x, halo.y, halo.cote, halo.cote);
   }
 
   /**
@@ -1202,7 +1335,6 @@ export function initialiserEcranMonde(doc, crochets = {}) {
 
     const pas = cran();
     dessinerFrontieres(ox, oy, pas);
-    dessinerHalo(ox, oy, pas);
     sitesAffiches = sitesDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
     }));
@@ -1220,8 +1352,21 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       );
     }
 
-    // ⚠ APRÈS LES EMBLÈMES, contrairement au halo et aux frontières : la flèche
-    // DOIT se lire par-dessus, c'est tout ce qu'elle a à dire.
+    // ⚠ LES ÉTIQUETTES EN SECONDE PASSE, ET SEULEMENT ASSEZ PRÈS. Voir
+    // `ETIQUETTE_CARTE` de `data/sites.js` : le seuil est mesuré sur la DENSITÉ,
+    // pas sur la lisibilité d'une plaque isolée.
+    if (pas / (fenetre.devicePixelRatio || 1) >= ETIQUETTE_CARTE.cssMiniParCase) {
+      for (const site of sitesAffiches) {
+        dessinerEtiquette(
+          site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas,
+        );
+      }
+    }
+
+    // ⚠ APRÈS LES EMBLÈMES, comme le contour de la base et contrairement aux
+    // frontières : la flèche DOIT se lire par-dessus, c'est tout ce qu'elle a à
+    // dire.
+    dessinerHalo(ox, oy, pas);
     dessinerFleche(ox, oy, pas);
     dessinerCasesDuDeplacement(ox, oy, pas);
 
@@ -1647,8 +1792,16 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // neuf hachages par case de la fenêtre — deux mille cases au cran le plus
     // large — pour redessiner exactement la même image. Le fond, lui, est une
     // fonction de la graine : il ne change jamais.
+    // ⚠⚠ LE CLIGNOTEMENT REDESSINE, MAIS SEULEMENT QUAND IL CHANGE D'ÉTAT.
+    // Repeindre à chaque appel serait dix cartes par seconde, indéfiniment,
+    // pour une image identique neuf fois sur dix — le coût exact que le
+    // paragraphe ci-dessous existe pour éviter. On ne redessine qu'aux DEUX
+    // instants où le cadre s'allume et s'éteint, soit une fois par seconde.
+    const avant = haloAllumeAuTick(tickHalo);
+    tickHalo += 1;
+    const clignote = haloAllumeAuTick(tickHalo) !== avant;
     const empreinte = empreinteDeLaCarte(etat);
-    if (empreinte === empreinteSatellites) return;
+    if (empreinte === empreinteSatellites && !clignote) return;
     empreinteSatellites = empreinte;
     dessiner();
   }
