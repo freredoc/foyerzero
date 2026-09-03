@@ -1,0 +1,150 @@
+{
+ "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/bords.py ». Les murs sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur eux. Même motif que art/sprites/atlas-empreintes.json depuis le lot PIXELS.",
+ "qualite": 85,
+ "sprites": {
+  "bord_j_bloc_1": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1388,
+   "sha256": "4816904c781c02c767ac1345d0d407564d46d59f77682221d3c6425eb3b56e0e",
+   "teintes": 4943,
+   "transparents": 199,
+   "trousEnfermes": 0
+  },
+  "bord_j_bloc_2": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1384,
+   "sha256": "15d4ce00f5ee117f17bb0929e1ce436f1eec7365930b8cf97b37c6909d2319c1",
+   "teintes": 5054,
+   "transparents": 372,
+   "trousEnfermes": 0
+  },
+  "bord_j_bloc_3": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1544,
+   "sha256": "c5642dacab76b0e64e1adf30745255e54ba95c395238faf106c94a6479a280ce",
+   "teintes": 5280,
+   "transparents": 271,
+   "trousEnfermes": 0
+  },
+  "bord_j_bloc_4": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1416,
+   "sha256": "9f87c2ffbfa1b1cd3925fde0339c3da5c43a815b38c97517223a16f135df184c",
+   "teintes": 5125,
+   "transparents": 448,
+   "trousEnfermes": 0
+  },
+  "bord_j_mur_1": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 6340,
+   "sha256": "1d1d9cb3cebfdfce85a99c230101b012a8a32e04f380f431553b046c04b00b85",
+   "teintes": 20221,
+   "transparents": 2680,
+   "trousEnfermes": 0
+  },
+  "bord_j_mur_2": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 4860,
+   "sha256": "21687ee0ad7dcf94f9f84bbf8c6d785989c982fcf8dc80893315100a59a9d38c",
+   "teintes": 16940,
+   "transparents": 2885,
+   "trousEnfermes": 0
+  },
+  "bord_j_mur_3": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 5616,
+   "sha256": "6bf63d6dcfbe16885879441909b20800f77474d4ad2402b01bf328c0b490a4f3",
+   "teintes": 18960,
+   "transparents": 2995,
+   "trousEnfermes": 0
+  },
+  "bord_j_mur_4": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 6272,
+   "sha256": "e9587a1efb1319e5444794ceb182ac04896a152434df027b24432496ff9145e0",
+   "teintes": 20952,
+   "transparents": 2875,
+   "trousEnfermes": 0
+  },
+  "bord_o_bloc_1": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1422,
+   "sha256": "ea9de7e50f79e194d5be1fbe3d00a7a819219b55e4469eec75a6d6decb4128e3",
+   "teintes": 4317,
+   "transparents": 59,
+   "trousEnfermes": 7
+  },
+  "bord_o_bloc_2": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1432,
+   "sha256": "db924d2116335b8c85b2f6ca89c8ace5bbf85dadfcec38ced9c2e2034082672a",
+   "teintes": 4460,
+   "transparents": 49,
+   "trousEnfermes": 0
+  },
+  "bord_o_bloc_3": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1356,
+   "sha256": "f26095926d7cb77204a7ea2878b413aa195fc99506624d6f761be0a708b34640",
+   "teintes": 4132,
+   "transparents": 36,
+   "trousEnfermes": 0
+  },
+  "bord_o_bloc_4": {
+   "hauteur": 128,
+   "largeur": 128,
+   "octets": 1468,
+   "sha256": "838ecb8392aeb9834374491a03966567bba7073cdecf0d5a4c9c184dcf3a22ee",
+   "teintes": 4201,
+   "transparents": 113,
+   "trousEnfermes": 0
+  },
+  "bord_o_mur_1": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 4882,
+   "sha256": "bd4590d82570b93e243abc1943c794fead53743c953e486db077dbd666eedcb1",
+   "teintes": 15215,
+   "transparents": 3495,
+   "trousEnfermes": 0
+  },
+  "bord_o_mur_2": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 4876,
+   "sha256": "1e4790a91637b0be982830897bafc39790dda629dcb9839e6497a6374334d0f5",
+   "teintes": 15272,
+   "transparents": 4412,
+   "trousEnfermes": 0
+  },
+  "bord_o_mur_3": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 4422,
+   "sha256": "642f8d2fb63807dbd0aa0d4ee9ff33e0991855b7e89b844866ce14636e3705b9",
+   "teintes": 14709,
+   "transparents": 4078,
+   "trousEnfermes": 0
+  },
+  "bord_o_mur_4": {
+   "hauteur": 128,
+   "largeur": 512,
+   "octets": 4152,
+   "sha256": "bafbf56539578823f25e4bfc168c87dafbe0f3a886d188bc184f37e5441777e9",
+   "teintes": 14104,
+   "transparents": 3684,
+   "trousEnfermes": 70
+  }
+ }
+}

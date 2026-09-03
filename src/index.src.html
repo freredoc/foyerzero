@@ -389,11 +389,12 @@
        côté —, donc chacune entre par son propre marqueur. Seul le camp du
        joueur est ici : les cinq de l'Ouvrage sont produites et attendent
        l'écran de raid. */
-    --mur-j-h-a: url('%MUR_J_H_A%');
-    --mur-j-v-a: url('%MUR_J_V_A%');
-    --mur-j-v-b: url('%MUR_J_V_B%');
-    --mur-j-angle-no: url('%MUR_J_ANGLE_NO%');
-    --mur-j-angle-ne: url('%MUR_J_ANGLE_NE%');
+    --mur-j-mur-1: url('%MUR_J_MUR_1%');
+    --mur-j-mur-2: url('%MUR_J_MUR_2%');
+    --mur-j-bloc-1: url('%MUR_J_BLOC_1%');
+    --mur-j-bloc-2: url('%MUR_J_BLOC_2%');
+    --mur-j-bloc-3: url('%MUR_J_BLOC_3%');
+    --mur-j-bloc-4: url('%MUR_J_BLOC_4%');
   }
 
   /* ⚠⚠ QUATRE ATLAS QUI SERVENT DES DEUX CÔTÉS — EN FOND CSS ET EN `drawImage`.
@@ -666,10 +667,20 @@
      ⚠ ET `coteQuiTient` DIVISE PAR `largeur + 1`, PAS PAR `largeur` : la boîte
      fait neuf colonnes plus deux demi-cases, donc dix cases de large. Le
      calculer sur neuf redonnerait exactement le débordement qu'on retire. */
+  /* ⚠⚠ UNE CASE PLEINE DE `padding`, ET PLUS UNE DEMI — lot MURS, 03/09. La v1
+     du mur était un TRAIT posé à cheval sur la ligne du bord : il mordait d'une
+     demi-case de chaque côté, et la demi-case de `padding` lui rendait la
+     place. La v2 est un BLOC PLEIN qui CEINT la grille sans rien recouvrir,
+     donc il lui faut une case entière. Sans ce changement, la moitié
+     extérieure de l'anneau sortirait de la boîte et le champ défilerait
+     horizontalement au repos — le « ça déborde » d'Ethan.
+     ⚠ `coteQuiTient` d'`ui/chantier.js` divise par `largeur + 2` pour la même
+     raison, et `paddingDeLaGrille` rend une case entière. Les trois vont
+     ensemble ; en changer un seul décale le mur du contenu. */
   #chantier-grille {
     display: grid; align-content: start; margin-inline: auto; position: relative;
     width: max-content;
-    padding: calc(var(--case-cote) / 2);
+    padding: var(--case-cote);
   }
   /* ⚠⚠ LE MUR DE CONTOUR. Il se POSE sur la grille et ne prend aucun geste :
      `pointer-events: none`, comme le calque des traits de voisinage — un mur qui
@@ -692,17 +703,23 @@
      le quart extérieur d'une case du pourtour — son liseré de case légale
      compris, sur ce côté-là seulement, les trois autres restant lisibles. */
   #chantier-contour { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-  /* ⚠ LA TAILLE VIENT DU JS, EN UNITÉS DE CASE : un mur court d'un bout à
-     l'autre de son côté, un angle fait une case. `background-size: 100% 100%`
-     étire donc l'image sur la pièce — au plafond du zoom c'est le rapport 1:1,
-     l'asset faisant 512 pixels pour huit cases de 64.
-     ⚠ ET `image-rendering: pixelated` RESTE, malgré les seize couleurs : le
-     dessin est de l'art de pixel, et un lissage lui donnerait un flou que les
-     sprites voisins n'ont pas. */
+  /* ⚠ LA TAILLE VIENT DU JS, EN UNITÉS DE CASE : un mur couvre quatre cases, un
+     bloc une seule. `background-size: 100% 100%` étire donc l'image sur la
+     pièce — au plafond du zoom c'est le rapport 1:1, l'asset faisant 512 pixels
+     pour quatre cases de 128.
+     ⚠⚠ ET `image-rendering: pixelated` EST PARTI D'ICI, LE 03/09, SUR CETTE
+     RÈGLE-LÀ SEULEMENT. La v1 du mur était quantifiée sur seize teintes : du
+     pixel art, que le plus proche voisin servait bien. La v2 garde le RENDU —
+     vingt mille teintes — et, à la case par défaut de 46 px, ses 512 pixels
+     s'affichent en 184 : le plus proche voisin y jetterait deux pixels sur
+     trois et crénellerait les briques. C'est l'argument du lot PIXELS, mot pour
+     mot, appliqué au deuxième site.
+     ⚠ LES SEPT AUTRES `image-rendering: pixelated` DE CETTE FEUILLE NE BOUGENT
+     PAS, et c'est délibéré : ils peignent des cellules d'atlas, dont le cadrage
+     par pourcentage tombe juste. Chacun demandera sa propre mesure. */
   #chantier-contour .mur {
     position: absolute;
     background-repeat: no-repeat; background-size: 100% 100%;
-    image-rendering: pixelated;
   }
   /* ⚠ `aspect-ratio: 1` NE SE TOUCHE PAS. Une case carrée est ce qui fait qu'une
      cellule d'atlas de 64×64 tombe dans un cadre de même proportion : la rendre
