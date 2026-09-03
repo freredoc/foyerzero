@@ -1,0 +1,68 @@
+{
+ "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/fonds.py ». Les fonds sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur eux — au premier chef leurs DIMENSIONS, dont src/render/fond.js dérive le rectangle source de sa primitive. Même motif que art/sprites/bord/bord-empreintes.json depuis le lot MURS.",
+ "fonds": {
+  "fond_j_01": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 110106,
+   "qualite": 75,
+   "sha256": "e3be3834fa5a54e10f35f2c5573593967b8059fe1511f7871f562cec299b8d5d"
+  },
+  "fond_j_02": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 219666,
+   "qualite": 75,
+   "sha256": "98c07d9c169d7064d99b229fe8834bb235e5accdf41ead4911d2137982aed5fc"
+  },
+  "fond_j_03": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 230918,
+   "qualite": 75,
+   "sha256": "433272bcbf7cd96f2dc88505985184427e64a2f91ad21855f45fbcdf1d253f5b"
+  },
+  "fond_j_04": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 197824,
+   "qualite": 75,
+   "sha256": "1b4ef8209f037fea2cce8901ced965ee3d655678c1d29e8bfa206a85a86cc749"
+  },
+  "fond_o_austere": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 164036,
+   "qualite": 75,
+   "sha256": "8bf72fa1888035a96cc43367b48a3495a28d60b1628ea4828af3e76140b5d242"
+  },
+  "fond_o_hostile": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 279838,
+   "qualite": 75,
+   "sha256": "eb2e49bcb1f6028b2e8f62f7f4c114663f4a00b5ff11ecf2d0992a1164550c87"
+  },
+  "fond_o_menacante": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 231034,
+   "qualite": 75,
+   "sha256": "87499aa0b2afea6eaf9e1ab31b34901e93d76dd923fcb418dbccdda2b39d9d72"
+  },
+  "fond_o_oppressante": {
+   "hauteur": 2160,
+   "largeur": 1080,
+   "octets": 217124,
+   "qualite": 75,
+   "sha256": "006648e4522fbefade6028d16d7be8ea1a4f6d1456570d2ff0a75f64107a9353"
+  },
+  "fond_offense": {
+   "hauteur": 1368,
+   "largeur": 1149,
+   "octets": 164578,
+   "qualite": 85,
+   "sha256": "3df8376c151f9904119cb890bc3e139c25325958f0bfbce51acf506496d10102"
+  }
+ }
+}

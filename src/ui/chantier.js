@@ -597,63 +597,24 @@ function bandesDansLOrdreDeLEcran() {
 }
 
 /**
- * La géométrie du mur de contour vient de `render/contour.js`, et elle est
- * RÉ-EXPORTÉE ici.
+ * La géométrie du fond peint vient de `render/fond.js`, et elle est IMPORTÉE.
  *
- * ⚠⚠ ELLE A DÉMÉNAGÉ AU LOT MURS-OUVRAGE, ET LE RÉ-EXPORT N'EST PAS UNE COPIE.
- * Ethan, 03/09 : « c'est pour le joueur et pour l'ouvrage » — la base de
- * l'Ouvrage se regarde sur l'écran de RAID, qui est un canevas et passe par
- * `render/`, lequel n'a pas le droit d'importer `ui/`. Le mur des deux écrans
- * est donc le MÊME mur, calculé une fois. Un ré-export garde la même liaison :
- * `import { tuilesDuContour } from './chantier.js'` marche toujours, et il n'y
- * a pas deux listes qui puissent diverger. Même motif que `baseCourante`, que
- * `sim/state.js` ré-exporte depuis `sim/base-courante.js`.
+ * ⚠⚠ CE BLOC RÉ-EXPORTAIT `render/contour.js` JUSQU'AU LOT MUR-PEINT. L'anneau
+ * de blocs que les deux écrans posaient case par case n'existe plus : le mur est
+ * peint dans le fond, donc il n'y a plus de géométrie de mur à partager. Ce qui
+ * reste partagé, c'est la PLACE que ce mur occupe — une demi-case — et la boîte
+ * qu'elle définit, parce que l'écran de la base et celui du raid doivent poser
+ * le même décor au même endroit.
+ *
+ * ⚠ ET IL N'Y A PLUS DE RÉ-EXPORT. Il existait parce que `tuilesDuContour`
+ * avait déménagé d'ici vers `render/`, et que des appelants la demandaient
+ * encore à cet écran. Rien n'a jamais demandé le fond à l'écran de la base :
+ * les deux écrans le prennent à la source.
  */
-export {
-  BANDE_DU_CONTOUR, BANDE_DE_FIN_DU_CONTOUR,
-  LONGUEUR_DU_MUR, NB_VARIANTES_DU_MUR, tuilesDuContour,
-} from '../render/contour.js';
-
-// ⚠ ET UN RÉ-EXPORT NE CRÉE AUCUNE LIAISON LOCALE — payé en une exécution.
-// `bornesDeDefilement`, plus bas, lit `BANDE_DU_CONTOUR` : sous le seul
-// `export … from`, le nom n'existe pas dans ce module et la fonction lève
-// « BANDE_DU_CONTOUR is not defined » au premier défilement. Ce qui sort et ce
-// qui sert se déclarent séparément.
-import { BANDE_DU_CONTOUR, tuilesDuContour, nomsDuContour } from '../render/contour.js';
-
-/**
- * Les images du mur de contour DU JOUEUR, et la variable CSS qui porte chacune.
- *
- * ⚠⚠ CE NE SONT PAS DES CELLULES D'ATLAS. Un mur fait 512 × 128 et un bloc
- * 128 × 128 ; `tools/atlas.py` exige des cellules CARRÉES d'un même côté, donc
- * il ne peut coudre ni l'un ni l'autre ensemble. Chaque image entre dans le
- * livrable par son propre marqueur, comme les deux grosses bases de l'Ouvrage
- * sur la carte du monde et comme le fond du bassin de l'écran Offense.
- *
- * ⚠⚠ HUIT DESSINS PAR CAMP, ET L'ANNEAU N'EN POSE QUE SIX. `tools/bords.py`
- * produit quatre murs et quatre blocs par camp ; le U d'une base de neuf
- * colonnes n'a que DEUX créneaux de mur. Inliner les seize aurait coûté
- * 51 000 octets de base64 pour dix dessins que rien ne dessine.
- *
- * ⚠⚠ ET CELLE-CI NE PORTE QUE LE CAMP DU JOUEUR — l'écran de la base ne montre
- * que la sienne. Le camp de l'Ouvrage se dessine sur le CANEVAS de l'écran de
- * raid, par des balises `img` et non par des fonds CSS : voir
- * `ATLAS_DE_LA_PAGE` de `ui/session.js`.
- *
- * ⚠⚠ ELLE SE DÉRIVE DE L'ANNEAU, ELLE NE S'ÉCRIT PLUS À LA MAIN — lot
- * MURS-OUVRAGE, 03/09. Six lignes recopiées ont tenu tant qu'il n'y avait
- * qu'un camp ; à deux, la même liste doit servir deux fois, et une seconde
- * copie aurait été la première à oublier une pièce le jour où la base
- * changerait de largeur. `nomsDuContour` dit ce que l'anneau emploie, et
- * `nomCssDuMur` en fait un nom de variable. Le test des deux sens n'a rien
- * perdu de sa force : il compare toujours la table à `tuilesDuContour`, et il
- * tombe si la dérivation se met à mentir.
- */
-export const nomCssDuMur = (nom) => `--mur-${nom.replace(/^bord_/, '').replaceAll('_', '-')}`;
-
-export const VARIABLE_DU_MUR = Object.fromEntries(
-  nomsDuContour('j').map((nom) => [nom, `var(${nomCssDuMur(nom)})`]),
-);
+import {
+  MUR_CASES, LARGEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES, BANDE_SOUS_LE_MUR,
+  fondDeLaBase, VARIABLE_DU_FOND,
+} from '../render/fond.js';
 
 /**
  * Ce que fait le bouton de bascule quand on est sur cette bande.
@@ -738,7 +699,7 @@ export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue, padding 
     : suivante.premiereLigne;
   // Le mur ne dépasse qu'au-dessus de la bande qu'il entoure — le U n'a pas de
   // bas —, et sa hauteur de dépassement est très exactement celle du `padding`.
-  const murAuDessus = cleBande === BANDE_DU_CONTOUR ? padding : 0;
+  const murAuDessus = cleBande === BANDE_SOUS_LE_MUR ? padding : 0;
   const min = padding + (ordre[ici].premiereLigne - 1) * hauteurRangee - murAuDessus;
   // ⚠ LE BAS EST LE BAS DU CONTENU, PAS DE LA BOÎTE : la demi-case de `padding`
   // du bas ne porte aucun dessin, et la rendre atteignable ferait défiler dans
@@ -2164,11 +2125,12 @@ const VARIABLE_DATLAS = {
   unite: 'var(--atlas-unite)',
   chassis: 'var(--atlas-chassis)',
   tourelle_unite: 'var(--atlas-tourelle-unite)',
-  // ⚠ `sol` N'EST PAS UNE FAMILLE COUSUE. L'atlas du monde n'est pas produit
-  // par `tools/atlas.py` et n'a pas de noms : ses cellules se désignent par
-  // leur RANG, et `fondsDuSol` passe par `fondDeCellule` au lieu de
-  // `fondDuSprite`. Il est ici parce que c'est la table des atlas de l'écran,
-  // et qu'en avoir deux serait la seconde vérité habituelle.
+  // ⚠ `sol` RESTE, ET IL NE SERT PLUS À LA BASE. L'atlas du MONDE tapissait les
+  // cases de la grille jusqu'au lot MUR-PEINT, quatre cellules par case ; le sol
+  // de la base est maintenant le décor peint. La variable reste parce que
+  // l'écran Monde en a besoin — c'est le même fichier — et parce que cette table
+  // est la table des atlas de l'écran, dont en avoir deux serait la seconde
+  // vérité habituelle.
   sol: 'var(--atlas-sol)',
 };
 
@@ -2369,111 +2331,28 @@ export function coteCaseParDefaut(doc) {
 }
 
 /**
- * Le côté d'une cellule de sol dans l'atlas du monde, en pixels.
+ * ⚠⚠ LE SOL PAVÉ CASE PAR CASE A DISPARU — lot MUR-PEINT, 03/09.
  *
- * ⚠ IL SE DÉDUIT, IL NE S'ÉCRIT PAS. Une tuile du monde fait `coteTuile` pixels
- * et couvre `tuilesParCase` cases par axe ; découper au quart de tuile donne
- * exactement la grille de 64 sur laquelle tous les sprites du dépôt sont
- * conditionnés. Écrire 64 ici serait une troisième vérité.
+ * Quatre fonctions vivaient ici : `COTE_CELLULE_SOL`, `cellulesDeSolParAxe`,
+ * `casesDeSolParAtlas` et `fondsDuSol`. Elles découpaient l'atlas du MONDE en
+ * quatre cellules par case et en tapissaient les cent soixante-deux cases de la
+ * grille, plus le champ derrière elles. Le sol de la base est maintenant UNE
+ * image — le décor peint, mur compris —, donc il n'y a plus rien à découper ni à
+ * paver.
+ *
+ * ⚠ CE QUI N'A PAS DISPARU : `--atlas-sol`, qui porte l'atlas du monde. La
+ * CARTE en a toujours besoin, et son terrain est procédural
+ * (`render/terrain.js`) — ce n'est pas le même sol. Le retirer aurait vidé
+ * l'écran Monde pour une raison qui ne le regarde pas.
+ *
+ * ⚠ ET `tile_sol_{j,o}_*` N'A PAS ÉTÉ TOUCHÉ NON PLUS, parce que ce lot ne
+ * l'orpheline pas : il l'était DÉJÀ. Mesuré — les huit dalles ne sont nommées
+ * dans `src/` que par des commentaires, aucun écran ne les résout depuis le
+ * 30/08, où le sol de la base est passé à l'atlas du monde. Elles restent
+ * cousues dans l'atlas `terrain` ; les en retirer changerait la géométrie d'un
+ * fichier GÉNÉRÉ pour une dette que ce lot n'a pas créée.
  */
-const COTE_CELLULE_SOL = ZOOM_CARTE.coteTuile / ZOOM_CARTE.tuilesParCase;
 
-/**
- * Combien de cellules de sol par axe porte l'atlas du monde.
- *
- * ⚠⚠ LA TAILLE VIENT DE L'ATTRIBUT `width` DE L'IMAGE, PAS DE `naturalWidth`.
- * `naturalWidth` vaut zéro tant que le PNG n'est pas décodé, et le sol se peint
- * à la première image : la grille serait fausse au démarrage et juste ensuite,
- * ce qui est la pire des deux. L'attribut, lui, est lisible dès que le balisage
- * est analysé. Un test le confronte à l'en-tête RÉEL du fichier — une
- * transcription qui ne se confronte pas à sa source est une copie qui vieillit.
- *
- * @param {Document} doc
- * @returns {number}
- */
-export function cellulesDeSolParAxe(doc) {
-  const image = doc.getElementById('monde-atlas');
-  const largeur = Number(image?.getAttribute('width'));
-  if (!Number.isInteger(largeur) || largeur <= 0 || largeur % COTE_CELLULE_SOL !== 0) {
-    throw new RangeError(
-      `chantier : l'atlas du monde annonce une largeur « ${image?.getAttribute('width')} », `
-        + `qui n'est pas un multiple de ${COTE_CELLULE_SOL}`,
-    );
-  }
-  return largeur / COTE_CELLULE_SOL;
-}
-
-/**
- * Combien de CASES l'atlas du monde couvre par axe, une fois posé au sol.
- *
- * ⚠⚠ ELLE EXISTE POUR LE DÉCOR, ET ELLE SE DÉDUIT. Le fond de
- * `#chantier-defile` tapisse ce que la grille laisse nu ; pour que le raccord
- * ne se voie pas, il doit poser l'atlas ENTIER à l'échelle où les cases le
- * découpent. Une case prend `tuilesParCase²` cellules, donc l'atlas en couvre
- * `parAxe / tuilesParCase` par axe — huit sur celui du dépôt. Écrire huit dans
- * la feuille en ferait une seconde vérité, que le premier atlas d'une autre
- * taille ferait mentir sans que rien ne le dise : le motif se décalerait, et
- * seul l'œil le verrait.
- *
- * ⚠ ELLE LÈVE SI LE COMPTE NE TOMBE PAS JUSTE. Un atlas dont les cellules ne
- * se groupent pas en cases entières donnerait un pavage fractionnaire, donc un
- * sol brouillé — le défaut que tout le reste du dépôt refuse sur le pixel art.
- *
- * @param {Document} doc
- * @returns {number}
- */
-export function casesDeSolParAtlas(doc) {
-  const parAxe = cellulesDeSolParAxe(doc);
-  const divisions = ZOOM_CARTE.tuilesParCase;
-  if (parAxe % divisions !== 0) {
-    throw new RangeError(
-      `chantier : l'atlas du monde porte ${parAxe} cellules par axe, que `
-      + `${divisions} tuiles par case ne divisent pas`,
-    );
-  }
-  return parAxe / divisions;
-}
-
-/**
- * Les quatre couches de sol d'une case, de la plus haute à la plus basse.
- *
- * L'ordre n'a aucune importance visuelle ici — les quatre quartiers ne se
- * recouvrent pas —, mais il est fixé pour que la liste soit reproductible.
- *
- * @param {number} parAxe cellules de l'atlas par axe
- * @param {number} graine
- * @param {number} rangee
- * @param {number} colonne
- * @returns {{image: string, taille: string, position: string}[]}
- */
-export function fondsDuSol(parAxe, graine, rangee, colonne) {
-  const divisions = ZOOM_CARTE.tuilesParCase;
-  const cellules = parAxe * parAxe;
-  const couches = [];
-  for (let sousRangee = 0; sousRangee < divisions; sousRangee += 1) {
-    for (let sousColonne = 0; sousColonne < divisions; sousColonne += 1) {
-      const rang = variante(
-        graine,
-        rangee * divisions + sousRangee,
-        colonne * divisions + sousColonne,
-        cellules,
-      );
-      couches.push({
-        image: VARIABLE_DATLAS.sol,
-        ...fondDeCellule({
-          colonne: rang % parAxe,
-          rangee: Math.floor(rang / parAxe),
-          colonnes: parAxe,
-          rangees: parAxe,
-          divisions,
-          sousColonne,
-          sousRangee,
-        }),
-      });
-    }
-  }
-  return couches;
-}
 
 /**
  * Câble l'écran Chantier dans une page qui porte le balisage attendu (voir
@@ -2491,11 +2370,6 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
-  // ⚠ MESURÉ UNE FOIS AU CÂBLAGE, PAS À CHAQUE PINCEMENT. L'attribut `width` de
-  // l'atlas ne bouge jamais de la vie de la page, et `reglerCoteCase` passe à
-  // chaque cran de zoom : le relire là serait payer une lecture du DOM pour un
-  // nombre constant.
-  const casesParAtlas = casesDeSolParAtlas(doc);
 
   let selection = null; // indice dans la liste du terrain sélectionné, ou null
   // ⚠ UN INDICE SEUL NE SUFFIT PLUS DEPUIS QUE LA BANDE DÉFENSE EST ÉDITABLE.
@@ -2647,46 +2521,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   // seul pixel. `pointer-events: none` en fait un dessin et rien d'autre : le
   // doigt continue de toucher la case qu'il vise.
   const SVG = 'http://www.w3.org/2000/svg';
-  // ⚠⚠ LE MUR DE CONTOUR, POSÉ UNE FOIS POUR TOUTES. Ses cinq pièces ne bougent
-  // jamais : elles sont en unités de CASE et suivent `--case-cote` par `calc`,
-  // donc le zoom au doigt les emmène sans qu'on les touche. Les reconstruire à
-  // chaque peinture coûterait cinq nœuds dix fois par seconde pour dessiner
-  // exactement la même chose.
-  //
-  // ⚠ IL PEINT ENTRE LE SOL ET LES PIÈCES, et c'est la feuille qui le dit, pas
-  // l'ordre du document : `#chantier-contour` porte l'étage 1, les jetons
-  // l'étage 2. En s'en remettant à l'ordre, il passait SOUS le sol des cases
-  // qu'il chevauche, et la moitié intérieure du trait disparaissait.
-  const contour = doc.createElement('div');
-  contour.id = 'chantier-contour';
-  contour.setAttribute('aria-hidden', 'true');
-  for (const tuile of tuilesDuContour('j')) {
-    const variable = VARIABLE_DU_MUR[tuile.nom];
-    if (variable === undefined) {
-      // ⚠ ON LÈVE, ON NE SAUTE PAS. Un pan de mur absent est exactement ce que
-      // personne ne remarque : l'écran s'ouvrirait, le côté serait nu, et rien
-      // ne dirait que l'image n'est pas dans le livrable.
-      throw new RangeError(
-        `chantier : « ${tuile.nom} » n'a pas de variable CSS — l'inliner dans `
-          + 'tools/build.js et l\'ajouter à VARIABLE_DU_MUR',
-      );
-    }
-    const mur = doc.createElement('div');
-    mur.className = 'mur';
-    mur.style.left = `calc(var(--case-cote) * ${tuile.x})`;
-    mur.style.top = `calc(var(--case-cote) * ${tuile.y})`;
-    mur.style.width = `calc(var(--case-cote) * ${tuile.l})`;
-    mur.style.height = `calc(var(--case-cote) * ${tuile.h})`;
-    // ⚠ LE MUR PASSE PAR LA MÊME CLASSE PARTAGÉE QUE LES CASES. L'anneau pose
-    // 41 pièces depuis le lot RETOURS-DU-03-SOIR, donc 41 substitutions de
-    // `var()` de plus — mesuré à 0,78 s la couche sur 162 cases, soit environ
-    // 0,2 s ici. La règle est la même, et elle n'a aucune raison de s'arrêter
-    // aux cases.
-    poserLesAtlas(mur, [variable]);
-    contour.appendChild(mur);
-  }
-  grille.prepend(contour);
-
+  // ⚠⚠ IL N'Y A PLUS D'ANNEAU À POSER — lot MUR-PEINT, 03/09. Quarante et une
+  // pièces de mur se construisaient ici, une fois pour toutes, en unités de
+  // case : deux coins, trois créneaux en haut, trente-six blocs de flanc. Le
+  // mur est maintenant PEINT dans le décor de la base : il n'y a plus de
+  // géométrie à dessiner, plus de variable CSS par pan de mur, et plus rien à
+  // lever quand une image manque à la table. Ce que l'anneau réservait —
+  // une case de chaque côté — est devenu la demi-case de `paddingDeLaGrille`.
   const traits = doc.createElementNS(SVG, 'svg');
   traits.id = 'chantier-traits';
   traits.setAttribute('viewBox', `0 0 ${GRILLE.largeur} ${GRILLE.longueur}`);
@@ -2829,12 +2670,12 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   /**
    * Hauteur d'une rangée à l'écran.
    *
-   * ⚠⚠ ELLE NE SE MESURE PLUS SUR LA BOÎTE DE LA GRILLE, ET C'EST LE MUR DE
-   * CONTOUR QUI L'A IMPOSÉ. Elle valait `hauteur de la boîte / GRILLE.longueur` ;
-   * depuis que la grille porte une demi-case de `padding` de chaque côté, cette
-   * boîte fait DIX-NEUF cases de haut pour dix-huit rangées, et la formule
-   * rendrait 19/18 de la vraie hauteur — soit 5,6 % de trop, ce qui décalerait
-   * la bande Défense d'une demi-rangée sans que rien ne le dise.
+   * ⚠⚠ ELLE NE SE MESURE PLUS SUR LA BOÎTE DE LA GRILLE, ET C'EST LE MUR QUI
+   * L'A IMPOSÉ. Elle valait `hauteur de la boîte / GRILLE.longueur` ; depuis que
+   * la grille porte la marge du mur, cette boîte est plus haute que ses dix-huit
+   * rangées, et la formule rendrait plus que la vraie hauteur — ce qui
+   * décalerait la bande Défense sans que rien ne le dise. Vrai de l'anneau qui
+   * coûtait une case, vrai du mur peint qui en coûte une demie.
    *
    * ⚠ ET LA CASE EST CARRÉE (`aspect-ratio: 1`), donc sa hauteur EST le côté que
    * le JS vient d'écrire. On lit ce qu'on a écrit plutôt que de le remesurer :
@@ -2845,15 +2686,19 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   }
 
   /**
-   * La demi-case de marge que le mur de contour ajoute en haut de la grille.
+   * La marge que le mur PEINT ajoute autour de la grille — une demi-case.
    *
    * ⚠ ELLE ENTRE DANS LE DÉFILEMENT, ET NULLE PART AILLEURS. `bornesDeDefilement`
    * raisonne en coordonnées de CONTENU — c'est ce qui la rend pure et testable
    * sans DOM ; le `padding`, lui, est un fait de mise en page. On l'ajoute donc
    * ici, au seul endroit qui convertit l'un en l'autre.
+   *
+   * ⚠⚠ ELLE VALAIT UNE CASE ENTIÈRE JUSQU'AU LOT MUR-PEINT, quand l'anneau était
+   * fait de blocs pleins qui ceignaient la grille. Le mur peint n'occupe qu'une
+   * DEMI-case : c'est ce qui rend au joueur environ 10 % de taille de case.
    */
   function paddingDeLaGrille() {
-    return coteCase;
+    return coteCase * MUR_CASES;
   }
 
   /**
@@ -3010,14 +2855,17 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   function coteQuiTient() {
     const large = defile.clientWidth;
     if (!(large > 0)) return COTE_CASE_DEFAUT;
-    // ⚠⚠ ON DIVISE PAR `largeur + 2`, PAS PAR `largeur`, DEPUIS QUE LE MUR EST
-    // UN ANNEAU. La v1 se posait à cheval sur le bord et coûtait deux
-    // DEMI-cases ; la v2 est faite de blocs pleins qui ceignent la grille, donc
-    // elle coûte deux cases entières. Diviser par neuf redonnerait exactement le
-    // défilement horizontal au repos que ce padding existe pour éviter, et
-    // diviser par dix laisserait déborder une demi-case de mur de chaque côté —
-    // le « ça déborde » d'Ethan, du 03/09, avec la moitié de son ampleur.
-    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / (GRILLE.largeur + 2)));
+    // ⚠⚠ ON DIVISE PAR `LARGEUR_EN_CASES`, ET C'EST LE FOND QUI LE DIT. La boîte
+    // affichée fait dix cases : les neuf colonnes jouables, plus la demi-case de
+    // mur PEINT de chaque côté. Diviser par neuf ferait déborder le décor,
+    // diviser par onze — ce que faisait l'anneau de blocs jusqu'au lot MUR-PEINT
+    // — laisserait une case entière de vide de chaque côté du mur.
+    //
+    // ⚠ ET LE NOMBRE NE S'ÉCRIT PAS ICI. `LARGEUR_EN_CASES` se dérive de
+    // `GRILLE.largeur` dans `render/fond.js`, à côté de la mesure qui le
+    // justifie ; l'écrire « 10 » ferait deux vérités, et la seconde mentirait le
+    // jour où la base changerait de largeur.
+    return Math.min(COTE_CASE_DEFAUT, Math.floor(large / LARGEUR_EN_CASES));
   }
 
   /** Le côté de case appliqué en ce moment, en pixels. */
@@ -3052,13 +2900,22 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     const borne = Math.min(COTE_CASE_MAX, Math.max(plancher, demande));
     coteCase = borne;
     grille.style.setProperty('--case-cote', `${borne}px`);
-    defile.style.setProperty('--sol-pave', `${borne * casesParAtlas}px`);
-    // ⚠⚠ LE PAVAGE DÉCORATIF SE RÈGLE ICI, ET NULLE PART AILLEURS. Le fond de
-    // `#chantier-defile` tapisse ce que la grille ne couvre pas ; il doit suivre
-    // le zoom à la case près, sinon le raccord se verrait au premier pincement.
-    // L'écrire dans un second point d'appel donnerait deux échelles qui
-    // divergeraient — c'est la faute que `--case-cote` évite déjà en n'étant
-    // écrite qu'ici.
+    defile.style.setProperty(
+      '--fond-taille',
+      `${borne * LARGEUR_EN_CASES}px ${borne * HAUTEUR_IMAGE_EN_CASES}px`,
+    );
+    // ⚠⚠ LE DÉCOR SE MET À L'ÉCHELLE ICI, ET NULLE PART AILLEURS. Il doit suivre
+    // le zoom à la case près, sinon le mur peint se décollerait de la grille au
+    // premier pincement. L'écrire dans un second point d'appel donnerait deux
+    // échelles qui divergeraient — c'est la faute que `--case-cote` évite déjà
+    // en n'étant écrite qu'ici.
+    //
+    // ⚠⚠ ET LES DEUX FACTEURS VIENNENT DE `render/fond.js`, PAS DE LA FEUILLE.
+    // La largeur vaut dix cases, la hauteur VINGT — le décor est plus haut que
+    // la boîte, et ce sont ces 1,5 case de débord qu'Ethan laisse passer sous
+    // l'UI. Écrire ces nombres dans le CSS en ferait une seconde vérité, et le
+    // jour où la base changerait de largeur le mur peint se désalignerait des
+    // colonnes sans qu'un test le voie.
     return borne;
   }
 
@@ -4034,24 +3891,27 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     }
     traits.textContent = '';
 
-    // ⚠ LE SOL EST UN FOND, PAS UN ENFANT — RIEN À CRÉER, RIEN À RETIRER AU
-    // REPEINT. Cent soixante-deux nœuds créés et détruits à chaque geste
-    // seraient cent soixante-deux occasions de faire clignoter la grille sous le
-    // doigt, et il faudrait les retirer dans la boucle de remise à zéro
-    // ci-dessus — donc s'en souvenir. Un fond se réécrit, il ne se nettoie pas.
-    // Mesuré ici : 25,8 µs pour les 162 cases, sur un geste et non sur une image.
+    // ⚠⚠ LES CASES SE VIDENT DE LEURS FONDS, ET IL FAUT LE FAIRE EXPLICITEMENT
+    // DEPUIS LE LOT MUR-PEINT. Jusque-là, la boucle qui posait le sol repassait
+    // sur les cent soixante-deux cases et ÉCRASAIT ce qui s'y trouvait : la
+    // remise à zéro était un effet de bord du pavage. Le décor est maintenant
+    // une seule image derrière la grille, plus rien ne repasse sur les cases, et
+    // sans cette boucle un champ démoli garderait son dessin jusqu'au
+    // rechargement.
+    for (const case_ of cellules.values()) poserFonds(case_, []);
+
+    // ⚠⚠ LE DÉCOR DE LA BASE — UNE IMAGE, MUR PEINT COMPRIS. Il se pose sur le
+    // conteneur qui DÉFILE, pas sur la grille : la grille est haute de ses
+    // dix-huit rangées, le décor de vingt cases, et c'est ce débord qu'Ethan
+    // laisse passer sous les contrôles plutôt que de le rogner.
     //
-    // ⚠ ET LA VARIANTE NE SE TIRE PAS, ELLE SE CALCULE. `variante()` est une
-    // fonction pure de la graine et de la case : deux peintures successives
-    // rendent le même sol, et `etat.rng` — le flux de la SIMULATION — n'est pas
-    // touché. Y prendre un tirage décalerait tout ce que le moteur tire
-    // ensuite, et la partie cesserait de se rejouer à l'identique.
-    const parAxe = cellulesDeSolParAxe(doc);
-    for (const case_ of cellules.values()) {
-      const rangee = Number(case_.dataset.rangee);
-      const colonne = Number(case_.dataset.colonne);
-      poserFonds(case_, fondsDuSol(parAxe, etat.graine, rangee, colonne));
-    }
+    // ⚠ LA CASE QUI L'IDENTIFIE EST `fondation`, PAS `position`. C'est
+    // l'IDENTITÉ de la base — elle ne bouge jamais, quand `position` change à
+    // chaque redéploiement —, donc le décor tient à travers un déménagement,
+    // un rechargement et une sauvegarde reprise.
+    const fondation = baseCourante(etat).fondation;
+    const nomDuFond = fondDeLaBase('joueur', 'base', fondation.rangee, fondation.colonne);
+    poserLesAtlas(defile, [VARIABLE_DU_FOND[nomDuFond]]);
 
     // ⚠ LE TERRAIN SE DESSINE SOUS LES BÂTIMENTS, JAMAIS AU-DESSUS. Un champ
     // masqué par le collecteur qui l'exploite ferait disparaître de l'écran la

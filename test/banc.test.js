@@ -668,10 +668,34 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // presque tout transparent, et le WebP le sait. C'est le premier atlas du
   // dépôt dont le poids ne se discute pas.
   //
+  // ⚠⚠ ET ELLE PASSE DE 3 400 000 À 5 700 000 AU LOT MUR-PEINT, 03/09 — LE PLUS
+  // GROS SAUT DEPUIS GRILLE-128. Ethan a fait peindre le mur de contour DANS le
+  // fond de base, et livré huit décors de 1080 × 2160. Poste par poste :
+  //   • les huit fonds, WebP q75 — 1 650 546 o sur le disque, **+2 200 728 en
+  //     base64** ;
+  //   • les DOUZE pièces de mur de `bord/` qui SORTENT — **−43 176 en base64** ;
+  //   • code, balisage et feuille — le reste.
+  // Mesuré : **5 516 056 octets**, soit **+2 154 705**. Le livrable passe de
+  // 25 `data:` à 21 — huit décors entrent, douze murs sortent.
+  //
+  // ⚠⚠ LE q75 EST UN ARBITRAGE D'ETHAN, ET IL A ÉTÉ PRIS SUR MESURE. À q85 les
+  // huit pesaient 2 720 514 o, soit 3 627 352 en base64 : le HTML passait à
+  // 6 988 703 octets, **2,08 fois son poids d'avant**, et le brief du lot pose le
+  // doublement comme une condition d'arrêt qui revient à Ethan. Les paliers lui
+  // ont été soumis, mesurés sur les huit planches — q80 → 1,83× · q75 → 1,65× ·
+  // q70 → 1,60×, contre 1,73× pour une réduction à 810 px. Réponse : q75, pleine
+  // résolution. Confronté à 1:1 sur la zone la plus texturée des huit, q75 ne se
+  // distingue pas de la source.
+  //
+  // ⚠ LA MARGE EST DE 184 099 OCTETS, 3,2 %. Elle est plus large qu'aux six
+  // derniers lots, et c'est délibéré : ce lot fait entrer huit images d'un coup,
+  // et une borne posée au ras du livrable ferait tomber la suite au premier
+  // octet de code du lot suivant.
+  //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 3_400_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 5_700_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

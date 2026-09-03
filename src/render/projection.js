@@ -25,55 +25,70 @@ import { MILLI_PAR_CASE, estDansLaGrille } from '../sim/grille.js';
  * demande 18 × 45 = 810 px de haut ; si le HUD n'en laisse pas autant, c'est
  * la hauteur qui commande et la grille se centre horizontalement.
  *
- * ⚠⚠ `contour` RÉSERVE L'ANNEAU DU MUR DE BASE, ET IL VAUT ZÉRO PAR DÉFAUT —
- * lot MURS-OUVRAGE, 03/09. Une base ceinte d'un mur occupe `largeur + 2`
- * colonnes et `longueur + 1` lignes ; la case y est donc PLUS PETITE — mesuré,
- * de 5 % sur un écran étroit à 18 % sur un écran haut —, et cela sur tout le
- * champ de bataille. C'est le prix du mur, et il ne se paie qu'où le mur se
- * dessine : réserver l'anneau ailleurs rétrécirait la case pour rien.
- * `ui/raid.js` passe 1 — il regarde une base ceinte —, `ui/banc.js` passe 0.
+ * ⚠⚠ `murCases` RÉSERVE LE MUR PEINT, ET IL VAUT ZÉRO PAR DÉFAUT — lot
+ * MUR-PEINT, 03/09. Il a remplacé `contour`, qui réservait l'ANNEAU de blocs
+ * que le code dessinait case par case : cet anneau n'existe plus, le mur est
+ * peint dans le fond de base. Ce qui reste à réserver, c'est la place que le
+ * mur occupe DANS l'image — une demi-case de chaque côté et une en haut, au
+ * lieu d'une case pleine.
+ *
+ * ⚠⚠ ET LE PARAMÈTRE N'A PAS ÉTÉ RETIRÉ, IL A CHANGÉ DE VALEUR — il fallait le
+ * dire plutôt que d'annoncer une suppression. La boîte affichée passe de
+ * `largeur + 2` × `longueur + 1` (11 × 19) à `largeur + 1` × `longueur + 0,5`
+ * (10 × 18,5) : la case GROSSIT d'environ 10 % à surface d'écran égale. Le
+ * garder à zéro pour le banc reste nécessaire — il n'a pas de fond peint, et
+ * lui réserver un mur déplacerait la douzaine de positions en pixels que ses
+ * assertions portent.
+ *
+ * ⚠ IL EST EN CASES, PAS EN DRAPEAU, et c'est ce qui garde la géométrie du mur
+ * chez le fond. `MUR_CASES` vit dans `render/fond.js`, avec la mesure qui le
+ * justifie ; ce module-ci ne fait que réserver ce qu'on lui dit de réserver, et
+ * n'a donc rien à savoir des huit décors. `ui/raid.js` passe `MUR_CASES`,
+ * `ui/banc.js` ne passe rien.
  *
  * ⚠ UN PARAMÈTRE, PAS UNE SECONDE FONCTION. `calculerProjectionAvecContour`
  * aurait mis DEUX formules de letterboxing dans le dépôt, dont une seule
  * serait corrigée le jour d'une correction. C'est la même formule, avec un
- * nombre de cases réservées — et `contour = 0` la rend au caractère près.
+ * nombre de cases réservées — et `murCases = 0` la rend au caractère près.
  *
  * @param {number} largeurPx Largeur disponible, en pixels CSS.
  * @param {number} hauteurPx Hauteur disponible, en pixels CSS.
- * @param {number} [contour] 1 pour réserver l'anneau du mur, 0 sinon.
+ * @param {number} [murCases] Cases réservées au mur peint de chaque côté, 0 à 1.
  * @returns {{ tailleCase: number, margeX: number, margeY: number,
- *   largeurPx: number, hauteurPx: number, contour: number }}
+ *   largeurPx: number, hauteurPx: number, murCases: number }}
  */
-export function calculerProjection(largeurPx, hauteurPx, contour = 0) {
+export function calculerProjection(largeurPx, hauteurPx, murCases = 0) {
   if (!Number.isFinite(largeurPx) || !Number.isFinite(hauteurPx)
       || largeurPx <= 0 || hauteurPx <= 0) {
     throw new Error(`projection : viewport invalide ${largeurPx} × ${hauteurPx}`);
   }
-  if (contour !== 0 && contour !== 1) {
-    throw new RangeError(`projection : anneau de contour « ${contour} » — 0 ou 1`);
+  // ⚠ UN BOOLÉEN PASSÉ PAR MÉGARDE LÈVE ICI. `Number.isFinite(true)` rend
+  // `false`, donc un `true` ne se coerce pas en 1 en silence — c'est la garde
+  // que `contour` portait déjà, et elle n'a pas de raison de partir avec lui.
+  if (!Number.isFinite(murCases) || murCases < 0 || murCases > 1) {
+    throw new RangeError(`projection : mur peint « ${murCases} » — entre 0 et 1 case`);
   }
-  // L'anneau prend une case À GAUCHE, une À DROITE et une EN HAUT. Jamais en
-  // bas : le U s'ouvre sur les deux rangées de déploiement, par lesquelles
-  // l'assaut arrive. D'où `+ 2` en largeur et `+ 1` seulement en hauteur.
-  const colonnes = GRILLE.largeur + 2 * contour;
-  const lignes = GRILLE.longueur + contour;
+  // Le mur peint prend une demi-case À GAUCHE, une À DROITE et une EN HAUT.
+  // Jamais en bas : le U s'ouvre sur les deux rangées de déploiement, par
+  // lesquelles l'assaut arrive. D'où `2 ×` en largeur et une seule en hauteur.
+  const colonnes = GRILLE.largeur + 2 * murCases;
+  const lignes = GRILLE.longueur + murCases;
   const tailleCase = Math.floor(Math.min(largeurPx / colonnes, hauteurPx / lignes));
   if (tailleCase < 1) {
     throw new Error(`projection : viewport ${largeurPx} × ${hauteurPx} trop petit pour une case`);
   }
   return {
     tailleCase,
-    // ⚠⚠ LA MARGE POINTE SUR LE CONTENU, PAS SUR L'ANNEAU, et c'est tout ce
-    // qui rend ce paramètre payable. `xDeColonne`, `yDeRangee`,
-    // `yDeRangeeMilli` et `caseDepuisPixels` n'ont pas changé d'un caractère :
-    // la colonne 1 tombe toujours en `margeX`. L'anneau est simplement replié
-    // DANS la marge, où il se dessine en coordonnées 0 et `largeur + 1` — que
-    // la même formule affine sert sans le savoir.
-    margeX: Math.floor((largeurPx - colonnes * tailleCase) / 2) + contour * tailleCase,
-    margeY: Math.floor((hauteurPx - lignes * tailleCase) / 2) + contour * tailleCase,
+    // ⚠⚠ LA MARGE POINTE SUR LE CONTENU, PAS SUR LE MUR, et c'est tout ce qui
+    // rend ce paramètre payable. `xDeColonne`, `yDeRangee`, `yDeRangeeMilli` et
+    // `caseDepuisPixels` n'ont pas changé d'un caractère : la colonne 1 tombe
+    // toujours en `margeX`. Le mur est simplement replié DANS la marge, où le
+    // fond se pose en reculant de `MUR_CASES` — voir `rectangleDuFond`.
+    margeX: Math.floor((largeurPx - colonnes * tailleCase) / 2) + murCases * tailleCase,
+    margeY: Math.floor((hauteurPx - lignes * tailleCase) / 2) + murCases * tailleCase,
     largeurPx,
     hauteurPx,
-    contour,
+    murCases,
   };
 }
 

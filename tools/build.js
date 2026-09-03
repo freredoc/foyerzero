@@ -135,44 +135,34 @@ const IMAGES_INLINE = [
   { ...atlas('terrain'), marqueur: '%ATLAS_TERRAIN_BASE%' },
   atlas('defense'),
   atlas('socle'),
-  // ⚠⚠ LE MUR DE CONTOUR DE LA BASE — CINQ IMAGES, PAS UN ATLAS. Un mur fait
-  // 512 × 64 et un angle 64 × 64 : `tools/atlas.py` ne coud que des cellules
-  // carrées d'un même côté, donc chacune voyage dans son propre marqueur, comme
-  // les deux grosses bases de l'Ouvrage plus bas.
-  // ⚠⚠ ET LES DEUX CAMPS SONT LÀ DEPUIS LE LOT MURS-OUVRAGE, 03/09. Cette ligne
-  // disait « seul le camp du joueur », la base du joueur étant alors la seule
-  // qu'un écran dessinât ; l'écran de raid dessine celle de l'Ouvrage. Un atlas
-  // aurait été tout ou rien ; des fichiers séparés permettent de ne payer que ce
-  // qui se voit — SIX dessins sur huit par camp, et pas un de plus.
-  // ⚠⚠ HUIT PIÈCES ET PLUS CINQ, EN WEBP ET PLUS EN PNG — lot MURS, 03/09. La
-  // v1 était cinq TRAITS quantifiés sur seize teintes par camp ; la v2 est
-  // quatre murs `4x1` et quatre BLOCS `1x1` qui gardent le rendu, comme tout ce
-  // que la chaîne produit depuis le lot PIXELS. Mesuré sur `mur_1` : 6 344
-  // octets en WebP q85 contre 72 651 en PNG optimisé — le PNG aurait coûté
-  // 467 028 octets de base64 pour les huit, le WebP en coûte 38 878.
-  // ⚠ ILS NE SERVENT QU'EN FOND CSS, donc pas de balise `img` : voir
-  // `garnirLesAtlas` pour ceux qui servent AUSSI à `drawImage`.
-  { marqueur: '%MUR_J_MUR_1%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_1.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_J_MUR_2%', chemin: ['art', 'sprites', 'bord', 'bord_j_mur_2.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_J_BLOC_1%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_1.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_J_BLOC_2%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_2.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_J_BLOC_3%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_3.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_J_BLOC_4%', chemin: ['art', 'sprites', 'bord', 'bord_j_bloc_4.webp'], type: 'image/webp' },
-  // ⚠⚠ ET LES SIX DE L'OUVRAGE ENTRENT AU LOT MURS-OUVRAGE, 03/09. Ethan :
-  // « c'est pour le joueur et pour l'ouvrage ». La base attaquée porte le même
-  // U, sur l'écran de raid. Ceux-ci ne servent QU'À `drawImage` — voir les
-  // balises `bord-o-*` du balisage, qui portent le marqueur en `src` — donc
-  // ils ne sont dans aucune variable CSS et ne s'inlinent qu'une fois.
-  // ⚠ SIX SUR HUIT, COMME POUR LE JOUEUR : `mur_3` et `mur_4` restent produites
-  // et non employées, le U d'une base de neuf colonnes n'ayant que DEUX
-  // créneaux de mur. Un test confronte cette liste à `nomsDuContour('o')`,
-  // dans les deux sens.
-  { marqueur: '%MUR_O_MUR_1%', chemin: ['art', 'sprites', 'bord', 'bord_o_mur_1.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_O_MUR_2%', chemin: ['art', 'sprites', 'bord', 'bord_o_mur_2.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_O_BLOC_1%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_1.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_O_BLOC_2%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_2.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_O_BLOC_3%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_3.webp'], type: 'image/webp' },
-  { marqueur: '%MUR_O_BLOC_4%', chemin: ['art', 'sprites', 'bord', 'bord_o_bloc_4.webp'], type: 'image/webp' },
+  // ⚠⚠ LES HUIT DÉCORS DE BASE — lot MUR-PEINT, 03/09. Ils remplacent les douze
+  // pièces de mur de `bord/` qui entraient ici : Ethan a fait peindre le mur
+  // DANS le fond, donc l'anneau que le code dessinait n'existe plus. Un décor
+  // fait 1080 × 2160 et n'entre dans aucun atlas — `tools/atlas.py` ne coud que
+  // des cellules carrées d'un même côté —, donc chacun a son marqueur, comme le
+  // fond du bassin juste en dessous.
+  //
+  // ⚠⚠ ILS PÈSENT 1 650 546 OCTETS EN WEBP q75, SOIT 2 200 728 EN BASE64, ET
+  // C'EST UN ARBITRAGE D'ETHAN. À q85 le HTML construit passait à 2,08 fois son
+  // poids d'avant, et le brief du lot pose le doublement comme une condition
+  // d'arrêt. Les paliers mesurés lui ont été soumis : q80 → 1,83× · q75 → 1,65×
+  // · q70 → 1,60×, contre 1,73× pour une réduction à 810 px. Réponse : q75,
+  // pleine résolution — voir `tools/fonds.py`, qui dit pourquoi la résolution ne
+  // se touche pas.
+  //
+  // ⚠ ILS SERVENT AUX DEUX ÉCRANS, ET NE S'INLINENT QU'UNE FOIS. La feuille les
+  // déclare en variables pour l'écran de la base ; les balises `fond-*` du
+  // balisage n'ont PAS de `src` et reçoivent l'adresse de `garnirLesAtlas`. Les
+  // douze murs, eux, se partageaient par camp — six en CSS, six en `src` — parce
+  // qu'aucune image ne servait des deux côtés.
+  { marqueur: '%FOND_J_01%', chemin: ['art', 'sprites', 'fond', 'fond_j_01.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_J_02%', chemin: ['art', 'sprites', 'fond', 'fond_j_02.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_J_03%', chemin: ['art', 'sprites', 'fond', 'fond_j_03.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_J_04%', chemin: ['art', 'sprites', 'fond', 'fond_j_04.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_O_AUSTERE%', chemin: ['art', 'sprites', 'fond', 'fond_o_austere.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_O_HOSTILE%', chemin: ['art', 'sprites', 'fond', 'fond_o_hostile.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_O_MENACANTE%', chemin: ['art', 'sprites', 'fond', 'fond_o_menacante.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_O_OPPRESSANTE%', chemin: ['art', 'sprites', 'fond', 'fond_o_oppressante.webp'], type: 'image/webp' },
   atlas('unite'),
   atlas('chassis'),
   // ⚠ LE FICHIER PORTE LE SLUG À SOULIGNÉ — `atlas-tourelle_unite-64.png` —

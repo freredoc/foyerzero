@@ -384,22 +384,28 @@
     --atlas-terrain: url('%ATLAS_TERRAIN_BASE%');
     --atlas-defense: url('%ATLAS_DEFENSE%');
     --atlas-socle: url('%ATLAS_SOCLE%');
-    /* ⚠ LE MUR DE CONTOUR N'EST PAS UN ATLAS. Ses images font 512 × 128 et
-       128 × 128 — `tools/atlas.py` ne coud que des cellules carrées d'un même
-       côté —, donc chacune entre par son propre marqueur.
-       ⚠⚠ ET SEUL LE CAMP DU JOUEUR EST ICI, PARCE QUE SEUL LUI SE PEINT EN CSS.
-       L'écran de la base est du DOM et pose ses murs en `background-image` ;
-       celui de l'Ouvrage se regarde sur l'écran de raid, qui est un CANEVAS et
-       veut des `HTMLImageElement` pour `drawImage`. Ses six images sont donc
-       des balises `img` plus bas, avec leur marqueur en `src` — comme les deux
-       grosses bases de la carte du monde, et pour la même raison. Rien n'est
-       partagé entre les deux camps : aucune image n'entre deux fois. */
-    --mur-j-mur-1: url('%MUR_J_MUR_1%');
-    --mur-j-mur-2: url('%MUR_J_MUR_2%');
-    --mur-j-bloc-1: url('%MUR_J_BLOC_1%');
-    --mur-j-bloc-2: url('%MUR_J_BLOC_2%');
-    --mur-j-bloc-3: url('%MUR_J_BLOC_3%');
-    --mur-j-bloc-4: url('%MUR_J_BLOC_4%');
+    /* ⚠⚠ LES HUIT DÉCORS DE BASE, MUR PEINT COMPRIS — lot MUR-PEINT, 03/09. Ils
+       remplacent les six pièces de mur que la feuille portait : l'anneau de
+       blocs a disparu, Ethan ayant fait peindre le mur DANS le fond. Un décor
+       fait 1080 × 2160 et n'entre dans aucun atlas — `tools/atlas.py` ne coud
+       que des cellules carrées d'un même côté —, donc chacun entre par son
+       propre marqueur, comme le fond du bassin de l'écran Offense.
+
+       ⚠⚠ ET LES HUIT SONT DÉCLARÉS ICI, PAS SEULEMENT CEUX DU JOUEUR — c'est
+       l'inverse du choix qu'imposait l'anneau. Les deux écrans montrent des
+       décors : celui de la base peint le sien en CSS, celui du raid dessine
+       celui de sa cible sur un CANEVAS, qui veut des `HTMLImageElement`. Les
+       balises `img` plus bas prennent leur adresse ICI, par `garnirLesAtlas` :
+       aucune image n'entre deux fois, et c'est ce que le lot SPRITES-ET-ZOOM a
+       mesuré à 507 464 octets sur des atlas bien plus légers. */
+    --fond-j-01: url('%FOND_J_01%');
+    --fond-j-02: url('%FOND_J_02%');
+    --fond-j-03: url('%FOND_J_03%');
+    --fond-j-04: url('%FOND_J_04%');
+    --fond-o-austere: url('%FOND_O_AUSTERE%');
+    --fond-o-hostile: url('%FOND_O_HOSTILE%');
+    --fond-o-menacante: url('%FOND_O_MENACANTE%');
+    --fond-o-oppressante: url('%FOND_O_OPPRESSANTE%');
   }
 
   /* ⚠⚠ QUATRE ATLAS QUI SERVENT DES DEUX CÔTÉS — EN FOND CSS ET EN `drawImage`.
@@ -649,40 +655,44 @@
      défiler à DEUX doigts, et quand il prend la main il envoie `pointercancel`.
      C'est `ui/chantier.js` qui le lui refuse, par un `touchmove` non passif et
      seulement quand deux doigts sont posés. */
-  /* ⚠⚠ LE CHAMP EST TAPISSÉ DE SOL, ET C'EST PUREMENT DÉCORATIF. Ethan, 03/09,
-     capture à l'appui : « rajouter tuiles terrain afin de remplir l'ui ». La
-     grille ne fait que dix-huit rangées ; sous elle, le conteneur qui défile
-     montrait le `#161914` de `#chantier-champ` — une bande noire franche sous
-     un sol de terre. Le fond est le MÊME atlas que le sol des cases, à la MÊME
-     échelle, si bien que le raccord ne se voit pas.
+  /* ⚠⚠ LE CHAMP PORTE LE DÉCOR DE LA BASE — lot MUR-PEINT, 03/09. Il était
+     tapissé du sol de la carte, répété case par case, depuis le 03/09 au matin ;
+     c'est maintenant UNE image, celle que `render/fond.js` choisit pour cette
+     base-là, et le mur y est peint.
 
-     ⚠ IL NE COÛTE NI UN OCTET NI UNE TEINTE. L'atlas est déjà inliné pour le
-     sol des cases, et `--sol-pave` ne fait que le mettre à l'échelle : aucune
-     image n'entre au livrable, et la palette fermée ne gagne pas une couleur.
+     ⚠⚠ IL SE POSE SUR LE CONTENEUR QUI DÉFILE, PAS SUR LA GRILLE, et c'est ce
+     qui laisse le débord passer. Le décor fait vingt cases de haut quand la
+     grille n'en occupe que dix-huit et demie : posé sur la grille, sa boîte le
+     ROGNERAIT de 1,5 case. Ethan : « le débord du bas se laisse déborder sous
+     l'UI […] ni rognage, ni étirement, ni recentrage ».
+
+     ⚠ `no-repeat`, ET C'EST LA MOITIÉ QUI COMPTE. Le pavage d'avant se répétait
+     à l'infini ; un décor qui se répéterait remettrait un mur peint au milieu
+     de l'écran à chaque hauteur d'image.
 
      ⚠ `local` ET NON `scroll` : le fond doit défiler AVEC la grille. Sous le
-     défaut, la terre resterait collée au cadre pendant que la base glisse
-     dessus — un effet de parallaxe que personne n'a demandé, et qui trahirait
-     que ce sol-ci n'est pas celui des cases.
+     défaut, le mur peint resterait collé au cadre pendant que la base glisse
+     dessous — et il cesserait d'être aligné avec les colonnes, ce qui est tout
+     ce qu'on lui demande.
 
      ⚠⚠ ET LA COULEUR RESTE SOUS L'IMAGE. `#161914` est le fond de
-     `#chantier-champ` : si l'atlas manquait, on retomberait sur le noir d'avant
-     plutôt que sur du blanc. Un décor ne doit pas pouvoir rendre l'écran
-     illisible en tombant.
+     `#chantier-champ` : si le décor manquait, on retomberait sur le noir plutôt
+     que sur du blanc. Un décor ne doit pas pouvoir rendre l'écran illisible en
+     tombant.
 
-     ⚠ L'ÉCHELLE VIENT DU JS, PAS D'ICI. `--sol-pave` vaut le côté d'une case
-     multiplié par le nombre de cases que l'atlas couvre, et ce nombre se MESURE
-     sur l'attribut `width` de l'image — l'écrire dans la feuille en ferait une
-     seconde vérité, que le jour d'un atlas plus grand ferait mentir. Tant que
-     le JS ne l'a pas écrite, `--sol-pave` vaut le côté d'une case : le pavage
-     est plus serré, jamais absent. */
+     ⚠ L'ÉCHELLE VIENT DU JS, PAS D'ICI. `--fond-taille` vaut dix cases sur
+     vingt, deux nombres que `render/fond.js` dérive de `GRILLE.largeur` et du
+     rapport de l'image ; les écrire dans la feuille en ferait une seconde
+     vérité, et le mur peint se désalignerait des colonnes le jour où la base
+     changerait de largeur. Tant que le JS ne l'a pas écrite, le décor prend la
+     largeur du conteneur — il est mal à l'échelle, jamais absent. */
   #chantier-defile {
     flex: 1; min-height: 0; overflow: auto; scrollbar-width: none;
     touch-action: pan-x pan-y;
-    background-image: var(--atlas-sol);
-    background-repeat: repeat;
+    background-repeat: no-repeat;
     background-attachment: local;
-    background-size: var(--sol-pave, var(--case-cote)) var(--sol-pave, var(--case-cote));
+    background-position: top center;
+    background-size: var(--fond-taille, 100% auto);
   }
   #chantier-defile::-webkit-scrollbar { display: none; }
   /* Colonnes posées par le JS depuis GRILLE : autant de colonnes de
@@ -703,60 +713,32 @@
      ⚠ ET `coteQuiTient` DIVISE PAR `largeur + 1`, PAS PAR `largeur` : la boîte
      fait neuf colonnes plus deux demi-cases, donc dix cases de large. Le
      calculer sur neuf redonnerait exactement le débordement qu'on retire. */
-  /* ⚠⚠ UNE CASE PLEINE DE `padding`, ET PLUS UNE DEMI — lot MURS, 03/09. La v1
-     du mur était un TRAIT posé à cheval sur la ligne du bord : il mordait d'une
-     demi-case de chaque côté, et la demi-case de `padding` lui rendait la
-     place. La v2 est un BLOC PLEIN qui CEINT la grille sans rien recouvrir,
-     donc il lui faut une case entière. Sans ce changement, la moitié
-     extérieure de l'anneau sortirait de la boîte et le champ défilerait
-     horizontalement au repos — le « ça déborde » d'Ethan.
-     ⚠ `coteQuiTient` d'`ui/chantier.js` divise par `largeur + 2` pour la même
-     raison, et `paddingDeLaGrille` rend une case entière. Les trois vont
-     ensemble ; en changer un seul décale le mur du contenu. */
+  /* ⚠⚠ UNE DEMI-CASE DE `padding`, ET PLUS UNE PLEINE — lot MUR-PEINT, 03/09.
+     Troisième valeur sur cette même ligne : la v1 du mur était un TRAIT à cheval
+     sur le bord et demandait une demi-case ; la v2 était un BLOC PLEIN qui
+     ceignait la grille et en demandait une entière ; le mur est maintenant PEINT
+     dans le décor, où il occupe une demi-case — mesuré sur les huit planches,
+     54 px pour une case de 108.
+     ⚠ `coteQuiTient` d'`ui/chantier.js` divise par `LARGEUR_EN_CASES` pour la
+     même raison, et `paddingDeLaGrille` rend une demi-case. Les trois vont
+     ensemble ; en changer un seul décolle le mur peint des colonnes, et
+     personne ne le verrait sans mesurer. */
   #chantier-grille {
     display: grid; align-content: start; margin-inline: auto; position: relative;
     width: max-content;
-    padding: var(--case-cote);
+    padding: calc(var(--case-cote) / 2);
   }
-  /* ⚠⚠ LE MUR DE CONTOUR. Il se POSE sur la grille et ne prend aucun geste :
-     `pointer-events: none`, comme le calque des traits de voisinage — un mur qui
-     avalerait le toucher d'une case du pourtour serait la faute que le dépôt
-     refuse depuis qu'il interdit un `transform: scale()` sur cette grille.
-
-     ⚠⚠ TROIS ÉTAGES, ET LE MUR EST CELUI DU MILIEU : le SOL des cases (aucun
-     `z-index`), puis le MUR, puis les JETONS et le calque des traits. C'est
-     l'ordre du document qui décidait jusqu'au 31/08, et il donnait le mur EN
-     DESSOUS de tout — donc sous le sol des cases qu'il chevauche. Mesuré dans
-     Chromium : la moitié intérieure du trait était cachée, et pas la même
-     moitié en haut qu'en bas, si bien que le mur du haut et celui du bas ne
-     montraient pas le même dessin. Invisible tant que le trait faisait un
-     huitième de case ; flagrant depuis qu'il en fait la moitié.
-
-     ⚠ UN MUR À CHEVAL RECOUVRE FORCÉMENT DU SOL, et c'est l'arbitrage d'Ethan
-     du 31/08 (« à cheval sur le bord »), pas un effet de bord. Deux des quatre
-     côtés de la base n'ont d'ailleurs AUCUNE marge où se réfugier : la bande de
-     défense commence là où celle des bâtiments finit. Ce que le mur mange, c'est
-     le quart extérieur d'une case du pourtour — son liseré de case légale
-     compris, sur ce côté-là seulement, les trois autres restant lisibles. */
-  #chantier-contour { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-  /* ⚠ LA TAILLE VIENT DU JS, EN UNITÉS DE CASE : un mur couvre quatre cases, un
-     bloc une seule. `background-size: 100% 100%` étire donc l'image sur la
-     pièce — au plafond du zoom c'est le rapport 1:1, l'asset faisant 512 pixels
-     pour quatre cases de 128.
-     ⚠⚠ ET `image-rendering: pixelated` EST PARTI D'ICI, LE 03/09, SUR CETTE
-     RÈGLE-LÀ SEULEMENT. La v1 du mur était quantifiée sur seize teintes : du
-     pixel art, que le plus proche voisin servait bien. La v2 garde le RENDU —
-     vingt mille teintes — et, à la case par défaut de 46 px, ses 512 pixels
-     s'affichent en 184 : le plus proche voisin y jetterait deux pixels sur
-     trois et crénellerait les briques. C'est l'argument du lot PIXELS, mot pour
-     mot, appliqué au deuxième site.
-     ⚠ LES SEPT AUTRES `image-rendering: pixelated` DE CETTE FEUILLE NE BOUGENT
-     PAS, et c'est délibéré : ils peignent des cellules d'atlas, dont le cadrage
-     par pourcentage tombe juste. Chacun demandera sa propre mesure. */
-  #chantier-contour .mur {
-    position: absolute;
-    background-repeat: no-repeat; background-size: 100% 100%;
-  }
+  /* ⚠⚠ IL N'Y A PLUS DE CALQUE DE MUR — lot MUR-PEINT, 03/09. `#chantier-contour`
+     et sa règle `.mur` vivaient ici : QUARANTE ET UNE pièces posées en `absolute` sur la
+     grille, à l'étage 1, entre le sol des cases et les jetons. Le mur étant peint
+     dans le décor, il n'y a plus de pièce à poser, plus d'étage à arbitrer, et
+     plus de `pointer-events: none` à tenir — le décor est un `background`, il n'a
+     jamais pris un geste.
+     ⚠ ET LE COMPTE DES `image-rendering: pixelated` NE BOUGE PAS — SEPT AVANT,
+     SEPT APRÈS, mesuré. Le calque du mur n'en portait plus : le sien était tombé
+     au lot MURS, quand la v2 est passée du pixel art au rendu. Les sept qui
+     restent peignent tous des cellules d'atlas, et chacun demandera sa propre
+     mesure, comme le lot PIXELS l'a écrit. */
   /* ⚠ `aspect-ratio: 1` NE SE TOUCHE PAS. Une case carrée est ce qui fait qu'une
      cellule d'atlas de 64×64 tombe dans un cadre de même proportion : la rendre
      rectangulaire écraserait tous les sprites, et rien dans la suite ne le
@@ -1924,12 +1906,30 @@
            ⚠ SIX SUR HUIT. `tools/bords.py` produit quatre murs et quatre blocs
            par camp ; le U d'une base de neuf colonnes n'a que deux créneaux de
            mur. Un test dit lesquels, depuis `nomsDuContour('o')`. -->
-      <img id="bord-o-mur-1" alt="" hidden src="%MUR_O_MUR_1%">
-      <img id="bord-o-mur-2" alt="" hidden src="%MUR_O_MUR_2%">
-      <img id="bord-o-bloc-1" alt="" hidden src="%MUR_O_BLOC_1%">
-      <img id="bord-o-bloc-2" alt="" hidden src="%MUR_O_BLOC_2%">
-      <img id="bord-o-bloc-3" alt="" hidden src="%MUR_O_BLOC_3%">
-      <img id="bord-o-bloc-4" alt="" hidden src="%MUR_O_BLOC_4%">
+      <!-- ⚠⚠ LES HUIT DÉCORS, POUR LE CANEVAS DE L'ÉCRAN DE RAID — lot
+           MUR-PEINT, 03/09. Ils remplacent les six pièces de mur de l'Ouvrage
+           qui étaient ici : l'anneau a disparu, le mur est peint dans le fond.
+           `drawImage` veut un `HTMLImageElement` et pas une adresse, d'où ces
+           balises.
+           ⚠⚠ ET ELLES N'ONT PAS DE `src` — c'est tout ce qui les empêche de
+           peser deux fois. Les huit décors sont déclarés en variables CSS
+           plus haut, pour l'écran de la base ; `garnirLesAtlas` de
+           `ui/session.js` leur recopie l'adresse au démarrage. Les inliner ici
+           AUSSI les ferait entrer une seconde fois dans le fichier — 3,3 Mo, et
+           la garde offline refuserait de toute façon une adresse fabriquée à
+           l'exécution.
+           ⚠ LES SIX MURS DE L'OUVRAGE, EUX, PORTAIENT LEUR MARQUEUR EN `src`,
+           parce que le camp de l'Ouvrage ne se peignait nulle part en CSS. Ici
+           les deux écrans partagent les mêmes huit images : c'est la déclaration
+           qui devient commune, pas seulement la balise. -->
+      <img id="fond-j-01" alt="" hidden>
+      <img id="fond-j-02" alt="" hidden>
+      <img id="fond-j-03" alt="" hidden>
+      <img id="fond-j-04" alt="" hidden>
+      <img id="fond-o-austere" alt="" hidden>
+      <img id="fond-o-hostile" alt="" hidden>
+      <img id="fond-o-menacante" alt="" hidden>
+      <img id="fond-o-oppressante" alt="" hidden>
       <div id="monde-champ">
         <canvas id="monde-canvas"></canvas>
         <!-- ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08. Ethan : « zoom

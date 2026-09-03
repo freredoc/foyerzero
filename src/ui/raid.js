@@ -41,6 +41,7 @@ import {
 } from '../render/interpolation.js';
 import { calculerProjection } from '../render/projection.js';
 import { listeAffichage } from '../render/scene.js';
+import { MUR_CASES, fondDeLaBase } from '../render/fond.js';
 import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -254,6 +255,10 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   let etatCourant = null;
   let cibleCourante = null;
+  // ⚠ LE DÉCOR DE LA BASE REGARDÉE — lot MUR-PEINT. Il ne change pas tant qu'on
+  // reste sur la même cible, donc il se calcule à l'ouverture et pas à chaque
+  // image : `dessiner` passe dix fois par seconde.
+  let fondCourant = null;
   let atlas = null;
   let mode = null;
   let rapportCourant = null;
@@ -301,12 +306,16 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     if (largeur <= 0 || hauteur <= 0) { projection = null; return false; }
     if (canvas.width !== largeur) canvas.width = largeur;
     if (canvas.height !== hauteur) canvas.height = hauteur;
-    // ⚠⚠ `1` — L'ANNEAU DU MUR, ET C'EST L'ÉCRAN QUI LE DIT. Le champ de
-    // bataille montre une BASE, et une base est ceinte : la projection réserve
-    // donc une case à gauche, à droite et en haut. La case y est plus petite
-    // qu'au banc d'essai — de 5 à 18 % selon la forme du canevas —, et c'est le
-    // prix du mur, payé là et nulle part ailleurs.
-    projection = calculerProjection(largeur, hauteur, 1);
+    // ⚠⚠ `MUR_CASES` — LA PLACE DU MUR PEINT, ET C'EST L'ÉCRAN QUI LE DIT. Le
+    // champ de bataille montre une BASE, et une base porte son mur DANS son
+    // décor : la projection réserve donc une demi-case à gauche, à droite et en
+    // haut, pour que le fond se pose d'un mur à l'autre sans recouvrir une case
+    // de contenu. Le banc d'essai n'a pas de décor et ne réserve rien.
+    //
+    // ⚠ IL VALAIT `1` JUSQU'AU LOT MUR-PEINT, quand le mur était un ANNEAU de
+    // blocs dessinés case par case. La demi-case rend au champ de bataille
+    // environ 10 % de taille de case à surface d'écran égale.
+    projection = calculerProjection(largeur, hauteur, MUR_CASES);
     return true;
   }
 
@@ -317,7 +326,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     executer(
       ctx,
       listeAffichage(combat, projection, precedentes,
-        combat.termine ? 0 : alphaMilli(accumulateur, vitesse)),
+        combat.termine ? 0 : alphaMilli(accumulateur, vitesse), fondCourant),
       atlas ?? {},
     );
     const fin = (doc.defaultView?.performance ?? globalThis.performance)?.now() ?? 0;
@@ -671,6 +680,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       if (atlasFournis !== null) atlas = atlasFournis;
       rapportCourant = null;
       combat = null;
+      fondCourant = null;
       fermerPanneaux();
       desarmer();
       peindreVagues();
@@ -685,6 +695,19 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // n'est cachée — arbitrage d'Ethan du 01/09.
       if (site !== null) {
         combat = creerCombat({ ...montageDuRaid(etat, site), vagues: [] });
+        // ⚠⚠ LE PROPRIÉTAIRE SE LIT SUR LE MONTAGE, JAMAIS `'ouvrage'` EN DUR.
+        // `sim/raid-ouvrage.js` monte des combats où la défense appartient au
+        // JOUEUR ; l'écrire en dur passerait le test d'aujourd'hui et donnerait
+        // un décor de l'Ouvrage à la base du joueur le jour où cet écran-là
+        // s'ouvrira. Même leçon que `pointsRecherche` au lot MODULES-E, et que
+        // le camp du mur au lot MURS-OUVRAGE.
+        //
+        // ⚠ ET CE JOUR-LÀ, LA CASE À PASSER SERA `fondation`, PAS LA CIBLE :
+        // c'est elle qui identifie une base du joueur, comme sur l'écran de la
+        // base. Ici la cible EST le site, qui ne se déplace pas.
+        fondCourant = fondDeLaBase(
+          combat.proprietaireDefense, site.type, site.rangee, site.colonne,
+        );
         precedentes = prendrePositions(combat);
         dimensionner();
         dessiner();
