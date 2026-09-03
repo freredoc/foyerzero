@@ -26,7 +26,10 @@ import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { DEPLACEMENT, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE } from '../src/data/combat.js';
-import { centreDeLaCase, traitDeLaFleche, geometrieDuHalo } from '../src/ui/monde.js';
+import {
+  centreDeLaCase, traitDeLaFleche, geometrieDuHalo,
+  haloAllumeAuTick, PERIODE_HALO_TICKS,
+} from '../src/ui/monde.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
@@ -488,12 +491,47 @@ test('DÉPLACEMENT T11 bis — la géométrie du halo et de la flèche, sans DOM
   const centre = centreDeLaCase({ rangee: 3, colonne: 5 }, 0, 0, 10);
   assert.deepEqual(centre, { x: 45, y: 25 });
 
+  // ⚠⚠ CETTE ASSERTION EST RETOURNÉE, PAS ASSOUPLIE, ET C'EST UN ARBITRAGE
+  // D'ETHAN DU 03/09 : « le halo doit coller la base, faire son contour et
+  // clignoter ». Elle exigeait l'INVERSE — `rayon > 5` sur une case de 10,
+  // c'est-à-dire un anneau qui déborde —, au motif qu'un cercle inscrit serait
+  // caché par l'emblème. Le motif était juste et la conclusion ne l'était plus :
+  // le contour passe maintenant PAR-DESSUS les emblèmes, donc il n'a plus à
+  // déborder pour se voir. Ce qui est asserté ici est strictement plus fort
+  // qu'avant : le cadre tient DANS la case, il ne mord sur aucune voisine.
   const halo = geometrieDuHalo({ rangee: 3, colonne: 5 }, 0, 0, 10);
-  assert.equal(halo.x, 45);
-  assert.equal(halo.y, 25);
-  // ⚠ IL DÉBORDE DE LA CASE : un cercle inscrit serait caché par l'emblème.
-  assert.ok(halo.rayon > 5, `rayon ${halo.rayon} : le halo tient dans la case`);
   assert.ok(halo.epaisseur >= 1);
+  // Le trait se centre sur son chemin : le cadre rentre d'une demi-épaisseur,
+  // donc le trait tient tout entier entre les bords de la case.
+  assert.equal(halo.x - halo.epaisseur / 2, 40, 'le cadre ne part pas du bord de la case');
+  assert.equal(halo.y - halo.epaisseur / 2, 20);
+  assert.equal(halo.cote + halo.epaisseur, 10, 'le cadre ne fait pas la taille d\'une case');
+  // ⚠ ET LA FALSIFICATION QUI COMPTE : un cadre posé SUR le bord déborderait de
+  // la moitié de son trait. On mesure donc le débordement, qui doit être NUL.
+  assert.equal(halo.x - halo.epaisseur / 2 - 40, 0, 'le cadre déborde à gauche');
+  assert.equal(40 + 10 - (halo.x + halo.cote + halo.epaisseur / 2), 0, 'le cadre déborde à droite');
+  assert.equal(halo.rayon, undefined, 'le halo est encore un cercle');
+
+  // ⚠⚠ ET IL CLIGNOTE SANS LIRE D'HORLOGE. `maintenantMs` est la seule lectrice
+  // du temps mural de tout `src/`, et la garde §11 de `banc.test.js` en exige
+  // EXACTEMENT une, dans `ui/session.js` : le clignotement compte donc les
+  // appels que la session fait déjà, cadencés à 100 ms dans sa boucle.
+  assert.equal(haloAllumeAuTick(0), true, 'le contour part éteint');
+  assert.equal(haloAllumeAuTick(PERIODE_HALO_TICKS - 1), true);
+  assert.equal(haloAllumeAuTick(PERIODE_HALO_TICKS), false, 'le contour ne s\'éteint jamais');
+  assert.equal(haloAllumeAuTick(PERIODE_HALO_TICKS * 2), true, 'le contour ne se rallume pas');
+  // Il alterne pour de bon sur une longue série — un `true` constant passerait
+  // les quatre lignes ci-dessus si la période était énorme.
+  const serie = Array.from({ length: PERIODE_HALO_TICKS * 6 }, (_, i) => haloAllumeAuTick(i));
+  assert.equal(serie.filter(Boolean).length, PERIODE_HALO_TICKS * 3,
+    'le contour ne passe pas la moitié du temps allumé');
+
+  // ⚠ ET L'ÉCRAN NE REDESSINE QU'AUX DEUX BASCULES, pas à chaque appel : dix
+  // cartes par seconde pour une image identique neuf fois sur dix est le coût
+  // exact que `rafraichir` existe pour éviter.
+  const ecranSource = readFileSync(join(RACINE, 'src', 'ui', 'monde.js'), 'utf8');
+  assert.match(ecranSource, /haloAllumeAuTick\(tickHalo\) !== avant/,
+    'le clignotement redessine sans regarder s\'il a changé d\'état');
 
   // La flèche part de la base et arrive à la cible, retirée aux deux bouts.
   const trait = traitDeLaFleche({ rangee: 3, colonne: 5 }, { rangee: 3, colonne: 15 }, 0, 0, 10);

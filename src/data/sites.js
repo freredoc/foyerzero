@@ -885,6 +885,52 @@ export const ZOOM_CARTE = {
  */
 export const PIXELS_SOURCE_PAR_CASE = ZOOM_CARTE.coteTuile * ZOOM_CARTE.tuilesParCase;
 
+/**
+ * L'étiquette d'un site sur la carte du monde — son nom, et son niveau dessous.
+ *
+ * ⚠⚠ ETHAN, 03/09 : « rajouter un petit nom sur fond semi opaque + niveau en
+ * dessous de chaque entité de la carte ». C'est un RETOUR SUR L'ARBITRAGE DU
+ * 30/08, et il se lit dans ce sens-là : ce qui avait été retiré ce jour-là
+ * (« on enlève les lettres quoi qu'il arrive »), c'était la LETTRE — une
+ * capitale peinte SUR l'emblème, qu'il fallait décoder. Ce qui revient est un
+ * NOM écrit en toutes lettres, posé SOUS la case. `CSS_MINI_LETTRE` ne
+ * reparaît pas, et le champ `lettre` n'est toujours lu par aucun écran.
+ *
+ * ⚠⚠ ET C'EST DU CALIBRAGE, DONC ÇA VIT ICI. La première écriture posait ces
+ * trois nombres dans `ui/monde.js` — et la garde « l'écran ne nomme aucune
+ * constante de zoom en dur » est TOMBÉE dessus, parce que le seuil valait 64 et
+ * que 64 est aussi un cran de zoom. Elle avait raison pour une raison qu'elle
+ * ne connaissait pas : un seuil d'affichage est une valeur de réglage, et §4
+ * les veut toutes dans `src/data/`.
+ */
+export const ETIQUETTE_CARTE = {
+  // ⚠⚠ EN DEÇÀ DE CETTE LARGEUR DE CASE, EN PIXELS CSS, AUCUNE ÉTIQUETTE — ET
+  // LE SEUIL EST MESURÉ SUR LA DENSITÉ, PAS SUR LA LISIBILITÉ D'UNE PLAQUE.
+  // Fenêtre de 360 × 512 px CSS, vingt graines, fenêtres centrées sur les
+  // rangées 250, 150 et 50 : le nombre de sites À L'ÉCRAN vaut 296 au cran de
+  // 10,7 px CSS par case, 98 à 21,3, 33 à 42,7 et 13 à 85,3. À 33 les plaques
+  // se recouvrent — c'est la capture d'Ethan —, à 13 elles ne se touchent pas :
+  // mesuré sur trente graines, 88 % des sites ont leur plus proche voisin à
+  // DEUX cases (170 px CSS) et 8,4 % à une seule (85), quand « Base de
+  // l'Ouvrage » fait une soixantaine de pixels.
+  //
+  // ⚠ EN PIXELS CSS ET NON EN CRANS, et c'est ce qui le rend juste sur tous les
+  // appareils : les crans de `ZOOM_CARTE` sont en pixels PHYSIQUES, donc le
+  // même cran n'a pas la même taille apparente à densité d'écran différente.
+  cssMiniParCase: 64,
+
+  /** La police, en fraction de case : elle suit le cran, comme les frontières. */
+  partPolice: 0.09,
+
+  // ⚠ L'ENCRE EST NEUTRE, ET CE N'EST PAS `TEINTES_TERRITOIRE`, qui porte
+  // pourtant la même valeur pour le joueur. Cette table-là dit « ceci
+  // appartient au joueur » ; une étiquette nomme aussi bien une base de
+  // l'Ouvrage qu'un gisement. Deux grandeurs qui partagent une valeur ne
+  // partagent pas une constante — règle §4, celle qui a séparé `economie.js`
+  // de `niveaux.js`.
+  encre: '#F5F3E8',
+};
+
 // --- le pavage du fond de carte ----------------------------------------------
 // Le fond de la carte n'est PAS une case répétée : c'est un semis de tuiles
 // posées sur un réseau plus serré qu'une case, chacune décalée, tournée,
