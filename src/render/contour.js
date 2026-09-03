@@ -38,19 +38,33 @@ import { variante } from './variante.js';
 export const BANDE_DU_CONTOUR = 'batiments';
 
 /**
- * La bande où le contour S'ARRÊTE — le bas de la défense.
+ * La bande où le contour S'ARRÊTE — la dernière de la grille.
  *
- * ⚠⚠ LES FLANCS DESCENDENT LE LONG DE LA DÉFENSE, ET C'EST UN ARBITRAGE
- * D'ETHAN DU 03/09 : « flanc sur la défense aussi ». Sa phrase précédente —
- * « les murs vont du haut de la base jusqu'à la défense et ne ferme pas en
- * bas » — avait d'abord été lue *jusqu'au bord de la base* ; elle voulait dire
- * *jusqu'au bout de la défense*. Le U enferme donc les DEUX bandes que le
- * joueur compose, et ne s'ouvre que sur les deux rangées de déploiement, par
- * lesquelles l'assaut arrive.
+ * ⚠⚠ LES FLANCS VONT MAINTENANT JUSQU'EN BAS, ET C'EST LE TROISIÈME ARBITRAGE
+ * D'ETHAN SUR CETTE MÊME LIGNE. Le 31/08 : « le mur fait un U, le bas reste
+ * sans mur » — les flancs s'arrêtaient au bord de la base. Le 03/09 : « flanc
+ * sur la défense aussi » — ils ont gagné les huit rangées de défense. Le 03/09
+ * encore, devant la capture : « remplir les murs jusqu'en bas […] purement
+ * décoratif ». Ils couvrent donc les DIX-HUIT rangées, déploiement compris.
  *
- * ⚠ ET LE BAS RESTE SANS MUR, inchangé depuis le 31/08.
+ * ⚠⚠ ET LE BAS RESTE SANS MUR — LE U N'EST PAS DEVENU UN CADRE. Ce qui
+ * s'allonge, ce sont les deux FLANCS ; le côté du bas n'a jamais eu de pièce et
+ * n'en a toujours pas, parce que c'est par là que l'assaut arrive. La phrase
+ * « jusqu'en bas » désigne la longueur des flancs, pas la fermeture du U.
+ *
+ * ⚠⚠ ET ÇA NE COÛTE NI UNE CASE NI UN PIXEL DE GÉOMÉTRIE. Les flancs vivent
+ * aux colonnes `0` et `largeur + 1`, HORS du contenu : les allonger n'ajoute
+ * aucune ligne à réserver, et `calculerProjection` continue de compter
+ * `GRILLE.longueur + contour` lignes — la ligne en plus est celle du mur du
+ * FOND, en haut, et elle n'a pas bougé. Aucune mesure de pixel du dépôt ne
+ * change, ce qui est exactement ce que « purement décoratif » veut dire.
+ *
+ * ⚠ ELLE SE LIT DANS `GRILLE.bandes`, ELLE NE S'ÉCRIT PAS « celle du bas ».
+ * `nbLignes` se calcule d'un bord à l'autre dans `tuilesDuContour` : le jour où
+ * une quatrième bande entrerait sous le déploiement, c'est cette constante-ci
+ * qu'on changerait, et le flanc suivrait sans qu'une somme le saute.
  */
-export const BANDE_DE_FIN_DU_CONTOUR = 'defense';
+export const BANDE_DE_FIN_DU_CONTOUR = 'deploiement';
 
 /**
  * Ce qu'un mur couvre, et combien de variantes le dessin porte.
@@ -84,11 +98,11 @@ const SEL_DU_MUR = 0x4d555253;
  * Les pièces du mur de contour, en unités de CASE depuis le coin de la grille.
  *
  * ⚠⚠ LE MUR FAIT UN U, LE BAS RESTE SANS MUR — arbitrage d'Ethan du 31/08, mot
- * pour mot, et il n'a pas bougé. Ce qui a bougé le 03/09, c'est jusqu'OÙ les
- * flancs descendent : « flanc sur la défense aussi ». Le U enferme donc les
- * deux bandes que le joueur compose — bâtiments ET défense — et ne s'ouvre que
- * sur les deux rangées de déploiement, par lesquelles l'assaut arrive. C'est le
- * seul des quatre côtés sans mur, et le seul que l'assaillant franchit.
+ * pour mot, et il n'a toujours pas bougé. Ce qui a bougé DEUX fois le 03/09,
+ * c'est jusqu'OÙ les flancs descendent : « flanc sur la défense aussi », puis
+ * « remplir les murs jusqu'en bas ». Ils courent désormais sur les dix-huit
+ * rangées. Le côté du bas reste le seul des quatre sans pièce, et le seul que
+ * l'assaillant franchit.
  *
  * ⚠⚠ ET LES PIÈCES NE SONT PAS À CHEVAL : ELLES CEIGNENT — lot MURS, 03/09.
  * Ethan : « pour que ça passe bien, parce que là ça déborde ». La v1 était un

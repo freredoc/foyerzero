@@ -744,6 +744,26 @@ export const POI = {
  */
 export const NIVEAUX_PAR_BANDE = 5;
 
+/**
+ * L'écart minimal entre deux POI, en cases.
+ *
+ * ⚠⚠ ARBITRÉ PAR ETHAN LE 03/09, DEVANT LA CARTE : « éparpille les poi. jamais
+ * 2 poi collé, au moins 4 cases d'écart ». Le tirage n'écartait jusque-là que
+ * la case EXACTE d'un POI déjà posé : deux gisements pouvaient se toucher par
+ * un côté ou par un coin, et la carte en montrait des paires collées.
+ *
+ * ⚠ « QUATRE CASES D'ÉCART » EST LU COMME UNE DISTANCE, PAS COMME UN NOMBRE DE
+ * CASES VIDES. Deux POI à distance 4 laissent trois cases entre eux ; l'autre
+ * lecture — quatre cases VIDES, donc distance 5 — se prend en changeant ce seul
+ * nombre. C'est écrit ici pour que le choix se voie et se défasse d'un chiffre.
+ *
+ * ⚠⚠ ET LA DISTANCE EST EUCLIDIENNE, comme toutes les portées du dépôt depuis
+ * le lot EUCLIDE — c'est déjà la métrique de `horsDeLaGarde`, que ce même
+ * tirage appelle deux lignes plus haut. En prendre une autre ici donnerait à
+ * `sim/poi.js` deux géométries pour deux refus voisins.
+ */
+export const ECART_MINIMAL_POI = 4;
+
 // --- satellites d'une base du joueur -----------------------------------------
 // ARBITRÉ le 29/08/2026 : « 5 min après la pose d'une base joueur ou déplacement
 // d'une base joueur, 2 camps et 1 avant-poste ouvrage apparaissent. Respawn
@@ -844,8 +864,15 @@ export const ZOOM_CARTE = {
   // pixel art brouillé — exactement ce que la note des crans refuse plus haut.
   tuilesParCase: 2,
 
-  /** Côté de la grille logique d'un emblème, en pixels. */
-  grilleEmbleme: 64,
+  // ⚠⚠ `grilleEmbleme` A ÉTÉ RETIRÉE ICI LE 03/09, ET SON ABSENCE EST LE
+  // MESSAGE. Elle valait 64 et disait « le côté d'une cellule d'emblème » —
+  // c'est-à-dire la grille de couture des atlas, que `COTE_SPRITE` de
+  // `data/atlas.js` porte déjà et que `tools/atlas.py` GÉNÈRE. Deux vérités
+  // pour une grandeur, dont une écrite à la main : le lot GRILLE-128 a fait
+  // passer la couture à 128 sans que celle-ci suive, et pendant deux lots la
+  // carte du monde a lu ses emblèmes dans la mauvaise cellule, au quart de
+  // leur taille. `render/embleme.js` lit `COTE_SPRITE`, comme
+  // `render/limite.js` le faisait déjà. Ne pas la recréer.
 };
 
 /**

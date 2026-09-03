@@ -28,7 +28,7 @@ import {
 import { creerCombat } from '../src/sim/combat.js';
 import { executerRaid } from '../src/sim/raid.js';
 import {
-  GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE, PEUPLEMENT,
+  GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE, PEUPLEMENT, ECART_MINIMAL_POI,
 } from '../src/data/sites.js';
 import { RAYONS, JOUEUR } from '../src/sim/territoire.js';
 import { baseCourante } from '../src/sim/base-courante.js';
@@ -254,6 +254,117 @@ test('POI T7 — `ESSAIS_MAX` lève, il ne rend pas une carte amputée', () => {
   assert.throws(() => rangeesDeLaBande(NOMBRE_DE_BANDES + 1), /hors de/);
 });
 
+test('POI T26 — jamais deux POI à moins de `ECART_MINIMAL_POI`, et la borne est ATTEINTE', () => {
+  const seuil = ECART_MINIMAL_POI * ECART_MINIMAL_POI;
+
+  let paires = 0;
+  let auSeuil = 0;
+  let minCarre = Infinity;
+  let minTchebychev = Infinity;
+  for (const graine of GRAINES) {
+    const liste = tirerLesPoi(graine);
+    for (let i = 0; i < liste.length; i += 1) {
+      for (let j = i + 1; j < liste.length; j += 1) {
+        const dr = liste[i].rangee - liste[j].rangee;
+        const dc = liste[i].colonne - liste[j].colonne;
+        const carre = dr * dr + dc * dc;
+        paires += 1;
+        if (carre === seuil) auSeuil += 1;
+        if (carre < minCarre) minCarre = carre;
+        const tchebychev = Math.max(Math.abs(dr), Math.abs(dc));
+        if (tchebychev < minTchebychev) minTchebychev = tchebychev;
+        assert.ok(carre >= seuil,
+          `graine ${graine} : « ${liste[i].type} » (${liste[i].rangee}, ${liste[i].colonne}) et `
+          + `« ${liste[j].type} » (${liste[j].rangee}, ${liste[j].colonne}) sont à `
+          + `${Math.sqrt(carre).toFixed(2)} cases`);
+      }
+    }
+  }
+
+  // ⚠ FALSIFIABLE, ET C'EST LA MOITIÉ QUI COMPTE. Une garde qui ne dirait que
+  // « aucune paire sous le seuil » passerait aussi sur une carte où les POI
+  // seraient naturellement lointains — c'est-à-dire sans que la règle serve à
+  // rien. On exige donc que la borne soit ATTEINTE : des paires tombent
+  // EXACTEMENT à l'écart minimal, donc c'est bien le refus qui les y tient.
+  // Mesuré sur ces cinquante graines : 56 paires au seuil exact sur 120 750.
+  assert.ok(paires > 100_000, `${paires} paires : le montage ne mesure rien`);
+  assert.ok(auSeuil > 0,
+    `aucune paire à l'écart exact : la borne ne mord pas, ${Math.sqrt(minCarre).toFixed(2)} au plus près`);
+  assert.equal(minCarre, seuil, 'l\'écart le plus court n\'est pas l\'écart minimal');
+
+  // ⚠⚠ ET LA MÉTRIQUE EST EUCLIDIENNE, PAS TCHEBYCHEV — mesuré, pas déduit.
+  // Deux POI en diagonale à trois cases de côté sont à 4,24 en Euclide : la
+  // règle les ACCEPTE, et un carré de Tchebychev de même rayon les refuserait.
+  // Cette ligne tombe le jour où quelqu'un troque la distance contre l'autre,
+  // ce qu'aucune des assertions ci-dessus ne verrait.
+  assert.ok(minTchebychev < ECART_MINIMAL_POI,
+    `min Tchebychev ${minTchebychev} : la règle a cessé d'être euclidienne`);
+});
+
+test('POI T27 — la séparation retire un tiers d\'une bande, et la carte reste tirable', () => {
+  // ⚠ CE QUI EST MESURÉ, C'EST LA PLACE QUI RESTE. `ESSAIS_MAX` ne peut pas se
+  // saturer sur la vraie carte (T7 dit pourquoi) ; ce qui se mesure, c'est la
+  // PROBABILITÉ qu'un tirage tombe sur une case admissible, dont l'espérance du
+  // nombre d'essais est l'inverse. Un seuil trop grand la ferait fondre, et
+  // c'est exactement la panne que ce test doit voir venir.
+  const seuil = ECART_MINIMAL_POI * ECART_MINIMAL_POI;
+  const e = empriseDeLaGrosseBase(3, positionBaseTerminale());
+  const sousLaTerminale = (r, c) => r >= e.rangee && r <= e.rangee + e.cotes - 1
+    && c >= e.colonne && c <= e.colonne + e.cotes - 1;
+  const largeur = GEOGRAPHIE.carte.largeur;
+
+  let pireProbabilite = 1;
+  let partMaxSeparation = 0;
+  for (const graine of GRAINES.slice(0, 5)) {
+    const liste = tirerLesPoi(graine);
+    for (let bande = 1; bande <= NOMBRE_DE_BANDES; bande += 1) {
+      let total = 0;
+      let admissibles = 0;
+      let retireesParLaSeparation = 0;
+      for (const rangee of rangeesDeLaBande(bande)) {
+        for (let colonne = 1; colonne <= largeur; colonne += 1) {
+          total += 1;
+          if (!horsDeLaGarde(rangee, colonne)) continue;
+          if (estBaseOuvrage(graine, rangee, colonne)) continue;
+          if (sousLaTerminale(rangee, colonne)) continue;
+          const tropPres = liste.some((p) => (p.rangee - rangee) ** 2
+            + (p.colonne - colonne) ** 2 < seuil);
+          if (tropPres) { retireesParLaSeparation += 1; continue; }
+          admissibles += 1;
+        }
+      }
+      pireProbabilite = Math.min(pireProbabilite, admissibles / total);
+      partMaxSeparation = Math.max(partMaxSeparation, retireesParLaSeparation / total);
+    }
+  }
+
+  // ⚠ FALSIFIABLE : la séparation doit RETIRER quelque chose, sinon la marge
+  // qu'on mesure ensuite est celle d'avant le lot. Mesuré : jusqu'à 34,3 % des
+  // cases d'une bande, sur ces cinq graines.
+  assert.ok(partMaxSeparation > 0.1,
+    `la séparation ne retire que ${(partMaxSeparation * 100).toFixed(1)} % d'une bande`);
+
+  // ⚠⚠ ET C'EST LA PROBABILITÉ D'UNE CARTE IMPOSSIBLE QU'ON BORNE, PAS UN
+  // NOMBRE D'ESSAIS. Le tirage est une suite d'épreuves indépendantes : la
+  // chance d'épuiser le plafond vaut `(1 − p)^ESSAIS_MAX`, et c'est CETTE
+  // grandeur que `ESSAIS_MAX` existe pour tenir. Un « dix fois moins que le
+  // plafond » écrit à la place serait un proxy — la faute que ce dépôt a déjà
+  // payée deux fois, sur `grilleEmbleme` et sur `ZOOM_BASE_MULTIPLE_MAX`.
+  //
+  // La bande 1 est la plus serrée, et c'est la GARDE du peuplement qui la
+  // serre, pas la séparation : elle couvre les rangées du départ du joueur.
+  // Mesuré ici : p = 0,135, donc une carte impossible sur 10²⁷ — et sur les
+  // trois cents graines du rapport, p = 0,0945 au pire.
+  const risque = (1 - pireProbabilite) ** ESSAIS_MAX;
+  assert.ok(risque < 1e-9,
+    `p = ${pireProbabilite.toFixed(4)}, soit ${(1 / pireProbabilite).toFixed(1)} essais espérés `
+    + `et un risque de ${risque.toExponential(2)} d'épuiser ${ESSAIS_MAX} essais`);
+
+  // Et la carte se tire, sur cinquante graines, sans qu'aucune bande n'épuise
+  // ses essais — c'est la conséquence, et elle se constate.
+  for (const graine of GRAINES) assert.equal(tirerLesPoi(graine).length, 70);
+});
+
 // ---------------------------------------------------------------------------
 // L'acquisition
 // ---------------------------------------------------------------------------
@@ -261,12 +372,18 @@ test('POI T7 — `ESSAIS_MAX` lève, il ne rend pas une carte amputée', () => {
 /**
  * Une partie posée SUR un POI ISOLÉ, sans passer par le redéploiement.
  *
- * ⚠ L'ISOLEMENT EST UNE CONDITION DE MONTAGE, PAS UN DÉTAIL. Deux POI peuvent se
- * toucher — rien ne l'interdit, ils ne s'excluent qu'à la case —, et le premier
- * de la carte de 4242 a effectivement un voisin à une case. Un test qui attendrait
- * « exactement un acquis » y tomberait pour une raison qui n'a rien à voir avec ce
- * qu'il mesure. On choisit donc un POI dont le disque de rayon 5 est vide, et on
- * l'ASSERTE.
+ * ⚠ L'ISOLEMENT EST UNE CONDITION DE MONTAGE, PAS UN DÉTAIL. Un test qui
+ * attendrait « exactement un acquis » tomberait sur un voisin, pour une raison
+ * qui n'a rien à voir avec ce qu'il mesure. On choisit donc un POI dont le
+ * disque de rayon 5 est vide, et on l'ASSERTE.
+ *
+ * ⚠⚠ CE COMMENTAIRE DISAIT « deux POI peuvent se toucher — rien ne l'interdit,
+ * ils ne s'excluent qu'à la case », ET C'EST DEVENU FAUX LE 03/09 : le tirage
+ * les écarte désormais de `ECART_MINIMAL_POI`. La recherche reste pourtant
+ * nécessaire, et c'est MESURÉ : la règle est EUCLIDIENNE et vaut 4, le montage
+ * demande un carré de TCHEBYCHEV de rayon 5, et deux POI en diagonale à trois
+ * cases de côté satisfont la première sans satisfaire le second — on en observe
+ * (min Tchebychev = 3, POI T26). Sur la graine 4242, 32 des 70 POI passent.
  */
 function partieSurLePoi(graine, marge = 5) {
   const liste = carteDesPoi(graine).liste;

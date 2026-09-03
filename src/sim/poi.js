@@ -30,7 +30,7 @@
 // géométrie dans `sim/` plutôt qu'en recopiant le décalage.
 
 import {
-  GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE,
+  GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE, ECART_MINIMAL_POI,
 } from '../data/sites.js';
 import { niveauDeLaRangee, estSurLaCarte, positionBaseTerminale } from './carte.js';
 import { hachageBrut, horsDeLaGarde, estBaseOuvrage } from './peuplement.js';
@@ -151,6 +151,43 @@ function caseLibrePourUnPoi(graine, rangee, colonne) {
 }
 
 /**
+ * Un POI déjà posé est-il trop près de cette case ?
+ *
+ * ⚠⚠ ARBITRÉ PAR ETHAN LE 03/09 : « éparpille les poi. jamais 2 poi collé, au
+ * moins 4 cases d'écart ». Le tirage n'écartait que la case EXACTE d'un POI
+ * déjà posé — deux gisements pouvaient donc se toucher par un côté ou par un
+ * coin, et la carte en montrait des paires collées.
+ *
+ * ⚠⚠ AU CARRÉ DES DEUX CÔTÉS, JAMAIS DE RACINE — la doctrine d'EUCLIDE, et
+ * `src/sim/` s'interdit `Math.sqrt` de face. `d² < écart²` compare deux
+ * entiers, et la comparaison est exacte.
+ *
+ * ⚠ ELLE REGARDE TOUS LES POI DÉJÀ POSÉS, PAS SEULEMENT CEUX DE LA BANDE. Les
+ * bandes sont des paquets de rangées CONTIGUS : deux POI de bandes voisines
+ * peuvent se retrouver à deux rangées l'un de l'autre, et une garde par bande
+ * ne les verrait jamais. C'est même le cas le plus fréquent, les sept POI d'une
+ * bande ayant trente rangées pour eux.
+ *
+ * ⚠ ET ELLE EST EN O(n) SUR SOIXANTE-DIX POSES, ce qui est le coût de tout ce
+ * module : 70 × 69 / 2 comparaisons d'entiers pour une carte entière. Un index
+ * spatial serait de l'ingénierie pour deux mille quatre cents soustractions.
+ *
+ * @param {Array<{rangee: number, colonne: number}>} poses les POI déjà placés
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {boolean}
+ */
+function troppresDUnPoiPose(poses, rangee, colonne) {
+  const seuil = ECART_MINIMAL_POI * ECART_MINIMAL_POI;
+  for (const pose of poses) {
+    const dr = pose.rangee - rangee;
+    const dc = pose.colonne - colonne;
+    if (dr * dr + dc * dc < seuil) return true;
+  }
+  return false;
+}
+
+/**
  * Les soixante-dix POI d'une partie — sept types dans chacune des dix bandes.
  *
  * ⚠ TIRAGE PAR REJET, DÉTERMINISTE, DÉRIVÉ DE LA SEULE GRAINE. L'ordre des
@@ -180,6 +217,7 @@ export function tirerLesPoi(graine) {
         const marque = `${rangee}:${colonne}`;
         if (prises.has(marque)) continue;
         if (!caseLibrePourUnPoi(graine, rangee, colonne)) continue;
+        if (troppresDUnPoiPose(poses, rangee, colonne)) continue;
         prises.add(marque);
         pose = { type: TYPES_POI[indexDuType], bande, rangee, colonne };
         break;

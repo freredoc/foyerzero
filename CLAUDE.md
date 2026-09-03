@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.76.0 · build 78.
+Dernière révision : **03/09/2026**, version 0.77.0 · build 79.
 
 ---
 
@@ -41,8 +41,124 @@ Dernière révision : **03/09/2026**, version 0.76.0 · build 78.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot MOULINETTE-TERRAIN), à confronter :**
-`npm test` → **960 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot RETOURS-DU-03-SOIR), à confronter :**
+`npm test` → **964 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**3 350 987 octets**, 0 référence externe.
+⚠⚠ **TROIS RETOURS D'ETHAN SUR CAPTURES, ET UN QUATRIÈME EN COURS DE ROUTE.**
+03/09 au soir : « 1. remplir les murs jusqu'en bas et rajouter tuiles terrain
+afin de remplir l'ui. purement decoratif / 2. fix des emblèmes de la carte »,
+puis « juste avant : eparpille les poi. jamais 2 poi collé, au moins 4 cases
+d'ecart ». Coût **+2 283 octets**, aucune image n'entre — **25 `data:` avant,
+25 après**. Borne T10 **inchangée à 3 400 000**, marge **49 013 octets,
+1,46 %** : c'est la plus mince du dépôt depuis BASES-1, et le prochain lot qui
+fait entrer une image devra la relever EN ÉCRIVANT POURQUOI.
+⚠⚠ **LES EMBLÈMES DE LA CARTE ÉTAIENT DÉCOUPÉS DANS UN QUART DE CELLULE, ET
+C'EST LE LOT GRILLE-128 QUI L'AVAIT FAIT — SON PROPRE RAPPORT ANNONÇAIT LE
+CONTRAIRE.** Il écrivait « tout le reste suit — `src/render/sprite.js` calcule
+en POURCENTAGES, donc il est sans échelle » : vrai de `sprite.js`, **FAUX de
+`render/embleme.js`**, qui calcule en PIXELS et lisait le côté de cellule dans
+`ZOOM_CARTE.grilleEmbleme`, resté à **64** quand l'atlas embarqué passait à
+**128**. Mesuré : la cellule (2, 2) de `site_base_o_n1` était lue
+`(128, 128, 64, 64)`, c'est-à-dire **le quart haut-gauche de la cellule (1, 1)**
+— le sprite du voisin, tronqué. Reproduit à l'octet contre la capture d'Ethan
+avant d'écrire une ligne.
+⚠⚠ **`ZOOM_CARTE.grilleEmbleme` EST RETIRÉE, PAS CORRIGÉE.** La remettre à 128
+aurait laissé au dépôt **deux vérités pour la grille de couture**, dont une
+seule est écrite par l'outil : `COTE_SPRITE` de `src/data/atlas.js` est GÉNÉRÉ
+par `tools/atlas.py`, l'autre était recopiée à la main. La donnée retirée laisse
+un commentaire qui dit de ne pas la recréer.
+⚠ **ET SA GARDE MESURAIT UN PROXY, POUR LA TROISIÈME FOIS DU DÉPÔT.**
+`monde.test.js` figeait `ZOOM_CARTE.grilleEmbleme === 64` — vrai, et sans rapport
+avec ce qu'elle défendait. Elle lit désormais les DEUX côtés : le rectangle
+source rendu vaut `COTE_SPRITE`, et les cellules d'emblème PAVENT l'atlas.
+Même leçon que `ZOOM_BASE_MULTIPLE_MAX` au lot GRILLE-128.
+⚠⚠ **LES MURS DESCENDENT JUSQU'EN BAS, ET C'EST LE TROISIÈME ARBITRAGE SUR LA
+MÊME LIGNE.** 31/08 : le U s'arrêtait au bord de la bande des bâtiments ; 03/09
+matin : « flanc sur la défense aussi » ; 03/09 soir : « remplir les murs
+jusqu'en bas ». `BANDE_DE_FIN_DU_CONTOUR` passe de `'defense'` à
+`'deploiement'` — **41 pièces d'anneau au lieu de 37**, flancs de 17 à 19
+lignes, et **zéro image de plus** : ce sont les mêmes six dessins. Le bas du U reste OUVERT : c'est par là que l'assaut arrive.
+⚠⚠ **ET ÇA NE COÛTE AUCUNE GÉOMÉTRIE — MESURÉ SUR CINQ VIEWPORTS.** Les flancs
+vivent aux colonnes 0 et `largeur + 1`, que `calculerProjection` réserve déjà
+depuis le lot MURS-OUVRAGE : allonger un flanc ne prend pas une case de contenu,
+donc **la taille de case ne bouge pas d'un pixel**.
+⚠⚠ **UNE ASSERTION DÉCLARÉE INERTE AU LOT MURS EST TOMBÉE, EXACTEMENT COMME
+ANNONCÉ.** Elle relevait que « le flanc se mesure d'un bord à l'autre, jamais en
+additionnant les bandes » et disait que la falsification NE MORDAIT PAS, les
+deux bandes étant adjacentes. Le lot en ajoute une TROISIÈME : les deux
+formules divergent, la garde mord, et elle est devenue ACTIVE dans les deux
+fichiers qui la portaient.
+⚠ **UNE SECONDE GARDE MESURAIT UN PROXY, ET ELLE A ÉTÉ RÉÉCRITE AUSSI.**
+`lignesHorsDuU > 0` ne disait rien de l'endroit où le U s'arrête ; la garde
+nomme désormais la propriété — **aucune pièce à la ligne `haut + 1 + nbLignes`
+ni en dessous** — et une falsification prouve qu'elle la voit.
+⚠⚠ **LE CHAMP DE LA BASE A UN SOL, ET IL NE COÛTE NI UNE IMAGE NI UNE
+COULEUR.** `#chantier-defile` porte `var(--atlas-sol)` en `repeat` — le MÊME
+atlas que les cases, déjà inliné depuis le lot SPRITES-ET-ZOOM — donc
+**25 `data:` avant, 25 après**. Le noir `#161914` reste dessous en repli.
+⚠ **`background-attachment: local`, JAMAIS `scroll`.** Le champ DÉFILE ; sous
+`scroll` le sol resterait collé au cadre et glisserait sous la grille à chaque
+mouvement du doigt.
+⚠⚠ **ET L'ÉCHELLE SE DÉRIVE, ELLE NE S'ÉCRIT PAS.** Une case vaut
+`ZOOM_CARTE.tuilesParCase` tuiles de l'atlas, donc l'atlas entier vaut
+`parAxe / tuilesParCase` = **8 cases** — `casesDeSolParAtlas` le calcule et LÈVE
+si la division ne tombe pas juste. Les deux échelles, celle de la case et celle
+du pavage, s'écrivent dans **la même fonction** : elles ne peuvent pas diverger
+au zoom.
+⚠⚠ **LES POI S'ÉCARTENT DE QUATRE CASES, ET LE TIRAGE N'EN ÉCARTAIT QUE LA CASE
+EXACTE.** Mesuré AVANT sur 300 graines et 724 500 paires : **3 534 paires sous
+quatre cases (0,488 %), et le minimum valait 1,000** — deux gisements
+côte à côte. Après : **zéro sous le seuil, minimum exactement 4,000**.
+⚠ **`ECART_MINIMAL_POI` EST UNE DISTANCE, PAS UN NOMBRE DE CASES VIDES.** Deux
+POI à distance 4 laissent TROIS cases entre eux ; l'autre lecture — quatre cases
+vides, donc distance 5 — se prend en changeant ce seul nombre, et **elle passe
+encore les gardes** : mesuré, le seuil 5 est vert, c'est à partir de 6 que la
+garde de marge avertit.
+⚠ **ET LA MÉTRIQUE EST EUCLIDIENNE, comme toutes les portées depuis le lot
+EUCLIDE** — c'est déjà celle de `horsDeLaGarde`, que le même tirage appelle deux
+lignes plus haut. Un test le DISCRIMINE : le minimum de Tchebychev observé vaut
+**3**, donc un carré de même rayon refuserait des paires que la règle accepte.
+⚠⚠ **LA MARGE D'ESSAIS SE MESURE SUR LA GRANDEUR QU'ELLE DÉFEND, PAS SUR UN
+PROXY.** `POI T27` borne la PROBABILITÉ qu'une carte soit impossible —
+`(1 − p)^ESSAIS_MAX` — et non un « dix fois moins que le plafond ». Mesuré :
+`p = 0,135` au pire sur cinq graines, `0,0945` sur trois cents, soit un risque
+de l'ordre de 10⁻²⁷. La séparation retire jusqu'à **34,3 %** d'une bande, et
+c'est la GARDE du peuplement, pas elle, qui serre la bande 1.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE, AVEC 21 COUPLES DÉCLARÉS SUR 350, ET
+L'ATTRIBUTION EST MESURÉE.** En retirant la SEULE ligne du refus, `bases.test.js`
+repasse **30 pass / 0 fail** : les vingt et un couples sont tous à l'espacement
+des POI, et les trois autres gestes du lot — murs, sol, emblèmes — n'atteignent
+pas le moteur. La chaîne se lit d'un bout à l'autre : les POI changent de case,
+donc `poisAcquis` change dès la phase 10, donc la majoration de production,
+donc `economie`, donc ce qu'un rasage détruit, donc `rapports`. `satellites`
+suit pour la raison écrite au lot POI — un satellite ne se pose jamais SUR un
+POI.
+⚠ **NEUF GRAINES SUR VINGT-CINQ SONT IDENTIQUES AU BIT**, et **UN SEUL SCALAIRE
+BOUGE, SUR DEUX GRAINES** — l'empreinte du rapport du raid lointain. Gestes,
+sauvegarde, cases atteignables, déplacement, nombre d'attaquantes, nombre de
+cibles, cible retenue et **tout le raid de proximité** : 0 / 25.
+⚠⚠ **ONZE FALSIFICATIONS, ONZE CHUTES — ET UNE DOUZIÈME QUI NE MORDAIT PAS,
+DÉCLARÉE ET RÉÉCRITE.** La première garde du pavage vérifiait que
+`casesDeSolParAtlas` dérive bien de l'atlas, suit une image deux fois plus
+large, LÈVE sur un atlas mal groupé, et que les deux échelles s'écrivent au même
+endroit — tout cela juste, **et remplacer `borne * casesParAtlas` par `borne` la
+laissait VERTE**. Elle nommait la PRÉSENCE de la ligne, pas le FACTEUR. C'est le
+proxy du lot, vu une TROISIÈME fois. Elle lit désormais les deux gabarits
+`${…}px`, retrouve le nom du facteur dans la source plutôt que de le recopier,
+et exige que `--sol-pave` le nomme, que `--case-cote` ne le nomme pas, et que le
+premier reparte du second.
+⚠ **LE DÉCOMPTE** : la ligne du contour, la cellule de l'emblème, le pavage pris
+de trois façons, le `background-attachment`, l'espacement des POI pris de quatre
+façons (appel retiré, métrique changée, fonction rendue inerte, seuil porté
+à 8), et le témoin de BASES-0.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** `poisAcquis` range le couple
+`{ type, bande }` et JAMAIS une position : un POI déplacé reste le même POI, et
+il n'y a rien à migrer.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le
+lot ne touche ni `art/`, ni `tools/` — pas un octet de `art/sprites/` ne change.
+
+**Auparavant, après le lot MOULINETTE-TERRAIN :**
+`npm test` → 960 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 348 704 octets**, 0 référence externe.
 ⚠⚠ **LES CHAMPS ET LES OBSTACLES PASSENT ENFIN AU FILTRE, ET ILS ÉTAIENT LES
 SEULS QUI RESTAIENT.** Ethan, 03/09 : « passe tout les sprites non fait dans le

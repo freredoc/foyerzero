@@ -34,7 +34,7 @@
 // sprites et les effets ; une seconde correspondance ici divergerait au premier
 // renommage d'image.
 
-import { ATLAS } from '../data/atlas.js';
+import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
 import { ZOOM_CARTE, GEOGRAPHIE, POI } from '../data/sites.js';
 import { existeDansAtlas, celluleDuSprite } from './sprite.js';
 
@@ -177,7 +177,7 @@ export function empriseDeLaGrosseBase(cotes, site) {
  *
  * ⚠ L'ÉCHELLE SE LIT DANS `ZOOM_CARTE`, elle ne se réécrit pas. Une grosse base
  * couvre `cotes` cases, donc `cran × cotes` pixels de côté ; un emblème
- * ordinaire vaut `cran / grilleEmbleme` fois sa taille source. Écrire ces
+ * ordinaire vaut `cran / COTE_SPRITE` fois sa taille source. Écrire ces
  * nombres ici en ferait une seconde vérité, et le dessin cesserait de suivre le
  * jour où un cran bougerait.
  *
@@ -221,9 +221,29 @@ export function dessinerGrosseBase(cotes, site, cran, origine) {
  * était le seul à faire son calcul dans l'écran, donc le seul qu'aucun test ne
  * pouvait atteindre — le dépôt n'a pas de navigateur. Ramené ici, il se mesure.
  *
- * ⚠ LE CÔTÉ DE LA CELLULE SE LIT DANS `ZOOM_CARTE.grilleEmbleme`, il ne se
- * recopie pas : c'est la grille logique sur laquelle les emblèmes sont
- * conditionnés, et elle vit déjà dans la table de calibrage.
+ * ⚠⚠ LE CÔTÉ DE LA CELLULE SE LIT DANS `COTE_SPRITE`, ET IL A ÉTÉ LU AILLEURS
+ * PENDANT DEUX LOTS. Il venait de `ZOOM_CARTE.grilleEmbleme`, une entrée de
+ * `data/sites.js` qui valait 64 — c'est-à-dire la grille de couture de
+ * l'époque, recopiée dans une table de calibrage. Le lot GRILLE-128 a fait
+ * passer l'atlas embarqué à 128 en changeant DEUX constantes d'outil, et son
+ * rapport annonçait « tout le reste suit — `render/sprite.js` calcule en
+ * POURCENTAGES, donc il est sans échelle ». C'était vrai de `sprite.js` et
+ * FAUX d'ici : ce module-ci calcule en PIXELS, et sa constante est restée à 64.
+ *
+ * ⚠⚠ CE QUE ÇA DONNAIT À L'ÉCRAN, MESURÉ SUR L'ATLAS RÉEL. Avec `sCote` à 64
+ * sur un atlas cousu en 128, la cellule `(2, 2)` de `site_base_o_n1` se lisait
+ * en `(128, 128, 64, 64)` — c'est-à-dire le QUART HAUT-GAUCHE de la cellule
+ * `(1, 1)`, qui porte `site_base_j_n2`. Toutes les bases de l'Ouvrage de la
+ * carte du monde étaient donc dessinées avec un morceau de l'emblème du
+ * JOUEUR, étiré sur la case entière. Reproduit à l'octet contre une capture
+ * d'Ethan du 03/09 avant d'écrire une ligne.
+ *
+ * ⚠ IL N'Y A PLUS DE SECONDE VÉRITÉ : `ZOOM_CARTE.grilleEmbleme` est RETIRÉE.
+ * Le côté d'une cellule d'atlas est une grandeur, et `COTE_SPRITE` la porte
+ * déjà — la recopier dans une table de calibrage, c'est exactement ce que §4
+ * de `CLAUDE.md` refuse, et c'est ce qui a permis aux deux de diverger sans que
+ * rien ne le dise. `render/limite.js` lisait `COTE_SPRITE` depuis le premier
+ * jour, et ses frontières se dessinaient juste pendant que les emblèmes non.
  *
  * @param {{type: string, saveur: string|null}} site
  * @param {number} palier 1…9, de `palierDeNiveau`
@@ -236,7 +256,7 @@ export function dessinerGrosseBase(cotes, site, cran, origine) {
 export function dessinerEmblemeDUneCase(site, palier, x, y, taille) {
   const nom = spriteDuSite(site.type, palier, site.saveur);
   const cellule = celluleDuSprite(FAMILLE, nom);
-  const sCote = ZOOM_CARTE.grilleEmbleme;
+  const sCote = COTE_SPRITE;
   return {
     nom,
     sx: cellule.colonne * sCote,

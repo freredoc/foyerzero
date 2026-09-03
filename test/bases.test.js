@@ -69,6 +69,8 @@ import {
   CLES_DU_RAPPORT_AVANT_TRANSFERT,
   DEPLACES_PAR_RETOURS_DU_03, EMPREINTES_PAR_GRAINE_RETOURS_DU_03,
   SCALAIRES_RETOURS_DU_03,
+  DEPLACES_PAR_RETOURS_DU_03_SOIR, EMPREINTES_PAR_GRAINE_RETOURS_DU_03_SOIR,
+  RAPPORTS_RETOURS_DU_03_SOIR,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -81,6 +83,12 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * LÉGITIMEMENT DÉPLACÉS OU AJOUTÉS. Le témoin ne se rafraîchit pas en bloc : un
  * lot qui change un comportement NOMME ce qui bouge, et laisse tout le reste
  * gardé contre la référence d'avant.
+ *
+ * ⚠⚠ VINGT ET UN COUPLES DE PLUS AU LOT RETOURS-DU-03-SOIR, tous à partir de
+ * la phase 10 : l'espacement des POI déplace les soixante-dix gisements de
+ * chaque graine, donc ce que la base ACQUIERT en montant, donc sa production,
+ * donc ses rapports de raid. L'attribution est mesurée — en retirant la seule
+ * ligne du refus, ce fichier repasse entièrement vert.
  *
  * ⚠⚠ TRENTE-SEPT COUPLES DE PLUS AU LOT RETOURS-DU-03, tous à partir de la
  * phase 10 : deux des trois retours d'Ethan changent la CARTE de chaque graine —
@@ -101,7 +109,8 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_RETOURS_DU_03[phase]?.[champ]
+  return DEPLACES_PAR_RETOURS_DU_03_SOIR[phase]?.[champ]
+    ?? DEPLACES_PAR_RETOURS_DU_03[phase]?.[champ]
     ?? DEPLACES_PAR_TRANSFERT[phase]?.[champ]
     ?? EMPREINTES_DES_CHAMPS_AJOUTES[phase]?.[champ]
     ?? DEPLACES_PAR_BASES_1[phase]?.[champ]
@@ -454,7 +463,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOURS_DU_03[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOURS_DU_03_SOIR[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -511,8 +520,13 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // plus la même sur six d'entre elles, et le prix a bougé sur les autres.
       // Celui du raid de PROXIMITÉ, lui, reste gardé contre TRANSFERT : un camp
       // est de l'histoire, pas du tirage de carte.
+      // ⚠ ET RETOURS-DU-03-SOIR N'EN DÉPLACE QUE DEUX, NOMMÉES : l'espacement
+      // des POI change ce que la base acquiert, donc ses stocks, donc ce qu'un
+      // rasage lui détruit. Les vingt-trois autres restent gardées contre
+      // RETOURS-DU-03 — c'est cette moitié-là qui prouve que la cible et le
+      // barème du raid n'ont pas bougé.
       const attenduRapport = cle === 'raidOuvrage'
-        ? surcharge.raidOuvrageRapport
+        ? (RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
         : RAPPORTS_TRANSFERT[g][`${cle}Rapport`];
       assert.equal(
         empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,

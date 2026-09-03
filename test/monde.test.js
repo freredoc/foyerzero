@@ -30,7 +30,7 @@ import {
   dessinerEmblemeDUneCase,
 } from '../src/render/embleme.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
-import { ATLAS } from '../src/data/atlas.js';
+import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
@@ -66,7 +66,7 @@ test('zoom — les quatre crans sont des puissances de deux et divisent tuile et
     // Depuis le 30/08 elle en couvre un quart : c'est `cran / tuilesParCase`
     // qu'elle doit remplir, et le rapport à mesurer est celui-là.
     const versTuile = ZOOM_CARTE.coteTuile / (cran / ZOOM_CARTE.tuilesParCase);
-    const versEmbleme = ZOOM_CARTE.grilleEmbleme / cran;
+    const versEmbleme = COTE_SPRITE / cran;
     assert.ok(Number.isInteger(versTuile) || Number.isInteger(1 / versTuile),
       `la tuile ne s'échelonne pas entier au cran ${cran}`);
     // ⚠ ET LE DÉCOUPAGE DOIT TOMBER JUSTE : une tuile d'écran fractionnaire
@@ -352,7 +352,7 @@ test('écran — il ne nomme aucune constante de grille ni de zoom en dur', () =
     [GEOGRAPHIE.carte.largeur, 'la largeur de la carte'],
     [GEOGRAPHIE.carte.hauteur, 'la hauteur de la carte'],
     [ZOOM_CARTE.coteTuile, 'le côté d\'une tuile'],
-    [ZOOM_CARTE.grilleEmbleme, 'la grille d\'un emblème'],
+    [COTE_SPRITE, 'la grille de couture d\'un emblème'],
     [GEOGRAPHIE.niveauPlafond, 'le plafond de niveau'],
     [TERRAIN_CARTE.dalleCotePx, 'le côté d\'une dalle'],
     [TERRAIN_CARTE.dallesEnCache, 'la taille du cache'],
@@ -902,10 +902,34 @@ test('emblèmes — `ZOOM_CARTE` est la source des échelles, et le dessin la su
   // Un cran hors table est refusé : le dessin ne s'invente pas une échelle.
   assert.throws(() => dessinerGrosseBase(3, { rangee: 10, colonne: 10 }, 99, { x: 0, y: 0 }), /cran/);
 
-  // ⚠ ET LA GRILLE SOURCE EST LUE, ELLE AUSSI. `grilleEmbleme` dit la taille
-  // d'une cellule d'emblème ; c'est elle que `celluleDuSprite` doit rendre.
-  assert.equal(ZOOM_CARTE.grilleEmbleme, ATLAS[FAMILLE] === undefined ? null : 64,
+  // ⚠⚠ ET LA GRILLE SOURCE EST MESURÉE CONTRE LA COUTURE, PLUS COMPARÉE À UN
+  // NOMBRE ÉCRIT. Cette garde-ci disait, mot pour mot, « la grille d'emblème ne
+  // correspond plus à la grille de couture » — et elle comparait à **64**, un
+  // littéral, sans jamais lire la couture. Le lot GRILLE-128 a porté la couture
+  // à 128 : la garde est restée VERTE pendant que la phrase qu'elle porte
+  // devenait fausse, et la carte du monde a dessiné ses emblèmes dans la
+  // mauvaise cellule pendant deux lots. C'est le défaut que `ZOOM_BASE_MULTIPLE_MAX`
+  // avait déjà commis au même lot — une garde qui mesure un PROXY.
+  //
+  // Elle lit maintenant les deux côtés, et la grandeur qu'elle défend est
+  // celle-ci : les cellules d'emblème doivent PAVER l'atlas cousu, sans en
+  // laisser un bord ni en sortir.
+  const geo = ATLAS[FAMILLE];
+  const dernier = dessinerEmblemeDUneCase(
+    { type: 'camp', saveur: 'richeScorie' }, PALIERS_EMBLEME.nombre, 0, 0, 32,
+  );
+  assert.equal(dernier.sCote, COTE_SPRITE,
     'la grille d\'emblème ne correspond plus à la grille de couture');
+  const bordDroit = (geo.colonnes - 1) * dernier.sCote + dernier.sCote;
+  const bordBas = (geo.rangees - 1) * dernier.sCote + dernier.sCote;
+  assert.equal(bordDroit, geo.colonnes * COTE_SPRITE,
+    'les cellules d\'emblème ne pavent pas la largeur de l\'atlas');
+  assert.equal(bordBas, geo.rangees * COTE_SPRITE,
+    'les cellules d\'emblème ne pavent pas la hauteur de l\'atlas');
+  // Falsifiable de face : au côté d'AVANT le correctif, le pavage s'arrête à
+  // la moitié de l'atlas — c'est exactement ce qui se dessinait à l'écran.
+  assert.notEqual(geo.colonnes * 64, geo.colonnes * COTE_SPRITE,
+    'le montage ne distingue plus l\'ancienne grille de la nouvelle');
 });
 
 // ---------------------------------------------------------------------------
@@ -1200,7 +1224,7 @@ test('atlas — la valeur CSS se déballe, guillemets ou pas', () => {
 test('emblème — la primitive d\'une case rend un rectangle source FINI', () => {
   // ⚠ LE MONTAGE PART DE L'ATLAS RÉEL, pas d'un site écrit à la main : c'est ce
   // qui fait qu'il couvre les quarante et un noms d'une case, et pas trois.
-  const cotes = ZOOM_CARTE.grilleEmbleme;
+  const cotes = COTE_SPRITE;
   const cas = [];
   for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
     cas.push({ site: { type: 'base', saveur: null }, palier });

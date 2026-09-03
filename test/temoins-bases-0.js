@@ -1819,3 +1819,128 @@ export const SCALAIRES_RETOURS_DU_03 = {
     raidOuvrageRapport: 'e005af147f522c5c',
   },
 };
+
+// ---------------------------------------------------------------------------
+// Ce que le lot RETOURS-DU-03-SOIR a légitimement déplacé (03/09/2026)
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ UN SEUL DES QUATRE GESTES DU LOT TOUCHE LA SIMULATION, ET C'EST MESURÉ.
+// Ethan, 03/09 au soir : « éparpille les poi. jamais 2 poi collé, au moins
+// 4 cases d'écart ». Les trois autres — les murs qui descendent jusqu'en bas,
+// les tuiles de sol sous la grille, les emblèmes de la carte — sont du DESSIN :
+// ils ne peuvent rien déplacer ici, et le témoin le confirme en ne bougeant que
+// sur ce qui descend du tirage des POI.
+//
+// ⚠⚠ L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE. En retirant la SEULE ligne
+// `troppresDUnPoiPose` du tirage — c'est-à-dire en remettant exactement l'état
+// d'avant le lot —, `test/bases.test.js` repasse **30 pass / 0 fail**. Les
+// vingt et un couples ci-dessous sont donc tous à l'espacement des POI, et rien
+// d'autre du lot n'atteint le moteur.
+//
+// ⚠⚠ VINGT ET UN COUPLES SUR 350, ET RECONSTRUITS PLUTÔT QUE COMPLÉTÉS : le
+// relevé compare à la chaîne des lots PRÉCÉDENTS, si bien qu'un couple revenu à
+// sa valeur d'avant sort du bloc au lieu d'y rester déclaré à tort. Ils
+// commencent tous à la phase 10, qui est celle où la base MONTE et acquiert ses
+// premiers POI ; les neuf premières phases — construction, économie, garnison,
+// armée, ET les deux premiers raids — sont identiques au bit.
+//
+// ⚠⚠ ET LA CHAÎNE SE LIT D'UN BOUT À L'AUTRE : les POI changent de case, donc
+// `poisAcquis` change dès la phase 10, donc la MAJORATION DE PRODUCTION change,
+// donc `economie` bouge aux phases 13 et 14, donc la sanction d'un rasage
+// détruit d'autres montants, donc `rapports` bouge. `satellites` suit pour une
+// raison distincte et écrite depuis le lot POI : un satellite ne se pose jamais
+// SUR un POI, donc déplacer les POI déplace l'ensemble des cases libres.
+//
+// ⚠ `recherche` BOUGE PARCE QUE LE POINT DE RECHERCHE EST UN SOLDE, pas parce
+// que l'arbre a changé : un raid dont le rapport diffère verse un nombre de
+// points différent.
+//
+// ⚠ ET CE QUI NE BOUGE PAS EST LA MOITIÉ QUI PROUVE. Sur les vingt-cinq
+// graines : gestes de construction, gestes d'armement, taille de la sauvegarde
+// (`SAVE_VERSION` reste à 24), cases atteignables, déplacement, nombre de bases
+// attaquantes, nombre de cibles du raid lointain, cible retenue, et TOUT le
+// raid de proximité — zéro écart. Le seul scalaire déplacé est l'empreinte du
+// rapport du raid lointain, sur DEUX graines.
+export const DEPLACES_PAR_RETOURS_DU_03_SOIR = {
+  p10_montee: {
+    poisAcquis: '9ca9426ae26cf0c4',
+  },
+  p11_raidOuvrageApres: {
+    poisAcquis: '9ca9426ae26cf0c4',
+    rapports: '4c6c2dd9d961727b',
+    recherche: 'e2697e7b101a719d',
+    sitesEntames: '24dab6716c90af35',
+  },
+  p12_veilleDuRaid: {
+    poisAcquis: '9ca9426ae26cf0c4',
+    rapports: '4c6c2dd9d961727b',
+    recherche: 'e2697e7b101a719d',
+    satellites: '36ef899df3fa5073',
+    sitesEntames: 'fcd0278adf5186dc',
+  },
+  p13_apresLeRaid: {
+    economie: '2ccf059a785db913',
+    poisAcquis: '7caf051c681f1f01',
+    rapports: '660843e96ce8536a',
+    recherche: 'e2697e7b101a719d',
+    satellites: 'b2588dc4e00d6b8b',
+    sitesEntames: '28809a4f76ccda89',
+  },
+  p14_sousLeFeu: {
+    economie: 'c758a9365a8f4a4e',
+    poisAcquis: '244a71b67c2a1377',
+    rapports: '3231234195cd1078',
+    recherche: 'e2697e7b101a719d',
+    satellites: '7fa58d13504d743f',
+  },
+};
+
+/**
+ * Les vingt-cinq empreintes par graine, après RETOURS-DU-03-SOIR.
+ *
+ * ⚠ NEUF GRAINES SUR VINGT-CINQ SONT INCHANGÉES AU BIT — 1, 2, 3, 10, 11, 15,
+ * 19, 20 et 22 —, et elles restent donc gardées contre la valeur d'avant. Un
+ * témoin qu'on rafraîchit en bloc perdrait cette moitié-là.
+ */
+export const EMPREINTES_PAR_GRAINE_RETOURS_DU_03_SOIR = {
+  1: '79e2850e546a1100',
+  2: '7e74f1b8f471ac86',
+  3: '87a1a7d00473b6df',
+  4: '080f5dbbd1968e2e',
+  5: 'ca9b0e28a4babfb9',
+  6: 'b9275c2831aedba7',
+  7: 'f636b96686fec5c8',
+  8: '9b3e645efb2a2bca',
+  9: '55207aa3f937ef62',
+  10: '1b54c08917d84efc',
+  11: '3d993fbaea6e7fee',
+  12: 'aaabe94bb57ea1a4',
+  13: 'd82665561de0cdeb',
+  14: '982f829c8608fe41',
+  15: '3021c457698fcd5e',
+  16: '93c79e675c78925f',
+  17: 'e39c42025eb8f5b9',
+  18: 'b5344dfa95e25f95',
+  19: '4d5ce8cd59ee2c3e',
+  20: '2f783ebd8711614b',
+  21: 'b096d12e417f68d0',
+  22: '4cea8436f0e83eec',
+  23: 'cd64290ddadd446e',
+  24: '51de15ae1660987b',
+  25: '7ba1080e99eb6bf4',
+};
+
+/**
+ * Les DEUX empreintes de rapport que le lot déplace, et elles seules.
+ *
+ * ⚠⚠ DEUX GRAINES SUR VINGT-CINQ, ET C'EST TOUT CE QU'ON DÉCLARE. Le lot
+ * précédent avait dû surcharger les vingt-cinq ; ici la cible du raid lointain
+ * et son nombre de cibles ne bougent nulle part — c'est le CONTENU du rapport
+ * qui diffère sur 4 et 6, la sanction d'un rasage détruisant d'autres stocks
+ * quand la majoration des POI a changé. Les vingt-trois autres restent gardées
+ * contre `SCALAIRES_RETOURS_DU_03`.
+ */
+export const RAPPORTS_RETOURS_DU_03_SOIR = {
+  4: 'd5868617b03d6f9d',
+  6: '2e063df951e09ccf',
+};

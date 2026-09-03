@@ -2256,6 +2256,37 @@ export function cellulesDeSolParAxe(doc) {
 }
 
 /**
+ * Combien de CASES l'atlas du monde couvre par axe, une fois posé au sol.
+ *
+ * ⚠⚠ ELLE EXISTE POUR LE DÉCOR, ET ELLE SE DÉDUIT. Le fond de
+ * `#chantier-defile` tapisse ce que la grille laisse nu ; pour que le raccord
+ * ne se voie pas, il doit poser l'atlas ENTIER à l'échelle où les cases le
+ * découpent. Une case prend `tuilesParCase²` cellules, donc l'atlas en couvre
+ * `parAxe / tuilesParCase` par axe — huit sur celui du dépôt. Écrire huit dans
+ * la feuille en ferait une seconde vérité, que le premier atlas d'une autre
+ * taille ferait mentir sans que rien ne le dise : le motif se décalerait, et
+ * seul l'œil le verrait.
+ *
+ * ⚠ ELLE LÈVE SI LE COMPTE NE TOMBE PAS JUSTE. Un atlas dont les cellules ne
+ * se groupent pas en cases entières donnerait un pavage fractionnaire, donc un
+ * sol brouillé — le défaut que tout le reste du dépôt refuse sur le pixel art.
+ *
+ * @param {Document} doc
+ * @returns {number}
+ */
+export function casesDeSolParAtlas(doc) {
+  const parAxe = cellulesDeSolParAxe(doc);
+  const divisions = ZOOM_CARTE.tuilesParCase;
+  if (parAxe % divisions !== 0) {
+    throw new RangeError(
+      `chantier : l'atlas du monde porte ${parAxe} cellules par axe, que `
+      + `${divisions} tuiles par case ne divisent pas`,
+    );
+  }
+  return parAxe / divisions;
+}
+
+/**
  * Les quatre couches de sol d'une case, de la plus haute à la plus basse.
  *
  * L'ordre n'a aucune importance visuelle ici — les quatre quartiers ne se
@@ -2312,6 +2343,11 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
+  // ⚠ MESURÉ UNE FOIS AU CÂBLAGE, PAS À CHAQUE PINCEMENT. L'attribut `width` de
+  // l'atlas ne bouge jamais de la vie de la page, et `reglerCoteCase` passe à
+  // chaque cran de zoom : le relire là serait payer une lecture du DOM pour un
+  // nombre constant.
+  const casesParAtlas = casesDeSolParAtlas(doc);
 
   let selection = null; // indice dans la liste du terrain sélectionné, ou null
   // ⚠ UN INDICE SEUL NE SUFFIT PLUS DEPUIS QUE LA BANDE DÉFENSE EST ÉDITABLE.
@@ -2863,6 +2899,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     const borne = Math.min(COTE_CASE_MAX, Math.max(plancher, demande));
     coteCase = borne;
     grille.style.setProperty('--case-cote', `${borne}px`);
+    defile.style.setProperty('--sol-pave', `${borne * casesParAtlas}px`);
+    // ⚠⚠ LE PAVAGE DÉCORATIF SE RÈGLE ICI, ET NULLE PART AILLEURS. Le fond de
+    // `#chantier-defile` tapisse ce que la grille ne couvre pas ; il doit suivre
+    // le zoom à la case près, sinon le raccord se verrait au premier pincement.
+    // L'écrire dans un second point d'appel donnerait deux échelles qui
+    // divergeraient — c'est la faute que `--case-cote` évite déjà en n'étant
+    // écrite qu'ici.
     return borne;
   }
 
