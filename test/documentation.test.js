@@ -312,8 +312,16 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   //                             montages qui fabriquent une sauvegarde
   //                             d'ancienne version ; HUIT fichiers en ont eu
   //                             besoin le même jour, comme le décodeur PNG.
+  //   `temoins-combat.js`     — les empreintes de deux cents combats, relevées
+  //                             sur `origin/main` AVANT le journal de tick du
+  //                             lot JOURNAL-DE-COMBAT. Même nature que
+  //                             `temoins-bases-0.js` : c'est la RÉFÉRENCE d'un
+  //                             test, et elle ne se rafraîchit pas — la
+  //                             recapturer sur le code modifié ferait comparer
+  //                             un code à lui-même, ce qui ne prouve rien.
   const connus = new Set([
     'prereglages-lot3a.js', 'png-rgba.js', 'temoins-bases-0.js', 'aplatir-sauvegarde.js',
+    'temoins-combat.js',
   ]);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));

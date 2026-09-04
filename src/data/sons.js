@@ -544,7 +544,7 @@ export const EVENEMENTS = {
 export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };
 
 /**
- * LES QUATRE TABLES DU CÂBLAGE — ce que le JEU demande, et à quel son.
+ * LES TABLES DU CÂBLAGE — ce que le JEU demande, et à quel son.
  *
  * ⚠⚠ ELLES SONT ICI PARCE QUE C'EST DU CALIBRAGE (§4), ET GÉNÉRÉES PARCE QUE
  * `sons.js` L'EST. Trois d'entre elles sont écrites à la main DANS
@@ -553,14 +553,14 @@ export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };
  * refuse un nom de son qui n'existe pas, et refuse une ambiance ou une boucle
  * de bâtiment qui ne serait pas marquée `loop` dans le manifeste.
  *
- * ⚠⚠ LA QUATRIÈME, ELLE, EST DÉRIVÉE — ET ELLE NE S'INVENTE PAS.
- * `MOUVEMENT_PAR_PAIRE` sort d'`art/sources/unit_audio_map.json`, que ce lot
- * fait passer de DORMANTE à CONSOMMÉE. Sa clé est la paire « nom joueur/nom
+ * ⚠⚠ CELLES DES UNITÉS, ELLES, SONT DÉRIVÉES — ET ELLES NE S'INVENTENT PAS.
+ * `ARME_PAR_PAIRE` et `DEPLOIEMENT_PAR_PAIRE` sortent
+ * d'`art/sources/unit_audio_map.json`. Leur clé est la paire « nom joueur/nom
  * Ouvrage », qui est exactement ce que `UNITES[x].nom` porte : mesuré,
- * **quatorze paires sur quatorze se résolvent**, aucune unité du jeu n'est
- * laissée sans entrée. Le bloc `ouvrage` du même fichier n'est PAS lu — ses
- * sept clés ne sont aucun nom du dépôt, et attribuer une boucle par
- * ressemblance est nommément interdit.
+ * **quatorze paires sur quatorze se résolvent**. Le bloc `ouvrage` du même
+ * fichier n'est PAS lu — ses sept clés ne sont aucun nom du dépôt, et attribuer
+ * un son par ressemblance est nommément interdit ; le camp de l'Ouvrage s'obtient
+ * par SUBSTITUTION `_player_` → `_ouvrage_`, vérifiée douze fois sur douze.
  */
 export const AMBIANCE_PAR_ECRAN = {
   chantier: 'ambience_base_player_loop',
@@ -579,11 +579,164 @@ export const BOUCLES_DE_BATIMENT = {
   depotDeVehicules: 'building_player_factory_loop',
 };
 
-export const MOUVEMENT_PAR_PAIRE = {
-  'Chasseur/Fendeur': 'movement_tracks_medium_loop',
-  'Fusiliers/Meute': 'movement_infantry_player_loop',
-  'Percheron/Broyeur': 'movement_tracks_heavy_loop',
-  'Éclaireur/Ratisseur': 'movement_tracks_light_loop',
+/**
+ * Le roulement d'une pièce qui avance, PAR CHÂSSIS et par camp.
+ *
+ * ⚠⚠ PAR CHÂSSIS, PAS PAR UNITÉ, ET C'EST CE QUI LE REND TENABLE. Cinq
+ * escouades partagent un bruit de bottes ; leur écrire cinq lignes ferait cinq
+ * occasions de diverger. `src/son/cablage.js` compose la clé depuis
+ * `UNITES[x].chassis` et `UNITES[x].comportementAerien`, qui sont la donnée qui
+ * fait foi sur le classement des quatorze — jamais une liste recopiée.
+ *
+ * ⚠ UN `traversant` N'EST PAS ICI : il PASSE, donc il ne boucle pas. Son coup
+ * est `PASSAGE_AERIEN`, et `movement_player_flyby` n'est pas marqué `loop` dans
+ * le manifeste — c'est la donnée, pas une lecture.
+ */
+export const ROULEMENT_PAR_CHASSIS = {
+  aeronef_stoppeur_leger: { joueur: 'movement_dard_light_loop', ouvrage: 'movement_dard_light_loop' },
+  aeronef_stoppeur_lourd: { joueur: 'movement_dard_heavy_loop', ouvrage: 'movement_dard_heavy_loop' },
+  blinde_leger: { joueur: 'movement_tracks_light_loop', ouvrage: 'movement_walker_light_loop' },
+  blinde_lourd: { joueur: 'movement_tracks_heavy_loop', ouvrage: 'movement_walker_heavy_loop' },
+  blinde_moyen: { joueur: 'movement_tracks_medium_loop', ouvrage: 'movement_walker_medium_loop' },
+  escouade: { joueur: 'movement_infantry_player_loop', ouvrage: 'movement_essaim_ouvrage_loop' },
+};
+
+/**
+ * Le moteur d'un blindé VIVANT ET IMMOBILE — l'autre moitié du roulement.
+ *
+ * ⚠⚠ ARBITRAGE D'ETHAN DU 04/09, ET C'EST LA MÊME LECTURE D'ÉTAT QUE LE
+ * ROULEMENT, PRISE DANS L'AUTRE SENS. Une pièce qui a bougé au dernier tick
+ * roule ; une pièce qui n'a pas bougé tourne au ralenti. Les deux se
+ * réconcilient, aucune ne s'événementialise : un moteur qui tourne est un ÉTAT.
+ *
+ * ⚠ TROIS POIDS, ET CE SONT CEUX DES BLINDÉS — le pack n'en porte pas d'autres.
+ * Une escouade n'a pas de moteur ; un aéronef stoppeur tient l'air, et son
+ * `dard` couvre déjà ses deux états. Leur en attribuer un serait l'attribution
+ * par ressemblance que le brief interdit.
+ */
+export const MOTEUR_PAR_CHASSIS = {
+  blinde_leger: { joueur: 'engine_player_light_idle_loop', ouvrage: 'engine_ouvrage_light_idle_loop' },
+  blinde_lourd: { joueur: 'engine_player_heavy_idle_loop', ouvrage: 'engine_ouvrage_heavy_idle_loop' },
+  blinde_moyen: { joueur: 'engine_player_medium_idle_loop', ouvrage: 'engine_ouvrage_medium_idle_loop' },
+};
+
+/**
+ * Quel poids porte quel blindé, et lequel des deux dards porte quel stoppeur.
+ *
+ * ⚠⚠ TROIS DE CES SEPT LIGNES SE LISENT DANS LA CARTE, ET LE GÉNÉRATEUR LES Y
+ * CONFRONTE : Ratisseur `tracks_light`, Fendeur `tracks_medium`, Broyeur
+ * `tracks_heavy`. ⚠ Bélier et Pilon n'y portent qu'un `deploy` et aucun
+ * roulement : ils prennent le moyen, c'est l'arbitrage d'Ethan du 04/09 — « un
+ * blindé qui avance ne doit pas être muet ». Le partage des deux stoppeurs suit
+ * leurs PV, 1 050 contre 1 800, et le pack n'a que deux dards.
+ */
+export const ARCHETYPE_PAR_UNITE = {
+  belier: 'blinde_moyen',
+  broyeur: 'blinde_lourd',
+  busard: 'aeronef_stoppeur_leger',
+  enclume: 'aeronef_stoppeur_lourd',
+  fendeur: 'blinde_moyen',
+  pilon: 'blinde_moyen',
+  ratisseur: 'blinde_leger',
+};
+
+/**
+ * Le passage d'un aéronef traversant — un COUP, jamais une boucle.
+ *
+ * ⚠ IL SONNE À L'APPARITION DE LA VAGUE, ET NULLE PART AILLEURS. C'est le seul
+ * instant que le moteur publie où un aéronef « passe ». Le jouer à chaque tick
+ * de déplacement demanderait un événement « l'aéronef traverse » qui n'existe
+ * nulle part, et le rejouer en boucle inventerait une mécanique que le pack ne
+ * demande pas — il ne marque d'ailleurs pas ce son `loop`.
+ */
+export const PASSAGE_AERIEN = { joueur: 'movement_player_flyby', ouvrage: 'movement_ouvrage_flyby' };
+
+/**
+ * Le déploiement d'une pièce qui se met en place — un COUP, à l'apparition.
+ *
+ * ⚠ DEUX UNITÉS SUR QUATORZE, ET CE SONT EXACTEMENT LES DEUX BLINDÉS QUE LA
+ * CARTE LAISSAIT SANS ROULEMENT. Elles gardent leur `deploy` ET prennent le
+ * roulement moyen : l'arbitrage d'Ethan ajoute, il ne remplace pas.
+ */
+export const DEPLOIEMENT_PAR_PAIRE = {
+  'Obusier/Pilon': { joueur: 'movement_player_deploy', ouvrage: 'movement_ouvrage_deploy' },
+  'Pionnier/Bélier': { joueur: 'movement_player_deploy', ouvrage: 'movement_ouvrage_deploy' },
+};
+
+/**
+ * L'arme de chaque unité, dans les deux camps — DÉRIVÉE de la carte du pack.
+ *
+ * ⚠ DEUX DES DOUZE JEUX DISTINCTS NE SONT PAS DES `weapon_*` : Sapeurs et
+ * Albatros tirent une EXPLOSION. C'est le pack qui le dit, et la substitution
+ * `_player_` → `_ouvrage_` y marche à l'identique.
+ */
+export const ARME_PAR_PAIRE = {
+  'Albatros/Enclume': { joueur: 'explosion_player_large', ouvrage: 'explosion_ouvrage_large' },
+  'Chasseur/Fendeur': { joueur: 'weapon_player_cannon_medium', ouvrage: 'weapon_ouvrage_cannon_medium' },
+  'Cuirassiers/Carapace': { joueur: 'weapon_player_machinegun', ouvrage: 'weapon_ouvrage_machinegun' },
+  'Foudre/Frappeur': { joueur: 'weapon_player_aa_burst', ouvrage: 'weapon_ouvrage_aa_burst' },
+  'Fusiliers/Meute': { joueur: 'weapon_player_rifle', ouvrage: 'weapon_ouvrage_rifle' },
+  'Grenadiers/Perceurs': { joueur: 'weapon_player_grenade', ouvrage: 'weapon_ouvrage_grenade' },
+  'Milan/Crécelle': { joueur: 'weapon_player_machinegun_burst', ouvrage: 'weapon_ouvrage_machinegun_burst' },
+  'Obusier/Pilon': { joueur: 'weapon_player_artillery', ouvrage: 'weapon_ouvrage_artillery' },
+  'Percheron/Broyeur': { joueur: 'weapon_player_cannon_heavy', ouvrage: 'weapon_ouvrage_cannon_heavy' },
+  'Pionnier/Bélier': { joueur: 'weapon_player_cannon_medium', ouvrage: 'weapon_ouvrage_cannon_medium' },
+  'Sapeurs/Fouisseurs': { joueur: 'explosion_player_small', ouvrage: 'explosion_ouvrage_small' },
+  'Voltigeurs/Guetteur': { joueur: 'weapon_player_rifle', ouvrage: 'weapon_ouvrage_rifle' },
+  'Éclaireur/Ratisseur': { joueur: 'weapon_player_cannon_light', ouvrage: 'weapon_ouvrage_cannon_light' },
+  'Épervier/Busard': { joueur: 'weapon_player_missile_launch', ouvrage: 'weapon_ouvrage_missile_launch' },
+};
+
+/**
+ * Ce que tire chacune des six défenses qui tirent — arbitrage d'Ethan, 04/09.
+ *
+ * ⚠⚠ C'EST UN TROU DE LA CARTE, ET IL EST MESURÉ : `unit_audio_map.json` ne
+ * décrit que les quatorze UNITÉS, aucune de ses clés ne nomme une défense.
+ * L'arme suit la colonne DOMINANTE et la portée, relevées dans `DEFENSES` —
+ * casemate infanterie 20 à 2,5 · créneau véhicule 35 à 2,5 · batterie aviation
+ * 40 à 2,5 · faucheuse infanterie 10 à 5,5 · mortier véhicule 12 à 5,5 · harpon
+ * aviation 16 à 5,5 — et un test les REMESURE plutôt que de les croire.
+ *
+ * ⚠ MERLON, RONCE ET HERSE SONT ABSENTES, ET LA DONNÉE LE DIT : leur `degats`
+ * vaut `null`. Elles ne tirent pas ; leur donner une arme serait leur inventer
+ * un tir.
+ */
+export const ARME_PAR_DEFENSE = {
+  batterie: { joueur: 'weapon_player_aa', ouvrage: 'weapon_ouvrage_aa' },
+  casemate: { joueur: 'weapon_player_machinegun', ouvrage: 'weapon_ouvrage_machinegun' },
+  creneau: { joueur: 'weapon_player_cannon_medium', ouvrage: 'weapon_ouvrage_cannon_medium' },
+  faucheuse: { joueur: 'weapon_player_machinegun_burst', ouvrage: 'weapon_ouvrage_machinegun_burst' },
+  harpon: { joueur: 'weapon_player_missile_launch', ouvrage: 'weapon_ouvrage_missile_launch' },
+  mortier: { joueur: 'weapon_player_artillery', ouvrage: 'weapon_ouvrage_artillery' },
 };
 
 export const EFFONDREMENT_PV = [2000, 3000];
+
+/**
+ * La taille de l'explosion d'une PIÈCE détruite au combat, sur ses PV.
+ *
+ * ⚠⚠ CE NE SONT PAS LES SEUILS D'`EFFONDREMENT_PV`, ET C'EST MESURÉ. Les
+ * vingt-trois unités et défenses vont de 500 à 2 000 PV : les seuils du bâtiment
+ * — 2 000 et 3 000 — en classeraient **21 en `small`, 2 en `medium`, 0 en
+ * `large`**. Deux paires, deux échelles.
+ *
+ * ⚠ 900 ET 1 500 RENDENT 9 · 10 · 4, et la coupure tombe dans un creux :
+ * {500…800} · {900…1300} · {1500…2000}. Deux nombres qui se changent seuls.
+ */
+export const EXPLOSION_PV = [900, 1500];
+
+/**
+ * Au-delà de quelle PART de ses PV une cible prend un impact « lourd », en
+ * millièmes.
+ *
+ * ⚠⚠ UNE PART, ET NON UN MONTANT, PARCE QUE LE MONTANT SUIT LE NIVEAU. Mesuré
+ * sur **57 864 impacts** de raids réels, l'encaissé va de 67 à 34 683 675
+ * milli-PV — cinq ordres de grandeur —, `facteurMilli` mettant dégâts et PV à
+ * l'échelle ensemble : un seuil absolu classerait tout en `small` au niveau 5 et
+ * tout en `heavy` au niveau 50. La part, elle, ne bouge pas — médiane **12 · 13
+ * · 13 · 14** millièmes aux niveaux 5, 20, 35 et 50.
+ *
+ * ⚠ 25 EST LE TROISIÈME QUARTILE MESURÉ, donc « le quart supérieur des coups ».
+ * C'est le SEUL arbitrage encore ouvert de ce lot, et il se change seul.
+ */
+export const IMPACT_LOURD_MILLIEMES = 25;

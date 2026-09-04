@@ -44,7 +44,7 @@ import { listeAffichage } from '../render/scene.js';
 import { MUR_CASES, fondDeLaBase } from '../render/fond.js';
 import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
-import { unitesEnMouvement } from '../son/cablage.js';
+import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 
 // ---------------------------------------------------------------------------
 // Étage pur
@@ -253,6 +253,19 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // attendent un journal de tick qui n'existe pas, et ce journal est un chantier
   // de simulation.
   const sonDeGeste = crochets.sonDeGeste ?? (() => {});
+  /**
+   * Ce que le DÉROULÉ a fait entendre depuis le dernier relevé de la session.
+   *
+   * ⚠⚠ UN ENSEMBLE, PAS UNE FILE, ET C'EST LA RÉPONSE AU POINT DUR DU LOT. La
+   * simulation avance par TICKS, l'écran par IMAGES, et `ticksDus` en résout
+   * jusqu'à douze dans la même image en ×4. Une file demanderait cent cinquante
+   * coups de canon dans la même milliseconde ; la politique de voix les
+   * refuserait, mais compter sur un refus n'est pas une conception. **Un
+   * événement distinct ne sonne qu'une fois par relevé**, quel que soit le
+   * nombre de ticks qui l'ont réclamé — et l'ensemble est borné par le pack,
+   * donc il ne peut pas grossir.
+   */
+  const evenementsSonores = new Set();
 
   const canvas = $('raid-canvas');
   const ctx = canvas === null ? null : canvas.getContext('2d');
@@ -282,6 +295,31 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let simulation = false;
   /** Combien de fois une image a été calculée, et le temps total — mesure M2. */
   const mesure = { images: 0, totalMs: 0 };
+
+  /**
+   * Avance d'UN tick, et relève ce que ce tick a publié.
+   *
+   * ⚠⚠ LE RELEVÉ SE FAIT LÀ OÙ L'INSTANTANÉ SE PREND, ET NULLE PART AILLEURS.
+   * Les deux vont ensemble : `precedentes` sert l'interpolation, le journal sert
+   * le son, et tous deux ne valent que pour le tick qu'on vient de jouer. C'est
+   * pourquoi « Instantané » ne fait sonner RIEN — il boucle sur `tickCombat`
+   * sans prendre d'instantané, exactement comme il le faisait déjà avant ce lot,
+   * et un combat résolu d'un coup n'a pas de déroulé. Ce n'est pas un cas
+   * particulier écrit à la main : c'est une conséquence de l'endroit.
+   */
+  function avancerDUnTick() {
+    precedentes = prendrePositions(combat);
+    tickCombat(combat);
+    relever();
+  }
+
+  /** Verse le journal du dernier tick dans l'ensemble en attente. */
+  function relever() {
+    if (combat === null) return;
+    for (const evenement of evenementsDuJournal(combat.journal)) {
+      evenementsSonores.add(evenement);
+    }
+  }
 
   function arreterBoucle() {
     if (idImage !== null && typeof globalThis.cancelAnimationFrame === 'function') {
@@ -349,9 +387,8 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       const dus = ticksDus(accumulateur, ecoule, vitesse);
       for (let k = 0; k < dus && !combat.termine; k += 1) {
         // L'instantané se prend AVANT le tick : c'est lui que l'interpolation
-        // compare à la position d'après.
-        precedentes = prendrePositions(combat);
-        tickCombat(combat);
+        // compare à la position d'après. Le journal se relève après.
+        avancerDUnTick();
       }
     }
     dessiner();
@@ -377,6 +414,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
    */
   function rejouer(montage, vagues) {
     combat = creerCombat({ ...montage, vagues });
+    // ⚠ LE JOURNAL DE LA CRÉATION PORTE L'ENTRÉE DE LA VAGUE 1. `creerCombat` la
+    // pose au tick 0 — c'est sa dernière ligne — et `tick()` viderait ce journal
+    // à la première image. Sans ce relevé-ci, la première vague serait la seule
+    // des quatre à entrer en silence.
+    relever();
     precedentes = prendrePositions(combat);
     accumulateur = creerAccumulateur();
     enPause = false;
@@ -663,8 +705,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     if (combat === null || combat.termine) return;
     enPause = true;
     arreterBoucle();
-    precedentes = prendrePositions(combat);
-    tickCombat(combat);
+    avancerDUnTick();
     dessiner();
     if (combat.termine) finDuDeroule();
   });
@@ -727,7 +768,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     peindre(etat) { etatCourant = etat; peindreVagues(); },
     masquer() { arreterBoucle(); },
     /**
-     * Les unités du joueur qui ont bougé au dernier tick — pour le son.
+     * Les unités attaquantes et leur état de mouvement — pour le son.
      *
      * ⚠⚠ C'EST UNE LECTURE, PAS UN ÉVÉNEMENT, ET LA NUANCE EST TOUTE LA GARDE
      * `SON T14`. Le moteur ne publie rien et n'a pas bougé d'une ligne : on
@@ -735,7 +776,20 @@ export function initialiserEcranRaid(doc, crochets = {}) {
      * interpolation. Le calcul lui-même vit dans `src/son/cablage.js`, qui est
      * pur ; ici il n'y a qu'un accès aux deux variables locales.
      */
-    enMouvement() { return unitesEnMouvement(combat, precedentes); },
+    unitesDuCombat() { return etatDesUnites(combat, precedentes); },
+    /**
+     * Ce que le déroulé a publié depuis le dernier appel — et il VIDE.
+     *
+     * ⚠ IL VIDE, PARCE QU'UN COUP NE SE REJOUE PAS. Une ambiance se réconcilie
+     * — on la redemande tant qu'elle est vraie ; un tir est un fait, il a lieu
+     * une fois. Ne pas vider referait sonner le même coup dix fois par seconde
+     * jusqu'à la fin du combat.
+     */
+    evenementsSonores() {
+      const sortie = [...evenementsSonores].sort();
+      evenementsSonores.clear();
+      return sortie;
+    },
     /** La mesure M2 : le coût moyen d'une image du déroulé. */
     mesureImages() {
       return { images: mesure.images, moyenneMs: mesure.images === 0 ? 0 : mesure.totalMs / mesure.images };

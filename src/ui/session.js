@@ -565,8 +565,21 @@ export function initialiserSession(doc) {
     son.reconcilier(bouclesDesirees({
       ecran: ecranCourant,
       disposition: etat === null ? [] : baseCourante(etat).disposition,
-      unites: surLeRaid ? ecranRaid.enMouvement() : [],
+      unites: surLeRaid ? ecranRaid.unitesDuCombat() : [],
     }));
+    // ⚠⚠ ET LES COUPS DU DÉROULÉ, QUI NE SE RÉCONCILIENT PAS — ILS SE VIDENT.
+    // Une boucle est vraie tant qu'un état dure ; un tir est un FAIT qui a eu
+    // lieu une fois. `evenementsSonores` rend l'ensemble accumulé depuis le
+    // dernier passage et l'efface : redemander un coup dix fois par seconde
+    // ferait tirer le même canon jusqu'à la fin du combat.
+    //
+    // ⚠ L'ÉCRAN NE NOMME AUCUN SON, ICI NON PLUS : c'est `src/son/cablage.js`
+    // qui a traduit les FAITS du journal — qui tire, qui encaisse, qui meurt —
+    // en événements du pack, et la garde `SON T14` veut que `jouer(` reste
+    // groupé dans ce fichier-ci.
+    if (surLeRaid) {
+      for (const evenement of ecranRaid.evenementsSonores()) son.jouer(evenement);
+    }
   }
 
   // Le bandeau d'avis appartient à l'écran Chantier — c'est son élément. La
