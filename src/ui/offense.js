@@ -407,7 +407,7 @@ function avisDeLOffense(niveau, engages, budget, depasse) {
  *   refaire parce que le système a tué l'application.
  * @returns {{peindre: Function, rafraichir: Function, nbEmplacements: number}}
  */
-export function initialiserEcranOffense(doc, { apresPose } = {}) {
+export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   const $ = (id) => doc.getElementById(id);
   const corps = $('offense-vagues');
   const palette = $('offense-palette');
@@ -455,6 +455,13 @@ export function initialiserEcranOffense(doc, { apresPose } = {}) {
     registres.toast = texte;
     rendreLigne();
     if (texte === '') return;
+    // ⚠⚠ LE SON DE REFUS SUIT LA GARDE QUI EXISTE DÉJÀ, IL N'EN AJOUTE PAS. La
+    // ligne au-dessus sort quand il n'y a rien à annoncer — effacer un toast
+    // passe par ici aussi. Écrire un second `if (texte !== '')` dirait la même
+    // chose deux fois, et les deux finiraient par diverger. Même place, même
+    // garde et même mot que dans `chantier.js` : les deux registres se
+    // comportent enfin pareil.
+    if (sonDeRefus !== undefined) sonDeRefus();
     minuterieToast = fenetre.setTimeout(() => {
       minuterieToast = null;
       // Il ne s'efface que s'il est encore le sien : entre l'affichage et

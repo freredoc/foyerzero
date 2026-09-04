@@ -14,7 +14,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { SONS, EVENEMENTS, BUS, REGLAGES_PAR_DEFAUT } from '../src/data/sons.js';
+import { SONS, EVENEMENTS, BUS, MEMOIRE, REGLAGES_PAR_DEFAUT } from '../src/data/sons.js';
 import { creerVoix, demanderUnSon, gainDuSon } from '../src/son/politique.js';
 import { initialiserLeSon, idDuSon, octetsDuDataUri } from '../src/ui/son.js';
 import { lireLesReglages, CLE_REGLAGES, CLE_SAUVEGARDE } from '../src/ui/session.js';
@@ -34,49 +34,72 @@ const ACTIF = { muet: false, volume: 1 };
 // SON T1 — la table est une transcription, et elle se confronte à sa source
 // ---------------------------------------------------------------------------
 
-test('SON T1 — les quatre témoins disent ce que le manifeste dit d\'eux', () => {
-  // ⚠⚠ LE MANIFESTE RESTE DORMANT, ET CE TEST NE LE CONSOMME PAS. Le brief
-  // interdit d'en tirer le catalogue ; il ne demande pas d'écrire quatre lignes
-  // de chiffres sans jamais les confronter. `tools/entrees.py` classe une source
-  // d'après ce que la CHAÎNE ouvre sous son mouchard — un test de Node n'en est
-  // pas, donc `sfx_manifest.json` reste dormant, et ces quatre lignes cessent
-  // d'être une copie qui vieillit. Même motif que `src/data/ancres-chassis.js`.
+test('SON T1 — les 263 entrées disent ce que le manifeste dit d\'elles', () => {
+  // ⚠⚠ LA TABLE N'EST PLUS UNE TRANSCRIPTION, ELLE EST GÉNÉRÉE — et ce test
+  // cesse donc de vérifier une RECOPIE pour vérifier une DÉRIVATION. Il rejoue
+  // en JavaScript ce que `tools/sons.py` fait en Python, et compare : une
+  // génération qui mentirait, ou un fichier généré retouché à la main, tombent
+  // tous les deux ici.
   const manifeste = JSON.parse(lire('art', 'sources', 'sfx_manifest.json'));
   const parId = new Map(manifeste.sounds.map((s) => [s.id, s]));
   assert.equal(manifeste.sounds.length, 263, 'le pack a changé de taille : relire la table');
+  assert.equal(Object.keys(SONS).length, 263, 'la table et le pack ont divergé en nombre');
+  assert.deepEqual(Object.keys(SONS).sort(), [...parId.keys()].sort(),
+    'la table et le manifeste ne nomment pas les mêmes sons');
 
   for (const [nom, son] of Object.entries(SONS)) {
     const dit = parId.get(nom);
-    assert.ok(dit !== undefined, `« ${nom} » n'est pas dans le manifeste du pack`);
     assert.equal(son.dureeMs, dit.duration_ms, `${nom} : durée`);
     assert.equal(son.maxInstances, dit.recommended_max_instances, `${nom} : plafond de voix`);
     assert.equal(son.volumeDb, dit.recommended_volume_db, `${nom} : niveau`);
-    assert.equal(dit.channels, 1, `${nom} : le moteur suppose du mono`);
+    assert.ok(son.bus in BUS, `${nom} : bus « ${son.bus} » inconnu`);
+    // ⚠⚠ LE MASTER N'EST PAS FORCÉMENT MONO, ET LE LOT L'A MESURÉ. Le brief
+    // annonçait « 259 masters mono » et posait le contraire en condition
+    // d'arrêt ; **quatorze le contredisent** — les huit ambiances et les six
+    // passages d'aéronef, que le manifeste déclare `channels: 2`. La SORTIE,
+    // elle, reste mono : `--downmix-mono` la ramène à une voie et
+    // `verifier_la_sortie` le lit dans l'en-tête OpusHead du fichier produit.
+    assert.ok(dit.channels === 1 || dit.channels === 2, `${nom} : ${dit.channels} canaux`);
   }
+  const stereo = manifeste.sounds.filter((s) => s.channels === 2).map((s) => s.id);
+  assert.equal(stereo.length, 14, 'le compte de masters stéréo a bougé : relire le rapport');
+  assert.ok(stereo.every((id) => id.startsWith('ambience_') || id.includes('_flyby_')),
+    'un master stéréo qui n\'est ni une ambiance ni un passage d\'aéronef');
+
+  // ⚠ CE QUI RESTE DÉCODÉ EST UNE FAMILLE, PAS UNE LISTE DE HUIT NOMS.
+  const residentes = Object.entries(SONS).filter(([, v]) => v.residente === true).map(([k]) => k);
+  assert.deepEqual(residentes.sort(),
+    manifeste.sounds.filter((s) => s.category === 'ambiences').map((s) => s.id).sort(),
+    'les résidentes ne sont plus exactement les ambiances');
 
   // Le temps de garde vit sur l'ÉVÉNEMENT ; le manifeste le donne par fichier.
-  // Les deux lectures doivent coïncider, variante par variante — c'est ce qui
-  // rend le déplacement gratuit.
+  // Les deux lectures doivent coïncider, variante par variante.
+  const vues = new Set();
   for (const [evenement, decrit] of Object.entries(EVENEMENTS)) {
     for (const variante of decrit.variantes) {
+      assert.ok(!vues.has(variante), `${variante} appartient à deux événements`);
+      vues.add(variante);
       assert.equal(
         decrit.gardeMs, parId.get(variante).recommended_cooldown_ms,
         `${evenement} : sa garde et celle de ${variante} divergent`,
       );
+      assert.equal(variante.replace(/_\d+$/, ''), evenement,
+        `${variante} n'est pas une variante de ${evenement}`);
     }
   }
+  assert.equal(vues.size, 263, 'un son du pack n\'est demandable par aucun événement');
 
-  // ⚠ ET LA COÏNCIDENCE VAUT SUR TOUT LE PACK, PAS SEULEMENT SUR NOS QUATRE.
-  // C'est la mesure qui autorise à porter la garde par événement : 54 groupes
-  // à plusieurs variantes, zéro divergence. Le jour où le pack en portera une,
-  // ce test tombera et il faudra rouvrir la question — c'est ce qu'on lui
-  // demande.
+  // ⚠ ET LA COÏNCIDENCE VAUT SUR TOUT LE PACK. C'est la mesure qui autorise à
+  // porter la garde par événement : 54 groupes à plusieurs variantes, zéro
+  // divergence. Le jour où le pack en portera une, ce test tombera et il faudra
+  // rouvrir la question — c'est ce qu'on lui demande.
   const groupes = new Map();
   for (const s of manifeste.sounds) {
     const base = s.id.replace(/_\d+$/, '');
     if (!groupes.has(base)) groupes.set(base, []);
     groupes.get(base).push(s);
   }
+  assert.equal(groupes.size, Object.keys(EVENEMENTS).length, 'les groupes et les événements divergent');
   const multiples = [...groupes.values()].filter((l) => l.length > 1);
   assert.equal(multiples.length, 54, 'le montage ne mesure plus les groupes du pack');
   for (const l of multiples) {
@@ -87,21 +110,20 @@ test('SON T1 — les quatre témoins disent ce que le manifeste dit d\'eux', () 
   }
 });
 
-// ---------------------------------------------------------------------------
 // SON T2 — le temps de garde mord (falsification n° 1)
 // ---------------------------------------------------------------------------
 
 test('SON T2 — deux clics à 40 ms d\'écart ne rendent qu\'un son', () => {
   const voix = creerVoix(12345);
-  const premier = demanderUnSon(voix, 'ui_clic', 1000, ACTIF);
+  const premier = demanderUnSon(voix, 'ui_click', 1000, ACTIF);
   assert.equal(premier.jouer, true);
-  const second = demanderUnSon(voix, 'ui_clic', 1040, ACTIF);
+  const second = demanderUnSon(voix, 'ui_click', 1040, ACTIF);
   assert.equal(second.jouer, false, 'la garde de 55 ms devrait refuser à 40 ms');
   assert.equal(second.raison, 'garde');
 
   // ⚠ ET LE TEST N'EST PAS VACUEUX : au-delà de la garde, ça repasse. Sans
   // cette moitié, un moteur qui refuserait TOUT serait vert.
-  assert.equal(demanderUnSon(voix, 'ui_clic', 1060, ACTIF).jouer, true, 'à 60 ms la garde est passée');
+  assert.equal(demanderUnSon(voix, 'ui_click', 1060, ACTIF).jouer, true, 'à 60 ms la garde est passée');
 
   // ⚠⚠ ET LA GARDE PORTE SUR L'ÉVÉNEMENT, PAS SUR LE FICHIER — c'est la moitié
   // qui compte. Un clic a deux variantes : une garde par fichier laisserait
@@ -110,16 +132,16 @@ test('SON T2 — deux clics à 40 ms d\'écart ne rendent qu\'un son', () => {
   // sur cinquante graines, pour que le tirage ne puisse pas le sauver.
   for (let g = 1; g <= 50; g += 1) {
     const v = creerVoix(g * 2654435761 % 4294967291 || 7);
-    assert.equal(demanderUnSon(v, 'ui_clic', 0, ACTIF).jouer, true);
-    assert.equal(demanderUnSon(v, 'ui_clic', 40, ACTIF).jouer, false,
+    assert.equal(demanderUnSon(v, 'ui_click', 0, ACTIF).jouer, true);
+    assert.equal(demanderUnSon(v, 'ui_click', 40, ACTIF).jouer, false,
       `graine ${g} : la garde a laissé passer un second clic à 40 ms`);
   }
 
   // La garde d'un événement n'est pas celle d'un autre : un refus ne doit pas
   // faire taire tout le jeu.
   const v2 = creerVoix(99);
-  assert.equal(demanderUnSon(v2, 'ui_clic', 0, ACTIF).jouer, true);
-  assert.equal(demanderUnSon(v2, 'ui_refus', 0, ACTIF).jouer, true, 'les gardes se mêlent');
+  assert.equal(demanderUnSon(v2, 'ui_click', 0, ACTIF).jouer, true);
+  assert.equal(demanderUnSon(v2, 'ui_error', 0, ACTIF).jouer, true, 'les gardes se mêlent');
 });
 
 // ---------------------------------------------------------------------------
@@ -132,26 +154,26 @@ test('SON T3 — ui_toggle_on, plafonné à une voix, refuse la seconde', () => 
   // 160 : il reste quarante millisecondes où la garde laisse passer et où le
   // plafond doit refuser. Sans cet écart le plafond serait INATTEIGNABLE, et ce
   // test serait vert quelle que soit la valeur écrite dans la table.
-  const garde = EVENEMENTS.ui_bascule.gardeMs;
+  const garde = EVENEMENTS.ui_toggle_on.gardeMs;
   const duree = SONS.ui_toggle_on.dureeMs;
   assert.ok(duree > garde, `montage vide : durée ${duree} ms, garde ${garde} ms`);
 
   const voix = creerVoix(4242);
-  assert.equal(demanderUnSon(voix, 'ui_bascule', 0, ACTIF).jouer, true);
-  const dansLaFenetre = demanderUnSon(voix, 'ui_bascule', garde + 5, ACTIF);
+  assert.equal(demanderUnSon(voix, 'ui_toggle_on', 0, ACTIF).jouer, true);
+  const dansLaFenetre = demanderUnSon(voix, 'ui_toggle_on', garde + 5, ACTIF);
   assert.equal(dansLaFenetre.jouer, false, 'le plafond de une voix devrait refuser');
   assert.equal(dansLaFenetre.raison, 'plafond', 'refusé, mais pas par le plafond');
 
   // Et une fois la durée écoulée, l'instance a expiré : ça repasse.
-  assert.equal(demanderUnSon(voix, 'ui_bascule', duree + 1, ACTIF).jouer, true);
+  assert.equal(demanderUnSon(voix, 'ui_toggle_on', duree + 1, ACTIF).jouer, true);
 
   // ⚠ L'INSTANCE EXPIRE PAR SA DURÉE, SANS QU'AUCUN RAPPEL NE L'ANNONCE. Si
   // l'adaptateur devait signaler la fin d'un son, un rappel manqué fermerait le
   // plafond pour toujours — un son qui se tait sans que rien ne lève.
   const seule = creerVoix(7);
-  demanderUnSon(seule, 'ui_bascule', 0, ACTIF);
+  demanderUnSon(seule, 'ui_toggle_on', 0, ACTIF);
   assert.equal(seule.instances.ui_toggle_on.length, 1);
-  demanderUnSon(seule, 'ui_bascule', 10_000, ACTIF);
+  demanderUnSon(seule, 'ui_toggle_on', 10_000, ACTIF);
   assert.equal(seule.instances.ui_toggle_on.length, 1, 'les instances mortes ne sont pas purgées');
 });
 
@@ -179,7 +201,7 @@ test('SON T4 — cent déclenchements ne consomment pas un bit du flux de la par
   const vues = new Set();
   const v = creerVoix(20260904);
   for (let i = 0; i < 200; i += 1) {
-    const d = demanderUnSon(v, 'ui_clic', i * 100, ACTIF);
+    const d = demanderUnSon(v, 'ui_click', i * 100, ACTIF);
     if (d.jouer) vues.add(d.son);
   }
   assert.deepEqual([...vues].sort(), ['ui_click_01', 'ui_click_02'], 'le tirage ne rend qu\'une variante');
@@ -188,7 +210,7 @@ test('SON T4 — cent déclenchements ne consomment pas un bit du flux de la par
   // ce qui prouve qu'il ne va chercher son entropie nulle part.
   const suite = (graine) => {
     const w = creerVoix(graine);
-    return Array.from({ length: 20 }, (_, i) => demanderUnSon(w, 'ui_clic', i * 100, ACTIF).son);
+    return Array.from({ length: 20 }, (_, i) => demanderUnSon(w, 'ui_click', i * 100, ACTIF).son);
   };
   assert.deepEqual(suite(123), suite(123), 'deux voix de même graine divergent');
   assert.notDeepEqual(suite(123), suite(456), 'la graine ne change rien : ce n\'est pas un tirage');
@@ -235,19 +257,19 @@ test('SON T5 — la simulation n\'importe ni la politique ni l\'adaptateur', () 
 
 test('SON T6 — muet refuse, le volume nul aussi, et le réglage se relit', () => {
   const voix = creerVoix(11);
-  const coupe = demanderUnSon(voix, 'ui_clic', 0, { muet: true, volume: 1 });
+  const coupe = demanderUnSon(voix, 'ui_click', 0, { muet: true, volume: 1 });
   assert.equal(coupe.jouer, false);
   assert.equal(coupe.raison, 'silence');
   // Falsifiable : le même appel non muet passe. Sans cette ligne, un moteur
   // cassé qui refuserait tout serait vert.
-  assert.equal(demanderUnSon(creerVoix(11), 'ui_clic', 0, ACTIF).jouer, true);
+  assert.equal(demanderUnSon(creerVoix(11), 'ui_click', 0, ACTIF).jouer, true);
   // Un volume nul revient au même à l'oreille, et ne dépense pas de voix.
-  assert.equal(demanderUnSon(creerVoix(11), 'ui_clic', 0, { muet: false, volume: 0 }).jouer, false);
+  assert.equal(demanderUnSon(creerVoix(11), 'ui_click', 0, { muet: false, volume: 0 }).jouer, false);
 
   // ⚠ MUET NE CONSOMME NI LA GARDE NI UNE INSTANCE. Sinon, couper puis rallumer
   // laisserait le premier son d'après refusé, sans que rien ne l'explique.
   const v = creerVoix(11);
-  demanderUnSon(v, 'ui_clic', 0, { muet: true, volume: 1 });
+  demanderUnSon(v, 'ui_click', 0, { muet: true, volume: 1 });
   assert.deepEqual(v.gardes, {});
   assert.deepEqual(v.instances, {});
 
@@ -274,9 +296,10 @@ function faireDoc(fenetre, avecBalises = true) {
   const balises = new Map();
   if (avecBalises) {
     for (const nom of Object.keys(SONS)) {
-      // Quatre octets qui ne sont pas de l'Opus : le décodage échouera, et
-      // c'est justement ce qu'on veut voir traité en silence.
-      balises.set(idDuSon(nom), { getAttribute: () => `data:audio/ogg;base64,${btoa('opus')}` });
+      // ⚠ LES OCTETS PORTENT LE NOM DU SON, et ce n'est pas décoratif : c'est
+      // ce qui permet au faux décodeur de dire LEQUEL on lui a donné, donc de
+      // mesurer qu'une demande décode la variante demandée et une seule.
+      balises.set(idDuSon(nom), { getAttribute: () => `data:audio/ogg;base64,${btoa(nom)}` });
     }
   }
   return { defaultView: fenetre, getElementById: (id) => balises.get(id) ?? null };
@@ -287,27 +310,38 @@ test('SON T7 — sans Web Audio, le jeu démarre et se tait (falsification n° 6
   const son = initialiserLeSon(doc, { reglages: { ...ACTIF }, graine: 5 });
   // Aucune exception ne remonte à l'interface, dans aucun des deux chemins.
   assert.doesNotThrow(() => son.reveiller());
-  assert.doesNotThrow(() => son.jouer('ui_clic'));
-  assert.doesNotThrow(() => son.jouer('ui_clic'));
+  assert.doesNotThrow(() => son.jouer('ui_click'));
+  assert.doesNotThrow(() => son.jouer('ui_click'));
 
   // Un `AudioContext` dont le constructeur lève — une sortie audio absente —
   // se traite pareil.
   const casse = faireDoc({ AudioContext: function () { throw new Error('pas de sortie'); } });
   const s2 = initialiserLeSon(casse, { reglages: { ...ACTIF }, graine: 5 });
-  assert.doesNotThrow(() => s2.jouer('ui_clic'));
+  assert.doesNotThrow(() => s2.jouer('ui_click'));
 
   // Et une page à qui il manque les balises : le décodage n'a rien à décoder.
   const nu = faireDoc(faussesFenetres().fenetre, false);
   const s3 = initialiserLeSon(nu, { reglages: { ...ACTIF }, graine: 5 });
-  assert.doesNotThrow(() => s3.jouer('ui_clic'));
+  assert.doesNotThrow(() => s3.jouer('ui_click'));
 });
 
-/** Une fenêtre qui compte ses contextes audio et ce qu'on lui demande de jouer. */
-function faussesFenetres() {
-  const journal = { contextes: 0, decodages: 0, joues: [], gains: [] };
+/**
+ * Une fenêtre qui compte ses contextes audio et ce qu'on lui demande de jouer.
+ *
+ * ⚠ ELLE EXPOSE SON CONTEXTE ET SON HORLOGE, et ce n'est pas du confort : la
+ * politique reçoit l'instant en ARGUMENT — `contexte.currentTime * 1000` —, donc
+ * sans pouvoir avancer cette horloge, aucun test ne peut faire accepter deux
+ * demandes du même événement, et « un son n'est décodé qu'une fois » resterait
+ * invérifiable.
+ *
+ * `echecs` nomme les sons dont le décodage doit ÉCHOUER.
+ */
+function faussesFenetres(echecs = new Set()) {
+  const journal = { contextes: 0, decodages: 0, demandes: [], joues: [], contexte: null };
   class FauxContexte {
     constructor() {
       journal.contextes += 1;
+      journal.contexte = this;
       this.state = 'suspended';
       this.currentTime = 0;
       this.destination = { nom: 'sortie' };
@@ -318,12 +352,21 @@ function faussesFenetres() {
       const source = { buffer: null, connect: () => {}, start: () => { journal.joues.push(source.buffer); } };
       return source;
     }
-    decodeAudioData() { journal.decodages += 1; return Promise.resolve({ faux: true }); }
+    decodeAudioData(octets) {
+      journal.decodages += 1;
+      const nom = new TextDecoder().decode(octets);
+      journal.demandes.push(nom);
+      if (echecs.has(nom)) return Promise.reject(new Error('octets illisibles'));
+      return Promise.resolve({ nom });
+    }
   }
   return { fenetre: { AudioContext: FauxContexte }, journal };
 }
 
-test('SON T8 — rien ne sonne avant le premier geste (falsification n° 7)', () => {
+/** Laisse tourner les promesses de décodage déjà résolues. */
+const laisserDecoder = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
+
+test('SON T8 — rien n\'est décodé au démarrage (falsifications n° 7 et n° 12)', () => {
   const { fenetre, journal } = faussesFenetres();
   const doc = faireDoc(fenetre);
   const son = initialiserLeSon(doc, { reglages: { ...ACTIF }, graine: 5 });
@@ -333,31 +376,125 @@ test('SON T8 — rien ne sonne avant le premier geste (falsification n° 7)', ()
   assert.equal(journal.contextes, 0, 'un contexte audio a été créé avant tout geste');
   assert.equal(journal.decodages, 0, 'des octets ont été décodés avant tout geste');
 
-  son.jouer('ui_clic');
+  // ⚠⚠ ET LE PREMIER GESTE N'EN DÉCODE QU'UN, PAS 263. C'est tout le point dur
+  // du lot : 336,8 secondes décodées vaudraient 64,7 Mo en Float32 à 48 kHz,
+  // soixante-treize fois le poids des fichiers. Le lot précédent décodait ses
+  // quatre témoins au réveil ; à 263 le même geste serait un démarrage qui
+  // cesse d'être instantané et une empreinte mémoire que rien ne borne.
+  son.reveiller();
   assert.equal(journal.contextes, 1, 'le premier geste doit créer le contexte');
-  assert.equal(journal.decodages, Object.keys(SONS).length, 'les quatre sons doivent être décodés une fois');
+  assert.equal(journal.decodages, 0, 'le réveil a décodé : le décodage doit être PARESSEUX');
 
-  son.jouer('ui_clic');
-  assert.equal(journal.contextes, 1, 'le contexte se crée UNE fois');
-  assert.equal(journal.decodages, Object.keys(SONS).length, 'le décodage ne se refait pas');
+  son.jouer('ui_click');
+  assert.equal(journal.decodages, 1, 'une demande, un décodage — pas 263');
+  assert.ok(journal.demandes[0].startsWith('ui_click_'), 'ce n\'est pas la variante demandée');
 });
 
-test('SON T8 bis — le décodage rendu, le son part par son bus', async () => {
+test('SON T8 bis — deux demandes rapprochées ne rendent qu\'un décodage (falsification n° 13)', async () => {
+  const { fenetre, journal } = faussesFenetres();
+  const son = initialiserLeSon(faireDoc(fenetre), { reglages: { ...ACTIF }, graine: 5 });
+
+  // ⚠⚠ LE MONTAGE DOIT D'ABORD MESURER QUELQUE CHOSE : sans avancer l'horloge,
+  // la garde de 55 ms refuserait la seconde demande et le décodage unique
+  // serait vrai pour une raison qui n'est pas la bonne.
+  son.jouer('ui_toggle_on');
+  assert.equal(journal.decodages, 1, 'la première demande n\'a rien décodé');
+  // La seconde tombe AVANT que la promesse du décodage soit tenue : c'est le
+  // piège classique, et c'est `enVol` qui l'attrape.
+  journal.contexte.currentTime = 10; // 10 s : la garde et le plafond sont passés
+  son.jouer('ui_toggle_on');
+  assert.equal(journal.decodages, 1, 'le même son a été décodé deux fois');
+  assert.equal(journal.joues.length, 0, 'un tampon non décodé a pourtant été joué');
+
+  // Le décodage rendu, le son part — et il ne se redécode pas.
+  await laisserDecoder();
+  journal.contexte.currentTime = 20;
+  son.jouer('ui_toggle_on');
+  assert.equal(journal.decodages, 1, 'le décodage s\'est refait après coup');
+  assert.equal(journal.joues.length, 1, 'le tampon décodé n\'a pas été joué');
+  assert.equal(journal.joues[0].nom, 'ui_toggle_on', 'ce n\'est pas le bon tampon qui est parti');
+});
+
+test('SON T8 ter — un décodage en échec se tait, les autres sonnent (falsification n° 14)', async () => {
+  const { fenetre, journal } = faussesFenetres(new Set(['ui_error_01', 'ui_error_02']));
+  const son = initialiserLeSon(faireDoc(fenetre), { reglages: { ...ACTIF }, graine: 5 });
+
+  assert.doesNotThrow(() => son.jouer('ui_error'));
+  await laisserDecoder();
+  journal.contexte.currentTime = 10;
+  assert.doesNotThrow(() => son.jouer('ui_error'));
+  await laisserDecoder();
+  assert.equal(journal.joues.length, 0, 'un son dont le décodage a échoué a été joué');
+
+  // ⚠ ET LE RESTE DU MOTEUR CONTINUE : c'est la moitié qui compte. Un test qui
+  // ne vérifierait que le silence serait vert sur un moteur entièrement mort.
+  journal.contexte.currentTime = 20;
+  son.jouer('ui_toggle_on');
+  await laisserDecoder();
+  journal.contexte.currentTime = 30;
+  son.jouer('ui_toggle_on');
+  assert.equal(journal.joues.length, 1, 'les autres sons ne sonnent plus');
+});
+
+test('SON T8 quater — la mémoire décodée est bornée, les ambiances exceptées (falsification n° 15)', async () => {
   const { fenetre, journal } = faussesFenetres();
   const son = initialiserLeSon(faireDoc(fenetre), { reglages: { ...ACTIF }, graine: 5 });
   son.reveiller();
-  await Promise.resolve(); await Promise.resolve();
-  son.jouer('ui_clic');
-  assert.equal(journal.joues.length, 1, 'le tampon décodé n\'a pas été joué');
+
+  // ⚠⚠ CE QUE CE TEST DÉFEND EST UN NOMBRE D'OCTETS, PAS UN NOMBRE DE FICHIERS.
+  // Un son décodé pèse `durée × 48 000 × 4` : les 263 feraient 64,7 Mo. Le
+  // budget est donc en SECONDES, et il se traduit exactement.
+  assert.ok(MEMOIRE.budgetSecondesDecodees > 0, 'montage : pas de budget');
+
+  // ⚠ ON NE PREND QUE DES ÉVÉNEMENTS À UNE SEULE VARIANTE. Sur un groupe à
+  // plusieurs, la variante est TIRÉE : le test ne saurait pas lequel a été
+  // décodé, et il mesurerait le tirage plutôt que l'éviction.
+  const longs = Object.entries(EVENEMENTS)
+    .filter(([, d]) => d.variantes.length === 1)
+    .map(([, d]) => d.variantes[0])
+    .filter((n) => SONS[n].residente !== true && SONS[n].dureeMs >= 1000)
+    .sort();
+  const cumul = longs.reduce((t, n) => t + SONS[n].dureeMs / 1000, 0);
+  assert.ok(cumul > MEMOIRE.budgetSecondesDecodees * 2,
+    `montage vide : ${cumul} s demandées pour un budget de ${MEMOIRE.budgetSecondesDecodees}`);
+
+  let t = 0;
+  const demander = async (nom) => {
+    t += 60;
+    journal.contexte.currentTime = t;
+    son.jouer(nom);
+    await laisserDecoder();
+  };
+
+  for (const nom of longs) await demander(nom);
+  // Le premier son demandé a forcément été évincé : le redemander redécode.
+  const avant = journal.decodages;
+  await demander(longs[0]);
+  assert.ok(journal.decodages > avant,
+    'aucune éviction : la mémoire décodée n\'est pas bornée');
+
+  // ⚠ ET UNE AMBIANCE, ELLE, RESTE. Huit fichiers de huit secondes, 12,3 Mo,
+  // les seuls qui tournent en boucle en permanence : les redécoder à chaque
+  // tour serait absurde. Sans cette moitié, une éviction aveugle serait verte.
+  const ambiance = Object.entries(SONS).find(([, v]) => v.residente === true)[0];
+  await demander(ambiance);
+  const decodagesDeLAmbiance = () => journal.demandes.filter((n) => n === ambiance).length;
+  assert.equal(decodagesDeLAmbiance(), 1, 'montage : l\'ambiance n\'a pas été décodée');
+  const apres = journal.decodages;
+  for (const nom of longs) await demander(nom);
+  assert.ok(journal.decodages > apres, 'montage : les longs n\'ont rien redécodé');
+  await demander(ambiance);
+  assert.equal(decodagesDeLAmbiance(), 1,
+    'une ambiance a été évincée puis redécodée : elle doit rester résidente');
 });
 
 // ---------------------------------------------------------------------------
 // SON T9 — table, fichiers, marqueurs et balises ne peuvent pas diverger
 // ---------------------------------------------------------------------------
 
-test('SON T9 — un cinquième .opus sans emploi fait tomber (falsification n° 8)', () => {
+test('SON T9 — table, fichiers, outil, marqueurs et balises ne peuvent pas diverger (falsifications n° 8 et n° 16)', () => {
   const noms = Object.keys(SONS).sort();
-  assert.equal(noms.length, 4, 'quatre témoins, pas un de plus : le catalogue est un autre lot');
+  assert.equal(noms.length, 263, 'le catalogue entier entre : 263, pas un de moins');
 
   // 1. le disque
   const surDisque = readdirSync(join(RACINE, 'art', 'sprites', 'son'))
@@ -371,46 +508,60 @@ test('SON T9 — un cinquième .opus sans emploi fait tomber (falsification n° 
     assert.equal(empreintes.sons[nom].duree_ms, SONS[nom].dureeMs, `${nom} : durée mesurée ≠ table`);
   }
 
-  // 3. la table de l'outil — elle porte le nom du master, que le jeu ne voit pas
+  // 3. les masters — l'outil les nomme `<id>.wav`, et ils sont tous là
+  const sources = new Set(readdirSync(join(RACINE, 'art', 'sources')));
+  for (const nom of noms) {
+    assert.ok(sources.has(`${nom}.wav`), `le master « ${nom}.wav » manque à art/sources/`);
+  }
+
+  // ⚠⚠ 4. LE PALIER EST 20 kbps, ET IL SE LIT DANS CE QUI A ÉTÉ PRODUIT, PAS
+  // DANS LA CONSTANTE. Un débit changé dans `tools/sons.py` sans régénération
+  // laisserait la constante juste et les fichiers faux ; les empreintes, elles,
+  // sont écrites par l'exécution. « Ne pas descendre sous 20 pour gagner des
+  // octets » est l'arbitrage d'Ethan, tranché à l'oreille sur le téléphone.
+  const debits = new Set(Object.values(empreintes.sons).map((e) => e.debit_kbps));
+  assert.deepEqual([...debits], [20], `le palier a bougé : ${[...debits].join(', ')} kbps`);
   const outil = lire('tools', 'sons.py');
-  for (const nom of noms) {
-    assert.ok(outil.includes(`'${nom}'`), `tools/sons.py ne produit pas ${nom}`);
-  }
-  const masters = [...outil.matchAll(/\('(son_[a-z0-9_]+\.wav)',\s*'([a-z0-9_]+)'/g)];
-  assert.equal(masters.length, 4, 'la table de tools/sons.py n\'est plus lisible');
-  assert.deepEqual(masters.map((m) => m[2]).sort(), noms, 'l\'outil et la table nomment d\'autres sons');
-  const sources = readdirSync(join(RACINE, 'art', 'sources'));
-  for (const [, master] of masters) {
-    assert.ok(sources.includes(master), `le master « ${master} » manque à art/sources/`);
-  }
+  assert.ok(/DEBIT_PAR_DEFAUT = 20\b/.test(outil), 'tools/sons.py ne pose plus 20 kbps');
+  // ⚠ ET LE NUMÉRO DE SÉRIE OGG RESTE FIXÉ PAR ENTRÉE. Sans lui, `opusenc` le
+  // tire au hasard et deux exécutions rendent 263 SHA-256 différents :
+  // `tools/verifier.py` dirait « 263 différents » à chaque passage, pour
+  // toujours, et quelqu'un finirait par l'assouplir.
+  assert.ok(outil.includes("'--serial'"), 'tools/sons.py ne fixe plus le numéro de série Ogg');
+  assert.equal(new Set(Object.values(empreintes.sons).map((e) => e.serie)).size, 263,
+    'deux sons partagent un numéro de série Ogg');
+  // ⚠ ET LA SORTIE EST MONO, quels que soient les masters : quatorze d'entre eux
+  // sont stéréo, `--downmix-mono` les ramène, et l'outil le RELIT dans
+  // l'en-tête OpusHead du fichier produit — sur l'artefact qui part au joueur.
+  assert.ok(outil.includes("'--downmix-mono'"), 'la sortie n\'est plus ramenée au mono');
+  assert.ok(outil.includes('def verifier_la_sortie('), 'plus rien ne vérifie le mono en sortie');
 
-  // 4. le build et la page — un son inliné que rien ne pose, ou l'inverse
-  const build = lire('tools', 'build.js');
-  const html = lire('src', 'index.src.html');
-  for (const nom of noms) {
-    const marqueur = `%SON_${nom.toUpperCase()}%`;
-    assert.ok(build.includes(marqueur), `tools/build.js n'inline pas ${marqueur}`);
-    assert.ok(html.includes(marqueur), `la page ne porte pas ${marqueur}`);
-    assert.ok(html.includes(`id="${idDuSon(nom)}"`), `la page n'a pas de balise ${idDuSon(nom)}`);
-  }
-  const marqueursDuBuild = [...build.matchAll(/%SON_[A-Z0-9_]+%/g)].map((m) => m[0]);
-  assert.equal(new Set(marqueursDuBuild).size, 4, 'tools/build.js déclare un son de plus ou de moins');
-
-  // ⚠ ET AUCUN MARQUEUR N'EST PRÉFIXE D'UN AUTRE. `tools/build.js` le dit depuis
-  // le 30/08 et l'avait vérifié À LA MAIN ; on le MESURE, sur tous les marqueurs
-  // du build et plus seulement sur les nôtres. Sans le `%` final, un
-  // `replaceAll` mangerait la tête d'un autre et laisserait un orphelin que la
-  // garde offline ne verrait pas.
+  // 5. le build et la page — un son inliné que rien ne pose, ou l'inverse
   //
-  // ⚠ ET ILS SE LISENT DANS LA PAGE, PAS DANS `tools/build.js` — mesuré, et
-  // c'est ce qui change tout. Le build fabrique ses marqueurs d'atlas par
-  // gabarit (`%ATLAS_${slug}%`), donc ils n'y figurent pas en toutes lettres :
-  // les lire là-bas manquerait justement le couple `%ATLAS_TERRAIN%` /
-  // `%ATLAS_TERRAIN_BASE%` que le commentaire du build donne en exemple. La
-  // page, elle, les porte tous littéralement — c'est la vraie surface où
-  // `replaceAll` opère.
-  const tous = [...new Set([...html.matchAll(/%[A-Z0-9_]+%/g)].map((m) => m[0]))];
-  assert.ok(tous.length >= 25, `montage cassé : ${tous.length} marqueurs lus dans la page`);
+  // ⚠⚠ LES 263 MARQUEURS NE SONT PLUS ÉCRITS NULLE PART, ET C'EST LE LOT. Le
+  // build les DÉRIVE de `SONS` et écrit les balises lui-même ; les chercher en
+  // toutes lettres dans le HTML reviendrait à exiger la table recopiée que ce
+  // lot retire. Ce qui se garde, c'est la DÉRIVATION : le build lit la table du
+  // jeu, et la page porte le marqueur de famille.
+  const build = lire('tools', 'build.js');
+  assert.ok(/import \{ SONS \} from '\.\.\/src\/data\/sons\.js';/.test(build),
+    'tools/build.js ne lit plus la table des sons');
+  assert.ok(build.includes('%SON_${nom.toUpperCase()}%'), 'le marqueur ne se dérive plus du nom');
+  assert.ok(build.includes('idDuSon(nom)'), 'le build fabrique les identifiants au lieu de les dériver');
+  const html = lire('src', 'index.src.html');
+  assert.ok(html.includes('%BALISES_SON%'), 'la page ne porte plus le marqueur de la famille');
+  assert.equal((html.match(/%SON_[A-Z0-9_]+%/g) ?? []).length, 0,
+    'un marqueur de son est écrit à la main dans la page : la famille se dérive');
+
+  // ⚠ ET AUCUN MARQUEUR N'EST PRÉFIXE D'UN AUTRE. `tools/build.js` le disait
+  // depuis le 30/08 et l'avait vérifié À LA MAIN sur huit ; à 284, une
+  // relecture à la main serait une affirmation sans mesure. On les mesure tous
+  // — ceux de la page ET les 263 dérivés.
+  const tous = [...new Set([
+    ...[...html.matchAll(/%[A-Z0-9_]+%/g)].map((m) => m[0]),
+    ...noms.map((n) => `%SON_${n.toUpperCase()}%`),
+  ])];
+  assert.ok(tous.length >= 284, `montage cassé : ${tous.length} marqueurs`);
   assert.ok(tous.includes('%ATLAS_TERRAIN%') && tous.includes('%ATLAS_TERRAIN_BASE%'),
     'le montage ne voit plus le couple que le build donne en exemple');
   for (const a of tous) {
@@ -444,9 +595,9 @@ test('SON T10 — src/son/ ne touche à aucune API du navigateur (falsification 
   // La même question posée à deux instants doit rendre deux réponses : c'est ce
   // qu'un `Date.now()` en dur rendrait impossible à écrire.
   const voix = creerVoix(3);
-  assert.equal(demanderUnSon(voix, 'ui_refus', 0, ACTIF).jouer, true);
-  assert.equal(demanderUnSon(voix, 'ui_refus', 10, ACTIF).jouer, false);
-  assert.equal(demanderUnSon(voix, 'ui_refus', 10_000, ACTIF).jouer, true);
+  assert.equal(demanderUnSon(voix, 'ui_error', 0, ACTIF).jouer, true);
+  assert.equal(demanderUnSon(voix, 'ui_error', 10, ACTIF).jouer, false);
+  assert.equal(demanderUnSon(voix, 'ui_error', 10_000, ACTIF).jouer, true);
 
   // Un événement inconnu LÈVE : un nom mal tapé au câblage est un fait de
   // programme, et le taire rendrait le son muet à un endroit sans que personne
@@ -508,7 +659,7 @@ test('SON T12 — les cinq bus sont posés, aux niveaux du pack', () => {
   assert.throws(() => gainDuSon('ui_inconnu', 1), RangeError);
 
   // Le gain rendu par la politique est celui-là, et pas un autre.
-  const d = demanderUnSon(creerVoix(1), 'ui_bascule', 0, { muet: false, volume: 0.7 });
+  const d = demanderUnSon(creerVoix(1), 'ui_toggle_on', 0, { muet: false, volume: 0.7 });
   assert.equal(d.gain, gainDuSon('ui_toggle_on', 0.7));
 });
 
@@ -549,46 +700,70 @@ test('SON T13 — les réglages vont dans leur magasin, jamais dans la partie', 
 // SON T14 — les trois points de câblage, et pas un quatrième
 // ---------------------------------------------------------------------------
 
-test('SON T14 — trois points d\'accroche, un seul écouteur pour tous les boutons', () => {
+test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les boutons (falsification n° 17)', () => {
   const session = sansCommentaires(lire('src', 'ui', 'session.js'));
-  const appels = [...session.matchAll(/son\.jouer\('([a-z_]+)'\)/g)].map((m) => m[1]);
-  // ⚠ TROIS POINTS, PAS QUATRE. Le brief le pose comme une condition d'arrêt :
-  // « l'envie de câbler un cinquième son ou un événement de jeu ».
-  assert.deepEqual(appels.sort(), ['ui_bascule', 'ui_clic', 'ui_refus'],
-    'le câblage a bougé : le brief pose TROIS points, pas quatre');
-  // Le refus part de l'écran de la base, par son registre `toast`.
-  assert.ok(/sonDeRefus:\s*\(\)\s*=>\s*son\.jouer\('ui_refus'\)/.test(session),
-    'le son de refus n\'est plus câblé');
+  const appels = [...session.matchAll(/son\.jouer\('([a-z_0-9]+)'\)/g)].map((m) => m[1]);
+  // ⚠⚠ QUATRE POINTS, ET AUCUN N'EST NEUF. Le clic délégué, les DEUX registres
+  // `toast` — celui du Chantier depuis le lot SON-MOTEUR, celui de l'Offense
+  // depuis celui-ci, écart déclaré et refermé — et la bascule d'OPTIONS. Le
+  // brief l'interdit de face : « ne créer aucun événement de jeu pour donner un
+  // emploi à un son ».
+  assert.deepEqual(appels.sort(), ['ui_click', 'ui_error', 'ui_error', 'ui_toggle_on'],
+    'le câblage a bougé : quatre points, dont deux refus');
+  for (const nom of new Set(appels)) {
+    assert.ok(nom in EVENEMENTS, `« ${nom} » n'est pas un événement de la table`);
+  }
+  // ⚠ ET LES DEUX REGISTRES `toast` SONNENT, PAS UN SEUL. C'est l'écart que le
+  // lot précédent avait déclaré : le refus sonnait sur la base et se taisait
+  // sur l'armée, pour la même faute du joueur.
+  assert.equal((session.match(/sonDeRefus:\s*\(\)\s*=>\s*son\.jouer\('ui_error'\)/g) ?? []).length, 2,
+    'un seul des deux registres de refus est câblé');
 
   // ⚠⚠ UN SEUL ÉCOUTEUR POUR TOUS LES BOUTONS. Un écouteur par bouton dispersé
   // dans six écrans est la dette que ce lot existe pour éviter : le premier
   // bouton ajouté serait muet sans que rien ne le dise.
-  assert.equal((session.match(/son\.jouer\('ui_clic'\)/g) ?? []).length, 1,
+  assert.equal((session.match(/son\.jouer\('ui_click'\)/g) ?? []).length, 1,
     'le clic est câblé à plus d\'un endroit');
   assert.ok(/doc\.addEventListener\('click'/.test(session), 'la délégation a disparu');
 
-  // Et aucun autre écran ne joue de son : le câblage des événements de JEU est
-  // un autre lot, et cette garde tombera le jour où il arrivera.
+  // ⚠⚠ ET AUCUN ÉVÉNEMENT DE SIMULATION NE DÉCLENCHE DE SON. La garde du lot
+  // précédent disait « aucun autre écran ne joue de son » ; elle est REMPLACÉE,
+  // pas supprimée — elle porte désormais sur ce qui compte vraiment à 263 sons :
+  // qu'aucune famille hors `ui` ne sonne, et donc qu'aucun module de rendu ou de
+  // simulation n'appelle le moteur audio. Brancher un tir la fait tomber.
   //
   // ⚠ LE MOTIF EST BORNÉ À GAUCHE, ET IL A FALLU LE PAYER UNE FOIS. Un
   // `includes('jouer(')` nu tombe sur le `rejouer(` de `src/ui/raid.js`, qui
   // rejoue un combat et ne fait aucun bruit — c'est la faute que CLAUDE.md §6
   // raconte déjà pour `\b`, qui est ASCII dans un dépôt écrit en français.
   const joueUnSon = /(^|[^\p{L}\p{N}_])jouer\s*\(/u;
-  for (const nom of readdirSync(join(RACINE, 'src', 'ui')).filter((n) => n.endsWith('.js'))) {
-    if (nom === 'session.js' || nom === 'son.js') continue;
-    const code = sansCommentaires(lire('src', 'ui', nom));
-    assert.ok(!joueUnSon.test(code), `src/ui/${nom} joue un son : le câblage doit rester groupé`);
+  for (const dossier of ['ui', 'sim', 'render', 'data']) {
+    for (const nom of readdirSync(join(RACINE, 'src', dossier)).filter((n) => n.endsWith('.js'))) {
+      if (dossier === 'ui' && (nom === 'session.js' || nom === 'son.js')) continue;
+      const code = sansCommentaires(lire('src', dossier, nom));
+      assert.ok(!joueUnSon.test(code), `src/${dossier}/${nom} joue un son : le câblage reste groupé`);
+    }
   }
   // L'appât dans les deux sens : le motif reconnaît la vraie faute, et laisse
   // passer celle qui n'en est pas une.
-  assert.ok(joueUnSon.test("  son.jouer('ui_clic');"), 'le motif ne voit plus la vraie faute');
+  assert.ok(joueUnSon.test("  son.jouer('ui_click');"), 'le motif ne voit plus la vraie faute');
   assert.ok(!joueUnSon.test('  rejouer(montage, vagues);'), 'le motif retombe sur rejouer(');
 
-  // Le refus arrive par le registre `toast`, APRÈS la garde du texte vide :
-  // effacer un toast ne doit pas sonner.
-  const chantier = sansCommentaires(lire('src', 'ui', 'chantier.js'));
-  const garde = chantier.indexOf("if (texte === '') return;");
-  const son = chantier.indexOf('sonDeRefus !== undefined');
-  assert.ok(garde >= 0 && son > garde, 'le son de refus sonnerait sur un toast effacé');
+  // ⚠ ET LES 240 SONS HORS `ui` SONT LIVRÉS SANS ÊTRE DEMANDÉS. C'est voulu, et
+  // c'est mesuré plutôt qu'affirmé : les événements atteignables ne portent que
+  // des sons de la famille `ui`.
+  const atteignables = [...new Set(appels)].flatMap((e) => EVENEMENTS[e].variantes);
+  assert.equal(atteignables.length, 5, 'le nombre de sons atteignables a bougé');
+  assert.ok(atteignables.every((n) => n.startsWith('ui_')),
+    'un son hors de la famille `ui` est atteignable');
+
+  // Le refus arrive par les registres `toast`, APRÈS la garde du texte vide :
+  // effacer un toast ne doit pas sonner. Les DEUX écrans, à la même place.
+  for (const ecran of ['chantier.js', 'offense.js']) {
+    const code = sansCommentaires(lire('src', 'ui', ecran));
+    const garde = code.indexOf("if (texte === '') return;");
+    const sonne = code.indexOf('sonDeRefus !== undefined');
+    assert.ok(garde >= 0 && sonne > garde,
+      `src/ui/${ecran} : le son de refus sonnerait sur un toast effacé`);
+  }
 });

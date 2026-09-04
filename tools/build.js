@@ -18,6 +18,19 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
+// ⚠⚠ LA FAMILLE DES SONS SE LIT DANS LA TABLE QUE LE JEU LIT, ELLE NE SE
+// RECOPIE PAS. 263 marqueurs écrits à la main, ce seraient 263 occasions d'en
+// oublier un — et la faute serait MUETTE : un marqueur absent de cette table
+// resterait tel quel dans le HTML, la garde offline n'y verrait pas d'adresse,
+// et le son manquerait sans que rien ne lève. En important `SONS`, tout son que
+// le jeu connaît DOIT avoir son fichier, et la garde « marqueur sans fichier »
+// juste en dessous le dit.
+import { SONS } from '../src/data/sons.js';
+// ⚠ ET L'IDENTIFIANT DOM VIENT DE LA MÊME FONCTION QUE CELLE QUI LE RELIT.
+// `src/ui/son.js` cherche ses balises par `idDuSon` ; les fabriquer ici avec un
+// second `replaceAll` marcherait aujourd'hui et divergerait au premier son dont
+// le nom sort du moule. Une dérivation, un seul endroit.
+import { idDuSon } from '../src/ui/son.js';
 
 const racine = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -35,6 +48,25 @@ const build = pkg.config?.build ?? '0';
 
 const cheminHtml = join(racine, 'src', 'index.src.html');
 const htmlSource = readFileSync(cheminHtml, 'utf8');
+
+// --- les balises des sons ---------------------------------------------------
+
+// ⚠⚠ 263 BALISES NE S'ÉCRIVENT PAS À LA MAIN DANS LE HTML. Le lot précédent en
+// posait quatre, ce qui se relit ; à 263 ce serait deux cent soixante-trois
+// occasions d'oublier un attribut, et la faute serait MUETTE — un son sans
+// balise reste simplement silencieux. Le HTML porte donc UN marqueur, et ce
+// build y écrit la famille entière, dans l'ordre de la table.
+//
+// ⚠ `preload="none"` EST OBLIGATOIRE : sans lui, le navigateur préchargerait
+// 263 `data:` au chargement de la page, c'est-à-dire exactement le démarrage
+// non instantané que ce lot s'interdit. Rien ne lit jamais ces balises comme
+// des lecteurs audio — `src/ui/son.js` ne fait que relire leur attribut `src`
+// et le décoder par `atob`.
+const MARQUEUR_BALISES_SON = '%BALISES_SON%';
+
+const balisesSon = Object.keys(SONS)
+  .map((nom) => `<audio id="${idDuSon(nom)}" preload="none" src="%SON_${nom.toUpperCase()}%"></audio>`)
+  .join('\n');
 
 // --- extraction du point d'entrée -------------------------------------------
 
@@ -71,6 +103,7 @@ if (js.includes('</script')) {
 
 let html = htmlSource
   .replace(motifEntree, () => `<script>${js}</script>`)
+  .replaceAll(MARQUEUR_BALISES_SON, balisesSon)
   .replaceAll('%VERSION%', version)
   .replaceAll('%BUILD%', build)
   // Les commentaires HTML ne portent rien dans le livrable.
@@ -196,7 +229,7 @@ const FICHIERS_INLINE = [
   // qui dit pourquoi un décor n'est pas du pixel art à teintes comptées.
   { marqueur: '%FOND_OFFENSE%', chemin: ['art', 'sprites', 'fond', 'fond_offense.webp'], type: 'image/webp' },
 
-  // ⚠⚠ LES QUATRE SONS TÉMOINS — lot SON-MOTEUR, 04/09. Ils ne sont pas des
+  // ⚠⚠ LES 263 SONS DU PACK — lot SON-CATALOGUE, 04/09. Ils ne sont pas des
   // images, et ils voyagent pourtant par le mécanisme des images : un marqueur,
   // un `data:`, une balise qui le porte en `src`. C'est la même contrainte qui
   // le veut — la garde offline refuse toute adresse dans le HTML produit, et
@@ -204,16 +237,33 @@ const FICHIERS_INLINE = [
   // `src/ui/son.js` LIT donc l'adresse sur la balise, comme `garnirLesAtlas`
   // lit la sienne dans une variable CSS, et la décode par `atob`.
   //
-  // ⚠ 3 634 OCTETS POUR LES QUATRE, 4 848 EN BASE64. Le brief en annonçait
-  // 2 520 ; l'écart est le conteneur Ogg, qui pèse deux pages d'en-tête par
-  // fichier — sur un son de 75 ms, l'emballage coûte plus que le son. Le débit
-  // reste celui qu'Ethan a fixé, 24 kbps mono : on rapporte l'écart, on ne
-  // dégrade pas le son pour tomber sur un nombre.
-  { marqueur: '%SON_UI_CLICK_01%', chemin: ['art', 'sprites', 'son', 'ui_click_01.opus'], type: 'audio/ogg' },
-  { marqueur: '%SON_UI_CLICK_02%', chemin: ['art', 'sprites', 'son', 'ui_click_02.opus'], type: 'audio/ogg' },
-  { marqueur: '%SON_UI_ERROR_01%', chemin: ['art', 'sprites', 'son', 'ui_error_01.opus'], type: 'audio/ogg' },
-  { marqueur: '%SON_UI_TOGGLE_ON%', chemin: ['art', 'sprites', 'son', 'ui_toggle_on.opus'], type: 'audio/ogg' },
+  // ⚠ UNE FAMILLE, PAS 263 CONSTANTES. Le lot précédent en écrivait quatre à la
+  // main, ce qui se relit ; à 263 la table serait une copie qui vieillit. Le
+  // marqueur se DÉRIVE du nom, exactement comme `idDuSon` dérive l'identifiant
+  // DOM du même nom — deux dérivations de la même chaîne, jamais deux tables.
+  ...Object.keys(SONS).map((nom) => ({
+    marqueur: `%SON_${nom.toUpperCase()}%`,
+    chemin: ['art', 'sprites', 'son', `${nom}.opus`],
+    type: 'audio/ogg',
+  })),
 ];
+
+// ⚠⚠ ET LE « AUCUN MARQUEUR N'EST PRÉFIXE D'UN AUTRE » SE MESURE MAINTENANT,
+// IL NE SE RELIT PLUS. Le commentaire du haut disait « revérifié à la main sur
+// les HUIT marqueurs » ; à 284, une relecture à la main serait une affirmation
+// sans mesure. Le `%` final le garantit tant que deux marqueurs ne sont pas
+// ÉGAUX — d'où ce contrôle-ci, qui attrape aussi le doublon.
+{
+  const vus = new Set();
+  for (const entree of FICHIERS_INLINE) {
+    if (vus.has(entree.marqueur)) echec(`${entree.marqueur} est déclaré deux fois`);
+    vus.add(entree.marqueur);
+    if (!/^%[A-Z0-9_]+%$/.test(entree.marqueur)) {
+      echec(`${entree.marqueur} n'a pas la forme %NOM% : le « % » final est ce qui`
+        + ' empêche un marqueur d\'être préfixe d\'un autre');
+    }
+  }
+}
 
 for (const image of FICHIERS_INLINE) {
   if (!html.includes(image.marqueur)) continue;

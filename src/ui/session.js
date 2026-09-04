@@ -1014,7 +1014,15 @@ export function initialiserSession(doc) {
   version.addEventListener('contextmenu', (evenement) => evenement.preventDefault());
   $('banc-fermer').addEventListener('click', fermerLeBanc);
 
-  // --- le son : trois points d'accroche, et c'est tout ----------------------
+  // --- le son : quatre points d'accroche, et c'est tout ---------------------
+  //
+  // ⚠⚠ QUATRE, ET AUCUN N'EST NEUF. Le clic délégué, les DEUX registres `toast`
+  // — celui du Chantier depuis le lot SON-MOTEUR, celui de l'Offense depuis
+  // celui-ci — et la bascule d'OPTIONS. Vingt-trois sons de la famille `ui`
+  // entrent au livrable ; CINQ sont atteignables, et les dix-huit autres n'ont
+  // pas de point d'accroche EXISTANT dans le code. On n'en crée aucun : « ne
+  // créer aucun événement de jeu pour donner un emploi à un son » — le rapport
+  // les nomme un par un avec leur raison.
   //
   // ⚠⚠ UN SEUL ÉCOUTEUR POUR TOUS LES BOUTONS DE LA PAGE. Poser un écouteur par
   // bouton dans six écrans serait la dette que ce lot existe pour éviter : il
@@ -1029,7 +1037,7 @@ export function initialiserSession(doc) {
   doc.addEventListener('click', (evenement) => {
     const cible = evenement.target;
     if (cible !== null && typeof cible.closest === 'function' && cible.closest('button') !== null) {
-      son.jouer('ui_clic');
+      son.jouer('ui_click');
     }
   });
 
@@ -1054,7 +1062,7 @@ export function initialiserSession(doc) {
     reglages.muet = !reglages.muet;
     rendreLesReglages();
     enregistrerLesReglages();
-    if (!reglages.muet) son.jouer('ui_bascule');
+    if (!reglages.muet) son.jouer('ui_toggle_on');
   });
   // `input` et non `change` : le volume suit le doigt, sinon le joueur règle à
   // l'aveugle et ne s'entend qu'après avoir lâché.
@@ -1094,7 +1102,7 @@ export function initialiserSession(doc) {
     // ⚠ `ui/offense.js` PORTE SON PROPRE `toast`, ET IL N'EST PAS BRANCHÉ ICI —
     // écart déclaré : le brief pose TROIS points de câblage, pas quatre, et le
     // lot du catalogue unifiera les deux registres.
-    sonDeRefus: () => son.jouer('ui_refus'),
+    sonDeRefus: () => son.jouer('ui_error'),
     // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE. La barre du bas appartient à
     // l'écran Chantier — c'est lui qui la construit et qui y affiche les
     // niveaux — mais un de ses trois boutons change d'ÉCRAN, ce que seule la
@@ -1131,7 +1139,14 @@ export function initialiserSession(doc) {
       rafraichirLaBase();
     },
   });
-  ecranOffense = initialiserEcranOffense(doc, { apresPose: () => sauvegarder() });
+  // ⚠⚠ ET L'OFFENSE REÇOIT LE MÊME `sonDeRefus` QUE LE CHANTIER — écart déclaré
+  // par le lot SON-MOTEUR, refermé ici. Les deux écrans portent chacun leur
+  // registre `toast` ; n'en brancher qu'un rendait le refus sonore sur la base
+  // et muet sur l'armée, pour la même faute du joueur.
+  ecranOffense = initialiserEcranOffense(doc, {
+    apresPose: () => sauvegarder(),
+    sonDeRefus: () => son.jouer('ui_error'),
+  });
   // ⚠ LES DEUX VUES DU TUTORIEL SE CÂBLENT ENSEMBLE, et chacune agit sur
   // l'autre : la croix ferme la mini-fenêtre, le bouton de l'onglet Mission la
   // rouvre. Écrire dans l'état est le travail de `sim/state.js` ; l'enregistrer

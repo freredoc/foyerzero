@@ -2202,7 +2202,13 @@
 </div>
 
 <!-- ======================================================================
-     LES QUATRE SONS TÉMOINS — lot SON-MOTEUR, 04/09.
+     LES 263 SONS DU PACK — lot SON-CATALOGUE, 04/09.
+     ⚠⚠ UN SEUL MARQUEUR POUR LA FAMILLE ENTIÈRE. `tools/build.js` écrit ici
+     une balise par entrée de `src/data/sons.js`, avec l'identifiant que
+     `idDuSon` dérive — la MÊME fonction que `src/ui/son.js` emploie pour les
+     retrouver. Écrire 263 balises à la main, ce seraient 263 occasions d'en
+     oublier une, et un son sans balise est simplement silencieux : la faute ne
+     lèverait nulle part.
      ⚠⚠ ILS PORTENT LEUR MARQUEUR EN `src`, ET LE JS LE LIT. C'est le même
      détour que `monde-emblemes` juste au-dessus, et il a la même cause :
      `tools/build.js` refuse toute adresse dans le HTML produit, et CLAUDE.md
@@ -2216,10 +2222,7 @@
      aucun écran, et les enfermer dans l'un d'eux les ferait disparaître avec
      lui le jour où quelqu'un déplacerait le bloc.
      ====================================================================== -->
-<audio id="son-ui-click-01" preload="none" src="%SON_UI_CLICK_01%"></audio>
-<audio id="son-ui-click-02" preload="none" src="%SON_UI_CLICK_02%"></audio>
-<audio id="son-ui-error-01" preload="none" src="%SON_UI_ERROR_01%"></audio>
-<audio id="son-ui-toggle-on" preload="none" src="%SON_UI_TOGGLE_ON%"></audio>
+%BALISES_SON%
 
 <div id="banc" hidden>
 <header>

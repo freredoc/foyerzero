@@ -17,7 +17,7 @@
 // qu'on doit voir » —, et l'asymétrie est voulue : une carte noire rend le jeu
 // injouable, un jeu muet reste entièrement jouable.
 
-import { SONS, BUS } from '../data/sons.js';
+import { SONS, BUS, MEMOIRE } from '../data/sons.js';
 import { creerVoix, demanderUnSon } from '../son/politique.js';
 
 /**
@@ -71,7 +71,23 @@ export function initialiserLeSon(doc, { reglages, graine }) {
   let contexte = null;
   let maitre = null;
   const bus = {};
+  // Les sons DÉCODÉS. ⚠⚠ C'est ici que se joue le point dur du lot : un son
+  // décodé ne pèse plus rien de ce que pèse son fichier — le navigateur le
+  // range en Float32 à 48 kHz —, donc les 263 feraient 64,7 Mo si tout y
+  // entrait, contre 890 417 octets de fichiers.
   const tampons = new Map();
+  // Les décodages EN VOL. ⚠⚠ Sans cette table, deux demandes rapprochées du
+  // même son lanceraient deux décodages : `decodeAudioData` est asynchrone, et
+  // le premier n'a pas encore rempli `tampons` quand le second regarde. C'est
+  // le piège classique, et il coûte double travail ET double mémoire crête.
+  const enVol = new Map();
+  // Le rang de dernier usage, pour l'éviction. Un COMPTEUR, pas un temps : il
+  // ne sert qu'à ordonner, et l'horloge murale est interdite ici (CLAUDE.md §11
+  // — `maintenantMs` est seule lectrice dans tout `src/`).
+  const usages = new Map();
+  let rang = 0;
+  // Les secondes décodées HORS résidentes, celles que le budget borne.
+  let secondesDecodees = 0;
   let horsService = false;
 
   /**
@@ -92,9 +108,9 @@ export function initialiserLeSon(doc, { reglages, graine }) {
         maitre = contexte.createGain();
         maitre.gain.value = 1;
         maitre.connect(contexte.destination);
-        // Les cinq bus, aux niveaux de `data/sons.js`. Trois n'ont aucun son
-        // dans ce lot ; les poser quand même évite que le lot du catalogue les
-        // improvise, chacun à sa mesure.
+        // Les cinq bus, aux niveaux de `data/sons.js`. Quatre familles n'ont
+        // pas de bus nommé par le brief et sont posées sur le plus proche par
+        // nature, en attendant l'arbitrage d'Ethan — voir `data/sons.js`.
         for (const [nom, db] of Object.entries(BUS)) {
           const noeud = contexte.createGain();
           noeud.gain.value = 10 ** (db / 20);
@@ -105,7 +121,10 @@ export function initialiserLeSon(doc, { reglages, graine }) {
         horsService = true;
         return;
       }
-      decoder();
+      // ⚠⚠ ET RIEN N'EST DÉCODÉ ICI. Le lot précédent décodait ses quatre
+      // témoins au premier geste ; à 263 ce serait 64,7 Mo et le temps qui va
+      // avec, pour des sons dont aucun ne sonnera peut-être jamais. Le
+      // décodage part de `jouer`, et de lui seul.
     }
     // Un contexte peut retomber en `suspended` — l'onglet passe à l'arrière,
     // le système reprend la sortie audio. On le relance à chaque geste, et
@@ -114,21 +133,77 @@ export function initialiserLeSon(doc, { reglages, graine }) {
   }
 
   /**
-   * Décode les quatre `data:` de la page, une fois. Chaque son qui échoue reste
-   * simplement absent de la table : les autres continuent de sonner.
+   * Relâche les sons non résidents les moins récemment employés.
+   *
+   * ⚠⚠ IL FAUT UN PLAFOND, ET IL SE COMPTE EN SECONDES DÉCODÉES, PAS EN
+   * FICHIERS. Un son dure de 44 ms à 8 s : plafonner leur NOMBRE bornerait la
+   * mémoire à un facteur cent quatre-vingts près, ce qui n'est pas une borne.
+   * `MEMOIRE.budgetSecondesDecodees` se traduit directement en octets —
+   * `secondes × 48 000 × 4` — donc le plafond se lit comme une quantité de
+   * mémoire, qui est la grandeur qu'on défend.
+   *
+   * ⚠ ÉVINCER UN SON QUI JOUE EST SANS EFFET SUR LUI. `AudioBufferSourceNode`
+   * garde sa propre référence sur le tampon ; oublier le nôtre ne coupe rien,
+   * ça libère seulement le jour où plus personne ne le tient.
+   *
+   * ⚠ ET LE DERNIER TAMPON NE S'ÉVINCE JAMAIS LUI-MÊME. Un son plus long que
+   * tout le budget viderait la table puis se relâcherait aussitôt, donc se
+   * redécoderait à chaque demande : la boucle s'arrête quand il ne reste plus
+   * qu'un candidat, ce qui garantit qu'un son décodé sert au moins une fois.
    */
-  function decoder() {
-    for (const nomDuSon of Object.keys(SONS)) {
-      const balise = doc.getElementById(idDuSon(nomDuSon));
-      const octets = balise === null ? null : octetsDuDataUri(balise.getAttribute('src'));
-      if (octets === null) continue;
-      try {
-        contexte.decodeAudioData(octets).then(
-          (tampon) => { tampons.set(nomDuSon, tampon); },
-          () => {},
-        );
-      } catch { /* un navigateur ancien lève au lieu de rejeter */ }
+  function evincer() {
+    while (secondesDecodees > MEMOIRE.budgetSecondesDecodees) {
+      let vieux = null;
+      let candidats = 0;
+      for (const nom of tampons.keys()) {
+        if (SONS[nom].residente === true) continue;
+        candidats += 1;
+        if (vieux === null || (usages.get(nom) ?? 0) < (usages.get(vieux) ?? 0)) vieux = nom;
+      }
+      if (vieux === null || candidats <= 1) return;
+      tampons.delete(vieux);
+      usages.delete(vieux);
+      secondesDecodees -= SONS[vieux].dureeMs / 1000;
     }
+  }
+
+  /**
+   * Décode un son s'il ne l'est pas déjà et qu'aucun décodage n'est en vol.
+   *
+   * ⚠⚠ À LA PREMIÈRE UTILISATION, JAMAIS AU DÉMARRAGE. Décoder les 263 à
+   * l'ouverture ajouterait 64,7 Mo et le temps qui va avec, là où le démarrage
+   * n'en prend aucun aujourd'hui. Rien ici n'est appelé par `reveiller` : le
+   * seul appelant est `jouer`.
+   *
+   * ⚠ ET UN ÉCHEC SE TAIT. Le son reste absent de la table, les autres
+   * continuent de sonner — la dégradation silencieuse du lot précédent, tenue
+   * pour chacun des 263.
+   */
+  function decoderSiBesoin(nomDuSon) {
+    if (tampons.has(nomDuSon) || enVol.has(nomDuSon)) return;
+    const balise = doc.getElementById(idDuSon(nomDuSon));
+    const octets = balise === null ? null : octetsDuDataUri(balise.getAttribute('src'));
+    if (octets === null) return;
+    let promesse;
+    try {
+      promesse = contexte.decodeAudioData(octets);
+    } catch {
+      // Un navigateur ancien lève au lieu de rejeter.
+      return;
+    }
+    enVol.set(nomDuSon, promesse);
+    promesse.then(
+      (tampon) => {
+        enVol.delete(nomDuSon);
+        tampons.set(nomDuSon, tampon);
+        usages.set(nomDuSon, rang);
+        if (SONS[nomDuSon].residente !== true) {
+          secondesDecodees += SONS[nomDuSon].dureeMs / 1000;
+          evincer();
+        }
+      },
+      () => { enVol.delete(nomDuSon); },
+    );
   }
 
   /**
@@ -141,10 +216,15 @@ export function initialiserLeSon(doc, { reglages, graine }) {
     if (horsService || contexte === null) return;
     const decision = demanderUnSon(voix, evenement, contexte.currentTime * 1000, reglages);
     if (!decision.jouer) return;
+    rang += 1;
+    usages.set(decision.son, rang);
+    decoderSiBesoin(decision.son);
     const tampon = tampons.get(decision.son);
-    // Le décodage est asynchrone : les premiers gestes d'une page fraîche
-    // peuvent tomber avant lui. La politique a déjà compté l'instance — c'est
-    // sans conséquence, elle expirera d'elle-même à la durée du son.
+    // Le décodage est asynchrone : la PREMIÈRE demande d'un son tombe toujours
+    // avant lui, et le son ne sort pas. La politique a déjà compté l'instance —
+    // c'est sans conséquence, elle expirera d'elle-même à la durée du son.
+    // ⚠ C'est le prix du décodage paresseux, et il est déclaré : le premier
+    // geste qui demande un son donné est muet, les suivants sonnent.
     if (tampon === undefined) return;
     try {
       const source = contexte.createBufferSource();
