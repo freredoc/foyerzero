@@ -172,6 +172,23 @@
     flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
     background: #1E2124; color: #8C9A72; border: 1px solid #161914;
   }
+  /* Le prix du raid, en gros, au-dessus du corps. Le nombre porte l'os des
+     valeurs du panneau ; le libellé reprend la casse et la teinte des `.nom` du
+     bandeau des ressources, parce que c'est la même grandeur qui s'y compte.
+     ⚠ 28 px EST UNE PROPOSITION, ET UN NOMBRE SE CHANGE SEUL. */
+  #monde-panneau-prix {
+    display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px;
+    padding: 6px 8px 2px;
+  }
+  #monde-panneau-prix-cout {
+    font-size: 28px; font-weight: 600; line-height: 1;
+    color: #F5F3E8; font-variant-numeric: tabular-nums;
+  }
+  #monde-panneau-prix-solde { font-size: 11px; color: #8C9A72; font-variant-numeric: tabular-nums; }
+  #monde-panneau-prix-nom {
+    flex: 0 0 100%; font-size: 8px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #68727E;
+  }
   #monde-panneau-corps { padding: 4px 8px 8px; }
   /* Le refus d'entrer dans la cible — ambre, pas rouge : rien n'est cassé, il
      manque des points d'attaque ou une armée en état de partir. */
@@ -600,10 +617,27 @@
   .ressource .debit { font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums; }
   .ressource.scorie b { color: #F5B636; }
   .ressource.electricite b { color: #8C9A72; }
+  /* ⚠ LA TEINTE EST MESURÉE, PAS CHOISIE À L'ŒIL. Sur le fond `#343A2C` du
+     bandeau, les candidates de `FICHE-STYLE.md` donnent : `#8A1E17` → 1,27 de
+     contraste (illisible), `#E43E32` → 2,82 (et il est réservé à ce qui ATTAQUE
+     le joueur), `#8C9A72` → 3,90 mais l'électricité l'a déjà, `#F5B636` → 6,50
+     mais la scorie l'a déjà. `#E0B9A8` — la poussière de la terre cuite, la
+     rampe du JOUEUR — rend 6,53, le meilleur des candidats libres, et elle
+     n'est employée nulle part ailleurs dans la feuille. */
+  .ressource.attaque b { color: #E0B9A8; }
   /* Le compteur d'emplacements, revenu le 28/08. Il se lit comme un stock
      plafonné — « 1 / 2 » — et se range donc avec les stocks. Il ne prend que sa
      place : les trois ressources gardent la leur. */
   .ressource.emplacements { flex: 0 0 auto; padding-left: 4px; border-left: 1px solid #161914; }
+  /* ⚠⚠ SUR LA CARTE, LA TUILE D'ATTAQUE EST LA SEULE QUI RESTE — Ethan, 04/09 :
+     « enlever emplacement/compteur ressources quand on est sur la carte ». Le
+     masquage du chrome, lui, est par BLOC entier : ajouter `monde` à
+     `CHROME_MASQUE_PAR` emporterait AUSSI les points d'attaque, qui sont
+     justement ce qu'on veut voir là.
+     ⚠ UNE SEULE SOURCE DÉCIDE, ET C'EST L'ÉCRAN COURANT. `session.js` écrit
+     `data-ecran` sur `#ressources` dans la même fonction qui masque déjà ;
+     `CHROME_MASQUE_PAR` reste ce qu'il est. */
+  #ressources[data-ecran="monde"] .ressource:not(.attaque) { display: none; }
   /* Un stock saturé est GELÉ, jamais amputé (arbitré le 26/08) : il faut donc
      que le joueur voie qu'il plafonne, sinon il croit à un compteur cassé.
      Après les règles par ressource, pour l'emporter sur elles. */
@@ -2002,6 +2036,23 @@
           <div class="tete">
             <b id="monde-panneau-titre">—</b>
             <button type="button" id="monde-panneau-fermer">Fermer</button>
+          </div>
+          <!-- ⚠⚠ LE PRIX D'UN RAID EST LA PREMIÈRE CHOSE QU'ON LIT — lot
+               CARTE-A, 04/09. Ethan : « ne pas afficher les points d'attaque
+               sur la flèche qui apparaît quand on clique sur une cible, mais en
+               gros dans l'onglet ». Il était peint au milieu du trait, et
+               répété en petit au milieu de sept lignes ; il est maintenant ici,
+               et NULLE PART ailleurs.
+               ⚠ LE SOLDE EST À CÔTÉ : un prix sans solde ne dit pas si on peut
+               payer. Il vient de `etat.attaque`, la même paire que la tuile du
+               bandeau.
+               ⚠ ET LE BLOC EST `hidden` HORS DE PORTÉE : le coût vaut alors
+               `null`, `#monde-panneau-refus` écrit déjà pourquoi, et un tiret en
+               corps 28 crierait un vide. -->
+          <div id="monde-panneau-prix" hidden>
+            <b id="monde-panneau-prix-cout">—</b>
+            <span id="monde-panneau-prix-solde"></span>
+            <span id="monde-panneau-prix-nom">points d'attaque</span>
           </div>
           <div id="monde-panneau-corps"></div>
       <!-- ⚠ LE REFUS D'ENTRER SE DIT ICI. `problemesDuRaid` rend une liste de

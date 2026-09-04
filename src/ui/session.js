@@ -922,6 +922,13 @@ export function initialiserSession(doc) {
   function appliquerLeChrome() {
     const masques = chromeMasque(ecranCourant, derouleEnCours);
     for (const bloc of BLOCS_DE_CHROME) $(bloc).hidden = masques.has(bloc);
+    // ⚠⚠ ET LE BANDEAU PORTE L'ÉCRAN COURANT — lot CARTE-A, 04/09. Sur la
+    // carte, Ethan ne veut voir QUE les points d'attaque : c'est un masquage
+    // PARTIEL, que `CHROME_MASQUE_PAR` ne sait pas dire — il ferait partir tout
+    // le bandeau, points d'attaque compris. La feuille cache
+    // `.ressource:not(.attaque)` sous cet attribut ; une seule source décide,
+    // et c'est celle-ci.
+    $('ressources').dataset.ecran = ecranCourant;
   }
 
   function montrerEcran(nom) {

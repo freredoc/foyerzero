@@ -48,6 +48,10 @@ import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
 } from '../render/embleme.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
+// ⚠ LE FORMATAGE D'UN NIVEAU EN DIXIÈMES VIT DANS `ui/chantier.js`, ET IL N'Y
+// EN A QU'UN. `src/ui/recherche.js` importe déjà de là pour la même raison : ce
+// sont des fonctions PURES d'un module d'écran, pas son DOM.
+import { formaterDixiemes } from './chantier.js';
 import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
@@ -398,6 +402,20 @@ export function sitesDeLaFenetre(etat, fenetre) {
       saveur: saveur(base.position.rangee, base.position.colonne, 'base'),
       indiceBase: indice,
       courante: indice === etat.baseCourante,
+      // ⚠⚠ LE NUMÉRO COMPTE À PARTIR DE UN, ET IL NE S'INVENTE PAS ICI : le
+      // bandeau de bascule affiche déjà « BASE 1 / 1 » depuis le lot BASES-1.
+      // Deux façons de numéroter la même base seraient une de trop.
+      numeroBase: indice + 1,
+      // ⚠⚠ LE NIVEAU DES BÂTIMENTS, EN DIXIÈMES ENTIERS, ET C'EST LA MÊME
+      // GRANDEUR QUE L'EMBLÈME. `palierDuSite` la retient déjà pour choisir le
+      // palier de dessin d'une base du joueur ; l'étiquette qui LÉGENDE ce
+      // dessin en prendrait une autre que le même dessin dirait deux choses.
+      //
+      // ⚠ ET SURTOUT PAS LE NIVEAU DE LA RANGÉE. `niveauDeLaRangee` donne le
+      // niveau des sites de l'OUVRAGE à cet endroit : l'écrire sous une base du
+      // joueur est la faute que `sim/carte.js` existe pour empêcher, et que
+      // trois commentaires de ce fichier nomment déjà.
+      niveauBatimentsDixiemes: niveauDesBatiments(base.disposition),
     });
   });
   return sites;
@@ -426,9 +444,18 @@ export function sitesDeLaFenetre(etat, fenetre) {
  * @returns {number} 1…9
  */
 export function palierDuSite(site, etat) {
-  const laBase = baseCourante(etat);
   if (site.niveau !== null) return palierDeNiveau(site.niveau);
-  const dixiemes = niveauDesBatiments(laBase.disposition);
+  // ⚠⚠ LE SITE PORTE SA PROPRE MOYENNE DEPUIS LE LOT CARTE-A, ET ELLE PASSE
+  // AVANT CELLE DE LA BASE COURANTE. C'est l'étiquette qui l'a exigé : elle
+  // LÉGENDE ce dessin, donc les deux doivent lire la même grandeur. Avec deux
+  // bases, l'ancienne écriture donnait à TOUTES le palier de la base courante,
+  // si bien que le dessin et sa plaque se seraient contredits dès la seconde.
+  //
+  // ⚠ LE REPLI RESTE, ET IL SERT : `palierDuSite` est appelée par des montages
+  // qui composent un site à la main, sans passer par `sitesDeLaFenetre`.
+  const dixiemes = site.niveauBatimentsDixiemes === undefined
+    ? niveauDesBatiments(baseCourante(etat).disposition)
+    : site.niveauBatimentsDixiemes;
   const niveau = Math.max(1, Math.round(dixiemes / 10));
   return palierDeNiveau(niveau);
 }
@@ -553,13 +580,16 @@ export function lignesDuSite(site, depuis, poisAcquis = [], ciblage = null) {
     lignes.push({ quoi: 'Butin si tout tombe', valeur: `${ciblage.butin.quartz} quartz` });
     lignes.push({ quoi: 'dont scorie', valeur: `${ciblage.butin.scorie} scorie` });
     lignes.push({ quoi: 'Force de la défense', valeur: `${ciblage.force} points` });
-    // ⚠ `null` VEUT DIRE « HORS DE PORTÉE », et la ligne le dit plutôt que
-    // d'écrire « null points d'attaque ».
-    lignes.push({
-      quoi: 'Coût du raid',
-      valeur: ciblage.cout === null
-        ? 'hors de portée' : `${ciblage.cout} points d'attaque`,
-    });
+    // ⚠⚠ LE COÛT N'EST PLUS UNE LIGNE DE CETTE LISTE — lot CARTE-A, 04/09. Il y
+    // était, en petit, au milieu de sept autres ; Ethan le veut « en gros dans
+    // l'onglet ». Il est donc peint par un BLOC propre, au-dessus du corps, et
+    // il ne peut pas être ici en même temps : deux afficheurs du même nombre
+    // dans le même panneau finiraient par ne plus dire la même chose.
+    //
+    // ⚠ ET IL N'Y A TOUJOURS QU'UN SEUL CALCUL. Le bloc relit `ciblageOuvert`,
+    // il ne rappelle pas `coutDUnRaid` — c'est ce que `ciblageDuSite` interdit
+    // depuis le lot RETOURS-DU-31. Ce lot RETIRE un afficheur, il n'en ajoute
+    // pas un second.
   }
   return lignes;
 }
@@ -744,7 +774,7 @@ export function haloAllumeAuTick(tick) {
 }
 
 /**
- * Ce qu'une étiquette de carte écrit sous un site : son nom, puis son niveau.
+ * Le nom affiché d'un site — l'étiquette de la carte ET le titre du panneau.
  *
  * ⚠⚠ ETHAN, 03/09 : « rajouter un petit nom sur fond semi opaque + niveau en
  * dessous de chaque entité de la carte ». C'est un RETOUR SUR L'ARBITRAGE DU
@@ -760,20 +790,59 @@ export function haloAllumeAuTick(tick) {
  * lecteurs vivants —, donc l'étiquette et le panneau ne peuvent pas se
  * contredire. En écrire une seconde table donnerait deux noms au même endroit.
  *
- * ⚠⚠ ET LA BASE DU JOUEUR N'A PAS DE LIGNE DE NIVEAU, CE QUI N'EST PAS UN
- * OUBLI. `sitesDeLaFenetre` lui pose `niveau: null` parce qu'elle en a TROIS —
- * bâtiments, défense, armée — et qu'aucun ne vient de sa rangée : écrire ici le
- * niveau de la rangée 295 serait très exactement la faute que `sim/carte.js`
- * existe pour empêcher, et qu'un test de ce fichier refuse déjà dans le
- * panneau. Une seule ligne, donc, et c'est la règle qui la donne.
+ * ⚠⚠ ET C'EST POURQUOI CETTE FONCTION EXISTE DEPUIS LE LOT CARTE-A. Le numéro
+ * de base est le PREMIER nom que la table ne porte pas : le calculer dans
+ * l'étiquette et dans le panneau ferait deux endroits pour un seul libellé, et
+ * le joueur lirait deux noms pour la même base sur le même écran.
  *
- * @param {{type: string, niveau: number|null}} site
+ * ⚠ `EMBLEMES_CARTE.baseJoueur.nom` RESTE « Votre base », ET C'EST LE REPLI. Il
+ * est aussi la source de la ligne « Type » du panneau et de son test ; y écrire
+ * « Base » tout court ferait mentir les deux.
+ *
+ * @param {{type: string, numeroBase?: number}} site
+ * @returns {string}
+ */
+export function nomDuSite(site) {
+  const embleme = EMBLEMES_CARTE[site.type];
+  if (embleme === undefined) throw new RangeError(`carte : site sans emblème « ${site.type} »`);
+  // ⚠ LE NUMÉRO N'EST POSÉ QUE SUR LES BASES DU JOUEUR, par `sitesDeLaFenetre`.
+  // Un site qui n'en porte pas retombe sur le nom de la table — c'est le cas de
+  // tout ce que l'Ouvrage tient, et de tout appelant qui monte un site à la
+  // main. Le repli n'est donc pas une commodité : c'est le cas ORDINAIRE.
+  return site.numeroBase === undefined ? embleme.nom : `Base n°${site.numeroBase}`;
+}
+
+/**
+ * Les lignes de l'étiquette posée sous une case de la carte.
+ *
+ * ⚠⚠ ET LA BASE DU JOUEUR PORTE SON NUMÉRO ET SON NIVEAU DEPUIS LE LOT
+ * CARTE-A — Ethan, 04/09 : « au lieu d'afficher "votre base" afficher Base n°x
+ * niv x ». Le paragraphe ci-dessus disait qu'elle n'avait PAS de ligne de
+ * niveau et que ce n'était pas un oubli ; c'est encore vrai de son niveau de
+ * CARTE, qui n'existe pas, et c'est devenu faux du niveau de ses BÂTIMENTS, qui
+ * est celui que l'emblème dessine déjà.
+ *
+ * ⚠ `niv` EN MINUSCULES, ET `Niveau` CAPITALISÉ POUR L'OUVRAGE : ce ne sont pas
+ * la même grandeur, et deux mots identiques les feraient lire comme telles. Un
+ * site de l'Ouvrage porte un niveau ENTIER de carte ; une base du joueur porte
+ * une MOYENNE à une décimale.
+ *
+ * @param {{type: string, niveau: number|null, numeroBase?: number,
+ *          niveauBatimentsDixiemes?: number}} site
  * @returns {Array<string>} une ou deux lignes, jamais vides
  */
 export function lignesDeLEtiquette(site) {
-  const embleme = EMBLEMES_CARTE[site.type];
-  if (embleme === undefined) throw new RangeError(`carte : site sans emblème « ${site.type} »`);
-  const lignes = [embleme.nom];
+  const lignes = [nomDuSite(site)];
+  if (site.numeroBase !== undefined) {
+    // ⚠ LA DÉCIMALE SE MONTRE TOUJOURS, ET LE FORMATAGE NE S'ÉCRIT PAS ICI :
+    // `formaterDixiemes` de `ui/chantier.js` porte la règle depuis le 27/08 —
+    // « 6,0 », jamais « 6 ». En écrire un second donnerait deux façons d'écrire
+    // le même nombre, et la première divergence se lirait comme un bogue.
+    if (site.niveauBatimentsDixiemes !== undefined && site.niveauBatimentsDixiemes !== null) {
+      lignes.push(`niv ${formaterDixiemes(site.niveauBatimentsDixiemes)}`);
+    }
+    return lignes;
+  }
   if (site.niveau !== null && site.niveau !== undefined) lignes.push(`Niveau ${site.niveau}`);
   return lignes;
 }
@@ -912,6 +981,9 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   ctx.imageSmoothingEnabled = false;
   const panneau = $('monde-panneau');
   const panneauTitre = $('monde-panneau-titre');
+  const panneauPrix = $('monde-panneau-prix');
+  const panneauPrixCout = $('monde-panneau-prix-cout');
+  const panneauPrixSolde = $('monde-panneau-prix-solde');
   const panneauCorps = $('monde-panneau-corps');
   const panneauRefus = $('monde-panneau-refus');
   const panneauDeplacer = $('monde-panneau-deplacer');
@@ -1461,9 +1533,16 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * ouvert.
    */
   function dessinerFleche(ox, oy, pas) {
-    // ⚠ PAS DE FLÈCHE SANS PRIX. Hors de portée, `cout` vaut `null` : une flèche
-    // qui ne porterait aucun nombre n'aurait plus rien à dire, et le panneau
-    // écrit déjà « hors de portée ».
+    // ⚠⚠ LE TEST RESTE, SA RAISON A CHANGÉ — lot CARTE-A, 04/09. Il disait « pas
+    // de flèche sans prix » : la flèche PORTAIT le nombre, et sans lui elle
+    // n'aurait plus rien eu à dire. Elle ne le porte plus — Ethan : « ne pas
+    // afficher les points d'attaque sur la flèche […] mais en gros dans
+    // l'onglet ». Ce que `cout === null` dit maintenant, c'est HORS DE PORTÉE :
+    // une flèche vers une cible qu'on ne peut pas atteindre promettrait un raid
+    // que `problemesDuRaid` refusera. Le panneau, lui, écrit pourquoi.
+    //
+    // ⚠ ET LE COMMENTAIRE EST RÉÉCRIT PLUTÔT QUE LAISSÉ : un motif mort sous une
+    // conclusion vivante est le mensonge que `CLAUDE.md` §6 raconte trois fois.
     if (siteOuvert === null || ciblageOuvert === null || ciblageOuvert.cout === null) return;
     const trait = traitDeLaFleche(baseCourante(etatCourant).position, siteOuvert, ox, oy, pas);
     if (trait === null) return;
@@ -1490,20 +1569,6 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     );
     ctx.closePath();
     ctx.fill();
-
-    // Le coût, au milieu du trait.
-    const mx = (trait.x1 + trait.x2) / 2;
-    const my = (trait.y1 + trait.y2) / 2;
-    const taille = Math.max(9, Math.round(pas * 0.32));
-    ctx.font = `${taille}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const texte = `${ciblageOuvert.cout}`;
-    const large = ctx.measureText(texte).width + taille * 0.6;
-    ctx.fillStyle = '#161914';
-    ctx.fillRect(mx - large / 2, my - taille * 0.7, large, taille * 1.4);
-    ctx.fillStyle = TEINTES_TERRITOIRE[JOUEUR];
-    ctx.fillText(texte, mx, my);
   }
 
   /**
@@ -1869,7 +1934,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       apresBascule();
     }
     siteOuvert = { rangee: site.rangee, colonne: site.colonne };
-    panneauTitre.textContent = EMBLEMES_CARTE[site.type].nom;
+    // ⚠ LE MÊME LIBELLÉ QUE L'ÉTIQUETTE, ET PAR LA MÊME FONCTION. Le joueur ne
+    // doit pas lire deux noms pour la même base à deux endroits de l'écran —
+    // la plaque sous la case dit « Base n°1 », le titre aussi.
+    panneauTitre.textContent = nomDuSite(site);
     panneauCorps.textContent = '';
     // ⚠ LES TROIS NOMBRES DE CIBLAGE VIENNENT DES BRIQUES, PAS DE L'ÉCRAN.
     const ciblage = ciblageDuSite(etatCourant, site);
@@ -1877,6 +1945,19 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // valeurs qui peuvent diverger, et le joueur verrait un prix sur la flèche
     // et un autre dans le panneau.
     ciblageOuvert = ciblage;
+    // ⚠⚠ LE BLOC RELIT `ciblage`, IL NE RAPPELLE PAS LE BARÈME. C'est ce que le
+    // commentaire de `ciblageDuSite` interdit depuis le lot RETOURS-DU-31 : un
+    // panneau qui annoncerait 31 points au-dessus d'une flèche qui en annonce 40
+    // serait pire que pas de flèche du tout. Un seul calcul, un seul afficheur.
+    //
+    // ⚠ ET LE SOLDE VIENT DE `etat.attaque`, la paire que la tuile du bandeau
+    // montre déjà. Le recomposer donnerait deux comptes du même stock.
+    const prix = ciblage === null ? null : ciblage.cout;
+    panneauPrix.hidden = prix === null;
+    if (prix !== null) {
+      panneauPrixCout.textContent = String(prix);
+      panneauPrixSolde.textContent = `${etatCourant.attaque.points} / ${etatCourant.attaque.plafond}`;
+    }
     panneauRefus.hidden = ciblage === null || ciblage.problemes.length === 0;
     panneauRefus.textContent = ciblage === null ? ''
       : ciblage.problemes.map((p) => p.message).join(' ; ');
@@ -1905,6 +1986,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   function fermerPanneau() {
     panneau.hidden = true;
     panneauDeplacer.hidden = true;
+    // ⚠ LE BLOC DE PRIX SE FERME AVEC LE PANNEAU. Le laisser visible sous un
+    // panneau caché ne se verrait pas aujourd'hui — il est DANS le panneau —
+    // mais le premier lot qui le sortirait de là hériterait d'un prix orphelin.
+    panneauPrix.hidden = true;
     siteOuvert = null;
     ciblageOuvert = null;
     dessiner();

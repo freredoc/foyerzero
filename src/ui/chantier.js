@@ -2588,6 +2588,40 @@ export function initialiserEcranChantier(doc, {
     champsRessource.set(cleRessource, { stock, capacite, debit });
   }
 
+  // --- les points d'attaque ---------------------------------------------------
+  //
+  // ⚠⚠ ETHAN, 04/09 : « afficher les points d'attaque entre l'électricité et
+  // emplacement ». La place est donnée par l'ORDRE DU DOM, et par lui seul :
+  // cette tuile est construite ici, entre la boucle des trois ressources et le
+  // bloc des emplacements. La poser à la fin pour la ramener par `order`
+  // ferait diverger l'ordre lu et l'ordre vu — donc la navigation au clavier et
+  // la lecture d'écran.
+  //
+  // ⚠ ELLE RÉEMPLOIE LES CLASSES DES TROIS AUTRES — `.ressource`, `.ligne`, `b`,
+  // `.capacite`, `.nom` — et n'ajoute qu'une teinte. Un stock plafonné se lit
+  // exactement comme les autres : « 31 / 118 ».
+  //
+  // ⚠⚠ ET IL N'Y A RIEN À PEINDRE EN SATURÉ. `b.sature` dit « le stock est gelé
+  // au-dessus de sa capacité, il ne redescendra pas tout seul » — un DÉFAUT que
+  // le joueur doit voir. Des points d'attaque au plafond, c'est le PLEIN : le
+  // marquer en rouge dirait le contraire de ce qui se passe.
+  const blocAttaque = doc.createElement('div');
+  blocAttaque.className = 'ressource attaque';
+  const attaquePoints = doc.createElement('b');
+  const attaquePlafond = doc.createElement('span');
+  attaquePlafond.className = 'capacite';
+  const attaqueNom = doc.createElement('span');
+  attaqueNom.className = 'nom';
+  attaqueNom.textContent = 'Attaque';
+  const hautAttaque = doc.createElement('div');
+  hautAttaque.className = 'ligne';
+  hautAttaque.append(attaquePoints, attaquePlafond);
+  const basAttaque = doc.createElement('div');
+  basAttaque.className = 'ligne';
+  basAttaque.append(attaqueNom);
+  blocAttaque.append(hautAttaque, basAttaque);
+  bandeauRessources.appendChild(blocAttaque);
+
   // --- le compteur, qui suit le contexte -------------------------------------
   //
   // ⚠ IL AVAIT ÉTÉ RETIRÉ AVEC LA BARRE DE GAUCHE (27/08), au motif que la
@@ -4066,6 +4100,18 @@ export function initialiserEcranChantier(doc, {
   function rafraichir(etat) {
     etatCourant = etat;
     const resume = resumeDeLaBase(etat);
+
+    // ⚠ LES POINTS D'ATTAQUE SE REPEIGNENT ICI, avec les trois ressources et
+    // dans la même passe. Un second minuteur pour un seul nombre ferait deux
+    // horloges dans un écran qui n'en a déjà qu'une — `session.js` appelle
+    // cette fonction dix fois par seconde.
+    //
+    // ⚠ ILS SE LISENT DIRECTEMENT DANS L'ÉTAT, ET C'EST VOULU : `etat.attaque`
+    // porte `points` et `plafond`, tenus par le tick. Les recalculer donnerait
+    // un second compte du même stock — et le plafond est À CLIQUET, donc un
+    // recalcul le ferait redescendre.
+    attaquePoints.textContent = formaterEntier(etat.attaque.points);
+    attaquePlafond.textContent = `/ ${formaterEntier(etat.attaque.plafond)}`;
 
     for (const r of resume.ressources) {
       const champs = champsRessource.get(r.cle);

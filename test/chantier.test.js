@@ -3763,3 +3763,66 @@ test('défense — la ligne de détail suit le TERRAIN, jamais la disposition', 
   assert.ok(!/=== 'demolir'/.test(ecran), 'l\'écran reconnaît « demolir » par son nom');
   assert.match(ecran, /retireLaPiece === true/, 'la sélection ne lit plus la table');
 });
+
+// ---------------------------------------------------------------------------
+// Les points d'attaque au bandeau — lot CARTE-A, 04/09
+// ---------------------------------------------------------------------------
+
+test('CARTE-A T7 — la tuile d\'attaque ne passe pas par le compteur de contexte', () => {
+  // ⚠⚠ ETHAN, 04/09 : « afficher les points d'attaque entre l'électricité et
+  // emplacement ». C'est une QUATRIÈME tuile, pas un cinquième contexte du
+  // compteur : le compteur change de LIBELLÉ avec l'écran, la tuile d'attaque
+  // dit toujours la même grandeur. Les confondre aurait fait disparaître les
+  // points d'attaque dès qu'on descend sur la bande Défense.
+  const etat = creerEtat(11);
+  assert.deepEqual(Object.keys(CONTEXTES).slice().sort(), ['batiments', 'defense', 'offense'],
+    'un contexte est apparu : la tuile d\'attaque est passée par le compteur');
+  for (const contexte of ['batiments', 'defense', 'offense']) {
+    const vue = compteurDeContexte(etat, contexte);
+    assert.ok(!/[Aa]ttaque/.test(vue.libelle), `${contexte} annonce l'attaque`);
+  }
+  assert.throws(() => compteurDeContexte(etat, 'attaque'), /contexte/);
+
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+
+  // ⚠ ELLE LIT L'ÉTAT DIRECTEMENT, et c'est voulu : `etat.attaque` porte
+  // `points` et `plafond`, tenus par le tick. Le plafond est À CLIQUET — le
+  // recalculer le ferait redescendre.
+  assert.match(ecran, /attaquePoints\.textContent = formaterEntier\(etat\.attaque\.points\)/,
+    'la tuile ne lit plus les points d\'attaque dans l\'état');
+  assert.match(ecran, /attaquePlafond\.textContent = `\/ \$\{formaterEntier\(etat\.attaque\.plafond\)\}`/,
+    'la tuile ne lit plus le plafond dans l\'état');
+
+  // ⚠⚠ ET SA PLACE EST L'ORDRE DU DOM, PAS UN `order` CSS. La tuile est
+  // ajoutée AVANT le bloc des emplacements et APRÈS la boucle des trois
+  // ressources : un `order` ferait diverger l'ordre lu et l'ordre vu, donc la
+  // navigation au clavier et la lecture d'écran.
+  const iBoucle = ecran.indexOf('bandeauRessources.appendChild(bloc);');
+  const iAttaque = ecran.indexOf('bandeauRessources.appendChild(blocAttaque);');
+  const iEmplacements = ecran.indexOf('bandeauRessources.appendChild(blocEmplacements);');
+  assert.ok(iBoucle > 0 && iAttaque > 0 && iEmplacements > 0, 'le bandeau a changé de forme');
+  assert.ok(iBoucle < iAttaque && iAttaque < iEmplacements,
+    'la tuile d\'attaque n\'est plus entre l\'électricité et les emplacements');
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(feuille, /#ressources[^{]*\{[^}]*order:/, 'le bandeau ordonne par CSS');
+
+  // ⚠⚠ ET RIEN N'Y EST PEINT « SATURÉ ». `b.sature` dit « le stock est gelé
+  // au-dessus de sa capacité » — un DÉFAUT que le joueur doit voir. Des points
+  // d'attaque au plafond, c'est le PLEIN : le marquer en rouge dirait le
+  // contraire de ce qui se passe.
+  const bloc = ecran.slice(iBoucle, iEmplacements);
+  assert.doesNotMatch(bloc, /attaque[A-Za-z]*\.classList/, 'la tuile d\'attaque porte une classe d\'état');
+  assert.doesNotMatch(bloc, /sature/, 'la tuile d\'attaque se peint saturée');
+
+  // ⚠ SUR LA CARTE, ELLE EST LA SEULE QUI RESTE, et c'est la SESSION qui le
+  // dit — une seule source, l'écran courant. `CHROME_MASQUE_PAR` ne bouge pas :
+  // y ajouter `monde` emporterait aussi les points d'attaque.
+  const session = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8'));
+  assert.match(session, /\$\('ressources'\)\.dataset\.ecran = ecranCourant;/,
+    'la session n\'écrit plus l\'écran courant sur le bandeau');
+  assert.doesNotMatch(session, /CHROME_MASQUE_PAR = \{[^}]*monde/,
+    'l\'écran Monde masque tout le bandeau, points d\'attaque compris');
+  assert.match(feuille, /#ressources\[data-ecran="monde"\] \.ressource:not\(\.attaque\) \{ display: none; \}/,
+    'la feuille ne réduit plus le bandeau sur la carte');
+});
