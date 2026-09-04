@@ -5,10 +5,26 @@
 // déclare dans `ECRANS` et dans `ONGLET_DE_L_ECRAN` de `ui/session.js`, et
 // nulle part ailleurs — c'est ce que dit le commentaire de cette table.
 //
-// ⚠ LE BANDEAU DES RESSOURCES ET CELUI DES BASES SONT MASQUÉS ICI, la rangée
-// d'onglets RESTE. Ethan, 01/09 : « finalement on garde la barre du haut… les
-// onglets seuls ». Le masquage se fait dans `montrerEcran`, chez la session, qui
-// est la seule à connaître le chrome commun.
+// ⚠⚠ L'ÉCRAN A DEUX ÉTATS DE CHROME, ET C'EST LE LOT ASSAUT QUI LES SÉPARE.
+// EN PRÉPARATION, le bandeau des ressources et celui des bases sont masqués et
+// la rangée d'onglets RESTE — Ethan, 01/09 : « finalement on garde la barre du
+// haut… les onglets seuls ». PENDANT LE DÉROULÉ, les onglets partent aussi, et
+// `#raid-bas` avec eux — Ethan, 04/09 : « quand on lance un raid, toutes les
+// barres disparaissent. On voit juste la simulation en cours. » La seconde
+// phrase REVIENT sur la première, et elle ne la remplace pas : la préparation a
+// besoin de ses onglets, c'est là qu'on répare, qu'on active, qu'on repart en
+// Offense chercher une pièce.
+//
+// ⚠ LE CHROME COMMUN RESTE ÉCRIT PAR LA SESSION, ET PAR ELLE SEULE. Le déroulé
+// n'est pas un écran : cet écran-ci le DEMANDE par le crochet `pendantLeDeroule`
+// au lieu de toucher `#tete-onglets`, qui ne lui appartient pas. `#raid-bas`,
+// lui, est à lui — il le masque directement.
+//
+// ⚠⚠ ET LE RETOUR EST GARANTI SUR TOUS LES CHEMINS DE FIN, ce qui est le défaut
+// le plus probable du lot : un chrome masqué qui ne revient pas enferme le
+// joueur dans un écran sans onglets. `quitterLeDeroule` est appelée par la fin
+// normale, par `fermerPanneaux` et par `masquer` — trois portes, une fonction,
+// idempotente.
 //
 // ⚠⚠ L'ÉTAGE PUR PORTE TOUT CE QUI SE MESURE, et il porte surtout
 // `lignesDuResultat` : les DEUX panneaux de fin — le petit du simulateur et le
@@ -21,7 +37,7 @@
 // d'`executerRaid`, donc du simulateur aussi — c'est la raison d'être de RAID-0.
 // Cet écran FORMATE, il ne mesure pas.
 
-import { EMPLACEMENTS_ASSAUT, BATIMENTS } from '../data/sites.js';
+import { EMPLACEMENTS_ASSAUT, BATIMENTS, ECRAN_RAID } from '../data/sites.js';
 import { UNITES } from '../data/combat.js';
 import { TICK_MS } from '../sim/clock.js';
 import {
@@ -35,6 +51,7 @@ import {
   pvMaxDeLUnite,
 } from '../sim/raid.js';
 import { siteDeLaCase } from '../sim/site-de-la-case.js';
+import { coutDUnRaid } from '../sim/points-attaque.js';
 import { creerCombat, tick as tickCombat } from '../sim/combat.js';
 import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
@@ -181,6 +198,23 @@ export function vaguesDeLArmee(etat) {
 /**
  * Tout ce que l'écran de raid affiche, calculé depuis l'état et la cible.
  *
+ * ⚠⚠ ET LE COÛT EN FAIT PARTIE DEPUIS LE LOT ASSAUT, PARCE QUE LE BOUTON LE
+ * PORTE. « Lancer l'attaque » ne disait pas le prix ; le joueur venait de la
+ * carte, où il l'avait lu, et devait s'en souvenir. Le bouton dit maintenant ce
+ * qu'il va dépenser.
+ *
+ * ⚠ ET C'EST LE SEUL ENDROIT DE CET ÉCRAN QUI APPELLE `coutDUnRaid`. L'étage DOM
+ * LIT cette valeur ; la rappeler pour le libellé donnerait deux nombres qui
+ * peuvent diverger, et le joueur verrait un prix sur le bouton et un autre dans
+ * le panneau de la carte. C'est mot pour mot le motif de `ciblageOuvert` dans
+ * `ui/monde.js`, où la flèche RELIT le ciblage au lieu de le recalculer.
+ *
+ * ⚠⚠ LE COÛT VAUT `null` HORS DE PORTÉE, JAMAIS ZÉRO, et l'ordre des deux
+ * lignes n'est pas un détail de style : `coutDUnRaid` LÈVE au-delà du rayon
+ * d'attaque. Les problèmes se demandent donc AVANT le coût — c'est le défaut
+ * qu'`ciblageDuSite` a payé au lot DÉPLACEMENT, où un panneau ne s'ouvrait plus
+ * sur aucun site lointain de toute la carte.
+ *
  * @param {object} etat
  * @param {{rangee: number, colonne: number}} cible
  * @returns {object}
@@ -189,13 +223,31 @@ export function vueDuRaid(etat, cible) {
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
   const problemes = site === null ? [{ code: 'sans-cible', message: 'Plus rien à attaquer ici.' }]
     : problemesDuRaid(etat, baseCourante(etat), cible);
+  const horsPortee = site === null || problemes.some((p) => p.code === 'hors-portee');
   return {
     site,
     problemes,
     peutAttaquer: problemes.length === 0,
+    cout: horsPortee ? null : coutDUnRaid(etat, baseCourante(etat), cible),
     vagues: vaguesDeLArmee(etat),
     engagees: composerLesVagues(etat).indices.length,
   };
+}
+
+/**
+ * Ce que le gros bouton d'attaque écrit, en deux lignes.
+ *
+ * ⚠ LE MOT NE CHANGE PAS, LE PRIX SI. « ATTAQUER » est le geste ; la seconde
+ * ligne dit ce qu'il coûte, et elle se tait quand il n'y a pas de prix — hors
+ * de portée, ou plus rien à attaquer. « 0 point » se lirait « gratuit », qui est
+ * la convention que tout le dépôt refuse depuis `niveauDeCommandement`.
+ *
+ * @param {number|null} cout
+ * @returns {{mot: string, prix: string}}
+ */
+export function libelleDAttaque(cout) {
+  if (cout === null || cout === undefined) return { mot: 'ATTAQUER', prix: '' };
+  return { mot: 'ATTAQUER', prix: cout === 1 ? '1 point' : `${cout} points` };
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +305,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // attendent un journal de tick qui n'existe pas, et ce journal est un chantier
   // de simulation.
   const sonDeGeste = crochets.sonDeGeste ?? (() => {});
+  // ⚠⚠ LE CHROME COMMUN N'EST PAS À CET ÉCRAN, ET LE DÉROULÉ N'EST PAS UN
+  // ÉCRAN. `#tete-onglets`, `#ressources` et `#navigation` sont frères de
+  // `#ecrans` : les masquer d'ici demanderait à l'écran de raid de connaître le
+  // balisage de la page, ce que la règle de `montrerEcran` refuse depuis le lot
+  // MISE-EN-PAGE. On DEMANDE, la session écrit — même découpage que `versEcran`.
+  const pendantLeDeroule = crochets.pendantLeDeroule ?? (() => {});
   /**
    * Ce que le DÉROULÉ a fait entendre depuis le dernier relevé de la session.
    *
@@ -293,6 +351,10 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let enPause = false;
   let projection = null;
   let simulation = false;
+  /** Vrai tant qu'un combat se déroule à l'écran — la préparation est l'autre état. */
+  let deroule = false;
+  /** La minuterie qui rend le bouton d'attaque vif — voir `armerLAttaque`. */
+  let minuterieArmement = null;
   /** Combien de fois une image a été calculée, et le temps total — mesure M2. */
   const mesure = { images: 0, totalMs: 0 };
 
@@ -426,8 +488,76 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     demarrerBoucle();
   }
 
+  // --- les deux états de l'écran --------------------------------------------
+  //
+  // ⚠⚠ PRÉPARATION ET DÉROULÉ, ET LA FIN EST LA PRÉPARATION. Ethan, 04/09 :
+  // « quand on lance un raid, toutes les barres disparaissent. On voit juste la
+  // simulation en cours. » Ce qui part : les onglets et les deux bandeaux, que
+  // la session écrit, et `#raid-bas`, que cet écran-ci possède. Ce qui RESTE :
+  // les vitesses, qui sont le contrôle du déroulé lui-même.
+  //
+  // ⚠ LES DEUX SONT IDEMPOTENTES, et ce n'est pas de la coquetterie :
+  // `quitterLeDeroule` est appelée par trois portes — la fin du combat,
+  // `fermerPanneaux` et `masquer` — dont deux passent aussi au câblage et à
+  // chaque ouverture. Sans le garde-fou, la session recevrait un « le déroulé
+  // est fini » avant qu'aucun n'ait commencé.
+
+  function entrerDansLeDeroule() {
+    deroule = true;
+    const bas = $('raid-bas');
+    if (bas !== null) bas.hidden = true;
+    pendantLeDeroule(true);
+  }
+
+  function quitterLeDeroule() {
+    if (!deroule) return;
+    deroule = false;
+    const bas = $('raid-bas');
+    if (bas !== null) bas.hidden = false;
+    // Les vitesses sont un contrôle du déroulé : elles s'en vont avec lui.
+    const vitesses = $('raid-vitesses');
+    if (vitesses !== null) vitesses.hidden = true;
+    pendantLeDeroule(false);
+  }
+
+  /**
+   * Le gros bouton d'attaque : son prix, et le court délai qui le rend vif.
+   *
+   * ⚠⚠ IL NAÎT INERTE À CHAQUE ENTRÉE SUR L'ÉCRAN. Voir `ECRAN_RAID` dans
+   * `src/data/sites.js` pour le motif entier : le bouton est gros et il est
+   * posé à l'endroit de la carte qu'on vient de toucher deux fois.
+   *
+   * ⚠ INERTE, ET QUI SE VOIT. Un bouton qui ne répond pas sans le dire est un
+   * bouton cassé — l'attribut `disabled` porte l'aspect que le dépôt emploie
+   * déjà pour `#raid-fin .boutons button[disabled]`, et il n'en faut pas une
+   * seconde.
+   *
+   * @param {number|null} cout
+   */
+  function armerLAttaque(cout) {
+    const bouton = $('raid-attaquer');
+    if (bouton === null) return;
+    const { mot, prix } = libelleDAttaque(cout);
+    const grand = bouton.querySelector('b');
+    const petit = bouton.querySelector('small');
+    if (grand !== null) grand.textContent = mot;
+    if (petit !== null) { petit.textContent = prix; petit.hidden = prix === ''; }
+    bouton.disabled = true;
+    const fenetre = doc.defaultView;
+    if (fenetre === null || typeof fenetre.setTimeout !== 'function') {
+      bouton.disabled = false;
+      return;
+    }
+    if (minuterieArmement !== null) fenetre.clearTimeout(minuterieArmement);
+    minuterieArmement = fenetre.setTimeout(() => {
+      minuterieArmement = null;
+      bouton.disabled = false;
+    }, ECRAN_RAID.delaiArmementMs);
+  }
+
   function finDuDeroule() {
     arreterBoucle();
+    quitterLeDeroule();
     if (rapportCourant !== null) montrerResultat(rapportCourant, simulation);
   }
 
@@ -650,6 +780,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   function fermerPanneaux() {
     arreterBoucle();
+    // ⚠ ET LE CHROME REVIENT. C'est la porte d'ABANDON : « Carte », « Offense »,
+    // « Ré-attaquer » et les deux boutons du rapport passent par ici, et
+    // l'ouverture d'une cible aussi. Un chrome masqué qui ne revient pas laisse
+    // le joueur enfermé dans un écran sans onglets.
+    quitterLeDeroule();
     for (const id of ['raid-sim', 'raid-fin', 'raid-bandeau', 'raid-vitesses']) {
       const bloc = $(id);
       if (bloc !== null) bloc.hidden = true;
@@ -686,6 +821,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // trente, donc il n'y a pas de durée à gérer.
     $('raid-vitesses').hidden = !simule;
     vitesse = 1;
+    // ⚠ AVANT `rejouer`, ET C'EST UNE QUESTION DE MESURE : masquer `#raid-bas`
+    // agrandit le canevas, et `rejouer` appelle `dimensionner`. Dans l'autre
+    // ordre, la première image serait projetée sur l'ancienne taille et le
+    // `ResizeObserver` la referait aussitôt.
+    entrerDansLeDeroule();
     rejouer(montage, vagues);
   }
 
@@ -737,6 +877,16 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       desarmer();
       peindreVagues();
       const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
+      // ⚠⚠ LE PRIX SE PREND DANS `vueDuRaid`, ET NULLE PART AILLEURS. C'est
+      // elle qui appelle `coutDUnRaid`, une fois ; le libellé LIT ce qu'elle
+      // rend. Rappeler le barème ici donnerait deux nombres qui peuvent
+      // diverger — le motif de `ciblageOuvert` dans `ui/monde.js`.
+      //
+      // ⚠ ET LE PRIX NE BOUGE PAS TANT QU'ON RESTE SUR LA CIBLE : il est
+      // fonction de la distance et du niveau du site, que ni une réparation ni
+      // une activation ne changent. Il se peint donc à l'ouverture, comme le
+      // titre, et pas à chaque image.
+      armerLAttaque(vueDuRaid(etat, cibleCourante).cout);
       const titre = $('raid-titre');
       if (titre !== null && site !== null) {
         titre.textContent = `${site.type} · niveau ${site.niveau}`
@@ -766,7 +916,10 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       }
     },
     peindre(etat) { etatCourant = etat; peindreVagues(); },
-    masquer() { arreterBoucle(); },
+    // ⚠ QUITTER L'ÉCRAN REND LE CHROME. Sans cette ligne, changer d'onglet
+    // pendant un déroulé laisserait la page sans onglets — donc sans moyen d'en
+    // revenir. Troisième porte, la même fonction idempotente.
+    masquer() { arreterBoucle(); quitterLeDeroule(); },
     /**
      * Les unités attaquantes et leur état de mouvement — pour le son.
      *

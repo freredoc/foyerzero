@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.88.0 · build 90.
+Dernière révision : **04/09/2026**, version 0.89.0 · build 91.
 
 ---
 
@@ -42,7 +42,115 @@ Dernière révision : **04/09/2026**, version 0.88.0 · build 90.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot ZOOM-CONTINU), à confronter :**
+**Référence au 04/09/2026 (après le lot ASSAUT), à confronter :**
+`npm test` → **1037 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 783 659 octets**, 0 référence externe.
+⚠⚠ **LE DOUBLE-TOUCHER NE LANÇAIT PAS LE RAID, ET IL FALLAIT LE DIRE AVANT TOUT
+LE RESTE.** Ethan, 04/09 : « le double clic lance le raid : non, surtout pas ».
+`relacher` appelait `entrerDansLaCible`, qui ouvre l'écran ; le combat, lui,
+partait de `brancher('raid-attaquer', …)`. **Ce qu'il a vu est réel autrement :
+le bouton qui déclenche était NOYÉ** — six boutons de même taille, et rien ne
+distinguait celui qui dépense des points d'attaque de celui qui revient à la
+carte. Coût **+3 343 octets**, mesuré poste par poste contre un livrable rebâti
+depuis `main` : **JavaScript +1 383 · feuille +1 861 · balisage +99 · audio +0 ·
+images +0**. **289 `data:` avant, 289 après.** Borne T10 **inchangée à
+7 000 000**, marge **216 341 octets, 3,09 %**.
+⚠⚠ **LE CLIC FANTÔME EXISTE, ET IL A ÉTÉ REPRODUIT AVANT D'ÊTRE GARDÉ.** Ethan
+n'y croyait qu'à moitié — « si ça se trouve je double-clique et le bouton
+attaquer apparaissait pile poil sous mon doigt […] parce que je viens de tester
+et ça n'arrive pas ». **Mesuré dans Chromium sur un livrable où le délai vaut
+zéro** : la carte défilée pour que la cible tombe à l'endroit EXACT du bouton,
+trois contacts tactiles au même point, `elementFromPoint` rend `raid-attaquer`,
+et **le raid part aux quatre intervalles essayés — 140, 141, 244 et 600 ms**.
+⚠⚠ **ET LE MÉCANISME EST LE TROISIÈME CONTACT, PAS LE CLIC DE COMPATIBILITÉ.**
+Le brief donnait trois candidats ; la contre-épreuve les départage. **Avec DEUX
+contacts seulement, le raid ne part JAMAIS** — mesuré à 60, 120 et 250 ms sur le
+même livrable sans garde. Le `click` que Chromium émet après un `touchend` ne
+tombe donc pas sur le bouton neuf.
+⚠⚠ **LA GARDE MORD, ET ELLE N'EST PAS UN MUR.** Même montage sur le livrable du
+lot : intervalles réels **102 · 101 · 219 ms → `lancer(false)` ne part pas** ;
+**611 ms → il part**. Une garde qui bloquerait toujours passerait `ASSAUT T9`
+sans rien valoir, et c'est `T10` qui l'en empêche.
+⚠ **LES DEUX INTERVALLES LES PLUS COURTS DU BRIEF NE SONT PAS ATTEIGNABLES DEPUIS
+LE BANC, ET ÇA SE DÉCLARE.** Un contact dispatché par CDP coûte une soixantaine
+de millisecondes : le plancher du montage est **~101 ms**, donc « 60 » et
+« 120 » y valent la même chose. Les deux sont sous les 300 ms de la garde, qui
+les couvre par construction.
+⚠⚠ **LE BOUTON SORT DU RANG, ET C'EST MESURÉ À L'ÉCRAN.** `#raid-attaquer` quitte
+`#raid-boutons` : **107 × 48 px, posé à x = 247 sur 360**, contre 45 × 48 pour
+chacun des cinq autres. Il porte **« ATTAQUER » et « 11 points »**, et le prix
+vient de `vueDuRaid` — **seule appelante de `coutDUnRaid` dans tout l'écran**,
+comme `ciblageOuvert` est la seule lectrice du ciblage dans `ui/monde.js`.
+⚠ **`vueDuRaid` ÉTAIT MORTE, ET ELLE EST VIVANTE.** Écrite au lot RAID-A comme
+étage pur de cet écran, elle n'avait **aucun appelant** — ni dans `src/`, ni dans
+`test/`. C'est elle qui porte le coût, donc c'est elle que l'étage DOM lit.
+⚠ **AUCUNE TEINTE NEUVE : `#8A1E17` SUR `#F5F3E8` EST DÉJÀ LE BOUTON
+IRRÉVERSIBLE DU DÉPÔT** — `#options-zero`, « Effacer et recommencer ». `#E43E32`
+a été écarté : un test croise déjà cette teinte avec `attaqueLeJoueur` sur les
+bords d'emblème, et si ce test ne lit pas la feuille, **la règle qu'il défend est
+une règle de jeu** qu'un bouton d'interface n'a pas à emprunter.
+⚠⚠ **ET AUCUNE CONFIRMATION N'A ÉTÉ AJOUTÉE.** Ethan dit que le bouton doit être
+gros et seul, pas qu'il faut demander « êtes-vous sûr ? ». Une boîte ajouterait
+un geste à CHAQUE raid, et il est le seul testeur.
+⚠⚠ **LE SECOND TOUCHER SE LIT SUR LE TYPE, ET SUR SA PROPRE BASE IL NE MENAIT
+NULLE PART.** `ciblageDuSite` rend `null` sur une `baseJoueur` — on n'attaque pas
+chez soi — donc le panneau affichait « Plus rien à attaquer ici ».
+`gesteDuSecondToucher` entre : `baseJoueur` → l'écran Chantier par le crochet
+`surEntreeBase`, tout le reste → `entrerDansLaCible`, inchangé.
+⚠ **ET RIEN NE REBASCULE. `basculerVersLaBase` N'A TOUJOURS QU'UN SEUL SITE
+D'APPEL**, dans `ouvrirPanneau`, au PREMIER toucher — « haloter et basculer sont
+le MÊME geste », lot BASES-1. Une seconde écriture de la même grandeur sur le
+même trajet divergerait à la première inattention.
+⚠ **LE BOUTON « DÉPLACER LA BASE » LIT LA MÊME FONCTION**, plutôt que de
+recomparer `'baseJoueur'` de son côté : une seule table fait foi par grandeur.
+⚠⚠ **PENDANT LE DÉROULÉ IL NE RESTE QUE LE COMBAT, ET LA CITATION DU 01/09 EST
+RÉÉCRITE PLUTÔT QUE LAISSÉE.** Ce jour-là Ethan gardait « la barre du haut… les
+onglets seuls » ; le 04/09 il dit « quand on lance un raid, toutes les barres
+disparaissent ». **Les deux tiennent ensemble** : la première parle de l'ÉCRAN,
+la seconde du DÉROULÉ. La préparation garde ses onglets — c'est là qu'on répare,
+qu'on active, qu'on repart en Offense chercher une pièce.
+⚠⚠ **ET « TOUTES LES BARRES » A ÉTÉ PRIS AU MOT PAR LA CAPTURE, PAS PAR LA
+RELECTURE.** La première écriture masquait onglets, ressources et bascule, et
+laissait `#barre-bas` — « BASE 1,0 · DÉFENSE — · OFFENSE 1,0 », les trois niveaux
+de la base du JOUEUR, devant une base ennemie qu'on est en train de casser. Elle
+entre dans `BLOCS_DE_CHROME`, où elle n'était pas : **personne ne l'avait jamais
+masquée**. Relevé à l'écran après correction : **le canevas fait 360 × 720 au
+déroulé contre 360 × 674 avant**, et il ne reste que la légende de la cible.
+⚠ **LE DÉROULÉ N'EST PAS UN ÉCRAN, D'OÙ UN CROCHET ET NON UN APPEL DIRECT.**
+`#tete-onglets` n'appartient pas à l'écran de raid ; il ANNONCE par
+`pendantLeDeroule`, la session ÉCRIT. Une garde balaie les six écrans et refuse
+qu'aucun masque un bloc de chrome — et elle a **accusé un innocent au premier
+jet** : `ui/chantier.js` nomme `#ressources` pour le REMPLIR. Elle porte
+désormais sur le masquage, pas sur le nom.
+⚠⚠ **LE RETOUR EST GARANTI SUR LES QUATRE CHEMINS, ET C'EST MESURÉ CHEMIN PAR
+CHEMIN.** Fin normale, « Instantané », pas-à-pas jusqu'au bout, et simulateur :
+**les quatre rendent un chrome IDENTIQUE à celui de la préparation**, relevé bloc
+par bloc dans Chromium. Un seul chemin gardé aurait laissé vert un lot qui
+enferme le joueur dès qu'il touche « Instantané ».
+⚠ **ET « INSTANTANÉ » COMME LE PAS-À-PAS SONT DES CHEMINS DU SIMULATEUR**, pas du
+vrai raid : `#raid-vitesses` est masqué quand `simule` est faux — « le vrai raid
+se regarde en temps réel, sans contrôle de vitesse », arbitrage du 01/09.
+⚠ **LE SIMULATEUR SUIT LA MÊME RÈGLE, ET C'EST UNE LECTURE.** C'est le même
+déroulé à l'écran ; laisser les barres dans un cas et pas dans l'autre
+apprendrait deux grammaires pour le même dessin. Ethan a parlé du raid.
+⚠ **DIX-NEUF FALSIFICATIONS, DIX-NEUF CHUTES, ZÉRO MUETTE** — le bouton remis
+dans la rangée, sa hauteur sous 48 px, un troisième chemin vers `lancer(false)`,
+le coût recalculé, le geste toujours « base » puis toujours « cible », une
+seconde bascule, le déroulé qui ne masque plus rien, la porte d'abandon qui ne
+rend pas le chrome, « Instantané » qui ne finit plus, le simulateur exempté, le
+bouton né vif, la minuterie avant l'extinction, le délai à zéro puis écrit en
+dur, deux minuteries empilées, la barre du bas épargnée, et deux écrans qui
+masquent le chrome eux-mêmes.
+⚠ **ONZE TESTS ENTRENT — `test/raid-ecran.test.js` — ET LE COMPTE PASSE DE 1 026
+À 1 037.** Aucune assertion n'a été retirée ni assouplie.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état, et **la sauvegarde ne grandit pas d'un octet** — 6 517 octets sur les
+cinq graines témoins, avant comme après.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/` — pas un octet de `art/sprites/` ne change. Les
+trois captures du rapport vivent dans `rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot ZOOM-CONTINU :**
 `npm test` → **1026 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 780 316 octets**, 0 référence externe.
 ⚠⚠ **LE ZOOM DE LA CARTE N'EST PLUS PAR CRANS, ET LE PAVÉ QUI L'INTERDISAIT
@@ -3602,6 +3710,20 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
     disparaître. Le fichier de la base construit tout ce chrome — il a les
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
+  ⤷ ⚠⚠ ET CE CHROME A DEUX ÉTATS DEPUIS LE LOT ASSAUT, PAS UN — 04/09. La
+    session porte `BLOCS_DE_CHROME`, `CHROME_MASQUE_PAR` (par ÉCRAN) et
+    `CHROME_MASQUE_PAR_LE_DEROULE` (pendant un COMBAT), et `chromeMasque` les
+    réunit. Le déroulé n'est pas un écran : `ui/raid.js` l'ANNONCE par le
+    crochet `pendantLeDeroule`, la session ÉCRIT — un écran qui masquerait
+    `#tete-onglets` lui-même serait le premier à oublier de le rendre. Une garde
+    balaie les six écrans et refuse le masquage, jamais le NOM : `chantier.js`
+    nomme `#ressources` pour le REMPLIR.
+  ⤷ ⚠ `#raid-attaquer` A QUITTÉ `#raid-boutons` — 04/09, Ethan : « le bouton
+    attaquer, il est vraiment en gros à droite. Il n'y a que ça qui déclenche
+    l'attaque. » Il porte le PRIX, pris dans `vueDuRaid`, seule appelante de
+    `coutDUnRaid` de cet écran ; et il naît INERTE à chaque entrée, le temps de
+    `ECRAN_RAID.delaiArmementMs`. Le clic fantôme a été REPRODUIT avant d'être
+    gardé — voir `RAPPORT-lotASSAUT.md`.
 
 src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT
@@ -3637,7 +3759,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   52 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
+test/                   53 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -3646,7 +3768,7 @@ test/                   52 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal
+  son  journal  raid-ecran
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

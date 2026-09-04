@@ -473,6 +473,33 @@ export function ciblageDuSite(etat, site) {
   };
 }
 
+/**
+ * Ce que fait le SECOND toucher sur un site déjà ouvert.
+ *
+ * ⚠⚠ IL SE LIT SUR LE TYPE, ET C'EST LE §2.2 DU LOT ASSAUT. Ethan, 04/09 : « il
+ * faut que le double clic, on rentre sur la base, et dans la cible prêt à
+ * attaquer ». Avant ce lot, le second toucher appelait `entrerDansLaCible` quel
+ * que soit le site : sur sa PROPRE base, `ciblageDuSite` rend `null` — on
+ * n'attaque pas chez soi — et le panneau affichait « Plus rien à attaquer ici ».
+ * **Le geste ne menait nulle part.**
+ *
+ * ⚠ ET IL N'A RIEN À BASCULER. `ouvrirPanneau` écrit déjà `etat.baseCourante` au
+ * PREMIER toucher — c'est la lecture prise au lot BASES-1, « haloter et basculer
+ * sont le MÊME geste ». Rebasculer ici poserait une seconde écriture de la même
+ * grandeur sur le même trajet, et deux écritures de la même grandeur divergent à
+ * la première inattention.
+ *
+ * ⚠ UN SEUL LITTÉRAL POUR LES DEUX QUESTIONS QUI SE POSENT SUR SA PROPRE BASE :
+ * celle-ci et le bouton « Déplacer la base », qui LIT cette fonction plutôt que
+ * de recomparer le type de son côté.
+ *
+ * @param {{type: string}} site
+ * @returns {'base'|'cible'}
+ */
+export function gesteDuSecondToucher(site) {
+  return site.type === 'baseJoueur' ? 'base' : 'cible';
+}
+
 export function lignesDuSite(site, depuis, poisAcquis = [], ciblage = null) {
   const embleme = EMBLEMES_CARTE[site.type];
   if (embleme === undefined) throw new Error(`monde : type de site inconnu « ${site.type} »`);
@@ -857,6 +884,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // l'écran Chantier. La carte sait QUELLE cible on a touchée deux fois ; seule
   // la session sait changer d'écran.
   const surEntreeRaid = crochets.surEntreeRaid ?? (() => {});
+  // ⚠ ENTRER DANS SA BASE SE DEMANDE À LA SESSION, comme entrer dans une cible.
+  // Cet écran ne connaît pas `montrerEcran` et ne doit pas l'apprendre : il
+  // nomme un GESTE, la session décide de l'écran. Même découpage que
+  // `surEntreeRaid`, à côté duquel il est câblé.
+  const surEntreeBase = crochets.surEntreeBase ?? (() => {});
   // ⚠ L'ÉCRAN DEMANDE, LA SESSION ÉCRIT — même partage que `apresPose` de
   // l'écran Chantier. Un déplacement change l'état et doit être SAUVEGARDÉ tout
   // de suite : c'est une action irréversible, et la perdre parce que
@@ -1702,6 +1734,19 @@ export function initialiserEcranMonde(doc, crochets = {}) {
         // MÊME case que celle dont le panneau parle ».
         if (siteOuvert !== null
           && siteOuvert.rangee === site.rangee && siteOuvert.colonne === site.colonne) {
+          // ⚠ ET CE QU'IL FAIT DÉPEND DU TYPE — voir `gesteDuSecondToucher`. Sur
+          // sa propre base on ENTRE dans la base ; partout ailleurs on entre
+          // dans la cible, inchangé.
+          //
+          // ⚠ LE PANNEAU SE FERME EN PARTANT, DES DEUX CÔTÉS.
+          // `entrerDansLaCible` le fait déjà ; sinon il resterait ouvert sur un
+          // site qu'on ne regarde plus — c'est le motif écrit au bouton
+          // « Ma base ».
+          if (gesteDuSecondToucher(site) === 'base') {
+            fermerPanneau();
+            surEntreeBase();
+            return;
+          }
           entrerDansLaCible(site);
           return;
         }
@@ -1849,7 +1894,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // ⚠⚠ LE BOUTON N'APPARAÎT QUE SUR SA PROPRE BASE. Sur un camp ou une base de
     // l'Ouvrage il n'aurait aucun sens, et le panneau retomberait dans la faute
     // qu'il combat depuis le 27/08 : promettre un geste qui n'existe pas là.
-    panneauDeplacer.hidden = site.type !== 'baseJoueur';
+    panneauDeplacer.hidden = gesteDuSecondToucher(site) !== 'base';
     panneau.hidden = false;
     // ⚠ LA FLÈCHE NAÎT AVEC LE PANNEAU, donc l'ouverture repeint. Sans ça elle
     // n'apparaîtrait qu'au prochain geste sur la carte — la boucle de dessin ne

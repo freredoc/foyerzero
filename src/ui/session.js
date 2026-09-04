@@ -461,6 +461,74 @@ export function ligneDeMiseAJour(lu, monBuild) {
   return lu.message;
 }
 
+// ---------------------------------------------------------------------------
+// Le chrome commun — ce que la page garde au-dessus des écrans
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ TROIS BLOCS, ET ILS SONT FRÈRES DE `#ecrans`. Un écran ne peut pas les
+// cacher lui-même sans les déplacer, et les déplacer casserait l'ordre du
+// document — donc la navigation au clavier et la lecture d'écran. Ils
+// s'écrivent ici, et nulle part ailleurs.
+
+/**
+ * Les blocs de chrome commun, dans l'ordre du document.
+ *
+ * ⚠ `#barre-bas` EN FAIT PARTIE DEPUIS LE LOT ASSAUT, et il n'y était pas. Il
+ * n'avait jamais été masqué par personne, donc rien ne le nommait ici ; le
+ * déroulé le masque, donc il entre. Il est construit par `ui/chantier.js` —
+ * comme `#ressources` — et il vit quand même dans `#jeu`, au-dessus des écrans :
+ * CONSTRUIRE et MASQUER sont deux gestes, et seul le second est à la session.
+ */
+export const BLOCS_DE_CHROME = ['tete-onglets', 'ressources', 'navigation', 'barre-bas'];
+
+// ⚠⚠ LES DEUX BANDEAUX QUE L'ÉCRAN DE RAID MASQUE — et il est le seul.
+// Ethan, 01/09 : « on garde la barre du haut… les onglets seuls ». Le bandeau
+// des ressources part donc, et celui des bases avec lui : « BASE 1 / 1 » est
+// un compteur des bases DU JOUEUR, et il n'a aucun sens devant une base
+// ennemie. Ce second retrait est une LECTURE, pas une dictée d'Ethan ; s'il
+// le veut visible, c'est cette liste-ci qui change, et rien d'autre.
+export const CHROME_MASQUE_PAR = { raid: ['ressources', 'navigation'] };
+
+// ⚠⚠ ET LE DÉROULÉ D'UN COMBAT MASQUE TOUT, ONGLETS COMPRIS — lot ASSAUT,
+// 04/09. Ethan : « quand on lance un raid, toutes les barres disparaissent. On
+// voit juste la simulation en cours. » **CETTE PHRASE REVIENT SUR CELLE DU
+// 01/09 ci-dessus, et les deux tiennent ensemble** : ce jour-là il parlait de
+// l'écran de raid, celui-ci du DÉROULÉ. La préparation garde donc ses onglets —
+// c'est là qu'on répare, qu'on active, qu'on repart en Offense chercher une
+// pièce —, et seul le combat qui se joue les fait partir.
+//
+// ⚠⚠ ET « TOUTES LES BARRES » SE PREND AU MOT : `#barre-bas` EN EST UNE. Elle
+// est restée visible sur la première écriture de ce lot, et c'est la CAPTURE
+// qui l'a dit — pas la relecture. Elle annonce « BASE 1,0 · DÉFENSE — · OFFENSE
+// 1,0 », c'est-à-dire les trois niveaux de la base du JOUEUR, devant une base
+// ennemie qu'on est en train de casser : le même motif que le bandeau des bases,
+// masqué depuis le 01/09 pour cette raison exacte.
+//
+// ⚠ LE DÉROULÉ N'EST PAS UN ÉCRAN, ET C'EST TOUTE LA DIFFICULTÉ. Il n'a pas
+// d'entrée dans `ECRANS`, donc `montrerEcran` ne peut pas le voir passer :
+// c'est `src/ui/raid.js` qui l'annonce par le crochet `pendantLeDeroule`, et la
+// session qui écrit. Le retour est garanti sur les trois portes de sortie de cet
+// écran-là — sans quoi le joueur resterait enfermé dans une page sans onglets.
+export const CHROME_MASQUE_PAR_LE_DEROULE = [
+  'tete-onglets', 'ressources', 'navigation', 'barre-bas',
+];
+
+/**
+ * Les blocs de chrome à masquer, pour un écran et selon qu'un combat se déroule.
+ *
+ * ⚠ TROIS ÉTATS, ET LA FIN EST LA PRÉPARATION. Un rapport de raid s'ouvre sur
+ * un écran qui a retrouvé ses barres : c'est de là qu'on repart.
+ *
+ * @param {string} ecran
+ * @param {boolean} deroule
+ * @returns {Set<string>}
+ */
+export function chromeMasque(ecran, deroule = false) {
+  const masques = new Set(CHROME_MASQUE_PAR[ecran] ?? []);
+  if (deroule) for (const bloc of CHROME_MASQUE_PAR_LE_DEROULE) masques.add(bloc);
+  return masques;
+}
+
 export function initialiserSession(doc) {
   const fenetre = doc.defaultView;
   const $ = (id) => doc.getElementById(id);
@@ -823,13 +891,6 @@ export function initialiserSession(doc) {
   // SECOND toucher sur une cible déjà ouverte.
   const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
 
-  // ⚠⚠ LES DEUX BANDEAUX QUE L'ÉCRAN DE RAID MASQUE — et il est le seul.
-  // Ethan, 01/09 : « on garde la barre du haut… les onglets seuls ». Le bandeau
-  // des ressources part donc, et celui des bases avec lui : « BASE 1 / 1 » est
-  // un compteur des bases DU JOUEUR, et il n'a aucun sens devant une base
-  // ennemie. Ce second retrait est une LECTURE, pas une dictée d'Ethan ; s'il
-  // le veut visible, c'est cette liste-ci qui change, et rien d'autre.
-  const CHROME_MASQUE_PAR = { raid: ['ressources', 'navigation'] };
 
   // ⚠ QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN — UNE TABLE, PAS DES CONDITIONS.
   // La version précédente écrivait « actif si ce n'est pas Options », ce qui
@@ -847,15 +908,31 @@ export function initialiserSession(doc) {
     options: 'onglet-options',
   };
 
+  /** Vrai tant qu'un combat se DÉROULE à l'écran de raid — pas « on est sur le raid ». */
+  let derouleEnCours = false;
+
+  /**
+   * Pose le chrome commun d'après l'écran courant ET le déroulé.
+   *
+   * ⚠ ELLE EST APPELÉE PAR DEUX ENDROITS, ET C'EST VOULU : `montrerEcran`, qui
+   * sait quel écran ; et le crochet `pendantLeDeroule`, qui sait qu'un combat
+   * commence ou finit sans que l'écran change. Les DEUX écritures sont ici — un
+   * écran ne touche jamais `#tete-onglets` lui-même.
+   */
+  function appliquerLeChrome() {
+    const masques = chromeMasque(ecranCourant, derouleEnCours);
+    for (const bloc of BLOCS_DE_CHROME) $(bloc).hidden = masques.has(bloc);
+  }
+
   function montrerEcran(nom) {
     ecranCourant = nom;
     for (const autre of ECRANS) $(`ecran-${autre}`).hidden = autre !== nom;
-    // ⚠ LE CHROME COMMUN SE MASQUE ICI, ET NULLE PART AILLEURS. `#ressources` et
-    // `#navigation` sont frères de `#ecrans` : un écran ne peut pas les cacher
-    // lui-même sans les déplacer, et les déplacer casserait l'ordre du document
-    // — donc la navigation au clavier et la lecture d'écran.
-    const masques = new Set(CHROME_MASQUE_PAR[nom] ?? []);
-    for (const bloc of ['ressources', 'navigation']) $(bloc).hidden = masques.has(bloc);
+    // ⚠ LE CHROME COMMUN S'ÉCRIT ICI, ET NULLE PART AILLEURS — mais il dépend
+    // de DEUX choses depuis le lot ASSAUT : l'écran, et le fait qu'un combat se
+    // déroule. Le déroulé n'étant pas un écran, il ne peut pas passer par ce
+    // paramètre-ci : d'où `appliquerLeChrome`, que `montrerEcran` appelle et que
+    // le crochet `pendantLeDeroule` rappelle sans changer d'écran.
+    appliquerLeChrome();
     // Les onglets du haut ET la barre du bas doivent dire où l'on est. Le
     // premier est à la session ; le second appartient à l'écran Chantier, qui
     // le construit — d'où l'appel, plutôt qu'une seconde écriture ici.
@@ -1254,6 +1331,11 @@ export function initialiserSession(doc) {
   ecranRaid = initialiserEcranRaid(doc, {
     versEcran: (nom) => montrerEcran(nom),
     apresGeste: () => sauvegarder(),
+    // ⚠⚠ « QUAND ON LANCE UN RAID, TOUTES LES BARRES DISPARAISSENT » — Ethan,
+    // 04/09. L'écran de raid ANNONCE le déroulé, la session ÉCRIT le chrome :
+    // `#tete-onglets` ne lui appartient pas, et un écran qui le masquerait
+    // lui-même serait le premier à oublier de le rendre.
+    pendantLeDeroule: (enCours) => { derouleEnCours = enCours; appliquerLeChrome(); },
     // ⚠ SEULE LA VRAIE ATTAQUE SONNE — l'écran le décide, pas la session : lui
     // seul sait si le déroulé est une simulation.
     sonDeGeste,
@@ -1268,6 +1350,15 @@ export function initialiserSession(doc) {
       ecranRaid.ouvrir(etat, cible, atlasDeLaScene(doc));
       montrerEcran('raid');
     },
+    // ⚠⚠ ET LE SECOND TOUCHER SUR SA PROPRE BASE Y ENTRE — Ethan, 04/09 : « il
+    // faut que le double clic, on rentre sur la base ». Avant le lot ASSAUT il
+    // menait à un refus : on n'attaque pas chez soi.
+    //
+    // ⚠ RIEN À BASCULER ICI. Le PREMIER toucher a déjà écrit
+    // `etat.baseCourante` par `ouvrirPanneau`, et `apresBascule` a déjà
+    // sauvegardé et rafraîchi. Une seconde écriture de la même grandeur sur le
+    // même trajet divergerait à la première inattention.
+    surEntreeBase: () => { montrerEcran('chantier'); },
     // ⚠⚠ UN DÉPLACEMENT SE SAUVEGARDE TOUT DE SUITE, comme une pose. C'est une
     // action irréversible du joueur ; la perdre parce que l'application a été
     // tuée avant l'enregistrement périodique serait la pire façon de perdre sa

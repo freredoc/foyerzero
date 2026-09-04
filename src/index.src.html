@@ -220,12 +220,39 @@
     display: block; width: calc(100% - 12px); margin: 4px 6px 0; padding: 4px;
     font-size: 11px; background: #343A2C; color: #F5F3E8; border: 1px solid #4E5742;
   }
-  #raid-boutons { display: flex; gap: 3px; padding: 4px 6px; }
+  /* ⚠⚠ DEUX BLOCS, PAS SIX PARTS ÉGALES. Les cinq gestes de navigation et de
+     préparation se partagent la gauche ; « ATTAQUER » prend la droite, en
+     entier. C'est le §2.1 du lot ASSAUT : un geste irréversible et payant ne
+     peut pas avoir la taille d'un geste de navigation. */
+  #raid-rangee { display: flex; align-items: stretch; gap: 4px; padding: 4px 6px; }
+  #raid-boutons { display: flex; gap: 3px; flex: 1; min-width: 0; }
   #raid-boutons button {
     flex: 1; min-width: 0; padding: 5px 2px; font-size: 9px; line-height: 1.1;
     overflow-wrap: anywhere;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
   }
+  /* ⚠ « VRAIMENT EN GROS » SE MESURE : au moins 48 px de haut, la cible de doigt
+     que le reste de la page n'atteint jamais, et une largeur qui tient le mot
+     sans le couper sur 360 px CSS.
+     ⚠ AUCUNE TEINTE NEUVE : `#8A1E17` sur `#F5F3E8` est déjà le bouton
+     irréversible du dépôt — `#options-zero`, « Effacer et recommencer ». La
+     palette est fermée à trente-trois, et `banc.test.js` refuse tout hex
+     qui n'y est pas.
+     ⚠ ET CE N'EST PAS `flex: 0 0 Npx` : la garde du chrome de 288 px énumère
+     TOUTES les barres à hauteur fixe de la page, et une de plus la fait
+     tomber. Ce bouton n'est pas une barre. */
+  #raid-attaquer {
+    flex: 0 0 auto; min-height: 48px; min-width: 104px; padding: 4px 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px; background: #8A1E17; color: #F5F3E8; border: 1px solid #161914;
+  }
+  #raid-attaquer b { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; }
+  #raid-attaquer small { font-size: 10px; font-variant-numeric: tabular-nums; }
+  /* Inerte à l'entrée sur l'écran, et QUI SE VOIT inerte — un bouton qui ne
+     répond pas sans le dire est un bouton cassé. La teinte est celle que le
+     dépôt emploie déjà pour un bouton hors service, juste en dessous
+     (`#raid-fin .boutons button[disabled]`) : il n'en faut pas une seconde. */
+  #raid-attaquer[disabled] { background: #343A2C; color: #68727E; }
   /* Un mode ARMÉ se voit — sans cette règle, tout le modèle « armer puis
      toucher » serait invisible au doigt. C'est la faute du lot ÉCRAN-ACTIONS,
      et la garde des classes existe depuis. */
@@ -2037,13 +2064,25 @@
         <!-- ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et il n'apparaît que
              le mode Réparer armé — Ethan, 01/09. -->
         <button type="button" id="raid-tout-reparer" hidden>Tout réparer</button>
-        <div id="raid-boutons">
-          <button type="button" id="raid-reparer">Réparer</button>
-          <button type="button" id="raid-activer">Activer</button>
-          <button type="button" id="raid-simuler">Simulateur</button>
-          <button type="button" id="raid-attaquer">Lancer l'attaque</button>
-          <button type="button" id="raid-retour-carte">Carte</button>
-          <button type="button" id="raid-retour-offense">Offense</button>
+        <!-- ⚠⚠ LE BOUTON D'ATTAQUE A QUITTÉ LA RANGÉE — lot ASSAUT, 04/09.
+             Ethan : « le bouton attaquer, il est vraiment en gros à droite. Il
+             n'y a que ça qui déclenche l'attaque. » Il alignait six boutons de
+             même taille, si bien que le geste qui DÉPENSE des points d'attaque
+             avait la taille de celui qui revient à la carte.
+             ⚠ ET IL DIT SON PRIX. Le joueur l'a lu sur la carte, une fois ; le
+             bouton le porte, en petit, sous le mot. Le nombre vient de
+             `vueDuRaid`, seule appelante de `coutDUnRaid` dans cet écran.
+             ⚠ IL NAÎT INERTE, ET IL SE VOIT INERTE — voir `ECRAN_RAID` dans
+             `src/data/sites.js` pour le motif entier. -->
+        <div id="raid-rangee">
+          <div id="raid-boutons">
+            <button type="button" id="raid-reparer">Réparer</button>
+            <button type="button" id="raid-activer">Activer</button>
+            <button type="button" id="raid-simuler">Simulateur</button>
+            <button type="button" id="raid-retour-carte">Carte</button>
+            <button type="button" id="raid-retour-offense">Offense</button>
+          </div>
+          <button type="button" id="raid-attaquer" disabled><b>ATTAQUER</b><small hidden></small></button>
         </div>
         <p id="raid-avis" hidden></p>
         <!-- Les quatre vagues de neuf. Le glisser-déposer y vit ; il passe par
