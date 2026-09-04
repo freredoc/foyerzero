@@ -36,6 +36,7 @@ import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
+import { tousLesFonds } from '../src/render/fond.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 
@@ -1279,21 +1280,30 @@ test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse a
   const source = sansCommentaires(lire('src', 'ui', 'session.js'));
   const balisage = lire('src', 'index.src.html');
 
+  // ⚠⚠ LE MARQUEUR N'EST PLUS FORCÉMENT UN `%ATLAS_…%` — lot MUR-PEINT, 03/09.
+  // Les huit décors de base entrent par `%FOND_…%` : un décor n'est pas un atlas
+  // et n'en sera jamais un, `tools/atlas.py` ne cousant que des cellules carrées
+  // d'un même côté. Ce que la garde défend n'a pas bougé d'un mot — la
+  // déclaration est UNIQUE et la balise n'a pas de `src` —, seul le préfixe du
+  // marqueur s'élargit. Il reste NOMMÉ : un `url()` quelconque ne passerait pas.
   for (const [id, variable] of Object.entries(ATLAS_DE_LA_PAGE)) {
-    assert.match(balisage, new RegExp(`--${variable.slice(2)}:\\s*url\\('%ATLAS_[A-Z_]+%'\\)`),
-      `${variable} ne porte plus de marqueur d'atlas dans la feuille`);
+    assert.match(balisage, new RegExp(`--${variable.slice(2)}:\\s*url\\('%(?:ATLAS|FOND)_[A-Z0-9_]+%'\\)`),
+      `${variable} ne porte plus de marqueur dans la feuille`);
     const balise = balisage.match(new RegExp(`<img[^>]*id="${id}"[^>]*>`));
     assert.ok(balise, `l'image « ${id} » a disparu du balisage`);
     assert.ok(!/\bsrc=/.test(balise[0]),
       `l'image « ${id} » porte un \`src\` : son atlas est inliné deux fois`);
   }
-  // ⚠ SEPT DEPUIS LE LOT RAID-A, et les trois qui entrent ne coûtent RIEN : le
-  // bâtiment, la défense et le socle étaient déjà dans la feuille pour le fond
-  // CSS du Chantier. L'écran de raid en a besoin en `drawImage` — un champ de
-  // bataille de site porte des bâtiments et des défenses, ce que le banc n'avait
-  // jamais eu à dessiner — et c'est la boucle ci-dessus, pas ce compte, qui
-  // garde l'invariant qui compte : aucune de ces balises ne porte de `src`.
-  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7);
+  // ⚠ QUINZE DEPUIS LE LOT MUR-PEINT : les sept d'avant, plus les HUIT décors de
+  // base. Ils étaient déjà dans la feuille pour l'écran de la base, qui peint son
+  // fond en CSS ; leur donner une balise ne les inline pas une seconde fois, et
+  // c'est la boucle ci-dessus — pas ce compte — qui garde l'invariant qui
+  // compte : aucune de ces balises ne porte de `src`.
+  //
+  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : sept
+  // atlas, plus autant d'entrées que la table des fonds en porte.
+  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7 + tousLesFonds().length);
+  assert.equal(tousLesFonds().length, 8, 'les huit décors ne sont plus huit');
   assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
   assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');
 

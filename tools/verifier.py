@@ -56,11 +56,15 @@ CHAINE = [
     ('effets',          []),
     ('chassis',         []),
     ('ruines',          []),
-    # ⚠ LES MURS DE CONTOUR — 31/08. Leurs 48 fichiers sont au dépôt et AUCUN
-    # atlas ne les coud encore : sans cette ligne, le vérificateur les compterait
-    # MANQUANTS à chaque exécution, c'est-à-dire « le dépôt les porte, aucun
-    # outil ne les produit » — exactement le contraire de la vérité.
-    ('bords',           []),
+    # ⚠⚠ LES MURS DE CONTOUR SONT SORTIS DE LA CHAÎNE — lot MUR-PEINT, 03/09.
+    # Ethan a fait peindre le mur DANS le fond de base : l'anneau que le code
+    # dessinait n'existe plus, et aucun écran ne lit `bord_j_*` ni `bord_o_*`.
+    # Les laisser produire remplirait `art/sprites/bord/` de dix-sept fichiers
+    # que le dépôt ne porte plus, donc comptés « nouveaux » à chaque exécution.
+    #
+    # ⚠ `tools/bords.py` RESTE AU DÉPÔT, SANS APPELANT — comme
+    # `tools/align_chenilles.py` depuis la sortie de la grille 32. Ethan :
+    # « les `bord_*` ne sont pas supprimés » ; l'outil qui les fabrique non plus.
     # ⚠ LES FONDS D'ÉCRAN — 03/09. Un décor n'est pas un sprite et n'entre dans
     # aucun atlas ; il passe quand même par la chaîne pour que personne n'ait à
     # se demander, dans six mois, comment on referait ce fichier.

@@ -18,10 +18,8 @@ import {
   ACTIONS, messagePasDeReparation, DUREE_TOAST_MS,
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
-  SIGLES_OBSTACLE, LIBELLES_OBSTACLE, fondsDuSol, LIBELLES_FAMILLE, coteCaseParDefaut,
+  SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
   COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, basculeDeBande, bornesDeDefilement,
-  tuilesDuContour, BANDE_DU_CONTOUR, BANDE_DE_FIN_DU_CONTOUR, VARIABLE_DU_MUR,
-  LONGUEUR_DU_MUR, NB_VARIANTES_DU_MUR,
 } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { ZOOM_CARTE } from '../src/data/sites.js';
@@ -41,7 +39,6 @@ import {
   messageDeConfirmation,
   messageDeDestination,
   casesDeplacables,
-  casesDeSolParAtlas,
 } from '../src/ui/chantier.js';
 import {
   SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
@@ -2915,82 +2912,36 @@ test('écran — le fond d\'atlas passe par une règle PARTAGÉE, jamais par él
     'une variable d\'atlas vide ne fait plus lever');
 });
 
-test('écran — les 162 cases reçoivent un sol, et il vient de l\'atlas DU MONDE', () => {
-  // ⚠ GARDE DE TEXTE, comme ses voisines : le dépôt n'a ni jsdom ni navigateur,
-  // ce qui touche le DOM ne s'automatise pas ici (CLAUDE.md §3). Ce qu'on PEUT
-  // confronter sans navigateur, c'est que l'écran demande son sol au module
-  // d'atlas plutôt que de composer un nom de fichier à la main.
+test('écran — les 162 cases n\'ont plus de sol : c\'est le décor qui le porte', () => {
+  // ⚠⚠ CE TEST EN REMPLACE UN — lot MUR-PEINT, 03/09. Celui d'avant vérifiait
+  // que les 162 cases recevaient QUATRE couches de sol découpées dans l'atlas du
+  // monde. Le sol de la base est maintenant le décor peint, une image entière :
+  // il n'y a plus rien à découper ni à poser par case.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.ok(!/fondsDuSol|cellulesDeSolParAxe|casesDeSolParAtlas/.test(ecran),
+    'le pavage du sol case par case est revenu');
 
-  assert.match(ecran, /from '\.\.\/render\/sprite\.js'/,
-    'l\'écran ne lit plus l\'atlas par `render/sprite.js`');
-  assert.match(ecran, /from '\.\.\/render\/variante\.js'/,
-    'l\'écran ne tire plus sa variante par `render/variante.js`');
-
-  // Le sol est posé sur TOUTES les cases, donc dans une boucle sur `cellules`,
-  // et non sur les seules cases qui portent quelque chose.
-  assert.match(ecran, /for \(const case_ of cellules\.values\(\)\)[\s\S]{0,400}?fondsDuSol\(/,
-    'le sol n\'est pas posé sur l\'ensemble des cases');
-
-  // ⚠ ET IL EST UN FOND, PAS UN ENFANT. Un `createElement` par case ferait 162
-  // nœuds à créer et à retirer à chaque geste — quatre fois plus depuis que le
-  // sol fait 2 × 2 — et il faudrait penser à les retirer, ce que la boucle de
-  // remise à zéro ne fait pas.
-  // ⚠ LE MOT A CHANGÉ, PAS LA PROPRIÉTÉ GARDÉE. `poserFonds` écrivait
-  // `backgroundImage` en ligne ; depuis le correctif du freeze, l'image vient
-  // d'une CLASSE partagée et seules la taille et la position restent en ligne.
-  // Ce qu'on veut savoir est le même qu'avant — les couches sont un FOND, pas
-  // des enfants —, et les trois lignes ci-dessous le disent mieux que le nom de
-  // la propriété : `poserFonds` délègue l'image, et pose les deux autres.
-  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?poserLesAtlas\(/,
-    'les couches de fond ne passent plus par `poserLesAtlas`');
-  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundSize/,
-    '`poserFonds` ne pose plus la taille des couches');
-  assert.match(ecran, /function poserFonds\(case_, fonds\)[\s\S]{0,400}?backgroundPosition/,
-    '`poserFonds` ne pose plus la position des couches');
-  assert.doesNotMatch(ecran, /createElement\('div'\)[\s\S]{0,120}?className = 'sol'/,
-    'le sol est redevenu un élément enfant');
-
-  // Les deux couches de terrain qui restent — le champ et l'obstacle — viennent
-  // du même point d'appel : une seconde façon de nommer un sprite de terrain
-  // finirait par nommer autrement.
-  assert.equal((ecran.match(/fondDuTerrain\(/g) ?? []).length, 3,
-    'le nombre d\'appels à `fondDuTerrain` a changé — deux poses plus sa définition');
-
-  // ⚠⚠ ET LE SOL NE VIENT PLUS DE L'ATLAS DE LA BASE. Ethan, 30/08 : « changer
-  // le terrain de la base. Utiliser les sprites terrain monde (en 2 × 2) ». Les
-  // quatre `tile_sol_j_*` étaient quatre dessins pour cent soixante-deux cases,
-  // et la répétition se lisait d'un coup d'œil.
-  assert.doesNotMatch(ecran, /tile_sol_j/,
-    'le sol de la base repasse par les quatre tuiles de l\'atlas de la base');
+  // ⚠⚠ MAIS `--atlas-sol` RESTE, ET IL FAUT SAVOIR POURQUOI. C'est l'atlas du
+  // MONDE : la carte en a toujours besoin, et son terrain est procédural
+  // (`render/terrain.js`) — ce n'est pas le même sol. Le retirer aurait vidé
+  // l'écran Monde pour une raison qui ne le regarde pas.
   assert.match(ecran, /sol: 'var\(--atlas-sol\)'/,
-    'la table des atlas ne porte plus celui du sol');
+    '--atlas-sol a disparu de la table des atlas : la carte du monde en a besoin');
 
-  // ⚠ QUATRE COUCHES, PAS UNE, et le nombre se LIT dans `ZOOM_CARTE`. L'écrire
-  // ici ferait la troisième vérité sur le découpage d'une case.
-  assert.match(ecran, /const divisions = ZOOM_CARTE\.tuilesParCase/,
-    'le découpage du sol ne suit plus la table du monde');
-  assert.equal(ZOOM_CARTE.tuilesParCase, 2, 'le sol de la base n\'est plus en 2 × 2');
-
-  // ⚠ ET LA VARIANTE SE PREND SUR LA SOUS-CASE. Sur la case, les quatre
-  // quartiers tireraient le MÊME dessin — quatre fois le même carré — et le
-  // 2 × 2 n'apporterait rien du tout. Le montage le mesure au lieu de le lire :
-  // on demande les quatre couches d'une case et on exige qu'elles diffèrent.
-  const parAxe = 16;
-  const couches = fondsDuSol(parAxe, 20260830, 14, 4);
-  assert.equal(couches.length, 4, `${couches.length} couches de sol au lieu de quatre`);
-  assert.equal(new Set(couches.map((c) => c.position)).size, 4,
-    'les quatre quartiers se posent au même endroit');
-  // Falsifiable : sur une graine et une case, deux voisines ne donnent pas le
-  // même sol — sans quoi le tirage serait constant et le test ne mesurerait rien.
-  const voisine = fondsDuSol(parAxe, 20260830, 14, 5);
-  assert.notDeepEqual(couches.map((c) => c.taille + c.position),
-    voisine.map((c) => c.taille + c.position),
-    'deux cases voisines reçoivent exactement le même sol');
-  // Et toutes viennent bien de l'atlas du monde.
-  for (const c of couches) assert.equal(c.image, 'var(--atlas-sol)');
+  // ⚠⚠ ET `tile_sol_{j,o}_*` N'A PAS ÉTÉ TOUCHÉ, parce que ce lot ne l'orpheline
+  // pas : il l'était DÉJÀ. Mesuré ici plutôt que lu — les huit dalles ne sont
+  // nommées dans `src/` que par des COMMENTAIRES, et aucun écran ne les résout
+  // depuis le 30/08, où le sol de la base est passé à l'atlas du monde. Les
+  // retirer de l'atlas `terrain` changerait la géométrie d'un fichier GÉNÉRÉ
+  // pour une dette que ce lot n'a pas créée.
+  for (const dossier of ['data', 'sim', 'render', 'ui']) {
+    for (const fichier of readdirSync(join(RACINE, 'src', dossier))) {
+      if (dossier === 'data' && fichier === 'atlas.js') continue;
+      assert.ok(!/tile_sol_/.test(sansCommentaires(readFileSync(join(RACINE, 'src', dossier, fichier), 'utf8'))),
+        `src/${dossier}/${fichier} résout une dalle tile_sol_* : elle n'est plus orpheline`);
+    }
+  }
 });
-
 test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
 
@@ -3309,24 +3260,27 @@ test('zoom — les deux bornes se LISENT, et le geste est un rapport', () => {
   // ⚠ LE PLANCHER EST LA TAILLE QUI FAIT TENIR LA GRILLE, mesurée et non
   // devinée : sous celle-là, le zoom arrière ne montrerait que du vide.
   //
-  // ⚠⚠ ET IL DIVISE PAR `largeur + 2` DEPUIS QUE LE MUR EST UN ANNEAU (03/09).
-  // La v1 était un TRAIT posé à cheval sur le bord et coûtait deux DEMI-cases ;
-  // la v2 est faite de BLOCS pleins qui ceignent la grille, donc deux cases
-  // entières. Diviser par neuf redonnerait le défilement horizontal au repos que
-  // ce padding existe pour éviter — 414 px dans 360, mesuré le 31/08 —, et
-  // diviser par dix laisserait déborder une demi-case de mur de chaque côté,
-  // c'est-à-dire le « ça déborde » d'Ethan avec la moitié de son ampleur.
-  assert.match(ecran, /Math\.floor\(large \/ \(GRILLE\.largeur \+ 2\)\)/,
-    'le plancher du zoom ne compte plus la case de mur de chaque côté');
+  // ⚠⚠ ET IL DIVISE PAR `LARGEUR_EN_CASES` DEPUIS LE LOT MUR-PEINT (03/09).
+  // Troisième valeur sur cette même ligne : le TRAIT de la v1 coûtait deux
+  // DEMI-cases, les BLOCS de la v2 deux cases entières, et le mur PEINT en coûte
+  // de nouveau deux demies — mesuré sur les huit planches, 54 px pour une case
+  // de 108. Diviser par neuf redonnerait le défilement horizontal au repos que
+  // cette marge existe pour éviter — 414 px dans 360, mesuré le 31/08 —, et
+  // diviser par onze laisserait une case entière de vide de chaque côté.
+  //
+  // ⚠ ET LE NOMBRE NE S'ÉCRIT PAS DANS L'ÉCRAN : `LARGEUR_EN_CASES` se dérive de
+  // `GRILLE.largeur` dans `render/fond.js`, à côté de la mesure qui le justifie.
+  assert.match(ecran, /Math\.floor\(large \/ LARGEUR_EN_CASES\)/,
+    'le plancher du zoom ne compte plus la demi-case de mur peint de chaque côté');
 
-  // ⚠ ET LES TROIS MOITIÉS DOIVENT S'ACCORDER : le `+ 2` du plancher n'a de sens
-  // que si la feuille pose bien une case ENTIÈRE de chaque côté, et que
-  // `paddingDeLaGrille` en rend autant. En changer une seule décale le mur du
-  // contenu, et personne ne le verrait sans mesurer.
-  assert.match(feuille, /#chantier-grille\s*\{[^}]*padding:\s*var\(--case-cote\)/,
-    'la grille ne porte plus la case de marge que l\'anneau exige');
-  assert.match(ecran, /function paddingDeLaGrille\(\)\s*\{\s*return coteCase;/,
-    'le padding vu par le défilement ne vaut plus une case pleine');
+  // ⚠ ET LES TROIS MOITIÉS DOIVENT S'ACCORDER : diviser par `LARGEUR_EN_CASES`
+  // n'a de sens que si la feuille pose bien une DEMI-case de chaque côté, et que
+  // `paddingDeLaGrille` en rend autant. En changer une seule décolle le mur peint
+  // des colonnes, et personne ne le verrait sans mesurer.
+  assert.match(feuille, /#chantier-grille\s*\{[^}]*padding:\s*calc\(var\(--case-cote\) \/ 2\)/,
+    'la grille ne porte plus la demi-case de marge que le mur peint exige');
+  assert.match(ecran, /function paddingDeLaGrille\(\)\s*\{\s*return coteCase \* MUR_CASES;/,
+    'le padding vu par le défilement ne vaut plus une demi-case');
 
   // ⚠⚠ LE GESTE EST UN RAPPORT D'ÉCARTS, PAS UNE DIFFÉRENCE. Une différence en
   // pixels zoomerait plus vite sur un grand écran que sur un petit, pour le
@@ -3631,378 +3585,124 @@ test('bandes — l\'écran borne au lieu de changer de bande, et le bouton exist
   assert.match(vue[1], /flex-direction:\s*column/);
   assert.match(vue[1], /min-height:\s*0/);
 });
-test('contour — le mur fait un U, et l\'anneau se pave sans trou ni recouvrement', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE, EN DEUX ARBITRAGES D'ETHAN. Le 31/08 : « le mur
-  // fait un U, le bas reste sans mur ». Le 03/09, avec des blocs neufs : « pour
-  // que ça passe bien parce que là ça déborde ; les murs vont du haut de la
-  // base jusqu'à la défense et ne ferme pas en bas ».
+test('traits — le calque se cale sur le CONTENU, et rien ne le liait au padding', () => {
+  // ⚠⚠ DÉFAUT ANTÉRIEUR À CE LOT, TROUVÉ EN RELISANT ET MESURÉ SUR `main`.
+  // `#chantier-traits` est en `position: absolute` : son `inset` se compte
+  // depuis la boîte de PADDING de la grille, donc il doit valoir EXACTEMENT le
+  // `padding` pour tomber sur le contenu. Depuis le lot MURS, le padding valait
+  // une case pleine et l'inset une demi-case — les deux avaient été changés
+  // séparément.
   //
-  // ⚠⚠ ET IL A CHANGÉ DE GÉOMÉTRIE, PAS DE TAILLE. La v1 posait cinq TRAITS À
-  // CHEVAL sur la ligne du bord : chaque pièce mordait d'une demi-case
-  // au-dedans. La v2 pose des BLOCS PLEINS qui CEIGNENT la grille sans rien
-  // recouvrir. Ce test asserte donc l'inverse de ce qu'il assertait : plus
-  // aucune pièce ne touche le contenu.
-  const bandeHaute = BANDES.find((b) => b.cle === BANDE_DU_CONTOUR);
-  const bandeBasse = BANDES.find((b) => b.cle === BANDE_DE_FIN_DU_CONTOUR);
-  assert.ok(bandeHaute, 'la bande où le mur commence n\'existe plus dans BANDES');
-  assert.ok(bandeBasse, 'la bande où le mur s\'arrête n\'existe plus dans BANDES');
-  const { premiereLigne } = ligneEcranDeLaBande(bandeHaute);
-  const fin = ligneEcranDeLaBande(bandeBasse);
-  // ⚠⚠ LE FLANC COURT D'UN BORD À L'AUTRE — Ethan, 03/09 : « flanc sur la
-  // défense aussi ». On mesure donc du haut de la première bande au bas de la
-  // seconde, et NON la somme des deux : une somme sauterait une bande qui se
-  // glisserait un jour entre elles, et le mur aurait un trou que rien ne dirait.
-  const nbLignes = fin.premiereLigne + fin.nbLignes - premiereLigne;
-
-  // Le montage mesure quelque chose : sans plusieurs colonnes et plusieurs
-  // rangées, « paver » et « poser une case » se confondraient — et sans DEUX
-  // bandes distinctes, « jusqu'au bas de la défense » se confondrait avec
-  // « jusqu'au bas de la base ».
-  assert.ok(GRILLE.largeur > LONGUEUR_DU_MUR, `la base fait ${GRILLE.largeur} colonnes`);
-  assert.ok(nbLignes > ligneEcranDeLaBande(bandeHaute).nbLignes,
-    'le mur ne descend pas plus bas que sa première bande : le flanc ne longe pas la défense');
-
-  // ⚠⚠ LA COÏNCIDENCE EST TERMINÉE, ET CETTE ASSERTION CHANGE DE CAMP. Elle
-  // était DÉCLARÉE « ne mordant pas » depuis le lot MURS : les deux bandes
-  // nommées étant adjacentes, mesurer d'un bord à l'autre et les additionner
-  // donnaient le même nombre, et le test relevait l'égalité au lieu de faire
-  // semblant de la garder. Elle annonçait ceci, mot pour mot : « c'est elle qui
-  // tombera le jour où une bande se glisserait entre les deux ». Le lot
-  // MURS-JUSQU-EN-BAS a fait descendre les flancs sur le DÉPLOIEMENT : la
-  // défense est désormais la bande du milieu, et l'égalité est tombée.
+  // ⚠ MESURÉ DANS CHROMIUM, viewport 360, sur le livrable d'AVANT et d'APRÈS :
+  // avant, le contenu commence à x = 36 et le calque à x = 20 — seize pixels,
+  // soit une demi-case — et le calque est 32 px trop large, donc les traits
+  // étaient étirés de 11,1 %. Après : écart 0 et 0. C'est très exactement ce que
+  // le commentaire du calque annonçait comme faute possible ; elle était commise.
   //
-  // Elle mesure donc maintenant la vraie propriété — le flanc couvre EXACTEMENT
-  // les bandes qu'il enjambe — et la falsification MORD, ce qu'une assertion
-  // supplémentaire dit de face.
-  const couvertes = Object.values(GRILLE.bandes)
-    .map((b) => ligneEcranDeLaBande(b))
-    .filter((l) => l.premiereLigne >= premiereLigne
-      && l.premiereLigne + l.nbLignes <= fin.premiereLigne + fin.nbLignes);
-  assert.equal(couvertes.length, 3,
-    'le flanc n\'enjambe plus trois bandes : la mesure ci-dessous ne dirait plus rien');
-  assert.equal(nbLignes, couvertes.reduce((s, l) => s + l.nbLignes, 0),
-    'le flanc ne couvre pas exactement les bandes qu\'il enjambe');
-  assert.notEqual(nbLignes, ligneEcranDeLaBande(bandeHaute).nbLignes + fin.nbLignes,
-    'additionner les deux bandes NOMMÉES redonne la bonne hauteur : le flanc a '
-    + 'cessé d\'enjamber une bande du milieu, et la garde ne mesure plus rien');
-
-  const pieces = tuilesDuContour('j');
-  const gauche = 0;
-  const droite = GRILLE.largeur + 1;
-  const haut = premiereLigne - 1;
-
-  // --- 1. rien ne sort de la boîte, et rien ne touche le contenu -------------
-  //
-  // La boîte fait `largeur + 2` de large ; le CONTENU occupe [1, largeur + 1[.
-  // Une seule pièce qui y mordrait recouvrirait une case jouable, et le joueur
-  // verrait un bâtiment barré par son propre mur.
-  for (const p of pieces) {
-    assert.ok(p.l > 0 && p.h > 0, `${p.nom} n'a pas de surface`);
-    assert.ok(p.x >= 0 && p.x + p.l <= GRILLE.largeur + 2, `${p.nom} hors boîte en x`);
-    assert.ok(p.y >= 0 && p.y + p.h <= GRILLE.longueur + 2, `${p.nom} hors boîte en y`);
-    const surLeContenuEnX = p.x + p.l > gauche + 1 && p.x < droite;
-    const surLeContenuEnY = p.y + p.h > haut + 1;
-    assert.ok(!(surLeContenuEnX && surLeContenuEnY),
-      `${p.nom} mord sur le contenu : l'anneau ceint la grille, il ne la recouvre pas`);
-  }
-
-  // --- 2. le U : trois côtés, et rien en bas --------------------------------
-  const flancGauche = pieces.filter((p) => p.x === gauche && p.y > haut);
-  const flancDroit = pieces.filter((p) => p.x === droite && p.y > haut);
-  assert.equal(flancGauche.length, nbLignes, 'le flanc gauche ne longe plus les deux bandes');
-  assert.equal(flancDroit.length, nbLignes, 'le flanc droit ne longe plus les deux bandes');
-
-  // ⚠⚠ LE U DESCEND JUSQU'EN BAS, ET IL NE SE FERME TOUJOURS PAS. Ethan, 03/09 :
-  // « remplir les murs jusqu'en bas […] purement décoratif ». Les flancs
-  // couvrent les dix-huit rangées ; le côté du BAS reste sans une seule pièce,
-  // et c'est par là que l'assaut entre.
-  const plusBas = Math.max(...pieces.map((p) => p.y + p.h));
-  assert.equal(plusBas, haut + 1 + nbLignes,
-    `le mur descend jusqu'en ${plusBas}, la grille s'arrête en ${haut + 1 + nbLignes}`);
-
-  // ⚠⚠ ET CETTE GARDE-CI MESURAIT UN PROXY, CE QUE LE LOT A RÉVÉLÉ. Elle
-  // exigeait `GRILLE.longueur - nbLignes > 0` — « il reste des rangées hors du
-  // U » — pour dire « le U s'ouvre quelque part ». C'était vrai tant que les
-  // flancs s'arrêtaient avant le bas ; ça a cessé de l'être le jour où ils sont
-  // descendus, alors que le U s'ouvre EXACTEMENT comme avant. Un nombre de
-  // rangées non ceintes ne dit rien de l'ouverture : ce qui la dit, c'est
-  // qu'aucune pièce ne se pose SOUS le dernier cran des flancs.
-  assert.equal(pieces.filter((p) => p.y >= haut + 1 + nbLignes).length, 0,
-    'une pièce est passée sous le dernier cran des flancs : le U s\'est refermé '
-    + 'en bas, et l\'assaut n\'a plus par où entrer');
-  // Falsifiable : le montage sait reconnaître une pièce posée là.
-  assert.equal([...pieces, { x: 3, y: haut + 1 + nbLignes, l: 1, h: 1 }]
-    .filter((p) => p.y >= haut + 1 + nbLignes).length, 1,
-    'le montage ne verrait pas une pièce sous les flancs');
-
-  // --- 3. le pavage : la somme retombe juste, et rien ne se recouvre ---------
-  //
-  // ⚠ ON REFAIT LE COMPTE, ON NE LE RECOPIE PAS. Un mur couvre
-  // `LONGUEUR_DU_MUR` cases, un bloc une ; la rangée du haut doit couvrir
-  // exactement `largeur + 2` unités, sans trou ni chevauchement.
-  const rangeeDuHaut = pieces.filter((p) => p.y === haut).sort((a, b) => a.x - b.x);
-  assert.equal(rangeeDuHaut.reduce((t, p) => t + p.l, 0), GRILLE.largeur + 2,
-    'la rangée du haut ne couvre plus toute la largeur de la boîte');
-  let bord = 0;
-  for (const p of rangeeDuHaut) {
-    assert.equal(p.x, bord, `trou ou recouvrement à x=${bord} : ${p.nom} commence en ${p.x}`);
-    bord = p.x + p.l;
-  }
-  assert.equal(bord, GRILLE.largeur + 2);
-
-  // Les deux coins sont des BLOCS, et le haut porte au moins un mur — sans quoi
-  // le pavage se ferait case par case, ce que les murs de quatre cases existent
-  // précisément pour éviter.
-  assert.match(rangeeDuHaut[0].nom, /_bloc_\d$/, 'le coin haut-gauche n\'est plus un bloc');
-  assert.match(rangeeDuHaut.at(-1).nom, /_bloc_\d$/, 'le coin haut-droit n\'est plus un bloc');
-  assert.ok(rangeeDuHaut.some((p) => p.l === LONGUEUR_DU_MUR),
-    'le haut est pavé bloc par bloc : les murs de quatre cases ne servent plus');
-
-  // --- 4. les variantes tournent vraiment -----------------------------------
-  //
-  // ⚠ SANS ÇA, LE TIRAGE POURRAIT RENDRE TOUJOURS LA MÊME et personne ne le
-  // verrait sans regarder l'écran. L'anneau porte assez de blocs pour que les
-  // quatre soient employées.
-  const variantesDeBloc = new Set(
-    pieces.filter((p) => p.nom.includes('_bloc_')).map((p) => p.nom.slice(-1)),
-  );
-  assert.equal(variantesDeBloc.size, NB_VARIANTES_DU_MUR,
-    `${variantesDeBloc.size} variantes de bloc employées sur ${NB_VARIANTES_DU_MUR}`);
-
-  // ⚠ ET LE TIRAGE EST STABLE : deux appels rendent le même mur. Un mur qui
-  // changerait de dessin à chaque peinture scintillerait dix fois par seconde.
-  assert.deepEqual(tuilesDuContour('j'), pieces, 'le mur change d\'un appel à l\'autre');
-
-  // ⚠ ET IL NE CONSOMME PAS LE FLUX DE LA PARTIE. `variante` est pure ; s'en
-  // remettre à `etat.rng` décalerait tout ce que le moteur tire ensuite.
-  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  const corps = source.slice(source.indexOf('export function tuilesDuContour'));
-  assert.doesNotMatch(corps.slice(0, corps.indexOf('\n}')), /etat\.rng|Math\.random/,
-    'le mur tire dans le flux de la partie');
-
-  // Les deux camps existent, et un camp inconnu lève plutôt que de rendre une
-  // liste vide — un mur absent est exactement ce que personne ne remarque.
-  assert.equal(tuilesDuContour('o').length, pieces.length);
-  assert.ok(tuilesDuContour('o').every((p) => p.nom.startsWith('bord_o_')));
-  assert.throws(() => tuilesDuContour('x'), /camp/);
+  // ⚠⚠ ET RIEN NE POUVAIT LE VOIR : deux valeurs justes séparément, fausses
+  // ensemble, dans deux règles CSS que personne ne comparait. C'est la leçon de
+  // la boussole de `rendu-pose.js` au lot BRANCHEMENT-DÉFENSE, reprise ici.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const grille = feuille.match(/#chantier-grille\s*\{[^}]*\}/)[0];
+  const traits = feuille.match(/#chantier-traits\s*\{[^}]*\}/)[0];
+  const padding = grille.match(/padding:\s*([^;]+);/)[1].trim();
+  const inset = traits.match(/inset:\s*([^;]+);/)[1].trim();
+  assert.equal(inset, padding,
+    `le calque des traits (${inset}) ne se cale plus sur le padding de la grille (${padding})`
+    + ' : les traits de voisinage partiront à côté des centres de case');
 });
 
-test('contour — l\'écran pose les huit images, et lève sur celle qui manque', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE : que chaque pièce ait vraiment une image dans le
-  // livrable. Le mur n'est pas un atlas — chaque fichier entre par son propre
-  // marqueur —, donc rien ne garantit qu'un nom rendu par `tuilesDuContour`
-  // corresponde à quelque chose. Une pièce sans image serait un pan de mur
-  // absent, c'est-à-dire exactement ce que personne ne remarque.
-  //
-  // ⚠ ET C'EST DU WEBP DEPUIS LE LOT MURS. Le rendu n'est plus quantifié sur
-  // seize teintes par camp : les huit pièces pèseraient 467 028 octets de
-  // base64 en PNG, elles en pèsent 38 878 en WebP q85 — le même encodage que
-  // les atlas et que le fond du bassin.
-  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
-  // ⚠ LES NOMS SE RÉPÈTENT, ET C'EST LE PRINCIPE DEPUIS LE LOT MURS : vingt et
-  // une pièces pour huit dessins. Ce qu'on exige, c'est que CHAQUE dessin
-  // employé ait son image — et que l'anneau les emploie tous les huit, sans
-  // quoi on paierait dans le livrable une variante que rien ne pose.
-  const noms = [...new Set(tuilesDuContour('j').map((p) => p.nom))];
-  assert.deepEqual(noms.slice().sort(), Object.keys(VARIABLE_DU_MUR).sort(),
-    'la table des images et ce que l\'anneau pose ont divergé : une pièce sans image '
-    + 'est un pan de mur absent, une image sans pièce est du poids pour rien');
-  // Le montage mesure quelque chose : sans plusieurs dessins, « chacun a son
-  // image » se confondrait avec « il y en a un ».
-  assert.ok(noms.length > 3, `l'anneau ne pose que ${noms.length} dessins`);
-  for (const nom of noms) {
-    const variable = VARIABLE_DU_MUR[nom];
-    assert.ok(variable, `${nom} n'a pas de variable CSS`);
-    const cle = variable.match(/var\((--[a-z0-9-]+)\)/)[1];
-    // La variable existe dans le livrable, et elle porte une image INLINÉE — pas
-    // une adresse, que la garde offline du build refuserait de toute façon.
-    const regle = html.match(new RegExp(`${cle}:\\s*url\\('(data:image/webp;base64,[^']{200,})'\\)`));
-    assert.ok(regle, `${cle} n'est pas une image inlinée dans le livrable`);
-  }
+test('décor — la base porte UNE image, mur peint compris, et elle défile avec la grille', () => {
+  // ⚠⚠ CES QUATRE TESTS EN REMPLACENT QUATRE — lot MUR-PEINT, 03/09. Ceux d'avant
+  // gardaient l'anneau : le pavage du U sans trou ni recouvrement, les huit
+  // images posées par l'écran, les trois étages du dessin, et le sol tapissé
+  // case par case. Le mur est maintenant PEINT dans le décor et le sol est ce
+  // décor : il n'y a plus d'anneau à paver, plus de pièce à poser, plus d'étage
+  // à arbitrer et plus de pavage à mettre à l'échelle. Ils ont été RETIRÉS, pas
+  // ajustés — le brief l'exige, et changer leurs valeurs attendues aurait été la
+  // faute qu'il nomme.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const bloc = feuille.match(/#chantier-defile \{[^}]*\}/);
+  assert.ok(bloc, '#chantier-defile a perdu sa règle');
 
-  // ⚠ ET LE CAMP DE L'OUVRAGE N'Y EST PAS, DÉLIBÉRÉMENT : 24 438 octets pour
-  // zéro pixel tant qu'aucun écran ne dessine sa base. L'écran LÈVE dessus au
-  // lieu de sauter en silence, et le message dit quoi faire.
-  for (const p of tuilesDuContour('o')) {
-    assert.equal(VARIABLE_DU_MUR[p.nom], undefined,
-      `${p.nom} est dans le livrable : le camp de l'Ouvrage n'y a rien à faire encore`);
-  }
+  // ⚠ `no-repeat`, ET C'EST LA MOITIÉ QUI COMPTE. Le pavage d'avant se répétait
+  // à l'infini ; un décor qui se répéterait remettrait un mur peint au milieu de
+  // l'écran à chaque hauteur d'image.
+  assert.match(bloc[0], /background-repeat:\s*no-repeat/,
+    'le décor de la base se répète : le mur peint reparaîtra au milieu du champ');
+
+  // ⚠ `local` ET NON `scroll` : le décor doit défiler AVEC la grille, sinon le
+  // mur peint reste collé au cadre pendant que la base glisse dessous — et il
+  // cesse d'être aligné avec les colonnes, ce qui est tout ce qu'on lui demande.
+  assert.match(bloc[0], /background-attachment:\s*local/,
+    'le décor ne défile plus avec la grille');
+  assert.match(bloc[0], /background-size:\s*var\(--fond-taille/,
+    'le décor ne prend plus son échelle du JS');
+
+  // ⚠⚠ ET IL EST SUR LE CONTENEUR QUI DÉFILE, PAS SUR LA GRILLE. Le décor fait
+  // vingt cases de haut quand la grille n'en occupe que dix-huit et demie :
+  // posé sur la grille, sa boîte le ROGNERAIT de 1,5 case. Ethan : « le débord
+  // du bas se laisse déborder sous l'UI — ni rognage, ni étirement, ni
+  // recentrage. »
+  const grille = feuille.match(/#chantier-grille \{[^}]*\}/);
+  assert.ok(!/background/.test(grille[0]),
+    'le décor est passé sur la grille : son débord serait rogné');
+
+  // ⚠ ET LA COULEUR RESTE SOUS L'IMAGE. Un décor ne doit pas pouvoir rendre
+  // l'écran illisible en tombant.
+  assert.match(feuille, /#chantier-champ \{[^}]*#161914/,
+    'le noir de repli a disparu de sous le décor');
+});
+
+test('décor — l\'écran choisit son fond sur la FONDATION, et il n\'y a plus d\'anneau', () => {
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  const bloc = ecran.match(/for \(const tuile of tuilesDuContour\([\s\S]*?\n  \}/);
-  assert.ok(bloc, 'la boucle qui pose le mur a disparu');
-  assert.match(bloc[0], /throw new RangeError/, 'la boucle du mur saute une image absente en silence');
-  assert.match(bloc[0], /tuile\.l/, 'la boucle du mur ignore la longueur de la pièce');
-  assert.match(bloc[0], /tuile\.h/, 'la boucle du mur ignore la hauteur de la pièce');
-  assert.match(bloc[0], /VARIABLE_DU_MUR/, 'la boucle du mur n\'écrit plus l\'image depuis la table');
-});
 
-test('contour — trois étages : le sol, puis le mur, puis les pièces', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE, ET IL A ÉTÉ ÉCRIT LE JOUR OÙ LE DÉFAUT S'EST VU.
-  // Le calque du mur était le premier enfant de la grille et n'avait pas de
-  // `z-index` : il peignait donc SOUS le sol des cases qu'il chevauche. Mesuré
-  // dans Chromium — la moitié intérieure du trait disparaissait, et pas la même
-  // moitié en haut qu'en bas, si bien que les deux murs horizontaux ne
-  // montraient pas le même dessin.
+  // ⚠⚠ PLUS UNE PIÈCE DE MUR N'EST POSÉE. C'est le cœur du lot : quarante et un
+  // éléments `.mur` se construisaient au câblage, en `absolute` sur la grille.
+  assert.ok(!/chantier-contour/.test(ecran), 'le calque du mur est revenu dans l\'écran');
+  assert.ok(!/tuilesDuContour|VARIABLE_DU_MUR/.test(ecran),
+    'l\'écran repose un anneau de mur');
+  // ⚠⚠ ON LIT LA FEUILLE DÉCOMMENTÉE, ET C'EST LA CINQUIÈME FOIS QUE LE DÉPÔT
+  // PAIE CETTE FAUTE. La première écriture de cette garde cherchait
+  // `#chantier-contour` dans le HTML brut — et le trouvait dans le commentaire
+  // qui explique justement que le calque a disparu. Après `viewport-fit=cover`,
+  // `MENTION_SATURE`, `variante.js` et `render/contour.js` : une garde qui lit ce
+  // qu'on a écrit à son sujet ne garde rien.
+  const feuilleNue = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/#chantier-contour/.test(feuilleNue),
+    'le calque du mur est revenu dans la feuille');
+  // Témoin : la garde voit encore une vraie règle, sinon elle passerait sur
+  // n'importe quelle feuille.
+  assert.ok(/#chantier-grille\s*\{/.test(feuilleNue),
+    'la feuille décommentée ne porte plus aucune règle : le filtre a tout mangé');
+
+  // ⚠⚠ LE COMPTE DES `image-rendering: pixelated` NE BOUGE PAS, ET LA PREMIÈRE
+  // ÉCRITURE DE CETTE GARDE DISAIT LE CONTRAIRE. Elle annonçait « le huitième est
+  // parti avec le mur » : MESURÉ, il était déjà tombé au lot MURS — CLAUDE.md le
+  // dit noir sur blanc, « il en reste SEPT ». Sept avant ce lot, sept après. Le
+  // calque du mur n'en portait plus.
   //
-  // ⚠ ON ASSERTE UNE RELATION, PAS TROIS NOMBRES. Recopier « 1 » et « 2 »
-  // laisserait passer l'inversion des deux, qui est exactement la faute.
-  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
-  const regle = (selecteur) => {
-    const m = feuille.match(new RegExp(`${selecteur.replace(/[.#]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
-    assert.ok(m, `${selecteur} n'a plus de règle CSS`);
-    return m[1];
-  };
-  const etage = (selecteur) => {
-    const m = regle(selecteur).match(/z-index:\s*(-?\d+)/);
-    return m ? Number(m[1]) : null;
-  };
+  // ⚠ ET ON COMPTE SUR LA FEUILLE DÉCOMMENTÉE : le brut en rend DIX, les trois de
+  // trop étant dans les commentaires qui expliquent la règle.
+  assert.equal((feuilleNue.match(/image-rendering:\s*pixelated/g) ?? []).length, 7,
+    'le compte des `image-rendering: pixelated` a bougé sans qu\'on le dise');
 
-  const mur = etage('#chantier-contour');
-  const jeton = etage('.jeton');
-  assert.ok(mur !== null, 'le calque du mur n\'a plus d\'étage : il repasse sous le sol des cases');
-  assert.ok(jeton !== null, 'les jetons n\'ont plus d\'étage : le mur leur passera dessus');
-  assert.ok(mur > 0, `le mur est à l'étage ${mur} : il ne monte plus au-dessus du sol`);
-  assert.ok(jeton > mur,
-    `les jetons sont à l'étage ${jeton} et le mur à ${mur} : un bâtiment du pourtour serait barré`);
+  // ⚠⚠ LE DÉCOR SE CHOISIT SUR `fondation`, PAS SUR `position`. C'est l'IDENTITÉ
+  // de la base : elle ne bouge jamais, quand `position` change à chaque
+  // redéploiement. Le décor tient donc à travers un déménagement.
+  assert.match(ecran, /fondDeLaBase\('joueur', 'base', fondation\.rangee, fondation\.colonne\)/,
+    'l\'écran ne choisit plus son décor sur la fondation de la base');
 
-  // ⚠ LE SOL N'A PAS D'ÉTAGE, ET C'EST CE QUI LE MET SOUS LE MUR. Une case qui
-  // en gagnerait un remonterait son fond opaque par-dessus le mur.
-  assert.equal(etage('.case'), null, 'les cases ont un `z-index` : leur sol recouvrira le mur');
-  assert.equal(etage('.case.choisie'), null,
-    'la case choisie a repris un `z-index` : elle redevient un CONTEXTE D\'EMPILEMENT, '
-    + 'donc son jeton retombe sous le mur');
-
-  // ⚠ ET LE CALQUE DES TRAITS RESTE AU-DESSUS DU MUR. Les flèches de voisinage
-  // répondent à un geste ; le mur est un décor.
-  assert.ok(etage('#chantier-traits') >= mur, 'les traits de voisinage passent sous le mur');
-
-  // Le mur ne prend aucun geste : un mur qui avalerait le toucher d'une case du
-  // pourtour serait la faute que le dépôt refuse depuis le `transform: scale()`.
-  assert.match(regle('#chantier-contour'), /pointer-events:\s*none/,
-    'le mur de contour avale le toucher des cases du pourtour');
-
-  // ⚠ ET LA PIÈCE PORTE SA TAILLE, PAS UNE CASE. Une règle qui figerait
-  // `width: var(--case-cote)` ramènerait le pavage case par case que le lot
-  // vient de retirer, et le mur redeviendrait un motif répété.
-  const piece = regle('#chantier-contour .mur');
-  assert.doesNotMatch(piece, /width:/, 'la pièce de mur fixe sa largeur dans la feuille');
-  assert.match(piece, /background-size:\s*100% 100%/, 'l\'image ne remplit plus sa pièce');
+  // ⚠⚠ ET LES CASES SE VIDENT EXPLICITEMENT DE LEURS FONDS. Jusqu'au lot
+  // MUR-PEINT, la boucle qui posait le sol repassait sur les 162 cases et
+  // ÉCRASAIT ce qui s'y trouvait : la remise à zéro était un effet de bord du
+  // pavage. Plus rien ne repasse sur les cases, et sans cette boucle un champ
+  // démoli garderait son dessin jusqu'au rechargement.
+  assert.match(ecran, /for \(const case_ of cellules\.values\(\)\) poserFonds\(case_, \[\]\);/,
+    'les cases ne se vident plus de leurs fonds : un champ démoli resterait dessiné');
 });
-
-// ---------------------------------------------------------------------------
-// Le sol qui remplit le champ — lot MURS-JUSQU-EN-BAS, 03/09
-// ---------------------------------------------------------------------------
-
-test('décor — le champ est tapissé du même sol que les cases, à la même échelle', () => {
-  // ⚠⚠ CE QUE CETTE GARDE TIENT. Ethan, 03/09, capture à l'appui : « rajouter
-  // tuiles terrain afin de remplir l'ui. purement decoratif ». La grille ne
-  // fait que dix-huit rangées ; sous elle, `#chantier-defile` montrait le
-  // `#161914` de son parent — une bande noire franche sous un sol de terre.
-  //
-  // ⚠ « PUREMENT DÉCORATIF » EST UNE CONTRAINTE, PAS UN COMMENTAIRE : le fond
-  // ne doit ni entrer dans le flux, ni prendre un geste, ni déplacer une case.
-  // Un `background` ne fait aucune des trois — c'est pour ça que c'est un
-  // `background` et pas une rangée de cases en plus.
-  const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
-  const bloc = feuille.match(/#chantier-defile\s*\{([^}]*)\}/);
-  assert.ok(bloc, '#chantier-defile n\'a plus de règle');
-
-  // Le MÊME atlas que le sol des cases : une seconde image serait un second
-  // `data:` au livrable, pour un décor.
-  assert.match(bloc[1], /background-image:\s*var\(--atlas-sol\)/,
-    'le champ ne se tapisse pas de l\'atlas du sol');
-  assert.match(bloc[1], /background-repeat:\s*repeat/, 'le fond ne se répète pas');
-
-  // ⚠ `local`, ET C'EST LA MOITIÉ QUI COMPTE. Sous le défaut `scroll`, la terre
-  // resterait collée au cadre pendant que la grille glisse dessus : un effet de
-  // parallaxe qui trahirait que ce sol-là n'est pas celui des cases.
-  assert.match(bloc[1], /background-attachment:\s*local/,
-    'le fond du champ ne défile plus avec la grille');
-
-  // ⚠ ET L'ÉCHELLE VIENT DE LA VARIABLE, PAS D'UN NOMBRE. Un `background-size`
-  // chiffré marcherait à la case par défaut et mentirait au premier pincement.
-  assert.match(bloc[1], /background-size:\s*var\(--sol-pave/,
-    'l\'échelle du pavage est écrite en dur dans la feuille');
-  assert.doesNotMatch(bloc[1], /background-size:\s*\d/, 'le pavage porte une taille chiffrée');
-
-  // ⚠⚠ ET LA COULEUR RESTE SOUS L'IMAGE. Si l'atlas manquait, on retombe sur le
-  // noir d'avant, jamais sur du blanc : un décor ne rend pas l'écran illisible
-  // en tombant.
-  const champ = feuille.match(/#chantier-champ\s*\{([^}]*)\}/);
-  assert.ok(champ, '#chantier-champ n\'a plus de règle');
-  assert.match(champ[1], /background:\s*#161914/,
-    'le champ n\'a plus de couleur sous le décor');
-});
-
-test('décor — le pavage se dérive de l\'atlas, et il se règle au même endroit que la case', () => {
-  // ⚠⚠ LE NOMBRE SE MESURE SUR L'IMAGE, IL NE S'ÉCRIT PAS. Une case prend
-  // `tuilesParCase²` cellules de l'atlas ; l'atlas en couvre donc
-  // `parAxe / tuilesParCase` par axe. Sur celui du dépôt — 1024 px, cellules de
-  // 64 — cela fait 16 / 2 = 8 cases. Écrire 8 dans la feuille ou dans le JS en
-  // ferait une seconde vérité, et le premier atlas d'une autre taille
-  // décalerait le motif sans que rien ne le dise.
-  const octets = readFileSync(join(RACINE, 'art', 'sprites', 'carte', 'atlas-terrain-64.png'));
-  const largeur = octets.readUInt32BE(16);
-  const cellule = ZOOM_CARTE.coteTuile / ZOOM_CARTE.tuilesParCase;
-  const attendu = (largeur / cellule) / ZOOM_CARTE.tuilesParCase;
-  const doc = { getElementById: () => ({ getAttribute: () => String(largeur) }) };
-  assert.equal(casesDeSolParAtlas(doc), attendu,
-    'le pavage ne se dérive plus de la largeur réelle de l\'atlas');
-  // Le montage mesure quelque chose : le nombre n'est ni 1 ni la grille entière.
-  assert.ok(attendu > 1 && attendu < largeur, `pavage dégénéré : ${attendu}`);
-  // ⚠ ET IL SUIT L'IMAGE, IL NE REND PAS UNE CONSTANTE. Sans ce second point,
-  // une fonction qui rendrait huit en dur passerait l'égalité ci-dessus, la
-  // valeur du dépôt valant huit — c'est exactement la faute que ce lot vient de
-  // corriger sur `grilleEmbleme`, qui valait la bonne réponse d'hier.
-  const double = { getElementById: () => ({ getAttribute: () => String(largeur * 2) }) };
-  assert.equal(casesDeSolParAtlas(double), attendu * 2,
-    'le pavage ne suit pas la taille de l\'atlas : il rend une constante');
-
-  // ⚠ ET UN ATLAS QUI NE SE GROUPE PAS EN CASES ENTIÈRES LÈVE. Un pavage
-  // fractionnaire brouillerait le pixel art — le défaut que tout le reste du
-  // dépôt refuse.
-  const bancal = { getElementById: () => ({ getAttribute: () => String(cellule * 3) }) };
-  assert.throws(() => casesDeSolParAtlas(bancal), /ne divisent pas|multiple/,
-    'un atlas de trois cellules par axe passe : le pavage tomberait entre deux cases');
-
-  // ⚠⚠ ET LES DEUX ÉCHELLES S'ÉCRIVENT DANS LA MÊME FONCTION. `--case-cote` et
-  // `--sol-pave` disent la même grandeur à un facteur près ; les régler à deux
-  // endroits, c'est se donner rendez-vous pour diverger au premier pincement.
-  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  const poses = [...source.matchAll(/setProperty\('--(case-cote|sol-pave)'/g)].map((m) => m[1]);
-  assert.deepEqual(poses.sort(), ['case-cote', 'sol-pave'],
-    'une des deux échelles est posée deux fois, ou plus du tout');
-  const bloc = source.match(/function reglerCoteCase\([^)]*\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(bloc, 'reglerCoteCase a disparu');
-  assert.match(bloc[0], /--case-cote/, 'reglerCoteCase ne pose plus le côté de case');
-  assert.match(bloc[0], /--sol-pave/,
-    'le pavage décoratif a quitté la fonction qui règle la case : les deux échelles vont diverger');
-
-  // ⚠⚠ ET C'EST LE FACTEUR QU'ON LIT, PAS LA PRÉSENCE DE LA LIGNE. Une garde
-  // qui se contenterait de trouver `--sol-pave` dans la fonction passerait sur
-  // un pavage réglé à la taille de la CASE — le motif serait alors huit fois
-  // trop serré, et rien ne tomberait. C'est le proxy que ce lot vient de
-  // corriger deux fois ailleurs, sur `grilleEmbleme` et sur `lignesHorsDuU` :
-  // on nomme la grandeur défendue, qui est le RAPPORT entre les deux échelles.
-  const nomDuFacteur = source.match(/const\s+(\w+)\s*=\s*casesDeSolParAtlas\(/);
-  assert.ok(nomDuFacteur, 'le facteur de pavage ne vient plus de `casesDeSolParAtlas`');
-  const expression = (variable) => {
-    const m = bloc[0].match(new RegExp(`--${variable}',\\s*\`\\$\\{([^}]*)\\}px\``));
-    assert.ok(m, `--${variable} ne se pose plus par un gabarit \`\${…}px\``);
-    return m[1];
-  };
-  const cote = expression('case-cote');
-  const pave = expression('sol-pave');
-  assert.equal(pave.includes(nomDuFacteur[1]), true,
-    `--sol-pave vaut « ${pave} » : le pavage ne multiplie plus par ${nomDuFacteur[1]}, `
-    + 'donc il suit la case au lieu de l\'atlas');
-  assert.equal(cote.includes(nomDuFacteur[1]), false,
-    `--case-cote vaut « ${cote} » : le côté de case s'est mis à porter le facteur du pavage`);
-  assert.equal(pave.includes(cote.trim()), true,
-    `--sol-pave vaut « ${pave} » et ne repart plus du côté de case « ${cote} » : `
-    + 'les deux échelles ont cessé d\'en être une seule');
-});
-
 test('défense — la ligne de détail suit le TERRAIN, jamais la disposition', () => {
   // ⚠⚠ DÉFAUT ANTÉRIEUR À CE LOT, TROUVÉ AU BOOT SANS TÊTE ET REPRODUIT SUR
   // `main`. `rafraichir` réécrivait `#chantier-selection-detail` avec

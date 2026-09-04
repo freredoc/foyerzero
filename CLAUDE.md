@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.82.0 · build 84.
+Dernière révision : **03/09/2026**, version 0.83.0 · build 85.
 
 ---
 
@@ -41,8 +41,127 @@ Dernière révision : **03/09/2026**, version 0.82.0 · build 84.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot CHAMPS-ET-OBSTACLES), à confronter :**
-`npm test` → **976 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 03/09/2026 (après le lot MUR-PEINT), à confronter :**
+`npm test` → **977 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**5 516 056 octets**, 0 référence externe.
+⚠⚠ **LE MUR DE CONTOUR N'EST PLUS UNE GÉOMÉTRIE : IL EST PEINT DANS LE FOND.**
+Ethan, 03/09 : « le mur est peint dans le fond, il n'est plus dessiné », et huit
+décors de 1080 × 2160 livrés. `render/contour.js` SORT, `render/fond.js` entre ;
+l'anneau de dix-neuf pièces que les deux écrans posaient case par case disparaît,
+et avec lui le sol pavé case par case. Coût **+2 154 705 octets**, soit
+**1,64×** — **25 `data:` avant, 21 après** : huit décors entrent, douze murs
+sortent. Borne T10 **relevée de 3 400 000 à 5 700 000**, marge **184 099 octets,
+3,2 %**.
+⚠⚠ **LE LOT S'EST ARRÊTÉ DEUX FOIS, ET LES DEUX ARRÊTS ÉTAIENT JUSTES.** (1) Les
+huit SHA-256 du brief divergeaient — **les huit, pas un** —, et rien au dépôt ne
+permettait d'établir que les pixels étaient les mêmes ; Ethan a confirmé.
+(2) À q85 le HTML passait à **6 988 703 octets, 2,08 fois**, au-delà du
+doublement qu'il pose lui-même comme condition d'arrêt. Paliers mesurés et
+soumis : q80 → 1,83× · **q75 → 1,65×** · q70 → 1,60×, contre 1,73× pour une
+réduction à 810 px. **Réponse : q75, pleine résolution.** Un lot qui entre d'un
+seul commit ne se bâtit pas sur une provenance non établie.
+⚠⚠ **ET LA RÉSOLUTION NE SE TOUCHE PAS, C'EST LA MOITIÉ DU CHOIX.** Réduire à
+810 px rendait 5 828 763 octets — **moins de marge que q75**, pour un flou
+permanent : les planches font 1080 de large, soit exactement la largeur physique
+d'un téléphone à dpr 3, et le décor y tombe au **1:1**.
+⚠⚠ **LE MUR VAUT UNE DEMI-CASE, ET C'EST MESURÉ SUR L'ART, PAS CHOISI.** Un
+repère à x = 54 longe la face intérieure du parapet peint sur les quatre jets
+joueur, et son symétrique tombe sur 1026 : case = 108 px, mur = 54, image = **dix
+cases de large**. L'anneau en prenait onze — **la case GROSSIT de 10,8 % sur
+412 × 820**, mesuré, 3,4 % sur 360 × 560.
+⚠⚠ **L'ART A ÉTÉ COMPOSÉ POUR CETTE GRILLE, ET ÇA SE VÉRIFIE AU RENDU.** La fin
+de la bande `batiments` tombe à **306,28 px** du haut du décor quand l'art la met
+à `918/2160 × 720 = 306` : **un tiers de pixel**. Relevé dans Chromium, pas sur
+la planche.
+⚠ **LE DÉBORD EST DE 1,5 CASE, ET IL EST VOULU** : `54 + 18 × 108 = 1998` sur
+2160, il reste 162 px. « Ni rognage, ni étirement, ni recentrage » — le terrain
+en trop passe sous les contrôles.
+⚠⚠ **LE PARAMÈTRE `contour` N'A PAS ÉTÉ RETIRÉ — IL A CHANGÉ DE NOM ET DE
+VALEUR, ET IL FALLAIT LE DIRE.** Le brief demandait de le retirer « si plus aucun
+appelant ne le passe » : un appelant le passe toujours, la boîte faisant DIX
+cases et non neuf. Il s'appelle `murCases`, il est **en cases et non en drapeau**,
+et `ui/banc.js` ne passe rien — `FOND T5` vérifie que `murCases = 0` rend
+l'ancienne projection au caractère près, ce qui laisse les douze mesures de
+pixels du banc intactes.
+⚠⚠ **DEUX MÉTRIQUES INVENTÉES POUR L'OCCASION ONT ÉTÉ JETÉES AVANT D'ÊTRE
+CRUES.** L'une ne distinguait pas le mur de la texture du sol et rendait des
+faces intérieures de x = 115 à x = 356 ; l'autre cherchait « la plus forte
+rupture horizontale » et attrapait une corniche, annonçant six cases d'écart sur
+l'alignement des bandes. **Ce qui a tranché, c'est d'avoir regardé les images.**
+⚠⚠ **UNE GARDE QUE J'AI ÉCRITE LISAIT MON PROPRE COMMENTAIRE — CINQUIÈME FOIS DU
+DÉPÔT**, après `viewport-fit=cover`, `MENTION_SATURE`, `variante.js` et
+`render/contour.js`. Elle cherchait `#chantier-contour` dans le HTML brut et le
+trouvait dans le commentaire qui explique que le calque a disparu. Elle lit la
+feuille décommentée, avec un témoin qui prouve que le filtre n'a pas tout mangé.
+⚠⚠ **ET UN COMMENTAIRE QUE J'AVAIS ÉCRIT AFFIRMAIT UN CHANGEMENT QUI N'A PAS EU
+LIEU** : « le huitième `image-rendering: pixelated` part avec le calque du mur ».
+**Mesuré : il en restait déjà SEPT avant le lot** — celui du mur était tombé au
+lot MURS. Sept avant, sept après. Le test compte désormais sur la version
+décommentée, le brut en rendant dix.
+⚠ **HUIT FALSIFICATIONS, HUIT CHUTES** — l'anneau rallumé, le mur à une case
+pleine puis à zéro, la boîte à 10,5 cases, une bande déplacée, le tirage rendu
+constant, un type inconnu toléré, un neuvième fichier de décor, un `bord_j_*`
+réintroduit. ⚠ La sixième mord **dans les deux sens** : un fichier de trop comme
+un nom de trop. ⚠ Et l'une d'elles a dû être **refaite** parce qu'elle cassait la
+syntaxe au lieu de mordre — 0 pass / 1 fail ne prouve rien.
+⚠⚠ **`art/sourcesstandby/bord/` N'EXISTAIT PAS, ET LE BRIEF L'ANNONÇAIT COMME UN
+PRÉCÉDENT.** Vérifié avant de choisir, comme il le demandait : c'est ce lot qui
+crée le sous-dossier. Les dix-sept fichiers de l'anneau y sont mis de côté —
+Ethan : « les `bord_*` ne sont pas supprimés » — et `bords` sort de `CHAINE`,
+sans quoi le vérificateur les compterait « nouveaux » à chaque exécution.
+⚠⚠ **MAIS LES `base_bords_*` N'ONT PAS SUIVI, ET C'EST UN ÉCART DÉCLARÉ.** Le
+brief leur donnait « le même chemin » ; **`art/sources/` ne s'ampute JAMAIS**, et
+le lot MURS a le précédent exact — la v1 retirée a laissé ses planches en place,
+reclassées `dormantes`. Le diff de `art/sources-declarees.json` raconte le lot en
+**douze lignes**.
+⚠ **`tile_sol_{j,o}_*` N'A PAS ÉTÉ TOUCHÉ, PARCE QUE CE LOT NE L'ORPHELINE PAS :
+IL L'ÉTAIT DÉJÀ.** Mesuré, et un test le rejoue : les huit dalles ne sont nommées
+dans `src/` que par des COMMENTAIRES depuis le 30/08. Les retirer changerait la
+géométrie d'un fichier GÉNÉRÉ pour une dette que ce lot n'a pas créée.
+⚠ **`--atlas-sol` RESTE** : c'est l'atlas du MONDE, et la carte en a toujours
+besoin. Seul l'usage qu'en faisait la base disparaît.
+⚠ **`yDeLigneEcran` N'A PLUS D'APPELANT DE PRODUCTION ET RESTE** — encore
+exportée et testée par `rendu.test.js`. À reprendre.
+⚠⚠ **UN DÉFAUT ANTÉRIEUR AU LOT A ÉTÉ TROUVÉ EN RELISANT, ET IL EST MESURÉ SUR
+`main`.** `#chantier-traits` est en `position: absolute` : son `inset` se compte
+depuis la boîte de PADDING de la grille, donc il doit VALOIR le `padding` pour
+tomber sur le contenu. Depuis le lot MURS, le padding valait une case pleine et
+l'inset une demi-case — les deux avaient été changés séparément. **Mesuré dans
+Chromium sur le livrable d'avant : contenu à x = 36, calque à x = 20, et 32 px
+trop large — les traits de voisinage étaient étirés de 11,1 % et partaient à côté
+des centres de case.** C'est très exactement la faute que le commentaire du
+calque annonçait comme possible ; elle était commise. Après : **écart 0 et 0**.
+⚠ **RIEN NE POUVAIT LE VOIR : deux valeurs justes séparément, fausses ensemble**,
+dans deux règles CSS que personne ne comparait — la leçon de la boussole de
+`rendu-pose.js`. La garde qui manquait exige désormais l'ÉGALITÉ des deux, et
+elle tombe si on les sépare.
+⚠ **LE COMPTE DE TESTS MONTE DE UN, ET IL SE DÉCOMPOSE** : +12 (`fond.test.js`
+entre), −9 (`contour.test.js` sort), −2 (`chantier.test.js`, 86 → 84 : cinq
+tests d'anneau et de pavage remplacés par trois, plus la garde du calque qui
+entre). **Aucune assertion n'a été assouplie** : les tests qui affirmaient
+l'anneau ont été REMPLACÉS, pas ajustés.
+⚠ **LA BASELINE ÉTAIT ROUGE, ET C'ÉTAIT LA GARDE D'ENTRÉES** : `main` a viré au
+rouge au commit qui apporte les huit PNG, run 507 en échec contre 505 vert. Ce
+lot referme ce rouge en les consommant.
+⚠ **RELEVÉ AU DOIGT DANS CHROMIUM** (360 × 720, dpr 3) : case 36 px, `padding`
+18, grille **360 px de large** — toute la largeur, aucune marge latérale —,
+décor 360 × 720 en `no-repeat` + `local`, **zéro élément `.mur`**, et les **huit
+balises `fond-*` décodent en 1080 × 2160**. Zéro erreur de page.
+⚠ **L'ÉCRAN DE RAID N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ** : y entrer
+demande une armée composée, et 120 doubles touchers balayés n'ont ouvert aucune
+cible. `FOND T10` le couvre — la primitive est posée UNE fois, avec la famille du
+PROPRIÉTAIRE DE LA DÉFENSE, jamais `'ouvrage'` en dur.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Un décor est un dessin.
+⚠ **`python3 tools/verifier.py` → 997 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 359,8 s. Il était dû. **Le compte passe de 1 005 à
+997** : −17 (les murs sortent d'`art/sprites/`), +9 (les huit décors et leur
+manifeste).
+⚠ **`python3 tools/entrees.py --declarer` → 97 consommées · 90 dormantes ·
+187 fichiers** dans `art/sources/` (avant : 93 / 86 / 179). Lancé **à la main**,
+et mesuré : il n'écrit pas un octet dans `art/sprites/`.
+
+**Auparavant, après le lot CHAMPS-ET-OBSTACLES :**
+`npm test` → 976 pass / 0 fail, `npm run build` → `dist/index.html`,
 **3 361 351 octets**, 0 référence externe.
 ⚠⚠ **CINQ PLANCHES NEUVES D'ETHAN REMPLACENT LES SEPT ANCIENNES, ET LE LOT TIENT
 EN CINQ LIGNES DE TABLE.** 03/09 au soir, dix images et trois lignes — « terrain
@@ -2604,7 +2723,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
 src/render/             rendu, sans DOM non plus : rend des primitives — 11 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
-  contour.js            l'anneau de mur d'une base : des pièces en unités de case
+  fond.js               le décor peint d'une base : quel dessin, et où il se pose
   limite.js             quel dessin porte une frontière de territoire, et où le découper
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
@@ -2634,16 +2753,19 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 11 fi
     ligne qui n'est pas « deux espaces puis une minuscule » : une note glissée
     au milieu tronque la liste, et le test accuse alors les fichiers qui la
     suivent d'avoir disparu. Elles vont à la FIN du bloc. Payé une fois.
-  ⤷ ⚠⚠ `contour.js` EST NÉ D'UN DÉMÉNAGEMENT, PAS D'UNE ÉCRITURE — lot
-    MURS-OUVRAGE, 03/09. `tuilesDuContour` vivait dans `ui/chantier.js` tant
-    qu'un seul écran s'en servait ; la base de l'OUVRAGE se regarde sur l'écran
-    de raid, qui est un canevas et passe par `render/`, lequel n'a pas le droit
-    d'importer `ui/`. Pas une ligne de la géométrie n'a changé en route, et
-    l'écran de la base la RÉ-EXPORTE — un ré-export n'est pas une copie, c'est
-    la même liaison. Même motif que `baseCourante`, ré-exporté par
-    `sim/state.js`. ⚠ ET UN RÉ-EXPORT NE CRÉE AUCUNE LIAISON LOCALE : payé en
-    une exécution, `bornesDeDefilement` levant « BANDE_DU_CONTOUR is not
-    defined » sous le seul `export … from`.
+  ⤷ ⚠⚠ `fond.js` REMPLACE `contour.js`, IL NE S'AJOUTE PAS À LUI — lot
+    MUR-PEINT, 03/09. Ethan : « le mur est peint dans le fond, il n'est plus
+    dessiné ». L'anneau de blocs que les deux écrans posaient case par case a
+    disparu, et avec lui `tuilesDuContour`, `nomsDuContour`, les six variables
+    CSS de mur du Chantier, les six balises de l'Ouvrage et le ré-export qui
+    tenait les deux écrans ensemble. Ce module-ci garde le PARTAGE — il rend un
+    nom et des unités de case, à charge des deux écrans de les poser — et rien
+    d'autre de l'ancien. ⚠ IL PORTE AUSSI LA BOÎTE : `MUR_CASES` vaut une
+    demi-case, mesurée sur les huit planches (54 px pour une case de 108), donc
+    la boîte fait dix cases de large au lieu des onze de l'anneau — la case
+    GROSSIT d'environ 10 % à surface d'écran égale. ⚠ ET `BANDE_SOUS_LE_MUR` est
+    tout ce qui survit de `contour.js` : `bornesDeDefilement` la lit pour ne pas
+    couper la bande de mur en défilant, et c'est son seul lecteur.
   ⤷ ⚠⚠ `limite.js` REMPLACE UN TRAIT PAR UN DESSIN — lot TERRITOIRE, 03/09.
     `ui/monde.js` traçait les frontières au `strokeStyle` depuis le 31/08 ; ce
     que les sprites d'Ethan apportent, c'est une frontière qui a un DEDANS et un
@@ -2700,7 +2822,7 @@ test/                   50 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
-  sprite  state  recherche  maj  territoire  bases  transfert  contour  limite
+  sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -2793,12 +2915,17 @@ tools/                  28 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sprites bruts, hors chaîne de build — 179 fichiers à la
-                        racine, 442 en comptant `carte/`. RECOMPTÉ le 03/09 au
-                        lot CHAMPS-ET-OBSTACLES, qui en fait entrer cinq : les
-                        planches neuves des champs et des obstacles. Les sept
-                        qu'elles remplacent RESTENT — ce dossier ne s'ampute
+art/sources/            sprites bruts, hors chaîne de build — 187 fichiers à la
+                        racine, 450 en comptant `carte/`. RECOMPTÉ le 03/09 au
+                        lot MUR-PEINT, qui en fait entrer huit : les décors de
+                        base peints, mur compris. Les quatre planches de mur
+                        qu'ils remplacent RESTENT — ce dossier ne s'ampute
                         jamais — et passent en `dormantes`.
+                        ⚠⚠ ET LE BRIEF DU LOT DEMANDAIT DE LES EN SORTIR : refusé,
+                          et l'écart est déclaré. « `art/sources/` ne s'ampute
+                          jamais » est écrit trois fois dans ce fichier, et le lot
+                          MURS a le précédent exact — la v1 retirée a laissé ses
+                          planches en place, reclassées `dormantes`.
                         ⚠⚠ ET IL EST DÉSORMAIS GARDÉ : `art/sources-declarees.json`
                           classe chacun de ces fichiers en `consommees` (93) ou
                           `dormantes` (86), et `tools/entrees.py --verifier` fait
@@ -2827,7 +2954,19 @@ art/sources/            sprites bruts, hors chaîne de build — 179 fichiers à
                           lit `icone_appli.png` et n'est pas dans `CHAINE`. Rien
                           n'est supprimé sur la foi de ce classement.
 art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images déposées
-                        par Ethan le 03/09, plus son `README.md`.
+                        par Ethan le 03/09, plus son `README.md`, plus le
+                        sous-dossier `bord/` depuis le lot MUR-PEINT.
+                        ⚠⚠ `bord/` NE PORTE PAS DES SOURCES MAIS DES PRODUITS —
+                          les seize murs de contour et leur manifeste, mis de
+                          côté quand le mur est passé dans le fond peint. Ethan :
+                          « les `bord_*` ne sont pas supprimés ». Le nom du
+                          dossier dit « standby », ce qui est juste ; il dit
+                          aussi « sources », ce qui ne l'est pas pour eux — et
+                          c'est le seul endroit du dépôt dont une garde prouve
+                          qu'aucun outil ne le lit, ce qui est exactement la
+                          propriété qu'on cherchait. ⚠ Le brief l'annonçait
+                          « déjà existant comme précédent » : il ne l'était pas,
+                          et c'est ce lot qui le crée.
                         ⚠⚠ AUCUN OUTIL NE LE LIT, et une garde le mesure : la
                           troisième assertion d'`entrees.py` tombe si la chaîne
                           y ouvre quoi que ce soit. Ne pas déplacer une image
@@ -2841,17 +2980,21 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           trier les chemins à la sous-chaîne rangerait chaque
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
-art/sprites/            les sprites conditionnés — VINGT ET UN dossiers de grille
-                        et 1 010 fichiers, recomptés le 03/09 au lot
-                        MOULINETTE-TERRAIN, plus
-                        DIX-HUIT atlas `.webp` à la racine, DEUX fichiers générés —
-                        `ancres-chassis.json` et `atlas-empreintes.json` — et les
-                        SEIZE images à plat de `bord/` avec leur manifeste, et
-                        depuis le 03/09 l'unique image de `fond/`.
+art/sprites/            les sprites conditionnés — ONZE dossiers de famille et
+                        **1 042 fichiers**, recomptés le 03/09 au lot MUR-PEINT,
+                        plus DIX-HUIT atlas `.webp` à la racine et DEUX fichiers
+                        générés — `ancres-chassis.json` et
+                        `atlas-empreintes.json`.
                         DIX familles en 128 et 64 : unité, bâtiment, terrain,
                         defense, tourelle-unite, socle, carte, effet, chassis,
-                        limite. La onzième, `bord`, n'a pas de grille ; la
-                        douzième, `fond`, n'est même pas une famille de sprites.
+                        limite. La onzième, `fond`, n'est même pas une famille de
+                        sprites : neuf décors et leur manifeste.
+                        ⚠⚠ ET `bord/` N'Y EST PLUS — lot MUR-PEINT, 03/09. Ses
+                          seize murs et son manifeste sont mis de côté dans
+                          `art/sourcesstandby/bord/`, et `bords` est sorti de
+                          `CHAINE` : le mur est peint dans le fond, plus aucun
+                          écran ne le dessine. Les laisser ici les ferait compter
+                          « nouveaux » par le vérificateur à chaque exécution.
                         ⚠ CE BLOC A ANNONCÉ « NEUF FAMILLES » ET « SEIZE ATLAS »
                         APRÈS LE LOT TERRITOIRE, QUI EN AVAIT AJOUTÉ UNE DE
                         CHAQUE : le compte de ce dossier n'est gardé par aucun

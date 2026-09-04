@@ -30,7 +30,11 @@ import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
-import { TERRAINS, tuilesDuContour, LONGUEUR_DU_MUR } from '../src/ui/chantier.js';
+import { TERRAINS } from '../src/ui/chantier.js';
+import {
+  tousLesFonds, SOURCE_LARGEUR, SOURCE_HAUTEUR, COTE_CASE_SOURCE,
+  LARGEUR_EN_CASES, HAUTEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES,
+} from '../src/render/fond.js';
 import { BATIMENTS } from '../src/data/sites.js';
 import { ORIENTATION_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
 import { creerCombat } from '../src/sim/combat.js';
@@ -476,114 +480,100 @@ test('sprite — une cellule se pose aussi dans un QUARTIER, et la formule tient
   assert.equal(degenere.position, '0% 0%');
 });
 
-test('bord — les murs de contour sont des BLOCS à part, et le manifeste en répond', () => {
-  // ⚠⚠ CE QUE CE TEST GARDE, ET IL VIENT DE DEUX ARBITRAGES. Le 31/08, le mur
-  // avait d'abord été conditionné comme un sprite de case — 64 × 64, quatorze
-  // teintes du dépôt, cousu dans un atlas — et Ethan l'a refusé de face : « mais
-  // c'est quoi cette chiasse de pixel. divise par deux l'asset original. et
-  // garde la colorisation. » Le 03/09, il a livré des planches neuves : « déjà
-  // refait les murs avec les nouveaux sprites, et pour que ça passe bien parce
-  // que là ça déborde ».
-  //
-  // ⚠⚠ LA V2 N'EST PAS LA V1 EN PLUS GRAND. Ce sont des BLOCS PLEINS — quatre
-  // murs de quatre cases et quatre blocs d'une case par camp —, là où la v1
-  // était cinq TRAITS fins nommés par leur PLACE (`mur_h_a`, `angle_no`). Les
-  // quatre « angles » du zip ne sont pas quatre orientations d'un coude : ce
-  // sont quatre VARIANTES du même carré, mesuré et regardé, dont aucune n'est le
-  // miroir d'une autre. Ils se numérotent, donc, au lieu de se nommer.
-  const dossier = join(SPRITES, 'bord');
-  const fichiers = readdirSync(dossier).filter((f) => f.endsWith('.webp')).sort();
-  assert.equal(fichiers.length, 16,
-    `bord/ porte ${fichiers.length} fichiers : deux camps × (4 murs + 4 blocs)`);
+test('fond — les huit décors, la table et les fichiers ne peuvent pas diverger', () => {
+  // ⚠⚠ CE TEST REMPLACE CELUI DES MURS DE CONTOUR, IL NE L'AJUSTE PAS — lot
+  // MUR-PEINT, 03/09. Celui d'avant gardait `art/sprites/bord/` : dix-sept
+  // fichiers, un manifeste, la taille d'un bloc et d'un mur en cases. Le mur est
+  // maintenant PEINT dans le fond de base ; il n'y a plus d'anneau, plus de pièce
+  // et plus de dossier `bord/` sous `art/sprites/`. Garder ce test en changeant
+  // ses valeurs attendues aurait été la faute que le brief nomme : on le retire,
+  // et on écrit celui qui affirme le contraire.
+  const dossier = join(RACINE, 'art', 'sprites', 'fond');
 
-  // ⚠ LA V1 EST PARTIE AVEC SA PRODUCTION. `tools/bords.py` ne fait plus ses
-  // seize traits ; les laisser au dépôt les ferait compter MANQUANTS par le
-  // vérificateur à chaque exécution — « le dépôt les porte, aucun outil ne les
-  // fait », c'est-à-dire le contraire de la vérité.
-  assert.equal(readdirSync(dossier).filter((f) => f.endsWith('.png')).length, 0,
-    'bord/ porte encore des PNG : la v1 du mur n\'est plus produite par personne');
-  assert.ok(!existsSync(join(dossier, String(COTE_SPRITE))),
-    'bord/ a repris un dossier de grille : ses sprites ne sont pas des sprites de case');
+  // ⚠ `bord/` N'EST PLUS SOUS `art/sprites/`, ET C'EST LA MOITIÉ DU LOT. Il est
+  // mis de côté dans `art/sourcesstandby/bord/`, hors de la chaîne : Ethan
+  // (« les `bord_*` ne sont pas supprimés ») voulait qu'ils survivent, pas qu'ils
+  // se produisent. Le laisser sous `art/sprites/` aurait fait compter ses
+  // dix-sept fichiers MANQUANTS par `tools/verifier.py` à chaque exécution.
+  assert.ok(!existsSync(join(RACINE, 'art', 'sprites', 'bord')),
+    'art/sprites/bord/ est revenu : l\'anneau de mur se reproduit');
 
-  // ⚠ ET IL N'EST TOUJOURS PAS DANS L'INDEX DES ATLAS. `tools/atlas.py` n'accepte
-  // que des cellules carrées d'un même côté ; ni 512 × 128 ni un mélange de
-  // formats n'y tiennent.
-  assert.equal(ATLAS.bord, undefined,
-    'la famille `bord` est revenue dans l\'atlas : elle n\'y tient pas');
+  // ⚠ ET UN DÉCOR N'EST DANS AUCUN ATLAS, ni ne peut y être : `tools/atlas.py`
+  // n'accepte que des cellules CARRÉES d'un même côté, quand un fond fait
+  // 1080 × 2160.
+  assert.equal(ATLAS.fond, undefined,
+    'la famille `fond` est entrée dans l\'atlas : elle n\'y tient pas');
 
-  // ⚠⚠ LE MANIFESTE EST CE QUI REMPLACE `decoderRgba` ICI, ET C'EST LE MOTIF DU
-  // DÉPÔT DEPUIS LE 02/09. Les murs sont en WebP — 6 344 octets pour `mur_1`
-  // contre 72 651 en PNG optimisé, mesuré — et Node n'a pas de décodeur WebP ;
-  // §3 interdit d'ajouter une dépendance de test. `tools/bords.py` écrit donc
-  // `bord-empreintes.json` : le SHA-256 de chaque fichier, sa taille, ses
-  // teintes opaques, ses transparents et ses trous enfermés. Le test lit, il ne
-  // décode pas.
-  const manifeste = JSON.parse(readFileSync(join(dossier, 'bord-empreintes.json'), 'utf8'));
-  const sprites = manifeste.sprites;
-  assert.equal(Object.keys(sprites).length, fichiers.length,
-    'le manifeste et le dossier ont divergé — relancer `python3 tools/bords.py`');
+  // ⚠⚠ LE MANIFESTE REMPLACE `decoderRgba` ICI, MOTIF DU DÉPÔT DEPUIS LE 02/09.
+  // Les fonds sont en WebP et Node n'a pas de décodeur WebP ; §3 interdit
+  // d'ajouter une dépendance de test. `tools/fonds.py` écrit donc
+  // `fond-empreintes.json` — SHA-256, dimensions, poids, qualité. Le test lit,
+  // il ne décode pas.
+  const manifeste = JSON.parse(readFileSync(join(dossier, 'fond-empreintes.json'), 'utf8'));
+  const dits = manifeste.fonds;
+
+  // ⚠⚠ LA TABLE ET LE DOSSIER NE PEUVENT PAS DIVERGER, ET ÇA SE VÉRIFIE DANS LES
+  // DEUX SENS. Un neuvième fichier déposé dans `art/sprites/fond/` sans que la
+  // table l'emploie fait tomber ce test, et un nom ajouté à la table sans son
+  // fichier aussi. C'est la garde qui manquait aux murs : `nomsDuContour` était
+  // confrontée aux fichiers, mais rien n'interdisait un fichier de trop.
+  const surLeDisque = readdirSync(dossier)
+    .filter((f) => f.endsWith('.webp'))
+    .map((f) => f.replace(/\.webp$/, ''))
+    .sort();
+  // `fond_offense` est le décor de l'écran Offense, entré au lot du même nom. Il
+  // vit dans le même dossier et n'est pas un fond de BASE : il n'est pas dans la
+  // table, et c'est normal.
+  assert.deepEqual(surLeDisque, [...tousLesFonds(), 'fond_offense'].sort(),
+    'art/sprites/fond/ et la table des fonds ont divergé — relancer `python3 tools/fonds.py`');
+  assert.deepEqual(Object.keys(dits).sort(), surLeDisque,
+    'le manifeste et le dossier ont divergé — relancer `python3 tools/fonds.py`');
 
   // ⚠ L'EMPREINTE SE VÉRIFIE, ELLE NE SE CROIT PAS. Sans ce bloc, le manifeste
-  // serait une prose que rien ne rattache aux fichiers : un sprite remplacé
-  // passerait, et c'est exactement l'accident de BÂTIMENTS-1024 sous un autre
-  // format.
-  for (const fichier of fichiers) {
-    const nom = fichier.replace(/\.webp$/, '');
-    const dit = sprites[nom];
-    assert.ok(dit, `${nom} n'est pas dans le manifeste`);
-    const vu = createHash('sha256').update(readFileSync(join(dossier, fichier))).digest('hex');
-    assert.equal(vu, dit.sha256, `${fichier} ne correspond plus à son empreinte`);
-    assert.equal(statSync(join(dossier, fichier)).size, dit.octets, `${fichier} : taille`);
+  // serait une prose que rien ne rattache aux fichiers : un décor remplacé
+  // passerait, et c'est l'accident de BÂTIMENTS-1024 sous un autre format.
+  for (const nom of surLeDisque) {
+    const fichier = join(dossier, `${nom}.webp`);
+    const vu = createHash('sha256').update(readFileSync(fichier)).digest('hex');
+    assert.equal(vu, dits[nom].sha256, `${nom} ne correspond plus à son empreinte`);
+    assert.equal(statSync(fichier).size, dits[nom].octets, `${nom} : taille`);
   }
 
-  // ⚠⚠ LA TAILLE EST CELLE DE LA GRILLE DU JEU, ET LA DETTE DU 03/09 EST
-  // SOLDÉE. La v1 était taillée pour une case de 64 et s'affichait étirée deux
-  // fois depuis le passage à la 128 ; `COTE_MUR` et son assertion inverse ont
-  // disparu avec elle. Un bloc fait une case, un mur `LONGUEUR_DU_MUR` cases.
-  for (const [nom, dit] of Object.entries(sprites)) {
-    const mur = nom.includes('_mur_');
-    assert.equal(dit.hauteur, COTE_SPRITE, `${nom} fait ${dit.hauteur} de haut`);
-    assert.equal(dit.largeur, COTE_SPRITE * (mur ? LONGUEUR_DU_MUR : 1),
-      `${nom} fait ${dit.largeur} de large`);
-  }
-  assert.equal(tuilesDuContour('j').find((t) => t.l === LONGUEUR_DU_MUR).h, 1,
-    'un mur ne fait plus une case d\'épaisseur sur la grille');
-
-  // ⚠⚠ « GARDE LA COLORISATION » SE MESURE, ET LA MESURE A CHANGÉ DE SENS. La
-  // v1 était ramenée à SEIZE teintes par camp, parce qu'un PNG au rendu libre
-  // pesait 42 643 octets pour un seul mur. Depuis le lot PIXELS la chaîne ne
-  // quantifie plus rien, et c'est le WebP qui paie : on exige donc maintenant le
-  // CONTRAIRE — des milliers de teintes, pas quelques-unes.
-  for (const [nom, dit] of Object.entries(sprites)) {
-    assert.ok(dit.teintes > 1000,
-      `${nom} ne porte que ${dit.teintes} teintes : la chaîne s'est remise à quantifier`);
+  // ⚠⚠ LE RECTANGLE SOURCE DE `render/fond.js` SE CONFRONTE AUX FICHIERS. Le
+  // module est PUR : il ne lit rien, et `naturalWidth` n'existe qu'une fois
+  // l'image décodée par un navigateur. Ses constantes seraient donc invérifiables
+  // sans ce manifeste — et une source fausse poserait le décor au mauvais
+  // facteur sans qu'aucune erreur ne le dise. C'est la règle que le lot
+  // MURS-OUVRAGE avait déjà écrite pour la taille source des murs.
+  for (const nom of tousLesFonds()) {
+    assert.equal(dits[nom].largeur, SOURCE_LARGEUR, `${nom} ne fait plus ${SOURCE_LARGEUR} de large`);
+    assert.equal(dits[nom].hauteur, SOURCE_HAUTEUR, `${nom} ne fait plus ${SOURCE_HAUTEUR} de haut`);
   }
 
-  // ⚠⚠ LE DÉTOURAGE A MORDU, ET IL N'A PAS PERCÉ. La coupe livrée par Ethan
-  // laissait 2 029 pixels de magenta pur dans `mur_1`, dont 493 sur la seule
-  // ligne du haut : un liseré `#FF00FF` aurait couru sur toute la longueur du
-  // mur. On exige donc des transparents — le détourage a bien fait quelque
-  // chose — et presque aucun TROU ENFERMÉ, qui serait la seconde porte
-  // d'`est_fond` en train de percer le bloc.
-  for (const [nom, dit] of Object.entries(sprites)) {
-    assert.ok(dit.transparents > 0,
-      `${nom} n'a aucun pixel transparent : le fond magenta est resté dans le sprite`);
-    assert.ok(dit.trousEnfermes <= 100,
-      `${nom} enferme ${dit.trousEnfermes} px : le détourage perce le bloc`);
-  }
-  // Et le compteur compte : sans ce témoin, un `trousEnfermes` toujours nul
-  // ferait passer l'assertion du dessus sur n'importe quel détourage.
-  assert.ok(Object.values(sprites).some((d) => d.trousEnfermes > 0),
-    'aucun sprite n\'enferme le moindre pixel : le compteur de trous ne compte rien');
+  // ⚠⚠ ET LA GÉOMÉTRIE DE L'ÉCRAN SE DÉDUIT DE CES PIXELS-LÀ, pas l'inverse. Une
+  // case vaut `COTE_CASE_SOURCE` pixels dans l'image, la boîte en fait
+  // `LARGEUR_EN_CASES` de large et l'image `HAUTEUR_IMAGE_EN_CASES` de haut :
+  // les trois doivent retomber sur les dimensions réelles, sinon le mur peint se
+  // décolle des colonnes.
+  assert.equal(LARGEUR_EN_CASES * COTE_CASE_SOURCE, SOURCE_LARGEUR);
+  assert.equal(HAUTEUR_IMAGE_EN_CASES * COTE_CASE_SOURCE, SOURCE_HAUTEUR);
 
-  // ⚠ ET LE CAMP DU JOUEUR EST PROPRE, LUI. Le violet de l'Ouvrage frôle le
-  // magenta — distance minimale 140,0, pile sur le seuil de `cond.est_fond` —,
-  // donc ses blocs se font grignoter ; ceux du joueur, non, et ce sont les seuls
-  // qui entrent dans le livrable.
-  for (const [nom, dit] of Object.entries(sprites)) {
-    if (!nom.startsWith('bord_j_')) continue;
-    assert.equal(dit.trousEnfermes, 0, `${nom} enferme ${dit.trousEnfermes} px côté joueur`);
+  // ⚠ LE DÉBORD SE MESURE ICI, ET C'EST L'ARBITRAGE D'ETHAN. L'image fait vingt
+  // cases quand la boîte en fait dix-huit et demie : il reste 1,5 case sous la
+  // dernière rangée, soit 162 px à la définition source. « Le débord du bas se
+  // laisse déborder sous l'UI — ni rognage, ni étirement, ni recentrage. »
+  assert.equal(HAUTEUR_IMAGE_EN_CASES - HAUTEUR_EN_CASES, 1.5);
+  assert.equal((HAUTEUR_IMAGE_EN_CASES - HAUTEUR_EN_CASES) * COTE_CASE_SOURCE, 162);
+
+  // ⚠ LES HUIT SONT EN q75, ET `fond_offense` EN q85. La qualité est PAR ENTRÉE
+  // dans `tools/fonds.py` : une constante globale aurait réécrit le décor du
+  // bassin, que `tools/verifier.py` compare à l'octet et que ce lot ne touche
+  // pas. Le q75 est l'arbitrage de budget d'Ethan — à q85 le livrable doublait.
+  for (const nom of tousLesFonds()) {
+    assert.equal(dits[nom].qualite, 75, `${nom} n'est plus encodé en q75`);
   }
+  assert.equal(dits.fond_offense.qualite, 85,
+    'le décor du bassin a changé de qualité : il n\'est pas de ce lot');
 });
 
 test('sprite — un nom absent lève, il ne rend pas un fond vide', () => {

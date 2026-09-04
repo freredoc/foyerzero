@@ -38,7 +38,7 @@ import {
 } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
-import { nomsDuContour } from '../render/contour.js';
+import { tousLesFonds, nomCssDuFond } from '../render/fond.js';
 import { initialiserPanneauDeTransfert } from './transfert.js';
 import { initialiserEcranOffense } from './offense.js';
 import { initialiserEcranMission, initialiserMiniTutoriel } from './mission.js';
@@ -231,6 +231,18 @@ export const ATLAS_DE_LA_PAGE = {
   'atlas-batiment': '--atlas-batiment',
   'atlas-defense': '--atlas-defense',
   'atlas-socle': '--atlas-socle',
+  // ⚠⚠ ET LES HUIT DÉCORS DE BASE — lot MUR-PEINT, 03/09. Ils sont déclarés en
+  // variables CSS pour l'écran de la base, qui peint son fond en `background`,
+  // et le canevas de l'écran de raid en veut des `HTMLImageElement`. C'est
+  // exactement le cas que cette table existe pour traiter : une déclaration, deux
+  // formes, aucune image inlinée deux fois.
+  //
+  // ⚠ LA LISTE SE DÉRIVE DE LA TABLE DES FONDS, elle ne se recopie pas — et
+  // l'identifiant comme la variable viennent de `nomCssDuFond`, pour que les
+  // deux ne puissent pas diverger d'un tiret.
+  ...Object.fromEntries(tousLesFonds().map(
+    (nom) => [nom.replaceAll('_', '-'), nomCssDuFond(nom)],
+  )),
 };
 
 /**
@@ -289,26 +301,24 @@ export function atlasDeLaScene(doc) {
     defense: doc.getElementById('atlas-defense'),
     socle: doc.getElementById('atlas-socle'),
   };
-  // ⚠⚠ ET LES PIÈCES DE L'ANNEAU DE MUR, UNE FAMILLE PAR IMAGE — lot
-  // MURS-OUVRAGE. Un mur fait 512 × 128 : il n'est dans aucun atlas et ne peut
-  // pas y être, `tools/atlas.py` n'acceptant que des cellules carrées d'un même
-  // côté. La primitive `sprite` prend donc son nom pour famille, et chaque image
-  // est une famille d'une seule — ce qui est exactement ce que « hors atlas »
-  // veut dire.
+  // ⚠⚠ ET LES HUIT DÉCORS DE BASE, UNE FAMILLE PAR IMAGE — lot MUR-PEINT,
+  // 03/09. Ils remplacent les six pièces de mur de l'Ouvrage qui étaient ici.
+  // Un décor fait 1080 × 2160 : il n'est dans aucun atlas et ne peut pas y être,
+  // `tools/atlas.py` n'acceptant que des cellules carrées d'un même côté. La
+  // primitive `sprite` prend donc son nom pour famille, et chaque image est une
+  // famille d'une seule — ce qui est exactement ce que « hors atlas » veut dire.
   //
-  // ⚠ LA LISTE SE DÉRIVE DE L'ANNEAU, elle ne se recopie pas : `nomsDuContour`
-  // dit ce que `tuilesDuContour` emploie vraiment, et c'est la même source que
-  // `VARIABLE_DU_MUR` côté CSS. Une liste écrite à la main serait la première à
-  // oublier une pièce le jour où la base changerait de largeur.
+  // ⚠⚠ LES HUIT, ET PLUS SEULEMENT UN CAMP. L'anneau ne donnait de balise qu'à
+  // l'Ouvrage, l'écran de raid ne montrant que ses bases ; mais le décor du
+  // JOUEUR devra se dessiner sur ce même canevas le jour où
+  // `sim/raid-ouvrage.js` aura son écran, et les huit sont déjà déclarés pour
+  // l'écran de la base — les donner tous ne coûte donc pas un octet de plus.
   //
-  // ⚠⚠ SEUL LE CAMP DE L'OUVRAGE A DES BALISES, et c'est mesuré, pas oublié :
-  // l'écran de raid est le seul canevas qui montre une base, et il ne montre
-  // aujourd'hui que celles de l'Ouvrage. Le jour où `sim/raid-ouvrage.js` aura
-  // son écran, il demandera `bord_j_*` — qui vivent en variables CSS pour
-  // l'écran de la base et n'ont pas de balise. `getElementById` rendrait alors
-  // `null` et `executer` LÈVE, plutôt que de dessiner un mur absent : « une
-  // unité invisible est un défaut qu'on doit voir ».
-  for (const nom of nomsDuContour('o')) {
+  // ⚠ LA LISTE SE DÉRIVE DE LA TABLE DES FONDS, elle ne se recopie pas. Une
+  // liste écrite à la main serait la première à oublier un décor le jour où un
+  // neuvième entrerait, et `executer` LÈVE sur une famille absente plutôt que de
+  // dessiner un fond vide : « une unité invisible est un défaut qu'on doit voir ».
+  for (const nom of tousLesFonds()) {
     scene[nom] = doc.getElementById(nom.replaceAll('_', '-'));
   }
   return scene;
