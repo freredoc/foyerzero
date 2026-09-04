@@ -202,6 +202,13 @@ export const ACTIONS = {
   ameliorer: {
     bouton: 'chantier-ameliorer',
     libelle: 'Améliorer',
+    // ⚠⚠ LE GESTE EST DANS LA TABLE, PAS DEVINÉ DU NOM DE L'ACTION. C'est le
+    // même motif que `cible` et `retireLaPiece`, et pour la même raison : deux
+    // gardes de `chantier.test.js` refusent qu'un écran reconnaisse « demolir »
+    // ou « deplacer » à son nom, et le son serait le troisième cas particulier
+    // écrit à la main. L'écran nomme un GESTE, `src/son/cablage.js` décide s'il
+    // fait du bruit et lequel.
+    geste: 'amelioration',
     problemes: problemesDeLAmelioration,
     agir: ameliorer,
   },
@@ -213,6 +220,7 @@ export const ACTIONS = {
     bouton: 'chantier-deplacer',
     libelle: 'Déplacer',
     cible: true,
+    geste: 'deplacement',
     problemes: problemesDuDeplacement,
     agir: deplacer,
   },
@@ -225,6 +233,7 @@ export const ACTIONS = {
     retireLaPiece: true,
     bouton: 'chantier-demolir',
     libelle: 'Démolir',
+    geste: 'retrait',
     problemes: problemesDeLaDemolition,
     agir: demolir,
   },
@@ -1736,6 +1745,11 @@ export const TERRAINS = {
     bande: GRILLE.bandes.batiments,
     // `null` = les bâtiments de la base, qui ne sont pas une « force ».
     force: null,
+    // ⚠ CE QUE LA BANDE PORTE, POUR LE SON. `src/son/cablage.js` en tire
+    // l'événement d'un geste : un bâtiment qui tombe est un effondrement, une
+    // pièce de garnison retirée n'est rien de ce que le pack sait dire — et on
+    // ne détourne pas un son d'effondrement pour lui donner un emploi.
+    genreSonore: 'batiment',
     pieces: (etat) => baseCourante(etat).disposition,
     posables: (etat) => posablesDeLaBase(etat).map((p) => ({
       ...p, sigle: SIGLES[p.id], verrouille: p.dejaPose,
@@ -1788,6 +1802,7 @@ export const TERRAINS = {
   defense: {
     bande: GRILLE.bandes.defense,
     force: 'garnison',
+    genreSonore: 'garnison',
     pieces: (etat) => baseCourante(etat).garnison,
     posables: posablesDeLaDefense,
     nomDe: nomDeLaPieceDeDefense,
@@ -1861,7 +1876,10 @@ export const TERRAINS = {
         problemes: () => [],
         agir: (etat, index) => retirerEffectif(etat, 'garnison', index),
       },
-      deplacer: { cible: true, problemes: refusDuDeplacementEnGarnison, agir: deplacerLaGarnison },
+      deplacer: {
+        cible: true, geste: 'deplacement', problemes: refusDuDeplacementEnGarnison,
+        agir: deplacerLaGarnison,
+      },
     },
     panneau: false,
     quoi: 'aucun défenseur n\'est endommagé',
@@ -2366,7 +2384,9 @@ export function coteCaseParDefaut(doc) {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function, allerALaBande: Function}}
  */
-export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascule, sonDeRefus } = {}) {
+export function initialiserEcranChantier(doc, {
+  apresPose, versEcran, apresBascule, sonDeRefus, sonDeGeste,
+} = {}) {
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
@@ -3411,6 +3431,21 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     }
   }
 
+  // --- le son ----------------------------------------------------------------
+
+  /**
+   * Signale un GESTE du joueur. L'écran ne nomme aucun son.
+   *
+   * ⚠ IL NE PART QUE D'UN GESTE, JAMAIS D'UN REPEINT. `selectionner` est appelée
+   * par `peindre` et par `rafraichir`, qui passent dix fois par seconde : y
+   * accrocher le son ferait un déclic continu. Les points d'appel sont les
+   * quatre endroits où le DOIGT a agi, et un test les compte.
+   */
+  function sonner(geste, terrain, id) {
+    if (sonDeGeste === undefined) return;
+    sonDeGeste(geste, { genre: TERRAINS[terrain].genreSonore, id });
+  }
+
   // --- la sélection ----------------------------------------------------------
 
   function selectionner(index) {
@@ -3539,6 +3574,11 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
       return;
     }
 
+    // ⚠ LE SON PART AVANT `agir` POUR LE RETRAIT, ET IL LE FAUT : après, la
+    // pièce n'est plus dans la liste et son identifiant — donc la taille de son
+    // effondrement — ne se lit plus nulle part.
+    const pieceAgie = TERRAINS[terrainCible].pieces(etatCourant)[index];
+    sonner(ACTIONS[nom].geste, terrainCible, pieceAgie?.id);
     action.agir(etatCourant, index);
     terrainSelection = terrainCible;
     // Une action qui retire la pièce laisse un indice qui ne désigne plus rien,
@@ -3600,6 +3640,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     // une pièce de garnison n'a rien de tout ça, et lui ouvrir un panneau vide
     // ferait croire à un écran cassé. Le bandeau contextuel, lui, dit son nom,
     // son niveau et ses points — c'est tout ce qu'il y a à dire.
+    sonner('selection', terrainTouche);
     if (TERRAINS[terrainTouche].panneau) {
       ouvrirPanneau(index);
       return;
@@ -3730,6 +3771,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
       toast(messageDeRefus(problemes));
       return;
     }
+    sonner('amelioration', terrainSelection,
+      TERRAINS[terrainSelection].pieces(etatCourant)[selection]?.id);
     ameliorer(etatCourant, selection);
     // Une amélioration change les emplacements et les débits : elle s'écrit
     // tout de suite, comme une pose.
@@ -3784,6 +3827,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     }
     poseEnAttente = null;
 
+    sonner('pose', terrainCourant(), posableChoisi);
     terrain.poser(etatCourant, posableChoisi, rangee, colonne);
     // ⚠ SAUVEGARDER AVANT DE REPEINDRE, et l'ordre s'est resserré à ce lot.
     // C'est la première action irréversible du jeu ; l'écrire d'abord la met à
@@ -3847,6 +3891,8 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
       toast(messageDeRefus(problemes));
       return;
     }
+    sonner('deplacement', terrainDeplacement,
+      TERRAINS[terrainDeplacement].pieces(etatCourant)[deplacementEnCours]?.id);
     terrain.deplacer(etatCourant, deplacementEnCours, rangee, colonne);
     terrainSelection = terrainDeplacement;
     selection = deplacementEnCours;

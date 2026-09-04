@@ -42,7 +42,171 @@ Dernière révision : **04/09/2026**, version 0.85.0 · build 87.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot SON-CATALOGUE), à confronter :**
+**Référence au 04/09/2026 (après le lot SON-CÂBLAGE), à confronter :**
+`npm test` → **1000 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 773 971 octets**, 0 référence externe.
+⚠⚠ **DIX-NEUF SONS SORTENT DU SILENCE, ET LE BRIEF EN ANNONÇAIT CINQUANTE-DEUX.**
+On passe de **5 sons câblés sur 263 à 24**. L'écart n'est pas un renoncement : il
+se décompose son par son, et **chaque muet a une raison mesurée** — le rapport
+les nomme tous. Coût **+5 469 octets, ENTIÈREMENT DU JAVASCRIPT** : mesuré poste
+par poste contre un livrable rebâti depuis `main`, **audio +0 · images +0 ·
+feuille +0 · balisage +0**. **284 `data:` avant, 284 après.** Borne T10
+**inchangée à 7 000 000**, marge **226 029 octets, 3,23 %**.
+⚠⚠ **LE MOTEUR SAIT ENFIN JOUER AUTRE CHOSE QU'UN COUP, ET LA DÉCISION RESTE
+PURE.** `reconcilierLesBoucles` entre dans `src/son/politique.js` : elle reçoit
+l'ensemble DÉSIRÉ et l'ensemble EN COURS, et rend deux listes. `src/ui/son.js`
+les exécute et ne calcule rien. ⚠ **L'horloge n'est PAS un argument, et il faut
+le dire** : une garde ou un plafond de voix sur une boucle refuserait un
+démarrage que l'ÉTAT demande, et la boucle resterait muette jusqu'au prochain
+changement d'état — un refus qui ne se rattrape jamais, là où un clic refusé se
+rejoue au clic suivant.
+⚠⚠ **`src/son/cablage.js` ENTRE, ET IL RÉPOND AUX DEUX QUESTIONS DU LOT :** quelles
+boucles l'état porte, et quel son un geste réclame. Il n'importe que `src/data/`
+— trois tables, aucun moteur — et un test l'exige. **Trois responsabilités, trois
+endroits** : l'écran nomme un GESTE, `cablage` nomme le SON, la session le JOUE.
+⚠⚠ **L'ÉVICTION PROTÈGE LES TAMPONS QU'UNE SOURCE LIT, ET C'EST L'UNE DES DEUX
+ISSUES, CHOISIE POUR UN MOTIF ÉCRIT.** Évincer une entrée de table ne libère pas
+le tampon — la source en lecture le tient — donc `secondesDecodees` retombait
+alors que la mémoire ne bougeait pas. L'autre issue, « ne décompter que ce qui
+est réellement libéré », demande d'observer le ramasse-miettes du navigateur :
+**un mécanisme qu'on ne peut pas ouvrir**, et les interdits du brief l'écartent.
+`tenus` compte les sources, `onended` les relâche, et le compte reste un MAJORANT
+exact. ⚠ La protection vaut aussi pour les COUPS : un invariant qui ne vaudrait
+que pour 35 sons sur 263 serait le premier oublié.
+⚠⚠ **ET CETTE FALSIFICATION-LÀ NE MORDAIT PAS AU PREMIER RELEVÉ — SEPTIÈME FOIS
+DU DÉPÔT.** Retirer la ligne de protection ne change **rien d'observable au
+son** : la boucle continue de jouer, personne ne la redemande, donc rien n'est
+redécodé. **Mesuré : 23 pass / 0 fail sur le code fautif.** Le seul dégât est que
+la comptabilité cesse de décrire la mémoire, et il ne se voit que sur elle :
+`mesureMemoire()` entre dans l'adaptateur pour ça, et pour rien d'autre — même
+motif que `mesureImages` de `ui/raid.js`.
+⚠⚠ **VINGT BOUCLES DE ROULEMENT NE TIENNENT PAS DANS LE BUDGET, ET IL N'A PAS ÉTÉ
+GONFLÉ.** Il y en a **seize**, pas vingt : ensemble **53,60 s = 10,29 Mo**, contre
+un budget de **30 s** — **dépassement 23,60 s**. Les vingt boucles non résidentes
+les plus longues feraient **73,40 s**. ⚠ **Mais ce lot n'y arrive jamais, et c'est
+mesuré aussi** : au pire instant il en demande **12,00 s** (raid : une ambiance
+résidente et quatre roulements) ou **9,20 s** (base), et **21,20 s** en réunissant
+les deux écrans — sous le budget dans les trois cas. Plafond total inchangé :
+**12,29 + 5,76 = 18,05 Mo**, contre 64,67 si tout était décodé.
+⚠⚠ **LA CARTE DES UNITÉS EST CONSOMMÉE, ET SA COUVERTURE EST TOTALE DANS LES DEUX
+SENS.** `art/sources/unit_audio_map.json` passe de DORMANTE à CONSOMMÉE :
+`tools/sons.py` la lit **à chaque exécution**, pas seulement sous `--ecrire` —
+une lecture réservée au drapeau l'aurait laissée dormante alors qu'un outil la
+consomme, le mensonge exact qu'`entrees.py` existe pour empêcher. **14 paires sur
+14 se résolvent contre `UNITES[x].nom`, et les 14 unités du jeu ont leur entrée.**
+⚠⚠ **ET SES VALEURS SONT DES ÉVÉNEMENTS, PAS DES FICHIERS — LE PREMIER JET S'Y EST
+TROMPÉ.** Il les cherchait parmi les 263 identifiants ; `movement_player_flyby`
+n'en est pas un, c'est le groupe des trois `_0N`. Mesuré sur TOUTES les valeurs,
+les deux blocs et les sept champs : **35 sur 35 se résolvent comme événements,
+zéro comme identifiant seul.** La note du fichier ne le disait que de
+`variant_set` ; c'est vrai des sept.
+⚠⚠ **QUATRE ROULEMENTS SEULEMENT SONNENT, ET C'EST LA CARTE QUI LE DIT.** Sept
+paires sur quatorze portent un `movement` ; **trois portent un passage d'aéronef,
+qui ne boucle pas** — le jouer en continu inventerait une mécanique que le pack ne
+demande pas. Les **sept sans `movement`** et les **six boucles du bloc `ouvrage`**
+restent muettes : mesuré, **zéro des sept clés de ce bloc** — « essaim »,
+« marcheur léger », « Dard lourd », « pylône énergétique » — n'est un nom du
+dépôt, et attribuer une correspondance par ressemblance est nommément interdit.
+⚠ **UNE JOINTURE PAR SUFFIXE D'ARME A ÉTÉ MESURÉE ET ÉCARTÉE** :
+`weapon_player_X` ↔ `weapon_ouvrage_X` ne rend que **4 appariements uniques sur
+6**, `rifle` et `cannon_medium` restant ambigus. C'est une proposition pour Ethan,
+pas un câblage.
+⚠⚠ **LA TAILLE D'UN EFFONDREMENT SE LIT SUR LES PV, ET C'EST UNE PROPOSITION.** Le
+brief donnait « l'empreinte du bâtiment » comme candidat naturel : **mesuré, elle
+ne discrimine RIEN — les onze occupent une case.** Les PV se coupent net :
+**{1000, 1000, 1500} · {2000, 2500 ×4} · {3000, 3000, 5500}**, d'où
+`EFFONDREMENT_PV = [2000, 3000]`, qui rend **3 · 5 · 3**. ⚠ `classeDeCout` donne
+presque la même partition — elle ne diverge que sur la Centrale — mais elle a
+**quatre** classes pour trois tailles : il faudrait en grouper deux, ce qui est le
+même choix déguisé en donnée. **Ethan tranche ; deux nombres se changent seuls.**
+⚠⚠ **`alert_player_insufficient` N'EST PAS CÂBLÉ, ET LE MOTIF EST DÉCLARÉ.** Le
+refus sonne déjà `ui_error` sur le même geste depuis le lot SON-MOTEUR ; les deux
+ensemble feraient sonner deux fois une faute unique. **Décision de conception,
+elle revient à Ethan.**
+⚠⚠ **ET `power_up` / `power_down` NON PLUS, POUR UNE RAISON MESURÉE.**
+`capacitesMilli` de `sim/economie-base.js` est une fonction de la SEULE
+`disposition` : la capacité d'électricité ne bouge donc qu'à une pose, une
+amélioration, un déplacement ou une démolition — **c'est-à-dire aux quatre gestes
+qui sonnent déjà**. Les câbler ferait sonner deux fois chacun d'eux, exactement le
+cas d'`alert_player_insufficient`. ⚠ `alert_player_low_power`, lui, n'a **aucun**
+point d'accroche : le modèle n'a pas d'état « manque de courant » — l'électricité
+est un stock avec une capacité, rien de plus.
+⚠⚠ **TROIS AMBIANCES SUR HUIT SONNENT, ET LES CINQ AUTRES SE NOMMENT.**
+`quartz_field`, `scoria_field` et `reactor_room` demandent un CONTEXTE que l'état
+ne dit pas — « être dans un champ de quartz » ne se lit nulle part, et l'inventer
+serait créer un événement de jeu ; `base_ouvrage` n'a aucun écran qui montre la
+base de l'Ouvrage au repos ; `map_wind` est la seconde ambiance de carte, et
+choisir entre elle et `calm_map` est esthétique. ⚠ **`calm_map` a été prise pour
+que la carte ne soit pas muette, et c'est le SEUL choix esthétique du lot** — une
+ligne d'`AMBIANCE_PAR_ECRAN`, qu'Ethan change seul.
+⚠⚠ **DEUX BOUCLES DE BÂTIMENT SUR CINQ, ET UNE PAR TYPE — PAS PAR BÂTIMENT.**
+Caserne, Dépôt et Aérodrome partagent `factory_loop`, la Centrale porte
+`reactor_loop`. Les trois autres sont muettes : il n'y a **ni file de
+construction**, **ni réparation qui DURE** — c'est un stock depuis le lot RÉSERVE
+—, **ni état « base attaquée » qui persiste**. ⚠ Le dédoublonnage est dans
+`bouclesDesirees`, pas dans le plafond de voix : compter sur lui pour refuser six
+usines demanderait de savoir combien il en autorise.
+⚠⚠ **LES 174 SONS DE COMBAT RESTENT MUETS, ET `src/sim/` N'A PAS BOUGÉ D'UNE
+LIGNE** — vérifié sur le diff du lot. Ils attendent un journal de `tick` qui
+n'existe pas, et ce journal est un chantier de SIMULATION : il sert aussi les
+effets visuels du raid, et il ne se construit pas deux fois.
+⚠⚠ **LE ROULEMENT EST UNE LECTURE D'ÉTAT, PAS UN ÉVÉNEMENT, ET LA NUANCE EST TOUTE
+LA GARDE `SON T14`.** `unitesEnMouvement` compare les DEUX instantanés que
+`ui/raid.js` prend déjà pour son interpolation. Le moteur ne publie rien et ne
+sait pas qu'on l'écoute.
+⚠ **UNE GARDE A ACCUSÉ UN INNOCENT, ET ELLE A CHANGÉ DE CIBLE EN SE RESSERRANT.**
+`entrées — le dossier d'attente est dehors` comparait des NOMS COURTS : le
+`README.md` du pack, entré dans `art/sources/`, a fait accuser le `README.md` du
+dossier d'attente, qui est un autre fichier écrit pour une autre raison. Elle
+compare désormais les OCTETS — ce qu'elle cherche est un fichier DÉPLACÉ, donc
+identique des deux côtés. Même leçon que le dossier PARENT d'`entrees.py`.
+⚠ **`art/sources/` PASSE DE 361 / 95 À 362 CONSOMMÉES · 95 DORMANTES ·
+457 FICHIERS.** `unit_audio_map.json` monte en consommée, `README.md` entre en
+dormante — **et c'est ce README qui rendait la baseline ROUGE**, quatrième lot de
+suite, pour la même garde d'entrées.
+⚠⚠ **LA BASELINE ÉTAIT DONC ROUGE, ET LE BRIEF EN FAISAIT UNE CONDITION D'ARRÊT
+SANS EXCEPTION — ÉCART DÉCLARÉ, LOT POURSUIVI.** 993 pass / 1 fail sur le clone
+intact ; le diff nomme **un seul fichier**, `art/sources/README.md`, qu'Ethan a
+commité sur `main` et que le lot précédent annonçait comme entrant « en source
+dormante ». C'est ce lot-ci qui referme ce rouge, et il devait de toute façon
+relancer `entrees.py --declarer` pour consommer la carte des unités.
+⚠⚠ **ET LES CINQ NIVEAUX DE BUS ONT ENFIN UN FICHIER AU DÉPÔT.** L'écart déclaré
+du lot précédent se referme : `art/sources/README.md` porte, ligne 36, « Bus UI :
+-3 dB ; armes : -6 dB ; impacts : -7 dB ; moteurs : -12 dB ; ambiances : -18 dB »
+— les cinq valeurs de `BUS`, au décibel. Elles cessent d'être la parole d'Ethan
+recopiée.
+⚠⚠ **ET LA RAMPE N'EST PAS LE FONDU QUE CE README INTERDIT.** Sa ligne 39 dit « ne
+pas appliquer de fondu supplémentaire aux fichiers marqués `loop: true` ; leurs
+bornes exactes sont fournies en échantillons » : elle parle du FICHIER, qu'on ne
+touche pas — `source.loop = true` rejoue ses bornes à l'échantillon près.
+`RAMPE_BOUCLE_MS` porte sur le GAIN DE LECTURE, au démarrage et à l'arrêt, et
+**l'arrêt attend la fin de sa rampe avant de couper sa source** : `stop(fin)` est
+donné à l'horloge du contexte audio, la seule qui sache quand la rampe est finie.
+⚠ **`boucle` ENTRE DANS LA TABLE GÉNÉRÉE, ET C'EST LA LIGNE QUE LE LOT PRÉCÉDENT
+ANNONÇAIT.** Il n'est posé que sur les **35** sons qui bouclent, jamais
+`boucle: false` sur les 228 autres. ⚠ Et il ne se déduit pas de `residente` :
+**27 boucles ne sont pas résidentes**, et deux sons `weapons` bouclent aussi.
+⚠ **HUIT FALSIFICATIONS, HUIT CHUTES**, plus quatre des lots précédents rejouées —
+garde élargie à zéro, plafond relevé, muet désarmé, `Date.now` dans la politique —
+et deux formes de « aucun événement de simulation ne déclenche de son » : l'import
+à effet de bord dans `src/sim/rng.js`, et un tir branché dans `ui/raid.js`.
+⚠ **SIX TESTS ENTRENT DANS `test/son.test.js` — `SON T15` à `SON T20` — ET LE
+COMPTE PASSE DE 994 À 1 000.** Aucune assertion existante n'a été retirée ; `SON
+T14` est RÉÉCRIT pour recompter les atteignables **par les DEUX portes** — les
+littéraux de `session.js` ET `src/son/cablage.js` —, sans quoi il annoncerait
+cinq sons atteignables sur vingt-quatre, c'est-à-dire déclarerait muet ce qui
+sonne.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans l'état.
+⚠ **`python3 tools/verifier.py` → 1 261 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en **514,5 s**. Il était dû : le lot touche `tools/`.
+**Le compte ne bouge pas** — aucun sprite, aucun `.opus` n'entre ni ne sort : les
+changements de `tools/sons.py` portent sur ce qu'il LIT et sur la table qu'il
+écrit dans `src/data/`, jamais sur l'encodage. ⚠ Il a été relancé une SECONDE
+fois : le premier passage tournait pendant que les falsifications mutaient
+`art/sources/`, et « ne jamais le lancer sur un arbre qu'on modifie » est une
+règle du dépôt. Les deux rendent le même verdict.
+
+**Auparavant, après le lot SON-CATALOGUE :**
 `npm test` → **994 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 768 502 octets**, 0 référence externe.
 ⚠⚠ **LES 263 SONS ENTRENT, ET UNE SEULE FAMILLE EST CÂBLÉE.** Le lot SON-MOTEUR
@@ -3138,9 +3302,16 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-src/son/                la politique de voix, sans un octet de navigateur — 1 fichiers
+src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT
-  ⤷ ⚠⚠ UN DOSSIER POUR UN FICHIER, ET C'EST LE LOT ENTIER. La DÉCISION et la
+  cablage.js            ce que l'état demande en boucle, et ce qu'un geste réclame
+  ⤷ ⚠⚠ `cablage.js` ENTRE AU LOT SON-CÂBLAGE, ET IL NE FAIT PAS DE BRUIT NON
+    PLUS. Il répond à deux questions et rend des NOMS d'événement : quelles
+    boucles l'état porte — écran affiché, bâtiments présents, unités qui roulent
+    — et quel son un geste du joueur réclame. Il n'importe que `src/data/` ; la
+    différence entre le désiré et le courant se calcule dans `politique.js`,
+    l'exécution dans `src/ui/son.js`. **Trois responsabilités, trois endroits.**
+  ⤷ ⚠⚠ UN DOSSIER POUR UN FICHIER, ET C'ÉTAIT LE LOT SON-MOTEUR ENTIER. La DÉCISION et la
     SORTIE sont deux modules : sans cette séparation, rien du moteur ne serait
     éprouvable — le dépôt n'a ni navigateur ni Web Audio (§3), donc tout ce qui
     touche `AudioContext` est hors de portée des tests. La politique reçoit

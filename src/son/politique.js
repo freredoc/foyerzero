@@ -149,3 +149,87 @@ export function demanderUnSon(voix, evenement, maintenantMs, reglages) {
   voix.instances[nomDuSon] = [...enCours, maintenantMs + son.dureeMs];
   return { jouer: true, son: nomDuSon, gain: gainDuSon(nomDuSon, reglages.volume) };
 }
+
+/**
+ * LA RÉCONCILIATION DES BOUCLES : ce qu'il faut démarrer, ce qu'il faut arrêter.
+ *
+ * ⚠⚠ ELLE EST PURE, ET C'EST TOUT LE LOT SON-CÂBLAGE. Le moteur des trois lots
+ * précédents ne savait jouer qu'un COUP ; une boucle commence, dure, et
+ * s'arrête. L'ensemble qui DOIT sonner se déduit de l'état — quel écran, quelles
+ * unités bougent, quels bâtiments tournent — et jamais d'un événement. La
+ * différence entre le désiré et le courant se calcule donc ici, où Node peut la
+ * mesurer ; `src/ui/son.js` l'EXÉCUTE, il ne la calcule pas.
+ *
+ * ⚠⚠ ET L'HORLOGE N'EST PAS UN ARGUMENT, CONTRAIREMENT À `demanderUnSon`. Il
+ * faut le dire plutôt que de le laisser deviner : une garde ou un plafond de
+ * voix sur une boucle refuserait un démarrage que l'ÉTAT demande, et la boucle
+ * resterait muette jusqu'au prochain changement d'état — c'est-à-dire un refus
+ * qui ne se rattrape pas, là où un clic refusé se rejoue au clic suivant. Une
+ * boucle n'a ni garde ni plafond : elle a une raison de sonner, ou elle n'en a
+ * pas.
+ *
+ * ⚠ LE MUET PASSE PAR ICI, PAS PAR L'APPELANT. « Toute condition d'autorisation
+ * vit dans la politique » : couper le son doit ARRÊTER les boucles en cours, pas
+ * seulement empêcher les suivantes. On vide donc le désiré, ce qui rend
+ * l'ensemble des arrêts sans qu'une seconde règle soit écrite.
+ *
+ * ⚠ UN NOM QUI N'EST PAS UNE BOUCLE LÈVE. C'est un fait de PROGRAMME — un
+ * câblage qui demande un coup en continu —, et le taire donnerait une boucle qui
+ * se couperait net à la fin du fichier, sans que rien ne le dise.
+ *
+ * @param {string[]} desire les événements de boucle que l'état demande
+ * @param {Iterable<string>} enCours ceux qui sonnent déjà
+ * @param {{muet: boolean, volume: number}} reglages
+ * @returns {{demarrer: string[], arreter: string[]}} deux listes triées
+ */
+export function reconcilierLesBoucles(desire, enCours, reglages) {
+  const silence = reglages.muet || reglages.volume <= 0;
+  const voulu = new Set(silence ? [] : desire);
+  for (const nom of voulu) {
+    const decrit = EVENEMENTS[nom];
+    if (decrit === undefined) {
+      throw new RangeError(`son : « ${nom} » n'est pas un événement connu`);
+    }
+    if (!decrit.variantes.every((v) => SONS[v].boucle === true)) {
+      throw new RangeError(`son : « ${nom} » n'est pas une boucle`);
+    }
+  }
+  const joue = new Set(enCours);
+  const demarrer = [...voulu].filter((nom) => !joue.has(nom)).sort();
+  const arreter = [...joue].filter((nom) => !voulu.has(nom)).sort();
+  return { demarrer, arreter };
+}
+
+/**
+ * Le gain d'une boucle : celui de son unique variante.
+ *
+ * ⚠ UNE BOUCLE NE SE TIRE PAS AU SORT. Mesuré sur les 35 boucles du pack :
+ * **les 35 sont seules dans leur événement**. Passer par le tirage de variante
+ * ferait avancer la graine du xorshift à chaque changement d'écran, donc
+ * changerait la suite des variantes des clics — un couplage entre deux
+ * mécanismes qui n'ont rien à voir. On lève si le fait mesuré cesse d'être vrai.
+ *
+ * ⚠ ELLE REÇOIT LES RÉGLAGES, PAS LE VOLUME, ET LA GARDE `SON T11` L'EXIGE.
+ * L'adaptateur n'a pas le droit de lire un champ de `reglages` — ni `muet`, ni
+ * `volume` : il TRANSMET l'objet. Prendre un nombre ici obligerait
+ * `src/ui/son.js` à écrire `reglages.volume`, c'est-à-dire à porter une part de
+ * la décision, et la garde tomberait — à raison.
+ *
+ * @param {string} evenement une clé d'`EVENEMENTS` marquée boucle
+ * @param {{muet: boolean, volume: number}} reglages
+ * @returns {{son: string, gain: number}}
+ */
+export function boucleDeLEvenement(evenement, reglages) {
+  const decrit = EVENEMENTS[evenement];
+  if (decrit === undefined) {
+    throw new RangeError(`son : « ${evenement} » n'est pas un événement connu`);
+  }
+  if (decrit.variantes.length !== 1) {
+    throw new RangeError(`son : la boucle « ${evenement} » porte plusieurs variantes`);
+  }
+  const nomDuSon = decrit.variantes[0];
+  if (SONS[nomDuSon].boucle !== true) {
+    throw new RangeError(`son : « ${evenement} » n'est pas une boucle`);
+  }
+  return { son: nomDuSon, gain: gainDuSon(nomDuSon, reglages.volume) };
+}

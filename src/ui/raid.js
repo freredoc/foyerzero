@@ -44,6 +44,7 @@ import { listeAffichage } from '../render/scene.js';
 import { MUR_CASES, fondDeLaBase } from '../render/fond.js';
 import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
+import { unitesEnMouvement } from '../son/cablage.js';
 
 // ---------------------------------------------------------------------------
 // Étage pur
@@ -246,6 +247,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   const $ = (id) => doc.getElementById(id);
   const versEcran = crochets.versEcran ?? (() => {});
   const apresGeste = crochets.apresGeste ?? (() => {});
+  // ⚠ L'ÉCRAN NOMME UN GESTE, JAMAIS UN SON — même frontière que `sonDeRefus`
+  // du lot SON-MOTEUR, et la garde `SON T14` refuse de toute façon un appel de
+  // `jouer(` ici. Le déroulé, lui, n'a rien à annoncer : les 174 sons de combat
+  // attendent un journal de tick qui n'existe pas, et ce journal est un chantier
+  // de simulation.
+  const sonDeGeste = crochets.sonDeGeste ?? (() => {});
 
   const canvas = $('raid-canvas');
   const ctx = canvas === null ? null : canvas.getContext('2d');
@@ -623,7 +630,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     rapportCourant = simule
       ? simulerRaid(etatCourant, baseCourante(etatCourant), cibleCourante)
       : executerRaid(etatCourant, baseCourante(etatCourant), cibleCourante);
-    if (!simule) apresGeste();
+    // ⚠ LE SON NE PART QUE SUR LA VRAIE ATTAQUE. Une simulation ne commande
+    // rien à personne : la faire sonner comme un ordre ferait croire au joueur
+    // qu'il vient d'engager son armée. Un bandeau couvre déjà la vue pour la
+    // même raison.
+    if (!simule) { sonDeGeste('attaque', {}); apresGeste(); }
     peindreVagues();
     // ⚠ UN BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ,
     // pour qu'on ne le confonde jamais avec la vraie attaque.
@@ -715,6 +726,16 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     },
     peindre(etat) { etatCourant = etat; peindreVagues(); },
     masquer() { arreterBoucle(); },
+    /**
+     * Les unités du joueur qui ont bougé au dernier tick — pour le son.
+     *
+     * ⚠⚠ C'EST UNE LECTURE, PAS UN ÉVÉNEMENT, ET LA NUANCE EST TOUTE LA GARDE
+     * `SON T14`. Le moteur ne publie rien et n'a pas bougé d'une ligne : on
+     * compare les deux instantanés que cet écran prend DÉJÀ pour son
+     * interpolation. Le calcul lui-même vit dans `src/son/cablage.js`, qui est
+     * pur ; ici il n'y a qu'un accès aux deux variables locales.
+     */
+    enMouvement() { return unitesEnMouvement(combat, precedentes); },
     /** La mesure M2 : le coût moyen d'une image du déroulé. */
     mesureImages() {
       return { images: mesure.images, moyenneMs: mesure.images === 0 ? 0 : mesure.totalMs / mesure.images };
