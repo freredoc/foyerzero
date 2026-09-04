@@ -687,33 +687,39 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // dépôt dont le poids ne se discute pas.
   //
   // ⚠⚠ ET ELLE PASSE DE 3 400 000 À 5 700 000 AU LOT MUR-PEINT, 03/09 — LE PLUS
-  // GROS SAUT DEPUIS GRILLE-128. Ethan a fait peindre le mur de contour DANS le
-  // fond de base, et livré huit décors de 1080 × 2160. Poste par poste :
-  //   • les huit fonds, WebP q75 — 1 650 546 o sur le disque, **+2 200 728 en
-  //     base64** ;
-  //   • les DOUZE pièces de mur de `bord/` qui SORTENT — **−43 176 en base64** ;
-  //   • code, balisage et feuille — le reste.
-  // Mesuré : **5 516 056 octets**, soit **+2 154 705**. Le livrable passe de
-  // 25 `data:` à 21 — huit décors entrent, douze murs sortent.
+  // ⚠⚠ LA BORNE PASSE DE 5 700 000 À 7 000 000 — lot SON-CATALOGUE, 04/09, ET
+  // C'EST UN ARBITRAGE D'ETHAN. Les 263 sons du pack entrent, encodés en Opus
+  // mono à 20 kbps : **890 417 octets sur le disque, 1 187 224 en base64**, plus
+  // 45 401 octets pour `src/data/sons.js`, qui passe de 4 entrées à 263. Le
+  // livrable passe de 5 526 427 à **6 768 502 octets**, et de 25 `data:` à 284
+  // — 21 images, inchangées à l'octet, et 263 sons. Poste par poste, mesuré
+  // contre un livrable REBÂTI depuis le commit d'avant : audio 1 188 410 ·
+  // balisage des 263 balises 18 778 · JavaScript 34 887.
   //
-  // ⚠⚠ LE q75 EST UN ARBITRAGE D'ETHAN, ET IL A ÉTÉ PRIS SUR MESURE. À q85 les
-  // huit pesaient 2 720 514 o, soit 3 627 352 en base64 : le HTML passait à
-  // 6 988 703 octets, **2,08 fois son poids d'avant**, et le brief du lot pose le
-  // doublement comme une condition d'arrêt qui revient à Ethan. Les paliers lui
-  // ont été soumis, mesurés sur les huit planches — q80 → 1,83× · q75 → 1,65× ·
-  // q70 → 1,60×, contre 1,73× pour une réduction à 810 px. Réponse : q75, pleine
-  // résolution. Confronté à 1:1 sur la zone la plus texturée des huit, q75 ne se
-  // distingue pas de la source.
+  // ⚠⚠ ET LA BORNE CESSE D'ÊTRE UN NOMBRE ROND : ELLE A UNE RAISON PHYSIQUE.
+  // Ethan a mesuré le démarrage du livrable de 5,5 Mo sur un Galaxy S25 FE, son
+  // appareil réel : **sous la seconde**. Sept mégaoctets sont posés comme la
+  // marge au-delà de laquelle il faudra REMESURER ce démarrage avant de faire
+  // entrer quoi que ce soit — pas comme un seuil esthétique. C'est aussi
+  // pourquoi la borne a été relevée trois fois en trois lots sans qu'aucun de
+  // ces relèvements n'ait de justification autre que « ça ne tenait plus ».
   //
-  // ⚠ LA MARGE EST DE 184 099 OCTETS, 3,2 %. Elle est plus large qu'aux six
-  // derniers lots, et c'est délibéré : ce lot fait entrer huit images d'un coup,
-  // et une borne posée au ras du livrable ferait tomber la suite au premier
-  // octet de code du lot suivant.
+  // ⚠ LE PALIER DE COMPRESSION NE SE BAISSE PAS POUR TOMBER SOUS LA BORNE.
+  // 20 kbps est l'arbitrage d'Ethan, tranché À L'OREILLE sur le haut-parleur du
+  // téléphone, qui est l'appareil de sortie réel : aucune différence audible
+  // entre 20 et 24, différence audible en dessous. « Ne pas descendre sous 20
+  // pour gagner des octets. »
+  //
+  // ⚠ LA MARGE EST DE 231 498 OCTETS, 3,31 %.
   //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.
+  //
+  // Auparavant, au lot MUR-PEINT, la borne valait 5 700 000 : Ethan avait fait
+  // peindre le mur de contour DANS le fond de base et livré huit décors de
+  // 1080 × 2160, +2 154 705 octets, q75 et pleine résolution.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 5_700_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 7_000_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

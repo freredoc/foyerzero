@@ -60,7 +60,7 @@ OUTILS = [(nom, args) for nom, args in CHAINE if nom != 'entrees']
 # dans les treize outils — et c'est la moitié qui compte : une garde qui
 # demanderait aux outils de se déclarer eux-mêmes ne verrait pas celui qui
 # oublie de le faire.
-# ⚠⚠ ET IL SUIT MAINTENANT DEUX PORTES, PAS UNE — lot SON-MOTEUR, 04/09. La
+# ⚠⚠ ET IL SUIT MAINTENANT TROIS PORTES — lot SON-CATALOGUE, 04/09. La
 # chaîne a cessé de n'ouvrir que des images : `tools/sons.py` lit des WAV. Une
 # source qu'aucune porte ne surveille serait classée DORMANTE alors qu'un outil
 # la consomme, c'est-à-dire exactement le mensonge que ce fichier existe pour
@@ -71,13 +71,22 @@ OUTILS = [(nom, args) for nom, args in CHAINE if nom != 'entrees']
 # sorties des outils eux-mêmes, et la trace ne voudrait plus rien dire. C'est
 # l'exact pendant audio d'`Image.open`.
 #
+# ⚠⚠ ET LA TROISIÈME PORTE EST `json.load`, PARCE QUE LA CHAÎNE LIT MAINTENANT
+# UNE SOURCE QUI N'EST NI UNE IMAGE NI UN SON : `art/sources/sfx_manifest.json`.
+# `tools/sons.py` en DÉRIVE sa table de production — il n'écrit plus 263 lignes
+# à la main —, donc c'est une source CONSOMMÉE au sens strict, et la laisser
+# dormante serait le mensonge exact que ce fichier empêche. Elle reste NOMMÉE :
+# `json.load` reçoit un fichier déjà ouvert, dont on lit le `name`, et tout ce
+# qui n'est pas posé dans `art/sources/` est écarté au classement.
+#
 # ⚠ ET `opusenc` EST UN SOUS-PROCESSUS, DONC SA LECTURE EST INVISIBLE ICI.
 # `tools/sons.py` ouvre chaque master avec `wave` pour VÉRIFIER ses paramètres —
 # mono, 44,1 kHz, durée — et c'est cette ouverture-là que la trace voit. Le
 # contrôle et la déclaration sont le même geste, ce qui est ce qui les tient
 # d'accord : supprimer la vérification ferait basculer les quatre WAV en
 # « dormants », et la garde tomberait.
-MOUCHARD = '''import os
+MOUCHARD = '''import json
+import os
 import wave
 from PIL import Image
 
@@ -101,6 +110,12 @@ def _trace_wave(fp, *a, **k):
     _noter(fp)
     return _ouvrir_wave(fp, *a, **k)
 wave.open = _trace_wave
+
+_charger_json = json.load
+def _trace_json(fp, *a, **k):
+    _noter(fp)
+    return _charger_json(fp, *a, **k)
+json.load = _trace_json
 '''
 
 

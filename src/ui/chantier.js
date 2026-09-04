@@ -2458,7 +2458,7 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     registres.toast = texte;
     rendreLigne();
     if (texte === '') return;
-    // ⚠⚠ LE SON DE REFUS RIDE LA GARDE QUI EXISTE DÉJÀ, IL N'EN AJOUTE PAS.
+    // ⚠⚠ LE SON DE REFUS SUIT LA GARDE QUI EXISTE DÉJÀ, IL N'EN AJOUTE PAS.
     // La ligne au-dessus sort quand il n'y a rien à annoncer — effacer un
     // toast passe par ici aussi. Écrire un `if (texte !== '')` à moi aurait
     // posé une seconde condition disant la même chose, et les deux auraient
