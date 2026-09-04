@@ -959,8 +959,28 @@ export const TERRAIN_CARTE = {
   /** Côté d'une dalle de rendu, en pixels ÉCRAN. */
   dalleCotePx: 512,
 
-  /** Nombre de dalles gardées en cache, la plus ancienne employée cédant sa place. */
-  dallesEnCache: 30,
+  // ⚠⚠ IL PASSE DE 30 À 64 AU LOT ZOOM-CONTINU, ET LE NOMBRE EST MESURÉ. 30
+  // avait été calibré quand un SEUL cran vivait à la fois : le cache se vidait
+  // à chaque changement de cran. Depuis que le zoom est continu, deux crans
+  // cohabitent et — surtout — UNE SEULE IMAGE pose jusqu'à 32 dalles, mesuré
+  // dans Chromium sur un canevas de 1080 × 1692 (360 × 564 px CSS à dpr 3).
+  // À 30, une image évinçait donc deux dalles dont elle avait encore besoin, et
+  // l'image suivante les recalculait — indéfiniment.
+  //
+  // ⚠ MESURÉ SUR LE GESTE, PAS SUR UNE IMAGE FIXE. Médiane par image d'un
+  // pincement qui REVIENT du plus serré au plus large — la direction exigeante,
+  // celle qui redemande ce que l'aller a calculé —, trois exécutions :
+  // capacité 30 → 26,6 ms · 32 → 28,2 · 40 → 18,7 · 48 → 19,0 · **64 → 8,1** ·
+  // 96 → 7,0. Le budget d'une image à 60 Hz est de 16,7 ms : 64 est la première
+  // valeur qui passe dessous, et elle vaut le double de la fenêtre d'une image.
+  //
+  // ⚠⚠ ET ÇA SE PAIE EN MÉMOIRE, IL FAUT LE DIRE. Une dalle est un canevas de
+  // 512 × 512 en RVBA, soit 1 Mio exactement : le cache passe donc de 30 à
+  // 64 Mio. C'est le prix du zoom continu, et le seul curseur qui rendrait la
+  // même fluidité pour moins est `dalleCotePx` — 512 → 256 divise la dalle par
+  // quatre en surface —, ce qui est un autre lot. **Ethan tranche s'il juge
+  // 64 Mio trop cher ; le jeu tient sous 64 Mio de dalles sur son Galaxy S25 FE.**
+  dallesEnCache: 64,
 
   // Les deux rampes de cinq teintes de `FICHE-STYLE.md` §3, du creux à la
   // poussière. ⚠ ELLES ONT LA MÊME CLARTÉ RANG PAR RANG — L* 58,1 · 62,9 ·

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.87.0 · build 89.
+Dernière révision : **04/09/2026**, version 0.88.0 · build 90.
 
 ---
 
@@ -42,7 +42,107 @@ Dernière révision : **04/09/2026**, version 0.87.0 · build 89.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot JOURNAL-DE-COMBAT), à confronter :**
+**Référence au 04/09/2026 (après le lot ZOOM-CONTINU), à confronter :**
+`npm test` → **1026 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 780 316 octets**, 0 référence externe.
+⚠⚠ **LE ZOOM DE LA CARTE N'EST PLUS PAR CRANS, ET LE PAVÉ QUI L'INTERDISAIT
+AVAIT UN TROU.** Ethan, 04/09 : « le zoom de la carte ne doit pas être par
+cran ». `ui/monde.js` déclarait le continu impossible parce qu'il « demanderait
+de recalculer les dalles à chaque image — 19 ms pièce, mesuré — pour rendre du
+flou ». **Le raisonnement confondait deux grandeurs** : `rendreDalle` fabrique
+une image à un cran de la table, `drawImage` la POSE à la taille qu'on veut. Une
+dalle rendue au cran 128 s'affiche à 67,84 px par case sans être recalculée.
+Coût **+485 octets, ENTIÈREMENT DU JAVASCRIPT** — **289 `data:` avant, 289
+après**. Borne T10 **inchangée à 7 000 000**, marge **219 684 octets, 3,14 %**.
+⚠⚠ **CE QUE LE PAVÉ DISAIT DE JUSTE EST GARDÉ : ON NE GROSSIT JAMAIS DU PIXEL
+ART.** `cranDeRendu` rend le plus PETIT cran ≥ à l'échelle, jamais le plus
+proche — le plus proche donnerait un facteur jusqu'à 1,41, c'est-à-dire le
+« gros carré moche » du 30/08 que `tuilesParCase: 2` a corrigé. Le facteur tombe
+dans **(0,5 ; 1] par construction**, les crans allant du simple au double, et
+`ZOOM T3` le mesure sur cent échelles.
+⚠⚠ **LES COUTURES SONT LE VRAI PIÈGE, ET ELLES SE CALCULENT — ELLES NE SE
+REGARDENT PAS.** À facteur fractionnaire une dalle mesure `cote × facteur`
+pixels, qui n'est pas entier : arrondir la position ET la largeur chacune de son
+côté laisse un pixel de fond entre deux voisines. **Mesuré sur la pose naïve :
+198 facteurs sur 200 laissent au moins une couture, médiane 39 sur 200 dalles,
+pire cas 99 — une dalle sur deux.** On arrondit donc les BORDS : le bord droit
+d'une dalle EST le bord gauche de sa voisine, le même appel, donc le même
+nombre.
+⚠⚠ **ET LA MESURE À L'ÉCRAN LE CONFIRME PAR UN TÉMOIN, PAS PAR UNE CAPTURE.** Un
+aplat magenta peint sous la carte, puis un redessin : **0 pixel témoin sur
+1 827 360 aux facteurs 0,53 · 0,71 · 0,89**. Contre-épreuve sur la pose naïve
+rebâtie : **6 409 pixels témoins, 3 lignes et 2 colonnes de couture** à 0,53.
+Une capture agrandie peut rater une couture d'un pixel ; le témoin ne la rate
+pas.
+⚠⚠ **UN BLOCAGE A ÉTÉ TROUVÉ EN VÉRIFIANT CE QUE LE BRIEF DISAIT DE VÉRIFIER, ET
+IL VIDAIT L'ÉCRAN.** §2.5 annonçait que les six dessins « suivent l'échelle
+réelle sans une ligne de plus », en ajoutant que « en principe n'est pas une
+mesure ». Mesuré : `dessinerGrosseBase` de `render/embleme.js` EXIGEAIT un cran
+de la table et **levait à toute échelle intermédiaire**. Ce n'est pas un
+décalage d'un pixel — une levée dans la boucle de dessin tronque tout l'écran
+Monde, et la base terminale est à l'écran dès qu'on regarde le haut de la carte.
+**Contre-épreuve de bout en bout, ancienne garde rebâtie : `RangeError : cran
+49.92 hors de la table`, 0 base 3 × 3 posée, 135 emblèmes au lieu de 188.**
+⚠ **LA GARDE A CHANGÉ DE CIBLE, ELLE N'A PAS ÉTÉ RETIRÉE.** Ce qu'elle défend
+reste « le dessin ne s'invente pas une échelle » ; la faute qui peut arriver
+aujourd'hui n'est plus un cran hors table — il n'y en a plus — mais un `NaN`,
+qui rendrait `drawImage` MUET, sans lever et sans dessiner.
+⚠⚠ **`dallesEnCache` PASSE DE 30 À 64, ET LE NOMBRE EST MESURÉ, PAS CHOISI.**
+30 avait été calibré quand un seul cran vivait à la fois. Mesuré dans Chromium :
+**une seule image pose jusqu'à 32 dalles** sur un canevas de 1080 × 1692 — donc
+à 30, chaque image évinçait deux dalles dont elle avait encore besoin.
+Médiane par image d'un pincement qui REVIENT du plus serré au plus large, trois
+exécutions : **30 → 26,6 ms · 32 → 28,2 · 40 → 18,7 · 48 → 19,0 · 64 → 8,1 ·
+96 → 7,0**. 64 est la première valeur sous le budget de 16,7 ms.
+⚠ **ET ÇA SE PAIE : UNE DALLE EST UN CANEVAS DE 512 × 512 EN RVBA, SOIT 1 Mio.**
+Le cache passe donc de 30 à **64 Mio**. Le seul curseur qui rendrait la même
+fluidité pour moins est `dalleCotePx`, et c'est un autre lot. **Ethan tranche
+s'il juge 64 Mio trop cher.**
+⚠⚠ **M1 — LA MÉDIANE TIENT, LA QUEUE EST PLUS LOURDE QU'AVANT, ET IL FAUT LE
+DIRE DANS CE SENS-LÀ.** Geste rejoué image par image, cadencé sur
+`requestAnimationFrame`, trois exécutions : **intervalle entre images médiane
+16,8 ms contre 16,7 pour `main`** — les deux au plancher de la synchronisation
+verticale. Mais **42 images sur 60 restent sous 16,7 ms contre 57 sur 60 pour
+`main`**, et le p90 passe de 50 à 150 ms. Le lot calcule **96 dalles là où
+`main` en calcule 39** : un zoom continu traverse des indices de dalle à chaque
+image, un zoom par crans ne redessine que trois fois.
+⚠ **M2 — LES DALLES NE SE RECALCULENT PAS À CHAQUE IMAGE, ET C'EST LA THÈSE DU
+LOT.** **43 images sur 60 n'en calculent AUCUNE** ; les pics tombent aux
+passages de cran et à eux seuls, par salves de quatre.
+⚠ **UNE PROPOSITION MESURÉE ET NON APPLIQUÉE : `DALLES_PAR_IMAGE = 1`.** Elle
+abaisse le pire cas du geste de 117 à 70 ms, et **dégrade la médiane de 6,5 à
+23,6 ms** — 30 images sous 16,7 ms au lieu de 42. Ce n'est pas un gain net.
+**Un nombre se change seul ; Ethan tranche.**
+⚠⚠ **LE CRAN DE RENDU « AU PLUS PETIT ≥ » TIENT LE BUDGET, ET LE RAPPORT LE
+TRANCHE DE FACE** — il n'y a donc pas lieu de proposer le cran le plus proche,
+qui reste écarté parce qu'il agrandirait le pixel art.
+⚠ **LE LISSAGE EST VRAI POUR LE FOND ET FAUX AILLEURS.** Une réduction non
+entière en « plus proche voisin » produit du moiré ; il est remis à sa valeur
+d'avant en sortant de `dessinerFond`, si bien que les emblèmes gardent la
+décision du 30/08.
+⚠ **NEUF FALSIFICATIONS, NEUF CHUTES — ET LA PLUS IMPORTANTE N'A PAS MORDU AU
+PREMIER RELEVÉ, NEUVIÈME FOIS DU DÉPÔT.** Arrondir la largeur dans
+`dessinerFond` — le défaut même que `ZOOM T5` existe pour empêcher — laissait la
+suite **ENTIÈREMENT VERTE, 49 pass / 0 fail mesuré** : le test ne lisait que
+`bordDeDalle`, et le SITE DE POSE est hors de portée des tests faute de DOM.
+`ZOOM T5` lit désormais les six lignes de `dessinerFond`, comme `SON T24` lit
+les trois d'`avancerDUnTick`.
+⚠ **ONZE TESTS ENTRENT ET LE COMPTE PASSE DE 1 015 À 1 026.** **Aucune assertion
+n'a été retirée** ; deux gardes existantes sont RETOURNÉES en écrivant pourquoi —
+celle du pincement, qui exigeait `cranIndex + pas` et `SEUIL_PINCEMENT`, et
+celle de la grosse base, qui exigeait un cran de la table. L'assertion « les
+crans vont du simple au double » RESTE et défend désormais autre chose : que le
+facteur ne dépasse jamais 1.
+⚠ **LA FLÈCHE DE RAID SE DÉCLARE NON EXÉCUTÉE.** Elle ne se dessine que sur une
+cible à portée ; **la garde du peuplement écarte les bases de l'Ouvrage de
+quinze cases du départ**, donc une partie neuve n'en a aucune, et aucun
+balayage n'a pu en ouvrir une. Sa géométrie est celle du halo, qui est vérifié.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : une échelle d'affichage vit dans l'écran, et rien ne la sauvegarde.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le
+lot ne touche ni `art/`, ni `tools/` — pas un octet de `art/sprites/` ne change.
+
+**Auparavant, après le lot JOURNAL-DE-COMBAT :**
 `npm test` → **1015 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 779 831 octets**, 0 référence externe.
 ⚠⚠ **LE MOTEUR CESSE DE JETER CE QU'IL CALCULE, ET LE COMBAT SONNE.** `tick()`
@@ -3469,7 +3569,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
-  monde.js              l'écran de la carte : canevas, quatre crans, défilement au doigt
+  monde.js              l'écran de la carte : canevas, zoom continu, défilement au doigt
   raid.js               l'écran de raid : la cible, l'armée, le combat rejoué
   recherche.js          l'arbre du joueur : trois panneaux sur un rail, achat en deux touchers
   transfert.js          le panneau de transfert : il annonce le REÇU, il ne décide de rien
