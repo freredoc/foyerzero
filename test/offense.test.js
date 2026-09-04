@@ -357,7 +357,10 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
     .map((m) => m[1]).join('\n');
   assert.match(emplacement, /aspect-ratio:\s*1/,
     'les emplacements ne sont plus carrés : les sprites vont s\'étirer');
-  const piece = feuille.match(/#ecran-offense \.emplacement \.piece \{([^}]*)\}/)[1];
+  // ⚠ `[^{]*` ET NON UNE ESPACE : la règle porte deux sélecteurs depuis que les
+  // vagues du raid la partagent (lot ÉCRAN-RAID). Le motif d'hier ne trouvait
+  // plus le bloc et faisait tomber ce test sur du CSS juste.
+  const piece = feuille.match(/#ecran-offense \.emplacement \.piece[^{]*\{([^}]*)\}/)[1];
   const largeur = piece.match(/width:\s*([^;]+);/)[1].trim();
   const hauteur = piece.match(/height:\s*([^;]+);/)[1].trim();
   assert.equal(largeur, hauteur,

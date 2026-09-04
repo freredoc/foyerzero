@@ -230,6 +230,20 @@
     padding: 3px 8px; font-size: 10px;
     background: #1E2124; color: #8C9A72; border: 1px solid #4E5742;
   }
+  /* ⚠⚠ LA BASCULE ENTRE LA BASE DE LA CIBLE ET SA DÉFENSE. Elle se POSE sur le
+     canevas — pas de barre de plus, donc le chrome de l'écran ne bouge pas, et
+     c'est « tu compresses tout dans l'ui ».
+     ⚠ MÊME GÉOMÉTRIE ET MÊME TEINTE QUE `#chantier-bascule-bande` : 40 px de
+     côté, en bas à droite. Aucune teinte neuve, et surtout aucun second dessin
+     pour le même geste.
+     ⚠ ET SON `z-index` LA MET SOUS LES DEUX PANNEAUX DE RÉSULTAT (5) ET SOUS
+     LES VITESSES (3) : elle est un contrôle de la préparation, pas du combat. */
+  #raid-bascule-bande {
+    position: absolute; right: 6px; bottom: 6px; z-index: 2;
+    width: 40px; height: 40px; padding: 0;
+    font-size: 16px; line-height: 1;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+  }
   #raid-bas { flex: 0 0 auto; background: #1E2124; border-top: 2px solid #4E5742; }
   /* ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et caché tant que le mode
      Réparer n'est pas armé — Ethan, 01/09. */
@@ -1438,7 +1452,15 @@
   /* La pièce elle-même : un sprite d'atlas, cadré par `render/sprite.js`.
      Il porte le même grossissement que le jeton du Chantier — Ethan a demandé
      20 % de plus « sur le sprite », pas « sur l'écran de la base ». */
-  #ecran-offense .emplacement .piece {
+  /* ⚠⚠ LA RÈGLE SERT LES DEUX ÉCRANS DEPUIS LE LOT ÉCRAN-RAID, ET C'EST UN
+     SÉLECTEUR DE PLUS, PAS UNE SECONDE RÈGLE. Ethan, 04/09 : « il n'y a pas les
+     sprites de nos unités en bas ». Les quatre vagues du raid sont la même
+     grille de composition que celles de l'Offense, avec les mêmes pièces : leur
+     donner un bloc à elles aurait fait deux vignettes qui divergent au premier
+     ajustement, et la divergence se lirait comme deux tailles de sprite pour la
+     même unité d'un écran à l'autre. */
+  #ecran-offense .emplacement .piece,
+  #ecran-raid .emplacement .piece {
     --jeton-part: 84%;
     --jeton-grossissement: 1.2;
     width: calc(var(--jeton-part) * var(--jeton-grossissement));
@@ -2109,6 +2131,18 @@
           <button type="button" id="raid-vitesse-4">×4</button>
           <button type="button" id="raid-instantane">Instantané</button>
         </div>
+        <!-- ⚠⚠ LA BASCULE DE BANDE — lot ÉCRAN-RAID, 04/09. Ethan : « afficher
+             seulement la défense ou la base comme pour la base du joueur, de
+             sorte que le fond remplisse toute la largeur ». C'est le MÊME
+             bouton que `#chantier-bascule-bande`, au même coin, avec le même
+             glyphe déduit par `basculeDeBande` : deux grammaires pour la même
+             grille apprendraient deux jeux au même doigt.
+             ⚠ SON GLYPHE EST ÉCRIT PAR LE JS, PAS ICI. Le sens de la flèche se
+             déduit des lignes d'écran ; le graver dans le balisage serait juste
+             aujourd'hui et faux le jour où la grille changerait de sens.
+             ⚠ ET IL PART PENDANT LE DÉROULÉ, où la vue est d'ensemble : il n'y
+             a plus de bande à quitter, et un combat ne se regarde pas ailleurs. -->
+        <button type="button" id="raid-bascule-bande" hidden>▼</button>
       </div>
 
       <div id="raid-bas">

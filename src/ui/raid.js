@@ -57,11 +57,29 @@ import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
 } from '../render/interpolation.js';
 import { calculerProjection } from '../render/projection.js';
+// ⚠⚠ LES BANDES VIENNENT DE `render/`, PAS DE L'ÉCRAN DE LA BASE — lot
+// ÉCRAN-RAID, 04/09. Elles y ont déménagé au même lot : les recopier ici aurait
+// été la deuxième vérité que §4 interdit, et importer `ui/chantier.js` pour une
+// géométrie ferait dépendre le raid de la mise en page de la base.
+import {
+  BANDES_NAVIGABLES, basculeDeBande, casesDeLaBande,
+  bornesDuDecalage, bornesDuDecalageX,
+} from '../render/bandes.js';
+import { COTE_SPRITE } from '../data/atlas.js';
 import { listeAffichage } from '../render/scene.js';
 import { MUR_CASES, fondDeLaBase } from '../render/fond.js';
 import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
 import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
+// ⚠⚠ LE PLAFOND DU ZOOM ET LA POSE D'UN SPRITE SE PRENNENT LÀ OÙ ILS SONT DÉJÀ.
+// `COTE_CASE_MAX` est le plafond de la base — « le raid prend le même » —, et
+// `poserCouches` porte l'inversion d'ordre entre le canevas et une liste
+// `background-image`, qui n'a aucune raison d'être écrite deux fois.
+// `couchesDeLUniteDAssaut` porte les QUATRE champs d'une unité d'assaut ; les
+// recopier ici serait se donner une seconde occasion d'écrire `garnison` là où
+// il faut `attaque`, ce que son propre commentaire annonce.
+import { COTE_CASE_MAX, poserCouches } from './chantier.js';
+import { couchesDeLUniteDAssaut } from './offense.js';
 
 // ---------------------------------------------------------------------------
 // Étage pur
@@ -250,6 +268,38 @@ export function libelleDAttaque(cout) {
   return { mot: 'ATTAQUER', prix: cout === 1 ? '1 point' : `${cout} points` };
 }
 
+/**
+ * Le côté de case le plus grand qu'on autorise sur le CANEVAS, en pixels de
+ * mémoire d'image.
+ *
+ * ⚠⚠ LE PLAFOND DE LA BASE EST EN PIXELS CSS, CELUI-CI EN PIXELS DE BUFFER, ET
+ * LES CONFONDRE DIVISERAIT LA PLAGE PAR LA DENSITÉ. `#chantier-grille` écrit
+ * `--case-cote` en pixels CSS ; ce canevas-ci dessine dans son buffer, qui fait
+ * `devicePixelRatio` fois plus. Prendre `COTE_CASE_MAX` tel quel donnerait, sur
+ * un téléphone à densité 3, un plafond de 128 buffer là où le plancher en vaut
+ * déjà 108 : **une plage de 1,19 fois**, c'est-à-dire très exactement le « zoom
+ * chelou, très lent » qu'Ethan a rapporté le 31/08 et que le lot suivant a
+ * corrigé en ouvrant la plage.
+ *
+ * ⚠⚠ ET IL RESTE UN MULTIPLE ENTIER DE `COTE_SPRITE`, PAR CONSTRUCTION. C'est
+ * tout le raisonnement de `ZOOM_BASE_MULTIPLE_MAX` : au plafond, un pixel de
+ * sprite vaut un nombre ENTIER de pixels dessinés, donc `drawImage`
+ * n'interpole pas. On prend donc le multiple le plus PROCHE du plafond de la
+ * base converti — jamais le plafond converti lui-même, qu'une densité
+ * fractionnaire (2,625 sur certains Android) rendrait non entier.
+ *
+ * ⚠ UN MULTIPLE AU MOINS, JAMAIS ZÉRO : sur un écran à densité inférieure à 1,
+ * l'arrondi tomberait sur zéro et la grille disparaîtrait.
+ *
+ * @param {number} dpr densité de pixels de l'appareil
+ * @returns {number} côté maximal, en pixels de buffer
+ */
+export function plafondDuZoom(dpr) {
+  const densite = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  const multiple = Math.max(1, Math.round((COTE_CASE_MAX * densite) / COTE_SPRITE));
+  return COTE_SPRITE * multiple;
+}
+
 // ---------------------------------------------------------------------------
 // Étage DOM
 // ---------------------------------------------------------------------------
@@ -351,6 +401,29 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let enPause = false;
   let projection = null;
   let simulation = false;
+
+  // --- la vue : quelle bande, à quelle taille, et où -------------------------
+  //
+  // ⚠⚠ TROIS ÉTATS ET PAS UN DE PLUS, ET C'EST CE QUE `calculerProjection`
+  // ATTEND. La bande décide de ce qui doit TENIR en hauteur, le côté de case de
+  // la TAILLE, les deux décalages de l'ENDROIT. Rien d'autre n'est retenu : la
+  // projection se recalcule à chaque image à partir de ces trois-là et de la
+  // taille du canevas, si bien qu'une rotation d'écran ne peut pas laisser
+  // derrière elle une marge périmée.
+  //
+  // ⚠⚠ ET `null` DÉSIGNE LA VUE D'ENSEMBLE, QUI EST CELLE DU DÉROULÉ. C'est une
+  // LECTURE, et le rapport la déclare comme telle : Ethan a dit « mode Raid »
+  // sans distinguer la préparation du combat. Un raid part des rangées 1–2,
+  // traverse la défense en 3–10 et atteint les bâtiments en 11–18 : cadrer une
+  // seule bande pendant qu'il se joue serait regarder ailleurs pendant que ça
+  // se passe. Le zoom et le défilement, eux, RESTENT disponibles — si le joueur
+  // veut regarder de près, rien ne l'en empêche. Un mot d'Ethan renverse ça, et
+  // c'est le nombre de départ qui change, pas l'architecture.
+  let bandeCourante = 'batiments';
+  /** Le côté imposé par le doigt, en pixels de buffer ; `null` = celui qui tient. */
+  let coteVoulu = null;
+  let decalageX = 0;
+  let decalageY = 0;
   /** Vrai tant qu'un combat se déroule à l'écran — la préparation est l'autre état. */
   let deroule = false;
   /** La minuterie qui rend le bouton d'attaque vif — voir `armerLAttaque`. */
@@ -405,6 +478,17 @@ export function initialiserEcranRaid(doc, crochets = {}) {
    *
    * @returns {boolean} vrai si le canevas a une taille utilisable
    */
+  /**
+   * La bande que la vue cadre : celle qu'on a choisie, ou la vue d'ensemble
+   * pendant le déroulé.
+   *
+   * ⚠ ELLE SE DEMANDE, ELLE NE SE RETIENT PAS. Écrire `bandeCourante = null` en
+   * entrant dans le déroulé obligerait à la restaurer aux QUATRE portes de
+   * sortie — fin normale, « Instantané », pas-à-pas, abandon — et c'est très
+   * exactement le défaut que le lot ASSAUT a payé sur le chrome.
+   */
+  const bandeDeLaVue = () => (deroule ? null : bandeCourante);
+
   function dimensionner() {
     if (canvas === null) return false;
     const dpr = (doc.defaultView && doc.defaultView.devicePixelRatio) || 1;
@@ -422,8 +506,54 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ⚠ IL VALAIT `1` JUSQU'AU LOT MUR-PEINT, quand le mur était un ANNEAU de
     // blocs dessinés case par case. La demi-case rend au champ de bataille
     // environ 10 % de taille de case à surface d'écran égale.
-    projection = calculerProjection(largeur, hauteur, MUR_CASES);
+    //
+    // ⚠⚠ LA BANDE DÉCIDE DU CADRAGE, ET C'EST TOUT LE §2 DU LOT. Avant elle, la
+    // projection devait faire tenir DIX-HUIT rangées et demie dans un canevas
+    // que `#raid-bas` laisse à 466 px CSS sur un S25 FE : c'était la HAUTEUR qui
+    // commandait, la case tombait à 75 pixels de buffer au lieu de 108, et
+    // **165 pixels de noir restaient de chaque côté du décor — 30,6 % de la
+    // largeur**. Ethan : « de sorte que le fond remplisse toute la largeur ».
+    // Huit rangées et demie font passer la limite du côté de la largeur, sans
+    // condition.
+    const lignesVisibles = casesDeLaBande(bandeDeLaVue(), MUR_CASES);
+    // ⚠ LE PLANCHER SE DÉRIVE, IL NE S'ÉCRIT PAS : c'est la taille que la MÊME
+    // formule rend quand on ne lui impose rien, donc celle qui fait tenir la
+    // bande entière. L'écrire à la main donnerait un second letterboxing.
+    const plancher = calculerProjection(largeur, hauteur, MUR_CASES, { lignesVisibles })
+      .tailleCase;
+    const plafond = plafondDuZoom(dpr);
+    // ⚠ LE PLANCHER L'EMPORTE SUR LE PLAFOND, et l'ordre des bornes le dit : sur
+    // un écran très large, la taille qui fait tenir la bande peut dépasser le
+    // plafond de netteté. Montrer la bande entière est la contrainte forte ; du
+    // pixel art légèrement interpolé est le prix, et il ne se paie que là.
+    const cote = Math.max(plancher, Math.min(plafond, coteVoulu ?? plancher));
+    const bornesY = bornesDuDecalage(bandeDeLaVue(), cote, hauteur, MUR_CASES);
+    const bornesX = bornesDuDecalageX(cote, largeur, MUR_CASES);
+    decalageY = Math.min(bornesY.max, Math.max(bornesY.min, decalageY));
+    decalageX = Math.min(bornesX.max, Math.max(bornesX.min, decalageX));
+    projection = calculerProjection(largeur, hauteur, MUR_CASES, {
+      lignesVisibles, coteCase: cote, decalageX, decalageY,
+    });
     return true;
+  }
+
+  /**
+   * Va à une bande, et se pose à son début.
+   *
+   * ⚠ LE DÉCALAGE SE REMET À LA BORNE BASSE DE LA BANDE VISÉE, jamais à zéro :
+   * la borne basse de la Défense est le haut de la Défense, et zéro serait le
+   * haut de la base. Un joueur qui demande la défense et qui voit les bâtiments
+   * croirait le bouton cassé.
+   */
+  function allerALaBande(cle) {
+    if (!BANDES_NAVIGABLES.includes(cle)) return;
+    bandeCourante = cle;
+    // On force le décalage hors bornes : `dimensionner` le rabat sur le `min` de
+    // la bande neuve, quel qu'il soit, sans que ce code-ci ait à le recalculer.
+    decalageY = -Infinity;
+    marquerBascule();
+    dimensionner();
+    dessiner();
   }
 
   function dessiner() {
@@ -506,6 +636,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     deroule = true;
     const bas = $('raid-bas');
     if (bas !== null) bas.hidden = true;
+    // ⚠⚠ LE DÉROULÉ S'OUVRE SUR LA VUE D'ENSEMBLE, ZOOM COMPRIS. C'est la moitié
+    // de la lecture du §3.1 : garder le gros plan de la préparation ferait
+    // regarder trois colonnes pendant que le combat traverse les dix-huit
+    // rangées. Le pincement reste disponible — le joueur peut se rapprocher
+    // s'il le veut —, il ne s'applique simplement pas de lui-même.
+    coteVoulu = null;
+    marquerBascule();
     pendantLeDeroule(true);
   }
 
@@ -517,6 +654,14 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // Les vitesses sont un contrôle du déroulé : elles s'en vont avec lui.
     const vitesses = $('raid-vitesses');
     if (vitesses !== null) vitesses.hidden = true;
+    // ⚠ ON REVIENT À LA BANDE, DONC LE CADRAGE CHANGE : `#raid-bas` reparaît et
+    // la vue redevient celle d'une bande. Le `ResizeObserver` verra la hauteur
+    // bouger, mais pas la bande — c'est ici qu'on le dit.
+    coteVoulu = null;
+    decalageY = -Infinity;
+    marquerBascule();
+    dimensionner();
+    dessiner();
     pendantLeDeroule(false);
   }
 
@@ -628,7 +773,19 @@ export function initialiserEcranRaid(doc, crochets = {}) {
           if (occupant.degatsMilli > 0) emplacement.classList.add('abimee');
           emplacement.title = `${occupant.nom} · niveau ${occupant.niveau}`
             + ` · ${occupant.pvPct} % de PV${occupant.actif ? '' : ' · reste à la maison'}`;
-          emplacement.textContent = occupant.nom;
+          // ⚠⚠ LE SPRITE A REMPLACÉ LE NOM — Ethan, 04/09 : « il n'y a pas les
+          // sprites de nos unités en bas ». L'emplacement portait le nom en 6 px
+          // sur un bloc noir : six « Fusiliers » côte à côte se lisaient comme
+          // six étiquettes, pas comme une armée. C'est le geste que l'écran
+          // Offense a reçu le 30/08, et c'est la MÊME vignette — même fonction
+          // de couches, même pose, même part de 84 %.
+          //
+          // ⚠ LE NOM N'EST PAS PERDU : il est déjà dans le `title` ci-dessus,
+          // avec le niveau et les PV. « Rien ne se retire en silence » (§4).
+          const piece = doc.createElement('div');
+          piece.className = 'piece';
+          poserCouches(piece, couchesDeLUniteDAssaut(occupant.id));
+          emplacement.appendChild(piece);
         }
         cellules.set(cle(vague.numero, colonne), emplacement);
         rangee.appendChild(emplacement);
@@ -752,6 +909,144 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     });
   }
 
+  // --- la bascule de bande, et le zoom au doigt -------------------------------
+  //
+  // ⚠⚠ LE GESTE EST CELUI DE LA CARTE, PAS CELUI DE LA BASE, ET LA RAISON EST
+  // LA SURFACE. `#raid-canvas` porte `touch-action: none` : le navigateur n'a
+  // aucun geste à lui disputer, donc les évènements de POINTEUR y sont fiables —
+  // c'est exactement ce que `ui/monde.js` explique pour son propre canevas.
+  // L'écran de la base, lui, passe par `touchmove` parce que son conteneur
+  // défile NATIVEMENT et que le navigateur lui prend la main à deux doigts.
+  // Écrire les deux pareil aurait demandé de repeindre un défilement à la main.
+  //
+  // ⚠⚠ ET LE GLISSER-DÉPOSER NE VIT PAS SUR CETTE SURFACE — MESURÉ, PAS SUPPOSÉ.
+  // Il est posé sur `#raid-vagues`, la rangée du bas, et pas une ligne de ce
+  // fichier n'écoute le canevas avant ce lot. Les deux gestes ne peuvent donc
+  // pas se disputer un contact : ce sont deux éléments, et un contact tombe sur
+  // un seul. La dette d'ergonomie déclarée en tête de ce fichier — les modes
+  // tactiles et le glissement sur la même grille 4 × 9 — reste entière, et ce
+  // lot ne l'aggrave pas d'un pixel.
+  //
+  // ⚠ UN DOIGT PROMÈNE, DEUX DOIGTS ZOOMENT — la règle du 30/08, la même
+  // partout.
+
+  const boutonBascule = $('raid-bascule-bande');
+
+  function marquerBascule() {
+    if (boutonBascule === null) return;
+    // Pendant le déroulé il n'y a pas de bande : la vue est d'ensemble, et un
+    // bouton qui emmènerait ailleurs pendant qu'un combat se joue n'a pas de
+    // sens. Il revient avec `#raid-bas`, par la même porte.
+    boutonBascule.hidden = deroule;
+    const bascule = basculeDeBande(bandeCourante);
+    boutonBascule.textContent = bascule.glyphe;
+    boutonBascule.title = bascule.libelle;
+    boutonBascule.setAttribute('aria-label', bascule.libelle);
+  }
+
+  if (boutonBascule !== null) {
+    boutonBascule.addEventListener('click', () => {
+      allerALaBande(basculeDeBande(bandeCourante).cible);
+    });
+  }
+
+  /** Les contacts en cours, par identifiant — jamais un compteur. */
+  const doigts = new Map();
+  let pincement = null;
+  let pointeur = null;
+
+  const ecartDesDoigts = (deux) => Math.hypot(deux[0].x - deux[1].x, deux[0].y - deux[1].y);
+
+  /** Le milieu des deux doigts, en pixels du BUFFER du canevas. */
+  function milieuDesDoigts(deux) {
+    const cadre = canvas.getBoundingClientRect();
+    const dpr = (doc.defaultView && doc.defaultView.devicePixelRatio) || 1;
+    return {
+      x: ((deux[0].x + deux[1].x) / 2 - cadre.left) * dpr,
+      y: ((deux[0].y + deux[1].y) / 2 - cadre.top) * dpr,
+    };
+  }
+
+  /**
+   * Change le côté de case en gardant la case sous les doigts sous les doigts.
+   *
+   * ⚠⚠ ON RELIT LA PROJECTION AU LIEU DE REFAIRE SON CENTRAGE. Le décalage qui
+   * garde l'ancre dépend du centrage, et le centrage est une ligne de
+   * `calculerProjection` : la recopier ici en ferait une seconde vérité, et la
+   * divergence se lirait comme une vue qui saute d'un demi-écran au premier
+   * pincement. On applique, on relit où l'ancre est tombée, on corrige, on
+   * réapplique — trois calculs purs, et aucune formule dupliquée.
+   */
+  function reglerCote(nouveau, ancre) {
+    if (projection === null || !Number.isFinite(nouveau)) return;
+    const u = (ancre.x - projection.margeX) / projection.tailleCase;
+    const v = (ancre.y - projection.margeY) / projection.tailleCase;
+    coteVoulu = nouveau;
+    if (!dimensionner()) return;
+    decalageX += projection.margeX - ancre.x + u * projection.tailleCase;
+    decalageY += projection.margeY - ancre.y + v * projection.tailleCase;
+    dimensionner();
+    dessiner();
+  }
+
+  function ouvrirPincement() {
+    if (doigts.size !== 2) { pincement = null; return; }
+    const deux = [...doigts.values()];
+    const ecart = ecartDesDoigts(deux);
+    // Deux doigts joints donneraient un rapport qui explose au premier pixel.
+    if (ecart < 1) { pincement = null; return; }
+    pincement = { ecart };
+  }
+
+  if (canvas !== null) {
+    canvas.addEventListener('pointerdown', (evenement) => {
+      if (typeof canvas.setPointerCapture === 'function') {
+        canvas.setPointerCapture(evenement.pointerId);
+      }
+      doigts.set(evenement.pointerId, { x: evenement.clientX, y: evenement.clientY });
+      if (doigts.size >= 2) { ouvrirPincement(); return; }
+      pointeur = { id: evenement.pointerId, x: evenement.clientX, y: evenement.clientY };
+    });
+
+    canvas.addEventListener('pointermove', (evenement) => {
+      if (doigts.has(evenement.pointerId)) {
+        doigts.set(evenement.pointerId, { x: evenement.clientX, y: evenement.clientY });
+      }
+      if (pincement !== null && doigts.size === 2) {
+        const deux = [...doigts.values()];
+        const ecart = ecartDesDoigts(deux);
+        const rapport = ecart / pincement.ecart;
+        // ⚠ LE RAPPORT DES ÉCARTS, PAS LEUR DIFFÉRENCE : une différence en
+        // pixels zoomerait plus vite sur un grand écran que sur un petit, pour
+        // le même geste de la main.
+        if (ecart >= 1 && Number.isFinite(rapport) && projection !== null) {
+          reglerCote(projection.tailleCase * rapport, milieuDesDoigts(deux));
+        }
+        // On ré-ancre sur l'écart RÉEL, y compris quand la butée a refusé le
+        // changement : sinon il faudrait « rendre » le pincement excédentaire
+        // avant que le dézoom ne reprenne.
+        pincement = { ecart };
+        return;
+      }
+      if (pointeur === null || evenement.pointerId !== pointeur.id) return;
+      const dpr = (doc.defaultView && doc.defaultView.devicePixelRatio) || 1;
+      decalageX -= (evenement.clientX - pointeur.x) * dpr;
+      decalageY -= (evenement.clientY - pointeur.y) * dpr;
+      pointeur.x = evenement.clientX;
+      pointeur.y = evenement.clientY;
+      dimensionner();
+      dessiner();
+    });
+
+    const relacher = (evenement) => {
+      doigts.delete(evenement.pointerId);
+      if (doigts.size < 2) pincement = null;
+      if (pointeur !== null && evenement.pointerId === pointeur.id) pointeur = null;
+    };
+    canvas.addEventListener('pointerup', relacher);
+    canvas.addEventListener('pointercancel', relacher);
+  }
+
   // --- les six boutons -------------------------------------------------------
   function brancher(id, action) {
     const bouton = $(id);
@@ -873,6 +1168,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       rapportCourant = null;
       combat = null;
       fondCourant = null;
+      // ⚠ LA VUE SE REMET À NEUF À CHAQUE CIBLE. Garder le zoom et la bande de
+      // la cible précédente ferait s'ouvrir un raid sur trois colonnes de la
+      // défense d'une autre base — un état que le joueur n'a pas demandé et
+      // qu'il ne peut pas relier à son geste.
+      bandeCourante = 'batiments';
+      coteVoulu = null;
+      decalageX = 0;
+      decalageY = 0;
+      marquerBascule();
       fermerPanneaux();
       desarmer();
       peindreVagues();

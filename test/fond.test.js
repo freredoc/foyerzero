@@ -81,18 +81,31 @@ test('FOND T1 — plus un appelant n\'allume l\'anneau, et le module a disparu',
 
   // ⚠ ON LIT LA SOURCE DÉCOMMENTÉE. Les commentaires du lot nomment l'anneau
   // pour dire qu'il n'existe plus ; les compter serait la faute du §6.
+  //
+  // ⚠⚠ ET LA GARDE A CHANGÉ DE CIBLE EN SE RESSERRANT — lot ÉCRAN-RAID, 04/09.
+  // Elle cherchait `calculerProjection(…, 1)` et la chaîne exacte
+  // `calculerProjection(largeur, hauteur, MUR_CASES)` ; l'écran de raid a
+  // maintenant DEUX sites d'appel et un quatrième argument, si bien que le
+  // premier motif ne trouvait plus la parenthèse fermante et **cessait de voir
+  // un `1` remis** — mesuré. Elle lit désormais le TROISIÈME argument de CHAQUE
+  // appel, quel que soit ce qui suit : elle attrape donc le `1` de l'anneau, le
+  // `0.5` écrit à la main, et tout site d'appel qu'on ajouterait sans y penser.
+  const argumentDuMur = /calculerProjection\(\s*[^,()]+,\s*[^,()]+,\s*([^,()]+)/g;
   for (const [dossier, fichier] of [['ui', 'raid.js'], ['ui', 'banc.js'], ['ui', 'chantier.js']]) {
     const source = sansCommentaires(lire('src', dossier, fichier));
-    assert.ok(!/calculerProjection\([^)]*,\s*1\s*\)/.test(source),
-      `${fichier} rallume l'anneau : il passe 1 à calculerProjection`);
+    for (const trouve of source.matchAll(argumentDuMur)) {
+      assert.equal(trouve[1].trim(), 'MUR_CASES',
+        `${fichier} passe « ${trouve[1].trim()} » à calculerProjection au lieu de MUR_CASES`);
+    }
     assert.ok(!/from '\.\.\/render\/contour\.js'/.test(source),
       `${fichier} importe encore render/contour.js`);
   }
 
-  // ⚠ ET L'ÉCRAN DE RAID PASSE BIEN `MUR_CASES`, pas un nombre écrit à la main.
-  // Un `0.5` en dur passerait l'assertion du dessus et ferait deux vérités.
+  // ⚠ ET LA BOUCLE N'EST PAS VIDE : sans cette ligne, retirer tous les appels de
+  // l'écran de raid la rendrait verte, ce qui est le contraire de ce qu'on veut.
   const raid = sansCommentaires(lire('src', 'ui', 'raid.js'));
-  assert.match(raid, /calculerProjection\(largeur, hauteur, MUR_CASES\)/,
+  const appelsDuRaid = [...raid.matchAll(argumentDuMur)];
+  assert.ok(appelsDuRaid.length >= 1,
     'l\'écran de raid ne réserve plus la place du mur peint par MUR_CASES');
 });
 

@@ -51,13 +51,44 @@ import { MILLI_PAR_CASE, estDansLaGrille } from '../sim/grille.js';
  * serait corrigée le jour d'une correction. C'est la même formule, avec un
  * nombre de cases réservées — et `murCases = 0` la rend au caractère près.
  *
+ * ⚠⚠ LA `vue` EST LE QUATRIÈME PARAMÈTRE, ET SES QUATRE DÉFAUTS RENDENT LA
+ * FORMULE D'AVANT AU CARACTÈRE PRÈS — lot ÉCRAN-RAID, 04/09. L'écran de raid
+ * cadre désormais une BANDE à la fois et se laisse zoomer : trois choses lui
+ * manquaient, et ce sont les trois seules. `lignesVisibles` dit combien de
+ * cases doivent tenir en hauteur — huit et demie pour la base au lieu de
+ * dix-huit et demie —, `coteCase` impose la taille quand le doigt l'a réglée,
+ * `decalageX`/`decalageY` promènent la vue dans un contenu plus grand qu'elle.
+ *
+ * ⚠ UN PARAMÈTRE, PAS UNE SECONDE FONCTION — la règle que `murCases` porte déjà
+ * juste au-dessus, et elle vaut d'autant plus ici : une `projectionDeLaBande`
+ * aurait mis DEUX letterboxing dans le dépôt, dont un seul serait corrigé le
+ * jour d'une correction. C'est la même formule, avec une vue.
+ *
+ * ⚠⚠ ET LE CENTRAGE NE DESCEND JAMAIS SOUS ZÉRO. Tant que la taille est DÉRIVÉE,
+ * le contenu tient par construction et la parenthèse est positive : le plancher
+ * est donc inerte aujourd'hui, et un test l'asserte de face. Il mord dès qu'un
+ * `coteCase` imposé rend le contenu plus grand que la vue — là, centrer
+ * reviendrait à compter deux fois le débordement, une fois dans le centrage et
+ * une fois dans le décalage, et la vue partirait d'une demi-hauteur.
+ *
+ * ⚠ LE CENTRAGE SE MESURE SUR LE CONTENU ENTIER, PAS SUR LA BANDE VISIBLE. Une
+ * bande de huit rangées dans un cadre qui en montre treize se retrouverait
+ * centrée avec deux cents pixels de noir au-dessus, alors que la grille a de
+ * quoi les remplir — ce sont les rangées voisines, et il n'y a aucune raison de
+ * les cacher sur un canevas qui ne découpe rien.
+ *
  * @param {number} largeurPx Largeur disponible, en pixels CSS.
  * @param {number} hauteurPx Hauteur disponible, en pixels CSS.
  * @param {number} [murCases] Cases réservées au mur peint de chaque côté, 0 à 1.
+ * @param {object} [vue] La fenêtre : ce qu'on cadre, à quelle taille, et où.
+ * @param {number} [vue.lignesVisibles] Cases qui doivent tenir en hauteur.
+ * @param {number|null} [vue.coteCase] Côté imposé ; `null` = dérivé du cadre.
+ * @param {number} [vue.decalageX] Décalage de la vue vers la droite, en pixels.
+ * @param {number} [vue.decalageY] Décalage de la vue vers le bas, en pixels.
  * @returns {{ tailleCase: number, margeX: number, margeY: number,
  *   largeurPx: number, hauteurPx: number, murCases: number }}
  */
-export function calculerProjection(largeurPx, hauteurPx, murCases = 0) {
+export function calculerProjection(largeurPx, hauteurPx, murCases = 0, vue = {}) {
   if (!Number.isFinite(largeurPx) || !Number.isFinite(hauteurPx)
       || largeurPx <= 0 || hauteurPx <= 0) {
     throw new Error(`projection : viewport invalide ${largeurPx} × ${hauteurPx}`);
@@ -71,12 +102,34 @@ export function calculerProjection(largeurPx, hauteurPx, murCases = 0) {
   // Le mur peint prend une demi-case À GAUCHE, une À DROITE et une EN HAUT.
   // Jamais en bas : le U s'ouvre sur les deux rangées de déploiement, par
   // lesquelles l'assaut arrive. D'où `2 ×` en largeur et une seule en hauteur.
+  const {
+    lignesVisibles = GRILLE.longueur + murCases,
+    coteCase = null,
+    decalageX = 0,
+    decalageY = 0,
+  } = vue;
+  if (!Number.isFinite(lignesVisibles) || lignesVisibles <= 0) {
+    throw new RangeError(`projection : « ${lignesVisibles} » lignes visibles`);
+  }
+  if (coteCase !== null && (!Number.isFinite(coteCase) || coteCase < 1)) {
+    throw new RangeError(`projection : côté de case imposé « ${coteCase} » invalide`);
+  }
+  if (!Number.isFinite(decalageX) || !Number.isFinite(decalageY)) {
+    throw new RangeError(`projection : décalage « ${decalageX} ; ${decalageY} » invalide`);
+  }
   const colonnes = GRILLE.largeur + 2 * murCases;
-  const lignes = GRILLE.longueur + murCases;
-  const tailleCase = Math.floor(Math.min(largeurPx / colonnes, hauteurPx / lignes));
+  const lignes = lignesVisibles;
+  const tailleCase = coteCase === null
+    ? Math.floor(Math.min(largeurPx / colonnes, hauteurPx / lignes))
+    : coteCase;
   if (tailleCase < 1) {
     throw new Error(`projection : viewport ${largeurPx} × ${hauteurPx} trop petit pour une case`);
   }
+  // Le contenu ENTIER, mur compris : c'est lui qu'on centre quand il tient, et
+  // c'est son bord que le décalage promène quand il ne tient pas.
+  const contenuY = (GRILLE.longueur + murCases) * tailleCase;
+  const centrageX = Math.max(0, Math.floor((largeurPx - colonnes * tailleCase) / 2));
+  const centrageY = Math.max(0, Math.floor((hauteurPx - contenuY) / 2));
   return {
     tailleCase,
     // ⚠⚠ LA MARGE POINTE SUR LE CONTENU, PAS SUR LE MUR, et c'est tout ce qui
@@ -84,8 +137,8 @@ export function calculerProjection(largeurPx, hauteurPx, murCases = 0) {
     // `caseDepuisPixels` n'ont pas changé d'un caractère : la colonne 1 tombe
     // toujours en `margeX`. Le mur est simplement replié DANS la marge, où le
     // fond se pose en reculant de `MUR_CASES` — voir `rectangleDuFond`.
-    margeX: Math.floor((largeurPx - colonnes * tailleCase) / 2) + murCases * tailleCase,
-    margeY: Math.floor((hauteurPx - lignes * tailleCase) / 2) + murCases * tailleCase,
+    margeX: centrageX + murCases * tailleCase - decalageX,
+    margeY: centrageY + murCases * tailleCase - decalageY,
     largeurPx,
     hauteurPx,
     murCases,

@@ -49,6 +49,9 @@ import {
 import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation.js';
+import {
+  BANDES, BANDES_NAVIGABLES, basculeDeBande, bornesDeDefilement, bandeDeLaRangee,
+} from '../render/bandes.js';
 import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
 import { suffixeDeVariante, variante } from '../render/variante.js';
@@ -443,18 +446,11 @@ export const LIBELLES_FAMILLE = {
   mil: 'militaire',
 };
 
-/**
- * Les trois bandes de la grille, lues dans `GRILLE` et jamais réécrites.
- *
- * ⚠ LA RANGÉE 18 EST LE FOND, PAS « LE HAUT ». L'assaillant paraît aux rangées
- * 1–2 et monte en numéro ; la dernière rangée est donc la dernière qu'il
- * atteint. Le mot « haut » a coûté un lot le 26/08 et il ne se réemploie pas.
- */
-export const BANDES = [
-  { cle: 'deploiement', nom: 'Déploiement', ...GRILLE.bandes.deploiement },
-  { cle: 'defense', nom: 'Défense', ...GRILLE.bandes.defense },
-  { cle: 'batiments', nom: 'Chantier', ...GRILLE.bandes.batiments },
-];
+// ⚠⚠ LES TROIS BANDES ONT DÉMÉNAGÉ DANS `render/bandes.js` — lot ÉCRAN-RAID,
+// 04/09. L'écran de raid cadre une bande à la fois lui aussi ; une seconde
+// table ici et là-bas aurait été la deuxième vérité que §4 interdit. Rien de
+// la géométrie n'a changé, et il n'y a PAS de ré-export : les appelants —
+// `test/chantier.test.js` compris — prennent à la source.
 
 /**
  * Ce qu'affiche la barre de bascule entre bases.
@@ -572,38 +568,6 @@ export const BOUTONS_DU_BAS = [
   { cle: 'offense', nom: 'Offense', ecran: 'offense', bande: null },
 ];
 
-/**
- * Les bandes qui portent un bouton dans la barre du bas, dans l'ordre où elles
- * se lisent à l'écran : la base d'abord, sa défense ensuite.
- *
- * ⚠ LE DÉPLOIEMENT N'EN EST PAS, ET C'EST UNE CORRECTION. Le lot ÉCRAN-CHANTIER
- * lui avait donné un bouton nommé « Assaut » pointant sur les rangées 1–2. Ces
- * deux rangées sont l'endroit où les vagues PARAISSENT pendant un combat, pas
- * celui où on les COMPOSE : le bouton promettait un éditeur et livrait du sol
- * nu. La composition d'assaut a désormais son propre écran (`ui/offense.js`),
- * atteint par un bouton qui, lui, mène là où il le dit.
- *
- * La bande elle-même reste dans `BANDES` : elle existe toujours dans la grille,
- * elle se dessine, elle se traverse en défilant. Elle n'a simplement plus de
- * raccourci.
- */
-export const BANDES_NAVIGABLES = ['batiments', 'defense'];
-
-/**
- * Les deux bandes navigables, DANS L'ORDRE OÙ ELLES TOMBENT À L'ÉCRAN.
- *
- * ⚠ L'ORDRE SE CALCULE, IL NE SE RECOPIE PAS. `BANDES_NAVIGABLES` est écrite
- * dans l'ordre où on les nomme ; ce qui décide de « au-dessus » et « en
- * dessous », c'est `render/orientation.js`, et lui seul. Recopier l'ordre à la
- * main ferait pointer la flèche du mauvais côté le jour où la grille se
- * retournerait — et la grille S'EST déjà retournée une fois, le 27/08.
- */
-function bandesDansLOrdreDeLEcran() {
-  return BANDES
-    .filter((b) => BANDES_NAVIGABLES.includes(b.cle))
-    .map((b) => ({ ...b, ...ligneEcranDeLaBande(b) }))
-    .sort((a, b) => a.premiereLigne - b.premiereLigne);
-}
 
 /**
  * La géométrie du fond peint vient de `render/fond.js`, et elle est IMPORTÉE.
@@ -624,114 +588,6 @@ import {
   MUR_CASES, LARGEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES, BANDE_SOUS_LE_MUR,
   fondDeLaBase, VARIABLE_DU_FOND,
 } from '../render/fond.js';
-
-/**
- * Ce que fait le bouton de bascule quand on est sur cette bande.
- *
- * ⚠⚠ ETHAN, 31/08 : « on ne doit plus passer librement de la base joueur à la
- * def joueur. On rajoute un bouton avec une flèche en bas à droite. » La bascule
- * cesse donc d'être un défilement et devient un GESTE — ce qui veut dire qu'il
- * faut dire vers OÙ il emmène.
- *
- * ⚠ LE SENS DE LA FLÈCHE SE DÉDUIT DES LIGNES D'ÉCRAN, il ne s'écrit pas. La
- * bande des bâtiments tombe en haut, celle de la défense en dessous : aller à la
- * défense DESCEND. Écrire « ▼ pour la défense » en dur serait juste aujourd'hui
- * et faux le jour où la grille changerait de sens, sans que rien ne le dise.
- *
- * @param {string} cleCourante
- * @returns {{cible: string, glyphe: string, libelle: string}}
- */
-export function basculeDeBande(cleCourante) {
-  const ordre = bandesDansLOrdreDeLEcran();
-  const ici = ordre.findIndex((b) => b.cle === cleCourante);
-  // ⚠ UNE BANDE NON NAVIGABLE RENVOIE VERS LA PREMIÈRE, elle ne lève pas. Le
-  // déploiement n'a pas de bouton et n'en aura pas ; s'y trouver ne doit pas
-  // laisser le joueur sans porte de sortie.
-  const depart = ici < 0 ? -1 : ici;
-  const cible = ordre[(depart + 1) % ordre.length];
-  const descend = depart < 0 || cible.premiereLigne > ordre[depart].premiereLigne;
-  return {
-    cible: cible.cle,
-    glyphe: descend ? '▼' : '▲',
-    libelle: `Aller à ${cible.nom}`,
-  };
-}
-
-/**
- * Jusqu'où le champ a le droit de défiler quand on regarde cette bande.
- *
- * ⚠⚠ C'EST CE QUI REMPLACE LE DÉFILEMENT LIBRE. Avant le 31/08, la molette
- * traversait les trois bandes d'un trait : on passait des bâtiments à la défense
- * sans l'avoir demandé, et la palette changeait sous le doigt au milieu du
- * geste. Le défilement reste — il faut bien atteindre le bas d'une bande quand
- * on a zoomé — mais il ne FRANCHIT plus une frontière.
- *
- * ⚠ LA BORNE BASSE D'UNE BANDE EST LE HAUT DE LA SUIVANTE **NAVIGABLE**, pas le
- * haut de la bande suivante tout court. La défense est la dernière des deux ;
- * sous elle il n'y a que le déploiement, qui n'a pas de bouton et n'est pas un
- * endroit où l'on compose. Le lui rattacher est ce qui fait que ces deux rangées
- * restent ATTEIGNABLES : les enfermer aurait retiré du jeu deux rangées que le
- * défilement montrait, et « rien ne se retire en silence ».
- *
- * ⚠⚠ LE CONTENU NE COMMENCE PLUS AU HAUT DE LA GRILLE. Depuis le mur de
- * contour, `#chantier-grille` porte une demi-case de `padding` : la première
- * rangée est donc décalée d'autant, et l'ignorer ferait s'arrêter chaque bascule
- * une demi-rangée trop haut — on verrait la fin de la bande précédente au lieu
- * du début de celle qu'on a demandée. Mesuré : la bascule vers la Défense
- * s'arrêtait à 288 px au lieu de 306.
- *
- * ⚠⚠ ET LE MUR NE DÉBORDE QU'AU-DESSUS DE LA BANDE QU'IL ENTOURE. Il se pose à
- * cheval sur la ligne du bord, donc il monte d'une demi-case au-dessus de la
- * première rangée de la base — c'est ce que `min` retire pour cette bande-là, et
- * pour elle seule. En bas, il n'y a rien à retirer : le mur fait un U, ses bras
- * s'arrêtent au bord de la base (arbitrage d'Ethan du 31/08).
- *
- * ⚠ `padding` VAUT ZÉRO PAR DÉFAUT, et c'est ce qui garde le sens d'origine :
- * sans marge, une bande va d'une rangée à l'autre, exactement comme avant.
- *
- * @param {string} cleBande
- * @param {number} hauteurRangee hauteur d'une rangée à l'écran, en pixels
- * @param {number} hauteurVue hauteur visible du champ, en pixels
- * @param {number} [padding] marge de la grille, en pixels — une demi-case
- * @returns {{min: number, max: number}} bornes de `scrollTop`
- */
-export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue, padding = 0) {
-  if (!(hauteurRangee > 0)) {
-    throw new RangeError(`chantier : hauteur de rangée « ${hauteurRangee} » invalide`);
-  }
-  const ordre = bandesDansLOrdreDeLEcran();
-  const ici = ordre.findIndex((b) => b.cle === cleBande);
-  if (ici < 0) throw new RangeError(`chantier : bande « ${cleBande} » non navigable`);
-  const suivante = ordre[ici + 1];
-  const premiereLigneApres = suivante === undefined
-    ? GRILLE.longueur + 1
-    : suivante.premiereLigne;
-  // Le mur ne dépasse qu'au-dessus de la bande qu'il entoure — le U n'a pas de
-  // bas —, et sa hauteur de dépassement est très exactement celle du `padding`.
-  const murAuDessus = cleBande === BANDE_SOUS_LE_MUR ? padding : 0;
-  const min = padding + (ordre[ici].premiereLigne - 1) * hauteurRangee - murAuDessus;
-  // ⚠ LE BAS EST LE BAS DU CONTENU, PAS DE LA BOÎTE : la demi-case de `padding`
-  // du bas ne porte aucun dessin, et la rendre atteignable ferait défiler dans
-  // du vide.
-  const bas = padding + (premiereLigneApres - 1) * hauteurRangee;
-  // ⚠ `max` NE PASSE JAMAIS SOUS `min`. Quand la bande tient entière dans la vue
-  // — le cas normal au zoom d'ouverture — il n'y a rien à défiler du tout, et
-  // une borne haute négative ferait remonter le champ au-dessus de sa bande.
-  return { min, max: Math.max(min, bas - hauteurVue) };
-}
-
-/**
- * La bande à laquelle appartient une rangée.
- * @param {number} rangee
- * @returns {string} clé de bande
- */
-export function bandeDeLaRangee(rangee) {
-  const trouvee = BANDES.find((b) => rangee >= b.premiere && rangee <= b.derniere);
-  if (trouvee === undefined) {
-    throw new RangeError(`chantier : rangée ${rangee} hors de la grille`);
-  }
-  return trouvee.cle;
-}
 
 /** Les libellés courts des trois ressources, dans l'ordre de `RESSOURCES`. */
 export const LIBELLES_RESSOURCE = {
