@@ -13,11 +13,19 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { libelleDAttaque, vueDuRaid } from '../src/ui/raid.js';
+import { libelleDAttaque, vueDuRaid, plafondDuZoom } from '../src/ui/raid.js';
+import { calculerProjection } from '../src/render/projection.js';
+import { MUR_CASES, BANDE_SOUS_LE_MUR } from '../src/render/fond.js';
+import {
+  BANDES, casesDeLaBande, bornesDuDecalage, bornesDuDecalageX,
+} from '../src/render/bandes.js';
+import { GRILLE } from '../src/data/combat.js';
+import { COTE_SPRITE } from '../src/data/atlas.js';
+import { COTE_CASE_MAX } from '../src/ui/chantier.js';
 import { gesteDuSecondToucher } from '../src/ui/monde.js';
 import {
   chromeMasque, CHROME_MASQUE_PAR, CHROME_MASQUE_PAR_LE_DEROULE, BLOCS_DE_CHROME,
@@ -463,4 +471,311 @@ test('ASSAUT T11 — le délai est une donnée, pas un nombre dans l\'écran', (
   // Et la valeur ne se recopie pas non plus dans la feuille ni dans la session.
   const session = decommentee('src/ui/session.js');
   assert.ok(!session.includes('delaiArmementMs'), 'la session recopie le délai');
+});
+
+// ===========================================================================
+// Lot ÉCRAN-RAID, 04/09 — une bande à la fois, le zoom, et les sprites du bas
+// ===========================================================================
+//
+// ⚠⚠ CE QUE CES NEUF TESTS NE PROUVENT PAS, ET IL FAUT LE DIRE EN TÊTE. Cinq
+// d'entre eux calculent une géométrie — ça, ils le prouvent. `T5` et `T8` sont
+// des gardes de SOURCE : elles disent qu'une table est unique et qu'un nom nu a
+// disparu, jamais qu'un pixel est au bon endroit. `T9` est le seul qui porte
+// sur un geste, et il ne se calcule pas : il est mesuré dans Chromium, et le
+// rapport porte ses nombres. La preuve du rendu est là-bas, pas ici.
+
+test('RAID-E T1 — une bande cadre par la LARGEUR, et le fond remplit tout', () => {
+  // ⚠⚠ C'EST LE DÉFAUT QU'ETHAN A RAPPORTÉ, ET IL SE REPRODUIT ICI EN DEUX
+  // LIGNES. Sur le canevas de préparation d'un S25 FE — 1080 × 1398 pixels de
+  // buffer, mesuré, `#raid-bas` en prenant 227,56 px CSS —, faire tenir les
+  // dix-huit rangées et demie donne une case de 75 et laisse **165 pixels de
+  // noir de chaque côté**. Huit rangées et demie donnent 108, et la grille
+  // occupe les 1080.
+  const LARGEUR = 1080; const HAUTEUR = 1398;
+  const boite = GRILLE.largeur + 2 * MUR_CASES;
+
+  const avant = calculerProjection(LARGEUR, HAUTEUR, MUR_CASES);
+  assert.equal(avant.tailleCase, 75, 'la vue d\'ensemble ne tombe plus sur 75');
+  assert.equal((LARGEUR - boite * avant.tailleCase) / 2, 165,
+    'le vide latéral de la vue d\'ensemble a changé sans qu\'on le dise');
+
+  const bande = calculerProjection(LARGEUR, HAUTEUR, MUR_CASES, {
+    lignesVisibles: casesDeLaBande('batiments', MUR_CASES),
+  });
+  assert.equal(bande.tailleCase, 108, 'la bande ne fait plus tenir la case sur la largeur');
+  assert.equal(boite * bande.tailleCase, LARGEUR,
+    'la boîte n\'occupe plus exactement la largeur du cadre');
+  // ⚠ ET C'EST BIEN LA LARGEUR QUI COMMANDE, pas la hauteur : sans cette ligne,
+  // le test passerait sur une géométrie où les deux coïncideraient par hasard.
+  assert.ok(LARGEUR / boite < HAUTEUR / casesDeLaBande('batiments', MUR_CASES),
+    'la hauteur commande encore : le cadrage ne vient pas de la bande');
+
+  // ⚠⚠ ET LE CENTRAGE SE MESURE SUR LE CONTENU ENTIER, PAS SUR LA BANDE — CETTE
+  // ASSERTION A ÉTÉ ÉCRITE APRÈS UNE FALSIFICATION QUI NE MORDAIT PAS. Centrer
+  // sur les huit rangées et demie de la bande laisse **240 pixels de buffer de
+  // noir au-dessus de la rangée 18** — mesuré, `margeY` passe de 54 à 294 — et
+  // la suite restait ENTIÈREMENT VERTE, 30 pass / 0 fail. C'est la bande de noir
+  // que le lot retire, déplacée des côtés vers le haut.
+  assert.ok((GRILLE.longueur + MUR_CASES) * bande.tailleCase > HAUTEUR,
+    'le montage ne mesure rien : le contenu tient dans la vue, il n\'y a rien à centrer');
+  assert.equal(bande.margeY, MUR_CASES * bande.tailleCase,
+    'une bande de noir s\'est glissée au-dessus de la première rangée');
+
+  // ⚠ ET LE CENTRAGE MORD ENCORE QUAND LE CONTENU TIENT : sans cette moitié,
+  // l'assertion du dessus serait vraie d'un code qui ne centrerait jamais rien.
+  const plein = calculerProjection(1080, 2340, MUR_CASES);
+  assert.ok((GRILLE.longueur + MUR_CASES) * plein.tailleCase < 2340);
+  assert.ok(plein.margeY > MUR_CASES * plein.tailleCase,
+    'la vue d\'ensemble ne se centre plus quand elle a de la place');
+});
+
+test('RAID-E T2 — sans `lignesVisibles`, la projection est celle d\'hier au caractère près', () => {
+  // ⚠⚠ CE TEST EXISTE POUR QUE `T1` NE PUISSE PAS ÊTRE OBTENU EN CHANGEANT TOUT.
+  // Le défaut le plus probable du lot est un paramètre qui déborde sur les
+  // appelants qui ne l'ont pas demandé — `ui/banc.js`, et le déroulé lui-même.
+  // On refait donc l'ANCIENNE formule à la main et on exige l'égalité.
+  for (const [largeur, hauteur, mur] of [
+    [1080, 1398, 0.5], [1080, 2340, 0.5], [412, 820, 0], [360, 560, 0], [1024, 768, 1],
+  ]) {
+    const colonnes = GRILLE.largeur + 2 * mur;
+    const lignes = GRILLE.longueur + mur;
+    const tailleCase = Math.floor(Math.min(largeur / colonnes, hauteur / lignes));
+    const attendu = {
+      tailleCase,
+      margeX: Math.floor((largeur - colonnes * tailleCase) / 2) + mur * tailleCase,
+      margeY: Math.floor((hauteur - lignes * tailleCase) / 2) + mur * tailleCase,
+    };
+    const rendu = calculerProjection(largeur, hauteur, mur);
+    assert.equal(rendu.tailleCase, attendu.tailleCase, `${largeur}×${hauteur} : la taille de case a bougé`);
+    assert.equal(rendu.margeX, attendu.margeX, `${largeur}×${hauteur} : margeX a bougé`);
+    assert.equal(rendu.margeY, attendu.margeY, `${largeur}×${hauteur} : margeY a bougé`);
+  }
+  // ⚠ ET LE DÉFAUT DE `lignesVisibles` EST BIEN CELUI DE LA VUE D'ENSEMBLE :
+  // `casesDeLaBande(null, …)` doit rendre exactement ce que la formule d'hier
+  // mettait au dénominateur, sinon l'égalité ci-dessus tiendrait par accident.
+  assert.equal(casesDeLaBande(null, MUR_CASES), GRILLE.longueur + MUR_CASES);
+});
+
+test('RAID-E T3 — la demi-case de mur ne compte que sur la bande qui la porte', () => {
+  // ⚠ `BANDE_SOUS_LE_MUR` FAIT FOI, ET LE TEST NE LA RECOPIE PAS : il la LIT, et
+  // exige que ce soit la seule des trois à porter la demi-case. Écrire
+  // « batiments » ici passerait aujourd'hui et mentirait le jour où le mur
+  // changerait de bande.
+  const rangees = (cle) => {
+    const b = BANDES.find((x) => x.cle === cle);
+    return b.derniere - b.premiere + 1;
+  };
+  for (const bande of BANDES) {
+    const attendu = rangees(bande.cle) + (bande.cle === BANDE_SOUS_LE_MUR ? MUR_CASES : 0);
+    assert.equal(casesDeLaBande(bande.cle, MUR_CASES), attendu,
+      `la bande « ${bande.cle} » ne réserve pas la bonne hauteur`);
+  }
+  // Une seule bande porte le mur, et elle en porte une demi-case.
+  const avecMur = BANDES.filter((b) => casesDeLaBande(b.cle, MUR_CASES) % 1 !== 0);
+  assert.equal(avecMur.length, 1, 'zéro ou plusieurs bandes réservent une demi-case de mur');
+  assert.equal(avecMur[0].cle, BANDE_SOUS_LE_MUR);
+  // ⚠ ET SANS MUR, LES TROIS RENDENT UN NOMBRE ENTIER DE RANGÉES : un mur
+  // fantôme se verrait ici.
+  for (const bande of BANDES) {
+    assert.equal(casesDeLaBande(bande.cle, 0), rangees(bande.cle));
+  }
+});
+
+test('RAID-E T4 — une bande qui tient entière dans la vue ne défile pas', () => {
+  // ⚠⚠ LA BORNE DE BANDE NE SUFFIT PAS SUR UN CANEVAS, ET C'EST LA MOITIÉ QUE
+  // `bornesDuDecalage` AJOUTE. Au plancher de zoom, la vue montre TREIZE rangées
+  // pour une bande qui en fait huit : s'en tenir à `bornesDeDefilement`
+  // laisserait la Défense se poser à 918 pixels alors que le contenu s'arrête
+  // 318 pixels plus haut que le bas du cadre — trois cents pixels de noir.
+  const cote = 108; const vue = 1398; const mur = MUR_CASES;
+  const bat = bornesDuDecalage('batiments', cote, vue, mur);
+  assert.equal(bat.min, 0, 'la base ne commence plus en haut du contenu');
+  assert.equal(bat.max, bat.min, 'la base défile alors qu\'elle tient entière');
+
+  const def = bornesDuDecalage('defense', cote, vue, mur);
+  assert.equal(def.max, def.min, 'la défense défile alors qu\'elle tient entière');
+  // Le contenu entier fait 18 rangées plus la demi-case du mur ; la vue s'arrête
+  // à son bord, jamais après.
+  const contenu = mur * cote + GRILLE.longueur * cote;
+  assert.equal(def.min, contenu - vue, 'la vue de la défense dépasse le bas du contenu');
+  assert.ok(def.min > 0, 'le montage ne mesure rien : la défense ne décale pas');
+
+  // ⚠ ET AUCUNE BORNE N'EST NÉGATIVE, sur les deux bandes et les deux axes.
+  for (const bornes of [bat, def, bornesDuDecalageX(cote, 1080, mur)]) {
+    assert.ok(bornes.min >= 0 && bornes.max >= bornes.min,
+      `bornes hors course : ${JSON.stringify(bornes)}`);
+  }
+  // Au plancher, la boîte occupe exactement la largeur : rien à promener.
+  assert.equal(bornesDuDecalageX(cote, 1080, mur).max, 0);
+  // ⚠ ET UNE FOIS ZOOMÉ, LES DEUX AXES S'OUVRENT — sinon le zoom ne servirait à
+  // rien, et ces bornes seraient inertes.
+  assert.ok(bornesDuDecalageX(216, 1080, mur).max > 0, 'zoomé, on ne peut pas promener en largeur');
+  assert.ok(bornesDuDecalage('batiments', 216, 600, mur).max > 0, 'zoomé, on ne peut pas défiler');
+});
+
+test('RAID-E T5 — une seule table de bandes dans tout `src/`', () => {
+  // ⚠⚠ C'EST LA GARDE DU DÉPLACEMENT. Les bandes ont quitté `ui/chantier.js`
+  // pour `render/bandes.js` parce que l'écran de raid les cadre lui aussi ; une
+  // seconde table serait la deuxième vérité que §4 interdit, et la première à
+  // mentir le jour où une rangée bouge.
+  const dossiers = ['data', 'sim', 'render', 'ui', 'son'];
+  const porteurs = [];
+  for (const dossier of dossiers) {
+    for (const fichier of readdirSync(join(RACINE, 'src', dossier))) {
+      const source = decommentee(join('src', dossier, fichier));
+      // Une table de bandes se reconnaît à ce qu'elle NOMME les trois clés.
+      const nomme = ['deploiement', 'defense', 'batiments']
+        .every((cle) => source.includes(`'${cle}'`));
+      if (nomme) porteurs.push(`${dossier}/${fichier}`);
+    }
+  }
+  assert.deepEqual(porteurs, ['render/bandes.js'],
+    `les trois bandes sont nommées ailleurs qu'une fois : ${porteurs.join(', ')}`);
+
+  // ⚠ ET `ui/raid.js` LES IMPORTE, il ne les redéduit pas de `GRILLE.bandes`.
+  const raid = decommentee('src/ui/raid.js');
+  assert.match(raid, /from '\.\.\/render\/bandes\.js'/, 'l\'écran de raid n\'importe pas les bandes');
+  assert.ok(!/GRILLE\.bandes/.test(raid), 'l\'écran de raid relit GRILLE.bandes de son côté');
+  // Et il ne passe pas non plus par l'écran de la base pour les avoir.
+  assert.ok(!/BANDES[^_A-Za-z]|BANDES$/.test(raid.split('\n').filter((l) => l.includes("from './chantier.js'")).join('\n')),
+    'l\'écran de raid prend les bandes à l\'écran de la base');
+});
+
+test('RAID-E T6 — le plancher de zoom se dérive, et il laisse voir la bande', () => {
+  // ⚠⚠ LE PLANCHER N'EST PAS ÉCRIT, C'EST LA MÊME FORMULE SANS CÔTÉ IMPOSÉ.
+  // On le refait donc sur trois hauteurs de bande et on exige que la bande
+  // entre entière — c'est la seule chose qu'un plancher doive garantir.
+  for (const [largeur, hauteur] of [[1080, 1398], [1080, 2340], [360, 466]]) {
+    for (const cle of ['batiments', 'defense', 'deploiement']) {
+      const lignes = casesDeLaBande(cle, MUR_CASES);
+      const plancher = calculerProjection(largeur, hauteur, MUR_CASES, { lignesVisibles: lignes })
+        .tailleCase;
+      assert.ok(lignes * plancher <= hauteur,
+        `${cle} sur ${largeur}×${hauteur} : la bande ne tient pas au plancher`);
+      assert.ok((GRILLE.largeur + 2 * MUR_CASES) * plancher <= largeur,
+        `${cle} sur ${largeur}×${hauteur} : la boîte déborde en largeur au plancher`);
+      // Et il est MAXIMAL : une case de plus ferait déborder l'un des deux.
+      const trop = plancher + 1;
+      assert.ok(lignes * trop > hauteur || (GRILLE.largeur + 2 * MUR_CASES) * trop > largeur,
+        `${cle} sur ${largeur}×${hauteur} : le plancher laisse de la place perdue`);
+    }
+  }
+  // ⚠ ET LES TROIS BANDES NE DONNENT PAS LE MÊME PLANCHER : sans cette ligne, le
+  // test passerait sur un code qui ignorerait `lignesVisibles`.
+  const planchers = ['batiments', 'defense', 'deploiement'].map((cle) => calculerProjection(
+    1080, 1398, MUR_CASES, { lignesVisibles: casesDeLaBande(cle, MUR_CASES) },
+  ).tailleCase);
+  assert.equal(new Set(planchers).size >= 1, true);
+  assert.ok(planchers[0] > calculerProjection(1080, 1398, MUR_CASES).tailleCase,
+    'cadrer une bande ne gagne rien sur la vue d\'ensemble');
+});
+
+test('RAID-E T7 — le plafond du zoom est un multiple ENTIER de `COTE_SPRITE`', () => {
+  // ⚠⚠ C'EST LE RAISONNEMENT DE `ZOOM_BASE_MULTIPLE_MAX`, REPRIS DANS L'UNITÉ DU
+  // CANEVAS. Au plafond, un pixel de sprite doit valoir un nombre ENTIER de
+  // pixels dessinés, sans quoi `drawImage` interpole et rend du flou — c'est ce
+  // que le lot du 30/08 a retiré à la carte du monde.
+  for (const dpr of [1, 1.5, 2, 2.625, 3, 4]) {
+    const plafond = plafondDuZoom(dpr);
+    assert.equal(plafond % COTE_SPRITE, 0, `à dpr ${dpr}, le plafond n'est pas un multiple de sprite`);
+    assert.ok(plafond >= COTE_SPRITE, `à dpr ${dpr}, le plafond passe sous une cellule d'atlas`);
+  }
+  // ⚠ ET IL SUIT LA DENSITÉ. Prendre `COTE_CASE_MAX` tel quel donnerait, à
+  // densité 3, un plafond de 128 quand le plancher d'une bande en vaut déjà
+  // 108 : une plage de 1,19 fois, très exactement le « zoom chelou, très lent »
+  // du 31/08. Le test mesure la plage, pas la constante.
+  assert.equal(plafondDuZoom(3), COTE_CASE_MAX * 3);
+  const plancher = calculerProjection(1080, 1398, MUR_CASES, {
+    lignesVisibles: casesDeLaBande('batiments', MUR_CASES),
+  }).tailleCase;
+  assert.ok(plafondDuZoom(3) / plancher > 3, 'la plage du zoom du raid s\'est refermée');
+  // Une densité absurde ne fait pas disparaître la grille.
+  assert.equal(plafondDuZoom(0), COTE_SPRITE);
+  assert.equal(plafondDuZoom(Number.NaN), COTE_SPRITE);
+});
+
+test('RAID-E T8 — le nom nu a quitté les vagues, et le sprite est celui de l\'Offense', () => {
+  const raid = decommentee('src/ui/raid.js');
+  // ⚠⚠ FALSIFICATION : remettre `emplacement.textContent = occupant.nom` fait
+  // tomber ce test, et c'est ce qui a été vérifié en le remettant pour de bon.
+  assert.ok(!/emplacement\.textContent\s*=\s*occupant\.nom/.test(raid),
+    'les vagues du raid réécrivent le nom de l\'unité en toutes lettres');
+  // Le motif voit bien la faute qu'il cherche.
+  assert.ok(/emplacement\.textContent\s*=\s*occupant\.nom/
+    .test('          emplacement.textContent = occupant.nom;'));
+
+  // ⚠ ET LE SPRITE VIENT DE L'OFFENSE, PAS D'UN SECOND APPEL À `couchesDeLEntite`.
+  // Les quatre champs d'une unité d'assaut — dont `camp: 'attaque'`, qui décide
+  // de la POSE — ne se recopient pas : c'est ce que dit `couchesDeLUniteDAssaut`
+  // dans son propre commentaire.
+  assert.match(raid, /couchesDeLUniteDAssaut\(occupant\.id\)/,
+    'les vagues ne posent pas la vignette de l\'Offense');
+  assert.ok(!/couchesDeLEntite\(/.test(raid),
+    'l\'écran de raid recompose les couches d\'une unité de son côté');
+  assert.match(raid, /poserCouches\(/, 'les couches ne sont pas posées');
+
+  // ⚠ LE NOM N'EST PAS PERDU : il est dans le `title`, avec le niveau et les PV.
+  assert.match(raid, /emplacement\.title\s*=\s*`\$\{occupant\.nom\}/,
+    'le nom de l\'unité a disparu de l\'écran sans reparaître ailleurs');
+
+  // ⚠⚠ ET LES TROIS ÉTATS SURVIVENT, PARCE QU'AUCUN NE PEINT LE SPRITE. C'est
+  // la question que le brief pose : un aplat sur l'image rendrait les pièces
+  // méconnaissables. Les trois règles portent sur le LISERÉ.
+  const feuille = balisage();
+  for (const classe of ['occupe', 'inactive', 'abimee']) {
+    const bloc = feuille.match(new RegExp(`#ecran-raid \\.emplacement\\.${classe}[^{]*\\{([^}]*)\\}`));
+    assert.ok(bloc !== null, `l'état « ${classe} » n'a plus de règle`);
+    assert.ok(!/background(-color|-image)?:/.test(bloc[1]),
+      `l'état « ${classe} » peint le fond de la vignette : le sprite devient illisible`);
+    assert.ok(!/opacity:|filter:/.test(bloc[1]),
+      `l'état « ${classe} » voile le sprite`);
+  }
+});
+
+test('RAID-E T9 — un doigt promène, deux doigts zooment, et la pièce se glisse', () => {
+  // ⚠⚠ CE TEST NE MESURE PAS LE GESTE — IL N'Y A NI JSDOM NI NAVIGATEUR ICI.
+  // Ce qu'il garde, c'est la SÉPARATION qui rend le geste possible, et elle a
+  // été mesurée avant d'être crue : le glisser-déposer des pièces vit sur
+  // `#raid-vagues`, le pincement sur `#raid-canvas`. Ce sont DEUX éléments, et
+  // un contact tombe sur un seul — le brief supposait « la même grille », et
+  // c'est faux. Les cinq gestes sont relevés dans Chromium au rapport.
+  const raid = decommentee('src/ui/raid.js');
+
+  //
+  // ⚠⚠ ET LA GARDE NOMME LES RÔLES, ELLE NE LES COMPTE PAS — resserrée après une
+  // falsification qui NE MORDAIT PAS. Elle exigeait « au moins trois écouteurs
+  // par élément » : renommer `pointermove` en laissait trois, donc elle restait
+  // VERTE — mesuré, 20 pass / 0 fail — alors que ni le promenage ni le
+  // pincement ne faisaient plus rien. Un compte ne dit pas ce qui manque.
+  const ecoutes = [...raid.matchAll(/(\w+)\.addEventListener\('([a-z]+)'/g)]
+    .map((m) => `${m[1]}:${m[2]}`);
+  for (const attendu of ['canvas:pointerdown', 'canvas:pointermove', 'canvas:pointerup',
+    'canvas:pointercancel', 'hoteVagues:pointerdown', 'hoteVagues:pointerup']) {
+    assert.ok(ecoutes.includes(attendu), `l'écouteur « ${attendu} » a disparu`);
+  }
+  // ⚠ ET AUCUN CONTACT N'EST ÉCOUTÉ AILLEURS : deux surfaces, et deux
+  // seulement. Un troisième porteur rouvrirait la question de savoir laquelle
+  // reçoit le doigt.
+  const contacts = ecoutes.filter((e) => /:(pointer|touch)/.test(e));
+  assert.equal(contacts.filter((e) => !e.startsWith('hoteVagues:') && !e.startsWith('canvas:')).length, 0,
+    'un contact est écouté ailleurs que sur les vagues ou le canevas');
+
+  // ⚠ UN DOIGT PROMÈNE, DEUX DOIGTS ZOOMENT — la règle du 30/08. Le pincement
+  // ne s'ouvre qu'à DEUX contacts, et le promenage est la branche d'après.
+  assert.match(raid, /if \(doigts\.size >= 2\) \{ ouvrirPincement\(\); return; \}/,
+    'le second doigt n\'ouvre plus un pincement');
+  assert.match(raid, /if \(pincement !== null && doigts\.size === 2\)/,
+    'le pincement s\'applique à un nombre de doigts qui n\'est pas deux');
+  // ⚠ ET LES CONTACTS SE SUIVENT PAR IDENTIFIANT, jamais par compteur : un doigt
+  // qui quitte la dalle n'émet pas toujours `pointerup`, et un compteur qui ne
+  // redescend pas laisserait l'écran convaincu qu'on pince encore.
+  assert.match(raid, /const doigts = new Map\(\)/, 'les contacts se comptent au lieu de se nommer');
+
+  // ⚠⚠ ET LE ZOOM NE PASSE PAS PAR UNE TRANSFORMATION. `transform: scale()` est
+  // interdit sur la grille de la base depuis le lot POSE-À-L'ÉCRAN, pour une
+  // raison qui vaut ici : il déplace le DESSIN sans déplacer la géométrie du
+  // pointage. Ce qui change est le côté d'une case.
+  assert.ok(!/transform\s*:/.test(raid), 'l\'écran de raid zoome par une transformation');
+  assert.ok(!/ctx\.scale\(|setTransform\(/.test(raid),
+    'l\'écran de raid met le contexte à l\'échelle au lieu de changer la case');
 });

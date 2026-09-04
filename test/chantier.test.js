@@ -19,8 +19,16 @@ import {
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
-  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, basculeDeBande, bornesDeDefilement,
+  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX,
 } from '../src/ui/chantier.js';
+// ⚠ LES BANDES SE PRENNENT À LA SOURCE — lot ÉCRAN-RAID, 04/09. Elles ont
+// déménagé de `ui/chantier.js` vers `render/bandes.js` parce que l'écran de
+// raid les cadre lui aussi, et il n'y a PAS de ré-export : deux écrans qui se
+// demanderaient une géométrie l'un à l'autre finiraient par se coupler.
+import {
+  BANDES, BANDES_NAVIGABLES, basculeDeBande, bornesDeDefilement, bandeDeLaRangee,
+  casesDeLaBande, bornesDuDecalage, bornesDuDecalageX,
+} from '../src/render/bandes.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { ZOOM_CARTE } from '../src/data/sites.js';
 import { COTE_SPRITE } from '../src/data/atlas.js';
@@ -41,9 +49,9 @@ import {
   casesDeplacables,
 } from '../src/ui/chantier.js';
 import {
-  SEPARATEUR_MILLIERS, SIGLES, BANDES, BANDES_NAVIGABLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
+  SEPARATEUR_MILLIERS, SIGLES, LIBELLES_RESSOURCE, NIVEAU_ABSENT,
   formaterEntier, formaterUnites, formaterDixiemes, formaterDebit, formaterNiveau,
-  familleDuBatiment, bandeDeLaRangee, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
+  familleDuBatiment, resumeDeLaBase, detailDuBatiment, posablesDeLaBase,
   casesPosables, messageDeRefus,
 } from '../src/ui/chantier.js';
 import { creerChronometre,
@@ -3129,9 +3137,22 @@ test('écran — le sprite d\'un jeton a grandi de 20 %, et le facteur est écri
   // ⚠ ET LE MÊME GROSSISSEMENT VAUT POUR L'UNITÉ DE L'OFFENSE. Ethan a demandé
   // 20 % « sur le sprite », pas « sur l'écran de la base » : deux tailles
   // différentes pour la même chose se liraient comme un défaut de cadrage.
-  const piece = feuille.match(/#ecran-offense \.emplacement \.piece\s*\{([^}]*)\}/)[1];
+  //
+  // ⚠⚠ ET LE MOTIF SAUTE LA LISTE DE SÉLECTEURS — lot ÉCRAN-RAID, 04/09. La
+  // règle sert DEUX écrans depuis que les vagues du raid portent des sprites :
+  // `\s*` avant l'accolade ne trouvait plus rien, et le test tombait sur du CSS
+  // juste. `[^{]*` couvre les deux formes, celle d'hier comme celle d'aujourd'hui.
+  const piece = feuille.match(/#ecran-offense \.emplacement \.piece[^{]*\{([^}]*)\}/)[1];
   assert.equal(Number(piece.match(/--jeton-grossissement:\s*([\d.]+)/)[1]), facteur,
     'l\'unité de l\'Offense et le jeton du Chantier ne grossissent plus pareil');
+
+  // ⚠⚠ ET LA GARDE SE RESSERRE PLUTÔT QUE DE SE CONTENTER DE SUIVRE : les vagues
+  // du raid doivent partager la MÊME règle, pas en avoir une copie. Deux blocs
+  // identiques passeraient l'assertion du dessus et divergeraient au premier
+  // ajustement — deux tailles de sprite pour la même unité d'un écran à l'autre.
+  const listeDeLaPiece = feuille.match(/([^};]*)#ecran-offense \.emplacement \.piece[^{]*\{/)[0];
+  assert.match(listeDeLaPiece, /#ecran-raid \.emplacement \.piece/,
+    'les vagues du raid ne partagent plus la vignette de l\'Offense');
 });
 
 test('écran — les deux atlas entrent par une variable CSS, et le pixel art ne se lisse pas', () => {

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.90.0 · build 92.
+Dernière révision : **04/09/2026**, version 0.91.0 · build 93.
 
 ---
 
@@ -42,7 +42,144 @@ Dernière révision : **04/09/2026**, version 0.90.0 · build 92.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot CARTE-A), à confronter :**
+**Référence au 04/09/2026 (après le lot ÉCRAN-RAID), à confronter :**
+`npm test` → **1053 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 791 796 octets**, 0 référence externe.
+⚠⚠ **TROIS RETOURS D'ETHAN SUR L'ÉCRAN DE RAID, ET LE PREMIER ÉTAIT RÉEL DE
+30,6 % DE LA LARGEUR.** « Mode Raid : afficher seulement la défense ou la base
+comme pour la base du joueur, de sorte que le fond remplisse toute la largeur.
+Possibilité de zoomer. Il n'y a pas les sprites de nos unités en bas. » Coût
+**+5 020 octets**, mesuré poste par poste contre un livrable rebâti depuis
+`main` : **JavaScript +3 556 · feuille +1 381 · balisage +83 · audio +0 ·
+images +0**. **289 `data:` avant, 289 après.** Borne T10 **inchangée à
+7 000 000**, marge **208 204 octets, 2,97 %**.
+⚠⚠ **LE DIAGNOSTIC DU BRIEF DEMANDAIT LAQUELLE DE TROIS EXPLICATIONS, ET C'EST
+LA PREMIÈRE — MAIS PAS POUR LA RAISON QU'IL DONNAIT.** Il calculait sur un
+canevas de « 360 × 674 px CSS en préparation » : ce 674 est le DÉROULÉ du lot
+ASSAUT avant que `#barre-bas` ne soit masquée, pas la préparation. **Mesuré dans
+Chromium à la géométrie du S25 FE — 1080 × 2340, DPR 3 — le canevas de
+préparation fait 360 × 466,44 CSS**, `#raid-bas` en prenant **227,56**, les
+onglets 40 et la barre du bas 46. Le rapport 1,294 est très en dessous du 1,85
+de la boîte : **c'est la HAUTEUR qui commandait**, la case tombait à **75 pixels
+de buffer au lieu de 108**, et il restait **165 pixels de noir de chaque côté du
+décor, soit 30,6 % de la largeur**.
+⚠ **ET CE N'EST PAS L'APPAREIL D'ETHAN : le banc l'avait déjà.** Sur
+360 × 720 le canevas fait 406,44, la case tombe à **65**, et le vide vaut
+**215 px de chaque côté, 39,8 %**. Le défaut était sous les yeux depuis le lot
+RAID-A ; aucune capture ne le montrait parce que toutes étaient prises au
+DÉROULÉ.
+⚠⚠ **L'EXPLICATION 2 EST ÉCARTÉE PAR LA MESURE, PAS PAR RAISONNEMENT.**
+`rectangleDuFond` pose une image de `LARGEUR_EN_CASES × tailleCase` — exactement
+la largeur de la boîte de grille. Le décor n'a donc aucun défaut propre : il
+remplit toujours exactement ce que la grille occupe, et le vide était le
+letterboxing. ⚠ Et l'explication 3 tombe sur un nombre : `margeY` valait
+**42,5 px de buffer**, soit 14 px CSS — le vide était horizontal.
+⚠⚠ **LE DÉROULÉ, LUI, ÉTAIT DÉJÀ JUSTE, ET ÇA CHANGE LA LECTURE DU LOT.** Plein
+cadre, le canevas fait 1080 × 2340 : la largeur commande, la case vaut 108, et
+**le vide vaut zéro**. Seule la PRÉPARATION était en cause — ce qui est
+exactement l'écran où Ethan compose, répare et active.
+⚠⚠ **LES BANDES DÉMÉNAGENT DANS `render/bandes.js`, ET C'EST UN DÉPLACEMENT, PAS
+UNE ÉCRITURE.** `BANDES`, `BANDES_NAVIGABLES`, `bandesDansLOrdreDeLEcran`,
+`basculeDeBande`, `bornesDeDefilement` et `bandeDeLaRangee` quittent
+`ui/chantier.js` : pas une ligne de géométrie n'a changé en route. **Et il n'y a
+PAS de ré-export** — le lot MUR-PEINT a retiré le dernier en écrivant pourquoi,
+et `test/chantier.test.js` prend désormais à la source.
+⚠⚠ **`calculerProjection` GAGNE UNE `vue`, ET SES QUATRE DÉFAUTS RENDENT LA
+FORMULE D'HIER AU CARACTÈRE PRÈS.** `lignesVisibles` dit combien de cases doivent
+tenir en hauteur, `coteCase` impose la taille quand le doigt l'a réglée, les deux
+décalages promènent. `RAID-E T2` refait l'ancienne formule à la main sur cinq
+viewports et exige l'égalité : sans lui, `T1` s'obtiendrait en changeant tout.
+⚠⚠ **ET LE CENTRAGE SE MESURE SUR LE CONTENU ENTIER, PAS SUR LA BANDE — LA
+FALSIFICATION N'A PAS MORDU AU PREMIER RELEVÉ, DIXIÈME FOIS DU DÉPÔT.** Centrer
+sur les huit rangées et demie de la bande laisse **240 pixels de buffer de noir
+au-dessus de la rangée 18** — `margeY` passe de 54 à 294, mesuré — et la suite
+restait **ENTIÈREMENT VERTE, 30 pass / 0 fail** : c'est la bande de noir du lot,
+déplacée des côtés vers le haut. L'assertion a été écrite APRÈS la mesure.
+⚠⚠ **LA BANDE FAIT PASSER LA LIMITE DU CÔTÉ DE LA LARGEUR, SANS CONDITION.**
+Huit rangées et demie au lieu de dix-huit et demie : **la case passe de 75 à
+108, et la boîte occupe les 1080 pixels du cadre — vide mesuré à zéro, à
+gauche comme à droite**, sur les deux bandes.
+⚠ **LA DEMI-CASE DE MUR NE COMPTE QUE POUR LA BANDE QU'IL ENTOURE**, et
+`casesDeLaBande` LIT `BANDE_SOUS_LE_MUR` au lieu d'écrire « batiments ». C'est
+déjà la règle que `bornesDeDefilement` applique à sa borne haute.
+⚠⚠ **`bornesDuDecalage` COMPOSE LA BORNE DE BANDE AVEC LE BORD DU CONTENU, ET
+LES DEUX SONT NÉCESSAIRES.** Sur un canevas la vue est souvent PLUS HAUTE que la
+bande — au plancher, treize rangées tiennent dans le cadre pour une bande qui en
+fait huit —, et s'en tenir à `bornesDeDefilement` poserait la Défense à 918 px
+quand le contenu s'arrête 318 px plus haut que le bas du cadre : **trois cents
+pixels de noir sous la dernière rangée**.
+⚠⚠ **LE PLAFOND DU ZOOM EST EN PIXELS DE BUFFER, ET LES CONFONDRE DIVISERAIT LA
+PLAGE PAR LA DENSITÉ.** `COTE_CASE_MAX` est en pixels CSS ; le prendre tel quel
+donnerait, à densité 3, **128 de plafond pour 108 de plancher — une plage de
+1,19 fois**, très exactement le « zoom chelou, très lent » du 31/08.
+`plafondDuZoom` rend le multiple ENTIER de `COTE_SPRITE` le plus proche du
+plafond converti — **384 à densité 3** —, donc jamais un facteur fractionnaire,
+même sur une densité de 2,625.
+⚠⚠ **ET LA PLAGE DU RAID EST CELLE DE LA BASE À LA QUATRIÈME DÉCIMALE — MESURÉ,
+PAS VISÉ.** Raid : plancher 108, plafond 384, **3,5556**. Base : plancher 36,
+plafond 128, **3,5556**. ⚠ **Au plafond, un sprite est agrandi ×3 EXACTEMENT —
+donc sans interpolation — mais le DÉCOR l'est ×3,5556**, sa case source valant
+108 px et non 128. C'est déjà vrai de l'écran de la base ; **un nombre se change
+seul, Ethan tranche.**
+⚠⚠ **LE DÉROULÉ N'EST PAS LA PRÉPARATION, ET C'EST UNE LECTURE DÉCLARÉE.** Un
+raid part des rangées 1–2, traverse la défense en 3–10 et atteint les bâtiments
+en 11–18 : cadrer une bande pendant qu'il se joue serait regarder ailleurs. La
+préparation cadre une bande ; **le déroulé ouvre sur la vue d'ensemble, zoom
+remis au plancher**, et le pincement comme le défilement y restent disponibles.
+Ethan a dit « mode Raid » sans distinguer les deux temps ; **un mot renverse
+cette lecture, et c'est un nombre de départ qui change, pas une architecture.**
+⚠ **ET LA BANDE SE DEMANDE, ELLE NE SE RETIENT PAS** — `bandeDeLaVue()` rend
+`null` pendant le déroulé. Écrire `bandeCourante = null` en y entrant obligerait
+à la restaurer aux QUATRE portes de sortie, et c'est le défaut que le lot ASSAUT
+a payé sur le chrome.
+⚠⚠ **LE GLISSER-DÉPOSER NE VIT PAS SUR LA MÊME GRILLE QUE LE ZOOM, ET LE BRIEF
+SUPPOSAIT LE CONTRAIRE.** Il est posé sur `#raid-vagues` ; le pincement est sur
+`#raid-canvas`. **Deux éléments, et un contact tombe sur un seul.** Relevé dans
+Chromium, cinq gestes : un doigt sur les vagues déplace la pièce de 1:1 à 3:5 et
+le canevas ne bouge pas d'un pixel (93 312 px d'obstacle, coin identique) ; deux
+doigts sur les vagues ne font **rien** ; deux doigts sur le canevas zooment
+(93 312 → 51 330, coin 54;918 → 203;1148) sans déplacer une pièce ; un doigt à
+l'horizontale promène de 135 px ; un doigt en hauteur, une fois zoomé, change
+l'empreinte du décor. **La dette d'ergonomie déclarée en tête de `ui/raid.js`
+reste entière, et ce lot ne l'aggrave pas d'un pixel.**
+⚠ **ET LE ZOOM MESURÉ REVIENT EXACTEMENT AU PLANCHER** : un pincement de 1,25
+porte la case de 108 à 135 — plage d'obstacle 324 → 134 —, et le relâchement
+rend **324, au pixel**.
+⚠⚠ **LE NOM NU QUITTE LES VAGUES, ET C'EST LA VIGNETTE DE L'OFFENSE, PAS UNE
+COPIE.** `couchesDeLUniteDAssaut` porte les QUATRE champs d'une unité d'assaut —
+dont `camp: 'attaque'`, qui décide de la POSE — et son propre commentaire
+interdit de les recopier. La règle CSS gagne un SÉLECTEUR, elle ne se dédouble
+pas : une garde du dépôt exige désormais que les deux écrans la partagent.
+⚠ **LES TROIS ÉTATS SURVIVENT PARCE QU'AUCUN NE PEINT LE SPRITE**, et c'est
+confronté à l'écran : `occupe`, `inactive` et `abimee` portent tous sur le
+LISERÉ. Relevé à densité 3 sur six pièces — intacte, inactive, intacte, abîmée,
+inactive ET abîmée, intacte — **les six sprites sont également reconnaissables**.
+⚠ **CE QUI EST PERDU SE DÉCLARE** : `.inactive` posait aussi `color: #68727E`,
+qui teintait le NOM. Le nom parti, cette moitié du signal est inerte ; le liseré
+tireté clair la porte seul, et il est plus visible que le liseré presque noir
+d'une pièce active.
+⚠ **VINGT FALSIFICATIONS, VINGT CHUTES, ET DEUX QUI NE MORDAIENT PAS AU PREMIER
+RELEVÉ** — le centrage sur la bande, ci-dessus, et `pointermove` retiré du
+canevas : `RAID-E T9` exigeait « au moins trois écouteurs par élément » et il en
+restait trois, donc **20 pass / 0 fail** pendant que ni le promenage ni le
+pincement ne faisaient plus rien. Elle NOMME désormais les six écouteurs.
+⚠ **TROIS GARDES EXISTANTES SONT RESSERRÉES, AUCUNE ASSOUPLIE.** `FOND T1`
+cherchait `calculerProjection(…, 1)` et une chaîne exacte : avec deux sites
+d'appel et un quatrième argument, **elle cessait de voir un `1` remis** — elle
+lit maintenant le TROISIÈME argument de CHAQUE appel. Les deux gardes de la
+vignette lisaient un sélecteur nu ; elles lisent la LISTE de sélecteurs, et
+celle du Chantier exige en plus que le raid partage la règle.
+⚠ **NEUF TESTS ENTRENT ET LE COMPTE PASSE DE 1 044 À 1 053.** Aucune assertion
+n'a été retirée.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : une bande courante, un côté de case et deux décalages vivent dans
+l'écran. **La sauvegarde ne grandit pas d'un octet** — 1 301 · 1 301 · 1 303 ·
+1 307 · 1 309 sur les cinq graines témoins, avant comme après.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Les six captures du rapport vivent dans
+`rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot CARTE-A :**
 `npm test` → **1044 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 786 776 octets**, 0 référence externe.
 ⚠⚠ **TROIS RETOURS D'ETHAN, TOUS SUR LA LECTURE DE LA CARTE, ET AUCUN SUR UN
@@ -3705,9 +3842,10 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     par un test, pas par relecture — une pièce sur vingt-trois manquait au
     journal sur la graine 9.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 11 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 12 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
+  bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
   fond.js               le décor peint d'une base : quel dessin, et où il se pose
   limite.js             quel dessin porte une frontière de territoire, et où le découper
   terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
@@ -3760,6 +3898,29 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 11 fi
     de `monde.test.js` interdit à l'écran d'appeler `celluleDuSprite` depuis le
     lot RETOURS-DU-31, et elle a fait tomber le premier jet de ce lot-ci, qui
     refaisait le calcul dans l'écran. Même partage que `render/embleme.js`.
+  ⤷ ⚠⚠ `bandes.js` EST UN DÉPLACEMENT, PAS UNE ÉCRITURE — lot ÉCRAN-RAID,
+    04/09. `BANDES`, `BANDES_NAVIGABLES`, `bandesDansLOrdreDeLEcran`,
+    `basculeDeBande`, `bornesDeDefilement` et `bandeDeLaRangee` vivaient dans
+    `ui/chantier.js`, où un seul écran s'en servait ; l'écran de raid cadre
+    désormais une bande lui aussi, et une SECONDE table aurait été la deuxième
+    vérité que §4 interdit. **Pas une ligne de la géométrie n'a changé en
+    route.** ⚠ ET IL N'Y A PAS DE RÉ-EXPORT : le lot MUR-PEINT a retiré le
+    dernier en écrivant pourquoi, et `test/chantier.test.js` prend à la source.
+    ⚠ Il est dans `render/` et non dans `ui/` : un écran qui importerait l'autre
+    pour une géométrie ferait dépendre le raid de la mise en page de la base.
+    ⚠ Ce qu'il AJOUTE tient en trois fonctions, et elles sont pour le canevas :
+    `casesDeLaBande` — combien de cases une bande occupe, mur compris, `null`
+    valant la vue d'ensemble —, `bornesDuDecalage` et `bornesDuDecalageX`, qui
+    COMPOSENT la borne de bande avec le bord du contenu. Sur un canevas la vue
+    est souvent plus haute que la bande, et s'en tenir à `bornesDeDefilement`
+    laisserait trois cents pixels de noir sous la dernière rangée.
+  ⤷ ⚠⚠ `projection.js` PORTE UNE `vue` DEPUIS LE MÊME LOT, ET SES QUATRE DÉFAUTS
+    RENDENT LA FORMULE D'HIER AU CARACTÈRE PRÈS. `lignesVisibles`, `coteCase`,
+    `decalageX`, `decalageY` : c'est la même formule de letterboxing, avec une
+    fenêtre. ⚠ ET LE CENTRAGE SE MESURE SUR LE CONTENU ENTIER, jamais sur la
+    bande visible — centrer sur la bande laisse 240 px de buffer de noir
+    au-dessus de la rangée 18, et la falsification qui le fait N'A PAS MORDU au
+    premier relevé.
   ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
     est celui de la SIMULATION : y prendre un tirage pour choisir une texture
     décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se
@@ -3828,6 +3989,27 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
     l'étiquette de la carte et le titre du panneau ne puissent pas donner deux
     noms à la même base, et `palierDuSite` lit désormais la moyenne portée par
     le SITE — avec deux bases, il lisait celle de la courante.
+  ⤷ ⚠⚠ L'ÉCRAN DE RAID CADRE UNE BANDE À LA FOIS DEPUIS LE LOT ÉCRAN-RAID —
+    04/09, Ethan : « afficher seulement la défense ou la base comme pour la base
+    du joueur, de sorte que le fond remplisse toute la largeur ». En
+    préparation, le canevas ne fait que **466 px CSS de haut** sur un S25 FE —
+    `#raid-bas` en prend 227,56 — donc faire tenir les dix-huit rangées laissait
+    **165 px de buffer de noir de chaque côté**. Il tient une bande, une taille
+    de case et deux décalages ; tout le reste se recalcule à chaque image.
+    ⚠ IL PREND LES BANDES ET LE PLAFOND LÀ OÙ ILS SONT — `render/bandes.js` et
+    `COTE_CASE_MAX` de l'écran de la base —, et la vignette d'une pièce lui vient
+    de `couchesDeLUniteDAssaut` d'`ui/offense.js`, qui porte les quatre champs
+    d'une unité d'assaut. ⚠ SON PLAFOND DE ZOOM EST EN PIXELS DE BUFFER : à
+    densité 3 il vaut 384, un multiple ENTIER de `COTE_SPRITE`, et la plage
+    tombe à **3,5556** — celle de l'écran de la base à la quatrième décimale.
+    ⚠⚠ ET LE DÉROULÉ OUVRE SUR LA VUE D'ENSEMBLE, ZOOM REMIS AU PLANCHER. C'est
+    une LECTURE : un raid traverse les trois bandes, donc en cadrer une pendant
+    qu'il se joue serait regarder ailleurs. Le pincement y reste disponible.
+  ⤷ ⚠⚠ ET LE GLISSER-DÉPOSER NE VIT PAS SUR LA MÊME SURFACE QUE LE PINCEMENT —
+    mesuré, pas supposé. Les pièces se glissent sur `#raid-vagues`, le zoom vit
+    sur `#raid-canvas` : deux éléments, et un contact tombe sur un seul. La
+    dette d'ergonomie que ce fichier déclare en tête — les modes tactiles et le
+    glissement sur la même grille 4 × 9 — reste entière.
   ⤷ ⚠ `#raid-attaquer` A QUITTÉ `#raid-boutons` — 04/09, Ethan : « le bouton
     attaquer, il est vraiment en gros à droite. Il n'y a que ça qui déclenche
     l'attaque. » Il porte le PRIX, pris dans `vueDuRaid`, seule appelante de
