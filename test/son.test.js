@@ -16,16 +16,22 @@ import { fileURLToPath } from 'node:url';
 
 import {
   SONS, EVENEMENTS, BUS, MEMOIRE, REGLAGES_PAR_DEFAUT, RAMPE_BOUCLE_MS,
-  AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, MOUVEMENT_PAR_PAIRE, EFFONDREMENT_PV,
+  AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, EFFONDREMENT_PV, EXPLOSION_PV,
+  IMPACT_LOURD_MILLIEMES, ROULEMENT_PAR_CHASSIS, MOTEUR_PAR_CHASSIS, ARCHETYPE_PAR_UNITE,
+  PASSAGE_AERIEN, DEPLOIEMENT_PAR_PAIRE, ARME_PAR_PAIRE, ARME_PAR_DEFENSE,
 } from '../src/data/sons.js';
 import {
   creerVoix, demanderUnSon, gainDuSon, reconcilierLesBoucles, boucleDeLEvenement,
 } from '../src/son/politique.js';
 import {
-  bouclesDesirees, unitesEnMouvement, evenementDuGeste, effondrementDuBatiment, paireDeLUnite,
+  bouclesDesirees, etatDesUnites, evenementDuGeste, effondrementDuBatiment, paireDeLUnite,
+  boucleDeLUnite, armeDuTireur, explosionDeLaPiece, evenementsDuJournal,
 } from '../src/son/cablage.js';
-import { UNITES } from '../src/data/combat.js';
+import { UNITES, DEFENSES } from '../src/data/combat.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
+import { BATIMENTS } from '../src/data/sites.js';
+import { creerCombat, tick } from '../src/sim/combat.js';
+import { genererSite } from '../src/sim/generateur.js';
 import { initialiserLeSon, idDuSon, octetsDuDataUri } from '../src/ui/son.js';
 import { lireLesReglages, CLE_REGLAGES, CLE_SAUVEGARDE } from '../src/ui/session.js';
 import { creerRng, tirer } from '../src/sim/rng.js';
@@ -798,18 +804,23 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
   // SON-MOTEUR les lisait dans les seuls littéraux de `session.js` ; depuis
   // SON-CÂBLAGE la session appelle aussi `son.jouer(evenement)` avec une
   // VARIABLE, dont la valeur sort de `src/son/cablage.js`. Un test qui ne
-  // lirait que les littéraux annoncerait cinq sons atteignables sur vingt-quatre
-  // — c'est-à-dire qu'il mentirait dans le sens le plus dangereux, en déclarant
-  // muet ce qui sonne. On rejoue donc les DEUX portes.
+  // lirait que les littéraux annoncerait cinq sons atteignables sur cent
+  // soixante-neuf — c'est-à-dire qu'il mentirait dans le sens le plus dangereux,
+  // en déclarant muet ce qui sonne. On rejoue donc les DEUX portes.
+  //
+  // ⚠⚠ ET LA SECONDE PORTE EN COMPTE DEUX DEPUIS LE LOT JOURNAL-DE-COMBAT : le
+  // geste, qui existait, et le DÉROULÉ du raid, qui vide `evenementsSonores()`.
+  // Les deux appellent `son.jouer(evenement)`, les deux passent par
+  // `src/son/cablage.js`, et aucun écran ne nomme un son.
   const parLaVariable = (session.match(/son\.jouer\(evenement\)/g) ?? []).length;
-  assert.equal(parLaVariable, 1, 'la seconde porte du son a bougé : recompter les atteignables');
+  assert.equal(parLaVariable, 2, 'la seconde porte du son a bougé : recompter les atteignables');
   const atteignables = [...new Set([...appels, ...EVENEMENTS_CABLES])]
     .flatMap((e) => EVENEMENTS[e].variantes).sort();
   assert.deepEqual([...new Set(atteignables)], atteignables, 'un son atteignable en double');
-  assert.equal(atteignables.length, 24, 'le nombre de sons atteignables a bougé');
-  // ⚠ ET 239 RESTENT MUETS. C'est voulu, et le rapport les nomme un par un avec
+  assert.equal(atteignables.length, 169, 'le nombre de sons atteignables a bougé');
+  // ⚠ ET 94 RESTENT MUETS. C'est voulu, et le rapport les nomme un par un avec
   // leur raison : rien n'a été branché pour donner un emploi à un son.
-  assert.equal(Object.keys(SONS).length - atteignables.length, 239,
+  assert.equal(Object.keys(SONS).length - atteignables.length, 94,
     'le compte des sons muets a bougé sans que le rapport le dise');
 
   // Le refus arrive par les registres `toast`, APRÈS la garde du texte vide :
@@ -835,12 +846,53 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
  * deviendrait alors un mensonge dans le sens le plus dangereux : elle
  * déclarerait muet ce qui sonne.
  */
+const PROPRIETAIRES = ['joueur', 'ouvrage'];
+
+/** Un journal qui porte TOUS les faits que le moteur peut publier, une fois chacun. */
+function journalExhaustif() {
+  const journal = {
+    apparitions: [], vagues: [], tirs: [], impacts: [], destructions: [],
+  };
+  for (const proprietaire of PROPRIETAIRES) {
+    journal.vagues.push({ numero: 1, effectif: 1, proprietaire });
+    for (const id of Object.keys(UNITES)) {
+      journal.apparitions.push({ id, genre: 'unite', proprietaire });
+      journal.tirs.push({ id, genre: 'unite', proprietaire });
+      journal.destructions.push({ id, genre: 'unite', proprietaire });
+    }
+    for (const id of Object.keys(DEFENSES)) {
+      journal.tirs.push({ id, genre: 'defense', proprietaire });
+      journal.destructions.push({ id, genre: 'defense', proprietaire });
+    }
+    for (const id of [...Object.keys(BASE_BATIMENTS), ...Object.keys(BATIMENTS)]) {
+      journal.destructions.push({ id, genre: 'batiment', proprietaire });
+    }
+    // Les deux bouts de l'échelle d'impact : une égratignure et un coup mortel.
+    journal.impacts.push({ id: 'x', genre: 'unite', proprietaire, encaisseMilli: 1, pvMaxMilli: 1000000 });
+    journal.impacts.push({ id: 'x', genre: 'unite', proprietaire, encaisseMilli: 999000, pvMaxMilli: 1000000 });
+  }
+  return journal;
+}
+
 const EVENEMENTS_CABLES = (() => {
   const vus = new Set();
-  // Les boucles : les trois tables du câblage, sans exception.
+  // Les boucles d'écran et de bâtiment : deux tables, sans exception.
   for (const nom of Object.values(AMBIANCE_PAR_ECRAN)) vus.add(nom);
   for (const nom of Object.values(BOUCLES_DE_BATIMENT)) vus.add(nom);
-  for (const nom of Object.values(MOUVEMENT_PAR_PAIRE)) vus.add(nom);
+  // ⚠⚠ LES BOUCLES D'UNITÉ PASSENT PAR LA FONCTION, PAS PAR LA TABLE. Depuis le
+  // lot JOURNAL-DE-COMBAT, ce que roule une pièce dépend de son CHÂSSIS, de son
+  // PROPRIÉTAIRE et de son MOUVEMENT : lire `ROULEMENT_PAR_CHASSIS` seul
+  // oublierait les moteurs à l'arrêt, et lire les deux tables oublierait qu'un
+  // traversant n'en porte aucune. On demande donc les quatorze unités dans les
+  // quatre situations, et c'est la règle elle-même qui répond.
+  for (const id of Object.keys(UNITES)) {
+    for (const proprietaire of PROPRIETAIRES) {
+      for (const enMouvement of [true, false]) {
+        const nom = boucleDeLUnite(id, proprietaire, enMouvement);
+        if (nom !== null) vus.add(nom);
+      }
+    }
+  }
   // Les gestes : tous les couples que `evenementDuGeste` peut recevoir.
   for (const geste of ['selection', 'deplacement', 'attaque', 'pose', 'amelioration']) {
     for (const genre of ['batiment', 'garnison', null]) {
@@ -851,6 +903,9 @@ const EVENEMENTS_CABLES = (() => {
   for (const id of Object.keys(BASE_BATIMENTS)) {
     vus.add(evenementDuGeste('retrait', { genre: 'batiment', id }));
   }
+  // Le journal : tout ce que la traduction peut rendre, sur un journal qui porte
+  // tous les faits possibles.
+  for (const nom of evenementsDuJournal(journalExhaustif())) vus.add(nom);
   return [...vus].sort();
 })();
 
@@ -863,7 +918,8 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   // l'horloge. C'est ce qui rend la mécanique éprouvable ici.
   const cablage = sansCommentaires(lire('src', 'son', 'cablage.js'));
   const imports = [...cablage.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]).sort();
-  assert.deepEqual(imports, ['../data/base.js', '../data/combat.js', '../data/sons.js'],
+  assert.deepEqual(imports,
+    ['../data/base.js', '../data/combat.js', '../data/sites.js', '../data/sons.js'],
     'src/son/cablage.js a gagné une dépendance : il ne doit lire que des tables');
   for (const interdit of ['AudioContext', 'document', 'window', 'Date.now', 'performance']) {
     assert.ok(!cablage.includes(interdit), `src/son/cablage.js touche à « ${interdit} »`);
@@ -931,11 +987,30 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
   assert.deepEqual(Object.keys(AMBIANCE_PAR_ECRAN).sort(), ecrans.sort(),
     'un écran sans ambiance, ou une ambiance sans écran');
-  for (const nom of [...Object.values(AMBIANCE_PAR_ECRAN),
-    ...Object.values(BOUCLES_DE_BATIMENT), ...Object.values(MOUVEMENT_PAR_PAIRE)]) {
+  // ⚠⚠ ET TOUTE BOUCLE CÂBLÉE EN EST UNE, LES ROULEMENTS ET LES MOTEURS COMPRIS.
+  // Le pack marque `boucle` sur les 35 sons qui bouclent, et ce marquage est
+  // GÉNÉRÉ : brancher un `movement_player_flyby` — qui est un PASSAGE et ne
+  // boucle pas — comme roulement d'aéronef fait tomber cette ligne, et c'est la
+  // donnée qui l'interdit, pas une liste écrite ici.
+  const bouclesCablees = new Set([
+    ...Object.values(AMBIANCE_PAR_ECRAN), ...Object.values(BOUCLES_DE_BATIMENT),
+  ]);
+  for (const id of Object.keys(UNITES)) {
+    for (const proprietaire of ['joueur', 'ouvrage']) {
+      for (const enMouvement of [true, false]) {
+        const nom = boucleDeLUnite(id, proprietaire, enMouvement);
+        if (nom !== null) bouclesCablees.add(nom);
+      }
+    }
+  }
+  for (const nom of bouclesCablees) {
     assert.ok(nom in EVENEMENTS, `« ${nom} » n'est pas un événement`);
     assert.ok(EVENEMENTS[nom].variantes.every((v) => SONS[v].boucle === true),
       `« ${nom} » est câblé comme une boucle et n'en est pas une`);
+  }
+  // ⚠ ET AUCUN PASSAGE D'AÉRONEF N'Y EST : un traversant PASSE, il ne roule pas.
+  for (const nom of Object.values(PASSAGE_AERIEN)) {
+    assert.ok(!bouclesCablees.has(nom), `« ${nom} » est un passage, pas un roulement`);
   }
 });
 
@@ -1055,7 +1130,7 @@ test('SON T17 — un tampon qu\'une source lit ne s\'évince pas (falsification 
   // retomberait alors que la mémoire, elle, ne bougerait pas. Sans boucle le
   // défaut restait borné à la durée d'un coup ; une ambiance de huit secondes
   // rejouée sans fin le rendrait permanent.
-  const boucle = MOUVEMENT_PAR_PAIRE[Object.keys(MOUVEMENT_PAR_PAIRE)[0]];
+  const boucle = ROULEMENT_PAR_CHASSIS.blinde_leger.joueur;
   assert.ok(SONS[EVENEMENTS[boucle].variantes[0]].residente !== true,
     'montage : cette boucle est résidente, l\'éviction ne la regarde pas');
   son.reconcilier([boucle]);
@@ -1171,31 +1246,91 @@ test('SON T18 — unit_audio_map.json se résout, et sa couverture se recompte (
   assert.equal(valeurs.length, 35, 'le nombre de valeurs distinctes a bougé');
   for (const v of valeurs) assert.ok(v in EVENEMENTS, `« ${v} » n'est pas un événement du pack`);
 
-  // La table dérivée ne garde que les BOUCLES, et la dérivation se rejoue ici.
-  const attendu = {};
-  for (const [paire, entree] of Object.entries(carte.player)) {
-    const nom = entree.movement;
-    if (nom === undefined) continue;
-    if (!EVENEMENTS[nom].variantes.every((v) => SONS[v].boucle === true)) continue;
-    attendu[paire] = nom;
-  }
-  assert.deepEqual(MOUVEMENT_PAR_PAIRE, attendu, 'la table dérivée et la carte ont divergé');
-  assert.equal(Object.keys(MOUVEMENT_PAR_PAIRE).length, 4,
-    'le nombre de roulements câblés a bougé : le rapport doit le redire');
+  // ⚠⚠ LES TROIS TABLES DÉRIVÉES SE REJOUENT ICI, EN JAVASCRIPT, CONTRE LA CARTE.
+  // C'est ce que le lot SON-CATALOGUE a posé pour `SONS` et que celui-ci étend :
+  // le test ne vérifie pas une RECOPIE mais une DÉRIVATION, si bien qu'un
+  // `src/data/sons.js` retouché à la main tombe ici.
 
+  // 1. L'ARME — les quatorze paires, et la substitution vers l'Ouvrage.
+  // ⚠⚠ ELLE EST VÉRIFIÉE, PAS SUPPOSÉE : on EXIGE que le nom substitué soit un
+  // événement du pack. Le jeu a DEUX jeux de noms pour les mêmes quatorze
+  // pièces, donc le bloc `player` de la carte les couvre des deux côtés.
+  const armes = {};
+  for (const [paire, entree] of Object.entries(carte.player)) {
+    const joueur = entree.variant_set;
+    assert.ok(joueur.includes('_player_'), `« ${joueur} » ne porte pas _player_`);
+    const ouvrage = joueur.replace('_player_', '_ouvrage_');
+    assert.ok(ouvrage in EVENEMENTS, `« ${joueur} » substitué en « ${ouvrage} », qui n'existe pas`);
+    armes[paire] = { joueur, ouvrage };
+  }
+  assert.deepEqual(ARME_PAR_PAIRE, armes, 'la table des armes et la carte ont divergé');
+  assert.equal(Object.keys(ARME_PAR_PAIRE).length, 14, 'une unité a perdu son arme');
+  // ⚠ DOUZE `variant_set` DISTINCTS POUR QUATORZE PAIRES, ET C'EST LE PACK QUI
+  // LE DIT : Voltigeurs et Fusiliers partagent le fusil, Pionnier et Chasseur le
+  // canon moyen. Le brief en annonçait vingt-sept — c'est le nombre de sons
+  // `weapon_*`, pas celui des substitutions.
+  assert.equal(new Set(Object.values(ARME_PAR_PAIRE).map((c) => c.joueur)).size, 12,
+    'le nombre de variant_set distincts a bougé : le rapport doit le redire');
+  // ⚠ ET DEUX DES DOUZE NE SONT PAS DES `weapon_*` — le pack fait tirer une
+  // EXPLOSION aux Sapeurs et à l'Albatros, et la substitution y marche pareil.
+  const nonArmes = [...new Set(Object.values(ARME_PAR_PAIRE).map((c) => c.joueur))]
+    .filter((n) => !n.startsWith('weapon_')).sort();
+  assert.deepEqual(nonArmes, ['explosion_player_large', 'explosion_player_small'],
+    'les deux tirs qui ne sont pas des armes ont changé');
+
+  // 2. LE DÉPLOIEMENT — deux paires sur quatorze, et il ne boucle pas.
+  const deploiements = {};
+  for (const [paire, entree] of Object.entries(carte.player)) {
+    const nom = entree.deploy;
+    if (nom === undefined) continue;
+    assert.ok(!EVENEMENTS[nom].variantes.every((v) => SONS[v].boucle === true),
+      `« ${nom} » boucle : un déploiement est un coup`);
+    deploiements[paire] = { joueur: nom, ouvrage: nom.replace('_player_', '_ouvrage_') };
+  }
+  assert.deepEqual(DEPLOIEMENT_PAR_PAIRE, deploiements, 'la table des déploiements a divergé');
+  assert.deepEqual(Object.keys(DEPLOIEMENT_PAR_PAIRE).sort(), ['Obusier/Pilon', 'Pionnier/Bélier'],
+    'les deux unités qui se déploient ont changé');
+
+  // 3. LES ROULEMENTS — quatre paires sur quatorze sont CONFRONTÉES à la carte,
+  // et les autres lignes de la table sont l'écart assumé d'Ethan.
+  const parPaire = {
+    'Éclaireur/Ratisseur': 'blinde_leger',
+    'Chasseur/Fendeur': 'blinde_moyen',
+    'Percheron/Broyeur': 'blinde_lourd',
+    'Fusiliers/Meute': 'escouade',
+  };
+  for (const [paire, archetype] of Object.entries(parPaire)) {
+    assert.equal(ROULEMENT_PAR_CHASSIS[archetype].joueur, carte.player[paire].movement,
+      `ROULEMENT_PAR_CHASSIS.${archetype} et la carte ne disent pas la même chose`);
+  }
   // ⚠ SEPT PAIRES PORTENT UN `movement`, DONT TROIS UN PASSAGE D'AÉRONEF QUI NE
-  // BOUCLE PAS. Les dix muettes sont un fait de la CARTE, pas une décision.
+  // BOUCLE PAS. C'est un fait de la CARTE, pas une décision.
   const avecMouvement = Object.values(carte.player).filter((e) => e.movement !== undefined);
   assert.equal(avecMouvement.length, 7, 'le nombre de pièces portant un `movement` a bougé');
   const passages = avecMouvement.filter(
     (e) => !EVENEMENTS[e.movement].variantes.every((v) => SONS[v].boucle === true),
   );
   assert.equal(passages.length, 3, 'le nombre de passages d\'aéronef a bougé');
-  assert.ok(passages.every((e) => e.movement === 'movement_player_flyby'),
+  assert.ok(passages.every((e) => e.movement === PASSAGE_AERIEN.joueur),
     'un `movement` qui ne boucle pas et qui n\'est pas un passage');
 
-  // Et la lecture d'un combat : seules les unités du JOUEUR qui ont bougé.
-  const id = paires.get(Object.keys(MOUVEMENT_PAR_PAIRE)[0]);
+  // ⚠⚠ ET TOUTE UNITÉ A UN ARCHÉTYPE, OU N'EN A PAS BESOIN. Les sept blindés et
+  // stoppeurs sont dans `ARCHETYPE_PAR_UNITE` ; les escouades n'y sont pas, leur
+  // châssis suffit ; les traversants non plus, ils ne roulent pas. Une quinzième
+  // unité mal classée fait LEVER `boucleDeLUnite`, et c'est ce qu'on lui demande.
+  for (const id of Object.keys(UNITES)) {
+    const unite = UNITES[id];
+    const roule = !(unite.chassis === 'aeronef' && unite.comportementAerien === 'traversant');
+    const declare = unite.chassis === 'escouade' || ARCHETYPE_PAR_UNITE[id] !== undefined;
+    assert.equal(roule, declare, `« ${id} » : archétype et comportement se contredisent`);
+  }
+  assert.equal(Object.keys(ARCHETYPE_PAR_UNITE).length, 7, 'le nombre d\'archétypes a bougé');
+  assert.deepEqual(Object.keys(MOTEUR_PAR_CHASSIS).sort(),
+    ['blinde_leger', 'blinde_lourd', 'blinde_moyen'],
+    'seuls les blindés font du bruit à l\'arrêt');
+
+  // Et la lecture d'un combat : qui roule, à qui, et qui vient de bouger.
+  const id = 'ratisseur';
   const combat = {
     entites: [
       { id, camp: 'attaque', proprietaire: 'joueur', vivant: true, rangeeMilli: 2000 },
@@ -1206,10 +1341,23 @@ test('SON T18 — unit_audio_map.json se résout, et sa couverture se recompte (
     ],
   };
   const avant = [1000, 1000, 1000, 1000, 1000];
-  assert.deepEqual(unitesEnMouvement(combat, avant), [id], 'la lecture du mouvement a changé');
-  assert.deepEqual(unitesEnMouvement(combat, [2000, 1000, 2000, 2000, 2000]), [],
-    'une unité immobile est comptée en mouvement');
-  assert.deepEqual(unitesEnMouvement(null, null), [], 'sans combat, rien ne roule');
+  assert.deepEqual(etatDesUnites(combat, avant), [
+    { id, proprietaire: 'joueur', enMouvement: false },
+    { id, proprietaire: 'joueur', enMouvement: true },
+    { id, proprietaire: 'ouvrage', enMouvement: true },
+  ], 'la lecture du mouvement a changé');
+  // ⚠ IMMOBILE N'EST PLUS ABSENT : depuis que les moteurs à l'arrêt sont câblés,
+  // « n'a pas bougé » est une réponse, pas un silence.
+  assert.deepEqual(etatDesUnites(combat, [2000, 1000, 2000, 2000, 2000]), [
+    { id, proprietaire: 'joueur', enMouvement: false },
+    { id, proprietaire: 'ouvrage', enMouvement: false },
+  ], 'une unité immobile n\'est plus lue');
+  assert.deepEqual(etatDesUnites(null, null), [], 'sans combat, rien ne roule');
+  // ⚠ ET UNE UNITÉ QUI VIENT DE PARAÎTRE N'A PAS DE POSITION D'AVANT : elle
+  // n'est ni en mouvement ni à l'arrêt, elle n'est pas encore comparable.
+  assert.deepEqual(etatDesUnites(combat, [1000]), [
+    { id, proprietaire: 'joueur', enMouvement: true },
+  ], 'une unité sans position d\'avant est comptée');
 });
 
 // ---------------------------------------------------------------------------
@@ -1298,8 +1446,8 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
     for (const variante of EVENEMENTS[m[1]].variantes) cables.add(variante);
   }
   const muets = Object.keys(SONS).filter((n) => !cables.has(n)).sort();
-  assert.equal(cables.size, 24, 'le nombre de sons câblés a bougé');
-  assert.equal(muets.length, 239, 'le nombre de sons muets a bougé');
+  assert.equal(cables.size, 169, 'le nombre de sons câblés a bougé');
+  assert.equal(muets.length, 94, 'le nombre de sons muets a bougé');
 
   // ⚠ LES SIX ORDRES DE L'OUVRAGE RESTENT MUETS — il ne donne aucun ordre que
   // le joueur entende. En brancher un fait tomber cette ligne.
@@ -1315,13 +1463,66 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
   assert.ok(!cables.has('alert_player_insufficient'), 'le refus sonnerait deux fois');
   assert.ok(cables.has('ui_error_01') && cables.has('ui_error_02'), 'le refus ne sonne plus du tout');
 
-  // ⚠⚠ LES DIX-HUIT ALERTES SONT MUETTES, LES 174 SONS DE COMBAT AUSSI. Ils
-  // attendent un journal de tick qui n'existe pas, et ce journal est un chantier
-  // de SIMULATION : `src/sim/` n'a pas bougé d'une ligne à ce lot.
-  for (const prefixe of ['alert_', 'weapon_', 'explosion_']) {
-    const sonnants = [...cables].filter((n) => n.startsWith(prefixe));
-    assert.deepEqual(sonnants, [], `un son « ${prefixe} » est câblé sans journal de combat`);
+  // ⚠⚠ LE COMBAT SONNE, ET C'EST TOUT LE LOT JOURNAL-DE-COMBAT. La garde
+  // précédente exigeait ZÉRO son `alert_`, `weapon_` et `explosion_` au motif
+  // qu'il n'y avait « pas de journal de tick » ; le journal existe, donc elle a
+  // été RETOURNÉE plutôt que retirée — elle nomme maintenant ce qui reste muet,
+  // dans chacune des trois familles, et un branchement de plus la fait tomber.
+  //
+  // ⚠ SIX ALERTES SUR DIX-HUIT SONNENT — début de vague, pièce perdue, structure
+  // perdue, dans les deux camps. Les douze autres demandent un fait que le
+  // moteur ne publie pas : il n'a ni « fin de vague », ni « ennemi repéré », ni
+  // « artillerie entrante », ni état « base attaquée » qui dure ; et
+  // `insufficient` comme `low_power` ont leur motif déclaré depuis le lot
+  // précédent — le refus sonne déjà `ui_error`, et le modèle n'a pas d'état
+  // « manque de courant ».
+  const alertesMuettes = Object.keys(SONS)
+    .filter((n) => n.startsWith('alert_') && !cables.has(n)).sort();
+  assert.equal(alertesMuettes.length, 12, 'le compte des alertes muettes a bougé');
+  for (const suffixe of ['wave_start', 'unit_lost', 'structure_lost']) {
+    for (const mot of ['player', 'ouvrage']) {
+      assert.ok(cables.has(`alert_${mot}_${suffixe}`), `alert_${mot}_${suffixe} ne sonne plus`);
+    }
   }
+  // ⚠ CINQ SONS `weapon_*` RESTENT MUETS, ET AUCUN N'EST UN TIR. Trois décrivent
+  // un RAYON CONTINU que le moteur n'a pas — il tire par ticks, jamais en
+  // continu — et deux décrivent le VOL d'un missile, qui demanderait un
+  // projectile en vol : le moteur applique ses dégâts au tick du tir.
+  const armesMuettes = Object.keys(SONS)
+    .filter((n) => n.startsWith('weapon_') && !cables.has(n)).sort();
+  assert.deepEqual(armesMuettes, [
+    'weapon_missile_flight_loop', 'weapon_missile_lock',
+    'weapon_ouvrage_beam_end', 'weapon_ouvrage_beam_loop', 'weapon_ouvrage_beam_start',
+  ], 'la liste des armes muettes a changé : le rapport doit la redire');
+  // ⚠ ET LES SIX ÉVÉNEMENTS D'EXPLOSION SONNENT TOUS — trois tailles, deux camps.
+  for (const mot of ['player', 'ouvrage']) {
+    for (const taille of ['small', 'medium', 'large']) {
+      const nom = `explosion_${mot}_${taille}`;
+      assert.ok(EVENEMENTS[nom].variantes.every((v) => cables.has(v)),
+        `${nom} a cessé de sonner`);
+    }
+  }
+  assert.equal(Object.keys(SONS).filter((n) => n.startsWith('explosion_') && !cables.has(n)).length,
+    0, 'un son d\'explosion est muet');
+
+  // ⚠⚠ TRENTE-SIX IMPACTS SUR QUARANTE RESTENT MUETS, ET LE MOTIF EST MESURÉ.
+  // Le moteur ne publie un impact que sur une ENTITÉ touchée : il n'a ni tir
+  // manqué, ni projectile qui retombe à côté, donc aucune case vide n'est jamais
+  // frappée — `dirt`, `quartz`, `scoria`, `energy` et `ricochet` n'ont pas de
+  // fait à écouter. Seul le métal sonne, et sur deux tailles.
+  const impactsQuiSonnent = Object.keys(SONS)
+    .filter((n) => n.startsWith('impact_') && cables.has(n)).sort();
+  assert.ok(impactsQuiSonnent.every((n) => n.startsWith('impact_metal_')),
+    'un impact autre que du métal sonne : le moteur ne frappe que des entités');
+  assert.equal(Object.keys(SONS).filter((n) => n.startsWith('impact_') && !cables.has(n)).length,
+    36, 'le compte des impacts muets a bougé');
+  // ⚠ ET LE SEUIL `heavy` / `small` EST UNE PROPOSITION, PAS UN ARBITRAGE : il
+  // se lit en MILLIÈMES des PV max de la cible, jamais en milli-PV absolus. Un
+  // seuil absolu serait vide de sens — `facteurMilli` met dégâts ET PV à
+  // l'échelle du niveau, donc l'encaissé d'un même coup va de 67 à 34 683 675
+  // milli-PV du niveau 5 au niveau 50, quand la PART, elle, ne bouge pas.
+  assert.ok(Number.isInteger(IMPACT_LOURD_MILLIEMES) && IMPACT_LOURD_MILLIEMES > 0
+    && IMPACT_LOURD_MILLIEMES < 1000, 'le seuil d\'impact n\'est pas une part');
 
   // ⚠ LES CINQ AMBIANCES SANS ÉCRAN, NOMMÉES. Trois demandent un CONTEXTE que
   // l'état ne dit pas — « être dans un champ de quartz » ne se lit nulle part —,
@@ -1337,8 +1538,529 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
     'ambience_scoria_field_loop',
   ], 'la liste des ambiances muettes a changé : le rapport doit la redire');
 
-  // ⚠ ET LES SIX MOTEURS À L'ARRÊT AUSSI. La carte ne dit rien d'un moteur qui
-  // tourne à l'arrêt : choisir quand il tourne est un arbitrage, pas une lecture.
+  // ⚠⚠ ET LES SIX MOTEURS À L'ARRÊT SONNENT DÉSORMAIS TOUS. C'est l'une des six
+  // décisions rendues par Ethan le 04/09 : un moteur tourne sur « unité vivante
+  // et immobile pendant un raid », ce qui est une LECTURE D'ÉTAT et non un
+  // événement. Le lot précédent les laissait muets faute de cette règle.
   const moteursMuets = Object.keys(SONS).filter((n) => n.startsWith('engine_') && !cables.has(n));
-  assert.equal(moteursMuets.length, 6, 'les moteurs à l\'arrêt ont changé de compte');
+  assert.deepEqual(moteursMuets, [], 'un moteur est redevenu muet');
+  assert.equal(Object.keys(SONS).filter((n) => n.startsWith('engine_')).length, 6);
+
+  // ⚠⚠ ET DOUZE SONS DE BÂTIMENT RESTENT MUETS, POUR DES MOTIFS QUI TIENNENT
+  // TOUS AU MODÈLE. Il n'y a ni file de construction, ni réparation qui DURE —
+  // c'est un stock depuis le lot RÉSERVE —, ni état « base attaquée » qui
+  // persiste ; `power_up` et `power_down` sonneraient une seconde fois les
+  // quatre gestes qui sonnent déjà, `capacitesMilli` n'étant fonction que de la
+  // disposition ; et l'Ouvrage ne CONSTRUIT rien sous les yeux du joueur.
+  const batimentsMuets = Object.keys(SONS)
+    .filter((n) => n.startsWith('building_') && !cables.has(n)).sort();
+  assert.equal(batimentsMuets.length, 12, 'le compte des sons de bâtiment muets a bougé');
+  // ⚠ MAIS LES SIX EFFONDREMENTS SONNENT, DANS LES DEUX CAMPS — c'est le raid
+  // qui les fait tomber, et c'est ce que le journal publie.
+  for (const mot of ['player', 'ouvrage']) {
+    for (const taille of ['small', 'medium', 'large']) {
+      assert.ok(cables.has(`building_${mot}_collapse_${taille}`),
+        `building_${mot}_collapse_${taille} ne sonne plus`);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Le lot JOURNAL-DE-COMBAT — ce qu'un fait de combat demande au son
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// SON T21 — la traduction suit le PROPRIÉTAIRE, jamais le camp
+// ---------------------------------------------------------------------------
+
+test('SON T21 — un fait se traduit sur son propriétaire, et les seuils se mesurent', () => {
+  // ⚠⚠ `camp` ET `proprietaire` SONT DEUX CHOSES, ET C'EST LA FAUTE QUE CE TEST
+  // EXISTE POUR ATTRAPER. Le camp dit un côté de grille — le joueur DÉFEND sa
+  // propre base, et l'Ouvrage attaque —, le propriétaire dit à qui la pièce est.
+  // Lire le camp ferait sonner les Cuirassiers du joueur en Ouvrage dès le
+  // premier raid sur sa base. Le journal ne publie que le propriétaire.
+  const cablage = sansCommentaires(lire('src', 'son', 'cablage.js'));
+  assert.ok(!/\bcamp\b/.test(cablage.replace(/e\.camp !== 'attaque'/g, '')),
+    'src/son/cablage.js lit un camp ailleurs que pour écarter les défenseurs immobiles');
+
+  // 1. L'ARME — même pièce, deux propriétaires, deux sons.
+  const joueur = armeDuTireur({ id: 'meute', genre: 'unite', proprietaire: 'joueur' });
+  const ouvrage = armeDuTireur({ id: 'meute', genre: 'unite', proprietaire: 'ouvrage' });
+  assert.equal(joueur, 'weapon_player_rifle');
+  assert.equal(ouvrage, 'weapon_ouvrage_rifle');
+  assert.notEqual(joueur, ouvrage, 'montage : les deux camps rendraient le même son');
+
+  // ⚠ LES QUATORZE UNITÉS ONT UNE ARME, DANS LES DEUX CAMPS — la couverture est
+  // totale et se recompte plutôt que de se supposer.
+  for (const id of Object.keys(UNITES)) {
+    for (const proprietaire of PROPRIETAIRES) {
+      const nom = armeDuTireur({ id, genre: 'unite', proprietaire });
+      assert.ok(nom !== null && nom in EVENEMENTS, `« ${id} » n'a pas d'arme en ${proprietaire}`);
+    }
+  }
+
+  // ⚠⚠ TROIS DÉFENSES SUR NEUF NE TIRENT PAS, ET C'EST LA DONNÉE QUI LE DIT.
+  // Leur `degats` vaut `null` ; le moteur ne publiera jamais de tir pour elles,
+  // donc `armeDuTireur` est ici une ceinture — et elle se mesure des deux côtés.
+  const muettes = Object.keys(DEFENSES).filter((id) => DEFENSES[id].degats === null).sort();
+  assert.deepEqual(muettes, ['herse', 'merlon', 'ronce'], 'les défenses qui ne tirent pas ont changé');
+  for (const id of Object.keys(DEFENSES)) {
+    const nom = armeDuTireur({ id, genre: 'defense', proprietaire: 'joueur' });
+    assert.equal(nom === null, muettes.includes(id), `« ${id} » : arme et dégâts se contredisent`);
+  }
+  // Un bâtiment ne tire pas : `profilBatiment` lui pose `degatsColonne: null`.
+  assert.equal(armeDuTireur({ id: 'souche', genre: 'batiment', proprietaire: 'ouvrage' }), null);
+
+  // 2. L'EXPLOSION D'UNE PIÈCE — trois tailles, et la partition se recompte.
+  // ⚠⚠ SES SEUILS NE SONT PAS CEUX D'UN BÂTIMENT, ET C'EST MESURÉ. Les pièces
+  // vont de 500 à 2 000 PV, les bâtiments de 1 000 à 5 500 : appliquer
+  // `EFFONDREMENT_PV` aux pièces les classerait 21 en `small`, 2 en `medium` et
+  // AUCUNE en `large`, c'est-à-dire rendrait deux sons sur trois inatteignables.
+  const pieces = [
+    ...Object.keys(UNITES).map((id) => ({ id, genre: 'unite' })),
+    ...Object.keys(DEFENSES).map((id) => ({ id, genre: 'defense' })),
+  ];
+  const parTaille = { small: 0, medium: 0, large: 0 };
+  for (const piece of pieces) {
+    const nom = explosionDeLaPiece({ ...piece, proprietaire: 'joueur' });
+    parTaille[nom.slice('explosion_player_'.length)] += 1;
+  }
+  assert.deepEqual(parTaille, { small: 9, medium: 10, large: 4 },
+    'la partition des explosions a bougé : le rapport doit la redire');
+  const avecEffondrement = { small: 0, medium: 0, large: 0 };
+  for (const piece of pieces) {
+    const pv = (piece.genre === 'unite' ? UNITES : DEFENSES)[piece.id].pv;
+    avecEffondrement[pv >= EFFONDREMENT_PV[1] ? 'large'
+      : pv >= EFFONDREMENT_PV[0] ? 'medium' : 'small'] += 1;
+  }
+  assert.deepEqual(avecEffondrement, { small: 21, medium: 2, large: 0 },
+    'les seuils d\'effondrement ne discriminent plus les pièces : deux tables restent deux tables');
+
+  // 3. L'EFFONDREMENT D'UN BÂTIMENT — les deux camps, sur les mêmes seuils.
+  const compter = (ids, table, proprietaire) => {
+    const vu = { small: 0, medium: 0, large: 0 };
+    for (const id of ids) {
+      const nom = effondrementDuBatiment(id, proprietaire);
+      vu[nom.slice(`building_${proprietaire === 'joueur' ? 'player' : 'ouvrage'}_collapse_`.length)] += 1;
+    }
+    return vu;
+  };
+  assert.deepEqual(compter(Object.keys(BASE_BATIMENTS), BASE_BATIMENTS, 'joueur'),
+    { small: 3, medium: 5, large: 3 }, 'la partition des bâtiments du joueur a bougé');
+  assert.deepEqual(compter(Object.keys(BATIMENTS), BATIMENTS, 'ouvrage'),
+    { small: 3, medium: 1, large: 1 }, 'la partition des bâtiments de l\'Ouvrage a bougé');
+  // ⚠ LES DEUX TABLES SONT DISJOINTES, ET `verifierArithmetique` de
+  // `sim/combat.js` LÈVE si elles cessent de l'être : une seule aurait rendu
+  // muet l'effondrement d'une Souche, qui est ce qu'un raid fait tomber en
+  // premier.
+  const communs = Object.keys(BASE_BATIMENTS).filter((id) => id in BATIMENTS);
+  assert.deepEqual(communs, [], 'un identifiant est à la fois bâtiment du joueur et de l\'Ouvrage');
+
+  // ⚠⚠ ET LES QUATRE NOMBRES SONT DES DONNÉES, PAS DU CODE. Les recopier dans
+  // `src/son/cablage.js` rendrait le même son aujourd'hui et cesserait de suivre
+  // la table demain : la falsification « je réécris les mêmes nombres en dur »
+  // est invisible sur le RÉSULTAT — mesuré, 28 pass / 0 fail —, donc c'est la
+  // SOURCE qu'on lit. Changer la table, elle, fait tomber trois tests.
+  const cablageNu = sansCommentaires(lire('src', 'son', 'cablage.js'));
+  for (const nombre of [...EFFONDREMENT_PV, ...EXPLOSION_PV, IMPACT_LOURD_MILLIEMES]) {
+    assert.ok(!new RegExp(`(?<![\\p{N}])${nombre}(?![\\p{N}])`, 'u').test(cablageNu),
+      `src/son/cablage.js écrit ${nombre} en dur au lieu de lire sa table`);
+  }
+  for (const nom of ['EFFONDREMENT_PV', 'EXPLOSION_PV', 'IMPACT_LOURD_MILLIEMES']) {
+    assert.ok(cablageNu.includes(nom), `src/son/cablage.js ne lit plus ${nom}`);
+  }
+
+  // 4. UN PROPRIÉTAIRE INCONNU LÈVE — c'est un câblage mal tapé, donc un fait de
+  // programme, jamais un silence.
+  assert.throws(() => explosionDeLaPiece({ id: 'meute', genre: 'unite', proprietaire: 'x' }),
+    RangeError);
+  assert.throws(() => effondrementDuBatiment('caserne', 'x'), RangeError);
+  assert.throws(() => effondrementDuBatiment('pas_un_batiment'), RangeError);
+  assert.throws(() => explosionDeLaPiece({ id: 'zzz', genre: 'unite', proprietaire: 'joueur' }),
+    RangeError);
+});
+
+// ---------------------------------------------------------------------------
+// SON T22 — le journal se traduit en un ENSEMBLE, et l'impact se lit en PART
+// ---------------------------------------------------------------------------
+
+test('SON T22 — un événement distinct sonne au plus une fois par relevé', () => {
+  const vide = { apparitions: [], vagues: [], tirs: [], impacts: [], destructions: [] };
+  assert.deepEqual(evenementsDuJournal(vide), [], 'un tick sans fait demande un son');
+  assert.deepEqual(evenementsDuJournal(null), [], 'un journal absent lève');
+
+  // ⚠⚠ CENT CINQUANTE TIRS DE LA MÊME PIÈCE NE FONT QU'UN SON, ET C'EST LA
+  // RÈGLE DU LOT, PAS UN EFFET DE BORD. La simulation avance par TICKS, l'écran
+  // par IMAGES, et `ticksDus` en résout jusqu'à douze dans la même image en ×4 :
+  // demander un son par tir publié ferait cent cinquante coups de canon dans la
+  // même milliseconde. La politique de voix les refuserait — mais compter sur un
+  // refus n'est pas une conception : ce serait demander cent cinquante sons pour
+  // en obtenir deux, à chaque image.
+  const cent = { ...vide, tirs: Array.from({ length: 150 }, (_, i) => ({
+    indice: i, id: 'meute', genre: 'unite', proprietaire: 'ouvrage',
+  })) };
+  assert.deepEqual(evenementsDuJournal(cent), ['weapon_ouvrage_rifle'],
+    'cent cinquante tirs demandent plus d\'un son');
+
+  // ⚠ ET DEUX PIÈCES DIFFÉRENTES FONT DEUX SONS : l'ensemble déduplique, il
+  // n'écrase pas. Sans cette moitié, la règle serait « un son par relevé ».
+  const deux = { ...vide, tirs: [
+    { id: 'meute', genre: 'unite', proprietaire: 'ouvrage' },
+    { id: 'pilon', genre: 'unite', proprietaire: 'ouvrage' },
+  ] };
+  assert.deepEqual(evenementsDuJournal(deux),
+    ['weapon_ouvrage_artillery', 'weapon_ouvrage_rifle'], 'deux armes ne font pas deux sons');
+
+  // ⚠⚠ L'IMPACT SE LIT EN PART DES PV MAX, JAMAIS EN MILLI-PV ABSOLUS, ET LA
+  // RAISON SE MESURE. `facteurMilli` met les dégâts ET les PV à l'échelle du
+  // niveau : le même coup encaisse 67 milli-PV au niveau 5 et 34 683 675 au
+  // niveau 50, quand la part, elle, ne bouge pas. Un seuil absolu classerait
+  // tout `small` en bas de carte et tout `heavy` en haut.
+  const impact = (encaisseMilli, pvMaxMilli) => evenementsDuJournal({
+    ...vide, impacts: [{ id: 'meute', genre: 'unite', proprietaire: 'joueur', encaisseMilli, pvMaxMilli }],
+  });
+  const seuil = IMPACT_LOURD_MILLIEMES;
+  assert.deepEqual(impact(seuil, 1000), ['impact_metal_heavy'], 'le seuil exact n\'est pas lourd');
+  assert.deepEqual(impact(seuil - 1, 1000), ['impact_metal_small'], 'sous le seuil est lourd');
+  // La même PART à deux échelles séparées d'un facteur cent mille : même verdict.
+  assert.deepEqual(impact(seuil * 100000, 100000000), ['impact_metal_heavy'],
+    'la part n\'est pas invariante d\'échelle');
+  assert.deepEqual(impact((seuil - 1) * 100000, 100000000), ['impact_metal_small'],
+    'la part n\'est pas invariante d\'échelle');
+
+  // ⚠ ET LES DEUX SE MÉLANGENT DANS LE MÊME RELEVÉ — une égratignure et un coup
+  // mortel au même tick demandent les deux sons, pas le dernier vu.
+  assert.deepEqual(evenementsDuJournal({ ...vide, impacts: [
+    { encaisseMilli: 1, pvMaxMilli: 1000000 },
+    { encaisseMilli: 999000, pvMaxMilli: 1000000 },
+  ] }), ['impact_metal_heavy', 'impact_metal_small'], 'un seul impact est retenu par relevé');
+
+  // La vague, l'apparition, la destruction : chacune son alerte, du côté de qui
+  // la subit.
+  assert.deepEqual(evenementsDuJournal({ ...vide, vagues: [{ proprietaire: 'joueur' }] }),
+    ['alert_player_wave_start']);
+  assert.deepEqual(evenementsDuJournal({ ...vide, vagues: [{ proprietaire: 'ouvrage' }] }),
+    ['alert_ouvrage_wave_start']);
+  assert.deepEqual(evenementsDuJournal({ ...vide, destructions: [
+    { id: 'meute', genre: 'unite', proprietaire: 'ouvrage' },
+  ] }), ['alert_ouvrage_unit_lost', 'explosion_ouvrage_small'].sort());
+  // ⚠ MERLON À 2 000 PV EST UNE GRANDE EXPLOSION, MEUTE À 700 UNE PETITE : les
+  // trois tailles se rencontrent pour de bon sur le roster, elles ne sont pas
+  // décoratives.
+  assert.deepEqual(evenementsDuJournal({ ...vide, destructions: [
+    { id: 'merlon', genre: 'defense', proprietaire: 'joueur' },
+  ] }), ['alert_player_structure_lost', 'explosion_player_large'].sort());
+  assert.deepEqual(evenementsDuJournal({ ...vide, destructions: [
+    { id: 'crecelle', genre: 'unite', proprietaire: 'joueur' },
+  ] }), ['alert_player_unit_lost', 'explosion_player_medium'].sort());
+  assert.deepEqual(evenementsDuJournal({ ...vide, destructions: [
+    { id: 'souche', genre: 'batiment', proprietaire: 'ouvrage' },
+  ] }), ['alert_ouvrage_structure_lost', 'building_ouvrage_collapse_large'].sort());
+
+  // ⚠ UN TRAVERSANT PASSE À SON APPARITION, ET IL NE ROULE JAMAIS. Les deux
+  // moitiés se mesurent ensemble : le passage sonne, la boucle n'existe pas.
+  const traversants = Object.keys(UNITES).filter(
+    (id) => UNITES[id].chassis === 'aeronef' && UNITES[id].comportementAerien === 'traversant',
+  );
+  assert.ok(traversants.length > 0, 'montage : aucun traversant dans le roster');
+  for (const id of traversants) {
+    const vus = evenementsDuJournal({ ...vide, apparitions: [
+      { id, genre: 'unite', proprietaire: 'joueur' },
+    ] });
+    assert.ok(vus.includes(PASSAGE_AERIEN.joueur), `« ${id} » ne fait aucun bruit en passant`);
+    assert.equal(boucleDeLUnite(id, 'joueur', true), null, `« ${id} » roule alors qu'il passe`);
+  }
+  // ⚠ ET LES DEUX UNITÉS QUI SE DÉPLOIENT SONNENT À L'APPARITION, elles aussi —
+  // c'est le seul instant que le moteur publie où une pièce se met en place.
+  for (const paire of Object.keys(DEPLOIEMENT_PAR_PAIRE)) {
+    const id = Object.keys(UNITES).find((u) => paireDeLUnite(u) === paire);
+    assert.ok(id !== undefined, `« ${paire} » ne se résout pas`);
+    assert.ok(evenementsDuJournal({ ...vide, apparitions: [
+      { id, genre: 'unite', proprietaire: 'ouvrage' },
+    ] }).includes(DEPLOIEMENT_PAR_PAIRE[paire].ouvrage), `« ${id} » ne se déploie pas`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SON T23 — sur des raids RÉELS : ce qui sonne, et ce que ça tient en mémoire
+// ---------------------------------------------------------------------------
+
+/**
+ * Une fenêtre où un COUP tient son tampon pendant toute sa durée.
+ *
+ * ⚠⚠ ELLE DIFFÈRE DE `faussesFenetres` SUR LE SEUL POINT QUI COMPTE ICI. Là-bas
+ * un coup se termine à l'instant où il commence, ce qui suffit à mesurer
+ * l'éviction et fait de `tenus` un ensemble toujours vide ; ici on veut le
+ * contraire — savoir combien de tampons une IMAGE de raid tient EN MÊME TEMPS,
+ * puisque c'est cela, et non la table, que l'éviction ne peut pas libérer.
+ * `avancer(ms)` fait tourner une horloge de papier et relâche ce qui a fini.
+ */
+function fenetreQuiTient() {
+  const journal = { decodages: 0, horlogeMs: 0, enVol: [] };
+  class FauxContexte {
+    constructor() { this.state = 'suspended'; this.currentTime = 0; this.destination = {}; }
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    createGain() {
+      const gain = {
+        value: 1,
+        setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {},
+      };
+      return { gain, connect: () => {} };
+    }
+    createBufferSource() {
+      const source = {
+        buffer: null,
+        loop: false,
+        onended: null,
+        connect: () => {},
+        start: () => {
+          if (source.loop) return;
+          const duree = SONS[source.buffer?.nom]?.dureeMs ?? 0;
+          journal.enVol.push({ source, fin: journal.horlogeMs + duree });
+        },
+        stop: () => { if (source.onended !== null) source.onended(); },
+      };
+      return source;
+    }
+    decodeAudioData(octets) {
+      journal.decodages += 1;
+      return Promise.resolve({ nom: new TextDecoder().decode(octets) });
+    }
+  }
+  journal.avancer = (ms) => {
+    journal.horlogeMs += ms;
+    const reste = [];
+    for (const vol of journal.enVol) {
+      if (vol.fin <= journal.horlogeMs) { if (vol.source.onended !== null) vol.source.onended(); }
+      else reste.push(vol);
+    }
+    journal.enVol = reste;
+  };
+  return { fenetre: { AudioContext: FauxContexte }, journal };
+}
+
+test('SON T23 — un raid entier sonne, et la mémoire décodée reste bornée', async () => {
+  const { fenetre, journal } = fenetreQuiTient();
+  const son = initialiserLeSon(faireDoc(fenetre), { reglages: { ...ACTIF }, graine: 7 });
+  son.reveiller();
+
+  const vagues = [[], [], [], []];
+  Object.keys(UNITES).forEach((id, i) => {
+    vagues[i % 4].push({ id, colonne: (Math.floor(i / 4) % 9) + 1, niveau: 20 });
+  });
+  const montage = {
+    ...genererSite({ type: 'avantPoste', saveur: 'richeQuartz', niveau: 20, graine: 3 }),
+    vagues: vagues.filter((v) => v.length > 0),
+  };
+  const etat = creerCombat(montage);
+  etat.maxTicks = 900;
+
+  const vus = new Set(evenementsDuJournal(etat.journal));
+  let pireSecondes = 0;
+  let pireTenus = 0;
+  let ticks = 0;
+  // ⚠ LE RELEVÉ SE PREND OÙ L'ÉCRAN PREND SON INSTANTANÉ D'INTERPOLATION, donc
+  // une fois par tick joué ; l'image, elle, en résout jusqu'à douze en ×4. On
+  // joue ici à ×1 — cent millisecondes par tick — parce que c'est le régime où
+  // le plus de sons DISTINCTS atteignent la sortie : en ×4 l'ensemble d'une
+  // image les fond, il n'en ajoute pas.
+  while (!etat.termine) {
+    const avant = etat.entites.map((e) => e.rangeeMilli);
+    tick(etat);
+    ticks += 1;
+    const evenements = evenementsDuJournal(etat.journal);
+    for (const nom of evenements) { vus.add(nom); son.jouer(nom); }
+    son.reconcilier(bouclesDesirees({
+      ecran: 'raid', disposition: [], unites: etatDesUnites(etat, avant),
+    }));
+    await laisserDecoder();
+    const memoire = son.mesureMemoire();
+    pireSecondes = Math.max(pireSecondes, memoire.secondesDecodees);
+    pireTenus = Math.max(pireTenus, memoire.tenus.length);
+    journal.avancer(100);
+  }
+
+  assert.ok(ticks > 100, `montage : le combat n'a duré que ${ticks} ticks`);
+  // ⚠⚠ ET LE BUDGET TIENT, MESURÉ, PAS SUPPOSÉ. `secondesDecodees` est un
+  // MAJORANT de ce qui est décodé ET référencé ; l'éviction le ramène sous le
+  // budget à chaque décodage, SAUF sur les tampons qu'une source lit — ce sont
+  // eux, et eux seuls, qui pourraient le faire déborder. Ils ne le font pas.
+  assert.ok(pireSecondes <= MEMOIRE.budgetSecondesDecodees,
+    `la mémoire décodée a atteint ${pireSecondes.toFixed(2)} s pour un budget de `
+    + `${MEMOIRE.budgetSecondesDecodees} : le rapport doit donner ce chiffre`);
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sans cette ligne, un raid qui ne
+  // demanderait aucun son passerait le test précédent sans rien prouver.
+  assert.ok(pireSecondes > 1, `montage : le raid n'a décodé que ${pireSecondes} s`);
+  assert.ok(pireTenus > 0, 'montage : aucun tampon n\'a jamais été tenu');
+
+  for (const nom of vus) {
+    assert.ok(EVENEMENTS_CABLES.includes(nom),
+      `« ${nom} » sonne en raid et n'est pas dans l'ensemble câblé : le compte ment`);
+  }
+});
+
+test('SON T23 bis — ce qu\'un raid ATTEINT, et les seize qu\'aucun écran ne montre', () => {
+  // ⚠⚠ CE QU'UN RAID ATTEINT VRAIMENT ET CE QUE LE CÂBLAGE PEUT RENDRE NE SONT
+  // PAS LE MÊME NOMBRE, ET IL FAUT LE DIRE DANS CE SENS-LÀ. `src/ui/raid.js` ne
+  // montre qu'un raid DU JOUEUR : le propriétaire de l'attaque y est toujours le
+  // joueur. Tout ce qui suppose l'Ouvrage attaquant — ses roulements, ses
+  // moteurs, son début de vague — ou le joueur défendant — ses bâtiments qui
+  // s'effondrent, sa DCA qui tire — n'atteint donc pas la sortie aujourd'hui.
+  // Ce n'est pas un câblage manquant, c'est un écran qui n'existe pas : le raid
+  // de l'Ouvrage se résout HORS LIGNE depuis le lot RAID-B.
+  const vagues = (niveau) => {
+    const v = [[], [], [], []];
+    Object.keys(UNITES).forEach((id, i) => {
+      v[i % 4].push({ id, colonne: (Math.floor(i / 4) % 9) + 1, niveau });
+    });
+    return v.filter((x) => x.length > 0);
+  };
+  const vus = new Set();
+  let combats = 0;
+  for (const graine of [1, 2, 3, 4]) {
+    for (const niveau of [5, 20, 50]) {
+      for (const [type, saveur] of [
+        ['camp', 'richeQuartz'], ['avantPoste', 'richeScorie'], ['base', null],
+      ]) {
+        const etat = creerCombat({
+          ...genererSite({ type, saveur, niveau, graine }), vagues: vagues(niveau),
+        });
+        etat.maxTicks = 900;
+        combats += 1;
+        for (const nom of evenementsDuJournal(etat.journal)) vus.add(nom);
+        while (!etat.termine) {
+          const avant = etat.entites.map((e) => e.rangeeMilli);
+          tick(etat);
+          for (const nom of evenementsDuJournal(etat.journal)) vus.add(nom);
+          for (const nom of bouclesDesirees({
+            ecran: 'raid', disposition: [], unites: etatDesUnites(etat, avant),
+          })) vus.add(nom);
+        }
+      }
+    }
+  }
+  assert.equal(combats, 36, 'le balayage a changé de taille');
+
+  // 1. RIEN NE SONNE HORS DE L'ENSEMBLE CÂBLÉ — sans quoi le compte des muets
+  // de `SON T20` mentirait dans le sens le plus dangereux.
+  for (const nom of vus) {
+    assert.ok(EVENEMENTS_CABLES.includes(nom),
+      `« ${nom} » sonne en raid et n'est pas dans l'ensemble câblé : le compte ment`);
+  }
+
+  // 2. ET CE QUE CE BALAYAGE N'ATTEINT PAS SE NOMME, UN PAR UN. Les seize
+  // demandent tous la même chose : que l'Ouvrage attaque, ou que le joueur
+  // défende. `weapon_ouvrage_aa_burst` est le seul cas particulier, et il est
+  // mesuré aussi — le Frappeur n'apparaît dans AUCUNE garnison que le générateur
+  // produit, donc sa rafale n'a personne pour la tirer.
+  // ⚠ LE PÉRIMÈTRE SE CALCULE, IL NE SE FILTRE PAS SUR UN PRÉFIXE : c'est
+  // exactement ce que le combat peut demander — la traduction d'un journal
+  // exhaustif, les boucles d'unité, et l'ambiance de l'écran. Un filtre par
+  // préfixe attraperait `building_player_complete`, qui est un GESTE.
+  const bouclesEtCombat = new Set([
+    ...evenementsDuJournal(journalExhaustif()), AMBIANCE_PAR_ECRAN.raid,
+  ]);
+  for (const id of Object.keys(UNITES)) {
+    for (const proprietaire of PROPRIETAIRES) {
+      for (const enMouvement of [true, false]) {
+        const nom = boucleDeLUnite(id, proprietaire, enMouvement);
+        if (nom !== null) bouclesEtCombat.add(nom);
+      }
+    }
+  }
+  const jamais = [...bouclesEtCombat].filter((n) => !vus.has(n)).sort();
+  assert.deepEqual(jamais, [
+    'alert_ouvrage_wave_start',
+    'alert_player_structure_lost',
+    'building_player_collapse_large',
+    'building_player_collapse_medium',
+    'building_player_collapse_small',
+    'engine_ouvrage_heavy_idle_loop',
+    'engine_ouvrage_light_idle_loop',
+    'engine_ouvrage_medium_idle_loop',
+    'movement_essaim_ouvrage_loop',
+    'movement_ouvrage_deploy',
+    'movement_ouvrage_flyby',
+    'movement_walker_heavy_loop',
+    'movement_walker_light_loop',
+    'movement_walker_medium_loop',
+    'weapon_ouvrage_aa_burst',
+    'weapon_player_aa',
+  ], 'ce qu\'un raid atteint a bougé : le rapport doit redonner les deux comptes');
+
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sans cette ligne, un balayage qui
+  // n'atteindrait rien du tout passerait l'égalité ci-dessus à condition d'avoir
+  // la bonne longueur, et le premier test ne dirait rien non plus.
+  assert.ok(vus.size >= 45, `le balayage n'a atteint que ${vus.size} événements`);
+  for (const nom of ['weapon_player_rifle', 'weapon_ouvrage_machinegun', 'impact_metal_heavy',
+    'impact_metal_small', 'alert_player_wave_start', 'alert_ouvrage_unit_lost',
+    'building_ouvrage_collapse_large', 'movement_tracks_heavy_loop',
+    'engine_player_medium_idle_loop']) {
+    assert.ok(vus.has(nom), `« ${nom} » n'a pas sonné en trente-six raids`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SON T24 — le relevé se prend à l'instantané, et l'Instantané ne relève rien
+// ---------------------------------------------------------------------------
+
+test('SON T24 — le déroulé sonne, le mode Instantané se tait par construction (falsifications n° 10 et n° 11)', () => {
+  const raid = sansCommentaires(lire('src', 'ui', 'raid.js'));
+
+  // ⚠⚠ UN SEUL ENDROIT AVANCE D'UN TICK EN RELEVANT, ET C'EST CELUI OÙ
+  // L'INSTANTANÉ D'INTERPOLATION SE PREND. `precedentes` sert l'interpolation,
+  // le journal sert le son, et les deux ne valent que pour le tick qu'on vient
+  // de jouer : les séparer ferait relever un journal déjà écrasé, ou interpoler
+  // sur des positions qui ne sont plus celles d'avant.
+  const corps = raid.match(/function avancerDUnTick\(\) \{([\s\S]*?)\n  \}/);
+  assert.ok(corps !== null, 'avancerDUnTick a disparu');
+  const lignes = corps[1].split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  assert.deepEqual(lignes, [
+    'precedentes = prendrePositions(combat);', 'tickCombat(combat);', 'relever();',
+  ], 'l\'instantané et le relevé se sont séparés');
+
+  // ⚠⚠ ET « INSTANTANÉ » NE PASSE PAS PAR LÀ — c'est ce qui le rend MUET, et ce
+  // n'est pas un cas particulier écrit à la main : il boucle sur `tickCombat`
+  // sans prendre d'instantané, exactement comme avant le lot. Un combat résolu
+  // d'un coup n'a pas de déroulé, donc rien à sonner ; l'y brancher demanderait
+  // cent cinquante coups de canon dans la même milliseconde.
+  const bloc = raid.match(/brancher\('raid-instantane', \(\) => \{([\s\S]*?)\n  \}\);/);
+  assert.ok(bloc !== null, 'le bouton Instantané a disparu');
+  assert.ok(!bloc[1].includes('avancerDUnTick'), 'l\'Instantané relève le journal');
+  assert.ok(!bloc[1].includes('relever('), 'l\'Instantané relève le journal');
+  assert.ok(/while \(!combat\.termine\) tickCombat\(combat\);/.test(bloc[1]),
+    'l\'Instantané ne résout plus d\'un bloc');
+  // Le pas à pas, lui, passe par le même chemin que la boucle : un seul endroit.
+  const pas = raid.match(/brancher\('raid-pas', \(\) => \{([\s\S]*?)\n  \}\);/);
+  assert.ok(pas[1].includes('avancerDUnTick();'), 'le pas à pas ne relève plus');
+  assert.equal((raid.match(/avancerDUnTick\(\);/g) ?? []).length, 2,
+    'le nombre de points qui avancent d\'un tick a bougé');
+
+  // ⚠⚠ ET LE CORPS DU RELEVÉ SE LIT AUSSI, PARCE QU'UNE GARDE QUI NE REGARDE QUE
+  // L'APPEL NE MORD PAS. Mesuré : remplacer `evenementsDuJournal(combat.journal)`
+  // par la même liste tronquée à zéro laisse toute la suite VERTE — l'écran est
+  // hors de portée des tests, faute de DOM (CLAUDE.md §3), donc rien d'autre ne
+  // peut le dire. On lit donc les trois lignes, comme pour `avancerDUnTick`.
+  const releve = raid.match(/function relever\(\) \{([\s\S]*?)\n  \}/);
+  assert.ok(releve !== null, 'relever a disparu');
+  assert.deepEqual(releve[1].split('\n').map((l) => l.trim()).filter((l) => l.length > 0), [
+    'if (combat === null) return;',
+    'for (const evenement of evenementsDuJournal(combat.journal)) {',
+    'evenementsSonores.add(evenement);',
+    '}',
+  ], 'le relevé ne verse plus le journal entier dans l\'ensemble en attente');
+
+  // ⚠ ET L'ACCESSEUR VIDE CE QU'IL REND. Sans cela le même son se redemanderait
+  // à chaque image jusqu'à la fin du combat — la politique de voix le
+  // refuserait, et « compter sur un refus n'est pas une conception ».
+  const accesseur = raid.match(/evenementsSonores\(\) \{([\s\S]*?)\n    \}/);
+  assert.ok(accesseur !== null, 'l\'accesseur a disparu');
+  assert.ok(accesseur[1].includes('evenementsSonores.clear();'), 'le relevé ne se vide pas');
+
+  // ⚠ ET L'ÉCRAN NE NOMME AUCUN SON — il rend des noms d'ÉVÉNEMENT qui sortent
+  // de `src/son/cablage.js`, et la session les joue. La garde `SON T14` refuse
+  // déjà tout `jouer(` ici ; celle-ci refuse les noms eux-mêmes.
+  for (const nom of Object.keys(SONS)) {
+    assert.ok(!raid.includes(`'${nom}'`), `src/ui/raid.js nomme le son « ${nom} »`);
+  }
 });

@@ -795,6 +795,17 @@ export function creerCombat(montage) {
     entites: [],
     vagues: [],
     enAttente: [],
+    // ⚠⚠ LE JOURNAL EST POSÉ AVANT LA MOINDRE ENTITÉ, parce que la première
+    // vague apparaît DANS cette fonction — voir sa dernière ligne. Un journal
+    // créé après serait vide au moment où l'appelant le lit, et l'entrée en
+    // scène de la vague 1 ne sonnerait jamais.
+    //
+    // ⚠ ET LE JOURNAL DE LA CRÉATION EST CELUI DU « TICK 0 » : `tick()` le vide
+    // à son entrée, donc il vit exactement le temps qu'un journal de tick vit.
+    journal: journalVide(),
+    // Combien de vagues sont DÉJÀ entrées. Un compteur, pas une liste : il ne
+    // sert qu'à numéroter le fait de journal, et `vagues` ne fait que diminuer.
+    vaguesPosees: 0,
     modulesDebloques: {
       ouvrage: modulesDunProprietaire(montage.modulesDebloques?.ouvrage, 'ouvrage'),
       joueur: modulesDunProprietaire(montage.modulesDebloques?.joueur, 'joueur'),
@@ -934,6 +945,62 @@ function obtenirIndexObstacles(etat) {
 }
 
 // ---------------------------------------------------------------------------
+// Le journal du tick — une SORTIE, jamais une entrée
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LE MOTEUR CALCULAIT DÉJÀ TOUT CELA, ET IL LE JETAIT. `tir` construit un
+// tampon de tous les coups du tick et le détruit en sortant ; `retirerLesMorts`
+// bascule `vivant` sans dire quand ; `apparitionDeVague` fait entrer une vague
+// sans dire laquelle. Ce lot ne calcule RIEN de neuf — il cesse de jeter. C'est
+// ce qui rend l'additivité démontrable : aucune décision nouvelle, aucun tirage
+// nouveau, aucune phase déplacée.
+//
+// ⚠⚠ ET IL NE S'ACCUMULE PAS. `resoudre` boucle jusqu'à 900 ticks d'affilée et
+// l'écran de raid en résout autant en une image sous « Instantané » : un journal
+// qui empilerait produirait des dizaines de milliers d'objets avant le premier
+// dessin. Il est VIDÉ à l'entrée de chaque tick, exactement comme le tampon de
+// `tir` l'était déjà — sa durée de vie est celle d'un tick, et un test le mesure
+// sur un combat complet plutôt que de le supposer.
+//
+// ⚠⚠ IL NE PORTE AUCUN NOM DE SON, ET C'EST LA FRONTIÈRE DU DÉPÔT. Il publie
+// des FAITS — qui, quoi, où, combien —, et `src/son/cablage.js` seul les traduit
+// en événements du pack. La garde « aucun module de `src/sim/` n'importe le
+// son » reste verte, et le même canal servira les effets visuels du raid : il ne
+// se construit pas deux fois.
+//
+// ⚠ LES FAITS SONT DES COPIES, JAMAIS DES RÉFÉRENCES. `faitDeLEntite` compose un
+// objet neuf de primitives : un lecteur qui muterait ce qu'on lui rend ne peut
+// pas atteindre l'état. C'est la seule façon dont ce journal pourrait changer un
+// résultat, et elle est fermée ici.
+
+/** Le journal d'un tick, vide. Cinq listes, et rien qui vive plus d'un tick. */
+function journalVide() {
+  return {
+    apparitions: [], vagues: [], tirs: [], impacts: [], destructions: [],
+  };
+}
+
+/**
+ * L'identité et la place d'une entité, en primitives copiées.
+ *
+ * ⚠ `proprietaire` ET NON `camp`. Le camp dit un côté de la grille, le
+ * propriétaire dit à qui la pièce appartient — et les sons se choisissent sur le
+ * PROPRIÉTAIRE : `weapon_player_*` contre `weapon_ouvrage_*`. Prendre le camp
+ * ferait sonner en Ouvrage les Cuirassiers que le joueur met en garnison, le
+ * jour où sa base est attaquée. Une garde le mesure des deux côtés.
+ */
+function faitDeLEntite(e) {
+  return {
+    indice: e.indice,
+    id: e.id,
+    genre: e.genre,
+    proprietaire: e.proprietaire,
+    rangee: caseDepuisMilli(e.rangeeMilli),
+    colonne: e.colonne,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Les neuf étapes d'un tick — ordre NORMATIF (brief §6)
 // ---------------------------------------------------------------------------
 
@@ -953,7 +1020,16 @@ function expirerEffets(etat) {
  */
 function apparitionDeVague(etat, casesPrises = null) {
   if (etat.tick % TICKS_PAR_VAGUE === 0 && etat.vagues.length > 0) {
-    etat.enAttente.push(...etat.vagues.shift());
+    const vague = etat.vagues.shift();
+    // ⚠ LE NUMÉRO SE COMPTE SUR CE QUI RESTE, pas sur un compteur de plus dans
+    // l'état : `vagues` ne fait que diminuer, et `VAGUES_MAX` borne le montage.
+    etat.journal.vagues.push({
+      numero: etat.vaguesPosees + 1,
+      effectif: vague.length,
+      proprietaire: etat.proprietaireAttaque,
+    });
+    etat.vaguesPosees += 1;
+    etat.enAttente.push(...vague);
   }
   if (etat.enAttente.length === 0) return;
 
@@ -974,6 +1050,10 @@ function apparitionDeVague(etat, casesPrises = null) {
       obtenirIndexObstacles(etat),
     );
     if (p.bloquant) poser(occupation, d.rangee, d.colonne, entite.indice);
+    // ⚠ L'APPARITION EST UN FAIT DU MOTEUR, PAS UN DIFF. Une unité qui reste en
+    // attente faute de case libre n'apparaît pas — elle sera journalisée le tick
+    // où elle entre vraiment, et jamais deux fois.
+    etat.journal.apparitions.push(faitDeLEntite(entite));
   }
   etat.enAttente = restants;
 }
@@ -1466,6 +1546,29 @@ function tir(etat) {
       );
     }
   }
+
+  // JOURNAL — un tir par TIREUR, relevé APRÈS coup et jamais au fil de la
+  // boucle.
+  //
+  // ⚠⚠ UNE SECONDE PASSE, ET C'EST DÉLIBÉRÉ. Écrire le fait dans la boucle
+  // ci-dessus l'entrelacerait avec les `continue` qui décident QUI tire ; ici il
+  // ne reste qu'à lire `aTire`, que la boucle vient de poser et que rien d'autre
+  // ne touche avant l'étape 8. Aucune décision n'est prise deux fois, et l'ordre
+  // des faits est celui de `etat.entites`, qui ne varie pas.
+  //
+  // ⚠ LE BARRAGE N'EST PAS UN SECOND TIR, et le franchissement n'en est pas un
+  // du tout — `consommerReserve` compte déjà un tir par tireur, et le moteur le
+  // dit en toutes lettres. Le journal compte comme la réserve.
+  for (const e of etat.entites) {
+    if (!e.aTire) continue;
+    const cible = etat.entites[e.cibleIndice];
+    etat.journal.tirs.push({
+      ...faitDeLEntite(e),
+      cibleIndice: cible.indice,
+      cibleRangee: caseDepuisMilli(cible.rangeeMilli),
+      cibleColonne: cible.colonne,
+    });
+  }
   return tampon;
 }
 
@@ -1577,6 +1680,20 @@ function appliquerDegats(etat, tampon) {
     const encaisse = (nominal - reste) + (pvAvant - e.pvMilli);
     if (encaisse <= 0) continue;
 
+    // JOURNAL — ce que la cible a VRAIMENT encaissé, part de bouclier comprise.
+    // Le nominal dirait la force du coup, pas ce qui a été reçu.
+    //
+    // ⚠⚠ ET SES PV MAXIMUM AVEC, PARCE QUE L'ENCAISSÉ SEUL NE VEUT RIEN DIRE.
+    // `facteurMilli` met dégâts ET PV à l'échelle du niveau : mesuré sur 57 864
+    // impacts, l'encaissé va de 67 à 34 683 675 milli-PV, cinq ordres de
+    // grandeur. Le seul rapport invariant est `encaisse / pvMaxMilli` — médiane
+    // 12 · 13 · 13 · 14 millièmes aux niveaux 5, 20, 35 et 50 —, et il ne se
+    // calcule qu'ici : c'est le moteur, et lui seul, qui connaît les PV d'une
+    // pièce montée à son niveau.
+    etat.journal.impacts.push({
+      ...faitDeLEntite(e), encaisseMilli: encaisse, pvMaxMilli: e.pvMaxMilli,
+    });
+
     // ⚠ SERVIR PAR INDICE DE TIREUR CROISSANT, PAS AU PRORATA. Le prorata
     // demanderait un arrondi par tireur et une règle de reste — deux occasions
     // de diverger, pour un partage que rien dans le jeu ne rend visible. Le
@@ -1657,10 +1774,25 @@ function declencherBoosters(etat) {
   }
 }
 
-/** 6. Retrait des entités mortes. */
+/**
+ * 6. Retrait des entités mortes.
+ *
+ * ⚠ LA DESTRUCTION A UN INSTANT PRÉCIS, ET C'EST L'UN DES DEUX. Le journal s'y
+ * accroche plutôt que de comparer deux ticks, ce qui manquerait tout ce qui naît
+ * et meurt dans le même tick. ⚠ Et la POSITION relevée est celle d'avant le
+ * déplacement, qui est l'étape 7 : la pièce meurt là où elle a été touchée.
+ *
+ * ⚠⚠ L'AUTRE EST L'ÉCRASEMENT, DANS `deplacement`, ET LE PREMIER JET DE CE LOT
+ * L'AVAIT MANQUÉ. Une pièce écrasée passe `vivant` à faux à l'étape 7, donc
+ * après celle-ci ; s'accrocher ici seulement laissait une mort sur vingt-trois
+ * hors du journal. C'est un test qui l'a dit, pas une relecture.
+ */
 function retirerLesMorts(etat) {
   for (const e of etat.entites) {
-    if (e.vivant && e.pvMilli === 0) e.vivant = false;
+    if (e.vivant && e.pvMilli === 0) {
+      e.vivant = false;
+      etat.journal.destructions.push(faitDeLEntite(e));
+    }
   }
 }
 
@@ -2059,6 +2191,16 @@ function deplacement(etat) {
       occupante.pvMilli = 0;
       occupante.vivant = false;
       occupante.ecrase = true;
+      // ⚠⚠ LA SECONDE MORT DU MOTEUR, ET ELLE A ÉTÉ TROUVÉE PAR UN TEST, PAS PAR
+      // RELECTURE. Le premier jet de ce lot n'accrochait le journal qu'à
+      // `retirerLesMorts` en écrivant que c'était « la seule ligne qui fasse
+      // passer `vivant` à faux » — c'était FAUX, un écrasement tue à l'étape 7.
+      // Mesuré : une pièce sur vingt-trois manquait au journal sur la graine 9,
+      // et rien d'autre ne l'aurait dit.
+      //
+      // ⚠ ET LA POSITION EST CELLE DE L'ÉCRASÉE, PAS DE L'ÉCRASEUSE : elle meurt
+      // là où elle était, sur la case que l'autre vient de lui prendre.
+      etat.journal.destructions.push(faitDeLEntite(occupante));
       retirer(occupation, caseDestination, e.colonne);
       retirer(occupation, rangee, e.colonne);
       poser(occupation, caseDestination, e.colonne, e.indice);
@@ -2125,6 +2267,12 @@ function terminer(etat, cause) {
 export function tick(etat) {
   if (etat.termine) return etat;
   etat.tick += 1;
+  // ⚠⚠ LE JOURNAL SE VIDE ICI, ET NULLE PART AILLEURS. C'est ce qui borne sa
+  // durée de vie à UN tick — la même que celle du tampon de `tir`, qui existait
+  // déjà. Le vider en fin de tick le rendrait illisible à l'appelant ; le
+  // laisser courir en ferait une liste de dizaines de milliers d'objets sous
+  // « Instantané ».
+  etat.journal = journalVide(); //               0. le journal ne s'accumule pas
   expirerEffets(etat); //                        1. expiration des effets
   apparitionDeVague(etat); //                    2. apparition de vague
   ciblage(etat); //                              3. ciblage

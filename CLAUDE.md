@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.85.0 · build 87.
+Dernière révision : **04/09/2026**, version 0.87.0 · build 89.
 
 ---
 
@@ -42,7 +42,197 @@ Dernière révision : **04/09/2026**, version 0.85.0 · build 87.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot SON-CÂBLAGE), à confronter :**
+**Référence au 04/09/2026 (après le lot JOURNAL-DE-COMBAT), à confronter :**
+`npm test` → **1015 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 779 831 octets**, 0 référence externe.
+⚠⚠ **LE MOTEUR CESSE DE JETER CE QU'IL CALCULE, ET LE COMBAT SONNE.** `tick()`
+calculait déjà qui tire, qui encaisse et qui meurt, puis le jetait ; il publie
+maintenant cinq listes en lecture seule — apparitions, vagues, tirs, impacts,
+destructions. **Le lot ne calcule rien de neuf.** Coût **+5 860 octets,
+ENTIÈREMENT DU JAVASCRIPT** : mesuré poste par poste contre un livrable rebâti
+depuis `main`, **audio +0 · images +0 · feuille +0 · balisage +0**. **284 `data:`
+avant, 284 après.** Borne T10 **inchangée à 7 000 000**, marge **220 169 octets,
+3,15 %**.
+⚠⚠ **LE JOURNAL NE CHANGE AUCUN RÉSULTAT, ET ÇA SE PROUVE — ÇA NE SE PLAIDE
+PAS.** `test/temoins-combat.js` porte **deux cents combats** relevés dans un
+`git worktree` sur `origin/main` **AVANT qu'une ligne du moteur ne bouge** : huit
+champs chacun — empreinte du résultat, empreinte de l'état, cause de fin, tick,
+butin, points, PV restants par famille, détruits par famille. **1 600 valeurs, 0
+écart**, et le balayage complet en porte **400 combats, soit 3 200 valeurs**.
+⚠⚠ **ET ELLE NE SE FAIT PAS EN COMPARANT DEUX EXÉCUTIONS D'UN MÊME CODE** —
+c'est l'interdit que le brief pose et le seul qui rende la mesure valide. Le
+témoin est commité tel quel ; le recapturer sur le code modifié ferait comparer
+un code à lui-même. Même nature que `temoins-bases-0.js`, et même règle : il ne
+se rafraîchit pas.
+⚠ **L'ÉTAT SE COMPARE SANS SA SORTIE NEUVE.** `journal` et `vaguesPosees` sont ce
+que le lot AJOUTE : les opposer à un témoin qui ne les connaît pas ne dirait
+rien. Tout le reste de l'état y est, à l'octet.
+⚠⚠ **LE JOURNAL EST UN TAMPON D'UN TICK, ET LE CAS « PERSONNE NE LE LIT » EST
+MESURÉ, PAS SUPPOSÉ.** Il est remis à zéro **en tête de `tick`**, avant les onze
+phases, donc `resoudre()` qui boucle sans lecteur l'écrase à chaque tour au lieu
+de l'empiler. Mesuré sur un combat complet : **au plus 200 faits vivants à un
+instant, pour plus de 1 000 tirs publiés au total** — l'accumulation aurait été
+fatale, pas gênante. Et `resoudre` d'un bloc rend le même état que le même
+nombre de `tick`.
+⚠⚠ **LE MOTEUR A DEUX SITES DE MORT, ET LE SECOND A ÉTÉ TROUVÉ PAR UN TEST, PAS
+PAR RELECTURE.** Mon propre commentaire dans `retirerLesMorts` affirmait « c'est
+la seule ligne du moteur qui fasse passer `vivant` de vrai à faux » : faux —
+l'ÉCRASEMENT, dans `deplacement`, en est une autre. **Mesuré : une pièce sur
+vingt-trois manquait au journal sur la graine 9**, un `belier` portant
+`ecrase: true`. Les deux commentaires sont réécrits, et ils disent d'où vient la
+correction.
+⚠⚠ **UN ÉVÉNEMENT DISTINCT SONNE AU PLUS UNE FOIS PAR RELEVÉ, ET C'EST UNE RÈGLE
+ÉCRITE, PAS UN REFUS DE LA POLITIQUE DE VOIX.** `ticksDus` résout jusqu'à douze
+ticks dans la même image en ×4 : un son par tir publié ferait **cent cinquante
+coups de canon dans la même milliseconde**. La politique les refuserait — mais
+« compter sur un refus n'est pas une conception » : ce serait demander cent
+cinquante sons pour en obtenir deux, à chaque image. `evenementsDuJournal` rend
+un ENSEMBLE.
+⚠⚠ **ET « INSTANTANÉ » EST MUET PAR CONSTRUCTION, PAS PAR UN CAS PARTICULIER.**
+Le relevé se prend **là où l'instantané d'interpolation se prend**, dans
+`avancerDUnTick` ; le mode Instantané boucle sur `tickCombat` sans prendre
+d'instantané — **exactement comme avant ce lot** — donc il ne relève rien. Un
+combat résolu d'un coup n'a pas de déroulé. `SON T24` lit les trois lignes
+d'`avancerDUnTick` et refuse qu'elles se séparent.
+⚠⚠ **L'IMPACT SE LIT EN PART DES PV MAX DE LA CIBLE, JAMAIS EN MILLI-PV ABSOLUS,
+ET LA RAISON EST MESURÉE.** `facteurMilli` met les dégâts ET les PV à l'échelle
+du niveau : **le même coup encaisse 67 milli-PV au niveau 5 et 34 683 675 au
+niveau 50**, quand la PART, elle, ne bouge pas — médianes **12 · 13 · 13 · 14 ‰**
+aux niveaux 5/20/35/50. Un seuil absolu classerait tout `small` en bas de carte
+et tout `heavy` en haut. D'où `IMPACT_LOURD_MILLIEMES = 25`, et le fait d'impact
+porte `pvMaxMilli` pour ça et pour rien d'autre.
+⚠ **ET LE SEUIL RESTE UNE PROPOSITION** — c'est le seul arbitrage esthétique que
+le brief laissait ouvert, et il n'a pas été tranché : **un nombre se change
+seul**. Ethan tranche.
+⚠⚠ **ET CETTE FALSIFICATION-LÀ NE MORDAIT PAS AU PREMIER RELEVÉ — HUITIÈME FOIS
+DU DÉPÔT.** Remplacer `e.proprietaire` par `e.camp === 'attaque' ? 'joueur' :
+'ouvrage'` dans `faitDeLEntite` laissait la suite **ENTIÈREMENT VERTE — mesuré,
+37 pass / 0 fail** : TOUS les montages du dépôt font attaquer le joueur, si bien
+que camp et propriétaire coïncident partout. Le seul état où ils divergent est
+celui de `sim/raid-ouvrage.js` — l'Ouvrage attaque, le joueur défend sa base — et
+aucun test du journal ne le montait. `JOURNAL T10` le monte, et il a été écrit
+APRÈS la mesure. **Une falsification qui ne mord pas se vérifie avant d'être
+crue.**
+⚠ **ET UNE SECONDE N'A PAS MORDU NON PLUS** : tronquer le relevé à zéro dans
+`src/ui/raid.js` laissait `SON T24` vert — il ne lisait que l'APPEL. L'écran est
+hors de portée des tests, faute de DOM (§3), donc la garde lit désormais les
+QUATRE lignes de `relever()` comme elle lit les trois d'`avancerDUnTick`.
+⚠⚠ **`camp` ET `proprietaire` SONT DEUX CHOSES, ET LE SON SE CHOISIT SUR LE
+PROPRIÉTAIRE.** Le camp dit un côté de grille — le joueur DÉFEND sa propre base —
+donc lire le camp ferait sonner ses Cuirassiers en Ouvrage. `MOT_DU_PROPRIETAIRE`
+est la seule table qui relie « joueur » à « player », un propriétaire inconnu
+LÈVE, et une garde mesure les deux côtés sur la même pièce.
+⚠⚠ **SOIXANTE-QUATORZE ÉVÉNEMENTS SUR 135 SONT CÂBLÉS, SOIT 169 SONS SUR 263 —
+ON PASSE DE 24 À 169, ET 94 RESTENT MUETS.** L'ensemble se CALCULE de bout en
+bout : les deux tables de boucles, la règle de roulement jouée sur les quatorze
+unités dans les quatre situations, tous les gestes, et la traduction d'un journal
+qui porte tous les faits possibles. Une liste écrite à la main déclarerait muet
+ce qui sonne — le mensonge le plus dangereux de ce test.
+⚠⚠ **MAIS UN RAID N'EN ATTEINT PAS 74, ET IL FAUT LE DIRE DANS CE SENS-LÀ.**
+Balayage de **36 raids réels** (4 graines × 3 niveaux × 3 types, 900 ticks au
+plus) : **47 événements atteints sur les 63 que le combat peut demander**. Les
+**seize** qui manquent sont nommés un par un, et ils demandent tous la même
+chose : **que l'Ouvrage attaque, ou que le joueur défende** — ce qu'aucun écran
+ne montre, le raid de l'Ouvrage se résolvant HORS LIGNE depuis le lot RAID-B.
+⚠ **`weapon_ouvrage_aa_burst` EST LE SEUL CAS PARTICULIER, ET IL EST MESURÉ
+AUSSI** : le Frappeur n'apparaît dans **aucune** garnison que `genererSite`
+produit — vérifié sur 96 sites —, donc sa rafale n'a personne pour la tirer.
+⚠⚠ **LES SIX MOTEURS À L'ARRÊT SONNENT, ET C'EST L'UNE DES SIX DÉCISIONS RENDUES
+PAR ETHAN.** « Unité vivante et immobile pendant un raid » est une LECTURE
+D'ÉTAT, pas un événement : `etatDesUnites` rend désormais les deux moitiés
+ensemble — qui a bougé et qui n'a pas bougé —, parce que « a bougé » et « n'a pas
+bougé » sont la même lecture prise dans les deux sens. ⚠ Une escouade immobile se
+tait ; un **stoppeur** immobile tient l'air, donc son `dard` continue.
+⚠⚠ **LE ROULEMENT EST PAR CHÂSSIS, ET QUATRE LIGNES SUR SIX SONT CONFRONTÉES À
+LA CARTE DU PACK.** `ROULEMENT_PAR_CHASSIS` porte six archétypes × deux camps ;
+`verifier_les_roulements` de `tools/sons.py` EXIGE que les quatre paires que
+`unit_audio_map.json` décrit — Fusiliers, Ratisseur, Fendeur, Broyeur — rendent
+exactement ce que la carte dit, et que **tout nom de roulement ou de moteur soit
+un événement du pack qui BOUCLE**. Bélier et Pilon n'y portent que `deploy` : ce
+sont l'écart assumé d'Ethan, et les seuls que ce contrôle ne couvre pas.
+⚠⚠ **ET LES ARMES SE DÉRIVENT DE LA CARTE PAR SUBSTITUTION, VÉRIFIÉE ET NON
+SUPPOSÉE.** Le jeu a DEUX jeux de noms pour les mêmes quatorze pièces, si bien
+que le bloc `player` de la carte les couvre des deux côtés : on remplace
+`_player_` par `_ouvrage_` et on EXIGE que le résultat soit un événement du pack.
+**Douze `variant_set` distincts, douze substitutions résolues** — le brief en
+annonçait vingt-sept, qui est le nombre de sons `weapon_*`, pas celui des
+substitutions. ⚠ **Deux des douze ne sont pas des `weapon_*`** : le pack fait
+tirer une EXPLOSION aux Sapeurs et à l'Albatros.
+⚠⚠ **LES SIX DÉFENSES QUI TIRENT SONT UN ARBITRAGE, PAS UNE DÉRIVATION, ET LES
+DEUX TABLES RESTENT SÉPARÉES.** La carte du pack ne décrit **aucune** défense —
+mesuré, aucune de ses clés n'en nomme une. Les fondre en une seule table ferait
+croire que les deux moitiés se lisent au même endroit. ⚠ Merlon, ronce et herse
+rendent `null`, et c'est la DONNÉE qui le dit : leur `degats` vaut `null`.
+⚠⚠ **DEUX ÉCHELLES DE TAILLE, ET IL EN FALLAIT DEUX — MESURÉ.** Les vingt-trois
+pièces vont de 500 à 2 000 PV, les bâtiments de 1 000 à 5 500. Appliquer
+`EFFONDREMENT_PV` aux pièces les classerait **21 `small`, 2 `medium`, 0 `large`**,
+c'est-à-dire rendrait deux sons sur trois inatteignables ; `EXPLOSION_PV =
+[900, 1500]` rend **9 · 10 · 4**. Deux paires de nombres, et les deux se changent
+seules — **ce sont des propositions, Ethan tranche**.
+⚠ **ET `EFFONDREMENT_PV` SERT LES DEUX CAMPS DEPUIS CE LOT** : un raid fait
+tomber les bâtiments de l'Ouvrage. Mesuré : **3 · 5 · 3** côté joueur,
+**3 · 1 · 1** côté Ouvrage, sur les mêmes seuils.
+⚠⚠ **TRENTE-SIX IMPACTS SUR QUARANTE RESTENT MUETS, ET LE MOTIF EST MESURÉ.** Le
+moteur ne publie un impact que sur une ENTITÉ touchée : il n'a **ni tir manqué,
+ni projectile qui retombe à côté**, donc aucune case vide n'est jamais frappée.
+`dirt`, `quartz`, `scoria`, `energy` et `ricochet` n'ont pas de fait à écouter —
+et le champ de bataille ne connaît d'ailleurs ni quartz ni scorie, le montage
+portant `obstacles` et jamais un champ de ressource.
+⚠ **CINQ SONS `weapon_*` RESTENT MUETS, ET AUCUN N'EST UN TIR** : trois décrivent
+un RAYON CONTINU que le moteur n'a pas — il tire par ticks — et deux le VOL d'un
+missile, qui demanderait un projectile en vol quand le moteur applique ses dégâts
+au tick du tir.
+⚠ **DOUZE ALERTES SUR DIX-HUIT RESTENT MUETTES**, et six sonnent : début de
+vague, pièce perdue, structure perdue, dans les deux camps. Les douze autres
+demandent un fait que le moteur ne publie pas — ni « fin de vague », ni « ennemi
+repéré », ni « artillerie entrante », ni état « base attaquée » qui dure ;
+`insufficient` et `low_power` gardent le motif déclaré au lot précédent.
+⚠⚠ **LA MÉMOIRE TIENT, MESURÉE À TRAVERS LE VRAI ADAPTATEUR ET NON ESTIMÉE.**
+`SON T23` joue un raid entier — **290 ticks** — sous une fenêtre de papier où un
+COUP tient son tampon pendant toute sa durée, ce que `faussesFenetres` ne fait
+pas. Pire relevé : **29,996 s décodées pour un budget de 30**, **6 tampons tenus
+au même instant**, **35 décodages pour 290 ticks**. Le budget **n'a pas été
+gonflé**, et il est bien saturé — donc l'éviction mord pour de bon.
+⚠ **ET C'EST `tenus` QUI POURRAIT FAIRE DÉBORDER, PAS LA TABLE.** L'éviction
+ramène `secondesDecodees` sous le budget à chaque décodage **sauf** sur les
+tampons qu'une source lit. Ce sont eux, et eux seuls, qui pourraient dépasser :
+ils ne le font pas.
+⚠ **COÛT EN TEMPS : +6,3 %**, mesuré sur **24 442 ticks** et sept exécutions,
+médiane **381,2 → 405,2 ms**. Le nombre de ticks est identique des deux côtés,
+ce qui est la même additivité vue par un autre bout.
+⚠⚠ **`src/son/cablage.js` GAGNE UNE QUATRIÈME DÉPENDANCE, ET UNE SEULE :**
+`src/data/sites.js`, pour les bâtiments de l'Ouvrage. Il n'importe toujours **que
+des tables**, aucun moteur, et deux gardes le tiennent dans les deux sens.
+⚠ **`MOUVEMENT_PAR_PAIRE` SORT DE `src/data/sons.js`, IL N'EST PAS DOUBLÉ.** La
+règle par châssis le remplace : « une seule table fait foi par grandeur ».
+⚠ **QUATRE POINTS D'ACCROCHE ET DEUX PORTES.** `son.jouer(evenement)` apparaît
+désormais **deux** fois dans `session.js` — le geste, qui existait, et le
+DÉROULÉ du raid, qui vide `evenementsSonores()`. Aucun écran ne nomme un son, et
+`src/ui/raid.js` est balayé nom par nom sur les 263.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : le journal vit un tick et ne traverse ni `serialiser`, ni
+`structuredClone` d'une sauvegarde.
+⚠ **`python3 tools/verifier.py` → 1 261 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en **349,3 s**. Il était dû : le lot touche `tools/`.
+**Le compte ne bouge pas** — aucun sprite, aucun `.opus` n'entre ni ne sort : les
+changements de `tools/sons.py` portent sur ce qu'il LIT et sur la table qu'il
+écrit dans `src/data/`, jamais sur l'encodage. ⚠ Il a été relancé une SECONDE
+fois : le premier passage tournait pendant que les falsifications mutaient
+`art/sources/`, et « ne jamais le lancer sur un arbre qu'on modifie » est une
+règle du dépôt. ⚠ `art/sources/` : **362 consommées · 95 dormantes ·
+457 fichiers**, inchangé — le lot ne fait entrer aucune source, et c'est pourquoi
+la baseline était VERTE pour la première fois depuis quatre lots.
+⚠ **LA SAUVEGARDE NE GRANDIT PAS D'UN OCTET** — 1 133 sur les cinq graines
+témoins, avant comme après.
+⚠ **QUINZE TESTS ENTRENT ET LE COMPTE PASSE DE 1 000 À 1 015** — dix dans
+`test/journal.test.js`, qui entre, et cinq dans `test/son.test.js`, qui passe de
+20 à 28. **Aucune assertion existante n'a été retirée** ; `SON T14`, `SON T15`,
+`SON T17`, `SON T18` et `SON T20` sont RÉÉCRITS, et `SON T20` est RETOURNÉ plutôt
+que supprimé : il exigeait ZÉRO son `alert_`, `weapon_` et `explosion_` au motif
+qu'il n'y avait pas de journal de tick — il nomme maintenant ce qui reste muet
+dans chacune des trois familles, et un branchement de plus le fait tomber.
+
+**Auparavant, après le lot SON-CÂBLAGE :**
 `npm test` → **1000 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 773 971 octets**, 0 référence externe.
 ⚠⚠ **DIX-NEUF SONS SORTENT DU SILENCE, ET LE BRIEF EN ANNONÇAIT CINQUANTE-DEUX.**
@@ -3200,6 +3390,17 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     déjà en place pour `combat.js` et `missions.js` : la TABLE d'un côté, le
     MOTEUR de l'autre. Un import qui se trompe de dossier ne compile pas — les
     exports n'ont aucun nom en commun.
+  ⤷ ⚠⚠ `combat.js` PORTE UN JOURNAL DE TICK DEPUIS LE LOT JOURNAL-DE-COMBAT, ET
+    C'EST UNE SORTIE EN LECTURE SEULE. Cinq listes — apparitions, vagues, tirs,
+    impacts, destructions —, remises à zéro **en tête de `tick`**, donc écrasées
+    et jamais empilées quand personne ne les lit. Le moteur ne calcule rien de
+    neuf : il cesse de jeter. ⚠ Il ne connaît AUCUN nom de son — les faits
+    portent un identifiant, un genre et un PROPRIÉTAIRE, et c'est
+    `src/son/cablage.js` qui les traduit ; la garde « aucun module de `src/sim/`
+    n'importe le son » reste verte. ⚠ ET LE MOTEUR A DEUX SITES DE MORT :
+    `retirerLesMorts` et l'ÉCRASEMENT dans `deplacement`. Le second a été trouvé
+    par un test, pas par relecture — une pièce sur vingt-trois manquait au
+    journal sur la graine 9.
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 11 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -3325,10 +3526,18 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     et la partie cesserait de se rejouer à l'identique. Même raisonnement que
     `render/variante.js`. Deux gardes le tiennent, une par direction.
   ⤷ ⚠ LA TABLE, ELLE, EST DANS `src/data/sons.js` — c'est du calibrage (§4), et
-    la politique comme le pipeline la lisent tous les deux. Elle est une
-    TRANSCRIPTION du manifeste du pack, et un test les confronte.
+    la politique comme le pipeline la lisent tous les deux. Elle est GÉNÉRÉE par
+    `python3 tools/sons.py --ecrire`, et un test rejoue la dérivation.
+  ⤷ ⚠⚠ `cablage.js` TRADUIT AUSSI LE JOURNAL DEPUIS LE LOT JOURNAL-DE-COMBAT, ET
+    IL EST LE SEUL À NOMMER UN SON. `evenementsDuJournal` rend un ENSEMBLE, pas
+    une liste : un événement distinct sonne au plus une fois par relevé, quel que
+    soit le nombre de faits qui le réclament — cent cinquante tirs du même canon
+    dans la même image font un son. ⚠ ET IL LIT LE PROPRIÉTAIRE, JAMAIS LE CAMP :
+    le camp dit un côté de grille, et le joueur défend sa propre base.
+    ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
+    de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   51 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
+test/                   52 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -3337,8 +3546,8 @@ test/                   51 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son
-  ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
+  son  journal
+  ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
     `prereglages-lot3a.js` porte les montages du banc ; `png-rgba.js` porte le
@@ -3348,7 +3557,13 @@ test/                   51 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
     BASES-0 : `temoins-bases-0.js` porte les empreintes capturées AVANT le
     dépliage — ce n'est pas un test, c'est sa RÉFÉRENCE, et elle ne se
     rafraîchit pas —, et `aplatir-sauvegarde.js` porte l'inverse de la migration
-    22 → 23, dont HUIT fichiers ont eu besoin le même jour.
+    22 → 23, dont HUIT fichiers ont eu besoin le même jour. ⚠⚠ ET LE CINQUIÈME
+    EST `temoins-combat.js`, ENTRÉ AU LOT JOURNAL-DE-COMBAT : deux cents
+    empreintes de combat relevées dans un `git worktree` sur `origin/main`
+    AVANT qu'une ligne du moteur ne bouge. Même nature que `temoins-bases-0.js`,
+    et le même interdit : la recapturer sur le code modifié ferait comparer un
+    code à lui-même, ce qui ne prouve rien — « elle ne se fait pas en comparant
+    deux exécutions d'un même code ».
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour

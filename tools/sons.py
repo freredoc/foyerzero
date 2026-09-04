@@ -255,7 +255,7 @@ COMMENTAIRE_RAMPE = """/**
  */"""
 
 COMMENTAIRE_CABLAGE = """/**
- * LES QUATRE TABLES DU CÂBLAGE — ce que le JEU demande, et à quel son.
+ * LES TABLES DU CÂBLAGE — ce que le JEU demande, et à quel son.
  *
  * ⚠⚠ ELLES SONT ICI PARCE QUE C'EST DU CALIBRAGE (§4), ET GÉNÉRÉES PARCE QUE
  * `sons.js` L'EST. Trois d'entre elles sont écrites à la main DANS
@@ -264,14 +264,121 @@ COMMENTAIRE_CABLAGE = """/**
  * refuse un nom de son qui n'existe pas, et refuse une ambiance ou une boucle
  * de bâtiment qui ne serait pas marquée `loop` dans le manifeste.
  *
- * ⚠⚠ LA QUATRIÈME, ELLE, EST DÉRIVÉE — ET ELLE NE S'INVENTE PAS.
- * `MOUVEMENT_PAR_PAIRE` sort d'`art/sources/unit_audio_map.json`, que ce lot
- * fait passer de DORMANTE à CONSOMMÉE. Sa clé est la paire « nom joueur/nom
+ * ⚠⚠ CELLES DES UNITÉS, ELLES, SONT DÉRIVÉES — ET ELLES NE S'INVENTENT PAS.
+ * `ARME_PAR_PAIRE` et `DEPLOIEMENT_PAR_PAIRE` sortent
+ * d'`art/sources/unit_audio_map.json`. Leur clé est la paire « nom joueur/nom
  * Ouvrage », qui est exactement ce que `UNITES[x].nom` porte : mesuré,
- * **quatorze paires sur quatorze se résolvent**, aucune unité du jeu n'est
- * laissée sans entrée. Le bloc `ouvrage` du même fichier n'est PAS lu — ses
- * sept clés ne sont aucun nom du dépôt, et attribuer une boucle par
- * ressemblance est nommément interdit.
+ * **quatorze paires sur quatorze se résolvent**. Le bloc `ouvrage` du même
+ * fichier n'est PAS lu — ses sept clés ne sont aucun nom du dépôt, et attribuer
+ * un son par ressemblance est nommément interdit ; le camp de l'Ouvrage s'obtient
+ * par SUBSTITUTION `_player_` → `_ouvrage_`, vérifiée douze fois sur douze.
+ */"""
+
+COMMENTAIRE_ROULEMENT = """/**
+ * Le roulement d'une pièce qui avance, PAR CHÂSSIS et par camp.
+ *
+ * ⚠⚠ PAR CHÂSSIS, PAS PAR UNITÉ, ET C'EST CE QUI LE REND TENABLE. Cinq
+ * escouades partagent un bruit de bottes ; leur écrire cinq lignes ferait cinq
+ * occasions de diverger. `src/son/cablage.js` compose la clé depuis
+ * `UNITES[x].chassis` et `UNITES[x].comportementAerien`, qui sont la donnée qui
+ * fait foi sur le classement des quatorze — jamais une liste recopiée.
+ *
+ * ⚠ UN `traversant` N'EST PAS ICI : il PASSE, donc il ne boucle pas. Son coup
+ * est `PASSAGE_AERIEN`, et `movement_player_flyby` n'est pas marqué `loop` dans
+ * le manifeste — c'est la donnée, pas une lecture.
+ */"""
+
+COMMENTAIRE_MOTEUR = """/**
+ * Le moteur d'un blindé VIVANT ET IMMOBILE — l'autre moitié du roulement.
+ *
+ * ⚠⚠ ARBITRAGE D'ETHAN DU 04/09, ET C'EST LA MÊME LECTURE D'ÉTAT QUE LE
+ * ROULEMENT, PRISE DANS L'AUTRE SENS. Une pièce qui a bougé au dernier tick
+ * roule ; une pièce qui n'a pas bougé tourne au ralenti. Les deux se
+ * réconcilient, aucune ne s'événementialise : un moteur qui tourne est un ÉTAT.
+ *
+ * ⚠ TROIS POIDS, ET CE SONT CEUX DES BLINDÉS — le pack n'en porte pas d'autres.
+ * Une escouade n'a pas de moteur ; un aéronef stoppeur tient l'air, et son
+ * `dard` couvre déjà ses deux états. Leur en attribuer un serait l'attribution
+ * par ressemblance que le brief interdit.
+ */"""
+
+COMMENTAIRE_ARCHETYPE = """/**
+ * Quel poids porte quel blindé, et lequel des deux dards porte quel stoppeur.
+ *
+ * ⚠⚠ TROIS DE CES SEPT LIGNES SE LISENT DANS LA CARTE, ET LE GÉNÉRATEUR LES Y
+ * CONFRONTE : Ratisseur `tracks_light`, Fendeur `tracks_medium`, Broyeur
+ * `tracks_heavy`. ⚠ Bélier et Pilon n'y portent qu'un `deploy` et aucun
+ * roulement : ils prennent le moyen, c'est l'arbitrage d'Ethan du 04/09 — « un
+ * blindé qui avance ne doit pas être muet ». Le partage des deux stoppeurs suit
+ * leurs PV, 1 050 contre 1 800, et le pack n'a que deux dards.
+ */"""
+
+COMMENTAIRE_PASSAGE = """/**
+ * Le passage d'un aéronef traversant — un COUP, jamais une boucle.
+ *
+ * ⚠ IL SONNE À L'APPARITION DE LA VAGUE, ET NULLE PART AILLEURS. C'est le seul
+ * instant que le moteur publie où un aéronef « passe ». Le jouer à chaque tick
+ * de déplacement demanderait un événement « l'aéronef traverse » qui n'existe
+ * nulle part, et le rejouer en boucle inventerait une mécanique que le pack ne
+ * demande pas — il ne marque d'ailleurs pas ce son `loop`.
+ */"""
+
+COMMENTAIRE_DEPLOIEMENT = """/**
+ * Le déploiement d'une pièce qui se met en place — un COUP, à l'apparition.
+ *
+ * ⚠ DEUX UNITÉS SUR QUATORZE, ET CE SONT EXACTEMENT LES DEUX BLINDÉS QUE LA
+ * CARTE LAISSAIT SANS ROULEMENT. Elles gardent leur `deploy` ET prennent le
+ * roulement moyen : l'arbitrage d'Ethan ajoute, il ne remplace pas.
+ */"""
+
+COMMENTAIRE_ARMES = """/**
+ * L'arme de chaque unité, dans les deux camps — DÉRIVÉE de la carte du pack.
+ *
+ * ⚠ DEUX DES DOUZE JEUX DISTINCTS NE SONT PAS DES `weapon_*` : Sapeurs et
+ * Albatros tirent une EXPLOSION. C'est le pack qui le dit, et la substitution
+ * `_player_` → `_ouvrage_` y marche à l'identique.
+ */"""
+
+COMMENTAIRE_ARME_DEFENSE = """/**
+ * Ce que tire chacune des six défenses qui tirent — arbitrage d'Ethan, 04/09.
+ *
+ * ⚠⚠ C'EST UN TROU DE LA CARTE, ET IL EST MESURÉ : `unit_audio_map.json` ne
+ * décrit que les quatorze UNITÉS, aucune de ses clés ne nomme une défense.
+ * L'arme suit la colonne DOMINANTE et la portée, relevées dans `DEFENSES` —
+ * casemate infanterie 20 à 2,5 · créneau véhicule 35 à 2,5 · batterie aviation
+ * 40 à 2,5 · faucheuse infanterie 10 à 5,5 · mortier véhicule 12 à 5,5 · harpon
+ * aviation 16 à 5,5 — et un test les REMESURE plutôt que de les croire.
+ *
+ * ⚠ MERLON, RONCE ET HERSE SONT ABSENTES, ET LA DONNÉE LE DIT : leur `degats`
+ * vaut `null`. Elles ne tirent pas ; leur donner une arme serait leur inventer
+ * un tir.
+ */"""
+
+COMMENTAIRE_EXPLOSION = """/**
+ * La taille de l'explosion d'une PIÈCE détruite au combat, sur ses PV.
+ *
+ * ⚠⚠ CE NE SONT PAS LES SEUILS D'`EFFONDREMENT_PV`, ET C'EST MESURÉ. Les
+ * vingt-trois unités et défenses vont de 500 à 2 000 PV : les seuils du bâtiment
+ * — 2 000 et 3 000 — en classeraient **21 en `small`, 2 en `medium`, 0 en
+ * `large`**. Deux paires, deux échelles.
+ *
+ * ⚠ 900 ET 1 500 RENDENT 9 · 10 · 4, et la coupure tombe dans un creux :
+ * {500…800} · {900…1300} · {1500…2000}. Deux nombres qui se changent seuls.
+ */"""
+
+COMMENTAIRE_IMPACT = """/**
+ * Au-delà de quelle PART de ses PV une cible prend un impact « lourd », en
+ * millièmes.
+ *
+ * ⚠⚠ UNE PART, ET NON UN MONTANT, PARCE QUE LE MONTANT SUIT LE NIVEAU. Mesuré
+ * sur **57 864 impacts** de raids réels, l'encaissé va de 67 à 34 683 675
+ * milli-PV — cinq ordres de grandeur —, `facteurMilli` mettant dégâts et PV à
+ * l'échelle ensemble : un seuil absolu classerait tout en `small` au niveau 5 et
+ * tout en `heavy` au niveau 50. La part, elle, ne bouge pas — médiane **12 · 13
+ * · 13 · 14** millièmes aux niveaux 5, 20, 35 et 50.
+ *
+ * ⚠ 25 EST LE TROISIÈME QUARTILE MESURÉ, donc « le quart supérieur des coups ».
+ * C'est le SEUL arbitrage encore ouvert de ce lot, et il se change seul.
  */"""
 
 COMMENTAIRE_REGLAGES = """/**
@@ -425,6 +532,101 @@ BOUCLES_DE_BATIMENT = {
 # **Ethan tranche ; ces deux nombres se changent seuls.**
 EFFONDREMENT_PV = [2000, 3000]
 
+# ⚠⚠ ET LA TAILLE D'UNE PIÈCE DÉTRUITE AU COMBAT SE LIT SUR D'AUTRES SEUILS.
+# `EFFONDREMENT_PV` ne convient PAS ici, et c'est mesuré : les vingt-trois
+# unités et défenses vont de 500 à 2 000 PV, si bien que ses seuils les
+# classeraient **21 en `small`, 2 en `medium`, 0 en `large`**. Deux paires, deux
+# usages — l'effondrement volontaire d'un bâtiment de la base et la destruction
+# d'une pièce au combat ne sont pas la même échelle.
+#
+# ⚠ 900 ET 1 500 RENDENT 9 · 10 · 4, et la coupure tombe dans un creux :
+# {500…800} · {900…1300} · {1500…2000}. Ethan a rendu ces deux nombres le 04/09 ;
+# ils se changent seuls, comme les deux précédents.
+EXPLOSION_PV = [900, 1500]
+
+# ⚠⚠ AU-DELÀ DE QUELLE PART DE SES PV UNE CIBLE PREND UN IMPACT « LOURD » —
+# EN MILLIÈMES, ET C'EST LE SEUL ARBITRAGE ENCORE OUVERT DE CE LOT.
+#
+# ⚠⚠ UNE PART, PAS UN MONTANT, PARCE QUE LE MONTANT SUIT LE NIVEAU. Mesuré sur
+# 57 864 impacts de raids réels : l'encaissé va de **67 à 34 683 675 milli-PV**,
+# cinq ordres de grandeur, parce que `facteurMilli` met dégâts ET PV à l'échelle
+# ensemble. Un seuil absolu classerait donc tout en `small` au niveau 5 et tout
+# en `heavy` au niveau 50. La PART, elle, ne bouge pas : médiane **12 · 13 · 13 ·
+# 14** millièmes aux niveaux 5, 20, 35 et 50.
+#
+# ⚠ 25 EST LE TROISIÈME QUARTILE MESURÉ : un impact lourd est le quart supérieur.
+# **Ethan tranche ; ce nombre se change seul.**
+IMPACT_LOURD_MILLIEMES = 25
+
+# ⚠⚠ LE ROULEMENT EST PAR CHÂSSIS, ET LES POIDS SONT DÉJÀ ÉCRITS DANS LA CARTE.
+# Arbitrage d'Ethan du 04/09, en entier. Les poids léger/moyen/lourd des blindés
+# sont REPRIS du bloc `player` d'`unit_audio_map.json` — Ratisseur y porte
+# `tracks_light`, Fendeur `tracks_medium`, Broyeur `tracks_heavy` —, ils ne sont
+# pas inventés ; `verifier_les_roulements` les y confronte à chaque exécution.
+#
+# ⚠ LA COUPURE DES AÉRONEFS VIENT DE `comportementAerien`, QUI EST DANS LA
+# DONNÉE : un `traversant` PASSE — c'est un coup, pas une boucle — et un
+# `stoppeur` tient l'air, donc il boucle. Les deux stoppeurs prennent le même
+# roulement dans les deux camps : le pack ne porte qu'un `dard`.
+#
+# ⚠⚠ BÉLIER ET PILON SONT UN ÉCART ASSUMÉ, ET IL EST D'ETHAN. La carte leur donne
+# `deploy` et AUCUN `movement` ; un blindé qui avance ne doit pas être muet, donc
+# ils prennent le roulement moyen EN PLUS de leur `deploy`.
+ROULEMENT_PAR_CHASSIS = {
+    'escouade': ('movement_infantry_player_loop', 'movement_essaim_ouvrage_loop'),
+    'blinde_leger': ('movement_tracks_light_loop', 'movement_walker_light_loop'),
+    'blinde_moyen': ('movement_tracks_medium_loop', 'movement_walker_medium_loop'),
+    'blinde_lourd': ('movement_tracks_heavy_loop', 'movement_walker_heavy_loop'),
+    'aeronef_stoppeur_leger': ('movement_dard_light_loop', 'movement_dard_light_loop'),
+    'aeronef_stoppeur_lourd': ('movement_dard_heavy_loop', 'movement_dard_heavy_loop'),
+}
+
+# Quel poids porte quel blindé, et lequel des deux dards porte quel stoppeur.
+# ⚠ LES TROIS PREMIÈRES LIGNES SE LISENT DANS LA CARTE et y sont confrontées ;
+# Bélier et Pilon sont l'arbitrage d'Ethan. Le partage des deux stoppeurs suit
+# leurs PV — 1 050 contre 1 800 — et le pack n'a que deux dards.
+POIDS_DE_BLINDE = {
+    'ratisseur': 'blinde_leger',
+    'fendeur': 'blinde_moyen',
+    'broyeur': 'blinde_lourd',
+    'belier': 'blinde_moyen',
+    'pilon': 'blinde_moyen',
+}
+POIDS_DE_STOPPEUR = {'busard': 'aeronef_stoppeur_leger', 'enclume': 'aeronef_stoppeur_lourd'}
+
+# ⚠⚠ ET LE MOTEUR QUI TOURNE À L'ARRÊT — ARBITRAGE D'ETHAN DU 04/09, sur
+# « unité vivante et immobile pendant un raid ». C'est l'exact complément du
+# roulement : la même lecture d'état, prise dans l'autre sens.
+#
+# ⚠ SEULS LES BLINDÉS EN ONT UN, ET C'EST LE PACK QUI LE DIT : il porte trois
+# poids, léger, moyen et lourd, exactement ceux des blindés. Une escouade n'a pas
+# de moteur ; un aéronef stoppeur tient l'air, et son `dard` couvre déjà les deux
+# états. Leur en attribuer un serait l'attribution par ressemblance interdite.
+MOTEUR_PAR_CHASSIS = {
+    'blinde_leger': ('engine_player_light_idle_loop', 'engine_ouvrage_light_idle_loop'),
+    'blinde_moyen': ('engine_player_medium_idle_loop', 'engine_ouvrage_medium_idle_loop'),
+    'blinde_lourd': ('engine_player_heavy_idle_loop', 'engine_ouvrage_heavy_idle_loop'),
+}
+
+# ⚠⚠ CE QUE TIRE CHACUNE DES NEUF DÉFENSES — UN TROU DE LA CARTE, COMBLÉ PAR
+# ETHAN LE 04/09. `unit_audio_map.json` ne décrit que les quatorze UNITÉS ;
+# mesuré, aucune de ses clés ne nomme une défense. La colonne dominante et la
+# portée sont RELEVÉES dans `DEFENSES` — casemate infanterie 20 à 2,5 ; créneau
+# véhicule 35 à 2,5 ; batterie aviation 40 à 2,5 ; faucheuse infanterie 10 à
+# 5,5 ; mortier véhicule 12 à 5,5 ; harpon aviation 16 à 5,5 — et un test les
+# remesure plutôt que de les croire.
+#
+# ⚠ MERLON, RONCE ET HERSE SONT ABSENTS, ET C'EST LA DONNÉE QUI LE DIT : leur
+# `degats` vaut `null`, elles ne tirent pas.
+ARME_PAR_DEFENSE = {
+    'casemate': 'weapon_player_machinegun',
+    'creneau': 'weapon_player_cannon_medium',
+    'batterie': 'weapon_player_aa',
+    'faucheuse': 'weapon_player_machinegun_burst',
+    'mortier': 'weapon_player_artillery',
+    'harpon': 'weapon_player_missile_launch',
+}
+
 BUS_PAR_CATEGORIE = {
     # Les cinq que le brief nomme, et leur famille évidente.
     'ui': 'interface',
@@ -525,44 +727,95 @@ def carte_des_unites(sons_par_id):
     return carte, evenements
 
 
-def boucles_de_mouvement(sons_par_id):
-    """La boucle de roulement de chaque unité, DÉRIVÉE de `unit_audio_map.json`.
+def armes_des_unites(sons_par_id):
+    """L'arme de chaque unité, DÉRIVÉE de la carte, dans les DEUX camps.
 
-    ⚠⚠ LA CARTE NOMME DES ÉVÉNEMENTS, PAS DES FICHIERS, ET LE PREMIER JET S'Y
-    EST TROMPÉ. Il cherchait ses valeurs parmi les 263 identifiants ; or
-    `movement_player_flyby` n'en est PAS un — c'est le groupe des trois
-    `movement_player_flyby_0N`. Mesuré ensuite sur TOUTES les valeurs de la
-    carte, `player` et `ouvrage`, tous champs confondus : **trente-quatre sur
-    trente-quatre se résolvent comme événements, zéro comme identifiant seul**.
-    La note du fichier le disait — « les entrées `variant_set` désignent un
-    préfixe » — et c'est vrai des sept champs, pas du seul `variant_set`.
+    ⚠⚠ LE SON DE L'OUVRAGE S'OBTIENT PAR SUBSTITUTION, ET ELLE EST VÉRIFIÉE, PAS
+    SUPPOSÉE. Le jeu porte quatorze unités et DEUX JEUX DE NOMS — `meute`
+    s'appelle *Meute* pour l'Ouvrage et *Fusiliers* pour le joueur —, si bien que
+    le bloc `player` de la carte couvre les quatorze pièces DES DEUX CAMPS. On
+    remplace `_player_` par `_ouvrage_` et on EXIGE que le résultat soit un
+    événement du pack : mesuré, **douze `variant_set` distincts, douze
+    substitutions résolues**. Une seule qui manquerait ferait lever ici, au
+    dépôt, jamais chez le joueur.
 
-    ⚠⚠ ON NE GARDE QUE CE QUI BOUCLE. Sept des quatorze paires portent un
-    `movement` ; trois d'entre elles portent `movement_player_flyby`, qui est un
-    PASSAGE et non un roulement — le jouer en continu inventerait une mécanique
-    que le pack ne demande pas, et le jouer en coup demanderait un événement
-    « l'aéronef se met à bouger » qui n'existe nulle part. **Quatre paires
-    restent**, et les dix autres sont muettes ; le rapport les nomme une par une.
-
-    ⚠⚠ ET LE BLOC `ouvrage` N'EST PAS LU, PARCE QU'IL NE SE RÉSOUT PAS. Ses
-    sept clés — « essaim », « marcheur léger », « Dard lourd », « pylône
-    énergétique »… — ne sont AUCUN nom du dépôt : mesuré, zéro sur sept
-    apparaît dans `src/data/`. Le bloc `player`, lui, est indexé par la PAIRE
-    « nom joueur/nom Ouvrage », qui est exactement ce que `UNITES[x].nom`
-    porte : mesuré, **quatorze sur quatorze se résolvent**. Attribuer les six
-    boucles de l'Ouvrage par ressemblance est nommément interdit ; elles
-    restent muettes et le rapport propose la jointure mesurée.
+    ⚠ DEUX DES DOUZE NE SONT PAS DES `weapon_*` : Sapeurs/Fouisseurs tirent
+    `explosion_player_small` et Albatros/Enclume `explosion_player_large`. C'est
+    le pack qui le dit, et la substitution y marche à l'identique.
     """
     carte, evenements = carte_des_unites(sons_par_id)
     table = {}
-    for paire, entree in carte['player'].items():
-        nom = entree.get('movement')
+    for paire, entree in sorted(carte['player'].items()):
+        joueur = entree['variant_set']
+        if '_player_' not in joueur:
+            raise SystemExit('unit_audio_map.json : « %s » ne porte pas `_player_`, '
+                             'la substitution vers l\'Ouvrage ne s\'y applique pas'
+                             % joueur)
+        ouvrage = joueur.replace('_player_', '_ouvrage_')
+        if ouvrage not in evenements:
+            raise SystemExit('unit_audio_map.json : « %s » substitué en « %s », qui '
+                             'n\'est pas un événement du pack' % (joueur, ouvrage))
+        table[paire] = (joueur, ouvrage)
+    return table
+
+
+def deploiements_des_unites(sons_par_id):
+    """Le `deploy` que la carte donne à certaines unités, dans les deux camps.
+
+    ⚠⚠ DEUX UNITÉS SUR QUATORZE EN PORTENT UN, ET CE SONT CELLES QUI N'ONT PAS DE
+    ROULEMENT : Pionnier/Bélier et Obusier/Pilon. Ethan a tranché qu'elles
+    prennent le roulement moyen EN PLUS ; leur `deploy` reste, il n'est pas
+    remplacé. Il sonne à l'APPARITION — le seul instant que le moteur publie où
+    une pièce se met en place — et il ne boucle pas, ce que ce contrôle exige.
+    """
+    carte, evenements = carte_des_unites(sons_par_id)
+    table = {}
+    for paire, entree in sorted(carte['player'].items()):
+        nom = entree.get('deploy')
         if nom is None:
             continue
-        if not evenements[nom][0]['loop']:
-            continue
-        table[paire] = nom
-    return dict(sorted(table.items()))
+        if evenements[nom][0]['loop']:
+            raise SystemExit('%s : « %s » boucle — un déploiement est un coup'
+                             % (paire, nom))
+        ouvrage = nom.replace('_player_', '_ouvrage_')
+        if ouvrage not in evenements:
+            raise SystemExit('%s : « %s » substitué en « %s », qui n\'est pas un '
+                             'événement du pack' % (paire, nom, ouvrage))
+        table[paire] = (nom, ouvrage)
+    return table
+
+
+def verifier_les_roulements(sons_par_id):
+    """Confronte `ROULEMENT_PAR_CHASSIS` à la carte, et exige que tout boucle.
+
+    ⚠⚠ LES POIDS NE SONT PAS INVENTÉS, ET C'EST ICI QUE ÇA SE PROUVE. Quatre
+    paires portent un `movement` qui boucle dans le bloc `player` — Fusiliers
+    `infantry`, Ratisseur `tracks_light`, Fendeur `tracks_medium`, Broyeur
+    `tracks_heavy` — et cette fonction exige que la table leur rende EXACTEMENT
+    ce que la carte dit. Bélier et Pilon n'y portent que `deploy` : ils sont
+    l'écart assumé d'Ethan, et les seuls que ce contrôle ne couvre pas.
+    """
+    carte, evenements = carte_des_unites(sons_par_id)
+    par_paire = {'Éclaireur/Ratisseur': 'blinde_leger',
+                 'Chasseur/Fendeur': 'blinde_moyen',
+                 'Percheron/Broyeur': 'blinde_lourd',
+                 'Fusiliers/Meute': 'escouade'}
+    for paire, archetype in par_paire.items():
+        attendu = ROULEMENT_PAR_CHASSIS[archetype][0]
+        vu = carte['player'][paire].get('movement')
+        if vu != attendu:
+            raise SystemExit('ROULEMENT_PAR_CHASSIS[%s] = %s, mais la carte donne %s '
+                             'à « %s »' % (archetype, attendu, vu, paire))
+    for archetype, couple in {**ROULEMENT_PAR_CHASSIS, **MOTEUR_PAR_CHASSIS}.items():
+        for nom in couple:
+            if nom not in evenements:
+                raise SystemExit('ROULEMENT_PAR_CHASSIS[%s] : « %s » n\'est pas un '
+                                 'événement du pack' % (archetype, nom))
+            if not evenements[nom][0]['loop']:
+                raise SystemExit('ROULEMENT_PAR_CHASSIS[%s] : « %s » ne boucle pas — '
+                                 'un roulement qui ne boucle pas se couperait net'
+                                 % (archetype, nom))
+    return len(par_paire)
 
 
 def ecrire_la_table(pack):
@@ -640,21 +893,52 @@ def ecrire_la_table(pack):
     for bat in sorted(BOUCLES_DE_BATIMENT):
         exiger_une_boucle(BOUCLES_DE_BATIMENT[bat], 'BOUCLES_DE_BATIMENT[%s]' % bat)
         lignes.append("  %s: '%s'," % (bat, BOUCLES_DE_BATIMENT[bat]))
-    lignes += ['};', '', 'export const MOUVEMENT_PAR_PAIRE = {']
-    mouvement = boucles_de_mouvement(par_id)
-    for paire in mouvement:
-        lignes.append("  '%s': '%s'," % (paire, mouvement[paire]))
+    def paire_js(couple):
+        return "{ joueur: '%s', ouvrage: '%s' }" % tuple(couple)
+
+    armes = armes_des_unites(par_id)
+    deploiements = deploiements_des_unites(par_id)
+    confrontes = verifier_les_roulements(par_id)
+    poids = {**POIDS_DE_BLINDE, **POIDS_DE_STOPPEUR}
+    lignes += ['};', '', COMMENTAIRE_ROULEMENT, 'export const ROULEMENT_PAR_CHASSIS = {']
+    for archetype in sorted(ROULEMENT_PAR_CHASSIS):
+        lignes.append('  %s: %s,' % (archetype, paire_js(ROULEMENT_PAR_CHASSIS[archetype])))
+    lignes += ['};', '', COMMENTAIRE_MOTEUR, 'export const MOTEUR_PAR_CHASSIS = {']
+    for archetype in sorted(MOTEUR_PAR_CHASSIS):
+        lignes.append('  %s: %s,' % (archetype, paire_js(MOTEUR_PAR_CHASSIS[archetype])))
+    lignes += ['};', '', COMMENTAIRE_ARCHETYPE, 'export const ARCHETYPE_PAR_UNITE = {']
+    for unite in sorted(poids):
+        lignes.append("  %s: '%s'," % (unite, poids[unite]))
+    lignes += ['};', '', COMMENTAIRE_PASSAGE,
+               "export const PASSAGE_AERIEN = { joueur: 'movement_player_flyby',"
+               " ouvrage: 'movement_ouvrage_flyby' };", '',
+               COMMENTAIRE_DEPLOIEMENT, 'export const DEPLOIEMENT_PAR_PAIRE = {']
+    for paire in deploiements:
+        lignes.append("  '%s': %s," % (paire, paire_js(deploiements[paire])))
+    lignes += ['};', '', COMMENTAIRE_ARMES, 'export const ARME_PAR_PAIRE = {']
+    for paire in armes:
+        lignes.append("  '%s': %s," % (paire, paire_js(armes[paire])))
+    lignes += ['};', '', COMMENTAIRE_ARME_DEFENSE, 'export const ARME_PAR_DEFENSE = {']
+    for piece in sorted(ARME_PAR_DEFENSE):
+        joueur = ARME_PAR_DEFENSE[piece]
+        lignes.append('  %s: %s,'
+                      % (piece, paire_js((joueur, joueur.replace('_player_', '_ouvrage_')))))
     lignes += ['};', '',
                'export const EFFONDREMENT_PV = [%s];'
-               % ', '.join(str(n) for n in EFFONDREMENT_PV), '']
+               % ', '.join(str(n) for n in EFFONDREMENT_PV), '',
+               COMMENTAIRE_EXPLOSION,
+               'export const EXPLOSION_PV = [%s];'
+               % ', '.join(str(n) for n in EXPLOSION_PV), '',
+               COMMENTAIRE_IMPACT,
+               'export const IMPACT_LOURD_MILLIEMES = %d;' % IMPACT_LOURD_MILLIEMES, '']
 
     chemin = os.path.join(RACINE, 'src', 'data', 'sons.js')
     with open(chemin, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lignes))
-    print('src/data/sons.js : %d sons (%d boucles), %d événements, '
-          '%d paires d\'unité, %d octets'
-          % (len(sons), sum(1 for s in sons if s['loop']), len(groupes),
-             len(mouvement), os.path.getsize(chemin)))
+    print('src/data/sons.js : %d sons (%d boucles), %d événements, %d armes '
+          'd\'unité, %d déploiements, %d roulements confrontés à la carte, %d octets'
+          % (len(sons), sum(1 for s in sons if s['loop']), len(groupes), len(armes),
+             len(deploiements), confrontes, os.path.getsize(chemin)))
 
 
 def nombre_js(x):

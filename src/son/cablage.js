@@ -17,11 +17,35 @@
 // des sources, `src/ui/session.js` les lui demande. La garde `SON T14` refuse un
 // appel de `jouer(` ailleurs que dans ces deux fichiers-là, et elle reste vraie.
 
-import { UNITES } from '../data/combat.js';
+import { UNITES, DEFENSES } from '../data/combat.js';
 import { BASE_BATIMENTS } from '../data/base.js';
+import { BATIMENTS } from '../data/sites.js';
 import {
-  AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, MOUVEMENT_PAR_PAIRE, EFFONDREMENT_PV,
+  AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, EFFONDREMENT_PV, EXPLOSION_PV,
+  IMPACT_LOURD_MILLIEMES, ROULEMENT_PAR_CHASSIS, ARCHETYPE_PAR_UNITE, PASSAGE_AERIEN,
+  DEPLOIEMENT_PAR_PAIRE, ARME_PAR_PAIRE, ARME_PAR_DEFENSE, MOTEUR_PAR_CHASSIS,
 } from '../data/sons.js';
+
+/**
+ * Du PROPRIÉTAIRE du dépôt au mot du pack.
+ *
+ * ⚠⚠ LE DÉPÔT DIT « joueur », LE PACK DIT « player », ET LES DEUX MOTS NE SE
+ * DEVINENT PAS L'UN L'AUTRE. Une seule table les relie, ici, et tout le module
+ * y passe : `weapon_player_rifle` contre `weapon_ouvrage_rifle`,
+ * `explosion_player_small` contre `explosion_ouvrage_small`. ⚠ ET C'EST LE
+ * PROPRIÉTAIRE, JAMAIS LE CAMP. Le camp dit un côté de grille — le joueur
+ * DÉFEND sa propre base — et lire le camp ferait sonner ses Cuirassiers en
+ * Ouvrage. Une garde le mesure des deux côtés.
+ */
+const MOT_DU_PROPRIETAIRE = { joueur: 'player', ouvrage: 'ouvrage' };
+
+function motDuProprietaire(proprietaire) {
+  const mot = MOT_DU_PROPRIETAIRE[proprietaire];
+  if (mot === undefined) {
+    throw new RangeError(`son : propriétaire « ${proprietaire} » inconnu`);
+  }
+  return mot;
+}
 
 /**
  * La clé de `MOUVEMENT_PAR_PAIRE` pour une unité : « nom joueur/nom Ouvrage ».
@@ -44,13 +68,15 @@ export function paireDeLUnite(id) {
 }
 
 /**
- * Les unités du JOUEUR qui ont bougé pendant le dernier tick de combat.
+ * Les unités attaquantes, à qui elles sont, et si elles ont bougé au dernier tick.
  *
  * ⚠⚠ C'EST UNE LECTURE D'ÉTAT, PAS UN ÉVÉNEMENT DE SIMULATION, ET LA NUANCE EST
- * TOUTE LA GARDE `SON T14`. On ne branche rien dans `src/sim/` et le moteur ne
- * publie rien : on COMPARE deux instantanés que l'écran de raid prend déjà pour
- * son interpolation. Le moteur ne sait pas qu'on l'écoute, et il n'a pas bougé
- * d'une ligne.
+ * TOUTE LA GARDE `SON T14`. On ne branche rien dans `src/sim/` : on COMPARE deux
+ * instantanés que l'écran de raid prend déjà pour son interpolation. Le journal
+ * du lot JOURNAL-DE-COMBAT publie des ÉVÉNEMENTS — un tir, un impact, une mort —
+ * et un roulement n'en est pas un : c'est un ÉTAT qui dure, donc il se lit comme
+ * une ambiance se lit, par réconciliation. Les deux mécanismes coexistent parce
+ * qu'ils répondent à deux questions différentes.
  *
  * ⚠ SEUL LE CAMP `attaque` SE DÉPLACE — `deplacement()` de `sim/combat.js`
  * écarte tout le reste depuis toujours —, donc comparer les rangées suffit et
@@ -63,27 +89,80 @@ export function paireDeLUnite(id) {
  * jamais RACCOURCIE — `retirerLesMorts` marque `vivant`, elle ne retire rien —,
  * donc les indices des deux tableaux ne peuvent pas se décaler.
  *
- * ⚠ ET SEUL LE PROPRIÉTAIRE `joueur` EST RETENU. Le bloc `player` de la carte
- * décrit les unités du joueur ; son bloc `ouvrage` porte une taxonomie qui
- * n'est nulle part dans le dépôt (mesuré : zéro des sept noms). Faire sonner
- * une unité de l'Ouvrage avec le roulement du joueur serait l'attribution par
- * ressemblance que le brief interdit.
+ * ⚠⚠ ET LE PROPRIÉTAIRE SORT AVEC L'IDENTIFIANT, DEPUIS LE LOT
+ * JOURNAL-DE-COMBAT. Le lot précédent ne rendait que les unités du joueur, faute
+ * de savoir ce que roule une pièce de l'Ouvrage ; la table par CHÂSSIS le dit
+ * maintenant dans les deux camps. Toutes les attaquantes d'un combat partagent
+ * `proprietaireAttaque`, donc les deux camps ne roulent jamais ensemble — mais
+ * c'est une propriété du moteur, pas une hypothèse de ce module.
  *
  * @param {{entites: object[]}|null} combat l'état de combat, ou null
  * @param {number[]|null} precedentes les `rangeeMilli` d'avant le tick
- * @returns {string[]} les identifiants d'unité, triés, sans doublon
+ * ⚠⚠ ET LES DEUX MOITIÉS SORTENT ENSEMBLE, DEPUIS QUE LES MOTEURS À L'ARRÊT
+ * SONT CÂBLÉS. « A bougé » et « n'a pas bougé » sont la même lecture prise dans
+ * les deux sens ; en faire deux fonctions ferait deux parcours de la même liste,
+ * dont un seul serait éprouvé le jour où le critère changerait.
+ *
+ * @returns {Array<{id: string, proprietaire: string, enMouvement: boolean}>}
+ *   triés, sans doublon
  */
-export function unitesEnMouvement(combat, precedentes) {
+export function etatDesUnites(combat, precedentes) {
   if (combat === null || combat === undefined || precedentes === null
       || precedentes === undefined) return [];
-  const vus = new Set();
+  const vus = new Map();
   combat.entites.forEach((e, i) => {
-    if (e.camp !== 'attaque' || e.proprietaire !== 'joueur') return;
+    if (e.camp !== 'attaque') return;
     if (e.vivant !== true || e.sorti === true) return;
-    if (precedentes[i] === undefined || e.rangeeMilli === precedentes[i]) return;
-    vus.add(e.id);
+    // ⚠ UNE UNITÉ QUI VIENT DE PARAÎTRE N'A PAS DE POSITION D'AVANT : elle n'est
+    // ni en mouvement ni à l'arrêt, elle n'est pas encore comparable.
+    if (precedentes[i] === undefined) return;
+    const enMouvement = e.rangeeMilli !== precedentes[i];
+    const cle = `${e.id}|${e.proprietaire}|${enMouvement}`;
+    vus.set(cle, { id: e.id, proprietaire: e.proprietaire, enMouvement });
   });
-  return [...vus].sort();
+  return [...vus.keys()].sort().map((cle) => vus.get(cle));
+}
+
+/**
+ * La boucle qu'une unité porte à cet instant, ou `null` si elle n'en a pas.
+ *
+ * ⚠⚠ LA RÈGLE EST « PAR CHÂSSIS », ET ELLE SE COMPOSE DE LA DONNÉE QUI FAIT FOI.
+ * `UNITES[x].chassis` classe les quatorze en escouade, blindé et aéronef ;
+ * `comportementAerien` coupe les aéronefs en deux. Les poids des blindés et des
+ * stoppeurs sont dans `ARCHETYPE_PAR_UNITE`, où trois des sept lignes sont
+ * confrontées à la carte du pack par le générateur.
+ *
+ * ⚠ UN AÉRONEF `traversant` NE ROULE PAS : il PASSE. Son coup est
+ * `PASSAGE_AERIEN`, joué à l'apparition, et le pack ne marque pas
+ * `movement_player_flyby` comme une boucle — c'est la donnée qui l'interdit.
+ *
+ * @param {string} id une clé d'`UNITES`
+ * @param {string} proprietaire 'joueur' ou 'ouvrage'
+ * @returns {string|null} une clé d'`EVENEMENTS`
+ */
+export function boucleDeLUnite(id, proprietaire, enMouvement) {
+  const unite = UNITES[id];
+  if (unite === undefined) return null;
+  if (unite.chassis === 'aeronef' && unite.comportementAerien === 'traversant') return null;
+  const archetype = unite.chassis === 'escouade' ? 'escouade' : ARCHETYPE_PAR_UNITE[id];
+  if (archetype === undefined) {
+    throw new RangeError(`son : l'unité « ${id} » n'a pas d'archétype déclaré`);
+  }
+  // ⚠⚠ À L'ARRÊT, SEUL UN BLINDÉ FAIT DU BRUIT — et `MOTEUR_PAR_CHASSIS` le dit
+  // en ne portant que les trois poids de blindé. Une escouade immobile se tait ;
+  // un stoppeur immobile tient l'air, donc son `dard` continue. C'est pourquoi
+  // on retombe sur le roulement plutôt que de rendre `null` : pour eux, la
+  // boucle ne change pas selon qu'ils avancent ou non.
+  if (!enMouvement) {
+    const moteur = MOTEUR_PAR_CHASSIS[archetype];
+    if (moteur !== undefined) return moteur[proprietaire] ?? null;
+    if (unite.chassis === 'escouade') return null;
+  }
+  const couple = ROULEMENT_PAR_CHASSIS[archetype];
+  if (couple === undefined) {
+    throw new RangeError(`son : l'unité « ${id} » n'a pas de roulement déclaré`);
+  }
+  return couple[proprietaire] ?? null;
 }
 
 /**
@@ -100,7 +179,8 @@ export function unitesEnMouvement(combat, precedentes) {
  * écrans d'aujourd'hui, et un test l'exige ; mais l'appelant peut passer `null`
  * avant que le premier écran soit montré, et ce n'est pas une faute.
  *
- * @param {{ecran: string|null, disposition: object[], unites: string[]}} vue
+ * @param {{ecran: string|null, disposition: object[],
+ *   unites: Array<{id: string, proprietaire: string, enMouvement: boolean}>}} vue
  * @returns {string[]} des clés d'`EVENEMENTS`, triées, sans doublon
  */
 export function bouclesDesirees({ ecran = null, disposition = [], unites = [] } = {}) {
@@ -111,10 +191,9 @@ export function bouclesDesirees({ ecran = null, disposition = [], unites = [] } 
     const boucle = BOUCLES_DE_BATIMENT[piece.id];
     if (boucle !== undefined) voulu.add(boucle);
   }
-  for (const id of unites) {
-    const paire = paireDeLUnite(id);
-    const boucle = paire === null ? undefined : MOUVEMENT_PAR_PAIRE[paire];
-    if (boucle !== undefined) voulu.add(boucle);
+  for (const { id, proprietaire, enMouvement } of unites) {
+    const boucle = boucleDeLUnite(id, proprietaire, enMouvement === true);
+    if (boucle !== null) voulu.add(boucle);
   }
   return [...voulu].sort();
 }
@@ -133,18 +212,29 @@ export function bouclesDesirees({ ecran = null, disposition = [], unites = [] } 
  * tailles : il faudrait en grouper deux, ce qui est le même choix, déguisé en
  * donnée. **Ethan tranche.**
  *
- * @param {string} id une clé de `BASE_BATIMENTS`
+ * ⚠ ET ELLE SERT LES DEUX CAMPS DEPUIS LE LOT JOURNAL-DE-COMBAT : un raid fait
+ * tomber les bâtiments de l'Ouvrage, dont les PV — 1 000 à 5 500 — se partagent
+ * sur les mêmes seuils. Mesuré : 3 · 1 · 1 côté Ouvrage, 3 · 5 · 3 côté joueur.
+ *
+ * @param {string} id une clé de `BASE_BATIMENTS` ou de `BATIMENTS`
+ * @param {string} proprietaire 'joueur' ou 'ouvrage'
  * @returns {string} une clé d'`EVENEMENTS`
  */
-export function effondrementDuBatiment(id) {
-  const batiment = BASE_BATIMENTS[id];
+export function effondrementDuBatiment(id, proprietaire = 'joueur') {
+  // ⚠ LES DEUX TABLES, ET DANS CET ORDRE-LÀ N'IMPORTE PAS : `verifierArithmetique`
+  // de `sim/combat.js` LÈVE si un identifiant est à la fois un bâtiment de
+  // l'Ouvrage et du joueur, donc les deux jeux de clés sont disjoints. Une seule
+  // table aurait rendu muet l'effondrement d'une Souche, qui est très exactement
+  // ce qu'un raid fait tomber en premier.
+  const batiment = BASE_BATIMENTS[id] ?? BATIMENTS[id];
   if (batiment === undefined) {
-    throw new RangeError(`son : « ${id} » n'est pas un bâtiment de la base`);
+    throw new RangeError(`son : « ${id} » n'est pas un bâtiment`);
   }
+  const mot = motDuProprietaire(proprietaire);
   const [moyen, grand] = EFFONDREMENT_PV;
-  if (batiment.pv >= grand) return 'building_player_collapse_large';
-  if (batiment.pv >= moyen) return 'building_player_collapse_medium';
-  return 'building_player_collapse_small';
+  if (batiment.pv >= grand) return `building_${mot}_collapse_large`;
+  if (batiment.pv >= moyen) return `building_${mot}_collapse_medium`;
+  return `building_${mot}_collapse_small`;
 }
 
 /**
@@ -180,4 +270,141 @@ export function evenementDuGeste(geste, { genre = null, id = null } = {}) {
     default:
       throw new RangeError(`son : geste « ${geste} » inconnu`);
   }
+}
+
+/**
+ * L'arme d'une pièce qui vient de tirer, ou `null` si elle n'en a pas.
+ *
+ * ⚠⚠ DEUX PROVENANCES, DEUX TABLES, ET C'EST VOULU. Celle des quatorze unités
+ * est DÉRIVÉE d'`art/sources/unit_audio_map.json` ; celle des six défenses qui
+ * tirent est un ARBITRAGE d'Ethan, parce que la carte du pack ne décrit aucune
+ * défense — mesuré, aucune de ses clés n'en nomme une. Les fondre en une seule
+ * ferait croire que les deux moitiés se lisent au même endroit.
+ *
+ * ⚠ MERLON, RONCE ET HERSE RENDENT `null`, ET C'EST LA DONNÉE QUI LE DIT : leur
+ * `degats` vaut `null`, elles ne tirent pas. Le moteur ne publiera jamais de tir
+ * pour elles — `tir()` sort sur `degats === 0` — donc cette branche est une
+ * ceinture, et un test la mesure des deux côtés.
+ *
+ * @param {{id: string, genre: string, proprietaire: string}} fait
+ * @returns {string|null} une clé d'`EVENEMENTS`
+ */
+export function armeDuTireur({ id, genre, proprietaire }) {
+  if (genre === 'unite') {
+    const paire = paireDeLUnite(id);
+    const couple = paire === null ? undefined : ARME_PAR_PAIRE[paire];
+    return couple === undefined ? null : (couple[proprietaire] ?? null);
+  }
+  if (genre === 'defense') {
+    const couple = ARME_PAR_DEFENSE[id];
+    return couple === undefined ? null : (couple[proprietaire] ?? null);
+  }
+  // Un bâtiment ne tire pas : `profilBatiment` pose `degatsColonne: null`.
+  return null;
+}
+
+/**
+ * L'explosion d'une PIÈCE détruite au combat — jamais l'effondrement d'un
+ * bâtiment.
+ *
+ * ⚠⚠ SES SEUILS NE SONT PAS CEUX D'UN BÂTIMENT, ET C'EST MESURÉ. Les vingt-trois
+ * unités et défenses vont de 500 à 2 000 PV : `EFFONDREMENT_PV` en classerait
+ * **21 en `small`, 2 en `medium`, 0 en `large`**. `EXPLOSION_PV` rend 9 · 10 · 4.
+ * Deux paires de nombres, deux échelles, et les deux se changent seules.
+ *
+ * @param {{id: string, genre: string, proprietaire: string}} fait
+ * @returns {string} une clé d'`EVENEMENTS`
+ */
+export function explosionDeLaPiece({ id, genre, proprietaire }) {
+  const piece = genre === 'unite' ? UNITES[id] : DEFENSES[id];
+  if (piece === undefined) {
+    throw new RangeError(`son : « ${id} » n'est ni une unité ni une défense`);
+  }
+  const mot = motDuProprietaire(proprietaire);
+  const [moyenne, grande] = EXPLOSION_PV;
+  if (piece.pv >= grande) return `explosion_${mot}_large`;
+  if (piece.pv >= moyenne) return `explosion_${mot}_medium`;
+  return `explosion_${mot}_small`;
+}
+
+/**
+ * Ce que le journal d'UN tick demande au son.
+ *
+ * ⚠⚠ UN ENSEMBLE, PAS UNE LISTE, ET C'EST LA RÉPONSE AU POINT DUR DU LOT. La
+ * simulation avance par TICKS, l'écran par IMAGES, et `ticksDus` en résout
+ * jusqu'à douze dans la même image en ×4. Demander un son par tir publié ferait
+ * cent cinquante coups de canon dans la même milliseconde ; la politique de voix
+ * les refuserait, mais compter sur un refus n'est pas une conception — ce serait
+ * demander cent cinquante sons pour en obtenir deux, à chaque image. **Un
+ * événement distinct sonne au plus une fois par relevé**, quel que soit le
+ * nombre de faits qui le réclament.
+ *
+ * ⚠ ET C'EST L'APPELANT QUI DÉCIDE DE LA FENÊTRE. `src/ui/raid.js` relève le
+ * journal là où il prend son instantané d'interpolation — donc une fois par tick
+ * joué à l'image — et accumule jusqu'à ce que la session vienne le vider. Le
+ * mode « Instantané », lui, ne prend aucun instantané et ne relève rien : un
+ * combat résolu d'un coup n'a pas de déroulé, donc rien à sonner. C'est une
+ * conséquence de l'endroit, pas un cas particulier écrit à la main.
+ *
+ * ⚠⚠ ET LES ALERTES SUIVENT LE PROPRIÉTAIRE DE CE QUI TOMBE, pas celui qui
+ * regarde. `alert_ouvrage_unit_lost` est ce que l'Ouvrage « dit » quand il perd
+ * une pièce ; le pack porte les deux camps pour les dix-huit alertes, et choisir
+ * le spectateur demanderait de savoir qui regarde — ce que la simulation ne
+ * publie pas et n'a pas à publier.
+ *
+ * @param {{apparitions: object[], vagues: object[], tirs: object[],
+ *   impacts: object[], destructions: object[]}|null} journal
+ * @returns {string[]} des clés d'`EVENEMENTS`, triées, sans doublon
+ */
+export function evenementsDuJournal(journal) {
+  if (journal === null || journal === undefined) return [];
+  const voulu = new Set();
+
+  for (const vague of journal.vagues) {
+    voulu.add(`alert_${motDuProprietaire(vague.proprietaire)}_wave_start`);
+  }
+
+  for (const fait of journal.apparitions) {
+    const unite = UNITES[fait.id];
+    if (unite === undefined) continue;
+    // Le PASSAGE d'un traversant : un coup, à l'entrée en scène.
+    if (unite.chassis === 'aeronef' && unite.comportementAerien === 'traversant') {
+      voulu.add(PASSAGE_AERIEN[fait.proprietaire]);
+    }
+    const paire = paireDeLUnite(fait.id);
+    const deploiement = paire === null ? undefined : DEPLOIEMENT_PAR_PAIRE[paire];
+    if (deploiement !== undefined) voulu.add(deploiement[fait.proprietaire]);
+  }
+
+  for (const fait of journal.tirs) {
+    const arme = armeDuTireur(fait);
+    if (arme !== null) voulu.add(arme);
+  }
+
+  // ⚠⚠ TOUT IMPACT EST DU MÉTAL, ET C'EST MESURÉ, PAS SUPPOSÉ. Le moteur ne
+  // publie un impact que sur une ENTITÉ touchée : il n'a ni tir manqué, ni
+  // projectile qui retombe à côté, donc aucune case vide n'est jamais frappée.
+  // `impact_dirt_*`, `impact_quartz_*` et `impact_scoria_*` restent muets — le
+  // champ de bataille ne connaît d'ailleurs ni quartz ni scorie, mesuré : le
+  // montage porte `obstacles`, jamais un champ de ressource.
+  for (const fait of journal.impacts) {
+    // ⚠ EN MILLIÈMES DES PV MAX DE LA CIBLE, JAMAIS EN MILLI-PV ABSOLUS — voir
+    // `IMPACT_LOURD_MILLIEMES`. Un produit puis une comparaison : pas de
+    // division, donc pas d'arrondi à discuter.
+    const lourd = fait.encaisseMilli * 1000 >= fait.pvMaxMilli * IMPACT_LOURD_MILLIEMES;
+    voulu.add(lourd ? 'impact_metal_heavy' : 'impact_metal_small');
+  }
+
+  for (const fait of journal.destructions) {
+    const mot = motDuProprietaire(fait.proprietaire);
+    if (fait.genre === 'batiment') {
+      voulu.add(effondrementDuBatiment(fait.id, fait.proprietaire));
+      voulu.add(`alert_${mot}_structure_lost`);
+    } else {
+      voulu.add(explosionDeLaPiece(fait));
+      voulu.add(fait.genre === 'unite' ? `alert_${mot}_unit_lost` : `alert_${mot}_structure_lost`);
+    }
+  }
+
+  return [...voulu].sort();
 }
