@@ -727,14 +727,23 @@ test('RAID-A T1 — le panneau tire ses trois nombres des briques, il ne les ref
   assert.ok(ciblage.butin.quartz > 0 && ciblage.force > 0 && ciblage.cout > 0,
     'montage sans mordant : la cible ne vaut rien');
 
-  // Et les quatre lignes s'ajoutent bien à celles du site.
+  // ⚠⚠ TROIS LIGNES, ET C'ÉTAIT QUATRE JUSQU'AU LOT CARTE-A (04/09). Le coût a
+  // QUITTÉ la liste — Ethan le veut « en gros dans l'onglet », donc dans un bloc
+  // propre au-dessus du corps. Ce que ce test garde ne change pas d'un mot :
+  // `ciblage.cout` vaut toujours EXACTEMENT `coutDUnRaid`, c'est asserté dix
+  // lignes plus haut. Ce qui change, c'est qui l'AFFICHE.
   const sans = lignesDuSite(site, baseCourante(etat).position, etat.poisAcquis);
   const avec = lignesDuSite(site, baseCourante(etat).position, etat.poisAcquis, ciblage);
-  assert.equal(avec.length, sans.length + 4, 'le panneau ne gagne pas ses quatre lignes');
+  assert.equal(avec.length, sans.length + 3, 'le panneau ne gagne pas ses trois lignes');
   const quoi = avec.map((l) => l.quoi);
-  for (const attendu of ['Butin si tout tombe', 'Force de la défense', 'Coût du raid']) {
+  for (const attendu of ['Butin si tout tombe', 'Force de la défense']) {
     assert.ok(quoi.includes(attendu), `le panneau ne dit pas « ${attendu} »`);
   }
+  // ⚠ ET LA GARDE SE RESSERRE PLUTÔT QUE DE PERDRE UNE ASSERTION : le coût ne
+  // doit PLUS être ici. Deux afficheurs du même nombre dans le même panneau
+  // finiraient par ne plus dire la même chose.
+  assert.ok(!quoi.includes('Coût du raid'),
+    'le coût est revenu dans la liste : il y a deux afficheurs du même nombre');
   // ⚠ ET LA FONCTION RESTE PURE : sans ciblage, elle rend ce qu'elle rendait.
   assert.deepEqual(sans, lignesDuSite(site, baseCourante(etat).position, etat.poisAcquis, null));
 });

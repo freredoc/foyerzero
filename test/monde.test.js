@@ -21,7 +21,7 @@ import {
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles, indicesDeTeinte,
   teinteDAttente,
-  palierDuSite,
+  palierDuSite, nomDuSite,
 } from '../src/ui/monde.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
@@ -1175,10 +1175,19 @@ test('carte — plus aucune lettre n\'est dessinée, à aucun cran', () => {
   // un NOM en toutes lettres, posé SOUS la case, avec son niveau. Les deux ne
   // parlent pas de la même chose, exactement comme le coût de la flèche.
   //
-  // ⚠ L'INTERDICTION RESTE TOTALE HORS DE CES DEUX FONCTIONS, et c'est elle qui
-  // continue d'empêcher la lettre de revenir sur un emblème. Elle NOMME ses
-  // exceptions ; elle n'est pas retirée.
-  const AVEC_TEXTE = ['dessinerFleche', 'dessinerEtiquette'];
+  // ⚠⚠ ET LA PREMIÈRE EXCEPTION EST RETIRÉE AU LOT CARTE-A (04/09) : LA GARDE SE
+  // RESSERRE, ELLE NE S'ASSOUPLIT PAS. Ethan : « ne pas afficher les points
+  // d'attaque sur la flèche qui apparaît quand on clique sur une cible, mais en
+  // gros dans l'onglet ». La flèche n'écrit plus de texte du tout — elle n'a
+  // plus qu'un trait et une pointe —, donc l'exception qu'elle avait obtenue le
+  // 02/09 n'a plus d'objet. Il en reste UNE, et l'interdiction couvre à nouveau
+  // `dessinerFleche`.
+  //
+  // ⚠ ET LA BOUCLE EXIGE QUE CHAQUE EXCEPTION S'EN SERVE VRAIMENT. Une
+  // exception qui n'écrirait plus rien serait une porte laissée ouverte pour
+  // personne : c'est cette ligne-là qui est tombée quand la flèche a perdu son
+  // cartouche, et c'est ce qu'on lui demande.
+  const AVEC_TEXTE = ['dessinerEtiquette'];
   let horsExceptions = nu;
   for (const nom of AVEC_TEXTE) {
     const corps = extraireFonction(nu, nom);
@@ -1187,7 +1196,14 @@ test('carte — plus aucune lettre n\'est dessinée, à aucun cran', () => {
     horsExceptions = horsExceptions.replace(corps, '');
   }
   assert.doesNotMatch(horsExceptions, /fillText/,
-    'l\'écran Monde dessine du texte hors de la flèche et de l\'étiquette');
+    'l\'écran Monde dessine du texte hors de l\'étiquette');
+  // ⚠ ET LA FLÈCHE EST NOMMÉMENT MUETTE. Sans cette ligne, remettre un
+  // cartouche sur le trait serait attrapé par le balayage — mais le message
+  // parlerait d'« un texte hors de l'étiquette » sans dire lequel.
+  const fleche = extraireFonction(nu, 'dessinerFleche');
+  assert.ok(fleche.length > 200, 'la fonction `dessinerFleche` est introuvable');
+  assert.doesNotMatch(fleche, /fillText|measureText/,
+    'la flèche écrit à nouveau le prix : il vit dans le panneau depuis CARTE-A');
   assert.doesNotMatch(nu, /CSS_MINI_LETTRE/, '`CSS_MINI_LETTRE` est revenue dans le code');
   assert.doesNotMatch(nu, /\.lettre/, 'le champ `lettre` est relu par l\'écran');
 
@@ -1833,4 +1849,162 @@ test('ZOOM T11 — le cache ne se vide plus, il porte le cran dans sa clé', () 
   // deviendrait un tas de dalles jamais relues.
   assert.match(ecran, /return `\$\{cranCourant\(\)\}:\$\{i\}:\$\{j\}`/,
     'la clé de dalle ne porte plus le cran de rendu');
+});
+
+// ---------------------------------------------------------------------------
+// La lecture de la carte — lot CARTE-A, 04/09
+//
+// ⚠⚠ TROIS RETOURS D'ETHAN, TOUS SUR CE QU'ON LIT ET AUCUN SUR UN GESTE.
+// « au lieu d'afficher "votre base" afficher Base n°x niv x » · « ne pas
+// afficher les points d'attaque sur la flèche qui apparaît quand on clique sur
+// une cible, mais en gros dans l'onglet » · « afficher les points d'attaque
+// entre l'électricité et emplacement. Enlever emplacement/compteur ressources
+// quand on est sur la carte ». Aucune règle de jeu ne bouge.
+//
+// ⚠ `CARTE-A T5` ET `T6` SONT DES GARDES DE SOURCE, ET IL FAUT SAVOIR CE
+// QU'ELLES NE PROUVENT PAS : qu'un afficheur a disparu du fichier, pas que la
+// flèche se dessine encore. Le dépôt n'a ni jsdom ni navigateur (§3), et le lot
+// JOURNAL a montré qu'une garde qui ne lit que l'APPEL reste verte quand le
+// corps est tronqué. La preuve du rendu est dans `RAPPORT-lotCARTE-A.md`,
+// relevée dans Chromium.
+// ---------------------------------------------------------------------------
+
+test('CARTE-A T1 — la base du joueur porte son numéro et son niveau', () => {
+  // ⚠ LE MONTAGE PORTE LES DEUX CHAMPS QUE `sitesDeLaFenetre` POSE, et rien de
+  // plus : c'est exactement ce que l'étiquette reçoit à l'écran.
+  const site = {
+    type: 'baseJoueur', rangee: 295, colonne: 16, niveau: null,
+    numeroBase: 2, niveauBatimentsDixiemes: 58,
+  };
+  assert.deepEqual(lignesDeLEtiquette(site), ['Base n°2', 'niv 5,8']);
+
+  // ⚠⚠ ET LE TITRE DU PANNEAU DIT LA MÊME CHOSE, PAR LA MÊME FONCTION. Le
+  // joueur ne doit pas lire deux noms pour la même base à deux endroits de
+  // l'écran ; c'est pour ça que `nomDuSite` existe.
+  assert.equal(nomDuSite(site), 'Base n°2');
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.match(ecran, /panneauTitre\.textContent = nomDuSite\(site\)/,
+    'le titre du panneau ne suit plus le libellé de l\'étiquette');
+
+  // ⚠ `EMBLEMES_CARTE.baseJoueur.nom` RESTE le repli — il est aussi la source
+  // de la ligne « Type » du panneau, et d'un test voisin.
+  assert.equal(EMBLEMES_CARTE.baseJoueur.nom, 'Votre base');
+  assert.equal(nomDuSite({ type: 'baseJoueur' }), 'Votre base',
+    'un site sans numéro ne retombe plus sur le nom de la table');
+
+  // ⚠ ET SURTOUT PAS LE NIVEAU DE LA RANGÉE : `niv` en minuscules dit que ce
+  // n'est pas la grandeur des sites de l'Ouvrage, qui portent `Niveau`.
+  assert.ok(!lignesDeLEtiquette(site).some((l) => l.includes('Niveau')),
+    'la base du joueur porte le mot des sites de l\'Ouvrage');
+});
+
+test('CARTE-A T2 — la décimale du niveau ne se perd pas', () => {
+  // ⚠⚠ « 6,0 », JAMAIS « 6 ». Arbitré le 27/08 : un niveau moyen qui tombe rond
+  // reste une moyenne, et l'écrire sans décimale le ferait lire comme un niveau
+  // entier de bâtiment. Le formatage n'est pas réécrit ici — `formaterDixiemes`
+  // de `ui/chantier.js` le porte, et l'étiquette l'appelle.
+  const site = { type: 'baseJoueur', niveau: null, numeroBase: 1, niveauBatimentsDixiemes: 60 };
+  assert.deepEqual(lignesDeLEtiquette(site), ['Base n°1', 'niv 6,0']);
+  assert.equal(lignesDeLEtiquette({ ...site, niveauBatimentsDixiemes: 10 })[1], 'niv 1,0');
+  assert.equal(lignesDeLEtiquette({ ...site, niveauBatimentsDixiemes: 507 })[1], 'niv 50,7');
+
+  // ⚠ ET IL N'Y EN A QU'UN. Un second formateur écrit dans `ui/monde.js`
+  // donnerait deux façons d'écrire le même nombre.
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.match(ecran, /formaterDixiemes/, 'l\'étiquette n\'emploie plus le formateur du dépôt');
+  assert.doesNotMatch(ecran, /toFixed|replace\(['"`]\.['"`]/,
+    'l\'écran Monde formate un décimal à la main');
+});
+
+test('CARTE-A T3 — les sites de l\'Ouvrage ne bougent pas d\'un mot', () => {
+  // ⚠⚠ LE LOT NE TOUCHE QU'À UN TYPE, ET CE TEST EST CE QUI LE DIT. Une
+  // écriture qui aurait dérouté tous les sites vers « Base n°… » passerait T1
+  // sans broncher.
+  assert.deepEqual(lignesDeLEtiquette({ type: 'camp', niveau: 12 }), ['Camp', 'Niveau 12']);
+  assert.deepEqual(lignesDeLEtiquette({ type: 'base', niveau: 40 }),
+    ['Base de l\'Ouvrage', 'Niveau 40']);
+  assert.deepEqual(lignesDeLEtiquette({ type: 'avantPoste', niveau: 3 }),
+    ['Avant-poste', 'Niveau 3']);
+  // Un POI porte le nom que `POI` lui donne, et sa bande fait office de niveau.
+  assert.deepEqual(lignesDeLEtiquette({ type: 'poiQuartz', niveau: 3 }),
+    [EMBLEMES_CARTE.poiQuartz.nom, 'Niveau 3']);
+  for (const type of Object.keys(EMBLEMES_CARTE)) {
+    if (type === 'baseJoueur') continue;
+    assert.equal(nomDuSite({ type }), EMBLEMES_CARTE[type].nom, type);
+  }
+});
+
+test('CARTE-A T4 — chaque base porte son numéro, et il part de un', () => {
+  const etat = creerEtat(2026);
+  // Une seconde base, à côté de la première — le numéro est l'INDICE + 1.
+  etat.bases.push(structuredClone(etat.bases[0]));
+  etat.bases[1].position = {
+    rangee: etat.bases[0].position.rangee - 3, colonne: etat.bases[0].position.colonne,
+  };
+  const miennes = sitesDeLaFenetre(etat, {
+    premiereRangee: 1, derniereRangee: 300, premiereColonne: 1, derniereColonne: 31,
+  }).filter((s) => s.type === 'baseJoueur');
+  assert.equal(miennes.length, 2, 'le montage ne mesure rien : il faut deux bases');
+  assert.deepEqual(miennes.map((s) => s.numeroBase).sort(), [1, 2],
+    'les numéros ne sont pas 1 et 2 — un indice a fuité tel quel');
+  assert.ok(!miennes.some((s) => s.numeroBase === 0), 'un numéro vaut zéro');
+  // ⚠ ET LE NIVEAU EST CELUI DE CHAQUE BASE, PAS DE LA COURANTE. Sans ça, deux
+  // bases de niveaux différents porteraient la même plaque.
+  for (const b of etat.bases[1].disposition) b.niveau = 30;
+  const apres = sitesDeLaFenetre(etat, {
+    premiereRangee: 1, derniereRangee: 300, premiereColonne: 1, derniereColonne: 31,
+  }).filter((s) => s.type === 'baseJoueur');
+  const niveaux = apres.map((s) => s.niveauBatimentsDixiemes);
+  assert.notEqual(niveaux[0], niveaux[1], 'les deux bases portent le même niveau');
+  // ⚠⚠ ET L'EMBLÈME LIT LA MÊME GRANDEUR QUE SA PLAQUE. `palierDuSite` prenait
+  // la base COURANTE : avec deux bases, le dessin et sa légende se seraient
+  // contredits dès la seconde.
+  assert.notEqual(palierDuSite(apres[0], etat), palierDuSite(apres[1], etat),
+    'les deux bases se dessinent au même palier : l\'emblème ne lit pas le site');
+});
+
+test('CARTE-A T5 — la flèche a perdu son cartouche, et pour de bon', () => {
+  // ⚠ ETHAN, 04/09 : « ne pas afficher les points d'attaque sur la flèche ».
+  // La flèche garde son trait et sa pointe ; elle n'écrit plus rien.
+  const nu = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  const fleche = extraireFonction(nu, 'dessinerFleche');
+  assert.ok(fleche.length > 200, 'la fonction `dessinerFleche` est introuvable');
+  assert.doesNotMatch(fleche, /fillText|measureText/, 'la flèche écrit encore le prix');
+  // Falsifiable : le trait et la pointe, eux, sont toujours là.
+  assert.match(fleche, /ctx\.stroke\(\)/, 'la flèche n\'a plus de trait');
+  assert.match(fleche, /ctx\.fill\(\)/, 'la flèche n\'a plus de pointe');
+
+  // ⚠⚠ ET LE TEST DE LA GARDE RESTE, SA RAISON A CHANGÉ. `cout === null` ne dit
+  // plus « pas de nombre à peindre » mais « hors de portée » : une flèche vers
+  // une cible inatteignable promettrait un raid que `problemesDuRaid` refusera.
+  assert.match(fleche, /ciblageOuvert\.cout === null/,
+    'la flèche pointe désormais des cibles hors de portée');
+});
+
+test('CARTE-A T6 — un seul afficheur du prix, et un seul calcul', () => {
+  // ⚠⚠ DEUX AFFICHEURS DU MÊME NOMBRE DANS LE MÊME PANNEAU FINIRAIENT PAR NE
+  // PLUS DIRE LA MÊME CHOSE. Le prix est peint par le bloc, et il a quitté la
+  // liste de `lignesDuSite`.
+  const nu = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.equal((nu.match(/coutDUnRaid\(/g) ?? []).length, 1,
+    'l\'écran Monde calcule le coût plus d\'une fois');
+  assert.doesNotMatch(nu, /Coût du raid/, 'le coût est revenu dans la liste du panneau');
+  assert.equal((nu.match(/panneauPrixCout\.textContent/g) ?? []).length, 1,
+    'le prix s\'écrit à plus d\'un endroit');
+
+  // Le balisage porte le bloc, une fois, AU-DESSUS du corps.
+  const html = lire('dist', 'index.html').replace(/<!--[\s\S]*?-->/g, '');
+  for (const id of ['monde-panneau-prix', 'monde-panneau-prix-cout',
+    'monde-panneau-prix-solde', 'monde-panneau-prix-nom']) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) ?? []).length, 1,
+      `« ${id} » n'apparaît pas exactement une fois dans la page`);
+  }
+  assert.ok(html.indexOf('id="monde-panneau-prix"') < html.indexOf('id="monde-panneau-corps"'),
+    'le prix est passé sous le corps du panneau');
+  // ⚠ ET IL NAÎT CACHÉ : hors de portée, `cout` vaut `null`, le refus est déjà
+  // écrit, et un tiret en corps 28 crierait un vide.
+  assert.match(html, /<div id="monde-panneau-prix" hidden>/,
+    'le bloc de prix naît visible');
+  assert.match(nu, /panneauPrix\.hidden = prix === null/,
+    'le bloc de prix ne se cache plus hors de portée');
 });

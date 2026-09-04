@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.89.0 · build 91.
+Dernière révision : **04/09/2026**, version 0.90.0 · build 92.
 
 ---
 
@@ -42,7 +42,102 @@ Dernière révision : **04/09/2026**, version 0.89.0 · build 91.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot ASSAUT), à confronter :**
+**Référence au 04/09/2026 (après le lot CARTE-A), à confronter :**
+`npm test` → **1044 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 786 776 octets**, 0 référence externe.
+⚠⚠ **TROIS RETOURS D'ETHAN, TOUS SUR LA LECTURE DE LA CARTE, ET AUCUN SUR UN
+GESTE.** « au lieu d'afficher "votre base" afficher Base n°x niv x » · « ne pas
+afficher les points d'attaque sur la flèche qui apparaît quand on clique sur une
+cible, mais en gros dans l'onglet » · « afficher les points d'attaque entre
+l'électricité et emplacement. Enlever emplacement/compteur ressources quand on
+est sur la carte ». Coût **+3 117 octets**, mesuré poste par poste contre un
+livrable rebâti depuis `main` : **feuille +2 058 · JavaScript +806 · balisage
++253 · audio +0 · images +0**. **289 `data:` avant, 289 après.** Borne T10
+**inchangée à 7 000 000**, marge **213 224 octets, 3,05 %**.
+⚠⚠ **`nomDuSite` ENTRE, ET C'EST LE PREMIER NOM QUE `EMBLEMES_CARTE` NE PORTE
+PAS.** L'étiquette de la carte et le titre du panneau lisaient tous deux
+`EMBLEMES_CARTE[type].nom` ; un numéro de base ne s'y écrit pas. Le calculer aux
+DEUX endroits aurait donné deux libellés pour la même base sur le même écran.
+`EMBLEMES_CARTE.baseJoueur.nom` **reste « Votre base »** et devient le repli —
+il est aussi la source de la ligne « Type » du panneau et de son test.
+⚠⚠ **ET LE NIVEAU EST CELUI DES BÂTIMENTS, PARCE QUE C'EST CELUI QUE L'EMBLÈME
+DESSINE DÉJÀ.** `palierDuSite` le retenait pour choisir le palier ; l'étiquette
+LÉGENDE ce dessin, donc les deux lisent la même grandeur ou le même dessin dit
+deux choses. ⚠ **Et surtout pas le niveau de la rangée** : `niv` en minuscules,
+distinct du `Niveau` capitalisé des sites de l'Ouvrage, dit au joueur que ce
+n'est pas la même grandeur.
+⚠⚠ **UN DÉFAUT MULTI-BASES A ÉTÉ TROUVÉ EN TENANT CETTE RÈGLE, ET IL EST
+CORRIGÉ.** `palierDuSite` lisait `baseCourante(etat)` : avec deux bases, TOUTES
+se seraient dessinées au palier de la courante pendant que leurs plaques
+auraient dit chacune leur niveau. Le site porte désormais sa propre moyenne, et
+la base courante n'est plus que le repli des montages qui composent un site à la
+main. **Mesuré : deux bases aux dispositions différentes rendent deux paliers
+différents.**
+⚠⚠ **LE PRIX QUITTE LA FLÈCHE, ET LE COMMENTAIRE DE LA GARDE EST RÉÉCRIT PLUTÔT
+QUE LAISSÉ.** `dessinerFleche` disait « PAS DE FLÈCHE SANS PRIX » : le motif
+meurt avec le cartouche. Le test `cout === null` **reste**, pour une autre
+raison — une flèche vers une cible hors de portée promettrait un raid que
+`problemesDuRaid` refusera. Un motif mort sous une conclusion vivante est le
+mensonge que §6 raconte déjà trois fois.
+⚠ **ET LA GARDE DU `fillText` SE RESSERRE : UNE EXCEPTION DE MOINS.** Elle en
+nommait deux — `dessinerFleche` et `dessinerEtiquette` ; la flèche n'écrit plus
+rien, donc l'interdiction la couvre à nouveau. La boucle EXIGE que chaque
+exception écrive vraiment du texte, et c'est cette ligne-là qui est tombée.
+⚠⚠ **UN SEUL AFFICHEUR DU PRIX, ET UN SEUL CALCUL.** Le coût quitte AUSSI la
+liste de `lignesDuSite` — il y était en petit au milieu de sept lignes. Le bloc
+RELIT `ciblageOuvert` ; `coutDUnRaid` n'apparaît toujours qu'une fois dans tout
+l'écran. **Ce lot retire un afficheur, il n'en ajoute pas un second.**
+⚠ **LE SOLDE EST À CÔTÉ DU PRIX — « 11 » puis « 110 / 110 ».** Un prix sans solde
+ne dit pas si on peut payer. Il vient de `etat.attaque`, la même paire que la
+tuile du bandeau. ⚠ Et le bloc est `hidden` hors de portée : `#monde-panneau-refus`
+écrit déjà pourquoi, et un tiret en corps 28 crierait un vide.
+⚠⚠ **UNE QUATRIÈME TUILE AU BANDEAU, ET SA PLACE EST L'ORDRE DU DOM.** Elle est
+construite ENTRE la boucle des trois ressources et le bloc des emplacements ; un
+`order` CSS ferait diverger l'ordre lu et l'ordre vu, donc la navigation au
+clavier et la lecture d'écran. **Relevé à l'écran : cinq tuiles en 44 px de
+haut, 71 px chacune plus 47 pour les emplacements.**
+⚠ **ET RIEN N'Y EST PEINT « SATURÉ ».** `b.sature` dit « le stock est gelé
+au-dessus de sa capacité » — un DÉFAUT que le joueur doit voir. Des points
+d'attaque au plafond, c'est le PLEIN : le marquer en rouge dirait le contraire.
+⚠⚠ **LA TEINTE EST MESURÉE, PAS CHOISIE À L'ŒIL.** Sur le fond `#343A2C` du
+bandeau : `#8A1E17` rend **1,27** de contraste — illisible ; `#E43E32` **2,82**,
+et il est réservé à ce qui ATTAQUE le joueur ; `#8C9A72` **3,90** mais
+l'électricité l'a ; `#F5B636` **6,50** mais la scorie l'a. **`#E0B9A8`** — la
+poussière de la terre cuite, la rampe du JOUEUR — rend **6,53**, le meilleur des
+candidats libres, et n'était employée nulle part ailleurs.
+⚠⚠ **ET LE MASQUAGE PARTIEL NE PASSE PAS PAR `CHROME_MASQUE_PAR`, QUI EST PAR
+BLOC ENTIER.** Y ajouter `monde` aurait emporté les points d'attaque, qui sont
+justement ce qu'on veut voir là. La session écrit `data-ecran` sur `#ressources`
+dans la fonction qui masque déjà, et la feuille cache `.ressource:not(.attaque)`
+sous cet attribut. **Une seule source décide, et c'est l'écran courant.**
+⚠ **`#navigation` RESTE VISIBLE SUR LA CARTE** — Ethan ne l'a pas demandé, et il
+dit quelle base attaque.
+⚠⚠ **RELEVÉ DANS CHROMIUM, PAS ASSERTÉ.** Sur la carte : le bandeau ne montre
+QUE « 110 / 110 · ATTAQUE » ; l'étiquette de sa base dit **« Base n°1 / niv
+1,0 »** et celle du camp **« Camp / Niveau 1 »** ; la flèche a son trait et sa
+pointe et **aucun nombre** ; le panneau porte **11** en corps 28 et **110 / 110**
+à côté. En revenant sur l'écran Base, **les cinq tuiles sont là** — le masquage
+qui ne se lève pas était le défaut le plus probable du lot.
+⚠ **DIX-HUIT FALSIFICATIONS, DIX-HUIT CHUTES, ZÉRO MUETTE** — le numéro retiré
+puis parti de zéro, tout site devenu « Base n°… », le mot de l'Ouvrage emprunté,
+la décimale perdue, le titre repris à la table, l'emblème relisant la base
+courante, le cartouche revenu, le coût revenu dans la liste, le barème rappelé,
+le prix passé sous le corps, le bloc jamais caché, la tuile passée après les
+emplacements, peinte saturée, l'écran courant non écrit, la carte masquant tout
+le bandeau, la règle CSS retirée, et l'attaque devenue un quatrième contexte.
+⚠ **SEPT TESTS ENTRENT ET LE COMPTE PASSE DE 1 037 À 1 044** — six dans
+`monde.test.js`, un dans `chantier.test.js`. **Aucune assertion n'a été
+retirée** ; deux gardes existantes sont RESSERRÉES en écrivant pourquoi — celle
+du `fillText`, qui perd une exception, et `RAID-A T1`, qui exigeait quatre lignes
+de ciblage et en exige trois **plus l'absence du coût**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : deux champs entrent dans ce que `sitesDeLaFenetre` REND, et cette
+fonction ne stocke rien.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Les quatre captures du rapport vivent dans
+`rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot ASSAUT :**
 `npm test` → **1037 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 783 659 octets**, 0 référence externe.
 ⚠⚠ **LE DOUBLE-TOUCHER NE LANÇAIT PAS LE RAID, ET IL FALLAIT LE DIRE AVANT TOUT
@@ -3718,6 +3813,21 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
     `#tete-onglets` lui-même serait le premier à oublier de le rendre. Une garde
     balaie les six écrans et refuse le masquage, jamais le NOM : `chantier.js`
     nomme `#ressources` pour le REMPLIR.
+  ⤷ ⚠⚠ ET LE BANDEAU PORTE UNE QUATRIÈME TUILE DEPUIS LE LOT CARTE-A —
+    `.ressource.attaque`, entre l'électricité et les emplacements, dans l'ORDRE
+    DU DOM et jamais par un `order` CSS. Sur l'écran Carte elle est la SEULE qui
+    reste : `CHROME_MASQUE_PAR` est par BLOC entier et emporterait les points
+    d'attaque avec le reste, donc la session écrit `data-ecran` sur
+    `#ressources` et la feuille cache `.ressource:not(.attaque)`. ⚠ Rien n'y est
+    peint « saturé » : un plafond de points d'attaque est le PLEIN, pas un stock
+    gelé.
+  ⤷ ⚠⚠ ET LE PRIX D'UN RAID A QUITTÉ LA FLÈCHE POUR LE PANNEAU — même lot.
+    `dessinerFleche` n'écrit plus rien, `lignesDuSite` non plus, et
+    `#monde-panneau-prix` est le seul afficheur ; `coutDUnRaid` n'apparaît
+    toujours qu'UNE fois dans `ui/monde.js`. ⚠ `nomDuSite` entre pour que
+    l'étiquette de la carte et le titre du panneau ne puissent pas donner deux
+    noms à la même base, et `palierDuSite` lit désormais la moyenne portée par
+    le SITE — avec deux bases, il lisait celle de la courante.
   ⤷ ⚠ `#raid-attaquer` A QUITTÉ `#raid-boutons` — 04/09, Ethan : « le bouton
     attaquer, il est vraiment en gros à droite. Il n'y a que ça qui déclenche
     l'attaque. » Il porte le PRIX, pris dans `vueDuRaid`, seule appelante de
