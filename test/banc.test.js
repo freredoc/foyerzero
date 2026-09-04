@@ -281,9 +281,25 @@ function fautesDHorloge(comptes, porteur) {
 
 test('§11 — l\'horloge murale entre par UN fichier nommé, exactement une fois', () => {
   // --- 1. interdiction totale là où vit la simulation ---------------------
-  for (const dossier of ['src/sim', 'src/data', 'src/render']) {
+  // ⚠ `src/son` EST ENTRÉ DANS L'INTERDICTION TOTALE AU LOT SON-MOTEUR, 04/09.
+  // `src/son/politique.js` reçoit l'instant en ARGUMENT : c'est ce qui rend les
+  // temps de garde éprouvables dans Node, où il n'y a pas de Web Audio. Un
+  // `Date.now()` réintroduit là-bas les rendrait intestables, et il n'y aurait
+  // plus qu'à croire le code sur parole — c'est la falsification n° 9 du brief,
+  // et c'est cette ligne-ci qui la fait mordre.
+  // ⚠⚠ LE PLANCHER DE MONTAGE EST UN TOTAL, PAS UN COMPTE PAR DOSSIER — lot
+  // SON-MOTEUR, 04/09. Il valait « au moins quatre fichiers par dossier », ce
+  // que `src/son/` viole sans rien avoir de faux : il ne porte que la politique
+  // de voix. Le plancher garde contre UN cas — un dossier vide rendrait la
+  // boucle vacueuse —, et un total le ferme mieux : si `fichiersJs` cessait de
+  // lire, les QUATRE dossiers tomberaient d'un coup, ce qu'un plancher de
+  // quatre par dossier ne verrait pas mieux. Il s'est resserré en changeant de
+  // forme, il ne s'est pas assoupli.
+  let balayes = 0;
+  for (const dossier of ['src/sim', 'src/data', 'src/render', 'src/son']) {
     const fichiers = fichiersJs(dossier);
-    assert.ok(fichiers.length >= 4, `montage cassé : ${fichiers.length} fichiers dans ${dossier}/`);
+    assert.ok(fichiers.length >= 1, `montage cassé : ${dossier}/ est vide`);
+    balayes += fichiers.length;
     for (const fichier of fichiers) {
       assert.equal(
         compterHorloge(sansCommentaires(readFileSync(fichier, 'utf8'))), 0,
@@ -291,6 +307,8 @@ test('§11 — l\'horloge murale entre par UN fichier nommé, exactement une foi
       );
     }
   }
+
+  assert.ok(balayes >= 45, `montage cassé : ${balayes} fichiers balayés en tout`);
 
   // --- 2. exactement une, dans le porteur ---------------------------------
   const comptes = {};

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **03/09/2026**, version 0.83.0 · build 85.
+Dernière révision : **04/09/2026**, version 0.84.0 · build 86.
 
 ---
 
@@ -41,8 +41,146 @@ Dernière révision : **03/09/2026**, version 0.83.0 · build 85.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 03/09/2026 (après le lot MUR-PEINT), à confronter :**
-`npm test` → **977 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**Référence au 04/09/2026 (après le lot SON-MOTEUR), à confronter :**
+`npm test` → **992 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**5 526 427 octets**, 0 référence externe.
+⚠⚠ **LE JEU A UN SON, ET CE LOT NE POSE QUE LE MOTEUR.** Ethan a livré un pack
+de **263 sons** ; il en entre **QUATRE**, choisis pour exercer chaque mécanisme —
+deux variantes d'un même clic, deux plafonds de voix différents, deux temps de
+garde. Le catalogue, son palier de compression et le choix entre tout-inline et
+assets empaquetés **ne sont pas tranchés et ne le sont pas ici**. Coût
+**+10 371 octets** — **21 `data:` avant, 25 après**, les quatre témoins. Borne T10 **inchangée à
+5 700 000**, marge **173 573 octets, 3,05 %**.
+⚠⚠ **ET LE LOT DÉPASSE SA PROPRE CONDITION D'ARRÊT DE 371 OCTETS, QUI SE
+DÉCOMPOSENT.** Le brief pose « plus de 10 000 octets → STOP », au motif que
+« tout écart important signale une entrée non voulue ». Mesuré poste par poste,
+contre un livrable rebâti depuis `main` : **audio 4 936 · JS 4 123 · feuille
+701 · balisage 713**. Il n'y a donc **aucune entrée non voulue** — chaque octet
+est nommé. ⚠ **L'ÉCART VIENT DU BRIEF, PAS DU LOT** : il annonçait 3 360 octets
+d'audio, il en pèse **4 936**, parce qu'un conteneur Ogg porte deux pages
+d'en-tête par fichier — sur un son de 75 ms, l'emballage coûte plus que le son.
+Le reste du lot tient dans **5 537 octets** quand le brief en laissait 6 640
+implicitement. **Le débit n'a pas été baissé pour tomber sous le nombre** :
+24 kbps mono est l'arbitrage d'Ethan. **Relever la borne ou non lui revient.**
+⚠⚠ **LA DÉCISION ET LA SORTIE SONT DEUX MODULES, ET C'EST TOUT LE LOT.**
+`src/son/politique.js` est PUR — aucune API du navigateur, et **l'horloge est un
+ARGUMENT**. C'est ce qui rend les temps de garde éprouvables : le dépôt n'a ni
+navigateur ni Web Audio (§3), donc un `Date.now()` en dur là-bas les rendrait
+INTESTABLES et il n'y aurait plus qu'à croire le code sur parole.
+`src/ui/son.js` crée le contexte, décode, connecte, joue — **et ne décide de
+rien** ; une garde lui interdit les six noms de la politique.
+⚠⚠ **LE TEMPS DE GARDE A CHANGÉ DE PORTEUR, ET LA MESURE L'AUTORISE.** Le
+manifeste l'attribue au FICHIER ; un clic ayant DEUX variantes, une garde par
+fichier laisserait passer deux clics à quarante millisecondes dès que le tirage
+change de variante — c'est-à-dire exactement le cas qu'elle existe pour refuser.
+Elle porte donc sur l'ÉVÉNEMENT. **Et ça ne coûte rien, parce que c'est
+mesuré** : sur les 263 entrées, **54 groupes à plusieurs variantes, ZÉRO** qui
+porte deux `recommended_cooldown_ms` ou deux `recommended_max_instances`
+différents. Les deux lectures décrivent la même table ; un test rejoue ce compte
+et tombera le jour où le pack en portera une.
+⚠⚠ **LE PLAFOND DE VOIX A UNE FENÊTRE, ET ELLE SE CALCULE.** `ui_toggle_on` est
+le seul plafonné à UNE voix, et sa garde (120 ms) est plus COURTE que sa durée
+(160) : il reste **quarante millisecondes** où la garde laisse passer et où le
+plafond refuse. Sans cet écart le plafond serait INATTEIGNABLE, et le test qui
+le mesure serait vert quelle que soit la valeur écrite.
+⚠ **UNE INSTANCE EXPIRE PAR SA DURÉE, SANS RAPPEL DE L'ADAPTATEUR.** Si
+`ui/son.js` devait annoncer la fin d'un son, il porterait une part de la
+politique — et un rappel manqué fermerait le plafond pour toujours, c'est-à-dire
+un son qui se tait sans que rien ne lève.
+⚠⚠ **`--serial` EST OBLIGATOIRE, ET SANS LUI LA CHAÎNE N'ÉTAIT PAS
+REPRODUCTIBLE.** Mesuré : le numéro de série du flux Ogg est **tiré au hasard**,
+donc deux exécutions d'`opusenc` sur le même WAV aux mêmes réglages rendent des
+SHA-256 **différents** — `tools/verifier.py` aurait dit « 4 différents » à chaque
+passage, pour toujours, et quelqu'un aurait fini par l'assouplir. Avec un numéro
+fixe par entrée, deux exécutions rendent les mêmes octets. **La garantie à
+l'octet tient donc, et elle est liée à la VERSION de l'encodeur** — chaque
+`.opus` porte « libopus 1.4, libopusenc 0.2.1 » et sa ligne de commande dans ses
+`OpusTags`, donc un changement de version changera les octets **par
+construction**. C'est ce que le vérificateur doit dire ; ne pas l'assouplir.
+⚠ **LA QUALITÉ EST PAR ENTRÉE, ET C'EST LA LEÇON DE `fonds.py`** — sa constante
+globale avait failli réécrire un fichier qu'un autre lot ne touchait pas.
+⚠⚠ **LE MOUCHARD D'`entrees.py` SUIT DEUX PORTES, ET IL LE FALLAIT.** Il
+n'enveloppait que `PIL.Image.open` ; `tools/sons.py` lit des WAV, et `opusenc`
+est un SOUS-PROCESSUS, donc invisible. Sans `wave.open`, les quatre masters
+auraient été classés **dormants alors qu'un outil les consomme** — le mensonge
+exact que ce fichier existe pour empêcher. ⚠ **On élargit à `wave.open`, pas à
+`open`** : envelopper le `open` du langage attraperait les JSON et les sorties
+des outils, et la trace ne voudrait plus rien dire. ⚠ Et l'ouverture n'est pas
+décorative : `sons.py` VÉRIFIE mono, 44,1 kHz et durée — le contrôle et la
+déclaration sont le même geste, ce qui est ce qui les tient d'accord.
+⚠⚠ **LA BASELINE ÉTAIT ROUGE, ET C'ÉTAIT ENCORE LA GARDE D'ENTRÉES** — 976 pass
+/ 1 fail sur le clone intact, exactement comme au lot MUR-PEINT : `main` vire au
+rouge au commit qui apporte les six fichiers du pack, et **c'est ce lot-ci qui
+referme ce rouge en les classant**. `art/sources/` passe de 97 / 90 / 187 à
+**101 consommées · 92 dormantes · 193 fichiers**, et le diff de
+`art/sources-declarees.json` raconte le lot en **huit lignes** : les quatre WAV
+entrent CONSOMMÉES, `sfx_manifest.json` et `unit_audio_map.json` **DORMANTES**,
+comme le brief l'exige.
+⚠ **LE MANIFESTE RESTE DORMANT ET IL EST POURTANT CONFRONTÉ.** `src/data/sons.js`
+est une TRANSCRIPTION de ses quatre lignes, et un test de Node les compare —
+`entrees.py` classe d'après ce que la CHAÎNE ouvre sous son mouchard, et un test
+n'en est pas. Le catalogue n'en est pas tiré ; ces quatre lignes cessent d'être
+une copie qui vieillit. Même motif que `src/data/ancres-chassis.js`.
+⚠⚠ **DEUX GARDES ONT ÉTÉ RESSERRÉES EN CHANGEANT DE FORME, ET AUCUNE N'A ÉTÉ
+ASSOUPLIE.** `banc.test.js` et `documentation.test.js` posaient un plancher de
+montage PAR DOSSIER — « au moins quatre fichiers », « au moins trois noms » —
+que `src/son/` viole sans rien avoir de faux : il ne porte qu'un fichier. Le
+plancher ne gardait que contre UN cas, le dossier vide ; il est devenu un
+**TOTAL** sur tous les dossiers balayés, ce qui mord en plus sur le cas qu'il ne
+voyait pas — un lecteur de dossier qui cesserait de lire les perdrait tous d'un
+coup, et cinq planchers de trois n'y verraient rien.
+⚠⚠ **DIX FALSIFICATIONS, ET LA QUATRIÈME N'A PAS MORDU AU PREMIER RELEVÉ.** La
+garde « aucun module de `src/sim/` n'importe le son » cherchait
+`from '…/son/…'` ; or un import à EFFET DE BORD s'écrit `import '../son/x.js';`,
+**sans `from`**, et crée exactement le couplage interdit. **Mesuré : 15 pass / 0
+fail avec cette ligne déposée dans `src/sim/rng.js`.** Le motif lit désormais
+l'ADRESSE quelle que soit la forme, et trois appâts couvrent l'import nommé, à
+effet de bord et dynamique. **Une falsification qui ne mord pas se vérifie avant
+d'être crue** — sixième fois du dépôt.
+⚠ **ET UN MOTIF NON BORNÉ EST TOMBÉ SUR `rejouer(`** de `ui/raid.js` en
+cherchant `jouer(` : la faute que §6 raconte déjà pour `\b`, qui est ASCII dans
+un dépôt écrit en français. Borné à gauche, avec l'appât dans les deux sens.
+⚠ **LE DÉCOMPTE DES HUIT AUTRES** : la garde élargie à zéro (2 tests), le
+plafond porté à 2 (2), le tirage branché sur `etat.rng` (3), muet désarmé (1),
+l'absence de Web Audio qui lève au lieu d'absorber (1), le contexte créé au
+câblage (1), un cinquième `.opus` comme un `.opus` retiré (1 chacun), un
+`Date.now()` dans la politique (1, dans `banc.test.js`), et `--serial` retiré —
+qui ne fait tomber aucun test JS mais rend **quatre SHA-256 différents à chaque
+exécution**, ce qui est la seule mesure qui compte pour celle-là.
+⚠ **TROIS POINTS DE CÂBLAGE, PAS QUATRE.** Un SEUL écouteur pour tous les
+boutons de la page — la délégation prend le clic à la racine, donc un bouton qui
+n'existe pas encore sonne déjà, là où un écouteur par bouton dans six écrans
+aurait été la dette que ce lot existe pour éviter. Le refus part du registre
+`toast` de l'écran de la base, **APRÈS la garde `if (texte === '') return;` qui
+existait déjà** : effacer un toast ne sonne pas, et aucune seconde condition n'a
+été écrite. La bascule sonne en s'allumant, jamais en s'éteignant.
+⚠ **ÉCART DÉCLARÉ : `ui/offense.js` PORTE SON PROPRE `toast` ET N'EST PAS
+BRANCHÉ.** Le brief pose trois points ; le brancher en ferait quatre. Le lot du
+catalogue unifiera les deux registres.
+⚠ **ÉCART DÉCLARÉ : LES CINQ NIVEAUX DE BUS NE SONT PAS DANS LE MANIFESTE.**
+Vérifié — `sfx_manifest.json` ne porte **aucune** clé contenant « bus », « mix »,
+« master » ou « gain ». Ils viennent du BRIEF, qui les donne comme la
+recommandation du pack. ⚠ Et ils **ne couvrent pas les neuf catégories** du
+pack : `explosions`, `buildings`, `alerts` et `orders` n'ont pas de bus nommé,
+et on ne leur en invente pas.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Le volume et le muet vont dans
+un magasin de réglages SÉPARÉ, `foyer-zero/reglages/1` : un curseur n'est pas un
+fait de partie, et effacer sa partie ne doit pas remettre le son à fond.
+⚠ **LE SON EST ACTIF PAR DÉFAUT** — « une fonction muette par défaut n'est jamais
+testée ». Un réglage illisible revient au défaut et ne lève pas.
+⚠ **QUINZE TESTS ENTRENT — `test/son.test.js` — ET LE COMPTE PASSE DE 977 À
+992.** Aucune assertion existante n'a été retirée.
+⚠ **`python3 tools/verifier.py` → 1 002 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 278,1 s. Il était dû : le lot touche `art/` et
+`tools/`. **Le compte passe de 997 à 1 002** — les quatre `.opus` et leur
+manifeste, et rien d'autre. ⚠⚠ **ET LES QUATRE SONT DANS LES « IDENTIQUES À
+L'OCTET » : c'est la mesure qui prouve que la garantie tient sur de l'Opus**, et
+elle ne tenait pas avant `--serial`.
+⚠ **ET IL DEMANDE UNE QUATRIÈME DÉPENDANCE, `opus-tools`** — voir §3. Absente
+d'un conteneur neuf, comme Pillow.
+
+**Auparavant, après le lot MUR-PEINT :**
+`npm test` → 977 pass / 0 fail, `npm run build` → `dist/index.html`,
 **5 516 056 octets**, 0 référence externe.
 ⚠⚠ **LE MUR DE CONTOUR N'EST PLUS UNE GÉOMÉTRIE : IL EST PEINT DANS LE FOND.**
 Ethan, 03/09 : « le mur est peint dans le fond, il n'est plus dessiné », et huit
@@ -2661,7 +2799,7 @@ Relevée le **27/08/2026**, fichier par fichier. **La lister quand même.**
 ```
 src/index.src.html      point d'entrée ; son <script type="module"> est LE point d'entrée JS
 
-src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d'autre n'a le droit d'en porter
+src/data/               toutes les valeurs de calibrage — 12 fichiers ; RIEN d'autre n'a le droit d'en porter
   combat.js             grille, unités, défenses, QUI porte quel module, ciblage, écrasement, obstacles
   modules.js            ce que FAIT chaque module : libellé, description d'Ethan, état de câblage
   recherche.js          l'arbre de recherche du joueur — la SEULE porte qui ouvre une pièce
@@ -2673,6 +2811,7 @@ src/data/               toutes les valeurs de calibrage — 11 fichiers ; RIEN d
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
   atlas.js              l'index des atlas de sprites — ⚠ GÉNÉRÉ, voir ci-dessous
   ancres-chassis.js     où se pose la tourelle sur chaque coque de blindé du joueur
+  sons.js               les quatre sons témoins, les cinq bus, et les réglages par défaut
   ⤷ ⚠⚠ `ancres-chassis.js` EST UNE TRANSCRIPTION À LA MAIN de
     `art/sprites/ancres-chassis.json`, et un test les confronte — clés et valeurs
     SIGNÉES. Le JSON est mesuré par `tools/chassis.py` sur les images ; il ne peut
@@ -2782,7 +2921,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 11 fi
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les sept écrans et leurs éditeurs — 11 fichiers
+src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
@@ -2794,6 +2933,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 11 fichiers
   banc.js               le banc d'essai, désormais derrière un geste de debug
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
+  son.js                l'adaptateur audio : il joue, il ne décide de rien
   ⤷ le DOM reste confiné à ce dossier, mais il n'y a plus UN seul fichier qui y
     touche : `banc.js` et `chantier.js` le font tous les deux, et `session.js`
     les met en scène. La garde de `banc.test.js` porte sur le DOSSIER, pas sur
@@ -2814,7 +2954,26 @@ src/ui/                 les sept écrans et leurs éditeurs — 11 fichiers
     formateurs et l'état — mais il ne change pas d'écran lui-même : il le
     DEMANDE à la session par `versEcran`.
 
-test/                   50 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
+src/son/                la politique de voix, sans un octet de navigateur — 1 fichiers
+  politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT
+  ⤷ ⚠⚠ UN DOSSIER POUR UN FICHIER, ET C'EST LE LOT ENTIER. La DÉCISION et la
+    SORTIE sont deux modules : sans cette séparation, rien du moteur ne serait
+    éprouvable — le dépôt n'a ni navigateur ni Web Audio (§3), donc tout ce qui
+    touche `AudioContext` est hors de portée des tests. La politique reçoit
+    l'instant en ARGUMENT ; c'est ce qui rend les temps de garde mesurables, et
+    un `Date.now()` déposé ici les rendrait INTESTABLES. `test/banc.test.js`
+    range donc `src/son` avec `src/sim`, `src/data` et `src/render` sous
+    l'interdiction TOTALE de l'horloge murale.
+  ⤷ ⚠⚠ IL N'IMPORTE RIEN DE `src/sim/`, ET RIEN DE `src/sim/` NE L'IMPORTE. Le
+    tirage de variante a sa propre graine, portée par l'état des voix : y prendre
+    un nombre au flux d'`etat.rng` décalerait tout ce que le moteur tire ensuite,
+    et la partie cesserait de se rejouer à l'identique. Même raisonnement que
+    `render/variante.js`. Deux gardes le tiennent, une par direction.
+  ⤷ ⚠ LA TABLE, ELLE, EST DANS `src/data/sons.js` — c'est du calibrage (§4), et
+    la politique comme le pipeline la lisent tous les deux. Elle est une
+    TRANSCRIPTION du manifeste du pack, et un test les confronte.
+
+test/                   51 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -2823,6 +2982,7 @@ test/                   50 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
+  son
   ⤷ ⚠ QUATRE FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
@@ -2847,7 +3007,17 @@ test/                   50 fichiers *.test.js (node:test) ; QUATRE n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  28 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 03/09
+tools/                  29 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 04/09
+                        au lot SON-MOTEUR. Le vingt-neuvième est `sons.py`, qui
+                        encode les quatre témoins en Opus ; il ne produit ni
+                        sprite ni image, et il est le PREMIER outil de la chaîne
+                        à ne pas ouvrir un seul pixel. ⚠ IL DEMANDE `opusenc`,
+                        absent d'un conteneur neuf comme Pillow — voir §3.
+                        ⚠⚠ ET IL FIXE LE NUMÉRO DE SÉRIE OGG, SANS QUOI RIEN
+                        N'EST REPRODUCTIBLE : mesuré, deux exécutions sans
+                        `--serial` rendent des SHA-256 différents, donc « 4
+                        différents » au vérificateur à chaque passage, pour
+                        toujours. Auparavant, RECOMPTÉ le 03/09
                         au lot MOULINETTE-TERRAIN, fichier par fichier (hors
                         `__pycache__`, qui est ignoré par git). Le vingt-huitième
                         est `terrain.py`, qui conditionne les champs de quartz et
@@ -2980,8 +3150,8 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           trier les chemins à la sous-chaîne rangerait chaque
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
-art/sprites/            les sprites conditionnés — ONZE dossiers de famille et
-                        **1 042 fichiers**, recomptés le 03/09 au lot MUR-PEINT,
+art/sprites/            les sprites conditionnés — DOUZE dossiers de famille et
+                        **1 047 fichiers**, recomptés le 04/09 au lot SON-MOTEUR,
                         plus DIX-HUIT atlas `.webp` à la racine et DEUX fichiers
                         générés — `ancres-chassis.json` et
                         `atlas-empreintes.json`.
@@ -2989,6 +3159,19 @@ art/sprites/            les sprites conditionnés — ONZE dossiers de famille e
                         defense, tourelle-unite, socle, carte, effet, chassis,
                         limite. La onzième, `fond`, n'est même pas une famille de
                         sprites : neuf décors et leur manifeste.
+                        ⤷ ⚠⚠ ET LA DOUZIÈME, `son/`, N'EST PAS UNE IMAGE DU
+                          TOUT — lot SON-MOTEUR, 04/09. Quatre `.opus` et leur
+                          manifeste, 3 634 octets en tout. Un son n'a ni case,
+                          ni grille, ni atlas, ni palette ; il est ici pour la
+                          seule raison qui vaut aussi pour `fond/` — ce dossier
+                          est ce que la CHAÎNE produit, et ce que le
+                          vérificateur doit savoir rejouer. `art/sprites/` a
+                          cessé de ne porter que des sprites au lot OFFENSE ;
+                          il a cessé de ne porter que des images ici.
+                          ⚠ SON MANIFESTE PORTE LA DURÉE, et ce n'est pas
+                          décoratif : Node n'a pas de décodeur Opus, et
+                          `src/data/sons.js` dérive de cette durée le plafond
+                          de voix. Même motif que `fond-empreintes.json`.
                         ⚠⚠ ET `bord/` N'Y EST PLUS — lot MUR-PEINT, 03/09. Ses
                           seize murs et son manifeste sont mis de côté dans
                           `art/sourcesstandby/bord/`, et `bords` est sorti de
@@ -3176,6 +3359,7 @@ exécuté se déclare **non exécuté**, jamais passé.
 
 ```
 python3 -m pip install Pillow numpy scipy    # ⚠ SANS EUX IL NE DÉMARRE PAS
+apt-get install opus-tools                   # ⚠ ET SANS LUI, `sons` NE PRODUIT RIEN
 python3 tools/verifier.py                    # toute la chaîne, ~2 min
 python3 tools/verifier.py --outil emblemes   # un seul outil, pour itérer
 ```
@@ -3188,6 +3372,23 @@ lire « chaîne cassée » là où il manque une dépendance. Mesuré le 30/08 a
 SPRITES-S11, où il a fallu trois installations pour l'amener au bout.
 ⚠ Le « ~2 min » ci-dessus suppose donc qu'il DÉMARRE. Les onze outils rejoués
 prennent 110 s, la comparaison le reste.
+
+⚠⚠ **ET `opusenc` EST UNE QUATRIÈME DÉPENDANCE DEPUIS LE 04/09**, au même titre
+que les trois paquets Python : `tools/sons.py` encode les quatre sons témoins en
+Opus, et `apt-get install opus-tools` l'apporte. Il SORT EN ERREUR avec la
+commande d'installation plutôt que de laisser lire « chaîne cassée » là où il
+manque un paquet — la leçon du lot SPRITES-S11, prise à l'avance cette fois.
+⚠⚠ **ET LA GARANTIE À L'OCTET Y EST LIÉE À LA VERSION DE L'ENCODEUR, CE QUI
+N'EST PAS VRAI DES IMAGES.** Deux mesures, et il faut les lire ensemble. (1)
+Sans `--serial`, le numéro de série du flux Ogg est **tiré au hasard** : deux
+exécutions rendent des SHA-256 différents, donc « 4 différents » à chaque
+passage du vérificateur, pour toujours — `tools/sons.py` le fixe par entrée, et
+deux exécutions rendent alors les mêmes octets. (2) Chaque `.opus` porte dans
+ses `OpusTags` la chaîne « libopus 1.4, libopusenc 0.2.1 », le nom d'`opus-tools`
+et la ligne de commande complète : un changement de version de la bibliothèque
+change donc les octets **par construction**, et le vérificateur dira
+« différent » sur les quatre. C'est ce qu'il doit dire — **ne pas l'assouplir
+pour ça** ; on régénère et on commite, comme pour un sprite.
 
 ⚠ **ELLE N'ENTRE PAS DANS `npm run check`, ET C'EST DÉLIBÉRÉ.** Les outils sont
 en Python, hors de la chaîne de build ; y ajouter une dépendance Python serait un

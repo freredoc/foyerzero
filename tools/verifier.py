@@ -75,6 +75,26 @@ CHAINE = [
     # `limite/` seraient comptés MANQUANTS, et les quatre planches d'`art/sources/`
     # classées DORMANTES alors qu'un outil les consomme.
     ('limites',         []),
+    # ⚠⚠ LES QUATRE SONS TÉMOINS — lot SON-MOTEUR, 04/09. Un son n'est ni un
+    # sprite ni un décor, et il passe quand même par la chaîne, pour la raison
+    # ordinaire : sans cette ligne les quatre `.opus` seraient comptés MANQUANTS
+    # à chaque exécution, et les quatre masters WAV classés DORMANTS alors qu'un
+    # outil les consomme.
+    #
+    # ⚠⚠ ET IL DEMANDE `opusenc`, QUI N'EST PAS PLUS PRÉSENT QUE PILLOW SUR UN
+    # CONTENEUR NEUF. `tools/sons.py` sort en erreur avec la commande
+    # d'installation plutôt que de laisser lire « chaîne cassée » là où il
+    # manque une dépendance — la leçon du lot SPRITES-S11, prise à l'avance.
+    #
+    # ⚠⚠ SA GARANTIE À L'OCTET TIENT, ET ELLE A FAILLI NE PAS TENIR. Le numéro
+    # de série du flux Ogg est TIRÉ AU HASARD par défaut : deux exécutions
+    # rendaient des SHA-256 différents, donc « 4 différents » à chaque passage,
+    # pour toujours. `tools/sons.py` fixe `--serial` par entrée, et deux
+    # exécutions rendent alors les mêmes octets — mesuré. Ce qui reste vrai :
+    # les fichiers portent la version de libopus dans leurs `OpusTags`, donc un
+    # changement de version FERA dire « différent » au vérificateur. C'est ce
+    # qu'il doit dire ; ne pas l'assouplir pour ça.
+    ('sons',            []),
     # ⚠⚠ LES CHAMPS ET LES OBSTACLES — 03/09, lot MOULINETTE-TERRAIN. Cette
     # ligne-ci est la seule de la table qui RETIRE une source déclarée : les dix
     # sprites qu'elle produit étaient couverts par `SOURCES_DECLAREES['terrain/']`

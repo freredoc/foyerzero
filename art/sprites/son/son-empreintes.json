@@ -1,0 +1,33 @@
+{
+ "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/sons.py ». Les sons sont en Opus et Node n'a pas de décodeur Opus ; ce manifeste est ce que la suite JS peut encore mesurer sur eux — au premier chef leur DURÉE, dont src/data/sons.js dérive le plafond de voix. Même motif que art/sprites/fond/fond-empreintes.json depuis le lot MUR-PEINT.",
+ "sons": {
+  "ui_click_01": {
+   "debit_kbps": 24,
+   "duree_ms": 75,
+   "octets": 533,
+   "serie": 1,
+   "sha256": "dc82d326c74cf9259cc6a3ee2df1fb3658f14d4003a9f134db8972d5d0b4caf8"
+  },
+  "ui_click_02": {
+   "debit_kbps": 24,
+   "duree_ms": 75,
+   "octets": 516,
+   "serie": 2,
+   "sha256": "41da853d255b97f67032e7524599565a5a7e629a4dda5b28f89f2f23bd192373"
+  },
+  "ui_error_01": {
+   "debit_kbps": 24,
+   "duree_ms": 268,
+   "octets": 1689,
+   "serie": 3,
+   "sha256": "d7aef46bd43cc52494d42f61d366ad00956e183be085a4d7a95db7a23d5a9350"
+  },
+  "ui_toggle_on": {
+   "debit_kbps": 24,
+   "duree_ms": 160,
+   "octets": 896,
+   "serie": 4,
+   "sha256": "acfed26a3904f5be699c57fb8922dc8e86413a3caa19bf19eef6f1f0aaff49d1"
+  }
+ }
+}
