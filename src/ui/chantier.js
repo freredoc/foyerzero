@@ -2366,7 +2366,7 @@ export function coteCaseParDefaut(doc) {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function, allerALaBande: Function}}
  */
-export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascule } = {}) {
+export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascule, sonDeRefus } = {}) {
   const $ = (id) => doc.getElementById(id);
   const defile = $('chantier-defile');
   const grille = $('chantier-grille');
@@ -2458,6 +2458,13 @@ export function initialiserEcranChantier(doc, { apresPose, versEcran, apresBascu
     registres.toast = texte;
     rendreLigne();
     if (texte === '') return;
+    // ⚠⚠ LE SON DE REFUS RIDE LA GARDE QUI EXISTE DÉJÀ, IL N'EN AJOUTE PAS.
+    // La ligne au-dessus sort quand il n'y a rien à annoncer — effacer un
+    // toast passe par ici aussi. Écrire un `if (texte !== '')` à moi aurait
+    // posé une seconde condition disant la même chose, et les deux auraient
+    // fini par diverger. La session décide s'il y a un son ; l'écran dit
+    // seulement qu'un refus vient d'atteindre le joueur.
+    if (sonDeRefus !== undefined) sonDeRefus();
     minuterieToast = fenetre.setTimeout(() => {
       minuterieToast = null;
       if (registres.toast !== texte) return;

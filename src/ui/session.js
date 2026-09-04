@@ -46,6 +46,8 @@ import { initialiserEcranMonde } from './monde.js';
 import { initialiserEcranRaid } from './raid.js';
 import { initialiserEcranRecherche } from './recherche.js';
 import { initialiserBanc } from './banc.js';
+import { initialiserLeSon } from './son.js';
+import { REGLAGES_PAR_DEFAUT } from '../data/sons.js';
 
 /**
  * LA seule lecture de l'horloge murale de tout le dépôt.
@@ -84,6 +86,50 @@ export const CLE_SAUVEGARDE = 'foyer-zero/partie/1';
  * silence » vaut d'abord pour ce que le joueur a de plus précieux.
  */
 export const CLE_SECOURS = 'foyer-zero/partie/1.illisible';
+
+/**
+ * Le magasin des RÉGLAGES — volume, son coupé. Rien de ce qui s'y range n'est
+ * un fait de partie.
+ *
+ * ⚠⚠ IL EST SÉPARÉ DE LA SAUVEGARDE, ET C'EST L'ARBITRAGE DU LOT SON-MOTEUR.
+ * Mettre le volume dans l'état obligerait à faire monter `SAVE_VERSION` et à
+ * écrire une migration pour un curseur — et surtout, effacer sa partie
+ * remettrait le son à fond, ce qui n'a aucun sens. Les réglages survivent à la
+ * partie ; c'est ce qui les distingue d'elle.
+ *
+ * ⚠ NE PAS Y METTRE `SAVE_VERSION`, pour la raison qui vaut déjà pour la clé
+ * de sauvegarde juste au-dessus : ce numéro-ci est celui de l'EMPLACEMENT.
+ */
+export const CLE_REGLAGES = 'foyer-zero/reglages/1';
+
+/**
+ * Relit les réglages du magasin, en refusant tout ce qui n'a pas la bonne
+ * forme. Fonction PURE, pour être éprouvable sans magasin.
+ *
+ * ⚠ UN RÉGLAGE ILLISIBLE REVIENT AU DÉFAUT, IL NE LÈVE PAS. Un JSON tronqué par
+ * un magasin plein rendrait le jeu instartable pour un curseur de volume ; et
+ * le défaut est le son ACTIF, donc l'erreur ne se paie pas d'un silence qu'on
+ * ne saurait pas expliquer.
+ *
+ * @param {string|null} brut
+ * @returns {{muet: boolean, volume: number}}
+ */
+export function lireLesReglages(brut) {
+  let lu = null;
+  try {
+    lu = JSON.parse(brut ?? '');
+  } catch {
+    return { ...REGLAGES_PAR_DEFAUT };
+  }
+  if (lu === null || typeof lu !== 'object') return { ...REGLAGES_PAR_DEFAUT };
+  const volume = Number(lu.volume);
+  return {
+    muet: lu.muet === true,
+    volume: Number.isFinite(volume) && volume >= 0 && volume <= 1
+      ? volume
+      : REGLAGES_PAR_DEFAUT.volume,
+  };
+}
 
 /** Intervalle d'écriture périodique, en plus de l'écriture au masquage. */
 export const PERIODE_SAUVEGARDE_MS = 30_000;
@@ -450,6 +496,33 @@ export function initialiserSession(doc) {
   } catch {
     magasin = null;
   }
+
+  // --- les réglages, et le son ---------------------------------------------
+  //
+  // ⚠ L'OBJET EST VIVANT : la session le modifie, `ui/son.js` le transmet à la
+  // politique sans jamais en lire un champ. C'est ce qui garde l'adaptateur
+  // sans décision — il ne sait pas ce qu'est « muet ».
+  let reglages = { ...REGLAGES_PAR_DEFAUT };
+  try {
+    if (magasin !== null) reglages = lireLesReglages(magasin.getItem(CLE_REGLAGES));
+  } catch { /* magasin illisible : on garde le défaut, et le jeu démarre */ }
+
+  function enregistrerLesReglages() {
+    if (magasin === null) return;
+    try {
+      magasin.setItem(CLE_REGLAGES, JSON.stringify(reglages));
+    } catch { /* magasin plein : le réglage vaut pour la session, et c'est tout */ }
+  }
+
+  // ⚠ LA GRAINE DU TIRAGE DE VARIANTE VIENT DE L'HORLOGE MURALE, PAS DU FLUX DE
+  // LA PARTIE. `etat.rng` est le flux de la SIMULATION : y prendre un nombre
+  // pour choisir une variante de clic décalerait tout ce que le moteur tire
+  // ensuite. On passe par `maintenantMs`, le seul lecteur d'horloge du dépôt,
+  // et le `|| 1` écarte le zéro, qui est le point fixe du xorshift.
+  const son = initialiserLeSon(doc, {
+    reglages,
+    graine: (maintenantMs() & 0x7fffffff) || 1,
+  });
 
   // Le bandeau d'avis appartient à l'écran Chantier — c'est son élément. La
   // session lui parle au lieu d'écrire dedans : depuis que la pose s'y exprime
@@ -941,6 +1014,57 @@ export function initialiserSession(doc) {
   version.addEventListener('contextmenu', (evenement) => evenement.preventDefault());
   $('banc-fermer').addEventListener('click', fermerLeBanc);
 
+  // --- le son : trois points d'accroche, et c'est tout ----------------------
+  //
+  // ⚠⚠ UN SEUL ÉCOUTEUR POUR TOUS LES BOUTONS DE LA PAGE. Poser un écouteur par
+  // bouton dans six écrans serait la dette que ce lot existe pour éviter : il
+  // faudrait y penser à chaque bouton ajouté, et le premier oublié serait muet
+  // sans que rien ne le dise. La délégation prend le clic à la racine et
+  // remonte au bouton le plus proche — un bouton qui n'existe pas encore sonne
+  // déjà.
+  //
+  // ⚠ ET C'EST AUSSI CE QUI RÉVEILLE LE CONTEXTE. Un `AudioContext` créé avant
+  // un geste naît suspendu ; celui-ci naît DANS le geste. `jouer` réveille
+  // lui-même, donc il n'y a pas deux chemins à tenir d'accord.
+  doc.addEventListener('click', (evenement) => {
+    const cible = evenement.target;
+    if (cible !== null && typeof cible.closest === 'function' && cible.closest('button') !== null) {
+      son.jouer('ui_clic');
+    }
+  });
+
+  // ⚠⚠ L'INTERRUPTEUR SONNE EN S'ALLUMANT, ET PAS EN S'ÉTEIGNANT. « Le couper
+  // ne joue rien, évidemment » — un son qui accompagnerait la coupure serait la
+  // dernière chose qu'on entend après avoir demandé le silence. L'ordre compte :
+  // on écrit le réglage AVANT de demander le son, sinon la politique refuserait
+  // encore sur l'ancien état.
+  const sonMuet = $('options-son-muet');
+  const sonVolume = $('options-son-volume');
+  const sonVolumeValeur = $('options-son-volume-valeur');
+
+  function rendreLesReglages() {
+    sonMuet.textContent = reglages.muet ? 'Coupé' : 'Activé';
+    sonMuet.setAttribute('aria-pressed', String(reglages.muet));
+    sonMuet.classList.toggle('coupe', reglages.muet);
+    sonVolume.value = String(Math.round(reglages.volume * 100));
+    sonVolumeValeur.textContent = `${Math.round(reglages.volume * 100)} %`;
+  }
+
+  sonMuet.addEventListener('click', () => {
+    reglages.muet = !reglages.muet;
+    rendreLesReglages();
+    enregistrerLesReglages();
+    if (!reglages.muet) son.jouer('ui_bascule');
+  });
+  // `input` et non `change` : le volume suit le doigt, sinon le joueur règle à
+  // l'aveugle et ne s'entend qu'après avoir lâché.
+  sonVolume.addEventListener('input', () => {
+    reglages.volume = Number(sonVolume.value) / 100;
+    rendreLesReglages();
+    enregistrerLesReglages();
+  });
+  rendreLesReglages();
+
   // --- le temps qui passe pendant qu'on ne regarde pas -----------------------
 
   doc.addEventListener('visibilitychange', () => {
@@ -963,6 +1087,14 @@ export function initialiserSession(doc) {
     // La pose est la première action irréversible du jeu : elle s'écrit tout de
     // suite, sans attendre l'enregistrement périodique.
     apresPose: () => sauvegarder(),
+    // ⚠⚠ LE SON DE REFUS PASSE PAR LE REGISTRE `toast`, QUI EST LE POINT
+    // UNIQUE OÙ UN REFUS ATTEINT LE JOUEUR sur cet écran — sept appelants y
+    // convergent déjà. Le brancher aux sept aurait fait sept points d'accroche
+    // à tenir d'accord, c'est-à-dire la dette que le clic délégué évite.
+    // ⚠ `ui/offense.js` PORTE SON PROPRE `toast`, ET IL N'EST PAS BRANCHÉ ICI —
+    // écart déclaré : le brief pose TROIS points de câblage, pas quatre, et le
+    // lot du catalogue unifiera les deux registres.
+    sonDeRefus: () => son.jouer('ui_refus'),
     // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE. La barre du bas appartient à
     // l'écran Chantier — c'est lui qui la construit et qui y affiche les
     // niveaux — mais un de ses trois boutons change d'ÉCRAN, ce que seule la

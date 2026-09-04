@@ -118,6 +118,7 @@ test('documentation — CLAUDE.md §2 annonce la vraie arborescence', () => {
     { motif: /^src\/sim\/.*— (\d+) fichiers/m, chemin: ['src', 'sim'], filtre: () => true },
     { motif: /^src\/render\/.*— (\d+) fichiers/m, chemin: ['src', 'render'], filtre: () => true },
     { motif: /^src\/ui\/.*— (\d+) fichiers/m, chemin: ['src', 'ui'], filtre: () => true },
+    { motif: /^src\/son\/.*— (\d+) fichiers/m, chemin: ['src', 'son'], filtre: () => true },
     {
       motif: /^test\/ +(\d+) fichiers \*\.test\.js/m,
       chemin: ['test'],
@@ -198,7 +199,12 @@ test('documentation — CLAUDE.md §2 nomme exactement les fichiers de src/', ()
   // `src/` ne doivent nommer AUCUN fichier en `.js` : elles seraient lues comme
   // des déclarations. C'est une contrainte, et elle est voulue — un nom de
   // fichier dans une description est de toute façon un renvoi qui pourrit.
-  const dossiers = ['data', 'sim', 'render', 'ui'];
+  // ⚠ `son` EST ENTRÉ AU LOT SON-MOTEUR, 04/09. Un dossier de `src/` que cette
+  // liste ne nomme pas n'est gardé par personne : ni son compte, ni ses noms, ni
+  // l'interdiction d'y déposer un `.test.js`. C'est la dérive qui a coûté deux
+  // mensonges à §2, et elle se referme en ajoutant le nom ici.
+  const dossiers = ['data', 'sim', 'render', 'ui', 'son'];
+  let totalDeclares = 0;
 
   for (const dossier of dossiers) {
     const enTete = new RegExp(`^src/${dossier}/ .*— (\\d+) fichiers`, 'm');
@@ -218,9 +224,21 @@ test('documentation — CLAUDE.md §2 nomme exactement les fichiers de src/', ()
 
     const reels = fichiersJs('src', dossier);
 
-    // Falsifiable des deux côtés : deux listes vides seraient égales.
-    assert.ok(declares.length >= 3, `${declares.length} noms lus pour src/${dossier}/`);
-    assert.ok(reels.length >= 3, `${reels.length} fichiers trouvés dans src/${dossier}/`);
+    // Falsifiable des deux côtés : deux listes vides seraient égales, et le
+    // `deepEqual` plus bas passerait sur un bloc que la regex n'a pas lu.
+    //
+    // ⚠⚠ LE PLANCHER EST DEVENU UN TOTAL, ET IL S'EST RESSERRÉ EN CHANGEANT DE
+    // FORME — lot SON-MOTEUR, 04/09. Il valait « au moins trois par dossier »,
+    // ce qu'un dossier d'UN fichier viole sans rien avoir de faux : `src/son/`
+    // ne porte que la politique de voix. Or trois par dossier ne garde que
+    // contre UN cas, celui des deux listes vides, et un `>= 1` suffit à le
+    // fermer — puisqu'une liste vide en face d'une pleine fait tomber le
+    // `deepEqual`. Le total, lui, mord sur ce que le per-dossier ne voyait pas :
+    // si la regex cessait de lire les blocs, cinq dossiers passeraient sous un
+    // plancher de trois et le total tomberait. Il est plus fort, pas plus doux.
+    assert.ok(declares.length >= 1, `${declares.length} noms lus pour src/${dossier}/`);
+    assert.ok(reels.length >= 1, `${reels.length} fichiers trouvés dans src/${dossier}/`);
+    totalDeclares += declares.length;
     // Et aucun doublon déclaré, sinon un nom pourrait en masquer un absent.
     assert.equal(
       new Set(declares).size, declares.length,
@@ -233,6 +251,10 @@ test('documentation — CLAUDE.md §2 nomme exactement les fichiers de src/', ()
         + 'un module déposé dans le mauvais dossier en écrase un autre en silence',
     );
   }
+
+  // Le vrai garde-fou de montage : `src/` porte cinquante et quelques modules,
+  // et une regex qui cesserait de lire les blocs les perdrait TOUS d'un coup.
+  assert.ok(totalDeclares >= 50, `${totalDeclares} noms lus dans tout src/ — le montage est cassé`);
 });
 
 test('documentation — aucun fichier de test ne traîne hors de test/', () => {
@@ -253,7 +275,8 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   // Un fichier de test qui s'y trouve partirait dans le bundle si un jour
   // `index.src.html` l'importait par erreur.
   const intrus = [];
-  for (const dossier of [['src', 'data'], ['src', 'sim'], ['src', 'render'], ['src', 'ui'], ['tools']]) {
+  for (const dossier of [['src', 'data'], ['src', 'sim'], ['src', 'render'], ['src', 'ui'],
+    ['src', 'son'], ['tools']]) {
     for (const nom of fichiersJs(...dossier)) {
       if (nom.endsWith('.test.js')) intrus.push(`${dossier.join('/')}/${nom}`);
     }

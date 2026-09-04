@@ -97,7 +97,11 @@
     "planche_limites_ouvrage_5x1_1024.png",
     "planche_limites_ouvrage_5x1_128.png",
     "socles_j_tourelles_connexions_3x4.png",
-    "socles_o_tourelles_connexions_3x4.png"
+    "socles_o_tourelles_connexions_3x4.png",
+    "son_ui_click_01.wav",
+    "son_ui_click_02.wav",
+    "son_ui_error_01.wav",
+    "son_ui_toggle_on.wav"
   ],
   "dormantes": [
     "01_pylone_ouvrage_rampe_a.png",
@@ -176,6 +180,7 @@
     "nappe_petrole_a.png",
     "nappe_petrole_b.png",
     "roquettes_2x2_1254x1254.png",
+    "sfx_manifest.json",
     "sol_source_grille64_1536.png",
     "tourelle_off_o_belier_8_directions.png",
     "tourelle_off_o_belier_8_directions_intermediaires.png",
@@ -189,6 +194,7 @@
     "tourelle_off_o_ratisseur_8_directions_intermediaires.png",
     "ui_fleche_verte_1024x1024.png",
     "ui_fleche_verte_x1_5_1024x1536.png",
-    "ui_fleche_verte_x2_1024x2048.png"
+    "ui_fleche_verte_x2_1024x2048.png",
+    "unit_audio_map.json"
   ]
 }

@@ -124,7 +124,11 @@ const atlas = (slug) => ({
   type: 'image/webp',
 });
 
-const IMAGES_INLINE = [
+// ⚠ LA TABLE A CESSÉ DE NE PORTER QUE DES IMAGES — lot SON-MOTEUR, 04/09. Les
+// quatre sons témoins entrent par le même mécanisme, et le nom suit : une table
+// nommée « images » qui porterait de l'audio mentirait au premier relecteur.
+// Le type MIME est déjà par entrée, donc rien d'autre ne change.
+const FICHIERS_INLINE = [
   { marqueur: '%ATLAS_TERRAIN%', chemin: ['art', 'sprites', 'carte', 'atlas-terrain-64.png'], type: 'image/png' },
   atlas('batiment'),
   // ⚠ LE MARQUEUR NE SE DÉDUIT PAS DU SLUG ICI : la famille s'appelle `terrain`
@@ -191,9 +195,27 @@ const IMAGES_INLINE = [
   // 164 578 o en WebP contre 2 099 998 en PNG optimisé : voir `tools/fonds.py`,
   // qui dit pourquoi un décor n'est pas du pixel art à teintes comptées.
   { marqueur: '%FOND_OFFENSE%', chemin: ['art', 'sprites', 'fond', 'fond_offense.webp'], type: 'image/webp' },
+
+  // ⚠⚠ LES QUATRE SONS TÉMOINS — lot SON-MOTEUR, 04/09. Ils ne sont pas des
+  // images, et ils voyagent pourtant par le mécanisme des images : un marqueur,
+  // un `data:`, une balise qui le porte en `src`. C'est la même contrainte qui
+  // le veut — la garde offline refuse toute adresse dans le HTML produit, et
+  // CLAUDE.md §6 interdit d'en assembler une à l'exécution pour passer dessous.
+  // `src/ui/son.js` LIT donc l'adresse sur la balise, comme `garnirLesAtlas`
+  // lit la sienne dans une variable CSS, et la décode par `atob`.
+  //
+  // ⚠ 3 634 OCTETS POUR LES QUATRE, 4 848 EN BASE64. Le brief en annonçait
+  // 2 520 ; l'écart est le conteneur Ogg, qui pèse deux pages d'en-tête par
+  // fichier — sur un son de 75 ms, l'emballage coûte plus que le son. Le débit
+  // reste celui qu'Ethan a fixé, 24 kbps mono : on rapporte l'écart, on ne
+  // dégrade pas le son pour tomber sur un nombre.
+  { marqueur: '%SON_UI_CLICK_01%', chemin: ['art', 'sprites', 'son', 'ui_click_01.opus'], type: 'audio/ogg' },
+  { marqueur: '%SON_UI_CLICK_02%', chemin: ['art', 'sprites', 'son', 'ui_click_02.opus'], type: 'audio/ogg' },
+  { marqueur: '%SON_UI_ERROR_01%', chemin: ['art', 'sprites', 'son', 'ui_error_01.opus'], type: 'audio/ogg' },
+  { marqueur: '%SON_UI_TOGGLE_ON%', chemin: ['art', 'sprites', 'son', 'ui_toggle_on.opus'], type: 'audio/ogg' },
 ];
 
-for (const image of IMAGES_INLINE) {
+for (const image of FICHIERS_INLINE) {
   if (!html.includes(image.marqueur)) continue;
   const chemin = join(racine, ...image.chemin);
   if (!existsSync(chemin)) {

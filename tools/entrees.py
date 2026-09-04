@@ -60,10 +60,28 @@ OUTILS = [(nom, args) for nom, args in CHAINE if nom != 'entrees']
 # dans les treize outils — et c'est la moitié qui compte : une garde qui
 # demanderait aux outils de se déclarer eux-mêmes ne verrait pas celui qui
 # oublie de le faire.
+# ⚠⚠ ET IL SUIT MAINTENANT DEUX PORTES, PAS UNE — lot SON-MOTEUR, 04/09. La
+# chaîne a cessé de n'ouvrir que des images : `tools/sons.py` lit des WAV. Une
+# source qu'aucune porte ne surveille serait classée DORMANTE alors qu'un outil
+# la consomme, c'est-à-dire exactement le mensonge que ce fichier existe pour
+# empêcher.
+#
+# ⚠ ON ÉLARGIT À `wave.open`, PAS À `open`. La porte reste NOMMÉE : envelopper
+# le `open` du langage attraperait les JSON, les fichiers temporaires et les
+# sorties des outils eux-mêmes, et la trace ne voudrait plus rien dire. C'est
+# l'exact pendant audio d'`Image.open`.
+#
+# ⚠ ET `opusenc` EST UN SOUS-PROCESSUS, DONC SA LECTURE EST INVISIBLE ICI.
+# `tools/sons.py` ouvre chaque master avec `wave` pour VÉRIFIER ses paramètres —
+# mono, 44,1 kHz, durée — et c'est cette ouverture-là que la trace voit. Le
+# contrôle et la déclaration sont le même geste, ce qui est ce qui les tient
+# d'accord : supprimer la vérification ferait basculer les quatre WAV en
+# « dormants », et la garde tomberait.
 MOUCHARD = '''import os
+import wave
 from PIL import Image
-_ouvrir = Image.open
-def _trace(fp, *a, **k):
+
+def _noter(fp):
     try:
         chemin = os.path.abspath(fp if isinstance(fp, str) else getattr(fp, 'name', ''))
     except Exception:
@@ -71,8 +89,18 @@ def _trace(fp, *a, **k):
     if chemin:
         with open(os.environ['FZ_TRACE'], 'a', encoding='utf-8') as f:
             f.write(chemin + chr(10))
-    return _ouvrir(fp, *a, **k)
-Image.open = _trace
+
+_ouvrir_image = Image.open
+def _trace_image(fp, *a, **k):
+    _noter(fp)
+    return _ouvrir_image(fp, *a, **k)
+Image.open = _trace_image
+
+_ouvrir_wave = wave.open
+def _trace_wave(fp, *a, **k):
+    _noter(fp)
+    return _ouvrir_wave(fp, *a, **k)
+wave.open = _trace_wave
 '''
 
 
