@@ -313,6 +313,33 @@ export const PROFILS_ASSAUT = {
 // budget d'armée en un seul raid. La spec ne mentionne pas cette contrainte.
 export const EMPLACEMENTS_ASSAUT = { vagues: 4, parVague: 9 };
 
+// ⚠⚠ LE DÉLAI PENDANT LEQUEL « ATTAQUER » RESTE INERTE À CHAQUE ENTRÉE SUR
+// L'ÉCRAN DE RAID. Ethan, 04/09, en cherchant à reproduire un raid parti tout
+// seul : « si ça se trouve je double-clique et le bouton attaquer apparaissait
+// pile poil sous mon doigt ». C'est une HYPOTHÈSE, et elle n'a pas été
+// reproduite — voir `RAPPORT-lotASSAUT.md`, qui dit les intervalles essayés.
+//
+// ⚠ ELLE EST RETENUE POUR UNE RAISON QUI N'A RIEN À VOIR AVEC SA VRAISEMBLANCE :
+// le geste qu'elle décrit est IRRÉVERSIBLE et PAYANT. Un raid parti tout seul
+// dépense des points d'attaque et engage une armée abîmée. Quelques lignes
+// contre une heure de régénération.
+//
+// ⚠⚠ ET LE LOT QUI POSE CETTE GARDE AGGRAVE D'ABORD LE RISQUE : le bouton passe
+// d'un sixième de rangée à un bloc « vraiment en gros », donc il tombe plus
+// souvent sous un doigt qui vient de toucher la carte à cet endroit-là. La
+// garde est la contrepartie de cette taille, pas une précaution annexe.
+//
+// ⚠ CE N'EST PAS UNE CONFIRMATION DÉGUISÉE. Ethan n'en veut pas — « il n'y a
+// que ça qui déclenche l'attaque », pas « demander confirmation ». Un délai ne
+// demande rien, ne s'affiche pas, et au bout de trois cents millisecondes il
+// n'existe plus. S'il gêne un joueur qui attaque vite, **c'est ce nombre-ci qui
+// baisse**, pas la garde qui part.
+//
+// ⚠ ET IL VIT DANS `src/data/` PARCE QU'UN NOMBRE SE CHANGE SEUL — règle §4 de
+// `CLAUDE.md`. C'est exactement celle qui est tombée sur le seuil d'étiquette au
+// lot CONTOUR-ET-ÉTIQUETTES, parce qu'il valait 64 et qu'un cran valait 64.
+export const ECRAN_RAID = { delaiArmementMs: 300 };
+
 // --- points de recherche -----------------------------------------------------
 // Ils ne se produisent pas, ils se prennent sur les défenses détruites.
 // Barème au niveau 1, +20 % si le module de la cible est débloqué, et
