@@ -64,6 +64,129 @@ export const CRANS = ZOOM_CARTE.crans;
 export const CRAN_PAR_DEFAUT = 0;
 
 /**
+ * Les deux bouts de la course du zoom, en pixels physiques par case.
+ *
+ * ⚠ ELLES SE LISENT DANS LA TABLE, ELLES NE SE RÉÉCRIVENT PAS. Écrire les deux
+ * nombres ici ferait la seconde vérité que §4 de `CLAUDE.md` interdit, et la
+ * première à mentir le jour où un cran s'ajouterait à un bout ou à l'autre. La
+ * garde « l'écran ne nomme aucune constante de zoom en dur » de `monde.test.js`
+ * tomberait d'ailleurs dessus.
+ */
+export const ECHELLE_MIN = CRANS[0];
+export const ECHELLE_MAX = CRANS[CRANS.length - 1];
+
+/**
+ * Le cran auquel les dalles se rendent, pour une échelle d'affichage donnée :
+ * le plus PETIT cran qui soit supérieur ou égal à l'échelle.
+ *
+ * ⚠⚠ L'ÉCHELLE D'AFFICHAGE ET L'ÉCHELLE DE RENDU SONT DEUX GRANDEURS, ET C'EST
+ * TOUT CE QUI REND LE ZOOM CONTINU PAYABLE. `rendreDalle` fabrique une image à
+ * un cran de la table ; `drawImage` la pose à la taille qu'on veut. Une dalle
+ * rendue au cran 64 s'affiche donc à 45 px par case sans être recalculée, et le
+ * cache ne se renouvelle qu'aux passages de cran — trois fois sur toute la
+ * course, et non à chaque image. Le pavé du 30/08 qui déclarait le continu
+ * impossible confondait les deux ; c'est ce trou-là que le lot ZOOM-CONTINU a
+ * ouvert.
+ *
+ * ⚠⚠ LE PLUS PETIT CRAN ≥ L'ÉCHELLE, ET JAMAIS LE PLUS PROCHE. Le plus proche
+ * donnerait un facteur d'affichage jusqu'à 1,41, c'est-à-dire un
+ * AGRANDISSEMENT de pixel art — très exactement le « gros carré moche »
+ * qu'Ethan a rapporté le 30/08 et que `tuilesParCase: 2` a corrigé. Ici le
+ * facteur tombe dans (0,5 ; 1] par construction, les crans allant du simple au
+ * double : on réduit toujours, on ne grossit jamais.
+ *
+ * ⚠ ELLE LÈVE HORS DES BORNES, elle ne rend pas une valeur de repli. Une
+ * échelle hors course est un fait de PROGRAMME — le pincement la borne avant
+ * d'arriver ici —, et un repli silencieux ferait dessiner la carte à une
+ * échelle que personne n'a demandée.
+ *
+ * @param {number} echelle pixels physiques par case, réel
+ * @returns {number} un élément de `CRANS`
+ */
+export function cranDeRendu(echelle) {
+  if (!Number.isFinite(echelle) || echelle < ECHELLE_MIN || echelle > ECHELLE_MAX) {
+    throw new RangeError(
+      `zoom : échelle ${echelle} hors de [${ECHELLE_MIN}, ${ECHELLE_MAX}]`,
+    );
+  }
+  // La table est croissante — `monde.test.js` l'exige — et l'échelle est bornée
+  // par son dernier élément : il y a toujours un cran qui répond.
+  return CRANS.find((cran) => cran >= echelle);
+}
+
+/**
+ * Le facteur d'affichage d'une échelle : ce par quoi une dalle rendue se
+ * réduit pour se poser. Dans (0,5 ; 1], jamais au-delà de 1.
+ *
+ * @param {number} echelle pixels physiques par case, réel
+ * @returns {number}
+ */
+export function facteurDAffichage(echelle) {
+  return echelle / cranDeRendu(echelle);
+}
+
+/**
+ * Ramène une échelle demandée dans la course du zoom.
+ *
+ * ⚠ LA BUTÉE EST FRANCHE, ET C'EST LE COMPORTEMENT VOULU. Multiplier une
+ * échelle déjà collée à un bout par un rapport, puis re-borner, la laisse où
+ * elle est : la carte « colle » aux extrémités au lieu de rebondir.
+ *
+ * @param {number} demandee échelle voulue, en pixels physiques par case
+ * @returns {number} dans [`ECHELLE_MIN`, `ECHELLE_MAX`]
+ */
+export function bornerEchelle(demandee) {
+  return Math.min(ECHELLE_MAX, Math.max(ECHELLE_MIN, demandee));
+}
+
+/**
+ * La vue après un changement d'échelle qui garde un point de l'écran immobile.
+ *
+ * ⚠⚠ C'EST TOUTE L'ARITHMÉTIQUE DE L'ANCRAGE, ET ELLE EST ICI POUR ÊTRE
+ * MESURÉE. On relève la case sous l'ancre AVANT de changer l'échelle, on la
+ * réapplique APRÈS : sans ça la case visée fuit sous les doigts, et sur une
+ * carte de 300 rangées on ne la retrouve pas. La sortir de la fermeture est ce
+ * qui permet à `ZOOM T7` et `ZOOM T8` de mesurer le vrai code plutôt qu'une
+ * copie écrite à la main dans le test — « un montage écrit à la main ne garde
+ * que lui-même », leçon que le dépôt a payée cinq fois.
+ *
+ * @param {{x: number, y: number}} vue coin haut-gauche, en pixels d'écran
+ * @param {number} avant échelle d'avant
+ * @param {number} apres échelle d'après
+ * @param {{x: number, y: number}} ancre point du canevas à garder fixe
+ * @returns {{x: number, y: number}}
+ */
+export function vueApresEchelle(vue, avant, apres, ancre) {
+  const colonne = (vue.x + ancre.x) / avant;
+  const rangee = (vue.y + ancre.y) / avant;
+  return { x: colonne * apres - ancre.x, y: rangee * apres - ancre.y };
+}
+
+/**
+ * Le bord d'une dalle à l'écran : son indice, la largeur d'affichage d'une
+ * dalle, et l'origine de la vue.
+ *
+ * ⚠⚠ C'EST LA FONCTION QUI SUPPRIME LES COUTURES, ET ELLE EST ICI POUR ÊTRE
+ * MESURÉE. Le bord DROIT de la dalle `i` est `bordDeDalle(i + 1, …)`, qui est
+ * le bord GAUCHE de la dalle `i + 1` : le même appel, donc le même nombre. Ni
+ * trou ni recouvrement, quel que soit le facteur — et ça se calcule, là où une
+ * capture peut rater une couture d'un pixel.
+ *
+ * ⚠ ELLE ARRONDIT, ET C'EST TOUT CE QU'ELLE FAIT. La largeur d'une dalle n'est
+ * jamais arrondie de son côté : elle se DÉDUIT de deux bords. Arrondir les deux
+ * séparément est très exactement le défaut que cette fonction existe pour
+ * rendre impossible.
+ *
+ * @param {number} indice indice de la dalle sur cet axe
+ * @param {number} coteAffiche largeur d'une dalle à l'écran, réelle
+ * @param {number} origine coin de la vue sur cet axe, en pixels d'écran
+ * @returns {number} entier
+ */
+export function bordDeDalle(indice, coteAffiche, origine) {
+  return Math.round(indice * coteAffiche - origine);
+}
+
+/**
  * Combien de dalles au plus se calculent dans une même image.
  *
  * ⚠ CE PLAFOND EXISTE PARCE QU'UNE DALLE COÛTE CHER. Le pavage pose environ
@@ -778,7 +901,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   let etatCourant = null;
   let atlas = null;
   let atlasDemande = false;
-  let cranIndex = CRAN_PAR_DEFAUT;
+  // ⚠⚠ L'ÉCHELLE EST UN RÉEL, PLUS UN INDICE DE TABLE. Le zoom était par crans
+  // jusqu'au 04/09 ; Ethan : « le zoom de la carte ne doit pas être par cran ».
+  // Un `cranIndex` gardé à côté d'elle « au cas où » divergerait au premier
+  // pincement — il n'y en a plus, et `monde.test.js` refuse qu'il revienne.
+  let echelle = CRANS[CRAN_PAR_DEFAUT];
   let vueX = 0;
   let vueY = 0;
   let visible = false;
@@ -808,7 +935,8 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   let grossesBases = null;
   let grossesBasesDemandees = false;
 
-  const cran = () => CRANS[cranIndex];
+  /** Le cran auquel les dalles se rendent en ce moment. Voir `cranDeRendu`. */
+  const cranCourant = () => cranDeRendu(echelle);
 
   // --- l'atlas, décodé une fois ---------------------------------------------
   //
@@ -911,20 +1039,21 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   }
 
   function recadrer() {
-    const taille = dimensionsDeLaCarte(cran());
+    const taille = dimensionsDeLaCarte(echelle);
     vueX = bornerDefilement(vueX, taille.largeur, canvas.width);
     vueY = bornerDefilement(vueY, taille.hauteur, canvas.height);
   }
 
   /** Centre la vue sur une case de la carte. */
   function centrerSur(position) {
-    vueX = (position.colonne - 0.5) * cran() - canvas.width / 2;
-    vueY = (position.rangee - 0.5) * cran() - canvas.height / 2;
+    vueX = (position.colonne - 0.5) * echelle - canvas.width / 2;
+    vueY = (position.rangee - 0.5) * echelle - canvas.height / 2;
     recadrer();
   }
 
   /**
-   * Change de cran en gardant un point de l'écran immobile.
+   * Porte l'échelle à la valeur demandée, en gardant un point de l'écran
+   * immobile — le cœur du zoom continu.
    *
    * ⚠⚠ L'ANCRE N'EST PLUS FORCÉMENT LE CENTRE — c'est ce que le pincement
    * apporte. Zoomer sur le milieu des deux doigts est la seule façon de faire
@@ -932,26 +1061,34 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * doigts la case qu'on vise, et sur une carte de 300 rangées on ne la
    * retrouve pas. Le centre reste le défaut, pour tout appel sans ancre.
    *
-   * @param {number} pas −1 ou +1
+   * ⚠⚠ ET LE CACHE NE SE VIDE PLUS — C'ÉTAIT LA LIGNE QUI RENDAIT LE CONTINU
+   * IMPOSSIBLE. Elle disait : « une dalle est un rendu à un cran donné ; la
+   * garder d'un cran à l'autre dessinerait l'ancienne échelle. » Le motif était
+   * juste tant que `cleDeDalle` IGNORAIT le cran ; elle le porte depuis le lot
+   * ZOOM-CONTINU, si bien que deux crans cohabitent sans se confondre et que
+   * l'éviction au plus ancien usage s'en charge. Vider ici referait 19 ms par
+   * dalle à chaque image d'un pincement.
+   *
+   * ⚠ LA CASE SOUS L'ANCRE SE RELÈVE AVANT, ET SE RÉAPPLIQUE APRÈS. Sans ça
+   * elle fuit sous les doigts — c'est ce que le pavé ci-dessus décrit, et la
+   * bonne nouvelle du continu est que ça ne change pas d'un mot.
+   *
+   * @param {number} demandee échelle voulue, en pixels physiques par case
    * @param {{x: number, y: number}} [ancre] point à garder fixe, en pixels du
    *   canevas (physiques, origine au coin haut-gauche du canevas)
-   * @returns {boolean} vrai si le cran a changé
+   * @returns {boolean} vrai si l'échelle a bougé
    */
-  function changerDeCran(pas, ancre = null) {
-    const suivant = cranIndex + pas;
-    if (suivant < 0 || suivant >= CRANS.length) return false;
+  function reglerEchelle(demandee, ancre = null) {
+    // ⚠ ON BORNE ICI, ET C'EST POURQUOI `cranDeRendu` PEUT LEVER PLUS BAS.
+    const voulue = bornerEchelle(demandee);
+    if (!Number.isFinite(voulue) || voulue === echelle) return false;
     const point = ancre === null
       ? { x: canvas.width / 2, y: canvas.height / 2 }
       : ancre;
-    const ancien = cran();
-    const colonne = (vueX + point.x) / ancien;
-    const rangee = (vueY + point.y) / ancien;
-    cranIndex = suivant;
-    // ⚠ LE CACHE SE VIDE, IL NE SE TRIE PAS. Une dalle est un rendu à un cran
-    // donné ; la garder d'un cran à l'autre dessinerait l'ancienne échelle.
-    cache.vider();
-    vueX = colonne * cran() - point.x;
-    vueY = rangee * cran() - point.y;
+    const vue = vueApresEchelle({ x: vueX, y: vueY }, echelle, voulue, point);
+    echelle = voulue;
+    vueX = vue.x;
+    vueY = vue.y;
     recadrer();
     majBoutons();
     dessiner();
@@ -972,21 +1109,21 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * du cadre de famille du jeton.
    */
   function majBoutons() {
-    const cssParCase = cran() / (fenetre.devicePixelRatio || 1);
+    const cssParCase = echelle / (fenetre.devicePixelRatio || 1);
     $('monde-outils').title = `${Math.round(cssParCase)} px / case`;
   }
 
   // --- le dessin -------------------------------------------------------------
 
   function cleDeDalle(i, j) {
-    return `${cran()}:${i}:${j}`;
+    return `${cranCourant()}:${i}:${j}`;
   }
 
   /** Fabrique une dalle et la range. Rendue à part pour pouvoir la plafonner. */
   function calculerDalle(i, j) {
     const cote = TERRAIN_CARTE.dalleCotePx;
     const { donnees } = rendreDalle({
-      atlas, graine: etatCourant.graine, cran: cran(), x0: i * cote, y0: j * cote, cote,
+      atlas, graine: etatCourant.graine, cran: cranCourant(), x0: i * cote, y0: j * cote, cote,
     });
     const tampon = doc.createElement('canvas');
     tampon.width = cote;
@@ -999,49 +1136,86 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   /**
    * L'origine du dessin, en pixels ENTIERS.
    *
-   * ⚠ LE DÉFILEMENT SE GARDE EN FLOTTANT, LE DESSIN SE FAIT EN ENTIERS. Un
-   * `drawImage` à une position fractionnaire rééchantillonne la dalle : le
-   * pavage, qui est du pixel art, deviendrait flou dès qu'on pose le doigt
-   * dessus. Arrondir `vueX` lui-même perdrait un demi-pixel à chaque évènement
-   * de glissement, et la carte traînerait derrière le doigt sur un long
-   * défilement.
+   * ⚠ LE DÉFILEMENT SE GARDE EN FLOTTANT, LE DESSIN PART D'UNE ORIGINE ENTIÈRE.
+   * Arrondir `vueX` lui-même perdrait un demi-pixel à chaque évènement de
+   * glissement, et la carte traînerait derrière le doigt sur un long
+   * défilement : on arrondit à la lecture, jamais à l'écriture.
+   *
+   * ⚠⚠ ET CE QUI SUIT NE VAUT PLUS POUR LES DALLES DEPUIS LE ZOOM CONTINU. Ce
+   * pavé disait « le dessin se fait en ENTIERS », au motif qu'un `drawImage`
+   * fractionnaire rééchantillonne le pavage et le rend flou. C'est vrai du
+   * DÉFILEMENT, et c'est encore ce que cette origine-ci garantit ; ce n'est
+   * plus vrai de la TAILLE d'une dalle, qui vaut `cote × facteur` et n'est
+   * entière qu'aux crans. Une dalle se pose donc entre deux BORDS arrondis —
+   * voir `bordDeDalle` — et non à une position entière d'une largeur entière.
    */
   const origineX = () => Math.round(vueX);
   const origineY = () => Math.round(vueY);
 
+  /**
+   * Le fond : les dalles du cran de rendu, posées à l'échelle d'affichage.
+   *
+   * ⚠⚠ ON ARRONDIT LES BORDS, JAMAIS LES LARGEURS — ET C'EST LE PIÈGE DU LOT.
+   * À facteur fractionnaire une dalle mesure `cote × facteur` pixels d'écran,
+   * qui n'est pas entier. Arrondir séparément la position ET la largeur de
+   * chaque dalle laisse un pixel de fond entre deux voisines une fois sur
+   * deux : une grille noire sur toute la carte, c'est-à-dire exactement ce que
+   * le semis de `TERRAIN_CARTE` existe pour supprimer. En partant des BORDS, le
+   * bord droit d'une dalle EST le bord gauche de sa voisine — le même nombre,
+   * par construction et non par chance. `ZOOM T5` le calcule sur 200 facteurs.
+   *
+   * ⚠ LE LISSAGE EST VRAI ICI, ET FAUX PARTOUT AILLEURS. Une réduction non
+   * entière en « plus proche voisin » produit du moiré, pas du pixel art net.
+   * Il est remis à sa valeur d'avant en sortant : les emblèmes, eux, gardent la
+   * décision du 30/08 — voir la création du contexte.
+   */
   function dessinerFond(ox, oy) {
     const cote = TERRAIN_CARTE.dalleCotePx;
-    const i0 = Math.floor(ox / cote);
-    const i1 = Math.floor((ox + canvas.width - 1) / cote);
-    const j0 = Math.floor(oy / cote);
-    const j1 = Math.floor((oy + canvas.height - 1) / cote);
+    // Une dalle est rendue à `cranCourant()` et posée à `echelle` : sa largeur
+    // d'écran suit le même rapport que la case.
+    const facteur = facteurDAffichage(echelle);
+    const coteAffiche = cote * facteur;
+    const i0 = Math.floor(ox / coteAffiche);
+    const i1 = Math.floor((ox + canvas.width - 1) / coteAffiche);
+    const j0 = Math.floor(oy / coteAffiche);
+    const j1 = Math.floor((oy + canvas.height - 1) / coteAffiche);
+    const lissageAvant = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
     let budget = DALLES_PAR_IMAGE;
     let restent = false;
     for (let j = j0; j <= j1; j += 1) {
+      const y0 = bordDeDalle(j, coteAffiche, oy);
+      const y1 = bordDeDalle(j + 1, coteAffiche, oy);
       for (let i = i0; i <= i1; i += 1) {
-        const x = i * cote - ox;
-        const y = j * cote - oy;
+        const x0 = bordDeDalle(i, coteAffiche, ox);
+        const x1 = bordDeDalle(i + 1, coteAffiche, ox);
         let dalle = cache.lire(cleDeDalle(i, j));
         if (dalle === undefined && atlas !== null && budget > 0) {
           budget -= 1;
           dalle = calculerDalle(i, j);
         }
         if (dalle !== undefined) {
-          ctx.drawImage(dalle, x, y);
+          ctx.drawImage(dalle, x0, y0, x1 - x0, y1 - y0);
           continue;
         }
         restent = true;
         // Le centre de la dalle donne la rangée, donc le camp du sol : une
         // attente violette au bout de la carte et terre cuite au départ vaut
         // mieux qu'un aplat qui change de couleur quand la dalle arrive.
+        //
+        // ⚠ LE CENTRE SE COMPTE DANS L'ESPACE DE RENDU, DONC SUR LE CRAN DE
+        // RENDU. La dalle fait `cote` pixels À CE CRAN-LÀ ; la diviser par
+        // l'échelle d'affichage donnerait une rangée fausse d'un facteur
+        // jusqu'à deux, donc la mauvaise teinte d'attente.
         const rangeeCentre = Math.min(
           GEOGRAPHIE.carte.hauteur,
-          Math.max(1, Math.floor((j * cote + cote / 2) / cran()) + 1),
+          Math.max(1, Math.floor((j * cote + cote / 2) / cranCourant()) + 1),
         );
         ctx.fillStyle = teinteDAttente(rangeeCentre);
-        ctx.fillRect(x, y, cote, cote);
+        ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
+    ctx.imageSmoothingEnabled = lissageAvant;
     return restent;
   }
 
@@ -1333,7 +1507,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     const oy = origineY();
     const restent = dessinerFond(ox, oy);
 
-    const pas = cran();
+    const pas = echelle;
     dessinerFrontieres(ox, oy, pas);
     sitesAffiches = sitesDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
@@ -1388,21 +1562,24 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // base : au doigt, pas de zoom fixe avec + − ». Les deux boutons sont partis
   // du balisage ; le pincement les remplace.
   //
-  // ⚠⚠ LE ZOOM RESTE PAR CRANS, ET CE N'EST PAS UN DEMI-TRAVAIL. `rendreDalle`
-  // LÈVE sur un cran hors table, et pour une raison qui tient : à chaque cran,
-  // la tuile de terrain comme l'emblème restent à un facteur d'échelle ENTIER,
-  // seule façon de ne pas brouiller du pixel art (voir `ZOOM_CARTE`). Un zoom
-  // continu demanderait de recalculer les dalles à chaque image — 19 ms pièce,
-  // mesuré — pour rendre du flou. Le geste est donc continu, son EFFET est
-  // discret : on franchit un cran quand les doigts se sont écartés de √2, la
-  // moyenne géométrique entre deux crans qui vont du simple au double. C'est le
-  // point où le cran d'arrivée est plus proche que celui de départ.
+  // ⚠⚠ LE ZOOM EST CONTINU DEPUIS LE 04/09, ET LE PAVÉ QUI ÉTAIT ICI AVAIT UN
+  // TROU. Ethan : « le zoom de la carte ne doit pas être par cran ». Ce pavé
+  // déclarait le continu impossible parce qu'il « demanderait de recalculer les
+  // dalles à chaque image — 19 ms pièce, mesuré ». Le raisonnement supposait
+  // que l'échelle d'AFFICHAGE et l'échelle de RENDU sont la même grandeur :
+  // elles ne le sont pas. `rendreDalle` fabrique une image à un cran de la
+  // table, `drawImage` la pose à la taille qu'on veut, et `cranDeRendu` fait le
+  // pont. Les dalles ne se recalculent donc qu'aux passages de cran — trois
+  // fois sur toute la course.
   //
-  // ⚠ ET LE POINT DE RÉFÉRENCE SE REMET À CHAQUE FRANCHISSEMENT, pour qu'un
-  // pincement continu enchaîne les crans sans qu'on relâche.
-
-  /** Écart des doigts au-delà duquel on change de cran. Voir ci-dessus. */
-  const SEUIL_PINCEMENT = Math.SQRT2;
+  // ⚠ CE QUE LE PAVÉ DISAIT DE JUSTE EST GARDÉ : ON NE GROSSIT JAMAIS DU PIXEL
+  // ART. C'est la leçon du « gros carré moche » du 30/08. Le cran de rendu est
+  // le plus PETIT qui soit ≥ à l'échelle, donc le facteur d'affichage tombe
+  // dans (0,5 ; 1] et réduit toujours.
+  //
+  // ⚠ ET LE POINT DE RÉFÉRENCE SE REMET À CHAQUE IMAGE, sur l'écart RÉEL des
+  // doigts. Le ré-ancrer sur une échelle refusée ferait « rendre » le pincement
+  // au-delà de la butée avant que le dézoom ne reprenne.
 
   let pointeur = null;
   // ⚠ LES POINTEURS SE SUIVENT PAR IDENTIFIANT, PAS PAR COMPTEUR. Un doigt qui
@@ -1460,22 +1637,23 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     }
     if (pincement !== null && doigts.size === 2) {
       const deux = [...doigts.values()];
-      const rapport = ecartDesDoigts(deux) / pincement.ecart;
+      const ecart = ecartDesDoigts(deux);
       // ⚠ LE RAPPORT DES ÉCARTS, PAS LEUR DIFFÉRENCE : une différence en pixels
       // zoomerait plus vite sur une grande dalle que sur une petite, pour le
       // même geste de la main.
-      if (rapport >= SEUIL_PINCEMENT || rapport <= 1 / SEUIL_PINCEMENT) {
-        const sens = rapport >= SEUIL_PINCEMENT ? 1 : -1;
+      const rapport = ecart / pincement.ecart;
+      // Deux doigts qui se rejoignent donneraient un rapport qui explose.
+      if (ecart >= 1 && Number.isFinite(rapport)) {
         // Le point d'ancrage se relève AVANT le changement : après, les
-        // coordonnées de vue ont déjà bougé.
-        if (changerDeCran(sens, milieuDesDoigts(deux))) {
-          pincement = { ecart: ecartDesDoigts(deux) };
-        } else {
-          // Au bout de la table, on ré-ancre quand même : sinon le rapport
-          // reste franchi et chaque image redemande un cran qui n'existe pas.
-          pincement = { ecart: ecartDesDoigts(deux) };
-        }
+        // coordonnées de vue ont déjà bougé. `reglerEchelle` borne lui-même.
+        reglerEchelle(echelle * rapport, milieuDesDoigts(deux));
       }
+      // ⚠ ON RÉ-ANCRE SUR L'ÉCART RÉEL, ET DANS TOUS LES CAS — y compris quand
+      // la butée a refusé le changement. Ré-ancrer sur ce que l'échelle a
+      // vraiment fait obligerait à « rendre » le pincement excédentaire avant
+      // que le dézoom ne reprenne, et la carte resterait collée à la butée
+      // pendant que les doigts se referment.
+      pincement = { ecart };
       return;
     }
     if (pointeur === null || evenement.pointerId !== pointeur.id) return;
@@ -1504,8 +1682,8 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     const dpr = fenetre.devicePixelRatio || 1;
     const px = (evenement.clientX - cadre.left) * dpr + origineX();
     const py = (evenement.clientY - cadre.top) * dpr + origineY();
-    const colonne = Math.floor(px / cran()) + 1;
-    const rangee = Math.floor(py / cran()) + 1;
+    const colonne = Math.floor(px / echelle) + 1;
+    const rangee = Math.floor(py / echelle) + 1;
     // ⚠ LE MODE DE DÉPLACEMENT PREND LA MAIN AVANT TOUT LE RESTE. Sans ça,
     // toucher une case occupée par un site ouvrirait son panneau au lieu de
     // poser la base, et le geste armé serait avalé par le geste ordinaire.

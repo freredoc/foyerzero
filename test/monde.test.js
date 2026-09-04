@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   CRANS, CRAN_PAR_DEFAUT, DALLES_PAR_IMAGE,
+  ECHELLE_MIN, ECHELLE_MAX, cranDeRendu, facteurDAffichage,
+  bornerEchelle, vueApresEchelle, bordDeDalle,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles, indicesDeTeinte,
   teinteDAttente,
@@ -901,8 +903,32 @@ test('emblèmes — `ZOOM_CARTE` est la source des échelles, et le dessin la su
     assert.ok(Number.isInteger(d.x) && Number.isInteger(d.y), `cran ${cran} : coin non entier`);
     assert.equal(d.x, (10 - 1 - 1) * cran, `cran ${cran} : la 3 × 3 ne se centre pas`);
   }
-  // Un cran hors table est refusé : le dessin ne s'invente pas une échelle.
-  assert.throws(() => dessinerGrosseBase(3, { rangee: 10, colonne: 10 }, 99, { x: 0, y: 0 }), /cran/);
+
+  // ⚠⚠ ET UNE ÉCHELLE INTERMÉDIAIRE EST ACCEPTÉE DEPUIS LE LOT ZOOM-CONTINU —
+  // C'EST LA MOITIÉ QUI A CHANGÉ DE CIBLE. Cette ligne exigeait qu'un cran hors
+  // de `ZOOM_CARTE.crans` LÈVE, ce qui était juste tant que la carte zoomait
+  // par crans. Depuis le 04/09 l'échelle est un réel, et cette garde-là faisait
+  // lever `dessinerGrosseBase` à toute échelle intermédiaire : pas un décalage
+  // d'un pixel, mais une levée DANS LA BOUCLE DE DESSIN, qui vide tout l'écran
+  // Monde — et la base terminale est à l'écran dès qu'on regarde le haut de la
+  // carte. Mesuré avant correction : « cran 97.3 hors de 32, 64, 128, 256 ».
+  const intermediaire = dessinerGrosseBase(3, { rangee: 10, colonne: 10 }, 97.3, { x: 0, y: 0 });
+  assert.equal(intermediaire.cote, 97.3 * 3, 'la 3 × 3 ne suit pas une échelle intermédiaire');
+  assert.ok(Number.isInteger(intermediaire.x) && Number.isInteger(intermediaire.y),
+    'le coin d\'une 3 × 3 cesse d\'être entier à échelle intermédiaire');
+
+  // ⚠ CE QUE LA GARDE DÉFEND N'A PAS CHANGÉ : « le dessin ne s'invente pas une
+  // échelle ». La faute qui peut arriver aujourd'hui n'est plus un cran hors
+  // table — il n'y en a plus — mais une échelle qui n'est pas un nombre : un
+  // `NaN` rendrait `drawImage` MUET, sans lever et sans dessiner, ce qui est la
+  // faute que ce module tout entier raconte.
+  for (const absurde of [0, -5, NaN, Infinity]) {
+    assert.throws(
+      () => dessinerGrosseBase(3, { rangee: 10, colonne: 10 }, absurde, { x: 0, y: 0 }),
+      /échelle/,
+      `l'échelle ${absurde} passe : le dessin s'invente une échelle`,
+    );
+  }
 
   // ⚠⚠ ET LA GRILLE SOURCE EST MESURÉE CONTRE LA COUTURE, PLUS COMPARÉE À UN
   // NOMBRE ÉCRIT. Cette garde-ci disait, mot pour mot, « la grille d'emblème ne
@@ -1208,47 +1234,53 @@ test('carte — `CSS_MINI_LETTRE` n\'existe plus nulle part dans `src/`', () => 
 // Le lot SPRITES-ET-ZOOM : le zoom se fait au doigt, et l'atlas n'entre qu'une fois
 // ---------------------------------------------------------------------------
 
-test('zoom — le pincement a remplacé les deux boutons, et il reste par CRANS', () => {
+test('zoom — le pincement a remplacé les deux boutons, et il est CONTINU', () => {
   // ⚠⚠ ETHAN, 30/08 : « zoom carte et base : au doigt, pas de zoom fixe avec
   // + − ». Les deux boutons sont partis du balisage et de l'écran.
   const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
   assert.doesNotMatch(ecran, /monde-zoom-(moins|plus)/,
     'l\'écran Monde parle encore de ses boutons de zoom');
 
-  // ⚠⚠ ET LE ZOOM RESTE DISCRET, CE QUI N'EST PAS UN DEMI-TRAVAIL. `rendreDalle`
-  // LÈVE sur un cran hors table — `terrain.test.js` le garde de face —, et pour
-  // une raison qui tient : à chaque cran, la tuile comme l'emblème restent à un
-  // facteur d'échelle ENTIER, seule façon de ne pas brouiller du pixel art. Un
-  // zoom continu recalculerait les dalles à chaque image — 19 ms pièce, mesuré
-  // — pour rendre du flou. L'écran ne demande donc QUE des crans de la table :
-  // il change d'INDICE, il ne calcule jamais une échelle.
-  assert.match(ecran, /const suivant = cranIndex \+ pas/,
-    'le cran ne se déplace plus d\'un rang : le zoom a peut-être passé en continu');
-  assert.match(ecran, /if \(suivant < 0 \|\| suivant >= CRANS\.length\) return false/,
-    'le zoom ne s\'arrête plus aux bouts de la table des crans');
+  // ⚠⚠ CE TEST A CHANGÉ DE CIBLE AU LOT ZOOM-CONTINU, IL N'A PERDU AUCUNE
+  // ASSERTION QUI TIENT ENCORE. Il exigeait ici trois choses — `cranIndex + pas`,
+  // l'arrêt aux bouts de la table, et `SEUIL_PINCEMENT = Math.SQRT2` — au motif
+  // qu'« un zoom continu recalculerait les dalles à chaque image, 19 ms pièce,
+  // pour rendre du flou ». Ethan, 04/09 : « le zoom de la carte ne doit pas être
+  // par cran ». Et le motif avait un trou : il confondait l'échelle
+  // d'AFFICHAGE et l'échelle de RENDU. Les dalles se rendent toujours à un cran
+  // de la table — `cranDeRendu` —, elles se POSENT à l'échelle réelle.
+  assert.match(ecran, /let echelle = CRANS\[CRAN_PAR_DEFAUT\]/,
+    'l\'échelle n\'est plus une valeur réelle initialisée sur la table');
+  assert.match(ecran, /reglerEchelle\(echelle \* rapport, milieuDesDoigts\(deux\)\)/,
+    'le pincement ne multiplie plus l\'échelle par le rapport des écarts');
+  assert.match(ecran, /function reglerEchelle\(demandee, ancre = null\)/,
+    '`reglerEchelle` ne prend plus de point d\'ancrage');
 
-  // Le seuil est la moyenne GÉOMÉTRIQUE entre deux crans qui vont du simple au
-  // double : c'est le point où le cran d'arrivée est plus proche que celui de
-  // départ. Il se lit, il ne s'écrit pas en 1.41.
-  assert.match(ecran, /const SEUIL_PINCEMENT = Math\.SQRT2/,
-    'le seuil du pincement n\'est plus la moyenne géométrique entre deux crans');
+  // ⚠ ET LES BORNES SE LISENT DANS LA TABLE. Écrire 32 et 256 ici ferait la
+  // seconde vérité que §4 de `CLAUDE.md` interdit.
+  assert.match(ecran, /Math\.min\(ECHELLE_MAX, Math\.max\(ECHELLE_MIN, demandee\)\)/,
+    'le pincement ne borne plus l\'échelle sur les bouts de la table');
+
+  // ⚠⚠ L'ASSERTION DU SIMPLE AU DOUBLE RESTE, ET ELLE DÉFEND AUTRE CHOSE. Elle
+  // justifiait le seuil √2 ; elle garantit désormais que le facteur
+  // d'affichage tombe dans (0,5 ; 1] — donc qu'on RÉDUIT toujours, et qu'on ne
+  // grossit jamais du pixel art. Des crans qui n'iraient plus du simple au
+  // double casseraient cette borne-là.
   for (let i = 1; i < CRANS.length; i += 1) {
     assert.equal(CRANS[i] / CRANS[i - 1], 2,
-      'les crans ne vont plus du simple au double : le seuil √2 n\'est plus le bon');
+      'les crans ne vont plus du simple au double : le facteur peut dépasser 1');
   }
 
   // ⚠ LE RAPPORT, PAS LA DIFFÉRENCE — même raison que sur la base.
-  assert.match(ecran, /ecartDesDoigts\(deux\) \/ pincement\.ecart/,
+  assert.match(ecran, /ecart \/ pincement\.ecart/,
     'le pincement de la carte ne se mesure plus en rapport');
 
   // ⚠⚠ ET LE ZOOM S'ANCRE SUR LE MILIEU DES DOIGTS, PAS SUR LE CENTRE DE
   // L'ÉCRAN. C'est la seule façon de faire grossir CE QU'ON REGARDE : ancré au
   // centre, la case visée fuit sous les doigts, et sur une carte de 300 rangées
   // on ne la retrouve pas.
-  assert.match(ecran, /changerDeCran\(sens, milieuDesDoigts\(deux\)\)/,
+  assert.match(ecran, /milieuDesDoigts\(deux\)/,
     'le pincement ne zoome plus sur le milieu des doigts');
-  assert.match(ecran, /function changerDeCran\(pas, ancre = null\)/,
-    '`changerDeCran` ne prend plus de point d\'ancrage');
 
   // ⚠ ET LES DOIGTS SE SUIVENT PAR IDENTIFIANT, pas par compteur : un doigt
   // parti hors de la dalle n'émet pas toujours `pointerup`, et la carte
@@ -1481,3 +1513,324 @@ function extraireFonction(source, nom) {
   }
   return '';
 }
+
+// ---------------------------------------------------------------------------
+// Le zoom continu — lot ZOOM-CONTINU, 04/09
+//
+// ⚠⚠ ETHAN, 04/09 : « le zoom de la carte ne doit pas être par cran », puis
+// « on met ça en stand-by et on fait le zoom continu ». Ce que ce bloc mesure
+// est la distinction qui rend le continu payable : l'échelle d'AFFICHAGE est un
+// réel, l'échelle de RENDU reste dans la table, et le facteur entre les deux ne
+// dépasse jamais 1 — on ne grossit jamais du pixel art.
+// ---------------------------------------------------------------------------
+
+test('ZOOM T1 — un cran exact se rend à lui-même, et son facteur vaut 1', () => {
+  // ⚠ AUX CRANS, LE ZOOM CONTINU DOIT ÊTRE L'ANCIEN, AU BIT PRÈS. C'est ce qui
+  // garantit que le lot ne dégrade rien là où la carte était déjà nette : à
+  // facteur 1 le `drawImage` est un 1:1 et ne rééchantillonne rien.
+  for (const cran of CRANS) {
+    assert.equal(cranDeRendu(cran), cran, `le cran ${cran} ne se rend pas à lui-même`);
+    assert.equal(facteurDAffichage(cran), 1, `le cran ${cran} n'a pas un facteur de 1`);
+  }
+  // Falsifiable : un « plus petit cran STRICTEMENT supérieur » rendrait 64 ici.
+  assert.notEqual(cranDeRendu(CRANS[0]), CRANS[1],
+    'un cran exact monte au cran suivant : le rendu double pour rien');
+});
+
+test('ZOOM T2 — une échelle à peine au-dessus d\'un cran monte au suivant', () => {
+  // ⚠⚠ LE PLUS PETIT CRAN ≥ L'ÉCHELLE, ET JAMAIS LE PLUS PROCHE. Le plus proche
+  // rendrait 64 pour 65, donc un facteur de 1,016 — c'est-à-dire un
+  // AGRANDISSEMENT de pixel art, le « gros carré moche » du 30/08.
+  assert.equal(cranDeRendu(65), 128, 'une échelle de 65 se rend à 64 : on grossit');
+  assert.ok(facteurDAffichage(65) < 1, 'le facteur de 65 dépasse 1');
+  // Et juste au-dessus du plus petit cran, de même.
+  assert.equal(cranDeRendu(ECHELLE_MIN + 0.5), CRANS[1],
+    'une échelle à peine au-dessus du plus petit cran reste au plus petit');
+});
+
+test('ZOOM T3 — sur toute la course, le facteur reste dans (0,5 ; 1]', () => {
+  // ⚠⚠ C'EST L'INVARIANT DU LOT : ON RÉDUIT TOUJOURS, ON NE GROSSIT JAMAIS. Il
+  // tient parce que les crans vont du simple au double — la borne basse est
+  // ouverte, la haute fermée et atteinte aux quatre crans exacts.
+  let pire = 1;
+  for (let k = 0; k < 100; k += 1) {
+    const echelle = ECHELLE_MIN + ((ECHELLE_MAX - ECHELLE_MIN) * k) / 99;
+    const facteur = facteurDAffichage(echelle);
+    assert.ok(facteur > 0.5, `échelle ${echelle} : facteur ${facteur} ≤ 0,5`);
+    assert.ok(facteur <= 1, `échelle ${echelle} : facteur ${facteur} > 1 — on grossit`);
+    assert.ok(CRANS.includes(cranDeRendu(echelle)),
+      `échelle ${echelle} : le cran de rendu n'est pas dans la table`);
+    pire = Math.min(pire, facteur);
+  }
+  // Le montage mesure bien quelque chose : il descend franchement sous 1.
+  assert.ok(pire < 0.55, `le pire facteur vaut ${pire} : le balayage n'atteint pas la borne basse`);
+});
+
+test('ZOOM T4 — une échelle hors course LÈVE, elle ne se replie pas', () => {
+  // ⚠ UN REPLI SILENCIEUX FERAIT DESSINER LA CARTE À UNE ÉCHELLE QUE PERSONNE
+  // N'A DEMANDÉE. Le pincement borne avant d'arriver ici : ce qui passe quand
+  // même est un fait de PROGRAMME.
+  for (const absurde of [16, 400, 0, -32, NaN, Infinity]) {
+    assert.throws(() => cranDeRendu(absurde), /échelle/,
+      `l'échelle ${absurde} passe : le rendu s'invente un cran`);
+  }
+  // Et les deux bouts EXACTS sont acceptés — une borne fermée des deux côtés.
+  assert.equal(cranDeRendu(ECHELLE_MIN), ECHELLE_MIN);
+  assert.equal(cranDeRendu(ECHELLE_MAX), ECHELLE_MAX);
+  // Les bornes se LISENT dans la table : elles ne sont pas une seconde vérité.
+  assert.equal(ECHELLE_MIN, CRANS[0], 'ECHELLE_MIN a été recopiée au lieu d\'être lue');
+  assert.equal(ECHELLE_MAX, CRANS[CRANS.length - 1], 'ECHELLE_MAX a été recopiée');
+});
+
+test('ZOOM T5 — deux dalles voisines partagent leur bord : ni trou ni recouvrement', () => {
+  // ⚠⚠ C'EST LE TEST QUI COMPTE, ET IL SE CALCULE. À facteur fractionnaire une
+  // dalle mesure `cote × facteur` pixels, qui n'est pas entier : arrondir
+  // séparément la position ET la largeur laisse un pixel de fond entre deux
+  // voisines une image sur deux — une grille noire sur toute la carte. Une
+  // capture peut rater une couture d'un pixel ; l'arithmétique ne la rate pas.
+  const cote = TERRAIN_CARTE.dalleCotePx;
+  let fractionnaires = 0;
+  for (let f = 0; f < 200; f += 1) {
+    const echelle = ECHELLE_MIN + ((ECHELLE_MAX - ECHELLE_MIN) * f) / 199;
+    const coteAffiche = cote * facteurDAffichage(echelle);
+    if (!Number.isInteger(coteAffiche)) fractionnaires += 1;
+    // Une origine fractionnaire elle aussi : le défilement ne tombe pas rond.
+    for (const origine of [0, 1, 137, -58, 4096]) {
+      // ⚠ ON REJOUE LA BOUCLE DE DESSIN, ON NE COMPARE PAS UNE EXPRESSION À
+      // ELLE-MÊME. Chaque dalle est posée en `(x0, largeur)` exactement comme
+      // `dessinerFond` le fait ; ce qu'on vérifie est que le bord DROIT de la
+      // dalle `i` — c'est-à-dire `x0 + largeur`, ce que `drawImage` a
+      // réellement couvert — retombe sur le bord GAUCHE de la `i + 1`.
+      const poses = [];
+      for (let i = 0; i < 20; i += 1) {
+        const x0 = bordDeDalle(i, coteAffiche, origine);
+        const x1 = bordDeDalle(i + 1, coteAffiche, origine);
+        poses.push({ x0, largeur: x1 - x0 });
+      }
+      for (let i = 0; i < poses.length - 1; i += 1) {
+        assert.equal(poses[i].x0 + poses[i].largeur, poses[i + 1].x0,
+          `facteur ${coteAffiche / cote}, origine ${origine} : la dalle ${i} laisse `
+          + `${poses[i + 1].x0 - (poses[i].x0 + poses[i].largeur)} px de couture`);
+        // Et les bords sont ENTIERS — un `drawImage` fractionnaire rééchantillonne.
+        assert.ok(Number.isInteger(poses[i].x0) && Number.isInteger(poses[i].largeur),
+          `bord ou largeur non entiers à l'indice ${i}`);
+        // Aucune dalle ne se retourne : les largeurs sont positives.
+        assert.ok(poses[i].largeur > 0, `largeur ${poses[i].largeur} à l'indice ${i}`);
+      }
+    }
+  }
+
+  // ⚠⚠ ET LE MONTAGE DISCRIMINE — MESURÉ, PAS SUPPOSÉ. La façon de faire
+  // naïve, celle qui arrondit la position ET la largeur chacune de son côté,
+  // DOIT laisser des coutures ; sans cette contre-épreuve, « les bords se
+  // partagent » pourrait être vrai d'à peu près n'importe quel code.
+  let facteursAvecCouture = 0;
+  let pireCouture = 0;
+  for (let f = 0; f < 200; f += 1) {
+    const echelle = ECHELLE_MIN + ((ECHELLE_MAX - ECHELLE_MIN) * f) / 199;
+    const coteNaif = cote * facteurDAffichage(echelle);
+    let coutures = 0;
+    for (let i = 0; i < 200; i += 1) {
+      const x0 = Math.round(i * coteNaif - 137);
+      const suivant = Math.round((i + 1) * coteNaif - 137);
+      if (x0 + Math.round(coteNaif) !== suivant) coutures += 1;
+    }
+    if (coutures > 0) facteursAvecCouture += 1;
+    pireCouture = Math.max(pireCouture, coutures);
+  }
+  // Mesuré au lot : 198 facteurs sur 200 laissent au moins une couture, médiane
+  // 39 sur 200 dalles, pire cas 99 — c'est-à-dire une dalle sur deux. Les deux
+  // facteurs indemnes sont les crans EXACTS que le balayage touche, où la
+  // largeur d'affichage est entière et où le défaut ne peut pas exister.
+  assert.ok(facteursAvecCouture >= 190,
+    `la pose naïve n'échoue que sur ${facteursAvecCouture} facteurs sur 200 : le test ne mesure rien`);
+  assert.ok(pireCouture >= 50,
+    `la pose naïve ne laisse au pire que ${pireCouture} coutures sur 200 dalles`);
+
+  // ⚠⚠ ET CETTE FALSIFICATION-LÀ N'A PAS MORDU AU PREMIER RELEVÉ — LA GARDE
+  // QUI SUIT EST NÉE DE LÀ. Remplacer, DANS `dessinerFond`, la largeur
+  // `x1 - x0` par `Math.round(coteAffiche)` — c'est-à-dire commettre pour de
+  // bon le défaut que tout ce test existe pour empêcher — laissait la suite
+  // ENTIÈREMENT VERTE : 49 pass / 0 fail, mesuré. L'arithmétique ci-dessus ne
+  // regarde que `bordDeDalle` ; le SITE DE POSE, lui, est hors de portée des
+  // tests faute de DOM (§3 de `CLAUDE.md`), et rien ne le lisait. Même leçon
+  // que `SON T24`, qui lit les trois lignes d'`avancerDUnTick` parce qu'un
+  // appel juste peut avoir un corps vide.
+  const corps = sansCommentaires(lire('src', 'ui', 'monde.js'))
+    .split('function dessinerFond(')[1]
+    .split('\n  }')[0];
+  assert.match(corps, /const x0 = bordDeDalle\(i, coteAffiche, ox\);/,
+    '`dessinerFond` ne prend plus son bord gauche dans `bordDeDalle`');
+  assert.match(corps, /const x1 = bordDeDalle\(i \+ 1, coteAffiche, ox\);/,
+    '`dessinerFond` ne prend plus son bord droit dans `bordDeDalle`');
+  assert.match(corps, /const y0 = bordDeDalle\(j, coteAffiche, oy\);/,
+    '`dessinerFond` ne prend plus son bord haut dans `bordDeDalle`');
+  assert.match(corps, /const y1 = bordDeDalle\(j \+ 1, coteAffiche, oy\);/,
+    '`dessinerFond` ne prend plus son bord bas dans `bordDeDalle`');
+  // ⚠ LA LARGEUR SE DÉDUIT DE DEUX BORDS, ELLE NE S'ARRONDIT JAMAIS. Les deux
+  // sites de pose — la dalle et l'aplat d'attente — sont lus, parce qu'une
+  // couture sur l'attente est une couture quand même.
+  assert.match(corps, /ctx\.drawImage\(dalle, x0, y0, x1 - x0, y1 - y0\);/,
+    '`dessinerFond` pose sa dalle autrement qu'
+    + ' entre ses deux bords : les coutures reviennent');
+  assert.match(corps, /ctx\.fillRect\(x0, y0, x1 - x0, y1 - y0\);/,
+    'l\'aplat d\'attente ne se pose plus entre ses deux bords');
+  assert.ok(!/Math\.round\(coteAffiche\)/.test(corps),
+    '`dessinerFond` arrondit la largeur d\'une dalle : c\'est le défaut même');
+  // ⚠ LE MONTAGE MESURE BIEN LE CAS DIFFICILE : la plupart des facteurs
+  // balayés donnent une largeur de dalle NON entière. Sans ça, il ne
+  // vérifierait que les quatre crans, où le problème n'existe pas.
+  assert.ok(fractionnaires > 150,
+    `${fractionnaires} facteurs fractionnaires sur 200 : le montage ne mesure pas les coutures`);
+});
+
+test('ZOOM T6 — la somme des largeurs vaut la largeur totale, à l\'unité près', () => {
+  // ⚠ C'EST L'AUTRE MOITIÉ DE T5 : des bords partagés pourraient dériver
+  // ensemble et rendre une bande plus étroite que la carte. La somme des
+  // largeurs de N dalles doit valoir la largeur totale arrondie.
+  const cote = TERRAIN_CARTE.dalleCotePx;
+  for (let f = 0; f < 200; f += 1) {
+    const echelle = ECHELLE_MIN + ((ECHELLE_MAX - ECHELLE_MIN) * f) / 199;
+    const coteAffiche = cote * facteurDAffichage(echelle);
+    for (const origine of [0, 137, -58]) {
+      const n = 20;
+      let somme = 0;
+      for (let i = 0; i < n; i += 1) {
+        somme += bordDeDalle(i + 1, coteAffiche, origine) - bordDeDalle(i, coteAffiche, origine);
+      }
+      const attendue = bordDeDalle(n, coteAffiche, origine) - bordDeDalle(0, coteAffiche, origine);
+      assert.equal(somme, attendue,
+        `facteur ${coteAffiche / cote} : ${n} dalles couvrent ${somme} au lieu de ${attendue}`);
+      // Et ce total ne s'écarte jamais de plus d'un pixel de la vérité réelle.
+      assert.ok(Math.abs(attendue - n * coteAffiche) <= 1,
+        `facteur ${coteAffiche / cote} : ${attendue} contre ${n * coteAffiche} attendus`);
+    }
+  }
+});
+
+test('ZOOM T7 — la case sous l\'ancre ne bouge pas quand l\'échelle change', () => {
+  // ⚠⚠ SANS ÇA, LA CASE VISÉE FUIT SOUS LES DOIGTS. C'est ce que l'ancrage au
+  // milieu des deux doigts existe pour empêcher, et sur une carte de 300
+  // rangées on ne retrouve pas ce qu'on a perdu de vue.
+  const ancre = { x: 317, y: 209 };
+  const vue = { x: 1234.5, y: 5678.25 };
+  for (const depart of [ECHELLE_MIN, 47.3, 64, 97.7, 180, ECHELLE_MAX / 1.3]) {
+    const arrivee = bornerEchelle(depart * 1.3);
+    const avant = {
+      colonne: (vue.x + ancre.x) / depart,
+      rangee: (vue.y + ancre.y) / depart,
+    };
+    const neuve = vueApresEchelle(vue, depart, arrivee, ancre);
+    const apres = {
+      colonne: (neuve.x + ancre.x) / arrivee,
+      rangee: (neuve.y + ancre.y) / arrivee,
+    };
+    assert.ok(Math.abs(apres.colonne - avant.colonne) < 0.01,
+      `échelle ${depart} : la colonne sous l'ancre passe de ${avant.colonne} à ${apres.colonne}`);
+    assert.ok(Math.abs(apres.rangee - avant.rangee) < 0.01,
+      `échelle ${depart} : la rangée sous l'ancre passe de ${avant.rangee} à ${apres.rangee}`);
+  }
+  // Falsifiable : ancrer au centre plutôt qu'aux doigts DÉPLACE la case visée.
+  const centre = { x: 0, y: 0 };
+  const fautif = vueApresEchelle(vue, 64, 83.2, centre);
+  assert.ok(Math.abs((fautif.x + ancre.x) / 83.2 - (vue.x + ancre.x) / 64) > 0.01,
+    'le montage ne distingue pas une ancre juste d\'une ancre fausse');
+});
+
+test('ZOOM T8 — à la butée, l\'échelle ne dépasse pas et la vue ne saute pas', () => {
+  // ⚠ LA BUTÉE EST FRANCHE : une échelle déjà collée à un bout, multipliée puis
+  // re-bornée, reste où elle est. Ce qui ne doit pas arriver, c'est que la VUE
+  // saute alors que l'échelle n'a pas bougé.
+  assert.equal(bornerEchelle(ECHELLE_MAX * 4), ECHELLE_MAX, 'la butée haute cède');
+  assert.equal(bornerEchelle(ECHELLE_MIN / 4), ECHELLE_MIN, 'la butée basse cède');
+  assert.equal(bornerEchelle(ECHELLE_MAX), ECHELLE_MAX);
+
+  const ancre = { x: 200, y: 150 };
+  const vue = { x: 900.75, y: 400.5 };
+  // Une échelle inchangée laisse la vue EXACTEMENT où elle est : c'est ce qui
+  // fait que pincer au-delà de la butée ne fait rien bouger du tout.
+  const immobile = vueApresEchelle(vue, ECHELLE_MAX, bornerEchelle(ECHELLE_MAX * 2), ancre);
+  assert.equal(immobile.x, vue.x, 'la vue saute alors que l\'échelle est à la butée');
+  assert.equal(immobile.y, vue.y, 'la vue saute alors que l\'échelle est à la butée');
+
+  // Et le cran de rendu reste défini aux deux bouts : `cranDeRendu` ne lève pas
+  // sur ce que `bornerEchelle` laisse passer. Les deux doivent s'accorder,
+  // sinon la butée produirait une levée dans la boucle de dessin.
+  for (const demandee of [-1e9, 0, ECHELLE_MIN / 2, ECHELLE_MAX * 9, 1e9]) {
+    assert.doesNotThrow(() => cranDeRendu(bornerEchelle(demandee)),
+      `l'échelle bornée de ${demandee} fait lever le rendu`);
+  }
+});
+
+test('ZOOM T9 — à échelle fractionnaire, le défilement reste un nombre', () => {
+  // ⚠ AUCUN `NaN` NE DOIT SORTIR DE LÀ. Un défilement `NaN` se propage à
+  // l'origine, donc à tous les `drawImage` : la carte disparaîtrait sans lever.
+  const VUE = 1080;
+  for (let f = 0; f < 60; f += 1) {
+    const echelle = ECHELLE_MIN + ((ECHELLE_MAX - ECHELLE_MIN) * f) / 59;
+    const taille = dimensionsDeLaCarte(echelle);
+    for (const demande of [-5000, 0, 123.75, 1e9]) {
+      const x = bornerDefilement(demande, taille.largeur, VUE);
+      const y = bornerDefilement(demande, taille.hauteur, VUE);
+      assert.ok(Number.isFinite(x) && Number.isFinite(y),
+        `échelle ${echelle}, demande ${demande} : défilement non fini`);
+      assert.ok(x <= Math.max(0, taille.largeur - VUE),
+        `échelle ${echelle} : le défilement dépasse le bord de la carte`);
+    }
+  }
+
+  // ⚠⚠ ÉCART DÉCLARÉ AU BRIEF, QUI ATTENDAIT « PAS DE VUE NÉGATIVE ». Une vue
+  // NÉGATIVE est ici le comportement VOULU et déjà testé plus haut : quand la
+  // carte tient entière dans le canevas, `bornerDefilement` la CENTRE plutôt
+  // que de la coller à gauche, et centrer se dit par un décalage négatif.
+  // L'exiger positif casserait une décision du lot ÉCRAN-CARTE. Ce qui se
+  // vérifie ici est donc la valeur exacte du centrage, à échelle fractionnaire.
+  const etroite = dimensionsDeLaCarte(ECHELLE_MIN);
+  assert.ok(etroite.largeur < VUE, 'le montage ne mesure pas le cas « plus étroite que le canevas »');
+  assert.equal(bornerDefilement(0, etroite.largeur, VUE), -(VUE - etroite.largeur) / 2,
+    'une carte plus étroite que le canevas ne se centre plus');
+});
+
+test('ZOOM T10 — le mécanisme par crans a disparu de l\'écran', () => {
+  // ⚠ UN INDICE DE CRAN GARDÉ « AU CAS OÙ » À CÔTÉ D'UNE ÉCHELLE RÉELLE
+  // DIVERGERAIT AU PREMIER PINCEMENT. Le grep de fin de lot ne doit plus le
+  // trouver — ni lui, ni le seuil √2, ni la fonction qui les employait.
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  for (const reliquat of ['cranIndex', 'SEUIL_PINCEMENT', 'changerDeCran']) {
+    assert.ok(!ecran.includes(reliquat),
+      `l'écran Monde porte encore « ${reliquat} » : deux mécanismes de zoom cohabitent`);
+  }
+  // Et il porte bien le neuf : sans ça, un écran vide passerait aussi.
+  for (const attendu of ['cranDeRendu', 'facteurDAffichage', 'reglerEchelle', 'bordDeDalle']) {
+    assert.ok(ecran.includes(attendu), `l'écran Monde n'emploie pas ${attendu}`);
+  }
+  // ⚠ ET LA GARDE LIT LA SOURCE DÉCOMMENTÉE — le fichier NOMME `cranIndex` dans
+  // le commentaire qui explique sa disparition, et une garde qui lit ce qu'on a
+  // écrit à son sujet ne garde rien. C'est la faute que le dépôt a commise cinq
+  // fois, de `viewport-fit=cover` à `render/contour.js`.
+  assert.ok(lire('src', 'ui', 'monde.js').includes('cranIndex'),
+    'le commentaire qui explique la disparition de `cranIndex` est parti aussi');
+});
+
+test('ZOOM T11 — le cache ne se vide plus, il porte le cran dans sa clé', () => {
+  // ⚠⚠ C'ÉTAIT LA LIGNE QUI RENDAIT LE ZOOM CONTINU IMPOSSIBLE. `cache.vider()`
+  // au changement de cran forçait 19 ms par dalle à chaque image d'un
+  // pincement. Elle part parce que `cleDeDalle` porte désormais le cran : deux
+  // crans cohabitent sans se confondre, et l'éviction s'en charge.
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.ok(!ecran.includes('cache.vider()'),
+    'l\'écran Monde vide encore son cache : le zoom continu recalcule tout à chaque image');
+  // ⚠ LA MÉTHODE, ELLE, RESTE — et la garde ne compte pas sa propre définition.
+  // C'est la faute « une garde a compté sa propre définition », vue cinq fois.
+  assert.match(ecran, /vider\(\) \{ entrees\.clear\(\); \}/,
+    'le cache a perdu sa méthode `vider` : `monde.test.js` l\'emploie');
+  // Falsifiable : le motif attrape bien un vrai appel.
+  assert.ok('  cache.vider();'.includes('cache.vider()'),
+    'le motif ne reconnaît même pas un appât');
+
+  // ⚠ ET LA CLÉ PORTE LE CRAN DE RENDU, PAS L'ÉCHELLE. Une clé à l'échelle
+  // réelle ferait une entrée de cache par image de pincement — le cache
+  // deviendrait un tas de dalles jamais relues.
+  assert.match(ecran, /return `\$\{cranCourant\(\)\}:\$\{i\}:\$\{j\}`/,
+    'la clé de dalle ne porte plus le cran de rendu');
+});

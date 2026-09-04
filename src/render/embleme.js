@@ -35,7 +35,7 @@
 // renommage d'image.
 
 import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
-import { ZOOM_CARTE, GEOGRAPHIE, POI } from '../data/sites.js';
+import { GEOGRAPHIE, POI } from '../data/sites.js';
 import { existeDansAtlas, celluleDuSprite } from './sprite.js';
 
 /** La famille d'atlas où vivent les emblèmes. */
@@ -188,8 +188,23 @@ export function empriseDeLaGrosseBase(cotes, site) {
  * @returns {{nom: string, x: number, y: number, cote: number}}
  */
 export function dessinerGrosseBase(cotes, site, cran, origine) {
-  if (!ZOOM_CARTE.crans.includes(cran)) {
-    throw new RangeError(`emblème : cran ${cran} hors de ${ZOOM_CARTE.crans.join(', ')}`);
+  // ⚠⚠ LA GARDE A CHANGÉ DE CIBLE AU LOT ZOOM-CONTINU, ELLE N'A PAS ÉTÉ
+  // RETIRÉE. Elle exigeait un cran DE LA TABLE `ZOOM_CARTE.crans`, ce qui était
+  // juste tant que la carte zoomait par crans ; depuis le 04/09 l'échelle est
+  // un RÉEL, et cette garde-là faisait LEVER `dessinerGrosseBase` à toute
+  // échelle intermédiaire. Ce n'était pas un décalage d'un pixel : une levée
+  // dans la boucle de dessin vide tout l'écran Monde, et la base terminale est
+  // à l'écran dès qu'on regarde le haut de la carte. Mesuré avant correction —
+  // « cran 97.3 hors de 32, 64, 128, 256 » — et c'est très exactement ce que le
+  // §2.5 du brief demandait de vérifier plutôt que de croire.
+  //
+  // ⚠ CE QU'ELLE GARDE RESTE LE MÊME : « le dessin ne s'invente pas une
+  // échelle ». La faute qui peut arriver aujourd'hui n'est plus un cran hors
+  // table — il n'y a plus de table — mais une échelle qui n'est pas un nombre :
+  // un `NaN` venu d'une division par zéro rendrait `drawImage` muet, sans lever
+  // et sans dessiner, ce qui est la faute que ce module tout entier raconte.
+  if (!Number.isFinite(cran) || cran <= 0) {
+    throw new RangeError(`emblème : échelle ${cran} invalide`);
   }
   const emprise = empriseDeLaGrosseBase(cotes, site);
   return {
