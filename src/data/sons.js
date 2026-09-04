@@ -13,9 +13,15 @@
 // dérivation en JavaScript et compare, si bien que la génération ne peut pas
 // mentir sans qu'on le voie.
 //
-// ⚠ UNE SEULE FAMILLE EST CÂBLÉE — `ui`. Les 240 autres sons sont encodés,
-// livrés et jouables ; aucun événement du jeu ne les demande, et on n'en invente
-// aucun pour leur donner un usage.
+// ⚠⚠ VINGT-QUATRE SONS SONT CÂBLÉS, ET LES 239 AUTRES SONT MUETS À DESSEIN.
+// Le lot SON-CÂBLAGE branche ce qui avait DÉJÀ un point d'accroche dans le
+// dépôt : cinq sons `ui`, trois ambiances d'écran, QUATRE boucles de roulement,
+// deux boucles de machinerie, et les ponctuels de sélection, d'ordre, de pose et
+// d'effondrement. **Aucun son de combat** — ni tir, ni impact, ni explosion : ils
+// attendent un journal de `tick` qui n'existe pas, et ce journal est un chantier
+// de SIMULATION. Aucun événement de jeu n'a été inventé pour donner un emploi à
+// un son, et `src/sim/` n'a pas bougé d'une ligne. Ce qui reste muet est NOMMÉ
+// dans `RAPPORT-lotSON-CABLAGE.md`, un par un, avec son motif.
 
 /**
  * Ce que le jeu s'autorise à garder décodé, en secondes, hors résidentes.
@@ -34,6 +40,24 @@
  * est la seule câblée, rien n'est jamais évincé.
  */
 export const MEMOIRE = { budgetSecondesDecodees: 30 };
+
+/**
+ * La rampe anti-claquement d'une boucle, en millisecondes.
+ *
+ * ⚠⚠ ELLE N'EST PAS DANS `MEMOIRE`, ET C'EST LA RÈGLE §4 DU DÉPÔT. Un budget de
+ * mémoire et une durée de fondu sont deux grandeurs ; les ranger ensemble parce
+ * qu'elles arrivent le même jour est très exactement ce qui a fait naître
+ * `data/economie.js`.
+ *
+ * ⚠⚠ ET CE N'EST PAS LE FONDU QUE LE README DU PACK INTERDIT. Sa ligne 39 dit
+ * « ne pas appliquer de fondu supplémentaire aux fichiers marqués `loop: true` ;
+ * leurs bornes exactes sont fournies en échantillons ». Elle parle du FICHIER,
+ * qu'on ne touche pas : la boucle rejoue ses bornes à l'échantillon près, sans
+ * fondu. La rampe porte sur le GAIN DE LECTURE, au démarrage et à l'arrêt —
+ * ailleurs, et sur autre chose. Sans elle, la forme d'onde saute de zéro à sa
+ * valeur en un échantillon, et l'oreille entend un clic.
+ */
+export const RAMPE_BOUCLE_MS = 120;
 
 export const BUS = {
   interface: -3,
@@ -58,11 +82,17 @@ export const BUS = {
  * ⚠ `maxInstances` EST PAR FICHIER, `gardeMs` EST PAR ÉVÉNEMENT — voir
  * `EVENEMENTS` ci-dessous, qui dit pourquoi et sur quelle mesure.
  *
- * ⚠ LE DRAPEAU `loop` DU MANIFESTE N'EST PAS REPORTÉ, ET C'EST DÉCLARÉ. Rien ne
- * le lirait aujourd'hui : le seul mécanisme qui en aurait besoin — une ambiance
- * qui tourne en fond — n'est pas câblé, et 263 champs qu'aucun code ne lit
- * seraient du poids mort dans un livrable qui se compte à l'octet. Une ligne du
- * générateur à ajouter le jour où une ambiance jouera.
+ * ⚠⚠ `boucle` EST LE DRAPEAU `loop` DU MANIFESTE, ET C'EST LA LIGNE QUE LE LOT
+ * PRÉCÉDENT ANNONÇAIT. Il écrivait « une ligne du générateur à ajouter le jour
+ * où une ambiance jouera » : ce jour est celui-ci. **Il n'est posé que sur les
+ * 35 sons qui le portent**, jamais `boucle: false` sur les 228 autres — un
+ * champ faux à 228 exemplaires pèserait dans un livrable qui se compte à
+ * l'octet, et `!== true` se lit aussi bien que `=== false`.
+ *
+ * ⚠ ET IL NE SE DÉDUIT PAS DE `residente`. Vingt-sept boucles ne sont PAS
+ * résidentes — les roulements, les moteurs, les machineries — et deux sons
+ * `weapons` bouclent aussi. « Ce qui tourne » et « ce qui reste décodé » sont
+ * deux questions ; les confondre ferait résider vingt-sept tampons de plus.
  *
  * ⚠⚠ `residente` DIT CE QUI RESTE DÉCODÉ, ET C'EST LE POINT DUR DU LOT. Un son
  * décodé ne pèse plus rien de ce que pèse son fichier : le navigateur le range
@@ -97,41 +127,41 @@ export const SONS = {
   alert_player_unit_lost: { bus: 'interface', dureeMs: 514, maxInstances: 1, volumeDb: 0 },
   alert_player_wave_end: { bus: 'interface', dureeMs: 516, maxInstances: 1, volumeDb: 0 },
   alert_player_wave_start: { bus: 'interface', dureeMs: 516, maxInstances: 1, volumeDb: 0 },
-  ambience_base_ouvrage_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_base_player_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_battlefield_distant_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_calm_map_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_map_wind_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_quartz_field_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_reactor_room_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  ambience_scoria_field_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, residente: true },
-  building_ouvrage_alarm_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 3, volumeDb: -6 },
+  ambience_base_ouvrage_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_base_player_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_battlefield_distant_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_calm_map_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_map_wind_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_quartz_field_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_reactor_room_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  ambience_scoria_field_loop: { bus: 'ambiances', dureeMs: 8000, maxInstances: 1, volumeDb: -12, boucle: true, residente: true },
+  building_ouvrage_alarm_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 3, volumeDb: -6, boucle: true },
   building_ouvrage_collapse_large: { bus: 'moteurs', dureeMs: 2466, maxInstances: 2, volumeDb: 0 },
   building_ouvrage_collapse_medium: { bus: 'moteurs', dureeMs: 1609, maxInstances: 2, volumeDb: 0 },
   building_ouvrage_collapse_small: { bus: 'moteurs', dureeMs: 1371, maxInstances: 2, volumeDb: 0 },
   building_ouvrage_complete: { bus: 'moteurs', dureeMs: 429, maxInstances: 2, volumeDb: 0 },
-  building_ouvrage_construction_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 3, volumeDb: -6 },
-  building_ouvrage_factory_loop: { bus: 'moteurs', dureeMs: 4200, maxInstances: 3, volumeDb: -6 },
+  building_ouvrage_construction_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 3, volumeDb: -6, boucle: true },
+  building_ouvrage_factory_loop: { bus: 'moteurs', dureeMs: 4200, maxInstances: 3, volumeDb: -6, boucle: true },
   building_ouvrage_power_down: { bus: 'moteurs', dureeMs: 1150, maxInstances: 2, volumeDb: 0 },
   building_ouvrage_power_up: { bus: 'moteurs', dureeMs: 1321, maxInstances: 2, volumeDb: 0 },
-  building_ouvrage_repair_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 3, volumeDb: -6 },
-  building_player_alarm_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 3, volumeDb: -6 },
+  building_ouvrage_repair_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 3, volumeDb: -6, boucle: true },
+  building_player_alarm_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 3, volumeDb: -6, boucle: true },
   building_player_collapse_large: { bus: 'moteurs', dureeMs: 2466, maxInstances: 2, volumeDb: 0 },
   building_player_collapse_medium: { bus: 'moteurs', dureeMs: 1609, maxInstances: 2, volumeDb: 0 },
   building_player_collapse_small: { bus: 'moteurs', dureeMs: 1371, maxInstances: 2, volumeDb: 0 },
   building_player_complete: { bus: 'moteurs', dureeMs: 635, maxInstances: 2, volumeDb: 0 },
-  building_player_construction_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 3, volumeDb: -6 },
-  building_player_factory_loop: { bus: 'moteurs', dureeMs: 4200, maxInstances: 3, volumeDb: -6 },
+  building_player_construction_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 3, volumeDb: -6, boucle: true },
+  building_player_factory_loop: { bus: 'moteurs', dureeMs: 4200, maxInstances: 3, volumeDb: -6, boucle: true },
   building_player_power_down: { bus: 'moteurs', dureeMs: 1150, maxInstances: 2, volumeDb: 0 },
   building_player_power_up: { bus: 'moteurs', dureeMs: 1321, maxInstances: 2, volumeDb: 0 },
-  building_player_repair_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 3, volumeDb: -6 },
-  building_reactor_loop: { bus: 'moteurs', dureeMs: 5000, maxInstances: 2, volumeDb: -8 },
-  engine_ouvrage_heavy_idle_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 5, volumeDb: -7 },
-  engine_ouvrage_light_idle_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 5, volumeDb: -7 },
-  engine_ouvrage_medium_idle_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 5, volumeDb: -7 },
-  engine_player_heavy_idle_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 5, volumeDb: -7 },
-  engine_player_light_idle_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 5, volumeDb: -7 },
-  engine_player_medium_idle_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 5, volumeDb: -7 },
+  building_player_repair_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 3, volumeDb: -6, boucle: true },
+  building_reactor_loop: { bus: 'moteurs', dureeMs: 5000, maxInstances: 2, volumeDb: -8, boucle: true },
+  engine_ouvrage_heavy_idle_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 5, volumeDb: -7, boucle: true },
+  engine_ouvrage_light_idle_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 5, volumeDb: -7, boucle: true },
+  engine_ouvrage_medium_idle_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 5, volumeDb: -7, boucle: true },
+  engine_player_heavy_idle_loop: { bus: 'moteurs', dureeMs: 4000, maxInstances: 5, volumeDb: -7, boucle: true },
+  engine_player_light_idle_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 5, volumeDb: -7, boucle: true },
+  engine_player_medium_idle_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 5, volumeDb: -7, boucle: true },
   explosion_ouvrage_large_01: { bus: 'impacts', dureeMs: 2389, maxInstances: 3, volumeDb: 0 },
   explosion_ouvrage_large_02: { bus: 'impacts', dureeMs: 2428, maxInstances: 3, volumeDb: 0 },
   explosion_ouvrage_large_03: { bus: 'impacts', dureeMs: 2466, maxInstances: 3, volumeDb: 0 },
@@ -200,10 +230,10 @@ export const SONS = {
   impact_scoria_small_02: { bus: 'impacts', dureeMs: 429, maxInstances: 8, volumeDb: 0 },
   impact_scoria_small_03: { bus: 'impacts', dureeMs: 447, maxInstances: 8, volumeDb: 0 },
   impact_scoria_small_04: { bus: 'impacts', dureeMs: 465, maxInstances: 8, volumeDb: 0 },
-  movement_dard_heavy_loop: { bus: 'moteurs', dureeMs: 3400, maxInstances: 6, volumeDb: -6 },
-  movement_dard_light_loop: { bus: 'moteurs', dureeMs: 3400, maxInstances: 6, volumeDb: -6 },
-  movement_essaim_ouvrage_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 6, volumeDb: -6 },
-  movement_infantry_player_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 6, volumeDb: -6 },
+  movement_dard_heavy_loop: { bus: 'moteurs', dureeMs: 3400, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_dard_light_loop: { bus: 'moteurs', dureeMs: 3400, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_essaim_ouvrage_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_infantry_player_loop: { bus: 'moteurs', dureeMs: 2400, maxInstances: 6, volumeDb: -6, boucle: true },
   movement_ouvrage_deploy_01: { bus: 'moteurs', dureeMs: 1371, maxInstances: 3, volumeDb: 0 },
   movement_ouvrage_deploy_02: { bus: 'moteurs', dureeMs: 1389, maxInstances: 3, volumeDb: 0 },
   movement_ouvrage_flyby_01: { bus: 'moteurs', dureeMs: 2000, maxInstances: 2, volumeDb: 0 },
@@ -214,12 +244,12 @@ export const SONS = {
   movement_player_flyby_01: { bus: 'moteurs', dureeMs: 2000, maxInstances: 2, volumeDb: 0 },
   movement_player_flyby_02: { bus: 'moteurs', dureeMs: 2000, maxInstances: 2, volumeDb: 0 },
   movement_player_flyby_03: { bus: 'moteurs', dureeMs: 2000, maxInstances: 2, volumeDb: 0 },
-  movement_tracks_heavy_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 6, volumeDb: -6 },
-  movement_tracks_light_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 6, volumeDb: -6 },
-  movement_tracks_medium_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 6, volumeDb: -6 },
-  movement_walker_heavy_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 6, volumeDb: -6 },
-  movement_walker_light_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 6, volumeDb: -6 },
-  movement_walker_medium_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 6, volumeDb: -6 },
+  movement_tracks_heavy_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_tracks_light_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_tracks_medium_loop: { bus: 'moteurs', dureeMs: 3200, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_walker_heavy_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_walker_light_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 6, volumeDb: -6, boucle: true },
+  movement_walker_medium_loop: { bus: 'moteurs', dureeMs: 3600, maxInstances: 6, volumeDb: -6, boucle: true },
   order_ouvrage_attack_01: { bus: 'interface', dureeMs: 299, maxInstances: 2, volumeDb: 0 },
   order_ouvrage_attack_02: { bus: 'interface', dureeMs: 299, maxInstances: 2, volumeDb: 0 },
   order_ouvrage_move_01: { bus: 'interface', dureeMs: 299, maxInstances: 2, volumeDb: 0 },
@@ -255,7 +285,7 @@ export const SONS = {
   ui_toggle_off: { bus: 'interface', dureeMs: 140, maxInstances: 1, volumeDb: 0 },
   ui_toggle_on: { bus: 'interface', dureeMs: 160, maxInstances: 1, volumeDb: 0 },
   ui_victory: { bus: 'interface', dureeMs: 1011, maxInstances: 1, volumeDb: 0 },
-  weapon_missile_flight_loop: { bus: 'armes', dureeMs: 2000, maxInstances: 4, volumeDb: -4 },
+  weapon_missile_flight_loop: { bus: 'armes', dureeMs: 2000, maxInstances: 4, volumeDb: -4, boucle: true },
   weapon_missile_lock: { bus: 'armes', dureeMs: 425, maxInstances: 1, volumeDb: 0 },
   weapon_ouvrage_aa_01: { bus: 'armes', dureeMs: 351, maxInstances: 8, volumeDb: 0 },
   weapon_ouvrage_aa_02: { bus: 'armes', dureeMs: 351, maxInstances: 8, volumeDb: 0 },
@@ -269,7 +299,7 @@ export const SONS = {
   weapon_ouvrage_artillery_03: { bus: 'armes', dureeMs: 1719, maxInstances: 4, volumeDb: 0 },
   weapon_ouvrage_artillery_04: { bus: 'armes', dureeMs: 1719, maxInstances: 4, volumeDb: 0 },
   weapon_ouvrage_beam_end: { bus: 'armes', dureeMs: 621, maxInstances: 3, volumeDb: 0 },
-  weapon_ouvrage_beam_loop: { bus: 'armes', dureeMs: 2400, maxInstances: 3, volumeDb: 0 },
+  weapon_ouvrage_beam_loop: { bus: 'armes', dureeMs: 2400, maxInstances: 3, volumeDb: 0, boucle: true },
   weapon_ouvrage_beam_start: { bus: 'armes', dureeMs: 721, maxInstances: 3, volumeDb: 0 },
   weapon_ouvrage_cannon_heavy_01: { bus: 'armes', dureeMs: 1389, maxInstances: 4, volumeDb: 0 },
   weapon_ouvrage_cannon_heavy_02: { bus: 'armes', dureeMs: 1389, maxInstances: 4, volumeDb: 0 },
@@ -512,3 +542,48 @@ export const EVENEMENTS = {
  * appliqué APRÈS les décibels du bus.
  */
 export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };
+
+/**
+ * LES QUATRE TABLES DU CÂBLAGE — ce que le JEU demande, et à quel son.
+ *
+ * ⚠⚠ ELLES SONT ICI PARCE QUE C'EST DU CALIBRAGE (§4), ET GÉNÉRÉES PARCE QUE
+ * `sons.js` L'EST. Trois d'entre elles sont écrites à la main DANS
+ * `tools/sons.py` — un écran, un type de bâtiment et deux seuils de PV ne se
+ * dérivent d'aucun manifeste — mais elles y sont VÉRIFIÉES : le générateur
+ * refuse un nom de son qui n'existe pas, et refuse une ambiance ou une boucle
+ * de bâtiment qui ne serait pas marquée `loop` dans le manifeste.
+ *
+ * ⚠⚠ LA QUATRIÈME, ELLE, EST DÉRIVÉE — ET ELLE NE S'INVENTE PAS.
+ * `MOUVEMENT_PAR_PAIRE` sort d'`art/sources/unit_audio_map.json`, que ce lot
+ * fait passer de DORMANTE à CONSOMMÉE. Sa clé est la paire « nom joueur/nom
+ * Ouvrage », qui est exactement ce que `UNITES[x].nom` porte : mesuré,
+ * **quatorze paires sur quatorze se résolvent**, aucune unité du jeu n'est
+ * laissée sans entrée. Le bloc `ouvrage` du même fichier n'est PAS lu — ses
+ * sept clés ne sont aucun nom du dépôt, et attribuer une boucle par
+ * ressemblance est nommément interdit.
+ */
+export const AMBIANCE_PAR_ECRAN = {
+  chantier: 'ambience_base_player_loop',
+  mission: 'ambience_base_player_loop',
+  monde: 'ambience_calm_map_loop',
+  offense: 'ambience_base_player_loop',
+  options: 'ambience_base_player_loop',
+  raid: 'ambience_battlefield_distant_loop',
+  recherche: 'ambience_base_player_loop',
+};
+
+export const BOUCLES_DE_BATIMENT = {
+  aerodrome: 'building_player_factory_loop',
+  caserne: 'building_player_factory_loop',
+  centrale: 'building_reactor_loop',
+  depotDeVehicules: 'building_player_factory_loop',
+};
+
+export const MOUVEMENT_PAR_PAIRE = {
+  'Chasseur/Fendeur': 'movement_tracks_medium_loop',
+  'Fusiliers/Meute': 'movement_infantry_player_loop',
+  'Percheron/Broyeur': 'movement_tracks_heavy_loop',
+  'Éclaireur/Ratisseur': 'movement_tracks_light_loop',
+};
+
+export const EFFONDREMENT_PV = [2000, 3000];

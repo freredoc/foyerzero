@@ -57,6 +57,12 @@ from chemins import dossier_sprites  # noqa: E402
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 MANIFESTE = os.path.join(SRC, 'sfx_manifest.json')
+# ⚠⚠ LA CARTE DES UNITÉS ENTRE DANS LA CHAÎNE — lot SON-CÂBLAGE, 04/09. Elle
+# était DORMANTE depuis le lot SON-MOTEUR ; ce lot la CONSOMME pour en dériver
+# `BOUCLES_MOUVEMENT`. ⚠ Aucune porte n'a eu à être ajoutée à
+# `tools/entrees.py` : la troisième, `json.load`, y est depuis le lot
+# SON-CATALOGUE, et elle attrape ce fichier-ci sans qu'on la touche.
+CARTE_UNITES = os.path.join(SRC, 'unit_audio_map.json')
 DST = dossier_sprites('son')
 
 # Le niveau de compression de l'encodeur : 10 est le plus lent et le plus
@@ -156,9 +162,15 @@ EN_TETE_JS = """// Les 263 sons du pack, et la table de mixage qui les reçoit.
 // dérivation en JavaScript et compare, si bien que la génération ne peut pas
 // mentir sans qu'on le voie.
 //
-// ⚠ UNE SEULE FAMILLE EST CÂBLÉE — `ui`. Les 240 autres sons sont encodés,
-// livrés et jouables ; aucun événement du jeu ne les demande, et on n'en invente
-// aucun pour leur donner un usage."""
+// ⚠⚠ VINGT-QUATRE SONS SONT CÂBLÉS, ET LES 239 AUTRES SONT MUETS À DESSEIN.
+// Le lot SON-CÂBLAGE branche ce qui avait DÉJÀ un point d'accroche dans le
+// dépôt : cinq sons `ui`, trois ambiances d'écran, QUATRE boucles de roulement,
+// deux boucles de machinerie, et les ponctuels de sélection, d'ordre, de pose et
+// d'effondrement. **Aucun son de combat** — ni tir, ni impact, ni explosion : ils
+// attendent un journal de `tick` qui n'existe pas, et ce journal est un chantier
+// de SIMULATION. Aucun événement de jeu n'a été inventé pour donner un emploi à
+// un son, et `src/sim/` n'a pas bougé d'une ligne. Ce qui reste muet est NOMMÉ
+// dans `RAPPORT-lotSON-CABLAGE.md`, un par un, avec son motif."""
 
 COMMENTAIRE_SONS = """/**
  * Un son : son bus, et ce que le manifeste dit de lui.
@@ -175,11 +187,17 @@ COMMENTAIRE_SONS = """/**
  * ⚠ `maxInstances` EST PAR FICHIER, `gardeMs` EST PAR ÉVÉNEMENT — voir
  * `EVENEMENTS` ci-dessous, qui dit pourquoi et sur quelle mesure.
  *
- * ⚠ LE DRAPEAU `loop` DU MANIFESTE N'EST PAS REPORTÉ, ET C'EST DÉCLARÉ. Rien ne
- * le lirait aujourd'hui : le seul mécanisme qui en aurait besoin — une ambiance
- * qui tourne en fond — n'est pas câblé, et 263 champs qu'aucun code ne lit
- * seraient du poids mort dans un livrable qui se compte à l'octet. Une ligne du
- * générateur à ajouter le jour où une ambiance jouera.
+ * ⚠⚠ `boucle` EST LE DRAPEAU `loop` DU MANIFESTE, ET C'EST LA LIGNE QUE LE LOT
+ * PRÉCÉDENT ANNONÇAIT. Il écrivait « une ligne du générateur à ajouter le jour
+ * où une ambiance jouera » : ce jour est celui-ci. **Il n'est posé que sur les
+ * 35 sons qui le portent**, jamais `boucle: false` sur les 228 autres — un
+ * champ faux à 228 exemplaires pèserait dans un livrable qui se compte à
+ * l'octet, et `!== true` se lit aussi bien que `=== false`.
+ *
+ * ⚠ ET IL NE SE DÉDUIT PAS DE `residente`. Vingt-sept boucles ne sont PAS
+ * résidentes — les roulements, les moteurs, les machineries — et deux sons
+ * `weapons` bouclent aussi. « Ce qui tourne » et « ce qui reste décodé » sont
+ * deux questions ; les confondre ferait résider vingt-sept tampons de plus.
  *
  * ⚠⚠ `residente` DIT CE QUI RESTE DÉCODÉ, ET C'EST LE POINT DUR DU LOT. Un son
  * décodé ne pèse plus rien de ce que pèse son fichier : le navigateur le range
@@ -217,6 +235,43 @@ COMMENTAIRE_EVENEMENTS = """/**
  * `ui_bascule` : trois noms se relisent, cent trente-cinq demanderaient une
  * table de correspondance écrite à la main, c'est-à-dire la transcription que
  * ce lot retire.
+ */"""
+
+COMMENTAIRE_RAMPE = """/**
+ * La rampe anti-claquement d'une boucle, en millisecondes.
+ *
+ * ⚠⚠ ELLE N'EST PAS DANS `MEMOIRE`, ET C'EST LA RÈGLE §4 DU DÉPÔT. Un budget de
+ * mémoire et une durée de fondu sont deux grandeurs ; les ranger ensemble parce
+ * qu'elles arrivent le même jour est très exactement ce qui a fait naître
+ * `data/economie.js`.
+ *
+ * ⚠⚠ ET CE N'EST PAS LE FONDU QUE LE README DU PACK INTERDIT. Sa ligne 39 dit
+ * « ne pas appliquer de fondu supplémentaire aux fichiers marqués `loop: true` ;
+ * leurs bornes exactes sont fournies en échantillons ». Elle parle du FICHIER,
+ * qu'on ne touche pas : la boucle rejoue ses bornes à l'échantillon près, sans
+ * fondu. La rampe porte sur le GAIN DE LECTURE, au démarrage et à l'arrêt —
+ * ailleurs, et sur autre chose. Sans elle, la forme d'onde saute de zéro à sa
+ * valeur en un échantillon, et l'oreille entend un clic.
+ */"""
+
+COMMENTAIRE_CABLAGE = """/**
+ * LES QUATRE TABLES DU CÂBLAGE — ce que le JEU demande, et à quel son.
+ *
+ * ⚠⚠ ELLES SONT ICI PARCE QUE C'EST DU CALIBRAGE (§4), ET GÉNÉRÉES PARCE QUE
+ * `sons.js` L'EST. Trois d'entre elles sont écrites à la main DANS
+ * `tools/sons.py` — un écran, un type de bâtiment et deux seuils de PV ne se
+ * dérivent d'aucun manifeste — mais elles y sont VÉRIFIÉES : le générateur
+ * refuse un nom de son qui n'existe pas, et refuse une ambiance ou une boucle
+ * de bâtiment qui ne serait pas marquée `loop` dans le manifeste.
+ *
+ * ⚠⚠ LA QUATRIÈME, ELLE, EST DÉRIVÉE — ET ELLE NE S'INVENTE PAS.
+ * `MOUVEMENT_PAR_PAIRE` sort d'`art/sources/unit_audio_map.json`, que ce lot
+ * fait passer de DORMANTE à CONSOMMÉE. Sa clé est la paire « nom joueur/nom
+ * Ouvrage », qui est exactement ce que `UNITES[x].nom` porte : mesuré,
+ * **quatorze paires sur quatorze se résolvent**, aucune unité du jeu n'est
+ * laissée sans entrée. Le bloc `ouvrage` du même fichier n'est PAS lu — ses
+ * sept clés ne sont aucun nom du dépôt, et attribuer une boucle par
+ * ressemblance est nommément interdit.
  */"""
 
 COMMENTAIRE_REGLAGES = """/**
@@ -300,6 +355,19 @@ def verifier_la_sortie(chemin, octets):
 # est la seule câblée, rien n'est jamais évincé et aucun clic ne se redécode.
 BUDGET_SECONDES_DECODEES = 30
 
+# ⚠⚠ LA RAMPE ANTI-CLAQUEMENT D'UNE BOUCLE, EN MILLISECONDES. Une boucle qui
+# démarre ou s'arrête à plein gain claque : la forme d'onde saute de zéro à sa
+# valeur en un échantillon, et l'oreille entend un clic. Cent vingt
+# millisecondes sont assez courtes pour qu'un roulement suive l'unité et assez
+# longues pour que la marche disparaisse.
+# ⚠⚠ ET CE N'EST PAS LE FONDU QUE LE README DU PACK INTERDIT. Sa ligne 39 dit
+# « ne pas appliquer de fondu supplémentaire aux fichiers marqués `loop: true` ;
+# leurs bornes exactes sont fournies en échantillons » : elle parle du FICHIER,
+# qu'on ne touche pas — la boucle rejoue ses bornes à l'échantillon près, sans
+# fondu, `source.loop = true`. La rampe est sur le GAIN DE LECTURE, au démarrage
+# et à l'arrêt, c'est-à-dire ailleurs et sur autre chose.
+RAMPE_BOUCLE_MS = 120
+
 COMMENTAIRE_MEMOIRE = """/**
  * Ce que le jeu s'autorise à garder décodé, en secondes, hors résidentes.
  *
@@ -316,6 +384,46 @@ COMMENTAIRE_MEMOIRE = """/**
  * elles tiennent la famille `ui` entière — 23 sons, 6,42 s — donc tant qu'elle
  * est la seule câblée, rien n'est jamais évincé.
  */"""
+
+# ⚠⚠ QUEL ÉCRAN PORTE QUELLE AMBIANCE. Trois écrans, trois ambiances, et le
+# reste des huit est DÉCLARÉ MUET faute d'une lecture qui ne s'invente pas —
+# voir `RAPPORT-lotSON-CABLAGE.md`. ⚠ `ambience_calm_map_loop` contre
+# `ambience_map_wind_loop` est le SEUL choix esthétique que ce lot ait pris, et
+# il l'a pris pour que la carte ne soit pas muette : les deux sont des ambiances
+# de carte, rien dans le dépôt ne départage, et Ethan tranche en changeant cette
+# ligne-ci. ⚠ `ambience_base_ouvrage_loop` n'a AUCUN écran qui montre la base de
+# l'Ouvrage au repos ; `ambience_battlefield_distant_loop` en a un, le raid.
+AMBIANCE_PAR_ECRAN = {
+    'chantier': 'ambience_base_player_loop',
+    'offense': 'ambience_base_player_loop',
+    'mission': 'ambience_base_player_loop',
+    'recherche': 'ambience_base_player_loop',
+    'options': 'ambience_base_player_loop',
+    'monde': 'ambience_calm_map_loop',
+    'raid': 'ambience_battlefield_distant_loop',
+}
+
+# ⚠⚠ LES DEUX BOUCLES DE BÂTIMENT QUE LA BASE SAIT DIRE, ET RIEN D'AUTRE. Une
+# boucle par TYPE présent, jamais par bâtiment : six usines ne font pas six fois
+# le même bruit. Les trois autres boucles du pack sont muettes et le rapport dit
+# pourquoi — il n'y a ni file de construction, ni réparation qui DURE (c'est un
+# stock depuis le lot RÉSERVE), ni état « base attaquée » qui persiste.
+BOUCLES_DE_BATIMENT = {
+    'caserne': 'building_player_factory_loop',
+    'depotDeVehicules': 'building_player_factory_loop',
+    'aerodrome': 'building_player_factory_loop',
+    'centrale': 'building_reactor_loop',
+}
+
+# ⚠⚠ LA TAILLE D'UN EFFONDREMENT SE LIT SUR LES PV, ET C'EST UNE PROPOSITION.
+# Le brief donnait « l'empreinte du bâtiment » comme candidat naturel ; mesuré,
+# elle ne discrimine RIEN — les onze occupent une case. Les PV, eux, vont de
+# 1 000 à 5 500 et se coupent net : {1000, 1000, 1500} · {2000, 2500 ×4} ·
+# {3000, 3000, 5500}. ⚠ `classeDeCout` donnerait presque la même partition —
+# elle ne diverge que sur la Centrale — mais elle a QUATRE classes pour trois
+# tailles, donc il faudrait en grouper deux, ce qui est le même choix déguisé.
+# **Ethan tranche ; ces deux nombres se changent seuls.**
+EFFONDREMENT_PV = [2000, 3000]
 
 BUS_PAR_CATEGORIE = {
     # Les cinq que le brief nomme, et leur famille évidente.
@@ -338,9 +446,13 @@ BUS_PAR_CATEGORIE = {
 }
 
 # Les cinq bus, en décibels. ⚠ Ils ne sont PAS dans le manifeste — vérifié, il
-# n'y porte aucune clé contenant « bus », « mix », « master » ou « gain ». Ils
-# viennent du brief, qui les donne comme la recommandation du pack : leur source
-# est la parole d'Ethan, pas un fichier du dépôt.
+# n'y porte aucune clé contenant « bus », « mix », « master » ou « gain ».
+# ⚠⚠ MAIS ILS ONT ENFIN UN FICHIER AU DÉPÔT, ET C'EST L'ÉCART DU LOT PRÉCÉDENT
+# QUI SE REFERME. `art/sources/README.md` est arrivé sur `main` le 04/09 ; sa
+# ligne 36 porte « Bus UI : -3 dB ; armes : -6 dB ; impacts : -7 dB ; moteurs :
+# -12 dB ; ambiances : -18 dB », c'est-à-dire les cinq valeurs ci-dessous, au
+# décibel. Elles cessent donc d'être la parole d'Ethan recopiée : elles se
+# LISENT, et un test les confronte au fichier.
 BUS = {
     'interface': -3,
     'armes': -6,
@@ -381,6 +493,78 @@ def base_evenement(ident):
     return re.sub(r'_\d+$', '', ident)
 
 
+def carte_des_unites(sons_par_id):
+    """Lit `unit_audio_map.json` et VÉRIFIE que ses valeurs sont du pack.
+
+    ⚠⚠ ELLE EST LUE À CHAQUE EXÉCUTION, PAS SEULEMENT SOUS `--ecrire`, ET C'EST
+    CE QUI LA REND CONSOMMÉE. `tools/entrees.py` classe une source d'après ce que
+    la CHAÎNE ouvre sous son mouchard ; une lecture réservée au drapeau
+    d'écriture l'aurait laissée DORMANTE alors qu'un outil la consomme — le
+    mensonge exact que ce fichier existe pour empêcher. Et le contrôle n'est pas
+    décoratif : il attrape un nom de son qui bouge dans le pack sans que la carte
+    suive, ce qu'aucune autre garde ne verrait.
+
+    ⚠ ON RÉSOUT COMME ÉVÉNEMENT, PAS COMME IDENTIFIANT. La note du fichier le
+    dit — « les entrées `variant_set` désignent un préfixe » — et c'est vrai de
+    ses SEPT champs, pas du seul `variant_set` : mesuré, **trente-quatre valeurs
+    sur trente-quatre** se résolvent comme événements, zéro comme identifiant
+    seul. Le premier jet cherchait des identifiants et écartait
+    `movement_player_flyby` pour la mauvaise raison.
+    """
+    with open(CARTE_UNITES, encoding='utf-8') as f:
+        carte = json.load(f)
+    evenements = {}
+    for s in sons_par_id.values():
+        evenements.setdefault(base_evenement(s['id']), []).append(s)
+    inconnues = sorted({v for bloc in ('player', 'ouvrage')
+                        for entree in carte[bloc].values()
+                        for v in entree.values() if v not in evenements})
+    if inconnues:
+        raise SystemExit('unit_audio_map.json nomme %d valeur(s) qui ne sont pas '
+                         'des événements du pack : %s' % (len(inconnues), inconnues))
+    return carte, evenements
+
+
+def boucles_de_mouvement(sons_par_id):
+    """La boucle de roulement de chaque unité, DÉRIVÉE de `unit_audio_map.json`.
+
+    ⚠⚠ LA CARTE NOMME DES ÉVÉNEMENTS, PAS DES FICHIERS, ET LE PREMIER JET S'Y
+    EST TROMPÉ. Il cherchait ses valeurs parmi les 263 identifiants ; or
+    `movement_player_flyby` n'en est PAS un — c'est le groupe des trois
+    `movement_player_flyby_0N`. Mesuré ensuite sur TOUTES les valeurs de la
+    carte, `player` et `ouvrage`, tous champs confondus : **trente-quatre sur
+    trente-quatre se résolvent comme événements, zéro comme identifiant seul**.
+    La note du fichier le disait — « les entrées `variant_set` désignent un
+    préfixe » — et c'est vrai des sept champs, pas du seul `variant_set`.
+
+    ⚠⚠ ON NE GARDE QUE CE QUI BOUCLE. Sept des quatorze paires portent un
+    `movement` ; trois d'entre elles portent `movement_player_flyby`, qui est un
+    PASSAGE et non un roulement — le jouer en continu inventerait une mécanique
+    que le pack ne demande pas, et le jouer en coup demanderait un événement
+    « l'aéronef se met à bouger » qui n'existe nulle part. **Quatre paires
+    restent**, et les dix autres sont muettes ; le rapport les nomme une par une.
+
+    ⚠⚠ ET LE BLOC `ouvrage` N'EST PAS LU, PARCE QU'IL NE SE RÉSOUT PAS. Ses
+    sept clés — « essaim », « marcheur léger », « Dard lourd », « pylône
+    énergétique »… — ne sont AUCUN nom du dépôt : mesuré, zéro sur sept
+    apparaît dans `src/data/`. Le bloc `player`, lui, est indexé par la PAIRE
+    « nom joueur/nom Ouvrage », qui est exactement ce que `UNITES[x].nom`
+    porte : mesuré, **quatorze sur quatorze se résolvent**. Attribuer les six
+    boucles de l'Ouvrage par ressemblance est nommément interdit ; elles
+    restent muettes et le rapport propose la jointure mesurée.
+    """
+    carte, evenements = carte_des_unites(sons_par_id)
+    table = {}
+    for paire, entree in carte['player'].items():
+        nom = entree.get('movement')
+        if nom is None:
+            continue
+        if not evenements[nom][0]['loop']:
+            continue
+        table[paire] = nom
+    return dict(sorted(table.items()))
+
+
 def ecrire_la_table(pack):
     """Écrit `src/data/sons.js` : 263 sons et 135 événements, dérivés.
 
@@ -410,6 +594,8 @@ def ecrire_la_table(pack):
     lignes = [EN_TETE_JS, '', COMMENTAIRE_MEMOIRE,
               'export const MEMOIRE = { budgetSecondesDecodees: %d };'
               % BUDGET_SECONDES_DECODEES, '',
+              COMMENTAIRE_RAMPE,
+              'export const RAMPE_BOUCLE_MS = %d;' % RAMPE_BOUCLE_MS, '',
               'export const BUS = {']
     for bus, db in BUS.items():
         lignes.append('  %s: %d,' % (bus, db))
@@ -421,10 +607,11 @@ def ecrire_la_table(pack):
                              'serait choisir seul un niveau de mixage'
                              % (s['id'], categorie))
         residente = ', residente: true' if categorie in FAMILLES_RESIDENTES else ''
-        lignes.append("  %s: { bus: '%s', dureeMs: %d, maxInstances: %d, volumeDb: %s%s },"
+        boucle = ', boucle: true' if s['loop'] else ''
+        lignes.append("  %s: { bus: '%s', dureeMs: %d, maxInstances: %d, volumeDb: %s%s%s },"
                       % (s['id'], BUS_PAR_CATEGORIE[categorie], s['duration_ms'],
                          s['recommended_max_instances'],
-                         nombre_js(s['recommended_volume_db']), residente))
+                         nombre_js(s['recommended_volume_db']), boucle, residente))
     lignes += ['};', '', COMMENTAIRE_EVENEMENTS, 'export const EVENEMENTS = {']
     for nom in sorted(groupes):
         membres = sorted(groupes[nom], key=lambda m: m['variant'])
@@ -434,11 +621,40 @@ def ecrire_la_table(pack):
     lignes += ['};', '', COMMENTAIRE_REGLAGES,
                'export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };', '']
 
+    par_id = {s['id']: s for s in sons}
+
+    def exiger_une_boucle(nom, ou):
+        if nom not in par_id:
+            raise SystemExit('%s : « %s » n\'est pas un son du pack' % (ou, nom))
+        if not par_id[nom]['loop']:
+            raise SystemExit('%s : « %s » n\'est pas marqué `loop` dans le '
+                             'manifeste — une boucle qui ne boucle pas se '
+                             'couperait net à la fin du fichier' % (ou, nom))
+
+    lignes.append(COMMENTAIRE_CABLAGE)
+    lignes.append('export const AMBIANCE_PAR_ECRAN = {')
+    for ecran in sorted(AMBIANCE_PAR_ECRAN):
+        exiger_une_boucle(AMBIANCE_PAR_ECRAN[ecran], 'AMBIANCE_PAR_ECRAN[%s]' % ecran)
+        lignes.append("  %s: '%s'," % (ecran, AMBIANCE_PAR_ECRAN[ecran]))
+    lignes += ['};', '', 'export const BOUCLES_DE_BATIMENT = {']
+    for bat in sorted(BOUCLES_DE_BATIMENT):
+        exiger_une_boucle(BOUCLES_DE_BATIMENT[bat], 'BOUCLES_DE_BATIMENT[%s]' % bat)
+        lignes.append("  %s: '%s'," % (bat, BOUCLES_DE_BATIMENT[bat]))
+    lignes += ['};', '', 'export const MOUVEMENT_PAR_PAIRE = {']
+    mouvement = boucles_de_mouvement(par_id)
+    for paire in mouvement:
+        lignes.append("  '%s': '%s'," % (paire, mouvement[paire]))
+    lignes += ['};', '',
+               'export const EFFONDREMENT_PV = [%s];'
+               % ', '.join(str(n) for n in EFFONDREMENT_PV), '']
+
     chemin = os.path.join(RACINE, 'src', 'data', 'sons.js')
     with open(chemin, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lignes))
-    print('src/data/sons.js : %d sons, %d événements, %d octets'
-          % (len(sons), len(groupes), os.path.getsize(chemin)))
+    print('src/data/sons.js : %d sons (%d boucles), %d événements, '
+          '%d paires d\'unité, %d octets'
+          % (len(sons), sum(1 for s in sons if s['loop']), len(groupes),
+             len(mouvement), os.path.getsize(chemin)))
 
 
 def nombre_js(x):
@@ -452,6 +668,11 @@ def main():
         raise SystemExit('opusenc est absent : « apt-get install opus-tools »')
     os.makedirs(DST, exist_ok=True)
     table = table_des_sons()
+    # ⚠ LA CARTE DES UNITÉS SE LIT ET SE VÉRIFIE À CHAQUE EXÉCUTION — voir
+    # `carte_des_unites`. C'est ce qui la fait compter CONSOMMÉE par
+    # `tools/entrees.py`, et ce qui attrape un nom de son qui bougerait sans elle.
+    with open(MANIFESTE, encoding='utf-8') as f:
+        carte_des_unites({s['id']: s for s in json.load(f)['sounds']})
     empreintes = {}
     for entree in table:
         chemin = os.path.join(SRC, entree['source'])

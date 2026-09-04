@@ -1194,9 +1194,30 @@ test('entrées — le dossier d\'attente est dehors, et rien ne le déclare', ()
   const enAttente = fichiersDe(ATTENTE);
   assert.ok(enAttente.length > 1, `${enAttente.length} fichier(s) en attente : le balayage ne trouve rien`);
   const declares = new Set([...(d.consommees ?? []), ...(d.dormantes ?? [])]);
-  const intrus = enAttente.filter((n) => declares.has(n));
+  // ⚠⚠ UN HOMONYME N'EST PAS UN DÉPLACEMENT, ET LA GARDE A DÛ CHANGER DE CIBLE.
+  // Elle comparait des NOMS COURTS : le jour où `art/sources/` a reçu le
+  // `README.md` du pack de sons, elle a accusé le `README.md` du dossier
+  // d'attente, qui est un autre fichier, dans un autre dossier, écrit pour une
+  // autre raison. C'est le mécanisme même que `tools/entrees.py` évite en
+  // comparant le dossier PARENT (CLAUDE.md §2), vu par l'autre bout.
+  //
+  // ⚠ ELLE SE RESSERRE PLUTÔT QUE DE S'ASSOUPLIR : ce qu'elle cherche est un
+  // fichier DÉPLACÉ, donc identique à l'octet des deux côtés. Un vrai
+  // déplacement la fait toujours tomber ; deux fichiers différents qui portent
+  // le même nom ne la font plus tomber pour rien.
+  const memeContenu = (nom) => {
+    const ici = readFileSync(join(ATTENTE, nom));
+    const la = join(SOURCES, nom);
+    return existsSync(la) && ici.equals(readFileSync(la));
+  };
+  const intrus = enAttente.filter((n) => declares.has(n) && memeContenu(n));
   assert.deepEqual(intrus, [],
     'un fichier en attente est déclaré comme une source : il a été déplacé sans son lot');
+  // L'appât : le motif reconnaît encore la vraie faute. On prend un fichier de
+  // l'attente et on vérifie qu'il SERAIT vu s'il était déclaré et identique.
+  const temoin = enAttente.find((n) => !existsSync(join(SOURCES, n)));
+  assert.ok(temoin !== undefined, 'montage : tous les fichiers en attente ont un homonyme');
+  assert.ok(!memeContenu(temoin), 'montage cassé : un fichier absent d\'art/sources/ y est identique');
 
   // Et aucun outil ne nomme ce dossier, sauf celui qui le surveille.
   const outils = readdirSync(join(RACINE, 'tools')).filter((f) => f.endsWith('.py') || f.endsWith('.js'));

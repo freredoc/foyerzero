@@ -34,7 +34,7 @@
 // trois et à huit chiffres.
 
 import {
-  creerEtat, charger, serialiser, tickJeu, rattraperJeu, reglerTutoriel,
+  creerEtat, charger, serialiser, tickJeu, rattraperJeu, reglerTutoriel, baseCourante,
 } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import { initialiserEcranChantier } from './chantier.js';
@@ -47,6 +47,7 @@ import { initialiserEcranRaid } from './raid.js';
 import { initialiserEcranRecherche } from './recherche.js';
 import { initialiserBanc } from './banc.js';
 import { initialiserLeSon } from './son.js';
+import { bouclesDesirees, evenementDuGeste } from '../son/cablage.js';
 import { REGLAGES_PAR_DEFAUT } from '../data/sons.js';
 
 /**
@@ -524,6 +525,50 @@ export function initialiserSession(doc) {
     graine: (maintenantMs() & 0x7fffffff) || 1,
   });
 
+  /**
+   * Ce que le son doit faire d'un GESTE de l'écran.
+   *
+   * ⚠⚠ L'ÉCRAN NOMME UN GESTE, LE CÂBLAGE NOMME LE SON, LA SESSION LE JOUE.
+   * Trois responsabilités, trois endroits : `src/ui/chantier.js` ne connaît
+   * aucun identifiant du pack, `src/son/cablage.js` décide sans faire de bruit,
+   * et `jouer(` reste groupé ici — ce que la garde `SON T14` exige.
+   *
+   * ⚠ UN GESTE SANS SON NE LÈVE PAS. Retirer une pièce de garnison n'est pas un
+   * effondrement de bâtiment, et le pack n'a rien à dire là-dessus : `cablage`
+   * rend `null`, et on se tait plutôt que de détourner un son.
+   */
+  function sonDeGeste(geste, quoi) {
+    const evenement = evenementDuGeste(geste, quoi);
+    if (evenement !== null) son.jouer(evenement);
+  }
+
+  /**
+   * Met les boucles d'accord avec l'état, dix fois par seconde.
+   *
+   * ⚠⚠ C'EST UNE RÉCONCILIATION, PAS UN ÉVÉNEMENT, ET C'EST TOUT LE LOT
+   * SON-CÂBLAGE. Une ambiance ne « commence » sur aucun geste : elle est vraie
+   * tant qu'un écran est affiché. Un mécanisme fondé sur des transitions
+   * manquerait tout ce qui commence sans geste — un chargement de partie, une
+   * unité qui se remet en marche — et surtout tout ce qui s'arrête sans geste,
+   * ce qui laisserait une boucle sonner pour toujours.
+   *
+   * ⚠ ELLE PASSE PAR LA MÊME PORTE QUE LE RESTE DE L'AFFICHAGE — dix fois par
+   * seconde, pas soixante. La différence est presque toujours vide, et
+   * `reconcilier` ne fait rien quand elle l'est.
+   *
+   * ⚠ ET LES UNITÉS NE SE LISENT QUE SUR L'ÉCRAN DE RAID. Ailleurs il n'y a pas
+   * de combat en cours ; demander leur roulement depuis la carte ferait rouler
+   * une armée que personne ne regarde.
+   */
+  function reconcilierLeSon() {
+    const surLeRaid = ecranCourant === 'raid' && ecranRaid !== null;
+    son.reconcilier(bouclesDesirees({
+      ecran: ecranCourant,
+      disposition: etat === null ? [] : baseCourante(etat).disposition,
+      unites: surLeRaid ? ecranRaid.enMouvement() : [],
+    }));
+  }
+
   // Le bandeau d'avis appartient à l'écran Chantier — c'est son élément. La
   // session lui parle au lieu d'écrire dedans : depuis que la pose s'y exprime
   // aussi, deux modules qui écriraient la même ligne sans se connaître
@@ -572,6 +617,7 @@ export function initialiserSession(doc) {
     if (instant - dernierAffichageMs >= 100) {
       dernierAffichageMs = instant;
       rafraichirLaBase();
+      reconcilierLeSon();
       // ⚠ LA CARTE AUSSI, ET ELLE SEULE PARMI LES AUTRES ÉCRANS. Les satellites
       // paraissent cinq minutes après la pose d'une base : c'est la seule chose
       // de ces écrans-là qui change SANS que le joueur touche à rien, et elle
@@ -655,6 +701,13 @@ export function initialiserSession(doc) {
    */
   function suspendre() {
     arreterBoucle();
+    // ⚠⚠ ET LES BOUCLES SE TAISENT. `arreterBoucle` arrête la boucle d'IMAGES,
+    // donc plus rien ne réconcilie — une ambiance lancée continuerait de tourner
+    // pendant que l'application est masquée, ou pendant que le banc d'essai
+    // remplace la page. Ce n'est pas un événement de plus : c'est la même
+    // réconciliation, sur un ensemble désiré vide. Le retour la refait, et tout
+    // ce qui a une raison de sonner repart.
+    son.reconcilier([]);
     sauvegarder();
     instantSuspensionMs = maintenantMs();
   }
@@ -1103,6 +1156,12 @@ export function initialiserSession(doc) {
     // écart déclaré : le brief pose TROIS points de câblage, pas quatre, et le
     // lot du catalogue unifiera les deux registres.
     sonDeRefus: () => son.jouer('ui_error'),
+    // ⚠⚠ ET LES CINQ GESTES DE L'ÉCRAN DE LA BASE PASSENT PAR UN SEUL CROCHET.
+    // L'écran nomme un geste — sélection, pose, amélioration, déplacement,
+    // retrait — et `src/son/cablage.js` décide s'il fait du bruit et lequel.
+    // Cinq crochets nommés par leur son auraient mis cinq identifiants du pack
+    // dans un écran, c'est-à-dire la dette que le clic délégué évite déjà.
+    sonDeGeste,
     // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE. La barre du bas appartient à
     // l'écran Chantier — c'est lui qui la construit et qui y affiche les
     // niveaux — mais un de ses trois boutons change d'ÉCRAN, ce que seule la
@@ -1182,6 +1241,9 @@ export function initialiserSession(doc) {
   ecranRaid = initialiserEcranRaid(doc, {
     versEcran: (nom) => montrerEcran(nom),
     apresGeste: () => sauvegarder(),
+    // ⚠ SEULE LA VRAIE ATTAQUE SONNE — l'écran le décide, pas la session : lui
+    // seul sait si le déroulé est une simulation.
+    sonDeGeste,
   });
   // ⚠ LE SECOND TOUCHER ENTRE DANS LA CIBLE, et c'est la carte qui le détecte :
   // elle seule sait quelle case son panneau décrit. `problemesDuRaid` garde
@@ -1202,6 +1264,10 @@ export function initialiserSession(doc) {
     // qui dépendent de la position — rien aujourd'hui, mais le niveau des sites
     // alentour en dépendra —, et surtout le tutoriel lit la base à chaque image.
     apresDeplacement: () => {
+      // ⚠ DÉPLACER SA BASE EST UN ORDRE, ET C'EST LE MÊME SON QUE DÉPLACER UNE
+      // PIÈCE : le pack n'en a qu'un, `order_player_move`, et lui en inventer
+      // un second reviendrait à détourner un autre son de sa famille.
+      sonDeGeste('deplacement', {});
       sauvegarder();
       rafraichirLaBase();
     },

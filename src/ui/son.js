@@ -17,8 +17,8 @@
 // qu'on doit voir » —, et l'asymétrie est voulue : une carte noire rend le jeu
 // injouable, un jeu muet reste entièrement jouable.
 
-import { SONS, BUS, MEMOIRE } from '../data/sons.js';
-import { creerVoix, demanderUnSon } from '../son/politique.js';
+import { SONS, BUS, MEMOIRE, RAMPE_BOUCLE_MS } from '../data/sons.js';
+import { creerVoix, demanderUnSon, reconcilierLesBoucles, boucleDeLEvenement } from '../son/politique.js';
 
 /**
  * L'identifiant DOM qui porte le `data:` d'un son.
@@ -86,6 +86,14 @@ export function initialiserLeSon(doc, { reglages, graine }) {
   // — `maintenantMs` est seule lectrice dans tout `src/`).
   const usages = new Map();
   let rang = 0;
+  // Les BOUCLES en cours : nom d'événement → la source qui la joue.
+  // ⚠ Une entrée est posée AVANT que le décodage rende, et c'est ce qui évite le
+  // double démarrage : la réconciliation suivante voit la boucle « en cours » et
+  // ne la redemande pas, alors qu'aucun son ne sort encore.
+  const boucles = new Map();
+  // ⚠⚠ LES TAMPONS QU'UNE SOURCE LIT ENCORE — la moitié qui garde la
+  // comptabilité honnête. Voir `evincer`.
+  const tenus = new Map();
   // Les secondes décodées HORS résidentes, celles que le budget borne.
   let secondesDecodees = 0;
   let horsService = false;
@@ -142,9 +150,26 @@ export function initialiserLeSon(doc, { reglages, graine }) {
    * `secondes × 48 000 × 4` — donc le plafond se lit comme une quantité de
    * mémoire, qui est la grandeur qu'on défend.
    *
-   * ⚠ ÉVINCER UN SON QUI JOUE EST SANS EFFET SUR LUI. `AudioBufferSourceNode`
-   * garde sa propre référence sur le tampon ; oublier le nôtre ne coupe rien,
-   * ça libère seulement le jour où plus personne ne le tient.
+   * ⚠⚠ UN TAMPON QU'UNE SOURCE LIT NE S'ÉVINCE PAS, ET C'EST LE POINT DUR DU
+   * LOT SON-CÂBLAGE. `AudioBufferSourceNode` garde sa propre référence : oublier
+   * la nôtre ne coupe pas le son et ne libère pas un octet — mais
+   * `secondesDecodees` retomberait, alors que la mémoire, elle, n'a pas bougé.
+   * **La comptabilité cesserait de décrire la mémoire réelle**, et elle est la
+   * seule chose qui tient les 64,7 Mo du pack à distance. Sans boucle le défaut
+   * restait borné à la durée d'un coup ; une ambiance de huit secondes rejouée
+   * sans fin le rendrait permanent.
+   *
+   * ⚠⚠ DES DEUX ISSUES, ON RETIENT LA PROTECTION, ET LE MOTIF EST DANS LES
+   * INTERDITS. L'autre — « ne décompter que ce qui est réellement libéré » —
+   * demande de savoir QUAND le navigateur relâche un `AudioBuffer`, c'est-à-dire
+   * d'observer son ramasse-miettes : un mécanisme qu'on ne peut pas ouvrir, et
+   * « ne pas justifier une propriété par un mécanisme qu'on n'a pas ouvert ».
+   * `tenus` compte les sources en lecture, `source.onended` les relâche, et
+   * `secondesDecodees` reste un MAJORANT exact de ce qui est décodé et référencé.
+   *
+   * ⚠ ET LA PROTECTION VAUT AUSSI POUR LES COUPS, PAS SEULEMENT POUR LES
+   * BOUCLES. Le même raisonnement les couvre, et un invariant qui vaudrait pour
+   * 35 sons sur 263 serait le premier à être oublié.
    *
    * ⚠ ET LE DERNIER TAMPON NE S'ÉVINCE JAMAIS LUI-MÊME. Un son plus long que
    * tout le budget viderait la table puis se relâcherait aussitôt, donc se
@@ -157,6 +182,7 @@ export function initialiserLeSon(doc, { reglages, graine }) {
       let candidats = 0;
       for (const nom of tampons.keys()) {
         if (SONS[nom].residente === true) continue;
+        if (tenus.has(nom)) continue;
         candidats += 1;
         if (vieux === null || (usages.get(nom) ?? 0) < (usages.get(vieux) ?? 0)) vieux = nom;
       }
@@ -168,31 +194,55 @@ export function initialiserLeSon(doc, { reglages, graine }) {
   }
 
   /**
-   * Décode un son s'il ne l'est pas déjà et qu'aucun décodage n'est en vol.
+   * Le compte des sources qui lisent encore un tampon.
+   *
+   * ⚠⚠ C'EST LUI QUI REND `secondesDecodees` HONNÊTE. Un tampon tenu ne peut pas
+   * être évincé — voir `evincer` —, donc la table des secondes ne décompte
+   * jamais une mémoire qui n'a pas été rendue.
+   */
+  function tenir(nomDuSon) {
+    tenus.set(nomDuSon, (tenus.get(nomDuSon) ?? 0) + 1);
+  }
+
+  function relacher(nomDuSon) {
+    const reste = (tenus.get(nomDuSon) ?? 0) - 1;
+    if (reste <= 0) tenus.delete(nomDuSon);
+    else tenus.set(nomDuSon, reste);
+    // Ce qui vient d'être rendu redevient évinçable : on repasse le budget.
+    evincer();
+  }
+
+  /**
+   * Décode un son s'il ne l'est pas déjà, et rend son tampon.
    *
    * ⚠⚠ À LA PREMIÈRE UTILISATION, JAMAIS AU DÉMARRAGE. Décoder les 263 à
    * l'ouverture ajouterait 64,7 Mo et le temps qui va avec, là où le démarrage
-   * n'en prend aucun aujourd'hui. Rien ici n'est appelé par `reveiller` : le
-   * seul appelant est `jouer`.
+   * n'en prend aucun aujourd'hui. Rien ici n'est appelé par `reveiller` : les
+   * seuls appelants sont `jouer` et `demarrerUneBoucle`.
    *
    * ⚠ ET UN ÉCHEC SE TAIT. Le son reste absent de la table, les autres
    * continuent de sonner — la dégradation silencieuse du lot précédent, tenue
    * pour chacun des 263.
+   *
+   * @returns {Promise<AudioBuffer|null>} le tampon, ou null si rien n'a pu être
+   *   décodé. La promesse d'un décodage EN VOL est partagée, jamais relancée.
    */
-  function decoderSiBesoin(nomDuSon) {
-    if (tampons.has(nomDuSon) || enVol.has(nomDuSon)) return;
+  function assurerLeTampon(nomDuSon) {
+    const dejaLa = tampons.get(nomDuSon);
+    if (dejaLa !== undefined) return Promise.resolve(dejaLa);
+    const enCours = enVol.get(nomDuSon);
+    if (enCours !== undefined) return enCours;
     const balise = doc.getElementById(idDuSon(nomDuSon));
     const octets = balise === null ? null : octetsDuDataUri(balise.getAttribute('src'));
-    if (octets === null) return;
+    if (octets === null) return Promise.resolve(null);
     let promesse;
     try {
       promesse = contexte.decodeAudioData(octets);
     } catch {
       // Un navigateur ancien lève au lieu de rejeter.
-      return;
+      return Promise.resolve(null);
     }
-    enVol.set(nomDuSon, promesse);
-    promesse.then(
+    const partagee = promesse.then(
       (tampon) => {
         enVol.delete(nomDuSon);
         tampons.set(nomDuSon, tampon);
@@ -201,9 +251,12 @@ export function initialiserLeSon(doc, { reglages, graine }) {
           secondesDecodees += SONS[nomDuSon].dureeMs / 1000;
           evincer();
         }
+        return tampon;
       },
-      () => { enVol.delete(nomDuSon); },
+      () => { enVol.delete(nomDuSon); return null; },
     );
+    enVol.set(nomDuSon, partagee);
+    return partagee;
   }
 
   /**
@@ -218,7 +271,7 @@ export function initialiserLeSon(doc, { reglages, graine }) {
     if (!decision.jouer) return;
     rang += 1;
     usages.set(decision.son, rang);
-    decoderSiBesoin(decision.son);
+    assurerLeTampon(decision.son);
     const tampon = tampons.get(decision.son);
     // Le décodage est asynchrone : la PREMIÈRE demande d'un son tombe toujours
     // avant lui, et le son ne sort pas. La politique a déjà compté l'instance —
@@ -233,9 +286,184 @@ export function initialiserLeSon(doc, { reglages, graine }) {
       gain.gain.value = decision.gain;
       source.connect(gain);
       gain.connect(bus[SONS[decision.son].bus]);
-      source.start();
+      tenir(decision.son);
+      source.onended = () => relacher(decision.son);
+      try {
+        source.start();
+      } catch (erreur) {
+        // ⚠ UNE SOURCE QUI NE DÉMARRE PAS NE RENDRA JAMAIS SON TAMPON. Sans
+        // cette ligne, `onended` ne partirait jamais et le tampon resterait
+        // protégé pour toujours : le budget se réduirait d'autant, une fois
+        // pour toutes, sans que rien ne le dise.
+        relacher(decision.son);
+        throw erreur;
+      }
     } catch { /* la sortie audio a disparu sous nous : on se tait */ }
   }
 
-  return { reveiller, jouer };
+  /**
+   * Démarre une boucle : décode si besoin, puis monte le gain sur la rampe.
+   *
+   * ⚠⚠ L'ENTRÉE EST POSÉE AVANT LE DÉCODAGE, ET C'EST CE QUI EMPÊCHE LE DOUBLE
+   * DÉMARRAGE. `decodeAudioData` est asynchrone : entre la demande et le tampon
+   * il passe plusieurs images, donc plusieurs réconciliations. Sans une entrée
+   * posée tout de suite, chacune verrait la boucle absente et en lancerait une
+   * de plus — un roulement joué cinq fois par-dessus lui-même.
+   *
+   * ⚠ ET SI L'ARRÊT ARRIVE PENDANT LE DÉCODAGE, ON NE DÉMARRE PAS. L'entrée a
+   * déjà été retirée de `boucles` ; on le constate au retour et on s'en va.
+   */
+  function demarrerUneBoucle(evenement) {
+    const { son, gain } = boucleDeLEvenement(evenement, reglages);
+    const entree = { son, source: null, noeud: null, gainPose: gain };
+    boucles.set(evenement, entree);
+    rang += 1;
+    usages.set(son, rang);
+    assurerLeTampon(son).then((tampon) => {
+      if (tampon === null || boucles.get(evenement) !== entree) return;
+      try {
+        const source = contexte.createBufferSource();
+        source.buffer = tampon;
+        // ⚠ LES BORNES DU FICHIER, À L'ÉCHANTILLON PRÈS. `loop` sans
+        // `loopStart`/`loopEnd` rejoue le tampon entier, ce que le README du
+        // pack demande — « leurs bornes exactes sont fournies en échantillons ».
+        source.loop = true;
+        const noeud = contexte.createGain();
+        const debut = contexte.currentTime;
+        noeud.gain.setValueAtTime(0, debut);
+        noeud.gain.linearRampToValueAtTime(gain, debut + RAMPE_BOUCLE_MS / 1000);
+        source.connect(noeud);
+        noeud.connect(bus[SONS[son].bus]);
+        tenir(son);
+        source.onended = () => relacher(son);
+        try {
+          source.start();
+        } catch (erreur) {
+          // Même raison que dans `jouer` : un tampon tenu par une source qui
+          // n'a jamais démarré ne serait jamais relâché.
+          relacher(son);
+          throw erreur;
+        }
+        entree.source = source;
+        entree.noeud = noeud;
+      } catch {
+        boucles.delete(evenement);
+      }
+    });
+  }
+
+  /**
+   * Arrête une boucle : descend le gain, PUIS libère la source.
+   *
+   * ⚠⚠ L'ARRÊT ATTEND LA FIN DE SA RAMPE. Couper au milieu produit exactement le
+   * claquement que la rampe existe pour éviter : `stop()` immédiat laisse la
+   * forme d'onde à sa valeur courante et la met à zéro en un échantillon.
+   * `stop(fin)` est donné à l'horloge du contexte audio, qui est la seule qui
+   * sache quand la rampe est finie — un `setTimeout` dériverait de l'audio.
+   *
+   * ⚠ ET LE TAMPON N'EST RELÂCHÉ QU'À `onended`, donc après l'arrêt réel. Le
+   * relâcher ici le rendrait évinçable pendant qu'il joue encore, c'est-à-dire
+   * la faute même que `evincer` refuse.
+   */
+  function arreterUneBoucle(evenement) {
+    const entree = boucles.get(evenement);
+    boucles.delete(evenement);
+    if (entree === undefined || entree.source === null) return;
+    try {
+      // ⚠ ON LIT LA VALEUR AVANT D'ANNULER, ET L'ORDRE N'EST PAS LIBRE : on
+      // repart d'où la rampe de démarrage en était, sinon un arrêt qui tombe
+      // pendant la montée ferait sauter le gain à sa valeur pleine avant de
+      // redescendre — un claquement, exactement ce qu'on évite.
+      const courant = entree.noeud.gain.value;
+      const fin = contexte.currentTime + RAMPE_BOUCLE_MS / 1000;
+      entree.noeud.gain.cancelScheduledValues(contexte.currentTime);
+      entree.noeud.gain.setValueAtTime(courant, contexte.currentTime);
+      entree.noeud.gain.linearRampToValueAtTime(0, fin);
+      entree.source.stop(fin);
+    } catch { /* la source était déjà partie : rien à couper */ }
+  }
+
+  /**
+   * Suit le curseur de volume sur les boucles DÉJÀ en cours.
+   *
+   * ⚠⚠ SANS ÇA, LE CURSEUR NE TOUCHERAIT PAS CE QUI TOURNE. Une boucle prend son
+   * gain au démarrage et le garde ; le joueur qui bouge le curseur verrait les
+   * clics suivre et l'ambiance rester où elle était, jusqu'à ce qu'il change
+   * d'écran. Le défaut ne se voit pas à la relecture — il faut avoir le curseur
+   * sous le doigt.
+   *
+   * ⚠ ET LE GAIN VIENT DE LA POLITIQUE, PAS D'UN CALCUL D'ICI. C'est la même
+   * fonction qui l'a donné au démarrage ; en écrire un second ferait deux
+   * conversions décibels → linéaire, dont une seule serait éprouvée.
+   *
+   * ⚠ ON RAMPE PLUTÔT QUE D'ÉCRIRE `value`, et on ne touche à rien quand rien
+   * n'a changé : un `gain.value = x` posé pendant la rampe de démarrage la
+   * couperait net, et cette fonction passe dix fois par seconde.
+   */
+  function suivreLeVolume() {
+    for (const [evenement, entree] of boucles) {
+      if (entree.noeud === null) continue;
+      const { gain } = boucleDeLEvenement(evenement, reglages);
+      if (gain === entree.gainPose) continue;
+      entree.gainPose = gain;
+      try {
+        const debut = contexte.currentTime;
+        entree.noeud.gain.cancelScheduledValues(debut);
+        entree.noeud.gain.setValueAtTime(entree.noeud.gain.value, debut);
+        entree.noeud.gain.linearRampToValueAtTime(gain, debut + RAMPE_BOUCLE_MS / 1000);
+      } catch { /* la sortie audio a disparu sous nous */ }
+    }
+  }
+
+  /**
+   * Met les boucles en cours d'accord avec ce que l'état demande.
+   *
+   * ⚠⚠ LA DIFFÉRENCE SE CALCULE DANS LA POLITIQUE, PAS ICI. Ce fichier exécute
+   * deux listes ; il ne décide ni ce qui doit sonner, ni ce que le muet fait aux
+   * boucles en cours. C'est ce qui rend la mécanique éprouvable dans Node, où il
+   * n'y a pas de Web Audio.
+   *
+   * ⚠⚠ ET ELLE NE RÉVEILLE PAS LE CONTEXTE. La session l'appelle dix fois par
+   * seconde, y compris avant le premier geste du joueur ; créer un
+   * `AudioContext` hors d'un geste le laisserait suspendu sur le dos de
+   * l'onglet. Tant qu'il n'y a pas de contexte, rien ne sonne et rien ne se
+   * perd : la réconciliation suivante démarrera tout ce qui manque.
+   *
+   * @param {string[]} desire les événements de boucle que l'état demande
+   */
+  function reconcilier(desire) {
+    if (horsService || contexte === null) return;
+    const { demarrer, arreter } = reconcilierLesBoucles(desire, boucles.keys(), reglages);
+    for (const nom of arreter) arreterUneBoucle(nom);
+    for (const nom of demarrer) demarrerUneBoucle(nom);
+    suivreLeVolume();
+  }
+
+  return {
+    reveiller,
+    jouer,
+    reconcilier,
+    /**
+     * La mesure de la mémoire décodée — pour les tests, et pour eux seuls.
+     *
+     * ⚠⚠ SANS ELLE, L'INVARIANT DU LOT EST INVÉRIFIABLE, ET LA FALSIFICATION L'A
+     * DIT. Retirer la protection de l'éviction ne change RIEN d'observable de
+     * l'extérieur : la boucle continue de jouer — sa source tient le tampon —,
+     * elle n'est pas redemandée, donc elle n'est pas redécodée. Le seul dégât
+     * est que `secondesDecodees` cesse de décrire la mémoire réelle, et un test
+     * qui ne mesure que les décodages est VERT sur le code fautif. Mesuré :
+     * 23 pass / 0 fail avec la ligne de protection retirée.
+     *
+     * ⚠ ELLE NE DÉCIDE DE RIEN ET N'EXPOSE AUCUN RÉGLAGE : trois nombres et deux
+     * listes de noms, en lecture. Même motif que `mesureImages` de
+     * `src/ui/raid.js`, qui existe pour la mesure M2 et pour rien d'autre.
+     */
+    mesureMemoire() {
+      return {
+        secondesDecodees,
+        decodes: [...tampons.keys()].sort(),
+        tenus: [...tenus.keys()].sort(),
+      };
+    },
+  };
 }

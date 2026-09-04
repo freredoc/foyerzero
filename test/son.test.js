@@ -14,8 +14,18 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { SONS, EVENEMENTS, BUS, MEMOIRE, REGLAGES_PAR_DEFAUT } from '../src/data/sons.js';
-import { creerVoix, demanderUnSon, gainDuSon } from '../src/son/politique.js';
+import {
+  SONS, EVENEMENTS, BUS, MEMOIRE, REGLAGES_PAR_DEFAUT, RAMPE_BOUCLE_MS,
+  AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, MOUVEMENT_PAR_PAIRE, EFFONDREMENT_PV,
+} from '../src/data/sons.js';
+import {
+  creerVoix, demanderUnSon, gainDuSon, reconcilierLesBoucles, boucleDeLEvenement,
+} from '../src/son/politique.js';
+import {
+  bouclesDesirees, unitesEnMouvement, evenementDuGeste, effondrementDuBatiment, paireDeLUnite,
+} from '../src/son/cablage.js';
+import { UNITES } from '../src/data/combat.js';
+import { BASE_BATIMENTS } from '../src/data/base.js';
 import { initialiserLeSon, idDuSon, octetsDuDataUri } from '../src/ui/son.js';
 import { lireLesReglages, CLE_REGLAGES, CLE_SAUVEGARDE } from '../src/ui/session.js';
 import { creerRng, tirer } from '../src/sim/rng.js';
@@ -337,7 +347,11 @@ test('SON T7 — sans Web Audio, le jeu démarre et se tait (falsification n° 6
  * `echecs` nomme les sons dont le décodage doit ÉCHOUER.
  */
 function faussesFenetres(echecs = new Set()) {
-  const journal = { contextes: 0, decodages: 0, demandes: [], joues: [], contexte: null };
+  const journal = {
+    contextes: 0, decodages: 0, demandes: [], joues: [], contexte: null,
+    // Le lot SON-CÂBLAGE : ce qui BOUCLE, ce qui s'arrête, et les rampes.
+    boucles: [], arrets: [], rampes: [],
+  };
   class FauxContexte {
     constructor() {
       journal.contextes += 1;
@@ -347,9 +361,40 @@ function faussesFenetres(echecs = new Set()) {
       this.destination = { nom: 'sortie' };
     }
     resume() { this.state = 'running'; return Promise.resolve(); }
-    createGain() { return { gain: { value: 1 }, connect: () => {} }; }
+    createGain() {
+      // ⚠ UN `AudioParam` DE PAPIER, QUI ENREGISTRE SES RAMPES. Sans lui, « la
+      // boucle démarre et s'arrête sur une rampe » serait invérifiable ici.
+      const trace = [];
+      journal.rampes.push(trace);
+      const gain = {
+        value: 1,
+        setValueAtTime(v, t) { gain.value = v; trace.push(['pose', v, t]); },
+        linearRampToValueAtTime(v, t) { gain.value = v; trace.push(['rampe', v, t]); },
+        cancelScheduledValues(t) { trace.push(['annule', t]); },
+      };
+      return { gain, connect: () => {}, trace };
+    }
     createBufferSource() {
-      const source = { buffer: null, connect: () => {}, start: () => { journal.joues.push(source.buffer); } };
+      const source = {
+        buffer: null,
+        loop: false,
+        onended: null,
+        connect: () => {},
+        // ⚠⚠ UN COUP SE TERMINE TOUT DE SUITE, UNE BOUCLE ATTEND SON `stop`. Le
+        // vrai navigateur appelle `onended` à la fin du tampon ; ne jamais
+        // l'appeler ici laisserait chaque tampon TENU pour toujours, donc
+        // l'éviction bloquée — un faux qui mentirait sur le mécanisme même que
+        // ces tests mesurent.
+        start: () => {
+          journal.joues.push(source.buffer);
+          if (source.loop) journal.boucles.push(source.buffer?.nom ?? null);
+          else if (source.onended !== null) source.onended();
+        },
+        stop: (quand) => {
+          journal.arrets.push({ nom: source.buffer?.nom ?? null, quand });
+          if (source.onended !== null) source.onended();
+        },
+      };
       return source;
     }
     decodeAudioData(octets) {
@@ -749,13 +794,23 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
   assert.ok(joueUnSon.test("  son.jouer('ui_click');"), 'le motif ne voit plus la vraie faute');
   assert.ok(!joueUnSon.test('  rejouer(montage, vagues);'), 'le motif retombe sur rejouer(');
 
-  // ⚠ ET LES 240 SONS HORS `ui` SONT LIVRÉS SANS ÊTRE DEMANDÉS. C'est voulu, et
-  // c'est mesuré plutôt qu'affirmé : les événements atteignables ne portent que
-  // des sons de la famille `ui`.
-  const atteignables = [...new Set(appels)].flatMap((e) => EVENEMENTS[e].variantes);
-  assert.equal(atteignables.length, 5, 'le nombre de sons atteignables a bougé');
-  assert.ok(atteignables.every((n) => n.startsWith('ui_')),
-    'un son hors de la famille `ui` est atteignable');
+  // ⚠⚠ ET LES SONS ATTEIGNABLES SE RECOMPTENT, DE BOUT EN BOUT. Le lot
+  // SON-MOTEUR les lisait dans les seuls littéraux de `session.js` ; depuis
+  // SON-CÂBLAGE la session appelle aussi `son.jouer(evenement)` avec une
+  // VARIABLE, dont la valeur sort de `src/son/cablage.js`. Un test qui ne
+  // lirait que les littéraux annoncerait cinq sons atteignables sur vingt-quatre
+  // — c'est-à-dire qu'il mentirait dans le sens le plus dangereux, en déclarant
+  // muet ce qui sonne. On rejoue donc les DEUX portes.
+  const parLaVariable = (session.match(/son\.jouer\(evenement\)/g) ?? []).length;
+  assert.equal(parLaVariable, 1, 'la seconde porte du son a bougé : recompter les atteignables');
+  const atteignables = [...new Set([...appels, ...EVENEMENTS_CABLES])]
+    .flatMap((e) => EVENEMENTS[e].variantes).sort();
+  assert.deepEqual([...new Set(atteignables)], atteignables, 'un son atteignable en double');
+  assert.equal(atteignables.length, 24, 'le nombre de sons atteignables a bougé');
+  // ⚠ ET 239 RESTENT MUETS. C'est voulu, et le rapport les nomme un par un avec
+  // leur raison : rien n'a été branché pour donner un emploi à un son.
+  assert.equal(Object.keys(SONS).length - atteignables.length, 239,
+    'le compte des sons muets a bougé sans que le rapport le dise');
 
   // Le refus arrive par les registres `toast`, APRÈS la garde du texte vide :
   // effacer un toast ne doit pas sonner. Les DEUX écrans, à la même place.
@@ -766,4 +821,524 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
     assert.ok(garde >= 0 && sonne > garde,
       `src/ui/${ecran} : le son de refus sonnerait sur un toast effacé`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Le lot SON-CÂBLAGE — les boucles, les gestes, et ce qui reste muet
+// ---------------------------------------------------------------------------
+
+/**
+ * TOUT ce que le jeu peut demander au son, recomposé de bout en bout.
+ *
+ * ⚠⚠ IL SE CALCULE, IL NE SE RECOPIE PAS. Une liste écrite à la main serait la
+ * première à oublier un branchement — et la garde qui compte les sons muets
+ * deviendrait alors un mensonge dans le sens le plus dangereux : elle
+ * déclarerait muet ce qui sonne.
+ */
+const EVENEMENTS_CABLES = (() => {
+  const vus = new Set();
+  // Les boucles : les trois tables du câblage, sans exception.
+  for (const nom of Object.values(AMBIANCE_PAR_ECRAN)) vus.add(nom);
+  for (const nom of Object.values(BOUCLES_DE_BATIMENT)) vus.add(nom);
+  for (const nom of Object.values(MOUVEMENT_PAR_PAIRE)) vus.add(nom);
+  // Les gestes : tous les couples que `evenementDuGeste` peut recevoir.
+  for (const geste of ['selection', 'deplacement', 'attaque', 'pose', 'amelioration']) {
+    for (const genre of ['batiment', 'garnison', null]) {
+      const nom = evenementDuGeste(geste, { genre });
+      if (nom !== null) vus.add(nom);
+    }
+  }
+  for (const id of Object.keys(BASE_BATIMENTS)) {
+    vus.add(evenementDuGeste('retrait', { genre: 'batiment', id }));
+  }
+  return [...vus].sort();
+})();
+
+// ---------------------------------------------------------------------------
+// SON T15 — la réconciliation est pure, et elle est juste
+// ---------------------------------------------------------------------------
+
+test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence est pure (falsifications n° 18 et n° 19)', () => {
+  // 1. LA PURETÉ — le module ne connaît ni le navigateur, ni la simulation, ni
+  // l'horloge. C'est ce qui rend la mécanique éprouvable ici.
+  const cablage = sansCommentaires(lire('src', 'son', 'cablage.js'));
+  const imports = [...cablage.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]).sort();
+  assert.deepEqual(imports, ['../data/base.js', '../data/combat.js', '../data/sons.js'],
+    'src/son/cablage.js a gagné une dépendance : il ne doit lire que des tables');
+  for (const interdit of ['AudioContext', 'document', 'window', 'Date.now', 'performance']) {
+    assert.ok(!cablage.includes(interdit), `src/son/cablage.js touche à « ${interdit} »`);
+  }
+  const politique = sansCommentaires(lire('src', 'son', 'politique.js'));
+  assert.ok(!politique.includes('AudioContext'), 'la politique connaît Web Audio');
+
+  // 2. L'ENSEMBLE DÉSIRÉ — trois sources, dédoublonnées.
+  const vide = bouclesDesirees({ ecran: null, disposition: [], unites: [] });
+  assert.deepEqual(vide, [], 'sans écran ni base, rien ne doit sonner');
+
+  const surLaBase = bouclesDesirees({
+    ecran: 'chantier',
+    disposition: [{ id: 'chantierDeConstruction' }, { id: 'caserne' }, { id: 'centrale' }],
+    unites: [],
+  });
+  assert.deepEqual(surLaBase, [
+    AMBIANCE_PAR_ECRAN.chantier, BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.centrale,
+  ].sort(), 'l\'ensemble désiré sur la base a changé');
+
+  // ⚠⚠ UNE BOUCLE PAR TYPE, PAS PAR BÂTIMENT. Six casernes ne font pas six fois
+  // le même bruit ; compter sur le plafond de voix pour les refuser marcherait,
+  // et demanderait de savoir combien il en autorise.
+  const six = bouclesDesirees({
+    ecran: 'chantier',
+    disposition: Array.from({ length: 6 }, () => ({ id: 'caserne' })),
+    unites: [],
+  });
+  assert.equal(six.filter((n) => n === BOUCLES_DE_BATIMENT.caserne).length, 1,
+    'six casernes demandent six boucles');
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : la caserne et le dépôt PARTAGENT une
+  // boucle, donc le dédoublonnage joue aussi entre deux types différents.
+  assert.equal(BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.depotDeVehicules,
+    'montage : les deux ne partagent plus la même boucle');
+
+  // 3. LA DIFFÉRENCE — pure, et dans les deux sens.
+  // Un nom inconnu LÈVE : c'est un câblage mal tapé, donc un fait de programme.
+  assert.throws(() => reconcilierLesBoucles(['a_1'], [], ACTIF), RangeError);
+  const amb = AMBIANCE_PAR_ECRAN.chantier;
+  const mnd = AMBIANCE_PAR_ECRAN.monde;
+  assert.deepEqual(reconcilierLesBoucles([amb], [], ACTIF), { demarrer: [amb], arreter: [] });
+  assert.deepEqual(reconcilierLesBoucles([amb], [amb], ACTIF), { demarrer: [], arreter: [] });
+  assert.deepEqual(reconcilierLesBoucles([mnd], [amb], ACTIF),
+    { demarrer: [mnd], arreter: [amb] }, 'changer d\'écran change d\'ambiance');
+  // ⚠ LE MUET ARRÊTE, IL N'EMPÊCHE PAS SEULEMENT. Couper le son en laissant une
+  // ambiance tourner serait la faute exacte que cette ligne garde.
+  assert.deepEqual(reconcilierLesBoucles([amb], [amb], { muet: true, volume: 1 }),
+    { demarrer: [], arreter: [amb] }, 'muet ne coupe pas les boucles en cours');
+  assert.deepEqual(reconcilierLesBoucles([amb], [amb], { muet: false, volume: 0 }),
+    { demarrer: [], arreter: [amb] }, 'un volume nul ne coupe pas les boucles');
+
+  // 4. UN COUP DEMANDÉ EN BOUCLE LÈVE — c'est un fait de programme.
+  assert.throws(() => reconcilierLesBoucles(['ui_click'], [], ACTIF), RangeError);
+  assert.throws(() => boucleDeLEvenement('ui_click', ACTIF), RangeError);
+  assert.throws(() => boucleDeLEvenement('pas_un_evenement', ACTIF), RangeError);
+  // Et une boucle rend le gain de son unique variante.
+  const b = boucleDeLEvenement(amb, { muet: false, volume: 0.5 });
+  assert.equal(b.son, EVENEMENTS[amb].variantes[0]);
+  assert.equal(b.gain, gainDuSon(b.son, 0.5));
+
+  // 5. LES SEPT ÉCRANS ONT UNE AMBIANCE, ET AUCUNE N'EST UN COUP.
+  const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
+    .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
+    .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
+  assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
+  assert.deepEqual(Object.keys(AMBIANCE_PAR_ECRAN).sort(), ecrans.sort(),
+    'un écran sans ambiance, ou une ambiance sans écran');
+  for (const nom of [...Object.values(AMBIANCE_PAR_ECRAN),
+    ...Object.values(BOUCLES_DE_BATIMENT), ...Object.values(MOUVEMENT_PAR_PAIRE)]) {
+    assert.ok(nom in EVENEMENTS, `« ${nom} » n'est pas un événement`);
+    assert.ok(EVENEMENTS[nom].variantes.every((v) => SONS[v].boucle === true),
+      `« ${nom} » est câblé comme une boucle et n'en est pas une`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SON T16 — une boucle démarre une fois, s'arrête quand sa raison disparaît
+// ---------------------------------------------------------------------------
+
+test('SON T16 — la boucle ne se relance pas, et s\'arrête sur une rampe (falsifications n° 20 et n° 21)', async () => {
+  const { fenetre, journal } = faussesFenetres();
+  const reglages = { ...ACTIF };
+  const son = initialiserLeSon(faireDoc(fenetre), { reglages, graine: 5 });
+
+  const base = AMBIANCE_PAR_ECRAN.chantier;
+  const carte = AMBIANCE_PAR_ECRAN.monde;
+  assert.notEqual(base, carte, 'montage : les deux écrans partagent leur ambiance');
+
+  // ⚠ AVANT LE PREMIER GESTE, RIEN. La réconciliation ne crée pas de contexte :
+  // un `AudioContext` né hors d'un geste reste suspendu.
+  son.reconcilier([base]);
+  assert.equal(journal.contextes, 0, 'la réconciliation a créé un contexte hors geste');
+  assert.equal(journal.decodages, 0, 'la réconciliation a décodé hors contexte');
+
+  son.reveiller();
+  son.reconcilier([base]);
+  assert.equal(journal.decodages, 1, 'la boucle demandée n\'a pas été décodée');
+  // ⚠⚠ LA SECONDE RÉCONCILIATION TOMBE AVANT LE DÉCODAGE, et c'est le cas qui
+  // compte : sans une entrée posée AVANT la promesse, chaque image relancerait
+  // une boucle de plus.
+  son.reconcilier([base]);
+  son.reconcilier([base]);
+  assert.equal(journal.decodages, 1, 'la boucle a été redemandée pendant son décodage');
+  await laisserDecoder();
+  assert.deepEqual(journal.boucles, [base], 'la boucle n\'a pas démarré, ou a démarré deux fois');
+
+  // Deux images de plus avec le même état : aucun démarrage.
+  son.reconcilier([base]);
+  son.reconcilier([base]);
+  await laisserDecoder();
+  assert.deepEqual(journal.boucles, [base], 'un état inchangé a relancé la boucle');
+
+  // ⚠ ELLE DÉMARRE SUR UNE RAMPE, DEPUIS ZÉRO. Sans elle, la forme d'onde saute
+  // de zéro à sa valeur en un échantillon et l'oreille entend un clic.
+  const traceDemarrage = journal.rampes.at(-1);
+  assert.equal(traceDemarrage[0][0], 'pose', 'la boucle ne démarre pas depuis une valeur posée');
+  assert.equal(traceDemarrage[0][1], 0, 'la boucle démarre à plein gain');
+  assert.equal(traceDemarrage[1][0], 'rampe', 'la boucle ne monte pas en rampe');
+  assert.ok(traceDemarrage[1][1] > 0, 'la rampe monte vers un gain nul');
+
+  // LA RAISON DISPARAÎT : on quitte l'écran.
+  son.reconcilier([carte]);
+  await laisserDecoder();
+  assert.equal(journal.arrets.length, 1, 'la boucle ne s\'est pas arrêtée');
+  assert.equal(journal.arrets[0].nom, base, 'ce n\'est pas la bonne boucle qui s\'arrête');
+  assert.deepEqual(journal.boucles, [base, carte], 'la nouvelle ambiance n\'a pas démarré');
+
+  // ⚠⚠ L'ARRÊT ATTEND LA FIN DE SA RAMPE. Couper au milieu produit exactement le
+  // claquement que la rampe existe pour éviter.
+  assert.equal(journal.arrets[0].quand, journal.contexte.currentTime + RAMPE_BOUCLE_MS / 1000,
+    'la source est coupée avant la fin de sa rampe');
+  const traceArret = traceDemarrage;
+  assert.equal(traceArret.at(-1)[0], 'rampe', 'l\'arrêt ne descend pas en rampe');
+  assert.equal(traceArret.at(-1)[1], 0, 'l\'arrêt ne descend pas jusqu\'à zéro');
+  assert.equal(traceArret.at(-1)[2], journal.arrets[0].quand,
+    'la rampe de descente et la coupure ne tombent pas au même instant');
+
+  // ⚠⚠ ET LE CURSEUR DE VOLUME TOUCHE CE QUI TOURNE DÉJÀ. Une boucle prend son
+  // gain au démarrage et le garderait : le joueur verrait les clics suivre le
+  // curseur et l'ambiance rester où elle était jusqu'à ce qu'il change d'écran.
+  // Le défaut ne se voit pas à la relecture — il faut avoir le curseur sous le
+  // doigt — donc il se mesure ici.
+  const traceCarte = journal.rampes.at(-1);
+  const longueurAvant = traceCarte.length;
+  son.reconcilier([carte]);
+  assert.equal(traceCarte.length, longueurAvant,
+    'une réconciliation sans changement a touché au gain');
+  reglages.volume = 0.25;
+  son.reconcilier([carte]);
+  assert.ok(traceCarte.length > longueurAvant, 'le curseur ne touche pas la boucle en cours');
+  assert.equal(traceCarte.at(-1)[0], 'rampe', 'le gain saute au lieu de ramper');
+  assert.equal(traceCarte.at(-1)[1], gainDuSon(EVENEMENTS[carte].variantes[0], 0.25),
+    'le nouveau gain n\'est pas celui de la politique');
+  reglages.volume = 1;
+
+  // ⚠⚠ ET LE MASQUAGE DE L'APPLICATION LES FAIT TAIRE. `suspendre` arrête la
+  // boucle d'IMAGES : plus rien ne réconcilie, donc une ambiance lancée
+  // continuerait de tourner pendant que l'application est masquée — ou pendant
+  // que le banc d'essai remplace la page. Ce n'est pas un événement de plus,
+  // c'est la même réconciliation sur un ensemble vide.
+  const codeSession = sansCommentaires(lire('src', 'ui', 'session.js'));
+  const corpsSuspendre = codeSession.match(/function suspendre\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(corpsSuspendre, 'montage : `suspendre` a changé de forme');
+  assert.ok(/son\.reconcilier\(\[\]\)/.test(corpsSuspendre[0]),
+    'le masquage de l\'application ne fait pas taire les boucles');
+
+  // Et le muet arrête tout, sans qu'une seconde règle soit écrite ici.
+  const muet = initialiserLeSon(faireDoc(fenetre), { reglages: { muet: false, volume: 1 }, graine: 7 });
+  muet.reveiller();
+  muet.reconcilier([base]);
+  await laisserDecoder();
+  const avant = journal.arrets.length;
+  muet.reconcilier([]);
+  assert.equal(journal.arrets.length, avant + 1, 'un ensemble vide n\'arrête pas la boucle');
+});
+
+// ---------------------------------------------------------------------------
+// SON T17 — la comptabilité mémoire ne perd pas de vue un tampon en lecture
+// ---------------------------------------------------------------------------
+
+test('SON T17 — un tampon qu\'une source lit ne s\'évince pas (falsification n° 22)', async () => {
+  const { fenetre, journal } = faussesFenetres();
+  const son = initialiserLeSon(faireDoc(fenetre), { reglages: { ...ACTIF }, graine: 5 });
+  son.reveiller();
+
+  // ⚠⚠ CE QUE CE TEST DÉFEND : `secondesDecodees` doit rester un MAJORANT de ce
+  // qui est décodé ET référencé. Évincer une entrée de table ne libère pas le
+  // tampon — la source en lecture le tient encore —, donc la comptabilité
+  // retomberait alors que la mémoire, elle, ne bougerait pas. Sans boucle le
+  // défaut restait borné à la durée d'un coup ; une ambiance de huit secondes
+  // rejouée sans fin le rendrait permanent.
+  const boucle = MOUVEMENT_PAR_PAIRE[Object.keys(MOUVEMENT_PAR_PAIRE)[0]];
+  assert.ok(SONS[EVENEMENTS[boucle].variantes[0]].residente !== true,
+    'montage : cette boucle est résidente, l\'éviction ne la regarde pas');
+  son.reconcilier([boucle]);
+  await laisserDecoder();
+  assert.deepEqual(journal.boucles, [boucle], 'montage : la boucle n\'a pas démarré');
+  const decodagesDeLaBoucle = () => journal.demandes.filter((n) => n === boucle).length;
+  assert.equal(decodagesDeLaBoucle(), 1);
+
+  // On sature le budget PENDANT que la boucle joue. Elle ne doit pas être
+  // évincée : si elle l'était, la redemander la redécoderait.
+  // ⚠⚠ LE MONTAGE DOIT D'ABORD FAIRE DÉBORDER LE BUDGET, sans quoi l'éviction
+  // ne tournerait pas et le test serait vert sur n'importe quel code. On ne
+  // prend que des événements à UNE variante — sur un groupe à plusieurs, la
+  // variante est TIRÉE et le test mesurerait le tirage — et aucune boucle, pour
+  // que le seul tampon tenu soit celui qu'on surveille.
+  const coups = Object.entries(EVENEMENTS)
+    .filter(([, d]) => d.variantes.length === 1)
+    .map(([, d]) => d.variantes[0])
+    .filter((n) => SONS[n].residente !== true && SONS[n].boucle !== true && SONS[n].dureeMs >= 100)
+    .sort();
+  const dureeBoucle = SONS[EVENEMENTS[boucle].variantes[0]].dureeMs / 1000;
+  const cumul = coups.reduce((t2, n) => t2 + SONS[n].dureeMs / 1000, 0) + dureeBoucle;
+  assert.ok(cumul > MEMOIRE.budgetSecondesDecodees,
+    `montage vide : ${cumul} s pour un budget de ${MEMOIRE.budgetSecondesDecodees}`);
+
+  let t = 0;
+  const saturer = async () => {
+    for (const nom of coups) {
+      t += 60;
+      journal.contexte.currentTime = t;
+      son.jouer(nom);
+      await laisserDecoder();
+    }
+  };
+  await saturer();
+  // L'éviction a tourné : redemander le premier coup le REDÉCODE.
+  const avantCoup = journal.decodages;
+  t += 60; journal.contexte.currentTime = t;
+  son.jouer(coups[0]);
+  await laisserDecoder();
+  assert.ok(journal.decodages > avantCoup, 'montage : rien n\'a été évincé du tout');
+  assert.equal(decodagesDeLaBoucle(), 1, 'la boucle en cours a été redécodée');
+
+  // ⚠⚠ ET C'EST ICI QUE LA FALSIFICATION MORD, PAS AU-DESSUS. Retirer la
+  // protection ne change RIEN d'observable au son : la boucle continue de jouer
+  // — sa source tient le tampon — et personne ne la redemande, donc elle n'est
+  // pas redécodée. **Mesuré : 23 pass / 0 fail avec la ligne de protection
+  // retirée.** Le seul dégât est que la comptabilité cesse de décrire la
+  // mémoire, et il ne se voit que sur la comptabilité elle-même. C'est la
+  // septième fois que le dépôt vérifie une falsification avant de la croire.
+  const m = son.mesureMemoire();
+  assert.ok(m.tenus.length > 0, 'montage : plus rien n\'est tenu par une source');
+  for (const nom of m.tenus) {
+    assert.ok(m.decodes.includes(nom),
+      `« ${nom} » est lu par une source et n'est plus compté : `
+      + 'la comptabilité a cessé de décrire la mémoire réelle');
+  }
+  // Et le compte des secondes est EXACTEMENT celui des tampons non résidents.
+  const attendu = m.decodes
+    .filter((n) => SONS[n].residente !== true)
+    .reduce((somme, n) => somme + SONS[n].dureeMs / 1000, 0);
+  assert.ok(Math.abs(m.secondesDecodees - attendu) < 1e-9,
+    `secondesDecodees vaut ${m.secondesDecodees}, les tampons pèsent ${attendu}`);
+
+  // ⚠ ET DANS L'AUTRE SENS : une fois la boucle ARRÊTÉE, son tampon redevient
+  // évinçable. Une protection qui ne se relâche jamais serait une fuite, et le
+  // budget ne se libérerait plus jamais.
+  son.reconcilier([]);
+  await laisserDecoder();
+  await saturer();
+  son.reconcilier([boucle]);
+  await laisserDecoder();
+  assert.equal(decodagesDeLaBoucle(), 2,
+    'une boucle arrêtée reste protégée : le budget ne se libère jamais');
+});
+
+// ---------------------------------------------------------------------------
+// SON T18 — la couverture de la carte des unités se MESURE
+// ---------------------------------------------------------------------------
+
+test('SON T18 — unit_audio_map.json se résout, et sa couverture se recompte (falsification n° 23)', () => {
+  const carte = JSON.parse(lire('art', 'sources', 'unit_audio_map.json'));
+  const paires = new Map(Object.keys(UNITES).map((id) => [paireDeLUnite(id), id]));
+
+  // ⚠⚠ LA COUVERTURE SE MESURE DANS LES DEUX SENS, ET ELLE EST TOTALE. Quatorze
+  // paires dans la carte, quatorze unités dans le jeu, et les deux ensembles
+  // coïncident. C'est ce qui permet de dire qu'aucune unité n'est laissée sans
+  // entrée — et donc qu'aucune correspondance n'a été attribuée par ressemblance.
+  const dansLaCarte = Object.keys(carte.player);
+  assert.equal(dansLaCarte.length, 14, 'le bloc `player` a changé de taille');
+  assert.equal(paires.size, 14, 'le roster a changé de taille');
+  assert.deepEqual(dansLaCarte.slice().sort(), [...paires.keys()].sort(),
+    'la carte et le roster ne nomment pas les mêmes pièces');
+
+  // ⚠⚠ ET LE BLOC `ouvrage` NE SE RÉSOUT PAS — mesuré, zéro sur sept. « essaim »,
+  // « marcheur léger », « Dard lourd », « pylône énergétique » ne sont aucun nom
+  // du dépôt : ses six boucles restent MUETTES, et leur attribuer une pièce par
+  // ressemblance est nommément interdit.
+  const nomsDuDepot = new Set(Object.keys(UNITES).flatMap(
+    (id) => [UNITES[id].nom.joueur, UNITES[id].nom.ouvrage],
+  ));
+  const resolues = Object.keys(carte.ouvrage).filter((k) => nomsDuDepot.has(k));
+  assert.equal(Object.keys(carte.ouvrage).length, 7, 'le bloc `ouvrage` a changé de taille');
+  assert.deepEqual(resolues, [], 'une clé du bloc `ouvrage` se résout : le rapport doit le dire');
+
+  // ⚠⚠ TOUTES LES VALEURS DE LA CARTE SONT DES ÉVÉNEMENTS DU PACK, SEPT CHAMPS
+  // COMPRIS. La note du fichier ne le dit que de `variant_set` ; mesuré, c'est
+  // vrai des trente-cinq valeurs, et **aucune n'est un identifiant seul** —
+  // `movement_player_flyby` est le groupe des trois `_0N`.
+  const valeurs = [...new Set(['player', 'ouvrage'].flatMap(
+    (bloc) => Object.values(carte[bloc]).flatMap((e) => Object.values(e)),
+  ))].sort();
+  assert.equal(valeurs.length, 35, 'le nombre de valeurs distinctes a bougé');
+  for (const v of valeurs) assert.ok(v in EVENEMENTS, `« ${v} » n'est pas un événement du pack`);
+
+  // La table dérivée ne garde que les BOUCLES, et la dérivation se rejoue ici.
+  const attendu = {};
+  for (const [paire, entree] of Object.entries(carte.player)) {
+    const nom = entree.movement;
+    if (nom === undefined) continue;
+    if (!EVENEMENTS[nom].variantes.every((v) => SONS[v].boucle === true)) continue;
+    attendu[paire] = nom;
+  }
+  assert.deepEqual(MOUVEMENT_PAR_PAIRE, attendu, 'la table dérivée et la carte ont divergé');
+  assert.equal(Object.keys(MOUVEMENT_PAR_PAIRE).length, 4,
+    'le nombre de roulements câblés a bougé : le rapport doit le redire');
+
+  // ⚠ SEPT PAIRES PORTENT UN `movement`, DONT TROIS UN PASSAGE D'AÉRONEF QUI NE
+  // BOUCLE PAS. Les dix muettes sont un fait de la CARTE, pas une décision.
+  const avecMouvement = Object.values(carte.player).filter((e) => e.movement !== undefined);
+  assert.equal(avecMouvement.length, 7, 'le nombre de pièces portant un `movement` a bougé');
+  const passages = avecMouvement.filter(
+    (e) => !EVENEMENTS[e.movement].variantes.every((v) => SONS[v].boucle === true),
+  );
+  assert.equal(passages.length, 3, 'le nombre de passages d\'aéronef a bougé');
+  assert.ok(passages.every((e) => e.movement === 'movement_player_flyby'),
+    'un `movement` qui ne boucle pas et qui n\'est pas un passage');
+
+  // Et la lecture d'un combat : seules les unités du JOUEUR qui ont bougé.
+  const id = paires.get(Object.keys(MOUVEMENT_PAR_PAIRE)[0]);
+  const combat = {
+    entites: [
+      { id, camp: 'attaque', proprietaire: 'joueur', vivant: true, rangeeMilli: 2000 },
+      { id, camp: 'attaque', proprietaire: 'joueur', vivant: true, rangeeMilli: 1000 },
+      { id, camp: 'attaque', proprietaire: 'ouvrage', vivant: true, rangeeMilli: 2000 },
+      { id, camp: 'defense', proprietaire: 'joueur', vivant: true, rangeeMilli: 2000 },
+      { id, camp: 'attaque', proprietaire: 'joueur', vivant: false, rangeeMilli: 2000 },
+    ],
+  };
+  const avant = [1000, 1000, 1000, 1000, 1000];
+  assert.deepEqual(unitesEnMouvement(combat, avant), [id], 'la lecture du mouvement a changé');
+  assert.deepEqual(unitesEnMouvement(combat, [2000, 1000, 2000, 2000, 2000]), [],
+    'une unité immobile est comptée en mouvement');
+  assert.deepEqual(unitesEnMouvement(null, null), [], 'sans combat, rien ne roule');
+});
+
+// ---------------------------------------------------------------------------
+// SON T19 — les gestes, et la règle des trois effondrements
+// ---------------------------------------------------------------------------
+
+test('SON T19 — un geste demande un son, et l\'écran n\'en nomme aucun', () => {
+  // ⚠ L'ÉCRAN NOMME UN GESTE, JAMAIS UN SON. Aucun identifiant du pack ne doit
+  // apparaître dans un écran — c'est la même frontière que `sonDeRefus`.
+  for (const nom of ['chantier.js', 'raid.js', 'monde.js', 'offense.js']) {
+    const code = sansCommentaires(lire('src', 'ui', nom));
+    for (const evenement of Object.keys(EVENEMENTS)) {
+      assert.ok(!code.includes(evenement), `src/ui/${nom} nomme le son « ${evenement} »`);
+    }
+  }
+  // ⚠ ET IL NE RECONNAÎT PAS UNE ACTION À SON NOM. Le dépôt a déjà payé ce cas
+  // particulier deux fois — `demolir` puis `deplacer` — et le son serait le
+  // troisième : le geste est dans la table `ACTIONS`.
+  const chantier = sansCommentaires(lire('src', 'ui', 'chantier.js'));
+  assert.ok(!/===\s*'demolir'/.test(chantier), 'l\'écran reconnaît « demolir » à son nom');
+  assert.ok(chantier.includes('ACTIONS[nom].geste'), 'le geste ne vient plus de la table');
+  // ⚠ ET LE GENRE VIENT DE `TERRAINS`, PAS D'UN NOM DE BANDE ÉCRIT AU POINT
+  // D'APPEL. Le point unique est `sonner`, qui le LIT ; six appels qui le
+  // passeraient chacun à la main seraient six occasions de se tromper de bande.
+  assert.ok(/sonDeGeste\(geste, \{ genre: TERRAINS\[terrain\]\.genreSonore, id \}\)/.test(chantier),
+    'le genre sonore ne se lit plus dans la table des terrains');
+  assert.equal((chantier.match(/sonDeGeste\(/g) ?? []).length, 1,
+    'le son part d\'ailleurs que du point unique de l\'écran');
+  assert.equal((chantier.match(/(^|[^\p{L}\p{N}_])sonner\(/gu) ?? []).length, 6,
+    'le nombre de gestes sonores de l\'écran a bougé : cinq points, plus la fonction');
+
+  // Les cinq gestes de l'écran de la base, et le sixième du raid.
+  assert.equal(evenementDuGeste('selection', {}), 'order_player_select');
+  assert.equal(evenementDuGeste('deplacement', {}), 'order_player_move');
+  assert.equal(evenementDuGeste('attaque', {}), 'order_player_attack');
+  assert.equal(evenementDuGeste('pose', { genre: 'batiment' }), 'building_player_complete');
+  assert.equal(evenementDuGeste('amelioration', { genre: 'batiment' }), 'building_player_complete');
+  // ⚠⚠ UNE PIÈCE DE GARNISON NE SONNE PAS COMME UN BÂTIMENT. Le pack n'a pas de
+  // son pour ça, et on n'en détourne aucun : on se tait.
+  assert.equal(evenementDuGeste('pose', { genre: 'garnison' }), null);
+  assert.equal(evenementDuGeste('retrait', { genre: 'garnison', id: 'merlon' }), null);
+  assert.throws(() => evenementDuGeste('inconnu', {}), RangeError);
+
+  // ⚠⚠ LA RÈGLE DES TROIS EFFONDREMENTS EST UNE PROPOSITION, ET ELLE SE MESURE.
+  // Le brief donnait « l'empreinte » comme candidat naturel : mesuré, elle ne
+  // discrimine RIEN — les onze bâtiments occupent une case. Les PV, eux, se
+  // coupent net, et les seuils rendent 3 · 5 · 3.
+  const parTaille = { small: [], medium: [], large: [] };
+  for (const id of Object.keys(BASE_BATIMENTS)) {
+    parTaille[effondrementDuBatiment(id).replace('building_player_collapse_', '')].push(id);
+  }
+  assert.deepEqual(
+    [parTaille.small.length, parTaille.medium.length, parTaille.large.length], [3, 5, 3],
+    'la partition des effondrements a bougé : le rapport doit la redire',
+  );
+  // ⚠ ET AUCUNE CLASSE N'EST VIDE. Une règle qui n'emploierait que deux des
+  // trois sons rendrait le troisième inatteignable sans que rien ne le dise.
+  for (const [taille, ids] of Object.entries(parTaille)) {
+    assert.ok(ids.length > 0, `aucun bâtiment ne rend un effondrement « ${taille} »`);
+  }
+  // La règle est MONOTONE sur les PV : c'est ce qui la rend lisible.
+  const pv = (id) => BASE_BATIMENTS[id].pv;
+  assert.ok(Math.max(...parTaille.small.map(pv)) < EFFONDREMENT_PV[0]);
+  assert.ok(Math.min(...parTaille.medium.map(pv)) >= EFFONDREMENT_PV[0]);
+  assert.ok(Math.max(...parTaille.medium.map(pv)) < EFFONDREMENT_PV[1]);
+  assert.ok(Math.min(...parTaille.large.map(pv)) >= EFFONDREMENT_PV[1]);
+  assert.throws(() => effondrementDuBatiment('pas_un_batiment'), RangeError);
+});
+
+// ---------------------------------------------------------------------------
+// SON T20 — ce qui est déclaré muet l'est
+// ---------------------------------------------------------------------------
+
+test('SON T20 — les sons déclarés muets le sont, un par un (falsification n° 25)', () => {
+  // ⚠⚠ LA LISTE SE CALCULE, ELLE NE SE RECOPIE PAS. Elle est le complément de
+  // l'ensemble câblé, lui-même recomposé de bout en bout — tables de boucles ET
+  // gestes. Une liste écrite à la main déclarerait muet ce qui sonne le jour où
+  // un branchement entre sans qu'on y pense.
+  const cables = new Set(EVENEMENTS_CABLES.flatMap((e) => EVENEMENTS[e].variantes));
+  // ⚠ LA PART `ui` SE LIT DANS `session.js`, ELLE NE SE RECOPIE PAS. Cinq noms
+  // écrits ici seraient la seconde vérité que tout ce fichier refuse par
+  // ailleurs : brancher un son de plus dans la session le laisserait déclaré
+  // muet, ce qui est le mensonge le plus dangereux de ce test.
+  const session = sansCommentaires(lire('src', 'ui', 'session.js'));
+  for (const m of session.matchAll(/son\.jouer\('([a-z_0-9]+)'\)/g)) {
+    for (const variante of EVENEMENTS[m[1]].variantes) cables.add(variante);
+  }
+  const muets = Object.keys(SONS).filter((n) => !cables.has(n)).sort();
+  assert.equal(cables.size, 24, 'le nombre de sons câblés a bougé');
+  assert.equal(muets.length, 239, 'le nombre de sons muets a bougé');
+
+  // ⚠ LES SIX ORDRES DE L'OUVRAGE RESTENT MUETS — il ne donne aucun ordre que
+  // le joueur entende. En brancher un fait tomber cette ligne.
+  for (const nom of Object.keys(SONS).filter((n) => n.startsWith('order_ouvrage_'))) {
+    assert.ok(!cables.has(nom), `${nom} sonne : l'Ouvrage ne donne pas d'ordre au joueur`);
+  }
+  assert.equal(Object.keys(SONS).filter((n) => n.startsWith('order_ouvrage_')).length, 6);
+
+  // ⚠⚠ `alert_player_insufficient` NE SE CÂBLE PAS, ET C'EST DÉCLARÉ. Le refus
+  // sonne déjà `ui_error` depuis le lot SON-MOTEUR, sur le même geste : les deux
+  // ensemble feraient sonner deux fois une faute unique. Choisir lequel gagne
+  // est une décision de conception — Ethan tranche.
+  assert.ok(!cables.has('alert_player_insufficient'), 'le refus sonnerait deux fois');
+  assert.ok(cables.has('ui_error_01') && cables.has('ui_error_02'), 'le refus ne sonne plus du tout');
+
+  // ⚠⚠ LES DIX-HUIT ALERTES SONT MUETTES, LES 174 SONS DE COMBAT AUSSI. Ils
+  // attendent un journal de tick qui n'existe pas, et ce journal est un chantier
+  // de SIMULATION : `src/sim/` n'a pas bougé d'une ligne à ce lot.
+  for (const prefixe of ['alert_', 'weapon_', 'explosion_']) {
+    const sonnants = [...cables].filter((n) => n.startsWith(prefixe));
+    assert.deepEqual(sonnants, [], `un son « ${prefixe} » est câblé sans journal de combat`);
+  }
+
+  // ⚠ LES CINQ AMBIANCES SANS ÉCRAN, NOMMÉES. Trois demandent un CONTEXTE que
+  // l'état ne dit pas — « être dans un champ de quartz » ne se lit nulle part —,
+  // une décrit la base de l'Ouvrage au repos, qu'aucun écran ne montre, et la
+  // dernière est la seconde ambiance de carte, dont le choix est esthétique.
+  const ambiancesMuettes = Object.keys(SONS)
+    .filter((n) => SONS[n].bus === 'ambiances' && !cables.has(n)).sort();
+  assert.deepEqual(ambiancesMuettes, [
+    'ambience_base_ouvrage_loop',
+    'ambience_map_wind_loop',
+    'ambience_quartz_field_loop',
+    'ambience_reactor_room_loop',
+    'ambience_scoria_field_loop',
+  ], 'la liste des ambiances muettes a changé : le rapport doit la redire');
+
+  // ⚠ ET LES SIX MOTEURS À L'ARRÊT AUSSI. La carte ne dit rien d'un moteur qui
+  // tourne à l'arrêt : choisir quand il tourne est un arbitrage, pas une lecture.
+  const moteursMuets = Object.keys(SONS).filter((n) => n.startsWith('engine_') && !cables.has(n));
+  assert.equal(moteursMuets.length, 6, 'les moteurs à l\'arrêt ont changé de compte');
 });
