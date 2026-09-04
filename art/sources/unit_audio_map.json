@@ -1,0 +1,94 @@
+{
+  "notes": [
+    "ai (blanc) : sons courts, nets et brillants — fusil ou mitrailleuse.",
+    "av (rouge) : sons graves et lourds — canon moyen/lourd ou missile.",
+    "aa (jaune) : rafales rapides et verrouillage aigu — DCA ou missile.",
+    "Les entrées variant_set désignent un préfixe ; choisir aléatoirement une variante disponible."
+  ],
+  "player": {
+    "Fusiliers/Meute": {
+      "variant_set": "weapon_player_rifle",
+      "movement": "movement_infantry_player_loop"
+    },
+    "Voltigeurs/Guetteur": {
+      "variant_set": "weapon_player_rifle",
+      "order": "order_player_move"
+    },
+    "Grenadiers/Perceurs": {
+      "variant_set": "weapon_player_grenade"
+    },
+    "Sapeurs/Fouisseurs": {
+      "variant_set": "explosion_player_small"
+    },
+    "Cuirassiers/Carapace": {
+      "variant_set": "weapon_player_machinegun"
+    },
+    "Éclaireur/Ratisseur": {
+      "variant_set": "weapon_player_cannon_light",
+      "movement": "movement_tracks_light_loop"
+    },
+    "Chasseur/Fendeur": {
+      "variant_set": "weapon_player_cannon_medium",
+      "movement": "movement_tracks_medium_loop"
+    },
+    "Percheron/Broyeur": {
+      "variant_set": "weapon_player_cannon_heavy",
+      "movement": "movement_tracks_heavy_loop"
+    },
+    "Pionnier/Bélier": {
+      "variant_set": "weapon_player_cannon_medium",
+      "deploy": "movement_player_deploy"
+    },
+    "Obusier/Pilon": {
+      "variant_set": "weapon_player_artillery",
+      "deploy": "movement_player_deploy"
+    },
+    "Milan/Crécelle": {
+      "variant_set": "weapon_player_machinegun_burst",
+      "movement": "movement_player_flyby"
+    },
+    "Épervier/Busard": {
+      "variant_set": "weapon_player_missile_launch",
+      "movement": "movement_player_flyby"
+    },
+    "Foudre/Frappeur": {
+      "variant_set": "weapon_player_aa_burst",
+      "lock": "weapon_missile_lock"
+    },
+    "Albatros/Enclume": {
+      "variant_set": "explosion_player_large",
+      "movement": "movement_player_flyby"
+    }
+  },
+  "ouvrage": {
+    "essaim": {
+      "variant_set": "weapon_ouvrage_rifle",
+      "movement": "movement_essaim_ouvrage_loop"
+    },
+    "marcheur léger": {
+      "variant_set": "weapon_ouvrage_cannon_light",
+      "movement": "movement_walker_light_loop"
+    },
+    "marcheur moyen": {
+      "variant_set": "weapon_ouvrage_cannon_medium",
+      "movement": "movement_walker_medium_loop"
+    },
+    "marcheur lourd": {
+      "variant_set": "weapon_ouvrage_cannon_heavy",
+      "movement": "movement_walker_heavy_loop"
+    },
+    "Dard léger": {
+      "variant_set": "weapon_ouvrage_machinegun_burst",
+      "movement": "movement_dard_light_loop"
+    },
+    "Dard lourd": {
+      "variant_set": "weapon_ouvrage_missile_launch",
+      "movement": "movement_dard_heavy_loop"
+    },
+    "pylône énergétique": {
+      "start": "weapon_ouvrage_beam_start",
+      "loop": "weapon_ouvrage_beam_loop",
+      "end": "weapon_ouvrage_beam_end"
+    }
+  }
+}
