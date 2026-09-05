@@ -2447,6 +2447,36 @@ export function initialiserEcranChantier(doc, {
   // géométrie à dessiner, plus de variable CSS par pan de mur, et plus rien à
   // lever quand une image manque à la table. Ce que l'anneau réservait —
   // une case de chaque côté — est devenu la demi-case de `paddingDeLaGrille`.
+  // ⚠⚠ UN VOILE ZÉBRÉ PAR BANDE NAVIGABLE — Ethan, 04/09 : « Dans les bases,
+  // assombrir la défense quand on regarde la base et inversement — du genre
+  // grandes barres hachurées en travers, comme les zébras sur la route. »
+  //
+  // ⚠⚠ UN ÉLÉMENT PAR BANDE, PAS UN `::after` PAR CASE. Un dégradé répété sur
+  // chaque case redémarre à chaque bordure : à 45° la phase saute d'une case à
+  // l'autre, et on obtient un hachurage par case au lieu des GRANDES barres en
+  // travers qu'Ethan décrit. Posé sur la bande entière, le motif court d'un
+  // bord à l'autre.
+  //
+  // ⚠ ET IL N'EST PAS `position: absolute` : il est placé dans la GRILLE, sur
+  // les lignes d'écran de sa bande et sur les neuf colonnes. Il suit donc le
+  // zoom et le défilement sans qu'une seule ligne de JS ne le repositionne.
+  //
+  // ⚠ IL EST AJOUTÉ APRÈS LES CASES, DONC IL PEINT AU-DESSUS D'ELLES SANS
+  // `z-index` — un `z-index` sur une case en ferait un contexte d'empilement, et
+  // le dépôt a déjà payé cette faute avec `.case.choisie`.
+  const voiles = new Map();
+  for (const cle of BANDES_NAVIGABLES) {
+    const bande = BANDES.find((b) => b.cle === cle);
+    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
+    const voile = doc.createElement('div');
+    voile.className = 'voile-bande';
+    voile.style.gridColumn = `1 / ${GRILLE.largeur + 1}`;
+    voile.style.gridRow = `${premiereLigne} / span ${nbLignes}`;
+    voile.hidden = true;
+    grille.appendChild(voile);
+    voiles.set(cle, voile);
+  }
+
   const traits = doc.createElementNS(SVG, 'svg');
   traits.id = 'chantier-traits';
   traits.setAttribute('viewBox', `0 0 ${GRILLE.largeur} ${GRILLE.longueur}`);
@@ -2680,6 +2710,11 @@ export function initialiserEcranChantier(doc, {
     bandeCourante = cleBande;
     marquerBoutonDuBas();
     marquerBascule();
+    // ⚠ LE VOILE EST SUR L'AUTRE BANDE, ET IL N'Y EN A QU'UN D'ALLUMÉ. Le
+    // marquer ici et nulle part ailleurs : `bandeCourante` change à chaque
+    // évènement de défilement, et deux écrivains de la même bascule
+    // divergeraient à la première inattention.
+    for (const [cle, voile] of voiles) voile.hidden = cle === cleBande;
 
     // ⚠⚠ LA PALETTE SUIT LE TERRAIN, ET SANS CETTE LIGNE ELLE NE LE SUIVAIT
     // PAS. `bandeCourante` bouge à chaque évènement de défilement ; la palette,

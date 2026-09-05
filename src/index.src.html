@@ -872,6 +872,34 @@
      dont on vient d'ouvrir le panneau — aurait été le seul barré par son
      propre mur. */
   .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* ⚠⚠ LA BANDE QU'ON NE REGARDE PAS EST ZÉBRÉE — Ethan, 04/09 : « Dans les
+     bases, assombrir la défense quand on regarde la base et inversement — du
+     genre grandes barres hachurées en travers, comme les zébras sur la route. »
+
+     ⚠⚠ `pointer-events: none` N'EST PAS COSMÉTIQUE. Le voile couvre la bande
+     entière : sans cette ligne il avalerait tous les touchers de la bande d'en
+     dessous, et le joueur ne pourrait plus rien y poser ni y toucher. C'est la
+     faute que le calque des traits (`#chantier-traits`) et le `transform:
+     scale()` de la grille interdisent déjà, ici sur une surface bien plus
+     grande.
+
+     ⚠⚠ ET LA TEINTE EST LA SEULE TRANSPARENCE DE LA FICHE, `rgba(0,0,0,0.31)`.
+     La palette est fermée à trente-trois teintes opaques plus cette ombre-là :
+     un aplat gris opaque rendrait les pièces indiscernables entre elles — c'est
+     le raisonnement que l'écran Recherche porte déjà sur ses vignettes grisées.
+     À 31 % sur une barre couvrant un quart du motif, la pièce reste
+     reconnaissable ; confronté à l'écran, six pièces sur six.
+
+     ⚠ LES BARRES SE MESURENT EN CASES, PAS EN PIXELS. Le pas vaut deux fois
+     `--case-cote` : elles gardent la même épaisseur apparente à tous les
+     niveaux de zoom, là où un pas en pixels deviendrait un grain fin au zoom
+     maximal. */
+  .voile-bande {
+    pointer-events: none;
+    background-image: repeating-linear-gradient(-45deg,
+      rgba(0,0,0,0.31) 0 calc(var(--case-cote) / 2),
+      transparent calc(var(--case-cote) / 2) var(--case-cote));
+  }
   /* ⚠⚠ LE JETON A GRANDI DE 20 %, ET LE FACTEUR EST ÉCRIT PLUTÔT QUE FONDU.
      Ethan, 30/08 : « les bâtiments sont bien trop petits, surtout collecteur
      etc. Augmenter la taille du sprite de 20 %. Pas le choix pour l'instant. »

@@ -3988,3 +3988,56 @@ test('ERGO T1 bis — le pincement de la base appelle vraiment l\'ancrage', () =
   assert.ok(corps.indexOf('reglerCoteCase(') < corps.indexOf('defile.scrollWidth'),
     'les bornes sont lues avant que la taille ne soit posée');
 });
+
+// ---------------------------------------------------------------------------
+// ERGO T5 — le voile de la bande inactive
+// ---------------------------------------------------------------------------
+
+test('ERGO T5 — la bande qu\'on ne regarde pas est zébrée, et elle reste touchable', () => {
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/\.voile-bande \{[^}]*\}/);
+  assert.ok(regle !== null, 'le voile de bande n\'a pas de règle');
+
+  // ⚠⚠ LA GARDE QUI COMPTE. Le voile couvre une bande entière : sans
+  // `pointer-events: none` il avalerait tous les touchers de la bande d'en
+  // dessous, et le joueur ne pourrait plus rien y poser. Le dépôt porte déjà ce
+  // raisonnement sur `#chantier-traits`.
+  assert.match(regle[0], /pointer-events: none;/, 'le voile avale les touchers de la bande');
+
+  // Des BARRES EN TRAVERS, pas un aplat : un dégradé répété, en diagonale.
+  assert.match(regle[0], /repeating-linear-gradient\(\s*-?\d+deg/,
+    'le voile n\'est pas un motif rayé');
+  // ⚠ ET LA TRANSPARENCE EST CELLE DE LA FICHE, LA SEULE ADMISE. Un aplat
+  // opaque rendrait les pièces indiscernables entre elles.
+  assert.match(regle[0], /rgba\(0,0,0,0\.31\)/, 'le voile emploie une transparence hors fiche');
+  assert.match(regle[0], /transparent/, 'le voile n\'a pas d\'intervalle clair : c\'est un aplat');
+  // Le pas suit la case, donc le zoom.
+  assert.match(regle[0], /var\(--case-cote\)/, 'les barres sont en pixels et non en cases');
+
+  // ⚠⚠ UN VOILE PAR BANDE NAVIGABLE, ET UN SEUL ALLUMÉ. L'écran en construit
+  // exactement autant que `BANDES_NAVIGABLES` en compte, et la bascule est
+  // écrite à UN seul endroit : `bandeCourante` change à chaque évènement de
+  // défilement, deux écrivains divergeraient.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /for \(const cle of BANDES_NAVIGABLES\) \{/,
+    'les voiles ne se dérivent plus des bandes navigables');
+  // Deux écritures de `hidden` en tout : la naissance, cachée, et la bascule.
+  assert.equal((ecran.match(/voile\.hidden/g) ?? []).length, 2,
+    'un second écrivain de la bascule du voile est apparu');
+  assert.equal((ecran.match(/hidden = cle === cleBande/g) ?? []).length, 1,
+    'la bascule du voile est écrite à plus d\'un endroit');
+  assert.match(ecran, /for \(const \[cle, voile\] of voiles\) voile\.hidden = cle === cleBande;/,
+    'la bascule ne montre plus exactement l\'autre bande');
+  assert.equal(BANDES_NAVIGABLES.length, 2, 'la lecture « l\'autre bande » suppose deux bandes');
+
+  // ⚠ ET IL EST POSÉ DANS LA GRILLE, PAS EN ABSOLU : il suit le zoom et le
+  // défilement sans qu'une ligne ne le repositionne. Le vérifier par la
+  // géométrie qu'il reçoit — les neuf colonnes, et les lignes d'écran de sa
+  // bande.
+  assert.match(ecran, /voile\.style\.gridColumn = `1 \/ \$\{GRILLE\.largeur \+ 1\}`;/,
+    'le voile ne couvre plus les neuf colonnes');
+  assert.match(ecran, /voile\.style\.gridRow = `\$\{premiereLigne\} \/ span \$\{nbLignes\}`;/,
+    'le voile ne couvre plus les lignes d\'écran de sa bande');
+  assert.doesNotMatch(regle[0], /position: absolute/, 'le voile est sorti de la grille');
+});
