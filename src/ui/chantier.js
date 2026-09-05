@@ -2218,13 +2218,13 @@ const VARIABLE_DATLAS = {
   unite: 'var(--atlas-unite)',
   chassis: 'var(--atlas-chassis)',
   tourelle_unite: 'var(--atlas-tourelle-unite)',
-  // ⚠ `sol` RESTE, ET IL NE SERT PLUS À LA BASE. L'atlas du MONDE tapissait les
-  // cases de la grille jusqu'au lot MUR-PEINT, quatre cellules par case ; le sol
-  // de la base est maintenant le décor peint. La variable reste parce que
-  // l'écran Monde en a besoin — c'est le même fichier — et parce que cette table
-  // est la table des atlas de l'écran, dont en avoir deux serait la seconde
-  // vérité habituelle.
-  sol: 'var(--atlas-sol)',
+  // ⚠⚠ `sol` EST PARTI — lot SOL-SATELLITE, 05/09. Il pointait `--atlas-sol`,
+  // c'est-à-dire l'atlas indexé du fond de carte, et il ne servait déjà plus à
+  // la base depuis le lot MUR-PEINT : la grille tapissée case par case avait
+  // laissé place au décor peint. La variable elle-même n'existe plus, l'écran
+  // Monde ne passant plus par la feuille pour son sol — la laisser ici aurait
+  // fait résoudre une famille sur une variable vide, ce qui ne lève pas et ne
+  // dessine rien.
 };
 
 /**
@@ -2466,10 +2466,11 @@ export function defilementAncre(defilement, ancre, facteur, max) {
  * image — le décor peint, mur compris —, donc il n'y a plus rien à découper ni à
  * paver.
  *
- * ⚠ CE QUI N'A PAS DISPARU : `--atlas-sol`, qui porte l'atlas du monde. La
- * CARTE en a toujours besoin, et son terrain est procédural
- * (`render/terrain.js`) — ce n'est pas le même sol. Le retirer aurait vidé
- * l'écran Monde pour une raison qui ne le regarde pas.
+ * ⚠⚠ ET `--atlas-sol` A DISPARU À SON TOUR — lot SOL-SATELLITE, 05/09. Ce
+ * paragraphe disait qu'elle restait « parce que la CARTE en a toujours besoin,
+ * et que son terrain est procédural ». Il ne l'est plus : le sol de la carte est
+ * fait de huit planches satellite qu'`ui/monde.js` prend en `<img>`, sans passer
+ * par la feuille. Il n'y a donc plus d'atlas du monde du tout.
  *
  * ⚠ ET `tile_sol_{j,o}_*` N'A PAS ÉTÉ TOUCHÉ NON PLUS, parce que ce lot ne
  * l'orpheline pas : il l'était DÉJÀ. Mesuré — les huit dalles ne sont nommées

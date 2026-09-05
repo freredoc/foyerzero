@@ -1,491 +1,294 @@
-// Le fond de la carte — un pavage organique, sans DOM et sans canevas.
-//
-// Ce module ne dessine pas : il REND DES PIXELS. On lui donne un atlas de
-// tuiles, une graine, un cran de zoom et le coin d'une dalle ; il rend un
-// tableau RGBA. Le canevas, le cache et le défilement vivent dans `src/ui/`.
+// Le sol de la carte du monde — quels dessins, où, et avec quel poids.
 //
 // ---------------------------------------------------------------------------
-// ⚠⚠ CE N'EST PAS DE LA COMPOSITION ALPHA, ET C'EST TOUT LE MODULE
+// ⚠⚠ CE MODULE NE REND PLUS DE PIXELS — lot SOL-SATELLITE, 05/09
 // ---------------------------------------------------------------------------
 //
-// La formule est, par canal :
+// Il en rendait, et c'était toute son histoire. Jusqu'ici le fond de carte
+// était un PAVAGE À SOMME PONDÉRÉE sur un atlas INDEXÉ : soixante-quatre tuiles
+// de 128 px dont chaque pixel valait 0 à 4, semées sur un réseau au pas de 56,
+// accumulées à la main dans des `Float32Array` sous la formule
+// `μ + Σwᵢ(tᵢ − μ) / √(Σwᵢ²)`, puis REQUANTIFIÉES sur cinq teintes d'une rampe
+// de `FICHE-STYLE.md`. Cinq tuiles se superposaient sur chaque pixel.
 //
-//     sortie = μ + ( Σ wᵢ·(tᵢ − μ) ) / √( Σ wᵢ² )
+// Ethan, 05/09 : « je viens de t'envoyer 8 planches de terrain satellite pour la
+// carte du monde […] tu fais au mieux pour que ce soit joli, que les transitions
+// entre les différentes images se passent bien, pas de fond ouvrage pour le
+// moment, tu fais le moins de traitement possible ».
 //
-// où `μ` est la moyenne de l'atlas et `wᵢ` le masque de la tuile `i` au pixel.
-// `drawImage` avec `globalAlpha` calcule `Σwᵢtᵢ / Σwᵢ`, qui n'est PAS ça :
-// moyenner N textures divise leur écart-type par √N, et le fond devient plat.
-// La division par `√(Σwᵢ²)` au lieu de `Σwᵢ` est exactement ce qui rend
-// l'écart-type d'une seule tuile — c'est la normalisation d'une somme de
-// variables indépendantes, pas celle d'une moyenne.
-//
-// ⚠ LE RACCOURCI A ÉTÉ ESSAYÉ ET IL NE MARCHE PAS. Composer en alpha ordinaire
-// puis « rattraper » le contraste en répartissant par quintiles amplifie le
-// bruit au lieu de rendre le relief. Ne pas le refaire.
-//
-// D'où l'accumulation à la main dans des `Float32Array` : trois accumulateurs
-// pour la sortie — la somme pondérée centrée, `Σw`, `Σw²` — et un quatrième
-// pour l'appartenance de camp.
+// « Le moins de traitement possible » condamne la moulinette entière : de l'art
+// livré, il ne serait rien resté à l'écran qu'un relief à cinq niveaux repeint.
+// Ce qui la remplace tient en une phrase — **on pose la planche telle quelle, et
+// on ne fond que les bords**.
 //
 // ---------------------------------------------------------------------------
-// ⚠ CHAQUE DALLE SE CALCULE SEULE, ET RIEN NE DOIT DÉPENDRE DE SES VOISINES
+// ⚠⚠ LE PAVAGE EST UNE PARTITION DE L'UNITÉ, ET C'EST CE QUI REND LE FONDU SÛR
 // ---------------------------------------------------------------------------
 //
-// Le réseau est semé par la position ABSOLUE en pixels : le coin d'une dalle
-// n'entre nulle part dans un hachage, et la position d'une tuile à l'écran est
-// un entier calculé globalement, jamais relativement à la dalle. Deux dalles
-// adjacentes se raccordent donc exactement, et une zone rendue en une dalle est
-// identique à la même zone rendue en quatre. Un test l'asserte, parce que c'est
-// l'invariant qui casserait en silence — une couture ne fait pas tomber un
-// test, elle se voit six semaines plus tard sur un téléphone.
+// Les blocs sont posés sur une grille régulière de pas `PAS_SOURCE`, chacun
+// couvrant `COTE_SOURCE` : ils se CHEVAUCHENT donc de `FONDU_SOURCE`. Le poids
+// d'un bloc est le produit de deux profils séparables valant 1 au centre et
+// montant en `sin²` sur le fondu ; deux profils voisins étant `sin²` et `cos²`
+// du même angle, **ils somment exactement à 1**. Mesuré sur le prototype, sur
+// toute une vue : `Σw` minimum 1,0000, maximum 1,0000.
 //
-// C'est aussi pour ça que les seuils de teinte sont GLOBAUX et non calculés
-// dalle par dalle : deux découpages différents de part et d'autre d'un bord
-// donneraient une couture nette là où le pavage n'en a pas.
+// D'où trois propriétés qu'aucune autre écriture ne donne ensemble :
+//
+//   1. `78,6 %` de la surface est le pixel SOURCE, à l'octet — la part où un
+//      seul bloc a le poids 1, soit `((COTE − 2·FONDU) / PAS)²`. C'est
+//      exactement ce que « le moins de traitement possible » veut dire ;
+//   2. dans le fondu, deux blocs (quatre aux coins) se croisent en `sin²`, donc
+//      sans discontinuité de pente : aucune ligne ne se lit ;
+//   3. `Σw = 1` partout, donc **aucun plancher à prévoir**. L'ancien module
+//      portait une garde `sw <= 0` contre le noir, née d'un pas trop large ;
+//      ici la question ne se pose pas, et il n'y a rien à garder.
+//
+// ⚠ ET IL N'Y A PLUS DE NORMALISATION `/√(Σwᵢ²)`. Elle existait pour rattraper
+// l'écrasement du contraste que produit la moyenne de CINQ textures ; avec un
+// seul bloc à poids plein sur quatre pixels sur cinq, il n'y a plus rien à
+// rattraper — l'appliquer ici gonflerait le contraste d'un facteur √2 dans les
+// seules bandes de fondu, c'est-à-dire dessinerait le raccord qu'on efface.
+//
+// ---------------------------------------------------------------------------
+// ⚠ CHAQUE DALLE SE CALCULE SEULE, ET RIEN NE DÉPEND DE SES VOISINES
+// ---------------------------------------------------------------------------
+//
+// L'invariant du module d'avant survit mot pour mot, et il vaut toujours autant :
+// la grille de blocs est semée par la position ABSOLUE en pixels d'écran, le
+// coin d'une dalle n'entre dans aucun hachage, et la position d'un bloc se
+// calcule globalement, jamais relativement à la dalle qui le demande. Deux
+// dalles adjacentes se raccordent donc exactement, et une zone rendue en une
+// dalle est identique à la même rendue en quatre. Une couture ne fait pas
+// tomber un test : elle se voit six semaines plus tard sur un téléphone.
 
-import {
-  GEOGRAPHIE, TERRAIN_CARTE, ZOOM_CARTE, PIXELS_SOURCE_PAR_CASE,
-} from '../data/sites.js';
+import { ZOOM_CARTE, TERRAIN_CARTE, PIXELS_SOURCE_PAR_CASE } from '../data/sites.js';
 import { hachageBrut } from '../sim/peuplement.js';
-import { niveauDeLaRangee } from '../sim/carte.js';
 
 /**
- * Les deux sels du pavage.
+ * Le sel du pavage.
  *
- * ⚠ ILS SONT DEUX PARCE QU'UN HACHAGE N'A QUE TRENTE-DEUX BITS. Le premier
- * porte les deux décalages — seize bits chacun, tout le mot — et le second le
- * numéro de tuile, la rotation, le miroir et le tirage d'appartenance. Tout
- * prendre au même hachage demanderait quarante-neuf bits ; les tasser, c'est
- * exactement la faute des « bits épuisés » qui faisait basculer toutes les
- * tuiles du même côté pendant la maquette.
+ * ⚠ IL EN FAUT UN SEUL, LÀ OÙ L'ANCIEN EN PRENAIT DEUX. Le pavage d'avant
+ * devait tirer deux décalages de seize bits chacun, un numéro de tuile, une
+ * rotation, un miroir et un tirage d'appartenance : quarante-neuf bits, donc
+ * deux hachages. Ici trois champs suffisent — le dessin, le quart de tour, le
+ * miroir — et ils tiennent dans **six bits** du même mot.
+ *
+ * ⚠ 2 ET 3 SONT RETIRÉS, PAS RÉEMPLOYÉS. C'étaient `SEL_DECALAGE` et
+ * `SEL_FIGURE` ; les reprendre ferait dépendre le sol de la carte du même mot
+ * que `sim/poi.js`, qui tire ses rangées et ses colonnes sous ces deux sels-là.
+ * Deux tirages sans rapport qui partagent un sel finissent par se corréler, et
+ * personne ne s'en aperçoit. Le 6 est libre — 0 et 1 au peuplement, 4 à
+ * `render/variante.js`, 5 à `render/fond.js`.
  */
-export const SEL_DECALAGE = 2;
-export const SEL_FIGURE = 3;
-
-/** Le nombre de teintes d'une rampe de sol. Les deux en ont autant. */
-export const NB_TEINTES = TERRAIN_CARTE.rampes.joueur.length;
+export const SEL_BLOC = 6;
 
 /**
- * Un atlas de tuiles, prêt à être pavé.
+ * Les huit planches, dans l'ordre où Ethan les a envoyées.
  *
- * ⚠ LES VALEURS SONT DES INDICES DE TEINTE, PAS DES COULEURS. L'atlas livré est
- * une image indexée sur la rampe du joueur : chacun de ses pixels vaut 0 à 4,
- * et la mesure dit que les cinq occupent 20,0 % de la surface chacun. Travailler
- * sur l'indice plutôt que sur une luminance en 0–255 n'est pas une
- * simplification : les cinq teintes sont réparties à clarté régulière (L* 58,1 ·
- * 62,9 · 68,0 · 73,0 · 77,9, soit un pas de 4,95 ± 0,15), donc l'indice EST la
- * luminance à une transformation affine près — et la formule comme les quantiles
- * qui la suivent sont invariants par transformation affine.
- *
- * ⚠ ET C'EST CE QUI PERMET AUX DEUX RAMPES DE PARTAGER L'ATLAS. Le camp du sol
- * choisit la rampe ; l'indice, lui, ne change pas. « Repeindre à index
- * constant » ne touche donc ni au contraste ni à la garantie de clarté de
- * `FICHE-STYLE.md`.
- *
- * @param {Uint8Array} valeurs indices de teinte, image entière, ligne par ligne
- * @param {number} cote côté d'une tuile, en pixels
- * @param {number} largeur largeur de l'image, en pixels
- * @returns {{valeurs: Uint8Array, cote: number, largeur: number,
- *   colonnes: number, nombre: number, moyenne: number}}
+ * ⚠ L'ORDRE EST LE NOM. Le hachage rend un rang, et ce rang n'a que cette liste
+ * pour désigner un dessin : la réordonner rebattrait le sol de toutes les
+ * cartes de toutes les graines. `tools/sols.py` porte la même liste, et un test
+ * les confronte au manifeste.
  */
-export function creerAtlas(valeurs, cote, largeur) {
-  if (!Number.isInteger(cote) || cote <= 0) {
-    throw new RangeError(`terrain : côté de tuile « ${cote} » invalide`);
-  }
-  if (!Number.isInteger(largeur) || largeur % cote !== 0) {
-    throw new RangeError(`terrain : largeur ${largeur} non divisible par ${cote}`);
-  }
-  const colonnes = largeur / cote;
-  const hauteur = valeurs.length / largeur;
-  if (!Number.isInteger(hauteur) || hauteur % cote !== 0) {
-    throw new RangeError(`terrain : hauteur ${hauteur} non divisible par ${cote}`);
-  }
-  let somme = 0;
-  for (let i = 0; i < valeurs.length; i += 1) {
-    if (valeurs[i] >= NB_TEINTES) {
-      throw new RangeError(
-        `terrain : l'atlas porte l'indice ${valeurs[i]}, hors de 0…${NB_TEINTES - 1}`,
-      );
-    }
-    somme += valeurs[i];
-  }
-  return {
-    valeurs,
-    cote,
-    largeur,
-    colonnes,
-    nombre: colonnes * (hauteur / cote),
-    moyenne: somme / valeurs.length,
-  };
-}
+export const NOMS_DU_SOL = Object.freeze(
+  Array.from({ length: 8 }, (_, i) => `sol_carte_${i + 1}`),
+);
 
 /**
- * Les huit orientations d'une tuile, sous forme affine.
+ * Le côté d'une planche, en pixels SOURCE.
  *
- * Une orientation envoie le pixel source `(sx, sy)` sur le pixel d'atlas
- * `(ox + a·sx + b·sy, oy + c·sx + d·sy)`. C'est écrit ainsi — plutôt qu'en
- * huit `if` — parce que le rendu a besoin de sortir `a` et `c` de la boucle
- * intérieure : à `sy` fixé, l'indice dans l'atlas devient une progression
- * arithmétique, un ajout par pixel au lieu de deux multiplications.
- *
- * Le miroir s'applique AVANT la rotation, sur `sx`. L'ordre n'a pas
- * d'importance visuelle — les huit compositions sont les mêmes dans les deux
- * sens — mais il en a une pour la reproductibilité, donc il est fixé ici.
- *
- * @param {number} rotation 0 à 3, quarts de tour
- * @param {boolean} miroir
- * @param {number} cote côté de la tuile
- * @returns {{a: number, b: number, c: number, d: number, ox: number, oy: number}}
+ * ⚠ IL EST ÉCRIT ICI ET MESURÉ AILLEURS. `render/` est pur : il ne lit aucun
+ * fichier, et `naturalWidth` n'existe qu'une fois l'image décodée par un
+ * navigateur. La constante est donc au code, et un test la confronte à
+ * `art/sprites/sol/sol-empreintes.json` — elle tombe au dépôt, pas chez le
+ * joueur. Même motif que `render/fond.js` depuis le lot MUR-PEINT.
  */
-export function orientationDeLaTuile(rotation, miroir, cote) {
-  const n = cote - 1;
-  // Les quatre rotations, dans l'ordre des quarts de tour.
-  const ROTATIONS = [
-    { a: 1, b: 0, c: 0, d: 1, ox: 0, oy: 0 },
-    { a: 0, b: -1, c: 1, d: 0, ox: n, oy: 0 },
-    { a: -1, b: 0, c: 0, d: -1, ox: n, oy: n },
-    { a: 0, b: 1, c: -1, d: 0, ox: 0, oy: n },
-  ];
-  const r = ROTATIONS[rotation & 3];
-  if (!miroir) return { ...r };
-  // sx devient n − sx : les coefficients en `sx` changent de signe, et ce que
-  // valait `a·n` passe dans l'offset.
-  return {
-    a: -r.a, b: r.b, c: -r.c, d: r.d,
-    ox: r.ox + r.a * n, oy: r.oy + r.c * n,
-  };
-}
+export const COTE_SOURCE = 1254;
+
+/** La largeur du fondu entre deux blocs voisins, en pixels SOURCE. */
+export const FONDU_SOURCE = TERRAIN_CARTE.fonduSourcePx;
+
+/** Le pas de la grille de blocs : un bloc, moins ce qu'il partage avec le suivant. */
+export const PAS_SOURCE = COTE_SOURCE - FONDU_SOURCE;
 
 /**
- * Le masque, échantillonné sur le côté d'une tuile à l'écran.
+ * La part de la surface qui est le pixel source, sans le moindre mélange.
  *
- * Cosinus surélevé, SÉPARABLE : `m(u) = 0,5 − 0,5·cos(π·(1 − |u|))` avec
- * `u ∈ [−1, 1]`, appliqué en produit sur les deux axes. Il vaut 1 au centre et
- * 0 aux deux bords, sans discontinuité de pente — c'est ce qui empêche qu'on
- * lise le contour d'une tuile dans le fond.
- *
- * @param {number} cotePx côté de la tuile à l'écran, en pixels
- * @returns {Float64Array}
+ * ⚠ ELLE SE CALCULE, ELLE NE S'ANNONCE PAS. C'est le carré du rapport entre la
+ * zone à poids plein d'un bloc — `COTE − 2·FONDU` — et le pas de la grille.
+ * Un test la mesure sur le pavage lui-même plutôt que de croire cette ligne.
  */
-export function masqueDeLaTuile(cotePx) {
-  const m = new Float64Array(cotePx);
-  const demi = cotePx / 2;
-  for (let i = 0; i < cotePx; i += 1) {
-    // Le centre du pixel, pas son bord : sans le demi-pixel, le masque est
-    // asymétrique d'un pixel et le semis dérive doucement vers un coin.
-    const u = (i + 0.5) / demi - 1;
-    m[i] = 0.5 - 0.5 * Math.cos(Math.PI * (1 - Math.abs(u)));
-  }
-  return m;
-}
+export const PART_INTACTE = ((COTE_SOURCE - 2 * FONDU_SOURCE) / PAS_SOURCE) ** 2;
 
 /**
- * Ce que le hachage dit d'un nœud du réseau.
+ * Combien de pixels d'écran vaut un pixel source, à ce cran de zoom.
  *
- * ⚠ CHAQUE CHAMP A SES BITS, ET ILS SONT COMPTÉS ICI. Décalages : seize bits
- * chacun, sur le premier hachage. Tuile : six bits — assez pour soixante-quatre.
- * Rotation : deux. Miroir : un. Appartenance : les vingt-trois qui restent.
- * Aucun champ ne se sert dans les trois bits de tête d'un mot déjà découpé,
- * ce qui est la faute que ce module se souvient d'avoir vue.
+ * Une case vaut `PIXELS_SOURCE_PAR_CASE` pixels source et `cran` pixels
+ * physiques : l'échelle est le rapport des deux, et elle ne dépasse jamais 1 —
+ * le cran le plus serré tombe au 1:1, les autres réduisent. On n'agrandit
+ * jamais une source, c'est l'acquis du « gros carré moche » du 30/08.
  *
- * @param {number} graine graine de la partie
- * @param {number} gy indice de nœud, axe des rangées
- * @param {number} gx indice de nœud, axe des colonnes
- * @param {number} nombreDeTuiles
- * @returns {{decalageY: number, decalageX: number, tuile: number,
- *   rotation: number, miroir: boolean, tirage: number}}
+ * @param {number} cran pixels physiques par case, un cran de `ZOOM_CARTE`
+ * @returns {number}
  */
-export function descriptionDuNoeud(graine, gy, gx, nombreDeTuiles) {
-  const h0 = hachageBrut(graine, gy, gx, SEL_DECALAGE);
-  const h1 = hachageBrut(graine, gy, gx, SEL_FIGURE);
-  return {
-    // De −1 à +1, en fraction du décalage maximal.
-    decalageY: ((h0 & 0xffff) / 0x10000) * 2 - 1,
-    decalageX: (((h0 >>> 16) & 0xffff) / 0x10000) * 2 - 1,
-    tuile: (h1 & 0x3f) % nombreDeTuiles,
-    rotation: (h1 >>> 6) & 3,
-    miroir: ((h1 >>> 8) & 1) === 1,
-    tirage: ((h1 >>> 9) & 0x7fffff) / 0x800000,
-  };
-}
-
-/**
- * La probabilité qu'une tuile posée sur cette rangée appartienne à l'Ouvrage.
- *
- * ⚠ CETTE FORMULE EST UNE PROPOSITION, PAS UN ARBITRAGE. Elle est linéaire du
- * niveau 1 — la rangée du joueur au départ en vaut 5, donc 8 % de tuiles — au
- * niveau 50, où elle vaut 1 : le bout de la carte est entièrement à l'Ouvrage.
- * Elle tient en une ligne et se change en une ligne.
- *
- * ⚠ LE NIVEAU EST CELUI DE L'OUVRAGE, PAS CELUI DU JOUEUR. `niveauDeLaRangee`
- * le dit en en-tête : la base du joueur porte trois niveaux qui lui sont
- * propres, et aucun ne se déduit d'une rangée.
- *
- * @param {number} rangee
- * @returns {number} de 0 à 1
- */
-export function partOuvrageDeLaRangee(rangee) {
-  return (niveauDeLaRangee(rangee) - 1) / (GEOGRAPHIE.niveauPlafond - 1);
-}
-
-/**
- * La rangée de carte que touche un pixel source donné, bornée à la carte.
- *
- * ⚠ ON BORNE, ON NE LÈVE PAS. Le pavage déborde volontiers des bords : les
- * tuiles qui couvrent le bas de la dernière rangée ont leur centre au-delà, et
- * refuser de les décrire ferait un trou noir sur toute la bordure.
- *
- * @param {number} sourceY
- * @returns {number} rangée de 1 à `GEOGRAPHIE.carte.hauteur`
- */
-export function rangeeDuPixelSource(sourceY) {
-  const brute = Math.floor(sourceY / PIXELS_SOURCE_PAR_CASE) + 1;
-  if (brute < 1) return 1;
-  return brute > GEOGRAPHIE.carte.hauteur ? GEOGRAPHIE.carte.hauteur : brute;
-}
-
-/**
- * Les quatre seuils, lus une fois. La boucle finale du rendu les compare
- * 262 144 fois par dalle : les relire dans la table à chaque pixel coûtait
- * plusieurs millisecondes pour rien.
- */
-const SEUILS = TERRAIN_CARTE.seuilsDeTeinte;
-
-/**
- * L'indice de teinte d'une valeur accumulée.
- * @param {number} z
- * @returns {number} 0 à `NB_TEINTES − 1`
- */
-export function teinteDeLaValeur(z) {
-  let i = 0;
-  while (i < SEUILS.length && z >= SEUILS[i]) i += 1;
-  return i;
-}
-
-/**
- * L'ordre des octets de la machine.
- *
- * ⚠ IL SE MESURE, IL NE SE SUPPOSE PAS. La passe finale écrit un pixel par
- * entier de 32 bits plutôt que quatre octets clampés — c'est trois fois plus
- * rapide, mesuré — mais l'ordre des octets d'un `ImageData` est RVBA, toujours,
- * quand celui d'un entier dépend de la machine. Tous les navigateurs visés sont
- * en petit-boutiste ; l'écrire en dur reviendrait quand même à parier, et le
- * pari se paierait en couleurs interverties sur un appareil qu'on n'a pas.
- */
-const PETIT_BOUTISTE = (() => {
-  const sonde = new Uint32Array(1);
-  new Uint8Array(sonde.buffer)[0] = 1;
-  return sonde[0] === 1;
-})();
-
-/** Une rampe de `FICHE-STYLE.md`, décodée une fois en pixels RVBA empaquetés. */
-function decoderRampe(hexs) {
-  return Uint32Array.from(hexs, (hex) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const v = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return PETIT_BOUTISTE
-      ? ((255 << 24) | (b << 16) | (v << 8) | r) >>> 0
-      : ((r << 24) | (v << 16) | (b << 8) | 255) >>> 0;
-  });
-}
-
-const RAMPE_JOUEUR = decoderRampe(TERRAIN_CARTE.rampes.joueur);
-const RAMPE_OUVRAGE = decoderRampe(TERRAIN_CARTE.rampes.ouvrage);
-
-/**
- * Les quatre accumulateurs, ENTRELACÉS dans un seul tableau, et gardés d'un
- * appel à l'autre.
- *
- * ⚠ L'ENTRELACEMENT EST UNE MESURE, PAS UNE ÉLÉGANCE. En quatre tableaux
- * séparés d'un mégaoctet, chaque pixel touchait quatre lignes de cache
- * distantes : 21 ms la dalle de 512. Entrelacés — les quatre valeurs d'un
- * pixel côte à côte, donc dans la même ligne de cache — c'est 14 ms, mesuré sur
- * les quatre crans. Un tiers du temps de rendu tenait dans la disposition
- * mémoire, pas dans l'arithmétique.
- *
- * ⚠ ET ILS SONT REMIS À ZÉRO À L'ENTRÉE, jamais lus d'un appel sur l'autre. Le
- * rendu reste une fonction de ses arguments — c'est ce que vérifie de face le
- * test qui rend deux fois la même zone et compare au pixel près.
- */
-const tampons = new Map();
-
-/** Les quatre postes d'un pixel dans le tampon entrelacé. */
-const SOMME = 0;
-const POIDS = 1;
-const POIDS_CARRE = 2;
-const OUVRAGE = 3;
-const POSTES = 4;
-
-function obtenirTampon(cote) {
-  let t = tampons.get(cote);
-  if (t === undefined) {
-    t = new Float32Array(cote * cote * POSTES);
-    tampons.set(cote, t);
-  }
-  t.fill(0);
-  return t;
-}
-
-/**
- * Pave une dalle du fond de carte.
- *
- * ⚠ `x0` ET `y0` SONT DES PIXELS ABSOLUS DE LA CARTE, jamais des coordonnées de
- * dalle. C'est ce qui rend les dalles indépendantes : le semis est semé par la
- * position, pas par le découpage.
- *
- * @param {object} options
- * @param {object} options.atlas rendu par `creerAtlas`
- * @param {number} options.graine graine de la partie
- * @param {number} options.cran pixels écran par case — un cran de `ZOOM_CARTE`
- * @param {number} options.x0 coin gauche de la dalle, en pixels écran absolus
- * @param {number} options.y0 coin haut de la dalle
- * @param {number} [options.cote] côté de la dalle, en pixels écran
- * @param {boolean} [options.alphaOrdinaire] pour le test de contraste SEULEMENT :
- *   compose en `Σwt / Σw` au lieu de la formule. Voir l'en-tête — ce chemin est
- *   celui qu'on refuse, et il n'existe que pour qu'un test puisse MESURER de
- *   combien il est moins bon plutôt que de le croire sur parole.
- * @returns {{donnees: Uint8ClampedArray, cote: number, couvertureMin: number}}
- *   `couvertureMin` est le plus petit `Σw` de la dalle. ⚠ IL EST RENDU POUR
- *   QU'UN TEST PUISSE MESURER QUE LE PLANCHER NE MORD PAS. À un pas de 56, la
- *   couverture ne s'annule jamais ; à 84, elle s'annulait et le fond rendait du
- *   noir. Sans ce nombre, la garde `sw <= 0` serait une branche que rien ne
- *   distingue d'une branche morte — et le jour où quelqu'un élargirait le pas,
- *   aucun test ne le dirait.
- */
-export function rendreDalle({
-  atlas, graine, cran, x0, y0, cote = TERRAIN_CARTE.dalleCotePx, alphaOrdinaire = false,
-}) {
+export function echelleDuCran(cran) {
   if (!ZOOM_CARTE.crans.includes(cran)) {
     throw new RangeError(`terrain : cran ${cran} hors de ${ZOOM_CARTE.crans.join(', ')}`);
   }
+  return cran / PIXELS_SOURCE_PAR_CASE;
+}
+
+/**
+ * La géométrie du pavage à un cran donné, EN PIXELS ENTIERS.
+ *
+ * ⚠⚠ TOUT SE DÉRIVE DE LA TAILLE ARRONDIE DU BLOC, ET C'EST CE QUI REND LE
+ * FONDU EXACT. La tentation est de garder les flottants — `1254 × 0,125` fait
+ * 156,75 au cran 32 — et de laisser le navigateur poser les images à la
+ * sous-pixel près. Elle se paie : le profil montant d'un bloc et le profil
+ * descendant de son voisin seraient alors rééchantillonnés séparément, leurs
+ * bandes se décaleraient d'une fraction de pixel, et `Σw` ne vaudrait plus un
+ * sur la colonne du raccord — **un liseré d'un pixel, clair ou sombre, sur
+ * toute la longueur de chaque couture**.
+ *
+ * En arrondissant D'ABORD la taille et le fondu, le pas devient entier lui
+ * aussi, et la complémentarité `sin² + cos² = 1` tombe juste AU PIXEL, sans
+ * rien à normaliser après coup. Un test somme les poids sur une dalle entière
+ * et exige exactement 1.
+ *
+ * ⚠ CE QUE ÇA COÛTE : l'échelle réelle du sol s'écarte de l'échelle nominale
+ * d'au plus un demi-pixel sur 1 254, soit **0,04 %**, et le pas d'au plus 0,18 %
+ * au cran le plus large. Ça ne se voit pas et ça ne peut rien casser : le sol
+ * est un DÉCOR, il n'est indexé sur aucune case — rien n'oblige un bloc à
+ * tomber sur une frontière de grille, et rien ne se repère par rapport à lui.
+ *
+ * @param {number} cran pixels physiques par case, un cran de `ZOOM_CARTE`
+ * @returns {{echelle: number, taille: number, fondu: number, pas: number}}
+ */
+export function geometrieDuCran(cran) {
+  const echelle = echelleDuCran(cran);
+  const taille = Math.round(COTE_SOURCE * echelle);
+  const fondu = Math.round(FONDU_SOURCE * echelle);
+  if (fondu < 1 || fondu * 2 > taille) {
+    throw new RangeError(
+      `terrain : au cran ${cran}, un fondu de ${fondu} ne tient pas dans ${taille}`,
+    );
+  }
+  return { echelle, taille, fondu, pas: taille - fondu };
+}
+
+/**
+ * Ce que le hachage dit d'un bloc de la grille.
+ *
+ * ⚠ HUIT EST UNE PUISSANCE DE DEUX, DONC LE TIRAGE DU DESSIN EST SANS BIAIS.
+ * `h % 8` et `h & 7` rendent ici la même chose, et aucun reste ne penche — le
+ * biais de modulo que `sim/poi.js` déclare et accepte n'a pas d'équivalent.
+ * Le jour où une neuvième planche arriverait, il faudra le dire.
+ *
+ * ⚠ ET LES SIX BITS SONT PRIS PAR LE BAS. Le module d'avant portait la faute
+ * inverse en mémoire — des champs découpés dans les trois bits de tête d'un mot
+ * déjà entamé, donc toujours minuscules, donc toutes les tuiles du même côté.
+ * Trois, deux, un : le compte est écrit ici pour qu'un quatrième champ sache
+ * d'où partir.
+ *
+ * @param {number} graine graine de la partie
+ * @param {number} by indice de bloc, axe des rangées
+ * @param {number} bx indice de bloc, axe des colonnes
+ * @returns {{sol: number, rotation: number, miroir: boolean}}
+ */
+export function descriptionDuBloc(graine, by, bx) {
+  const h = hachageBrut(graine, by, bx, SEL_BLOC);
+  return {
+    sol: h & 7,
+    rotation: (h >>> 3) & 3,
+    miroir: ((h >>> 5) & 1) === 1,
+  };
+}
+
+/**
+ * Le profil de poids d'un bloc sur un axe, échantillonné à sa taille d'écran.
+ *
+ * `1` sur tout l'intérieur, `sin²(π/2 · t)` sur le fondu de chaque bord.
+ *
+ * ⚠⚠ C'EST LA COMPLÉMENTARITÉ QUI COMPTE, PAS LA FORME. Le profil montant d'un
+ * bloc et le profil descendant de son voisin couvrent EXACTEMENT la même bande
+ * — c'est ce que `PAS = COTE − FONDU` veut dire — et `sin²θ + cos²θ = 1` les
+ * fait sommer à un, au pixel près, sans que rien n'ait à être normalisé après
+ * coup. Une rampe linéaire sommerait à un elle aussi, mais avec une cassure de
+ * pente aux deux bouts de la bande, qui se lit comme un liseré ; le `sin²` n'en
+ * a pas.
+ *
+ * ⚠ LE CENTRE DU PIXEL, PAS SON BORD. Sans le demi-pixel, le profil est
+ * asymétrique d'un pixel et le semis dérive doucement vers un coin — la faute
+ * que l'ancien masque avait déjà payée.
+ *
+ * @param {number} taille côté du bloc à l'écran, en pixels
+ * @param {number} fondu largeur du fondu à l'écran, en pixels
+ * @returns {Float64Array}
+ */
+export function profilDuBloc(taille, fondu) {
+  if (!Number.isInteger(taille) || taille <= 0) {
+    throw new RangeError(`terrain : taille de bloc « ${taille} » invalide`);
+  }
+  if (!Number.isInteger(fondu) || fondu < 0 || fondu * 2 > taille) {
+    throw new RangeError(`terrain : fondu « ${fondu} » hors de 0…${Math.floor(taille / 2)}`);
+  }
+  const p = new Float64Array(taille).fill(1);
+  for (let i = 0; i < fondu; i += 1) {
+    const t = (i + 0.5) / fondu;
+    const w = Math.sin((Math.PI * t) / 2) ** 2;
+    p[i] = w;
+    p[taille - 1 - i] = w;
+  }
+  return p;
+}
+
+/**
+ * Les blocs qui mordent sur une dalle, et où ils tombent DEDANS.
+ *
+ * ⚠⚠ `x0` ET `y0` SONT DES PIXELS ABSOLUS DE LA CARTE, jamais des coordonnées
+ * de dalle — c'est ce qui rend les dalles indépendantes. Ce que la fonction
+ * rend, en revanche, est LOCAL à la dalle : `x` et `y` sont le coin du bloc
+ * relativement à elle, et ils peuvent être négatifs, un bloc mordant sur la
+ * dalle par la gauche ou par le haut.
+ *
+ * ⚠ TOUT EST ENTIER, ET ÇA VIENT DE `geometrieDuCran`. Le pas est arrondi une
+ * fois pour toutes au cran, donc `bx · pas` est un entier de la CARTE, calculé
+ * sans jamais consulter la dalle qui le demande — l'arrondi est global, comme
+ * il l'était dans le module d'avant et pour la même raison.
+ *
+ * @param {object} options
+ * @param {number} options.graine graine de la partie
+ * @param {number} options.cran pixels physiques par case, un cran de `ZOOM_CARTE`
+ * @param {number} options.x0 coin gauche de la dalle, en pixels écran absolus
+ * @param {number} options.y0 coin haut de la dalle
+ * @param {number} options.cote côté de la dalle, en pixels écran
+ * @returns {Array<{sol: number, rotation: number, miroir: boolean,
+ *   x: number, y: number, taille: number}>}
+ */
+export function blocsDeLaDalle({ graine, cran, x0, y0, cote }) {
   if (!Number.isInteger(x0) || !Number.isInteger(y0)) {
     throw new RangeError(`terrain : coin de dalle non entier (${x0}, ${y0})`);
   }
-
-  // ⚠⚠ UNE TUILE NE FAIT PLUS UNE CASE, ELLE EN FAIT UN QUART — deux par axe,
-  // `ZOOM_CARTE.tuilesParCase`. Une case vaut donc `PIXELS_SOURCE_PAR_CASE`
-  // pixels source, et le cran est cette même case à l'écran : l'échelle est le
-  // rapport des deux. La tuile, elle, suit — `cran / tuilesParCase`.
-  //
-  // ⚠ C'EST CE RAPPORT QUI DÉCIDE DU GRAIN, et c'est tout le correctif du 30/08.
-  // À une tuile par case, l'échelle valait `cran / 128` et montait donc à 2 au
-  // cran le plus serré : le pavage agrandissait sa source, et le grain de 4 px
-  // de l'art se lisait en carrés de 8 px. À deux tuiles par axe elle vaut
-  // `cran / 256`, donc au plus 1 : on ne grossit plus jamais un pixel source.
-  const echelle = cran / PIXELS_SOURCE_PAR_CASE;
-  const tuilePx = cran / ZOOM_CARTE.tuilesParCase;
-  const demiTuile = tuilePx / 2;
-  const pasDest = TERRAIN_CARTE.pasSourcePx * echelle;
-  const decalageMaxDest = TERRAIN_CARTE.pasSourcePx * TERRAIN_CARTE.decalageFraction * echelle;
-
-  const masque = masqueDeLaTuile(tuilePx);
-  // À quel pixel de la tuile source correspond le pixel `i` de la tuile à
-  // l'écran. Tabulé : la boucle intérieure ne fait plus que lire.
-  const sourceDe = new Int32Array(tuilePx);
-  for (let i = 0; i < tuilePx; i += 1) {
-    sourceDe[i] = Math.floor((i * atlas.cote) / tuilePx);
+  if (!Number.isInteger(cote) || cote <= 0) {
+    throw new RangeError(`terrain : côté de dalle « ${cote} » invalide`);
   }
-  const ecartAtlas = new Int32Array(tuilePx);
-  const valeurs = atlas.valeurs;
+  const { taille, pas } = geometrieDuCran(cran);
 
-  const acc = obtenirTampon(cote);
-  const mu = atlas.moyenne;
+  // Un bloc d'indice `b` couvre `[b·pas, b·pas + taille)` : il mord sur
+  // `[d0, d0 + cote)` dès que `b·pas < d0 + cote` et `b·pas + taille > d0`.
+  const premier = (d0) => Math.floor((d0 - taille) / pas) + 1;
+  const dernier = (d0) => Math.ceil((d0 + cote) / pas) - 1;
 
-  // Les nœuds qui peuvent mordre sur la dalle. Le demi-pixel vient de l'arrondi
-  // du centre : sans lui, une tuile à cheval sur le bord serait oubliée une fois
-  // sur deux, et la couture se verrait.
-  const marge = demiTuile + decalageMaxDest + 1;
-  const gx0 = Math.floor((x0 - marge) / pasDest);
-  const gx1 = Math.ceil((x0 + cote + marge) / pasDest);
-  const gy0 = Math.floor((y0 - marge) / pasDest);
-  const gy1 = Math.ceil((y0 + cote + marge) / pasDest);
-
-  for (let gy = gy0; gy <= gy1; gy += 1) {
-    for (let gx = gx0; gx <= gx1; gx += 1) {
-      const noeud = descriptionDuNoeud(graine, gy, gx, atlas.nombre);
-
-      const centreY = gy * pasDest + noeud.decalageY * decalageMaxDest;
-      const centreX = gx * pasDest + noeud.decalageX * decalageMaxDest;
-      // ⚠ L'ARRONDI EST GLOBAL, ET C'EST CE QUI FAIT TENIR LES DALLES ENSEMBLE.
-      // Le coin d'une tuile est un entier de la carte, calculé sans jamais
-      // consulter la dalle qui la demande.
-      const haut = Math.round(centreY) - demiTuile;
-      const gauche = Math.round(centreX) - demiTuile;
-
-      // Découpe sur la dalle.
-      const jDebut = Math.max(0, y0 - haut);
-      const jFin = Math.min(tuilePx, y0 + cote - haut);
-      if (jDebut >= jFin) continue;
-      const iDebut = Math.max(0, x0 - gauche);
-      const iFin = Math.min(tuilePx, x0 + cote - gauche);
-      if (iDebut >= iFin) continue;
-
-      // L'appartenance de la tuile se décide sur la rangée de son CENTRE : une
-      // tuile déborde sur deux rangées, il faut bien en choisir une, et le
-      // centre est la seule qui ne dépende pas du sens de lecture.
-      const rangee = rangeeDuPixelSource(centreY / echelle);
-      const estOuvrage = noeud.tirage < partOuvrageDeLaRangee(rangee) ? 1 : 0;
-
-      const t = orientationDeLaTuile(noeud.rotation, noeud.miroir, atlas.cote);
-      const tuileX = (noeud.tuile % atlas.colonnes) * atlas.cote;
-      const tuileY = Math.floor(noeud.tuile / atlas.colonnes) * atlas.cote;
-      // À `sy` fixé, l'indice dans l'atlas est une progression arithmétique en
-      // `sx` : c'est tout l'intérêt d'avoir écrit les orientations sous forme
-      // affine. Le pas est tabulé une fois par tuile, la boucle intérieure ne
-      // fait plus qu'une addition.
-      const pasAtlas = t.a + t.c * atlas.largeur;
-      for (let i = iDebut; i < iFin; i += 1) ecartAtlas[i] = sourceDe[i] * pasAtlas;
-
-      for (let j = jDebut; j < jFin; j += 1) {
-        const wy = masque[j];
-        const sy = sourceDe[j];
-        const baseAtlas = (tuileY + t.oy + t.d * sy) * atlas.largeur
-          + tuileX + t.ox + t.b * sy;
-        const ligneDalle = ((haut + j - y0) * cote + (gauche - x0)) * POSTES;
-        for (let i = iDebut; i < iFin; i += 1) {
-          const w = wy * masque[i];
-          const k = ligneDalle + i * POSTES;
-          const v = valeurs[baseAtlas + ecartAtlas[i]];
-          acc[k + SOMME] += w * (v - mu);
-          acc[k + POIDS] += w;
-          acc[k + POIDS_CARRE] += w * w;
-          if (estOuvrage === 1) acc[k + OUVRAGE] += w;
-        }
-      }
+  const blocs = [];
+  for (let by = premier(y0); by <= dernier(y0); by += 1) {
+    for (let bx = premier(x0); bx <= dernier(x0); bx += 1) {
+      const { sol, rotation, miroir } = descriptionDuBloc(graine, by, bx);
+      blocs.push({
+        sol, rotation, miroir, taille,
+        x: bx * pas - x0,
+        y: by * pas - y0,
+      });
     }
   }
-
-  // ⚠ LA PASSE FINALE COÛTE, ELLE AUSSI. Elle traverse 262 144 pixels : les deux
-  // rampes y sont pré-aplaties en octets et les seuils lus hors de la boucle,
-  // sinon un tiers du temps de rendu part en accès de propriété.
-  const octets = new Uint8ClampedArray(cote * cote * 4);
-  const pixels = new Uint32Array(octets.buffer);
-  const teinteMoyenne = teinteDeLaValeur(mu);
-  const seuilOuvrage = TERRAIN_CARTE.seuilOuvrage;
-  let couvertureMin = Infinity;
-  for (let pixel = 0; pixel < cote * cote; pixel += 1) {
-    const k = pixel * POSTES;
-    const sw = acc[k + POIDS];
-    if (sw < couvertureMin) couvertureMin = sw;
-    // ⚠ LE PLANCHER : jamais de noir. Un pas plus large que 56 laisse des
-    // pixels sans aucune tuile, et le noir qui en sortait s'est vu tout de
-    // suite sur la maquette. À 56 la couverture ne s'annule pas — mais la
-    // garde reste, parce qu'elle coûte une comparaison et qu'un carré noir
-    // livré coûte un lot.
-    let teinte;
-    let part;
-    if (sw <= 0) {
-      teinte = teinteMoyenne;
-      part = 0;
-    } else {
-      const z = alphaOrdinaire
-        ? mu + acc[k + SOMME] / sw
-        : mu + acc[k + SOMME] / Math.sqrt(acc[k + POIDS_CARRE]);
-      teinte = teinteDeLaValeur(z);
-      part = acc[k + OUVRAGE] / sw;
-    }
-    pixels[pixel] = part >= seuilOuvrage ? RAMPE_OUVRAGE[teinte] : RAMPE_JOUEUR[teinte];
-  }
-  return { donnees: octets, cote, couvertureMin };
+  return blocs;
 }

@@ -69,6 +69,15 @@ CHAINE = [
     # aucun atlas ; il passe quand même par la chaîne pour que personne n'ait à
     # se demander, dans six mois, comment on referait ce fichier.
     ('fonds',           []),
+    # ⚠⚠ LE SOL DE LA CARTE — lot SOL-SATELLITE, 05/09. Huit planches satellite
+    # posées telles quelles, à un alignement de moyenne près. Comme les décors
+    # juste au-dessus, ce n'est ni un sprite ni une cellule d'atlas — 1 254 px de
+    # côté pour 4,9 cases —, et la ligne est due pour la raison ordinaire : sans
+    # elle, les huit `.webp` de `sol/` seraient comptés MANQUANTS et les huit
+    # planches d'`art/sources/` classées DORMANTES alors qu'un outil les
+    # consomme. Mesuré : c'est très exactement ce que le premier
+    # `entrees.py --declarer` de ce lot a rendu, avant cette ligne.
+    ('sols',            []),
     # ⚠ LES LIMITES DE TERRITOIRE — 03/09. Elles SONT cousues dans un atlas, à
     # la différence des murs juste au-dessus : leurs cellules sont carrées. La
     # ligne reste due pour la raison ordinaire — sans elle, les 52 fichiers de

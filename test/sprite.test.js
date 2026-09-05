@@ -1240,6 +1240,23 @@ test(`entrées — \`${MOTIF}\` n'est jamais appelé par le chemin normal`, () =
   // qu'elle vient d'écrire ne peut pas échouer. La déclaration est une
   // INTENTION commitée ; la trace est un FAIT d'exécution. Deux sources
   // indépendantes, sinon rien.
+  // ⚠⚠ ET LE DÉCOMMENTAGE DOIT CONNAÎTRE LE PYTHON — lot SOL-SATELLITE, 05/09.
+  // `sansCommentaires` ne retire que les commentaires JavaScript ; le premier
+  // des suspects est un fichier PYTHON, dont les commentaires commencent par un
+  // croisillon. Un paragraphe de `tools/verifier.py` qui NOMME le mode de
+  // déclaration pour dire qu'on ne l'appelle pas faisait donc tomber cette
+  // garde — SIXIÈME fois du dépôt qu'une garde lit ce qu'on a écrit à son sujet,
+  // après `viewport-fit=cover`, `MENTION_SATURE`, `variante.js`,
+  // `render/contour.js` et le calque des traits.
+  //
+  // ⚠ ON NE RETIRE QUE LES LIGNES ENTIÈREMENT COMMENTÉES, jamais tout ce qui
+  // suit un croisillon : `tools/` en porte dans des chaînes — les clés de fond
+  // magenta s'écrivent `'#FF00FF'` —, et couper là mangerait du code.
+  const sansPython = (texte) => texte
+    .split('\n').filter((l) => !l.trimStart().startsWith('#')).join('\n');
+  const nettoyer = (nom, source) => (nom.endsWith('.py')
+    ? sansCommentaires(sansPython(source)) : sansCommentaires(source));
+
   const suspects = [
     ['tools/verifier.py', readFileSync(join(RACINE, 'tools', 'verifier.py'), 'utf8')],
     ['package.json', readFileSync(join(RACINE, 'package.json'), 'utf8')],
@@ -1248,7 +1265,7 @@ test(`entrées — \`${MOTIF}\` n'est jamais appelé par le chemin normal`, () =
       .map((f) => [`test/${f}`, readFileSync(join(RACINE, 'test', f), 'utf8')]),
   ];
   for (const [nom, source] of suspects) {
-    assert.ok(!sansCommentaires(source).includes(MOTIF),
+    assert.ok(!nettoyer(nom, source).includes(MOTIF),
       `${nom} appelle « ${MOTIF} » : la garde régénérerait ce qu'elle compare`);
   }
 
@@ -1256,7 +1273,13 @@ test(`entrées — \`${MOTIF}\` n'est jamais appelé par le chemin normal`, () =
   // décommentage ne vide pas les fichiers qu'il balaie.
   assert.ok(sansCommentaires(`jouer('entrees', ['${MOTIF}'])`).includes(MOTIF),
     'le motif ne reconnaît pas un appel qu\'il doit refuser');
-  assert.ok(suspects.every(([, s]) => sansCommentaires(s).length > 100),
+  assert.ok(nettoyer('x.py', `jouer('entrees', ['${MOTIF}'])`).includes(MOTIF),
+    'le décommentage Python mange un appel réel au lieu d\'un commentaire');
+  assert.ok(!nettoyer('x.py', `    # on n'appelle jamais ${MOTIF} ici`).includes(MOTIF),
+    'le décommentage Python ne retire pas une ligne de commentaire');
+  assert.ok(nettoyer('x.py', "CLE = '#FF00FF'").includes('#FF00FF'),
+    'le décommentage Python coupe à l\'intérieur d\'une chaîne');
+  assert.ok(suspects.every(([n, s]) => nettoyer(n, s).length > 100),
     'le décommentage a mangé un fichier balayé');
 
   // Et l'outil porte bien les DEUX modes : un mode de déclaration disparu rendrait la

@@ -43,7 +43,9 @@ import {
   problemesDuDeplacement, deplacerLaBase, casesAtteignables,
   ticksAvantProchainDeplacement,
 } from '../sim/deplacement.js';
-import { creerAtlas, rendreDalle, partOuvrageDeLaRangee, NB_TEINTES } from '../render/terrain.js';
+import {
+  blocsDeLaDalle, geometrieDuCran, profilDuBloc, COTE_SOURCE, NOMS_DU_SOL,
+} from '../render/terrain.js';
 import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
 } from '../render/embleme.js';
@@ -84,7 +86,7 @@ export const ECHELLE_MAX = CRANS[CRANS.length - 1];
  * le plus PETIT cran qui soit supérieur ou égal à l'échelle.
  *
  * ⚠⚠ L'ÉCHELLE D'AFFICHAGE ET L'ÉCHELLE DE RENDU SONT DEUX GRANDEURS, ET C'EST
- * TOUT CE QUI REND LE ZOOM CONTINU PAYABLE. `rendreDalle` fabrique une image à
+ * TOUT CE QUI REND LE ZOOM CONTINU PAYABLE. `calculerDalle` fabrique une image à
  * un cran de la table ; `drawImage` la pose à la taille qu'on veut. Une dalle
  * rendue au cran 64 s'affiche donc à 45 px par case sans être recalculée, et le
  * cache ne se renouvelle qu'aux passages de cran — trois fois sur toute la
@@ -95,7 +97,7 @@ export const ECHELLE_MAX = CRANS[CRANS.length - 1];
  * ⚠⚠ LE PLUS PETIT CRAN ≥ L'ÉCHELLE, ET JAMAIS LE PLUS PROCHE. Le plus proche
  * donnerait un facteur d'affichage jusqu'à 1,41, c'est-à-dire un
  * AGRANDISSEMENT de pixel art — très exactement le « gros carré moche »
- * qu'Ethan a rapporté le 30/08 et que `tuilesParCase: 2` a corrigé. Ici le
+ * qu'Ethan a rapporté le 30/08 et que l'échelle du sol a corrigé. Ici le
  * facteur tombe dans (0,5 ; 1] par construction, les crans allant du simple au
  * double : on réduit toujours, on ne grossit jamais.
  *
@@ -714,46 +716,22 @@ export function creerCacheDalles(capacite) {
 }
 
 /**
- * Convertit une image d'atlas décodée par le navigateur en indices de teinte.
+ * ⚠⚠ `indicesDeTeinte` A ÉTÉ RETIRÉE AU LOT SOL-SATELLITE (05/09), ET SON TEST
+ * AVEC — deux assertions en moins, et elles se déclarent.
  *
- * ⚠ ON APPARIE PAR LA COULEUR EXACTE, ET ON RETOMBE SUR LA PLUS PROCHE. L'atlas
- * livré est un PNG indexé sur la rampe du joueur et ne porte AUCUN chunk de
- * gestion de couleur — un navigateur rend donc les octets tels quels, et
- * l'appariement exact suffit. La retombée existe pour le jour où un appareil
- * appliquerait quand même un profil : mieux vaut une teinte voisine qu'un
- * atlas refusé et une carte noire.
+ * Elle relisait l'atlas de terrain décodé par le navigateur et rendait, pour
+ * chaque pixel, son rang dans la rampe du joueur : c'était l'entrée de la
+ * moulinette qui accumulait puis requantifiait le fond de carte. Le sol est
+ * maintenant fait de huit planches posées telles quelles ; il n'y a plus d'image
+ * indexée à relire, plus de rang à retrouver, et surtout **plus un seul pixel du
+ * sol qui transite par un tableau JavaScript** — les planches restent des
+ * `<img>` que le navigateur pose lui-même.
  *
- * @param {Uint8ClampedArray} rvba
- * @returns {Uint8Array} indices de 0 à `NB_TEINTES − 1`
+ * ⚠ ET C'EST CE QUI REND LE LOT PAYABLE EN MÉMOIRE. Décoder les huit planches en
+ * `Uint8Array` aurait coûté **50 Mio** à lui seul (8 × 1254² × 4 octets), à côté
+ * des 64 Mio du cache de dalles. Ne pas la recréer pour « pouvoir mesurer » : ce
+ * qui se mesure du sol se mesure dans `art/sprites/sol/sol-empreintes.json`.
  */
-export function indicesDeTeinte(rvba) {
-  const exact = new Map();
-  const reperes = TERRAIN_CARTE.rampes.joueur.map((hex, i) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const v = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    exact.set((r << 16) | (v << 8) | b, i);
-    return r + v + b;
-  });
-  const indices = new Uint8Array(rvba.length / 4);
-  for (let p = 0, k = 0; p < rvba.length; p += 4, k += 1) {
-    const cle = (rvba[p] << 16) | (rvba[p + 1] << 8) | rvba[p + 2];
-    const trouve = exact.get(cle);
-    if (trouve !== undefined) {
-      indices[k] = trouve;
-      continue;
-    }
-    const somme = rvba[p] + rvba[p + 1] + rvba[p + 2];
-    let meilleur = 0;
-    let ecart = Infinity;
-    for (let i = 0; i < reperes.length; i += 1) {
-      const d = Math.abs(reperes[i] - somme);
-      if (d < ecart) { ecart = d; meilleur = i; }
-    }
-    indices[k] = meilleur;
-  }
-  return indices;
-}
 
 /**
  * Le centre d'une case, en pixels du canevas.
@@ -1015,12 +993,23 @@ export const TEINTES_TERRITOIRE = {
  */
 
 
-/** La teinte du milieu d'une rampe : ce qu'on peint tant qu'une dalle manque. */
-export function teinteDAttente(rangee) {
-  const rampe = partOuvrageDeLaRangee(rangee) >= TERRAIN_CARTE.seuilOuvrage
-    ? TERRAIN_CARTE.rampes.ouvrage
-    : TERRAIN_CARTE.rampes.joueur;
-  return rampe[(NB_TEINTES - 1) / 2];
+/**
+ * La teinte qu'on peint tant qu'une dalle manque.
+ *
+ * ⚠⚠ ELLE NE PREND PLUS LA RANGÉE, ET C'EST LA DEMANDE D'ETHAN DU 05/09 — « pas
+ * de fond ouvrage pour le moment ». Elle rendait l'ardoise en haut de la carte
+ * et la terre cuite en bas, parce que le sol basculait de camp à mesure qu'on
+ * montait ; il n'y a plus qu'un sol, donc plus qu'une attente.
+ *
+ * ⚠ ET C'EST LE MILIEU DE LA RAMPE DÉCLARÉE, PAS UNE COULEUR INVENTÉE. Mesuré
+ * sur les huit planches livrées : leur moyenne RVB vaut `[198,6 · 144,5 ·
+ * 124,8]` quand ce ton-ci vaut `[207 · 154 · 131]` — huit à dix niveaux
+ * d'écart, sur un aplat qu'on ne voit qu'une image ou deux. Écrire la moyenne
+ * exacte aurait fait entrer une trente-quatrième teinte dans un dépôt dont la
+ * palette est fermée, pour un gain que personne ne peut voir.
+ */
+export function teinteDAttente() {
+  return TERRAIN_CARTE.rampes.joueur[2];
 }
 
 // ---------------------------------------------------------------------------
@@ -1088,8 +1077,15 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   let casesDuDeplacement = [];
 
   let etatCourant = null;
-  let atlas = null;
-  let atlasDemande = false;
+  // Les huit planches du sol, une fois décodées, et ce qu'on en dérive par cran.
+  let sols = null;
+  let solsDemandes = false;
+  /** cran → les huit planches réduites à la taille de bloc de ce cran. */
+  const solsParTaille = new Map();
+  /** taille de bloc → le masque de fondu, en alpha. */
+  const masquesParTaille = new Map();
+  /** Le canevas d'un bloc, réemployé d'un bloc à l'autre. */
+  let planche = null;
   // ⚠⚠ L'ÉCHELLE EST UN RÉEL, PLUS UN INDICE DE TABLE. Le zoom était par crans
   // jusqu'au 04/09 ; Ethan : « le zoom de la carte ne doit pas être par cran ».
   // Un `cranIndex` gardé à côté d'elle « au cas où » divergerait au premier
@@ -1127,35 +1123,111 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   /** Le cran auquel les dalles se rendent en ce moment. Voir `cranDeRendu`. */
   const cranCourant = () => cranDeRendu(echelle);
 
-  // --- l'atlas, décodé une fois ---------------------------------------------
+  // --- les huit planches du sol ---------------------------------------------
   //
-  // ⚠ IL SE DÉCODE À LA PREMIÈRE OUVERTURE DE LA CARTE, PAS AU DÉMARRAGE. Un
-  // million de pixels à relire coûte quelques millisecondes ; les dépenser au
-  // lancement pour un écran que le joueur n'ouvrira peut-être pas retarderait
-  // l'affichage de sa base.
-  function chargerAtlas() {
-    if (atlas !== null || atlasDemande) return;
+  // ⚠ ELLES S'ATTENDENT À LA PREMIÈRE OUVERTURE DE LA CARTE, PAS AU DÉMARRAGE.
+  // Les dépenser au lancement pour un écran que le joueur n'ouvrira peut-être
+  // pas retarderait l'affichage de sa base.
+  //
+  // ⚠⚠ ET ELLES NE SE DÉCODENT PAS EN PIXELS, contrairement à l'atlas de terrain
+  // qu'elles remplacent. Lui devait être relu case par case pour être accumulé ;
+  // une planche se POSE, et `drawImage` prend l'`<img>` telle quelle. Les lire
+  // en `Uint8Array` coûterait 50 Mio pour rien — c'est tout le motif de la
+  // réécriture du lot SOL-SATELLITE.
+  function chargerSols() {
+    if (sols !== null || solsDemandes) return;
     // ⚠ LE DRAPEAU SE POSE AVANT L'ATTENTE, PAS APRÈS. `peindre` rappelle ceci à
-    // chaque ouverture de la carte : sans lui, deux ouvertures pendant que
-    // l'image se décode poseraient deux écouteurs, donc deux décodages d'un
-    // million de pixels. Il retombe quand l'image arrive, pour que la seconde
-    // tentative fasse le travail.
-    atlasDemande = true;
-    const image = $('monde-atlas');
-    if (!image.complete || image.naturalWidth === 0) {
-      image.addEventListener('load', () => { atlasDemande = false; chargerAtlas(); }, { once: true });
+    // chaque ouverture de la carte : sans lui, deux ouvertures pendant que les
+    // images se décodent poseraient deux jeux d'écouteurs. Il retombe quand la
+    // dernière arrive, pour que la seconde tentative fasse le travail.
+    solsDemandes = true;
+    const images = NOMS_DU_SOL.map((_, i) => $(`sol-${i + 1}`));
+    const manquante = images.find((im) => !im.complete || im.naturalWidth === 0);
+    if (manquante !== undefined) {
+      manquante.addEventListener('load', () => { solsDemandes = false; chargerSols(); }, { once: true });
       return;
     }
-    const tampon = doc.createElement('canvas');
-    tampon.width = image.naturalWidth;
-    tampon.height = image.naturalHeight;
-    const ctxTampon = tampon.getContext('2d', { willReadFrequently: true });
-    ctxTampon.drawImage(image, 0, 0);
-    const rvba = ctxTampon.getImageData(0, 0, tampon.width, tampon.height).data;
-    atlas = creerAtlas(
-      indicesDeTeinte(rvba), ZOOM_CARTE.coteTuile, image.naturalWidth,
-    );
+    sols = images;
     dessiner();
+  }
+
+  /**
+   * Les huit planches réduites une fois à la taille de bloc d'un cran.
+   *
+   * ⚠⚠ ON RÉDUIT UNE FOIS PAR CRAN, PAS UNE FOIS PAR BLOC. Une dalle du cran le
+   * plus large demande dix-sept blocs ; les réduire à la volée referait
+   * dix-sept fois la réduction d'une image de 1 254², soit vingt-sept millions
+   * de pixels lus pour une dalle. Réduites d'avance, les huit coûtent
+   * 12,6 millions une fois pour toutes, et un bloc n'est plus qu'un `drawImage`
+   * de la bonne taille.
+   *
+   * ⚠ ET LE 1:1 NE PASSE PAS PAR ICI. Au cran le plus serré, la taille de bloc
+   * EST le côté de la planche : réduire serait recopier 50 Mio pour rien, alors
+   * que l'`<img>` fait déjà exactement l'affaire.
+   *
+   * ⚠ `imageSmoothingQuality` À `high`, ET C'EST LA MOITIÉ QUI COMPTE. Une
+   * réduction de huit contre un en bilinéaire simple n'échantillonne qu'un pixel
+   * sur soixante-quatre : le sol scintillerait au défilement. Le mot demande au
+   * navigateur sa réduction par étapes.
+   */
+  function solsALaTaille(taille) {
+    if (taille === COTE_SOURCE) return sols;
+    let prets = solsParTaille.get(taille);
+    if (prets !== undefined) return prets;
+    prets = sols.map((image) => {
+      const c = doc.createElement('canvas');
+      c.width = taille;
+      c.height = taille;
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(image, 0, 0, taille, taille);
+      return c;
+    });
+    solsParTaille.set(taille, prets);
+    return prets;
+  }
+
+  /**
+   * Le masque de fondu d'un bloc : le produit des deux profils, en ALPHA seul.
+   *
+   * ⚠⚠ IL EST INVARIANT PAR ROTATION ET PAR MIROIR, ET C'EST CE QUI PERMET DE
+   * L'APPLIQUER SANS TOURNER. Le profil est symétrique et le masque en est le
+   * produit sur les deux axes : le faire tourner d'un quart de tour rend
+   * exactement le même masque. Un seul par taille suffit donc, et il s'applique
+   * après la rotation de la planche sans avoir à la suivre.
+   *
+   * ⚠ IL NE PORTE QUE DE L'ALPHA. `destination-in` ne lit que ce canal ; y
+   * peindre une couleur serait écrire un octet que personne ne relit.
+   */
+  function masqueDeTaille(taille, fondu) {
+    let masque = masquesParTaille.get(taille);
+    if (masque !== undefined) return masque;
+    const profil = profilDuBloc(taille, fondu);
+    masque = doc.createElement('canvas');
+    masque.width = taille;
+    masque.height = taille;
+    const image = new fenetre.ImageData(taille, taille);
+    const octets = image.data;
+    for (let j = 0; j < taille; j += 1) {
+      const wy = profil[j];
+      for (let i = 0; i < taille; i += 1) {
+        octets[(j * taille + i) * 4 + 3] = Math.round(wy * profil[i] * 255);
+      }
+    }
+    masque.getContext('2d').putImageData(image, 0, 0);
+    masquesParTaille.set(taille, masque);
+    return masque;
+  }
+
+  /** Le canevas d'un bloc, redimensionné au besoin et réemployé ensuite. */
+  function plancheDeTaille(taille) {
+    if (planche === null) planche = doc.createElement('canvas');
+    if (planche.width !== taille) {
+      planche.width = taille;
+      planche.height = taille;
+    }
+    return planche;
   }
 
   /**
@@ -1308,16 +1380,59 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     return `${cranCourant()}:${i}:${j}`;
   }
 
-  /** Fabrique une dalle et la range. Rendue à part pour pouvoir la plafonner. */
+  /**
+   * Fabrique une dalle et la range. Rendue à part pour pouvoir la plafonner.
+   *
+   * ⚠⚠ `lighter` ADDITIONNE, ET C'EST EXACTEMENT LA FORMULE DU PAVAGE. Chaque
+   * bloc est peint dans un canevas à part, son masque de fondu lui est appliqué
+   * en `destination-in` — le canevas porte donc `w` en alpha et `v` en couleur
+   * —, puis il est ajouté à la dalle. `lighter` somme les canaux PRÉMULTIPLIÉS :
+   * la dalle finit avec `Σ w·v` en couleur et `Σ w` en alpha, et `Σ w` vaut
+   * exactement 1 (voir `render/terrain.js`). C'est donc `Σ w·v` qu'on obtient,
+   * sans division ni normalisation.
+   *
+   * ⚠ ET `source-over` NE MARCHERAIT PAS. Il rend `w·v + (1 − w)·fond`, ce qui
+   * n'est la bonne réponse que pour DEUX blocs, et à condition de les poser dans
+   * le bon ordre. Aux coins, quatre blocs se croisent.
+   *
+   * ⚠ LE CANEVAS DE BLOC EST RÉEMPLOYÉ, PAS RECRÉÉ. Une dalle du cran le plus
+   * large en demande dix-sept ; en créer dix-sept par dalle donnerait au
+   * ramasse-miettes de quoi hacher le défilement.
+   */
   function calculerDalle(i, j) {
     const cote = TERRAIN_CARTE.dalleCotePx;
-    const { donnees } = rendreDalle({
-      atlas, graine: etatCourant.graine, cran: cranCourant(), x0: i * cote, y0: j * cote, cote,
-    });
+    const cran = cranCourant();
+    const { taille, fondu } = geometrieDuCran(cran);
+    const prets = solsALaTaille(taille);
+    const masque = masqueDeTaille(taille, fondu);
+    const bloc = plancheDeTaille(taille);
+    const gBloc = bloc.getContext('2d');
+
     const tampon = doc.createElement('canvas');
     tampon.width = cote;
     tampon.height = cote;
-    tampon.getContext('2d').putImageData(new fenetre.ImageData(donnees, cote, cote), 0, 0);
+    const gDalle = tampon.getContext('2d');
+    gDalle.globalCompositeOperation = 'lighter';
+
+    for (const b of blocsDeLaDalle({
+      graine: etatCourant.graine, cran, x0: i * cote, y0: j * cote, cote,
+    })) {
+      gBloc.setTransform(1, 0, 0, 1, 0, 0);
+      gBloc.globalCompositeOperation = 'source-over';
+      gBloc.clearRect(0, 0, taille, taille);
+      // La rotation et le miroir se prennent autour du centre : un bloc est
+      // carré, donc son encombrement ne bouge pas d'un quart de tour à l'autre.
+      gBloc.translate(taille / 2, taille / 2);
+      gBloc.rotate((b.rotation * Math.PI) / 2);
+      if (b.miroir) gBloc.scale(-1, 1);
+      gBloc.drawImage(prets[b.sol], -taille / 2, -taille / 2, taille, taille);
+      gBloc.setTransform(1, 0, 0, 1, 0, 0);
+      gBloc.globalCompositeOperation = 'destination-in';
+      gBloc.drawImage(masque, 0, 0);
+      gDalle.drawImage(bloc, b.x, b.y);
+    }
+
+    gDalle.globalCompositeOperation = 'source-over';
     cache.ecrire(cleDeDalle(i, j), tampon);
     return tampon;
   }
@@ -1379,7 +1494,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
         const x0 = bordDeDalle(i, coteAffiche, ox);
         const x1 = bordDeDalle(i + 1, coteAffiche, ox);
         let dalle = cache.lire(cleDeDalle(i, j));
-        if (dalle === undefined && atlas !== null && budget > 0) {
+        if (dalle === undefined && sols !== null && budget > 0) {
           budget -= 1;
           dalle = calculerDalle(i, j);
         }
@@ -1388,19 +1503,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
           continue;
         }
         restent = true;
-        // Le centre de la dalle donne la rangée, donc le camp du sol : une
-        // attente violette au bout de la carte et terre cuite au départ vaut
-        // mieux qu'un aplat qui change de couleur quand la dalle arrive.
-        //
-        // ⚠ LE CENTRE SE COMPTE DANS L'ESPACE DE RENDU, DONC SUR LE CRAN DE
-        // RENDU. La dalle fait `cote` pixels À CE CRAN-LÀ ; la diviser par
-        // l'échelle d'affichage donnerait une rangée fausse d'un facteur
-        // jusqu'à deux, donc la mauvaise teinte d'attente.
-        const rangeeCentre = Math.min(
-          GEOGRAPHIE.carte.hauteur,
-          Math.max(1, Math.floor((j * cote + cote / 2) / cranCourant()) + 1),
-        );
-        ctx.fillStyle = teinteDAttente(rangeeCentre);
+        // ⚠ L'ATTENTE NE DÉPEND PLUS DE LA RANGÉE — lot SOL-SATELLITE. Elle
+        // rendait l'ardoise en haut de la carte et la terre cuite en bas, le sol
+        // basculant de camp à mesure qu'on montait ; il n'y a plus qu'un sol.
+        ctx.fillStyle = teinteDAttente();
         ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
@@ -1761,11 +1867,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     dessinerFleche(ox, oy, pas);
     dessinerCasesDuDeplacement(ox, oy, pas);
 
-    // ⚠ ON NE RELANCE PAS D'IMAGE TANT QUE L'ATLAS MANQUE. Sans lui, aucune
+    // ⚠ ON NE RELANCE PAS D'IMAGE TANT QU'UNE PLANCHE MANQUE. Sans elles, aucune
     // dalle ne peut se calculer : la boucle tournerait à vide soixante fois par
-    // seconde pour repeindre le même aplat. `chargerAtlas` redessine tout seul
-    // quand l'image arrive.
-    if (restent && atlas !== null && idImage === null && visible) {
+    // seconde pour repeindre le même aplat. `chargerSols` redessine tout seul
+    // quand la dernière arrive.
+    if (restent && sols !== null && idImage === null && visible) {
       idImage = fenetre.requestAnimationFrame(() => {
         idImage = null;
         dessiner();
@@ -1784,7 +1890,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // déclarait le continu impossible parce qu'il « demanderait de recalculer les
   // dalles à chaque image — 19 ms pièce, mesuré ». Le raisonnement supposait
   // que l'échelle d'AFFICHAGE et l'échelle de RENDU sont la même grandeur :
-  // elles ne le sont pas. `rendreDalle` fabrique une image à un cran de la
+  // elles ne le sont pas. `calculerDalle` fabrique une image à un cran de la
   // table, `drawImage` la pose à la taille qu'on veut, et `cranDeRendu` fait le
   // pont. Les dalles ne se recalculent donc qu'aux passages de cran — trois
   // fois sur toute la course.
@@ -2167,7 +2273,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     etatCourant = etat;
     visible = true;
     empreinteSatellites = empreinteDeLaCarte(etat);
-    chargerAtlas();
+    chargerSols();
     chargerEmblemes();
     chargerLimites();
     chargerGrossesBases();

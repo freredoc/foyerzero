@@ -613,11 +613,25 @@ test('SON T9 — table, fichiers, outil, marqueurs et balises ne peuvent pas div
     ...noms.map((n) => `%SON_${n.toUpperCase()}%`),
   ])];
   assert.ok(tous.length >= 284, `montage cassé : ${tous.length} marqueurs`);
-  assert.ok(tous.includes('%ATLAS_TERRAIN%') && tous.includes('%ATLAS_TERRAIN_BASE%'),
-    'le montage ne voit plus le couple que le build donne en exemple');
+  // ⚠⚠ LE TÉMOIN A CHANGÉ DE NATURE AU LOT SOL-SATELLITE, ET IL EST PLUS FORT.
+  // Il exigeait de voir le couple `%ATLAS_TERRAIN%` / `%ATLAS_TERRAIN_BASE%`,
+  // que `tools/build.js` donnait en exemple : c'était le seul cas du dépôt où un
+  // marqueur SANS son `%` final préfixait un autre. Le premier des deux est
+  // parti avec l'atlas du fond de carte, et — mesuré — **il ne reste aucune
+  // paire à risque dans les 284**. Un témoin qui s'appuie sur un accident de
+  // nommage disparaît donc avec l'accident.
+  //
+  // On le remplace par une SONDE : on fait passer au même prédicat une paire
+  // fabriquée dont on sait qu'elle est fautive, et on exige qu'il la refuse.
+  // La garde cesse ainsi de dépendre de ce que la table contient aujourd'hui.
+  const prefixe = (a, b) => a !== b && b.startsWith(a);
+  assert.ok(prefixe('%SOL_CARTE', '%SOL_CARTE_1%'),
+    'le prédicat de préfixe ne reconnaît plus une paire fautive');
+  assert.ok(!prefixe('%SOL_CARTE_1%', '%SOL_CARTE_2%'),
+    'le prédicat de préfixe accuse deux marqueurs sains');
   for (const a of tous) {
     for (const b of tous) {
-      if (a !== b) assert.ok(!b.startsWith(a), `le marqueur ${a} est préfixe de ${b}`);
+      assert.ok(!prefixe(a, b), `le marqueur ${a} est préfixe de ${b}`);
     }
   }
 });
