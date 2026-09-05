@@ -23,7 +23,8 @@ import { decoderRgba } from './png-rgba.js';
 
 import { ATLAS } from '../src/data/atlas.js';
 import { spriteDuSite, dessinerEmblemeDUneCase } from '../src/render/embleme.js';
-import { BATIMENTS } from '../src/data/sites.js';
+
+import { BATIMENTS, POI } from '../src/data/sites.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import {
   AVARIE, avarie, avarieDuSite, avarieDeLaBase, avariesParCase, enregistrerLeRaid,
@@ -314,10 +315,22 @@ test('EMB T8 — l\'atlas déclare les 115, et les 108 emblèmes y sont', () => 
   // que 100 et ferait déborder.
   assert.ok(ATLAS.carte.colonnes * ATLAS.carte.rangees >= 115,
     'la grille de l\'atlas ne tient pas les 115');
-  // ⚠ ET AUCUN POI N'A D'ÉTAT : il n'y a qu'un dessin par type, un gisement ne
-  // brûle pas. Les sept restent nus dans l'index.
+  // ⚠⚠ ET AUCUN POI N'A D'ÉTAT — NI DANS L'INDEX, NI DANS CE QUE `spriteDuSite`
+  // REND. La première écriture de cette garde ne lisait que l'INDEX : la
+  // falsification qui fait porter le suffixe à un POI laissait la suite
+  // ENTIÈREMENT VERTE — mesuré, 13 pass / 0 fail — parce que rien n'appelait
+  // `spriteDuSite` sur un POI avec une avarie. Elle demande maintenant les deux,
+  // et le nom rendu doit exister dans l'atlas.
   assert.equal(noms.filter((n) => n.startsWith('poi')).length, 7);
   assert.equal(noms.filter((n) => n.startsWith('poi') && /_(fumee|feu)$/.test(n)).length, 0);
+  for (const type of Object.keys(POI)) {
+    const nu = spriteDuSite(type, 5, null, AVARIE.AUCUNE);
+    for (const etat of [AVARIE.FUMEE, AVARIE.FEU]) {
+      assert.equal(spriteDuSite(type, 5, null, etat), nu,
+        `le POI « ${type} » change de dessin en ${etat}`);
+    }
+    assert.ok(noms.includes(nu), `${nu} hors atlas`);
+  }
 });
 
 /* ---------------------------------------------------------------- câblage */
