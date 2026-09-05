@@ -169,6 +169,57 @@ s'étendant, `tile_croute` tire vers cette rampe et **jamais vers le brun**.
 | **Anti-véhicule** (rouge) | `#8A1E17` | `#E43E32` |
 | **Anti-aérien** (jaune) | `#A67018` | `#F5B636` |
 
+### Frontières de territoire — kaki vif et violet vif (4 tons chacune)
+
+Arrêtées le **05/09/2026**, sur retour d'Ethan devant la carte au sol satellite :
+« tu re-appliques un coloris vert kaki mais assez vif pour qu'il se détache par
+rapport au nouveau plan satellite et tu prends un violet pareil assez vif comme
+ouvrage mais qui ressort et qui contraste par rapport au nouveau sol de la
+carte ». Elles ne peignent aucune entité : elles peignent la LIMITE d'un
+territoire sur la carte du monde, et elles seules. Produites par
+`tools/limites.py`.
+
+| Rang | Rôle sur le dessin | Joueur | Ouvrage |
+|---|---|---|---|
+| 1 | **Bande intérieure** (côté territoire) | `#161A0E` | `#100916` |
+| 2 | Repères, tournés vers l'intérieur | `#2F3C20` | `#26193C` |
+| 3 | **Bande extérieure** (côté dehors) | `#475A2F` | `#3B285C` |
+| 4 | Éclats aux angles | `#5F7A3E` | `#523A7A` |
+
+⚠ **Ce sont les quatre premiers tons de la rampe de camp, à chroma doublée.**
+Chaque ton garde au dixième la clarté du ton de même rang — kaki L\* 8,3 · 23,5 ·
+35,7 · 47,9, ardoise 3,3 · 12,2 · 21,0 · 30,0 — et au degré sa teinte — kaki
+125°, ardoise 308°. Seule la chroma change : 3,9 · 9,7 · 13,6 · 18,2 devient
+8,2 · 19,2 · 27,3 · 36,1 côté joueur. **Le rangement par clarté est donc
+inchangé, rang par rang**, et la lecture dedans-sombre / dehors-clair que la
+frontière porte tient par construction.
+
+⚠ **Pourquoi les rampes de châssis ne suffisaient plus.** La frontière avait été
+recolorisée le 03/09 sur les quatre tons sombres des rampes de camp, calibrés
+contre `TERRAIN_CARTE.rampes` — la référence *déclarée* de l'ancien sol indexé,
+dont les clartés s'arrêtaient à L\* 58,1 par le bas. Le sol satellite du lot
+SOL-SATELLITE descend plus bas et porte sa propre couleur : mesuré sur les huit
+planches, **L\* p1 50,7 · p5 55,0 · médiane 64,5 · p95 74,2 · p99 78,0**, chroma
+moyenne 25,8, teinte 46°. Contre un sol de cette chroma, une frontière à chroma
+13–18 se lit comme de la boue et non comme un code. Le pire écart au sol, en
+ΔE76, passe de **22,1 à 30,4 côté joueur et de 30,5 à 41,5 côté Ouvrage**.
+
+⚠ **Le facteur est deux, et c'est un nombre qui se change seul.** Mesuré aussi à
+×1,5, ×2,5 et ×3 : au-delà de ×2 le gain s'essouffle côté Ouvrage (+11,0 de ×1 à
+×2, +0,5 ensuite) et le kaki sort de sa famille côté joueur — à ×2,5 sa chroma
+passe à 45 et le ton clair vire à l'herbe, là où le treillis est demandé.
+
+⚠ **Et aucun autre code hexadécimal n'est écrit dans cette fiche hors des
+tableaux.** Deux gardes comptent les teintes en balayant ce document au motif
+`#` suivi de six chiffres : un ton cité en prose pour dire qu'on l'écarte
+entrerait dans la palette et deviendrait autorisé dans la feuille de style. Une
+valeur écartée se décrit, elle ne se cite pas.
+
+⚠ **Ces huit tons ne sont pas des tons d'entité et ne s'y substituent pas.** Une
+unité, un bâtiment, une défense se peignent sur les rampes de châssis et
+d'ardoise ci-dessus, inchangées. « Aucun vert dans le terrain, nulle part »
+reste vrai : une frontière n'est pas du terrain, c'est ce qui le borne.
+
 ### Divers
 
 | Rôle | Valeur |

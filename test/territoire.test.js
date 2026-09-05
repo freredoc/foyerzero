@@ -209,13 +209,40 @@ test('territoire — les côtés exposés sont ceux de l\'OCTOGONE, et rien d\'a
 
   // ⚠ VINGT ET UNE CASES, DONT NEUF STRICTEMENT INTÉRIEURES — le bloc 3 × 3 du
   // milieu au complet, là où le disque n'en avait que cinq en croix. Il reste
-  // donc DOUZE cases de bordure, contre huit sous le disque et seize au carré.
-  // Le nombre est écrit plutôt que dérivé : dérivé de la formule du code, il ne
-  // distinguerait plus les trois figures.
-  assert.equal(bords.length, 12, 'le pourtour de l\'octogone de rayon 2 ne fait plus douze cases');
-  assert.notEqual(bords.length, (2 * rayon + 1) ** 2 - (2 * rayon - 1) ** 2,
+  // donc DOUZE cases à côté exposé, contre huit sous le disque et seize au
+  // carré. Le nombre est écrit plutôt que dérivé : dérivé de la formule du code,
+  // il ne distinguerait plus les trois figures.
+  const aUnCote = bords.filter((b) => b.nord || b.est || b.sud || b.ouest);
+  assert.equal(aUnCote.length, 12,
+    'le pourtour de l\'octogone de rayon 2 ne fait plus douze cases');
+  assert.notEqual(aUnCote.length, (2 * rayon + 1) ** 2 - (2 * rayon - 1) ** 2,
     'le pourtour est redevenu celui du CARRÉ');
-  assert.notEqual(bords.length, 8, 'le pourtour est redevenu celui du DISQUE');
+  assert.notEqual(aUnCote.length, 8, 'le pourtour est redevenu celui du DISQUE');
+
+  // ⚠⚠ ET QUATRE CASES DE PLUS ENTRENT DANS LA LISTE DEPUIS LE 05/09, SANS
+  // PORTER UN SEUL CÔTÉ EXPOSÉ. Ce sont les quatre cases en diagonale du centre :
+  // leurs quatre voisines orthogonales sont dans l'octogone, et le COIN qu'elles
+  // touchent est justement la case rognée. C'est un sommet rentrant, et c'est là
+  // que la frontière manquait « les deux points » qu'Ethan a vus sur un U.
+  // Seize entrées, donc, dont quatre muettes en côtés — le compte du pourtour
+  // ci-dessus est écrit à part exprès, sans quoi cette ligne l'aurait déplacé
+  // sans qu'on sache laquelle des deux grandeurs a bougé.
+  assert.equal(bords.length, 16,
+    'la liste ne porte plus les quatre cases à sommet rentrant de l\'octogone');
+  const sansCote = bords.filter((b) => !b.nord && !b.est && !b.sud && !b.ouest);
+  assert.equal(sansCote.length, 4, 'les quatre sommets rentrants de l\'octogone ont bougé');
+  for (const b of sansCote) {
+    const dr = b.rangee - centre.rangee;
+    const dc = b.colonne - centre.colonne;
+    assert.deepEqual([Math.abs(dr), Math.abs(dc)], [1, 1],
+      `(${dr}, ${dc}) n'est pas une des quatre diagonales du centre`);
+    const coin = `${dr < 0 ? 'n' : 's'}${dc > 0 ? 'e' : 'o'}`;
+    const attendu = coin === 'ne' ? 'ne' : coin === 'se' ? 'es' : coin === 'so' ? 'so' : 'no';
+    assert.ok(b.rentrants[attendu],
+      `(${dr}, ${dc}) devrait porter le sommet rentrant « ${attendu} »`);
+    assert.equal(Object.values(b.rentrants).filter(Boolean).length, 1,
+      `(${dr}, ${dc}) porte plus d'un sommet rentrant`);
+  }
 
   // ⚠ LE COIN RESTE DEHORS — c'est le seul point commun des trois figures qui
   // survit : (−2, −2) est rogné, exactement comme le disque le rejetait.
@@ -246,13 +273,25 @@ test('territoire — les côtés exposés sont ceux de l\'OCTOGONE, et rien d\'a
     { nord: true, ouest: true, sud: false, est: false },
   );
 
-  // ⚠ ET LA DIAGONALE À (−1, −1) A CESSÉ D'ÊTRE UNE BORDURE, ce qui est la
+  // ⚠ ET LA DIAGONALE À (−1, −1) N'A PLUS UN SEUL CÔTÉ EXPOSÉ, ce qui est la
   // conséquence la moins visible du rognage : sous le disque elle était au bord,
   // sous l'octogone ses quatre voisines sont toutes au joueur.
-  assert.ok(
-    !bords.some((b) => b.rangee === centre.rangee - 1 && b.colonne === centre.colonne - 1),
-    'la diagonale intérieure est encore une bordure : les angles ne sont pas revenus',
+  //
+  // ⚠⚠ CETTE GARDE A CHANGÉ DE CIBLE LE 05/09, ET ELLE NE S'EST PAS ASSOUPLIE.
+  // Elle exigeait l'ABSENCE de cette case dans la liste ; la case y est revenue,
+  // pour son sommet rentrant et pour rien d'autre. Ce qu'elle défendait — « le
+  // rognage a rentré ses quatre voisines » — se dit sur les côtés, qui sont la
+  // grandeur dont elle parle. L'exiger absente ferait tomber cette ligne le jour
+  // où le dessin d'un coin arrive, ce qui n'a aucun rapport avec les angles.
+  const diagonale = bords.find((b) => b.rangee === centre.rangee - 1
+    && b.colonne === centre.colonne - 1);
+  assert.ok(diagonale, 'la diagonale intérieure a disparu de la liste');
+  assert.deepEqual(
+    { nord: diagonale.nord, ouest: diagonale.ouest, sud: diagonale.sud, est: diagonale.est },
+    { nord: false, ouest: false, sud: false, est: false },
+    'la diagonale intérieure porte encore un côté exposé : les angles ne sont pas revenus',
   );
+  assert.ok(diagonale.rentrants.no, 'la diagonale intérieure ne porte pas son sommet rentrant');
 });
 
 test('territoire — seules les BASES de l\'Ouvrage projettent son influence', () => {

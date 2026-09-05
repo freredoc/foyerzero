@@ -55,6 +55,17 @@ export const COTES = ['nord', 'est', 'sud', 'ouest'];
 const INITIALES = ['n', 'e', 's', 'o'];
 
 /**
+ * Les quatre coins d'une case, nommés par leurs deux côtés dans l'ordre de
+ * `COTES` — le coin nord-est s'écrit `ne`, jamais `en`.
+ *
+ * ⚠ C'EST LA MÊME RÈGLE DE NOMMAGE QUE `coin`, ET C'EST VOULU : `coin_es` porte
+ * l'angle SORTANT du coin sud-est, `pointe_es` son angle RENTRANT. Un seul jeu
+ * de suffixes à retenir, et `tourner_cotes` de `tools/limites.py` fait tourner
+ * les deux familles ensemble.
+ */
+export const COINS = ['ne', 'es', 'so', 'no'];
+
+/**
  * Les sprites à poser sur une case, pour un camp et ses côtés exposés.
  *
  * ⚠⚠ QUATRE FORMES COUVRENT LES SEIZE CAS, ET LE SEIZIÈME EST LE VIDE. Une case
@@ -69,15 +80,28 @@ const INITIALES = ['n', 'e', 's', 'o'];
  * composition donne au pixel près. C'est aussi pour ça que cette fonction rend
  * une LISTE et non un nom : le cas à deux pièces existe.
  *
- * ⚠ ET LE COIN RENTRANT N'EST PAS DESSINÉ NON PLUS, ce qui est une conséquence
- * du modèle par CASE et non un manque. Quand la frontière tourne autour d'une
- * encoche, les deux traits qui s'y rejoignent appartiennent à DEUX cases
- * voisines, chacune pleine sur toute la longueur de son côté : ils se joignent
- * au sommet sans qu'aucune pièce ne s'y pose. Le zip d'Ethan porte pourtant un
- * `angle_l` pour ce cas ; `tools/limites.py` ne le produit pas, et dit pourquoi.
+ * ⚠⚠ ET LE SOMMET RENTRANT PORTE SA PROPRE PIÈCE DEPUIS LE 05/09, PARCE QU'IL
+ * MANQUAIT. Ce commentaire affirmait le contraire — « les deux traits se
+ * joignent au sommet sans qu'aucune pièce ne s'y pose » — et Ethan l'a vu à
+ * l'écran : « quand tu dessines un territoire en U il manque les deux points ».
+ * Les deux traits se joignent au POINT, pas en surface : une bande a deux pixels
+ * logiques d'épaisseur, et à un sommet rentrant elle laisse un carré de 2 × 2
+ * que ni l'une ni l'autre ne peint. **Reproduit avant d'écrire une ligne** en
+ * rendant le U `XXX / X.X / X.X` : deux sommets, 0 pixel logique sur 4 à chacun.
+ *
+ * ⚠ LES SOMMETS SE LISENT DANS `cotes.rentrants`, ET ILS NE SE DÉDUISENT PAS DES
+ * CÔTÉS. Un sommet rentrant demande de connaître la DIAGONALE, que les quatre
+ * booléens de côté ne disent pas : une case entourée des quatre côtés par son
+ * camp peut très bien toucher l'extérieur par un coin — mesuré, c'est même le
+ * cas de 360 sommets sur 360 en jeu réel. C'est `sim/territoire.js` qui les
+ * calcule, comme il calcule les côtés.
+ *
+ * ⚠ ET IL PEUT N'Y AVOIR QUE ÇA : une case sans aucun côté exposé rend une
+ * liste d'une seule pointe, jamais une liste vide.
  *
  * @param {number} camp `JOUEUR` ou `OUVRAGE` de `sim/territoire.js`
- * @param {{nord: boolean, est: boolean, sud: boolean, ouest: boolean}} cotes
+ * @param {{nord: boolean, est: boolean, sud: boolean, ouest: boolean,
+ *   rentrants?: {ne: boolean, es: boolean, so: boolean, no: boolean}}} cotes
  * @returns {string[]} noms de sprites de la famille `limite`, jamais `null`
  */
 export function spritesDeLaLimite(camp, cotes) {
@@ -91,15 +115,26 @@ export function spritesDeLaLimite(camp, cotes) {
   const suffixe = (garde) => INITIALES.filter((_, i) => garde(i)).join('');
   const tous = suffixe((i) => exposes[i]);
 
-  if (combien === 0) return [];
-  if (combien === 4) return [`limite_${lettre}_carre`];
-  if (combien === 3) return [`limite_${lettre}_u_${tous}`];
-  if (combien === 1) return [`limite_${lettre}_trait_${tous}`];
-  // Deux côtés : adjacents si leurs indices ne sont pas à deux d'écart dans la
-  // boussole — nord/sud et est/ouest sont les deux seules paires opposées.
-  const opposes = (exposes[0] && exposes[2]) || (exposes[1] && exposes[3]);
-  if (!opposes) return [`limite_${lettre}_coin_${tous}`];
-  return INITIALES.filter((_, i) => exposes[i]).map((c) => `limite_${lettre}_trait_${c}`);
+  // ⚠ LES POINTES SE POSENT DANS L'ORDRE DE `COINS`, ET ELLES VIENNENT APRÈS.
+  // Elles n'occupent que le carré de coin, donc elles ne recouvrent aucune
+  // bande ; l'ordre est fixé pour que deux images du même état soient
+  // identiques à l'octet, pas parce qu'un dessin passe sur l'autre.
+  const rentrants = cotes.rentrants ?? {};
+  const pointes = COINS.filter((c) => rentrants[c] === true)
+    .map((c) => `limite_${lettre}_pointe_${c}`);
+
+  const bandes = (() => {
+    if (combien === 0) return [];
+    if (combien === 4) return [`limite_${lettre}_carre`];
+    if (combien === 3) return [`limite_${lettre}_u_${tous}`];
+    if (combien === 1) return [`limite_${lettre}_trait_${tous}`];
+    // Deux côtés : adjacents si leurs indices ne sont pas à deux d'écart dans la
+    // boussole — nord/sud et est/ouest sont les deux seules paires opposées.
+    const opposes = (exposes[0] && exposes[2]) || (exposes[1] && exposes[3]);
+    if (!opposes) return [`limite_${lettre}_coin_${tous}`];
+    return INITIALES.filter((_, i) => exposes[i]).map((c) => `limite_${lettre}_trait_${c}`);
+  })();
+  return bandes.concat(pointes);
 }
 
 /**
