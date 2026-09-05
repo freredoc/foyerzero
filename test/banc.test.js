@@ -712,6 +712,30 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   //
   // ⚠ LA MARGE EST DE 231 498 OCTETS, 3,31 %.
   //
+  // ⚠⚠ ET ELLE PASSE DE 7 000 000 À 7 300 000 AU LOT EMBLÈMES-ABÎMÉS, 05/09 —
+  // MAIS CE RELÈVEMENT-CI N'EST PAS COMME LES AUTRES, ET IL FAUT LE LIRE DANS
+  // CE SENS-LÀ. Le paragraphe ci-dessus pose sept mégaoctets comme « la marge
+  // au-delà de laquelle il faudra REMESURER ce démarrage avant de faire entrer
+  // quoi que ce soit ». Ce lot est le premier à franchir ce point : la
+  // condition est donc DUE, et elle demande l'appareil d'Ethan, que le dépôt
+  // n'a pas (§3). **Le démarrage a été mesuré dans Chromium à la place, et le
+  // rapport dit que ce n'est PAS l'appareil.** Le relèvement est proposé, pas
+  // acquis — un nombre se change seul, Ethan tranche.
+  //
+  // ⚠ CE QUI ENTRE EST DE L'ART, ET RIEN D'AUTRE : 72 emblèmes de site abîmés,
+  // quatre familles × neuf paliers × deux états. L'atlas `carte` en grille 128
+  // passe de 43 à 115 sprites, de 7 × 7 à 11 × 11 cellules, et de 217 330 à
+  // 409 686 octets — soit **+256 475 octets en base64**. Livrable mesuré :
+  // 6 801 384 → **7 060 617 octets**, et **289 `data:` avant, 289 après** : pas
+  // une ressource n'entre, c'est le même atlas qui grossit.
+  //
+  // ⚠ LE PALIER DE COMPRESSION NE SE BAISSE PAS NON PLUS ICI. `QUALITE` de
+  // `tools/atlas.py` vaut 85 pour les DIX-NEUF atlas : la baisser pour ce lot
+  // dégraderait les dix-huit autres, et ce serait rogner pour passer sous une
+  // borne — ce que §5 refuse.
+  //
+  // ⚠ LA MARGE EST DE 239 383 OCTETS, 3,28 %.
+  //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.
   //
@@ -719,7 +743,7 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // peindre le mur de contour DANS le fond de base et livré huit décors de
   // 1080 × 2160, +2 154 705 octets, q75 et pleine résolution.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 7_000_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 7_300_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

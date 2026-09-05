@@ -40,13 +40,47 @@ def quant(flat,P):
         elif n.startswith('blanc'): d[~pb,i]=M
     return d.argmin(1)
 
-def recadrer(cell,cible,N):
+def recadrer(cell,cible,N,cote_ref=None,ancrage='centre'):
+    """Pose le contenu d'une cellule dans une boîte carrée, à l'échelle voulue.
+
+    ⚠⚠ `cote_ref` EST L'ÉCHELLE, ET SANS ELLE CHAQUE CELLULE EST NORMALISÉE
+    SÉPARÉMENT. C'est le défaut que le lot EMBLÈMES-ABÎMÉS a mesuré : `cote` est
+    le côté du contenu DE CETTE CELLULE-LÀ, porté à `cible/N` de la boîte, si
+    bien qu'une base de niveau 1 ressortait à la taille d'une base de niveau 50 —
+    relevé sur `art/sprites/carte/128/`, largeurs 86 et 118 pour `site_base_j`,
+    et 117 ou 118 sur SEPT des neuf paliers. Passer une référence COMMUNE à
+    plusieurs cellules leur rend leur rapport de taille : celle qui vaut la
+    référence atteint `cible`, les autres restent dessous d'autant.
+
+    ⚠ LE DÉFAUT `None` REND LA FORMULE D'HIER AU CARACTÈRE PRÈS, et c'est ce qui
+    laisse les quinze autres producteurs byte-identiques — le vérificateur le
+    dit, pas la relecture.
+
+    ⚠⚠ `ancrage='bas'` POSE LES CONTENUS SUR UNE LIGNE DE SOL COMMUNE, et il va
+    avec la référence. Centrer des contenus de hauteurs différentes ferait
+    FLOTTER les petits au milieu de leur case pendant que les grands touchent le
+    sol ; sous une carte, des bâtiments qui ne reposent pas sur la même ligne se
+    lisent comme un défaut de dessin. Le panache, lui, monte librement dans
+    l'espace laissé au-dessus.
+
+    ⚠ LA LIGNE DE SOL EST CELLE QUE LE CENTRAGE DONNAIT AU PLUS GRAND CONTENU —
+    `box/2 + cote_ref/2` —, donc l'emprise ne change pas de valeur : le contenu
+    de référence occupe toujours `cible` sur `N`, marge du haut et marge du bas
+    identiques. Ce n'est pas un cadrage neuf, c'est le même vu depuis le bas.
+    """
     a=np.array(cell.convert('RGBA')); m=(~est_fond(a[...,:3]))&(a[...,3]>=128)
     ys,xs=np.where(m)
     cote=max(xs.max()-xs.min(),ys.max()-ys.min())+1
-    box=int(round(cote*N/cible))
+    reference=cote if cote_ref is None else int(round(cote_ref))
+    box=int(round(reference*N/cible))
     cx=(xs.min()+xs.max())//2; cy=(ys.min()+ys.max())//2
-    out=Image.new('RGBA',(box,box),(255,0,255,255)); out.paste(cell.convert('RGBA'),(box//2-cx,box//2-cy))
+    if ancrage=='bas':
+        oy=box//2+reference//2-int(ys.max())
+    elif ancrage=='centre':
+        oy=box//2-cy
+    else:
+        raise ValueError(f'recadrer : ancrage inconnu « {ancrage} »')
+    out=Image.new('RGBA',(box,box),(255,0,255,255)); out.paste(cell.convert('RGBA'),(box//2-cx,oy))
     return out
 
 def conditionner(im,P,N,erosion=3):

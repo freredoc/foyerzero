@@ -43,6 +43,7 @@
 // raid.
 
 import { TYPES_SITE, APRES_RAID, BATIMENTS } from '../data/sites.js';
+import { BASE_BATIMENTS } from '../data/base.js';
 import { TICKS_PAR_HEURE } from './clock.js';
 import {
   detruireSatellite, prolongerApresAttaque, trouverSatellite,
@@ -56,6 +57,122 @@ const ID_ETAI = Object.keys(BATIMENTS).find((id) => BATIMENTS[id].reparationDefe
 
 if (ID_SOUCHE === undefined || ID_ETAI === undefined) {
   throw new Error('site-entamé : la table des bâtiments ne nomme plus la Souche ou l\'Étai');
+}
+
+/**
+ * Le bâtiment dont la chute rase la base DU JOUEUR.
+ *
+ * ⚠⚠ MÊME CHAMP QUE CÔTÉ OUVRAGE, ET C'EST TOUT L'INTÉRÊT. `raseLeSite` est posé
+ * sur `BATIMENTS.souche` et sur `BASE_BATIMENTS.chantierDeConstruction`, avec le
+ * commentaire qui dit que c'est le même nom des deux côtés. Une seule règle
+ * couvre donc les deux camps ; écrire `id === 'chantierDeConstruction'` quelque
+ * part serait la seconde vérité que §4 de `CLAUDE.md` interdit, et elle
+ * mentirait pour toutes les bases de l'Ouvrage.
+ */
+const ID_CHANTIER = Object.keys(BASE_BATIMENTS)
+  .find((id) => BASE_BATIMENTS[id].raseLeSite === true);
+
+if (ID_CHANTIER === undefined) {
+  throw new Error('site-entamé : la table de la base ne nomme plus le bâtiment qui rase');
+}
+
+/**
+ * Ce qu'un site montre de ses blessures — trois états, et rien entre les deux.
+ *
+ * ⚠ « ABÎMÉ », PAS « DÉTRUIT », ET LA DIFFÉRENCE DÉCIDE DE TOUT. Côté joueur, la
+ * chute du Chantier déclenche le RASAGE, qui déplace la base de vingt cases : il
+ * n'existe aucun état durable « Chantier détruit » à afficher. « Chantier
+ * abîmé » existe des deux côtés, et il dure jusqu'à réparation.
+ */
+export const AVARIE = { AUCUNE: 'aucune', FUMEE: 'fumee', FEU: 'feu' };
+
+/**
+ * La règle, écrite UNE fois pour les deux camps.
+ *
+ * ⚠ L'ORDRE DES DEUX TESTS EST LA RÈGLE : le raseur touché l'emporte, parce
+ * qu'il est aussi « quelque chose d'abîmé ». Les intervertir rendrait le feu
+ * inatteignable.
+ *
+ * @param {{raseurAbime: boolean, quelqueChoseAbime: boolean}} faits
+ * @returns {string} une valeur d'`AVARIE`
+ */
+export function avarie({ raseurAbime, quelqueChoseAbime }) {
+  if (raseurAbime) return AVARIE.FEU;
+  if (quelqueChoseAbime) return AVARIE.FUMEE;
+  return AVARIE.AUCUNE;
+}
+
+/**
+ * L'avarie d'un site de l'Ouvrage, telle qu'elle est AUJOURD'HUI.
+ *
+ * ⚠ RIEN DE NEUF N'ENTRE DANS L'ÉTAT. `pvBatimentsMilli` est déjà là, et
+ * `reparerLesSites` efface l'entrée au bout d'une heure : l'emblème abîmé se
+ * lève et retombe tout seul. `null` veut dire intacte, `0` détruite, un nombre
+ * les milli-PV restants — donc « abîmée » est exactement « pas `null` ».
+ *
+ * @param {object} etat
+ * @param {object} identite
+ * @returns {string} une valeur d'`AVARIE`
+ */
+export function avarieDuSite(etat, identite) {
+  const entree = etatDuSite(etat, identite);
+  if (entree === null) return AVARIE.AUCUNE;
+  const touchee = (v) => v !== null;
+  const montage = montageDuSite(etat.graine, entree);
+  const index = montage.batiments.findIndex((b) => b.id === ID_SOUCHE);
+  return avarie({
+    raseurAbime: index >= 0 && touchee(entree.pvBatimentsMilli[index]),
+    quelqueChoseAbime: entree.pvBatimentsMilli.some(touchee)
+      || entree.pvDefensesMilli.some(touchee),
+  });
+}
+
+/**
+ * Les avaries de tous les sites entamés, rangées par case.
+ *
+ * ⚠ ON PART DES ENTAMÉS, PAS DES SITES VISIBLES, et c'est ce qui rend l'appel
+ * payable à chaque image : la fenêtre de la carte porte jusqu'à quinze cents
+ * cases, la table des entamés quelques dizaines d'entrées. Interroger chaque
+ * site visible régénérerait un montage par case.
+ *
+ * ⚠ ET LA CLÉ NE PORTE PAS L'INSTANCE : l'écran connaît une case, pas le numéro
+ * d'instance du camp qui l'occupe. Deux camps successifs au même endroit ne
+ * coexistent jamais.
+ *
+ * @param {object} etat
+ * @returns {Map<string, string>} « rangée:colonne » → valeur d'`AVARIE`
+ */
+export function avariesParCase(etat) {
+  exigerTable(etat);
+  const carte = new Map();
+  for (const entree of Object.values(etat.sitesEntames)) {
+    const etatDAvarie = avarieDuSite(etat, entree);
+    if (etatDAvarie !== AVARIE.AUCUNE) {
+      carte.set(`${entree.rangee}:${entree.colonne}`, etatDAvarie);
+    }
+  }
+  return carte;
+}
+
+/**
+ * L'avarie d'une base du joueur — même règle, autre porteur.
+ *
+ * ⚠ LES DÉGÂTS SONT DANS LA PIÈCE, PAS DANS UNE TABLE À CÔTÉ : `degatsMilli`,
+ * écrit par `sim/raid-ouvrage.js`. Zéro veut dire intacte.
+ *
+ * ⚠ ET LA GARNISON COMPTE, comme les défenses comptent côté Ouvrage : c'est la
+ * défense du joueur, et la traiter autrement apprendrait deux grammaires pour
+ * le même dessin.
+ *
+ * @param {object} base une entrée d'`etat.bases`
+ * @returns {string} une valeur d'`AVARIE`
+ */
+export function avarieDeLaBase(base) {
+  const abimee = (p) => (p.degatsMilli ?? 0) > 0;
+  return avarie({
+    raseurAbime: base.disposition.some((b) => b.id === ID_CHANTIER && abimee(b)),
+    quelqueChoseAbime: base.disposition.some(abimee) || base.garnison.some(abimee),
+  });
 }
 
 /** Réparation des défenses par l'Étai, en ticks. */

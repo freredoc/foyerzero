@@ -103,13 +103,17 @@ FAMILLES = {
     # ⚠ LE SLUG PREND UN SOULIGNÉ, PAS UN TIRET : il devient une clé JavaScript,
     # et `ATLAS['tourelle-unite']` s'écrirait mais `ATLAS.tourelle-unite` non.
     'tourelle-unite': ('tourelle_unite', 80, ()),  # 5 blindés joueur × 16 orientations
-    # ⚠⚠ 43 COUSUS SUR 45 SUR LE DISQUE. Les deux grosses bases de l'Ouvrage
+    # ⚠⚠ 115 COUSUS SUR 117 SUR LE DISQUE — 43 jusqu'au lot EMBLÈMES-ABÎMÉS, qui
+    # fait entrer les 72 emblèmes de site en fumée et en feu : quatre familles ×
+    # neuf paliers × deux états. Les 7 POI n'en ont pas — il n'existe qu'un
+    # dessin par type de POI, et un gisement ne brûle pas.
+    # Les deux grosses bases de l'Ouvrage
     # mesurent 128×128 et 192×192 à la grille 64 — elles couvrent 2×2 et 3×3
     # cases — et `coudre` exige `COTE × COTE` : les laisser entrer ferait sortir
     # l'outil en erreur. Elles voyagent chacune dans son propre marqueur, comme
     # l'atlas de terrain de la carte du monde. Un atlas d'un seul sprite ne coud
     # rien.
-    'carte': ('carte', 43, ('base_o_2x2', 'base_o_3x3')),
+    'carte': ('carte', 115, ('base_o_2x2', 'base_o_3x3')),
     # ⚠⚠ LES LIMITES DE TERRITOIRE ENTRENT AU LOT TERRITOIRE (03/09), ET ELLES
     # SONT DANS UN ATLAS ALORS QUE LES MURS DE CONTOUR N'Y SONT PAS. La
     # différence n'est pas de nature, elle est de FORME : un mur fait 512 × 128,

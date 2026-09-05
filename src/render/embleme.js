@@ -85,21 +85,45 @@ export const SPRITES_GROSSE_BASE = {
  *
  * @param {string} type clé d'`EMBLEMES_CARTE`
  * @param {number} palier 1…9, de `palierDeNiveau`
+ * @param {string} avarie une valeur d'`AVARIE` de `sim/site-entame.js`
  * @param {string|null} saveur `richeQuartz`, `richeScorie` ou `null`
  * @returns {string} un nom de la famille `carte`
  */
-export function spriteDuSite(type, palier, saveur) {
+/**
+ * Le suffixe de fichier d'un état d'avarie — le sain n'en a pas.
+ *
+ * ⚠⚠ LE PALIER NE CHANGE PAS AVEC L'ÉTAT, ET C'EST LA RÈGLE. `palierDeNiveau`
+ * rend le palier, l'avarie choisit la FAMILLE de dessin : une base de niveau 30
+ * en feu reste au palier 6. Mélanger les deux ferait RÉTRÉCIR la base quand elle
+ * brûle, c'est-à-dire dire au joueur qu'elle a baissé de niveau.
+ *
+ * ⚠ LE SAIN GARDE SON NOM NU. Renommer les 36 sprites sains aurait fait tomber
+ * `src/data/atlas.js`, ce module et leurs gardes pour un lot qui n'ajoute qu'un
+ * état.
+ */
+const SUFFIXE_AVARIE = { aucune: '', fumee: '_fumee', feu: '_feu' };
+
+export function spriteDuSite(type, palier, saveur, avarie = 'aucune') {
   if (!Number.isInteger(palier) || palier < 1 || palier > 9) {
     throw new RangeError(`emblème : palier ${palier} hors de 1…9`);
+  }
+  const abime = SUFFIXE_AVARIE[avarie];
+  if (abime === undefined) {
+    throw new RangeError(`emblème : avarie inconnue « ${avarie} »`);
   }
   // ⚠⚠ UN POI IGNORE SON PALIER, ET C'EST UNE PROPRIÉTÉ DE L'ART, PAS UN OUBLI.
   // Il n'y a qu'un dessin par type — pas de variante `n1`…`n9` —, et le niveau
   // d'un POI ne dit de toute façon rien de ce qu'il donne : il dit seulement où
   // il se trouve. Le contrôle de borne du palier reste AU-DESSUS, parce qu'il
   // protège tous les autres types.
+  // ⚠ UN POI NE BRÛLE PAS, ET IL N'A QU'UN DESSIN. Il ne s'attaque pas — il
+  // n'est dans aucun `TYPES_SITE` —, donc aucune avarie ne peut le concerner ;
+  // lui coudre 14 sprites de plus aurait payé des octets pour un état
+  // inatteignable. Le contrôle de borne de l'avarie reste AU-DESSUS, lui,
+  // parce qu'il protège tous les autres types.
   if (POI[type] !== undefined) return POI[type].sprite;
-  if (type === 'base') return `site_base_o_n${palier}`;
-  if (type === 'baseJoueur') return `site_base_j_n${palier}`;
+  if (type === 'base') return `site_base_o_n${palier}${abime}`;
+  if (type === 'baseJoueur') return `site_base_j_n${palier}${abime}`;
   if (type === 'baseTerminale') {
     throw new RangeError(
       'emblème : la base terminale se dessine en hexagone 3 × 3 par '
@@ -107,8 +131,8 @@ export function spriteDuSite(type, palier, saveur) {
     );
   }
   if (type === 'camp' || type === 'avantPoste') {
-    if (saveur === 'richeQuartz') return `site_quartz_n${palier}`;
-    if (saveur === 'richeScorie') return `site_scorie_n${palier}`;
+    if (saveur === 'richeQuartz') return `site_quartz_n${palier}${abime}`;
+    if (saveur === 'richeScorie') return `site_scorie_n${palier}${abime}`;
     throw new RangeError(`emblème : « ${type} » sans saveur — reçu « ${saveur} »`);
   }
   throw new RangeError(`emblème : type de site inconnu « ${type} »`);
@@ -260,7 +284,7 @@ export function dessinerGrosseBase(cotes, site, cran, origine) {
  * rien ne le dise. `render/limite.js` lisait `COTE_SPRITE` depuis le premier
  * jour, et ses frontières se dessinaient juste pendant que les emblèmes non.
  *
- * @param {{type: string, saveur: string|null}} site
+ * @param {{type: string, saveur: string|null, avarie: string|undefined}} site
  * @param {number} palier 1…9, de `palierDeNiveau`
  * @param {number} x abscisse de destination, en pixels
  * @param {number} y ordonnée de destination, en pixels
@@ -269,7 +293,10 @@ export function dessinerGrosseBase(cotes, site, cran, origine) {
  *   x: number, y: number, cote: number}}
  */
 export function dessinerEmblemeDUneCase(site, palier, x, y, taille) {
-  const nom = spriteDuSite(site.type, palier, site.saveur);
+  // ⚠ L'AVARIE VIENT DU SITE, ET SON DÉFAUT EST « AUCUNE ». Les montages qui
+  // composent un site à la main — il y en a plusieurs au dépôt — n'en portent
+  // pas, et un site sans blessure connue est un site sain.
+  const nom = spriteDuSite(site.type, palier, site.saveur, site.avarie ?? 'aucune');
   const cellule = celluleDuSprite(FAMILLE, nom);
   const sCote = COTE_SPRITE;
   return {
