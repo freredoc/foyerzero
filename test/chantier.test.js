@@ -1311,24 +1311,84 @@ test('actions — jamais de `try` autour d\'`ameliorer` ni de `demolir`', () => 
   assert.ok(!MOTIFS[1].motif.test('problemesDeLaDemolition(etat, i)'));
 });
 
-test('actions — les cases distinguées suivent la TABLE, pas un nom écrit dans l\'écran', () => {
-  // ⚠ SEUL LE COLLECTEUR EST DISTINGUÉ (27/08), et la raison n'est pas un choix
-  // d'interface : c'est le seul bâtiment pour qui le terrain décide. La règle
-  // vit dans `CHAMPS.posableDessus`, et l'écran doit la LIRE. Écrire
-  // `=== 'collecteur'` en dur marcherait aujourd'hui et mentirait le jour où un
-  // second bâtiment gagnerait le droit de se poser sur un champ.
+test('ERGO T3 — les cases distinguées suivent le MOTEUR, et plus aucun bâtiment n\'est privilégié', () => {
+  // ⚠⚠ CETTE GARDE A CHANGÉ DE CIBLE AU LOT ERGONOMIE, ET C'EST UN RETOUR
+  // D'ETHAN QUI L'A EXIGÉ. Elle tenait « seul le Collecteur est distingué »
+  // (27/08) et vérifiait que l'écran LISAIT `CHAMPS.posableDessus` au lieu
+  // d'écrire « collecteur » en dur. Ethan, 04/09 : « Une grille apparaît quand
+  // on déplace un bâtiment […] Faire de même lorsque l'on construit un bâtiment
+  // et sur défense. » Il n'y a donc plus de privilège à lire, et l'écran
+  // n'importe plus la table du tout.
+  //
+  // Ce que la garde défend est intact et se resserre même : l'écran ne décide
+  // de RIEN tout seul, il DEMANDE au moteur les cases posables.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  assert.ok(/CHAMPS\.posableDessus/.test(ecran),
-    'l\'écran ne lit pas CHAMPS.posableDessus pour décider quoi cercler');
   assert.ok(!/['\"]collecteur['\"]/.test(ecran),
-    'l\'écran nomme « collecteur » en dur au lieu de lire la table');
+    'l\'écran nomme « collecteur » en dur au lieu de demander au moteur');
+  assert.ok(!/CHAMPS\.posableDessus/.test(ecran),
+    'l\'écran privilégie encore un bâtiment pour décider quoi cercler');
 
-  // Et la table dit bien ce que l'écran en attend : un seul bâtiment concerné,
-  // sinon « seul le collecteur » cesserait d'être vrai sans que l'écran change.
+  // Falsifiable : les deux motifs doivent attraper de vrais appâts.
+  assert.ok(/['\"]collecteur['\"]/.test("if (posableChoisi === 'collecteur') return;"));
+  assert.ok(/CHAMPS\.posableDessus/.test('if (!CHAMPS.posableDessus.includes(x)) return;'));
+
+  // ⚠ ET LA RÈGLE, ELLE, N'A PAS BOUGÉ DANS LA DONNÉE : le Collecteur reste le
+  // seul bâtiment dont le TERRAIN décide. C'est le moteur qui l'applique — ce
+  // que `casesPosablesDuTerrain` rend pour lui n'est pas la bande entière.
   assert.equal(CHAMPS.posableDessus.length, 1);
 
-  // Falsifiable : le motif d'un nom en dur doit attraper un vrai appât.
-  assert.ok(/['\"]collecteur['\"]/.test("if (posableChoisi === 'collecteur') return;"));
+  // ⚠⚠ LA GRILLE S'ARME DANS LES TROIS MODES, ET LE MOTEUR LE DIT. Un montage
+  // par mode, sur les DEUX bandes : la pose d'un bâtiment quelconque, la pose
+  // d'une pièce de défense, et le déplacement d'un bâtiment posé. Les trois
+  // doivent rendre des cases, sinon la grille resterait vide dans ce mode-là.
+  const etat = creerEtat(11);
+  const base = baseCourante(etat);
+  const posablesBat = casesPosablesDuTerrain(etat, 'batiments', 'raffinerie');
+  const posablesDef = casesPosablesDuTerrain(etat, 'defense', 'merlon');
+  assert.ok(posablesBat.length > 20, `pose de bâtiment : ${posablesBat.length} cases`);
+  assert.ok(posablesDef.length > 20, `pose en défense : ${posablesDef.length} cases`);
+  const deplacables = casesDeplacablesDuTerrain(etat, 'batiments', 0);
+  assert.ok(deplacables.length > 20, `déplacement : ${deplacables.length} cases`);
+  assert.equal(base.disposition.length, 1, 'montage : la base neuve porte le seul Chantier');
+
+  // ⚠ ET LE COLLECTEUR, LUI, EN REND MOINS QUE LA BANDE — sans quoi « la règle
+  // n'a pas bougé » ne se mesurerait nulle part.
+  const posablesCollecteur = casesPosablesDuTerrain(etat, 'batiments', 'collecteur');
+  assert.ok(posablesCollecteur.length < posablesBat.length,
+    'le terrain ne décide plus pour le Collecteur');
+});
+
+test('ERGO T4 — la grille se retire, et c\'est la même fonction qui la pose', () => {
+  // ⚠⚠ C'EST LA MOITIÉ DU RETOUR D'ETHAN — « et disparaît ensuite » — ET C'EST
+  // LE TEST QUI MORD. Une grille qui s'arme partout et ne se retire jamais
+  // passerait le test précédent sans rien valoir.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const corps = source.match(/function marquerCasesLegales\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(corps !== null, 'marquerCasesLegales a disparu');
+
+  // Elle RETIRE d'abord, sur toutes les cases, et sans condition.
+  assert.match(corps[0], /for \(const case_ of cellules\.values\(\)\) case_\.classList\.remove\('legale'\);/,
+    'la grille ne se retire plus de toutes les cases à l\'entrée');
+  assert.ok(corps[0].indexOf("remove('legale')") < corps[0].indexOf("add('legale')"),
+    'la grille se pose avant d\'être retirée');
+
+  // ⚠ ET UN SEUL MÉCANISME LA POSE. Deux `add('legale')` — un par mode — c'est
+  // le cas du déplacement et celui de la pose, et il n'y en a pas de troisième.
+  assert.equal((corps[0].match(/add\('legale'\)/g) ?? []).length, 2);
+  assert.equal((source.match(/classList\.(add|remove|toggle)\('legale'/g) ?? []).length, 3,
+    'un second afficheur de grille est apparu hors de marquerCasesLegales');
+
+  // ⚠⚠ LES QUATRE PORTES D'ANNULATION PASSENT PAR ELLE. Sortir d'un mode sans
+  // la rappeler laisserait la grille à l'écran — le défaut « plus visible que
+  // son absence » que le brief nomme.
+  assert.ok((source.match(/marquerCasesLegales\(\);/g) ?? []).length >= 6,
+    'des portes de sortie ne rappellent plus la grille');
+  for (const porte of [
+    'deplacementEnCours = null;',   // annulation d'un déplacement
+    'posableChoisi = null;',        // armement d'une action, qui défait la palette
+  ]) {
+    assert.ok(source.includes(porte), `la porte « ${porte} » a disparu`);
+  }
 });
 
 test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le calcul n\'a pas bougé', () => {

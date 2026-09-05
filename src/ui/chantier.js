@@ -30,7 +30,7 @@ import { GRILLE } from '../data/combat.js';
 // La recopier ici en ferait une seconde vérité.
 import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
 import {
-  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
+  BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
   ORDRE_PALETTE,
 } from '../data/base.js';
@@ -3233,17 +3233,26 @@ export function initialiserEcranChantier(doc, {
   }
 
   /**
-   * Distingue à l'écran les cases où le bâtiment choisi peut se poser.
+   * Distingue à l'écran les cases où le bâtiment choisi peut se poser — c'est
+   * la GRILLE que le joueur voit.
    *
-   * ⚠ SEUL LE COLLECTEUR EST DISTINGUÉ, arbitré le 27/08. C'est le seul
-   * bâtiment pour qui le TERRAIN décide — `CHAMPS.posableDessus` ne contient que
-   * lui. Pour les dix autres, toute case libre de la bande convient, et cercler
-   * soixante cases sur soixante-douze n'apprend rien à personne.
+   * ⚠⚠ LES TROIS MODES LA MONTRENT, ET UN SEUL MÉCANISME LA MONTRE. Ethan,
+   * 04/09 : « Une grille apparaît quand on déplace un bâtiment et disparaît
+   * ensuite. Faire de même lorsque l'on construit un bâtiment et sur défense. »
+   * Elle s'arme donc au déplacement, à la pose, et sur les DEUX bandes ;
+   * l'arbitrage du 27/08 qui la réservait au Collecteur est levé.
    *
-   * ⚠ C'EST L'AFFICHAGE QUI DISPARAÎT, PAS LA RÈGLE. `problemesDeLaPose` est
+   * ⚠⚠ ET ELLE DISPARAÎT PARCE QUE CETTE FONCTION COMMENCE PAR LA RETIRER DE
+   * TOUTES LES CASES. C'est la moitié du retour d'Ethan — « et disparaît
+   * ensuite » —, et c'est ce qui interdit d'écrire un second afficheur : deux
+   * chemins montreraient la grille, un seul la retirerait. Elle est rappelée à
+   * chaque changement de bande, à chaque choix de palette, à chaque armement
+   * d'action et à chaque peinture ; les quatre portes d'annulation passent donc
+   * par elle.
+   *
+   * ⚠ C'EST L'AFFICHAGE QUI CHANGE, PAS LA RÈGLE. `problemesDeLaPose` est
    * interrogée exactement comme avant au moment de poser, et une case illégale
-   * dit toujours pourquoi. Retirer la distinction en retirant la vérification
-   * aurait été un tout autre lot.
+   * dit toujours pourquoi.
    */
   /**
    * Le bâtiment en aperçu et les flèches de bonus de proximité.
@@ -3359,18 +3368,20 @@ export function initialiserEcranChantier(doc, {
       return;
     }
     if (posableChoisi === null) return;
-    // ⚠ ON NE CERCLE QUE QUAND ÇA APPREND QUELQUE CHOSE, ET LA RÈGLE VAUT DES
-    // DEUX CÔTÉS. Seul le Collecteur a un terrain qui décide pour lui
-    // (`CHAMPS.posableDessus` ne contient que lui) ; pour tous les autres,
-    // toute case libre de la bande convient, et en cercler soixante sur
-    // soixante-douze n'apprend rien. Une pièce de garnison est dans ce cas :
-    // sa bande est vide au départ, donc le cerclage y désignerait les
-    // soixante-douze cases à la fois.
+    // ⚠⚠ ON CERCLE TOUT CE QUI EST LÉGAL, ET C'EST UN RETOUR SUR L'ARBITRAGE DU
+    // 30/08. Ce bloc portait « on ne cercle que quand ça apprend quelque chose »
+    // et se limitait au Collecteur, seul bâtiment dont le TERRAIN décide
+    // (`posableDessus` des champs ne contient que lui) : pour les autres, cercler
+    // soixante cases sur soixante-douze était jugé bavard. Ethan, 04/09 : « Une
+    // grille apparaît quand on déplace un bâtiment et disparaît ensuite. Faire
+    // de même lorsque l'on construit un bâtiment et sur défense. » Les liserés
+    // SONT cette grille : soixante cases cerclées se lisent comme un quadrillage,
+    // pas comme soixante indications.
     //
-    // ⚠ C'EST L'AFFICHAGE QUI SE TAIT, PAS LA RÈGLE. Le moteur est interrogé
-    // exactement comme avant au moment de poser, et une case illégale dit
-    // toujours pourquoi.
-    if (!CHAMPS.posableDessus.includes(posableChoisi)) return;
+    // ⚠ ET C'EST LA MÊME LIGNE QUI SERT LES TROIS MODES — déplacement plus haut,
+    // pose ici, sur les DEUX bandes, `terrainCourant()` décidant laquelle. Un
+    // second mécanisme d'affichage à côté de celui-ci donnerait deux chemins qui
+    // montrent la grille et un seul qui la retire.
     const terrain = terrainCourant();
     for (const { rangee, colonne } of casesPosablesDuTerrain(etatCourant, terrain, posableChoisi)) {
       cellules.get(cle(rangee, colonne))?.classList.add('legale');
