@@ -2083,6 +2083,13 @@
       <img id="atlas-batiment" alt="" hidden>
       <img id="atlas-defense" alt="" hidden>
       <img id="atlas-socle" alt="" hidden>
+      <!-- ⚠⚠ ET L'ATLAS DE TERRAIN — lot ERGONOMIE, 04/09. Ethan : « les sprites
+           obstacles Ouvrage ne sont pas placés, c'est les mêmes que le joueur ».
+           Le champ de bataille les peignait en aplat kaki ; il pose maintenant
+           leur sprite, et `drawImage` veut un élément. Même couplage que les
+           trois du dessus : la variable existe déjà pour le fond CSS du
+           Chantier, donc le livrable n'inline pas une seconde image. -->
+      <img id="atlas-terrain" alt="" hidden>
       <!-- ⚠⚠ LE MUR DE CONTOUR DE L'OUVRAGE — lot MURS-OUVRAGE, 03/09. Ethan :
            « c'est pour le joueur et pour l'ouvrage ». La base attaquée est
            ceinte du même U que celle du joueur, et le champ de bataille est un

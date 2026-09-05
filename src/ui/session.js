@@ -278,6 +278,9 @@ export const ATLAS_DE_LA_PAGE = {
   'atlas-batiment': '--atlas-batiment',
   'atlas-defense': '--atlas-defense',
   'atlas-socle': '--atlas-socle',
+  // ⚠ ET CELUI DU TERRAIN, depuis que les obstacles du champ de bataille portent
+  // leur sprite — lot ERGONOMIE. Même remarque : il est déjà dans la feuille.
+  'atlas-terrain': '--atlas-terrain',
   // ⚠⚠ ET LES HUIT DÉCORS DE BASE — lot MUR-PEINT, 03/09. Ils sont déclarés en
   // variables CSS pour l'écran de la base, qui peint son fond en `background`,
   // et le canevas de l'écran de raid en veut des `HTMLImageElement`. C'est
@@ -347,6 +350,10 @@ export function atlasDeLaScene(doc) {
     batiment: doc.getElementById('atlas-batiment'),
     defense: doc.getElementById('atlas-defense'),
     socle: doc.getElementById('atlas-socle'),
+    // ⚠ LE TERRAIN Y ENTRE AU LOT ERGONOMIE : les obstacles du champ de
+    // bataille sont des sprites, et `executer` LÈVE sur une famille absente
+    // plutôt que de dessiner un trou.
+    terrain: doc.getElementById('atlas-terrain'),
   };
   // ⚠⚠ ET LES HUIT DÉCORS DE BASE, UNE FAMILLE PAR IMAGE — lot MUR-PEINT,
   // 03/09. Ils remplacent les six pièces de mur de l'Ouvrage qui étaient ici.

@@ -562,8 +562,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     executer(
       ctx,
+      // ⚠⚠ LA GRAINE DE LA PARTIE, ET C'EST LA MÊME QUE L'ÉCRAN DE LA BASE
+      // DONNE À SES CASES. Elle ne choisit pas QUELS obstacles sont là — ça,
+      // c'est le montage du site — mais LEQUEL de leurs deux dessins se pose.
+      // Passer la graine du site à la place ferait un second tirage : le même
+      // obstacle, à la même case, n'aurait plus le même dessin des deux côtés,
+      // et c'est très exactement ce que ce point d'Ethan demande de refermer.
       listeAffichage(combat, projection, precedentes,
-        combat.termine ? 0 : alphaMilli(accumulateur, vitesse), fondCourant),
+        combat.termine ? 0 : alphaMilli(accumulateur, vitesse), fondCourant,
+        etatCourant.graine),
       atlas ?? {},
     );
     const fin = (doc.defaultView?.performance ?? globalThis.performance)?.now() ?? 0;

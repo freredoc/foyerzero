@@ -40,6 +40,7 @@ import { celluleDuSprite, existeDansAtlas } from './sprite.js';
 import { COTE_SPRITE } from '../data/atlas.js';
 import { ANCRES_CHASSIS } from '../data/ancres-chassis.js';
 import { liaisonDuMur, liaisonDuSocle, orientationDeLaPiece } from '../sim/rendu-pose.js';
+import { nomDeVariante } from './variante.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
 
@@ -72,9 +73,6 @@ export const PALETTE = {
  * existante — le contour de châssis — sert de fond uni PROVISOIRE.
  */
 export const FOND = PALETTE.contour;
-
-/** Aplat des cases d'obstacle : l'ombre de corps kaki, lisible sur le fond. */
-export const COULEUR_OBSTACLE = PALETTE.kakiOmbre;
 
 /** Barres : remplissage de PV en kaki lumière, de réserve en métal clair.
  * Jamais un accent — la fiche interdit d'employer une couleur d'accent pour
@@ -679,7 +677,9 @@ function rangeeAffichee(e, precedentes, alpha) {
  * @param {number} alpha       Fraction du tick courant, en millièmes 0…1000.
  * @returns {Array<object>} primitives.
  */
-export function listeAffichage(etat, projection, precedentes = null, alpha = 0, fond = null) {
+export function listeAffichage(
+  etat, projection, precedentes = null, alpha = 0, fond = null, graine = 0,
+) {
   const t = projection.tailleCase;
   const liste = [];
 
@@ -701,10 +701,28 @@ export function listeAffichage(etat, projection, precedentes = null, alpha = 0, 
   // `fondDeLaBase` et passe le nom.
   liste.push(...listeDuFond(fond, projection));
 
-  // 2. Obstacles, en aplat sombre.
+  // 2. Obstacles — leur sprite, et le MÊME que sur l'écran de la base.
+  //
+  // ⚠⚠ ETHAN, 04/09 : « les sprites obstacles Ouvrage ne sont pas placés, c'est
+  // les mêmes que le joueur ». Ils l'étaient — en aplat kaki, une teinte de
+  // plus, donc ils ne ressemblaient à rien. Les six dessins sont dans
+  // l'atlas `terrain` depuis le lot CHAMPS-ET-OBSTACLES, et l'écran Chantier les
+  // emploie déjà.
+  //
+  // ⚠⚠ ET LA VARIANTE SE TIRE PAR LA MÊME FONCTION QUE LÀ-BAS — `nomDeVariante`,
+  // descendue dans `render/variante.js` pour ça. La tirer autrement ici donnerait
+  // au même obstacle un dessin dans la base et un autre au combat, et ça ne se
+  // verrait qu'en comparant les deux écrans côte à côte.
+  //
+  // ⚠ LA GRAINE VIENT DE L'APPELANT, PAS DE L'ÉTAT DE COMBAT — même raison que
+  // le nom du fond, deux blocs plus haut : un montage de combat n'en porte pas,
+  // et lui en faire porter une mettrait une décision de DESSIN dans la
+  // simulation. `ui/raid.js` sait quelle partie il joue.
   for (const o of etat.obstacles) {
-    liste.push(rect(xDeColonne(projection, o.colonne), yDeRangee(projection, o.rangee),
-      t, t, COULEUR_OBSTACLE));
+    liste.push(sprite(
+      'terrain', nomDeVariante(`obs_${o.type}`, graine, o.rangee, o.colonne),
+      xDeColonne(projection, o.colonne), yDeRangee(projection, o.rangee), t, t,
+    ));
   }
 
   // Positions affichées, calculées une fois : barres et traits les réutilisent.
@@ -963,8 +981,19 @@ export function listeLegende(projection) {
 
   titre('LE RESTE');
   const bh = Math.max(2, Math.floor(t / 6));
+  // ⚠⚠ LA LÉGENDE MONTRE LE SPRITE, PLUS L'APLAT — lot ERGONOMIE, 04/09. Le
+  // champ dessine désormais les obstacles ; lui laisser un carré kaki
+  // apprendrait au joueur un vocabulaire visuel que le combat n'emploie pas,
+  // c'est-à-dire la faute même que le lot STRUCTURES-AU-COMBAT existe pour
+  // retirer. Le dessin retenu est celui qui ralentit TOUT, parce que la ligne
+  // parle des trois types à la fois.
+  //
+  // ⚠ ET LA VARIANTE SE DEMANDE COMME AILLEURS : une vignette de légende n'a ni
+  // graine ni case, donc elle prend celles du coin de la grille — ce qui compte
+  // ici est que le nom sorte de la même fonction, jamais qu'il soit écrit à la
+  // main.
   ligneVignette(
-    (yv) => liste.push(rect(marge, yv, t, t, COULEUR_OBSTACLE)),
+    (yv) => liste.push(sprite('terrain', nomDeVariante('obs_les_deux', 0, 1, 1), marge, yv, t, t)),
     'Obstacle — vitesse divisée par 2,5',
   );
   ligneVignette((yv) => {

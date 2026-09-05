@@ -1373,15 +1373,16 @@ test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse a
     assert.ok(!/\bsrc=/.test(balise[0]),
       `l'image « ${id} » porte un \`src\` : son atlas est inliné deux fois`);
   }
-  // ⚠ QUINZE DEPUIS LE LOT MUR-PEINT : les sept d'avant, plus les HUIT décors de
-  // base. Ils étaient déjà dans la feuille pour l'écran de la base, qui peint son
-  // fond en CSS ; leur donner une balise ne les inline pas une seconde fois, et
-  // c'est la boucle ci-dessus — pas ce compte — qui garde l'invariant qui
+  // ⚠ SEIZE DEPUIS LE LOT ERGONOMIE : les quinze du lot MUR-PEINT, plus l'atlas
+  // de TERRAIN, que le champ de bataille réclame depuis que ses obstacles
+  // portent leur sprite au lieu d'un aplat. Il était déjà dans la feuille pour
+  // l'écran de la base ; lui donner une balise ne l'inline pas une seconde fois,
+  // et c'est la boucle ci-dessus — pas ce compte — qui garde l'invariant qui
   // compte : aucune de ces balises ne porte de `src`.
   //
-  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : sept
+  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : huit
   // atlas, plus autant d'entrées que la table des fonds en porte.
-  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7 + tousLesFonds().length);
+  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 8 + tousLesFonds().length);
   assert.equal(tousLesFonds().length, 8, 'les huit décors ne sont plus huit');
   assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
   assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');

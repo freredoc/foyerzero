@@ -16,6 +16,7 @@ import {
 import {
   classeDe, accentDe, listeLegende, ENTREES_LEGENDE, NOMS_CLASSE, NOMS_ACCENT,
 } from '../src/render/scene.js';
+import { nomDeVariante } from '../src/render/variante.js';
 import { executer } from '../src/render/canvas2d.js';
 import { montageDuBanc, executerRaidComplet, entitesSurLaCase, decrireEntite } from '../src/ui/banc.js';
 
@@ -389,7 +390,21 @@ test('T7 bis — la légende se dessine avec les primitives de la scène', () =>
   // Aucune primitive d'un type que canvas2d ne connaît pas, et aucune teinte
   // qui ne vienne de la palette : la légende n'écrit rien en propre.
   const formes = new Set(liste.map((p) => p.forme));
-  for (const f of formes) assert.ok(['rect', 'cadre', 'disque', 'ligne', 'texte'].includes(f), f);
+  for (const f of formes) {
+    assert.ok(['rect', 'cadre', 'disque', 'ligne', 'texte', 'sprite'].includes(f), f);
+  }
+
+  // ⚠⚠ `sprite` ENTRE DANS CETTE LISTE AU LOT ERGONOMIE, ET L'ASSERTION SE
+  // RESSERRE AU LIEU DE S'OUVRIR. Le champ de bataille dessine ses obstacles
+  // depuis ce lot ; laisser à la légende un carré kaki apprendrait au joueur un
+  // vocabulaire visuel que le combat n'emploie plus — la faute même que le lot
+  // STRUCTURES-AU-COMBAT existe pour retirer. La légende en porte donc UN, et un
+  // seul : c'est l'obstacle, avec le nom que `nomDeVariante` rend, jamais un nom
+  // écrit à la main.
+  const sprites = liste.filter((p) => p.forme === 'sprite');
+  assert.equal(sprites.length, 1, 'la légende porte plus d\'un sprite');
+  assert.equal(sprites[0].famille, 'terrain');
+  assert.equal(sprites[0].nom, nomDeVariante('obs_les_deux', 0, 1, 1));
 
   // Elle s'exécute par le MÊME executer, sans lever, et produit autant
   // d'appels que de primitives.
@@ -400,7 +415,14 @@ test('T7 bis — la légende se dessine avec les primitives de la scène', () =>
   for (const prop of ['fillStyle', 'strokeStyle', 'lineWidth', 'font', 'textBaseline']) {
     Object.defineProperty(enregistreur, prop, { set(v) { appels.push([prop, v]); } });
   }
-  executer(enregistreur, liste);
+  // ⚠ ET L'ATLAS EST FOURNI, parce qu'`executer` LÈVE sur une famille absente
+  // plutôt que de dessiner un trou. C'est ce que fait le banc, seul appelant de
+  // la légende — et c'est cette levée-là qui a fait entrer l'atlas de terrain
+  // dans sa table quand les obstacles sont passés au sprite.
+  enregistreur.drawImage = (...a) => appels.push(['drawImage', ...a]);
+  executer(enregistreur, liste, { terrain: {} });
+  assert.equal(appels.filter(([n]) => n === 'drawImage').length, 1,
+    'la légende ne pose pas son sprite d\'obstacle');
   const compter = (nom) => appels.filter(([n]) => n === nom).length;
   assert.equal(compter('fillRect'), liste.filter((p) => p.forme === 'rect').length);
   assert.equal(compter('fillText'), liste.filter((p) => p.forme === 'texte').length);

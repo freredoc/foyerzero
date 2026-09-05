@@ -19,10 +19,11 @@ import {
   positionInterpolee, prendrePositions,
 } from '../src/render/interpolation.js';
 import {
-  PALETTE, FOND, COULEUR_OBSTACLE, COULEUR_BARRE_PV,
+  PALETTE, FOND, COULEUR_BARRE_PV,
   classeDe, accentDe, NB_PRIMITIVES, listeAffichage,
 } from '../src/render/scene.js';
 import { executer } from '../src/render/canvas2d.js';
+import { nomDeVariante } from '../src/render/variante.js';
 import {
   ligneEcranDeLaRangee, rangeeDeLaLigneEcran, ligneEcranDeLaBande,
 } from '../src/render/orientation.js';
@@ -312,7 +313,16 @@ test('T5 — composition et ordre de dessin stables', () => {
   assert.equal(liste[0].forme, 'rect');
   assert.equal(liste[0].couleur, FOND);
   assert.deepEqual([liste[0].x, liste[0].y, liste[0].l, liste[0].h], [0, 0, 412, 900]);
-  assert.equal(liste[1].couleur, COULEUR_OBSTACLE);
+  // ⚠⚠ L'OBSTACLE EST UN SPRITE DEPUIS LE LOT ERGONOMIE, ET CETTE ASSERTION A
+  // CHANGÉ DE CIBLE SANS S'ASSOUPLIR — elle en dit plus qu'avant. Elle lisait
+  // une teinte, `COULEUR_OBSTACLE`, qui n'existe plus : Ethan, 04/09, « les
+  // sprites obstacles Ouvrage ne sont pas placés, c'est les mêmes que le
+  // joueur ». Elle lit maintenant le NOM du dessin, donc le type de l'obstacle
+  // ET sa variante — un aplat remis à la place la ferait tomber, un mauvais
+  // sprite aussi.
+  assert.equal(liste[1].forme, 'sprite');
+  assert.equal(liste[1].famille, 'terrain');
+  assert.equal(liste[1].nom, nomDeVariante('obs_infanterie', 0, 5, 3));
 
   // Le bâtiment vient avant la première structure, qui vient avant la
   // première unité, qui vient avant la première barre.

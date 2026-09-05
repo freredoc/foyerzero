@@ -52,9 +52,9 @@ import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation
 import {
   BANDES, BANDES_NAVIGABLES, basculeDeBande, bornesDeDefilement, bandeDeLaRangee,
 } from '../render/bandes.js';
-import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
+import { COTE_SPRITE } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
-import { suffixeDeVariante, variante } from '../render/variante.js';
+import { nomDeVariante, variante } from '../render/variante.js';
 import { couchesDeLEntite, genreDeLaGarnison } from '../render/scene.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
@@ -314,24 +314,6 @@ export const SIGLES_OBSTACLE = {
   les_deux: 'X',
 };
 
-
-/**
- * Combien de variantes de dessin porte chaque famille de terrain.
- *
- * ⚠ CES NOMBRES SE LISENT DANS L'ATLAS, ILS NE S'ÉCRIVENT PAS ICI. Le sol a
- * quatre dessins (`tile_sol_j_a` … `_d`), les champs et les obstacles en ont
- * deux. Les compter depuis les noms cousus fait suivre la table toute seule le
- * jour où une cinquième variante entrera — et fait rougir `sprite.test.js` si
- * l'atlas et l'écran cessent de s'accorder.
- *
- * @param {string} prefixe début du nom des sprites de la famille
- * @returns {number} au moins 1
- */
-export function nombreDeVariantes(prefixe) {
-  const n = ATLAS.terrain.noms.filter((nom) => nom.startsWith(`${prefixe}_`)).length;
-  if (n < 1) throw new RangeError(`chantier : aucune variante pour « ${prefixe} »`);
-  return n;
-}
 
 export const LIBELLES_OBSTACLE = {
   infanterie: 'ralentit l\'infanterie',
@@ -2324,33 +2306,30 @@ function fondsPoses(case_) {
 }
 
 /**
- * Le sprite de terrain d'une case, variante comprise.
+ * Le sprite de terrain d'une case, sous la forme d'un fond CSS.
  *
- * ⚠ LE COMPTE DE VARIANTES SE PREND SUR LE PRÉFIXE EXACT, JAMAIS SUR UN VOISIN.
- * Mesurer les variantes du quartz pour les appliquer à la scorie marcherait
- * aujourd'hui — les deux en ont deux — et se tromperait en silence le jour où
- * l'une des deux en gagnerait une troisième : la case tirerait dans un intervalle
- * plus court que ce que l'atlas porte, et le dessin en trop ne paraîtrait jamais.
+ * ⚠⚠ LE CHOIX DE LA VARIANTE A DÉMÉNAGÉ DANS `render/variante.js` AU LOT
+ * ERGONOMIE, ET IL N'EN RESTE PAS DE COPIE ICI. Le champ de bataille dessine
+ * ses obstacles avec leur sprite depuis ce lot, et `render/scene.js` n'a pas le
+ * droit d'importer `ui/` : deux tirages voisins auraient donné au même obstacle
+ * un dessin dans la base et un autre au combat. Ce qui reste ici est la seule
+ * chose qui soit propre au DOM — l'adresse de l'atlas, la taille et la position.
  *
- * ⚠ ET LE COMPTE EST MÉMORISÉ. `peindre` balaie 162 cases ; y filtrer les
- * dix-huit noms de l'atlas ferait près de trois mille comparaisons par geste
- * pour un nombre qui ne change jamais de la vie du programme.
+ * ⚠ LE COMPTE DE VARIANTES SE PREND SUR LE PRÉFIXE EXACT, JAMAIS SUR UN VOISIN,
+ * et c'est `nomDeVariante` qui le tient : mesurer les variantes du quartz pour
+ * les appliquer à la scorie marcherait aujourd'hui — les deux en ont deux — et se
+ * tromperait en silence le jour où l'une en gagnerait une troisième.
  *
  * @param {string} prefixe début du nom, sans la lettre de variante
  * @param {number} graine
  * @param {number} rangee
  * @param {number} colonne
- * @returns {{taille: string, position: string}}
+ * @returns {{image: string, taille: string, position: string}}
  */
-const comptesDeVariantes = new Map();
 function fondDuTerrain(prefixe, graine, rangee, colonne) {
-  if (!comptesDeVariantes.has(prefixe)) {
-    comptesDeVariantes.set(prefixe, nombreDeVariantes(prefixe));
-  }
-  const nombre = comptesDeVariantes.get(prefixe);
   return {
     image: VARIABLE_DATLAS.terrain,
-    ...fondDuSprite('terrain', `${prefixe}_${suffixeDeVariante(graine, rangee, colonne, nombre)}`),
+    ...fondDuSprite('terrain', nomDeVariante(prefixe, graine, rangee, colonne)),
   };
 }
 
