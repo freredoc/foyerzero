@@ -346,19 +346,35 @@ test('base — la réparation est indexée sur le Chantier, et sa courbe n\'est 
   // ARBITRÉ le 29/08 par Ethan : « le chantier de construction […] définit
   // aussi les temps de réparation. »
   //
-  // ⚠ QUI DÉCIDE EST ÉCRIT ; DE COMBIEN NE L'EST PAS. Ethan a nommé le
-  // bâtiment, pas le barème. Écrire une courbe ici la figerait sous
-  // l'apparence d'une donnée relevée — c'est exactement la faute que CLAUDE.md
-  // §6 raconte pour la pente de `data/niveaux.js`, restée quatre jours à citer
-  // une source qu'on s'interdit de lire.
+  // ⚠⚠ ET DE COMBIEN EST ÉCRIT DEPUIS LE 05/09. Cette garde tenait la porte
+  // fermée — « une courbe de réparation est apparue sans arbitrage : la
+  // nommer, ou la retirer » — tant qu'aucune mesure ne la remplissait. Les
+  // trente captures de `RELEVE-TA-REPARATION.md` §5 l'ont remplie ; la garde
+  // change donc de sens sans s'assouplir : elle exige maintenant que la courbe
+  // EXISTE et porte ses trois champs, et elle tombera si l'un disparaît.
+  //
+  // ⚠ ELLE N'ASSERTE PAS LES VALEURS, et c'est délibéré : `donnees.test.js` les
+  // confronte au relevé. Ici on garde la FORME, comme on gardait l'absence.
   assert.equal(REPARATION_BASE_JOUEUR.mode, 'manuelle');
   assert.ok(
     BASE_BATIMENTS[REPARATION_BASE_JOUEUR.indexeeSur] !== undefined,
     `« ${REPARATION_BASE_JOUEUR.indexeeSur} » n\'est pas un bâtiment de la base`,
   );
   assert.equal(REPARATION_BASE_JOUEUR.indexeeSur, 'chantierDeConstruction');
-  assert.equal(REPARATION_BASE_JOUEUR.courbe, null,
-    'une courbe de réparation est apparue sans arbitrage : la nommer, ou la retirer');
+  const { courbe } = REPARATION_BASE_JOUEUR;
+  assert.ok(courbe !== null && typeof courbe === 'object',
+    'la courbe de réparation a disparu : elle est mesurée depuis le 05/09');
+  assert.ok(Number.isFinite(courbe.penteNiveau), 'la pente du temps a disparu');
+  assert.ok(Number.isFinite(courbe.diviseurDuCout), 'le diviseur du coût a disparu');
+  for (const clef of ['penteBasse', 'penteHaute', 'niveauRupture']) {
+    assert.ok(Number.isFinite(courbe.diviseurBatiment[clef]),
+      `le diviseur du Chantier a perdu ${clef}`);
+  }
+  // Falsifiable : une courbe remplie de zéros passerait les quatre lignes
+  // ci-dessus et ne dirait rien. Les trois grandeurs MONTENT.
+  assert.ok(courbe.penteNiveau > 1, 'une pente qui ne monte pas n\'est pas une pente');
+  assert.ok(courbe.diviseurDuCout > 1, 'un diviseur de 1 rendrait la réparation aussi chère que la montée');
+  assert.ok(courbe.diviseurBatiment.penteBasse > 1 && courbe.diviseurBatiment.penteHaute > 1);
   // Et la durée de BASE reste par bâtiment : c'est elle que la courbe modulera.
   for (const id of IDS) {
     assert.ok(Number.isFinite(BASE_BATIMENTS[id].reparationSec),
@@ -889,9 +905,17 @@ test('base — le cumul est la somme des paliers, et rien d\'autre', () => {
     }
   }
 
-  // Relevé par exécution : un collecteur de niveau 5 a coûté 47 de quartz et
-  // 22 d'électricité depuis le niveau 1.
-  assert.deepEqual(coutCumule('collecteur', 5), { quartz: 47, scorie: 0, electricite: 22 });
+  // Relevé par exécution : un collecteur de niveau 5 a coûté 41 de quartz et
+  // 28 d'électricité depuis le niveau 1.
+  //
+  // ⚠ CES DEUX NOMBRES ONT BOUGÉ LE 05/09, ET DANS DES SENS OPPOSÉS — 47 → 41
+  // et 22 → 28. C'est la signature exacte du lot BARÈME sur ce bâtiment : son
+  // coefficient de régime tombe de 3 à 2, donc le quartz baisse ; et sa
+  // fraction d'électricité monte de 0,5 à 0,75, donc l'électricité grimpe. Un
+  // relevé par exécution se REMESURE quand une constante bouge, il ne se
+  // conserve pas — mais il doit dire laquelle a bougé, sinon il devient une
+  // valeur que personne n'ose plus toucher.
+  assert.deepEqual(coutCumule('collecteur', 5), { quartz: 41, scorie: 0, electricite: 28 });
 
   // Falsifiable : le cumul doit dépasser STRICTEMENT le dernier palier, sinon
   // une fonction qui ne rendrait que le dernier passerait la comparaison.
@@ -916,8 +940,9 @@ test('base — démolir rend 90 % de l\'investi, arrondi vers le bas', () => {
     }
   }
 
-  // Relevé par exécution : un collecteur de niveau 5 rend 42 et 19.
-  assert.deepEqual(remboursementDuNiveau('collecteur', 5), { quartz: 42, scorie: 0, electricite: 19 });
+  // Relevé par exécution : un collecteur de niveau 5 rend 36 et 25. Remesuré le
+  // 05/09 avec le cumul dont il dérive — voir le test précédent.
+  assert.deepEqual(remboursementDuNiveau('collecteur', 5), { quartz: 36, scorie: 0, electricite: 25 });
 });
 
 test('base — la poche du Chantier suit le niveau, et la pente n\'est écrite qu\'une fois', () => {

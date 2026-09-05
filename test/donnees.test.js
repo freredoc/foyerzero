@@ -27,10 +27,18 @@ import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js
 // seule grandeur, CLAUDE.md §4.
 import { MODULES } from '../src/data/modules.js';
 import {
-  BATIMENTS, DENSITE, GARNISON, VAGUES, POINTS_RECHERCHE, RAID_OUVRAGE,
+  BATIMENTS, DENSITE, GARNISON, VAGUES, POINTS_RECHERCHE, RAID_OUVRAGE, REPARATION,
 } from '../src/data/sites.js';
 import { NIVEAU } from '../src/data/niveaux.js';
-import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
+import { ECONOMIE_NIVEAU, montantDuPalier, PROFIL } from '../src/data/economie.js';
+// Le lot BARÈME, 05/09 — voir le bloc en fin de fichier.
+import {
+  BASE_BATIMENTS, COUT_NIVEAU_DEUX, COEFFICIENT_DE_REGIME, COUT_ELECTRICITE, coutDeMontee,
+} from '../src/data/base.js';
+import {
+  coutDeMonteeOffense, coutDeMonteeDefense, RAPPORT_COEFFICIENT_OFFENSE,
+} from '../src/data/couts-militaires.js';
+import { TEMOINS_COUTS } from './temoins-couts.js';
 
 test('données — les colonnes de dégâts sont exactement COLONNES_DEGATS', () => {
   let mesurees = 0;
@@ -355,4 +363,297 @@ test('données — l\'écart voulu sur les DÉGÂTS est déclaré, pas subi', ()
     !/SOURCE[\s\S]{0,200}\.xlsx/.test(source),
     'niveaux.js cite de nouveau un classeur comme source',
   );
+});
+
+// ---------------------------------------------------------------------------
+// LE BARÈME — une entité a DEUX nombres, et le dépôt n'en portait qu'un
+// ---------------------------------------------------------------------------
+//
+// Lot BARÈME, 05/09/2026. `RELEVE-TA-REPARATION.md` §1 : le prix d'ACCUEIL au
+// niveau 2 et le COEFFICIENT DE RÉGIME qui commande la courbe haute sont deux
+// objets différents, et ils ne coïncident que pour le Chantier de construction
+// — le seul bâtiment sur lequel `ECONOMIE_NIVEAU.ratios` avait été calée.
+//
+// ⚠ CES TESTS VIVENT ICI PARCE QU'ILS CROISENT LES TABLES ET LE RELEVÉ, ce qui
+// est la raison d'être de ce fichier. Ceux qui ne portent que sur une table
+// sont restés chez elle : la rampe de référence dans `couts-militaires.test.js`
+// (BARÈME T1, non-régression), la forme de la courbe de réparation dans
+// `base.test.js` (BARÈME T11).
+
+/** Le témoin des quatorze ancres d'accueil — `RELEVE-TA-REPARATION.md` §3. */
+const ANCRES_RELEVEES = {
+  meute: 1, perceurs: 1.6, carapace: 2, ratisseur: 3.2, belier: 3.6, fendeur: 4,
+  crecelle: 4.4, busard: 4.8, guetteur: 5, frappeur: 5.6, fouisseurs: 8,
+  pilon: 9, broyeur: 12, enclume: 12,
+};
+
+test('BARÈME T2 — le Fusilier coûte la MOITIÉ de l\'Exosoldat, pas le tiers', () => {
+  // ⚠⚠ C'EST LE TEST QUI DIT LE DÉFAUT EN UN NOMBRE, ET IL TOMBE DE DEUX
+  // FAÇONS SUR LE CODE D'AVANT. Le rapport relevé vaut 1 / 2 :
+  //   — avant le 05/09, les DEUX ancres valaient 2 et le rapport rendait 1,000 ;
+  //   — et substituer l'ancre sans corriger l'arrondi rendrait 0,333, le TIERS
+  //     au lieu de la moitié, parce que l'arrondi par palier tire une petite
+  //     ancre vers le haut à chaque tour.
+  // Un seul arrondi, en sortie, garde le rapport exact.
+  const meute = coutDeMonteeOffense('meute', 10).scorie;
+  const carapace = coutDeMonteeOffense('carapace', 10).scorie;
+  assert.equal(meute / carapace, 0.5, `${meute} / ${carapace} : le rapport relevé est 1/2`);
+
+  // Falsifiable : deux zéros, ou deux nombres égaux, donneraient un rapport
+  // lisible sans que rien ne soit juste.
+  assert.ok(meute > 1000, 'le montage ne mesure rien : le niveau 10 doit être gros');
+  assert.equal(ANCRES_RELEVEES.meute / ANCRES_RELEVEES.carapace, 0.5);
+});
+
+test('BARÈME T3 — les proportions du relevé sont tenues, à un seul arrondi près', () => {
+  // ⚠⚠ LA MOITIÉ QUI COMPTE EST LA PREMIÈRE : à CHAQUE palier, de 2 à 50, le
+  // prix rendu est à moins de 0,5 du produit exact `ancre × PROFIL × facteur^e`.
+  // C'est la définition même de « un seul arrondi », et c'est ce qui rend les
+  // proportions exactes ; l'arrondi PAR PALIER se compose et n'a aucune borne
+  // de ce genre. Mesuré sur les 42 entités et les 49 paliers : l'écart maximal
+  // vaut exactement 0,5, atteint par `defense/merlon` au niveau 3.
+  // ⚠⚠ ON APPELLE LA FORMULE, ON NE RELIT PAS LE TÉMOIN — et la falsification
+  // l'a exigé. Le premier jet comparait `paliers[i]` au produit exact : le
+  // témoin étant lui-même produit par la formule, il ne gardait que lui-même,
+  // et retirer le plafond `min(…, 10)` du code le laissait VERT. Le témoin ne
+  // sert qu'à porter le couple (ancre, coefficient) des quarante-deux entités ;
+  // les nombres comparés viennent du code livré.
+  const FACTEUR_MAX = ECONOMIE_NIVEAU.ratios.length;
+  for (const [nom, ancre, coefficient] of TEMOINS_COUTS) {
+    for (let n = ECONOMIE_NIVEAU.premierNiveauPayant; n <= NIVEAU.plafond; n += 1) {
+      const redresse = Math.min(n - ECONOMIE_NIVEAU.premierNiveauPayant, FACTEUR_MAX);
+      const exact = ancre * PROFIL(n) * (coefficient / ancre) ** (redresse / FACTEUR_MAX);
+      assert.ok(
+        Math.abs(montantDuPalier(ancre, coefficient, n) - exact) <= 0.5 + 1e-9,
+        `${nom} niv.${n} : plus d'un arrondi sépare le prix du produit exact`,
+      );
+    }
+  }
+
+  // ⚠⚠ ÉCART DÉCLARÉ AU BRIEF : « exactes à 0,05 % DU NIVEAU 5 au niveau 50 »
+  // EST FAUX, ET C'EST MESURÉ. Le seuil ne tient qu'à partir du niveau 9. En
+  // dessous, l'arrondi unique porte sur de très petits entiers et domine :
+  // 4,00 % au niveau 5 (Fusilier 12 contre Exosoldat 25), 0,69 % au 6, 0,20 %
+  // au 7, 0,060 % au 8, puis 0,014 % au 9. Aucune formule ne fait mieux — un
+  // prix est un entier, et 12 n'est pas la moitié de 25.
+  const REFERENCE = 'carapace';
+  for (let n = 9; n <= NIVEAU.plafond; n += 1) {
+    const ref = coutDeMonteeOffense(REFERENCE, n).scorie;
+    for (const [id, ancre] of Object.entries(ANCRES_RELEVEES)) {
+      const attendu = ancre / ANCRES_RELEVEES[REFERENCE];
+      const rendu = coutDeMonteeOffense(id, n).scorie / ref;
+      assert.ok(
+        Math.abs(rendu / attendu - 1) < 0.0005,
+        `${id} niv.${n} : ${rendu.toFixed(6)} au lieu de ${attendu} — proportion perdue`,
+      );
+    }
+  }
+
+  // Falsifiable : le seuil de 0,05 % doit être HORS D'ATTEINTE du code d'avant.
+  // Mesuré : il rendait 33 % d'écart sur le Fusilier au niveau 3 et 50 % au
+  // niveau 10. La ligne ci-dessous dit que la mesure porte sur des prix qui ont
+  // divergé, pas sur des nombres tous égaux.
+  assert.ok(
+    new Set(Object.values(ANCRES_RELEVEES)).size > 8,
+    'les ancres relevées se sont aplaties : le test ne mesure plus de proportion',
+  );
+});
+
+test('BARÈME T4 — la Caserne au palier 11 coûte 144 000, la mesure du relevé', () => {
+  // `RELEVE-TA-COURBES-2.md` §5 : « Caserne, tibérium, coût au palier 11 :
+  // 144 000 ». Palier 11 = prix pour ATTEINDRE le niveau 12 = coefficient ×
+  // 24 000, donc 144 000 / 24 000 = 6,000 — et c'est exactement ce que rendent
+  // les panneaux d'optimisation de la Caserne au niveau 45, mesurés séparément.
+  // ⚠ DEUX CHEMINS INDÉPENDANTS POUR LE MÊME NOMBRE, dans deux documents dont
+  // le premier est écrit avant les captures du second.
+  assert.equal(coutDeMontee('caserne', 12).quartz, 144000);
+  assert.equal(COEFFICIENT_DE_REGIME.caserne, 6);
+  // Le code d'avant rendait 115 200 : l'ancre d'accueil, 5, prolongée sans
+  // redressement. C'est 20 % de moins, et l'écart se creuse ensuite.
+  assert.notEqual(coutDeMontee('caserne', 12).quartz, 115200);
+});
+
+test('BARÈME T5 — l\'Exosoldat au palier 11 coûte 96 000, la mesure du relevé', () => {
+  // `RELEVE-TA-COURBES-2.md` §5 : « Exosoldat, cristaux, coût au palier 11 :
+  // 96 000 ». C'est LE seul point absolu du relevé côté unités, et c'est de lui
+  // que sort le rapport coefficient / ancre de 2 : 96 000 / 24 000 = 4, pour
+  // une ancre d'accueil de 2.
+  assert.equal(coutDeMonteeOffense('carapace', 12).scorie, 96000);
+  assert.equal(RAPPORT_COEFFICIENT_OFFENSE, 2);
+  // Le code d'avant rendait 57 600 — 40 % de moins.
+  assert.notEqual(coutDeMonteeOffense('carapace', 12).scorie, 57600);
+});
+
+test('BARÈME T6 — le raccord au niveau 12 est EXACT, pour les quarante-deux', () => {
+  // ⚠⚠ C'EST LE PLAFOND `min(n − 2, 10)` QUE CE TEST GARDE, et il est le cœur
+  // de la formule, pas une protection. Sans lui, le redressement continuerait
+  // au-delà du niveau 12 et rendrait `coefficient² / ancre × 24 000` au lieu de
+  // `coefficient × 24 000`. Avec lui, les deux zones se raccordent exactement :
+  // `facteur^1` rend `ancre × 24 000 × coefficient / ancre`.
+  //
+  // ⚠ 24 000 N'EST PAS ÉCRIT EN DUR, IL EST LU DANS LA COURBE — et confronté au
+  // relevé une seule fois, juste ici.
+  assert.equal(PROFIL(12), 24000, 'le profil au niveau 12 a quitté la mesure du relevé');
+
+  // ⚠⚠ ET C'EST LA FORMULE QU'ON INTERROGE, PAS LE TÉMOIN. Le premier jet lisait
+  // `paliers[10]` du fichier figé — qui est produit par cette même formule,
+  // donc retirer le plafond du code laissait ce test VERT. C'est la falsification
+  // qui l'a dit, pas la relecture. Le témoin ne fournit que le couple
+  // (ancre, coefficient).
+  let redresses = 0;
+  for (const [nom, ancre, coefficient] of TEMOINS_COUTS) {
+    assert.equal(
+      montantDuPalier(ancre, coefficient, 12), Math.round(coefficient * PROFIL(12)),
+      `${nom} : le raccord au niveau 12 rate le coefficient de régime`,
+    );
+    if (coefficient !== ancre) redresses += 1;
+  }
+  // ⚠⚠ ÉCART DÉCLARÉ AU BRIEF : LE RACCORD SEUL NE PEUT PAS GARDER LE PLAFOND,
+  // et c'est la falsification qui l'a dit. Le brief annonçait qu'en retirant le
+  // `min(…, 10)` « le test tombe sur les dix-neuf entités dont le facteur
+  // diffère de 1 ». Mesuré : il ne tombe pas du tout. Au niveau 12, l'exposant
+  // vaut `(12 − 2)/10 = 1` AVEC ou SANS plafond — c'est exactement là que le
+  // plafond est un non-événement. Il ne mord qu'AU-DELÀ.
+  //
+  // D'où la seconde moitié, qui est la vraie garde : à partir du niveau 12,
+  // tout le monde monte de `penteStable` et de RIEN D'AUTRE. Sans le plafond,
+  // chaque palier au-dessus multiplierait en plus par `facteur^(1/10)`, et le
+  // prix au niveau 50 partirait à `coefficient^(4,8) / ancre^(3,8)`.
+  for (const [nom, ancre, coefficient] of TEMOINS_COUTS) {
+    for (let n = 12; n <= NIVEAU.plafond; n += 1) {
+      assert.equal(
+        montantDuPalier(ancre, coefficient, n), Math.round(coefficient * PROFIL(n)),
+        `${nom} niv.${n} : la zone de régime n'est plus le coefficient × la courbe`,
+      );
+    }
+  }
+
+  // Falsifiable : tout cela serait vide de sens si aucun facteur ne différait
+  // de 1. Mesuré : dix-neuf entités sont redressées — les quatorze unités et
+  // cinq bâtiments.
+  assert.equal(redresses, 19, `${redresses} entités redressées au lieu de 19`);
+});
+
+test('BARÈME T7 — les quatorze coûts de réparation relevés sont reproduits', () => {
+  // ⚠⚠ CE TEST EST LE SEUL À RELIER LA CHAÎNE ENTIÈRE À UNE OBSERVATION
+  // EXTÉRIEURE. Ancre d'accueil, coefficient de régime, redressement, arrondi
+  // unique et part du coût de montée doivent TOUS être justes pour qu'il passe.
+  // S'il tombe, ne pas ajuster `partDuCoutDeMontee` pour le faire passer :
+  // chercher lequel des cinq maillons a bougé.
+  //
+  // Les quatorze unités ont été relevées au niveau 10, intégralement détruites
+  // — ce que prouve l'exactitude du rapport, 397,5 × l'ancre sans une
+  // exception. `RELEVE-TA-REPARATION.md` §3 et §5.
+  const RELEVE = {
+    meute: 398, perceurs: 636, carapace: 795, ratisseur: 1272, belier: 1431,
+    fendeur: 1590, crecelle: 1749, busard: 1908, guetteur: 1988, frappeur: 2226,
+    fouisseurs: 3180, pilon: 3578, broyeur: 4770, enclume: 4770,
+  };
+  let exactes = 0;
+  for (const [id, attendu] of Object.entries(RELEVE)) {
+    const rendu = Math.round(
+      coutDeMonteeOffense(id, 10).scorie * REPARATION.partDuCoutDeMontee,
+    );
+    // ⚠ TOLÉRANCE DE ±1, ET SEULEMENT ±1. Une tolérance plus large laisserait
+    // passer une erreur de barème.
+    assert.ok(
+      Math.abs(rendu - attendu) <= 1,
+      `${id} : réparation ${rendu} au lieu de ${attendu} — un maillon a bougé`,
+    );
+    if (rendu === attendu) exactes += 1;
+  }
+  // ⚠ TREIZE SUR QUATORZE TOMBENT EXACTEMENT ; `guetteur` rend 1 987 pour
+  // 1 988, parce que le produit exact vaut 1 987,5 et que l'affichage du jeu de
+  // référence arrondit au-dessus. Asserter le COMPTE d'exactes empêche la
+  // tolérance de couvrir une dérive générale.
+  assert.equal(exactes, 13, `${exactes} réparations exactes au lieu de 13`);
+  assert.equal(
+    Math.round(coutDeMonteeOffense('guetteur', 10).scorie * REPARATION.partDuCoutDeMontee),
+    1987,
+  );
+});
+
+test('BARÈME T8 — l\'électricité est une seconde ancre, pas le quart pour tous', () => {
+  // `RELEVE-TA-REPARATION.md` §6 : mesuré sur les sept panneaux d'optimisation,
+  // `autres` tombe bien à 0,2500 sur quatre bâtiments, mais le Collecteur donne
+  // 0,7503 et la Centrale 0,0962. Le quart était une COÏNCIDENCE sur les quatre
+  // bâtiments qui partagent ce rapport.
+  const rapport = (id, n) => {
+    const c = coutDeMontee(id, n);
+    return c.electricite / c.quartz;
+  };
+  assert.ok(Math.abs(rapport('collecteur', 40) - 0.75) < 1e-6,
+    `collecteur : ${rapport('collecteur', 40)} au lieu de 0,75`);
+  assert.ok(Math.abs(rapport('centrale', 40) - 0.5 / 5.2) < 1e-6,
+    `centrale : ${rapport('centrale', 40)} au lieu de 0,5/5,2`);
+  assert.ok(Math.abs(rapport('caserne', 40) - 0.25) < 1e-6, 'les autres gardent le quart');
+
+  // ⚠ LA FRACTION DE LA CENTRALE EST ÉCRITE COMME UN QUOTIENT DANS LA SOURCE, et
+  // c'est ce qui rend la dérivation lisible : 0,5 d'électricité pour 5,2 de
+  // tibérium. Écrire 0,09615 la perdrait, et la prochaine personne y lirait un
+  // réglage.
+  const source = readFileSync(join(RACINE, 'src', 'data', 'base.js'), 'utf8');
+  assert.match(source, /centrale:\s*0\.5\s*\/\s*5\.2/,
+    'la fraction de la Centrale a été aplatie en décimale : sa dérivation est perdue');
+
+  // Le code d'avant rendait 0,5 pour le Collecteur et 0,1 pour la Centrale.
+  assert.notEqual(COUT_ELECTRICITE.fraction.collecteur, 0.5);
+  assert.notEqual(COUT_ELECTRICITE.fraction.centrale, 0.1);
+});
+
+test('BARÈME T9 — le coefficient de régime couvre exactement les onze bâtiments', () => {
+  // Même garde que celle des quatre classes de coût, et pour la même raison :
+  // sans elle, un douzième bâtiment entrerait sans coefficient et
+  // `coutDeMontee` rendrait `NaN` au lieu de lever.
+  assert.deepEqual(
+    Object.keys(COEFFICIENT_DE_REGIME).sort(), Object.keys(BASE_BATIMENTS).sort(),
+  );
+  for (const [id, coefficient] of Object.entries(COEFFICIENT_DE_REGIME)) {
+    assert.ok(Number.isFinite(coefficient) && coefficient > 0, `${id} : coefficient absent`);
+  }
+
+  // ⚠⚠ ET `classeDeCout` NE SUFFIT PLUS : la Centrale et le Collecteur sont
+  // tous deux `modeste`, ancre 3, et leurs coefficients diffèrent d'un facteur
+  // 2,6. C'est ce fait-là qui interdit de dériver le coefficient de la classe.
+  assert.equal(BASE_BATIMENTS.centrale.classeDeCout, BASE_BATIMENTS.collecteur.classeDeCout);
+  assert.equal(COEFFICIENT_DE_REGIME.centrale / COEFFICIENT_DE_REGIME.collecteur, 2.6);
+
+  // Et les trois `majeur` gardent un facteur de 1 : c'est sur eux que la rampe
+  // a été calée, et c'est pourquoi elle passait pour juste.
+  for (const id of ['chantierDeConstruction', 'centreDeCommandement', 'qgDeDefense']) {
+    assert.equal(COEFFICIENT_DE_REGIME[id], COUT_NIVEAU_DEUX[BASE_BATIMENTS[id].classeDeCout]);
+  }
+});
+
+test('BARÈME T10 — la formule et les témoins coïncident, palier par palier', () => {
+  // ⚠⚠ LA TABLE EST FIGÉE DANS `test/`, PAS DANS `dist/`. Ethan a demandé qu'il
+  // n'y ait aucun écart entre ce qui est voulu et ce qui est joué, et que le jeu
+  // lise des entiers pré-calculés : la formule à arrondi unique rend exactement
+  // les mêmes entiers qu'une table pré-calculée, et ce test EST cette preuve.
+  // L'embarquer dans le livrable coûterait des dizaines de kilo-octets pour zéro
+  // nombre différent.
+  assert.equal(TEMOINS_COUTS.length, 42, 'quatorze unités, dix-sept défenses, onze bâtiments');
+  const attendus = NIVEAU.plafond - ECONOMIE_NIVEAU.premierNiveauPayant + 1;
+
+  for (const [nom, ancre, coefficient, ...paliers] of TEMOINS_COUTS) {
+    assert.equal(paliers.length, attendus, `${nom} : ${paliers.length} paliers au lieu de ${attendus}`);
+    for (let i = 0; i < paliers.length; i += 1) {
+      const niveau = i + ECONOMIE_NIVEAU.premierNiveauPayant;
+      assert.equal(
+        montantDuPalier(ancre, coefficient, niveau), paliers[i],
+        `${nom} niv.${niveau} : la formule s'écarte du témoin`,
+      );
+    }
+  }
+
+  // ⚠ ET LES DEUX BOUTS PASSENT PAR LES FONCTIONS PUBLIQUES, pas seulement par
+  // la rampe : un témoin qui ne garderait que `montantDuPalier` laisserait
+  // passer une ancre débranchée dans `coutDeMontee`.
+  const parNom = new Map(TEMOINS_COUTS.map((l) => [l[0], l]));
+  for (const niveau of [2, 12, 30, NIVEAU.plafond]) {
+    const i = niveau - ECONOMIE_NIVEAU.premierNiveauPayant;
+    assert.equal(coutDeMontee('caserne', niveau).quartz, parNom.get('batiment/caserne')[3 + i]);
+    assert.equal(coutDeMonteeOffense('pilon', niveau).scorie, parNom.get('offense/pilon')[3 + i]);
+    assert.equal(coutDeMonteeDefense('merlon', niveau).quartz, parNom.get('defense/merlon')[3 + i]);
+  }
 });

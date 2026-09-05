@@ -319,9 +319,18 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   //                             test, et elle ne se rafraîchit pas — la
   //                             recapturer sur le code modifié ferait comparer
   //                             un code à lui-même, ce qui ne prouve rien.
+  //   `temoins-couts.js`      — les quarante-deux barèmes, palier par palier,
+  //                             écrits par `tools/generer-temoins-couts.mjs` au
+  //                             lot BARÈME. ⚠ CELUI-CI SE RÉGÉNÈRE, et c'est ce
+  //                             qui le distingue des trois précédents : il ne
+  //                             garde pas un AVANT, il fige une SORTIE pour
+  //                             qu'un ratio déplacé se lise dans un diff au
+  //                             lieu de passer pour un rééquilibrage. Le
+  //                             générateur IMPORTE la formule, il ne la
+  //                             recopie pas.
   const connus = new Set([
     'prereglages-lot3a.js', 'png-rgba.js', 'temoins-bases-0.js', 'aplatir-sauvegarde.js',
-    'temoins-combat.js',
+    'temoins-combat.js', 'temoins-couts.js',
   ]);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));
