@@ -433,7 +433,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   // ligne du Chantier, qui a un propriétaire unique depuis le lot
   // PANNEAU-ET-MARGES. Le champ est gardé pour que `ligneAAfficher` soit
   // interrogée avec la même forme des deux côtés.
-  const registres = { session: '', toast: '', mode: '' };
+  const registres = { session: '', toast: '', tonDuToast: 'alerte', mode: '' };
   const cellules = new Map(); // « vague:colonne » → élément
   const vignettes = new Map(); // id → bouton
 
@@ -445,15 +445,25 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     ligne.textContent = texte;
     ligne.hidden = texte === '';
     ligne.classList.toggle('mode', ton === 'mode');
+    ligne.classList.toggle('refus', ton === 'refus');
   }
 
-  /** Un message qui répond à un geste, et qui s'efface tout seul. */
-  function toast(texte) {
+  /**
+   * Un message qui répond à un geste, et qui s'efface tout seul.
+   *
+   * ⚠ LE TON EST UN ARGUMENT, ET IL VAUT `alerte` PAR DÉFAUT. Seul le refus de
+   * budget passe `refus` — Ethan, 04/09 : « Toast quand on n'a plus assez de
+   * points d'armement pour construire une unité offensive : en plus gros et
+   * rouge. » Les autres refus gardent le ton d'avant, faute d'un mot d'Ethan
+   * qui les y range.
+   */
+  function toast(texte, ton = 'alerte') {
     if (minuterieToast !== null) {
       fenetre.clearTimeout(minuterieToast);
       minuterieToast = null;
     }
     registres.toast = texte;
+    registres.tonDuToast = ton;
     rendreLigne();
     if (texte === '') return;
     // ⚠⚠ LE SON DE REFUS SUIT LA GARDE QUI EXISTE DÉJÀ, IL N'EN AJOUTE PAS. La
@@ -604,8 +614,11 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     const budget = budgetDuNiveau(niveauDeCommandement(etatCourant, 'armee'));
     const apres = pointsEngages(etatCourant, 'armee') + UNITES[choisie].points;
     if (apres > budget) {
+      // ⚠⚠ LE SEUL TOAST QUI SORTE EN `refus` — Ethan, 04/09. C'est le mur que
+      // le joueur heurte le plus souvent en composant son armée, et il sortait
+      // au même ton que « cet emplacement est déjà occupé ».
       toast(`${formaterEntier(apres)} points dépasseraient le budget`
-        + ` de ${formaterEntier(budget)}`);
+        + ` de ${formaterEntier(budget)}`, 'refus');
       desarmer();
       peindre(etatCourant);
       return;

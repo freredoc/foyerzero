@@ -1565,9 +1565,28 @@
   /* La vignette armée. Même os que la case choisie du Chantier : un seul
      vocabulaire visuel pour « c'est ça que le prochain toucher va poser ». */
   #ecran-offense .unite.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
-  /* La ligne d'avis de l'Offense porte les mêmes trois registres que celle du
+  /* La ligne d'avis de l'Offense porte les mêmes registres que celle du
      Chantier : rouge pour ce qui refuse, métal pour ce qui rappelle un mode. */
   #offense-avis.mode { background: #343A2C; color: #F5F3E8; }
+  /* ⚠⚠ LE REFUS D'ARMEMENT SORT PLUS GROS ET EN ROUGE — Ethan, 04/09 : « Toast
+     quand on n'a plus assez de points d'armement pour construire une unité
+     offensive : en plus gros et rouge. » Il sortait à 10 px sur le kaki, au
+     même ton que « cet emplacement est déjà occupé ».
+
+     ⚠⚠ ET LA TEINTE EST DÉJÀ CELLE DES REFUS DU DÉPÔT, vérifié avant de la
+     reprendre. `#E43E32` est « réservé à ce qui ATTAQUE le joueur » — mais ce
+     que le test croise avec `attaqueLeJoueur`, ce sont les BORDS D'EMBLÈME de
+     la carte, et lui seul. L'interface, elle, l'emploie déjà quatre fois pour
+     dire un refus ou un dépassement : `#transfert-refus`, `#banc-compteur`,
+     `#banc-compteur-defense` et l'emplacement abîmé de l'écran de raid.
+     Reprendre cette teinte-là est donc une CONTINUITÉ, pas une invention.
+
+     ⚠ LA TAILLE EST ICI, ET NULLE PART AILLEURS. `ligneAAfficher` rend un TON ;
+     l'écrire dans le JS mettrait une décision de feuille dans un module pur. */
+  #offense-avis.refus, #chantier-avis.refus {
+    background: #1E2124; color: #E43E32;
+    font-size: 14px; font-weight: 700; line-height: 1.25; padding: 8px;
+  }
 
   /* =======================================================================
      ÉCRAN RECHERCHE — un en-tête fixe, trois panneaux sur un rail

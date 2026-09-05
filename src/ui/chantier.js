@@ -736,12 +736,25 @@ export function detailDuBatiment(etat, index) {
  * registres. Fonction PURE : c'est elle qui porte la règle de priorité, et
  * c'est elle qu'un test peut interroger sans DOM.
  *
- * @param {{session?: string, toast?: string, mode?: string}} registres
- * @returns {{texte: string, ton: 'alerte'|'mode'|null}}
+ * ⚠⚠ UN TON DE PLUS DEPUIS LE LOT ERGONOMIE, ET C'EST UN TON — PAS UNE TAILLE.
+ * Ethan, 04/09 : « Toast quand on n'a plus assez de points d'armement pour
+ * construire une unité offensive : en plus gros et rouge. » Cette fonction rend
+ * un NOM, la feuille le peint : écrire une taille ici mettrait une décision de
+ * style dans un module pur, et c'est justement sa pureté qui le rend testable.
+ *
+ * ⚠ LE TON DU TOAST EST UN ARGUMENT, PAS UN QUATRIÈME REGISTRE. Un registre
+ * `refus` à côté de `toast` aurait donné deux écrivains du même message, donc
+ * la possibilité qu'ils se contredisent — le défaut exact que le registre unique
+ * a corrigé le 28/08. Un seul toast à la fois, et il porte son ton.
+ *
+ * @param {{session?: string, toast?: string, tonDuToast?: string, mode?: string}} registres
+ * @returns {{texte: string, ton: 'alerte'|'refus'|'mode'|null}}
  */
-export function ligneAAfficher({ session = '', toast = '', mode = '' } = {}) {
+export function ligneAAfficher({
+  session = '', toast = '', tonDuToast = 'alerte', mode = '',
+} = {}) {
   if (session !== '') return { texte: session, ton: 'alerte' };
-  if (toast !== '') return { texte: toast, ton: 'alerte' };
+  if (toast !== '') return { texte: toast, ton: tonDuToast };
   if (mode !== '') return { texte: mode, ton: 'mode' };
   return { texte: '', ton: null };
 }
@@ -2563,6 +2576,7 @@ export function initialiserEcranChantier(doc, {
     // seulement ce que le prochain toucher va faire. Il porte donc le métal, et
     // non le rouge des refus.
     ligne.classList.toggle('mode', ton === 'mode');
+    ligne.classList.toggle('refus', ton === 'refus');
   }
 
   /**

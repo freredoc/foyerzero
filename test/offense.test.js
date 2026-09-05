@@ -23,6 +23,7 @@ import {
   creerEtat, poser, poserEffectif, niveauDeCommandement,
 } from '../src/sim/state.js';
 import { acquisesDe } from '../src/sim/recherche.js';
+import { ligneAAfficher } from '../src/ui/chantier.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
@@ -956,4 +957,56 @@ test('offense — la sélection survit à l\'amélioration, et la ligne ne dit p
   const gabarit = ecriture.slice(ecriture.indexOf('vers niv.'));
   assert.ok(!/\?|:/.test(gabarit),
     `le niveau visé est encore conditionnel DANS le gabarit : ${gabarit.trim()}`);
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T8 — le refus d'armement sort plus gros et en rouge
+// ---------------------------------------------------------------------------
+
+/** La source, commentaires ôtés — une garde ne lit jamais sa propre prose. */
+const sansCommentaires = (source) => source
+  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+
+test('ERGO T8 — `ligneAAfficher` rend un TON, et aucune taille n\'est écrite dans le JS', () => {
+  // ⚠⚠ C'EST UN TON DE PLUS, PAS UNE TAILLE SUR UN APPEL. La fonction est pure
+  // et testée ; y écrire « 14 px » mettrait une décision de feuille dans un
+  // module que le dépôt garde justement pour sa pureté.
+  assert.deepEqual(ligneAAfficher({ toast: 'x', tonDuToast: 'refus' }),
+    { texte: 'x', ton: 'refus' });
+  // Le défaut ne bouge pas : un toast sans ton reste une alerte.
+  assert.deepEqual(ligneAAfficher({ toast: 'x' }), { texte: 'x', ton: 'alerte' });
+  // Et la priorité n'a pas changé : la session passe devant tout.
+  assert.deepEqual(ligneAAfficher({ session: 's', toast: 'x', tonDuToast: 'refus' }),
+    { texte: 's', ton: 'alerte' });
+  assert.deepEqual(ligneAAfficher({ mode: 'm' }), { texte: 'm', ton: 'mode' });
+  assert.deepEqual(ligneAAfficher({}), { texte: '', ton: null });
+
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8'));
+  const pur = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const fonction = pur.match(/export function ligneAAfficher\([\s\S]*?\n\}/);
+  assert.ok(fonction !== null);
+  assert.doesNotMatch(fonction[0], /px|font-size|color/, 'une décision de feuille est entrée dans la fonction pure');
+
+  // ⚠⚠ UN SEUL TOAST SORT EN `refus`, ET C'EST CELUI QU'ETHAN NOMME : le
+  // dépassement de budget d'armée. Un second ferait du ton un synonyme
+  // d'« alerte », donc rien du tout.
+  assert.equal((ecran.match(/, 'refus'\)/g) ?? []).length, 1,
+    'un second toast sort en refus : le ton cesse de distinguer');
+  assert.match(ecran, /points dépasseraient le budget[\s\S]{0,80}, 'refus'\)/,
+    'ce n\'est pas le refus de budget qui sort en rouge');
+  assert.match(ecran, /ligne\.classList\.toggle\('refus', ton === 'refus'\);/,
+    'l\'écran ne peint plus le ton de refus');
+
+  // ⚠ ET LA FEUILLE PORTE LA TAILLE ET LA TEINTE. `#E43E32` est déjà la teinte
+  // des refus de l'interface — quatre emplois avant celui-ci — et le test qui
+  // la « réserve » porte sur les BORDS D'EMBLÈME de la carte, pas sur l'écran.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/#offense-avis\.refus[^{]*\{[^}]*\}/);
+  assert.ok(regle !== null, 'le ton de refus n\'a pas de règle');
+  assert.match(regle[0], /#E43E32/, 'le refus n\'est pas rouge');
+  const taille = Number((regle[0].match(/font-size: (\d+)px/) ?? [])[1]);
+  const normale = Number((feuille.match(/#offense-avis \{[^}]*font-size: (\d+)px/) ?? [])[1]);
+  assert.ok(Number.isFinite(taille) && Number.isFinite(normale), 'les deux tailles doivent se lire');
+  assert.ok(taille > normale, `refus à ${taille} px contre ${normale} px : ce n'est pas « plus gros »`);
 });
