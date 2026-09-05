@@ -999,20 +999,20 @@
      de vue le voisinage, qui est justement ce que le panneau explique. D'où le
      bas du champ, une hauteur plafonnée, et le reste de la grille visible
      au-dessus. */
-  #chantier-panneau {
+  .panneau-detail {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
     max-height: 74%; overflow-y: auto; scrollbar-width: none;
     display: flex; flex-direction: column;
     background: #1E2124; border-top: 2px solid #4E5742;
   }
-  #chantier-panneau::-webkit-scrollbar { display: none; }
-  #chantier-panneau .tete {
+  .panneau-detail::-webkit-scrollbar { display: none; }
+  .panneau-detail .tete {
     position: sticky; top: 0; z-index: 1;
     display: flex; align-items: center; gap: 6px;
     padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
   }
-  #chantier-panneau-titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
-  #chantier-panneau-fermer {
+  .panneau-detail .titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
+  .panneau-detail .fermer {
     flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
     background: #1E2124; color: #8C9A72; border: 1px solid #161914;
   }
@@ -1062,42 +1062,42 @@
   #tuto-objectifs li.atteint .quoi { color: #8C9A72; }
   #tuto-objectifs li.atteint .compte { color: #6A7658; }
   #tuto-explication { margin: 3px 8px 7px; font-size: 9px; color: #68727E; }
-  #chantier-panneau-corps { padding: 4px 8px 8px; }
-  #chantier-panneau .section { margin-top: 6px; }
-  #chantier-panneau h3 {
+  .panneau-detail .corps { padding: 4px 8px 8px; }
+  .panneau-detail .section { margin-top: 6px; }
+  .panneau-detail h3 {
     margin: 0 0 2px; font-size: 8px; font-weight: 400;
     letter-spacing: 0.12em; text-transform: uppercase; color: #68727E;
   }
-  #chantier-panneau .ligne {
+  .panneau-detail .ligne {
     display: flex; align-items: baseline; gap: 4px;
     padding: 1px 0; font-size: 11px; color: #8C9A72;
   }
-  #chantier-panneau .ligne .quoi { flex: 1; min-width: 0; }
-  #chantier-panneau .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  .panneau-detail .ligne .quoi { flex: 1; min-width: 0; }
+  .panneau-detail .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
   /* La colonne « après » se lit en kaki clair : elle n'est pas encore vraie,
      c'est ce que l'amélioration donnerait. La distinguer de l'os du présent
      évite qu'on la prenne pour un chiffre courant. */
-  #chantier-panneau .ligne .fleche { color: #68727E; }
-  #chantier-panneau .ligne b.apres { color: #8C9A72; }
+  .panneau-detail .ligne .fleche { color: #68727E; }
+  .panneau-detail .ligne b.apres { color: #8C9A72; }
   /* Le détail du détail — production propre, apport de chaque type de voisin.
      Décalé et plus petit : c'est ce qui EXPLIQUE la ligne au-dessus. */
-  #chantier-panneau .ligne.mineure { padding-left: 10px; font-size: 9px; color: #68727E; }
-  #chantier-panneau .ligne.mineure b { font-weight: 400; color: #8C9A72; }
-  #chantier-panneau-ameliorer {
+  .panneau-detail .ligne.mineure { padding-left: 10px; font-size: 9px; color: #68727E; }
+  .panneau-detail .ligne.mineure b { font-weight: 400; color: #8C9A72; }
+  .panneau-detail .ameliorer {
     margin: 8px; padding: 9px;
     display: flex; flex-direction: column; align-items: center; gap: 2px;
     font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
     background: #6A7658; color: #161914; border: 1px solid #161914; font-weight: 600;
   }
-  #chantier-panneau-ameliorer .note {
+  .panneau-detail .ameliorer .note {
     font-style: normal; font-size: 10px; letter-spacing: 0; text-transform: none; color: #161914;
   }
   /* ⚠ IL RESTE VIF QUAND C'EST IMPOSSIBLE. « Un indice n'est pas une
      interdiction » (CLAUDE.md §4) : le refus chiffré du moteur — « il manque 8
      de quartz » — en apprend plus au joueur qu'un bouton mort, et il faut qu'il
      puisse le lire en appuyant. */
-  #chantier-panneau-ameliorer.impossible { background: #3E454C; color: #F5F3E8; }
-  #chantier-panneau-ameliorer.impossible .note { color: #F5B636; }
+  .panneau-detail .ameliorer.impossible { background: #3E454C; color: #F5F3E8; }
+  .panneau-detail .ameliorer.impossible .note { color: #F5B636; }
 
   /* Le bâtiment FANTÔME : ce que la première touche montre avant que la seconde
      ne pose.
@@ -1437,6 +1437,13 @@
      d'« utiliser la place » — laisser les cases GRANDIR en hauteur — déformerait
      les sprites : `.piece` prend `84 %` en largeur ET en hauteur, donc dans une
      case haute et étroite l'unité s'étire. Mesuré sur la règle, pas supposé. */
+  /* ⚠ L'ENVELOPPE DU CHAMP — même rôle que `#chantier-champ` : elle ancre le
+     panneau de détail, qui est en `position: absolute`. Sans elle, le panneau
+     se calerait sur l'écran entier et couvrirait la barre contextuelle. */
+  #offense-champ {
+    flex: 1; min-height: 0; position: relative;
+    display: flex; flex-direction: column;
+  }
   #offense-vagues {
     flex: 1; min-height: 0; overflow-y: auto; padding: 6px; scrollbar-width: none;
     display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
@@ -1844,13 +1851,13 @@
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
              vient du moteur n'est gravé ici. -->
-        <div id="chantier-panneau" hidden>
+        <div id="chantier-panneau" class="panneau-detail" hidden>
           <div class="tete">
-            <b id="chantier-panneau-titre">—</b>
-            <button type="button" id="chantier-panneau-fermer">Fermer</button>
+            <b id="chantier-panneau-titre" class="titre">—</b>
+            <button type="button" id="chantier-panneau-fermer" class="fermer">Fermer</button>
           </div>
-          <div id="chantier-panneau-corps"></div>
-          <button type="button" id="chantier-panneau-ameliorer"></button>
+          <div id="chantier-panneau-corps" class="corps"></div>
+          <button type="button" id="chantier-panneau-ameliorer" class="ameliorer"></button>
         </div>
 
         <!-- ⚠ LA MINI-FENÊTRE DU TUTORIEL — Ethan, 29/08 : « faire apparaître
@@ -1952,7 +1959,28 @@
            y met ce qui est vrai à cet instant — l'explication du budget absent,
            un refus, ou le rappel du mode en cours. Vide, elle se cache. -->
       <p id="offense-avis" hidden></p>
-      <div id="offense-vagues"></div>
+      <!-- ⚠⚠ UNE ENVELOPPE POUR ANCRER LE PANNEAU, ET ELLE COPIE
+           `#chantier-champ`. Ethan, 04/09 : « Quand on clique sur une unité en
+           défense ou armé, afficher un onglet comme pour les bâtiments. » Le
+           panneau se pose SUR le champ, pas à la place de l'écran : le joueur
+           doit garder sous les yeux la pièce dont on lui parle. Il lui faut
+           donc un bloc `position: relative` qui ne défile pas — `#offense-vagues`
+           défile, s'y poser ferait glisser le panneau avec les vagues. -->
+      <div id="offense-champ">
+        <div id="offense-vagues"></div>
+        <!-- ⚠ LE MÊME PANNEAU QUE CELUI DU CHANTIER, à la classe près : les
+             règles vivent sur `.panneau-detail`, et le rendu est la fonction
+             `peindreVueDuPanneau` de `ui/chantier.js`. Deux DOM voisins dont un
+             seul serait éprouvé, c'est la faute que ce partage évite. -->
+        <div id="offense-panneau" class="panneau-detail" hidden>
+          <div class="tete">
+            <b id="offense-panneau-titre" class="titre">—</b>
+            <button type="button" id="offense-panneau-fermer" class="fermer">Fermer</button>
+          </div>
+          <div id="offense-panneau-corps" class="corps"></div>
+          <button type="button" id="offense-panneau-ameliorer" class="ameliorer"></button>
+        </div>
+      </div>
       <!-- ⚠ LA BARRE CONTEXTUELLE, NEUVE AU 29/08. Ethan : « on ne peut pas
            supprimer une unité en cliquant dessus. D'ailleurs les boutons
            réparer, améliorer etc. n'apparaissent pas dans le menu offense. »

@@ -20,6 +20,7 @@ import {
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
   COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, defilementAncre,
+  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
 } from '../src/ui/chantier.js';
 // ⚠ LES BANDES SE PRENNENT À LA SOURCE — lot ÉCRAN-RAID, 04/09. Elles ont
 // déménagé de `ui/chantier.js` vers `render/bandes.js` parce que l'écran de
@@ -75,7 +76,8 @@ import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orienta
 import { positionDepartJoueur } from '../src/sim/carte.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
-import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
+import { facteurMilli } from '../src/sim/combat.js';
 import { budgetDuNiveau as budgetOffense } from '../src/ui/arsenal.js';
 import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
@@ -2829,7 +2831,16 @@ test('défense — la table des terrains dit tout ce qui les sépare, et rien de
   assert.equal(TERRAINS.defense.actions.reparer, null);
   assert.ok(typeof TERRAINS.defense.actions.demolir.agir === 'function');
   assert.equal(TERRAINS.defense.actions.deplacer.cible, true);
-  assert.equal(TERRAINS.defense.panneau, false);
+  // ⚠⚠ LE PANNEAU S'OUVRE AUSSI EN DÉFENSE DEPUIS LE LOT ERGONOMIE, ET CETTE
+  // ASSERTION A CHANGÉ DE CIBLE SANS S'ASSOUPLIR. Elle exigeait `false` — juste
+  // tant qu'une pièce n'avait rien à mettre dans un panneau qui chiffre
+  // production, capacité et voisinage. Ethan, 04/09 : « Quand on clique sur une
+  // unité en défense ou armé, afficher un onglet comme pour les bâtiments. » Ce
+  // qu'elle exige maintenant est plus fort : les DEUX terrains portent une
+  // fonction de vue, donc aucun écran n'a de cas particulier à écrire.
+  assert.equal(TERRAINS.defense.panneau, true);
+  assert.equal(typeof TERRAINS.batiments.vueDuPanneau, 'function');
+  assert.equal(typeof TERRAINS.defense.vueDuPanneau, 'function');
   assert.equal(TERRAINS.defense.force, 'garnison');
 
   // Les deux terrains couvrent les mêmes quatre noms d'action : un bouton sans
@@ -2875,7 +2886,7 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
     // Les deux entrées du 03/09 rejoignent la liste : l'amélioration d'une
     // pièce est un geste comme les autres, donc elle n'a qu'UN site d'appel,
     // et il est dans la table des terrains.
-    'ameliorerEffectif(', 'problemesDeLAmeliorationDEffectif(']) {
+    'ameliorerEffectif(']) {
     const n = source.split(appel).length - 1;
     assert.equal(
       n, 1,
@@ -2883,6 +2894,19 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
         + 'le seul chemin vers le moteur',
     );
   }
+
+  // ⚠⚠ `problemesDeLAmeliorationDEffectif` A DEUX APPELANTS DEPUIS LE LOT
+  // ERGONOMIE, ET LES DEUX SONT NOMMÉS. Le geste passe toujours par la table —
+  // c'est lui que la boucle ci-dessus compte à travers `ameliorerEffectif` —
+  // mais le panneau d'une pièce doit AFFICHER le refus, exactement comme celui
+  // d'un bâtiment lit `problemesDeLAmelioration`. On compte donc, et on exige
+  // que le second appel soit DANS le descripteur pur : un troisième, ou un
+  // second ailleurs, fait tomber ce test.
+  assert.equal(source.split('problemesDeLAmeliorationDEffectif(').length - 1, 2);
+  const descripteur = source.match(/export function apercuDeLaPiece\([\s\S]*?\n\}/);
+  assert.ok(descripteur !== null, 'le descripteur pur d\'une pièce a disparu');
+  assert.ok(descripteur[0].includes('problemesDeLAmeliorationDEffectif('),
+    'le panneau d\'une pièce ne lit plus le refus du moteur');
 
   // Et le geste passe par la TABLE, jamais par un nom de terrain écrit à la
   // main : un cas particulier serait le premier à diverger.
@@ -4079,4 +4103,119 @@ test('ERGO T6 — la pastille de niveau grossit sans déplacer une seule barre',
   // La garde des 288 px vit plus haut dans ce fichier et n'a pas bougé : elle
   // somme les hauteurs FIXES des six barres, et aucune n'est touchée ici.
   assert.match(feuille, /flex: 0 0 86px/, 'la palette a changé de hauteur');
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T7 — le panneau d'une pièce, en défense comme en offense
+// ---------------------------------------------------------------------------
+
+test('ERGO T7 — `apercuDeLaPiece` décrit une pièce des DEUX forces, sans DOM', () => {
+  // ⚠⚠ LA PARTIE QUI DÉCRIT EST PURE, ET C'EST TOUT CE QUI REND CE POINT
+  // TESTABLE. Le dépôt n'a ni jsdom ni navigateur (§3) : le DOM du panneau se
+  // vérifie à l'écran, sa MATIÈRE se vérifie ici.
+  const etat = creerEtat(11);
+  const base = baseCourante(etat);
+  base.garnison.push({ id: 'casemate', rangee: 5, colonne: 4, niveau: 3, degatsMilli: 0 });
+  base.armee.push({ id: 'meute', vague: 1, colonne: 2, niveau: 2, degatsMilli: 0, actif: true });
+
+  const tourelle = apercuDeLaPiece(etat, 'garnison', 0);
+  assert.equal(tourelle.nom, DEFENSES.casemate.nom.joueur);
+  assert.equal(tourelle.niveau, 3);
+  assert.equal(tourelle.vitesse, null, 'une structure ne se déplace pas');
+  const meute = apercuDeLaPiece(etat, 'armee', 0);
+  assert.equal(meute.nom, UNITES.meute.nom.joueur);
+  assert.equal(meute.vitesse, UNITES.meute.vitesse, 'une unité a une vitesse');
+
+  // ⚠⚠ LES PV SE CALCULENT COMME LE MOTEUR LES CALCULE — `pv × facteurMilli`,
+  // et le test le REFAIT au lieu de recopier un nombre. Une seconde courbe
+  // dans l'écran ferait diverger le panneau du combat d'un niveau à l'autre.
+  assert.equal(tourelle.pv, Math.round(DEFENSES.casemate.pv * facteurMilli(3) / 1000));
+  assert.equal(meute.pv, Math.round(UNITES.meute.pv * facteurMilli(2) / 1000));
+  assert.ok(tourelle.pv > DEFENSES.casemate.pv, 'montage : le niveau 3 doit rendre plus de PV que le 1');
+
+  // Les trois colonnes de dégâts sont toujours dites, même à zéro : c'est ce
+  // qui apprend au joueur qu'une Batterie ne touche que ce qui vole.
+  assert.deepEqual(tourelle.degats.map((d) => d.colonne), COLONNES_DEGATS);
+  base.garnison.push({ id: 'batterie', rangee: 5, colonne: 6, niveau: 1, degatsMilli: 0 });
+  const batterie = apercuDeLaPiece(etat, 'garnison', 1);
+  assert.equal(batterie.degats.find((d) => d.colonne === 'infanterie').avant, 0);
+  assert.ok(batterie.degats.find((d) => d.colonne === 'structureOuAviation').avant > 0);
+
+  // ⚠ LES DÉGÂTS SUBIS SONT UNE PART DES PV MAX, JAMAIS UN ABSOLU : `degatsMilli`
+  // est en milli-PV, et les PV max montent avec le niveau.
+  const pvMaxMilli = DEFENSES.casemate.pv * facteurMilli(3);
+  base.garnison[0].degatsMilli = Math.round(pvMaxMilli / 4);
+  assert.equal(apercuDeLaPiece(etat, 'garnison', 0).degatsSubisMilliemes, 250);
+  base.garnison[0].degatsMilli = 0;
+  assert.equal(apercuDeLaPiece(etat, 'garnison', 0).degatsSubisMilliemes, 0);
+
+  // Une force inconnue LÈVE plutôt que de rendre un panneau vide.
+  assert.throws(() => apercuDeLaPiece(etat, 'batiments', 0), /force/);
+  assert.throws(() => apercuDeLaPiece(etat, 'garnison', 99), /hors/);
+});
+
+test('ERGO T7 bis — la vue d\'une pièce a la MÊME forme que celle d\'un bâtiment', () => {
+  // ⚠⚠ C'EST CE QUI PERMET UN SEUL RENDU. `peindreVueDuPanneau` ne connaît
+  // qu'une structure ; deux formes voisines auraient demandé deux DOM, dont un
+  // seul serait relu.
+  const etat = creerEtat(11);
+  baseCourante(etat).garnison.push({ id: 'casemate', rangee: 5, colonne: 4, niveau: 1, degatsMilli: 0 });
+  const dUnePiece = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0));
+  const dUnBatiment = lignesDuPanneau(apercuDuBatiment(etat, 0));
+
+  assert.deepEqual(Object.keys(dUnePiece).sort(), Object.keys(dUnBatiment).sort());
+  assert.deepEqual(Object.keys(dUnePiece.bouton).sort(), Object.keys(dUnBatiment.bouton).sort());
+  for (const vue of [dUnePiece, dUnBatiment]) {
+    assert.ok(vue.sections.length > 0);
+    for (const section of vue.sections) {
+      assert.equal(typeof section.titre, 'string');
+      for (const l of section.lignes) {
+        assert.equal(typeof l.libelle, 'string');
+        assert.equal(typeof l.avant, 'string');
+        assert.ok(l.apres === null || typeof l.apres === 'string');
+      }
+    }
+  }
+  assert.match(dUnePiece.titre, /niv\. 1$/);
+  // ⚠ ET UN ZÉRO SE DIT « — ». « 0 par tir » se lirait comme un nombre qu'on
+  // pourrait faire monter.
+  baseCourante(etat).garnison.push({ id: 'batterie', rangee: 5, colonne: 6, niveau: 1, degatsMilli: 0 });
+  const batterie = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 1));
+  const contreInfanterie = batterie.sections[0].lignes.find((l) => /infanterie/.test(l.libelle));
+  assert.equal(contreInfanterie.avant, '—');
+});
+
+test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent', () => {
+  const chantier = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const offense = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8'));
+  assert.equal(typeof peindreVueDuPanneau, 'function');
+
+  // ⚠⚠ LE DOM DU PANNEAU EST ÉCRIT UNE FOIS. L'Offense l'IMPORTE — elle ne le
+  // recopie pas —, et une seconde construction dans l'un des deux écrans fait
+  // tomber ce test.
+  const bloc = offense.match(/import \{([^}]*)\} from '\.\/chantier\.js';/);
+  assert.ok(bloc !== null);
+  const importes = bloc[1].split(',').map((n) => n.trim());
+  for (const nom of ['apercuDeLaPiece', 'lignesDeLaPiece', 'peindreVueDuPanneau']) {
+    assert.ok(importes.includes(nom), `l'Offense n'importe plus ${nom}`);
+  }
+  assert.doesNotMatch(offense, /function peindreVueDuPanneau/, 'l\'Offense a recopié le rendu');
+  assert.equal((chantier.match(/export function peindreVueDuPanneau/g) ?? []).length, 1);
+  // La classe CSS est partagée, pas dédoublée : une règle par famille.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(feuille, /\.panneau-detail \{/, 'les règles du panneau ne sont plus partagées');
+  assert.doesNotMatch(feuille, /#offense-panneau \{/, 'l\'Offense a sa propre règle de panneau');
+  for (const id of ['offense-panneau', 'offense-panneau-titre', 'offense-panneau-corps',
+    'offense-panneau-ameliorer', 'offense-panneau-fermer']) {
+    assert.ok(feuille.includes(`id="${id}"`), `le balisage n'a pas ${id}`);
+  }
+
+  // ⚠⚠ ET LE TOUCHER NE CHANGE PAS DE SENS : il SÉLECTIONNE toujours, le
+  // panneau s'ouvre EN PLUS. Un panneau qui remplacerait la sélection viderait
+  // la barre contextuelle, donc retirerait au joueur les quatre boutons.
+  assert.match(offense, /selection = occupant;\s*ouvrirPanneau\(\);/,
+    'le panneau de l\'Offense a remplacé la sélection au lieu de s\'y ajouter');
+  assert.match(chantier, /panneauOuvert = true;[\s\S]{0,200}selectionner\(index\);/,
+    'le panneau du Chantier ne sélectionne plus ce dont il parle');
 });

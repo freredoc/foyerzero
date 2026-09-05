@@ -54,6 +54,7 @@ import {
   formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
   messageDePose, messageDeConfirmation,
   messagePasDeReparation, DUREE_TOAST_MS, poserCouches,
+  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
 } from './chantier.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -712,9 +713,11 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     }
 
     // Toucher une case VIDE désarme, sans rien dire : c'est le geste « à côté
-    // du menu », pas une erreur.
+    // du menu », pas une erreur. Le panneau se ferme avec la sélection : il
+    // décrivait la pièce qu'on vient de lâcher.
     if (occupant === -1) {
       selection = null;
+      fermerPanneau();
       desarmer();
       peindre(etatCourant);
       return;
@@ -728,6 +731,10 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       return;
     }
     selection = occupant;
+    // ⚠ LE PANNEAU S'OUVRE EN PLUS DE LA SÉLECTION, pas à sa place — Ethan,
+    // 04/09 : « afficher un onglet comme pour les bâtiments ». C'est exactement
+    // ce que fait `ouvrirPanneau` du Chantier, qui appelle `selectionner`.
+    ouvrirPanneau();
     peindre(etatCourant);
   });
 
@@ -841,6 +848,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
 
     peindrePalette(vue);
     peindreContexte(vue);
+    peindrePanneau();
 
     // ⚠⚠ L'EXPLICATION DU BUDGET ABSENT VA DANS LE REGISTRE `mode`, PAS DANS
     // `session`, ET C'EST UNE CORRECTION FAITE AVANT LIVRAISON. Elle décrit
@@ -865,6 +873,74 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
    * qu'aucune unité n'est choisie rendrait toute la barre inatteignable au
    * doigt. C'est la leçon du lot ÉCRAN-ACTIONS, et elle vaut ici mot pour mot.
    */
+  // -------------------------------------------------------------------------
+  // Le panneau de détail d'une unité — Ethan, 04/09
+  // -------------------------------------------------------------------------
+  //
+  // ⚠⚠ « Quand on clique sur une unité en défense ou armé, afficher un onglet
+  // comme pour les bâtiments. » C'est le panneau du Chantier, réemployé et non
+  // imité : la vue vient de `lignesDeLaPiece`, qui est PURE, et le DOM de
+  // `peindreVueDuPanneau`, qui est écrit une seule fois. Cet écran-ci n'ajoute
+  // que l'ouverture et la fermeture.
+  //
+  // ⚠ LE TOUCHER NE CHANGE PAS DE SENS. Il SÉLECTIONNE déjà — c'est ce qui
+  // alimente la barre contextuelle — et il continue de le faire : le panneau
+  // s'ouvre EN PLUS, exactement comme `ouvrirPanneau` du Chantier appelle
+  // `selectionner`. Aucun geste appris n'est repris au joueur.
+  const panneau = $('offense-panneau');
+  let panneauOuvert = false;
+  let derniereVue = null;
+
+  function ouvrirPanneau() {
+    panneauOuvert = true;
+    panneau.hidden = false;
+    derniereVue = null;
+  }
+
+  function fermerPanneau() {
+    panneauOuvert = false;
+    panneau.hidden = true;
+    derniereVue = null;
+  }
+
+  fermerPanneau();
+  $('offense-panneau-fermer').addEventListener('click', () => {
+    fermerPanneau();
+  });
+  // ⚠ LE BOUTON DU PANNEAU AGIT DIRECTEMENT, SANS ARMER — même règle qu'au
+  // Chantier : « armer puis toucher » existe parce que les boutons de la barre
+  // n'ont pas de cible ; celui-ci en a une.
+  $('offense-panneau-ameliorer').addEventListener('click', () => {
+    if (etatCourant === null || selection === null) return;
+    // ⚠ ON PASSE PAR LA TABLE, PAS PAR `appliquerAction` : celle-ci lit
+    // `actionArmee`, qui vaut `null` ici — le panneau n'arme rien, il agit.
+    const action = ACTIONS_ARMEE.ameliorer;
+    const problemes = action.problemes(etatCourant, selection);
+    if (problemes.length > 0) {
+      toast(messageDeRefus(problemes));
+      return;
+    }
+    action.agir(etatCourant, selection);
+    peindre(etatCourant);
+    if (apresPose) apresPose();
+  });
+
+  function peindrePanneau() {
+    if (!panneauOuvert || selection === null || etatCourant === null) return;
+    const vue = lignesDeLaPiece(apercuDeLaPiece(etatCourant, 'armee', selection));
+    const signature = JSON.stringify(vue);
+    // ⚠ ON NE RECONSTRUIT PAS QUINZE ÉLÉMENTS DIX FOIS PAR SECONDE, et le
+    // panneau suit quand même le temps : la note du bouton passe du refus au
+    // prix quand le stock arrive.
+    if (signature === derniereVue) return;
+    derniereVue = signature;
+    peindreVueDuPanneau(doc, {
+      titre: $('offense-panneau-titre'),
+      corps: $('offense-panneau-corps'),
+      bouton: $('offense-panneau-ameliorer'),
+    }, vue);
+  }
+
   function peindreContexte(vue) {
     const piece = selection === null ? null : baseCourante(etatCourant).armee[selection];
     $('offense-selection-nom').textContent = piece === null

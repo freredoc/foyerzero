@@ -72,10 +72,11 @@ import {
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
   problemesDeLAmeliorationDEffectif, ameliorerEffectif,
-  basculerVersLaBase,
+  basculerVersLaBase, FORCES,
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
-import { DEFENSES, UNITES } from '../data/combat.js';
+import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
+import { facteurMilli } from '../sim/combat.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -1362,6 +1363,137 @@ export function lignesDuPanneau(apercu) {
 }
 
 /**
+ * Le contenu du panneau d'une PIÈCE, à la même forme que celui d'un bâtiment.
+ *
+ * ⚠⚠ LA MÊME FORME, DONC LE MÊME RENDU. `peindrePanneau` ne connaît qu'une
+ * structure — un titre, des sections de lignes, un bouton — et ce sont les
+ * TERRAINS qui disent laquelle des deux vues fabriquer. Écrire un second
+ * afficheur pour les pièces aurait donné deux DOM voisins dont un seul serait
+ * éprouvé, et c'est exactement la faute que ce panneau-ci a déjà évitée en
+ * naissant pur.
+ *
+ * @param {object} apercu ce que rend `apercuDeLaPiece`
+ * @returns {object}
+ */
+export function lignesDeLaPiece(apercu) {
+  const sections = [];
+
+  const combat = [{
+    libelle: 'Points de vie',
+    avant: formaterEntier(apercu.pv),
+    apres: apercu.pvVise === null ? null : formaterEntier(apercu.pvVise),
+  }];
+  for (const d of apercu.degats) {
+    combat.push({
+      libelle: d.libelle,
+      // ⚠ UN ZÉRO SE DIT « — », JAMAIS « 0 ». « 0 par tir » se lit comme un
+      // nombre qu'on pourrait faire monter ; le tiret dit qu'il n'y a rien.
+      avant: d.avant === 0 ? '—' : formaterEntier(d.avant),
+      apres: d.apres === null || d.avant === 0 ? null : formaterEntier(d.apres),
+      mineur: true,
+    });
+  }
+  sections.push({ titre: 'Au combat', lignes: combat });
+
+  const fiche = [
+    // ⚠ LA VIRGULE, PAS LE POINT : `String(2.5)` rend « 2.5 », qui est de
+    // l'anglais. Le dépôt écrit ses décimales en français partout ailleurs.
+    { libelle: 'Portée', avant: `${String(apercu.portee).replace('.', ',')} cases`, apres: null },
+    { libelle: 'Points engagés', avant: formaterEntier(apercu.points), apres: null },
+  ];
+  // Une structure ne se déplace pas : la ligne n'aurait rien à dire.
+  if (apercu.vitesse !== null) {
+    fiche.push({ libelle: 'Vitesse', avant: formaterEntier(apercu.vitesse), apres: null, mineur: true });
+  }
+  fiche.push({
+    libelle: 'État',
+    avant: apercu.degatsSubisMilliemes === 0
+      ? 'intacte'
+      : `${formaterEntier(Math.round(apercu.degatsSubisMilliemes / 10))} % de dégâts`,
+    apres: null,
+  });
+  sections.push({ titre: 'La pièce', lignes: fiche });
+
+  return {
+    titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
+    sections,
+    // ⚠ `possible` NE DÉSACTIVE RIEN, comme pour les bâtiments : le refus
+    // chiffré du moteur en apprend plus au joueur qu'un bouton mort.
+    bouton: apercu.auPlafond
+      ? {
+        libelle: 'Amélioration impossible',
+        note: apercu.problemes.map((p) => p.message).join(' ; '),
+        possible: false,
+      }
+      : {
+        libelle: `Améliorer → niv. ${formaterEntier(apercu.niveauVise)}`,
+        note: apercu.problemes.length > 0
+          ? apercu.problemes.map((p) => p.message).join(' ; ')
+          : formaterCout(apercu.cout),
+        possible: apercu.problemes.length === 0,
+      },
+  };
+}
+
+/**
+ * Peint une vue de panneau dans un trio d'éléments — titre, corps, bouton.
+ *
+ * ⚠⚠ DEUX ÉCRANS L'APPELLENT DEPUIS LE LOT ERGONOMIE, ET C'EST TOUT L'INTÉRÊT.
+ * Le Chantier décrit un bâtiment ou une pièce de garnison, l'Offense une unité
+ * d'assaut ; les trois vues sortent de fonctions PURES à la même forme, et ce
+ * DOM-ci est écrit une fois. L'imiter dans `ui/offense.js` aurait donné deux
+ * constructions voisines dont une seule serait relue.
+ *
+ * ⚠ ELLE NE DÉCIDE DE RIEN : ni quand ouvrir, ni quoi montrer, ni si le bouton
+ * est possible. Elle POSE ce qu'on lui donne.
+ *
+ * @param {Document} doc
+ * @param {{titre: Element, corps: Element, bouton: Element}} elements
+ * @param {object} vue ce que rend `lignesDuPanneau` ou `lignesDeLaPiece`
+ */
+export function peindreVueDuPanneau(doc, elements, vue) {
+  elements.titre.textContent = vue.titre;
+  elements.corps.textContent = '';
+  for (const section of vue.sections) {
+    const bloc = doc.createElement('div');
+    bloc.className = 'section';
+    const titre = doc.createElement('h3');
+    titre.textContent = section.titre;
+    bloc.appendChild(titre);
+    for (const l of section.lignes) {
+      const ligne = doc.createElement('div');
+      ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
+      const quoi = doc.createElement('span');
+      quoi.className = 'quoi';
+      quoi.textContent = l.libelle;
+      const avant = doc.createElement('b');
+      avant.textContent = l.avant;
+      ligne.append(quoi, avant);
+      if (l.apres !== null) {
+        const fleche = doc.createElement('span');
+        fleche.className = 'fleche';
+        fleche.textContent = '→';
+        const apres = doc.createElement('b');
+        apres.className = 'apres';
+        apres.textContent = l.apres;
+        ligne.append(fleche, apres);
+      }
+      bloc.appendChild(ligne);
+    }
+    elements.corps.appendChild(bloc);
+  }
+
+  elements.bouton.textContent = '';
+  const libelle = doc.createElement('span');
+  libelle.textContent = vue.bouton.libelle;
+  const note = doc.createElement('em');
+  note.className = 'note';
+  note.textContent = vue.bouton.note;
+  elements.bouton.append(libelle, note);
+  elements.bouton.classList.toggle('impossible', !vue.bouton.possible);
+}
+
+/**
  * Les bâtiments que le joueur pourrait poser — ceux qui ne sont pas uniques, et
  * ceux qui le sont mais ne sont pas encore posés.
  *
@@ -1486,6 +1618,87 @@ export function posablesDeLaDefense(etat) {
  * @param {object} etat
  * @param {number} index indice dans `etat.garnison`
  */
+const LIBELLES_COLONNE_DEGATS = {
+  infanterie: 'Contre l\'infanterie',
+  vehicule: 'Contre les véhicules',
+  structureOuAviation: 'Contre les structures',
+};
+
+/**
+ * Ce qu'une pièce de garnison ou d'armée est, et ce qu'elle serait un niveau
+ * plus haut.
+ *
+ * ⚠⚠ ETHAN, 04/09 : « Quand on clique sur une unité en défense ou armé,
+ * afficher un onglet comme pour les bâtiments. » C'est le pendant exact
+ * d'`apercuDuBatiment`, et comme elle cette fonction est PURE : elle rend des
+ * données, le rendu les peint. Le dépôt n'a ni jsdom ni navigateur (§3), donc
+ * c'est la seule moitié de ce point qui soit éprouvable — et c'est pour ça
+ * qu'elle existe séparément.
+ *
+ * ⚠ LES DEUX FORCES PARTAGENT LA FONCTION, à la ligne de `FORCES` près : c'est
+ * elle qui porte le champ, le barème de montée et le rôle. Un `=== 'garnison'`
+ * écrit ici serait le premier cas particulier à diverger.
+ *
+ * ⚠ LES PV SE CALCULENT COMME LE MOTEUR LES CALCULE — `pv × facteurMilli`, ce
+ * que `src/sim/combat.js` écrit noir sur blanc : « pvMaxMilli = pv × 1000 ×
+ * facteurMilli / 1000 = pv × facteurMilli. Exact. » Réécrire une courbe ici en
+ * ferait une seconde, et l'écran mentirait d'un niveau à l'autre.
+ *
+ * @param {object} etat
+ * @param {string} force `garnison` ou `armee`
+ * @param {number} index
+ * @returns {object}
+ */
+export function apercuDeLaPiece(etat, force, index) {
+  const f = FORCES[force];
+  if (f === undefined) throw new RangeError(`chantier : force « ${force} » inconnue`);
+  const piece = baseCourante(etat)[f.champ][index];
+  if (piece === undefined) {
+    throw new RangeError(`chantier : indice ${index} hors de la ${f.quoi}`);
+  }
+  const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
+  if (ligne === undefined) throw new RangeError(`chantier : pièce « ${piece.id} » inconnue`);
+
+  const problemes = problemesDeLAmeliorationDEffectif(etat, force, index);
+  // ⚠ LE PLAFOND SE LIT DANS LE REFUS, IL NE SE RECALCULE PAS. `plafond` et
+  // `sans-batiment` sont les deux codes qui rendent la montée impossible pour
+  // toujours ; les autres — le prix — passeront quand le stock arrivera.
+  const bloque = problemes.some((p) => p.code === 'plafond' || p.code === 'sans-batiment');
+  const vise = piece.niveau + 1;
+  const echelle = (n) => facteurMilli(n) / 1000;
+  const auNiveau = (valeur, n) => Math.round(valeur * echelle(n));
+
+  return {
+    nom: ligne.nom.joueur,
+    force,
+    niveau: piece.niveau,
+    niveauVise: bloque ? null : vise,
+    auPlafond: bloque,
+    points: ligne.points,
+    pv: auNiveau(ligne.pv, piece.niveau),
+    pvVise: bloque ? null : auNiveau(ligne.pv, vise),
+    // ⚠ LES DÉGÂTS SONT PAR COLONNE DE MATRICE, ET LES TROIS SE DISENT MÊME À
+    // ZÉRO. « Contre les véhicules : — » est une information de jeu : c'est ce
+    // qui apprend au joueur qu'une Batterie ne touche que ce qui vole.
+    degats: COLONNES_DEGATS.map((colonne) => ({
+      colonne,
+      libelle: LIBELLES_COLONNE_DEGATS[colonne],
+      avant: auNiveau(ligne.degats?.[colonne] ?? 0, piece.niveau),
+      apres: bloque ? null : auNiveau(ligne.degats?.[colonne] ?? 0, vise),
+    })),
+    portee: ligne.portee,
+    // Une structure ne se déplace pas : la ligne n'aurait rien à dire.
+    vitesse: ligne.vitesse ?? null,
+    // ⚠ LES DÉGÂTS SUBIS SONT UNE PART DES PV MAX, PAS UN ABSOLU. `degatsMilli`
+    // est en milli-PV et les PV max montent avec le niveau : un nombre nu ne se
+    // compare à rien.
+    degatsSubisMilliemes: piece.degatsMilli === 0 ? 0
+      : Math.round((1000 * piece.degatsMilli) / (ligne.pv * facteurMilli(piece.niveau))),
+    cout: bloque ? null : f.coutDeMontee(piece.id, vise),
+    problemes,
+  };
+}
+
 export function detailDeLaDefense(etat, index) {
   const laBase = baseCourante(etat);
   const piece = laBase.garnison[index];
@@ -1648,6 +1861,7 @@ export const TERRAINS = {
     // Le panneau de détail chiffre production, capacité et voisinage : il n'a
     // de sens que pour un bâtiment de la base.
     panneau: true,
+    vueDuPanneau: (etat, index) => lignesDuPanneau(apercuDuBatiment(etat, index)),
     // ⚠ COMMENT ON APPELLE CE QU'ON MANIPULE. Les messages de refus le nomment
     // — « aucun bâtiment n'est endommagé », « pour la défense » — et jusqu'au
     // 29/08 ces mots étaient écrits en dur, ce qui faisait dire « bâtiment » à
@@ -1737,7 +1951,17 @@ export const TERRAINS = {
         agir: deplacerLaGarnison,
       },
     },
-    panneau: false,
+    // ⚠⚠ LE PANNEAU S'OUVRE AUSSI EN DÉFENSE — Ethan, 04/09 : « Quand on clique
+    // sur une unité en défense ou armé, afficher un onglet comme pour les
+    // bâtiments. » Il valait `false` depuis le lot GARNISON-ET-ARMÉE, au motif
+    // qu'« une pièce de garnison n'a ni production, ni capacité, ni voisinage,
+    // et lui ouvrir un panneau vide ferait croire à un écran cassé ». Le motif
+    // était juste et la conclusion trop courte : une pièce a des PV, une table
+    // de dégâts, une portée, un état et un prix de montée — de quoi remplir un
+    // panneau qui ne ment pas. `lignesDeLaPiece` rend la même FORME de vue, donc
+    // le même rendu la peint.
+    panneau: true,
+    vueDuPanneau: (etat, index) => lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', index)),
     quoi: 'aucun défenseur n\'est endommagé',
     pourQui: 'la défense',
   },
@@ -3678,52 +3902,20 @@ export function initialiserEcranChantier(doc, {
     // qui n'en a pas, mais `rafraichir` passe ici dix fois par seconde et une
     // seule image peinte avec le mauvais indice suffirait à mentir.
     if (!TERRAINS[terrainSelection].panneau) return;
-    const vue = lignesDuPanneau(apercuDuBatiment(etatCourant, selection));
+    // ⚠⚠ LA VUE SE DEMANDE AU TERRAIN, ET C'EST CE QUI OUVRE LE PANNEAU À LA
+    // DÉFENSE. Un `terrainSelection === 'defense' ? … : …` écrit ici serait le
+    // cas particulier que la table existe pour éviter, et qu'un test refuse
+    // déjà pour les gestes.
+    const vue = TERRAINS[terrainSelection].vueDuPanneau(etatCourant, selection);
     const signature = JSON.stringify(vue);
     if (signature === derniereVue) return;
     derniereVue = signature;
 
-    $('chantier-panneau-titre').textContent = vue.titre;
-    const corps = $('chantier-panneau-corps');
-    corps.textContent = '';
-    for (const section of vue.sections) {
-      const bloc = doc.createElement('div');
-      bloc.className = 'section';
-      const titre = doc.createElement('h3');
-      titre.textContent = section.titre;
-      bloc.appendChild(titre);
-      for (const l of section.lignes) {
-        const ligne = doc.createElement('div');
-        ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
-        const quoi = doc.createElement('span');
-        quoi.className = 'quoi';
-        quoi.textContent = l.libelle;
-        const avant = doc.createElement('b');
-        avant.textContent = l.avant;
-        ligne.append(quoi, avant);
-        if (l.apres !== null) {
-          const fleche = doc.createElement('span');
-          fleche.className = 'fleche';
-          fleche.textContent = '→';
-          const apres = doc.createElement('b');
-          apres.className = 'apres';
-          apres.textContent = l.apres;
-          ligne.append(fleche, apres);
-        }
-        bloc.appendChild(ligne);
-      }
-      corps.appendChild(bloc);
-    }
-
-    const bouton = $('chantier-panneau-ameliorer');
-    bouton.textContent = '';
-    const libelle = doc.createElement('span');
-    libelle.textContent = vue.bouton.libelle;
-    const note = doc.createElement('em');
-    note.className = 'note';
-    note.textContent = vue.bouton.note;
-    bouton.append(libelle, note);
-    bouton.classList.toggle('impossible', !vue.bouton.possible);
+    peindreVueDuPanneau(doc, {
+      titre: $('chantier-panneau-titre'),
+      corps: $('chantier-panneau-corps'),
+      bouton: $('chantier-panneau-ameliorer'),
+    }, vue);
   }
 
   function ouvrirPanneau(index) {
@@ -3758,14 +3950,21 @@ export function initialiserEcranChantier(doc, {
   // `executerAction`, et jamais de `try` autour d'`ameliorer`.
   $('chantier-panneau-ameliorer').addEventListener('click', () => {
     if (selection === null || etatCourant === null) return;
-    const problemes = problemesDeLAmelioration(etatCourant, selection);
+    // ⚠⚠ LE BOUTON PASSE PAR LA TABLE DEPUIS LE LOT ERGONOMIE, ET C'ÉTAIT UN
+    // DÉFAUT LATENT. Il appelait `problemesDeLAmelioration` et `ameliorer` — les
+    // fonctions des BÂTIMENTS — en dur : juste tant que le panneau ne s'ouvrait
+    // que sur eux, faux à la seconde où il s'ouvre sur une pièce de garnison. Il
+    // aurait amélioré le bâtiment de même indice pendant que le panneau parlait
+    // d'une tourelle, et rien à l'écran ne l'aurait dit.
+    const action = TERRAINS[terrainSelection].actions.ameliorer;
+    const problemes = action.problemes(etatCourant, selection);
     if (problemes.length > 0) {
       toast(messageDeRefus(problemes));
       return;
     }
     sonner('amelioration', terrainSelection,
       TERRAINS[terrainSelection].pieces(etatCourant)[selection]?.id);
-    ameliorer(etatCourant, selection);
+    action.agir(etatCourant, selection);
     // Une amélioration change les emplacements et les débits : elle s'écrit
     // tout de suite, comme une pose.
     if (apresPose !== undefined) apresPose(etatCourant);

@@ -709,7 +709,15 @@ test('offense — une unité posée porte son SPRITE, plus son nom écrit', () =
   // entre le canevas et `background-image` ; une seconde écriture qui
   // l'oublierait poserait le socle par-dessus la tourelle sur cet écran-ci et
   // pas sur l'autre, sans qu'aucun nom de sprite soit faux.
-  assert.match(ecran, /poserCouches,?\s*\n?\s*\} from '\.\/chantier\.js'/,
+  // ⚠ LE MOTIF LIT LE BLOC D'IMPORT, PLUS LA DERNIÈRE LIGNE. Il exigeait que
+  // `poserCouches` soit le DERNIER nom avant l'accolade : un nom ajouté après
+  // lui — ce que le lot ERGONOMIE a fait en important le panneau — le faisait
+  // tomber sans qu'aucune règle soit enfreinte. Ce qui compte est
+  // l'APPARTENANCE au bloc, pas la position dans la liste.
+  const blocChantier = ecran.match(/import \{([^}]*)\} from '\.\/chantier\.js';/);
+  assert.ok(blocChantier !== null, 'l\'Offense n\'importe plus rien du Chantier');
+  const importes = blocChantier[1].split(',').map((n) => n.trim());
+  assert.ok(importes.includes('poserCouches'),
     '`poserCouches` n\'est plus importé du Chantier : il a peut-être été recopié');
   assert.doesNotMatch(ecran, /function poserCouches/,
     'l\'Offense a réécrit sa propre pose de couches');
