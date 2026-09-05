@@ -199,7 +199,13 @@ test('TRANSFERT T5 — round(√x) en entiers ≡ Math.round(Math.sqrt(x)), sur 
  * FERMÉE : un troisième fichier fait tomber ce test, ce qui force à regarder
  * plutôt qu'à ajouter.
  */
-const RACINES_DE_DESSIN_TOLEREES = ['src/render/terrain.js', 'src/ui/monde.js'];
+// ⚠⚠ `src/render/terrain.js` EN EST SORTI — lot SOL-SATELLITE, 05/09, ET C'EST
+// UN RESSERREMENT. Sa racine était le `√(Σwᵢ²)` qui normalisait la somme
+// pondérée du pavage indexé ; le sol est maintenant fait de blocs à partition de
+// l'unité, où `Σw` vaut exactement 1 et où il n'y a rien à normaliser. La liste
+// tombe donc de deux à UN, et un fichier qui la rejoindrait ferait tomber ce
+// test — ce qu'on lui demande.
+const RACINES_DE_DESSIN_TOLEREES = ['src/ui/monde.js'];
 
 test('TRANSFERT T6 — aucun Math.sqrt là où une règle se décide', () => {
   const porteurs = [];

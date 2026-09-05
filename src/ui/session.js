@@ -268,7 +268,11 @@ export function avancer(etat, ecouleMs) {
  * aurait été un second changement pour rien.
  */
 export const ATLAS_DE_LA_PAGE = {
-  'monde-atlas': '--atlas-sol',
+  // ⚠ `monde-atlas` A QUITTÉ CETTE TABLE — lot SOL-SATELLITE, 05/09. Il servait
+  // l'atlas indexé du fond de carte depuis une variable CSS ; les huit planches
+  // qui le remplacent portent leur marqueur directement en `src`, aucune règle
+  // de la feuille ne s'en servant. Une entrée ici sans variable en face ferait
+  // lever `garnirLesAtlas`.
   'atlas-unite': '--atlas-unite',
   'atlas-chassis': '--atlas-chassis',
   'atlas-tourelle-unite': '--atlas-tourelle-unite',

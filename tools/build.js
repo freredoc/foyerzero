@@ -123,12 +123,12 @@ let html = htmlSource
 // exactement le genre de panne qui se découvre sur l'appareil.
 
 // ⚠ AUCUN MARQUEUR N'EST PRÉFIXE D'UN AUTRE, ET C'EST LE `%` FINAL QUI LE TIENT.
-// Revérifié le 30/08 sur les HUIT marqueurs, les trois atlas d'unité entrant.
-// `%ATLAS_TERRAIN%` et `%ATLAS_TERRAIN_BASE%` partagent quatorze caractères ;
-// sans le `%` de fin, le premier `replaceAll` mangerait la tête du second et
-// laisserait un `_BASE%` orphelin dans le HTML — la garde offline n'y verrait
-// rien, et l'écran afficherait la carte du monde sous les bâtiments. Vérifié :
-// aucune des trois chaînes complètes n'est préfixe d'une autre.
+// Le cas d'école était `%ATLAS_TERRAIN%` et `%ATLAS_TERRAIN_BASE%`, qui
+// partageaient quatorze caractères : sans le `%` de fin, le premier
+// `replaceAll` aurait mangé la tête du second et laissé un `_BASE%` orphelin
+// dans le HTML — la garde offline n'y aurait rien vu, et l'écran aurait affiché
+// la carte du monde sous les bâtiments. Le premier est parti au lot
+// SOL-SATELLITE ; la règle reste, et un test la vérifie sur toute la table.
 //
 // ⚠ ET ON N'EN DÉCLARE PAS « POUR PLUS TARD ». Les cinq familles restantes —
 // socle, defense, unite, tourelle-unite, carte — ne sont pas cousues : les
@@ -162,13 +162,39 @@ const atlas = (slug) => ({
 // nommée « images » qui porterait de l'audio mentirait au premier relecteur.
 // Le type MIME est déjà par entrée, donc rien d'autre ne change.
 const FICHIERS_INLINE = [
-  { marqueur: '%ATLAS_TERRAIN%', chemin: ['art', 'sprites', 'carte', 'atlas-terrain-64.png'], type: 'image/png' },
+  // ⚠⚠ LES HUIT PLANCHES DU SOL DE CARTE — lot SOL-SATELLITE, 05/09. Elles
+  // remplacent `%ATLAS_TERRAIN%`, qui portait l'atlas indexé de 64 tuiles du
+  // fond de carte : 224 548 octets de PNG, soit 299 400 en base64. Ethan a livré
+  // huit planches satellite et demandé « le moins de traitement possible » ; le
+  // sol n'est donc plus accumulé ni requantifié, il est posé tel quel.
+  //
+  // ⚠⚠ ELLES PÈSENT 1 674 196 OCTETS EN WEBP q75, SOIT 2 232 264 EN BASE64, ET
+  // C'EST LE POSTE LE PLUS LOURD DU LIVRABLE. Le réglage est celui des huit
+  // décors de base — voir `tools/sols.py`, qui porte les paliers mesurés et dit
+  // pourquoi la résolution ne se touche pas.
+  //
+  // ⚠ ET ELLES NE SONT PAS DANS UN ATLAS, parce qu'aucun atlas ne peut les
+  // prendre : `tools/atlas.py` coud des cellules carrées À LA TAILLE DE CASE, et
+  // une planche fait 1 254 pixels pour 4,9 cases. Chacune a donc son marqueur,
+  // comme les décors de base et les deux grosses bases de l'Ouvrage.
+  //
+  // ⚠ AUCUNE VARIABLE CSS EN FACE : seul le canevas de l'écran Monde s'en sert,
+  // et `drawImage` veut un élément. Le marqueur va donc dans le `src` de la
+  // balise, comme `%ATLAS_CARTE%` et `%ATLAS_LIMITE%`.
+  { marqueur: '%SOL_CARTE_1%', chemin: ['art', 'sprites', 'sol', 'sol_carte_1.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_2%', chemin: ['art', 'sprites', 'sol', 'sol_carte_2.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_3%', chemin: ['art', 'sprites', 'sol', 'sol_carte_3.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_4%', chemin: ['art', 'sprites', 'sol', 'sol_carte_4.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_5%', chemin: ['art', 'sprites', 'sol', 'sol_carte_5.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_6%', chemin: ['art', 'sprites', 'sol', 'sol_carte_6.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_7%', chemin: ['art', 'sprites', 'sol', 'sol_carte_7.webp'], type: 'image/webp' },
+  { marqueur: '%SOL_CARTE_8%', chemin: ['art', 'sprites', 'sol', 'sol_carte_8.webp'], type: 'image/webp' },
   atlas('batiment'),
   // ⚠ LE MARQUEUR NE SE DÉDUIT PAS DU SLUG ICI : la famille s'appelle `terrain`
-  // et le marqueur `%ATLAS_TERRAIN_BASE%`, parce que `%ATLAS_TERRAIN%` est déjà
-  // pris par l'atlas du FOND DE CARTE, qui est une source déclarée et reste en
-  // PNG. Deux images sans rapport, deux noms courts voisins : voir la note sur
-  // les préfixes de marqueur juste au-dessus.
+  // et le marqueur `%ATLAS_TERRAIN_BASE%`. Le suffixe date du temps où
+  // `%ATLAS_TERRAIN%` était pris par l'atlas du FOND DE CARTE ; celui-ci est
+  // parti au lot SOL-SATELLITE, et le suffixe RESTE — le renommer changerait le
+  // HTML de tous les appareils pour une cosmétique de source.
   { ...atlas('terrain'), marqueur: '%ATLAS_TERRAIN_BASE%' },
   atlas('defense'),
   atlas('socle'),
@@ -209,8 +235,8 @@ const FICHIERS_INLINE = [
   // ⚠⚠ LES DEUX GROSSES BASES VOYAGENT HORS ATLAS, CHACUNE DANS SON MARQUEUR.
   // À la grille 64 elles mesurent 128×128 et 192×192 — elles couvrent 2×2 et
   // 3×3 cases —, et `tools/atlas.py` exige `COTE × COTE` pour coudre. Un atlas
-  // d'un seul sprite ne coud rien de toute façon. Même forme que
-  // `%ATLAS_TERRAIN%`, l'atlas du fond de carte, qui est hors des sept aussi.
+  // d'un seul sprite ne coud rien de toute façon. Même forme que les huit
+  // planches de sol, qui sont hors des sept aussi.
   atlas('carte'),
   // ⚠⚠ L'ATLAS DES LIMITES DE TERRITOIRE — lot TERRITOIRE, 03/09. Il est dans un
   // atlas alors que les murs de contour n'y sont pas, et la différence est de

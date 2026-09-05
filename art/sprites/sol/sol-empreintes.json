@@ -1,0 +1,146 @@
+{
+ "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/sols.py ». Les planches sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur elles — au premier chef leur CÔTÉ, dont src/render/terrain.js dérive la géométrie de son pavage, et la correction de moyenne appliquée à chacune. Même motif que art/sprites/fond/fond-empreintes.json.",
+ "reference": [
+  198.7909,
+  144.1583,
+  124.8837
+ ],
+ "sols": {
+  "sol_carte_1": {
+   "correction": [
+    -8.2622,
+    -5.6093,
+    -4.746
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    199.0531,
+    143.7677,
+    124.6296
+   ],
+   "octets": 192656,
+   "qualite": 75,
+   "sha256": "f0090743cf2f6fe48a6928cf638fb1b2b0e8f1f5471fc197193d40fb07ae8a34"
+  },
+  "sol_carte_2": {
+   "correction": [
+    -6.6272,
+    -2.5406,
+    -3.0724
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.4181,
+    143.6989,
+    124.956
+   ],
+   "octets": 214818,
+   "qualite": 75,
+   "sha256": "9861128db09874a939dd8dd7f8b119fbcc0ad023087bf2d24621b726c4aa74d7"
+  },
+  "sol_carte_3": {
+   "correction": [
+    -4.1371,
+    -0.3261,
+    3.702
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.928,
+    144.4844,
+    125.1816
+   ],
+   "octets": 171702,
+   "qualite": 75,
+   "sha256": "ae1a07b3a2f86dd35398041e19340a9339af7dce0b386f8af53c14ec6624d5a6"
+  },
+  "sol_carte_4": {
+   "correction": [
+    0.4322,
+    0.596,
+    0.5704
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.3588,
+    144.5623,
+    125.3133
+   ],
+   "octets": 225442,
+   "qualite": 75,
+   "sha256": "8ad200448644563221fe2e908f2cdaa65006b3f62b54f228fd903bfaef22bb5b"
+  },
+  "sol_carte_5": {
+   "correction": [
+    2.8844,
+    1.7826,
+    1.2089
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.9065,
+    144.3758,
+    124.6747
+   ],
+   "octets": 196686,
+   "qualite": 75,
+   "sha256": "bdadf8621b884b2eee8faefa6177f1132863bab0f6b67ce18833be4e38375c94"
+  },
+  "sol_carte_6": {
+   "correction": [
+    16.2171,
+    4.6194,
+    0.8108
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.5735,
+    144.5389,
+    125.0729
+   ],
+   "octets": 261394,
+   "qualite": 75,
+   "sha256": "23d0986972e2699e7f395e9edc772b670472c35e13ac01a1da1e3538a518eeae"
+  },
+  "sol_carte_7": {
+   "correction": [
+    -0.759,
+    3.2807,
+    3.7471
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.5499,
+    143.8776,
+    125.1365
+   ],
+   "octets": 200806,
+   "qualite": 75,
+   "sha256": "b0722d9e7bbc2f1733899ed603d2168e48006fc9a291029d64b527e00b979c19"
+  },
+  "sol_carte_8": {
+   "correction": [
+    0.2517,
+    -1.8026,
+    -2.2208
+   ],
+   "hauteur": 1254,
+   "largeur": 1254,
+   "moyenne": [
+    198.5392,
+    143.9609,
+    125.1045
+   ],
+   "octets": 210692,
+   "qualite": 75,
+   "sha256": "9d031427ac04d22f30011f9cf225bda307c4f757409f88cd0ddc9287385a70a3"
+  }
+ }
+}

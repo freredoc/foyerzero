@@ -19,7 +19,7 @@ import {
   ECHELLE_MIN, ECHELLE_MAX, cranDeRendu, facteurDAffichage,
   bornerEchelle, vueApresEchelle, bordDeDalle,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
-  sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles, indicesDeTeinte,
+  sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles,
   teinteDAttente,
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
 } from '../src/ui/monde.js';
@@ -27,6 +27,13 @@ import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
   palierDeNiveau, PALIERS_EMBLEME,
 } from '../src/data/sites.js';
+import { echelleDuCran, geometrieDuCran, NOMS_DU_SOL } from '../src/render/terrain.js';
+
+/** Le manifeste des huit planches — Node n'a pas de décodeur WebP. */
+const MANIFESTE_SOL = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..',
+    'art', 'sprites', 'sol', 'sol-empreintes.json'), 'utf8'),
+);
 import {
   spriteDuSite, SPRITES_POI, SPRITES_GROSSE_BASE, nomsPreBranches,
   empriseDeLaGrosseBase, dessinerGrosseBase, FAMILLE, cotesDuSite,
@@ -56,38 +63,41 @@ function sansCommentaires(texte) {
 // Les crans
 // ---------------------------------------------------------------------------
 
-test('zoom — les quatre crans sont des puissances de deux et divisent tuile et emblème', () => {
-  // ⚠ CE N'EST PAS UNE COQUETTERIE. Une tuile de terrain fait 128 px et un
-  // emblème sera dessiné sur une grille de 64 : à chaque cran, les deux doivent
-  // rester à un facteur d'échelle ENTIER, sinon on brouille du pixel art. Un
-  // cran intermédiaire à 192 conviendrait à l'emblème (×3) et pas à la tuile
-  // (×1,5) — et c'est exactement le genre de valeur qu'on ajoute « pour avoir
-  // un pas plus doux ».
+test('zoom — les quatre crans sont des puissances de deux, et le sol y tombe juste', () => {
+  // ⚠ CE N'EST PAS UNE COQUETTERIE. L'emblème est dessiné sur une grille de
+  // `COTE_SPRITE` : à chaque cran, il doit rester à un facteur d'échelle ENTIER,
+  // sinon on brouille du pixel art. Un cran intermédiaire à 192 conviendrait à
+  // l'emblème (×3) et pas au reste — et c'est exactement le genre de valeur
+  // qu'on ajoute « pour avoir un pas plus doux ».
+  //
+  // ⚠⚠ CE QUI A CHANGÉ AU LOT SOL-SATELLITE : la moitié « tuile » de ce test
+  // portait sur `coteTuile` et `tuilesParCase`, qui sont partis avec l'atlas
+  // indexé. Le sol est fait de planches de 1 254 px, qui ne divisent aucun cran
+  // et n'ont pas à le faire — un bloc n'est pas indexé sur une case. Ce qu'on
+  // exige de lui à la place, c'est de ne JAMAIS agrandir sa source, ce que
+  // `render/terrain.js` tient par `echelleDuCran`.
   assert.equal(CRANS.length, 4, `${CRANS.length} crans`);
   for (const cran of CRANS) {
     assert.ok(Number.isInteger(Math.log2(cran)), `${cran} n'est pas une puissance de deux`);
-    // ⚠ LA TUILE S'ÉCHELONNE SUR SA PART DE CASE, PAS SUR LA CASE ENTIÈRE.
-    // Depuis le 30/08 elle en couvre un quart : c'est `cran / tuilesParCase`
-    // qu'elle doit remplir, et le rapport à mesurer est celui-là.
-    const versTuile = ZOOM_CARTE.coteTuile / (cran / ZOOM_CARTE.tuilesParCase);
     const versEmbleme = COTE_SPRITE / cran;
-    assert.ok(Number.isInteger(versTuile) || Number.isInteger(1 / versTuile),
-      `la tuile ne s'échelonne pas entier au cran ${cran}`);
-    // ⚠ ET LE DÉCOUPAGE DOIT TOMBER JUSTE : une tuile d'écran fractionnaire
-    // brouillerait le pixel art, ce que toute cette garde existe pour empêcher.
-    assert.ok(Number.isInteger(cran / ZOOM_CARTE.tuilesParCase),
-      `${ZOOM_CARTE.tuilesParCase} tuiles par axe ne divisent pas le cran ${cran}`);
     assert.ok(Number.isInteger(versEmbleme) || Number.isInteger(1 / versEmbleme),
       `l'emblème ne s'échelonne pas entier au cran ${cran}`);
+    assert.ok(echelleDuCran(cran) <= 1, `le sol est agrandi au cran ${cran}`);
+    // ⚠ ET LA GÉOMÉTRIE DU PAVAGE RESTE ENTIÈRE, ce qui est ce qui rend le
+    // fondu exact — voir `SOL T7`.
+    const g = geometrieDuCran(cran);
+    assert.ok(Number.isInteger(g.taille) && Number.isInteger(g.pas),
+      `la géométrie du sol est fractionnaire au cran ${cran}`);
   }
   // Croissants, et la carte s'ouvre sur le plus large.
   for (let i = 1; i < CRANS.length; i += 1) assert.ok(CRANS[i] > CRANS[i - 1]);
   assert.equal(CRAN_PAR_DEFAUT, 0, 'la carte ne s\'ouvre plus sur la vue la plus large');
 
   // Falsifiable : un cran intermédiaire serait bien refusé par ce montage.
-  const tuileA192 = ZOOM_CARTE.coteTuile / (192 / ZOOM_CARTE.tuilesParCase);
-  assert.ok(!Number.isInteger(tuileA192) && !Number.isInteger(1 / tuileA192),
+  const embleme192 = COTE_SPRITE / 192;
+  assert.ok(!Number.isInteger(embleme192) && !Number.isInteger(1 / embleme192),
     'le montage accepterait un cran à 192 : il ne mesure rien');
+  assert.throws(() => echelleDuCran(192), RangeError, 'un cran hors table ne lève plus');
 });
 
 test('zoom — au cran le plus large, les 31 colonnes tiennent dans un téléphone', () => {
@@ -355,12 +365,16 @@ test('écran — il ne nomme aucune constante de grille ni de zoom en dur', () =
   const interdits = new Map([
     [GEOGRAPHIE.carte.largeur, 'la largeur de la carte'],
     [GEOGRAPHIE.carte.hauteur, 'la hauteur de la carte'],
-    [ZOOM_CARTE.coteTuile, 'le côté d\'une tuile'],
+
     [COTE_SPRITE, 'la grille de couture d\'un emblème'],
     [GEOGRAPHIE.niveauPlafond, 'le plafond de niveau'],
     [TERRAIN_CARTE.dalleCotePx, 'le côté d\'une dalle'],
     [TERRAIN_CARTE.dallesEnCache, 'la taille du cache'],
-    [TERRAIN_CARTE.pasSourcePx, 'le pas du réseau'],
+    // ⚠ `coteTuile` ET `pasSourcePx` ONT QUITTÉ CETTE LISTE au lot
+    // SOL-SATELLITE : ils n'existent plus. Le fondu du pavage les remplace, et
+    // il est du même genre — une longueur de `src/data/` que l'écran ne doit
+    // pas recopier.
+    [TERRAIN_CARTE.fonduSourcePx, 'la largeur du fondu'],
   ]);
   for (const cran of CRANS) interdits.set(cran, `le cran de zoom ${cran}`);
 
@@ -417,41 +431,46 @@ test('cache — la dalle la moins récemment employée cède sa place, jamais la
   assert.ok(TERRAIN_CARTE.dallesEnCache >= 12, 'le cache ne tient plus une fenêtre');
 });
 
-test('attente — une dalle qui manque se peint de la teinte moyenne de son camp, jamais en noir', () => {
-  const auDepart = teinteDAttente(GEOGRAPHIE.carte.hauteur);
-  const auBout = teinteDAttente(1);
-  assert.ok(TERRAIN_CARTE.rampes.joueur.includes(auDepart), `teinte d'attente ${auDepart}`);
-  assert.ok(TERRAIN_CARTE.rampes.ouvrage.includes(auBout), `teinte d'attente ${auBout}`);
-  // C'est bien le MILIEU des rampes, pas un bout : une attente au ton extrême
+test('attente — une dalle qui manque se peint d\'un ton du sol, jamais en noir', () => {
+  // ⚠⚠ ELLE NE PREND PLUS LA RANGÉE — lot SOL-SATELLITE, 05/09, sur demande
+  // d'Ethan : « pas de fond ouvrage pour le moment ». Elle rendait l'ardoise en
+  // haut de la carte et la terre cuite en bas, le sol basculant de camp à mesure
+  // qu'on montait. Il n'y a plus qu'un sol, donc plus qu'une attente — et c'est
+  // une assertion en MOINS sur la rampe de l'Ouvrage, déclarée ici.
+  const teinte = teinteDAttente();
+  assert.ok(TERRAIN_CARTE.rampes.joueur.includes(teinte), `teinte d'attente ${teinte}`);
+  // C'est bien le MILIEU de la rampe, pas un bout : une attente au ton extrême
   // sauterait aux yeux quand la dalle arrive par-dessus.
-  assert.equal(auDepart, TERRAIN_CARTE.rampes.joueur[2]);
-  assert.equal(auBout, TERRAIN_CARTE.rampes.ouvrage[2]);
+  assert.equal(teinte, TERRAIN_CARTE.rampes.joueur[2]);
+  // ⚠ ET ELLE NE PREND PLUS D'ARGUMENT : lui en passer un ne doit rien changer,
+  // sans quoi un appelant resté sur l'ancienne forme croirait choisir un camp.
+  assert.equal(teinteDAttente(1), teinte, 'la teinte d\'attente écoute encore un argument');
   assert.ok(DALLES_PAR_IMAGE >= 1 && DALLES_PAR_IMAGE <= 4,
     `${DALLES_PAR_IMAGE} dalles par image : l'à-coup n'est plus borné`);
 });
 
-test('atlas — l\'appariement d\'une couleur est exact, et retombe sur la plus proche', () => {
-  // Le PNG livré est indexé sur la rampe du joueur et ne porte aucun chunk de
-  // gestion de couleur : l'appariement exact suffit. La retombée existe pour le
-  // jour où un appareil appliquerait quand même un profil — mieux vaut une
-  // teinte voisine qu'un atlas refusé et une carte noire.
-  const hex = TERRAIN_CARTE.rampes.joueur;
-  const rvba = new Uint8ClampedArray(4 * (hex.length + 1));
-  hex.forEach((h, i) => {
-    rvba[i * 4] = parseInt(h.slice(1, 3), 16);
-    rvba[i * 4 + 1] = parseInt(h.slice(3, 5), 16);
-    rvba[i * 4 + 2] = parseInt(h.slice(5, 7), 16);
-    rvba[i * 4 + 3] = 255;
-  });
-  // Une couleur décalée de deux niveaux sur chaque canal : le plus proche est
-  // encore le sien.
-  const dernier = hex.length;
-  rvba[dernier * 4] = parseInt(hex[1].slice(1, 3), 16) + 2;
-  rvba[dernier * 4 + 1] = parseInt(hex[1].slice(3, 5), 16) - 2;
-  rvba[dernier * 4 + 2] = parseInt(hex[1].slice(5, 7), 16) + 1;
-  const indices = indicesDeTeinte(rvba);
-  assert.deepEqual(Array.from(indices.slice(0, hex.length)), [0, 1, 2, 3, 4]);
-  assert.equal(indices[dernier], 1, 'la retombée ne trouve pas la teinte la plus proche');
+test('sol — les huit planches s\'attendent, et rien ne se dessine sans elles', () => {
+  // ⚠⚠ CE TEST REMPLACE CELUI DE L'APPARIEMENT DES COULEURS D'ATLAS. Il
+  // vérifiait qu'`indicesDeTeinte` retrouvait le rang d'une couleur dans la
+  // rampe, à l'exact puis au plus proche : la fonction est partie avec la
+  // moulinette, et il n'y a plus d'image indexée à relire.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'monde.js'), 'utf8'));
+  // Les huit balises se demandent par leur rang, pas par une liste écrite.
+  assert.match(ecran, /\$\(`sol-\$\{i \+ 1\}`\)/,
+    'les huit planches ne se demandent plus par leur rang');
+  // ⚠ ON ATTEND LA DERNIÈRE, PAS LA PREMIÈRE. Huit images se décodent dans un
+  // ordre que rien ne garantit ; poser l'écouteur sur la première et se déclarer
+  // prêt dessinerait la carte avec des blocs manquants.
+  assert.match(ecran, /const manquante = images\.find/,
+    'l\'écran ne cherche plus une planche manquante avant de se déclarer prêt');
+  assert.ok(/restent && sols !== null/.test(ecran),
+    'la boucle se relance alors qu\'une planche manque : elle tournerait à vide');
+  assert.ok(/dalle === undefined && sols !== null/.test(ecran),
+    'une dalle se calcule sans que les planches soient là');
+  // ⚠ ET AUCUN PIXEL DU SOL NE TRANSITE PAR UN TABLEAU : `getImageData` sur les
+  // planches coûterait 50 Mio, et c'est tout le motif de la réécriture.
+  assert.ok(!/getImageData/.test(ecran),
+    'l\'écran relit des pixels : les huit planches pèsent 50 Mio décodées');
 });
 
 // ---------------------------------------------------------------------------
@@ -504,11 +523,18 @@ test('emblèmes — le bord rouge est réservé à ce qui attaque le joueur', ()
 
 test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est inliné UNE fois', () => {
   const html = lire('dist', 'index.html');
-  for (const id of ['onglet-monde', 'ecran-monde', 'monde-atlas', 'monde-canvas',
+  for (const id of ['onglet-monde', 'ecran-monde', 'monde-canvas',
     'monde-champ', 'monde-outils', 'monde-recentrer',
     'monde-panneau', 'monde-panneau-titre', 'monde-panneau-fermer', 'monde-panneau-corps']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} manque à la page`);
   }
+  // ⚠⚠ `monde-atlas` A QUITTÉ CETTE LISTE — lot SOL-SATELLITE, 05/09. Il portait
+  // l'atlas indexé du fond de carte ; les huit planches qui le remplacent ont
+  // chacune leur balise, et c'est LEUR présence qu'on exige maintenant.
+  for (let i = 1; i <= NOMS_DU_SOL.length; i += 1) {
+    assert.ok(html.includes(`id="sol-${i}"`), `#sol-${i} manque à la page`);
+  }
+  assert.ok(!html.includes('id="monde-atlas"'), 'la balise de l\'atlas de terrain est revenue');
   // ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08, et cette garde le tient
   // par l'autre bout : Ethan a demandé « au doigt, pas de zoom fixe avec + − »,
   // donc leur RETOUR est ce qu'on refuse, pas leur absence.
@@ -540,69 +566,49 @@ test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est i
   // L'écran part caché : le jeu s'ouvre sur la Base.
   assert.match(html, /<div id="ecran-monde" hidden>/);
 
-  // ⚠ L'ATLAS EST DANS LE HTML, EN `data:`. C'est le prix de l'offline, qui
-  // n'est pas négociable : une image à côté serait une référence externe et le
-  // build sortirait en erreur. Le marqueur du source ne doit plus s'y trouver.
-  assert.ok(!html.includes('%ATLAS_TERRAIN%'), 'le marqueur de l\'atlas n\'a pas été remplacé');
+  // ⚠ LE SOL EST DANS LE HTML, EN `data:`. C'est le prix de l'offline, qui n'est
+  // pas négociable : une image à côté serait une référence externe et le build
+  // sortirait en erreur. Les marqueurs du source ne doivent plus s'y trouver.
+  assert.ok(!html.includes('%ATLAS_TERRAIN%'),
+    'le marqueur de l\'atlas de fond de carte est revenu : il est parti au lot SOL-SATELLITE');
+  for (let i = 1; i <= NOMS_DU_SOL.length; i += 1) {
+    assert.ok(!html.includes(`%SOL_CARTE_${i}%`), `le marqueur %SOL_CARTE_${i}% n'a pas été remplacé`);
+  }
 
-  // ⚠⚠ IL A CHANGÉ DE PORTE LE 30/08, ET LA GARDE S'EST RESSERRÉE AVEC LUI.
-  // Il entrait par le `src` d'une image ; il entre par la variable CSS
-  // `--atlas-sol`, et c'est `garnirLesAtlas` de `ui/session.js` qui en donne
-  // l'adresse à l'image au démarrage. La raison est mesurable : le sol de la
-  // base le veut en fond CSS et le fond de carte le veut en élément, et
-  // l'écrire aux deux endroits l'aurait inliné DEUX fois — 299 400 octets pour
-  // rien. Ce test compte donc les occurrences au lieu de se contenter d'en
-  // trouver une.
-  const debut = 'data:image/png;base64,iVBOR';
-  const variable = html.match(/--atlas-sol:\s*url\(['"]?(data:image\/png;base64,[^'")]{0,64})/);
-  assert.ok(variable, '`--atlas-sol` ne porte plus l\'atlas du terrain');
-  assert.ok(variable[1].startsWith(debut), `« ${variable[1]} » n'est pas un PNG inliné`);
-
-  // Et il pèse ce qu'il pèse : au moins deux cent mille caractères de base64,
-  // sinon c'est qu'un fichier vide a été inliné sans que rien ne le dise.
-  const entier = html.match(/--atlas-sol:\s*url\(['"]?(data:image\/png;base64,[^'")]*)/)[1];
-  assert.ok(entier.length > 200_000, `l'atlas inliné ne fait que ${entier.length} caractères`);
-
-  // ⚠⚠ ET IL N'Y EST QU'UNE FOIS. C'est l'assertion qui compte : le HTML
-  // porte huit atlas, et deux copies de celui-ci coûteraient à elles seules
-  // près de cinq fois la marge qui reste sous la borne de T10. On cherche les
-  // 64 premiers caractères de CE fichier-ci, qui l'identifient sans ambiguïté.
-  const empreinte = entier.slice(0, 64);
-  const copies = html.split(empreinte).length - 1;
-  assert.equal(copies, 1, `l'atlas du terrain est inliné ${copies} fois au lieu d'une`);
-
-  // ⚠ ET L'IMAGE QUI LE SERVIRA N'A PLUS DE `src` DANS LE FICHIER : elle le
-  // reçoit au démarrage. Un `src` écrit ici serait la seconde copie.
-  const balise = html.match(/<img[^>]*id="monde-atlas"[^>]*>/)[0];
-  assert.ok(!/\bsrc=/.test(balise), 'l\'image de l\'atlas porte de nouveau un `src` : il est inliné deux fois');
-  // ⚠ MAIS ELLE GARDE SA TAILLE DÉCLARÉE : le sol de la base la lit pour
-  // découper l'atlas, et il la lit AVANT tout décodage.
-  assert.match(balise, /width="\d+"/, 'l\'image de l\'atlas ne déclare plus sa largeur');
+  // ⚠⚠ ET CHACUNE DES HUIT N'Y EST QU'UNE FOIS. C'est l'assertion qui compte :
+  // à 200 Kio de WebP la planche, une seule copie de trop coûterait à elle seule
+  // plus que la marge sous la borne de T10. On identifie chaque planche par les
+  // 64 premiers caractères de SON base64, qui la distinguent des sept autres.
+  const debut = 'data:image/webp;base64,';
+  const empreintes = new Set();
+  for (let i = 1; i <= NOMS_DU_SOL.length; i += 1) {
+    const balise = html.match(new RegExp(`<img[^>]*id="sol-${i}"[^>]*>`))[0];
+    const adresse = balise.match(/src="([^"]*)"/)[1];
+    assert.ok(adresse.startsWith(debut), `sol-${i} : « ${adresse.slice(0, 40)} » n'est pas un WebP inliné`);
+    // ⚠ ET ELLE PÈSE CE QU'ELLE PÈSE. Le manifeste donne les octets du fichier ;
+    // le base64 en fait quatre tiers, au rembourrage près. Sans cette moitié-ci,
+    // un fichier vide passerait pour une planche.
+    const octets = MANIFESTE_SOL.sols[`sol_carte_${i}`].octets;
+    const attendu = Math.ceil(octets / 3) * 4;
+    const utile = adresse.length - debut.length;
+    assert.equal(utile, attendu, `sol-${i} : ${utile} caractères de base64 pour ${octets} octets`);
+    const empreinte = adresse.slice(debut.length, debut.length + 64);
+    assert.ok(!empreintes.has(empreinte), `deux planches partagent leurs 64 premiers caractères`);
+    empreintes.add(empreinte);
+    assert.equal(html.split(empreinte).length - 1, 1, `sol-${i} est inliné deux fois`);
+  }
 });
 
-test('page — la taille déclarée de l\'atlas est celle du fichier, à l\'octet', () => {
-  // ⚠⚠ UNE TRANSCRIPTION QUI NE SE CONFRONTE PAS À SA SOURCE EST UNE COPIE QUI
-  // VIEILLIT. Le balisage annonce `width` et `height` sur l'image de l'atlas
-  // parce que le SOL DE LA BASE en a besoin de façon synchrone — `naturalWidth`
-  // vaut zéro tant que le PNG n'est pas décodé, et le sol se peint à la
-  // première image. Ces deux nombres sont donc une copie de l'en-tête du
-  // fichier, et rien d'autre ne les tiendrait à jour : le jour où l'atlas
-  // change de taille sans qu'on y touche, le sol découperait une grille qui
-  // n'existe pas et dessinerait n'importe quel morceau d'image.
-  const octets = readFileSync(join(RACINE, 'art', 'sprites', 'carte', 'atlas-terrain-64.png'));
-  assert.equal(octets.readUInt32BE(0), 0x89504e47, 'ce n\'est pas un PNG');
-  const largeur = octets.readUInt32BE(16);
-  const hauteur = octets.readUInt32BE(20);
-
-  const balise = lire('src', 'index.src.html').match(/<img[^>]*id="monde-atlas"[^>]*>/)[0];
-  assert.equal(Number(balise.match(/width="(\d+)"/)[1]), largeur,
-    'la largeur déclarée n\'est plus celle du fichier');
-  assert.equal(Number(balise.match(/height="(\d+)"/)[1]), hauteur,
-    'la hauteur déclarée n\'est plus celle du fichier');
-
-  // Falsifiable : le montage lit bien l'en-tête, pas une constante.
-  assert.ok(largeur > 0 && hauteur > 0, 'l\'en-tête n\'a pas été lu');
-});
+// ⚠⚠ `page — la taille déclarée de l'atlas est celle du fichier, à l'octet` A
+// ÉTÉ RETIRÉ AU LOT SOL-SATELLITE (05/09), ET C'EST UNE ASSERTION EN MOINS,
+// DÉCLARÉE. Il confrontait les attributs `width` et `height` de `<img
+// id="monde-atlas">` à l'en-tête du PNG. Ces attributs existaient parce que le
+// SOL DE LA BASE lisait la largeur de l'atlas de façon SYNCHRONE, avant tout
+// décodage ; ce sol est le décor peint depuis le lot MUR-PEINT, et l'atlas
+// lui-même est parti avec celui-ci. Plus rien ne lit la taille d'une image du
+// sol : la géométrie du pavage vit dans `render/terrain.js`, qui est pur, et
+// `SOL T2` confronte sa constante au manifeste de `tools/sols.py`. La
+// confrontation n'a donc pas disparu — elle a changé de côté.
 
 test('page — l\'écran Monde n\'ajoute aucune barre à hauteur fixe', () => {
   // ⚠ CONSIGNE D'ETHAN, 28/08 : « tu compresses tout dans l'ui ». Le chrome
@@ -1373,16 +1379,17 @@ test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse a
     assert.ok(!/\bsrc=/.test(balise[0]),
       `l'image « ${id} » porte un \`src\` : son atlas est inliné deux fois`);
   }
-  // ⚠ SEIZE DEPUIS LE LOT ERGONOMIE : les quinze du lot MUR-PEINT, plus l'atlas
-  // de TERRAIN, que le champ de bataille réclame depuis que ses obstacles
-  // portent leur sprite au lieu d'un aplat. Il était déjà dans la feuille pour
-  // l'écran de la base ; lui donner une balise ne l'inline pas une seconde fois,
-  // et c'est la boucle ci-dessus — pas ce compte — qui garde l'invariant qui
-  // compte : aucune de ces balises ne porte de `src`.
+  // ⚠ QUINZE DEPUIS LE LOT SOL-SATELLITE : seize la veille, moins `monde-atlas`.
+  // Il servait l'atlas indexé du fond de carte depuis `--atlas-sol` ; les huit
+  // planches qui le remplacent portent leur marqueur directement en `src`,
+  // aucune règle de la feuille ne s'en servant. Une entrée sans variable en face
+  // ferait lever `garnirLesAtlas`.
   //
-  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : huit
+  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : sept
   // atlas, plus autant d'entrées que la table des fonds en porte.
-  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 8 + tousLesFonds().length);
+  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7 + tousLesFonds().length);
+  assert.ok(!('monde-atlas' in ATLAS_DE_LA_PAGE),
+    'l\'atlas du fond de carte est revenu dans la table : il n\'a plus de variable');
   assert.equal(tousLesFonds().length, 8, 'les huit décors ne sont plus huit');
   assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
   assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');

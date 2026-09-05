@@ -736,6 +736,38 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   //
   // ⚠ LA MARGE EST DE 239 383 OCTETS, 3,28 %.
   //
+  // ⚠⚠ ET ELLE PASSE DE 7 300 000 À 9 300 000 AU LOT SOL-SATELLITE, 05/09. Ethan
+  // a livré huit planches de terrain satellite de 1 254 × 1 254 pour la carte du
+  // monde, avec quatre consignes : « fais au mieux pour que ce soit joli », « que
+  // les transitions entre les différentes images se passent bien », « pas de fond
+  // ouvrage pour le moment », « tu fais le moins de traitement possible ».
+  //
+  // ⚠⚠ C'EST LE PREMIER LOT DEPUIS L'ÉCRAN DE CARTE QUI FAIT ENTRER DE L'IMAGE
+  // POUR DE BON, et le paragraphe des sept mégaoctets ci-dessus l'avait annoncé :
+  // « les deux lots de terrain devront relever la borne EN ÉCRIVANT POURQUOI ».
+  // Ce qui entre : 1 674 196 octets de WebP q75, soit **2 232 264 en base64**.
+  // Ce qui sort : `atlas-terrain-64.png`, l'atlas indexé de 64 tuiles du fond de
+  // carte, 224 548 octets, soit **299 400 en base64**. Livrable mesuré :
+  // 7 060 617 → **8 991 743 octets**, +1 931 126, soit **1,273 fois**. Et
+  // **289 `data:` avant, 296 après** : huit planches entrent, un atlas sort.
+  //
+  // ⚠⚠ LA CONDITION DE REMESURE EST DUE, ET ELLE A ÉTÉ FAITE — MAIS PAS SUR
+  // L'APPAREIL. Le dépôt n'a pas de téléphone (§3), et un test appareil non
+  // exécuté se déclare non exécuté. Mesuré dans Chromium à la place, géométrie
+  // 360 × 780 à dpr 3, sept exécutions par côté, médiane : **DOMContentLoaded
+  // 515 → 560 ms** (+45, soit +8,7 % pour +27 % de livrable) et **premier rendu
+  // 256 → 192 ms**. Ce n'est PAS l'appareil d'Ethan, et le relèvement est une
+  // proposition — un nombre se change seul.
+  //
+  // ⚠ LA QUALITÉ NE SE BAISSE PAS POUR PASSER SOUS LA BORNE. q75 est le réglage
+  // des huit décors de base depuis MUR-PEINT ; les paliers ont été mesurés —
+  // q85 → 3 660 040 octets de base64, q80 → 2 840 884, q75 → 2 229 936, q70 →
+  // 2 062 264 — et q70 rendrait 167 672 octets pour 0,4 dB de PSNR, c'est-à-dire
+  // pas assez pour valoir une seconde qualité dans le dépôt. Voir
+  // `tools/sols.py`, qui dit aussi pourquoi la résolution ne se touche pas.
+  //
+  // ⚠ LA MARGE EST DE 308 257 OCTETS, 3,43 %.
+  //
   // ⚠ ON NE ROGNE JAMAIS POUR PASSER SOUS LA BORNE (CLAUDE.md §5) : c'est la
   // borne qui monte, et le lot qui écrit pourquoi.
   //
@@ -743,7 +775,7 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // peindre le mur de contour DANS le fond de base et livré huit décors de
   // 1080 × 2160, +2 154 705 octets, q75 et pleine résolution.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 7_300_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 9_300_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

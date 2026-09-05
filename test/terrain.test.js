@@ -1,558 +1,472 @@
-// Le pavage du fond de carte — `src/render/terrain.js`, confronté à l'atlas réel.
+// Le sol de la carte du monde — `src/render/terrain.js`, confronté au dépôt.
 //
-// ⚠ CE FICHIER DÉCODE LE PNG LIVRÉ, IL NE SE FABRIQUE PAS UN ATLAS DE
-// COMPLAISANCE. Un atlas synthétique — du bruit, un dégradé — passerait tous
-// les tests ci-dessous et ne dirait rien du fichier que le joueur verra : c'est
-// SA distribution de teintes qui décide des seuils de quintile, et c'est SA
-// taille qui décide du nombre de tuiles. Le décodeur tient en quarante lignes
-// parce que le fichier est un PNG indexé sans entrelacement ; il refuse tout le
-// reste plutôt que de rendre une image approchée.
+// ⚠⚠ CE FICHIER A ÉTÉ RÉÉCRIT EN ENTIER AU LOT SOL-SATELLITE (05/09), ET IL FAUT
+// SAVOIR CE QU'IL NE MESURE PLUS. Il portait treize tests sur un module qui
+// RENDAIT DES PIXELS : il décodait l'atlas indexé livré, refaisait la somme
+// pondérée, vérifiait que les cinq teintes de sortie occupaient 20 % de la
+// surface chacune, que le plancher anti-noir ne mordait pas, que la formule
+// battait la composition alpha ordinaire à l'écart-type. Le sol n'est plus
+// accumulé ni quantifié : ces treize-là n'ont plus d'objet, et ce ne sont pas des
+// assertions assouplies, ce sont des assertions dont le sujet a disparu.
 //
-// ⚠ ET UN RENDU NE SE TESTE PAS QU'EN NOMBRES. Le défaut des « bits épuisés »,
-// qui faisait basculer toutes les tuiles du même côté, s'est vu à l'œil en une
-// seconde et aucune de ces assertions ne l'aurait attrapé — d'où le test des
-// distributions du hachage, écrit exprès pour lui, et l'image de contrôle jointe
-// au rapport du lot.
+// ⚠ CE QUI SURVIT, EN REVANCHE, SURVIT MOT POUR MOT : l'indépendance des dalles,
+// le fait qu'aucun cran n'agrandisse la source, et la distribution du hachage —
+// c'est le défaut des « bits épuisés » qui faisait basculer toutes les tuiles du
+// même côté, et il se serait commis à l'identique ici.
+//
+// ⚠⚠ ET CE FICHIER NE DÉCODE PLUS D'IMAGE. Les huit planches sont en WebP, que
+// Node ne sait pas lire ; ce que la suite peut encore mesurer sur elles vit dans
+// `art/sprites/sol/sol-empreintes.json`, écrit par `tools/sols.py`. Même motif
+// que `bord-empreintes.json` depuis le lot MURS et que `fond-empreintes.json`
+// depuis MUR-PEINT.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { inflateSync } from 'node:zlib';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  creerAtlas, rendreDalle, masqueDeLaTuile, orientationDeLaTuile,
-  descriptionDuNoeud, partOuvrageDeLaRangee, rangeeDuPixelSource,
-  teinteDeLaValeur, NB_TEINTES, SEL_DECALAGE, SEL_FIGURE,
+  blocsDeLaDalle, descriptionDuBloc, echelleDuCran, geometrieDuCran, profilDuBloc,
+  COTE_SOURCE, FONDU_SOURCE, PAS_SOURCE, PART_INTACTE, NOMS_DU_SOL, SEL_BLOC,
 } from '../src/render/terrain.js';
-import {
-  GEOGRAPHIE, TERRAIN_CARTE, ZOOM_CARTE, PIXELS_SOURCE_PAR_CASE,
-} from '../src/data/sites.js';
-import { niveauDeLaRangee, positionDepartJoueur } from '../src/sim/carte.js';
+import { TERRAIN_CARTE, ZOOM_CARTE, PIXELS_SOURCE_PAR_CASE } from '../src/data/sites.js';
+import { SEL_VARIANTE } from '../src/render/variante.js';
+import { SEL_FOND } from '../src/render/fond.js';
+import { SEL_RANGEE, SEL_COLONNE } from '../src/sim/poi.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
-const CHEMIN_ATLAS = join(RACINE, 'art', 'sprites', 'carte', 'atlas-terrain-64.png');
+const DOSSIER_SOL = join(RACINE, 'art', 'sprites', 'sol');
+const MANIFESTE = JSON.parse(readFileSync(join(DOSSIER_SOL, 'sol-empreintes.json'), 'utf8'));
 
-// ---------------------------------------------------------------------------
-// Le décodeur — juste assez de PNG pour ce fichier-ci, et rien de plus
-// ---------------------------------------------------------------------------
+const lire = (...bouts) => readFileSync(join(RACINE, ...bouts), 'utf8');
+
+/** La source sans ses commentaires — une garde ne lit jamais sa propre prose. */
+function sansCommentaires(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
 
 /**
- * Décode le PNG indexé de l'atlas en indices de palette.
- *
- * Il LÈVE sur tout ce qu'il ne sait pas faire — autre profondeur, entrelacement,
- * autre type de couleur — plutôt que de rendre une image approchée : un atlas
- * mal décodé ferait tomber les tests suivants sur un défaut qui n'existe pas.
+ * Le poids de chaque pixel d'une dalle, sommé sur tous les blocs qui la
+ * touchent. C'est la reconstruction de ce que `ui/monde.js` compose au canevas.
  */
-function decoderAtlasIndexe(chemin) {
-  const octets = readFileSync(chemin);
-  assert.equal(octets.readUInt32BE(0), 0x89504e47, 'ce n\'est pas un PNG');
-  let position = 8;
-  let largeur = 0;
-  let hauteur = 0;
-  const morceaux = [];
-  let palette = null;
-  while (position < octets.length) {
-    const taille = octets.readUInt32BE(position);
-    const nom = octets.toString('ascii', position + 4, position + 8);
-    const corps = octets.subarray(position + 8, position + 8 + taille);
-    if (nom === 'IHDR') {
-      largeur = corps.readUInt32BE(0);
-      hauteur = corps.readUInt32BE(4);
-      assert.equal(corps[8], 4, 'profondeur de bits inattendue');
-      assert.equal(corps[9], 3, 'l\'atlas n\'est plus une image indexée');
-      assert.equal(corps[12], 0, 'entrelacement non géré');
-    } else if (nom === 'PLTE') palette = Buffer.from(corps);
-    else if (nom === 'IDAT') morceaux.push(Buffer.from(corps));
-    else if (nom === 'IEND') break;
-    position += 12 + taille;
-  }
-  const brut = inflateSync(Buffer.concat(morceaux));
-  const octetsParLigne = Math.ceil(largeur / 2); // 4 bits par pixel
-  const lignes = Buffer.alloc(hauteur * octetsParLigne);
-  let lu = 0;
-  for (let y = 0; y < hauteur; y += 1) {
-    const filtre = brut[lu];
-    lu += 1;
-    const ligne = lignes.subarray(y * octetsParLigne, (y + 1) * octetsParLigne);
-    brut.copy(ligne, 0, lu, lu + octetsParLigne);
-    lu += octetsParLigne;
-    const precedente = y === 0 ? null : lignes.subarray((y - 1) * octetsParLigne, y * octetsParLigne);
-    for (let x = 0; x < octetsParLigne; x += 1) {
-      const a = x >= 1 ? ligne[x - 1] : 0;
-      const b = precedente === null ? 0 : precedente[x];
-      const c = (x >= 1 && precedente !== null) ? precedente[x - 1] : 0;
-      let v = ligne[x];
-      if (filtre === 1) v += a;
-      else if (filtre === 2) v += b;
-      else if (filtre === 3) v += (a + b) >> 1;
-      else if (filtre === 4) {
-        const p = a + b - c;
-        const pa = Math.abs(p - a);
-        const pb = Math.abs(p - b);
-        const pc = Math.abs(p - c);
-        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
-      } else assert.equal(filtre, 0, `filtre PNG ${filtre} non géré`);
-      ligne[x] = v & 0xff;
-    }
-  }
-  const indices = new Uint8Array(largeur * hauteur);
-  for (let y = 0; y < hauteur; y += 1) {
-    const ligne = lignes.subarray(y * octetsParLigne, (y + 1) * octetsParLigne);
-    for (let x = 0; x < largeur; x += 1) {
-      indices[y * largeur + x] = (x & 1) === 1 ? (ligne[x >> 1] & 0xf) : (ligne[x >> 1] >> 4);
-    }
-  }
-  return { largeur, hauteur, indices, palette };
-}
-
-const PNG = decoderAtlasIndexe(CHEMIN_ATLAS);
-const ATLAS = creerAtlas(PNG.indices, ZOOM_CARTE.coteTuile, PNG.largeur);
-
-/** Les dix couleurs des deux rampes, empaquetées pour une recherche rapide. */
-function codesDesRampes() {
-  const code = (hex) => (parseInt(hex.slice(1, 3), 16) << 16)
-    | (parseInt(hex.slice(3, 5), 16) << 8) | parseInt(hex.slice(5, 7), 16);
-  return {
-    joueur: TERRAIN_CARTE.rampes.joueur.map(code),
-    ouvrage: TERRAIN_CARTE.rampes.ouvrage.map(code),
-  };
-}
-const RAMPES = codesDesRampes();
-
-/** Décompose une dalle rendue : teintes employées, part d'Ouvrage, inconnus. */
-function analyser(dalle) {
-  const parTeinte = new Array(NB_TEINTES).fill(0);
-  let ouvrage = 0;
-  let inconnus = 0;
-  let noirs = 0;
-  const n = dalle.donnees.length / 4;
-  for (let p = 0; p < dalle.donnees.length; p += 4) {
-    const code = (dalle.donnees[p] << 16) | (dalle.donnees[p + 1] << 8) | dalle.donnees[p + 2];
-    if (code === 0) noirs += 1;
-    const j = RAMPES.joueur.indexOf(code);
-    if (j !== -1) { parTeinte[j] += 1; continue; }
-    const o = RAMPES.ouvrage.indexOf(code);
-    if (o !== -1) { parTeinte[o] += 1; ouvrage += 1; continue; }
-    inconnus += 1;
-  }
-  return { parTeinte, partOuvrage: ouvrage / n, inconnus, noirs, pixels: n };
-}
-
-// ---------------------------------------------------------------------------
-// L'atlas lui-même
-// ---------------------------------------------------------------------------
-
-test('atlas — le fichier livré est bien 64 tuiles indexées sur la rampe du joueur', () => {
-  assert.equal(PNG.largeur, PNG.hauteur, 'l\'atlas n\'est pas carré');
-  assert.equal(ATLAS.nombre, 64, `${ATLAS.nombre} tuiles au lieu de 64`);
-  assert.equal(ATLAS.cote, ZOOM_CARTE.coteTuile);
-
-  // ⚠⚠ ET UNE TUILE NE COUVRE PLUS UNE CASE, ELLE EN COUVRE UN QUART. C'est le
-  // correctif du 30/08 : à une tuile par case, le cran le plus serré
-  // AGRANDISSAIT la source d'un facteur deux, et le grain de 4 px de l'art se
-  // lisait en carrés de 8 px à l'écran. La garde porte sur ce qui compte —
-  // qu'AUCUN cran n'agrandisse — et non sur le nombre 2, qui n'en est que le
-  // moyen. Elle rougirait donc aussi bien si l'on ajoutait un cran de 512.
-  for (const cran of ZOOM_CARTE.crans) {
-    const echelle = cran / PIXELS_SOURCE_PAR_CASE;
-    assert.ok(echelle <= 1,
-      `au cran ${cran}, le pavage agrandit sa source de ×${echelle} : le grain se verra`);
-  }
-  assert.equal(PIXELS_SOURCE_PAR_CASE, ZOOM_CARTE.coteTuile * ZOOM_CARTE.tuilesParCase,
-    'le côté d\'une case en pixels source n\'est plus le produit des deux facteurs');
-
-  // Sa palette EST la rampe du joueur, dans l'ordre : c'est ce qui permet de
-  // travailler sur l'indice plutôt que sur une luminance, et de repeindre à
-  // index constant pour l'autre camp.
-  for (let i = 0; i < NB_TEINTES; i += 1) {
-    const hex = `#${[0, 1, 2].map((c) => PNG.palette[i * 3 + c].toString(16).padStart(2, '0')).join('')}`;
-    assert.equal(
-      hex.toUpperCase(), TERRAIN_CARTE.rampes.joueur[i].toUpperCase(),
-      `la couleur ${i} de l'atlas n'est plus celle de la rampe du joueur`,
-    );
-  }
-
-  // ⚠ ET IL EST ÉQUILIBRÉ, MESURÉ. Chaque indice couvre 20,0 % de la surface,
-  // ce qui est l'hypothèse sur laquelle repose tout le reste : c'est parce que
-  // l'atlas est uniforme et la SORTIE à peu près gaussienne que les seuils de
-  // teinte ne peuvent pas être ceux de l'atlas.
-  const compte = new Array(NB_TEINTES).fill(0);
-  for (const v of PNG.indices) compte[v] += 1;
-  for (let i = 0; i < NB_TEINTES; i += 1) {
-    const part = (100 * compte[i]) / PNG.indices.length;
-    assert.ok(Math.abs(part - 20) < 1, `l'indice ${i} couvre ${part.toFixed(2)} % de l'atlas`);
-  }
-  assert.ok(Math.abs(ATLAS.moyenne - 2) < 0.01, `moyenne ${ATLAS.moyenne}`);
-});
-
-// ---------------------------------------------------------------------------
-// Le masque et les orientations
-// ---------------------------------------------------------------------------
-
-test('masque — cosinus surélevé : plein au centre, nul aux bords, symétrique', () => {
-  for (const cote of ZOOM_CARTE.crans) {
-    const m = masqueDeLaTuile(cote);
-    assert.equal(m.length, cote);
-    // Symétrie : sans elle le semis dérive doucement vers un coin.
-    for (let i = 0; i < cote; i += 1) {
-      assert.ok(Math.abs(m[i] - m[cote - 1 - i]) < 1e-12, `masque asymétrique en ${i}`);
-    }
-    // Le centre vaut presque 1, les bords presque 0, et ça monte sans redescendre.
-    assert.ok(m[cote / 2] > 0.99, `centre à ${m[cote / 2]}`);
-    assert.ok(m[0] < 0.01 && m[cote - 1] < 0.01, `bord à ${m[0]}`);
-    assert.ok(m[0] > 0, 'le bord vaut exactement zéro : la couverture peut s\'annuler');
-    // Il monte strictement jusqu'aux DEUX échantillons du milieu, qui sont
-    // égaux par symétrie — l'échantillonnage est pris au centre des pixels,
-    // donc aucun ne tombe exactement sur l'axe.
-    for (let i = 1; i < cote / 2; i += 1) {
-      assert.ok(m[i] > m[i - 1], `le masque redescend en ${i}`);
-    }
-    assert.equal(m[cote / 2], m[cote / 2 - 1], 'les deux échantillons du milieu diffèrent');
-  }
-});
-
-test('orientations — les huit sont des bijections, et elles sont toutes distinctes', () => {
-  const cote = 8;
-  const empreintes = new Set();
-  for (let rotation = 0; rotation < 4; rotation += 1) {
-    for (const miroir of [false, true]) {
-      const t = orientationDeLaTuile(rotation, miroir, cote);
-      const atteints = new Set();
-      const trace = [];
-      for (let sy = 0; sy < cote; sy += 1) {
-        for (let sx = 0; sx < cote; sx += 1) {
-          const ax = t.ox + t.a * sx + t.b * sy;
-          const ay = t.oy + t.c * sx + t.d * sy;
-          assert.ok(ax >= 0 && ax < cote && ay >= 0 && ay < cote,
-            `rotation ${rotation} miroir ${miroir} sort de la tuile en (${sx}, ${sy})`);
-          atteints.add(ay * cote + ax);
-          trace.push(ay * cote + ax);
-        }
+function poidsDeLaDalle({ graine, cran, x0, y0, cote }) {
+  const { taille, fondu } = geometrieDuCran(cran);
+  const profil = profilDuBloc(taille, fondu);
+  const somme = new Float64Array(cote * cote);
+  const pleins = new Int32Array(cote * cote);
+  for (const b of blocsDeLaDalle({ graine, cran, x0, y0, cote })) {
+    for (let j = 0; j < taille; j += 1) {
+      const y = b.y + j;
+      if (y < 0 || y >= cote) continue;
+      for (let i = 0; i < taille; i += 1) {
+        const x = b.x + i;
+        if (x < 0 || x >= cote) continue;
+        const w = profil[j] * profil[i];
+        somme[y * cote + x] += w;
+        if (w === 1) pleins[y * cote + x] += 1;
       }
-      // Bijection : chaque pixel de la tuile est atteint une fois et une seule.
-      assert.equal(atteints.size, cote * cote,
-        `rotation ${rotation} miroir ${miroir} n'est pas une bijection`);
-      empreintes.add(trace.join(','));
     }
   }
-  assert.equal(empreintes.size, 8, 'deux orientations font la même chose');
+  return { somme, pleins };
+}
+
+// ---------------------------------------------------------------------------
+// SOL T1 — la table, l'outil, les fichiers, le manifeste, le build et la page
+// ---------------------------------------------------------------------------
+
+test('SOL T1 — les huit planches ne peuvent pas diverger entre six endroits', () => {
+  // ⚠⚠ SIX ÉCRITURES DU MÊME HUIT, ET AUCUNE N'EST LA SOURCE DES CINQ AUTRES.
+  // La table du module nomme les dessins, l'outil les produit, le dossier les
+  // porte, le manifeste les décrit, le build les inline, la page les déclare.
+  // Chacune est indispensable là où elle est — un module pur ne lit pas un
+  // dossier, un build ne lit pas un module ES — donc la seule chose à faire est
+  // de les CONFRONTER. C'est la garde née de BÂTIMENTS-1024, appliquée ici.
+  assert.equal(NOMS_DU_SOL.length, 8, 'huit planches, pas une de plus');
+
+  const surLeDisque = readdirSync(DOSSIER_SOL)
+    .filter((n) => n.endsWith('.webp')).map((n) => n.replace(/\.webp$/, '')).sort();
+  assert.deepEqual(surLeDisque, [...NOMS_DU_SOL].sort(), 'le dossier et la table divergent');
+  assert.deepEqual(Object.keys(MANIFESTE.sols).sort(), [...NOMS_DU_SOL].sort(),
+    'le manifeste et la table divergent');
+
+  const outil = lire('tools', 'sols.py');
+  assert.match(outil, /PLANCHES = \[f'sol_carte_\{i\}\.png' for i in range\(1, 9\)\]/,
+    'tools/sols.py ne dérive plus ses huit planches du même patron que la table');
+
+  const build = lire('tools', 'build.js');
+  const page = lire('src', 'index.src.html');
+  for (const nom of NOMS_DU_SOL) {
+    const marqueur = `%${nom.toUpperCase()}%`;
+    assert.ok(build.includes(`marqueur: '${marqueur}'`), `${marqueur} n'est pas inliné`);
+    assert.ok(build.includes(`'${nom}.webp'`), `${nom}.webp n'est pas dans la table du build`);
+    assert.ok(page.includes(`src="${marqueur}"`), `${marqueur} n'est pas posé dans la page`);
+  }
+  // ⚠ ET L'INVERSE : pas un marqueur de sol de plus que de planches. Un
+  // neuvième inliné sans dessin qui le pose pèserait 200 Kio pour rien.
+  assert.equal((build.match(/%SOL_CARTE_\d+%/g) ?? []).length, 8, 'le build inline autre chose');
+  assert.equal((page.match(/%SOL_CARTE_\d+%/g) ?? []).length, 8, 'la page déclare autre chose');
+  for (let i = 1; i <= 8; i += 1) {
+    assert.ok(page.includes(`<img id="sol-${i}"`), `la balise sol-${i} manque`);
+  }
 });
 
 // ---------------------------------------------------------------------------
-// Le hachage — la faute des « bits épuisés »
+// SOL T2 — le côté écrit dans le module est celui des fichiers
 // ---------------------------------------------------------------------------
 
-test('hachage — chaque champ du nœud a assez de bits pour être vraiment tiré', () => {
-  // ⚠ CE TEST EXISTE POUR UN DÉFAUT VU À L'ŒIL, PAS TROUVÉ PAR RELECTURE. Lire
-  // un champ dans les trois bits de tête d'un mot de 32 rend une valeur toujours
-  // minuscule : pendant la maquette, TOUTES les tuiles basculaient du même côté
-  // et le fond devenait un damier. Aucune des assertions de rendu de ce fichier
-  // ne l'aurait vu — le pavage restait « un pavage ».
-  const tuiles = new Array(64).fill(0);
-  const rotations = [0, 0, 0, 0];
-  const miroirs = [0, 0];
-  let decalageXNegatif = 0;
-  let decalageYNegatif = 0;
-  const tirages = [0, 0, 0, 0];
+test('SOL T2 — `COTE_SOURCE` est mesuré sur les fichiers, pas affirmé', () => {
+  // `render/` est pur : il ne lit aucun fichier, et `naturalWidth` n'existe
+  // qu'une fois l'image décodée par un navigateur. La constante est donc écrite,
+  // et c'est ICI qu'elle se confronte — au dépôt, pas chez le joueur.
+  for (const nom of NOMS_DU_SOL) {
+    const e = MANIFESTE.sols[nom];
+    assert.equal(e.largeur, COTE_SOURCE, `${nom} : largeur ${e.largeur}`);
+    assert.equal(e.hauteur, COTE_SOURCE, `${nom} : hauteur ${e.hauteur}`);
+  }
+  // ⚠ CARRÉES, ET C'EST CE QUI AUTORISE LES QUARTS DE TOUR. Une planche
+  // rectangulaire changerait d'encombrement en tournant, et le pavage laisserait
+  // des trous une fois sur deux.
+  assert.equal(FONDU_SOURCE, TERRAIN_CARTE.fonduSourcePx, 'le fondu ne vient plus de la donnée');
+  assert.equal(PAS_SOURCE, COTE_SOURCE - FONDU_SOURCE);
+  assert.ok(FONDU_SOURCE * 2 < COTE_SOURCE,
+    'le fondu mange plus que la moitié du bloc : il ne resterait aucune zone intacte');
+});
+
+// ---------------------------------------------------------------------------
+// SOL T3 — la partition de l'unité, sur une dalle entière et aux quatre crans
+// ---------------------------------------------------------------------------
+
+test('SOL T3 — la somme des poids vaut EXACTEMENT un, partout et à tous les crans', () => {
+  // ⚠⚠ C'EST L'INVARIANT DU LOT. `ui/monde.js` compose les blocs en `lighter`,
+  // qui ADDITIONNE : la dalle finit avec `Σ w·v` en couleur et `Σ w` en alpha, et
+  // rien ne divise après coup. Si `Σ w` s'écartait de un, la carte s'éclaircirait
+  // ou s'assombrirait dans les bandes de fondu — c'est-à-dire qu'elle
+  // DESSINERAIT ses coutures au lieu de les effacer.
+  for (const cran of ZOOM_CARTE.crans) {
+    const cote = 256;
+    const { somme } = poidsDeLaDalle({ graine: 12345, cran, x0: 3 * cote, y0: 7 * cote, cote });
+    let min = Infinity;
+    let max = -Infinity;
+    for (const v of somme) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    assert.ok(Math.abs(min - 1) < 1e-12, `cran ${cran} : poids minimum ${min}`);
+    assert.ok(Math.abs(max - 1) < 1e-12, `cran ${cran} : poids maximum ${max}`);
+  }
+});
+
+test('SOL T3 ter — et l\'exactitude s\'arrête à l\'alpha 8 bits, mesuré', () => {
+  // ⚠⚠ `Σw = 1` EST EXACT EN FLOTTANT ; LE MASQUE, LUI, EST UN CANEVAS. `ui/monde.js`
+  // écrit `round(w × 255)` dans le canal alpha, et deux arrondis qui se
+  // complètent ne somment pas forcément à 255. C'est la seule imprécision du
+  // pavage, et elle se mesure plutôt que de se supposer : la déclarer bornée est
+  // ce qui distingue « exact » d'« assez exact ».
+  for (const cran of ZOOM_CARTE.crans) {
+    const { taille, fondu, pas } = geometrieDuCran(cran);
+    const p = profilDuBloc(taille, fondu);
+    // Dans une bande, deux blocs se croisent.
+    let bande = 0;
+    for (let i = 0; i < fondu; i += 1) {
+      bande = Math.max(bande, Math.abs(Math.round(p[i] * 255) + Math.round(p[i + pas] * 255) - 255));
+    }
+    assert.equal(bande, 0, `cran ${cran} : la bande de fondu s'écarte de ${bande}/255`);
+    // Aux coins, quatre. Le produit de deux profils s'arrondit quatre fois.
+    let coin = 0;
+    for (let j = 0; j < fondu; j += 1) {
+      for (let i = 0; i < fondu; i += 1) {
+        const somme = Math.round(p[j] * p[i] * 255) + Math.round(p[j] * p[i + pas] * 255)
+          + Math.round(p[j + pas] * p[i] * 255) + Math.round(p[j + pas] * p[i + pas] * 255);
+        coin = Math.max(coin, Math.abs(somme - 255));
+      }
+    }
+    assert.ok(coin <= 1, `cran ${cran} : les coins s'écartent de ${coin}/255`);
+  }
+});
+
+test('SOL T3 bis — la complémentarité tient au PAS, et la sonde le prouve', () => {
+  // ⚠ SANS CETTE SONDE, T3 POURRAIT ÊTRE VRAI SANS RIEN GARDER. La propriété
+  // n'est pas « le profil monte doucement » : c'est que le profil MONTANT d'un
+  // bloc et le profil DESCENDANT de son voisin, décalés d'exactement `pas`,
+  // somment à un. On le vérifie, puis on décale d'un pixel de plus et on exige
+  // que ça CESSE d'être vrai.
+  for (const cran of ZOOM_CARTE.crans) {
+    const { taille, fondu, pas } = geometrieDuCran(cran);
+    const p = profilDuBloc(taille, fondu);
+    for (let i = 0; i < fondu; i += 1) {
+      assert.ok(Math.abs(p[i] + p[i + pas] - 1) < 1e-12,
+        `cran ${cran} : le profil n'est pas complémentaire au pixel ${i}`);
+    }
+    // Le même profil décalé d'un pixel : la somme s'écarte, et de beaucoup.
+    let pire = 0;
+    for (let i = 0; i < fondu - 1; i += 1) {
+      pire = Math.max(pire, Math.abs(p[i] + p[i + pas + 1] - 1));
+    }
+    assert.ok(pire > 0.01,
+      `cran ${cran} : un pas faux d'un pixel ne se voit pas (écart ${pire})`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SOL T4 — la part de surface qui est le pixel source
+// ---------------------------------------------------------------------------
+
+test('SOL T4 — 78,6 % du sol est le pixel source, et ça se compte sur le pavage', () => {
+  // ⚠⚠ C'EST LA MESURE DE « LE MOINS DE TRAITEMENT POSSIBLE ». On compte les
+  // pixels qu'UN SEUL bloc couvre avec le poids plein : là, la dalle reçoit la
+  // planche telle quelle. Le reste est la bande de fondu, où deux dessins — ou
+  // quatre aux coins — se croisent.
+  //
+  // ⚠ ON MESURE SUR UNE PÉRIODE ENTIÈRE DU PAVAGE, PAS SUR UNE DALLE RONDE. Le
+  // pas ne divise aucun côté de dalle : une fenêtre de 512 ou de 1 536 tombe au
+  // milieu d'une période et la mesure penche de neuf points. Premier jet mesuré
+  // 0,6944 pour 0,7856 attendus, et c'était le montage qui avait tort.
+  for (const cran of ZOOM_CARTE.crans) {
+    const { pas } = geometrieDuCran(cran);
+    const { pleins } = poidsDeLaDalle({ graine: 9, cran, x0: 4 * pas, y0: 3 * pas, cote: pas });
+    let intacts = 0;
+    for (const p of pleins) {
+      assert.ok(p <= 1, 'deux blocs à poids plein sur le même pixel');
+      if (p === 1) intacts += 1;
+    }
+    const part = intacts / (pas * pas);
+    assert.ok(Math.abs(part - PART_INTACTE) < 0.02,
+      `cran ${cran} : part intacte ${part.toFixed(4)} contre ${PART_INTACTE.toFixed(4)}`);
+    assert.ok(part > 0.75, `cran ${cran} : plus que ${(part * 100).toFixed(1)} % de source`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SOL T5 — l'indépendance des dalles
+// ---------------------------------------------------------------------------
+
+test('SOL T5 — une zone rendue en une dalle est identique à la même rendue en quatre', () => {
+  // ⚠⚠ C'EST L'INVARIANT QUI CASSERAIT EN SILENCE. Une couture ne fait pas
+  // tomber un test : elle se voit six semaines plus tard sur un téléphone. On
+  // compare donc ce que le pavage POSE — dessin, orientation, position ABSOLUE —
+  // vu d'un découpage et de l'autre.
+  const cran = 64;
+  const grand = 512;
+  const petit = 256;
+  const cle = (b, dx, dy) => `${b.sol}/${b.rotation}/${b.miroir}@${b.x + dx},${b.y + dy}`;
+
+  const enUn = new Set(
+    blocsDeLaDalle({ graine: 4242, cran, x0: 1024, y0: 2048, cote: grand })
+      .map((b) => cle(b, 1024, 2048)),
+  );
+  const enQuatre = new Set();
+  for (let j = 0; j < 2; j += 1) {
+    for (let i = 0; i < 2; i += 1) {
+      const x0 = 1024 + i * petit;
+      const y0 = 2048 + j * petit;
+      for (const b of blocsDeLaDalle({ graine: 4242, cran, x0, y0, cote: petit })) {
+        enQuatre.add(cle(b, x0, y0));
+      }
+    }
+  }
+  // Les quatre petites dalles voient exactement les mêmes blocs, aux mêmes
+  // positions absolues. Elles peuvent en voir DE PLUS — un bloc qui déborde d'un
+  // bord de la grande —, jamais d'autres.
+  for (const c of enUn) assert.ok(enQuatre.has(c), `le découpage en quatre a perdu ${c}`);
+  assert.ok(enQuatre.size >= enUn.size, 'montage cassé');
+});
+
+test('SOL T5 bis — le coin de la dalle n\'entre dans aucun hachage', () => {
+  // Le même bloc, demandé depuis deux dalles différentes, doit porter le même
+  // dessin : c'est ce que « semé par la position absolue » veut dire.
+  const source = sansCommentaires(lire('src', 'render', 'terrain.js'));
+  assert.ok(!/hachageBrut\([^)]*x0/.test(source) && !/hachageBrut\([^)]*y0/.test(source),
+    'le coin de la dalle est passé au hachage : les dalles cessent d\'être indépendantes');
+});
+
+// ---------------------------------------------------------------------------
+// SOL T6 — l'échelle, et le 1:1 au cran le plus serré
+// ---------------------------------------------------------------------------
+
+test('SOL T6 — aucun cran n\'agrandit la source, et le plus serré tombe au 1:1', () => {
+  // ⚠⚠ C'EST L'ACQUIS DU « GROS CARRÉ MOCHE » DU 30/08, et il survit au
+  // changement de sol. Un pavage qui agrandit sa source double son grain, et le
+  // grain se lit alors en carrés alignés sur les axes.
+  for (const cran of ZOOM_CARTE.crans) {
+    assert.ok(echelleDuCran(cran) <= 1, `le cran ${cran} agrandit la source`);
+  }
+  const plusSerre = Math.max(...ZOOM_CARTE.crans);
+  assert.equal(echelleDuCran(plusSerre), 1, 'le cran le plus serré ne tombe plus au 1:1');
+  assert.equal(PIXELS_SOURCE_PAR_CASE, plusSerre,
+    'l\'échelle source et le cran le plus serré ont divergé : le sol serait flou au maximum du zoom');
+  assert.throws(() => echelleDuCran(48), RangeError, 'un cran hors table ne lève plus');
+});
+
+test('SOL T7 — la géométrie est ENTIÈRE à tous les crans', () => {
+  // ⚠⚠ SANS ÇA, LE FONDU N'EST PLUS EXACT. Deux blocs voisins partagent leur
+  // bande ; si le pas était fractionnaire, leurs profils se décaleraient d'une
+  // fraction de pixel et `Σw` cesserait de valoir un sur la colonne du raccord —
+  // un liseré d'un pixel sur toute la longueur de chaque couture.
+  for (const cran of ZOOM_CARTE.crans) {
+    const g = geometrieDuCran(cran);
+    for (const [nom, v] of Object.entries({ taille: g.taille, fondu: g.fondu, pas: g.pas })) {
+      assert.ok(Number.isInteger(v), `cran ${cran} : ${nom} vaut ${v}`);
+    }
+    assert.equal(g.pas, g.taille - g.fondu, `cran ${cran} : le pas n'est plus le complément`);
+    assert.ok(g.fondu >= 1 && g.fondu * 2 <= g.taille, `cran ${cran} : fondu ${g.fondu}`);
+    // ⚠ ET L'ÉCART À L'ÉCHELLE NOMINALE RESTE SOUS LE DEMI-PIXEL. C'est ce que
+    // l'arrondi coûte, et il est écrit pour qu'on sache qu'il est mesuré.
+    assert.ok(Math.abs(g.taille - COTE_SOURCE * g.echelle) <= 0.5,
+      `cran ${cran} : la taille arrondie s'écarte de plus d'un demi-pixel`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SOL T8 — le tirage
+// ---------------------------------------------------------------------------
+
+test('SOL T8 — le tirage est stable, et il se répartit sur les huit dessins', () => {
+  // ⚠⚠ LE TEST QUI COMPTE ICI EST CELUI DE LA DISTRIBUTION, et il est écrit pour
+  // le défaut des « bits épuisés » : un champ lu dans les trois bits de tête d'un
+  // mot déjà entamé est toujours minuscule, donc TOUTES les tuiles basculent du
+  // même côté. Ça s'est vu à l'œil en une seconde pendant la maquette, et aucune
+  // assertion de forme ne l'aurait attrapé.
+  const a = descriptionDuBloc(77, 3, 5);
+  assert.deepEqual(descriptionDuBloc(77, 3, 5), a, 'le tirage n\'est pas stable');
+  assert.notDeepEqual(descriptionDuBloc(78, 3, 5), a, 'la graine ne change plus rien');
+
+  const parSol = new Array(8).fill(0);
+  const parRotation = new Array(4).fill(0);
+  let miroirs = 0;
   let n = 0;
-  for (let gy = 0; gy < 60; gy += 1) {
-    for (let gx = 0; gx < 60; gx += 1) {
-      const noeud = descriptionDuNoeud(1234, gy, gx, 64);
-      tuiles[noeud.tuile] += 1;
-      rotations[noeud.rotation] += 1;
-      miroirs[noeud.miroir ? 1 : 0] += 1;
-      if (noeud.decalageX < 0) decalageXNegatif += 1;
-      if (noeud.decalageY < 0) decalageYNegatif += 1;
-      tirages[Math.min(3, Math.floor(noeud.tirage * 4))] += 1;
+  for (let by = 0; by < 120; by += 1) {
+    for (let bx = 0; bx < 120; bx += 1) {
+      const d = descriptionDuBloc(31, by, bx);
+      parSol[d.sol] += 1;
+      parRotation[d.rotation] += 1;
+      if (d.miroir) miroirs += 1;
       n += 1;
-      assert.ok(noeud.decalageX >= -1 && noeud.decalageX < 1, 'décalage hors de [−1, 1[');
-      assert.ok(noeud.decalageY >= -1 && noeud.decalageY < 1, 'décalage hors de [−1, 1[');
-      assert.ok(noeud.tirage >= 0 && noeud.tirage < 1, 'tirage hors de [0, 1[');
     }
   }
-  // Les soixante-quatre tuiles sortent, et aucune ne prend le quart du semis.
-  assert.equal(tuiles.filter((c) => c === 0).length, 0, 'une tuile ne sort jamais');
-  assert.ok(Math.max(...tuiles) < n / 16, 'une tuile domine le semis');
-  // Les quatre rotations et les deux miroirs sont à peu près équiprobables.
-  for (const c of rotations) assert.ok(Math.abs(c / n - 0.25) < 0.05, `rotation à ${c / n}`);
-  for (const c of miroirs) assert.ok(Math.abs(c / n - 0.5) < 0.05, `miroir à ${c / n}`);
-  // Et les décalages vont dans les DEUX sens : c'est exactement ce qui manquait.
-  assert.ok(Math.abs(decalageXNegatif / n - 0.5) < 0.05, `décalage X négatif à ${decalageXNegatif / n}`);
-  assert.ok(Math.abs(decalageYNegatif / n - 0.5) < 0.05, `décalage Y négatif à ${decalageYNegatif / n}`);
-  for (const c of tirages) assert.ok(Math.abs(c / n - 0.25) < 0.05, `quart de tirage à ${c / n}`);
-
-  // Falsifiable : le montage doit attraper un champ pressé dans trop peu de
-  // bits. Trois bits de tête sur un hachage donnent au plus huit valeurs, donc
-  // au moins un huitième du semis sur une seule tuile.
-  const presse = new Array(64).fill(0);
-  for (let gy = 0; gy < 60; gy += 1) {
-    for (let gx = 0; gx < 60; gx += 1) {
-      presse[descriptionDuNoeud(1234, gy, gx, 64).tuile >>> 3] += 1;
-    }
+  for (let i = 0; i < 8; i += 1) {
+    assert.ok(Math.abs(parSol[i] / n - 1 / 8) < 0.02, `le dessin ${i} sort ${parSol[i]} fois sur ${n}`);
   }
-  assert.ok(Math.max(...presse) >= n / 16, 'le montage ne verrait pas un champ pressé');
+  for (let r = 0; r < 4; r += 1) {
+    assert.ok(Math.abs(parRotation[r] / n - 1 / 4) < 0.02, `la rotation ${r} sort ${parRotation[r]} fois`);
+  }
+  assert.ok(Math.abs(miroirs / n - 0.5) < 0.02, `${miroirs} miroirs sur ${n}`);
+  // ⚠ ET HUIT EST UNE PUISSANCE DE DEUX, DONC LE MODULO NE PENCHE PAS. Le jour
+  // où une neuvième planche arriverait, ce test-ci resterait vert et le biais
+  // serait réel : la garde est donc sur le NOMBRE, pas seulement sur la mesure.
+  assert.equal(NOMS_DU_SOL.length & (NOMS_DU_SOL.length - 1), 0,
+    'le nombre de planches n\'est plus une puissance de deux : le tirage penche');
+});
 
-  // Les deux sels sont distincts : un seul rendrait le décalage et la figure
-  // parfaitement corrélés, et le semis se remettrait à s'aligner.
-  assert.notEqual(SEL_DECALAGE, SEL_FIGURE);
+test('SOL T9 — le sel du pavage n\'est partagé avec personne', () => {
+  // ⚠ DEUX TIRAGES SANS RAPPORT QUI PARTAGENT UN SEL FINISSENT PAR SE CORRÉLER,
+  // et personne ne s'en aperçoit. `SEL_DECALAGE` et `SEL_FIGURE` valaient 2 et 3
+  // et sont partis avec la moulinette — ce sont les sels de `sim/poi.js`, qu'on
+  // ne reprend donc pas.
+  const autres = { SEL_VARIANTE, SEL_FOND, SEL_RANGEE, SEL_COLONNE };
+  for (const [nom, sel] of Object.entries(autres)) {
+    assert.notEqual(SEL_BLOC, sel, `le sel du pavage est aussi celui de ${nom}`);
+  }
+  // ⚠ 0 ET 1 SONT AU PEUPLEMENT, et ils ne s'importent pas d'ici — ce module
+  // n'exporte pas ses sels. On les nomme donc de face plutôt que de faire
+  // semblant de les lire.
+  assert.ok(SEL_BLOC !== 0 && SEL_BLOC !== 1, 'le sel du pavage est celui du peuplement');
 });
 
 // ---------------------------------------------------------------------------
-// Le rendu
+// SOL T10 — la moulinette a disparu, et rien ne la rallume
 // ---------------------------------------------------------------------------
 
-test('dalles — une zone rendue seule est identique à la même rendue en quatre', () => {
-  // ⚠ C'EST L'INVARIANT QUI CASSERAIT EN SILENCE. Une couture ne fait tomber
-  // aucun test « fonctionnel » : elle se voit sur un téléphone, six semaines
-  // plus tard. Le semis est semé par la position ABSOLUE en pixels ; le jour où
-  // le coin d'une dalle entrerait dans un hachage, ou qu'un seuil se
-  // calculerait dalle par dalle, ce test tombe.
-  const COTE = 256;
-  for (const cran of ZOOM_CARTE.crans) {
-    const X = 1024;
-    const Y = 20096;
-    const grande = rendreDalle({ atlas: ATLAS, graine: 7, cran, x0: X, y0: Y, cote: COTE });
-    let ecarts = 0;
-    for (const [dx, dy] of [[0, 0], [COTE / 2, 0], [0, COTE / 2], [COTE / 2, COTE / 2]]) {
-      const quart = rendreDalle({
-        atlas: ATLAS, graine: 7, cran, x0: X + dx, y0: Y + dy, cote: COTE / 2,
-      });
-      for (let j = 0; j < COTE / 2; j += 1) {
-        for (let i = 0; i < COTE / 2; i += 1) {
-          const a = ((j + dy) * COTE + (i + dx)) * 4;
-          const b = (j * (COTE / 2) + i) * 4;
-          for (let c = 0; c < 4; c += 1) {
-            if (grande.donnees[a + c] !== quart.donnees[b + c]) ecarts += 1;
-          }
-        }
+test('SOL T10 — plus rien ne quantifie, n\'accumule, ni ne repeint le sol', () => {
+  const partis = [
+    'creerAtlas', 'rendreDalle', 'indicesDeTeinte', 'masqueDeLaTuile',
+    'orientationDeLaTuile', 'descriptionDuNoeud', 'partOuvrageDeLaRangee',
+    'teinteDeLaValeur', 'rangeeDuPixelSource', 'NB_TEINTES',
+    'seuilsDeTeinte', 'seuilOuvrage', 'pasSourcePx', 'decalageFraction',
+    'coteTuile', 'tuilesParCase',
+  ];
+  for (const dossier of ['data', 'sim', 'render', 'ui']) {
+    for (const fichier of readdirSync(join(RACINE, 'src', dossier))) {
+      if (!fichier.endsWith('.js')) continue;
+      const source = sansCommentaires(lire('src', dossier, fichier));
+      for (const nom of partis) {
+        assert.ok(!new RegExp(`(?<![\\p{L}\\p{N}_])${nom}(?![\\p{L}\\p{N}_])`, 'u').test(source),
+          `src/${dossier}/${fichier} nomme encore ${nom}`);
       }
     }
-    assert.equal(ecarts, 0, `cran ${cran} : ${ecarts} octets divergent entre 1 dalle et 4`);
   }
-
-  // Falsifiable : le montage doit voir une différence quand il y en a une.
-  // Décaler la grande dalle d'un pixel change forcément le dessin.
-  const a = rendreDalle({ atlas: ATLAS, graine: 7, cran: 64, x0: 1024, y0: 20096, cote: 64 });
-  const b = rendreDalle({ atlas: ATLAS, graine: 7, cran: 64, x0: 1025, y0: 20096, cote: 64 });
-  assert.ok(a.donnees.some((v, i) => v !== b.donnees[i]),
-    'un décalage d\'un pixel ne change rien : le montage ne mesure pas');
+  // ⚠ LA PAGE AUSSI : le marqueur de l'atlas de fond de carte et la balise qui le
+  // portait sont partis, et la variable CSS avec.
+  const page = lire('src', 'index.src.html');
+  assert.ok(!page.includes('%ATLAS_TERRAIN%'), 'le marqueur de l\'atlas de fond de carte est revenu');
+  assert.ok(!page.includes('id="monde-atlas"'), 'la balise monde-atlas est revenue');
+  // ⚠ ON RETIRE AUSSI LES COMMENTAIRES HTML : le paragraphe qui explique la
+  // disparition de `--atlas-sol` la NOMME, et une garde qui lit sa propre prose
+  // ne garde rien. Cinquième fois du dépôt — après `viewport-fit=cover`,
+  // `MENTION_SATURE`, `variante.js`, `render/contour.js` et le calque des traits.
+  const feuille = page.replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!feuille.includes('--atlas-sol'), '--atlas-sol est revenue dans la feuille');
+  assert.ok(feuille.includes('--atlas-unite'),
+    'montage : le filtre des commentaires a mangé la feuille entière');
+  // ⚠ ET `%ATLAS_TERRAIN_BASE%` RESTE : c'est l'atlas des SPRITES de terrain —
+  // champs, obstacles —, qui n'a jamais eu de rapport avec le fond de carte
+  // malgré son nom court voisin. Le confondre serait l'accident des homonymes.
+  assert.ok(page.includes('%ATLAS_TERRAIN_BASE%'),
+    'l\'atlas des sprites de terrain est parti avec celui du fond de carte');
 });
 
-test('dalles — deux appels au même endroit rendent la même image, au pixel près', () => {
-  // ⚠ ON COMPARE À LA MAIN, PAS PAR `deepEqual`. Sur 65 536 pixels, la mise en
-  // forme de l'écart par le rapporteur de tests prend cent secondes quand il y
-  // en a un : un test qui met deux minutes à dire « rouge » ne se relance pas.
-  const premierEcart = (a, b) => {
-    for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return i;
-    return -1;
-  };
-  for (const cran of ZOOM_CARTE.crans) {
-    const un = rendreDalle({ atlas: ATLAS, graine: 3, cran, x0: 640, y0: 9088, cote: 128 });
-    const deux = rendreDalle({ atlas: ATLAS, graine: 3, cran, x0: 640, y0: 9088, cote: 128 });
-    const ecart = premierEcart(un.donnees, deux.donnees);
-    assert.equal(ecart, -1,
-      `cran ${cran} : deux rendus identiques divergent, premier écart à l'octet ${ecart}`);
-  }
-  // ⚠ ET LE MONTAGE DOIT VOIR UNE GRAINE CHANGER. Les tampons d'accumulation
-  // sont gardés d'un appel à l'autre : s'ils n'étaient pas remis à zéro, la
-  // seconde dalle serait la somme des deux, et l'égalité ci-dessus tomberait —
-  // mais si le rendu ignorait la graine, elle passerait sur du code mort.
-  const un = rendreDalle({ atlas: ATLAS, graine: 3, cran: 64, x0: 640, y0: 9088, cote: 128 });
-  const autre = rendreDalle({ atlas: ATLAS, graine: 4, cran: 64, x0: 640, y0: 9088, cote: 128 });
-  assert.ok(un.donnees.some((v, i) => v !== autre.donnees[i]),
-    'la graine ne change rien au fond : la carte serait la même dans toutes les parties');
-});
+// ---------------------------------------------------------------------------
+// SOL T11 — l'alignement des moyennes, lu dans le manifeste
+// ---------------------------------------------------------------------------
 
-test('dalles — aucun pixel hors des deux rampes, aucun noir, et le plancher ne mord pas', () => {
-  let couverture = Infinity;
-  for (const cran of ZOOM_CARTE.crans) {
-    for (const [x0, y0] of [[0, 0], [1024, 20000], [512, 9000], [3000, 38000]]) {
-      const dalle = rendreDalle({ atlas: ATLAS, graine: 11, cran, x0, y0, cote: 128 });
-      const vu = analyser(dalle);
-      assert.equal(vu.inconnus, 0,
-        `cran ${cran} en (${x0}, ${y0}) : ${vu.inconnus} pixels hors des deux rampes`);
-      assert.equal(vu.noirs, 0, `cran ${cran} en (${x0}, ${y0}) : ${vu.noirs} pixels noirs`);
-      if (dalle.couvertureMin < couverture) couverture = dalle.couvertureMin;
+test('SOL T11 — les huit planches sont ramenées à la même clarté', () => {
+  // ⚠⚠ C'EST LE SEUL TRAITEMENT DU LOT, ET IL SE MESURE ICI. Les planches
+  // arrivent de 148,7 à 162,2 de luminance moyenne — 13,5 sur 255, soit 5,4 % —,
+  // et le sol se pave par blocs d'une planche entière : cet écart-là se lit comme
+  // des taches. `tools/sols.py` ajoute une constante par canal, et rien d'autre.
+  //
+  // ⚠ NODE N'A PAS DE DÉCODEUR WEBP : ce test lit la moyenne que l'outil a
+  // MESURÉE sur la planche alignée, pas une intention.
+  const reference = MANIFESTE.reference;
+  for (const nom of NOMS_DU_SOL) {
+    const m = MANIFESTE.sols[nom].moyenne;
+    for (let c = 0; c < 3; c += 1) {
+      assert.ok(Math.abs(m[c] - reference[c]) < 1,
+        `${nom} : canal ${c} à ${m[c]} contre ${reference[c]} attendu`);
     }
   }
-  // ⚠ LE PLANCHER EST UNE GARDE MORTE, ET C'EST CE QU'ON LUI DEMANDE. À un pas
-  // de 56 px, la couverture ne s'annule jamais — mesuré à 0,165 au plus bas.
-  // À 84, elle s'annulait et le fond rendait du noir. Sans cette mesure, la
-  // branche `Σw ≤ 0` serait indiscernable d'une branche morte, et personne ne
-  // saurait le jour où le pas s'élargirait.
-  assert.ok(couverture > 0,
-    `la couverture tombe à ${couverture} : le pas du réseau laisse des trous`);
-  assert.ok(TERRAIN_CARTE.pasSourcePx < ZOOM_CARTE.coteTuile,
-    'le pas du réseau a dépassé la tuile : la couverture ne peut plus être garantie');
+  // ⚠ ET LA SONDE QUI PROUVE QUE LA MESURE MORD : les corrections ne sont pas
+  // toutes nulles. Une chaîne qui cesserait d'aligner les rendrait nulles et ce
+  // test-ci resterait vert sur des planches divergentes.
+  const pire = Math.max(...NOMS_DU_SOL.map(
+    (n) => Math.max(...MANIFESTE.sols[n].correction.map(Math.abs)),
+  ));
+  assert.ok(pire > 8, `la plus forte correction ne vaut que ${pire} : l'alignement ne fait plus rien`);
+
+  // ⚠ ET LA QUALITÉ EST LA MÊME POUR LES HUIT — descendre celle d'une seule
+  // planche pour gagner des octets serait rogner, ce que CLAUDE.md §5 refuse.
+  const qualites = new Set(NOMS_DU_SOL.map((n) => MANIFESTE.sols[n].qualite));
+  assert.deepEqual([...qualites], [75], 'les huit planches n\'ont plus la même qualité');
 });
 
-test('teintes — chaque teinte couvre un cinquième de la surface, et les seuils sont mesurés', () => {
-  // ⚠ LES SEUILS NE SONT PAS CEUX DE L'ATLAS, ET C'EST TOUT LE POINT. L'atlas
-  // est uniforme sur cinq indices ; la sortie est la somme pondérée d'environ
-  // cinq tuiles, donc à peu près gaussienne. Les seuils naïfs — 0,5 · 1,5 ·
-  // 2,5 · 3,5 — donneraient 14 % aux extrêmes et 28 % au milieu.
-  const total = new Array(NB_TEINTES).fill(0);
-  let pixels = 0;
+// ---------------------------------------------------------------------------
+// SOL T12 — ce que le module refuse
+// ---------------------------------------------------------------------------
+
+test('SOL T12 — les entrées absurdes LÈVENT, elles ne se replient pas', () => {
+  assert.throws(() => blocsDeLaDalle({ graine: 1, cran: 100, x0: 0, y0: 0, cote: 512 }), RangeError);
+  assert.throws(() => blocsDeLaDalle({ graine: 1, cran: 64, x0: 0.5, y0: 0, cote: 512 }), RangeError);
+  assert.throws(() => blocsDeLaDalle({ graine: 1, cran: 64, x0: 0, y0: 0, cote: 0 }), RangeError);
+  assert.throws(() => profilDuBloc(10, 6), RangeError, 'un fondu plus large que la moitié passe');
+  assert.throws(() => profilDuBloc(0, 0), RangeError);
+  // ⚠ UNE DALLE VOIT AU MOINS UN BLOC, TOUJOURS. Zéro bloc rendrait une dalle
+  // transparente, donc un carré du fond du canevas au milieu de la carte.
   for (const cran of ZOOM_CARTE.crans) {
-    for (const graine of [1, 7, 4242, 99991]) {
-      const vu = analyser(rendreDalle({
-        atlas: ATLAS, graine, cran, x0: 1024, y0: 20000, cote: 256,
-      }));
-      vu.parTeinte.forEach((c, i) => { total[i] += c; });
-      pixels += vu.pixels;
+    const blocs = blocsDeLaDalle({ graine: 5, cran, x0: 0, y0: 0, cote: TERRAIN_CARTE.dalleCotePx });
+    assert.ok(blocs.length >= 1, `cran ${cran} : aucune planche ne couvre la dalle`);
+    for (const b of blocs) {
+      assert.ok(Number.isInteger(b.x) && Number.isInteger(b.y), 'une position de bloc est fractionnaire');
+      assert.ok(b.sol >= 0 && b.sol < 8, `dessin hors table : ${b.sol}`);
     }
   }
-  for (let i = 0; i < NB_TEINTES; i += 1) {
-    const part = (100 * total[i]) / pixels;
-    assert.ok(Math.abs(part - 20) <= 2, `la teinte ${i} couvre ${part.toFixed(2)} % au lieu de 20`);
-  }
-
-  // Falsifiable : avec les seuils de l'atlas, la répartition sortirait de la
-  // tolérance. On refait la mesure sur les mêmes valeurs, en découpant
-  // autrement, sans toucher au rendu.
-  const naifs = [0.5, 1.5, 2.5, 3.5];
-  assert.notDeepEqual(TERRAIN_CARTE.seuilsDeTeinte, naifs,
-    'les seuils sont ceux de l\'atlas : ils n\'ont pas été mesurés sur la sortie');
-  // Et ils sont croissants, sinon une teinte serait inatteignable.
-  for (let i = 1; i < TERRAIN_CARTE.seuilsDeTeinte.length; i += 1) {
-    assert.ok(TERRAIN_CARTE.seuilsDeTeinte[i] > TERRAIN_CARTE.seuilsDeTeinte[i - 1]);
-  }
-  assert.equal(teinteDeLaValeur(-99), 0);
-  assert.equal(teinteDeLaValeur(99), NB_TEINTES - 1);
-});
-
-test('contraste — la formule garde le relief là où la composition alpha l\'aplatit', () => {
-  // ⚠⚠ C'EST LE CŒUR DU LOT, ET IL SE MESURE AU LIEU DE SE CROIRE. `drawImage`
-  // avec `globalAlpha` calcule `Σwt / Σw` : moyenner N textures divise leur
-  // écart-type par √N. La formule divise par `√(Σw²)`, ce qui rend l'écart-type
-  // d'UNE tuile. Le chemin alpha n'existe dans le module que pour ce test —
-  // sans lui, l'affirmation « ce n'est pas de la composition alpha » serait une
-  // opinion.
-  const luminance = (dalle) => {
-    let somme = 0;
-    let carres = 0;
-    const n = dalle.donnees.length / 4;
-    for (let p = 0; p < dalle.donnees.length; p += 4) {
-      const y = 0.2126 * dalle.donnees[p] + 0.7152 * dalle.donnees[p + 1]
-        + 0.0722 * dalle.donnees[p + 2];
-      somme += y;
-      carres += y * y;
-    }
-    return Math.sqrt(carres / n - (somme / n) ** 2);
-  };
-  for (const cran of ZOOM_CARTE.crans) {
-    const commun = { atlas: ATLAS, graine: 7, cran, x0: 1024, y0: 31000, cote: 256 };
-    const formule = luminance(rendreDalle(commun));
-    const alpha = luminance(rendreDalle({ ...commun, alphaOrdinaire: true }));
-    // Le plancher du brief : au-dessus de 12, mesuré à 19,6 ici.
-    assert.ok(formule > 12, `cran ${cran} : écart-type ${formule.toFixed(2)}, 12 attendus au moins`);
-    // Et le vrai discriminant, qui ne dépend d'aucune constante recopiée : la
-    // formule doit battre l'alpha d'au moins un quart. Mesuré : 19,6 contre
-    // 15,1, soit +30 %.
-    assert.ok(formule > alpha * 1.25,
-      `cran ${cran} : formule ${formule.toFixed(2)} contre alpha ${alpha.toFixed(2)} — `
-        + 'la normalisation ne fait plus son travail');
-  }
-});
-
-test('camp du sol — la part d\'Ouvrage suit le niveau : rien au départ, tout au bout', () => {
-  // ⚠ ELLE SUIT LE NIVEAU DE LA RANGÉE, ET NON LE NUMÉRO DE RANGÉE. La rangée 1
-  // est le bord HAUT, donc le bout de la carte : la part CROÎT quand le numéro
-  // DESCEND. Écrire « croît avec la rangée » ferait tomber le test dans le bon
-  // sens pour la mauvaise raison, et le prochain lecteur inverserait la
-  // convention en croyant réparer.
-  const partMesuree = (rangee) => {
-    let ouvrage = 0;
-    let pixels = 0;
-    for (const graine of [1, 7]) {
-      for (let k = 0; k < 4; k += 1) {
-        const vu = analyser(rendreDalle({
-          atlas: ATLAS,
-          graine,
-          cran: PIXELS_SOURCE_PAR_CASE,
-          x0: k * PIXELS_SOURCE_PAR_CASE,
-          y0: (rangee - 1) * PIXELS_SOURCE_PAR_CASE,
-          cote: PIXELS_SOURCE_PAR_CASE,
-        }));
-        ouvrage += vu.partOuvrage * vu.pixels;
-        pixels += vu.pixels;
-      }
-    }
-    return ouvrage / pixels;
-  };
-
-  const depart = positionDepartJoueur().rangee;
-  // ⚠ LE BORD BAS A QUITTÉ L'ÉCHANTILLON LE 31/08, ET C'EST UN FAIT, PAS UN
-  // ASSOUPLISSEMENT. Le départ est passé de la rangée 275 à la 295, donc dans la
-  // zone où `niveauDeLaRangee` PLAFONNE PAR LE BAS : la rangée 300 et la 295
-  // valent toutes deux 1, et une suite « strictement croissante » ne peut pas
-  // contenir les deux. On garde le DÉPART, qui est ce que le test veut dire
-  // (« rien au départ »), et on retire le bord, qui n'ajoutait plus de mesure.
-  const rangees = [depart, 200, 150, 100, 26];
-  const parts = rangees.map(partMesuree);
-
-  // Croissante à mesure que le niveau monte.
-  for (let i = 1; i < parts.length; i += 1) {
-    assert.ok(niveauDeLaRangee(rangees[i]) > niveauDeLaRangee(rangees[i - 1]),
-      'le montage ne fait pas monter le niveau : il ne mesure rien');
-    assert.ok(parts[i] >= parts[i - 1] - 0.01,
-      `la part d'Ouvrage descend de la rangée ${rangees[i - 1]} à ${rangees[i]} : `
-        + `${parts[i - 1].toFixed(3)} → ${parts[i].toFixed(3)}`);
-  }
-  // ~0 au départ du joueur, ~1 au bout. ⚠ L'INDICE EST 0 DEPUIS QUE LE BORD BAS
-  // A QUITTÉ L'ÉCHANTILLON : le départ est maintenant la PREMIÈRE rangée mesurée.
-  assert.ok(parts[0] < 0.1, `au départ du joueur, ${(100 * parts[0]).toFixed(1)} % d'Ouvrage`);
-  assert.equal(parts[parts.length - 1], 1, 'la base terminale n\'est pas entièrement en sol d\'Ouvrage');
-
-  // La formule elle-même, aux deux bouts, sans passer par le rendu.
-  assert.equal(partOuvrageDeLaRangee(GEOGRAPHIE.carte.hauteur), 0);
-  assert.equal(partOuvrageDeLaRangee(26), 1);
-  // ⚠⚠ ET LE DÉPART VAUT EXACTEMENT ZÉRO DEPUIS LE 31/08, plus « un peu plus que
-  // zéro ». La part vaut `(niveau − 1) / 49` ; la rangée 295 est au plancher de
-  // niveau, donc la part y est nulle. L'ancienne assertion exigeait `> 0`, ce
-  // qui était vrai à la rangée 275 (strate 5) et ne l'est plus. Le titre du test
-  // — « rien au départ » — n'a jamais été aussi littéral.
-  assert.equal(partOuvrageDeLaRangee(depart), 0,
-    'le sol du départ n\'est plus entièrement celui du joueur');
-});
-
-test('rangée d\'un pixel — elle se borne à la carte, elle ne lève pas', () => {
-  // Le pavage déborde volontiers des bords : les tuiles qui couvrent la
-  // dernière rangée ont leur centre au-delà. Refuser de les décrire ferait un
-  // trou noir sur toute la bordure.
-  assert.equal(rangeeDuPixelSource(-5000), 1);
-  assert.equal(rangeeDuPixelSource(0), 1);
-  assert.equal(rangeeDuPixelSource(PIXELS_SOURCE_PAR_CASE), 2);
-  assert.equal(
-    rangeeDuPixelSource(GEOGRAPHIE.carte.hauteur * PIXELS_SOURCE_PAR_CASE * 2),
-    GEOGRAPHIE.carte.hauteur,
-  );
-});
-
-test('atlas — un indice hors de la rampe est refusé, une taille impossible aussi', () => {
-  // `creerAtlas` est la porte d'entrée : ce qui passe ici sera lu un million de
-  // fois par dalle sans être revérifié.
-  assert.throws(() => creerAtlas(new Uint8Array(16), 3, 4), RangeError);
-  assert.throws(() => creerAtlas(new Uint8Array(16), 4, 6), RangeError);
-  const mauvais = new Uint8Array(16);
-  mauvais[7] = NB_TEINTES;
-  assert.throws(() => creerAtlas(mauvais, 4, 4), RangeError);
-  const bon = creerAtlas(new Uint8Array(16).fill(2), 4, 4);
-  assert.equal(bon.nombre, 1);
-  assert.equal(bon.moyenne, 2);
-});
-
-test('rendu — un cran hors table est refusé, un coin non entier aussi', () => {
-  // Un coin fractionnaire casserait l'invariant des dalles sans rien dire : les
-  // tuiles se poseraient à des entiers différents selon le découpage.
-  assert.throws(
-    () => rendreDalle({ atlas: ATLAS, graine: 1, cran: 96, x0: 0, y0: 0, cote: 64 }),
-    RangeError,
-  );
-  assert.throws(
-    () => rendreDalle({ atlas: ATLAS, graine: 1, cran: ZOOM_CARTE.crans[0], x0: 0.5, y0: 0, cote: 64 }),
-    RangeError,
-  );
 });

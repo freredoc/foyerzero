@@ -3013,12 +3013,24 @@ test('écran — les 162 cases n\'ont plus de sol : c\'est le décor qui le port
   assert.ok(!/fondsDuSol|cellulesDeSolParAxe|casesDeSolParAtlas/.test(ecran),
     'le pavage du sol case par case est revenu');
 
-  // ⚠⚠ MAIS `--atlas-sol` RESTE, ET IL FAUT SAVOIR POURQUOI. C'est l'atlas du
-  // MONDE : la carte en a toujours besoin, et son terrain est procédural
-  // (`render/terrain.js`) — ce n'est pas le même sol. Le retirer aurait vidé
-  // l'écran Monde pour une raison qui ne le regarde pas.
-  assert.match(ecran, /sol: 'var\(--atlas-sol\)'/,
-    '--atlas-sol a disparu de la table des atlas : la carte du monde en a besoin');
+  // ⚠⚠ ET `--atlas-sol` EST PARTI À SON TOUR — lot SOL-SATELLITE, 05/09. Ce
+  // test EXIGEAIT sa présence, au motif que « la carte en a toujours besoin, et
+  // que son terrain est procédural ». Il ne l'est plus : le sol de la carte est
+  // fait de huit planches satellite qu'`ui/monde.js` prend en `<img>`, sans
+  // passer par la feuille. La garde est donc RETOURNÉE, pas retirée — elle
+  // refuse maintenant que la variable revienne, ici comme dans la feuille, ce
+  // qui ferait résoudre une famille sur une variable vide : ça ne lève pas, et
+  // ça ne dessine rien.
+  assert.ok(!/--atlas-sol/.test(ecran),
+    '--atlas-sol est revenu dans la table des atlas : plus rien ne le sert');
+  // ⚠ ON RETIRE AUSSI LES COMMENTAIRES HTML : le paragraphe qui explique la
+  // disparition de `--atlas-sol` la NOMME, et une garde qui lit sa propre prose
+  // ne garde rien — cinquième fois du dépôt. Le témoin prouve que le filtre n'a
+  // pas mangé la feuille entière.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!/--atlas-sol/.test(feuille), '--atlas-sol est revenu dans la feuille');
+  assert.ok(/--atlas-unite/.test(feuille), 'montage : le filtre a mangé la feuille entière');
 
   // ⚠⚠ ET `tile_sol_{j,o}_*` N'A PAS ÉTÉ TOUCHÉ, parce que ce lot ne l'orpheline
   // pas : il l'était DÉJÀ. Mesuré ici plutôt que lu — les huit dalles ne sont

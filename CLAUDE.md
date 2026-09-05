@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **05/09/2026**, version 0.93.0 · build 95.
+Dernière révision : **05/09/2026**, version 0.95.0 · build 97.
 
 ---
 
@@ -42,7 +42,156 @@ Dernière révision : **05/09/2026**, version 0.93.0 · build 95.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot EMBLÈMES-ABÎMÉS), à confronter :**
+**Référence au 05/09/2026 (après le lot SOL-SATELLITE), à confronter :**
+`npm test` → **1094 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 991 743 octets**, 0 référence externe.
+⚠⚠ **LE SOL DE LA CARTE N'EST PLUS PROCÉDURAL : C'EST L'ART D'ETHAN, POSÉ TEL
+QUEL.** Ethan, 05/09 : « je viens de t'envoyer 8 planches de terrain satellite
+pour la carte du monde, tu fais au mieux pour que ce soit joli, que les
+transitions entre les différentes images se passent bien, pas de fond ouvrage
+pour le moment, tu fais le moins de traitement possible ». Le fond était un
+PAVAGE À SOMME PONDÉRÉE sur un atlas INDEXÉ — 64 tuiles dont chaque pixel valait
+0 à 4, cinq tuiles superposées par pixel, accumulation en `Float32Array` sous
+`μ + Σwᵢ(tᵢ − μ)/√(Σwᵢ²)`, puis REQUANTIFICATION sur cinq teintes d'une rampe de
+`FICHE-STYLE.md`. **De l'art livré, il ne restait à l'écran qu'un relief à cinq
+niveaux repeint.** Coût **+1 931 126 octets**, soit **1,273×** — **289 `data:`
+avant, 296 après** : huit planches entrent, un atlas sort. Borne T10 **relevée de
+7 300 000 à 9 300 000**, marge **308 257 octets, 3,43 %**.
+⚠⚠ **« LE MOINS DE TRAITEMENT POSSIBLE » SE MESURE, ET IL VAUT 78,6 %.** Les
+blocs font une planche entière, posés sur une grille de pas `COTE − FONDU` ;
+`78,6 %` de la surface est le pixel SOURCE, poids 1, un seul bloc — le reste est
+la bande de fondu où deux dessins (quatre aux coins) se croisent. `SOL T4` le
+COMPTE sur le pavage au lieu de le croire, aux quatre crans.
+⚠⚠ **ET LE FONDU EST UNE PARTITION DE L'UNITÉ, EXACTE AU PIXEL.** Deux profils
+voisins sont `sin²` et `cos²` du même angle : ils somment à un. Mesuré sur une
+dalle entière, aux quatre crans — **`Σw` minimum 1,000000000000000, maximum
+1,000000000000000**. D'où trois choses : rien à normaliser après coup, aucune
+discontinuité de pente donc aucun liseré, et **plus de plancher anti-noir** — la
+garde `sw <= 0` de l'ancien module n'a plus d'objet.
+⚠⚠ **ET L'EXACTITUDE S'ARRÊTE À L'ALPHA 8 BITS DU MASQUE, C'EST MESURÉ.** `Σw = 1`
+est exact en flottant ; le masque, lui, est un canevas où `ui/monde.js` écrit
+`round(w × 255)`. Mesuré aux quatre crans : dans une BANDE, où deux blocs se
+croisent, l'écart est de **0 sur 255** — les deux arrondis se complètent
+exactement ; aux COINS, où ils sont quatre, il vaut **1 sur 255, soit 0,39 %**,
+c'est-à-dire un niveau de clarté sur un petit carré. C'est la seule imprécision
+du pavage, elle est bornée par un test, et la déclarer est ce qui distingue
+« exact » d'« assez exact ».
+⚠⚠ **TOUT SE DÉRIVE DE LA TAILLE ARRONDIE DU BLOC, ET C'EST CE QUI REND LE FONDU
+EXACT.** En flottants — `1254 × 0,125` fait 156,75 au cran 32 —, les deux profils
+seraient rééchantillonnés séparément, leurs bandes se décaleraient d'une fraction
+de pixel et `Σw` cesserait de valoir un sur la colonne du raccord : **un liseré
+d'un pixel sur toute la longueur de chaque couture**. En arrondissant D'ABORD, le
+pas devient entier et la complémentarité tombe juste. Coût mesuré : l'échelle
+réelle s'écarte de **0,04 %** au plus, le pas de 0,18 % au cran le plus large —
+et le sol n'est indexé sur aucune case, donc rien ne s'en aperçoit.
+⚠⚠ **LE MODULE NE REND PLUS DE PIXELS, ET C'EST CE QUI ÉCONOMISE 50 Mio.**
+`render/terrain.js` rend une GÉOMÉTRIE — quels blocs, où, quelle orientation,
+quel poids — et `ui/monde.js` dessine au canevas. Décoder les huit planches en
+`Uint8Array` aurait coûté **50 Mio** (8 × 1254² × 4), à côté des 64 Mio du cache
+de dalles. Les planches restent des `<img>` que le navigateur pose lui-même.
+⚠⚠ **ET LA COMPOSITION SE FAIT EN `lighter`, PARCE QU'IL ADDITIONNE.** Chaque
+bloc est peint à part, masqué en `destination-in` — il porte donc `w` en alpha et
+`v` en couleur —, puis AJOUTÉ à la dalle : elle finit avec `Σw·v` en couleur et
+`Σw = 1` en alpha. `source-over` rendrait `w·v + (1−w)·fond`, ce qui n'est juste
+que pour DEUX blocs et dans le bon ordre ; aux coins il y en a quatre.
+⚠⚠ **L'ALIGNEMENT DES MOYENNES EST LE SEUL TRAITEMENT, ET IL ÉTAIT DÛ.** Les huit
+planches vont de **148,7 à 162,2** de luminance moyenne — 13,5 sur 255, **5,4 %**
+—, et un bloc fait une planche entière : l'écart se lit comme des taches. Mesuré,
+écart-type des moyennes locales sur une vue large : **4,284 sans alignement,
+2,509 avec, −41 %**, pour −3,5 % de contraste. C'est une TRANSLATION par canal,
+pas une normalisation — aucun gain, aucune courbe, le grain sort identique.
+⚠ **ÉGALISER LES ÉCARTS-TYPES A ÉTÉ ÉCARTÉ** : les planches n'ont pas le même
+contraste parce qu'elles ne dessinent pas la même chose, et l'aplatir aurait
+effacé ce qu'Ethan a dessiné pour qu'elles ne se ressemblent pas.
+⚠⚠ **q75, PLEINE RÉSOLUTION — LE MÊME RÉGLAGE QUE LES HUIT DÉCORS DE BASE.**
+Paliers mesurés en base64, PSNR médian : q85 → 3 660 040 o / 37,4 dB · q80 →
+2 840 884 / 35,9 · **q75 → 2 229 936 / 34,7** · q70 → 2 062 264 / 34,3. À 1:1 sur
+la planche la plus heurtée des huit, q75 ne se distingue pas de la source, et le
+sol est la SEULE image du jeu presque toujours affichée RÉDUITE — trois crans sur
+quatre. ⚠ **La résolution ne bouge pas** : une case vaut 256 pixels source et le
+cran le plus serré 256 pixels physiques, donc le sol y tombe au **1:1**.
+⚠⚠ **LA CONDITION DE REMESURE DES SEPT MÉGAOCTETS EST DUE, ET ELLE EST FAITE —
+MAIS PAS SUR L'APPAREIL.** Mesuré dans Chromium, 360 × 780 à dpr 3, sept
+exécutions par côté, médiane : **DOMContentLoaded 515 → 560 ms** (+45, soit
++8,7 % pour +27 % de livrable) et **premier rendu 256 → 192 ms**. Coût par image
+d'un pincement qui REVIENT du plus serré au plus large, la direction exigeante :
+**médiane 16,7 ms contre 16,8 avant**, p90 46,8 contre 56,7. Le dessin par le
+navigateur n'est pas plus cher que la boucle de pixels qu'il remplace.
+⚠ **CE N'EST PAS L'APPAREIL D'ETHAN, et le relèvement de borne est une
+proposition.** §3 : un test appareil non exécuté se déclare non exécuté.
+⚠⚠ **`partOuvrageDeLaRangee` EST RETIRÉE SUR DEMANDE, PAS PAR OUBLI.** « Pas de
+fond ouvrage pour le moment » : le sol basculait vers l'ardoise à mesure qu'on
+montait vers la base terminale — c'était une PROPOSITION, elle le disait. **La
+carte n'a donc plus qu'un seul sol**, et ce que le joueur lit du camp d'une zone,
+il ne le lit plus que dans les frontières de territoire. À rouvrir.
+⚠⚠ **MAIS `TERRAIN_CARTE.rampes` RESTE, ET LE NOUVEL ART TOMBE DESSUS.** Elles ne
+peignent plus rien ; ce qu'elles sont désormais, c'est la RÉFÉRENCE DÉCLARÉE du
+sol, celle contre laquelle le lot ARMÉE-ET-FRONTIÈRE a calibré les frontières.
+Mesuré sur les huit planches : distance RVB au ton de rampe le plus proche
+**9,0 en médiane, 14,0 au neuvième décile**, et la bande de clarté du sol
+(p5 132 → p95 181) tient dans celle de la rampe (137 → 192). **La frontière garde
+le contraste pour lequel elle a été recolorisée** — c'est un constat, pas une
+contrainte imposée à l'art.
+⚠ **UN SEUL SEL LÀ OÙ L'ANCIEN EN PRENAIT DEUX** : trois champs — le dessin, le
+quart de tour, le miroir — tiennent dans **six bits** d'un mot de trente-deux.
+⚠ **2 ET 3 SONT RETIRÉS, PAS RÉEMPLOYÉS** : ce sont les sels de `sim/poi.js`, et
+deux tirages sans rapport qui partagent un sel finissent par se corréler.
+⚠⚠ **LA BRIQUE A ÉTÉ MESURÉE ET ÉCARTÉE.** Décaler une rangée de blocs sur deux
+d'un demi-pas casserait la trame — mais mesuré, le patchwork passe de **2,509 à
+2,477**, soit **−1,3 %** : rien. Le fondu à 256 rendrait 2,369 pour 3,8 % de
+contraste et le DOUBLE de surface mélangée. Les deux sont écartés par la mesure,
+pas par le goût.
+⚠⚠ **DOUZE FALSIFICATIONS, DOUZE CHUTES — ET DEUX ONT DÛ ÊTRE REFAITES.** (1) « un
+champ pris dans les bits de tête » ne mordait pas, et c'est la falsification qui
+avait tort : `h >>> 29` est un champ de trois bits parfaitement distribué, quand
+le défaut historique était un champ de VINGT-TROIS bits pris dans les trois qui
+restaient. Reprise en « quatre planches sur huit ne sortent jamais », elle mord.
+(2) « une planche inlinée deux fois » ne mordait pas parce que le test lit
+`dist/`, que la falsification n'avait pas rebâti. **Une falsification qui ne mord
+pas se vérifie avant d'être crue**, quatrième fois.
+⚠⚠ **UNE GARDE A LU MA PROPRE PROSE, SIXIÈME FOIS DU DÉPÔT** — après
+`viewport-fit=cover`, `MENTION_SATURE`, `variante.js`, `render/contour.js` et le
+calque des traits. Celle qui refuse qu'on appelle le mode de déclaration des
+entrées ne décommentait que le JavaScript ; le premier des fichiers qu'elle
+balaie est du PYTHON, et un paragraphe de `tools/verifier.py` qui NOMME ce mode
+pour dire qu'on ne l'appelle pas la faisait tomber. **C'est la garde qui a été
+corrigée, pas la phrase**, et elle ne retire que les lignes ENTIÈREMENT
+commentées : couper à tout croisillon mangerait les clés `'#FF00FF'`.
+⚠ **DEUX AUTRES GARDES ONT DÛ APPRENDRE LES COMMENTAIRES HTML**, pour la même
+raison et le même jour : celle du Chantier et `SOL T10` trouvaient `--atlas-sol`
+dans le paragraphe qui explique sa disparition. Les deux portent un témoin.
+⚠⚠ **LE TÉMOIN DE `SON T9` A CHANGÉ DE NATURE, ET IL EST PLUS FORT.** Il exigeait
+de voir le couple `%ATLAS_TERRAIN%` / `%ATLAS_TERRAIN_BASE%`, seul cas du dépôt où
+un marqueur sans son `%` final en préfixait un autre. Le premier est parti, et —
+mesuré — **il ne reste aucune paire à risque dans les 284**. Un témoin adossé à
+un accident de nommage disparaît avec l'accident : il est remplacé par une SONDE,
+qui fait passer au prédicat une paire fabriquée dont on sait qu'elle est fautive.
+⚠ **LE COMPTE DE TESTS MONTE DE UN, ET IL SE DÉCOMPOSE** : `terrain.test.js`
+passe de 13 à 15, `monde.test.js` de 60 à 59 — deux gardes y sont RETIRÉES faute
+d'objet (la taille déclarée de l'atlas, l'appariement des couleurs indexées) et
+une entre (l'attente des huit planches). **Aucune assertion n'a été assouplie** :
+celles qui disparaissent sont celles dont le SUJET a disparu, et elles se
+déclarent.
+⚠ **`RACINES_DE_DESSIN_TOLEREES` TOMBE DE DEUX À UN** — `render/terrain.js` n'a
+plus de `Math.sqrt` : c'était le `√(Σwᵢ²)` de la normalisation.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Un sol est un dessin.
+⚠ **RELEVÉ AU DOIGT DANS CHROMIUM** (360 × 780, dpr 3) : la carte s'ouvre, les
+huit balises `sol-*` décodent en 1 254 × 1 254, le pincement mène de **11 à 21 à
+43 à 85 px CSS par case** — 85 × 3 = 255, donc le 1:1 —, **zéro erreur de page**,
+et deux captures du même état sont identiques à l'octet. L'écran de la base est
+intact : 162 cases, décor peint en place.
+⚠ **`python3 tools/verifier.py` → 1 415 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en 469,8 s. Il était dû : le lot touche `art/` et
+`tools/`. **Le compte passe de 1 406 à 1 415** — les huit planches et leur
+manifeste, et rien d'autre. ⚠ Et son second verdict tient aussi : « la chaîne lit
+exactement les sources déclarées », 378 / 378 et 95 / 95, `art/sourcesstandby/`
+34 fichiers **0 lu**.
+⚠ **`python3 tools/entrees.py --declarer` → 378 consommées · 95 dormantes ·
+473 fichiers** (avant : 370 / 95 / 465). Lancé **à la main**. ⚠ Son PREMIER
+passage a rendu les huit **dormantes**, et il avait raison : `sols` n'était pas
+encore dans `CHAINE`. C'est ce qui a fait ajouter la ligne.
+
+**Auparavant, après le lot EMBLÈMES-ABÎMÉS :**
 `npm test` → **1093 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 060 617 octets**, 0 référence externe.
 ⚠⚠ **LES TRENTE-SIX EMBLÈMES SAINS AVAIENT DÉJÀ PERDU LEUR ÉCHELLE, ET C'EST LA
@@ -4172,7 +4321,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 12 fi
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
   fond.js               le décor peint d'une base : quel dessin, et où il se pose
   limite.js             quel dessin porte une frontière de territoire, et où le découper
-  terrain.js            le pavage du fond de carte : il rend des pixels, pas un dessin
+  terrain.js            le sol de la carte : quels dessins, où, et avec quel poids
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
   embleme.js            quel dessin porte un site de la carte : palier, saveur, emprise
@@ -4415,7 +4564,12 @@ test/                   55 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  29 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 04/09
+tools/                  30 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 05/09
+                        au lot SOL-SATELLITE, qui fait entrer `sols.py` : les huit
+                        planches de terrain satellite de la carte du monde. Il ne
+                        réduit pas, ne recadre pas, ne quantifie pas — il aligne les
+                        moyennes et encode en WebP q75, et c'est tout.
+                        Auparavant, RECOMPTÉ le 04/09
                         au lot SON-CATALOGUE : le compte ne bouge pas, aucun
                         outil n'entre ni ne sort. Le vingt-neuvième est
                         `sons.py`, qui encode les **263** sons du pack en Opus ;
@@ -4502,9 +4656,18 @@ tools/                  29 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sources brutes, hors chaîne de build — **456 fichiers à
-                        la racine**, RECOMPTÉ le 04/09 au lot SON-CATALOGUE, qui
-                        en fait entrer 263 : les masters WAV du pack de sons.
+art/sources/            sources brutes, hors chaîne de build — **473 fichiers à
+                        la racine**, RECOMPTÉ le 05/09 au lot SOL-SATELLITE, qui
+                        en fait entrer huit : `sol_carte_1.png` à `_8.png`, les
+                        planches de terrain satellite de la carte du monde,
+                        1 254 × 1 254 chacune.
+                        ⚠ ET LE CLASSEMENT PASSE À **378 CONSOMMÉES ·
+                          95 DORMANTES** : les huit entrent du bon côté, parce
+                          que `sols` est dans `CHAINE`. Mesuré — le PREMIER
+                          `entrees.py` de ce lot les a rendues DORMANTES, et
+                          c'est ce qui a fait ajouter la ligne au vérificateur.
+                        Auparavant, RECOMPTÉ le 04/09 au lot SON-CATALOGUE, qui
+                        en faisait entrer 263 : les masters WAV du pack de sons.
                         ⚠⚠ IL NE PORTE PLUS QUE DES IMAGES DEPUIS LE LOT
                           SON-MOTEUR, et le catalogue le rend flagrant : **267
                           des 456 sont des `.wav`**. Le nom du dossier dit
@@ -4578,12 +4741,28 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           trier les chemins à la sous-chaîne rangerait chaque
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
-art/sprites/            les sprites conditionnés — DOUZE dossiers de famille et
-                        **1 306 fichiers en tout**, recomptés le 04/09 au lot
-                        SON-CATALOGUE : **1 286 dans les douze dossiers**, plus
+art/sprites/            les sprites conditionnés — TREIZE dossiers de famille et
+                        **1 460 fichiers en tout**, recomptés le 05/09 au lot
+                        SOL-SATELLITE : **1 440 dans les treize dossiers**, plus
                         DIX-HUIT atlas `.webp` et DEUX fichiers générés à la
                         racine — `ancres-chassis.json` et
                         `atlas-empreintes.json`.
+                        ⤷ ⚠⚠ LA TREIZIÈME EST `sol/`, ET ELLE N'EST PAS UNE
+                          FAMILLE DE SPRITES NON PLUS — lot SOL-SATELLITE, 05/09 :
+                          les huit planches de terrain satellite de la carte du
+                          monde et leur manifeste, **1 674 196 octets**. Une
+                          planche fait 1 254 × 1 254, soit 4,9 cases : aucun
+                          atlas ne peut la coudre, `tools/atlas.py` n'acceptant
+                          que des cellules carrées à la taille de case. Chacune
+                          a donc son marqueur de `tools/build.js`, comme les
+                          décors de `fond/`.
+                        ⚠ ET `art/sprites/carte/atlas-terrain-64.png` RESTE, SANS
+                          PLUS ENTRER DANS LE LIVRABLE. C'était l'atlas indexé du
+                          fond de carte ; il est une SOURCE DÉCLARÉE depuis
+                          toujours — aucun outil du dépôt ne le produit —, donc
+                          le retirer laisserait un fichier que personne ne sait
+                          refaire. Il coûte zéro octet au joueur, et il est la
+                          seule trace du sol procédural si Ethan veut y revenir.
                         ⚠ LE « 1 047 » DU LOT PRÉCÉDENT COMPTAIT LES VINGT
                         FICHIERS DE LA RACINE DEUX FOIS : c'était le TOTAL, et la
                         phrase disait « plus dix-huit atlas ». Recompté fichier
@@ -4796,7 +4975,7 @@ exécuté se déclare **non exécuté**, jamais passé.
 ```
 python3 -m pip install Pillow numpy scipy    # ⚠ SANS EUX IL NE DÉMARRE PAS
 apt-get install opus-tools                   # ⚠ ET SANS LUI, `sons` NE PRODUIT RIEN
-python3 tools/verifier.py                    # toute la chaîne, ~5 min 30
+python3 tools/verifier.py                    # toute la chaîne, ~7 min 50
 python3 tools/verifier.py --outil emblemes   # un seul outil, pour itérer
 ```
 
@@ -4806,11 +4985,17 @@ LE SAVOIR AVANT DE CONCLURE.** `tools/planches.py` importe `PIL`, `numpy` et
 **1** dès le premier outil, avec une trace Python — il ne ment pas, mais on peut
 lire « chaîne cassée » là où il manque une dépendance. Mesuré le 30/08 au lot
 SPRITES-S11, où il a fallu trois installations pour l'amener au bout.
-⚠ Le « ~5 min 30 » ci-dessus suppose donc qu'il DÉMARRE. Mesuré le 04/09 au lot
-SON-CATALOGUE : **330,1 s pour 1 261 fichiers**, contre 278,1 s pour 1 002 au lot
-précédent. Les 263 encodages Opus y comptent DEUX fois — `entrees.py` rejoue la
-chaîne sous son mouchard —, soit une douzaine de secondes ; le reste du surcoût
-est la comparaison des 259 fichiers de plus.
+⚠ Le « ~7 min 50 » ci-dessus suppose donc qu'il DÉMARRE. Mesuré le 05/09 au lot
+SOL-SATELLITE : **469,8 s pour 1 415 fichiers**, dont 195,6 s pour la seule
+seconde passe d'`entrees.py`. Auparavant, le 04/09 au lot SON-CATALOGUE :
+**330,1 s pour 1 261 fichiers**, contre 278,1 s pour 1 002 au lot précédent. Les
+263 encodages Opus comptent DEUX fois — `entrees.py` rejoue la chaîne sous son
+mouchard —, soit une douzaine de secondes ; le reste du surcoût est la
+comparaison des fichiers de plus.
+⚠ ET LE CHIFFRE DÉPEND DE LA MACHINE, pas seulement du dépôt : les deux mesures
+ci-dessus ont été prises sur des conteneurs différents. C'est un ordre de
+grandeur pour savoir si on a la patience de le lancer, pas une référence à
+confronter.
 
 ⚠⚠ **ET `opusenc` EST UNE QUATRIÈME DÉPENDANCE DEPUIS LE 04/09**, au même titre
 que les trois paquets Python : `tools/sons.py` encode les quatre sons témoins en

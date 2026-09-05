@@ -491,7 +491,6 @@
      l'ont fait tomber au premier essai. Une garde qui lit ce qu'on écrit à son
      sujet, vue par l'autre bout. */
   :root {
-    --atlas-sol: url('%ATLAS_TERRAIN%');
     --atlas-unite: url('%ATLAS_UNITE%');
     --atlas-chassis: url('%ATLAS_CHASSIS%');
     --atlas-tourelle-unite: url('%ATLAS_TOURELLE_UNITE%');
@@ -2022,26 +2021,43 @@
 
     <!-- ======================================================================
          ÉCRAN MONDE — la carte, ses sites, et le doigt qui la promène.
-         ⚠ L'ATLAS DE TERRAIN VIT ICI, DANS UNE IMAGE CACHÉE. Le build y injecte
-         les 64 tuiles en `data:` — le HTML ne référence rien d'extérieur, et
-         c'est non négociable. Une image en `display: none` se charge et se
-         décode quand même ; `ui/monde.js` la relit une fois, à la première
-         ouverture de la carte, et n'y touche plus.
+         ⚠ LE SOL VIT ICI, DANS HUIT IMAGES CACHÉES. Le build y injecte les huit
+         planches en `data:` — le HTML ne référence rien d'extérieur, et c'est
+         non négociable. Une image en `display: none` se charge et se décode
+         quand même ; `ui/monde.js` les attend une fois, à la première ouverture
+         de la carte, et n'y touche plus.
          ⚠ AUCUN BOUTON D'ACTION DANS LE PANNEAU. Il dit ce qu'on sait d'un
          site — type, niveau, distance, position — et rien d'autre : le raid
          n'existe pas. Promettre « Attaquer » serait refaire la faute du bouton
          « Assaut » du lot ÉCRAN-CHANTIER.
          ====================================================================== -->
     <div id="ecran-monde" hidden>
-      <!-- ⚠⚠ `width`/`height` NE SONT PAS DÉCORATIFS : le SOL DE LA BASE les lit.
-           Il découpe cet atlas-ci en cellules de 64 et doit connaître sa grille
-           dès la première peinture ; `naturalWidth` vaut zéro tant que le PNG
-           n'est pas décodé, donc la grille serait fausse au démarrage et juste
-           ensuite — la pire des deux. L'attribut, lui, est lisible dès que le
-           balisage est analysé. Un test le confronte à l'en-tête RÉEL du
-           fichier : une transcription qui ne se confronte pas à sa source est
-           une copie qui vieillit. -->
-      <img id="monde-atlas" alt="" hidden width="1024" height="1024">
+      <!-- ⚠⚠ LES HUIT PLANCHES DU SOL DE LA CARTE — lot SOL-SATELLITE, 05/09.
+           Ethan : « je viens de t'envoyer 8 planches de terrain satellite pour
+           la carte du monde ». Elles REMPLACENT `monde-atlas`, qui portait
+           l'atlas indexé de 64 tuiles dont `render/terrain.js` accumulait une
+           somme pondérée avant de la requantifier sur cinq teintes. Le sol est
+           maintenant l'art tel quel, posé par blocs d'une planche entière.
+
+           ⚠ LE MARQUEUR EST EN `src`, PAS EN VARIABLE CSS — même chemin que
+           `monde-emblemes` et `monde-limites` juste en dessous : seul un canevas
+           s'en sert, et `drawImage` veut un élément, pas une adresse. C'est
+           `--atlas-sol` qui disparaît avec elles, et l'entrée que
+           `ATLAS_DE_LA_PAGE` lui consacrait.
+
+           ⚠ ET PLUS DE `width`/`height` ÉCRITS À LA MAIN. L'ancien les portait
+           parce que `creerAtlas` avait besoin de la largeur dès la première
+           peinture ; plus rien ne lit la taille de ces images-ci — la géométrie
+           du pavage vit dans `render/terrain.js`, qui est pur, et un test
+           confronte sa constante au manifeste de `tools/sols.py`. -->
+      <img id="sol-1" alt="" hidden src="%SOL_CARTE_1%">
+      <img id="sol-2" alt="" hidden src="%SOL_CARTE_2%">
+      <img id="sol-3" alt="" hidden src="%SOL_CARTE_3%">
+      <img id="sol-4" alt="" hidden src="%SOL_CARTE_4%">
+      <img id="sol-5" alt="" hidden src="%SOL_CARTE_5%">
+      <img id="sol-6" alt="" hidden src="%SOL_CARTE_6%">
+      <img id="sol-7" alt="" hidden src="%SOL_CARTE_7%">
+      <img id="sol-8" alt="" hidden src="%SOL_CARTE_8%">
       <!-- ⚠⚠ LES EMBLÈMES DE LA CARTE, ET LES DEUX GROSSES BASES HORS ATLAS.
            Les 43 emblèmes tiennent dans un atlas 7 × 7 ; les deux grosses bases
            couvrent 2 × 2 et 3 × 3 cases, donc 128 et 192 pixels de côté à la
@@ -2068,7 +2084,7 @@
            `HTMLImageElement`, pas une URL. Les atlas du DOM — bâtiment, terrain,
            defense, socle — restent en `var(--atlas-…)` parce qu'ils servent de
            `background-image` ; ceux-ci passent par un canevas.
-           Le précédent est `monde-atlas`, en place depuis l'écran de la carte. -->
+           Le précédent est le sol de la carte, en place depuis l'écran Monde. -->
       <img id="atlas-unite" alt="" hidden>
       <img id="atlas-chassis" alt="" hidden>
       <img id="atlas-tourelle-unite" alt="" hidden>

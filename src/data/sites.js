@@ -863,33 +863,17 @@ export const ZOOM_CARTE = {
   /** Pixels physiques par case, du plus large au plus serré. */
   crans: [32, 64, 128, 256],
 
-  /** Côté d'une tuile de terrain dans l'atlas, en pixels SOURCE. */
-  coteTuile: 128,
-
-  // ⚠⚠ QUATRE TUILES PAR CASE — 2 PAR AXE —, ET C'EST LE CORRECTIF DU « GROS
-  // CARRÉ MOCHE » RAPPORTÉ PAR ETHAN LE 30/08. Une tuile faisait exactement une
-  // case : une case valait donc 128 pixels source, et au cran le plus serré
-  // (256 px par case) le pavage AGRANDISSAIT sa source d'un facteur deux. Or
-  // l'art de l'atlas a un grain de 4 pixels source — mesuré, pas supposé —, si
-  // bien que ce grain se lisait à l'écran en carrés de huit pixels, alignés sur
-  // les axes. C'est ce qu'on voyait.
+  // ⚠⚠ `coteTuile` ET `tuilesParCase` SONT PARTIS AVEC L'ATLAS DE TERRAIN — lot
+  // SOL-SATELLITE, 05/09. Ils disaient le côté d'une tuile et combien il en
+  // fallait pour couvrir une case ; le sol n'est plus fait de tuiles mais de
+  // planches entières, et `PIXELS_SOURCE_PAR_CASE` ci-dessous porte seul
+  // l'échelle qu'ils portaient à deux.
   //
-  // À deux tuiles par axe, une case vaut 256 pixels source : le cran 256 tombe
-  // au rapport 1:1 et les trois autres RÉDUISENT. Plus aucun agrandissement,
-  // donc plus de carré.
-  //
-  // ⚠ ET ÇA NE COÛTE NI UN OCTET NI UNE MILLISECONDE. L'atlas ne bouge pas —
-  // c'est le MÊME fichier, lu à une autre échelle — donc la carte ne quadruple
-  // pas, ce qu'Ethan redoutait en proposant de « redécouper les planches ». Le
-  // temps de rendu ne bouge pas non plus : le pas du réseau est lui aussi en
-  // pixels source, si bien que le nombre de tuiles qui se superposent SUR UN
-  // PIXEL D'ÉCRAN vaut `(coteTuile / pasSourcePx)²` quelle que soit l'échelle.
-  // Mesuré à la livraison, pas déduit.
-  //
-  // ⚠ IL DIVISE LES CRANS, ET UN TEST L'EXIGE. Un nombre qui ne diviserait pas
-  // 32 rendrait une tuile d'écran fractionnaire au cran le plus large, donc du
-  // pixel art brouillé — exactement ce que la note des crans refuse plus haut.
-  tuilesParCase: 2,
+  // ⚠ CE QU'ILS DISAIENT RESTE VRAI ET DOIT LE RESTER : le cran le plus serré
+  // vaut 256 pixels physiques par case, l'échelle source y tombe donc au 1:1, et
+  // AUCUN cran n'agrandit jamais la source. C'est l'acquis du « gros carré
+  // moche » qu'Ethan a rapporté le 30/08 — un pavage qui doublait son grain —,
+  // et c'est `echelleDuCran` de `render/terrain.js` qui le tient désormais.
 
   // ⚠⚠ `grilleEmbleme` A ÉTÉ RETIRÉE ICI LE 03/09, ET SON ABSENCE EST LE
   // MESSAGE. Elle valait 64 et disait « le côté d'une cellule d'emblème » —
@@ -903,14 +887,25 @@ export const ZOOM_CARTE = {
 };
 
 /**
- * Le côté d'une case de la carte, en pixels SOURCE de l'atlas de terrain.
+ * Le côté d'une case de la carte, en pixels SOURCE du sol.
  *
- * ⚠ IL SE CALCULE, IL NE S'ÉCRIT PAS. C'est le produit des deux nombres
- * ci-dessus, et une troisième constante qui vaudrait 256 serait la seconde
- * vérité que CLAUDE.md §4 interdit — la première à mentir le jour où l'un des
- * deux facteurs bougera.
+ * ⚠⚠ IL S'ÉCRIT MAINTENANT, ET C'EST UN RECUL ASSUMÉ. Il était le PRODUIT de
+ * `coteTuile` et `tuilesParCase`, pour qu'une troisième constante ne puisse pas
+ * mentir le jour où l'un des deux bougerait. Ces deux-là sont partis avec
+ * l'atlas de tuiles : il n'y a plus de facteurs dont dériver, et écrire
+ * `1254 / 4,8984…` pour se donner l'air de calculer serait pire.
+ *
+ * ⚠ CE NOMBRE EST LA SEULE CHOSE QUI RELIE LE SOL AU ZOOM, et il est adossé au
+ * cran le plus serré de `ZOOM_CARTE.crans` : les deux valent 256, donc ce cran
+ * tombe au 1:1 et aucun n'agrandit. Un test l'exige plutôt que de le supposer —
+ * les faire diverger rendrait le sol flou au maximum du zoom, ce qui est très
+ * exactement le défaut du 30/08.
+ *
+ * ⚠ ET IL NE DIT RIEN DU CÔTÉ D'UNE PLANCHE. Une planche fait 1 254 pixels, soit
+ * 4,898 cases : le pavage se compte en PIXELS, jamais en cases, et rien
+ * n'oblige un bloc à tomber sur une frontière de case.
  */
-export const PIXELS_SOURCE_PAR_CASE = ZOOM_CARTE.coteTuile * ZOOM_CARTE.tuilesParCase;
+export const PIXELS_SOURCE_PAR_CASE = 256;
 
 /**
  * L'étiquette d'un site sur la carte du monde — son nom, et son niveau dessous.
@@ -1005,11 +1000,28 @@ export const ETIQUETTE_CARTE = {
 // pixels, il faudrait le reprendre le jour où le pas bouge, et personne n'y
 // penserait : le semis se remettrait à s'aligner sans qu'un test tombe.
 export const TERRAIN_CARTE = {
-  /** Pas du réseau de pose, en pixels SOURCE. Une case en fait 128. */
-  pasSourcePx: 56,
-
-  /** Décalage maximal du centre d'une tuile, en fraction du pas, sur chaque axe. */
-  decalageFraction: 0.4,
+  // ⚠⚠ LA LARGEUR DU FONDU ENTRE DEUX BLOCS VOISINS, EN PIXELS SOURCE — lot
+  // SOL-SATELLITE, 05/09. Le sol de la carte est pavé par BLOCS d'une planche
+  // entière de 1 254 pixels, qui se chevauchent de ce nombre-ci : c'est la SEULE
+  // bande où deux dessins se mélangent, et tout le reste est la planche telle
+  // qu'Ethan l'a rendue. `128 / 1 254` par axe, donc **78,6 % de la surface est
+  // le pixel source à l'octet** — `render/terrain.js` le calcule et un test le
+  // mesure sur le pavage.
+  //
+  // ⚠ 128 EST MESURÉ, PAS CHOISI ROND. Écart-type des moyennes locales sur une
+  // vue large de 1 200 × 1 200 au cran 64, fenêtre d'un demi-bloc : le fondu 128
+  // rend **2,509**, le fondu 256 rend 2,369 — soit 5,6 % de raccord en moins —
+  // mais il coûte 3,8 % de contraste (14,064 → 13,519) et surtout il double la
+  // part de surface mélangée. À 128, la couture ne se voit déjà pas à 1:1 sur la
+  // planche la plus heurtée des huit ; élargir ne rachète rien qui se voie.
+  //
+  // ⚠ ET CE QUI ÉTAIT ICI EST PARTI AVEC LA MOULINETTE. `pasSourcePx: 56` était
+  // le pas d'un réseau où CINQ tuiles se superposaient sur chaque pixel, et
+  // `decalageFraction: 0.4` la gigue qui empêchait ce réseau de se lire comme
+  // une grille. Un bloc d'une planche entière n'a besoin ni de l'un ni de
+  // l'autre : ce qui casse la répétition, c'est huit dessins et huit
+  // orientations, pas un semis.
+  fonduSourcePx: 128,
 
   /** Côté d'une dalle de rendu, en pixels ÉCRAN. */
   dalleCotePx: 512,
@@ -1041,48 +1053,42 @@ export const TERRAIN_CARTE = {
   // poussière. ⚠ ELLES ONT LA MÊME CLARTÉ RANG PAR RANG — L* 58,1 · 62,9 ·
   // 68,0 · 73,0 · 77,9 —, ce qui est la raison d'être de la seconde : deux sols
   // de clarté différente donneraient à un camp un camouflage que personne n'a
-  // décidé. Repeindre à index CONSTANT ne touche donc ni au contraste ni à la
-  // lisibilité de ce qui se pose dessus. ⚠ Et jamais un voile de couleur
-  // globale à la place : il écraserait le relief et perdrait la garantie.
+  // décidé.
+  //
+  // ⚠⚠ ELLES NE PEIGNENT PLUS RIEN, ET ELLES RESTENT — lot SOL-SATELLITE, 05/09.
+  // Le sol de la carte était REQUANTIFIÉ sur elles ; il est maintenant l'art
+  // d'Ethan tel quel. Ce qu'elles sont désormais, c'est la RÉFÉRENCE DÉCLARÉE
+  // du sol, celle contre laquelle le lot ARMÉE-ET-FRONTIÈRE a calibré les
+  // frontières de territoire — « le sol de la carte est CLAIR des deux côtés »,
+  // et les quatre tons les plus sombres de chaque rampe ont été retenus pour
+  // ressortir dessus. Les retirer ferait tomber cette calibration sans que rien
+  // ne la remplace.
+  //
+  // ⚠⚠ ET LE NOUVEL ART TOMBE DESSUS, C'EST MESURÉ. Sur les huit planches
+  // livrées, la distance RVB au ton de rampe le plus proche vaut **9,0 en
+  // médiane et 14,0 au neuvième décile**, et la bande de clarté du sol
+  // (p5 = 132, p95 = 181) tient dans celle de la rampe (137 → 192). La
+  // frontière garde donc exactement le contraste pour lequel elle a été
+  // recolorisée. C'est un CONSTAT, pas une contrainte imposée à l'art : le jour
+  // où Ethan livrera un sol d'une autre famille, ce sont ces deux mesures-là
+  // qu'il faudra refaire, et la frontière avec.
   rampes: {
     joueur: ['#B87E64', '#C38C73', '#CF9A83', '#D7A995', '#E0B9A8'],
     ouvrage: ['#8E88A4', '#9B95AE', '#A8A3B9', '#B5B1C2', '#C2BFCC'],
   },
 
-  // Les quatre seuils qui découpent le résultat de l'accumulation en cinq
-  // teintes d'égale surface.
+  // ⚠⚠ `seuilsDeTeinte` ET `seuilOuvrage` SONT PARTIS AVEC LA MOULINETTE — lot
+  // SOL-SATELLITE. Les quatre seuils découpaient l'accumulation en cinq teintes
+  // d'égale surface, et le cinquième décidait quelle rampe peignait un pixel :
+  // il n'y a plus ni accumulation, ni quantification, ni rampe peinte. Ne pas
+  // les recréer sans le sol procédural qui allait avec.
   //
-  // ⚠⚠ ILS SONT MESURÉS, ET ILS NE SE DEVINENT PAS. L'atlas est exactement
-  // équilibré — 20,0 % de sa surface par index, mesuré — mais la SORTIE ne l'est
-  // pas : elle est la somme pondérée d'environ cinq tuiles, donc à peu près
-  // gaussienne là où l'atlas est uniforme. Prendre les seuils de l'atlas
-  // (0,5 · 1,5 · 2,5 · 3,5) donnerait 14 % aux teintes extrêmes et 28 % à celle
-  // du milieu. Ceux-ci sont les quintiles de la sortie elle-même, relevés sur
-  // 2 949 120 pixels — quatre crans × cinq graines × quatre endroits de la
-  // carte. Un test refait la mesure et exige 20 % ± 2 par teinte.
-  //
-  // ⚠ RELEVÉS À NOUVEAU LE 30/08, À QUATRE TUILES PAR CASE. Passer de une tuile
-  // par case à quatre change l'échantillonnage de l'atlas, donc la distribution
-  // de la sortie : les quatre valeurs ont bougé de 0,004 à 0,026. C'est le cas
-  // que CLAUDE.md §5 autorise — « recalculer un seuil parce qu'une constante a
-  // bougé : oui » — et non un assouplissement : la tolérance du test n'a pas été
-  // touchée. Les précédents étaient 0,660 · 1,586 · 2,444 · 3,363.
-  //
-  // ⚠ ET L'ACCORD ENTRE CRANS S'EST DESSERRÉ, IL FAUT LE DIRE. Il valait 0,05 ;
-  // il vaut 0,094 au pire (premier seuil, 0,631 au cran 32 contre 0,725 au cran
-  // 256). Un jeu de seuils PAR CRAN resterait un jeu de seuils de trop — la
-  // dispersion tient dans la tolérance, et deux découpages différents feraient
-  // deux fonds différents pour la même zone.
-  //
-  // ⚠ ET ILS SONT GLOBAUX, PAS PAR DALLE. La formule dit « par quantiles de
-  // luminance sur la dalle » ; des seuils calculés dalle par dalle feraient
-  // deux découpages différents de part et d'autre d'un bord, donc une couture
-  // visible — et casseraient l'invariant qui compte le plus ici, celui qui veut
-  // qu'une zone rendue en une dalle soit identique à la même rendue en quatre.
-  seuilsDeTeinte: [0.656, 1.574, 2.418, 3.338],
-
-  /** Au-dessus de cette part d'Ouvrage, le pixel prend la rampe de l'Ouvrage. */
-  seuilOuvrage: 0.5,
+  // ⚠ ET LE FOND DE L'OUVRAGE AVEC EUX, SUR DEMANDE D'ETHAN — 05/09, « pas de
+  // fond ouvrage pour le moment ». `partOuvrageDeLaRangee` faisait basculer le
+  // sol vers l'ardoise à mesure qu'on montait vers la base terminale ; c'était
+  // une PROPOSITION, elle le disait, et elle est retirée le temps qu'il regarde
+  // le sol satellite sur la carte. La rampe `ouvrage` ci-dessus reste, elle : la
+  // frontière de territoire s'en sert toujours.
 };
 
 // --- gabarits d'emblèmes ------------------------------------------------------
