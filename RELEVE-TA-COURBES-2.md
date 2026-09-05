@@ -12,6 +12,38 @@
 
 ---
 
+---
+
+## Amendement du 05/09/2026
+
+Trente captures d'écran ont été relevées ce jour-là ; elles sont dépouillées dans
+`RELEVE-TA-REPARATION.md`. **Aucune valeur de ce document-ci n'est infirmée.** Trois de ses
+affirmations sont confirmées par une mesure indépendante, et deux points nouveaux s'y
+rattachent.
+
+**Confirmé.** Le §5 donne « Caserne, tibérium, coût au palier 11 : 144 000 ». Divisé par
+24 000, ça rend un coefficient de **6** — exactement ce que rend le panneau d'optimisation
+de la Caserne au niveau 45, mesuré séparément. De même l'Exosoldat à 96 000 rend **4**. Et
+le §4 est falsifié au sens fort : les Exosoldats mesurés à Caserne 10 puis à Caserne 12
+donnent 716 s → 603 s, rapport 1,1874, soit **1,09² à un millième**.
+
+**Nouveau, et ça change la lecture du §0.** La phrase « tout ce qui précède le niveau 11
+relève de l'accueil du joueur et ne se modélise pas » est plus forte qu'elle n'en a l'air :
+le prix au niveau 2 et le coefficient de régime sont **deux nombres différents pour la même
+entité**, et ils ne coïncident que pour le Chantier de construction. La rampe unique de
+`data/economie.js`, calée sur ce seul bâtiment, sous-prixait toutes les autres entités en
+fin de partie, jusqu'à 50 %.
+
+⚠ **DIVERGENCE NON RÉSOLUE — la marche de ×1,794.** Le §5 dit que « de 10 à 11 le coût
+d'une unité fait ×1,794, puis ×1,32 jusqu'au bout ». Le montage retenu le 05/09 — rampe du
+Chantier redressée par entité pour atterrir sur son coefficient au niveau 12 — rend une
+marche de 2,06 à 2,30 selon l'entité, jamais 1,794. Sous aucun alignement d'index la rampe
+partagée ne rend ce nombre. Soit les unités ont leur propre forme de bas d'échelle, soit la
+phrase est approximative. **Non poursuivie**, arbitrage d'Ethan du 05/09 : ça ne touche rien
+au-dessus du niveau 11.
+
+---
+
 ## 0. Les cinq lois
 
 | grandeur | facteur par niveau | régime | qualité |
