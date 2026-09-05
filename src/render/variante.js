@@ -24,6 +24,7 @@
 // case à une décision de jeu prise ailleurs sur les mêmes coordonnées.
 
 import { hachageBrut } from '../sim/peuplement.js';
+import { ATLAS } from '../data/atlas.js';
 
 /** Le sel de ce module, distinct des quatre déjà employés dans `src/`. */
 export const SEL_VARIANTE = 4;
@@ -66,4 +67,57 @@ export function variante(graine, rangee, colonne, nombre) {
  */
 export function suffixeDeVariante(graine, rangee, colonne, nombre) {
   return String.fromCharCode(97 + variante(graine, rangee, colonne, nombre));
+}
+
+/**
+ * Combien de dessins porte une famille de terrain — sol, champ ou obstacle.
+ *
+ * ⚠ CES NOMBRES SE LISENT DANS L'ATLAS, ILS NE S'ÉCRIVENT PAS ICI. Le sol a
+ * quatre dessins (`tile_sol_j_a` … `_d`), les champs et les obstacles en ont
+ * deux. Les compter depuis les noms cousus fait suivre la table toute seule le
+ * jour où une cinquième variante entrera — et fait rougir `sprite.test.js` si
+ * l'atlas et le dessin cessent de s'accorder.
+ *
+ * ⚠⚠ ELLE DESCEND D'`ui/chantier.js` AU LOT ERGONOMIE, ET C'EST UN DÉPLACEMENT,
+ * PAS UNE ÉCRITURE. Elle y vivait tant qu'un seul écran choisissait une
+ * variante ; le champ de bataille en choisit une aussi depuis que ses obstacles
+ * portent leur sprite, et `render/scene.js` n'a pas le droit d'importer `ui/`.
+ * Une seconde écriture aurait donné à un même obstacle un dessin dans la base et
+ * un autre au combat — invisible tant qu'on ne compare pas les deux écrans.
+ *
+ * @param {string} prefixe début du nom des sprites de la famille
+ * @returns {number} au moins 1
+ */
+export function nombreDeVariantes(prefixe) {
+  const n = ATLAS.terrain.noms.filter((nom) => nom.startsWith(`${prefixe}_`)).length;
+  if (n < 1) throw new RangeError(`variante : aucune variante pour « ${prefixe} »`);
+  return n;
+}
+
+/**
+ * Le nom du sprite de terrain qui revient à cette case — variante comprise.
+ *
+ * ⚠⚠ C'EST LA SEULE PORTE, ET LES DEUX ÉCRANS Y PASSENT. `fondDuTerrain` de
+ * `ui/chantier.js` la lit pour le DOM, `listeAffichage` de `render/scene.js`
+ * pour le canevas : le même obstacle, à la même graine et sur la même case,
+ * porte donc le même dessin des deux côtés. `ERGO T14` le mesure.
+ *
+ * ⚠ ET LE COMPTE EST MÉMORISÉ. L'écran de la base balaie 162 cases à chaque
+ * peinture ; y filtrer les dix-huit noms de l'atlas ferait près de trois mille
+ * comparaisons par geste pour un nombre qui ne change jamais de la vie du
+ * programme.
+ *
+ * @param {string} prefixe début du nom, sans la lettre de variante
+ * @param {number} graine graine de la partie
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {string} un nom de l'atlas `terrain`
+ */
+const comptesDeVariantes = new Map();
+export function nomDeVariante(prefixe, graine, rangee, colonne) {
+  if (!comptesDeVariantes.has(prefixe)) {
+    comptesDeVariantes.set(prefixe, nombreDeVariantes(prefixe));
+  }
+  const nombre = comptesDeVariantes.get(prefixe);
+  return `${prefixe}_${suffixeDeVariante(graine, rangee, colonne, nombre)}`;
 }

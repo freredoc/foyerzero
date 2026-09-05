@@ -308,8 +308,18 @@ test('deux raids — le second part sur ce que le premier a laissé', () => {
   for (const p of baseCourante(etat).armee) p.degatsMilli = 0;
   const deux = executerRaid(etat, baseCourante(etat), cible);
   assert.equal(deux.cout, un.cout, 'le prix ne dépend pas de l\'état du site');
-  assert.ok(deux.ticks < un.ticks || deux.rase,
-    `second raid : ${deux.ticks} ticks contre ${un.ticks}`);
+  // ⚠⚠ LOT ARRÊT (04/09) : LA DURÉE N'EST PLUS L'OBSERVABLE, ET C'ÉTAIT UN
+  // PROXY. Les deux passes durent maintenant 441 ticks toutes les deux — les
+  // six Meutes tombent au même tick des deux côtés — pendant que le site, lui,
+  // est bel et bien plus entamé : 52 ‰ de défense restante après la première
+  // passe contre 33 après la seconde, 86 contre 69 pour les bâtiments, et un
+  // butin qui monte de 1 088 à 1 310. On asserte donc ce que le test
+  // PRÉTENDAIT mesurer — « le second part sur ce que le premier a laissé » —
+  // au lieu de la durée, qui n'en était que le symptôme.
+  assert.ok(deux.restantDefense < un.restantDefense || deux.rase,
+    `second raid : défense restante ${deux.restantDefense} contre ${un.restantDefense}`);
+  assert.ok(deux.restantBatiments < un.restantBatiments || deux.rase,
+    `second raid : bâtiments restants ${deux.restantBatiments} contre ${un.restantBatiments}`);
 });
 
 test('rasage — le satellite disparaît et son remplaçant est programmé', () => {
@@ -917,10 +927,23 @@ test('RAID-A T8 — les trois verdicts, et « défense seule touchée » est une
     '« Défaite » sans « totale » est réservé à la défense');
 
   // Une armée trop faible pour entamer un bâtiment : défaite totale.
+  //
+  // ⚠⚠ LOT ARRÊT (04/09) : LA CIBLE PASSE DU CAMP À L'AVANT-POSTE, ET LE MOTIF
+  // EST UNE MESURE. Une Meute seule de niveau 1 ne s'arrête plus pour la
+  // garnison du camp : elle la traverse, arrive jusqu'aux bâtiments et en
+  // griffe un — verdict « victoire », mesuré, alors que le pourcentage de
+  // bâtiments restants affiche toujours 100. Le verdict lit
+  // `pvPerdusIciMilli > 0`, pas un pourcentage arrondi. Sur l'avant-poste, qui
+  // est plus dur, la même Meute tombe avant d'atteindre la première rangée de
+  // bâtiments, et la défaite totale reste atteignable.
   const faible = partieJouable();
   baseCourante(faible).armee = [];
   poserEffectif(faible, 'armee', { id: 'meute', vague: 4, colonne: 1, niveau: 1 });
-  const rate = executerRaid(faible, baseCourante(faible), premierCamp(faible));
+  const avantPoste = baseCourante(faible).satellites.presents.find((s) => s.type === 'avantPoste');
+  assert.ok(avantPoste !== undefined, 'montage : aucun avant-poste autour de la base');
+  const rate = executerRaid(faible, baseCourante(faible), {
+    rangee: avantPoste.rangee, colonne: avantPoste.colonne,
+  });
   assert.equal(rate.verdict, 'defaite-totale', 'un raid sans dégât de bâtiment n\'est pas une défaite');
   assert.equal(rate.restantBatiments, 100, 'montage : aucun bâtiment ne devait tomber');
 

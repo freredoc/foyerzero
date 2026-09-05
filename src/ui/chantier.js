@@ -30,7 +30,7 @@ import { GRILLE } from '../data/combat.js';
 // La recopier ici en ferait une seconde vérité.
 import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
 import {
-  BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
+  BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
   ORDRE_PALETTE,
 } from '../data/base.js';
@@ -52,9 +52,9 @@ import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation
 import {
   BANDES, BANDES_NAVIGABLES, basculeDeBande, bornesDeDefilement, bandeDeLaRangee,
 } from '../render/bandes.js';
-import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
+import { COTE_SPRITE } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
-import { suffixeDeVariante, variante } from '../render/variante.js';
+import { nomDeVariante, variante } from '../render/variante.js';
 import { couchesDeLEntite, genreDeLaGarnison } from '../render/scene.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
@@ -72,10 +72,11 @@ import {
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
   problemesDeLAmeliorationDEffectif, ameliorerEffectif,
-  basculerVersLaBase,
+  basculerVersLaBase, FORCES,
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
-import { DEFENSES, UNITES } from '../data/combat.js';
+import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
+import { facteurMilli } from '../sim/combat.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -313,24 +314,6 @@ export const SIGLES_OBSTACLE = {
   les_deux: 'X',
 };
 
-
-/**
- * Combien de variantes de dessin porte chaque famille de terrain.
- *
- * ⚠ CES NOMBRES SE LISENT DANS L'ATLAS, ILS NE S'ÉCRIVENT PAS ICI. Le sol a
- * quatre dessins (`tile_sol_j_a` … `_d`), les champs et les obstacles en ont
- * deux. Les compter depuis les noms cousus fait suivre la table toute seule le
- * jour où une cinquième variante entrera — et fait rougir `sprite.test.js` si
- * l'atlas et l'écran cessent de s'accorder.
- *
- * @param {string} prefixe début du nom des sprites de la famille
- * @returns {number} au moins 1
- */
-export function nombreDeVariantes(prefixe) {
-  const n = ATLAS.terrain.noms.filter((nom) => nom.startsWith(`${prefixe}_`)).length;
-  if (n < 1) throw new RangeError(`chantier : aucune variante pour « ${prefixe} »`);
-  return n;
-}
 
 export const LIBELLES_OBSTACLE = {
   infanterie: 'ralentit l\'infanterie',
@@ -735,12 +718,25 @@ export function detailDuBatiment(etat, index) {
  * registres. Fonction PURE : c'est elle qui porte la règle de priorité, et
  * c'est elle qu'un test peut interroger sans DOM.
  *
- * @param {{session?: string, toast?: string, mode?: string}} registres
- * @returns {{texte: string, ton: 'alerte'|'mode'|null}}
+ * ⚠⚠ UN TON DE PLUS DEPUIS LE LOT ERGONOMIE, ET C'EST UN TON — PAS UNE TAILLE.
+ * Ethan, 04/09 : « Toast quand on n'a plus assez de points d'armement pour
+ * construire une unité offensive : en plus gros et rouge. » Cette fonction rend
+ * un NOM, la feuille le peint : écrire une taille ici mettrait une décision de
+ * style dans un module pur, et c'est justement sa pureté qui le rend testable.
+ *
+ * ⚠ LE TON DU TOAST EST UN ARGUMENT, PAS UN QUATRIÈME REGISTRE. Un registre
+ * `refus` à côté de `toast` aurait donné deux écrivains du même message, donc
+ * la possibilité qu'ils se contredisent — le défaut exact que le registre unique
+ * a corrigé le 28/08. Un seul toast à la fois, et il porte son ton.
+ *
+ * @param {{session?: string, toast?: string, tonDuToast?: string, mode?: string}} registres
+ * @returns {{texte: string, ton: 'alerte'|'refus'|'mode'|null}}
  */
-export function ligneAAfficher({ session = '', toast = '', mode = '' } = {}) {
+export function ligneAAfficher({
+  session = '', toast = '', tonDuToast = 'alerte', mode = '',
+} = {}) {
   if (session !== '') return { texte: session, ton: 'alerte' };
-  if (toast !== '') return { texte: toast, ton: 'alerte' };
+  if (toast !== '') return { texte: toast, ton: tonDuToast };
   if (mode !== '') return { texte: mode, ton: 'mode' };
   return { texte: '', ton: null };
 }
@@ -1362,6 +1358,137 @@ export function lignesDuPanneau(apercu) {
 }
 
 /**
+ * Le contenu du panneau d'une PIÈCE, à la même forme que celui d'un bâtiment.
+ *
+ * ⚠⚠ LA MÊME FORME, DONC LE MÊME RENDU. `peindrePanneau` ne connaît qu'une
+ * structure — un titre, des sections de lignes, un bouton — et ce sont les
+ * TERRAINS qui disent laquelle des deux vues fabriquer. Écrire un second
+ * afficheur pour les pièces aurait donné deux DOM voisins dont un seul serait
+ * éprouvé, et c'est exactement la faute que ce panneau-ci a déjà évitée en
+ * naissant pur.
+ *
+ * @param {object} apercu ce que rend `apercuDeLaPiece`
+ * @returns {object}
+ */
+export function lignesDeLaPiece(apercu) {
+  const sections = [];
+
+  const combat = [{
+    libelle: 'Points de vie',
+    avant: formaterEntier(apercu.pv),
+    apres: apercu.pvVise === null ? null : formaterEntier(apercu.pvVise),
+  }];
+  for (const d of apercu.degats) {
+    combat.push({
+      libelle: d.libelle,
+      // ⚠ UN ZÉRO SE DIT « — », JAMAIS « 0 ». « 0 par tir » se lit comme un
+      // nombre qu'on pourrait faire monter ; le tiret dit qu'il n'y a rien.
+      avant: d.avant === 0 ? '—' : formaterEntier(d.avant),
+      apres: d.apres === null || d.avant === 0 ? null : formaterEntier(d.apres),
+      mineur: true,
+    });
+  }
+  sections.push({ titre: 'Au combat', lignes: combat });
+
+  const fiche = [
+    // ⚠ LA VIRGULE, PAS LE POINT : `String(2.5)` rend « 2.5 », qui est de
+    // l'anglais. Le dépôt écrit ses décimales en français partout ailleurs.
+    { libelle: 'Portée', avant: `${String(apercu.portee).replace('.', ',')} cases`, apres: null },
+    { libelle: 'Points engagés', avant: formaterEntier(apercu.points), apres: null },
+  ];
+  // Une structure ne se déplace pas : la ligne n'aurait rien à dire.
+  if (apercu.vitesse !== null) {
+    fiche.push({ libelle: 'Vitesse', avant: formaterEntier(apercu.vitesse), apres: null, mineur: true });
+  }
+  fiche.push({
+    libelle: 'État',
+    avant: apercu.degatsSubisMilliemes === 0
+      ? 'intacte'
+      : `${formaterEntier(Math.round(apercu.degatsSubisMilliemes / 10))} % de dégâts`,
+    apres: null,
+  });
+  sections.push({ titre: 'La pièce', lignes: fiche });
+
+  return {
+    titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
+    sections,
+    // ⚠ `possible` NE DÉSACTIVE RIEN, comme pour les bâtiments : le refus
+    // chiffré du moteur en apprend plus au joueur qu'un bouton mort.
+    bouton: apercu.auPlafond
+      ? {
+        libelle: 'Amélioration impossible',
+        note: apercu.problemes.map((p) => p.message).join(' ; '),
+        possible: false,
+      }
+      : {
+        libelle: `Améliorer → niv. ${formaterEntier(apercu.niveauVise)}`,
+        note: apercu.problemes.length > 0
+          ? apercu.problemes.map((p) => p.message).join(' ; ')
+          : formaterCout(apercu.cout),
+        possible: apercu.problemes.length === 0,
+      },
+  };
+}
+
+/**
+ * Peint une vue de panneau dans un trio d'éléments — titre, corps, bouton.
+ *
+ * ⚠⚠ DEUX ÉCRANS L'APPELLENT DEPUIS LE LOT ERGONOMIE, ET C'EST TOUT L'INTÉRÊT.
+ * Le Chantier décrit un bâtiment ou une pièce de garnison, l'Offense une unité
+ * d'assaut ; les trois vues sortent de fonctions PURES à la même forme, et ce
+ * DOM-ci est écrit une fois. L'imiter dans `ui/offense.js` aurait donné deux
+ * constructions voisines dont une seule serait relue.
+ *
+ * ⚠ ELLE NE DÉCIDE DE RIEN : ni quand ouvrir, ni quoi montrer, ni si le bouton
+ * est possible. Elle POSE ce qu'on lui donne.
+ *
+ * @param {Document} doc
+ * @param {{titre: Element, corps: Element, bouton: Element}} elements
+ * @param {object} vue ce que rend `lignesDuPanneau` ou `lignesDeLaPiece`
+ */
+export function peindreVueDuPanneau(doc, elements, vue) {
+  elements.titre.textContent = vue.titre;
+  elements.corps.textContent = '';
+  for (const section of vue.sections) {
+    const bloc = doc.createElement('div');
+    bloc.className = 'section';
+    const titre = doc.createElement('h3');
+    titre.textContent = section.titre;
+    bloc.appendChild(titre);
+    for (const l of section.lignes) {
+      const ligne = doc.createElement('div');
+      ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
+      const quoi = doc.createElement('span');
+      quoi.className = 'quoi';
+      quoi.textContent = l.libelle;
+      const avant = doc.createElement('b');
+      avant.textContent = l.avant;
+      ligne.append(quoi, avant);
+      if (l.apres !== null) {
+        const fleche = doc.createElement('span');
+        fleche.className = 'fleche';
+        fleche.textContent = '→';
+        const apres = doc.createElement('b');
+        apres.className = 'apres';
+        apres.textContent = l.apres;
+        ligne.append(fleche, apres);
+      }
+      bloc.appendChild(ligne);
+    }
+    elements.corps.appendChild(bloc);
+  }
+
+  elements.bouton.textContent = '';
+  const libelle = doc.createElement('span');
+  libelle.textContent = vue.bouton.libelle;
+  const note = doc.createElement('em');
+  note.className = 'note';
+  note.textContent = vue.bouton.note;
+  elements.bouton.append(libelle, note);
+  elements.bouton.classList.toggle('impossible', !vue.bouton.possible);
+}
+
+/**
  * Les bâtiments que le joueur pourrait poser — ceux qui ne sont pas uniques, et
  * ceux qui le sont mais ne sont pas encore posés.
  *
@@ -1486,6 +1613,87 @@ export function posablesDeLaDefense(etat) {
  * @param {object} etat
  * @param {number} index indice dans `etat.garnison`
  */
+const LIBELLES_COLONNE_DEGATS = {
+  infanterie: 'Contre l\'infanterie',
+  vehicule: 'Contre les véhicules',
+  structureOuAviation: 'Contre les structures',
+};
+
+/**
+ * Ce qu'une pièce de garnison ou d'armée est, et ce qu'elle serait un niveau
+ * plus haut.
+ *
+ * ⚠⚠ ETHAN, 04/09 : « Quand on clique sur une unité en défense ou armé,
+ * afficher un onglet comme pour les bâtiments. » C'est le pendant exact
+ * d'`apercuDuBatiment`, et comme elle cette fonction est PURE : elle rend des
+ * données, le rendu les peint. Le dépôt n'a ni jsdom ni navigateur (§3), donc
+ * c'est la seule moitié de ce point qui soit éprouvable — et c'est pour ça
+ * qu'elle existe séparément.
+ *
+ * ⚠ LES DEUX FORCES PARTAGENT LA FONCTION, à la ligne de `FORCES` près : c'est
+ * elle qui porte le champ, le barème de montée et le rôle. Un `=== 'garnison'`
+ * écrit ici serait le premier cas particulier à diverger.
+ *
+ * ⚠ LES PV SE CALCULENT COMME LE MOTEUR LES CALCULE — `pv × facteurMilli`, ce
+ * que `src/sim/combat.js` écrit noir sur blanc : « pvMaxMilli = pv × 1000 ×
+ * facteurMilli / 1000 = pv × facteurMilli. Exact. » Réécrire une courbe ici en
+ * ferait une seconde, et l'écran mentirait d'un niveau à l'autre.
+ *
+ * @param {object} etat
+ * @param {string} force `garnison` ou `armee`
+ * @param {number} index
+ * @returns {object}
+ */
+export function apercuDeLaPiece(etat, force, index) {
+  const f = FORCES[force];
+  if (f === undefined) throw new RangeError(`chantier : force « ${force} » inconnue`);
+  const piece = baseCourante(etat)[f.champ][index];
+  if (piece === undefined) {
+    throw new RangeError(`chantier : indice ${index} hors de la ${f.quoi}`);
+  }
+  const ligne = DEFENSES[piece.id] ?? UNITES[piece.id];
+  if (ligne === undefined) throw new RangeError(`chantier : pièce « ${piece.id} » inconnue`);
+
+  const problemes = problemesDeLAmeliorationDEffectif(etat, force, index);
+  // ⚠ LE PLAFOND SE LIT DANS LE REFUS, IL NE SE RECALCULE PAS. `plafond` et
+  // `sans-batiment` sont les deux codes qui rendent la montée impossible pour
+  // toujours ; les autres — le prix — passeront quand le stock arrivera.
+  const bloque = problemes.some((p) => p.code === 'plafond' || p.code === 'sans-batiment');
+  const vise = piece.niveau + 1;
+  const echelle = (n) => facteurMilli(n) / 1000;
+  const auNiveau = (valeur, n) => Math.round(valeur * echelle(n));
+
+  return {
+    nom: ligne.nom.joueur,
+    force,
+    niveau: piece.niveau,
+    niveauVise: bloque ? null : vise,
+    auPlafond: bloque,
+    points: ligne.points,
+    pv: auNiveau(ligne.pv, piece.niveau),
+    pvVise: bloque ? null : auNiveau(ligne.pv, vise),
+    // ⚠ LES DÉGÂTS SONT PAR COLONNE DE MATRICE, ET LES TROIS SE DISENT MÊME À
+    // ZÉRO. « Contre les véhicules : — » est une information de jeu : c'est ce
+    // qui apprend au joueur qu'une Batterie ne touche que ce qui vole.
+    degats: COLONNES_DEGATS.map((colonne) => ({
+      colonne,
+      libelle: LIBELLES_COLONNE_DEGATS[colonne],
+      avant: auNiveau(ligne.degats?.[colonne] ?? 0, piece.niveau),
+      apres: bloque ? null : auNiveau(ligne.degats?.[colonne] ?? 0, vise),
+    })),
+    portee: ligne.portee,
+    // Une structure ne se déplace pas : la ligne n'aurait rien à dire.
+    vitesse: ligne.vitesse ?? null,
+    // ⚠ LES DÉGÂTS SUBIS SONT UNE PART DES PV MAX, PAS UN ABSOLU. `degatsMilli`
+    // est en milli-PV et les PV max montent avec le niveau : un nombre nu ne se
+    // compare à rien.
+    degatsSubisMilliemes: piece.degatsMilli === 0 ? 0
+      : Math.round((1000 * piece.degatsMilli) / (ligne.pv * facteurMilli(piece.niveau))),
+    cout: bloque ? null : f.coutDeMontee(piece.id, vise),
+    problemes,
+  };
+}
+
 export function detailDeLaDefense(etat, index) {
   const laBase = baseCourante(etat);
   const piece = laBase.garnison[index];
@@ -1648,6 +1856,7 @@ export const TERRAINS = {
     // Le panneau de détail chiffre production, capacité et voisinage : il n'a
     // de sens que pour un bâtiment de la base.
     panneau: true,
+    vueDuPanneau: (etat, index) => lignesDuPanneau(apercuDuBatiment(etat, index)),
     // ⚠ COMMENT ON APPELLE CE QU'ON MANIPULE. Les messages de refus le nomment
     // — « aucun bâtiment n'est endommagé », « pour la défense » — et jusqu'au
     // 29/08 ces mots étaient écrits en dur, ce qui faisait dire « bâtiment » à
@@ -1737,7 +1946,17 @@ export const TERRAINS = {
         agir: deplacerLaGarnison,
       },
     },
-    panneau: false,
+    // ⚠⚠ LE PANNEAU S'OUVRE AUSSI EN DÉFENSE — Ethan, 04/09 : « Quand on clique
+    // sur une unité en défense ou armé, afficher un onglet comme pour les
+    // bâtiments. » Il valait `false` depuis le lot GARNISON-ET-ARMÉE, au motif
+    // qu'« une pièce de garnison n'a ni production, ni capacité, ni voisinage,
+    // et lui ouvrir un panneau vide ferait croire à un écran cassé ». Le motif
+    // était juste et la conclusion trop courte : une pièce a des PV, une table
+    // de dégâts, une portée, un état et un prix de montée — de quoi remplir un
+    // panneau qui ne ment pas. `lignesDeLaPiece` rend la même FORME de vue, donc
+    // le même rendu la peint.
+    panneau: true,
+    vueDuPanneau: (etat, index) => lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', index)),
     quoi: 'aucun défenseur n\'est endommagé',
     pourQui: 'la défense',
   },
@@ -2087,33 +2306,30 @@ function fondsPoses(case_) {
 }
 
 /**
- * Le sprite de terrain d'une case, variante comprise.
+ * Le sprite de terrain d'une case, sous la forme d'un fond CSS.
  *
- * ⚠ LE COMPTE DE VARIANTES SE PREND SUR LE PRÉFIXE EXACT, JAMAIS SUR UN VOISIN.
- * Mesurer les variantes du quartz pour les appliquer à la scorie marcherait
- * aujourd'hui — les deux en ont deux — et se tromperait en silence le jour où
- * l'une des deux en gagnerait une troisième : la case tirerait dans un intervalle
- * plus court que ce que l'atlas porte, et le dessin en trop ne paraîtrait jamais.
+ * ⚠⚠ LE CHOIX DE LA VARIANTE A DÉMÉNAGÉ DANS `render/variante.js` AU LOT
+ * ERGONOMIE, ET IL N'EN RESTE PAS DE COPIE ICI. Le champ de bataille dessine
+ * ses obstacles avec leur sprite depuis ce lot, et `render/scene.js` n'a pas le
+ * droit d'importer `ui/` : deux tirages voisins auraient donné au même obstacle
+ * un dessin dans la base et un autre au combat. Ce qui reste ici est la seule
+ * chose qui soit propre au DOM — l'adresse de l'atlas, la taille et la position.
  *
- * ⚠ ET LE COMPTE EST MÉMORISÉ. `peindre` balaie 162 cases ; y filtrer les
- * dix-huit noms de l'atlas ferait près de trois mille comparaisons par geste
- * pour un nombre qui ne change jamais de la vie du programme.
+ * ⚠ LE COMPTE DE VARIANTES SE PREND SUR LE PRÉFIXE EXACT, JAMAIS SUR UN VOISIN,
+ * et c'est `nomDeVariante` qui le tient : mesurer les variantes du quartz pour
+ * les appliquer à la scorie marcherait aujourd'hui — les deux en ont deux — et se
+ * tromperait en silence le jour où l'une en gagnerait une troisième.
  *
  * @param {string} prefixe début du nom, sans la lettre de variante
  * @param {number} graine
  * @param {number} rangee
  * @param {number} colonne
- * @returns {{taille: string, position: string}}
+ * @returns {{image: string, taille: string, position: string}}
  */
-const comptesDeVariantes = new Map();
 function fondDuTerrain(prefixe, graine, rangee, colonne) {
-  if (!comptesDeVariantes.has(prefixe)) {
-    comptesDeVariantes.set(prefixe, nombreDeVariantes(prefixe));
-  }
-  const nombre = comptesDeVariantes.get(prefixe);
   return {
     image: VARIABLE_DATLAS.terrain,
-    ...fondDuSprite('terrain', `${prefixe}_${suffixeDeVariante(graine, rangee, colonne, nombre)}`),
+    ...fondDuSprite('terrain', nomDeVariante(prefixe, graine, rangee, colonne)),
   };
 }
 
@@ -2202,6 +2418,42 @@ export function coteCaseParDefaut(doc) {
   // ⚠ Un test de `chantier.test.js` tenait déjà cette égalité, et il est tombé
   // au moment où le plafond a bougé. Il avait raison.
   return Number.isFinite(lu) && lu > 0 ? lu : COTE_SPRITE;
+}
+
+/**
+ * Où défiler pour que le point du contenu sous l'ancre y RESTE quand la grille
+ * change de taille.
+ *
+ * ⚠⚠ ETHAN, 04/09 : « Le zoom dans la base se fait depuis l'angle en haut à
+ * gauche, très bizarre ». C'était vrai à la lettre : le pincement changeait la
+ * taille de case et rien d'autre, donc le conteneur grandissait depuis son
+ * origine et la case qu'on vise fuyait vers le bas à droite. `ui/monde.js`
+ * résout déjà ce geste sur un canevas ; ici la surface DÉFILE, donc ce qu'on
+ * réécrit est le défilement.
+ *
+ * ⚠⚠ ET LE FACTEUR SUFFIT — INUTILE DE CONNAÎTRE LE `padding`. Tout ce que la
+ * boîte contient est proportionnel à `--case-cote` : les neuf colonnes, et le
+ * `padding` d'une demi-case de chaque côté (`paddingDeLaGrille`). Le contenu se
+ * dilate donc autour de son ORIGINE, et la position du même point après
+ * dilatation vaut `(defilement + ancre) × facteur`. Lire le `padding` ici en
+ * ferait une seconde vérité, qui mentirait le jour où il cesserait de suivre la
+ * case.
+ *
+ * ⚠ LE RÉSULTAT EST BORNÉ ICI, PAS LAISSÉ AU NAVIGATEUR. Un `scrollLeft` écrit
+ * hors bornes est rogné en silence : l'ancrage sauterait sur les bords sans
+ * qu'aucun test ne le voie. On borne, et `ERGO T2` mesure les quatre coins.
+ *
+ * @param {number} defilement défilement courant, en pixels
+ * @param {number} ancre position de l'ancre dans le cadre, en pixels
+ * @param {number} facteur nouveau côté de case / ancien
+ * @param {number} max défilement maximal après le changement de taille
+ * @returns {number} le défilement à écrire
+ */
+export function defilementAncre(defilement, ancre, facteur, max) {
+  if (!(facteur > 0)) return defilement;
+  const vise = (defilement + ancre) * facteur - ancre;
+  if (!Number.isFinite(vise)) return defilement;
+  return Math.max(0, Math.min(max, Math.round(vise)));
 }
 
 /**
@@ -2303,6 +2555,7 @@ export function initialiserEcranChantier(doc, {
     // seulement ce que le prochain toucher va faire. Il porte donc le métal, et
     // non le rouge des refus.
     ligne.classList.toggle('mode', ton === 'mode');
+    ligne.classList.toggle('refus', ton === 'refus');
   }
 
   /**
@@ -2411,6 +2664,36 @@ export function initialiserEcranChantier(doc, {
   // géométrie à dessiner, plus de variable CSS par pan de mur, et plus rien à
   // lever quand une image manque à la table. Ce que l'anneau réservait —
   // une case de chaque côté — est devenu la demi-case de `paddingDeLaGrille`.
+  // ⚠⚠ UN VOILE ZÉBRÉ PAR BANDE NAVIGABLE — Ethan, 04/09 : « Dans les bases,
+  // assombrir la défense quand on regarde la base et inversement — du genre
+  // grandes barres hachurées en travers, comme les zébras sur la route. »
+  //
+  // ⚠⚠ UN ÉLÉMENT PAR BANDE, PAS UN `::after` PAR CASE. Un dégradé répété sur
+  // chaque case redémarre à chaque bordure : à 45° la phase saute d'une case à
+  // l'autre, et on obtient un hachurage par case au lieu des GRANDES barres en
+  // travers qu'Ethan décrit. Posé sur la bande entière, le motif court d'un
+  // bord à l'autre.
+  //
+  // ⚠ ET IL N'EST PAS `position: absolute` : il est placé dans la GRILLE, sur
+  // les lignes d'écran de sa bande et sur les neuf colonnes. Il suit donc le
+  // zoom et le défilement sans qu'une seule ligne de JS ne le repositionne.
+  //
+  // ⚠ IL EST AJOUTÉ APRÈS LES CASES, DONC IL PEINT AU-DESSUS D'ELLES SANS
+  // `z-index` — un `z-index` sur une case en ferait un contexte d'empilement, et
+  // le dépôt a déjà payé cette faute avec `.case.choisie`.
+  const voiles = new Map();
+  for (const cle of BANDES_NAVIGABLES) {
+    const bande = BANDES.find((b) => b.cle === cle);
+    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
+    const voile = doc.createElement('div');
+    voile.className = 'voile-bande';
+    voile.style.gridColumn = `1 / ${GRILLE.largeur + 1}`;
+    voile.style.gridRow = `${premiereLigne} / span ${nbLignes}`;
+    voile.hidden = true;
+    grille.appendChild(voile);
+    voiles.set(cle, voile);
+  }
+
   const traits = doc.createElementNS(SVG, 'svg');
   traits.id = 'chantier-traits';
   traits.setAttribute('viewBox', `0 0 ${GRILLE.largeur} ${GRILLE.longueur}`);
@@ -2644,6 +2927,11 @@ export function initialiserEcranChantier(doc, {
     bandeCourante = cleBande;
     marquerBoutonDuBas();
     marquerBascule();
+    // ⚠ LE VOILE EST SUR L'AUTRE BANDE, ET IL N'Y EN A QU'UN D'ALLUMÉ. Le
+    // marquer ici et nulle part ailleurs : `bandeCourante` change à chaque
+    // évènement de défilement, et deux écrivains de la même bascule
+    // divergeraient à la première inattention.
+    for (const [cle, voile] of voiles) voile.hidden = cle === cleBande;
 
     // ⚠⚠ LA PALETTE SUIT LE TERRAIN, ET SANS CETTE LIGNE ELLE NE LE SUIVAIT
     // PAS. `bandeCourante` bouge à chaque évènement de défilement ; la palette,
@@ -2889,7 +3177,27 @@ export function initialiserEcranChantier(doc, {
     // ⚠ À PARTIR D'ICI, LA LARGEUR DE L'ÉCRAN NE DÉCIDE PLUS. Le joueur a réglé
     // le zoom : une rotation ne doit plus le lui reprendre.
     zoomRegleParLeJoueur = true;
-    reglerCoteCase(Math.round(pincement.cote * facteur));
+    // ⚠⚠ L'ANCRE SE RELÈVE AVANT LE CHANGEMENT DE TAILLE, ET SUR LE MILIEU
+    // COURANT DES DOIGTS. La relever après ne dirait plus rien : la boîte a
+    // déjà grandi. Et la prendre au milieu du DÉPART ferait promener la grille
+    // dès que la main se déplace, ce qu'aucun retour ne demande.
+    const cadre = defile.getBoundingClientRect();
+    const ancreX = (deux[0].clientX + deux[1].clientX) / 2 - cadre.left;
+    const ancreY = (deux[0].clientY + deux[1].clientY) / 2 - cadre.top;
+    const defilementX = defile.scrollLeft;
+    const defilementY = defile.scrollTop;
+    const avant = coteCase;
+    const apres = reglerCoteCase(Math.round(pincement.cote * facteur));
+    // ⚠⚠ LA TAILLE EST POSÉE, DONC LES BORNES SONT À JOUR — c'est tout ce qui
+    // rend ce calcul juste. `scrollWidth` lu avant le changement rendrait
+    // l'ancienne borne, et l'ancrage sauterait sur les bords.
+    const echelle = apres / avant;
+    defile.scrollLeft = defilementAncre(
+      defilementX, ancreX, echelle, Math.max(0, defile.scrollWidth - defile.clientWidth),
+    );
+    defile.scrollTop = defilementAncre(
+      defilementY, ancreY, echelle, Math.max(0, defile.scrollHeight - defile.clientHeight),
+    );
     // Le pincement pilote la taille ; laisser le navigateur défiler en même
     // temps ferait glisser la grille sous les doigts pendant qu'elle grandit.
     evenement.preventDefault();
@@ -3177,17 +3485,26 @@ export function initialiserEcranChantier(doc, {
   }
 
   /**
-   * Distingue à l'écran les cases où le bâtiment choisi peut se poser.
+   * Distingue à l'écran les cases où le bâtiment choisi peut se poser — c'est
+   * la GRILLE que le joueur voit.
    *
-   * ⚠ SEUL LE COLLECTEUR EST DISTINGUÉ, arbitré le 27/08. C'est le seul
-   * bâtiment pour qui le TERRAIN décide — `CHAMPS.posableDessus` ne contient que
-   * lui. Pour les dix autres, toute case libre de la bande convient, et cercler
-   * soixante cases sur soixante-douze n'apprend rien à personne.
+   * ⚠⚠ LES TROIS MODES LA MONTRENT, ET UN SEUL MÉCANISME LA MONTRE. Ethan,
+   * 04/09 : « Une grille apparaît quand on déplace un bâtiment et disparaît
+   * ensuite. Faire de même lorsque l'on construit un bâtiment et sur défense. »
+   * Elle s'arme donc au déplacement, à la pose, et sur les DEUX bandes ;
+   * l'arbitrage du 27/08 qui la réservait au Collecteur est levé.
    *
-   * ⚠ C'EST L'AFFICHAGE QUI DISPARAÎT, PAS LA RÈGLE. `problemesDeLaPose` est
+   * ⚠⚠ ET ELLE DISPARAÎT PARCE QUE CETTE FONCTION COMMENCE PAR LA RETIRER DE
+   * TOUTES LES CASES. C'est la moitié du retour d'Ethan — « et disparaît
+   * ensuite » —, et c'est ce qui interdit d'écrire un second afficheur : deux
+   * chemins montreraient la grille, un seul la retirerait. Elle est rappelée à
+   * chaque changement de bande, à chaque choix de palette, à chaque armement
+   * d'action et à chaque peinture ; les quatre portes d'annulation passent donc
+   * par elle.
+   *
+   * ⚠ C'EST L'AFFICHAGE QUI CHANGE, PAS LA RÈGLE. `problemesDeLaPose` est
    * interrogée exactement comme avant au moment de poser, et une case illégale
-   * dit toujours pourquoi. Retirer la distinction en retirant la vérification
-   * aurait été un tout autre lot.
+   * dit toujours pourquoi.
    */
   /**
    * Le bâtiment en aperçu et les flèches de bonus de proximité.
@@ -3303,18 +3620,20 @@ export function initialiserEcranChantier(doc, {
       return;
     }
     if (posableChoisi === null) return;
-    // ⚠ ON NE CERCLE QUE QUAND ÇA APPREND QUELQUE CHOSE, ET LA RÈGLE VAUT DES
-    // DEUX CÔTÉS. Seul le Collecteur a un terrain qui décide pour lui
-    // (`CHAMPS.posableDessus` ne contient que lui) ; pour tous les autres,
-    // toute case libre de la bande convient, et en cercler soixante sur
-    // soixante-douze n'apprend rien. Une pièce de garnison est dans ce cas :
-    // sa bande est vide au départ, donc le cerclage y désignerait les
-    // soixante-douze cases à la fois.
+    // ⚠⚠ ON CERCLE TOUT CE QUI EST LÉGAL, ET C'EST UN RETOUR SUR L'ARBITRAGE DU
+    // 30/08. Ce bloc portait « on ne cercle que quand ça apprend quelque chose »
+    // et se limitait au Collecteur, seul bâtiment dont le TERRAIN décide
+    // (`posableDessus` des champs ne contient que lui) : pour les autres, cercler
+    // soixante cases sur soixante-douze était jugé bavard. Ethan, 04/09 : « Une
+    // grille apparaît quand on déplace un bâtiment et disparaît ensuite. Faire
+    // de même lorsque l'on construit un bâtiment et sur défense. » Les liserés
+    // SONT cette grille : soixante cases cerclées se lisent comme un quadrillage,
+    // pas comme soixante indications.
     //
-    // ⚠ C'EST L'AFFICHAGE QUI SE TAIT, PAS LA RÈGLE. Le moteur est interrogé
-    // exactement comme avant au moment de poser, et une case illégale dit
-    // toujours pourquoi.
-    if (!CHAMPS.posableDessus.includes(posableChoisi)) return;
+    // ⚠ ET C'EST LA MÊME LIGNE QUI SERT LES TROIS MODES — déplacement plus haut,
+    // pose ici, sur les DEUX bandes, `terrainCourant()` décidant laquelle. Un
+    // second mécanisme d'affichage à côté de celui-ci donnerait deux chemins qui
+    // montrent la grille et un seul qui la retire.
     const terrain = terrainCourant();
     for (const { rangee, colonne } of casesPosablesDuTerrain(etatCourant, terrain, posableChoisi)) {
       cellules.get(cle(rangee, colonne))?.classList.add('legale');
@@ -3576,52 +3895,20 @@ export function initialiserEcranChantier(doc, {
     // qui n'en a pas, mais `rafraichir` passe ici dix fois par seconde et une
     // seule image peinte avec le mauvais indice suffirait à mentir.
     if (!TERRAINS[terrainSelection].panneau) return;
-    const vue = lignesDuPanneau(apercuDuBatiment(etatCourant, selection));
+    // ⚠⚠ LA VUE SE DEMANDE AU TERRAIN, ET C'EST CE QUI OUVRE LE PANNEAU À LA
+    // DÉFENSE. Un `terrainSelection === 'defense' ? … : …` écrit ici serait le
+    // cas particulier que la table existe pour éviter, et qu'un test refuse
+    // déjà pour les gestes.
+    const vue = TERRAINS[terrainSelection].vueDuPanneau(etatCourant, selection);
     const signature = JSON.stringify(vue);
     if (signature === derniereVue) return;
     derniereVue = signature;
 
-    $('chantier-panneau-titre').textContent = vue.titre;
-    const corps = $('chantier-panneau-corps');
-    corps.textContent = '';
-    for (const section of vue.sections) {
-      const bloc = doc.createElement('div');
-      bloc.className = 'section';
-      const titre = doc.createElement('h3');
-      titre.textContent = section.titre;
-      bloc.appendChild(titre);
-      for (const l of section.lignes) {
-        const ligne = doc.createElement('div');
-        ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
-        const quoi = doc.createElement('span');
-        quoi.className = 'quoi';
-        quoi.textContent = l.libelle;
-        const avant = doc.createElement('b');
-        avant.textContent = l.avant;
-        ligne.append(quoi, avant);
-        if (l.apres !== null) {
-          const fleche = doc.createElement('span');
-          fleche.className = 'fleche';
-          fleche.textContent = '→';
-          const apres = doc.createElement('b');
-          apres.className = 'apres';
-          apres.textContent = l.apres;
-          ligne.append(fleche, apres);
-        }
-        bloc.appendChild(ligne);
-      }
-      corps.appendChild(bloc);
-    }
-
-    const bouton = $('chantier-panneau-ameliorer');
-    bouton.textContent = '';
-    const libelle = doc.createElement('span');
-    libelle.textContent = vue.bouton.libelle;
-    const note = doc.createElement('em');
-    note.className = 'note';
-    note.textContent = vue.bouton.note;
-    bouton.append(libelle, note);
-    bouton.classList.toggle('impossible', !vue.bouton.possible);
+    peindreVueDuPanneau(doc, {
+      titre: $('chantier-panneau-titre'),
+      corps: $('chantier-panneau-corps'),
+      bouton: $('chantier-panneau-ameliorer'),
+    }, vue);
   }
 
   function ouvrirPanneau(index) {
@@ -3656,14 +3943,21 @@ export function initialiserEcranChantier(doc, {
   // `executerAction`, et jamais de `try` autour d'`ameliorer`.
   $('chantier-panneau-ameliorer').addEventListener('click', () => {
     if (selection === null || etatCourant === null) return;
-    const problemes = problemesDeLAmelioration(etatCourant, selection);
+    // ⚠⚠ LE BOUTON PASSE PAR LA TABLE DEPUIS LE LOT ERGONOMIE, ET C'ÉTAIT UN
+    // DÉFAUT LATENT. Il appelait `problemesDeLAmelioration` et `ameliorer` — les
+    // fonctions des BÂTIMENTS — en dur : juste tant que le panneau ne s'ouvrait
+    // que sur eux, faux à la seconde où il s'ouvre sur une pièce de garnison. Il
+    // aurait amélioré le bâtiment de même indice pendant que le panneau parlait
+    // d'une tourelle, et rien à l'écran ne l'aurait dit.
+    const action = TERRAINS[terrainSelection].actions.ameliorer;
+    const problemes = action.problemes(etatCourant, selection);
     if (problemes.length > 0) {
       toast(messageDeRefus(problemes));
       return;
     }
     sonner('amelioration', terrainSelection,
       TERRAINS[terrainSelection].pieces(etatCourant)[selection]?.id);
-    ameliorer(etatCourant, selection);
+    action.agir(etatCourant, selection);
     // Une amélioration change les emplacements et les débits : elle s'écrit
     // tout de suite, comme une pose.
     if (apresPose !== undefined) apresPose(etatCourant);

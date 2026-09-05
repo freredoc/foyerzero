@@ -24,7 +24,9 @@ import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import {
   celluleDuSprite, existeDansAtlas, fondDuSprite, fondDeCellule,
 } from '../src/render/sprite.js';
-import { variante, suffixeDeVariante, SEL_VARIANTE } from '../src/render/variante.js';
+import {
+  variante, suffixeDeVariante, SEL_VARIANTE, nomDeVariante, nombreDeVariantes,
+} from '../src/render/variante.js';
 import { couchesDeLEntite, listeAffichage, genreDeLaGarnison } from '../src/render/scene.js';
 import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
@@ -2067,4 +2069,116 @@ test('terrain — l\'ajourage suit le DESSIN, et le compte global ne peut pas le
   // n'aurait ni borne haute ni borne basse, et passerait sans être mesuré.
   assert.deepEqual([...PLEINS, ...AJOURES].sort(),
     [...new Set(DESSINS_TERRAIN.map((n) => n.replace(/_[ab]$/, '')))].sort());
+});
+
+
+// ---------------------------------------------------------------------------
+// Les obstacles du champ de bataille — lot ERGONOMIE, point 8, 04/09
+//
+// ⚠⚠ ETHAN, 04/09 : « les sprites obstacles Ouvrage ne sont pas placés, c'est
+// les mêmes que le joueur ». Ils l'étaient — le champ de bataille les peignait
+// en aplat kaki, donc ils ne ressemblaient à rien, ni à ceux du joueur ni à
+// autre chose. Les six dessins sont dans l'atlas depuis le lot
+// CHAMPS-ET-OBSTACLES ; ce lot-ci les pose.
+// ---------------------------------------------------------------------------
+
+test('ERGO T14 — un obstacle porte le MÊME dessin dans la base et au combat', () => {
+  const GRAINE = 4242;
+  const montage = {
+    niveau: 1,
+    saveur: null,
+    obstacles: [
+      { rangee: 5, colonne: 3, type: 'infanterie' },
+      { rangee: 6, colonne: 7, type: 'vehicule' },
+      { rangee: 4, colonne: 2, type: 'les_deux' },
+    ],
+    batiments: [],
+    defenseurs: [],
+    vagues: [],
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+  };
+  const liste = listeAffichage(
+    creerCombat(montage), calculerProjection(412, 900), null, 0, null, GRAINE,
+  );
+  const poses = liste.filter((p) => p.forme === 'sprite' && p.famille === 'terrain');
+  assert.equal(poses.length, montage.obstacles.length,
+    'le champ de bataille ne pose pas un sprite par obstacle');
+
+  // ⚠⚠ CE QUE LA GARDE TIENT : le nom posé au COMBAT est celui que l'écran de la
+  // base poserait sur la même case, à la même graine. Les deux passent par
+  // `nomDeVariante` ; ce test refait le chemin de l'écran de la base — la
+  // cellule de l'atlas, prise par `celluleDuSprite` comme `fondDuSprite` la
+  // prend — et exige que le rectangle source du combat tombe dessus.
+  for (const [i, o] of montage.obstacles.entries()) {
+    const attendu = nomDeVariante(`obs_${o.type}`, GRAINE, o.rangee, o.colonne);
+    assert.equal(poses[i].nom, attendu, `l'obstacle ${o.type} ne porte pas son dessin`);
+    const { colonne, rangee } = celluleDuSprite('terrain', attendu);
+    assert.equal(poses[i].sx, colonne * COTE_SPRITE);
+    assert.equal(poses[i].sy, rangee * COTE_SPRITE);
+    // Et le fond CSS de l'écran de la base se découpe dans la MÊME cellule.
+    assert.deepEqual(fondDuSprite('terrain', attendu), fondDuSprite('terrain', poses[i].nom));
+  }
+
+  // ⚠⚠ ET LE MONTAGE DISCRIMINE, SANS QUOI IL NE MESURERAIT RIEN. Deux graines
+  // doivent rendre au moins un dessin différent sur les mêmes cases : sinon
+  // « la variante suit la graine » passerait sur un code qui l'ignore.
+  const autre = listeAffichage(
+    creerCombat(montage), calculerProjection(412, 900), null, 0, null, GRAINE + 1,
+  ).filter((p) => p.forme === 'sprite' && p.famille === 'terrain').map((p) => p.nom);
+  assert.notDeepEqual(autre, poses.map((p) => p.nom),
+    'changer la graine ne change aucun dessin : la variante ne la lit pas');
+
+  // ⚠ LES TROIS TYPES ONT BIEN DEUX DESSINS CHACUN, mesuré sur l'atlas et non
+  // écrit ici : à une seule variante, l'égalité ci-dessus serait vraie par
+  // accident.
+  for (const type of ['infanterie', 'vehicule', 'les_deux']) {
+    assert.equal(nombreDeVariantes(`obs_${type}`), 2, `obs_${type} n'a plus deux dessins`);
+  }
+
+  // ⚠⚠ UNE SEULE PORTE, ET LES DEUX ÉCRANS Y PASSENT. `render/scene.js` n'a pas
+  // le droit d'importer `ui/` : c'est pour ça que le choix de la variante est
+  // descendu dans `render/variante.js`. Un second tirage écrit d'un côté
+  // donnerait au même obstacle deux dessins, et ça ne se verrait qu'en
+  // comparant les deux écrans côte à côte.
+  const scene = sansCommentaires(readFileSync(join(RACINE, 'src', 'render', 'scene.js'), 'utf8'));
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  for (const [ou, code] of [['render/scene.js', scene], ['ui/chantier.js', ecran]]) {
+    assert.match(code, /nomDeVariante\(/, `${ou} ne passe plus par \`nomDeVariante\``);
+    assert.doesNotMatch(code, /suffixeDeVariante\(/,
+      `${ou} refait le tirage de variante à la main`);
+  }
+  assert.doesNotMatch(scene, /from '\.\.\/ui\//, '`render/` importe `ui/`');
+});
+
+test('ERGO T15 — l\'aplat d\'obstacle a disparu, et il ne reste pas de constante orpheline', () => {
+  // ⚠ UNE CONSTANTE QUE PLUS RIEN NE LIT EST UN COMMENTAIRE MENTEUR EN
+  // PUISSANCE : elle dit « les obstacles sont kaki » alors qu'ils ne le sont
+  // plus. `COULEUR_OBSTACLE` sort donc du dépôt entier, déclaration comprise.
+  for (const dossier of ['render', 'ui', 'sim', 'data']) {
+    for (const nom of readdirSync(join(RACINE, 'src', dossier)).filter((n) => n.endsWith('.js'))) {
+      assert.doesNotMatch(readFileSync(join(RACINE, 'src', dossier, nom), 'utf8'), /COULEUR_OBSTACLE/,
+        `src/${dossier}/${nom} nomme encore \`COULEUR_OBSTACLE\``);
+    }
+  }
+
+  // ⚠ MAIS `kakiOmbre` RESTE, ET CE N'EST PAS UN OUBLI : deux cadres de sélection
+  // l'emploient. Une teinte de la fiche ne se retire pas parce qu'un de ses
+  // lecteurs a changé d'avis — la palette est close, et `banc.test.js` la
+  // confronte à `FICHE-STYLE.md` dans les deux sens.
+  const scene = sansCommentaires(readFileSync(join(RACINE, 'src', 'render', 'scene.js'), 'utf8'));
+  assert.match(scene, /kakiOmbre: '#343A2C'/, 'la teinte a quitté la palette');
+  assert.ok(scene.split('PALETTE.kakiOmbre').length - 1 >= 2,
+    'plus personne ne lit `kakiOmbre` : la teinte serait orpheline à son tour');
+
+  // ⚠⚠ ET L'ATLAS DE TERRAIN EST FOURNI LÀ OÙ LA SCÈNE EST PEINTE. `executer`
+  // LÈVE sur une famille absente — « une unité invisible est un défaut qu'on
+  // doit voir » —, donc l'oublier ferait tomber l'écran de raid ET le banc au
+  // premier montage qui pose un rocher, c'est-à-dire tous.
+  const session = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8'));
+  assert.match(session, /terrain: doc\.getElementById\('atlas-terrain'\)/,
+    '`atlasDeLaScene` ne fournit pas l\'atlas de terrain');
+  assert.match(session, /'atlas-terrain': '--atlas-terrain'/,
+    'la page ne déclare pas l\'atlas de terrain');
+  assert.match(sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'banc.js'), 'utf8')),
+    /terrain: \$\('atlas-terrain'\)/, 'le banc ne fournit pas l\'atlas de terrain');
 });

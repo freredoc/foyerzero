@@ -792,12 +792,19 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
 
   const rNu = executerRaid(nu, baseCourante(nu), camp(nu));
   const rAvec = executerRaid(avec, baseCourante(avec), camp(avec));
-  // ⚠ MESURÉ SUR CE MONTAGE-CI : 378 ticks contre 376, et un site laissé dans un
-  // autre état. Le BUTIN, lui, est identique — six Meutes ne renversent pas un
-  // camp, et +10 % ne change pas ce qu'elles en rapportent. Asserter sur le seul
-  // butin aurait donc rendu ce test VERT sur un `executerRaid` qui n'emporte rien.
-  assert.notEqual(rAvec.ticks, rNu.ticks,
-    'le raid dure exactement autant avec et sans POI — le montage ne les emporte pas');
+  // ⚠⚠ LOT ARRÊT (04/09) : L'OBSERVABLE A CHANGÉ DE MAIN, ET IL FAUT LE DIRE
+  // DANS CE SENS-LÀ. Ce bloc écrivait « le BUTIN est identique — asserter
+  // dessus rendrait ce test VERT sur un `executerRaid` qui n'emporte rien » :
+  // c'était vrai, ça ne l'est plus. Les deux raids durent maintenant EXACTEMENT
+  // 441 ticks — les six Meutes tombent au même tick avec et sans le bonus —
+  // pendant que le butin, lui, passe de 1 088 à 1 230 de quartz. On asserte donc
+  // sur ce qui discrimine aujourd'hui, et sur les DEUX grandeurs plutôt qu'une :
+  // le butin, et l'état dans lequel le site est laissé.
+  assert.notDeepEqual(rAvec.butin, rNu.butin,
+    'le raid rapporte exactement autant avec et sans POI — le montage ne les emporte pas');
+  assert.deepEqual(rNu.butin, { quartz: 1088, scorie: 362 });
+  assert.deepEqual(rAvec.butin, { quartz: 1230, scorie: 410 });
+  assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),
     'le raid laisse le site dans le même état avec et sans POI',

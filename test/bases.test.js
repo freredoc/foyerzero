@@ -70,6 +70,8 @@ import {
   DEPLACES_PAR_RETOURS_DU_03, EMPREINTES_PAR_GRAINE_RETOURS_DU_03,
   SCALAIRES_RETOURS_DU_03,
   DEPLACES_PAR_RETOURS_DU_03_SOIR, EMPREINTES_PAR_GRAINE_RETOURS_DU_03_SOIR,
+  DEPLACES_PAR_ARRET, EMPREINTES_PAR_GRAINE_ARRET,
+  RAPPORTS_PROCHE_ARRET, RAPPORTS_OUVRAGE_ARRET,
   RAPPORTS_RETOURS_DU_03_SOIR,
 } from './temoins-bases-0.js';
 
@@ -83,6 +85,13 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * LÉGITIMEMENT DÉPLACÉS OU AJOUTÉS. Le témoin ne se rafraîchit pas en bloc : un
  * lot qui change un comportement NOMME ce qui bouge, et laisse tout le reste
  * gardé contre la référence d'avant.
+ *
+ * ⚠⚠ SOIXANTE ET UN COUPLES DE PLUS AU LOT ARRÊT, tous à partir de la phase 7,
+ * qui est le premier raid. Une unité s'arrête pour un bâtiment et pour rien
+ * d'autre : ce qu'un raid rapporte et ce qu'il laisse changent, donc la
+ * recherche, les sites entamés, les rapports, l'armée abîmée, l'économie et les
+ * satellites rasés. Les SIX PREMIÈRES PHASES sont identiques au bit — la règle
+ * ne touche ni la carte, ni un geste, ni un stock —, et aucun scalaire ne bouge.
  *
  * ⚠⚠ VINGT ET UN COUPLES DE PLUS AU LOT RETOURS-DU-03-SOIR, tous à partir de
  * la phase 10 : l'espacement des POI déplace les soixante-dix gisements de
@@ -109,7 +118,8 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_RETOURS_DU_03_SOIR[phase]?.[champ]
+  return DEPLACES_PAR_ARRET[phase]?.[champ]
+    ?? DEPLACES_PAR_RETOURS_DU_03_SOIR[phase]?.[champ]
     ?? DEPLACES_PAR_RETOURS_DU_03[phase]?.[champ]
     ?? DEPLACES_PAR_TRANSFERT[phase]?.[champ]
     ?? EMPREINTES_DES_CHAMPS_AJOUTES[phase]?.[champ]
@@ -463,7 +473,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOURS_DU_03_SOIR[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_ARRET[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -525,9 +535,17 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // rasage lui détruit. Les vingt-trois autres restent gardées contre
       // RETOURS-DU-03 — c'est cette moitié-là qui prouve que la cible et le
       // barème du raid n'ont pas bougé.
+      // ⚠⚠ ET LE LOT ARRÊT LES DÉPLACE TOUS LES DEUX — les vingt-cinq rapports de
+      // proximité, vingt-deux des vingt-cinq rapports de l'Ouvrage. C'est la
+      // seule chose que ce test-ci voit bouger : les gestes, la taille de la
+      // sauvegarde, les cases atteignables, le déplacement, le nombre de bases
+      // attaquantes, le nombre de cibles et la cible retenue sont IDENTIQUES sur
+      // les vingt-cinq graines, et restent gardés contre les captures d'avant.
+      // Un raid qui ne s'arrête plus aux mêmes endroits ne rend pas le même
+      // rapport ; s'il rendait le même, c'est la règle qui ne serait pas lue.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : RAPPORTS_TRANSFERT[g][`${cle}Rapport`];
+        ? (RAPPORTS_OUVRAGE_ARRET[g] ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
+        : RAPPORTS_PROCHE_ARRET[g];
       assert.equal(
         empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,
         `graine ${g} : ${cle} — le rapport de raid a changé`,

@@ -300,6 +300,11 @@ export function initialiserBanc(doc) {
     unite: $('atlas-unite'),
     chassis: $('atlas-chassis'),
     tourelle_unite: $('atlas-tourelle-unite'),
+    // ⚠ ET LE TERRAIN, DEPUIS LE LOT ERGONOMIE. Les obstacles du champ de
+    // bataille portent leur sprite au lieu d'un aplat, et `executer` LÈVE sur
+    // une famille absente : sans cette ligne, le banc tomberait sur le premier
+    // montage qui pose un rocher — ce que tous les préréglages font.
+    terrain: $('atlas-terrain'),
   };
 
   /**

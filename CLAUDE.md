@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.91.0 · build 93.
+Dernière révision : **05/09/2026**, version 0.93.0 · build 95.
 
 ---
 
@@ -42,7 +42,224 @@ Dernière révision : **04/09/2026**, version 0.91.0 · build 93.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot ÉCRAN-RAID), à confronter :**
+**Référence au 05/09/2026 (après le lot ERGONOMIE), à confronter :**
+`npm test` → **1080 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 801 384 octets**, 0 référence externe.
+⚠⚠ **HUIT RETOURS D'ETHAN, HUIT COMMITS, ET C'ÉTAIT LA CONTRAINTE DU BRIEF** —
+chacun tient debout tout seul, pour qu'Ethan puisse en laisser tomber un sans
+défaire les sept autres. Coût **+9 625 octets**, mesuré poste par poste contre un
+livrable rebâti depuis le lot ARRÊT : **JavaScript +4 811 · feuille +4 179 ·
+balisage +635 · audio +0 · images +0**. **289 `data:` avant, 289 après.** Borne
+T10 **inchangée à 7 000 000**, marge **198 616 octets, 2,84 %**.
+⚠⚠ **LE ZOOM DE LA BASE PARTAIT DE L'ANGLE, ET LA CAUSE ÉTAIT ENTIÈRE.**
+« Le zoom dans la base se fait depuis l'angle en haut à gauche, très bizarre » :
+le pincement changeait `--case-cote` et RIEN d'autre, donc le conteneur
+grandissait depuis son origine. `defilementAncre` entre — pure, exportée — et
+rend le défilement à écrire pour que le point du contenu sous le milieu des
+doigts y reste. ⚠ **Elle BORNE elle-même**, parce qu'un `scrollLeft` hors bornes
+est rogné EN SILENCE par le navigateur : sans la borne, l'ancre saute au bord et
+aucun test ne le voit. Ni le plancher ni le plafond du zoom ne sont touchés.
+⚠⚠ **LA GRILLE EST LES LISERÉS `.case.legale`, ET LA RESTRICTION DU 27/08 EST
+LEVÉE.** « Une grille apparaît quand on déplace un bâtiment […] faire de même
+lorsque l'on construit un bâtiment et sur défense. » Ils étaient réservés au
+Collecteur — « cercler soixante cases sur soixante-douze n'apprend rien » — et
+c'est un RETOUR sur cet arbitrage, pas un oubli réparé : soixante cases cerclées
+se lisent comme un quadrillage, pas comme soixante indications. **Le même
+mécanisme sert les trois modes sur les deux bandes**, et `marquerCasesLegales`
+commence par le retirer de toutes les cases — `ERGO T4` exige un seul afficheur.
+⚠⚠ **LE VOILE DE BANDE EST DANS LA GRILLE, PAS SUR CHAQUE CASE.** « assombrir la
+défense quand on regarde la base et inversement — grandes barres hachurées en
+travers ». Un `::after` par case redémarrerait le motif à chaque bordure : à 45°
+la phase saute, et on obtient un hachurage PAR CASE au lieu des grandes barres.
+Il couvre les neuf colonnes et les lignes d'écran de sa bande, donc il suit le
+zoom et le défilement sans qu'une ligne de JS ne le repositionne. ⚠
+`pointer-events: none` n'est pas cosmétique : il couvre une bande entière et
+avalerait tous ses touchers.
+⚠⚠ **LA PASTILLE DE NIVEAU DOUBLE DE SURFACE ET NE POUSSE RIEN — MESURÉ AVANT ET
+APRÈS.** `font-size: max(11px, calc(var(--case-cote) / 3.2))`, graisse 700 : un
+plancher parce que la case descend à 36 px, une fraction parce qu'elle monte à
+128. Relevé dans Chromium à 360 × 780, DPR 3 : **les six barres fixes valent
+40 · 44 · 26 · 46 · 86 · 46 des deux côtés**, la case 36, le jeton 36,28, la
+vignette 75, **zéro débordement horizontal**. Seule la boîte du nombre change —
+**8 × 5,28 → 11,25 × 8,02** —, la pastille étant en `position: absolute`.
+⚠ **ET LES PIÈCES DE L'OFFENSE ET DU RAID N'ONT AUCUNE PASTILLE** : leur niveau
+n'est que dans le `title`. Ce n'est pas une taille à relever, c'est un affichage
+qui n'existe pas. **Ethan tranche.**
+⚠⚠ **LE PANNEAU S'OUVRE SUR UNE PIÈCE, ET UN DÉFAUT LATENT EST TOMBÉ AVEC.**
+`apercuDeLaPiece` et `lignesDeLaPiece` entrent, `peindreVueDuPanneau` est
+EXTRAIT et les deux écrans l'appellent — l'Offense l'importe, elle ne le recopie
+pas. ⚠⚠ Le bouton du panneau du Chantier appelait `problemesDeLAmelioration` et
+`ameliorer` **des BÂTIMENTS en dur** : juste tant que le panneau ne s'ouvrait que
+sur eux, faux à la seconde où il s'ouvre sur une tourelle — il aurait amélioré le
+bâtiment de MÊME INDICE. Il passe par `TERRAINS[terrainSelection]`.
+⚠⚠ **ET DEUX FALSIFICATIONS N'ONT PAS MORDU AU PREMIER RELEVÉ, ONZIÈME ET
+DOUZIÈME FOIS DU DÉPÔT.** (1) `ERGO T7 ter` vérifiait que l'Offense IMPORTE le
+rendu commun, pas qu'elle l'APPELLE : en remplaçant l'appel par celui d'une
+fonction voisine, la suite restait **entièrement verte** pendant que le panneau
+ne se peignait plus. Elle compte désormais les APPELS, **déclaration retirée
+avant le comptage**. (2) Rien ne tenait le TERRAIN que le panneau décrit :
+`TERRAINS.batiments` écrit en dur passait au vert, c'est-à-dire que le défaut
+qu'on venait de corriger pouvait revenir. La garde exige les trois lectures par
+`terrainSelection` **et prouve d'abord que le choix compte** — les deux terrains
+rendent des vues différentes pour le même indice.
+⚠ **LE REFUS D'ARMEMENT EST UN TON, PAS UNE TAILLE ÉCRITE SUR UN APPEL.**
+`ligneAAfficher` rend `refus`, la feuille le peint — 14 px en graisse 700 contre
+10 px en 400. Le ton du toast est un ARGUMENT et non un quatrième registre : deux
+écrivains du même message pourraient se contredire. `#E43E32` est déjà la teinte
+des refus de l'interface, et le test qui la « réserve à ce qui attaque le
+joueur » porte sur les BORDS D'EMBLÈME — vérifié avant de la reprendre.
+⚠⚠ **LES NOMS DE LA CARTE TIENNENT JUSQU'À DIX CASES, ET LE SEUIL N'EST PLUS LE
+REMPART.** `cssMiniParCase` descend de **64 à 36** — dix cases sur les 360 px CSS
+d'un téléphone, ce qu'Ethan a dit mot pour mot. **La mesure du 30/08 reste
+VRAIE** : à ce cran-là il y a 33 sites à l'écran. Ce qui change est la RÉPONSE —
+le seuil ne dit plus que la lisibilité, et `etiquettesRetenues` écarte au DESSIN
+toute plaque qui en coupe une déjà retenue, les sites étant examinés par
+PRIORITÉ. Sans la priorité, la plaque qui reste serait celle que
+`sitesDeLaFenetre` a poussée en premier : **deux images identiques
+n'afficheraient pas les mêmes noms**.
+⚠⚠ **ET CE QUE ÇA DONNE EST MESURÉ, PAS DÉDUIT — `fillRect` INSTRUMENTÉ, DOUZE
+VUES PAR ÉCHELLE, CONTRE UN LIVRABLE REBÂTI SANS LA GARDE.** À **dix cases de
+large : 510 plaques, ZÉRO recouvrement des deux côtés** — le seuil seul suffirait
+encore. À **six cases : 12 vues sur 12 portent un recouvrement sans la garde
+(258 plaques, 12 croisements), et zéro avec (246 plaques)**. Le recouvrement
+apparaît donc **au-delà** du seuil, la police relative grandissant avec son
+arrondi ; c'est là que la garde mord, et elle retire exactement les douze
+fautives.
+⚠ **UN TYPE HORS TABLE PASSE EN DERNIER, JAMAIS EN TÊTE** — `indexOf` rend −1,
+qui trierait devant la base du joueur, la faute exacte d'`ORDRE_CHASSIS`. Il ne
+LÈVE pas : une levée dans la boucle de dessin tronque tout l'écran Monde, ce que
+`dessinerGrosseBase` a coûté au lot ZOOM-CONTINU. Un test exige que
+`ordreDePriorite` soit une permutation EXACTE des clés d'`EMBLEMES_CARTE` : le
+cas tombe au dépôt, pas chez le joueur.
+⚠⚠ **LES OBSTACLES DU CHAMP DE BATAILLE PORTENT ENFIN LEUR SPRITE.** « les
+sprites obstacles Ouvrage ne sont pas placés, c'est les mêmes que le joueur » :
+ils l'étaient — en aplat kaki, un carré —, donc ils ne ressemblaient ni à ceux du
+joueur ni à rien. Le choix de variante DESCEND dans `render/variante.js`
+(`nombreDeVariantes`, `nomDeVariante`), et c'est un DÉPLACEMENT : `render/` n'a
+pas le droit d'importer `ui/`, donc une seconde écriture aurait donné au même
+obstacle un dessin dans la base et un autre au combat. **Ni `scene.js` ni
+`chantier.js` n'appellent plus `suffixeDeVariante`.**
+⚠ **LA GRAINE VIENT DE L'APPELANT, PAS DE L'ÉTAT DE COMBAT** — même raison que
+le nom du décor : un montage n'en porte pas, et lui en faire porter une mettrait
+une décision de DESSIN dans la simulation. `ui/raid.js` passe `etatCourant.graine`.
+⚠⚠ **RELEVÉ SUR UN RAID RÉEL, `drawImage` INSTRUMENTÉ** — base de l'Ouvrage de
+niveau 6 en (272, 16) : **DIX poses depuis `atlas-terrain`**, soit exactement les
+dix obstacles du montage, et **leurs dix cellules source tombent au pixel** sur
+ce que `nomDeVariante` rend hors ligne pour la même graine et les mêmes cases.
+L'écran de la base est revérifié après le déplacement : 22 cases à fond de
+terrain, dix positions distinctes. **Zéro erreur de page.**
+⚠ **`COULEUR_OBSTACLE` DISPARAÎT, DÉCLARATION COMPRISE** — une constante que plus
+rien ne lit est un commentaire menteur en puissance. `PALETTE.kakiOmbre` RESTE :
+deux cadres de sélection l'emploient, et la palette est close. ⚠ **La LÉGENDE
+suit** : lui laisser un carré kaki apprendrait un vocabulaire visuel que le
+combat n'emploie plus.
+⚠ **L'ATLAS DE TERRAIN ENTRE DANS LES TROIS TABLES** — `ATLAS_DE_LA_PAGE`,
+`atlasDeLaScene` et celle du banc. `executer` LÈVE sur une famille absente, donc
+l'oublier ferait tomber l'écran de raid ET le banc au premier montage qui pose un
+rocher, c'est-à-dire tous. Il était déjà dans la feuille : **le compte de `data:`
+ne bouge pas**.
+⚠ **VINGT-SEPT FALSIFICATIONS, VINGT-SEPT CHUTES**, dont les deux muettes
+ci-dessus. **Six gardes existantes changent de cible et deux se resserrent**,
+aucune ne s'assouplit — dont celle de la densité des étiquettes, qui exigeait
+« au plus 20 sites étiquetés » et exige désormais l'INVERSE, le seuil ayant cessé
+d'être un plafond de densité. ⚠ Sa prose a été réécrite APRÈS la mesure : une
+première version affirmait « à dix cases les plaques se recouvrent », ce que le
+relevé contredit.
+⚠ **DIX-SEPT TESTS ENTRENT ET LE COMPTE PASSE DE 1 063 À 1 080.** Aucune
+assertion n'a été retirée.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : un ancrage de défilement, un voile, une taille de police, un panneau, un
+ton d'avis, un seuil d'affichage et un nom de sprite vivent tous dans l'écran.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Les sept captures du rapport vivent dans
+`rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot ARRÊT :**
+`npm test` → **1063 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 791 759 octets**, 0 référence externe.
+⚠⚠ **ON S'ARRÊTE POUR UN BÂTIMENT, ET POUR RIEN D'AUTRE.** Ethan, 04/09 : « Je
+demande un comportement. Chaque unité s'arrête pour casser des bâtiments. Merlon
+et tourelles exclus, sauf si ils empêchent d'avancer. » `doitSArreter` lit
+désormais le `genre` de la cible ; le lot **REND 37 octets**, et c'est tout ce
+qu'il pèse. **289 `data:` avant, 289 après.** Borne T10 **inchangée à
+7 000 000**, marge **208 241 octets, 2,97 %**.
+⚠⚠ **LA COLONNE NE POUVAIT PAS SÉPARER UN MUR D'UN BÂTIMENT, ET C'EST LE FAIT
+CENTRAL.** `COLONNE_PAR_TYPE_DEFENSE` range mur, barrière et tourelle sous
+`structureOuAviation` — la MÊME colonne que `profilBatiment`. Une anti-structure
+s'arrêtait donc pour un mur, pour une tourelle ET pour un bâtiment, sans que
+rien ne pût les distinguer. Le `genre` est le seul discriminant juste.
+⚠⚠ **« SAUF SI ILS EMPÊCHENT D'AVANCER » NE DEMANDE AUCUN CODE, ET LE MÉCANISME
+N'EST PAS CELUI QUE LE BRIEF ANNONÇAIT.** Il donnait `structureForcee` comme ce
+qui retient l'unité devant un merlon ; **mesuré, elle rend `undefined` sans le
+module Écraseur** — elle ne couvre donc que DEUX pièces sur quatorze. Ce qui
+tient les douze autres est le TIR : `nuit(e)` vaut `aTire`, et une unité qui
+tire sur le mur remet son compteur de repli à zéro. `ARRÊT T8` mesure les deux.
+⚠⚠ **ET LE REPLI NE PEUT PAS EMPIRER PAR CETTE FONCTION, PAR CONSTRUCTION.**
+`doitSArreter` implique `e.aTire`, qui EST `nuit(e)` : une bascule de vrai à
+faux ne peut qu'ajouter une chance de progresser, jamais retirer une raison de
+rester utile. **Mesuré sur 162 montages : les replis TOMBENT de 562 à 447**, et
+un seul montage en gagne un.
+⚠⚠ **CE SEUL CHEMIN A ÉTÉ CHERCHÉ ET TROUVÉ, ET CE N'EST PAS LA RÈGLE.** Sur
+`n30/infanterie/camp/11`, un Guetteur de plus se replie : il est bloqué en
+rangée 11 par une Gangue collée à lui, **réserve à ZÉRO** — une unité à sec ne
+peut plus rien contre un bâtiment (règle du lot 3C), donc elle ne tire pas, donc
+elle compte trente ticks et rentre. Le lot ne crée pas ce chemin, il le rend
+atteignable en portant les unités plus loin.
+⚠⚠ **LES RAIDS SONT DEVENUS PLUS DURS, ET DE COMBIEN : LE BUTIN TOTAL BAISSE DE
+24,6 %** — 108 606 958 à 81 853 061 sur les 162 montages, 68 en baisse, 42 en
+hausse, 52 identiques. **Les attaquantes détruites passent de 1 534 à 1 655 sur
+2 121 engagées**, les survivantes sur le terrain de 6 à **0**, et **le seul
+montage qui rasait ne rase plus**. La défense, elle, est MOINS entamée — 381 ‰
+de PV restants contre 444 : les unités la traversent au lieu de l'abattre.
+⚠ **ET LES COMBATS RACCOURCISSENT** — médiane 296 → 277 ticks, somme 53 582 →
+46 192 (−13,8 %), 103 plus courts contre 52 plus longs. ⚠⚠ **LES QUATRE RAIDS QUI
+TOUCHAIENT LE PLAFOND DE 900 ONT DISPARU**, le « autre régime » à 4 645 ticks
+compris : `cible.test.js T5` attend désormais une liste VIDE.
+⚠⚠ **LE RAID A DE RÉFÉRENCE NE RAPPORTE PLUS RIEN — 772 · 257 → 0 · 0**, et il ne
+laisse plus un survivant. Le raid B rapporte 10 % de PLUS, le C un peu moins.
+**Trois raids, trois sens différents** : un allongement uniforme n'aurait pas
+fait ça. **Le calibrage revient à Ethan ; rien n'a été compensé.**
+⚠ **VINGT ET UN TESTS SONT TOMBÉS, ET AUCUN N'A ÉTÉ ASSOUPLI.** Onze sont des
+mesures figées, réancrées **en écrivant le nombre d'avant et celui d'après** ;
+six sont des montages dont la PRÉMISSE a cessé d'être vraie et qui ont été
+réparés en nommant l'observable qui discrimine encore ; deux sont des témoins,
+surchargés et non rafraîchis ; deux sont les gardes de `documentation.test.js`,
+qui faisaient leur travail.
+⚠⚠ **`MODULES-F T14` CHANGE DE MÉTHODE, ET C'ÉTAIT UNE FAUTE À CORRIGER.** Il
+opposait les points d'aujourd'hui à des nombres relevés sur un AUTRE code, celui
+d'avant MODULES-F : deux règles, et l'écart cessait de dire ce qu'il prétendait
+dès qu'une seconde bougeait. Il compare désormais le canal **armé** au canal
+**vide** dans la même exécution. ⚠ Et le SIGNE s'est inversé au niveau 38 : le
+bonus de 20 % ne compense plus le surcroît de résistance de la garnison.
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.**
+`COMBATS_DEPLACES_PAR_ARRET` nomme **1 032 champs sur 1 600**, combat par combat
+— **568 restent gardés contre la capture d'avant le lot JOURNAL-DE-COMBAT**, dont
+dix-neuf combats entiers et 198 des 200 causes de fin. `DEPLACES_PAR_ARRET` nomme
+**61 couples, tous à partir de la phase 7** : les six premières phases de
+`temoins-bases-0.js` sont identiques AU BIT.
+⚠⚠ **ET AUCUN SCALAIRE DU TÉMOIN BASES-0 NE BOUGE** — gestes, gestes d'armement,
+taille de la sauvegarde, cases atteignables, déplacement, bases attaquantes,
+nombre de cibles et cible retenue : **25 graines sur 25, identiques**. Seules les
+empreintes des deux RAPPORTS changent. C'est la mesure qui dit que la règle ne
+touche qu'au combat.
+⚠ **DIX TESTS ENTRENT — `test/arret.test.js` — ET LE COMPTE PASSE DE 1 053 À
+1 063.** ⚠ `ARRÊT T2`, `T3` et `T4` sont des INVERSIONS, et elles sont vérifiées
+ROUGES sur `origin/main` en exécutant le fichier dans un `git worktree` : sept
+des dix y tombent. `T5`, `T6` et `T7` sont verts des deux côtés — ils gardent ce
+qui n'a PAS changé.
+⚠⚠ **ET LE BRIEF DEMANDAIT UNE TOURELLE NON BLOQUANTE : IL N'EN EXISTE AUCUNE.**
+Mesuré sur la table : les trois tourelles et les trois artilleries portent toutes
+`bloque: true` ; seules `ronce` et `herse` ne bloquent pas, et elles ne tirent
+jamais. « Sauf si ils empêchent d'avancer » est donc TOUJOURS vrai d'une tourelle
+plantée dans la colonne de l'unité — ce que la règle change ne se voit que
+LATÉRALEMENT.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : la règle est une décision de tick, et la sauvegarde ne grandit pas d'un
+octet — mesuré sur les vingt-cinq graines du témoin.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`, ni un module de `src/ui/`.
+
+**Auparavant, après le lot ÉCRAN-RAID :**
 `npm test` → **1053 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 791 796 octets**, 0 référence externe.
 ⚠⚠ **TROIS RETOURS D'ETHAN SUR L'ÉCRAN DE RAID, ET LE PREMIER ÉTAIT RÉEL DE
@@ -4051,7 +4268,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   53 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
+test/                   54 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -4060,7 +4277,7 @@ test/                   53 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal  raid-ecran
+  son  journal  raid-ecran  arret
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

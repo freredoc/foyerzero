@@ -19,7 +19,8 @@ import {
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
-  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX,
+  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, defilementAncre,
+  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
 } from '../src/ui/chantier.js';
 // ⚠ LES BANDES SE PRENNENT À LA SOURCE — lot ÉCRAN-RAID, 04/09. Elles ont
 // déménagé de `ui/chantier.js` vers `render/bandes.js` parce que l'écran de
@@ -75,7 +76,8 @@ import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orienta
 import { positionDepartJoueur } from '../src/sim/carte.js';
 import { problemesDeDisposition, debitDuBatiment } from '../src/sim/disposition.js';
 import { creerEtatEconomie, capacitesMilli, debitsMilliParHeure, RESSOURCES } from '../src/sim/economie-base.js';
-import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
+import { facteurMilli } from '../src/sim/combat.js';
 import { budgetDuNiveau as budgetOffense } from '../src/ui/arsenal.js';
 import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
@@ -1311,24 +1313,84 @@ test('actions — jamais de `try` autour d\'`ameliorer` ni de `demolir`', () => 
   assert.ok(!MOTIFS[1].motif.test('problemesDeLaDemolition(etat, i)'));
 });
 
-test('actions — les cases distinguées suivent la TABLE, pas un nom écrit dans l\'écran', () => {
-  // ⚠ SEUL LE COLLECTEUR EST DISTINGUÉ (27/08), et la raison n'est pas un choix
-  // d'interface : c'est le seul bâtiment pour qui le terrain décide. La règle
-  // vit dans `CHAMPS.posableDessus`, et l'écran doit la LIRE. Écrire
-  // `=== 'collecteur'` en dur marcherait aujourd'hui et mentirait le jour où un
-  // second bâtiment gagnerait le droit de se poser sur un champ.
+test('ERGO T3 — les cases distinguées suivent le MOTEUR, et plus aucun bâtiment n\'est privilégié', () => {
+  // ⚠⚠ CETTE GARDE A CHANGÉ DE CIBLE AU LOT ERGONOMIE, ET C'EST UN RETOUR
+  // D'ETHAN QUI L'A EXIGÉ. Elle tenait « seul le Collecteur est distingué »
+  // (27/08) et vérifiait que l'écran LISAIT `CHAMPS.posableDessus` au lieu
+  // d'écrire « collecteur » en dur. Ethan, 04/09 : « Une grille apparaît quand
+  // on déplace un bâtiment […] Faire de même lorsque l'on construit un bâtiment
+  // et sur défense. » Il n'y a donc plus de privilège à lire, et l'écran
+  // n'importe plus la table du tout.
+  //
+  // Ce que la garde défend est intact et se resserre même : l'écran ne décide
+  // de RIEN tout seul, il DEMANDE au moteur les cases posables.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  assert.ok(/CHAMPS\.posableDessus/.test(ecran),
-    'l\'écran ne lit pas CHAMPS.posableDessus pour décider quoi cercler');
   assert.ok(!/['\"]collecteur['\"]/.test(ecran),
-    'l\'écran nomme « collecteur » en dur au lieu de lire la table');
+    'l\'écran nomme « collecteur » en dur au lieu de demander au moteur');
+  assert.ok(!/CHAMPS\.posableDessus/.test(ecran),
+    'l\'écran privilégie encore un bâtiment pour décider quoi cercler');
 
-  // Et la table dit bien ce que l'écran en attend : un seul bâtiment concerné,
-  // sinon « seul le collecteur » cesserait d'être vrai sans que l'écran change.
+  // Falsifiable : les deux motifs doivent attraper de vrais appâts.
+  assert.ok(/['\"]collecteur['\"]/.test("if (posableChoisi === 'collecteur') return;"));
+  assert.ok(/CHAMPS\.posableDessus/.test('if (!CHAMPS.posableDessus.includes(x)) return;'));
+
+  // ⚠ ET LA RÈGLE, ELLE, N'A PAS BOUGÉ DANS LA DONNÉE : le Collecteur reste le
+  // seul bâtiment dont le TERRAIN décide. C'est le moteur qui l'applique — ce
+  // que `casesPosablesDuTerrain` rend pour lui n'est pas la bande entière.
   assert.equal(CHAMPS.posableDessus.length, 1);
 
-  // Falsifiable : le motif d'un nom en dur doit attraper un vrai appât.
-  assert.ok(/['\"]collecteur['\"]/.test("if (posableChoisi === 'collecteur') return;"));
+  // ⚠⚠ LA GRILLE S'ARME DANS LES TROIS MODES, ET LE MOTEUR LE DIT. Un montage
+  // par mode, sur les DEUX bandes : la pose d'un bâtiment quelconque, la pose
+  // d'une pièce de défense, et le déplacement d'un bâtiment posé. Les trois
+  // doivent rendre des cases, sinon la grille resterait vide dans ce mode-là.
+  const etat = creerEtat(11);
+  const base = baseCourante(etat);
+  const posablesBat = casesPosablesDuTerrain(etat, 'batiments', 'raffinerie');
+  const posablesDef = casesPosablesDuTerrain(etat, 'defense', 'merlon');
+  assert.ok(posablesBat.length > 20, `pose de bâtiment : ${posablesBat.length} cases`);
+  assert.ok(posablesDef.length > 20, `pose en défense : ${posablesDef.length} cases`);
+  const deplacables = casesDeplacablesDuTerrain(etat, 'batiments', 0);
+  assert.ok(deplacables.length > 20, `déplacement : ${deplacables.length} cases`);
+  assert.equal(base.disposition.length, 1, 'montage : la base neuve porte le seul Chantier');
+
+  // ⚠ ET LE COLLECTEUR, LUI, EN REND MOINS QUE LA BANDE — sans quoi « la règle
+  // n'a pas bougé » ne se mesurerait nulle part.
+  const posablesCollecteur = casesPosablesDuTerrain(etat, 'batiments', 'collecteur');
+  assert.ok(posablesCollecteur.length < posablesBat.length,
+    'le terrain ne décide plus pour le Collecteur');
+});
+
+test('ERGO T4 — la grille se retire, et c\'est la même fonction qui la pose', () => {
+  // ⚠⚠ C'EST LA MOITIÉ DU RETOUR D'ETHAN — « et disparaît ensuite » — ET C'EST
+  // LE TEST QUI MORD. Une grille qui s'arme partout et ne se retire jamais
+  // passerait le test précédent sans rien valoir.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const corps = source.match(/function marquerCasesLegales\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(corps !== null, 'marquerCasesLegales a disparu');
+
+  // Elle RETIRE d'abord, sur toutes les cases, et sans condition.
+  assert.match(corps[0], /for \(const case_ of cellules\.values\(\)\) case_\.classList\.remove\('legale'\);/,
+    'la grille ne se retire plus de toutes les cases à l\'entrée');
+  assert.ok(corps[0].indexOf("remove('legale')") < corps[0].indexOf("add('legale')"),
+    'la grille se pose avant d\'être retirée');
+
+  // ⚠ ET UN SEUL MÉCANISME LA POSE. Deux `add('legale')` — un par mode — c'est
+  // le cas du déplacement et celui de la pose, et il n'y en a pas de troisième.
+  assert.equal((corps[0].match(/add\('legale'\)/g) ?? []).length, 2);
+  assert.equal((source.match(/classList\.(add|remove|toggle)\('legale'/g) ?? []).length, 3,
+    'un second afficheur de grille est apparu hors de marquerCasesLegales');
+
+  // ⚠⚠ LES QUATRE PORTES D'ANNULATION PASSENT PAR ELLE. Sortir d'un mode sans
+  // la rappeler laisserait la grille à l'écran — le défaut « plus visible que
+  // son absence » que le brief nomme.
+  assert.ok((source.match(/marquerCasesLegales\(\);/g) ?? []).length >= 6,
+    'des portes de sortie ne rappellent plus la grille');
+  for (const porte of [
+    'deplacementEnCours = null;',   // annulation d'un déplacement
+    'posableChoisi = null;',        // armement d'une action, qui défait la palette
+  ]) {
+    assert.ok(source.includes(porte), `la porte « ${porte} » a disparu`);
+  }
 });
 
 test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le calcul n\'a pas bougé', () => {
@@ -2769,7 +2831,16 @@ test('défense — la table des terrains dit tout ce qui les sépare, et rien de
   assert.equal(TERRAINS.defense.actions.reparer, null);
   assert.ok(typeof TERRAINS.defense.actions.demolir.agir === 'function');
   assert.equal(TERRAINS.defense.actions.deplacer.cible, true);
-  assert.equal(TERRAINS.defense.panneau, false);
+  // ⚠⚠ LE PANNEAU S'OUVRE AUSSI EN DÉFENSE DEPUIS LE LOT ERGONOMIE, ET CETTE
+  // ASSERTION A CHANGÉ DE CIBLE SANS S'ASSOUPLIR. Elle exigeait `false` — juste
+  // tant qu'une pièce n'avait rien à mettre dans un panneau qui chiffre
+  // production, capacité et voisinage. Ethan, 04/09 : « Quand on clique sur une
+  // unité en défense ou armé, afficher un onglet comme pour les bâtiments. » Ce
+  // qu'elle exige maintenant est plus fort : les DEUX terrains portent une
+  // fonction de vue, donc aucun écran n'a de cas particulier à écrire.
+  assert.equal(TERRAINS.defense.panneau, true);
+  assert.equal(typeof TERRAINS.batiments.vueDuPanneau, 'function');
+  assert.equal(typeof TERRAINS.defense.vueDuPanneau, 'function');
   assert.equal(TERRAINS.defense.force, 'garnison');
 
   // Les deux terrains couvrent les mêmes quatre noms d'action : un bouton sans
@@ -2815,7 +2886,7 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
     // Les deux entrées du 03/09 rejoignent la liste : l'amélioration d'une
     // pièce est un geste comme les autres, donc elle n'a qu'UN site d'appel,
     // et il est dans la table des terrains.
-    'ameliorerEffectif(', 'problemesDeLAmeliorationDEffectif(']) {
+    'ameliorerEffectif(']) {
     const n = source.split(appel).length - 1;
     assert.equal(
       n, 1,
@@ -2823,6 +2894,19 @@ test('défense — le geste de pose n\'est écrit QU\'UNE FOIS', () => {
         + 'le seul chemin vers le moteur',
     );
   }
+
+  // ⚠⚠ `problemesDeLAmeliorationDEffectif` A DEUX APPELANTS DEPUIS LE LOT
+  // ERGONOMIE, ET LES DEUX SONT NOMMÉS. Le geste passe toujours par la table —
+  // c'est lui que la boucle ci-dessus compte à travers `ameliorerEffectif` —
+  // mais le panneau d'une pièce doit AFFICHER le refus, exactement comme celui
+  // d'un bâtiment lit `problemesDeLAmelioration`. On compte donc, et on exige
+  // que le second appel soit DANS le descripteur pur : un troisième, ou un
+  // second ailleurs, fait tomber ce test.
+  assert.equal(source.split('problemesDeLAmeliorationDEffectif(').length - 1, 2);
+  const descripteur = source.match(/export function apercuDeLaPiece\([\s\S]*?\n\}/);
+  assert.ok(descripteur !== null, 'le descripteur pur d\'une pièce a disparu');
+  assert.ok(descripteur[0].includes('problemesDeLAmeliorationDEffectif('),
+    'le panneau d\'une pièce ne lit plus le refus du moteur');
 
   // Et le geste passe par la TABLE, jamais par un nom de terrain écrit à la
   // main : un cas particulier serait le premier à diverger.
@@ -3846,4 +3930,336 @@ test('CARTE-A T7 — la tuile d\'attaque ne passe pas par le compteur de context
     'l\'écran Monde masque tout le bandeau, points d\'attaque compris');
   assert.match(feuille, /#ressources\[data-ecran="monde"\] \.ressource:not\(\.attaque\) \{ display: none; \}/,
     'la feuille ne réduit plus le bandeau sur la carte');
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T1 et T2 — le zoom de la base s'ancre sous les doigts
+// ---------------------------------------------------------------------------
+
+test('ERGO T1 — le point du contenu sous l\'ancre y reste, à un pixel', () => {
+  // ⚠⚠ CE QUI EST MESURÉ EST UNE INVARIANCE, PAS UNE FORMULE. Le point du
+  // CONTENU qui se trouve sous l'ancre avant le zoom doit s'y retrouver après :
+  // on le calcule des deux côtés et on compare. Recopier `(d + a) × f − a` ici
+  // ne prouverait rien — ce serait la même ligne écrite deux fois.
+  const pointSousLAncre = (defilement, ancre, cote) => (defilement + ancre) / cote;
+  const cote = 40;
+  const facteur = 1.4;
+  const apres = cote * facteur;
+  for (const defilement of [0, 37, 120, 640, 1999]) {
+    for (const ancre of [0, 15, 180, 359]) {
+      const avant = pointSousLAncre(defilement, ancre, cote);
+      // Bornes larges : on mesure l'ancrage, pas le rognage — c'est T2 qui le fait.
+      const suivant = defilementAncre(defilement, ancre, facteur, 1_000_000);
+      const trouve = pointSousLAncre(suivant, ancre, apres);
+      assert.ok(Math.abs(trouve - avant) * apres <= 1,
+        `ancre ${ancre}, défilement ${defilement} : le point a bougé de `
+          + `${((trouve - avant) * apres).toFixed(2)} px`);
+    }
+  }
+
+  // ⚠ ET LA MESURE N'EST PAS VACUEUSE : sans ancrage — c'est-à-dire en laissant
+  // le défilement tel quel, ce que faisait le code d'avant — le même point
+  // s'enfuit de plusieurs centaines de pixels. C'est très exactement le « très
+  // bizarre » d'Ethan.
+  const sansAncrage = pointSousLAncre(640, 180, apres) - pointSousLAncre(640, 180, cote);
+  assert.ok(Math.abs(sansAncrage) * apres > 200,
+    'le montage ne distingue pas un zoom ancré d\'un zoom qui ne l\'est pas');
+});
+
+test('ERGO T2 — aux quatre coins, le rognage borne au lieu de sauter', () => {
+  // ⚠⚠ UN `scrollLeft` ÉCRIT HORS BORNES EST ROGNÉ EN SILENCE PAR LE
+  // NAVIGATEUR. C'est la faute que ce test existe pour empêcher : le calcul
+  // borne lui-même, donc ce qu'on écrit est ce qui sera appliqué.
+  const max = 500;
+  // Coin haut-gauche : déjà en butée à zéro, on dézoome — la cible est négative.
+  assert.equal(defilementAncre(0, 180, 0.5, max), 0);
+  // Coin bas-droit : déjà en butée au maximum, on zoome — la cible dépasse.
+  assert.equal(defilementAncre(max, 180, 2, max), max);
+  // Et entre les deux, rien n'est rogné : la valeur passe telle quelle.
+  assert.equal(defilementAncre(100, 180, 1.4, max), Math.round((100 + 180) * 1.4 - 180));
+  assert.ok(defilementAncre(100, 180, 1.4, max) < max, 'montage : ce cas-ci ne doit pas être rogné');
+
+  // ⚠ ET UN FACTEUR ABSURDE NE DÉPLACE RIEN. Zéro, l'infini ou un NaN
+  // rendraient un défilement invalide, que le navigateur transformerait en zéro
+  // — c'est-à-dire un saut à l'angle haut-gauche, le défaut qu'on corrige.
+  for (const facteur of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(defilementAncre(250, 180, facteur, max), 250, `facteur ${facteur}`);
+  }
+});
+
+test('ERGO T1 bis — le pincement de la base appelle vraiment l\'ancrage', () => {
+  // ⚠ LA MOITIÉ DOM N'EST PAS TESTABLE ICI (§3 de CLAUDE.md), donc on garde ce
+  // qui l'est : que le geste LISE le cadre et le défilement AVANT de changer la
+  // taille, et qu'il écrive les deux défilements APRÈS. Une garde qui ne
+  // chercherait que le nom de la fonction laisserait passer un appel dont on
+  // jette le retour.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const geste = source.match(/defile\.addEventListener\('touchmove'[\s\S]*?\}, \{ passive: false \}\);/);
+  assert.ok(geste !== null, 'le pincement de la base a disparu');
+  const corps = geste[0];
+  for (const morceau of [
+    'getBoundingClientRect()',
+    'defile.scrollLeft;',
+    'defile.scrollTop;',
+    'defile.scrollLeft = defilementAncre(',
+    'defile.scrollTop = defilementAncre(',
+    'defile.scrollWidth - defile.clientWidth',
+    'defile.scrollHeight - defile.clientHeight',
+  ]) {
+    assert.ok(corps.includes(morceau), `le pincement ne porte plus « ${morceau} »`);
+  }
+  // L'ordre compte : la taille se pose AVANT que les bornes ne se lisent.
+  assert.ok(corps.indexOf('reglerCoteCase(') < corps.indexOf('defile.scrollWidth'),
+    'les bornes sont lues avant que la taille ne soit posée');
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T5 — le voile de la bande inactive
+// ---------------------------------------------------------------------------
+
+test('ERGO T5 — la bande qu\'on ne regarde pas est zébrée, et elle reste touchable', () => {
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/\.voile-bande \{[^}]*\}/);
+  assert.ok(regle !== null, 'le voile de bande n\'a pas de règle');
+
+  // ⚠⚠ LA GARDE QUI COMPTE. Le voile couvre une bande entière : sans
+  // `pointer-events: none` il avalerait tous les touchers de la bande d'en
+  // dessous, et le joueur ne pourrait plus rien y poser. Le dépôt porte déjà ce
+  // raisonnement sur `#chantier-traits`.
+  assert.match(regle[0], /pointer-events: none;/, 'le voile avale les touchers de la bande');
+
+  // Des BARRES EN TRAVERS, pas un aplat : un dégradé répété, en diagonale.
+  assert.match(regle[0], /repeating-linear-gradient\(\s*-?\d+deg/,
+    'le voile n\'est pas un motif rayé');
+  // ⚠ ET LA TRANSPARENCE EST CELLE DE LA FICHE, LA SEULE ADMISE. Un aplat
+  // opaque rendrait les pièces indiscernables entre elles.
+  assert.match(regle[0], /rgba\(0,0,0,0\.31\)/, 'le voile emploie une transparence hors fiche');
+  assert.match(regle[0], /transparent/, 'le voile n\'a pas d\'intervalle clair : c\'est un aplat');
+  // Le pas suit la case, donc le zoom.
+  assert.match(regle[0], /var\(--case-cote\)/, 'les barres sont en pixels et non en cases');
+
+  // ⚠⚠ UN VOILE PAR BANDE NAVIGABLE, ET UN SEUL ALLUMÉ. L'écran en construit
+  // exactement autant que `BANDES_NAVIGABLES` en compte, et la bascule est
+  // écrite à UN seul endroit : `bandeCourante` change à chaque évènement de
+  // défilement, deux écrivains divergeraient.
+  const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  assert.match(ecran, /for \(const cle of BANDES_NAVIGABLES\) \{/,
+    'les voiles ne se dérivent plus des bandes navigables');
+  // Deux écritures de `hidden` en tout : la naissance, cachée, et la bascule.
+  assert.equal((ecran.match(/voile\.hidden/g) ?? []).length, 2,
+    'un second écrivain de la bascule du voile est apparu');
+  assert.equal((ecran.match(/hidden = cle === cleBande/g) ?? []).length, 1,
+    'la bascule du voile est écrite à plus d\'un endroit');
+  assert.match(ecran, /for \(const \[cle, voile\] of voiles\) voile\.hidden = cle === cleBande;/,
+    'la bascule ne montre plus exactement l\'autre bande');
+  assert.equal(BANDES_NAVIGABLES.length, 2, 'la lecture « l\'autre bande » suppose deux bandes');
+
+  // ⚠ ET IL EST POSÉ DANS LA GRILLE, PAS EN ABSOLU : il suit le zoom et le
+  // défilement sans qu'une ligne ne le repositionne. Le vérifier par la
+  // géométrie qu'il reçoit — les neuf colonnes, et les lignes d'écran de sa
+  // bande.
+  assert.match(ecran, /voile\.style\.gridColumn = `1 \/ \$\{GRILLE\.largeur \+ 1\}`;/,
+    'le voile ne couvre plus les neuf colonnes');
+  assert.match(ecran, /voile\.style\.gridRow = `\$\{premiereLigne\} \/ span \$\{nbLignes\}`;/,
+    'le voile ne couvre plus les lignes d\'écran de sa bande');
+  assert.doesNotMatch(regle[0], /position: absolute/, 'le voile est sorti de la grille');
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T6 — le niveau se lit, et il ne pousse rien
+// ---------------------------------------------------------------------------
+
+test('ERGO T6 — la pastille de niveau grossit sans déplacer une seule barre', () => {
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/\.jeton \.niveau \{[^}]*\}/);
+  assert.ok(regle !== null, 'la pastille de niveau n\'a plus de règle');
+
+  // ⚠⚠ CE QUI REND CE POINT SÛR : ELLE EST HORS DU FLUX. Une pastille en
+  // `position: absolute` ne pousse ni le jeton, ni la case, ni la rangée
+  // suivante — c'est ce qui permet de la grossir sur des vignettes calibrées au
+  // pixel. Mesuré dans Chromium avant et après : les six barres fixes valent
+  // 40 · 44 · 26 · 46 · 86 · 46, la case 36, le jeton 36,28 et la vignette de
+  // palette 75, des deux côtés. Seule la boîte du nombre change — 8 × 5,28
+  // devient 11,25 × 8,02.
+  assert.match(regle[0], /position: absolute/, 'la pastille est entrée dans le flux : elle pousse');
+
+  // ⚠ ELLE SUIT LA CASE, AVEC UN PLANCHER. La case va de 36 px à 128 : un
+  // nombre en pixels fixes redevient minuscule au zoom, un nombre purement
+  // proportionnel devient illisible au plancher.
+  assert.match(regle[0], /font-size: max\(\s*\d+px\s*,\s*calc\(var\(--case-cote\)/,
+    'la taille du nombre ne suit plus la case, ou n\'a plus de plancher');
+  const taille = regle[0].match(/font-size: max\((\d+)px/);
+  assert.ok(Number(taille[1]) >= 10, `plancher de ${taille[1]} px : Ethan les trouvait déjà petits à 8`);
+  const graisse = regle[0].match(/font-weight: (\d+)/);
+  assert.ok(Number(graisse[1]) >= 600, `graisse ${graisse[1]} : le nombre reste maigre sur le sprite`);
+
+  // ⚠ ET UNE SEULE RÈGLE PORTE LA PASTILLE — pas une par écran. C'est la
+  // consigne du brief : une famille, une règle.
+  assert.equal((feuille.match(/\.niveau \{/g) ?? []).length, 1,
+    'une seconde règle de pastille de niveau est apparue');
+
+  // La garde des 288 px vit plus haut dans ce fichier et n'a pas bougé : elle
+  // somme les hauteurs FIXES des six barres, et aucune n'est touchée ici.
+  assert.match(feuille, /flex: 0 0 86px/, 'la palette a changé de hauteur');
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T7 — le panneau d'une pièce, en défense comme en offense
+// ---------------------------------------------------------------------------
+
+test('ERGO T7 — `apercuDeLaPiece` décrit une pièce des DEUX forces, sans DOM', () => {
+  // ⚠⚠ LA PARTIE QUI DÉCRIT EST PURE, ET C'EST TOUT CE QUI REND CE POINT
+  // TESTABLE. Le dépôt n'a ni jsdom ni navigateur (§3) : le DOM du panneau se
+  // vérifie à l'écran, sa MATIÈRE se vérifie ici.
+  const etat = creerEtat(11);
+  const base = baseCourante(etat);
+  base.garnison.push({ id: 'casemate', rangee: 5, colonne: 4, niveau: 3, degatsMilli: 0 });
+  base.armee.push({ id: 'meute', vague: 1, colonne: 2, niveau: 2, degatsMilli: 0, actif: true });
+
+  const tourelle = apercuDeLaPiece(etat, 'garnison', 0);
+  assert.equal(tourelle.nom, DEFENSES.casemate.nom.joueur);
+  assert.equal(tourelle.niveau, 3);
+  assert.equal(tourelle.vitesse, null, 'une structure ne se déplace pas');
+  const meute = apercuDeLaPiece(etat, 'armee', 0);
+  assert.equal(meute.nom, UNITES.meute.nom.joueur);
+  assert.equal(meute.vitesse, UNITES.meute.vitesse, 'une unité a une vitesse');
+
+  // ⚠⚠ LES PV SE CALCULENT COMME LE MOTEUR LES CALCULE — `pv × facteurMilli`,
+  // et le test le REFAIT au lieu de recopier un nombre. Une seconde courbe
+  // dans l'écran ferait diverger le panneau du combat d'un niveau à l'autre.
+  assert.equal(tourelle.pv, Math.round(DEFENSES.casemate.pv * facteurMilli(3) / 1000));
+  assert.equal(meute.pv, Math.round(UNITES.meute.pv * facteurMilli(2) / 1000));
+  assert.ok(tourelle.pv > DEFENSES.casemate.pv, 'montage : le niveau 3 doit rendre plus de PV que le 1');
+
+  // Les trois colonnes de dégâts sont toujours dites, même à zéro : c'est ce
+  // qui apprend au joueur qu'une Batterie ne touche que ce qui vole.
+  assert.deepEqual(tourelle.degats.map((d) => d.colonne), COLONNES_DEGATS);
+  base.garnison.push({ id: 'batterie', rangee: 5, colonne: 6, niveau: 1, degatsMilli: 0 });
+  const batterie = apercuDeLaPiece(etat, 'garnison', 1);
+  assert.equal(batterie.degats.find((d) => d.colonne === 'infanterie').avant, 0);
+  assert.ok(batterie.degats.find((d) => d.colonne === 'structureOuAviation').avant > 0);
+
+  // ⚠ LES DÉGÂTS SUBIS SONT UNE PART DES PV MAX, JAMAIS UN ABSOLU : `degatsMilli`
+  // est en milli-PV, et les PV max montent avec le niveau.
+  const pvMaxMilli = DEFENSES.casemate.pv * facteurMilli(3);
+  base.garnison[0].degatsMilli = Math.round(pvMaxMilli / 4);
+  assert.equal(apercuDeLaPiece(etat, 'garnison', 0).degatsSubisMilliemes, 250);
+  base.garnison[0].degatsMilli = 0;
+  assert.equal(apercuDeLaPiece(etat, 'garnison', 0).degatsSubisMilliemes, 0);
+
+  // Une force inconnue LÈVE plutôt que de rendre un panneau vide.
+  assert.throws(() => apercuDeLaPiece(etat, 'batiments', 0), /force/);
+  assert.throws(() => apercuDeLaPiece(etat, 'garnison', 99), /hors/);
+});
+
+test('ERGO T7 bis — la vue d\'une pièce a la MÊME forme que celle d\'un bâtiment', () => {
+  // ⚠⚠ C'EST CE QUI PERMET UN SEUL RENDU. `peindreVueDuPanneau` ne connaît
+  // qu'une structure ; deux formes voisines auraient demandé deux DOM, dont un
+  // seul serait relu.
+  const etat = creerEtat(11);
+  baseCourante(etat).garnison.push({ id: 'casemate', rangee: 5, colonne: 4, niveau: 1, degatsMilli: 0 });
+  const dUnePiece = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0));
+  const dUnBatiment = lignesDuPanneau(apercuDuBatiment(etat, 0));
+
+  assert.deepEqual(Object.keys(dUnePiece).sort(), Object.keys(dUnBatiment).sort());
+  assert.deepEqual(Object.keys(dUnePiece.bouton).sort(), Object.keys(dUnBatiment.bouton).sort());
+  for (const vue of [dUnePiece, dUnBatiment]) {
+    assert.ok(vue.sections.length > 0);
+    for (const section of vue.sections) {
+      assert.equal(typeof section.titre, 'string');
+      for (const l of section.lignes) {
+        assert.equal(typeof l.libelle, 'string');
+        assert.equal(typeof l.avant, 'string');
+        assert.ok(l.apres === null || typeof l.apres === 'string');
+      }
+    }
+  }
+  assert.match(dUnePiece.titre, /niv\. 1$/);
+  // ⚠ ET UN ZÉRO SE DIT « — ». « 0 par tir » se lirait comme un nombre qu'on
+  // pourrait faire monter.
+  baseCourante(etat).garnison.push({ id: 'batterie', rangee: 5, colonne: 6, niveau: 1, degatsMilli: 0 });
+  const batterie = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 1));
+  const contreInfanterie = batterie.sections[0].lignes.find((l) => /infanterie/.test(l.libelle));
+  assert.equal(contreInfanterie.avant, '—');
+});
+
+test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent', () => {
+  const chantier = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const offense = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8'));
+  assert.equal(typeof peindreVueDuPanneau, 'function');
+
+  // ⚠⚠ LE DOM DU PANNEAU EST ÉCRIT UNE FOIS. L'Offense l'IMPORTE — elle ne le
+  // recopie pas —, et une seconde construction dans l'un des deux écrans fait
+  // tomber ce test.
+  const bloc = offense.match(/import \{([^}]*)\} from '\.\/chantier\.js';/);
+  assert.ok(bloc !== null);
+  const importes = bloc[1].split(',').map((n) => n.trim());
+  for (const nom of ['apercuDeLaPiece', 'lignesDeLaPiece', 'peindreVueDuPanneau']) {
+    assert.ok(importes.includes(nom), `l'Offense n'importe plus ${nom}`);
+  }
+  assert.doesNotMatch(offense, /function peindreVueDuPanneau/, 'l\'Offense a recopié le rendu');
+  assert.equal((chantier.match(/export function peindreVueDuPanneau/g) ?? []).length, 1);
+
+  // ⚠⚠ ET LES DEUX ÉCRANS L'APPELLENT VRAIMENT — importer n'est pas appeler, et
+  // cette moitié-là MANQUAIT. Mesuré : remplacer l'appel de l'Offense par celui
+  // d'une fonction voisine laissait ce test ENTIÈREMENT VERT, l'import restant
+  // en place et aucune seconde déclaration n'apparaissant. Un import qui n'est
+  // pas appelé est du code mort, et le panneau ne se peindrait plus du tout.
+  // ⚠ ET ON RETIRE LA DÉCLARATION AVANT DE COMPTER : une garde qui compte sa
+  // propre définition est la faute que ce dépôt a déjà payée cinq fois.
+  const horsImport = (code) => code
+    .replace(/import \{[^}]*\} from '[^']*';/g, '')
+    .replace(/export function peindreVueDuPanneau\(/g, 'DECLARATION(');
+  for (const [ou, code] of [['chantier', chantier], ['offense', offense]]) {
+    assert.equal((horsImport(code).match(/peindreVueDuPanneau\(/g) ?? []).length, 1,
+      `${ou} n'appelle pas exactement une fois \`peindreVueDuPanneau\``);
+  }
+  // La classe CSS est partagée, pas dédoublée : une règle par famille.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(feuille, /\.panneau-detail \{/, 'les règles du panneau ne sont plus partagées');
+  assert.doesNotMatch(feuille, /#offense-panneau \{/, 'l\'Offense a sa propre règle de panneau');
+  for (const id of ['offense-panneau', 'offense-panneau-titre', 'offense-panneau-corps',
+    'offense-panneau-ameliorer', 'offense-panneau-fermer']) {
+    assert.ok(feuille.includes(`id="${id}"`), `le balisage n'a pas ${id}`);
+  }
+
+  // ⚠⚠ ET LE PANNEAU LIT LE TERRAIN DE LA SÉLECTION, JAMAIS UN TERRAIN ÉCRIT EN
+  // DUR — CETTE MOITIÉ MANQUAIT AUSSI. Mesuré : remplacer `terrainSelection` par
+  // `batiments` dans les trois lectures laissait la suite ENTIÈREMENT VERTE,
+  // alors que c'est exactement le défaut que ce lot corrige — le panneau
+  // décrirait le bâtiment de même indice pendant qu'il parle d'une tourelle.
+  // C'est la faute que `rafraichir` avait commise au lot NIVEAU-DES-PIÈCES, vue
+  // par l'autre bout.
+  //
+  // ⚠ ET LE MONTAGE PROUVE QUE LE CHOIX COMPTE avant de le garder : les deux
+  // terrains rendent des vues DIFFÉRENTES pour le même indice, sans quoi
+  // l'index serait sans conséquence et la garde ne dirait rien.
+  const etatVue = creerEtat(11);
+  baseCourante(etatVue).garnison.push(
+    { id: 'casemate', rangee: 5, colonne: 4, niveau: 3, degatsMilli: 0 },
+  );
+  const vueBatiment = TERRAINS.batiments.vueDuPanneau(etatVue, 0);
+  const vuePiece = TERRAINS.defense.vueDuPanneau(etatVue, 0);
+  assert.notDeepEqual(vueBatiment, vuePiece,
+    'les deux terrains décrivent la même chose : l\'index ne peut rien changer');
+  for (const quoi of ['vueDuPanneau(', 'actions.ameliorer', 'panneau)']) {
+    assert.doesNotMatch(chantier, new RegExp(`TERRAINS\\.(batiments|defense)\\.${quoi.replace(/[.()]/g, '\\$&')}`),
+      `le panneau écrit un terrain en dur pour ${quoi}`);
+  }
+  for (const lu of [/TERRAINS\[terrainSelection\]\.vueDuPanneau\(/,
+    /TERRAINS\[terrainSelection\]\.actions\.ameliorer/,
+    /TERRAINS\[terrainSelection\]\.panneau/]) {
+    assert.match(chantier, lu, `le panneau ne lit plus la table par ${lu}`);
+  }
+
+  // ⚠⚠ ET LE TOUCHER NE CHANGE PAS DE SENS : il SÉLECTIONNE toujours, le
+  // panneau s'ouvre EN PLUS. Un panneau qui remplacerait la sélection viderait
+  // la barre contextuelle, donc retirerait au joueur les quatre boutons.
+  assert.match(offense, /selection = occupant;\s*ouvrirPanneau\(\);/,
+    'le panneau de l\'Offense a remplacé la sélection au lieu de s\'y ajouter');
+  assert.match(chantier, /panneauOuvert = true;[\s\S]{0,200}selectionner\(index\);/,
+    'le panneau du Chantier ne sélectionne plus ce dont il parle');
 });

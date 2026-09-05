@@ -872,6 +872,34 @@
      dont on vient d'ouvrir le panneau — aurait été le seul barré par son
      propre mur. */
   .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* ⚠⚠ LA BANDE QU'ON NE REGARDE PAS EST ZÉBRÉE — Ethan, 04/09 : « Dans les
+     bases, assombrir la défense quand on regarde la base et inversement — du
+     genre grandes barres hachurées en travers, comme les zébras sur la route. »
+
+     ⚠⚠ `pointer-events: none` N'EST PAS COSMÉTIQUE. Le voile couvre la bande
+     entière : sans cette ligne il avalerait tous les touchers de la bande d'en
+     dessous, et le joueur ne pourrait plus rien y poser ni y toucher. C'est la
+     faute que le calque des traits (`#chantier-traits`) et le `transform:
+     scale()` de la grille interdisent déjà, ici sur une surface bien plus
+     grande.
+
+     ⚠⚠ ET LA TEINTE EST LA SEULE TRANSPARENCE DE LA FICHE, `rgba(0,0,0,0.31)`.
+     La palette est fermée à trente-trois teintes opaques plus cette ombre-là :
+     un aplat gris opaque rendrait les pièces indiscernables entre elles — c'est
+     le raisonnement que l'écran Recherche porte déjà sur ses vignettes grisées.
+     À 31 % sur une barre couvrant un quart du motif, la pièce reste
+     reconnaissable ; confronté à l'écran, six pièces sur six.
+
+     ⚠ LES BARRES SE MESURENT EN CASES, PAS EN PIXELS. Le pas vaut deux fois
+     `--case-cote` : elles gardent la même épaisseur apparente à tous les
+     niveaux de zoom, là où un pas en pixels deviendrait un grain fin au zoom
+     maximal. */
+  .voile-bande {
+    pointer-events: none;
+    background-image: repeating-linear-gradient(-45deg,
+      rgba(0,0,0,0.31) 0 calc(var(--case-cote) / 2),
+      transparent calc(var(--case-cote) / 2) var(--case-cote));
+  }
   /* ⚠⚠ LE JETON A GRANDI DE 20 %, ET LE FACTEUR EST ÉCRIT PLUTÔT QUE FONDU.
      Ethan, 30/08 : « les bâtiments sont bien trop petits, surtout collecteur
      etc. Augmenter la taille du sprite de 20 %. Pas le choix pour l'instant. »
@@ -940,7 +968,26 @@
     background-repeat: no-repeat;
     image-rendering: pixelated;
   }
-  .jeton .niveau { position: absolute; right: 0; bottom: -1px; font-size: 8px; font-weight: 400; line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914; }
+  /* ⚠⚠ LE NIVEAU SE LIT — Ethan, 04/09 : « Les nombres qui montrent les niveaux
+     des bâtiments et unités sont trop petits et peu lisibles. » Il valait 8 px
+     en graisse 400, sur un sprite chargé, sous une ombre d'un pixel.
+
+     ⚠⚠ ET IL SUIT LA CASE, AVEC UN PLANCHER. Un nombre en pixels fixes reste
+     minuscule dès qu'on zoome — la case va de 36 px à 128 —, et un nombre
+     purement proportionnel deviendrait illisiblement petit au plancher du zoom.
+     `max()` prend le plus grand des deux : 11 px tant que la case est petite,
+     puis le tiers de la case. Mesuré à l'écran : 14,4 px à la case par défaut
+     de 46, 11 px au plancher, 40 au plafond.
+
+     ⚠ IL EST EN `position: absolute`, DONC IL NE POUSSE RIEN. C'est ce qui rend
+     ce changement sûr sur des vignettes calibrées au pixel : la hauteur du
+     jeton, celle de la case et celle des barres ne bougent pas d'un pixel —
+     mesuré avant et après, voir `RAPPORT-lotERGONOMIE.md`. */
+  .jeton .niveau {
+    position: absolute; right: 0; bottom: -1px;
+    font-size: max(11px, calc(var(--case-cote) / 3.2)); font-weight: 700;
+    line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914;
+  }
 
   /* --- le panneau de détail d'un bâtiment ----------------------------------
      ⚠ IL RÉPOND À UNE DEMANDE PRÉCISE d'Ethan, le 28/08 : « quand on clique sur
@@ -952,20 +999,20 @@
      de vue le voisinage, qui est justement ce que le panneau explique. D'où le
      bas du champ, une hauteur plafonnée, et le reste de la grille visible
      au-dessus. */
-  #chantier-panneau {
+  .panneau-detail {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
     max-height: 74%; overflow-y: auto; scrollbar-width: none;
     display: flex; flex-direction: column;
     background: #1E2124; border-top: 2px solid #4E5742;
   }
-  #chantier-panneau::-webkit-scrollbar { display: none; }
-  #chantier-panneau .tete {
+  .panneau-detail::-webkit-scrollbar { display: none; }
+  .panneau-detail .tete {
     position: sticky; top: 0; z-index: 1;
     display: flex; align-items: center; gap: 6px;
     padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
   }
-  #chantier-panneau-titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
-  #chantier-panneau-fermer {
+  .panneau-detail .titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
+  .panneau-detail .fermer {
     flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
     background: #1E2124; color: #8C9A72; border: 1px solid #161914;
   }
@@ -1015,42 +1062,42 @@
   #tuto-objectifs li.atteint .quoi { color: #8C9A72; }
   #tuto-objectifs li.atteint .compte { color: #6A7658; }
   #tuto-explication { margin: 3px 8px 7px; font-size: 9px; color: #68727E; }
-  #chantier-panneau-corps { padding: 4px 8px 8px; }
-  #chantier-panneau .section { margin-top: 6px; }
-  #chantier-panneau h3 {
+  .panneau-detail .corps { padding: 4px 8px 8px; }
+  .panneau-detail .section { margin-top: 6px; }
+  .panneau-detail h3 {
     margin: 0 0 2px; font-size: 8px; font-weight: 400;
     letter-spacing: 0.12em; text-transform: uppercase; color: #68727E;
   }
-  #chantier-panneau .ligne {
+  .panneau-detail .ligne {
     display: flex; align-items: baseline; gap: 4px;
     padding: 1px 0; font-size: 11px; color: #8C9A72;
   }
-  #chantier-panneau .ligne .quoi { flex: 1; min-width: 0; }
-  #chantier-panneau .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
+  .panneau-detail .ligne .quoi { flex: 1; min-width: 0; }
+  .panneau-detail .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
   /* La colonne « après » se lit en kaki clair : elle n'est pas encore vraie,
      c'est ce que l'amélioration donnerait. La distinguer de l'os du présent
      évite qu'on la prenne pour un chiffre courant. */
-  #chantier-panneau .ligne .fleche { color: #68727E; }
-  #chantier-panneau .ligne b.apres { color: #8C9A72; }
+  .panneau-detail .ligne .fleche { color: #68727E; }
+  .panneau-detail .ligne b.apres { color: #8C9A72; }
   /* Le détail du détail — production propre, apport de chaque type de voisin.
      Décalé et plus petit : c'est ce qui EXPLIQUE la ligne au-dessus. */
-  #chantier-panneau .ligne.mineure { padding-left: 10px; font-size: 9px; color: #68727E; }
-  #chantier-panneau .ligne.mineure b { font-weight: 400; color: #8C9A72; }
-  #chantier-panneau-ameliorer {
+  .panneau-detail .ligne.mineure { padding-left: 10px; font-size: 9px; color: #68727E; }
+  .panneau-detail .ligne.mineure b { font-weight: 400; color: #8C9A72; }
+  .panneau-detail .ameliorer {
     margin: 8px; padding: 9px;
     display: flex; flex-direction: column; align-items: center; gap: 2px;
     font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
     background: #6A7658; color: #161914; border: 1px solid #161914; font-weight: 600;
   }
-  #chantier-panneau-ameliorer .note {
+  .panneau-detail .ameliorer .note {
     font-style: normal; font-size: 10px; letter-spacing: 0; text-transform: none; color: #161914;
   }
   /* ⚠ IL RESTE VIF QUAND C'EST IMPOSSIBLE. « Un indice n'est pas une
      interdiction » (CLAUDE.md §4) : le refus chiffré du moteur — « il manque 8
      de quartz » — en apprend plus au joueur qu'un bouton mort, et il faut qu'il
      puisse le lire en appuyant. */
-  #chantier-panneau-ameliorer.impossible { background: #3E454C; color: #F5F3E8; }
-  #chantier-panneau-ameliorer.impossible .note { color: #F5B636; }
+  .panneau-detail .ameliorer.impossible { background: #3E454C; color: #F5F3E8; }
+  .panneau-detail .ameliorer.impossible .note { color: #F5B636; }
 
   /* Le bâtiment FANTÔME : ce que la première touche montre avant que la seconde
      ne pose.
@@ -1390,6 +1437,13 @@
      d'« utiliser la place » — laisser les cases GRANDIR en hauteur — déformerait
      les sprites : `.piece` prend `84 %` en largeur ET en hauteur, donc dans une
      case haute et étroite l'unité s'étire. Mesuré sur la règle, pas supposé. */
+  /* ⚠ L'ENVELOPPE DU CHAMP — même rôle que `#chantier-champ` : elle ancre le
+     panneau de détail, qui est en `position: absolute`. Sans elle, le panneau
+     se calerait sur l'écran entier et couvrirait la barre contextuelle. */
+  #offense-champ {
+    flex: 1; min-height: 0; position: relative;
+    display: flex; flex-direction: column;
+  }
   #offense-vagues {
     flex: 1; min-height: 0; overflow-y: auto; padding: 6px; scrollbar-width: none;
     display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
@@ -1511,9 +1565,28 @@
   /* La vignette armée. Même os que la case choisie du Chantier : un seul
      vocabulaire visuel pour « c'est ça que le prochain toucher va poser ». */
   #ecran-offense .unite.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
-  /* La ligne d'avis de l'Offense porte les mêmes trois registres que celle du
+  /* La ligne d'avis de l'Offense porte les mêmes registres que celle du
      Chantier : rouge pour ce qui refuse, métal pour ce qui rappelle un mode. */
   #offense-avis.mode { background: #343A2C; color: #F5F3E8; }
+  /* ⚠⚠ LE REFUS D'ARMEMENT SORT PLUS GROS ET EN ROUGE — Ethan, 04/09 : « Toast
+     quand on n'a plus assez de points d'armement pour construire une unité
+     offensive : en plus gros et rouge. » Il sortait à 10 px sur le kaki, au
+     même ton que « cet emplacement est déjà occupé ».
+
+     ⚠⚠ ET LA TEINTE EST DÉJÀ CELLE DES REFUS DU DÉPÔT, vérifié avant de la
+     reprendre. `#E43E32` est « réservé à ce qui ATTAQUE le joueur » — mais ce
+     que le test croise avec `attaqueLeJoueur`, ce sont les BORDS D'EMBLÈME de
+     la carte, et lui seul. L'interface, elle, l'emploie déjà quatre fois pour
+     dire un refus ou un dépassement : `#transfert-refus`, `#banc-compteur`,
+     `#banc-compteur-defense` et l'emplacement abîmé de l'écran de raid.
+     Reprendre cette teinte-là est donc une CONTINUITÉ, pas une invention.
+
+     ⚠ LA TAILLE EST ICI, ET NULLE PART AILLEURS. `ligneAAfficher` rend un TON ;
+     l'écrire dans le JS mettrait une décision de feuille dans un module pur. */
+  #offense-avis.refus, #chantier-avis.refus {
+    background: #1E2124; color: #E43E32;
+    font-size: 14px; font-weight: 700; line-height: 1.25; padding: 8px;
+  }
 
   /* =======================================================================
      ÉCRAN RECHERCHE — un en-tête fixe, trois panneaux sur un rail
@@ -1797,13 +1870,13 @@
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
              vient du moteur n'est gravé ici. -->
-        <div id="chantier-panneau" hidden>
+        <div id="chantier-panneau" class="panneau-detail" hidden>
           <div class="tete">
-            <b id="chantier-panneau-titre">—</b>
-            <button type="button" id="chantier-panneau-fermer">Fermer</button>
+            <b id="chantier-panneau-titre" class="titre">—</b>
+            <button type="button" id="chantier-panneau-fermer" class="fermer">Fermer</button>
           </div>
-          <div id="chantier-panneau-corps"></div>
-          <button type="button" id="chantier-panneau-ameliorer"></button>
+          <div id="chantier-panneau-corps" class="corps"></div>
+          <button type="button" id="chantier-panneau-ameliorer" class="ameliorer"></button>
         </div>
 
         <!-- ⚠ LA MINI-FENÊTRE DU TUTORIEL — Ethan, 29/08 : « faire apparaître
@@ -1905,7 +1978,28 @@
            y met ce qui est vrai à cet instant — l'explication du budget absent,
            un refus, ou le rappel du mode en cours. Vide, elle se cache. -->
       <p id="offense-avis" hidden></p>
-      <div id="offense-vagues"></div>
+      <!-- ⚠⚠ UNE ENVELOPPE POUR ANCRER LE PANNEAU, ET ELLE COPIE
+           `#chantier-champ`. Ethan, 04/09 : « Quand on clique sur une unité en
+           défense ou armé, afficher un onglet comme pour les bâtiments. » Le
+           panneau se pose SUR le champ, pas à la place de l'écran : le joueur
+           doit garder sous les yeux la pièce dont on lui parle. Il lui faut
+           donc un bloc `position: relative` qui ne défile pas — `#offense-vagues`
+           défile, s'y poser ferait glisser le panneau avec les vagues. -->
+      <div id="offense-champ">
+        <div id="offense-vagues"></div>
+        <!-- ⚠ LE MÊME PANNEAU QUE CELUI DU CHANTIER, à la classe près : les
+             règles vivent sur `.panneau-detail`, et le rendu est la fonction
+             `peindreVueDuPanneau` de `ui/chantier.js`. Deux DOM voisins dont un
+             seul serait éprouvé, c'est la faute que ce partage évite. -->
+        <div id="offense-panneau" class="panneau-detail" hidden>
+          <div class="tete">
+            <b id="offense-panneau-titre" class="titre">—</b>
+            <button type="button" id="offense-panneau-fermer" class="fermer">Fermer</button>
+          </div>
+          <div id="offense-panneau-corps" class="corps"></div>
+          <button type="button" id="offense-panneau-ameliorer" class="ameliorer"></button>
+        </div>
+      </div>
       <!-- ⚠ LA BARRE CONTEXTUELLE, NEUVE AU 29/08. Ethan : « on ne peut pas
            supprimer une unité en cliquant dessus. D'ailleurs les boutons
            réparer, améliorer etc. n'apparaissent pas dans le menu offense. »
@@ -1989,6 +2083,13 @@
       <img id="atlas-batiment" alt="" hidden>
       <img id="atlas-defense" alt="" hidden>
       <img id="atlas-socle" alt="" hidden>
+      <!-- ⚠⚠ ET L'ATLAS DE TERRAIN — lot ERGONOMIE, 04/09. Ethan : « les sprites
+           obstacles Ouvrage ne sont pas placés, c'est les mêmes que le joueur ».
+           Le champ de bataille les peignait en aplat kaki ; il pose maintenant
+           leur sprite, et `drawImage` veut un élément. Même couplage que les
+           trois du dessus : la variable existe déjà pour le fond CSS du
+           Chantier, donc le livrable n'inline pas une seconde image. -->
+      <img id="atlas-terrain" alt="" hidden>
       <!-- ⚠⚠ LE MUR DE CONTOUR DE L'OUVRAGE — lot MURS-OUVRAGE, 03/09. Ethan :
            « c'est pour le joueur et pour l'ouvrage ». La base attaquée est
            ceinte du même U que celle du joueur, et le champ de bataille est un

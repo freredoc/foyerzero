@@ -456,8 +456,15 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
   const attaquant = entite(etat, (e) => e.camp === 'attaque');
   const defenseur = entite(etat, (e) => e.camp === 'defense' && e.id === 'fendeur');
   jouer(etat, 20);
-  // Aucun n'avance : position identique 20 ticks plus tard.
-  assert.equal(attaquant.rangeeMilli, 2000);
+  // ⚠⚠ LOT ARRÊT (04/09) : L'ATTAQUANT RAMPE DANS SA PROPRE CASE, ET CE QUE CE
+  // TEST GARDE EST LA CASE, PAS LE MILLI-CASE. Il visait le Fendeur d'en face —
+  // un `unite`, plus un bâtiment — donc il ne s'arrête plus ; mais
+  // `peutAvancer` compte comme un progrès le fait d'avancer CHEZ SOI, et il
+  // monte donc de 2 000 à 2 990, où le pas suivant viserait la case 3, occupée
+  // par une masse égale. Aucun ne CHANGE de case, aucun n'écrase l'autre : le
+  // blocage mutuel est intact, et c'est lui que ce test existe pour tenir.
+  assert.equal(attaquant.rangeeMilli, 2990);
+  assert.equal(caseDepuisMilli(attaquant.rangeeMilli), 2, 'l\'attaquant a changé de case');
   assert.equal(defenseur.rangeeMilli, 3000);
   // ⚠ Seuil déplacé au lot 4A : le Fendeur passe de 300 à 1 000 PV et de 12 ×
   // 1,0 à 23 PV par tir contre un véhicule. Chacun inflige

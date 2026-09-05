@@ -1944,3 +1944,197 @@ export const RAPPORTS_RETOURS_DU_03_SOIR = {
   4: 'd5868617b03d6f9d',
   6: '2e063df951e09ccf',
 };
+
+/**
+ * CE QUE LE LOT ARRÊT DÉPLACE — soixante et un couples, tous à partir de la
+ * PHASE 7, qui est le premier raid.
+ *
+ * ⚠⚠ LES SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT — construction,
+ * économie, garnison, armée, carte, satellites. La règle d ARRET ne touche
+ * qu au COMBAT : elle ne déplace ni une base de la carte, ni un geste, ni un
+ * stock. Ce qui bouge est ce qu un raid RAPPORTE et ce qu il LAISSE, et tout
+ * ce qui en découle — recherche, sites entamés, rapports, armée abîmée,
+ * économie, satellites rasés.
+ *
+ * ⚠ ET LES SCALAIRES NE BOUGENT PAS D UNE UNITE, mesuré graine par graine :
+ * gestes, gestes d armement, taille de sauvegarde, cases atteignables,
+ * déplacement, bases attaquantes, nombre de cibles et cible retenue des deux
+ * raids. Seules les EMPREINTES DES DEUX RAPPORTS changent, et elles ont leur
+ * propre surcharge.
+ */
+export const DEPLACES_PAR_ARRET = {
+  p07_raidProcheApres: {
+    armee: '4a41ded8b974bee8',
+    economie: '163118f74eccce7e',
+    rapports: 'dde31d88fe0d0fc9',
+    recherche: 'eff73a8ebe69c8a7',
+    satellites: '4fa89e2f9a64e16b',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '0d214e340ea2c72a',
+  },
+  p08_100ticks: {
+    armee: '4a41ded8b974bee8',
+    economie: '5e817c8c244c2a87',
+    rapports: 'dde31d88fe0d0fc9',
+    recherche: 'eff73a8ebe69c8a7',
+    satellites: '4fa89e2f9a64e16b',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '0d214e340ea2c72a',
+  },
+  p09_deplace: {
+    armee: '4a41ded8b974bee8',
+    economie: '5e817c8c244c2a87',
+    rapports: 'dde31d88fe0d0fc9',
+    recherche: 'eff73a8ebe69c8a7',
+    satellites: '4fa89e2f9a64e16b',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '0d214e340ea2c72a',
+  },
+  p10_montee: {
+    armee: '4a41ded8b974bee8',
+    economie: '5e817c8c244c2a87',
+    rapports: 'dde31d88fe0d0fc9',
+    recherche: 'eff73a8ebe69c8a7',
+    satellites: '4fa89e2f9a64e16b',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '0d214e340ea2c72a',
+  },
+  p11_raidOuvrageApres: {
+    armee: '420dc8a133208ae8',
+    economie: '5e817c8c244c2a87',
+    rapports: '71783c04c511c39e',
+    recherche: 'e45f3387b4203208',
+    satellites: '4fa89e2f9a64e16b',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: 'cc4101fbee1eb6a4',
+  },
+  p12_veilleDuRaid: {
+    armee: '420dc8a133208ae8',
+    economie: '5e817c8c244c2a87',
+    prochaineInstanceSatellite: '38b9ce7a2d1493b6',
+    rapports: '71783c04c511c39e',
+    recherche: 'e45f3387b4203208',
+    satellites: '1894cfd8b1bda926',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '11513cb701c88087',
+  },
+  p13_apresLeRaid: {
+    armee: '420dc8a133208ae8',
+    disposition: 'a961c8a455ece27c',
+    economie: 'ea78aeaf8f03cb5c',
+    poisAcquis: 'a99c5d034c8bee47',
+    position: 'd7cc92e6c85cc100',
+    prochaineInstanceSatellite: 'a5ec24af81722767',
+    rapports: 'f5b329fc0e8dcf69',
+    recherche: 'e45f3387b4203208',
+    satellites: 'ecb5fddaab57aa77',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '19a208d4bccc970a',
+  },
+  p14_sousLeFeu: {
+    armee: '420dc8a133208ae8',
+    prochaineInstanceSatellite: 'b687c10f429aba29',
+    rapports: 'c0406b174949f0d2',
+    recherche: 'e45f3387b4203208',
+    satellites: '6e2257c8389f4dd4',
+    satellitesDetruits: 'e672203527869bf6',
+    sitesEntames: '0d214e340ea2c72a',
+  },
+};
+
+/**
+ * Les vingt-cinq empreintes par graine, après ARRÊT.
+ *
+ * ⚠ AUCUNE GRAINE N EST INCHANGÉE ICI, et c est attendu : chacune joue deux
+ * raids dans le scénario, et un raid ne rend plus les mêmes PV. La preuve que
+ * le lot ne touche pas au reste est dans les six premières phases, gardées
+ * champ par champ ci-dessus.
+ */
+export const EMPREINTES_PAR_GRAINE_ARRET = {
+  1: '2652e9eb3e46600f',
+  2: '2fd8f2579fa8c420',
+  3: 'a48607dcbd326455',
+  4: 'ac6bfaee801f312c',
+  5: '0c2616ac03512142',
+  6: 'e8f87ee17316d6c2',
+  7: '754feb407eda9677',
+  8: '0cda4acf02b709f5',
+  9: 'c41bdb38e2b49e4e',
+  10: '83b86911f6f8ee9d',
+  11: '3c4690e5a0000298',
+  12: '024c2f3b10331958',
+  13: 'df3e7fb8179df0f4',
+  14: 'ff1c690c6dd58505',
+  15: 'bf2d90c9e2c3dadf',
+  16: 'f3210c9b78863476',
+  17: 'f31d28de6b343f23',
+  18: '3b7609dbf808eb3d',
+  19: '794b15a7b4927bc1',
+  20: 'ab91031122a52c26',
+  21: '73d75d63b2431d2a',
+  22: '3fb92fdf14587fbe',
+  23: '94363f620d3438db',
+  24: '9b5a5ab4091a2593',
+  25: '399f8c7cebadece6',
+};
+
+/**
+ * Les empreintes des DEUX rapports de raid, après ARRÊT.
+ *
+ * ⚠ VINGT-CINQ ET VINGT-DEUX. Le rapport du raid de proximité change sur les
+ * vingt-cinq graines ; celui du raid de l Ouvrage sur vingt-deux — trois
+ * graines rendent le même rapport qu avant, et elles restent gardées contre
+ * la surcharge du lot précédent.
+ */
+export const RAPPORTS_PROCHE_ARRET = {
+  1: '07adffe556fface2',
+  2: 'cefd03a8c12b8b75',
+  3: '464295d874aef776',
+  4: '51ea822f56f2748c',
+  5: '359976a2509d1969',
+  6: 'ea045bdf91c6f181',
+  7: 'ce9698814535573b',
+  8: '595937cd8f71fd8c',
+  9: 'c73ab1ce12ddd779',
+  10: 'e76f189b97d832fc',
+  11: 'fda3f4fddd094b8e',
+  12: '29edc102dad59151',
+  13: '2a49f61983029a6d',
+  14: '6119f413bd76a461',
+  15: '7f14f1a5f678b09a',
+  16: '81eb8867d461aad4',
+  17: 'e896c041beb6382c',
+  18: '2cf118d3e8676209',
+  19: 'ff1172896e6b66b1',
+  20: '0514e39bcb6809a6',
+  21: '00c296b6727d0370',
+  22: 'bff5ee087f401ee6',
+  23: '239a1341c23d4b41',
+  24: 'd4460a0077278051',
+  25: '8203f2391b398130',
+};
+
+export const RAPPORTS_OUVRAGE_ARRET = {
+  1: '15238cc293645887',
+  2: '0ce422fb16e666d5',
+  3: '6a6e808ddd1e2052',
+  4: '2a24bbc6be48cb4e',
+  5: '1576345cbb95845f',
+  6: '5d45ee8a35c37b06',
+  8: 'c6c22559f46a6f8c',
+  9: 'cc83977782b267b5',
+  11: '5fd2a267c2902f52',
+  12: '093cb6e5f8db1088',
+  13: '521728d913b2fa12',
+  14: 'eea27ebfde18792c',
+  15: '8abee81249c45f9b',
+  16: '2388bfa0e98d5b7f',
+  18: 'f8ef8f08a2c31008',
+  19: '04de2f4953f7067e',
+  20: '7a3f42d9ef6482ef',
+  21: '2f17344a8f4b88cd',
+  22: 'ab30c9eec26c4bc6',
+  23: 'efc4cac12a1f5f84',
+  24: '1a03af9ee48b6a31',
+  25: '1e4ea0e6625d6f0f',
+};

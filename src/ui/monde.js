@@ -595,6 +595,76 @@ export function lignesDuSite(site, depuis, poisAcquis = [], ciblage = null) {
 }
 
 /**
+ * Le rang de priorité d'une étiquette : plus il est petit, plus elle compte.
+ *
+ * ⚠⚠ ELLE LIT `ETIQUETTE_CARTE.ordreDePriorite` ET NE RECOPIE AUCUN NOM. Une
+ * seconde liste écrite ici serait la copie qui vieillit au premier type de site
+ * ajouté — et §4 veut de toute façon le calibrage dans `src/data/`.
+ *
+ * ⚠⚠ UN TYPE HORS TABLE PASSE EN DERNIER, JAMAIS EN TÊTE. `indexOf` rend −1,
+ * qui trierait AVANT la base du joueur : c'est la faute exacte qu'`ORDRE_CHASSIS`
+ * a payée au lot ARMÉE-ET-FRONTIÈRE, où un châssis inconnu se serait rangé
+ * devant l'infanterie. Il n'est pas LEVÉ ici, et le motif est mesuré ailleurs :
+ * une levée dans la boucle de dessin tronque tout l'écran Monde — c'est ce que
+ * `dessinerGrosseBase` a coûté au lot ZOOM-CONTINU. La garde qui empêche le cas
+ * d'arriver est au DÉPÔT : `monde.test.js` exige que la table soit une
+ * permutation EXACTE des clés d'`EMBLEMES_CARTE`, donc elle tombe chez nous, pas
+ * chez le joueur.
+ *
+ * @param {string} type
+ * @returns {number}
+ */
+export function prioriteDeLEtiquette(type) {
+  const rang = ETIQUETTE_CARTE.ordreDePriorite.indexOf(type);
+  return rang === -1 ? ETIQUETTE_CARTE.ordreDePriorite.length : rang;
+}
+
+/**
+ * Quelles étiquettes dessiner quand plusieurs se recouvrent.
+ *
+ * ⚠⚠ ETHAN, 04/09 : « les noms des éléments de la carte persistent jusqu'à ce
+ * que je dézoome, environ dix cases en largeur ». Le seuil descend à 36 px CSS
+ * par case pour le lui donner ; mais le recouvrement, lui, ne disparaît pas —
+ * il EMPIRE, le zoom continu pouvant s'arrêter à n'importe quelle échelle,
+ * donc juste au pire endroit. Une plaque n'est donc dessinée que si sa boîte ne
+ * coupe aucune boîte DÉJÀ retenue.
+ *
+ * ⚠⚠ ET LES SITES SONT EXAMINÉS PAR PRIORITÉ, PAS DANS L'ORDRE D'ENTRÉE. Sans
+ * cela, la plaque qui reste serait celle que `sitesDeLaFenetre` a poussée en
+ * premier : deux images identiques n'afficheraient pas les mêmes noms, et le
+ * joueur verrait un nom apparaître ou disparaître en défilant d'un pixel. À
+ * priorité égale, la case la plus HAUTE puis la plus à GAUCHE — deux critères,
+ * parce qu'un seul laisse des ex æquo.
+ *
+ * ⚠ FONCTION PURE, ET C'EST LA SEULE FAÇON DE TESTER CE POINT : `CLAUDE.md` §3
+ * rappelle que l'écran est hors de portée faute de DOM. Celle qui PEINT ne
+ * décide plus rien.
+ *
+ * @param {Array<{x: number, y: number, largeur: number, hauteur: number,
+ *   priorite: number, rangee?: number, colonne?: number}>} boites
+ * @returns {number[]} les indices retenus, dans l'ordre d'entrée
+ */
+export function etiquettesRetenues(boites) {
+  const coupe = (a, b) => a.x < b.x + b.largeur && b.x < a.x + a.largeur
+    && a.y < b.y + b.hauteur && b.y < a.y + a.hauteur;
+  const ordre = boites.map((boite, indice) => ({ boite, indice }))
+    .sort((a, b) => a.boite.priorite - b.boite.priorite
+      || (a.boite.rangee ?? 0) - (b.boite.rangee ?? 0)
+      || (a.boite.colonne ?? 0) - (b.boite.colonne ?? 0)
+      || a.indice - b.indice);
+  const retenues = [];
+  const gardees = [];
+  for (const { boite, indice } of ordre) {
+    if (gardees.some((autre) => coupe(boite, autre))) continue;
+    gardees.push(boite);
+    retenues.push(indice);
+  }
+  // ⚠ RENDUES DANS L'ORDRE D'ENTRÉE, pas dans celui de la priorité : l'appelant
+  // dessine sa liste, il n'a pas à la réordonner pour savoir qui il peint.
+  return retenues.sort((a, b) => a - b);
+}
+
+/**
  * Un cache de dalles à éviction de la moins récemment employée.
  *
  * ⚠ PAS « FENÊTRE + MARGE ». Le pavage pose environ cinq tuiles par case ; au
@@ -1471,23 +1541,54 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * juste en dessous de lui — mesuré : 8,4 % des sites ont un voisin à une
    * seule case.
    */
-  function dessinerEtiquette(site, x, y, taille) {
+  /**
+   * La boîte d'une étiquette, mesurée mais pas dessinée.
+   *
+   * ⚠⚠ DEUX PASSES OBLIGATOIRES : mesurer TOUTES les boîtes, retenir, puis
+   * peindre. Peindre en mesurant ferait dépendre l'affichage de l'ordre de
+   * parcours, ce que la règle de priorité interdit — et l'ordre de parcours est
+   * celui où `sitesDeLaFenetre` a poussé ses sites, c'est-à-dire un détail
+   * d'implémentation.
+   *
+   * ⚠ LA LARGEUR SE PREND À `ctx.measureText`, JAMAIS AU NOMBRE DE CARACTÈRES.
+   * La police est en monospace aujourd'hui, ce qui rendrait l'approximation
+   * juste par accident ; elle cesserait de l'être au premier changement de
+   * police, et le recouvrement reviendrait sans que rien ne le dise.
+   */
+  function boiteDeLEtiquette(site, x, y, taille) {
     const lignes = lignesDeLEtiquette(site);
     const police = Math.max(1, Math.round(taille * ETIQUETTE_CARTE.partPolice));
     ctx.font = `${police}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
     const marge = Math.round(police * 0.5);
     const interligne = Math.round(police * 1.25);
     const large = Math.max(...lignes.map((l) => ctx.measureText(l).width)) + marge * 2;
     const haut = lignes.length * interligne + marge;
     const cx = Math.round(x + taille / 2);
-    const hautPlaque = Math.round(y + taille);
+    return {
+      lignes,
+      police,
+      marge,
+      interligne,
+      x: Math.round(cx - large / 2),
+      y: Math.round(y + taille),
+      largeur: Math.round(large),
+      hauteur: haut,
+      cx,
+      priorite: prioriteDeLEtiquette(site.type),
+      rangee: site.rangee,
+      colonne: site.colonne,
+    };
+  }
+
+  function dessinerEtiquette(boite) {
+    ctx.font = `${boite.police}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
     ctx.fillStyle = PALETTE.ombrePortee;
-    ctx.fillRect(Math.round(cx - large / 2), hautPlaque, Math.round(large), haut);
+    ctx.fillRect(boite.x, boite.y, boite.largeur, boite.hauteur);
     ctx.fillStyle = ETIQUETTE_CARTE.encre;
-    lignes.forEach((ligne, i) => {
-      ctx.fillText(ligne, cx, hautPlaque + Math.round(marge / 2) + i * interligne);
+    boite.lignes.forEach((ligne, i) => {
+      ctx.fillText(ligne, boite.cx, boite.y + Math.round(boite.marge / 2) + i * boite.interligne);
     });
   }
 
@@ -1627,11 +1728,15 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // `ETIQUETTE_CARTE` de `data/sites.js` : le seuil est mesuré sur la DENSITÉ,
     // pas sur la lisibilité d'une plaque isolée.
     if (pas / (fenetre.devicePixelRatio || 1) >= ETIQUETTE_CARTE.cssMiniParCase) {
-      for (const site of sitesAffiches) {
-        dessinerEtiquette(
-          site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas,
-        );
-      }
+      // ⚠⚠ MESURER, RETENIR, PEINDRE — trois temps, et ils ne se mélangent pas.
+      // Le seuil dit à partir de quand une plaque est LISIBLE ; il ne dit rien
+      // du recouvrement, et depuis qu'il est descendu à dix cases de large
+      // (04/09) il y a de quoi se recouvrir. C'est `etiquettesRetenues` qui
+      // tranche, et elle est pure.
+      const boites = sitesAffiches.map((site) => boiteDeLEtiquette(
+        site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas,
+      ));
+      for (const indice of etiquettesRetenues(boites)) dessinerEtiquette(boites[indice]);
     }
 
     // ⚠ APRÈS LES EMBLÈMES, comme le contour de la base et contrairement aux

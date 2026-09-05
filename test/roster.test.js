@@ -385,7 +385,10 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // défense. Ce que ce test mesure est intact : NEUF niveaux, une SEULE durée.
   // L'invariance en miroir ne dit pas quelle est la durée, elle dit qu'elle ne
   // dépend pas du niveau.
-  assert.deepEqual([...ticks], [174], `durées observées : ${[...ticks].join(', ')}`);
+  // Lot ARRÊT : 113 au lieu de 174 — soixante et un ticks de moins, l'assaut
+  // lourd ne s'arrêtant plus devant les tourelles et les murs qu'il croise. La
+  // propriété, elle, tient toujours : UNE seule durée pour les neuf niveaux.
+  assert.deepEqual([...ticks], [113], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -411,15 +414,21 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // bougent pas d'une unité : c'est la meilleure preuve que le multiplicateur
     // ne touche que ce qu'il doit toucher. Ni les causes, ni les trois ticks,
     // ni les comptes de survivants ne changent : il s'applique après le combat.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 429, butin: { quartz: 772, scorie: 257 }, survivants: 3 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 409, butin: { quartz: 37_221, scorie: 12_407 }, survivants: 8 },
+    // ⚠⚠ LOT ARRÊT (04/09) : LES TROIS RAIDS BOUGENT, ET DANS LES DEUX SENS. A
+    // ne rapporte plus RIEN et ne laisse plus un survivant — ses six unités
+    // traversent la défense sans s'y arrêter et tombent devant les bâtiments ;
+    // B rapporte 10 % de PLUS en trente et un ticks de plus ; C rapporte un peu
+    // moins en trente ticks de plus. Le calibrage revient à Ethan : voir
+    // `RAPPORT-lotARRET.md`.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 380, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 440, butin: { quartz: 41_006, scorie: 13_668 }, survivants: 6 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 305, butin: { quartz: 24_796, scorie: 8265 }, survivants: 7 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 335, butin: { quartz: 24_640, scorie: 8213 }, survivants: 6 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

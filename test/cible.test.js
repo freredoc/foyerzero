@@ -286,9 +286,15 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // Le butin monte pourtant — 2 766 contre 2 655 — parce que ces deux unités-là
   // ont tiré avant de tomber. Ce que ce test tient est inchangé depuis le lot
   // 3C : le raid ne se termine pas faute de mieux.
+  //
+  // ⚠⚠ LOT ARRÊT (04/09) : 193 ticks, et le raid RACCOURCIT de 120. L'assaut
+  // lourd ne s'arrête plus pour les tourelles ni pour les murs qu'il croisait :
+  // il entre dans la bande de défense, y prend tout le feu de face et s'y
+  // défait. Ce que ce test tient est inchangé depuis le lot 3C : le raid ne se
+  // termine pas faute de mieux.
   assert.notEqual(r.cause, 'duree', 'le raid ne doit plus expirer faute de mieux');
   assert.equal(r.cause, 'attaquants');
-  assert.equal(r.nbTicks, 313);
+  assert.equal(r.nbTicks, 193);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -299,7 +305,11 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // cause, ni le tick, ni les survivants : le multiplicateur s'applique APRÈS le
   // combat, il ne change pas un seul tir. Les raids sur camp, eux, ne bougent
   // pas d'une unité, leur facteur valant 1.
-  assert.deepEqual(r.butin, { quartz: 8992, scorie: 2997 });
+  //
+  // ⚠ LOT ARRÊT : 2 094 et 698, soit 77 % de moins. Le raid dure 120 ticks de
+  // moins, donc il tire moins, donc il rapporte moins — et le multiplicateur de
+  // 3,25 de l'avant-poste amplifie la baisse comme il amplifiait la hausse.
+  assert.deepEqual(r.butin, { quartz: 2094, scorie: 698 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 0);
 });
 
@@ -389,13 +399,17 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // Aucun des quatre n'est un gel, vérifié comme la fois précédente en portant
   // `dureeMaxCombatSec` à 600 : ils se concluent tous par `attaquants`, aux
   // ticks 1080 (blindeLourd/camp/2), 4645 (blindeLourd/base/11), 948
-  // (mixte/camp/11) et 2019 (mixte/base/11). Le 4645 est à remonter : 464
-  // secondes de combat, c'est cinq fois le plafond, et ce n'est plus un
-  // dépassement, c'est un autre régime.
+  // (mixte/camp/11) et 2019 (mixte/base/11). Le 4645 était à remonter : 464
+  // secondes de combat, c'est cinq fois le plafond.
+  //
+  // ⚠⚠ LOT ARRÊT (04/09) : IL N'EN RESTE AUCUN, ET C'EST LA MEILLEURE MESURE DU
+  // LOT. Les quatre raids qui touchaient le plafond se concluent maintenant
+  // d'eux-mêmes ; le « autre régime » à 4 645 ticks a disparu avec eux. La
+  // liste vide n'est PAS une assertion creuse — elle tombe dès qu'un raid
+  // recommence à s'éterniser, et elle était pleine hier.
   assert.deepEqual(
-    expires.sort(),
-    ['blindeLourd/base/11', 'blindeLourd/camp/2', 'mixte/base/11', 'mixte/camp/11'],
-    'quatre raids touchent le plafond de 900, et par dépassement de délai',
+    expires.sort(), [],
+    'un raid touche de nouveau le plafond de 900 par dépassement de délai',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');

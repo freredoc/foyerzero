@@ -21,7 +21,7 @@ import {
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles, indicesDeTeinte,
   teinteDAttente,
-  palierDuSite, nomDuSite,
+  palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
 } from '../src/ui/monde.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
@@ -1086,10 +1086,41 @@ test('carte — chaque entité porte son nom et son niveau, et le seuil suit la 
   const ouverts = CRANS.filter((c) => c / dpr >= ETIQUETTE_CARTE.cssMiniParCase);
   assert.ok(ouverts.length >= 1, 'aucun cran n\'ouvre les étiquettes');
   const pireOuvert = Math.max(...ouverts.map((c) => comptes.get(c)));
+
+  // ⚠⚠ CETTE GARDE A CHANGÉ DE CIBLE AU LOT ERGONOMIE, ET ELLE NE S'EST PAS
+  // ASSOUPLIE — ELLE MESURE LE CONTRAIRE. Elle exigeait « au plus 20 sites
+  // étiquetés à l'écran », parce que le SEUIL était alors le seul rempart contre
+  // le recouvrement : il achetait la lisibilité en fermant les crans denses.
+  // Ethan, 04/09 : « les noms des éléments de la carte persistent jusqu'à ce que
+  // je dézoome, environ dix cases en largeur ». Le seuil descend donc à dix
+  // cases, et ce qu'il laisse passer n'est plus borné à vingt.
+  //
+  // ⚠⚠ ET CE QUI SE PASSE ALORS EST MESURÉ À L'ÉCRAN, PAS DÉDUIT ICI. Relevé
+  // dans Chromium en instrumentant `fillRect`, douze vues à chaque échelle : à
+  // DIX cases de large, 510 plaques peintes et ZÉRO recouvrement — le seuil
+  // seul suffirait encore ; à SIX cases, la police relative grandit avec
+  // l'arrondi et 12 vues sur 12 portent un recouvrement, que `etiquettesRetenues`
+  // retire toutes. La garde ne peut donc pas affirmer « ça se recouvre » : ce
+  // qu'elle tient, c'est que le seuil a cessé d'être un plafond de densité, donc
+  // qu'il ne peut plus être ce rempart-là. Le rempart est au DESSIN, et
+  // `ERGO T9` à `T13` le tiennent.
+  assert.ok(pireOuvert > 20,
+    `${pireOuvert} sites au cran le plus ouvert : le seuil borne encore la densité, `
+    + 'donc il n\'a pas été descendu');
+
+  // ⚠ ET LE SEUIL SE MESURE DANS L'UNITÉ OÙ ETHAN L'A DONNÉ : des CASES sur la
+  // largeur d'un téléphone. 360 px CSS de large, dix cases, donc 36 px par
+  // case. Figer « cssMiniParCase === 36 » serait vert quelle que soit la valeur
+  // écrite ; ceci tombe dans les deux sens — à 64 l'écran n'en montrerait que
+  // 5,6, à 20 il en montrerait 18.
+  const casesEnLargeur = 360 / ETIQUETTE_CARTE.cssMiniParCase;
+  assert.ok(casesEnLargeur >= 9 && casesEnLargeur <= 11,
+    `${casesEnLargeur.toFixed(1)} cases en largeur au seuil : ce n'est pas «\u00a0environ dix\u00a0»`);
+
+  // ⚠ LES CRANS FERMÉS LE RESTENT POUR LA RAISON D'ORIGINE : sous le seuil, la
+  // plaque n'est plus lisible, et il y en a bien trop.
   const meilleurFerme = Math.min(...CRANS
     .filter((c) => c / dpr < ETIQUETTE_CARTE.cssMiniParCase).map((c) => comptes.get(c)));
-  assert.ok(pireOuvert <= 20,
-    `${pireOuvert} sites étiquetés à l'écran : les plaques se recouvrent`);
   assert.ok(meilleurFerme > 20,
     `le seuil ferme un cran qui ne portait que ${meilleurFerme} sites — il est trop haut`);
 
@@ -1342,15 +1373,16 @@ test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse a
     assert.ok(!/\bsrc=/.test(balise[0]),
       `l'image « ${id} » porte un \`src\` : son atlas est inliné deux fois`);
   }
-  // ⚠ QUINZE DEPUIS LE LOT MUR-PEINT : les sept d'avant, plus les HUIT décors de
-  // base. Ils étaient déjà dans la feuille pour l'écran de la base, qui peint son
-  // fond en CSS ; leur donner une balise ne les inline pas une seconde fois, et
-  // c'est la boucle ci-dessus — pas ce compte — qui garde l'invariant qui
+  // ⚠ SEIZE DEPUIS LE LOT ERGONOMIE : les quinze du lot MUR-PEINT, plus l'atlas
+  // de TERRAIN, que le champ de bataille réclame depuis que ses obstacles
+  // portent leur sprite au lieu d'un aplat. Il était déjà dans la feuille pour
+  // l'écran de la base ; lui donner une balise ne l'inline pas une seconde fois,
+  // et c'est la boucle ci-dessus — pas ce compte — qui garde l'invariant qui
   // compte : aucune de ces balises ne porte de `src`.
   //
-  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : sept
+  // ⚠ ET LE COMPTE SE DÉRIVE À MOITIÉ, pour qu'il ne mente pas tout seul : huit
   // atlas, plus autant d'entrées que la table des fonds en porte.
-  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7 + tousLesFonds().length);
+  assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 8 + tousLesFonds().length);
   assert.equal(tousLesFonds().length, 8, 'les huit décors ne sont plus huit');
   assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
   assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');
@@ -2007,4 +2039,158 @@ test('CARTE-A T6 — un seul afficheur du prix, et un seul calcul', () => {
     'le bloc de prix naît visible');
   assert.match(nu, /panneauPrix\.hidden = prix === null/,
     'le bloc de prix ne se cache plus hors de portée');
+});
+
+
+// ---------------------------------------------------------------------------
+// Les étiquettes de la carte — lot ERGONOMIE, point 7, 04/09
+//
+// ⚠⚠ ETHAN, 04/09 : « les noms des éléments de la carte persistent jusqu'à ce
+// que je dézoome, environ dix cases en largeur ». Le stand-by du 04/09 est levé,
+// et le point se décompose en deux moitiés qui ne se remplacent pas : le SEUIL
+// dit à partir de quand une plaque est lisible, l'ANTI-RECOUVREMENT dit
+// laquelle survit quand deux se coupent. Baisser le seuil sans la seconde
+// moitié rendrait la carte illisible au lieu de la nommer.
+// ---------------------------------------------------------------------------
+
+/** Une boîte d'étiquette de test : rien que ce que `etiquettesRetenues` lit. */
+function boite(x, y, largeur, hauteur, priorite, rangee = 0, colonne = 0) {
+  return { x, y, largeur, hauteur, priorite, rangee, colonne };
+}
+
+test('ERGO T9 — deux plaques qui se coupent d\'un seul pixel : la seconde tombe', () => {
+  // Elles se chevauchent d'UN pixel en x et en y. Un test qui les ferait se
+  // couvrir de moitié passerait avec un prédicat trop lâche.
+  const a = boite(0, 0, 100, 20, 0);
+  const b = boite(99, 19, 100, 20, 1);
+  assert.deepEqual(etiquettesRetenues([a, b]), [0],
+    'une plaque qui coupe une retenue d\'un pixel est dessinée quand même');
+
+  // ⚠ ET LE CONTACT PAR LE BORD N'EST PAS UN RECOUVREMENT — sinon deux plaques
+  // qui se touchent sans se cacher se refuseraient l'une l'autre, et la carte
+  // perdrait des noms pour rien. Un pixel plus loin, les deux passent.
+  const c = boite(100, 20, 100, 20, 1);
+  assert.deepEqual(etiquettesRetenues([a, c]), [0, 1],
+    'deux plaques qui se touchent par le coin s\'excluent : le prédicat est trop large');
+});
+
+test('ERGO T10 — c\'est la PRIORITÉ qui tranche, pas l\'ordre d\'entrée', () => {
+  // ⚠⚠ LE MONTAGE MET LA MOINS PRIORITAIRE EN PREMIER, ET C'EST TOUT L'ENJEU.
+  // Sans la table, la plaque qui reste serait celle que `sitesDeLaFenetre` a
+  // poussée en premier : deux images identiques n'afficheraient pas les mêmes
+  // noms, et un nom apparaîtrait ou disparaîtrait en défilant d'un pixel.
+  const camp = boite(0, 0, 100, 20, prioriteDeLEtiquette('camp'));
+  const sienne = boite(10, 5, 100, 20, prioriteDeLEtiquette('baseJoueur'));
+  assert.ok(camp.priorite > sienne.priorite, 'le montage ne discrimine rien');
+  assert.deepEqual(etiquettesRetenues([camp, sienne]), [1],
+    'la plaque du camp l\'emporte sur celle de la base du joueur');
+
+  // Et l'ordre RENDU est celui d'entrée, pas celui de la priorité : l'appelant
+  // dessine sa liste, il n'a pas à la réordonner.
+  const loin = boite(400, 400, 100, 20, prioriteDeLEtiquette('camp'));
+  assert.deepEqual(etiquettesRetenues([camp, sienne, loin]), [1, 2]);
+
+  // ⚠ LA TABLE EST UNE PERMUTATION EXACTE DES TYPES DESSINÉS, et c'est la garde
+  // qui autorise `prioriteDeLEtiquette` à ne pas LEVER : une levée dans la
+  // boucle de dessin tronquerait tout l'écran Monde — le lot ZOOM-CONTINU l'a
+  // payé sur `dessinerGrosseBase`. Le cas tombe donc au dépôt, pas chez le
+  // joueur.
+  const ordre = ETIQUETTE_CARTE.ordreDePriorite;
+  assert.deepEqual([...ordre].sort(), Object.keys(EMBLEMES_CARTE).sort(),
+    'la table de priorité et la table des emblèmes ne portent pas les mêmes types');
+  assert.equal(new Set(ordre).size, ordre.length, 'un type est écrit deux fois');
+
+  // ⚠⚠ ET UN TYPE HORS TABLE PASSE EN DERNIER, JAMAIS EN TÊTE. `indexOf` rend
+  // −1, qui trierait AVANT la base du joueur : c'est la faute exacte
+  // qu'`ORDRE_CHASSIS` a payée, où un châssis inconnu se rangeait devant
+  // l'infanterie.
+  assert.ok(prioriteDeLEtiquette('inexistant') > prioriteDeLEtiquette('camp'),
+    'un type inconnu passe devant les types connus');
+});
+
+test('ERGO T11 — à priorité égale, la case la plus haute puis la plus à gauche', () => {
+  const p = prioriteDeLEtiquette('base');
+  // Même rangée, colonnes 4 et 2 : c'est la 2 qui reste, et elle est SECONDE
+  // dans le tableau — un départage qui suivrait l'ordre d'entrée garderait la 4.
+  const droite = boite(0, 0, 100, 20, p, 30, 4);
+  const gauche = boite(10, 0, 100, 20, p, 30, 2);
+  assert.deepEqual(etiquettesRetenues([droite, gauche]), [1],
+    'à colonnes égales de priorité, la plus à gauche ne l\'emporte pas');
+
+  // Et la rangée passe AVANT la colonne : la plus haute gagne même si elle est
+  // plus à droite.
+  const bas = boite(0, 0, 100, 20, p, 31, 1);
+  const haut = boite(10, 0, 100, 20, p, 30, 9);
+  assert.deepEqual(etiquettesRetenues([bas, haut]), [1],
+    'la rangée ne passe pas avant la colonne');
+});
+
+test('ERGO T12 — des plaques disjointes sont TOUTES dessinées', () => {
+  // ⚠⚠ C'EST LE TEST QUI MORD. Une règle d'anti-recouvrement qui écarterait
+  // tout — « ne garder que la première », « ne garder qu'une par rangée » —
+  // passerait T9, T10 et T11 sans rien valoir, et la carte perdrait les noms
+  // qu'Ethan demande justement à voir.
+  const boites = [];
+  for (let i = 0; i < 12; i += 1) {
+    boites.push(boite(i * 120, (i % 3) * 40, 100, 20,
+      prioriteDeLEtiquette(i % 2 === 0 ? 'camp' : 'base'), 10 + i, 1 + i));
+  }
+  assert.deepEqual(etiquettesRetenues(boites), boites.map((_, i) => i),
+    'des plaques qui ne se coupent pas sont écartées');
+
+  // Une liste vide ne lève pas et ne rend rien.
+  assert.deepEqual(etiquettesRetenues([]), []);
+
+  // ⚠ ET UNE SEULE PLAQUE PASSE TOUJOURS : une règle qui comparerait une boîte
+  // à elle-même n'en dessinerait aucune.
+  assert.deepEqual(etiquettesRetenues([boite(0, 0, 100, 20, 0)]), [0]);
+});
+
+test('ERGO T13 — le seuil ouvre dix cases, et l\'écran mesure avant de peindre', () => {
+  // ⚠⚠ LE ZOOM EST CONTINU DEPUIS LE 04/09, DONC LE SEUIL NE SE LIT PLUS SUR UN
+  // CRAN. L'échelle s'arrête où le doigt la laisse : on balaie la course
+  // entière et on relève à partir d'où les noms tiennent.
+  const dpr = 3;
+  const largeurCss = 360;
+  const ouvre = (echelle) => echelle / dpr >= ETIQUETTE_CARTE.cssMiniParCase;
+  // Dix cases sur la largeur, c'est la demande d'Ethan mot pour mot.
+  const echelleDixCases = (largeurCss / 10) * dpr;
+  assert.ok(ouvre(echelleDixCases),
+    'à dix cases de large, les noms ne s\'affichent pas');
+  // Onze cases : c'est déjà « dézoomé », et les noms doivent partir. Sans cette
+  // moitié, un seuil de zéro passerait la première.
+  assert.ok(!ouvre((largeurCss / 11) * dpr),
+    'les noms tiennent encore au-delà de dix cases de large');
+
+  // ⚠ ET LE SEUIL RESTE DANS `src/data/` : « l'écran ne nomme aucune constante
+  // de zoom en dur » est tombée dessus au lot CONTOUR-ET-ÉTIQUETTES, parce que
+  // 64 était aussi un cran. Elle avait raison.
+  const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.match(ecran, /ETIQUETTE_CARTE\.ordreDePriorite/,
+    'l\'écran écrit son ordre de priorité au lieu de le lire dans les données');
+  assert.doesNotMatch(ecran, /'baseTerminale', 'base'/,
+    'l\'ordre de priorité est recopié dans l\'écran');
+
+  // ⚠⚠ MESURER, RETENIR, PEINDRE — TROIS TEMPS, DANS CET ORDRE. Peindre en
+  // mesurant ferait dépendre l'affichage de l'ordre de parcours de
+  // `sitesDeLaFenetre`, c'est-à-dire d'un détail d'implémentation, et la règle
+  // de priorité ne déciderait plus rien.
+  const corps = extraireFonction(ecran, 'dessiner');
+  assert.ok(corps.length > 200, 'la fonction `dessiner` est introuvable');
+  const rangMesure = corps.indexOf('boiteDeLEtiquette(');
+  const rangTri = corps.indexOf('etiquettesRetenues(');
+  const rangPeinture = corps.indexOf('dessinerEtiquette(');
+  assert.ok(rangMesure >= 0 && rangTri >= 0 && rangPeinture >= 0,
+    '`dessiner` ne fait plus les trois temps');
+  assert.ok(rangMesure < rangTri && rangTri < rangPeinture,
+    'l\'écran peint avant d\'avoir retenu : la priorité ne tranche plus rien');
+
+  // ⚠ ET LA LARGEUR SE PREND À `measureText`, JAMAIS AU NOMBRE DE CARACTÈRES.
+  // La police est monospace, ce qui rendrait l'approximation juste par accident
+  // — et fausse au premier changement de police, sans que rien ne le dise.
+  const mesure = extraireFonction(ecran, 'boiteDeLEtiquette');
+  assert.match(mesure, /measureText/,
+    'la boîte d\'une étiquette ne se mesure pas sur la police');
+  assert.doesNotMatch(extraireFonction(ecran, 'dessinerEtiquette'), /measureText/,
+    'la peinture remesure : les deux passes se sont remélangées');
 });
