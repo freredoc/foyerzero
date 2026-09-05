@@ -102,10 +102,38 @@ COMMENTAIRE = (
     'FICHIER GÉNÉRÉ par « python3 tools/sols.py ». Les planches sont en WebP et '
     'Node n\'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut '
     'encore mesurer sur elles — au premier chef leur CÔTÉ, dont '
-    'src/render/terrain.js dérive la géométrie de son pavage, et la correction '
-    'de moyenne appliquée à chacune. Même motif que '
-    'art/sprites/fond/fond-empreintes.json.'
+    'src/render/terrain.js dérive la géométrie de son pavage, la correction '
+    'de moyenne appliquée à chacune, et depuis le 05/09 la CLARTÉ du sol, contre '
+    'laquelle test/limite.test.js calibre les frontières de territoire. Même '
+    'motif que art/sprites/fond/fond-empreintes.json.'
 )
+
+# Les quantiles de clarté relevés sur les huit planches ALIGNÉES, en L* CIE.
+#
+# ⚠⚠ ILS ENTRENT AU MANIFESTE PARCE QUE LA FRONTIÈRE SE CALIBRE DESSUS, ET QUE
+# JUSQU'AU 05/09 ELLE SE CALIBRAIT SUR AUTRE CHOSE. `test/limite.test.js` exigeait
+# que chaque ton de frontière soit à huit clartés au moins du sol — mais il lisait
+# `TERRAIN_CARTE.rampes`, c'est-à-dire la référence DÉCLARÉE de l'ancien sol
+# indexé, dont les cinq clartés s'arrêtaient à 58,1 par le bas. Le sol réel, lui,
+# descend à **51,0 au premier centile** : sept clartés plus bas. La garde
+# mesurait donc contre un sol qui n'est plus à l'écran depuis le lot
+# SOL-SATELLITE, et elle passait au vert sur une frontière qu'Ethan ne voyait
+# plus. Elle lit ces nombres-ci désormais.
+#
+# ⚠ ON RANGE DES QUANTILES, PAS UN MINIMUM ET UN MAXIMUM. Un sol de 12,6 millions
+# de pixels a des extrêmes qui ne décrivent rien — quelques pixels très sombres
+# au fond d'une fracture ne disent pas contre quoi la frontière se lit. Les
+# centiles extrêmes bornent ce que le joueur voit vraiment.
+QUANTILES = (1, 5, 50, 95, 99)
+
+
+def clarte(rvb):
+    """La clarté L* CIE d'un tableau de pixels sRGB. Sert à MESURER, pas à peindre."""
+    a = np.asarray(rvb, dtype=np.float64) / 255.0
+    a = np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+    y = 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
+    f = np.where(y > 0.008856, np.cbrt(y), 7.787 * y + 16 / 116)
+    return 116 * f - 16
 
 
 def main():
@@ -122,12 +150,14 @@ def main():
     print('  moyenne de référence RVB %s' % np.round(reference, 2).tolist())
 
     empreintes = {}
+    alignees = []
     for nom, a, moyenne in sources:
         correction = reference - moyenne
         # ⚠ `rint`, PAS UNE TRONCATURE. `astype(uint8)` tronque vers zéro, ce qui
         # décalerait toute la planche d'un demi-niveau vers le sombre et ferait
         # mentir l'alignement qu'on vient de calculer.
         aligne = np.rint(np.clip(a + correction, 0, 255)).astype(np.uint8)
+        alignees.append((nom, aligne, correction))
         court = os.path.splitext(nom)[0]
         sortie = os.path.join(DST, court + '.webp')
         Image.fromarray(aligne).save(sortie, 'WEBP', quality=QUALITE, method=METHODE)
@@ -153,8 +183,18 @@ def main():
               % (court, aligne.shape[1], aligne.shape[0],
                  np.round(correction, 2).tolist(), octets))
 
+    # ⚠ LA CLARTÉ SE MESURE SUR LES PLANCHES ALIGNÉES, PAS SUR LES SOURCES : c'est
+    # ce que le joueur a sous les yeux, et l'alignement déplace chaque planche de
+    # plusieurs niveaux. On les réunit toutes — le pavage les mélange, donc la
+    # frontière tombera sur n'importe laquelle.
+    tout = np.concatenate([a.reshape(-1, 3) for _, a, _ in alignees])
+    L = clarte(tout)
+    clartes = {'p%d' % q: round(float(np.percentile(L, q)), 2) for q in QUANTILES}
+    print('  clarté du sol : %s' % clartes)
+
     with open(os.path.join(DST, 'sol-empreintes.json'), 'w', encoding='utf-8') as f:
         json.dump({'commentaire': COMMENTAIRE,
+                   'clarte': clartes,
                    'reference': [round(float(c), 4) for c in reference],
                    'sols': empreintes},
                   f, ensure_ascii=False, indent=1, sort_keys=True)

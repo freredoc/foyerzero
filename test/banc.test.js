@@ -20,8 +20,8 @@ import { PREREGLAGES, montagePreregle } from './prereglages-lot3a.js';
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * La palette de `FICHE-STYLE.md`, transcrite. Trente-trois teintes depuis la v5.
- * Un test plus bas l'asserte contre le document, dans les deux sens.
+ * La palette de `FICHE-STYLE.md`, transcrite. Quarante et une teintes depuis le
+ * 05/09. Un test plus bas l'asserte contre le document, dans les deux sens.
  */
 const PALETTE_FICHE = [
   // châssis kaki — le joueur
@@ -40,6 +40,20 @@ const PALETTE_FICHE = [
   '#1E2124', '#3E454C', '#68727E',
   // accents fonctionnels
   '#928E80', '#F5F3E8', '#8A1E17', '#E43E32', '#A67018', '#F5B636',
+  // ⚠⚠ FRONTIÈRES DE TERRITOIRE — huit tons entrés le 05/09, sur arbitrage
+  // d'Ethan (« un vert kaki assez vif », « un violet assez vif »). Ce sont les
+  // quatre premiers tons des rampes de camp à CHROMA DOUBLÉE : même clarté au
+  // dixième, même teinte au degré. Ils ne peignent aucune entité — ils peignent
+  // la limite d'un territoire sur la carte du monde, et `tools/limites.py` est
+  // aujourd'hui leur seul producteur.
+  //
+  // ⚠ ET LES INSCRIRE ICI ÉLARGIT CETTE GARDE DE HUIT TEINTES, ce qui est le
+  // prix de les avoir mises dans la fiche plutôt que de les y cacher. La fiche
+  // fait autorité sur le style ; huit tons produits sans y être écrits
+  // l'auraient fait mentir, et le lot suivant les aurait « corrigés » vers la
+  // rampe des châssis. Aucun des huit n'est employé dans `src/` aujourd'hui.
+  '#161A0E', '#2F3C20', '#475A2F', '#5F7A3E',
+  '#100916', '#26193C', '#3B285C', '#523A7A',
 ];
 
 /** Retire commentaires de ligne, de bloc et HTML avant un balayage de code. */

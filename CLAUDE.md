@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **05/09/2026**, version 0.95.0 · build 97.
+Dernière révision : **05/09/2026**, version 0.96.0 · build 98.
 
 ---
 
@@ -42,7 +42,148 @@ Dernière révision : **05/09/2026**, version 0.95.0 · build 97.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot SOL-SATELLITE), à confronter :**
+**Référence au 05/09/2026 (après le lot LIMITES-VIVES), à confronter :**
+`npm test` → **1096 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 995 675 octets**, 0 référence externe.
+⚠⚠ **« IL MANQUE LES DEUX POINTS » ÉTAIT VRAI, ET LE LOT TERRITOIRE AVAIT ÉCRIT
+LE CONTRAIRE.** Ethan, 05/09 : « quand tu dessines un U un territoire en U il
+manque les deux points je pense qu'il manque les coins comment dirais-je en
+270 degrés ». `tools/limites.py` ET `render/limite.js` affirmaient depuis le
+03/09 qu'un coin rentrant « est déjà formé par deux traits pleins de DEUX cases
+voisines qui se rejoignent au sommet — vérifié en rendant un territoire d'essai à
+encoche ». Les deux traits se rejoignent au **POINT**, pas en surface : une bande
+fait deux pixels logiques, et à un sommet rentrant elles laissent un carré de
+2 × 2 que ni l'une ni l'autre ne peint. **Reproduit avant d'écrire une ligne** en
+composant le U `XXX / X.X / X.X` : deux sommets, **0 pixel logique sur 4 à
+chacun**. Après : 4 sur 4. Coût **+3 932 octets** — images +3 492, JavaScript
++440, audio, feuille et balisage **+0**. **296 `data:` avant, 296 après.** Borne
+T10 **inchangée à 9 300 000**, marge **304 325 octets, 3,27 %**.
+⚠⚠ **ET CE N'EST PAS `angle_l`, QUI EST UN ANGLE SORTANT — MESURÉ SUR LA
+PLANCHE.** Sa bande verticale tient les colonnes 15–16 sur les rangées 0–16, son
+horizontale les rangées 15–16 sur les colonnes 0–16, ses repères pointent au nord
+et à l'ouest, et son coude porte `#FFE984`, l'ÉCLAT. C'est le bord sud-est du
+QUART nord-ouest de la case : le même angle que `coin`, à la médiane et à moitié
+d'échelle. Le poser à un sommet rentrant peindrait une frontière au milieu d'un
+territoire. Il reste non produit.
+⚠⚠ **LA PIÈCE EST DONC COMPOSÉE, ET C'EST LE SEUL PIXEL DU LOT QUI NE VIENT PAS
+D'UNE PLANCHE.** Cherché d'abord : sur les cinq cellules des deux camps, **zéro**
+bloc de 2 × 2 logiques porte le motif d'un sommet rentrant. Les quatre pixels se
+composent des deux tons de BANDE — rangs 1 et 3, jamais les repères ni les éclats
+—, et le motif se dérive : dans le carré de raccord, la distance à la frontière
+est la distance au SOMMET (0,71 · 1,58 · 1,58 · 2,12), donc **un seul pixel est
+dans le cran extérieur**. ⚠ C'est l'exact COMPLÉMENT d'un coin sortant, où la
+même règle donne trois pixels clairs et un sombre — mesuré sur `carre`, dont
+chaque coin vaut trois `EAB82B` et un `7E4A12`. **Les deux motifs ne sont pas
+l'image l'un de l'autre par rotation** : les composer par symétrie mettrait le
+clair au fond du territoire.
+⚠⚠ **ET EN JEU RÉEL, LA CASE QUI PORTE LE SOMMET N'A AUCUN CÔTÉ EXPOSÉ — 360 SUR
+360.** Mesuré sur 20 graines × 4 vues, 50 940 cases occupées : **360 sommets
+rentrants, 0,71 % du nombre de cases, et les 360 sont sur des cases entourées des
+quatre côtés par leur propre camp**. `bordsDuTerritoire` ne retenait que les cases
+à côté exposé : **elle n'en aurait vu aucun**. Sur le U d'Ethan c'est l'inverse —
+les deux cases ont des côtés — et les deux montages sont dans les tests.
+⚠⚠ **LA FRONTIÈRE ÉTAIT CALIBRÉE CONTRE UN SOL QUI N'EST PLUS À L'ÉCRAN.** Le lot
+ARMÉE-ET-FRONTIÈRE mesurait l'écart de clarté contre `TERRAIN_CARTE.rampes`, la
+référence DÉCLARÉE de l'ancien sol indexé (L\* 58,1 → 77,9). Mesuré sur les huit
+planches satellite alignées, 12,6 millions de pixels : **p1 50,72 · p5 54,96 ·
+médiane 64,54 · p95 74,24 · p99 77,97**, chroma moyenne **25,8**, teinte 46°. Le
+sol réel descend **sept clartés plus bas** que la référence déclarée, et le ton
+clair du joueur (`#6A7658`, L\* 47,9) n'était plus qu'à **3,1** de son plancher —
+avec une chroma de 18,2 contre 25,8 au sol. Une frontière moins colorée que le
+terrain se lit comme de la boue.
+⚠⚠ **CE QUI CHANGE EST LA CHROMA, ET ELLE SEULE : ×2.** Chaque ton garde **sa
+clarté au dixième** et **sa teinte au degré** — kaki 125°, ardoise 308°. D'où une
+conséquence gratuite : le rangement par clarté est identique rang par rang, donc
+la lecture dedans-sombre / dehors-clair est **intacte par construction**. Pire
+écart au sol, ΔE76 : **joueur 22,1 → 30,4 (+38 %), Ouvrage 30,5 → 41,5 (+36 %)**.
+⚠ **LE FACTEUR EST DEUX, ET LE NOMBRE SE CHANGE SEUL.** Mesuré à ×1,5 (26,9 /
+36,8), ×2 (30,4 / 41,5), ×2,5 (33,7 / 42,0) et ×3 (36,9 / 42,4) : le gain
+s'essouffle après ×2 côté Ouvrage — **+11,0 de ×1 à ×2, +0,5 ensuite** — et à
+×2,5 la chroma du kaki passe à 45 et le ton clair vire à l'herbe là où Ethan
+demande un treillis. **Ethan tranche s'il le veut plus vif.**
+⚠⚠ **LA FICHE A SUIVI, ELLE N'A PAS ÉTÉ CONTOURNÉE — LA PALETTE PASSE DE
+TRENTE-TROIS À QUARANTE-ET-UNE.** `FICHE-STYLE.md` fait autorité sur le style et
+dit « aucune teinte hors de cette liste » : les huit tons y entrent sous leur
+propre titre. **Le prix est déclaré** — la garde de palette de `banc.test.js`
+s'élargit de huit teintes, et aucune des huit n'est employée dans `src/`. Premier
+élargissement depuis la v4 de la fiche.
+⚠⚠ **ET UN TON ÉCARTÉ NE SE CITE PLUS EN PROSE DANS LA FICHE, SEPTIÈME FOIS DU
+DÉPÔT.** Le premier jet nommait la valeur essayée à ×2,5 pour dire qu'on
+l'écarte : les deux gardes comptent au motif `#` + six chiffres, la fiche est
+passée à **quarante-deux**, et cette valeur serait devenue autorisée dans la
+feuille. **C'est le TEXTE qui a été corrigé, pas la garde** — tout hex écrit dans
+la fiche EST dans la palette, c'est sa définition.
+⚠⚠ **LE SOL SE MESURE, IL NE SE DÉCLARE PLUS.** `tools/sols.py` écrit les
+quantiles de clarté dans `sol-empreintes.json`, et `LIMITE T8` les lit — Node n'a
+pas de décodeur WebP. La borne devient **SIGNÉE** : chaque ton est au moins **5
+clartés SOUS le p5** du sol, et non « à 8 en valeur absolue ». Un écart absolu
+serait tenu par un ton PLUS CLAIR que le sol, ce qu'est justement l'ancien
+gris-bleu de l'Ouvrage ; et sous un p95 de 74,2, aucun ton lisible n'est
+atteignable par le haut en sRGB. Pire des huit : **7,1** sous le p5. ⚠ La borne
+n'est pas vacueuse — `#CD6F26` est à 1,6, `#9FB3C5` est au-dessus du sol.
+⚠ **ET « ASSEZ VIF » EST MESURÉ, CE QUE RIEN NE FAISAIT.** `LIMITE T8` exige, ton
+par ton contre la rampe de camp de même rang : clarté à 0,3 près, teinte à 3°
+près, **chroma au moins 1,8 fois**. ⚠ La teinte ne se compare QUE là où elle
+existe : le rang 1 des deux rampes est presque neutre (chroma 3,9 et 3,7) et sa
+teinte est du bruit — `#161914` rend 133° quand le reste du kaki rend 125°. La
+moitié qui reste se mesure autrement : la rampe de frontière a une teinte à elle,
+constante sur ses quatre rangs à 3° près.
+⚠ **L'ATLAS PASSE DE 26 À 34 CELLULES**, sa grille de 6 × 5 à **6 × 6**, son poids
+de **10 472 à 13 092 octets**. ⚠ Il GROSSIT alors qu'on ne fait que recoloriser :
+le WebP q85 compresse moins bien huit tons chromatiques que huit tons presque
+neutres — le mouvement inverse du lot ARMÉE-ET-FRONTIÈRE, qui avait RENDU 11 608
+octets en désaturant.
+⚠ **`src/ui/monde.js` N'A PAS CHANGÉ D'UN CARACTÈRE**, et c'est la mesure du bon
+découpage : l'écran passe l'objet de bord ENTIER à `dessinerLimiteDUneCase`, donc
+un champ de plus le traverse sans qu'une ligne bouge.
+⚠ **`pointe` N'EST PAS DANS `FORMES`, ET SON ORIENTATION DE BASE EST LE COIN
+NORD-EST, COMME `coin`.** Les quatre formes de la planche se découpent ; celle-ci
+se compose. Et les deux familles partagent les suffixes : `coin_es` porte l'angle
+SORTANT du coin sud-est, `pointe_es` son angle RENTRANT.
+⚠⚠ **TREIZE FALSIFICATIONS, TREIZE CHUTES — ET TROIS SONT ATTRAPÉES PAR
+L'OUTIL.** `assert_pointe` LÈVE sur le motif inversé, sur une pointe qui déborde
+et sur une rotation à l'envers : le sprite fautif n'atteint jamais le dépôt, et
+les tests JS qui tombent ensuite ne tombent que parce que les fichiers manquent —
+**ce n'est pas la propriété qu'ils mesurent, et il fallait le dire**.
+⚠⚠ **D'OÙ LA CONTRE-ÉPREUVE, QUI EST LA FALSIFICATION LA PLUS INSTRUCTIVE DU
+LOT.** On écrit à la main une pointe dont les deux tons sont PERMUTÉS, sans passer
+par l'outil : **`LIMITE T8` ne la voit pas** — elle compare l'ENSEMBLE des tons,
+que la permutation ne change pas — et **`LIMITE T10` la voit**, parce qu'elle REND
+le U et nomme le pixel du sommet. Même leçon que la garde du rangement par clarté
+du lot ARMÉE-ET-FRONTIÈRE, un lot plus tard.
+⚠ **ET UNE GARDE EXISTANTE A MORDU SANS QU'ON LA PROVOQUE** : `tools/atlas.py`
+refuse de coudre une famille dont l'effectif ne correspond pas à sa table —
+« limite/64 porte 34 sprites cousables, 26 attendus ».
+⚠ **DEUX TESTS ENTRENT ET LE COMPTE PASSE DE 1 094 À 1 096.** **Aucune assertion
+n'a été retirée ni assouplie** ; quatre gardes changent de cible et trois se
+RESSERRENT — `LIMITE T1` balaie 256 cas au lieu de 16 (côtés et sommets sont deux
+axes indépendants), `LIMITE T4` exige d'une pointe qu'elle ne porte AUCUNE ligne
+pleine, `LIMITE T8` change de référence de sol et gagne la chroma, et la garde de
+l'octogone distingue **12 cases à côté exposé** de **16 entrées**.
+⚠ **LE DÉCODEUR DE NOMBRES FRANÇAIS APPREND « une »** : il se disait capable
+d'aller « de un à quatre-vingt-dix-neuf » et ne savait pas lire
+« quarante-et-une », donc la garde serait tombée sur du vrai.
+⚠ **RELEVÉ AU DOIGT DANS CHROMIUM** (360 × 780, dpr 3) : la carte s'ouvre,
+`monde-limites` décode en 768 × 768, **203 poses de limite par image** à tous les
+crans, **zéro erreur de page**. Les quatre épaules de l'octogone du joueur sont
+FERMÉES après et TROUÉES avant — capture avant/après dans `rapports/`. ⚠ Au cran
+le plus large la bande claire fait moins d'un pixel physique (2/32 × 33 ≈ 2 px
+pour les deux bandes) : la frontière y lit surtout son ton sombre. Ce n'est pas un
+défaut du lot, c'est la géométrie du zoom, et elle était la même avant.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** `rentrants` est CALCULÉ par
+`bordsDuTerritoire`, qui ne stocke rien, et une couleur de frontière est un
+dessin.
+⚠ **`python3 tools/verifier.py` → 1 431 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en **415,5 s**. Il était dû : le lot touche `art/` et
+`tools/`. **Le compte passe de 1 415 à 1 431** — les seize pointes, et rien
+d'autre. Lancé sur l'arbre FINAL, une fois les treize falsifications défaites.
+⚠ **ET SON SECOND VERDICT TIENT AUSSI** : « la chaîne lit exactement les sources
+déclarées », **378 / 378 et 95 / 95**, `art/sourcesstandby/` 34 fichiers **0 lu**.
+⚠ **`art/sources/` EST INCHANGÉ — 378 consommées · 95 dormantes · 473 fichiers.**
+Le zip d'Ethan est celui du 03/09 **à l'octet**, SHA-256 comparés : aucune source
+n'entre, donc `entrees.py --declarer` n'avait pas lieu d'être lancé.
+
+**Auparavant, après le lot SOL-SATELLITE :**
 `npm test` → **1094 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 991 743 octets**, 0 référence externe.
 ⚠⚠ **LE SOL DE LA CARTE N'EST PLUS PROCÉDURAL : C'EST L'ART D'ETHAN, POSÉ TEL
@@ -2575,13 +2716,28 @@ sur les **trente** combinaisons — cinq formes × deux camps × trois tailles �
 rend EXACTEMENT les pixels magenta purs, et il n'y a **pas un seul pixel proche
 du magenta sans l'être** dans toute la livraison. `assert_fond` le vérifie à
 chaque exécution.
-⚠⚠ **`angle_l` N'EST PAS PRODUIT, ET CE N'EST PAS UN OUBLI.** C'est le coin
-RENTRANT ; or le modèle du dépôt est PAR CASE — `bordsDuTerritoire` rend quatre
-booléens par case depuis le 31/08 — et un coin rentrant y est déjà formé par
-deux traits pleins de DEUX cases voisines qui se rejoignent au sommet. **Vérifié
-en rendant un territoire d'essai à encoche avant d'écrire l'outil** : la
-frontière s'y ferme sans lui. Le produire l'aurait fait coudre et payer pour
-zéro pixel dessiné. Sa cellule reste dans la planche, qui ne s'ampute pas.
+⚠⚠ **CE PARAGRAPHE A ÉTÉ FAUX PENDANT DEUX JOURS, ET C'EST ETHAN QUI L'A VU.**
+Il disait : « `angle_l` n'est pas produit, et ce n'est pas un oubli. C'est le
+coin RENTRANT ; or le modèle du dépôt est PAR CASE, et un coin rentrant y est
+déjà formé par deux traits pleins de DEUX cases voisines qui se rejoignent au
+sommet. **Vérifié en rendant un territoire d'essai à encoche avant d'écrire
+l'outil** : la frontière s'y ferme sans lui. » Les deux traits se rejoignent au
+**POINT**, pas en surface : une bande fait deux pixels logiques d'épaisseur, et à
+un sommet rentrant elles laissent un carré de 2 × 2 que ni l'une ni l'autre ne
+peint. Ethan, 05/09 : « il manque les deux points ». **Mesuré, sur le U
+`XXX / X.X / X.X` : deux sommets, 0 pixel logique sur 4 à chacun.** Voir le §0 du
+lot LIMITES-VIVES. ⚠ **UNE VÉRIFICATION ANNONCÉE N'EST PAS UNE MESURE ÉCRITE** :
+celle-là ne l'a pas été, et rien au dépôt ne pouvait la contredire — c'est
+`LIMITE T10` qui rend désormais le U et compte les pixels.
+⚠ **ET `angle_l` RESTE NON PRODUIT, POUR UNE RAISON MESURÉE CETTE FOIS.** Ce
+n'est PAS le coin rentrant : sa bande verticale tient les colonnes 15–16 sur les
+rangées 0–16, son horizontale les rangées 15–16 sur les colonnes 0–16, ses
+repères pointent au nord et à l'ouest, et son coude porte `#FFE984`, l'ÉCLAT.
+C'est le bord sud-est du QUART nord-ouest de la case — le même angle que `coin`,
+à la médiane et à moitié d'échelle, donc un angle SORTANT. Le poser à un sommet
+rentrant peindrait une frontière au milieu d'un territoire. Il n'aurait d'emploi
+que dans un modèle par SOMMET ; sa cellule reste dans la planche, qui ne
+s'ampute pas.
 ⚠⚠ **QUATRE FORMES COUVRENT LES SEIZE CAS, ET LE CAS DES DEUX CÔTÉS OPPOSÉS N'A
 PAS DE DESSIN.** 0 côté : rien ; 1 : `trait` ; 2 adjacents : `coin` ; **2
 opposés : DEUX `trait`** ; 3 : `u` ; 4 : `carre`. Un couloir d'une case de large
@@ -2595,7 +2751,11 @@ tout le champ de bataille. Une rotation de 90° d'une image carrée est exacte.
 ⚠⚠ **ET L'ATLAS EXISTE, LÀ OÙ LES MURS DE CONTOUR N'EN ONT PAS. LA DIFFÉRENCE
 EST DE FORME, PAS DE NATURE :** une limite fait 128 × 128, un mur 512 × 128, et
 `coudre` exige des cellules CARRÉES. Vingt-six cellules pour **19 178 octets** —
-un dessin de limite est presque tout transparent.
+un dessin de limite est presque tout transparent. ⚠ **TRENTE-QUATRE CELLULES
+POUR 13 092 OCTETS DEPUIS LE 05/09** : les quatre pointes de chaque camp
+entrent, et la recolorisation en tons vifs a fait remonter le WebP q85 de 10 472
+à 13 092 — huit tons chromatiques se compressent moins bien que huit tons
+presque neutres.
 ⚠ **UNE GARDE EXISTANTE A REJETÉ LE PREMIER JET, ET ELLE AVAIT RAISON.**
 `monde.test.js` interdit à l'écran d'appeler `celluleDuSprite` depuis le lot
 RETOURS-DU-31 — elle rend des INDICES, et `drawImage` sur un rectangle non fini
@@ -4371,6 +4531,12 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 12 fi
     de `monde.test.js` interdit à l'écran d'appeler `celluleDuSprite` depuis le
     lot RETOURS-DU-31, et elle a fait tomber le premier jet de ce lot-ci, qui
     refaisait le calcul dans l'écran. Même partage que `render/embleme.js`.
+    ⚠⚠ ET IL POSE LES SOMMETS RENTRANTS DEPUIS LE 05/09, LOT LIMITES-VIVES —
+    quatre `pointe` par camp, après les bandes et dans l'ordre de `COINS`. Elles
+    se lisent dans `cotes.rentrants`, que `sim/territoire.js` calcule : un
+    sommet rentrant demande de connaître la DIAGONALE, que les quatre booléens
+    de côté ne disent pas. ⚠ `coin_es` porte l'angle SORTANT du coin sud-est,
+    `pointe_es` son angle RENTRANT : un seul jeu de suffixes.
   ⤷ ⚠⚠ `bandes.js` EST UN DÉPLACEMENT, PAS UNE ÉCRITURE — lot ÉCRAN-RAID,
     04/09. `BANDES`, `BANDES_NAVIGABLES`, `bandesDansLOrdreDeLEcran`,
     `basculeDeBande`, `bornesDeDefilement` et `bandeDeLaRangee` vivaient dans
@@ -4742,11 +4908,17 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
 art/sprites/            les sprites conditionnés — TREIZE dossiers de famille et
-                        **1 460 fichiers en tout**, recomptés le 05/09 au lot
-                        SOL-SATELLITE : **1 440 dans les treize dossiers**, plus
+                        **1 476 fichiers en tout**, recomptés le 05/09 au lot
+                        LIMITES-VIVES : **1 456 dans les treize dossiers**, plus
                         DIX-HUIT atlas `.webp` et DEUX fichiers générés à la
                         racine — `ancres-chassis.json` et
                         `atlas-empreintes.json`.
+                        ⚠ LE COMPTE MONTE DE SEIZE, ET C'EST `limite/` : quatre
+                        POINTES par camp et par grille, le carré de raccord d'un
+                        sommet rentrant. La famille passe de 26 à **34 sprites
+                        par grille**, son atlas de 6 × 5 à 6 × 6 cellules. Aucun
+                        autre dossier ne bouge — le zip d'Ethan du 05/09 est
+                        celui du 03/09 à l'octet, et rien n'entre en source.
                         ⤷ ⚠⚠ LA TREIZIÈME EST `sol/`, ET ELLE N'EST PAS UNE
                           FAMILLE DE SPRITES NON PLUS — lot SOL-SATELLITE, 05/09 :
                           les huit planches de terrain satellite de la carte du
@@ -5835,13 +6007,26 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ni horloge système, et `maintenantMs` reste seule lectrice de l'horloge dans
   tout `src/`, comme la garde §11 l'exige.
 
-- **LA PALETTE EST FERMÉE : trente-trois teintes, plus un seul `rgba`.**
+- **LA PALETTE EST FERMÉE : quarante-et-une teintes, plus un seul `rgba`.**
   `banc.test.js` balaie `src/render/`, `src/ui/` et `src/index.src.html` et
   refuse toute couleur hors de `FICHE-STYLE.md`, ainsi que tout `rgba` autre que
   `rgba(0,0,0,0.31)`. Aucune transparence, donc — ni tuile pâle, ni gris
-  intermédiaire. Les trente-trois : cinq de châssis kaki, cinq de sol joueur,
+  intermédiaire. Les quarante-et-une : cinq de châssis kaki, cinq de sol joueur,
   cinq de sol Ouvrage, cinq d'ardoise Ouvrage, quatre d'accents de terrain,
-  trois de métal, six d'accents fonctionnels.
+  trois de métal, six d'accents fonctionnels, huit de frontière de territoire.
+  ⚠⚠ **LES HUIT DERNIÈRES SONT ENTRÉES LE 05/09, ET C'EST LE PREMIER
+  ÉLARGISSEMENT DE LA PALETTE DEPUIS LA v4 DE LA FICHE.** Ethan a demandé « un
+  vert kaki assez vif » et « un violet assez vif » pour les frontières de
+  territoire ; ce sont les quatre premiers tons des rampes de camp à **chroma
+  doublée**, à clarté et à teinte identiques. Ils ne peignent aucune entité et
+  aucun n'est employé dans `src/` — les inscrire élargit donc la garde de huit
+  teintes sans contrepartie immédiate, et c'est le prix assumé de les avoir
+  écrites dans la fiche plutôt que cachées dans `tools/limites.py`.
+  ⚠ **ET UN TON ÉCARTÉ NE SE CITE PLUS EN PROSE DANS LA FICHE.** Le premier jet
+  de cette section y nommait la valeur essayée à ×2,5 pour dire qu'on l'écarte :
+  les deux gardes comptent les teintes au motif `#` + six chiffres, donc elle
+  serait entrée dans la palette et serait devenue autorisée dans la feuille. La
+  fiche porte désormais l'avertissement.
   ⚠ **CE PARAGRAPHE DISAIT « VINGT-HUIT » JUSQU'AU 28/08 AU SOIR, ET IL AVAIT
   TORT DE CINQ.** Son énumération avait perdu une rampe entière — les cinq tons
   du sol de l'Ouvrage — exactement comme la liste de `banc.test.js` en avait

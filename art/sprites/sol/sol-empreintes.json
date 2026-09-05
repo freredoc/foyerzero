@@ -1,5 +1,12 @@
 {
- "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/sols.py ». Les planches sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur elles — au premier chef leur CÔTÉ, dont src/render/terrain.js dérive la géométrie de son pavage, et la correction de moyenne appliquée à chacune. Même motif que art/sprites/fond/fond-empreintes.json.",
+ "clarte": {
+  "p1": 50.72,
+  "p5": 54.96,
+  "p50": 64.54,
+  "p95": 74.24,
+  "p99": 77.97
+ },
+ "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/sols.py ». Les planches sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur elles — au premier chef leur CÔTÉ, dont src/render/terrain.js dérive la géométrie de son pavage, la correction de moyenne appliquée à chacune, et depuis le 05/09 la CLARTÉ du sol, contre laquelle test/limite.test.js calibre les frontières de territoire. Même motif que art/sprites/fond/fond-empreintes.json.",
  "reference": [
   198.7909,
   144.1583,

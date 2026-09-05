@@ -207,9 +207,27 @@ export function occupantDeLaCase(carte, rangee, colonne) {
  * défilement. On ne rend donc que les cases dont les quatre voisines sont DANS
  * la carte d'occupation — d'où la dilatation de la fenêtre chez l'appelant.
  *
+ * ⚠⚠ ET UNE CASE PORTE AUSSI SES SOMMETS RENTRANTS — 05/09, sur rapport d'Ethan :
+ * « quand tu dessines un territoire en U il manque les deux points, je pense
+ * qu'il manque les coins en 270 degrés ». Un sommet est RENTRANT quand les deux
+ * voisines orthogonales du coin sont du même camp et que la DIAGONALE ne l'est
+ * pas : la frontière y tourne de 270° vu du dedans, et les deux bandes qui s'y
+ * rejoignent appartiennent à deux cases voisines, si bien qu'aucune des deux ne
+ * peint le carré de raccord. C'est un fait de MODÈLE — quel sommet tourne — et
+ * `render/limite.js` en tire un sprite.
+ *
+ * ⚠⚠ UNE CASE PEUT PORTER UN SOMMET RENTRANT SANS AUCUN CÔTÉ EXPOSÉ, ET C'EST LE
+ * CAS COURANT, PAS LE CAS RARE. Elle est alors entourée des quatre côtés par son
+ * propre camp et ne touche l'extérieur que par un coin. Mesuré sur vingt graines
+ * et quatre-vingts vues, 50 940 cases occupées : **360 sommets rentrants, et les
+ * 360 sont sur des cases dont les quatre côtés sont intérieurs**. Une liste qui
+ * ne retiendrait que les cases à côté exposé — ce que celle-ci faisait jusqu'au
+ * 05/09 — n'en verrait donc AUCUN sur une vraie carte.
+ *
  * @param {ReturnType<typeof territoireDeLaFenetre>} carte
  * @returns {Array<{rangee: number, colonne: number, camp: number,
- *   nord: boolean, est: boolean, sud: boolean, ouest: boolean}>}
+ *   nord: boolean, est: boolean, sud: boolean, ouest: boolean,
+ *   rentrants: {ne: boolean, es: boolean, so: boolean, no: boolean}}>}
  */
 export function bordsDuTerritoire(carte) {
   const bords = [];
@@ -226,10 +244,19 @@ export function bordsDuTerritoire(carte) {
       // s'y dessine en haut. Ce n'est PAS la boussole de `sim/rendu-pose.js`,
       // qui décrit la grille de COMBAT et son retournement — les deux ne parlent
       // pas de la même surface, et les confondre retournerait les bordures.
+      // ⚠ LES QUATRE COINS SE NOMMENT COMME LES SPRITES, dans l'ordre canonique
+      // `n e s o` : le coin nord-est s'écrit `ne`, jamais `en`. C'est l'ordre de
+      // `COTES` de `render/limite.js`, et un test confronte les deux.
+      const rentrant = (dr, dc) => !autre(dr, 0) && !autre(0, dc) && autre(dr, dc);
       const cote = {
         rangee, colonne, camp, nord: autre(-1, 0), est: autre(0, 1), sud: autre(1, 0), ouest: autre(0, -1),
+        rentrants: {
+          ne: rentrant(-1, 1), es: rentrant(1, 1), so: rentrant(1, -1), no: rentrant(-1, -1),
+        },
       };
-      if (cote.nord || cote.est || cote.sud || cote.ouest) bords.push(cote);
+      const unSommet = cote.rentrants.ne || cote.rentrants.es
+        || cote.rentrants.so || cote.rentrants.no;
+      if (cote.nord || cote.est || cote.sud || cote.ouest || unSommet) bords.push(cote);
     }
   }
   return bords;

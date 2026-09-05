@@ -345,8 +345,12 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
  * TOMBER la garde, pas la faire passer silencieusement à côté.
  */
 function nombreEnLettres(mot) {
+  // ⚠ « une » ENTRE LE 05/09, ET CE N'EST PAS UNE COMMODITÉ : le décodeur se
+  // disait capable d'aller « de un à quatre-vingt-dix-neuf » et ne savait pas
+  // lire « quarante-et-une », qui est le féminin exigé par le mot « teintes ».
+  // Il rendait `null`, donc la garde serait tombée sur du vrai.
   const VALEURS = new Map([
-    ['un', 1], ['deux', 2], ['trois', 3], ['quatre', 4], ['cinq', 5], ['six', 6],
+    ['un', 1], ['une', 1], ['deux', 2], ['trois', 3], ['quatre', 4], ['cinq', 5], ['six', 6],
     ['sept', 7], ['huit', 8], ['neuf', 9], ['dix', 10], ['onze', 11], ['douze', 12],
     ['treize', 13], ['quatorze', 14], ['quinze', 15], ['seize', 16],
     ['vingt', 20], ['vingts', 20], ['trente', 30], ['quarante', 40],
@@ -385,6 +389,7 @@ test('documentation — CLAUDE.md compte les teintes de FICHE-STYLE.md, total ET
   // teintes. Sans ces deux-là, l'égalité finale pourrait tenir sur du vide.
   assert.equal(nombreEnLettres('vingt-huit'), 28, 'le décodeur ne décode pas');
   assert.equal(nombreEnLettres('trente-trois'), 33, 'le décodeur ne décode pas');
+  assert.equal(nombreEnLettres('quarante-et-une'), 41, 'le décodeur ne décode pas le féminin');
   assert.equal(nombreEnLettres('brouette'), null, 'le décodeur avale un mot inconnu');
   assert.ok(teintes.size >= 20, `${teintes.size} teintes lues dans FICHE-STYLE.md`);
 

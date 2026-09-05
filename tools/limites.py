@@ -37,15 +37,37 @@ n'est inventé, aucun n'est perdu (les repères descendent de 11–14 à 26–29
 la case en compte 32). `assert_bord` le vérifie sur les quatre formes produites,
 au lieu de croire que la translation est tombée juste.
 
-⚠⚠ ET `angle_l` N'EST PAS PRODUIT DU TOUT. C'est le coin RENTRANT, celui où la
-frontière tourne autour d'une encoche ; or le modèle du dépôt est PAR CASE —
-`bordsDuTerritoire` de `sim/territoire.js` rend quatre booléens par case depuis
-le 31/08 —, et dans ce modèle un coin rentrant est déjà formé par deux traits
-pleins de DEUX cases voisines qui se rejoignent au sommet. Vérifié en rendant
-un territoire d'essai à encoche : la frontière s'y ferme sans lui. Le produire
-l'aurait fait coudre dans l'atlas et payer au livrable pour zéro pixel dessiné.
-Sa cellule reste dans la planche, qui ne s'ampute pas : le jour où un modèle par
-SOMMET arriverait, elle est là.
+⚠⚠ LE COIN RENTRANT MANQUAIT, ET LE LOT TERRITOIRE AVAIT ÉCRIT LE CONTRAIRE.
+Ce paragraphe affirmait, le 03/09 : « dans ce modèle un coin rentrant est déjà
+formé par deux traits pleins de DEUX cases voisines qui se rejoignent au sommet.
+Vérifié en rendant un territoire d'essai à encoche : la frontière s'y ferme sans
+lui. » **C'est faux, et Ethan l'a vu à l'écran** — 05/09 : « quand tu dessines un
+territoire en U il manque les deux points, je pense qu'il manque les coins en
+270 degrés ». Les deux traits se rejoignent au POINT, pas en surface : une bande
+a deux pixels logiques d'épaisseur, et à un sommet rentrant elles laissent
+exactement un carré de 2 × 2 non peint. **Reproduit avant d'écrire une ligne**,
+en rendant le U `XXX / X.X / X.X` avec les sprites du dépôt : deux sommets
+rentrants, **0 pixel logique sur 4 peint à chacun**. Ethan compte deux points, la
+mesure en compte deux.
+
+⚠⚠ ET CE N'EST PAS `angle_l` QUI LE COMBLE — MESURÉ, `angle_l` EST UN COIN
+SORTANT. Sa bande verticale occupe les colonnes logiques 15–16 sur les rangées
+0–16, son horizontale les rangées 15–16 sur les colonnes 0–16, et ses repères
+pointent au nord et à l'ouest : c'est le bord SUD-EST du QUART nord-ouest de la
+case, donc le même angle que `coin`, à la médiane et à moitié d'échelle. Son
+sommet porte `#FFE984` — l'éclat, celui d'un angle qui SORT. Le poser à un sommet
+rentrant peindrait une frontière au milieu d'un territoire.
+
+⚠⚠ D'OÙ `pointe`, ET ELLE EST COMPOSÉE, PAS DÉCOUPÉE — C'EST LE SEUL ENDROIT DU
+LOT OÙ UN PIXEL NE VIENT PAS D'UNE PLANCHE. Cherché d'abord : sur les cinq
+cellules des deux camps, **zéro** bloc de 2 × 2 logiques porte le motif d'un
+sommet rentrant — trois tons sombres et un ton clair au coin extérieur. Il n'y en
+a pas parce que l'art n'en dessine pas. Les quatre pixels se composent donc des
+DEUX tons de bande de la rampe du camp, et le motif est celui du raccord
+d'onglet : le pixel qui touche le sommet prend la bande CLAIRE, les trois autres
+la bande SOMBRE. C'est l'exact complément d'un coin sortant, où la claire fait le
+L de trois et la sombre le pixel du fond — mesuré sur `carre`, dont chaque coin
+vaut trois `EAB82B` et un `7E4A12`.
 
 ⚠ LES ROTATIONS SE PRODUISENT ICI, ELLES NE SE FONT PAS AU DESSIN. Le README du
 zip le demande — « rotations de 90 degrés avec interpolation NEAREST/point
@@ -117,37 +139,64 @@ CAMPS = [('joueur', 'j'), ('ouvrage', 'o')]
 # joueur, GRIS-BLEU PÂLE pour l'Ouvrage —, ce que le rapport du lot TERRITOIRE
 # avait relevé comme « un arbitrage qui revient à Ethan ». Il est rendu.
 #
-# ⚠⚠ ET CE N'EST PAS QU'UNE QUESTION DE TEINTE : C'EST UNE QUESTION DE CLARTÉ,
-# MESURÉE. Le sol de la carte est CLAIR des deux côtés — `TERRAIN_CARTE.rampes`
-# de `src/data/sites.js` porte deux rampes dont les cinq clartés sont L* 58,1 ·
-# 62,9 · 68,0 · 73,0 · 77,9, rang par rang, à dessein (FICHE-STYLE §3 : « deux
-# sols de clarté différente donnent à un camp un camouflage que personne n'a
-# décidé »). Or la frontière du joueur portait un ton à **L* 56,6** — `#CD6F26`,
-# 16,2 % de son dessin —, soit **1,5 de clarté** du sol le plus sombre : ce ton
-# était INVISIBLE sur le terrain, et c'est exactement ce qu'Ethan rapporte. Le
-# pire ton de l'Ouvrage était à 8,8.
+# ⚠⚠ ET LES DEUX RAMPES ONT ÉTÉ AVIVÉES LE 05/09, PARCE QUE LE SOL A CHANGÉ SOUS
+# ELLES. Ethan : « tu re-appliques un coloris vert kaki mais assez vif pour qu'il
+# se détache par rapport au nouveau plan satellite et tu prends un violet pareil
+# assez vif comme ouvrage mais qui ressort et qui contraste par rapport au
+# nouveau sol de la carte ». Le lot SOL-SATELLITE a remplacé un sol INDEXÉ sur
+# cinq teintes par l'art d'Ethan ; la frontière, elle, avait été calibrée en
+# septembre contre `TERRAIN_CARTE.rampes`, c'est-à-dire contre la référence
+# DÉCLARÉE de l'ancien sol. Mesuré sur les huit planches livrées, ce que le sol
+# vaut vraiment aujourd'hui :
 #
-# ⚠⚠ D'OÙ LES QUATRE TONS LES PLUS SOMBRES DE CHAQUE RAMPE, ET LE CHOIX EST
-# MESURÉ, PAS ESTHÉTIQUE. Les deux rampes de camp de FICHE-STYLE §3 en portent
-# cinq ; prendre les tons 2 à 5 laisserait le kaki `#8C9A72` à L* 61,6, donc à
-# 3,5 du sol — la faute qu'on vient de corriger, refaite. Écart minimal au sol
-# le plus sombre, mesuré sur les deux découpes :
+#     L* p1 51,0 · p5 55,3 · médiane 64,6 · p95 74,1 · p99 77,9
+#     chroma moyenne 25,8, teinte 46° (terre cuite)
 #
-#     rampe             tons 1-4    tons 2-5
-#     kaki joueur         10,2         3,5
-#     ardoise Ouvrage     28,1        16,6
+# La rampe déclarée s'arrêtait à L* 58,1 par le bas : **le sol réel descend sept
+# clartés plus bas qu'elle**, et le ton clair de l'ancienne frontière du joueur —
+# `#6A7658`, L* 47,9 — n'était plus qu'à 3,1 du plancher du sol. Surtout, il
+# portait une chroma de 18,2 contre 25,8 au sol : il se lisait comme de la boue
+# sombre, pas comme un code couleur.
 #
-# et l'écart INTERNE bande sombre → bande claire ne se paie pas : 27,4 contre
-# 24,4 en kaki, 17,7 contre 17,8 en ardoise. Les tons 1-4 gagnent des deux
-# côtés, sur les deux rampes.
+# ⚠⚠ CE QUI CHANGE EST LA CHROMA, ET ELLE SEULE : ×2, À CLARTÉ ET TEINTE
+# IDENTIQUES. Chaque ton garde son L* au dixième et sa teinte au degré — kaki
+# 125°, ardoise 308° —, et sa chroma double. C'est ce que « re-appliquer le même
+# coloris, en plus vif » veut dire au pied de la lettre, et ça a une conséquence
+# qui compte : **le rangement par clarté ne bouge pas d'un rang**, donc la
+# lecture dedans/dehors que ce fichier construit plus bas est intacte PAR
+# CONSTRUCTION, et non parce qu'on l'a revérifiée.
 #
-# ⚠ LE JOUEUR EST VERT PARCE QUE FICHE-STYLE LE DIT — « la rampe kaki ci-dessus
-# est celle du joueur, définitivement », et « aucun vert dans le terrain, nulle
-# part : le vert est la couleur du joueur ». C'est ce qui rend le kaki lisible
-# comme sien sur un sol de terre cuite : aucune tuile de sol ne peut le citer.
+#     ton                       avant            après         ΔE min au sol
+#     kaki 1                 #161914 C 3,9    #161A0E C 8,2    39,5 → 39,9
+#     kaki 2 (repères)       #343A2C C 9,7    #2F3C20 C19,2    28,4 → 33,2
+#     kaki 3 (bande claire)  #4E5742 C13,6    #475A2F C27,3    23,4 → 33,2
+#     kaki 4 (éclats)        #6A7658 C18,2    #5F7A3E C36,1    22,5 → 30,4
+#
+# Pire écart au sol, sur les quatre tons : **joueur 22,1 → 30,4 (+38 %),
+# Ouvrage 30,5 → 41,5 (+36 %)**, mesuré en ΔE76 contre 1,6 million de pixels des
+# huit planches.
+#
+# ⚠ LE FACTEUR EST DEUX, ET LE NOMBRE SE CHANGE SEUL. Mesuré aussi à ×1,5, ×2,5
+# et ×3 : le gain de ΔE s'essouffle après ×2 côté Ouvrage (+11,0 de ×1 à ×2,
+# +0,5 ensuite), et côté joueur ×2,5 fait sortir le kaki de sa famille — le ton
+# clair passe à `#587C2F`, une herbe et non un treillis. Deux est le premier
+# facteur où la couleur se NOMME et le dernier où elle reste kaki. **Ethan
+# tranche s'il le veut plus vif ; c'est une ligne.**
+#
+# ⚠ ET LA FICHE A SUIVI, ELLE N'A PAS ÉTÉ CONTOURNÉE. `FICHE-STYLE.md` fait
+# autorité sur le style et sa §3 dit « aucune teinte hors de cette liste » : les
+# huit tons ci-dessous y entrent sous leur propre titre, avec la date et la
+# phrase d'Ethan. Les produire ici sans les y écrire aurait laissé la fiche
+# mentir, et le prochain lot les aurait « corrigés » vers la rampe des châssis.
+# Un test lit la fiche et confronte les sprites produits, dans les deux sens.
+#
+# ⚠ LE JOUEUR EST VERT PARCE QUE FICHE-STYLE LE DIT — « la rampe kaki est celle
+# du joueur, définitivement », et « aucun vert dans le terrain, nulle part ».
+# C'est ce qui rend le kaki lisible comme sien sur un sol de terre cuite : aucune
+# tuile de sol ne peut le citer, et l'aviver ne fait que le dire plus fort.
 RAMPES = {
-    'joueur': ['#161914', '#343A2C', '#4E5742', '#6A7658'],
-    'ouvrage': ['#0D0B12', '#231D2E', '#382E47', '#4E4160'],
+    'joueur': ['#161A0E', '#2F3C20', '#475A2F', '#5F7A3E'],
+    'ouvrage': ['#100916', '#26193C', '#3B285C', '#523A7A'],
 }
 
 
@@ -210,6 +259,26 @@ FORMES = {
     'u': ({'n', 'e', 'o'}, 4),
     'carre': ({'n', 'e', 's', 'o'}, 1),
 }
+
+# ⚠⚠ `pointe` N'EST PAS DANS `FORMES` PARCE QU'ELLE N'EST PAS DANS LA PLANCHE.
+# Les quatre formes ci-dessus se découpent, se normalisent, se détourent et se
+# recolorisent ; celle-ci se COMPOSE, à partir des deux tons de bande que la
+# recolorisation vient de poser. Lui donner une entrée dans `FORMES` aurait
+# obligé la boucle principale à savoir laquelle de ses cinq entrées n'a pas de
+# cellule — un cas particulier nommé à la main dans la boucle qu'on veut garder
+# uniforme. Elle a sa propre fonction, et son propre contrôle.
+#
+# ⚠ SON ORIENTATION DE BASE EST LE COIN NORD-EST, comme `coin`, et pour la même
+# raison : les deux se nomment par les MÊMES suffixes — `ne`, `es`, `so`, `no` —
+# donc `tourner_cotes` les fait tourner ensemble. Un `pointe_es` est le sommet
+# rentrant au coin SUD-EST de la case, exactement là où `coin_es` porterait un
+# angle sortant.
+POINTE = ({'n', 'e'}, 4)
+
+# L'épaisseur d'une bande, en pixels logiques — deux, comme `assert_bord` le
+# vérifie sur les quatre formes de la planche. La pointe est le carré de raccord
+# d'onglet, donc elle en fait exactement autant de côté.
+EPAISSEUR = 2
 
 
 def cellules(chemin, cote):
@@ -355,6 +424,75 @@ def assert_bord(rgba, forme, exposes, cote):
         f'n\'est pas tenue')
 
 
+def composer_pointe(camp, cote):
+    """Le carré de raccord d'un sommet RENTRANT, au coin nord-est de la case.
+
+    ⚠⚠ LE MOTIF EST CELUI DE L'ONGLET, ET IL SE DÉRIVE, IL NE SE CHOISIT PAS.
+    Une bande hugge sa frontière par l'intérieur : le pixel extérieur porte le
+    ton CLAIR, celui d'un cran plus dedans le ton SOMBRE — c'est ce que `carre`
+    fait sur ses quatre côtés, mesuré. À un sommet rentrant, les deux bandes
+    arrivent perpendiculairement et l'onglet remplit le carré de 2 × 2 qui leur
+    manque à toutes les deux. Dans ce carré, la distance à la frontière est la
+    distance au SOMMET : le seul pixel qui le touche est à 0,71, les deux autres
+    à 1,58 et le quatrième à 2,12. Un seul est donc dans le cran extérieur.
+
+    ⚠ C'EST L'EXACT COMPLÉMENT D'UN COIN SORTANT, où la même règle donne trois
+    pixels clairs et un sombre — et c'est bien ce que porte chaque coin de
+    `carre` : trois `EAB82B` et un `7E4A12`. Les deux motifs ne sont donc PAS
+    l'image l'un de l'autre par rotation ; les composer par symétrie mettrait le
+    ton clair au fond du territoire.
+
+    ⚠ LES DEUX TONS SONT LES DEUX TONS DE BANDE DE LA RAMPE, RANGS 1 ET 3. Les
+    rangs 2 et 4 sont les repères et les éclats, mesurés sur la planche : 16,2 %
+    et 11,0 % du dessin, et jamais une bande. Une pointe n'a ni repère à porter
+    ni éclat à donner — elle fait deux pixels de côté.
+    """
+    pas = cote // LOGIQUE
+    sombre = rvb(RAMPES[camp][0])
+    clair = rvb(RAMPES[camp][2])
+    out = np.zeros((cote, cote, 4), np.uint8)
+    for g in range(EPAISSEUR):                      # ligne logique, depuis le haut
+        for h in range(EPAISSEUR):                  # colonne logique, depuis la droite
+            ton = clair if (g == 0 and h == 0) else sombre
+            y = g * pas
+            x = cote - (h + 1) * pas
+            out[y:y + pas, x:x + pas, 0:3] = ton
+            out[y:y + pas, x:x + pas, 3] = 255
+    return baver(out)
+
+
+def assert_pointe(rgba, camp, exposes, cote):
+    """Une pointe n'occupe QUE son carré de coin, et son ton clair touche le sommet.
+
+    ⚠⚠ LA SECONDE MOITIÉ EST CELLE QUI COMPTE. « Quatre pixels opaques dans le
+    bon coin » resterait vrai d'un carré entièrement sombre, ou d'un carré dont
+    le clair serait au fond du territoire — c'est-à-dire de la faute exacte que
+    le commentaire de `composer_pointe` existe pour empêcher. La garde nomme
+    donc le pixel : celui qui touche le sommet est le ton de bande CLAIR, les
+    trois autres le SOMBRE.
+    """
+    pas = cote // LOGIQUE
+    plein = rgba[..., 3] == 255
+    attendu = 4 * pas * pas
+    assert int(plein.sum()) == attendu, (
+        f'{camp}/pointe ({nom_des_cotes(exposes)}) : {int(plein.sum())} pixels opaques, '
+        f'{attendu} attendus — la pointe déborde de son carré')
+    g0 = 0 if 'n' in exposes else LOGIQUE - EPAISSEUR
+    c0 = LOGIQUE - EPAISSEUR if 'e' in exposes else 0
+    coin = [(g0 + g, c0 + h) for g in range(EPAISSEUR) for h in range(EPAISSEUR)]
+    for g, c in coin:
+        assert plein[g * pas + pas // 2, c * pas + pas // 2], (
+            f'{camp}/pointe ({nom_des_cotes(exposes)}) : le pixel logique ({g},{c}) '
+            f'du carré de coin est vide')
+    # Le sommet de la case, c'est-à-dire le pixel logique le plus extérieur du carré.
+    sg = 0 if 'n' in exposes else LOGIQUE - 1
+    sc = LOGIQUE - 1 if 'e' in exposes else 0
+    lu = tuple(int(v) for v in rgba[sg * pas + pas // 2, sc * pas + pas // 2, 0:3])
+    assert lu == rvb(RAMPES[camp][2]), (
+        f'{camp}/pointe ({nom_des_cotes(exposes)}) : le pixel du sommet vaut {lu}, '
+        f'{rvb(RAMPES[camp][2])} attendu — la bande claire n\'est plus au dehors')
+
+
 def main():
     from chemins import dossier_sprites
     DST = dossier_sprites('limite')
@@ -395,6 +533,21 @@ def main():
                     chemin = os.path.join(DST, str(cote), f'{nom}.png')
                     Image.fromarray(tourne, 'RGBA').save(chemin, optimize=True)
                     ecrits += 1
+            # ⚠ LA POINTE SE COMPOSE APRÈS LES QUATRE FORMES, ET ELLE TOURNE DE
+            # LA MÊME FAÇON — même sens horaire, mêmes suffixes, même garde de
+            # rotation. Elle est en dehors de la boucle des formes parce qu'elle
+            # n'a pas de cellule à découper, pas parce qu'elle vit à part.
+            base, rotations = POINTE
+            rgba = composer_pointe(camp, cote)
+            assert_pointe(rgba, camp, base, cote)
+            for k in range(rotations):
+                tourne = np.rot90(rgba, -k)
+                cotes = tourner_cotes(base, k)
+                assert_pointe(tourne, camp, cotes, cote)
+                nom = f'limite_{lettre}_pointe_{nom_des_cotes(cotes)}'
+                Image.fromarray(tourne, 'RGBA').save(
+                    os.path.join(DST, str(cote), f'{nom}.png'), optimize=True)
+                ecrits += 1
     print(f'limites : {ecrits} fichiers écrits dans {DST}')
 
 

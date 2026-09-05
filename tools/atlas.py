@@ -118,12 +118,16 @@ FAMILLES = {
     # SONT DANS UN ATLAS ALORS QUE LES MURS DE CONTOUR N'Y SONT PAS. La
     # différence n'est pas de nature, elle est de FORME : un mur fait 512 × 128,
     # une limite fait 128 × 128. `coudre` exige des cellules carrées de `COTE`,
-    # et celles-ci en sont. Treize par camp — quatre traits, quatre coins,
-    # quatre U et un carré —, donc 26.
-    # ⚠ LE COIN RENTRANT (`angle_l` du zip) N'EST PAS PRODUIT, donc pas compté :
-    # le modèle par CASE de `sim/territoire.js` forme ses coins rentrants avec
-    # deux traits pleins de cases voisines. Voir `tools/limites.py`.
-    'limite': ('limite', 26, ()),
+    # et celles-ci en sont. Dix-sept par camp — quatre traits, quatre coins,
+    # quatre U, un carré et quatre POINTES —, donc 34.
+    # ⚠⚠ LES QUATRE POINTES ENTRENT LE 05/09, ET LE COMPTE MONTE DE 26 À 34. Ce
+    # commentaire disait « le coin rentrant n'est pas produit : le modèle par
+    # CASE forme ses coins rentrants avec deux traits pleins de cases voisines ».
+    # C'est FAUX — les deux traits se joignent au POINT, pas en surface, et
+    # laissent un carré de 2 × 2 pixels logiques non peint. Ethan l'a vu à
+    # l'écran ; c'est reproduit et mesuré dans `tools/limites.py`. La pointe est
+    # ce carré-là, et elle n'est PAS `angle_l`, qui est un coin SORTANT.
+    'limite': ('limite', 34, ()),
     # ⚠⚠ `bord/` N'EST PAS ICI, ET CE N'EST PAS UN OUBLI. Le mur de contour ne
     # tient pas dans une case : ses sprites font 512 × 64, 64 × 512 et 64 × 64
     # (arbitrage d'Ethan du 31/08, « divise par deux l'asset original […] le mur
