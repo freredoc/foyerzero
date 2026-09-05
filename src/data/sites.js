@@ -931,20 +931,48 @@ export const PIXELS_SOURCE_PAR_CASE = ZOOM_CARTE.coteTuile * ZOOM_CARTE.tuilesPa
  * les veut toutes dans `src/data/`.
  */
 export const ETIQUETTE_CARTE = {
-  // ⚠⚠ EN DEÇÀ DE CETTE LARGEUR DE CASE, EN PIXELS CSS, AUCUNE ÉTIQUETTE — ET
-  // LE SEUIL EST MESURÉ SUR LA DENSITÉ, PAS SUR LA LISIBILITÉ D'UNE PLAQUE.
-  // Fenêtre de 360 × 512 px CSS, vingt graines, fenêtres centrées sur les
-  // rangées 250, 150 et 50 : le nombre de sites À L'ÉCRAN vaut 296 au cran de
-  // 10,7 px CSS par case, 98 à 21,3, 33 à 42,7 et 13 à 85,3. À 33 les plaques
-  // se recouvrent — c'est la capture d'Ethan —, à 13 elles ne se touchent pas :
-  // mesuré sur trente graines, 88 % des sites ont leur plus proche voisin à
-  // DEUX cases (170 px CSS) et 8,4 % à une seule (85), quand « Base de
-  // l'Ouvrage » fait une soixantaine de pixels.
+  // ⚠⚠ EN DEÇÀ DE CETTE LARGEUR DE CASE, EN PIXELS CSS, AUCUNE ÉTIQUETTE.
+  //
+  // ⚠⚠ IL DESCEND DE 64 À 36 AU LOT ERGONOMIE, ET LA MESURE DU 30/08 QUI L'AVAIT
+  // POSÉ À 64 RESTE VRAIE — ELLE EST TRAITÉE AUTREMENT. Ethan, 04/09 : « les
+  // noms des éléments de la carte persistent jusqu'à ce que je dézoome, environ
+  // dix cases en largeur ». Dix cases sur 360 px CSS font 36 px par case, et
+  // c'est ce nombre-là qui est écrit ici.
+  //
+  // ⚠⚠ CE QUE LE 30/08 AVAIT MESURÉ NE DISPARAÎT PAS. Fenêtre de 360 × 512 px
+  // CSS, vingt graines, fenêtres centrées sur les rangées 250, 150 et 50 : le
+  // nombre de sites À L'ÉCRAN vaut 296 au cran de 10,7 px CSS par case, 98 à
+  // 21,3, 33 à 42,7 et 13 à 85,3. À 33 les plaques SE RECOUVRENT — c'était la
+  // capture d'Ethan, et ça l'est toujours. Ce qui a changé, c'est la RÉPONSE :
+  // le seuil ne sert plus à éviter le recouvrement, il ne sert qu'à dire à
+  // partir de quand une plaque est lisible. Le recouvrement, lui, est réglé au
+  // dessin par `etiquettesRetenues` de `ui/monde.js`, qui écarte toute boîte
+  // qui en coupe une déjà retenue.
+  //
+  // ⚠ ET LE ZOOM CONTINU RENDAIT L'ANCIENNE RÉPONSE INSUFFISANTE DE TOUTE
+  // FAÇON. Avec des crans, un seuil tombait entre deux paliers ; depuis le lot
+  // ZOOM-CONTINU, l'échelle s'arrête où le doigt la laisse — donc juste au pire
+  // endroit si le seuil est le seul rempart.
   //
   // ⚠ EN PIXELS CSS ET NON EN CRANS, et c'est ce qui le rend juste sur tous les
   // appareils : les crans de `ZOOM_CARTE` sont en pixels PHYSIQUES, donc le
   // même cran n'a pas la même taille apparente à densité d'écran différente.
-  cssMiniParCase: 64,
+  cssMiniParCase: 36,
+
+  // ⚠⚠ L'ORDRE DE PRIORITÉ DES ÉTIQUETTES, du plus important au moins. Quand
+  // deux plaques se coupent, c'est la plus prioritaire qui reste — sans cette
+  // table, celle qui reste serait celle que `sitesDeLaFenetre` a poussée en
+  // premier, et deux images identiques n'afficheraient pas les mêmes noms.
+  //
+  // ⚠ ELLE EST ICI ET NON DANS L'ÉCRAN : c'est du calibrage d'affichage, au
+  // même titre que le seuil au-dessus, et `monde.test.js` refuse déjà qu'un
+  // écran nomme une constante de zoom en dur.
+  ordreDePriorite: [
+    'baseJoueur', 'baseTerminale', 'base',
+    'poiQuartz', 'poiScorie', 'poiEnergie', 'poiCantonnement',
+    'poiParcRoulant', 'poiPlotAerien', 'poiRedoute',
+    'avantPoste', 'camp',
+  ],
 
   /** La police, en fraction de case : elle suit le cran, comme les frontières. */
   partPolice: 0.09,
