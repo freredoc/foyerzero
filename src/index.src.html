@@ -968,7 +968,26 @@
     background-repeat: no-repeat;
     image-rendering: pixelated;
   }
-  .jeton .niveau { position: absolute; right: 0; bottom: -1px; font-size: 8px; font-weight: 400; line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914; }
+  /* ⚠⚠ LE NIVEAU SE LIT — Ethan, 04/09 : « Les nombres qui montrent les niveaux
+     des bâtiments et unités sont trop petits et peu lisibles. » Il valait 8 px
+     en graisse 400, sur un sprite chargé, sous une ombre d'un pixel.
+
+     ⚠⚠ ET IL SUIT LA CASE, AVEC UN PLANCHER. Un nombre en pixels fixes reste
+     minuscule dès qu'on zoome — la case va de 36 px à 128 —, et un nombre
+     purement proportionnel deviendrait illisiblement petit au plancher du zoom.
+     `max()` prend le plus grand des deux : 11 px tant que la case est petite,
+     puis le tiers de la case. Mesuré à l'écran : 14,4 px à la case par défaut
+     de 46, 11 px au plancher, 40 au plafond.
+
+     ⚠ IL EST EN `position: absolute`, DONC IL NE POUSSE RIEN. C'est ce qui rend
+     ce changement sûr sur des vignettes calibrées au pixel : la hauteur du
+     jeton, celle de la case et celle des barres ne bougent pas d'un pixel —
+     mesuré avant et après, voir `RAPPORT-lotERGONOMIE.md`. */
+  .jeton .niveau {
+    position: absolute; right: 0; bottom: -1px;
+    font-size: max(11px, calc(var(--case-cote) / 3.2)); font-weight: 700;
+    line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914;
+  }
 
   /* --- le panneau de détail d'un bâtiment ----------------------------------
      ⚠ IL RÉPOND À UNE DEMANDE PRÉCISE d'Ethan, le 28/08 : « quand on clique sur

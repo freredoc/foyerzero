@@ -4041,3 +4041,42 @@ test('ERGO T5 — la bande qu\'on ne regarde pas est zébrée, et elle reste tou
     'le voile ne couvre plus les lignes d\'écran de sa bande');
   assert.doesNotMatch(regle[0], /position: absolute/, 'le voile est sorti de la grille');
 });
+
+// ---------------------------------------------------------------------------
+// ERGO T6 — le niveau se lit, et il ne pousse rien
+// ---------------------------------------------------------------------------
+
+test('ERGO T6 — la pastille de niveau grossit sans déplacer une seule barre', () => {
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/\.jeton \.niveau \{[^}]*\}/);
+  assert.ok(regle !== null, 'la pastille de niveau n\'a plus de règle');
+
+  // ⚠⚠ CE QUI REND CE POINT SÛR : ELLE EST HORS DU FLUX. Une pastille en
+  // `position: absolute` ne pousse ni le jeton, ni la case, ni la rangée
+  // suivante — c'est ce qui permet de la grossir sur des vignettes calibrées au
+  // pixel. Mesuré dans Chromium avant et après : les six barres fixes valent
+  // 40 · 44 · 26 · 46 · 86 · 46, la case 36, le jeton 36,28 et la vignette de
+  // palette 75, des deux côtés. Seule la boîte du nombre change — 8 × 5,28
+  // devient 11,25 × 8,02.
+  assert.match(regle[0], /position: absolute/, 'la pastille est entrée dans le flux : elle pousse');
+
+  // ⚠ ELLE SUIT LA CASE, AVEC UN PLANCHER. La case va de 36 px à 128 : un
+  // nombre en pixels fixes redevient minuscule au zoom, un nombre purement
+  // proportionnel devient illisible au plancher.
+  assert.match(regle[0], /font-size: max\(\s*\d+px\s*,\s*calc\(var\(--case-cote\)/,
+    'la taille du nombre ne suit plus la case, ou n\'a plus de plancher');
+  const taille = regle[0].match(/font-size: max\((\d+)px/);
+  assert.ok(Number(taille[1]) >= 10, `plancher de ${taille[1]} px : Ethan les trouvait déjà petits à 8`);
+  const graisse = regle[0].match(/font-weight: (\d+)/);
+  assert.ok(Number(graisse[1]) >= 600, `graisse ${graisse[1]} : le nombre reste maigre sur le sprite`);
+
+  // ⚠ ET UNE SEULE RÈGLE PORTE LA PASTILLE — pas une par écran. C'est la
+  // consigne du brief : une famille, une règle.
+  assert.equal((feuille.match(/\.niveau \{/g) ?? []).length, 1,
+    'une seconde règle de pastille de niveau est apparue');
+
+  // La garde des 288 px vit plus haut dans ce fichier et n'a pas bougé : elle
+  // somme les hauteurs FIXES des six barres, et aucune n'est touchée ici.
+  assert.match(feuille, /flex: 0 0 86px/, 'la palette a changé de hauteur');
+});
