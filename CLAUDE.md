@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **05/09/2026**, version 0.96.0 · build 98.
+Dernière révision : **05/09/2026**, version 0.98.0 · build 100.
 
 ---
 
@@ -42,7 +42,128 @@ Dernière révision : **05/09/2026**, version 0.96.0 · build 98.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot BARÈME), à confronter :**
+**Référence au 05/09/2026 (après le lot RÉSERVE-BASE), à confronter :**
+`npm test` → **1117 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 996 966 octets**, 0 référence externe. Coût **+941 octets**, ENTIÈREMENT DU
+JAVASCRIPT — **296 `data:` avant, 296 après**. Borne T10 inchangée à 9 300 000,
+marge **303 034 octets, 3,26 %**.
+⚠⚠ **LE CLIQUET N'EST PAS REFERMÉ POUR LE JOUEUR, ET C'EST LA PREMIÈRE CHOSE À
+DIRE.** Le moteur sait réparer un bâtiment ; **aucun écran ne l'appelle**. Un raid
+subi laisse toujours la base à 1 PV du point de vue du joueur, qui n'a aucun
+bouton pour payer. Écrire « cliquet corrigé » serait faux — il est cassé côté
+MOTEUR, et l'écran est le lot suivant.
+⚠⚠ **IL Y A QUATRE RÉSERVES DE TEMPS, PAS TROIS, ET LA QUATRIÈME EST UN CHAMP À
+PART.** `base.reserveReparationBatiments`, un nombre en TICKS, jamais une
+quatrième clé de `reserveReparation` : cet objet-là est indexé par CHÂSSIS,
+`CHASSIS_REPARABLES` se dérive de `BATIMENT_DE_CHASSIS`, et `reservoirsDeLArmee`
+boucle dessus pour l'écran d'armée. Une clé qui n'est pas un châssis fuirait dans
+les deux — **mesuré à la falsification : elle fait tomber `RÉSERVE T4` en même
+temps que la garde neuve**, donc l'écran d'armée aurait bien affiché un quatrième
+réservoir qui n'existe pas.
+⚠⚠ **LES DEUX NOMBRES DU PLAFOND SONT RECOPIÉS DE L'ARMÉE, ET CE N'EST PAS UNE
+MESURE.** 12 h + 1 h par niveau de BÂTIMENTS. `MODELE-REPARATION-1.md` §6 point 8
+est OUVERT : aucune des trente captures ne montre le dénominateur de cette
+réserve — l'écran de TA n'affiche qu'un STOCK, `3j 22:01:08`. Ils vivent dans
+`REPARATION_BASE_JOUEUR` et **jamais dans `REPARATION` de `data/sites.js`**, qui
+porte déjà `plafondHeures` pour l'ARMÉE : deux vérités sous deux noms voisins, et
+la première personne qui lit `plafondHeures` ne saurait plus de quelle réserve on
+parle.
+⚠⚠ **LE LEVIER EST BEAUCOUP PLUS RAIDE QUE LE BRIEF NE L'ANNONÇAIT, ET C'EST
+MESURÉ.** Base pleine — quarante bâtiments, tous ramenés à 1 PV, le pire cas :
+Chantier 50 → **12,7 h à réparer pour 62,0 h de plafond** (le brief annonçait
+10 h) ; Chantier 30 → **119,0 h pour 61,5** ; Chantier 20 → **369,2 h pour 61,3** ;
+Chantier 10 → **1 085,9 h pour 61,0**. La réserve ne mord PAS quand le Chantier
+suit, et elle mord d'un facteur DEUX à vingt niveaux de retard. ⚠ Le plafond, lui,
+bouge à peine d'une ligne à l'autre : il est indexé sur la MOYENNE des bâtiments,
+que le Chantier seul ne déplace guère à quarante. Aux niveaux 10 et 30 : 0,9 h et
+4,7 h pour 22 h et 42 h.
+⚠⚠ **`niveauDesBatiments` LÈVE, ELLE NE REND PAS `null`, ET LE `?? 0` DE L'ARMÉE
+NE SE RECOPIE PAS.** Une armée VIDE est l'état normal d'une base neuve ; une base
+sans un seul bâtiment n'existe pas — `problemesDeDisposition` rend `sans-chantier`,
+qui n'est pas dans `CODES_TOLERES_AU_CHARGEMENT`. Un `?? 0` transformerait une
+invariante violée en plafond de 12 h silencieux.
+⚠⚠ **LA GRATUITÉ DU BAS D'ÉCHELLE EST UN ARRONDI AU PLUS PROCHE, ET LE BRIEF
+DISAIT AUTRE CHOSE.** Il annonçait « `coutDeMontee` rend moins de 230 unités, donc
+la division rend 0 », c'est-à-dire une TRONCATURE. Mesuré sur les onze bâtiments,
+c'est l'arrondi au plus proche qui reproduit la frontière du relevé — « jusqu'au
+niveau 5, **6 pour la classe la plus légère** » : au niveau 6, `mineur` vaut
+**0,478** (sous la demie), `modeste` 0,896 et `courant` 1,287. Une troncature
+rendrait DEUX classes gratuites au niveau 6, un `Math.ceil` — celui du coût en
+scorie de l'armée — aucune au-dessus du niveau 1. **La frontière départage les
+trois lectures, et c'est la seule mesure qui les départage.**
+⚠ **LE DEVIS SOMME DES ARRONDIS, IL N'ARRONDIT PAS LA SOMME.**
+`toutReparerLesBatiments` débite un arrondi PAR BÂTIMENT : un devis qui
+arrondirait la somme des parts exactes annoncerait un prix que l'opération ne
+pratique pas. Un test l'exige des deux côtés, et la falsification qui les
+désaccorde d'une unité mord.
+⚠⚠ **`diviseurDuBatiment` GAGNE UN SECOND ARGUMENT — UNE SEULE IMPLÉMENTATION,
+DEUX TABLES — ET C'EST UN ÉCART AU BRIEF, DÉCLARÉ.** Il demandait de passer par la
+fonction existante telle quelle, donc de lire les pentes de l'ARMÉE. Elles sont
+mesurées (Exosoldats à Caserne 10 puis 12, rapport 1,1874 = 1,09² à un millième) ;
+celles des bâtiments, dans `REPARATION_BASE_JOUEUR.courbe.diviseurBatiment`, sont
+**reprises par analogie et SANS PREUVE**, et le commentaire de `data/base.js` le
+dit en toutes lettres. Lire la table de l'armée en ferait un mensonge et rendrait
+invisible le jour où une capture mesurera le vrai diviseur. La FORMULE reste
+écrite une fois.
+⚠⚠ **LE CHANTIER DÉCOTE PAR SON NIVEAU, PAS PAR SES PV, ET C'EST L'INVERSE DU
+COMPLEXE DE DÉFENSE.** Un Chantier à 1 PV décote autant qu'un Chantier intact.
+Ce n'est pas mesuré, et `MODELE-REPARATION-1.md` §6 point 5 dit que le Complexe,
+lui, répare « au prorata de ses PV ». Les aligner en croyant corriger un oubli
+rendrait une base rasée d'un cheveu irréparable au moment exact où elle en a
+besoin. `RÉSERVE-BASE T12` le mesure, et la falsification qui met le prorata mord.
+⚠⚠ **UN RAID SUBI NE VIDE PAS LA QUATRIÈME RÉSERVE, ET C'EST UNE DÉCISION
+ÉCRITE.** `raid-ouvrage.js` vide les trois réservoirs d'ARMÉE depuis le lot
+RÉSERVE ; y ajouter celui des bâtiments rendrait le cliquet INCASSABLE — le raid
+qui abîme emporterait du même geste le temps qu'il faut pour relever. La phrase de
+`MODELE-ECONOMIQUE.md` §7 est du 24/08 et ne connaît qu'UN réservoir. **Ethan
+tranche ; c'est une clé de boucle qui change.**
+⚠⚠ **`SAVE_VERSION` PASSE À 25, ET CETTE FOIS LE BUMP EST OBLIGATOIRE.** Le lot
+BARÈME ne l'avait pas touché parce qu'il ne changeait que des PRIX, qui se
+recalculent ; ici la **forme** de l'état change. La migration 24 → 25 pose le champ
+**à zéro** — pas au plafond : créditer une partie ancienne d'une réserve pleine lui
+offrirait une remise en état gratuite au premier chargement. ⚠ Et elle **n'écrase
+pas** une valeur déjà présente, exactement comme le compteur d'instance de la
+23 → 24 : les montages du dépôt fabriquent leurs vieilles sauvegardes en rabaissant
+une récente, et remettre zéro dessus effacerait une réserve accumulée.
+⚠ **`CHAMPS_DE_BASE` PASSE DE ONZE À DOUZE**, et `HORS_EXIGENCE` de deux à trois —
+la quatrième réserve se vérifie par sa propre fonction, qui rend un message qui
+parle de RÉSERVE, jamais par « champ absent ».
+⚠⚠ **LA SAUVEGARDE GRANDIT DE 36 OCTETS EXACTEMENT, SUR LES VINGT-CINQ GRAINES.**
+Trente pour `,"reserveReparationBatiments":` et six chiffres de valeur. Le nombre
+est FIXE, et c'est ce qu'on lui demande : `OCTETS_AJOUTES_PAR_RESERVE_BASE` entre
+dans `test/temoins-bases-0.js` et **s'ajoute** aux trois termes précédents au lieu
+de les remplacer, pour que chaque lot dise ce qu'il a coûté.
+⚠⚠ **QUATORZE FALSIFICATIONS, QUATORZE CHUTES — MAIS LA PREMIÈRE VERSION DE `T7`
+NE MORDAIT PAS, TREIZIÈME FOIS DU DÉPÔT.** Elle écrivait `Math.round(cout.quartz)`
+DANS LE TEST : remplacer l'arrondi du module par un `Math.ceil` laissait la suite
+**entièrement verte**, parce que le test refaisait le calcul au lieu de le lire.
+**Un test qui interroge le témoin ne garde que le témoin** — même leçon que `T3`
+et `T6` du lot BARÈME, un lot plus tôt. Il lit désormais les DEUX sorties du
+module, ce que le devis ANNONCE et ce que la réparation FACTURE, et il exige
+qu'elles coïncident.
+⚠⚠ **ET LES DOUZE TESTS NE « TOMBENT PAS SUR LE CODE D'AVANT » AU SENS OÙ ON
+L'ENTEND D'HABITUDE — IL FAUT LE DIRE.** Le fichier entier refuse de se charger :
+« The requested module '../src/sim/reparation.js' does not provide an export named
+`coutDeLaReparationDUnBatiment` ». Ce n'est PAS la propriété qu'ils mesurent. Ce
+qui la mesure, ce sont les quatorze falsifications ciblées sur l'arbre FINAL, une
+par test, listées au rapport.
+⚠ **DEUX NOMBRES DU BRIEF ÉTAIENT FAUX, ET LES DEUX SONT DÉCLARÉS.** Son `T5`
+annonçait « 100 000 ticks sur une base neuve » pour saturer : mesuré, une base
+neuve porte un Chantier de niveau 1, donc **435 600 ticks** — à 100 000 le plafond
+ne mord pas et le test serait vert sur n'importe quel code. Et son `T9` demandait
+un raid qui abîme : à niveau 40 la base est **RASÉE**, donc plus rien à réparer ;
+le niveau 20 abîme quatre bâtiments dont trois au plancher. Les deux montages
+portent leur mesure.
+⚠ **DOUZE TESTS ENTRENT DANS `test/reparation.test.js` ET LE COMPTE PASSE DE 1 105
+À 1 117.** Aucune assertion n'a été retirée ni assouplie ; **une garde change de
+porteur** — le `SAVE_VERSION === 24` de `BASES-1 T14` devient `=== 25` sous
+`RÉSERVE-BASE T11`, « la garde du numéro appartient au maillon le plus RÉCENT, une
+seule fois ». Aucun fichier de test n'entre.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne graphique — pas un octet
+d'`art/sprites/` ne change.
+
+**Auparavant, après le lot BARÈME :**
 `npm test` → **1105 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 996 025 octets**, 0 référence externe. Coût **+350 octets** — du code de
 données, aucune image : **296 `data:` avant, 296 après**. Borne T10 inchangée à
@@ -4556,7 +4677,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
   deplacement.js        la base bouge : portée, délai, et LE seul écrivain de `position`
   fondation.js          fonder une base de plus : où c'est permis, ce qu'on écrase, qui encaisse
   transfert.js          envoyer des ressources d'une base à l'autre : distance, taxe, refus
-  reparation.js         la réserve de temps : trois stocks par châssis, crédit et débit
+  reparation.js         les réserves de temps : trois par châssis, une pour les bâtiments
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
@@ -4575,6 +4696,18 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     `retirerLesMorts` et l'ÉCRASEMENT dans `deplacement`. Le second a été trouvé
     par un test, pas par relecture — une pièce sur vingt-trois manquait au
     journal sur la graine 9.
+  ⤷ ⚠⚠ `reparation.js` PORTE QUATRE RÉSERVES DEPUIS LE 05/09, PAS TROIS — lot
+    RÉSERVE-BASE. Trois par CHÂSSIS, qui paient les unités d'assaut en scorie ;
+    une pour les BÂTIMENTS, produite par le Chantier et payée en QUARTZ.
+    `MODELE-REPARATION-1.md` §4, réécrit ce jour-là : la version du 24/08 disait
+    que les deux puisaient dans la même, et c'était faux.
+  ⤷ ⚠⚠ LA QUATRIÈME EST UN CHAMP À PART — `base.reserveReparationBatiments` —,
+    JAMAIS UNE CLÉ DE `reserveReparation`. Cet objet-là est indexé par châssis,
+    `CHASSIS_REPARABLES` s'en dérive, et `reservoirsDeLArmee` boucle dessus pour
+    l'écran d'armée : une clé qui n'est pas un châssis y fuirait. Mesuré à la
+    falsification — elle fait tomber `RÉSERVE T4` en même temps que la garde neuve.
+  ⤷ ⚠ ET LE CLIQUET N'EST CASSÉ QUE CÔTÉ MOTEUR. `AUDIT-REPARATION.md` §4 tient
+    encore pour le JOUEUR : aucun écran n'appelle `reparerUnBatiment`.
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 12 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -6307,13 +6440,21 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ⚠ **LES BOUTONS NE SONT PLUS DÉSACTIVÉS**, et ils ne peuvent plus l'être :
   c'est le bouton qu'on touche EN PREMIER. Un test refuse qu'un `disabled`
   revienne sur les trois, ce qui rendrait tout le modèle inatteignable au doigt.
-  ⚠ **RÉPARER N'A PAS DE MOTEUR, ET SON REFUS EST LA SEULE PHRASE ÉCRITE DANS
-  L'INTERFACE.** `REPARATION_BASE_JOUEUR` est une table de calibrage, aucune
-  fonction ne répare, aucun bâtiment ne porte de dégâts. Le bouton suit quand
-  même le chemin complet — il s'arme, il se désarme — et dit ce qui est vrai.
-  Un test asserte que `sim/state.js` n'exporte toujours rien qui répare : **il
-  est fait pour tomber** le jour où le moteur en gagne une, et dire quoi
-  brancher.
+  ⚠⚠ **RÉPARER N'A PAS DE MOTEUR DANS L'ÉCRAN, ET DEPUIS LE 05/09 LE MOTEUR, LUI,
+  EXISTE.** Ce paragraphe disait « aucune fonction ne répare, aucun bâtiment ne
+  porte de dégâts » : les deux moitiés sont fausses — les bâtiments portent
+  `degatsMilli` depuis le lot RAID-B (02/09), et `sim/reparation.js` sait les
+  relever depuis le lot RÉSERVE-BASE. Le bouton suit toujours le chemin complet
+  — il s'arme, il se désarme — mais **sa phrase de refus peut désormais mentir**
+  après un raid subi. C'est le lot suivant, celui de l'écran.
+  ⚠⚠ **ET LA GARDE QUI DEVAIT PRÉVENIR EST RESTÉE VERTE, PARCE QU'ELLE REGARDAIT
+  LE MAUVAIS MODULE.** Elle assertait que `sim/state.js` n'exporte rien qui
+  répare, et se disait « faite pour tomber le jour où le moteur en gagne une » :
+  la fonction est née dans `sim/reparation.js`, donc elle n'a rien vu. Troisième
+  proxy du dépôt, après `ZOOM_BASE_MULTIPLE_MAX` et `ZOOM_CARTE.grilleEmbleme`.
+  Elle a **changé de cible** : elle exige maintenant que le moteur PORTE
+  `reparerUnBatiment` et que l'écran ne l'appelle PAS, donc elle tombera au
+  branchement — et il faudra alors la RETIRER, pas l'ajuster.
   ⚠ **ON DEMANDE, PUIS ON AGIT — ET LA GARDE VISE AUSSI LE POINT D'APPEL
   INDIRECT.** L'écran n'appelle pas `ameliorer(...)`, il appelle
   `action.agir(...)` par la table `ACTIONS`. Une garde qui ne cherchait que les

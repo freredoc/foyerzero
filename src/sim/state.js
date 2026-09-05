@@ -24,7 +24,10 @@ import {
   sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
 } from './site-entame.js';
 import { creerRecherche } from './raid.js';
-import { crediterLesReserves, reservesVides, problemesDesReserves } from './reparation.js';
+import {
+  crediterLesReserves, reservesVides, problemesDesReserves,
+  problemesDeLaReserveDesBatiments,
+} from './reparation.js';
 import {
   basesAttaquantes, resoudreLaMinute, prochaineMinuteDeRaid, minuteDeLHorloge,
   TICKS_PAR_MINUTE,
@@ -62,10 +65,10 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 24;
+export const SAVE_VERSION = 25;
 
 /**
- * Les onze champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
+ * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
  *
  * ⚠ UNE SEULE LISTE, LUE PAR LA MIGRATION ET PAR `verifierEtat`. En écrire deux
  * ferait diverger ce que la migration DESCEND et ce que la vérification EXIGE :
@@ -73,11 +76,16 @@ export const SAVE_VERSION = 24;
  * manquerait en jeu, ou l'inverse. `champs` et `obstacles` y sont, bien qu'ils
  * ne soient jamais sauvegardés — la migration les traite comme absents, et
  * `charger` les redéduit.
+ *
+ * ⚠ LE DOUZIÈME EST ENTRÉ AU LOT RÉSERVE-BASE, 05/09/2026 :
+ * `reserveReparationBatiments`, la quatrième réserve de temps. Il en était onze
+ * jusque-là, et le compte est écrit ici parce qu'il se relit — pas parce qu'un
+ * test le garde.
  */
 export const CHAMPS_DE_BASE = Object.freeze([
   'position', 'fondation', 'disposition', 'garnison', 'armee', 'economie',
   'champs', 'obstacles', 'satellites', 'reserveReparation',
-  'dernierDeplacementTick',
+  'reserveReparationBatiments', 'dernierDeplacementTick',
 ]);
 
 /**
@@ -105,7 +113,8 @@ export const CHAMPS_DE_BASE = Object.freeze([
  * @property {object} champs    DÉRIVÉ de `fondation` — voir `serialiser`.
  * @property {object} obstacles DÉRIVÉ de `fondation` — voir `serialiser`.
  * @property {object} satellites            HISTOIRE — voir `sim/satellites.js`.
- * @property {Record<string, number>} reserveReparation Trois stocks, en TICKS.
+ * @property {Record<string, number>} reserveReparation Trois stocks de CHÂSSIS, en TICKS.
+ * @property {number} reserveReparationBatiments Le quatrième stock, celui des BÂTIMENTS.
  * @property {number|null} dernierDeplacementTick `null` = jamais déplacée.
  */
 
@@ -231,6 +240,21 @@ function creerBase(position, disposition) {
     // courante, et devra boucler sur `etat.bases`. Ne jamais laisser un
     // commentaire qui annonce un futur devenu présent (CLAUDE.md §6).
     reserveReparation: reservesVides(),
+    // ⚠⚠ ET LE QUATRIÈME RÉSERVOIR, CELUI DES BÂTIMENTS — lot RÉSERVE-BASE,
+    // 05/09/2026. `MODELE-REPARATION-1.md` §4 : « il y en a quatre, pas une ».
+    // Il est produit par le Chantier de construction, il se dépense en réparant
+    // un bâtiment, et il se paie en QUARTZ là où les trois autres se paient en
+    // scorie.
+    //
+    // ⚠⚠ UN CHAMP À PART, PAS UNE QUATRIÈME CLÉ DE `reserveReparation`. Cet
+    // objet-là est indexé par CHÂSSIS — `CHASSIS_REPARABLES` se dérive de
+    // `BATIMENT_DE_CHASSIS`, et `reservoirsDeLArmee` boucle dessus pour l'écran
+    // d'armée. Une clé qui n'est pas un châssis fuirait dans les deux, et
+    // l'écran afficherait un quatrième réservoir d'armée qui n'existe pas.
+    //
+    // ⚠ À ZÉRO À LA CRÉATION, comme les trois autres : une base neuve n'a rien
+    // d'abîmé, et le premier tick commence à créditer.
+    reserveReparationBatiments: 0,
     // ⚠⚠ QUAND LA BASE S'EST DÉPLACÉE POUR LA DERNIÈRE FOIS — lot DÉPLACEMENT,
     // 02/09. Un HORODATAGE de jeu, jamais un compte à rebours : un résiduel qui
     // décroîtrait tick par tick divergerait au rattrapage, alors qu'un instant
@@ -502,11 +526,12 @@ function verifierEtat(etat) {
       `etat : base courante ${etat.baseCourante} hors de 0…${etat.bases.length - 1}`,
     );
   }
-  // ⚠⚠ DEUX CHAMPS DE `CHAMPS_DE_BASE` NE SONT PAS EXIGÉS ICI, ET C'EST LE
-  // COMPORTEMENT D'AVANT LE DÉPLIAGE, PAS UN OUBLI. `reserveReparation` est
-  // vérifiée quinze lignes plus bas par `problemesDesReserves`, qui rend un
-  // message qui parle de RÉSERVE — l'exiger ici la ferait échouer d'abord, sur
-  // « champ absent », et le refus cesserait de dire ce qui manque vraiment.
+  // ⚠⚠ TROIS CHAMPS DE `CHAMPS_DE_BASE` NE SONT PAS EXIGÉS ICI, ET C'EST LE
+  // COMPORTEMENT D'AVANT LE DÉPLIAGE, PAS UN OUBLI. `reserveReparation` et
+  // `reserveReparationBatiments` sont vérifiées quinze lignes plus bas par
+  // `problemesDesReserves` et `problemesDeLaReserveDesBatiments`, qui rendent un
+  // message qui parle de RÉSERVE — les exiger ici les ferait échouer d'abord,
+  // sur « champ absent », et le refus cesserait de dire ce qui manque vraiment.
   // `dernierDeplacementTick`, lui, n'a jamais été vérifié : une base qui ne
   // l'a pas ne s'est jamais déplacée, ce que `ticksAvantProchainDeplacement`
   // lit déjà comme `null`.
@@ -514,7 +539,9 @@ function verifierEtat(etat) {
   // ⚠ ILS SE RETIRENT DE LA LISTE COMMUNE, ils ne se recopient pas. Une seconde
   // liste écrite à la main cesserait d'être juste au premier champ qu'une base
   // gagnerait, et la divergence ne se verrait qu'au chargement.
-  const HORS_EXIGENCE = new Set(['reserveReparation', 'dernierDeplacementTick']);
+  const HORS_EXIGENCE = new Set([
+    'reserveReparation', 'reserveReparationBatiments', 'dernierDeplacementTick',
+  ]);
   for (const base of etat.bases) {
     for (const champ of CHAMPS_DE_BASE) {
       if (!HORS_EXIGENCE.has(champ)) exigerChamp(base, champ);
@@ -550,6 +577,17 @@ function verifierEtat(etat) {
     const defautsReserve = problemesDesReserves(b.reserveReparation ?? null);
     if (defautsReserve.length > 0) {
       throw new Error(`etat : réserve de réparation injouable — ${defautsReserve.join(' ; ')}`);
+    }
+    // ⚠ LA QUATRIÈME SE VÉRIFIE À PART PARCE QU'ELLE N'A PAS LA MÊME FORME : un
+    // NOMBRE, là où les trois autres sont une table indexée par châssis. Un
+    // `undefined` qui passerait ici ferait un `NaN` au premier crédit, qui se
+    // propagerait sans jamais lever — c'est exactement ce qu'un contrôle au
+    // chargement existe pour attraper.
+    const defautsBatiments = problemesDeLaReserveDesBatiments(b.reserveReparationBatiments);
+    if (defautsBatiments.length > 0) {
+      throw new Error(
+        `etat : réserve de réparation injouable — ${defautsBatiments.join(' ; ')}`,
+      );
     }
   }
   // ⚠ UNE LISTE, ET PAS PLUS LONGUE QUE LA BORNE. Un journal qui déborde est un
@@ -2598,6 +2636,40 @@ const MIGRATIONS = {
     // c'est vite fait.
     s.satellitesDetruits = { ...Object.fromEntries(Object.keys(ANNEAUX).map((t) => [t, 0])),
       ...(s.satellitesDetruits ?? {}) };
+  },
+
+  /**
+   * v24 → v25 : la QUATRIÈME réserve de temps entre dans chaque base — lot
+   * RÉSERVE-BASE, 05/09/2026.
+   *
+   * ⚠⚠ ET CETTE FOIS LE BUMP EST OBLIGATOIRE. Le lot BARÈME ne l'avait pas
+   * touché parce qu'il ne changeait que des PRIX, qui se recalculent : les
+   * soixante et une clés persistées portent des NIVEAUX, pas des montants. Ici
+   * c'est la FORME de l'état qui change — une base sauvegardée n'a pas le champ,
+   * et `crediterLesReserves` ferait un `NaN` dès le premier tick.
+   *
+   * ⚠ À ZÉRO, PAS AU PLAFOND. Créditer une partie ancienne d'une réserve pleine
+   * lui offrirait une remise en état gratuite au premier chargement, pour un
+   * mécanisme qui n'existait pas quand le joueur jouait. C'est la règle de la
+   * v16 → v17, qui posait déjà les trois autres réservoirs à zéro : le premier
+   * tick commence à créditer, comme pour une base neuve.
+   *
+   * ⚠⚠ ET LA VALEUR DÉJÀ PRÉSENTE N'EST PAS ÉCRASÉE, exactement comme le
+   * compteur d'instance de la v23 → v24. Une VRAIE v24 ne porte pas le champ ;
+   * une sauvegarde FABRIQUÉE à partir d'une v25 rabaissée le porte encore, et
+   * les montages de test du dépôt travaillent tous ainsi — remettre zéro
+   * dessus effacerait une réserve accumulée sans que rien ne le dise.
+   *
+   * @param {object} s
+   */
+  24: (s) => {
+    s.version = 25;
+    for (const base of s.bases ?? []) {
+      if (!Number.isInteger(base.reserveReparationBatiments)
+        || base.reserveReparationBatiments < 0) {
+        base.reserveReparationBatiments = 0;
+      }
+    }
   },
 };
 
