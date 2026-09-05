@@ -42,7 +42,114 @@ Dernière révision : **05/09/2026**, version 0.93.0 · build 95.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot ERGONOMIE), à confronter :**
+**Référence au 05/09/2026 (après le lot EMBLÈMES-ABÎMÉS), à confronter :**
+`npm test` → **1093 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 060 617 octets**, 0 référence externe.
+⚠⚠ **LES TRENTE-SIX EMBLÈMES SAINS AVAIENT DÉJÀ PERDU LEUR ÉCHELLE, ET C'EST LA
+MOITIÉ DU LOT.** Ethan : « garder l'échelle sur tous les emblèmes lors de
+l'implantation. Les petites bases doivent rester petites. Les dernières doivent
+prendre toute la case. » `recadrer` portait le contenu de CHAQUE cellule à
+`cible/N` de sa boîte, donc normalisait chaque palier séparément : mesuré,
+`site_base_j` faisait **86 px de large en `n1` pour 118 en `n9`, et SEPT des
+neuf paliers valaient 117 ou 118** — pas de progression, deux accidents. Après :
+**36 · 56 · 80 · 68 · 78 · 92 · 89 · 84 · 108**. Coût **+259 233 octets**,
+mesuré poste par poste contre un livrable rebâti depuis `main` : **images
++256 472 · JavaScript +2 761 · feuille +0 · balisage +0 · audio +0**.
+**284 `data:` avant, 284 après.**
+⚠⚠ **LA BORNE T10 PASSE DE 7 000 000 À 7 300 000, ET CE RELÈVEMENT-CI N'EST PAS
+COMME LES AUTRES.** Le §0 du lot SON-CATALOGUE pose sept mégaoctets comme « la
+marge au-delà de laquelle il faudra REMESURER ce démarrage avant de faire entrer
+quoi que ce soit ». Ce lot est le premier à franchir ce point : **la condition
+est DUE, et elle demande l'appareil d'Ethan, que le dépôt n'a pas.** Le démarrage
+a été mesuré dans Chromium à la place — trois exécutions par côté, géométrie du
+S25 FE — et **il ne se dégrade pas : DOMContentLoaded médian 480 → 457 ms,
+premier rendu 216 → 220 ms**. Ce n'est PAS l'appareil, et le relèvement est une
+proposition. Marge **239 383 octets, 3,28 %**.
+⚠ **`QUALITE` NE SE BAISSE PAS POUR PASSER SOUS LA BORNE** : elle vaut 85 pour
+les DIX-NEUF atlas, et la baisser pour ce lot dégraderait les dix-huit autres.
+⚠⚠ **LA COUPE SE FAIT PAR COMPOSANTE CONNEXE, PARCE QU'IL N'Y A PAS DE GOUTTIÈRE
+HORIZONTALE À TROUVER.** Le panache d'une rangée monte dans la cellule du
+dessus : à la frontière du tiers il reste **115 à 434 pixels** de matière selon
+la planche, et les deux planches `base_ouvrage` n'ont **AUCUNE** ligne vide entre
+leurs rangées. La cellule rendue porte le MASQUE de sa composante, jamais un
+rectangle. **Sept planches sur huit rendent neuf composantes franches** ; la
+huitième, `camps_quartz_en_feu`, en rend huit.
+⚠⚠ **ET LA COMPOSANTE FUSIONNÉE SE COUPE À SA TAILLE, CONFRONTÉE À LA PLANCHE
+SŒUR.** Le profil de largeur descend de 245 px à **20 px** au plus fin ; la coupe
+tombe à **y = 583**, et la planche `degats_fumee`, où les deux composantes sont
+SÉPARÉES, met la frontière de cette colonne à **y = 582**. **Un pixel d'écart sur
+1 024.**
+⚠ **LE SEUIL DE 500 PX N'EN EST PAS UN** : la plus petite composante d'emblème
+fait **13 541 px**, la plus grosse braise détachée **258**. Un facteur 52.
+⚠⚠ **UN DÉFAUT A ÉTÉ INTRODUIT PUIS CORRIGÉ, ET C'EST LE SECOND PIÈGE DE LA
+SECONDE PORTE D'`est_fond`.** Masquer sur la composante NUE peignait en magenta
+le violet clair de l'Ouvrage qu'elle attrape jusqu'au MILIEU d'une base — le
+défaut que le lot PIXELS a mesuré et que `est_fond_sujet` borne en aval. Mesuré :
+`site_base_o` passait de **0 à 893 pixels de trou**, et les 525 pixels percés de
+sa source sont du `#8D5FA0`, c'est-à-dire du SUJET. Le masque porte sur la
+composante REMPLIE : **1 400 → 187 px de trous sur 108 sprites, et les 36 sains
+reviennent à ZÉRO**, comme avant le lot.
+⚠ **LE TRI SE FAIT PAR COLONNE PUIS PAR LIGNE DE SOL, ET LE BRIEF SE TROMPAIT SUR
+LA MOITIÉ QUI CORRIGE.** Il annonçait qu'un tri par le HAUT mélange les rangées ;
+mesuré colonne par colonne sur les douze planches, **les deux tris rendent le
+même ordre**. Ce qui corrige est le GROUPEMENT PAR COLONNE : un tri global par
+ligne de sol met la colonne 1 devant la colonne 0 sur la planche saine du joueur,
+dont la rangée 1 porte les bas 311, 310 et 311. La ligne de sol reste le bon
+critère — elle ne dépend pas de la hauteur du panache —, et **cette
+falsification-là se DÉCLARE au lieu d'être comptée**.
+⚠⚠ **L'ÉCHELLE EST RELATIVE À LA CELLULE DE PLANCHE, PAS EN PIXELS BRUTS** : les
+quatre planches saines font **1 254** de côté, les huit neuves **1 024**.
+Comparer des pixels bruts aurait rétréci tout l'état abîmé de 18 %. Rapportées à
+leur cellule, les largeurs des trois états d'un même palier coïncident à moins de
+**1 % sur trois familles** — c'est la mesure qui autorise la référence commune.
+`site_base_j` est systématiquement **3 % plus étroite** à l'état abîmé, et c'est
+le dessin d'Ethan : la chaîne ne peut pas le rattraper sans normaliser par
+planche, donc sans casser la propriété qu'on achète.
+⚠ **ET LA RÉFÉRENCE EST `max(largeur, hauteur)`, PAS LA SEULE LARGEUR** : le
+panache fait monter la hauteur jusqu'à **1,08 cellule**, et une référence prise
+sur la largeur laisserait son sommet hors de la boîte.
+⚠⚠ **LA LARGEUR SORTANTE EST UNE FONCTION AFFINE DE L'ENTRANTE, DE PENTE 1** —
+résidu médian **2,0 px**, min 0,6, max 3,1, écart-type **0,51** sur les 108.
+C'est l'érosion de trois pixels de `conditionner`, et elle ne dépend pas du
+palier. ⚠ Le brief demandait « le rapport n1/n9 à 5 % près » : ce rapport-là est
+biaisé jusqu'à **5,5 %** par cette perte absolue, et `EMB T3` mesure donc
+l'affinité, qui est bien plus forte.
+⚠ **LES 108 EMBLÈMES REPOSENT SUR UNE SEULE LIGNE DE SOL, y = 122.** Le centrage
+d'avant posait la matière de `site_base_j` entre les lignes **104 et 122** selon
+le palier.
+⚠⚠ **`avarie` EST UNE RÈGLE, ÉCRITE UNE FOIS POUR LES DEUX CAMPS.** Le
+discriminant est **`raseLeSite`**, posé sur `BATIMENTS.souche` ET sur
+`BASE_BATIMENTS.chantierDeConstruction` : un `id === 'chantierDeConstruction'`
+aurait été la seconde vérité que §4 interdit, et il aurait menti pour toutes les
+bases de l'Ouvrage. `avarieDuSite` lit `pvBatimentsMilli`, `avarieDeLaBase` lit
+`degatsMilli` ; **ni l'une ni l'autre ne décide** — elles extraient des faits.
+⚠ **RIEN N'ENTRE DANS L'ÉTAT, ET `SAVE_VERSION` RESTE À 24.** L'avarie se LIT sur
+des PV qui étaient déjà là ; côté Ouvrage `reparerLesSites` efface l'entrée au
+bout d'une heure, donc l'emblème se lève et retombe tout seul.
+⚠⚠ **MAIS CÔTÉ JOUEUR IL NE RETOMBE PAS, ET IL FAUT LE SAVOIR** : vérifié sur
+`main` au moment d'exécuter, **aucun chemin ne répare les bâtiments du joueur** —
+`REPARATION_BASE_JOUEUR.courbe` vaut `null` et `sim/reparation.js` ne touche que
+`laBase.armee`. Un emblème du joueur passé au feu y reste **définitivement**
+jusqu'au lot réparation. Ethan a dit s'en occuper le 05/09 ; le lot est livré
+quand même, comme il l'a demandé.
+⚠ **LE PALIER NE CHANGE PAS AVEC L'ÉTAT** : `palierDeNiveau` choisit le palier,
+l'avarie choisit la FAMILLE de dessin. Les mélanger ferait rétrécir une base de
+niveau 30 quand elle brûle.
+⚠ **AUCUN POI N'A D'ÉTAT** — il n'y a qu'un dessin par type, et un gisement ne
+brûle pas. L'atlas `carte` passe de **43 à 115** sprites, de 7 × 7 à **11 × 11**,
+et de 217 330 à **409 686 octets**.
+⚠ **QUATORZE FALSIFICATIONS, TREIZE CHUTES, UNE DÉCLARÉE** — celle du tri par le
+haut, ci-dessus, qui ne mord sur aucune planche d'aujourd'hui.
+⚠ **TREIZE TESTS ENTRENT — `test/embleme.test.js` — ET LE COMPTE PASSE DE 1 080 À
+1 093.** Aucune assertion n'a été retirée ni assouplie.
+⚠ **`python3 tools/verifier.py` → 1 406 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, verdict VERT, en **442,4 s**. Il était dû : le lot touche `art/` et
+`tools/`. Le compte passe de 1 261 à 1 406 — les 144 sprites qui entrent et leur
+manifeste de mesures, et rien d'autre.
+⚠ **`python3 tools/entrees.py --declarer` → 370 consommées · 95 dormantes ·
+465 fichiers** (avant : 362 · 95 · 457). Les huit planches entrent CONSOMMÉES.
+
+**Auparavant, après le lot ERGONOMIE :**
 `npm test` → **1080 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 801 384 octets**, 0 référence externe.
 ⚠⚠ **HUIT RETOURS D'ETHAN, HUIT COMMITS, ET C'ÉTAIT LA CONTRAINTE DU BRIEF** —
@@ -4268,7 +4375,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   54 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
+test/                   55 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -4277,7 +4384,7 @@ test/                   54 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal  raid-ecran  arret
+  son  journal  raid-ecran  arret  embleme
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

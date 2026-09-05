@@ -1,0 +1,1001 @@
+{
+ "coupes": [
+  {
+   "colonne": 1,
+   "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+   "y": 583
+  }
+ ],
+ "site_base_j": {
+  "cellules": {
+   "site_base_j_n1": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 173,
+    "l": 129,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 0,
+    "sol": 311
+   },
+   "site_base_j_n1_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 212,
+    "l": 103,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_base_j_n1_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 209,
+    "l": 102,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_base_j_n2": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 191,
+    "l": 200,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 0,
+    "sol": 310
+   },
+   "site_base_j_n2_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 232,
+    "l": 156,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_base_j_n2_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 232,
+    "l": 157,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_base_j_n3": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 197,
+    "l": 282,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 0,
+    "sol": 311
+   },
+   "site_base_j_n3_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 240,
+    "l": 223,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_base_j_n3_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 240,
+    "l": 223,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_base_j_n4": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 230,
+    "l": 243,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 1,
+    "sol": 712
+   },
+   "site_base_j_n4_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 289,
+    "l": 191,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_j_n4_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 279,
+    "l": 191,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_j_n5": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 267,
+    "l": 276,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 1,
+    "sol": 704
+   },
+   "site_base_j_n5_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 284,
+    "l": 218,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 575
+   },
+   "site_base_j_n5_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 281,
+    "l": 218,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 575
+   },
+   "site_base_j_n6": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 277,
+    "l": 323,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 1,
+    "sol": 711
+   },
+   "site_base_j_n6_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 291,
+    "l": 254,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_j_n6_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 294,
+    "l": 254,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_j_n7": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 290,
+    "l": 315,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 2,
+    "sol": 1115
+   },
+   "site_base_j_n7_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 311,
+    "l": 247,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 909
+   },
+   "site_base_j_n7_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 308,
+    "l": 247,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 910
+   },
+   "site_base_j_n8": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 331,
+    "l": 299,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 2,
+    "sol": 1122
+   },
+   "site_base_j_n8_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 327,
+    "l": 236,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 917
+   },
+   "site_base_j_n8_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 329,
+    "l": 235,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 916
+   },
+   "site_base_j_n9": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 372,
+    "l": 381,
+    "planche": "S10_base_joueur_64-256.png",
+    "rangee": 2,
+    "sol": 1143
+   },
+   "site_base_j_n9_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 340,
+    "l": 303,
+    "planche": "S10_base_joueur_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 932
+   },
+   "site_base_j_n9_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 339,
+    "l": 302,
+    "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 932
+   }
+  },
+  "reference": 0.99609375
+ },
+ "site_base_o": {
+  "cellules": {
+   "site_base_o_n1": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 182,
+    "l": 153,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 0,
+    "sol": 323
+   },
+   "site_base_o_n1_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 236,
+    "l": 125,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 264
+   },
+   "site_base_o_n1_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 231,
+    "l": 125,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 264
+   },
+   "site_base_o_n2": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 223,
+    "l": 204,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 0,
+    "sol": 334
+   },
+   "site_base_o_n2_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 261,
+    "l": 167,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 273
+   },
+   "site_base_o_n2_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 250,
+    "l": 167,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 273
+   },
+   "site_base_o_n3": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 270,
+    "l": 254,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 0,
+    "sol": 340
+   },
+   "site_base_o_n3_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 278,
+    "l": 207,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 277
+   },
+   "site_base_o_n3_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 279,
+    "l": 208,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 278
+   },
+   "site_base_o_n4": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 265,
+    "l": 213,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 1,
+    "sol": 710
+   },
+   "site_base_o_n4_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 284,
+    "l": 173,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_o_n4_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 280,
+    "l": 173,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_o_n5": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 282,
+    "l": 259,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 1,
+    "sol": 711
+   },
+   "site_base_o_n5_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 296,
+    "l": 212,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_o_n5_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 289,
+    "l": 212,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_o_n6": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 314,
+    "l": 292,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 1,
+    "sol": 711
+   },
+   "site_base_o_n6_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 300,
+    "l": 239,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_o_n6_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 298,
+    "l": 239,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_o_n7": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 336,
+    "l": 291,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 2,
+    "sol": 1131
+   },
+   "site_base_o_n7_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 336,
+    "l": 237,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 924
+   },
+   "site_base_o_n7_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 328,
+    "l": 238,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 924
+   },
+   "site_base_o_n8": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 374,
+    "l": 321,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 2,
+    "sol": 1136
+   },
+   "site_base_o_n8_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 345,
+    "l": 261,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 927
+   },
+   "site_base_o_n8_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 342,
+    "l": 261,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 928
+   },
+   "site_base_o_n9": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 418,
+    "l": 393,
+    "planche": "S10_base_ouvrage_64-256_v2.png",
+    "rangee": 2,
+    "sol": 1153
+   },
+   "site_base_o_n9_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 370,
+    "l": 322,
+    "planche": "S10_base_ouvrage_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 942
+   },
+   "site_base_o_n9_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 369,
+    "l": 321,
+    "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 942
+   }
+  },
+  "reference": 1.083984375
+ },
+ "site_quartz": {
+  "cellules": {
+   "site_quartz_n1": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 170,
+    "l": 127,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 0,
+    "sol": 311
+   },
+   "site_quartz_n1_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 214,
+    "l": 116,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
+   "site_quartz_n1_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 213,
+    "l": 114,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 254
+   },
+   "site_quartz_n2": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 208,
+    "l": 196,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 0,
+    "sol": 332
+   },
+   "site_quartz_n2_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 257,
+    "l": 160,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 271
+   },
+   "site_quartz_n2_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 257,
+    "l": 160,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 271
+   },
+   "site_quartz_n3": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 238,
+    "l": 265,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 0,
+    "sol": 339
+   },
+   "site_quartz_n3_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 266,
+    "l": 216,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 277
+   },
+   "site_quartz_n3_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 266,
+    "l": 216,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 277
+   },
+   "site_quartz_n4": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 205,
+    "l": 257,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 1,
+    "sol": 708
+   },
+   "site_quartz_n4_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 264,
+    "l": 211,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 579
+   },
+   "site_quartz_n4_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 256,
+    "l": 210,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 579
+   },
+   "site_quartz_n5": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 258,
+    "l": 302,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 1,
+    "sol": 713
+   },
+   "site_quartz_n5_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 290,
+    "l": 245,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 583
+   },
+   "site_quartz_n5_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 285,
+    "l": 246,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 582
+   },
+   "site_quartz_n6": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 273,
+    "l": 311,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 1,
+    "sol": 715
+   },
+   "site_quartz_n6_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 298,
+    "l": 258,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 584
+   },
+   "site_quartz_n6_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 296,
+    "l": 257,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 584
+   },
+   "site_quartz_n7": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 308,
+    "l": 289,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 2,
+    "sol": 1109
+   },
+   "site_quartz_n7_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 317,
+    "l": 235,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 906
+   },
+   "site_quartz_n7_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 316,
+    "l": 235,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 906
+   },
+   "site_quartz_n8": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 353,
+    "l": 310,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 2,
+    "sol": 1117
+   },
+   "site_quartz_n8_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 330,
+    "l": 253,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 913
+   },
+   "site_quartz_n8_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 334,
+    "l": 254,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 913
+   },
+   "site_quartz_n9": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 378,
+    "l": 370,
+    "planche": "S10_camps_avant-postes_quartz_64-256.png",
+    "rangee": 2,
+    "sol": 1139
+   },
+   "site_quartz_n9_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 360,
+    "l": 301,
+    "planche": "S10_camps_quartz_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 932
+   },
+   "site_quartz_n9_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 357,
+    "l": 301,
+    "planche": "S10_camps_quartz_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 931
+   }
+  },
+  "reference": 1.0546875
+ },
+ "site_scorie": {
+  "cellules": {
+   "site_scorie_n1": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 162,
+    "l": 157,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 0,
+    "sol": 341
+   },
+   "site_scorie_n1_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 233,
+    "l": 127,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 278
+   },
+   "site_scorie_n1_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 224,
+    "l": 127,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 278
+   },
+   "site_scorie_n2": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 193,
+    "l": 223,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 0,
+    "sol": 355
+   },
+   "site_scorie_n2_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 254,
+    "l": 182,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 291
+   },
+   "site_scorie_n2_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 252,
+    "l": 182,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 290
+   },
+   "site_scorie_n3": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 240,
+    "l": 277,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 0,
+    "sol": 367
+   },
+   "site_scorie_n3_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 284,
+    "l": 226,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 0,
+    "sol": 300
+   },
+   "site_scorie_n3_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 277,
+    "l": 226,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 0,
+    "sol": 300
+   },
+   "site_scorie_n4": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 204,
+    "l": 240,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 1,
+    "sol": 707
+   },
+   "site_scorie_n4_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 259,
+    "l": 195,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 577
+   },
+   "site_scorie_n4_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 253,
+    "l": 196,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 577
+   },
+   "site_scorie_n5": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 217,
+    "l": 272,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 1,
+    "sol": 711
+   },
+   "site_scorie_n5_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 263,
+    "l": 223,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_scorie_n5_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 257,
+    "l": 223,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 581
+   },
+   "site_scorie_n6": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 246,
+    "l": 316,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 1,
+    "sol": 722
+   },
+   "site_scorie_n6_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 282,
+    "l": 258,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 1,
+    "sol": 589
+   },
+   "site_scorie_n6_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 276,
+    "l": 258,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 589
+   },
+   "site_scorie_n7": {
+    "colonne": 0,
+    "cotePlanche": 418.0,
+    "h": 262,
+    "l": 309,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 2,
+    "sol": 1097
+   },
+   "site_scorie_n7_feu": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 291,
+    "l": 252,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 896
+   },
+   "site_scorie_n7_fumee": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 289,
+    "l": 253,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 896
+   },
+   "site_scorie_n8": {
+    "colonne": 1,
+    "cotePlanche": 418.0,
+    "h": 318,
+    "l": 299,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 2,
+    "sol": 1112
+   },
+   "site_scorie_n8_feu": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 327,
+    "l": 244,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 908
+   },
+   "site_scorie_n8_fumee": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 324,
+    "l": 244,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 908
+   },
+   "site_scorie_n9": {
+    "colonne": 2,
+    "cotePlanche": 418.0,
+    "h": 355,
+    "l": 407,
+    "planche": "S10_camps_avant-postes_scories_64-256.png",
+    "rangee": 2,
+    "sol": 1136
+   },
+   "site_scorie_n9_feu": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 338,
+    "l": 331,
+    "planche": "S10_camps_scories_en_feu_3x3_1024.png",
+    "rangee": 2,
+    "sol": 927
+   },
+   "site_scorie_n9_fumee": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 337,
+    "l": 332,
+    "planche": "S10_camps_scories_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 927
+   }
+  },
+  "reference": 0.990234375
+ }
+}

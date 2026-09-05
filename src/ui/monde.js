@@ -34,7 +34,7 @@ import { poisDeLaFenetre, poiEstAcquis } from '../sim/poi.js';
 import {
   saveurDeLaCase, siteDeLaCase, butinSiToutTombe, forceDeLaDefense,
 } from '../sim/site-de-la-case.js';
-import { montageCourant } from '../sim/site-entame.js';
+import { avariesParCase, avarieDeLaBase, montageCourant } from '../sim/site-entame.js';
 import {
   coutDUnRaid, distanceCarreeCases, casesArrondiesAuSuperieur,
 } from '../sim/points-attaque.js';
@@ -326,12 +326,25 @@ export function sitesDeLaFenetre(etat, fenetre) {
   // affirmation sur une question qui a déjà sa réponse.
   const saveur = (rangee, colonne, type) => saveurDeLaCase(etat.graine, rangee, colonne, type);
 
+  // ⚠⚠ L'AVARIE SE DEMANDE AU MOTEUR, ET ELLE NE SE DÉDUIT PAS DU PANNEAU.
+  // `avariesParCase` part des sites ENTAMÉS — quelques dizaines — et non des
+  // sites visibles, qui sont jusqu'à quinze cents : interroger chaque case
+  // régénérerait un montage par case, à chaque image.
+  //
+  // ⚠ ET LA BASE DU JOUEUR NE PASSE PAS PAR CETTE TABLE : elle n'est pas un
+  // site entamé de l'Ouvrage, ses dégâts vivent dans sa `disposition`. C'est la
+  // MÊME règle qui les lit — `avarieDeLaBase` et `avarieDuSite` appellent toutes
+  // deux `avarie`, et le discriminant est `raseLeSite` des deux côtés.
+  const avaries = avariesParCase(etat);
+  const avarie = (rangee, colonne) => avaries.get(`${rangee}:${colonne}`) ?? 'aucune';
+
   const sites = basesDeLaFenetre(etat.graine, fenetre).map((base) => ({
     type: 'base',
     rangee: base.rangee,
     colonne: base.colonne,
     niveau: niveauDeLaRangee(base.rangee),
     saveur: saveur(base.rangee, base.colonne, 'base'),
+    avarie: avarie(base.rangee, base.colonne),
   }));
 
   // ⚠⚠ APRÈS LES BASES DE L'OUVRAGE ET AVANT LES SATELLITES, ET L'ORDRE EST LE
@@ -366,6 +379,7 @@ export function sitesDeLaFenetre(etat, fenetre) {
       colonne: satellite.colonne,
       niveau: satellite.niveau,
       saveur: saveur(satellite.rangee, satellite.colonne, satellite.type),
+      avarie: avarie(satellite.rangee, satellite.colonne),
     });
   }
 
@@ -400,6 +414,7 @@ export function sitesDeLaFenetre(etat, fenetre) {
       colonne: base.position.colonne,
       niveau: null,
       saveur: saveur(base.position.rangee, base.position.colonne, 'base'),
+      avarie: avarieDeLaBase(base),
       indiceBase: indice,
       courante: indice === etat.baseCourante,
       // ⚠⚠ LE NUMÉRO COMPTE À PARTIR DE UN, ET IL NE S'INVENTE PAS ICI : le
