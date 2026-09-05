@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 
 import {
   COUT_NIVEAU_DEUX_OFFENSE, COUT_NIVEAU_DEUX_DEFENSE, rosterDefensif,
-  coutDeMonteeOffense, coutDeMonteeDefense,
+  coutDeMonteeOffense, coutDeMonteeDefense, RAPPORT_COEFFICIENT_OFFENSE,
 } from '../src/data/couts-militaires.js';
 import { ECONOMIE_NIVEAU, montantDuPalier } from '../src/data/economie.js';
 import { COUT_ELECTRICITE, RESSOURCE_DE_COUT } from '../src/data/base.js';
@@ -38,9 +38,19 @@ test('couts-militaires — l\'ancre du niveau 2 est exactement celle qu\'Ethan a
   // données tombe, au lieu de passer pour un rééquilibrage voulu. C'est la même
   // discipline que la transcription de la palette dans `banc.test.js`.
   //
+  // ⚠⚠ ET IL SE CONFRONTE DÉSORMAIS AU PRIX PAYÉ, PAS À L'ANCRE BRUTE. Depuis
+  // le 05/09 la table d'offense porte des FRACTIONS — l'ancre d'accueil mesurée
+  // sur les captures —, et la dictée du 28/08 portait leurs arrondis. Les deux
+  // se rejoignent exactement au niveau 2, parce que `montantDuPalier` arrondit
+  // sa sortie : 1,6 rend 2, 3,2 rend 3, 3,6 rend 4, 4,4 rend 4, 4,8 rend 5 et
+  // 5,6 rend 6. Comparer l'ancre brute à la dictée ferait tomber ce test pour
+  // une raison qui n'est pas la sienne ; comparer le PRIX le rend plus fort,
+  // puisqu'il garde ce que le joueur voit.
+  //
   // Les noms en commentaire sont ceux de l'arbitrage — noms Tiberium Alliances.
   const offense = {
-    meute: 2, carapace: 2, perceurs: 2, //          riflemen, exosoldat, lance-roquettes
+    meute: 1, //                                    riflemen — DICTÉ 2, corrigé
+    carapace: 2, perceurs: 2, //                    exosoldat, lance-roquettes
     ratisseur: 3, //                                guardien
     fendeur: 4, belier: 4, crecelle: 4, //          predator, pitbull, orca
     guetteur: 5, busard: 5, //                      sniper, paladin
@@ -63,7 +73,29 @@ test('couts-militaires — l\'ancre du niveau 2 est exactement celle qu\'Ethan a
     broyeur: ['scorie', 12], //                     mammouth
   };
 
-  assert.deepEqual(COUT_NIVEAU_DEUX_OFFENSE, offense);
+  // ⚠⚠ UNE SEULE VALEUR DE LA DICTÉE A ÉTÉ CORRIGÉE, ET C'EST L'ESCADRON DE
+  // TIREURS : 2 → 1. Le rapport coefficient / ancre vaut exactement 2,000 pour
+  // les sept unités dont l'ancre était déjà juste, et 1,000 pour lui seul — la
+  // dictée portait un plancher. Ethan, 05/09 : « le fusilier coûte moins que
+  // l'exosoldat, quoi qu'il arrive ». Voir `RELEVE-TA-REPARATION.md` §3.
+  assert.equal(offense.meute, 1, 'la correction du 05/09 a disparu du témoin');
+  assert.ok(offense.meute < offense.carapace, 'le Fusilier doit coûter moins que l\'Exosoldat');
+
+  assert.equal(Object.keys(offense).length, 14);
+  for (const [id, montant] of Object.entries(offense)) {
+    assert.equal(
+      coutDeMonteeOffense(id, PREMIER).scorie, montant,
+      `${id} : le prix du niveau 2 s'écarte de la dictée du 28/08`,
+    );
+  }
+  // Falsifiable : sans cette ligne, une table d'ancres toutes égales à leur
+  // arrondi passerait — c'est-à-dire le code d'AVANT le 05/09. Six ancres sur
+  // quatorze sont strictement fractionnaires.
+  assert.equal(
+    Object.values(COUT_NIVEAU_DEUX_OFFENSE).filter((a) => !Number.isInteger(a)).length, 6,
+    'les ancres fractionnaires du relevé ont disparu',
+  );
+
   assert.equal(Object.keys(defense).length, 17);
   for (const [id, [ressource, montant]] of Object.entries(defense)) {
     assert.deepEqual(
@@ -119,18 +151,31 @@ test('couts-militaires — la même unité ne coûte pas le même prix des deux 
     ['belier', 'broyeur', 'carapace', 'fendeur', 'guetteur', 'meute', 'perceurs', 'ratisseur'],
   );
 
-  // Relevé par exécution le 28/08. CINQ unités changent de prix selon le rôle,
-  // TROIS coïncident. Une table unique indexée par unité aurait paru marcher —
-  // trois cas sur huit — et faussé les cinq autres en silence.
-  const different = communs
-    .filter((id) => COUT_NIVEAU_DEUX_OFFENSE[id] !== COUT_NIVEAU_DEUX_DEFENSE[id].montant);
-  assert.deepEqual(different.sort(), ['belier', 'fendeur', 'guetteur', 'meute', 'ratisseur']);
+  // ⚠⚠ LA COMPARAISON PORTE SUR LE PRIX PAYÉ, PAS SUR L'ANCRE BRUTE, DEPUIS LE
+  // 05/09. Les deux tables ne sont plus commensurables : l'offense porte des
+  // ancres d'ACCUEIL mesurées, qui peuvent être fractionnaires, la défense des
+  // entiers dictés. Ce que ce test garde est le piège n° 1 du fichier — « la
+  // même unité ne coûte pas le même prix des deux côtés » —, et ce piège se lit
+  // sur ce que le joueur paie.
+  //
+  // ⚠ REMESURÉ LE 05/09 : QUATRE unités changent de prix selon le rôle, QUATRE
+  // coïncident. C'était cinq et trois. DEUX mouvements en sens contraire, et
+  // ils s'expliquent tous les deux : `meute` quitte la liste des différentes,
+  // parce que sa correction à 1 la fait tomber sur le prix de garnison ; et
+  // `perceurs` la quitte aussi, parce que 1,6 s'arrondit sur le 2 de la
+  // défense. Une table unique indexée par unité aurait donc paru marcher sur
+  // quatre cas sur huit, et faussé les quatre autres en silence.
+  const prixOffense = (id) => coutDeMonteeOffense(id, PREMIER).scorie;
+  const prixDefense = (id) => coutDeMonteeDefense(id, PREMIER)[COUT_NIVEAU_DEUX_DEFENSE[id].ressource];
+  const different = communs.filter((id) => prixOffense(id) !== prixDefense(id));
+  assert.deepEqual(different.sort(), ['belier', 'fendeur', 'guetteur', 'ratisseur']);
 
   // Le pire écart, de face : le Voltigeur vaut 5 en assaut et 2 en garnison.
-  assert.equal(COUT_NIVEAU_DEUX_OFFENSE.guetteur, 5);
-  assert.equal(COUT_NIVEAU_DEUX_DEFENSE.guetteur.montant, 2);
-  // Et le Fusilier est le seul à valoir 1 quelque part.
+  assert.equal(prixOffense('guetteur'), 5);
+  assert.equal(prixDefense('guetteur'), 2);
+  // Et le Fusilier vaut 1 des DEUX côtés depuis la correction du 05/09.
   assert.equal(COUT_NIVEAU_DEUX_DEFENSE.meute.montant, 1);
+  assert.equal(prixOffense('meute'), 1);
   assert.equal(
     Object.values(COUT_NIVEAU_DEUX_DEFENSE).filter((l) => l.montant === 1).length, 1,
   );
@@ -214,9 +259,13 @@ test('couts-militaires — le niveau 1 lève au lieu de rendre zéro', () => {
 });
 
 test('couts-militaires — le niveau 2 vaut l\'ancre, à l\'unité près et sans électricité', () => {
+  // ⚠ « À L'UNITÉ PRÈS » A PRIS SON SENS PLEIN LE 05/09 : l'ancre d'accueil peut
+  // être fractionnaire, et le prix est son ARRONDI. Au niveau 2 le profil vaut 1
+  // et l'exposant du redressement est nul, donc le coefficient de régime ne peut
+  // pas intervenir — c'est ce que cette ligne garde.
   for (const [id, ancre] of Object.entries(COUT_NIVEAU_DEUX_OFFENSE)) {
     const cout = coutDeMonteeOffense(id, 2);
-    assert.equal(cout.scorie, ancre, `${id} : le niveau 2 doit valoir son ancre`);
+    assert.equal(cout.scorie, Math.round(ancre), `${id} : le niveau 2 doit valoir son ancre`);
     assert.equal(cout.electricite, 0, `${id} : pas d'électricité avant le niveau 3`);
   }
   for (const [id, ligne] of Object.entries(COUT_NIVEAU_DEUX_DEFENSE)) {
@@ -231,8 +280,11 @@ test('couts-militaires — le niveau 2 vaut l\'ancre, à l\'unité près et sans
 // ---------------------------------------------------------------------------
 
 test('couts-militaires — la chaîne est celle des bâtiments, seule l\'ancre change', () => {
-  // Relevé par exécution le 28/08 sur le Fusilier en assaut, ancre 2 :
-  const attendus = [2, 3, 6, 24, 132, 432];
+  // Relevé par exécution. ⚠ REMESURÉ LE 05/09 : le Fusilier passe d'une ancre
+  // de 2 à une ancre d'accueil de 1 et d'un coefficient de 2, donc sa chaîne
+  // n'est plus la moitié de celle de l'Exosoldat par arrondis successifs mais
+  // par construction. C'était [2, 3, 6, 24, 132, 432].
+  const attendus = [1, 1, 3, 12, 73, 255];
   const obtenus = [2, 3, 4, 5, 6, 7].map((n) => coutDeMonteeOffense('meute', n).scorie);
   assert.deepEqual(obtenus, attendus);
 
@@ -241,35 +293,58 @@ test('couts-militaires — la chaîne est celle des bâtiments, seule l\'ancre c
   assert.ok(obtenus[5] / obtenus[0] > 200, 'la chaîne ne monte pas : le montage ne mesure rien');
 
   // Et la même rampe, sur toutes les entités et tous les paliers.
+  //
+  // ⚠ LE COEFFICIENT DE L'OFFENSE EST UN SCALAIRE, ET IL EST LU, PAS RECOPIÉ.
+  // `RAPPORT_COEFFICIENT_OFFENSE` vaut 2 pour les quatorze — mesuré. Écrire une
+  // seconde table de quatorze coefficients ici en ferait une copie, et sa
+  // première divergence se lirait comme un déséquilibre de jeu.
   for (const [id, ancre] of Object.entries(COUT_NIVEAU_DEUX_OFFENSE)) {
     for (let n = PREMIER; n <= NIVEAU.plafond; n += 1) {
       assert.equal(
-        coutDeMonteeOffense(id, n).scorie, montantDuPalier(ancre, n),
+        coutDeMonteeOffense(id, n).scorie,
+        montantDuPalier(ancre, ancre * RAPPORT_COEFFICIENT_OFFENSE, n),
         `${id} niv.${n} : l'assaut a sa propre rampe, ce qui est interdit`,
       );
     }
   }
+  // ⚠ ET LA DÉFENSE PREND SON ANCRE POUR COEFFICIENT — facteur 1, donc aucun
+  // redressement. Choix conservateur du 05/09 : aucune capture n'a jamais
+  // confronté ces dix-sept ancres à quoi que ce soit.
   for (const [id, ligne] of Object.entries(COUT_NIVEAU_DEUX_DEFENSE)) {
     for (let n = PREMIER; n <= NIVEAU.plafond; n += 1) {
       assert.equal(
-        coutDeMonteeDefense(id, n)[ligne.ressource], montantDuPalier(ligne.montant, n),
+        coutDeMonteeDefense(id, n)[ligne.ressource],
+        montantDuPalier(ligne.montant, ligne.montant, n),
       );
     }
   }
 });
 
 test('couts-militaires — la rampe partagée restitue la table relevée des bâtiments', () => {
+  // ⚠⚠ C'EST LE **BARÈME T1**, ET C'EST UNE NON-RÉGRESSION, PAS UNE
+  // FALSIFICATION : il passait avant le lot BARÈME du 05/09 et il passe après,
+  // délibérément. Le Chantier a un coefficient de régime ÉGAL à son ancre
+  // d'accueil — facteur 1 —, donc sa rampe doit être restituée à l'identique
+  // par la formule redressée. C'est la vérification qui passe avant toutes les
+  // autres : si elle tombait, le redressement aurait changé la référence
+  // elle-même.
+  //
   // ⚠ CE TEST GARDE LE DÉPLACEMENT DE LA RAMPE. Elle vivait en privé dans
   // `data/base.js` ; elle est passée dans `data/economie.js` le 28/08 pour que
   // la défense et l'offense s'en servent sans la recopier. Si le déplacement
   // avait changé un arrondi, c'est ici que ça se verrait — la suite relevée est
   // celle que `COUT_NIVEAU_DEUX.majeur` produit depuis le 27/08.
   assert.deepEqual(
-    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => montantDuPalier(8, n)),
+    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => montantDuPalier(8, 8, n)),
     [8, 10, 20, 80, 440, 1440, 4400, 12800, 35200, 89600, 192000],
   );
-  // L'ancre EST le premier palier : la boucle ne tourne pas au niveau 2.
-  assert.equal(montantDuPalier(7, PREMIER), 7);
+  // L'ancre EST le premier palier : le profil vaut 1 au niveau 2.
+  assert.equal(montantDuPalier(7, 7, PREMIER), 7);
+  // ⚠ ET ELLE L'EST QUEL QUE SOIT LE COEFFICIENT : au niveau 2 l'exposant du
+  // redressement est nul. Sans cette ligne, une formule qui appliquerait le
+  // facteur dès le premier palier passerait le test ci-dessus, où le Chantier a
+  // justement un facteur de 1.
+  assert.equal(montantDuPalier(7, 21, PREMIER), 7);
 });
 
 // ---------------------------------------------------------------------------
@@ -282,12 +357,17 @@ test('couts-militaires — l\'électricité commence au niveau 3 et vaut le quar
   // systématiquement le quart de la monnaie principale. »
   assert.equal(COUT_ELECTRICITE.premierNiveauPayant, 3);
   assert.equal(COUT_ELECTRICITE.fraction.autres, 0.25);
+  // ⚠ LE QUART VAUT POUR LE MILITAIRE, PAS POUR TOUT LE MONDE. Depuis le 05/09
+  // le Collecteur prend 0,75 et la Centrale 0,5/5,2 — mesurés. Les entités
+  // militaires ne figurent pas dans la table par bâtiment et prennent donc
+  // `autres`, qui est resté le quart et qui est le seul nombre confirmé.
+  assert.notEqual(COUT_ELECTRICITE.fraction.collecteur, COUT_ELECTRICITE.fraction.autres);
 
   let arrondisNonTriviaux = 0;
   for (const [id, ancre] of Object.entries(COUT_NIVEAU_DEUX_OFFENSE)) {
     for (let n = PREMIER; n <= NIVEAU.plafond; n += 1) {
       const cout = coutDeMonteeOffense(id, n);
-      const principal = montantDuPalier(ancre, n);
+      const principal = montantDuPalier(ancre, ancre * RAPPORT_COEFFICIENT_OFFENSE, n);
       const attendue = n < 3 ? 0 : Math.round(principal / 4);
       assert.equal(cout.electricite, attendue, `${id} niv.${n} : électricité`);
       if (n >= 3 && principal % 4 !== 0) arrondisNonTriviaux += 1;
@@ -301,10 +381,15 @@ test('couts-militaires — l\'électricité commence au niveau 3 et vaut le quar
     `${arrondisNonTriviaux} paliers à arrondi non trivial : le montage ne mesure pas l'arrondi`,
   );
 
-  // Les petites ancres font mordre l'arrondi tout de suite : au niveau 3 le
-  // Fusilier coûte 3 de scorie, donc 0,75 d'électricité, donc 1.
-  assert.equal(coutDeMonteeOffense('meute', 3).scorie, 3);
-  assert.equal(coutDeMonteeOffense('meute', 3).electricite, 1);
+  // Les petites ancres font mordre l'arrondi tout de suite. ⚠ REMESURÉ LE
+  // 05/09 : le Fusilier coûte 1 de scorie au niveau 3, donc 0,25
+  // d'électricité, donc ZÉRO. C'était 3 et 1 — l'ancre a été corrigée de 2 à 1,
+  // et son coefficient de régime la redresse trop tard pour que ce palier-là
+  // bouge. Le premier palier où l'électricité mord est le 4.
+  assert.equal(coutDeMonteeOffense('meute', 3).scorie, 1);
+  assert.equal(coutDeMonteeOffense('meute', 3).electricite, 0);
+  assert.equal(coutDeMonteeOffense('meute', 4).scorie, 3);
+  assert.equal(coutDeMonteeOffense('meute', 4).electricite, 1);
 });
 
 // ---------------------------------------------------------------------------

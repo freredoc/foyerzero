@@ -68,22 +68,54 @@ import { COUT_ELECTRICITE } from './base.js';
 // l'arbitrage sont ceux de Tiberium Alliances ; la clé du dépôt est à côté, et
 // un test croise les deux tables dans les deux sens pour qu'aucune unité ne
 // puisse entrer ou sortir du roster sans que son prix suive.
+//
+// ⚠⚠ CETTE TABLE EST L'ANCRE D'ACCUEIL, ET ELLE PORTE DES FRACTIONS DEPUIS LE
+// 05/09. La dictée du 28/08 donnait des entiers ; `RELEVE-TA-REPARATION.md` §3
+// a mesuré les quatorze coûts de réparation au niveau 10 et trouvé qu'ils
+// valent tous **exactement 397,5 × l'ancre**, sans une exception. C'est cette
+// exactitude qui rend les fractions lisibles : 636 / 397,5 = 1,6 pour
+// l'Escadron lance-missiles, là où la dictée écrivait 2.
+//
+// ⚠ SIX ÉCARTS SUR SEPT NE SONT QUE DES ARRONDIS, ET ILS SE REFERMENT TOUT
+// SEULS : `montantDuPalier` arrondit sa sortie, donc 1,6 · 3,2 · 3,6 · 4,4 ·
+// 4,8 · 5,6 rendent 2 · 3 · 4 · 4 · 5 · 6 au niveau 2 — exactement les entiers
+// dictés. Un test l'asserte, sinon la table aurait l'air de contredire Ethan.
+//
+// ⚠⚠ LE SEPTIÈME EST UNE CORRECTION DE FOND : L'ESCADRON DE TIREURS PASSE DE
+// 2 À 1. Le rapport coefficient / ancre vaut exactement 2,000 pour les sept
+// unités dont l'ancre était déjà juste, et 1,000 pour lui seul — la dictée du
+// 28/08 portait un plancher, vraisemblablement pour ne pas écrire un prix de 1.
+// Ethan l'a repéré le 05/09 par le raisonnement de jeu : « le fusilier coûte
+// moins que l'exosoldat, quoi qu'il arrive ».
 export const COUT_NIVEAU_DEUX_OFFENSE = {
-  meute: 2, //        riflemen
+  meute: 1, //        riflemen        — 2 dicté, corrigé le 05/09
+  perceurs: 1.6, //   lance-roquettes — 2 dicté, arrondi
   carapace: 2, //     exosoldat
-  perceurs: 2, //     lance-roquettes
-  ratisseur: 3, //    guardien
+  ratisseur: 3.2, //  guardien        — 3 dicté, arrondi
+  belier: 3.6, //     pitbull         — 4 dicté, arrondi
   fendeur: 4, //      predator
-  belier: 4, //       pitbull
-  crecelle: 4, //     orca
+  crecelle: 4.4, //   orca            — 4 dicté, arrondi
+  busard: 4.8, //     paladin         — 5 dicté, arrondi
   guetteur: 5, //     sniper
-  busard: 5, //       paladin
-  frappeur: 6, //     firehawk
+  frappeur: 5.6, //   firehawk        — 6 dicté, arrondi
   fouisseurs: 8, //   commando
   pilon: 9, //        juggernaut
   broyeur: 12, //     mammouth
   enclume: 12, //     kodiak
 };
+
+// ⚠⚠ LE COEFFICIENT DE RÉGIME D'UNE UNITÉ VAUT LE DOUBLE DE SON ANCRE, POUR LES
+// QUATORZE — mesuré, `RELEVE-TA-REPARATION.md` §3. C'est donc UN SCALAIRE et
+// non une seconde table de quatorze nombres : une table serait une copie, et sa
+// première divergence se lirait comme un déséquilibre de jeu au lieu d'un
+// défaut de programme. C'est la faute que le commentaire d'`economie.js`
+// raconte déjà pour la rampe.
+//
+// ⚠ IL S'APPUIE SUR UN SEUL POINT ABSOLU, et il faut le savoir :
+// `RELEVE-TA-COURBES-2.md` §5 donne « Exosoldat, cristaux, coût au palier 11 :
+// 96 000 », soit un coefficient de 4 pour une ancre de 2. Les treize autres en
+// découlent par le rapport constant des réparations.
+export const RAPPORT_COEFFICIENT_OFFENSE = 2;
 
 // ---------------------------------------------------------------------------
 // Défense — neuf ouvrages et huit unités de garnison, dans DEUX ressources
@@ -92,6 +124,22 @@ export const COUT_NIVEAU_DEUX_OFFENSE = {
 // `montant` est le coût du niveau 2 ; `ressource` est celle dans laquelle il se
 // paie. Voir le piège n° 2 en tête de fichier : cette seconde clé n'est pas un
 // ornement, c'est la moitié de l'arbitrage.
+//
+// ⚠⚠ AUCUNE ANCRE DE DÉFENSE NE BOUGE LE 05/09, ET SON COEFFICIENT DE RÉGIME
+// VAUT SON ANCRE — facteur 1, donc aucun redressement. **CE N'EST PAS UNE
+// MESURE, C'EST UN CHOIX CONSERVATEUR**, et il doit se voir : aucune capture,
+// aucun relevé n'a jamais confronté ces dix-sept ancres à quoi que ce soit. Les
+// trente captures du 05/09 portent sur les bâtiments et sur l'armée d'assaut ;
+// la garnison n'y figure pas.
+//
+// ⚠ ET RIEN NE VIENDRA LE CONTREDIRE PAR LA BANDE : le premier piège du fichier
+// reste vrai — la même unité ne vaut pas le même prix des deux côtés —, donc le
+// coefficient de l'offense ne se transporte pas ici ; et la réparation de la
+// garnison est GRATUITE, donc aucun barème ne traverse la frontière.
+//
+// ⚠ LEURS PRIX CHANGENT MALGRÉ TOUT, et c'est voulu : `montantDuPalier`
+// n'arrondit plus qu'une fois, ce qui déplace les paliers hauts de toutes les
+// entités, facteur 1 compris. Arbitré par Ethan le 05/09.
 export const COUT_NIVEAU_DEUX_DEFENSE = {
   // Les six ouvrages fixes — en quartz, comme les bâtiments.
   merlon: { montant: 2, ressource: 'quartz' }, //     mur
@@ -147,12 +195,13 @@ function verifierNiveau(niveau, quoi) {
 
 /**
  * Le coût d'un palier, ventilé sur les trois ressources.
- * @param {number} ancre coût du niveau 2
+ * @param {number} ancre coût du niveau 2 — l'ancre d'ACCUEIL
+ * @param {number} coefficient le coefficient de RÉGIME de l'entité
  * @param {string} ressource 'quartz' ou 'scorie'
  * @param {number} niveau le niveau ATTEINT
  */
-function coutMilitaire(ancre, ressource, niveau) {
-  const principal = montantDuPalier(ancre, niveau);
+function coutMilitaire(ancre, coefficient, ressource, niveau) {
+  const principal = montantDuPalier(ancre, coefficient, niveau);
   const cout = { quartz: 0, scorie: 0, electricite: 0 };
   cout[ressource] = principal;
   if (niveau >= COUT_ELECTRICITE.premierNiveauPayant) {
@@ -175,7 +224,7 @@ export function coutDeMonteeOffense(id, niveau) {
     throw new Error(`couts-militaires : ${id} n'est pas une unité d'assaut`);
   }
   verifierNiveau(niveau, id);
-  return coutMilitaire(ancre, 'scorie', niveau);
+  return coutMilitaire(ancre, ancre * RAPPORT_COEFFICIENT_OFFENSE, 'scorie', niveau);
 }
 
 /**
@@ -192,5 +241,7 @@ export function coutDeMonteeDefense(id, niveau) {
     throw new Error(`couts-militaires : ${id} n'a pas de rôle en défense`);
   }
   verifierNiveau(niveau, id);
-  return coutMilitaire(ligne.montant, ligne.ressource, niveau);
+  // ⚠ LE COEFFICIENT EST L'ANCRE, donc le facteur vaut 1 et la rampe n'est pas
+  // redressée. C'est le choix conservateur du 05/09 — voir le bloc de la table.
+  return coutMilitaire(ligne.montant, ligne.montant, ligne.ressource, niveau);
 }

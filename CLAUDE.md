@@ -42,7 +42,108 @@ Dernière révision : **05/09/2026**, version 0.96.0 · build 98.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot LIMITES-VIVES), à confronter :**
+**Référence au 05/09/2026 (après le lot BARÈME), à confronter :**
+`npm test` → **1105 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 996 025 octets**, 0 référence externe. Coût **+350 octets** — du code de
+données, aucune image : **296 `data:` avant, 296 après**. Borne T10 inchangée à
+9 300 000, marge **303 975 octets, 3,27 %**.
+⚠⚠ **UNE ENTITÉ A DEUX NOMBRES, ET LE DÉPÔT N'EN PORTAIT QU'UN.** Son prix
+d'ACCUEIL au niveau 2, dicté, et son COEFFICIENT DE RÉGIME, qui commande sa
+courbe au-delà du niveau 12. `RELEVE-TA-COURBES-2.md` §0 le disait depuis le
+24/08 — « tout ce qui précède le niveau 11 relève de l'accueil du joueur et NE SE
+MODÉLISE PAS » — sans qu'on en tire la conséquence. Les deux ne coïncident que
+pour le **Chantier de construction**, et c'est exactement sur lui que
+`ECONOMIE_NIVEAU.ratios` avait été calée : **toutes les autres entités étaient
+mal prixées en fin de partie, jusqu'à 50 %.**
+⚠⚠ **UNE SEULE FORMULE, UN SEUL ARRONDI, ET LE PLAFOND EST SON CŒUR.**
+`montant(n) = round(ancre × PROFIL(n) × facteur^(min(n−2, 10)/10))`, avec
+`facteur = coefficient / ancre`. Sans le plafond, le redressement continuerait
+au-delà du niveau 12 et rendrait `coefficient²/ancre × 24 000` au lieu de
+`coefficient × 24 000`. Avec lui, les deux zones se raccordent EXACTEMENT. Il n'y
+a pas deux branches, il y en a une.
+⚠ **NI LE 2 NI LE 10 NE SONT ÉCRITS EN DUR** : `premierNiveauPayant` et
+`ratios.length`. **`PROFIL` est exporté** pour que les tests et le générateur ne
+le recopient pas.
+⚠⚠ **LE COMMENTAIRE D'`economie.js` SUR L'ARRONDI ÉTAIT FAUX, ET LA RAISON EST
+L'INVERSE DE CE QU'IL DISAIT.** Il affirmait qu'un arrondi unique « ferait
+diverger la chaîne dès le sixième palier » : mesuré, l'erreur flottante de
+`440 × 36/11` vaut 1e-10, `Math.round` l'absorbe, et la rampe de référence est
+restituée à l'identique. Ce qui rend l'arrondi unique NÉCESSAIRE, c'est que
+l'arrondi PAR PALIER se compose et détruit les proportions des petites ancres :
+l'ancre 1 rendait au niveau 10 le **TIERS** de l'ancre 2, là où le relevé dit la
+**MOITIÉ**.
+⚠⚠ **LE TEST LE PLUS FORT DU LOT RELIE LA CHAÎNE ENTIÈRE À UNE OBSERVATION
+EXTÉRIEURE — ET IL PASSE.** Les quatorze coûts de réparation lus sur les captures
+sont reproduits en partant DU PRIX : **treize exactement**, `guetteur` à −1 parce
+que le produit exact vaut 1 987,5. Ancre, coefficient, redressement, arrondi
+unique et `partDuCoutDeMontee` doivent TOUS être justes pour qu'il tombe juste.
+⚠ **DEUX POINTS ABSOLUS DU RELEVÉ SONT DÉSORMAIS RENDUS** : Caserne au palier 11
+**115 200 → 144 000**, Exosoldat **57 600 → 96 000**. Ce sont les deux seules
+mesures de coût en valeur absolue que le dépôt possède.
+⚠⚠ **`partDuCoutDeMontee` ÉTAIT VINGT FOIS TROP CHER — 1 au lieu de 0,051887**,
+et il est indexé sur le PRIX PAYÉ, pas sur la courbe de régime. Les deux
+définitions donnent le même montant au niveau 10, le seul mesuré ; ce qui les
+départage est le bas d'échelle — un Fusilier de niveau 2 coûte 1 à construire et
+se réparerait pour **43** si l'on indexait sur le régime.
+⚠⚠ **L'ÉLECTRICITÉ EST UNE SECONDE ANCRE, PAS UNE FRACTION, ET DEUX VALEURS SUR
+TROIS ÉTAIENT FAUSSES.** Collecteur **0,5 → 0,75**, Centrale **0,1 → 0,5/5,2**.
+Le quart était une coïncidence sur les quatre bâtiments qui partagent ce rapport.
+⚠ **`0.5 / 5.2` EST ÉCRIT EN TOUTES LETTRES DANS LA SOURCE**, et un test l'exige :
+la décimale perdrait la dérivation, et la prochaine personne y lirait un réglage.
+⚠⚠ **`classeDeCout` NE SUFFIT PLUS.** La Centrale et le Collecteur sont tous deux
+`modeste` et leurs coefficients diffèrent d'un facteur **2,6** : le coefficient
+s'écrit CLÉ PAR CLÉ, et un test exige qu'il couvre exactement les onze bâtiments.
+⚠ **DEUX COEFFICIENTS SUR ONZE NE SONT PAS MESURÉS** — QG de défense 8 et
+Complexe de défense 5, dictés par Ethan le 05/09. Le commentaire le dit.
+⚠ **L'ESCADRON DE TIREURS EST LA SEULE CORRECTION DE FOND DE LA DICTÉE : 2 → 1.**
+Les six autres écarts ne sont que des arrondis — `montantDuPalier` les referme au
+niveau 2, et un test le vérifie contre la dictée du 28/08 mot pour mot.
+⚠⚠ **LA DÉFENSE NE BOUGE PAS D'ANCRE, ET SON COEFFICIENT VAUT SON ANCRE — CE
+N'EST PAS UNE MESURE, C'EST UN CHOIX CONSERVATEUR.** Aucune capture n'a jamais
+confronté ces dix-sept ancres à quoi que ce soit. **Leurs prix changent malgré
+tout**, parce que l'arrondi unique déplace les paliers hauts de tout le monde.
+⚠⚠ **1 901 PALIERS SUR 2 058 BOUGENT** — 471 sur 539 pour les bâtiments, 664 sur
+686 pour l'offense, 766 sur 833 pour la défense. Au plus **×2,20** (Orca au
+niveau 18), au moins **×0,333** (Fusilier au niveau 3). Le brief annonçait 474
+paliers de bâtiment : mesuré, 471.
+⚠ **`REPARATION_BASE_JOUEUR.courbe` CESSE D'ÊTRE `null`**, et l'avertissement qui
+disait le contraire est retiré dans le même patch. **1,1767 est une CINQUIÈME
+pente et ne repose que sur UN couple** (Collecteur 55/56) ; **le diviseur du
+Chantier est repris de l'armée par analogie, SANS PREUVE** ; **230 est un arrondi**
+de 230,3 et 230,4.
+⚠⚠ **ONZE FALSIFICATIONS SUR COPIE FRAÎCHE, LES ONZE MORDENT — ET DEUX ONT
+TROUVÉ UN DÉFAUT DANS MES PROPRES TESTS.** `T3` et `T6` relisaient
+`test/temoins-couts.js` au lieu d'appeler la formule : le témoin étant produit
+PAR elle, retirer le plafond du code les laissait VERTS. **Un test qui interroge
+le témoin ne garde que le témoin.**
+⚠⚠ **ET LE `T6` DU BRIEF NE POUVAIT PAS GARDER LE PLAFOND, C'EST MESURÉ.** Le
+brief annonçait qu'en le retirant « le test tombe sur les dix-neuf entités » : au
+niveau 12 l'exposant vaut `(12−2)/10 = 1` AVEC ou SANS plafond. Le raccord est
+exactement l'endroit où le plafond est un non-événement ; la vraie garde est
+au-DESSUS — à partir du niveau 12, tout le monde monte de 1,32 et de rien d'autre.
+⚠⚠ **LA TABLE DES BARÈMES EST FIGÉE DANS `test/`, PAS DANS `dist/`.** Ethan a
+demandé qu'il n'y ait aucun écart entre ce qui est voulu et ce qui est joué, et
+que le jeu lise des entiers pré-calculés : la formule à arrondi unique rend
+exactement les mêmes entiers qu'une table pré-calculée, et `BARÈME T10` EST cette
+preuve. L'embarquer coûterait des dizaines de kilo-octets pour zéro nombre
+différent.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 24** — vérifié, pas supposé : les
+soixante et une clés persistées d'un état sérialisé ne portent aucun PRIX, elles
+portent des NIVEAUX, et les prix se recalculent.
+⚠⚠ **LA BASE DE RÉFÉRENCE DU BRIEF N'A PAS ÉTÉ RETROUVÉE, ET C'ÉTAIT BÉNIN.**
+Il annonçait 1 093 pass, 7 060 617 octets, une borne T10 à 7 300 000 et une
+dérive de version entre ce fichier et `package.json` ; mesuré au départ,
+**1 096 pass, 8 995 675 octets, borne 9 300 000, aucune dérive** — trois lots ont
+été mergés entre l'écriture du brief et son exécution. **Les sept faits dont le
+lot dépend étaient intacts** : la signature de `montantDuPalier`, les dix ratios,
+les quatorze ancres d'offense, les quatre classes de coût, les trois fractions
+d'électricité, `courbe: null` et `partDuCoutDeMontee: 1`. Signalé plutôt que
+traité comme un point d'arrêt.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne graphique. `generer-temoins-couts.mjs`
+n'écrit ni sprite ni son.
+
+**Auparavant, après le lot LIMITES-VIVES :**
 `npm test` → **1096 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 995 675 octets**, 0 référence externe.
 ⚠⚠ **« IL MANQUE LES DEUX POINTS » ÉTAIT VRAI, ET LE LOT TERRITOIRE AVAIT ÉCRIT
@@ -4690,7 +4791,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   55 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
+test/                   55 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -4717,6 +4818,12 @@ test/                   55 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
     et le même interdit : la recapturer sur le code modifié ferait comparer un
     code à lui-même, ce qui ne prouve rien — « elle ne se fait pas en comparant
     deux exécutions d'un même code ».
+    ⚠⚠ ET LE SIXIÈME EST `temoins-couts.js`, ENTRÉ AU LOT BARÈME : les
+    quarante-deux barèmes, palier par palier, du niveau 2 au 50. **IL SE
+    RÉGÉNÈRE, ET C'EST CE QUI LE DISTINGUE DES TROIS AUTRES TÉMOINS** — il ne
+    garde pas un AVANT, il fige une SORTIE pour qu'un ratio déplacé se lise dans
+    un diff au lieu de passer pour un rééquilibrage. Il est écrit par
+    `tools/generer-temoins-couts.mjs`, qui IMPORTE la formule.
   ⤷ documentation.test.js : les COMPTES **et les NOMS** de ce fichier-ci sont
     assertés contre le disque — noms de `test/` et noms de chaque dossier de
     `src/`. Ajouter, retirer ou déplacer un fichier sans mettre §0 et §2 à jour
@@ -4730,7 +4837,15 @@ test/                   55 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  30 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 05/09
+tools/                  31 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 05/09
+                        au lot BARÈME, qui fait entrer
+                        `generer-temoins-couts.mjs`. ⚠ IL EST LE SECOND OUTIL EN
+                        JAVASCRIPT DE LA CHAÎNE APRÈS `build.js`, et le TROISIÈME
+                        à écrire dans le dépôt : il produit `test/temoins-couts.js`,
+                        les quarante-deux barèmes palier par palier. Il IMPORTE
+                        `montantDuPalier`, il ne la recopie pas — un générateur
+                        qui réimplémente la formule ne teste plus rien.
+                        Auparavant, RECOMPTÉ le 05/09
                         au lot SOL-SATELLITE, qui fait entrer `sols.py` : les huit
                         planches de terrain satellite de la carte du monde. Il ne
                         réduit pas, ne recadre pas, ne quantifie pas — il aligne les

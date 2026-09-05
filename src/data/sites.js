@@ -218,15 +218,37 @@ export const APRES_RAID = {
 //
 // ⚠ LA RUPTURE DU DIVISEUR EST AU NIVEAU 12, PAS AU 11. Quatre autres systèmes
 // changent de régime au 11 ; celui-ci fait exception, et le relevé le mesure.
+//
+// ⚠⚠ `penteBasse: 1.09` EST DEVENUE UNE MESURE LE 05/09, ELLE N'EST PLUS UNE
+// TRANSCRIPTION. Les Exosoldats ont été relevés DEUX FOIS, à Caserne 10 puis à
+// Caserne 12 : 11:56 → 10:03, soit 716 s → 603 s, rapport **1,1874** — c'est
+// 1,09² à un millième. Corollaire qui ferme la cohérence : à Caserne 12, le
+// 20:06 de l'Équipe de snipers remonte à 1 432 s, exactement le Commando, et
+// les deux unités partagent bien leur base de 882 s.
 export const REPARATION = {
   penteNiveauUnite: 1.15,
   diviseurBatiment: { penteBasse: 1.09, penteHaute: 1.12, niveauRupture: 12 },
-  // ⚠ CE NOMBRE-CI EST LE SEUL DU BLOC QUI NE VIENNE PAS D'UN RELEVÉ.
-  // `MODELE-REPARATION-1.md` §3 dit que le coût se paie en scorie et qu'il est
-  // indexé sur le niveau de l'unité, « et rien d'autre » — sans donner d'ancre.
-  // Retenu : réparer une unité DE FOND EN COMBLE coûte ce que sa dernière montée
-  // a coûté. À arbitrer.
-  partDuCoutDeMontee: 1,
+  // ⚠⚠ CE NOMBRE VIENT D'UN RELEVÉ DEPUIS LE 05/09, ET IL VALAIT 1.
+  // Ce commentaire disait : « CE NOMBRE-CI EST LE SEUL DU BLOC QUI NE VIENNE
+  // PAS D'UN RELEVÉ […] Retenu : réparer une unité DE FOND EN COMBLE coûte ce
+  // que sa dernière montée a coûté. À arbitrer. » L'arbitrage est tombé, et la
+  // valeur retenue était **vingt fois trop chère**.
+  //
+  // SOURCE : `RELEVE-TA-REPARATION.md` §5. Les quatorze unités d'assaut ont été
+  // relevées au niveau 10, toutes intégralement détruites — ce que prouve
+  // l'exactitude du rapport, 397,5 × l'ancre d'accueil sans une exception. Une
+  // avarie partielle aurait dispersé les rapports.
+  //
+  // ⚠⚠ ELLE EST INDEXÉE SUR LE PRIX PAYÉ, PAS SUR LA COURBE DE RÉGIME, ET LES
+  // DEUX DÉFINITIONS ONT LE MÊME DROIT AU NIVEAU MESURÉ. Le seul niveau relevé
+  // est le 10, qui tombe dans la zone d'accueil : « 5,1887 % du prix payé » et
+  // « 1,4429 % de la courbe de régime » y donnent exactement le même montant, et
+  // aucune mesure ne les départage. **CE QUI LES DÉPARTAGE EST LE BAS
+  // D'ÉCHELLE** : un Fusilier de niveau 2 coûte 1 à construire et se réparerait
+  // pour 43 si l'on indexait sur le régime — quarante-trois fois son prix, la
+  // remise d'accueil annulée par la première réparation. Arbitré le 05/09 : on
+  // indexe sur le prix payé.
+  partDuCoutDeMontee: 0.051887,
   // ⚠⚠ LE PLAFOND DE LA RÉSERVE DE TEMPS — dicté par Ethan le 01/09/2026 :
   // « 12 h en début de partie, +1 h par niveau d'armée ». Le temps qui passe
   // crédite un stock par châssis, et réparer le débite ; ces deux nombres sont

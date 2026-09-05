@@ -736,13 +736,45 @@ export const REPARATION_BASE_JOUEUR = {
   // que d'être écrit en dur le jour où le moteur arrivera.
   indexeeSur: 'chantierDeConstruction',
 
-  // ⚠⚠ ET LA COURBE N'EST PAS DONNÉE, DONC ELLE N'EST PAS ÉCRITE. Ethan a dit
-  // QUI décide, pas de combien. `reparationSec` de chaque bâtiment reste la
-  // durée de base ; comment le niveau du Chantier la module — division, palier,
-  // pourcentage — reste à arbitrer. Inventer un barème ici le figerait sous
-  // l'apparence d'une donnée relevée, ce qui est exactement la faute que
-  // CLAUDE.md §6 raconte pour la pente de `data/niveaux.js`.
-  courbe: null,
+  // ⚠⚠ LA COURBE EXISTE DEPUIS LE 05/09, ET CE BLOC DISAIT LE CONTRAIRE.
+  // Il portait : « ET LA COURBE N'EST PAS DONNÉE, DONC ELLE N'EST PAS ÉCRITE.
+  // Ethan a dit QUI décide, pas de combien. » C'était vrai jusqu'aux trente
+  // captures du 05/09 ; le garder une ligne de plus en aurait fait un mensonge.
+  //
+  //     coût(niveau)  = prix du niveau atteint / diviseurDuCout
+  //     temps(N, C)   = reparationSec × penteNiveau^(N−1) / D(C)
+  //     D(C)          = penteBasse^(min(C,12)−1) × penteHaute^max(C−12, 0)
+  //
+  // ⚠⚠ ET IL FAUT DIRE EXACTEMENT CE QUE LA MESURE AUTORISE, PARCE QUE LES
+  // TROIS NOMBRES N'ONT PAS LA MÊME SOLIDITÉ :
+  //
+  // — **1,1767 EST UNE CINQUIÈME PENTE, ET ELLE NE REPOSE QUE SUR UN COUPLE.**
+  //   Ni 1,10 (les PV), ni 1,15 (la réparation d'armée), ni 1,32 (les coûts) :
+  //   le seul écart d'un niveau disponible dans les captures est le Collecteur
+  //   55 → 56, dont le temps passe de 36 071 s à 42 445 s, soit 1,176707. Rien
+  //   d'autre dans le dépôt ne portait cette pente. Un second couple la
+  //   confirmerait ou la ferait tomber ; il n'y en a pas.
+  //
+  // — **LE DIVISEUR EST REPRIS DE L'ARMÉE PAR ANALOGIE, ET SANS PREUVE.**
+  //   `REPARATION.diviseurBatiment` de `data/sites.js` est mesuré pour les
+  //   UNITÉS — les Exosoldats relevés à Caserne 10 puis 12 rendent 1,1874, soit
+  //   1,09² à un millième. AUCUNE des trente captures ne montre l'effet du
+  //   Chantier sur le temps de réparation d'un BÂTIMENT. Le jour où une capture
+  //   le montrera, c'est cette ligne-ci qui tombera, pas la pente.
+  //
+  // — **230 EST UN ARRONDI DE DEUX MESURES**, 230,3 et 230,4 : Accumulateur 62
+  //   à 222,7 M pour un prix de 51,27 G, Centrale 48 à 11,87 M pour 2,734 G.
+  //   Deux bâtiments, deux coefficients de régime différents, le même rapport à
+  //   0,1 % près. Le Collecteur 56 rend 1/153,6 — exactement 1,4993 fois plus
+  //   cher —, et cette anomalie est ABANDONNÉE sur arbitrage d'Ethan du 05/09 :
+  //   deux pistes ont été falsifiées (ce ne sont ni les PV, ni l'électricité),
+  //   et la troisième — une avarie partielle des Collecteurs — n'est pas
+  //   testable ici. Si c'était elle, 230 serait une borne basse.
+  courbe: {
+    penteNiveau: 1.1767,
+    diviseurBatiment: { penteBasse: 1.09, penteHaute: 1.12, niveauRupture: 12 },
+    diviseurDuCout: 230,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -769,12 +801,75 @@ export const COUT_NIVEAU_DEUX = {
   mineur: 2, // raffinerie, accumulateur
 };
 
+// ---------------------------------------------------------------------------
+// Le coefficient de régime — la SECONDE moitié du prix d'un bâtiment
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ `classeDeCout` NE SUFFIT PLUS, ET CE N'EST PAS UN RAFFINEMENT. Une entité
+// porte deux nombres : son prix d'ACCUEIL au niveau 2 — la table ci-dessus — et
+// le coefficient qui commande sa courbe au-delà du niveau 12. Les deux ne
+// coïncident que pour les trois bâtiments de la classe `majeur`, et c'est
+// exactement sur le Chantier que la rampe d'`economie.js` avait été calée.
+//
+// ⚠⚠ LA CENTRALE ET LE COLLECTEUR SONT TOUS DEUX `modeste`, ET LEURS
+// COEFFICIENTS DIFFÈRENT D'UN FACTEUR 2,6. C'est le fait qui interdit de
+// dériver l'un de l'autre : la classe reste l'ancre d'accueil, le coefficient
+// ne s'en déduit pas, et il s'écrit donc CLÉ PAR CLÉ. Un test exige que cette
+// table couvre exactement les onze clés de `BASE_BATIMENTS`, comme celui qui
+// existe déjà pour les quatre classes — sans lui, un douzième bâtiment entrerait
+// sans coefficient et `coutDeMontee` rendrait `NaN` au lieu de lever.
+//
+// SOURCE : `RELEVE-TA-REPARATION.md` §2, sept coefficients lus sur les panneaux
+// d'optimisation d'une base de niveau 53,68 et divisés par le profil de la
+// courbe au niveau atteint. La Caserne est confirmée DEUX FOIS par deux chemins
+// indépendants : les captures rendent 5,997, et `RELEVE-TA-COURBES-2.md` §5
+// donnait déjà « Caserne, tibérium, coût au palier 11 : 144 000 », soit
+// 144 000 / 24 000 = 6,000 — dans un document écrit avant les captures.
+export const COEFFICIENT_DE_REGIME = {
+  chantierDeConstruction: 8, // mesuré — 7,999 au niveau 40
+  centreDeCommandement: 8, //  mesuré — 7,999 au niveau 50
+  qgDeDefense: 8, //           ARBITRÉ par Ethan le 05/09, jamais mesuré
+  complexeDeDefense: 5, //     ARBITRÉ par Ethan le 05/09, jamais mesuré
+  caserne: 6, //               mesuré DEUX FOIS, par deux chemins
+  depotDeVehicules: 6, //      mesuré — 5,997 au niveau 45
+  aerodrome: 6, //             mesuré — 5,997 au niveau 45
+  centrale: 5.2, //            mesuré — 5,200 au niveau 41, ancre d'accueil 3
+  collecteur: 2, //            mesuré — 1,999 au niveau 56, ancre d'accueil 3
+  raffinerie: 2, //            mesuré — le Silo, 1,999 au niveau 56
+  accumulateur: 2, //          mesuré — 2,000 au niveau 62
+};
+
 // Coût en électricité d'une amélioration, à partir du niveau 3. Exprimé en
 // fraction du coût en quartz du même palier.
 // ⚠ « à partir du niveau 3 » : les niveaux 1 et 2 ne coûtent aucune électricité.
+//
+// ⚠⚠ DEUX DES TROIS FRACTIONS ÉTAIENT FAUSSES, ET LE QUART N'ÉTAIT PAS UNE
+// RÈGLE — `RELEVE-TA-REPARATION.md` §6. Mesuré sur les sept panneaux
+// d'optimisation : `autres` tombe bien à 0,2500 sur quatre bâtiments, mais le
+// Collecteur donne 0,7503 et la Centrale 0,0962. Le quart était une coïncidence
+// sur les quatre bâtiments qui partagent ce rapport.
+//
+// ⚠⚠ L'ÉLECTRICITÉ EST UNE SECONDE ANCRE, PAS UN RATIO — et c'est ce qui rend
+// les trois nombres lisibles. Sept bâtiments, sept multiples EXACTS de 0,5 :
+//   Chantier · Centre de commandement    tibérium 8    électricité 2
+//   Caserne · Dépôt · Aérodrome          tibérium 6    électricité 1,5
+//   Collecteur                           tibérium 2    électricité 1,5
+//   Silo · Accumulateur                  tibérium 2    électricité 0,5
+//   Centrale                             tibérium 5,2  électricité 0,5
+// La Centrale à 0,0962 est simplement 0,5 / 5,2, et c'est pour ça que le
+// quotient est ÉCRIT ICI EN TOUTES LETTRES : la décimale perdrait la
+// dérivation, et la prochaine personne y lirait un réglage.
+//
+// ⚠ LA FORME `fraction` EST CONSERVÉE À DESSEIN. Les deux colonnes partagent la
+// même courbe, donc leur rapport est constant sur les cinquante niveaux : une
+// fraction et une seconde ancre donnent le même nombre. On garde la forme la
+// moins invasive.
+//
+// ⚠ LE QG ET LE COMPLEXE DE DÉFENSE N'ONT AUCUNE MESURE : ils prennent
+// `autres`, soit le quart — 2 et 1,25 d'électricité pour 8 et 5 de tibérium.
 export const COUT_ELECTRICITE = {
   premierNiveauPayant: 3,
-  fraction: { centrale: 0.1, collecteur: 0.5, autres: 0.25 },
+  fraction: { centrale: 0.5 / 5.2, collecteur: 0.75, autres: 0.25 },
 };
 
 // ---------------------------------------------------------------------------
@@ -863,7 +958,9 @@ export function coutDeMontee(id, niveau) {
     );
   }
 
-  const principal = montantDuPalier(COUT_NIVEAU_DEUX[def.classeDeCout], niveau);
+  const principal = montantDuPalier(
+    COUT_NIVEAU_DEUX[def.classeDeCout], COEFFICIENT_DE_REGIME[id], niveau,
+  );
   const cout = { quartz: 0, scorie: 0, electricite: 0 };
   cout[RESSOURCE_DE_COUT[CATEGORIE_DE_COUT_DE_LA_BASE]] = principal;
 
