@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **05/09/2026**, version 0.98.0 · build 100.
+Dernière révision : **05/09/2026**, version 0.99.0 · build 101.
 
 ---
 
@@ -42,7 +42,142 @@ Dernière révision : **05/09/2026**, version 0.98.0 · build 100.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot RÉSERVE-BASE), à confronter :**
+**Référence au 05/09/2026 (après le lot RÉPARER-ÉCRAN), à confronter :**
+`npm test` → **1128 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**9 003 058 octets**, 0 référence externe. Coût **+6 092 octets**, mesuré poste
+par poste contre un livrable rebâti depuis `main` : **JavaScript +4 244 ·
+feuille +1 623 · balisage +225 · audio +0 · images +0**. Borne T10 **inchangée à
+9 300 000**, marge **296 942 octets, 3,19 %**.
+⚠⚠ **LE CLIQUET EST REFERMÉ POUR LE JOUEUR, ET C'EST LA PREMIÈRE CHOSE À DIRE.**
+Le lot précédent finissait par « le moteur sait réparer un bâtiment ; **aucun
+écran ne l'appelle** » : le bouton Réparer du bandeau contextuel existait depuis
+le 27/08 et répondait par une phrase. Il agit. **Relevé dans Chromium à la
+géométrie du S25 FE, sur une partie abîmée par un VRAI raid de l'Ouvrage** :
+quatre jetons marqués, un geste en répare un (4 → 3 marqués), « Tout réparer »
+solde les trois autres pour 9 109 de quartz, **zéro erreur de page, zéro
+débordement horizontal**. ⚠ **Et à quelles conditions** : réserve des bâtiments
+suffisante ET quartz suffisant, chacun refusé séparément par le moteur, qui
+chiffre le manque.
+⚠⚠ **LE COMPTE DE `data:` ANNONCÉ DEPUIS QUATRE LOTS EST UN COMPTE DE LIGNES, ET
+IL VAUT 296 ; LE VRAI COMPTE D'URI EST 291.** `grep -c` compte les lignes qui
+contiennent le motif, pas les occurrences : cinq lignes de plus le nomment sans
+en porter une, dont le commentaire de la feuille qui explique l'inlinage. **291
+avant, 291 après** — 21 images, 270 sons —, et le nombre de LIGNES ne bouge pas
+non plus. Ce lot ne fait entrer ni une image ni un son.
+⚠⚠ **LE MOTEUR VIENT DE `sim/reparation.js`, ET C'EST LÀ QUE LA GARDE PRÉCÉDENTE
+S'ÉTAIT TROMPÉE DE MODULE.** `TERRAINS.batiments.actions.reparer` reçoit
+`problemesDeLaReparationDUnBatiment` et `reparerUnBatiment` **tels quels** — rien
+n'est réécrit dans l'écran, c'est la règle que l'en-tête d'`ACTIONS` porte déjà
+pour les trois autres.
+⚠⚠ **ET LA GARDE « RÉPARER N'A PAS DE MOTEUR » A ÉTÉ RETIRÉE, PAS ASSOUPLIE.**
+Elle portait sa condition de mort en toutes lettres — « il faudra alors le
+RETIRER, pas l'ajuster ». Un commentaire prend sa place et dit pourquoi. ⚠ La
+falsifiabilité qu'elle servait CHANGE DE PORTEUR sans se relâcher : `ACTIONS`
+n'a plus de forme « sans moteur », mais un TERRAIN en a une — la garnison — et
+le compte se fait désormais sur les terrains, **exigé dans les deux sens**.
+⚠⚠ **`messagePasDeReparation` DISPARAÎT, ET ELLE MENTAIT SUR LES DEUX ÉCRANS.**
+« aucun bâtiment n'est endommagé : les dégâts n'existent pas encore » : faux
+depuis le 02/09 côté base — `raid-ouvrage.js` écrit `degatsMilli` depuis le lot
+RAID-B — et faux depuis RAID-0 côté armée. ⚠ **Le champ `quoi` des deux terrains
+part avec elle** : elle en était le seul lecteur, et un champ que plus rien ne lit
+est un commentaire menteur en puissance. ⚠ **Et la branche
+`action.problemes === undefined` aussi** : elle existait pour la seule action qui
+n'avait de moteur nulle part.
+⚠⚠ **L'ÉCRAN OFFENSE L'IMPORTAIT AUSSI, ET LE BRIEF NE LE DISAIT PAS.** Le build
+est tombé sur `No matching export`. `REPARATION_AILLEURS` le remplace et dit ce
+qui est VRAI — « Les unités se réparent sur l'écran de raid » : le moteur existe,
+il est branché sur l'AUTRE écran depuis le 01/09. ⚠ `actionSansMoteur` aurait été
+faux, et rendre le bouton inerte aurait été « un indice n'est pas une
+interdiction » pris à l'envers.
+⚠⚠ **LE GESTE `reparation` EST DÉCLARÉ DANS `src/son/cablage.js`, ET IL NE
+RECOPIE PAS `'amelioration'`.** Passer le geste voisin depuis l'écran aurait donné
+le même son en MENTANT sur ce que le joueur vient de faire. ⚠ **Et le son n'est
+pas `building_player_repair_loop`** : celui-là porte `boucle: true`, il décrit une
+réparation qui DURE, et le modèle n'en a pas — c'est un stock qui se dépense en un
+tick. C'est `building_player_complete`, parce que ce qui est vrai, c'est qu'un
+bâtiment vient de se retrouver debout et entier. ⚠ Le balayage des atteignables de
+`SON T19` gagne le geste : il se dit exhaustif, et un geste absent y déclarerait
+muet ce qui sonne.
+⚠⚠ **LE BANDEAU CONTEXTUEL DIT L'AVARIE ET SON PRIX, ET LE DEVIS EST CELUI DU
+MOTEUR.** Armer Réparer sans savoir quel bâtiment est abîmé, c'est toucher au
+hasard parmi quarante. `detailDuBatiment` rend `degatsSubisMilliemes` — **une part
+des PV max, jamais un absolu**, même règle qu'`apercuDeLaPiece` — et un `devis`
+pris dans `coutDeLaReparationDUnBatiment`, avec le `Math.round` que
+`reparerUnBatiment` facturera.
+⚠⚠ **ET LA FALSIFICATION DU DEVIS N'A PAS MORDU AU PREMIER RELEVÉ.** Le montage
+abîmait de 37 % : le prix brut vaut **19 679,737**, donc `Math.round` et
+`Math.ceil` rendent tous deux 19 680, et « le devis est recalculé avec `ceil` »
+laissait le test **VERT — 1 pass / 0 fail, mesuré**. À 50 % le brut vaut
+**26 594,239** et les deux lectures divergent. C'est « un montage qui tombe rond
+ne mesure pas un arrondi », troisième fois du dépôt, et le test exige désormais
+que les deux arrondis DIFFÈRENT avant de comparer.
+⚠⚠ **UN ABÎMÉ SE VOIT, ET LA CONVENTION VIENT DE L'ÉCRAN DE RAID — ELLE N'EST PAS
+INVENTÉE.** `#ecran-raid .emplacement.abimee` borde en `#E43E32` depuis le 01/09 ;
+le jeton reprend la classe et la teinte. ⚠ **Mais c'est un `outline`, pas un
+`border`** : le jeton n'a aucune bordure, et lui en donner une rétrécirait la
+boîte de PADDING — donc la surface où `background-image` peint le sprite. Un pixel
+art recalé d'un pixel n'est plus du pixel art. `.case.legale` et `.case.choisie`
+emploient l'`outline` pour cette raison exacte. ⚠ **Et la même ligne sert les DEUX
+bandes** : une pièce de garnison porte `degatsMilli` comme un bâtiment.
+⚠⚠ **« TOUT RÉPARER » EST UN BOUTON DIRECT, ET IL NE REFUSE PAS EN BLOC.**
+`ACTIONS` est le registre du modèle « armer puis toucher » ; un geste global n'y a
+rien à désigner. **`problemesDeToutReparerLesBatiments` n'est lue que pour son
+code `rien-a-reparer`** : elle juge le devis TOTAL et refuserait trente-neuf
+bâtiments payables parce que le quarantième ne l'est pas, quand
+`toutReparerLesBatiments` est écrite pour l'inverse. **Mesuré sur une base mixte :
+`reparees: 3`, `impayables: 2`, et les trois payables ont bien leurs PV.**
+⚠ **ET LE BILAN SE DIT, MÊME À ZÉRO RÉPARÉ** — sinon une réserve à sec rendrait un
+écran qui ne bouge pas, et le joueur croirait le bouton mort. Trois phrases : tout
+réparé, partiellement, rien de payable.
+⚠⚠ **LA RÉSERVE DES BÂTIMENTS S'AFFICHE, ET LE BRIEF SE TROMPAIT SUR SON
+PRÉCÉDENT.** Il disait « comme l'écran d'armée montre ses trois réservoirs » :
+mesuré, **`reservoirsDeLArmee` n'a AUCUN appelant dans `src/ui/`** — aucun écran
+ne montre de réserve, et il n'y avait donc rien à reprendre. La ligne est sobre,
+elle vit dans le bloc de « Tout réparer », et **le bloc n'apparaît que le mode
+Réparer armé** — la discipline de `raid-tout-reparer`, arbitrée le 01/09.
+⚠ **DONC AUCUNE SEPTIÈME BARRE FIXE.** `flex: 0 0 auto` comme `#chantier-avis`, et
+`hidden` par défaut : le chrome fixe reste à **288 px** et la garde qui énumère les
+`flex: 0 0 Npx` ne le voit pas. **Relevé à l'écran : la barre fait 360 × 22 px, et
+`#chantier-champ` passe de 492 à 426 px pendant le mode** — la grille absorbe,
+zéro débordement.
+⚠⚠ **`direLaDuree` EST EXPORTÉE ET PREND SON ARRONDI EN ARGUMENT, PARCE QU'UN
+MANQUE ET UN STOCK NE S'ARRONDISSENT PAS DANS LE MÊME SENS.** Un manque monte —
+annoncer moins que ce qui manque ferait cliquer sur un refus ; un stock descend —
+annoncer « 5 min » pour 4 min 10 s ferait tenter une réparation refusée. **Le
+défaut reste `Math.ceil`, et les quatre messages de refus qui l'appellent déjà ne
+bougent pas d'une lettre.**
+⚠⚠ **UN RAID SUBI NE VIDE PAS LA RÉSERVE DES BÂTIMENTS — ETHAN, 05/09.** Le
+commentaire de `raid-ouvrage.js` portait une omission « délibérée mais non
+arbitrée » ; il porte désormais la décision, son auteur et sa date. Le motif ne
+change pas : vider les quatre réservoirs rendrait le cliquet INCASSABLE.
+⚠⚠ **LES TESTS PASSENT PAR LE GESTE, ET IL A FALLU UN FAUX DOCUMENT POUR ÇA.**
+Asserter `ACTIONS.reparer.agir === reparerUnBatiment` prouve la TABLE, pas le
+chemin — c'est exactement le proxy qui a laissé la garde précédente verte. Un faux
+document écrit à la main entre dans `test/chantier.test.js`, sur le modèle de
+celui de `test/recherche.test.js` : **aucune dépendance n'entre**, `esbuild` reste
+la seule. ⚠ **Il ne sert que les identifiants que `src/index.src.html` déclare
+vraiment et LÈVE sur tout autre** — donc il garde une seconde chose : que l'écran
+ne demande aucun élément que le balisage n'a pas.
+⚠⚠ **`desarmerLAction` ENTRE, ET SA PREMIÈRE ÉCRITURE S'EST APPELÉE ELLE-MÊME.**
+Les trois lignes du désarmement étaient recopiées QUATRE fois ; le remplacement
+textuel a aussi frappé le corps de la fonction qui les remplaçait — « Maximum call
+stack size exceeded », attrapé par les tests neufs et non par la relecture. Cinq
+sites d'appel désormais, un seul corps.
+⚠ **DOUZE TESTS ENTRENT — `RÉPARER T1` à `T12`, dans `test/chantier.test.js` — ET
+LE COMPTE PASSE DE 1 117 À 1 128** : +12 entrants, −1 retiré, la garde du §4.
+**Aucune assertion n'a été assouplie**, et deux gardes se RESSERRENT : le balayage
+des atteignables de `SON T19`, et la falsifiabilité de la table des actions.
+⚠ **TREIZE FALSIFICATIONS, TREIZE CHUTES**, dont celle du devis reprise après
+mesure, et une treizième dans `src/son/cablage.js` — faire sonner la boucle de
+réparation fait tomber trois tests de `son.test.js`.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 25.** Pas un champ n'entre dans
+l'état : la quatrième réserve y était depuis le lot RÉSERVE-BASE, et ce lot ne
+fait que la lire, la dépenser et l'afficher.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Les sept captures du rapport vivent dans
+`rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot RÉSERVE-BASE :**
 `npm test` → **1117 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 996 966 octets**, 0 référence externe. Coût **+941 octets**, ENTIÈREMENT DU
 JAVASCRIPT — **296 `data:` avant, 296 après**. Borne T10 inchangée à 9 300 000,

@@ -252,8 +252,24 @@ export function effondrementDuBatiment(id, proprietaire = 'joueur') {
  * refusent nommément. Démolir une garnison n'est pas un effondrement de
  * bâtiment : le pack n'a pas de son pour ça, et on n'en détourne aucun.
  *
- * @param {string} geste 'selection' · 'pose' · 'amelioration' · 'deplacement'
- *   · 'retrait' · 'attaque'
+ * ⚠⚠ ET « RÉPARER » EST UN GESTE À PART ENTIÈRE, PAS UN `'amelioration'`
+ * EMPRUNTÉ — lot RÉPARER-ÉCRAN, 05/09. L'écran aurait pu passer le geste voisin
+ * pour obtenir le même son : il aurait alors MENTI sur ce que le joueur vient de
+ * faire, et le jour où le pack donnera un son propre à la réparation, il aurait
+ * fallu retrouver lequel des deux appels était lequel. Le geste dit ce qui s'est
+ * passé ; c'est ici, et ici seulement, qu'on décide du bruit.
+ *
+ * ⚠⚠ ET LE SON EST CELUI DE LA CONSTRUCTION ACHEVÉE, PARCE QUE LES DEUX SONS DE
+ * RÉPARATION DU PACK SONT DES BOUCLES. `building_player_repair_loop` porte
+ * `boucle: true` : il décrit une réparation qui DURE, et il reste muet pour la
+ * raison écrite au lot SON-CÂBLAGE — le modèle n'a « ni réparation qui dure »,
+ * c'est un stock qui se dépense en un tick. Le jouer en coup unique inventerait
+ * une mécanique que le pack ne demande pas. Ce qui est vrai, en revanche, c'est
+ * qu'un bâtiment vient de se retrouver debout et entier : c'est exactement ce
+ * que `building_player_complete` dit déjà de la pose et de l'amélioration.
+ *
+ * @param {string} geste 'selection' · 'pose' · 'amelioration' · 'reparation'
+ *   · 'deplacement' · 'retrait' · 'attaque'
  * @param {{genre?: string, id?: string}} quoi ce sur quoi le geste porte
  * @returns {string|null}
  */
@@ -264,6 +280,7 @@ export function evenementDuGeste(geste, { genre = null, id = null } = {}) {
     case 'attaque': return 'order_player_attack';
     case 'pose':
     case 'amelioration':
+    case 'reparation':
       return genre === 'batiment' ? 'building_player_complete' : null;
     case 'retrait':
       return genre === 'batiment' ? effondrementDuBatiment(id) : null;

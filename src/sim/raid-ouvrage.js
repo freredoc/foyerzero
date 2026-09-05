@@ -583,16 +583,22 @@ export function subirUnRaid(etat, base, minute, options = {}) {
 
   // --- 3. la réserve de réparation se vide ---------------------------------
   //
-  // ⚠⚠ LES TROIS RÉSERVOIRS D'ARMÉE SEULEMENT, ET LE QUATRIÈME EST ÉPARGNÉ PAR
-  // DÉCISION, PAS PAR OUBLI — lot RÉSERVE-BASE, 05/09/2026. Vider aussi
-  // `reserveReparationBatiments` rendrait le cliquet de la base INCASSABLE : le
-  // raid qui abîme les bâtiments emporterait du même geste le temps qu'il faut
-  // pour les relever, et le joueur repartirait de zéro à chaque passe. La phrase
-  // de `MODELE-ECONOMIQUE.md` §7 — « un raid qui passe vide le réservoir de
-  // réparation » — est du 24/08 et ne connaît qu'UN réservoir ; l'étendre à la
-  // quatrième réserve serait un arbitrage de calibrage, et il revient à Ethan.
-  // Si Ethan le veut, c'est la clé de boucle ci-dessous qui change, et rien
-  // d'autre.
+  // ⚠⚠ LES TROIS RÉSERVOIRS D'ARMÉE SEULEMENT, ET C'EST ARBITRÉ — ETHAN,
+  // 05/09/2026 : « un raid subi ne vide pas la réserve des bâtiments ». Le lot
+  // RÉSERVE-BASE avait laissé ici une omission déclarée délibérée mais NON
+  // tranchée ; elle l'est, et ce commentaire porte la décision au lieu de
+  // l'hésitation.
+  //
+  // ⚠ LE MOTIF N'A PAS CHANGÉ, ET IL EST CE QUI FAIT TENIR LE CLIQUET. Vider
+  // aussi `reserveReparationBatiments` le rendrait INCASSABLE : le raid qui
+  // abîme les bâtiments emporterait du même geste le temps qu'il faut pour les
+  // relever, et le joueur repartirait de zéro à chaque passe.
+  //
+  // ⚠ ET `MODELE-ECONOMIQUE.md` §7 NE DIT PAS LE CONTRAIRE. Sa phrase — « un
+  // raid qui passe vide le réservoir de réparation » — est du 24/08 et ne
+  // connaît qu'UN réservoir : c'est celui de l'armée, et il se vide bien.
+  // Si Ethan revient dessus, c'est la clé de boucle ci-dessous qui change, et
+  // rien d'autre.
   const aPerduDesPv = resultat.batiments.some((b) => b.pvPerdusIciMilli > 0);
   if (aPerduDesPv) {
     for (const chassis of Object.keys(laBase.reserveReparation)) {

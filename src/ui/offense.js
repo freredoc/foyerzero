@@ -53,7 +53,7 @@ import { couchesDeLEntite } from '../render/scene.js';
 import {
   formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
   messageDePose, messageDeConfirmation,
-  messagePasDeReparation, DUREE_TOAST_MS, poserCouches,
+  DUREE_TOAST_MS, poserCouches,
   apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
 } from './chantier.js';
 import { baseCourante } from '../sim/base-courante.js';
@@ -262,6 +262,24 @@ export function messageDeDestinationDUnite(nom) {
   return `Déplacement de ${nom} : touchez l'emplacement d'arrivée.`
     + ' Retouchez le bouton pour annuler.';
 }
+
+/**
+ * Ce que Réparer répond sur l'écran de composition.
+ *
+ * ⚠⚠ IL REMPLACE `messagePasDeReparation`, QUI EST PARTIE AU LOT RÉPARER-ÉCRAN
+ * — ET QUI MENTAIT ICI AUSSI. Elle rendait « aucune unité n'est endommagée : les
+ * dégâts n'existent pas encore » ; les dégâts d'une unité existent depuis le lot
+ * RAID-0, `reporterLesDegats` les écrit après chaque raid, et
+ * `reparerUnePiece` les efface depuis le lot RÉSERVE. La phrase décrivait un
+ * manque comblé deux fois.
+ *
+ * ⚠ ET CE N'EST PAS UN REFUS DE MOTEUR : `actionSansMoteur` dirait « Réparer
+ * n'existe pas encore pour l'armée », ce qui est FAUX. Le moteur existe, il est
+ * simplement branché sur l'AUTRE écran — arbitrage du 01/09, l'armée se répare
+ * là où elle part au combat. Ce message dit où aller, il ne refuse rien.
+ */
+export const REPARATION_AILLEURS = 'Les unités se réparent sur l\'écran de raid,'
+  + ' avec « Réparer » ou « Tout réparer ».';
 
 export const ACTIONS_ARMEE = {
   reparer: { bouton: 'offense-reparer', libelle: 'Réparer', agir: null },
@@ -650,7 +668,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       // la barre contextuelle n'existait qu'au Chantier. Vu en essayant cet
       // écran-ci, pas en le relisant.
       toast(nom === 'reparer'
-        ? messagePasDeReparation('aucune unité n\'est endommagée')
+        ? REPARATION_AILLEURS
         : actionSansMoteur(action.libelle, 'l\'armée'));
       peindre(etatCourant);
       return;

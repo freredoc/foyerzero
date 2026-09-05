@@ -908,7 +908,12 @@ const EVENEMENTS_CABLES = (() => {
     }
   }
   // Les gestes : tous les couples que `evenementDuGeste` peut recevoir.
-  for (const geste of ['selection', 'deplacement', 'attaque', 'pose', 'amelioration']) {
+  // ⚠ `reparation` ENTRE AU LOT RÉPARER-ÉCRAN, 05/09. Ce balayage se dit
+  // exhaustif — « tous les couples » — donc un geste ajouté à la table sans être
+  // ajouté ici ferait mentir le compte des atteignables, dans le sens le plus
+  // dangereux : il déclarerait muet ce qui sonne.
+  for (const geste of ['selection', 'deplacement', 'attaque', 'pose', 'amelioration',
+    'reparation']) {
     for (const genre of ['batiment', 'garnison', null]) {
       const nom = evenementDuGeste(geste, { genre });
       if (nom !== null) vus.add(nom);
@@ -1409,6 +1414,18 @@ test('SON T19 — un geste demande un son, et l\'écran n\'en nomme aucun', () =
   assert.equal(evenementDuGeste('attaque', {}), 'order_player_attack');
   assert.equal(evenementDuGeste('pose', { genre: 'batiment' }), 'building_player_complete');
   assert.equal(evenementDuGeste('amelioration', { genre: 'batiment' }), 'building_player_complete');
+  // ⚠⚠ RÉPARER EST UN GESTE À PART, ET IL SONNE COMME UNE CONSTRUCTION ACHEVÉE
+  // — lot RÉPARER-ÉCRAN, 05/09. L'écran aurait pu passer `'amelioration'` pour
+  // obtenir le même son : il aurait menti sur ce que le joueur vient de faire.
+  // Et le son n'est PAS `building_player_repair_loop` : celui-là porte
+  // `boucle: true`, il décrit une réparation qui DURE, et le modèle n'en a pas —
+  // c'est un stock qui se dépense en un tick. Le jouer en coup unique
+  // inventerait une mécanique que le pack ne demande pas.
+  assert.equal(evenementDuGeste('reparation', { genre: 'batiment' }), 'building_player_complete');
+  assert.equal(evenementDuGeste('reparation', { genre: 'garnison' }), null);
+  assert.equal(EVENEMENTS.building_player_repair_loop.variantes.length, 1);
+  assert.equal(SONS.building_player_repair_loop.boucle, true,
+    'le son de réparation a cessé de boucler : ce choix-là est à reprendre');
   // ⚠⚠ UNE PIÈCE DE GARNISON NE SONNE PAS COMME UN BÂTIMENT. Le pack n'a pas de
   // son pour ça, et on n'en détourne aucun : on se tait.
   assert.equal(evenementDuGeste('pose', { genre: 'garnison' }), null);

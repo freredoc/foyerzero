@@ -487,11 +487,39 @@ function nomDuBatiment(id) {
   return BASE_BATIMENTS[id].nom.joueur;
 }
 
-/** Le manque de temps, dit en minutes ou en heures selon sa taille. */
-function direLaDuree(ticks) {
+/**
+ * Une durée de réserve, dite en secondes, en minutes ou en heures.
+ *
+ * ⚠⚠ ELLE EST EXPORTÉE DEPUIS LE LOT RÉPARER-ÉCRAN, ET C'EST « UNE SEULE TABLE
+ * FAIT FOI PAR GRANDEUR » (CLAUDE.md §4). L'écran affiche désormais la réserve
+ * des bâtiments ; s'il écrivait son propre formatage, la même quantité se
+ * lirait « 11,5 h » sur la ligne de réserve et « 11 h » dans le refus qui la
+ * cite deux lignes plus bas, sans que rien ne le signale.
+ *
+ * ⚠⚠ ET L'ARRONDI EST UN ARGUMENT, PARCE QU'UN MANQUE ET UN STOCK NE S'ARRONDISSENT
+ * PAS DANS LE MÊME SENS. Un manque s'arrondit vers le HAUT — annoncer moins que
+ * ce qui manque ferait cliquer le joueur sur un refus. Un stock s'arrondit vers
+ * le BAS, pour la raison exactement symétrique : une réserve de 4 min 10 s
+ * annoncée « 5 min » ferait tenter une réparation de 5 min, que le moteur
+ * refuserait. C'est le même piège que le §7.3 du lot RÉSERVE-BASE — l'écart entre
+ * ce qu'on annonce et ce qu'on facture — pris du côté du temps.
+ *
+ * ⚠ LE DÉFAUT EST `Math.ceil`, ET IL REPRODUIT AU CARACTÈRE PRÈS LES QUATRE
+ * MESSAGES DE REFUS QUI L'APPELLENT DÉJÀ : ce lot n'en déplace pas une lettre.
+ *
+ * @param {number} ticks
+ * @param {(x: number) => number} [arrondi] `Math.ceil` pour un manque,
+ *   `Math.floor` pour un stock
+ * @returns {string}
+ */
+export function direLaDuree(ticks, arrondi = Math.ceil) {
   const secondes = ticks / TICKS_PAR_SECONDE;
-  if (secondes < 60) return `${Math.ceil(secondes)} s`;
-  if (secondes < 3600) return `${Math.ceil(secondes / 60)} min`;
+  if (secondes < 60) return `${arrondi(secondes)} s`;
+  if (secondes < 3600) return `${arrondi(secondes / 60)} min`;
+  // ⚠ AU-DELÀ DE L'HEURE, LA DÉCIMALE FAIT L'ARRONDI, et il est le même dans les
+  // deux sens : un dixième d'heure vaut six minutes, ce qui est sous la
+  // granularité de toute décision de réparation. Y appliquer `arrondi` donnerait
+  // « 11 h » pour 11,9 h de réserve, ce qui est bien PIRE que la demie.
   return `${(secondes / 3600).toFixed(1)} h`;
 }
 

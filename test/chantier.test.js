@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  ACTIONS, messagePasDeReparation, DUREE_TOAST_MS,
+  ACTIONS, DUREE_TOAST_MS,
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
@@ -89,6 +89,16 @@ import * as moteurEtat from '../src/sim/state.js';
 import * as moteurReparation from '../src/sim/reparation.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+// ⚠ LE LOT RÉPARER-ÉCRAN MONTE L'ÉCRAN POUR DE BON — voir le faux document en
+// bas de fichier, et le motif qui l'accompagne.
+import { initialiserEcranChantier } from '../src/ui/chantier.js';
+import * as moteurEcranChantier from '../src/ui/chantier.js';
+import {
+  crediterLesReserves, plafondDeLaReserveDesBatiments,
+  coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments, direLaDuree,
+} from '../src/sim/reparation.js';
+import { rattraperJeu } from '../src/sim/state.js';
+import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -1194,77 +1204,37 @@ test('actions — les quatre boutons sont branchés sur le MOTEUR, pas sur une c
     assert.equal(typeof action.libelle, 'string');
   }
 
-  // Falsifiable : le montage doit voir les DEUX formes d'action — celles qui
-  // ont un moteur et celle qui n'en a pas. Sinon la distinction ne prouve rien.
-  const avecMoteur = Object.values(ACTIONS).filter((a) => a.agir !== undefined);
-  const sansMoteur = Object.values(ACTIONS).filter((a) => a.agir === undefined);
-  assert.equal(avecMoteur.length, 3);
-  assert.equal(sansMoteur.length, 1);
+  // ⚠⚠ LES QUATRE ONT UN MOTEUR DEPUIS LE LOT RÉPARER-ÉCRAN, ET LA
+  // FALSIFIABILITÉ A CHANGÉ DE PORTEUR SANS S'ASSOUPLIR. Elle exigeait de voir
+  // « les DEUX formes d'action » dans `ACTIONS` — trois avec moteur, une sans —
+  // et cette division-là n'existe plus : `reparer` a le sien. Ce qu'elle gardait
+  // vraiment, c'est qu'un TERRAIN peut n'avoir pas de moteur là où un autre en
+  // a ; les deux formes se comptent donc sur les terrains, où elles sont encore
+  // vraies, et le compte est exigé DANS LES DEUX SENS.
+  assert.equal(Object.values(ACTIONS).filter((a) => a.agir === undefined).length, 0,
+    'une action du bandeau n\'a plus de moteur : la table a reculé');
+  const terrainsOuReparerVaut = (nul) => Object.values(TERRAINS)
+    .filter((t) => (t.actions.reparer === null) === nul).length;
+  assert.equal(terrainsOuReparerVaut(false), 1, 'aucun terrain ne sait réparer');
+  assert.equal(terrainsOuReparerVaut(true), 1, 'aucun terrain ne répond « pas ici »');
 });
 
-test('actions — Réparer n\'a pas de moteur DANS L\'ÉCRAN, et le moteur existe', () => {
-  // ⚠⚠ CE TEST A CHANGÉ DE CIBLE AU LOT RÉSERVE-BASE, 05/09/2026, ET IL AVAIT
-  // MESURÉ UN PROXY. Il disait : « ce test est fait pour tomber un jour ; le
-  // jour où le moteur gagne une fonction de réparation, il rougit et dit quoi
-  // brancher ». Ce jour est venu — et IL EST RESTÉ VERT, parce qu'il regardait
-  // les exports de `sim/state.js` quand la fonction est née dans
-  // `sim/reparation.js`. Une garde qui surveille le mauvais module ne prévient
-  // de rien : c'est la même faute que `ZOOM_BASE_MULTIPLE_MAX` et que
-  // `ZOOM_CARTE.grilleEmbleme`, troisième et quatrième fois du dépôt.
-  //
-  // ⚠ CE QU'IL DÉFEND MAINTENANT, ET C'EST L'ÉTAT RÉEL : le moteur SAIT réparer
-  // un bâtiment, l'écran ne l'appelle PAS encore, et la dette est donc ICI et
-  // nulle part ailleurs. Il tombera le jour où l'écran branchera le bouton —
-  // c'est ce qu'on lui demande —, et il faudra alors le RETIRER, pas l'ajuster.
-  assert.ok('reparerUnBatiment' in moteurReparation,
-    'le moteur a perdu `reparerUnBatiment` : c\'est le lot RÉSERVE-BASE qui recule');
-  assert.ok('problemesDeLaReparationDUnBatiment' in moteurReparation);
-  assert.ok('toutReparerLesBatiments' in moteurReparation);
-  assert.equal(ACTIONS.reparer.problemes, undefined,
-    'l\'écran a gagné son moteur : retirer ce test, la dette est soldée');
-  assert.equal(ACTIONS.reparer.agir, undefined,
-    'l\'écran a gagné son moteur : retirer ce test, la dette est soldée');
-
-  // ⚠ ET LA PHRASE DE REFUS EST DEVENUE FAUSSE APRÈS UN RAID, ce qui est le
-  // DÉFAUT que le prochain lot corrige : `raid-ouvrage.js` écrit `degatsMilli`
-  // sur les bâtiments depuis le lot RAID-B, donc « aucun bâtiment n'est
-  // endommagé » peut mentir. C'est un fait d'ÉCRAN, hors de ce lot-ci, et il
-  // est nommé pour qu'on ne le redécouvre pas.
-
-  // La phrase dit ce qui est vrai, et ne promet rien.
-  // ⚠ LE MESSAGE NOMME CE DONT IL PARLE DEPUIS LE 29/08. Il disait « aucun
-  // bâtiment n'est endommagé » en dur, y compris sur la bande de garnison et,
-  // à ce lot, sur l'écran Offense : le mot vient maintenant du terrain.
-  const constat = 'aucun bâtiment n\'est endommagé';
-  assert.equal(typeof messagePasDeReparation(constat), 'string');
-  assert.ok(messagePasDeReparation(constat).length > 20,
-    'un refus doit expliquer, pas seulement refuser');
-  // ⚠⚠ LE CONSTAT ENTIER, ET IL A FALLU DEUX ESSAIS. La première écriture ne
-  // prenait que le nom et préfixait « aucun » : « aucun unité ». La deuxième
-  // prenait le sujet accordé et gardait le verbe : « aucune unité n'est
-  // endommagé ». Les deux se sont vues À L'ESSAI, pas à la relecture — et ce
-  // test-ci les avait laissées passer avec un `aucune?` complaisant. Il exige
-  // maintenant que la phrase soit REPRISE, pas recomposée.
-  const feminin = 'aucune unité n\'est endommagée';
-  assert.ok(messagePasDeReparation(feminin).startsWith(`${feminin} `),
-    'le message recompose le constat au lieu de le reprendre');
-  assert.ok(!messagePasDeReparation(feminin).includes('bâtiment'),
-    'le message parle encore de bâtiments alors qu\'on lui parle d\'unités');
-  // Et chaque terrain porte SON constat, accordé de bout en bout.
-  for (const terrain of Object.values(TERRAINS)) {
-    assert.match(terrain.quoi, /^aucun(e?) [^ ]+ n'est endommagé\1$/,
-      `« ${terrain.quoi} » n'est pas un constat accordé`);
-    assert.ok(terrain.pourQui.length > 2, 'le terrain ne dit pas pour qui il parle');
-  }
-
-  // Falsifiable dans l'autre sens : le montage doit voir de VRAIS exports, sinon
-  // « aucun nom de réparation » passerait sur un module vide.
-  assert.ok('ameliorer' in moteurEtat && 'demolir' in moteurEtat,
-    'le montage ne lit pas les exports de sim/state.js');
-
-  // Le toast a une durée bornée : ni instantané, ni permanent.
-  assert.ok(DUREE_TOAST_MS >= 1500 && DUREE_TOAST_MS <= 10_000, `${DUREE_TOAST_MS} ms`);
-});
+// ⚠⚠ LE TEST « RÉPARER N'A PAS DE MOTEUR DANS L'ÉCRAN » A ÉTÉ RETIRÉ ICI, ET
+// C'EST SA RAISON D'ÊTRE — lot RÉPARER-ÉCRAN, 05/09/2026. Il portait sa propre
+// condition de mort en toutes lettres : « il tombera le jour où l'écran
+// branchera le bouton — c'est ce qu'on lui demande —, et il faudra alors le
+// RETIRER, pas l'ajuster ». Ce jour est celui-ci. Il n'a été ni assoupli ni
+// retourné : ce qu'il gardait — une dette d'ÉCRAN — n'existe plus, et un test
+// qui ne peut tomber sur aucun état d'aujourd'hui ne garde rien.
+//
+// ⚠ CE QU'IL DÉFENDAIT EST REPRIS AILLEURS, ET PLUS HAUT. Les tests
+// « réparation — … » ci-dessous passent par le GESTE — armer, toucher — au lieu
+// d'interroger `ACTIONS` : c'est exactement le proxy que ce test-ci avait commis
+// en regardant les exports de `sim/state.js` quand la fonction vivait dans
+// `sim/reparation.js`, et qui l'a laissé VERT le jour qu'il devait signaler.
+//
+// ⚠ ET `messagePasDeReparation` EST PARTIE AVEC LUI, ainsi que le champ
+// `quoi` des terrains, qui n'avait pas d'autre lecteur.
 
 test('actions — jamais de `try` autour d\'`ameliorer` ni de `demolir`', () => {
   // Même discipline que pour `poser`, et pour la même raison : `problemes…`
@@ -4291,4 +4261,531 @@ test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent
     'le panneau de l\'Offense a remplacé la sélection au lieu de s\'y ajouter');
   assert.match(chantier, /panneauOuvert = true;[\s\S]{0,200}selectionner\(index\);/,
     'le panneau du Chantier ne sélectionne plus ce dont il parle');
+});
+
+// ---------------------------------------------------------------------------
+// Le lot RÉPARER-ÉCRAN — un bouton branché, et un faux document pour le prouver
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CES TESTS PASSENT PAR LE GESTE, JAMAIS PAR LA TABLE, ET C'EST TOUTE LEUR
+// RAISON D'ÊTRE. Asserter `ACTIONS.reparer.agir === reparerUnBatiment` prouve
+// que la TABLE porte la fonction, pas que le chemin d'exécution l'appelle : une
+// table peut porter un moteur que `executerAction` n'atteint jamais. C'est
+// exactement le proxy qui a laissé la garde du lot RÉSERVE-BASE verte le jour
+// qu'elle devait signaler, en regardant `sim/state.js` quand la fonction vivait
+// dans `sim/reparation.js`. On arme donc le bouton, on touche la case, et on
+// regarde les PV.
+//
+// ⚠⚠ D'OÙ UN FAUX DOCUMENT, ET IL EST DÉRIVÉ DU BALISAGE RÉEL. Le dépôt n'a ni
+// jsdom ni navigateur (`CLAUDE.md` §3), et `esbuild` reste sa seule dépendance :
+// ce faux-ci est écrit à la main, comme celui de `test/recherche.test.js` depuis
+// le lot RECHERCHE. Il ne sert QUE les identifiants que `src/index.src.html`
+// déclare vraiment et LÈVE sur tout autre — si bien qu'il garde une seconde
+// chose au passage : que l'écran ne demande aucun élément que le balisage n'a
+// pas. Un faux qui fabriquerait n'importe quel identifiant à la demande
+// laisserait passer une faute de frappe sans un mot.
+
+const IDS_DU_BALISAGE = new Set(
+  [...readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .matchAll(/\bid="([A-Za-z0-9-]+)"/g)].map((m) => m[1]),
+);
+
+/** Un élément de papier — juste ce que `ui/chantier.js` emploie vraiment. */
+function faireElement(tag, doc) {
+  const classes = new Set();
+  const ecouteurs = {};
+  let texte = '';
+  const el = {
+    tagName: String(tag).toUpperCase(),
+    ownerDocument: doc,
+    children: [],
+    parent: null,
+    attributs: {},
+    dataset: {},
+    // ⚠ `style` EST UN OBJET NU AVEC `setProperty` : l'écran y écrit des
+    // propriétés de grille et deux variables CSS, jamais rien qu'il relise
+    // autrement que par le même nom.
+    style: { setProperty(nom, valeur) { this[nom] = valeur; } },
+    hidden: false,
+    title: '',
+    disabled: false,
+    clientWidth: 360,
+    clientHeight: 480,
+    scrollWidth: 360,
+    scrollHeight: 480,
+    scrollLeft: 0,
+    scrollTop: 0,
+    classList: {
+      add: (...n) => { for (const c of n) classes.add(c); },
+      remove: (...n) => { for (const c of n) classes.delete(c); },
+      contains: (c) => classes.has(c),
+      toggle: (c, force) => {
+        const veut = force === undefined ? !classes.has(c) : force;
+        if (veut) classes.add(c); else classes.delete(c);
+        return veut;
+      },
+    },
+    get className() { return [...classes].join(' '); },
+    set className(v) {
+      classes.clear();
+      for (const c of String(v).split(/\s+/)) if (c !== '') classes.add(c);
+    },
+    // Écrire `textContent` vide les enfants, comme dans un vrai document : c'est
+    // ce dont `peindre` se sert pour ne pas empiler deux fois le même arbre.
+    get textContent() { return texte + el.children.map((c) => c.textContent).join(''); },
+    set textContent(v) { texte = String(v); el.children.length = 0; },
+    appendChild(n) { n.parent = el; el.children.push(n); return n; },
+    append(...n) { for (const x of n) { if (x.parent !== undefined) x.parent = el; } el.children.push(...n); },
+    remove() {
+      if (el.parent === null) return;
+      const i = el.parent.children.indexOf(el);
+      if (i >= 0) el.parent.children.splice(i, 1);
+      el.parent = null;
+    },
+    setAttribute(nom, valeur) { el.attributs[nom] = String(valeur); },
+    removeAttribute(nom) { delete el.attributs[nom]; },
+    addEventListener(type, fn) { (ecouteurs[type] ??= []).push(fn); },
+    // ⚠ LE CLIC PORTE SA CIBLE, ET C'EST CE QUI REND LE GESTE RÉEL. L'écran lit
+    // `evenement.target.closest('.case')` : un faux qui n'enverrait pas de cible
+    // ferait tomber le gestionnaire avant d'atteindre la moindre décision.
+    dispatch(type, evenement = {}) {
+      for (const fn of ecouteurs[type] ?? []) fn({ target: el, ...evenement });
+    },
+    click() { el.dispatch('click'); },
+    closest(selecteur) {
+      const classe = selecteur.replace('.', '');
+      for (let n = el; n !== null; n = n.parent) if (n.classList.contains(classe)) return n;
+      return null;
+    },
+    querySelector(selecteur) {
+      const classe = selecteur.replace('.', '');
+      for (const enfant of el.children) {
+        if (enfant.classList.contains(classe)) return enfant;
+        const dedans = enfant.querySelector(selecteur);
+        if (dedans !== null) return dedans;
+      }
+      return null;
+    },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 360, height: 480 }),
+    scrollTo() {},
+  };
+  return el;
+}
+
+/** Le faux document de l'écran de la base. */
+function fauxDocumentChantier() {
+  const parId = new Map();
+  const doc = {
+    head: null,
+    documentElement: null,
+    getElementById(id) {
+      if (!IDS_DU_BALISAGE.has(id)) {
+        throw new Error(`faux document : « ${id} » n'est pas dans src/index.src.html`);
+      }
+      if (!parId.has(id)) parId.set(id, faireElement('div', doc));
+      return parId.get(id);
+    },
+    createElement: (tag) => faireElement(tag, doc),
+    createElementNS: (_ns, tag) => faireElement(tag, doc),
+    createTextNode: (t) => ({ textContent: String(t), classList: { contains: () => false } }),
+    // ⚠ LES ATLAS SONT DES CLÉS, PAS DES IMAGES. `classeDeFond` LÈVE sur une
+    // variable vide — « une unité invisible est un défaut qu'on doit voir » —
+    // donc le faux doit rendre quelque chose de non vide, et deux variables
+    // différentes doivent donner deux valeurs différentes.
+    defaultView: {
+      getComputedStyle: () => ({ getPropertyValue: (nom) => `url("${nom}")` }),
+      setTimeout: () => 0,
+      clearTimeout: () => {},
+      addEventListener: () => {},
+    },
+  };
+  doc.head = faireElement('head', doc);
+  doc.documentElement = faireElement('html', doc);
+  return doc;
+}
+
+/** Monte l'écran de la base sur un faux document, et le peint une fois. */
+function ecranMonte(etat) {
+  const doc = fauxDocumentChantier();
+  const sauvegardes = [];
+  const ecran = initialiserEcranChantier(doc, { apresPose: (e) => sauvegardes.push(e) });
+  ecran.peindre(etat);
+  ecran.rafraichir(etat);
+  return { doc, ecran, sauvegardes };
+}
+
+/** La case (rangée, colonne) de la grille peinte. */
+function caseDe(doc, rangee, colonne) {
+  const trouvee = doc.getElementById('chantier-grille').children.find(
+    (c) => c.dataset.rangee === String(rangee) && c.dataset.colonne === String(colonne),
+  );
+  assert.ok(trouvee, `le montage ne trouve pas la case ${rangee};${colonne}`);
+  return trouvee;
+}
+
+/** Arme une action du bandeau, puis touche la case d'un bâtiment. */
+function armerEtToucher(doc, action, rangee, colonne) {
+  doc.getElementById(`chantier-${action}`).click();
+  doc.getElementById('chantier-grille').dispatch('click', { target: caseDe(doc, rangee, colonne) });
+}
+
+/** Ce que la ligne d'avis dit à cet instant. */
+const avisDe = (doc) => doc.getElementById('chantier-avis').textContent;
+
+/**
+ * Une base bâtie, la réserve pleine, le quartz à volonté.
+ *
+ * ⚠ LA DISPOSITION EST CONFRONTÉE À `problemesDeDisposition` AVANT D'ÊTRE
+ * RENDUE, comme celle de `test/reparation.test.js`, et pour la même raison : un
+ * montage illégal ne se voit qu'au CHARGEMENT, si bien qu'un test pourrait
+ * mesurer une réparation sur une base que le jeu refuserait.
+ */
+function baseBatie(niveauChantier, batiments = []) {
+  const etat = creerEtat(2026);
+  rattraperJeu(etat, 3001);
+  const laBase = baseCourante(etat);
+  laBase.disposition[0].niveau = niveauChantier;
+  laBase.disposition[0].degatsMilli = 0;
+  let colonne = 1;
+  for (const { id, niveau } of batiments) {
+    laBase.disposition.push({ id, rangee: 13, colonne, niveau, degatsMilli: 0 });
+    // ⚠ LE RÉSIDU EST PAR (BÂTIMENT, RESSOURCE), ET LES TROIS CLÉS DOIVENT Y
+    // ÊTRE. Un `{}` passe les tests qui ne font pas tourner l'économie, et il
+    // rend `NaN` au premier tick — mesuré : `resumeDeLaBase` affiche alors un
+    // stock `NaN`, et l'écran tombe sur « formaterEntier : « NaN » ». C'est ce
+    // que `poserEffectif` écrit, et on écrit la même chose.
+    laBase.economie.residus.push(Object.fromEntries(RESSOURCES.map((r) => [r, 0])));
+    colonne += 2;
+  }
+  laBase.economie.ressources.quartz = 1_000_000_000;
+  assert.deepEqual(
+    problemesDeDisposition(laBase.disposition, laBase.champs).map((p) => p.code), [],
+    'le montage ne mesure rien : sa disposition est illégale',
+  );
+  crediterLesReserves(etat, plafondDeLaReserveDesBatiments(laBase));
+  return etat;
+}
+
+/** Abîme un bâtiment d'une fraction de ses PV maximaux. */
+function abimerLeBatiment(etat, index, part) {
+  const pose = baseCourante(etat).disposition[index];
+  const pvMax = BASE_BATIMENTS[pose.id].pv * facteurMilli(pose.niveau);
+  pose.degatsMilli = Math.round(pvMax * part);
+}
+
+test('RÉPARER T1 — armé puis touché sur un abîmé, le bâtiment retrouve ses PV', () => {
+  // ⚠⚠ UN VRAI RAID DE L'OUVRAGE, PAS UN `degatsMilli` ÉCRIT À LA MAIN. C'est
+  // le cliquet d'`AUDIT-REPARATION.md` §4 vu depuis l'écran : « un raid subi
+  // laisse la base du joueur à 1 PV, et rien au monde ne l'en fait remonter ».
+  // Le montage doit donc PRODUIRE l'état que le joueur subit, sinon il ne
+  // mesure que sa propre écriture.
+  const etat = baseBatie(20, [
+    { id: 'caserne', niveau: 20 }, { id: 'centrale', niveau: 20 },
+    { id: 'accumulateur', niveau: 20 },
+  ]);
+  const laBase = baseCourante(etat);
+  const rapport = subirUnRaid(etat, {
+    type: 'base', niveau: 20, rangee: 190, colonne: 16, saveur: null, instance: 0,
+  }, 5, { maxTicks: 900 });
+  assert.equal(rapport.rase, false, 'le montage ne mesure rien : la base a été rasée');
+  // ⚠ ET LE RAID VIDE LES TROIS RÉSERVOIRS D'ARMÉE, JAMAIS LE QUATRIÈME —
+  // arbitrage d'Ethan du 05/09, écrit dans `sim/raid-ouvrage.js`. C'est
+  // exactement ce qui rend le geste suivant possible.
+  crediterLesReserves(etat, plafondDeLaReserveDesBatiments(laBase));
+
+  // ⚠ MESURÉ : LE RAID ABÎME LES QUATRE, CHANTIER COMPRIS. Le premier de la
+  // liste est donc le Chantier lui-même, et c'est le cas qui compte le plus —
+  // c'est lui qui, tombé, rase la base.
+  const index = laBase.disposition.findIndex((b) => (b.degatsMilli ?? 0) > 0);
+  assert.ok(index >= 0, 'le montage ne mesure rien : le raid n\'a rien abîmé');
+  assert.equal(laBase.disposition.filter((b) => (b.degatsMilli ?? 0) > 0).length, 4,
+    'le montage a changé de mordant : recompter ce que le raid abîme');
+  const pose = laBase.disposition[index];
+  const quartzAvant = laBase.economie.ressources.quartz;
+  const reserveAvant = laBase.reserveReparationBatiments;
+
+  const { doc } = ecranMonte(etat);
+  armerEtToucher(doc, 'reparer', pose.rangee, pose.colonne);
+
+  assert.equal(pose.degatsMilli, 0, 'le geste n\'a pas rendu les PV');
+  assert.ok(laBase.economie.ressources.quartz < quartzAvant, 'rien n\'a été débité');
+  assert.ok(laBase.reserveReparationBatiments < reserveAvant, 'la réserve n\'a pas été prise');
+});
+
+test('RÉPARER T2 — sur un bâtiment intact, le refus vient du MOTEUR', () => {
+  // ⚠⚠ LE MESSAGE EST CELUI DE `problemesDeLaReparationDUnBatiment`, MOT POUR
+  // MOT. `messagePasDeReparation` en écrivait un dans l'écran — « aucun bâtiment
+  // n'est endommagé : les dégâts n'existent pas encore » —, et il était FAUX
+  // depuis le 02/09. Réintroduire une phrase d'écran fait tomber ce test.
+  const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
+  const { doc } = ecranMonte(etat);
+  const pose = baseCourante(etat).disposition[1];
+  armerEtToucher(doc, 'reparer', pose.rangee, pose.colonne);
+
+  const attendu = moteurReparation.problemesDeLaReparationDUnBatiment(etat, 1);
+  assert.deepEqual(attendu.map((p) => p.code), ['rien-a-reparer']);
+  assert.equal(avisDe(doc), messageDeRefus(attendu));
+  assert.ok(!avisDe(doc).includes('n\'existent pas encore'),
+    'l\'écran a repris une phrase à lui au lieu de celle du moteur');
+});
+
+test('RÉPARER T3 — réserve insuffisante : le refus arrive, et rien n\'a bougé', () => {
+  const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
+  abimerLeBatiment(etat, 1, 0.5);
+  const laBase = baseCourante(etat);
+  const cout = coutDeLaReparationDUnBatiment(etat, 1);
+  // ⚠ UN TICK SOUS LE COMPTE, PAS ZÉRO. À zéro, le manque de quartz pourrait
+  // refuser en même temps et le test ne dirait plus laquelle des deux gardes a
+  // mordu ; à `ticks − 1`, seule la réserve manque.
+  laBase.reserveReparationBatiments = cout.ticks - 1;
+  const degatsAvant = laBase.disposition[1].degatsMilli;
+  const quartzAvant = laBase.economie.ressources.quartz;
+
+  const { doc } = ecranMonte(etat);
+  const pose = laBase.disposition[1];
+  armerEtToucher(doc, 'reparer', pose.rangee, pose.colonne);
+
+  assert.match(avisDe(doc), /réserve/i, 'le refus ne parle pas de la réserve');
+  assert.equal(laBase.disposition[1].degatsMilli, degatsAvant, 'les PV ont bougé malgré le refus');
+  assert.equal(laBase.economie.ressources.quartz, quartzAvant, 'du quartz a été débité');
+  assert.equal(laBase.reserveReparationBatiments, cout.ticks - 1, 'la réserve a été prise');
+});
+
+test('RÉPARER T4 — le devis affiché EST le prix facturé', () => {
+  // ⚠⚠ C'EST LE §7.3 DU LOT RÉSERVE-BASE, VU DEPUIS L'ÉCRAN. Un devis recalculé
+  // ici — un `Math.ceil` au lieu du `Math.round` du moteur, ou l'arrondi de la
+  // somme au lieu de la somme des arrondis — laisserait le joueur passer la
+  // garde puis manquer d'une unité. On lit ce que l'écran ANNONCE, on répare, et
+  // on compare au quartz réellement débité.
+  const etat = baseBatie(30, [{ id: 'caserne', niveau: 28 }]);
+  abimerLeBatiment(etat, 1, 0.5);
+  const laBase = baseCourante(etat);
+  const annonce = detailDuBatiment(etat, 1);
+  assert.ok(annonce.devis.quartz > 0, 'le montage ne mesure rien : la réparation est gratuite');
+  // ⚠⚠ ET LE MONTAGE DOIT DISCRIMINER LES ARRONDIS — MESURÉ, PAS SUPPOSÉ. À la
+  // part 0,37 le prix brut vaut 19 679,737 : `Math.round` et `Math.ceil` rendent
+  // tous deux 19 680, et la falsification « le devis est recalculé avec ceil »
+  // NE MORDAIT PAS — 1 pass / 0 fail, vérifié. C'est la leçon du dépôt prise une
+  // troisième fois : un montage qui tombe du bon côté de la demie ne mesure pas
+  // un arrondi. À 0,5 le brut vaut 26 594,239, et les deux lectures divergent.
+  const brut = coutDeLaReparationDUnBatiment(etat, 1).quartz;
+  assert.notEqual(Math.ceil(brut), Math.round(brut),
+    `le montage ne discrimine pas les arrondis : brut ${brut}`);
+  assert.match(annonce.detail, new RegExp(`${formaterEntier(annonce.devis.quartz)} q`),
+    'la ligne du bandeau ne porte pas le devis qu\'elle rend');
+
+  const avant = laBase.economie.ressources.quartz;
+  const { doc } = ecranMonte(etat);
+  const pose = laBase.disposition[1];
+  armerEtToucher(doc, 'reparer', pose.rangee, pose.colonne);
+  const debite = (avant - laBase.economie.ressources.quartz) / 1000;
+  assert.equal(debite, annonce.devis.quartz, 'le devis annoncé n\'est pas le prix facturé');
+});
+
+test('RÉPARER T5 — les dégâts se disent en MILLIÈMES des PV max, pas en absolu', () => {
+  // ⚠⚠ LE MÊME BÂTIMENT À DEUX NIVEAUX, LA MÊME PART. Les PV max montent avec
+  // le niveau : un absolu donnerait deux nombres, la part n'en donne qu'un.
+  const bas = baseBatie(30, [{ id: 'caserne', niveau: 5 }]);
+  const haut = baseBatie(30, [{ id: 'caserne', niveau: 30 }]);
+  abimerLeBatiment(bas, 1, 0.4);
+  abimerLeBatiment(haut, 1, 0.4);
+  // Falsifiable : les deux montages doivent VRAIMENT porter des absolus
+  // différents, sinon l'égalité ci-dessous serait vraie des deux lectures.
+  assert.notEqual(baseCourante(bas).disposition[1].degatsMilli,
+    baseCourante(haut).disposition[1].degatsMilli,
+    'le montage ne discrimine pas : les deux dégâts absolus sont égaux');
+
+  assert.equal(detailDuBatiment(bas, 1).degatsSubisMilliemes, 400);
+  assert.equal(detailDuBatiment(haut, 1).degatsSubisMilliemes, 400);
+  assert.match(detailDuBatiment(haut, 1).detail, /40 % de dégâts/);
+  // Et un intact ne dit rien du tout, plutôt que « 0 % de dégâts » onze fois.
+  assert.equal(detailDuBatiment(bas, 0).degatsSubisMilliemes, 0);
+  assert.equal(detailDuBatiment(bas, 0).devis, null);
+  assert.ok(!detailDuBatiment(bas, 0).detail.includes('dégâts'));
+});
+
+test('RÉPARER T6 — le mode se désarme après un refus comme après une réussite', () => {
+  const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
+  const laBase = baseCourante(etat);
+  const pose = laBase.disposition[1];
+
+  // Refus — le bâtiment est intact.
+  const refus = ecranMonte(etat);
+  refus.doc.getElementById('chantier-reparer').click();
+  assert.ok(refus.doc.getElementById('chantier-reparer').classList.contains('arme'),
+    'le montage ne mesure rien : le bouton ne s\'arme pas');
+  refus.doc.getElementById('chantier-grille')
+    .dispatch('click', { target: caseDe(refus.doc, pose.rangee, pose.colonne) });
+  assert.ok(!refus.doc.getElementById('chantier-reparer').classList.contains('arme'),
+    'le mode reste armé après un refus');
+
+  // Réussite.
+  abimerLeBatiment(etat, 1, 0.3);
+  const reussite = ecranMonte(etat);
+  armerEtToucher(reussite.doc, 'reparer', pose.rangee, pose.colonne);
+  assert.equal(laBase.disposition[1].degatsMilli, 0, 'le montage n\'a rien réparé');
+  assert.ok(!reussite.doc.getElementById('chantier-reparer').classList.contains('arme'),
+    'le mode reste armé après une réussite');
+});
+
+test('RÉPARER T7 — la réserve affichée est celle des BÂTIMENTS, pas celle de l\'armée', () => {
+  // ⚠⚠ C'EST LA GARDE CONTRE LE PROXY DU LOT RÉSERVE-BASE. Les deux réserves
+  // portent des noms voisins et vivent dans le même module ; lire la mauvaise
+  // donnerait un nombre plausible et faux. Vider les TROIS réservoirs d'armée ne
+  // doit pas changer d'un caractère ce que la ligne annonce.
+  const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
+  const laBase = baseCourante(etat);
+  const { doc } = ecranMonte(etat);
+  doc.getElementById('chantier-reparer').click();
+  const avecArmee = doc.getElementById('chantier-reserve').textContent;
+
+  for (const chassis of Object.keys(laBase.reserveReparation)) {
+    laBase.reserveReparation[chassis] = 0;
+  }
+  const vidée = ecranMonte(etat);
+  vidée.doc.getElementById('chantier-reparer').click();
+  assert.equal(vidée.doc.getElementById('chantier-reserve').textContent, avecArmee,
+    'la ligne suit la réserve de l\'ARMÉE : c\'est la mauvaise');
+
+  // Et elle suit bien la sienne : la vider change ce qui est écrit.
+  laBase.reserveReparationBatiments = 0;
+  const sansBase = ecranMonte(etat);
+  sansBase.doc.getElementById('chantier-reparer').click();
+  assert.notEqual(sansBase.doc.getElementById('chantier-reserve').textContent, avecArmee,
+    'la ligne ne suit pas la réserve des bâtiments');
+  // ⚠ ET LE STOCK S'ARRONDIT VERS LE BAS : `direLaDuree` le prend en argument
+  // depuis ce lot, et annoncer plus que ce qu'on a ferait tenter un refus.
+  assert.ok(avecArmee.includes(
+    direLaDuree(plafondDeLaReserveDesBatiments(laBase), Math.floor),
+  ), 'le plafond de la réserve n\'est pas celui du moteur');
+});
+
+test('RÉPARER T8 — `messagePasDeReparation` n\'est plus exportée nulle part', () => {
+  // ⚠ LA PHRASE MENTAIT DEPUIS LE 02/09, ET SUR LES DEUX ÉCRANS. Elle disait
+  // « les dégâts n'existent pas encore » quand `raid-ouvrage.js` écrit
+  // `degatsMilli` sur les bâtiments depuis le lot RAID-B et `reporterLesDegats`
+  // sur l'armée depuis RAID-0. On ne la garde pas « au cas où » : les refus
+  // viennent du moteur, qui les chiffre.
+  const ecran = moteurEcranChantier;
+  assert.equal('messagePasDeReparation' in ecran, false,
+    'la phrase d\'écran est revenue : les refus doivent venir du moteur');
+  // Falsifiable dans l'autre sens : le montage lit bien le vrai module.
+  assert.ok('detailDuBatiment' in ecran && 'ACTIONS' in ecran,
+    'le montage ne lit pas les exports de src/ui/chantier.js');
+  // ⚠ ET LE CHAMP `quoi` DES TERRAINS EST PARTI AVEC ELLE : il n'avait pas
+  // d'autre lecteur, et un champ que plus rien ne lit est un commentaire
+  // menteur en puissance.
+  for (const [nom, terrain] of Object.entries(TERRAINS)) {
+    assert.equal(terrain.quoi, undefined, `le terrain « ${nom} » porte encore « quoi »`);
+  }
+});
+
+test('RÉPARER T9 — « Tout réparer » répare ce qui est payable et COMPTE le reste', () => {
+  // ⚠⚠ ELLE NE REFUSE PAS EN BLOC, ET C'EST LE PIÈGE DU LOT.
+  // `problemesDeToutReparerLesBatiments` juge le devis TOTAL : la mettre en
+  // garde du bouton refuserait les payables parce que le dernier est hors de
+  // portée. Le montage porte donc trois payables et deux qui ne le sont pas.
+  const etat = baseBatie(30, [
+    { id: 'caserne', niveau: 5 }, { id: 'centrale', niveau: 5 },
+    { id: 'accumulateur', niveau: 5 },
+    { id: 'depotDeVehicules', niveau: 30 }, { id: 'aerodrome', niveau: 30 },
+  ]);
+  const laBase = baseCourante(etat);
+  laBase.disposition[0].degatsMilli = 0;
+  for (let i = 1; i <= 5; i += 1) abimerLeBatiment(etat, i, 0.9);
+
+  // La réserve est réglée pour couvrir les trois petits et pas les deux gros.
+  const couts = [1, 2, 3, 4, 5].map((i) => coutDeLaReparationDUnBatiment(etat, i).ticks);
+  const petits = couts[0] + couts[1] + couts[2];
+  assert.ok(couts[3] > petits && couts[4] > petits,
+    'le montage ne discrimine pas : les cinq coûts sont du même ordre');
+  laBase.reserveReparationBatiments = petits;
+
+  const { doc, sauvegardes } = ecranMonte(etat);
+  doc.getElementById('chantier-reparer').click();
+  assert.equal(doc.getElementById('chantier-reparation').hidden, false,
+    'le bloc « Tout réparer » ne s\'est pas montré');
+  doc.getElementById('chantier-tout-reparer').click();
+
+  for (const i of [1, 2, 3]) {
+    assert.equal(laBase.disposition[i].degatsMilli, 0, `le payable ${i} n'a pas été réparé`);
+  }
+  for (const i of [4, 5]) {
+    assert.ok(laBase.disposition[i].degatsMilli > 0, `l'impayable ${i} a été réparé quand même`);
+  }
+  assert.match(avisDe(doc), /3 réparé\(s\), 2 hors de portée/);
+  assert.equal(sauvegardes.length, 1, 'le geste ne s\'est pas sauvegardé');
+});
+
+test('RÉPARER T10 — le bilan arrive à l\'écran, y compris à zéro réparé', () => {
+  const etat = baseBatie(30, [{ id: 'caserne', niveau: 30 }]);
+  abimerLeBatiment(etat, 1, 0.9);
+  const laBase = baseCourante(etat);
+  laBase.reserveReparationBatiments = 0;
+
+  const { doc } = ecranMonte(etat);
+  doc.getElementById('chantier-reparer').click();
+  doc.getElementById('chantier-tout-reparer').click();
+  assert.ok(avisDe(doc).length > 20, 'le bandeau est resté muet : le bouton a l\'air mort');
+  assert.match(avisDe(doc), /Aucune réparation payable/);
+
+  // ⚠ ET UNE BASE INTACTE DIT AUTRE CHOSE, par le code `rien-a-reparer` du
+  // moteur — jamais par une phrase d'écran.
+  const saine = baseBatie(30, [{ id: 'caserne', niveau: 30 }]);
+  const vue = ecranMonte(saine);
+  vue.doc.getElementById('chantier-reparer').click();
+  vue.doc.getElementById('chantier-tout-reparer').click();
+  const attendu = moteurReparation.problemesDeToutReparerLesBatiments(saine)
+    .find((p) => p.code === 'rien-a-reparer');
+  assert.equal(avisDe(vue.doc), attendu.message);
+});
+
+test('RÉPARER T11 — le bouton global n\'apparaît que le mode Réparer armé', () => {
+  // ⚠ MÊME DISCIPLINE QUE `raid-tout-reparer` — Ethan, 01/09 : « le bouton
+  // n'apparaît que le mode Réparer armé, et au-dessus de la rangée ».
+  const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
+  abimerLeBatiment(etat, 1, 0.2);
+  const { doc } = ecranMonte(etat);
+  const barre = doc.getElementById('chantier-reparation');
+  assert.equal(barre.hidden, true, 'le bloc est visible sans mode armé');
+
+  doc.getElementById('chantier-reparer').click();
+  assert.equal(barre.hidden, false, 'armer Réparer ne montre pas le bloc');
+  // Une autre action le remasque : un seul mode à la fois.
+  doc.getElementById('chantier-demolir').click();
+  assert.equal(barre.hidden, true, 'armer une autre action laisse le bloc à l\'écran');
+  // Et le retoucher désarme, donc remasque.
+  doc.getElementById('chantier-reparer').click();
+  assert.equal(barre.hidden, false);
+  doc.getElementById('chantier-reparer').click();
+  assert.equal(barre.hidden, true, 'désarmer laisse le bloc à l\'écran');
+});
+
+test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', () => {
+  // ⚠ LA CONVENTION VIENT DE L'ÉCRAN DE RAID, elle n'est pas inventée ici :
+  // `.abimee` y borde l'emplacement d'une unité entamée depuis le 01/09.
+  const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
+  abimerLeBatiment(etat, 1, 0.5);
+  const laBase = baseCourante(etat);
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 5, colonne: 3, niveau: 1 });
+  laBase.garnison[0].degatsMilli = 1;
+
+  const { doc } = ecranMonte(etat);
+  const jetonDe = (rangee, colonne) => caseDe(doc, rangee, colonne).children
+    .find((c) => c.classList.contains('jeton'));
+  const pose = laBase.disposition[1];
+  assert.ok(jetonDe(pose.rangee, pose.colonne).classList.contains('abimee'),
+    'le bâtiment abîmé ne se voit pas');
+  assert.ok(jetonDe(5, 3).classList.contains('abimee'),
+    'la pièce de garnison abîmée ne se voit pas');
+  // Falsifiable : un intact ne la porte pas, sinon la classe ne dirait rien.
+  const chantier = laBase.disposition[0];
+  assert.ok(!jetonDe(chantier.rangee, chantier.colonne).classList.contains('abimee'),
+    'un bâtiment intact est marqué abîmé');
+
+  // Et la feuille la peint — une classe sans règle est un lot invisible.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(feuille, /\.jeton\.abimee\s*\{[^}]*#E43E32/,
+    'la classe `abimee` du jeton n\'a pas de règle');
 });
