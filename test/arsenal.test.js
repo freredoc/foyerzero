@@ -565,7 +565,14 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   });
   // Lot CARTE : 305 au lieu de 315. Les obstacles ne se dispersent plus que dans
   // la bande de défense, et ce raid-ci s'y épuise dix ticks plus tôt.
-  assert.equal(r.nbTicks, 305);
+  //
+  // ⚠ LOT ARRÊT (04/09) : 335 au lieu de 305, et le sens de l'allongement est
+  // celui de la règle. Une unité ne s'arrête plus pour une tourelle : elle
+  // traverse la bande de défense en tirant, arrive plus loin, et c'est devant
+  // les BÂTIMENTS qu'elle s'immobilise désormais. Le raid dure trente ticks de
+  // plus et perd un survivant — sept avant, six après. La cause, elle, ne bouge
+  // pas : il se termine toujours faute de combattants.
+  assert.equal(r.nbTicks, 335);
   assert.equal(r.cause, 'attaquants');
 });
 

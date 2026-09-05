@@ -1207,7 +1207,18 @@ test('MODULES-B T1 — le Flashbang désactive une infanterie, et pas une struct
   assert.deepEqual(parId(sans, 'belier').modulesActifs, []);
 
   const tirs = ticksDeTir(etat, ['guetteur', 'casemate'], 59);
-  assert.equal(belier.rangeeMilli, 2000, 'montage : le Bélier a bougé, les portées ont changé');
+  // ⚠⚠ LOT ARRÊT (04/09) : LE BÉLIER AVANCE, ET CE QUE CETTE GARDE DÉFEND N'EST
+  // PAS SA CASE — C'EST L'ATTRIBUTION DU SILENCE DU GUETTEUR. Il visait le
+  // Merlon, qui n'est plus un motif d'arrêt : il monte de 2 000 à 3 920 en
+  // cinquante-neuf ticks et s'immobilise sous le mur, qui bloque. Le silence
+  // qu'on mesure plus bas doit venir du module, jamais de la distance : on
+  // vérifie donc que le Guetteur reste À PORTÉE aux deux bouts de la fenêtre,
+  // ce qui est la grandeur en jeu. Le Bélier ne fait que s'en rapprocher.
+  assert.equal(belier.rangeeMilli, 3920, 'montage : le Bélier ne monte plus au contact du mur');
+  const aPortee = (r) => (guetteur.rangeeMilli - r) ** 2
+    + ((guetteur.colonne - belier.colonne) * 1000) ** 2 <= belier.porteeCarree;
+  assert.ok(aPortee(2000), 'montage : le Guetteur n\'était pas à portée au départ');
+  assert.ok(aPortee(belier.rangeeMilli), 'montage : le Guetteur est sorti de portée en route');
 
   // 50 ticks de silence, puis il tire de nouveau — c'est la preuve de
   // NON-VACUITÉ : sans elle, un Guetteur mort ou hors de portée donnerait le
@@ -2008,18 +2019,30 @@ test('MODULES-C T3 — l\'absorption est PARTIELLE, le surplus passe', () => {
 });
 
 test('MODULES-C T4 — le réservoir ne se recharge jamais', () => {
-  const { etat, allie, porteur } = bouclierStabilise();
+  const { etat, allie, porteur, tireur } = bouclierStabilise();
   porteur.bouclierMilli = 1;
   tick(etat);
   assert.equal(porteur.bouclierMilli, 0, 'montage : le réservoir doit être à sec');
 
+  // ⚠⚠ LOT ARRÊT (04/09) : ON NE COMPTE QUE LES TICKS OÙ LA CASEMATE VISE
+  // L'ALLIÉ, ET IL FALLAIT LE DIRE PLUTÔT QUE D'ÉLARGIR. Le porteur ne s'arrête
+  // plus pour le Merlon : il DOUBLE l'allié au tick 5 (5 120 contre 4 960),
+  // devient la cible la plus proche, et l'allié ne perd rien ce tick-là. Ce que
+  // ce test garde — « le réservoir ne remonte jamais » — est asserté sur les
+  // TRENTE ticks, sans exception ; c'est la garde de non-vacuité qui se
+  // restreint aux ticks où le tir arrive vraiment sur l'allié.
   const pertes = [];
+  let visesAllie = 0;
   for (let t = 1; t <= 30; t += 1) {
     const pv = allie.pvMilli;
     tick(etat);
     assert.equal(porteur.bouclierMilli, 0, `le réservoir est remonté au tick ${t}`);
-    pertes.push(pv - allie.pvMilli);
+    if (tireur.cibleIndice === allie.indice) {
+      visesAllie += 1;
+      pertes.push(pv - allie.pvMilli);
+    }
   }
+  assert.ok(visesAllie >= 25, `montage : ${visesAllie} ticks visés seulement, trop peu pour mesurer`);
   assert.ok(pertes.every((x) => x > 0), 'l\'allié est encore protégé après le vidage');
   assert.ok(porteur.vivant && !porteur.sorti, 'montage : le porteur doit rester en jeu');
 
@@ -2583,7 +2606,10 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   // des DEUX côtés et identique. Le canal armé se mesure en MODULES-F T12/T14.
   const jeu = raidDeReference([]);
   assert.equal(jeu.points, 2059722n, 'les points du raid de référence ont bougé');
-  assert.equal(jeu.resultat.tick, 120, 'montage : le combat doit se dérouler pareil');
+  // ⚠ LOT ARRÊT : 110 au lieu de 120. Le montage ne change pas, la règle
+  // d'arrêt si — et les POINTS, eux, ne bougent pas d'une unité : c'est
+  // exactement ce que cette ligne existe pour dire.
+  assert.equal(jeu.resultat.tick, 110, 'montage : le combat doit se dérouler pareil');
 
   // ⚠ ET LE MONTAGE N'EST PAS VIDE. Le Merlon porte `pvPlusVingt` côté Ouvrage :
   // débloquer ce module-là majore bien les points. Sans cette ligne, l'égalité
@@ -3750,7 +3776,9 @@ test('MODULES-E T7 — contre-épreuve : le même nom dans l\'AUTRE branche ne r
   // les PV du Merlon, ni les points. Sous l'union, ce montage rendait 2 106 166.
   assert.equal(pointsRecherche(resultat, montage), 2059722n,
     'la branche offense de l\'Ouvrage majore encore les points de recherche');
-  assert.equal(resultat.tick, 120, 'le combat lui-même a changé : le module a été lu');
+  // ⚠ LOT ARRÊT : 110 au lieu de 120, comme à MODULES-D T4 et pour la même
+  // raison — la règle d'arrêt a changé, le montage non.
+  assert.equal(resultat.tick, 110, 'le combat lui-même a changé : le module a été lu');
 });
 
 test('MODULES-E T8 — le déterminisme tient, les deux branches armées', () => {
@@ -4508,39 +4536,56 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
     { id: 'belier', colonne: 6 }, { id: 'crecelle', colonne: 8 },
     { id: 'perceurs', colonne: 3 }, { id: 'perceurs', colonne: 7 },
   ];
-  const points = (niveau, graine) => {
+  // ⚠⚠ LOT ARRÊT (04/09) : LA COMPARAISON SE PREND SOUS LE MÊME CODE, ET C'EST
+  // UNE CORRECTION DE MÉTHODE. Ce test opposait les points d'aujourd'hui à des
+  // nombres relevés sur `origin/main` AVANT le lot MODULES-F : deux codes, deux
+  // règles, et l'écart mesuré cessait de dire ce qu'il prétendait dès qu'une
+  // seconde règle bougeait. On mesure donc le canal ARMÉ contre le canal VIDE
+  // dans la MÊME exécution — c'est très exactement ce que MODULES-F voulait
+  // dire, et c'est désormais falsifiable d'un lot à l'autre.
+  const points = (niveau, graine, canal = 'arme') => {
     const site = genererSite({ type: 'base', niveau, saveur: null, graine });
     const montage = { ...site, vagues: [ARMEE] };
+    if (canal === 'vide') {
+      montage.modulesDebloques = {
+        ...montage.modulesDebloques, ouvrage: { offense: [], defense: [] },
+      };
+    }
     return pointsRecherche(resoudre(creerCombat(montage)), montage);
   };
 
-  // Niveau 20 : aucun module n'est armé sous 28, donc IDENTIQUE AU POINT.
-  // C'est cette moitié qui rend l'autre falsifiable — sans elle, un barème
-  // globalement gonflé passerait la moitié « en hausse » sans rien prouver.
-  assert.equal(points(20, 11), 2302652n);
-  assert.equal(points(20, 22), 1146497n);
-  assert.equal(points(20, 33), 1692238n);
-
-  // Niveau 38 : Camouflage, Munition spéciale et PV +20 % sont armés. Les points
-  // MONTENT sur les trois graines — le bonus de +20 % de MODULES-E l'emporte sur
-  // le surcroît de résistance de la garnison.
-  const avant38 = { 11: 173_605_846n, 22: 255_641_308n, 33: 286_985_226n };
-  const apres38 = { 11: 194_230_489n, 22: 276_265_951n, 33: 308_676_642n };
+  // Niveau 20 : aucun module n'est armé sous 28, donc IDENTIQUE AU POINT — le
+  // canal vide et le canal armé rendent le même nombre. C'est cette moitié qui
+  // rend l'autre falsifiable : sans elle, un barème globalement gonflé passerait
+  // la moitié « en hausse » sans rien prouver.
+  const apres20 = { 11: 2_103_589n, 22: 989_923n, 33: 1_814_857n };
   for (const g of [11, 22, 33]) {
-    assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
-    assert.ok(points(38, g) > avant38[g], `niveau 38, graine ${g} : les points n'ont pas monté`);
+    assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
+    assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
   }
 
-  // ⚠ ET ILS NE MONTENT PAS PARTOUT — mesuré, rapporté, NON corrigé. Au
-  // niveau 50 le Vol de vie et le Rayon minimum −1 sont armés eux aussi : la
-  // garnison encaisse davantage, l'assaut casse moins, et les points BAISSENT
-  // sur les trois mêmes graines. Ce lot ne touche à aucun barème ; l'arbitrage
+  // ⚠⚠ NIVEAU 38 : LE SIGNE S'EST INVERSÉ AU LOT ARRÊT, MESURÉ ET NON CORRIGÉ.
+  // MODULES-F relevait que les points MONTAIENT quand le canal s'arme — le
+  // bonus de 20 % l'emportait sur le surcroît de résistance de la garnison.
+  // Depuis que les unités traversent la défense au lieu de s'y arrêter, elles
+  // arrivent entamées et cassent moins : le bonus ne compense plus, et les
+  // points BAISSENT. Trois graines sur trois, dans le même sens.
+  const apres38 = { 11: 99_380_188n, 22: 132_090_028n, 33: 246_884_277n };
+  for (const g of [11, 22, 33]) {
+    assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
+    assert.ok(points(38, g) < points(38, g, 'vide'),
+      `niveau 38, graine ${g} : le canal armé ne coûte plus rien`);
+  }
+
+  // ⚠ ET AU NIVEAU 50 LE SENS N'A PAS CHANGÉ — mesuré, rapporté, NON corrigé.
+  // Le Vol de vie et le Rayon minimum −1 y sont armés eux aussi : la garnison
+  // encaisse davantage, l'assaut casse moins, et les points baissent, comme au
+  // lot MODULES-F. Ce lot-ci ne touche à aucun barème ; l'arbitrage
   // d'équilibrage revient à Ethan.
-  const avant50 = { 11: 15_973_692_801n, 22: 8_318_116_000n, 33: 9_775_306_972n };
-  const apres50 = { 11: 15_325_146_868n, 22: 7_043_493_598n, 33: 8_150_073_821n };
+  const apres50 = { 11: 15_308_879_030n, 22: 4_561_467_407n, 33: 8_150_073_821n };
   for (const g of [11, 22, 33]) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
-    assert.ok(points(50, g) < avant50[g], `niveau 50, graine ${g} : les points n'ont pas baissé`);
+    assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);
   }
 });
 

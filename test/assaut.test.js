@@ -304,23 +304,31 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // (321 → 669), B un peu (583 → 608), et C raccourcit (551 → 524) parce qu'il
   // perd ses unités plus tôt qu'il n'aurait fini.
   //
-  // ⚠ ET B RASE TOUJOURS LA SOUCHE, ce que j'ai cru un instant démenti. Une
-  // première rédaction de ce bloc écrivait ici `attaquants` : c'était une
-  // mauvaise lecture de la mesure, et l'assertion l'a fait tomber au premier
-  // essai. Le contraste que ce test tient — le figé rase, le budgété non — est
-  // intact.
+  // ⚠⚠ LOT ARRÊT (04/09) : LE CONTRASTE QUE CE TEST TENAIT A DISPARU, ET IL
+  // FAUT LE DIRE PLUTÔT QUE DE RÉANCRER SANS RIEN ÉCRIRE. Ce bloc portait « le
+  // figé rase la Souche, le budgété non » ; depuis que `doitSArreter` lit le
+  // genre, le préréglage figé de B ne rase PLUS — il se termine par
+  // `attaquants` au tick 408 au lieu de `souche` au 608. Ce n'est pas une
+  // régression du budget : c'est l'assaut lourd qui traverse la défense sans
+  // s'y arrêter, y meurt davantage, et n'arrive plus au bout. Ce que ce test
+  // garde encore est la SÉRIE : les deux ne rendent pas les mêmes durées, et
+  // c'est ce que la seconde moitié mesure.
+  //
+  // A passe de 669 à 338 ticks — presque la moitié —, C de 524 à 529.
   const figes = cas.map((c) => resoudre(creerCombat(montagePreregle(parametres(c)))));
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 669);
-  assert.equal(figes[1].cause, 'souche');
-  assert.equal(figes[1].tick, 608);
+  assert.equal(figes[0].tick, 338);
+  assert.equal(figes[1].cause, 'attaquants');
+  assert.equal(figes[1].tick, 408);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 524);
+  assert.equal(figes[2].tick, 529);
 
-  // Série 2 — assauts BUDGÉTÉS. B ne rase plus la Souche.
+  // Série 2 — assauts BUDGÉTÉS. Aucun des deux ne rase plus la Souche depuis le
+  // lot ARRÊT : les deux séries se distinguent par leurs durées, plus par leur
+  // issue.
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
-  assert.equal(budgetes[0].nbTicks, 429);
+  assert.equal(budgetes[0].nbTicks, 380);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -328,20 +336,31 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // cause, ni le tick, ni les survivants : le multiplicateur s'applique APRÈS le
   // combat, il ne change pas un seul tir. Les raids sur camp, eux, ne bougent
   // pas d'une unité, leur facteur valant 1.
-  assert.equal(budgetes[0].butin.quartz, 772);
+  //
+  // ⚠⚠ LOT ARRÊT : LE BUTIN DE A TOMBE À ZÉRO, ET C'EST LE RELEVÉ LE PLUS DUR
+  // DU LOT. L'assaut d'infanterie budgété contre un avant-poste rapportait 772
+  // de quartz et 257 de scorie ; il ne rapporte plus RIEN, et il ne laisse plus
+  // un survivant — trois avant. Les six unités traversent la défense sans s'y
+  // arrêter, arrivent entamées devant les bâtiments et tombent avant d'en
+  // griffer un. C'est du calibrage, pas un défaut : voir `RAPPORT-lotARRET.md`.
+  assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
   assert.equal(budgetes[1].cause, 'attaquants');
-  assert.equal(budgetes[1].nbTicks, 409);
+  assert.equal(budgetes[1].nbTicks, 440);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 305);
+  assert.equal(budgetes[2].nbTicks, 335);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
   // ticks au lieu de 315 — et non parce que les dégâts ont changé.
-  assert.equal(budgetes[2].butin.quartz, 24_796);
+  // Lot ARRÊT : 24 640, soit 156 de moins pour trente ticks de PLUS. Le raid
+  // s'allonge et rapporte un peu moins : les unités passent leur temps devant
+  // des bâtiments qu'elles entament à peine au lieu d'abattre la défense.
+  assert.equal(budgetes[2].butin.quartz, 24_640);
 
-  // La raison du renversement de B, vérifiée et non supposée : le préréglage
-  // figé alignait au niveau 15 deux unités que le joueur ne peut pas posséder,
-  // et l'assaut budgété n'en aligne aucune.
+  // Ce que le préréglage figé alignait et que le budget refuse — deux unités
+  // que le joueur ne peut pas posséder au niveau 15. C'est ce qui faisait raser
+  // B jusqu'au lot ARRÊT ; depuis, plus aucune des deux séries ne rase, mais
+  // l'écart de composition, lui, est intact et se mesure toujours ici.
   const fige = montagePreregle(parametres(cas[1]));
   const verrouillees = [...new Set(
     fige.vagues.flat().map((u) => u.id).filter((id) => UNITES[id].apparition > 15),

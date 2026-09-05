@@ -1797,16 +1797,41 @@ function retirerLesMorts(etat) {
 }
 
 /**
- * L'entité s'arrête-t-elle ? Une unité s'arrête pour sa CIBLE DE PRÉDILECTION
- * — celle dont la colonne de matrice vaut 1,0 pour elle. Les autres cibles
- * sont engagées sans s'arrêter : elle tire en marchant. L'aviation traversante
- * ne s'arrête jamais.
+ * L'entité s'arrête-t-elle ? Elle s'arrête pour un BÂTIMENT, et pour rien
+ * d'autre. L'aviation traversante ne s'arrête jamais.
+ *
+ * ⚠⚠ LE GENRE, JAMAIS LA COLONNE, ET C'EST UN ARBITRAGE D'ETHAN DU 04/09 :
+ * « Chaque unité s'arrête pour casser des bâtiments. Merlon et tourelles
+ * exclus, sauf si ils empêchent d'avancer. » La règle d'avant comparait
+ * `colonnePredilection` à la colonne de la cible — or `COLONNE_PAR_TYPE_DEFENSE`
+ * range mur, barrière et tourelle sous `structureOuAviation`, la MÊME colonne
+ * que `profilBatiment`. Une anti-structure s'arrêtait donc pour un mur, pour
+ * une tourelle ET pour un bâtiment, sans que rien ne pût les séparer. Le
+ * `genre` est le seul discriminant qui les sépare.
+ *
+ * ⚠ `p` RESTE DANS LA SIGNATURE parce que la garde aérienne le lit, et
+ * `colonnePredilection` reste un champ VIVANT : la munition spéciale et le
+ * camouflage le lisent tous les deux.
+ *
+ * ⚠⚠ « SAUF SI ILS EMPÊCHENT D'AVANCER » NE DEMANDE AUCUN CODE, ET LE
+ * MÉCANISME N'EST PAS CELUI QU'ON CROIT. Devant un merlon bloquant, l'unité ne
+ * s'arrête plus au sens de cette fonction, mais `peutAvancer` la retient et
+ * elle TIRE — donc `nuit(e)`, c'est-à-dire `aTire`, remet `ticksInutiles` à
+ * zéro et elle ne se replie pas. `structureForcee` ne couvre QUE les porteurs
+ * de l'Écraseur, qui rend `undefined` sans le module : c'est le tir, pas le
+ * forçage, qui tient les autres pièces devant le mur.
+ *
+ * ⚠⚠ ET LE REPLI NE PEUT PAS EMPIRER PAR CETTE FONCTION, PAR CONSTRUCTION.
+ * `doitSArreter` implique `e.aTire`, qui EST `nuit(e)` : une bascule de vrai à
+ * faux ne peut qu'AJOUTER une chance de progresser, jamais retirer une raison
+ * de rester utile. Ce que la mesure doit chercher est l'autre chemin — une
+ * unité arrêtée devant un bâtiment bloque sa colonne, et c'est l'alliée
+ * DERRIÈRE elle, sans cible à portée, qui se replierait.
  */
 function doitSArreter(etat, e, p) {
   if (p.comportementAerien === 'traversant') return false;
   if (!e.aTire || e.cibleIndice === null) return false;
-  const pc = profil(etat.entites[e.cibleIndice]);
-  return p.colonnePredilection === pc.colonneMatrice;
+  return profil(etat.entites[e.cibleIndice]).genre === 'batiment';
 }
 
 /**
@@ -2117,10 +2142,9 @@ function deplacement(etat) {
     const destinationMilli = e.rangeeMilli + vitesse;
     const caseDestination = caseDepuisMilli(destinationMilli);
 
-    // Une unité arrêtée pour sa cible de prédilection ne PROGRESSE pas : elle a
-    // choisi de combattre plutôt que d'avancer. Si son tir porte, `nuit` la
-    // garde en jeu ; s'il ne porte pas, elle ne fait plus rien du tout — c'est
-    // exactement le cas que le raid C exhibait.
+    // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
+    // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`
+    // exige `aTire` —, donc `nuit` la garde en jeu et elle ne se replie pas.
     const arrete = doitSArreter(etat, e, p);
     const progresse = !arrete
       && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
@@ -2128,10 +2152,16 @@ function deplacement(etat) {
     // ÉCRASEUR — forcer la structure qui barre la colonne.
     //
     // ⚠ AVANT LE REPLI, ET AVANT LE `continue` DE L'ARRÊT. « En plus de ses
-    // tirs ordinaires » : une unité arrêtée pour tirer sur le mur le force
-    // AUSSI, et une unité qui force n'est pas inutile — sans ce calcul ici,
-    // `TICKS_AVANT_REPLI` (30) la ferait rentrer à la base bien avant les
-    // 100 ticks qu'il faut pour ouvrir la brèche.
+    // tirs ordinaires » : une unité qui force n'est pas inutile — sans ce
+    // calcul ici, `TICKS_AVANT_REPLI` (30) la ferait rentrer à la base bien
+    // avant les 100 ticks qu'il faut pour ouvrir la brèche.
+    //
+    // ⚠⚠ ET LE MOTIF A CHANGÉ AU LOT ARRÊT, PAS LE CODE. Il disait « une unité
+    // arrêtée pour tirer sur le mur le force AUSSI » : depuis que `doitSArreter`
+    // lit le genre, personne ne s'arrête plus POUR un mur. Ce qui retient
+    // l'unité devant lui est `peutAvancer`, et ce qui la garde utile est son
+    // TIR. Le forçage reste ce qui ouvre la brèche, et il reste réservé aux
+    // porteurs de l'Écraseur.
     const forcee = progresse
       ? undefined
       : structureForcee(etat, e, p, occupation, caseDestination);

@@ -20,7 +20,7 @@ import {
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
 import { UNITES } from '../src/data/combat.js';
-import { TEMOINS_COMBAT } from './temoins-combat.js';
+import { TEMOINS_COMBAT, COMBATS_DEPLACES_PAR_ARRET } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...bouts) => readFileSync(join(RACINE, ...bouts), 'utf8');
@@ -67,6 +67,7 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
 
   let i = 0;
   let champs = 0;
+  let surcharges = 0;
   for (const graine of [1, 2, 3, 4, 5]) {
     for (const niveau of [5, 20, 35, 50]) {
       for (const [type, saveur] of TYPES) {
@@ -90,10 +91,20 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
           const attendu = TEMOINS_COMBAT[i];
           assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT.length} lignes`);
           assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
+          // ⚠⚠ LOT ARRÊT (04/09) : LA SURCHARGE EST NOMMÉE, LE TÉMOIN N'EST PAS
+          // RAFRAÎCHI. `COMBATS_DEPLACES_PAR_ARRET` donne, combat par combat et
+          // champ par champ, ce que la nouvelle règle d'arrêt déplace ; tout le
+          // reste continue d'être comparé à la capture d'AVANT le lot
+          // JOURNAL-DE-COMBAT. Même doctrine que les `DEPLACES_PAR_*` de
+          // `temoins-bases-0.js`.
+          const deplaces = COMBATS_DEPLACES_PAR_ARRET[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
-            assert.equal(vu[c], attendu[c],
+            const reference = Object.prototype.hasOwnProperty.call(deplaces, c)
+              ? deplaces[c] : attendu[c];
+            assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
+            if (Object.prototype.hasOwnProperty.call(deplaces, c)) surcharges += 1;
           }
           i += 1;
         }
@@ -103,6 +114,13 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
   assert.equal(i, TEMOINS_COMBAT.length, 'le nombre de combats joués a changé');
   assert.equal(i, 200);
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
+  // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON
+  // LE VOIE. 1 032 champs déplacés sur 1 600 : 568 restent gardés contre la
+  // capture d'avant le lot JOURNAL-DE-COMBAT, dont dix-neuf combats entiers.
+  // Une surcharge qui grandirait sans qu'un lot le dise fait tomber ce test.
+  assert.equal(surcharges, 1032, `champs surchargés : ${surcharges}`);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
+  assert.ok(champs - surcharges === 568, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -323,14 +341,31 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
       assert.ok(i.encaisseMilli > 0, 'un impact nul est publié');
       // ⚠ L'ENCAISSÉ N'EST PAS LA PERTE DE PV : il compte AUSSI ce qu'un
       // Bouclier a absorbé, donc il est toujours au moins égal à la perte.
+      //
+      // ⚠⚠ SAUF SUR UNE PIÈCE ÉCRASÉE, ET LE LOT ARRÊT L'A RENDU ATTEIGNABLE.
+      // L'écrasement est la SECONDE mort du moteur : il met les PV à zéro à
+      // l'étape 7, hors de `appliquerDegats`, donc sans publier d'impact. Une
+      // pièce touchée ET écrasée dans le même tick perd donc plus que ce que
+      // son impact annonce, sans que rien ne soit faux. Le montage n'en
+      // produisait aucune tant que les attaquants s'arrêtaient devant la
+      // défense ; ils la traversent désormais et l'écrasent. Mesuré sur ce
+      // montage-ci : un Ratisseur de garnison, 38 904 140 milli-PV perdus pour
+      // 309 452 encaissés, au tick 140.
       const perdu = pvAvant.get(i.indice) - e.pvMilli;
-      assert.ok(i.encaisseMilli >= perdu,
-        `encaissé ${i.encaisseMilli} < PV perdus ${perdu}`);
+      if (e.ecrase !== true) {
+        assert.ok(i.encaisseMilli >= perdu,
+          `encaissé ${i.encaisseMilli} < PV perdus ${perdu}`);
+      }
       parts.push(Math.round((1000 * i.encaisseMilli) / i.pvMaxMilli));
       vus += 1;
     }
   }
   assert.ok(vus > 500, `montage : ${vus} impacts, trop peu pour mesurer`);
+  // ⚠ ET L'EXCEPTION N'EST PAS UNE PORTE OUVERTE : le montage doit vraiment
+  // écraser quelqu'un, sinon la garde ci-dessus se relâcherait sans qu'on le
+  // sache. Mesuré : deux pièces écrasées dans la fenêtre de quatre cents ticks.
+  assert.equal(etat.entites.filter((e) => e.ecrase === true).length, 2,
+    'le montage n\'écrase plus personne : l\'exception ci-dessus ne se mesure plus');
   // ⚠⚠ ET LA PART EST BORNÉE, CE QUE LE MONTANT N'EST PAS. C'est la mesure qui
   // justifie `IMPACT_LOURD_MILLIEMES` : un seuil ABSOLU serait ininterprétable,
   // `facteurMilli` mettant dégâts et PV à l'échelle ensemble.

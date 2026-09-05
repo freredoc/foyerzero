@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **04/09/2026**, version 0.91.0 · build 93.
+Dernière révision : **05/09/2026**, version 0.92.0 · build 94.
 
 ---
 
@@ -42,7 +42,92 @@ Dernière révision : **04/09/2026**, version 0.91.0 · build 93.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 04/09/2026 (après le lot ÉCRAN-RAID), à confronter :**
+**Référence au 05/09/2026 (après le lot ARRÊT), à confronter :**
+`npm test` → **1063 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 791 759 octets**, 0 référence externe.
+⚠⚠ **ON S'ARRÊTE POUR UN BÂTIMENT, ET POUR RIEN D'AUTRE.** Ethan, 04/09 : « Je
+demande un comportement. Chaque unité s'arrête pour casser des bâtiments. Merlon
+et tourelles exclus, sauf si ils empêchent d'avancer. » `doitSArreter` lit
+désormais le `genre` de la cible ; le lot **REND 37 octets**, et c'est tout ce
+qu'il pèse. **289 `data:` avant, 289 après.** Borne T10 **inchangée à
+7 000 000**, marge **208 241 octets, 2,97 %**.
+⚠⚠ **LA COLONNE NE POUVAIT PAS SÉPARER UN MUR D'UN BÂTIMENT, ET C'EST LE FAIT
+CENTRAL.** `COLONNE_PAR_TYPE_DEFENSE` range mur, barrière et tourelle sous
+`structureOuAviation` — la MÊME colonne que `profilBatiment`. Une anti-structure
+s'arrêtait donc pour un mur, pour une tourelle ET pour un bâtiment, sans que
+rien ne pût les distinguer. Le `genre` est le seul discriminant juste.
+⚠⚠ **« SAUF SI ILS EMPÊCHENT D'AVANCER » NE DEMANDE AUCUN CODE, ET LE MÉCANISME
+N'EST PAS CELUI QUE LE BRIEF ANNONÇAIT.** Il donnait `structureForcee` comme ce
+qui retient l'unité devant un merlon ; **mesuré, elle rend `undefined` sans le
+module Écraseur** — elle ne couvre donc que DEUX pièces sur quatorze. Ce qui
+tient les douze autres est le TIR : `nuit(e)` vaut `aTire`, et une unité qui
+tire sur le mur remet son compteur de repli à zéro. `ARRÊT T8` mesure les deux.
+⚠⚠ **ET LE REPLI NE PEUT PAS EMPIRER PAR CETTE FONCTION, PAR CONSTRUCTION.**
+`doitSArreter` implique `e.aTire`, qui EST `nuit(e)` : une bascule de vrai à
+faux ne peut qu'ajouter une chance de progresser, jamais retirer une raison de
+rester utile. **Mesuré sur 162 montages : les replis TOMBENT de 562 à 447**, et
+un seul montage en gagne un.
+⚠⚠ **CE SEUL CHEMIN A ÉTÉ CHERCHÉ ET TROUVÉ, ET CE N'EST PAS LA RÈGLE.** Sur
+`n30/infanterie/camp/11`, un Guetteur de plus se replie : il est bloqué en
+rangée 11 par une Gangue collée à lui, **réserve à ZÉRO** — une unité à sec ne
+peut plus rien contre un bâtiment (règle du lot 3C), donc elle ne tire pas, donc
+elle compte trente ticks et rentre. Le lot ne crée pas ce chemin, il le rend
+atteignable en portant les unités plus loin.
+⚠⚠ **LES RAIDS SONT DEVENUS PLUS DURS, ET DE COMBIEN : LE BUTIN TOTAL BAISSE DE
+24,6 %** — 108 606 958 à 81 853 061 sur les 162 montages, 68 en baisse, 42 en
+hausse, 52 identiques. **Les attaquantes détruites passent de 1 534 à 1 655 sur
+2 121 engagées**, les survivantes sur le terrain de 6 à **0**, et **le seul
+montage qui rasait ne rase plus**. La défense, elle, est MOINS entamée — 381 ‰
+de PV restants contre 444 : les unités la traversent au lieu de l'abattre.
+⚠ **ET LES COMBATS RACCOURCISSENT** — médiane 296 → 277 ticks, somme 53 582 →
+46 192 (−13,8 %), 103 plus courts contre 52 plus longs. ⚠⚠ **LES QUATRE RAIDS QUI
+TOUCHAIENT LE PLAFOND DE 900 ONT DISPARU**, le « autre régime » à 4 645 ticks
+compris : `cible.test.js T5` attend désormais une liste VIDE.
+⚠⚠ **LE RAID A DE RÉFÉRENCE NE RAPPORTE PLUS RIEN — 772 · 257 → 0 · 0**, et il ne
+laisse plus un survivant. Le raid B rapporte 10 % de PLUS, le C un peu moins.
+**Trois raids, trois sens différents** : un allongement uniforme n'aurait pas
+fait ça. **Le calibrage revient à Ethan ; rien n'a été compensé.**
+⚠ **VINGT ET UN TESTS SONT TOMBÉS, ET AUCUN N'A ÉTÉ ASSOUPLI.** Onze sont des
+mesures figées, réancrées **en écrivant le nombre d'avant et celui d'après** ;
+six sont des montages dont la PRÉMISSE a cessé d'être vraie et qui ont été
+réparés en nommant l'observable qui discrimine encore ; deux sont des témoins,
+surchargés et non rafraîchis ; deux sont les gardes de `documentation.test.js`,
+qui faisaient leur travail.
+⚠⚠ **`MODULES-F T14` CHANGE DE MÉTHODE, ET C'ÉTAIT UNE FAUTE À CORRIGER.** Il
+opposait les points d'aujourd'hui à des nombres relevés sur un AUTRE code, celui
+d'avant MODULES-F : deux règles, et l'écart cessait de dire ce qu'il prétendait
+dès qu'une seconde bougeait. Il compare désormais le canal **armé** au canal
+**vide** dans la même exécution. ⚠ Et le SIGNE s'est inversé au niveau 38 : le
+bonus de 20 % ne compense plus le surcroît de résistance de la garnison.
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.**
+`COMBATS_DEPLACES_PAR_ARRET` nomme **1 032 champs sur 1 600**, combat par combat
+— **568 restent gardés contre la capture d'avant le lot JOURNAL-DE-COMBAT**, dont
+dix-neuf combats entiers et 198 des 200 causes de fin. `DEPLACES_PAR_ARRET` nomme
+**61 couples, tous à partir de la phase 7** : les six premières phases de
+`temoins-bases-0.js` sont identiques AU BIT.
+⚠⚠ **ET AUCUN SCALAIRE DU TÉMOIN BASES-0 NE BOUGE** — gestes, gestes d'armement,
+taille de la sauvegarde, cases atteignables, déplacement, bases attaquantes,
+nombre de cibles et cible retenue : **25 graines sur 25, identiques**. Seules les
+empreintes des deux RAPPORTS changent. C'est la mesure qui dit que la règle ne
+touche qu'au combat.
+⚠ **DIX TESTS ENTRENT — `test/arret.test.js` — ET LE COMPTE PASSE DE 1 053 À
+1 063.** ⚠ `ARRÊT T2`, `T3` et `T4` sont des INVERSIONS, et elles sont vérifiées
+ROUGES sur `origin/main` en exécutant le fichier dans un `git worktree` : sept
+des dix y tombent. `T5`, `T6` et `T7` sont verts des deux côtés — ils gardent ce
+qui n'a PAS changé.
+⚠⚠ **ET LE BRIEF DEMANDAIT UNE TOURELLE NON BLOQUANTE : IL N'EN EXISTE AUCUNE.**
+Mesuré sur la table : les trois tourelles et les trois artilleries portent toutes
+`bloque: true` ; seules `ronce` et `herse` ne bloquent pas, et elles ne tirent
+jamais. « Sauf si ils empêchent d'avancer » est donc TOUJOURS vrai d'une tourelle
+plantée dans la colonne de l'unité — ce que la règle change ne se voit que
+LATÉRALEMENT.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : la règle est une décision de tick, et la sauvegarde ne grandit pas d'un
+octet — mesuré sur les vingt-cinq graines du témoin.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`, ni un module de `src/ui/`.
+
+**Auparavant, après le lot ÉCRAN-RAID :**
 `npm test` → **1053 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 791 796 octets**, 0 référence externe.
 ⚠⚠ **TROIS RETOURS D'ETHAN SUR L'ÉCRAN DE RAID, ET LE PREMIER ÉTAIT RÉEL DE
@@ -4051,7 +4136,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   53 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
+test/                   54 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -4060,7 +4145,7 @@ test/                   53 fichiers *.test.js (node:test) ; CINQ n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal  raid-ecran
+  son  journal  raid-ecran  arret
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
