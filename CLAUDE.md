@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **05/09/2026**, version 0.92.0 · build 94.
+Dernière révision : **05/09/2026**, version 0.93.0 · build 95.
 
 ---
 
@@ -42,8 +42,140 @@ Dernière révision : **05/09/2026**, version 0.92.0 · build 94.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 05/09/2026 (après le lot ARRÊT), à confronter :**
+**Référence au 05/09/2026 (après le lot ERGONOMIE), à confronter :**
 `npm test` → **1080 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**6 801 384 octets**, 0 référence externe.
+⚠⚠ **HUIT RETOURS D'ETHAN, HUIT COMMITS, ET C'ÉTAIT LA CONTRAINTE DU BRIEF** —
+chacun tient debout tout seul, pour qu'Ethan puisse en laisser tomber un sans
+défaire les sept autres. Coût **+9 625 octets**, mesuré poste par poste contre un
+livrable rebâti depuis le lot ARRÊT : **JavaScript +4 811 · feuille +4 179 ·
+balisage +635 · audio +0 · images +0**. **289 `data:` avant, 289 après.** Borne
+T10 **inchangée à 7 000 000**, marge **198 616 octets, 2,84 %**.
+⚠⚠ **LE ZOOM DE LA BASE PARTAIT DE L'ANGLE, ET LA CAUSE ÉTAIT ENTIÈRE.**
+« Le zoom dans la base se fait depuis l'angle en haut à gauche, très bizarre » :
+le pincement changeait `--case-cote` et RIEN d'autre, donc le conteneur
+grandissait depuis son origine. `defilementAncre` entre — pure, exportée — et
+rend le défilement à écrire pour que le point du contenu sous le milieu des
+doigts y reste. ⚠ **Elle BORNE elle-même**, parce qu'un `scrollLeft` hors bornes
+est rogné EN SILENCE par le navigateur : sans la borne, l'ancre saute au bord et
+aucun test ne le voit. Ni le plancher ni le plafond du zoom ne sont touchés.
+⚠⚠ **LA GRILLE EST LES LISERÉS `.case.legale`, ET LA RESTRICTION DU 27/08 EST
+LEVÉE.** « Une grille apparaît quand on déplace un bâtiment […] faire de même
+lorsque l'on construit un bâtiment et sur défense. » Ils étaient réservés au
+Collecteur — « cercler soixante cases sur soixante-douze n'apprend rien » — et
+c'est un RETOUR sur cet arbitrage, pas un oubli réparé : soixante cases cerclées
+se lisent comme un quadrillage, pas comme soixante indications. **Le même
+mécanisme sert les trois modes sur les deux bandes**, et `marquerCasesLegales`
+commence par le retirer de toutes les cases — `ERGO T4` exige un seul afficheur.
+⚠⚠ **LE VOILE DE BANDE EST DANS LA GRILLE, PAS SUR CHAQUE CASE.** « assombrir la
+défense quand on regarde la base et inversement — grandes barres hachurées en
+travers ». Un `::after` par case redémarrerait le motif à chaque bordure : à 45°
+la phase saute, et on obtient un hachurage PAR CASE au lieu des grandes barres.
+Il couvre les neuf colonnes et les lignes d'écran de sa bande, donc il suit le
+zoom et le défilement sans qu'une ligne de JS ne le repositionne. ⚠
+`pointer-events: none` n'est pas cosmétique : il couvre une bande entière et
+avalerait tous ses touchers.
+⚠⚠ **LA PASTILLE DE NIVEAU DOUBLE DE SURFACE ET NE POUSSE RIEN — MESURÉ AVANT ET
+APRÈS.** `font-size: max(11px, calc(var(--case-cote) / 3.2))`, graisse 700 : un
+plancher parce que la case descend à 36 px, une fraction parce qu'elle monte à
+128. Relevé dans Chromium à 360 × 780, DPR 3 : **les six barres fixes valent
+40 · 44 · 26 · 46 · 86 · 46 des deux côtés**, la case 36, le jeton 36,28, la
+vignette 75, **zéro débordement horizontal**. Seule la boîte du nombre change —
+**8 × 5,28 → 11,25 × 8,02** —, la pastille étant en `position: absolute`.
+⚠ **ET LES PIÈCES DE L'OFFENSE ET DU RAID N'ONT AUCUNE PASTILLE** : leur niveau
+n'est que dans le `title`. Ce n'est pas une taille à relever, c'est un affichage
+qui n'existe pas. **Ethan tranche.**
+⚠⚠ **LE PANNEAU S'OUVRE SUR UNE PIÈCE, ET UN DÉFAUT LATENT EST TOMBÉ AVEC.**
+`apercuDeLaPiece` et `lignesDeLaPiece` entrent, `peindreVueDuPanneau` est
+EXTRAIT et les deux écrans l'appellent — l'Offense l'importe, elle ne le recopie
+pas. ⚠⚠ Le bouton du panneau du Chantier appelait `problemesDeLAmelioration` et
+`ameliorer` **des BÂTIMENTS en dur** : juste tant que le panneau ne s'ouvrait que
+sur eux, faux à la seconde où il s'ouvre sur une tourelle — il aurait amélioré le
+bâtiment de MÊME INDICE. Il passe par `TERRAINS[terrainSelection]`.
+⚠⚠ **ET DEUX FALSIFICATIONS N'ONT PAS MORDU AU PREMIER RELEVÉ, ONZIÈME ET
+DOUZIÈME FOIS DU DÉPÔT.** (1) `ERGO T7 ter` vérifiait que l'Offense IMPORTE le
+rendu commun, pas qu'elle l'APPELLE : en remplaçant l'appel par celui d'une
+fonction voisine, la suite restait **entièrement verte** pendant que le panneau
+ne se peignait plus. Elle compte désormais les APPELS, **déclaration retirée
+avant le comptage**. (2) Rien ne tenait le TERRAIN que le panneau décrit :
+`TERRAINS.batiments` écrit en dur passait au vert, c'est-à-dire que le défaut
+qu'on venait de corriger pouvait revenir. La garde exige les trois lectures par
+`terrainSelection` **et prouve d'abord que le choix compte** — les deux terrains
+rendent des vues différentes pour le même indice.
+⚠ **LE REFUS D'ARMEMENT EST UN TON, PAS UNE TAILLE ÉCRITE SUR UN APPEL.**
+`ligneAAfficher` rend `refus`, la feuille le peint — 14 px en graisse 700 contre
+10 px en 400. Le ton du toast est un ARGUMENT et non un quatrième registre : deux
+écrivains du même message pourraient se contredire. `#E43E32` est déjà la teinte
+des refus de l'interface, et le test qui la « réserve à ce qui attaque le
+joueur » porte sur les BORDS D'EMBLÈME — vérifié avant de la reprendre.
+⚠⚠ **LES NOMS DE LA CARTE TIENNENT JUSQU'À DIX CASES, ET LE SEUIL N'EST PLUS LE
+REMPART.** `cssMiniParCase` descend de **64 à 36** — dix cases sur les 360 px CSS
+d'un téléphone, ce qu'Ethan a dit mot pour mot. **La mesure du 30/08 reste
+VRAIE** : à ce cran-là il y a 33 sites à l'écran. Ce qui change est la RÉPONSE —
+le seuil ne dit plus que la lisibilité, et `etiquettesRetenues` écarte au DESSIN
+toute plaque qui en coupe une déjà retenue, les sites étant examinés par
+PRIORITÉ. Sans la priorité, la plaque qui reste serait celle que
+`sitesDeLaFenetre` a poussée en premier : **deux images identiques
+n'afficheraient pas les mêmes noms**.
+⚠⚠ **ET CE QUE ÇA DONNE EST MESURÉ, PAS DÉDUIT — `fillRect` INSTRUMENTÉ, DOUZE
+VUES PAR ÉCHELLE, CONTRE UN LIVRABLE REBÂTI SANS LA GARDE.** À **dix cases de
+large : 510 plaques, ZÉRO recouvrement des deux côtés** — le seuil seul suffirait
+encore. À **six cases : 12 vues sur 12 portent un recouvrement sans la garde
+(258 plaques, 12 croisements), et zéro avec (246 plaques)**. Le recouvrement
+apparaît donc **au-delà** du seuil, la police relative grandissant avec son
+arrondi ; c'est là que la garde mord, et elle retire exactement les douze
+fautives.
+⚠ **UN TYPE HORS TABLE PASSE EN DERNIER, JAMAIS EN TÊTE** — `indexOf` rend −1,
+qui trierait devant la base du joueur, la faute exacte d'`ORDRE_CHASSIS`. Il ne
+LÈVE pas : une levée dans la boucle de dessin tronque tout l'écran Monde, ce que
+`dessinerGrosseBase` a coûté au lot ZOOM-CONTINU. Un test exige que
+`ordreDePriorite` soit une permutation EXACTE des clés d'`EMBLEMES_CARTE` : le
+cas tombe au dépôt, pas chez le joueur.
+⚠⚠ **LES OBSTACLES DU CHAMP DE BATAILLE PORTENT ENFIN LEUR SPRITE.** « les
+sprites obstacles Ouvrage ne sont pas placés, c'est les mêmes que le joueur » :
+ils l'étaient — en aplat kaki, un carré —, donc ils ne ressemblaient ni à ceux du
+joueur ni à rien. Le choix de variante DESCEND dans `render/variante.js`
+(`nombreDeVariantes`, `nomDeVariante`), et c'est un DÉPLACEMENT : `render/` n'a
+pas le droit d'importer `ui/`, donc une seconde écriture aurait donné au même
+obstacle un dessin dans la base et un autre au combat. **Ni `scene.js` ni
+`chantier.js` n'appellent plus `suffixeDeVariante`.**
+⚠ **LA GRAINE VIENT DE L'APPELANT, PAS DE L'ÉTAT DE COMBAT** — même raison que
+le nom du décor : un montage n'en porte pas, et lui en faire porter une mettrait
+une décision de DESSIN dans la simulation. `ui/raid.js` passe `etatCourant.graine`.
+⚠⚠ **RELEVÉ SUR UN RAID RÉEL, `drawImage` INSTRUMENTÉ** — base de l'Ouvrage de
+niveau 6 en (272, 16) : **DIX poses depuis `atlas-terrain`**, soit exactement les
+dix obstacles du montage, et **leurs dix cellules source tombent au pixel** sur
+ce que `nomDeVariante` rend hors ligne pour la même graine et les mêmes cases.
+L'écran de la base est revérifié après le déplacement : 22 cases à fond de
+terrain, dix positions distinctes. **Zéro erreur de page.**
+⚠ **`COULEUR_OBSTACLE` DISPARAÎT, DÉCLARATION COMPRISE** — une constante que plus
+rien ne lit est un commentaire menteur en puissance. `PALETTE.kakiOmbre` RESTE :
+deux cadres de sélection l'emploient, et la palette est close. ⚠ **La LÉGENDE
+suit** : lui laisser un carré kaki apprendrait un vocabulaire visuel que le
+combat n'emploie plus.
+⚠ **L'ATLAS DE TERRAIN ENTRE DANS LES TROIS TABLES** — `ATLAS_DE_LA_PAGE`,
+`atlasDeLaScene` et celle du banc. `executer` LÈVE sur une famille absente, donc
+l'oublier ferait tomber l'écran de raid ET le banc au premier montage qui pose un
+rocher, c'est-à-dire tous. Il était déjà dans la feuille : **le compte de `data:`
+ne bouge pas**.
+⚠ **VINGT-SEPT FALSIFICATIONS, VINGT-SEPT CHUTES**, dont les deux muettes
+ci-dessus. **Six gardes existantes changent de cible et deux se resserrent**,
+aucune ne s'assouplit — dont celle de la densité des étiquettes, qui exigeait
+« au plus 20 sites étiquetés » et exige désormais l'INVERSE, le seuil ayant cessé
+d'être un plafond de densité. ⚠ Sa prose a été réécrite APRÈS la mesure : une
+première version affirmait « à dix cases les plaques se recouvrent », ce que le
+relevé contredit.
+⚠ **DIX-SEPT TESTS ENTRENT ET LE COMPTE PASSE DE 1 063 À 1 080.** Aucune
+assertion n'a été retirée.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 24.** Pas un champ n'entre dans
+l'état : un ancrage de défilement, un voile, une taille de police, un panneau, un
+ton d'avis, un seuil d'affichage et un nom de sprite vivent tous dans l'écran.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`. Les sept captures du rapport vivent dans
+`rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot ARRÊT :**
+`npm test` → **1063 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 791 759 octets**, 0 référence externe.
 ⚠⚠ **ON S'ARRÊTE POUR UN BÂTIMENT, ET POUR RIEN D'AUTRE.** Ethan, 04/09 : « Je
 demande un comportement. Chaque unité s'arrête pour casser des bâtiments. Merlon

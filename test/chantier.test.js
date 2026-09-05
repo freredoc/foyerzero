@@ -4201,6 +4201,21 @@ test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent
   }
   assert.doesNotMatch(offense, /function peindreVueDuPanneau/, 'l\'Offense a recopié le rendu');
   assert.equal((chantier.match(/export function peindreVueDuPanneau/g) ?? []).length, 1);
+
+  // ⚠⚠ ET LES DEUX ÉCRANS L'APPELLENT VRAIMENT — importer n'est pas appeler, et
+  // cette moitié-là MANQUAIT. Mesuré : remplacer l'appel de l'Offense par celui
+  // d'une fonction voisine laissait ce test ENTIÈREMENT VERT, l'import restant
+  // en place et aucune seconde déclaration n'apparaissant. Un import qui n'est
+  // pas appelé est du code mort, et le panneau ne se peindrait plus du tout.
+  // ⚠ ET ON RETIRE LA DÉCLARATION AVANT DE COMPTER : une garde qui compte sa
+  // propre définition est la faute que ce dépôt a déjà payée cinq fois.
+  const horsImport = (code) => code
+    .replace(/import \{[^}]*\} from '[^']*';/g, '')
+    .replace(/export function peindreVueDuPanneau\(/g, 'DECLARATION(');
+  for (const [ou, code] of [['chantier', chantier], ['offense', offense]]) {
+    assert.equal((horsImport(code).match(/peindreVueDuPanneau\(/g) ?? []).length, 1,
+      `${ou} n'appelle pas exactement une fois \`peindreVueDuPanneau\``);
+  }
   // La classe CSS est partagée, pas dédoublée : une règle par famille.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -4209,6 +4224,35 @@ test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent
   for (const id of ['offense-panneau', 'offense-panneau-titre', 'offense-panneau-corps',
     'offense-panneau-ameliorer', 'offense-panneau-fermer']) {
     assert.ok(feuille.includes(`id="${id}"`), `le balisage n'a pas ${id}`);
+  }
+
+  // ⚠⚠ ET LE PANNEAU LIT LE TERRAIN DE LA SÉLECTION, JAMAIS UN TERRAIN ÉCRIT EN
+  // DUR — CETTE MOITIÉ MANQUAIT AUSSI. Mesuré : remplacer `terrainSelection` par
+  // `batiments` dans les trois lectures laissait la suite ENTIÈREMENT VERTE,
+  // alors que c'est exactement le défaut que ce lot corrige — le panneau
+  // décrirait le bâtiment de même indice pendant qu'il parle d'une tourelle.
+  // C'est la faute que `rafraichir` avait commise au lot NIVEAU-DES-PIÈCES, vue
+  // par l'autre bout.
+  //
+  // ⚠ ET LE MONTAGE PROUVE QUE LE CHOIX COMPTE avant de le garder : les deux
+  // terrains rendent des vues DIFFÉRENTES pour le même indice, sans quoi
+  // l'index serait sans conséquence et la garde ne dirait rien.
+  const etatVue = creerEtat(11);
+  baseCourante(etatVue).garnison.push(
+    { id: 'casemate', rangee: 5, colonne: 4, niveau: 3, degatsMilli: 0 },
+  );
+  const vueBatiment = TERRAINS.batiments.vueDuPanneau(etatVue, 0);
+  const vuePiece = TERRAINS.defense.vueDuPanneau(etatVue, 0);
+  assert.notDeepEqual(vueBatiment, vuePiece,
+    'les deux terrains décrivent la même chose : l\'index ne peut rien changer');
+  for (const quoi of ['vueDuPanneau(', 'actions.ameliorer', 'panneau)']) {
+    assert.doesNotMatch(chantier, new RegExp(`TERRAINS\\.(batiments|defense)\\.${quoi.replace(/[.()]/g, '\\$&')}`),
+      `le panneau écrit un terrain en dur pour ${quoi}`);
+  }
+  for (const lu of [/TERRAINS\[terrainSelection\]\.vueDuPanneau\(/,
+    /TERRAINS\[terrainSelection\]\.actions\.ameliorer/,
+    /TERRAINS\[terrainSelection\]\.panneau/]) {
+    assert.match(chantier, lu, `le panneau ne lit plus la table par ${lu}`);
   }
 
   // ⚠⚠ ET LE TOUCHER NE CHANGE PAS DE SENS : il SÉLECTIONNE toujours, le
