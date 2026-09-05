@@ -19,7 +19,7 @@ import {
   SIGLES_DEFENSE, posablesDeLaDefense, detailDeLaDefense, nomDeLaPieceDeDefense,
   TERRAINS, casesPosablesDuTerrain, casesDeplacablesDuTerrain, actionSansMoteur,
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
-  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX,
+  COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, defilementAncre,
 } from '../src/ui/chantier.js';
 // ⚠ LES BANDES SE PRENNENT À LA SOURCE — lot ÉCRAN-RAID, 04/09. Elles ont
 // déménagé de `ui/chantier.js` vers `render/bandes.js` parce que l'écran de
@@ -3846,4 +3846,85 @@ test('CARTE-A T7 — la tuile d\'attaque ne passe pas par le compteur de context
     'l\'écran Monde masque tout le bandeau, points d\'attaque compris');
   assert.match(feuille, /#ressources\[data-ecran="monde"\] \.ressource:not\(\.attaque\) \{ display: none; \}/,
     'la feuille ne réduit plus le bandeau sur la carte');
+});
+
+// ---------------------------------------------------------------------------
+// ERGO T1 et T2 — le zoom de la base s'ancre sous les doigts
+// ---------------------------------------------------------------------------
+
+test('ERGO T1 — le point du contenu sous l\'ancre y reste, à un pixel', () => {
+  // ⚠⚠ CE QUI EST MESURÉ EST UNE INVARIANCE, PAS UNE FORMULE. Le point du
+  // CONTENU qui se trouve sous l'ancre avant le zoom doit s'y retrouver après :
+  // on le calcule des deux côtés et on compare. Recopier `(d + a) × f − a` ici
+  // ne prouverait rien — ce serait la même ligne écrite deux fois.
+  const pointSousLAncre = (defilement, ancre, cote) => (defilement + ancre) / cote;
+  const cote = 40;
+  const facteur = 1.4;
+  const apres = cote * facteur;
+  for (const defilement of [0, 37, 120, 640, 1999]) {
+    for (const ancre of [0, 15, 180, 359]) {
+      const avant = pointSousLAncre(defilement, ancre, cote);
+      // Bornes larges : on mesure l'ancrage, pas le rognage — c'est T2 qui le fait.
+      const suivant = defilementAncre(defilement, ancre, facteur, 1_000_000);
+      const trouve = pointSousLAncre(suivant, ancre, apres);
+      assert.ok(Math.abs(trouve - avant) * apres <= 1,
+        `ancre ${ancre}, défilement ${defilement} : le point a bougé de `
+          + `${((trouve - avant) * apres).toFixed(2)} px`);
+    }
+  }
+
+  // ⚠ ET LA MESURE N'EST PAS VACUEUSE : sans ancrage — c'est-à-dire en laissant
+  // le défilement tel quel, ce que faisait le code d'avant — le même point
+  // s'enfuit de plusieurs centaines de pixels. C'est très exactement le « très
+  // bizarre » d'Ethan.
+  const sansAncrage = pointSousLAncre(640, 180, apres) - pointSousLAncre(640, 180, cote);
+  assert.ok(Math.abs(sansAncrage) * apres > 200,
+    'le montage ne distingue pas un zoom ancré d\'un zoom qui ne l\'est pas');
+});
+
+test('ERGO T2 — aux quatre coins, le rognage borne au lieu de sauter', () => {
+  // ⚠⚠ UN `scrollLeft` ÉCRIT HORS BORNES EST ROGNÉ EN SILENCE PAR LE
+  // NAVIGATEUR. C'est la faute que ce test existe pour empêcher : le calcul
+  // borne lui-même, donc ce qu'on écrit est ce qui sera appliqué.
+  const max = 500;
+  // Coin haut-gauche : déjà en butée à zéro, on dézoome — la cible est négative.
+  assert.equal(defilementAncre(0, 180, 0.5, max), 0);
+  // Coin bas-droit : déjà en butée au maximum, on zoome — la cible dépasse.
+  assert.equal(defilementAncre(max, 180, 2, max), max);
+  // Et entre les deux, rien n'est rogné : la valeur passe telle quelle.
+  assert.equal(defilementAncre(100, 180, 1.4, max), Math.round((100 + 180) * 1.4 - 180));
+  assert.ok(defilementAncre(100, 180, 1.4, max) < max, 'montage : ce cas-ci ne doit pas être rogné');
+
+  // ⚠ ET UN FACTEUR ABSURDE NE DÉPLACE RIEN. Zéro, l'infini ou un NaN
+  // rendraient un défilement invalide, que le navigateur transformerait en zéro
+  // — c'est-à-dire un saut à l'angle haut-gauche, le défaut qu'on corrige.
+  for (const facteur of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(defilementAncre(250, 180, facteur, max), 250, `facteur ${facteur}`);
+  }
+});
+
+test('ERGO T1 bis — le pincement de la base appelle vraiment l\'ancrage', () => {
+  // ⚠ LA MOITIÉ DOM N'EST PAS TESTABLE ICI (§3 de CLAUDE.md), donc on garde ce
+  // qui l'est : que le geste LISE le cadre et le défilement AVANT de changer la
+  // taille, et qu'il écrive les deux défilements APRÈS. Une garde qui ne
+  // chercherait que le nom de la fonction laisserait passer un appel dont on
+  // jette le retour.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const geste = source.match(/defile\.addEventListener\('touchmove'[\s\S]*?\}, \{ passive: false \}\);/);
+  assert.ok(geste !== null, 'le pincement de la base a disparu');
+  const corps = geste[0];
+  for (const morceau of [
+    'getBoundingClientRect()',
+    'defile.scrollLeft;',
+    'defile.scrollTop;',
+    'defile.scrollLeft = defilementAncre(',
+    'defile.scrollTop = defilementAncre(',
+    'defile.scrollWidth - defile.clientWidth',
+    'defile.scrollHeight - defile.clientHeight',
+  ]) {
+    assert.ok(corps.includes(morceau), `le pincement ne porte plus « ${morceau} »`);
+  }
+  // L'ordre compte : la taille se pose AVANT que les bornes ne se lisent.
+  assert.ok(corps.indexOf('reglerCoteCase(') < corps.indexOf('defile.scrollWidth'),
+    'les bornes sont lues avant que la taille ne soit posée');
 });

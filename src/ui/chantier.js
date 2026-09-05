@@ -2205,6 +2205,42 @@ export function coteCaseParDefaut(doc) {
 }
 
 /**
+ * Où défiler pour que le point du contenu sous l'ancre y RESTE quand la grille
+ * change de taille.
+ *
+ * ⚠⚠ ETHAN, 04/09 : « Le zoom dans la base se fait depuis l'angle en haut à
+ * gauche, très bizarre ». C'était vrai à la lettre : le pincement changeait la
+ * taille de case et rien d'autre, donc le conteneur grandissait depuis son
+ * origine et la case qu'on vise fuyait vers le bas à droite. `ui/monde.js`
+ * résout déjà ce geste sur un canevas ; ici la surface DÉFILE, donc ce qu'on
+ * réécrit est le défilement.
+ *
+ * ⚠⚠ ET LE FACTEUR SUFFIT — INUTILE DE CONNAÎTRE LE `padding`. Tout ce que la
+ * boîte contient est proportionnel à `--case-cote` : les neuf colonnes, et le
+ * `padding` d'une demi-case de chaque côté (`paddingDeLaGrille`). Le contenu se
+ * dilate donc autour de son ORIGINE, et la position du même point après
+ * dilatation vaut `(defilement + ancre) × facteur`. Lire le `padding` ici en
+ * ferait une seconde vérité, qui mentirait le jour où il cesserait de suivre la
+ * case.
+ *
+ * ⚠ LE RÉSULTAT EST BORNÉ ICI, PAS LAISSÉ AU NAVIGATEUR. Un `scrollLeft` écrit
+ * hors bornes est rogné en silence : l'ancrage sauterait sur les bords sans
+ * qu'aucun test ne le voie. On borne, et `ERGO T2` mesure les quatre coins.
+ *
+ * @param {number} defilement défilement courant, en pixels
+ * @param {number} ancre position de l'ancre dans le cadre, en pixels
+ * @param {number} facteur nouveau côté de case / ancien
+ * @param {number} max défilement maximal après le changement de taille
+ * @returns {number} le défilement à écrire
+ */
+export function defilementAncre(defilement, ancre, facteur, max) {
+  if (!(facteur > 0)) return defilement;
+  const vise = (defilement + ancre) * facteur - ancre;
+  if (!Number.isFinite(vise)) return defilement;
+  return Math.max(0, Math.min(max, Math.round(vise)));
+}
+
+/**
  * ⚠⚠ LE SOL PAVÉ CASE PAR CASE A DISPARU — lot MUR-PEINT, 03/09.
  *
  * Quatre fonctions vivaient ici : `COTE_CELLULE_SOL`, `cellulesDeSolParAxe`,
@@ -2889,7 +2925,27 @@ export function initialiserEcranChantier(doc, {
     // ⚠ À PARTIR D'ICI, LA LARGEUR DE L'ÉCRAN NE DÉCIDE PLUS. Le joueur a réglé
     // le zoom : une rotation ne doit plus le lui reprendre.
     zoomRegleParLeJoueur = true;
-    reglerCoteCase(Math.round(pincement.cote * facteur));
+    // ⚠⚠ L'ANCRE SE RELÈVE AVANT LE CHANGEMENT DE TAILLE, ET SUR LE MILIEU
+    // COURANT DES DOIGTS. La relever après ne dirait plus rien : la boîte a
+    // déjà grandi. Et la prendre au milieu du DÉPART ferait promener la grille
+    // dès que la main se déplace, ce qu'aucun retour ne demande.
+    const cadre = defile.getBoundingClientRect();
+    const ancreX = (deux[0].clientX + deux[1].clientX) / 2 - cadre.left;
+    const ancreY = (deux[0].clientY + deux[1].clientY) / 2 - cadre.top;
+    const defilementX = defile.scrollLeft;
+    const defilementY = defile.scrollTop;
+    const avant = coteCase;
+    const apres = reglerCoteCase(Math.round(pincement.cote * facteur));
+    // ⚠⚠ LA TAILLE EST POSÉE, DONC LES BORNES SONT À JOUR — c'est tout ce qui
+    // rend ce calcul juste. `scrollWidth` lu avant le changement rendrait
+    // l'ancienne borne, et l'ancrage sauterait sur les bords.
+    const echelle = apres / avant;
+    defile.scrollLeft = defilementAncre(
+      defilementX, ancreX, echelle, Math.max(0, defile.scrollWidth - defile.clientWidth),
+    );
+    defile.scrollTop = defilementAncre(
+      defilementY, ancreY, echelle, Math.max(0, defile.scrollHeight - defile.clientHeight),
+    );
     // Le pincement pilote la taille ; laisser le navigateur défiler en même
     // temps ferait glisser la grille sous les doigts pendant qu'elle grandit.
     evenement.preventDefault();

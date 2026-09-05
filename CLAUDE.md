@@ -43,7 +43,7 @@ Dernière révision : **05/09/2026**, version 0.92.0 · build 94.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 05/09/2026 (après le lot ARRÊT), à confronter :**
-`npm test` → **1063 pass / 0 fail**, `npm run build` → `dist/index.html`,
+`npm test` → **1066 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **6 791 759 octets**, 0 référence externe.
 ⚠⚠ **ON S'ARRÊTE POUR UN BÂTIMENT, ET POUR RIEN D'AUTRE.** Ethan, 04/09 : « Je
 demande un comportement. Chaque unité s'arrête pour casser des bâtiments. Merlon
