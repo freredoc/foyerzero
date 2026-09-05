@@ -582,6 +582,17 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   const sanction = rase ? raserLaBase(etat, laBase) : null;
 
   // --- 3. la réserve de réparation se vide ---------------------------------
+  //
+  // ⚠⚠ LES TROIS RÉSERVOIRS D'ARMÉE SEULEMENT, ET LE QUATRIÈME EST ÉPARGNÉ PAR
+  // DÉCISION, PAS PAR OUBLI — lot RÉSERVE-BASE, 05/09/2026. Vider aussi
+  // `reserveReparationBatiments` rendrait le cliquet de la base INCASSABLE : le
+  // raid qui abîme les bâtiments emporterait du même geste le temps qu'il faut
+  // pour les relever, et le joueur repartirait de zéro à chaque passe. La phrase
+  // de `MODELE-ECONOMIQUE.md` §7 — « un raid qui passe vide le réservoir de
+  // réparation » — est du 24/08 et ne connaît qu'UN réservoir ; l'étendre à la
+  // quatrième réserve serait un arbitrage de calibrage, et il revient à Ethan.
+  // Si Ethan le veut, c'est la clé de boucle ci-dessous qui change, et rien
+  // d'autre.
   const aPerduDesPv = resultat.batiments.some((b) => b.pvPerdusIciMilli > 0);
   if (aPerduDesPv) {
     for (const chassis of Object.keys(laBase.reserveReparation)) {

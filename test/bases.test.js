@@ -64,7 +64,7 @@ import {
   VERSION_AU_TEMOIN, OCTETS_AJOUTES_PAR_LE_DEPLIAGE, OCTETS_AJOUTES_PAR_BASES_1,
   DEPLACES_PAR_BASES_1, EMPREINTES_DES_CHAMPS_AJOUTES,
   EMPREINTES_PAR_GRAINE_BASES_1,
-  DEPLACES_PAR_TRANSFERT, OCTETS_AJOUTES_PAR_TRANSFERT,
+  DEPLACES_PAR_TRANSFERT, OCTETS_AJOUTES_PAR_TRANSFERT, OCTETS_AJOUTES_PAR_RESERVE_BASE,
   RAPPORTS_TRANSFERT,
   CLES_DU_RAPPORT_AVANT_TRANSFERT,
   DEPLACES_PAR_RETOURS_DU_03, EMPREINTES_PAR_GRAINE_RETOURS_DU_03,
@@ -489,10 +489,16 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
     // PERMET. `{"bases":[…],"baseCourante":0}` enveloppe onze champs qui, eux,
     // n'ont pas changé d'un octet : si l'écart dépendait de la partie, c'est que
     // le dépliage aurait modifié un CONTENU.
+    //
+    // ⚠ LE QUATRIÈME TERME EST ENTRÉ AU LOT RÉSERVE-BASE, 05/09 : un champ de
+    // plus par base, `reserveReparationBatiments`, et lui aussi d'un nombre fixe
+    // — 36 octets sur les vingt-cinq graines. Il s'AJOUTE aux trois précédents
+    // au lieu de les remplacer : chacun dit ce que son lot a coûté, et la somme
+    // reste lisible ligne par ligne.
     assert.equal(
       x.tailleSauvegarde,
       attendu.tailleSauvegarde + OCTETS_AJOUTES_PAR_LE_DEPLIAGE + OCTETS_AJOUTES_PAR_BASES_1
-        + OCTETS_AJOUTES_PAR_TRANSFERT,
+        + OCTETS_AJOUTES_PAR_TRANSFERT + OCTETS_AJOUTES_PAR_RESERVE_BASE,
       `graine ${g} : taille de la sauvegarde`,
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);
@@ -1518,8 +1524,11 @@ function premierChampLibre(etat) {
 test('BASES-1 T14 — la migration 23 → 24 remonte les trois champs neufs', () => {
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, UNE SEULE FOIS —
   // règle écrite dans `points-attaque.test.js` depuis le lot SITE-ENTAMÉ. Le
-  // maillon 22 → 23 l'a laissée en descendant d'un cran.
-  assert.equal(SAVE_VERSION, 24, 'le bump de la version des sauvegardes a été oublié');
+  // maillon 22 → 23 l'avait laissée à celui-ci en descendant d'un cran ; celui-ci
+  // la laisse au 24 → 25 du lot RÉSERVE-BASE, qui la porte dans
+  // `reparation.test.js` sous « RÉSERVE-BASE T11 ». Ce qui reste gardé ici, et
+  // qui est ce que ce test mesure vraiment, c'est que SON maillon est encore là :
+  // sans lui, rien de ce qui suit ne remonterait.
 
   const etat = creerEtat(4321);
   rattraperJeu(etat, 2 * H);
@@ -1534,7 +1543,7 @@ test('BASES-1 T14 — la migration 23 → 24 remonte les trois champs neufs', ()
   delete v23.recherche.basesAutorisees;
 
   const migre = migrer(structuredClone(v23));
-  assert.equal(migre.version, 24);
+  assert.equal(migre.version, SAVE_VERSION);
   assert.equal(migre.prochaineInstanceSatellite, v24.prochaineInstanceSatellite,
     'le compteur d\'instance n\'a pas remonté');
   assert.equal(migre.bases[0].satellites.prochaineInstance, undefined,

@@ -775,6 +775,44 @@ export const REPARATION_BASE_JOUEUR = {
     diviseurBatiment: { penteBasse: 1.09, penteHaute: 1.12, niveauRupture: 12 },
     diviseurDuCout: 230,
   },
+
+  // ⚠⚠ LE PLAFOND DE LA QUATRIÈME RÉSERVE, ET LES DEUX NOMBRES SONT RECOPIÉS DE
+  // L'ARMÉE — CE N'EST PAS UNE MESURE. `MODELE-REPARATION-1.md` §6 point 8 est
+  // OUVERT : aucune des trente captures du 05/09 ne montre le dénominateur de
+  // cette réserve. L'écran de réparation de Tiberium Alliances n'affiche qu'un
+  // STOCK — `3j 22:01:08` sur l'une, `2j 10:31:41` sur l'autre — et jamais le
+  // plafond qui le borne. Ce que le §4 relève, c'est ~94 h pour un niveau de
+  // base de 53,68, là où la règle des trois autres réservoirs en donnerait 65 ;
+  // les deux systèmes ne se recouvrent pas, et rien n'oblige à transposer.
+  //
+  // Ce qui est retenu est donc la règle des trois autres, à l'identique : douze
+  // heures, plus une heure par niveau de BÂTIMENTS. Deux nombres posés pour être
+  // joués et changés, pas pour être justes.
+  //
+  // ⚠⚠ CE QUE LE CALIBRAGE DONNE EST MESURÉ, ET LE LEVIER EST BEAUCOUP PLUS RAIDE
+  // QUE PRÉVU. Base pleine — quarante bâtiments, le plafond
+  // d'`emplacementsDuNiveau` — tous ramenés à 1 PV, ce qui est le pire cas :
+  //
+  //     Chantier 50, bâtiments 50 →  12,7 h à réparer pour 62,0 h de plafond
+  //     Chantier 30, bâtiments 50 → 119,0 h            pour 61,5 h
+  //     Chantier 20, bâtiments 50 → 369,2 h            pour 61,3 h
+  //     Chantier 10, bâtiments 50 → 1 085,9 h          pour 61,0 h
+  //
+  // La réserve ne mord donc PAS quand le Chantier suit — c'est le levier voulu —
+  // et elle mord déjà d'un facteur DEUX à vingt niveaux de retard. Le plafond,
+  // lui, ne bouge presque pas d'une ligne à l'autre : il est indexé sur la
+  // MOYENNE des bâtiments, que le Chantier seul ne déplace guère à quarante.
+  // ⚠ Aux niveaux 10 et 30 la base pleine rend 0,9 h et 4,7 h pour 22 h et 42 h
+  // de plafond : le milieu de partie est confortable, et c'est la fin qui
+  // tranche.
+  //
+  // ⚠⚠ ET ILS VIVENT ICI, PAS DANS `REPARATION` DE `data/sites.js`. Cette
+  // table-là est la réparation de l'ARMÉE, et ses `plafondHeures` /
+  // `plafondHeuresParNiveauArmee` portent déjà ces noms pour une autre grandeur.
+  // Les réunir ferait deux vérités sous deux noms voisins, et la première
+  // personne qui lit `plafondHeures` ne saurait plus de quelle réserve on parle.
+  plafondHeures: 12,
+  plafondHeuresParNiveauBatiments: 1,
 };
 
 // ---------------------------------------------------------------------------

@@ -86,6 +86,7 @@ import {
 } from '../src/sim/state.js';
 import { fonderUneBase } from '../src/sim/fondation.js';
 import * as moteurEtat from '../src/sim/state.js';
+import * as moteurReparation from '../src/sim/reparation.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 
@@ -1201,18 +1202,34 @@ test('actions — les quatre boutons sont branchés sur le MOTEUR, pas sur une c
   assert.equal(sansMoteur.length, 1);
 });
 
-test('actions — Réparer n\'a pas de moteur, et ce n\'est pas un oubli', () => {
-  // ⚠ CE TEST EST FAIT POUR TOMBER UN JOUR, ET C'EST SON INTÉRÊT. La phrase de
-  // refus de Réparer est la SEULE écrite dans l'interface — toutes les autres
-  // viennent de `sim/disposition.js` ou de `sim/state.js`. Elle n'est légitime
-  // que tant qu'aucune fonction ne répare. Le jour où le moteur en gagne une,
-  // ce test rougit et dit quoi brancher, au lieu de laisser l'écran répéter
-  // « rien n'est endommagé » devant des bâtiments abîmés.
-  for (const nom of ['reparer', 'problemesDeLaReparation', 'problemesDeLaReparation']) {
-    assert.ok(!(nom in moteurEtat), `sim/state.js exporte « ${nom} » : brancher Réparer dessus`);
-  }
-  assert.equal(ACTIONS.reparer.problemes, undefined);
-  assert.equal(ACTIONS.reparer.agir, undefined);
+test('actions — Réparer n\'a pas de moteur DANS L\'ÉCRAN, et le moteur existe', () => {
+  // ⚠⚠ CE TEST A CHANGÉ DE CIBLE AU LOT RÉSERVE-BASE, 05/09/2026, ET IL AVAIT
+  // MESURÉ UN PROXY. Il disait : « ce test est fait pour tomber un jour ; le
+  // jour où le moteur gagne une fonction de réparation, il rougit et dit quoi
+  // brancher ». Ce jour est venu — et IL EST RESTÉ VERT, parce qu'il regardait
+  // les exports de `sim/state.js` quand la fonction est née dans
+  // `sim/reparation.js`. Une garde qui surveille le mauvais module ne prévient
+  // de rien : c'est la même faute que `ZOOM_BASE_MULTIPLE_MAX` et que
+  // `ZOOM_CARTE.grilleEmbleme`, troisième et quatrième fois du dépôt.
+  //
+  // ⚠ CE QU'IL DÉFEND MAINTENANT, ET C'EST L'ÉTAT RÉEL : le moteur SAIT réparer
+  // un bâtiment, l'écran ne l'appelle PAS encore, et la dette est donc ICI et
+  // nulle part ailleurs. Il tombera le jour où l'écran branchera le bouton —
+  // c'est ce qu'on lui demande —, et il faudra alors le RETIRER, pas l'ajuster.
+  assert.ok('reparerUnBatiment' in moteurReparation,
+    'le moteur a perdu `reparerUnBatiment` : c\'est le lot RÉSERVE-BASE qui recule');
+  assert.ok('problemesDeLaReparationDUnBatiment' in moteurReparation);
+  assert.ok('toutReparerLesBatiments' in moteurReparation);
+  assert.equal(ACTIONS.reparer.problemes, undefined,
+    'l\'écran a gagné son moteur : retirer ce test, la dette est soldée');
+  assert.equal(ACTIONS.reparer.agir, undefined,
+    'l\'écran a gagné son moteur : retirer ce test, la dette est soldée');
+
+  // ⚠ ET LA PHRASE DE REFUS EST DEVENUE FAUSSE APRÈS UN RAID, ce qui est le
+  // DÉFAUT que le prochain lot corrige : `raid-ouvrage.js` écrit `degatsMilli`
+  // sur les bâtiments depuis le lot RAID-B, donc « aucun bâtiment n'est
+  // endommagé » peut mentir. C'est un fait d'ÉCRAN, hors de ce lot-ci, et il
+  // est nommé pour qu'on ne le redécouvre pas.
 
   // La phrase dit ce qui est vrai, et ne promet rien.
   // ⚠ LE MESSAGE NOMME CE DONT IL PARLE DEPUIS LE 29/08. Il disait « aucun

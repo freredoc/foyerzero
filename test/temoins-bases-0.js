@@ -1331,6 +1331,23 @@ export const DEPLACES_PAR_TRANSFERT = {
 export const OCTETS_AJOUTES_PAR_TRANSFERT = 0;
 
 /**
+ * Ce que RÉSERVE-BASE ajoute à la sauvegarde, en octets : **36**.
+ *
+ * ⚠ CE SONT LES TRENTE CARACTÈRES DE `,"reserveReparationBatiments":` ET LES SIX
+ * CHIFFRES DE SA VALEUR. La mesure est prise en phase 5, après dix-huit heures
+ * de jeu : les quatre réservoirs y sont à leur plafond, et celui des bâtiments
+ * vaut un nombre à six chiffres sur les vingt-cinq graines.
+ *
+ * ⚠⚠ ET LE NOMBRE EST FIXE, C'EST CE QU'ON LUI DEMANDE. Un écart qui dépendrait
+ * de la partie voudrait dire que la réserve des bâtiments diverge d'une graine à
+ * l'autre — or son plafond ne dépend que du niveau des BÂTIMENTS, et le scénario
+ * du témoin pose exactement les mêmes quatre bâtiments aux mêmes niveaux sur les
+ * vingt-cinq. Le jour où il cesserait d'être fixe, ce serait un fait à
+ * comprendre, pas un nombre à ajuster.
+ */
+export const OCTETS_AJOUTES_PAR_RESERVE_BASE = 36;
+
+/**
  * Les empreintes par graine, RECALCULÉES au lot TRANSFERT.
  *
  * ⚠ ELLES AGRÈGENT LES QUATORZE PHASES ET LES VINGT-TROIS CHAMPS À LA FOIS,
