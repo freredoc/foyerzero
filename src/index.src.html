@@ -967,6 +967,18 @@
     background-repeat: no-repeat;
     image-rendering: pixelated;
   }
+  /* ⚠⚠ UN ABÎMÉ SE VOIT — lot RÉPARER-ÉCRAN, 05/09. La classe et la teinte sont
+     celles de l'écran de raid (`#ecran-raid .emplacement.abimee`), pour que le
+     joueur n'apprenne pas deux vocabulaires visuels pour le même fait.
+
+     ⚠ MAIS C'EST UN `outline`, PAS UN `border`, ET LA DIFFÉRENCE EST MESURABLE.
+     L'emplacement du raid porte DÉJÀ une bordure, dont ce fait ne change que la
+     couleur ; le jeton n'en a aucune, et lui en donner une rétrécirait la boîte
+     de PADDING — donc la surface où `background-image` peint le sprite, dont
+     `background-origin` vaut `padding-box`. Un pixel art recalé d'un pixel n'est
+     plus du pixel art. L'`outline` ne touche à aucune boîte, et c'est déjà pour
+     cette raison que `.case.legale` et `.case.choisie` l'emploient. */
+  .jeton.abimee { outline: 2px solid #E43E32; outline-offset: -1px; }
   /* ⚠⚠ LE NIVEAU SE LIT — Ethan, 04/09 : « Les nombres qui montrent les niveaux
      des bâtiments et unités sont trop petits et peu lisibles. » Il valait 8 px
      en graisse 400, sur un sprite chargé, sous une ombre d'un pixel.
@@ -1325,6 +1337,20 @@
   .posable.actif i { box-shadow: inset 0 0 0 2px #F5F3E8; }
 
   /* --- ce qui se dit quand quelque chose ne va pas -------------------------- */
+  /* ⚠ MÊME FORME QUE `#chantier-avis` : `flex: 0 0 auto`, donc une hauteur
+     dictée par son contenu et NULLE quand il est `hidden`. Ce n'est pas une
+     barre à hauteur fixe, et la garde des 288 px ne le compte pas. */
+  #chantier-reparation {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 3px 8px; background: #343A2C;
+  }
+  #chantier-reserve { font-size: 9px; color: #F5F3E8; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  #chantier-tout-reparer {
+    flex: 0 0 auto; padding: 3px 10px; border: 0; border-radius: 2px;
+    background: #6A7658; color: #161914; font-size: 9px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
   #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }
   /* ⚠ UN MODE N'EST PAS UNE ALERTE. « Mode DÉMOLIR : touchez le bâtiment à
      démolir » ne signale aucune panne : il rappelle ce que le prochain toucher
@@ -1899,6 +1925,24 @@
           <ul id="tuto-objectifs"></ul>
           <p id="tuto-explication"></p>
         </div>
+      </div>
+
+      <!-- ⚠⚠ LA RÉSERVE DES BÂTIMENTS ET « TOUT RÉPARER » — lot RÉPARER-ÉCRAN,
+           05/09. Le bloc n'apparaît QUE le mode Réparer armé, exactement comme
+           `#raid-tout-reparer` depuis le 01/09 (Ethan : « le bouton n'apparaît
+           que le mode Réparer armé, et au-dessus de la rangée »). Reprendre la
+           discipline de l'autre écran vaut mieux que d'en inventer une seconde
+           pour le même geste.
+           ⚠ ET IL N'EST PAS UNE SEPTIÈME BARRE FIXE. `flex: 0 0 auto` comme
+           `#chantier-avis`, et `hidden` par défaut : le chrome fixe reste à
+           288 px, et la garde de `chantier.test.js` qui énumère les
+           `flex: 0 0 Npx` ne le voit pas — c'est voulu, il n'en est pas une.
+           ⚠ LA RÉSERVE EST LÀ PARCE QU'UN JOUEUR QUI NE LA VOIT PAS NE COMPREND
+           PAS POURQUOI RÉPARER REFUSE. Elle est écrite par `ui/chantier.js`
+           depuis `plafondDeLaReserveDesBatiments` ; rien n'est calculé ici. -->
+      <div id="chantier-reparation" hidden>
+        <span id="chantier-reserve">—</span>
+        <button type="button" id="chantier-tout-reparer">Tout réparer</button>
       </div>
 
       <p id="chantier-avis" hidden></p>

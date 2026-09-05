@@ -74,6 +74,16 @@ import {
   problemesDeLAmeliorationDEffectif, ameliorerEffectif,
   basculerVersLaBase, FORCES,
 } from '../sim/state.js';
+// ⚠ LA RÉPARATION DES BÂTIMENTS VIENT DE `sim/reparation.js`, ET C'EST LÀ QUE
+// LE LOT RÉSERVE-BASE L'A ÉCRITE — pas dans `sim/state.js`. La garde qui
+// surveillait cette dette a passé une journée verte pour avoir regardé le mauvais
+// module ; l'import, lui, ne peut pas se tromper d'adresse.
+import {
+  problemesDeLaReparationDUnBatiment, reparerUnBatiment,
+  coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments,
+  problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
+  plafondDeLaReserveDesBatiments, direLaDuree,
+} from '../sim/reparation.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
 import { facteurMilli } from '../sim/combat.js';
@@ -198,11 +208,25 @@ export const DUREE_TOAST_MS = 4000;
  * mode se désarme dès qu'il a servi, réussi ou non.
  *
  * `problemes` rend la liste du moteur ; `agir` exécute. Les deux viennent de
- * `sim/state.js` et ne sont JAMAIS réécrites ici. `reparer` n'a pas
- * d'équivalent moteur — voir `PAS_DE_REPARATION`.
+ * `sim/state.js` ou de `sim/reparation.js` et ne sont JAMAIS réécrites ici.
+ *
+ * ⚠⚠ LES QUATRE ONT UN MOTEUR DEPUIS LE LOT RÉPARER-ÉCRAN, 05/09, ET LE
+ * COMMENTAIRE QUI DISAIT LE CONTRAIRE EST PARTI AVEC LA PHRASE QU'IL DÉCRIVAIT.
+ * Il annonçait que « `reparer` n'a pas d'équivalent moteur » : c'était vrai
+ * jusqu'au lot RÉSERVE-BASE, qui a écrit les cinq fonctions, et faux depuis. Un
+ * commentaire qui décrit un manque comblé envoie chercher un travail déjà fait.
  */
 export const ACTIONS = {
-  reparer: { bouton: 'chantier-reparer', libelle: 'Réparer' },
+  reparer: {
+    bouton: 'chantier-reparer',
+    libelle: 'Réparer',
+    // ⚠ LE GESTE EST DÉCLARÉ DANS `src/son/cablage.js`, PAS INVENTÉ ICI. C'est
+    // la même frontière que les trois voisines : l'écran nomme ce que le joueur
+    // vient de faire, le câblage décide si ça fait du bruit et lequel.
+    geste: 'reparation',
+    problemes: problemesDeLaReparationDUnBatiment,
+    agir: reparerUnBatiment,
+  },
   ameliorer: {
     bouton: 'chantier-ameliorer',
     libelle: 'Améliorer',
@@ -242,28 +266,6 @@ export const ACTIONS = {
     agir: demolir,
   },
 };
-
-/**
- * Ce que Réparer répond, faute de moteur.
- *
- * ⚠ C'EST LA SEULE PHRASE DE REFUS ÉCRITE DANS L'INTERFACE, et elle l'est parce
- * qu'aucune règle ne la porte : `REPARATION_BASE_JOUEUR` de `data/base.js` est
- * une table de calibrage, aucune fonction ne répare, et aucun bâtiment ne porte
- * de dégâts. Inventer un moteur de réparation dans l'écran serait trancher seul
- * une mécanique de jeu. Le bouton suit donc le même chemin que les deux autres
- * — il s'arme, il se désarme — et dit ce qui est vrai : il n'y a rien à
- * réparer. Le jour où les dégâts existeront, il n'y aura qu'une fonction à
- * brancher ici.
- */
-export function messagePasDeReparation(constat) {
-  // ⚠⚠ LE CONSTAT ENTIER, ET IL A FALLU DEUX ESSAIS POUR L'ADMETTRE. La
-  // première écriture prenait le seul nom et préfixait « aucun » : elle rendait
-  // « aucun unité » sur l'écran Offense. La deuxième prenait le sujet accordé
-  // et gardait le verbe : elle rendait « aucune unité n'est endommagé ». Le
-  // français ne se recompose pas morceau par morceau — le terrain donne la
-  // phrase, et ce module n'ajoute que ce qui est invariable.
-  return `${constat} : les dégâts n'existent pas encore`;
-}
 
 /** Un niveau absent — la Défense et l'Assaut, qui n'ont pas encore d'état. */
 export const NIVEAU_ABSENT = '—';
@@ -662,6 +664,23 @@ export function resumeDeLaBase(etat) {
 
 /**
  * Ce que le bandeau contextuel dit du bâtiment sélectionné.
+ *
+ * ⚠⚠ IL DIT L'AVARIE ET SON PRIX DEPUIS LE LOT RÉPARER-ÉCRAN, 05/09, ET C'EST
+ * CE QUI REND LE MODE « ARMER PUIS TOUCHER » JOUABLE. Armer Réparer sans savoir
+ * quel bâtiment est abîmé, c'est toucher au hasard parmi quarante.
+ *
+ * ⚠⚠ LES DÉGÂTS SONT UNE PART DES PV MAX, JAMAIS UN ABSOLU — même règle et même
+ * avertissement que `degatsSubisMilliemes` d'`apercuDeLaPiece`. `degatsMilli` est
+ * en milli-PV et les PV max montent avec le niveau : le MÊME coup encaisse 67
+ * milli-PV au niveau 5 et des dizaines de millions au niveau 50. Un nombre nu ne
+ * se compare à rien, et surtout pas d'un bâtiment à l'autre.
+ *
+ * ⚠⚠ ET LE DEVIS VIENT DE `coutDeLaReparationDUnBatiment`, IL NE SE RECALCULE
+ * PAS ICI. Le quartz annoncé doit être exactement celui que `reparerUnBatiment`
+ * débitera : un arrondi de plus, pris de ce côté-ci, laisserait le joueur passer
+ * la garde puis manquer d'une unité — c'est le §7.3 du lot RÉSERVE-BASE, vu
+ * depuis l'écran. Le moteur arrondit avec `Math.round` ; on lui demande.
+ *
  * @param {object} etat
  * @param {number} index indice dans la disposition
  */
@@ -676,14 +695,30 @@ export function detailDuBatiment(etat, index) {
     if (!production[r]) continue;
     morceaux.push(`+${formaterEntier(production[r])} ${LIBELLES_RESSOURCE[r].sigle}`);
   }
+  const cout = coutDeLaReparationDUnBatiment(etat, index);
+  const degatsSubisMilliemes = cout === null ? 0 : Math.round(cout.part * 1000);
+  // ⚠ LE PRIX EST CELUI QUE LE MOTEUR FACTURERA — `Math.round`, comme
+  // `reparerUnBatiment`. Un `Math.ceil` d'écran annoncerait une unité de trop et
+  // ferait chercher un quartz qui ne sert à rien.
+  const devis = cout === null ? null
+    : { quartz: Math.round(cout.quartz), ticks: cout.ticks };
+  // « Niv. 5 · +176 q +352 s /h » — et rien du tout quand le bâtiment ne
+  // produit pas, plutôt qu'un « /h » orphelin.
+  const lignes = [`Niv. ${b.niveau}`];
+  if (morceaux.length > 0) lignes.push(`${morceaux.join(' ')} /h`);
+  // ⚠ L'AVARIE PASSE APRÈS LA PRODUCTION, ET ELLE NE S'ÉCRIT QUE SI ELLE EXISTE.
+  // « 0 % de dégâts » sur les onze bâtiments d'une base intacte serait onze fois
+  // la même absence d'information, dans une ligne qui coupe à l'ellipse.
+  if (devis !== null) {
+    lignes.push(`${formaterEntier(Math.round(degatsSubisMilliemes / 10))} % de dégâts`);
+    lignes.push(`réparer : ${formaterEntier(devis.quartz)} q · ${direLaDuree(devis.ticks)}`);
+  }
   return {
     nom: def.nom.joueur,
     niveau: b.niveau,
-    // « Niv. 5 · +176 q +352 s /h » — et rien du tout quand le bâtiment ne
-    // produit pas, plutôt qu'un « /h » orphelin.
-    detail: morceaux.length === 0
-      ? `Niv. ${b.niveau}`
-      : `Niv. ${b.niveau} · ${morceaux.join(' ')} /h`,
+    degatsSubisMilliemes,
+    devis,
+    detail: lignes.join(' · '),
   };
 }
 
@@ -1857,11 +1892,18 @@ export const TERRAINS = {
     // de sens que pour un bâtiment de la base.
     panneau: true,
     vueDuPanneau: (etat, index) => lignesDuPanneau(apercuDuBatiment(etat, index)),
-    // ⚠ COMMENT ON APPELLE CE QU'ON MANIPULE. Les messages de refus le nomment
-    // — « aucun bâtiment n'est endommagé », « pour la défense » — et jusqu'au
-    // 29/08 ces mots étaient écrits en dur, ce qui faisait dire « bâtiment » à
-    // la bande de garnison. Le terrain le dit, une fois.
-    quoi: 'aucun bâtiment n\'est endommagé',
+    // ⚠ COMMENT ON APPELLE CE QU'ON MANIPULE. Le refus d'une action sans moteur
+    // le nomme — « pour la défense » — et jusqu'au 29/08 ce mot était écrit en
+    // dur, ce qui faisait dire « bâtiment » à la bande de garnison. Le terrain
+    // le dit, une fois.
+    //
+    // ⚠⚠ ET LE CHAMP `quoi` EST PARTI AVEC LA PHRASE QU'IL SERVAIT — lot
+    // RÉPARER-ÉCRAN, 05/09. Il portait « aucun bâtiment n'est endommagé », le
+    // constat de `messagePasDeReparation`, seul lecteur qu'il ait jamais eu. Ce
+    // constat était devenu FAUX le 02/09, `raid-ouvrage.js` écrivant
+    // `degatsMilli` depuis le lot RAID-B ; les refus viennent maintenant de
+    // `problemesDeLaReparationDUnBatiment`, qui les chiffre. Un champ que plus
+    // rien ne lit est un commentaire menteur en puissance.
     pourQui: 'la base',
   },
   defense: {
@@ -1915,9 +1957,17 @@ export const TERRAINS = {
     // DIT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton au
     // lieu de le rendre inerte — « un indice n'est pas une interdiction »
     // (CLAUDE.md §4).
-    //   `reparer`  — même situation que pour les bâtiments : une table de
-    //     calibrage, aucune fonction. Les dégâts, eux, existent enfin
-    //     (`degatsMilli`), donc ce trou-là est le prochain à se combler.
+    //   `reparer`  — ET CE TROU-LÀ NE SE COMBLERA JAMAIS PAR UN BOUTON. Le
+    //     commentaire d'hier annonçait qu'il était « le prochain à se
+    //     combler » : il se trompait de mécanique, pas de constat.
+    //     `MODELE-REPARATION-1.md` §3 dit que le Complexe de défense répare la
+    //     garnison GRATUITEMENT, TOUT SEUL, en une heure — et
+    //     `reparerLaGarnison` de `sim/raid-ouvrage.js` le fait déjà après
+    //     chaque raid. Il n'y a donc rien à brancher : le geste du joueur
+    //     n'existe pas dans cette moitié du modèle, et un bouton qui réparerait
+    //     à la demande inventerait une seconde règle à côté de celle qui tourne.
+    //     Le `null` reste, et il dit « pas de geste ici », plus « pas encore de
+    //     moteur ».
     //
     // ⚠⚠ `ameliorer` A PERDU SON `null` LE 03/09, ET LE COMMENTAIRE QUI DISAIT
     // LE CONTRAIRE EST PARTI AVEC LUI. Il affirmait que « rien dans `sim/` ne
@@ -1957,7 +2007,7 @@ export const TERRAINS = {
     // le même rendu la peint.
     panneau: true,
     vueDuPanneau: (etat, index) => lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', index)),
-    quoi: 'aucun défenseur n\'est endommagé',
+
     pourQui: 'la défense',
   },
 };
@@ -3703,11 +3753,76 @@ export function initialiserEcranChantier(doc, {
   // Les actions : armer, puis toucher
   // -------------------------------------------------------------------------
 
-  /** Reflète le mode courant sur les trois boutons. */
+  /**
+   * Reflète le mode courant sur les quatre boutons — et sur la barre de
+   * réparation, qui n'existe à l'écran que pendant le mode Réparer.
+   *
+   * ⚠⚠ LE POINT EST UNIQUE, ET IL LE FAUT. Cette fonction est appelée aux SEPT
+   * endroits où le mode peut changer — armement, exécution, câblage,
+   * chargement, abandon d'un déplacement. Montrer la barre depuis `armer` et la
+   * cacher depuis `executerAction` aurait laissé les cinq autres chemins
+   * l'oublier, et la barre serait restée à l'écran après un refus.
+   */
   function marquerBoutonsAction() {
     for (const [nom, action] of Object.entries(ACTIONS)) {
       $(action.bouton).classList.toggle('arme', actionArmee === nom);
     }
+    // ⚠ « TOUT RÉPARER » N'APPARAÎT QUE LE MODE RÉPARER ARMÉ — Ethan, 01/09, sur
+    // l'écran de raid ; c'est la même discipline, sur l'autre écran.
+    const barre = $('chantier-reparation');
+    if (barre === null) return;
+    barre.hidden = actionArmee !== 'reparer';
+    if (!barre.hidden) ecrireLaReserve();
+  }
+
+  /**
+   * Écrit la réserve des bâtiments et ce qu'elle permet.
+   *
+   * ⚠⚠ `plafondDeLaReserveDesBatiments` LÈVE SUR UNE DISPOSITION VIDE, elle ne
+   * rend pas zéro — et elle a raison : une base sans un seul bâtiment n'existe
+   * pas, `problemesDeDisposition` refuse `sans-chantier`. L'écran, lui, se peint
+   * AVANT que l'état soit là (`etatCourant` vaut `null` au câblage) et pendant
+   * un chargement raté. On regarde donc, plutôt que de l'appeler à l'aveugle.
+   *
+   * ⚠ ET LE DEVIS EST CELUI DU MOTEUR. `devisDeLaReparationDesBatiments` somme
+   * des ARRONDIS parce que `toutReparerLesBatiments` débite bâtiment par
+   * bâtiment ; le recalculer ici annoncerait un prix que l'opération ne pratique
+   * pas — jusqu'à cinq unités d'écart à onze bâtiments.
+   */
+  function ecrireLaReserve() {
+    const ligne = $('chantier-reserve');
+    if (ligne === null) return;
+    if (etatCourant === null || baseCourante(etatCourant).disposition.length === 0) {
+      ligne.textContent = '—';
+      return;
+    }
+    const laBase = baseCourante(etatCourant);
+    const plafond = plafondDeLaReserveDesBatiments(laBase);
+    // ⚠ UN STOCK S'ARRONDIT VERS LE BAS. `direLaDuree` le prend en argument
+    // depuis ce lot : annoncer « 5 min » de réserve pour 4 min 10 s ferait
+    // tenter une réparation que le moteur refuserait.
+    const reserve = `Réserve : ${direLaDuree(laBase.reserveReparationBatiments, Math.floor)}`
+      + ` / ${direLaDuree(plafond, Math.floor)}`;
+    const devis = devisDeLaReparationDesBatiments(etatCourant);
+    ligne.textContent = devis.batiments === 0 ? `${reserve} · base intacte`
+      : `${reserve} · ${devis.batiments} à réparer :`
+        + ` ${formaterEntier(devis.quartz)} q · ${direLaDuree(devis.ticks)}`;
+  }
+
+  /**
+   * Désarme l'action courante et efface son mot.
+   *
+   * ⚠ LES TROIS LIGNES ÉTAIENT ÉCRITES QUATRE FOIS À L'IDENTIQUE, ET LE LOT
+   * RÉPARER-ÉCRAN EN AURAIT ÉCRIT UNE CINQUIÈME. Trois gestes qui doivent
+   * toujours aller ensemble — l'état, le mot, les boutons — recopiés à cinq
+   * endroits, c'est exactement la forme que prend une divergence quand elle
+   * commence : le jour où le désarmement devra faire une quatrième chose, un
+   * des cinq sites l'oubliera.
+   */
+  function desarmerLAction() {
+    actionArmee = null;
+    ligneDeMode('');
+    marquerBoutonsAction();
   }
 
   /**
@@ -3760,21 +3875,18 @@ export function initialiserEcranChantier(doc, {
     // Quoi qu'il arrive, le mode se désarme : réussite comme refus. Sa ligne
     // tombe avec lui — elle décrivait ce que le prochain toucher ferait, et il
     // vient d'avoir lieu.
-    actionArmee = null;
-    ligneDeMode('');
-    marquerBoutonsAction();
+    desarmerLAction();
 
-    // ⚠ `null` N'EST PAS `undefined` ICI, ET LA DISTINCTION PORTE UN SENS.
-    // `undefined` = l'action n'a de moteur nulle part (Réparer, qui n'existe
-    // pour personne) ; `null` = ce TERRAIN-là n'en a pas, alors qu'un autre
-    // pourrait. Les deux répondent, aucun des deux ne reste muet.
+    // ⚠⚠ IL N'Y A PLUS QU'UNE FORME SANS MOTEUR, ET C'EST `null` — lot
+    // RÉPARER-ÉCRAN, 05/09. La branche `action.problemes === undefined` est
+    // partie avec `messagePasDeReparation` : elle existait pour la seule action
+    // qui n'avait de moteur NULLE PART, et Réparer en a un depuis le lot
+    // RÉSERVE-BASE. Il ne reste que le cas du TERRAIN qui n'en a pas alors qu'un
+    // autre en a — la garnison, que le Complexe de défense répare tout seul. Le
+    // bouton répond, il ne reste jamais muet : « un indice n'est pas une
+    // interdiction » (CLAUDE.md §4).
     if (action === null) {
       toast(actionSansMoteur(ACTIONS[nom].libelle, TERRAINS[terrainCible].pourQui));
-      return;
-    }
-    if (action.problemes === undefined) {
-      // Réparer : le chemin existe, il n'a rien à réparer.
-      toast(messagePasDeReparation(TERRAINS[terrainCible].quoi));
       return;
     }
 
@@ -3860,6 +3972,47 @@ export function initialiserEcranChantier(doc, {
 
   for (const nom of Object.keys(ACTIONS)) {
     $(ACTIONS[nom].bouton).addEventListener('click', () => armer(nom));
+  }
+
+  // ⚠⚠ « TOUT RÉPARER » EST UN BOUTON DIRECT, PAS UNE CINQUIÈME ENTRÉE
+  // D'`ACTIONS` — lot RÉPARER-ÉCRAN, 05/09. `ACTIONS` est le registre du modèle
+  // « armer puis toucher » : chacune de ses lignes attend un doigt sur une case.
+  // Un geste GLOBAL n'a rien à y désigner, et l'y mettre lui donnerait un bouton
+  // du bandeau contextuel, un mode et une ligne d'invite pour un geste qui n'en
+  // a pas besoin. `src/ui/raid.js` a le précédent depuis le 01/09.
+  const toutReparer = $('chantier-tout-reparer');
+  if (toutReparer !== null) {
+    toutReparer.addEventListener('click', () => {
+      if (etatCourant === null) return;
+      // ⚠⚠ ON PASSE PAR `problemesDeToutReparerLesBatiments` POUR SON SEUL CODE
+      // `rien-a-reparer`, JAMAIS POUR SON VERDICT DE PRIX. Elle juge le devis
+      // TOTAL : elle refuserait les trente-neuf bâtiments payables parce que le
+      // quarantième est hors de portée, alors que `toutReparerLesBatiments` est
+      // écrite pour l'inverse — elle fait ce qu'elle peut et COMPTE le reste.
+      // Ce serait plus sévère que l'armée, pour la même mécanique.
+      const rien = problemesDeToutReparerLesBatiments(etatCourant)
+        .find((p) => p.code === 'rien-a-reparer');
+      if (rien !== undefined) { toast(rien.message); desarmerLAction(); return; }
+
+      const bilan = toutReparerLesBatiments(etatCourant);
+      desarmerLAction();
+      peindre(etatCourant);
+      rafraichir(etatCourant);
+      if (apresPose !== undefined) apresPose(etatCourant);
+      // ⚠ ET LE BILAN SE DIT, MÊME À ZÉRO RÉPARÉ. Sans lui, une réserve à sec
+      // rendrait un écran qui ne bouge pas : le joueur croirait le bouton mort.
+      // `raid.js` dit déjà la même chose de l'armée, dans la même forme.
+      if (bilan.reparees === 0) {
+        toast(`Aucune réparation payable : ${bilan.impayables} bâtiment(s)`
+          + ' hors de portée de la réserve ou du quartz.');
+      } else if (bilan.impayables === 0) {
+        toast(`${bilan.reparees} bâtiment(s) réparé(s)`
+          + ` pour ${formaterEntier(bilan.quartz)} de quartz.`);
+      } else {
+        toast(`${bilan.reparees} réparé(s), ${bilan.impayables} hors de portée`
+          + ' de la réserve ou du quartz.');
+      }
+    });
   }
   marquerBoutonsAction();
 
@@ -4082,9 +4235,7 @@ export function initialiserEcranChantier(doc, {
     terrainSelection = terrainDeplacement;
     selection = deplacementEnCours;
     deplacementEnCours = null;
-    actionArmee = null;
-    ligneDeMode('');
-    marquerBoutonsAction();
+    desarmerLAction();
     // Un déplacement change le voisinage, donc les débits : il s'écrit tout de
     // suite, comme une pose.
     if (apresPose !== undefined) apresPose(etatCourant);
@@ -4195,6 +4346,18 @@ export function initialiserEcranChantier(doc, {
         if (case_ === undefined) continue;
         const jeton = doc.createElement('div');
         jeton.className = `jeton ${terrain.familleDe(b.id)}`;
+        // ⚠⚠ UN ABÎMÉ SE VOIT, ET LA CONVENTION EST CELLE DE L'ÉCRAN DE RAID —
+        // lot RÉPARER-ÉCRAN, 05/09. `#ecran-raid .emplacement.abimee` borde en
+        // `#E43E32` depuis le 01/09 : reprendre la classe et la teinte apprend au
+        // joueur UNE grammaire pour les deux écrans, là où un second langage
+        // visuel lui en apprendrait deux pour le même fait.
+        //
+        // ⚠ ET C'EST LA MÊME LIGNE POUR LES DEUX BANDES, sans un `=== 'defense'`
+        // écrit à la main : une pièce de garnison porte `degatsMilli` comme un
+        // bâtiment, et deux gardes de ce fichier refusent déjà qu'une bande soit
+        // reconnue à son nom. La garnison se répare toute seule et son avarie ne
+        // dure qu'une heure — la marquer reste vrai pendant cette heure-là.
+        if ((b.degatsMilli ?? 0) > 0) jeton.classList.add('abimee');
         // ⚠ LE TERRAIN DÉCIDE, PAS LE NOM DE LA BANDE. `spriteDe` vaut `null`
         // tant qu'une famille n'est pas branchée : la bande garde alors son
         // sigle. Les deux bandes sont branchées depuis le 30/08 ; la porte reste
@@ -4251,6 +4414,11 @@ export function initialiserEcranChantier(doc, {
   function rafraichir(etat) {
     etatCourant = etat;
     const resume = resumeDeLaBase(etat);
+    // ⚠ LA RÉSERVE MONTE PENDANT QU'ON LA REGARDE, DONC ELLE SE REPEINT ICI —
+    // mais SEULEMENT quand la barre est à l'écran. Elle ne l'est que le mode
+    // Réparer armé ; hors de là, ce serait recalculer un devis sur quarante
+    // bâtiments dix fois par seconde pour une ligne que personne ne voit.
+    if ($('chantier-reparation')?.hidden === false) ecrireLaReserve();
 
     // ⚠ LES POINTS D'ATTAQUE SE REPEIGNENT ICI, avec les trois ressources et
     // dans la même passe. Un second minuteur pour un seul nombre ferait deux
