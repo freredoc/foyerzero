@@ -3,8 +3,15 @@
 // ⚠⚠ FICHIER GÉNÉRÉ par « python3 tools/sons.py --ecrire ». NE PAS MODIFIER À
 // LA MAIN : la moindre retouche serait effacée au prochain lot d'art, sans
 // bruit. Tout ce qui est ici est DÉRIVÉ d'`art/sources/sfx_manifest.json`, sauf
-// les cinq bus et les réglages par défaut, qui viennent du brief et sont écrits
+// les cinq bus et les réglages par défaut, qui viennent du pack et sont écrits
 // dans le générateur.
+//
+// ⚠⚠ ET DEPUIS LE LOT SON-VOLUMES, `volumeDb` EST UNE DÉRIVATION PLUS UN CRAN.
+// Le générateur porte `RETRAIT_PAR_CATEGORIE`, ce que le JEU retire à une
+// famille en plus de ce que le pack recommande : les boutons baissent de six
+// décibels, sur demande d'Ethan du 06/09. Le retrait est BAKÉ dans la table —
+// il ne s'applique pas une seconde fois à la lecture — et `SON T1` le LIT dans
+// le générateur pour confronter la dérivation, plutôt que de le recopier.
 //
 // ⚠⚠ ET C'EST L'INVERSE DU LOT SON-MOTEUR, QUI TRANSCRIVAIT QUATRE LIGNES À LA
 // MAIN. À quatre entrées une transcription se relit et un test la confronte ; à
@@ -13,7 +20,10 @@
 // dérivation en JavaScript et compare, si bien que la génération ne peut pas
 // mentir sans qu'on le voie.
 //
-// ⚠⚠ VINGT-QUATRE SONS SONT CÂBLÉS, ET LES 239 AUTRES SONT MUETS À DESSEIN.
+// ⚠⚠ VINGT-TROIS SONS SONT CÂBLÉS, ET LES 240 AUTRES SONT MUETS À DESSEIN.
+// ⚠ Ils étaient vingt-quatre : `ambience_calm_map_loop` est devenu DORMANT le
+// 06/09, Ethan ayant demandé d'enlever l'ambiance de la carte. Le son reste au
+// catalogue et au livrable — pas un `data:` n'en sort.
 // Le lot SON-CÂBLAGE branche ce qui avait DÉJÀ un point d'accroche dans le
 // dépôt : cinq sons `ui`, trois ambiances d'écran, QUATRE boucles de roulement,
 // deux boucles de machinerie, et les ponctuels de sélection, d'ordre, de pose et
@@ -69,6 +79,13 @@ export const BUS = {
 
 /**
  * Un son : son bus, et ce que le manifeste dit de lui.
+ *
+ * ⚠⚠ `volumeDb` N'EST PLUS LE SEUL `recommended_volume_db` DU MANIFESTE : c'est
+ * lui PLUS le cran que `RETRAIT_PAR_CATEGORIE` retire à sa famille. Une seule
+ * famille en porte un aujourd'hui — les boutons, à -6 —, et le générateur écrit
+ * pourquoi. Les décibels s'additionnent, donc le niveau effectif d'un son est
+ * `BUS[son.bus] + son.volumeDb`, et rien d'autre : un clic vaut -9, un
+ * lancement de raid -3, une construction -12.
  *
  * ⚠ LE NOM DU MASTER WAV N'EST PAS ICI, ET C'EST VOULU. Le jeu ne voit jamais
  * un WAV — il reçoit un `.opus` déjà encodé, sous un `data:`. Le nom du master
@@ -262,29 +279,29 @@ export const SONS = {
   order_player_move_02: { bus: 'interface', dureeMs: 189, maxInstances: 2, volumeDb: 0 },
   order_player_select_01: { bus: 'interface', dureeMs: 122, maxInstances: 2, volumeDb: 0 },
   order_player_select_02: { bus: 'interface', dureeMs: 122, maxInstances: 2, volumeDb: 0 },
-  ui_cancel_01: { bus: 'interface', dureeMs: 190, maxInstances: 2, volumeDb: 0 },
-  ui_cancel_02: { bus: 'interface', dureeMs: 190, maxInstances: 2, volumeDb: 0 },
-  ui_click_01: { bus: 'interface', dureeMs: 75, maxInstances: 2, volumeDb: 0 },
-  ui_click_02: { bus: 'interface', dureeMs: 75, maxInstances: 2, volumeDb: 0 },
-  ui_confirm_01: { bus: 'interface', dureeMs: 256, maxInstances: 2, volumeDb: 0 },
-  ui_confirm_02: { bus: 'interface', dureeMs: 256, maxInstances: 2, volumeDb: 0 },
-  ui_countdown: { bus: 'interface', dureeMs: 120, maxInstances: 1, volumeDb: 0 },
-  ui_defeat: { bus: 'interface', dureeMs: 1235, maxInstances: 1, volumeDb: 0 },
-  ui_error_01: { bus: 'interface', dureeMs: 268, maxInstances: 2, volumeDb: 0 },
-  ui_error_02: { bus: 'interface', dureeMs: 268, maxInstances: 2, volumeDb: 0 },
-  ui_hover_01: { bus: 'interface', dureeMs: 55, maxInstances: 2, volumeDb: 0 },
-  ui_hover_02: { bus: 'interface', dureeMs: 55, maxInstances: 2, volumeDb: 0 },
-  ui_objective_complete: { bus: 'interface', dureeMs: 635, maxInstances: 1, volumeDb: 0 },
-  ui_objective_new: { bus: 'interface', dureeMs: 377, maxInstances: 1, volumeDb: 0 },
-  ui_pause: { bus: 'interface', dureeMs: 190, maxInstances: 1, volumeDb: 0 },
-  ui_queue_add: { bus: 'interface', dureeMs: 148, maxInstances: 1, volumeDb: 0 },
-  ui_queue_remove: { bus: 'interface', dureeMs: 148, maxInstances: 1, volumeDb: 0 },
-  ui_resource_gain: { bus: 'interface', dureeMs: 260, maxInstances: 1, volumeDb: 0 },
-  ui_resource_spend: { bus: 'interface', dureeMs: 152, maxInstances: 1, volumeDb: 0 },
-  ui_resume: { bus: 'interface', dureeMs: 155, maxInstances: 1, volumeDb: 0 },
-  ui_toggle_off: { bus: 'interface', dureeMs: 140, maxInstances: 1, volumeDb: 0 },
-  ui_toggle_on: { bus: 'interface', dureeMs: 160, maxInstances: 1, volumeDb: 0 },
-  ui_victory: { bus: 'interface', dureeMs: 1011, maxInstances: 1, volumeDb: 0 },
+  ui_cancel_01: { bus: 'interface', dureeMs: 190, maxInstances: 2, volumeDb: -6 },
+  ui_cancel_02: { bus: 'interface', dureeMs: 190, maxInstances: 2, volumeDb: -6 },
+  ui_click_01: { bus: 'interface', dureeMs: 75, maxInstances: 2, volumeDb: -6 },
+  ui_click_02: { bus: 'interface', dureeMs: 75, maxInstances: 2, volumeDb: -6 },
+  ui_confirm_01: { bus: 'interface', dureeMs: 256, maxInstances: 2, volumeDb: -6 },
+  ui_confirm_02: { bus: 'interface', dureeMs: 256, maxInstances: 2, volumeDb: -6 },
+  ui_countdown: { bus: 'interface', dureeMs: 120, maxInstances: 1, volumeDb: -6 },
+  ui_defeat: { bus: 'interface', dureeMs: 1235, maxInstances: 1, volumeDb: -6 },
+  ui_error_01: { bus: 'interface', dureeMs: 268, maxInstances: 2, volumeDb: -6 },
+  ui_error_02: { bus: 'interface', dureeMs: 268, maxInstances: 2, volumeDb: -6 },
+  ui_hover_01: { bus: 'interface', dureeMs: 55, maxInstances: 2, volumeDb: -6 },
+  ui_hover_02: { bus: 'interface', dureeMs: 55, maxInstances: 2, volumeDb: -6 },
+  ui_objective_complete: { bus: 'interface', dureeMs: 635, maxInstances: 1, volumeDb: -6 },
+  ui_objective_new: { bus: 'interface', dureeMs: 377, maxInstances: 1, volumeDb: -6 },
+  ui_pause: { bus: 'interface', dureeMs: 190, maxInstances: 1, volumeDb: -6 },
+  ui_queue_add: { bus: 'interface', dureeMs: 148, maxInstances: 1, volumeDb: -6 },
+  ui_queue_remove: { bus: 'interface', dureeMs: 148, maxInstances: 1, volumeDb: -6 },
+  ui_resource_gain: { bus: 'interface', dureeMs: 260, maxInstances: 1, volumeDb: -6 },
+  ui_resource_spend: { bus: 'interface', dureeMs: 152, maxInstances: 1, volumeDb: -6 },
+  ui_resume: { bus: 'interface', dureeMs: 155, maxInstances: 1, volumeDb: -6 },
+  ui_toggle_off: { bus: 'interface', dureeMs: 140, maxInstances: 1, volumeDb: -6 },
+  ui_toggle_on: { bus: 'interface', dureeMs: 160, maxInstances: 1, volumeDb: -6 },
+  ui_victory: { bus: 'interface', dureeMs: 1011, maxInstances: 1, volumeDb: -6 },
   weapon_missile_flight_loop: { bus: 'armes', dureeMs: 2000, maxInstances: 4, volumeDb: -4, boucle: true },
   weapon_missile_lock: { bus: 'armes', dureeMs: 425, maxInstances: 1, volumeDb: 0 },
   weapon_ouvrage_aa_01: { bus: 'armes', dureeMs: 351, maxInstances: 8, volumeDb: 0 },
@@ -565,7 +582,6 @@ export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };
 export const AMBIANCE_PAR_ECRAN = {
   chantier: 'ambience_base_player_loop',
   mission: 'ambience_base_player_loop',
-  monde: 'ambience_calm_map_loop',
   offense: 'ambience_base_player_loop',
   options: 'ambience_base_player_loop',
   raid: 'ambience_battlefield_distant_loop',

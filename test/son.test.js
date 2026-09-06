@@ -44,6 +44,19 @@ function sansCommentaires(code) {
   return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
+/**
+ * Le même geste pour un outil Python, dont les commentaires portent un `#`.
+ *
+ * ⚠⚠ ON NE RETIRE QUE LES LIGNES ENTIÈREMENT COMMENTÉES, et c'est la leçon du
+ * lot SOL-SATELLITE : couper à tout croisillon mangerait les clés `'#FF00FF'`
+ * et les valeurs hexadécimales que ces outils portent partout. Ce qu'on défend
+ * ici, c'est qu'une garde ne lise jamais la prose écrite à son sujet — le dépôt
+ * l'a payé huit fois.
+ */
+function sansCommentairesPython(code) {
+  return code.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+}
+
 const ACTIF = { muet: false, volume: 1 };
 
 // ---------------------------------------------------------------------------
@@ -58,6 +71,23 @@ test('SON T1 — les 263 entrées disent ce que le manifeste dit d\'elles', () =
   // tous les deux ici.
   const manifeste = JSON.parse(lire('art', 'sources', 'sfx_manifest.json'));
   const parId = new Map(manifeste.sounds.map((s) => [s.id, s]));
+
+  // ⚠⚠ ET LE NIVEAU N'EST PLUS UNE DÉRIVATION PURE DU MANIFESTE DEPUIS LE LOT
+  // SON-VOLUMES. Le générateur RETIRE un cran à une famille — les boutons — et
+  // ce cran se LIT dans `tools/sons.py` plutôt que d'être recopié ici : une
+  // valeur retapée serait très exactement la seconde vérité que ce test existe
+  // pour refuser. La garde y gagne : elle exige désormais que le retrait soit
+  // celui que le générateur DÉCLARE, pour la famille qu'il déclare, et ZÉRO
+  // partout ailleurs — un réglage son par son la fait tomber.
+  const sourcePy = sansCommentairesPython(lire('tools', 'sons.py'));
+  assert.ok(sourcePy.includes('BUS_PAR_CATEGORIE'),
+    'témoin : le filtre des commentaires Python a tout mangé');
+  const bloc = sourcePy.match(/RETRAIT_PAR_CATEGORIE = \{([\s\S]*?)\}/);
+  assert.ok(bloc !== null, 'le générateur ne déclare plus de retrait par catégorie');
+  const RETRAIT = Object.fromEntries([...bloc[1].matchAll(/'([a-z]+)':\s*(-?\d+)/g)]
+    .map((m) => [m[1], Number(m[2])]));
+  assert.deepEqual(Object.keys(RETRAIT), ['ui'],
+    'le générateur retire un cran à une autre famille que les boutons');
   assert.equal(manifeste.sounds.length, 263, 'le pack a changé de taille : relire la table');
   assert.equal(Object.keys(SONS).length, 263, 'la table et le pack ont divergé en nombre');
   assert.deepEqual(Object.keys(SONS).sort(), [...parId.keys()].sort(),
@@ -67,7 +97,8 @@ test('SON T1 — les 263 entrées disent ce que le manifeste dit d\'elles', () =
     const dit = parId.get(nom);
     assert.equal(son.dureeMs, dit.duration_ms, `${nom} : durée`);
     assert.equal(son.maxInstances, dit.recommended_max_instances, `${nom} : plafond de voix`);
-    assert.equal(son.volumeDb, dit.recommended_volume_db, `${nom} : niveau`);
+    assert.equal(son.volumeDb, dit.recommended_volume_db + (RETRAIT[dit.category] ?? 0),
+      `${nom} : niveau`);
     assert.ok(son.bus in BUS, `${nom} : bus « ${son.bus} » inconnu`);
     // ⚠⚠ LE MASTER N'EST PAS FORCÉMENT MONO, ET LE LOT L'A MESURÉ. Le brief
     // annonçait « 259 masters mono » et posait le contraire en condition
@@ -717,10 +748,16 @@ test('SON T12 — les cinq bus sont posés, aux niveaux du pack', () => {
 
   // Les décibels s'ADDITIONNENT, le volume MULTIPLIE. Les convertir chacun en
   // linéaire pour les additionner rendrait des nombres plausibles et faux.
-  const attendu = (10 ** (-3 / 20));
+  //
+  // ⚠⚠ ET LE NIVEAU D'UN SON EST CELUI DE SON BUS **PLUS LE SIEN**. Cette ligne
+  // écrivait `-3` en dur, ce qui supposait `volumeDb: 0` : vrai des boutons
+  // jusqu'au lot SON-VOLUMES, faux depuis qu'ils portent leur propre cran, et
+  // faux depuis toujours des moteurs et des ambiances, dont le manifeste
+  // recommande -8, -7, -6 et -12. La garde nomme les deux termes.
+  const attendu = (10 ** ((BUS.interface + SONS.ui_click_01.volumeDb) / 20));
   assert.ok(Math.abs(gainDuSon('ui_click_01', 1) - attendu) < 1e-12);
   assert.ok(Math.abs(gainDuSon('ui_click_01', 0.5) - attendu / 2) < 1e-12);
-  assert.ok(gainDuSon('ui_click_01', 1) < 1, '-3 dB devrait atténuer');
+  assert.ok(gainDuSon('ui_click_01', 1) < 1, 'un bouton devrait être atténué');
   assert.throws(() => gainDuSon('ui_inconnu', 1), RangeError);
 
   // Le gain rendu par la politique est celui-là, et pas un autre.
@@ -831,10 +868,17 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
   const atteignables = [...new Set([...appels, ...EVENEMENTS_CABLES])]
     .flatMap((e) => EVENEMENTS[e].variantes).sort();
   assert.deepEqual([...new Set(atteignables)], atteignables, 'un son atteignable en double');
-  assert.equal(atteignables.length, 169, 'le nombre de sons atteignables a bougé');
-  // ⚠ ET 94 RESTENT MUETS. C'est voulu, et le rapport les nomme un par un avec
+  // ⚠⚠ CENT SOIXANTE-HUIT DEPUIS LE LOT SON-VOLUMES, ET LE SON PERDU N'A PAS
+  // QUITTÉ LE LIVRABLE. Ethan, 06/09 : « enlever son d'ambiance sur la carte ».
+  // `ambience_calm_map_loop` n'a plus aucun demandeur — l'écran Monde était sa
+  // SEULE porte, `AMBIANCE_PAR_ECRAN` n'ayant qu'un lecteur — donc il devient
+  // DORMANT. Il reste au catalogue et sous son `data:` : le retirer serait une
+  // économie qu'on n'a pas demandée, et le compte de `data:` que `CLAUDE.md`
+  // suit poste par poste ne bouge pas d'une ligne.
+  assert.equal(atteignables.length, 168, 'le nombre de sons atteignables a bougé');
+  // ⚠ ET 95 RESTENT MUETS. C'est voulu, et le rapport les nomme un par un avec
   // leur raison : rien n'a été branché pour donner un emploi à un son.
-  assert.equal(Object.keys(SONS).length - atteignables.length, 94,
+  assert.equal(Object.keys(SONS).length - atteignables.length, 95,
     'le compte des sons muets a bougé sans que le rapport le dise');
 
   // Le refus arrive par les registres `toast`, APRÈS la garde du texte vide :
@@ -977,12 +1021,18 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   // 3. LA DIFFÉRENCE — pure, et dans les deux sens.
   // Un nom inconnu LÈVE : c'est un câblage mal tapé, donc un fait de programme.
   assert.throws(() => reconcilierLesBoucles(['a_1'], [], ACTIF), RangeError);
+  // ⚠ LA SECONDE AMBIANCE EST CELLE DU RAID, PLUS CELLE DE LA CARTE. Le lot
+  // SON-VOLUMES retire l'ambiance de l'écran Monde : `AMBIANCE_PAR_ECRAN.monde`
+  // n'existe plus, et le montage prend l'autre ambiance encore câblée. Ce qu'il
+  // mesure — changer d'écran change d'ambiance — n'a pas bougé d'un mot, et
+  // l'assertion de discrimination ci-dessous le prouve.
   const amb = AMBIANCE_PAR_ECRAN.chantier;
-  const mnd = AMBIANCE_PAR_ECRAN.monde;
+  const rai = AMBIANCE_PAR_ECRAN.raid;
+  assert.notEqual(amb, rai, 'montage : les deux écrans partagent leur ambiance');
   assert.deepEqual(reconcilierLesBoucles([amb], [], ACTIF), { demarrer: [amb], arreter: [] });
   assert.deepEqual(reconcilierLesBoucles([amb], [amb], ACTIF), { demarrer: [], arreter: [] });
-  assert.deepEqual(reconcilierLesBoucles([mnd], [amb], ACTIF),
-    { demarrer: [mnd], arreter: [amb] }, 'changer d\'écran change d\'ambiance');
+  assert.deepEqual(reconcilierLesBoucles([rai], [amb], ACTIF),
+    { demarrer: [rai], arreter: [amb] }, 'changer d\'écran change d\'ambiance');
   // ⚠ LE MUET ARRÊTE, IL N'EMPÊCHE PAS SEULEMENT. Couper le son en laissant une
   // ambiance tourner serait la faute exacte que cette ligne garde.
   assert.deepEqual(reconcilierLesBoucles([amb], [amb], { muet: true, volume: 1 }),
@@ -999,13 +1049,22 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   assert.equal(b.son, EVENEMENTS[amb].variantes[0]);
   assert.equal(b.gain, gainDuSon(b.son, 0.5));
 
-  // 5. LES SEPT ÉCRANS ONT UNE AMBIANCE, ET AUCUNE N'EST UN COUP.
+  // 5. SIX ÉCRANS SUR SEPT ONT UNE AMBIANCE, ET AUCUNE N'EST UN COUP.
+  // ⚠⚠ LA GARDE CHANGE DE CIBLE ET SE RESSERRE. Elle exigeait que les SEPT
+  // écrans en aient une ; Ethan retire celle de la carte le 06/09, et elle
+  // exige désormais que l'exception soit EXACTEMENT Monde — nommée. Un huitième
+  // écran sans ambiance, ou un autre des six qui perdrait la sienne, la fait
+  // tomber, ce qu'un simple `>= 6` n'aurait pas fait.
   const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
     .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
     .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
   assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
-  assert.deepEqual(Object.keys(AMBIANCE_PAR_ECRAN).sort(), ecrans.sort(),
-    'un écran sans ambiance, ou une ambiance sans écran');
+  assert.deepEqual(
+    ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
+    ['monde'], 'un écran autre que Monde est sans ambiance, ou Monde en a retrouvé une');
+  assert.deepEqual(
+    Object.keys(AMBIANCE_PAR_ECRAN).filter((e) => !ecrans.includes(e)),
+    [], 'une ambiance sans écran');
   // ⚠⚠ ET TOUTE BOUCLE CÂBLÉE EN EST UNE, LES ROULEMENTS ET LES MOTEURS COMPRIS.
   // Le pack marque `boucle` sur les 35 sons qui bouclent, et ce marquage est
   // GÉNÉRÉ : brancher un `movement_player_flyby` — qui est un PASSAGE et ne
@@ -1042,8 +1101,10 @@ test('SON T16 — la boucle ne se relance pas, et s\'arrête sur une rampe (fals
   const reglages = { ...ACTIF };
   const son = initialiserLeSon(faireDoc(fenetre), { reglages, graine: 5 });
 
+  // ⚠ LA SECONDE AMBIANCE EST CELLE DU RAID depuis le lot SON-VOLUMES, la carte
+  // n'en portant plus. Ce que le test mesure n'a pas bougé.
   const base = AMBIANCE_PAR_ECRAN.chantier;
-  const carte = AMBIANCE_PAR_ECRAN.monde;
+  const carte = AMBIANCE_PAR_ECRAN.raid;
   assert.notEqual(base, carte, 'montage : les deux écrans partagent leur ambiance');
 
   // ⚠ AVANT LE PREMIER GESTE, RIEN. La réconciliation ne crée pas de contexte :
@@ -1477,8 +1538,13 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
     for (const variante of EVENEMENTS[m[1]].variantes) cables.add(variante);
   }
   const muets = Object.keys(SONS).filter((n) => !cables.has(n)).sort();
-  assert.equal(cables.size, 169, 'le nombre de sons câblés a bougé');
-  assert.equal(muets.length, 94, 'le nombre de sons muets a bougé');
+  // ⚠⚠ CENT SOIXANTE-HUIT, ET NON 169 : `ambience_calm_map_loop` EST DEVENU
+  // DORMANT. Ethan retire l'ambiance de la carte le 06/09 ; le son reste au
+  // catalogue et au livrable — pas un `data:` n'en sort — et il n'a plus aucun
+  // demandeur. C'est cette ligne qui le mesure, et c'est elle qui tomberait si
+  // le lot avait retiré le son au lieu de le laisser dormir.
+  assert.equal(cables.size, 168, 'le nombre de sons câblés a bougé');
+  assert.equal(muets.length, 95, 'le nombre de sons muets a bougé');
 
   // ⚠ LES SIX ORDRES DE L'OUVRAGE RESTENT MUETS — il ne donne aucun ordre que
   // le joueur entende. En brancher un fait tomber cette ligne.
@@ -1563,6 +1629,11 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
     .filter((n) => SONS[n].bus === 'ambiances' && !cables.has(n)).sort();
   assert.deepEqual(ambiancesMuettes, [
     'ambience_base_ouvrage_loop',
+    // ⚠⚠ ET LA CARTE EST MUETTE DEPUIS LE 06/09, PAR ARBITRAGE : Ethan, « enlever
+    // son d'ambiance sur la carte ». Le départage `calm_map` / `map_wind`, seul
+    // choix esthétique du lot SON-CÂBLAGE, devient SANS OBJET — les deux
+    // ambiances de carte se taisent, et aucune n'a été supprimée du catalogue.
+    'ambience_calm_map_loop',
     'ambience_map_wind_loop',
     'ambience_quartz_field_loop',
     'ambience_reactor_room_loop',
@@ -2103,4 +2174,174 @@ test('SON T24 — le déroulé sonne, le mode Instantané se tait par constructi
   for (const nom of Object.keys(SONS)) {
     assert.ok(!raid.includes(`'${nom}'`), `src/ui/raid.js nomme le son « ${nom} »`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// SON-V T1 — l'écran Monde ne demande AUCUNE ambiance
+// ---------------------------------------------------------------------------
+
+test('SON-V T1 — la carte n\'a plus d\'ambiance, et c\'est la CLÉ qui manque (falsification n° 1)', () => {
+  // ⚠⚠ C'EST LA PRÉSENCE DE LA CLÉ QU'ON MESURE, JAMAIS SA VALEUR.
+  // `bouclesDesirees` teste `!== undefined` : une clé POSÉE à `undefined`
+  // passerait un `AMBIANCE_PAR_ECRAN.monde === undefined` sans rien apprendre,
+  // et une clé posée à `null` la passerait au test suivant — `voulu.add(null)`
+  // empoisonnerait alors l'ensemble des boucles voulues, et la réconciliation
+  // lèverait sur un nom qui n'est pas un événement. La clé DISPARAÎT.
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, 'monde'), false,
+    'l\'écran Monde porte encore une ambiance',
+  );
+
+  // ⚠ LE TÉMOIN QUI PROUVE QUE LA GARDE N'EST PAS LA NAÏVE. Sur une table où la
+  // clé est posée à `undefined`, la lecture par valeur passe et celle-ci mord.
+  const piege = { ...AMBIANCE_PAR_ECRAN, monde: undefined };
+  assert.equal(piege.monde === undefined, true,
+    'témoin : la lecture par valeur laisserait passer une clé à `undefined`');
+  assert.equal(Object.prototype.hasOwnProperty.call(piege, 'monde'), true,
+    'témoin : la lecture par présence, elle, la voit');
+});
+
+// ---------------------------------------------------------------------------
+// SON-V T2 — les six autres écrans gardent la leur
+// ---------------------------------------------------------------------------
+
+test('SON-V T2 — six écrans sur sept gardent leur ambiance (falsification n° 2)', () => {
+  // ⚠ UN TEST QUI NE VÉRIFIERAIT QUE L'ABSENCE DE `monde` PASSERAIT SUR UNE
+  // TABLE VIDÉE. On énumère donc les six qui restent, avec leur valeur.
+  assert.deepEqual(AMBIANCE_PAR_ECRAN, {
+    chantier: 'ambience_base_player_loop',
+    mission: 'ambience_base_player_loop',
+    offense: 'ambience_base_player_loop',
+    options: 'ambience_base_player_loop',
+    raid: 'ambience_battlefield_distant_loop',
+    recherche: 'ambience_base_player_loop',
+  }, 'la table des ambiances d\'écran a bougé : le rapport doit la redire');
+
+  // ⚠⚠ ET LES SIX SE CONFRONTENT À `ECRANS`, ILS NE SE RECOPIENT PAS. Les sept
+  // écrans se lisent dans `session.js` ; ce qui est arbitré, c'est que le
+  // septième — Monde, et lui seul — n'ait pas d'ambiance. Un huitième écran
+  // sans ambiance fait tomber cette ligne, ce qu'on lui demande.
+  const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
+    .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
+    .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
+  assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
+  assert.deepEqual(
+    ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
+    ['monde'],
+    'un écran autre que Monde a perdu son ambiance, ou Monde l\'a retrouvée',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// SON-V T3 — la réconciliation ne veut plus rien sur Monde
+// ---------------------------------------------------------------------------
+
+test('SON-V T3 — sur la carte, aucune boucle d\'ambiance n\'est voulue (falsification n° 3)', () => {
+  const evenementsDAmbiance = new Set(Object.entries(EVENEMENTS)
+    .filter(([, d]) => d.variantes.every((v) => SONS[v].bus === 'ambiances'))
+    .map(([nom]) => nom));
+  assert.equal(evenementsDAmbiance.size, 8, 'montage : le pack ne porte plus huit ambiances');
+
+  // ⚠⚠ UN MONTAGE QUI PASSERAIT `ecran: null` NE PROUVERAIT RIEN : `null` était
+  // déjà muet avant le lot. On demande l'écran Monde NOMMÉ, et on montre
+  // d'abord qu'un autre écran, lui, rend bien son ambiance — sans ce témoin,
+  // le test serait vert sur une fonction qui ne rendrait jamais rien.
+  const surChantier = bouclesDesirees({ ecran: 'chantier' });
+  assert.ok(surChantier.some((n) => evenementsDAmbiance.has(n)),
+    'témoin : l\'écran de la base ne demande plus d\'ambiance non plus');
+
+  const surMonde = bouclesDesirees({ ecran: 'monde' });
+  assert.deepEqual(surMonde.filter((n) => evenementsDAmbiance.has(n)), [],
+    'la carte demande encore une ambiance');
+
+  // ⚠ ET LE RETRAIT EST CHIRURGICAL : le reste de ce que l'écran porte sonne
+  // toujours. Une base avec une caserne garde sa machinerie, sur la carte comme
+  // ailleurs — sans quoi le lot aurait coupé plus que ce qu'Ethan a demandé.
+  const avecUsine = bouclesDesirees({ ecran: 'monde', disposition: [{ id: 'caserne' }] });
+  assert.deepEqual(avecUsine, ['building_player_factory_loop'],
+    'sur la carte, la machinerie s\'est tue avec l\'ambiance');
+});
+
+// ---------------------------------------------------------------------------
+// SON-V T4 — les trois gestes préservés, et pourquoi le BUS ne peut pas baisser
+// ---------------------------------------------------------------------------
+
+test('SON-V T4 — un des trois gestes préservés est sur `interface` (falsification n° 4)', () => {
+  // ⚠⚠ CE TEST A ÉTÉ ÉCRIT AVANT DE TOUCHER AU MOINDRE NIVEAU, ET IL A CHANGÉ
+  // LE MOYEN DU LOT. Le brief posait que les trois gestes à préserver — pose,
+  // amélioration, lancement de raid — ne sont pas sur le bus `interface`, et en
+  // tirait qu'il suffisait de baisser ce bus. **Mesuré, c'est faux** :
+  // `order_player_attack`, qui EST le lancement de raid, y est. Baisser le bus
+  // aurait baissé le raid avec les boutons, c'est-à-dire exactement ce qu'Ethan
+  // demande de garder.
+  const bus = (ev) => [...new Set(EVENEMENTS[ev].variantes.map((v) => SONS[v].bus))];
+
+  assert.equal(evenementDuGeste('pose', { genre: 'batiment' }), 'building_player_complete');
+  assert.equal(evenementDuGeste('amelioration', { genre: 'batiment' }), 'building_player_complete');
+  assert.equal(evenementDuGeste('attaque', {}), 'order_player_attack');
+
+  assert.deepEqual(bus('building_player_complete'), ['moteurs'],
+    'la construction a changé de bus : le moyen du lot est à rouvrir');
+  assert.deepEqual(bus('order_player_attack'), ['interface'],
+    'le lancement de raid a quitté `interface` : la voie du bus redevient possible');
+
+  // ⚠ DONC `BUS.interface` NE BOUGE PAS, ET IL VAUT CE QUE LE PACK RECOMMANDE.
+  // `art/sources/README.md` ligne 36 porte les cinq niveaux ; `SON T12` les
+  // confronte. Le lot baisse la FAMILLE des boutons, pas la ligne de mixage
+  // qu'elle partage avec les ordres et les alertes.
+  assert.equal(BUS.interface, -3, 'le bus interface a baissé : il emporterait le raid avec lui');
+
+  // ⚠⚠ ET LE SEUIL SE MESURE, IL NE SE PLAIDE PAS. Niveau EFFECTIF, bus plus
+  // volume du son. Avant le lot, un clic et un lancement de raid étaient au
+  // MÊME niveau — il n'y avait aucun seuil à garder ; après, le raid passe
+  // au-dessus des boutons, et c'est ce qu'« garder les seuils » veut dire.
+  const effectif = (n) => BUS[SONS[n].bus] + SONS[n].volumeDb;
+  assert.equal(effectif('order_player_attack_01'), -3, 'le lancement de raid a baissé');
+  assert.equal(effectif('building_player_complete'), -12, 'la construction a baissé');
+  assert.ok(effectif('order_player_attack_01') - effectif('ui_click_01') >= 6,
+    'le lancement de raid ne se détache pas d\'au moins 6 dB des boutons');
+});
+
+// ---------------------------------------------------------------------------
+// SON-V T5 — les boutons ont baissé, et d'un seul cran pour toute la famille
+// ---------------------------------------------------------------------------
+
+test('SON-V T5 — la famille `ui` baisse d\'un seul cran (falsification n° 5)', () => {
+  const ui = Object.entries(SONS).filter(([nom]) => nom.startsWith('ui_'));
+  assert.equal(ui.length, 23, 'le compte des sons d\'interface a bougé');
+
+  // ⚠⚠ UN SEUL CRAN POUR LES VINGT-TROIS : C'EST UNE DÉCISION, PAS VINGT-TROIS.
+  // Les décaler un par un ouvrirait vingt-trois arbitrages là où il en faut un,
+  // et la famille cesserait d'être cohérente au premier réglage.
+  const crans = [...new Set(ui.map(([, s]) => s.volumeDb))];
+  assert.equal(crans.length, 1, 'les sons d\'interface ne partagent plus un seul niveau');
+
+  // ⚠ ON ASSERTE LE SENS, PAS LA VALEUR. Le nombre appartient à Ethan : un test
+  // qui figerait −6 se casserait à son prochain réglage sans rien apprendre.
+  assert.ok(crans[0] < 0, 'les sons des boutons n\'ont pas baissé');
+});
+
+// ---------------------------------------------------------------------------
+// SON-V T6 — et rien d'autre n'a bougé
+// ---------------------------------------------------------------------------
+
+test('SON-V T6 — ni le bus, ni les ordres, ni les alertes (falsification n° 6)', () => {
+  // Le bus reste aux cinq niveaux du pack : c'est ce qui rend la baisse sûre.
+  assert.deepEqual(BUS, { interface: -3, armes: -6, impacts: -7, moteurs: -12, ambiances: -18 });
+
+  // ⚠⚠ LES TRENTE AUTRES SONS DU BUS `interface` NE BOUGENT PAS, ET C'EST LE
+  // TEST QUI ATTRAPE UN LOT PARTI BAISSER LA LIGNE DE MIXAGE. Douze ordres et
+  // dix-huit alertes la partagent avec les boutons ; `order_player_attack` est
+  // parmi eux, et le baisser serait la régression qu'Ethan a nommée.
+  const partages = Object.entries(SONS)
+    .filter(([nom, s]) => s.bus === 'interface' && !nom.startsWith('ui_'));
+  assert.equal(partages.length, 30, 'le bus interface a changé de composition');
+  for (const [nom, s] of partages) {
+    assert.equal(s.volumeDb, 0, `${nom} a baissé alors qu'on ne le lui demandait pas`);
+  }
+
+  // Et les deux sons que les trois gestes préservés demandent, nommément.
+  assert.equal(SONS.order_player_attack_01.volumeDb, 0);
+  assert.equal(SONS.order_player_attack_02.volumeDb, 0);
+  assert.equal(SONS.building_player_complete.volumeDb, 0);
 });

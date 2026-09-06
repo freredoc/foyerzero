@@ -152,8 +152,15 @@ EN_TETE_JS = """// Les 263 sons du pack, et la table de mixage qui les reçoit.
 // ⚠⚠ FICHIER GÉNÉRÉ par « python3 tools/sons.py --ecrire ». NE PAS MODIFIER À
 // LA MAIN : la moindre retouche serait effacée au prochain lot d'art, sans
 // bruit. Tout ce qui est ici est DÉRIVÉ d'`art/sources/sfx_manifest.json`, sauf
-// les cinq bus et les réglages par défaut, qui viennent du brief et sont écrits
+// les cinq bus et les réglages par défaut, qui viennent du pack et sont écrits
 // dans le générateur.
+//
+// ⚠⚠ ET DEPUIS LE LOT SON-VOLUMES, `volumeDb` EST UNE DÉRIVATION PLUS UN CRAN.
+// Le générateur porte `RETRAIT_PAR_CATEGORIE`, ce que le JEU retire à une
+// famille en plus de ce que le pack recommande : les boutons baissent de six
+// décibels, sur demande d'Ethan du 06/09. Le retrait est BAKÉ dans la table —
+// il ne s'applique pas une seconde fois à la lecture — et `SON T1` le LIT dans
+// le générateur pour confronter la dérivation, plutôt que de le recopier.
 //
 // ⚠⚠ ET C'EST L'INVERSE DU LOT SON-MOTEUR, QUI TRANSCRIVAIT QUATRE LIGNES À LA
 // MAIN. À quatre entrées une transcription se relit et un test la confronte ; à
@@ -162,7 +169,10 @@ EN_TETE_JS = """// Les 263 sons du pack, et la table de mixage qui les reçoit.
 // dérivation en JavaScript et compare, si bien que la génération ne peut pas
 // mentir sans qu'on le voie.
 //
-// ⚠⚠ VINGT-QUATRE SONS SONT CÂBLÉS, ET LES 239 AUTRES SONT MUETS À DESSEIN.
+// ⚠⚠ VINGT-TROIS SONS SONT CÂBLÉS, ET LES 240 AUTRES SONT MUETS À DESSEIN.
+// ⚠ Ils étaient vingt-quatre : `ambience_calm_map_loop` est devenu DORMANT le
+// 06/09, Ethan ayant demandé d'enlever l'ambiance de la carte. Le son reste au
+// catalogue et au livrable — pas un `data:` n'en sort.
 // Le lot SON-CÂBLAGE branche ce qui avait DÉJÀ un point d'accroche dans le
 // dépôt : cinq sons `ui`, trois ambiances d'écran, QUATRE boucles de roulement,
 // deux boucles de machinerie, et les ponctuels de sélection, d'ordre, de pose et
@@ -174,6 +184,13 @@ EN_TETE_JS = """// Les 263 sons du pack, et la table de mixage qui les reçoit.
 
 COMMENTAIRE_SONS = """/**
  * Un son : son bus, et ce que le manifeste dit de lui.
+ *
+ * ⚠⚠ `volumeDb` N'EST PLUS LE SEUL `recommended_volume_db` DU MANIFESTE : c'est
+ * lui PLUS le cran que `RETRAIT_PAR_CATEGORIE` retire à sa famille. Une seule
+ * famille en porte un aujourd'hui — les boutons, à -6 —, et le générateur écrit
+ * pourquoi. Les décibels s'additionnent, donc le niveau effectif d'un son est
+ * `BUS[son.bus] + son.volumeDb`, et rien d'autre : un clic vaut -9, un
+ * lancement de raid -3, une construction -12.
  *
  * ⚠ LE NOM DU MASTER WAV N'EST PAS ICI, ET C'EST VOULU. Le jeu ne voit jamais
  * un WAV — il reçoit un `.opus` déjà encodé, sous un `data:`. Le nom du master
@@ -492,13 +509,29 @@ COMMENTAIRE_MEMOIRE = """/**
  * est la seule câblée, rien n'est jamais évincé.
  */"""
 
-# ⚠⚠ QUEL ÉCRAN PORTE QUELLE AMBIANCE. Trois écrans, trois ambiances, et le
-# reste des huit est DÉCLARÉ MUET faute d'une lecture qui ne s'invente pas —
-# voir `RAPPORT-lotSON-CABLAGE.md`. ⚠ `ambience_calm_map_loop` contre
-# `ambience_map_wind_loop` est le SEUL choix esthétique que ce lot ait pris, et
-# il l'a pris pour que la carte ne soit pas muette : les deux sont des ambiances
-# de carte, rien dans le dépôt ne départage, et Ethan tranche en changeant cette
-# ligne-ci. ⚠ `ambience_base_ouvrage_loop` n'a AUCUN écran qui montre la base de
+# ⚠⚠ QUEL ÉCRAN PORTE QUELLE AMBIANCE — SIX SUR SEPT DEPUIS LE 06/09. Deux
+# ambiances pour six écrans, et le reste des huit est DÉCLARÉ MUET faute d'une
+# lecture qui ne s'invente pas — voir `RAPPORT-lotSON-CABLAGE.md`.
+#
+# ⚠⚠ ET LA CARTE N'EN A PLUS AUCUNE. Ethan, 06/09 : « enlever son d'ambiance sur
+# la carte ». Le lot SON-CÂBLAGE avait choisi `ambience_calm_map_loop` contre
+# `ambience_map_wind_loop` — le SEUL choix esthétique de ce lot-là, pris « pour
+# que la carte ne soit pas muette » —, et c'est cet arbitrage-ci qui le
+# renverse : elle doit l'être. La question du départage des deux ambiances de
+# carte devient donc SANS OBJET, elle n'est pas tranchée.
+#
+# ⚠⚠ LA CLÉ DISPARAÎT, ELLE NE PASSE PAS À `None`. `bouclesDesirees` de
+# `src/son/cablage.js` teste `!== undefined` : une clé posée à `None` — donc à
+# `null` — passerait le test, et `voulu.add(null)` empoisonnerait l'ensemble des
+# boucles voulues avec un nom qui n'est pas un événement. La réconciliation
+# lèverait, et loin de la faute.
+#
+# ⚠ ET `ambience_calm_map_loop` RESTE AU CATALOGUE ET AU LIVRABLE. Le son
+# devient DORMANT : plus aucun écran ne le demande, et pas un `data:` ne sort du
+# bundle. Le retirer serait une économie qu'Ethan n'a pas demandée, et il
+# redeviendra utile le jour où une autre situation l'appellera.
+#
+# ⚠ `ambience_base_ouvrage_loop` n'a AUCUN écran qui montre la base de
 # l'Ouvrage au repos ; `ambience_battlefield_distant_loop` en a un, le raid.
 AMBIANCE_PAR_ECRAN = {
     'chantier': 'ambience_base_player_loop',
@@ -506,7 +539,6 @@ AMBIANCE_PAR_ECRAN = {
     'mission': 'ambience_base_player_loop',
     'recherche': 'ambience_base_player_loop',
     'options': 'ambience_base_player_loop',
-    'monde': 'ambience_calm_map_loop',
     'raid': 'ambience_battlefield_distant_loop',
 }
 
@@ -661,6 +693,41 @@ BUS = {
     'impacts': -7,
     'moteurs': -12,
     'ambiances': -18,
+}
+
+# ⚠⚠ CE QUE LE JEU RETIRE À UNE FAMILLE, EN PLUS DE CE QUE LE PACK RECOMMANDE.
+# Ethan, 06/09 : « baisser les sons des boutons, garder les seuils pour les
+# améliorations, construction et lancement de raid. »
+#
+# ⚠⚠ ET LA VOIE ÉVIDENTE — BAISSER `BUS['interface']` — EST FAUSSE, MESURÉ. Ce
+# bus porte CINQUANTE-TROIS sons : les 23 `ui_*`, mais aussi les 18 `alert_*` et
+# les 12 `order_*`, dont `order_player_attack`, qui EST le son du lancement de
+# raid. Le baisser aurait baissé le raid en même temps que les boutons,
+# c'est-à-dire exactement ce qu'Ethan demande de garder. `SON-V T4` mesure ce
+# fait et interdit la voie ; il a été écrit AVANT qu'un niveau ne bouge.
+#
+# ⚠⚠ ET LE SIXIÈME BUS RESTE INTERDIT. `BUS_PAR_CATEGORIE` ci-dessus l'écrit
+# déjà — « il n'y a pas de sixième bus, on n'en invente pas » —, et les cinq
+# niveaux se LISENT dans `art/sources/README.md` ligne 36. En ajouter un pour
+# loger les boutons serait choisir seul une ligne de mixage que le pack n'a pas.
+#
+# ⚠ C'EST DONC LA FAMILLE QU'ON BAISSE, ET C'EST UNE SEULE DÉCISION : un cran
+# par CATÉGORIE, jamais un réglage son par son. Vingt-trois `ui_*` décalés un par
+# un ouvriraient vingt-trois arbitrages là où il en faut un, et la famille
+# cesserait d'être cohérente au premier réglage suivant.
+#
+# ⚠⚠ LA VALEUR EST UNE PROPOSITION, ET ELLE SE JUSTIFIE PAR LE BARÈME DES BUS.
+# Les décibels s'ADDITIONNENT : un bouton valait `-3 + 0 = -3`, il vaut
+# `-3 + -6 = -9`. Six décibels, c'est l'amplitude divisée par deux — une baisse
+# qui s'entend. Et **-9 tombe entre `impacts` (-7) et `moteurs` (-12)** : les
+# boutons restent AU-DESSUS de la couche des moteurs, donc ils ne deviennent pas
+# inaudibles sur un téléphone en extérieur, ce qu'une descente plus franche
+# ferait. ⚠ Mesuré aussi : AVANT ce lot, un clic et un lancement de raid étaient
+# au MÊME niveau, -3 — il n'y avait aucun « seuil » à garder ; après, le raid
+# passe 6 dB au-dessus des boutons et la construction reste à -12.
+# **Ethan tranche ; ce nombre se change seul, et lui seul.**
+RETRAIT_PAR_CATEGORIE = {
+    'ui': -6,
 }
 
 
@@ -864,7 +931,9 @@ def ecrire_la_table(pack):
         lignes.append("  %s: { bus: '%s', dureeMs: %d, maxInstances: %d, volumeDb: %s%s%s },"
                       % (s['id'], BUS_PAR_CATEGORIE[categorie], s['duration_ms'],
                          s['recommended_max_instances'],
-                         nombre_js(s['recommended_volume_db']), boucle, residente))
+                         nombre_js(s['recommended_volume_db']
+                                   + RETRAIT_PAR_CATEGORIE.get(categorie, 0)),
+                         boucle, residente))
     lignes += ['};', '', COMMENTAIRE_EVENEMENTS, 'export const EVENEMENTS = {']
     for nom in sorted(groupes):
         membres = sorted(groupes[nom], key=lambda m: m['variant'])

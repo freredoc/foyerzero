@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.6 · build 107.
+Dernière révision : **06/09/2026**, version 0.99.7 · build 108.
 
 ---
 
@@ -42,7 +42,147 @@ Dernière révision : **06/09/2026**, version 0.99.6 · build 107.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot RETOUR-DE-RAID), à confronter :**
+**Référence au 06/09/2026 (après le lot SON-VOLUMES), à confronter :**
+`npm test` → **1179 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 997 316 octets**, 0 référence externe. Le lot **REND 8 octets**, ENTIÈREMENT
+DU JAVASCRIPT, mesurés poste par poste contre le livrable bâti depuis
+`origin/main` : **JavaScript −8 · feuille +0 · balisage +0 · images +0 · audio
++0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **296 lignes
+`data:` avant, 296 après, 291 URI de part et d'autre**. Borne T10 inchangée à
+9 300 000, marge **1 302 684 octets, 14,01 %**. Le lot ne touche que
+`tools/sons.py`, `src/data/sons.js` — qui en est GÉNÉRÉ — et `test/son.test.js`.
+⚠⚠ **ET LES HUIT OCTETS SE DÉCOMPOSENT EXACTEMENT, CE QUI EST LA PREUVE QUE RIEN
+N'A DÉBORDÉ.** `monde:"ambience_calm_map_loop",` fait **31 octets** et sort ;
+vingt-trois `volumeDb:0` deviennent `volumeDb:-6`, soit **+23**. −31 + 23 = −8,
+au caractère. Le bump de version ne coûte rien, les deux numéros gardant leur
+nombre de chiffres.
+⚠⚠ **LA PRÉMISSE CENTRALE DU BRIEF ÉTAIT FAUSSE, ET C'EST LE PREMIER FAIT À
+DIRE.** Il pose que les trois gestes à préserver — pose, amélioration, lancement
+de raid — « ne sont pas sur le bus `interface` », et en tire qu'il suffit de
+baisser ce bus. **Mesuré : `order_player_attack`, qui EST le son du lancement de
+raid, y est.** Le bus `interface` porte **cinquante-trois** sons — 23 `ui_*`,
+18 `alert_*` et 12 `order_*` — et le baisser aurait baissé le raid en même temps
+que les boutons, c'est-à-dire exactement ce qu'Ethan demande de garder.
+⚠⚠ **LE BRIEF POSAIT SA PROPRE CONDITION D'ARRÊT, ET ELLE S'EST DÉCLENCHÉE.**
+« Si l'un d'eux y était, **s'arrêter** : le moyen retenu serait faux et il
+faudrait passer par les `volumeDb` individuels. » `SON-V T4` a été écrit et lancé
+**AVANT qu'un seul niveau ne bouge**, sur l'arbre intact, et il passait déjà :
+c'est lui qui a changé le moyen du lot. **Écart majeur, déclaré.**
+⚠⚠ **ET LE FAIT ÉTAIT AU DÉPÔT DEPUIS LE 04/09.** `RAPPORT-lotSON-CATALOGUE.md`
+§5 écrit `alerts → interface` et `orders → interface` en toutes lettres, avec le
+motif — « des accusés de réception d'un ordre que le joueur vient de donner ».
+Chercher la réponse dans le dépôt avant de croire un brief a payé ici.
+⚠⚠ **LE SIXIÈME BUS RESTE INTERDIT, ET CE N'EST PAS UN CONFORT.** Loger les
+boutons sur une ligne à eux résoudrait tout en un nombre ; `BUS_PAR_CATEGORIE`
+écrit « il n'y a pas de sixième bus, on n'en invente pas », et les cinq niveaux
+se LISENT dans `art/sources/README.md` ligne 36 — c'est la recommandation du
+pack, pas un réglage du dépôt. **`BUS` ne bouge donc pas d'un décibel**, et
+`SON T12` le tient, intact.
+⚠⚠ **LE MOYEN RETENU EST UN CRAN PAR FAMILLE, ET C'EST UNE SEULE DÉCISION.**
+`RETRAIT_PAR_CATEGORIE = {'ui': -6}` entre dans `tools/sons.py` ; le générateur
+écrit `recommended_volume_db + retrait` dans les 263 lignes de la table. Le brief
+interdisait de « toucher aucun `volumeDb` individuel » au motif que « les décaler
+un par un ouvrirait vingt-trois décisions là où il en faut une » : **la règle
+tient l'intention à la lettre** — une ligne de générateur, vingt-trois
+conséquences, et la famille reste cohérente par construction.
+⚠⚠ **LA VALEUR EST UNE PROPOSITION, ET ELLE SE JUSTIFIE PAR LE BARÈME.** Les
+décibels s'additionnent : un bouton valait `-3 + 0 = -3`, il vaut `-3 + -6 = -9`.
+Six décibels, c'est l'amplitude divisée par deux — une baisse qui s'entend. Et
+**-9 tombe entre `impacts` (-7) et `moteurs` (-12)** : les boutons restent
+au-dessus de la couche des moteurs, donc ils ne deviennent pas inaudibles sur un
+téléphone en extérieur, ce que le brief pose comme la borne basse. **Ethan
+tranche ; ce nombre se change seul.**
+⚠⚠ **ET « GARDER LES SEUILS » N'AVAIT AUCUN SEUIL À GARDER — MESURÉ.** Avant le
+lot, un clic et un lancement de raid étaient au **MÊME niveau, -3** : baisser le
+bus les aurait fait descendre ensemble, donc n'aurait rien gardé du tout. Après,
+le raid passe **6 dB au-dessus** des boutons, et c'est ce que la demande veut
+dire.
+⚠ **ET LA CONSTRUCTION EST À -12, DONC SOUS LES BOUTONS MÊME APRÈS LA BAISSE —
+RELEVÉ, NON CORRIGÉ.** `building_player_complete` est sur le bus `moteurs` ;
+l'écart aux boutons passe de 9 dB à 3 dB, dans le bon sens, sans qu'une ligne la
+concerne. La monter serait inventer une demande qu'Ethan n'a pas faite. **À
+rouvrir s'il la trouve trop discrète.**
+⚠⚠ **L'AMBIANCE DE LA CARTE PART, ET LE SON RESTE AU LIVRABLE.** Ethan, point 2 :
+« enlever son d'ambiance sur la carte ». La clé `monde` **disparaît** de
+`AMBIANCE_PAR_ECRAN` — elle ne passe pas à `null` : `bouclesDesirees` teste
+`!== undefined`, donc `voulu.add(null)` empoisonnerait l'ensemble des boucles
+voulues avec un nom qui n'est pas un événement. **`ambience_calm_map_loop`
+devient DORMANT et pas un `data:` ne sort du bundle** — ses 19 198 octets d'Opus
+restent inlinés, et le compte de `data:` ne bouge pas d'une ligne.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE, SUR LE GRAPHE AUDIO LUI-MÊME.**
+`AudioBufferSourceNode.prototype.start` et `.stop` instrumentés avant le
+chargement, seules les sources qui BOUCLENT comptées : **1 sur le Chantier,
+ZÉRO sur le Monde, 1 au retour**. L'ambiance s'arrête pour de bon à l'entrée
+dans la carte et repart en sortant, et **zéro erreur de page** sur le trajet.
+⚠ Et la page porte toujours **263 balises `<audio>`**, celle du son dormant
+comprise : la mesure du navigateur confirme qu'aucun `data:` n'est sorti.
+⚠ **ET L'ÉCRAN EST BIEN LA SEULE SOURCE, VÉRIFIÉ PLUTÔT QUE SUPPOSÉ.**
+`AMBIANCE_PAR_ECRAN` n'a qu'UN lecteur dans tout `src/`, `bouclesDesirees` ;
+`BOUCLES_DE_BATIMENT` ne porte aucune ambiance et `boucleDeLUnite` ne rend que
+des `movement_*`. Le retrait de la clé suffit donc, et il n'y avait pas à patcher
+à l'aveugle.
+⚠ **ET LE DÉPARTAGE `calm_map` / `map_wind` DEVIENT SANS OBJET.** C'était « le
+SEUL choix esthétique » du lot SON-CÂBLAGE, pris « pour que la carte ne soit pas
+muette » ; l'arbitrage le renverse — elle doit l'être. Les deux ambiances de
+carte se taisent, aucune n'est retirée du catalogue, et la question ne se pose
+plus.
+⚠⚠ **`SON T1` CESSE D'ÊTRE UNE DÉRIVATION PURE, ET ELLE SE RESSERRE.** Elle
+exigeait `volumeDb === recommended_volume_db` sur les 263 ; elle exige désormais
+`recommended + retrait[catégorie]`, avec le retrait **LU dans `tools/sons.py`** —
+une valeur retapée dans le test aurait été la seconde vérité qu'il existe pour
+refuser. Elle attrape en plus ce qu'elle ne voyait pas : un réglage son par son,
+et un retrait posé sur une autre famille que les boutons.
+⚠ **ET ELLE LIT UNE SOURCE PYTHON, D'OÙ UN SECOND FILTRE DE COMMENTAIRES.**
+`sansCommentairesPython` ne retire que les lignes ENTIÈREMENT commentées — la
+leçon du lot SOL-SATELLITE : couper à tout croisillon mangerait les clés
+`'#FF00FF'`. Un témoin prouve que le filtre n'a pas tout mangé.
+⚠ **SIX GARDES CHANGENT DE CIBLE, CINQ SE RESSERRENT, AUCUNE NE S'ASSOUPLIT.**
+`SON T1` ci-dessus ; `SON T12`, dont le gain attendu s'écrivait `-3` en dur —
+donc supposait `volumeDb: 0` — et nomme désormais les DEUX termes ; `SON T14` et
+`SON T20`, qui passent de 169 à **168 atteignables** et de 94 à **95 muets**, ce
+qui EST la mesure du son devenu dormant ; `SON T15`, qui exigeait une ambiance
+sur les SEPT écrans et exige maintenant que l'exception soit **exactement Monde,
+nommée** ; et `SON T16`, dont le montage prend l'ambiance du raid, la carte n'en
+ayant plus. **Aucune assertion n'a été retirée.**
+⚠⚠ **ONZE FALSIFICATIONS, ONZE CHUTES — ET LA PREMIÈRE EST ATTRAPÉE PAR L'OUTIL,
+PAS PAR LA SUITE.** Poser `'monde': None` dans le générateur ne fait tomber aucun
+test JS : `exiger_une_boucle` LÈVE à la production — « `None` n'est pas un son du
+pack » — et la table empoisonnée n'atteint jamais le dépôt. **C'est le bon
+endroit pour cette garde-là, et il fallait le dire** plutôt que de la compter
+comme une chute de test.
+⚠⚠ **ET LA PLUS INSTRUCTIVE EST LA CLÉ POSÉE À `undefined`.** Elle fait tomber
+`SON-V T1` et **pas `SON-V T3`** : `bouclesDesirees` teste `!== undefined`, donc
+le comportement reste juste et seule la garde de PRÉSENCE mord. C'est exactement
+pourquoi T1 mesure `hasOwnProperty` et jamais `=== undefined`.
+⚠ **ET `SON-V T3` A SA PROPRE FALSIFICATION, QUI NE FAIT TOMBER QUE LUI** : un
+repli `?? 'ambience_calm_map_loop'` glissé dans `cablage.js` laisse la table
+juste et le comportement faux. C'est elle qui justifie que T3 existe à côté de
+T1 et T2.
+⚠ **LA VOIE QUE LE BRIEF PRESCRIVAIT EST DÉSORMAIS GARDÉE TROIS FOIS** : baisser
+`BUS.interface` à -9 fait tomber `SON T12`, `SON-V T4` et `SON-V T6`.
+⚠ **SIX TESTS ENTRENT — `SON-V T1` à `T6`, dans `test/son.test.js` — ET LE COMPTE
+PASSE DE 1 173 À 1 179.**
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 26.** Pas un champ n'entre dans
+l'état : un niveau de mixage et une table d'ambiance par écran sont des réglages
+de SORTIE, et le volume comme le muet vivent depuis toujours dans le magasin
+séparé `foyer-zero/reglages/1`.
+⚠ **`src/son/politique.js` ET `src/son/cablage.js` N'ONT PAS UNE LIGNE DE
+CHANGÉE**, comme le brief l'exige : `gainDuSon` fait déjà la somme des décibels,
+et le `!== undefined` suffit. Aucun écran n'est touché non plus.
+⚠⚠ **`python3 tools/verifier.py` → 858 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT, verdict VERT, AVANT ET APRÈS.** Il était dû : le lot touche un outil
+de la chaîne. **Le compte ne bouge pas, et les 263 `.opus` sont dans les
+identiques** — le retrait vit dans la TABLE, pas dans l'encodage : pas un octet
+d'audio n'a changé. ⚠ Ses trois paquets Python et `opus-tools` **manquaient au
+conteneur** et ont dû être installés : sans eux il sort en 1 dès le premier
+outil, et on lit « chaîne cassée » là où il manque une dépendance (§3).
+⚠⚠ **LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ, QUATRIÈME LOT DE SUITE.** Il
+pose 1 135 pass, 7 987 956 octets et 0.99.2 · build 103 ; mesuré au départ,
+**1 173 pass, 7 997 324 octets, 0.99.6 · build 107**. ⚠ Et **un second fait du
+brief est faux, en plus de la prémisse** : il annonce « trente-et-un sons `ui_*`
+à `volumeDb: 0` » — **mesuré, ils sont vingt-trois**.
+
+**Auparavant, après le lot RETOUR-DE-RAID :**
 `npm test` → **1173 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 997 324 octets**, 0 référence externe. Coût **+3 837 octets**, mesuré poste par
 poste contre un livrable rebâti depuis `origin/main` : **JavaScript +1 788 · feuille
@@ -5747,6 +5887,28 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
   ancres-blindes.js     où se pose la tourelle sur chaque coque de blindé du joueur
   ancres-defense.js     où se pose la tourelle sur chaque socle de défense du joueur
   sons.js               les 263 sons du pack, les cinq bus, la mémoire, les réglages — ⚠ GÉNÉRÉ
+  ⤷ ⚠⚠ `volumeDb` N'EST PLUS LE SEUL NIVEAU DU MANIFESTE DEPUIS LE 06/09 —
+    lot SON-VOLUMES. C'est `recommended_volume_db` PLUS le cran que
+    `RETRAIT_PAR_CATEGORIE` de `tools/sons.py` retire à sa famille. Une seule en
+    porte un : les boutons, à **-6**, sur demande d'Ethan (point 22).
+  ⤷ ⚠⚠ ET LE BUS NE POUVAIT PAS SERVIR, C'EST MESURÉ. `BUS.interface` porte
+    **53** sons — 23 `ui_*`, 18 `alert_*`, 12 `order_*` — dont
+    `order_player_attack`, qui EST le lancement de raid : le baisser aurait
+    baissé le raid avec les boutons, c'est-à-dire ce qu'Ethan demande de GARDER.
+    `SON-V T4` mesure ce fait et interdit la voie ; il a été écrit AVANT qu'un
+    niveau ne bouge. ⚠ Et il n'y a **pas de sixième bus** — les cinq niveaux se
+    lisent dans `art/sources/README.md` ligne 36, et `SON T12` les confronte.
+  ⤷ ⚠ LE NIVEAU EFFECTIF D'UN SON EST `BUS[son.bus] + son.volumeDb`, ET RIEN
+    D'AUTRE : un clic vaut **-9**, un lancement de raid **-3**, une construction
+    **-12**. Avant ce lot, le clic et le raid étaient au MÊME niveau — il n'y
+    avait aucun « seuil » à garder.
+  ⤷ ⚠⚠ ET L'ÉCRAN MONDE N'A PLUS D'AMBIANCE — point 2 d'Ethan, « enlever son
+    d'ambiance sur la carte ». La clé `monde` **disparaît** d'`AMBIANCE_PAR_ECRAN`
+    et ne passe PAS à `null` : `bouclesDesirees` teste `!== undefined`, donc une
+    clé posée empoisonnerait l'ensemble des boucles voulues.
+    **`ambience_calm_map_loop` devient DORMANT et reste au livrable** — zéro
+    `data:` retiré. Le départage `calm_map` / `map_wind`, seul choix esthétique
+    du lot SON-CÂBLAGE, devient sans objet.
   ⤷ ⚠⚠ LES DEUX `ancres-*.js` SONT DES TRANSCRIPTIONS À LA MAIN de
     `art/sprites/ancres-{blindes,defense}.json`, et un test les confronte — clés
     et valeurs SIGNÉES, sur les DEUX sections de chaque JSON. Les JSON sont
@@ -6124,6 +6286,10 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
 src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT
   cablage.js            ce que l'état demande en boucle, et ce qu'un geste réclame
+  ⤷ ⚠ IL N'A PAS UNE LIGNE DE CHANGÉE AU LOT SON-VOLUMES, et `politique.js` non
+    plus : `gainDuSon` fait déjà la somme des décibels, et le `!== undefined`
+    d'`AMBIANCE_PAR_ECRAN` suffit à taire la carte. Tout le lot vit dans la
+    TABLE et dans le générateur qui l'écrit.
   ⤷ ⚠⚠ `cablage.js` ENTRE AU LOT SON-CÂBLAGE, ET IL NE FAIT PAS DE BRUIT NON
     PLUS. Il répond à deux questions et rend des NOMS d'événement : quelles
     boucles l'état porte — écran affiché, bâtiments présents, unités qui roulent
