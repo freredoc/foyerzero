@@ -15,13 +15,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  CRANS, CRAN_PAR_DEFAUT, DALLES_PAR_IMAGE,
+  CRANS, DALLES_PAR_IMAGE,
   ECHELLE_MIN, ECHELLE_MAX, cranDeRendu, facteurDAffichage,
   bornerEchelle, vueApresEchelle, bordDeDalle,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles,
   teinteDAttente,
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
+  traitDeLaFleche, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
 } from '../src/ui/monde.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
@@ -89,9 +90,15 @@ test('zoom — les quatre crans sont des puissances de deux, et le sol y tombe j
     assert.ok(Number.isInteger(g.taille) && Number.isInteger(g.pas),
       `la géométrie du sol est fractionnaire au cran ${cran}`);
   }
-  // Croissants, et la carte s'ouvre sur le plus large.
+  // Croissants — c'est ce qui donne un sens aux deux bouts de la table.
   for (let i = 1; i < CRANS.length; i += 1) assert.ok(CRANS[i] > CRANS[i - 1]);
-  assert.equal(CRAN_PAR_DEFAUT, 0, 'la carte ne s\'ouvre plus sur la vue la plus large');
+  // ⚠⚠ L'ASSERTION SUR `CRAN_PAR_DEFAUT` EST RETIRÉE, ET ELLE SE DÉCLARE — lot
+  // CARTE-B, 06/09. Elle exigeait `CRAN_PAR_DEFAUT === 0` sous le message « la
+  // carte ne s'ouvre plus sur la vue la plus large » : c'est très exactement ce
+  // qu'Ethan a renversé — « ouverture de la carte : centrée sur ma base du
+  // joueur au zoom maximum ». La constante n'existe plus, et la propriété
+  // qu'elle gardait — sur quoi la carte s'ouvre — est reprise par `CARTE-B T1`,
+  // qui la mesure sur l'ÉCRAN MONTÉ au lieu de la lire dans une constante.
 
   // Falsifiable : un cran intermédiaire serait bien refusé par ce montage.
   const embleme192 = COTE_SPRITE / 192;
@@ -1302,8 +1309,14 @@ test('zoom — le pincement a remplacé les deux boutons, et il est CONTINU', ()
   // par cran ». Et le motif avait un trou : il confondait l'échelle
   // d'AFFICHAGE et l'échelle de RENDU. Les dalles se rendent toujours à un cran
   // de la table — `cranDeRendu` —, elles se POSENT à l'échelle réelle.
-  assert.match(ecran, /let echelle = CRANS\[CRAN_PAR_DEFAUT\]/,
+  // ⚠ LA CIBLE A CHANGÉ AU LOT CARTE-B, LA PROPRIÉTÉ NON : l'échelle de départ
+  // se LIT dans la table. Elle valait `CRANS[CRAN_PAR_DEFAUT]`, elle vaut
+  // `ECHELLE_MAX` — l'autre bout de la même table. Écrire 256 ici la ferait
+  // tomber, ce qu'on lui demande.
+  assert.match(ecran, /let echelle = ECHELLE_MAX;/,
     'l\'échelle n\'est plus une valeur réelle initialisée sur la table');
+  assert.doesNotMatch(ecran, /let echelle = \d/,
+    'l\'échelle de départ est écrite en dur');
   assert.match(ecran, /reglerEchelle\(echelle \* rapport, milieuDesDoigts\(deux\)\)/,
     'le pincement ne multiplie plus l\'échelle par le rapport des écarts');
   assert.match(ecran, /function reglerEchelle\(demandee, ancre = null\)/,
@@ -1512,10 +1525,13 @@ test('emblème — l\'écran ne recalcule plus la cellule lui-même', () => {
 
 test('monde — un bouton ramène toujours à la base du joueur', () => {
   // ⚠⚠ ETHAN, 31/08 : « toujours une possibilité de revenir sur sa base quand on
-  // se balade sur la carte ». La vue ne se recentre qu'à la PREMIÈRE ouverture —
-  // et ça reste vrai, c'est délibéré : revenir de force à chaque visite ferait
-  // perdre l'endroit qu'on regardait. Le corollaire, c'est qu'il fallait une
-  // porte de sortie, et il n'y en avait aucune sur 300 rangées.
+  // se balade sur la carte ». Le motif d'origine est PÉRIMÉ depuis le lot
+  // CARTE-B : il disait que « la vue ne se recentre qu'à la PREMIÈRE
+  // ouverture », donc qu'il fallait une porte de sortie, faute de quoi on
+  // restait perdu sur 300 rangées. La carte se recentre désormais à CHAQUE
+  // ouverture — Ethan, 06/09. Le bouton reste, et son emploi s'est déplacé :
+  // il sert maintenant DANS une visite, à revenir de la balade sans quitter
+  // l'écran. Les assertions ci-dessous ne bougent pas d'un caractère.
   const html = lire('dist', 'index.html');
   assert.match(html, /id="monde-recentrer"/,
     'le bouton de retour à la base a disparu du livrable');
@@ -2200,4 +2216,302 @@ test('ERGO T13 — le seuil ouvre dix cases, et l\'écran mesure avant de peindr
     'la boîte d\'une étiquette ne se mesure pas sur la police');
   assert.doesNotMatch(extraireFonction(ecran, 'dessinerEtiquette'), /measureText/,
     'la peinture remesure : les deux passes se sont remélangées');
+});
+
+// ---------------------------------------------------------------------------
+// Le lot CARTE-B — l'ouverture cadre la base au zoom maximum, et la flèche va
+// d'un centre à l'autre. Retours d'Ethan du 06/09, points 3 et 4.
+// ---------------------------------------------------------------------------
+
+test('CARTE-B T4 — la flèche vers sa propre case rend `null`', () => {
+  // ⚠⚠ CE TEST EXISTAIT AVANT LA MODIFICATION, ET IL EST ÉCRIT POUR ÇA. Il ne
+  // décrit aucune nouveauté : il attrape une RÉGRESSION. Le retrait aux deux
+  // bouts disparaît au lot CARTE-B, et la première façon de se tromper en le
+  // retirant est de retirer aussi la garde qui le précède — `Math.atan2(0, 0)`
+  // rend alors zéro sans le dire, et la carte peint une pointe de flèche posée
+  // sur la base du joueur, sans trait et sans cible.
+  const k = { rangee: 295, colonne: 16 };
+  assert.equal(traitDeLaFleche(k, { ...k }, 0, 0, 64), null,
+    'une flèche part de la base du joueur vers elle-même');
+
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : deux cases DIFFÉRENTES rendent bien
+  // un trait. Sans cette moitié, un `traitDeLaFleche` qui rendrait `null`
+  // partout passerait le test ci-dessus.
+  const voisine = { rangee: 295, colonne: 17 };
+  assert.notEqual(traitDeLaFleche(k, voisine, 0, 0, 64), null,
+    'aucune flèche ne se dessine plus, même vers une autre case');
+});
+
+/**
+ * Le faux document de l'écran Monde.
+ *
+ * ⚠⚠ IL LÈVE SUR TOUT IDENTIFIANT QUE `src/index.src.html` NE DÉCLARE PAS, et
+ * c'est la seconde chose qu'il garde : l'écran ne peut pas demander un élément
+ * que le balisage n'a pas. Même idiome que le faux document de
+ * `test/chantier.test.js` et celui de `test/recherche.test.js` — **aucune
+ * dépendance n'entre**, `esbuild` reste la seule (CLAUDE.md §3).
+ *
+ * ⚠⚠ ET IL NE REND DÉCODÉE QUE L'IMAGE DES EMBLÈMES. Les huit planches de sol,
+ * l'atlas des limites et les deux grosses bases restent « en attente » : sans
+ * elles, `dessiner` peint l'aplat d'attente et sort, là où les rendre prêtes
+ * ferait calculer de vraies dalles de 512² dans un canevas de papier. Les
+ * emblèmes, eux, DOIVENT être prêts — leur repli d'attente peint un
+ * `strokeRect` par site, et le halo cesserait d'être le seul de la scène.
+ */
+function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {}) {
+  const IDS = [
+    'monde-canvas', 'monde-emblemes', 'monde-limites', 'monde-outils',
+    'monde-panneau', 'monde-panneau-titre', 'monde-panneau-prix',
+    'monde-panneau-prix-cout', 'monde-panneau-prix-solde', 'monde-panneau-corps',
+    'monde-panneau-refus', 'monde-panneau-deplacer', 'monde-panneau-fermer',
+    'monde-recentrer', 'monde-base-2x2', 'monde-base-3x3',
+    'sol-1', 'sol-2', 'sol-3', 'sol-4', 'sol-5', 'sol-6', 'sol-7', 'sol-8',
+  ];
+  // ⚠ LA LISTE SE CONFRONTE AU BALISAGE, elle ne se croit pas sur parole.
+  const balisage = lire('src', 'index.src.html');
+  for (const id of IDS) {
+    assert.match(balisage, new RegExp(`id="${id}"`), `« ${id} » n'est pas dans le balisage`);
+  }
+
+  /** Ce que le canevas a reçu : on ne relit que `strokeRect`, voir plus bas. */
+  const appels = [];
+  const ctx = new Proxy({}, {
+    get(_, nom) {
+      if (nom === 'measureText') return () => ({ width: 40 });
+      return (...args) => { appels.push({ nom, args }); };
+    },
+    set(_, nom, valeur) { appels.push({ nom, args: [valeur] }); return true; },
+  });
+
+  const faire = (id) => ({
+    id,
+    // Les images : seuls les emblèmes sont décodés.
+    complete: id === 'monde-emblemes',
+    naturalWidth: id === 'monde-emblemes' ? 512 : 0,
+    hidden: false,
+    textContent: '',
+    title: '',
+    style: {},
+    classList: { add() {}, remove() {}, toggle() {} },
+    children: [],
+    appendChild(n) { this.children.push(n); },
+    replaceChildren(...n) { this.children = n; },
+    ecouteurs: new Map(),
+    addEventListener(type, fn) {
+      if (!this.ecouteurs.has(type)) this.ecouteurs.set(type, []);
+      this.ecouteurs.get(type).push(fn);
+    },
+    /** Rejoue un évènement sur cet élément — c'est ce qui fait le doigt. */
+    envoyer(type, evenement) {
+      const fns = this.ecouteurs.get(type);
+      assert.ok(fns && fns.length > 0, `rien n'écoute « ${type} » sur ${this.id}`);
+      for (const fn of fns) fn(evenement);
+    },
+    setPointerCapture() {},
+    getContext: () => ctx,
+    getBoundingClientRect: () => ({ width: largeurCss, height: hauteurCss, left: 0, top: 0 }),
+    width: 0,
+    height: 0,
+  });
+
+  const parId = new Map(IDS.map((id) => [id, faire(id)]));
+  const doc = {
+    getElementById(id) {
+      if (!parId.has(id)) throw new Error(`faux document : « ${id} » n'est pas dans src/index.src.html`);
+      return parId.get(id);
+    },
+    createElement: (tag) => faire(tag),
+    defaultView: {
+      devicePixelRatio: dpr,
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame() {},
+    },
+  };
+  return { doc, appels, canvas: parId.get('monde-canvas'), dpr };
+}
+
+/**
+ * Le cadre du halo tel que la dernière image l'a peint.
+ *
+ * ⚠⚠ C'EST LA SEULE FENÊTRE SUR LA VUE, ET ELLE EST HONNÊTE. `initialiserEcranMonde`
+ * ne rend que `peindre`, `rafraichir` et `masquer` : ni l'origine ni l'échelle
+ * ne sortent du module, et leur ouvrir un accesseur pour les besoins d'un test
+ * mettrait dans `src/` une porte que la production n'emploie pas. Le halo, lui,
+ * est peint À la position de la base du joueur et À l'échelle courante — il
+ * porte donc les deux grandeurs qu'on cherche, telles que l'écran les a
+ * réellement employées.
+ *
+ * ⚠ ET IL EST LE SEUL `strokeRect` DE LA SCÈNE dans ce montage : le seul autre
+ * du module est le repli d'attente des emblèmes, que le faux document rend
+ * inatteignable en livrant leur image décodée.
+ */
+function cadreDuHalo(appels) {
+  const traces = appels.filter((a) => a.nom === 'strokeRect');
+  assert.equal(traces.length, 1,
+    `${traces.length} strokeRect dans la scène : le halo n'est plus seul, le montage ne mesure rien`);
+  const [x, y, cote] = traces[traces.length - 1].args;
+  return { x, y, cote };
+}
+
+test('CARTE-B T1 — la carte s\'ouvre au zoom MAXIMUM, pas au plus large', () => {
+  // ⚠⚠ ETHAN, 06/09 : « ouverture de la carte : centrée sur ma base du joueur au
+  // ZOOM MAXIMUM ». Elle s'ouvrait sur `CRANS[0]`, le dézoom maximal.
+  const { doc, appels, dpr } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const etat = creerEtat(20260906);
+  ecran.peindre(etat);
+
+  // ⚠⚠ ON MESURE L'ÉCHELLE SUR CE QUE L'ÉCRAN A PEINT, PAS SUR UNE CONSTANTE.
+  // Le côté du halo vaut `pas - epaisseur`, et l'épaisseur `max(1, round(pas ×
+  // EPAISSEUR_HALO))` : l'échelle s'en déduit exactement, et elle est celle que
+  // `dessiner` a réellement employée.
+  const attendu = (pas) => pas - Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+  const { cote } = cadreDuHalo(appels);
+  assert.equal(cote, attendu(ECHELLE_MAX),
+    'la carte ne s\'ouvre pas au zoom maximum');
+
+  // ⚠⚠ ET LE MONTAGE DISCRIMINE : le cran d'AVANT rendrait un autre nombre, et
+  // un cran INTERMÉDIAIRE aussi. Sans ces deux lignes, `cote !== attendu(CRANS[0])`
+  // passerait sur n'importe quel cran de la table sauf le plus large.
+  assert.notEqual(attendu(CRANS[0]), attendu(ECHELLE_MAX),
+    'les deux bouts de la table rendent le même halo : le montage ne mesure rien');
+  for (const cran of CRANS) {
+    if (cran === ECHELLE_MAX) continue;
+    assert.notEqual(cote, attendu(cran), `la carte s'ouvre au cran ${cran}`);
+  }
+
+  // ⚠ ET C'EST BIEN LE HAUT DE LA COURSE, pas un nombre écrit ici : `ECHELLE_MAX`
+  // est le dernier élément de la table, qui est croissante.
+  assert.equal(ECHELLE_MAX, CRANS[CRANS.length - 1]);
+  assert.equal(doc.getElementById('monde-outils').title,
+    `${Math.round(ECHELLE_MAX / dpr)} px / case`,
+    'l\'échelle annoncée à l\'écran n\'est pas celle du zoom maximum');
+});
+
+/**
+ * Un pincement à deux doigts sur le canevas, du rapport demandé.
+ *
+ * ⚠ LES DEUX DOIGTS SE RETIRENT PAR `pointercancel`, PAS PAR `pointerup`.
+ * `relacher` ouvre le panneau du site touché quand le doigt n'a pas glissé — et
+ * pendant un pincement il n'a pas glissé, la branche du zoom sortant avant le
+ * promenage. `pointercancel` est l'évènement que le navigateur envoie
+ * réellement quand le geste change de main, et il ne fait que rendre l'état.
+ */
+function pincer(canvas, rapport) {
+  const a = { pointerId: 1, clientX: 100, clientY: 300 };
+  const b = { pointerId: 2, clientX: 300, clientY: 300 };
+  canvas.envoyer('pointerdown', a);
+  canvas.envoyer('pointerdown', b);
+  canvas.envoyer('pointermove', { ...b, clientX: 100 + 200 * rapport });
+  canvas.envoyer('pointercancel', a);
+  canvas.envoyer('pointercancel', b);
+}
+
+test('CARTE-B T2 — la carte se recadre à CHAQUE ouverture, pas seulement à la première', () => {
+  // ⚠⚠ RENVERSEMENT DU 06/09. `peindre` ne recentrait que quand `etatCourant`
+  // valait `null`, c'est-à-dire UNE FOIS pour toute la partie : le commentaire
+  // qui le défendait est réécrit dans `monde.js`, il n'est pas supprimé.
+  const { doc, appels } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+
+  const etat = creerEtat(20260906);
+  ecran.peindre(etat);
+  const premier = cadreDuHalo(appels);
+
+  // ⚠⚠ ON DÉPLACE LA VUE COMME LE JOUEUR LA DÉPLACE : AU DOIGT. Un pincement
+  // qui referme les doigts dézoome ET promène la vue — `reglerEchelle` ancre sur
+  // le milieu des deux doigts —, donc les DEUX moitiés du cadrage d'ouverture
+  // sont défaites avant qu'on ne rouvre.
+  appels.length = 0;
+  pincer(canvas, 0.25);
+  const perdu = cadreDuHalo(appels);
+  assert.notEqual(perdu.cote, premier.cote,
+    'le pincement n\'a pas changé l\'échelle : le montage ne défait rien');
+  // ⚠ ET LE PINCEMENT DÉCENTRE AUSSI, PARCE QU'IL S'ANCRE SUR LE MILIEU DES
+  // DOIGTS — qui n'est pas le milieu de l'écran. Sans cette moitié, le test ne
+  // mesurerait que le retour du zoom.
+  assert.ok(Math.abs((perdu.x + perdu.cote / 2) - canvas.width / 2) > 1,
+    'la vue est restée centrée sur la base : il n\'y a rien à recentrer');
+
+  // ⚠ ET LA BASE CHANGE AUSSI DE CASE, pour que « centré » ne puisse pas être
+  // vrai par accident sur l'ancienne vue.
+  const ailleurs = creerEtat(20260906);
+  baseCourante(ailleurs).position = { rangee: 250, colonne: 8 };
+
+  ecran.masquer();
+  appels.length = 0;
+  ecran.peindre(ailleurs);
+  const second = cadreDuHalo(appels);
+
+  // ⚠⚠ ET L'ÉCHELLE EST REVENUE AU MAXIMUM, PAS SEULEMENT LE CENTRE. C'est la
+  // seconde moitié de la phrase d'Ethan — « centrée sur ma base du joueur au
+  // zoom maximum » —, et elle vaut à la seconde ouverture comme à la première.
+  // Sans cette assertion, un `cadrerSurLaBase` qui ne reposerait que la vue
+  // passerait : la première ouverture hérite déjà de l'échelle d'origine.
+  assert.equal(second.cote, premier.cote,
+    'la seconde ouverture ne revient pas au zoom maximum');
+  assert.equal(second.cote,
+    ECHELLE_MAX - Math.max(1, Math.round(ECHELLE_MAX * EPAISSEUR_HALO)));
+
+  // ⚠⚠ CENTRÉ, ET MESURÉ COMME TEL : le cadre du halo est au milieu du canevas
+  // aux deux ouvertures. C'est ce que « centrée sur ma base du joueur » dit, et
+  // ça ne dépend d'aucune des deux positions.
+  for (const [quand, cadre] of [['première', premier], ['seconde', second]]) {
+    assert.equal(Math.round(cadre.x + cadre.cote / 2), Math.round(canvas.width / 2),
+      `la ${quand} ouverture ne centre pas la base horizontalement`);
+    assert.equal(Math.round(cadre.y + cadre.cote / 2), Math.round(canvas.height / 2),
+      `la ${quand} ouverture ne centre pas la base verticalement`);
+  }
+
+  // ⚠ ET LE MONTAGE PROUVE D'ABORD QU'IL BOUGE QUELQUE CHOSE. Les deux bases
+  // sont à des cases DIFFÉRENTES : sans recadrage, le second halo tomberait à
+  // `(colonne − 1) × pas − vueX` de la première vue, soit très loin du centre.
+  const a = baseCourante(etat).position;
+  const b = baseCourante(ailleurs).position;
+  assert.notDeepEqual({ rangee: a.rangee, colonne: a.colonne },
+    { rangee: b.rangee, colonne: b.colonne },
+    'les deux ouvertures regardent la même case : le montage ne mesure rien');
+  const sansRecadrage = (b.colonne - 1) * ECHELLE_MAX - (premier.x - (a.colonne - 1) * ECHELLE_MAX);
+  assert.ok(Math.abs(sansRecadrage - second.x) > ECHELLE_MAX,
+    'la vue d\'avant et la vue d\'après se confondent : le test passerait sans recadrage');
+});
+
+test('CARTE-B T3 — la flèche part et finit aux CENTRES des deux cases', () => {
+  // ⚠⚠ ETHAN, 06/09 : « flèche de la base à la cible : du centre de l'un au
+  // centre de l'autre ». Elle reculait de `RETRAIT_FLECHE = 0,55` case à chaque
+  // bout — la constante est retirée, et `monde.js` dit pourquoi.
+  const depuis = { rangee: 295, colonne: 16 };
+  const vers = { rangee: 288, colonne: 21 };
+  const ox = 137;
+  const oy = 4211;
+  const pas = 64;
+
+  const trait = traitDeLaFleche(depuis, vers, ox, oy, pas);
+  const a = centreDeLaCase(depuis, ox, oy, pas);
+  const b = centreDeLaCase(vers, ox, oy, pas);
+
+  // ⚠⚠ À L'ÉGALITÉ STRICTE, PAS À UNE TOLÉRANCE. Un test qui vérifierait « la
+  // flèche est plus longue qu'avant » passerait sur un retrait divisé par deux ;
+  // celui-ci ne passe que sur un retrait EXACTEMENT nul.
+  assert.equal(trait.x1, a.x);
+  assert.equal(trait.y1, a.y);
+  assert.equal(trait.x2, b.x);
+  assert.equal(trait.y2, b.y);
+
+  // ⚠ ET LE MONTAGE MESURE UN RETRAIT : les deux centres sont à plus d'une case
+  // l'un de l'autre dans les deux axes, donc un recul même petit se lirait. Sur
+  // deux cases voisines en ligne, un retrait sur l'axe mort ne changerait rien.
+  assert.ok(Math.abs(b.x - a.x) > pas && Math.abs(b.y - a.y) > pas,
+    'les deux cases sont trop proches ou alignées : un retrait passerait inaperçu');
+
+  // ⚠ L'ANGLE NE BOUGE PAS D'UN RADIAN : reculer les deux bouts du MÊME vecteur
+  // ne changeait jamais la direction, et la pointe reste orientée pareil.
+  assert.equal(trait.angle, Math.atan2(b.y - a.y, b.x - a.x));
+
+  // ⚠ ET LA CONSTANTE EST PARTIE POUR DE BON — un `RETRAIT_FLECHE` remis à zéro
+  // serait un nom qui ment, et le prochain lecteur le croirait vivant.
+  const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.doesNotMatch(source, /RETRAIT_FLECHE/,
+    'le retrait de la flèche est encore nommé dans l\'écran');
 });

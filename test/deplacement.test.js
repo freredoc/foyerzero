@@ -533,10 +533,15 @@ test('DÉPLACEMENT T11 bis — la géométrie du halo et de la flèche, sans DOM
   assert.match(ecranSource, /haloAllumeAuTick\(tickHalo\) !== avant/,
     'le clignotement redessine sans regarder s\'il a changé d\'état');
 
-  // La flèche part de la base et arrive à la cible, retirée aux deux bouts.
+  // ⚠⚠ LA FLÈCHE VA D'UN CENTRE À L'AUTRE — lot CARTE-B, 06/09, ET CES DEUX
+  // ASSERTIONS SE RESSERRENT AU LIEU DE SE RELÂCHER. Elles disaient
+  // « retirée aux deux bouts » et se contentaient d'un `x1 > 45` / `x2 < 145`,
+  // c'est-à-dire de N'IMPORTE QUEL retrait ; Ethan : « du centre de l'un au
+  // centre de l'autre ». Elles nomment donc les deux centres à l'ÉGALITÉ
+  // STRICTE, ce qu'un retrait, même divisé par cent, ferait tomber.
   const trait = traitDeLaFleche({ rangee: 3, colonne: 5 }, { rangee: 3, colonne: 15 }, 0, 0, 10);
-  assert.ok(trait.x1 > 45, 'la flèche part du centre de la case');
-  assert.ok(trait.x2 < 145, 'la flèche arrive au centre de la cible');
+  assert.equal(trait.x1, 45, 'la flèche ne part pas du centre exact de la case');
+  assert.equal(trait.x2, 145, 'la flèche n\'arrive pas au centre exact de la cible');
   assert.equal(Math.round(trait.y1), 25);
   assert.equal(Math.round(trait.y2), 25);
   assert.equal(trait.angle, 0);
