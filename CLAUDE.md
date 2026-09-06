@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **05/09/2026**, version 0.99.0 · build 101.
+Dernière révision : **06/09/2026**, version 0.99.1 · build 102.
 
 ---
 
@@ -42,7 +42,124 @@ Dernière révision : **05/09/2026**, version 0.99.0 · build 101.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot SPRITES-V2-JOUEUR), à confronter :**
+**Référence au 06/09/2026 (après le lot COMPLEXE), à confronter :**
+`npm test` → **1129 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 985 488 octets**, 0 référence externe. Coût **+3 122 octets**, mesurés poste
+par poste contre un livrable rebâti depuis `origin/main` : **JavaScript +2 746 ·
+feuille +316 · balisage +52 · images +0 · audio +0** — **296 `data:` avant, 296
+après**. Borne T10 inchangée à 9 300 000, marge **1 314 512 octets, 14,13 %**.
+⚠⚠ **LE COMPLEXE DE DÉFENSE COMMANDE ENFIN QUELQUE CHOSE, ET IL NE COMMANDAIT
+RIEN — MESURÉ.** `complexeDeDefense` n'apparaissait dans **AUCUN** module de
+`src/sim/` : il se construisait, se montait, se payait, et une garnison abîmée le
+restait pour toujours, sauf pour les pièces qui portent le module
+`autoReparation`. `MODELE-REPARATION-1.md` §3 lui confie pourtant la garnison
+entière depuis le 24/08 — « répare TOUT, GRATUITEMENT, en une heure ».
+⚠⚠ **LA PÉNALITÉ EST LINÉAIRE ET LE PLANCHER VAUT 24 h, ET C'EST UN ARBITRAGE
+D'ETHAN DU 06/09 QUI RENVERSE LE BRIEF.** Celui-ci proposait une forme
+GÉOMÉTRIQUE — `(plancher/base)^(1−santé)` — au motif que « tout l'est dans ce
+jeu » (1,09 · 1,10 · 1,15 · 1,32), et 72 h au plancher. Ethan : « la courbe
+choisie est géométrique. je préfère linéaire. 24h, pas 72h ». **Les deux formes
+touchent EXACTEMENT les deux points arbitrés** — 1 h à pleine santé, le plancher
+à 1 PV — et **ne diffèrent qu'entre les deux** : à plancher égal de 24 h,
+géométrique **4 h 54** à mi-vie, linéaire **12 h 30**. `RETOUR T3` nomme les deux
+et refuse la géométrique de face.
+⚠⚠ **`facteurMilli` EST APPELÉE, PAS RECOPIÉE, ET C'EST L'ARRONDI AU MILLIÈME QUI
+LE PROUVE.** Elle rend `Math.round(1000 × pente^n)`, soit **2 594** pour un
+dépassement de dix, quand `1,10^10` vaut 2,5937424601 — **neuf ticks d'écart**.
+`RETOUR T2` nomme les deux valeurs : un test « à 1 % près » n'aurait rien vu.
+⚠ Second discriminant, dans le même test : basculer `NIVEAU.deuxRegimes` doit
+CHANGER le résultat, ce qu'une pente écrite en dur ne ferait pas.
+⚠⚠ **LA RÈGLE EST PAR PIÈCE, ET C'EST `facteurMilli` QUI L'IMPOSE.** Elle REFUSE
+un niveau non entier ; `niveauDeLaDefense` rend une MOYENNE en dixièmes, qui ne
+l'est pas. Une garnison mêlée revient donc à trois instants distincts —
+`RETOUR T5` en monte trois et exige trois échéances différentes.
+⚠⚠ **UNE ÉCHÉANCE, PAS UN DÉBIT — ET LE PRORATA SE FIGE À L'INSTANT DU RAID.**
+`MODELE-REPARATION-1.md` §6 point 5 décrit un débit qui s'accélère à mesure que
+le Complexe se répare lui-même ; on suit l'idiome de `sim/site-entame.js`, qui ne
+lit que l'horloge courante et rend donc `rattraperJeu` équivalent à `tickJeu`.
+**Conséquence assumée, écrite au module et mesurée par `RETOUR T7` : réparer le
+Complexe ensuite NE RACCOURCIT PAS l'attente en cours.** C'est ce qui donne une
+raison de le garder entier AVANT d'être attaqué.
+⚠⚠ **ET LE RAID STAMPE SUR-LE-CHAMP, CE QUI N'EST PAS UNE PRÉCAUTION MAIS LA
+CONDITION DE L'ÉQUIVALENCE.** `rattraperJeu` découpe sa fenêtre aux instants des
+raids et n'appelle `ramenerLaGarnison` qu'aux BORNES de ses segments : une pièce
+abîmée y serait stampée des heures plus tard, là où le chemin direct la stampe au
+tick d'après. `subirUnRaid` appelle donc la fonction lui-même, et l'appel est
+idempotent.
+⚠⚠ **`RETOUR T8` PORTE BIEN UN RAID DANS SA FENÊTRE, ET IL LE PROUVE AVANT DE
+COMPARER.** Mesuré : la base montée en rangée 200, **49 bases attaquantes**, un
+raid à la minute 6, **343 ticks de combat**, les trois pièces de garnison
+abîmées et stampées — puis les deux chemins rendent le même état, sérialisation
+comprise. **Sans raid dans la fenêtre le test serait vert sur n'importe quel
+code**, et deux assertions le refusent explicitement.
+⚠⚠ **UNE FALSIFICATION N'A PAS MORDU, QUATORZIÈME FOIS DU DÉPÔT, ET ELLE A FAIT
+CORRIGER UN TEST.** Retirer `ramenerLaGarnison` du chemin DIRECT — `tickJeu` —
+laissait la suite **entièrement verte, 43 pass / 0 fail mesuré** : `RETOUR T1`
+avançait par `rattraperJeu` d'un bout à l'autre, et `RETOUR T8` compare les deux
+chemins sur **cinq minutes**, où aucune échéance ne tombe jamais. Le dernier pas
+de `T1` se fait désormais par `tickJeu`, et la falsification mord.
+⚠ **QUINZE FALSIFICATIONS, QUINZE CHUTES**, une par test plus trois de
+structure — l'appel retiré de chacun des deux chemins d'avancement, et la garde
+de forme du champ retirée du chargement.
+⚠⚠ **SANS COMPLEXE CONSTRUIT, LA GARNISON NE REVIENT JAMAIS — ETHAN, 05/09.**
+Ce n'est ni un défaut ni un cas limite : `complexeDeLaBase` rend **`null` et
+jamais un niveau zéro**, parce qu'un zéro se lirait « retour infiniment lent » et
+finirait par afficher une durée. L'écran l'ANNONCE, sous la bande Défense, dans
+`#chantier-garnison` — **un ÉTAT, pas un refus** : ni `avis()`, ni `toast()`, ni
+le rouge des refus.
+⚠ **ET `retourDeLaPiece` REND TROIS ÉTATS, PAS DEUX** — `intacte`,
+`sans-retour`, `en-attente`. Les deux derniers se confondraient sous un `null`,
+et l'écran ne pourrait plus distinguer « jamais » de « bientôt ».
+⚠⚠ **UN SECOND RAID PENDANT L'ATTENTE NE REMET PAS LE COMPTEUR À ZÉRO**, et
+c'est une lecture, pas un oubli : la règle est « on ne stampe que ce qui n'est
+PAS stampé ». La pièce garde son échéance et revient entière, dégâts neufs
+compris. Restamper rallongerait l'attente à chaque passe et rendrait la garnison
+indisponible pour toujours sous des raids rapprochés. **Une ligne à changer si
+Ethan tranche autrement.**
+⚠⚠ **`SAVE_VERSION` PASSE À 26, ET LA MIGRATION NE CALCULE RIEN — PAS MÊME LE
+CHAMP.** Une sauvegarde d'avant ne sait ni quand ses pièces ont été abîmées ni
+dans quel état était le Complexe alors ; lui inventer une date la ferait revenir,
+ou jamais, selon un Complexe peut-être réparé depuis. **C'est le FILET qui s'en
+charge au premier tick, avec le Complexe D'AUJOURD'HUI** — `RETOUR T10` le mesure
+en changeant le niveau du Complexe entre le chargement et le tick.
+⚠ **« ABSENT » VAUT « null » VAUT « pas d'échéance »**, partout : une v25, une
+pièce fraîchement posée et une pièce d'armée n'en portent aucune, et
+`problemesDuRetourTick` ne refuse qu'une valeur PRÉSENTE et malformée.
+⚠ **LA SAUVEGARDE NE GRANDIT QUE POUR CE QUI ATTEND — 22 octets par pièce en
+retour**, et zéro pour tout le reste. **Le témoin de BASES-0 ne bouge pas d'un
+octet** : sa sauvegarde se prend en phase 6, avant le premier raid, et aucune
+pièce n'y attend. Aucun terme ne s'ajoute à `test/temoins-bases-0.js`.
+⚠⚠ **`pvMaxDeLaPiece` DÉMÉNAGE DE `raid-ouvrage.js` VERS `reparation.js`, ET
+C'EST UN DÉPLACEMENT QUI RETIRE UNE COPIE.** Deux fonctions interrogeaient
+`DEFENSES` puis `UNITES` pour le même nombre ; il n'en reste qu'une,
+`pvMaxDeLaPieceDeGarnisonMilli`, et pas une ligne de son corps n'a changé.
+⚠ **DEUX COMMENTAIRES DE `ui/chantier.js` MENTAIENT, ET LES DEUX SONT RÉÉCRITS.**
+Celui du `reparer: null` de la défense créditait `reparerLaGarnison` de
+`sim/raid.js` d'avoir « déjà fait » ce travail « après chaque raid » : cette
+fonction-là est le module `autoReparation` d'une PIÈCE, elle ne connaît pas le
+Complexe. Celui du marqueur `.abimee` affirmait que « la garnison se répare toute
+seule et son avarie ne dure qu'une heure » : elle ne se réparait pas du tout, et
+l'heure est désormais le cas le plus RAPIDE. **Le `null` avait raison pour une
+raison qui n'existait pas encore.**
+⚠⚠ **LE LEVIER EST TRÈS RAIDE AU-DELÀ DE DIX NIVEAUX DE DÉPASSEMENT, ET C'EST
+MESURÉ.** Complexe entier : pièce de niveau 50 sous un Complexe 10 → **45,3 h** ;
+sous un Complexe 20 → 17,4 h ; sous un Complexe 30 → 6,7 h ; à niveau égal → 1 h.
+Complexe à 1 PV, les mêmes : **1 086 h · 161 h · 24 h**. Les deux nombres de
+`RETOUR_GARNISON` sont posés pour être joués et changés, et **Ethan tranche**.
+⚠ **`MODELE-REPARATION-1.md` §6 POINT 6 EST CLOS PAR CE LOT**, par arbitrage et
+non par mesure — aucune capture ne montre la formule du dépassement. Le point 5
+reste ouvert autrement : le modèle y fait revenir le site entier parce que le
+débit s'accélère, l'échéance fige le prorata, et l'écart est écrit au module.
+⚠ **AUCUN FICHIER N'ENTRE, ET LE COMPTE PASSE DE 1 117 À 1 129** — onze tests
+dans `test/reparation.test.js`, un dans `test/chantier.test.js`. **Aucune
+assertion n'a été retirée ni assouplie** ; **une garde change de porteur** — le
+`SAVE_VERSION === 25` de `RÉSERVE-BASE T11` devient `=== 26` sous `RETOUR T10`,
+« la garde du numéro appartient au maillon le plus RÉCENT, une seule fois ».
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — pas un octet d'`art/sprites/` ne
+change.
+
+**Auparavant, après le lot SPRITES-V2-JOUEUR :**
 `npm test` → **1117 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 982 366 octets**, 0 référence externe. Le lot **REND 1 020 692 octets**,
 mesurés poste par poste contre un livrable rebâti depuis `origin/main` : **images
@@ -4936,7 +5053,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
-  base.js               les onze bâtiments de la base du joueur ; lu par champs, disposition et le tick
+  base.js               les onze bâtiments du joueur, leur réparation et le retour de la garnison
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
   atlas.js              l'index des atlas de sprites — ⚠ GÉNÉRÉ, voir ci-dessous
@@ -5003,7 +5120,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
   deplacement.js        la base bouge : portée, délai, et LE seul écrivain de `position`
   fondation.js          fonder une base de plus : où c'est permis, ce qu'on écrase, qui encaisse
   transfert.js          envoyer des ressources d'une base à l'autre : distance, taxe, refus
-  reparation.js         les réserves de temps : trois par châssis, une pour les bâtiments
+  reparation.js         les réserves de temps, et le retour gratuit de la garnison
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
@@ -5032,6 +5149,24 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     `CHASSIS_REPARABLES` s'en dérive, et `reservoirsDeLArmee` boucle dessus pour
     l'écran d'armée : une clé qui n'est pas un châssis y fuirait. Mesuré à la
     falsification — elle fait tomber `RÉSERVE T4` en même temps que la garde neuve.
+  ⤷ ⚠⚠ ET IL PORTE UNE SECONDE MOITIÉ DEPUIS LE 06/09, QUI NE SE PAIE PAS —
+    lot COMPLEXE. Tout ce qui précède est un GESTE : le joueur dépense du temps
+    de réserve et de la ressource, et les PV reviennent dans le même appel.
+    `ramenerLaGarnison` est une ÉCHÉANCE : le Complexe de défense ramène la
+    garnison tout seul, gratuitement, sans réservoir et sans geste. Les deux ne
+    se touchent pas, et les fondre demanderait un cinquième réservoir et un
+    bouton — c'est-à-dire une seconde règle à côté de celle qui tourne.
+  ⤷ ⚠⚠ SANS COMPLEXE, `complexeDeLaBase` REND `null` ET LA GARNISON NE REVIENT
+    JAMAIS. Ethan, 05/09 : c'est la règle, pas un cas limite. `null` et non un
+    niveau zéro, pour que l'écran puisse l'ANNONCER — un zéro se lirait « retour
+    infiniment lent » et finirait par afficher une durée.
+  ⤷ ⚠ LA PÉNALITÉ DE SANTÉ EST LINÉAIRE ET SON PLANCHER VAUT 24 h — arbitrage
+    d'Ethan du 06/09, qui renverse la forme géométrique proposée. Les deux
+    touchent les mêmes deux points ; elles ne diffèrent qu'entre eux.
+  ⤷ ⚠ ET `subirUnRaid` APPELLE `ramenerLaGarnison` SUR-LE-CHAMP, ce qui n'est pas
+    une précaution : c'est ce qui fait stamper les deux chemins d'avancement au
+    MÊME instant, celui du raid. Le rattrapage n'appelle ce module qu'aux bornes
+    de ses segments.
   ⤷ ⚠ ET LE CLIQUET N'EST CASSÉ QUE CÔTÉ MOTEUR. `AUDIT-REPARATION.md` §4 tient
     encore pour le JOUEUR : aucun écran n'appelle `reparerUnBatiment`.
 
@@ -7226,11 +7361,29 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   borne le NOMBRE de bâtiments par ses emplacements, le QG borne les POINTS
   d'armée par son budget. Dire « c'est plein » sans dire de quoi enverrait le
   joueur améliorer le mauvais bâtiment.
-  ⚠ **AMÉLIORER ET RÉPARER N'ONT PAS DE MOTEUR EN DÉFENSE, ET LE DISENT.**
-  `null` dans la table, pas un bouton inerte — « un indice n'est pas une
-  interdiction » (§4). Le COÛT d'une amélioration existe depuis l'arbitrage du
-  28/08 ; la mécanique, non : ce que gagne une unité améliorée n'est pas
-  arbitré. C'est le prochain trou à combler.
+  ⚠⚠ **RÉPARER N'A PAS DE BOUTON EN DÉFENSE, ET IL N'EN AURA JAMAIS — MAIS LA
+  RAISON A CHANGÉ LE 06/09.** `null` dans la table, pas un bouton inerte — « un
+  indice n'est pas une interdiction » (§4). Ce qui est neuf, c'est que la
+  garnison a enfin un moteur : `MODELE-REPARATION-1.md` §3 la fait réparer par le
+  **Complexe de défense**, gratuitement et tout seul, et `ramenerLaGarnison` de
+  `sim/reparation.js` le fait depuis le lot COMPLEXE. Le geste du joueur n'existe
+  pas dans cette moitié du modèle ; un bouton inventerait une seconde règle.
+  ⚠⚠ **ET LA RAISON QUE CE PARAGRAPHE DONNAIT ÉTAIT FAUSSE.** Il créditait
+  `reparerLaGarnison` de `sim/raid.js` d'avoir « déjà fait » ce travail « après
+  chaque raid » : cette fonction-là est le module `autoReparation` d'une PIÈCE —
+  un pour-cent des dégâts, sur-le-champ, aux seules pièces qui le portent. Elle
+  ne connaît pas le Complexe, et jusqu'au 06/09 `complexeDeDefense` n'apparaissait
+  dans **aucun** module de `src/sim/`. **Le `null` avait raison pour une raison
+  qui n'existait pas encore.**
+  ⚠ **AMÉLIORER, LUI, A SON MOTEUR DEPUIS LE 03/09** — le paragraphe qui l'annonçait
+  sans moteur a été retiré le jour où `ameliorerEffectif` est arrivée.
+  ⚠⚠ **ET LA BANDE DÉFENSE PORTE SON PROPRE ÉTAT, `#chantier-garnison`.** Sans
+  Complexe construit, la garnison abîmée ne revient JAMAIS (Ethan, 05/09) : le
+  joueur doit l'apprendre là où il regarde sa garnison, et **ce n'est pas un
+  refus** — ni `avis()`, ni `toast()`, ni le rouge. Avec un Complexe, la même
+  ligne dit combien de pièces attendent et quand revient la première. ⚠ Un manque
+  s'arrondit vers le HAUT (`direLaDuree` par défaut) ; c'est l'inverse de la
+  réserve des bâtiments, qui est un STOCK.
   ⚠ **LA PALETTE SUIT LA BANDE, ET IL A FALLU LE BRANCHER.** `bandeCourante`
   bouge à chaque évènement de défilement, mais la palette n'était repeinte que
   par trois autres chemins : le joueur serait descendu sur la Défense avec les

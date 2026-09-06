@@ -26,7 +26,7 @@ import {
 import { creerRecherche } from './raid.js';
 import {
   crediterLesReserves, reservesVides, problemesDesReserves,
-  problemesDeLaReserveDesBatiments,
+  problemesDeLaReserveDesBatiments, ramenerLaGarnison, problemesDuRetourTick,
 } from './reparation.js';
 import {
   basesAttaquantes, resoudreLaMinute, prochaineMinuteDeRaid, minuteDeLHorloge,
@@ -65,7 +65,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 25;
+export const SAVE_VERSION = 26;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -646,6 +646,13 @@ export function tickJeu(etat) {
   avancerPointsAttaque(etat, 1);
   reparerLesSites(etat);
   crediterLesReserves(etat, 1);
+  // ⚠ MÊME FORME QUE `reparerLesSites` : elle ne lit que l'horloge courante, donc
+  // mille ticks d'un coup ramènent ce que mille ticks un par un auraient ramené.
+  // ⚠ ET AVANT `resoudreLesMinutes`, PAS APRÈS : une pièce dont l'échéance tombe
+  // pendant cette minute doit être debout quand le raid la trouve, dans les DEUX
+  // chemins. Le rattrapage fait exactement le même geste — il ramène en bout de
+  // segment, et le segment s'arrête au raid.
+  ramenerLaGarnison(etat);
   // ⚠⚠ EN DERNIER, ET APRÈS TOUT LE RESTE. Un raid modifie la disposition, la
   // position, l'économie et la réserve : le placer avant l'économie ferait
   // produire le tick sur une base déjà rasée, et le rattrapage — qui découpe sa
@@ -820,6 +827,18 @@ function avancerAnalytiquement(etat, nbTicks) {
   // du temps et cette ligne cessera d'être juste. C'est le test d'équivalence
   // des deux chemins qui doit tomber en premier.
   crediterLesReserves(etat, nbTicks);
+  // ⚠ MÊME RAISON QUE `reparerLesSites` : un seul appel, pas une boucle. Le
+  // retour de la garnison est une ÉCHÉANCE — `maintenant >= retourTick` — donc
+  // le franchir en un bond ou en mille pas rend le même état.
+  //
+  // ⚠⚠ ET SA CONDITION DE RUPTURE EST DÉJÀ TRAITÉE, PAS SEULEMENT ÉCRITE.
+  // L'échéance se CALCULE, elle, à partir du Complexe de l'instant : appelée
+  // seulement ici, elle stamperait une pièce abîmée par un raid au bout du
+  // segment SUIVANT, avec un Complexe qui aura peut-être été réparé entre-temps.
+  // C'est pourquoi `subirUnRaid` appelle `ramenerLaGarnison` sur-le-champ. Le
+  // jour où un autre chemin abîmerait la garnison sans passer par lui, il devra
+  // faire de même — et c'est le test d'équivalence des deux chemins qui le dira.
+  ramenerLaGarnison(etat);
 }
 
 // ---------------------------------------------------------------------------
@@ -1388,6 +1407,15 @@ function problemesDeLEffectif(force, liste, piece, indexIgnore, obstacles = []) 
       code: 'degats',
       message: `dégâts « ${piece.degatsMilli} » — entier de milli-PV ≥ 0 attendu`,
     });
+  }
+  // ⚠⚠ L'ABSENCE EST LÉGALE, ET C'EST LE FILET DU LOT COMPLEXE QUI L'AUTORISE.
+  // Une sauvegarde d'avant la v26 ne porte aucune échéance, une pièce
+  // fraîchement posée non plus, et une pièce d'armée n'en portera jamais :
+  // « absent » vaut « null » vaut « pas d'échéance ». Ce qui est refusé, c'est
+  // une valeur PRÉSENTE et malformée — elle ferait revenir la pièce à un instant
+  // qui n'existe pas, ou jamais.
+  for (const message of problemesDuRetourTick(piece.retourTick)) {
+    problemes.push({ code: 'retour', message });
   }
   return problemes;
 }
@@ -2668,6 +2696,36 @@ const MIGRATIONS = {
       if (!Number.isInteger(base.reserveReparationBatiments)
         || base.reserveReparationBatiments < 0) {
         base.reserveReparationBatiments = 0;
+      }
+    }
+  },
+
+  /**
+   * v25 → v26 : les pièces de garnison portent une échéance de retour,
+   * `retourTick`, que le Complexe de défense pose et consomme.
+   *
+   * ⚠⚠ ELLE NE CALCULE RIEN, ET SURTOUT PAS UNE ÉCHÉANCE. Une sauvegarde
+   * d'avant ne sait pas quand ses pièces ont été abîmées ni dans quel état
+   * était le Complexe à ce moment-là : lui inventer une date la ferait revenir
+   * — ou ne jamais revenir — selon un Complexe qu'elle avait peut-être réparé
+   * depuis longtemps. Le FILET de `ramenerLaGarnison` s'en charge au premier
+   * tick, avec le Complexe D'AUJOURD'HUI, ce qui est la seule lecture honnête.
+   *
+   * ⚠ ELLE NE POSE MÊME PAS LE CHAMP. « Absent » vaut « null » vaut « pas
+   * d'échéance » partout dans le module : l'écrire à `null` sur chaque pièce
+   * ferait grossir toutes les sauvegardes pour rien. Ce qu'elle fait, et c'est
+   * tout, c'est REFUSER une valeur héritée malformée en la ramenant à `null` —
+   * un champ de ce nom ne peut pas exister dans une v25, mais un état fabriqué
+   * à la main en montage, lui, le peut.
+   *
+   * @param {object} s
+   */
+  25: (s) => {
+    s.version = 26;
+    for (const base of s.bases ?? []) {
+      for (const piece of base.garnison ?? []) {
+        if (piece.retourTick === undefined) continue;
+        if (problemesDuRetourTick(piece.retourTick).length > 0) piece.retourTick = null;
       }
     }
   },

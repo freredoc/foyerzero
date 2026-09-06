@@ -239,11 +239,37 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**.
    complété le 05/09 par la quatrième réserve. Voir §4.
 5. ~~Un Complexe endommagé répare-t-il moins ?~~ **Clos le 24/08** : oui, au prorata de ses PV —
    mais **il se répare lui-même**, donc son débit s'accélère au fil de l'heure et le site revient
-   entier malgré tout.
-6. **Formule du dépassement** : de combien le temps de réparation dépasse-t-il l'heure quand les
-   défenses sont au-dessus du Complexe ? ⚠ **TOUJOURS OUVERT AU 05/09.** Aucune des trente
-   captures ne le montre, et Ethan ne peut pas le provoquer en jeu. C'est tout l'arbitrage
-   « puissance contre disponibilité » entre le QG de défense et le Complexe.
+   entier malgré tout. ⚠⚠ **ET LE CODE S'EN ÉCARTE DEPUIS LE 06/09, DÉLIBÉRÉMENT.** Le lot
+   COMPLEXE suit l'idiome de `sim/site-entame.js` — une **échéance**, pas un débit — parce que
+   c'est ce qui rend `rattraperJeu` équivalent à `tickJeu`, et parce qu'un débit dépendant de la
+   santé changerait de valeur à l'instant d'un raid subi. **Conséquence assumée : le prorata se
+   FIGE à l'instant du raid**, et réparer le Complexe ensuite ne raccourcit pas l'attente en
+   cours. Ce qu'on y gagne est une raison de garder le Complexe entier AVANT d'être attaqué ;
+   ce qu'on y perd est l'accélération que ce point décrit. À rouvrir si Ethan la veut.
+6. ~~**Formule du dépassement** : de combien le temps de réparation dépasse-t-il l'heure quand
+   les défenses sont au-dessus du Complexe ?~~ **CLOS LE 06/09, PAR ARBITRAGE ET NON PAR
+   MESURE** — et il faut le dire dans ce sens-là : aucune des trente captures ne le montre, et
+   Ethan ne peut toujours pas le provoquer en jeu. La règle retenue est **par pièce**, jamais en
+   agrégat :
+
+   ```
+   dépassement = max(0, niveau de la pièce − niveau du Complexe)
+   santé       = PV restants du Complexe / ses PV maximaux
+   durée       = 1 h × facteurMilli(1 + dépassement)/1000 × pénalité(santé)
+   pénalité(s) = 1 + (24 − 1) × (1 − s)          ← LINÉAIRE, plancher 24 h
+   ```
+
+   ⚠ **`facteurMilli` EST APPELÉE, PAS RECOPIÉE** — c'est « la même formule que la croissance
+   des unités de défense », donc la courbe de `data/niveaux.js` et rien d'autre. ⚠ **ET C'EST
+   ELLE QUI IMPOSE LE PAR-PIÈCE** : elle refuse un niveau non entier, et une moyenne n'en est
+   pas un. ⚠ **LA FORME ET LE PLANCHER SONT D'ETHAN, 06/09** — le brief proposait une pénalité
+   géométrique et 72 h ; « la courbe choisie est géométrique. je préfère linéaire. 24h, pas
+   72h ». Les deux formes touchent les mêmes deux points arbitrés (1 h à pleine santé, le
+   plancher à 1 PV) et ne diffèrent qu'entre eux : à mi-vie, 12 h 30 contre 4 h 54.
+   ⚠ **ET SANS COMPLEXE CONSTRUIT, LA GARNISON NE REVIENT JAMAIS** — Ethan, 05/09. Les deux
+   nombres vivent dans `RETOUR_GARNISON` de `src/data/base.js`, posés pour être joués et
+   changés. Le reste de l'arbitrage « puissance contre disponibilité » entre le QG de défense
+   et le Complexe est désormais jouable et mesurable en partie.
 7. ~~**Barèmes** : coût et temps de réparation par niveau.~~ **Clos le 05/09**, voir §3.
 8. **Le plafond de la quatrième réserve**, celle des bâtiments. Voir §4.
 9. **L'anomalie du Collecteur** : il se répare pour 1/153,6 d'un palier là où l'Accumulateur

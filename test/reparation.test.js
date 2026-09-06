@@ -25,20 +25,29 @@ import {
   problemesDeLaReparationDUnBatiment, reparerUnBatiment,
   problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
   problemesDeLaReserveDesBatiments,
+  complexeDeLaBase, ticksDeRetourDeLaPiece, retourDeLaPiece, ramenerLaGarnison,
+  pvMaxDeLaPieceDeGarnisonMilli,
 } from '../src/sim/reparation.js';
 import {
   creerEtat, rattraperJeu, tickJeu, serialiser, charger, migrer, SAVE_VERSION,
+  poserEffectif, problemesDeLaPoseDEffectif,
 } from '../src/sim/state.js';
 import { executerRaid } from '../src/sim/raid.js';
-import { UNITES } from '../src/data/combat.js';
+import { UNITES, GRILLE } from '../src/data/combat.js';
+import { NIVEAU } from '../src/data/niveaux.js';
 import { REPARATION } from '../src/data/sites.js';
-import { BASE_BATIMENTS, REPARATION_BASE_JOUEUR, coutDeMontee } from '../src/data/base.js';
+import {
+  BASE_BATIMENTS, REPARATION_BASE_JOUEUR, RETOUR_GARNISON, coutDeMontee,
+} from '../src/data/base.js';
 import { problemesDeDisposition } from '../src/sim/disposition.js';
-import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
+import {
+  subirUnRaid, basesAttaquantes, prochaineMinuteDeRaid, minuteDeLHorloge, TICKS_PAR_MINUTE,
+} from '../src/sim/raid-ouvrage.js';
 import { facteurMilli } from '../src/sim/combat.js';
 import { TICKS_PAR_SECONDE, TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { niveauDeLArmee, niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { poserLaBaseSur } from '../src/sim/deplacement.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 /**
@@ -993,12 +1002,11 @@ test('RÉSERVE-BASE T10 — réparer débite les trois choses, ou aucune', () =>
 });
 
 test('RÉSERVE-BASE T11 — la migration pose 0 sur TOUTES les bases, et le numéro bouge', () => {
-  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, UNE SEULE FOIS —
-  // règle écrite dans `points-attaque.test.js` depuis le lot SITE-ENTAMÉ. Le
-  // maillon 23 → 24 la laisse à celui-ci, et `bases.test.js` le dit en toutes
-  // lettres à l'endroit où elle vivait.
-  assert.equal(SAVE_VERSION, 25, 'le bump de la version des sauvegardes a été oublié');
-
+  // ⚠ LA GARDE DU NUMÉRO A CHANGÉ DE PORTEUR AU LOT COMPLEXE, ET C'EST LA RÈGLE :
+  // elle appartient au maillon le plus RÉCENT, une seule fois — écrite dans
+  // `points-attaque.test.js` depuis le lot SITE-ENTAMÉ. Ce test-ci garde le
+  // maillon 24 → 25 ; le `assert.equal(SAVE_VERSION, …)` est passé sous
+  // `RETOUR T10`, qui garde le 25 → 26.
   const etat = creerEtat(4321);
   rattraperJeu(etat, 2 * TICKS_PAR_HEURE);
   const v25 = JSON.parse(serialiser(etat, 5_000_000));
@@ -1014,6 +1022,10 @@ test('RÉSERVE-BASE T11 — la migration pose 0 sur TOUTES les bases, et le num�
   const migre = migrer(structuredClone(v24));
   assert.equal(migre.version, SAVE_VERSION);
   assert.equal(migre.bases.length, 2);
+  // ⚠ CE QUE CE TEST GARDE ENCORE, ET QUE LE DÉPLACEMENT DE LA GARDE NE LUI
+  // RETIRE PAS : le maillon 24 → 25 fait toujours son travail, quel que soit le
+  // numéro du bout de la chaîne. Retirer ce maillon-là fait tomber les trois
+  // assertions qui suivent.
   for (const b of migre.bases) {
     assert.equal(b.reserveReparationBatiments, 0, 'la migration crédite une réserve d\'avance');
   }
@@ -1076,4 +1088,394 @@ test('RÉSERVE-BASE T12 — le Chantier décote par son NIVEAU, jamais par ses P
   const bas = coutDeLaReparationDUnBatiment(chantierBas, 1);
   assert.ok(bas.secondes > reference.secondes * 2, 'le niveau du Chantier ne décote rien');
   assert.equal(bas.quartz, reference.quartz, 'le Chantier décote AUSSI le coût en quartz');
+});
+
+// ---------------------------------------------------------------------------
+// Le retour de la garnison — ce que le Complexe de défense commande
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ AUCUN DE CES DOUZE TESTS NE LIT UNE CONSTANTE POUR CONCLURE. Le dépôt a
+// déjà trouvé trois proxys — une garde qui regardait `sim/state.js` quand la
+// fonction vivait dans `sim/reparation.js`, et deux tests qui interrogeaient un
+// témoin qu'ils avaient eux-mêmes produit. Ceux-ci passent par l'HORLOGE et par
+// `degatsMilli` : ce qu'ils mesurent, c'est qu'une pièce est debout ou à terre à
+// un instant donné.
+
+/**
+ * Une base avec son Complexe de défense, ou sans lui si `niveauComplexe` vaut
+ * `null` — et c'est ce second montage qui garde la règle « pas de Complexe, pas
+ * de retour ».
+ */
+function baseAvecComplexe(niveauComplexe, niveauChantier = 20) {
+  const batiments = niveauComplexe === null
+    ? [] : [{ id: 'complexeDeDefense', niveau: niveauComplexe }];
+  return baseBatie(niveauChantier, batiments);
+}
+
+/**
+ * Pose une pièce de garnison sur la première case que le MOTEUR accepte.
+ *
+ * ⚠ ELLE DEMANDE SA CASE, ELLE NE L'ÉCRIT PAS. « Un montage qui écrit une
+ * coordonnée ne garde que lui-même » — cinq tests du dépôt sont tombés pour
+ * l'avoir fait, sur un obstacle tiré par une graine qu'ils ne connaissaient pas.
+ */
+function poserEnGarnison(etat, id, niveau) {
+  const bande = GRILLE.bandes.defense;
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee += 1) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+      const piece = { id, rangee, colonne, niveau };
+      if (problemesDeLaPoseDEffectif(etat, 'garnison', piece).length > 0) continue;
+      poserEffectif(etat, 'garnison', piece);
+      const liste = baseCourante(etat).garnison;
+      return liste[liste.length - 1];
+    }
+  }
+  throw new Error(`aucune case libre en garnison pour « ${id} »`);
+}
+
+/** Abîme une pièce de garnison d'une fraction de ses PV maximaux. */
+function abimerLaPiece(piece, part) {
+  piece.degatsMilli = Math.round(pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau) * part);
+  return piece;
+}
+
+/** Abîme le Complexe pour qu'il lui reste exactement cette part de ses PV. */
+function santeDuComplexe(etat, part) {
+  const pose = baseCourante(etat).disposition.find((b) => b.id === 'complexeDeDefense');
+  const max = BASE_BATIMENTS.complexeDeDefense.pv * facteurMilli(pose.niveau);
+  pose.degatsMilli = Math.round(max * (1 - part));
+  return pose;
+}
+
+/** Une durée en ticks, dite « 2 h 36 » — pour que les messages soient lisibles. */
+function enHeuresMinutes(ticks) {
+  const minutes = Math.round(ticks / (TICKS_PAR_HEURE / 60));
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
+}
+
+test('RETOUR T1 — une pièce au niveau du Complexe revient en UNE HEURE, pas avant', () => {
+  const etat = baseAvecComplexe(5);
+  const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
+  const degatsAvant = piece.degatsMilli;
+  assert.ok(degatsAvant > 0, 'le montage ne mesure rien : la pièce est intacte');
+
+  // Le tick stampe l'échéance ; elle vaut exactement une heure.
+  rattraperJeu(etat, 1);
+  assert.equal(piece.retourTick, etat.horloge.nbTicks + TICKS_PAR_HEURE,
+    'l\'échéance n\'est pas à une heure du tick qui l\'a posée');
+
+  // ⚠ UNE HEURE MOINS UN TICK : elle est encore à terre. Sans ce demi-pas, un
+  // code qui ramènerait TOUT DE SUITE passerait le test.
+  rattraperJeu(etat, TICKS_PAR_HEURE - 1);
+  assert.equal(piece.degatsMilli, degatsAvant, 'la pièce est revenue avant l\'heure');
+
+  // ⚠⚠ LE DERNIER PAS SE FAIT PAR `tickJeu`, ET C'EST UNE FALSIFICATION QUI L'A
+  // EXIGÉ. Écrit `rattraperJeu(etat, 1)`, ce test ne touchait QUE le chemin
+  // analytique : retirer l'appel du chemin DIRECT laissait la suite entièrement
+  // verte — mesuré, 43 pass / 0 fail — parce que `RETOUR T8` compare les deux
+  // chemins sur cinq minutes, où aucune échéance ne tombe jamais. Les deux
+  // chemins portent la même ligne ; il faut donc que les deux soient exercés.
+  tickJeu(etat);
+  assert.equal(piece.degatsMilli, 0, 'la pièce n\'est pas revenue à l\'heure dite');
+  assert.equal(piece.retourTick, null, 'l\'échéance n\'a pas été consommée');
+});
+
+test('RETOUR T2 — le dépassement suit `facteurMilli`, jamais une pente écrite en dur', () => {
+  const complexe = { niveau: 1, sante: 1 };
+  const ticks = ticksDeRetourDeLaPiece(complexe, 11);
+  assert.equal(enHeuresMinutes(ticks), '2 h 36');
+
+  // ⚠⚠ CE QUI DISCRIMINE, C'EST L'ARRONDI AU MILLIÈME. `facteurMilli` rend
+  // `Math.round(1000 × pente^n)`, soit 2 594 pour +10 ; une pente écrite en dur
+  // rendrait 2,5937424601 et neuf ticks de moins. Les deux valeurs sont à un
+  // dix-millième l'une de l'autre, et c'est précisément pour ça qu'il faut les
+  // nommer toutes les deux : un test « à 1 % près » ne verrait rien.
+  const enDur = Math.ceil(NIVEAU.penteHaute ** 10 * TICKS_PAR_HEURE);
+  assert.notEqual(ticks, enDur, 'la pente est écrite en dur : l\'arrondi au millième a disparu');
+  assert.equal(ticks - enDur, 9, 'l\'écart mesuré entre les deux lectures a bougé');
+
+  // ⚠ ET LE SECOND DISCRIMINANT EST LA TABLE ELLE-MÊME. Basculer `deuxRegimes`
+  // change la courbe des PV ; un `1,10` écrit dans ce module ne bougerait pas
+  // d'un tick. On rétablit dans un `finally` — c'est une table partagée.
+  const avant = NIVEAU.deuxRegimes;
+  try {
+    NIVEAU.deuxRegimes = true;
+    NIVEAU.penteBasse = 1.2;
+    assert.notEqual(ticksDeRetourDeLaPiece(complexe, 11), ticks,
+      'la courbe de `data/niveaux.js` ne commande pas le dépassement');
+  } finally {
+    NIVEAU.deuxRegimes = avant;
+    NIVEAU.penteBasse = 1.1;
+  }
+  assert.equal(ticksDeRetourDeLaPiece(complexe, 11), ticks, 'la table n\'a pas été rétablie');
+});
+
+test('RETOUR T3 — la pénalité touche ses deux points arbitrés, et elle est LINÉAIRE', () => {
+  // Point 1 : pleine santé, aucun dépassement — l'heure du modèle, exactement.
+  assert.equal(ticksDeRetourDeLaPiece({ niveau: 5, sante: 1 }, 5), TICKS_PAR_HEURE);
+
+  // ⚠ POINT 2 : LE COMPLEXE À 1 PV, ET LA SANTÉ SE MESURE, ELLE NE S'ÉCRIT PAS.
+  const etat = baseAvecComplexe(1);
+  const pose = baseCourante(etat).disposition.find((b) => b.id === 'complexeDeDefense');
+  const max = BASE_BATIMENTS.complexeDeDefense.pv * facteurMilli(pose.niveau);
+  pose.degatsMilli = max - 1000; // il lui reste UN point de vie
+  const complexe = complexeDeLaBase(baseCourante(etat));
+  const ticks = ticksDeRetourDeLaPiece(complexe, 1);
+  const plancher = RETOUR_GARNISON.heuresAuPlancher * TICKS_PAR_HEURE;
+  assert.ok(Math.abs(ticks - plancher) < TICKS_PAR_HEURE / 60,
+    `le plancher est à ${enHeuresMinutes(ticks)} au lieu de `
+    + `${RETOUR_GARNISON.heuresAuPlancher} h — plus d'une minute d'écart`);
+
+  // ⚠⚠ ET LA FORME EST LINÉAIRE, PAR ARBITRAGE D'ETHAN DU 06/09 : « la courbe
+  // choisie est géométrique. je préfère linéaire. » Les deux formes touchent
+  // EXACTEMENT les deux points ci-dessus ; c'est le MILIEU qui les départage, et
+  // ce test ne vaut que par cette moisié-là. À mi-vie : linéaire 12 h 30,
+  // géométrique 4 h 54.
+  const miVie = ticksDeRetourDeLaPiece({ niveau: 1, sante: 0.5 }, 1);
+  assert.equal(enHeuresMinutes(miVie), '12 h 30');
+  const geometrique = Math.ceil(RETOUR_GARNISON.heuresAuPlancher ** 0.5 * TICKS_PAR_HEURE);
+  assert.notEqual(miVie, geometrique, 'la pénalité est restée géométrique');
+  assert.equal(enHeuresMinutes(geometrique), '4 h 54');
+
+  // Et la droite passe bien par ses quarts — trois points, pas un.
+  assert.equal(enHeuresMinutes(ticksDeRetourDeLaPiece({ niveau: 1, sante: 0.75 }, 1)), '6 h 45');
+  assert.equal(enHeuresMinutes(ticksDeRetourDeLaPiece({ niveau: 1, sante: 0.25 }, 1)), '18 h 15');
+});
+
+test('RETOUR T4 — les deux facteurs se MULTIPLIENT, ils ne se remplacent pas', () => {
+  const depassementSeul = ticksDeRetourDeLaPiece({ niveau: 1, sante: 1 }, 11);
+  const santeSeule = ticksDeRetourDeLaPiece({ niveau: 1, sante: 0.5 }, 1);
+  const melange = ticksDeRetourDeLaPiece({ niveau: 1, sante: 0.5 }, 11);
+
+  assert.equal(enHeuresMinutes(depassementSeul), '2 h 36');
+  assert.equal(enHeuresMinutes(santeSeule), '12 h 30');
+  assert.equal(enHeuresMinutes(melange), '32 h 26');
+
+  // ⚠ LES TROIS ASSERTIONS QUI COMPTENT SONT LES TROIS REFUS. Un code qui
+  // prendrait le MAX des deux rendrait 12 h 30, un code qui n'appliquerait que le
+  // dépassement rendrait 2 h 36, et une SOMME rendrait 15 h 06.
+  assert.notEqual(melange, depassementSeul);
+  assert.notEqual(melange, santeSeule);
+  assert.notEqual(melange, depassementSeul + santeSeule - TICKS_PAR_HEURE);
+});
+
+test('RETOUR T5 — chaque pièce a SON échéance, jamais une seule pour la garnison', () => {
+  const etat = baseAvecComplexe(5);
+  const pieces = [
+    abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5),
+    abimerLaPiece(poserEnGarnison(etat, 'casemate', 15), 0.5),
+    abimerLaPiece(poserEnGarnison(etat, 'ronce', 25), 0.5),
+  ];
+  rattraperJeu(etat, 1);
+
+  const echeances = pieces.map((p) => p.retourTick);
+  assert.equal(new Set(echeances).size, 3,
+    `un agrégat les ferait revenir ensemble : ${echeances.join(' · ')}`);
+  // Elles CROISSENT avec le niveau, c'est le sens du dépassement.
+  assert.ok(echeances[0] < echeances[1] && echeances[1] < echeances[2]);
+
+  // Et elles reviennent une par une, dans cet ordre-là.
+  rattraperJeu(etat, echeances[0] - etat.horloge.nbTicks);
+  assert.deepEqual(pieces.map((p) => p.degatsMilli > 0), [false, true, true]);
+  rattraperJeu(etat, echeances[1] - etat.horloge.nbTicks);
+  assert.deepEqual(pieces.map((p) => p.degatsMilli > 0), [false, false, true]);
+  rattraperJeu(etat, echeances[2] - etat.horloge.nbTicks);
+  assert.deepEqual(pieces.map((p) => p.degatsMilli > 0), [false, false, false]);
+});
+
+test('RETOUR T6 — sans Complexe, la garnison ne revient JAMAIS', () => {
+  const etat = baseAvecComplexe(null);
+  const pieces = [
+    abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5),
+    abimerLaPiece(poserEnGarnison(etat, 'casemate', 5), 1),
+  ];
+  assert.equal(complexeDeLaBase(baseCourante(etat)), null,
+    'le montage ne mesure rien : un Complexe traîne dans la disposition');
+  const avant = pieces.map((p) => p.degatsMilli);
+
+  // Cent heures — trois fois le pire retour que le barème puisse produire.
+  rattraperJeu(etat, 100 * TICKS_PAR_HEURE);
+  assert.deepEqual(pieces.map((p) => p.degatsMilli), avant, 'quelque chose a ramené la garnison');
+  assert.deepEqual(pieces.map((p) => p.retourTick ?? null), [null, null],
+    'une échéance a été posée sans Complexe pour la tenir');
+
+  // ⚠ ET L'ÉCRAN DOIT POUVOIR LE DIRE : trois états, pas deux. « sans-retour »
+  // n'est pas « bientôt », et un `null` unique les confondrait.
+  assert.equal(retourDeLaPiece(baseCourante(etat), pieces[0], etat.horloge.nbTicks).etat,
+    'sans-retour');
+
+  // Poser le Complexe rouvre le retour, et le tick suivant stampe.
+  baseCourante(etat).disposition.push({
+    id: 'complexeDeDefense', rangee: 13, colonne: 7, niveau: 5, degatsMilli: 0,
+  });
+  baseCourante(etat).economie.residus.push({});
+  rattraperJeu(etat, 1);
+  assert.ok(pieces.every((p) => Number.isInteger(p.retourTick)),
+    'le Complexe posé n\'a pas rouvert le retour');
+});
+
+test('RETOUR T7 — le prorata se FIGE à l\'instant du raid', () => {
+  const etat = baseAvecComplexe(20);
+  const piece = poserEnGarnison(etat, 'merlon', 20);
+  santeDuComplexe(etat, 0.5);
+  const complexeAvant = complexeDeLaBase(baseCourante(etat));
+  assert.ok(Math.abs(complexeAvant.sante - 0.5) < 1e-9,
+    'le montage ne mesure rien : le Complexe est intact');
+
+  // Un vrai raid, celui de `RÉSERVE-BASE T9` — niveau 20, il abîme sans raser.
+  const rapport = subirUnRaid(etat, {
+    type: 'base', niveau: 20, rangee: 190, colonne: 16, saveur: null, instance: 0,
+  }, 5, { maxTicks: 900 });
+  assert.equal(rapport.rase, false, 'le montage ne mesure rien : la base a été rasée');
+  assert.ok(piece.degatsMilli > 0, 'le montage ne mesure rien : la garnison est intacte');
+  const echeance = piece.retourTick;
+  assert.ok(Number.isInteger(echeance), 'le raid n\'a pas stampé la pièce qu\'il vient d\'abîmer');
+
+  // On répare le Complexe : l'attente en cours NE BOUGE PAS.
+  crediterLesReserves(etat, plafondDeLaReserveDesBatiments(baseCourante(etat)));
+  const index = baseCourante(etat).disposition.findIndex((b) => b.id === 'complexeDeDefense');
+  reparerUnBatiment(etat, index);
+  assert.equal(complexeDeLaBase(baseCourante(etat)).sante, 1, 'le Complexe n\'est pas réparé');
+  rattraperJeu(etat, 1);
+  assert.equal(piece.retourTick, echeance,
+    'réparer le Complexe a raccourci une attente déjà en cours');
+
+  // ⚠ ET LA PROCHAINE FOIS, ELLE COMPTE. Une pièce abîmée APRÈS la réparation
+  // reçoit l'échéance du Complexe entier — sans quoi ce test passerait aussi sur
+  // un code qui ignorerait la santé du Complexe.
+  const neuve = abimerLaPiece(poserEnGarnison(etat, 'casemate', 20), 0.5);
+  rattraperJeu(etat, 1);
+  assert.equal(neuve.retourTick - etat.horloge.nbTicks, TICKS_PAR_HEURE,
+    'la santé rétablie du Complexe ne sert pas au raid suivant');
+});
+
+test('RETOUR T8 — les deux chemins d\'avancement rendent la même garnison, RAID COMPRIS', () => {
+  const etat = baseAvecComplexe(20);
+  for (const [id, niveau] of [['merlon', 20], ['casemate', 25], ['ronce', 30]]) {
+    poserEnGarnison(etat, id, niveau);
+  }
+  // ⚠⚠ LA BASE MONTE EN PAYS ENNEMI, ET SANS ÇA LE TEST NE MESURE RIEN. À la
+  // rangée 295 — le départ — la garde du peuplement écarte toute base de
+  // l'Ouvrage de quinze cases : `basesAttaquantes` rend une liste VIDE et aucun
+  // raid ne peut tomber dans la fenêtre. À la rangée 200 la strate vaut 17, donc
+  // `RAID_OUVRAGE.niveauMinimal` est franchi. C'est le geste que le témoin de
+  // BASES-0 fait déjà, pour la même raison et avec le même commentaire.
+  //
+  // ⚠ `poserLaBaseSur` ET NON `deplacerLaBase` : on veut le terrain de jeu, pas
+  // le délai de déplacement.
+  poserLaBaseSur(etat, 200, 16);
+
+  // On amène la partie à la veille d'un raid, comme le témoin de BASES-0.
+  const minuteCourante = minuteDeLHorloge(etat.horloge.nbTicks);
+  const prochaine = prochaineMinuteDeRaid(
+    etat.graine, basesAttaquantes(etat), minuteCourante, minuteCourante + 1440,
+  );
+  assert.notEqual(prochaine, null,
+    'le montage ne mesure rien : aucune base de l\'Ouvrage n\'attaque dans les 24 h');
+  if (prochaine > minuteCourante + 1) {
+    rattraperJeu(etat, (prochaine - minuteCourante - 1) * TICKS_PAR_MINUTE);
+  }
+
+  const json = serialiser(etat, 3_000_000);
+  const parRattrapage = charger(json, 3_000_000);
+  const parTicks = charger(json, 3_000_000);
+  const fenetre = 5 * TICKS_PAR_MINUTE;
+  rattraperJeu(parRattrapage, fenetre);
+  for (let i = 0; i < fenetre; i += 1) tickJeu(parTicks);
+
+  // ⚠⚠ LA PREUVE QUE LA FENÊTRE PORTE BIEN UN RAID. Sans elle, ce test est VERT
+  // sur n'importe quel code : les deux chemins ne divergent qu'à un raid, et un
+  // segment sans raid rend l'égalité gratuite.
+  const subis = parRattrapage.rapports.filter((r) => r.sens === 'defense');
+  assert.ok(subis.length > 0, 'aucun raid dans la fenêtre : le test ne prouve rien');
+  const stampees = baseCourante(parRattrapage).garnison
+    .filter((p) => Number.isInteger(p.retourTick));
+  assert.ok(stampees.length > 0, 'le raid n\'a abîmé aucune pièce : le test ne prouve rien');
+
+  assert.deepEqual(
+    baseCourante(parTicks).garnison, baseCourante(parRattrapage).garnison,
+    'les deux chemins ne rendent pas la même garnison',
+  );
+  assert.equal(serialiser(parTicks, 4_000_000), serialiser(parRattrapage, 4_000_000),
+    'les deux chemins ne rendent pas le même état',
+  );
+});
+
+test('RETOUR T9 — le filet stampe ce qui n\'est pas stampé', () => {
+  const etat = baseAvecComplexe(5);
+  const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
+  rattraperJeu(etat, 1);
+  const echeance = piece.retourTick;
+  assert.ok(Number.isInteger(echeance));
+
+  // On lui retire son échéance — l'état d'une pièce abîmée par un chemin qui ne
+  // connaîtrait pas le Complexe, et celui d'une sauvegarde d'avant ce lot.
+  delete piece.retourTick;
+  rattraperJeu(etat, 1);
+  assert.equal(piece.retourTick, etat.horloge.nbTicks + TICKS_PAR_HEURE,
+    'le filet n\'a pas rattrapé une pièce abîmée sans échéance');
+
+  // ⚠ ET IL NE STAMPE QUE CE QUI EST ABÎMÉ. Une pièce intacte n'a pas d'échéance,
+  // sans quoi la garnison entière en porterait une et la sauvegarde grossirait
+  // d'autant.
+  const intacte = poserEnGarnison(etat, 'casemate', 5);
+  rattraperJeu(etat, 1);
+  assert.equal(intacte.retourTick, undefined, 'une pièce intacte a reçu une échéance');
+});
+
+test('RETOUR T10 — la migration ne calcule AUCUNE échéance, et le numéro bouge', () => {
+  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, UNE SEULE FOIS.
+  // Elle vivait sous `RÉSERVE-BASE T11` ; elle est ici depuis le lot COMPLEXE.
+  assert.equal(SAVE_VERSION, 26, 'le bump de la version des sauvegardes a été oublié');
+
+  const etat = baseAvecComplexe(5);
+  abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
+  const v26 = JSON.parse(serialiser(etat, 6_000_000));
+
+  // Une vraie v25 : la pièce est abîmée et ne porte aucune échéance.
+  const v25 = structuredClone(v26);
+  v25.version = 25;
+  for (const b of v25.bases) for (const p of b.garnison) delete p.retourTick;
+
+  const migre = migrer(structuredClone(v25));
+  assert.equal(migre.version, SAVE_VERSION);
+  assert.equal(migre.bases[0].garnison[0].retourTick, undefined,
+    'la migration a inventé une échéance');
+
+  // ⚠ ET C'EST LE TICK QUI STAMPE, AVEC LE COMPLEXE D'AUJOURD'HUI. On charge, on
+  // monte le Complexe, on avance : l'échéance suit le NOUVEAU niveau, ce qu'une
+  // échéance calculée à la migration n'aurait pas pu faire.
+  const relu = charger(JSON.stringify(v25), 6_000_000);
+  const laBase = baseCourante(relu);
+  laBase.disposition.find((b) => b.id === 'complexeDeDefense').niveau = 1;
+  rattraperJeu(relu, 1);
+  const piece = laBase.garnison[0];
+  assert.equal(
+    piece.retourTick - relu.horloge.nbTicks,
+    ticksDeRetourDeLaPiece({ niveau: 1, sante: 1 }, 5),
+    'l\'échéance ne suit pas le Complexe d\'aujourd\'hui',
+  );
+
+  // ⚠ ET UNE ÉCHÉANCE MALFORMÉE FAIT LEVER AU CHARGEMENT — un tick négatif
+  // ramènerait la pièce à un instant qui n'existe pas.
+  const casse = structuredClone(v26);
+  casse.bases[0].garnison[0].retourTick = -3;
+  assert.throws(() => charger(JSON.stringify(casse), 6_000_000), /retour|garnison/i);
+});
+
+test('RETOUR T11 — `1 + dépassement` ne sort jamais de la table des niveaux', () => {
+  // Le pire cas possible : une pièce au plafond, un Complexe au niveau 1.
+  const etat = baseAvecComplexe(1);
+  const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', NIVEAU.plafond), 0.5);
+  assert.doesNotThrow(() => rattraperJeu(etat, 1));
+  assert.ok(Number.isInteger(piece.retourTick), 'le pire cas n\'a pas été stampé');
+
+  // ⚠ ET LA BORNE EST NOMMÉE PLUTÔT QU'ESPÉRÉE : un dépassement fabriqué qui la
+  // franchit LÈVE, avec les deux niveaux dans le message.
+  assert.throws(
+    () => ticksDeRetourDeLaPiece({ niveau: 0, sante: 1 }, NIVEAU.plafond),
+    /dépassement/,
+  );
+  // Le dépassement maximum ATTEIGNABLE, lui, passe.
+  assert.doesNotThrow(() => ticksDeRetourDeLaPiece({ niveau: 1, sante: 1 }, NIVEAU.plafond));
 });

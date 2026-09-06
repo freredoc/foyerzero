@@ -816,6 +816,97 @@ export const REPARATION_BASE_JOUEUR = {
 };
 
 // ---------------------------------------------------------------------------
+// Le retour de la garnison — ce que le Complexe de défense commande
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LE COMPLEXE DE DÉFENSE NE COMMANDAIT RIEN JUSQU'AU 06/09. Il se
+// construisait, se montait, se payait, et `complexeDeDefense` n'apparaissait
+// dans AUCUN module de `src/sim/` — mesuré, pas supposé.
+// `MODELE-REPARATION-1.md` §3 lui confie pourtant la garnison entière :
+// « Le Complexe de défense répare TOUT, GRATUITEMENT, en une heure. Le temps ne
+// descend jamais sous une heure, mais il peut être supérieur si le niveau des
+// unités en défense dépasse celui du Complexe. » C'est cette table-ci qui porte
+// enfin les deux nombres qui manquaient.
+//
+// ⚠⚠ ET C'EST GRATUIT, DONC IL N'Y A NI RÉSERVE NI RESSOURCE. Rien ici ne
+// ressemble à `REPARATION_BASE_JOUEUR` au-dessus : la garnison ne se paie pas,
+// ne consomme aucun réservoir de temps, et le joueur n'a aucun geste à faire.
+// Ce sont deux mécanismes distincts, et les fondre serait la faute — la table
+// du dessus dit « ce que le joueur ACHÈTE », celle-ci « ce que le temps REND ».
+//
+//     dépassement = max(0, niveau de la pièce − niveau du Complexe)
+//     santé       = PV restants du Complexe / ses PV maximaux
+//     durée       = heuresDeBase × facteurMilli(1 + dépassement)/1000
+//                                × pénalité(santé)
+//
+// ⚠⚠ `facteurMilli` EST APPELÉE, JAMAIS RECOPIÉE. Le modèle dit « la même
+// formule que la croissance des unités de défense » : l'appeler fait suivre
+// `deuxRegimes`, `niveauBascule` et `plafond` de `data/niveaux.js` sans qu'une
+// seconde pente existe nulle part. Écrire `1,10` ici serait la faute, et elle
+// serait invisible tant que personne ne rebasculerait les deux régimes.
+//
+// ⚠ ET C'EST POUR ÇA QUE LA RÈGLE EST PAR PIÈCE, JAMAIS EN AGRÉGAT.
+// `facteurMilli` REFUSE un niveau non entier ; `niveauDeLaDefense` rend une
+// MOYENNE en dixièmes, qui ne l'est pas. Une garnison mêlée revient donc à
+// trois instants différents, ce qui est aussi la lecture juste : c'est la pièce
+// de haut niveau qui paie son dépassement, pas ses voisines.
+//
+// ⚠⚠ LA PÉNALITÉ EST LINÉAIRE, ET C'EST UN ARBITRAGE D'ETHAN DU 06/09 QUI
+// RENVERSE LA PROPOSITION DU BRIEF. Celui-ci proposait une forme GÉOMÉTRIQUE —
+// `(heuresAuPlancher / heuresDeBase) ** (1 − santé)` — au motif que « tout l'est
+// dans ce jeu » (1,09 · 1,10 · 1,15 · 1,32), et un plancher à 72 h. Ethan :
+// « la courbe choisie est géométrique. je préfère linéaire. 24h, pas 72h ».
+//
+//     pénalité(santé) = 1 + (heuresAuPlancher / heuresDeBase − 1) × (1 − santé)
+//
+// ⚠ CE QUE LE CHANGEMENT DE FORME DÉPLACE SE MESURE, ET IL PORTE SUR LE MILIEU,
+// PAS SUR LES BORNES. Les deux formes touchent EXACTEMENT les deux points
+// arbitrés — 1 h à pleine santé, le plancher à 1 PV — et ne diffèrent qu'entre
+// les deux. À plancher égal de 24 h : géométrique 4 h 54 à mi-vie, linéaire
+// 12 h 30. La linéaire punit donc beaucoup plus tôt une avarie légère, ce qui
+// est le sens de l'arbitrage.
+//
+// LES DEUX TABLES, MESURÉES (`RETOUR T3` et `RETOUR T4` les rejouent) :
+//
+//     dépassement, Complexe entier        Complexe abîmé, dépassement nul
+//       +0  →  1 h 00                       100 %  →   1 h 00
+//       +5  →  1 h 37                        75 %  →   6 h 45
+//      +10  →  2 h 36                        50 %  →  12 h 30
+//      +20  →  6 h 44                        25 %  →  18 h 15
+//      +30  → 17 h 27                         1 PV →  23 h 59
+//
+// Les deux se multiplient : une pièce à +10 sur un Complexe à mi-vie revient en
+// 32 h 26.
+//
+// ⚠ ET LA DERNIÈRE LIGNE N'EST PAS 24 h 00 TOUT ROND, PARCE QUE 1 PV N'EST PAS
+// ZÉRO. Le plancher exact est atteint à santé NULLE ; à 1 PV sur les 2 500 d'un
+// Complexe de niveau 1, la santé vaut 0,0004 et l'attente 23 h 59 min 27 s —
+// trente-trois secondes sous les 24 h arbitrées, et l'écart se resserre encore
+// à mesure que le Complexe monte de niveau, ses PV maximaux grandissant.
+//
+// ⚠⚠ SANS COMPLEXE CONSTRUIT, LA GARNISON NE REVIENT JAMAIS — ETHAN, 05/09.
+// Ce n'est ni un défaut ni un cas limite, c'est la règle, et c'est pourquoi
+// `complexeDeLaBase` rend `null` et jamais un niveau zéro : `null` dit un fait
+// de JEU que l'écran doit pouvoir ANNONCER, là où un zéro se lirait comme un
+// retour infiniment lent. L'avertissement est à l'écran, sous la bande Défense.
+//
+// ⚠ LES DEUX NOMBRES SONT POSÉS POUR ÊTRE JOUÉS ET CHANGÉS. `heuresDeBase` est
+// la seule des deux que le modèle dicte (« en une heure ») ; `heuresAuPlancher`
+// est un arbitrage, et il a déjà bougé une fois.
+export const RETOUR_GARNISON = {
+  // ⚠ LE BÂTIMENT EST NOMMÉ ICI, comme `REPARATION_BASE_JOUEUR.indexeeSur`
+  // nomme le Chantier et `POINTS_ARMEE` le QG. L'écrire en dur dans `sim/`
+  // ferait la seconde vérité que ce champ existe pour éviter.
+  indexeeSur: 'complexeDeDefense',
+
+  /** À pleine santé et sans dépassement — le « en une heure » du modèle. */
+  heuresDeBase: 1,
+
+  /** Le Complexe à 1 PV. Arbitré à 24 h par Ethan le 06/09 (72 h auparavant). */
+  heuresAuPlancher: 24,
+};
+
+// ---------------------------------------------------------------------------
 // Coûts de construction
 // ---------------------------------------------------------------------------
 //

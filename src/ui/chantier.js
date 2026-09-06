@@ -32,7 +32,7 @@ import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
 import {
   BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
-  ORDRE_PALETTE,
+  ORDRE_PALETTE, RETOUR_GARNISON,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { majorationsDeProduction } from '../sim/poi.js';
@@ -83,6 +83,7 @@ import {
   coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments,
   problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
   plafondDeLaReserveDesBatiments, direLaDuree,
+  complexeDeLaBase, retourDeLaPiece,
 } from '../sim/reparation.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
@@ -1737,8 +1738,95 @@ export function detailDeLaDefense(etat, index) {
   return {
     nom: ligne.nom.joueur,
     niveau: piece.niveau,
-    detail: `Niv. ${piece.niveau} · ${formaterEntier(ligne.points)} pts`,
+    detail: `Niv. ${piece.niveau} · ${formaterEntier(ligne.points)} pts`
+      + motDuRetour(laBase, piece, etat.horloge.nbTicks),
   };
+}
+
+/**
+ * Ce que la bande Défense dit de sa garnison — un ÉTAT, jamais un refus.
+ *
+ * ⚠⚠ PURE ET EXPORTÉE, PARCE QUE C'EST LA SEULE MOITIÉ ÉPROUVABLE. Le dépôt n'a
+ * ni jsdom ni navigateur (CLAUDE.md §3) : la décision — quel texte, et
+ * avertit-on ? — se sépare donc du rendu, et `ecrireLEtatDeLaGarnison` ne fait
+ * plus que poser `hidden` et recopier `texte`. C'est la discipline de tout ce
+ * fichier depuis le premier jour : formatage pur, puis rendu au DOM.
+ *
+ * ⚠⚠ SANS COMPLEXE DE DÉFENSE, LA GARNISON ABÎMÉE NE REVIENT JAMAIS — Ethan,
+ * 05/09. C'est la règle, pas un cas limite, et un joueur qui ne la connaît pas
+ * verra ses pièces rester à terre sans comprendre ce qui manque. Le
+ * `complexeDeLaBase === null` du moteur est exactement ce fait-là : `null` et non
+ * un niveau zéro, pour que l'écran puisse l'ANNONCER au lieu d'afficher une durée
+ * qui n'arriverait jamais.
+ *
+ * ⚠ CE N'EST PAS UN REFUS. Il ne passe donc ni par `avis()` ni par `toast()` :
+ * rien n'est refusé, le joueur n'a rien demandé, et le rouge des refus le ferait
+ * chercher ce qu'il a cassé.
+ *
+ * ⚠ LE NOM DU BÂTIMENT EST LU, PAS ÉCRIT. `RETOUR_GARNISON.indexeeSur` le nomme
+ * depuis `data/base.js` et `BASE_BATIMENTS` porte son libellé : l'écrire en
+ * toutes lettres ferait la seconde vérité que ce champ existe pour éviter.
+ *
+ * @param {object} etat
+ * @returns {{ avertissement: boolean, enAttente: number, texte: string }}
+ */
+export function etatDeLaGarnison(etat) {
+  const laBase = baseCourante(etat);
+  const nom = BASE_BATIMENTS[RETOUR_GARNISON.indexeeSur].nom.joueur;
+  const complexe = complexeDeLaBase(laBase);
+  if (complexe === null) {
+    return {
+      avertissement: true,
+      enAttente: 0,
+      texte: `Sans ${nom}, les pièces abîmées de la garnison ne reviennent jamais.`,
+    };
+  }
+  const maintenant = etat.horloge.nbTicks;
+  // ⚠ ON DEMANDE AU MOTEUR, ON NE RECALCULE PAS. `retourDeLaPiece` porte les
+  // trois états et l'échéance ; refaire la soustraction ici donnerait un second
+  // compte du même nombre, et le premier écart se lirait comme un bogue.
+  const attentes = laBase.garnison
+    .map((piece) => retourDeLaPiece(laBase, piece, maintenant))
+    .filter((r) => r.etat === 'en-attente')
+    .map((r) => r.ticks)
+    .sort((a, b) => a - b);
+  const tete = `${nom} niv. ${formaterEntier(complexe.niveau)}`;
+  if (attentes.length === 0) {
+    return { avertissement: false, enAttente: 0, texte: `${tete} — garnison intacte.` };
+  }
+  return {
+    avertissement: false,
+    enAttente: attentes.length,
+    texte: attentes.length === 1
+      ? `${tete} — 1 pièce en retour dans ${direLaDuree(attentes[0])}.`
+      : `${tete} — ${attentes.length} pièces en retour,`
+        + ` la première dans ${direLaDuree(attentes[0])}.`,
+  };
+}
+
+/**
+ * Ce qu'une pièce de garnison dit de son retour — vide si elle est intacte.
+ *
+ * ⚠⚠ UN MANQUE S'ARRONDIT VERS LE HAUT, ET C'EST LE DÉFAUT DE `direLaDuree`.
+ * Annoncer « 2 h » pour 2 h 50 ferait revenir le joueur devant une pièce encore
+ * à terre. C'est l'inverse de la réserve des bâtiments, qui est un STOCK et
+ * s'arrondit vers le bas.
+ *
+ * ⚠ « SANS RETOUR » N'EST PAS « BIENTÔT ». Les trois états de `retourDeLaPiece`
+ * se distinguent ici comme ils se distinguent là-bas : une pièce sans Complexe
+ * ne revient JAMAIS, et un tiret ou une durée absente se lirait « on ne sait
+ * pas ».
+ *
+ * @param {object} laBase
+ * @param {object} piece
+ * @param {number} maintenant
+ * @returns {string} vide, ou un fragment qui commence par un séparateur
+ */
+function motDuRetour(laBase, piece, maintenant) {
+  const retour = retourDeLaPiece(laBase, piece, maintenant);
+  if (retour.etat === 'intacte') return '';
+  if (retour.etat === 'sans-retour') return ' · abîmée, sans retour';
+  return ` · retour dans ${direLaDuree(retour.ticks)}`;
 }
 
 /**
@@ -1961,17 +2049,23 @@ export const TERRAINS = {
     // DIT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton au
     // lieu de le rendre inerte — « un indice n'est pas une interdiction »
     // (CLAUDE.md §4).
-    //   `reparer`  — ET CE TROU-LÀ NE SE COMBLERA JAMAIS PAR UN BOUTON. Le
-    //     commentaire d'hier annonçait qu'il était « le prochain à se
-    //     combler » : il se trompait de mécanique, pas de constat.
+    //   `reparer`  — ET CE TROU-LÀ NE SE COMBLERA JAMAIS PAR UN BOUTON. La
+    //     conclusion tient, et elle a UNE VRAIE RAISON DEPUIS LE LOT COMPLEXE :
     //     `MODELE-REPARATION-1.md` §3 dit que le Complexe de défense répare la
-    //     garnison GRATUITEMENT, TOUT SEUL, en une heure — et
-    //     `reparerLaGarnison` de `sim/raid-ouvrage.js` le fait déjà après
-    //     chaque raid. Il n'y a donc rien à brancher : le geste du joueur
+    //     garnison GRATUITEMENT, TOUT SEUL, et `ramenerLaGarnison` de
+    //     `sim/reparation.js` le fait depuis le 06/09. Le geste du joueur
     //     n'existe pas dans cette moitié du modèle, et un bouton qui réparerait
     //     à la demande inventerait une seconde règle à côté de celle qui tourne.
-    //     Le `null` reste, et il dit « pas de geste ici », plus « pas encore de
-    //     moteur ».
+    //
+    //     ⚠⚠ ET LA RAISON QUE CE COMMENTAIRE DONNAIT ÉTAIT FAUSSE, IL FAUT LE
+    //     DIRE. Il créditait `reparerLaGarnison` de `sim/raid.js` d'avoir « déjà
+    //     fait » ce travail « après chaque raid » : cette fonction-là est le
+    //     module `autoReparation` d'une PIÈCE — elle rend un pour-cent des
+    //     dégâts, sur-le-champ, aux seules pièces qui portent le module. Elle ne
+    //     connaît pas le Complexe, et jusqu'au lot COMPLEXE le Complexe ne
+    //     commandait rien du tout : `complexeDeDefense` n'apparaissait dans aucun
+    //     module de `sim/`. Le `null` avait raison pour une raison qui n'existait
+    //     pas encore.
     //
     // ⚠⚠ `ameliorer` A PERDU SON `null` LE 03/09, ET LE COMMENTAIRE QUI DISAIT
     // LE CONTRAIRE EST PARTI AVEC LUI. Il affirmait que « rien dans `sim/` ne
@@ -3037,6 +3131,11 @@ export function initialiserEcranChantier(doc, {
     // évènement de défilement, et deux écrivains de la même bascule
     // divergeraient à la première inattention.
     for (const [cle, voile] of voiles) voile.hidden = cle === cleBande;
+    // ⚠ ICI AUSSI, ET PAS SEULEMENT DANS `rafraichir`. Le défilement change de
+    // bande sans qu'un tick soit passé : sans cette ligne, l'avertissement
+    // apparaîtrait avec un dixième de seconde de retard — et resterait à l'écran
+    // ce même dixième de seconde après qu'on a quitté la bande.
+    ecrireLEtatDeLaGarnison();
 
     // ⚠⚠ LA PALETTE SUIT LE TERRAIN, ET SANS CETTE LIGNE ELLE NE LE SUIVAIT
     // PAS. `bandeCourante` bouge à chaque évènement de défilement ; la palette,
@@ -3864,6 +3963,39 @@ export function initialiserEcranChantier(doc, {
   }
 
   /**
+   * Écrit l'état de la garnison — et d'abord l'avertissement qui compte.
+   *
+   * ⚠⚠ SANS COMPLEXE DE DÉFENSE, LA GARNISON ABÎMÉE NE REVIENT JAMAIS — Ethan,
+   * 05/09. C'est la règle, pas un cas limite, et un joueur qui ne la connaît pas
+   * verra ses pièces rester à terre sans comprendre ce qui manque. Le
+   * `complexeDeLaBase === null` du moteur est exactement ce fait-là : `null` et
+   * non un niveau zéro, pour que l'écran puisse l'ANNONCER au lieu d'afficher une
+   * durée qui n'arriverait jamais.
+   *
+   * ⚠ SOUS LA BANDE DÉFENSE, ET NULLE PART AILLEURS. Un avertissement sur la
+   * garnison affiché pendant qu'on compose ses bâtiments parlerait d'un écran
+   * qu'on ne regarde pas ; et il n'apparaît pas non plus sur l'Offense, dont les
+   * unités se réparent contre de la scorie et n'ont rien à voir avec le Complexe.
+   *
+   * ⚠ CE N'EST PAS UN REFUS. Il ne passe donc ni par `avis()` ni par `toast()` :
+   * rien n'est refusé, le joueur n'a rien demandé, et le rouge des refus le ferait
+   * chercher ce qu'il a cassé.
+   */
+  function ecrireLEtatDeLaGarnison() {
+    const ligne = $('chantier-garnison');
+    if (ligne === null) return;
+    // ⚠ L'ÉCRAN SE PEINT AVANT QUE L'ÉTAT SOIT LÀ — `etatCourant` vaut `null` au
+    // câblage et pendant un chargement raté. On regarde, plutôt que d'appeler à
+    // l'aveugle : même précaution qu'`ecrireLaReserve`.
+    if (etatCourant === null || bandeCourante !== 'defense') {
+      ligne.hidden = true;
+      return;
+    }
+    ligne.hidden = false;
+    ligne.textContent = etatDeLaGarnison(etatCourant).texte;
+  }
+
+  /**
    * Désarme l'action courante et efface son mot.
    *
    * ⚠ LES TROIS LIGNES ÉTAIENT ÉCRITES QUATRE FOIS À L'IDENTIQUE, ET LE LOT
@@ -4409,8 +4541,15 @@ export function initialiserEcranChantier(doc, {
         // ⚠ ET C'EST LA MÊME LIGNE POUR LES DEUX BANDES, sans un `=== 'defense'`
         // écrit à la main : une pièce de garnison porte `degatsMilli` comme un
         // bâtiment, et deux gardes de ce fichier refusent déjà qu'une bande soit
-        // reconnue à son nom. La garnison se répare toute seule et son avarie ne
-        // dure qu'une heure — la marquer reste vrai pendant cette heure-là.
+        // reconnue à son nom.
+        //
+        // ⚠⚠ ET « SON AVARIE NE DURE QU'UNE HEURE » ÉTAIT FAUX, DEUX FOIS. Le
+        // commentaire d'hier disait que « la garnison se répare toute seule »
+        // en une heure : jusqu'au lot COMPLEXE elle ne se réparait PAS DU TOUT,
+        // et depuis, l'heure est le cas le PLUS RAPIDE — un dépassement de
+        // niveau ou un Complexe abîmé la portent bien au-delà, et sans Complexe
+        // du tout la marque ne part jamais. C'est justement ce qui rend le
+        // marquage utile ici, et `#chantier-garnison` dit combien de temps.
         if ((b.degatsMilli ?? 0) > 0) jeton.classList.add('abimee');
         // ⚠ LE TERRAIN DÉCIDE, PAS LE NOM DE LA BANDE. `spriteDe` vaut `null`
         // tant qu'une famille n'est pas branchée : la bande garde alors son
@@ -4473,6 +4612,11 @@ export function initialiserEcranChantier(doc, {
     // Réparer armé ; hors de là, ce serait recalculer un devis sur quarante
     // bâtiments dix fois par seconde pour une ligne que personne ne voit.
     if ($('chantier-reparation')?.hidden === false) ecrireLaReserve();
+    // ⚠ ELLE SE REPEINT À CHAQUE PASSE, ET C'EST NÉCESSAIRE : la ligne porte un
+    // COMPTE À REBOURS, qui descend pendant qu'on le regarde. Elle sort d'elle-
+    // même dès que la bande courante n'est pas la Défense, donc la boucle ne
+    // parcourt la garnison que lorsqu'elle est à l'écran.
+    ecrireLEtatDeLaGarnison();
 
     // ⚠ LES POINTS D'ATTAQUE SE REPEIGNENT ICI, avec les trois ressources et
     // dans la même passe. Un second minuteur pour un seul nombre ferait deux

@@ -1383,6 +1383,10 @@
     background: #6A7658; color: #161914; font-size: 9px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.04em;
   }
+  /* ⚠ MÊME FORME QUE `#chantier-reparation` : `flex: 0 0 auto`, donc aucune
+     hauteur fixe à ajouter à la somme des six barres. Le ton est celui du
+     registre `mode` — un état, jamais un refus. */
+  #chantier-garnison { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #343A2C; color: #F5F3E8; }
   #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }
   /* ⚠ UN MODE N'EST PAS UNE ALERTE. « Mode DÉMOLIR : touchez le bâtiment à
      démolir » ne signale aucune panne : il rappelle ce que le prochain toucher
@@ -1980,6 +1984,20 @@
         <span id="chantier-reserve">—</span>
         <button type="button" id="chantier-tout-reparer">Tout réparer</button>
       </div>
+
+      <!-- ⚠⚠ L'ÉTAT DE LA GARNISON — lot COMPLEXE, 06/09. Ethan, 05/09 : sans
+           Complexe de défense construit, la garnison abîmée ne revient JAMAIS.
+           Ce n'est ni un défaut ni un cas limite, c'est la règle, et le joueur
+           doit en être averti LÀ OÙ IL REGARDE SA GARNISON — donc sous la bande
+           Défense, et nulle part ailleurs.
+           ⚠ CE N'EST PAS UN REFUS, C'EST UN ÉTAT. Il ne passe donc pas par
+           `#chantier-avis` et n'emprunte pas le rouge des refus : rien n'est
+           refusé, le joueur n'a rien demandé. Le ton est celui du registre
+           `mode`, métal sur métal.
+           ⚠ ET CE N'EST PAS UNE SEPTIÈME BARRE FIXE, pour la même raison que
+           `#chantier-reparation` juste au-dessus : `flex: 0 0 auto` et `hidden`
+           hors de la bande Défense. Le chrome fixe reste à 288 px. -->
+      <p id="chantier-garnison" hidden></p>
 
       <p id="chantier-avis" hidden></p>
 

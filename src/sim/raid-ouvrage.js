@@ -35,7 +35,6 @@ import { creerRng, tirer } from './rng.js';
 import { TICKS_PAR_HEURE } from './clock.js';
 import { RAID_OUVRAGE, TYPES_SITE, APRES_RAID, GEOGRAPHIE } from '../data/sites.js';
 import { BASE_BATIMENTS } from '../data/base.js';
-import { UNITES, DEFENSES } from '../data/combat.js';
 import {
   creerCombat, resoudre, facteurMilli, TICKS_MAX_COMBAT,
 } from './combat.js';
@@ -48,6 +47,7 @@ import { majorationsDeCombat } from './poi.js';
 import { poserLaBaseSur } from './deplacement.js';
 import { reparerLaGarnison, garderLeRapport } from './raid.js';
 import { baseCourante } from './base-courante.js';
+import { pvMaxDeLaPieceDeGarnisonMilli, ramenerLaGarnison } from './reparation.js';
 
 /**
  * Le sel du tirage de raid — le SIXIÈME du dépôt, et il était libre.
@@ -172,22 +172,13 @@ export function basesAttaquantes(etat) {
   return paires;
 }
 
-/**
- * Les PV maximaux d'une pièce de garnison du joueur, en milli-PV.
- *
- * ⚠ LES DEUX TABLES SONT INTERROGÉES, DANS L'ORDRE DE `forceDeLaDefense`. Une
- * garnison mêle des ouvrages fixes (`DEFENSES`) et des unités mobiles
- * (`UNITES`) : `rosterDefensif` en compose dix-sept à partir des deux, et une
- * liste de noms écrite à la main ici serait la première à diverger. C'est la
- * faute qui a fait un écran blanc le 30/08.
- */
-function pvMaxDeLaPiece(id, niveau) {
-  const ligne = DEFENSES[id] ?? UNITES[id];
-  if (ligne === undefined) {
-    throw new RangeError(`raid-ouvrage : « ${id} » n'est ni une défense ni une unité`);
-  }
-  return ligne.pv * facteurMilli(niveau);
-}
+// ⚠⚠ `pvMaxDeLaPiece` A DÉMÉNAGÉ DANS `sim/reparation.js` AU LOT COMPLEXE, ET
+// C'EST UN DÉPLACEMENT, PAS UNE SUPPRESSION. Le retour de la garnison a besoin
+// de la même grandeur — les PV maximaux d'une pièce, lus dans `DEFENSES` PUIS
+// dans `UNITES` — et deux fonctions qui interrogent les deux mêmes tables pour
+// le même nombre, c'est exactement ce que « une seule table fait foi par
+// grandeur » interdit. Elle s'appelle `pvMaxDeLaPieceDeGarnisonMilli` là-bas,
+// et pas une ligne de son corps n'a changé en route.
 
 /** Les PV maximaux d'un bâtiment du joueur, en milli-PV. */
 function pvMaxDuBatiment(id, niveau) {
@@ -288,7 +279,7 @@ export function montageDeLaBaseDuJoueur(
   const indicesDefenseurs = [];
   laBase.garnison.forEach((p, index) => {
     if (surObstacle.has(`${p.rangee}:${p.colonne}`)) return;
-    const pv = pvCourantsMilli(pvMaxDeLaPiece(p.id, p.niveau), p.degatsMilli);
+    const pv = pvCourantsMilli(pvMaxDeLaPieceDeGarnisonMilli(p.id, p.niveau), p.degatsMilli);
     const ligne = {
       id: p.id, rangee: p.rangee, colonne: p.colonne, niveau: p.niveau,
     };
@@ -607,7 +598,30 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   }
 
   // --- 4. l'auto-réparation de garnison, enfin atteignable ------------------
+  //
+  // ⚠ DEUX MÉCANISMES DISTINCTS SE SUIVENT ICI, ET ILS NE SE FUSIONNENT PAS.
+  // `reparerLaGarnison` est le module `autoReparation` d'une PIÈCE : il rend un
+  // pour-cent des dégâts, sur-le-champ, aux seules pièces qui le portent.
+  // `ramenerLaGarnison` juste en dessous est le COMPLEXE DE DÉFENSE : il rend
+  // tout, à l'échéance, à toute la garnison. Le premier réduit `degatsMilli`, le
+  // second pose `retourTick` — l'ordre compte donc, et il est le bon : l'échéance
+  // se calcule sur les dégâts qui RESTENT après l'auto-réparation.
   const autoReparationMilli = reparerLaGarnison(etat, laBase);
+
+  // --- 4 bis. l'échéance de retour se pose À L'INSTANT DU RAID ---------------
+  //
+  // ⚠⚠ ET C'EST CE QUI REND LES DEUX CHEMINS D'AVANCEMENT ÉQUIVALENTS, PAS UNE
+  // PRÉCAUTION. `rattraperJeu` découpe sa fenêtre aux instants des raids et
+  // n'appelle `ramenerLaGarnison` qu'aux BORNES de ses segments : une pièce
+  // abîmée ici y serait stampée au bout du segment SUIVANT — des heures plus
+  // tard — là où `tickJeu` la stampe au tick d'après. En appelant sur-le-champ,
+  // les deux chemins stampent au même instant, celui du raid. L'appel est
+  // idempotent, donc il ne coûte rien au chemin direct.
+  //
+  // ⚠ ET C'EST AUSSI CE QUI FIGE LE PRORATA. Le Complexe vient d'encaisser sa
+  // part du raid : la santé lue ici est celle d'après le combat, et réparer le
+  // Complexe plus tard ne raccourcira pas l'attente en cours.
+  ramenerLaGarnison(etat);
 
   // --- 5. le rapport rejoint les dix ---------------------------------------
   const rapport = {
