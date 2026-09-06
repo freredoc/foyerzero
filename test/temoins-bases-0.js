@@ -2231,3 +2231,202 @@ export const EMPREINTES_PAR_GRAINE_RETOUR_DEFENSES = {
   24: '4e15685391f48e64',
   25: '313cfc55d9b569e1',
 };
+
+/**
+ * Le lot COLONNE, 06/09 — CINQUANTE-CINQ COUPLES, TOUS À PARTIR DE LA PHASE 7,
+ * ET PAS UN AVANT.
+ *
+ * ⚠⚠ ET C'EST LA MESURE QUI DIT CE QUE LE LOT TOUCHE : LE COMBAT, ET RIEN
+ * D'AUTRE. La phase 7 est le premier raid ; les six premières sont identiques
+ * AU BIT. Trois règles entrent — l'arrêt sur la colonne de prédilection, le
+ * décalage latéral de la défense des deux camps, et une disposition de site qui
+ * cesse d'être la même à chaque graine —, et les trois ne s'exercent que dans
+ * une résolution de combat.
+ *
+ * ⚠⚠ SEPT SCALAIRES SONT IDENTIQUES SUR LES VINGT-CINQ GRAINES, ET C'EST CE QUI
+ * L'ÉTABLIT : gestes de construction, gestes d'armement, TAILLE DE LA
+ * SAUVEGARDE, cases atteignables, déplacement de la base, nombre de bases
+ * attaquantes, nombre de cibles et cible retenue. Ils restent gardés contre les
+ * captures d'AVANT ce lot, et aucun terme ne s'ajoute aux quatre existants.
+ *
+ * ⚠⚠ D'OÙ LA CONFIRMATION QUE `SAVE_VERSION` N'A PAS EU À BOUGER, ET ELLE EST
+ * MESURÉE PLUTÔT QUE CRUE. Une entité de combat porte désormais `colonneMilli`
+ * au lieu de `colonne` — mais une ENTITÉ n'est pas un état sauvegardé : elle
+ * naît de `creerCombat` et meurt avec le montage. La sauvegarde ne grandit donc
+ * pas d'un octet, sur les vingt-cinq graines, et l'assertion qui le dit n'a pas
+ * été touchée.
+ *
+ * ⚠ ET LA CHAÎNE SE LIT D'UN BOUT À L'AUTRE : la disposition d'un site change,
+ * donc ce qu'un raid y trouve, donc `sitesEntames` et `rapports` ; le butin
+ * change, donc `economie` ; l'armée revient autrement abîmée, donc `armee` ; et
+ * `recherche`, `satellites` et `satellitesDetruits` suivent ce que les raids
+ * détruisent.
+ */
+export const DEPLACES_PAR_COLONNE = {
+  p07_raidProcheApres: {
+    recherche: '118aa44b08dd566b',
+    sitesEntames: 'b1792a34f5592487',
+    rapports: 'e1637d1b1e739615',
+    armee: '0bb842b48f1417b1',
+    economie: 'a72e440fbf981258',
+    satellites: '4dedf188fb1ff661',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p08_100ticks: {
+    recherche: '118aa44b08dd566b',
+    sitesEntames: 'b1792a34f5592487',
+    rapports: 'e1637d1b1e739615',
+    armee: '0bb842b48f1417b1',
+    economie: '4b762ddff9453613',
+    satellites: '4dedf188fb1ff661',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p09_deplace: {
+    recherche: '118aa44b08dd566b',
+    sitesEntames: 'b1792a34f5592487',
+    rapports: 'e1637d1b1e739615',
+    armee: '0bb842b48f1417b1',
+    economie: '4b762ddff9453613',
+    satellites: '4dedf188fb1ff661',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p10_montee: {
+    recherche: '118aa44b08dd566b',
+    sitesEntames: 'b1792a34f5592487',
+    rapports: 'e1637d1b1e739615',
+    armee: '0bb842b48f1417b1',
+    economie: '4b762ddff9453613',
+    satellites: '4dedf188fb1ff661',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p11_raidOuvrageApres: {
+    recherche: 'bf6d7ca4f0323b9f',
+    sitesEntames: 'f4556d8a6e0e6627',
+    rapports: '2eee8394619206e9',
+    economie: '4b762ddff9453613',
+    satellites: '4dedf188fb1ff661',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p12_veilleDuRaid: {
+    recherche: 'bf6d7ca4f0323b9f',
+    sitesEntames: 'ad0bf67551f2f229',
+    rapports: '2eee8394619206e9',
+    economie: '4b762ddff9453613',
+    satellites: 'ded1076ae3e18a01',
+    prochaineInstanceSatellite: '2aea6cff861aee5b',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p13_apresLeRaid: {
+    recherche: 'bf6d7ca4f0323b9f',
+    sitesEntames: 'b951009f4c0c5718',
+    rapports: 'c64c1b82231a3a69',
+    disposition: 'bca28b0a5b4eeff4',
+    economie: 'c7daa052809f7229',
+    satellites: 'a8d0090639d61817',
+    prochaineInstanceSatellite: '1568ea968d4f56b2',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+  p14_sousLeFeu: {
+    recherche: 'bf6d7ca4f0323b9f',
+    sitesEntames: '740cbeac75f856e9',
+    rapports: '4aa5926a254ead2f',
+    satellites: 'e1692c6f1c87371d',
+    prochaineInstanceSatellite: '21b0b42797d8363c',
+    satellitesDetruits: '309bf03ba9f4a29c',
+  },
+};
+
+/** L'empreinte de CHAQUE graine après le lot COLONNE, toutes phases mêlées. */
+export const EMPREINTES_PAR_GRAINE_COLONNE = {
+  1: '5061b4379f82a010',
+  2: '951ce218c438bce0',
+  3: 'aad3e20ccf163fcb',
+  4: '61bdf9bdebd2fe6d',
+  5: 'c658a434362c0f85',
+  6: 'a7362aa7e4005cad',
+  7: '920154575db0ac3b',
+  8: '22ad4a2c47db6a6b',
+  9: 'fcd57aaf9189dc78',
+  10: '31d74e14694b6d70',
+  11: '45431567169034bc',
+  12: '0620791e19193f32',
+  13: '04ffb7d2616bd6dd',
+  14: '554d9c2d7d80e6b6',
+  15: '26daa29ec07369ea',
+  16: 'dc1d5d265ce8ded8',
+  17: 'e1a8cd763a77be55',
+  18: '9ae8619dbd9519f8',
+  19: '324b1d6664107b18',
+  20: '2c862918c2a30f9f',
+  21: '0ac8f49c64c5aa00',
+  22: '9e119ffa079a563f',
+  23: '801e23c930880ce5',
+  24: 'cd17222c6ec5ca4b',
+  25: '199570ba592e882b',
+};
+
+/**
+ * Les vingt-cinq rapports du raid de PROXIMITÉ après le lot COLONNE.
+ *
+ * ⚠⚠ LES VINGT-CINQ BOUGENT, ET C'EST CE QU'ON LEUR DEMANDE. Un raid dont les
+ * unités s'arrêtent sur une infanterie ennemie, dont la défense se décale
+ * latéralement pour venir à leur rencontre, et qui ne trouve plus la même
+ * disposition en face, ne peut pas rendre le même rapport. S'il rendait le
+ * même, c'est qu'aucune des trois règles ne serait lue.
+ */
+export const RAPPORTS_PROCHE_COLONNE = {
+  1: '54a77c1e39dfb9da',
+  2: '0d3805fb1457e9a8',
+  3: '648779d66fee35f2',
+  4: 'b91dbef168e95ffc',
+  5: '5c01ec9ea7094e0b',
+  6: 'ac42a1b208da1560',
+  7: 'd2dbe46300e54a96',
+  8: '3e4b896bed2d2f46',
+  9: '29f59f7c27ca4548',
+  10: 'fc365dbe4d65f2c9',
+  11: 'd8f7817c831198e0',
+  12: '6b9b493830d50b94',
+  13: 'bd89a08237837257',
+  14: '90503050a81b28b1',
+  15: '9598d578c169794e',
+  16: '9a31d1ea7752079d',
+  17: '941bca78a7b768bc',
+  18: '33680effef4357bd',
+  19: '542e35d73922ae12',
+  20: 'e5bb6ec169d22c04',
+  21: 'c5962f2442ba8fe5',
+  22: '8307be1dd4b32d4a',
+  23: 'c4a494987684fb75',
+  24: '3aae62ba8745498c',
+  25: 'decdf4ab1f288553',
+};
+
+/** Les vingt-cinq rapports du raid de l'OUVRAGE après le lot COLONNE. */
+export const RAPPORTS_OUVRAGE_COLONNE = {
+  1: '5857dc593099a126',
+  2: '6625a369dac9c8e7',
+  3: '9d33895ce6413918',
+  4: '64dc97c39b6edc6f',
+  5: 'c2823e98133d3bd7',
+  6: '245660e50e79c023',
+  7: '2698b930223bef30',
+  8: '13f6fc5feb7b37d8',
+  9: '5b17dc7c997c8374',
+  10: 'fc75fe613f6fcc46',
+  11: 'd1fbc7ab853ddb96',
+  12: '4b7213bab4a5dd6c',
+  13: '90d8099249d98c85',
+  14: '2b6385489fc25e6d',
+  15: '4080c765a05415c3',
+  16: '9491153106d0dc1b',
+  17: '7d83167758e2029f',
+  18: 'c42b998e7e22027e',
+  19: 'b2658f3c1018c15c',
+  20: 'f1cd6750e0027218',
+  21: '82abf4ca6b4b52e1',
+  22: 'd22347ff8dc29a45',
+  23: '8bdc14a978acd095',
+  24: 'f880879c9e1b806f',
+  25: 'ba853077ee9ed513',
+};

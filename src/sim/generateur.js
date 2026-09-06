@@ -248,33 +248,203 @@ export function composerBatiments(nbBatiments) {
 }
 
 /**
+ * Découpe `nb` occupants en tailles de rangée, la dernière portant le reste.
+ * @returns {number[]} Une taille par rangée employée, de l'arrière vers l'avant.
+ */
+function taillesDeRangee(nb, parRangee, rangeesMax, quoi) {
+  const rangees = Math.ceil(nb / parRangee);
+  if (rangees > rangeesMax) {
+    throw new Error(
+      `générateur : ${nb} ${quoi} ne tiennent pas en ${rangeesMax} rangées `
+      + `à ${parRangee} occupants`,
+    );
+  }
+  const tailles = [];
+  let reste = nb;
+  for (let k = 0; k < rangees; k++) {
+    const t = Math.min(parRangee, reste);
+    tailles.push(t);
+    reste -= t;
+  }
+  return tailles;
+}
+
+/**
+ * Le profil de charge est-il RÉALISABLE sur ces rangées ? C'est la condition de
+ * Gale-Ryser, écrite telle quelle : une matrice 0/1 dont les sommes de lignes
+ * valent `tailles` et les sommes de colonnes `charge` existe si et seulement si,
+ * pour tout k, la somme des k plus grandes charges ne dépasse pas
+ * `Σ min(taille, k)`.
+ *
+ * ⚠⚠ ELLE N'EST PAS DÉCORATIVE, ET LE CONTRE-EXEMPLE EST PETIT. Treize défenses
+ * tiennent en trois rangées de 6 · 6 · 1 ; un profil à (3, 3, 2, 2, 1, 1, 1, 0,
+ * 0) somme bien à treize et respecte le budget d'écart — et il est
+ * IRRÉALISABLE : à k = 2 il demande 6 places quand les trois rangées n'en
+ * offrent que min(6,2) + min(6,2) + min(1,2) = 5. La rangée d'un seul occupant
+ * ne peut pas absorber deux colonnes chargées. Sans ce contrôle, le placement
+ * lèverait — ou pire, poserait deux pièces sur la même case.
+ */
+function profilRealisable(charge, tailles) {
+  const desc = [...charge].sort((a, b) => b - a);
+  let cumul = 0;
+  for (let k = 1; k <= desc.length; k++) {
+    cumul += desc[k - 1];
+    let capacite = 0;
+    for (const t of tailles) capacite += Math.min(t, k);
+    if (cumul > capacite) return false;
+  }
+  return true;
+}
+
+/**
+ * Tire la CHARGE de chaque colonne : combien d'occupants elle recevra.
+ *
+ * ⚠⚠ C'EST ICI QUE LA FORME D'UN SITE CESSE D'ÊTRE LA MÊME — lot COLONNE,
+ * 06/09, point 9. Le placement d'avant tirait une permutation des colonnes et
+ * posait en tourniquet : la charge par colonne était TOUJOURS la même — plate à
+ * une unité près — et deux graines ne rendaient que deux étiquetages du même
+ * dessin. Une permutation préserve le multi-ensemble des charges ; tant qu'il
+ * est constant, aucune graine ne peut produire autre chose qu'une image.
+ *
+ * On part donc du profil PLAT — `base` partout, `+1` sur `total % 9` colonnes
+ * tirées —, puis on tente des TRANSFERTS : une unité passe d'une colonne à une
+ * autre, et le transfert est DÉFAIT s'il fait sortir le profil du budget
+ * d'écart, du plancher, ou de la capacité d'une colonne.
+ *
+ * ⚠⚠ LE PLANCHER SERT LES DEUX BÂTIMENTS UNIQUES, ET IL NE COMPTE QUE POUR
+ * L'ÉCART. Souche et Étai sont posés hors de ce tirage, au fond et au centre,
+ * et ils comptent pourtant dans la charge que `T8` mesure : le budget d'écart
+ * s'apprécie donc sur la somme `profil + plancher`. Les ignorer rendrait un
+ * profil à écart 2 sur les PROPORTIONNELS, donc à écart 3 une fois les deux
+ * uniques ajoutés — le budget serait dépassé par une addition que personne ne
+ * regarde.
+ *
+ * ⚠⚠ MAIS LE PROFIL LUI-MÊME PORTE LES SEULS PROPORTIONNELS, ET LES CONFONDRE
+ * REND UN PROFIL IRRÉALISABLE — mesuré, pas soupçonné. Tirer le profil sur le
+ * TOTAL puis lui retrancher le plancher donne, sur 31 bâtiments en 4 rangées de
+ * 9 · 9 · 9 · 2, quatre colonnes à quatre occupants là où la dernière rangée
+ * n'en offre que deux : Gale-Ryser refuse, et le repli plat refuse aussi,
+ * puisqu'il est calculé de la même façon. Le profil se tire sur ce qu'il
+ * PLACE.
+ *
+ * ⚠ UN TRANSFERT REFUSÉ CONSOMME SES TIRAGES COMME UN ACCEPTÉ : les deux bornes
+ * sont tirées AVANT tout test. Le nombre de tirages ne dépend donc pas du taux
+ * d'acceptation, et deux graines consomment exactement autant de flux.
+ *
+ * @param {number[]} plancher Minimum imposé par colonne, ou null.
+ * @returns {number[]} Charge par colonne, indexée de 0.
+ */
+function profilDeCharge(rng, total, tailles, ecartMax, brassages, plancher) {
+  const n = GRILLE.largeur;
+  const bas = plancher ?? new Array(n).fill(0);
+  const base = Math.floor(total / n);
+  const surplus = total % n;
+  const plat = new Array(n).fill(base);
+  for (const c of melanger(rng, colonnes()).slice(0, surplus)) plat[c - 1] += 1;
+  // L'écart se mesure sur la charge TOTALE — le profil plus son plancher.
+  const ecart = (t) => {
+    const v = t.map((x, i) => x + bas[i]);
+    return Math.max(...v) - Math.min(...v);
+  };
+  if (!profilRealisable(plat, tailles) || ecart(plat) > ecartMax) {
+    throw new Error(
+      `générateur : le profil plat de ${total} occupants sur ${tailles.length} rangées `
+      + 'sort du budget — c\'est le placement d\'avant le lot COLONNE qui ne tiendrait plus',
+    );
+  }
+
+  const charge = [...plat];
+  for (let k = 0; k < brassages; k++) {
+    const depuis = entier(rng, 0, n - 1);
+    const vers = entier(rng, 0, n - 1);
+    if (depuis === vers) continue;
+    if (charge[depuis] === 0) continue;
+    // Une colonne ne peut porter qu'un occupant par rangée.
+    if (charge[vers] + 1 > tailles.length) continue;
+    charge[depuis] -= 1;
+    charge[vers] += 1;
+    if (ecart(charge) > ecartMax) {
+      charge[depuis] += 1;
+      charge[vers] -= 1;
+    }
+  }
+  return profilRealisable(charge, tailles) ? charge : plat;
+}
+
+/**
+ * Assigne les colonnes rangée par rangée, en honorant un profil de charge.
+ *
+ * ⚠ SERVIR LES COLONNES AU PLUS GRAND RESTE EST L'ALGORITHME DE GALE-RYSER, pas
+ * une heuristique : sur un profil que `profilRealisable` a accepté, il aboutit
+ * toujours. À égalité de reste, le tirage tranche — c'est ce qui fait qu'une
+ * même charge se répartit différemment d'une graine à l'autre.
+ *
+ * @returns {number[][]} Les colonnes de chaque rangée, dans l'ordre des tailles.
+ */
+function repartirLesColonnes(rng, tailles, charge) {
+  const reste = [...charge];
+  const lignes = [];
+  for (const k of tailles) {
+    const tri = colonnes()
+      .map((c) => ({ c, reste: reste[c - 1], cle: entier(rng, 0, 1000000) }))
+      .sort((a, b) => b.reste - a.reste || a.cle - b.cle);
+    const prises = tri.slice(0, k);
+    if (prises.some((o) => o.reste <= 0)) {
+      throw new Error(
+        'générateur : profil de charge irréalisable — Gale-Ryser aurait dû le refuser',
+      );
+    }
+    for (const o of prises) reste[o.c - 1] -= 1;
+    lignes.push(melanger(rng, prises.map((o) => o.c)));
+  }
+  return lignes;
+}
+
+/**
  * Pose les bâtiments. Souche et Étai au FOND, rangée 18, aussi centrés que
  * possible : ce sont les deux objectifs du raid, ils doivent coûter la
- * traversée complète. Le reste se répartit sur les rangées 11 à 17, en
- * tourniquet sur une permutation des colonnes.
+ * traversée complète. Le reste se répartit sur les rangées 11 à 17.
+ *
+ * ⚠⚠ CE N'EST PLUS UN TOURNIQUET DEPUIS LE LOT COLONNE, 06/09. Il écrivait
+ * `colonne = permutation[rang % 9]` et remplissait des rangées de neuf : la
+ * charge par colonne était plate sur TOUTE graine, donc deux sites de même
+ * niveau ne différaient que par le nom des colonnes. La charge se TIRE
+ * désormais — voir `profilDeCharge` —, et les deux uniques y comptent par leur
+ * plancher.
  */
 function placerBatiments(rng, liste, niveau) {
   const fond = GRILLE.bandes.batiments.derniere;
   const premiere = GRILLE.bandes.batiments.premiere;
   const centre = Math.ceil(GRILLE.largeur / 2);
-  const permutation = melanger(rng, colonnes());
   const poses = [];
-  let rang = 0;
+  const proportionnels = [];
   for (const id of liste) {
     if (BATIMENTS[id].unique) {
       // Souche au centre exact, Étai immédiatement à sa gauche.
       const colonne = poses.length === 0 ? centre : centre - 1;
       poses.push({ id, rangee: fond, colonne, niveau });
-      continue;
+    } else {
+      proportionnels.push(id);
     }
-    const colonne = permutation[rang % GRILLE.largeur];
-    const rangee = premiere + Math.floor(rang / GRILLE.largeur);
-    if (rangee >= fond) {
-      throw new Error(`générateur : ${liste.length} bâtiments ne tiennent pas dans la bande`);
-    }
-    poses.push({ id, rangee, colonne, niveau });
-    rang += 1;
   }
+  const plancher = new Array(GRILLE.largeur).fill(0);
+  for (const p of poses) plancher[p.colonne - 1] += 1;
+
+  const tailles = taillesDeRangee(
+    proportionnels.length, GRILLE.largeur, fond - premiere, 'bâtiments',
+  );
+  const charge = profilDeCharge(
+    rng, proportionnels.length, tailles,
+    DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, plancher,
+  );
+  const lignes = repartirLesColonnes(rng, tailles, charge);
+  let rang = 0;
+  lignes.forEach((cols, j) => {
+    for (const colonne of cols) {
+      poses.push({ id: proportionnels[rang], rangee: premiere + j, colonne, niveau });
+      rang += 1;
+    }
+  });
   return poses;
 }
 
@@ -287,14 +457,26 @@ function placerBatiments(rng, liste, niveau) {
  *      aux bâtiments — l'attaquant traverse d'abord du vide ;
  *   2. six occupants au plus par rangée de neuf colonnes, donc trois colonnes
  *      libres au minimum : sans passage, le terrain ne décide plus rien ;
- *   3. l'écart de charge entre colonnes n'excède jamais 2 — les unités ne
- *      changent jamais de colonne, une colonne à huit structures serait
- *      infranchissable et une colonne vide une autoroute.
+ *   3. l'écart de charge entre colonnes n'excède jamais `ecartColonnesMax` —
+ *      l'ASSAUT ne change jamais de colonne, une colonne à huit structures
+ *      serait infranchissable et une colonne vide une autoroute.
  *
- * L'indice global i donne la colonne par `permutation[i % 9]` et la rangée par
- * `rangees[floor(i / 6)]`. Six indices consécutifs modulo neuf sont distincts,
- * donc aucune collision dans une rangée ; et chaque colonne reçoit floor(N/9)
- * ou ceil(N/9) défenses, donc un écart de 1 au plus.
+ * Les rangées se remplissent du fond vers l'avant, `occupantsMaxParRangee` à la
+ * fois, la rangée la plus AVANCÉE portant le reste. Le nombre de rangées vaut
+ * donc toujours `ceil(nb / 6)`, et il n'a pas bougé.
+ *
+ * ⚠⚠ CE QUI A BOUGÉ, C'EST LA COLONNE — lot COLONNE, 06/09, point 9. Ce
+ * paragraphe expliquait que « l'indice global i donne la colonne par
+ * `permutation[i % 9]` », et en tirait que « chaque colonne reçoit floor(N/9) ou
+ * ceil(N/9) défenses, donc un écart de 1 au plus ». C'était vrai, et c'était le
+ * défaut : un écart de 1 au plus SUR TOUTE GRAINE veut dire que la charge par
+ * colonne ne dépend pas de la graine, donc que deux sites de même niveau sont
+ * l'image l'un de l'autre par une permutation. La charge se TIRE maintenant,
+ * dans le budget d'écart de la table — voir `profilDeCharge`.
+ *
+ * ⚠ ET LE BUDGET N'A PAS ÉTÉ RELEVÉ POUR L'OCCASION : `ecartColonnesMax` vaut 2
+ * depuis le lot 2B, et le placement d'avant n'en employait qu'un. Le lot cesse
+ * de laisser une moitié du budget inutilisée ; il n'en demande pas davantage.
  *
  * L'ordre de la liste porte le reste : artilleries d'abord, donc au fond. Une
  * artillerie a une portée minimale de 3,5 — posée à l'avant, elle ne tirerait
@@ -305,27 +487,22 @@ function placerDefenses(rng, liste, niveau) {
   const bande = GRILLE.bandes.defense;
   const rangeesMax = bande.derniere - bande.premiere + 1;
   const nb = liste.length;
-  const rangees = Math.min(rangeesMax, Math.ceil(nb / parRangee));
-  if (nb > rangees * parRangee) {
-    throw new Error(
-      `générateur : ${nb} défenses ne tiennent pas en ${rangeesMax} rangées `
-      + `à ${parRangee} occupants`,
-    );
-  }
-  // Du fond vers l'avant : 10, 9, 8…
-  const ordreRangees = [];
-  for (let k = 0; k < rangees; k++) ordreRangees.push(bande.derniere - k);
-
-  const permutation = melanger(rng, colonnes());
+  if (nb === 0) return [];
+  const tailles = taillesDeRangee(nb, parRangee, rangeesMax, 'défenses');
+  const charge = profilDeCharge(
+    rng, nb, tailles,
+    DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, null,
+  );
+  const lignes = repartirLesColonnes(rng, tailles, charge);
   const poses = [];
-  for (let i = 0; i < nb; i++) {
-    poses.push({
-      id: liste[i],
-      rangee: ordreRangees[Math.floor(i / parRangee)],
-      colonne: permutation[i % GRILLE.largeur],
-      niveau,
-    });
-  }
+  let i = 0;
+  lignes.forEach((cols, j) => {
+    for (const colonne of cols) {
+      // Du fond vers l'avant : 10, 9, 8…
+      poses.push({ id: liste[i], rangee: bande.derniere - j, colonne, niveau });
+      i += 1;
+    }
+  });
   return poses;
 }
 

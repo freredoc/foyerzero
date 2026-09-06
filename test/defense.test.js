@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import { GRILLE, DEFENSES, UNITES } from '../src/data/combat.js';
 import { POINTS_ARMEE, DISPOSITION_DEFENSES } from '../src/data/sites.js';
 import { NIVEAU } from '../src/data/niveaux.js';
+import { caseDepuisMilli } from '../src/sim/grille.js';
 import {
   defenseVide, poser, retirer, enDefenseurs, depuisDefenseurs, avecNiveau, purger,
   defensesDisponibles, bilan, budgetDuNiveau, couverture, indicesDeCouverture, estVide,
@@ -69,7 +70,7 @@ test('T1 — les neuf abscisses ET les huit ordonnées sont celles du champ', ()
     // Chaque défenseur du moteur retombe sur une abscisse et une ordonnée de
     // l'éditeur — égalité EXACTE, aucune tolérance.
     for (const e of etat.entites.filter((x) => x.genre === 'defense')) {
-      assert.ok(abscisses.includes(xDeColonne(projection, e.colonne)),
+      assert.ok(abscisses.includes(xDeColonne(projection, caseDepuisMilli(e.colonneMilli))),
         `colonne ${e.colonne} hors des abscisses`);
       const rangee = Math.round(e.rangeeMilli / 1000);
       assert.ok(ordonnees.includes(yDeRangee(projection, rangee)),

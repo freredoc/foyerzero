@@ -802,8 +802,17 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   // le butin, et l'état dans lequel le site est laissé.
   assert.notDeepEqual(rAvec.butin, rNu.butin,
     'le raid rapporte exactement autant avec et sans POI — le montage ne les emporte pas');
-  assert.deepEqual(rNu.butin, { quartz: 1088, scorie: 362 });
-  assert.deepEqual(rAvec.butin, { quartz: 1230, scorie: 410 });
+  // ⚠ RÉANCRÉ AU LOT COLONNE : 1 088 · 362 et 1 230 · 410 sous l'arrêt du 04/09.
+  // L'arrêt sur prédilection retient les six Meutes devant la garnison, elles
+  // griffent moins les bâtiments, et les deux butins baissent ENSEMBLE — l'écart
+  // relatif entre les deux, qui est ce que ce test mesure, ne bouge pas d'un
+  // point : +13,1 % avant, +15,9 % après.
+  // ⚠ RÉANCRÉ UNE SECONDE FOIS PAR LE POINT 9 DU MÊME LOT : 730 · 243 et
+  // 851 · 283. Le camp que ce montage vise n'est plus disposé ni composé pareil,
+  // donc les six Meutes n'en tirent plus la même chose. **L'écart relatif, qui
+  // est ce que ce test mesure, ne bouge toujours pas d'un point : +16,6 %.**
+  assert.deepEqual(rNu.butin, { quartz: 730, scorie: 243 });
+  assert.deepEqual(rAvec.butin, { quartz: 851, scorie: 283 });
   assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),

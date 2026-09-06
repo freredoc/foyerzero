@@ -71,7 +71,8 @@ function entite(etat, predicat) {
 
 const parId = (id) => (e) => e.id === id;
 const parCase = (id, rangee, colonne) => (e) =>
-  e.id === id && caseDepuisMilli(e.rangeeMilli) === rangee && e.colonne === colonne;
+  e.id === id && caseDepuisMilli(e.rangeeMilli) === rangee
+  && caseDepuisMilli(e.colonneMilli) === colonne;
 
 /** Attaquants encore présents sur la grille (ni morts, ni sortis par le haut). */
 function attaquantsPresents(etat) {
@@ -456,15 +457,27 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
   const attaquant = entite(etat, (e) => e.camp === 'attaque');
   const defenseur = entite(etat, (e) => e.camp === 'defense' && e.id === 'fendeur');
   jouer(etat, 20);
-  // ⚠⚠ LOT ARRÊT (04/09) : L'ATTAQUANT RAMPE DANS SA PROPRE CASE, ET CE QUE CE
+  // ⚠⚠ LOT ARRÊT (04/09) : L'ATTAQUANT RAMPAIT DANS SA PROPRE CASE, ET CE QUE CE
   // TEST GARDE EST LA CASE, PAS LE MILLI-CASE. Il visait le Fendeur d'en face —
-  // un `unite`, plus un bâtiment — donc il ne s'arrête plus ; mais
+  // un `unite`, plus un bâtiment — donc il ne s'arrêtait plus ; mais
   // `peutAvancer` compte comme un progrès le fait d'avancer CHEZ SOI, et il
-  // monte donc de 2 000 à 2 990, où le pas suivant viserait la case 3, occupée
-  // par une masse égale. Aucun ne CHANGE de case, aucun n'écrase l'autre : le
-  // blocage mutuel est intact, et c'est lui que ce test existe pour tenir.
-  assert.equal(attaquant.rangeeMilli, 2990);
+  // montait de 2 000 à 2 990, où le pas suivant aurait visé la case 3, occupée
+  // par une masse égale.
+  //
+  // ⚠⚠ LOT COLONNE (06/09) : IL NE RAMPE MÊME PLUS, ET C'EST L'ARBITRAGE
+  // D'ETHAN. « Ajouter l'arrêt sur prédilection EN PLUS du bâtiment » : la cible
+  // est un Fendeur, de colonne `vehicule`, et la prédilection de l'attaquant est
+  // `vehicule` — ce n'est ni un merlon ni une tourelle, donc l'exclusion du
+  // 04/09 ne la couvre pas. Il se fige à 2 000, sa position de départ. Ce que ce
+  // test existe pour tenir n'a pas bougé d'un mot : **aucun ne change de case,
+  // aucun n'écrase l'autre, le blocage mutuel est intact.**
+  assert.equal(attaquant.rangeeMilli, 2000, 'l\'attaquant n\'est plus figé par sa cible');
   assert.equal(caseDepuisMilli(attaquant.rangeeMilli), 2, 'l\'attaquant a changé de case');
+  // ⚠ ET LE DÉFENSEUR NE SE DÉCALE PAS NON PLUS, ce qui n'est plus gratuit
+  // depuis le lot COLONNE : c'est une unité de garnison MOBILE. Sa cible de
+  // prédilection est l'attaquant, qui est DANS SA COLONNE — `sens` vaut zéro,
+  // donc aucun pas latéral. C'est la seule raison pour laquelle il tient sa
+  // case, et elle se lit.
   assert.equal(defenseur.rangeeMilli, 3000);
   // ⚠ Seuil déplacé au lot 4A : le Fendeur passe de 300 à 1 000 PV et de 12 ×
   // 1,0 à 23 PV par tir contre un véhicule. Chacun inflige

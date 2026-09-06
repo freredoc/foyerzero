@@ -151,6 +151,29 @@ export function xDeColonne(projection, colonne) {
 }
 
 /**
+ * Bord GAUCHE de la case dessinée pour une position latérale en milli-cases.
+ *
+ * ⚠⚠ ELLE ENTRE AU LOT COLONNE, ET ELLE EST LA JUMELLE DE `yDeRangeeMilli`. La
+ * défense des deux camps se décale latéralement à partir du 06/09 : sans une
+ * abscisse continue, une défenseuse sauterait d'une colonne à l'autre entre deux
+ * images. Elle borne comme sa jumelle, pour la même raison — une position
+ * interpolée peut passer une fraction de pixel au-delà du bord.
+ *
+ * ⚠ ET `xDeColonne` EN EST UN CAS, pas une seconde formule : la colonne `c` se
+ * dessine en `xDeColonneMilli(p, c × 1000)`, et les deux expressions coïncident
+ * terme à terme. Un test le refait plutôt que de le croire.
+ */
+export function xDeColonneMilli(projection, colonneMilli) {
+  const { tailleCase, margeX } = projection;
+  const brut = margeX + Math.floor(
+    ((colonneMilli - MILLI_PAR_CASE) * tailleCase) / MILLI_PAR_CASE,
+  );
+  const gauche = margeX;
+  const droite = margeX + (GRILLE.largeur - 1) * tailleCase;
+  return Math.min(Math.max(brut, gauche), droite);
+}
+
+/**
  * Bord HAUT de la case dessinée pour une position en milli-cases.
  *
  * La position m d'une entité est le bas de sa case : elle occupe la bande

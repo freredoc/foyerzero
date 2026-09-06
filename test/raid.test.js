@@ -316,8 +316,16 @@ test('deux raids — le second part sur ce que le premier a laissé', () => {
   // butin qui monte de 1 088 à 1 310. On asserte donc ce que le test
   // PRÉTENDAIT mesurer — « le second part sur ce que le premier a laissé » —
   // au lieu de la durée, qui n'en était que le symptôme.
-  assert.ok(deux.restantDefense < un.restantDefense || deux.rase,
-    `second raid : défense restante ${deux.restantDefense} contre ${un.restantDefense}`);
+  // ⚠⚠ LOT COLONNE (06/09) : LA PREMIÈRE PASSE RASE DÉJÀ TOUTE LA DÉFENSE, et
+  // c'est mesuré. L'arrêt sur prédilection fige les six Meutes devant la
+  // garnison, qu'elles achèvent : `restantDefense` vaut ZÉRO dès la première
+  // passe, donc la seconde ne peut pas faire STRICTEMENT moins. Le `<` n'est
+  // donc plus l'observable — mais on n'assouplit pas : on ASSERTE le zéro, ce
+  // qui est plus fort, et on garde la décroissance stricte là où elle a encore
+  // un sens, sur les bâtiments.
+  assert.equal(un.restantDefense, 0,
+    'la première passe ne rase plus toute la défense : la garde ci-dessous change');
+  assert.equal(deux.restantDefense, 0, 'la défense est revenue entre deux passes');
   assert.ok(deux.restantBatiments < un.restantBatiments || deux.rase,
     `second raid : bâtiments restants ${deux.restantBatiments} contre ${un.restantBatiments}`);
 });
@@ -698,6 +706,22 @@ const sansCommentairesRaidA = (code) => code
   .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 /** Une partie jouable : satellites parus, armée posée, points et réserve pleins. */
+/**
+ * Remet l'armée à neuf entre deux raids.
+ *
+ * ⚠⚠ IL ENTRE AU LOT COLONNE, ET C'EST UNE RÉPARATION DE PRÉMISSE PARTAGÉE. Les
+ * trois tests qui enchaînent des raids supposaient qu'une armée survive à
+ * plusieurs passes ; l'arrêt sur prédilection du 06/09 la fige devant la
+ * garnison, elle y meurt, et le raid suivant lève « Aucune unité en état de
+ * partir ». Ce que ces tests mesurent — les verdicts, la file des dix rapports,
+ * le pourcentage qui descend — n'a rien à voir avec l'endurance de l'armée. Le
+ * lot ne fait pas la réparation ; le montage la fait à la main, comme le test
+ * « deux raids » le faisait déjà depuis le lot RAID-0.
+ */
+function reparerLArmee(etat) {
+  for (const p of baseCourante(etat).armee) p.degatsMilli = 0;
+}
+
 function partieJouable(graine = 2026) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
@@ -959,6 +983,7 @@ test('RAID-A T8 — les trois verdicts, et « défense seule touchée » est une
   let dernier = null;
   for (let n = 0; n < 30 && (dernier === null || !dernier.rase); n += 1) {
     acharne.attaque.points = 100_000;
+    reparerLArmee(acharne);
     dernier = executerRaid(acharne, baseCourante(acharne), cible);
   }
   assert.ok(dernier.rase, 'montage : le camp n\'est jamais tombé');
@@ -997,6 +1022,7 @@ test('RAID-A T10 — onze raids ne gardent que les dix derniers, le plus ancien 
     // relit donc une cible vivante à chaque tour.
     const cible = premierCamp(etat);
     assert.ok(cible, `tour ${n} : plus aucun camp à attaquer, le montage ne mesure rien`);
+    reparerLArmee(etat);
     executerRaid(etat, baseCourante(etat), cible);
     ticks.push(etat.rapports[etat.rapports.length - 1].tick);
   }
@@ -1055,6 +1081,7 @@ test('RAID-A — trois raids d\'affilée sur la même cible, et le pourcentage D
   const restants = [];
   for (let n = 0; n < 5; n += 1) {
     etat.attaque.points = 100_000;
+    reparerLArmee(etat);
     restants.push(executerRaid(etat, baseCourante(etat), cible).restantBatiments);
   }
   assert.equal(restants.length, 5, 'un raid a levé avant le cinquième');

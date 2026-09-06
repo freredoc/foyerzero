@@ -193,8 +193,16 @@ test('T3 — alpha 0 : précédent · alpha 1000 : courant · alpha 500 : milieu
   const etat = creerCombat(montage);
   // Ordre d'insertion du moteur : bâtiments d'abord, puis la vague — la
   // Gangue est l'indice 0, le Meute l'indice 1.
-  const precedentes = prendrePositions(etat); // [18000, 2000]
-  assert.deepEqual(precedentes, [18_000, 2000]);
+  // ⚠⚠ UN COUPLE PAR ENTITÉ DEPUIS LE LOT COLONNE, PLUS UN SEUL NOMBRE.
+  // `prendrePositions` ne relevait que `rangeeMilli` au motif écrit en tête de
+  // `render/interpolation.js` qu'« une entité ne change jamais de colonne » : le
+  // motif est tombé pour la défense, et un instantané à un seul axe ferait
+  // TÉLÉPORTER une défenseuse d'une colonne à l'autre entre deux images.
+  const precedentes = prendrePositions(etat);
+  assert.deepEqual(precedentes, [
+    { rangeeMilli: 18_000, colonneMilli: 9000 },
+    { rangeeMilli: 2000, colonneMilli: 5000 },
+  ]);
   tick(etat); // le Meute avance de 60 milli-cases (lot 4A : 50 avant conversion)
   const meute = etat.entites.find((e) => e.camp === 'attaque');
   assert.equal(meute.rangeeMilli, 2060);
@@ -244,7 +252,7 @@ test('T4 — un raid entier rendu à chaque tick laisse l\'état sérialisé ide
   const etat = creerCombat(montageDeScene());
   const proj = calculerProjection(412, 900);
   let precedentes = null;
-  let nbColonnesFigees = etat.entites.map((e) => e.colonne);
+  let nbColonnesFigees = etat.entites.map((e) => e.colonneMilli);
 
   while (!etat.termine) {
     precedentes = prendrePositions(etat);
@@ -258,13 +266,25 @@ test('T4 — un raid entier rendu à chaque tick laisse l\'état sérialisé ide
 
     // Et les deux faits du moteur dont dépend l'interpolation, asseyés en
     // continu : les indices sont stables (le tableau ne fait que croître) et
-    // aucune entité ne change jamais de colonne.
+    // AUCUN ATTAQUANT ne change jamais de colonne.
+    //
+    // ⚠⚠ LA SECONDE MOITIÉ A CHANGÉ DE CIBLE AU LOT COLONNE, ELLE NE S'EST PAS
+    // ASSOUPLIE. Elle disait « aucune entité ne change jamais de colonne », et
+    // c'était l'invariant du moteur depuis le lot 2A. Ethan l'a renversé pour la
+    // DÉFENSE des deux camps le 06/09 ; il tient toujours, entier, pour
+    // l'ATTAQUE — et c'est de l'attaque que dépendaient les conclusions de
+    // `peutEcraser` et du blocage de colonne. La garde le NOMME désormais, au
+    // lieu de le supposer de tout le monde.
     assert.ok(etat.entites.length >= nbColonnesFigees.length, 'une entité a été retirée');
     for (let i = 0; i < nbColonnesFigees.length; i++) {
-      assert.equal(etat.entites[i].colonne, nbColonnesFigees[i], `colonne changée sur ${i}`);
-      assert.equal(etat.entites[i].indice, i, `indice déplacé sur ${i}`);
+      const e = etat.entites[i];
+      if (e.camp === 'attaque') {
+        assert.equal(e.colonneMilli, nbColonnesFigees[i],
+          `un ATTAQUANT a changé de colonne sur ${i}`);
+      }
+      assert.equal(e.indice, i, `indice déplacé sur ${i}`);
     }
-    nbColonnesFigees = etat.entites.map((e) => e.colonne);
+    nbColonnesFigees = etat.entites.map((e) => e.colonneMilli);
   }
   assert.ok(etat.tick > 0);
 });

@@ -572,7 +572,18 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // les BÂTIMENTS qu'elle s'immobilise désormais. Le raid dure trente ticks de
   // plus et perd un survivant — sept avant, six après. La cause, elle, ne bouge
   // pas : il se termine toujours faute de combattants.
-  assert.equal(r.nbTicks, 335);
+  //
+  // ⚠ LOT COLONNE (06/09), POINT 7 : 336, un tick de plus. L'arrêt sur
+  // prédilection revient « EN PLUS du bâtiment » et retient l'infanterie devant
+  // la garnison ; la cause et le compte de survivants ne bougent pas.
+  //
+  // ⚠⚠ ET LE POINT 9 DU MÊME LOT LE PORTE À 513. La disposition du camp de la
+  // graine 1 change de forme ET de composition — `composerRepartition` tire
+  // après `placerBatiments`, dont le nombre de tirages a changé —, donc ce raid
+  // ne dure plus pareil. Ce que ce test-ci mesure n'a rien à voir avec la durée :
+  // c'est que les DEUX chemins de montage rendent le même combat, et les trois
+  // assertions qui le disent sont au-dessus, intactes.
+  assert.equal(r.nbTicks, 513);
   assert.equal(r.cause, 'attaquants');
 });
 

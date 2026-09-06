@@ -72,6 +72,8 @@ import {
   DEPLACES_PAR_RETOURS_DU_03_SOIR, EMPREINTES_PAR_GRAINE_RETOURS_DU_03_SOIR,
   DEPLACES_PAR_ARRET, EMPREINTES_PAR_GRAINE_ARRET,
   DEPLACES_PAR_RETOUR_DEFENSES, EMPREINTES_PAR_GRAINE_RETOUR_DEFENSES,
+  DEPLACES_PAR_COLONNE, EMPREINTES_PAR_GRAINE_COLONNE,
+  RAPPORTS_PROCHE_COLONNE, RAPPORTS_OUVRAGE_COLONNE,
   RAPPORTS_PROCHE_ARRET, RAPPORTS_OUVRAGE_ARRET,
   RAPPORTS_RETOURS_DU_03_SOIR,
 } from './temoins-bases-0.js';
@@ -125,7 +127,8 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_RETOUR_DEFENSES[phase]?.[champ]
+  return DEPLACES_PAR_COLONNE[phase]?.[champ]
+    ?? DEPLACES_PAR_RETOUR_DEFENSES[phase]?.[champ]
     ?? DEPLACES_PAR_ARRET[phase]?.[champ]
     ?? DEPLACES_PAR_RETOURS_DU_03_SOIR[phase]?.[champ]
     ?? DEPLACES_PAR_RETOURS_DU_03[phase]?.[champ]
@@ -481,7 +484,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOUR_DEFENSES[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_COLONNE[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -558,8 +561,9 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // Un raid qui ne s'arrête plus aux mêmes endroits ne rend pas le même
       // rapport ; s'il rendait le même, c'est la règle qui ne serait pas lue.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_ARRET[g] ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : RAPPORTS_PROCHE_ARRET[g];
+        ? (RAPPORTS_OUVRAGE_COLONNE[g] ?? RAPPORTS_OUVRAGE_ARRET[g]
+          ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
+        : (RAPPORTS_PROCHE_COLONNE[g] ?? RAPPORTS_PROCHE_ARRET[g]);
       assert.equal(
         empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,
         `graine ${g} : ${cle} — le rapport de raid a changé`,

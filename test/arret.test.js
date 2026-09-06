@@ -171,14 +171,25 @@ test('ARRÊT T3 — une anti-structure ne s\'arrête plus pour un mur (inversion
 });
 
 // ---------------------------------------------------------------------------
-// ARRÊT T4 — une anti-véhicule ne s'arrête plus pour une artillerie
+// ARRÊT T4 — une anti-véhicule s'arrête POUR une artillerie
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T4 — une anti-véhicule ne s\'arrête plus pour une artillerie (inversion)', () => {
+test('ARRÊT T4 — une anti-véhicule s\'arrête pour une artillerie (arbitrage du 06/09)', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ, ET IL A ÉTÉ VU ROUGE AVANT DE L'ÊTRE — LOT
+  // COLONNE. Il assertait l'INVERSE : « elle ne s'arrête plus pour une
+  // artillerie », qui était la conséquence de l'arbitrage du 04/09 remplaçant
+  // la colonne par le genre. Ethan, 06/09 : « ajouter l'arrêt sur prédilection
+  // EN PLUS du bâtiment ». L'exclusion qu'il avait posée le 04/09 nomme
+  // « merlon et tourelles » ; `estStructureDefensive` la tient au COUPLE
+  // `genre === 'defense'` ET `colonneMatrice === 'structureOuAviation'`, qui
+  // désigne exactement les murs, les barrières et les tourelles. **Une
+  // artillerie n'y est pas** — c'est une conséquence DÉCLARÉE de la lecture du
+  // lot, et une ligne suffit à la renverser si Ethan tranche autrement.
+  //
   // ⚠ LES TROIS ARTILLERIES SONT DES VÉHICULES SANS ÊTRE DES BLINDÉS : leur
   // châssis est nul, c'est `COLONNE_PAR_TYPE_DEFENSE` qui les range en
-  // `vehicule`. La Carapace, dont la prédilection est `vehicule`, s'arrêtait
-  // donc pour elles.
+  // `vehicule`. La Carapace, dont la prédilection est `vehicule`, s'arrête donc
+  // pour elles.
   const etat = creerCombat(montage({
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'harpon', rangee: 6, colonne: 6 }],
@@ -187,15 +198,36 @@ test('ARRÊT T4 — une anti-véhicule ne s\'arrête plus pour une artillerie (i
   const carapace = assaillant(etat);
   assert.equal(DEFENSES.harpon.type, 'artillerie');
   assert.equal(DEFENSES.harpon.degats.infanterie, 0, 'montage : le Harpon ne doit pas riposter');
+  // La prédilection est la colonne de dégâts DOMINANTE — on la recalcule sur la
+  // table plutôt que d'écrire « vehicule », qui ne dirait pas d'où ça vient.
+  const dominante = (degats) => Object.entries(degats)
+    .reduce((m, [c, v]) => (v > (degats[m] ?? -1) ? c : m), null);
+  assert.equal(dominante(UNITES.carapace.degats), 'vehicule',
+    'montage : la prédilection doit correspondre à la colonne de l\'artillerie');
 
   jouer(etat, 50);
   assert.equal(cibleDe(etat, carapace), 'harpon', 'montage : l\'artillerie doit être visée');
   const depart = carapace.rangeeMilli;
 
-  jouer(etat, 20);
-  assert.equal(carapace.rangeeMilli - depart, 20 * UNITES.carapace.vitesse,
-    'elle est restée devant l\'artillerie');
-  assert.equal(carapace.rangeeMilli, 6200);
+  // ⚠⚠ LA FENÊTRE EST BORNÉE PAR LA MORT DE LA CIBLE, ET C'EST CE QUI L'A FAIT
+  // TOMBER AU PREMIER JET. Mesuré : la Carapace se fige au tick 50 et repart au
+  // 69 — parce qu'elle a TUÉ le Harpon, pas parce que la règle a lâché. Un
+  // montage qui jouerait vingt ticks de trop mesurerait la reprise et
+  // conclurait que l'arrêt ne marche pas. On mesure DANS la fenêtre, et on
+  // asserte que la cible est encore debout à la fin.
+  jouer(etat, 15);
+  assert.equal(carapace.rangeeMilli - depart, 0,
+    'elle a continué d\'avancer devant l\'artillerie qu\'elle vise');
+  assert.equal(etat.entites.find((e) => e.id === 'harpon').vivant, true,
+    'le Harpon est tombé pendant la fenêtre : la mesure ne vaut rien');
+
+  // Falsifiable : sans le tir, il n'y a pas d'arrêt — la garde `aTire` d'abord.
+  assert.equal(carapace.aTire, true, 'montage : elle doit tirer pour s\'arrêter');
+
+  // ⚠ ET LA SCÈNE DOIT AVANCER SANS LA RÈGLE, sinon le test passerait sur une
+  // unité déjà bloquée : elle montait de 60 milli-cases par tick jusqu'ici.
+  assert.ok(depart > 2000 + 40 * UNITES.carapace.vitesse,
+    'montage : elle n\'a pas avancé avant d\'acquérir sa cible');
 });
 
 // ---------------------------------------------------------------------------
@@ -368,16 +400,30 @@ test('ARRÊT T9 — aucune tourelle ne retient plus, et aucune n\'est non bloqua
     'la liste des défenses non bloquantes a changé',
   );
 
-  // Latéralement, donc : une Casemate en colonne 6 contre une unité en colonne
+  // Latéralement, donc : une TOURELLE en colonne 6 contre une unité en colonne
   // 5. Elle est à portée, elle est visée, elle tire — et l'unité passe.
+  //
+  // ⚠⚠ LE MONTAGE CHANGE D'ENTITÉ AU LOT COLONNE, ET C'EST UNE CORRECTION, PAS
+  // UN CONTOURNEMENT. Il portait un `harpon`, qui est une ARTILLERIE : le test
+  // s'intitulait « aucune tourelle ne retient plus » et n'en montait aucune.
+  // Depuis l'arbitrage du 06/09 la distinction MORD — une artillerie est de la
+  // colonne `vehicule`, donc de la prédilection du Fendeur, donc elle l'arrête
+  // (`ARRÊT T4`) ; une tourelle est `structureOuAviation` ET de genre
+  // `defense`, donc exclue, donc elle ne l'arrête pas. Le test mesure
+  // désormais ce que son titre annonce, et il tombe si l'exclusion saute.
   const etat = creerCombat(montage({
     batiments: [GANGUE_LOINTAINE],
-    defenseurs: [{ id: 'harpon', rangee: 6, colonne: 6 }],
+    defenseurs: [{ id: 'creneau', rangee: 6, colonne: 6 }],
     vagues: [[{ id: 'fendeur', colonne: 5 }]],
   }));
   const fendeur = assaillant(etat);
+  assert.equal(DEFENSES.creneau.type, 'tourelle', 'montage : il faut une TOURELLE');
+  // Une tourelle est rangée `structureOuAviation` par `COLONNE_PAR_TYPE_DEFENSE`
+  // — c'est la moitié du couple qui l'exclut de l'arrêt sur prédilection.
+  assert.equal(DEFENSES.creneau.bloque, true, 'montage : elle doit bloquer la colonne voisine ?');
   jouer(etat, 35);
-  assert.equal(cibleDe(etat, fendeur), 'harpon', 'montage : l\'artillerie doit être visée');
+  assert.equal(cibleDe(etat, fendeur), 'creneau', 'montage : la tourelle doit être visée');
+  assert.equal(fendeur.aTire, true, 'montage : sans tir, l\'arrêt ne se pose même pas');
   const r = fendeur.rangeeMilli;
   jouer(etat, 10);
   assert.equal(fendeur.rangeeMilli, r + 10 * UNITES.fendeur.vitesse, 'elle s\'est arrêtée');
@@ -387,31 +433,54 @@ test('ARRÊT T9 — aucune tourelle ne retient plus, et aucune n\'est non bloqua
 // ARRÊT T10 — `colonnePredilection` n'est pas devenu un champ mort
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T10 — `colonnePredilection` garde ses deux lecteurs', () => {
-  // ⚠ LE BRIEF LE DEMANDE PAR GREP, ET C'EST LA BONNE FORME : un champ qu'on
-  // laisserait sans lecteur serait un commentaire menteur en puissance. Deux
-  // lecteurs restent — la munition spéciale et le camouflage — et le troisième,
-  // `doitSArreter`, est celui que le lot retire.
+test('ARRÊT T10 — `colonnePredilection` garde ses QUATRE lecteurs', () => {
+  // ⚠ LE BRIEF DU LOT ARRÊT LE DEMANDAIT PAR GREP, ET C'EST LA BONNE FORME : un
+  // champ qu'on laisserait sans lecteur serait un commentaire menteur en
+  // puissance. Le compte SE RESSERRE au lot COLONNE, il ne s'assouplit pas — le
+  // champ gagne deux lecteurs au lieu d'en perdre un.
+  //
+  // ⚠⚠ ET LE MOTIF DE CE TEST S'EST RENVERSÉ AVEC L'ARBITRAGE. Il gardait la
+  // DISPARITION de la prédilection dans `doitSArreter` — la conséquence du
+  // 04/09 —, et il assertait de face que la règle d'arrêt « ne lit plus la
+  // colonne ». Ethan la rétablit le 06/09, « EN PLUS du bâtiment » : ce qui est
+  // gardé désormais, c'est que les deux moitiés COHABITENT, le genre pour le
+  // bâtiment et la colonne pour la prédilection.
   const code = sansCommentaires(readFileSync(join(RACINE, 'src/sim/combat.js'), 'utf8'));
   const lectures = code.match(/[\w.]*colonnePredilection/g) ?? [];
-  // Trois écritures dans les profils, deux lectures de comparaison, une garde
-  // de nullité : six occurrences, et pas celle de `doitSArreter`.
-  // Sept occurrences : trois écritures de profil, une garde de nullité, et
-  // trois lectures de comparaison — deux pour le camouflage, une pour la
-  // munition spéciale. Celle de `doitSArreter` faisait la huitième.
-  assert.equal(lectures.length, 7, `occurrences trouvées : ${lectures.join(', ')}`);
-  assert.equal(code.includes('p.colonnePredilection === pc.colonneMatrice'), false,
-    'la règle d\'arrêt lit encore la colonne de prédilection');
+  // Onze occurrences : trois écritures de profil, et huit lectures — une pour
+  // la munition spéciale et sa garde de nullité (2), deux pour le camouflage,
+  // deux pour `doitSArreter` (garde puis comparaison), deux pour
+  // `cibleDuDecalage` (garde puis comparaison).
+  assert.equal(lectures.length, 11, `occurrences trouvées : ${lectures.join(', ')}`);
   assert.ok(code.includes('pc.colonneMatrice !== p.colonnePredilection'),
     'la munition spéciale ne lit plus la prédilection');
   assert.ok(code.includes('profil(c).colonneMatrice !== p.colonnePredilection'),
     'le camouflage ne lit plus la prédilection');
 
-  // Et la règle d'arrêt lit bien le GENRE — la seule grandeur qui sépare un mur
-  // d'un bâtiment.
+  // ⚠⚠ ET LA COMPARAISON EST ÉCRITE DANS LE SENS QUI PROTÈGE DU `null`,
+  // PARTOUT : `p.colonnePredilection === pc.colonneMatrice` seul serait VRAI si
+  // les deux valaient `null`, et une entité qui ne tire pas porte `null`. La
+  // garde de nullité vient d'abord, et cette forme-là reste interdite.
+  assert.equal(code.includes('p.colonnePredilection === pc.colonneMatrice'), false,
+    'une comparaison de prédilection est écrite sans garde de nullité');
+
+  // La règle d'arrêt lit le GENRE — la seule grandeur qui sépare un mur d'un
+  // bâtiment — ET la colonne, sous l'exclusion des structures défensives.
   const regle = code.match(/function doitSArreter[\s\S]*?\n}/);
   assert.ok(regle !== null, 'doitSArreter est introuvable');
   assert.ok(regle[0].includes("genre === 'batiment'"), 'la règle d\'arrêt ne lit pas le genre');
   assert.ok(regle[0].includes('comportementAerien'), 'la garde aérienne a disparu');
   assert.ok(regle[0].includes('e.aTire'), 'la garde du tir a disparu');
+  assert.ok(regle[0].includes('p.colonnePredilection === null'),
+    'la garde de nullité de la prédilection a disparu de la règle d\'arrêt');
+  assert.ok(regle[0].includes('estStructureDefensive(pc)'),
+    'la règle d\'arrêt ne tient plus l\'exclusion du 04/09');
+
+  // Et l'exclusion est le COUPLE, jamais l'une des deux moitiés seule : le genre
+  // seul couvrirait les artilleries, la colonne seule les bâtiments.
+  const exclusion = code.match(/function estStructureDefensive[\s\S]*?\n}/);
+  assert.ok(exclusion !== null, 'estStructureDefensive est introuvable');
+  assert.ok(exclusion[0].includes("genre === 'defense'"), 'la moitié GENRE a disparu');
+  assert.ok(exclusion[0].includes("colonneMatrice === 'structureOuAviation'"),
+    'la moitié COLONNE a disparu');
 });

@@ -61,13 +61,31 @@ export function caseDepuisMilli(milli) {
 }
 
 /**
- * Distance AU CARRÉ entre deux positions, en milli-case².
- * Les colonnes sont des entiers de case : elles sont converties ici.
+ * Distance AU CARRÉ entre deux positions, en milli-case², LES DEUX AXES EN
+ * MILLI-CASES.
+ *
+ * ⚠⚠ ELLE S'APPELAIT `distanceCarree` ET ELLE MÉLANGEAIT LES DEUX UNITÉS —
+ * rangée en milli, colonne en CASES, converties dedans. C'était juste tant
+ * qu'aucune entité ne changeait de colonne : la colonne était un entier, et il
+ * n'y avait pas d'autre position latérale à décrire. Le lot COLONNE fait tomber
+ * cette prémisse pour la DÉFENSE des deux camps, et une entité porte désormais
+ * un `colonneMilli` comme elle porte un `rangeeMilli`.
+ *
+ * ⚠⚠ LE RENOMMAGE EST LE GARDE-FOU, ET C'EST POUR ÇA QU'IL A ÉTÉ FAIT. Gardé
+ * sous son ancien nom, un appelant oublié lui aurait passé une colonne en
+ * CASES : le carré aurait été faux d'un facteur 1 000 000 sur l'axe horizontal,
+ * `node --check` n'aurait rien vu, et un test de portée écrit sur des entités
+ * ALIGNÉES en colonne n'aurait rien vu non plus — la composante horizontale y
+ * vaut zéro des deux façons. Sous un nom neuf, `esbuild` refuse le build sur
+ * « No matching export » et Node lève à l'import : un appelant oublié ne peut
+ * plus être silencieux. Les cinq appelants de production ont été repris d'un
+ * coup, et `COL T11` désaligne les colonnes pour que le montage puisse tomber.
+ *
  * @returns {number} Entier.
  */
-export function distanceCarree(rangeeMilliA, colonneA, rangeeMilliB, colonneB) {
+export function distanceCarreeMilli(rangeeMilliA, colonneMilliA, rangeeMilliB, colonneMilliB) {
   const dr = rangeeMilliA - rangeeMilliB;
-  const dc = (colonneA - colonneB) * MILLI_PAR_CASE;
+  const dc = colonneMilliA - colonneMilliB;
   return dr * dr + dc * dc;
 }
 
@@ -108,6 +126,26 @@ export function bornesBande(nomBande) {
  */
 export function estSortiParLeHaut(rangeeMilli) {
   return rangeeMilli >= milliDepuisCase(DERNIERE_RANGEE + 1);
+}
+
+/**
+ * Une position latérale sort-elle de la grille PAR LE CÔTÉ ?
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE `peutAvancer` EST ÉCRITE POUR LA VERTICALE, ET QU'ON
+ * NE LUI AJOUTE PAS UN AXE. Sa première ligne teste `rangee >= DERNIERE_RANGEE`
+ * et rend le comportement aérien : un paramètre d'axe en ferait deux fonctions
+ * dans une, dont l'une des deux branches ne serait jamais relue. La borne
+ * latérale est donc écrite ICI, PURE et EXPORTÉE, pour qu'un test l'atteigne
+ * sans monter un combat — `COL T10`.
+ *
+ * ⚠ ET IL N'Y A AUCUNE SORTIE LÉGALE PAR LE CÔTÉ, contrairement au fond que
+ * l'aviation traversante franchit. Une entité qui atteindrait la colonne 0 ou
+ * 10 quitterait la grille sans qu'aucune règle le prévoie : le déplacement qui
+ * l'y mènerait est simplement REFUSÉ, et elle reste où elle est.
+ */
+export function estSortiParLeCote(colonneMilli) {
+  const c = caseDepuisMilli(colonneMilli);
+  return c < PREMIERE_COLONNE || c > DERNIERE_COLONNE;
 }
 
 // ---------------------------------------------------------------------------

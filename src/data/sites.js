@@ -1244,7 +1244,45 @@ export const DISPOSITION_DEFENSES = {
   ordreCategories: ['artillerie', 'tourelle', 'unite', 'mur', 'barriere'],
 
   // Écart maximal de charge entre la colonne la plus garnie et la moins garnie.
-  // Les unités ne changent jamais de colonne : une colonne à huit structures
-  // serait infranchissable et une colonne vide une autoroute.
+  //
+  // ⚠⚠ SON MOTIF A ÉTÉ RÉÉCRIT LE 06/09, LOT COLONNE. Il disait « les unités ne
+  // changent jamais de colonne : une colonne à huit structures serait
+  // infranchissable et une colonne vide une autoroute ». La première moitié est
+  // tombée pour la DÉFENSE, qui se décale désormais latéralement ; elle reste
+  // vraie pour l'ASSAUT, qui ne bouge que vers le fond. Le motif tient donc
+  // encore, et par le bon bout : c'est l'ATTAQUANT qui ne contourne pas, donc
+  // c'est lui qu'une colonne surchargée arrête et qu'une colonne vide laisse
+  // passer. Que la défense puisse venir à sa rencontre ne lui rend aucun
+  // contournement.
   ecartColonnesMax: 2,
+
+  // Nombre de TRANSFERTS tentés sur le profil de charge des colonnes — lot
+  // COLONNE, 06/09, point 9 d'Ethan : « la disposition des unités et bâtiments
+  // ouvrage semblent identique alors qu'elle doit être plus aléatoire ».
+  //
+  // ⚠⚠ ET LE DÉFAUT N'ÉTAIT PAS UNE ABSENCE DE HASARD, C'EN ÉTAIT LA FORME. Le
+  // placement tirait bien une permutation des colonnes par graine — mais il
+  // posait ensuite en TOURNIQUET, `colonne = permutation[i % 9]`, si bien que
+  // deux sites de même niveau ne différaient QUE par le NOM des colonnes : même
+  // nombre d'occupants par rangée, même charge par colonne, même forme. La
+  // graine renommait, elle ne redessinait pas.
+  //
+  // ⚠⚠ CE QUI CHANGE LA FORME, C'EST LE PROFIL DE CHARGE. Une permutation
+  // préserve le MULTI-ENSEMBLE des charges par colonne : tant que les neuf
+  // colonnes portent toutes le même nombre d'occupants, aucun tirage ne peut
+  // produire deux dispositions qui ne soient pas l'image l'une de l'autre.
+  // C'est pourquoi le lot tire d'abord une charge PAR COLONNE — plate, puis
+  // brassée par transferts — et n'assigne les rangées qu'ensuite. Le budget
+  // d'écart ci-dessus est ce qui borne le brassage, et il n'a pas bougé.
+  //
+  // Dix-huit tentatives, soit deux par colonne : mesuré, c'est le point où le
+  // profil cesse d'être plat sans que le budget d'écart ne refuse la moitié des
+  // transferts. Un transfert refusé consomme ses tirages comme un accepté : le
+  // déterminisme ne dépend pas du taux d'acceptation.
+  //
+  // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme `ecartColonnesMax`
+  // le fait déjà. Le nom de la table dit « défenses » et c'est un héritage ;
+  // écrire une seconde table pour un seul nombre serait la seconde vérité que
+  // §4 interdit.
+  brassagesDeCharge: 18,
 };

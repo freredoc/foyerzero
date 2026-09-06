@@ -18,7 +18,7 @@ import { NIVEAU } from '../src/data/niveaux.js';
 import {
   creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin, facteurMilli,
 } from '../src/sim/combat.js';
-import { caseDepuisMilli, distanceCarree } from '../src/sim/grille.js';
+import { caseDepuisMilli, distanceCarreeMilli } from '../src/sim/grille.js';
 import { executerRaid, pvMaxDeLUnite } from '../src/sim/raid.js';
 import { APRES_RAID } from '../src/data/sites.js';
 import { genererSite } from '../src/sim/generateur.js';
@@ -726,13 +726,13 @@ function pertesAuPremierTick(etat) {
   const avant = new Map();
   for (const e of etat.entites) {
     if (e.camp !== 'defense') continue;
-    avant.set(`${caseDepuisMilli(e.rangeeMilli)},${e.colonne}`, e.pvMilli);
+    avant.set(`${caseDepuisMilli(e.rangeeMilli)},${caseDepuisMilli(e.colonneMilli)}`, e.pvMilli);
   }
   tick(etat);
   const pertes = new Map();
   for (const e of etat.entites) {
     if (e.camp !== 'defense') continue;
-    const cle = `${caseDepuisMilli(e.rangeeMilli)},${e.colonne}`;
+    const cle = `${caseDepuisMilli(e.rangeeMilli)},${caseDepuisMilli(e.colonneMilli)}`;
     pertes.set(cle, avant.get(cle) - e.pvMilli);
   }
   return pertes;
@@ -757,7 +757,8 @@ test('MODULES-A T1 — le barrage frappe les VOISINES de la cible, et elles seul
   // ⚠ APRÈS LE TICK : `cibleIndice` est posé par l'étape 3, il est encore nul
   // au tick 0. La cible élue est celle sur laquelle le tir direct a porté.
   const vise = etat.entites.find((e) => e.camp === 'attaque').cibleIndice;
-  assert.equal(`${caseDepuisMilli(etat.entites[vise].rangeeMilli)},${etat.entites[vise].colonne}`,
+  assert.equal(`${caseDepuisMilli(etat.entites[vise].rangeeMilli)},`
+    + `${caseDepuisMilli(etat.entites[vise].colonneMilli)}`,
     '3,5', 'montage : le ciblage n\'a pas élu la case attendue');
   const directe = pertes.get('3,5');
   assert.ok(directe > 0, 'montage sans mordant : le tir direct ne retire rien');
@@ -860,7 +861,7 @@ test('MODULES-A T3 — le barrage ne coûte pas une seule munition de plus', () 
   // ⚠ SANS CE CONTRE-CAS, LE TEST PASSERAIT SUR UN BARRAGE INERTE. Les deux
   // combats doivent diverger PAR AILLEURS — c'est là toute la mesure.
   const pvVoisines = (etat) => etat.entites
-    .filter((e) => e.camp === 'defense' && e.colonne !== 5)
+    .filter((e) => e.camp === 'defense' && caseDepuisMilli(e.colonneMilli) !== 5)
     .reduce((s, e) => s + e.pvMilli, 0);
   assert.ok(pvVoisines(avec.etat) < pvVoisines(sans.etat),
     'les voisines n\'ont pas plus souffert avec le module : le barrage ne fait rien');
@@ -913,7 +914,8 @@ test('MODULES-A T4 — en DÉFENSE, le barrage n\'a rien à frapper', () => {
         const g = etat.entites.find((e) => e.id === 'perceurs' && e.camp === 'defense');
         const c = g.cibleIndice === null ? null : etat.entites[g.cibleIndice];
         visee = c === null ? null : {
-          camp: c.camp, colonne: c.colonne, rangee: caseDepuisMilli(c.rangeeMilli),
+          camp: c.camp, colonne: caseDepuisMilli(c.colonneMilli),
+          rangee: caseDepuisMilli(c.rangeeMilli),
         };
       }
     }
@@ -1227,7 +1229,7 @@ test('MODULES-B T1 — le Flashbang désactive une infanterie, et pas une struct
   // ce qui est la grandeur en jeu. Le Bélier ne fait que s'en rapprocher.
   assert.equal(belier.rangeeMilli, 3920, 'montage : le Bélier ne monte plus au contact du mur');
   const aPortee = (r) => (guetteur.rangeeMilli - r) ** 2
-    + ((guetteur.colonne - belier.colonne) * 1000) ** 2 <= belier.porteeCarree;
+    + (guetteur.colonneMilli - belier.colonneMilli) ** 2 <= belier.porteeCarree;
   assert.ok(aPortee(2000), 'montage : le Guetteur n\'était pas à portée au départ');
   assert.ok(aPortee(belier.rangeeMilli), 'montage : le Guetteur est sorti de portée en route');
 
@@ -1579,7 +1581,7 @@ test('MODULES-B T9 — le Booster ne franchit rien (arbitrage 2)', () => {
 function projectionCanonique(etat) {
   const cle = (e) => `${e.id}@${e.camp}`;
   return etat.entites.map((e) => [
-    cle(e), e.colonne, e.rangeeMilli, e.pvMilli, e.vivant ? 1 : 0,
+    cle(e), e.colonneMilli, e.rangeeMilli, e.pvMilli, e.vivant ? 1 : 0,
     e.cibleIndice === null ? '-' : cle(etat.entites[e.cibleIndice]),
     [...e.modulesActifs].sort().join('|'),
     e.effetsTemporises.map((f) => `${f.nom}:${f.finTick}`).sort().join('|'),
@@ -1787,7 +1789,8 @@ test('MODULES-B T14 — le départage de la neutralisation est celui de `ciblage
   ];
   for (const ordre of [[0, 1], [1, 0]]) {
     const v = aEgaleDistance(ordre, parColonne);
-    assert.equal(v.colonne, 4, `ordre ${ordre.join('')} : la colonne 6 a été retenue`);
+    assert.equal(caseDepuisMilli(v.colonneMilli), 4,
+      `ordre ${ordre.join('')} : la colonne 6 a été retenue`);
   }
 
   // 2) Même distance, même colonne → la PLUS PETITE rangée.
@@ -1922,8 +1925,8 @@ test('MODULES-C T1 — le rayon est de 2 500 MILLI-cases, borne comprise', () =>
   /** Place le porteur à `d` milli-cases de l'allié et joue UN tick. */
   const a = (d) => {
     porteur.rangeeMilli = allie.rangeeMilli - d;
-    const d2 = distanceCarree(
-      porteur.rangeeMilli, porteur.colonne, allie.rangeeMilli, allie.colonne,
+    const d2 = distanceCarreeMilli(
+      porteur.rangeeMilli, porteur.colonneMilli, allie.rangeeMilli, allie.colonneMilli,
     );
     assert.equal(d2, d * d, 'montage : les deux acteurs doivent être sur la même colonne');
     const pv = allie.pvMilli;
@@ -1934,7 +1937,7 @@ test('MODULES-C T1 — le rayon est de 2 500 MILLI-cases, borne comprise', () =>
     return { pvPerdus: pv - allie.pvMilli, absorbe: res - porteur.bouclierMilli };
   };
 
-  // ⚠⚠ C'EST LE PIÈGE DU LOT, ET CE TEST EST LÀ POUR LUI. `distanceCarree` rend
+  // ⚠⚠ C'EST LE PIÈGE DU LOT, ET CE TEST EST LÀ POUR LUI. `distanceCarreeMilli` rend
   // un carré de MILLI-cases : un seuil écrit `2.5 * 2.5` ferait échouer DÈS
   // d = 2 000, c'est-à-dire deux cases — le bouclier ne couvrirait plus que la
   // case du porteur. Les deux premières lignes suffisent à l'attraper.
@@ -2083,8 +2086,8 @@ test('MODULES-C T5 — un bouclier mort ne protège plus, DANS LE MÊME TICK', (
     // Le porteur rejoint la rangée de l'allié : il le couvre (deux colonnes
     // d'écart, 2 000 milli-cases) tout en restant sous le feu de sa casemate.
     porteur.rangeeMilli = allie.rangeeMilli;
-    const d2 = distanceCarree(
-      porteur.rangeeMilli, porteur.colonne, allie.rangeeMilli, allie.colonne,
+    const d2 = distanceCarreeMilli(
+      porteur.rangeeMilli, porteur.colonneMilli, allie.rangeeMilli, allie.colonneMilli,
     );
     assert.ok(d2 <= BOUCLIER_RAYON_MILLI * BOUCLIER_RAYON_MILLI, 'montage : l\'allié doit être couvert');
     // ⚠ L'INDICE DU PORTEUR DOIT ÊTRE LE PLUS PETIT : le tampon est appliqué par
@@ -2154,22 +2157,61 @@ test('MODULES-C T6 — l\'ordre du tampon n\'a plus d\'influence', () => {
     // Le porteur rejoint la rangée des alliés : une colonne d'écart de chaque
     // côté, donc les deux sont couverts. Le porteur, lui, n'est visé par
     // personne — c'est bien l'ordre du TAMPON qu'on mesure, pas sa survie.
+    //
+    // ⚠⚠ LES TROIS SONT ALIGNÉS À LA MAIN DEPUIS LE LOT COLONNE, ET C'EST UNE
+    // RÉPARATION DE MONTAGE, PAS UN ASSOUPLISSEMENT. Ce test mesure l'ORDRE DU
+    // TAMPON de `appliquerDegats` ; sa géométrie n'était qu'une prémisse, et
+    // elle s'appuyait sur le fait que vingt ticks laissaient les deux Meutes à
+    // la même rangée. L'arrêt sur prédilection du 06/09 les décale — chacune
+    // s'arrête pour l'infanterie de garnison qu'elle vise —, si bien que le
+    // second allié sortait du rayon du bouclier et que la prémisse tombait sans
+    // que la propriété mesurée bouge. On POSE donc la géométrie au lieu de
+    // l'espérer, et la boucle d'assertions qui suit la vérifie encore.
     porteur.rangeeMilli = allies[0].rangeeMilli;
+    for (const a of allies) a.rangeeMilli = allies[0].rangeeMilli;
     for (const a of allies) {
-      const d2 = distanceCarree(porteur.rangeeMilli, porteur.colonne, a.rangeeMilli, a.colonne);
+      const d2 = distanceCarreeMilli(
+        porteur.rangeeMilli, porteur.colonneMilli, a.rangeeMilli, a.colonneMilli,
+      );
       assert.ok(d2 <= BOUCLIER_RAYON_MILLI * BOUCLIER_RAYON_MILLI,
-        `montage : l'allié en c${a.colonne} doit être couvert`);
+        `montage : l'allié en c${caseDepuisMilli(a.colonneMilli)} doit être couvert`);
     }
     // Réservoir volontairement insuffisant : le premier servi est couvert, le
     // second paie le reste. Sans tri, c'est l'ordre de déclaration qui trancherait.
-    porteur.bouclierMilli = 150000;
+    //
+    // ⚠⚠ IL SE MESURE, IL NE S'ÉCRIT PLUS EN DUR — LOT COLONNE. Il valait
+    // 150 000, un nombre calibré sur la géométrie qu'un raid de vingt ticks
+    // produisait AVANT l'arrêt sur prédilection. Cet arrêt décale les Meutes,
+    // donc les distances, donc les dégâts encaissés : le nombre figé est devenu
+    // soit trop grand — les deux alliés couverts — soit trop petit, et le test
+    // tombait sur sa PRÉMISSE, pas sur ce qu'il mesure. On relève ce que les
+    // deux prendraient sans bouclier, sur une COPIE de l'état, et on en donne
+    // un peu plus de la moitié : de quoi couvrir exactement l'un des deux.
+    const sansBouclier = structuredClone(etat);
+    for (const e of sansBouclier.entites) e.bouclierMilli = 0;
+    const pvAvant = sansBouclier.entites.map((e) => e.pvMilli);
+    tick(sansBouclier);
+    const encaisse = sansBouclier.entites
+      .filter((e) => e.id === 'meute' && e.camp === 'attaque')
+      .map((e) => pvAvant[e.indice] - e.pvMilli);
+    assert.equal(encaisse.length, 2, 'montage : deux alliés à couvrir');
+    assert.ok(encaisse.every((x) => x > 0), 'montage : les deux alliés doivent encaisser');
+    // ⚠ LE MAXIMUM, PAS LE MINIMUM : le tampon sert par INDICE DE CIBLE
+    // croissant, et rien ne dit que le premier servi est celui qui encaisse le
+    // moins. Avec le minimum, le premier servi pouvait n'être couvert QUE
+    // partiellement et les deux payaient — la prémisse tombait encore.
+    porteur.bouclierMilli = Math.max(...encaisse) + 1;
+    assert.ok(porteur.bouclierMilli < encaisse[0] + encaisse[1],
+      'montage : le réservoir devait être insuffisant pour les deux');
     const avant = allies.map((e) => e.pvMilli);
     tick(etat);
     return {
       // ⚠ CLÉ PAR POSITION, PAS PAR INDICE : les indices se décalent quand on
       // permute les défenseurs, et deux relevés indexés ne seraient pas
       // comparables. Le repère stable est la colonne de l'allié.
-      pertes: Object.fromEntries(allies.map((e, i) => [`c${e.colonne}`, avant[i] - e.pvMilli])),
+      pertes: Object.fromEntries(
+        allies.map((e, i) => [`c${caseDepuisMilli(e.colonneMilli)}`, avant[i] - e.pvMilli]),
+      ),
       reservoir: porteur.bouclierMilli,
     };
   };
@@ -2208,7 +2250,9 @@ test('MODULES-C T7 — à recouvrement, c\'est le plus petit indice qui se vide 
   p1.rangeeMilli = allie.rangeeMilli - 2000;
   p2.rangeeMilli = allie.rangeeMilli - 2000;
   for (const p of [p1, p2]) {
-    const d2 = distanceCarree(p.rangeeMilli, p.colonne, allie.rangeeMilli, allie.colonne);
+    const d2 = distanceCarreeMilli(
+      p.rangeeMilli, p.colonneMilli, allie.rangeeMilli, allie.colonneMilli,
+    );
     assert.ok(d2 <= BOUCLIER_RAYON_MILLI * BOUCLIER_RAYON_MILLI,
       `montage : le porteur #${p.indice} doit couvrir l'allié`);
   }
@@ -2671,8 +2715,8 @@ function sceneDePortee({ defenseur, modules = [], distanceMilli }) {
   assert.ok(garde !== undefined && assaillant !== undefined, 'montage');
   if (distanceMilli !== undefined) assaillant.rangeeMilli = garde.rangeeMilli - distanceMilli;
   const avant = assaillant.pvMilli;
-  const d2 = distanceCarree(garde.rangeeMilli, garde.colonne,
-    assaillant.rangeeMilli, assaillant.colonne);
+  const d2 = distanceCarreeMilli(garde.rangeeMilli, garde.colonneMilli,
+    assaillant.rangeeMilli, assaillant.colonneMilli);
   tick(etat);
   return { etat, garde, assaillant, d2, pertes: avant - assaillant.pvMilli };
 }
@@ -4416,6 +4460,14 @@ test('MODULES-F T10 — le soin n\'ajoute de ligne ni au butin ni aux points', (
   assert.doesNotMatch(corpsDe('pointsRecherche'), /VOL_PCT/,
     'le Vol de vie est entré dans les points');
 
+  // ⚠⚠ LA VAGUE S'ÉLARGIT AU LOT COLONNE, ET C'EST UNE RÉPARATION DE PRÉMISSE.
+  // Elle portait deux unités ; l'arrêt sur prédilection du 06/09 arrête le
+  // Bélier DEVANT le Broyeur — une unité de garnison de colonne `vehicule`, qui
+  // n'est ni un merlon ni une tourelle, donc pas exclue — et le raid n'atteint
+  // plus la Souche. La seconde moitié du test exige un butin non nul, et elle
+  // tombait sur ce « montage inerte », pas sur ce qu'elle mesure. Deux Béliers
+  // de plus, sur des colonnes libres, et le site retombe : mesuré, `souche` au
+  // tick 284 contre `attaquants` au tick 69.
   const montageDe = (vol) => ({
     niveau: 20,
     obstacles: [],
@@ -4424,6 +4476,8 @@ test('MODULES-F T10 — le soin n\'ajoute de ligne ni au butin ni aux points', (
     vagues: [[
       { id: 'meute', colonne: 5, rangee: 4, niveau: 20 },
       { id: 'belier', colonne: 6, rangee: 4, niveau: 20 },
+      { id: 'belier', colonne: 3, rangee: 4, niveau: 20 },
+      { id: 'belier', colonne: 8, rangee: 4, niveau: 20 },
     ]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: vol ? ['volDeVie'] : [] },
@@ -4500,7 +4554,7 @@ test('MODULES-F T11 — le franchissement porte l\'indice de la BARRIÈRE', () =
     b.pvMilli = Math.floor(b.pvMaxMilli / 2);
     // Le Bélier est amené SUR la case de la Herse : il la franchit ce tick-ci.
     v.rangeeMilli = herse.rangeeMilli;
-    v.colonne = herse.colonne;
+    v.colonneMilli = herse.colonneMilli;
     v.pvMilli = pvVictime;
     const avant = b.pvMilli;
     tick(etat);
@@ -4638,8 +4692,26 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // canal vide et le canal armé rendent le même nombre. C'est cette moitié qui
   // rend l'autre falsifiable : sans elle, un barème globalement gonflé passerait
   // la moitié « en hausse » sans rien prouver.
-  const apres20 = { 11: 2_103_589n, 22: 989_923n, 33: 1_814_857n };
-  for (const g of [11, 22, 33]) {
+  // ⚠ RÉANCRÉ AU LOT COLONNE, AVEC LE NOMBRE D'AVANT ET CELUI D'APRÈS. Les
+  // trois valeurs de l'arrêt du 04/09 étaient 2 103 589 · 989 923 · 1 814 857 ;
+  // l'arrêt sur prédilection du 06/09 les déplace, dans les deux sens.
+  //
+  // ⚠⚠ ET LES TROIS GRAINES CHANGENT, PARCE QUE LA PRÉMISSE DU MONTAGE EST
+  // TOMBÉE — pas l'assertion. Le point 9 du même lot fait varier la disposition
+  // ET la composition d'un site ; sur les graines 11 et 22, la garnison de
+  // niveau 38 ne porte plus AUCUNE pièce dont le `moduleOuvrage` soit armé, si
+  // bien que le canal armé et le canal vide rendent EXACTEMENT le même nombre.
+  // Le test ne mesurait plus rien sur deux de ses trois graines. Les nouvelles —
+  // 3, 14, 31 — discriminent aux DEUX niveaux, et la propriété gardée n'a pas
+  // bougé d'un mot.
+  //
+  // ⚠ ET C'EST UN FAIT DE JEU À REMONTER, PAS UN ACCIDENT DE MONTAGE : l'effet
+  // du canal de l'Ouvrage dépend désormais de ce que le tirage a posé, là où la
+  // disposition uniforme d'avant le rendait quasi certain. Voir
+  // `RAPPORT-lotCOLONNE.md`.
+  const GRAINES = [3, 14, 31];
+  const apres20 = { 3: 698_133n, 14: 580_245n, 31: 3_143_606n };
+  for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
   }
@@ -4650,8 +4722,14 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // Depuis que les unités traversent la défense au lieu de s'y arrêter, elles
   // arrivent entamées et cassent moins : le bonus ne compense plus, et les
   // points BAISSENT. Trois graines sur trois, dans le même sens.
-  const apres38 = { 11: 99_380_188n, 22: 132_090_028n, 33: 246_884_277n };
-  for (const g of [11, 22, 33]) {
+  // ⚠ RÉANCRÉ : 99 380 188 · 132 090 028 · 246 884 277 sous l'arrêt du 04/09.
+  // La BAISSE est franche sur les trois — les unités se figent désormais devant
+  // les défenseuses de leur prédilection et arrivent moins loin.
+  // ⚠ RÉANCRÉ AU POINT 9 : 131 695 108 · 174 314 881 · 181 035 872 sur les trois
+  // graines neuves. Le SENS est intact — armé reste sous vide sur les trois —,
+  // et c'est la seule chose que ce test mesure.
+  const apres38 = { 3: 131_695_108n, 14: 174_314_881n, 31: 181_035_872n };
+  for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
       `niveau 38, graine ${g} : le canal armé ne coûte plus rien`);
@@ -4662,8 +4740,12 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // encaisse davantage, l'assaut casse moins, et les points baissent, comme au
   // lot MODULES-F. Ce lot-ci ne touche à aucun barème ; l'arbitrage
   // d'équilibrage revient à Ethan.
-  const apres50 = { 11: 15_308_879_030n, 22: 4_561_467_407n, 33: 8_150_073_821n };
-  for (const g of [11, 22, 33]) {
+  // ⚠ RÉANCRÉ : 15 308 879 030 · 4 561 467 407 · 8 150 073 821 sous l'arrêt du
+  // 04/09. Le SENS ne bouge pas — armé reste sous vide sur les trois graines —,
+  // et c'est ce que le test mesure ; les valeurs, elles, sont un constat.
+  // ⚠ RÉANCRÉ AU POINT 9, sur les trois graines neuves.
+  const apres50 = { 3: 4_690_402_313n, 14: 4_758_499_020n, 31: 1_528_651_413n };
+  for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);
   }
@@ -4682,7 +4764,16 @@ test('MODULES-F T14 bis — le Camouflage côté Ouvrage ne fait RIEN, et c\'est
     { id: 'perceurs', colonne: 3 }, { id: 'perceurs', colonne: 7 },
   ];
   // Au niveau 28 le canal ne contient QUE `camouflage` : le site isole le module.
-  const site = genererSite({ type: 'base', niveau: 28, saveur: null, graine: 1028 });
+  //
+  // ⚠⚠ LA GRAINE PASSE DE 1028 À 1077 AU LOT COLONNE, POINT 9, ET C'EST UNE
+  // PRÉMISSE RÉPARÉE, PAS UNE ASSERTION ASSOUPLIE. La dernière ligne de ce test
+  // exige que le bonus de MODULES-E MORDE, ce qui demande qu'au moins un porteur
+  // de Camouflage soit ENTAMÉ à la fin du raid — `pointsRecherche` majore de
+  // 20 % les points d'une cible dont le module est débloqué, et une cible
+  // intacte n'en rapporte aucun. La nouvelle disposition de la graine 1028 laisse
+  // ses deux porteurs intacts : le test cessait de mesurer quoi que ce soit. La
+  // 1077 en abîme, et les trois assertions sont inchangées.
+  const site = genererSite({ type: 'base', niveau: 28, saveur: null, graine: 1077 });
   assert.deepEqual(site.modulesDebloques.ouvrage.defense, ['camouflage'],
     'montage : le niveau 28 n\'isole plus le Camouflage');
   const porteurs = site.defenseurs.filter((d) => ['carapace', 'fouisseurs'].includes(d.id));
@@ -4707,8 +4798,29 @@ test('MODULES-F T14 bis — le Camouflage côté Ouvrage ne fait RIEN, et c\'est
     'le Camouflage change le combat côté Ouvrage : la mesure du rapport est fausse');
   assert.notEqual(serialiserEtat(avec.etat), serialiserEtat(sans.etat),
     'montage : la liste n\'est même pas sérialisée, la garde ci-dessus est creuse');
-  assert.equal(pointsRecherche(avec.resultat, avec.montage),
-    pointsRecherche(sans.resultat, sans.montage));
+  // ⚠⚠ LA COMPARAISON DE POINTS SE FAIT À MONTAGE CONSTANT DEPUIS LE LOT
+  // COLONNE, ET ELLE SE RESSERRE. Elle opposait `pointsRecherche(avec,
+  // avec.montage)` à `pointsRecherche(sans, sans.montage)` : deux montages
+  // différents, donc deux listes de modules débloqués différentes — et
+  // `pointsRecherche` MAJORE de +20 % les points d'une cible dont le module est
+  // débloqué, depuis MODULES-E. L'égalité ne tenait que parce qu'aucun porteur
+  // de Camouflage n'était entamé sur cette graine ; l'arrêt sur prédilection du
+  // 06/09 en abîme un, et le bonus est apparu. **Il est voulu, il n'est pas ce
+  // que ce test mesure.**
+  //
+  // Ce que le test dit — « le Camouflage ne change pas le COMBAT côté Ouvrage »
+  // — se mesure donc en donnant LE MÊME montage aux deux résultats : ce qui
+  // reste différent est le combat, et rien d'autre.
+  assert.equal(pointsRecherche(avec.resultat, sans.montage),
+    pointsRecherche(sans.resultat, sans.montage),
+    'le Camouflage change les points côté Ouvrage, à liste de modules égale');
+
+  // ⚠ ET LE BONUS DE MODULES-E, LUI, EST ENCORE LÀ ET SE MESURE DE FACE : la
+  // même issue, lue sous la liste qui contient `camouflage`, vaut PLUS. Sans
+  // cette ligne, la garde ci-dessus passerait aussi si le bonus disparaissait.
+  assert.ok(pointsRecherche(sans.resultat, avec.montage)
+    > pointsRecherche(sans.resultat, sans.montage),
+  'le bonus de module débloqué de MODULES-E a disparu');
 });
 
 test('MODULES-F T15 — les deux drapeaux n\'ouvrent AUCUNE ligne à l\'écran', () => {
@@ -4791,10 +4903,20 @@ test('MODULES-F T16 — le déterminisme tient avec les deux modules', () => {
       obstacles: [],
       batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
       defenseurs: ordre.map((i) => defenseurs[i]),
+      // ⚠⚠ LE BÉLIER ET LA CRÉCELLE SONT PERMUTÉS AU LOT COLONNE, ET C'EST UNE
+      // RÉPARATION DE PRÉMISSE. Le Broyeur est une pièce de garnison MOBILE
+      // (`vitesseMilli` non nul) : depuis le 06/09 il se décale vers la cible la
+      // plus proche de sa prédilection, qui est `vehicule`. Le Bélier posé en
+      // colonne 4 l'attirait donc hors de sa colonne, et — mesuré — il MOURAIT
+      // dans les deux runs, si bien que « le Vol de vie a soigné le Broyeur »
+      // comparait deux zéros. Le Bélier passe en colonne 6, celle du Broyeur :
+      // le décalage rend `sens === 0`, la pièce reste où elle est, et les deux
+      // gardes de non-vacuité redeviennent mesurables — broyeur 9 457 535 armé
+      // contre 6 355 935 nu, Meute 5 041 263 contre 6 768 887.
       vagues: [[
         { id: 'meute', colonne: 5, rangee: 2, niveau: 30 },
-        { id: 'belier', colonne: 4, rangee: 2, niveau: 30 },
-        { id: 'crecelle', colonne: 6, rangee: 2, niveau: 30 },
+        { id: 'belier', colonne: 6, rangee: 2, niveau: 30 },
+        { id: 'crecelle', colonne: 4, rangee: 2, niveau: 30 },
       ]],
       modulesDebloques: {
         ouvrage: { offense: [], defense: modules },
