@@ -148,15 +148,34 @@ test('montage — les détruites sont RETIRÉES, les abîmées montées à leurs
   const id = avantPoste(etat);
   const intact = montageDuSite(etat.graine, id);
 
+  // ⚠⚠ L'ÉTAI TOMBE, ET C'EST CE QUI FAIT QUE LA DÉTRUITE RESTE DÉTRUITE.
+  // Depuis le lot RETOUR-DÉFENSES, une défense à zéro se relève à 70 % à la fin
+  // du raid — donc `appliquer` ne la retirerait plus, et ce test cesserait de
+  // mesurer ce qu'il annonce. La PRÉMISSE a changé, pas la propriété : avec
+  // l'Étai à terre, rien ne revient jamais, et le retrait redevient observable.
+  const indexEtai = intact.batiments.findIndex((b) => b.id === 'etai');
+  assert.ok(indexEtai >= 0, 'montage : pas d\'Étai dans ce site');
+  // ⚠ ET LE BÂTIMENT ABÎMÉ N'EST PAS L'ÉTAI : deux clés identiques dans le même
+  // littéral s'écraseraient, et le test se falsifierait tout seul.
+  const indexAbime = intact.batiments.findIndex((b, i) => i !== indexEtai);
+  assert.ok(indexAbime >= 0, 'montage : un seul bâtiment dans ce site');
+
   enregistrerLeRaid(etat, id, resultatSur(intact, {
-    batiments: { 1: 0.25 }, defenses: { 0: 0, 1: 0.5 },
+    batiments: { [indexAbime]: 0.25, [indexEtai]: 0 }, defenses: { 0: 0, 1: 0.5 },
   }));
   const courant = montageCourant(etat, id);
 
-  assert.equal(courant.batiments.length, intact.batiments.length, 'aucun bâtiment n\'était détruit');
+  assert.equal(courant.batiments.length, intact.batiments.length - 1, 'l\'Étai détruit est resté');
   assert.equal(courant.defenseurs.length, intact.defenseurs.length - 1, 'la détruite est restée');
-  assert.equal(courant.batiments[1].pvMilli, Math.floor(
-    construireResultat(creerCombat(intact)).batiments[1].pvMaxMilli * 0.25,
+  // ⚠ L'ABÎMÉ SE RETROUVE PAR SA CASE, PAS PAR SON RANG : l'Étai retiré, les
+  // indices du montage courant ont glissé.
+  const vu = courant.batiments.find(
+    (b) => b.rangee === intact.batiments[indexAbime].rangee
+      && b.colonne === intact.batiments[indexAbime].colonne,
+  );
+  assert.ok(vu, 'le bâtiment abîmé a disparu du montage');
+  assert.equal(vu.pvMilli, Math.floor(
+    construireResultat(creerCombat(intact)).batiments[indexAbime].pvMaxMilli * 0.25,
   ));
   // ⚠ LA VRAIE GARDE : le montage doit se MONTER. `creerCombat` refuse
   // `pvMilli === 0`, refuse un pvMilli au-dessus du maximum, et vérifie les
@@ -171,13 +190,20 @@ test('résumé — un site entamé annonce ce qu\'il est devenu', () => {
   const avant = resumeCourant(etat, id);
   const intact = montageDuSite(etat.graine, id);
 
-  // Trois défenses sur six tombent : la force annoncée doit chuter.
-  enregistrerLeRaid(etat, id, resultatSur(intact, { defenses: { 0: 0, 1: 0, 2: 0 } }));
+  // Trois défenses sur six tombent, ET L'ÉTAI AVEC : la force annoncée doit
+  // chuter. ⚠ Sans l'Étai à terre, la règle du 05/09 relève les trois à 70 % à
+  // la fin du raid et le résumé ne bouge plus — la prémisse a changé, la
+  // propriété mesurée est la même.
+  const indexEtai = intact.batiments.findIndex((b) => b.id === 'etai');
+  assert.ok(indexEtai >= 0, 'montage : pas d\'Étai dans ce site');
+  enregistrerLeRaid(etat, id, resultatSur(intact, {
+    batiments: { [indexEtai]: 0 }, defenses: { 0: 0, 1: 0, 2: 0 },
+  }));
   const apres = resumeCourant(etat, id);
 
   assert.equal(apres.defenseurs, avant.defenseurs - 3);
   assert.ok(apres.forceDeLaDefense < avant.forceDeLaDefense, 'la force n\'a pas bougé');
-  assert.equal(apres.batiments, avant.batiments, 'aucun bâtiment ne devait tomber');
+  assert.equal(apres.batiments, avant.batiments - 1, 'seul l\'Étai devait tomber');
 });
 
 test('réparation — une base revient ENTIÈREMENT au bout d\'une heure, pas avant', () => {
@@ -197,30 +223,78 @@ test('réparation — une base revient ENTIÈREMENT au bout d\'une heure, pas av
   assert.deepEqual(montageCourant(etat, cible), montage);
 });
 
-test('réparation — un camp ne répare que ses défenses SURVIVANTES', () => {
+// ⚠⚠ DEUX TESTS ONT ÉTÉ RETIRÉS ICI, PAS AJUSTÉS — lot RETOUR-DÉFENSES, 06/09.
+// « réparation — un camp ne répare que ses défenses SURVIVANTES » et
+// « réparation — l'Étai tombé, les défenses ne repoussent JAMAIS » figeaient la
+// règle d'AVANT : seules les survivantes revenaient, en une heure sèche. La
+// règle arbitrée le 05/09 rend 70 % d'un coup à CHAQUE pièce, détruite comprise,
+// puis le reste en rampe. Ce qu'ils gardaient de vrai est repris par
+// `RETOUR-D T14` (Étai tombé : jamais) et `RETOUR-D T15` (les bâtiments d'un
+// camp ne reviennent jamais), ci-dessous.
+
+test('RETOUR-D T13 — sur une BASE de l\'Ouvrage aussi, l\'Étai commande les défenses', () => {
+  // ⚠⚠ AVANT CE LOT, LES DÉFENSES D'UNE BASE RENTRAIENT PAR LA PORTE DES
+  // BÂTIMENTS : `reparerLesSites` traitait le type `base` dans une branche qui
+  // rendait TOUT au bout d'une heure et `continue`ait avant d'atteindre l'Étai.
+  // Désormais les deux se séparent — les bâtiments à l'heure, les défenses sur
+  // la rampe — et c'est l'Étai ABÎMÉ qui le rend visible.
+  const etat = partie();
+  const cible = { type: 'base', niveau: 30, saveur: null, instance: 0, rangee: 150, colonne: 16 };
+  const intact = montageDuSite(etat.graine, cible);
+  const indexEtai = intact.batiments.findIndex((b) => b.id === 'etai');
+  assert.ok(indexEtai >= 0, 'montage : pas d\'Étai dans cette base');
+
+  // L'Étai tombe à 1 PV — sur une base, tout planche, donc il ne meurt pas.
+  enregistrerLeRaid(etat, cible, resultatSur(intact, {
+    batiments: { [indexEtai]: 0 }, defenses: { 0: 0, 1: 0.5 },
+  }));
+  const entree = etatDuSite(etat, cible);
+  assert.ok(entree, 'montage sans mordant : rien n\'a été rangé');
+  assert.equal(entree.pvBatimentsMilli[indexEtai], APRES_RAID.plancherPvMilli,
+    'l\'Étai d\'une base ne planche plus à 1 PV');
+
+  // À l'heure : les BÂTIMENTS sont revenus, les défenses NON.
+  rattraperJeu(etat, TICKS_REPARATION_BASE);
+  const apresUneHeure = etatDuSite(etat, cible);
+  assert.ok(apresUneHeure, 'l\'entrée a disparu : les défenses sont revenues avec les bâtiments');
+  assert.ok(apresUneHeure.pvBatimentsMilli.every((v) => v === null),
+    'les bâtiments de la base ne sont pas revenus à l\'heure');
+  assert.ok(apresUneHeure.pvDefensesMilli.some((v) => v !== null),
+    'les défenses sont revenues à l\'heure, comme avant le lot');
+  assert.equal(apresUneHeure.santeComplexeMilli, 0,
+    'la santé figée d\'un Étai à 1 PV ne vaut pas zéro millième');
+
+  // ⚠ ET LE PALIER, LUI, A DÉJÀ JOUÉ — mais à santé nulle il ne rend rien : la
+  // rampe seule ramènera les défenses, en vingt-quatre heures.
+  rattraperJeu(etat, 23 * TICKS_REPARATION_BASE);
+  assert.equal(etatDuSite(etat, cible), null,
+    'les défenses de la base ne sont pas revenues au bout de la rampe');
+  assert.deepEqual(montageCourant(etat, cible), intact, 'la base n\'est pas revenue entière');
+});
+
+test('RETOUR-D T15 — aucun bâtiment de camp ne revient, abîmé comme détruit', () => {
+  // ⚠ C'EST LE SEUL DES TROIS TESTS D'AVANT QUI SURVIT À CE LOT, et il survit
+  // ENTIER : §3 du brief le confirme comme règle, pas comme oubli. Il vivait
+  // dans « un camp ne répare que ses défenses SURVIVANTES » ; il a sa place à
+  // lui maintenant que le reste de ce test-là est parti.
   const etat = partie();
   const id = avantPoste(etat);
   const intact = montageDuSite(etat.graine, id);
-  enregistrerLeRaid(etat, id, resultatSur(intact, {
-    batiments: { 3: 0.5 }, defenses: { 0: 0, 1: 0.2 },
-  }));
+  enregistrerLeRaid(etat, id, resultatSur(intact, { batiments: { 3: 0.5, 4: 0 } }));
+  assert.ok(etatDuSite(etat, id), 'montage sans mordant : rien n\'a été rangé');
 
-  rattraperJeu(etat, TICKS_REPARATION_DEFENSES);
+  rattraperJeu(etat, TICKS_REPARATION_DEFENSES * 100);
   const entree = etatDuSite(etat, id);
   assert.ok(entree, 'l\'entrée a disparu : les bâtiments abîmés ont été oubliés');
-  assert.equal(entree.pvDefensesMilli[1], null, 'la défense survivante n\'a pas été réparée');
-  assert.equal(entree.pvDefensesMilli[0], 0, 'une défense détruite est revenue d\'entre les morts');
-  // ⚠ ET LES BÂTIMENTS NE SE RÉPARENT JAMAIS DANS UN CAMP. Cent heures plus
-  // tard, l'égratignure est toujours là.
-  rattraperJeu(etat, TICKS_REPARATION_DEFENSES * 100);
-  assert.notEqual(etatDuSite(etat, id).pvBatimentsMilli[3], null, 'le bâtiment s\'est réparé');
+  assert.notEqual(entree.pvBatimentsMilli[3], null, 'le bâtiment abîmé s\'est réparé');
+  assert.equal(entree.pvBatimentsMilli[4], 0, 'le bâtiment détruit est revenu d\'entre les morts');
 });
 
-test('réparation — l\'Étai tombé, les défenses ne repoussent JAMAIS', () => {
-  // ⚠ MONTAGE FALSIFIABLE, ET C'EST LE CŒUR DE L'ARBITRAGE DE CALIBRAGE : le
-  // même raid, à ceci près que l'Étai tombe. Sans lui, la défense survivante
-  // doit rester abîmée pour toujours — c'est ce qui rend la seconde passe peu
-  // coûteuse.
+test('RETOUR-D T14 — l\'Étai tombé sur un camp, les défenses ne repoussent JAMAIS', () => {
+  // ⚠⚠ LA GARDE, PAS LA FORMULE. À santé nulle la pénalité vaut son maximum —
+  // vingt-quatre heures — et non « jamais » : c'est `pvApresRetour` qui refuse
+  // de rendre quoi que ce soit sur une santé `null`. Cent heures plus tard, la
+  // détruite est toujours détruite et l'abîmée toujours abîmée.
   const etat = partie();
   const id = avantPoste(etat);
   const intact = montageDuSite(etat.graine, id);
@@ -228,14 +302,22 @@ test('réparation — l\'Étai tombé, les défenses ne repoussent JAMAIS', () =
   assert.ok(indexEtai >= 0, 'montage : pas d\'Étai dans ce site');
 
   enregistrerLeRaid(etat, id, resultatSur(intact, {
-    batiments: { [indexEtai]: 0 }, defenses: { 1: 0.2 },
+    batiments: { [indexEtai]: 0 }, defenses: { 0: 0, 1: 0.2 },
   }));
-  rattraperJeu(etat, TICKS_REPARATION_DEFENSES * 50);
+  const avant = structuredClone(etatDuSite(etat, id).pvDefensesMilli);
+  rattraperJeu(etat, TICKS_REPARATION_DEFENSES * 100);
 
   const entree = etatDuSite(etat, id);
   assert.ok(entree, 'l\'entrée a disparu alors que l\'Étai est tombé');
-  assert.notEqual(entree.pvDefensesMilli[1], null, 'les défenses ont repoussé sans Étai');
-  assert.equal(entree.pvBatimentsMilli[indexEtai], 0);
+  assert.equal(entree.santeComplexeMilli, null, 'l\'Étai tombé n\'a pas figé une santé nulle');
+  assert.deepEqual(entree.pvDefensesMilli, avant, 'les défenses ont repoussé sans Étai');
+  assert.equal(entree.pvDefensesMilli[0], 0, 'la détruite est revenue sans Étai');
+  // ⚠ ET LE MONTAGE LU LE DIT AUSSI — la rampe se calcule à la LECTURE côté
+  // Ouvrage, donc c'est là qu'une garde absente se verrait.
+  assert.equal(
+    montageCourant(etat, id).defenseurs.length, intact.defenseurs.length - 1,
+    'la détruite est remontée dans le montage',
+  );
 });
 
 test('réparation — les deux chemins d\'avancement réparent pareil', () => {
@@ -247,7 +329,14 @@ test('réparation — les deux chemins d\'avancement réparent pareil', () => {
     const etat = partie();
     const id = avantPoste(etat);
     const intact = montageDuSite(etat.graine, id);
-    enregistrerLeRaid(etat, id, resultatSur(intact, { defenses: { 0: 0, 2: 0.4 } }));
+    // ⚠ UN BÂTIMENT ABÎMÉ ENTRE DANS LE MONTAGE, ET C'EST OBLIGATOIRE DEPUIS LE
+    // LOT RETOUR-DÉFENSES. Les défenses reviennent TOUTES au bout de la rampe,
+    // détruites comprises : sans un bâtiment de camp — qui, lui, ne revient
+    // jamais — l'entrée « ne dit plus rien » et disparaît, si bien que la
+    // dernière assertion de ce test n'aurait plus rien à comparer.
+    enregistrerLeRaid(etat, id, resultatSur(intact, {
+      batiments: { 3: 0.5 }, defenses: { 0: 0, 2: 0.4 },
+    }));
     const n = TICKS_REPARATION_DEFENSES + 500;
     if (parBoucle) for (let i = 0; i < n; i += 1) tickJeu(etat);
     else rattraperJeu(etat, n);
@@ -314,17 +403,32 @@ test('deux passes — le site s\'use pour de bon, et le butin ne se paie pas deu
   const un = passe(1, 8);
   const apres = resumeCourant(etat, id);
 
-  // La première passe a mordu : il reste moins de défense qu'avant.
-  assert.ok(apres.forceDeLaDefense < avant.forceDeLaDefense,
-    `force ${apres.forceDeLaDefense} contre ${avant.forceDeLaDefense}`);
   assert.ok(un.gagne.quartz > 0, 'la première passe n\'a rien rapporté');
 
+  // ⚠⚠ LA MESURE A CHANGÉ DE GRANDEUR, ET LA PROPRIÉTÉ EST LA MÊME. `force`
+  // compte des PIÈCES : depuis le lot RETOUR-DÉFENSES, une défense à zéro se
+  // relève à 70 % à la fin du raid tant que l'Étai tient, donc le COMPTE ne
+  // bouge plus alors que le site s'est bel et bien usé. Ce qu'on mesure
+  // désormais est ce qui ne revient pas : les PV que le site porte encore, et
+  // les bâtiments d'un camp, qui ne se réparent jamais.
+  const pvDuMontage = (m) => {
+    const r = construireResultat(creerCombat(m));
+    return [...r.batiments, ...r.defenses].reduce((t, l) => t + l.pvMilli, 0);
+  };
+  const intact = montageDuSite(etat.graine, id);
+  assert.ok(pvDuMontage(montageCourant(etat, id)) < pvDuMontage(intact),
+    'la première passe n\'a rien usé du tout');
+  assert.ok(apres.forceDeLaDefense <= avant.forceDeLaDefense,
+    `force ${apres.forceDeLaDefense} contre ${avant.forceDeLaDefense}`);
+
   // ⚠ ET LA SECONDE PASSE PART DE CE QUI RESTE : son montage porte strictement
-  // moins de défenseurs que la première. C'est ce qui rend « deux passes »
-  // possible, et un code qui régénérerait le site intact le ferait tomber.
+  // moins de PV que le site intact. C'est ce qui rend « deux passes » possible,
+  // et un code qui régénérerait le site intact le ferait tomber.
   const deux = passe(2, 30);
-  assert.ok(deux.montage.defenseurs.length < un.montage.defenseurs.length,
-    'la seconde passe a retrouvé la garnison de la première');
+  assert.ok(pvDuMontage(deux.montage) < pvDuMontage(intact),
+    'la seconde passe a retrouvé le site intact');
+  assert.ok(deux.montage.batiments.length <= un.montage.batiments.length,
+    'un bâtiment de camp est revenu d\'entre les morts');
 });
 
 test('butin — une pièce entamée ne repaie pas ce qu\'elle a déjà payé', () => {
@@ -375,9 +479,20 @@ test('recherche — cinquante pour cent plus cinquante pour cent, pas le double'
   const dUnCoup = pointsRecherche(resultatSur(intact, { defenses: toutes(0) }), intact);
   assert.ok(dUnCoup > 0n, 'montage sans mordant : cette garnison ne rapporte rien');
 
+  // ⚠⚠ L'ÉTAI TOMBE DANS LA PREMIÈRE PASSE, ET SANS LUI CE TEST NE MESURE PLUS
+  // RIEN. La phrase d'Ethan parle du MÊME instant ; depuis le lot
+  // RETOUR-DÉFENSES, une défense laissée à 50 % remonte à 85 % à la fin du raid
+  // si l'Étai tient — donc la seconde passe casse 85 % et la somme dépasse
+  // légitimement le tout. Ce n'est pas un double paiement, c'est le travail
+  // refait sur une cible RÉPARÉE, ce que le test voisin dit déjà. L'Étai à terre,
+  // rien ne revient, et l'égalité qu'on garde ici redevient observable.
+  const indexEtai = intact.batiments.findIndex((b) => b.id === 'etai');
+  assert.ok(indexEtai >= 0, 'montage : pas d\'Étai dans ce site');
+  const passeUn = { batiments: { [indexEtai]: 0 }, defenses: toutes(0.5) };
+
   // Passe 1 : la moitié des PV de chaque défense.
   const un = pointsRecherche(resultatSur(intact, { defenses: toutes(0.5) }), intact);
-  enregistrerLeRaid(etat, id, resultatSur(intact, { defenses: toutes(0.5) }));
+  enregistrerLeRaid(etat, id, resultatSur(intact, passeUn));
 
   // Passe 2 : on achève ce qui reste, monté à ses PV rangés.
   const reste = montageCourant(etat, id);

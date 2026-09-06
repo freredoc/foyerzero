@@ -26,7 +26,7 @@ import {
 import { creerRecherche } from './raid.js';
 import {
   crediterLesReserves, reservesVides, problemesDesReserves,
-  problemesDeLaReserveDesBatiments,
+  problemesDeLaReserveDesBatiments, ramenerLaGarnison, problemesDuRetour,
 } from './reparation.js';
 import {
   basesAttaquantes, resoudreLaMinute, prochaineMinuteDeRaid, minuteDeLHorloge,
@@ -65,7 +65,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 25;
+export const SAVE_VERSION = 26;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -646,6 +646,13 @@ export function tickJeu(etat) {
   avancerPointsAttaque(etat, 1);
   reparerLesSites(etat);
   crediterLesReserves(etat, 1);
+  // ⚠ MÊME FORME QUE `reparerLesSites` : elle ne lit que l'horloge courante, donc
+  // mille ticks d'un coup ramènent ce que mille ticks un par un auraient ramené.
+  // ⚠ ET AVANT `resoudreLesMinutes`, PAS APRÈS : une pièce dont la rampe finit
+  // pendant cette minute doit être debout quand le raid la trouve, dans les DEUX
+  // chemins. Le rattrapage fait exactement le même geste — il ramène en bout de
+  // segment, et le segment s'arrête au raid.
+  ramenerLaGarnison(etat);
   // ⚠⚠ EN DERNIER, ET APRÈS TOUT LE RESTE. Un raid modifie la disposition, la
   // position, l'économie et la réserve : le placer avant l'économie ferait
   // produire le tick sur une base déjà rasée, et le rattrapage — qui découpe sa
@@ -820,6 +827,19 @@ function avancerAnalytiquement(etat, nbTicks) {
   // du temps et cette ligne cessera d'être juste. C'est le test d'équivalence
   // des deux chemins qui doit tomber en premier.
   crediterLesReserves(etat, nbTicks);
+  // ⚠ MÊME RAISON QUE `reparerLesSites` : un seul appel, pas une boucle. Le
+  // retour des défenses est une RAMPE ANALYTIQUE — elle recalcule le total
+  // depuis l'écoulé au lieu d'ajouter un morceau par tick —, donc la franchir en
+  // un bond ou en mille pas rend le même état, PAR CONSTRUCTION.
+  //
+  // ⚠⚠ ET SA CONDITION DE RUPTURE EST DÉJÀ TRAITÉE, PAS SEULEMENT ÉCRITE. Le
+  // STAMP, lui, lit le Complexe de l'instant : appelée seulement ici, la
+  // fonction stamperait une pièce abîmée par un raid au bout du segment
+  // SUIVANT, avec un Complexe qui aura peut-être été réparé entre-temps.
+  // C'est pourquoi `subirUnRaid` appelle `ramenerLaGarnison` sur-le-champ. Le
+  // jour où un autre chemin abîmerait la garnison sans passer par lui, il devra
+  // faire de même — et c'est le test d'équivalence des deux chemins qui le dira.
+  ramenerLaGarnison(etat);
 }
 
 // ---------------------------------------------------------------------------
@@ -1388,6 +1408,15 @@ function problemesDeLEffectif(force, liste, piece, indexIgnore, obstacles = []) 
       code: 'degats',
       message: `dégâts « ${piece.degatsMilli} » — entier de milli-PV ≥ 0 attendu`,
     });
+  }
+  // ⚠⚠ L'ABSENCE EST LÉGALE, ET C'EST LE FILET DU LOT RETOUR-DÉFENSES QUI
+  // L'AUTORISE. Une sauvegarde d'avant la v26 ne porte aucune rampe, une pièce
+  // fraîchement posée non plus, et une pièce d'armée n'en portera jamais :
+  // « absent » vaut « null » vaut « pas de rampe en cours ». Ce qui est refusé,
+  // c'est une valeur PRÉSENTE et malformée — elle ferait rendre à la rampe des
+  // PV qui n'existent pas.
+  for (const message of problemesDuRetour(piece.retour)) {
+    problemes.push({ code: 'retour', message });
   }
   return problemes;
 }
@@ -2668,6 +2697,42 @@ const MIGRATIONS = {
       if (!Number.isInteger(base.reserveReparationBatiments)
         || base.reserveReparationBatiments < 0) {
         base.reserveReparationBatiments = 0;
+      }
+    }
+  },
+
+  /**
+   * v25 → v26 : la forme de l'état change des DEUX CÔTÉS. Les pièces de
+   * garnison portent une rampe de retour, `retour`, que le Complexe de défense
+   * pose et consomme ; les entrées de `sitesEntames` portent la santé de l'Étai
+   * FIGÉE à l'instant du raid.
+   *
+   * ⚠⚠ ELLE NE CALCULE RIEN, ET SURTOUT PAS UNE RAMPE. Une sauvegarde d'avant
+   * ne sait pas quand ses pièces ont été abîmées ni dans quel état était le
+   * Complexe à ce moment-là : lui inventer une date la ferait revenir — ou ne
+   * jamais revenir — selon un Complexe qu'elle avait peut-être réparé depuis
+   * longtemps. Le FILET de `ramenerLaGarnison` s'en charge au premier tick, avec
+   * le Complexe D'AUJOURD'HUI, ce qui est la seule lecture honnête.
+   *
+   * ⚠ ET CÔTÉ OUVRAGE ELLE NE POSE RIEN NON PLUS : `reparerLesSites` relit la
+   * santé sur l'Étai TEL QUE LE RAID L'A LAISSÉ, ce qui EST la santé du raid —
+   * la seule des deux grandeurs qu'une vieille entrée porte encore.
+   *
+   * ⚠ ELLE NE POSE MÊME PAS LE CHAMP. « Absent » vaut « null » vaut « pas de
+   * rampe en cours » partout dans le module : l'écrire à `null` sur chaque pièce
+   * ferait grossir toutes les sauvegardes pour rien. Ce qu'elle fait, et c'est
+   * tout, c'est REFUSER une valeur héritée malformée en la ramenant à `null` —
+   * un champ de ce nom ne peut pas exister dans une v25, mais un état fabriqué
+   * à la main en montage, lui, le peut.
+   *
+   * @param {object} s
+   */
+  25: (s) => {
+    s.version = 26;
+    for (const base of s.bases ?? []) {
+      for (const piece of base.garnison ?? []) {
+        if (piece.retour === undefined) continue;
+        if (problemesDuRetour(piece.retour).length > 0) piece.retour = null;
       }
     }
   },

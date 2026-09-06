@@ -21,6 +21,7 @@ import {
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
   COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, defilementAncre,
   apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
+  etatDeLaGarnison,
 } from '../src/ui/chantier.js';
 // ⚠ LES BANDES SE PRENNENT À LA SOURCE — lot ÉCRAN-RAID, 04/09. Elles ont
 // déménagé de `ui/chantier.js` vers `render/bandes.js` parce que l'écran de
@@ -61,6 +62,7 @@ import { creerChronometre,
 } from '../src/ui/session.js';
 import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, emplacementsDuNiveau,
+  RETOUR_DEFENSES,
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
   ORDRE_PALETTE,
@@ -96,6 +98,7 @@ import * as moteurEcranChantier from '../src/ui/chantier.js';
 import {
   crediterLesReserves, plafondDeLaReserveDesBatiments,
   coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments, direLaDuree,
+  pvMaxDeLaPieceDeGarnisonMilli,
 } from '../src/sim/reparation.js';
 import { rattraperJeu } from '../src/sim/state.js';
 import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
@@ -2742,6 +2745,51 @@ test('défense — le détail d\'une pièce dit son niveau et ses points', () =>
   assert.ok(vue.detail.includes('Niv. 3'));
   assert.ok(vue.detail.includes(String(DEFENSES.faucheuse.points)));
   assert.throws(() => detailDeLaDefense(etat, 4), RangeError);
+});
+
+test('RETOUR-D T17 — l\'avertissement paraît sans Complexe et part avec lui', () => {
+  // ⚠⚠ CE QUE CE TEST GARDE EST UNE RÈGLE DE JEU, PAS UNE PHRASE. Ethan, 05/09 :
+  // sans Complexe de défense construit, la garnison abîmée ne revient JAMAIS. Un
+  // joueur qui l'ignore verra ses pièces rester à terre sans savoir ce qui
+  // manque — l'avertissement est la seule chose qui le lui dise.
+  const etat = baseAvecCommandement(3, 20);
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 6, colonne: 4, niveau: 3 });
+
+  const sans = etatDeLaGarnison(etat);
+  assert.equal(sans.avertissement, true, 'aucun avertissement sans Complexe de défense');
+  // ⚠ LE NOM EST CELUI DE LA TABLE, PAS UNE CHAÎNE ÉCRITE ICI : le test tombe le
+  // jour où le bâtiment est renommé d'un côté seulement.
+  const nom = BASE_BATIMENTS[RETOUR_DEFENSES.indexeeSur].nom.joueur;
+  assert.ok(sans.texte.includes(nom), `l'avertissement ne nomme pas « ${nom} » : ${sans.texte}`);
+  assert.match(sans.texte, /jamais/, 'l\'avertissement ne dit pas que le retour n\'aura pas lieu');
+
+  // ⚠ ET IL PART QUAND ON POSE LE COMPLEXE — c'est la moitié qui prouve que le
+  // test ne mesure pas une constante. Sans elle, un avertissement affiché
+  // TOUJOURS passerait.
+  poser(etat, 'complexeDeDefense', 13, 1);
+  const avec = etatDeLaGarnison(etat);
+  assert.equal(avec.avertissement, false, 'l\'avertissement survit au Complexe posé');
+  assert.ok(avec.texte.includes(nom), 'la ligne ne nomme plus le Complexe');
+  assert.match(avec.texte, /intacte/, 'une garnison intacte est annoncée en retour');
+
+  // ⚠ ET LA LIGNE DIT QUAND, DÈS QU'UNE PIÈCE ATTEND — §5.2. Un manque
+  // s'arrondit vers le HAUT : annoncer « 2 h » pour 2 h 50 ferait revenir le
+  // joueur devant une pièce encore à terre.
+  const piece = baseCourante(etat).garnison[0];
+  piece.degatsMilli = Math.round(pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau) / 2);
+  const enAttente = etatDeLaGarnison(etat);
+  assert.equal(enAttente.enAttente, 1);
+  assert.match(enAttente.texte, /1 pièce en retour dans /, enAttente.texte);
+  assert.equal(detailDeLaDefense(etat, 0).detail.includes('retour dans'), true,
+    'le détail de la pièce ne dit pas quand elle revient');
+
+  // ⚠ ET « SANS RETOUR » N'EST PAS « BIENTÔT ». Une pièce abîmée sans Complexe le
+  // dit en toutes lettres, là où une durée absente se lirait « on ne sait pas ».
+  const orphelin = baseAvecCommandement(3, 20);
+  poserEffectif(orphelin, 'garnison', { id: 'merlon', rangee: 6, colonne: 4, niveau: 3 });
+  const seule = baseCourante(orphelin).garnison[0];
+  seule.degatsMilli = 1000;
+  assert.match(detailDeLaDefense(orphelin, 0).detail, /sans retour/);
 });
 
 test('défense — les deux terrains balaient CHACUN leur bande, et pas l\'autre', () => {
