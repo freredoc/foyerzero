@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.9 · build 110.
+Dernière révision : **06/09/2026**, version 0.99.10 · build 111.
 
 ---
 
@@ -42,7 +42,105 @@ Dernière révision : **06/09/2026**, version 0.99.9 · build 110.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot SATELLITES-RESPAWN), à confronter :**
+**Référence au 06/09/2026 (après le lot CARTE-C), à confronter :**
+`npm test` → **1231 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 003 118 octets**, 0 référence externe. Coût **+2 087 octets**, mesuré poste
+par poste contre un livrable rebâti depuis le lot précédent : **JavaScript +798 ·
+feuille +1 187 · balisage +102 · images +0 · audio +0**, et la somme des cinq
+postes tombe EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291
+URI de part et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 296 882
+octets, 13,95 %**. Le lot touche `src/ui/monde.js`, `src/data/sites.js` et la
+page.
+⚠⚠ **LA FLÈCHE S'ARRÊTE AU BORD DU CANEVAS, ET LE CAS EST LE CAS COURANT AU ZOOM
+MAXIMUM.** Ethan, 06/09 : la POINTE était hors écran, et le joueur ne voyait
+qu'une barre nue qui traverse la carte sans rien désigner. **Mesuré : une case
+vaut 256 pixels physiques au dernier cran, donc un téléphone de 1 080 × 2 340 en
+montre 4,2 × 9,1 — la portée d'un raid est de DIX cases.** Deux sites attaquables
+ne tiennent pas ensemble dans le cadre.
+⚠⚠ **`traitRogne` EST PURE, EXPORTÉE, ET ELLE ROGNE LES DEUX BOUTS.** Liang–Barsky
+les traite par construction, et le DÉPART hors champ est atteignable pour la même
+raison : le joueur promène la carte jusqu'à sa cible, et sa base est alors dehors.
+⚠ **L'ANGLE SE REPREND, IL NE SE RECALCULE PAS.** `trait.angle` est celui du
+segment ENTIER, et c'est lui qui porte la direction de la cible ; le refaire
+depuis le morceau visible rendrait le même nombre par un chemin qui peut diverger.
+⚠ **ET `traitDeLaFleche` N'A PAS UN CARACTÈRE DE CHANGÉ** — centre à centre, garde
+« même case → `null` » intacte. Un trait entièrement visible ressort par IDENTITÉ
+D'OBJET ; entièrement dehors, on rend `null` et jamais un segment de longueur
+nulle.
+⚠⚠ **LES TESTS PURS NE MORDAIENT PAS, ET `CARTE-C T1 bis` A ÉTÉ ÉCRIT POUR ÇA.**
+Retirer l'appel à `traitRogne` dans `dessinerFleche` laissait `T1` à `T5`
+**entièrement verts** : ils mesurent la FONCTION, pas le CHEMIN. Le test monte
+l'écran sur un canevas volontairement petit et exige que chaque point peint tienne
+dans le cadre.
+⚠⚠ **ET UNE SECONDE FALSIFICATION A MONTRÉ QU'IL NE COUVRAIT QUE DEUX BORDS SUR
+QUATRE.** Remplacer `canvas.width, canvas.height` par `Infinity, Infinity` le
+laissait VERT : sur cette graine les trois satellites sont au-dessus et à gauche
+de la base, donc la flèche ne sort que par les bords zéro. Une assertion de source
+ferme le trou, et le fait est déclaré.
+⚠ **L'ÉPAISSEUR N'EST PAS TOUCHÉE — ARBITRAGE D'ETHAN, « on fait croître avec le
+zoom ».** Une proposition de la borner en pixels d'écran a été faite et REFUSÉE ;
+`CARTE-C T7` la fige. ⚠ Et sa première écriture mesurait la mauvaise grandeur :
+le RAPPORT des deux épaisseurs vaut **6,67 quand celui des pas vaut 8**, parce
+qu'à `pas = 32` l'exacte vaut 2,56 et l'arrondi rend 3. Le test asserte désormais
+chaque cran à un demi-pixel près.
+⚠⚠ **LA FICHE DIT D'OÙ VIENT LE NIVEAU, ET LE DISCRIMINANT EXISTAIT DÉJÀ.** Ethan
+a vu un avant-poste de niveau 1 collé à une base de niveau 7,6 : un CAMP suit le
+niveau des bâtiments du joueur, un AVANT-POSTE l'endroit de la carte, et rien ne
+le disait. Il a choisi de ne pas changer la règle mais de l'AFFICHER.
+`ORIGINE_DU_NIVEAU` entre dans `src/data/sites.js`, **à côté d'`indexeSur`**, et
+`CARTE-C T9` change `indexeSur` dans un montage pour attraper un `if` sur le type
+recopié dans l'écran.
+⚠ **AUCUN CHIFFRE N'EST RECALCULÉ, ET RIEN NE S'AFFICHE SUR SA PROPRE BASE** —
+elle n'a pas UN niveau mais trois moyennes, et elle n'est pas dans `TYPES_SITE`.
+Un `indexeSur` sans libellé LÈVE plutôt que de rendre un vide.
+⚠⚠ **UN BOUTON ATTAQUER ENTRE DANS LE PANNEAU, ET LE MOTIF ÉCRIT EST RENVERSÉ
+PLUTÔT QU'ENJAMBÉ.** Ethan : « rajouter un bouton attaquer sur la fiche car ça
+bloque » — le panneau occupe la moitié basse de l'écran, donc le SECOND TOUCHER
+est impossible dès que la cible est dessous, ce qui arrive constamment puisque la
+carte s'ouvre centrée sur la base. Le commentaire du balisage interdisait QUATRE
+mots depuis le 27/08 ; il est réécrit.
+⚠⚠ **ET LA GARDE EST RETOURNÉE SANS SE RELÂCHER.** La liste des boutons reste
+EXACTE — deux nommés, aucun autre —, les TROIS autres mots restent interdits, le
+libellé doit être dans le BALISAGE et pas dans l'écran, et le bouton doit passer
+par `entrerDansLaCible`, donc par `problemesDuRaid`. Un bouton qui appellerait
+`surEntreeRaid` lui-même la fait tomber, mesuré.
+⚠ **LE DISCRIMINANT N'EST PAS INVENTÉ : C'EST CELUI DE LA FLÈCHE.** Présent quand
+`ciblage !== null` — `ciblageDuSite` rend `null` sur sa propre base comme sur une
+case sans rien à attaquer —, actif quand `cout !== null`, qui EST « hors de
+portée ». Hors de portée il se voit et ne se touche pas ; un manque de points, lui,
+ne l'éteint pas — « un indice n'est pas une interdiction ».
+⚠⚠ **ET CE QUE LE BRIEF DEMANDAIT SUR LE MODE DE DÉPLACEMENT NE SE POSE PAS COMME
+ÇA — RELEVÉ.** Il voulait que « Attaquer » désarme le mode ; mesuré,
+`armerLeDeplacement` FERME le panneau **puis le ROUVRE** pour y écrire son propre
+message, titre « Déplacer la base » et corps vide. Ce qui rend le cas
+inatteignable est autre chose, et ce sont DEUX lignes : `fermerPanneau` cache le
+bouton et l'armement ne le rouvre pas, et `relacher` route tout toucher vers
+`poserLaBase` tant que le mode est armé. Y appeler `desarmerLeDeplacement` serait
+du code mort ; `CARTE-C T14` garde les deux lignes.
+⚠ **LE PANNEAU RESTE DONC OUVERT PENDANT LE MODE — RELEVÉ, NON CORRIGÉ.** Ce n'est
+pas dans le brief, et c'est peut-être voulu. **Ethan tranche.**
+⚠ **DIX FALSIFICATIONS, DIX CHUTES**, dont deux refaites avant de mordre — celle
+du `null` visait la branche « parallèle au bord », qu'aucun montage n'atteint, et
+celle du rognage visait les bornes plutôt que l'appel.
+⚠ **SEIZE TESTS ENTRENT — `CARTE-C T1` à `T14`, plus `T1 bis` et `T12 bis`, dans
+`test/monde.test.js` — ET LE COMPTE PASSE DE 1 215 À 1 231.** **Aucune assertion
+n'a été retirée ni assouplie** ; **deux gardes changent de cible et les DEUX se
+RESSERRENT** — la liste des boutons gagne trois assertions, et les lignes du
+panneau se cherchent par NOM plutôt que par indice, une ligne insérée au milieu
+décalant trois assertions sans rapport.
+⚠ **LE FAUX DOCUMENT GAGNE `append` ET `disabled`** : il n'avait qu'`appendChild`,
+si bien qu'il ne montait AUCUN panneau — `ouvrirPanneau` pose le couple
+libellé/valeur par `append`.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27 — VÉRIFIÉ PLUTÔT QUE CRU.** Une
+géométrie de trait, un libellé de fiche et un bouton vivent tous dans l'écran.
+⚠ **RIEN N'A ÉTÉ VU SUR UN APPAREIL, ET C'EST DÉCLARÉ NON EXÉCUTÉ.** Tout ce qui
+touche le DOM est mesuré par le faux document de `monde.test.js`, qui monte
+l'écran et rejoue de vrais évènements de pointeur — mais qui n'est pas un
+navigateur.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot SATELLITES-RESPAWN :**
 `npm test` → **1215 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 001 031 octets**, 0 référence externe. Coût **+479 octets, ENTIÈREMENT DU
 JAVASCRIPT**, mesuré poste par poste contre le livrable bâti depuis
