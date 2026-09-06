@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.11 · build 112.
+Dernière révision : **06/09/2026**, version 0.99.12 · build 113.
 
 ---
 
@@ -42,7 +42,114 @@ Dernière révision : **06/09/2026**, version 0.99.11 · build 112.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot FICHE-JUSTE), à confronter :**
+**Référence au 06/09/2026 (après le lot EMBLÈME-CENTRÉ), à confronter :**
+`npm test` → **1245 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 003 811 octets**, 0 référence externe. Coût **+732 octets, ENTIÈREMENT EN
+IMAGES**, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **images +732 · JavaScript +0 · feuille
++0 · balisage +0 · audio +0**, et la somme des cinq postes tombe EXACTEMENT sur
+le total — **296 lignes `data:` avant, 296 après, 291 URI de part et d'autre**.
+Borne T10 inchangée à 9 300 000, marge **1 296 189 octets, 13,94 %**. Le lot
+touche `tools/emblemes.py`, `tools/final128.py` et 208 PNG de
+`art/sprites/carte/`.
+⚠⚠ **L'EMBLÈME ÉTAIT COLLÉ AU SUD, ET C'EST UNE LIGNE D'OUTIL.** Ethan, 06/09,
+point 1 : « le sprite a dû être fabriqué bizarrement peut-être ? Regarde, il est
+collé au sud. » **Un seul appel du dépôt passait `ancrage='bas'`** —
+`tools/emblemes.py`, et lui seul, vérifié par `grep` : il passe `'centre'`.
+⚠⚠ **LE MOTIF QU'ON ÉCARTE ÉTAIT JUSTE, ET IL SE LIT ENCORE DANS `recadrer`.**
+Il défendait une LIGNE DE SOL commune : « centrer des contenus de hauteurs
+différentes ferait FLOTTER les petits au milieu de leur case pendant que les
+grands touchent le sol ». **C'est vrai d'un bâtiment vu de CÔTÉ et faux d'une vue
+zénithale** — il n'y a pas de sol à toucher sur une carte, et « reposer sur le
+sol » y devient « décalé vers le sud ». Le paragraphe disait « sous une carte » :
+c'était le contresens exact, et il est réécrit à sa place.
+⚠⚠ **MESURÉ SUR LES 216 EMBLÈMES DES DEUX GRILLES, PAS SUR TROIS.** Écart entre
+la marge haute et la marge basse de l'encre : **201 sur 216 au-dessus d'un pixel
+AVANT, pire cas +74 px** — `site_scorie_n1` en 128, soit **58 % de la case** ;
+**ZÉRO au-dessus d'un pixel APRÈS**, 154 à l'écart nul et 62 à un pixel, qui est
+la parité d'une hauteur d'encre impaire. Les trois paliers du relevé d'Ethan
+passent de **76 / 5, 45 / 5, 25 / 5** à **40 / 40, 27 / 23, 19 / 11** à
+alpha ≥ 128, et à **40 / 40, 23 / 22, 11 / 10** au seuil de l'encre.
+⚠⚠ **ET LE SEUIL DE MESURE EST DEVENU CELUI DE L'ENCRE, PARCE QUE 128 MENTAIT
+ICI.** `site_base_j_n9` porte un mât de deux pixels qui ressort à **alpha 86 à
+95** après la réduction LANCZOS : mesuré à 128 il DISPARAÎT, et la marge haute
+paraît valoir 19 px pour 11 en bas. Le mât est DESSINÉ — `ecrire` ne coupe qu'à
+`SEUIL_ALPHA` —, donc c'est la mesure qui était fausse, pas le sprite. **Le seuil
+se LIT dans `tools/final128.py`**, il ne se retape pas.
+⚠⚠ **`cote_ref` N'A PAS ÉTÉ TOUCHÉ, ET LES DEUX PARAMÈTRES SONT INDÉPENDANTS.**
+`cote_ref` décide de l'ÉCHELLE — le rapport de taille des paliers, l'acquis du
+lot EMBLÈMES-ABÎMÉS —, `ancrage` de la POSITION, et `recadrer` les lit
+séparément. `EMB-C T2` attrape un lot qui aurait retiré l'un avec l'autre, et
+`EMB-C T5` exige que l'appel porte encore les deux.
+⚠⚠ **QUATRE SPRITES SUR 108 NE CHANGENT PAS D'UN OCTET, ET CE SONT EXACTEMENT
+LES `*_n9_feu` — LA CELLULE DE RÉFÉRENCE DE CHAQUE FAMILLE.** Son encre remplit
+la référence, donc `box//2 + reference//2 − ys.max()` vaut `box//2 − cy` : la
+ligne de sol et le centre coïncident pour elle. C'est la preuve, à l'octet, que
+le lot n'a touché QUE l'ancrage — l'ancien commentaire l'annonçait, « la ligne de
+sol est celle que le centrage donnait au plus grand contenu », et les quatre
+fichiers le confirment.
+⚠ **LES DEUX GROSSES BASES ET LES SEPT POI NE BOUGENT PAS NON PLUS, ET C'ÉTAIT À
+VÉRIFIER.** `base_o_2x2` et `base_o_3x3` sortent par la seconde boucle de
+`emblemes.py`, qui n'a jamais passé `cote_ref` ni `ancrage` — donc `'centre'` par
+défaut depuis toujours. Mesuré avant le lot : marges **11 / 11** et **31 / 31**,
+écart nul. Elles étaient déjà centrées ; le brief demandait de le dire.
+⚠⚠ **UNE GARDE EXISTANTE EST RETOURNÉE, ET AUCUNE N'EST RETIRÉE.** `EMB T6`
+exigeait que les 108 emblèmes reposent sur UNE ligne de sol — c'est la propriété
+que l'arbitrage renverse. Elle devient `EMB-C T1`, qui exige le CENTRAGE **et
+falsifie l'ancienne de face** : les lignes de sol ne coïncident plus, sans quoi
+un `'bas'` revenu ferait tomber la boucle sans dire pourquoi.
+⚠⚠ **ET `EMB T5` A CHANGÉ DE MESURE SANS QUE SON SEUIL BOUGE — C'EST UN
+RESSERREMENT.** Il exige qu'un palier fasse la même largeur dans les trois états,
+à 4 px près. Recentrer ne change aucune largeur de DESSIN : **mesuré au seuil de
+l'encre, les neuf paliers rendent EXACTEMENT les mêmes largeurs avant et après**.
+À 128, une seule cellule bouge — `site_base_j_n7_feu`, 86 → 84 — parce que le
+décalage vertical change la PHASE de la réduction et fait tomber deux colonnes de
+bord sous le seuil. **Le 4 n'a pas été relevé** : la mesure a cessé de compter
+des pixels que l'écran dessine.
+⚠ **L'ATLAS GROSSIT ALORS QU'ON NE FAIT QUE DÉPLACER DES PIXELS** —
+`atlas-carte-128.webp` **409 686 → 410 234 octets**, et le 64, non embarqué,
+155 418 → 156 372. Le WebP q85 prédit un peu moins bien une planche dont les
+cellules ne partagent plus leur ligne de base. C'est le mouvement inverse du lot
+ARMÉE-ET-FRONTIÈRE, qui avait RENDU des octets en désaturant.
+⚠ **`src/data/atlas.js` EST IDENTIQUE**, et `art/sources-declarees.json` aussi —
+**393 consommées · 123 dormantes · 516 fichiers**, inchangé : aucune source
+n'entre ni ne sort, le lot repeint ce que la chaîne produit déjà.
+⚠ **CINQ TESTS ENTRENT, UN EST RETOURNÉ, ET LE COMPTE PASSE DE 1 241 À 1 245** —
+`EMB-C T1` à `T5`, dans `test/embleme.test.js`, qui passe de 13 à 17.
+⚠⚠ **SEPT FALSIFICATIONS, SEPT CHUTES, ET LA PREMIÈRE MORD PAR DEUX CHEMINS.**
+Remettre `'bas'` fait tomber `EMB-C T1` — qui voit le décalage dans les PIXELS —
+ET `EMB-C T5` — qui le voit dans la SOURCE de l'outil. Un lot qui reviendrait à
+`'bas'` sans régénérer l'art ne ferait tomber que le second, et c'est très
+exactement le trou du 30/08 où six PNG contredisaient l'outil qui les fabrique
+pendant que `npm run check` était vert. ⚠ Retirer `cote_ref` en fait tomber SIX,
+dont quatre gardes du lot EMBLÈMES-ABÎMÉS : l'échelle ne peut pas partir par
+mégarde. ⚠ Et mesurer `EMB-C T1` à 128 le fait tomber sur une chaîne juste —
+sans cette falsification-là, le choix du seuil serait une opinion.
+⚠⚠ **`python3 tools/verifier.py` → 858 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT, verdict VERT, AVANT ET APRÈS** — 516,9 s puis 509,9 s. Il était dû :
+le lot touche `art/` et `tools/`. **Le compte ne bouge pas, et les 208 PNG
+régénérés sont dans les identiques** : la chaîne reproduit à l'octet ce que le
+dépôt porte, ce qui est la seule chose qui dise que l'art commité vient de
+l'outil commité. ⚠ Son second verdict tient aussi — **393 / 393 consommées et
+123 / 123 dormantes**, `art/sourcesstandby/` 34 fichiers 0 lu, `art/reserve/`
+10 fichiers 0 lu —, et `python3 tools/atlas.py --verifier` rend **18 atlas
+identiques · 0 différent · 0 nouveau**, relancé APRÈS la ronde de falsifications.
+⚠ **`python3 tools/entrees.py --declarer` A ÉTÉ LANCÉ, ET IL NE CHANGE RIEN** :
+`art/sources-declarees.json` est identique à l'octet. Le lot repeint ce que la
+chaîne produit déjà ; aucune source n'entre ni ne sort.
+⚠⚠ **ÉCART DÉCLARÉ : LE LOT N'EST PAS SUR SA PROPRE BRANCHE.** Le brief l'exige
+— « à exécuter seul sur sa branche » — et l'environnement d'exécution épingle la
+session à une branche unique. Les quatre lots de la série sont donc quatre
+COMMITS distincts sur `claude/foyer-zer0-patch-5lqyq8` ; celui-ci est le dernier
+et le seul à toucher `art/`, donc il se révoque par un `git revert` d'un seul
+commit.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** §3 : il
+n'y a pas d'appareil ici. Le halo carré qu'Ethan cite comme repère est dessiné
+par `src/ui/monde.js`, que le lot ne touche pas.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27.** Un emblème est un dessin :
+`src/render/embleme.js` et `src/ui/monde.js` n'ont pas une ligne de changée.
+
+**Auparavant, après le lot FICHE-JUSTE :**
 `npm test` → **1241 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 003 079 octets**, 0 référence externe. Le lot **REND 39 octets**, ENTIÈREMENT
 DU JAVASCRIPT, mesurés poste par poste contre un livrable rebâti dans un

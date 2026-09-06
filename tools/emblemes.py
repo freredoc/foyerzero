@@ -344,9 +344,31 @@ for prefixe, ouv, fichiers in FAMILLES:
             MESURES[prefixe]['cellules'][nom] = dict(
                 planche=fichier, cotePlanche=cote_planche, **releve)
             for N in GRILLES:
+                # ⚠⚠ `ancrage='centre'`, ET C'EST UN RENVERSEMENT DU LOT
+                # EMBLÈMES-ABÎMÉS — Ethan, 06/09 : « le sprite a dû être fabriqué
+                # bizarrement peut-être ? Regarde, il est collé au sud. » Cet
+                # appel-ci passait `'bas'`, et c'était le SEUL du dépôt.
+                #
+                # ⚠⚠ LE MOTIF QU'ON ÉCARTE ÉTAIT JUSTE POUR UN BÂTIMENT VU DE
+                # CÔTÉ, ET FAUX POUR UNE VUE ZÉNITHALE. Il défendait une LIGNE DE
+                # SOL commune : « des bâtiments qui ne reposent pas sur la même
+                # ligne se lisent comme un défaut de dessin ». Une carte se
+                # regarde de dessus : il n'y a pas de sol à toucher, et « reposer
+                # sur le sol » y devient « décalé vers le sud ». Mesuré sur la
+                # grille 128, marge haute / marge basse de l'encre :
+                # `site_base_j_n1` 76 / 5, `n7` 45 / 5, `n9` 25 / 5 — **la marge
+                # basse valait 5 px à TOUS les paliers**, et l'écart au centre de
+                # la cellule montait à 35,5 px, soit 28 % d'une case.
+                #
+                # ⚠⚠ ET `cote_ref` RESTE, INTACT : C'EST L'AUTRE MOITIÉ, ET ELLE
+                # N'A RIEN À VOIR AVEC L'ANCRAGE. Elle rend aux paliers leur
+                # RAPPORT de taille — une base de niveau 1 doit rester plus
+                # petite qu'une base de niveau 9 —, et `recadrer` lit les deux
+                # paramètres séparément. Un lot qui la retirerait avec l'ancrage
+                # ferait tomber `EMB-C T2`.
                 g, matiere = conditionner(
                     recadrer(cell, EMPRISE * (N // 32), N,
-                             cote_ref=reference * cote_planche, ancrage='bas'),
+                             cote_ref=reference * cote_planche, ancrage='centre'),
                     P, N)
                 d = os.path.join(DST, str(N))
                 os.makedirs(d, exist_ok=True)

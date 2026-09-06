@@ -59,14 +59,29 @@ def recadrer(cell,cible,N,cote_ref=None,ancrage='centre'):
     ⚠⚠ `ancrage='bas'` POSE LES CONTENUS SUR UNE LIGNE DE SOL COMMUNE, et il va
     avec la référence. Centrer des contenus de hauteurs différentes ferait
     FLOTTER les petits au milieu de leur case pendant que les grands touchent le
-    sol ; sous une carte, des bâtiments qui ne reposent pas sur la même ligne se
+    sol ; des bâtiments VUS DE CÔTÉ qui ne reposent pas sur la même ligne se
     lisent comme un défaut de dessin. Le panache, lui, monte librement dans
     l'espace laissé au-dessus.
+
+    ⚠⚠ ET IL NE VAUT PAS POUR UNE VUE ZÉNITHALE — ETHAN, 06/09 : « le sprite a
+    dû être fabriqué bizarrement peut-être ? Regarde, il est collé au sud. » Le
+    paragraphe ci-dessus disait « sous une carte » ; c'était le contresens. Une
+    carte se regarde de DESSUS : il n'y a pas de sol à toucher, et « reposer sur
+    le sol » y devient « décalé vers le sud » — mesuré, jusqu'à 35,5 px sur une
+    cellule de 128, soit 28 % d'une case au palier le plus bas.
+    **`tools/emblemes.py` est passé à `'centre'` ; ce mode-ci RESTE**, il est
+    juste pour ce qu'il servira de côté, et le retirer casserait ce qui
+    l'emploierait un jour. `EMB-C T5` le tient, et il n'a plus aucun appelant.
 
     ⚠ LA LIGNE DE SOL EST CELLE QUE LE CENTRAGE DONNAIT AU PLUS GRAND CONTENU —
     `box/2 + cote_ref/2` —, donc l'emprise ne change pas de valeur : le contenu
     de référence occupe toujours `cible` sur `N`, marge du haut et marge du bas
     identiques. Ce n'est pas un cadrage neuf, c'est le même vu depuis le bas.
+
+    ⚠⚠ ET LES DEUX PARAMÈTRES SONT INDÉPENDANTS, CE QUI EST TOUT CE QUI A PERMIS
+    DE N'EN CHANGER QU'UN. `cote_ref` décide de l'ÉCHELLE, `ancrage` de la
+    POSITION, et ce corps les lit séparément : passer à `'centre'` ne touche pas
+    au rapport de taille des paliers, qui est l'acquis d'EMBLÈMES-ABÎMÉS.
     """
     a=np.array(cell.convert('RGBA')); m=(~est_fond(a[...,:3]))&(a[...,3]>=128)
     ys,xs=np.where(m)
