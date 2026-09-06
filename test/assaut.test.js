@@ -17,6 +17,7 @@ import { NIVEAU } from '../src/data/niveaux.js';
 import { creerCombat, resoudre } from '../src/sim/combat.js';
 import { genererAssaut, budgetAssaut, genererSite } from '../src/sim/generateur.js';
 import { montageDuBanc, executerRaidComplet } from '../src/ui/banc.js';
+import { pvMaxDeLaPieceDeGarnisonMilli } from '../src/sim/reparation.js';
 import { montagePreregle } from './prereglages-lot3a.js';
 
 const PROFILS = Object.keys(PROFILS_ASSAUT);
@@ -117,11 +118,22 @@ test('T2 — les bâtiments pèsent désormais plus que les défenses, sur quinz
     }
   }
 
-  // Mesuré : de 0,30–0,46 avant à 2,35–3,75 après. Les défenses pesaient deux à
-  // trois fois les bâtiments ; les bâtiments pèsent maintenant deux à quatre
+  // Mesuré : de 0,28–0,60 avant à 2,18–4,75 après. Les défenses pesaient deux à
+  // quatre fois les bâtiments ; les bâtiments pèsent maintenant deux à cinq
   // fois les défenses. L'objectif redevient le gros du travail — c'est le but
   // du lot, et voici sa borne.
-  assert.ok(rapportAvantMax < 0.5, `avant : rapport maximal ${rapportAvantMax.toFixed(3)}`);
+  //
+  // ⚠⚠ LES DEUX BORNES SONT RÉANCRÉES PAR LE LOT COLONNE, 06/09, ET LES DEUX
+  // NOMBRES SE DISENT. Avant : 0,300–0,458, borne à 0,5. Après : 0,279–0,600,
+  // borne à 0,7. La composition de la garnison a bougé — `composerRepartition`
+  // tire APRÈS `placerBatiments`, dont le nombre de tirages a changé —, donc
+  // les PV de défense d'un site donné ne sont plus les mêmes. C'est le décalage
+  // de consommation que le brief demandait de mesurer et d'annoncer, vu par un
+  // de ses bouts. ⚠ CE QUE LE TEST MESURE N'A PAS BOUGÉ D'UN MOT : le
+  // RENVERSEMENT est asserté SITE PAR SITE quinze fois plus haut — `avant <
+  // defenses` et `apres > defenses` —, et ces deux lignes-ci ne sont que le
+  // résumé chiffré. Aucune assertion n'est retirée.
+  assert.ok(rapportAvantMax < 0.7, `avant : rapport maximal ${rapportAvantMax.toFixed(3)}`);
   assert.ok(rapportApresMin > 2, `après : rapport minimal ${rapportApresMin.toFixed(3)}`);
 
   // Le facteur qui sépare les deux régimes est celui des PV eux-mêmes, et il
@@ -314,21 +326,40 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // garde encore est la SÉRIE : les deux ne rendent pas les mêmes durées, et
   // c'est ce que la seconde moitié mesure.
   //
-  // A passe de 669 à 338 ticks — presque la moitié —, C de 524 à 529.
+  // A passait de 669 à 338 ticks — presque la moitié —, C de 524 à 529.
+  //
+  // ⚠⚠ LOT COLONNE (06/09) : LE CONTRASTE REVIENT, ET C'EST LA MESURE À LIRE
+  // EN PREMIER. Le préréglage figé de B RASE de nouveau la Souche — `souche` au
+  // tick 562 — pendant qu'aucun des trois assauts budgétés n'y parvient. Le
+  // bloc du lot ARRÊT disait « le contraste que ce test tenait a disparu » ;
+  // l'arrêt sur prédilection le rétablit, parce que l'assaut lourd figé s'arrête
+  // de nouveau devant la garnison, la casse, et arrive au bout. C'est bien la
+  // COMPOSITION qui décide : le figé aligne un Broyeur et un Pilon que le budget
+  // du niveau 15 refuse, et la seconde moitié de ce test le mesure toujours.
+  //
+  // A passe de 338 à 344, C de 529 à 524.
+  //
+  // ⚠⚠ ET LES SIX NOMBRES SONT RÉANCRÉS UNE SECONDE FOIS PAR LE MÊME LOT, POUR
+  // SON POINT 9 — la disposition d'un site cesse d'être la même. `A 344 → 287`,
+  // `B souche 562 → souche 516`, `C 524 → 348`. Le point 9 change DEUX choses à
+  // la fois : où les défenses sont posées, et — parce que
+  // `composerRepartition` tire APRÈS `placerBatiments`, dont le nombre de
+  // tirages a changé — LESQUELLES sont posées. La cause de chacun des trois ne
+  // bouge pas, et c'est elle que ce test garde.
   const figes = cas.map((c) => resoudre(creerCombat(montagePreregle(parametres(c)))));
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 338);
-  assert.equal(figes[1].cause, 'attaquants');
-  assert.equal(figes[1].tick, 408);
+  assert.equal(figes[0].tick, 287);
+  assert.equal(figes[1].cause, 'souche', 'le préréglage figé ne rase plus la Souche');
+  assert.equal(figes[1].tick, 516);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 529);
+  assert.equal(figes[2].tick, 348);
 
-  // Série 2 — assauts BUDGÉTÉS. Aucun des deux ne rase plus la Souche depuis le
-  // lot ARRÊT : les deux séries se distinguent par leurs durées, plus par leur
-  // issue.
+  // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
+  // que le figé de B rase : les deux séries se distinguent de nouveau par leur
+  // ISSUE, et plus seulement par leurs durées.
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
-  assert.equal(budgetes[0].nbTicks, 380);
+  assert.equal(budgetes[0].nbTicks, 355);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -343,11 +374,23 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // un survivant — trois avant. Les six unités traversent la défense sans s'y
   // arrêter, arrivent entamées devant les bâtiments et tombent avant d'en
   // griffer un. C'est du calibrage, pas un défaut : voir `RAPPORT-lotARRET.md`.
+  //
+  // ⚠⚠ LOT COLONNE, POINT 7 : A REDEVENAIT RENTABLE — 222 de quartz et 74 de
+  // scorie au lieu de zéro, en 516 ticks au lieu de 380. L'arrêt sur
+  // prédilection le retient DANS la bande de défense, où il casse la garnison au
+  // lieu de mourir devant les bâtiments.
+  //
+  // ⚠⚠ ET LE POINT 9 DU MÊME LOT LE RAMÈNE À ZÉRO, EN 359 TICKS. Il faut le dire
+  // dans ce sens-là : les deux moitiés du lot tirent en sens contraire sur ce
+  // raid-ci, et c'est la SECONDE qui l'emporte. La disposition du site change et
+  // la garnison n'est plus composée des mêmes pièces ; l'assaut d'infanterie
+  // budgété n'en vient de nouveau pas à bout. C'est du CALIBRAGE, pas un défaut
+  // — ce test mesure, il ne règle rien, et le rapport le porte pour Ethan.
   assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
   assert.equal(budgetes[1].cause, 'attaquants');
-  assert.equal(budgetes[1].nbTicks, 440);
+  assert.equal(budgetes[1].nbTicks, 749);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 335);
+  assert.equal(budgetes[2].nbTicks, 513);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -355,12 +398,20 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // Lot ARRÊT : 24 640, soit 156 de moins pour trente ticks de PLUS. Le raid
   // s'allonge et rapporte un peu moins : les unités passent leur temps devant
   // des bâtiments qu'elles entament à peine au lieu d'abattre la défense.
-  assert.equal(budgetes[2].butin.quartz, 24_640);
+  // ⚠ LOT COLONNE, POINT 7 : 15 350, soit 37,7 % de moins pour UN tick de plus.
+  // Le raid ne s'allonge pas — il change de cible : ses unités se figent devant
+  // la garnison, donc elles griffent encore moins les bâtiments, et c'est d'eux
+  // que vient le butin.
+  // ⚠⚠ ET LE POINT 9 LE FAIT REMONTER À 54 560, soit PLUS DU DOUBLE de ce que le
+  // raid rapportait avant tout le lot. La garnison du camp de la graine 1 n'est
+  // plus la même : l'assaut la traverse et atteint les bâtiments. Les deux
+  // moitiés du lot tirent en sens contraire ici aussi, et c'est mesuré, pas
+  // compensé.
+  assert.equal(budgetes[2].butin.quartz, 54_560);
 
-  // Ce que le préréglage figé alignait et que le budget refuse — deux unités
-  // que le joueur ne peut pas posséder au niveau 15. C'est ce qui faisait raser
-  // B jusqu'au lot ARRÊT ; depuis, plus aucune des deux séries ne rase, mais
-  // l'écart de composition, lui, est intact et se mesure toujours ici.
+  // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
+  // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de
+  // nouveau depuis le lot COLONNE, et l'écart de composition se mesure ici.
   const fige = montagePreregle(parametres(cas[1]));
   const verrouillees = [...new Set(
     fige.vagues.flat().map((u) => u.id).filter((id) => UNITES[id].apparition > 15),
@@ -401,19 +452,48 @@ export function passesPourRaser({ type, niveau, assaut, graine, monter = montage
     if (r.cause === 'souche') return passe;
     const batiments = [];
     const defenseurs = [];
+    // ⚠⚠ L'APPARIEMENT SE FAIT PAR RANG, PLUS PAR POSITION — LOT COLONNE. Il
+    // cherchait la ligne du montage dont l'identifiant, la rangée ET LA COLONNE
+    // correspondaient à celle du résultat. Depuis le 06/09 une pièce de garnison
+    // SE DÉPLACE latéralement : sa colonne de fin n'est plus celle de sa pose,
+    // le `find` rendait `undefined`, et le tour suivant montait un défenseur
+    // « undefined » — `creerCombat` levait « identifiant inconnu ».
+    //
+    // ⚠ LE RANG EST LE SEUL REPÈRE QUI NE BOUGE PAS, et c'est déjà celui que
+    // `reprojeter` de `sim/site-entame.js` emploie : `construireResultat`
+    // parcourt `etat.entites` dans l'ordre d'insertion, qui est l'ordre du
+    // montage. Une pièce détruite se saute des DEUX côtés, donc on avance un
+    // curseur au lieu d'indexer.
+    let curseurB = 0;
     for (const b of r.batiments) {
+      const ligne = montage.batiments[curseurB];
+      curseurB += 1;
       if (b.detruit) continue;
-      const ligne = montage.batiments.find(
-        (x) => x.id === b.id && x.rangee === b.rangee && x.colonne === b.colonne,
-      );
       batiments.push({ ...ligne, pvMilli: b.pvMilli });
     }
+    // ⚠⚠ ET LES PV SE BORNENT AU NOMINAL, COMME LA PRODUCTION LE FAIT À LA
+    // LECTURE. Le module « PV +20 % » de l'Ouvrage monte le plafond d'une pièce
+    // de garnison dès le niveau 32 : une pièce abîmée peut SURVIVRE au-dessus de
+    // son nominal, et `creerCombat` refuse un `pvMilli` forcé qui le dépasse.
+    // Le jeu, lui, ne remonte jamais un tel PV sur une scène : `pvCourantsDesDefenses`
+    // de `sim/site-entame.js` passe chaque valeur rangée par `pvApresRetour` et
+    // rend `null` dès qu'elle atteint le NOMINAL — c'est cette borne-là qu'on
+    // rejoue ici. Sans elle, ce montage mesurerait une boucle que le jeu ne
+    // joue pas.
+    //
+    // ⚠ ET LE BESOIN EST ANTÉRIEUR AU LOT COLONNE : mesuré sur un `git worktree`
+    // bâti depuis `origin/main`, quatre cas sur quatre-vingts. C'est le nouveau
+    // placement qui l'a rendu atteignable dans les paramètres de `T8`.
+    let curseurD = 0;
     for (const d of r.defenses) {
+      const ligne = montage.defenseurs[curseurD];
+      curseurD += 1;
       if (d.detruit) continue;
-      const ligne = montage.defenseurs.find(
-        (x) => x.id === d.id && x.rangee === d.rangee && x.colonne === d.colonne,
-      );
-      defenseurs.push({ ...ligne, pvMilli: d.pvMilli });
+      const nominal = pvMaxDeLaPieceDeGarnisonMilli(d.id, d.niveau);
+      defenseurs.push({ ...ligne, pvMilli: Math.min(d.pvMilli, nominal) });
+    }
+    if (curseurB !== montage.batiments.length || curseurD !== montage.defenseurs.length) {
+      throw new Error('passesPourRaser : le résultat ne s\'apparie plus au montage rang à rang');
     }
     if (batiments.length === 0) return passe;
     montage = { ...montage, batiments, defenseurs };

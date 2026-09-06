@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.7 · build 108.
+Dernière révision : **06/09/2026**, version 0.99.8 · build 109.
 
 ---
 
@@ -42,7 +42,162 @@ Dernière révision : **06/09/2026**, version 0.99.7 · build 108.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot SON-VOLUMES), à confronter :**
+**Référence au 06/09/2026 (après le lot COLONNE), à confronter :**
+`npm test` → **1201 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 000 552 octets**, 0 référence externe. Coût **+3 236 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti depuis
+`origin/main` : **JavaScript +3 236 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **296
+lignes `data:` avant, 296 après**. Borne T10 inchangée à 9 300 000, marge
+**1 299 448 octets, 13,98 %**.
+⚠⚠ **LA COLONNE D'UNE ENTITÉ DE COMBAT CESSE D'ÊTRE UN ENTIER, ET C'EST LE
+PREMIER FAIT À DIRE.** Ethan, point 10 : « déplacement latéral identique au
+déplacement vertical. Vitesse multipliée par 2/3. Même règle de collision. Elle
+veut aller vers la cible la plus proche, peu importe si elle se bloque » — pour
+la **défense des deux camps**. Une entité porte désormais `colonneMilli` et RIEN
+D'AUTRE, comme elle porte `rangeeMilli` et pas `rangee` : la case se DEMANDE, par
+`caseColonne(e)`.
+⚠⚠ **`distanceCarree` DEVIENT `distanceCarreeMilli`, ET LE RENOMMAGE EST LE
+GARDE-FOU.** Elle mélangeait les unités — rangée en milli, colonne en CASES.
+Gardée sous son ancien nom, un appelant oublié lui aurait passé une colonne en
+cases : le carré aurait été faux **d'un facteur 1 000 000 sur l'axe horizontal**,
+`node --check` n'aurait rien vu, et un test de portée écrit sur des entités
+ALIGNÉES en colonne n'aurait rien vu non plus. Sous un nom neuf, `esbuild` refuse
+le build. **CINQ appelants de production repris d'un coup**, et `COL T11`
+DÉSALIGNE les colonnes pour que le montage puisse tomber.
+⚠⚠ **ET DEUX LECTEURS DE `.colonne` AVAIENT ÉCHAPPÉ À LA RELECTURE, TROUVÉS PAR
+UN PIÈGE.** Un accesseur qui LÈVE, posé temporairement à la place du champ
+retiré, a énuméré tout ce qui le lisait encore : les départages de `ciblage` et
+de `cibleDeNeutralisation`, et `entitesSurLaCase` de `src/ui/banc.js`. Le piège
+ne reste pas au dépôt.
+⚠⚠ **LE REPLI RESTE SOUS GARDE DE CAMP, ET `COL T9` A ÉTÉ ÉCRIT AVANT LE CODE.**
+`deplacement` route `camp === 'attaque'` vers `avancer` et tout le reste vers
+`seDecaler` ; le repli, l'Écraseur, la sortie par le haut et le franchissement du
+fond restent dans `avancer`. Une garnison qui se replierait quitterait le terrain
+sans être détruite — **elle n'a pas de base où rentrer**.
+⚠ **LE ×2/3 TOMBE JUSTE, ET IL S'APPLIQUE EN DERNIER.** `GRILLE.lateral` vaut
+`{ numerateur: 2, denominateur: 3 }` ; les quatre vitesses du roster sont
+divisibles par 3 — **60 · 90 · 120 · 240 → 40 · 60 · 80 · 160** — et `COL T13` le
+garde. Posé avant la réduction d'obstacle il ferait cesser l'obstacle de
+ralentir ; posé avant le Booster il fausserait leur rapport.
+⚠⚠ **ET LE PIRE CAS DU BRIEF ÉTAIT FAUX — MESURÉ.** Son §2.4 annonce « le pire
+latéral 160, 400 boosté » : la plus rapide des quatorze unités vaut **240**, ce
+qui ferait **1 600** boosté et latéral, au-DESSUS de la case. Mais **seule la
+DÉFENSE se décale**, et la plus rapide des huit unités qui entrent en garnison
+vaut 120, donc **800** au pire. `COL T14` prend le pire cas sur la GARNISON et
+asserte que la plus rapide du roster n'y entre pas.
+⚠⚠ **`peutAvancer` N'A PAS ÉTÉ SURCHARGÉE D'UN AXE**, ce que le §2.5 interdit :
+sa première ligne teste `rangee >= DERNIERE_RANGEE` et rend le comportement
+aérien. La borne latérale est **`estSortiParLeCote`**, PURE et EXPORTÉE, et **il
+n'y a AUCUNE sortie légale par le côté** — le pas qui quitterait la grille est
+simplement REFUSÉ.
+⚠⚠ **`Math.trunc` REMPLACE `Math.floor` DANS `positionInterpolee`, ET `COL T12` A
+ÉTÉ VU ROUGE SUR L'ARBRE INTACT.** La fonction est PURE : rien ne l'empêchait de
+recevoir un delta négatif, c'est seulement que personne ne lui en donnait. De
+2 075 vers 2 000 à alpha 500, `floor` rend 2 037 quand la moitié vaut 2 037,5 —
+l'entité dépasse d'un milli-case et revient à l'image suivante. **Elle tremble.**
+⚠⚠ **ET LE MÊME DÉFAUT EXISTAIT DANS LE MODÈLE, TROUVÉ À LA RELECTURE HOSTILE DU
+§7 ET NON À L'ÉCRITURE.** Un attaquant ne change jamais de colonne : sa colonne
+est FIXE. Une défenseuse qui la DÉPASSE repart en sens inverse au tick suivant —
+mesuré : cible en 5 000, défenseuse en 4 970, pas de 40 → 5 010 (case 5), puis
+4 970 (case 4), puis 5 010 : **deux cases prises et rendues à chaque tick**. Le
+pas est borné par l'écart, et `COL T6 ter` le mesure.
+⚠⚠ **L'ARRÊT SUR PRÉDILECTION REVIENT « EN PLUS DU BÂTIMENT », ET L'ARBITRAGE DU
+04/09 EST GARDÉ PAR UN COUPLE.** Point 7. « Merlon et tourelles exclus » : or un
+merlon est rangé sous `structureOuAviation`, **exactement comme un bâtiment**. Ce
+qui les sépare est le COUPLE `genre === 'defense'` ET `colonneMatrice ===
+'structureOuAviation'` — il désigne exactement les merlons, les barrières et les
+tourelles. `COL T2` est le test qui attrape un lot qui le perdrait.
+⚠ **ET LE BLOCAGE DE COLONNE EST MESURÉ, PAS RAISONNÉ** — 486 montages de banc
+contre un livrable bâti depuis `origin/main` : **replis 1 072 → 1 123 (+4,8 %)**,
+médiane des ticks 273 → 256, attaquantes détruites 6 562 → 6 510, **butin total
++67,4 %**. Le repli ne peut pas empirer par `doitSArreter` — la condition
+`e.aTire` est restée EN TÊTE — ; ce qui le fait monter est **l'alliée DERRIÈRE**
+une unité arrêtée, qui bloque sa colonne.
+⚠⚠ **LA DISPOSITION D'UN SITE CESSE D'ÊTRE LA MÊME, ET LE DÉFAUT N'ÉTAIT PAS UNE
+ABSENCE DE HASARD MAIS SA FORME.** Point 9 : « la disposition des unités et
+bâtiments ouvrage semblent identique alors qu'elle doit être plus aléatoire ». Le
+placement tirait bien une permutation des colonnes — puis posait en TOURNIQUET,
+`colonne = permutation[i % 9]` : la charge par colonne était **plate sur TOUTE
+graine**, donc deux sites de même niveau ne différaient que par le NOM des
+colonnes. **La graine renommait, elle ne redessinait pas.**
+⚠⚠ **CE QUI FALSIFIE EST LE MULTI-ENSEMBLE DES CHARGES PAR COLONNE**, qu'une
+permutation préserve par définition. Mesuré, 40 graines par configuration :
+**1 profil distinct AVANT, 4 APRÈS** ; formes canoniques **3 → 40** (base n30 et
+avant-poste n40), **3 → 10** (base n10), **3 → 17** (camp n20).
+⚠ **ET LE BUDGET D'ÉCART N'A PAS ÉTÉ RELEVÉ POUR L'OCCASION.**
+`ecartColonnesMax` vaut 2 depuis le lot 2B et le placement d'avant n'en employait
+qu'UN. Le lot cesse de laisser une moitié du budget inutilisée. `COL T16` écrit
+ses deux seuils **en clair** : une garde qui lit son seuil dans la table qu'elle
+garde ne peut PAS le voir se relâcher — mesuré, porter le budget à 4 ne faisait
+tomber aucun test.
+⚠⚠ **`profilRealisable` EST LA CONDITION DE GALE-RYSER, ET LE CONTRE-EXEMPLE EST
+PETIT.** Treize défenses en trois rangées de 6 · 6 · 1 ; un profil à
+(3, 3, 2, 2, 1, 1, 1, 0, 0) somme à treize, respecte le budget, et est
+IRRÉALISABLE — à k = 2 il demande 6 places quand les rangées n'en offrent que 5.
+Sans ce contrôle, le placement lèverait ou poserait deux pièces sur la même case.
+⚠⚠ **LE DÉCALAGE DE CONSOMMATION DU PRNG EST MESURÉ ET ANNONCÉ, ET IL DÉPLACE
+PLUS QUE LA POSE.** Tirages de `genererSite` : base n30 **79 → 297**, base n10
+**91 → 218**, camp n20 **93 → 234**, avant-poste n40 **79 → 299** — constant
+d'une graine à l'autre. Et `composerRepartition` tire **APRÈS**
+`placerBatiments` : le décalage change donc aussi **QUELLES** pièces sont posées,
+pas seulement OÙ. C'est la cause principale des réancrages.
+⚠⚠ **DEUX COLONNES PEUVENT DÉSORMAIS ÊTRE ENTIÈREMENT VIDES SUR UN PETIT SITE —
+RELEVÉ, NON CORRIGÉ.** `base` niveau 10, onze pièces : le profil peut rendre
+`2,2,2,2,1,1,1,0,0`, ce qui n'arrivait jamais avec la charge plate. C'est dans le
+budget déclaré, et **l'autre moitié du lot est ce qui le rend défendable** : la
+défense se déplace latéralement, donc une colonne vide n'est plus une autoroute.
+**Une ligne suffit à y poser un plancher si Ethan tranche autrement.**
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RAFRAÎCHIS.**
+`COMBATS_DEPLACES_PAR_COLONNE` entre comme SECONDE couche par-dessus celle du lot
+ARRÊT : **309 champs sur 1 600 restent gardés** contre la capture d'avant
+JOURNAL-DE-COMBAT (568 après ARRÊT), **plus un seul des 200 combats n'est
+entièrement gardé, ni même son seul tick de fin**, et **195 causes de fin sur 200
+tiennent encore**. `DEPLACES_PAR_COLONNE` de BASES-0 nomme **cinquante-cinq
+couples**, tous à partir de la phase 7 — le premier raid ; les six premières
+phases sont identiques AU BIT.
+⚠⚠ **ET SEPT SCALAIRES SONT IDENTIQUES SUR LES VINGT-CINQ GRAINES** : gestes,
+gestes d'armement, **taille de la sauvegarde**, cases atteignables, déplacement,
+nombre de bases attaquantes, nombre de cibles et cible retenue. C'est la mesure
+qui dit que **le lot ne touche que le combat**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 26 — VÉRIFIÉ PLUTÔT QUE CRU.** Une
+entité de combat porte `colonneMilli` ; une ENTITÉ n'est pas un état sauvegardé,
+elle naît de `creerCombat` et meurt avec le montage. Ce qui traverse `serialiser`
+garde une `colonne` ENTIÈRE. Le témoin mesure `tailleSauvegarde` sur les
+vingt-cinq graines : **identique sur 25/25**.
+⚠⚠ **UNE DETTE EST TROUVÉE, MESURÉE ET NON CORRIGÉE, ET UN CORRECTIF A ÉTÉ
+RETIRÉ.** Un site raidé plusieurs fois peut LEVER au raid suivant —
+« pvMilli N hors de 1…M », jusqu'à **1,37 fois le nominal** : le joueur perd sa
+partie sur une exception. **Elle est ANTÉRIEURE au lot** — six cas sur 900
+scénarios mesurés sur `origin/main`, cinq ici, sur d'autres graines. Borner la
+valeur dans `reprojeter` a été écrit, mesuré INEFFICACE — cinq cas sur cinq
+persistent — et **retiré** : `src/sim/site-entame.js` n'a pas une ligne de
+changée. **Un correctif qui ne mord pas se vérifie avant d'être cru**, comme une
+falsification. `COL T18 bis` l'asserte **encore violée**, sur l'idiome de
+`DETTES_ACCENT`.
+⚠ **DIX-NEUF FALSIFICATIONS, SEIZE CHUTES, ET LES TROIS MUETTES SONT TRAITÉES
+DIFFÉREMMENT.** « La garnison ignore les collisions latérales » n'a mordu sur
+rien → `COL T6 bis` a été ÉCRIT ; « le budget relevé à 4 » n'a mordu sur rien →
+`COL T16` écrit son seuil en clair ; « la garde `null` retirée » ne mord pas et
+se DÉCLARE, la comparaison la rendant redondante par construction.
+⚠ **VINGT-ET-UN TESTS ENTRENT — `COL T1` à `T18`, plus `T6 bis`, `T6 ter` et
+`T18 bis`, dans `test/colonne.test.js` — ET LE COMPTE PASSE DE 1 179 À 1 201.**
+**Aucune assertion n'a été retirée ni assouplie** ; **onze gardes changent de
+cible et deux se RESSERRENT** — `COL T16` écrit ses seuils là où les gardes
+existantes les lisaient dans la table, et `passesPourRaser` LÈVE désormais si le
+résultat cesse de s'apparier rang à rang.
+⚠⚠ **LE CALIBRAGE REVIENT À ETHAN, ET RIEN N'A ÉTÉ COMPENSÉ.** Butin total du
+banc **154,4 G → 258,5 G, +67,4 %** ; les trois raids de référence bougent tous,
+dans les deux sens. Et **`blindeLourd/base/1` demande 5 478 ticks**, soit 547
+secondes : ce n'est plus un dépassement du plafond de 90 s, c'est un autre
+régime — à remonter, comme le 4 645 du lot CARTE.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ, CINQUIÈME LOT DE SUITE.** Il
+pose 1 135 pass, 7 987 956 octets et 0.99.2 · build 103 ; mesuré au départ,
+**1 179 pass, 7 997 316 octets, 0.99.7 · build 108**.
+
+**Auparavant, après le lot SON-VOLUMES :**
 `npm test` → **1179 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 997 316 octets**, 0 référence externe. Le lot **REND 8 octets**, ENTIÈREMENT
 DU JAVASCRIPT, mesurés poste par poste contre le livrable bâti depuis
@@ -6321,7 +6476,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   55 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   56 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -6330,7 +6485,7 @@ test/                   55 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal  raid-ecran  arret  embleme
+  son  journal  raid-ecran  arret  embleme  colonne
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

@@ -386,9 +386,19 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // L'invariance en miroir ne dit pas quelle est la durée, elle dit qu'elle ne
   // dépend pas du niveau.
   // Lot ARRÊT : 113 au lieu de 174 — soixante et un ticks de moins, l'assaut
-  // lourd ne s'arrêtant plus devant les tourelles et les murs qu'il croise. La
-  // propriété, elle, tient toujours : UNE seule durée pour les neuf niveaux.
-  assert.deepEqual([...ticks], [113], `durées observées : ${[...ticks].join(', ')}`);
+  // lourd ne s'arrêtant plus devant les tourelles et les murs qu'il croise.
+  // ⚠⚠ LOT COLONNE : 139, vingt-six ticks de PLUS. L'arrêt sur prédilection
+  // revient, donc l'assaut se fige de nouveau — mais devant les pièces de
+  // garnison de sa colonne, pas devant les murs : il ne remonte pas à 174.
+  // **La propriété, elle, n'a jamais bougé, et c'est la seule chose que ce test
+  // mesure : UNE seule durée pour les neuf niveaux.** L'invariance en miroir ne
+  // dit pas QUELLE est la durée, elle dit qu'elle ne dépend pas du niveau — et
+  // ce lot fait bouger les deux camps sans la rompre.
+  // ⚠ ET LE POINT 9 DU MÊME LOT LA PORTE À 188 : le site de référence n'est plus
+  // disposé pareil, donc le combat ne dure plus pareil. **La propriété tient
+  // toujours, et c'est la seule que ce test mesure : une SEULE durée, sur neuf
+  // niveaux, sur un site dont la forme vient de changer.**
+  assert.deepEqual([...ticks], [188], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -420,15 +430,31 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // B rapporte 10 % de PLUS en trente et un ticks de plus ; C rapporte un peu
     // moins en trente ticks de plus. Le calibrage revient à Ethan : voir
     // `RAPPORT-lotARRET.md`.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 380, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 440, butin: { quartz: 41_006, scorie: 13_668 }, survivants: 6 },
+    // ⚠⚠ LOT COLONNE (06/09) : LES TROIS BOUGENT ENCORE, ET ENCORE DANS LES DEUX
+    // SENS. A repasse de 380 à 516 ticks, redevient RENTABLE — 0 · 0 → 222 · 74
+    // — et ramène TROIS survivants sur six là où il n'en ramenait aucun :
+    // l'arrêt sur prédilection le retient dans la bande de défense, il y casse
+    // la garnison au lieu de mourir devant les bâtiments. B raccourcit de 440 à
+    // 371 et rapporte 2,9 % de MOINS ; C rallonge d'un tick et perd 37,7 % de
+    // butin. Aucun barème n'a été touché — voir `RAPPORT-lotCOLONNE.md`.
+    // ⚠⚠ ET LE POINT 9 DU MÊME LOT LES FAIT BOUGER UNE SECONDE FOIS, TOUJOURS
+    // DANS LES DEUX SENS, ET IL L'EMPORTE SUR LE POINT 7 SUR LES TROIS. A
+    // redescend de 516 à 359 ticks, reperd tout son butin et tous ses
+    // survivants ; B passe de 371 à 749 ticks — le double — en perdant 29 % de
+    // butin et en ramenant SEPT survivants sur huit ; C passe de 336 à 513 et
+    // gagne 255 % de butin. La disposition d'un site ne change pas seulement de
+    // FORME : `composerRepartition` tire après `placerBatiments`, donc la
+    // composition de la garnison change avec elle. Aucun barème n'a été touché,
+    // et le calibrage revient à Ethan — voir `RAPPORT-lotCOLONNE.md`.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 355, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 749, butin: { quartz: 28_127, scorie: 9375 }, survivants: 7 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 335, butin: { quartz: 24_640, scorie: 8213 }, survivants: 6 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 513, butin: { quartz: 54_560, scorie: 18_186 }, survivants: 3 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

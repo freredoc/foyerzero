@@ -5,9 +5,15 @@
 // permettra de le sauvegarder plus tard sans y toucher.
 //
 // L'INVARIANT DU LOT. La grille de l'Arsenal fait 4 × 9 et ses colonnes SONT
-// celles du champ de bataille : aucune unité ne change jamais de colonne
-// pendant un raid — c'est vrai depuis le lot 2A et un test le vérifie sur
-// 300 ticks. La case où le joueur pose un Perceurs EST le couloir qu'il
+// celles du champ de bataille : aucune unité D'ASSAUT ne change jamais de
+// colonne pendant un raid — c'est vrai depuis le lot 2A et un test le vérifie
+// sur 300 ticks.
+//
+// ⚠ LES DEUX MOTS EN CAPITALES SONT DU LOT COLONNE, 06/09. La phrase disait
+// « aucune unité », et le lot fait bouger la DÉFENSE des deux camps
+// latéralement. L'invariant de CET écran n'a pas bougé d'un pixel — il ne
+// compose que de l'assaut —, mais la phrase qui le portait était devenue plus
+// large que le fait. La case où le joueur pose un Perceurs EST le couloir qu'il
 // empruntera. La position dans l'éditeur n'est pas une représentation de la
 // décision tactique : elle en est la totalité.
 //

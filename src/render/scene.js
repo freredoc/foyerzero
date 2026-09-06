@@ -33,7 +33,9 @@
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { BATIMENTS } from '../data/sites.js';
-import { xDeColonne, yDeRangeeMilli, yDeRangee } from './projection.js';
+import {
+  xDeColonne, xDeColonneMilli, yDeRangeeMilli, yDeRangee,
+} from './projection.js';
 import { rectangleDuFond } from './fond.js';
 import { positionInterpolee } from './interpolation.js';
 import { celluleDuSprite, existeDansAtlas } from './sprite.js';
@@ -695,12 +697,30 @@ function visible(e) {
 
 /**
  * Position affichée d'une entité : interpolée entre l'instantané pris avant le
- * dernier tick et la position courante. Une entité née après la prise —
- * indice ≥ instantane.length — se dessine sans interpolation.
+ * dernier tick et la position courante, SUR LES DEUX AXES. Une entité née après
+ * la prise — indice ≥ instantane.length — se dessine sans interpolation.
+ *
+ * ⚠⚠ LES DEUX AXES DEPUIS LE LOT COLONNE, 06/09. Elle ne rendait qu'une rangée,
+ * et `xDe` lisait `e.colonne` en ENTIER : une défenseuse qui se décale aurait
+ * sauté d'une colonne à l'autre entre deux images, le moteur étant juste et
+ * l'écran faux. Elle rend un couple, et les DEUX passent par
+ * `positionInterpolee` — la même fonction, qui ne sait pas de quel axe il
+ * s'agit.
+ *
+ * ⚠ ET C'EST CE QUI A EXIGÉ `Math.trunc` DANS CETTE FONCTION-LÀ : un décalage
+ * vers la gauche rend un delta NÉGATIF, que `Math.floor` arrondissait vers −∞,
+ * donc au-delà de la destination. `COL T12` mesure le défaut, et il a été vu
+ * rouge avant la correction.
  */
-function rangeeAffichee(e, precedentes, alpha) {
-  if (!precedentes || e.indice >= precedentes.length) return e.rangeeMilli;
-  return positionInterpolee(precedentes[e.indice], e.rangeeMilli, alpha);
+function positionAffichee(e, precedentes, alpha) {
+  if (!precedentes || e.indice >= precedentes.length) {
+    return { rangeeMilli: e.rangeeMilli, colonneMilli: e.colonneMilli };
+  }
+  const avant = precedentes[e.indice];
+  return {
+    rangeeMilli: positionInterpolee(avant.rangeeMilli, e.rangeeMilli, alpha),
+    colonneMilli: positionInterpolee(avant.colonneMilli, e.colonneMilli, alpha),
+  };
 }
 
 /**
@@ -770,10 +790,12 @@ export function listeAffichage(
   // Positions affichées, calculées une fois : barres et traits les réutilisent.
   const positions = new Map();
   for (const e of etat.entites) {
-    if (visible(e)) positions.set(e.indice, rangeeAffichee(e, precedentes, alpha));
+    if (visible(e)) positions.set(e.indice, positionAffichee(e, precedentes, alpha));
   }
-  const xDe = (e) => xDeColonne(projection, e.colonne);
-  const yDe = (e) => yDeRangeeMilli(projection, positions.get(e.indice));
+  const positionDe = (e) => positions.get(e.indice)
+    ?? { rangeeMilli: e.rangeeMilli, colonneMilli: e.colonneMilli };
+  const xDe = (e) => xDeColonneMilli(projection, positionDe(e).colonneMilli);
+  const yDe = (e) => yDeRangeeMilli(projection, positionDe(e).rangeeMilli);
 
   // ⚠⚠ LA LISTE DES DÉFENSES VIVANTES A DISPARU AVEC LE CHAÎNAGE, ET C'EST LE
   // LOT. Elle était calculée ici, une fois par image, pour que `liaisonDuMur`
@@ -806,10 +828,8 @@ export function listeAffichage(
     if (e.cibleIndice === null || e.cibleIndice === undefined) return null;
     const cible = etat.entites[e.cibleIndice];
     if (cible === undefined || !visible(cible)) return null;
-    return {
-      rangee: (positions.get(cible.indice) ?? cible.rangeeMilli) / 1000,
-      colonne: cible.colonne,
-    };
+    const pos = positionDe(cible);
+    return { rangee: pos.rangeeMilli / 1000, colonne: pos.colonneMilli / 1000 };
   };
 
   // 3. Bâtiments — 4. structures — 5. unités.
@@ -827,8 +847,11 @@ export function listeAffichage(
           // ⚠ LA RANGÉE AFFICHÉE, INTERPOLÉE COMME CELLE DE LA CIBLE. Viser
           // juste depuis une case fausse rendrait le même décalage que viser
           // faux depuis la bonne.
-          rangee: (positions.get(e.indice) ?? e.rangeeMilli) / 1000,
-          colonne: e.colonne,
+          rangee: positionDe(e).rangeeMilli / 1000,
+          // ⚠ LA COLONNE AFFICHÉE, INTERPOLÉE ELLE AUSSI — LOT COLONNE. Elle
+          // était lue en entier sur l'entité : la tourelle d'une défenseuse qui
+          // se décale aurait visé depuis la case qu'elle vient de quitter.
+          colonne: positionDe(e).colonneMilli / 1000,
         }, { cible: cibleAffichee(e) }));
     }
   }
@@ -862,12 +885,12 @@ export function listeAffichage(
     const cible = etat.entites[e.cibleIndice];
     const accent = accentDe(e.genre, e.id);
     // Une cible morte de ce tir n'est plus dans `positions` : le trait va
-    // alors à sa dernière position brute.
-    const milliCible = positions.get(cible.indice) ?? cible.rangeeMilli;
+    // alors à sa dernière position brute, sur les DEUX axes.
+    const posCible = positionDe(cible);
     liste.push(ligne(
       xDe(e) + demi, yDe(e) + demi,
-      xDeColonne(projection, cible.colonne) + demi,
-      yDeRangeeMilli(projection, milliCible) + demi,
+      xDeColonneMilli(projection, posCible.colonneMilli) + demi,
+      yDeRangeeMilli(projection, posCible.rangeeMilli) + demi,
       accent.clair, 2,
     ));
   }

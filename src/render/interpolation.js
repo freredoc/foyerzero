@@ -4,9 +4,22 @@
 // pilotent pas l'un l'autre. Le temps réel écoulé est injecté par l'appelant
 // (couche ui/), jamais lu ici — même règle que src/sim/clock.js.
 //
-// L'interpolation est À UNE DIMENSION : une entité ne change jamais de colonne
-// (le déplacement du moteur est strictement vertical), seule rangeeMilli
-// s'interpole. Et les indices d'entités sont STABLES : une entité morte reste
+// ⚠⚠ L'INTERPOLATION EST À DEUX DIMENSIONS DEPUIS LE LOT COLONNE, 06/09. Ce
+// paragraphe a écrit pendant six jours que « l'interpolation est À UNE
+// DIMENSION : une entité ne change jamais de colonne (le déplacement du moteur
+// est strictement vertical) ». La seconde moitié est tombée : la DÉFENSE des
+// deux camps se décale latéralement, à 2/3 de sa vitesse. Sans interpolation
+// latérale, une défenseuse qui traverse une colonne se TÉLÉPORTERAIT d'une case
+// à l'autre entre deux images — `prendrePositions` ne relevait que rangeeMilli,
+// et `scene.js` lisait la colonne en entier. Les deux relèvent désormais les
+// DEUX axes, et `positionInterpolee` sert les deux sans savoir lequel est
+// lequel.
+//
+// ⚠ ELLE RESTE À UNE DIMENSION POUR L'ASSAUT, et ce n'est pas une nuance : une
+// unité d'attaque ne change toujours jamais de colonne, son `colonneMilli` est
+// constant, et l'interpolation latérale y rend la même valeur aux deux bouts.
+//
+// Et les indices d'entités sont STABLES : une entité morte reste
 // dans etat.entites avec vivant: false, elle n'est jamais retirée du tableau —
 // il n'y a donc ni apparition ni disparition à gérer ici, seulement les
 // entités nées après la prise du dernier instantané, dessinées sans
@@ -94,22 +107,51 @@ export function alphaMilli(accumulateur, vitesse) {
 /**
  * Position affichée entre deux ticks, en milli-cases entières :
  *
- *   rangeeAffichee = precedent + floor((courant − precedent) × alphaMilli / 1000)
+ *   affichee = precedent + trunc((courant − precedent) × alphaMilli / 1000)
  *
  * À alpha = 0 la position précédente, à alpha = 1000 la courante, à alpha = 500
- * le milieu entier. Le moteur ne déplace que vers le haut : courant ≥ precedent,
- * le floor est donc un plancher franc, jamais une troncature vers le haut.
+ * le milieu entier.
+ *
+ * ⚠⚠ `Math.trunc`, ET PLUS `Math.floor` — LOT COLONNE, 06/09. Ce commentaire a
+ * écrit pendant six jours que « le moteur ne déplace que vers le haut : courant
+ * ≥ precedent, le floor est donc un plancher franc ». La première moitié cesse
+ * d'être vraie sur l'axe des COLONNES : une défenseuse qui se décale vers la
+ * gauche rend un delta NÉGATIF, et `Math.floor` arrondit alors vers −∞, donc
+ * PLUS LOIN que sa destination. Mesuré : de 2075 vers 2000, à alpha 500, floor
+ * rend 2037 quand la moitié exacte vaut 2037,5 — l'entité dépasse d'un
+ * milli-case, puis revient à l'image suivante. Elle tremble.
+ *
+ * ⚠ `Math.trunc` TRONQUE VERS ZÉRO, donc vers `precedent` des deux côtés : la
+ * position affichée reste toujours DANS le segment [precedent, courant], quel
+ * que soit son sens. C'est la propriété que `COL T12` mesure sur toute la plage
+ * d'alpha, et non le seul nombre 2038.
+ *
+ * ⚠ ET LE DÉFAUT ÉTAIT MESURABLE AVANT LE LOT : cette fonction est PURE, rien
+ * ne l'empêchait de recevoir un delta négatif — c'est seulement que personne ne
+ * lui en donnait. `COL T12` a été écrit et vu ROUGE sur l'arbre intact.
  */
 export function positionInterpolee(precedentMilli, courantMilli, alpha) {
-  return precedentMilli + Math.floor(((courantMilli - precedentMilli) * alpha) / 1000);
+  return precedentMilli + Math.trunc(((courantMilli - precedentMilli) * alpha) / 1000);
 }
 
 /**
  * Instantané des positions courantes, indexé par indice d'entité. À prendre
  * AVANT chaque tick. Une entité d'indice ≥ instantane.length est née après la
  * prise : elle se dessine sans interpolation, à sa position courante.
- * @returns {number[]} rangeeMilli par indice.
+ *
+ * ⚠⚠ LES DEUX AXES DEPUIS LE LOT COLONNE. Elle ne relevait que `rangeeMilli`,
+ * au motif écrit en tête de ce fichier qu'« une entité ne change jamais de
+ * colonne ». Ce motif est tombé pour la défense, et un instantané à un seul axe
+ * aurait fait TÉLÉPORTER une défenseuse d'une colonne à l'autre entre deux
+ * images — le moteur aurait été juste et l'écran faux, ce qui ne se voit qu'à
+ * l'œil.
+ *
+ * ⚠ UN COUPLE PAR ENTITÉ, ET NON DEUX TABLEAUX PARALLÈLES : deux tableaux
+ * indexés de la même façon finissent par se désynchroniser d'un cran, et c'est
+ * le défaut que `economie.residus` a déjà coûté au dépôt.
+ *
+ * @returns {{rangeeMilli: number, colonneMilli: number}[]} par indice.
  */
 export function prendrePositions(etat) {
-  return etat.entites.map((e) => e.rangeeMilli);
+  return etat.entites.map((e) => ({ rangeeMilli: e.rangeeMilli, colonneMilli: e.colonneMilli }));
 }

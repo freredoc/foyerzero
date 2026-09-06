@@ -20,7 +20,9 @@ import {
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
 import { UNITES } from '../src/data/combat.js';
-import { TEMOINS_COMBAT, COMBATS_DEPLACES_PAR_ARRET } from './temoins-combat.js';
+import {
+  TEMOINS_COMBAT, COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
+} from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...bouts) => readFileSync(join(RACINE, ...bouts), 'utf8');
@@ -97,14 +99,26 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
           // reste continue d'être comparé à la capture d'AVANT le lot
           // JOURNAL-DE-COMBAT. Même doctrine que les `DEPLACES_PAR_*` de
           // `temoins-bases-0.js`.
+          //
+          // ⚠⚠ ET LE LOT COLONNE EN AJOUTE UNE SECONDE, IL NE REMPLACE PAS LA
+          // PREMIÈRE. Les couches se lisent de la plus RÉCENTE à la plus
+          // ancienne : ce que COLONNE déplace l'emporte, sinon ce qu'ARRÊT
+          // déplaçait, sinon le témoin d'avant JOURNAL-DE-COMBAT. Empiler
+          // plutôt qu'écraser est ce qui garde les 309 champs restants adossés
+          // à une capture qu'aucun de ces trois lots n'a produite.
           const deplaces = COMBATS_DEPLACES_PAR_ARRET[i] ?? {};
+          const deplacesColonne = COMBATS_DEPLACES_PAR_COLONNE[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
-            const reference = Object.prototype.hasOwnProperty.call(deplaces, c)
-              ? deplaces[c] : attendu[c];
+            let reference = attendu[c];
+            if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
+            if (Object.prototype.hasOwnProperty.call(deplacesColonne, c)) {
+              reference = deplacesColonne[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
-            if (Object.prototype.hasOwnProperty.call(deplaces, c)) surcharges += 1;
+            if (Object.prototype.hasOwnProperty.call(deplaces, c)
+              || Object.prototype.hasOwnProperty.call(deplacesColonne, c)) surcharges += 1;
           }
           i += 1;
         }
@@ -115,12 +129,22 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
   assert.equal(i, 200);
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
   // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON
-  // LE VOIE. 1 032 champs déplacés sur 1 600 : 568 restent gardés contre la
-  // capture d'avant le lot JOURNAL-DE-COMBAT, dont dix-neuf combats entiers.
-  // Une surcharge qui grandirait sans qu'un lot le dise fait tomber ce test.
-  assert.equal(surcharges, 1032, `champs surchargés : ${surcharges}`);
+  // LE VOIE. Elle était de 1 032 champs sur 1 600 après le lot ARRÊT, 568
+  // restant gardés contre la capture d'avant le lot JOURNAL-DE-COMBAT, dont
+  // dix-neuf combats entiers. Le lot COLONNE la porte à **1 233**, et il ne
+  // reste que **334 champs gardés** — dont **173 causes de fin sur 200**, mais
+  // plus AUCUN combat entier. C'est ce que coûte un lot qui touche les deux
+  // moitiés du moteur, et le dire est la moitié du travail : une surcharge qui
+  // grandirait sans qu'un lot le déclare fait tomber ce test.
+  //
+  // ⚠ LE COMPTE EST L'UNION DES DEUX COUCHES, PAS LEUR SOMME : trente-trois
+  // champs qu'ARRÊT avait déplacés n'ont pas rebougé, et ils restent surchargés
+  // par lui. 1 233 entrées neuves, 1 266 champs couverts, 334 encore adossés au
+  // témoin d'avant JOURNAL-DE-COMBAT.
+  assert.equal(surcharges, 1291, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
-  assert.ok(champs - surcharges === 568, 'le compte des champs encore gardés a changé');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
+  assert.ok(champs - surcharges === 309, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -327,7 +351,15 @@ test('JOURNAL T7 — une vague entre une fois, et chaque unité paraît une fois
 // ---------------------------------------------------------------------------
 
 test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsification n° 8)', () => {
-  const etat = creerCombat(montageDe('base', null, 45, 8));
+  // ⚠⚠ LA GRAINE PASSE DE 8 À 12 AU LOT COLONNE, ET C'EST UNE RÉPARATION DE
+  // PRÉMISSE. La garde du bas exige que le montage ÉCRASE vraiment quelqu'un,
+  // sans quoi l'exception « une pièce écrasée perd plus que son impact » ne se
+  // mesurerait plus. L'arrêt sur prédilection du 06/09 fige les attaquantes
+  // devant les défenseuses de leur colonne : sur la graine 8 elles n'écrasent
+  // plus personne — mesuré, 0 écrasée contre 2 avant. La graine 12 en rend
+  // deux, au même type, au même niveau, avec la même armée. Le seuil d'impacts
+  // (> 500) tient aussi : 855 contre 955.
+  const etat = creerCombat(montageDe('base', null, 45, 12));
   let ticks = 0;
   let vus = 0;
   let parts = [];

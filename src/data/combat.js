@@ -51,6 +51,28 @@ export const GRILLE = {
   // qui allait percer. Le compteur se remet à zéro dès qu'une des deux
   // conditions cesse d'être vraie.
   ticksAvantRepli: 30,
+
+  // ⚠⚠ LE DÉPLACEMENT LATÉRAL DE LA DÉFENSE — ETHAN, 06/09, POINT 10.
+  // « Déplacement latéral identique au déplacement vertical. Vitesse multipliée
+  // par 2/3. Même règle de collision. Elle veut aller vers la cible la plus
+  // proche, peu importe si elle se bloque. » Périmètre : « défense des deux
+  // camps ». Une unité d'ASSAUT ne change toujours jamais de colonne.
+  //
+  // ⚠ UNE FRACTION D'ENTIERS, JAMAIS `0.666…`. Toute l'arithmétique du moteur
+  // est entière, et un flottant écrit ici ferait diverger le rattrapage du tick
+  // à tick sur la troisième décimale — la faute exacte que le lot BASES-1 a
+  // déjà payée sur le ×2,5 de la base supplémentaire.
+  //
+  // ⚠⚠ ET LE QUOTIENT TOMBE JUSTE, CE QUI EST RARE DANS CE MOTEUR. Les seules
+  // vitesses du relevé sont 60, 90, 120 et 240 — toutes divisibles par 3 —, donc
+  // le ×2/3 rend 40, 60, 80 et 160, tous ENTIERS. Aucun arrondi n'est à
+  // arbitrer, et `COL T13` garde cette divisibilité : le jour où une vitesse non
+  // divisible par 3 entrerait dans `UNITES`, c'est un test qui le dira, pas un
+  // arrondi silencieux qui décalerait une unité d'un milli-case par tick.
+  //
+  // ⚠ IL VIT ICI, PAS DANS `sim/combat.js` : un seuil de jeu ne s'écrit pas dans
+  // le moteur.
+  lateral: { numerateur: 2, denominateur: 3 },
 };
 
 // --- obstacles de terrain ----------------------------------------------------

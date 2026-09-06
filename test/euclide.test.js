@@ -20,7 +20,7 @@ import {
   horsDeLaGarde, hachageDeCase, estBaseOuvrage, VOISINES_EXCLUES,
 } from '../src/sim/peuplement.js';
 import { casesDeLAnneau } from '../src/sim/satellites.js';
-import { distanceCarree } from '../src/sim/grille.js';
+import { distanceCarreeMilli } from '../src/sim/grille.js';
 import { positionDepartJoueur, estSurLaCarte } from '../src/sim/carte.js';
 import {
   creerEtat, serialiser, migrer, SAVE_VERSION,
@@ -419,32 +419,51 @@ test('EUCLIDE T6 — distanceCarreeCases lève sur une case non entière, en nom
 
 test('EUCLIDE T7 — la distance de la CARTE et celle du COMBAT restent séparées', () => {
   // ⚠⚠ DEUX FONCTIONS AUX NOMS PRESQUE IDENTIQUES, ET UN FACTEUR UN MILLION
-  // ENTRE ELLES. `distanceCarree` de `sim/grille.js` travaille en MILLI-CASES :
-  // deux cases voisines y sont à 1 000 000. Les confondre donnerait un résultat
-  // faux sans que rien ne lève.
+  // ENTRE ELLES. `distanceCarreeMilli` de `sim/grille.js` travaille en
+  // MILLI-CASES : deux cases voisines y sont à 1 000 000. Les confondre donnerait
+  // un résultat faux sans que rien ne lève.
   // ⚠ ET LES SIGNATURES NE SE RESSEMBLENT MÊME PAS : celle du combat prend
   // QUATRE scalaires, celle de la carte DEUX cases. C'est une protection de
   // plus, et elle se mesure — passer deux objets à celle du combat rend `NaN`.
-  const voisines = distanceCarree(0, 1, 0, 2);
+  //
+  // ⚠⚠ ELLE S'APPELAIT `distanceCarree` JUSQU'AU LOT COLONNE, ET LE RENOMMAGE
+  // EST UN GARDE-FOU, PAS UNE COQUETTERIE. Ses deux axes sont passés en milli le
+  // 06/09 — la colonne y était en CASES, convertie dedans. Gardée sous son
+  // ancien nom, elle aurait accepté un appelant oublié qui lui passe encore une
+  // colonne entière : `esbuild` ne dit rien d'un argument, et un test de portée
+  // écrit sur des entités ALIGNÉES en colonne ne le verrait pas non plus. Sous
+  // un nom neuf, l'import lève. `COL T11` désaligne les colonnes.
+  const voisines = distanceCarreeMilli(0, 1000, 0, 2000);
   assert.equal(voisines, 1_000_000, 'deux cases voisines valent un million de milli-cases');
   const surLaCarte = distanceCarreeCases({ rangee: 0, colonne: 1 }, { rangee: 0, colonne: 2 });
   assert.equal(surLaCarte, 1);
   assert.equal(voisines / surLaCarte, 1_000_000);
-  assert.ok(Number.isNaN(distanceCarree(
+  assert.ok(Number.isNaN(distanceCarreeMilli(
     { rangee: 0, colonne: 1 }, { rangee: 0, colonne: 2 },
   )), 'la distance du combat doit refuser des cases');
 
   // ⚠ ET AUCUN DES TROIS MODULES QUI ONT BASCULÉ N'IMPORTE LA DISTANCE DU
   // COMBAT. La garde porte sur l'import, pas sur l'usage : c'est l'import qui
-  // rendrait la confusion possible.
+  // rendrait la confusion possible. Elle refuse les DEUX noms — l'ancien parce
+  // qu'il ne doit pas reparaître, le neuf parce que c'est lui qui existe.
   for (const chemin of SOURCES_EUCLIDE) {
     const source = decommentee(chemin);
-    assert.doesNotMatch(source, /distanceCarree(?![A-Za-z])/,
+    assert.doesNotMatch(source, /distanceCarree(Milli)?(?![A-Za-z])/,
       `${chemin} emploie la distance du COMBAT`);
   }
-  // Falsifiable : le motif doit attraper l'appât, et laisser passer le nom long.
-  assert.match('import { distanceCarree } from "./grille.js";', /distanceCarree(?![A-Za-z])/);
-  assert.doesNotMatch('distanceCarreeCases(a, b)', /distanceCarree(?![A-Za-z])/);
+  // Falsifiable : le motif doit attraper les deux appâts, et laisser passer le
+  // nom de la distance de la CARTE.
+  assert.match('import { distanceCarreeMilli } from "./grille.js";',
+    /distanceCarree(Milli)?(?![A-Za-z])/);
+  assert.match('import { distanceCarree } from "./grille.js";',
+    /distanceCarree(Milli)?(?![A-Za-z])/);
+  assert.doesNotMatch('distanceCarreeCases(a, b)', /distanceCarree(Milli)?(?![A-Za-z])/);
+
+  // ⚠⚠ ET L'ANCIEN NOM N'EXISTE PLUS DU TOUT, ce qui est la moitié qui compte :
+  // un module qui l'importerait ne se chargerait pas.
+  const grille = readFileSync(new URL('../src/sim/grille.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(grille, /export function distanceCarree\(/,
+    'l\'ancienne distance à deux unités est revenue');
 });
 
 // ---------------------------------------------------------------------------

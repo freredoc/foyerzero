@@ -11,11 +11,14 @@ import { POINTS_RECHERCHE, GEOGRAPHIE } from '../src/data/sites.js';
 import {
   MILLI_PAR_CASE,
   PREMIERE_RANGEE,
+  PREMIERE_COLONNE,
+  DERNIERE_COLONNE,
   DERNIERE_RANGEE,
   enEntier,
   milliDepuisCase,
   caseDepuisMilli,
-  distanceCarree,
+  distanceCarreeMilli,
+  estSortiParLeCote,
   estDansLaGrille,
   estDansLaBande,
   bornesBande,
@@ -52,19 +55,46 @@ test('G1 — conversions en milli-cases, exactes et réversibles', () => {
   assert.throws(() => enEntier(1.0005, 1000, 'essai'), /n'est pas entier/);
 });
 
-test('G2 — distances au carré, en milli-case², sans racine', () => {
+test('G2 — distances au carré, en milli-case², sans racine, LES DEUX AXES EN MILLI', () => {
+  // ⚠⚠ LES DEUX AXES EN MILLI DEPUIS LE LOT COLONNE. La fonction s'appelait
+  // `distanceCarree` et prenait la colonne en CASES, qu'elle convertissait
+  // elle-même. Elle a été RENOMMÉE plutôt qu'élargie en place : sous l'ancien
+  // nom, un appelant oublié aurait passé une colonne en cases et le carré aurait
+  // été faux d'un facteur 1 000 000 sur l'axe horizontal, SANS LEVER.
   // (3,5) → (4,4) : dr = 1000, dc = 1000 → 1000² + 1000² = 2 000 000.
-  assert.equal(distanceCarree(3000, 5, 4000, 4), 2_000_000);
+  assert.equal(distanceCarreeMilli(3000, 5000, 4000, 4000), 2_000_000);
   // (3,5) → (4,6) : strictement la même distance, l'ordre total tranche ailleurs.
-  assert.equal(distanceCarree(3000, 5, 4000, 6), 2_000_000);
+  assert.equal(distanceCarreeMilli(3000, 5000, 4000, 6000), 2_000_000);
   // Même colonne, trois cases d'écart : 3000² = 9 000 000.
-  assert.equal(distanceCarree(5000, 5, 8000, 5), 9_000_000);
+  assert.equal(distanceCarreeMilli(5000, 5000, 8000, 5000), 9_000_000);
   // Portée 5,5 → 5500² = 30 250 000 ; portée mini 3,5 → 3500² = 12 250 000.
   assert.equal(5500 * 5500, 30_250_000);
   assert.equal(3500 * 3500, 12_250_000);
   // La distance est symétrique et nulle sur soi-même.
-  assert.equal(distanceCarree(4000, 2, 4000, 2), 0);
-  assert.equal(distanceCarree(1000, 1, 9000, 9), distanceCarree(9000, 9, 1000, 1));
+  assert.equal(distanceCarreeMilli(4000, 2000, 4000, 2000), 0);
+  assert.equal(
+    distanceCarreeMilli(1000, 1000, 9000, 9000),
+    distanceCarreeMilli(9000, 9000, 1000, 1000),
+  );
+  // ⚠ ET UNE DEMI-CASE LATÉRALE SE MESURE, ce qu'aucune colonne entière ne
+  // pouvait exprimer : c'est très exactement ce que le lot COLONNE achète.
+  assert.equal(distanceCarreeMilli(3000, 5000, 3000, 5500), 250_000);
+});
+
+test('COL T10 — la borne latérale refuse les deux côtés, et rien entre les deux', () => {
+  // ⚠ ELLE EST PURE ET EXPORTÉE POUR QU'UN TEST L'ATTEIGNE SANS MONTER UN
+  // COMBAT — §2.5 du brief. `peutAvancer` reste verticale : on ne lui ajoute pas
+  // un paramètre d'axe qui en ferait deux fonctions dans une.
+  for (let c = PREMIERE_COLONNE; c <= DERNIERE_COLONNE; c += 1) {
+    assert.equal(estSortiParLeCote(c * 1000), false, `colonne ${c} est sur la grille`);
+    assert.equal(estSortiParLeCote(c * 1000 + 999), false, `colonne ${c} au bord droit`);
+  }
+  // Un milli-case au-delà de chaque bord, des deux côtés.
+  assert.equal(estSortiParLeCote(PREMIERE_COLONNE * 1000 - 1), true);
+  assert.equal(estSortiParLeCote(DERNIERE_COLONNE * 1000 + 1000), true);
+  assert.equal(estSortiParLeCote(0), true);
+  // Falsifiable : le montage doit voir de vrais refus ET de vraies acceptations.
+  assert.equal(DERNIERE_COLONNE, GRILLE.largeur);
 });
 
 test('G3 — bornes de la grille et des trois bandes contiguës', () => {

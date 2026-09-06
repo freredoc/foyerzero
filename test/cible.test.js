@@ -290,11 +290,29 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // ⚠⚠ LOT ARRÊT (04/09) : 193 ticks, et le raid RACCOURCIT de 120. L'assaut
   // lourd ne s'arrête plus pour les tourelles ni pour les murs qu'il croisait :
   // il entre dans la bande de défense, y prend tout le feu de face et s'y
-  // défait. Ce que ce test tient est inchangé depuis le lot 3C : le raid ne se
-  // termine pas faute de mieux.
+  // défait.
+  //
+  // ⚠⚠ LOT COLONNE (06/09) : 594 ticks, et le raid RALLONGE DE 401 — plus du
+  // triple. C'est l'exact symétrique de ce qu'ARRÊT avait mesuré : l'arrêt sur
+  // prédilection revient « EN PLUS du bâtiment », donc l'assaut lourd se fige de
+  // nouveau devant les pièces de garnison de sa colonne au lieu de les
+  // traverser. Il ne les traverse plus, il les casse — et il y met le temps.
+  //
+  // Ce que ce test tient est inchangé depuis le lot 3C, à travers les cinq
+  // réancrages : **le raid ne se termine pas faute de mieux.**
   assert.notEqual(r.cause, 'duree', 'le raid ne doit plus expirer faute de mieux');
   assert.equal(r.cause, 'attaquants');
-  assert.equal(r.nbTicks, 193);
+  //
+  // ⚠⚠ ET LE POINT 9 DU MÊME LOT LE RAMÈNE À 164 TICKS, SOIT SOUS SA VALEUR
+  // D'AVANT LE LOT. Il faut le dire dans ce sens-là : les deux moitiés du lot
+  // tirent en sens contraire sur ce raid-ci, et la seconde l'emporte largement.
+  // La disposition du site ne se contente pas de changer de forme — la
+  // composition de la garnison bouge avec elle, `composerRepartition` tirant
+  // APRÈS `placerBatiments`, dont le nombre de tirages a changé. L'assaut lourd
+  // de la graine 1 tombe désormais très vite. **Aucun barème n'a été touché**,
+  // et ce que ce test tient est toujours la même chose : le raid ne se termine
+  // pas faute de mieux.
+  assert.equal(r.nbTicks, 164);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -306,10 +324,20 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // combat, il ne change pas un seul tir. Les raids sur camp, eux, ne bougent
   // pas d'une unité, leur facteur valant 1.
   //
-  // ⚠ LOT ARRÊT : 2 094 et 698, soit 77 % de moins. Le raid dure 120 ticks de
-  // moins, donc il tire moins, donc il rapporte moins — et le multiplicateur de
-  // 3,25 de l'avant-poste amplifie la baisse comme il amplifiait la hausse.
-  assert.deepEqual(r.butin, { quartz: 2094, scorie: 698 });
+  // ⚠ LOT ARRÊT : 2 094 et 698, soit 77 % de moins. Le raid durait 120 ticks de
+  // moins, donc il tirait moins, donc il rapportait moins — et le multiplicateur
+  // de 3,25 de l'avant-poste amplifiait la baisse comme il amplifiait la hausse.
+  //
+  // ⚠ LOT COLONNE, POINT 7 : 12 182 et 4 060, soit près de SIX FOIS le lot ARRÊT
+  // et quatre fois et demie ce que le raid rapportait avant lui. Même mécanique
+  // dans l'autre sens : trois fois plus de ticks, donc trois fois plus de tirs,
+  // amplifiés par le 3,25 de l'avant-poste.
+  //
+  // ⚠⚠ ET LE POINT 9 LE RAMÈNE À ZÉRO. Cent soixante-quatre ticks ne suffisent
+  // pas à griffer un bâtiment : l'assaut lourd meurt dans la bande de défense.
+  // C'est le même renversement que sur le tick, mesuré sur l'autre grandeur.
+  // **Aucun barème n'a été touché.**
+  assert.deepEqual(r.butin, { quartz: 0, scorie: 0 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 0);
 });
 
@@ -402,14 +430,36 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // (mixte/camp/11) et 2019 (mixte/base/11). Le 4645 était à remonter : 464
   // secondes de combat, c'est cinq fois le plafond.
   //
-  // ⚠⚠ LOT ARRÊT (04/09) : IL N'EN RESTE AUCUN, ET C'EST LA MEILLEURE MESURE DU
-  // LOT. Les quatre raids qui touchaient le plafond se concluent maintenant
-  // d'eux-mêmes ; le « autre régime » à 4 645 ticks a disparu avec eux. La
-  // liste vide n'est PAS une assertion creuse — elle tombe dès qu'un raid
-  // recommence à s'éterniser, et elle était pleine hier.
+  // ⚠⚠ LOT ARRÊT (04/09) : IL N'EN RESTAIT AUCUN, ET C'ÉTAIT LA MEILLEURE MESURE
+  // DE CE LOT-LÀ. Les quatre raids qui touchaient le plafond se concluaient
+  // d'eux-mêmes ; le « autre régime » à 4 645 ticks avait disparu avec eux.
+  //
+  // ⚠⚠ LOT COLONNE (06/09) : ILS SONT TROIS, ET C'EST LE PRIX DE L'ARRÊT SUR
+  // PRÉDILECTION. Ethan rétablit l'arrêt sur la cible de prédilection « EN PLUS
+  // du bâtiment » : une unité qui croise une pièce de garnison de sa colonne se
+  // fige devant elle au lieu de la traverser, donc l'assaut reste plus longtemps
+  // sous le feu et les combats s'allongent. C'est mécanique, et c'est l'exact
+  // symétrique de ce que le lot ARRÊT avait mesuré en sens inverse.
+  //
+  // ⚠⚠ ET LE POINT 9 DU MÊME LOT N'EN LAISSE QU'UN, EN CHANGEANT SON NOM. La liste bouge des DEUX côtés — les trois du point 7 sortent, deux
+  // autres entrent — et c'est cohérent : la disposition ET la composition d'un
+  // site changent ensemble, donc un raid qui traînait peut désormais s'achever
+  // et un raid qui s'achevait peut traîner. Un allongement uniforme n'aurait
+  // fait qu'ajouter.
+  //
+  // ⚠ IL N'EST PAS UN GEL, vérifié comme les fois précédentes en portant
+  // `maxTicks` à 20 000 : il se conclut par `attaquants` au tick 5 478. C'est un
+  // combat trop long, pas un combat sans issue.
+  //
+  // ⚠⚠ ET LE 5 478 EST À REMONTER, COMME LE 4 645 DU LOT CARTE L'AVAIT ÉTÉ :
+  // 547 secondes de combat, c'est six fois le plafond. Ce n'est plus un
+  // dépassement, c'est un autre régime. Voir `RAPPORT-lotCOLONNE.md`.
+  //
+  // ⚠ ET LA LISTE EST NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
+  // n'importe quel autre raid. Celui-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), [],
-    'un raid touche de nouveau le plafond de 900 par dépassement de délai',
+    expires.sort(), ['blindeLourd/base/1'],
+    'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');

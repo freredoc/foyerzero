@@ -111,12 +111,44 @@ test('T2 — plus aucun fratricide sur le montage qui le produisait', () => {
       type: 'camp', niveau: 15, saveur: 'richeQuartz', graine, assaut: 'mixte',
     });
     const etat = creerCombat(montage);
-    resoudre(etat);
-    const ecrases = etat.entites.filter((e) => e.camp === 'attaque' && e.ecrase);
-    assert.deepEqual(
-      ecrases.map((e) => `${e.id} en colonne ${e.colonne}`), [],
-      `graine ${graine} : un attaquant a été écrasé par les siens`,
-    );
+    // ⚠⚠ « ÉCRASÉ » A CESSÉ D'ÊTRE UN PROXY DU FRATRICIDE — LOT COLONNE, 06/09.
+    // Ce test lisait `e.camp === 'attaque' && e.ecrase` et en concluait « écrasé
+    // PAR LES SIENS » : c'était juste tant que SEULS les attaquants bougeaient,
+    // puisqu'un attaquant ne pouvait alors être écrasé que par un attaquant.
+    // Depuis qu'une pièce de garnison se décale latéralement, elle peut écraser
+    // un attaquant en arrivant sur sa case — un écrasement parfaitement
+    // LÉGITIME, entre camps opposés, que `peutEcraser` autorise depuis le lot
+    // 3B. Mesuré : une Carapace en colonne 2 sur la graine 1.
+    //
+    // ⚠ ON MESURE DONC LE FRATRICIDE POUR DE BON, tick par tick : quand un
+    // attaquant passe à `ecrase`, on regarde QUI occupe sa case. Le champ
+    // `ecrase` ne dit pas par qui — et lui faire porter l'indice de l'écraseuse
+    // ferait entrer un champ de plus dans l'état sérialisé, donc déplacerait
+    // toutes les empreintes de déterminisme du dépôt pour un besoin de test.
+    const fratricides = [];
+    const dejaEcrases = new Set();
+    while (!etat.termine) {
+      tick(etat);
+      for (const e of etat.entites) {
+        if (e.camp !== 'attaque' || !e.ecrase || dejaEcrases.has(e.indice)) continue;
+        dejaEcrases.add(e.indice);
+        const surSaCase = etat.entites.find((x) => x.indice !== e.indice
+          && x.vivant && !x.sorti
+          && caseDepuisMilli(x.rangeeMilli) === caseDepuisMilli(e.rangeeMilli)
+          && caseDepuisMilli(x.colonneMilli) === caseDepuisMilli(e.colonneMilli));
+        if (surSaCase !== undefined && surSaCase.camp === 'attaque') {
+          fratricides.push(`${e.id} en colonne ${caseDepuisMilli(e.colonneMilli)}`
+            + ` par ${surSaCase.id}`);
+        }
+      }
+    }
+    assert.deepEqual(fratricides, [],
+      `graine ${graine} : un attaquant a été écrasé par les siens`);
+    // ⚠ ET LE MONTAGE N'EST PAS VACANT : il DOIT écraser des attaquants, sinon
+    // la garde ci-dessus ne mesure rien. Ce sont des écrasements d'ENNEMI.
+    for (const e of etat.entites) {
+      if (e.camp === 'attaque' && e.ecrase) assert.ok(dejaEcrases.has(e.indice));
+    }
     legitimesEnTout += etat.entites.filter((e) => e.camp === 'defense' && e.ecrase).length;
   }
   // Le test ne passe pas à vide : l'écrasement légitime, lui, opère toujours.
@@ -294,7 +326,19 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // défense et vont s'immobiliser devant les bâtiments. Le butin baisse de 156
   // de quartz, un survivant de moins — six au lieu de sept —, et ce que ce test
   // existe pour tenir ne bouge pas : au moins une unité rentre à la base.
-  assert.equal(r.nbTicks, 335);
+  // ⚠ LOT COLONNE (06/09) : 336, UN tick de plus, et le butin tombe de 24 640 à
+  // 15 350 — 37,7 % de moins. Le raid ne s'allonge pas : il change de cible.
+  // L'arrêt sur prédilection le fige devant les pièces de garnison de sa
+  // colonne, donc il griffe encore moins les bâtiments, d'où vient le butin. Ce
+  // que ce test existe pour tenir ne bouge toujours pas : au moins une unité
+  // rentre à la base.
+  // ⚠⚠ ET LE POINT 9 DU MÊME LOT LE PORTE À 513 TICKS, ET LE BUTIN À 54 560 DE
+  // QUARTZ — plus du double de ce qu'il rapportait avant tout le lot. Les deux
+  // moitiés du lot tirent en sens contraire sur ce raid-ci : la disposition du
+  // camp de la graine 1 change de forme ET de composition, et l'infanterie la
+  // traverse au lieu de s'y figer. Ce que ce test existe pour tenir ne bouge
+  // pas davantage : au moins une unité rentre à la base.
+  assert.equal(r.nbTicks, 513);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -308,8 +352,14 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // Lot COURBE : 26 321 au lieu de 26 319. DEUX unités de quartz. Le tick 315,
   // la cause et les sept survivants sont bit pour bit les mêmes sous une courbe
   // 4 500 fois plus plate — c'est l'invariance en miroir qui se montre.
-  assert.deepEqual(r.butin, { quartz: 24_640, scorie: 8213 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
+  // ⚠⚠ LOT COLONNE, POINT 9 : 54 560 et 18 186, soit 255 % de plus, et TROIS
+  // survivants au lieu de six. Le camp de la graine 1 n'est plus disposé ni
+  // composé pareil ; l'infanterie le traverse au lieu de s'y figer, elle
+  // atteint les bâtiments, elle en rapporte davantage et elle y laisse la
+  // moitié de ses unités. Ce que ce test existe pour tenir ne bouge pas : au
+  // moins une unité rentre à la base.
+  assert.deepEqual(r.butin, { quartz: 54_560, scorie: 18_186 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',

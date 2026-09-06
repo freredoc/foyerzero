@@ -50,11 +50,12 @@ import {
   enEntier,
   milliDepuisCase,
   caseDepuisMilli,
-  distanceCarree,
+  distanceCarreeMilli,
   estDansLaGrille,
   estDansLaBande,
   bornesBande,
   estSortiParLeHaut,
+  estSortiParLeCote,
   creerOccupation,
   poser,
   retirer,
@@ -525,6 +526,19 @@ function estActive(e) {
   return e.vivant && !e.sorti;
 }
 
+/**
+ * La CASE de la colonne d'une entité.
+ *
+ * ⚠⚠ ELLE SE DEMANDE, ELLE NE SE STOCKE PAS — c'est exactement le motif de
+ * `caseDepuisMilli(e.rangeeMilli)`, qui n'a jamais eu de champ `e.rangee` à
+ * côté. Depuis le lot COLONNE l'entité ne porte plus qu'un `colonneMilli` ;
+ * ranger la case à côté de lui ferait DEUX vérités pour une grandeur, et
+ * l'occupation dérivée serait la première à diverger. Le coût est un `floor`.
+ */
+function caseColonne(e) {
+  return caseDepuisMilli(e.colonneMilli);
+}
+
 // ---------------------------------------------------------------------------
 // Montage : validation et création de l'état
 // ---------------------------------------------------------------------------
@@ -643,7 +657,14 @@ function ajouterEntite(
     proprietaire: proprietaireEntite,
     genre,
     id,
-    colonne,
+    // ⚠⚠ `colonneMilli`, ET PLUS `colonne` — LOT COLONNE, 06/09. La position
+    // latérale est devenue CONTINUE pour la défense des deux camps, exactement
+    // comme la position verticale l'est depuis le lot 2A. Une seule vérité par
+    // grandeur : il n'y a PAS de champ `colonne` à côté qu'il faudrait tenir
+    // synchronisé — la case se DEMANDE par `caseColonne(e)`, comme la rangée se
+    // demande par `caseDepuisMilli(e.rangeeMilli)`. Un index dérivé stocké
+    // serait la source de divergence que `construireOccupation` refuse déjà.
+    colonneMilli: milliDepuisCase(colonne),
     niveau: niveauEntite,
     rangeeMilli: milliDepuisCase(rangee),
     pvMilli: pv,
@@ -930,7 +951,7 @@ function construireOccupation(etat) {
   for (const e of etat.entites) {
     if (!estActive(e)) continue;
     if (!profil(e).bloquant) continue;
-    poser(occupation, caseDepuisMilli(e.rangeeMilli), e.colonne, e.indice);
+    poser(occupation, caseDepuisMilli(e.rangeeMilli), caseColonne(e), e.indice);
   }
   return occupation;
 }
@@ -996,7 +1017,7 @@ function faitDeLEntite(e) {
     genre: e.genre,
     proprietaire: e.proprietaire,
     rangee: caseDepuisMilli(e.rangeeMilli),
-    colonne: e.colonne,
+    colonne: caseColonne(e),
   };
 }
 
@@ -1156,7 +1177,9 @@ function ensembleCamoufles(etat) {
       for (const c of etat.entites) {
         if (c.camp === e.camp || !estActive(c)) continue;
         if (profil(c).colonneMatrice !== p.colonnePredilection) continue;
-        const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
+        const d2 = distanceCarreeMilli(
+          e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
+        );
         if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
         revele = true;
         break;
@@ -1194,7 +1217,9 @@ function ciblage(etat) {
     for (const c of etat.entites) {
       if (c.camp === e.camp || !estActive(c)) continue;
       if (masque !== null && masque.has(c.indice)) continue;
-      const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
+      const d2 = distanceCarreeMilli(
+        e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
+      );
       if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
       // UNE CIBLE VALIDE EST UNE CIBLE QU'ON PEUT BLESSER. Sans cette ligne, une
       // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
@@ -1203,13 +1228,13 @@ function ciblage(etat) {
       if (
         meilleur === null
         || d2 < meilleureDistance
-        || (d2 === meilleureDistance && c.colonne < meilleureColonne)
-        || (d2 === meilleureDistance && c.colonne === meilleureColonne
+        || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
+        || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
             && c.rangeeMilli < meilleureRangee)
       ) {
         meilleur = c.indice;
         meilleureDistance = d2;
-        meilleureColonne = c.colonne;
+        meilleureColonne = c.colonneMilli;
         meilleureRangee = c.rangeeMilli;
       }
     }
@@ -1311,18 +1336,20 @@ function cibleDeNeutralisation(etat, e, p, colonneVisee) {
   for (const c of etat.entites) {
     if (c.camp === e.camp || !estActive(c)) continue;
     if (profil(c).colonneMatrice !== colonneVisee) continue;
-    const d2 = distanceCarree(e.rangeeMilli, e.colonne, c.rangeeMilli, c.colonne);
+    const d2 = distanceCarreeMilli(
+      e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
+    );
     if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
     if (
       meilleur === null
       || d2 < meilleureDistance
-      || (d2 === meilleureDistance && c.colonne < meilleureColonne)
-      || (d2 === meilleureDistance && c.colonne === meilleureColonne
+      || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
+      || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
           && c.rangeeMilli < meilleureRangee)
     ) {
       meilleur = c;
       meilleureDistance = d2;
-      meilleureColonne = c.colonne;
+      meilleureColonne = c.colonneMilli;
       meilleureRangee = c.rangeeMilli;
     }
   }
@@ -1454,7 +1481,7 @@ function tirDeBarrage(etat, e, p, cible, ajouter) {
     if (v.indice === cible.indice || v.camp === e.camp || !estActive(v)) continue;
     if (v.genre !== 'defense' && v.genre !== 'batiment') continue;
     if (Math.abs(caseDepuisMilli(v.rangeeMilli) - rangeeCible) > 1) continue;
-    if (Math.abs(v.colonne - cible.colonne) > 1) continue;
+    if (Math.abs(caseColonne(v) - caseColonne(cible)) > 1) continue;
     // Un seul `floor`, sur le produit — comme partout ailleurs dans ce moteur.
     const degats = Math.floor((degatsContre(etat, e, p, v) * BARRAGE_PCT) / 100);
     if (degats > 0) ajouter(v.indice, degats, e.indice);
@@ -1500,7 +1527,9 @@ function tir(etat) {
     const cible = etat.entites[e.cibleIndice];
     if (!estActive(cible)) continue;
     const p = profil(e);
-    const d2 = distanceCarree(e.rangeeMilli, e.colonne, cible.rangeeMilli, cible.colonne);
+    const d2 = distanceCarreeMilli(
+      e.rangeeMilli, e.colonneMilli, cible.rangeeMilli, cible.colonneMilli,
+    );
     if (d2 > e.porteeCarree || d2 < e.porteeMiniCarree) continue;
     // Le MÊME prédicat que le ciblage — dont la réserve : le plancher porte sur
     // la nature de la cible, jamais sur la position du tireur (brief 2A §8). Sur
@@ -1523,12 +1552,12 @@ function tir(etat) {
     if (!estActive(b) || b.genre !== 'defense') continue;
     const pb = profil(b);
     if (pb.bloquant || b.franchissementColonne === null) continue;
-    barrieres.set(cleCase(caseDepuisMilli(b.rangeeMilli), b.colonne), b);
+    barrieres.set(cleCase(caseDepuisMilli(b.rangeeMilli), caseColonne(b)), b);
   }
   if (barrieres.size > 0) {
     for (const e of etat.entites) {
       if (!estActive(e) || e.camp !== 'attaque') continue;
-      const b = barrieres.get(cleCase(caseDepuisMilli(e.rangeeMilli), e.colonne));
+      const b = barrieres.get(cleCase(caseDepuisMilli(e.rangeeMilli), caseColonne(e)));
       if (b === undefined) continue;
       // ⚠ LE TIREUR EST LA BARRIÈRE. Le franchissement passe par le même
       // tampon que les tirs ; sans indice, cette ligne serait la seule sans
@@ -1566,7 +1595,7 @@ function tir(etat) {
       ...faitDeLEntite(e),
       cibleIndice: cible.indice,
       cibleRangee: caseDepuisMilli(cible.rangeeMilli),
-      cibleColonne: cible.colonne,
+      cibleColonne: caseColonne(cible),
     });
   }
   return tampon;
@@ -1661,7 +1690,9 @@ function appliquerDegats(etat, tampon) {
       // chaque test d'ennemi s'y écrit `c.camp === e.camp`. `proprietaire` dit
       // à qui la pièce appartient, pas de quel côté de la grille elle se bat.
       if (b.camp !== e.camp) continue;
-      const d2 = distanceCarree(b.rangeeMilli, b.colonne, e.rangeeMilli, e.colonne);
+      const d2 = distanceCarreeMilli(
+        b.rangeeMilli, b.colonneMilli, e.rangeeMilli, e.colonneMilli,
+      );
       if (d2 > BOUCLIER_RAYON_CARRE) continue;
 
       // Absorption PARTIELLE : le réservoir prend ce qu'il peut, le reste
@@ -1797,41 +1828,87 @@ function retirerLesMorts(etat) {
 }
 
 /**
- * L'entité s'arrête-t-elle ? Elle s'arrête pour un BÂTIMENT, et pour rien
- * d'autre. L'aviation traversante ne s'arrête jamais.
+ * La cible est-elle une STRUCTURE DÉFENSIVE au sens de l'arbitrage du 04/09 —
+ * « merlon et tourelles exclus » ?
  *
- * ⚠⚠ LE GENRE, JAMAIS LA COLONNE, ET C'EST UN ARBITRAGE D'ETHAN DU 04/09 :
- * « Chaque unité s'arrête pour casser des bâtiments. Merlon et tourelles
- * exclus, sauf si ils empêchent d'avancer. » La règle d'avant comparait
- * `colonnePredilection` à la colonne de la cible — or `COLONNE_PAR_TYPE_DEFENSE`
- * range mur, barrière et tourelle sous `structureOuAviation`, la MÊME colonne
- * que `profilBatiment`. Une anti-structure s'arrêtait donc pour un mur, pour
- * une tourelle ET pour un bâtiment, sans que rien ne pût les séparer. Le
- * `genre` est le seul discriminant qui les sépare.
+ * ⚠⚠ LE COUPLE, JAMAIS UN DES DEUX SEUL, ET C'EST CE QUI REND LE « EN PLUS »
+ * POSSIBLE. Ni le genre ni la colonne ne suffisent : `genre === 'defense'`
+ * couvre AUSSI les trois artilleries, que `COLONNE_PAR_TYPE_DEFENSE` range en
+ * `vehicule` ; et `colonneMatrice === 'structureOuAviation'` couvre AUSSI les
+ * bâtiments et les aéronefs. Mesuré sur les deux tables, le couple désigne
+ * EXACTEMENT les murs, les barrières et les tourelles — les trois familles
+ * qu'Ethan a nommées — et rien d'autre.
  *
- * ⚠ `p` RESTE DANS LA SIGNATURE parce que la garde aérienne le lit, et
- * `colonnePredilection` reste un champ VIVANT : la munition spéciale et le
- * camouflage le lisent tous les deux.
+ * ⚠ CONSÉQUENCE DÉCLARÉE : une artillerie n'est PAS exclue. Une unité
+ * anti-véhicule s'arrête donc devant elle, comme devant un blindé. C'est la
+ * lecture du brief à la lettre — « merlon et tourelles », pas « toute défense »
+ * — et une ligne suffit à la renverser si Ethan tranche autrement.
+ */
+function estStructureDefensive(pc) {
+  return pc.genre === 'defense' && pc.colonneMatrice === 'structureOuAviation';
+}
+
+/**
+ * L'entité s'arrête-t-elle ? Elle s'arrête pour un BÂTIMENT, et pour sa CIBLE
+ * DE PRÉDILECTION quand celle-ci n'est pas une structure défensive.
+ * L'aviation traversante ne s'arrête jamais.
  *
- * ⚠⚠ « SAUF SI ILS EMPÊCHENT D'AVANCER » NE DEMANDE AUCUN CODE, ET LE
+ * ⚠⚠ DEUX ARBITRAGES, DANS L'ORDRE, ET LE SECOND N'ANNULE PAS LE PREMIER.
+ *
+ * 04/09 — « Chaque unité s'arrête pour casser des bâtiments. Merlon et
+ * tourelles exclus, sauf si ils empêchent d'avancer. » La règle d'AVANT ce
+ * jour-là comparait `colonnePredilection` à la colonne de la cible, et elle
+ * était fausse : `COLONNE_PAR_TYPE_DEFENSE` range mur, barrière et tourelle
+ * sous `structureOuAviation`, la MÊME colonne que `profilBatiment`, si bien
+ * qu'une anti-structure s'arrêtait pour un mur, pour une tourelle ET pour un
+ * bâtiment sans que rien ne pût les séparer. Le lot ARRÊT a donc REMPLACÉ la
+ * colonne par le genre.
+ *
+ * 06/09 — « **Ajouter l'arrêt sur prédilection EN PLUS du bâtiment.** », sur le
+ * défaut rapporté « un éclaireur ne s'arrête pas lorsqu'il rencontre une
+ * infanterie ennemie ». La prédilection revient donc, mais elle ne remplace
+ * rien : elle s'AJOUTE, et elle porte son exclusion avec elle.
+ *
+ * ⚠⚠ CE QUI A CHANGÉ ENTRE LES DEUX N'EST PAS LA DEMANDE, C'EST LE
+ * DISCRIMINANT. Le 04/09 il n'existait aucun moyen d'écrire « la colonne, sauf
+ * les murs et les tourelles » ; `estStructureDefensive` l'écrit, sur le COUPLE
+ * genre × colonne. L'exclusion du 04/09 est donc tenue à la lettre par la
+ * seconde branche, et le premier arbitrage survit intact dans la première —
+ * `COL T2` et `COL T3` les gardent séparément.
+ *
+ * ⚠ `colonnePredilection` VAUT `null` pour toute entité qui ne tire pas, et la
+ * comparaison est écrite dans le sens qui protège du `null` : on refuse
+ * d'abord, on compare ensuite. Écrire `p.colonnePredilection ===
+ * pc.colonneMatrice` seul serait vrai si les deux valaient `null` — c'est
+ * l'avertissement que `degatsDUnTir` porte déjà quelques centaines de lignes
+ * plus haut, et il vaut ici mot pour mot.
+ *
+ * ⚠⚠ « SAUF SI ILS EMPÊCHENT D'AVANCER » NE DEMANDE TOUJOURS AUCUN CODE, ET LE
  * MÉCANISME N'EST PAS CELUI QU'ON CROIT. Devant un merlon bloquant, l'unité ne
- * s'arrête plus au sens de cette fonction, mais `peutAvancer` la retient et
- * elle TIRE — donc `nuit(e)`, c'est-à-dire `aTire`, remet `ticksInutiles` à
- * zéro et elle ne se replie pas. `structureForcee` ne couvre QUE les porteurs
- * de l'Écraseur, qui rend `undefined` sans le module : c'est le tir, pas le
+ * s'arrête pas au sens de cette fonction, mais `peutAvancer` la retient et elle
+ * TIRE — donc `nuit(e)`, c'est-à-dire `aTire`, remet `ticksInutiles` à zéro et
+ * elle ne se replie pas. `structureForcee` ne couvre QUE les porteurs de
+ * l'Écraseur, qui rend `undefined` sans le module : c'est le tir, pas le
  * forçage, qui tient les autres pièces devant le mur.
  *
- * ⚠⚠ ET LE REPLI NE PEUT PAS EMPIRER PAR CETTE FONCTION, PAR CONSTRUCTION.
- * `doitSArreter` implique `e.aTire`, qui EST `nuit(e)` : une bascule de vrai à
- * faux ne peut qu'AJOUTER une chance de progresser, jamais retirer une raison
- * de rester utile. Ce que la mesure doit chercher est l'autre chemin — une
- * unité arrêtée devant un bâtiment bloque sa colonne, et c'est l'alliée
- * DERRIÈRE elle, sans cible à portée, qui se replierait.
+ * ⚠⚠ ET LE REPLI NE PEUT TOUJOURS PAS EMPIRER PAR CETTE FONCTION, PAR
+ * CONSTRUCTION — vérifié explicitement au lot COLONNE plutôt que reconduit.
+ * `doitSArreter` implique `e.aTire`, qui EST `nuit(e)` : la condition est
+ * restée EN TÊTE, avant les deux branches, donc une bascule de faux à vrai ne
+ * peut qu'ôter une chance de progresser à une entité qui nuit DÉJÀ, jamais lui
+ * retirer sa raison de rester utile. Ce que la mesure doit chercher est l'autre
+ * chemin — une unité arrêtée bloque sa colonne, et c'est l'alliée DERRIÈRE
+ * elle, sans cible à portée, qui se replierait. Le lot COLONNE l'a mesuré sur
+ * les 162 montages du banc plutôt que de le raisonner.
  */
 function doitSArreter(etat, e, p) {
   if (p.comportementAerien === 'traversant') return false;
   if (!e.aTire || e.cibleIndice === null) return false;
-  return profil(etat.entites[e.cibleIndice]).genre === 'batiment';
+  const pc = profil(etat.entites[e.cibleIndice]);
+  if (pc.genre === 'batiment') return true;
+  if (p.colonnePredilection === null) return false;
+  if (pc.colonneMatrice !== p.colonnePredilection) return false;
+  return !estStructureDefensive(pc);
 }
 
 /**
@@ -1845,7 +1922,13 @@ function doitSArreter(etat, e, p) {
  *
  * Conséquence de jeu, assumée : la colonne devient un choix. Poser un blindé
  * derrière une infanterie dans la même colonne gâche le blindé, puisqu'aucune
- * unité ne change jamais de colonne.
+ * unité D'ASSAUT ne change jamais de colonne.
+ *
+ * ⚠ LES DEUX MOTS EN CAPITALES SONT DU LOT COLONNE, 06/09. La phrase disait
+ * « aucune unité », et c'était vrai tant que le déplacement était strictement
+ * vertical pour tout le monde. La DÉFENSE des deux camps se décale désormais
+ * latéralement ; l'assaut, lui, ne bouge toujours que vers le fond, et c'est
+ * de lui seul que ce paragraphe parle.
  */
 function peutEcraser(etat, e, p, occupante, po) {
   return occupante.camp !== e.camp && po.ecrasable && masseEffective(etat, e, p, po) > po.masse;
@@ -2047,7 +2130,7 @@ const ECRASEUR_PCT_PAR_TICK = 1;
 function structureForcee(etat, e, p, occupation, caseDestination) {
   if (e.camp !== 'attaque' || !p.bloquant) return undefined;
   if (!moduleActif(etat, e, p, 'ecraseur')) return undefined;
-  const indice = occupantDe(occupation, caseDestination, e.colonne);
+  const indice = occupantDe(occupation, caseDestination, caseColonne(e));
   if (indice === undefined) return undefined;
   const occupante = etat.entites[indice];
   if (occupante.camp === e.camp || occupante.genre !== 'defense') return undefined;
@@ -2066,12 +2149,18 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
  * Aucune vitesse n'atteignant 1000 milli-cases par tick (300 au plus, pour le
  * Frappeur), la case de destination ne saute jamais une rangée : depuis une
  * rangée avant la dernière, elle vaut toujours la rangée ou la suivante.
+ *
+ * ⚠⚠ ELLE RESTE VERTICALE, ET ON NE LUI AJOUTE PAS D'AXE — LOT COLONNE. Sa
+ * première ligne teste `rangee >= DERNIERE_RANGEE` et rend le comportement
+ * aérien : un paramètre d'axe en ferait deux fonctions dans une, dont l'une des
+ * deux branches ne serait jamais relue. Le latéral a sa borne à part,
+ * `estSortiParLeCote` de `grille.js`, et sa propre étape de déplacement.
  */
 function peutAvancer(etat, e, p, occupation, rangee, caseDestination) {
   if (rangee >= DERNIERE_RANGEE) return p.comportementAerien === 'traversant';
   if (caseDestination === rangee) return true;
   if (!p.bloquant) return true; // l'aviation ignore l'occupation
-  const indiceOccupante = occupantDe(occupation, caseDestination, e.colonne);
+  const indiceOccupante = occupantDe(occupation, caseDestination, caseColonne(e));
   if (indiceOccupante === undefined) return true;
   const occupante = etat.entites[indiceOccupante];
   return peutEcraser(etat, e, p, occupante, profil(occupante));
@@ -2101,9 +2190,30 @@ function nuit(e) {
 }
 
 /**
- * 7. Déplacement. Strictement vertical, des rangées basses vers les hautes :
- * aucun pathfinding, aucune sortie de colonne. C'est ce que le terrain est
- * censé compenser. Itération dans l'ordre d'insertion, stable et consigné.
+ * 7. Déplacement. DEUX AXES DEPUIS LE LOT COLONNE, ET UN SEUL PAR CAMP.
+ *
+ * ⚠⚠ L'ATTAQUE AVANCE, LA DÉFENSE SE DÉCALE — ETHAN, 06/09, POINT 10 :
+ * « déplacement latéral identique au déplacement vertical, vitesse multipliée
+ * par 2/3, même règle de collision », sur le périmètre « défense des deux
+ * camps ». Une unité d'ASSAUT ne change TOUJOURS JAMAIS de colonne, et tout ce
+ * que `peutEcraser` en déduit — « poser un blindé derrière une infanterie dans
+ * la même colonne gâche le blindé » — reste vrai côté offense.
+ *
+ * ⚠⚠ ET CETTE ÉTAPE S'OUVRE POUR LA PREMIÈRE FOIS AU CAMP `defense`. Sa boucle
+ * portait `e.camp !== 'attaque'` en tête depuis le lot 2A : rien de ce qui suit
+ * n'avait jamais été exécuté par un défenseur. Ce qui est écrit POUR L'ASSAUT
+ * reste donc sous garde de camp, et le rapport du lot les nomme un par un — le
+ * REPLI (`ticksInutiles`, `TICKS_AVANT_REPLI`), l'ÉCRASEUR (`structureForcee`,
+ * qui refuse déjà `e.camp !== 'attaque'`), la SORTIE PAR LE HAUT et le
+ * franchissement du fond. Ouvert tel quel, le repli ferait quitter le terrain
+ * aux défenseuses bloquées — `COL T9` le mesure.
+ *
+ * ⚠ LES STRUCTURES NE BOUGENT PAS, ET C'EST GRATUIT. `profilDefense` et
+ * `profilBatiment` posent tous deux `vitesseMilli: 0`, et le
+ * `if (p.vitesseMilli === 0) continue;` d'en dessous suffit : murs, barrières,
+ * tourelles, artilleries et bâtiments restent immobiles SANS qu'une seule garde
+ * neuve soit écrite. Seules les unités posées en garnison se décalent, et
+ * `COL T8` le vérifie plutôt que de le croire.
  *
  * Écrasement, une seule règle : masse mobile strictement supérieure → la
  * bloquante meurt et la mobile continue ; masse égale ou inférieure → blocage.
@@ -2114,132 +2224,315 @@ function deplacement(etat) {
   const obstacles = obtenirIndexObstacles(etat);
 
   for (const e of etat.entites) {
-    if (!estActive(e) || e.camp !== 'attaque') continue;
+    if (!estActive(e)) continue;
     const p = profil(e);
     if (p.vitesseMilli === 0) continue;
-
-    const rangee = caseDepuisMilli(e.rangeeMilli);
-    let vitesse = p.vitesseMilli;
-    const type = typeObstacleSur(obstacles, rangee, e.colonne);
-    if (type !== undefined && obstacleConcerne(type, p.chassis)) {
-      vitesse = p.vitesseObstacleMilli;
-    }
-    // BOOSTER — ×10 APRÈS la réduction d'obstacle, sur la valeur retenue.
-    //
-    // ⚠ APPLIQUÉ AVANT, UN OBSTACLE CESSERAIT DE RALENTIR UNE UNITÉ BOOSTÉE,
-    // ce qu'aucune règle ne dit : 60 → 600 → 240 sous obstacle serait plus
-    // rapide que la vitesse nominale. Ici c'est 24 → 240, le rapport est gardé.
-    //
-    // ⚠⚠ ET IL EXISTE UN INVARIANT NON ÉCRIT QUE CE ×10 FRÔLE — voir
-    // `peutAvancer` : « aucune vitesse n'atteint 1 000 milli-cases par tick ».
-    // Les deux porteurs du Booster sont des escouades à 60, donc 600, et
-    // l'invariant tient. Il ne tient QUE PAR ACCIDENT : au Frappeur (240), 2 400
-    // ferait sauter une rangée à la destination et `peutAvancer` laisserait
-    // passer une unité À TRAVERS un mur, sans qu'aucun test n'échoue. Un test de
-    // données garde ce seuil (`recherche.test.js`, MODULES-A T6).
-    if (boosterActif(e)) vitesse *= BOOSTER_FACTEUR;
-
-    const destinationMilli = e.rangeeMilli + vitesse;
-    const caseDestination = caseDepuisMilli(destinationMilli);
-
-    // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
-    // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`
-    // exige `aTire` —, donc `nuit` la garde en jeu et elle ne se replie pas.
-    const arrete = doitSArreter(etat, e, p);
-    const progresse = !arrete
-      && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
-
-    // ÉCRASEUR — forcer la structure qui barre la colonne.
-    //
-    // ⚠ AVANT LE REPLI, ET AVANT LE `continue` DE L'ARRÊT. « En plus de ses
-    // tirs ordinaires » : une unité qui force n'est pas inutile — sans ce
-    // calcul ici, `TICKS_AVANT_REPLI` (30) la ferait rentrer à la base bien
-    // avant les 100 ticks qu'il faut pour ouvrir la brèche.
-    //
-    // ⚠⚠ ET LE MOTIF A CHANGÉ AU LOT ARRÊT, PAS LE CODE. Il disait « une unité
-    // arrêtée pour tirer sur le mur le force AUSSI » : depuis que `doitSArreter`
-    // lit le genre, personne ne s'arrête plus POUR un mur. Ce qui retient
-    // l'unité devant lui est `peutAvancer`, et ce qui la garde utile est son
-    // TIR. Le forçage reste ce qui ouvre la brèche, et il reste réservé aux
-    // porteurs de l'Écraseur.
-    const forcee = progresse
-      ? undefined
-      : structureForcee(etat, e, p, occupation, caseDestination);
-    if (forcee !== undefined) {
-      const degats = Math.max(1, Math.floor((forcee.pvMaxMilli * ECRASEUR_PCT_PAR_TICK) / 100));
-      forcee.pvMilli = Math.max(0, forcee.pvMilli - degats);
-    }
-
-    // REPLI. Une unité offensive qui ne peut ni avancer ni nuire pendant
-    // TICKS_AVANT_REPLI ticks consécutifs rentre à la base : elle sort du champ
-    // sans être détruite, et compte parmi les survivants. Le compteur se remet
-    // à zéro dès qu'une des deux conditions cesse d'être vraie — un blocage est
-    // souvent transitoire.
-    if (progresse || nuit(e) || forcee !== undefined) {
-      e.ticksInutiles = 0;
-    } else {
-      e.ticksInutiles += 1;
-      if (e.ticksInutiles >= TICKS_AVANT_REPLI) {
-        e.sorti = true;
-        // Sa case se libère immédiatement : un allié derrière elle peut
-        // repartir dès ce tick.
-        retirer(occupation, rangee, e.colonne);
-        continue;
-      }
-    }
-    if (arrete) continue;
-
-    if (caseDestination === rangee) {
-      e.rangeeMilli = destinationMilli;
-      continue;
-    }
-    if (caseDestination > DERNIERE_RANGEE) {
-      // Seule l'aviation traversante franchit le fond : elle sort du combat et
-      // n'y revient pas. Le sol et l'aviation stoppeuse s'arrêtent au fond.
-      if (p.comportementAerien === 'traversant') {
-        e.rangeeMilli = destinationMilli;
-        e.sorti = estSortiParLeHaut(destinationMilli);
-      }
-      continue;
-    }
-    if (!p.bloquant) {
-      // Aviation : ni bloquée ni bloquante, elle ignore l'occupation.
-      e.rangeeMilli = destinationMilli;
-      continue;
-    }
-
-    const indiceOccupante = occupantDe(occupation, caseDestination, e.colonne);
-    if (indiceOccupante === undefined) {
-      retirer(occupation, rangee, e.colonne);
-      poser(occupation, caseDestination, e.colonne, e.indice);
-      e.rangeeMilli = destinationMilli;
-      continue;
-    }
-    const occupante = etat.entites[indiceOccupante];
-    const po = profil(occupante);
-    if (peutEcraser(etat, e, p, occupante, po)) {
-      occupante.pvMilli = 0;
-      occupante.vivant = false;
-      occupante.ecrase = true;
-      // ⚠⚠ LA SECONDE MORT DU MOTEUR, ET ELLE A ÉTÉ TROUVÉE PAR UN TEST, PAS PAR
-      // RELECTURE. Le premier jet de ce lot n'accrochait le journal qu'à
-      // `retirerLesMorts` en écrivant que c'était « la seule ligne qui fasse
-      // passer `vivant` à faux » — c'était FAUX, un écrasement tue à l'étape 7.
-      // Mesuré : une pièce sur vingt-trois manquait au journal sur la graine 9,
-      // et rien d'autre ne l'aurait dit.
-      //
-      // ⚠ ET LA POSITION EST CELLE DE L'ÉCRASÉE, PAS DE L'ÉCRASEUSE : elle meurt
-      // là où elle était, sur la case que l'autre vient de lui prendre.
-      etat.journal.destructions.push(faitDeLEntite(occupante));
-      retirer(occupation, caseDestination, e.colonne);
-      retirer(occupation, rangee, e.colonne);
-      poser(occupation, caseDestination, e.colonne, e.indice);
-      e.rangeeMilli = destinationMilli;
-    }
-    // Masse égale ou inférieure : blocage, aucune avance. La structure forcée,
-    // elle, a déjà encaissé ses 1 % plus haut : elle tombera, et l'unité
-    // avancera au tick suivant — `retirerLesMorts` passe avant `deplacement`.
+    if (e.camp === 'attaque') avancer(etat, e, p, occupation, obstacles);
+    else seDecaler(etat, e, p, occupation, obstacles);
   }
+}
+
+/**
+ * La vitesse d'un tick, obstacle et Booster appliqués — la valeur d'où PART le
+ * déplacement, quel que soit son axe.
+ *
+ * ⚠ L'OBSTACLE SE LIT SUR LA CASE OÙ L'ENTITÉ EST, jamais sur celle où elle va :
+ * c'est le terrain qu'elle traverse qui la ralentit.
+ *
+ * BOOSTER — ×10 APRÈS la réduction d'obstacle, sur la valeur retenue.
+ *
+ * ⚠ APPLIQUÉ AVANT, UN OBSTACLE CESSERAIT DE RALENTIR UNE UNITÉ BOOSTÉE, ce
+ * qu'aucune règle ne dit : 60 → 600 → 240 sous obstacle serait plus rapide que
+ * la vitesse nominale. Ici c'est 24 → 240, le rapport est gardé.
+ *
+ * ⚠⚠ ET IL EXISTE UN INVARIANT NON ÉCRIT QUE CE ×10 FRÔLE — voir `peutAvancer` :
+ * « aucune vitesse n'atteint 1 000 milli-cases par tick ». Les deux porteurs du
+ * Booster sont des escouades à 60, donc 600, et l'invariant tient. Il ne tient
+ * QUE PAR ACCIDENT : au Frappeur (240), 2 400 ferait sauter une rangée à la
+ * destination et `peutAvancer` laisserait passer une unité À TRAVERS un mur,
+ * sans qu'aucun test n'échoue. Un test de données garde ce seuil
+ * (`recherche.test.js`, MODULES-A T6), et `COL T14` le garde LATÉRALEMENT.
+ */
+function vitesseDuTick(etat, e, p, obstacles, rangee) {
+  let vitesse = p.vitesseMilli;
+  const type = typeObstacleSur(obstacles, rangee, caseColonne(e));
+  if (type !== undefined && obstacleConcerne(type, p.chassis)) {
+    vitesse = p.vitesseObstacleMilli;
+  }
+  if (boosterActif(e)) vitesse *= BOOSTER_FACTEUR;
+  return vitesse;
+}
+
+/**
+ * La vitesse LATÉRALE d'un tick : celle du tick, au facteur près.
+ *
+ * ⚠⚠ LE ×2/3 SE POSE EN DERNIER, SUR LA VALEUR RETENUE — c'est l'ordre que le
+ * commentaire du Booster impose déjà pour lui-même. Posé avant la réduction
+ * d'obstacle, il ferait cesser l'obstacle de ralentir ; posé avant le Booster,
+ * il rendrait le rapport des deux faux. En dernier, TOUS les rapports sont
+ * gardés : 60 → 40, 24 sous obstacle → 16, 600 boosté → 400.
+ *
+ * ⚠ LE QUOTIENT EST ENTIER PAR CONSTRUCTION, ET `COL T13` LE GARDE. Les quatre
+ * vitesses du relevé sont divisibles par 3, et les deux transformations d'amont
+ * conservent cette divisibilité — l'obstacle divise par 2,5 en multipliant par
+ * 1 000 puis en divisant par 2 500, le Booster multiplie par 10. Le `floor`
+ * ci-dessous ne tronque donc rien aujourd'hui ; il est écrit pour que le jour où
+ * une vitesse indivisible entrerait, le moteur reste entier et le TEST de
+ * données le dise, plutôt qu'un flottant ne se glisse dans `colonneMilli`.
+ */
+function vitesseLaterale(etat, e, p, obstacles, rangee) {
+  const { numerateur, denominateur } = GRILLE.lateral;
+  return Math.floor((vitesseDuTick(etat, e, p, obstacles, rangee) * numerateur) / denominateur);
+}
+
+/**
+ * La cible vers laquelle une défenseuse veut se décaler — la plus proche de sa
+ * COLONNE DE PRÉDILECTION —, ou `null`.
+ *
+ * ⚠⚠ « LA CIBLE LA PLUS PROCHE » S'ENTEND DANS SA PRÉDILECTION, ET C'EST UNE
+ * LECTURE DÉCLARÉE. Le point 10 d'Ethan dit « quand une cible de prédilection
+ * arrive » ; la règle qu'il donne ensuite dit « la cible la plus proche, peu
+ * importe si elle se bloque ». Prises ensemble, elles décrivent un décalage vers
+ * la prédilection et rien d'autre : **sans cible de prédilection, l'entité ne se
+ * décale pas.** Une ligne suffit à ouvrir le décalage à n'importe quelle cible.
+ *
+ * ⚠ ET CE N'EST PAS `e.cibleIndice`. Celle-là est la cible de TIR, que `ciblage`
+ * conserve hors de portée et choisit en repli hors prédilection quand aucune
+ * cible de prédilection n'est à portée : s'en servir ferait courir la défenseuse
+ * vers une cible qu'elle n'a prise que faute de mieux. On cherche donc à part,
+ * avec le MÊME départage que `ciblage` — distance, puis colonne, puis rangée —
+ * pour que deux cibles à égalité ne dépendent pas de l'ordre d'insertion.
+ *
+ * ⚠ AUCUNE CONDITION DE PORTÉE. « Peu importe si elle se bloque » : elle veut y
+ * aller, qu'elle puisse tirer ou non.
+ */
+function cibleDuDecalage(etat, e, p) {
+  if (p.colonnePredilection === null) return null;
+  let meilleure = null;
+  let meilleureDistance = Infinity;
+  let meilleureColonne = Infinity;
+  let meilleureRangee = Infinity;
+  for (const c of etat.entites) {
+    if (!estActive(c) || c.camp === e.camp) continue;
+    if (profil(c).colonneMatrice !== p.colonnePredilection) continue;
+    const d2 = distanceCarreeMilli(
+      e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
+    );
+    if (
+      d2 < meilleureDistance
+      || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
+      || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
+        && c.rangeeMilli < meilleureRangee)
+    ) {
+      meilleure = c;
+      meilleureDistance = d2;
+      meilleureColonne = c.colonneMilli;
+      meilleureRangee = c.rangeeMilli;
+    }
+  }
+  return meilleure;
+}
+
+/**
+ * Le déplacement LATÉRAL d'une pièce de garnison — lot COLONNE.
+ *
+ * ⚠⚠ IL NE PORTE NI REPLI, NI ÉCRASEUR, NI SORTIE. Les quatre mécanismes que
+ * `avancer` exécute sont écrits pour l'ASSAUT, et ils restent chez lui : le
+ * repli parce qu'une défenseuse bloquée n'a pas de base où rentrer et que
+ * l'ouvrir ferait quitter le terrain à la garnison (`COL T9`) ; l'Écraseur parce
+ * que `structureForcee` refuse déjà tout ce qui n'est pas `attaque` ; la sortie
+ * par le haut et le franchissement du fond parce qu'ils décrivent un assaut qui
+ * traverse la base. Le latéral, lui, N'A AUCUNE SORTIE : `estSortiParLeCote`
+ * REFUSE le pas qui quitterait la grille, elle ne fait sortir personne.
+ *
+ * ⚠ ET `ticksInutiles` N'EST PAS TOUCHÉ ICI, même pas remis à zéro. Il ne sert
+ * qu'au repli ; l'écrire côté défense mettrait dans l'état une grandeur que
+ * personne ne lit, et inviterait le lot suivant à brancher le repli dessus.
+ */
+function seDecaler(etat, e, p, occupation, obstacles) {
+  const cible = cibleDuDecalage(etat, e, p);
+  if (cible === null) return;
+  const sens = Math.sign(cible.colonneMilli - e.colonneMilli);
+  if (sens === 0) return;
+
+  const rangee = caseDepuisMilli(e.rangeeMilli);
+  const colonne = caseColonne(e);
+  // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
+  // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
+  // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
+  // dépasse repart en sens inverse au tick suivant, puis revient — elle
+  // oscille pour toujours. Mesuré sur le cas nu : cible en 5 000, défenseuse en
+  // 4 970, pas de 40 → 5 010 (case 5), puis 4 970 (case 4), puis 5 010… Deux
+  // cases qu'elle prend et rend à chaque tick, avec l'occupation qui suit.
+  //
+  // ⚠ ET C'EST LA MÊME FAUTE QUE `Math.floor` DANS `positionInterpolee`, VUE PAR
+  // L'AUTRE BOUT : là-bas le DESSIN dépassait sa destination, ici c'est le
+  // MODÈLE. Les deux naissent du même fait — la colonne a cessé d'être
+  // monotone — et le lot doit les corriger toutes les deux.
+  const ecart = Math.abs(cible.colonneMilli - e.colonneMilli);
+  const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee), ecart);
+  const destinationMilli = e.colonneMilli + sens * pas;
+  if (estSortiParLeCote(destinationMilli)) return;
+
+  const caseDestination = caseDepuisMilli(destinationMilli);
+  if (caseDestination === colonne) {
+    // Elle se décale À L'INTÉRIEUR de sa case : rien à réserver, rien à libérer.
+    e.colonneMilli = destinationMilli;
+    return;
+  }
+  if (!p.bloquant) {
+    // Aviation : ni bloquée ni bloquante, elle ignore l'occupation. Aucune ne
+    // défend aujourd'hui — `presentEnDefense` est faux pour les trois aéronefs —
+    // mais la branche est écrite là où elle l'est déjà pour la verticale.
+    e.colonneMilli = destinationMilli;
+    return;
+  }
+  const indiceOccupante = occupantDe(occupation, rangee, caseDestination);
+  if (indiceOccupante === undefined) {
+    retirer(occupation, rangee, colonne);
+    poser(occupation, rangee, caseDestination, e.indice);
+    e.colonneMilli = destinationMilli;
+    return;
+  }
+  const occupante = etat.entites[indiceOccupante];
+  const po = profil(occupante);
+  if (peutEcraser(etat, e, p, occupante, po)) {
+    occupante.pvMilli = 0;
+    occupante.vivant = false;
+    occupante.ecrase = true;
+    // ⚠ LA TROISIÈME MORT DU MOTEUR, ET ELLE EST DU MÊME GENRE QUE LA DEUXIÈME :
+    // un écrasement tue à l'étape 7, donc APRÈS `retirerLesMorts`. Le journal
+    // s'y accroche ici comme il s'y accroche dans `avancer`, faute de quoi une
+    // mort latérale manquerait au relevé — c'est la faute que le lot
+    // JOURNAL-DE-COMBAT a payée une fois.
+    etat.journal.destructions.push(faitDeLEntite(occupante));
+    retirer(occupation, rangee, caseDestination);
+    retirer(occupation, rangee, colonne);
+    poser(occupation, rangee, caseDestination, e.indice);
+    e.colonneMilli = destinationMilli;
+  }
+  // Masse égale ou inférieure : blocage, aucun décalage. « Peu importe si elle
+  // se bloque » — Ethan, 06/09. Elle reste où elle est et retentera au tick
+  // suivant.
+}
+
+/**
+ * Le déplacement VERTICAL d'un attaquant — le corps de l'étape 7 tel qu'il
+ * existe depuis le lot 2A, EXTRAIT sans qu'une ligne de sa logique ne change.
+ * Strictement vertical, des rangées basses vers les hautes : aucun pathfinding,
+ * aucune sortie de colonne. C'est ce que le terrain est censé compenser.
+ * Itération dans l'ordre d'insertion, stable et consigné.
+ */
+function avancer(etat, e, p, occupation, obstacles) {
+  const rangee = caseDepuisMilli(e.rangeeMilli);
+  const colonne = caseColonne(e);
+  const vitesse = vitesseDuTick(etat, e, p, obstacles, rangee);
+
+  const destinationMilli = e.rangeeMilli + vitesse;
+  const caseDestination = caseDepuisMilli(destinationMilli);
+
+  // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
+  // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`
+  // exige `aTire` —, donc `nuit` la garde en jeu et elle ne se replie pas.
+  const arrete = doitSArreter(etat, e, p);
+  const progresse = !arrete
+    && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
+
+  // ÉCRASEUR — forcer la structure qui barre la colonne.
+  //
+  // ⚠ AVANT LE REPLI, ET AVANT LE `return` DE L'ARRÊT. « En plus de ses tirs
+  // ordinaires » : une unité qui force n'est pas inutile — sans ce calcul ici,
+  // `TICKS_AVANT_REPLI` (30) la ferait rentrer à la base bien avant les 100
+  // ticks qu'il faut pour ouvrir la brèche.
+  //
+  // ⚠⚠ ET LE MOTIF A CHANGÉ AU LOT ARRÊT, PAS LE CODE. Il disait « une unité
+  // arrêtée pour tirer sur le mur le force AUSSI » : depuis que `doitSArreter`
+  // lit le genre, personne ne s'arrête plus POUR un mur. Ce qui retient l'unité
+  // devant lui est `peutAvancer`, et ce qui la garde utile est son TIR. Le
+  // forçage reste ce qui ouvre la brèche, et il reste réservé aux porteurs de
+  // l'Écraseur.
+  const forcee = progresse
+    ? undefined
+    : structureForcee(etat, e, p, occupation, caseDestination);
+  if (forcee !== undefined) {
+    const degats = Math.max(1, Math.floor((forcee.pvMaxMilli * ECRASEUR_PCT_PAR_TICK) / 100));
+    forcee.pvMilli = Math.max(0, forcee.pvMilli - degats);
+  }
+
+  // REPLI. Une unité offensive qui ne peut ni avancer ni nuire pendant
+  // TICKS_AVANT_REPLI ticks consécutifs rentre à la base : elle sort du champ
+  // sans être détruite, et compte parmi les survivants. Le compteur se remet
+  // à zéro dès qu'une des deux conditions cesse d'être vraie — un blocage est
+  // souvent transitoire.
+  //
+  // ⚠⚠ IL RESTE SOUS GARDE DE CAMP PARCE QU'IL EST DANS `avancer`, ET C'EST LA
+  // MOITIÉ DU LOT COLONNE. Son commentaire dit « une unité OFFENSIVE […] rentre
+  // à la base » ; ouvert à la garnison, il ferait quitter le terrain à une
+  // défenseuse bloquée, qui n'a pas de base où rentrer.
+  if (progresse || nuit(e) || forcee !== undefined) {
+    e.ticksInutiles = 0;
+  } else {
+    e.ticksInutiles += 1;
+    if (e.ticksInutiles >= TICKS_AVANT_REPLI) {
+      e.sorti = true;
+      // Sa case se libère immédiatement : un allié derrière elle peut
+      // repartir dès ce tick.
+      retirer(occupation, rangee, colonne);
+      return;
+    }
+  }
+  if (arrete) return;
+
+  if (caseDestination === rangee) {
+    e.rangeeMilli = destinationMilli;
+    return;
+  }
+  if (caseDestination > DERNIERE_RANGEE) {
+    // Seule l'aviation traversante franchit le fond : elle sort du combat et
+    // n'y revient pas. Le sol et l'aviation stoppeuse s'arrêtent au fond.
+    if (p.comportementAerien === 'traversant') {
+      e.rangeeMilli = destinationMilli;
+      e.sorti = estSortiParLeHaut(destinationMilli);
+    }
+    return;
+  }
+  if (!p.bloquant) {
+    // Aviation : ni bloquée ni bloquante, elle ignore l'occupation.
+    e.rangeeMilli = destinationMilli;
+    return;
+  }
+
+  const indiceOccupante = occupantDe(occupation, caseDestination, colonne);
+  if (indiceOccupante === undefined) {
+    retirer(occupation, rangee, colonne);
+    poser(occupation, caseDestination, colonne, e.indice);
+    e.rangeeMilli = destinationMilli;
+    return;
+  }
+  const occupante = etat.entites[indiceOccupante];
+  const po = profil(occupante);
+  if (peutEcraser(etat, e, p, occupante, po)) {
+    occupante.pvMilli = 0;
+    occupante.vivant = false;
+    occupante.ecrase = true;
+    // ⚠⚠ LA SECONDE MORT DU MOTEUR, ET ELLE A ÉTÉ TROUVÉE PAR UN TEST, PAS PAR
+    // RELECTURE. Le premier jet du lot JOURNAL-DE-COMBAT n'accrochait le journal
+    // qu'à `retirerLesMorts` en écrivant que c'était « la seule ligne qui fasse
+    // passer `vivant` à faux » — c'était FAUX, un écrasement tue à l'étape 7.
+    // Mesuré : une pièce sur vingt-trois manquait au journal sur la graine 9,
+    // et rien d'autre ne l'aurait dit.
+    //
+    // ⚠ ET LA POSITION EST CELLE DE L'ÉCRASÉE, PAS DE L'ÉCRASEUSE : elle meurt
+    // là où elle était, sur la case que l'autre vient de lui prendre.
+    etat.journal.destructions.push(faitDeLEntite(occupante));
+    retirer(occupation, caseDestination, colonne);
+    retirer(occupation, rangee, colonne);
+    poser(occupation, caseDestination, colonne, e.indice);
+    e.rangeeMilli = destinationMilli;
+  }
+  // Masse égale ou inférieure : blocage, aucune avance. La structure forcée,
+  // elle, a déjà encaissé ses 1 % plus haut : elle tombera, et l'unité
+  // avancera au tick suivant — `retirerLesMorts` passe avant `deplacement`.
 }
 
 /**
@@ -2328,7 +2621,13 @@ function ligneResultat(e) {
     genre: e.genre,
     niveau: e.niveau,
     rangee: caseDepuisMilli(e.rangeeMilli),
-    colonne: e.colonne,
+    // ⚠ LA CASE OÙ ELLE FINIT, ET ELLE PEUT AVOIR CHANGÉ DEPUIS LE LOT COLONNE.
+    // Une défenseuse se décale ; le champ dit donc où elle est à la fin du
+    // raid. C'est informatif et rien ne s'y adosse : `reprojeter` de
+    // `site-entame.js` apparie par INDICE, jamais par position — vérifié —, et
+    // `raid-ouvrage.js` recopie les PV sur la garnison par `indicesDefenseurs`.
+    // Une pièce que le joueur a posée ne bouge donc pas de sa case.
+    colonne: caseColonne(e),
     pvMaxMilli: e.pvMaxMilli,
     pvMilli: e.pvMilli,
     pvPerdusMilli: e.pvMaxMilli - e.pvMilli,

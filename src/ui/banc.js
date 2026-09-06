@@ -201,7 +201,8 @@ export function nomAffiche(entite) {
  */
 export function entitesSurLaCase(etat, rangee, colonne) {
   return etat.entites.filter((e) => e.vivant && !e.sorti
-    && e.colonne === colonne && caseDepuisMilli(e.rangeeMilli) === rangee);
+    && caseDepuisMilli(e.colonneMilli) === colonne
+    && caseDepuisMilli(e.rangeeMilli) === rangee);
 }
 
 /**
