@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.4 · build 105.
+Dernière révision : **06/09/2026**, version 0.99.5 · build 106.
 
 ---
 
@@ -42,7 +42,134 @@ Dernière révision : **06/09/2026**, version 0.99.4 · build 105.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot CHANTIER-FICHES), à confronter :**
+**Référence au 06/09/2026 (après le lot RECHERCHE-ÉCRAN), à confronter :**
+`npm test` → **1159 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 993 487 octets**, 0 référence externe. Coût **+4 630 octets**, mesuré poste par
+poste contre un livrable rebâti depuis `origin/main` : **JavaScript +209 · feuille
++4 421 · balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part et
+d'autre**. Borne T10 inchangée à 9 300 000, marge **1 306 513 octets, 14,05 %**. Le
+lot touche `src/data/recherche.js` (une valeur), `src/ui/recherche.js` et la
+feuille.
+⚠⚠ **UN DÉFAUT ANTÉRIEUR AU LOT RENDAIT CET ÉCRAN ILLISIBLE, ET C'EST LE PREMIER
+FAIT À DIRE.** Trouvé en faisant la vérification de visu que le brief exige :
+sur un livrable bâti depuis `origin/main`, l'écran Recherche est recouvert d'un
+**sprite géant** — un aéronef peint par-dessus les onglets, le bandeau et la
+moitié des lignes. Le lot SPRITES-V2-JOUEUR a sorti la tourelle du fond pour en
+faire un `<span class="couche-tournante">` en position ABSOLUE, dimensionné en
+POURCENTAGE de son premier ancêtre positionné ; son rapport nomme QUATRE règles
+qui gagnaient `position: relative`, **et il en manquait une cinquième**,
+`#ecran-recherche .sprite`. Mesuré dans Chromium : les tourelles de cet écran se
+peignaient de **153 × 265 à 403 × 699 pixels CSS**, calées sur `#ecrans`. Une
+ligne de feuille corrige.
+⚠⚠ **ET LA GARDE QUI MANQUAIT NE RECOPIE PAS LA LISTE : ELLE L'ADOSSE AU CODE.**
+Une liste écrite à la main est EXACTEMENT ce qui a échoué. `RECH-É T11` porte les
+six sélecteurs hôtes et exige que leur nombre s'accorde au nombre d'appels de
+`poserCouches` dans `src/ui/` — **sept aujourd'hui, dont deux partagent une
+règle**. Un huitième point de pose fait tomber le test et oblige à nommer son
+hôte. ⚠ **Elle a lu ma propre prose au premier jet, huitième fois du dépôt** :
+retirer `position: relative` laissait la suite **ENTIÈREMENT VERTE, 108 pass / 0
+fail mesuré**, le commentaire qui explique la règle nommant la déclaration. Elle
+décommente désormais, avec un témoin qui prouve que le filtre ne mange pas tout.
+⚠⚠ **LE PIONNIER D'OFFENSE COÛTE 100 POINTS, ET LA DÉFENSE NE BOUGE PAS.** Ethan,
+point 12 du 06/09 : « recherche à 100 points ». **C'est 100, pas 100 000** — la
+table est en POINTS, `coutMilli` porte le facteur mille. Quatre nombres portent le
+nom « Bélier » et **un seul a été arbitré** ; `RECH-É T2` garde les trois autres
+ET la **somme des quatre colonnes de l'arbre**, qu'une valeur déplacée n'importe
+où fait bouger. ⚠ Aucune ligne ne se déplace : le Bélier est déjà quatrième, et la
+table se lit encore par prix croissants.
+⚠⚠ **« IL MANQUE X POINTS » NE SORT PLUS DE L'ÉCRAN, ET LE MOTEUR LE DIT
+TOUJOURS.** Point 14. Le filtre est dans `lignePourLAchat`, sur le `code` et
+jamais sur le texte ; **`src/sim/recherche.js` n'a pas une ligne de changée** —
+le message sert aussi au panneau de la base supplémentaire. `RECH-É T4` est le
+test qui attrape un lot parti l'y corriger, et il exige les DEUX chemins. ⚠ **Et
+aucun `div.raison` vide ne se peint** : une ligne dont le manque était le seul
+refus n'a plus rien à dire — mesuré, zéro raison vide sur les 62 cadres.
+⚠ **ET C'EST MON COMMENTAIRE QUI A DÛ CHANGER, PAS LA GARDE.** Son premier jet
+écrivait la faute en toutes lettres — un `startsWith` avec la chaîne citée — donc
+la garde qui refuse que l'écran CITE le message tombait sur ma prose. Même remède
+qu'au ton écarté de `FICHE-STYLE.md`.
+⚠⚠ **DEUX CASES PAR LIGNE, ET LE MOTIF DU RETRAIT NE DISPARAÎT PAS AVEC LUI.**
+Point 15 : « diviser en 2 cases l'unité et son amélioration ». Le panneau de
+l'offense passe de **14 à 28 enfants**, celui de la défense de 17 à 34. Le
+commentaire du retrait disait vrai — « aligné sur elle, il se lirait comme une
+quinzième pièce » — et il est RÉÉCRIT pour nommer les trois choses qui portent
+l'appartenance à sa place : la pastille `◈` au lieu du sprite, le titre en kaki
+plus petit, et **l'écart vertical** — 2 px sous sa pièce, 8 px entre deux pièces,
+relevé à l'écran.
+⚠ **ET LE MODULE SUIT SA PIÈCE, IL NE SE RANGE PAS EN BLOC À LA FIN** : un test
+parcourt les 28 et les 34 cadres deux par deux. ⚠ **Une pièce sans module ne
+fabrique pas de case vide** — aucune des trente et une n'est dans ce cas, donc
+`cadresDeLaLigne` est PURE et EXPORTÉE pour qu'on lui donne une ligne forgée, et
+le DOM la lit pour qu'elle ne soit pas un proxy.
+⚠⚠ **TROIS CODES VISUELS, ET AUCUNE TEINTE NEUVE.** Point 16. La CASE a deux
+aspects — normale `#343A2C` quand acquise, assombrie `#1E2124` sinon —, le BOUTON
+en a trois, et **une seule classe les commande**, celle que `etatDuCadre` pose sur
+le cadre. Mesuré : l'ambre `#F5B636` sur le fond assombri rend **8,96** de
+contraste contre **3,31** pour le gris d'un bouton éteint, un facteur **2,7**.
+⚠⚠ **ET L'ARMÉ RESTE DISTINCT DE L'ACHETABLE, VÉRIFIÉ DE VISU.** L'achetable est
+**cerné** d'ambre, l'armé est **rempli** d'ambre et change de libellé pour
+« Confirmer ? ». La feuille l'exclut par `:not(.arme)` plutôt que de compter sur
+l'ordre des lignes : sans lui, `.piece.achetable .acheter` (1,3,0) l'emporterait
+sur `.acheter.arme` (1,2,0). ⚠ **Et chacune des trois classes a sa règle, gardé
+ici** : la garde générale de `chantier.test.js` n'extrait que les LITTÉRAUX passés
+à `classList`, et celles-ci passent par une table.
+⚠⚠ **LA DESCRIPTION D'UNE PIÈCE EST DÉRIVÉE, ET LES DEUX AXES DU BRIEF NE
+POUVAIENT PAS SERVIR — MESURÉ.** Point 17. Le dépôt n'a **aucune phrase par
+pièce** ; en écrire trente et une reviendrait à trancher seul du contenu de jeu.
+Le brief donnait `chassis` × `specialite` : **les neuf ouvrages de `DEFENSES` ne
+portent ni l'un ni l'autre**, donc la moitié de la branche défense n'aurait eu
+aucune description. Les axes qui couvrent les deux branches sont ceux de la
+SCÈNE — `classeDe` rend le châssis d'une unité ET le type d'un ouvrage, `accentDe`
+la colonne de dégâts DOMINANTE.
+⚠⚠ **ET LES DEUX TABLES DE LIBELLÉS EXISTENT DÉJÀ — ÉCART AU BRIEF, DÉCLARÉ.**
+`NOMS_CLASSE` et `NOMS_ACCENT` de `render/scene.js` légendent le champ de bataille
+depuis le lot 3B ; en écrire deux autres dans `src/data/`, ce que le brief
+demandait, aurait mis au dépôt deux vocabulaires pour la même grandeur. Elles
+rendent d'ailleurs **exactement l'exemple du brief**, « Blindé · anti-infanterie ».
+⚠ **L'ACCENT SE MESURE SUR LES DÉGÂTS, IL NE SE DÉCLARE PAS** : la Herse, qui n'a
+que des dégâts de franchissement, ressort « Barrière · anti-véhicule », et le
+Merlon « Mur · ne tue rien » — avec le mot de la table, jamais un vide.
+⚠ **ET « DANS LE BOUTON » SE LIT « SUR LA LIGNE »** : le bouton porte déjà son
+prix et fait soixante pixels. La description va sous le nom, dans la case, au même
+endroit et dans la même forme que celle d'un module. **Lecture déclarée.**
+⚠ **LE STOCK DE POINTS PASSE DE 11 À 15 PX, GRAISSE 600.** Point 13. 15 px est la
+taille que le dépôt emploie DÉJÀ pour « le nombre qui compte dans un panneau »
+(`#transfert-bilan .recu b`) ; **28 px a été mesurée et écartée** — le prix le plus
+haut de l'arbre n'y tiendrait pas à côté des trois pastilles. Relevé à la
+géométrie du S25 FE : **à 250 000 points l'en-tête ne coûte pas un pixel de plus**
+(360 × 31, avant comme après) ; à 2 500 000 000 il prend une seconde ligne
+(360 × 55) et rend 24 px au panneau. Aucun débordement dans les deux cas.
+⚠ **TREIZE FALSIFICATIONS, TREIZE CHUTES**, dont neuf qui ne font tomber QUE leur
+test. ⚠ **Une n'a pas mordu au premier relevé** — celle du `position: relative`,
+ci-dessus — et elle a été rejouée avant d'être comptée.
+⚠ **ONZE TESTS ENTRENT — `RECH-É T1` à `T11`, dans `test/recherche.test.js` — ET
+LE COMPTE PASSE DE 1 148 À 1 159.** **Aucune assertion n'a été retirée ni
+assouplie** ; **cinq gardes changent de cible et deux se RESSERRENT** — `T7` et
+`T8` demandent le prix à la table au lieu de l'écrire, le compte des panneaux
+exige désormais l'alternance pièce/module, et `T15 — ce qui est acquis se dit`
+passe de « la ligne PORTE le manque » à « la ligne ne porte AUCUNE raison »,
+l'assertion sur l'espace fine insécable déménageant sur le prix du bouton.
+⚠⚠ **LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ, ET C'ÉTAIT BÉNIN.** Il pose
+1 135 pass, 7 987 956 octets et 0.99.2 · build 103 ; mesuré au départ, **1 148
+pass, 7 988 857 octets, 0.99.4 · build 105** — les lots CARTE-B et
+CHANTIER-FICHES ont été mergés entre l'écriture du brief et son exécution. **Les
+sept faits dont le lot dépend étaient intacts**, vérifiés un par un. ⚠ Un huitième
+fait du brief est périmé : **la palette fait quarante-et-une teintes, plus
+trente-trois** — elle s'est élargie au lot LIMITES-VIVES. Sans conséquence : le
+lot n'en ajoute aucune.
+⚠ **UN SECOND FAIT MESURÉ, NON CORRIGÉ, DÉCLARÉ** : sur cet écran,
+`document.body.scrollWidth` vaut **382** pour un `clientWidth` de 360 — le rail
+des trois panneaux. **Identique sur le livrable d'avant le lot**, donc antérieur ;
+le panneau lui-même ne déborde pas. À reprendre.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 26.** Pas un champ n'entre dans
+l'état : un prix de table, une taille de police, une classe d'affichage et une
+phrase dérivée vivent tous hors de la sauvegarde.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne. Les trois captures du rapport vivent
+dans `rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot CHANTIER-FICHES :**
 `npm test` → **1148 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 988 857 octets**, 0 référence externe. Coût **+1 036 octets**, ENTIÈREMENT DU
 JAVASCRIPT, mesuré poste par poste contre un livrable rebâti depuis l'arbre
@@ -5780,6 +5907,28 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
     `coutDUnRaid` de cet écran ; et il naît INERTE à chaque entrée, le temps de
     `ECRAN_RAID.delaiArmementMs`. Le clic fantôme a été REPRODUIT avant d'être
     gardé — voir `RAPPORT-lotASSAUT.md`.
+  ⤷ ⚠⚠ TOUT ÉLÉMENT QUI REÇOIT `poserCouches` DOIT ÊTRE UN ANCÊTRE POSITIONNÉ, ET
+    L'OUBLIER RECOUVRE LA PAGE. La tourelle d'une pièce est un
+    `<span class="couche-tournante">` en position ABSOLUE depuis le lot
+    SPRITES-V2-JOUEUR, dimensionné en POURCENTAGE de son premier ancêtre
+    positionné : sans `position: relative` sur l'hôte, il se cale sur `#ecrans`
+    et s'y peint en grand. **Mesuré le 06/09 sur l'écran Recherche, dont la
+    vignette avait été oubliée par la liste de quatre règles de ce lot-là** :
+    de 153 × 265 à 403 × 699 pixels CSS, par-dessus les onglets et le bandeau.
+  ⤷ ⚠ SEPT POINTS DE POSE, SIX HÔTES — deux écrans partagent la règle des vagues.
+    `RECH-É T11` de `test/recherche.test.js` adosse la liste des hôtes au NOMBRE
+    d'appels de `poserCouches` dans `src/ui/` : un huitième fait tomber le test et
+    oblige à nommer son hôte. Une liste écrite à la main est ce qui a échoué.
+  ⤷ ⚠⚠ ET L'ÉCRAN RECHERCHE PORTE DEUX CADRES PAR LIGNE DEPUIS LE 06/09 — Ethan,
+    point 15 : « diviser en 2 cases l'unité et son amélioration ». Le module
+    n'est plus imbriqué dans le bloc de sa pièce, il est son VOISIN, et ce qui
+    porte l'appartenance est la pastille `◈`, le titre en kaki plus petit et
+    l'écart vertical — 2 px sous sa pièce, 8 px entre deux pièces.
+  ⤷ ⚠ SA DESCRIPTION DE PIÈCE EST DÉRIVÉE, PAS ÉCRITE. `descriptionDeLaPiece`
+    compose `NOMS_CLASSE` × `NOMS_ACCENT` de `render/scene.js` — les tables de la
+    légende du champ de bataille, jamais une seconde paire dans `src/data/`. Les
+    trente et une phrases de saveur restent à écrire par Ethan ; la dérivation
+    tient la place, et `RECH-É T9` tombera le jour où elles arriveront.
 
 src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT

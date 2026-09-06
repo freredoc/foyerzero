@@ -36,7 +36,15 @@ export const ARBRE_RECHERCHE = {
     meute: { unite: 0, module: 10000000 }, //         Fusiliers   — gratuit
     ratisseur: { unite: 0, module: 60000000 }, //     Éclaireur   — gratuit
     busard: { unite: 0, module: 540000000 }, //       Épervier    — gratuit, arbitrage 9
-    belier: { unite: 12500, module: 80000000 }, //    Pionnier
+    // ⚠ 100 POINTS, ET C'EST UN ARBITRAGE D'ETHAN DU 06/09 — « recherche à
+    // 100 points », branche OFFENSE seulement. Le Pionnier valait 12 500. Sa
+    // ligne de DÉFENSE (940 000) et les deux modules ne bougent pas : ce sont
+    // quatre nombres distincts, et un seul a été arbitré.
+    // ⚠ ET IL RESTE À SA PLACE. L'ordre d'affichage suit `Object.keys` et
+    // l'arbitrage du 30/08 le dit libre ; le Bélier est déjà quatrième, après
+    // les trois gratuites et avant les Grenadiers à 200 000, donc la table se
+    // lit encore par prix croissants sans qu'on déplace une ligne.
+    belier: { unite: 100, module: 80000000 }, //      Pionnier — arbitrage du 06/09
     perceurs: { unite: 200000, module: 24000000 }, // Grenadiers
     fendeur: { unite: 300000, module: 300000000 }, // Chasseur
     frappeur: { unite: 750000, module: 800000000 }, // Foudre

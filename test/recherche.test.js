@@ -25,7 +25,8 @@ import { genererSite } from '../src/sim/generateur.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
-  problemesDeLAchat, acheter, acquisesDe, modulesDebloquesDuJoueur,
+  problemesDeLAchat, problemesDeLAchatDUneBase, acheter, acquisesDe,
+  modulesDebloquesDuJoueur,
 } from '../src/sim/recherche.js';
 import {
   creerEtat, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION, niveauDeCommandement,
@@ -36,6 +37,7 @@ import { bilan as bilanDefense, defenseVide, defensesDisponibles } from '../src/
 import { ATLAS } from '../src/data/atlas.js';
 import {
   initialiserEcranRecherche, lignesDeRecherche, lignesSpeciales, couchesDeLaPiece,
+  descriptionDeLaPiece, cadresDeLaLigne, etatDuCadre, CLASSE_DE_L_ETAT,
   PANNEAUX, LIBELLE_CONFIRMER,
 } from '../src/ui/recherche.js';
 import { baseCourante } from '../src/sim/base-courante.js';
@@ -166,8 +168,17 @@ test('recherche — les gratuites sont acquises à la création, et elles seules
   assert.equal(neuf.acquises.defense.length, 3);
 });
 
-test('T7 — le facteur mille : 12 499 999 milli-points n\'achètent pas 12 500 points', () => {
-  const juste = partie('12499999');
+// ⚠⚠ LE PRIX SE DEMANDE À LA TABLE, IL NE S'ÉCRIT PLUS ICI — lot
+// RECHERCHE-ÉCRAN. `T7` et `T8` sondaient le facteur mille sur le Pionnier à
+// 12 500 points, écrits en clair : l'arbitrage d'Ethan du 06/09 l'a mis à 100,
+// et les deux montages sont tombés pour une raison qui ne les regarde pas. Ce
+// qu'ils mesurent — que le moteur multiplie par mille — ne dépend d'aucun prix
+// particulier. Le ×1000, lui, RESTE écrit : c'est la propriété gardée, et la
+// lire dans la table aussi la rendrait vacueuse.
+const PRIX_BELIER = BigInt(ARBRE_RECHERCHE.offense.belier.unite);
+
+test('T7 — le facteur mille : un milli-point de moins n\'achète pas', () => {
+  const juste = partie(String(PRIX_BELIER * 1000n - 1n));
   const pb = problemesDeLAchat(juste, 'offense', 'belier', 'unite');
   assert.equal(pb.length, 1, `refus attendu, obtenu : ${JSON.stringify(pb)}`);
   assert.equal(pb[0].code, 'pointsInsuffisants');
@@ -175,7 +186,7 @@ test('T7 — le facteur mille : 12 499 999 milli-points n\'achètent pas 12 500 
   // « 1 point ». Annoncer « 0 » bloquerait le joueur sans rien lui dire.
   assert.equal(pb[0].message, 'il manque 1 point');
 
-  const pile = partie('12500000');
+  const pile = partie(String(PRIX_BELIER * 1000n));
   assert.deepEqual(problemesDeLAchat(pile, 'offense', 'belier', 'unite'), []);
   acheter(pile, 'offense', 'belier', 'unite');
   assert.ok(estAcquise(pile, 'offense', 'belier'));
@@ -183,7 +194,7 @@ test('T7 — le facteur mille : 12 499 999 milli-points n\'achètent pas 12 500 
 
   // ⚠ CE QUI FALSIFIERAIT CE TEST : une comparaison qui oublie le ×1000. Elle
   // achèterait au premier cas, et la première assertion tomberait.
-  assert.equal(coutMilli('offense', 'belier', 'unite'), 12500000n);
+  assert.equal(coutMilli('offense', 'belier', 'unite'), PRIX_BELIER * 1000n);
 });
 
 test('T8 — pas de `Number` sur le compteur : un total hors entier sûr reste exact', () => {
@@ -192,7 +203,7 @@ test('T8 — pas de `Number` sur le compteur : un total hors entier sûr reste e
   assert.notEqual(Number(enorme).toString(), enorme, 'montage sans mordant : ce total tient en Number');
 
   acheter(etat, 'offense', 'belier', 'unite');
-  assert.equal(etat.recherche.pointsMilli, (BigInt(enorme) - 12500000n).toString());
+  assert.equal(etat.recherche.pointsMilli, (BigInt(enorme) - PRIX_BELIER * 1000n).toString());
   // Le dernier chiffre est celui qui tombe le premier si un `Number` s'est
   // glissé sur le chemin : il vaut 7, il doit valoir 7.
   assert.ok(etat.recherche.pointsMilli.endsWith('7'), etat.recherche.pointsMilli);
@@ -3212,9 +3223,32 @@ function fauxDocument() {
   return doc;
 }
 
-/** Toutes les lignes `.piece` d'un panneau, à plat. */
-function piecesDuPanneau(doc, nom) {
+// ⚠⚠ LE PANNEAU PORTE DEUX CADRES PAR LIGNE DEPUIS LE LOT RECHERCHE-ÉCRAN — le
+// point 15 d'Ethan, « diviser en 2 cases l'unité et son amélioration ». Le
+// module vivait DANS le bloc de sa pièce ; il est son voisin. `piecesDuPanneau`
+// garde donc son sens — les cadres de PIÈCE, dans l'ordre de la table, ce qui
+// laisse juste tout indexage par `ids.indexOf(id)` — et deux helpers nomment le
+// reste. Aucune assertion n'a été retirée : celles qui descendaient dans le bloc
+// chercher `.module` regardent maintenant à côté.
+
+/** Tous les cadres d'un panneau, à plat — une pièce et son module en font deux. */
+function cadresDuPanneau(doc, nom) {
   return doc.getElementById(`recherche-${nom}`).children;
+}
+
+/** Les cadres de PIÈCE d'un panneau, dans l'ordre de la table. */
+function piecesDuPanneau(doc, nom) {
+  return cadresDuPanneau(doc, nom).filter((c) => !c.classList.contains('module'));
+}
+
+/** Les cadres de MODULE d'un panneau, dans l'ordre de la table. */
+function modulesDuPanneau(doc, nom) {
+  return cadresDuPanneau(doc, nom).filter((c) => c.classList.contains('module'));
+}
+
+/** La rangée de tête d'un cadre — sprite ou pastille, nom, bouton. */
+function rangeeDuCadre(cadre) {
+  return cadre.children.find((c) => c.className === 'rangee');
 }
 
 /** Le bouton d'achat d'une rangée. */
@@ -3252,25 +3286,35 @@ test('T15 — les trois panneaux portent l\'arbre entier, dans l\'ordre de la ta
     );
   }
 
-  // Chaque pièce porte SA rangée de module, en retrait — aucune n'en manque
-  // aujourd'hui, et le jour où l'une n'en aura plus, la rangée disparaîtra
-  // plutôt que d'afficher un module vide.
+  // ⚠⚠ CHAQUE PIÈCE A SON MODULE À CÔTÉ, PLUS EN RETRAIT DEDANS — point 15
+  // d'Ethan. Aucune n'en manque aujourd'hui ; le jour où l'une n'en aura plus,
+  // c'est le CADRE qui disparaîtra plutôt qu'un module vide s'affiche.
+  // MONTAGE QUI LE FAIT TOMBER : garder le module imbriqué — le panneau
+  // rendrait 14 enfants au lieu de 28.
   for (const branche of BRANCHES) {
-    let avecModule = 0;
-    for (const bloc of piecesDuPanneau(doc, branche)) {
-      const mod = bloc.children.filter((c) => c.className.includes('module'));
-      assert.ok(mod.length <= 1, 'deux rangées de module sous une pièce');
-      avecModule += mod.length;
-    }
-    assert.equal(avecModule, Object.keys(ARBRE_RECHERCHE[branche]).length,
+    const attendus = Object.keys(ARBRE_RECHERCHE[branche]).length;
+    assert.equal(modulesDuPanneau(doc, branche).length, attendus,
       `des pièces de ${branche} n'affichent pas leur module`);
+    assert.equal(cadresDuPanneau(doc, branche).length, attendus * 2,
+      `le panneau ${branche} ne porte pas deux cadres par ligne`);
+    // ⚠ ET LE MODULE SUIT SA PIÈCE, IL NE SE RANGE PAS EN BLOC À LA FIN. C'est
+    // l'ORDRE qui apparie les deux cadres maintenant que le retrait a disparu :
+    // les grouper autrement se lirait comme deux listes séparées.
+    const cadres = cadresDuPanneau(doc, branche);
+    for (let i = 0; i < cadres.length; i += 2) {
+      assert.ok(!cadres[i].classList.contains('module'), `cadre ${i} : pièce attendue`);
+      assert.ok(cadres[i + 1].classList.contains('module'), `cadre ${i + 1} : module attendu`);
+    }
   }
+  // Et le panneau Spécial, lui, n'a aucun module : quatre cadres, quatre lignes.
+  assert.equal(cadresDuPanneau(doc, 'special').length, 4);
+  assert.equal(modulesDuPanneau(doc, 'special').length, 0);
 
   // ⚠ ET REPEINDRE NE DOUBLE PAS. MONTAGE QUI LE FAIT TOMBER : retirer le
   // `panneau.textContent = ''` de `peindre` — l'écran se repeint à CHAQUE
   // ouverture d'onglet, donc l'arbre aurait grossi à chaque visite.
   ecran.peindre(partie('0'));
-  assert.equal(piecesDuPanneau(doc, 'offense').length, 14, 'la peinture empile au lieu de remplacer');
+  assert.equal(cadresDuPanneau(doc, 'offense').length, 28, 'la peinture empile au lieu de remplacer');
 });
 
 test('T15 — les sprites nommés par l\'écran existent tous dans les atlas', () => {
@@ -3341,8 +3385,11 @@ test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
 
   const ids = Object.keys(ARBRE_RECHERCHE.offense);
   const blocs = piecesDuPanneau(doc, 'offense');
+  const mods = modulesDuPanneau(doc, 'offense');
   const bloc = (id) => blocs[ids.indexOf(id)];
-  const rangeeDe = (b) => b.children.find((c) => c.className === 'rangee');
+  const moduleDe = (id) => mods[ids.indexOf(id)];
+  const rangeeDe = rangeeDuCadre;
+  const raisonDe = (cadre) => cadre.children.find((c) => c.className === 'raison');
 
   // Une gratuite est ACQUISE dès la création, et son bouton le dit sans être un
   // refus. MONTAGE QUI LE FAIT TOMBER : traiter « déjà acquis » comme une
@@ -3352,29 +3399,36 @@ test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
   assert.ok(gratuite.disabled, 'une pièce acquise se rachète');
   assert.ok(gratuite.classList.contains('acquis'));
 
-  // Une payante sans le sou est refusée, et la ligne PORTE la raison — un
-  // bouton `disabled` n'émet aucun clic, donc aucun toast ne pourrait la dire.
+  // ⚠⚠ ET LE MANQUE DE POINTS NE S'ÉCRIT PLUS — ETHAN, POINT 14 DU 06/09 : « ne
+  // pas écrire "il manque x point" ». Une payante sans le sou n'a plus AUCUNE
+  // raison à afficher, donc plus de cadre `.raison` du tout : un `div` vide
+  // laisserait un blanc que le joueur lirait comme un défaut. Ce qui dit
+  // désormais qu'on ne peut pas payer, c'est la couleur du bouton (point 16) et
+  // le compteur du haut, grossi (point 13).
+  // MONTAGE QUI LE FAIT TOMBER : retirer le filtre de `lignePourLAchat`.
   const cher = bloc('enclume');
   assert.ok(boutonDe(rangeeDe(cher)).disabled);
-  const raison = cher.children.find((c) => c.className === 'raison');
-  assert.ok(raison, 'la ligne refusée ne dit pas pourquoi');
-  assert.match(raison.textContent, /il manque/);
+  assert.equal(raisonDe(cher), undefined,
+    'la ligne refusée pour les seuls points porte encore une raison');
+  assert.doesNotMatch(cher.textContent, /il manque/);
+
   // ⚠ L'ESPACE DES MILLIERS EST FINE ET INSÉCABLE (U+202F), et elle s'écrit en
   // échappement : tapée au clavier, l'assertion dépendrait de l'éditeur qui a
-  // enregistré ce fichier.
-  assert.match(raison.textContent, /120\u202f000\u202f000/);
+  // enregistré ce fichier. Elle se lit maintenant sur le PRIX du bouton, seul
+  // endroit de la ligne où le nombre subsiste.
+  assert.match(boutonDe(rangeeDe(cher)).textContent, /120\u202f000\u202f000/);
 
-  // Le module d'une pièce NON acquise accumule ses deux refus.
+  // Le module d'une pièce NON acquise dit ce qu'aucune couleur ne peut dire.
   //
-  // ⚠ RÉÉCRIT AU LOT MODULES-C, ET LE COUPLE DE REFUS A CHANGÉ. Cette ligne
-  // portait « la pièce doit être débloquée » ET « n'a pas encore d'effet en
-  // jeu » : le Bouclier étant désormais câblé, la seconde a disparu et c'est
-  // « il manque … points » qui l'accompagne. Ce qui est testé reste
-  // l'ACCUMULATION — deux refus tiennent sur la même ligne, séparés par « ; ».
-  const modBloc = bloc('enclume').children.find((c) => c.className === 'module');
-  const modRaison = modBloc.children.find((c) => c.className === 'raison');
+  // ⚠ RÉÉCRIT AU LOT MODULES-C, PUIS AU LOT RECHERCHE-ÉCRAN. Cette ligne portait
+  // « la pièce doit être débloquée » ET « n'a pas encore d'effet en jeu » ; le
+  // Bouclier étant câblé, la seconde a disparu et « il manque … points » l'avait
+  // remplacée. Le point 14 retire ce dernier à son tour. Ce qui reste est le
+  // refus que le joueur ne peut PAS deviner : l'ordre des deux achats.
+  const modRaison = raisonDe(moduleDe('enclume'));
+  assert.ok(modRaison, 'le module refusé ne dit plus pourquoi');
   assert.match(modRaison.textContent, /la pièce doit être débloquée avant son module/);
-  assert.match(modRaison.textContent, /il manque/);
+  assert.doesNotMatch(modRaison.textContent, /il manque/);
   // Et le Bouclier NE porte plus le refus d'effet. MONTAGE QUI LE FAIT
   // TOMBER : repasser `bouclier.cable.offense` à `false` — la mention revient.
   assert.ok(!/n'a pas encore d'effet en jeu/.test(modRaison.textContent),
@@ -3383,17 +3437,14 @@ test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
   // Un module réellement non câblé, lui, le dit — la Buse porte la Garnison,
   // qui n'a pas de moteur. Sa pièce est gratuite, donc acquise : le seul refus
   // d'effet s'affiche sans être noyé dans celui de la pièce.
-  const busard = bloc('busard').children.find((c) => c.className === 'module');
-  const busardRaison = busard.children.find((c) => c.className === 'raison');
-  assert.match(busardRaison.textContent, /n'a pas encore d'effet en jeu/);
+  assert.match(raisonDe(moduleDe('busard')).textContent, /n'a pas encore d'effet en jeu/);
 
   // ⚠ ET L'ÉCRASEUR NE PORTE PAS CE REFUS NON PLUS. Il était le seul câblé au
   // lot Recherche ; ils sont sept depuis MODULES-C. Les sept autres modules
   // s'affichent et ne s'achètent pas, parce que prendre les points du joueur
   // contre rien serait un vol.
-  const ecraseur = bloc('fendeur').children.find((c) => c.className === 'module');
-  const ecraseurRaison = ecraseur.children.find((c) => c.className === 'raison');
-  assert.ok(!/n'a pas encore d'effet en jeu/.test(ecraseurRaison.textContent),
+  const ecraseurRaison = raisonDe(moduleDe('fendeur'));
+  assert.ok(!/n'a pas encore d'effet en jeu/.test(ecraseurRaison?.textContent ?? ''),
     'l\'Écraseur est déclaré sans effet alors qu\'il est câblé');
 });
 
@@ -3401,15 +3452,17 @@ test('T15 — l\'achat se fait en DEUX touchers, et le premier ne paie rien', ()
   const doc = fauxDocument();
   let enregistrements = 0;
   const ecran = initialiserEcranRecherche(doc, { apresAchat: () => { enregistrements += 1; } });
-  // De quoi payer le Pionnier (12 500 points) et rien de plus.
-  const etat = partie(String(12_500n * 1000n));
+  // ⚠ DE QUOI PAYER LE PIONNIER, ET RIEN DE PLUS — le prix se DEMANDE à la
+  // table depuis l'arbitrage du 06/09 qui l'a mis à 100 points. Seul le LIBELLÉ
+  // reste écrit : c'est lui qu'on garde, et une re-tarification le dira d'une
+  // ligne au lieu de faire tomber le montage entier.
+  const etat = partie(String(PRIX_BELIER * 1000n));
   ecran.peindre(etat);
 
   const ids = Object.keys(ARBRE_RECHERCHE.offense);
-  const rangee = piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]
-    .children.find((c) => c.className === 'rangee');
+  const rangee = rangeeDuCadre(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]);
   const bouton = boutonDe(rangee);
-  assert.equal(bouton.textContent, '12\u202f500');
+  assert.equal(bouton.textContent, '100');
 
   // Premier toucher : le bouton s'arme, RIEN n'est débité, rien n'est acquis.
   // MONTAGE QUI LE FAIT TOMBER : appeler `acheter` dès le premier clic — deux
@@ -3417,7 +3470,7 @@ test('T15 — l\'achat se fait en DEUX touchers, et le premier ne paie rien', ()
   bouton.click();
   assert.equal(bouton.textContent, LIBELLE_CONFIRMER);
   assert.ok(bouton.classList.contains('arme'));
-  assert.equal(etat.recherche.pointsMilli, String(12_500n * 1000n));
+  assert.equal(etat.recherche.pointsMilli, String(PRIX_BELIER * 1000n));
   assert.ok(!estAcquise(etat, 'offense', 'belier'));
   assert.equal(enregistrements, 0);
 
@@ -3437,9 +3490,7 @@ test('T15 — toucher un AUTRE bouton désarme le premier', () => {
 
   const ids = Object.keys(ARBRE_RECHERCHE.offense);
   const blocs = piecesDuPanneau(doc, 'offense');
-  const boutonDeLaPiece = (id) => boutonDe(
-    blocs[ids.indexOf(id)].children.find((c) => c.className === 'rangee'),
-  );
+  const boutonDeLaPiece = (id) => boutonDe(rangeeDuCadre(blocs[ids.indexOf(id)]));
   const belier = boutonDeLaPiece('belier');
   const perceurs = boutonDeLaPiece('perceurs');
 
@@ -3451,7 +3502,7 @@ test('T15 — toucher un AUTRE bouton désarme le premier', () => {
   // une traînée de boutons armés, dont un frôlement paierait n'importe lequel.
   perceurs.click();
   assert.equal(perceurs.textContent, LIBELLE_CONFIRMER);
-  assert.equal(belier.textContent, '12\u202f500', 'le premier bouton est resté armé');
+  assert.equal(belier.textContent, '100', 'le premier bouton est resté armé');
   assert.ok(!estAcquise(etat, 'offense', 'belier'));
   assert.ok(!estAcquise(etat, 'offense', 'perceurs'));
 
@@ -3474,17 +3525,15 @@ test('T15 — l\'en-tête montre les points, et une peinture désarme tout', () 
   assert.equal(doc.getElementById('recherche-points').textContent, '1\u202f234\u202f567 points');
 
   const ids = Object.keys(ARBRE_RECHERCHE.offense);
-  const bouton = boutonDe(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]
-    .children.find((c) => c.className === 'rangee'));
+  const bouton = boutonDe(rangeeDuCadre(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]));
   bouton.click();
   assert.equal(bouton.textContent, LIBELLE_CONFIRMER);
   // ⚠ REPEINDRE DÉTRUIT LES NŒUDS ARMÉS. Garder la référence donnerait un
   // armement qui pointe un bouton absent de la page — et le toucher suivant
   // paierait sur un écran que le joueur ne voit plus.
   ecran.peindre(etat);
-  const neuf = boutonDe(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]
-    .children.find((c) => c.className === 'rangee'));
-  assert.equal(neuf.textContent, '12\u202f500');
+  const neuf = boutonDe(rangeeDuCadre(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]));
+  assert.equal(neuf.textContent, '100');
   neuf.click();
   assert.ok(!estAcquise(etat, 'offense', 'belier'), 'le premier toucher a payé après une peinture');
 });
@@ -3498,7 +3547,7 @@ test('T15 — l\'onglet Spécial s\'affiche et ne s\'achète pas', () => {
   // MONTAGE QUI LE FAIT TOMBER : réutiliser `boutonDAchat` pour la deuxième
   // base, dont le classeur donne pourtant un prix.
   for (const bloc of piecesDuPanneau(doc, 'special')) {
-    const rangee = bloc.children.find((c) => c.className === 'rangee');
+    const rangee = rangeeDuCadre(bloc);
     assert.ok(!rangee.children.some((c) => c.tagName === 'BUTTON'),
       'une ligne du panneau Spécial porte un bouton d\'achat');
     const raison = bloc.children.find((c) => c.className === 'raison');
@@ -4784,4 +4833,433 @@ test('MODULES-F T16 — le déterminisme tient avec les deux modules', () => {
     'la Munition spéciale de la Casemate n\'a pas mordu sur l\'infanterie');
   const voleur = (etat) => etat.entites.find((e) => e.id === 'broyeur').pvMilli;
   assert.ok(voleur(a.etat) > voleur(temoin), 'le Vol de vie n\'a pas soigné le Broyeur');
+});
+
+// ---------------------------------------------------------------------------
+// Lot RECHERCHE-ÉCRAN — les six retours d'Ethan du 06/09, points 12 à 17
+//
+// ⚠⚠ CINQ DES SIX SONT DE L'AFFICHAGE, ET CELUI QUI NE L'EST PAS EST UN SEUL
+// NOMBRE. Le point 12 met le Pionnier d'OFFENSE à 100 points ; les points 13 à
+// 17 vivent dans `src/ui/recherche.js` et dans la feuille. `src/sim/recherche.js`
+// n'a pas une ligne de changée, et `RECH-É T4` est le test qui attrape un lot
+// parti l'y corriger.
+// ---------------------------------------------------------------------------
+
+/** La feuille de style du jeu, telle qu'elle part au joueur. */
+function feuilleDuJeu() {
+  return readFileSync(new URL('../src/index.src.html', import.meta.url), 'utf8');
+}
+
+test('RECH-É T1 — le Pionnier d\'offense coûte 100 points', () => {
+  // ⚠ ARBITRAGE D'ETHAN DU 06/09, point 12 : « recherche à 100 points ». C'est
+  // bien 100, pas 100 000 — la table est en POINTS, et c'est `coutMilli` qui
+  // porte le facteur mille.
+  // MONTAGE QUI LE FAIT TOMBER : remettre 12 500, ou écrire 100 000 en croyant
+  // écrire des milli-points.
+  assert.equal(ARBRE_RECHERCHE.offense.belier.unite, 100);
+  assert.equal(coutMilli('offense', 'belier', 'unite'), 100_000n);
+
+  // ⚠ ET CE QUE ÇA CHANGE POUR LE JOUEUR SE MESURE : le Pionnier devient la
+  // première pièce payante que l'arbre offre, et de très loin. Le suivant coûte
+  // deux mille fois plus.
+  const payantes = Object.entries(ARBRE_RECHERCHE.offense)
+    .filter(([, e]) => e.unite > 0)
+    .map(([, e]) => e.unite);
+  assert.equal(Math.min(...payantes), 100, 'le Pionnier n\'est plus la moins chère');
+  const suivante = Math.min(...payantes.filter((v) => v > 100));
+  assert.equal(suivante, 200_000, 'la deuxième payante de l\'offense a changé de prix');
+
+  // ⚠ ET IL N'A PAS CHANGÉ DE PLACE. L'ordre d'affichage suit `Object.keys` et
+  // l'arbitrage du 30/08 le dit libre ; la table se lit encore par prix
+  // croissants sans qu'une ligne ait été déplacée.
+  const ordre = Object.keys(ARBRE_RECHERCHE.offense);
+  assert.equal(ordre.indexOf('belier'), 3, 'le Pionnier a été déplacé dans la table');
+  const prix = ordre.map((id) => ARBRE_RECHERCHE.offense[id].unite);
+  for (let i = 1; i < prix.length; i += 1) {
+    assert.ok(prix[i] >= prix[i - 1], `la table n'est plus croissante en ${ordre[i]}`);
+  }
+});
+
+test('RECH-É T2 — la défense et les deux modules du Pionnier n\'ont pas bougé', () => {
+  // ⚠ QUATRE NOMBRES PORTENT LE NOM « BÉLIER », ET UN SEUL A ÉTÉ ARBITRÉ. Un
+  // test qui ne regarderait que l'offense laisserait passer une modification
+  // collatérale — la plus facile à commettre étant un remplacement de texte qui
+  // frappe les deux branches.
+  assert.equal(ARBRE_RECHERCHE.defense.belier.unite, 940_000);
+  assert.equal(ARBRE_RECHERCHE.offense.belier.module, 80_000_000);
+  assert.equal(ARBRE_RECHERCHE.defense.belier.module, 14_000_000);
+
+  // ⚠⚠ ET LE RESTE DE L'ARBRE NON PLUS — mesuré sur la SOMME des deux colonnes
+  // de chaque branche, ce qu'aucune assertion pièce à pièce ne ferait sans
+  // recopier trente et une lignes. Une valeur déplacée n'importe où bouge la
+  // somme. Les quatre nombres ci-dessous sont ceux de l'arbre APRÈS le lot,
+  // relevés par exécution ; l'offense y a perdu exactement 12 400.
+  const somme = (branche, colonne) => Object.values(ARBRE_RECHERCHE[branche])
+    .reduce((t, e) => t + BigInt(e[colonne]), 0n);
+  assert.equal(somme('offense', 'unite'), 300_500_100n);
+  assert.equal(somme('offense', 'module'), 8_374_000_000n);
+  assert.equal(somme('defense', 'unite'), 1_061_715_000n);
+  assert.equal(somme('defense', 'module'), 9_988_200_000n);
+  // Et l'écart avec l'avant du lot est exactement le prix perdu par le Pionnier.
+  assert.equal(somme('offense', 'unite') + 12_400n, 300_512_500n,
+    'l\'offense a bougé ailleurs que sur le Pionnier');
+});
+
+test('RECH-É T3 — « il manque X points » ne sort plus de l\'écran', () => {
+  // ⚠ ETHAN, POINT 14 : « ne pas écrire "il manque x point" ». Le compteur du
+  // haut le dit déjà, et le point 16 le dit par la couleur du bouton.
+  const etat = partie('0');
+
+  // ⚠⚠ LE MONTAGE DOIT D'ABORD PROUVER QU'IL Y A QUELQUE CHOSE À TAIRE. À points
+  // suffisants, aucun refus de ce code ne serait produit et le test serait vert
+  // sur n'importe quel écran. On compte donc les lignes que le MOTEUR refuse
+  // pour cette raison-là avant de regarder ce que l'écran en fait.
+  let refusesFauteDePoints = 0;
+  for (const branche of BRANCHES) {
+    for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
+      for (const quoi of ['unite', 'module']) {
+        if (problemesDeLAchat(etat, branche, id, quoi)
+          .some((p) => p.code === 'pointsInsuffisants')) refusesFauteDePoints += 1;
+      }
+    }
+  }
+  assert.ok(refusesFauteDePoints >= 20,
+    `montage sans mordant : ${refusesFauteDePoints} refus de points seulement`);
+
+  // MONTAGE QUI LE FAIT TOMBER : retirer le filtre de `lignePourLAchat`.
+  for (const branche of BRANCHES) {
+    for (const ligne of lignesDeRecherche(etat, branche)) {
+      assert.doesNotMatch(ligne.unite.raison, /il manque/,
+        `${branche}/${ligne.id} : la pièce annonce encore le manque`);
+      if (ligne.module !== null) {
+        assert.doesNotMatch(ligne.module.raison, /il manque/,
+          `${branche}/${ligne.id} : le module annonce encore le manque`);
+      }
+    }
+  }
+
+  // ⚠ ET AUCUN `div.raison` VIDE NE SE PEINT. Une ligne qui n'avait que ce refus
+  // n'a plus rien à dire : un cadre vide laisserait un blanc que le joueur
+  // lirait comme un défaut.
+  const doc = fauxDocument();
+  initialiserEcranRecherche(doc).peindre(etat);
+  let raisonsVides = 0;
+  for (const branche of BRANCHES) {
+    for (const cadre of cadresDuPanneau(doc, branche)) {
+      for (const enfant of cadre.children) {
+        if (enfant.className === 'raison' && enfant.textContent === '') raisonsVides += 1;
+      }
+    }
+  }
+  assert.equal(raisonsVides, 0, 'des cadres portent une raison vide');
+});
+
+test('RECH-É T4 — le moteur, lui, dit toujours le manque', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UN LOT PARTI CORRIGER `src/sim/`. Le message
+  // est la source unique de vérité du refus et il sert ailleurs — le panneau de
+  // la base supplémentaire le porte aussi. Le filtre est dans l'ÉCRAN.
+  const etat = partie('0');
+  const pb = problemesDeLAchat(etat, 'offense', 'enclume', 'unite');
+  const manque = pb.find((p) => p.code === 'pointsInsuffisants');
+  assert.ok(manque, 'le moteur ne refuse plus faute de points');
+  assert.match(manque.message, /il manque/);
+
+  // Et l'autre chemin du même message n'a pas bougé non plus.
+  const pbBase = problemesDeLAchatDUneBase(etat);
+  assert.ok(pbBase.some((p) => p.code === 'pointsInsuffisants' && /il manque/.test(p.message)),
+    'le refus de la base supplémentaire a perdu son message');
+
+  // ⚠ ET LE FILTRE DE L'ÉCRAN PORTE SUR LE `code`, JAMAIS SUR LE TEXTE. Une
+  // comparaison sur la chaîne se casserait à la première reformulation du
+  // moteur, et personne ne saurait pourquoi la raison est revenue.
+  const ecran = readFileSync(new URL('../src/ui/recherche.js', import.meta.url), 'utf8');
+  assert.match(ecran, /p\.code !== 'pointsInsuffisants'/,
+    'l\'écran ne filtre plus sur le code du problème');
+  const CITATION = /['`"]il manque/;
+  assert.doesNotMatch(ecran, CITATION,
+    'l\'écran écrit le TEXTE du refus : il finira par filtrer sur la chaîne');
+  // Falsifiable : le motif attrape bien la faute qu'il cherche, et il ne se
+  // laisse pas abuser par la prose — aucun commentaire de ce fichier-là ne cite
+  // le message entre guillemets, et c'est une contrainte tenue exprès.
+  assert.match("if (p.message.startsWith('il manque')) return;", CITATION);
+  assert.match(readFileSync(new URL('../src/sim/recherche.js', import.meta.url), 'utf8'),
+    CITATION, 'le moteur a perdu le message : le lot est parti corriger `src/sim/`');
+});
+
+test('RECH-É T5 — les autres raisons survivent au filtre', () => {
+  // ⚠ UN FILTRE TROP LARGE PASSERAIT SANS CE TEST. `effetNonCable` dit une chose
+  // que le joueur ne peut PAS deviner de la couleur d'un bouton — la Garnison de
+  // l'Épervier n'a pas de moteur, et sa pièce est gratuite, donc acquise : ce
+  // refus-là s'affiche seul.
+  const etat = partie('0');
+  const ligne = lignesDeRecherche(etat, 'offense').find((l) => l.id === 'busard');
+  assert.equal(moduleEstCable(ligne.module.nom, 'offense'), false,
+    'montage sans mordant : ce module est câblé');
+  assert.match(ligne.module.raison, /n'a pas encore d'effet en jeu/);
+  assert.doesNotMatch(ligne.module.raison, /il manque/);
+
+  // Et l'ordre des deux achats, qui n'est pas non plus une affaire de couleur.
+  const enclume = lignesDeRecherche(etat, 'offense').find((l) => l.id === 'enclume');
+  assert.match(enclume.module.raison, /la pièce doit être débloquée avant son module/);
+  assert.doesNotMatch(enclume.module.raison, /il manque/);
+});
+
+test('RECH-É T6 — trois codes visuels, deux à deux distincts', () => {
+  // ⚠ ETHAN, POINT 16 : « une case normale quand la recherche est acquise, une
+  // case assombrie quand non acquise, une case assombrie mais le bouton
+  // d'acquisition couleur vive et contraste quand l'acquisition est possible ».
+  //
+  // ⚠⚠ LE MONTAGE PORTE LES TROIS CAS DANS UN SEUL ÉTAT. Un test à deux cas ne
+  // verrait pas le troisième code se confondre avec l'un des deux — et c'est
+  // exactement la faute qu'un `acquis ? A : B` commettrait.
+  const etat = partie(String(BigInt(ARBRE_RECHERCHE.offense.belier.unite) * 1000n));
+  const doc = fauxDocument();
+  initialiserEcranRecherche(doc).peindre(etat);
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const cadreDe = (id) => piecesDuPanneau(doc, 'offense')[ids.indexOf(id)];
+  const signature = (cadre) => {
+    const b = boutonDe(rangeeDuCadre(cadre));
+    return [cadre.className, b.className, b.disabled].join('|');
+  };
+
+  // Les trois cas sont bien ceux qu'on croit : le montage le prouve avant de
+  // comparer des chaînes.
+  assert.ok(estAcquise(etat, 'offense', 'meute'), 'montage : la Meute doit être acquise');
+  assert.deepEqual(problemesDeLAchat(etat, 'offense', 'belier', 'unite'), [],
+    'montage : le Pionnier doit être achetable');
+  assert.ok(problemesDeLAchat(etat, 'offense', 'enclume', 'unite').length > 0,
+    'montage : l\'Albatros doit être hors de portée');
+
+  const acquis = signature(cadreDe('meute'));
+  const achetable = signature(cadreDe('belier'));
+  const bloque = signature(cadreDe('enclume'));
+  assert.notEqual(acquis, achetable);
+  assert.notEqual(acquis, bloque);
+  assert.notEqual(achetable, bloque, 'l\'achetable ne se distingue pas du bloqué');
+
+  // Et la classe portée est bien celle que `etatDuCadre` nomme.
+  assert.ok(cadreDe('meute').classList.contains(CLASSE_DE_L_ETAT.acquis));
+  assert.ok(cadreDe('belier').classList.contains(CLASSE_DE_L_ETAT.achetable));
+  assert.ok(cadreDe('enclume').classList.contains(CLASSE_DE_L_ETAT.bloque));
+  assert.equal(etatDuCadre({ acquis: true, achetable: false }), 'acquis');
+  assert.equal(etatDuCadre({ acquis: false, achetable: true }), 'achetable');
+  assert.equal(etatDuCadre({ acquis: false, achetable: false }), 'bloque');
+  // ⚠ UN ACQUIS N'EST JAMAIS ACHETABLE, et l'ordre des deux tests le dit : si
+  // les deux drapeaux se contredisaient, c'est « acquis » qui l'emporte.
+  assert.equal(etatDuCadre({ acquis: true, achetable: true }), 'acquis');
+
+  // ⚠⚠ ET CHACUNE DES TROIS CLASSES A UNE RÈGLE DANS LA FEUILLE. La garde
+  // générale de `chantier.test.js` n'extrait que les LITTÉRAUX passés à
+  // `classList` ; celles-ci passent par une table, donc elle ne les voit pas.
+  // C'est le défaut livré du lot ÉCRAN-ACTIONS — une classe basculée que rien ne
+  // peint —, et il fallait le garder ici.
+  const feuille = feuilleDuJeu();
+  for (const classe of Object.values(CLASSE_DE_L_ETAT)) {
+    assert.ok(new RegExp(`\\.${classe}(?![a-zA-Z0-9_-])`).test(feuille),
+      `la classe « ${classe} » n'a aucune règle dans la feuille`);
+  }
+  assert.ok(!/\.bloquee(?![a-zA-Z0-9_-])/.test('.bloqueeee { }'),
+    'un préfixe de classe est accepté à tort');
+
+  // ⚠ ET L'ARMÉ RESTE DISTINCT DE L'ACHETABLE. Le bouton achetable est CERNÉ
+  // d'ambre, l'armé est REMPLI d'ambre et change de libellé. La feuille exclut
+  // donc l'armé de la règle de l'achetable, plutôt que de compter sur l'ordre
+  // des lignes — que personne ne relit.
+  assert.match(feuille, /\.piece\.achetable \.acheter:not\(\.arme\)/,
+    'la règle du bouton achetable écrase l\'armé');
+});
+
+test('RECH-É T7 — la pièce et son module ont des états indépendants', () => {
+  // ⚠ UNE PIÈCE ACQUISE DONT LE MODULE NE L'EST PAS DOIT MONTRER UNE CASE CLAIRE
+  // ET UNE CASE SOMBRE. MONTAGE QUI LE FAIT TOMBER : porter l'état de la pièce
+  // sur les deux cadres — ce que faisait l'ancien bloc unique, dont la classe
+  // `acquise` venait de `ligne.unite.acquis` seul.
+  const etat = partie('0');
+  assert.ok(estAcquise(etat, 'offense', 'meute'), 'montage : la Meute est gratuite');
+  assert.equal(moduleEstAcquis(etat, 'offense', 'meute'), false,
+    'montage : son module ne doit pas être acquis');
+
+  const doc = fauxDocument();
+  initialiserEcranRecherche(doc).peindre(etat);
+  const i = Object.keys(ARBRE_RECHERCHE.offense).indexOf('meute');
+  const piece = piecesDuPanneau(doc, 'offense')[i];
+  const module = modulesDuPanneau(doc, 'offense')[i];
+  assert.ok(piece.classList.contains(CLASSE_DE_L_ETAT.acquis));
+  assert.ok(module.classList.contains(CLASSE_DE_L_ETAT.bloque));
+  assert.notEqual(piece.className, module.className);
+
+  // Et le module bascule tout seul quand les points arrivent, la pièce ne
+  // bougeant pas : deux états, deux sources.
+  const riche = partie(String(BigInt(ARBRE_RECHERCHE.offense.meute.module) * 1000n));
+  const doc2 = fauxDocument();
+  initialiserEcranRecherche(doc2).peindre(riche);
+  assert.ok(piecesDuPanneau(doc2, 'offense')[i].classList.contains(CLASSE_DE_L_ETAT.acquis));
+  assert.ok(modulesDuPanneau(doc2, 'offense')[i].classList.contains(CLASSE_DE_L_ETAT.achetable));
+});
+
+test('RECH-É T8 — une pièce sans module ne fabrique pas de case vide', () => {
+  // ⚠⚠ AUCUNE DES TRENTE ET UNE ENTRÉES N'EST DANS CE CAS AUJOURD'HUI — la table
+  // le dit en toutes lettres. Le cas ne se monte donc que sur une ligne FORGÉE,
+  // et c'est pour lui que `cadresDeLaLigne` est une fonction pure et exportée.
+  const ligne = lignesDeRecherche(partie('0'), 'offense').find((l) => l.id === 'belier');
+  assert.ok(ligne.module !== null, 'montage sans mordant : cette ligne n\'a pas de module');
+  assert.equal(cadresDeLaLigne(ligne).length, 2);
+  assert.deepEqual(cadresDeLaLigne(ligne).map((c) => c.quoi), ['unite', 'module']);
+  assert.equal(cadresDeLaLigne({ ...ligne, module: null }).length, 1);
+  assert.deepEqual(cadresDeLaLigne({ ...ligne, module: null }).map((c) => c.quoi), ['unite']);
+
+  // ⚠ ET LE DOM LA LIT, SANS QUOI ELLE NE SERAIT QU'UN PROXY. Le panneau peint
+  // exactement autant de cadres que cette fonction en rend, ligne par ligne.
+  const doc = fauxDocument();
+  initialiserEcranRecherche(doc).peindre(partie('0'));
+  for (const branche of BRANCHES) {
+    const attendu = lignesDeRecherche(partie('0'), branche)
+      .reduce((t, l) => t + cadresDeLaLigne(l).length, 0);
+    assert.equal(cadresDuPanneau(doc, branche).length, attendu,
+      `le panneau ${branche} ne peint pas les cadres que la fonction rend`);
+  }
+});
+
+test('RECH-É T9 — la description est DÉRIVÉE, elle n\'est pas écrite', () => {
+  // ⚠⚠ ETHAN, POINT 17 : « rajouter brève description unités ». Le dépôt n'a
+  // aucune phrase par pièce, et en écrire trente et une reviendrait à trancher
+  // seul du contenu de jeu. La description se dérive donc de la CLASSE VISUELLE
+  // et de la colonne de dégâts DOMINANTE, par les deux tables que la légende du
+  // champ de bataille emploie déjà.
+  //
+  // ⚠ UN TEST SUR UNE SEULE UNITÉ NE DISTINGUERAIT PAS UNE DÉRIVATION D'UNE
+  // TABLE ÉCRITE À LA MAIN. Deux pièces de même classe et de même accent
+  // rendent donc la MÊME phrase — Fusiliers et Voltigeurs sont deux escouades
+  // anti-infanterie.
+  assert.equal(UNITES.meute.chassis, UNITES.guetteur.chassis);
+  assert.equal(UNITES.meute.specialite, UNITES.guetteur.specialite);
+  assert.equal(descriptionDeLaPiece('meute'), descriptionDeLaPiece('guetteur'));
+  assert.equal(descriptionDeLaPiece('meute'), 'Escouade · anti-infanterie');
+
+  // Et deux pièces qui diffèrent sur un seul des deux axes rendent deux phrases.
+  assert.notEqual(descriptionDeLaPiece('meute'), descriptionDeLaPiece('ratisseur'));
+  assert.notEqual(descriptionDeLaPiece('meute'), descriptionDeLaPiece('carapace'));
+
+  // ⚠⚠ ET LES NEUF OUVRAGES N'ONT NI `chassis` NI `specialite` — mesuré. C'est
+  // pourquoi les deux axes du brief ne pouvaient pas servir : la moitié de la
+  // branche défense n'aurait eu aucune description.
+  for (const id of Object.keys(DEFENSES)) {
+    assert.equal(DEFENSES[id].chassis, undefined, `${id} porte un châssis`);
+    assert.equal(DEFENSES[id].specialite, undefined, `${id} porte une spécialité`);
+  }
+  assert.equal(descriptionDeLaPiece('faucheuse'), 'Artillerie · anti-infanterie');
+  assert.equal(descriptionDeLaPiece('casemate'), 'Tourelle · anti-infanterie');
+
+  // ⚠ CE QUI NE TUE RIEN LE DIT AVEC LE MOT DE LA TABLE, jamais avec un vide.
+  assert.equal(DEFENSES.merlon.degats, null);
+  assert.equal(descriptionDeLaPiece('merlon'), 'Mur · ne tue rien');
+
+  // Un identifiant inconnu LÈVE : une description muette se lirait comme une
+  // pièce sans rôle.
+  assert.throws(() => descriptionDeLaPiece('raffinerie'), RangeError);
+});
+
+test('RECH-É T10 — les trente et une lignes portent leur description, à l\'écran', () => {
+  // ⚠ ASSERTER LA PRÉSENCE, JAMAIS `description !== id` : une dérivation peut
+  // légitimement tomber sur un mot qui ressemble au nom de la pièce.
+  const etat = partie('0');
+  let comptees = 0;
+  for (const branche of BRANCHES) {
+    for (const ligne of lignesDeRecherche(etat, branche)) {
+      assert.equal(typeof ligne.description, 'string');
+      assert.ok(ligne.description.length > 0, `${branche}/${ligne.id} n'a pas de description`);
+      comptees += 1;
+    }
+  }
+  assert.equal(comptees, 31, 'l\'arbre ne fait plus trente et une lignes');
+
+  // ⚠⚠ ET ELLE EST DANS LA CASE DE LA PIÈCE, SOUS SON NOM. « Dans le bouton
+  // recherche » se lit « sur la ligne » : le bouton porte déjà son prix ou
+  // « Acquis », et il est étroit. C'est une LECTURE, et elle est déclarée au
+  // rapport. La forme est celle que la description d'un module emploie depuis le
+  // lot RECHERCHE — même classe, même place.
+  const doc = fauxDocument();
+  initialiserEcranRecherche(doc).peindre(etat);
+  for (const branche of BRANCHES) {
+    const ids = Object.keys(ARBRE_RECHERCHE[branche]);
+    const cadres = piecesDuPanneau(doc, branche);
+    for (const [i, id] of ids.entries()) {
+      const dit = cadres[i].children.find((c) => c.className === 'description');
+      assert.ok(dit, `${branche}/${id} : la case ne porte pas de description`);
+      assert.equal(dit.textContent, descriptionDeLaPiece(id));
+    }
+  }
+  // Et le module garde la sienne, qui est écrite par Ethan dans `data/modules.js`.
+  const premier = modulesDuPanneau(doc, 'offense')[0];
+  const ditModule = premier.children.find((c) => c.className === 'description');
+  assert.ok(ditModule, 'le cadre du module a perdu sa description');
+  assert.equal(ditModule.textContent,
+    MODULES[lignesDeRecherche(etat, 'offense')[0].module.nom].description);
+});
+
+test('RECH-É T11 — tout hôte d\'une couche tournante est un ancêtre POSITIONNÉ', () => {
+  // ⚠⚠ CETTE GARDE EXISTE À CAUSE D'UN DÉFAUT LIVRÉ, ET ANTÉRIEUR À CE LOT-CI.
+  // Le lot SPRITES-V2-JOUEUR a sorti la tourelle du fond pour en faire un
+  // `<span class="couche-tournante">` en position ABSOLUE, dimensionné en
+  // POURCENTAGE de son premier ancêtre positionné. Son rapport nomme QUATRE
+  // règles de la feuille qui gagnaient `position: relative` — et il en manquait
+  // une cinquième, la vignette de CET écran. Mesuré dans Chromium sur un
+  // livrable bâti depuis `origin/main` : les tourelles de l'écran Recherche se
+  // peignaient de 153 × 265 à 403 × 699 pixels CSS, calées sur `#ecrans`,
+  // c'est-à-dire par-dessus toute la page. Aucun test ne pouvait le voir : une
+  // règle absente n'est pas du JS faux, et le dépôt n'a pas de navigateur.
+  //
+  // ⚠ CE QU'ON PEUT FAIRE SANS NAVIGATEUR : compter les hôtes. Une liste écrite
+  // à la main est ce qui a échoué ; celle-ci est ADOSSÉE au nombre d'appels de
+  // `poserCouches` dans `src/ui/`, donc un huitième point de pose fait tomber le
+  // test et oblige à nommer son hôte.
+  const HOTES = [
+    ['.posable i', 'la vignette de la palette du Chantier'],
+    ['.fantome', 'l\'aperçu de pose'],
+    ['.jeton', 'le jeton d\'une case de la base'],
+    ['#offense-palette .unite i', 'la vignette de la palette de l\'Offense'],
+    ['#ecran-offense .emplacement .piece,\n  #ecran-raid .emplacement .piece',
+      'la pièce d\'une vague, aux DEUX écrans qui partagent la règle'],
+    ['#ecran-recherche .sprite', 'la vignette de l\'arbre de recherche'],
+  ];
+
+  const feuille = feuilleDuJeu();
+  // La prémisse : sans `absolute`, la question du parent positionné ne se pose
+  // pas, et cette garde ne garderait rien.
+  const couche = feuille.slice(feuille.indexOf('.couche-tournante {'));
+  assert.match(couche.slice(0, couche.indexOf('}')), /position: absolute/,
+    'la couche tournante n\'est plus en position absolue : cette garde est sans objet');
+
+  // ⚠⚠ DÉCOMMENTÉ, ET C'EST LA FALSIFICATION QUI L'A EXIGÉ. Le premier jet
+  // lisait le bloc BRUT : retirer `position: relative` de la règle laissait la
+  // suite ENTIÈREMENT VERTE — 108 pass / 0 fail, mesuré —, parce que le
+  // commentaire qui explique la règle NOMME la déclaration pour raconter le
+  // défaut. C'est « une garde qui lit ma propre prose », que ce dépôt a déjà
+  // payée sept fois. Le témoin ci-dessous prouve que le filtre ne mange pas
+  // tout : il laisse une déclaration hors commentaire.
+  const sansProse = (texte) => texte.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.equal(sansProse('a /* position: relative */ b: 1;').trim(), 'a  b: 1;');
+  const bloc = (selecteur) => {
+    const i = feuille.indexOf(`${selecteur} {`);
+    assert.notEqual(i, -1, `la règle « ${selecteur} » a disparu de la feuille`);
+    return sansProse(feuille.slice(i, feuille.indexOf('}', i)));
+  };
+  for (const [selecteur, quoi] of HOTES) {
+    assert.match(bloc(selecteur), /position: relative/,
+      `${quoi} : « ${selecteur} » n'est pas positionné, la tourelle s'y peindra ailleurs`);
+  }
+  // Falsifiable : l'extraction voit bien l'absence, elle ne rend pas tout vrai.
+  assert.ok(!/position: relative/.test(sansProse('.x { /* position: relative */ width: 1px; }')));
+
+  // ⚠ ET LE COMPTE SE TIENT AU NOMBRE DE POINTS DE POSE. Deux des sept passent
+  // par la même règle — les vagues de l'Offense et du raid la partagent, ce
+  // qu'une autre garde du dépôt exige déjà —, d'où six hôtes pour sept appels.
+  let appels = 0;
+  for (const nom of readdirSync(new URL('../src/ui/', import.meta.url)).filter((n) => n.endsWith('.js'))) {
+    const code = readFileSync(new URL(`../src/ui/${nom}`, import.meta.url), 'utf8');
+    appels += (code.match(/^\s*poserCouches\(/gm) ?? []).length;
+  }
+  assert.equal(appels, 7, `sept poses attendues, ${appels} trouvées : nommer l'hôte de la nouvelle`);
+  assert.equal(HOTES.length, 6);
 });
