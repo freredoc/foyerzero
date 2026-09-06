@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.5 · build 106.
+Dernière révision : **06/09/2026**, version 0.99.6 · build 107.
 
 ---
 
@@ -42,7 +42,153 @@ Dernière révision : **06/09/2026**, version 0.99.5 · build 106.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot RECHERCHE-ÉCRAN), à confronter :**
+**Référence au 06/09/2026 (après le lot RETOUR-DE-RAID), à confronter :**
+`npm test` → **1173 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 997 324 octets**, 0 référence externe. Coût **+3 837 octets**, mesuré poste par
+poste contre un livrable rebâti depuis `origin/main` : **JavaScript +1 788 · feuille
++2 049 · balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part et
+d'autre**. Borne T10 inchangée à 9 300 000, marge **1 302 676 octets, 14,01 %**. Le
+lot touche `src/ui/raid.js`, `src/ui/offense.js`, `src/sim/state.js` et la feuille.
+⚠⚠ **UN RAID QUITTÉ EN COURS ATTERRIT SUR SON RAPPORT, ET L'ÉTAT N'ÉTAIT PAS EN
+CAUSE.** Ethan, point 11 : « je lance le raid, je quitte le jeu juste après, je
+reviens après 5 min. Le raid a figé et reprend, je dois attendre la fin. »
+`lancer` appelle `executerRaid` **avant la première image** — arbitrage « A » du
+01/09 —, donc le butin était versé, la cible entamée et les points dépensés : ce
+qui retenait le joueur était l'ANIMATION. Trois mécanismes s'y conjuguaient —
+`requestAnimationFrame` ne bat plus en arrière-plan, `ticksDus` plafonne le temps
+injecté à `PLAFOND_RATTRAPAGE_MS` puis à `TICKS_MAX_PAR_IMAGE` (**cinq minutes
+d'absence font avancer le déroulé d'une seconde au plus**), et `demarrerBoucle`
+remet `derniereImageMs` à `null` — et il n'y avait **aucune sortie** :
+`#raid-instantane` fait exactement ce qu'il faut, mais il vit dans
+`#raid-vitesses`, que `lancer` masque par `hidden = !simule`.
+⚠⚠ **QUATRE GARDES, ET LA TROISIÈME N'ÉTAIT PAS AU BRIEF — ELLE EST MESURÉE.** Le
+brief demandait `combat !== null && !combat.termine` ; or `ouvrir` monte DÉJÀ un
+combat pour montrer la cible, avec `vagues: []`, et **ce combat-là n'est pas
+terminé tant qu'aucun tick n'a tourné**. S'en tenir aux gardes du brief aurait
+donc résolu l'APERÇU chaque fois que le joueur quitte le jeu depuis la
+PRÉPARATION. `deroule` est exactement « un déroulé est en cours », et `RDR T3` le
+mesure sur le canevas : la scène ne doit pas être repeinte.
+⚠ **ET PAS DE BOUTON « PASSER » — ETHAN, MOT POUR MOT.** On emprunte le CHEMIN DE
+CODE d'« Instantané », extrait sous le nom `conclureLeDeroule` ; `#raid-vitesses`
+garde son `hidden = !simule`, et `RDR T4` fige l'arbitrage dans les deux sens.
+⚠ **LES DEUX PLAFONDS D'INTERPOLATION N'ONT PAS UNE LIGNE DE CHANGÉE**, et
+`src/ui/session.js` non plus : ses deux écouteurs — l'horloge économique et le
+`pagehide` — sont intacts. Le déroulé appartient à l'écran de raid.
+⚠⚠ **« RÉATTAQUER » REMET SUR LA CIBLE, IL N'ATTAQUE PLUS.** Point 8. Il appelait
+`lancer(false)` : un second raid partait sans que le joueur revoie sa cible ni sa
+composition. Le chemin d'entrée est EXTRAIT sous le nom `ouvrirSurLaCible` — deux
+appelants, la session et ce bouton —, et `ASSAUT T1` se RESSERRE : `lancer(false)`
+n'a plus qu'UN déclencheur au lieu de deux.
+⚠ **ET L'ÉTAT D'APRÈS-RAID EST RELU, PAS REJOUÉ.** `ouvrirSurLaCible` rebâtit son
+aperçu par `montageDuRaid(etat, siteDeLaCase(...))`. ⚠⚠ **LA GRILLE DES VAGUES NE
+DISCRIMINAIT PAS, ET LA PREMIÈRE ÉCRITURE DE `RDR T6` EST TOMBÉE DESSUS** :
+`lancer` repeint DÉJÀ les vagues après le raid, donc l'armée abîmée est à l'écran
+avant qu'on touche « Réattaquer ». Ce qui discrimine est la SCÈNE — les trois
+défenseurs du camp survivent tous mais à **52 % de leurs PV**, et la barre de vie
+est un rectangle dont la LARGEUR en dépend. Le test compare la trace du canevas,
+et prouve d'abord que deux ouvertures du même état la rendent IDENTIQUE.
+⚠⚠ **LA CIBLE S'OUVRE SUR LA DÉFENSE, À CHAQUE ENTRÉE.** Point 5.
+`BANDE_A_L_OUVERTURE` vaut `'defense'` et **se vérifie contre `BANDES_NAVIGABLES`
+au chargement du module** : une clé hors liste ferait rendre `basculeDeBande` la
+première bande venue, en silence. La valeur se pose dans `ouvrirSurLaCible`, donc
+à chaque entrée — `RDR T7` défait la bande avec le bouton avant de rouvrir, sans
+quoi une valeur posée une fois au câblage passerait.
+⚠ **ET « RÉATTAQUER » EN HÉRITE, CE QUI EST DIT ET NON DÉCOUVERT** : il repasse par
+le chemin d'entrée, donc il rouvre lui aussi sur la défense. Relevé à l'écran.
+⚠⚠ **LE NIVEAU D'UNE PIÈCE OFFENSIVE SE LIT ENFIN.** Point 21. Il était dans le
+`title`, et un `title` ne s'ouvre pas au doigt : `ACTIONS_ARMEE.ameliorer` a un
+moteur depuis le 03/09, donc le joueur montait une pièce sans jamais voir le
+résultat. **La convention est celle du jeton du Chantier, reprise à la lettre** —
+un `<span class="niveau">` en absolu dans le coin bas-droit, graisse 700, os
+`#F5F3E8` sur une ombre d'un pixel `#161914`. **Aucune teinte neuve.**
+⚠ **CE QUI CHANGE EST LA TAILLE, ET C'EST UNE CONSÉQUENCE.** Le Chantier écrit
+`max(11px, calc(var(--case-cote) / 3.2))` parce que SA case zoome de 36 à 128 px ;
+ces deux grilles-ci ne zooment pas. Relevé à l'écran : **case de 34,0 px à
+l'Offense, 36,9 px au raid** — la formule du Chantier y rend son PLANCHER, 11 px,
+et rien d'autre. C'est donc le plancher qui est écrit.
+⚠ **ET LES DEUX ÉCRANS PARTAGENT LA RÈGLE**, comme ils partagent déjà celle de
+`.piece`. `ERGO T6` change de cible et se RESSERRE : elle exigeait UNE règle de
+pastille dans toute la feuille, elle en exige deux — celle du jeton, et une
+SEULE pour les deux grilles de composition.
+⚠⚠ **ET LA DÉFENSE N'AVAIT PAS CE MANQUE — RELEVÉ, PAS CORRIGÉ.** `src/ui/defense.js`
+est un éditeur PUR et ne touche pas au DOM ; la bande Défense est peinte par
+`ui/chantier.js`, dans la MÊME boucle que les bâtiments, qui pose déjà
+`.jeton .niveau`. Le trou était propre aux deux grilles de vagues.
+⚠⚠ **DEUX PIÈCES SE PERMUTENT, ET UNE PERMUTATION N'EST PAS DEUX DÉPLACEMENTS.**
+Point 6. `permuterEffectif` et `problemesDeLaPermutationDEffectif` entrent dans
+`src/sim/state.js`. Enchaîner `deplacer(A → case de B)` puis l'inverse passerait
+par un état intermédiaire où deux pièces occupent la même case, et la première
+validation le refuserait — `superposition`, sur un geste légal. On construit donc
+l'état d'ARRIVÉE, une fois, et on le juge.
+⚠⚠ **ELLE REFUSE EN ENTIER, ET LE CAS EST RÉEL.** `obstacle` est dans
+`CODES_TOLERES_AU_CHARGEMENT` : le terrain se redéduit à chaque chargement, donc
+un rocher peut apparaître sous une pièce posée la veille. Permuter cette
+pièce-là ferait ARRIVER l'autre sur le rocher — et une demi-permutation laisserait
+la force dans un état que le chargement suivant refuserait. `RDR T10` le monte et
+prouve d'abord qu'une seule des deux arrivées est illégale.
+⚠ **ELLE NE COÛTE RIEN, ET SES INDICES NE BOUGENT PAS.** Les deux pièces sont
+modifiées EN PLACE — l'écran garde un indice EN MAIN entre les deux touchers du
+geste. ⚠ Et elle LÈVE sur deux fois le même indice : l'écran route ce cas-là vers
+le DÉPLACEMENT, où rester sur place est légal.
+⚠ **LE GESTE N'EST CÂBLÉ QUE SUR L'ARMÉE**, la garnison ayant son propre chantier
+d'interface. La fonction, elle, prend la force en paramètre comme ses voisines.
+⚠⚠ **DEUX FAUX DOCUMENTS ENTRENT, ET `test/offense.test.js` N'EN MONTAIT AUCUN.**
+Le point 11 porte sur un CYCLE DE VIE et le point 21 sur du DOM : « le code
+contient un écouteur » ne dit rien de ce que cet écouteur fait, et c'est le proxy
+que le dépôt a déjà payé quatre fois. Les deux faux sont écrits à la main sur le
+modèle de ceux de `chantier.test.js`, `recherche.test.js` et `monde.test.js` —
+**aucune dépendance n'entre**, `esbuild` reste la seule. ⚠ Ils LÈVENT sur tout
+identifiant que `src/index.src.html` ne déclare pas, donc ils gardent une seconde
+chose : que ni écran ne demande un élément que la page n'a pas.
+⚠ **ET ÉCRIRE `textContent` DOIT VIDER LES ENFANTS** — trouvé en le mesurant, pas
+en le relisant : les deux peintres repartent d'une grille vide par
+`hote.textContent = ''`, et un faux qui garderait ses enfants empilait quatre
+vagues de plus à chaque repeint, si bien que `RDR T6` comptait des cases mortes.
+⚠ **QUINZE FALSIFICATIONS, QUINZE CHUTES**, dont onze qui ne font tomber que leur
+test. ⚠⚠ **ET LA PREMIÈRE VERSION DE `F7` N'A PAS MORDU** : mémoriser le SITE ne
+change rien — l'objet ne porte que `{type, niveau, saveur, instance, rangee,
+colonne}`, et les dégâts vivent dans `etat.sitesEntames`, que `montageCourant`
+relit. C'est le MONTAGE qu'il fallait mémoriser, et la falsification a été
+reprise avant d'être comptée.
+⚠ **QUATORZE TESTS ENTRENT — `RDR T1` à `T11`, plus `T3 bis`, `T8 bis` et
+`T9 bis` — ET LE COMPTE PASSE DE 1 159 À 1 173.** Neuf dans
+`test/raid-ecran.test.js`, trois dans `test/state.test.js`, deux dans
+`test/offense.test.js`. **Aucune assertion n'a été retirée ni assouplie** ;
+**cinq gardes changent de cible et quatre se RESSERRENT** — `ASSAUT T1` passe de
+deux déclencheurs à un et nomme « Réattaquer » dans les deux sens, `ASSAUT T7` et
+`SON T24` suivent l'extraction en vérifiant les DEUX maillons, `ASSAUT T9` lit le
+chemin d'entrée NOMMÉ et exige que la méthode publique lui délègue, et `ERGO T6`
+passe d'une règle de pastille à deux dont une partagée.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE, SUR UNE VRAIE PARTIE CHARGÉE.**
+Pastilles de niveau : **11 px, graisse 700, `rgb(245, 243, 232)`**, boîte
+7,7 × 11 px (15,3 pour « 11 »), **toutes DANS leur case**, `scrollWidth` 360 pour
+un `clientWidth` de 360 — **zéro débordement**. Permutation au doigt : `v1c2=niv1`
+et `v2c3=niv3` deviennent `v1c2=niv3` et `v2c3=niv1`, **aucun refus**. Cible
+ouverte : la bascule dit « ▲ Aller à Chantier », donc **on est sur la défense**.
+Raid lancé puis page masquée : `#raid-bas` revient, `#raid-fin` s'ouvre avec ses
+**dix lignes**, `#raid-vitesses` reste caché. « Réattaquer » : rapport refermé,
+préparation rendue, bouton « ATTAQUER · 12 points » ré-armé. **Zéro erreur de
+page.** Cinq captures dans `rapports/`.
+⚠⚠ **LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ, TROISIÈME LOT DE SUITE.** Il
+pose 1 135 pass, 7 987 956 octets et 0.99.2 · build 103 ; mesuré au départ,
+**1 159 pass, 7 993 487 octets, 0.99.5 · build 106** — CARTE-B, CHANTIER-FICHES et
+RECHERCHE-ÉCRAN ont été mergés entre l'écriture du brief et son exécution. **Les
+faits dont le lot dépend étaient intacts**, vérifiés un par un. ⚠ Deux faits du
+brief sont périmés : la fonction s'appelle **`vueDeLOffense`**, pas
+`apercuDeLOffense` — ce nom n'existe nulle part au dépôt —, et **la palette fait
+quarante-et-une teintes, plus trente-trois**. Sans conséquence : le lot n'en
+ajoute aucune.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 26.** Pas un champ n'entre dans
+l'état : une permutation échange deux cases déjà sauvegardées, une pastille est un
+dessin, une bande d'ouverture et un écouteur vivent dans l'écran.
+⚠ **`src/sim/combat.js` N'A PAS UNE LIGNE DE CHANGÉE**, et `src/ui/session.js` non
+plus. Les points 7, 9 et 10 sont le lot COLONNE.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne. Les cinq captures du rapport vivent
+dans `rapports/`, hors de la chaîne.
+
+**Auparavant, après le lot RECHERCHE-ÉCRAN :**
 `npm test` → **1159 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 993 487 octets**, 0 référence externe. Coût **+4 630 octets**, mesuré poste par
 poste contre un livrable rebâti depuis `origin/main` : **JavaScript +209 · feuille
@@ -5726,6 +5872,22 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     repartir des dégâts neufs, sinon elle les efface au tick suivant.
   ⤷ ⚠ ET LE CLIQUET N'EST CASSÉ QUE CÔTÉ MOTEUR. `AUDIT-REPARATION.md` §4 tient
     encore pour le JOUEUR : aucun écran n'appelle `reparerUnBatiment`.
+  ⤷ ⚠⚠ `state.js` SAIT PERMUTER DEUX PIÈCES DEPUIS LE 06/09 — lot RETOUR-DE-RAID,
+    point 6 d'Ethan : « on peut permuter des unités lors du glisser déposer. »
+    `permuterEffectif` et `problemesDeLaPermutationDEffectif` vivent à côté de
+    `deplacerEffectif`, et prennent la force en paramètre comme leurs voisines.
+  ⤷ ⚠⚠ ET UNE PERMUTATION N'EST PAS DEUX DÉPLACEMENTS. Enchaîner
+    `deplacer(A → case de B)` puis l'inverse passerait par un état intermédiaire
+    où DEUX pièces occupent la même case, et la première des deux validations le
+    refuserait — `superposition`, sur un geste parfaitement légal. La fonction
+    construit l'état d'ARRIVÉE, une fois, et le juge.
+  ⤷ ⚠ ELLE REFUSE EN ENTIER, ET LE CAS EST RÉEL. `obstacle` est toléré au
+    chargement : un rocher peut apparaître sous une pièce posée la veille, donc
+    permuter cette pièce-là ferait ARRIVER l'autre dessus. Une demi-permutation
+    laisserait la force dans un état que le chargement suivant refuserait.
+  ⤷ ⚠ ELLE NE COÛTE RIEN, SES INDICES NE BOUGENT PAS — l'écran garde un indice EN
+    MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
+    l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
 src/render/             rendu, sans DOM non plus : rend des primitives — 12 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
@@ -5929,6 +6091,35 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
     légende du champ de bataille, jamais une seconde paire dans `src/data/`. Les
     trente et une phrases de saveur restent à écrire par Ethan ; la dérivation
     tient la place, et `RECH-É T9` tombera le jour où elles arriveront.
+  ⤷ ⚠⚠ UN RAID QUITTÉ EN COURS ATTERRIT SUR SON RAPPORT — lot RETOUR-DE-RAID,
+    06/09. `ui/raid.js` porte un `visibilitychange` À LUI : quand la page se
+    masque pendant un déroulé de VRAI raid, le combat se conclut sur-le-champ par
+    `conclureLeDeroule` — le chemin de `#raid-instantane`, EXTRAIT et non recopié
+    — et le joueur retrouve `#raid-fin`. L'état, lui, n'était pas en cause :
+    `executerRaid` a commis avant la première image.
+  ⤷ ⚠⚠ QUATRE GARDES, ET `deroule` EST CELLE QUI COMPTE. `ouvrir` monte DÉJÀ un
+    combat pour montrer la cible, avec `vagues: []`, et ce combat-là n'est pas
+    terminé tant qu'aucun tick n'a tourné : « combat non nul et non terminé » ne
+    suffit pas, il résoudrait l'APERÇU dès qu'on quitte le jeu en préparation.
+  ⤷ ⚠ `src/ui/session.js` N'A PAS UNE LIGNE DE CHANGÉE, ni les deux plafonds de
+    `render/interpolation.js` : le défaut n'était pas là, et les relever
+    remplacerait une attente par un gel à la reprise. Et **pas de bouton
+    « passer »** — Ethan, mot pour mot : `#raid-vitesses` reste au simulateur.
+  ⤷ ⚠⚠ « RÉATTAQUER » REMET SUR LA CIBLE, IL N'ATTAQUE PLUS. Il appelait
+    `lancer(false)` ; il repasse par `ouvrirSurLaCible`, le chemin d'entrée
+    NOMMÉ, qui relit `siteDeLaCase` — donc la défense telle que le raid l'a
+    laissée. `lancer(false)` n'a plus qu'UN déclencheur, `#raid-attaquer`.
+  ⤷ ⚠⚠ ET UNE CIBLE S'OUVRE SUR LA DÉFENSE, À CHAQUE ENTRÉE.
+    `BANDE_A_L_OUVERTURE` vaut `'defense'` et se vérifie contre
+    `BANDES_NAVIGABLES` au chargement du module. « Réattaquer » en hérite,
+    puisqu'il repasse par le même chemin — dit, et non découvert.
+  ⤷ ⚠⚠ LE NIVEAU D'UNE PIÈCE OFFENSIVE SE PEINT SUR SA CASE, dans les DEUX
+    grilles de vagues — Offense et raid —, sous une règle PARTAGÉE comme celle de
+    `.piece`. C'est la convention du jeton du Chantier, à la lettre ; ce qui
+    change est la taille, parce que ces grilles-ci ne zooment pas et que la
+    formule du Chantier y rend son plancher, 11 px. `ui/defense.js` n'avait pas
+    ce manque : il ne touche pas au DOM, et la bande Défense est peinte par
+    `ui/chantier.js`, qui pose déjà `.jeton .niveau`.
 
 src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT

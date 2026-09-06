@@ -32,8 +32,9 @@ import {
 import { BASE_BATIMENTS } from '../data/base.js';
 import {
   pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
-  poserEffectif, retirerEffectif, deplacerEffectif,
+  poserEffectif, retirerEffectif, deplacerEffectif, permuterEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
+  problemesDeLaPermutationDEffectif,
   problemesDeLAmeliorationDEffectif, ameliorerEffectif,
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
@@ -306,6 +307,19 @@ export const ACTIONS_ARMEE = {
       etat, 'armee', index, position,
     ),
     agir: (etat, index, position) => deplacerEffectif(etat, 'armee', index, position),
+    // ⚠⚠ LA CASE D'ARRIVÉE OCCUPÉE N'EST PLUS UN REFUS, C'EST UNE PERMUTATION —
+    // Ethan, 06/09 : « on peut permuter des unités lors du glisser déposer. »
+    // C'est le MÊME geste, avec une autre destination : il reste dans la même
+    // ligne de la table, sous deux champs de plus, plutôt que dans une cinquième
+    // action que rien ne déclencherait au bouton.
+    //
+    // ⚠ ET LE MOTEUR EST DANS `sim/state.js`, comme les quatre autres. Rien de
+    // la règle n'est réécrit ici : l'écran DEMANDE, puis AGIT si la liste est
+    // vide — la discipline que ce fichier applique déjà partout.
+    problemesDeLaPermutation: (etat, index, autre) => problemesDeLaPermutationDEffectif(
+      etat, 'armee', index, autre,
+    ),
+    permuter: (etat, index, autre) => permuterEffectif(etat, 'armee', index, autre),
   },
   retirer: {
     bouton: 'offense-retirer',
@@ -692,12 +706,41 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     if (apresPose) apresPose();
   }
 
-  /** Le second toucher d'un déplacement. */
+  /**
+   * Le second toucher d'un déplacement.
+   *
+   * ⚠⚠ SUR UNE CASE OCCUPÉE, ON PERMUTE — Ethan, 06/09 : « on peut permuter des
+   * unités lors du glisser déposer. » Le geste ne change pas : on prend, on
+   * dépose. Ce qui change est ce que « déposer sur une case prise » veut dire —
+   * c'était un refus, c'est un échange.
+   *
+   * ⚠ SUR SA PROPRE CASE, ON DÉPLACE, ET ÇA RESTE LÉGAL. `problemesDeLEffectif`
+   * ignore la pièce qu'on bouge, donc rester sur place rend une liste vide et le
+   * joueur garde son annulation. Router ce cas-là vers la permutation la ferait
+   * lever : une pièce ne se permute pas avec elle-même.
+   */
   function deposerLaPieceEnMain(vague, colonne) {
     const index = enMain;
     const action = ACTIONS_ARMEE.deplacer;
     enMain = null;
     ligneDeMode('');
+    const occupant = baseCourante(etatCourant).armee.findIndex(
+      (p) => p.vague === vague && p.colonne === colonne,
+    );
+    if (occupant !== -1 && occupant !== index) {
+      const refus = action.problemesDeLaPermutation(etatCourant, index, occupant);
+      if (refus.length > 0) {
+        toast(messageDeRefus(refus));
+        peindre(etatCourant);
+        return;
+      }
+      // ⚠ UNE PERMUTATION NE COÛTE RIEN NON PLUS : les deux mêmes pièces, aux
+      // mêmes niveaux, changent de case. Le budget engagé est identique.
+      action.permuter(etatCourant, index, occupant);
+      peindre(etatCourant);
+      if (apresPose) apresPose();
+      return;
+    }
     const problemes = action.problemes(etatCourant, index, { vague, colonne });
     if (problemes.length > 0) {
       toast(messageDeRefus(problemes));
@@ -867,6 +910,25 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
           poserCouches(piece, couchesDeLUniteDAssaut(occupant.id));
           element.appendChild(piece);
           element.title = `${occupant.nom} — niveau ${occupant.niveau}`;
+          // ⚠⚠ LE NIVEAU SE LIT SUR LA CASE — Ethan, 06/09 : « le niveau des
+          // unités offensives ne s'affiche pas dans l'ui ». Il était dans le
+          // `title` et nulle part ailleurs : `ACTIONS_ARMEE.ameliorer` a un
+          // moteur depuis le 03/09, donc le joueur pouvait monter une pièce d'un
+          // niveau sans jamais voir le résultat de son geste.
+          //
+          // ⚠ AUCUN CALCUL ICI : le nombre vient de ce que rend `vueDeLOffense`,
+          // qui le lit sur la pièce. Le reprendre depuis `baseCourante(etat).armee`
+          // serait la seconde vérité que §4 de `CLAUDE.md` interdit.
+          //
+          // ⚠ ET C'EST LA CONVENTION DU JETON DU CHANTIER, REPRISE ET NON
+          // RÉINVENTÉE : un `<span class="niveau">` posé en absolu dans le coin
+          // bas-droit, en os sur une ombre d'un pixel. Une troisième façon
+          // d'écrire un niveau apprendrait au joueur deux grammaires pour la
+          // même grandeur.
+          const niveau = doc.createElement('span');
+          niveau.className = 'niveau';
+          niveau.textContent = String(occupant.niveau);
+          element.appendChild(niveau);
         } else {
           element.removeAttribute('title');
         }

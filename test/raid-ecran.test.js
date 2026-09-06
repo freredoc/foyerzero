@@ -17,11 +17,14 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { libelleDAttaque, vueDuRaid, plafondDuZoom } from '../src/ui/raid.js';
+import {
+  libelleDAttaque, vueDuRaid, plafondDuZoom,
+  initialiserEcranRaid, BANDE_A_L_OUVERTURE,
+} from '../src/ui/raid.js';
 import { calculerProjection } from '../src/render/projection.js';
 import { MUR_CASES, BANDE_SOUS_LE_MUR } from '../src/render/fond.js';
 import {
-  BANDES, casesDeLaBande, bornesDuDecalage, bornesDuDecalageX,
+  BANDES, casesDeLaBande, bornesDuDecalage, bornesDuDecalageX, basculeDeBande,
 } from '../src/render/bandes.js';
 import { GRILLE } from '../src/data/combat.js';
 import { COTE_SPRITE } from '../src/data/atlas.js';
@@ -85,20 +88,34 @@ test('ASSAUT T1 — `lancer(false)` n\'est atteint que par deux boutons nommés'
     .filter(({ l }) => /lancer\(false\)/.test(l));
   assert.ok(chemins.length > 0, 'le montage ne mesure rien : plus aucun appel à lancer(false)');
 
-  // ⚠ « RÉ-ATTAQUER » RESTE, ET C'EST UNE DÉCISION. C'est un second raid décidé
-  // devant un RÉSULTAT, pas un geste accidentel : le panneau de fin couvre tout
-  // l'écran, et son bouton n'est vif que si `problemesDuRaid` est vide.
-  const permis = ['raid-attaquer', 'raid-reattaquer'];
+  // ⚠⚠ ELLE A CHANGÉ DE CIBLE AU LOT RETOUR-DE-RAID, ET ELLE SE RESSERRE : IL
+  // N'Y EN A PLUS QU'UN. Elle admettait DEUX déclencheurs — « Attaquer » et
+  // « Ré-attaquer » —, au motif que le second était « un second raid décidé
+  // devant un résultat ». Ethan, 06/09 : « bouton réattaquer remet sur la cible,
+  // pas d'attaque instantané. » Il ne dépense plus : il rouvre la préparation, et
+  // c'est « Attaquer » qui engage, comme la première fois.
+  const permis = ['raid-attaquer'];
   for (const { l } of chemins) {
     const parQui = permis.filter((id) => l.includes(`'${id}'`));
     assert.equal(parQui.length, 1,
-      `un chemin vers lancer(false) qui ne part ni de raid-attaquer ni de raid-reattaquer : ${l.trim()}`);
+      `un chemin vers lancer(false) qui ne part pas de raid-attaquer : ${l.trim()}`);
   }
   assert.deepEqual(
     chemins.map(({ l }) => permis.find((id) => l.includes(`'${id}'`))).sort(),
     [...permis].sort(),
-    'les deux déclencheurs attendus ne sont pas exactement ceux qu\'on trouve',
+    'le déclencheur attendu n\'est pas exactement celui qu\'on trouve',
   );
+
+  // ⚠⚠ ET « RÉ-ATTAQUER » EST NOMMÉ DE FACE, DANS LES DEUX SENS. Sans ces deux
+  // lignes, remettre `lancer(false)` dans son branchement ferait tomber la
+  // boucle ci-dessus par accident, avec un message qui parlerait d'autre chose ;
+  // et surtout, un bouton qui cesserait de rouvrir la cible passerait inaperçu.
+  const reattaquer = src.match(/brancher\('raid-reattaquer'[\s\S]*?\n {2}\}\);/);
+  assert.ok(reattaquer, 'raid-reattaquer a disparu');
+  assert.ok(!/lancer\(/.test(reattaquer[0]),
+    'raid-reattaquer engage de nouveau un raid : Ethan a dit « pas d\'attaque instantané »');
+  assert.match(reattaquer[0], /ouvrirSurLaCible\(etatCourant, cibleCourante\)/,
+    'raid-reattaquer ne remet plus le joueur sur sa cible');
 
   // Falsifiable : un troisième chemin est bien vu comme tel.
   const appat = "  brancher('raid-vitesse-1', () => lancer(false));";
@@ -334,11 +351,22 @@ test('ASSAUT T7 — le chrome revient par TOUS les chemins de fin', () => {
   const fins = [...src.matchAll(/finDuDeroule\(\)/g)];
   assert.ok(fins.length >= 4,
     `${fins.length} appels à finDuDeroule : la boucle, le pas-à-pas, l'instantané, et sa déclaration`);
-  for (const bouton of ['raid-pas', 'raid-instantane']) {
-    const bloc = src.match(new RegExp(`brancher\\('${bouton}'[\\s\\S]*?\\n {2}\\}\\);`));
-    assert.ok(bloc, `${bouton} a disparu`);
-    assert.match(bloc[0], /finDuDeroule\(\)/, `${bouton} ne passe pas par finDuDeroule`);
-  }
+  const pasAPas = src.match(/brancher\('raid-pas'[\s\S]*?\n {2}\}\);/);
+  assert.ok(pasAPas, 'raid-pas a disparu');
+  assert.match(pasAPas[0], /finDuDeroule\(\)/, 'raid-pas ne passe pas par finDuDeroule');
+  // ⚠⚠ « INSTANTANÉ » PASSE PAR UNE INDIRECTION DEPUIS LE LOT RETOUR-DE-RAID, ET
+  // LA GARDE LA SUIT. Son corps a été EXTRAIT sous le nom `conclureLeDeroule`,
+  // parce que le masquage de la page en a besoin lui aussi — et deux écritures
+  // voisines de « conclure un combat » divergeraient. Le test ne relâche rien :
+  // il vérifie que le bouton mène à la fonction, PUIS que la fonction mène à
+  // `finDuDeroule`. Une indirection qui perdrait la fin le ferait tomber.
+  const instantane = src.match(/brancher\('raid-instantane'[\s\S]*?\);/);
+  assert.ok(instantane, 'raid-instantane a disparu');
+  assert.match(instantane[0], /conclureLeDeroule\(\)/,
+    'raid-instantane ne conclut plus le déroulé');
+  const conclure = src.match(/function conclureLeDeroule\(\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(conclure, 'conclureLeDeroule a disparu');
+  assert.match(conclure[0], /finDuDeroule\(\)/, 'conclureLeDeroule ne passe pas par finDuDeroule');
   const boucle = src.match(/function image\(horodatageMs\) \{[\s\S]*?\n {2}\}/);
   assert.ok(boucle, 'la boucle d\'image a disparu');
   assert.match(boucle[0], /finDuDeroule\(\)/, 'la fin normale ne passe pas par finDuDeroule');
@@ -409,9 +437,18 @@ test('ASSAUT T9 — le bouton naît inerte, et il le dit', () => {
   assert.ok(iEteint >= 0 && iMinuterie > iEteint,
     'le bouton n\'est pas éteint avant que la minuterie ne parte');
   // Et il est ré-armé à CHAQUE entrée sur l'écran, pas une fois pour toutes.
-  const ouvrir = src.match(/ouvrir\(etat, cible, atlasFournis = null\) \{[\s\S]*?\n {4}\}/);
-  assert.ok(ouvrir, 'ouvrir a disparu');
+  //
+  // ⚠ LE CHEMIN D'ENTRÉE PORTE UN NOM DEPUIS LE LOT RETOUR-DE-RAID : il a deux
+  // appelants — la session, et « Réattaquer » —, donc la garde lit la fonction
+  // NOMMÉE, et exige au passage que la méthode publique lui délègue plutôt que
+  // de refaire une entrée à elle.
+  const ouvrir = src.match(/function ouvrirSurLaCible\([\s\S]*?\n {2}\}/);
+  assert.ok(ouvrir, 'ouvrirSurLaCible a disparu');
   assert.match(ouvrir[0], /armerLAttaque\(/, 'le bouton n\'est pas ré-armé à l\'entrée');
+  const methode = src.match(/ouvrir\(etat, cible, atlasFournis = null\) \{[^\n]*\}/);
+  assert.ok(methode, 'la méthode `ouvrir` a disparu');
+  assert.match(methode[0], /ouvrirSurLaCible\(etat, cible, atlasFournis\)/,
+    'la méthode `ouvrir` ne passe plus par le chemin d\'entrée commun');
 
   // ⚠ INERTE, ET QUI SE VOIT — et la teinte n'est pas une seconde.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
@@ -778,4 +815,430 @@ test('RAID-E T9 — un doigt promène, deux doigts zooment, et la pièce se glis
   assert.ok(!/transform\s*:/.test(raid), 'l\'écran de raid zoome par une transformation');
   assert.ok(!/ctx\.scale\(|setTransform\(/.test(raid),
     'l\'écran de raid met le contexte à l\'échelle au lieu de changer la case');
+});
+
+// ---------------------------------------------------------------------------
+// RETOUR-DE-RAID — points 5, 8, 11 et 21 d'Ethan, 06/09
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CES HUIT TESTS-CI MONTENT L'ÉCRAN POUR DE BON, ET C'EST NEUF DANS CE
+// FICHIER. Les onze tests du lot ASSAUT, plus haut, lisent la SOURCE et le
+// BALISAGE : c'était juste pour ce qu'ils gardent — quels boutons existent, quel
+// chemin mène où. Le point 11 d'Ethan, lui, porte sur un CYCLE DE VIE — un raid
+// masqué en cours de déroulé — et « le code contient un écouteur » ne dit rien de
+// ce que cet écouteur FAIT. Asserter la présence d'une ligne est le proxy que ce
+// dépôt a déjà payé quatre fois.
+//
+// ⚠ AUCUNE DÉPENDANCE N'ENTRE : le faux document est écrit à la main, sur le
+// modèle de ceux de `chantier.test.js`, `recherche.test.js` et `monde.test.js`.
+// `esbuild` reste la seule dépendance de développement (CLAUDE.md §3).
+
+/**
+ * Un document de papier qui porte exactement les identifiants de l'écran de
+ * raid — et LÈVE sur tout autre.
+ *
+ * ⚠⚠ IL GARDE DONC UNE SECONDE CHOSE : que l'écran ne demande aucun élément que
+ * `src/index.src.html` n'a pas. La liste est confrontée au balisage avant le
+ * montage, comme celle de `fauxDocumentMonde`.
+ */
+function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) {
+  const IDS = [
+    'raid-canvas', 'raid-titre', 'raid-avis', 'raid-bas', 'raid-vagues',
+    'raid-bandeau', 'raid-vitesses', 'raid-bascule-bande', 'raid-boutons',
+    'raid-attaquer', 'raid-simuler', 'raid-reattaquer', 'raid-tout-reparer',
+    'raid-reparer', 'raid-activer', 'raid-pas', 'raid-instantane',
+    'raid-sim', 'raid-sim-corps', 'raid-sim-fermer',
+    'raid-fin', 'raid-fin-corps', 'raid-fin-carte', 'raid-fin-base',
+    'raid-retour-carte', 'raid-retour-offense',
+    'raid-vitesse-1', 'raid-vitesse-2', 'raid-vitesse-4',
+  ];
+  const html = balisage();
+  for (const id of IDS) {
+    assert.match(html, new RegExp(`id="${id}"`), `« ${id} » n'est pas dans le balisage`);
+  }
+
+  /** Tout ce que le canevas a reçu — on n'en compte que le nombre. */
+  const appels = [];
+  const ctx = new Proxy({}, {
+    get(_, nom) {
+      if (nom === 'measureText') return () => ({ width: 40 });
+      return (...args) => { appels.push({ nom, args }); };
+    },
+    set(_, nom, valeur) { appels.push({ nom, args: [valeur] }); return true; },
+  });
+
+  const faire = (id) => {
+    const el = {
+      id,
+      tag: id,
+      hidden: false,
+      disabled: false,
+      title: '',
+      style: {},
+      dataset: {},
+      classes: new Set(),
+      children: [],
+      parent: null,
+      attributs: new Map(),
+      complete: true,
+      naturalWidth: 512,
+      clientWidth: largeurCss,
+      clientHeight: hauteurCss,
+      width: 0,
+      height: 0,
+      classList: {
+        add(...n) { for (const c of n) el.classes.add(c); },
+        remove(...n) { for (const c of n) el.classes.delete(c); },
+        contains(c) { return el.classes.has(c); },
+        toggle(c, force) {
+          const veut = force === undefined ? !el.classes.has(c) : force;
+          if (veut) el.classes.add(c); else el.classes.delete(c);
+          return veut;
+        },
+      },
+      set className(v) { el.classes = new Set(String(v).split(/\s+/).filter(Boolean)); },
+      get className() { return [...el.classes].join(' '); },
+      // ⚠⚠ ÉCRIRE `textContent` VIDE LES ENFANTS, ET C'EST LA MOITIÉ QUI COMPTE.
+      // Les deux peintres du dépôt commencent par `hote.textContent = ''` pour
+      // repartir d'une grille vide ; un faux qui garderait ses enfants ferait
+      // s'empiler quatre vagues à chaque repeint, et le test compterait des
+      // cases qui n'existent plus. Trouvé en le mesurant, pas en le relisant.
+      _texte: '',
+      set textContent(v) { el.children.length = 0; el._texte = String(v); },
+      get textContent() { return el._texte; },
+      appendChild(n) { el.children.push(n); n.parent = el; return n; },
+      append(...n) { for (const x of n) el.appendChild(x); },
+      querySelector: () => null,
+      setAttribute(nom, valeur) { el.attributs.set(nom, valeur); },
+      ownerDocument: null,
+      getContext: () => ctx,
+      getBoundingClientRect: () => ({ width: largeurCss, height: hauteurCss, left: 0, top: 0 }),
+      ecouteurs: new Map(),
+      addEventListener(type, fn) {
+        if (!el.ecouteurs.has(type)) el.ecouteurs.set(type, []);
+        el.ecouteurs.get(type).push(fn);
+      },
+      envoyer(type, evenement = {}) {
+        const fns = el.ecouteurs.get(type);
+        assert.ok(fns && fns.length > 0, `rien n'écoute « ${type} » sur ${el.id}`);
+        for (const fn of fns) fn(evenement);
+      },
+      setPointerCapture() {},
+    };
+    return el;
+  };
+
+  const parId = new Map(IDS.map((id) => [id, faire(id)]));
+  const ecouteursDoc = new Map();
+  // ⚠⚠ LE FAUX PORTE CE QUE LE CODE EMPLOIE VRAIMENT, IL NE L'ÉVITE PAS. Les
+  // fonds d'atlas passent par une règle de feuille PARTAGÉE depuis le correctif
+  // du freeze : `poserCouches` demande un `head`, un `createTextNode` et une vue
+  // qui rende la valeur d'une variable CSS. Les lui refuser ferait retomber
+  // l'écran sur un chemin de repli, donc exercer autre chose que ce qui est
+  // livré. Même choix qu'au faux document de `recherche.test.js`.
+  const doc = {
+    hidden: false,
+    head: faire('head'),
+    documentElement: faire('html'),
+    getElementById(id) {
+      if (!parId.has(id)) {
+        throw new Error(`faux document : « ${id} » n'est pas dans src/index.src.html`);
+      }
+      return parId.get(id);
+    },
+    createElement: (tag) => { const el = faire(tag); el.ownerDocument = doc; return el; },
+    createTextNode: (texte) => ({ textContent: String(texte) }),
+    addEventListener(type, fn) {
+      if (!ecouteursDoc.has(type)) ecouteursDoc.set(type, []);
+      ecouteursDoc.get(type).push(fn);
+    },
+    /** Rejoue un évènement de document — c'est ce qui masque la page. */
+    envoyer(type) {
+      const fns = ecouteursDoc.get(type);
+      assert.ok(fns && fns.length > 0, `rien n'écoute « ${type} » sur le document`);
+      for (const fn of fns) fn({});
+    },
+    aUnEcouteur(type) { return (ecouteursDoc.get(type) ?? []).length > 0; },
+    defaultView: {
+      devicePixelRatio: dpr,
+      requestAnimationFrame: () => { rafs.n += 1; return rafs.n; },
+      cancelAnimationFrame() {},
+      setTimeout: () => 1,
+      clearTimeout() {},
+      performance: { now: () => 0 },
+      // L'adresse rendue n'est pas une image, et elle n'a pas à l'être : le code
+      // s'en sert comme d'une CLÉ — deux atlas doivent donner deux règles, et
+      // une variable vide doit lever.
+      getComputedStyle: () => ({ getPropertyValue: (nom) => `url("${nom}")` }),
+    },
+  };
+  for (const el of parId.values()) el.ownerDocument = doc;
+  doc.head.ownerDocument = doc;
+  const rafs = { n: 0 };
+  return { doc, appels, parId, rafs };
+}
+
+/**
+ * Des atlas de papier pour toutes les familles, quelle qu'en soit la liste.
+ *
+ * ⚠ `executer` LÈVE SUR UNE FAMILLE ABSENTE — « une unité invisible est un
+ * défaut qu'on doit voir » —, et ce montage-ci ne mesure ni un sprite ni un
+ * cadrage : il mesure un cycle de vie. Écrire la liste des familles à la main la
+ * ferait vieillir au premier décor qui change, et le test tomberait pour une
+ * raison qui ne le regarde pas.
+ */
+function fauxAtlas() {
+  const image = { width: 512, height: 512, complete: true, naturalWidth: 512 };
+  return new Proxy({}, { get: () => image, has: () => true });
+}
+
+/** L'écran monté sur une partie prête à attaquer, et sa cible. */
+function ecranPret(options = {}) {
+  const { doc, appels, parId } = fauxDocumentRaid(options);
+  const etat = partieArmee();
+  const cible = premierCamp(etat);
+  const journal = { deroule: [] };
+  const ecran = initialiserEcranRaid(doc, {
+    pendantLeDeroule: (v) => journal.deroule.push(v),
+  });
+  ecran.ouvrir(etat, cible, fauxAtlas());
+  return {
+    doc, appels, parId, etat, cible, ecran, journal, $: (id) => parId.get(id),
+  };
+}
+
+test('RDR T1 — un VRAI raid masqué se conclut, et le joueur atterrit sur son rapport', () => {
+  // ⚠⚠ ETHAN, 06/09 : « je lance le raid, je quitte le jeu juste après, je
+  // reviens après 5 min : le raid a figé et reprend, je dois attendre la fin. »
+  const { doc, etat, $ } = ecranPret();
+  const rapportsAvant = etat.rapports.length;
+
+  $('raid-attaquer').envoyer('click');
+
+  // ⚠ LE MONTAGE PROUVE D'ABORD QU'IL MESURE QUELQUE CHOSE : un déroulé de VRAI
+  // raid est en cours, et aucun rapport n'est affiché. Sans ces trois lignes, un
+  // combat déjà terminé passerait le test sans que l'écouteur existe.
+  assert.equal(etat.rapports.length, rapportsAvant + 1, 'le montage n\'a pas lancé de raid');
+  assert.equal($('raid-bas').hidden, true, 'le montage n\'est pas dans un déroulé');
+  assert.equal($('raid-fin').hidden, true, 'le panneau de fin est déjà ouvert');
+  assert.equal($('raid-bandeau').hidden, true, 'le montage a lancé une SIMULATION');
+
+  // ⚠⚠ ET C'EST ICI QUE LE DÉFAUT VIVAIT : `requestAnimationFrame` ne rappelle
+  // jamais dans ce montage, exactement comme il cesse de battre quand la WebView
+  // passe à l'arrière-plan. Le déroulé est figé où il en était.
+  doc.hidden = true;
+  doc.envoyer('visibilitychange');
+
+  // ⚠⚠ LE COMBAT EST CONCLU, ET LE RAPPORT EST À L'ÉCRAN. `combat` ne sort pas du
+  // module — lui ouvrir un accesseur pour les besoins d'un test mettrait dans
+  // `src/` une porte que la production n'emploie pas —, donc on lit l'état du
+  // DÉROULÉ, qui est la conséquence exacte de sa fin : `finDuDeroule` appelle
+  // `quitterLeDeroule`, qui rend `#raid-bas`, puis `montrerResultat`.
+  assert.equal($('raid-fin').hidden, false, 'le joueur n\'atterrit pas sur son rapport');
+  assert.equal($('raid-bas').hidden, false, 'le déroulé n\'est pas fini');
+  assert.ok($('raid-fin-corps').children.length > 0, 'le rapport est vide');
+
+  // ⚠ ET AUCUN SECOND RAID N'A EU LIEU : on conclut l'animation, on ne rejoue rien.
+  assert.equal(etat.rapports.length, rapportsAvant + 1, 'le masquage a engagé un second raid');
+});
+
+test('RDR T2 — une SIMULATION masquée ne se conclut PAS', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UN ÉCOUTEUR ÉCRIT SANS SA GARDE. Une simulation
+  // ne commande rien à personne — le bandeau « SIMULATEUR » existe pour qu'on ne
+  // la confonde pas avec un ordre —, donc le joueur qui revient la reprend où il
+  // l'a laissée.
+  const { doc, etat, $ } = ecranPret();
+  const rapportsAvant = etat.rapports.length;
+
+  $('raid-simuler').envoyer('click');
+  assert.equal(etat.rapports.length, rapportsAvant,
+    'le montage a lancé un VRAI raid : il ne mesure pas ce qu\'il annonce');
+  assert.equal($('raid-bandeau').hidden, false, 'le bandeau SIMULATEUR n\'est pas levé');
+  assert.equal($('raid-bas').hidden, true, 'le montage n\'est pas dans un déroulé');
+
+  doc.hidden = true;
+  doc.envoyer('visibilitychange');
+
+  assert.equal($('raid-bas').hidden, true, 'la simulation a été conclue par le masquage');
+  assert.equal($('raid-sim').hidden, true, 'un rapport de simulation s\'est ouvert tout seul');
+  assert.equal($('raid-fin').hidden, true, 'le panneau du VRAI raid s\'est ouvert');
+});
+
+test('RDR T3 — masquer sans déroulé ne fait rien, préparation comprise', () => {
+  // ⚠⚠ LA SECONDE MOITIÉ DE CE TEST N'EST PAS AU BRIEF, ET C'EST LA PLUS UTILE.
+  // Il demandait `combat === null` ; or `ouvrir` monte DÉJÀ un combat pour
+  // montrer la cible, avec `vagues: []`, et ce combat-là n'est PAS terminé tant
+  // qu'aucun tick n'a tourné. S'en tenir à « combat non nul et non terminé »
+  // ferait donc conclure l'APERÇU chaque fois que le joueur quitte le jeu depuis
+  // la préparation. C'est `deroule` qui discrimine, et c'est ce que ce test-ci
+  // mesure.
+  const { doc, appels, $ } = ecranPret();
+  assert.equal($('raid-bas').hidden, false, 'le montage est déjà dans un déroulé');
+
+  // ⚠ L'OBSERVABLE EST LE CANEVAS : `conclureLeDeroule` finit par `dessiner()`.
+  // Si l'aperçu était résolu, la scène serait repeinte — et elle ne doit pas
+  // l'être, puisque rien ne s'est passé.
+  const avant = appels.length;
+  assert.ok(avant > 0, 'le montage n\'a rien peint : il ne mesure pas un repeint');
+  doc.hidden = true;
+  doc.envoyer('visibilitychange');
+  assert.equal(appels.length, avant, 'la préparation a été résolue par le masquage');
+  assert.equal($('raid-fin').hidden, true, 'un rapport s\'est ouvert sans raid');
+  assert.equal($('raid-sim').hidden, true, 'un rapport de simulation s\'est ouvert sans raid');
+
+  // Et sur un écran monté mais jamais ouvert, `combat` vaut `null` : rien non plus.
+  const vierge = fauxDocumentRaid();
+  initialiserEcranRaid(vierge.doc);
+  vierge.doc.hidden = true;
+  vierge.doc.envoyer('visibilitychange');
+  assert.equal(vierge.parId.get('raid-fin').hidden, true, 'un rapport sans combat');
+});
+
+test('RDR T3 bis — le retour de veille ne conclut rien non plus', () => {
+  // L'évènement se déclenche dans les DEUX sens : `doc.hidden` faux est le
+  // RETOUR, et il n'a rien à conclure.
+  const { doc, $ } = ecranPret();
+  $('raid-attaquer').envoyer('click');
+  assert.equal($('raid-bas').hidden, true, 'le montage n\'est pas dans un déroulé');
+  doc.hidden = false;
+  doc.envoyer('visibilitychange');
+  assert.equal($('raid-bas').hidden, true, 'le RETOUR de veille a conclu le raid');
+  assert.equal($('raid-fin').hidden, true, 'le RETOUR de veille a ouvert le rapport');
+});
+
+test('RDR T4 — `#raid-vitesses` reste caché sur un vrai raid : pas de bouton « passer »', () => {
+  // ⚠ ETHAN, 06/09, MOT POUR MOT : « bouton passer non ». On emprunte le CHEMIN
+  // DE CODE d'« Instantané », on n'expose pas son bouton.
+  const { $ } = ecranPret();
+  $('raid-attaquer').envoyer('click');
+  assert.equal($('raid-vitesses').hidden, true, 'les contrôles de vitesse sont apparus sur un vrai raid');
+  // Et ils reviennent bien pour le simulateur : la garde n'est pas un mur.
+  const b = ecranPret();
+  b.$('raid-simuler').envoyer('click');
+  assert.equal(b.$('raid-vitesses').hidden, false, 'le simulateur a perdu ses vitesses');
+});
+
+test('RDR T5 — « Réattaquer » n\'engage pas : il remet sur la cible', () => {
+  // ⚠⚠ ETHAN, 06/09 : « bouton réattaquer remet sur la cible, pas d'attaque
+  // instantané. » Il appelait `lancer(false)`.
+  const { doc, etat, $ } = ecranPret();
+  $('raid-attaquer').envoyer('click');
+  doc.hidden = true;
+  doc.envoyer('visibilitychange');
+  assert.equal($('raid-fin').hidden, false, 'le montage n\'a pas de rapport à fermer');
+
+  const rapportsApresRaid = etat.rapports.length;
+  const pointsApresRaid = etat.attaque.points;
+
+  $('raid-reattaquer').envoyer('click');
+
+  // ⚠ L'OBSERVABLE EST LE RAPPORT, PAS LE PANNEAU. « les panneaux sont fermés »
+  // passerait sur l'ancien code, qui les fermait avant de relancer :
+  // `executerRaid` EMPILE un rapport et DÉPENSE des points, et ni l'un ni
+  // l'autre ne bouge.
+  assert.equal(etat.rapports.length, rapportsApresRaid, '« Réattaquer » a engagé un second raid');
+  assert.equal(etat.attaque.points, pointsApresRaid, '« Réattaquer » a dépensé des points');
+  // Et l'écran est en PRÉPARATION : le rapport est refermé, la barre du bas est
+  // là, le bandeau du simulateur ne l'est pas.
+  assert.equal($('raid-fin').hidden, true, 'le rapport est resté ouvert');
+  assert.equal($('raid-bas').hidden, false, 'l\'écran n\'est pas revenu en préparation');
+  assert.equal($('raid-bandeau').hidden, true, 'le bandeau SIMULATEUR est apparu');
+});
+
+test('RDR T6 — « Réattaquer » relit l\'état d\'APRÈS le raid, il ne rejoue pas la vue d\'avant', () => {
+  // ⚠⚠ CE QUE CE TEST MESURE, ET POURQUOI CE N'EST PAS CE QUE LE BRIEF PROPOSAIT.
+  // Il demandait que « les points d'attaque affichés au retour diffèrent » : cet
+  // écran-ci n'affiche pas le SOLDE, il affiche le PRIX d'un raid, qui est
+  // fonction de la distance et du niveau du site — donc que le raid ne change
+  // pas. Écart déclaré au rapport.
+  //
+  // ⚠⚠ ET LA GRILLE DES VAGUES NE DISCRIMINE PAS NON PLUS — MESURÉ, ET C'EST LA
+  // PREMIÈRE ÉCRITURE DE CE TEST QUI EST TOMBÉE. `lancer` repeint DÉJÀ les vagues
+  // après le raid : l'armée abîmée est à l'écran avant même qu'on touche
+  // « Réattaquer », si bien qu'un test qui la compterait passerait sur un écran
+  // qui ne relit rien. Une falsification qui ne mord pas se vérifie avant d'être
+  // crue.
+  //
+  // ⚠⚠ CE QUI DISCRIMINE EST LA SCÈNE. `ouvrirSurLaCible` rebâtit son aperçu par
+  // `montageDuRaid(etat, siteDeLaCase(...))`, donc sur la défense TELLE QUE LE
+  // RAID L'A LAISSÉE — mesuré : les trois défenseurs du camp survivent tous, mais
+  // à 52 % de leurs PV, et `render/scene.js` peint une barre de vie dont la
+  // LARGEUR est proportionnelle aux PV. Le nombre de primitives ne bouge pas ;
+  // leurs arguments, si.
+  const { doc, appels, etat, cible, ecran, $ } = ecranPret();
+
+  const trace = () => appels.map((a) => `${a.nom}(${a.args.join(',')})`).join('|');
+  const peintureDe = (geste) => { appels.length = 0; geste(); return trace(); };
+
+  const avant = peintureDe(() => ecran.ouvrir(etat, cible, fauxAtlas()));
+  assert.ok(avant.length > 0, 'le montage ne peint rien : il ne mesure aucune scène');
+  // ⚠ LE MONTAGE PROUVE QUE LA DIFFÉRENCE N'EST PAS DU BRUIT : deux ouvertures
+  // du MÊME état rendent la MÊME scène, au caractère près.
+  assert.equal(peintureDe(() => ecran.ouvrir(etat, cible, fauxAtlas())), avant,
+    'deux ouvertures du même état ne rendent pas la même scène : le témoin est instable');
+
+  $('raid-attaquer').envoyer('click');
+  doc.hidden = true;
+  doc.envoyer('visibilitychange');
+  assert.equal($('raid-fin').hidden, false, 'le montage n\'a pas de rapport à fermer');
+
+  const apres = peintureDe(() => $('raid-reattaquer').envoyer('click'));
+  assert.ok(apres.length > 0, '« Réattaquer » ne peint plus rien');
+  assert.notEqual(apres, avant,
+    '« Réattaquer » rejoue la scène d\'AVANT le raid : la cible n\'est pas relue');
+});
+
+test('RDR T7 — une cible s\'ouvre sur la DÉFENSE, à CHAQUE entrée', () => {
+  // ⚠⚠ ETHAN, 06/09 : « ouverture de la cible : on voit la défense ennemie en
+  // 1er. »
+  const { etat, cible, ecran, $ } = ecranPret();
+  const attendue = basculeDeBande(BANDE_A_L_OUVERTURE);
+  assert.equal(BANDE_A_L_OUVERTURE, 'defense', 'la bande d\'ouverture n\'est plus la défense');
+  assert.equal($('raid-bascule-bande').title, attendue.libelle,
+    'la première cible ne s\'ouvre pas sur la défense');
+
+  // ⚠ ON DÉFAIT AVANT DE REFAIRE : sans ce toucher, une valeur posée UNE FOIS au
+  // câblage passerait le test. La bascule emmène sur l'autre bande.
+  $('raid-bascule-bande').envoyer('click');
+  assert.notEqual($('raid-bascule-bande').title, attendue.libelle,
+    'la bascule n\'a pas changé de bande : le montage ne défait rien');
+
+  // Une SECONDE entrée, sur une autre cible : elle doit s'ouvrir sur la défense.
+  const autre = baseCourante(etat).satellites.presents
+    .find((s) => s.rangee !== cible.rangee || s.colonne !== cible.colonne);
+  assert.ok(autre !== undefined, 'le montage n\'a pas de seconde cible');
+  ecran.ouvrir(etat, { rangee: autre.rangee, colonne: autre.colonne });
+  assert.equal($('raid-bascule-bande').title, attendue.libelle,
+    'la seconde cible ne s\'ouvre pas sur la défense');
+});
+
+test('RDR T8 — le niveau peint sur une vague vient de l\'aperçu, pas d\'un 1 en dur', () => {
+  // ⚠⚠ ETHAN, 06/09 : « le niveau des unités offensives ne s'affiche pas dans
+  // l'ui ». Il était dans le `title`, et un `title` ne s'ouvre pas au doigt.
+  //
+  // ⚠ LE MONTAGE MONTE UNE PIÈCE AU NIVEAU 3 : à niveau 1 partout, un « 1 »
+  // écrit en dur passerait.
+  const { doc, parId } = fauxDocumentRaid();
+  const etat = partieArmee();
+  baseCourante(etat).armee[0].niveau = 3;
+  baseCourante(etat).armee[1].niveau = 7;
+  const ecran = initialiserEcranRaid(doc);
+  ecran.ouvrir(etat, premierCamp(etat), fauxAtlas());
+
+  const cases = parId.get('raid-vagues').children
+    .flatMap((v) => v.children).flatMap((r) => r.children);
+  const occupees = cases.filter((c) => c.classList.contains('occupe'));
+  assert.equal(occupees.length, baseCourante(etat).armee.length,
+    'le montage ne peint pas toute l\'armée');
+  const niveaux = occupees.map((c) => {
+    const pastille = c.children.find((e) => e.classList.contains('niveau'));
+    assert.ok(pastille !== undefined, 'une case occupée ne porte pas son niveau');
+    return pastille.textContent;
+  });
+  assert.deepEqual(niveaux, baseCourante(etat).armee.map((p) => String(p.niveau)),
+    'les niveaux peints ne sont pas ceux de l\'armée');
+  // ⚠ ET UNE CASE VIDE N'EN PORTE PAS : la pastille n'est pas un décor de case.
+  for (const vide of cases.filter((c) => !c.classList.contains('occupe'))) {
+    assert.equal(vide.children.length, 0, 'une case vide porte une pastille de niveau');
+  }
 });

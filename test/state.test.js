@@ -20,6 +20,7 @@ import {
   FORCES, poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
   problemesDeLAmeliorationDEffectif, ameliorerEffectif, pointsEngages,
+  problemesDeLaPermutationDEffectif, permuterEffectif,
   niveauDeCommandement, niveauDuChantier, batimentDeProductionManquant,
 } from '../src/sim/state.js';
 import { budgetDuNiveau as budgetOffense, arsenalVide, poser as poserUnite } from '../src/ui/arsenal.js';
@@ -2005,4 +2006,122 @@ test('AMÉLIORER-PIÈCE — UN moteur pour les deux forces, et le barème vient 
   for (const [nom, f] of Object.entries(FORCES)) {
     assert.equal(typeof f.coutDeMontee, 'function', `la force « ${nom} » n'a pas de barème`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// RETOUR-DE-RAID — point 6 d'Ethan, 06/09 : « on peut permuter des unités
+// lors du glisser déposer »
+// ---------------------------------------------------------------------------
+
+/** Une base avec deux unités d'assaut posées à des cases distinctes. */
+function armeeDeDeux(graine = 77) {
+  const etat = creerEtat(graine);
+  poserEffectif(etat, 'armee', {
+    id: 'meute', vague: 1, colonne: 2, niveau: 3,
+  });
+  poserEffectif(etat, 'armee', {
+    id: 'ratisseur', vague: 3, colonne: 7, niveau: 5,
+  });
+  return etat;
+}
+
+test('RDR T9 — deux pièces échangent leurs cases, et personne ne disparaît', () => {
+  // ⚠⚠ ETHAN, 06/09 : « on peut permuter des unités lors du glisser déposer. »
+  // Déposer sur une case occupée était refusé — `superposition` — et le joueur
+  // devait d'abord sortir l'occupante.
+  const etat = armeeDeDeux();
+  const armee = baseCourante(etat).armee;
+  const avant = armee.map((p) => ({ id: p.id, vague: p.vague, colonne: p.colonne }));
+  assert.equal(avant.length, 2, 'le montage ne pose pas deux pièces');
+  assert.notDeepEqual(
+    { v: avant[0].vague, c: avant[0].colonne },
+    { v: avant[1].vague, c: avant[1].colonne },
+    'le montage pose les deux pièces au même endroit : il ne mesure aucun échange',
+  );
+
+  assert.deepEqual(problemesDeLaPermutationDEffectif(etat, 'armee', 0, 1), [],
+    'une permutation entre deux cases légales est refusée');
+  permuterEffectif(etat, 'armee', 0, 1);
+
+  // ⚠ CHACUNE PORTE LA CASE DE L'AUTRE — les deux, pas une. Un test qui ne
+  // regarderait qu'une pièce passerait sur une permutation qui en perd une.
+  assert.equal(armee[0].vague, avant[1].vague);
+  assert.equal(armee[0].colonne, avant[1].colonne);
+  assert.equal(armee[1].vague, avant[0].vague);
+  assert.equal(armee[1].colonne, avant[0].colonne);
+
+  // ⚠⚠ ET LES INDICES NE BOUGENT PAS. L'écran garde un indice EN MAIN entre les
+  // deux touchers du geste : réécrire la liste dans un autre ordre lui ferait
+  // viser, au geste suivant, une pièce qui n'est plus celle-là. C'est la même
+  // discipline que `deplacerEffectif`.
+  assert.equal(armee.length, 2, 'une pièce a disparu dans la permutation');
+  assert.equal(armee[0].id, avant[0].id, 'les pièces ont changé d\'indice');
+  assert.equal(armee[1].id, avant[1].id, 'les pièces ont changé d\'indice');
+  // Et rien d'autre de la pièce n'a bougé : ni son niveau, ni ses dégâts.
+  assert.equal(armee[0].niveau, 3);
+  assert.equal(armee[1].niveau, 5);
+
+  // ⚠ ET DEUX FOIS LE MÊME INDICE LÈVE : ce n'est pas un refus de jeu — l'écran
+  // route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
+  assert.throws(() => permuterEffectif(etat, 'armee', 0, 0), RangeError);
+  assert.throws(() => permuterEffectif(etat, 'armee', 0, 9), RangeError);
+});
+
+test('RDR T10 — une permutation dont UNE arrivée est illégale est refusée EN ENTIER', () => {
+  // ⚠⚠ C'EST LE TEST DE LA DEMI-PERMUTATION, ET LE CAS EST RÉEL. `obstacle` est
+  // dans `CODES_TOLERES_AU_CHARGEMENT` : le terrain se redéduit à chaque
+  // chargement, donc un rocher PEUT apparaître sous une pièce posée légalement
+  // la veille. Permuter cette pièce-là avec une autre ferait arriver l'autre sur
+  // le rocher — et une moitié de permutation laisserait la force dans un état
+  // que le chargement suivant refuserait.
+  //
+  // ⚠ LA GARNISON, PARCE QU'ELLE EST LA SEULE SUR LE TERRAIN. `permuterEffectif`
+  // prend la force en paramètre comme ses voisines ; le geste, lui, n'est câblé
+  // que sur l'armée dans ce lot.
+  const etat = creerEtat(2026);
+  const base = baseCourante(etat);
+  const rocher = base.obstacles.cases[0];
+  assert.ok(rocher !== undefined, 'le montage : cette graine ne pose aucun obstacle');
+  assert.ok(FORCES.garnison.surLeTerrain, 'la garnison a cessé d\'être sur le terrain');
+
+  // Une pièce SOUS le rocher — l'état toléré —, une autre sur une case libre.
+  const libre = { rangee: FORCES.garnison.axeMin, colonne: 1 };
+  assert.ok(!base.obstacles.cases.some(
+    (o) => o.rangee === libre.rangee && o.colonne === libre.colonne,
+  ), 'le montage : la case « libre » porte elle aussi un obstacle');
+  base.garnison.push({
+    id: 'merlon', rangee: rocher.rangee, colonne: rocher.colonne, niveau: 1, degatsMilli: 0,
+  });
+  base.garnison.push({
+    id: 'merlon', rangee: libre.rangee, colonne: libre.colonne, niveau: 1, degatsMilli: 0,
+  });
+
+  // ⚠ LE MONTAGE PROUVE D'ABORD SA PRÉMISSE : une seule des deux arrivées est
+  // illégale. Sans cette ligne, deux arrivées illégales passeraient le test
+  // sans rien dire de la moitié qu'on garde.
+  const problemes = problemesDeLaPermutationDEffectif(etat, 'garnison', 0, 1);
+  assert.equal(problemes.length, 1, `refus attendu : ${JSON.stringify(problemes)}`);
+  assert.equal(problemes[0].code, 'obstacle');
+
+  const avant = JSON.stringify(base.garnison);
+  assert.throws(() => permuterEffectif(etat, 'garnison', 0, 1), /permutation illégale/);
+  assert.equal(JSON.stringify(base.garnison), avant,
+    'la permutation refusée a quand même déplacé une pièce : demi-permutation');
+});
+
+test('RDR T11 — une permutation ne coûte rien', () => {
+  // ⚠ ETHAN, 28/08 : « déplacement gratuit, comme bâtiment ». Ce sont les mêmes
+  // pièces, aux mêmes niveaux, qui changent de case : rien n'est posé, rien
+  // n'est retiré.
+  const etat = armeeDeDeux();
+  const avant = pointsEngages(etat, 'armee');
+  assert.ok(avant > 0, 'le montage n\'engage aucun point : il ne mesure rien');
+  permuterEffectif(etat, 'armee', 0, 1);
+  assert.equal(pointsEngages(etat, 'armee'), avant, 'la permutation a changé le budget engagé');
+  // Et l'économie n'a pas bougé non plus : une permutation ne se paie pas.
+  assert.deepEqual(
+    baseCourante(etat).economie.ressources,
+    creerEtat(77).bases[0].economie.ressources,
+    'la permutation a débité une ressource',
+  );
 });
