@@ -293,6 +293,8 @@
   #ecran-raid .vague { margin-bottom: 3px; }
   #ecran-raid .emplacements { display: grid; gap: 2px; }
   #ecran-raid .emplacement {
+    /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — même motif qu'à l'Offense. */
+    position: relative;
     aspect-ratio: 1; background: #161914; border: 1px dashed #4E5742;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 6px; line-height: 1.1; text-align: center;
@@ -1544,6 +1546,11 @@
   #ecran-offense .emplacements .emplacement:first-child { grid-column: 1 / span 2; }
   #ecran-offense .emplacements.decalee .emplacement:first-child { grid-column: 2 / span 2; }
   #ecran-offense .emplacement {
+    /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — voir `.emplacement .niveau`.
+       La vignette, elle, garde son propre `relative` : c'est ELLE qui reste
+       l'ancêtre positionné de la couche tournante, et la pastille ne le lui
+       prend pas. */
+    position: relative;
     aspect-ratio: 1; background: #161914; border: 1px dashed #4E5742;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 7px; line-height: 1.1; text-align: center;
@@ -1584,6 +1591,35 @@
     height: calc(var(--jeton-part) * var(--jeton-grossissement));
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;
+  }
+
+  /* ⚠⚠ LE NIVEAU D'UNE PIÈCE OFFENSIVE SE LIT — Ethan, 06/09 : « le niveau des
+     unités offensives ne s'affiche pas dans l'ui ». Il était dans le `title`, et
+     un `title` ne s'ouvre pas au doigt.
+
+     ⚠⚠ C'EST LA CONVENTION DU JETON DU CHANTIER, REPRISE À LA LETTRE et non
+     réinventée : `.jeton .niveau` pose un nombre en absolu dans le coin
+     bas-droit, graisse 700, en os `#F5F3E8` sur une ombre d'un pixel `#161914`.
+     Aucune teinte neuve — les deux sont déjà celles de ce nombre-là ailleurs.
+
+     ⚠ CE QUI CHANGE EST LA TAILLE, ET C'EST UNE CONSÉQUENCE, PAS UN CHOIX. Le
+     Chantier écrit `max(11px, calc(var(--case-cote) / 3.2))` parce que SA case
+     zoome de 36 à 128 px. Ces deux grilles-ci ne zooment pas et n'ont pas de
+     `--case-cote` : à leurs tailles réelles — relevées à l'écran —, la formule
+     du Chantier rend son PLANCHER, 11 px, et rien d'autre. On écrit donc le
+     plancher, qui est exactement ce que la convention donne ici.
+
+     ⚠ EN `position: absolute`, DONC IL NE POUSSE RIEN. Les deux vignettes sont
+     calibrées au pixel — 84 % de la case, grossies de 20 % — et un nombre dans
+     le flux les déplacerait. Même raison qu'au Chantier.
+
+     ⚠ ET LA RÈGLE SERT LES DEUX ÉCRANS, comme celle de `.piece` juste au-dessus :
+     ce sont les mêmes pièces, dans la même grille de composition. */
+  #ecran-offense .emplacement .niveau,
+  #ecran-raid .emplacement .niveau {
+    position: absolute; right: 1px; bottom: 0;
+    font-size: 11px; font-weight: 700; line-height: 1;
+    color: #F5F3E8; text-shadow: 0 1px 0 #161914; pointer-events: none;
   }
   /* Le premier des deux touchers : l'unité est MONTRÉE, pas encore posée. Un
      liseré tireté et un mot éteint disent « pas encore là » — pas de

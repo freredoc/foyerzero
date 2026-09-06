@@ -1655,6 +1655,127 @@ export function deplacerEffectif(etat, force, index, position) {
 }
 
 /**
+ * Ce qui empêche d'échanger les positions de deux pièces de la même force.
+ * Liste vide = permutation légale.
+ *
+ * ⚠⚠ ETHAN, 06/09 : « on peut permuter des unités lors du glisser déposer. »
+ * Déposer une pièce sur une case occupée était REFUSÉ — `problemesDeLEffectif`
+ * rend `superposition` — et le joueur devait sortir l'occupante pour faire de la
+ * place. C'est le seul geste que ce lot ajoute à la composition.
+ *
+ * ⚠⚠ UNE PERMUTATION N'EST PAS DEUX DÉPLACEMENTS, ET C'EST TOUT L'INTÉRÊT DE
+ * CETTE FONCTION. Enchaîner `deplacer(A → case de B)` puis `deplacer(B → case de
+ * A)` passerait par un état intermédiaire où DEUX pièces occupent la même case,
+ * et la première des deux validations le refuserait — `superposition`, sur un
+ * geste parfaitement légal. On construit donc l'état d'ARRIVÉE, une fois, et on
+ * le juge.
+ *
+ * ⚠⚠ ET ELLE JUGE LES DEUX ARRIVÉES, DONC ELLE REFUSE EN ENTIER. Si l'une des
+ * deux cases est illégale POUR LA PIÈCE QUI Y ARRIVE — obstacle, vague hors
+ * bornes, colonne interdite —, la permutation entière tombe. Une demi-permutation
+ * laisserait la force dans un état que `verifierEtat` refuserait au chargement
+ * suivant, c'est-à-dire une partie rendue illisible par un geste accepté.
+ *
+ * ⚠ LES DOUBLONS SONT RETIRÉS, ET RIEN D'AUTRE. Les deux arrivées peuvent
+ * produire mot pour mot le même refus — deux obstacles, par exemple — et
+ * `messageDeRefus` les joindrait par un point-virgule : « cette case porte un
+ * obstacle ; cette case porte un obstacle ». La phrase répétée n'apprend rien de
+ * plus que la première. Le dédoublonnage porte sur le COUPLE code+message : deux
+ * refus de codes différents restent deux refus.
+ *
+ * ⚠ ET ELLE LÈVE SUR DEUX FOIS LE MÊME INDICE. Ce n'est pas un refus de jeu —
+ * une pièce n'a pas de raison de se permuter avec elle-même, et l'écran route ce
+ * cas-là vers le DÉPLACEMENT, où rester sur place est légal. Un appelant qui
+ * arrive ici avec deux fois le même indice s'est trompé de chemin, et c'est un
+ * fait de programme, comme un indice hors liste.
+ *
+ * @param {Etat} etat
+ * @param {string} force 'garnison' ou 'armee'
+ * @param {number} indexA
+ * @param {number} indexB
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLaPermutationDEffectif(etat, force, indexA, indexB) {
+  const f = exigerForce(force);
+  const base = baseCourante(etat);
+  exigerChamp(base, f.champ);
+  const liste = base[f.champ];
+  const a = liste[indexA];
+  const b = liste[indexB];
+  if (a === undefined) {
+    throw new RangeError(`permuterEffectif : indice ${indexA} hors de la ${f.quoi}`);
+  }
+  if (b === undefined) {
+    throw new RangeError(`permuterEffectif : indice ${indexB} hors de la ${f.quoi}`);
+  }
+  if (indexA === indexB) {
+    throw new RangeError(`permuterEffectif : deux fois l'indice ${indexA} en ${f.quoi}`);
+  }
+  // L'état d'ARRIVÉE, en entier : les deux pièces échangées, les autres intactes.
+  const apres = liste.map((piece, i) => {
+    if (i === indexA) return { ...a, [f.axe]: b[f.axe], colonne: b.colonne };
+    if (i === indexB) return { ...b, [f.axe]: a[f.axe], colonne: a.colonne };
+    return piece;
+  });
+  const obstacles = base.obstacles?.cases ?? [];
+  const tous = [
+    ...problemesDeLEffectif(force, apres, apres[indexA], indexA, obstacles),
+    ...problemesDeLEffectif(force, apres, apres[indexB], indexB, obstacles),
+  ];
+  const vus = new Set();
+  return tous.filter((p) => {
+    const signature = `${p.code}\u0000${p.message}`;
+    if (vus.has(signature)) return false;
+    vus.add(signature);
+    return true;
+  });
+}
+
+/**
+ * Échange les positions de deux pièces. Gratuit, comme le déplacement.
+ *
+ * ⚠ ELLE NE COÛTE RIEN — Ethan, 28/08 : « déplacement gratuit, comme bâtiment ».
+ * Le budget ne bouge pas d'un point : ce sont les MÊMES pièces, aux mêmes
+ * niveaux, qui changent de case. Rien n'est posé, rien n'est retiré.
+ *
+ * ⚠⚠ LES DEUX PIÈCES SONT MODIFIÉES EN PLACE, ET LEURS INDICES NE BOUGENT PAS.
+ * C'est la discipline de `deplacerEffectif` juste au-dessus, et elle compte
+ * doublement ici : l'écran garde un indice EN MAIN entre les deux touchers du
+ * geste, et réécrire la liste dans un autre ordre lui ferait viser une pièce qui
+ * n'est plus celle-là.
+ *
+ * ⚠ ET ELLE LÈVE SUR UN REFUS, comme `deplacerEffectif` : une permutation
+ * refusée est un fait de JEU que l'appelant doit DEMANDER d'abord, et montrer au
+ * joueur. Le chemin reste « problèmes → si vide, agir ; sinon, toast ».
+ *
+ * @param {Etat} etat modifié en place
+ * @param {string} force
+ * @param {number} indexA
+ * @param {number} indexB
+ * @returns {Etat} le même état
+ */
+export function permuterEffectif(etat, force, indexA, indexB) {
+  const f = exigerForce(force);
+  const problemes = problemesDeLaPermutationDEffectif(etat, force, indexA, indexB);
+  if (problemes.length > 0) {
+    throw new Error(
+      `permuterEffectif : permutation illégale en ${f.quoi} — `
+        + problemes.map((p) => p.message).join(' ; '),
+    );
+  }
+  const liste = baseCourante(etat)[f.champ];
+  const a = liste[indexA];
+  const b = liste[indexB];
+  const axeDeA = a[f.axe];
+  const colonneDeA = a.colonne;
+  a[f.axe] = b[f.axe];
+  a.colonne = b.colonne;
+  b[f.axe] = axeDeA;
+  b.colonne = colonneDeA;
+  return etat;
+}
+
+/**
  * Ce qui empêche de monter cette pièce d'un niveau. Liste vide = amélioration
  * légale.
  *

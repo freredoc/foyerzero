@@ -15,12 +15,12 @@ import {
   vagueDAssaut, vaguesDAssaut, unitesDeLaPalette, vueDeLOffense,
   SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
   ACTIONS_ARMEE, MESSAGES_MODE_ARMEE, messageDeDestinationDUnite, messageIndisponible,
-  couchesDeLUniteDAssaut,
+  couchesDeLUniteDAssaut, initialiserEcranOffense,
 } from '../src/ui/offense.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { couchesDeLEntite } from '../src/render/scene.js';
 import {
-  creerEtat, poser, poserEffectif, niveauDeCommandement,
+  creerEtat, poser, poserEffectif, niveauDeCommandement, pointsEngages,
 } from '../src/sim/state.js';
 import { acquisesDe } from '../src/sim/recherche.js';
 import { ligneAAfficher } from '../src/ui/chantier.js';
@@ -534,7 +534,7 @@ function baseAvecCommandement(niveau = 12) {
 }
 
 test('offense — la vue lit l\'armée de l\'état, case par case', () => {
-  const etat = baseAvecCommandement();
+  const etat = baseAvecCommandement(12);
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 3, niveau: 2 });
   poserEffectif(etat, 'armee', { id: 'fendeur', vague: 4, colonne: 9, niveau: 6 });
 
@@ -1009,4 +1009,225 @@ test('ERGO T8 — `ligneAAfficher` rend un TON, et aucune taille n\'est écrite 
   const normale = Number((feuille.match(/#offense-avis \{[^}]*font-size: (\d+)px/) ?? [])[1]);
   assert.ok(Number.isFinite(taille) && Number.isFinite(normale), 'les deux tailles doivent se lire');
   assert.ok(taille > normale, `refus à ${taille} px contre ${normale} px : ce n'est pas « plus gros »`);
+});
+
+// ---------------------------------------------------------------------------
+// RETOUR-DE-RAID — points 6 et 21 d'Ethan, 06/09, sur l'écran Offense
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE FICHIER NE MONTAIT AUCUN ÉCRAN, ET DEUX POINTS DE CE LOT-CI SONT DANS
+// LE DOM. Le niveau peint sur une case et le routage d'un dépôt vers la
+// permutation ne se lisent pas dans une fonction pure : asserter que la source
+// CONTIENT un appel prouve la ligne, pas le chemin — c'est le proxy que ce dépôt
+// a déjà payé quatre fois. Le faux document est écrit à la main, sur le modèle
+// de ceux de `chantier.test.js`, `recherche.test.js`, `monde.test.js` et
+// `raid-ecran.test.js` ; **aucune dépendance n'entre** (CLAUDE.md §3).
+
+/** Un document de papier qui porte exactement les identifiants de l'écran. */
+function fauxDocumentOffense() {
+  const IDS = [
+    'offense-vagues', 'offense-palette', 'offense-avis', 'offense-champ',
+    'offense-contexte', 'offense-selection-nom', 'offense-selection-detail',
+    'offense-ameliorer-cible', 'offense-reparer', 'offense-ameliorer',
+    'offense-deplacer', 'offense-retirer', 'offense-panneau',
+    'offense-panneau-titre', 'offense-panneau-corps', 'offense-panneau-fermer',
+    'offense-panneau-ameliorer',
+  ];
+  // ⚠ LA LISTE SE CONFRONTE AU BALISAGE, elle ne se croit pas sur parole : le
+  // faux garde donc aussi que l'écran ne demande rien que la page n'ait pas.
+  const html = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  for (const id of IDS) {
+    assert.match(html, new RegExp(`id="${id}"`), `« ${id} » n'est pas dans le balisage`);
+  }
+
+  const faire = (tag) => {
+    const el = {
+      tag,
+      hidden: false,
+      disabled: false,
+      type: '',
+      title: '',
+      style: {},
+      dataset: {},
+      classes: new Set(),
+      children: [],
+      parent: null,
+      _texte: '',
+      classList: {
+        add(...n) { for (const c of n) el.classes.add(c); },
+        remove(...n) { for (const c of n) el.classes.delete(c); },
+        contains(c) { return el.classes.has(c); },
+        toggle(c, force) {
+          const veut = force === undefined ? !el.classes.has(c) : force;
+          if (veut) el.classes.add(c); else el.classes.delete(c);
+          return veut;
+        },
+      },
+      set className(v) { el.classes = new Set(String(v).split(/\s+/).filter(Boolean)); },
+      get className() { return [...el.classes].join(' '); },
+      // ⚠ ÉCRIRE `textContent` VIDE LES ENFANTS : les deux peintres repartent
+      // d'une grille vide par `hote.textContent = ''`, et un faux qui garderait
+      // ses enfants ferait s'empiler quatre vagues à chaque repeint.
+      set textContent(v) { el.children.length = 0; el._texte = String(v); },
+      get textContent() { return el._texte; },
+      appendChild(n) { el.children.push(n); n.parent = el; return n; },
+      append(...n) { for (const x of n) el.appendChild(x); },
+      attributs: new Map(),
+      setAttribute(nom, valeur) { el.attributs.set(nom, valeur); },
+      removeAttribute(nom) { el.attributs.delete(nom); if (nom === 'title') el.title = ''; },
+      /** Remonte l'arbre, sur une classe — c'est tout ce que l'écran demande. */
+      closest(selecteur) {
+        const classe = selecteur.replace(/^\./, '');
+        let noeud = el;
+        while (noeud !== null) {
+          if (noeud.classes.has(classe)) return noeud;
+          noeud = noeud.parent;
+        }
+        return null;
+      },
+      ecouteurs: new Map(),
+      addEventListener(type, fn) {
+        if (!el.ecouteurs.has(type)) el.ecouteurs.set(type, []);
+        el.ecouteurs.get(type).push(fn);
+      },
+      envoyer(type, evenement = {}) {
+        const fns = el.ecouteurs.get(type);
+        assert.ok(fns && fns.length > 0, `rien n'écoute « ${type} » ici`);
+        for (const fn of fns) fn(evenement);
+      },
+    };
+    return el;
+  };
+
+  const parId = new Map(IDS.map((id) => [id, faire('div')]));
+  const doc = {
+    head: faire('head'),
+    documentElement: faire('html'),
+    getElementById(id) {
+      if (!parId.has(id)) {
+        throw new Error(`faux document : « ${id} » n'est pas dans src/index.src.html`);
+      }
+      return parId.get(id);
+    },
+    createElement: (tag) => { const el = faire(tag); el.ownerDocument = doc; return el; },
+    createTextNode: (texte) => ({ textContent: String(texte) }),
+    defaultView: {
+      getComputedStyle: () => ({ getPropertyValue: (nom) => `url("${nom}")` }),
+    },
+  };
+  for (const el of parId.values()) el.ownerDocument = doc;
+  doc.head.ownerDocument = doc;
+  return { doc, parId };
+}
+
+/** Les trente-six cases de la grille des vagues, à plat. */
+function casesDesVagues(parId) {
+  return parId.get('offense-vagues').children
+    .flatMap((vague) => vague.children)
+    .flatMap((rangee) => rangee.children);
+}
+
+/** La case d'une vague et d'une colonne. */
+function caseDe(parId, vague, colonne) {
+  const trouvee = casesDesVagues(parId).find(
+    (c) => c.dataset.vague === String(vague) && c.dataset.colonne === String(colonne),
+  );
+  assert.ok(trouvee !== undefined, `pas de case en vague ${vague}, colonne ${colonne}`);
+  return trouvee;
+}
+
+
+/**
+ * Un doigt sur une case de la grille des vagues.
+ *
+ * ⚠ L'ÉCOUTEUR EST DÉLÉGUÉ À `#offense-vagues`, PAS POSÉ SUR CHAQUE CASE — la
+ * grille se repeint à chaque geste, et un écouteur par case serait reposé
+ * trente-six fois par repeint. L'évènement part donc de l'hôte, avec la case
+ * pour cible, exactement comme le navigateur le livre.
+ */
+function toucher(parId, vague, colonne) {
+  parId.get('offense-vagues').envoyer('click', { target: caseDe(parId, vague, colonne) });
+}
+
+test('RDR T8 bis — le niveau d\'une pièce se lit sur sa case, et il vient de l\'aperçu', () => {
+  // ⚠⚠ ETHAN, 06/09 : « le niveau des unités offensives ne s'affiche pas dans
+  // l'ui ». Il était dans le `title`, et un `title` ne s'ouvre pas au doigt.
+  //
+  // ⚠ LE MONTAGE MONTE DEUX PIÈCES À DES NIVEAUX DIFFÉRENTS ET DIFFÉRENTS DE 1 :
+  // à niveau 1 partout, un « 1 » écrit en dur passerait le test.
+  const etat = baseAvecCommandement(12);
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 4 });
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 2, colonne: 5, niveau: 9 });
+  const { doc, parId } = fauxDocumentOffense();
+  const ecran = initialiserEcranOffense(doc);
+  ecran.peindre(etat);
+
+  const pastilleDe = (vague, colonne) => {
+    const trouvee = caseDe(parId, vague, colonne).children
+      .find((e) => e.classList.contains('niveau'));
+    return trouvee === undefined ? null : trouvee.textContent;
+  };
+  assert.equal(pastilleDe(1, 2), '4', 'la case ne porte pas le niveau de sa pièce');
+  assert.equal(pastilleDe(2, 5), '9', 'la seconde case ne porte pas le niveau de sa pièce');
+  // ⚠ ET UNE CASE VIDE N'EN PORTE PAS : la pastille n'est pas un décor de case.
+  assert.equal(pastilleDe(4, 9), null, 'une case vide porte une pastille de niveau');
+
+  // ⚠⚠ ET LE NOMBRE SUIT LE MOTEUR, IL N'EST PAS FIGÉ AU PREMIER PEINT. C'est
+  // ce qui manquait vraiment : `ACTIONS_ARMEE.ameliorer` a un moteur depuis le
+  // 03/09, et le joueur montait une pièce sans jamais voir le résultat.
+  ACTIONS_ARMEE.ameliorer.agir(etat, 0);
+  ecran.peindre(etat);
+  assert.equal(pastilleDe(1, 2), '5', 'la pastille ne suit pas l\'amélioration');
+});
+
+test('RDR T9 bis — déposer sur une case occupée PERMUTE, au lieu de refuser', () => {
+  // ⚠⚠ ETHAN, 06/09 : « on peut permuter des unités lors du glisser déposer. »
+  // Le geste ne change pas — on prend, on dépose ; ce qui change est ce que
+  // « déposer sur une case prise » veut dire.
+  const etat = baseAvecCommandement(12);
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 1 });
+  poserEffectif(etat, 'armee', { id: 'ratisseur', vague: 3, colonne: 7, niveau: 1 });
+  const { doc, parId } = fauxDocumentOffense();
+  const ecran = initialiserEcranOffense(doc);
+  ecran.peindre(etat);
+  const armee = baseCourante(etat).armee;
+  const engagesAvant = pointsEngages(etat, 'armee');
+
+  // Premier temps : on SÉLECTIONNE la pièce, puis on arme « Déplacer », qui la
+  // prend en main. C'est le chemin du doigt, pas un raccourci.
+  toucher(parId, 1, 2);
+  parId.get('offense-deplacer').envoyer('click');
+  toucher(parId, 1, 2);
+  assert.equal(parId.get('offense-avis').textContent,
+    messageDeDestinationDUnite(UNITES.meute.nom.joueur),
+    'la pièce n\'est pas en main : le montage ne mesure pas un dépôt');
+
+  // Second temps : on dépose sur la case OCCUPÉE par l'autre.
+  toucher(parId, 3, 7);
+
+  assert.equal(armee.length, 2, 'une pièce a disparu dans la permutation');
+  assert.deepEqual(
+    { v: armee[0].vague, c: armee[0].colonne }, { v: 3, c: 7 },
+    'la pièce en main n\'a pas pris la case de l\'autre',
+  );
+  assert.deepEqual(
+    { v: armee[1].vague, c: armee[1].colonne }, { v: 1, c: 2 },
+    'l\'occupante n\'a pas pris la case de la pièce en main',
+  );
+  // ⚠ ET LE REFUS D'AVANT A DISPARU : aucun toast ne s'est écrit.
+  assert.ok(!/occup/i.test(parId.get('offense-avis').textContent),
+    `le dépôt a été refusé : « ${parId.get('offense-avis').textContent} »`);
+  // ⚠ ET ÇA NE COÛTE RIEN.
+  assert.equal(pointsEngages(etat, 'armee'), engagesAvant, 'la permutation a changé le budget');
+
+  // ⚠⚠ ET LE DÉPÔT SUR SA PROPRE CASE RESTE UN DÉPLACEMENT, PAS UNE PERMUTATION.
+  // Router ce cas-là vers l'échange le ferait LEVER — une pièce ne se permute
+  // pas avec elle-même — et le joueur perdrait son annulation.
+  parId.get('offense-deplacer').envoyer('click');
+  toucher(parId, 3, 7);
+  toucher(parId, 3, 7);
+  assert.deepEqual(
+    { v: armee[0].vague, c: armee[0].colonne }, { v: 3, c: 7 },
+    'reposer une pièce sur sa propre case ne la laisse plus en place',
+  );
 });

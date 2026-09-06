@@ -89,6 +89,23 @@ import { couchesDeLUniteDAssaut } from './offense.js';
 export const NB_VAGUES = EMPLACEMENTS_ASSAUT.vagues;
 export const NB_COLONNES = EMPLACEMENTS_ASSAUT.parVague;
 
+/**
+ * La bande sur laquelle une cible s'ouvre — Ethan, 06/09 : « ouverture de la
+ * cible : on voit la défense ennemie en 1er. »
+ *
+ * ⚠ ELLE SE VÉRIFIE CONTRE `BANDES_NAVIGABLES` PLUTÔT QUE DE SE CROIRE. Une clé
+ * hors de cette liste ferait rendre `basculeDeBande` la première bande venue et
+ * l'écran s'ouvrirait ailleurs, en silence : c'est le seul mensonge que cette
+ * constante puisse dire, et il se dit au chargement du module, pas chez le
+ * joueur.
+ */
+export const BANDE_A_L_OUVERTURE = 'defense';
+if (!BANDES_NAVIGABLES.includes(BANDE_A_L_OUVERTURE)) {
+  throw new RangeError(
+    `ui/raid : « ${BANDE_A_L_OUVERTURE} » n'est pas une bande navigable`,
+  );
+}
+
 /** Le mot affiché pour chacun des trois verdicts. */
 export const LIBELLE_VERDICT = {
   'victoire-totale': 'Victoire totale',
@@ -713,6 +730,29 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     if (rapportCourant !== null) montrerResultat(rapportCourant, simulation);
   }
 
+  /**
+   * Résout ce qui reste du combat SUR-LE-CHAMP, puis montre le rapport.
+   *
+   * ⚠⚠ C'EST LE CHEMIN DE `#raid-instantane`, EXTRAIT ET NON RECOPIÉ. Deux
+   * appelants le demandent désormais — le bouton du simulateur et le masquage de
+   * la page (voir plus bas) —, et deux écritures voisines de « conclure un
+   * combat » divergeraient au premier ajustement, la seconde n'étant éprouvée
+   * par personne. Pas une ligne de son corps n'a changé en route.
+   *
+   * ⚠ ELLE NE DÉCIDE DE RIEN. Qui a le droit de l'appeler, et quand, se juge
+   * chez l'appelant : le bouton n'existe que pour le simulateur, l'écouteur
+   * porte ses quatre gardes. Une garde écrite ici les rendrait invisibles depuis
+   * les deux points d'appel.
+   */
+  function conclureLeDeroule() {
+    if (combat === null) return;
+    enPause = false;
+    arreterBoucle();
+    while (!combat.termine) tickCombat(combat);
+    dessiner();
+    finDuDeroule();
+  }
+
   // --- les panneaux de résultat ---------------------------------------------
   //
   // ⚠⚠ DEUX TAILLES, UN SEUL CONTENU. Les deux panneaux rendent
@@ -793,6 +833,16 @@ export function initialiserEcranRaid(doc, crochets = {}) {
           piece.className = 'piece';
           poserCouches(piece, couchesDeLUniteDAssaut(occupant.id));
           emplacement.appendChild(piece);
+          // ⚠⚠ ET LE NIVEAU AVEC — Ethan, 06/09 : « le niveau des unités
+          // offensives ne s'affiche pas dans l'ui ». Ce sont les MÊMES pièces
+          // que l'écran Offense, dans la même grille de composition : les
+          // écrire d'un côté seulement aurait laissé au joueur un écran où le
+          // niveau se lit et un autre où il ne se lit pas, pour une armée qui
+          // est la même. Le nombre vient de `vaguesDeLArmee`, qui le porte déjà.
+          const niveau = doc.createElement('span');
+          niveau.className = 'niveau';
+          niveau.textContent = String(occupant.niveau);
+          emplacement.appendChild(niveau);
         }
         cellules.set(cle(vague.numero, colonne), emplacement);
         rangee.appendChild(emplacement);
@@ -1133,7 +1183,30 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   brancher('raid-attaquer', () => lancer(false));
   brancher('raid-simuler', () => lancer(true));
-  brancher('raid-reattaquer', () => { fermerPanneaux(); lancer(false); });
+  // ⚠⚠ « RÉATTAQUER » REMET SUR LA CIBLE, IL N'ATTAQUE PAS — Ethan, 06/09 :
+  // « bouton réattaquer remet sur la cible, pas d'attaque instantané. » Il
+  // appelait `lancer(false)`, donc il engageait un second raid SANS que le
+  // joueur revoie sa cible ni sa composition. Il rend maintenant l'écran de
+  // préparation armé sur la même cible ; « Attaquer » reste à portée, et c'est
+  // lui qui engage.
+  //
+  // ⚠ LA CIBLE SE RELIT, ELLE NE SE RECOMPOSE PAS : `cibleCourante` est en
+  // mémoire, et on repasse par le chemin d'entrée déjà écrit plutôt que d'en
+  // écrire un second.
+  //
+  // ⚠⚠ ET L'ÉTAT A CHANGÉ, DONC L'ÉCRAN LE MONTRE. C'est `ouvrirSurLaCible` qui
+  // relit `siteDeLaCase` : la défense restante, les points d'attaque et
+  // `problemesDuRaid` ne sont plus ceux d'avant le raid. Rouvrir la vue d'AVANT
+  // mentirait au joueur sur ce qui l'attend.
+  //
+  // ⚠ ET IL HÉRITE DE LA BANDE D'OUVERTURE : il repasse par le chemin d'entrée,
+  // donc il ouvre lui aussi sur la défense. C'est cohérent — c'est ce qu'il
+  // reste à affronter — et c'est dit au rapport plutôt que découvert.
+  brancher('raid-reattaquer', () => {
+    if (etatCourant === null || cibleCourante === null) return;
+    fermerPanneaux();
+    ouvrirSurLaCible(etatCourant, cibleCourante);
+  });
 
   brancher('raid-sim-fermer', () => { $('raid-sim').hidden = true; });
   brancher('raid-fin-carte', () => { fermerPanneaux(); versEcran('monde'); });
@@ -1151,14 +1224,65 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     dessiner();
     if (combat.termine) finDuDeroule();
   });
-  brancher('raid-instantane', () => {
-    if (combat === null) return;
-    enPause = false;
-    arreterBoucle();
-    while (!combat.termine) tickCombat(combat);
-    dessiner();
-    finDuDeroule();
-  });
+  brancher('raid-instantane', () => { conclureLeDeroule(); });
+
+  // --- quitter le jeu pendant un vrai raid ----------------------------------
+  //
+  // ⚠⚠ UN RAID QUITTÉ EN COURS ATTERRIT SUR SON RAPPORT — Ethan, 06/09 : « je
+  // lance le raid, je quitte le jeu juste après, je reviens après 5 min : le
+  // raid a figé et reprend, je dois attendre la fin. »
+  //
+  // ⚠⚠ ET L'ÉTAT N'EST PAS EN CAUSE, C'EST LE PREMIER FAIT À DIRE. `lancer`
+  // appelle `executerRaid` AVANT la première image — arbitrage « A » du 01/09,
+  // écrit en tête de `rejouer`. Le butin est versé, la cible est entamée, les
+  // points sont dépensés : ce qui retenait le joueur était l'ANIMATION, et rien
+  // d'autre. Trois mécanismes s'y conjuguaient : `requestAnimationFrame` ne bat
+  // plus en arrière-plan, `ticksDus` plafonne le temps injecté à
+  // `PLAFOND_RATTRAPAGE_MS` puis à `TICKS_MAX_PAR_IMAGE` — cinq minutes
+  // d'absence font avancer le déroulé d'une seconde au plus —, et
+  // `demarrerBoucle` remet `derniereImageMs` à `null`. Le joueur était enfermé
+  // pour les `dureeMaxCombatSec` secondes du combat, sans aucune sortie.
+  //
+  // ⚠ LES DEUX PLAFONDS NE BOUGENT PAS, ET LE DÉFAUT N'ÉTAIT PAS LÀ. Ils
+  // protègent de la spirale de la mort et du téléphone qui chauffe ; les relever
+  // remplacerait une attente de quatre-vingt-dix secondes par un gel de
+  // plusieurs secondes à la reprise.
+  //
+  // ⚠ ET PAS DE BOUTON « PASSER » — Ethan, 06/09, mot pour mot : « bouton passer
+  // non ». On emprunte le CHEMIN DE CODE de `#raid-instantane`, on n'expose pas
+  // son bouton : `#raid-vitesses` garde son `hidden = !simule`.
+  //
+  // ⚠⚠ QUATRE GARDES, ET AUCUNE N'EST FACULTATIVE.
+  //
+  // 1. `doc.hidden` — l'évènement se déclenche dans les DEUX sens, et le retour
+  //    n'a rien à conclure.
+  // 2. `!simulation` — une simulation ne commande rien à personne, et le bandeau
+  //    « SIMULATEUR » existe justement pour qu'on ne la confonde pas avec un
+  //    ordre. Quittée puis reprise, elle se reprend où elle en était.
+  // 3. `deroule` — ET C'EST LA GARDE QUE LE BRIEF NE DEMANDAIT PAS, mesurée :
+  //    `ouvrir` monte DÉJÀ un `combat` pour montrer la cible, avec `vagues: []`,
+  //    et ce combat-là N'EST PAS TERMINÉ tant qu'aucun tick n'a tourné. S'en
+  //    tenir à `combat !== null && !combat.termine` ferait donc tourner la boucle
+  //    d'aperçu à chaque fois que le joueur quitte le jeu depuis la PRÉPARATION :
+  //    la cible se figerait sur un combat conclu « attaquants », que le joueur
+  //    n'a pas lancé. `deroule` est exactement « un déroulé est en cours ».
+  // 4. `combat !== null && !combat.termine` — masquer l'écran alors que rien ne
+  //    tourne ne doit rien déclencher, et surtout pas un second `montrerResultat`
+  //    sur un rapport déjà affiché.
+  //
+  // ⚠ ET `src/ui/session.js` N'A PAS UNE LIGNE DE CHANGÉE. Il porte déjà son
+  // `visibilitychange`, qui suspend et reprend l'horloge économique, et son
+  // `pagehide`, qui sauvegarde. Le déroulé appartient à l'écran de raid : c'est
+  // lui qui en a un, donc c'est lui qui l'écoute.
+  if (typeof doc.addEventListener === 'function') {
+    doc.addEventListener('visibilitychange', () => {
+      if (doc.hidden !== true) return;
+      if (simulation) return;
+      if (!deroule) return;
+      if (combat === null || combat.termine) return;
+      conclureLeDeroule();
+    });
+  }
 
   if (typeof doc.defaultView?.ResizeObserver === 'function' && canvas !== null) {
     new doc.defaultView.ResizeObserver(() => { dimensionner(); dessiner(); }).observe(canvas);
@@ -1166,66 +1290,92 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   fermerPanneaux();
 
+  /**
+   * Entre sur une cible : la vue à neuf, les panneaux fermés, le bouton armé.
+   *
+   * ⚠⚠ ELLE EST NOMMÉE PARCE QU'ELLE A DEUX APPELANTS DEPUIS LE 06/09. La
+   * session y entre depuis la carte ; « Réattaquer » y REVIENT, sur la même
+   * cible. Recomposer cette entrée dans le bouton en aurait donné une seconde,
+   * voisine et non éprouvée — et c'est très exactement ce que le point 8
+   * demande d'éviter : « le bouton réattaquer remet sur la cible ».
+   */
+  function ouvrirSurLaCible(etat, cible, atlasFournis = null) {
+    etatCourant = etat;
+    cibleCourante = { rangee: cible.rangee, colonne: cible.colonne };
+    if (atlasFournis !== null) atlas = atlasFournis;
+    rapportCourant = null;
+    combat = null;
+    fondCourant = null;
+    // ⚠ LA VUE SE REMET À NEUF À CHAQUE CIBLE. Garder le zoom et la bande de
+    // la cible précédente ferait s'ouvrir un raid sur trois colonnes de la
+    // défense d'une autre base — un état que le joueur n'a pas demandé et
+    // qu'il ne peut pas relier à son geste.
+    //
+    // ⚠⚠ ET ELLE S'OUVRE SUR LA DÉFENSE — Ethan, 06/09 : « ouverture de la
+    // cible : on voit la défense ennemie en 1er. » C'est ce que le joueur va
+    // affronter, et c'est la seule bande dont l'état décide de son raid. Rien
+    // d'autre ne change : la bascule garde sa forme, sa place et sa teinte,
+    // seule sa valeur de départ bouge.
+    //
+    // ⚠ ELLE SE POSE ICI, DONC À CHAQUE ENTRÉE, ET PAS DANS L'INITIALISATION DU
+    // MODULE. Entrer dans une cible, revenir à la carte, entrer dans une autre :
+    // les trois doivent s'ouvrir sur la défense. Une valeur posée une seule fois
+    // au câblage n'aurait tenu que pour la première.
+    bandeCourante = BANDE_A_L_OUVERTURE;
+    coteVoulu = null;
+    decalageX = 0;
+    // ⚠ HORS BORNES, PAS ZÉRO, ET C'EST LE MÊME GESTE QU'`allerALaBande`. La
+    // borne basse de la Défense n'est pas le haut de la grille : `dimensionner`
+    // rabat `-Infinity` sur le `min` de la bande, quel qu'il soit, sans que ce
+    // code-ci ait à le recalculer.
+    decalageY = -Infinity;
+    marquerBascule();
+    fermerPanneaux();
+    desarmer();
+    peindreVagues();
+    const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
+    // ⚠⚠ LE PRIX SE PREND DANS `vueDuRaid`, ET NULLE PART AILLEURS. C'est
+    // elle qui appelle `coutDUnRaid`, une fois ; le libellé LIT ce qu'elle
+    // rend. Rappeler le barème ici donnerait deux nombres qui peuvent
+    // diverger — le motif de `ciblageOuvert` dans `ui/monde.js`.
+    //
+    // ⚠ ET LE PRIX NE BOUGE PAS TANT QU'ON RESTE SUR LA CIBLE : il est
+    // fonction de la distance et du niveau du site, que ni une réparation ni
+    // une activation ne changent. Il se peint donc à l'ouverture, comme le
+    // titre, et pas à chaque image.
+    armerLAttaque(vueDuRaid(etat, cibleCourante).cout);
+    const titre = $('raid-titre');
+    if (titre !== null && site !== null) {
+      titre.textContent = `${site.type} · niveau ${site.niveau}`
+        + ` · rangée ${site.rangee}, colonne ${site.colonne}`;
+    }
+    // ⚠ ON MONTRE LA CIBLE AVANT MÊME D'ATTAQUER : le montage courant, donc la
+    // garnison RÉELLE et les bâtiments à leurs PV du jour. Aucune information
+    // n'est cachée — arbitrage d'Ethan du 01/09.
+    if (site !== null) {
+      combat = creerCombat({ ...montageDuRaid(etat, site), vagues: [] });
+      // ⚠⚠ LE PROPRIÉTAIRE SE LIT SUR LE MONTAGE, JAMAIS `'ouvrage'` EN DUR.
+      // `sim/raid-ouvrage.js` monte des combats où la défense appartient au
+      // JOUEUR ; l'écrire en dur passerait le test d'aujourd'hui et donnerait
+      // un décor de l'Ouvrage à la base du joueur le jour où cet écran-là
+      // s'ouvrira. Même leçon que `pointsRecherche` au lot MODULES-E, et que
+      // le camp du mur au lot MURS-OUVRAGE.
+      //
+      // ⚠ ET CE JOUR-LÀ, LA CASE À PASSER SERA `fondation`, PAS LA CIBLE :
+      // c'est elle qui identifie une base du joueur, comme sur l'écran de la
+      // base. Ici la cible EST le site, qui ne se déplace pas.
+      fondCourant = fondDeLaBase(
+        combat.proprietaireDefense, site.type, site.rangee, site.colonne,
+      );
+      precedentes = prendrePositions(combat);
+      dimensionner();
+      dessiner();
+    }
+  }
+
   return {
     /** Entre dans l'écran de raid sur une cible. */
-    ouvrir(etat, cible, atlasFournis = null) {
-      etatCourant = etat;
-      cibleCourante = { rangee: cible.rangee, colonne: cible.colonne };
-      if (atlasFournis !== null) atlas = atlasFournis;
-      rapportCourant = null;
-      combat = null;
-      fondCourant = null;
-      // ⚠ LA VUE SE REMET À NEUF À CHAQUE CIBLE. Garder le zoom et la bande de
-      // la cible précédente ferait s'ouvrir un raid sur trois colonnes de la
-      // défense d'une autre base — un état que le joueur n'a pas demandé et
-      // qu'il ne peut pas relier à son geste.
-      bandeCourante = 'batiments';
-      coteVoulu = null;
-      decalageX = 0;
-      decalageY = 0;
-      marquerBascule();
-      fermerPanneaux();
-      desarmer();
-      peindreVagues();
-      const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
-      // ⚠⚠ LE PRIX SE PREND DANS `vueDuRaid`, ET NULLE PART AILLEURS. C'est
-      // elle qui appelle `coutDUnRaid`, une fois ; le libellé LIT ce qu'elle
-      // rend. Rappeler le barème ici donnerait deux nombres qui peuvent
-      // diverger — le motif de `ciblageOuvert` dans `ui/monde.js`.
-      //
-      // ⚠ ET LE PRIX NE BOUGE PAS TANT QU'ON RESTE SUR LA CIBLE : il est
-      // fonction de la distance et du niveau du site, que ni une réparation ni
-      // une activation ne changent. Il se peint donc à l'ouverture, comme le
-      // titre, et pas à chaque image.
-      armerLAttaque(vueDuRaid(etat, cibleCourante).cout);
-      const titre = $('raid-titre');
-      if (titre !== null && site !== null) {
-        titre.textContent = `${site.type} · niveau ${site.niveau}`
-          + ` · rangée ${site.rangee}, colonne ${site.colonne}`;
-      }
-      // ⚠ ON MONTRE LA CIBLE AVANT MÊME D'ATTAQUER : le montage courant, donc la
-      // garnison RÉELLE et les bâtiments à leurs PV du jour. Aucune information
-      // n'est cachée — arbitrage d'Ethan du 01/09.
-      if (site !== null) {
-        combat = creerCombat({ ...montageDuRaid(etat, site), vagues: [] });
-        // ⚠⚠ LE PROPRIÉTAIRE SE LIT SUR LE MONTAGE, JAMAIS `'ouvrage'` EN DUR.
-        // `sim/raid-ouvrage.js` monte des combats où la défense appartient au
-        // JOUEUR ; l'écrire en dur passerait le test d'aujourd'hui et donnerait
-        // un décor de l'Ouvrage à la base du joueur le jour où cet écran-là
-        // s'ouvrira. Même leçon que `pointsRecherche` au lot MODULES-E, et que
-        // le camp du mur au lot MURS-OUVRAGE.
-        //
-        // ⚠ ET CE JOUR-LÀ, LA CASE À PASSER SERA `fondation`, PAS LA CIBLE :
-        // c'est elle qui identifie une base du joueur, comme sur l'écran de la
-        // base. Ici la cible EST le site, qui ne se déplace pas.
-        fondCourant = fondDeLaBase(
-          combat.proprietaireDefense, site.type, site.rangee, site.colonne,
-        );
-        precedentes = prendrePositions(combat);
-        dimensionner();
-        dessiner();
-      }
-    },
+    ouvrir(etat, cible, atlasFournis = null) { ouvrirSurLaCible(etat, cible, atlasFournis); },
     peindre(etat) { etatCourant = etat; peindreVagues(); },
     // ⚠ QUITTER L'ÉCRAN REND LE CHROME. Sans cette ligne, changer d'onglet
     // pendant un déroulé laisserait la page sans onglets — donc sans moyen d'en

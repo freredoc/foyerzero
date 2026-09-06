@@ -4172,10 +4172,29 @@ test('ERGO T6 — la pastille de niveau grossit sans déplacer une seule barre',
   const graisse = regle[0].match(/font-weight: (\d+)/);
   assert.ok(Number(graisse[1]) >= 600, `graisse ${graisse[1]} : le nombre reste maigre sur le sprite`);
 
-  // ⚠ ET UNE SEULE RÈGLE PORTE LA PASTILLE — pas une par écran. C'est la
-  // consigne du brief : une famille, une règle.
-  assert.equal((feuille.match(/\.niveau \{/g) ?? []).length, 1,
-    'une seconde règle de pastille de niveau est apparue');
+  // ⚠⚠ ELLE A CHANGÉ DE CIBLE AU LOT RETOUR-DE-RAID, ET ELLE SE RESSERRE. Elle
+  // exigeait UNE règle de pastille dans toute la feuille — « une famille, une
+  // règle », vrai tant que la seule grandeur affichée était celle du jeton de la
+  // grille du Chantier. Ethan, 06/09 : « le niveau des unités offensives ne
+  // s'affiche pas dans l'ui », et il y a désormais DEUX sujets, pas deux copies :
+  // la grille du Chantier, qui ZOOME et dont la taille suit `--case-cote`, et
+  // les deux grilles de COMPOSITION — Offense et raid —, qui ne zooment pas.
+  //
+  // ⚠ CE QU'ELLE GARDE MAINTENANT EST PLUS FORT : les deux écrans de composition
+  // PARTAGENT leur règle, comme ils partagent déjà celle de `.piece`. Une règle
+  // par écran ferait deux pastilles qui divergent au premier ajustement, et la
+  // divergence se lirait comme deux tailles de nombre pour la même armée.
+  const reglesDeNiveau = feuille.match(/[^{}]*\.niveau \{[^}]*\}/g) ?? [];
+  assert.equal(reglesDeNiveau.length, 2,
+    `${reglesDeNiveau.length} règles de pastille de niveau : la feuille en attend deux`);
+  const composition = reglesDeNiveau.find((r) => !r.includes('.jeton .niveau'));
+  assert.ok(composition !== undefined, 'la règle des grilles de composition a disparu');
+  assert.match(composition, /#ecran-offense \.emplacement \.niveau/,
+    'la pastille des vagues ne vise plus l\'écran Offense');
+  assert.match(composition, /#ecran-raid \.emplacement \.niveau/,
+    'l\'écran de raid s\'est donné une seconde règle de pastille');
+  assert.match(composition, /position: absolute/,
+    'la pastille des vagues est entrée dans le flux : elle déplacerait la vignette');
 
   // La garde des 288 px vit plus haut dans ce fichier et n'a pas bougé : elle
   // somme les hauteurs FIXES des six barres, et aucune n'est touchée ici.

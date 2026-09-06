@@ -2055,8 +2055,17 @@ test('SON T24 — le déroulé sonne, le mode Instantané se tait par constructi
   // sans prendre d'instantané, exactement comme avant le lot. Un combat résolu
   // d'un coup n'a pas de déroulé, donc rien à sonner ; l'y brancher demanderait
   // cent cinquante coups de canon dans la même milliseconde.
-  const bloc = raid.match(/brancher\('raid-instantane', \(\) => \{([\s\S]*?)\n  \}\);/);
-  assert.ok(bloc !== null, 'le bouton Instantané a disparu');
+  // ⚠⚠ LE CORPS A ÉTÉ EXTRAIT AU LOT RETOUR-DE-RAID, ET LA GARDE SUIT SANS SE
+  // RELÂCHER. « Instantané » appelle désormais `conclureLeDeroule`, que le
+  // masquage de la page appelle aussi — un raid quitté en cours atterrit sur son
+  // rapport (Ethan, 06/09). Ce qui est gardé n'a pas changé d'un mot : ce chemin
+  // résout d'un bloc, et il ne relève RIEN. Il y a maintenant deux appelants
+  // muets au lieu d'un, ce qui rend cette assertion plus utile, pas moins.
+  const appel = raid.match(/brancher\('raid-instantane'[\s\S]*?\);/);
+  assert.ok(appel !== null, 'le bouton Instantané a disparu');
+  assert.match(appel[0], /conclureLeDeroule\(\)/, 'l\'Instantané ne conclut plus le déroulé');
+  const bloc = raid.match(/function conclureLeDeroule\(\) \{([\s\S]*?)\n  \}/);
+  assert.ok(bloc !== null, 'conclureLeDeroule a disparu');
   assert.ok(!bloc[1].includes('avancerDUnTick'), 'l\'Instantané relève le journal');
   assert.ok(!bloc[1].includes('relever('), 'l\'Instantané relève le journal');
   assert.ok(/while \(!combat\.termine\) tickCombat\(combat\);/.test(bloc[1]),
