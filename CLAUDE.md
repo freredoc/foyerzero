@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.1 · build 102.
+Dernière révision : **06/09/2026**, version 0.99.2 · build 103.
 
 ---
 
@@ -42,7 +42,148 @@ Dernière révision : **06/09/2026**, version 0.99.1 · build 102.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot COMPLEXE), à confronter :**
+**Référence au 06/09/2026 (après le lot RETOUR-DÉFENSES), à confronter :**
+`npm test` → **1135 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 987 956 octets**, 0 référence externe. Coût **+5 590 octets** contre un
+livrable rebâti depuis `origin/main`, mesuré poste par poste : **JavaScript
++5 214 · feuille +324 · balisage +52 · images +0 · audio +0**, et la somme des
+cinq postes tombe EXACTEMENT sur le total — **296 `data:` avant, 296 après**.
+Borne T10 inchangée à 9 300 000, marge **1 312 044 octets, 14,11 %**.
+⚠⚠ **LE LOT RETOUR-DÉFENSES REMPLACE LE LOT COMPLEXE, QUI N'EST PAS MERGÉ — ET
+C'EST LE PREMIER FAIT À DIRE.** Le brief de RETOUR-DÉFENSES se présente comme
+remplaçant « `BRIEF-lotCOMPLEXE.md`, écrit le même jour et **jamais exécuté** » :
+il l'a été, sur cette branche, et la PR est ouverte et verte. Les deux lots ne
+s'empilent donc pas, ils se **substituent** — l'échéance sèche de COMPLEXE cède
+la place au palier de 70 % suivi d'une rampe, et le champ `retourTick` au champ
+`retour`. Vu de `main`, c'est **UN SEUL** changement de forme d'état.
+⚠⚠ **LA RÈGLE VAUT DÉSORMAIS POUR LES DEUX CAMPS, ET C'EST TOUT LE LOT.** Côté
+joueur le Complexe de défense ramène la garnison ; côté Ouvrage c'est l'ÉTAI, qui
+est le même bâtiment sous l'autre jeu de noms — `BATIMENTS.etai.ta` vaut
+« Complexe de défense ». Une seule fonction pure, `pvApresRetour`, sert les deux ;
+elle ne lit QUE ses arguments.
+⚠⚠ **LES 70 % SONT REVENUS, ET ILS TOUCHENT LES PIÈCES DÉTRUITES.** À la fin du
+raid, chaque pièce regagne d'un coup **70 % de ses propres PV perdus × la santé
+du Complexe** ; le reste revient linéairement sur la durée. Une défense à zéro se
+relève donc instantanément à 70 % si le Complexe est entier — la règle d'avant ne
+rendait rien à ce qui était tombé dans un camp. `MODELE-REPARATION-1.md` §5
+rangeait cette constante parmi les **supprimées** du 24/08 ; Ethan la réinstalle
+le 05/09, avec une rampe en plus, et le document est réécrit dans le même lot.
+⚠⚠ **LA PÉNALITÉ RESTE LINÉAIRE ET LE PLANCHER 24 h — ÉCART DÉCLARÉ AU BRIEF.**
+Le brief de RETOUR-DÉFENSES rétablit la forme GÉOMÉTRIQUE et un plancher à 72 h,
+et écrit « la géométrique est prise parce que tout l'est dans ce jeu ». Il a été
+écrit le 05/09 ; l'arbitrage d'Ethan est du 06/09 et dit l'inverse mot pour mot :
+« la courbe choisie est géométrique. je préfère linéaire. 24h, pas 72h ». Le code
+suit l'arbitrage, pas le brief, et `RETOUR-D T6` refuse la géométrique de face.
+**Toutes les durées du §2 du brief sont donc recalculées** — voir la table de
+`RETOUR_DEFENSES` dans `src/data/base.js`.
+⚠⚠ **ET LES DEUX POINTS ARBITRÉS SONT TOUCHÉS EXACTEMENT, PARCE QUE LA SANTÉ SE
+RANGE EN MILLIÈMES.** 1 h à pleine santé ; **24 h TOUT ROND** à 1 PV — un PV sur
+les 2 500 000 milli-PV du plus petit Complexe possible vaut 0,4 millième, donc
+zéro une fois arrondi. Le lot COMPLEXE annonçait 23 h 59 : il calculait la santé
+en flottant.
+⚠⚠ **COMPLEXE OU ÉTAI À ZÉRO PV : RIEN NE REVIENT, JAMAIS — ET C'EST UNE GARDE
+ÉCRITE.** Mesuré en la retirant : la formule rend alors **tout en 24 h**, pas
+« jamais » (250 000 → 281 250 à 1 h, 625 000 à 12 h, plein à 24 h sur une pièce
+d'un million de milli-PV). Côté joueur elle ne tire pas — les bâtiments planchent
+à 1 PV ; côté Ouvrage l'Étai d'un camp peut tomber, et c'est là qu'elle mord.
+⚠⚠ **TROIS TESTS SONT RETIRÉS, PAS AJUSTÉS, ET LE BRIEF LES NOMMAIT.**
+« un camp ne répare que ses défenses SURVIVANTES » et « l'Étai tombé, les
+défenses ne repoussent JAMAIS » figeaient la règle d'avant ; l'assertion « une
+défense détruite est revenue d'entre les morts » part avec la première.
+`RETOUR-D T14` et `RETOUR-D T15` reprennent ce qu'ils gardaient de vrai — et le
+second est le SEUL des trois qui survive, §3 du brief le confirmant comme règle.
+⚠⚠ **QUATRE MONTAGES DE `site-entame.test.js` ONT DÛ ÊTRE RÉPARÉS, ET AUCUNE
+ASSERTION N'A ÉTÉ ASSOUPLIE.** Leur PRÉMISSE a cessé d'être vraie : « les
+détruites sont RETIRÉES », « un site entamé annonce ce qu'il est devenu » et
+« recherche — 50 % + 50 % » supposent tous qu'une défense tombée reste tombée, ce
+que seul un Étai à terre garantit désormais — les trois font donc tomber l'Étai.
+« les deux chemins réparent pareil » gagne un bâtiment abîmé, sans quoi l'entrée
+« ne dit plus rien » et disparaît. ⚠ Et « deux passes — le site s'use pour de
+bon » CHANGE DE GRANDEUR : `forceDeLaDefense` compte des PIÈCES, et le compte ne
+bouge plus quand elles se relèvent ; il mesure désormais les PV du montage, ce
+qui est la propriété qu'il annonce.
+⚠⚠ **UN SECOND RAID PENDANT LA RAMPE REPART DE ZÉRO — RENVERSEMENT DE LA LECTURE
+DU LOT COMPLEXE, ET IL EST FORCÉ.** La rampe est ANALYTIQUE, donc autoritaire sur
+`degatsMilli` : si elle ne repartait pas des dégâts NEUFS, elle les écraserait au
+tick suivant par la valeur calculée depuis le premier raid, et la seconde passe
+ne laisserait aucune trace. `subirUnRaid` remet donc `retour` à `null` sur ce
+qu'il vient d'abîmer, et le filet couvre le reste.
+⚠⚠ **ET LE FILET NE PEUT PAS SE COMPARER AUX DÉGÂTS ATTENDUS — MESURÉ.** La
+première écriture testait `degats > degatsAttendus(maintenant)` : `degatsMilli`
+porte ce que le tick PRÉCÉDENT a écrit, donc il les dépasse TOUJOURS d'un cran,
+et la rampe se restampait dix fois par seconde — aucune pièce ne revenait jamais.
+Le test porte désormais sur `degatsAuDebutMilli`, que la rampe ne peut que faire
+BAISSER : pas de faux positif possible.
+⚠⚠ **LE DISCRIMINANT DE `facteurMilli` PROPOSÉ PAR LE BRIEF EST INERTE, ET C'EST
+MESURÉ.** Il demandait de basculer `NIVEAU.deuxRegimes` : `penteBasse` et
+`penteHaute` valent **toutes deux 1,1** depuis le 25/08, donc les deux régimes
+rendent le même nombre et le test serait vert sur une pente écrite en dur.
+`RETOUR-D T5` bouge la PENTE — la grandeur que le drapeau était censé faire lire
+— et asserte que les deux pentes sont encore égales, pour que le drapeau
+redevienne un discriminant le jour où elles divergeront.
+⚠ **L'ARRONDI AU MILLIÈME RESTE LE PREMIER DISCRIMINANT** : `facteurMilli(11)`
+rend **2 594** quand `1,10^10` vaut 2,5937424601 — **neuf ticks d'écart** sur
+93 384, un dix-millième. Un test « à 1 % près » ne verrait rien.
+⚠⚠ **CÔTÉ OUVRAGE LE RETOUR SE CALCULE À LA LECTURE, CÔTÉ JOUEUR IL SE RÉÉCRIT —
+DEUX CÂBLAGES, UNE SEULE FONCTION.** `sitesEntames` n'est lu que par
+`montageCourant` et `resumeCourant` : rien n'y est réécrit, l'entrée garde
+`tickDuRaid` et gagne `santeComplexeMilli`. `degatsMilli`, lui, a treize lecteurs
+côté joueur, donc c'est le TICK qui réécrit — analytiquement, jamais par
+accumulation, ce qui rend `tickJeu` × n ≡ `rattraperJeu(n)` par construction.
+⚠⚠ **ET L'ÉTAI D'UNE BASE DE L'OUVRAGE COMMANDE ENFIN QUELQUE CHOSE.**
+`reparerLesSites` traitait le type `base` dans une branche qui rendait TOUT au
+bout d'une heure et `continue`ait avant d'atteindre l'Étai. Les deux se séparent :
+les BÂTIMENTS d'une base reviennent tous en une heure, détruits compris ; ses
+DÉFENSES suivent la rampe. `RETOUR-D T13` le mesure avec un Étai à 1 PV — les
+bâtiments reviennent à l'heure, les défenses en vingt-quatre.
+⚠ **LE PÉRIMÈTRE EST LES DÉFENSES, ET LES TROIS RÉGIMES DE BÂTIMENT NE BOUGENT
+PAS** : base du joueur au quartz, base de l'Ouvrage en une heure, camp et
+avant-poste **jamais** — `RETOUR-D T15` garde le troisième, entier.
+⚠⚠ **`SAVE_VERSION` PASSE À 26, ET LE LOT COMPLEXE Y AVAIT DÉJÀ MENÉ — UN SEUL
+MAILLON, PAS DEUX.** Le v25 → v26 de COMPLEXE portait `retourTick` ; il est
+RÉÉCRIT pour porter `retour` et la santé figée, au lieu qu'un v26 → v27 s'empile
+dessus. Motif : aucune sauvegarde au monde n'a jamais été en v26 — la PR de
+COMPLEXE n'est pas mergée, Pages ne bâtit que `main` —, et empiler deux liens
+embarquerait pour toujours une migration pour une forme qui n'a jamais quitté la
+branche. **La garde du numéro vit sous `RETOUR-D T18`.**
+⚠ **LA MIGRATION NE CALCULE RIEN, DES DEUX CÔTÉS.** Elle ne pose même pas le
+champ — « absent » vaut « null » vaut « pas de rampe » —, et côté Ouvrage c'est
+`reparerLesSites` qui relit la santé sur l'Étai TEL QUE LE RAID L'A LAISSÉ, ce
+qui EST la santé du raid.
+⚠⚠ **`retour` PORTE QUATRE CHAMPS, PAS TROIS — ÉCART DÉCLARÉ.** Le brief nomme
+`tickDuRaid`, `santeMilli` et `degatsAuDebutMilli` ; `niveauComplexe` s'y ajoute
+parce que la durée en dépend et que les deux décrivent LE MÊME bâtiment au MÊME
+instant. En figer un seul ferait de l'autre une seconde vérité : une montée du
+Complexe raccourcirait alors une attente déjà commencée, ce que le prorata figé
+refuse justement.
+⚠ **ET SANS COMPLEXE ON NE STAMPE RIEN**, plutôt que de stamper `santeMilli:
+null`. La pièce reste abîmée et sans rampe ; le jour où le joueur POSE un
+Complexe, le tick suivant la prend en charge — `RETOUR-D T10` le mesure. Stamper
+un `null` la condamnerait pour toujours, y compris après la construction.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE HUIT COUPLES, TOUS SUR `sitesEntames`, ET PAS
+UN DE PLUS.** Phases 7 à 14, c'est-à-dire à partir du premier raid ; les six
+premières sont identiques AU BIT. ⚠ **`garnison` NE BOUGE PAS**, et ce n'est pas
+un oubli : le scénario du témoin construit des bâtiments et une ARMÉE, il ne pose
+aucune pièce de garnison. ⚠ **Aucun scalaire ne bouge, la taille de la sauvegarde
+comprise** — elle se prend en phase 6, avant le premier raid, donc `sitesEntames`
+y est vide et le champ neuf n'y coûte rien. Aucun terme ne s'ajoute aux quatre de
+`test/temoins-bases-0.js`.
+⚠ **VINGT-DEUX FALSIFICATIONS, VINGT-DEUX CHUTES**, une par test plus quatre de
+structure — les deux chemins d'avancement, le stamp du raid, et la garde de forme
+du champ. ⚠ **Deux ont dû être refaites avant de mordre** : le motif de la
+première visait un texte que le lot venait de réécrire, et « la garde de forme
+désarmée » ne faisait tomber AUCUN test — rien ne mesurait le refus d'un `retour`
+malformé au chargement. `RETOUR-D T20` a été écrit APRÈS cette mesure.
+⚠ **VINGT TESTS ENTRENT, DEUX SORTENT, ET LE COMPTE PASSE DE 1 129 À 1 135.**
+Treize dans `test/reparation.test.js`, trois dans `test/site-entame.test.js`, un
+dans `test/chantier.test.js` — les douze `RETOUR T*` du lot COMPLEXE sont
+REMPLACÉS, pas complétés. **Aucune assertion n'a été retirée ni assouplie** hors
+les trois que le brief nomme.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — pas un octet d'`art/sprites/` ne
+change.
+
+**Auparavant, après le lot COMPLEXE (non mergé, remplacé par le précédent) :**
 `npm test` → **1129 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 985 488 octets**, 0 référence externe. Coût **+3 122 octets**, mesurés poste
 par poste contre un livrable rebâti depuis `origin/main` : **JavaScript +2 746 ·
@@ -5053,7 +5194,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
   sites.js              bâtiments de site, butin, densité, garnisons, vagues, recherche, géographie
   niveaux.js            courbe de niveau du COMBAT — PV et dégâts
   economie.js           courbe des COÛTS et de la PRODUCTION — distincte de la précédente
-  base.js               les onze bâtiments du joueur, leur réparation et le retour de la garnison
+  base.js               les onze bâtiments du joueur, leur réparation et le retour des défenses
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
   atlas.js              l'index des atlas de sprites — ⚠ GÉNÉRÉ, voir ci-dessous
@@ -5120,7 +5261,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
   deplacement.js        la base bouge : portée, délai, et LE seul écrivain de `position`
   fondation.js          fonder une base de plus : où c'est permis, ce qu'on écrase, qui encaisse
   transfert.js          envoyer des ressources d'une base à l'autre : distance, taxe, refus
-  reparation.js         les réserves de temps, et le retour gratuit de la garnison
+  reparation.js         les réserves de temps, et le retour gratuit des défenses
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
@@ -5149,24 +5290,40 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     `CHASSIS_REPARABLES` s'en dérive, et `reservoirsDeLArmee` boucle dessus pour
     l'écran d'armée : une clé qui n'est pas un châssis y fuirait. Mesuré à la
     falsification — elle fait tomber `RÉSERVE T4` en même temps que la garde neuve.
+  ⤷ ⚠⚠ SES DÉFENSES SUIVENT LA MÊME RAMPE QUE LA GARNISON DU JOUEUR DEPUIS LE
+    06/09, lot RETOUR-DÉFENSES — palier de 70 % à la fin du raid puis rampe
+    linéaire, sous l'ÉTAI, qui EST le Complexe de défense sous l'autre jeu de
+    noms. Le calcul se fait À LA LECTURE : l'entrée garde `tickDuRaid` et gagne
+    `santeComplexeMilli`, et rien n'est réécrit. ⚠ Ses BÂTIMENTS ne changent
+    pas : une base de l'Ouvrage les rend tous en une heure, un camp jamais.
   ⤷ ⚠⚠ ET IL PORTE UNE SECONDE MOITIÉ DEPUIS LE 06/09, QUI NE SE PAIE PAS —
-    lot COMPLEXE. Tout ce qui précède est un GESTE : le joueur dépense du temps
-    de réserve et de la ressource, et les PV reviennent dans le même appel.
-    `ramenerLaGarnison` est une ÉCHÉANCE : le Complexe de défense ramène la
-    garnison tout seul, gratuitement, sans réservoir et sans geste. Les deux ne
-    se touchent pas, et les fondre demanderait un cinquième réservoir et un
-    bouton — c'est-à-dire une seconde règle à côté de celle qui tourne.
+    lot RETOUR-DÉFENSES. Tout ce qui précède est un GESTE : le joueur dépense du
+    temps de réserve et de la ressource, et les PV reviennent dans le même appel.
+    `pvApresRetour` est une RAMPE : le Complexe de défense ramène la garnison
+    tout seul, gratuitement, sans réservoir et sans geste — 70 % d'un coup à la
+    fin du raid, le reste linéairement. Les deux ne se touchent pas, et les
+    fondre demanderait un cinquième réservoir et un bouton, c'est-à-dire une
+    seconde règle à côté de celle qui tourne.
+  ⤷ ⚠⚠ ET `pvApresRetour` SERT LES DEUX CAMPS, CE QUI EST TOUT SON INTÉRÊT. Elle
+    ne lit QUE ses arguments — pas d'`etat`, pas d'horloge, pas de
+    `baseCourante` —, si bien que `sim/site-entame.js` l'appelle telle quelle
+    pour les défenseurs d'un site de l'Ouvrage, où l'ÉTAI tient le rôle du
+    Complexe. Une seconde écriture là-bas aurait divergé au premier réglage.
   ⤷ ⚠⚠ SANS COMPLEXE, `complexeDeLaBase` REND `null` ET LA GARNISON NE REVIENT
     JAMAIS. Ethan, 05/09 : c'est la règle, pas un cas limite. `null` et non un
     niveau zéro, pour que l'écran puisse l'ANNONCER — un zéro se lirait « retour
     infiniment lent » et finirait par afficher une durée.
   ⤷ ⚠ LA PÉNALITÉ DE SANTÉ EST LINÉAIRE ET SON PLANCHER VAUT 24 h — arbitrage
-    d'Ethan du 06/09, qui renverse la forme géométrique proposée. Les deux
-    touchent les mêmes deux points ; elles ne diffèrent qu'entre eux.
+    d'Ethan du 06/09, qui renverse la forme géométrique proposée par les DEUX
+    briefs. Les deux touchent les mêmes deux points ; elles ne diffèrent
+    qu'entre eux.
   ⤷ ⚠ ET `subirUnRaid` APPELLE `ramenerLaGarnison` SUR-LE-CHAMP, ce qui n'est pas
     une précaution : c'est ce qui fait stamper les deux chemins d'avancement au
-    MÊME instant, celui du raid. Le rattrapage n'appelle ce module qu'aux bornes
-    de ses segments.
+    MÊME instant, celui du raid, et c'est aussi ce qui fait arriver le palier des
+    70 % à la FIN du raid. Le rattrapage n'appelle ce module qu'aux bornes de ses
+    segments. ⚠ Il y remet aussi `retour` à `null` sur ce qu'il vient d'abîmer :
+    une rampe analytique est autoritaire sur `degatsMilli`, donc elle DOIT
+    repartir des dégâts neufs, sinon elle les efface au tick suivant.
   ⤷ ⚠ ET LE CLIQUET N'EST CASSÉ QUE CÔTÉ MOTEUR. `AUDIT-REPARATION.md` §4 tient
     encore pour le JOUEUR : aucun écran n'appelle `reparerUnBatiment`.
 
@@ -7365,9 +7522,10 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   RAISON A CHANGÉ LE 06/09.** `null` dans la table, pas un bouton inerte — « un
   indice n'est pas une interdiction » (§4). Ce qui est neuf, c'est que la
   garnison a enfin un moteur : `MODELE-REPARATION-1.md` §3 la fait réparer par le
-  **Complexe de défense**, gratuitement et tout seul, et `ramenerLaGarnison` de
-  `sim/reparation.js` le fait depuis le lot COMPLEXE. Le geste du joueur n'existe
-  pas dans cette moitié du modèle ; un bouton inventerait une seconde règle.
+  **Complexe de défense**, gratuitement et tout seul — 70 % à la fin du raid puis
+  une rampe —, et `pvApresRetour` de `sim/reparation.js` le fait depuis le lot
+  RETOUR-DÉFENSES. Le geste du joueur n'existe pas dans cette moitié du modèle ;
+  un bouton inventerait une seconde règle.
   ⚠⚠ **ET LA RAISON QUE CE PARAGRAPHE DONNAIT ÉTAIT FAUSSE.** Il créditait
   `reparerLaGarnison` de `sim/raid.js` d'avoir « déjà fait » ce travail « après
   chaque raid » : cette fonction-là est le module `autoReparation` d'une PIÈCE —

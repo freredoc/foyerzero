@@ -603,12 +603,13 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   // `reparerLaGarnison` est le module `autoReparation` d'une PIÈCE : il rend un
   // pour-cent des dégâts, sur-le-champ, aux seules pièces qui le portent.
   // `ramenerLaGarnison` juste en dessous est le COMPLEXE DE DÉFENSE : il rend
-  // tout, à l'échéance, à toute la garnison. Le premier réduit `degatsMilli`, le
-  // second pose `retourTick` — l'ordre compte donc, et il est le bon : l'échéance
-  // se calcule sur les dégâts qui RESTENT après l'auto-réparation.
+  // 70 % d'un coup puis le reste en rampe, à TOUTE la garnison, détruites
+  // comprises. Le premier réduit `degatsMilli`, le second pose `retour` —
+  // l'ordre compte donc, et il est le bon : le palier et la rampe se calculent
+  // sur les dégâts qui RESTENT après l'auto-réparation.
   const autoReparationMilli = reparerLaGarnison(etat, laBase);
 
-  // --- 4 bis. l'échéance de retour se pose À L'INSTANT DU RAID ---------------
+  // --- 4 bis. la rampe de retour se pose À L'INSTANT DU RAID ----------------
   //
   // ⚠⚠ ET C'EST CE QUI REND LES DEUX CHEMINS D'AVANCEMENT ÉQUIVALENTS, PAS UNE
   // PRÉCAUTION. `rattraperJeu` découpe sa fenêtre aux instants des raids et
@@ -618,9 +619,22 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   // les deux chemins stampent au même instant, celui du raid. L'appel est
   // idempotent, donc il ne coûte rien au chemin direct.
   //
-  // ⚠ ET C'EST AUSSI CE QUI FIGE LE PRORATA. Le Complexe vient d'encaisser sa
-  // part du raid : la santé lue ici est celle d'après le combat, et réparer le
-  // Complexe plus tard ne raccourcira pas l'attente en cours.
+  // ⚠ ET C'EST AUSSI CE QUI FIGE LE PRORATA, ET CE QUI FAIT ARRIVER LE PALIER
+  // DES 70 % À LA FIN DU RAID PLUTÔT QU'UN TICK PLUS TARD. Le Complexe vient
+  // d'encaisser sa part du raid : la santé lue ici est celle d'après le combat,
+  // et réparer le Complexe plus tard ne raccourcira pas la rampe en cours.
+  //
+  // ⚠⚠ ET LA RAMPE REPART DE ZÉRO, ELLE NE SE POURSUIT PAS. C'est un
+  // RENVERSEMENT de la lecture du lot COMPLEXE — « un second raid ne remet pas
+  // le compteur à zéro » — et il est forcé par la forme analytique : la rampe
+  // est autoritaire sur `degatsMilli`, donc si elle ne repartait pas des dégâts
+  // NEUFS, elle les écraserait au tick suivant par la valeur calculée depuis le
+  // premier raid, et la seconde passe ne laisserait aucune trace. Le raid le dit
+  // lui-même plutôt que de le laisser deviner au filet : il sait ce qu'il vient
+  // d'abîmer.
+  for (const piece of laBase.garnison) {
+    if ((piece.degatsMilli ?? 0) > 0) piece.retour = null;
+  }
   ramenerLaGarnison(etat);
 
   // --- 5. le rapport rejoint les dix ---------------------------------------

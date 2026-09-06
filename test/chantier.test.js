@@ -62,7 +62,7 @@ import { creerChronometre,
 } from '../src/ui/session.js';
 import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, emplacementsDuNiveau,
-  RETOUR_GARNISON,
+  RETOUR_DEFENSES,
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
   ORDRE_PALETTE,
@@ -2747,7 +2747,7 @@ test('défense — le détail d\'une pièce dit son niveau et ses points', () =>
   assert.throws(() => detailDeLaDefense(etat, 4), RangeError);
 });
 
-test('RETOUR T12 — l\'avertissement paraît sans Complexe et part avec lui', () => {
+test('RETOUR-D T17 — l\'avertissement paraît sans Complexe et part avec lui', () => {
   // ⚠⚠ CE QUE CE TEST GARDE EST UNE RÈGLE DE JEU, PAS UNE PHRASE. Ethan, 05/09 :
   // sans Complexe de défense construit, la garnison abîmée ne revient JAMAIS. Un
   // joueur qui l'ignore verra ses pièces rester à terre sans savoir ce qui
@@ -2759,7 +2759,7 @@ test('RETOUR T12 — l\'avertissement paraît sans Complexe et part avec lui', (
   assert.equal(sans.avertissement, true, 'aucun avertissement sans Complexe de défense');
   // ⚠ LE NOM EST CELUI DE LA TABLE, PAS UNE CHAÎNE ÉCRITE ICI : le test tombe le
   // jour où le bâtiment est renommé d'un côté seulement.
-  const nom = BASE_BATIMENTS[RETOUR_GARNISON.indexeeSur].nom.joueur;
+  const nom = BASE_BATIMENTS[RETOUR_DEFENSES.indexeeSur].nom.joueur;
   assert.ok(sans.texte.includes(nom), `l'avertissement ne nomme pas « ${nom} » : ${sans.texte}`);
   assert.match(sans.texte, /jamais/, 'l\'avertissement ne dit pas que le retour n\'aura pas lieu');
 

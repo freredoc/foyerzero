@@ -32,7 +32,7 @@ import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
 import {
   BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
-  ORDRE_PALETTE, RETOUR_GARNISON,
+  ORDRE_PALETTE, RETOUR_DEFENSES,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { majorationsDeProduction } from '../sim/poi.js';
@@ -1763,7 +1763,7 @@ export function detailDeLaDefense(etat, index) {
  * rien n'est refusé, le joueur n'a rien demandé, et le rouge des refus le ferait
  * chercher ce qu'il a cassé.
  *
- * ⚠ LE NOM DU BÂTIMENT EST LU, PAS ÉCRIT. `RETOUR_GARNISON.indexeeSur` le nomme
+ * ⚠ LE NOM DU BÂTIMENT EST LU, PAS ÉCRIT. `RETOUR_DEFENSES.indexeeSur` le nomme
  * depuis `data/base.js` et `BASE_BATIMENTS` porte son libellé : l'écrire en
  * toutes lettres ferait la seconde vérité que ce champ existe pour éviter.
  *
@@ -1772,9 +1772,13 @@ export function detailDeLaDefense(etat, index) {
  */
 export function etatDeLaGarnison(etat) {
   const laBase = baseCourante(etat);
-  const nom = BASE_BATIMENTS[RETOUR_GARNISON.indexeeSur].nom.joueur;
+  const nom = BASE_BATIMENTS[RETOUR_DEFENSES.indexeeSur].nom.joueur;
   const complexe = complexeDeLaBase(laBase);
-  if (complexe === null) {
+  // ⚠ DEUX FAÇONS DE N'AVOIR PAS DE COMPLEXE, ET UNE SEULE PHRASE. Pas posé, ou
+  // posé et à zéro PV : le joueur en tire la même conséquence. La seconde ne
+  // peut pas arriver aujourd'hui — les bâtiments planchent à 1 PV — et elle est
+  // écrite parce que la garde du moteur, elle, la connaît.
+  if (complexe === null || complexe.santeMilli === null) {
     return {
       avertissement: true,
       enAttente: 0,
@@ -1830,7 +1834,6 @@ function motDuRetour(laBase, piece, maintenant) {
 }
 
 /**
- * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ./**
  * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ.
  *
  * Jumelle de `casesPosables`, et pour les mêmes raisons : on interroge

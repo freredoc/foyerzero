@@ -137,13 +137,43 @@ pour le joueur : il a dépensé des raids, et s'il ne fait pas tomber la Souche 
 Le joueur, lui, n'a droit à aucun remboursement automatique : il paie ses réparations.
 L'asymétrie est voulue.
 
-### La défense, cas à part
+### La défense, cas à part — RÉÉCRIT LE 06/09, LOT RETOUR-DÉFENSES
 
-Le Complexe de défense répare **tout**, **gratuitement**, **en une heure** — joueur comme Ouvrage.
-Ce n'est plus 70 % des PV perdus : c'est la totalité.
+Le Complexe de défense répare **tout**, **gratuitement** — joueur comme Ouvrage, et **côté
+Ouvrage c'est l'Étai**, qui est le même bâtiment sous l'autre jeu de noms
+(`BATIMENTS.etai.ta === 'Complexe de défense'`).
+
+⚠⚠ **ET LES 70 % SONT REVENUS, LE 05/09, AVEC UNE RAMPE PAR-DESSUS.** La version du 24/08 de ce
+document les rangeait au §5 parmi les constantes **supprimées** — « c'est la totalité, en une
+heure ». Ethan les réinstalle : à la **fin du raid**, chaque pièce regagne d'un coup **70 % de
+ses propres PV perdus, multipliés par la santé du Complexe** ; le reste revient **linéairement**
+sur la durée du §6 point 6.
+
+```
+santé       = PV restants du Complexe / ses PV maximaux    FIGÉE à l'instant du raid
+instantané  = 0,70 × PV perdus × santé                     appliqué à la FIN du raid
+pv(t)       = pvAprèsRaid + instantané
+              + (PV perdus − instantané) × min(1, écoulé / durée)
+```
+
+⚠⚠ **LE PALIER TOUCHE LES PIÈCES DÉTRUITES, ET C'EST LE CHANGEMENT DE FOND.** Une défense à zéro
+se relève instantanément à 70 % si le Complexe est entier. La règle d'avant ne rendait rien à ce
+qui était tombé dans un camp — trois tests le figeaient, et ils ont été **retirés**.
+
+⚠⚠ **COMPLEXE OU ÉTAI À ZÉRO PV : RIEN NE REVIENT, JAMAIS.** C'est une **garde écrite**, pas une
+propriété de la formule — celle-ci rendrait la pénalité maximale, donc vingt-quatre heures, et
+non « jamais ». Côté joueur elle ne tire pas : les bâtiments planchent à 1 PV. Côté Ouvrage,
+l'Étai d'un camp peut tomber, et c'est là qu'elle mord.
+
+⚠ **ET SANS COMPLEXE CONSTRUIT, LA GARNISON DU JOUEUR NE REVIENT JAMAIS** — Ethan, 05/09. Ce
+n'est ni un défaut ni un cas limite : c'est la règle, et l'écran l'annonce sous la bande Défense.
 
 Le temps ne descend **jamais sous une heure**, mais il peut être **supérieur** si le niveau des
-unités en défense dépasse celui du Complexe.
+unités en défense dépasse celui du Complexe, ou si le Complexe est abîmé.
+
+⚠ **LE PÉRIMÈTRE EST LES DÉFENSES, ET RIEN D'AUTRE.** Les bâtiments gardent leurs trois régimes :
+ceux de la base du joueur se réparent au quartz, ceux d'une base de l'Ouvrage reviennent tous en
+une heure, ceux d'un camp ou d'un avant-poste **ne reviennent jamais**.
 
 C'est ce qui rend le Complexe intéressant. Le **QG de défense** fixe le plafond de niveau des
 défenses ; rien n'empêche donc de monter des défenses au-delà du niveau du Complexe. On y gagne
@@ -212,8 +242,8 @@ systèmes ne se recouvrent pas et rien n'oblige à transposer.
 
 | Endroit | Ancien | Nouveau |
 |---|---|---|
-| SPEC §1 | « seule joue la réparation gratuite de 70 % assurée par le complexe » | 100 %, en une heure |
-| SPEC §2 | constante « Réparation gratuite après raid : 70 % des PV perdus, au prorata des PV du complexe » | supprimée |
+| SPEC §1 | « seule joue la réparation gratuite de 70 % assurée par le complexe » | **70 % d'un coup, puis le reste en rampe** — rétabli le 05/09, voir §3 |
+| SPEC §2 | constante « Réparation gratuite après raid : 70 % des PV perdus, au prorata des PV du complexe » | ~~supprimée~~ — **RÉINSTALLÉE le 05/09**, et elle porte désormais sur les pièces DÉTRUITES aussi |
 | SPEC §2 | constante « Plancher de PV des défenseurs : 1 % » | plancher à **1 PV**, et seulement sur base et joueur |
 | SPEC §10 | « Bâtiment détruit : réparé en 1 h » (base) | inchangé, mais gratuit **pour l'Ouvrage seulement** |
 | §4 de ce document, version du 24/08 | « les bâtiments et les unités puisent dans la même réserve » | **quatre réserves**, la quatrième produite par le Chantier |
@@ -240,12 +270,15 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**.
 5. ~~Un Complexe endommagé répare-t-il moins ?~~ **Clos le 24/08** : oui, au prorata de ses PV —
    mais **il se répare lui-même**, donc son débit s'accélère au fil de l'heure et le site revient
    entier malgré tout. ⚠⚠ **ET LE CODE S'EN ÉCARTE DEPUIS LE 06/09, DÉLIBÉRÉMENT.** Le lot
-   COMPLEXE suit l'idiome de `sim/site-entame.js` — une **échéance**, pas un débit — parce que
-   c'est ce qui rend `rattraperJeu` équivalent à `tickJeu`, et parce qu'un débit dépendant de la
-   santé changerait de valeur à l'instant d'un raid subi. **Conséquence assumée : le prorata se
-   FIGE à l'instant du raid**, et réparer le Complexe ensuite ne raccourcit pas l'attente en
-   cours. Ce qu'on y gagne est une raison de garder le Complexe entier AVANT d'être attaqué ;
-   ce qu'on y perd est l'accélération que ce point décrit. À rouvrir si Ethan la veut.
+   RETOUR-DÉFENSES pose un **palier de 70 % à la fin du raid** puis une **rampe linéaire**, sous
+   une santé **figée à l'instant du raid** — là où ce point décrit un débit qui s'ACCÉLÈRE à
+   mesure que le Complexe se répare lui-même. Le motif est mécanique : la rampe est ANALYTIQUE,
+   donc `rattraperJeu(n)` rend exactement ce que `tickJeu` × n rend, par construction ; un débit
+   dépendant d'une santé qui bouge demanderait d'intégrer sur la fenêtre, et changerait de valeur
+   à l'instant d'un raid subi. **Conséquence assumée : le prorata se FIGE à l'instant du raid**,
+   et réparer le Complexe ensuite ne raccourcit pas la rampe en cours. Ce qu'on y gagne est une
+   raison de garder le Complexe entier AVANT d'être attaqué ; ce qu'on y perd est l'accélération
+   que ce point décrit. À rouvrir si Ethan la veut.
 6. ~~**Formule du dépassement** : de combien le temps de réparation dépasse-t-il l'heure quand
    les défenses sont au-dessus du Complexe ?~~ **CLOS LE 06/09, PAR ARBITRAGE ET NON PAR
    MESURE** — et il faut le dire dans ce sens-là : aucune des trente captures ne le montre, et
@@ -254,10 +287,14 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**.
 
    ```
    dépassement = max(0, niveau de la pièce − niveau du Complexe)
-   santé       = PV restants du Complexe / ses PV maximaux
+   santé       = PV restants du Complexe / ses PV maximaux    FIGÉE au raid
    durée       = 1 h × facteurMilli(1 + dépassement)/1000 × pénalité(santé)
    pénalité(s) = 1 + (24 − 1) × (1 − s)          ← LINÉAIRE, plancher 24 h
    ```
+
+   ⚠ **LA DURÉE EST CELLE DE LA RAMPE, ET LE PALIER DES 70 % LA PRÉCÈDE** — voir §3. Sur un site
+   de l'Ouvrage le dépassement vaut TOUJOURS zéro, tout y étant au niveau du site : la durée s'y
+   réduit au prorata de santé, et la règle n'en reste pas moins unique.
 
    ⚠ **`facteurMilli` EST APPELÉE, PAS RECOPIÉE** — c'est « la même formule que la croissance
    des unités de défense », donc la courbe de `data/niveaux.js` et rien d'autre. ⚠ **ET C'EST
@@ -266,9 +303,9 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**.
    géométrique et 72 h ; « la courbe choisie est géométrique. je préfère linéaire. 24h, pas
    72h ». Les deux formes touchent les mêmes deux points arbitrés (1 h à pleine santé, le
    plancher à 1 PV) et ne diffèrent qu'entre eux : à mi-vie, 12 h 30 contre 4 h 54.
-   ⚠ **ET SANS COMPLEXE CONSTRUIT, LA GARNISON NE REVIENT JAMAIS** — Ethan, 05/09. Les deux
-   nombres vivent dans `RETOUR_GARNISON` de `src/data/base.js`, posés pour être joués et
-   changés. Le reste de l'arbitrage « puissance contre disponibilité » entre le QG de défense
+   ⚠ **ET SANS COMPLEXE CONSTRUIT, LA GARNISON NE REVIENT JAMAIS** — Ethan, 05/09. Les trois
+   nombres — l'heure de base, le plancher et les 70 % — vivent dans `RETOUR_DEFENSES` de
+   `src/data/base.js`, posés pour être joués et changés. Le reste de l'arbitrage « puissance contre disponibilité » entre le QG de défense
    et le Complexe est désormais jouable et mesurable en partie.
 7. ~~**Barèmes** : coût et temps de réparation par niveau.~~ **Clos le 05/09**, voir §3.
 8. **Le plafond de la quatrième réserve**, celle des bâtiments. Voir §4.

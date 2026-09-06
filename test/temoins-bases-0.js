@@ -2155,3 +2155,79 @@ export const RAPPORTS_OUVRAGE_ARRET = {
   24: '1a03af9ee48b6a31',
   25: '1e4ea0e6625d6f0f',
 };
+
+/**
+ * Le lot RETOUR-DÉFENSES, 06/09 — HUIT COUPLES, TOUS SUR `sitesEntames`, ET PAS
+ * UN DE PLUS.
+ *
+ * ⚠⚠ ET C'EST LA MESURE QUI DIT CE QUE LE LOT TOUCHE. Les défenses d'un site
+ * reviennent désormais par un palier de 70 % suivi d'une rampe, détruites
+ * comprises, et l'entrée porte la santé de l'Étai figée au raid : `sitesEntames`
+ * change donc de contenu ET de forme à partir de la phase 7, qui est le premier
+ * raid. Les six premières phases sont identiques AU BIT — la règle ne touche ni
+ * la carte, ni un geste, ni un stock.
+ *
+ * ⚠⚠ ET `garnison` NE BOUGE PAS, CE QUI N'EST PAS UN OUBLI. Le scénario du
+ * témoin construit des bâtiments et une ARMÉE ; il ne pose aucune pièce de
+ * garnison, si bien que la moitié joueur de la règle n'a rien à toucher ici.
+ * C'est `RETOUR-D T12` qui la mesure, sur une base qui en porte trois.
+ *
+ * ⚠ AUCUN SCALAIRE NE BOUGE, LA TAILLE DE LA SAUVEGARDE COMPRISE : elle se
+ * prend en phase 6, avant le premier raid, donc `sitesEntames` y est vide et le
+ * champ neuf n'y coûte rien. Aucun terme ne s'ajoute aux quatre existants.
+ */
+export const DEPLACES_PAR_RETOUR_DEFENSES = {
+  p07_raidProcheApres: {
+    sitesEntames: 'f9993d498680446d',
+  },
+  p08_100ticks: {
+    sitesEntames: 'f9993d498680446d',
+  },
+  p09_deplace: {
+    sitesEntames: 'f9993d498680446d',
+  },
+  p10_montee: {
+    sitesEntames: 'f9993d498680446d',
+  },
+  p11_raidOuvrageApres: {
+    sitesEntames: '695d2c4746814422',
+  },
+  p12_veilleDuRaid: {
+    sitesEntames: '6b1861bb9e12878c',
+  },
+  p13_apresLeRaid: {
+    sitesEntames: '5d7747eccc7c8d36',
+  },
+  p14_sousLeFeu: {
+    sitesEntames: 'e4d1d69ef2ef52c1',
+  },
+};
+
+/** L'empreinte de CHAQUE graine après le lot RETOUR-DÉFENSES, toutes phases mêlées. */
+export const EMPREINTES_PAR_GRAINE_RETOUR_DEFENSES = {
+  1: 'bfc7d97e62c3e9f8',
+  2: 'a9e7cf77108a266c',
+  3: 'ce8f86a4000bdf0e',
+  4: '7aa2a6df185a79f4',
+  5: '7f74e2ce9e76b72b',
+  6: '75b62d2a6d41d733',
+  7: '10bb692efc201b36',
+  8: '476bd875d63edd60',
+  9: 'ed33905e50a5169b',
+  10: '21357f0e123bb863',
+  11: 'c393bbda2f2f60b4',
+  12: '1aab384373d9c3cf',
+  13: 'b874a2b4386cac70',
+  14: 'ef0dc81aab7457d1',
+  15: 'ece9d335a604e78f',
+  16: '8699946f1aab7a8d',
+  17: '13a13b18e6dbf966',
+  18: '81c868bb7b3e231c',
+  19: '18a789a29c06b5b7',
+  20: 'fe9d91485696cea0',
+  21: '33d5b82cf224a795',
+  22: 'dc57acd0a105ebf2',
+  23: 'fa4de8a349e3bd83',
+  24: '4e15685391f48e64',
+  25: '313cfc55d9b569e1',
+};

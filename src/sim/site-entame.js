@@ -9,17 +9,37 @@
 // ⚠ TROIS RÉGIMES DISJOINTS, ET AUCUN N'EST INVENTÉ ICI. Le tableau de
 // `MODELE-REPARATION-1.md` §2 et §3, mot pour mot :
 //
-//   BASE de l'Ouvrage — tout planche à 1 PV sauf la Souche, et TOUT revient au
-//   bout d'une heure, gratuitement. « Une base se prend d'un coup ou pas du
-//   tout » : si la Souche ne tombe pas dans la fenêtre, le raid est perdu.
+//   BASE de l'Ouvrage — tout planche à 1 PV sauf la Souche, et ses BÂTIMENTS
+//   reviennent tous au bout d'une heure, gratuitement. « Une base se prend d'un
+//   coup ou pas du tout » : si la Souche ne tombe pas dans la fenêtre, le raid
+//   est perdu.
 //
 //   CAMP et AVANT-POSTE — rien ne planche, ce qui tombe est perdu POUR
-//   TOUJOURS, et les bâtiments ne se réparent jamais. Seules les défenses
-//   SURVIVANTES reviennent, en une heure, et seulement si l'Étai est debout :
-//   « si l'Étai tombe pendant l'attaque, même les défenses survivantes et
-//   abîmées ne seront plus jamais réparées ». D'où l'arbitrage de calibrage
-//   d'Ethan : abattre l'Étai à la première passe rend la seconde peu coûteuse,
-//   et un camp se rase en deux passes.
+//   TOUJOURS, et les BÂTIMENTS ne se réparent jamais.
+//
+//   LES DÉFENSES, DES DEUX TYPES ET DES DEUX CAMPS — palier instantané puis
+//   rampe, sous la conduite de l'Étai. Voir plus bas.
+//
+// ⚠⚠ CE TROISIÈME RÉGIME EST NEUF DU 05/09, ET IL CHANGE LA RÈGLE PLUTÔT QU'IL
+// NE CORRIGE UN DÉFAUT. Jusque-là, seules les défenses SURVIVANTES d'un camp
+// revenaient, en une heure, et celles d'une base rentraient par la porte des
+// bâtiments. Ethan a réinstallé la ligne que `MODELE-REPARATION-1.md` §5
+// rangeait parmi les constantes supprimées le 24/08 — « réparation gratuite
+// après raid : 70 % des PV perdus, au prorata des PV du complexe » — et il y a
+// ajouté une rampe. Le palier porte sur CHAQUE pièce, DÉTRUITE COMPRISE : une
+// défense à zéro se relève désormais, ce que trois tests interdisaient.
+//
+// ⚠ CE QUI N'A PAS CHANGÉ : « si l'Étai tombe pendant l'attaque, même les
+// défenses survivantes et abîmées ne seront plus jamais réparées ». C'est
+// l'arbitrage de calibrage d'Ethan — abattre l'Étai à la première passe rend la
+// seconde peu coûteuse, et un camp se rase en deux passes — et c'est une GARDE
+// ÉCRITE dans `pvApresRetour`, pas une conséquence de la formule.
+//
+// ⚠⚠ ET LA RÈGLE VIT DANS `sim/reparation.js`, PAS ICI. `pvApresRetour` ne lit
+// que ses arguments et sert les deux camps ; ce module lui donne les PV, la
+// santé figée et l'écoulé, et ne connaît ni la pénalité ni le palier. Une
+// seconde écriture ici aurait divergé de celle de la garnison du joueur au
+// premier réglage, et l'écart se serait lu comme un déséquilibre entre les camps.
 //
 // ⚠ TROIS VALEURS DE PV, PAS DEUX, et c'est ce qui rend la table légère.
 // `null` veut dire INTACT, `0` veut dire DÉTRUIT, un entier veut dire « il lui
@@ -50,6 +70,13 @@ import {
 } from './satellites.js';
 import { montageDuSite, resumeDuSite } from './site-de-la-case.js';
 import { baseCourante } from './base-courante.js';
+import { facteurMilli } from './combat.js';
+import {
+  pvApresRetour, pvMaxDeLaPieceDeGarnisonMilli, ticksDeRetour,
+} from './reparation.js';
+
+/** Un PV vaut mille milli-PV, et une santé se range en millièmes. */
+const MILLE = 1000;
 
 /** Le bâtiment dont la chute rase le site, et celui qui répare les défenses. */
 const ID_SOUCHE = Object.keys(BATIMENTS).find((id) => BATIMENTS[id].raseLeSite === true);
@@ -175,10 +202,27 @@ export function avarieDeLaBase(base) {
   });
 }
 
-/** Réparation des défenses par l'Étai, en ticks. */
+/**
+ * La durée de BASE de la rampe des défenses, en ticks — une heure.
+ *
+ * ⚠ ELLE N'A PLUS D'APPELANT DE PRODUCTION DEPUIS LE LOT RETOUR-DÉFENSES, et
+ * c'est dit plutôt que tu. La durée réelle sort de `ticksDeRetour`, qui multiplie
+ * cette heure-là par le dépassement et par la pénalité de santé ;
+ * `RETOUR_DEFENSES.heuresDeBase` EST `APRES_RAID.reparationDefensesHeures`, donc
+ * il n'y a toujours qu'une seule vérité pour cette heure. Elle reste exportée
+ * parce que les tests s'en servent comme unité de temps lisible, et parce que la
+ * retirer ferait croire que l'heure a disparu du modèle.
+ */
 export const TICKS_REPARATION_DEFENSES = APRES_RAID.reparationDefensesHeures * TICKS_PAR_HEURE;
 
-/** Réparation intégrale d'une base de l'Ouvrage, en ticks. */
+/**
+ * Réparation intégrale des BÂTIMENTS d'une base de l'Ouvrage, en ticks.
+ *
+ * ⚠ ELLE NE COUVRE PLUS LES DÉFENSES DEPUIS LE LOT RETOUR-DÉFENSES. Celles d'une
+ * base suivent la même rampe que celles d'un camp — c'est ce que « une seule
+ * règle, les deux camps » veut dire —, et la coïncidence des durées à pleine
+ * santé (une heure des deux côtés) ne doit pas les refondre en une seule ligne.
+ */
 export const TICKS_REPARATION_BASE = TYPES_SITE.base.reparationHeures * TICKS_PAR_HEURE;
 
 /** La table vide, pour une partie où rien n'a encore été attaqué. */
@@ -324,6 +368,12 @@ export function enregistrerLeRaid(etat, identite, resultat) {
     ),
   };
 
+  // ⚠⚠ LA SANTÉ SE FIGE ICI, ET NULLE PART AILLEURS. C'est l'instant du raid,
+  // le seul que la règle du 05/09 reconnaisse : réparer l'Étai ensuite ne
+  // raccourcit pas le retour en cours. Elle se lit sur les PV que le raid vient
+  // de LAISSER, donc APRÈS `reprojeter` — la lire avant rendrait toujours mille.
+  entree.santeComplexeMilli = santeDeLEtai(entree, complet);
+
   if (neDitRien(entree)) delete etat.sitesEntames[cle];
   else etat.sitesEntames[cle] = entree;
 
@@ -375,8 +425,99 @@ export function montageCourant(etat, identite) {
   return {
     ...montage,
     batiments: appliquer(montage.batiments, entree.pvBatimentsMilli),
-    defenseurs: appliquer(montage.defenseurs, entree.pvDefensesMilli),
+    defenseurs: appliquer(montage.defenseurs, pvCourantsDesDefenses(etat, entree, montage)),
   };
+}
+
+/**
+ * La santé de l'Étai à l'instant du raid, en millièmes — ou `null` s'il est
+ * tombé, ou si ce site n'en a pas.
+ *
+ * ⚠⚠ `null` VEUT DIRE « PLUS JAMAIS », ET C'EST LA GARDE DU §2, PAS UNE
+ * PROPRIÉTÉ ÉMERGENTE. Une santé de zéro rendrait la pénalité maximale — donc
+ * vingt-quatre heures —, et non « jamais » : c'est `pvApresRetour` qui refuse
+ * de rendre quoi que ce soit sur un `null`, et un test le mesure en retirant la
+ * ligne.
+ *
+ * ⚠ L'ÉTAI EST LE COMPLEXE DE DÉFENSE SOUS L'AUTRE JEU DE NOMS —
+ * `BATIMENTS.etai.ta` le dit, et `reparationDefenses` le désigne. Écrire
+ * « etai » ici serait la seconde vérité que `ID_ETAI` existe pour éviter.
+ *
+ * @param {object} entree
+ * @param {object} montage la composition PLEINE du site
+ * @returns {number|null}
+ */
+function santeDeLEtai(entree, montage) {
+  const index = montage.batiments.findIndex((b) => b.id === ID_ETAI);
+  if (index < 0) return null;
+  const pv = entree.pvBatimentsMilli[index];
+  if (pv === 0) return null;
+  if (pv === null) return MILLE;
+  const max = BATIMENTS[ID_ETAI].pv * facteurMilli(montage.batiments[index].niveau);
+  return Math.max(0, Math.min(MILLE, Math.round((pv * MILLE) / max)));
+}
+
+/**
+ * La santé figée que porte cette entrée — celle du raid si elle y est, sinon
+ * celle qu'on relit sur l'Étai.
+ *
+ * ⚠ LE REPLI COUVRE LES SAUVEGARDES D'AVANT CE LOT, et il ne calcule rien de
+ * neuf : il relit l'Étai tel que le raid l'a laissé, ce qui EST la santé du
+ * raid. `reparerLesSites` écrit ensuite la valeur pour de bon, comme le filet de
+ * la garnison stampe une pièce non stampée.
+ */
+function santeFigee(entree, montage) {
+  if (entree.santeComplexeMilli !== undefined) return entree.santeComplexeMilli;
+  return santeDeLEtai(entree, montage);
+}
+
+/**
+ * Les milli-PV des défenses TELS QU'ILS SONT AUJOURD'HUI — palier des 70 % et
+ * rampe compris.
+ *
+ * ⚠⚠ RIEN N'EST RÉÉCRIT, ET C'EST LE CÂBLAGE CHOISI CÔTÉ OUVRAGE. `sitesEntames`
+ * n'est lu que par `montageCourant` et `resumeCourant` : le retour s'y calcule à
+ * la LECTURE, l'entrée gardant `tickDuRaid` et sa santé figée. Côté joueur,
+ * `degatsMilli` a treize lecteurs et c'est le tick qui RÉÉCRIT — deux câblages,
+ * une seule fonction pure.
+ *
+ * ⚠ UNE PIÈCE À ZÉRO REVIENT, SI L'ÉTAI TIENT. C'est le changement de fond du
+ * 05/09 : le palier porte sur les PV perdus de chaque pièce, détruite comprise,
+ * là où la règle d'avant ne rendait rien à ce qui était tombé.
+ */
+function pvCourantsDesDefenses(etat, entree, montage) {
+  const sante = santeFigee(entree, montage);
+  if (sante === null) return entree.pvDefensesMilli;
+  const ecoule = etat.horloge.nbTicks - entree.tickDuRaid;
+  return entree.pvDefensesMilli.map((pv, i) => {
+    if (pv === null) return null;
+    const piece = montage.defenseurs[i];
+    const pvMax = pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau);
+    const courant = pvApresRetour({
+      pvMaxMilli: pvMax,
+      pvApresRaidMilli: pv,
+      niveau: piece.niveau,
+      niveauComplexe: entree.niveau,
+      santeMilli: sante,
+      ecouleTicks: ecoule,
+    });
+    return courant >= pvMax ? null : courant;
+  });
+}
+
+/**
+ * Combien de ticks la rampe met à tout rendre sur ce site.
+ *
+ * ⚠ LE MAXIMUM, PAS LA PREMIÈRE. Sur un site de l'Ouvrage tout est au niveau du
+ * site, donc les durées coïncident aujourd'hui ; prendre le maximum reste juste
+ * le jour où une garnison mêlée y paraîtrait, et ne coûte rien.
+ */
+function dureeDuRetourDesDefenses(entree, montage, sante) {
+  let duree = 0;
+  for (const piece of montage.defenseurs) {
+    duree = Math.max(duree, ticksDeRetour(piece.niveau, entree.niveau, sante));
+  }
+  return duree;
 }
 
 /**
@@ -432,17 +573,6 @@ export function resumeCourant(etat, identite) {
 }
 
 /**
- * L'Étai de ce site est-il encore debout ? C'est lui qui décide si les défenses
- * repousseront un jour.
- */
-function etaiDebout(etat, entree) {
-  const montage = montageDuSite(etat.graine, entree);
-  const index = montage.batiments.findIndex((b) => b.id === ID_ETAI);
-  if (index < 0) return false;
-  return entree.pvBatimentsMilli[index] !== 0;
-}
-
-/**
  * Rend au temps ce qui lui revient : les réparations dues.
  *
  * ⚠ APPELÉE PAR LES DEUX CHEMINS D'AVANCEMENT, ET SANS BOUCLE PAR TICK. Elle ne
@@ -461,29 +591,42 @@ export function reparerLesSites(etat) {
 
   for (const [cle, entree] of Object.entries(etat.sitesEntames)) {
     const ecoule = maintenant - entree.tickDuRaid;
+    const montage = montageDuSite(etat.graine, entree);
+    let change = false;
 
-    if (entree.type === 'base') {
-      // Tout revient, y compris ce qui était tombé : le plancher à 1 PV a fait
-      // que rien n'est vraiment mort, sauf une Souche — et une Souche tombée
-      // aurait rasé le site au lieu de l'entamer.
-      if (ecoule >= TICKS_REPARATION_BASE) {
-        delete etat.sitesEntames[cle];
-        touches += 1;
-      }
-      continue;
+    // ⚠⚠ LE FILET, ET IL PASSE AVANT TOUT LE RESTE. Une entrée d'avant ce lot ne
+    // porte pas de santé figée ; on la relit sur l'Étai TEL QUE LE RAID L'A
+    // LAISSÉ, ce qui EST la santé du raid. Le faire après la remise à neuf des
+    // bâtiments d'une base rendrait toujours mille, et un Étai à moitié tombé
+    // passerait pour intact.
+    if (entree.santeComplexeMilli === undefined) {
+      entree.santeComplexeMilli = santeDeLEtai(entree, montage);
+      change = true;
     }
 
-    if (ecoule < TICKS_REPARATION_DEFENSES) continue;
-    if (!etaiDebout(etat, entree)) continue;
-
-    // Les SURVIVANTES seulement. Ce qui est tombé dans un camp est perdu pour
-    // toujours — c'est ce qui rend la seconde passe moins chère que la première.
-    let change = false;
-    entree.pvDefensesMilli = entree.pvDefensesMilli.map((pv) => {
-      if (pv === null || pv === 0) return pv;
+    // ⚠ LES BÂTIMENTS D'UNE BASE DE L'OUVRAGE REVIENNENT TOUS EN UNE HEURE,
+    // détruits compris : le plancher à 1 PV a fait que rien n'est vraiment mort,
+    // sauf une Souche — et une Souche tombée aurait rasé le site au lieu de
+    // l'entamer. Ceux d'un camp ou d'un avant-poste ne reviennent JAMAIS.
+    if (entree.type === 'base' && ecoule >= TICKS_REPARATION_BASE
+        && entree.pvBatimentsMilli.some((v) => v !== null)) {
+      entree.pvBatimentsMilli = entree.pvBatimentsMilli.map(() => null);
       change = true;
-      return null;
-    });
+    }
+
+    // ⚠⚠ LES DÉFENSES SUIVENT LA RAMPE, DES DEUX CÔTÉS ET QUEL QUE SOIT LE TYPE
+    // DE SITE. Ce qu'on écrit ici est le seul instant qui compte pour la table :
+    // celui où il n'y a plus rien à rendre. Tout ce qui précède se lit à la
+    // volée dans `pvCourantsDesDefenses`, donc l'entrée n'a pas à être touchée
+    // pendant la rampe — c'est ce qui garde les deux chemins d'avancement
+    // équivalents sans qu'on ait à le vérifier.
+    const sante = entree.santeComplexeMilli;
+    if (sante !== null && entree.pvDefensesMilli.some((v) => v !== null)
+        && ecoule >= dureeDuRetourDesDefenses(entree, montage, sante)) {
+      entree.pvDefensesMilli = entree.pvDefensesMilli.map(() => null);
+      change = true;
+    }
+
     if (!change) continue;
     touches += 1;
     if (neDitRien(entree)) delete etat.sitesEntames[cle];
@@ -510,6 +653,15 @@ export function problemesDesSitesEntames(sitesEntames) {
     if (cleDuSite(e) !== cle) problemes.push(`site entamé « ${cle} » rangé sous une autre clé`);
     if (!Number.isInteger(e.tickDuRaid) || e.tickDuRaid < 0) {
       problemes.push(`site entamé « ${cle} » — tick de raid « ${e.tickDuRaid} »`);
+    }
+    const sante = e.santeComplexeMilli;
+    if (sante !== undefined && sante !== null
+        && (!Number.isInteger(sante) || sante < 0 || sante > MILLE)) {
+      // ⚠ L'ABSENCE EST LÉGALE, ET C'EST LE FILET DE `reparerLesSites` QUI
+      // L'AUTORISE : une sauvegarde d'avant ce lot n'en porte pas, et le tick
+      // suivant la relit sur l'Étai. Ce qui est refusé, c'est une valeur
+      // PRÉSENTE et malformée.
+      problemes.push(`site entamé « ${cle} » — santé « ${sante} » : 0…${MILLE} ou null attendu`);
     }
     for (const champ of ['pvBatimentsMilli', 'pvDefensesMilli']) {
       if (!Array.isArray(e[champ])) {

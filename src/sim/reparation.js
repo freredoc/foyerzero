@@ -69,7 +69,7 @@
 
 import { DEFENSES, UNITES } from '../data/combat.js';
 import {
-  BASE_BATIMENTS, BATIMENT_DE_CHASSIS, REPARATION_BASE_JOUEUR, RETOUR_GARNISON, coutDeMontee,
+  BASE_BATIMENTS, BATIMENT_DE_CHASSIS, REPARATION_BASE_JOUEUR, RETOUR_DEFENSES, coutDeMontee,
 } from '../data/base.js';
 import { NIVEAU } from '../data/niveaux.js';
 import { ECONOMIE_NIVEAU } from '../data/economie.js';
@@ -1055,48 +1055,61 @@ export function problemesDeLaReserveDesBatiments(reserve) {
 }
 
 // ---------------------------------------------------------------------------
-// Le retour de la garnison — l'autre moitié, celle qui ne se paie pas
+// Le retour des défenses — l'autre moitié, celle qui ne se paie pas
 // ---------------------------------------------------------------------------
 //
 // ⚠⚠ CE N'EST PAS UNE RÉPARATION DU JOUEUR, ET LES DEUX MOITIÉS DE CE FICHIER NE
 // SE TOUCHENT PAS. Tout ce qui précède est un GESTE : le joueur paie du temps de
 // réserve et de la ressource, et les PV reviennent dans le même appel. Ce qui
-// suit est une ÉCHÉANCE : le Complexe de défense ramène la garnison tout seul,
+// suit est une RAMPE : le Complexe de défense ramène la garnison tout seul,
 // gratuitement, sans réservoir et sans que le joueur touche à quoi que ce soit.
-// `MODELE-REPARATION-1.md` §3 : « Le Complexe de défense répare tout,
-// gratuitement, en une heure. » Les fondre demanderait un cinquième réservoir et
-// un bouton, c'est-à-dire inventer une seconde règle à côté de celle-ci.
+// `MODELE-REPARATION-1.md` §3 et §5. Les fondre demanderait un cinquième
+// réservoir et un bouton, c'est-à-dire inventer une seconde règle à côté de
+// celle-ci — et `reparerLaGarnison` de `sim/raid.js`, le module `autoReparation`
+// d'une PIÈCE à 20 %, est un TROISIÈME mécanisme qui coexiste avec les deux.
 //
-// ⚠⚠ UNE ÉCHÉANCE, PAS UN DÉBIT — ET C'EST CE QUI LA REND COMPATIBLE AVEC LE
-// RATTRAPAGE. `MODELE-REPARATION-1.md` §6 point 5 parle d'un débit qui
-// s'accélère à mesure que le Complexe se répare lui-même ; `sim/site-entame.js`
-// implémente déjà le côté Ouvrage comme une échéance — un tick de raid, un
-// seuil, tout revient d'un coup — et c'est cette forme-là qu'on suit. Une
-// échéance ne lit que l'horloge courante, donc mille ticks d'un coup ramènent
-// exactement ce que mille ticks un par un auraient ramené.
+// ⚠⚠ LA MOITIÉ QUI SUIT SERT LES DEUX CAMPS, ET C'EST TOUT SON INTÉRÊT.
+// `pvApresRetour` ne lit QUE ses arguments — pas d'`etat`, pas d'horloge, pas de
+// `baseCourante` — si bien que `sim/site-entame.js` l'appelle telle quelle pour
+// les défenseurs d'un site de l'Ouvrage, où l'Étai tient le rôle du Complexe.
+// Une seconde écriture là-bas aurait divergé au premier réglage, et l'écart se
+// serait lu comme un déséquilibre entre les camps.
 //
-// ⚠⚠ CONSÉQUENCE ASSUMÉE, ET ELLE SE VOIT EN JEU : LE PRORATA SE FIGE À
-// L'INSTANT DU RAID. Réparer le Complexe ensuite NE RACCOURCIT PAS l'attente en
-// cours — ça ne sert que pour le raid suivant. C'est ce qui donne une raison de
-// garder le Complexe entier AVANT d'être attaqué, et non après ; et c'est le
-// point où ce module s'écarte du §6 point 5 du modèle, qui fait revenir le site
-// entier malgré tout parce que le débit s'accélère en chemin.
+// ⚠⚠ ET LA RÉÉCRITURE EST ANALYTIQUE, JAMAIS UNE ACCUMULATION. Le tick ne
+// soustrait pas un petit morceau à chaque passage : il RECALCULE le total depuis
+// l'écoulé. C'est ce qui rend `tickJeu` × n ≡ `rattraperJeu(n)` vrai PAR
+// CONSTRUCTION et non par vérification — la même raison que `reparerLesSites`
+// porte déjà, et la seule qui tienne devant un rattrapage de dix ans.
 //
-// ⚠ ET UN SECOND RAID PENDANT L'ATTENTE NE REMET PAS LE COMPTEUR À ZÉRO. La
-// règle est écrite en une ligne — on ne stampe que ce qui n'est PAS stampé —,
-// donc une pièce déjà en attente garde son échéance et revient entière, dégâts
-// neufs compris. L'autre lecture — restamper à chaque raid — rallongerait
-// l'attente à chaque passe et rendrait la garnison indisponible pour toujours
-// sous des raids rapprochés. Une ligne à changer si Ethan tranche autrement.
+// ⚠⚠ LA SANTÉ SE FIGE À L'INSTANT DU RAID, ET LE NIVEAU DU COMPLEXE AVEC ELLE.
+// Réparer le Complexe ensuite NE RACCOURCIT PAS l'attente en cours — ça ne sert
+// que pour le raid suivant. C'est ce qui donne une raison de garder le Complexe
+// entier AVANT d'être attaqué, et non après. ⚠ ÉCART DÉCLARÉ AU BRIEF : il ne
+// nomme que trois champs et ne fige que la santé ; le niveau y est ajouté parce
+// que les deux décrivent LE MÊME bâtiment au MÊME instant, et qu'en figer un
+// seul ferait de l'autre une seconde vérité — une montée du Complexe
+// raccourcirait alors une attente déjà commencée, ce que le prorata figé refuse
+// justement. Conséquence assumée : démolir le Complexe pendant une attente ne
+// l'interrompt pas ; ce sont les dégâts SUIVANTS qui n'auront plus d'échéance.
+//
+// ⚠⚠ ET UN SECOND RAID PENDANT L'ATTENTE REPART DE ZÉRO — c'est un RENVERSEMENT
+// de la lecture du lot COMPLEXE, et il est forcé par la forme analytique. Une
+// rampe est autoritaire sur `degatsMilli` : si elle ne repartait pas des dégâts
+// NEUFS, elle les écraserait au tick suivant par la valeur calculée depuis le
+// premier raid, et la seconde passe ne laisserait aucune trace. Le filet détecte
+// donc les dégâts que la rampe n'explique pas, et restampe.
 
 /**
- * Les PV maximaux d'une pièce de garnison du joueur, en milli-PV.
+ * Les PV maximaux d'une pièce de garnison, en milli-PV.
  *
  * ⚠ LES DEUX TABLES SONT INTERROGÉES, ET DANS CET ORDRE. Une garnison mêle des
  * ouvrages fixes (`DEFENSES`) et des unités mobiles (`UNITES`) — `rosterDefensif`
  * en compose dix-sept à partir des deux —, et une liste de noms écrite à la main
  * serait la première à diverger : c'est la faute qui a fait un écran blanc le
  * 30/08.
+ *
+ * ⚠ ELLE SERT LES DEUX CAMPS. Les défenseurs d'un site de l'Ouvrage sortent des
+ * mêmes deux tables ; `sim/site-entame.js` l'appelle pour eux.
  *
  * ⚠ ELLE VIT ICI DEPUIS LE LOT COMPLEXE, ET C'EST UN DÉPLACEMENT, PAS UNE
  * SECONDE ÉCRITURE. `sim/raid-ouvrage.js` en portait une copie privée ; deux
@@ -1124,41 +1137,32 @@ export function pvMaxDeLaPieceDeGarnisonMilli(id, niveau) {
  * afficher une durée ; `null` dit un fait de jeu que l'écran doit ANNONCER.
  * Même convention que `batimentDuChassis` et `niveauDeCommandement`.
  *
+ * ⚠ ET `santeMilli` VAUT `null` SI LE COMPLEXE EST À ZÉRO PV — la garde du §2,
+ * écrite et non émergente. Côté joueur elle ne tire pas : les bâtiments
+ * planchent à 1 PV et ne meurent pas. Elle est écrite quand même, parce que la
+ * fonction pure qui la lit sert AUSSI l'Ouvrage, où l'Étai peut tomber.
+ *
  * ⚠ LA SANTÉ EST BORNÉE À LA LECTURE, JAMAIS À L'ÉCRITURE. `degatsMilli` n'a
  * aucun plafond dans l'état — les borner exigerait de refuser une sauvegarde le
  * jour où un PV baisse dans la table (`problemesDeLEffectif` le dit déjà de son
- * côté) —, donc c'est ici qu'on rabat sur [0, 1].
+ * côté) —, donc c'est ici qu'on rabat sur [0, 1000].
  *
  * @param {{ disposition: Array }} laBase
- * @returns {{ id: string, niveau: number, sante: number }|null}
+ * @returns {{ id: string, niveau: number, santeMilli: number|null }|null}
  */
 export function complexeDeLaBase(laBase) {
-  const id = RETOUR_GARNISON.indexeeSur;
+  const id = RETOUR_DEFENSES.indexeeSur;
   const pose = laBase.disposition.find((b) => b.id === id);
   if (pose === undefined) return null;
   const maxMilli = pvMaxDuBatimentMilli(id, pose.niveau);
   const restants = Math.max(0, maxMilli - (pose.degatsMilli ?? 0));
-  return { id, niveau: pose.niveau, sante: Math.min(1, restants / maxMilli) };
+  if (restants === 0) return { id, niveau: pose.niveau, santeMilli: null };
+  const santeMilli = Math.min(MILLE, Math.round((restants * MILLE) / maxMilli));
+  return { id, niveau: pose.niveau, santeMilli };
 }
 
 /**
- * La pénalité de santé — le facteur qui allonge l'attente quand le Complexe est
- * abîmé. Vaut 1 à pleine santé et `heuresAuPlancher / heuresDeBase` à zéro.
- *
- * ⚠⚠ LINÉAIRE, PAR ARBITRAGE D'ETHAN DU 06/09 — voir `RETOUR_GARNISON` dans
- * `data/base.js`, qui porte la forme écartée et ce qu'elle rendait. Les deux
- * formes touchent les mêmes deux points ; elles ne diffèrent qu'entre eux.
- *
- * @param {number} sante dans [0, 1]
- * @returns {number} facteur ≥ 1
- */
-function penaliteDeSante(sante) {
-  const rapport = RETOUR_GARNISON.heuresAuPlancher / RETOUR_GARNISON.heuresDeBase;
-  return 1 + (rapport - 1) * (1 - sante);
-}
-
-/**
- * Combien de ticks une pièce mettra à revenir, sous ce Complexe-là.
+ * Combien de ticks la rampe met à rendre le plein, sous ce Complexe-là.
  *
  * ⚠⚠ `1 + dépassement` NE PEUT PAS SORTIR DE `NIVEAU`, ET ON L'ASSERTE PLUTÔT
  * QUE DE L'ESPÉRER. Le dépassement vaut au plus `plafond − 1`, le niveau du
@@ -1167,29 +1171,77 @@ function penaliteDeSante(sante) {
  * message qui dit LEQUEL des deux niveaux est en cause, le jour où un plafond
  * bougera d'un côté sans bouger de l'autre.
  *
- * ⚠ ARRONDI VERS LE HAUT. Une échéance est une ATTENTE, et une attente
- * s'arrondit vers le haut — même règle que le `Math.ceil` par défaut de
- * `direLaDuree`. Vers le bas, une pièce reviendrait avant l'heure annoncée.
+ * ⚠ ARRONDI VERS LE HAUT, ET PLANCHER À UN TICK. Une durée est une ATTENTE, et
+ * une attente s'arrondit vers le haut — même règle que le `Math.ceil` par défaut
+ * de `direLaDuree`. Une durée nulle diviserait par zéro dans la rampe.
  *
- * @param {{ niveau: number, sante: number }} complexe
  * @param {number} niveauPiece
+ * @param {number} niveauComplexe
+ * @param {number} santeMilli dans [0, 1000]
  * @returns {number} ticks, ≥ 1
  */
-export function ticksDeRetourDeLaPiece(complexe, niveauPiece) {
+export function ticksDeRetour(niveauPiece, niveauComplexe, santeMilli) {
   if (!Number.isInteger(niveauPiece) || niveauPiece < 1) {
     throw new RangeError(`réparation : niveau de pièce « ${niveauPiece} » — entier ≥ 1 attendu`);
   }
-  const depassement = Math.max(0, niveauPiece - complexe.niveau);
+  const depassement = Math.max(0, niveauPiece - niveauComplexe);
   if (1 + depassement > NIVEAU.plafond) {
     throw new RangeError(
       `réparation : dépassement ${depassement} — pièce niveau ${niveauPiece}, `
-      + `Complexe niveau ${complexe.niveau}, plafond ${NIVEAU.plafond}`,
+      + `Complexe niveau ${niveauComplexe}, plafond ${NIVEAU.plafond}`,
     );
   }
-  const heures = RETOUR_GARNISON.heuresDeBase
+  const rapport = RETOUR_DEFENSES.heuresAuPlancher / RETOUR_DEFENSES.heuresDeBase;
+  const penalite = 1 + (rapport - 1) * (1 - santeMilli / MILLE);
+  const heures = RETOUR_DEFENSES.heuresDeBase
     * (facteurMilli(1 + depassement) / MILLE)
-    * penaliteDeSante(complexe.sante);
-  return Math.ceil(heures * TICKS_PAR_HEURE);
+    * penalite;
+  return Math.max(1, Math.ceil(heures * TICKS_PAR_HEURE));
+}
+
+/**
+ * LE CŒUR DE LA RÈGLE — les milli-PV courants d'une pièce de défense, des DEUX
+ * camps. Un palier instantané à la fin du raid, puis une rampe linéaire.
+ *
+ * ⚠⚠ ELLE NE LIT QUE SES ARGUMENTS. Pas d'`etat`, pas d'horloge, pas de
+ * `baseCourante` : c'est ce qui la rend éprouvable au montage direct, sans
+ * partie, et ce qui permet aux deux camps de l'appeler sans se ressembler par
+ * ailleurs.
+ *
+ * ⚠⚠ LA GARDE « RIEN NE REVIENT JAMAIS » EST ÉCRITE, PAS ÉMERGENTE. À santé
+ * nulle la formule rendrait la pénalité maximale — vingt-quatre heures —, et
+ * non « jamais ». `santeMilli === null` dit « pas de Complexe, ou Complexe à
+ * zéro PV » ; retirer la ligne fait revenir les pièces en 24 h, ce qu'un test
+ * mesure de face.
+ *
+ * @param {object} arg
+ * @param {number} arg.pvMaxMilli
+ * @param {number} arg.pvApresRaidMilli ce que le raid a laissé
+ * @param {number} arg.niveau niveau de la PIÈCE
+ * @param {number} arg.niveauComplexe niveau du Complexe ou de l'Étai
+ * @param {number|null} arg.santeMilli santé FIGÉE, `null` = rien ne revient
+ * @param {number} arg.ecouleTicks depuis le raid
+ * @returns {number} milli-PV courants
+ */
+export function pvApresRetour({
+  pvMaxMilli, pvApresRaidMilli, niveau, niveauComplexe, santeMilli, ecouleTicks,
+}) {
+  const apres = Math.max(0, Math.min(pvMaxMilli, pvApresRaidMilli));
+  const perdus = pvMaxMilli - apres;
+  if (perdus <= 0) return pvMaxMilli;
+  if (santeMilli === null) return apres; // ⚠⚠ LA GARDE — voir plus haut.
+
+  // ⚠ LE PALIER PORTE SUR LES PV PERDUS DE CETTE PIÈCE-CI, DÉTRUITE COMPRISE.
+  // Une pièce à zéro a tout perdu, donc elle se relève à 70 % × santé — c'est le
+  // changement de fond du 05/09, la règle d'avant ne touchant que les
+  // survivantes d'un camp.
+  const instantane = Math.floor(
+    (perdus * RETOUR_DEFENSES.partInstantaneeMilli * santeMilli) / (MILLE * MILLE),
+  );
+  const duree = ticksDeRetour(niveau, niveauComplexe, santeMilli);
+  const ecoule = Math.max(0, ecouleTicks);
+  if (ecoule >= duree) return pvMaxMilli;
+  return apres + instantane + Math.floor(((perdus - instantane) * ecoule) / duree);
 }
 
 /**
@@ -1197,8 +1249,8 @@ export function ticksDeRetourDeLaPiece(complexe, niveauPiece) {
  * quand ?
  *
  * ⚠ TROIS RÉPONSES, PAS DEUX. `intacte` — rien à attendre ; `sans-retour` — la
- * pièce est abîmée et aucun Complexe ne la ramènera ; `en-attente` — elle
- * revient dans `ticks`. Les deux dernières se confondraient sous un `null`, et
+ * pièce est abîmée et aucun Complexe ne la ramènera ; `en-attente` — elle est
+ * entière dans `ticks`. Les deux dernières se confondraient sous un `null`, et
  * l'écran ne pourrait plus distinguer « jamais » de « bientôt ».
  *
  * @param {object} laBase
@@ -1208,19 +1260,41 @@ export function ticksDeRetourDeLaPiece(complexe, niveauPiece) {
  */
 export function retourDeLaPiece(laBase, piece, maintenant) {
   if ((piece.degatsMilli ?? 0) <= 0) return { etat: 'intacte', ticks: null };
-  if (piece.retourTick === null || piece.retourTick === undefined) {
+  const r = piece.retour ?? null;
+  if (r === null) {
     // Non stampée : soit il n'y a pas de Complexe, soit le tick ne l'a pas
     // encore vue. Le second cas ne dure qu'un dixième de seconde ; le premier
     // est la règle, et c'est lui qu'on annonce.
     const complexe = complexeDeLaBase(laBase);
-    if (complexe === null) return { etat: 'sans-retour', ticks: null };
-    return { etat: 'en-attente', ticks: ticksDeRetourDeLaPiece(complexe, piece.niveau) };
+    if (complexe === null || complexe.santeMilli === null) {
+      return { etat: 'sans-retour', ticks: null };
+    }
+    return {
+      etat: 'en-attente',
+      ticks: ticksDeRetour(piece.niveau, complexe.niveau, complexe.santeMilli),
+    };
   }
-  return { etat: 'en-attente', ticks: Math.max(0, piece.retourTick - maintenant) };
+  if (r.santeMilli === null) return { etat: 'sans-retour', ticks: null };
+  const duree = ticksDeRetour(piece.niveau, r.niveauComplexe, r.santeMilli);
+  return { etat: 'en-attente', ticks: Math.max(0, r.tickDuRaid + duree - maintenant) };
+}
+
+/** Les dégâts que la rampe explique à cet instant, pour une pièce stampée. */
+function degatsAttendusMilli(piece, maintenant) {
+  const pvMax = pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau);
+  const pv = pvApresRetour({
+    pvMaxMilli: pvMax,
+    pvApresRaidMilli: pvMax - piece.retour.degatsAuDebutMilli,
+    niveau: piece.niveau,
+    niveauComplexe: piece.retour.niveauComplexe,
+    santeMilli: piece.retour.santeMilli,
+    ecouleTicks: maintenant - piece.retour.tickDuRaid,
+  });
+  return pvMax - pv;
 }
 
 /**
- * Ramène la garnison que le temps a rendue, et stampe ce qui ne l'est pas.
+ * Fait avancer la rampe de toute la garnison, et stampe ce qui ne l'est pas.
  *
  * ⚠⚠ APPELÉE PAR LES DEUX CHEMINS D'AVANCEMENT, ET UNE TROISIÈME FOIS PAR LE
  * RAID — cette troisième est ce qui rend les deux chemins ÉQUIVALENTS, et elle
@@ -1229,18 +1303,38 @@ export function retourDeLaPiece(laBase, piece, maintenant) {
  * abîmée par un raid y serait stampée au bout du segment SUIVANT, c'est-à-dire
  * des heures plus tard, là où le chemin direct la stampe au tick d'après.
  * `subirUnRaid` appelle donc cette fonction sur-le-champ, si bien que les deux
- * chemins stampent au MÊME instant : celui du raid.
+ * chemins stampent au MÊME instant : celui du raid. C'est aussi ce qui fait que
+ * le palier des 70 % arrive à la FIN DU RAID et pas un tick plus tard.
  *
  * ⚠ ET SON IDEMPOTENCE EST CE QUI AUTORISE CE TROISIÈME APPEL. Deux appels au
- * même tick rendent le même état : le premier ramène et stampe, le second ne
- * trouve plus rien à faire.
+ * même tick rendent le même état : la rampe est analytique, donc la relire ne
+ * la fait pas avancer.
  *
  * ⚠⚠ LE FILET STAMPE CE QUI N'EST PAS STAMPÉ, ET IL COUVRE PLUS QUE LA
- * MIGRATION. Une pièce qui porte des dégâts sans échéance en reçoit une au
- * premier passage : c'est ce qui rend la migration triviale — le champ absent
- * vaut `null` — et c'est aussi ce qui couvrira tout chemin futur qui abîmerait
- * la garnison sans passer par `subirUnRaid`. Sans lui, une sauvegarde d'avant ce
- * lot garderait sa garnison abîmée pour toujours.
+ * MIGRATION. Une pièce qui porte des dégâts sans `retour` en reçoit un au
+ * premier passage, avec le Complexe D'AUJOURD'HUI : c'est ce qui rend la
+ * migration triviale — le champ absent vaut `null` — et c'est aussi ce qui
+ * couvre tout chemin futur qui abîmerait la garnison sans passer par
+ * `subirUnRaid`. Sans lui, une sauvegarde d'avant ce lot garderait sa garnison à
+ * terre pour toujours.
+ *
+ * ⚠⚠ ET IL RESTAMPE CE QUE LA RAMPE N'EXPLIQUE PAS, SOUS UN TEST QUI NE PEUT PAS
+ * SE TROMPER DANS L'AUTRE SENS. La rampe ne fait que RÉDUIRE les dégâts sous
+ * `degatsAuDebutMilli` : des dégâts plus grands que ce point de départ ne
+ * peuvent donc venir que d'ailleurs. Comparer aux dégâts ATTENDUS à l'instant
+ * présent serait faux — `degatsMilli` porte ce que le tick PRÉCÉDENT a écrit,
+ * donc il les dépasse toujours d'un cran, et la rampe se restamperait à chaque
+ * passage. Mesuré : la première écriture de ce test faisait repartir l'attente
+ * dix fois par seconde, si bien qu'aucune pièce ne revenait jamais.
+ *
+ * ⚠ LE RAID, LUI, NE COMPTE PAS SUR CE FILET : `subirUnRaid` remet `retour` à
+ * `null` sur ce qu'il vient d'abîmer. Le filet couvre ce qu'on ne connaît pas
+ * encore — un chemin futur qui abîmerait la garnison sans passer par lui.
+ *
+ * ⚠ SANS COMPLEXE, ON NE STAMPE RIEN — et surtout pas une échéance lointaine. La
+ * pièce reste abîmée et sans `retour` ; le jour où le joueur POSE un Complexe,
+ * le tick suivant la stampe avec le Complexe du jour. Stamper `santeMilli: null`
+ * la condamnerait pour toujours, y compris après la construction.
  *
  * ⚠ TOUTES LES BASES, PAS SEULEMENT LA COURANTE — même raison que
  * `crediterLesReserves` : la base qu'on ne regarde pas doit vivre aussi.
@@ -1258,43 +1352,66 @@ export function ramenerLaGarnison(etat) {
     // disposition.
     let complexe;
     for (const piece of base.garnison) {
-      if (piece.retourTick !== null && piece.retourTick !== undefined) {
-        if (maintenant >= piece.retourTick) {
-          piece.degatsMilli = 0;
-          piece.retourTick = null;
+      const degats = piece.degatsMilli ?? 0;
+      if (degats <= 0) {
+        if (piece.retour !== null && piece.retour !== undefined) {
+          piece.retour = null;
           touches += 1;
         }
         continue;
       }
-      if ((piece.degatsMilli ?? 0) <= 0) continue;
-      if (complexe === undefined) complexe = complexeDeLaBase(base);
-      // ⚠ SANS COMPLEXE, ON NE STAMPE RIEN — et surtout pas une échéance
-      // lointaine. La pièce reste abîmée et sans échéance ; le jour où le joueur
-      // POSE un Complexe, le tick suivant la stampe avec le Complexe du jour.
-      if (complexe === null) continue;
-      piece.retourTick = maintenant + ticksDeRetourDeLaPiece(complexe, piece.niveau);
-      touches += 1;
+      if (piece.retour !== null && piece.retour !== undefined
+          && degats > piece.retour.degatsAuDebutMilli) {
+        piece.retour = null;
+      }
+      if (piece.retour === null || piece.retour === undefined) {
+        if (complexe === undefined) complexe = complexeDeLaBase(base);
+        if (complexe === null || complexe.santeMilli === null) continue;
+        piece.retour = {
+          tickDuRaid: maintenant,
+          santeMilli: complexe.santeMilli,
+          niveauComplexe: complexe.niveau,
+          degatsAuDebutMilli: degats,
+        };
+        touches += 1;
+      }
+      const voulus = degatsAttendusMilli(piece, maintenant);
+      if (voulus !== degats) {
+        piece.degatsMilli = voulus;
+        touches += 1;
+      }
+      if (voulus <= 0) piece.retour = null;
     }
   }
   return touches;
 }
 
 /**
- * Le défaut STRUCTUREL du champ `retourTick`, pour le chargement.
+ * Le défaut STRUCTUREL du champ `retour`, pour le chargement.
  *
  * ⚠ L'ABSENCE EST LÉGALE, ET C'EST LE FILET QUI L'AUTORISE. Une sauvegarde
- * d'avant le lot COMPLEXE n'en porte aucun, une pièce fraîchement posée non
- * plus : « absent » vaut « null » vaut « pas d'échéance ». Ce qui est refusé,
+ * d'avant ce lot n'en porte aucun, une pièce fraîchement posée non plus :
+ * « absent » vaut « null » vaut « pas de rampe en cours ». Ce qui est refusé,
  * c'est une valeur PRÉSENTE et malformée — un tick négatif, un flottant, une
- * chaîne — parce qu'elle ferait revenir la pièce à un instant qui n'existe pas.
+ * chaîne — parce qu'elle ferait rendre à la rampe des PV qui n'existent pas.
  *
  * @param {*} valeur
  * @returns {Array<string>}
  */
-export function problemesDuRetourTick(valeur) {
+export function problemesDuRetour(valeur) {
   if (valeur === null || valeur === undefined) return [];
-  if (!Number.isInteger(valeur) || valeur < 0) {
-    return [`échéance de retour « ${valeur} » — entier de ticks ≥ 0 ou null attendu`];
+  if (typeof valeur !== 'object' || Array.isArray(valeur)) {
+    return [`retour de défense « ${valeur} » — objet ou null attendu`];
   }
-  return [];
+  const problemes = [];
+  for (const champ of ['tickDuRaid', 'degatsAuDebutMilli', 'niveauComplexe']) {
+    if (!Number.isInteger(valeur[champ]) || valeur[champ] < 0) {
+      problemes.push(`retour de défense — « ${champ} » vaut « ${valeur[champ]} »`);
+    }
+  }
+  const s = valeur.santeMilli;
+  if (s !== null && (!Number.isInteger(s) || s < 0 || s > MILLE)) {
+    problemes.push(`retour de défense — santé « ${s} » : 0…${MILLE} ou null attendu`);
+  }
+  return problemes;
 }
