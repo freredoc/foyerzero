@@ -90,7 +90,6 @@ import {
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
 import { facteurMilli } from '../sim/combat.js';
-import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -958,7 +957,20 @@ export function traitDeVoisinage(depart, arrivee, forme = TRAIT_VOISINAGE) {
  * et c'est elle que le test attrape.
  *
  * ⚠ LE VOISINAGE VIENT DU MOTEUR, pas d'un second parcours du 3 × 3.
- * `voisinsQualifiantsParCase` est la même règle que celle qui calcule le débit.
+ *
+ * ⚠⚠ ET CE COMMENTAIRE AFFIRMAIT UNE PROPRIÉTÉ FAUSSE JUSQU'AU 06/09/2026. Il
+ * disait : « `voisinsQualifiantsParCase` est la même règle que celle qui calcule
+ * le débit. » **Elle ne l'était pas** — sa branche champ était en
+ * `else if (i === undefined)`, donc un champ sous un bâtiment cessait de compter
+ * pour elle, quand `voisinsQualifiants` le comptait toujours. C'est très
+ * exactement la faute que le dépôt se nomme à lui-même : justifier une propriété
+ * par un mécanisme qu'on n'a pas ouvert. Le lot FICHE-JUSTE aligne le DESSIN sur
+ * le moteur, et la phrase est redevenue vraie.
+ *
+ * ⚠⚠ ELLE N'EST PLUS SEULEMENT AFFIRMÉE : ELLE EST MESURÉE. `F-J T2` compare le
+ * COMPTE PAR TYPE des deux fonctions sur une famille de montages — champ libre,
+ * champ occupé, bâtiment sur case nue, case vide —, et il tombe si elles
+ * divergent à nouveau. Sans lui, cette ligne redeviendrait un pari.
  *
  * @param {Array<object>} disposition
  * @param {object} champs
@@ -1178,17 +1190,16 @@ export function libelleDuVoisin(type) {
  * ne ferait pas — `CH-F T8` monte le même bâtiment à deux niveaux et exige que
  * la valeur diffère.
  *
- * ⚠ LA SANTÉ DU COMPLEXE SE RELIT SUR LA CANDIDATE, PAS SUR LA DISPOSITION
- * COURANTE. Monter le Complexe augmente ses PV MAXIMAUX sans réparer un seul
- * dégât : sa santé en MILLIÈMES monte donc toute seule, et lire l'avant des
- * deux côtés annoncerait un retour plus lent qu'il ne sera.
- *
- * ⚠ ET LE NIVEAU DE RÉFÉRENCE DU COMPLEXE EST `NIVEAU.plafond`, PAS
- * `GEOGRAPHIE.niveauPlafond`. Les deux valent 50 aujourd'hui, et ce n'est pas
- * une coquetterie : `ticksDeRetour` LÈVE quand `1 + dépassement` sort de
- * `NIVEAU`, si bien que prendre l'autre plafond ferait tomber tout le panneau
- * le jour où les deux divergeraient. Avec celui-ci la borne tient par
- * construction, le niveau du Complexe valant au moins 1.
+ * ⚠⚠ LA SANTÉ DU COMPLEXE SE RELIT SUR LA CANDIDATE, PAS SUR LA DISPOSITION
+ * COURANTE, ET DEPUIS LE 06/09 C'EST LE SEUL DISCRIMINANT DE SA LIGNE. Monter
+ * le Complexe augmente ses PV MAXIMAUX sans réparer un seul dégât : sa santé en
+ * MILLIÈMES monte donc toute seule, et lire l'avant des deux côtés annoncerait
+ * un retour plus lent qu'il ne sera. La pièce de référence ayant désormais le
+ * niveau du Complexe, le dépassement vaut zéro des deux côtés : **un Complexe
+ * INTACT annonce donc 1 h avant comme après, et c'est vrai** — le monter ne
+ * raccourcit rien tant qu'il n'est pas abîmé. C'est un Complexe ENTAMÉ qui fait
+ * bouger la ligne, les dégâts étant absolus quand les PV maximaux croissent
+ * avec le niveau. `CH-F T8` monte donc un Complexe abîmé, et il le dit.
  *
  * ⚠ UN BÂTIMENT NON UNIQUE N'EN REÇOIT AUCUN. La liste est vide, et
  * `lignesDuPanneau` teste sa longueur comme il teste déjà celle des capacités.
@@ -1226,15 +1237,41 @@ function effetsDuBatiment(pose, def, vise, disposition, candidate) {
   }
 
   if (def.role === 'reparation') {
-    // ⚠ LA PIÈCE DE RÉFÉRENCE EST CELLE DU PLAFOND, ET C'EST LE SEUL POINT DE
-    // COMPARAISON QUI NE S'INVENTE PAS. Le retour d'une défense dépend du
-    // DÉPASSEMENT entre son niveau et celui du Complexe : il n'existe donc
-    // aucune durée qui soit fonction du seul Complexe. Prendre le haut de la
-    // table donne le pire cas, qui est aussi le levier — c'est la mesure que le
-    // §0 de `CLAUDE.md` porte déjà, « pièce de niveau 50 sous un Complexe 10 →
-    // 45,3 h ».
+    // ⚠⚠ LA PIÈCE DE RÉFÉRENCE EST DE MÊME NIVEAU QUE LE COMPLEXE, ET C'EST UN
+    // ARBITRAGE D'ETHAN DU 06/09 QUI RENVERSE LE MOTIF ÉCRIT ICI. Ce bloc
+    // défendait le niveau 50 : « le retour d'une défense dépend du DÉPASSEMENT
+    // entre son niveau et celui du Complexe, il n'existe donc aucune durée qui
+    // soit fonction du seul Complexe ; prendre le haut de la table donne le
+    // pire cas, qui est aussi le levier ». **Le raisonnement était juste et il
+    // est écarté** : « Le complexe n'indique pas le coût de réparation. Ou juste
+    // dire 1h pour un niveau similaire. » Le pire cas annonçait 106,7 h à un
+    // joueur dont la garnison est au niveau 3 — un nombre qui ne le concerne
+    // pas.
+    //
+    // ⚠⚠ ET CE QUE LE NOUVEAU CHOIX COÛTE SE DIT : UN JOUEUR DONT LA GARNISON
+    // DÉPASSE LE NIVEAU DU COMPLEXE ATTENDRA PLUS LONGTEMPS QUE CETTE LIGNE NE
+    // L'ANNONCE. C'est la contrepartie exacte de l'ancien choix, prise dans
+    // l'autre sens : le dépassement est réel, la fiche cesse simplement de le
+    // supposer maximal. Une pièce de niveau 50 sous un Complexe 10 revient
+    // toujours en 45,3 h ; la ligne, elle, dit 1 h. **Le jour où la fiche
+    // devra dire les deux, c'est une SECONDE ligne qu'il faudra, pas ce
+    // niveau-ci qu'il faudra remonter.**
+    //
+    // ⚠⚠ ET LE CHIFFRE SE CALCULE, IL NE S'ÉCRIT PAS. « 1 h » est ce que la
+    // formule REND à dépassement nul, jamais ce qu'on tape ici : `ticksDeRetour`
+    // fait `heuresDeBase × facteurMilli(1 + 0)/1000 × pénalité(santé)`, et
+    // `facteurMilli(1)` vaut exactement 1 000. Mesuré aux niveaux 1, 5, 10, 25
+    // et 50 : 36 000 ticks, soit 1,0000 h à chaque fois — et 24,00 h à un PV.
+    // Les deux repères d'Ethan sont donc touchés par la formule, pas par une
+    // constante. `F-J T7` les rejoue.
+    //
+    // ⚠ ET LA BORNE DE `ticksDeRetour` TIENT MIEUX QU'AVANT, PAS MOINS BIEN.
+    // Elle LÈVE quand `1 + dépassement` sort de `NIVEAU` ; le dépassement vaut
+    // désormais ZÉRO par construction, quel que soit le niveau du Complexe. Le
+    // choix entre `NIVEAU.plafond` et `GEOGRAPHIE.niveauPlafond` — qui valaient
+    // tous deux 50 et que ce bloc départageait — devient donc sans objet.
     return [ligne(
-      `Retour d'une défense de niveau ${formaterEntier(NIVEAU.plafond)}`,
+      'Retour d\'une défense de son niveau',
       'duree',
       (niveau, ou) => {
         const complexe = complexeDeLaBase({ disposition: ou });
@@ -1242,7 +1279,7 @@ function effetsDuBatiment(pose, def, vise, disposition, candidate) {
         // jamais », et non « très lentement ». Il n'y a pas de durée à
         // annoncer ; `null` remonte, et la ligne se dira sans nombre.
         if (complexe === null || complexe.santeMilli === null) return null;
-        return ticksDeRetour(NIVEAU.plafond, niveau, complexe.santeMilli);
+        return ticksDeRetour(niveau, niveau, complexe.santeMilli);
       },
     )];
   }

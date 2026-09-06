@@ -13,6 +13,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 import {
   diviseurDuBatiment, secondesPleines, batimentDuChassis, reservoirsDeLArmee,
@@ -49,6 +52,19 @@ import { niveauDeLArmee, niveauDesBatiments } from '../src/sim/niveau-de-base.js
 import { baseCourante } from '../src/sim/base-courante.js';
 import { poserLaBaseSur } from '../src/sim/deplacement.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * La source d'un module, commentaires ôtés.
+ *
+ * ⚠ UNE GARDE QUI LIT SA PROPRE PROSE NE GARDE RIEN — le dépôt l'a payé huit
+ * fois. Ce paragraphe-ci nomme `quartz` pour dire que le retour ne le nomme
+ * pas ; sans ce filtre, il ferait tomber `F-J T9`.
+ */
+function sansCommentaires(texte) {
+  return texte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
 
 /**
  * Une partie avec les trois bâtiments réparateurs posés au niveau voulu, la
@@ -1570,4 +1586,83 @@ test('RETOUR-D T19 — `1 + dépassement` ne sort jamais de la table des niveaux
     'un dépassement hors table passe en silence',
   );
   assert.throws(() => ticksDeRetour(5.5, 1, 1000), /entier/, 'un niveau non entier passe');
+});
+
+// ---------------------------------------------------------------------------
+// Lot FICHE-JUSTE — le retour de la garnison ne coûte QUE du temps
+// ---------------------------------------------------------------------------
+
+/** Le corps d'une fonction de `src/sim/reparation.js`, accolades appariées. */
+function corpsDe(source, nom) {
+  const debut = source.indexOf(`export function ${nom}(`);
+  assert.ok(debut >= 0, `${nom} n'existe plus dans le module`);
+  let i = source.indexOf('{', debut);
+  let profondeur = 0;
+  for (; i < source.length; i += 1) {
+    if (source[i] === '{') profondeur += 1;
+    else if (source[i] === '}') {
+      profondeur -= 1;
+      if (profondeur === 0) return source.slice(debut, i + 1);
+    }
+  }
+  throw new Error(`${nom} : accolades non appariées`);
+}
+
+test('F-J T9 — le retour de la garnison ne nomme ni ressource ni réserve', () => {
+  // ⚠⚠ C'EST LA PHRASE DE `RETOUR_DEFENSES` MISE À L'ÉPREUVE. Elle écrit depuis
+  // le lot RETOUR-DÉFENSES : « ET C'EST GRATUIT, DONC IL N'Y A NI RÉSERVE NI
+  // RESSOURCE. Rien ici ne ressemble à `REPARATION_BASE_JOUEUR` au-dessus. »
+  // C'était une AFFIRMATION que rien ne mesurait — exactement la faute que le
+  // lot FICHE-JUSTE répare pour le voisinage. Ethan, 06/09 : « Complexe
+  // seulement du temps. »
+  //
+  // ⚠ ET C'EST CE QUI SÉPARE LES DEUX MÉCANISMES DE CE MODULE. La réparation
+  // d'un BÂTIMENT coûte du quartz pour de bon — `reparerUnBatiment` le débite —
+  // et `REPARATION_BASE_JOUEUR` a raison de dire « il paie ». Le RETOUR d'une
+  // défense, lui, ne se paie pas. Les fondre serait la faute ; ce test tient les
+  // deux moitiés séparées.
+  const source = sansCommentaires(readFileSync(join(RACINE, 'src/sim/reparation.js'), 'utf8'));
+  const INTERDITS = [
+    'ressources', 'reserveReparation', 'reserveReparationBatiments',
+    'quartz', 'scorie', 'electricite', 'coutDeMontee', 'coutDeLaReparation',
+  ];
+  for (const nom of ['pvApresRetour', 'ramenerLaGarnison', 'ticksDeRetour']) {
+    const corps = corpsDe(source, nom);
+    for (const mot of INTERDITS) {
+      assert.ok(!corps.includes(mot),
+        `${nom} nomme « ${mot} » : le retour de la garnison s'est mis à coûter`);
+    }
+  }
+
+  // ⚠ ET LE MOTIF N'EST PAS AVEUGLE : les mêmes mots sont bien présents dans le
+  // module, du côté qui paie. Sans cette ligne, huit `includes` sur une chaîne
+  // vide passeraient tout aussi bien.
+  const paie = corpsDe(source, 'reparerUnBatiment');
+  assert.ok(paie.includes('quartz'),
+    'la réparation d\'un bâtiment ne nomme plus le quartz : le test ne discrimine rien');
+
+  // ⚠ ET LA MESURE SE FAIT AUSSI PAR EXÉCUTION, pas seulement sur le texte : un
+  // retour complet ne bouge ni les stocks, ni les quatre réserves.
+  const etat = baseAvecComplexe(5);
+  const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 1);
+  const laBase = baseCourante(etat);
+  const avant = JSON.stringify({
+    ressources: laBase.economie.ressources,
+    reserves: laBase.reserveReparation,
+    batiments: laBase.reserveReparationBatiments,
+  });
+  assert.ok(piece.degatsMilli > 0, 'le montage ne porte aucune pièce abîmée');
+  // ⚠ DEUX APPELS, ET IL EN FAUT DEUX : le premier STAMPE la pièce et applique
+  // le palier de 70 %, le second sert la rampe une fois le temps écoulé. Un seul
+  // appel après l'avance ferait partir la rampe de là, et la pièce resterait à
+  // 70 % — c'est ce que la première écriture de ce montage a mesuré.
+  ramenerLaGarnison(etat);
+  etat.horloge.nbTicks += TICKS_PAR_HEURE * 48;
+  ramenerLaGarnison(etat);
+  assert.equal(piece.degatsMilli, 0, 'la pièce n\'est pas revenue : le montage ne mesure rien');
+  assert.equal(JSON.stringify({
+    ressources: laBase.economie.ressources,
+    reserves: laBase.reserveReparation,
+    batiments: laBase.reserveReparationBatiments,
+  }), avant, 'le retour de la garnison a dépensé quelque chose');
 });

@@ -23,12 +23,13 @@ import assert from 'node:assert/strict';
 
 import {
   problemesDeDisposition, dispositionValide, voisinsQualifiants,
+  voisinsQualifiantsParCase,
   debitDuBatiment, ressourceProduite, productionParRessource, casesVoisines,
   dispositionNouvelleBase,
 } from '../src/sim/disposition.js';
 import { champsDeLaBase, ressourceDeLaCase } from '../src/sim/champs.js';
 import {
-  VOISINAGE, CHAMPS, EMPLACEMENTS, BASE_BATIMENTS, GEOMETRIE_BASE,
+  VOISINAGE, CHAMPS, DEBITS, EMPLACEMENTS, BASE_BATIMENTS, GEOMETRIE_BASE,
   emplacementsDuNiveau, zoneDesChamps,
 } from '../src/data/base.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
@@ -727,4 +728,163 @@ test('disposition — deux bâtiments uniques ne peuvent pas être voisins', () 
   assert.match(p[0].message, /Chantier de construction/);
   assert.match(p[0].message, /QG de défense/);
   assert.ok(Number.isInteger(p[0].index), 'le défaut doit désigner un bâtiment');
+});
+
+// ---------------------------------------------------------------------------
+// Lot FICHE-JUSTE — le voisinage : deux fonctions, une seule question
+// ---------------------------------------------------------------------------
+
+/**
+ * Le montage EXACT du défaut d'Ethan : une centrale de niveau 1, un champ de
+ * scorie voisin, et un collecteur posé dessus.
+ *
+ * ⚠ LE CHANTIER EST LOIN, et il le faut : `problemesDeDisposition` refuse deux
+ * uniques voisins, et un montage refusé mesurerait autre chose.
+ */
+const CHAMP_UNIQUE = { cases: [{ rangee: 13, colonne: 3, ressource: 'scorie' }] };
+const CENTRALE_SEULE = () => [
+  { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+  { id: 'centrale', rangee: 14, colonne: 4, niveau: 1 },
+];
+const INDICE_CENTRALE = 1;
+
+test('F-J T1 — un champ sous un collecteur qualifie encore', () => {
+  // ⚠⚠ ETHAN, 06/09 : « un collecteur posé sur un Champ de scories bloque la
+  // production d'élec : anormal ». Ce n'est pas la production qui s'arrêtait —
+  // `F-J T3` le mesure — mais la FLÈCHE de la fiche, parce que
+  // `voisinsQualifiantsParCase` mettait sa branche champ en
+  // `else if (i === undefined)`.
+  const sans = CENTRALE_SEULE();
+  const avec = [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }];
+
+  // ⚠ LE MONTAGE EST LÉGAL DES DEUX CÔTÉS, et on le prouve avant de mesurer :
+  // un collecteur est le SEUL bâtiment que `CHAMPS.posableDessus` autorise sur
+  // un champ, donc c'est le seul montage qui puisse exister en jeu.
+  assert.deepEqual(problemesDeDisposition(sans, CHAMP_UNIQUE), []);
+  assert.deepEqual(problemesDeDisposition(avec, CHAMP_UNIQUE), []);
+  assert.deepEqual(CHAMPS.posableDessus, ['collecteur']);
+
+  for (const [nom, d] of [['sans collecteur', sans], ['collecteur dessus', avec]]) {
+    const cases = voisinsQualifiantsParCase(d, CHAMP_UNIQUE, INDICE_CENTRALE);
+    const champs = cases.filter((v) => v.type === 'champDeScorie');
+    assert.equal(champs.length, 1, `${nom} : le champ de scorie a disparu de la fiche`);
+    assert.equal(champs[0].rangee, 13);
+    assert.equal(champs[0].colonne, 3);
+    assert.ok(champs[0].apportParHeure > 0, `${nom} : le champ qualifie pour zéro`);
+  }
+});
+
+test('F-J T2 — les deux fonctions rendent le même compte par type', () => {
+  // ⚠⚠ C'EST LE TEST QUI REND VRAIE LA PHRASE ÉCRITE DANS LES DEUX MODULES —
+  // « `voisinsQualifiantsParCase` est la même règle que celle qui calcule le
+  // débit ». Elle était fausse et rien ne l'attrapait : justifier une propriété
+  // par un mécanisme qu'on n'a pas ouvert est exactement la faute que ce lot
+  // répare. Sans ce test, la divergence peut revenir en silence.
+  const montages = [
+    ['champ libre', CHAMP_UNIQUE, CENTRALE_SEULE()],
+    ['champ occupé', CHAMP_UNIQUE,
+      [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }]],
+    ['bâtiment sur case nue', CHAMP_UNIQUE,
+      [...CENTRALE_SEULE(), { id: 'accumulateur', rangee: 15, colonne: 5, niveau: 1 }]],
+    ['les deux à la fois', CHAMP_UNIQUE,
+      [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 },
+        { id: 'accumulateur', rangee: 15, colonne: 5, niveau: 1 }]],
+    ['aucun voisin', { cases: [] }, CENTRALE_SEULE()],
+    ['le terrain complet', TERRAIN, baseDeReference()],
+  ];
+
+  let compares = 0;
+  let qualifiants = 0;
+  for (const [nom, terrain, disposition] of montages) {
+    assert.deepEqual(problemesDeDisposition(disposition, terrain).map((x) => x.code), [],
+      `${nom} : le montage est illégal, il ne mesure pas ce qu'il annonce`);
+    for (let index = 0; index < disposition.length; index += 1) {
+      const attendu = voisinsQualifiants(disposition, terrain, index);
+      if (Object.keys(attendu).length === 0) continue;
+      const compte = {};
+      for (const type of Object.keys(attendu)) compte[type] = 0;
+      for (const v of voisinsQualifiantsParCase(disposition, terrain, index)) {
+        assert.notEqual(compte[v.type], undefined,
+          `${nom} / ${disposition[index].id} : la fiche invente le type « ${v.type} »`);
+        compte[v.type] += 1;
+        qualifiants += 1;
+      }
+      assert.deepEqual(compte, attendu,
+        `${nom} / ${disposition[index].id} : le dessin et le moteur ne comptent pas pareil`);
+      compares += 1;
+    }
+  }
+
+  // ⚠ ET LE BALAYAGE VOIT VRAIMENT QUELQUE CHOSE, DANS LES DEUX SENS : assez de
+  // bâtiments comparés, ET assez de voisins QUALIFIANTS trouvés. Sans le second
+  // plancher, une fonction qui rendrait toujours la liste vide passerait sur les
+  // montages où le moteur ne compte rien non plus.
+  assert.ok(compares >= 10,
+    `seulement ${compares} bâtiments comparés : le balayage ne mesure rien`);
+  assert.ok(qualifiants >= 8,
+    `seulement ${qualifiants} voisins qualifiants : le balayage est creux`);
+});
+
+test('F-J T3 — la production n\'a pas bougé d\'un milli', () => {
+  // ⚠⚠ LE LOT CORRIGE UN DESSIN. Si `debitDuBatiment` bouge, il a débordé.
+  // 180 est la mesure du brief, rejouée : centrale de niveau 1, UN champ de
+  // scorie voisin, avec et sans collecteur dessus.
+  const sans = CENTRALE_SEULE();
+  const avec = [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }];
+  assert.equal(debitDuBatiment(sans, CHAMP_UNIQUE, INDICE_CENTRALE).total, 180);
+  assert.equal(debitDuBatiment(avec, CHAMP_UNIQUE, INDICE_CENTRALE).total, 180);
+  assert.deepEqual(
+    productionParRessource(avec, CHAMP_UNIQUE, INDICE_CENTRALE),
+    productionParRessource(sans, CHAMP_UNIQUE, INDICE_CENTRALE),
+  );
+
+  // ⚠ ET LE MONTAGE DISCRIMINE : sans le champ, la centrale ne rendrait pas 180.
+  // Sans cette ligne, « 180 des deux côtés » serait vrai d'une centrale qui ne
+  // toucherait rien du tout.
+  assert.notEqual(debitDuBatiment(sans, { cases: [] }, INDICE_CENTRALE).total, 180);
+});
+
+test('F-J T5 — une case peut qualifier DEUX fois, et la fiche le dit', () => {
+  // ⚠⚠ LE CAS EST INATTEIGNABLE AUJOURD'HUI, ET C'EST MESURÉ — donc le test
+  // monte un `parVoisin` À LA MAIN plutôt que d'être sauté. Il faudrait qu'une
+  // table porte à la fois une clé `champDe…` et une clé de bâtiment posable sur
+  // un champ ; `CHAMPS.posableDessus` ne contient que `collecteur`, qu'aucune
+  // table n'apparie à un champ.
+  const apparie = Object.entries(DEBITS).filter(([, def]) => {
+    const cles = Object.keys(def.parVoisin ?? {});
+    return cles.some((c) => c.startsWith('champDe'))
+      && cles.some((c) => CHAMPS.posableDessus.includes(c));
+  });
+  assert.deepEqual(apparie.map(([id]) => id), [],
+    'le cas est devenu atteignable en jeu : le monter pour de bon et retirer le faux');
+
+  // ⚠ LA TABLE EST MONTÉE PUIS RETIRÉE, et `DEBITS` retrouve son état — un test
+  // qui laisserait une entrée derrière lui empoisonnerait ses voisins.
+  const FAUX = 'fauxDoubleQualifiant';
+  DEBITS[FAUX] = { propre: 0, parVoisin: { champDeScorie: 10, collecteur: 20 } };
+  try {
+    const d = [
+      { id: FAUX, rangee: 14, colonne: 4, niveau: 1 },
+      { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 },
+    ];
+    const cases = voisinsQualifiantsParCase(d, CHAMP_UNIQUE, 0);
+    // ⚠⚠ DEUX ENTRÉES POUR UNE CASE, ET NON UNE ENTRÉE À PLUSIEURS TYPES :
+    // `apportParHeure` est par TYPE, donc une entrée multiple devrait porter
+    // plusieurs apports, c'est-à-dire changer de forme pour dire exactement ce
+    // que deux entrées disent déjà. Et c'est ce que le MOTEUR fait — deux
+    // boucles, deux lignes de `comptes`.
+    assert.equal(cases.length, 2, 'la case ne qualifie qu\'une fois');
+    assert.deepEqual(cases.map((v) => v.type).sort(), ['champDeScorie', 'collecteur']);
+    for (const v of cases) {
+      assert.equal(v.rangee, 13);
+      assert.equal(v.colonne, 3);
+      assert.ok(v.apportParHeure > 0);
+    }
+    // Et le moteur compte pareil — c'est `F-J T2` sur ce cas-là précisément.
+    assert.deepEqual(voisinsQualifiants(d, CHAMP_UNIQUE, 0),
+      { champDeScorie: 1, collecteur: 1 });
+  } finally {
+    delete DEBITS[FAUX];
+  }
+  assert.equal(DEBITS[FAUX], undefined, 'le faux bâtiment est resté dans la table');
 });

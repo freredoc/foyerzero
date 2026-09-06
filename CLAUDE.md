@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.10 · build 111.
+Dernière révision : **06/09/2026**, version 0.99.11 · build 112.
 
 ---
 
@@ -42,7 +42,127 @@ Dernière révision : **06/09/2026**, version 0.99.10 · build 111.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot CARTE-C), à confronter :**
+**Référence au 06/09/2026 (après le lot FICHE-JUSTE), à confronter :**
+`npm test` → **1241 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 003 079 octets**, 0 référence externe. Le lot **REND 39 octets**, ENTIÈREMENT
+DU JAVASCRIPT, mesurés poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **JavaScript −39 · feuille +0 ·
+balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 296 921 octets,
+13,95 %**. Le lot touche `src/sim/disposition.js` et `src/ui/chantier.js`.
+⚠⚠ **LE DÉPÔT AFFIRMAIT PAR ÉCRIT UNE PROPRIÉTÉ QUI ÉTAIT FAUSSE, ET C'EST LE
+PREMIER FAIT À DIRE.** `ui/chantier.js` portait, au-dessus de
+`flechesDeVoisinage` : « `voisinsQualifiantsParCase` est la même règle que celle
+qui calcule le débit. » **Elle ne l'était pas.** Sa branche champ était en
+`else if (i === undefined)`, quand `voisinsQualifiants` ne regarde PAS
+l'occupation pour une clé `champDe…` — elle boucle sur `ressourceDeLaCase` seule.
+Deux fonctions, une seule question, deux réponses.
+⚠⚠ **ET LA PLAINTE D'ETHAN EST RENVERSÉE PAR LA MESURE.** « Un collecteur posé
+sur un Champ de scories bloque la production d'élec : anormal » — **mesuré, la
+production ne bougeait pas d'un milli** : centrale de niveau 1, un champ de
+scorie voisin, `debitDuBatiment.total = 180` avec comme sans collecteur dessus,
+avant comme après le lot. Ce qu'il voyait disparaître était la **FLÈCHE** de la
+fiche, et il l'a lue, très raisonnablement, comme une perte de production. Le lot
+aligne le **DESSIN** sur le moteur, jamais l'inverse — `F-J T3` attrape un lot
+qui aurait « corrigé » le moteur à la place.
+⚠⚠ **LA CORRECTION OUVRE UN CAS QUE `ParCase` NE SAVAIT PAS DIRE, ET L'ISSUE
+RETENUE EST DEUX ENTRÉES POUR UNE CASE.** Une case peut qualifier comme champ ET
+comme bâtiment ; le moteur les compte SÉPARÉMENT — deux boucles, deux lignes de
+`comptes` — et `apportParHeure` est **par type**, si bien qu'une entrée à
+plusieurs types devrait porter plusieurs apports, c'est-à-dire changer de forme
+pour dire ce que deux entrées disent déjà.
+⚠⚠ **LE CAS EST INATTEIGNABLE AUJOURD'HUI, MESURÉ ET NON SUPPOSÉ.** Il faudrait
+qu'un `parVoisin` porte à la fois une clé `champDe…` et une clé de bâtiment
+POSABLE SUR UN CHAMP. Les quatre tables sont `centrale {champDeScorie,
+accumulateur}`, `accumulateur {centrale}`, `collecteur {raffinerie}`, `raffinerie
+{collecteur}`, et `CHAMPS.posableDessus` ne contient que `collecteur`, qu'aucune
+table n'apparie à un champ. **`F-J T5` monte donc un `parVoisin` à la main, dans
+un `try/finally` — pas de test sauté.**
+⚠⚠ **« LA MÊME RÈGLE » SE MESURE DÉSORMAIS, ELLE NE S'AFFIRME PLUS.** `F-J T2`
+compare le COMPTE PAR TYPE des deux fonctions sur six montages — champ libre,
+champ occupé, bâtiment sur case nue, les deux à la fois, aucun voisin, le terrain
+complet — avec **deux planchers** : au moins dix bâtiments comparés ET au moins
+huit voisins qualifiants vus, sans quoi une fonction qui rendrait toujours la
+liste vide passerait. Les deux commentaires sont réécrits et renvoient à lui.
+⚠⚠ **LA FICHE DU COMPLEXE ANNONCE UNE PIÈCE DE SON PROPRE NIVEAU, ET LE CHIFFRE
+EST CALCULÉ.** Ethan : « Le complexe n'indique pas le coût de réparation. Ou juste
+dire 1h pour un niveau similaire. » Elle calculait sur une pièce de niveau 50 — le
+pire cas — et affichait **106,7 h à un joueur dont le Complexe est au niveau 1**.
+Mesuré, Complexe entier : **1,0000 h aux niveaux 1, 3, 5, 10, 25 et 50** contre
+106,72 · 88,20 · 72,89 · 45,26 · 10,84 · 1,00. **36 000 ticks, et ce n'est pas
+écrit** : `facteurMilli(1 + 0)` vaut mille, la pénalité de santé vaut un.
+⚠ **ET LE SECOND REPÈRE DU §0 TIENT AUSSI** — `ticksDeRetour(7, 7, 0)` rend
+**24,0000 h TOUT ROND**, ce que `F-J T7` asserte à côté du premier.
+⚠⚠ **`F-J T6` MONTE UN COMPLEXE ABÎMÉ, ET C'EST CE QUI ATTRAPE LA PIRE FAÇON DE SE
+TROMPER.** Intact, la valeur vaut exactement 36 000 : **une fiche qui écrirait
+36 000 en dur, sans jamais appeler la formule, passerait l'égalité comme
+l'inégalité.** Sous `degatsMilli = 800 000`, les trois nombres divergent — niveau
+10, santé 864 ‰ : **4,128 h** contre 186,829 h pour l'ancienne règle. Le niveau 10
+n'est pas un détail non plus : **à 50, les deux règles coïncident**.
+⚠⚠ **ET `CH-F T8` A DÛ CHANGER DE MONTAGE SANS QU'UNE ASSERTION SOIT
+ASSOUPLIE.** Il exige qu'une valeur d'effet DIFFÈRE entre deux niveaux ; à
+dépassement nul, un Complexe intact rend 1 h à **tous** les niveaux, donc sa
+PRÉMISSE a cessé d'être vraie et il serait tombé sur un code juste. Le montage
+abîme le Complexe des deux côtés — les dégâts sont un absolu quand les PV
+maximaux croissent avec le niveau, donc la santé discrimine : **680 ‰ au niveau 1
+contre 888 ‰ au niveau 12**, soit 8,360 h contre 3,576 h. **Une assertion ENTRE**
+et prouve qu'un Complexe intact rendrait le même nombre.
+⚠⚠ **CE QUE LE NOUVEAU CHOIX COÛTE EST ÉCRIT, PAS TU : UN JOUEUR DONT LA GARNISON
+DÉPASSE LE NIVEAU DU COMPLEXE ATTENDRA PLUS LONGTEMPS QUE LA FICHE N'ANNONCE.**
+C'est la contrepartie exacte de l'ancien choix, prise dans l'autre sens ; le
+raisonnement du bloc — « il n'existe aucune durée qui soit fonction du seul
+Complexe » — était JUSTE et il est écarté par arbitrage. **Le jour où la fiche
+devra dire les deux, c'est une SECONDE ligne qu'il faudra.**
+⚠ **ET LA BORNE DE `ticksDeRetour` TIENT MIEUX QU'AVANT** : le dépassement vaut
+zéro par construction, donc le départage entre `NIVEAU.plafond` et
+`GEOGRAPHIE.niveauPlafond` devient sans objet. `NIVEAU` sort des imports de
+`ui/chantier.js`, et c'est là que les 39 octets sont rendus.
+⚠⚠ **ÉCART DÉCLARÉ : `REPARATION_BASE_JOUEUR` N'EST PAS TOUCHÉ, ET LE BRIEF
+DEMANDAIT DE LE CORRIGER.** Son instruction repose sur une confusion entre deux
+mécanismes que le dépôt tient séparés depuis RETOUR-DÉFENSES. Cette table décrit
+la réparation d'un **BÂTIMENT** — `indexeeSur` nomme le Chantier,
+`courbe.diviseurDuCout` est le diviseur d'un PRIX, et le quartz est réellement
+débité en quatre points de `sim/reparation.js`. Y écrire « ne coûte que du
+temps » en ferait un mensonge et contredirait l'arbitrage du 05/09. Ce dont Ethan
+parle — « Complexe seulement du temps » — est le RETOUR de la garnison, et
+`RETOUR_DEFENSES` **le dit déjà** : « c'est gratuit, donc il n'y a ni réserve ni
+ressource ». **Ce qui manquait n'était pas la phrase, c'était sa mesure.**
+⚠⚠ **`F-J T9` L'A ÉCRITE, ET ELLE MORD PLUS LOIN QUE PRÉVU.** Il balaie les corps
+de `pvApresRetour`, `ramenerLaGarnison` et `ticksDeRetour` sur huit mots
+interdits, **prouve que le motif n'est pas aveugle** en exigeant que
+`reparerUnBatiment` nomme bien le quartz, puis mesure par EXÉCUTION qu'un retour
+complet ne bouge ni les stocks ni les quatre réserves. ⚠ Et faire débiter du
+quartz à `ramenerLaGarnison` fait tomber **`RÉSERVE T3` et `RÉSERVE-BASE T4`** en
+plus : le retour gratuit n'est pas qu'une règle de jeu, c'est une condition de
+l'équivalence `tickJeu × n ≡ rattraperJeu(n)`.
+⚠ **NEUF FALSIFICATIONS, NEUF CHUTES**, dont quatre qui ne font tomber qu'un seul
+test — le champ qui l'emporte, l'avarie retirée de `CH-F T8`, le zéro PV qui
+promet « aucune attente », et le 36 000 écrit en dur (deux tests).
+⚠ **DIX TESTS ENTRENT — `F-J T1` à `T10` — ET LE COMPTE PASSE DE 1 231 À 1 241.**
+Quatre dans `test/disposition.test.js`, cinq dans `test/chantier.test.js`, un
+dans `test/reparation.test.js`. **Aucune assertion n'a été retirée ni assouplie**
+; **trois gardes changent de cible** — les deux commentaires cessent d'affirmer
+pour renvoyer à `F-J T2`, et `CH-F T8` gagne une avarie ET une assertion.
+⚠⚠ **LA RELECTURE HOSTILE N'A TROUVÉ QU'UNE CANDIDATE, ET ELLE EST DÉCLARÉE.**
+Vingt-trois occurrences de « la même règle », « s'accordent », « ne peuvent pas
+diverger » relues : vingt-deux sont des « par construction » où le second
+mécanisme APPELLE le premier, ou renvoient à un test nommé. La dernière est
+`formaterUnites`, qui dit « la même règle que `formaterPv` du banc » sans qu'un
+test les compare — mais les deux ne rendent pas la même grandeur (un entier
+contre un dixième), et chacune est épinglée par une assertion discriminante
+(`999 → '0'`, `499 → '0,4'`). **Non corrigée, dite.**
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27 — VÉRIFIÉ AU DIFF.** Une entrée de
+voisinage se calcule à la demande, une durée de fiche est un affichage :
+`src/sim/state.js` n'a pas une ligne de changée.
+⚠ **`src/sim/reparation.js` N'A PAS UNE LIGNE DE CODE CHANGÉE**, ni
+`RETOUR_DEFENSES`, ni `pvApresRetour`, ni `direLaDuree` et son point décimal —
+celle-ci est partagée avec la réserve de réparation, et la corriger ici ferait
+diverger les deux affichages.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot CARTE-C :**
 `npm test` → **1231 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 003 118 octets**, 0 référence externe. Coût **+2 087 octets**, mesuré poste
 par poste contre un livrable rebâti depuis le lot précédent : **JavaScript +798 ·
@@ -904,6 +1024,10 @@ soit fonction du seul Complexe**. Le haut de la table donne le pire cas, qui est
 aussi le levier — c'est la mesure que ce fichier-ci porte déjà, « pièce de niveau
 50 sous un Complexe 10 → 45,3 h ». Relevé à l'écran : **106,7 h → 97,0 h** en
 montant le Complexe du niveau 1 au 2.
+⚠⚠ **CE PARAGRAPHE EST RENVERSÉ DEPUIS LE 06/09, LOT FICHE-JUSTE.** Le
+raisonnement reste juste ; Ethan l'a écarté — « ou juste dire 1h pour un niveau
+similaire » — et la fiche annonce désormais une pièce de MÊME niveau que le
+Complexe. Ne pas le réappliquer : voir le §0 de ce fichier.
 ⚠ **ET C'EST `NIVEAU.plafond`, PAS `GEOGRAPHIE.niveauPlafond`.** Les deux valent
 50, et ce n'est pas une coquetterie : `ticksDeRetour` **LÈVE** quand
 `1 + dépassement` sort de `NIVEAU`, si bien que prendre l'autre plafond ferait
