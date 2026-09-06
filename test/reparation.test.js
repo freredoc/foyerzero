@@ -1480,14 +1480,30 @@ test('RETOUR-D T16 — le filet stampe ce qui n\'est pas stampé', () => {
 });
 
 test('RETOUR-D T18 — la migration ne calcule AUCUNE rampe, et le numéro bouge', () => {
-  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois —
-  // la règle que `points-attaque.test.js` écrit depuis le lot SITE-ENTAMÉ. Elle
-  // vivait sous `RÉSERVE-BASE T11` à `=== 25` ; elle est ici.
-  assert.equal(SAVE_VERSION, 26, 'la chaîne de migrations a gagné un maillon');
-
+  // ⚠ LA GARDE DU NUMÉRO A DÉMÉNAGÉ, ELLE N'A PAS ÉTÉ RETIRÉE — même règle que
+  // celle qui l'avait amenée ici : « elle appartient au maillon le plus RÉCENT,
+  // une seule fois ». Elle vivait sous `RÉSERVE-BASE T11` à `=== 25`, puis ici à
+  // `=== 26` ; depuis le lot SATELLITES-RESPAWN (06/09/2026) elle est sous
+  // `SAT-R T11`, à `=== 27`. Ce qui reste ici est ce que ce test-ci mesure : que
+  // le maillon v25 → v26 est encore dans la chaîne et qu'il n'invente aucune
+  // rampe, ce qu'un numéro figé ne dirait pas.
+  //
+  // ⚠⚠ ET CE QUI LA REMPLACE EST PLUS FORT QU'UN NOMBRE : on fait passer une v25
+  // qui porte un `retour` MALFORMÉ et on exige qu'il ressorte à `null`. C'est
+  // très exactement ce que le maillon v25 → v26 fait, et rien d'autre dans la
+  // chaîne ne le fait — le retirer fait tomber cette ligne, là où un numéro figé
+  // se contentait de signaler qu'on avait ajouté un maillon ailleurs.
   const etat = baseAvecComplexe(5);
   const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
   const degats = piece.degatsMilli;
+
+  const malformee = JSON.parse(serialiser(etat, 1_000));
+  malformee.version = 25;
+  for (const p of malformee.bases[0].garnison) p.retour = { tickDuRaid: 'jamais' };
+  assert.equal(
+    migrer(malformee).bases[0].garnison[0].retour, null,
+    'le maillon v25 → v26 ne refuse plus un retour malformé',
+  );
 
   // Une v25 fabriquée en rabaissant une sauvegarde d'aujourd'hui.
   const vieille = JSON.parse(serialiser(etat, 1_000));

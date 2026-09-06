@@ -20,8 +20,10 @@ import {
   problemesDesSatellites, TICKS_DUREE_DE_VIE, TICKS_SURSIS, prolongerApresAttaque,
 } from '../src/sim/satellites.js';
 import {
-  creerEtat, tickJeu, rattraperJeu, serialiser, charger,
+  creerEtat, tickJeu, rattraperJeu, serialiser, charger, SAVE_VERSION, migrer,
 } from '../src/sim/state.js';
+import { poiDeLaCase } from '../src/sim/poi.js';
+import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { SATELLITES, TYPES_SITE, GEOGRAPHIE } from '../src/data/sites.js';
 import { niveauDeLaRangee } from '../src/sim/carte.js';
 import { TICKS_PAR_SECONDE } from '../src/sim/clock.js';
@@ -127,12 +129,17 @@ test('satellites — un camp détruit revient, avec un NOUVEAU numéro d\'instan
   assert.equal(baseCourante(etat).satellites.attentes.length, 1);
   assert.equal(baseCourante(etat).satellites.attentes[0].type, detruit.type);
 
-  // Il ne revient pas tout de suite.
-  rattraperJeu(etat, TICKS_APPARITION - 1);
-  assert.equal(baseCourante(etat).satellites.presents.length, 2, 'le respawn est immédiat');
-
+  // ⚠⚠ IL REVIENT TOUT DE SUITE DEPUIS LE LOT SATELLITES-RESPAWN, 06/09/2026 —
+  // Ethan, « un camp ou avant poste rasé = un autre pop direct ». Ces trois
+  // lignes disaient l'INVERSE et elles avaient raison de tomber : elles
+  // asseyaient « rattraper TICKS_APPARITION - 1 laisse 2 présents, le tick
+  // suivant en rend 3 ». C'est UN tick qui suffit désormais, et le montage est
+  // réancré en écrivant les deux règles plutôt qu'en assouplissant l'assertion.
+  assert.equal(baseCourante(etat).satellites.attentes[0].tickDu, etat.horloge.nbTicks,
+    'l\'attente du remplaçant n\'est pas échue sur-le-champ');
   rattraperJeu(etat, 1);
-  assert.equal(baseCourante(etat).satellites.presents.length, 3);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3,
+    'le remplaçant n\'est pas paru au tick suivant');
 
   // ⚠ ET SON INSTANCE EST NEUVE, MÊME S'IL RETOMBE SUR LA MÊME CASE. C'est tout
   // ce qui fait qu'un camp reconstruit n'a pas la même disposition de bâtiments
@@ -545,4 +552,400 @@ test('relève — dix ans d\'absence se rattrapent, et on mesure ce que ça coû
   // est là pour attraper un retour à une boucle par TICK, qui serait mille fois
   // plus lente. Mesuré ici à ~600 ms pour dix ans.
   assert.ok(ms < 10_000, `${ms.toFixed(0)} ms pour dix ans : la boucle avance par tick`);
+});
+
+// ---------------------------------------------------------------------------
+// SAT-R — lot SATELLITES-RESPAWN, 06/09/2026
+//
+// Ethan : « un camp ou avant poste rasé = un autre pop direct », puis, sur la
+// case du remplaçant, « ailleurs ». Ce que ces tests doivent prouver : que le
+// remplaçant est dû SUR-LE-CHAMP et qu'il paraît vraiment, qu'il ne reparaît pas
+// sur la case rasée, que le peuplement d'une base neuve garde ses cinq minutes,
+// et que le déterminisme du flux tient — c'est-à-dire qu'un seul tirage est
+// consommé quoi qu'il arrive.
+// ---------------------------------------------------------------------------
+
+/** Les cases de l'anneau des camps autour de la base courante. */
+const anneauDesCamps = (etat) => casesDeLAnneau(
+  baseCourante(etat).position, ANNEAUX.camp.min, ANNEAUX.camp.max,
+);
+
+const cle = (k) => `${k.rangee}:${k.colonne}`;
+
+/**
+ * Occupe l'anneau des camps, sauf les cases nommées.
+ *
+ * ⚠ C'EST LE MONTAGE QUI REND LE TIRAGE DISCRIMINANT. Sur un anneau de douze
+ * cases, un tirage libre retomberait sur la case rasée une fois sur dix : un seul
+ * essai ne falsifierait rien. En n'en laissant que deux — la rasée et une autre —
+ * le tirage SANS exclusion aurait une chance sur deux, et le tirage AVEC est
+ * forcé. La différence se voit alors sur une seule graine.
+ *
+ * ⚠ `tickDeReleve` EST POSÉ TRÈS LOIN : ces faux satellites ne doivent pas se
+ * relever pendant le montage, sinon ils libéreraient les cases qu'ils occupent.
+ *
+ * ⚠⚠ ET LEURS NUMÉROS D'INSTANCE SORTENT DU COMPTEUR, ILS NE SONT PAS INVENTÉS.
+ * `problemesDesSatellites` refuse une instance au-delà du compteur, et
+ * `verifierEtat` LÈVE au chargement : un montage à 90 000 passait tant qu'on ne
+ * sérialisait pas, et tombait dès qu'on le faisait. C'est la garde qui avait
+ * raison — un état qu'on ne peut pas recharger n'est pas un état.
+ */
+function occuperLAnneau(etat, garder) {
+  const base = baseCourante(etat);
+  const aGarder = new Set(garder.map(cle));
+  const dejaLa = new Set(base.satellites.presents.map(cle));
+  for (const k of anneauDesCamps(etat)) {
+    if (aGarder.has(cle(k)) || dejaLa.has(cle(k))) continue;
+    base.satellites.presents.push({
+      type: 'camp', rangee: k.rangee, colonne: k.colonne, niveau: 1,
+      instance: etat.prochaineInstanceSatellite, tickDeReleve: 9_000_000,
+    });
+    etat.prochaineInstanceSatellite += 1;
+  }
+}
+
+/** Le satellite qui n'était pas là avant — identifié par sa CASE, pas par un numéro. */
+function leNouveau(etat, avant) {
+  return baseCourante(etat).satellites.presents.find((s) => !avant.has(cle(s)));
+}
+
+/** L'anneau est-il vierge de tout ce que le tirage écarte par ailleurs ? */
+function anneauSansObstacle(etat) {
+  return anneauDesCamps(etat).every(
+    (k) => !estBaseOuvrage(etat.graine, k.rangee, k.colonne)
+      && poiDeLaCase(etat.graine, k.rangee, k.colonne) === null,
+  );
+}
+
+/** Monte une partie, fait paraître les trois, et rend l'indice d'un camp. */
+function partieAvecTrois(graine) {
+  const etat = creerEtat(graine);
+  rattraperJeu(etat, TICKS_APPARITION);
+  const presents = baseCourante(etat).satellites.presents;
+  assert.equal(presents.length, 3, 'les trois n\'ont pas paru');
+  const index = presents.findIndex((s) => s.type === 'camp');
+  assert.ok(index >= 0, 'aucun camp dans le montage');
+  return { etat, index, camp: { ...presents[index] } };
+}
+
+test('SAT-R T1 — le remplaçant est dû sur-le-champ, pas dans cinq minutes', () => {
+  const { etat, index } = partieAvecTrois(4242);
+  const t = etat.horloge.nbTicks;
+  detruireSatellite(etat, index);
+
+  const attente = baseCourante(etat).satellites.attentes[0];
+  // ⚠ L'ÉGALITÉ, PAS UNE INÉGALITÉ. `tickDu < t + TICKS_APPARITION` passerait sur
+  // un délai simplement divisé par deux, c'est-à-dire sur autre chose que ce
+  // qu'Ethan a demandé.
+  assert.equal(attente.tickDu, t, 'l\'attente du remplaçant n\'est pas échue');
+  // Et la constante n'a pas été mise à zéro pour l'occasion : elle sert ailleurs.
+  assert.equal(TICKS_APPARITION, SATELLITES.delaiApparitionSec * TICKS_PAR_SECONDE);
+  assert.ok(TICKS_APPARITION > 0, 'TICKS_APPARITION a été mis à zéro');
+});
+
+test('SAT-R T2 — et il paraît vraiment, au tick suivant', () => {
+  const { etat, index } = partieAvecTrois(4242);
+  detruireSatellite(etat, index);
+  assert.equal(baseCourante(etat).satellites.presents.length, 2);
+
+  // ⚠ UN SEUL TICK. C'est ce qui distingue « échéance à zéro » de « effectivement
+  // servi » : une attente due mais qu'aucun chemin ne sert laisserait T1 vert.
+  tickJeu(etat);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'le remplaçant n\'est pas paru');
+  assert.deepEqual(baseCourante(etat).satellites.attentes, [], 'l\'attente n\'a pas été consommée');
+});
+
+test('SAT-R T3 — le peuplement d\'une base neuve garde ses cinq minutes', () => {
+  // ⚠ CE TEST ATTRAPE UN LOT QUI AURAIT MIS `TICKS_APPARITION` À ZÉRO pour faire
+  // passer T1 et T2. Ethan n'a parlé que du REMPLACEMENT d'un site rasé.
+  const etat = creerEtat(77);
+  const t = etat.horloge.nbTicks;
+  const attentes = baseCourante(etat).satellites.attentes;
+  assert.equal(attentes.length, 3);
+  for (const a of attentes) assert.equal(a.tickDu, t + TICKS_APPARITION);
+
+  rattraperJeu(etat, TICKS_APPARITION - 1);
+  assert.deepEqual(baseCourante(etat).satellites.presents, [], 'les trois ont paru avant l\'heure');
+});
+
+test('SAT-R T4 — le remplaçant ne reparaît pas sur la case rasée', () => {
+  // ⚠⚠ VINGT GRAINES, ET LA PREMIÈRE ÉCRITURE N'EN AVAIT QU'UNE — ELLE NE
+  // MORDAIT PAS. Sur un anneau réduit à DEUX cases libres — la rasée et une
+  // autre —, le tirage sans exclusion a une chance sur deux d'éviter la rasée
+  // tout seul : mesuré, il l'évitait sur la graine 4242, si bien que retirer
+  // l'exclusion laissait ce test VERT. Une falsification qui ne mord pas se
+  // vérifie avant d'être crue — ici elle a dit que c'était le TEST qui était
+  // faible. À vingt graines, la probabilité qu'aucune ne discrimine vaut 2⁻²⁰.
+  let sansExclusionAuraitPuTomber = 0;
+  for (let g = 1; g <= 20; g += 1) {
+    const { etat, index, camp } = partieAvecTrois(g);
+    assert.ok(anneauSansObstacle(etat), `graine ${g} : l'anneau porte une base ou un POI`);
+
+    // On ne laisse LIBRES que deux cases : celle qu'on va raser, et une autre.
+    // ⚠ ET « UNE AUTRE » SE CHOISIT PARMI CE QUI EST VRAIMENT LIBRE : le second
+    // camp et l'avant-poste peuvent occuper une case de cet anneau-là, et sur la
+    // graine 2 la première case du balayage est justement prise.
+    const occupees = new Set(baseCourante(etat).satellites.presents.map(cle));
+    const libre = anneauDesCamps(etat)
+      .find((k) => cle(k) !== cle(camp) && !occupees.has(cle(k)));
+    assert.ok(libre, `graine ${g} : aucune case libre à garder dans l'anneau`);
+    occuperLAnneau(etat, [camp, libre]);
+    sansExclusionAuraitPuTomber += 1;
+
+    detruireSatellite(etat, index);
+    const restantes = new Set(baseCourante(etat).satellites.presents.map(cle));
+    tickJeu(etat);
+
+    const neuf = leNouveau(etat, restantes);
+    assert.ok(neuf, `graine ${g} : le remplaçant n'est pas paru`);
+    assert.notEqual(cle(neuf), cle(camp), `graine ${g} : le remplaçant est reparu sur la case rasée`);
+    assert.equal(cle(neuf), cle(libre), `graine ${g} : le remplaçant n'est pas sur la seule case qui restait`);
+  }
+  assert.equal(sansExclusionAuraitPuTomber, 20, 'le montage n\'a pas réduit l\'anneau sur les vingt graines');
+});
+
+test('SAT-R T4 bis — et sur cent graines, jamais une seule fois', () => {
+  // ⚠ L'ANNEAU PLEIN N'EST PAS LE CAS COURANT : sur un anneau de douze cases, un
+  // tirage libre retomberait sur la case rasée environ une fois sur dix. Cent
+  // graines rendent donc une dizaine d'occasions de tomber ; zéro est une mesure.
+  let mesures = 0;
+  for (let g = 1; g <= 100; g += 1) {
+    const { etat, index, camp } = partieAvecTrois(g);
+    detruireSatellite(etat, index);
+    tickJeu(etat);
+    const neuf = baseCourante(etat).satellites.presents.find((s) => s.instance === 4);
+    if (neuf === undefined) continue;
+    mesures += 1;
+    assert.notEqual(cle(neuf), cle(camp), `graine ${g} : le remplaçant est reparu sur la case rasée`);
+  }
+  assert.ok(mesures >= 95, `seulement ${mesures} graines mesurées : le montage ne mesure presque rien`);
+});
+
+test('SAT-R T5 — il n\'atterrit sur aucune case déjà occupée', () => {
+  // Non-régression : c'était vrai avant le lot, ça doit le rester.
+  const { etat, index } = partieAvecTrois(4242);
+  detruireSatellite(etat, index);
+  tickJeu(etat);
+  const cles = baseCourante(etat).satellites.presents.map(cle);
+  assert.equal(new Set(cles).size, cles.length, 'deux satellites sur la même case');
+});
+
+test('SAT-R T6 — l\'anneau saturé ne lève pas, et l\'exclusion ne cède pas', () => {
+  const { etat, index, camp } = partieAvecTrois(4242);
+  assert.ok(anneauSansObstacle(etat), 'montage : l\'anneau porte une base ou un POI');
+  // Tout est pris SAUF la case qu'on va raser : après exclusion, il ne reste rien.
+  occuperLAnneau(etat, [camp]);
+  const avant = baseCourante(etat).satellites.presents.length;
+
+  detruireSatellite(etat, index);
+  const restantes = new Set(baseCourante(etat).satellites.presents.map(cle));
+  assert.doesNotThrow(() => tickJeu(etat), 'l\'anneau saturé a levé');
+
+  // ⚠ LE CHOIX ÉCRIT : il n'apparaît PAS, et l'attente est reportée AVEC son
+  // exclusion. Céder ici briserait « ailleurs » dans le seul cas où le joueur le
+  // verrait.
+  assert.equal(baseCourante(etat).satellites.presents.length, avant - 1, 'un remplaçant a paru quand même');
+  assert.equal(leNouveau(etat, restantes), undefined, 'quelque chose s\'est posé malgré la saturation');
+  const attentes = baseCourante(etat).satellites.attentes;
+  assert.equal(attentes.length, 1, 'l\'attente a été perdue');
+  assert.deepEqual(attentes[0].evite, { rangee: camp.rangee, colonne: camp.colonne },
+    'l\'attente reportée a perdu son exclusion');
+  assert.ok(!baseCourante(etat).satellites.presents.some((s) => cle(s) === cle(camp)),
+    'quelque chose s\'est posé sur la case rasée');
+
+  // On libère UNE case, qui n'est pas la rasée : le remplaçant part dessus.
+  const rendue = { ...baseCourante(etat).satellites.presents.find((s) => cle(s) !== cle(camp)
+    && anneauDesCamps(etat).some((k) => cle(k) === cle(s))) };
+  baseCourante(etat).satellites.presents = baseCourante(etat).satellites.presents
+    .filter((s) => cle(s) !== cle(rendue));
+  const avantLaPlace = new Set(baseCourante(etat).satellites.presents.map(cle));
+  tickJeu(etat);
+  const neuf = leNouveau(etat, avantLaPlace);
+  assert.ok(neuf, 'le remplaçant n\'est pas parti quand la place s\'est libérée');
+  assert.equal(cle(neuf), cle(rendue), 'le remplaçant n\'a pas pris la case libérée');
+});
+
+test('SAT-R T7 — deux parties de même graine, deux destructions : identiques au bit', () => {
+  // ⚠⚠ ET CE TEST NE GARDE PAS CE QUE LE BRIEF LUI PRÊTAIT — MESURÉ. Son §4
+  // annonce qu'un tirage de plus « décale tout ce qui suit », si bien que « deux
+  // parties identiques divergent dès le premier remplacement ». **C'est faux, et
+  // la falsification le dit** : un `entier(rng, 0, 7)` inconditionnel glissé
+  // avant le tirage laisse la suite ENTIÈREMENT VERTE — 29 pass / 0 fail mesuré.
+  // Deux exécutions du MÊME code sur la MÊME graine ne peuvent pas diverger d'un
+  // nombre de tirages, puisqu'elles le consomment toutes les deux.
+  //
+  // ⚠⚠ CE QU'IL GARDE POUR DE BON, c'est une source d'aléa qui ne vient PAS de la
+  // graine — `Math.random`, l'horloge, l'ordre d'itération d'un ensemble d'objets.
+  // Mesuré : un `Math.random()` dans le choix de la case fait tomber ce test et
+  // les deux gardes d'équivalence des chemins d'avancement, et rien d'autre.
+  //
+  // ⚠ LES DEUX DESTRUCTIONS SUCCESSIVES RESTENT, ET ELLES SERVENT AUTRE CHOSE :
+  // le second remplacement passe par un anneau que le premier a déjà modifié,
+  // donc par un `libres` plus court. C'est le seul endroit du montage où la
+  // longueur de l'ensemble des candidates entre dans le tirage.
+  const jouer = (g) => {
+    const etat = creerEtat(g);
+    rattraperJeu(etat, TICKS_APPARITION);
+    for (let n = 0; n < 2; n += 1) {
+      const i = baseCourante(etat).satellites.presents.findIndex((s) => s.type === 'camp');
+      detruireSatellite(etat, i);
+      rattraperJeu(etat, 1);
+    }
+    return etat;
+  };
+  for (const g of [4242, 7, 99]) {
+    const a = jouer(g);
+    const b = jouer(g);
+    assert.equal(
+      a.satellitesDetruits.camp, 2,
+      `graine ${g} : le montage n'a pas détruit deux camps — il ne mesure rien`,
+    );
+    assert.equal(serialiser(a, T0), serialiser(b, T0), `graine ${g} : deux exécutions divergent`);
+  }
+});
+
+test('SAT-R T8 — le compteur de destructions ne bouge pas', () => {
+  const { etat, index, camp } = partieAvecTrois(4242);
+  assert.equal(etat.satellitesDetruits[camp.type] ?? 0, 0);
+  detruireSatellite(etat, index);
+  assert.equal(etat.satellitesDetruits[camp.type], 1, 'le compteur n\'a pas été incrémenté');
+  // Le remplaçant qui paraît n'en est PAS une : le compteur mesure des
+  // destructions, jamais des apparitions.
+  tickJeu(etat);
+  assert.equal(etat.satellitesDetruits[camp.type], 1, 'le remplaçant a été compté comme une destruction');
+});
+
+test('SAT-R T9 — un camp revient en camp, un avant-poste en avant-poste', () => {
+  for (const type of ['camp', 'avantPoste']) {
+    const etat = creerEtat(4242);
+    rattraperJeu(etat, TICKS_APPARITION);
+    const index = baseCourante(etat).satellites.presents.findIndex((s) => s.type === type);
+    assert.ok(index >= 0, `montage : aucun ${type}`);
+    detruireSatellite(etat, index);
+    assert.equal(baseCourante(etat).satellites.attentes[0].type, type);
+    tickJeu(etat);
+    const neuf = baseCourante(etat).satellites.presents.find((s) => s.instance === 4);
+    assert.equal(neuf.type, type, `un ${type} rasé est revenu en autre chose`);
+  }
+});
+
+test('SAT-R T10 — le niveau du remplaçant suit sa règle, que le lot ne touche pas', () => {
+  // ⚠ LE LOT NE CHANGE AUCUNE RÈGLE DE NIVEAU — `niveauDuSatellite` ne reçoit pas
+  // une ligne. Ethan a choisi d'AFFICHER l'origine du niveau plutôt que de la
+  // changer, et c'est un autre lot.
+  const etat = creerEtat(4242);
+  rattraperJeu(etat, TICKS_APPARITION);
+  const base = baseCourante(etat);
+  const rangee = niveauDeLaRangee(base.position.rangee);
+  for (const type of ['camp', 'avantPoste']) {
+    const index = base.satellites.presents.findIndex((s) => s.type === type);
+    detruireSatellite(etat, index);
+    tickJeu(etat);
+    const neuf = base.satellites.presents[base.satellites.presents.length - 1];
+    assert.equal(neuf.type, type);
+    if (type === 'camp') {
+      // Camp → le niveau des BÂTIMENTS du joueur, en dixièmes.
+      assert.equal(neuf.niveau, Math.max(1, Math.round(niveauDesBatiments(base.disposition) / 10)));
+    } else {
+      // Avant-poste → le niveau de la RANGÉE, ±1, plancher à 1.
+      assert.ok(Math.abs(neuf.niveau - rangee) <= 1 || neuf.niveau === 1,
+        `avant-poste de niveau ${neuf.niveau} pour une rangée de niveau ${rangee}`);
+    }
+  }
+});
+
+test('SAT-R T11 — la chaîne de migrations, et le numéro qu\'elle porte', () => {
+  // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois —
+  // la règle que `points-attaque.test.js` écrit depuis le lot SITE-ENTAMÉ. Elle
+  // vivait sous `RÉSERVE-BASE T11` à `=== 25`, puis sous `RETOUR-D T18` à
+  // `=== 26` ; elle est ici.
+  assert.equal(SAVE_VERSION, 27, 'la chaîne de migrations a gagné un maillon');
+
+  const etat = creerEtat(4242);
+  rattraperJeu(etat, TICKS_APPARITION);
+  const vieille = JSON.parse(serialiser(etat, T0));
+  vieille.version = 26;
+  // Une v26 ne porte AUCUNE exclusion : le champ est né avec ce lot.
+  for (const a of vieille.bases[0].satellites.attentes) delete a.evite;
+
+  const migre = migrer(vieille);
+  assert.equal(migre.version, SAVE_VERSION);
+  for (const a of migre.bases[0].satellites.attentes) {
+    assert.equal(a.evite, undefined, 'la migration a inventé une case à éviter');
+  }
+
+  // ⚠ ET CE QU'ELLE FAIT, ELLE LE FAIT : une valeur héritée malformée est
+  // RETIRÉE. Un état fabriqué à la main en montage peut en porter une.
+  const tordue = JSON.parse(serialiser(etat, T0));
+  tordue.version = 26;
+  tordue.bases[0].satellites.attentes = [{ type: 'camp', tickDu: 0, evite: { rangee: -3, colonne: 900 } }];
+  assert.equal(
+    migrer(tordue).bases[0].satellites.attentes[0].evite, undefined,
+    'le maillon v26 → v27 ne retire pas une exclusion hors carte',
+  );
+});
+
+test('SAT-R T12 — l\'exclusion survit à la sauvegarde, et c\'est pour ça qu\'elle y entre', () => {
+  // ⚠⚠ C'EST LA MESURE QUI JUSTIFIE LE BUMP, et elle contredit le brief, qui
+  // posait « rien n'est ajouté à l'état ». `executerRaid` détruit le satellite,
+  // puis `ui/raid.js` appelle `apresGeste()`, qui SAUVEGARDE ; le tick qui sert
+  // l'attente vient après. Une exclusion gardée en mémoire seule serait perdue
+  // exactement dans le cas courant — le joueur rase un camp et ferme le jeu.
+  const { etat, index, camp } = partieAvecTrois(4242);
+  assert.ok(anneauSansObstacle(etat), 'montage : l\'anneau porte une base ou un POI');
+  const autres = anneauDesCamps(etat).filter((k) => cle(k) !== cle(camp));
+  const libre = autres[0];
+  occuperLAnneau(etat, [camp, libre]);
+  detruireSatellite(etat, index);
+
+  const json = serialiser(etat, T0);
+  assert.match(json, /"evite"/, 'l\'exclusion ne traverse pas la sérialisation');
+
+  const restantes = new Set(baseCourante(etat).satellites.presents.map(cle));
+  const recharge = charger(json, T0);
+  tickJeu(recharge);
+  const neuf = leNouveau(recharge, restantes);
+  assert.ok(neuf, 'le remplaçant n\'est pas paru après rechargement');
+  assert.equal(cle(neuf), cle(libre), 'l\'exclusion a été perdue au rechargement');
+});
+
+test('SAT-R T11 bis — un « evite » malformé rend la sauvegarde injouable', () => {
+  // ⚠⚠ CE TEST A ÉTÉ ÉCRIT APRÈS UNE FALSIFICATION QUI NE MORDAIT PAS. Retirer la
+  // garde de forme de `problemesDesSatellites` laissait la suite ENTIÈREMENT
+  // VERTE — 87 pass / 0 fail mesuré sur `satellites` et `state` : rien ne
+  // mesurait le refus d'une exclusion malformée au chargement. Une falsification
+  // qui ne mord pas se vérifie avant d'être crue, et ici elle a dit qu'il
+  // manquait un test.
+  //
+  // ⚠ ET C'EST UN FAIT DE PROGRAMME, PAS DE JEU : il ne rejoint pas
+  // `CODES_TOLERES_AU_CHARGEMENT`. Une v26 ne peut porter aucun `evite`, et le
+  // jeu n'en écrit jamais un hors carte — s'il en existe un, la sauvegarde a été
+  // écrite de travers, comme pour « deux satellites sur une case ».
+  const etat = creerEtat(4242);
+  rattraperJeu(etat, TICKS_APPARITION);
+  const { index, camp } = { index: 0, camp: baseCourante(etat).satellites.presents[0] };
+  detruireSatellite(etat, index);
+  assert.ok(camp, 'montage : aucun satellite détruit');
+
+  const sain = JSON.parse(serialiser(etat, T0));
+  assert.equal(problemesDesSatellites(sain.bases[0].satellites, sain.prochaineInstanceSatellite).length, 0,
+    'montage : la sauvegarde saine est déjà refusée — le test ne mesurerait rien');
+
+  for (const tordue of [{ rangee: -1, colonne: 4 }, { rangee: 3, colonne: 9_999 }, 42]) {
+    const casse = JSON.parse(serialiser(etat, T0));
+    casse.bases[0].satellites.attentes[0].evite = tordue;
+    assert.ok(
+      problemesDesSatellites(casse.bases[0].satellites, casse.prochaineInstanceSatellite)
+        .some((m) => m.includes('case évitée')),
+      `l'exclusion ${JSON.stringify(tordue)} passe la garde de forme`,
+    );
+    assert.throws(() => charger(JSON.stringify(casse), T0), /satellites injouables/,
+      `l'exclusion ${JSON.stringify(tordue)} passe le chargement`);
+  }
+
+  // ⚠ ET « ABSENT » RESTE LÉGAL : une attente de peuplement initial n'en porte
+  // aucune, et une v26 non plus. L'exiger rendrait illisible tout l'avant du lot.
+  const sans = JSON.parse(serialiser(etat, T0));
+  delete sans.bases[0].satellites.attentes[0].evite;
+  assert.doesNotThrow(() => charger(JSON.stringify(sans), T0), 'une attente sans exclusion est refusée');
 });

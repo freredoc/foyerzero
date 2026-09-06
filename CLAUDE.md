@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.8 · build 109.
+Dernière révision : **06/09/2026**, version 0.99.9 · build 110.
 
 ---
 
@@ -42,7 +42,128 @@ Dernière révision : **06/09/2026**, version 0.99.8 · build 109.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot COLONNE), à confronter :**
+**Référence au 06/09/2026 (après le lot SATELLITES-RESPAWN), à confronter :**
+`npm test` → **1215 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 001 031 octets**, 0 référence externe. Coût **+479 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable bâti depuis
+`origin/main` : **JavaScript +479 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **296
+lignes `data:` avant, 296 après, 291 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **1 298 969 octets, 13,97 %**. Le lot ne touche que
+`src/sim/satellites.js`, `src/sim/state.js` et trois fichiers de `test/`.
+⚠⚠ **UN CAMP RASÉ REVIENT SUR-LE-CHAMP, ET IL PASSE QUAND MÊME PAR `attentes`.**
+Ethan, 06/09 : « un camp ou avant poste rasé = un autre pop direct ».
+`detruireSatellite` pousse `tickDu: etat.horloge.nbTicks` au lieu de
+`+ TICKS_APPARITION` — l'attente est ÉCHUE, et `resoudreSatellites`, seul endroit
+qui fasse paraître un satellite, la sert au tick suivant. Fabriquer le remplaçant
+sur place aurait ouvert un second chemin de création.
+⚠ **ET `TICKS_APPARITION` NE BOUGE PAS D'UN TICK.** Il sert à
+`planifierSatellites` : le mettre à zéro ferait paraître les trois satellites
+d'une base neuve à l'instant où le joueur fonde. `SAT-R T3` est le test qui
+attrape un lot parti par là. La relève NATURELLE garde ses cinq minutes aussi —
+« rasé » désigne une destruction, pas une expiration.
+⚠⚠ **« AILLEURS » SE FAIT PAR RETRAIT AVANT LE TIRAGE, ET IL RÉEMPLOIE `prises`,
+LE MÉCANISME QUI EXISTAIT DÉJÀ** — l'ensemble des cases des satellites présents,
+à côté des filtres « jamais sur une base de l'Ouvrage » et « ni sur un POI ». Une
+seconde façon d'exclure une case aurait été la seconde vérité que §4 interdit.
+⚠⚠ **LA PRÉMISSE DU §4 DU BRIEF EST FAUSSE, ET C'EST MESURÉ.** Il annonce qu'un
+re-tirage en boucle ferait « diverger deux parties identiques dès le premier
+remplacement », le nombre de tirages consommés dépendant du résultat. **Mesuré :
+un `entier(rng, 0, 7)` inconditionnel glissé avant le tirage laisse la suite
+ENTIÈREMENT VERTE, 29 pass / 0 fail.** Deux exécutions du MÊME code sur la MÊME
+graine ne peuvent pas diverger d'un nombre de tirages — elles le consomment
+toutes les deux.
+⚠⚠ **LE VRAI MOTIF EST LA TERMINAISON, ET LUI SE MESURE.** Écrit exactement comme
+le brief le décrit — pas de retrait, un `while` qui retire — le code **ne termine
+pas** : sur un anneau dont la seule case libre EST la case exclue, `libres` n'a
+qu'un élément et la boucle tourne pour toujours. **Timeout à 90 s sur
+`test/satellites.test.js`.** Le retrait, lui, dégrade proprement en attente
+reportée.
+⚠⚠ **ET `SAT-R T7` NE GARDAIT PAS CE QUE LE BRIEF LUI PRÊTAIT — SON COMMENTAIRE
+EST RÉÉCRIT.** Ce qu'il garde pour de bon est une source d'aléa qui ne vient PAS
+de la graine : mesuré, un `Math.random()` dans le choix de la case fait tomber ce
+test et les deux gardes d'équivalence des chemins d'avancement, et rien d'autre.
+⚠⚠ **`SAVE_VERSION` PASSE À 27, ET C'EST UN ÉCART AU BRIEF, DÉCLARÉ ET MESURÉ.**
+Il pose « rien n'est ajouté à l'état » en demandant de le vérifier plutôt que de
+le croire : vérifié, **quelque chose entre**. L'exclusion voyage sur l'ATTENTE,
+qui est sérialisée, et elle DOIT y voyager — `executerRaid` détruit le satellite,
+puis `ui/raid.js` appelle `apresGeste()`, qui SAUVEGARDE, et le tick qui sert
+l'attente vient après. Une exclusion gardée en mémoire seule serait perdue
+exactement dans le cas courant : le joueur rase un camp et ferme le jeu.
+**`SAT-R T12` le mesure de bout en bout, sérialisation comprise.**
+⚠ **LA MIGRATION 26 → 27 NE CALCULE RIEN, ET ELLE NE PEUT RIEN CALCULER.** Une
+v26 ne sait pas quel satellite a été rasé ni où. « Absent » vaut « pas
+d'exclusion », ce qui est exactement juste pour une attente programmée sous
+l'ancienne règle. Ce qu'elle fait, et c'est tout : RETIRER une valeur héritée
+malformée — même forme que la v25 → v26.
+⚠ **ET LE DÉLAI DES ATTENTES EXISTANTES N'EST PAS RAMENÉ À ZÉRO** : une v26 peut
+porter un remplacement programmé à cinq minutes, et l'avancer ferait paraître au
+chargement un camp que la partie attendait encore.
+⚠⚠ **LA SATURATION NE FAIT PAS CÉDER L'EXCLUSION — CHOIX ÉCRIT, ET LE CAS N'EST
+PAS ATTEIGNABLE.** Un anneau plein sauf la case rasée ne fait pas reparaître le
+remplaçant dessus : l'attente est reportée AVEC son exclusion, et repart dès
+qu'une place se libère — c'est le mécanisme que `reportees` porte déjà. **Mesuré :
+l'anneau du camp fait 12 cases, et il est bloqué à 0 sur 12 au départ sur 300
+graines ; balayé sur toute la carte et 20 graines, il ne reste jamais moins de 7
+cases libres**, quand la saturation en demanderait 3 ou moins. La garde est
+écrite quand même.
+⚠ **L'ANNEAU DE L'AVANT-POSTE FAIT 72 CASES**, six fois celui du camp : la
+question ne se pose pas de ce côté-là.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE TREIZE COUPLES SUR 322, ET PAS UN DE PLUS.**
+Deux champs seulement — `satellites` et `prochaineInstanceSatellite` — à partir
+de la **phase 7**, le premier raid ; les six premières phases sont identiques AU
+BIT. **Les vingt autres champs ne bougent pas**, `economie`, `disposition`,
+`garnison`, `armee`, `sitesEntames`, `rapports` et `recherche` compris — et
+`satellitesDetruits` non plus : on détruit autant, on remplace plus vite.
+⚠⚠ **ET LES CINQUANTE EMPREINTES DE RAPPORT NE BOUGENT PAS, NI AUCUN DES HUIT
+SCALAIRES** — gestes, gestes d'armement, taille de la sauvegarde, cases
+atteignables, déplacement, bases attaquantes, nombre de cibles et cible retenue :
+**0 sur 25 pour chacun**. C'est la mesure qui dit que le lot ne touche que les
+satellites.
+⚠ **ET LA TAILLE DE LA SAUVEGARDE NE BOUGE PAS NON PLUS** : le témoin la prend en
+phase 6, avant le premier raid, donc aucune attente ne porte d'exclusion. Aucun
+terme ne s'ajoute aux quatre de `test/temoins-bases-0.js`.
+⚠⚠ **DIX FALSIFICATIONS, HUIT CHUTES, ET LES DEUX MUETTES ONT CHACUNE PRODUIT UN
+TRAVAIL.** Le re-tirage conforme au brief : il ne mord pas, et c'est la PRÉMISSE
+du brief qui est fausse — mesurée ci-dessus. La garde de forme d'`evite`
+retirée : elle laissait **87 pass / 0 fail**, rien ne mesurait le refus d'une
+exclusion malformée au chargement — `SAT-R T11 bis` a été ÉCRIT après la mesure.
+⚠⚠ **ET `SAT-R T4` A DÛ ÊTRE CORRIGÉ AVANT D'ÊTRE CRU.** Sa première écriture
+montait UNE graine sur un anneau réduit à deux cases : le tirage sans exclusion y
+évitait la case rasée par chance, si bien que retirer l'exclusion laissait ce
+test VERT. Il balaie vingt graines désormais — la probabilité qu'aucune ne
+discrimine vaut 2⁻²⁰ — et la falsification mord.
+⚠ **QUATORZE TESTS ENTRENT — `SAT-R T1` à `T12`, plus `T4 bis` et `T11 bis`, dans
+`test/satellites.test.js` — ET LE COMPTE PASSE DE 1 201 À 1 215.** **Aucune
+assertion n'a été retirée ni assouplie** ; **deux gardes changent de porteur et
+une se RESSERRE** — le `SAVE_VERSION === 26` de `RETOUR-D T18` devient `=== 27`
+sous `SAT-R T11`, et ce qui le remplace là-bas est plus fort qu'un nombre : une
+v25 au `retour` MALFORMÉ doit ressortir à `null`, ce que seul ce maillon-là fait.
+⚠ **UN MONTAGE A ÉTÉ RÉANCRÉ EN ÉCRIVANT LES DEUX RÈGLES** — « un camp détruit
+revient » assertait « rattraper `TICKS_APPARITION - 1` laisse 2 présents » ; c'est
+UN tick qui suffit désormais, et le test le dit dans les deux sens.
+⚠⚠ **UNE COURSE DANS LA SUITE A ÉTÉ TROUVÉE EN MESURANT, ET CORRIGÉE HORS BRIEF.**
+`npm run check` virait au rouge sans qu'une ligne ait changé, puis vert à
+l'exécution suivante : **`banc.test.js` T10 relance `tools/build.js`, donc écrit
+dans `dist/index.html` — que `chantier.test.js` et `sprite.test.js` LISENT** —, et
+`node --test` exécute les fichiers en PARALLÈLE. **Mesuré : une exécution sur
+quatre.** Le défaut est ANTÉRIEUR au lot et hors du périmètre des quatre briefs ;
+corrigé quand même parce qu'il rend fausse la seule chose que ces rapports
+affirment. `FZ_SORTIE` déroute la destination du build, **exactement comme
+`FZ_SPRITES` déroute celle des outils d'art** — « un contrôle qui écrit là où il
+compare est un piège ». ⚠ La SOURCE n'est pas déroutable, et T10 mesure le même
+build sur les mêmes sources : seul l'endroit du fichier bouge.
+⚠ **ET LA GARDE QUI ENTRE EST DÉTERMINISTE LÀ OÙ LA COURSE NE L'EST PAS** : T10
+relève la date de `dist/index.html` avant et après et exige qu'elle n'ait pas
+bougé. Remettre la destination dans `dist/` la fait tomber **à tous les coups**.
+Trois exécutions complètes après correction : **1 215 · 1 215 · 1 215**.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche pas `art/`, et `tools/build.js` n'est pas un outil de la chaîne
+graphique — il ne produit ni sprite ni son.
+⚠ **LA BASE ANNONCÉE PAR LE BRIEF ÉTAIT EXACTE, PREMIÈRE FOIS DEPUIS SIX LOTS** —
+1 201 pass, 8 000 552 octets, 0.99.8 · build 109, mesurés au départ.
+
+**Auparavant, après le lot COLONNE :**
 `npm test` → **1201 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 000 552 octets**, 0 référence externe. Coût **+3 236 octets, ENTIÈREMENT DU
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti depuis
