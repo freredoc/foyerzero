@@ -38,8 +38,9 @@ import { rectangleDuFond } from './fond.js';
 import { positionInterpolee } from './interpolation.js';
 import { celluleDuSprite, existeDansAtlas } from './sprite.js';
 import { COTE_SPRITE } from '../data/atlas.js';
-import { ANCRES_CHASSIS } from '../data/ancres-chassis.js';
-import { liaisonDuMur, liaisonDuSocle, orientationDeLaPiece } from '../sim/rendu-pose.js';
+import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
+import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
+import { angleDeLaPiece } from '../sim/rendu-pose.js';
 import { nomDeVariante } from './variante.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
@@ -186,9 +187,9 @@ export const NB_PRIMITIVES = {
   escouade: 1, //  le sprite de l'unité, pose d'attaque ou de défense
   blinde: 2, //    coque + tourelle orientable — CÔTÉ JOUEUR ; l'Ouvrage en a 1
   aeronef: 1, //   le sprite de l'unité
-  mur: 1, //       le merlon seul, raccordé à ses voisines par son nom
+  mur: 1, //       le merlon seul — il ne se raccorde plus à ses voisines
   barriere: 1, //  ni orientation, ni socle
-  tourelle: 2, //  socle (raccordé si l'atlas le porte) + tourelle orientée
+  tourelle: 2, //  socle nu + tourelle TOURNÉE — un seul dessin, un angle
   artillerie: 2, // même paire que la tourelle
   batiment: 1, //  le sprite du bâtiment, propriétaire compris
 };
@@ -224,7 +225,7 @@ const ligne = (x1, y1, x2, y2, couleur, epaisseur) => ({ forme: 'ligne', x1, y1,
  * LISIBLE dans un test et dans un débogage, où « le sprite en (192, 64) » ne dit
  * rien et « off_j_belier_chassis » dit tout.
  */
-const sprite = (famille, nom, x, y, l, h) => {
+const sprite = (famille, nom, x, y, l, h, angle = 0) => {
   const { colonne, rangee } = celluleDuSprite(famille, nom);
   return {
     forme: 'sprite',
@@ -238,6 +239,12 @@ const sprite = (famille, nom, x, y, l, h) => {
     y,
     l,
     h,
+    // ⚠ EN DEGRÉS, ET ZÉRO PAR DÉFAUT — donc porté par TOUTES les primitives,
+    // même celles qui ne tournent pas. Ne le poser que sur les tournantes
+    // demanderait à `canvas2d.js` de distinguer « absent » de « nul » pour un
+    // dessin identique, et la première primitive qui l'oublierait le ferait en
+    // silence. Le sens est celui de `angleVers` : 0 au nord, 90 à l'est.
+    angle,
   };
 };
 
@@ -289,6 +296,7 @@ export function listeDuFond(nom, projection) {
     y: r.y,
     l: r.l,
     h: r.h,
+    angle: 0,
   }];
 }
 
@@ -405,9 +413,13 @@ function forceDuCamp(camp) {
  * Mesuré le 30/08 : huit des quatorze unités de l'Ouvrage ont une pose `_def`,
  * six ne l'ont pas. Écrire ces huit noms dans le code serait une seconde vérité,
  * et la première à diverger le jour où les six manquantes seront dessinées —
- * `existeDansAtlas` fait qu'il n'y aura alors RIEN à changer. C'est exactement
- * la règle appliquée aux socles de liaison au lot précédent, et pour la même
- * raison. Un test fige la coïncidence d'aujourd'hui et rougira ce jour-là.
+ * `existeDansAtlas` fait qu'il n'y aura alors RIEN à changer. Un test fige la
+ * coïncidence d'aujourd'hui et rougira ce jour-là.
+ *
+ * ⚠ ELLE SERT AUSSI LES NEUF COQUES DU JOUEUR, ET LEUR COMPTE N'EST PLUS DIX :
+ * `off_j_pilon_chassis_def` n'existe pas — l'Obusier n'entre jamais en garnison,
+ * `pilon.defense.present` valant `false`. C'est la table de l'atlas qui le dit,
+ * pas une liste écrite ici.
  */
 function nomAvecPose(famille, base, force) {
   const defensif = `${base}_def`;
@@ -456,9 +468,9 @@ function couchesDeLUnite(d, cible = null) {
     return [{ famille: 'unite', nom: nomAvecPose('unite', `off_${c}_${d.id}`, force) }];
   }
 
-  // Blindé du joueur : la coque, puis la tourelle orientée par-dessus.
+  // Blindé du joueur : la coque, puis la tourelle TOURNÉE par-dessus.
   const coque = nomAvecPose('chassis', `off_j_${d.id}_chassis`, force);
-  const orientation = orientationDeLaPiece(
+  const angle = angleDeLaPiece(
     force,
     { rangee: d.rangee ?? 0, colonne: d.colonne ?? 0 },
     cible,
@@ -471,9 +483,16 @@ function couchesDeLUnite(d, cible = null) {
       // ASCII qui devient une clé JavaScript : `ATLAS.tourelle_unite`. Écrit
       // avec un tiret ici au premier essai — T6 a levé « famille absente de
       // l'atlas » et a nommé les sept familles cousues, ce qui a dit la faute.
+      //
+      // ⚠⚠ UN SEUL SPRITE, PLUS SEIZE. `off_j_<id>_<orientation>` a disparu : la
+      // tourelle est dessinée une fois, canon au NORD, et le rendu la tourne.
+      // Cinq sprites au lieu de quatre-vingts, et l'angle devient CONTINU — la
+      // tourelle suit sa cible au degré, là où seize orientations la faisaient
+      // sauter par crans de 22,5°.
       famille: 'tourelle_unite',
-      nom: `off_j_${d.id}_${orientation}`,
-      ancre: ANCRES_CHASSIS[coque] ?? null,
+      nom: `off_j_${d.id}_tourelle`,
+      ancre: ANCRES_BLINDES[coque] ?? null,
+      angle,
     },
   ];
 }
@@ -496,14 +515,29 @@ function couchesDeLUnite(d, cible = null) {
  * `ui/chantier.js` qui inverse maintenant, une fois, à l'endroit où il compose
  * ses trois listes CSS.
  *
- * ⚠ AU COMBAT, LE CHAÎNAGE SUIT LES VIVANTES. `liaisonDuMur` lit les voisines
- * qu'on lui passe : quand une tourelle meurt, le merlon d'à côté repasse à
- * `isole` à l'image suivante. C'est le comportement VOULU — un mur ne reste pas
- * raccordé à une ruine — et non un effet de bord du branchement.
+ * ⚠⚠ LE CHAÎNAGE A DISPARU AVEC LA v2, ET CE PARAGRAPHE DISAIT LE CONTRAIRE.
+ * Il expliquait qu'« au combat, le chaînage suit les vivantes » — `liaisonDuMur`
+ * lisant les voisines, un merlon repassait à `isole` quand sa voisine mourait.
+ * Les vingt-quatre socles raccordés et les quatre merlons de liaison ne sont
+ * plus dessinés : Ethan a arbitré le 05/09 que les pièces ne se raccordent pas.
+ * `contexte.voisines` n'est donc plus lu ici, et les deux fonctions de liaison
+ * de `sim/rendu-pose.js` n'ont plus d'objet. Un merlon est un merlon.
+ *
+ * ⚠⚠ ET LA TOURELLE NE CHANGE PLUS DE SPRITE : ELLE TOURNE. Un seul dessin,
+ * canon au nord, avec son ANGLE — continu, au degré, là où seize orientations le
+ * faisaient sauter par crans de 22,5°. C'est `dessinerCouches` qui pose le
+ * carré, et `canvas2d.js` qui le tourne autour de son CENTRE.
+ *
+ * ⚠⚠ L'OUVRAGE NE TOURNE PAS, ET LE DISCRIMINANT EST LA DONNÉE, JAMAIS LE CAMP.
+ * Ses six tourelles sont celles de la v1, dessinées au nord, dont le pivot est
+ * décalé de 2 à 11 % du côté du sprite : les tourner autour du centre les ferait
+ * osciller. Elles n'ont pas d'entrée d'ancre, donc elles se posent sur la case
+ * entière comme avant — un `=== 'o'` écrit ici serait la seconde vérité que §4
+ * interdit, et il mentirait le jour où l'Ouvrage sera redessiné.
  *
  * @param {{genre: string, id: string, proprietaire: string}} d
- * @param {{cible: object|null, voisines: Array}} contexte
- * @returns {{famille: string, nom: string}[]}
+ * @param {{cible: object|null}} contexte
+ * @returns {{famille: string, nom: string, ancre?: object, angle?: number}[]}
  */
 function couchesDeLaDefense(d, contexte) {
   const type = DEFENSES[d.id]?.type;
@@ -511,30 +545,27 @@ function couchesDeLaDefense(d, contexte) {
     throw new RangeError(`scene : « ${d.id} » n'est pas une pièce de défense`);
   }
   const c = lettreDuProprietaire(d.proprietaire);
-  const voisines = contexte.voisines ?? [];
   const piece = { id: d.id, rangee: d.rangee ?? 0, colonne: d.colonne ?? 0 };
 
-  // Un mur ne porte ni orientation ni socle : c'est le raccord qui le dessine.
+  // Un mur ne porte ni tourelle ni socle, et il ne se raccorde plus.
   if (type === 'mur') {
-    const liaison = liaisonDuMur(voisines, piece, d.proprietaire);
-    return [{ famille: 'defense', nom: `def_${c}_${d.id}_${liaison}` }];
+    return [{ famille: 'defense', nom: `def_${c}_${d.id}` }];
   }
   // Une barrière blesse au contact : ni tourelle à tourner, ni socle à poser.
   if (type === 'barriere') {
     return [{ famille: 'defense', nom: `def_${c}_${d.id}` }];
   }
 
-  // ⚠ LE SOCLE À LIAISON N'EXISTE QUE POUR LES TROIS TOURELLES DE CONTACT : la
-  // planche des trois artilleries n'a pas été dessinée. On DEMANDE à l'atlas au
-  // lieu de porter une liste de trois noms — le jour où la planche arrive, elles
-  // prennent leurs liaisons sans qu'une ligne change ici.
-  const liaison = liaisonDuSocle(voisines, piece, d.proprietaire);
-  const socleLie = `socle_def_${c}_${d.id}_${liaison}`;
-  const socle = existeDansAtlas('socle', socleLie) ? socleLie : `socle_def_${c}_${d.id}`;
-  const orientation = orientationDeLaPiece('garnison', piece, contexte.cible ?? null);
+  const socle = `socle_def_${c}_${d.id}`;
+  const angle = angleDeLaPiece('garnison', piece, contexte.cible ?? null);
   return [
     { famille: 'socle', nom: socle },
-    { famille: 'defense', nom: `def_${c}_${d.id}_${orientation}` },
+    {
+      famille: 'defense',
+      nom: `def_${c}_${d.id}`,
+      ancre: ANCRES_DEFENSE[socle] ?? null,
+      angle,
+    },
   ];
 }
 
@@ -568,7 +599,7 @@ function couchesDuBatiment(d) {
  *
  * @param {{genre: string, id: string, proprietaire: string, camp: string,
  *          rangee?: number, colonne?: number}} d
- * @param {{cible?: object|null, voisines?: Array}} [contexte]
+ * @param {{cible?: object|null}} [contexte]
  * @returns {{famille: string, nom: string}[]|null} du plus BAS au plus haut
  */
 export function couchesDeLEntite(d, contexte = {}) {
@@ -581,25 +612,36 @@ export function couchesDeLEntite(d, contexte = {}) {
 /**
  * Pose les couches d'une unité dans sa case.
  *
- * ⚠ LA TOURELLE SUIT L'ANCRE DE SA COQUE, pas le centre de la case. Les trois
- * nombres d'`ANCRES_CHASSIS` sont des POURCENTAGES de la coque — mesurés sur
- * l'image par `tools/chassis.py` —, donc valables aux trois grilles. Sans eux,
- * la tourelle se poserait au centre géométrique et flotterait à côté du logement
- * sur les dix coques.
+ * ⚠⚠ LES TROIS NOMBRES LUS ICI SONT EN POURCENTS DE LA CASE, PLUS DE LA PIÈCE,
+ * ET LES CONFONDRE FAIT DEUX FOIS LA TAILLE DE LA CASE. `ANCRES_CHASSIS`
+ * portait `diametre_pct`, `x_pct`, `y_pct` — mesurés sur le DESSIN, donc en
+ * pourcentage de la coque ; les tables de la v2 portent en plus
+ * `cote_case_pct`, `dx_case_pct`, `dy_case_pct`, qui sont ce que le rendu
+ * emploie. Une pièce n'occupe pas la case entière — `recadrer` porte sa plus
+ * grande dimension à `emprise / 32` —, donc lire les premiers pour les seconds
+ * multiplie le carré par `32 / largeur_de_la_pièce` : mesuré, le carré du
+ * Chasseur ferait 131,9 pixels de case sur 64, et celui de la Faucheuse 113,8.
+ * Le facteur d'échelle et la marge de rotation sont DÉJÀ dans `cote_case_pct` :
+ * il n'y a rien à multiplier ici.
+ *
+ * ⚠ UNE COUCHE SANS ANCRE SE POSE SUR LA CASE ENTIÈRE, et c'est ce qui laisse
+ * l'Ouvrage intact : ses tourelles n'ont pas d'entrée, donc elles se dessinent
+ * comme avant, sans rotation. Le camp n'est jamais testé ici.
  */
 function dessinerCouches(liste, x, y, t, couches) {
   for (const couche of couches) {
+    const angle = couche.angle ?? 0;
     if (!couche.ancre) {
-      liste.push(sprite(couche.famille, couche.nom, x, y, t, t));
+      liste.push(sprite(couche.famille, couche.nom, x, y, t, t, angle));
       continue;
     }
-    const { diametre_pct: d, x_pct: dx, y_pct: dy } = couche.ancre;
+    const { cote_case_pct: d, dx_case_pct: dx, dy_case_pct: dy } = couche.ancre;
     const cote = Math.max(1, Math.round((t * d) / 100));
     liste.push(sprite(
       couche.famille, couche.nom,
       Math.round(x + t / 2 + (t * dx) / 100 - cote / 2),
       Math.round(y + t / 2 + (t * dy) / 100 - cote / 2),
-      cote, cote,
+      cote, cote, angle,
     ));
   }
 }
@@ -733,29 +775,13 @@ export function listeAffichage(
   const xDe = (e) => xDeColonne(projection, e.colonne);
   const yDe = (e) => yDeRangeeMilli(projection, positions.get(e.indice));
 
-  // ⚠⚠ LE CHAÎNAGE DES MURS SUIT LES VIVANTES, ET C'EST VOULU. `liaisonDuMur`
-  // lit cette liste : une tourelle qui meurt en sort, et le merlon d'à côté
-  // repasse à `isole` à l'image suivante. Un mur ne reste pas raccordé à une
-  // ruine. La liste se calcule UNE fois — la relire par entité ferait un balayage
-  // quadratique sur une scène de cent défenses.
-  //
-  // ⚠⚠ LA RANGÉE AFFICHÉE, ET C'EST UN DÉFAUT MESURÉ, PAS UNE PRÉCAUTION. Cette
-  // liste portait `e.rangee`, qui n'existe PAS sur une entité de combat : le
-  // moteur range `rangeeMilli`, et `e.rangee` vaut `undefined`. Le chaînage
-  // comparait donc `undefined === 3` pour chaque voisine et rendait `isole`
-  // partout — deux merlons côte à côte ne se rejoignaient pas au combat, alors
-  // qu'ils se rejoignent sur l'écran Chantier. Le même objet, deux dessins :
-  // exactement ce que ce lot existe pour retirer, et le premier montage du test
-  // ne pouvait pas le voir, parce qu'il écrivait ses voisines à la main.
-  // C'est la même faute que la cible passée au lot précédent, vue une deuxième
-  // fois : une entité de combat ne se lit pas comme une pièce d'éditeur.
-  const defensesVivantes = etat.entites
-    .filter((e) => visible(e) && e.genre === 'defense')
-    .map((e) => ({
-      id: e.id,
-      rangee: (positions.get(e.indice) ?? e.rangeeMilli) / 1000,
-      colonne: e.colonne,
-    }));
+  // ⚠⚠ LA LISTE DES DÉFENSES VIVANTES A DISPARU AVEC LE CHAÎNAGE, ET C'EST LE
+  // LOT. Elle était calculée ici, une fois par image, pour que `liaisonDuMur`
+  // puisse faire repasser à `isole` le merlon dont la voisine venait de mourir.
+  // Les pièces ne se raccordent plus — arbitrage du 05/09 —, donc plus personne
+  // ne la lit. La retirer est aussi ce qui solde le défaut mesuré du lot
+  // STRUCTURES-AU-COMBAT : elle portait `e.rangee`, qui n'existe pas sur une
+  // entité de combat, et le chaînage était mort au champ pendant un lot entier.
 
   /**
    * La position AFFICHÉE de la cible d'une entité, ou `null` si elle n'en a pas.
@@ -803,7 +829,7 @@ export function listeAffichage(
           // faux depuis la bonne.
           rangee: (positions.get(e.indice) ?? e.rangeeMilli) / 1000,
           colonne: e.colonne,
-        }, { cible: cibleAffichee(e), voisines: defensesVivantes }));
+        }, { cible: cibleAffichee(e) }));
     }
   }
 
@@ -1119,19 +1145,6 @@ export function listeDefense(grille, projection, casesMarquees = []) {
 
   // Les huit rangées, la 3 en bas de l'écran comme sur le champ — l'assaut
   // monte, et la grille se lit dans le sens où il la traverse.
-  // ⚠ LA GRILLE MÊLE DÉFENSES ET UNITÉS, ET SEULES LES DÉFENSES CHAÎNENT. On
-  // reconstitue donc les voisines depuis les indices — rangée et colonne — au
-  // lieu de passer la grille brute, que `liaisonDuMur` ne saurait pas lire.
-  const voisines = [];
-  for (let indice = 0; indice < nbRangees; indice += 1) {
-    for (let colonne = 1; colonne <= grille.cases[indice].length; colonne += 1) {
-      const id = grille.cases[indice][colonne - 1];
-      if (id !== null && DEFENSES[id] !== undefined) {
-        voisines.push({ id, rangee: premiereRangee + indice, colonne });
-      }
-    }
-  }
-
   for (let indice = 0; indice < nbRangees; indice += 1) {
     const rangee = premiereRangee + indice;
     const y = yDeRangee(projection, rangee);
@@ -1144,7 +1157,6 @@ export function listeDefense(grille, projection, casesMarquees = []) {
       dessinerEntite(liste, x, y, t, classeDe(genre, id), 'defense', accentDe(genre, id),
         couchesDeLEntite(
           { genre, id, proprietaire: 'joueur', camp: 'defense', rangee, colonne },
-          { voisines },
         ));
     }
   }

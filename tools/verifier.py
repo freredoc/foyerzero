@@ -47,15 +47,35 @@ SPRITES = os.path.join(RACINE, 'art', 'sprites')
 CHAINE = [
     ('planches',        ['--ecrire']),
     ('tourelles',       ['--ecrire']),
-    ('tourelles_unite', ['--ecrire']),
+    # ⚠⚠ TROIS OUTILS SONT SORTIS DE CETTE TABLE — lot SPRITES-V2-JOUEUR, 05/09.
+    # `tourelles_unite` et `connexions` sont SUPPRIMÉS : le premier fabriquait
+    # les seize orientations d'une tourelle de blindé, le second les quatre états
+    # de liaison d'un socle, et les deux arbitrages du lot — la tourelle tourne au
+    # rendu, les connexions sont abandonnées — les vident entièrement.
+    # `chassis` est VIDÉ mais RESTE au dépôt : il ne produit plus de sprite, il
+    # ne porte plus que le détecteur d'ancre, que les deux outils d'ancre ci-
+    # dessous importent. Un outil qui ne produit rien n'a rien à comparer.
     ('socles',          []),
-    ('connexions',      []),
     ('emblemes',        []),
     ('unites_ouvrage',  []),
     ('barrieres',       []),
     ('effets',          []),
-    ('chassis',         []),
     ('ruines',          []),
+    # ⚠⚠ LES QUARANTE-DEUX SPRITES DU JOUEUR EN V2 — 05/09. Une planche pour un
+    # sprite : ni grille de coupe, ni gouttière à trouver, ni attribution à
+    # mesurer. Il produit les cinq familles du joueur d'un coup, parce que la
+    # règle est la même pour les cinq et qu'un outil par famille aurait recopié
+    # cinq fois la même boucle.
+    ('joueur_v2',       []),
+    # ⚠⚠ LES DEUX OUTILS D'ANCRE ENTRENT DANS LA CHAÎNE, ET ILS N'ÉCRIVENT PAS UN
+    # PIXEL. Ils produisent `ancres-defense.json` et `ancres-blindes.json` sous
+    # `art/sprites/`, comme `chassis.py` écrivait `ancres-chassis.json` : le
+    # vérificateur les compare à l'octet, donc la mesure des ancres devient
+    # rejouable. Sans ces deux lignes, les deux JSON seraient comptés MANQUANTS à
+    # chaque exécution, et les seize planches de socle et de coque classées
+    # DORMANTES alors que deux outils les consomment.
+    ('ancres-defense',  []),
+    ('ancres-blindes',  []),
     # ⚠⚠ LES MURS DE CONTOUR SONT SORTIS DE LA CHAÎNE — lot MUR-PEINT, 03/09.
     # Ethan a fait peindre le mur DANS le fond de base : l'anneau que le code
     # dessinait n'existe plus, et aucun écran ne lit `bord_j_*` ni `bord_o_*`.

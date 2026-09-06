@@ -1920,9 +1920,14 @@ export const TERRAINS = {
     // n'existait : `sim/rendu-pose.js` fait les deux depuis, et un commentaire
     // qui décrit un manque comblé envoie chercher un travail déjà fait.
     //
-    // ⚠ LA GARNISON ENTIÈRE EST PASSÉE, PAS LA CASE. `liaisonDuMur` et
-    // `liaisonDuSocle` regardent les VOISINS pour décider d'un raccord : leur
-    // donner la seule pièce les priverait de ce qu'ils viennent chercher.
+    // ⚠⚠ LA GARNISON N'EST PLUS PASSÉE, ET LE COMMENTAIRE QUI L'EXIGEAIT EST
+    // PARTI AVEC — lot SPRITES-V2-JOUEUR. Il disait que `liaisonDuMur` et
+    // `liaisonDuSocle` regardent les VOISINS pour décider d'un raccord, donc
+    // qu'il fallait leur donner toute la garnison. Les pièces ne se raccordent
+    // plus (Ethan, 05/09) et les deux fonctions n'existent plus : ce qu'une
+    // pièce a besoin de savoir tient dans sa propre case. L'écran ne passe donc
+    // plus de contexte du tout — il n'a pas de cible à donner, une base au repos
+    // ne visant rien.
     // ⚠⚠ LA FONCTION A DÉMÉNAGÉ DANS `render/scene.js` AU LOT
     // STRUCTURES-AU-COMBAT, et cet écran la CONSOMME au lieu de la porter. Elle
     // y vivait seule ; le champ de bataille et l'éditeur Défense dessinaient les
@@ -1934,10 +1939,9 @@ export const TERRAINS = {
     // de `UNITES`), et `couchesDeLEntite` LEVAIT dessus. Comme la levée part de
     // `peindre`, poser des Fusiliers en garnison laissait l'écran de la base
     // BLANC. Mesuré sur `main` avant ce lot : le défaut est antérieur.
-    spriteDe: (piece, etat) => couchesDeLEntite(
+    spriteDe: (piece) => couchesDeLEntite(
       { genre: genreDeLaGarnison(piece.id), id: piece.id, proprietaire: 'joueur',
         camp: 'defense', rangee: piece.rangee, colonne: piece.colonne },
-      { voisines: baseCourante(etat).garnison },
     ),
     // ⚠ TOUT EST « mil » EN DÉFENSE, ET C'EST UN CHOIX DE PALETTE. La famille
     // décide de la couleur du liseré, et la fiche de style n'a pas de teinte
@@ -2303,22 +2307,71 @@ const VARIABLE_DATLAS = {
  * un écran et pas sur l'autre. `ui/offense.js` importe déjà de ce fichier-ci
  * (`formaterEntier`, `ligneAAfficher`, …), le précédent est en place.
  *
+ * ⚠⚠ UNE COUCHE QUI PORTE UNE ANCRE SORT DES FONDS ET DEVIENT UN ENFANT — lot
+ * SPRITES-V2-JOUEUR, 05/09. Une tourelle n'occupe plus la case entière : elle
+ * porte un carré, un décalage et un ANGLE, et `background-image` ne sait pas
+ * tourner. Elle est donc posée dans un `<i>` en position absolue, dimensionné
+ * en pourcentage de l'élément — le même référentiel que le canevas, où le socle
+ * remplit la case comme il remplit ici le jeton — et tourné par `transform`.
+ * Les couches SANS ancre restent des fonds, comme avant : c'est ce qui laisse
+ * les bâtiments, les murs, les barrières et TOUT l'Ouvrage intacts.
+ *
+ * ⚠⚠ L'ENFANT SE REMPLACE, IL NE S'EMPILE PAS, ET LA LISTE SE RETIENT PLUTÔT
+ * QUE DE SE CHERCHER. Les six appelants posent tous sur un élément qu'ils
+ * VIENNENT de créer — jeton, fantôme, vignette de palette, pièce d'une vague,
+ * ligne de recherche —, donc rien ne s'empile aujourd'hui ; mais `rafraichir`
+ * repasse dix fois par seconde et un appelant qui réemploierait son élément
+ * ferait un `<span>` de plus par image, sans qu'aucune longueur de liste ne soit
+ * fausse. On retient donc ce qu'on a posé et on le retire, plutôt que
+ * d'interroger le DOM : `querySelectorAll` retirerait aussi ce qu'un AUTRE aurait
+ * posé, et il n'existe pas dans les faux documents des tests, qui portent « ce
+ * que le code emploie vraiment ». Sur un élément neuf la liste est vide, donc
+ * rien n'est appelé.
+ *
  * @param {HTMLElement} element
- * @param {{famille: string, nom: string}[]} couches de la plus BASSE à la plus haute
+ * @param {{famille: string, nom: string, ancre?: object, angle?: number}[]} couches
+ *   de la plus BASSE à la plus haute
  */
 export function poserCouches(element, couches) {
   if (!Array.isArray(couches) || couches.length === 0) {
     throw new RangeError('chantier : une pièce sans couche de sprite');
   }
+  const doc = element.ownerDocument;
+  for (const vieux of element.couchesTournantes ?? []) vieux.remove();
+  const tournantes = [];
+
   const images = [];
   const tailles = [];
   const positions = [];
-  for (const { famille, nom } of [...couches].reverse()) {
+  for (const couche of [...couches].reverse()) {
+    const { famille, nom } = couche;
     const variable = VARIABLE_DATLAS[famille];
     if (variable === undefined) {
       throw new RangeError(`chantier : la famille « ${famille} » n'a pas de variable CSS`);
     }
     const fond = fondDuSprite(famille, nom);
+    if (couche.ancre) {
+      const { cote_case_pct: c, dx_case_pct: dx, dy_case_pct: dy } = couche.ancre;
+      // ⚠ UN `span`, PAS UN `i`. Quatre règles de la feuille visent le
+      // descendant `i` de leur conteneur — `.posable i`,
+      // `#offense-palette .unite i` — et lui imposent 26 px de côté : un `<i>`
+      // ici hériterait de cette taille dans les deux palettes, et la tourelle
+      // s'y dessinerait à côté de sa pièce. Aucune règle ne vise `span` en
+      // descendant nu ; `.jeton .niveau` est scopée par sa classe.
+      const i = doc.createElement('span');
+      i.className = 'couche-tournante';
+      i.style.width = `${c}%`;
+      i.style.height = `${c}%`;
+      i.style.left = `${50 + dx - c / 2}%`;
+      i.style.top = `${50 + dy - c / 2}%`;
+      i.style.transform = `rotate(${couche.angle ?? 0}deg)`;
+      i.style.backgroundSize = fond.taille;
+      i.style.backgroundPosition = fond.position;
+      poserLesAtlas(i, [variable]);
+      element.appendChild(i);
+      tournantes.push(i);
+      continue;
+    }
     images.push(variable);
     tailles.push(fond.taille);
     positions.push(fond.position);
@@ -2329,6 +2382,7 @@ export function poserCouches(element, couches) {
   poserLesAtlas(element, images);
   element.style.backgroundSize = tailles.join(', ');
   element.style.backgroundPosition = positions.join(', ');
+  element.couchesTournantes = tournantes;
 }
 
 /**

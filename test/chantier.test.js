@@ -3309,9 +3309,33 @@ test('zoom — la base se zoome par la TAILLE d\'une case, jamais par une transf
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
   const feuille = sansCommentairesHtml(readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'));
 
-  assert.doesNotMatch(ecran, /transform/, 'l\'écran de la base a pris une transformation');
+  // ⚠⚠ L'INTERDICTION NOMME UNE EXCEPTION DEPUIS LE LOT SPRITES-V2-JOUEUR, ET
+  // ELLE SE RESSERRE EN MÊME TEMPS. Une tourelle du joueur n'est plus dessinée
+  // seize fois : il y en a UNE, canon au nord, et `poserCouches` la TOURNE. Un
+  // `background-image` ne sait pas tourner, et `transform` sur le jeton ferait
+  // pivoter son socle avec — d'où un `<span>` enfant en position absolue.
+  //
+  // ⚠ CE QUI REND CETTE EXCEPTION SÛRE EST MESURABLE, ET C'EST ASSERTÉ ICI :
+  // la couche tournante porte `pointer-events: none`, donc elle ne peut PAS
+  // décrocher le doigt de la case qu'il vise — ce qui est très exactement la
+  // faute que cette garde existe pour empêcher. Sans cette ligne, l'exception
+  // rouvrirait la vanne au lieu de la déplacer.
+  assert.match(feuille, /\.couche-tournante\s*\{[^}]*pointer-events: none/,
+    'la couche tournante avale le toucher : la transformation redevient interdite');
+
+  // L'exception se retire du texte AVANT le comptage, plutôt que d'être
+  // tolérée par un motif plus large : une seconde transformation, ailleurs dans
+  // l'écran, fait toujours tomber la garde.
+  const sansLaTourelle = ecran.replace(/i\.style\.transform = `rotate\([^`]*`;/g, '');
+  assert.notEqual(sansLaTourelle, ecran, 'la ligne exceptée a disparu : relire cette garde');
+  assert.doesNotMatch(sansLaTourelle, /transform/,
+    'l\'écran de la base a pris une transformation');
   assert.doesNotMatch(feuille.match(/#chantier-grille\s*\{([^}]*)\}/)[1], /transform/,
     'la grille de la base a pris une transformation');
+  assert.doesNotMatch(feuille.match(/\.case\s*\{([^}]*)\}/)[1], /transform/,
+    'la case de la base a pris une transformation');
+  assert.doesNotMatch(feuille.match(/\.jeton\s*\{([^}]*)\}/)[1], /transform/,
+    'le jeton de la base a pris une transformation');
 
   // Ce qui change, c'est le côté d'une case, en pixels.
   assert.match(ecran, /grille\.style\.setProperty\('--case-cote'/,
@@ -3788,9 +3812,15 @@ test('décor — l\'écran choisit son fond sur la FONDATION, et il n\'y a plus 
   // dit noir sur blanc, « il en reste SEPT ». Sept avant ce lot, sept après. Le
   // calque du mur n'en portait plus.
   //
-  // ⚠ ET ON COMPTE SUR LA FEUILLE DÉCOMMENTÉE : le brut en rend DIX, les trois de
-  // trop étant dans les commentaires qui expliquent la règle.
-  assert.equal((feuilleNue.match(/image-rendering:\s*pixelated/g) ?? []).length, 7,
+  // ⚠ ET ON COMPTE SUR LA FEUILLE DÉCOMMENTÉE : le brut en rend plus, les
+  // surnuméraires étant dans les commentaires qui expliquent la règle.
+  //
+  // ⚠⚠ LE HUITIÈME ENTRE AU LOT SPRITES-V2-JOUEUR, ET IL SE DÉCLARE. C'est
+  // `.couche-tournante`, le `<span>` qui porte une tourelle : elle a cessé
+  // d'être un fond du jeton — `background-image` ne sait pas tourner — pour
+  // devenir un enfant en position absolue que `transform` fait pivoter. Un
+  // sprite tourné en fractionnaire est le cas où `pixelated` compte le plus.
+  assert.equal((feuilleNue.match(/image-rendering:\s*pixelated/g) ?? []).length, 8,
     'le compte des `image-rendering: pixelated` a bougé sans qu\'on le dise');
 
   // ⚠⚠ LE DÉCOR SE CHOISIT SUR `fondation`, PAS SUR `position`. C'est l'IDENTITÉ

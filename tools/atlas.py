@@ -96,13 +96,29 @@ METHODE = 6
 FAMILLES = {
     'bâtiment': ('batiment', 34, ()),   # 16 intacts + 16 détruits + 2 ruines, lot 10 du 30/08
     'terrain': ('terrain', 18, ()),
-    'defense': ('defense', 204, ()),    # 9 pièces × orientations et liaisons, deux camps
-    'socle': ('socle', 36, ()),         # les socles des tourelles, deux camps
-    'unite': ('unite', 36, ()),         # les 14 unités des deux camps, poses d'attaque et de défense
-    'chassis': ('chassis', 10, ()),     # les coques de blindé du JOUEUR seul, attaque et défense
+    # ⚠⚠ 204 → 18 AU LOT SPRITES-V2-JOUEUR, 05/09 : NEUF PAR CAMP, ET RIEN DE
+    # PLUS. Les seize orientations tombent — la tourelle TOURNE au rendu — et les
+    # quatre liaisons du merlon aussi — les connexions sont abandonnées. Ce qui
+    # reste est ce que la donnée décrit : neuf pièces de défense par propriétaire.
+    'defense': ('defense', 18, ()),
+    # ⚠ 36 → 12, MÊME LOT. Un socle nu par pièce à tourelle, six par camp ; les
+    # quatre états de liaison des trois socles de contact partent avec les
+    # connexions, et `tools/connexions.py` avec eux.
+    'socle': ('socle', 12, ()),
+    # ⚠ 36 → 35, MÊME LOT : −5 blindés monolithes du joueur, que plus aucun
+    # chemin de code ne lisait, +4 poses de défense d'escouade, dessinées en v2.
+    'unite': ('unite', 35, ()),
+    # ⚠ 10 → 9, MÊME LOT : `off_j_pilon_chassis_def` part. L'Obusier n'entre
+    # jamais en garnison — `pilon.defense.present` vaut `false` — et `nomAvecPose`
+    # ne demande `_def` que pour cette force-là : le sprite existait depuis le
+    # lot 8 et personne ne l'a jamais lu.
+    'chassis': ('chassis', 9, ()),      # les coques de blindé du JOUEUR seul
     # ⚠ LE SLUG PREND UN SOULIGNÉ, PAS UN TIRET : il devient une clé JavaScript,
     # et `ATLAS['tourelle-unite']` s'écrirait mais `ATLAS.tourelle-unite` non.
-    'tourelle-unite': ('tourelle_unite', 80, ()),  # 5 blindés joueur × 16 orientations
+    # ⚠ 80 → 5, MÊME LOT : une tourelle par blindé, carrée et centrée sur son
+    # pivot, que `dessinerCouches` fait tourner. `tools/tourelles_unite.py`, qui
+    # fabriquait les seize orientations, n'a plus d'objet et est supprimé.
+    'tourelle-unite': ('tourelle_unite', 5, ()),
     # ⚠⚠ 115 COUSUS SUR 117 SUR LE DISQUE — 43 jusqu'au lot EMBLÈMES-ABÎMÉS, qui
     # fait entrer les 72 emblèmes de site en fumée et en feu : quatre familles ×
     # neuf paliers × deux états. Les 7 POI n'en ont pas — il n'existe qu'un

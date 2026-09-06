@@ -1,5 +1,30 @@
 #!/usr/bin/env python3
-"""Lot 1 — tourelles de défense (16 orientations) et merlons (4 connexions).
+"""Tourelles de défense de l'OUVRAGE — une seule pose — et le merlon isolé.
+
+⚠⚠ IL NE PRODUIT PLUS SEIZE ORIENTATIONS NI QUATRE LIAISONS — lot
+SPRITES-V2-JOUEUR, 05/09. Deux arbitrages l'ont vidé des trois quarts :
+**la tourelle tourne au rendu**, donc un sprite au lieu de seize ; **les
+connexions sont abandonnées**, donc l'état isolé au lieu de quatre. Les deux
+valent pour les DEUX camps.
+
+⚠ ET IL N'A PAS ÉTÉ SUPPRIMÉ, contrairement à ce que le brief du lot annonçait.
+Il produisait AUSSI les merlons, que rien d'autre ne produit, et les six
+tourelles de l'Ouvrage, que la v2 ne redessine pas. Le supprimer aurait fait
+disparaître sept sprites que le jeu dessine. Ce qui reste est donc : les six
+`def_o_*` en pose NORD, et `def_o_merlon` dans son état isolé.
+
+⚠⚠ ET LE CAMP DU JOUEUR EST PARTI : ses six tourelles et son mur sont dessinés
+en v2, une planche chacun, et passent par `tools/joueur_v2.py`. Les seize
+planches `T*` restent au dépôt et ne sont plus citées que pour l'Ouvrage.
+
+⚠ LES SEIZE PLANCHES SONT ENCORE TOUTES LUES, ET IL LE FAUT. La toile commune
+d'une tourelle de l'Ouvrage est dimensionnée sur la PORTÉE MAXIMALE des seize
+orientations — voir `serie` : n'en lire qu'une changerait le cadrage, donc les
+pixels, donc ferait un sprite différent de celui qui est au dépôt. On lit les
+seize, on n'en écrit qu'une. C'est ce qui rend les six sortants identiques à
+l'octet à leurs `_n` d'hier.
+
+Ce qui suit décrit l'ancrage, et vaut encore.
 
 Le point dur des tourelles n'est pas la découpe, c'est l'ANCRAGE. Chaque
 orientation a été générée dans une image séparée, et le socle n'y occupe pas la
@@ -57,6 +82,12 @@ CELLULES = [
     ('def_o_casemate',  True),  ('def_o_creneau',  True),  ('def_o_batterie',  True),
     ('def_o_faucheuse', True),  ('def_o_mortier',  True),  ('def_o_harpon',    True),
 ]
+# ⚠ SEULES LES SIX DERNIÈRES SONT ÉCRITES. Les six premières sont les tourelles
+# du joueur, redessinées en v2 ; leurs cellules restent nommées ici parce que
+# `serie(k)` indexe la grille 3 × 4 des planches `T*` par ce rang-là — retirer
+# les six lignes décalerait les six autres d'un cran et produirait les mauvais
+# dessins, sans que rien ne lève.
+ECRITES = {k for k, (_nom, ouv) in enumerate(CELLULES) if ouv}
 
 # --- pose de la tourelle sur son socle -------------------------------------
 # Arbitré par Ethan le 29/08 : la base de la tourelle occupe 45 % de la largeur
@@ -78,10 +109,12 @@ DECALAGE = {'def_j_casemate': -7.0, 'def_j_creneau': -7.0, 'def_j_batterie': -7.
             'def_o_casemate': 2.8, 'def_o_creneau': 2.8, 'def_o_batterie': 2.8,
             'def_o_faucheuse': 14.1, 'def_o_mortier': 14.1, 'def_o_harpon': 14.1}
 
-MERLONS = [('merlons_j_connexions_2x2.png', 'def_j_merlon', False),
-           ('merlons_o_connexions_2x2.png', 'def_o_merlon', True)]
-# Arbitrage du 28/08 : les murs ne se raccordent qu'à l'est et à l'ouest.
+MERLONS = [('merlons_o_connexions_2x2.png', 'def_o_merlon', True)]
+# Les quatre cellules de la planche 2 × 2 restent nommées — la CELLULE 0 est
+# l'état isolé, et c'est la seule écrite depuis que les connexions sont
+# abandonnées. Les trois autres ne sont plus produites.
 CONNEXIONS = ['isole', 'est', 'ouest', 'traversant']
+CELLULE_ISOLEE = 0
 
 
 # ⚠⚠ LES SEIZE PLANCHES SE NOMMENT, ELLES NE SE CHERCHENT PLUS — lot ENTRÉES.
@@ -254,27 +287,30 @@ def main():
 
     n = 0
     for k, (nom, ouv) in enumerate(CELLULES):
+        if k not in ECRITES:
+            continue
         P = pal(ouv)
         for orient, im in serie(k):
+            if orient != 'n':
+                continue
             for N in GRILLES:
                 g, matiere = conditionner(im, P, N)
                 d = os.path.join(DST, 'defense', str(N))
                 os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}_{orient}.png'), matiere)
+                ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
                 n += 1
     for fichier, nom, ouv in MERLONS:
         P = pal(ouv)
         chemin = os.path.join(SRC, fichier)
-        for k, conn in enumerate(CONNEXIONS):
-            im = cellule(chemin, k, nx=2, ny=2)
-            px, py, m = pivot(im)
-            im = recadrer_pivot(im, px, py, demi_portee(im, px, py, m))
-            for N in GRILLES:
-                g, matiere = conditionner(im, P, N)
-                d = os.path.join(DST, 'defense', str(N))
-                os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}_{conn}.png'), matiere)
-                n += 1
+        im = cellule(chemin, CELLULE_ISOLEE, nx=2, ny=2)
+        px, py, m = pivot(im)
+        im = recadrer_pivot(im, px, py, demi_portee(im, px, py, m))
+        for N in GRILLES:
+            g, matiere = conditionner(im, P, N)
+            d = os.path.join(DST, 'defense', str(N))
+            os.makedirs(d, exist_ok=True)
+            ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
+            n += 1
     print(f'{n} fichiers écrits')
     return 0
 

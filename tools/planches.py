@@ -124,14 +124,16 @@ def produire(im, boite_cellule, emprise32, ouvrage, N, sortie, nom=''):
 
 
 def taches():
-    """Rend (sous_dossier, nom_fichier, boite, emprise32, ouvrage) par sprite."""
+    """Rend (sous_dossier, nom_fichier, boite, emprise32, ouvrage) par sprite.
+
+    ⚠⚠ LA TABLE `U` N'EST PLUS PARCOURUE — lot SPRITES-V2-JOUEUR, 05/09. Elle
+    donnait les treize unités du joueur, découpées à plusieurs par planche ; la
+    v2 en dessine une par planche, et `tools/joueur_v2.py` les produit. Elle
+    reste importée pour ses EMPRISES : `joueur_v2` relit dedans les 18 et 24 des
+    escouades, qui ne changent pas dans ce lot, et un test le confronte. Il ne
+    reste donc ici que les trente-quatre bâtiments et les deux ruines.
+    """
     out = []
-    for fn, cles, emp in U:
-        im = Image.open(os.path.join(SRC, fn)); W, H = im.size
-        cw = W // len(cles)
-        for i, cle in enumerate(cles):
-            out.append(('unite', 'off_j_' + cle, os.path.join(SRC, fn),
-                        (i * cw, 0, (i + 1) * cw, H), emp, False))
     for fn, nx, ny, gr in B:
         im = Image.open(os.path.join(SRC, fn)); W, H = im.size
         cw, ch = W // nx, H // ny

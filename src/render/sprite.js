@@ -58,14 +58,19 @@ function exigerFamille(famille) {
  * faire — poser la variante si elle existe, retomber sur la forme de base
  * sinon — et pour qui l'absence est une réponse, pas une faute.
  *
- * ⚠ ELLE EXISTE PARCE QUE L'ART EST INCOMPLET, ET DÉLIBÉRÉMENT. Six défenses du
- * joueur portent une tourelle, trois seulement ont des socles de liaison : la
- * planche `socles_j_tourelles_connexions_3x4.png` est un 3 × 4 — trois
- * tourelles, quatre états — et il n'en existe pas pour les trois artilleries.
- * L'écran LIT donc l'atlas au lieu de porter une liste de trois noms : le jour
- * où la planche arrive et où les outils tournent, les artilleries prennent leurs
- * liaisons SANS QU'UNE LIGNE DE CODE CHANGE. Une liste écrite à la main serait
- * la première à diverger, et il faudrait se souvenir de la modifier.
+ * ⚠⚠ SON PREMIER MOTIF A DISPARU AU LOT SPRITES-V2-JOUEUR, ET ELLE EN GARDE UN
+ * AUTRE. Ce paragraphe expliquait qu'elle existe « parce que l'art est
+ * incomplet » : six défenses du joueur portaient une tourelle et trois seulement
+ * avaient des socles de LIAISON, faute d'une planche pour les artilleries.
+ * Ethan a arbitré le 05/09 que les pièces ne se raccordent plus ; il n'y a plus
+ * d'état de liaison à demander, et la planche qui manquait n'a plus à venir.
+ *
+ * ⚠ CE QUI LA GARDE VIVANTE EST `nomAvecPose` de `render/scene.js` : huit unités
+ * de l'Ouvrage sur quatorze ont une pose `_def`, six ne l'ont pas, et neuf
+ * coques du joueur sur dix — l'Obusier n'entre jamais en garnison. L'écran LIT
+ * donc l'atlas au lieu de porter ces listes : le jour où les six manquantes
+ * seront dessinées, elles seront demandées SANS QU'UNE LIGNE DE CODE CHANGE.
+ * Une liste écrite à la main serait la première à diverger.
  *
  * ⚠ UNE FAMILLE INCONNUE REND `false`, elle ne lève pas non plus. La question
  * « ce sprite est-il là » a une réponse même quand la famille n'est pas cousue,

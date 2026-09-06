@@ -20,9 +20,10 @@
  * remarque. C'est la même règle que `fondDuSprite`, qui lève sur un nom absent.
  *
  * ⚠ ET CE MODULE NE DÉCIDE TOUJOURS RIEN. La branche `sprite` appelle
- * `drawImage` avec les six nombres que la primitive porte — ni choix de nom, ni
- * calcul de position, ni lissage. `imageSmoothingEnabled` est une décision, elle
- * se pose chez celui qui crée le contexte.
+ * `drawImage` avec les huit nombres que la primitive porte, et tourne le
+ * contexte de l'angle qu'elle porte aussi — ni choix de nom, ni calcul de
+ * position, ni lissage. `imageSmoothingEnabled` est une décision, elle se pose
+ * chez celui qui crée le contexte.
  *
  * @param {object} ctx   Contexte 2D (ou enregistreur compatible).
  * @param {Array<object>} liste Primitives produites par scene.js.
@@ -61,7 +62,28 @@ export function executer(ctx, liste, atlas = null) {
             `canvas2d : la famille d'atlas « ${p.famille} » manque pour « ${p.nom} »`,
           );
         }
-        ctx.drawImage(image, p.sx, p.sy, p.sl, p.sh, p.x, p.y, p.l, p.h);
+        // ⚠⚠ LA ROTATION SE FAIT AUTOUR DU CENTRE DU SPRITE, ET C'EST POUR ÇA
+        // QUE LES ONZE TOURELLES DU JOUEUR SONT CARRÉES ET CENTRÉES SUR LEUR
+        // PIVOT, avec la marge qui les empêche d'être rognées à 45°. Ne jamais
+        // recadrer ces sprites — ni au conditionnement, ni ici : un recadrage à
+        // la boîte englobante déplace le pivot et la tourelle se met à osciller.
+        //
+        // ⚠ ET CE N'EST PAS UNE DÉCISION PRISE ICI : l'angle est un champ de la
+        // primitive, comme les six nombres de `drawImage`. Ce module ne fait que
+        // le poser sur le contexte. Un angle nul ne touche pas au contexte du
+        // tout — sinon toute la scène paierait un `save`/`restore` par primitive
+        // pour une transformation identité.
+        if (p.angle) {
+          const cx = p.x + p.l / 2;
+          const cy = p.y + p.h / 2;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate((p.angle * Math.PI) / 180);
+          ctx.drawImage(image, p.sx, p.sy, p.sl, p.sh, -p.l / 2, -p.h / 2, p.l, p.h);
+          ctx.restore();
+        } else {
+          ctx.drawImage(image, p.sx, p.sy, p.sl, p.sh, p.x, p.y, p.l, p.h);
+        }
         break;
       }
       case 'ligne':
