@@ -1666,12 +1666,29 @@
      kaki pour les fonds, métal pour le secondaire, ambre pour ce qui est armé. */
   #ecran-recherche { min-height: 0; }
   #recherche-tete {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
     padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
   }
+  /* ⚠ LE STOCK EN PLUS GROS — Ethan, point 13 du 06/09. 11 px le rangeaient
+     avec les libellés secondaires de l'écran ; il porte le nombre qui décide de
+     tout ce que le panneau propose. 15 px est la taille que le dépôt emploie
+     DÉJÀ pour « le nombre qui compte dans un panneau » — `#transfert-bilan
+     .recu b`, le montant reçu —, et la graisse 600 est celle du prix d'un raid.
+     ⚠⚠ ET IL S'ENROULE PLUTÔT QUE DE POUSSER L'ÉCRAN. Le stock atteint treize
+     chiffres groupés — deux milliards et demi est le prix le plus haut de
+     l'arbre —, et à 15 px « … points » ne tient plus à côté des trois pastilles
+     sur les 360 px d'un téléphone. `min-width: 0` laisse la boîte se réduire et
+     le texte passer à la ligne DANS son cadre : la tête grandit d'une ligne
+     quand il le faut, et jamais avant. Un défilement latéral est ce que le
+     dépôt refuse partout — « tu compresses tout dans l'UI ».
+     ⚠ ET LE NOMBRE, LUI, NE SE COUPE PAS. `formaterPoints` groupe à l'espace
+     fine INSÉCABLE (U+202F) : la seule coupure possible est celle qui précède
+     le mot « points ». `#recherche-tete` est en `flex: 0 0 auto` et n'entre
+     dans aucune des sommes de chrome fixe du Chantier et de l'Offense. */
   #recherche-points {
-    flex: 1; min-width: 0; color: #F5B636;
-    font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+    flex: 1 1 auto; min-width: 0; color: #F5B636;
+    font-size: 15px; font-weight: 600; line-height: 1.2;
+    font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
   }
   #recherche-pastilles { flex: 0 0 auto; display: flex; gap: 3px; }
   #recherche-pastilles button {
@@ -1689,13 +1706,45 @@
   #recherche-panneaux .panneau {
     flex: 0 0 100%; min-width: 0; scroll-snap-align: start;
     overflow-y: auto; scrollbar-width: none;
-    padding: 6px; display: grid; gap: 5px; align-content: start;
+    padding: 6px; display: grid; gap: 0; align-content: start;
   }
   #recherche-panneaux .panneau::-webkit-scrollbar { display: none; }
   #ecran-recherche .piece {
     background: #343A2C; border-left: 3px solid #3E454C; padding: 6px 7px;
   }
+  /* ⚠⚠ DEUX CASES, ET C'EST L'ÉCART QUI LES APPARIE — Ethan, point 15 du 06/09.
+     Le module était EN RETRAIT dans le cadre de sa pièce ; il a le sien. Le
+     risque que le retrait écartait est réel — deux cadres de même forme se
+     lisent comme deux pièces — et trois choses portent l'appartenance à sa
+     place : la pastille `◈` au lieu du sprite, le titre en kaki plus petit, et
+     ces deux écarts-ci. La grille du panneau passe donc à `gap: 0` et l'écart
+     se pose entre CADRES VOISINS : serré sous sa pièce, desserré entre pièces.
+     ⚠ `+` PLUTÔT QU'UN `margin-top` SUR CHACUN : le premier cadre du panneau ne
+     gagne alors aucune marge, et le `padding: 6px` de la grille reste le seul
+     blanc du haut. */
+  #ecran-recherche .piece + .piece { margin-top: 8px; }
+  #ecran-recherche .piece + .piece.module { margin-top: 2px; }
+  /* ⚠⚠ TROIS CODES VISUELS, ET PAS UN DE PLUS — Ethan, point 16 du 06/09 :
+     « une case normale quand la recherche est acquise, une case assombrie quand
+     non acquise, une case assombrie mais le bouton d'acquisition couleur vive
+     et contraste quand l'acquisition est possible ». La case a donc DEUX
+     aspects, le bouton en a TROIS, et une seule classe les commande — celle que
+     `etatDuCadre` pose sur le cadre.
+     ⚠ AUCUNE TEINTE NEUVE. `#1E2124` est le fond des boutons et des pastilles
+     de cet écran ; `#F5B636` est l'ambre de la fiche, déjà l'armé du Chantier,
+     le compteur du haut et les refus d'ici. Mesuré : l'ambre sur `#1E2124`
+     rend 8,96 de contraste, contre 3,31 pour le gris d'un bouton éteint — un
+     facteur 2,7, ce qui est le « vif et contraste » demandé.
+     ⚠⚠ ET L'ARMÉ RESTE DISTINCT DE L'ACHETABLE : l'achetable est CERNÉ d'ambre
+     sur fond sombre, l'armé est REMPLI d'ambre — plus son libellé, qui devient
+     « Confirmer ? ». Le `:not(.arme)` le dit dans la règle plutôt que de
+     compter sur l'ordre des lignes de cette feuille, qui se relit mal. */
   #ecran-recherche .piece.acquise { border-left-color: #6A7658; }
+  #ecran-recherche .piece.bloquee,
+  #ecran-recherche .piece.achetable { background: #1E2124; }
+  #ecran-recherche .piece.achetable .acheter:not(.arme) {
+    color: #F5B636; border-color: #F5B636;
+  }
   #ecran-recherche .rangee { display: flex; align-items: center; gap: 7px; }
   #ecran-recherche .rangee b {
     flex: 1; min-width: 0; color: #F5F3E8; font-size: 11px; line-height: 1.2;
@@ -1703,6 +1752,18 @@
   /* La vignette : même découpe d'atlas que la palette de l'Offense — le JS pose
      les trois listes de fond, la feuille ne fixe que la taille et le lissage. */
   #ecran-recherche .sprite {
+    /* ⚠⚠ `relative` POUR LA COUCHE TOURNANTE — ET SON ABSENCE ÉTAIT UN DÉFAUT
+       LIVRÉ, ANTÉRIEUR À CE LOT. Le lot SPRITES-V2-JOUEUR a sorti la tourelle
+       du fond pour en faire un `<span>` en position ABSOLUE, et il a nommé
+       QUATRE règles qui gagnaient `position: relative` : `.fantome`,
+       `.posable i`, `#offense-palette .unite i` et la pièce d'une vague. Il en
+       a manqué une cinquième — celle-ci. Sans ancêtre positionné, le `<span>`
+       se cale sur le premier qu'il trouve, qui est `#ecrans`, et se dimensionne
+       en POURCENTAGE de lui : mesuré dans Chromium sur un livrable bâti depuis
+       `origin/main`, les tourelles de cet écran se peignaient à 336 × 583 et
+       jusqu'à 403 × 699 pixels CSS, par-dessus toute la page. Voir
+       `.couche-tournante`. */
+    position: relative;
     flex: 0 0 28px; height: 28px; image-rendering: pixelated;
     background-repeat: no-repeat;
   }
@@ -1724,9 +1785,9 @@
   #ecran-recherche .prix {
     flex: 0 0 auto; color: #8C9A72; font-size: 10px; font-variant-numeric: tabular-nums;
   }
-  /* Le module, EN RETRAIT sous sa pièce : il lui appartient. */
-  #ecran-recherche .module { margin: 4px 0 0 12px; border-left: 1px solid #4E5742; padding-left: 6px; }
-  #ecran-recherche .module b { font-size: 10px; color: #8C9A72; }
+  /* Le module : son propre cadre, reconnaissable à son titre plus petit et en
+     kaki là où celui d'une pièce est blanc et à 11 px. */
+  #ecran-recherche .piece.module b { font-size: 10px; color: #8C9A72; }
   #ecran-recherche .description { margin-top: 2px; color: #68727E; font-size: 9px; line-height: 1.35; }
   #ecran-recherche .raison { margin-top: 2px; color: #F5B636; font-size: 9px; line-height: 1.3; }
 
