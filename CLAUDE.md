@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.2 · build 103.
+Dernière révision : **06/09/2026**, version 0.99.3 · build 104.
 
 ---
 
@@ -42,7 +42,139 @@ Dernière révision : **06/09/2026**, version 0.99.2 · build 103.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot RETOUR-DÉFENSES), à confronter :**
+**Référence au 06/09/2026 (après le lot CARTE-B), à confronter :**
+`npm test` → **1139 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 987 821 octets**, 0 référence externe. Le lot **REND 135 octets**,
+ENTIÈREMENT DU JAVASCRIPT, mesurés poste par poste contre un livrable rebâti
+depuis l'arbre d'avant : **JavaScript −135 · feuille +0 · balisage +0 ·
+images +0 · audio +0** — **296 lignes `data:` avant, 296 après, 291 URI de part
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 312 179 octets,
+14,11 %**. Le lot ne touche QUE `src/ui/monde.js`.
+⚠⚠ **DEUX RETOURS D'ETHAN DU 06/09, ET LES DEUX RENVERSENT UN ARBITRAGE ÉCRIT —
+C'EST LE PREMIER FAIT À DIRE.** Point 3 : « ouverture de la carte : centrée sur
+ma base du joueur au zoom maximum » ; point 4 : « flèche de la base à la cible :
+du centre de l'un au centre de l'autre ». Le code ne bouge que de quelques
+lignes ; **tout le travail est de renverser les COMMENTAIRES en même temps**, et
+aucun des trois motifs écartés n'a été supprimé en silence — les trois sont cités
+dans le fichier, avec la date et la phrase qui les écarte.
+⚠⚠ **LA CARTE S'OUVRAIT AU DÉZOOM MAXIMAL, ET CE N'EST PAS UNE INVERSION DE
+SIGNE.** `CRANS` est rangée du plus large au plus serré : `CRANS[0]` est le cran
+qui montre le PLUS de carte, `ECHELLE_MAX` celui qui montre le moins et le mieux.
+L'ouverture passe de l'un à l'autre, et **`ECHELLE_MAX` se LIT dans la table** —
+écrire 256 ferait la seconde vérité que §4 interdit, et la garde « l'écran ne
+nomme aucune constante de zoom en dur » tomberait dessus.
+⚠⚠ **LES DEUX MOITIÉS DE LA PHRASE NE SE SÉPARENT PAS, ET C'EST UNE LECTURE
+DÉCLARÉE.** Le brief demandait le recentrage à chaque ouverture et l'échelle une
+seule fois, à l'initialisation. Appliquer la moitié d'une phrase à partir de la
+deuxième visite ne serait la lecture de personne : `cadrerSurLaBase` pose les
+DEUX à chaque ouverture, et `CARTE-B T2` le mesure — la falsification qui ne
+repose que la vue fait tomber ce seul test. **Écart au brief, réversible d'une
+ligne.**
+⚠⚠ **ET CE QUE ÇA COÛTE EST NOMMÉ, PAS TU : REVENIR D'UN RAID RAMÈNE LA VUE SUR
+SA BASE.** Le commentaire de `peindre` défendait l'inverse depuis le 31/08 —
+« recentrer chaque fois qu'on revient à la carte ferait perdre l'endroit qu'on
+était en train de regarder, c'est la première chose qui agace sur une carte ». Ce
+raisonnement n'est pas faux, il est ÉCARTÉ ; la session appelle `peindre` à
+chaque `montrerEcran`, donc l'endroit qu'on regardait est perdu en revenant du
+Chantier, de l'Offense et de la Recherche aussi. **Un `if (premiere)` remis
+autour de l'appel rend le comportement du 31/08.**
+⚠ **ET LE BOUTON `#monde-recentrer` NE CHANGE TOUJOURS PAS DE ZOOM.** Son emploi
+se DÉPLACE — il servait à rentrer d'une balade perdue, il sert maintenant DANS
+une visite —, mais ni lui ni le recentrage d'après-déplacement ne forcent le
+cran : Ethan n'a parlé que de l'OUVERTURE, et `cadrerSurLaBase` est le seul
+endroit qui l'impose.
+⚠⚠ **LA FLÈCHE PASSE DÉSORMAIS PAR-DESSUS LES DEUX EMBLÈMES, ET C'EST RELEVÉ, PAS
+SUBI.** Ordre de dessin de `dessiner`, consigné : **fond · frontières · emblèmes
+· étiquettes · halo · flèche · cases du déplacement**. La flèche est peinte APRÈS
+les emblèmes depuis toujours, et un emblème occupe la case ENTIÈRE —
+`dessinerEmblemeDUneCase` rend `cote: taille`. Le trait masque donc le centre de
+la base du joueur comme celui de la cible : c'est ce que la demande implique, et
+**l'ordre n'a pas été touché pour l'adoucir**. La garde d'ordre de
+`monde.test.js` le tenait déjà de face ; elle n'a pas bougé d'un caractère.
+⚠ **ET LA FLÈCHE NE PORTE PLUS DE CHIFFRE DEPUIS LE LOT CARTE-A — LE BRIEF SE
+TROMPAIT.** Son §2 demandait de vérifier que « le chiffre porté par la flèche
+reste lisible » une fois le trait rallongé : `dessinerFleche` n'écrit rien depuis
+le 04/09, le prix vit dans `#monde-panneau-prix`. Il n'y avait rien à replacer.
+**Écart déclaré ; le test `cout === null` reste, pour la raison écrite ce
+jour-là — hors de portée, pas de flèche.**
+⚠⚠ **DEUX CONSTANTES SORTENT, ET AUCUNE N'EST REMISE À ZÉRO.** `CRAN_PAR_DEFAUT`
+n'avait plus qu'un lecteur, l'initialisation qu'elle vient de perdre ;
+`RETRAIT_FLECHE` valait 0,55 case et n'en avait aucun autre — vérifié dans `src/`
+comme dans `test/` avant le retrait. Les laisser à `0` aurait mis dans `src/` deux
+noms qui affirment le contraire de ce que l'écran fait. **Chacune laisse à sa
+place le paragraphe qui dit ce qu'elle valait et pourquoi elle est partie.**
+⚠⚠ **ET `Math.sqrt` PART AVEC LE RETRAIT :
+`RACINES_DE_DESSIN_TOLEREES` TOMBE DE UN À ZÉRO.** La racine normalisait le
+vecteur pour reculer les deux bouts ; sans recul, `Math.atan2` suffit.
+`src/ui/monde.js` était le DERNIER porteur des quatre dossiers, si bien que
+l'interdiction devient **totale sur `data`, `sim`, `render` et `ui`**. La liste
+tombe dans les deux sens : le prochain fichier qui reprendrait une racine devra
+l'y inscrire en écrivant pourquoi. Second resserrement de cette garde après celui
+du lot SOL-SATELLITE.
+⚠⚠ **L'ÉCRAN MONDE EST MONTÉ POUR DE BON, ET IL A FALLU UN FAUX DOCUMENT POUR
+ÇA.** `monde.test.js` ne mesurait jusqu'ici que les fonctions PURES et la SOURCE
+au motif que « le canevas se vérifie sur appareil » ; asserter par `assert.match`
+qu'`echelle` est initialisée quelque part prouve la LIGNE, pas le CHEMIN — c'est
+le proxy que le dépôt a déjà payé trois fois. Le faux document entre dans
+`test/monde.test.js`, sur le modèle de ceux de `chantier.test.js` et
+`recherche.test.js` : **aucune dépendance n'entre**, `esbuild` reste la seule.
+⚠ **ET IL LÈVE SUR TOUT IDENTIFIANT QUE `src/index.src.html` NE DÉCLARE PAS**,
+les vingt-quatre étant confrontés au balisage avant le montage : il garde donc
+une seconde chose — que l'écran ne demande aucun élément que la page n'a pas.
+⚠⚠ **LA VUE S'OBSERVE PAR LE HALO, ET C'EST LA SEULE FENÊTRE HONNÊTE.**
+`initialiserEcranMonde` ne rend que `peindre`, `rafraichir` et `masquer` : ni
+l'origine ni l'échelle ne sortent du module, et leur ouvrir un accesseur pour les
+besoins d'un test mettrait dans `src/` une porte que la production n'emploie pas.
+Le halo est peint À la position de la base et À l'échelle courante — son
+`strokeRect` porte donc les deux grandeurs cherchées, telles que l'écran les a
+employées. ⚠ Et il est le SEUL `strokeRect` de la scène parce que le faux
+document livre l'image des emblèmes DÉCODÉE : leur repli d'attente en peint un
+par site, et le halo cesserait d'être identifiable. Le test le compte et lève
+au-delà de un.
+⚠⚠ **LE DOIGT EST REJOUÉ, IL N'EST PAS CONTOURNÉ.** `CARTE-B T2` défait le
+cadrage par un vrai PINCEMENT — deux `pointerdown`, un `pointermove`, deux
+`pointercancel` sur le canevas —, ce qui dézoome ET promène la vue en un geste,
+donc défait les deux moitiés avant de rouvrir. ⚠ Les doigts se retirent par
+`pointercancel` et non par `pointerup` : `relacher` ouvrirait le panneau du site
+touché, un doigt qui pince n'ayant pas « glissé ».
+⚠ **QUATRE TESTS ENTRENT — `CARTE-B T1` à `T4` — ET LE COMPTE PASSE DE 1 135 À
+1 139.** **Aucune assertion n'a été retirée ni assouplie**, et **quatre gardes
+changent de cible, dont trois se RESSERRENT** : l'initialisation de l'échelle
+gagne un refus des nombres écrits en dur, les deux bouts de la flèche de
+`DÉPLACEMENT T11 bis` passent de `x1 > 45` / `x2 < 145` — c'est-à-dire de
+n'importe quel retrait — à l'ÉGALITÉ STRICTE sur les deux centres, et
+`RACINES_DE_DESSIN_TOLEREES` tombe à zéro. **Une assertion est RETIRÉE et se
+déclare** : `CRAN_PAR_DEFAUT === 0`, dont le message disait « la carte ne s'ouvre
+plus sur la vue la plus large » — c'est exactement ce qu'Ethan renverse. La
+propriété qu'elle gardait est reprise par `CARTE-B T1`, qui la mesure sur
+l'ÉCRAN MONTÉ au lieu de la lire dans une constante.
+⚠⚠ **`CARTE-B T4` A ÉTÉ ÉCRIT ET VÉRIFIÉ VERT AVANT LA MODIFICATION — 60 pass /
+0 fail mesuré.** Il ne décrit aucune nouveauté : il attrape une RÉGRESSION. Rien
+ne mesurait le refus d'une flèche vers sa propre case, et la première façon de se
+tromper en retirant le retrait est de retirer la garde qui le précède —
+`Math.atan2(0, 0)` rend alors zéro sans le dire.
+⚠ **SIX FALSIFICATIONS, SIX CHUTES**, une par test plus deux de discrimination :
+l'ouverture remise au cran le plus large, le cadrage revenu au seul `premiere`,
+le cadrage qui ne repose QUE la vue, le retrait de 0,55 case remis, **un retrait
+DIVISÉ PAR DEUX** — écrit en `Math.hypot` pour que la garde des racines ne le
+dénonce pas à la place du test —, et la garde « même case » désarmée. Les cinq
+premières font tomber leur test et rien d'autre du lot.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 26.** Pas un champ n'entre dans
+l'état : une échelle d'affichage, une origine de vue et deux bouts de trait
+vivent dans l'écran, et rien ne les sauvegarde.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — pas un octet d'`art/sprites/` ne
+change.
+⚠⚠ **LE POINT 1 D'ETHAN — « emblème carte à centrer » — EST SUSPENDU, PAS
+OUBLIÉ.** Le brief le met hors lot et demande de poser la question : l'emblème
+d'une case est **déjà centré par construction**, `dessinerEmblemeDUneCase`
+rendant `cote: taille`, et la grosse base 3 × 3 se centre aussi. Deux lectures
+restent ouvertes et ne demandent pas le même travail — (a) amener l'emblème
+touché au CENTRE DE LA VUE, typiquement parce que le panneau du bas le recouvre ;
+(b) un emblème précis mal posé AILLEURS qu'à la carte. **Ethan tranche.** Le
+point 2, « enlever son d'ambiance sur la carte », est le lot SON-VOLUMES.
+
+**Auparavant, après le lot RETOUR-DÉFENSES :**
 `npm test` → **1135 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 987 956 octets**, 0 référence externe. Coût **+5 590 octets** contre un
 livrable rebâti depuis `origin/main`, mesuré poste par poste : **JavaScript

@@ -205,7 +205,17 @@ test('TRANSFERT T5 — round(√x) en entiers ≡ Math.round(Math.sqrt(x)), sur 
 // l'unité, où `Σw` vaut exactement 1 et où il n'y a rien à normaliser. La liste
 // tombe donc de deux à UN, et un fichier qui la rejoindrait ferait tomber ce
 // test — ce qu'on lui demande.
-const RACINES_DE_DESSIN_TOLEREES = ['src/ui/monde.js'];
+//
+// ⚠⚠ ET `src/ui/monde.js` EN EST SORTI À SON TOUR — lot CARTE-B, 06/09, SECOND
+// RESSERREMENT. Sa racine normalisait le vecteur de la flèche de raid pour en
+// reculer les deux bouts d'une fraction de case ; Ethan, 06/09 : « du centre de
+// l'un au centre de l'autre ». Sans recul il n'y a plus rien à normaliser, et
+// `Math.atan2` suffit à l'angle. **LA LISTE EST DONC VIDE, ET L'INTERDICTION
+// DEVIENT TOTALE SUR LES QUATRE DOSSIERS** — `data`, `sim`, `render`, `ui`. Le
+// test ne s'en trouve pas affaibli : il tombe toujours dans les deux sens, et
+// le premier fichier qui reprendrait une racine, où que ce soit dans `src/`,
+// devra l'inscrire ici en écrivant pourquoi.
+const RACINES_DE_DESSIN_TOLEREES = [];
 
 test('TRANSFERT T6 — aucun Math.sqrt là où une règle se décide', () => {
   const porteurs = [];

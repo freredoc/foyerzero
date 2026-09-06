@@ -66,8 +66,19 @@ import { satellitesPresents } from '../sim/satellites.js';
 /** Les crans de zoom, du plus large au plus serré. Lus, jamais recopiés. */
 export const CRANS = ZOOM_CARTE.crans;
 
-/** Le cran sur lequel la carte s'ouvre : celui qui montre le plus. */
-export const CRAN_PAR_DEFAUT = 0;
+/**
+ * ⚠⚠ `CRAN_PAR_DEFAUT` A ÉTÉ RETIRÉE AU LOT CARTE-B (06/09), ET C'EST UNE
+ * CONSTANTE EN MOINS, PAS UN OUBLI.
+ *
+ * Elle valait `0` et disait « le cran sur lequel la carte s'ouvre : celui qui
+ * montre le plus ». Ethan, 06/09 : « ouverture de la carte : centrée sur ma
+ * base du joueur AU ZOOM MAXIMUM ». La carte s'ouvre donc sur `ECHELLE_MAX`,
+ * qui est l'autre bout de la même table, et cette constante-ci n'avait plus
+ * qu'un lecteur : l'initialisation qu'elle vient de perdre. La garder à `0`
+ * aurait laissé dans `src/` un nom qui affirme le contraire de ce que l'écran
+ * fait — le commentaire menteur en puissance que `CLAUDE.md` §6 raconte déjà
+ * trois fois.
+ */
 
 /**
  * Les deux bouts de la course du zoom, en pixels physiques par case.
@@ -915,10 +926,20 @@ export function lignesDeLEtiquette(site) {
 /**
  * Le trait de la flèche qui va de la base halotée à la cible ouverte.
  *
- * ⚠ ELLE S'ARRÊTE AU BORD DES DEUX CASES, pas à leur centre. Un trait qui
- * traverserait les deux emblèmes couperait les seuls dessins qui disent ce qu'il
- * y a là — c'est la raison pour laquelle les frontières passent déjà SOUS les
- * emblèmes.
+ * ⚠⚠ ELLE VA D'UN CENTRE À L'AUTRE DEPUIS LE 06/09, ET C'EST UN RENVERSEMENT.
+ * Ce paragraphe disait « elle s'arrête au bord des deux cases, pas à leur
+ * centre », au motif qu'« un trait qui traverserait les deux emblèmes couperait
+ * les seuls dessins qui disent ce qu'il y a là ». Ethan, 06/09 : « flèche de la
+ * base à la cible : du centre de l'un au centre de l'autre ». Le retrait tombe,
+ * et `RETRAIT_FLECHE` avec lui — il n'avait pas d'autre lecteur.
+ *
+ * ⚠⚠ ET LE MOTIF ÉCARTÉ DÉCRIT CE QUE ÇA COÛTE, MESURÉ ET NON SUPPOSÉ. Un
+ * emblème occupe la case ENTIÈRE — `dessinerEmblemeDUneCase` rend
+ * `cote: taille` —, et `dessiner` peint la flèche APRÈS les emblèmes, comme le
+ * halo et les étiquettes : le trait passe donc PAR-DESSUS les deux, et masque le
+ * centre de la base du joueur comme celui de la cible. C'est ce que la demande
+ * implique ; l'ordre de dessin n'a pas été touché pour l'adoucir, et
+ * `monde.test.js` le tient déjà de face.
  *
  * ⚠ ELLE REND `null` SI LES DEUX CASES SONT LA MÊME. Pas de flèche vers sa
  * propre base : elle n'aurait ni longueur ni sens, et `Math.atan2(0, 0)` rendrait
@@ -935,27 +956,31 @@ export function traitDeLaFleche(depuis, vers, ox, oy, pas) {
   if (depuis.rangee === vers.rangee && depuis.colonne === vers.colonne) return null;
   const a = centreDeLaCase(depuis, ox, oy, pas);
   const b = centreDeLaCase(vers, ox, oy, pas);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const longueur = Math.sqrt(dx * dx + dy * dy);
-  // ⚠ ICI UNE RACINE EST LÉGITIME, ET IL FAUT LE DIRE : on est dans le DESSIN,
-  // en pixels, pas dans une règle de jeu. Les distances de la carte se comparent
-  // au carré depuis le lot EUCLIDE parce qu'elles décident ; celle-ci ne décide
-  // de rien, elle normalise un vecteur d'écran.
-  const marge = pas * RETRAIT_FLECHE;
-  const ux = dx / longueur;
-  const uy = dy / longueur;
+  // ⚠⚠ ET LE `Math.sqrt` PART AVEC LE RETRAIT. Il normalisait le vecteur pour
+  // reculer les deux bouts d'une fraction de case ; sans recul il n'y a plus
+  // rien à normaliser, et l'angle se prend directement en `atan2`. `src/ui/`
+  // était le dernier dossier de dessin à porter une racine :
+  // `RACINES_DE_DESSIN_TOLEREES` de `transfert.test.js` tombe donc de UN à
+  // ZÉRO, et l'interdiction devient totale sur les quatre dossiers.
   return {
-    x1: a.x + ux * marge,
-    y1: a.y + uy * marge,
-    x2: b.x - ux * marge,
-    y2: b.y - uy * marge,
-    angle: Math.atan2(dy, dx),
+    x1: a.x,
+    y1: a.y,
+    x2: b.x,
+    y2: b.y,
+    angle: Math.atan2(b.y - a.y, b.x - a.x),
   };
 }
 
-/** Le retrait aux deux bouts de la flèche, en cases : elle ne couvre pas les emblèmes. */
-export const RETRAIT_FLECHE = 0.55;
+/**
+ * ⚠⚠ `RETRAIT_FLECHE` A ÉTÉ RETIRÉE AU LOT CARTE-B (06/09), ET C'EST UNE
+ * CONSTANTE EN MOINS QUI SE DÉCLARE.
+ *
+ * Elle valait `0,55` case et reculait les deux bouts de la flèche pour qu'elle
+ * ne couvre pas les emblèmes. Ethan, 06/09 : « du centre de l'un au centre de
+ * l'autre ». Un retrait à zéro serait un nom qui ment ; la remettre serait
+ * défaire l'arbitrage. Elle n'avait aucun autre lecteur — vérifié avant le
+ * retrait, `src/` comme `test/`.
+ */
 
 /**
  * La couleur du trait de frontière de chaque camp.
@@ -1090,7 +1115,14 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // jusqu'au 04/09 ; Ethan : « le zoom de la carte ne doit pas être par cran ».
   // Un `cranIndex` gardé à côté d'elle « au cas où » divergerait au premier
   // pincement — il n'y en a plus, et `monde.test.js` refuse qu'il revienne.
-  let echelle = CRANS[CRAN_PAR_DEFAUT];
+  // ⚠⚠ ET ELLE S'OUVRE AU ZOOM MAXIMUM DEPUIS LE 06/09, PLUS AU PLUS LARGE.
+  // Ethan : « ouverture de la carte : centrée sur ma base du joueur au zoom
+  // maximum ». `ECHELLE_MAX` se LIT dans la table — écrire 256 ici ferait la
+  // seconde vérité que §4 de `CLAUDE.md` interdit, et la garde « l'écran ne
+  // nomme aucune constante de zoom en dur » de `monde.test.js` tomberait
+  // dessus. Cette valeur-ci n'est que le point de départ : `cadrerSurLaBase`
+  // la repose à chaque ouverture.
+  let echelle = ECHELLE_MAX;
   let vueX = 0;
   let vueY = 0;
   let visible = false;
@@ -1310,6 +1342,35 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     vueX = (position.colonne - 0.5) * echelle - canvas.width / 2;
     vueY = (position.rangee - 0.5) * echelle - canvas.height / 2;
     recadrer();
+  }
+
+  /**
+   * Le cadrage d'ouverture : la base du joueur, au zoom maximum.
+   *
+   * ⚠⚠ LES DEUX MOITIÉS SONT LA MÊME PHRASE, ET ELLES NE SE SÉPARENT PAS.
+   * Ethan, 06/09 : « ouverture de la carte : centrée sur ma base du joueur au
+   * zoom maximum ». Un sujet, deux compléments : appliquer le recentrage à
+   * chaque ouverture et l'échelle une seule fois rendrait la phrase à moitié
+   * vraie à partir de la deuxième visite, ce qui ne serait la lecture de
+   * personne. D'où une fonction, appelée d'un seul endroit — `peindre`.
+   *
+   * ⚠ L'ÉCHELLE SE POSE AVANT LE CENTRAGE, ET L'ORDRE COMPTE. `centrerSur`
+   * calcule sa vue à partir d'`echelle` : centrer d'abord poserait la vue à
+   * l'ancienne échelle, et le zoom la ferait fuir juste après.
+   *
+   * ⚠ ON ÉCRIT `echelle` PLUTÔT QUE D'APPELER `reglerEchelle`. Celle-ci garde un
+   * point de l'écran immobile — c'est ce que le pincement demande, et c'est
+   * exactement ce qu'on ne veut pas ici : la vue est remplacée, pas ancrée. Elle
+   * sort d'ailleurs sans rien faire quand l'échelle ne bouge pas, ce qui
+   * laisserait le cadrage à moitié fait une ouverture sur deux.
+   *
+   * ⚠ ET C'EST LE SEUL ENDROIT QUI FORCE LE ZOOM. `#monde-recentrer` et le
+   * recentrage d'après-déplacement appellent `centrerSur` seul, et gardent le
+   * cran que le joueur venait de choisir : Ethan n'a parlé que de l'OUVERTURE.
+   */
+  function cadrerSurLaBase(etat) {
+    echelle = ECHELLE_MAX;
+    centrerSur(baseCourante(etat).position);
   }
 
   /**
@@ -2262,14 +2323,32 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   /**
    * Première mise en scène, et chaque ouverture de l'écran.
    *
-   * ⚠ L'ATLAS ET LA VUE NE SE REFONT PAS À CHAQUE OUVERTURE. Recentrer sur la
+   * ⚠⚠ LA VUE SE REFAIT À CHAQUE OUVERTURE DEPUIS LE 06/09, ET C'EST UN
+   * RENVERSEMENT ASSUMÉ. Ce paragraphe disait l'inverse : « recentrer sur la
    * base du joueur chaque fois qu'on revient à la carte ferait perdre l'endroit
    * qu'on était en train de regarder — c'est la première chose qui agace sur une
-   * carte. Le recentrage n'a lieu qu'une fois, quand la vue n'existe pas encore.
+   * carte », et le recentrage n'avait lieu qu'une fois, quand la vue n'existait
+   * pas encore. Ce raisonnement n'est pas faux ; il est ÉCARTÉ. Ethan, 06/09 :
+   * « ouverture de la carte : centrée sur ma base du joueur au zoom maximum », et
+   * « ouverture de la carte » se lit à la lettre — chaque entrée dans l'écran
+   * Monde.
+   *
+   * ⚠⚠ ET CE QUE ÇA COÛTE EST NOMMÉ : REVENIR D'UN RAID RAMÈNE LA VUE SUR SA
+   * BASE. L'endroit qu'on regardait est perdu, et il l'est aussi en revenant du
+   * Chantier, de l'Offense ou de la Recherche — la session appelle `peindre` à
+   * chaque `montrerEcran`. C'est le prix de la demande, pas un défaut à corriger
+   * de sa propre initiative ; `#monde-recentrer` reste la porte de sortie dans
+   * l'autre sens, pour ceux qui se sont éloignés.
+   *
+   * ⚠ C'EST UN CHOIX RÉVERSIBLE D'UNE LIGNE : remettre le `premiere` d'avant
+   * autour de l'appel rend le comportement du 31/08.
+   *
+   * ⚠ L'ATLAS, LUI, NE SE REFAIT TOUJOURS PAS. Les quatre `charger*` sortent
+   * d'eux-mêmes quand leur image est déjà là ; ce sont la VUE et l'ÉCHELLE qui
+   * se reposent, rien d'autre.
    */
   function peindre(etat) {
     if (etat === null || etat === undefined) return;
-    const premiere = etatCourant === null;
     etatCourant = etat;
     visible = true;
     empreinteSatellites = empreinteDeLaCarte(etat);
@@ -2278,7 +2357,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     chargerLimites();
     chargerGrossesBases();
     dimensionner();
-    if (premiere) centrerSur(baseCourante(etat).position);
+    cadrerSurLaBase(etat);
     majBoutons();
     dessiner();
   }
