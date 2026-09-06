@@ -46,7 +46,9 @@ import {
 // qui font foi dessus depuis le lot 5 ; l'écran la LIT au lieu d'en écrire une
 // troisième. Les deux fonctions portent le même nom court dans deux modules —
 // d'où le renommage à l'import, comme pour `poser`.
-import { budgetDuNiveau as budgetOffense, messageSansBatiment } from './arsenal.js';
+import {
+  budgetDuNiveau as budgetOffense, messageSansBatiment, FAMILLE_DE_CHASSIS,
+} from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation.js';
 import {
@@ -83,11 +85,12 @@ import {
   coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments,
   problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
   plafondDeLaReserveDesBatiments, direLaDuree,
-  complexeDeLaBase, retourDeLaPiece,
+  complexeDeLaBase, retourDeLaPiece, ticksDeRetour, diviseurDuBatiment,
 } from '../sim/reparation.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
 import { facteurMilli } from '../sim/combat.js';
+import { NIVEAU } from '../data/niveaux.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -1138,6 +1141,130 @@ export function libelleDuVoisin(type) {
  *   problemesDemolition: Array<{code: string, message: string}>
  * }}
  */
+/**
+ * Ce qu'un bâtiment UNIQUE commande, lu dans le module qui le porte.
+ *
+ * ⚠⚠ ETHAN, 06/09 : « les bâtiments uniques n'indiquent pas ce qu'elles
+ * améliorent ». Sept bâtiments portent `unique: true` ; le Chantier avait sa
+ * section « Emplacements ouverts » depuis toujours, les six autres ouvraient un
+ * panneau qui ne disait rien de ce qu'ils font.
+ *
+ * ⚠⚠ CHAQUE EFFET EST LU DANS SA FONCTION, JAMAIS PARAPHRASÉ, ET LE RELEVÉ A ÉTÉ
+ * FAIT AVANT D'ÉCRIRE UNE LIGNE. Justifier une propriété par un mécanisme qu'on
+ * n'a pas ouvert est la faute la plus dangereuse qu'un lot puisse commettre :
+ *
+ *   • Centre de commandement · QG de défense → `niveauDeCommandementDeLaBase`
+ *     de `src/sim/state.js` lit leur niveau. Il en sort DEUX grandeurs, et les
+ *     deux se chiffrent : le BUDGET de points, par `budgetDuNiveau` de
+ *     `ui/arsenal.js` et de `ui/defense.js` — `POINTS_ARMEE` de `data/sites.js`
+ *     nomme le bâtiment de chaque côté —, et le PLAFOND de niveau des pièces,
+ *     que `problemesDeLAmeliorationDUnePiece` refuse de dépasser sous le code
+ *     `plafond-commandement`.
+ *   • Complexe de défense → `complexeDeLaBase` et `ticksDeRetour` de
+ *     `src/sim/reparation.js` ; `RETOUR_DEFENSES.indexeeSur` de `data/base.js`
+ *     le nomme.
+ *   • Caserne · Dépôt de véhicules · Aérodrome → `batimentDuChassis` puis
+ *     `diviseurDuBatiment` de `src/sim/reparation.js`, par `BATIMENT_DE_CHASSIS`
+ *     de `data/base.js`. L'en-tête de ce module-là écrit le fait de face : « le
+ *     niveau du bâtiment rend les réparations MOINS CHÈRES —
+ *     `diviseurDuBatiment` —, et c'est son SEUL effet ». Il ne crédite rien, et
+ *     la présence seule — non le niveau — gouverne la construction, par
+ *     `batimentDeProductionManquant`.
+ *
+ * ⚠⚠ LA VALEUR SE DEMANDE, ELLE NE SE RECALCULE PAS. Aucune de ces formules
+ * n'est réécrite ici : l'écran appelle la fonction relevée, une fois sur le
+ * niveau courant et une fois sur le niveau VISÉ. C'est ce qui fait qu'un
+ * changement de barème suit tout seul, et c'est ce qu'un libellé écrit en dur
+ * ne ferait pas — `CH-F T8` monte le même bâtiment à deux niveaux et exige que
+ * la valeur diffère.
+ *
+ * ⚠ LA SANTÉ DU COMPLEXE SE RELIT SUR LA CANDIDATE, PAS SUR LA DISPOSITION
+ * COURANTE. Monter le Complexe augmente ses PV MAXIMAUX sans réparer un seul
+ * dégât : sa santé en MILLIÈMES monte donc toute seule, et lire l'avant des
+ * deux côtés annoncerait un retour plus lent qu'il ne sera.
+ *
+ * ⚠ ET LE NIVEAU DE RÉFÉRENCE DU COMPLEXE EST `NIVEAU.plafond`, PAS
+ * `GEOGRAPHIE.niveauPlafond`. Les deux valent 50 aujourd'hui, et ce n'est pas
+ * une coquetterie : `ticksDeRetour` LÈVE quand `1 + dépassement` sort de
+ * `NIVEAU`, si bien que prendre l'autre plafond ferait tomber tout le panneau
+ * le jour où les deux divergeraient. Avec celui-ci la borne tient par
+ * construction, le niveau du Complexe valant au moins 1.
+ *
+ * ⚠ UN BÂTIMENT NON UNIQUE N'EN REÇOIT AUCUN. La liste est vide, et
+ * `lignesDuPanneau` teste sa longueur comme il teste déjà celle des capacités.
+ *
+ * @param {{id: string, niveau: number}} pose
+ * @param {object} def la ligne de `BASE_BATIMENTS`
+ * @param {number|null} vise `null` au plafond
+ * @param {Array} disposition celle de la base, telle qu'elle est
+ * @param {Array|null} candidate la même, ce bâtiment monté d'un niveau
+ * @returns {Array<{libelle: string, avant: number|null, apres: number|null, forme: string}>}
+ */
+function effetsDuBatiment(pose, def, vise, disposition, candidate) {
+  // ⚠ LES DEUX MESURES SE PRENNENT SUR UNE VRAIE DISPOSITION, jamais sur un
+  // montage d'une seule case fabriqué ici : `complexeDeLaBase` balaie la
+  // disposition, et lui en donner une fausse serait mesurer autre chose que la
+  // base du joueur.
+  const ligne = (libelle, forme, mesure) => ({
+    libelle,
+    forme,
+    avant: mesure(pose.niveau, disposition),
+    apres: vise === null ? null : mesure(vise, candidate),
+  });
+
+  if (def.role === 'qgOffensif' || def.role === 'qgDefensif') {
+    const budget = def.role === 'qgOffensif' ? budgetOffense : budgetDefense;
+    const quoi = def.role === 'qgOffensif' ? 'd\'assaut' : 'de garnison';
+    return [
+      ligne(`Budget de points ${quoi}`, 'entier', (niveau) => budget(niveau)),
+      // ⚠ LE SECOND EFFET DU MÊME NIVEAU, ET IL N'EST PAS LE TITRE DU PANNEAU.
+      // Celui-ci dit « niv. 3 » du BÂTIMENT ; cette ligne-ci dit jusqu'où
+      // montent les PIÈCES, ce qui est la règle de `plafond-commandement` et
+      // que rien n'annonçait au joueur avant qu'un refus ne la lui apprenne.
+      ligne('Niveau maximum des pièces', 'entier', (niveau) => niveau),
+    ];
+  }
+
+  if (def.role === 'reparation') {
+    // ⚠ LA PIÈCE DE RÉFÉRENCE EST CELLE DU PLAFOND, ET C'EST LE SEUL POINT DE
+    // COMPARAISON QUI NE S'INVENTE PAS. Le retour d'une défense dépend du
+    // DÉPASSEMENT entre son niveau et celui du Complexe : il n'existe donc
+    // aucune durée qui soit fonction du seul Complexe. Prendre le haut de la
+    // table donne le pire cas, qui est aussi le levier — c'est la mesure que le
+    // §0 de `CLAUDE.md` porte déjà, « pièce de niveau 50 sous un Complexe 10 →
+    // 45,3 h ».
+    return [ligne(
+      `Retour d'une défense de niveau ${formaterEntier(NIVEAU.plafond)}`,
+      'duree',
+      (niveau, ou) => {
+        const complexe = complexeDeLaBase({ disposition: ou });
+        // ⚠ SANTÉ NULLE — le Complexe à zéro PV — VEUT DIRE « rien ne revient,
+        // jamais », et non « très lentement ». Il n'y a pas de durée à
+        // annoncer ; `null` remonte, et la ligne se dira sans nombre.
+        if (complexe === null || complexe.santeMilli === null) return null;
+        return ticksDeRetour(NIVEAU.plafond, niveau, complexe.santeMilli);
+      },
+    )];
+  }
+
+  if (def.role === 'production') {
+    // ⚠ LE MOT EST CELUI D'ETHAN, PRIS DANS `FAMILLE_DE_CHASSIS` — « infanterie »,
+    // « véhicule », « avion ». Écrire ici « escouade », « blindé », « aéronef »
+    // rendrait au joueur les noms INTERNES des châssis, qui n'apparaissent
+    // nulle part à l'écran ; en écrire une seconde table serait la seconde
+    // vérité que §4 de `CLAUDE.md` interdit.
+    return [ligne(
+      `Réparation · ${FAMILLE_DE_CHASSIS[def.chassis]}`,
+      'diviseur',
+      (niveau) => diviseurDuBatiment(niveau),
+    )];
+  }
+
+  // Le Chantier garde sa section « Emplacements ouverts », qui existe et
+  // fonctionne : ce lot AJOUTE pour les six autres, il ne refond pas le premier.
+  return [];
+}
+
 export function apercuDuBatiment(etat, index) {
   const laBase = baseCourante(etat);
   const b = laBase.disposition[index];
@@ -1177,10 +1304,23 @@ export function apercuDuBatiment(etat, index) {
       apresMilli: prodApres === null ? null : (prodApres[cle] ?? 0) * 1000,
     }));
 
-  // Les capacités, elles, ne se filtrent que sur ce qui CHANGE ou ce qui n'est
-  // pas nul : une capacité qui ne bouge pas d'un niveau n'apprend rien.
+  // ⚠⚠ LES CAPACITÉS NE SE FILTRENT QUE SUR CE QUI CHANGE — 06/09, ET LE TERME
+  // QUI VIENT DE PARTIR FAISAIT APPARAÎTRE LA SECTION PARTOUT. Ethan : « le
+  // stockage s'affiche partout même sur un bâtiment qui n'en fait pas ». Le
+  // filtre portait aussi `capsAvant[cle] !== 0`, qui est vrai pour toute base
+  // possédant le moindre stockage, QUEL QUE SOIT le bâtiment sélectionné : une
+  // Centrale, une Caserne, un Collecteur ouvraient tous « Stockage de la base »
+  // sur des nombres que les améliorer ne bouge pas d'une unité.
+  //
+  // ⚠ ET LE COMMENTAIRE D'AVANT ANNONÇAIT DÉJÀ LA BONNE RÈGLE — « ne se
+  // filtrent que sur ce qui CHANGE ou ce qui n'est pas nul » : c'est la seconde
+  // moitié qui était de trop, et elle contredisait la phrase qui la portait.
+  //
+  // ⚠ CONSÉQUENCE VOULUE : sur un bâtiment qui ne stocke rien, la liste est
+  // VIDE et la section entière disparaît — `lignesDuPanneau` teste déjà cette
+  // longueur, et il n'y avait donc rien à changer de son côté.
   const capacites = RESSOURCES
-    .filter((cle) => capsAvant[cle] !== 0 || (capsApres !== null && capsApres[cle] !== capsAvant[cle]))
+    .filter((cle) => capsApres !== null && capsApres[cle] !== capsAvant[cle])
     .map((cle) => ({
       cle,
       avantMilli: capsAvant[cle],
@@ -1210,6 +1350,10 @@ export function apercuDuBatiment(etat, index) {
       })),
     production,
     capacites,
+    // ⚠ CE QUE CE BÂTIMENT COMMANDE, quand il est UNIQUE — voir
+    // `effetsDuBatiment`. Vide pour les quatre non uniques et pour le Chantier,
+    // qui a sa propre section depuis toujours.
+    effets: effetsDuBatiment(b, def, auPlafond ? null : vise, laBase.disposition, candidate),
     // Le Chantier est le seul à ouvrir des emplacements ; pour les dix autres
     // la ligne n'aurait aucun sens et ne s'affiche pas.
     emplacements: def.role === 'central'
@@ -1297,6 +1441,60 @@ export function noteDuRefus(apercu) {
   return `${manque} · rien n'en produit`;
 }
 
+/**
+ * La note sous le bouton d'amélioration : le coût complet, puis le refus.
+ *
+ * ⚠⚠ LES DEUX, ET DANS CET ORDRE — Ethan, 06/09 : « indiquer coût complet
+ * lorsque l'amélioration n'est pas possible ». Le coût vient en premier parce
+ * qu'il est le fait STABLE : il ne dépend que du palier visé, quand le manque
+ * dépend de ce que le joueur a en poche à cet instant.
+ *
+ * ⚠ ELLE NE REFORMULE RIEN. Le refus lui arrive déjà composé — par
+ * `noteDuRefus` pour un bâtiment, par la liste des messages du moteur pour une
+ * pièce —, et elle se contente de le coudre au coût. Lui faire lire
+ * `apercu.problemes` en ferait une TROISIÈME écriture de la règle, dans un
+ * fichier qui en porte déjà deux.
+ *
+ * ⚠ ET LE PLAFOND NE PASSE PAS PAR ICI. `apercu.auPlafond` rend `cout: null`,
+ * et les deux appelants le traitent AVANT d'arriver au bouton d'amélioration :
+ * il n'y a pas de coût à montrer pour un palier qui n'existe pas.
+ *
+ * @param {{quartz?: number, scorie?: number, electricite?: number}} cout
+ * @param {string|null} refus déjà composé, ou `null` si l'amélioration passe
+ * @returns {string}
+ */
+/**
+ * Un effet de bâtiment unique, en clair.
+ *
+ * ⚠ TROIS FORMES, ET CHACUNE EMPRUNTE LE FORMATEUR QUI EXISTE DÉJÀ.
+ * `direLaDuree` est celui de la réserve de réparation — en écrire un second
+ * donnerait deux façons d'écrire la même durée, et la première divergence se
+ * lirait comme un bogue. ⚠ Elle prend son arrondi PAR DÉFAUT, `Math.ceil` :
+ * c'est une ATTENTE, et une attente s'annonce vers le haut.
+ *
+ * ⚠ LE DIVISEUR SE DIT « ÷ 1,09 », PAS EN POUR-CENT. C'est ce que la fonction
+ * rend — `diviseurDuBatiment` divise un temps —, et le convertir en gain
+ * relatif ferait ici un calcul que personne d'autre ne fait.
+ *
+ * ⚠ ET `null` SE DIT, IL NE SE TAIT PAS. Un Complexe à zéro PV ne rend rien,
+ * jamais ; un tiret laisserait croire à une valeur manquante.
+ *
+ * @param {number|null} valeur
+ * @param {'entier'|'duree'|'diviseur'} forme
+ * @returns {string}
+ */
+function formaterEffet(valeur, forme) {
+  if (valeur === null) return 'aucun retour';
+  if (forme === 'duree') return direLaDuree(valeur);
+  if (forme === 'diviseur') return `÷ ${valeur.toFixed(2).replace('.', ',')}`;
+  return formaterEntier(valeur);
+}
+
+export function noteDuBouton(cout, refus) {
+  const prix = formaterCout(cout);
+  return refus === null ? prix : `${prix} — ${refus}`;
+}
+
 export function lignesDuPanneau(apercu) {
   const sections = [];
 
@@ -1345,6 +1543,28 @@ export function lignesDuPanneau(apercu) {
     });
   }
 
+  // ⚠⚠ CE QUE LE BÂTIMENT COMMANDE — 06/09. La section emprunte la forme
+  // existante, `{ libelle, avant, apres }` : `peindrePanneau` n'apprend aucune
+  // structure nouvelle, et c'est ce qui permet aux deux écrans qui l'appellent
+  // de la poser sans une ligne de plus.
+  //
+  // ⚠ LE FORMATAGE SE FAIT ICI, LA MESURE EN AMONT. `apercuDuBatiment` rend des
+  // NOMBRES et une `forme` ; les trois formes qui existent — un entier, une
+  // durée en ticks, un diviseur — se peignent chacune avec le formateur que le
+  // dépôt porte déjà. Un aperçu qui rendrait des chaînes ferait de la mise en
+  // forme une propriété de la simulation, et les tests ne pourraient plus
+  // comparer que du texte.
+  if (apercu.effets.length > 0) {
+    sections.push({
+      titre: 'Ce qu\'il commande',
+      lignes: apercu.effets.map((e) => ({
+        libelle: e.libelle,
+        avant: formaterEffet(e.avant, e.forme),
+        apres: e.apres === null ? null : formaterEffet(e.apres, e.forme),
+      })),
+    });
+  }
+
   if (apercu.emplacements !== null) {
     sections.push({
       titre: 'Emplacements ouverts',
@@ -1385,9 +1605,21 @@ export function lignesDuPanneau(apercu) {
         libelle: `Améliorer → niv. ${formaterEntier(apercu.niveauVise)}`,
         // Le coût est dans le bouton : c'est ce qu'Ethan a demandé le 28/08 —
         // « un bouton amélioration avec les coûts induits ».
-        note: apercu.problemes.length > 0
-          ? noteDuRefus(apercu)
-          : formaterCout(apercu.cout),
+        //
+        // ⚠⚠ ET IL SURVIT AU REFUS DEPUIS LE 06/09. C'était un OU EXCLUSIF :
+        // dès qu'un problème existait, le coût complet DISPARAISSAIT au profit
+        // du seul manque. Ethan : « indiquer coût complet lorsque
+        // l'amélioration n'est pas possible ». Le joueur à qui il manque huit
+        // quartz apprenait combien il lui en manquait et perdait de vue ce que
+        // le palier coûte en entier — or c'est ce second nombre qui lui dit
+        // s'il doit attendre une minute ou renoncer.
+        //
+        // ⚠ LE REFUS S'AJOUTE, IL NE SE RÉÉCRIT PAS. `noteDuRefus` compose déjà
+        // le message du moteur avec le délai, et son en-tête porte le motif —
+        // « le message du moteur est repris mot pour mot ». La composition se
+        // fait ICI, au point d'appel ; cette fonction-là n'a pas bougé d'un
+        // caractère.
+        note: noteDuBouton(apercu.cout, apercu.problemes.length > 0 ? noteDuRefus(apercu) : null),
         possible: apercu.problemes.length === 0,
       },
   };
@@ -1458,9 +1690,16 @@ export function lignesDeLaPiece(apercu) {
       }
       : {
         libelle: `Améliorer → niv. ${formaterEntier(apercu.niveauVise)}`,
-        note: apercu.problemes.length > 0
-          ? apercu.problemes.map((p) => p.message).join(' ; ')
-          : formaterCout(apercu.cout),
+        // ⚠⚠ LE COÛT COMPLET SURVIT AU REFUS ICI AUSSI — 06/09. Les deux
+        // panneaux partagent la même forme et le même bouton ; ne corriger que
+        // celui des bâtiments aurait laissé la moitié des fiches du Chantier
+        // avec l'ancien comportement, et la bande Défense est justement celle
+        // où le joueur compose le plus. Le refus d'une PIÈCE n'a pas de délai —
+        // `noteDuRefus` lit `apercu.delai`, qu'un aperçu de pièce ne porte
+        // pas —, donc c'est la liste des messages du moteur qui s'ajoute,
+        // reprise mot pour mot comme de l'autre côté.
+        note: noteDuBouton(apercu.cout, apercu.problemes.length > 0
+          ? apercu.problemes.map((p) => p.message).join(' ; ') : null),
         possible: apercu.problemes.length === 0,
       },
   };

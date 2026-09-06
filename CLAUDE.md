@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.3 · build 104.
+Dernière révision : **06/09/2026**, version 0.99.4 · build 105.
 
 ---
 
@@ -42,7 +42,148 @@ Dernière révision : **06/09/2026**, version 0.99.3 · build 104.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot CARTE-B), à confronter :**
+**Référence au 06/09/2026 (après le lot CHANTIER-FICHES), à confronter :**
+`npm test` → **1148 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**7 988 857 octets**, 0 référence externe. Coût **+1 036 octets**, ENTIÈREMENT DU
+JAVASCRIPT, mesuré poste par poste contre un livrable rebâti depuis l'arbre
+d'avant : **JavaScript +1 036 · feuille +0 · balisage +0 · images +0 · audio
++0** — **296 lignes `data:` avant, 296 après, 291 URI de part et d'autre**. Borne
+T10 inchangée à 9 300 000, marge **1 311 143 octets, 14,10 %**. Le lot ne touche
+QUE `src/ui/chantier.js`.
+⚠⚠ **LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ, ET C'ÉTAIT BÉNIN.** Il pose
+1 135 pass, 7 987 956 octets et 0.99.2 · build 103 ; mesuré au départ, **1 139
+pass, 7 987 821 octets, 0.99.3 · build 104** — le lot CARTE-B a été mergé entre
+l'écriture du brief et son exécution. **Les sept faits dont le lot dépend étaient
+intacts**, vérifiés un par un avant d'écrire : les DEUX `formaterCout(apercu.cout)`,
+`noteDuRefus`, le terme `capsAvant[cle] !== 0`, la branche `def.role === 'central'`
+et les sept `unique: true`. Signalé plutôt que traité comme un point d'arrêt —
+même cas que le lot BARÈME.
+⚠⚠ **LE COÛT COMPLET NE DISPARAÎT PLUS DERRIÈRE LE REFUS, ET C'ÉTAIT UN OU
+EXCLUSIF.** Ethan, point 18 : « indiquer coût complet lorsque l'amélioration
+n'est pas possible ». Dès qu'un problème existait, `formaterCout` cédait la place
+au seul manque : le joueur à qui il manquait huit quartz apprenait combien il lui
+en manquait et **perdait de vue ce que le palier coûte en entier** — or c'est ce
+second nombre qui lui dit s'il attend une minute ou s'il renonce.
+⚠⚠ **ET IL Y AVAIT DEUX POINTS D'APPEL, PAS UN — LES DEUX SONT TRAITÉS.**
+`formaterCout(apercu.cout)` apparaissait deux fois : le panneau d'un BÂTIMENT et
+celui d'une PIÈCE, qui partagent la même forme et deux peintres distincts —
+`lignesDuPanneau` et `lignesDeLaPiece`. **`CH-F T3` est le test qui attrape un lot
+qui n'en aurait corrigé qu'un**, et la falsification qui ne défait que la moitié
+PIÈCE ne fait tomber que lui.
+⚠ **`noteDuRefus` N'A PAS BOUGÉ D'UN CARACTÈRE.** Elle compose déjà le message du
+moteur avec le délai, et son en-tête porte le motif — « le message du moteur est
+repris mot pour mot ». La composition se fait au POINT D'APPEL, par `noteDuBouton`,
+qui reçoit un refus DÉJÀ composé : lui faire relire `apercu.problemes` en aurait
+fait une troisième écriture de la règle dans un fichier qui en porte deux.
+⚠ **ET LE PLAFOND NE COMPOSE RIEN** : `auPlafond` rend `cout: null` et le bouton
+garde sa note VIDE. Il n'y a pas de prix pour un palier qui n'existe pas, et
+« rien » ou « 0 » s'y lirait gratuit.
+⚠⚠ **LE STOCKAGE S'AFFICHAIT PARTOUT, ET LE TERME FAUTIF ÉTAIT NOMMÉ DANS SON
+PROPRE COMMENTAIRE.** Ethan, point 19 : « le stockage s'affiche partout même sur
+un bâtiment qui n'en fait pas ». Le filtre portait `capsAvant[cle] !== 0`, **vrai
+pour toute base possédant le moindre stockage, quel que soit le bâtiment
+sélectionné** : une Centrale, une Caserne, un QG ouvraient tous « Stockage de la
+base » sur des nombres que les améliorer ne bouge pas d'une unité. Le commentaire
+au-dessus annonçait pourtant la règle — « ne se filtrent que sur ce qui CHANGE ou
+ce qui n'est pas nul » : c'est la seconde moitié qui était de trop, et elle
+contredisait la phrase qui la portait. **Il est réécrit dans le même geste.**
+⚠ **LE TITRE ET LES NOMBRES NE BOUGENT PAS.** « Stockage **de la base** », et
+l'`avant` reste `capacitesMilli` de la disposition ENTIÈRE : ce que le lot change
+est **QUAND** la section apparaît, jamais **CE** qu'elle annonce. `CH-F T6` le
+mesure et discrimine — la base entière stocke strictement plus que le seul
+bâtiment regardé, sans quoi lire la capacité propre rendrait le même nombre.
+⚠⚠ **LES SIX AUTRES UNIQUES DISENT ENFIN CE QU'ILS COMMANDENT, ET CHAQUE EFFET
+EST LU DANS SON MODULE.** Ethan, point 20. Le relevé a été fait **avant** d'écrire
+une ligne d'écran, et il est au rapport, bâtiment par bâtiment :
+**Centre de commandement · QG de défense** → `niveauDeCommandementDeLaBase` de
+`src/sim/state.js`, d'où DEUX grandeurs — le budget par `budgetDuNiveau`
+(`ui/arsenal.js`, `ui/defense.js`) et le plafond de niveau des pièces, que
+`problemesDeLAmeliorationDUnePiece` refuse sous le code `plafond-commandement` ;
+**Complexe de défense** → `complexeDeLaBase` et `ticksDeRetour` de
+`src/sim/reparation.js` ; **Caserne · Dépôt · Aérodrome** → `batimentDuChassis`
+puis `diviseurDuBatiment`, du même module, dont l'en-tête écrit le fait de face :
+« le niveau du bâtiment rend les réparations MOINS CHÈRES — `diviseurDuBatiment` —,
+et c'est son SEUL effet ».
+⚠⚠ **AUCUNE FORMULE N'EST RECALCULÉE DANS L'ÉCRAN, ET C'EST `CH-F T8` QUI LE
+PROUVE.** L'écran APPELLE la fonction relevée, une fois sur le niveau courant et
+une fois sur le niveau visé. Un libellé plausible écrit en dur — « commande le
+budget d'armée » — passerait `T7` sans rien mesurer ; `T8` monte les six à deux
+niveaux et exige que la VALEUR diffère. La falsification qui rend `avant: 1,
+apres: 2` ne fait tomber que lui.
+⚠⚠ **LA PIÈCE DE RÉFÉRENCE DU COMPLEXE EST CELLE DU PLAFOND, ET C'EST LE SEUL
+POINT DE COMPARAISON QUI NE S'INVENTE PAS.** Le retour d'une défense dépend du
+DÉPASSEMENT entre son niveau et celui du Complexe : **il n'existe aucune durée qui
+soit fonction du seul Complexe**. Le haut de la table donne le pire cas, qui est
+aussi le levier — c'est la mesure que ce fichier-ci porte déjà, « pièce de niveau
+50 sous un Complexe 10 → 45,3 h ». Relevé à l'écran : **106,7 h → 97,0 h** en
+montant le Complexe du niveau 1 au 2.
+⚠ **ET C'EST `NIVEAU.plafond`, PAS `GEOGRAPHIE.niveauPlafond`.** Les deux valent
+50, et ce n'est pas une coquetterie : `ticksDeRetour` **LÈVE** quand
+`1 + dépassement` sort de `NIVEAU`, si bien que prendre l'autre plafond ferait
+tomber TOUT le panneau le jour où les deux divergeraient. Avec celui-ci la borne
+tient par construction, le niveau du Complexe valant au moins 1.
+⚠ **LA SANTÉ DU COMPLEXE SE RELIT SUR LA CANDIDATE, PAS SUR LA DISPOSITION
+COURANTE.** Monter le Complexe augmente ses PV MAXIMAUX sans réparer un seul
+dégât : sa santé en MILLIÈMES monte donc toute seule, et lire l'avant des deux
+côtés annoncerait un retour plus lent qu'il ne sera.
+⚠ **ET UN COMPLEXE À ZÉRO PV NE PROMET AUCUNE DURÉE.** `santeMilli` vaut alors
+`null`, ce qui veut dire « rien ne revient, jamais » et non « très lentement » :
+la ligne se dit sans nombre. Le cas ne tire pas côté joueur — les bâtiments
+planchent à 1 PV — et la garde est écrite quand même, la fonction servant AUSSI
+l'Ouvrage.
+⚠ **LE MOT DU CHÂSSIS VIENT DE `FAMILLE_DE_CHASSIS`** — « infanterie »,
+« véhicule », « avion », les mots d'Ethan du 29/08. Écrire « escouade »,
+« blindé », « aéronef » rendrait au joueur les noms INTERNES, qui n'apparaissent
+nulle part à l'écran ; en écrire une seconde table serait la seconde vérité que
+§4 interdit.
+⚠⚠ **`peindrePanneau` N'APPREND AUCUNE STRUCTURE NOUVELLE, ET UN TEST L'EXIGE.**
+La section « Ce qu'il commande » emprunte la forme existante — un titre, des
+lignes `{ libelle, avant, apres }` —, et `CH-F T7` compare les CLÉS d'une ligne à
+cette forme exacte. ⚠ Le formatage se fait dans `lignesDuPanneau`, la mesure en
+amont : `apercuDuBatiment` rend des NOMBRES et une `forme`, et les trois formes
+qui existent — entier, durée en ticks, diviseur — se peignent chacune avec le
+formateur que le dépôt porte déjà. `direLaDuree` n'est pas réécrite.
+⚠ **LE CHANTIER GARDE « EMPLACEMENTS OUVERTS », ET N'EN GAGNE PAS UNE SECONDE.**
+Le lot AJOUTE pour les six autres, il ne refond pas le premier — `CH-F T9` exige
+les deux moitiés, et la liste des six se DÉRIVE de `unique: true` moins le rôle
+`central` : un huitième unique ferait tomber ce test, ce qu'on lui demande.
+⚠ **ET LES QUATRE NON UNIQUES N'EN GAGNENT AUCUNE** — `effets` vaut la liste
+vide, et `lignesDuPanneau` teste sa longueur comme il teste déjà celle des
+capacités.
+⚠⚠ **HUIT FALSIFICATIONS, HUIT CHUTES**, une par test plus deux de
+discrimination : le refus qui chasse le coût côté bâtiment, **puis côté PIÈCE
+seulement** — celle-là ne fait tomber que `T3` —, le plafond qui compose un coût,
+le terme fautif remis au filtre, la capacité PROPRE lue à la place de celle de la
+base, la section retirée aux six, l'effet écrit en dur, et la section ouverte à
+tout bâtiment.
+⚠⚠ **ET DEUX MONTAGES ONT DÛ ÊTRE CORRIGÉS AVANT DE MORDRE, LES DEUX DITS PAR UN
+TEST ET NON PAR LA RELECTURE.** (1) Le montage vidait `economie.stocks` — **un
+champ qui n'existe pas** : le vrai est `economie.ressources`, et rien n'a bronché
+parce que **poser est GRATUIT au niveau 1**, si bien qu'une base sans le sou
+passait quand même. C'est `CH-F T1` qui l'a dit, en ne trouvant aucun refus là où
+il en attendait un. (2) `CH-F T9` testait `unique === undefined` : la table écrit
+`unique: false` sur les onze, donc l'assertion passait pour une garde et n'en
+était pas.
+⚠ **NEUF TESTS ENTRENT — `CH-F T1` à `T9`, dans `test/chantier.test.js` — ET LE
+COMPTE PASSE DE 1 139 À 1 148.** **Aucune assertion n'a été retirée ni
+assouplie**, et aucune garde existante n'a eu à changer de cible : les deux qui
+tombent sous falsification — « au plafond, tout le volet après vaut null » et
+« le si j'améliorais se calcule avec les mêmes fonctions » — faisaient leur
+travail et sont restées telles quelles.
+⚠ **AUCUNE COORDONNÉE N'EST ÉCRITE DANS LE MONTAGE**, et c'est la leçon payée
+cinq fois par le dépôt : les cases se DEMANDENT à `problemesDeLaPose`. Un montage
+qui écrit « rangée 11, colonne 3 » ne garde que lui-même, et tombe le jour où le
+tirage met un champ ou un obstacle dessous.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 26.** Pas un champ n'entre dans
+l'état : une note de bouton, un filtre d'affichage et une section de fiche vivent
+dans l'écran, et `effets` ne traverse ni `serialiser` ni une migration.
+⚠ **`src/sim/` N'A PAS UNE LIGNE DE CHANGÉE, ET `src/data/` NON PLUS.** Le lot
+LIT ces modules ; les six effets étaient tous lisibles sans y toucher, donc le
+point d'arrêt du brief n'a pas été atteint.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot CARTE-B :**
 `npm test` → **1139 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **7 987 821 octets**, 0 référence externe. Le lot **REND 135 octets**,
 ENTIÈREMENT DU JAVASCRIPT, mesurés poste par poste contre un livrable rebâti

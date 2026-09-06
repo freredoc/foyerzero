@@ -4867,3 +4867,315 @@ test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', 
   assert.match(feuille, /\.jeton\.abimee\s*\{[^}]*#E43E32/,
     'la classe `abimee` du jeton n\'a pas de règle');
 });
+
+// ---------------------------------------------------------------------------
+// Le lot CHANTIER-FICHES — le coût complet survit au refus, le stockage ne
+// s'affiche que là où il change, et les six uniques disent ce qu'ils commandent.
+// Retours d'Ethan du 06/09, points 18, 19 et 20.
+// ---------------------------------------------------------------------------
+
+/**
+ * Une base qui porte les sept uniques, deux stockages et deux producteurs.
+ *
+ * ⚠⚠ AUCUNE COORDONNÉE N'EST ÉCRITE ICI, ET C'EST UNE LEÇON PAYÉE CINQ FOIS PAR
+ * LE DÉPÔT. Les cases se DEMANDENT à `problemesDeLaPose` : un montage qui écrit
+ * « rangée 11, colonne 3 » ne garde que lui-même, et tombe le jour où le tirage
+ * du terrain met un champ ou un obstacle sous l'une d'elles.
+ */
+function baseDesUniques(graine = 20260906) {
+  const etat = creerEtat(graine);
+  const laBase = baseCourante(etat);
+  // Le Chantier haut, sinon les emplacements manquent avant le sixième bâtiment.
+  laBase.disposition[0].niveau = 20;
+  // ⚠ LE CHAMP EST `ressources`, PAS `stocks` — la première écriture de ce
+  // montage a inventé le second, et rien n'a bronché : les poses sont GRATUITES
+  // au niveau 1, donc un montage sans le sou passait quand même. C'est
+  // `CH-F T1` qui l'a dit, en ne trouvant aucun refus là où il en attendait un.
+  laBase.economie.ressources = { quartz: 1e12, scorie: 1e12, electricite: 1e12 };
+  const poserOuLever = (id) => {
+    for (let rangee = 11; rangee <= GRILLE.longueur; rangee += 1) {
+      for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+        if (problemesDeLaPose(etat, id, rangee, colonne).length === 0) {
+          poser(etat, id, rangee, colonne);
+          return;
+        }
+      }
+    }
+    throw new Error(`montage : aucune case légale pour ${id}`);
+  };
+  for (const id of ['centreDeCommandement', 'qgDeDefense', 'complexeDeDefense',
+    'caserne', 'depotDeVehicules', 'aerodrome', 'centrale', 'raffinerie', 'accumulateur']) {
+    poserOuLever(id);
+  }
+  return etat;
+}
+
+/** L'indice d'un bâtiment dans la disposition de la base courante. */
+function indiceDe(etat, id) {
+  const i = baseCourante(etat).disposition.findIndex((b) => b.id === id);
+  assert.ok(i >= 0, `le montage ne porte pas de ${id}`);
+  return i;
+}
+
+/** Les six uniques qui n'avaient rien à dire avant ce lot. */
+const UNIQUES_SANS_FICHE = ['centreDeCommandement', 'qgDeDefense', 'complexeDeDefense',
+  'caserne', 'depotDeVehicules', 'aerodrome'];
+
+test('CH-F T1 — le coût complet survit au refus, il ne le remplace pas', () => {
+  // ⚠⚠ ETHAN, 06/09 : « indiquer coût complet lorsque l'amélioration n'est pas
+  // possible ». C'était un OU EXCLUSIF : le manque CHASSAIT le coût.
+  const etat = baseDesUniques();
+  const laBase = baseCourante(etat);
+  // ⚠ LA POCHE À SEC, ET C'EST CE QUI FAIT LE REFUS. Un montage aux ressources
+  // suffisantes ne produirait AUCUN problème, et ce test serait vert sans rien
+  // mesurer — c'est très exactement le piège que le brief nomme.
+  laBase.economie.ressources = { quartz: 0, scorie: 0, electricite: 0 };
+
+  const index = indiceDe(etat, 'centrale');
+  const apercu = apercuDuBatiment(etat, index);
+  assert.ok(apercu.problemes.length > 0, 'le montage ne refuse rien : il ne mesure pas un refus');
+  assert.notEqual(apercu.cout, null, 'le montage est au plafond : ce n\'est pas le cas mesuré');
+
+  const note = lignesDuPanneau(apercu).bouton.note;
+  // Le coût complet, ET le manque. Les deux, pas l'un OU l'autre.
+  const prix = formaterCout(apercu.cout);
+  assert.ok(note.includes(prix), `le coût complet a disparu de la note : « ${note} »`);
+  for (const probleme of apercu.problemes) {
+    assert.ok(note.includes(probleme.message),
+      `le refus « ${probleme.message} » a disparu de la note : « ${note} »`);
+  }
+
+  // ⚠ ET LE MONTAGE DISCRIMINE : le prix et le manque sont deux textes
+  // DIFFÉRENTS. S'ils coïncidaient, une note qui ne porterait que l'un des deux
+  // passerait les deux assertions ci-dessus.
+  assert.notEqual(prix, apercu.problemes.map((p) => p.message).join(' ; '),
+    'le prix et le refus disent la même chose : le montage ne discrimine pas');
+
+  // ⚠ ET SANS PROBLÈME, LA NOTE EST LE SEUL PRIX — l'autre moitié de la règle.
+  laBase.economie.ressources = { quartz: 1e12, scorie: 1e12, electricite: 1e12 };
+  const paisible = apercuDuBatiment(etat, index);
+  assert.deepEqual(paisible.problemes, []);
+  assert.equal(lignesDuPanneau(paisible).bouton.note, formaterCout(paisible.cout));
+});
+
+test('CH-F T2 — au plafond, il n\'y a pas de coût à montrer', () => {
+  // ⚠ UN PALIER QUI N'EXISTE PAS N'A PAS DE PRIX. `apercu.auPlafond` rend
+  // `cout: null`, et le bouton dit « Niveau maximum » avec une note VIDE :
+  // composer un coût ici afficherait « rien » ou « 0 », qui se lirait gratuit.
+  const etat = baseDesUniques();
+  const index = indiceDe(etat, 'centrale');
+  baseCourante(etat).disposition[index].niveau = GEOGRAPHIE.niveauPlafond;
+
+  const apercu = apercuDuBatiment(etat, index);
+  assert.equal(apercu.auPlafond, true, 'le montage n\'est pas au plafond');
+  assert.equal(apercu.cout, null);
+  assert.equal(apercu.niveauVise, null);
+
+  const bouton = lignesDuPanneau(apercu).bouton;
+  assert.equal(bouton.note, '', `le plafond porte une note : « ${bouton.note} »`);
+  assert.equal(bouton.possible, false);
+
+  // ⚠ ET LA SECTION D'EFFET NE PROMET PAS D'APRÈS AU PLAFOND. Le montage le
+  // vérifie sur un UNIQUE, où la section existe.
+  const complexe = indiceDe(etat, 'complexeDeDefense');
+  baseCourante(etat).disposition[complexe].niveau = GEOGRAPHIE.niveauPlafond;
+  const auPlafond = apercuDuBatiment(etat, complexe);
+  assert.ok(auPlafond.effets.length > 0, 'le montage a perdu sa section d\'effet');
+  for (const effet of auPlafond.effets) assert.equal(effet.apres, null);
+});
+
+test('CH-F T3 — les DEUX panneaux composent le coût et le refus', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UN LOT QUI N'AURAIT CORRIGÉ QUE LA MOITIÉ.
+  // `formaterCout(apercu.cout)` apparaissait DEUX fois — une fois pour les
+  // bâtiments, une fois pour les pièces — et les deux panneaux partagent la
+  // même forme, donc rien n'aurait bronché.
+  const etat = baseDesUniques();
+  baseCourante(etat).economie.ressources = { quartz: 0, scorie: 0, electricite: 0 };
+
+  // ⚠ CHAQUE VUE PASSE PAR SON PROPRE PEINTRE, ET C'EST LE POINT DU TEST.
+  // `lignesDuPanneau` sert les bâtiments, `lignesDeLaPiece` les pièces : ce
+  // sont les DEUX fonctions qui portaient chacune leur `formaterCout`.
+  const vues = [];
+  vues.push(['bâtiment', apercuDuBatiment(etat, indiceDe(etat, 'centrale')), lignesDuPanneau]);
+  // La pièce : le QG est au niveau 1, donc le plafond de commandement refuse.
+  poserEffectif(etat, 'garnison', {
+    id: 'merlon', rangee: 3, colonne: 1, niveau: 1,
+  });
+  vues.push(['pièce', apercuDeLaPiece(etat, 'garnison', 0), lignesDeLaPiece]);
+
+  for (const [quoi, apercu, peindre] of vues) {
+    assert.ok(apercu.problemes.length > 0, `le montage ne refuse rien pour la ${quoi}`);
+    assert.notEqual(apercu.cout, null, `la ${quoi} est au plafond : ce n'est pas le cas mesuré`);
+    const note = peindre(apercu).bouton.note;
+    assert.ok(note.includes(formaterCout(apercu.cout)),
+      `le coût complet a disparu de la note de la ${quoi} : « ${note} »`);
+    assert.ok(apercu.problemes.some((p) => note.includes(p.message)),
+      `le refus a disparu de la note de la ${quoi} : « ${note} »`);
+  }
+
+  // ⚠ ET LES DEUX VUES SONT BIEN DEUX CHEMINS DE CODE : ni les aperçus ni les
+  // peintres ne sont la même fonction, sans quoi ce test ne mesurerait qu'une
+  // seule ligne là où le fichier en portait deux.
+  assert.notEqual(apercuDuBatiment, apercuDeLaPiece);
+  assert.notEqual(lignesDuPanneau, lignesDeLaPiece);
+});
+
+test('CH-F T4 — un bâtiment qui ne stocke rien n\'affiche pas le stockage de la base', () => {
+  // ⚠⚠ ETHAN, 06/09 : « le stockage s'affiche partout même sur un bâtiment qui
+  // n'en fait pas ». Le filtre portait `capsAvant[cle] !== 0`, vrai pour toute
+  // base qui possède le moindre stockage, QUEL QUE SOIT le bâtiment regardé.
+  const etat = baseDesUniques();
+  const laBase = baseCourante(etat);
+
+  // ⚠⚠ LE MONTAGE PORTE DU STOCKAGE AILLEURS, ET C'EST TOUT CE QUI LE REND
+  // FALSIFIABLE. Une base SANS aucun stockage rendrait un tableau vide de toute
+  // façon, et ce test passerait sur le code d'avant sans rien mesurer.
+  const caps = capacitesMilli(laBase.disposition);
+  assert.ok(RESSOURCES.some((cle) => caps[cle] > 0),
+    'le montage n\'a aucun stockage : il ne peut pas mesurer un filtre');
+
+  for (const id of ['centrale', 'caserne', 'centreDeCommandement', 'qgDeDefense']) {
+    const apercu = apercuDuBatiment(etat, indiceDe(etat, id));
+    assert.equal(apercu.capacites.length, 0,
+      `${id} annonce un stockage qu'il ne fait pas`);
+    const titres = lignesDuPanneau(apercu).sections.map((s) => s.titre);
+    assert.ok(!titres.includes('Stockage de la base'),
+      `la section « Stockage de la base » s'affiche encore sur ${id}`);
+  }
+});
+
+test('CH-F T5 — le stockage s\'affiche là où l\'améliorer le change', () => {
+  const etat = baseDesUniques();
+  const laBase = baseCourante(etat);
+
+  // ⚠ LES STOCKEURS SE DEMANDENT À LA TABLE, ils ne s'écrivent pas à la main :
+  // un quatrième `role: 'stockage'` entrerait tout seul dans ce balayage.
+  const stockeurs = laBase.disposition
+    .map((b, i) => [b, i])
+    .filter(([b]) => BASE_BATIMENTS[b.id].role === 'stockage');
+  assert.ok(stockeurs.length >= 2,
+    `${stockeurs.length} stockeur(s) au montage : ce n'est pas assez pour mesurer`);
+
+  for (const [b, index] of stockeurs) {
+    const apercu = apercuDuBatiment(etat, index);
+    assert.ok(apercu.capacites.length > 0, `${b.id} n'annonce aucun stockage`);
+    for (const c of apercu.capacites) {
+      assert.notEqual(c.apresMilli, null, `${b.id} : ${c.cle} sans valeur d'après`);
+      assert.notEqual(c.apresMilli, c.avantMilli,
+        `${b.id} : ${c.cle} est listée alors que l'améliorer ne la change pas`);
+    }
+    const titres = lignesDuPanneau(apercu).sections.map((s) => s.titre);
+    assert.ok(titres.includes('Stockage de la base'),
+      `${b.id} a perdu sa section de stockage`);
+  }
+});
+
+test('CH-F T6 — les nombres du stockage restent ceux de la BASE ENTIÈRE', () => {
+  // ⚠ « DE LA BASE », ET LE MOT COMPTE — le commentaire du titre le dit depuis
+  // le lot PANNEAU-ET-MARGES : il n'y a qu'un plafond par ressource, celui de
+  // la base entière. Ce lot change QUAND la section apparaît, pas CE qu'elle
+  // annonce. Annoncer la capacité PROPRE du bâtiment ferait croire à un second
+  // plafond.
+  const etat = baseDesUniques();
+  const laBase = baseCourante(etat);
+  const attendu = capacitesMilli(laBase.disposition);
+
+  const index = laBase.disposition.findIndex((b) => BASE_BATIMENTS[b.id].role === 'stockage');
+  assert.ok(index >= 0, 'le montage ne porte aucun stockeur');
+  const apercu = apercuDuBatiment(etat, index);
+  assert.ok(apercu.capacites.length > 0);
+
+  for (const c of apercu.capacites) {
+    assert.equal(c.avantMilli, attendu[c.cle],
+      `${c.cle} : l'avant n'est pas la capacité de la base entière`);
+  }
+
+  // ⚠ ET LE MONTAGE DISCRIMINE : la base entière stocke STRICTEMENT PLUS que ce
+  // seul bâtiment — le Chantier porte sa propre poche. Sans cet écart, lire la
+  // capacité propre rendrait le même nombre et le test ne verrait rien.
+  const seul = capacitesMilli([laBase.disposition[index]]);
+  const cle = apercu.capacites[0].cle;
+  assert.ok(attendu[cle] > seul[cle],
+    'la base entière et ce bâtiment stockent autant : le montage ne discrimine pas');
+});
+
+test('CH-F T7 — les six uniques disent enfin ce qu\'ils commandent', () => {
+  // ⚠⚠ ETHAN, 06/09 : « les bâtiments uniques n'indiquent pas ce qu'elles
+  // améliorent ». Le Chantier avait sa section depuis toujours ; les six autres
+  // ouvraient un panneau muet. UN test sur un seul d'entre eux laisserait cinq
+  // trous, donc les six sont balayés.
+  const etat = baseDesUniques();
+
+  for (const id of UNIQUES_SANS_FICHE) {
+    const apercu = apercuDuBatiment(etat, indiceDe(etat, id));
+    assert.ok(apercu.effets.length > 0, `${id} ne dit toujours pas ce qu'il commande`);
+    for (const effet of apercu.effets) {
+      assert.ok(typeof effet.libelle === 'string' && effet.libelle.length > 0,
+        `${id} : un effet sans libellé`);
+      assert.notEqual(effet.avant, undefined, `${id} : un effet sans valeur courante`);
+    }
+    // ⚠ ET LA SECTION ARRIVE JUSQU'À L'ÉCRAN, à la forme que `peindrePanneau`
+    // connaît déjà — un titre, des lignes `{libelle, avant, apres}`.
+    const section = lignesDuPanneau(apercu).sections.find((s) => s.titre === 'Ce qu\'il commande');
+    assert.ok(section, `${id} : la section d'effet n'atteint pas le panneau`);
+    for (const ligne of section.lignes) {
+      assert.equal(Object.keys(ligne).sort().join(','), 'apres,avant,libelle',
+        `${id} : la ligne a une forme que peindrePanneau ne connaît pas`);
+      assert.ok(ligne.avant.length > 0 && ligne.apres.length > 0);
+    }
+  }
+
+  // ⚠ LES SIX SONT BIEN LES UNIQUES MOINS LE CHANTIER, et la liste se DÉRIVE de
+  // la table : un huitième `unique: true` ferait tomber ce test, ce qu'on lui
+  // demande — il faudrait alors lui relever son effet, pas allonger la liste.
+  const uniques = Object.entries(BASE_BATIMENTS)
+    .filter(([, def]) => def.unique === true).map(([id]) => id);
+  assert.deepEqual([...UNIQUES_SANS_FICHE].sort(),
+    uniques.filter((id) => BASE_BATIMENTS[id].role !== 'central').sort());
+});
+
+test('CH-F T8 — l\'effet SUIT le niveau : il est lu, pas écrit en dur', () => {
+  // ⚠⚠ C'EST LE TEST QUI DISTINGUE UN EFFET LU D'UN LIBELLÉ PLAUSIBLE. Une
+  // phrase écrite en dur — « commande le budget d'armée » — passerait `T7` sans
+  // rien mesurer ; ici la VALEUR doit bouger avec le niveau du bâtiment.
+  const bas = baseDesUniques();
+  const haut = baseDesUniques();
+
+  for (const id of UNIQUES_SANS_FICHE) {
+    const index = indiceDe(haut, id);
+    baseCourante(haut).disposition[index].niveau = 12;
+    assert.notEqual(baseCourante(bas).disposition[indiceDe(bas, id)].niveau, 12,
+      `${id} : les deux montages sont au même niveau, rien ne peut différer`);
+
+    const a = apercuDuBatiment(bas, indiceDe(bas, id)).effets;
+    const b = apercuDuBatiment(haut, index).effets;
+    assert.equal(a.length, b.length, `${id} : les deux niveaux ne rendent pas les mêmes lignes`);
+    assert.ok(a.some((effet, i) => effet.avant !== b[i].avant),
+      `${id} : aucune valeur ne bouge entre le niveau 1 et le niveau 12 — l'effet est écrit en dur`);
+  }
+});
+
+test('CH-F T9 — un bâtiment qui n\'est pas unique ne gagne aucune fiche d\'effet', () => {
+  const etat = baseDesUniques();
+
+  for (const id of ['centrale', 'raffinerie', 'accumulateur']) {
+    const apercu = apercuDuBatiment(etat, indiceDe(etat, id));
+    // ⚠ `unique` EST ÉCRIT `false`, IL N'EST PAS ABSENT — la table le pose sur
+    // les onze. Tester `undefined` ici passait pour une garde et n'en était pas.
+    assert.equal(BASE_BATIMENTS[id].unique, false,
+      `${id} est devenu unique : le montage ne mesure plus ce qu'il annonce`);
+    assert.deepEqual(apercu.effets, [], `${id} annonce un effet qu'il n'a pas`);
+    const titres = lignesDuPanneau(apercu).sections.map((s) => s.titre);
+    assert.ok(!titres.includes('Ce qu\'il commande'),
+      `la section d'effet s'affiche sur ${id}`);
+  }
+
+  // ⚠ ET LE CHANTIER GARDE LA SIENNE, qui n'est PAS celle-ci : « Emplacements
+  // ouverts » existe et fonctionne, le lot ne la refond pas.
+  const chantier = apercuDuBatiment(etat, indiceDe(etat, 'chantierDeConstruction'));
+  assert.deepEqual(chantier.effets, [], 'le Chantier a gagné une seconde section d\'effet');
+  assert.notEqual(chantier.emplacements, null, 'le Chantier a perdu ses emplacements');
+  const titres = lignesDuPanneau(chantier).sections.map((s) => s.titre);
+  assert.ok(titres.includes('Emplacements ouverts'));
+  assert.ok(!titres.includes('Ce qu\'il commande'));
+});
