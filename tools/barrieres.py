@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Lot 8 — les quatre barrières de défense : ronce et herse, joueur et Ouvrage.
+"""Les deux barrières de défense de l'OUVRAGE : ronce et herse.
+
+⚠⚠ LE JOUEUR EST PARTI — lot SPRITES-V2-JOUEUR, 05/09. Ses barbelés et sa
+barrière anti-char sont dessinés en v2, une planche chacune, et passent par
+`tools/joueur_v2.py`. La planche de l'Ouvrage reste : son art n'est pas
+redessiné.
+
+Ce qui suit décrit la coupe, et vaut encore pour la planche qui reste.
 
 `INVENTAIRE-SPRITES.md` §4.2 demande neuf défenses par propriétaire. Huit
 étaient produites — les six tourelles et artilleries par `tourelles.py`, le
@@ -49,7 +56,6 @@ GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests 
 EMPRISE = 28          # gros pixels sur une grille de 32 — voir l'en-tête
 
 PLANCHES = [
-    ('P4.2_def_j_ronce_def_j_herse.png',    False, ['def_j_ronce', 'def_j_herse']),
     ('P5.2_def_o_ronce_def_o_herse_v2.png', True,  ['def_o_ronce', 'def_o_herse']),
 ]
 

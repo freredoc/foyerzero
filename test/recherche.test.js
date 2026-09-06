@@ -3278,27 +3278,58 @@ test('T15 — les sprites nommés par l\'écran existent tous dans les atlas', (
   // NAVIGATEUR. `poserCouches` lève sur une famille inconnue mais `fondDuSprite`
   // lève, lui, sur un NOM inconnu — et rien de tout cela ne tourne dans un test
   // sans DOM. On croise donc les noms avec l'atlas, des deux côtés.
-  // MONTAGE QUI LE FAIT TOMBER : écrire `def_j_<id>_n` au lieu de `_s`, ou
-  // oublier que le Merlon, la Herse et la Ronce n'ont pas d'orientation.
+  //
+  // ⚠⚠ IL A CHANGÉ DE CIBLE AU LOT SPRITES-V2-JOUEUR, ET IL SE RESSERRE. Il
+  // exigeait UNE couche par pièce et nommait les quatre règles que l'écran
+  // composait lui-même — `off_j_<id>`, `def_j_<id>_s`, et trois exceptions sans
+  // orientation. Ces règles étaient une SECONDE vérité : elles sont retirées, et
+  // `couchesDeLaPiece` passe désormais par `couchesDeLEntite`, le dispatch
+  // unique. La garde porte donc sur ce qui reste vrai — tout nom sort d'un
+  // atlas, tout nom est du vocabulaire du joueur — plus sur la forme des noms,
+  // qui n'appartient plus à cet écran. Ce qu'elle GAGNE, c'est qu'elle balaie
+  // maintenant les DEUX couches d'une pièce à tourelle.
+  // MONTAGE QUI LA FAIT TOMBER : rendre `off_o_…` au lieu de `off_j_…`, ou
+  // nommer un sprite que l'atlas ne porte pas.
   for (const branche of BRANCHES) {
     for (const ligne of lignesDeRecherche(partie('0'), branche)) {
-      assert.equal(ligne.couches.length, 1, `${ligne.id} : une seule couche attendue`);
-      const { famille, nom } = ligne.couches[0];
-      assert.ok(ATLAS[famille], `famille d'atlas inconnue : ${famille}`);
-      assert.ok(ATLAS[famille].noms.includes(nom),
-        `${branche}/${ligne.id} : le sprite « ${nom} » n'est pas dans l'atlas ${famille}`);
-      // Et la lettre est celle du JOUEUR : `off_o_…` est le vocabulaire de
-      // l'Ouvrage, interdit dans un écran du joueur (CLAUDE.md §4).
-      assert.ok(nom.startsWith('off_j_') || nom.startsWith('def_j_'),
-        `${nom} n'est pas un sprite du joueur`);
+      assert.ok(ligne.couches.length >= 1 && ligne.couches.length <= 2,
+        `${ligne.id} : une ou deux couches attendues, ${ligne.couches.length} rendues`);
+      for (const { famille, nom } of ligne.couches) {
+        assert.ok(ATLAS[famille], `famille d'atlas inconnue : ${famille}`);
+        assert.ok(ATLAS[famille].noms.includes(nom),
+          `${branche}/${ligne.id} : le sprite « ${nom} » n'est pas dans l'atlas ${famille}`);
+        // Et la lettre est celle du JOUEUR : `off_o_…` est le vocabulaire de
+        // l'Ouvrage, interdit dans un écran du joueur (CLAUDE.md §4).
+        assert.ok(/^(off|def|socle_def)_j_/.test(nom), `${nom} n'est pas un sprite du joueur`);
+      }
     }
   }
-  // Les trois ouvrages sans tourelle prennent bien leur nom à eux.
-  assert.deepEqual(couchesDeLaPiece('merlon'), [{ famille: 'defense', nom: 'def_j_merlon_isole' }]);
+  // ⚠ LES TROIS SANS TOURELLE RENDENT UNE COUCHE, LES AUTRES DEUX — et c'est ce
+  // qui prouve que la délégation passe bien par la table des DÉFENSES et non par
+  // une liste écrite ici. Le Merlon n'a plus d'état de liaison dans son nom : les
+  // connexions sont tombées avec la v2.
+  assert.deepEqual(couchesDeLaPiece('merlon'), [{ famille: 'defense', nom: 'def_j_merlon' }]);
   assert.deepEqual(couchesDeLaPiece('herse'), [{ famille: 'defense', nom: 'def_j_herse' }]);
   assert.deepEqual(couchesDeLaPiece('ronce'), [{ famille: 'defense', nom: 'def_j_ronce' }]);
-  assert.deepEqual(couchesDeLaPiece('casemate'), [{ famille: 'defense', nom: 'def_j_casemate_s' }]);
+
+  const casemate = couchesDeLaPiece('casemate');
+  assert.equal(casemate.length, 2, 'une tourelle porte son socle et sa tourelle');
+  assert.equal(casemate[0].nom, 'socle_def_j_casemate');
+  assert.equal(casemate[1].nom, 'def_j_casemate');
+  assert.ok(casemate[1].ancre !== null, 'la tourelle du joueur porte son ancre');
+  // Au repos, une pièce de garnison regarde l'assaut : le sud, soit 180°.
+  assert.equal(casemate[1].angle, 180, 'la tourelle au repos regarde le sud');
+
+  // Une escouade reste un sprite unique, en pose de marche.
   assert.deepEqual(couchesDeLaPiece('meute'), [{ famille: 'unite', nom: 'off_j_meute' }]);
+  // ⚠ ET UN BLINDÉ DU JOUEUR EN REND DEUX, coque et tourelle — c'est la moitié
+  // qu'une liste écrite à la main dans cet écran ne savait pas rendre, et qui a
+  // fait LEVER l'écran entier au premier essai du lot.
+  const ratisseur = couchesDeLaPiece('ratisseur');
+  assert.deepEqual(ratisseur.map((c) => c.nom),
+    ['off_j_ratisseur_chassis', 'off_j_ratisseur_tourelle']);
+  assert.equal(ratisseur[1].angle, 0, 'une unité d\'assaut au repos regarde le nord');
+
   assert.throws(() => couchesDeLaPiece('raffinerie'), RangeError);
 });
 

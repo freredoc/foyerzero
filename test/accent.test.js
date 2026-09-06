@@ -27,7 +27,6 @@ import { fileURLToPath } from 'node:url';
 import { decoderRgba } from './png-rgba.js';
 import { PALETTE, accentDe, classeDe } from '../src/render/scene.js';
 import { UNITES } from '../src/data/combat.js';
-import { ORIENTATIONS } from '../src/sim/rendu-pose.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SPRITES = join(RACINE, 'art', 'sprites');
@@ -185,7 +184,7 @@ const fichier = (famille, nom) => join(SPRITES, famille, String(GRILLE), `${nom}
  * `test/sprite.test.js` asserte par ailleurs que les noms rendus par le module
  * existent bien dans l'atlas ; les deux se recoupent sans se remplacer.
  */
-function fichiersAffiches(id, lettre, force, orientation = 's') {
+function fichiersAffiches(id, lettre, force) {
   const pose = (base, famille) => {
     const defensif = `${base}_def`;
     return force === 'garnison' && existsSync(fichier(famille, defensif)) ? defensif : base;
@@ -193,71 +192,78 @@ function fichiersAffiches(id, lettre, force, orientation = 's') {
   if (classeDe('unite', id) === 'blinde' && lettre === 'j') {
     return [
       fichier('chassis', pose(`off_j_${id}_chassis`, 'chassis')),
-      fichier('tourelle-unite', `off_j_${id}_${orientation}`),
+      fichier('tourelle-unite', `off_j_${id}_tourelle`),
     ];
   }
   return [fichier('unite', pose(`off_${lettre}_${id}`, 'unite'))];
 }
 
 /**
- * ⚠⚠ LES QUATRE DETTES D'ART, MESURÉES LE 30/08 SUR `main` À `aca172f`.
+ * ⚠⚠ LES QUATRE DETTES D'ART, MESURÉES LE 05/09 SUR LA v2 DES SPRITES DU JOUEUR.
  *
  * Elles entrent au dépôt comme EXCEPTIONS NOMMÉES pour que le garde-fou puisse
- * être posé sans rendre `main` rouge — et chacune porte sa raison. Ce lot NE
- * CORRIGE PAS L'ART : recolorier une tourelle est une décision de production,
- * au pinceau ou par remappage de palette dans la chaîne, et elle appartient à
- * Ethan.
+ * rester posé sans rendre `main` rouge — et chacune porte sa raison. Ce lot NE
+ * CORRIGE PAS L'ART : le brief l'écrit en toutes lettres, « si une pièce paraît
+ * fausse, le dire au rapport ; ne pas la corriger ». Recolorier un sprite est
+ * une décision de production, et elle appartient à Ethan.
  *
  * ⚠⚠ CHAQUE DETTE EST ASSERTÉE ENCORE VIOLÉE, ET C'EST CE QUI REND LA TABLE
  * HONNÊTE. Le jour où l'art est corrigé, le test tombe et quelqu'un retire la
  * ligne. Sans cette moitié-là, une liste d'exceptions pourrit en silence — même
- * mécanique que les deux `ÉCART` permanents de `tools/planches.py`, qui sont
- * voulus ET vérifiés.
+ * mécanique que les `ÉCART` permanents de `tools/planches.py`, qui sont voulus
+ * ET vérifiés. C'est exactement ce qui vient de se passer, dans les deux sens.
  *
- * ⚠ LA CLÉ EST (unité, camp), PAS (unité, camp, force). Le brief du lot en
- * comptait quatre ; mesuré, SIX combinaisons violent, parce que `broyeur` et
- * `pilon` violent dans LES DEUX poses — leur tourelle n'a pas de variante `_def`
- * et les deux coques donnent le même verdict. Quatre sujets, six combinaisons :
- * la table dit les quatre et couvre les six, ce qui est le fait mesuré.
+ * ⚠⚠ LES DEUX DETTES DE LA V1 SE SONT REFERMÉES, ET LES QUATRE NEUVES SONT
+ * D'AUTRES SUJETS. `broyeur j` et `pilon j` étaient déclarés en défaut depuis le
+ * 30/08 — le composé coque + tourelle contredisait le sprite entier ; mesuré sur
+ * la v2, les deux rendent EXACTEMENT ce que la table dit (broyeur : 35 pixels de
+ * véhicule et zéro ailleurs ; pilon : 243 de structure contre 2 et 1). Les
+ * quatre qui entrent n'ont rien à voir avec elles : ce sont des ESCOUADES et des
+ * AÉRONEFS, que ce lot redessine, pas des blindés composés.
+ *
+ * ⚠ LA CLÉ EST (unité, camp), PAS (unité, camp, force) — inchangé. Les quatre
+ * sujets violent dans LEURS DEUX poses, soit huit combinaisons couvertes.
  */
 const DETTES_ACCENT = [
   {
-    unite: 'broyeur',
+    unite: 'meute',
     camp: 'j',
-    attendu: 'vehicule',
-    mesure: 'infanterie',
-    raison: 'le composé coque + tourelle n\'a AUCUN pixel de véhicule (161 d\'infanterie) '
-      + 'alors que le sprite `unite/off_j_broyeur`, lui, est juste : l\'art détaché '
-      + 'contredit l\'art entier. Les deux poses violent.',
+    attendu: 'infanterie',
+    mesure: 'structureOuAviation',
+    raison: 'la pose d\'attaque n\'a AUCUN pixel d\'infanterie sur 272 opaques, et 25 de '
+      + 'structure ; la pose de défense en a 6 contre 59. Les Fusiliers sont la '
+      + 'première ligne du joueur, et leur accent dit qu\'ils visent des bâtiments.',
   },
   {
-    unite: 'pilon',
+    unite: 'guetteur',
+    camp: 'j',
+    attendu: 'infanterie',
+    mesure: 'structureOuAviation',
+    raison: 'même écart que la Meute, et plus net — 6 pixels d\'infanterie contre 127 de '
+      + 'structure en attaque, 8 contre 128 en défense. Les deux escouades légères '
+      + 'du joueur portent la même teinte, ce qui suggère un choix de dessin et non '
+      + 'un accident sur une pièce.',
+  },
+  {
+    unite: 'carapace',
+    camp: 'j',
+    attendu: 'vehicule',
+    mesure: 'structureOuAviation',
+    raison: 'le véhicule EST présent — 76 pixels en attaque, 62 en défense — mais la '
+      + 'structure domine, 118 et 157. C\'est la dette la plus proche de se '
+      + 'refermer : quelques pixels d\'ambre de plus la renverseraient.',
+  },
+  {
+    unite: 'frappeur',
     camp: 'j',
     attendu: 'structureOuAviation',
-    mesure: 'vehicule',
-    raison: 'le composé dit véhicule (173 contre 19) quand la table dit structure sans '
-      + 'ambiguïté — {infanterie 5, vehicule 10, structureOuAviation 50}. Le sprite '
-      + '`unite/off_j_pilon` non affiché est juste. Les deux poses violent.',
+    mesure: 'infanterie',
+    raison: 'les deux colonnes sont presque à égalité — 66 pixels d\'infanterie contre '
+      + '63 de structure, dans les deux poses, qui partagent le même fichier. Trois '
+      + 'pixels séparent le verdict de la table : c\'est la dette la plus fragile '
+      + 'des quatre, et elle basculera au premier retouchage.',
   },
 ];
-
-/**
- * ⚠⚠ DEUX DETTES SE SONT REFERMÉES AU LOT PIXELS, ET L'ART N'A PAS ÉTÉ TOUCHÉ.
- * `ratisseur` et `belier`, camp `o`, étaient déclarés en défaut le 30/08 :
- * « la pose d'attaque n'a AUCUN pixel d'accent à la grille 64 » pour le premier,
- * « dit véhicule quand la table dit structure » pour le second.
- *
- * Mesuré après la bascule : les deux rendent EXACTEMENT ce que la table dit.
- * Ce n'est pas l'art qui était de travers, c'est la QUANTIFICATION qui effaçait
- * son accent — un pixel d'accent isolé perdait son vote de bloc contre le kaki
- * autour, et le sprite ressortait nu. La réduction par filtre le conserve en le
- * mélangeant, et la classification au plus proche le retrouve.
- *
- * Les deux lignes sont donc RETIRÉES, comme la table l'exigeait d'elle-même :
- * « le jour où l'art est corrigé, le test tombe et quelqu'un retire la ligne ».
- * Il restait à vérifier que les deux autres violent encore — elles violent.
- */
-
 
 const estUneDette = (id, lettre) => DETTES_ACCENT.some((d) => d.unite === id && d.camp === lettre);
 
@@ -279,13 +285,19 @@ test('accent — le décodeur rend les comptes attendus sur un sprite connu', ()
   // ⚠ D'ABORD : LE DÉCODAGE REND-IL DES PIXELS ? Un décodeur cassé qui rendrait
   // zéro pixel opaque ferait passer TOUTES les assertions de ce fichier, la
   // dominante valant alors `null` partout.
-  const c = comptesDAccent([fichier('tourelle-unite', 'off_j_pilon_s')]);
+  // ⚠⚠ LE TÉMOIN CHANGE DE FICHIER ET DE VERDICT AU LOT SPRITES-V2-JOUEUR, ET
+  // LES DEUX SE DÉCLARENT. `off_j_pilon_s` était l'une des seize orientations de
+  // la tourelle de l'Obusier ; il n'y en a plus qu'une, `off_j_pilon_tourelle`,
+  // et elle est REDESSINÉE. Le nombre ne se recopie donc pas d'un lot à l'autre :
+  // 179 pixels de VÉHICULE hier, 200 de STRUCTURE aujourd'hui sur 2 584 opaques.
+  // Ce que le témoin garde est inchangé — que le décodeur lit vraiment des
+  // pixels, sans quoi toutes les assertions de ce fichier passeraient sur une
+  // dominante nulle.
+  const c = comptesDAccent([fichier('tourelle-unite', 'off_j_pilon_tourelle')]);
   assert.ok(c.opaques > 500, `${c.opaques} pixels opaques : le décodeur ne lit rien`);
-  // ⚠ 179 DEPUIS LE LOT PIXELS, 161 AVANT. Le nombre a bougé parce que la
-  // mesure a changé de nature — égalité exacte hier, plus proche sous portes
-  // aujourd'hui — et pas parce que l'art a bougé : le verdict, lui, est le même.
-  assert.equal(c.vehicule, 179, 'off_j_pilon_s doit porter 179 pixels de véhicule à la grille 64');
-  assert.equal(dominant(c), 'vehicule');
+  assert.equal(c.structureOuAviation, 200,
+    'off_j_pilon_tourelle doit porter 200 pixels de structure à la grille 64');
+  assert.equal(dominant(c), 'structureOuAviation');
 
   // Et les six teintes viennent bien de `PALETTE`, pas d'une copie : six clés,
   // trois colonnes, et chacune se retrouve dans la table de la fiche.
@@ -313,10 +325,13 @@ test('accent — l\'accent dessiné est celui de la table, hors dettes', () => {
   }
 
   // ⚠ SANS CETTE LIGNE, UNE TABLE DE DETTES QUI COUVRIRAIT TOUT PASSERAIT.
-  // ⚠ RELEVÉ DE 30 À 45 AU LOT PIXELS, ET LA HAUSSE EST UN RESSERREMENT, PAS UN
-  // RÉGLAGE : deux dettes se sont refermées, donc quatre combinaisons de plus
-  // sont MESURÉES au lieu d'être exemptées. Mesuré, 52 sur 56.
-  assert.ok(mesurees >= 45, `${mesurees} combinaisons hors dettes : les exceptions couvrent trop`);
+  // ⚠⚠ IL DESCEND DE 45 À 42 AU LOT SPRITES-V2-JOUEUR, ET C'EST UN ASSOUPLISSEMENT
+  // QU'IL FAUT DIRE COMME TEL : deux dettes se referment, quatre s'ouvrent, donc
+  // les exceptions couvrent HUIT combinaisons au lieu de quatre. MESURÉ : 44
+  // mesurées sur 56, contre 52 sur 56 avant. La borne suit le fait, elle ne le
+  // déguise pas — et les quatre dettes neuves sont chacune nommée avec son
+  // compte de pixels, ce qui est le prix à payer pour ne pas retoucher l'art.
+  assert.ok(mesurees >= 42, `${mesurees} combinaisons hors dettes : les exceptions couvrent trop`);
   assert.deepEqual(violations, [],
     'l\'art et la table de dégâts divergent — corriger l\'art, ou ajouter la dette avec sa raison');
 });
@@ -325,7 +340,7 @@ test('accent — chaque dette déclarée est ENCORE violée', () => {
   // ⚠⚠ L'ASSERTION INVERSE. Le jour où l'art est corrigé, ce test tombe et
   // quelqu'un retire la ligne. Une liste d'exceptions sans cette moitié-là
   // pourrit en silence.
-  assert.equal(DETTES_ACCENT.length, 2, 'la table des dettes a changé de taille');
+  assert.equal(DETTES_ACCENT.length, 4, 'la table des dettes a changé de taille');
 
   for (const dette of DETTES_ACCENT) {
     const attendu = accentDe('unite', dette.unite).colonne;
@@ -350,19 +365,36 @@ test('accent — chaque dette déclarée est ENCORE violée', () => {
   }
 });
 
-test('accent — le verdict d\'un blindé ne dépend pas de l\'orientation de sa tourelle', () => {
+test('accent — un blindé du joueur porte UNE tourelle, et son verdict la comprend', () => {
+  // ⚠⚠ CE TEST EST RÉÉCRIT, SON SUJET AYANT DISPARU — lot SPRITES-V2-JOUEUR. Il
+  // exigeait que le verdict d'accent d'un blindé soit le MÊME sur les seize
+  // orientations de sa tourelle : une propriété qui n'a plus d'objet, puisqu'il
+  // n'y a plus qu'un dessin de tourelle et que le rendu le tourne. Le rendre
+  // trivialement vrai en bouclant sur une liste d'un élément aurait été garder
+  // la forme du test en perdant ce qu'il mesure.
+  //
+  // Ce qui le remplace mesure la propriété du modèle NEUF, et elle n'allait pas
+  // de soi : la tourelle est un fichier À PART, donc le verdict d'un blindé doit
+  // le compter — un compteur qui ne lirait que la coque changerait de verdict
+  // sur au moins un blindé, et la légende mentirait sur ce qu'il peut tuer.
   const blindes = Object.keys(UNITES).filter((id) => classeDe('unite', id) === 'blinde');
   assert.ok(blindes.length > 0, 'aucun blindé au roster : le test ne mesure rien');
-  assert.equal(ORIENTATIONS.length, 16, 'le compte d\'orientations a changé');
 
+  let comptent = 0;
   for (const id of blindes) {
-    const verdicts = new Set();
-    for (const orientation of ORIENTATIONS) {
-      verdicts.add(dominant(comptesDAccent(fichiersAffiches(id, 'j', 'armee', orientation))));
-    }
-    assert.equal(verdicts.size, 1,
-      `${id} : ${verdicts.size} verdicts distincts sur 16 orientations (${[...verdicts].join(', ')})`);
+    const deux = fichiersAffiches(id, 'j', 'armee');
+    assert.equal(deux.length, 2, `${id} : ${deux.length} fichier(s) au lieu de la coque et sa tourelle`);
+    assert.match(deux[1], /_tourelle\.png$/, `${id} : la tourelle porte encore une orientation`);
+
+    const avecTourelle = comptesDAccent(deux);
+    const coqueSeule = comptesDAccent([deux[0]]);
+    assert.ok(avecTourelle.opaques > coqueSeule.opaques,
+      `${id} : la tourelle n'ajoute aucun pixel — le montage ne mesure rien`);
+    if (dominant(avecTourelle) !== dominant(coqueSeule)) comptent += 1;
   }
+  assert.ok(comptent > 0,
+    'la tourelle ne change le verdict d\'aucun blindé : un compteur qui ne lirait '
+    + 'que la coque passerait ce test, et il ne garderait rien');
 
   // ⚠ FALSIFIABLE : le montage sait DISTINGUER deux verdicts. Sans cet appât,
   // une fonction `dominant` qui rendrait toujours la même chose ferait passer la

@@ -967,6 +967,31 @@
     background-repeat: no-repeat;
     image-rendering: pixelated;
   }
+  /* ⚠⚠ LA TOURELLE EST UN ENFANT, PARCE QU'UN FOND NE SE TOURNE PAS — lot
+     SPRITES-V2-JOUEUR, 05/09. Les onze tourelles du joueur ne sont plus
+     dessinées en seize orientations : il y en a UNE, canon au nord, que le rendu
+     tourne. `background-image` ne sait pas tourner, et `transform` sur le jeton
+     ferait tourner le socle avec. La couche ancrée sort donc des fonds et
+     devient un `<i>` en position absolue — même idiome que
+     `#offense-palette .unite i`.
+
+     ⚠ LES QUATRE NOMBRES SONT EN POURCENTAGE DE L'ÉLÉMENT, et c'est le même
+     référentiel que le canevas : là-bas le socle remplit la CASE, ici il remplit
+     le JETON, et l'ancre est relative à ce que le socle remplit dans les deux
+     cas. Ils viennent tels quels de `src/data/ancres-{defense,blindes}.js` ;
+     `poserCouches` ne les multiplie par rien.
+
+     ⚠ LA ROTATION SE FAIT AUTOUR DU CENTRE — `transform-origin` vaut `50% 50%`
+     par défaut, et c'est exactement ce que les sprites carrés centrés sur leur
+     pivot demandent. Ne pas le changer, et ne pas recadrer ces sprites.
+
+     ⚠ `pointer-events: none` N'EST PAS COSMÉTIQUE : le `<i>` couvre le milieu du
+     jeton, et sans lui il avalerait le toucher qui vise la pièce. */
+  .couche-tournante {
+    position: absolute; pointer-events: none;
+    background-color: transparent; background-repeat: no-repeat;
+    image-rendering: pixelated;
+  }
   /* ⚠⚠ UN ABÎMÉ SE VOIT — lot RÉPARER-ÉCRAN, 05/09. La classe et la teinte sont
      celles de l'écran de raid (`#ecran-raid .emplacement.abimee`), pour que le
      joueur n'apprenne pas deux vocabulaires visuels pour le même fait.
@@ -1137,6 +1162,11 @@
      le pose : les deux variables sont les mêmes, donc le dessin ne bouge pas
      d'un pixel entre le premier et le second toucher. */
   .fantome {
+    /* ⚠ `relative` POUR LA COUCHE TOURNANTE, ET POUR RIEN D'AUTRE : le `<span>`
+       d'une tourelle est en position absolue et se cale sur son premier ancêtre
+       positionné. Sans lui il se calerait sur la CASE, donc au mauvais endroit
+       et à la mauvaise taille. Voir `.couche-tournante`. */
+    position: relative;
     width: calc(var(--jeton-part) * var(--jeton-grossissement));
     height: calc(var(--jeton-part) * var(--jeton-grossissement));
     --jeton-part: 84%;
@@ -1310,6 +1340,8 @@
      palette ils sont la seule chose qui distingue les familles de coût, et une
      vignette n'est pas une case du terrain. */
   .posable i {
+    /* ⚠ `relative` POUR LA COUCHE TOURNANTE — voir `.couche-tournante`. */
+    position: relative;
     width: 26px; height: 26px; font-style: normal;
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;
@@ -1540,6 +1572,8 @@
      même unité d'un écran à l'autre. */
   #ecran-offense .emplacement .piece,
   #ecran-raid .emplacement .piece {
+    /* ⚠ `relative` POUR LA COUCHE TOURNANTE — voir `.couche-tournante`. */
+    position: relative;
     --jeton-part: 84%;
     --jeton-grossissement: 1.2;
     width: calc(var(--jeton-part) * var(--jeton-grossissement));
@@ -1767,6 +1801,8 @@
      un carré. Sans cadre de famille ici : une unité n'a pas de famille de coût,
      elle a un châssis, et ce châssis se lit à la silhouette. */
   #offense-palette .unite i {
+    /* ⚠ `relative` POUR LA COUCHE TOURNANTE — voir `.couche-tournante`. */
+    position: relative;
     width: 26px; height: 26px; font-style: normal;
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;

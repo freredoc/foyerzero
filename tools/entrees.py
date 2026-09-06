@@ -40,6 +40,14 @@ import tempfile
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCES = os.path.join(RACINE, 'art', 'sources')
 ATTENTE = os.path.join(RACINE, 'art', 'sourcesstandby')
+# ⚠⚠ `art/reserve/` EST LE SECOND DOSSIER HORS CHAÎNE — lot SPRITES-V2-JOUEUR,
+# 05/09. Il porte des ARCHIVES : anciennes versions d'un dessin, poses mises de
+# côté sans emploi décidé, et les scripts qui les ont produites. Il se distingue
+# du dossier d'attente par l'intention — l'attente est ce qui n'est pas encore
+# entré, la réserve est ce qui en est sorti ou n'y entrera peut-être jamais —
+# et il partage avec lui la seule propriété qui compte ici : **aucun outil ne
+# doit l'ouvrir**, et c'est mesuré plutôt qu'affirmé.
+RESERVE = os.path.join(RACINE, 'art', 'reserve')
 DECLARATION = os.path.join(RACINE, 'art', 'sources-declarees.json')
 
 # ⚠⚠ LA CHAÎNE SE LIT DANS `verifier.py`, ELLE NE SE RECOPIE PAS. Une seconde
@@ -147,9 +155,10 @@ def dans(dossier, chemin):
 def tracer():
     """Rejoue la chaîne sous le mouchard, et rend les noms qu'elle a ouverts.
 
-    Rend `(consommees, attente_lues, hors_racine)` : ce qu'elle ouvre dans
-    `art/sources/`, ce qu'elle ouvre dans le dossier d'attente — qui doit être
-    vide —, et ce qu'elle ouvre ailleurs sous `art/sources/` (ses sous-dossiers).
+    Rend `(consommees, hors_chaine, hors_racine)` : ce qu'elle ouvre dans
+    `art/sources/`, ce qu'elle ouvre dans les deux dossiers hors chaîne — qui
+    doivent rester vides —, et ce qu'elle ouvre ailleurs sous `art/sources/`
+    (ses sous-dossiers).
     """
     boite = tempfile.mkdtemp(prefix='fz-entrees-')
     try:
@@ -179,20 +188,22 @@ def tracer():
     finally:
         shutil.rmtree(boite, ignore_errors=True)
 
-    consommees, attente_lues, hors_racine = set(), set(), set()
+    consommees, hors_chaine, hors_racine = set(), set(), set()
     for chemin in vus:
         if dans(SOURCES, chemin):
             consommees.add(os.path.basename(chemin))
         elif dans(ATTENTE, chemin):
-            attente_lues.add(os.path.basename(chemin))
+            hors_chaine.add('sourcesstandby/' + os.path.basename(chemin))
+        elif dans(RESERVE, chemin):
+            hors_chaine.add('reserve/' + os.path.basename(chemin))
         elif os.path.abspath(chemin).startswith(os.path.abspath(SOURCES) + os.sep):
             hors_racine.add(os.path.relpath(chemin, SOURCES))
-    return sorted(consommees), sorted(attente_lues), sorted(hors_racine)
+    return sorted(consommees), sorted(hors_chaine), sorted(hors_racine)
 
 
 def declarer():
     """Écrit la déclaration depuis la trace — À LA MAIN, et jamais autrement."""
-    consommees, attente_lues, hors_racine = tracer()
+    consommees, hors_chaine, hors_racine = tracer()
     presentes = fichiers_de(SOURCES)
     dormantes = [n for n in presentes if n not in set(consommees)]
     contenu = {
@@ -211,8 +222,9 @@ def declarer():
         f.write('\n')
     print('déclaration écrite : %d consommées · %d dormantes · %d dans art/sources/'
           % (len(consommees), len(dormantes), len(presentes)))
-    if attente_lues:
-        print('  ⚠ la chaîne a ouvert %d fichier(s) du dossier d\'attente' % len(attente_lues))
+    if hors_chaine:
+        print('  ⚠ la chaîne a ouvert %d fichier(s) hors chaîne : %s'
+              % (len(hors_chaine), ', '.join(hors_chaine)))
     if hors_racine:
         print('  (hors racine, non classés : %s)' % ', '.join(hors_racine))
     return 0
@@ -228,7 +240,7 @@ def verifier():
     consommees_dec = list(declare.get('consommees', []))
     dormantes_dec = list(declare.get('dormantes', []))
 
-    consommees, attente_lues, hors_racine = tracer()
+    consommees, hors_chaine, hors_racine = tracer()
     presentes = fichiers_de(SOURCES)
     fautes = []
 
@@ -250,16 +262,22 @@ def verifier():
     for n in sorted(classees - set(presentes)):
         fautes.append('DÉCLARÉE ET ABSENTE      %s' % n)
 
-    # 3. Le dossier d'attente est-il bien hors de la chaîne ?
-    for n in attente_lues:
-        fautes.append('LUE DANS L\'ATTENTE       %s' % n)
+    # 3. Les deux dossiers hors chaîne le sont-ils vraiment ? `sourcesstandby/`
+    #    porte ce qui n'est pas encore entré, `reserve/` ce qui en est sorti ou
+    #    n'entrera peut-être jamais. Ni l'un ni l'autre ne doit être ouvert.
+    for n in hors_chaine:
+        fautes.append('LUE HORS CHAÎNE          %s' % n)
 
     print('art/sources/           %4d fichiers' % len(presentes))
     print('  consommées (trace)   %4d   déclarées %d' % (len(consommees), len(consommees_dec)))
     print('  dormantes (déduites) %4d   déclarées %d'
           % (len(presentes) - len(consommees), len(dormantes_dec)))
     print('art/sourcesstandby/    %4d fichiers, %d lu(s) par la chaîne'
-          % (len(fichiers_de(ATTENTE)), len(attente_lues)))
+          % (len(fichiers_de(ATTENTE)),
+             sum(1 for n in hors_chaine if n.startswith('sourcesstandby/'))))
+    print('art/reserve/           %4d fichiers, %d lu(s) par la chaîne'
+          % (len(fichiers_de(RESERVE)),
+             sum(1 for n in hors_chaine if n.startswith('reserve/'))))
     if hors_racine:
         print('  (sous-dossiers de art/sources/ ouverts : %s)' % ', '.join(hors_racine))
 

@@ -9,7 +9,8 @@ LA TABLE EST CELLE DE `final128.py`, PAS UNE RECOPIE. Les planches détruites
 reprennent exactement la disposition des planches intactes — même grille, mêmes
 bâtiments dans le même ordre — et c'est ce qui permet de dériver l'une de
 l'autre. Si `B` change, ce lot suit sans intervention. Une table écrite à la
-main ici serait la première à diverger, comme l'a montré `SE_LIE_AU_MUR`.
+main ici serait la première à diverger, comme l'a montré `rosterDefensif`, qui
+lit `DEFENSES` et `UNITES` au lieu d'énumérer dix-sept noms.
 
 DEUX DOUBLONS ONT ÉTÉ ARBITRÉS PAR MESURE, faute d'instruction, et le critère
 est la survie à la grille de 32 gros pixels :

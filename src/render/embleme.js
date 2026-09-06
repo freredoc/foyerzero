@@ -45,8 +45,11 @@ export const FAMILLE = 'carte';
  * Les sept points d'intérêt, LUS dans l'atlas et non recopiés.
  *
  * ⚠ UNE LISTE ÉCRITE À LA MAIN VIEILLIRAIT au premier POI ajouté ou renommé, et
- * rien ne le dirait — c'est la faute que `SE_LIE_AU_MUR` de `sim/rendu-pose.js`
- * évite déjà en lisant `DEFENSES` plutôt qu'en énumérant.
+ * rien ne le dirait — c'est la faute que `rosterDefensif` de `sim/state.js`
+ * évite déjà en lisant `DEFENSES` et `UNITES` plutôt qu'en énumérant. (Ce
+ * paragraphe citait `SE_LIE_AU_MUR`, qui appliquait la même règle et qui est
+ * parti avec le chaînage au lot SPRITES-V2-JOUEUR ; un exemple qui n'existe plus
+ * envoie chercher un mécanisme qu'on ne trouvera pas.)
  */
 export const SPRITES_POI = ATLAS[FAMILLE].noms.filter((nom) => nom.startsWith('poi_'));
 

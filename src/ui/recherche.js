@@ -41,6 +41,7 @@ import {
 // l'arbre a besoin dans ses deux branches, et aucun identifiant n'existe dans
 // les deux tables à la fois (croisé par `test/recherche.test.js`). La renommer
 // toucherait ses appelants du Chantier sans rien apprendre à personne.
+import { couchesDeLEntite } from '../render/scene.js';
 import { poserCouches, nomDeLaPieceDeDefense as nomDeLaPiece } from './chantier.js';
 
 /** Les trois panneaux, dans l'ordre où le défilement horizontal les présente. */
@@ -56,25 +57,41 @@ export const TITRE_DU_PANNEAU = {
 /**
  * Le sprite d'une pièce, en couches prêtes pour `poserCouches`.
  *
- * ⚠ TROIS OUVRAGES ONT UN NOM À EUX, LES AUTRES PRENNENT L'ORIENTATION SUD.
- * Le Merlon, la Herse et la Ronce n'ont pas de tourelle et ne sont donc pas
- * déclinés en seize directions ; les six autres ouvrages le sont, et le sud est
- * celui qui regarde le joueur. Les unités, elles, ont un sprite unique.
+ * ⚠⚠ ELLE DÉLÈGUE À `couchesDeLEntite`, ET C'ÉTAIT UNE SECONDE VÉRITÉ — lot
+ * SPRITES-V2-JOUEUR, 05/09. Elle composait ses noms elle-même : `off_j_<id>`
+ * pour toute unité, `def_j_<id>_s` pour un ouvrage à tourelle, et une table de
+ * trois exceptions pour le Merlon, la Herse et la Ronce. Trois de ces quatre
+ * règles sont devenues fausses le même jour — un blindé du joueur n'a plus de
+ * sprite monolithe, une tourelle n'a plus d'orientation dans son nom, un merlon
+ * n'a plus d'état de liaison — et rien, dans cet écran, ne pouvait le dire :
+ * `celluleDuSprite` a LEVÉ à la première peinture. C'est exactement ce que le
+ * dispatch unique de `render/scene.js` existe pour empêcher (CLAUDE.md §4), et
+ * l'écran de recherche était le dernier à ne pas y passer.
  *
- * ⚠ ET LA LETTRE EST TOUJOURS `_j_`. C'est l'arbre du JOUEUR : `off_o_…` est le
- * vocabulaire de l'Ouvrage, et mélanger les deux dans un même écran est
- * exactement ce que CLAUDE.md §4 interdit pour les noms.
+ * ⚠ LA LETTRE RESTE `_j_`, ET C'EST LE PROPRIÉTAIRE QUI LA DONNE. C'est l'arbre
+ * du JOUEUR : `off_o_…` est le vocabulaire de l'Ouvrage, et mélanger les deux
+ * dans un même écran est ce que §4 interdit pour les noms.
+ *
+ * ⚠ ET LE CAMP DIT LA POSE. Une unité est montrée en assaut — `camp: 'attaque'`,
+ * donc la pose de marche —, un ouvrage en garnison, donc son socle, sa tourelle
+ * et l'angle par défaut de la force. C'est ce que l'écran de l'Offense fait déjà
+ * pour ses vignettes, par la même porte.
  *
  * @param {string} id
- * @returns {{famille: string, nom: string}[]}
+ * @returns {{famille: string, nom: string, ancre?: object, angle?: number}[]}
  */
 export function couchesDeLaPiece(id) {
-  if (UNITES[id] !== undefined) return [{ famille: 'unite', nom: `off_j_${id}` }];
+  if (UNITES[id] !== undefined) {
+    return couchesDeLEntite({
+      genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque',
+    });
+  }
   if (DEFENSES[id] === undefined) {
     throw new RangeError(`recherche : « ${id} » n'est ni une unité ni un ouvrage`);
   }
-  const sans = { merlon: 'def_j_merlon_isole', herse: 'def_j_herse', ronce: 'def_j_ronce' };
-  return [{ famille: 'defense', nom: sans[id] ?? `def_j_${id}_s` }];
+  return couchesDeLEntite({
+    genre: 'defense', id, proprietaire: 'joueur', camp: 'defense',
+  });
 }
 
 /**

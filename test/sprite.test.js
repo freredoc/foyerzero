@@ -28,7 +28,8 @@ import {
   variante, suffixeDeVariante, SEL_VARIANTE, nomDeVariante, nombreDeVariantes,
 } from '../src/render/variante.js';
 import { couchesDeLEntite, listeAffichage, genreDeLaGarnison } from '../src/render/scene.js';
-import { ANCRES_CHASSIS } from '../src/data/ancres-chassis.js';
+import { ANCRES_BLINDES, TOURELLES_BLINDES } from '../src/data/ancres-blindes.js';
+import { ANCRES_DEFENSE, TOURELLES_DEFENSE } from '../src/data/ancres-defense.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
@@ -38,7 +39,7 @@ import {
   LARGEUR_EN_CASES, HAUTEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES,
 } from '../src/render/fond.js';
 import { BATIMENTS } from '../src/data/sites.js';
-import { ORIENTATION_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
+import { ANGLE_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
 import { creerCombat } from '../src/sim/combat.js';
 import { calculerProjection } from '../src/render/projection.js';
 import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
@@ -363,14 +364,29 @@ test('sprite — les sprites de l\'Ouvrage ne sont plus percés de trous', () =>
   // leurs propres ouvertures — mesuré 2 694 px, déjà au dépôt avant ce lot —
   // et c'est l'appât : un `trousEnfermes` qui rendrait toujours zéro ferait
   // passer l'assertion du dessus sur n'importe quel art.
-  const chassis = readdirSync(join(SPRITES, 'chassis', '128'))
-    .filter((f) => f.endsWith('.png'))
-    .reduce((t, f) => t + trousEnfermes(join(SPRITES, 'chassis', '128', f)), 0);
-  assert.ok(chassis > 2000, `${chassis} px enfermés côté joueur : le compteur ne compte rien`);
+  //
+  // ⚠⚠ ET L'APPÂT A CHANGÉ DE FAMILLE AU LOT SPRITES-V2-JOUEUR. Il lisait les
+  // coques du joueur — 2 694 px d'ouvertures mesurés sur la V1 ; les neuf coques
+  // de la v2 n'en portent plus que 13, parce qu'Ethan les a redessinées pleines.
+  // Un seuil laissé à 2 000 aurait fait tomber la garde sur de l'art SAIN, et
+  // baisser le seuil sur la même famille aurait rendu l'appât muet — 13 px ne
+  // distinguent pas un compteur qui marche d'un compteur à zéro. On prend donc
+  // la famille qui porte vraiment des ajours : les BÂTIMENTS du joueur.
+  const bat = join(SPRITES, 'bâtiment', '128');
+  const batiments = readdirSync(bat)
+    .filter((f) => f.endsWith('.png') && f.startsWith('bat_j_'))
+    .reduce((t, f) => t + trousEnfermes(join(bat, f)), 0);
+  assert.ok(batiments > 500, `${batiments} px enfermés côté joueur : le compteur ne compte rien`);
 
   // Et le balayage a bien trouvé les sprites : sans ça, zéro fichier donnerait
   // zéro trou, et la garde serait verte sur un dossier vide.
-  assert.ok(spritesDeLOuvrage(128).length > 150,
+  // ⚠ LE SEUIL DESCEND DE 150 À 60 AU LOT SPRITES-V2-JOUEUR, ET IL SUIT LA
+  // BASCULE, PAS L'ART DE L'OUVRAGE. Pas un octet de l'Ouvrage ne change ; ce
+  // qui change est le nombre de FICHIERS qui portent `_o_` — ses six tourelles
+  // et son merlon perdent leurs seize orientations et leurs quatre liaisons,
+  // donc 96 + 4 fichiers deviennent 7, et neuf socles à amorce deviennent six.
+  // MESURÉ : 76 sprites de l'Ouvrage après la bascule, 183 avant.
+  assert.ok(spritesDeLOuvrage(128).length > 60,
     `${spritesDeLOuvrage(128).length} sprites de l'Ouvrage : le balayage n'a rien trouvé`);
 });
 
@@ -755,7 +771,13 @@ test('sprite — l\'atlas cousu répond des sprites d\'aujourd\'hui', () => {
   // comparer. Ensuite l'empreinte DISTINGUE : deux sprites différents n'ont pas
   // la même, sans quoi un `sha` qui rendrait toujours la même chaîne rendrait
   // tout ce qui précède muet.
-  assert.ok(comparees > 400, `${comparees} sprites confrontés : le balayage n'a rien parcouru`);
+  // ⚠ LE SEUIL DESCEND DE 400 À 250 AU LOT SPRITES-V2-JOUEUR, ET CE N'EST PAS
+  // UN ASSOUPLISSEMENT : les cinq familles de la bascule passent de 366 à 79
+  // sprites — 80 tourelles d'unité tombent à 5, 204 défenses à 18, 36 socles à
+  // 12 —, parce qu'un dessin unique tourne au lieu d'être décliné seize fois.
+  // Ce que la garde mesure est inchangé : que le balayage a bien eu lieu.
+  // MESURÉ : 280 sprites confrontés après la bascule, 465 avant.
+  assert.ok(comparees > 250, `${comparees} sprites confrontés : le balayage n'a rien parcouru`);
   assert.notEqual(
     sha(join(SPRITES, 'bâtiment', '64', 'bat_j_collecteur.png')),
     sha(join(SPRITES, 'bâtiment', '64', 'bat_j_chantier_de_construction.png')),
@@ -794,36 +816,37 @@ function garnisonComplete(graine = 7) {
   return etat;
 }
 
-test('sprite — les socles à liaison sont exactement les défenses de type tourelle', () => {
-  // ⚠⚠ CE TEST FIGE UNE COÏNCIDENCE D'AUJOURD'HUI, ET IL EST FAIT POUR ROUGIR.
-  // Six défenses du joueur portent une tourelle ; trois seulement ont des socles
-  // de liaison. Ce n'est pas un manque d'outil mais un manque de SOURCE :
-  // `tools/connexions.py` coupe `socles_j_tourelles_connexions_3x4.png`, un
-  // 3 × 4 — trois tourelles, quatre états — et il n'existe pas de planche pour
-  // les trois artilleries.
+test('sprite — plus aucun socle ni merlon ne porte d\'état de liaison', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ, PAS RETIRÉ — lot SPRITES-V2-JOUEUR. Il exigeait
+  // l'INVERSE : que les socles à liaison soient exactement les trois défenses de
+  // type tourelle, et il disait être « fait pour rougir » le jour où la planche
+  // des trois artilleries arriverait. Ce jour n'est pas venu ; c'est
+  // l'arbitrage qui est tombé. Ethan, 05/09 : les pièces ne se raccordent plus.
+  // `tools/connexions.py` est retiré, les vingt-quatre socles à amorce et les
+  // quatre merlons de liaison ne sont plus produits.
   //
-  // Le jour où Ethan dessine cette planche et où les outils tournent, ce test
-  // TOMBE. C'est ce qu'on veut : quelqu'un relira ce paragraphe au lieu de
-  // découvrir la nouveauté six mois plus tard. Le rendu, lui, s'adapte tout seul
-  // — il LIT l'atlas par `existeDansAtlas` au lieu de porter une liste.
-  const avecLiaison = [];
-  const sansLiaison = [];
+  // Ce qu'il garde maintenant est l'autre moitié de la même propriété, et elle
+  // vaut pour les DEUX camps : aucun nom d'atlas ne porte un état de liaison.
+  const liaisons = [...ATLAS.socle.noms, ...ATLAS.defense.noms]
+    .filter((n) => /_(est|ouest|traversant|isole)$/.test(n));
+  assert.deepEqual(liaisons, [],
+    `${liaisons.join(', ')} : un état de liaison est revenu dans l'atlas`);
+
+  // ⚠ FALSIFIABLE DANS LES DEUX SENS. D'abord le motif reconnaît encore ce
+  // qu'il cherche — sans cet appât, une expression cassée rendrait la liste vide
+  // pour toujours. Ensuite les deux familles ne sont pas vides : un atlas absent
+  // rendrait `[]` sans rien mesurer.
+  assert.ok(/_(est|ouest|traversant|isole)$/.test('socle_def_j_casemate_est'));
+  assert.ok(ATLAS.socle.noms.length > 0 && ATLAS.defense.noms.length > 0);
+
+  // Et chaque défense à socle en a exactement UN, nu, par camp.
   for (const [id, def] of Object.entries(DEFENSES)) {
-    if (!existeDansAtlas('socle', `socle_def_j_${id}`)) continue;
-    (existeDansAtlas('socle', `socle_def_j_${id}_est`) ? avecLiaison : sansLiaison).push(id);
+    const aSocle = def.type === 'tourelle' || def.type === 'artillerie';
+    for (const c of ['j', 'o']) {
+      assert.equal(existeDansAtlas('socle', `socle_def_${c}_${id}`), aSocle,
+        `socle_def_${c}_${id} : présence inattendue dans l'atlas`);
+    }
   }
-
-  // ⚠ D'ABORD : LES DEUX GROUPES SONT-ILS NON VIDES ? Deux listes vides
-  // seraient égales à deux autres listes vides, et le test ne mesurerait rien.
-  assert.ok(avecLiaison.length > 0, 'aucun socle à liaison — l\'atlas n\'est pas celui qu\'on croit');
-  assert.ok(sansLiaison.length > 0, 'tous les socles ont des liaisons — le trou d\'art est comblé, relire le lot');
-
-  const tourelles = Object.keys(DEFENSES).filter((id) => DEFENSES[id].type === 'tourelle');
-  const artilleries = Object.keys(DEFENSES).filter((id) => DEFENSES[id].type === 'artillerie');
-  assert.deepEqual(avecLiaison.sort(), [...tourelles].sort(),
-    'les socles à liaison ne sont plus exactement les défenses de type tourelle');
-  assert.deepEqual(sansLiaison.sort(), [...artilleries].sort(),
-    'les socles sans liaison ne sont plus exactement les artilleries');
 });
 
 test('sprite — chaque pièce de garnison résout toutes ses couches dans un atlas', () => {
@@ -889,70 +912,281 @@ test('sprite — la ronce et la herse n\'ont ni socle ni orientation', () => {
   // paire d'assertions, l'inversion n'aurait fait tomber aucun test.
   assert.equal(couchesTourelle[0].famille, 'socle', 'le socle doit être la couche BASSE');
   assert.equal(couchesTourelle[1].famille, 'defense', 'la tourelle doit être la couche HAUTE');
-  assert.match(couchesTourelle[1].nom, /_(n|s|e|o)[a-z]*$/,
-    'la tourelle ne porte plus de suffixe d\'orientation');
+  // ⚠⚠ ET LA TOURELLE NE PORTE PLUS DE SUFFIXE DU TOUT — lot SPRITES-V2-JOUEUR.
+  // Cette ligne exigeait l'INVERSE : un suffixe d'orientation, `_n` à `_nno`,
+  // parce qu'une tourelle était dessinée seize fois. Il n'y a plus qu'un dessin
+  // et le rendu le tourne ; le nom est nu, et c'est l'ANGLE qui porte la
+  // direction. La garde est retournée, pas retirée.
+  assert.equal(couchesTourelle[1].nom, `def_j_${tourelle.id}`,
+    'la tourelle porte encore un suffixe d\'orientation');
+  assert.equal(typeof couchesTourelle[1].angle, 'number',
+    'la tourelle ne porte pas son angle');
+  assert.ok(couchesTourelle[1].ancre, 'la tourelle du joueur ne porte pas son ancre');
 });
 
 // ---------------------------------------------------------------------------
 // Les unités au combat — lot UNITÉS-AU-COMBAT
 // ---------------------------------------------------------------------------
 
-test('sprite — les ancres de coque transcrites sont identiques au JSON du disque', () => {
-  // ⚠ UNE TRANSCRIPTION QUI NE SE CONFRONTE PAS À SA SOURCE EST UNE COPIE QUI
-  // VIEILLIT. `src/data/ancres-chassis.js` est écrit à la main parce que le
-  // build n'inline pas de JSON et que `scene.js` ne lit aucun fichier ; c'est ce
-  // test qui rend la divergence impossible.
-  const json = JSON.parse(readFileSync(join(SPRITES, 'ancres-chassis.json'), 'utf8'));
-  const cles = Object.keys(json).sort();
+/** La boîte englobante des pixels opaques d'un sprite, en pixels de la grille. */
+function boiteDuSprite(famille, nom, grille = 64) {
+  const { largeur, hauteur, pixels } = decoderRgba(
+    join(SPRITES, famille, String(grille), `${nom}.png`),
+  );
+  let x0 = largeur; let y0 = hauteur; let x1 = -1; let y1 = -1;
+  for (let y = 0; y < hauteur; y += 1) {
+    for (let x = 0; x < largeur; x += 1) {
+      if (pixels[(y * largeur + x) * 4 + 3] < 128) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  assert.ok(x1 >= 0, `${famille}/${nom} : aucun pixel opaque`);
+  return { l: x1 - x0 + 1, h: y1 - y0 + 1, cote: largeur };
+}
 
-  assert.ok(cles.length > 0, 'le JSON des ancres est vide : le test ne mesure rien');
-  assert.deepEqual(Object.keys(ANCRES_CHASSIS).sort(), cles,
-    'la transcription et le JSON ne portent pas les mêmes coques');
+test('sprite — les lourds sont plus gros que les légers, dans les DEUX poses', () => {
+  // ⚠⚠ C'EST LE DÉFAUT QUE LA v2 CORRIGE, ET SANS CE TEST IL REVIENDRA À LA
+  // PREMIÈRE REFONTE DE LA CHAÎNE. Une emprise UNIFORME par châssis — un seul
+  // nombre pour les cinq blindés, un seul pour les quatre aéronefs — porte la
+  // plus grande dimension de CHAQUE pièce à la même fraction de la case : un
+  // Éclaireur y devient aussi large qu'un Percheron, et la silhouette cesse de
+  // dire le poids. `EMPRISE_UNITE` de `tools/joueur_v2.py` porte donc DEUX
+  // nombres par châssis, un plancher et un plafond, interpolés sur les points
+  // d'armée. Ce test lit le RÉSULTAT sur le disque, jamais la table.
+  //
+  // ⚠ IL MESURE LA BOÎTE ENGLOBANTE, PAS LE CÔTÉ DU FICHIER : les sprites font
+  // tous 64 × 64, c'est la MATIÈRE dedans qui grandit.
+  const plus = (a, b) => Math.max(a.l, a.h) > Math.max(b.l, b.h);
 
-  for (const cle of cles) {
-    // ⚠ LES VALEURS SIGNÉES, PAS LEUR VALEUR ABSOLUE. Un signe inversé décalerait
-    // les dix tourelles du même côté, ce qui a l'air d'un choix d'art et n'en est
-    // pas un.
-    assert.deepEqual(ANCRES_CHASSIS[cle], json[cle], `ancre « ${cle} » divergente`);
+  // Les blindés, par leur COQUE : c'est elle qui porte la silhouette, la
+  // tourelle étant un carré à part depuis la v2.
+  for (const pose of ['', '_def']) {
+    const boite = (id) => boiteDuSprite('chassis', `off_j_${id}_chassis${pose}`);
+    // ⚠ L'Obusier n'a pas de pose de garnison — `pilon.defense.present` vaut
+    // `false`. On ne le compare que là où il existe.
+    const lourds = pose === '' ? ['broyeur', 'pilon'] : ['broyeur'];
+    for (const lourd of lourds) {
+      for (const leger of ['ratisseur', 'fendeur', 'belier']) {
+        assert.ok(plus(boite(lourd), boite(leger)),
+          `${lourd}${pose} n'est pas plus gros que ${leger}${pose} — `
+          + 'l\'emprise est repassée uniforme par châssis');
+      }
+    }
   }
 
-  // ⚠⚠ NEUF `y_pct` SUR DIX SONT NÉGATIFS, PAS LES DIX. Le brief du lot
-  // annonçait les dix ; mesuré, `off_j_fendeur_chassis_def` vaut **+1,0**. Un
-  // test qui asserterait « toutes négatives » serait donc faux, et pire, il
-  // inviterait à « corriger » une donnée juste. On asserte le fait mesuré.
-  const positifs = cles.filter((c) => json[c].y_pct >= 0);
-  assert.deepEqual(positifs, ['off_j_fendeur_chassis_def'],
-    'la liste des y_pct non négatifs a changé — remesurer avant de conclure');
+  // Les aéronefs : l'Albatros contre les trois autres.
+  const air = (id) => boiteDuSprite('unite', `off_j_${id}`);
+  for (const leger of ['crecelle', 'busard', 'frappeur']) {
+    assert.ok(plus(air('enclume'), air(leger)),
+      `l'Albatros n'est pas plus gros que ${leger} — l'emprise est repassée uniforme`);
+  }
 
-  // Et une seule ancre n'est pas mesurée sur l'image, ce que `tools/chassis.py`
-  // annonce par « 10 ancres dont 9 mesurées ».
-  assert.equal(cles.filter((c) => !json[c].mesure).length, 1);
+  // ⚠ FALSIFIABLE : le montage sait DISTINGUER deux tailles. Sans cet appât, une
+  // `boiteDuSprite` qui rendrait toujours la même chose ferait passer tout ce
+  // qui précède, et une emprise uniforme ne se verrait pas.
+  assert.ok(plus({ l: 30, h: 10 }, { l: 20, h: 20 }));
+  assert.ok(!plus({ l: 20, h: 20 }, { l: 30, h: 10 }));
+
+  // Et l'écart est RÉEL, pas d'un pixel : le plus gros blindé dépasse le plus
+  // petit de moitié au moins. MESURÉ à la grille 64 : Percheron 31 gros pixels
+  // de 32 contre 20 pour l'Éclaireur, 20 pour le Pionnier, 19,5 pour le Chasseur.
+  // ⚠ `cote` EST LE CÔTÉ DU FICHIER, PAS DE LA MATIÈRE : le prendre dans le
+  // maximum comparerait 64 à 64 sur les onze sprites. On lit `l` et `h`.
+  const cote = ({ l, h }) => Math.max(l, h);
+  const grand = cote(boiteDuSprite('chassis', 'off_j_broyeur_chassis'));
+  const petit = cote(boiteDuSprite('chassis', 'off_j_fendeur_chassis'));
+  assert.ok(grand >= petit * 1.4,
+    `${grand} contre ${petit} : l'écart de silhouette est trop mince pour se lire`);
 });
 
-test('sprite — les ancres posent la tourelle DANS la coque', () => {
-  // Pour chacune des dix coques, le disque de la tourelle reste dans la boîte de
-  // la coque. Sans ça, une tourelle déborderait de son blindé.
-  const COTE = 100; // une coque de 100 unités : les pourcentages se lisentdirectement
-  let verifiees = 0;
-  for (const [cle, a] of Object.entries(ANCRES_CHASSIS)) {
-    const rayon = (COTE * a.diametre_pct) / 200;
-    const cx = COTE / 2 + (COTE * a.x_pct) / 100;
-    const cy = COTE / 2 + (COTE * a.y_pct) / 100;
-    assert.ok(cx - rayon >= 0 && cx + rayon <= COTE,
-      `${cle} : la tourelle déborde horizontalement (${(cx - rayon).toFixed(1)}…${(cx + rayon).toFixed(1)})`);
-    assert.ok(cy - rayon >= 0 && cy + rayon <= COTE,
-      `${cle} : la tourelle déborde verticalement (${(cy - rayon).toFixed(1)}…${(cy + rayon).toFixed(1)})`);
-    verifiees += 1;
-  }
-  assert.equal(verifiees, 10, 'les dix coques n\'ont pas été vérifiées');
+test('sprite — une tourelle ne sort pas de son carré en tournant', () => {
+  // ⚠⚠ C'EST LA CONDITION EXACTE, ET ELLE N'EST PAS « LE SPRITE EST CARRÉ ». Une
+  // rotation autour du centre laisse invariant le DISQUE inscrit, pas le carré :
+  // un pixel opaque plus loin du centre que la demi-largeur sort du cadre pour au
+  // moins un angle, et se ferait rogner à 45°. C'est pour ça que les onze
+  // tourelles sont livrées carrées, centrées sur leur pivot, avec la marge —
+  // et c'est pour ça qu'il ne faut PAS les recadrer à la boîte englobante, ni au
+  // conditionnement ni au rendu.
+  const tourelles = [
+    ...['belier', 'broyeur', 'fendeur', 'pilon', 'ratisseur']
+      .map((n) => ['tourelle-unite', `off_j_${n}_tourelle`]),
+    ...['batterie', 'casemate', 'creneau', 'faucheuse', 'harpon', 'mortier']
+      .map((n) => ['defense', `def_j_${n}`]),
+  ];
+  assert.equal(tourelles.length, 11, 'le compte de tourelles du joueur a changé');
 
-  // ⚠ FALSIFIABLE : un décalage volontaire de 200 % en sortirait. Sans cet
-  // appât, une boîte trop large accepterait n'importe quelle ancre.
-  const fautif = { diametre_pct: 30, x_pct: 200, y_pct: 0 };
-  const rayonFautif = (COTE * fautif.diametre_pct) / 200;
-  const cxFautif = COTE / 2 + (COTE * fautif.x_pct) / 100;
-  assert.ok(!(cxFautif - rayonFautif >= 0 && cxFautif + rayonFautif <= COTE),
-    'le montage accepterait une tourelle hors de la coque');
+  let pireNom = null;
+  let pire = 0;
+  for (const [famille, nom] of tourelles) {
+    const { largeur, hauteur, pixels } = decoderRgba(join(SPRITES, famille, '64', `${nom}.png`));
+    assert.equal(largeur, hauteur, `${nom} n'est pas carré : la rotation le déformerait`);
+    const cx = (largeur - 1) / 2;
+    const cy = (hauteur - 1) / 2;
+    let rayon = 0;
+    let opaques = 0;
+    for (let y = 0; y < hauteur; y += 1) {
+      for (let x = 0; x < largeur; x += 1) {
+        if (pixels[(y * largeur + x) * 4 + 3] < 128) continue;
+        opaques += 1;
+        const d = Math.hypot(x - cx, y - cy);
+        if (d > rayon) rayon = d;
+      }
+    }
+    // ⚠ D'ABORD : LE SPRITE PORTE-T-IL DE LA MATIÈRE ? Un fichier vide aurait un
+    // rayon nul et passerait l'assertion suivante sans rien mesurer.
+    assert.ok(opaques > 300, `${nom} : ${opaques} pixels opaques, le sprite est presque vide`);
+    assert.ok(rayon <= largeur / 2,
+      `${nom} : un pixel à ${rayon.toFixed(2)} du centre pour une demi-largeur de `
+      + `${largeur / 2} — le canon sera rogné à 45°`);
+    if (rayon > pire) { pire = rayon; pireNom = nom; }
+  }
+
+  // ⚠ ET LA MARGE EST MINCE, CE QU'IL FAUT SAVOIR AVANT DE RETOUCHER UN DESSIN :
+  // MESURÉ, le pire des onze est à 31,69 sur 32, soit TROIS DIXIÈMES de pixel de
+  // la bordure. Ces sprites sont calibrés au plus juste ; un canon allongé d'un
+  // pixel ferait tomber ce test, et il aurait raison.
+  assert.equal(pireNom !== null, true);
+  assert.ok(pire > 30, `${pireNom} à ${pire.toFixed(2)} : la marge est plus large qu'annoncé — remesurer`);
+  assert.equal(pire.toFixed(2), '31.69');
+});
+
+test('sprite — les deux tables d\'ancres transcrites sont identiques aux JSON du disque', () => {
+  // ⚠ UNE TRANSCRIPTION QUI NE SE CONFRONTE PAS À SA SOURCE EST UNE COPIE QUI
+  // VIEILLIT. `src/data/ancres-*.js` sont écrits à la main parce que le build
+  // n'inline pas de JSON et que `scene.js` ne lit aucun fichier ; c'est ce test
+  // qui rend la divergence impossible.
+  //
+  // ⚠⚠ IL A CHANGÉ DE SOURCE AU LOT SPRITES-V2-JOUEUR, ET C'EST CE QUE LE BRIEF
+  // DEMANDAIT. Il lisait `ancres-chassis.json`, mesuré au lot 8 sur les coques
+  // de la V1 ; elles sont redessinées, et le logement n'est ni au même endroit
+  // ni de la même taille — le Percheron passe de 50,2 % à 28,5 % en attaque.
+  // L'ANCIEN test ne l'aurait jamais vu : il comparait la transcription à son
+  // JSON, c'est-à-dire la copie à sa source, jamais la source au DESSIN. Il y a
+  // désormais DEUX tables, parce qu'il y a deux jeux de tourelles — celles des
+  // coques de blindé et celles des socles de défense.
+  // ⚠ LES DEUX MOITIÉS DE CHAQUE JSON SE CONFRONTENT, PAS SEULEMENT LA
+  // PREMIÈRE. `cote_case_pct` DÉRIVE de `cote_pct_embase` et d'`echelle` : ne
+  // transcrire que la moitié qui se lit au dessin laisserait la moitié qui dit
+  // D'OÙ elle vient dériver en silence, et la première personne à relire
+  // trouverait un nombre tombé du ciel.
+  for (const [fichier, section, table] of [
+    ['ancres-blindes.json', 'coques', ANCRES_BLINDES],
+    ['ancres-blindes.json', 'tourelles', TOURELLES_BLINDES],
+    ['ancres-defense.json', 'socles', ANCRES_DEFENSE],
+    ['ancres-defense.json', 'tourelles', TOURELLES_DEFENSE],
+  ]) {
+    const json = JSON.parse(readFileSync(join(SPRITES, fichier), 'utf8'))[section];
+    assert.ok(json !== undefined, `${fichier} n'a pas de section « ${section} »`);
+    const cles = Object.keys(json).sort();
+    assert.ok(cles.length > 0, `${fichier}/${section} est vide : le test ne mesure rien`);
+    assert.deepEqual(Object.keys(table).sort(), cles,
+      `${fichier}/${section} : la transcription et le JSON ne portent pas les mêmes clés`);
+    for (const cle of cles) {
+      // ⚠ LES VALEURS SIGNÉES, PAS LEUR VALEUR ABSOLUE. Un signe inversé
+      // décalerait toutes les tourelles du même côté, ce qui a l'air d'un choix
+      // d'art et n'en est pas un.
+      assert.deepEqual(table[cle], json[cle],
+        `${fichier}/${section} : ancre « ${cle} » divergente`);
+    }
+  }
+
+  // ⚠ ET `cote_case_pct` SE REFAIT, IL NE SE RELIT PAS. C'est la seule
+  // assertion qui relie les deux moitiés : sans elle, la transcription pourrait
+  // porter deux tables cohérentes chacune avec sa source et incohérentes entre
+  // elles. La formule est celle de `tools/ancres-*.py` — le côté du carré vaut
+  // la largeur de la pièce DANS LA CASE, multipliée par le diamètre du logement,
+  // par la marge de rotation du sprite, et par le facteur de lisibilité.
+  for (const [ancres, tourelles, suffixe] of [
+    [ANCRES_BLINDES, TOURELLES_BLINDES, '_chassis'],
+    [ANCRES_DEFENSE, TOURELLES_DEFENSE, ''],
+  ]) {
+    for (const [cle, a] of Object.entries(ancres)) {
+      const nomTourelle = suffixe === ''
+        ? cle.replace(/^socle_/, '')
+        : `${cle.replace(/_chassis(_def)?$/, '')}_tourelle`;
+      const t = tourelles[nomTourelle];
+      assert.ok(t !== undefined, `${cle} : pas de tourelle « ${nomTourelle} »`);
+      // La largeur de la pièce dans la case se retrouve en divisant : c'est le
+      // seul terme que la table ne porte pas, et il se déduit exactement.
+      const largeur = a.cote_case_pct
+        / (a.diametre_pct / 100) / (t.cote_pct_embase / 100) / t.echelle;
+      assert.ok(largeur > 20 && largeur <= 100,
+        `${cle} : la pièce ferait ${largeur.toFixed(1)} % de la case — les deux moitiés `
+        + 'ne décrivent pas la même géométrie');
+    }
+  }
+
+  // ⚠⚠ NEUF COQUES, PAS DIX : `off_j_pilon_chassis_def` est parti avec le
+  // sprite. L'Obusier n'entre jamais en garnison — `pilon.defense.present` vaut
+  // `false` — et `nomAvecPose` ne demande `_def` que pour cette force-là. Le
+  // sprite existait depuis le lot 8 et personne ne l'avait jamais lu.
+  assert.equal(Object.keys(ANCRES_BLINDES).length, 9);
+  assert.equal(Object.keys(ANCRES_DEFENSE).length, 6);
+
+  // ⚠⚠ `y_pct` N'EST PAS NÉGATIF PARTOUT, ET UN TEST QUI L'AFFIRMERAIT SERAIT
+  // FAUX. Trois coques sur neuf portent une tourelle SOUS le centre. On asserte
+  // le fait mesuré, jamais une règle qu'on croit générale — l'ancienne version
+  // de cette assertion nommait déjà une exception, et il y en a deux
+  // aujourd'hui.
+  const positifs = Object.entries(ANCRES_BLINDES)
+    .filter(([, a]) => a.y_pct >= 0).map(([c]) => c).sort();
+  assert.deepEqual(positifs,
+    ['off_j_belier_chassis', 'off_j_fendeur_chassis', 'off_j_fendeur_chassis_def'],
+    'la liste des y_pct non négatifs a changé — remesurer avant de conclure');
+});
+
+test('sprite — le carré de tourelle tient sur les coques, et déborde sur les socles', () => {
+  // ⚠⚠ CE TEST REMPLACE « les ancres posent la tourelle DANS la coque », ET LA
+  // PROPRIÉTÉ A CHANGÉ DE NATURE. L'ancien mesurait le LOGEMENT — un disque en
+  // pourcentage de la pièce — et exigeait qu'il tienne dans la boîte de la
+  // coque : trivialement vrai, puisqu'un logement est dessiné dedans. Ce qui
+  // compte depuis que la tourelle TOURNE, c'est le carré qu'on pose dans la
+  // CASE : il porte l'échelle du canon et la marge de rotation à 45°, donc il
+  // est bien plus grand que le logement.
+  //
+  // ⚠⚠ ET IL DÉBORDE SUR LES SIX SOCLES — MESURÉ, PAS SUBI. Deux arbitrages se
+  // croisent, et le lot n'en défait aucun : l'emprise des socles est celle
+  // qu'Ethan a donnée — 90 % pour les socles de tourelle, 85 % pour les coques
+  // d'artillerie — et `echelle` est ce qu'il a fallu pour que le canon SE LISE à
+  // 40 px. Les faire tenir demanderait de descendre `echelle` à ~1,35, où
+  // l'artiste a mesuré que « le canon pointe » sans se lire. Le corriger est un
+  // arbitrage, et il revient à Ethan.
+  //
+  // ⚠ ET LA v1 FAISAIT PIRE, ce qui met le chiffre en perspective : elle
+  // dessinait la tourelle sur la case ENTIÈRE — `sprite(famille, nom, x, y, t,
+  // t)` —, son canon atteignant le bord par construction. On passe donc de
+  // « toute la case » à « la case plus 12 à 15 % », pas de zéro à un débord.
+  const portee = (a) => Math.max(
+    Math.abs(a.dx_case_pct) + a.cote_case_pct / 2,
+    Math.abs(a.dy_case_pct) + a.cote_case_pct / 2,
+  );
+
+  // Les neuf coques de blindé tiennent toutes dans la case.
+  for (const [cle, a] of Object.entries(ANCRES_BLINDES)) {
+    assert.ok(portee(a) <= 50,
+      `${cle} : le carré de tourelle atteint ${portee(a).toFixed(2)} % de demi-case`);
+  }
+
+  // Les six socles débordent, et de combien : la borne est SIGNÉE des deux
+  // côtés, sinon un `echelle` divisé par deux la passerait aussi.
+  const debords = Object.entries(ANCRES_DEFENSE)
+    .map(([cle, a]) => [cle, portee(a)]);
+  for (const [cle, p] of debords) {
+    assert.ok(p > 50, `${cle} : le carré ne déborde plus — l'arbitrage a bougé, le dire`);
+    assert.ok(p < 70, `${cle} : le carré atteint ${p.toFixed(2)} %, au-delà du débord mesuré`);
+  }
+  // Et le pire des six est nommé, au centième : un test qui ne bornerait que
+  // par intervalle laisserait passer une dérive lente.
+  const pire = debords.reduce((m, x) => (x[1] > m[1] ? x : m));
+  assert.equal(pire[0], 'socle_def_j_faucheuse');
+  assert.equal(pire[1].toFixed(2), '65.34');
+
+  // ⚠ FALSIFIABLE : le montage sait DISTINGUER les deux verdicts. Sans cet
+  // appât, une fonction `portee` qui rendrait toujours zéro ferait passer la
+  // première boucle, et une qui rendrait toujours cent ferait passer la seconde.
+  assert.ok(portee({ dx_case_pct: 0, dy_case_pct: 0, cote_case_pct: 40 }) <= 50);
+  assert.ok(portee({ dx_case_pct: 0, dy_case_pct: 0, cote_case_pct: 120 }) > 50);
 });
 
 test('sprite — chaque unité des deux camps résout des noms qui sont dans l\'atlas', () => {
@@ -1071,31 +1305,41 @@ test('sprite — les unités à pose de défense sont exactement les huit mesur�
   }
 });
 
-test('sprite — la tourelle du blindé suit sa cible, et retombe au défaut sans elle', () => {
+test('sprite — la tourelle du blindé suit sa cible par l\'ANGLE, et retombe au défaut sans elle', () => {
+  // ⚠⚠ ELLE SUIVAIT SA CIBLE PAR LE NOM, ELLE LA SUIT PAR L'ANGLE — lot
+  // SPRITES-V2-JOUEUR. Cette garde exigeait `_n` et `_e` en fin de nom, sur
+  // seize orientations dessinées. Il n'y a plus qu'un sprite, `off_j_<id>_tourelle`,
+  // et c'est le champ `angle` qui porte la direction. L'exigence est la même —
+  // deux azimuts distincts doivent se distinguer — et elle se RESSERRE : le nom
+  // doit désormais rester IDENTIQUE dans les deux cas, ce que l'ancienne
+  // formulation ne pouvait pas demander.
   const id = Object.keys(UNITES).find((u) => UNITES[u].chassis === 'blinde');
   const tireur = { genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque', rangee: 8, colonne: 5 };
 
-  // ⚠ D'ABORD : LES DEUX AZIMUTS TOMBENT-ILS DANS DES SECTEURS DIFFÉRENTS ?
-  // Deux cibles trop proches en angle rendraient la même orientation, et le test
-  // passerait sur une boussole bloquée.
   const nord = { rangee: 16, colonne: 5 };
   const est = { rangee: 8, colonne: 9 };
-  const nomDeLaTourelle = (cible) => couchesDeLUnite(tireur, cible)[1].nom;
+  const tourelle = (cible) => couchesDeLUnite(tireur, cible)[1];
 
-  const versNord = nomDeLaTourelle(nord);
-  const versEst = nomDeLaTourelle(est);
-  assert.notEqual(versNord, versEst, 'deux azimuts distincts rendent la même orientation');
-  assert.match(versNord, /_n$/, 'une cible vers la rangée 18 doit rendre le nord');
-  assert.match(versEst, /_e$/, 'une cible à droite doit rendre l\'est');
+  assert.equal(tourelle(nord).nom, `off_j_${id}_tourelle`);
+  assert.equal(tourelle(est).nom, `off_j_${id}_tourelle`,
+    'la tourelle change encore de SPRITE selon l\'azimut');
+  assert.equal(tourelle(nord).angle, 0, 'une cible vers la rangée 18 doit rendre zéro');
+  assert.equal(tourelle(est).angle, 90, 'une cible à droite doit rendre 90°');
 
   // Sans cible, la valeur par défaut de la force — juste depuis le correctif de
   // boussole du lot BRANCHEMENT-DÉFENSE : l'armée au repos regarde au nord.
-  assert.equal(nomDeLaTourelle(null), `off_j_${id}_n`);
+  assert.equal(tourelle(null).angle, 0);
   assert.equal(
-    couchesDeLUnite({ ...tireur, camp: 'defense' }, null)[1].nom,
-    `off_j_${id}_s`,
+    couchesDeLUnite({ ...tireur, camp: 'defense' }, null)[1].angle,
+    180,
     'la garnison au repos doit regarder au sud, vers le déploiement',
   );
+
+  // ⚠ ET L'ANGLE EST CONTINU : une cible en diagonale ne tombe sur aucun des
+  // seize secteurs d'hier. Sans cette ligne, une quantification remise passerait
+  // — les trois assertions ci-dessus portent toutes sur des multiples de 22,5.
+  const oblique = tourelle({ rangee: 15, colonne: 8 }).angle;
+  assert.ok(oblique % 22.5 !== 0, `${oblique}° tombe sur un secteur : la quantification est revenue`);
 });
 
 // ---------------------------------------------------------------------------
@@ -1399,43 +1643,42 @@ test('couches — les trois genres en rendent, et `null` reste réservé à la l
 
 test('couches — tout nom composable est dans un atlas cousu, les deux propriétaires compris', () => {
   // ⚠⚠ C'EST LE TEST QUI FAIT SERVIR LES SPRITES DORMANTS. 125 sprites de
-  // l'Ouvrage — 102 `def_o_*`, 18 `socle_def_o_*`, 5 `bat_o_*` — étaient DANS le
-  // fichier livré et n'étaient nommés par aucune ligne de `src/`. Le brief le
-  // dit : « s'il passe du premier coup sans en toucher un seul, c'est qu'il ne
-  // balaye pas ce qu'il croit » — d'où le compte de noms d'Ouvrage, asserté.
+  // l'Ouvrage étaient DANS le fichier livré et n'étaient nommés par aucune ligne
+  // de `src/`. Le brief de ce lot-là le disait : « s'il passe du premier coup
+  // sans en toucher un seul, c'est qu'il ne balaye pas ce qu'il croit » — d'où
+  // le compte de noms d'Ouvrage, asserté.
+  //
+  // ⚠⚠ IL A PERDU DEUX DE SES TROIS AXES AU LOT SPRITES-V2-JOUEUR, ET C'EST LA
+  // BASCULE. Il balayait quatre VOISINAGES × seize AZIMUTS pour faire composer
+  // les quatre liaisons et les seize orientations : les unes comme les autres
+  // ont disparu du NOM. Un seul axe reste — les deux propriétaires — et le
+  // compte de noms distincts tombe de 238 à ce que les pièces portent vraiment.
+  // Ce que la garde mesure est inchangé : tout nom que le code compose sort d'un
+  // atlas cousu, et l'Ouvrage n'est pas oublié.
   const RANGEE = 5;
   const COLONNE = 5;
-  // Les quatre voisinages qui produisent les quatre liaisons, et rien d'autre :
-  // ils se construisent, ils ne se nomment pas. Écrire les suffixes à la main
-  // ferait balayer ce que le test croit, et non ce que le code compose.
-  const VOISINAGES = [
-    [],
-    [{ id: 'merlon', rangee: RANGEE, colonne: COLONNE + 1 }],
-    [{ id: 'merlon', rangee: RANGEE, colonne: COLONNE - 1 }],
-    [{ id: 'merlon', rangee: RANGEE, colonne: COLONNE - 1 },
-      { id: 'merlon', rangee: RANGEE, colonne: COLONNE + 1 }],
-  ];
-  // Seize azimuts réguliers : la cible est POSÉE, l'orientation se calcule.
-  const CIBLES = Array.from({ length: 16 }, (_, k) => {
-    const a = (k * 2 * Math.PI) / 16;
-    return { rangee: RANGEE + Math.cos(a) * 10, colonne: COLONNE + Math.sin(a) * 10 };
-  });
+  // ⚠ ON GARDE UNE CIBLE, ET C'EST L'ASSERTION QUI COMPTE MAINTENANT : elle ne
+  // doit RIEN changer au nom. Avant la bascule elle en changeait seize fois.
+  const CIBLES = [null, { rangee: RANGEE + 8, colonne: COLONNE }, { rangee: RANGEE, colonne: COLONNE + 4 }];
 
   const noms = new Set();
+  const parCible = new Map();
   for (const id of Object.keys(DEFENSES)) {
     for (const proprietaire of ['joueur', 'ouvrage']) {
-      for (const voisinage of VOISINAGES) {
-        for (const cible of CIBLES) {
-          const couches = couchesDeLEntite(
-            { genre: 'defense', id, proprietaire, camp: 'defense', rangee: RANGEE, colonne: COLONNE },
-            { voisines: [{ id, rangee: RANGEE, colonne: COLONNE }, ...voisinage], cible },
-          );
-          for (const { famille, nom } of couches) {
-            assert.ok(existeDansAtlas(famille, nom),
-              `${id}/${proprietaire} demande ${famille}/${nom}, absent de l'atlas cousu`);
-            assert.doesNotThrow(() => fondDuSprite(famille, nom));
-            noms.add(`${famille}/${nom}`);
-          }
+      for (const cible of CIBLES) {
+        const couches = couchesDeLEntite(
+          { genre: 'defense', id, proprietaire, camp: 'defense', rangee: RANGEE, colonne: COLONNE },
+          { cible },
+        );
+        const cle = `${id}/${proprietaire}`;
+        const rendu = couches.map((c) => `${c.famille}/${c.nom}`).join('+');
+        if (!parCible.has(cle)) parCible.set(cle, new Set());
+        parCible.get(cle).add(rendu);
+        for (const { famille, nom } of couches) {
+          assert.ok(existeDansAtlas(famille, nom),
+            `${id}/${proprietaire} demande ${famille}/${nom}, absent de l'atlas cousu`);
+          assert.doesNotThrow(() => fondDuSprite(famille, nom));
+          noms.add(`${famille}/${nom}`);
         }
       }
     }
@@ -1449,160 +1692,95 @@ test('couches — tout nom composable est dans un atlas cousu, les deux proprié
     }
   }
 
-  // ⚠ LE BALAYAGE SE MESURE, IL NE SE SUPPOSE PAS. Les seize orientations et les
-  // quatre liaisons doivent réellement produire des noms distincts : sans ce
-  // compte, une composition qui ignorerait la cible passerait toutes les
-  // assertions ci-dessus en ne nommant que seize sprites.
-  assert.equal(noms.size, 238, `${noms.size} noms distincts composés`);
+  // ⚠⚠ LA CIBLE NE CHANGE PLUS LE NOM, ET C'EST CE QUE LA BASCULE ACHÈTE. Trois
+  // cibles, un seul jeu de noms par pièce : une tourelle qui redeviendrait
+  // seize sprites ferait tomber cette ligne avant toute autre.
+  for (const [cle, rendus] of parCible) {
+    assert.equal(rendus.size, 1, `${cle} : ${rendus.size} jeux de noms selon la cible`);
+  }
 
-  // ⚠⚠ ET LE COMPTE QUI FAIT LE LOT : les noms de l'OUVRAGE désormais atteints.
-  // Ils étaient zéro avant — aucune ligne de `src/` ne les nommait — et le
-  // fichier livré les portait déjà.
+  // ⚠ LE BALAYAGE SE MESURE, IL NE SE SUPPOSE PAS. MESURÉ après la bascule :
+  // 18 défenses + 12 socles + 16 bâtiments = 46 noms distincts, contre 238
+  // avant, quand seize orientations et quatre liaisons se multipliaient.
+  assert.equal(noms.size, 46, `${noms.size} noms distincts composés`);
+
+  // ⚠⚠ ET LE COMPTE QUI FAISAIT LE LOT STRUCTURES-AU-COMBAT TIENT : les noms de
+  // l'OUVRAGE sont atteints, et pas un ne dort. Ils étaient zéro avant ce
+  // lot-là — aucune ligne de `src/` ne les nommait — et le fichier livré les
+  // portait déjà. MESURÉ : 9 `def_o_*` + 6 `socle_def_o_*` + 5 `bat_o_*` = 20,
+  // contre 110 quand les orientations et les liaisons les multipliaient.
   const ouvrage = [...noms].filter((n) => /\/(def_o_|socle_def_o_|bat_o_)/.test(n));
-  assert.equal(ouvrage.length, 110, `${ouvrage.length} sprites de l'Ouvrage atteints`);
+  assert.equal(ouvrage.length, 20, `${ouvrage.length} sprites de l'Ouvrage atteints`);
 
-  // ⚠ LES QUINZE QUI RESTENT DORMANTS SE NOMMENT, plutôt que d'être un reste.
-  // Douze le sont par ARBITRAGE — l'Ouvrage ne chaîne pas (Ethan, 30/08), donc
-  // ses socles et ses merlons raccordés ne peuvent pas être demandés — et trois
-  // par une conséquence mesurable : les socles NUS des trois tourelles de
-  // contact du joueur ne servent jamais, leurs quatre variantes raccordées
-  // couvrant les quatre liaisons, `isole` compris. Ce n'est pas un défaut, c'est
-  // le repli d'`existeDansAtlas` qui ne mord pas là où la planche est complète.
+  // ⚠⚠ ET PLUS AUCUN NE DORT, ce qui est le renversement le plus net du lot. La
+  // liste des quinze dormants — trois merlons de liaison de l'Ouvrage, trois
+  // socles nus du joueur, neuf socles de l'Ouvrage — se vidait par ARBITRAGE et
+  // par une conséquence du repli d'`existeDansAtlas`. Les deux causes sont
+  // parties avec les liaisons : chaque sprite de défense et de socle est
+  // maintenant demandé par au moins une pièce.
   const dormants = [
     ...ATLAS.defense.noms.map((n) => `defense/${n}`),
     ...ATLAS.socle.noms.map((n) => `socle/${n}`),
   ].filter((n) => !noms.has(n));
-  assert.deepEqual(dormants.sort(), [
-    'defense/def_o_merlon_est',
-    'defense/def_o_merlon_ouest',
-    'defense/def_o_merlon_traversant',
-    'socle/socle_def_j_batterie',
-    'socle/socle_def_j_casemate',
-    'socle/socle_def_j_creneau',
-    'socle/socle_def_o_batterie',
-    'socle/socle_def_o_batterie_est',
-    'socle/socle_def_o_batterie_ouest',
-    'socle/socle_def_o_batterie_traversant',
-    'socle/socle_def_o_casemate',
-    'socle/socle_def_o_casemate_est',
-    'socle/socle_def_o_casemate_ouest',
-    'socle/socle_def_o_casemate_traversant',
-    'socle/socle_def_o_creneau',
-    'socle/socle_def_o_creneau_est',
-    'socle/socle_def_o_creneau_ouest',
-    'socle/socle_def_o_creneau_traversant',
-  ].sort(), 'la liste des sprites hors d\'atteinte a changé — dire pourquoi');
+  assert.deepEqual(dormants, [],
+    `${dormants.join(', ')} : des sprites de défense sont hors d'atteinte — dire pourquoi`);
 });
 
-test('couches — le chaînage suit les vivantes, MESURÉ SUR LA LISTE D\'AFFICHAGE', () => {
-  // ⚠⚠ CE TEST A ÉTÉ RÉÉCRIT APRÈS FALSIFICATION, ET LA RÉÉCRITURE A TROUVÉ UN
-  // DÉFAUT. Sa première version appelait `couchesDeLEntite` avec une liste de
-  // voisines ÉCRITE À LA MAIN : retirer `visible(e)` du filtre de
-  // `listeAffichage` la laissait VERTE. C'est le défaut que CLAUDE.md nomme
-  // déjà — « un montage écrit à la main ne garde que lui-même » —, et en
-  // passant par la vraie liste d'affichage on a découvert que le chaînage était
-  // MORT au combat : les voisines portaient `e.rangee`, qui vaut `undefined`
-  // sur une entité (le moteur range `rangeeMilli`), donc aucune comparaison de
-  // rangée ne pouvait réussir. Deux merlons côte à côte se rejoignaient sur
-  // l'écran Chantier et pas au combat.
+test('couches — la tourelle du champ vise sa cible par l\'ANGLE, et le nom ne bouge pas', () => {
+  // ⚠⚠ CE TEST REMPLACE DEUX GARDES DU CHAÎNAGE ET UNE DE L'ORIENTATION, ET LES
+  // TROIS SUJETS ONT DISPARU LE MÊME JOUR.
   //
-  // ⚠ IL FAUT UN COMBAT OÙ LE JOUEUR DÉFEND, sans quoi rien n'est observable :
-  // l'Ouvrage ne chaîne pas (arbitré le 30/08), et un site de l'Ouvrage est le
-  // seul défenseur que le jeu produise aujourd'hui. `proprietaireDefense` existe
-  // dans le montage de `creerCombat` depuis le lot 3A ; c'est ce qui permet de
-  // mesurer dès maintenant un chemin que le raid empruntera plus tard.
+  //   • « le chaînage suit les vivantes, MESURÉ SUR LA LISTE D'AFFICHAGE » —
+  //     elle montait un combat, tuait un merlon, et exigeait que son voisin
+  //     repasse à `isole`. Il n'y a plus d'état de liaison.
+  //   • « l'Ouvrage ne chaîne pas, et le joueur dans la même case chaîne » —
+  //     même sujet, vu par l'autre bout.
+  //   • « la tourelle du champ vise sa cible, et deux azimuts donnent deux
+  //     sprites » — elle exigeait `def_j_casemate_n` et `def_j_casemate_s`.
   //
-  // ⚠ ET LE MONTAGE NE PORTE AUCUN BÂTIMENT, délibérément : `creerCombat` ne
-  // connaît que les cinq bâtiments de l'Ouvrage, et en poser un sous un
-  // propriétaire joueur demanderait `bat_j_gangue`, qui n'existe pas. La levée
-  // est le bon comportement — « une unité invisible est un défaut qu'on doit
-  // voir » — et ce n'est pas ce test-ci qui l'éprouve.
-  const bande = GRILLE.bandes.defense;
-  const montage = {
-    niveau: 1,
-    saveur: null,
-    obstacles: [],
-    proprietaireDefense: 'joueur',
-    proprietaireAttaque: 'ouvrage',
-    batiments: [],
-    defenseurs: [
-      { id: 'merlon', rangee: bande.premiere, colonne: 4 },
-      { id: 'merlon', rangee: bande.premiere, colonne: 5 },
-    ],
-    vagues: [[{ id: 'meute', colonne: 9 }]],
-    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
-  };
-  const etat = creerCombat(montage);
-  const projection = calculerProjection(412, 900);
-  const murs = (liste) => liste
-    .filter((p) => p.forme === 'sprite' && p.nom.includes('merlon'))
-    .map((p) => p.nom)
-    .sort();
-
-  // ⚠ FALSIFIABLE : on asserte D'ABORD que les deux se lient. Deux merlons qui
-  // ne se rejoindraient jamais rendraient `isole` avant comme après, et la
-  // comparaison ci-dessous passerait sur du code mort.
-  const avant = murs(listeAffichage(etat, projection, null, 0));
-  assert.deepEqual(avant, ['def_j_merlon_est', 'def_j_merlon_ouest'],
-    `${avant.join(' ')} : les deux merlons ne se lient pas au combat`);
-
-  // La colonne 4 tombe. Le survivant n'est plus raccordé à une ruine.
-  const mort = etat.entites.find((e) => e.id === 'merlon' && e.colonne === 4);
-  assert.ok(mort !== undefined, 'le montage n\'a pas produit le merlon de la colonne 4');
-  mort.vivant = false;
-  const apres = murs(listeAffichage(etat, projection, null, 0));
-  assert.deepEqual(apres, ['def_j_merlon_isole'],
-    `${apres.join(' ')} : le survivant reste raccordé à une ruine`);
-});
-
-test('couches — l\'Ouvrage ne chaîne pas, et le joueur dans la même case chaîne', () => {
-  const RANGEE = 5;
-  const voisines = [
-    { id: 'merlon', rangee: RANGEE, colonne: 4 },
-    { id: 'casemate', rangee: RANGEE, colonne: 5 },
-    { id: 'merlon', rangee: RANGEE, colonne: 6 },
-  ];
-  const couches = (piece, proprietaire) => couchesDeLEntite(
-    { genre: 'defense', id: piece.id, proprietaire, camp: 'defense',
-      rangee: piece.rangee, colonne: piece.colonne },
-    { voisines },
-  );
-
-  // ⚠ FALSIFIABLE : le témoin joueur d'abord. Un montage qui ne lierait rien
-  // rendrait `isole` des deux côtés et le test passerait sur du code cassé.
-  const murJoueur = couches(voisines[0], 'joueur')[0].nom;
-  const socleJoueur = couches(voisines[1], 'joueur')[0].nom;
-  assert.doesNotMatch(murJoueur, /_isole$/, `« ${murJoueur} » : le mur du joueur ne chaîne pas`);
-  assert.match(socleJoueur, /_(est|ouest|traversant)$/,
-    `« ${socleJoueur} » : le socle du joueur ne porte pas d'amorce`);
-
-  // Mêmes voisines, propriétaire Ouvrage : tout est isolé. Arbitré le 30/08.
-  assert.match(couches(voisines[0], 'ouvrage')[0].nom, /^def_o_merlon_isole$/);
-  assert.match(couches(voisines[1], 'ouvrage')[0].nom, /^socle_def_o_casemate_isole$/);
-});
-
-test('couches — la tourelle du champ vise sa cible, et deux azimuts donnent deux sprites', () => {
+  // Ce qui reste vrai de la troisième est REPRIS ici, en degrés : la tourelle
+  // suit sa cible, et au repos elle regarde le déploiement. C'est le témoin qui
+  // avait manqué au 30/08, quand la boussole et le défaut de la garnison se
+  // contredisaient en étant gardés chacun de son côté.
   const piece = { id: 'casemate', rangee: 5, colonne: 5 };
-  const nomVers = (cible) => couchesDeLEntite(
+  const couche = (cible) => couchesDeLEntite(
     { genre: 'defense', id: piece.id, proprietaire: 'joueur', camp: 'defense',
       rangee: piece.rangee, colonne: piece.colonne },
-    { voisines: [piece], cible },
-  )[1].nom;
+    { cible },
+  )[1];
 
   // Deux cibles à deux azimuts nettement distincts — l'une vers la rangée 18
   // (le fond, le nord), l'autre vers le déploiement (le sud).
-  const versLeFond = nomVers({ rangee: 15, colonne: 5 });
-  const versLAssaut = nomVers({ rangee: 2, colonne: 5 });
-  assert.equal(versLeFond, 'def_j_casemate_n');
-  assert.equal(versLAssaut, 'def_j_casemate_s');
-  assert.notEqual(versLeFond, versLAssaut, 'la tourelle ne suit pas sa cible');
+  const versLeFond = couche({ rangee: 15, colonne: 5 });
+  const versLAssaut = couche({ rangee: 2, colonne: 5 });
+  assert.equal(versLeFond.angle, 0);
+  assert.equal(versLAssaut.angle, 180);
+  assert.notEqual(versLeFond.angle, versLAssaut.angle, 'la tourelle ne suit pas sa cible');
 
-  // Sans cible, c'est le défaut de la garnison — le sud, vers l'assaut. Ce
-  // témoin est ce qui a manqué au 30/08 : la boussole et ce défaut se
-  // contredisaient, et chacun était gardé de son côté.
-  assert.equal(nomVers(null), `def_j_casemate_${ORIENTATION_PAR_DEFAUT.garnison}`);
-  assert.equal(nomVers(null), versLAssaut,
-    'le repos et la cible au sud ne donnent pas le même sprite : la boussole a redivergé');
+  // ⚠ ET LE NOM NE BOUGE PAS D'UN CARACTÈRE — c'est ce que l'ancienne
+  // formulation ne pouvait pas exiger, et c'est toute la bascule.
+  assert.equal(versLeFond.nom, 'def_j_casemate');
+  assert.equal(versLAssaut.nom, 'def_j_casemate');
+
+  // Sans cible, c'est le défaut de la garnison — le sud, vers l'assaut.
+  assert.equal(couche(null).angle, ANGLE_PAR_DEFAUT.garnison);
+  assert.equal(couche(null).angle, versLAssaut.angle,
+    'le repos et la cible au sud ne donnent pas le même angle : la boussole a redivergé');
+
+  // ⚠⚠ ET LA TOURELLE DE L'OUVRAGE NE TOURNE PAS, LE DISCRIMINANT ÉTANT LA
+  // DONNÉE ET JAMAIS LE CAMP. Son sprite est celui de la v1, dessiné au nord,
+  // dont le pivot est décalé de 2 à 11 % du côté : le tourner autour du centre
+  // le ferait osciller. Il n'a pas d'entrée d'ancre, donc il se pose sur la case
+  // entière comme avant. Un `=== 'o'` écrit dans `scene.js` serait la seconde
+  // vérité que §4 interdit — et il mentirait le jour où l'Ouvrage sera
+  // redessiné, ce que cette assertion-ci rendra visible.
+  const ouvrage = couchesDeLEntite(
+    { genre: 'defense', id: 'casemate', proprietaire: 'ouvrage', camp: 'defense',
+      rangee: 5, colonne: 5 },
+    { cible: { rangee: 15, colonne: 5 } },
+  )[1];
+  assert.equal(ouvrage.nom, 'def_o_casemate');
+  assert.equal(ouvrage.ancre, null, 'la tourelle de l\'Ouvrage a gagné une ancre sans le dire');
 });
 
 test('couches — le renommage propriétaire est complet dans tout `src/`', () => {
@@ -1646,16 +1824,24 @@ test('couches — le renommage propriétaire est complet dans tout `src/`', () =
   }
   assert.equal(decommentes, fichiers.length);
 
-  // Et les deux fonctions de liaison ne prennent plus un paramètre nommé `camp`.
-  const rendu = readFileSync(join(RACINE, 'src', 'sim', 'rendu-pose.js'), 'utf8');
-  assert.match(rendu, /export function proprietaireChaine\(proprietaire\)/);
-  for (const fonction of ['liaisonDuMur', 'liaisonDuSocle']) {
-    const motif = new RegExp(`export function ${fonction}\\([^)]*\\)`);
-    const signature = rendu.match(motif);
-    assert.ok(signature !== null, `${fonction} a disparu`);
-    assert.doesNotMatch(signature[0], /\bcamp\b/, `${signature[0]} : le paramètre s'appelle encore camp`);
-    assert.match(signature[0], /proprietaire/, `${signature[0]} : le paramètre ne dit pas propriétaire`);
-  }
+  // ⚠⚠ LA SECONDE MOITIÉ DE CETTE GARDE EST PARTIE AVEC SON SUJET — lot
+  // SPRITES-V2-JOUEUR. Elle lisait la signature de `liaisonDuMur` et de
+  // `liaisonDuSocle` dans `rendu-pose.js` et exigeait que leur paramètre
+  // s'appelle `proprietaire` et non `camp`. Les deux fonctions n'existent plus :
+  // les pièces ne se raccordent plus, `proprietaireChaine` non plus. Le
+  // BALAYAGE, lui, reste entier — c'est lui qui garde le renommage dans tout
+  // `src/`, et il ne dépend d'aucune de ces trois fonctions.
+  //
+  // Ce qui la remplace garde la même propriété là où elle a encore un objet :
+  // la distinction `camp` / `proprietaire` dans le dispatch des couches, qui est
+  // le dernier endroit du dépôt où la confondre compilerait sans lever.
+  const scene = sansCommentaires(readFileSync(join(RACINE, 'src', 'render', 'scene.js'), 'utf8'));
+  assert.match(scene, /lettreDuProprietaire\(d\.proprietaire\)/,
+    'la lettre de camp d\'un sprite ne se lit plus sur le PROPRIÉTAIRE');
+  assert.doesNotMatch(scene, /lettreDuProprietaire\(d\.camp\)/,
+    'la lettre de camp d\'un sprite se lit sur le camp — elle doit lire le propriétaire');
+  assert.match(scene, /forceDuCamp\(d\.camp\)/,
+    'la force ne se lit plus sur le CAMP');
 });
 
 // ---------------------------------------------------------------------------

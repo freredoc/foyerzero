@@ -484,8 +484,14 @@ const ATLAS_FACTICE = {
 function creerEnregistreur() {
   const appels = [];
   const enregistreur = { appels };
+  // ⚠ `save`, `translate`, `rotate` ET `restore` ENTRENT AU LOT
+  // SPRITES-V2-JOUEUR : une tourelle du joueur est un seul dessin que le rendu
+  // TOURNE, plus l'un de seize sprites nommés. L'enregistreur les porte comme
+  // les autres — c'est-à-dire qu'ils sont COMPTÉS et ORDONNÉS eux aussi, et
+  // qu'un `save` sans son `restore` fera tomber la séquence exacte ci-dessous.
   for (const methode of ['fillRect', 'strokeRect', 'beginPath', 'arc', 'fill',
-    'moveTo', 'lineTo', 'stroke', 'drawImage']) {
+    'moveTo', 'lineTo', 'stroke', 'drawImage',
+    'save', 'translate', 'rotate', 'restore']) {
     enregistreur[methode] = (...args) => appels.push([methode, ...args]);
   }
   for (const propriete of ['fillStyle', 'strokeStyle', 'lineWidth']) {
@@ -507,10 +513,17 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
     // SOURCE — `sx sy sl sh` — parce que le découpage dans l'atlas est un calcul
     // de position, et que ce module-ci n'en fait aucun : `scene.js` le fait une
     // fois, `canvas2d` recopie les huit nombres dans `drawImage`.
-    { forme: 'sprite', famille: 'unite', nom: 'off_j_meute', sx: 64, sy: 0, sl: 64, sh: 64, x: 12, y: 13, l: 14, h: 15 },
+    { forme: 'sprite', famille: 'unite', nom: 'off_j_meute', sx: 64, sy: 0, sl: 64, sh: 64, x: 12, y: 13, l: 14, h: 15, angle: 0 },
+    // ⚠⚠ LA MÊME PRIMITIVE, TOURNÉE. Elle prouve les deux moitiés de la branche
+    // neuve : le contexte est SAUVÉ puis RESTAURÉ autour du seul `drawImage`, et
+    // le dessin est recentré — `-l/2, -h/2` après une translation au CENTRE du
+    // sprite, jamais `x, y`. C'est ce recentrage qui fait tourner la tourelle
+    // autour de son pivot au lieu de la faire décrire un arc de cercle.
+    { forme: 'sprite', famille: 'unite', nom: 'off_j_meute', sx: 64, sy: 0, sl: 64, sh: 64, x: 12, y: 13, l: 14, h: 16, angle: 90 },
   ], { unite: FAUSSE_IMAGE });
   // La séquence exacte, appel pour appel : rect → 2, cadre → 3, disque → 4,
-  // ligne → 6, sprite → 1, soit 16 entrées. Ni plus, ni moins, ni réordonnées.
+  // ligne → 6, sprite droit → 1, sprite tourné → 5. Ni plus, ni moins, ni
+  // réordonnées.
   assert.deepEqual(enregistreur.appels, [
     ['fillStyle', '#161914'], ['fillRect', 1, 2, 3, 4],
     ['strokeStyle', '#343A2C'], ['lineWidth', 2], ['strokeRect', 5, 6, 7, 8],
@@ -518,7 +531,19 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
     ['strokeStyle', '#F5B636'], ['lineWidth', 2], ['beginPath'],
     ['moveTo', 1, 2], ['lineTo', 3, 4], ['stroke'],
     ['drawImage', FAUSSE_IMAGE, 64, 0, 64, 64, 12, 13, 14, 15],
+    ['save'], ['translate', 19, 21], ['rotate', Math.PI / 2],
+    ['drawImage', FAUSSE_IMAGE, 64, 0, 64, 64, -7, -8, 14, 16], ['restore'],
   ]);
+
+  // ⚠ ET UN ANGLE NUL NE TOUCHE PAS AU CONTEXTE DU TOUT — c'est ce que la
+  // première des deux primitives vient de montrer, et c'est délibéré : sinon
+  // toute la scène paierait un `save`/`restore` par primitive pour une
+  // transformation identité. Un `sprite` sans champ `angle` se dessine comme un
+  // angle nul, ce qui laisse `listeDuFond` et le banc intacts.
+  const droit = creerEnregistreur();
+  executer(droit, [{ forme: 'sprite', famille: 'unite', nom: 'x', sx: 0, sy: 0, sl: 1, sh: 1, x: 0, y: 0, l: 1, h: 1 }],
+    { unite: FAUSSE_IMAGE });
+  assert.deepEqual(droit.appels.map(([n]) => n), ['drawImage']);
 
   // ⚠ UNE PRIMITIVE `sprite` SANS SON ATLAS LÈVE, ET LE MESSAGE NOMME LA
   // FAMILLE. Une unité invisible est un défaut qu'on doit voir à la première
