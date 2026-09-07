@@ -36,7 +36,9 @@ import { gesteDuSecondToucher } from '../src/ui/monde.js';
 import {
   chromeMasque, CHROME_MASQUE_PAR, CHROME_MASQUE_PAR_LE_DEROULE, BLOCS_DE_CHROME,
 } from '../src/ui/session.js';
-import { ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE } from '../src/data/sites.js';
+import {
+  ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE, RESTE_APRES_DESTRUCTION,
+} from '../src/data/sites.js';
 import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { coutDUnRaid } from '../src/sim/points-attaque.js';
@@ -1619,11 +1621,15 @@ test('EFF T10 — l\'ordre de chute suit l\'assaut, et il ne touche QUE la défe
   assert.notDeepEqual(ordreDeLEffondrement(entites), [0, 1, 2]);
 });
 
-test('EFF T11 — ce qui est BÂTI laisse une ruine, une escouade n\'en laisse pas', () => {
-  // ⚠⚠ ETHAN, 07/09 : « utilise ruine_j ruine_o ». Les deux planches dormaient
-  // dans la famille `batiment` de l'atlas depuis leur fabrication — DANS le
-  // livrable, donc payées en octets, et employées par personne. Le relevé du lot
-  // les a trouvées ; ce test les met au travail.
+/**
+ * Un site à TROIS pièces de défense — un bâtiment, une structure, une escouade —
+ * et l\'ensemble de leurs indices, prêt pour `listeAffichage`.
+ *
+ * ⚠ LES TROIS GENRES SONT LÀ EXPRÈS : `RESTE_APRES_DESTRUCTION` en porte trois
+ * clés, et un montage qui n\'en couvrirait que deux laisserait la troisième sans
+ * mesure.
+ */
+function montageDeRuines() {
   const montage = {
     niveau: 1,
     saveur: null,
@@ -1641,43 +1647,100 @@ test('EFF T11 — ce qui est BÂTI laisse une ruine, une escouade n\'en laisse p
   const etat = creerCombat(montage);
   const proj = calculerProjection(1080, 4000, MUR_CASES);
   const noms = (liste) => liste.filter((p) => p.forme === 'sprite').map((p) => p.nom);
+  const parId = new Map(etat.entites.map((e) => [e.id, e]));
+  const souche = parId.get('souche');
+  const merlon = parId.get('merlon');
+  const escouade = etat.entites.find((e) => e.id === 'meute' && e.camp === 'defense');
+  assert.ok(souche && merlon && escouade, 'le montage n\'a pas les trois genres attendus');
+  return {
+    etat, proj, noms, souche, merlon, escouade,
+    tombees: new Set([souche.indice, merlon.indice, escouade.indice]),
+  };
+}
 
-  // Sans effondrement, rien ne change : c'est le cas de tous les autres
+test('EFF T11 — un BÂTIMENT laisse une ruine, une structure et une escouade n\'en laissent pas', () => {
+  // ⚠⚠ ETHAN, 07/09 : « utilise ruine_j ruine_o », puis « restreins aux bâtiments
+  // pour l\'instant ». Les deux planches dormaient dans la famille `batiment` de
+  // l\'atlas — DANS le livrable, donc payées en octets, et employées par
+  // personne. Elles travaillent, et sous les bâtiments SEULS : elles ont été
+  // dessinées pour une case de bâtiment, et personne n\'a encore vu ce qu\'elles
+  // donnent sous une tourelle.
+  const { etat, proj, noms, tombees, souche, merlon, escouade } = montageDeRuines();
+
+  // Sans effondrement, rien ne change : c\'est le cas de tous les autres
   // appelants de `listeAffichage`, et il ne doit pas bouger.
   const intact = noms(listeAffichage(etat, proj));
   assert.equal(intact.filter((n) => n.startsWith('ruine_')).length, 0,
     'une ruine se dessine hors effondrement');
   assert.ok(intact.includes('bat_o_souche'), 'le montage ne dessine pas la Souche');
 
-  // Les trois pièces de la DÉFENSE tombent : deux bâties, une escouade.
-  const parId = new Map(etat.entites.map((e) => [e.id, e]));
-  const souche = parId.get('souche');
-  const merlon = parId.get('merlon');
-  const escouade = etat.entites.find((e) => e.id === 'meute' && e.camp === 'defense');
-  assert.ok(souche && merlon && escouade, 'le montage n\'a pas les trois pièces attendues');
-
-  const tombees = new Set([souche.indice, merlon.indice, escouade.indice]);
   const apres = noms(listeAffichage(etat, proj, null, 0, null, 0, tombees));
 
-  // ⚠ DEUX RUINES, PAS TROIS : la Souche et le Merlon sont BÂTIS, l'escouade non.
-  assert.equal(apres.filter((n) => n === 'ruine_o').length, 2,
-    'ce qui est bâti ne laisse pas exactement une ruine chacun');
+  // ⚠ UNE SEULE RUINE : la Souche. Le Merlon est une STRUCTURE, l\'autre pièce
+  // une escouade, et `RESTE_APRES_DESTRUCTION` les met toutes deux à `rien`.
+  assert.equal(apres.filter((n) => n === 'ruine_o').length, 1,
+    'le compte des ruines ne suit pas la table');
   assert.equal(apres.filter((n) => n === 'ruine_j').length, 0,
     'une ruine du JOUEUR sur un site de l\'Ouvrage');
-  // Et les pièces d'origine ne sont plus dessinées.
+  // Et aucune des trois pièces d\'origine ne se dessine plus.
   assert.ok(!apres.includes('bat_o_souche'), 'la Souche se dessine encore');
   assert.ok(!apres.some((n) => n.startsWith('def_o_merlon')), 'le Merlon se dessine encore');
-
-  // ⚠ L'ATTAQUANT SURVIVANT, LUI, EST TOUJOURS LÀ. C'est lui qui a gagné.
-  const attaquant = etat.entites.find((e) => e.camp === 'attaque');
-  assert.ok(attaquant !== undefined, 'le montage n\'a pas d\'attaquant');
-  assert.ok(apres.length > 0);
-  assert.equal(
-    noms(listeAffichage(etat, proj, null, 0, null, 0, tombees)).length, apres.length,
-  );
+  assert.ok(souche && merlon && escouade);
 
   // ⚠ ET LA LETTRE SUIT LE PROPRIÉTAIRE, pas le camp — « le joueur peut
   // défendre ». Prise seule, la règle se mesure sans montage.
   assert.deepEqual(couchesDeLaRuine('ouvrage'), [{ famille: 'batiment', nom: 'ruine_o' }]);
   assert.deepEqual(couchesDeLaRuine('joueur'), [{ famille: 'batiment', nom: 'ruine_j' }]);
+});
+
+test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage attend', () => {
+  // ⚠⚠ C\'EST LE TEST DE « PRÉPARE LES CÂBLAGES ». Ethan restreint aux bâtiments
+  // POUR L\'INSTANT : ce test prouve qu\'ouvrir aux structures ne demandera pas
+  // une ligne de code, seulement un mot dans `src/data/sites.js`. Sans lui, la
+  // table pourrait être décorative et personne ne le saurait avant d\'essayer.
+  const { etat, proj, noms, tombees } = montageDeRuines();
+
+  const dOrigine = { ...RESTE_APRES_DESTRUCTION };
+  try {
+    // Le réglage d\'aujourd\'hui : une ruine, celle du bâtiment.
+    assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
+      { batiment: 'ruine', defense: 'rien', unite: 'rien' },
+      'le réglage de la table a changé sans que ce test le dise');
+    assert.equal(
+      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+        .filter((n) => n === 'ruine_o').length, 1,
+    );
+
+    // ⚠ ON OUVRE LES STRUCTURES : deux ruines, sans toucher une ligne de code.
+    RESTE_APRES_DESTRUCTION.defense = 'ruine';
+    assert.equal(
+      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+        .filter((n) => n === 'ruine_o').length, 2,
+      'ouvrir `defense` ne donne pas de ruine à la structure : le câblage ne répond pas',
+    );
+
+    // ⚠ ET ON LES REFERME : le câblage marche dans les DEUX sens, sinon il ne
+    // prouverait qu\'une porte qui s\'ouvre.
+    RESTE_APRES_DESTRUCTION.defense = 'rien';
+    assert.equal(
+      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+        .filter((n) => n === 'ruine_o').length, 1,
+    );
+
+    // ⚠⚠ ET LES TROIS GENRES SONT COUVERTS, sinon une entité disparaîtrait en
+    // SILENCE. Un genre absent de la table LÈVE, et c\'est mesuré plutôt que cru.
+    RESTE_APRES_DESTRUCTION.batiment = undefined;
+    delete RESTE_APRES_DESTRUCTION.batiment;
+    assert.throws(
+      () => listeAffichage(etat, proj, null, 0, null, 0, tombees),
+      /sans reste après destruction/,
+      'un genre absent de la table passe en silence',
+    );
+  } finally {
+    for (const k of Object.keys(RESTE_APRES_DESTRUCTION)) delete RESTE_APRES_DESTRUCTION[k];
+    Object.assign(RESTE_APRES_DESTRUCTION, dOrigine);
+  }
+  // Le nettoyage a bien remis la table d\'origine.
+  assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
+    { batiment: 'ruine', defense: 'rien', unite: 'rien' });
 });

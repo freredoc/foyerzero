@@ -222,10 +222,11 @@ une seconde fois.
 Elles sont **mises au travail**, et elles ne coûtent **pas un octet d'image** —
 elles étaient déjà dans l'atlas.
 
-**Ce qui est BÂTI laisse une ruine ; une escouade n'en laisse pas.** Bâtiments et
-structures de défense — murs, tourelles, artilleries — deviennent `ruine_o` en
-tombant ; les unités de garnison s'effacent. Donner une ruine à une escouade
-ferait pousser un pan de mur là où six hommes sont tombés.
+**Un BÂTIMENT laisse une ruine ; une structure de défense et une escouade n'en
+laissent pas** — Ethan, dans la foulée : « restreins aux bâtiments pour
+l'instant ». Le motif est mesurable et non frileux : les deux planches ont été
+dessinées pour une case de BÂTIMENT, et personne n'a vu ce qu'elles donnent sous
+une tourelle ou sous un mur.
 
 ```js
 export function couchesDeLaRuine(proprietaire) {
@@ -238,13 +239,42 @@ défendre » (CLAUDE.md §4). Les deux planches existent parce que les deux camp
 ont des bâtiments ; `ruine_j` n'a pas d'appelant aujourd'hui, et la règle la
 servira le jour où un déroulé montrera une base du joueur attaquée.
 
+### ⚠⚠ Et le câblage est POSÉ pour les trois genres
+
+« Prépare les câblages » : ouvrir aux structures ne demandera **pas une ligne de
+code**, seulement un mot dans `src/data/sites.js`.
+
+```js
+export const RESTE_APRES_DESTRUCTION = {
+  batiment: 'ruine',
+  defense: 'rien',   // ⚠ en attente d'un coup d'œil d'Ethan
+  unite: 'rien',     // ⚠ celui-ci n'a pas de raison de changer
+};
+```
+
+⚠⚠ **LE PREMIER JET ÉCRIVAIT `if (genreVoulu === 'unite') continue;` DANS
+`render/scene.js`.** C'était juste, et c'était déjà une règle de jeu écrite dans
+un fichier de dessin. « Pour l'instant » est très exactement ce qui va bouger :
+ça appartient à `src/data/` (§4 de `CLAUDE.md`).
+
+⚠ **DEUX VALEURS, ET PAS UNE DE PLUS.** `'ruine'` pose la planche, `'rien'`
+efface la pièce. Un troisième reste — une explosion, une fumée — demanderait des
+sprites qui ne sont dans aucun atlas : **inventer la valeur avant les sprites
+ferait une table qui promet ce qu'elle ne peut pas tenir.**
+
+⚠ **UN GENRE ABSENT DE LA TABLE LÈVE**, il ne retombe pas sur un défaut. Une
+entité qu'on oublierait de classer disparaîtrait en silence, et le silence est ce
+qu'on ne veut pas d'un effet qu'on ne regarde qu'une fois par raid. `EFF T12` le
+mesure.
+
 ⚠ **CE QUI RESTE DORMANT** : les douze explosions. Les employer demanderait une
 famille d'atlas, donc des octets d'images, donc un delta à ventiler — et le point
 13 d'Ethan touchera de toute façon aux mêmes assets. **Le lot les nomme pour que
 le suivant les trouve.**
 
-⚠ **CE QU'ON VOIT, DONC** : le site se couvre de ruines de l'avant vers le fond,
-les escouades s'effacent, et l'attaquant survivant reste debout au milieu.
+⚠ **CE QU'ON VOIT, DONC** : les pièces de défense s'effacent de l'avant vers le
+fond, **les bâtiments laissent une ruine**, et l'attaquant survivant reste debout
+au milieu.
 **Aucun sprite neuf, aucune teinte neuve, aucun `data:` de plus** — `images +0`,
 296 lignes et 291 URI de part et d'autre.
 
@@ -304,7 +334,8 @@ l'effondrement avant d'en arriver là.
 | **EFF T9** | **PASS** | Un compteur remplace `setTimeout` sur le faux `window` **après** le lancement — `armerLAttaque` en pose un à l'ouverture et il ne regarde pas ce lot. Zéro minuterie de plus jusqu'au rapport. ⚠ Plus la preuve par la source : le corps de `image` ne contient ni `setTimeout` ni `setInterval`. |
 | **EFF T10** | **PASS** | *Hors brief.* La règle pure, prise seule : six entités montées à la main — deux à l'avant, une au fond, un attaquant, une morte, une sortie. L'ordre rendu est `[2, 1, 0]` ; l'attaquant, la morte et la sortie n'y sont pas. La chute est proportionnelle, atteint le total à la fin, et une durée nulle fait tout tomber plutôt que de diviser par zéro. ⚠ Falsifiable : sans le tri, l'ordre d'insertion rendrait `[0, 1, 2]`. |
 
-| **EFF T11** | **PASS** | *Ajouté sur demande d'Ethan — « utilise ruine_j ruine_o ».* Un montage à trois pièces de défense : une Souche, un Merlon, une escouade. Hors effondrement, **zéro ruine** dessinée et la Souche présente. Les trois tombées : **deux `ruine_o`, pas trois** — l'escouade n'en laisse pas —, **zéro `ruine_j`**, et ni la Souche ni le Merlon ne se dessinent plus. Plus la règle prise seule : `couchesDeLaRuine('ouvrage')` et `('joueur')` rendent les deux planches. |
+| **EFF T11** | **PASS** | *Ajouté sur demande d'Ethan — « utilise ruine_j ruine_o ».* Un montage aux **trois genres** : une Souche (bâtiment), un Merlon (structure), une escouade. Hors effondrement, **zéro ruine** dessinée et la Souche présente. Les trois tombées : **UNE `ruine_o`**, celle du bâtiment, **zéro `ruine_j`**, et aucune des trois pièces d'origine ne se dessine plus. Plus la règle prise seule : `couchesDeLaRuine('ouvrage')` et `('joueur')` rendent les deux planches. |
+| **EFF T12** | **PASS** | *Ajouté sur demande d'Ethan — « prépare les câblages ».* Le réglage du jour est asserté en clair, puis **ouvert** — `defense: 'ruine'` → deux ruines — puis **refermé** — une ruine : le câblage répond dans les **deux** sens, sinon il ne prouverait qu'une porte qui s'ouvre. ⚠ Et un genre **retiré** de la table fait **lever** `listeAffichage` : une entité qu'on oublierait de classer disparaîtrait en silence. La table est restaurée en `finally`, et le test le vérifie. |
 
 ⚠ **LE FAUX DOCUMENT APPREND À RETENIR SA RAPPEL D'IMAGE**, et rien de plus. Il
 ne comptait que les demandes, ce qui suffisait tant qu'aucun test n'avait besoin
@@ -317,8 +348,8 @@ rappelle jamais. **Aucun test existant n'a changé de comportement.**
 
 | Grandeur | Avant | Après | Écart |
 | --- | --- | --- | --- |
-| `npm test` | **1 295 pass / 0 fail** | **1 306 pass / 0 fail** | **+11** |
-| `dist/index.html` | **8 014 150** | **8 015 058** | **+908** |
+| `npm test` | **1 295 pass / 0 fail** | **1 307 pass / 0 fail** | **+12** |
+| `dist/index.html` | **8 014 150** | **8 015 213** | **+1 063** |
 | lignes `data:` | 296 | **296** | **0** |
 | URI `data:` | 291 | **291** | **0** |
 | `SAVE_VERSION` | 27 | **27** | **0** |
@@ -326,11 +357,11 @@ rappelle jamais. **Aucun test existant n'a changé de comportement.**
 
 | Poste | Écart |
 | --- | --- |
-| JavaScript | **+908** |
+| JavaScript | **+1 063** |
 | feuille · balisage · **images** · audio | **+0** |
 
 **La somme des cinq postes tombe EXACTEMENT sur le total.** Borne T10 inchangée à
-**9 300 000** ; marge **1 284 942 octets, 13,82 %**. Zéro référence externe.
+**9 300 000** ; marge **1 284 787 octets, 13,82 %**. Zéro référence externe.
 
 ⚠ **`images +0` EST LE CHIFFRE À LIRE** : le lot ajoute un effet visuel — un
 champ de ruines — **sans un octet d'image**, parce que les deux planches étaient
@@ -348,9 +379,9 @@ disparition progressive elle-même n'a été vue par personne : ni sur appareil,
 dans un navigateur.
 
 Ce qui reste à juger à l'œil : est-ce que deux secondes se **sentent** ? est-ce
-que le champ de ruines lit comme une destruction ? et surtout — **`ruine_o` a été
-dessinée pour une case de BÂTIMENT, et ce lot en met une sous chaque structure de
-défense tombée**, murs et tourelles compris. Personne n'a vu le résultat.
+qu'un bâtiment en ruine au milieu de pièces effacées lit comme une destruction ?
+**La question des structures est REPORTÉE, pas tranchée** — `RESTE_APRES_DESTRUCTION`
+attend un coup d'œil, et le câblage est déjà éprouvé.
 
 ### ⚠ 9.2 — `arreterBoucle` annule par `globalThis`
 
@@ -362,10 +393,10 @@ porte pas. **Rien n'a été corrigé** : c'est hors du lot, et la garde `deroule
 
 ### 9.3 — Points en suspens
 
-1. **`ruine_o` sous une tourelle, est-ce que ça tient ?** La planche a été
-   dessinée pour une case de bâtiment ; ce lot en met une sous chaque structure
-   de défense tombée. Si le dessin ne convient pas, la règle se restreint aux
-   `genre === 'batiment'` **en une ligne**.
+1. **`ruine_o` sous une tourelle, est-ce que ça tient ?** C'est LA question
+   ouverte, et elle est câblée : `RESTE_APRES_DESTRUCTION.defense` passe de
+   `'rien'` à `'ruine'`, **un mot**, et `EFF T12` prouve que le câblage répond.
+   Il faut un coup d'œil avant, pas un pari.
 2. **Faut-il des explosions en plus des ruines ?** Les douze dorment toujours ;
    les employer demanderait une famille d'atlas, donc des octets. §5.
 3. **Deux secondes, est-ce le bon temps ?** La valeur est dans la table, elle se

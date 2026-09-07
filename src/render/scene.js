@@ -32,7 +32,7 @@
 // champ de bataille à la légende.
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
-import { BATIMENTS } from '../data/sites.js';
+import { BATIMENTS, RESTE_APRES_DESTRUCTION } from '../data/sites.js';
 import {
   xDeColonne, xDeColonneMilli, yDeRangeeMilli, yDeRangee,
 } from './projection.js';
@@ -873,12 +873,23 @@ export function listeAffichage(
       if (!visible(e) || e.genre !== genreVoulu) continue;
       const x = xDe(e);
       const y = yDe(e);
-      // ⚠⚠ CE QU'UNE CHOSE DÉTRUITE LAISSE DERRIÈRE ELLE EST UNE DÉCISION DE
-      // DESSIN, ET ELLE EST ICI. Ce qui est BÂTI — bâtiments et structures de
-      // défense — laisse une RUINE ; une escouade n'en laisse pas, et lui en
-      // donner une ferait pousser un pan de mur là où six hommes sont tombés.
+      // ⚠⚠ CE QU'UNE CHOSE DÉTRUITE LAISSE DERRIÈRE ELLE SE LIT DANS
+      // `RESTE_APRES_DESTRUCTION`, IL NE SE DÉCIDE PAS ICI. Le premier jet
+      // écrivait `if (genreVoulu === 'unite') continue;` — juste, et déjà une
+      // règle de jeu écrite dans un fichier de dessin. Ethan a demandé de
+      // restreindre aux bâtiments « pour l'instant » : c'est très exactement un
+      // réglage qui va bouger, donc il appartient à `src/data/`.
+      //
+      // ⚠ UN GENRE ABSENT DE LA TABLE LÈVE, il ne retombe pas sur un défaut. Une
+      // entité qu'on oublierait de classer disparaîtrait en silence, et le
+      // silence est ce qu'on ne veut pas d'un effet qu'on ne regarde qu'une fois
+      // par raid.
       if (estTombee(e)) {
-        if (genreVoulu === 'unite') continue;
+        const reste = RESTE_APRES_DESTRUCTION[genreVoulu];
+        if (reste === undefined) {
+          throw new Error(`scene : genre « ${genreVoulu} » sans reste après destruction`);
+        }
+        if (reste === 'rien') continue;
         dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
           accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
         continue;

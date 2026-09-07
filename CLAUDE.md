@@ -43,13 +43,13 @@ Dernière révision : **07/09/2026**, version 0.99.17 · build 118.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 07/09/2026 (après le lot EFFONDREMENT), à confronter :**
-`npm test` → **1306 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**8 015 058 octets**, 0 référence externe. Coût **+908 octets, ENTIÈREMENT EN
+`npm test` → **1307 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 015 213 octets**, 0 référence externe. Coût **+1 063 octets, ENTIÈREMENT EN
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
-`git worktree` depuis le lot précédent : **JavaScript +908 · feuille +0 ·
+`git worktree` depuis le lot précédent : **JavaScript +1 063 · feuille +0 ·
 balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
 EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
-et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 284 942 octets,
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 284 787 octets,
 13,82 %**. Le lot touche `src/ui/raid.js`, `src/render/scene.js` et
 `src/data/sites.js`.
 ⚠⚠ **ETHAN, POINT 12 : « lors d'une victoire totale, juste après la destruction
@@ -90,11 +90,23 @@ aucun livrable. Et `ruine_j` / `ruine_o` étaient dans l'atlas `batiment`, donc
 DANS le livrable — payées en octets d'images — et **employées par personne**.
 C'était `ui_pause` deux fois.
 ⚠⚠ **`ruine_j` ET `ruine_o` SONT MISES AU TRAVAIL — ETHAN, 07/09 : « utilise
-ruine_j ruine_o ».** Ce qui est BÂTI — bâtiments et structures de défense —
-laisse une RUINE en tombant ; une escouade n'en laisse pas, et lui en donner une
-ferait pousser un pan de mur là où six hommes sont tombés. La lettre vient de
-`lettreDuProprietaire`, jamais du camp : « le joueur peut défendre » (§4).
-`EFF T11` compte deux ruines pour deux pièces bâties, zéro pour l'escouade.
+ruine_j ruine_o », puis « restreins aux bâtiments pour l'instant ».** Un BÂTIMENT
+qui tombe laisse une RUINE ; une structure de défense et une escouade n'en
+laissent pas. La lettre vient de `lettreDuProprietaire`, jamais du camp : « le
+joueur peut défendre » (§4). `EFF T11` compte UNE ruine sur trois pièces tombées.
+⚠⚠ **ET LE CÂBLAGE EST POSÉ POUR LES TROIS GENRES, SEUL LE RÉGLAGE ATTEND.**
+`RESTE_APRES_DESTRUCTION` de `src/data/sites.js` porte
+`{ batiment: 'ruine', defense: 'rien', unite: 'rien' }` : ouvrir aux structures
+est **UN MOT**, pas une ligne de code. Le premier jet écrivait
+`if (genreVoulu === 'unite') continue;` dans `render/scene.js` — juste, et déjà
+une règle de jeu écrite dans un fichier de dessin ; « pour l'instant » est très
+exactement ce qui va bouger, donc ça appartient à `src/data/`. **`EFF T12` fait
+répondre le câblage dans les DEUX sens** — il ouvre `defense`, compte deux
+ruines, referme, en recompte une — et vérifie qu'un genre absent de la table
+LÈVE plutôt que de faire disparaître une entité en silence.
+⚠ **LE MOTIF DE LA RESTRICTION EST MESURABLE, PAS FRILEUX** : les deux planches
+ont été dessinées pour une case de BÂTIMENT, et personne n'a vu ce qu'elles
+donnent sous une tourelle ou sous un mur. On ne devine pas.
 ⚠ **ET ELLES NE COÛTENT PAS UN OCTET D'IMAGE** : elles étaient déjà dans
 l'atlas. **`images +0`, 296 lignes `data:` et 291 URI de part et d'autre**, et
 aucune teinte neuve. Les douze explosions, elles, dorment toujours — les employer
