@@ -26,7 +26,7 @@ import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
   problemesDeLAchat, problemesDeLAchatDUneBase, acheter, acquisesDe,
-  modulesDebloquesDuJoueur,
+  modulesDebloquesDuJoueur, formaterPoints,
 } from '../src/sim/recherche.js';
 import {
   creerEtat, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION, niveauDeCommandement,
@@ -227,10 +227,17 @@ test('T9 — deux branches, deux prix : le Chasseur s\'achète des deux côtés'
   // Et le second achat coûte son propre prix, pas la différence.
   const pb = problemesDeLAchat(etat, 'offense', 'fendeur', 'unite');
   assert.equal(pb[0].code, 'pointsInsuffisants');
-  // ⚠ L'ESPACE DES MILLIERS EST UNE FINE INSÉCABLE, U+202F, écrite ici en
-  // ÉCHAPPEMENT. Tapée au clavier elle se confond avec une espace ordinaire, et
-  // le test passerait ou tomberait selon l'éditeur qui a enregistré le fichier.
-  assert.equal(pb[0].message, `il manque 300\u202f000 points`);
+  // ⚠⚠ LE MESSAGE EST COMPACT DEPUIS LE 07/09 — Ethan : « dès qu'un nombre
+  // est supérieur à dix mille, il faudrait l'afficher avec trois chiffres et k
+  // pour mille… ». Le refus du moteur passe par `formaterPoints`, donc il suit
+  // la règle d'affichage du jeu entier : il aurait été pire que le compteur
+  // dise « 299k » pendant que le refus réclame « 300 000 ».
+  assert.equal(pb[0].message, 'il manque 300k points');
+  // ⚠ ET SOUS LE SEUIL, RIEN N'A BOUGÉ : l'espace des milliers reste une fine
+  // insécable, U+202F, écrite ici en ÉCHAPPEMENT. Tapée au clavier elle se
+  // confond avec une espace ordinaire, et le test passerait ou tomberait selon
+  // l'éditeur qui a enregistré le fichier.
+  assert.equal(formaterPoints(9999000n), `9\u202f999`);
 
   // Le doublon est refusé, dans la branche où l'achat a eu lieu.
   etat.recherche.pointsMilli = '999999999999';
@@ -3468,7 +3475,9 @@ test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
   // échappement : tapée au clavier, l'assertion dépendrait de l'éditeur qui a
   // enregistré ce fichier. Elle se lit maintenant sur le PRIX du bouton, seul
   // endroit de la ligne où le nombre subsiste.
-  assert.match(boutonDe(rangeeDe(cher)).textContent, /120\u202f000\u202f000/);
+  // ⚠ COMPACT DEPUIS LE 07/09 : « 120 000 000 » s'écrit « 120M ». Le bouton
+  // porte le PRIX, et le prix suit la règle d'affichage du jeu entier.
+  assert.match(boutonDe(rangeeDe(cher)).textContent, /120M/);
 
   // Le module d'une pièce NON acquise dit ce qu'aucune couleur ne peut dire.
   //
@@ -3563,7 +3572,7 @@ test('T15 — toucher un AUTRE bouton désarme le premier', () => {
   const pastilles = doc.getElementById('recherche-pastilles');
   assert.equal(pastilles.children.length, PANNEAUX.length);
   pastilles.children[1].click();
-  assert.equal(perceurs.textContent, '200\u202f000', 'changer de panneau garde un bouton armé');
+  assert.equal(perceurs.textContent, '200k', 'changer de panneau garde un bouton armé');
 });
 
 test('T15 — l\'en-tête montre les points, et une peinture désarme tout', () => {
@@ -3571,10 +3580,17 @@ test('T15 — l\'en-tête montre les points, et une peinture désarme tout', () 
   const ecran = initialiserEcranRecherche(doc);
   const etat = partie(String(1_234_567n * 1000n + 999n));
   ecran.peindre(etat);
-  // ⚠ LE COMPTEUR TRONQUE. MONTAGE QUI LE FAIT TOMBER : arrondir au point
-  // supérieur — l'écran annoncerait 1 234 568 points dépensables alors que le
-  // moteur en refuserait le dernier, et le joueur toucherait un bouton mort.
-  assert.equal(doc.getElementById('recherche-points').textContent, '1\u202f234\u202f567 points');
+  // ⚠⚠ LE COMPTEUR TRONQUE, ET IL EST COMPACT DEPUIS LE 07/09. Les deux
+  // règles se cumulent : 1 234 567,999 points se tronquent à 1 234 567, qui
+  // s'écrivent « 1,23M ».
+  assert.equal(doc.getElementById('recherche-points').textContent, '1,23M points');
+  // ⚠⚠ ET LE MONTAGE QUI FAIT TOMBER LA TRONCATURE EST REFAIT SUR UNE BORNE,
+  // parce que la forme compacte l'avait rendu muet : à 1,23M, arrondir au point
+  // supérieur rend « 1,23M » aussi, et le test ne dirait plus rien. Sur le
+  // passage de k à M, la différence se voit — l'écran annoncerait un million de
+  // points dépensables alors que le moteur en refuserait le dernier.
+  assert.equal(formaterPoints(999999n * 1000n + 999n), '999k');
+  assert.equal(formaterPoints(1000000n * 1000n), '1,00M');
 
   const ids = Object.keys(ARBRE_RECHERCHE.offense);
   const bouton = boutonDe(rangeeDuCadre(piecesDuPanneau(doc, 'offense')[ids.indexOf('belier')]));
@@ -3610,7 +3626,7 @@ test('T15 — l\'onglet Spécial s\'affiche et ne s\'achète pas', () => {
   const prix = lignesSpeciales().map((l) => l.prix);
   assert.equal(prix.filter((p) => p === '—').length, 3);
   assert.equal(prix.filter((p) => p !== '—').length, 1);
-  assert.ok(prix.includes('2\u202f000\u202f000'), 'la deuxième base a perdu son prix');
+  assert.ok(prix.includes('2,00M'), 'la deuxième base a perdu son prix');
 });
 
 // ---------------------------------------------------------------------------

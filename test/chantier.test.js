@@ -105,6 +105,7 @@ import {
 } from '../src/sim/reparation.js';
 import { rattraperJeu } from '../src/sim/state.js';
 import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
+import { PALIERS, SEUIL_COMPACT } from '../src/render/nombre.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -239,11 +240,55 @@ test('chantier — les milliers se groupent avec l\'espace fine insécable', () 
   assert.equal(formaterEntier(7), '7');
   assert.equal(formaterEntier(999), '999');
   assert.equal(formaterEntier(1000), `1${SEPARATEUR_MILLIERS}000`);
-  assert.equal(formaterEntier(45_738_385), `45${SEPARATEUR_MILLIERS}738${SEPARATEUR_MILLIERS}385`);
+  assert.equal(formaterEntier(9999), `9${SEPARATEUR_MILLIERS}999`);
   assert.equal(formaterEntier(-1234), `-1${SEPARATEUR_MILLIERS}234`);
   // Falsifiable : le séparateur ne doit surtout pas être une espace ordinaire.
   assert.ok(!formaterEntier(1000).includes(' '), 'espace ordinaire entre les milliers');
   assert.throws(() => formaterEntier(Number.NaN), /n'est pas un nombre fini/);
+
+  // ⚠⚠ AU-DELÀ DE DIX MILLE, LA FORME CHANGE — ETHAN, 07/09 : « dès qu'un
+  // nombre est supérieur à dix mille, il faudrait l'afficher avec trois chiffres
+  // et k pour mille, m pour million, g pour milliard, et t pour mille
+  // milliards. » Ce test-ci n'a donc plus rien à dire au-dessus du seuil, et il
+  // le dit : `45 738 385` rend maintenant « 45,7M ». Le groupement reste ce
+  // qu'il était SOUS le seuil, et c'est ce que les lignes ci-dessus mesurent.
+  assert.equal(formaterEntier(45_738_385), '45,7M');
+  assert.equal(formaterEntier(SEUIL_COMPACT - 1), `9${SEPARATEUR_MILLIERS}999`);
+  assert.equal(formaterEntier(SEUIL_COMPACT), '10,0k');
+});
+
+test('NBR T1 — trois chiffres et un suffixe, dès dix mille', () => {
+  // ⚠⚠ LES TROIS FORMES QU'ETHAN A DÉCRITES, ET RIEN D'AUTRE : « soit un
+  // chiffre, puis virgule, puis deux chiffres, soit deux chiffres puis une
+  // virgule, soit trois chiffres ». Trois chiffres significatifs, toujours.
+  assert.equal(formaterEntier(10_000), '10,0k');
+  assert.equal(formaterEntier(12_345), '12,3k');
+  assert.equal(formaterEntier(100_000), '100k');
+  assert.equal(formaterEntier(1_000_000), '1,00M');
+  assert.equal(formaterEntier(2_500_000_000), '2,50G');
+  assert.equal(formaterEntier(1_000_000_000_000), '1,00T');
+  assert.equal(formaterEntier(-12_345), '-12,3k');
+
+  // ⚠⚠ IL TRONQUE, IL N'ARRONDIT PAS, et c'est la règle du dépôt : arrondir
+  // ferait dire « 1,00M » à 999 999 points, c'est-à-dire promettre un achat que
+  // le moteur refuserait. Conséquence voulue et mesurée : la sortie reste à
+  // trois chiffres au lieu d'en gagner un quatrième.
+  assert.equal(formaterEntier(999_999), '999k');
+  assert.equal(formaterEntier(19_999), '19,9k');
+  assert.equal(formaterEntier(1_999_999), '1,99M');
+
+  // ⚠ FALSIFIABLE : chaque forme doit avoir EXACTEMENT trois chiffres, sinon
+  // les égalités ci-dessus pourraient toutes tomber juste sur un formateur qui
+  // en rendrait quatre ailleurs. On balaie deux décades par palier.
+  for (const n of [10_000, 45_678, 123_456, 7_890_123, 45_678_901, 999_999_999]) {
+    const chiffres = formaterEntier(n).replace(/[^0-9]/g, '');
+    assert.equal(chiffres.length, 3, `${n} rend « ${formaterEntier(n)} », qui n'a pas trois chiffres`);
+  }
+
+  // ⚠ ET LE SUFFIXE EST CELUI DE LA NORME, PAS DE LA DICTÉE. `m` est le préfixe
+  // de MILLI : « 10,0m » se lirait « dix millièmes » là où on veut dire « dix
+  // millions ». Un seul caractère à changer si Ethan préfère l'oral.
+  assert.deepEqual(PALIERS.map((p) => p.suffixe), ['k', 'M', 'G', 'T']);
 });
 
 test('chantier — les milli-unités se tronquent, elles ne s\'arrondissent pas', () => {

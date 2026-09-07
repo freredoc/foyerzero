@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.19 · build 120.
+Dernière révision : **07/09/2026**, version 0.99.20 · build 121.
 
 ---
 
@@ -42,7 +42,60 @@ Dernière révision : **07/09/2026**, version 0.99.19 · build 120.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot CÂBLAGE-PICTOGRAMMES), à confronter :**
+**Référence au 07/09/2026 (après le lot NOMBRES-COMPACTS), à confronter :**
+`npm test` → **1324 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 255 283 octets**, 0 référence externe. Coût **+619 octets, ENTIÈREMENT EN
+JAVASCRIPT** : **JavaScript +619 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total —
+**297 lignes `data:` et 292 URI de part et d'autre**. Borne T10 inchangée à
+9 300 000, marge **1 044 717 octets, 11,23 %**. Le lot touche un fichier NEUF
+`src/render/nombre.js`, `src/ui/chantier.js` et `src/sim/recherche.js`.
+⚠⚠ **ETHAN, 07/09 : « DÈS QU'UN NOMBRE EST SUPÉRIEUR À DIX MILLE, IL FAUDRAIT
+L'AFFICHER AVEC TROIS CHIFFRES ET k POUR MILLE, m POUR MILLION, g POUR MILLIARD,
+ET t POUR MILLE MILLIARDS. »** Les trois formes qu'il décrit — « soit un chiffre
+puis virgule puis deux chiffres, soit deux chiffres puis une virgule, soit trois
+chiffres » — sont **trois chiffres significatifs**, toujours : `10,0k`, `12,3k`,
+`100k`, `1,00M`, `2,50G`, `1,00T`.
+⚠⚠ **LA RÈGLE EST ÉCRITE UNE FOIS, DANS `src/render/nombre.js`, ET DEUX
+COUCHES LA DEMANDENT.** `ui/chantier.js` formate les stocks, les débits, les
+capacités, les coûts et les points engagés ; `sim/recherche.js` formate les
+points de recherche et **ne peut pas importer d'`ui/`**. `src/data/` est réservé
+aux valeurs de calibrage (§2) — reste `render/`, qui rend des primitives sans
+DOM, et où `sim/poi.js` puise déjà.
+⚠⚠ **ELLE TRAVAILLE SUR LES CHIFFRES, PAS SUR UN NOMBRE, ET C'EST CE QUI LUI
+PERMET DE SERVIR LES DEUX.** L'un lui passe un `number` tronqué, l'autre un
+`bigint` qui dépasse l'entier sûr — le dépôt portait DÉJÀ deux fonctions de
+groupement pour cette raison, avec un paragraphe expliquant qu'elles ne peuvent
+pas fusionner. `compacter` ne divise jamais : elle coupe une chaîne, donc elle ne
+perd rien, quelle que soit la taille.
+⚠⚠ **ELLE TRONQUE, ELLE N'ARRONDIT PAS**, comme `formaterUnites` et
+`formaterPoints` avant elle : arrondir ferait dire « 1,00M » à 999 999 points,
+c'est-à-dire promettre un achat que le moteur refuserait. Conséquence voulue et
+mesurée — 999 999 rend **« 999k »**, qui reste à trois chiffres.
+⚠ **`M`, `G` ET `T` SONT EN CAPITALES, ET C'EST UNE CORRECTION ASSUMÉE DE LA
+DICTÉE.** Ethan les a nommés à l'oral, où la casse ne se dit pas ; en notation
+SI, `m` est le préfixe de MILLI, et « 10,0m » se lirait « dix millièmes » là où
+on veut dire « dix millions ». `k` reste minuscule, comme en SI. Un seul
+caractère à changer s'il préfère l'oral à la norme.
+⚠ **`formaterDixiemes` NE L'HÉRITE PAS, ET LA GARDE EST STRUCTURELLE** : elle
+compose sa PROPRE virgule décimale, donc un entier compacté rendrait « 12,3k,4 ».
+Elle appelle le groupement directement. Les niveaux plafonnent à 50 et ne peuvent
+pas atteindre le seuil aujourd'hui ; la garde s'écrit maintenant.
+⚠ **AU-DELÀ DE MILLE MILLIARDS, LA MANTISSE GROSSIT** — « 1 200T » — plutôt
+que de prendre un cinquième palier qu'Ethan n'a pas nommé. Mesuré : le prix le
+plus cher de `ARBRE_RECHERCHE` vaut 2 500 000 000, soit « 2,50G ».
+⚠ **LE BANC D'ESSAI GARDE SES CHIFFRES EXACTS.** `formaterPv` et
+`formaterPointsMilli` d'`ui/banc.js` rendent des PV au dixième et des points au
+millième : c'est de la précision de DIAGNOSTIC, derrière un geste de debug, et
+la compacter reviendrait à casser l'outil qui sert à vérifier les autres.
+⚠ **CINQ TESTS ONT CHANGÉ DE VALEUR ATTENDUE, AUCUN NE S'EST ASSOUPLI**, et
+l'un d'eux a dû être REFAIT : le montage qui prouvait la troncature du compteur
+de recherche devenait muet en forme compacte — à 1,23M, arrondir au point
+supérieur rend « 1,23M » aussi. Il est refait sur le passage de k à M, où la
+différence se voit. **Le rendu a été vu** : les prix de l'arbre lisent « 10,0M »,
+« 60,0M », « 540M », « 200k » là où ils débordaient.
+
+**Auparavant, après le lot CÂBLAGE-PICTOGRAMMES :**
 `npm test` → **1323 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 254 664 octets**, 0 référence externe. Coût **+238 540 octets**, mesuré poste
 par poste contre le livrable du lot précédent : **images +233 940 · JavaScript
@@ -7299,7 +7352,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
     l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 13 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 14 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
@@ -7309,6 +7362,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 13 fi
   terrain.js            le sol de la carte : quels dessins, où, et avec quel poids
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
+  nombre.js             comment un grand nombre s'écrit : trois chiffres et un suffixe
   embleme.js            quel dessin porte un site de la carte : palier, saveur, emprise
   ⤷ ⚠⚠ AU SINGULIER, ET CE N'EST PAS NÉGOCIABLE. `tools/emblemes.py` produit les
     sprites que ce module nomme ; un sélecteur de téléphone n'affiche que les

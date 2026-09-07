@@ -35,6 +35,7 @@ import {
   ORDRE_PALETTE, RETOUR_DEFENSES,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
+import { compacter } from '../render/nombre.js';
 // ⚠⚠ LES PICTOGRAMMES NE SONT PAS NOMMÉS ICI, ILS SONT DEMANDÉS — lot
 // CÂBLAGE, 07/09. `src/ui/pictogramme.js` traduit une clé de DONNÉE en nom de
 // sprite ; écrire un nom d'atlas en clair dans cet écran-ci serait la première
@@ -121,7 +122,7 @@ import { baseCourante } from '../sim/base-courante.js';
 export const SEPARATEUR_MILLIERS = ' ';
 
 /**
- * Groupe les chiffres par trois, à la française.
+ * Groupe une suite de chiffres par trois, à la française.
  *
  * ⚠ ÉCRIT À LA MAIN PLUTÔT QUE PAR `toLocaleString`, et c'est délibéré. Le
  * format d'une locale dépend des données ICU embarquées dans le moteur : le
@@ -129,6 +130,37 @@ export const SEPARATEUR_MILLIERS = ' ';
  * et rien du tout sur un runtime compilé sans ICU. Un affichage qui change
  * selon l'appareil n'est pas testable, et un test qui normalise le séparateur
  * pour s'en accommoder ne mesure plus l'affichage réel.
+ *
+ * ⚠⚠ ELLE PREND DES CHIFFRES, PAS UN NOMBRE, DEPUIS LE LOT NOMBRES-COMPACTS.
+ * `compacter` de `render/nombre.js` lui passe la MANTISSE d'un nombre au-delà de
+ * mille milliards — une chaîne qui peut dépasser l'entier sûr —, et
+ * `formaterDixiemes` la lui passe pour composer sa propre décimale.
+ *
+ * @param {string} chiffres la valeur absolue, en base dix, sans signe
+ * @returns {string}
+ */
+export function grouperLesChiffres(chiffres) {
+  let sortie = '';
+  for (let i = 0; i < chiffres.length; i++) {
+    if (i > 0 && (chiffres.length - i) % 3 === 0) sortie += SEPARATEUR_MILLIERS;
+    sortie += chiffres[i];
+  }
+  return sortie;
+}
+
+/**
+ * Un entier tel que le joueur le lit — groupé sous dix mille, COMPACT au-dessus.
+ *
+ * ⚠⚠ ETHAN, 07/09 : « dès qu'un nombre est supérieur à dix mille, il faudrait
+ * l'afficher avec trois chiffres et k pour mille, m pour million, g pour
+ * milliard, et t pour mille milliards. » La règle vit dans
+ * `render/nombre.js` — deux couches en ont besoin et `sim/` ne peut pas
+ * importer d'`ui/`.
+ *
+ * ⚠ ELLE S'APPLIQUE PARTOUT D'UN COUP, ET C'EST VOULU. Les stocks, les débits,
+ * les capacités, les coûts, les points engagés passent TOUS par ici : une règle
+ * d'affichage posée écran par écran aurait laissé des « 2 500 000 » à côté de
+ * « 2,50M » sans que rien ne le dise.
  *
  * @param {number} n entier
  * @returns {string}
@@ -140,12 +172,7 @@ export function formaterEntier(n) {
   const entier = Math.trunc(n);
   const signe = entier < 0 ? '-' : '';
   const chiffres = String(Math.abs(entier));
-  let sortie = '';
-  for (let i = 0; i < chiffres.length; i++) {
-    if (i > 0 && (chiffres.length - i) % 3 === 0) sortie += SEPARATEUR_MILLIERS;
-    sortie += chiffres[i];
-  }
-  return signe + sortie;
+  return signe + (compacter(chiffres, grouperLesChiffres) ?? grouperLesChiffres(chiffres));
 }
 
 /**
@@ -178,7 +205,12 @@ export function formaterDixiemes(dixiemes) {
   }
   const signe = dixiemes < 0 ? '-' : '';
   const absolu = Math.abs(dixiemes);
-  return `${signe}${formaterEntier(Math.floor(absolu / 10))},${absolu % 10}`;
+  // ⚠⚠ GROUPÉ, JAMAIS COMPACT, ET LA DISTINCTION EST STRUCTURELLE. Cette
+  // fonction compose sa PROPRE virgule décimale : un entier compacté rendrait
+  // « 12,3k,4 », c'est-à-dire deux virgules dans un nombre. Les niveaux
+  // plafonnent à 50 et ne peuvent pas atteindre le seuil aujourd'hui — la garde
+  // s'écrit maintenant, pas le jour où un compteur en dixièmes le franchira.
+  return `${signe}${grouperLesChiffres(String(Math.floor(absolu / 10)))},${absolu % 10}`;
 }
 
 /**

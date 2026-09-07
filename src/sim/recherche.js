@@ -29,6 +29,10 @@ import {
 } from '../data/recherche.js';
 import { UNITES, DEFENSES } from '../data/combat.js';
 import { MODULES, moduleEstCable } from '../data/modules.js';
+// ⚠ `sim/` IMPORTE DE `render/`, ET CE N'EST PAS UNE PREMIÈRE : `sim/poi.js` y
+// prend `empriseDeLaGrosseBase`. Ce qui est interdit est d'importer d'`ui/`, qui
+// touche au DOM ; `render/` ne rend que des primitives.
+import { compacter } from '../render/nombre.js';
 
 /** Le millier qui sépare les points des milli-points. */
 const MILLE = 1000n;
@@ -45,15 +49,30 @@ const MILLE = 1000n;
  * @param {bigint} n
  * @returns {string}
  */
-function grouper(n) {
-  const signe = n < 0n ? '-' : '';
-  const chiffres = (n < 0n ? -n : n).toString();
+function grouperLesChiffres(chiffres) {
   let sortie = '';
   for (let i = 0; i < chiffres.length; i += 1) {
     if (i > 0 && (chiffres.length - i) % 3 === 0) sortie += ' ';
     sortie += chiffres[i];
   }
-  return signe + sortie;
+  return sortie;
+}
+
+function grouper(n) {
+  const signe = n < 0n ? '-' : '';
+  const chiffres = (n < 0n ? -n : n).toString();
+  // ⚠⚠ COMPACT AU-DELÀ DE DIX MILLE — ETHAN, 07/09. Les prix de l'arbre vont
+  // jusqu'à 2 500 000 000, et un compteur qui écrit ce nombre en entier sur
+  // 375 px de large déborde ou se tronque. La règle est celle de tout le jeu, et
+  // elle est écrite UNE fois, dans `render/nombre.js` : cette couche-ci ne peut
+  // pas importer d'`ui/`, mais `sim/poi.js` importe déjà de `render/`.
+  //
+  // ⚠ ET LE COMPACTAGE NE DIVISE PAS. Il coupe la chaîne de chiffres, donc il
+  // garde la précision d'un `bigint` que ce module existe pour préserver — « une
+  // seule conversion en `Number` quelque part sur ce chemin, et le compteur du
+  // joueur se met à mentir en fin de partie ».
+  const compact = compacter(chiffres, grouperLesChiffres);
+  return signe + (compact ?? grouperLesChiffres(chiffres));
 }
 
 /**
