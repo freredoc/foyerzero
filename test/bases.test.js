@@ -81,6 +81,8 @@ import {
   DEPLACES_PAR_PRODUCTION_EN_DEFENSE, EMPREINTES_PAR_GRAINE_PRODUCTION_EN_DEFENSE,
   GESTES_ARMER_PRODUCTION_EN_DEFENSE, OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE,
   RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE, RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE,
+  DEPLACES_PAR_CIBLES_RANGEES, EMPREINTES_PAR_GRAINE_CIBLES_RANGEES,
+  RAPPORTS_PROCHE_CIBLES_RANGEES, RAPPORTS_OUVRAGE_CIBLES_RANGEES,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -132,7 +134,8 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_PRODUCTION_EN_DEFENSE[phase]?.[champ]
+  return DEPLACES_PAR_CIBLES_RANGEES[phase]?.[champ]
+    ?? DEPLACES_PAR_PRODUCTION_EN_DEFENSE[phase]?.[champ]
     ?? DEPLACES_PAR_SATELLITES_RESPAWN[phase]?.[champ]
     ?? DEPLACES_PAR_COLONNE[phase]?.[champ]
     ?? DEPLACES_PAR_RETOUR_DEFENSES[phase]?.[champ]
@@ -491,7 +494,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_PRODUCTION_EN_DEFENSE[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_CIBLES_RANGEES[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -581,11 +584,17 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // rapport. Ce qui NE bouge pas juste au-dessus — nombre de cibles, cible
       // retenue, non-fuite et exactitude de la simulation — dit que seule la
       // composition a changé.
+      // ⚠ ET LE LOT CIBLES-RANGÉES LES DÉPLACE TOUS LES DEUX, SUR LES VINGT-CINQ
+      // GRAINES : un site qui n'est plus disposé pareil ne rend pas le même
+      // rapport. Ce qui NE bouge pas juste au-dessus — nombre de cibles, cible
+      // retenue, non-fuite et exactitude — dit que seule la disposition a changé.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
+        ? (RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
+          ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]
+        : (RAPPORTS_PROCHE_CIBLES_RANGEES[g]
+          ?? RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]
           ?? RAPPORTS_PROCHE_ARRET[g]);
       assert.equal(
         empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,

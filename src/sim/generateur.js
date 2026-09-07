@@ -248,10 +248,62 @@ export function composerBatiments(nbBatiments) {
 }
 
 /**
- * Découpe `nb` occupants en tailles de rangée, la dernière portant le reste.
- * @returns {number[]} Une taille par rangée employée, de l'arrière vers l'avant.
+ * Le support des tailles est-il un PRÉFIXE — aucune rangée vide au milieu ?
+ *
+ * ⚠ LA CONTIGUÏTÉ EST UNE CONTRAINTE TESTÉE, PAS UNE COMMODITÉ. `COL T16`
+ * asserte que « les rangées occupées sont les plus ARRIÈRE, sans trou » : c'est
+ * la première des quatre contraintes de `placerDefenses` — l'assaut doit
+ * traverser du vide avant de rencontrer quoi que ce soit. Un transfert qui
+ * ouvrirait un trou est donc DÉFAIT, pas accepté.
  */
-function taillesDeRangee(nb, parRangee, rangeesMax, quoi) {
+function contigueDepuisLOrigine(tailles) {
+  let vues = false;
+  for (const t of tailles) {
+    if (t === 0) vues = true;
+    else if (vues) return false;
+  }
+  return true;
+}
+
+/**
+ * Découpe `nb` occupants en tailles de rangée — ET C'EST UN TIRAGE DEPUIS LE LOT
+ * CIBLES-RANGÉES, 07/09.
+ *
+ * ⚠⚠ ELLE ÉTAIT LA CAUSE DU DÉFAUT D'ETHAN, ET ELLE SEULE. Elle rendait
+ * `6, 6, …, reste` — une fonction pure de `nb`, donc du niveau. La colonne
+ * passait par une permutation semée depuis le lot COLONNE ; la RANGÉE, elle,
+ * était une fonction pure du rang `i` dans la liste, et la liste est composée
+ * dans un ordre déterministe. Le nᵉ occupant tombait donc toujours dans la même
+ * rangée. Mesuré sur 200 graines : **UN SEUL** profil d'occupation par rangée,
+ * à tous les types et à tous les niveaux.
+ *
+ * ⚠⚠ ON PART DU DÉCOUPAGE D'AVANT, PUIS ON TRANSFÈRE — même forme que
+ * `profilDeCharge`, et pour les mêmes raisons. Une unité passe d'une rangée à
+ * une autre ; le transfert est DÉFAIT s'il dépasse `parRangee`, ou s'il ouvre un
+ * trou dans le bloc collé au fond. Le nombre de rangées employées varie donc
+ * aussi : c'est ce qui fait qu'un site ne se lit plus toujours sur les mêmes
+ * trois lignes.
+ *
+ * ⚠⚠ UN TRANSFERT REFUSÉ CONSOMME SES TIRAGES COMME UN ACCEPTÉ. Les deux bornes
+ * sont tirées AVANT tout test : le nombre de tirages ne dépend pas du résultat,
+ * donc deux graines consomment exactement autant de flux. C'est la règle du §5
+ * du brief, et c'est la seule forme sous laquelle `genererSite` reste
+ * déterministe — un « tire, si ça ne va pas recommence » ferait diverger deux
+ * parties identiques.
+ *
+ * ⚠ LE TABLEAU FAIT `rangeesMax` CASES, PAS `ceil(nb / parRangee)`. Sans les
+ * cases vides au bout, aucun transfert ne pourrait AJOUTER une rangée, et le
+ * nombre de rangées resterait la fonction pure de `nb` qu'on vient de retirer.
+ *
+ * @param {object} rng
+ * @param {number} nb occupants à répartir
+ * @param {number} parRangee plafond par rangée
+ * @param {number} rangeesMax rangées disponibles
+ * @param {number} brassages transferts tentés
+ * @param {string} quoi pour le message d'erreur
+ * @returns {number[]} Une taille par rangée EMPLOYÉE, depuis l'origine du bloc.
+ */
+function taillesDeRangee(rng, nb, parRangee, rangeesMax, brassages, quoi) {
   const rangees = Math.ceil(nb / parRangee);
   if (rangees > rangeesMax) {
     throw new Error(
@@ -259,14 +311,27 @@ function taillesDeRangee(nb, parRangee, rangeesMax, quoi) {
       + `à ${parRangee} occupants`,
     );
   }
-  const tailles = [];
+  const tailles = new Array(rangeesMax).fill(0);
   let reste = nb;
   for (let k = 0; k < rangees; k++) {
     const t = Math.min(parRangee, reste);
-    tailles.push(t);
+    tailles[k] = t;
     reste -= t;
   }
-  return tailles;
+  for (let k = 0; k < brassages; k++) {
+    const depuis = entier(rng, 0, rangeesMax - 1);
+    const vers = entier(rng, 0, rangeesMax - 1);
+    if (depuis === vers) continue;
+    if (tailles[depuis] === 0) continue;
+    if (tailles[vers] + 1 > parRangee) continue;
+    tailles[depuis] -= 1;
+    tailles[vers] += 1;
+    if (!contigueDepuisLOrigine(tailles)) {
+      tailles[depuis] += 1;
+      tailles[vers] -= 1;
+    }
+  }
+  return tailles.filter((t) => t > 0);
 }
 
 /**
@@ -430,8 +495,16 @@ function placerBatiments(rng, liste, niveau) {
   const plancher = new Array(GRILLE.largeur).fill(0);
   for (const p of poses) plancher[p.colonne - 1] += 1;
 
+  // ⚠ `GRILLE.largeur` EST LE PLAFOND DES BÂTIMENTS, ET CE N'EST PAS
+  // `occupantsMaxParRangee` — la réponse à la question du brief. Neuf bâtiments
+  // par rangée sont légaux ; six est la règle des DÉFENSES, et elle a un motif
+  // que les bâtiments n'ont pas : laisser passer l'assaut. Le relevé qui montrait
+  // « 7 occupants en rangée 11 » lisait une rangée de BÂTIMENTS, pas une
+  // violation. Mesuré sur les trois types, cinquante niveaux et vingt graines :
+  // défenses 6 au plus, bâtiments 9 au plus.
   const tailles = taillesDeRangee(
-    proportionnels.length, GRILLE.largeur, fond - premiere, 'bâtiments',
+    rng, proportionnels.length, GRILLE.largeur, fond - premiere,
+    DISPOSITION_DEFENSES.brassagesDeRangee, 'bâtiments',
   );
   const charge = profilDeCharge(
     rng, proportionnels.length, tailles,
@@ -461,9 +534,14 @@ function placerBatiments(rng, liste, niveau) {
  *      l'ASSAUT ne change jamais de colonne, une colonne à huit structures
  *      serait infranchissable et une colonne vide une autoroute.
  *
- * Les rangées se remplissent du fond vers l'avant, `occupantsMaxParRangee` à la
- * fois, la rangée la plus AVANCÉE portant le reste. Le nombre de rangées vaut
- * donc toujours `ceil(nb / 6)`, et il n'a pas bougé.
+ * ⚠⚠ LES TAILLES DE RANGÉE SE TIRENT DEPUIS LE LOT CIBLES-RANGÉES, 07/09. Ce
+ * paragraphe disait : « les rangées se remplissent du fond vers l'avant,
+ * `occupantsMaxParRangee` à la fois, la rangée la plus AVANCÉE portant le reste.
+ * Le nombre de rangées vaut donc toujours `ceil(nb / 6)`, et il n'a pas bougé. »
+ * C'était vrai, et c'était le défaut restant : le nᵉ occupant tombait toujours
+ * dans la même rangée, si bien qu'un camp de niveau 7 portait 5 occupants en
+ * rangée 10 et 7 en rangée 11 SUR TOUTE GRAINE. Voir `taillesDeRangee`. Ce qui
+ * ne bouge pas : le bloc reste COLLÉ AU FOND et sans trou.
  *
  * ⚠⚠ CE QUI A BOUGÉ, C'EST LA COLONNE — lot COLONNE, 06/09, point 9. Ce
  * paragraphe expliquait que « l'indice global i donne la colonne par
@@ -478,9 +556,18 @@ function placerBatiments(rng, liste, niveau) {
  * depuis le lot 2B, et le placement d'avant n'en employait qu'un. Le lot cesse
  * de laisser une moitié du budget inutilisée ; il n'en demande pas davantage.
  *
- * L'ordre de la liste porte le reste : artilleries d'abord, donc au fond. Une
- * artillerie a une portée minimale de 3,5 — posée à l'avant, elle ne tirerait
- * jamais.
+ * L'ordre de la liste porte le reste : artilleries d'abord, donc au fond.
+ *
+ * ⚠⚠ ET LA RAISON QUE CETTE PHRASE DONNAIT ÉTAIT FAUSSE — corrigée au lot
+ * CIBLES-RANGÉES. Elle disait : « une artillerie a une portée minimale de 3,5 —
+ * posée à l'avant, elle ne tirerait jamais. » `data/sites.js` a mesuré le
+ * contraire dès le 25/08 : le moteur teste une distance EUCLIDIENNE 2D, donc une
+ * Faucheuse en rangée 3 atteint les colonnes lointaines — 23 ticks de tir
+ * mesurés, premier tir au tick 1. Elle n'est PAS inerte. Ce qui est vrai, et qui
+ * suffit à fonder l'ordre : elle ENGAGE MOINS — 23 ticks contre 110 en rangée
+ * 10, et 32 cases de couverture contre 50. `verifierLeRetraitDesPortees` garde
+ * l'ordre, `rangeeLaPlusAvanceeQuiTire` garde la géométrie, et le second est
+ * vacueux aujourd'hui : aucune rangée de la bande n'est interdite à personne.
  */
 function placerDefenses(rng, liste, niveau) {
   const parRangee = DISPOSITION_DEFENSES.occupantsMaxParRangee;
@@ -488,7 +575,9 @@ function placerDefenses(rng, liste, niveau) {
   const rangeesMax = bande.derniere - bande.premiere + 1;
   const nb = liste.length;
   if (nb === 0) return [];
-  const tailles = taillesDeRangee(nb, parRangee, rangeesMax, 'défenses');
+  const tailles = taillesDeRangee(
+    rng, nb, parRangee, rangeesMax, DISPOSITION_DEFENSES.brassagesDeRangee, 'défenses',
+  );
   const charge = profilDeCharge(
     rng, nb, tailles,
     DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, null,
@@ -503,7 +592,102 @@ function placerDefenses(rng, liste, niveau) {
       i += 1;
     }
   });
+  verifierLeRetraitDesPortees(poses);
   return poses;
+}
+
+/**
+ * La rangée la plus AVANCÉE d'où cette pièce atteint encore quelque chose.
+ *
+ * ⚠⚠ ELLE EST DÉRIVÉE, ET LE RELEVÉ QUI LA FONDE EST DANS LE RAPPORT. Une pièce
+ * à portée minimale ne peut pas tirer sur ce qui la touche : `creerCombat`
+ * compare `porteeMiniCarree ≤ d² ≤ porteeCarree`, les deux axes en milli-cases.
+ * On cherche donc, pour chaque rangée, s'il existe UNE case de la grille dans
+ * cette couronne — et on rend la plus avancée qui en porte une.
+ *
+ * ⚠⚠ ET LE RÉSULTAT EST VACUEUX AUJOURD'HUI, CE QUI EST UN FAIT ET NON UN
+ * ÉCHEC. Les trois artilleries portent `porteeMini: 3.5` et `portee: 5.5` :
+ * depuis n'importe quelle rangée de la bande, la couronne `[12,25 ; 30,25]`
+ * contient des cases — quatre rangées devant, par exemple. **Aucune rangée de la
+ * bande de défense n'est donc géométriquement interdite à aucune pièce.** C'est
+ * ce que `data/sites.js` mesure déjà depuis le 25/08 : « une Faucheuse en rangée
+ * 3 atteint les colonnes lointaines dès l'apparition […] Elle n'est PAS
+ * inerte. » La phrase « posée à l'avant, elle ne tirerait jamais » est fausse, et
+ * l'en-tête de `placerDefenses` la portait encore.
+ *
+ * ⚠ CE QUI BORNE VRAIMENT L'ARTILLERIE EST L'ORDRE, PAS LA GÉOMÉTRIE — et c'est
+ * `verifierLeRetraitDesPortees` juste dessous qui le garde. Cette fonction-ci
+ * reste écrite parce qu'elle deviendra mordante le jour où une portée minimale
+ * montera : elle se lit dans les données, elle ne recopie aucun nombre.
+ *
+ * @param {string} id
+ * @returns {number} la rangée la plus avancée qui garde une cible atteignable
+ */
+export function rangeeLaPlusAvanceeQuiTire(id) {
+  const ligne = DEFENSES[id] ?? UNITES[id];
+  if (ligne === undefined) throw new Error(`générateur : « ${id} » n'est ni défense ni unité`);
+  const mini = enEntier(ligne.porteeMini ?? 0, MILLE, `${id}.porteeMini`);
+  const maxi = enEntier(ligne.portee ?? 0, MILLE, `${id}.portee`);
+  const bande = GRILLE.bandes.defense;
+  // ⚠⚠ UNE PIÈCE QUI NE TIRE PAS N'A AUCUNE CONTRAINTE DE RANGÉE, et l'oublier
+  // donnait l'inverse exact de la règle. Un Mur a `portee: 0` : la couronne
+  // `[0 ; 0]` ne contient aucune case, la boucle ci-dessous n'aboutissait jamais
+  // et le repli rendait la rangée du FOND — c'est-à-dire qu'un Merlon n'aurait
+  // eu le droit de se poser que collé aux bâtiments. Mesuré par `CR T3`, qui
+  // lisait 10 là où il attendait 3.
+  if (maxi === 0) return bande.premiere;
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+      for (let r = 1; r <= GRILLE.longueur; r++) {
+        for (let c = 1; c <= GRILLE.largeur; c++) {
+          const dr = (rangee - r) * MILLE;
+          const dc = (colonne - c) * MILLE;
+          const d2 = dr * dr + dc * dc;
+          if (d2 >= mini * mini && d2 <= maxi * maxi && d2 > 0) return rangee;
+        }
+      }
+    }
+  }
+  return bande.derniere;
+}
+
+/**
+ * L'artillerie reste DERRIÈRE tout le reste, et cette garde le dit.
+ *
+ * ⚠⚠ C'EST LA QUATRIÈME CONTRAINTE, ET C'EST CELLE QUE LA POSE LIBRE POUVAIT
+ * PERDRE EN SILENCE. Elle tenait « par construction » : la liste arrive triée
+ * par `ordonnerDefenses` — artillerie, tourelle, unité, mur, barrière — et les
+ * rangées se remplissent du fond vers l'avant. Elle tient ENCORE, les tailles de
+ * rangée tirées n'ayant pas changé cet ordre-là ; mais « par construction » est
+ * exactement ce qui cesse d'être vrai quand la construction bouge, et ce lot la
+ * fait bouger. On mesure donc, plutôt que de continuer à le déduire.
+ *
+ * ⚠ LE MOTIF N'EST PAS QU'ELLE SERAIT MUETTE DEVANT — mesuré le 25/08, elle ne
+ * l'est pas. C'est qu'elle ENGAGE MOINS : 23 ticks de tir en rangée 3 contre 110
+ * en rangée 10, et une couverture géométrique qui tombe de 50 cases à 32. Le
+ * motif est un motif de jeu, `DISPOSITION_DEFENSES.ordreCategories` le porte, et
+ * cette garde ne fait que refuser qu'on le perde.
+ */
+function verifierLeRetraitDesPortees(poses) {
+  const ordre = DISPOSITION_DEFENSES.ordreCategories;
+  for (const a of poses) {
+    if (categorieDe(a.id) !== 'artillerie') continue;
+    for (const b of poses) {
+      if (categorieDe(b.id) === 'artillerie') continue;
+      if (a.rangee < b.rangee) {
+        throw new Error(
+          `générateur : ${a.id} (artillerie) en rangée ${a.rangee}, devant `
+          + `${b.id} en rangée ${b.rangee} — l'ordre ${ordre.join(' → ')} est perdu`,
+        );
+      }
+    }
+    if (a.rangee < rangeeLaPlusAvanceeQuiTire(a.id)) {
+      throw new Error(
+        `générateur : ${a.id} en rangée ${a.rangee}, devant sa rangée `
+        + `${rangeeLaPlusAvanceeQuiTire(a.id)} — elle n'aurait aucune cible`,
+      );
+    }
+  }
 }
 
 /** Trie les défenses du fond vers l'avant selon DISPOSITION_DEFENSES. */

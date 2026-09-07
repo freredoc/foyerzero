@@ -1310,4 +1310,49 @@ export const DISPOSITION_DEFENSES = {
   // écrire une seconde table pour un seul nombre serait la seconde vérité que
   // §4 interdit.
   brassagesDeCharge: 18,
+
+  // Nombre de TRANSFERTS tentés sur les TAILLES DE RANGÉE — lot CIBLES-RANGÉES,
+  // 07/09, point 9 d'Ethan : « audit sur les cibles ouvrage : elles sont toutes
+  // positionnées de façon identique ».
+  //
+  // ⚠⚠ LE LOT COLONNE AVAIT TRAITÉ UN AXE SUR DEUX, ET C'EST LA LEÇON. Il a
+  // rendu la charge PAR COLONNE variable ; la rangée, elle, restait une
+  // fonction pure du rang dans la liste — `taillesDeRangee` découpait toujours
+  // `nb` en `6, 6, …, reste`. Mesuré sur 200 graines AVANT ce lot : **UN SEUL**
+  // profil d'occupation par rangée, à tous les types et à tous les niveaux. Un
+  // camp de niveau 7 portait toujours 5 occupants en rangée 10, 7 en rangée 11
+  // et 2 en rangée 18, quelle que soit la graine.
+  //
+  // ⚠⚠ ET LE TEST DU LOT COLONNE NE POUVAIT PAS LE VOIR : `COL T15` mesure le
+  // multi-ensemble des charges par COLONNE. Il est passé sans jamais regarder
+  // l'axe qui gênait Ethan. Le brief d'alors demandait « le multi-ensemble des
+  // `(rangee, id)` » ; l'exécution a mesuré autre chose. `CR T1` mesure les
+  // rangées, et son montage IGNORE la colonne pour ne pas refaire la faute.
+  //
+  // Vingt-quatre tentatives, soit TROIS par rangée de la bande de défense.
+  // Mesuré sur 200 graines — profils distincts, tous occupants / défenses
+  // seules :
+  //
+  //     transferts   camp n.3   camp n.7   base n.15   base n.30
+  //              6      5 / 2      6 / 3     59 / 25    122 / 50
+  //             12     10 / 4     12 / 5    117 / 53    190 / 121
+  //             18     11 / 4     13 / 5    162 / 90    200 / 147
+  //         →   24     18 / 4     21 / 6    187 / 124   200 / 164
+  //             36     25 / 4     32 / 10   200 / 158   200 / 191
+  //             48     35 / 4     44 / 13   198 / 172   200 / 197
+  //
+  // ⚠ LE COMPTE MONTE ENCORE À 48, ET LA VALEUR N'EST DONC PAS UN OPTIMUM. Ce
+  // qui plafonne, c'est la colonne des DÉFENSES aux bas niveaux : un camp de
+  // niveau 3 n'a que trois défenseurs, et il n'existe pas plus de quatre façons
+  // de les répartir sous les contraintes. Aucun nombre de transferts ne l'ouvre.
+  // Vingt-quatre est le point où les deux bandes sont franchement brassées pour
+  // un coût de tirages qui reste petit ; monter est sans risque et sans
+  // migration, la valeur est ici pour ça.
+  //
+  // ⚠ UN TRANSFERT REFUSÉ CONSOMME SES TIRAGES COMME UN ACCEPTÉ — même
+  // discipline que `brassagesDeCharge`, et pour la même raison.
+  //
+  // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme les deux valeurs
+  // ci-dessus.
+  brassagesDeRangee: 24,
 };

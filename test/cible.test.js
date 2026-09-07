@@ -312,7 +312,16 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // de la graine 1 tombe désormais très vite. **Aucun barème n'a été touché**,
   // et ce que ce test tient est toujours la même chose : le raid ne se termine
   // pas faute de mieux.
-  assert.equal(r.nbTicks, 164);
+  //
+  // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : LES TAILLES DE RANGÉE SE TIRENT À LEUR TOUR.
+  // Le lot COLONNE avait rendu la charge par COLONNE variable ; la rangée restait
+  // une fonction pure du rang, si bien qu'un site portait toujours le même nombre
+  // d'occupants sur les mêmes lignes — mesuré, UN SEUL profil d'occupation par
+  // rangée sur 200 graines. `taillesDeRangee` consomme donc désormais des
+  // tirages, et tout ce qui tire APRÈS `placerDefenses` et `placerBatiments` se
+  // décale : obstacles, composition, vagues. Le brief l'annonçait, le rapport le
+  // chiffre, et ce que ce test tient ne change pas.
+  assert.equal(r.nbTicks, 409);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -337,8 +346,15 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // pas à griffer un bâtiment : l'assaut lourd meurt dans la bande de défense.
   // C'est le même renversement que sur le tick, mesuré sur l'autre grandeur.
   // **Aucun barème n'a été touché.**
-  assert.deepEqual(r.butin, { quartz: 0, scorie: 0 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 0);
+  //
+  // ⚠⚠ ET LE LOT CIBLES-RANGÉES LE REMONTE À 31 028 ET 10 342. Quatre cent neuf
+  // ticks au lieu de cent soixante-quatre : l'assaut lourd de la graine 1
+  // traverse de nouveau la bande de défense et griffe les bâtiments, et le
+  // multiplicateur de 3,25 de l'avant-poste amplifie la remontée comme il avait
+  // amplifié la chute. **Aucun barème n'a été touché**, et ce que ce test tient
+  // — le raid ne se termine pas faute de mieux — ne bouge pas.
+  assert.deepEqual(r.butin, { quartz: 31_028, scorie: 10_342 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
 });
 
 // ---------------------------------------------------------------------------
@@ -455,10 +471,24 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // 547 secondes de combat, c'est six fois le plafond. Ce n'est plus un
   // dépassement, c'est un autre régime. Voir `RAPPORT-lotCOLONNE.md`.
   //
-  // ⚠ ET LA LISTE EST NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
-  // n'importe quel autre raid. Celui-là, et personne d'autre.
+  // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : ILS SONT TROIS, ET LES TROIS SONT NEUFS. La
+  // liste bouge entièrement des deux côtés — `blindeLourd/base/1` en sort, trois
+  // assauts MIXTES y entrent. Les tailles de rangée se tirent désormais, donc la
+  // disposition ET la composition d'un site changent ensemble : un raid qui
+  // traînait s'achève, un raid qui s'achevait traîne. Un allongement uniforme
+  // n'aurait fait qu'ajouter.
+  //
+  // ⚠⚠ ET LE « AUTRE RÉGIME » A DISPARU, CE QUI EST LA BONNE NOUVELLE DU RELEVÉ.
+  // Aucun des trois n'est un gel, vérifié en portant `maxTicks` à 20 000 : ils
+  // se concluent tous par `attaquants`, aux ticks **1 478** (mixte/base/11),
+  // **1 101** (mixte/camp/11) et **945** (mixte/camp/3). Le 5 478 du lot COLONNE
+  // — six fois le plafond, « à remonter » — n'a plus d'équivalent : le pire des
+  // trois vaut une fois et demie le plafond.
+  //
+  // ⚠ ET LA LISTE EST NOMMÉE, PAS BORNÉE : « au plus trois » laisserait entrer
+  // n'importe quel autre raid. Ceux-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), ['blindeLourd/base/1'],
+    expires.sort(), ['mixte/base/11', 'mixte/camp/11', 'mixte/camp/3'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
