@@ -281,21 +281,32 @@ agrandie **trois fois**, la 128 une fois et demie. À quelle taille CSS ils
 s'afficheront, personne ne le sait encore : c'est une décision du câblage.
 
 ⚠⚠ **ET LE CHOIX NE SE PREND PAS PAR FAMILLE AUJOURD'HUI.** `GRILLE_ATLAS` de
-`tools/build.js` est **une constante, et une seule**, pour les dix familles — son
+`tools/build.js` est **une constante, et une seule**, pour les NEUF familles
+embarquées — son
 propre commentaire dit pourquoi : « l'écrire dix fois dans la table ci-dessous, ce
 serait dix occasions d'en oublier une, et la faute serait MUETTE ». Embarquer
 l'interface en 64 pendant que les autres restent en 128 demanderait de faire de
 cette constante une valeur PAR ENTRÉE, plus un test qui épingle la grille de
 chaque famille.
 
-**Proposition à Ethan, en trois lignes :**
+**Proposition faite à Ethan :** garder les deux grilles sur le disque, trancher
+au lot de câblage quand les tailles d'affichage réelles seront connues, et se
+souvenir que choisir la 64 pour cette seule famille demanderait de faire de
+`GRILLE_ATLAS` une valeur par entrée — un lot, pas une ligne.
 
-1. **Garder les deux grilles sur le disque** — elles ne coûtent rien au livrable
-   et la 64 est déjà produite.
-2. **Trancher au lot de CÂBLAGE**, quand les tailles d'affichage réelles seront
-   connues, plutôt que maintenant à l'aveugle.
-3. Si la 64 gagne, le geste complet est : `GRILLE_ATLAS` par entrée + un test qui
-   épingle la grille de chaque famille. **C'est un lot, pas une ligne.**
+⚠⚠ **ETHAN A TRANCHÉ LE 07/09 : « 128. »** La proposition tombe, et c'est la
+réponse la plus simple des trois : **rien à faire**. `GRILLE_ATLAS` vaut déjà
+128, `COTE_SPRITE` aussi, et le câblage embarquera `atlas-interface-128.webp`
+par le mécanisme ordinaire. Ce que ça fixe :
+
+- le câblage paiera **233 938 octets** de base64, pas 105 922 ;
+- projection **8 250 062 octets**, marge **1 049 938**, soit **11,29 %** ;
+- **`GRILLE_ATLAS` reste une constante unique**, et la complication d'une valeur
+  par famille n'a plus lieu d'être — c'est le vrai gain de cet arbitrage, plus
+  encore que les pixels ;
+- ⚠ **la grille 64 continue d'être PRODUITE**, comme pour les neuf autres
+  familles. Elle ne coûte rien au livrable, et la retirer serait une exception
+  de plus dans `tools/planches.py` pour zéro octet gagné.
 
 ---
 
@@ -315,18 +326,45 @@ atlas, une entrée dans `src/data/atlas.js`. **Aucun n'est affiché.**
 | états d'interface | 4 | `ui_verrou` `ui_emplacement` `ui_vague` `ui_budget` |
 | flèches et signes | 5 | `ui_fleche_gauche` `ui_fleche_droite` `ui_fleche_verte` `ui_plus` `ui_moins` |
 
-**Découpage proposé du câblage — quatre lots, dans cet ordre :**
+**Découpage proposé du câblage — quatre lots, dans cet ordre.**
 
-| lot | pictogrammes | écrans | pourquoi celui-là d'abord |
+⚠⚠ **CE QUI REND LE PREMIER DIFFÉRENT DES TROIS AUTRES.** Aujourd'hui l'atlas
+d'interface existe sur le disque et dans l'index, mais **la page ne le connaît
+pas**. Le rendre visible demande trois gestes, une fois pour toutes :
+
+1. `src/index.src.html` déclare `--atlas-interface: url('%ATLAS_INTERFACE%')`,
+   comme il déclare déjà `--atlas-batiment` ;
+2. `tools/build.js` ajoute `atlas('interface')` à `FICHIERS_INLINE`, ce qui
+   remplace le marqueur par le `data:` — **c'est là que les 233 938 octets
+   entrent**, et nulle part ailleurs ;
+3. `src/ui/session.js` ajoute `'atlas-interface': '--atlas-interface'` à
+   `ATLAS_DE_LA_PAGE` **si et seulement si** un canevas en veut un
+   `HTMLImageElement` ; une étiquette en CSS n'en a pas besoin.
+
+**Après ça, poser un pictogramme est une ligne** — `fondDuSprite('interface',
+'ui_quartz')` rend déjà l'image, la position et la taille de fond. Les trois lots
+suivants ne coûtent donc **pas un octet d'image** : ils ne font que remplacer des
+étiquettes par des fonds.
+
+| lot | pictogrammes | écrans | ce qu'il fait, et pourquoi à ce rang |
 |---|---:|---|---|
-| **CÂBLAGE-BANDEAU** | 7 — ressources + points stratégiques | `src/ui/session.js` | Le bandeau est **partout** : c'est le lot qui fait entrer l'atlas dans le livrable, donc celui qui paie les octets, et il vaut mieux qu'il soit petit et visible. Il porte aussi la décision 64/128 du §8. |
-| **CÂBLAGE-ARSENAL** | 10 — cibles, châssis, catégories | `src/ui/arsenal.js`, `src/ui/offense.js`, `src/ui/defense.js` | Les trois palettes ont déjà des libellés à remplacer ; les six cibles/châssis et les quatre catégories forment un vocabulaire fermé. |
-| **CÂBLAGE-MODULES** | 14 | `src/ui/recherche.js`, `src/ui/raid.js` | Le plus gros bloc, et le seul dont la table de vérité est déjà écrite — `MODULES` a quatorze clés, `PIC T2 bis` en garde la correspondance. |
-| **CÂBLAGE-CHIFFRES** | 15 — stats, états, flèches et signes | `src/ui/chantier.js`, `monde.js`, `mission.js`, et les contrôles | Le plus diffus : `ui_plus` / `ui_moins` / les flèches sont des CONTRÔLES, pas des étiquettes, et ils touchent tous les écrans. À faire en dernier, quand la convention d'affichage sera posée par les trois lots d'avant. |
+| **1. CÂBLAGE-BANDEAU** | **7** — les 3 ressources + les 4 points stratégiques | `src/index.src.html`, `tools/build.js`, `src/ui/session.js` | **Le seul lot qui paie des octets** : il fait entrer l'atlas dans le livrable (+233 938, marge 11,29 %) et pose la convention d'affichage — taille CSS, alignement sur le texte, comportement à `dpr` 3. Il est premier parce que le bandeau est **sur tous les écrans** : si la convention est mauvaise, ça se voit tout de suite, sur sept pictogrammes et pas sur quarante-six. |
+| **2. CÂBLAGE-ARSENAL** | **10** — 3 cibles, 3 châssis, 4 catégories de défense | `src/ui/arsenal.js`, `src/ui/offense.js`, `src/ui/defense.js` | Un **vocabulaire fermé** : les trois palettes affichent déjà ces dix notions en toutes lettres, et les remplacer est une substitution ligne à ligne. Deuxième parce que c'est le premier vrai essai de la convention du lot 1 sur des listes denses. |
+| **3. CÂBLAGE-MODULES** | **14** — les quatorze modules | `src/ui/recherche.js`, `src/ui/raid.js` | Le plus gros bloc, et **le seul dont la table de vérité est déjà écrite** : `MODULES` a quatorze clés, `PIC T2 bis` garde déjà la correspondance nom de sprite ↔ clé. Le lot n'a donc pas à décider quel dessin va où, seulement où le poser à l'écran. |
+| **4. CÂBLAGE-CHIFFRES** | **15** — 6 stats et actions, 4 états, 5 flèches et signes | `src/ui/chantier.js`, `monde.js`, `mission.js`, et les contrôles | **Le plus diffus, donc le dernier.** `ui_plus`, `ui_moins` et les trois flèches ne sont pas des étiquettes mais des **CONTRÔLES** : ils entrent dans des boutons, donc ils touchent à l'accessibilité, aux zones de touche et aux libellés lus à voix haute. À faire quand les trois lots d'avant auront posé la convention, pas avant. |
 
-⚠ **CE DÉCOUPAGE EST UNE PROPOSITION, PAS UNE DÉCISION.** Il suit les écrans, pas
-les planches — un lot par écran laisse relire un écran d'un coup, et c'est ce qui
-manquait à un câblage de quarante-six d'un seul tenant.
+⚠ **LE DÉCOUPAGE SUIT LES ÉCRANS, PAS LES PLANCHES.** Un lot par famille de
+planche mélangerait quatre écrans dans chaque relecture ; un lot par écran laisse
+relire un écran d'un coup. C'est le seul critère qui a servi.
+
+⚠ **ET IL EST DÉSÉQUILIBRÉ EXPRÈS** : 7, 10, 14, 15. Le premier est petit parce
+qu'il porte le risque — les octets et la convention ; le dernier est gros parce
+qu'à ce moment-là il ne restera plus de décision à prendre.
+
+⚠⚠ **CE DÉCOUPAGE EST UNE PROPOSITION, PAS UNE DÉCISION.** Il tient aussi en
+**un seul lot** si tu préfères tout voir d'un coup — c'est alors quarante-six
+décisions d'interface dans une seule relecture, et c'est très exactement ce que
+le §6 du brief demandait d'éviter.
 
 ---
 
@@ -375,8 +413,10 @@ N'EST UN PICTOGRAMME.** Ventilés : **264 sons**, **1 `sol/`**, **1 `fond/`**,
   l'annonce (« il demande `opusenc`, qui n'est pas plus présent que Pillow sur un
   conteneur neuf »). Les `.opus` ne peuvent pas se reproduire sans lui.
 - **Les 3 WebP** : même classe que les 10 atlas — l'encodeur libwebp de cette
-  machine n'est pas celui qui a produit les fichiers commités. **Pixels
-  identiques.**
+  machine n'est pas celui qui a produit les fichiers commités. ⚠ **L'identité
+  des pixels a été vérifiée pour les 32 PNG de `planches`, PAS pour ces
+  trois-là** : la cause est présumée, pas mesurée, et le dire vaut mieux que de
+  l'affirmer.
 - **Les 2 JSON** : les treize outils écrivent leurs fichiers texte **sans
   `newline=`**. Sous Windows, le mode texte rend du CRLF ; le dépôt est en LF.
 
@@ -415,11 +455,11 @@ voulue : le remplacement devient un **geste explicite**.
 | **PIC T1** | la chaîne reproduit à l'octet, avant et après | **PASS** — 32/0/0 avant, **124/0/0** après. ⚠ **N'EST PAS UN TEST NODE** : `--verifier` est du Python, et `CLAUDE.md` §3 le garde hors de `npm run check`. Le verdict est ici. |
 | **PIC T2** | le compte est celui des grilles mesurées | **PASS** — 46, planche par planche, sur les deux grilles |
 | **PIC T2 bis** | les 14 modules sont les 14 clés de `MODULES` | **PASS** |
-| **PIC T3** | chaque pictogramme est centré | **PASS** — écart ≤ 1 px sur les 92, pire écart = 1 |
+| **PIC T3** | chaque pictogramme est centré | **PASS** — écart ≤ 1 px sur les 92 sprites et les DEUX AXES, pire écart = 1 |
 | **PIC T4** | aucun fond magenta ne survit | **PASS** — 0 sur **343 861** pixels opaques balayés |
 | **PIC T4 bis** | le vert de la flèche survit | **PASS** |
 | **PIC T5** | la table et les fichiers s'accordent | **PASS** — dans les deux sens |
-| **PIC T6** | les onze autres atlas n'ont pas bougé | **PASS** — 18 tailles en clair |
+| **PIC T6** | les atlas d'avant n'ont pas bougé | **PASS** — **18 tailles en clair**, soit les neuf familles d'avant × deux grilles. ⚠ Le brief dit « onze » ; le dépôt en portait **dix-huit fichiers pour neuf familles** au moment du lot. |
 | **PIC T7** | le poids est sous la borne, marge en clair | **PASS** — 8 016 124 < 9 300 000, marge 1 283 876 (13,81 %) |
 
 **`npm run check` : 1315 pass / 0 fail.** +8 tests, **aucune assertion retirée ni
@@ -454,5 +494,6 @@ assouplie**.
    correction, le pire écart vaut **1 px sur les deux axes et les deux grilles** —
    contre 5 px en 64 et **11 px en 128** avant. Il reste donc une assertion de
    plus que ce que le brief demandait, et elle garde la correction.
-6. ⚠ **CE QU'ETHAN TRANCHE** : la grille du câblage (§8) et le découpage des
-   quatre lots (§9).
+6. ⚠ **CE QU'ETHAN A TRANCHÉ, LE JOUR MÊME** : la grille du câblage sera la
+   **128** (§8). Reste ouvert : le découpage des quatre lots de câblage (§9),
+   qui est une proposition et pas une décision.

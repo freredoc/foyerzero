@@ -67,6 +67,18 @@ soit **233 938 en base64**, et c'est le lot de CÂBLAGE qui les paiera —
 projection **8 250 062 octets, marge 11,29 %**, toujours au-dessus des 10 % dont
 le brief demandait qu'on parle. Les 911 octets sont du JavaScript pur : les
 quarante-six noms et la grille 7 × 7 dans `src/data/atlas.js`.
+⚠⚠ **ETHAN A TRANCHÉ LA GRILLE DU CÂBLAGE LE JOUR MÊME : « 128. »** Le brief
+demandait de proposer la 64 si la seconde grille ne servait personne ; la 128
+l'emporte, et c'est la réponse qui ne demande RIEN — `GRILLE_ATLAS` de
+`tools/build.js` vaut déjà 128, `COTE_SPRITE` aussi, et la constante **reste
+unique** au lieu de devenir une valeur par famille. La grille 64 continue
+d'être produite comme pour les neuf autres familles : elle ne coûte rien au
+livrable, et la retirer serait une exception de plus pour zéro octet gagné.
+⚠ **LE CÂBLAGE EST PROPOSÉ EN QUATRE LOTS — §9 du rapport.** Seul le PREMIER
+paie des octets : il pose `--atlas-interface` dans `src/index.src.html` et
+`atlas('interface')` dans `tools/build.js`, et c'est LÀ que les 233 938 octets
+entrent. Les trois suivants ne font que remplacer des étiquettes par des fonds,
+`fondDuSprite('interface', …)` rendant déjà tout ce qu'il faut.
 ⚠⚠ **`tools/atlas.py` ÉCRASAIT SANS CONDITION, ET CE LOT L'A DÉCOUVERT EN
 S'Y COGNANT.** Mesuré sur un arbre PRISTINE, avant qu'une ligne ne soit écrite :
 l'outil réécrit **dix atlas sur dix-huit** avec les octets de l'encodeur WebP de

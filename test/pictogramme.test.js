@@ -8,7 +8,7 @@
  * quarante-six est quarante-six décisions d'interface, et ce n'est pas le même
  * travail que de produire des images. Ces tests gardent donc la CHAÎNE et rien
  * d'autre : la coupe des neuf planches, le centrage, le détourage, l'accord de
- * l'index et du disque, la non-régression des onze autres atlas, le poids.
+ * l'index et du disque, la non-régression des atlas d'avant, le poids.
  *
  * ⚠⚠ `PIC T1` N'EST PAS ICI, ET IL NE PEUT PAS Y ÊTRE. « La chaîne reproduit à
  * l'octet » se mesure par `python3 tools/planches.py --verifier`, et le dépôt
@@ -285,7 +285,7 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
 });
 
 // ---------------------------------------------------------------------------
-// PIC T6 — les onze autres atlas n'ont pas bougé d'un octet
+// PIC T6 — les atlas d'avant n'ont pas bougé d'un octet
 // ---------------------------------------------------------------------------
 
 /**
@@ -317,8 +317,8 @@ const TAILLES_D_AVANT = {
 
 test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () => {
   // ⚠⚠ NON-RÉGRESSION, ET ELLE A DEMANDÉ UNE CORRECTION D'OUTIL. `tools/atlas.py`
-  // écrivait SANS CONDITION : ajouter une famille réécrivait les onze autres
-  // atlas avec les octets de l'encodeur WebP de la machine, pour des images
+  // écrivait SANS CONDITION : ajouter une famille réécrivait DIX des dix-huit
+  // atlas d'avant avec les octets de l'encodeur WebP de la machine, pour des images
   // identiques. Mesuré le 07/09 sur un arbre PRISTINE, `--verifier` rend déjà
   // **8 identiques, 10 différents** sur dix-huit avant qu'une ligne de ce lot ne soit
   // écrite — les SPRITES, eux, se reproduisent à l'octet. L'outil porte
