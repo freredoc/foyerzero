@@ -55,6 +55,51 @@ export const BANDES = [
 export const BANDES_NAVIGABLES = ['batiments', 'defense'];
 
 /**
+ * Les zones d'écran à voiler quand on regarde la bande `cle` — tout ce qui
+ * n'est pas elle, fusionné en séquences d'un seul tenant.
+ *
+ * ⚠⚠ ELLE EXISTE POUR QUE LA COUTURE SOIT IMPOSSIBLE, PAS RARE. Le voile de
+ * `ui/chantier.js` est un dégradé répété à −45° : posé en DEUX éléments
+ * adjacents, sa phase redémarre à leur jointure et la couture se lit comme un
+ * défaut de dessin — c'est la leçon que le fichier écrit déjà contre un
+ * `::after` par case. Fusionner AVANT de créer les éléments transforme une
+ * propriété qu'il faudrait vérifier à l'œil en une propriété du code.
+ *
+ * ⚠⚠ ET C'EST LE DÉPLOIEMENT QUI L'A RENDUE NÉCESSAIRE — Ethan, 07/09, point 6 :
+ * « Afficher le hachuré dans les 2 lignes du bas en défense. » Il n'est pas dans
+ * `BANDES_NAVIGABLES` — il n'a pas de bouton depuis le lot ÉCRAN-CHANTIER — et
+ * il n'a pas à y entrer pour autant : « où l'on peut aller » et « ce qu'on ne
+ * compose pas » sont deux questions, et la seconde se répond par le complément.
+ *
+ * ⚠ ELLE NE NOMME AUCUNE BANDE, et c'est ce qui la garde compatible avec
+ * `RAID-E T5` : la table des trois bandes reste `BANDES`, ici et nulle part
+ * ailleurs.
+ *
+ * @param {string} cle la bande qu'on regarde
+ * @returns {{premiereLigne: number, nbLignes: number}[]}
+ */
+export function voilesDeLaBande(cle) {
+  const regardee = BANDES.find((b) => b.cle === cle);
+  if (regardee === undefined) throw new Error(`bandes : bande « ${cle} » inconnue`);
+  const lignes = new Set();
+  for (const bande of BANDES) {
+    if (bande.cle === cle) continue;
+    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
+    for (let i = 0; i < nbLignes; i += 1) lignes.add(premiereLigne + i);
+  }
+  const zones = [];
+  for (const ligne of [...lignes].sort((a, b) => a - b)) {
+    const derniere = zones[zones.length - 1];
+    if (derniere !== undefined && ligne === derniere.premiereLigne + derniere.nbLignes) {
+      derniere.nbLignes += 1;
+    } else {
+      zones.push({ premiereLigne: ligne, nbLignes: 1 });
+    }
+  }
+  return zones;
+}
+
+/**
  * Les deux bandes navigables, DANS L'ORDRE OÙ ELLES TOMBENT À L'ÉCRAN.
  *
  * ⚠ L'ORDRE SE CALCULE, IL NE SE RECOPIE PAS. `BANDES_NAVIGABLES` est écrite

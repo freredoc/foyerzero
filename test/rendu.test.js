@@ -27,6 +27,14 @@ import { nomDeVariante } from '../src/render/variante.js';
 import {
   ligneEcranDeLaRangee, rangeeDeLaLigneEcran, ligneEcranDeLaBande,
 } from '../src/render/orientation.js';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { casesAPortee, porteeQuiTire } from '../src/render/portee.js';
+
+/** La racine du dépôt, pour les gardes qui lisent la SOURCE. */
+const RACINE_RENDU = join(dirname(fileURLToPath(import.meta.url)), '..');
+import { distanceCarreeMilli, milliDepuisCase, estDansLaGrille } from '../src/sim/grille.js';
 
 // ---------------------------------------------------------------------------
 // Montage de référence pour la scène : une entité de chaque classe visuelle.
@@ -713,4 +721,170 @@ test('orientation — le canvas et la grille CSS placent les rangées PAREIL', (
   // bord d'où l'on commence à lire, des deux côtés.
   assert.equal(ligneEcranDeLaRangee(GRILLE.longueur), 1);
   assert.equal(yDeRangee(projection, GRILLE.longueur), projection.margeY);
+});
+
+// ---------------------------------------------------------------------------
+// ÉD T6 et T7 — le rayon d'attaque, lot ÉCRAN-DÉFENSE.
+//
+// ⚠⚠ ILS VIVENT ICI ET NON DANS `chantier.test.js`, ET C'EST LE PARTAGE DU
+// DÉPÔT. `render/portee.js` est PUR : il ne connaît ni case du DOM, ni classe,
+// ni écran. Ce que l'écran en fait — poser `a-portee` sur la case, et rien
+// d'autre — se mesure là-bas, sur le document monté.
+// ---------------------------------------------------------------------------
+
+/**
+ * L'ensemble des cases à portée, recalculé à la main sur TOUTE la grille.
+ *
+ * ⚠ IL BALAIE LES 18 × 9 CASES, LÀ OÙ LE MODULE BORNE SON BALAYAGE À UN CARRÉ.
+ * C'est ce qui rend la comparaison utile : une borne trop serrée retirerait des
+ * cases que ce témoin-ci trouve encore.
+ */
+function aPorteeALaMain(depuis, portee, porteeMini) {
+  const porteeCarree = Math.round(portee * 1000) ** 2;
+  const miniCarree = Math.round(porteeMini * 1000) ** 2;
+  const cles = new Set();
+  for (let rangee = 1; rangee <= GRILLE.longueur; rangee += 1) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+      if (!estDansLaGrille(rangee, colonne)) continue;
+      const d2 = distanceCarreeMilli(
+        milliDepuisCase(depuis.rangee), milliDepuisCase(depuis.colonne),
+        milliDepuisCase(rangee), milliDepuisCase(colonne),
+      );
+      if (d2 > porteeCarree || d2 < miniCarree) continue;
+      cles.add(`${rangee};${colonne}`);
+    }
+  }
+  return cles;
+}
+
+const clesDe = (cases) => new Set(cases.map((c) => `${c.rangee};${c.colonne}`));
+
+test('ÉD T6 — le rayon est celui du moteur, sur DEUX portées et depuis un bord', () => {
+  // ⚠⚠ LE BRIEF EXIGE DEUX PORTÉES, ET IL A RAISON : « un test sur une seule
+  // portée passerait sur un rayon écrit en dur ». Les deux retenues sont la
+  // casemate (2,5 case, sans trou) et la faucheuse (5,5 case, trou de 3,5) —
+  // elles ne partagent ni le rayon, ni le nombre de cases, ni la forme.
+  const montages = [
+    { id: 'casemate', ligne: DEFENSES.casemate },
+    { id: 'faucheuse', ligne: DEFENSES.faucheuse },
+  ];
+  const tailles = new Set();
+  for (const { id, ligne } of montages) {
+    const portees = porteeQuiTire(ligne);
+    assert.ok(portees !== null, `${id} ne tire pas : le montage ne mesure rien`);
+    // ⚠ DEUX ORIGINES, DONT UNE CONTRE LE BORD. Au milieu de la grille, une
+    // borne fausse d'une case se voit ; contre un bord, c'est le ROGNAGE qui se
+    // mesure — un module qui rendrait des cases hors grille passerait l'autre.
+    for (const depuis of [{ rangee: 6, colonne: 5 }, { rangee: 3, colonne: 1 }]) {
+      const rendues = clesDe(casesAPortee(depuis, portees));
+      const attendues = aPorteeALaMain(depuis, ligne.portee, ligne.porteeMini ?? 0);
+      assert.ok(attendues.size > 0, `${id} en ${depuis.rangee};${depuis.colonne} ne couvre rien`);
+      assert.deepEqual([...rendues].sort(), [...attendues].sort(),
+        `${id} en ${depuis.rangee};${depuis.colonne} : le rayon diverge du moteur`);
+      // Et rien ne sort de la grille.
+      for (const c of casesAPortee(depuis, portees)) {
+        assert.ok(estDansLaGrille(c.rangee, c.colonne),
+          `${id} marque ${c.rangee};${c.colonne}, hors grille`);
+      }
+      tailles.add(`${id}:${rendues.size}`);
+    }
+  }
+  // ⚠ LES DEUX PORTÉES NE RENDENT PAS LE MÊME COMPTE : sans ça, les deux moitiés
+  // du test mesureraient la même chose et « deux portées » ne vaudrait rien.
+  const casemate = clesDe(casesAPortee({ rangee: 6, colonne: 5 },
+    porteeQuiTire(DEFENSES.casemate)));
+  const faucheuse = clesDe(casesAPortee({ rangee: 6, colonne: 5 },
+    porteeQuiTire(DEFENSES.faucheuse)));
+  assert.notEqual(casemate.size, faucheuse.size,
+    'les deux portées couvrent le même nombre de cases : le test ne discrimine rien');
+  // ⚠⚠ ET LE DISQUE N'EST PAS LE CARRÉ, MESURÉ. Un rayon écrit en Tchebychev —
+  // la faute la plus probable — rendrait 25 cases pour la casemate au milieu de
+  // la grille ; le disque euclidien en rend 21. Sans cette ligne, un carré
+  // passerait tant que les deux témoins seraient calculés pareil.
+  const carre = new Set();
+  for (let r = 6 - 2; r <= 6 + 2; r += 1) {
+    for (let c = 5 - 2; c <= 5 + 2; c += 1) carre.add(`${r};${c}`);
+  }
+  assert.notEqual(carre.size, casemate.size,
+    'le disque et le carré rendent le même compte : le montage ne les sépare pas');
+});
+
+test('ÉD T6 bis — la conversion en milli-cases est celle du moteur, pas une seconde', () => {
+  // ⚠⚠ C'EST LA TROUVAILLE DE LA RELECTURE HOSTILE DU §10 : un endroit où
+  // l'écran RECALCULAIT un nombre que le moteur détient. `casesAPortee` faisait
+  // `Math.round(portee × 1000)` ; `creerCombat` fait `enEntier(u.portee, MILLE)`.
+  // Deux conversions de la même grandeur, et elles ne rendent pas la même chose.
+  const source = readFileSync(join(RACINE_RENDU, 'src', 'render', 'portee.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  assert.ok(!/1000/.test(source),
+    'le module réécrit le millier au lieu de nommer `MILLI_PAR_CASE`');
+  assert.ok(!/Math\.round/.test(source),
+    'le module arrondit lui-même une portée que le moteur convertit déjà');
+  assert.match(source, /enEntier\(/, 'le module ne passe plus par la conversion du moteur');
+
+  // ⚠ ET LA DIFFÉRENCE EST OBSERVABLE, pas seulement écrite. `Math.round`
+  // accepte une portée de 2,5001 et l'arrondit EN SILENCE ; `enEntier` lève en
+  // nommant la table fautive. Sans cette moitié, un `Math.round` réécrit sous
+  // un autre nom passerait le balayage de source ci-dessus.
+  assert.throws(
+    () => casesAPortee({ rangee: 6, colonne: 5 }, { portee: 2.5001, porteeMini: 0 }),
+    /portee\.portee/,
+    'une portée qui n\'est pas un multiple du milli passe en silence',
+  );
+  // Et une portée honnête, elle, passe : la garde n'est pas un mur.
+  assert.ok(casesAPortee({ rangee: 6, colonne: 5 }, { portee: 2.5, porteeMini: 0 }).length > 0);
+});
+
+test('ÉD T7 — une artillerie porte son trou, et une tourelle n\'en a pas', () => {
+  // ⚠⚠ LA PORTÉE MINIMALE EST UNE RÈGLE DU MOTEUR, PAS UNE COQUETTERIE :
+  // `tir` exige `d2 >= porteeMiniCarree`, donc une faucheuse ne touche RIEN de
+  // ce qui lui colle dessus. Peindre un disque plein promettrait un tir qui
+  // n'aura pas lieu — c'est exactement ce que le §3 du brief demande de traiter.
+  const depuis = { rangee: 6, colonne: 5 };
+  const artillerie = clesDe(casesAPortee(depuis, porteeQuiTire(DEFENSES.faucheuse)));
+  const tourelle = clesDe(casesAPortee(depuis, porteeQuiTire(DEFENSES.casemate)));
+
+  // Sa propre case : la tourelle la couvre, l'artillerie non.
+  assert.ok(tourelle.has('6;5'), 'la tourelle ne couvre plus sa propre case');
+  assert.ok(!artillerie.has('6;5'), 'l\'artillerie couvre sa propre case : le trou a disparu');
+
+  // ⚠ ET LE TROU N'EST PAS QU'UNE CASE — il vaut 3,5 cases de rayon. Le compter
+  // est ce qui fait tomber un module qui n'exclurait que le centre.
+  const trou = [];
+  for (let r = 1; r <= GRILLE.longueur; r += 1) {
+    for (let c = 1; c <= GRILLE.largeur; c += 1) {
+      const d2 = distanceCarreeMilli(
+        milliDepuisCase(depuis.rangee), milliDepuisCase(depuis.colonne),
+        milliDepuisCase(r), milliDepuisCase(c),
+      );
+      if (d2 < 3500 ** 2) trou.push(`${r};${c}`);
+    }
+  }
+  assert.ok(trou.length > 10, `le trou ne fait que ${trou.length} cases : le montage est trop petit`);
+  for (const cle of trou) {
+    assert.ok(!artillerie.has(cle), `${cle} est marquée alors qu'elle est dans le trou`);
+  }
+  // Et le trou est bien CREUSÉ dans quelque chose : la couronne existe.
+  assert.ok(artillerie.size > 0, 'l\'artillerie ne couvre plus rien du tout');
+
+  // ⚠⚠ ET « QUI TIRE » SE MESURE ICI AUSSI, PARCE QUE C'EST LA MÊME FONCTION.
+  // Un Mur n'a pas de table de dégâts ; une Ronce a une portée de 1 et ne tire
+  // JAMAIS — elle franchit. Les deux rendent `null`, et un rayon autour d'elles
+  // promettrait un tir qui n'existe pas.
+  assert.equal(porteeQuiTire(DEFENSES.merlon), null, 'le Mur s\'est mis à tirer');
+  assert.equal(porteeQuiTire(DEFENSES.ronce), null, 'la Ronce s\'est mise à tirer');
+  assert.equal(porteeQuiTire(DEFENSES.herse), null, 'la Herse s\'est mise à tirer');
+  assert.equal(porteeQuiTire(null), null);
+  assert.equal(porteeQuiTire(undefined), null);
+  // ⚠ ET LA GARDE N'EST PAS VACUEUSE : les huit unités de garnison tirent, elles.
+  const tirent = Object.values(UNITES)
+    .filter((u) => u.defense?.present)
+    .filter((u) => porteeQuiTire(u) !== null);
+  assert.equal(tirent.length, 8,
+    `${tirent.length} unités de garnison sur 8 tirent : le prédicat refuse trop`);
+  // Et le prédicat mord bien sur la table de dégâts, pas seulement sur la portée.
+  assert.equal(porteeQuiTire({ portee: 3, porteeMini: 0, degats: { infanterie: 0, vehicule: 0, structureOuAviation: 0 } }),
+    null, 'une pièce à portée non nulle et sans dégât se met à tirer');
+  assert.ok(COLONNES_DEGATS.length === 3);
 });
