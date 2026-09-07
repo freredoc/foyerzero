@@ -264,3 +264,66 @@ test('peuplement — la fenêtre se rogne sur la carte, elle ne lève pas', () =
   assert.equal(estBaseOuvrage(42, HAUTEUR + 1, 5), false);
   assert.equal(estBaseOuvrage(42, 100, LARGEUR + 1), false);
 });
+
+// ---------------------------------------------------------------------------
+// MEM T1 — le mémo des tours est partagé, et il reste PROPRE À UNE GRAINE
+// ---------------------------------------------------------------------------
+
+test('MEM T1 — le mémo partagé ne change aucune réponse, et il ne fuit pas d\'une graine à l\'autre', () => {
+  // ⚠⚠ CE QUE CE MÉMO EXISTE POUR EMPÊCHER, ET CE QU'IL POURRAIT CASSER. Le
+  // commentaire de `priseAUnTour` posait la condition depuis toujours : « le mémo
+  // est PROPRE À UNE GRAINE. La clé ne porte que la case et le tour ; le partager
+  // entre deux graines rendrait la carte de la première. C'est l'appelant qui
+  // garantit l'unicité. » L'appelant est désormais `memoDeLaGraine`, qui le
+  // renouvelle au changement de graine — et c'est ce test qui l'oblige.
+  //
+  // ⚠⚠ LE MONTAGE ALTERNE LES DEUX GRAINES, IL NE LES ENCHAÎNE PAS. Deux
+  // balayages l'un après l'autre passeraient même si le mémo ne se renouvelait
+  // jamais : la seconde graine trouverait le cache déjà rempli par la première et
+  // rendrait sa carte, mais on ne l'aurait comparée à rien. En alternant, chaque
+  // réponse est donnée sur un cache que l'AUTRE graine vient de salir.
+  const A = 31_082_026;
+  const B = 7;
+  const cases = [];
+  for (let rangee = 100; rangee <= 130; rangee += 1) {
+    for (let colonne = 1; colonne <= LARGEUR; colonne += 1) cases.push([rangee, colonne]);
+  }
+
+  // La vérité de chaque graine, prise d'un seul tenant.
+  const seul = (graine) => cases.map(([r, c]) => (estBaseOuvrage(graine, r, c) ? 1 : 0)).join('');
+  const verite = { [A]: seul(A), [B]: seul(B) };
+
+  // ⚠ FALSIFIABLE : les deux cartes doivent DIFFÉRER, sinon un mémo qui fuit
+  // rendrait la même chaîne et le test passerait sans rien mesurer.
+  assert.notEqual(verite[A], verite[B], 'les deux graines rendent la même carte : le montage ne mesure rien');
+  assert.ok(verite[A].includes('1'), 'la graine A ne porte aucune base');
+
+  // Et maintenant en alternant, une case sur deux.
+  const alterne = { [A]: '', [B]: '' };
+  cases.forEach(([r, c], i) => {
+    const premiere = i % 2 === 0 ? A : B;
+    const seconde = i % 2 === 0 ? B : A;
+    alterne[premiere] += estBaseOuvrage(premiere, r, c) ? '1' : '0';
+    alterne[seconde] += estBaseOuvrage(seconde, r, c) ? '1' : '0';
+  });
+  assert.equal(alterne[A], verite[A], 'la graine A rend la carte d\'une autre après alternance');
+  assert.equal(alterne[B], verite[B], 'la graine B rend la carte d\'une autre après alternance');
+
+  // ⚠ ET LES DEUX CHEMINS S'ACCORDENT — `estBaseOuvrage` case par case contre
+  // `basesDeLaFenetre` sur la même bande. Ils partagent le mémo depuis le lot
+  // MÉMO-DES-TOURS ; un partage mal fait les ferait diverger d'un tour.
+  const fenetre = {
+    premiereRangee: 100, derniereRangee: 130, premiereColonne: 1, derniereColonne: LARGEUR,
+  };
+  for (const graine of [A, B]) {
+    const parLaFenetre = new Set(
+      basesDeLaFenetre(graine, fenetre).map((b) => `${b.rangee}:${b.colonne}`),
+    );
+    const parLaCase = new Set(
+      cases.filter(([r, c]) => estBaseOuvrage(graine, r, c)).map(([r, c]) => `${r}:${c}`),
+    );
+    assert.deepEqual([...parLaFenetre].sort(), [...parLaCase].sort(),
+      `graine ${graine} : les deux chemins ne voient pas les mêmes bases`);
+    assert.ok(parLaFenetre.size > 20, `graine ${graine} : ${parLaFenetre.size} bases, trop peu pour mesurer`);
+  }
+});

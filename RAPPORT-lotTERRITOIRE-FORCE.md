@@ -1,6 +1,6 @@
 # RAPPORT — lot TERRITOIRE-FORCE
 
-**Version 0.99.21 · build 122.** Branche `claude/lot-territoire-force`, empilée
+**Version 0.99.22 · build 123.** Branche `claude/lot-territoire-force`, empilée
 sur `claude/lot-pictogrammes` (PR #106, encore ouverte). PR ouverte, non mergée.
 
 Arbitrages d'Ethan du 07/09, point **13**, première moitié.
@@ -189,7 +189,35 @@ fois plus lent qu'ici, 6,7 ms deviennent **20 à 33 ms** par mouvement de doigt,
 contre **17 à 28 ms** avant ce lot. Le lot aggrave de 19 % un coût qui existait ;
 il ne le crée pas.
 
-**Deux remèdes, proposés et non implantés :**
+### ⚠⚠ ET LE REMÈDE A ÉTÉ TROUVÉ, MESURÉ ET IMPLANTÉ — lot MÉMO-DES-TOURS
+
+Il n'est **aucun** des deux que le brief proposait, et il ne coûte rien au sens
+de la règle : il ne change pas un comportement.
+
+`priseAUnTour` prend un mémo en argument, et `basesDeLaFenetre` en **ouvrait un
+neuf à chaque appel** pour le jeter aussitôt. Son propre commentaire posait déjà
+la condition — « le mémo est PROPRE À UNE GRAINE […] c'est l'appelant qui
+garantit l'unicité » — sans que personne ne remarque que l'appelant pouvait le
+garder. Il est désormais partagé sur **une seule entrée par graine**, exactement
+le motif de `carteDesPoi` : « une seule partie est ouverte à la fois, et le cache
+ne peut pas mentir, puisque la carte est une fonction pure de la graine ».
+
+| `territoireDeLaFenetre`, fenêtre pleine | µs / appel |
+|---|---:|
+| avant TERRITOIRE-FORCE | 5 612,3 |
+| après TERRITOIRE-FORCE | 6 701,2 |
+| **après MÉMO-DES-TOURS** | **1 783,8** |
+
+**3,8 fois plus rapide qu'il y a une heure, et 3,1 fois plus rapide qu'avant ce
+lot.** Le défilement au doigt repasse largement sous les 10 ms, même sur un
+téléphone cinq fois plus lent. **Le point 2 des « en suspens » est clos.**
+
+⚠ **`MEM T1` ALTERNE DEUX GRAINES CASE PAR CASE**, il ne les enchaîne pas : deux
+balayages l'un après l'autre passeraient même si le cache ne se renouvelait
+jamais — la seconde graine trouverait le cache de la première et rendrait sa
+carte, sans qu'on l'ait comparée à rien.
+
+**Les deux remèdes que le brief proposait, pour mémoire :**
 
 1. **Mémoriser la carte tant que ni les bases ni la fenêtre n'ont bougé.** C'est
    celui que la mesure désigne : pendant un défilement la fenêtre bouge d'une
@@ -317,10 +345,10 @@ Marge sur la borne T10 : **1 043 800 octets, 11,22 %**. La borne ne bouge pas.
 
 ## 10. Écarts et points en suspens
 
-1. ⚠⚠ **LA CARTE ET LE PRIX DIVERGENT** (§7) — le seul point que la relecture
-   cherchait, mesuré à 15 cases sur un montage. **Ethan tranche.**
-2. ⚠ **LE COÛT EST SENSIBLE SUR TÉLÉPHONE PENDANT UN DÉFILEMENT** (§5), et il
-   l'était déjà. Deux remèdes proposés, aucun implanté.
+1. ⚠⚠ **LA CARTE ET LE PRIX DIVERGENT** (§7). **La correction a été écrite,
+   mesurée, puis RETIRÉE** — voir le §11, qui dit pourquoi. **Ethan tranche.**
+2. ✅ **LE COÛT EST RÉGLÉ** — `territoireDeLaFenetre` passe à **1 784 µs**, soit
+   3,1 fois plus rapide qu'AVANT ce lot. Voir le §5.
 3. ⚠ **`GEOGRAPHIE.rayonInfluenceJoueur` ET `rayonInfluenceEnnemie` N'ONT PAS
    BOUGÉ**, comme le §4 du brief l'exigeait : `TF T8` le garde en mesurant qu'un
    niveau 50 ne peint pas une case de plus qu'un niveau 1.
@@ -333,3 +361,60 @@ Marge sur la borne T10 : **1 043 800 octets, 11,22 %**. La borne ne bouge pas.
    MODÈLE, case par case.
 6. ⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le
    lot ne touche ni `art/`, ni un outil de la chaîne.
+
+---
+
+## 11. ⚠⚠ LA CORRECTION DU §7 : ÉCRITE, MESURÉE, PUIS RETIRÉE
+
+Ethan, le jour même : « donc pour 1. tu corriges ou non ». **Elle a été écrite en
+entier**, puis retirée sur une mesure. Voici ce qu'elle disait et ce qu'elle a
+coûté, pour que la décision se prenne sur des chiffres.
+
+**Ce qu'elle faisait.** `estEnTerritoireAllie` cessait de demander « cette case
+est-elle dans mon OCTOGONE » pour demander « cette case M'APPARTIENT-elle », et
+`releverLesPoisAcquis` en faisait autant. Une fonction `campDeLaCase(etat, r, c)`
+répondait pour UNE case, avec les mêmes planchers, la même distance et le même
+arbitrage d'égalité que la carte — **vérifié : 961 cases confrontées à
+`territoireDeLaFenetre`, zéro divergence**.
+
+**Trois obstacles, et deux ont été franchis :**
+
+1. ⚠ **UN CYCLE D'IMPORTS.** `territoire.js` prenait sa géométrie à
+   `points-attaque.js`, qui aurait dû lui demander la propriété. La géométrie
+   descendait dans `carte.js` — au-dessous des deux, et chez elle : ce fichier
+   porte déjà les rangées, les niveaux et les bornes. **Franchi.**
+2. ⚠⚠ **LE COÛT, D'ABORD RÉDHIBITOIRE.** `campDeLaCase` rouvrait un mémo vide
+   par case : **153 µs pour une seule case**, soit très exactement le « 441
+   hachages PAR CASE » que l'en-tête de `territoire.js` existe pour refuser. Le
+   mémo partagé le ramène à **24 µs**, et réordonner les quatre gardes de
+   `releverLesPoisAcquis` — le gisement d'abord, la propriété en dernier, car il
+   y a 70 POI sur 9 300 cases — ramène l'appel de **45 µs à 3,3 µs**. La suite
+   repassait de 353 s à 12 s. **Franchi.**
+3. ⚠⚠ **LE JEU CHANGE, ET CE N'EST PAS UN DÉTAIL D'ÉQUILIBRAGE.** C'est
+   l'obstacle qui l'a fait retirer.
+
+**Ce que la mesure a montré :**
+
+- **Les vingt-cinq graines témoins de `BASES-0 T1` divergent** — toutes.
+- `POI T8`, `POI T25` et `RAID-B T7` tombent : **le joueur cesse d'acquérir des
+  POI qu'il acquérait**, sur des montages de progression ordinaire.
+- `BASES-1 T2` : un raid passe de 11 à 13 points.
+
+**La raison est mécanique.** Le niveau d'un site de l'Ouvrage est celui de sa
+RANGÉE — jusqu'à 50 — quand une base neuve vaut 1. Dès qu'il monte vers le nord,
+le joueur **perd son territoire, son tarif de proximité ET ses gisements d'un
+seul coup**, et les trois se cumulent. C'est une **courbe de difficulté**, pas une
+correction de bogue.
+
+⚠⚠ **CE QUI RESTE VRAI MALGRÉ LE RETRAIT** : la carte peinte et le prix affiché
+disent toujours deux choses différentes, mesuré à **15 cases** sur un montage.
+Le choix n'est pas entre « corriger » et « laisser une faute », il est entre
+**deux règles de jeu** :
+
+| | ce que ça dit | ce que ça coûte |
+|---|---|---|
+| **la portée** (aujourd'hui) | le tarif et les gisements suivent où tes bases PROJETTENT | la carte montre du rouge là où tu paies le prix du vert |
+| **la propriété** | ils suivent ce que tu TIENS | un joueur pressé par un voisin fort perd tout en même temps ; 25 témoins à refaire |
+
+**Rien n'est laissé à moitié dans le dépôt** : la correction est retirée en
+entier, seul le mémo partagé — qui ne change aucun comportement — est gardé.

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.21 · build 122.
+Dernière révision : **07/09/2026**, version 0.99.22 · build 123.
 
 ---
 
@@ -42,12 +42,12 @@ Dernière révision : **07/09/2026**, version 0.99.21 · build 122.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot TERRITOIRE-FORCE), à confronter :**
-`npm test` → **1335 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**8 256 200 octets**, 0 référence externe. Coût **+917 octets, ENTIÈREMENT EN
+**Référence au 07/09/2026 (après les lots TERRITOIRE-FORCE et MÉMO-DES-TOURS), à confronter :**
+`npm test` → **1336 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 256 294 octets**, 0 référence externe. Coût **+1 011 octets, ENTIÈREMENT EN
 JAVASCRIPT**, et la somme des cinq postes tombe EXACTEMENT sur le total —
 **297 lignes `data:` et 292 URI de part et d'autre**. Borne T10 inchangée à
-9 300 000, marge **1 043 800 octets, 11,22 %**. Le lot touche
+9 300 000, marge **1 043 706 octets, 11,22 %**. Le lot touche
 `src/sim/territoire.js`, `src/sim/points-attaque.js` et `src/data/sites.js`.
 ⚠⚠ **ETHAN, 07/09, POINT 13 : LE NIVEAU D'UNE BASE DEVIENT UNE FORCE, ET LES
 BASES D'UN CAMP S'ADDITIONNENT.** `influence = raison ^ (niveau − distance)`,
@@ -92,6 +92,28 @@ perdrait des unités **exactement dans les cas serrés**. `niveau − distance` 
 négatif pour un niveau 1 à trois cases — et `2n ** -2n` levant —, tous les
 exposants sont décalés du plus grand rayon : un facteur commun ne change aucune
 comparaison. `occupant` reste un `Uint8Array`.
+⚠⚠ **ET LE COÛT EST RÉGLÉ, PAS SEULEMENT MESURÉ — MÉMO-DES-TOURS, MÊME JOUR.**
+Le mémo de `priseAUnTour` s'ouvrait et se jetait à CHAQUE appel de
+`basesDeLaFenetre` ; il est désormais partagé, sur une seule entrée par graine —
+le motif exact de `carteDesPoi`, et la condition que `priseAUnTour` posait déjà
+(« le mémo est PROPRE À UNE GRAINE […] c'est l'appelant qui garantit l'unicité »).
+**Mesuré : `territoireDeLaFenetre` passe de 6 701 à 1 784 µs**, soit **3,8 fois
+plus rapide qu'après TERRITOIRE-FORCE et 3,1 fois plus rapide qu'AVANT lui**. Le
+défilement au doigt sur téléphone repasse sous les 10 ms. **Aucun comportement ne
+change** : la carte est une fonction pure de la graine, et `MEM T1` l'oblige en
+ALTERNANT deux graines case par case — deux balayages enchaînés passeraient même
+si le cache ne se renouvelait jamais.
+⚠⚠ **CE QUI RESTE OUVERT, ET QUI EST UNE DÉCISION DE JEU, PAS DE CODE : LE PRIX
+ET LES POI SUIVENT TOUJOURS LA PORTÉE, PAS LA PROPRIÉTÉ.** La correction a été
+écrite, mesurée, puis **retirée** : elle est juste, elle est abordable — 24 µs
+par case une fois le mémo partagé —, mais elle change le JEU. Mesuré sur la
+branche d'essai : **les vingt-cinq graines témoins divergent**, et deux tests de
+progression ordinaire tombent — le joueur cesse d'acquérir des POI qu'il
+acquérait. La raison est mécanique : le niveau d'un site de l'Ouvrage est celui
+de sa RANGÉE, jusqu'à 50, quand une base neuve vaut 1 — un joueur qui monte perd
+donc son territoire, son tarif de proximité ET ses gisements d'un coup. C'est une
+courbe de difficulté, et Ethan tranche.
+
 ⚠⚠ **LE COÛT A ÉTÉ MESURÉ AVANT ET APRÈS : 5 612 µs → 6 701 µs par appel**,
 soit **+19,4 %**, sur une fenêtre pleine de 69 × 31 cases toutes occupées. ⚠
 **ET LA CARTE NE SE REDESSINE PAS DIX FOIS PAR SECONDE** — `rafraichir` sort sur
