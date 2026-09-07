@@ -11,9 +11,17 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+import { createHash } from 'node:crypto';
+
 import {
   creerEtat, tickJeu, rattraperJeu, serialiser, migrer, SAVE_VERSION, poser,
+  ajouterUneBase,
 } from '../src/sim/state.js';
+import { poserLaBaseSur } from '../src/sim/deplacement.js';
+import { niveauDeLaRangee, positionDepartJoueur } from '../src/sim/carte.js';
+import { distanceTchebychev, estAPorteeDAttaque } from '../src/sim/points-attaque.js';
+import { creerRng, entier } from '../src/sim/rng.js';
+import { TICKS_APPARITION } from '../src/sim/satellites.js';
 import {
   SEL_RAID_OUVRAGE, TICKS_PAR_MINUTE, minuteDeLHorloge, baseAttaqueALaMinute,
   basesAttaquantes, montageDeLaBaseDuJoueur, subirUnRaid, resoudreLaMinute,
@@ -770,4 +778,365 @@ test('RAID-B — prochaineMinuteDeRaid ne résout rien et borne sa fenêtre', ()
   const avant = serialiser(etat, 0);
   prochaineMinuteDeRaid(etat.graine, bases, 0, 5000);
   assert.equal(serialiser(etat, 0), avant);
+});
+
+// ---------------------------------------------------------------------------
+// RAID-CIBLE-UNIQUE — une base de l'Ouvrage n'en frappe qu'une, 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ARBITRÉ PAR ETHAN LE 07/09 : « elle n'en frappe qu'une, la plus proche »,
+// et pour l'égalité « le plus haut, puis gauche à droite ». Le commentaire de
+// `basesAttaquantes` portait la LECTURE PRISE — à portée de deux bases du
+// joueur, une base de l'Ouvrage les attaquait toutes les deux la même minute —
+// et désignait le `for` imbriqué à changer. C'est ce qui est fait.
+//
+// ⚠ LES MONTAGES POSENT LES BASES DU JOUEUR AUX COORDONNÉES VOULUES, ET LA CARTE
+// NE BOUGE PAS SOUS ELLES. Le peuplement se tire de la graine et de la position
+// de DÉPART, qui est une constante : déplacer une base ne déplace aucun site,
+// et c'est ce qui rend ces géométries reproductibles.
+
+/** Une partie dont les bases du joueur sont aux positions demandées. */
+function partieAvecBases(graine, positions) {
+  const etat = creerEtat(graine);
+  poserLaBaseSur(etat, positions[0].rangee, positions[0].colonne);
+  for (const p of positions.slice(1)) ajouterUneBase(etat, { rangee: p.rangee, colonne: p.colonne });
+  return etat;
+}
+
+/** La clé d'une case — une case porte au plus un site. */
+const caseDe = (x) => `${x.rangee},${x.colonne}`;
+
+/** La position de la base du joueur qu'une paire désigne. */
+const cibleDe = (etat, paire) => etat.bases[paire.baseVisee].position;
+
+/** Le carré de la distance euclidienne — la mesure QUI DÉCIDE de la portée. */
+const d2 = (a, b) => (a.rangee - b.rangee) ** 2 + (a.colonne - b.colonne) ** 2;
+
+/** Deux bases voisines dont beaucoup d'attaquantes voient les DEUX. */
+const A_NORD = { rangee: 200, colonne: 16 };
+const B_SUD = { rangee: 204, colonne: 19 };
+
+test('RCU T0 — l\'orientation, vérifiée par EXÉCUTION avant tout comparateur', () => {
+  // ⚠⚠ C'EST LE PIÈGE DU LOT, ET IL SE PREND À L'ENVERS SANS QUE RIEN NE LE
+  // DISE. « Le plus haut » veut dire la plus PETITE rangée : le niveau croît
+  // vers le nord, et le nord est la rangée 1. Un signe inversé donnerait un
+  // départage qui marche parfaitement et choisit systématiquement la mauvaise
+  // base — et un test d'égalité écrit avec la même erreur ne le verrait pas.
+  // On ne le déduit donc pas d'un commentaire : on l'exécute.
+  assert.equal(niveauDeLaRangee(1), GEOGRAPHIE.niveauPlafond,
+    'la rangée 1 devrait être au plafond de niveau : le nord est en haut');
+  assert.equal(niveauDeLaRangee(GEOGRAPHIE.carte.hauteur), 1,
+    'la dernière rangée devrait être au niveau 1');
+  assert.ok(niveauDeLaRangee(100) > niveauDeLaRangee(200),
+    'le niveau devrait DÉCROÎTRE quand la rangée croît');
+  // Le joueur démarre au sud, au niveau 1 : c'est la moitié qui rend la première
+  // assertion non tautologique.
+  assert.equal(niveauDeLaRangee(positionDepartJoueur().rangee), 1);
+
+  // ⚠ ET « LA PLUS PROCHE » N'EST PAS TCHEBYCHEV. La portée est un DISQUE depuis
+  // le lot EUCLIDE — `estAPorteeDAttaque` teste `d² ≤ rayon²` — et c'est cette
+  // mesure-là que `ciblesAPortee` pose sur chaque site sous le nom
+  // `distanceCarree`. Mesuré : une case à (10, 10) est à distance 10 de
+  // Tchebychev, donc « au rayon », et pourtant HORS de portée.
+  const origine = { rangee: 100, colonne: 100 };
+  const coin = { rangee: 110, colonne: 110 };
+  assert.equal(distanceTchebychev(origine, coin), GEOGRAPHIE.rayonAttaque);
+  assert.equal(estAPorteeDAttaque(origine, coin), false,
+    'le coin du carré de Tchebychev est hors du disque : les deux mesures diffèrent');
+  assert.equal(estAPorteeDAttaque(origine, { rangee: 107, colonne: 107 }), true);
+});
+
+test('RCU T1 — une base de l\'Ouvrage ne frappe qu\'UNE base du joueur', () => {
+  // ⚠ LES CONTESTÉES SE COMPTENT SUR L'ÉTAT À DEUX BASES, JAMAIS EN CROISANT
+  // DEUX ÉTATS À UNE BASE. `siteDeLaCase` rend `null` sur la case d'une base du
+  // joueur : la seconde base EFFACE le site qui occupait la sienne, et le
+  // croisement aurait compté un site qui n'existe plus. Mesuré — 73 sites d'un
+  // côté, 72 de l'autre, et l'écart était le montage, pas le code.
+  const etat = partieAvecBases(7, [A_NORD, B_SUD]);
+  const rayonCarre = GEOGRAPHIE.rayonAttaque ** 2;
+  const paires = basesAttaquantes(etat);
+  const contestes = paires.filter(
+    (p) => etat.bases.every((b) => d2(b.position, p) <= rayonCarre),
+  );
+  assert.ok(contestes.length > 0,
+    'le montage ne mesure rien : aucune attaquante ne voit les deux bases');
+
+  // ⚠ AUCUNE ATTAQUANTE N'APPARAÎT DEUX FOIS — contestée ou non. C'est le défaut
+  // exact que le lot referme : avant lui, chaque contestée produisait DEUX
+  // paires, la même minute.
+  const cases = paires.map(caseDe);
+  assert.equal(new Set(cases).size, cases.length, 'une attaquante paraît deux fois');
+
+  // Falsifiable par le COMPTE : sans le regroupement, la liste ferait la somme
+  // des vues, donc exactement une entrée de plus par contestée.
+  const sansRegroupement = etat.bases.reduce((n, b) => n + ciblesAPortee(etat, b).filter(
+    (s) => TYPES_SITE[s.type]?.attaqueLeJoueur === true && s.niveau >= RAID_OUVRAGE.niveauMinimal,
+  ).length, 0);
+  assert.ok(sansRegroupement > paires.length, 'le montage ne mesure rien : aucun doublon');
+  assert.equal(sansRegroupement - paires.length, contestes.length,
+    'le compte des doublons retirés ne tombe pas sur celui des attaquantes contestées');
+});
+
+test('RCU T2 — c\'est la PLUS PROCHE qui est frappée', () => {
+  const etat = partieAvecBases(7, [A_NORD, B_SUD]);
+  const paires = basesAttaquantes(etat);
+  let mesurees = 0;
+  for (const p of paires) {
+    const distances = etat.bases.map((b) => d2(b.position, p));
+    const mini = Math.min(...distances.filter((d) => d <= GEOGRAPHIE.rayonAttaque ** 2));
+    if (distances[0] === distances[1]) continue; // l'égalité est le sujet de T3
+    mesurees += 1;
+    assert.equal(d2(cibleDe(etat, p), p), mini,
+      `l'attaquante (${caseDe(p)}) ne frappe pas la plus proche`);
+  }
+  assert.ok(mesurees > 0, 'le montage ne mesure rien : aucune distance différente');
+});
+
+test('RCU T3 — à égale distance, la PLUS HAUTE, c\'est-à-dire la plus PETITE rangée', () => {
+  // ⚠⚠ POURQUOI LA PLUS PETITE : le nord est en haut, la rangée 1 est au niveau
+  // 50 et la rangée 300 au niveau 1 — `RCU T0` l'exécute. « Le plus haut » d'Ethan
+  // est donc la rangée qui DÉCROÎT, et c'est le seul endroit du lot où un signe
+  // inversé passerait inaperçu.
+  const x = basesAttaquantes(partieAvecBases(7, [A_NORD]))[0];
+  // Deux bases symétriques autour de l'attaquante : d² = 9 + 16 = 25 des deux
+  // côtés, rangées différentes.
+  const haute = { rangee: x.rangee - 3, colonne: x.colonne - 4 };
+  const basse = { rangee: x.rangee + 3, colonne: x.colonne + 4 };
+  assert.equal(d2(haute, x), d2(basse, x), 'le montage ne mesure rien : distances inégales');
+  assert.ok(haute.rangee < basse.rangee);
+
+  for (const ordre of [[haute, basse], [basse, haute]]) {
+    const etat = partieAvecBases(7, ordre);
+    const paire = basesAttaquantes(etat).find((p) => caseDe(p) === caseDe(x));
+    assert.notEqual(paire, undefined, 'l\'attaquante a disparu du montage');
+    assert.deepEqual(
+      { rangee: cibleDe(etat, paire).rangee, colonne: cibleDe(etat, paire).colonne }, haute,
+      'à égale distance, c\'est la plus HAUTE — la plus petite rangée — qui est frappée',
+    );
+  }
+});
+
+test('RCU T4 — à égale hauteur, la plus à GAUCHE, c\'est-à-dire la plus petite colonne', () => {
+  const x = basesAttaquantes(partieAvecBases(7, [A_NORD]))[0];
+  const gauche = { rangee: x.rangee - 3, colonne: x.colonne - 4 };
+  const droite = { rangee: x.rangee - 3, colonne: x.colonne + 4 };
+  assert.equal(d2(gauche, x), d2(droite, x), 'le montage ne mesure rien : distances inégales');
+  assert.equal(gauche.rangee, droite.rangee, 'le montage ne mesure rien : rangées différentes');
+
+  for (const ordre of [[gauche, droite], [droite, gauche]]) {
+    const etat = partieAvecBases(7, ordre);
+    const paire = basesAttaquantes(etat).find((p) => caseDe(p) === caseDe(x));
+    assert.notEqual(paire, undefined, 'l\'attaquante a disparu du montage');
+    assert.deepEqual(
+      { rangee: cibleDe(etat, paire).rangee, colonne: cibleDe(etat, paire).colonne }, gauche,
+      'à égale hauteur, c\'est la plus à GAUCHE qui est frappée',
+    );
+  }
+});
+
+test('RCU T5 — le départage est TOTAL : cent montages, jamais d\'ex æquo', () => {
+  // ⚠ LE TIRAGE VIENT DU PRNG DU DÉPÔT, PAS DE `Math.random` — un test qui ne se
+  // rejoue pas à l'identique ne prouve rien le jour où il tombe.
+  const rng = creerRng(20260907);
+  let contestees = 0;
+  for (let n = 0; n < 100; n += 1) {
+    const nb = entier(rng, 2, 4); // deux à quatre bases
+    const positions = [];
+    for (let i = 0; i < nb; i += 1) {
+      positions.push({ rangee: entier(rng, 190, 210), colonne: entier(rng, 6, 26) });
+    }
+    // Deux bases sur la même case rendraient le départage impossible, et ce
+    // n'est pas un état que le jeu produit : on l'écarte du montage.
+    if (new Set(positions.map(caseDe)).size !== nb) continue;
+
+    const etat = partieAvecBases(7, positions);
+    const paires = basesAttaquantes(etat); // LÈVE sur un ex æquo
+    for (const p of paires) {
+      // Le vainqueur se recalcule ICI, indépendamment, sur la clé annoncée.
+      const candidates = etat.bases
+        .map((b, i) => ({ i, pos: b.position, d: d2(b.position, p) }))
+        .filter((c) => c.d <= GEOGRAPHIE.rayonAttaque ** 2);
+      candidates.sort((a, b) => a.d - b.d || a.pos.rangee - b.pos.rangee
+        || a.pos.colonne - b.pos.colonne);
+      assert.equal(paires.filter((q) => caseDe(q) === caseDe(p)).length, 1);
+      assert.equal(p.baseVisee, candidates[0].i,
+        `(${caseDe(p)}) : le moteur et la règle recalculée ne désignent pas la même base`);
+      // Le montage mesure-t-il quelque chose ? On compte les vraies disputes.
+      if (candidates.length > 1) contestees += 1;
+    }
+  }
+  assert.ok(contestees > 100,
+    `le montage ne mesure rien : ${contestees} attaquantes contestées seulement`);
+});
+
+test('RCU T6 — l\'INDICE dans `etat.bases` ne départage rien', () => {
+  // ⚠⚠ C'EST LE TEST QUI PROUVE QUE LA RÈGLE EST UNE RÈGLE. Un ordre de tableau
+  // n'en est pas une : il change quand le joueur fonde ou perd une base, et la
+  // cible d'un raid changerait avec lui, sans que rien ne l'annonce.
+  const cibles = (positions) => {
+    const etat = partieAvecBases(7, positions);
+    const table = new Map();
+    for (const p of basesAttaquantes(etat)) {
+      table.set(caseDe(p), caseDe(cibleDe(etat, p)));
+    }
+    return table;
+  };
+  const dansUnSens = cibles([A_NORD, B_SUD]);
+  const dansLAutre = cibles([B_SUD, A_NORD]);
+
+  assert.ok(dansUnSens.size > 0, 'le montage ne mesure rien : aucune attaquante');
+  assert.deepEqual([...dansUnSens.entries()].sort(), [...dansLAutre.entries()].sort(),
+    'réordonner `etat.bases` a changé une cible : l\'indice départage encore');
+
+  // Falsifiable : le montage doit VRAIMENT porter des attaquantes qui visent
+  // chacune des deux bases, sinon l'égalité serait gratuite.
+  const visees = new Set(dansUnSens.values());
+  assert.equal(visees.size, 2, `le montage ne vise qu'une base sur deux : ${[...visees]}`);
+});
+
+test('RCU T7 — à UNE base, rien ne bouge : mêmes raids, aux mêmes minutes', () => {
+  // ⚠⚠ C'EST LA NON-RÉGRESSION LA PLUS IMPORTANTE DU LOT. À une seule base il
+  // n'y a rien à départager : le tirage ne change pas, et le compte non plus.
+  // Les trois nombres ci-dessous ont été relevés sur l'arbre d'AVANT le lot, par
+  // `git worktree`, et recopiés ici — pas produits par le code qu'ils gardent.
+  const etat = partieAvecBases(7, [A_NORD]);
+  const attaquantes = basesAttaquantes(etat);
+  assert.equal(attaquantes.length, 58, 'le nombre d\'attaquantes a bougé à une seule base');
+
+  const minutes = [];
+  for (let m = 1; m <= 3 * 24 * 60; m += 1) {
+    for (const a of attaquantes) {
+      if (baseAttaqueALaMinute(etat.graine, a, m)) minutes.push(m);
+    }
+  }
+  assert.equal(minutes.length, 157, 'le nombre de raids subis a bougé à une seule base');
+  assert.equal(
+    createHash('sha256').update(minutes.join(',')).digest('hex').slice(0, 16),
+    '9da2b5139d0cefdb',
+    'les MINUTES des raids ont bougé à une seule base',
+  );
+
+  // ⚠ ET LE SEUL EFFET MESURABLE À UNE BASE EST L'ORDRE DE LA LISTE, qui suit
+  // désormais la case de l'attaquante — la plus haute d'abord, puis de gauche à
+  // droite — au lieu de la distance. `resoudreLaMinute` la parcourt dans cet
+  // ordre ; c'est une RÈGLE, là où l'ordre d'avant dépendait de la base qui
+  // avait demandé le balayage.
+  const parCase = [...attaquantes].sort((a, b) => a.rangee - b.rangee || a.colonne - b.colonne);
+  assert.deepEqual(attaquantes.map(caseDe), parCase.map(caseDe));
+});
+
+test('RCU T8 — le lot limite PAR ATTAQUANTE, pas globalement', () => {
+  const etat = partieAvecBases(7, [A_NORD, B_SUD]);
+  const paires = basesAttaquantes(etat);
+  assert.ok(paires.length > 1, 'une seule paire : le lot a limité globalement');
+
+  // Toutes les bases de l'Ouvrage à portée d'AU MOINS une base du joueur, et de
+  // niveau suffisant, doivent être là — le lot ne retire aucune attaquante.
+  const attendues = new Set();
+  for (const b of etat.bases) {
+    for (const s of ciblesAPortee(etat, b)) {
+      if (TYPES_SITE[s.type]?.attaqueLeJoueur !== true) continue;
+      if (s.niveau < RAID_OUVRAGE.niveauMinimal) continue;
+      attendues.add(caseDe(s));
+    }
+  }
+  assert.deepEqual(new Set(paires.map(caseDe)), attendues,
+    'le lot a perdu ou inventé une attaquante');
+  assert.ok(attendues.size > 1, 'le montage ne mesure rien : une seule attaquante');
+});
+
+test('RCU T9 — le niveau minimal tient encore, à plusieurs bases', () => {
+  // ⚠ NON-RÉGRESSION DE `RAID-B T6`, QUI N'EST PAS MODIFIÉ : lui mesure une base
+  // seule, celui-ci mesure le chemin NEUF, celui du regroupement.
+  assert.equal(RAID_OUVRAGE.niveauMinimal, 10);
+  const etat = partieAvecBases(7, [{ rangee: 255, colonne: 16 }, { rangee: 258, colonne: 19 }]);
+  const toutes = new Set();
+  const sousLeSeuil = new Set();
+  for (const b of etat.bases) {
+    for (const s of ciblesAPortee(etat, b)) {
+      if (TYPES_SITE[s.type]?.attaqueLeJoueur !== true) continue;
+      toutes.add(caseDe(s));
+      if (s.niveau < RAID_OUVRAGE.niveauMinimal) sousLeSeuil.add(caseDe(s));
+    }
+  }
+  assert.ok(sousLeSeuil.size > 0, 'le montage ne mesure rien : aucune base sous le seuil');
+  assert.ok(toutes.size > sousLeSeuil.size, 'le montage ne mesure rien : aucune au-dessus');
+
+  const paires = basesAttaquantes(etat);
+  assert.equal(paires.length, toutes.size - sousLeSeuil.size, 'le filtre de niveau ne mord plus');
+  for (const p of paires) assert.ok(p.niveau >= RAID_OUVRAGE.niveauMinimal);
+});
+
+test('RCU T10 — camps et avant-postes n\'attaquent toujours pas', () => {
+  const etat = partieAvecBases(7, [A_NORD, B_SUD]);
+  // ⚠ LES SATELLITES DOIVENT AVOIR PARU, SINON LE FILTRE NE MESURE RIEN. Camp et
+  // avant-poste sont les satellites d'une base, et ils n'apparaissent qu'au bout
+  // de `TICKS_APPARITION` : sur une partie au premier tick, il n'y a aucun site
+  // non attaquant à portée et l'assertion serait gratuite.
+  rattraperJeu(etat, TICKS_APPARITION);
+  // Le filtre est dans les DONNÉES, et le test le relit là.
+  const paires = basesAttaquantes(etat);
+  for (const p of paires) {
+    assert.equal(TYPES_SITE[p.type].attaqueLeJoueur, true, `« ${p.type} » ne devrait pas attaquer`);
+  }
+  // Falsifiable : il DOIT y avoir des camps et des avant-postes à portée, sinon
+  // le filtre ne mesure rien.
+  const genres = new Set();
+  for (const b of etat.bases) {
+    for (const s of ciblesAPortee(etat, b)) genres.add(s.type);
+  }
+  for (const t of Object.keys(TYPES_SITE).filter((x) => !TYPES_SITE[x].attaqueLeJoueur)) {
+    assert.ok(genres.has(t), `le montage ne mesure rien : aucun « ${t} » à portée`);
+  }
+});
+
+test('RCU T11 — le coût n\'explose pas : UN appel à `ciblesAPortee` par base du joueur', () => {
+  // ⚠⚠ INVERSER LES BOUCLES AURAIT PU MULTIPLIER LES APPELS, et chacun coûte 441
+  // lectures de case. On garde donc le balayage par base du joueur — la distance
+  // est symétrique — et on REGROUPE. Mesuré, pas supposé.
+  //
+  // ⚠ LE COMPTE SE PREND SUR L'APPELANT DIRECT. `ciblesAPortee` lit
+  // `base.position` une fois et une seule ; chercher son nom dans la pile
+  // ENTIÈRE compterait aussi les lectures faites plus bas par `siteDeLaCase`,
+  // appelée 316 fois par balayage.
+  const appels = (positions) => {
+    const etat = partieAvecBases(7, positions);
+    let n = 0;
+    etat.bases = etat.bases.map((b) => new Proxy(b, {
+      get(cible, prop, recepteur) {
+        if (prop === 'position') {
+          const direct = new Error().stack.split(String.fromCharCode(10))[2] ?? '';
+          if (direct.includes('ciblesAPortee')) n += 1;
+        }
+        return Reflect.get(cible, prop, recepteur);
+      },
+    }));
+    basesAttaquantes(etat);
+    return n;
+  };
+  assert.equal(appels([A_NORD]), 1);
+  assert.equal(appels([A_NORD, B_SUD]), 2);
+  assert.equal(appels([A_NORD, B_SUD, { rangee: 196, colonne: 13 }]), 3);
+
+  // ⚠ ET LE SEUL APPEL DU FICHIER EST CELUI-LÀ. Un second, ajouté un jour dans
+  // la boucle intérieure, ne se verrait pas dans le compte ci-dessus s'il
+  // portait sur une base de l'Ouvrage.
+  const source = readFileSync(join(RACINE, 'src', 'sim', 'raid-ouvrage.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.equal(source.split('ciblesAPortee(').length - 1, 1,
+    '`ciblesAPortee` est appelée plus d\'une fois dans raid-ouvrage.js');
+});
+
+test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état', () => {
+  // Le lot ne fait que CHOISIR ; il n'écrit aucun champ. Le §6 du brief demande
+  // de le vérifier plutôt que de l'affirmer.
+  assert.equal(SAVE_VERSION, 27, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION');
+  const etat = partieAvecBases(7, [A_NORD, B_SUD]);
+  const json = serialiser(etat, 1_700_000_000_000);
+  assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),
+    'une sauvegarde v27 a été réécrite par une migration');
+  // Et aucune paire ne se range dans l'état : `basesAttaquantes` est un CALCUL.
+  basesAttaquantes(etat);
+  assert.equal(serialiser(etat, 1_700_000_000_000), json,
+    '`basesAttaquantes` a écrit dans l\'état');
 });
