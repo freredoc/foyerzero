@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.20 · build 121.
+Dernière révision : **07/09/2026**, version 0.99.23 · build 124.
 
 ---
 
@@ -42,7 +42,144 @@ Dernière révision : **07/09/2026**, version 0.99.20 · build 121.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot NOMBRES-COMPACTS), à confronter :**
+**Référence au 07/09/2026 (après le lot TERRITOIRE-LU), à confronter :**
+`npm test` → **1340 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 256 764 octets**, 0 référence externe. Marge T10 : **1 043 236 octets,
+11,22 %**. Le lot touche `src/sim/poi.js` et `src/sim/territoire.js`.
+⚠⚠ **ETHAN, 07/09 : « DONC POUR 1. TU CORRIGES OU NON », PUIS « UN POI PRIS EST
+VALIDÉ DE FAÇON PERMANENTE » ET « SI TU VAS VERS LE NORD, TU MONTES AUSSI EN
+NIVEAU AVANT ».** La réponse est OUI pour la récolte des POI, NON pour le tarif du
+raid, et les deux moitiés viennent d'une mesure, pas d'un goût.
+⚠⚠ **LA RÉCOLTE DEMANDE LA PROPRIÉTÉ.** `releverLesPoisAcquis` parcourait
+l'octogone d'une base — où elle PROJETTE — et ramassait tout ce qui s'y trouvait ;
+elle demande maintenant `campDeLaCase`, c'est-à-dire ce que la base TIENT. Sans
+ça, le joueur ramassait le gisement d'une case que la carte peint à l'Ouvrage.
+⚠⚠ **LE TARIF DU RAID, LUI, RESTE SUR LA PORTÉE, ET C'EST UNE MESURE QUI L'A
+DÉCIDÉ.** La correction avait été écrite ; elle a été retirée quand le montage a
+montré que **les 58 cibles de raid d'une base sont TOUTES des bases de
+l'Ouvrage** — et qu'une base garde toujours sa case, par le plancher d'Ethan.
+Demander la propriété rendrait donc le tarif de proximité **inatteignable** : la
+règle de la spec §8 — « le territoire allié est ce qui rend un raid bon marché » —
+mourrait en silence. Le prix suit donc la LOGISTIQUE (où mes bases projettent),
+la carte suit la PROPRIÉTÉ (ce que je tiens), et les deux disent maintenant deux
+choses différentes **parce qu'elles répondent à deux questions différentes**.
+⚠⚠ **L'ORDRE DES QUATRE GARDES DE LA RÉCOLTE EST UNE MESURE, PAS UN GOÛT.**
+`releverLesPoisAcquis` tourne À CHAQUE TICK ; demander la propriété avant de
+regarder s'il y a seulement un gisement la faisait passer de 1 à 45 µs, et trois
+tests de simulation de secondes à des MINUTES. Il y a 70 POI sur 9 300 cases : la
+question ne se pose donc presque jamais, à condition de la poser en dernier —
+mesuré à **3,1 µs** l'appel.
+⚠ **UN POI DÉJÀ PRIS RESTE PRIS**, et la garde d'acquisition passe AVANT celle
+de propriété pour cette raison exacte. `TL T4` le mesure : on ramasse, on rend la
+case à l'Ouvrage, on relève cinquante fois — rien ne bouge.
+⚠⚠ **`campDeLaCase` REND EXACTEMENT CE QUE LA CARTE PEINT, ET `TL T1` LE
+CONFRONTE CASE PAR CASE** sur une fenêtre entière, en exigeant que les trois
+occupants y paraissent. Deux vérités sur la même case seraient la faute que ce lot
+corrige, un cran plus bas.
+⚠⚠ **LES TROIS TÉMOINS GELÉS ONT UNE CINQUIÈME COUCHE, PAS UNE RÉÉCRITURE.**
+`DEPLACES_PAR_TERRITOIRE_LU` porte **cinq phases sur quatorze et dix-huit champs**
+— les neuf premières tombent à l'octet sur la capture d'origine, ce qui dit que la
+règle n'a pas fui hors de la récolte. Et `RAPPORTS_OUVRAGE_TERRITOIRE_LU` ne
+déplace **qu'une graine sur vingt-cinq** : sur la 6, un gisement de moins finance
+une recherche de moins, donc une autre armée.
+⚠ **QUATRE MONTAGES DE TEST DISENT ENFIN CE QU'ILS SUPPOSAIENT.** `POI T8`,
+`POI T25` et `RAID-B T7` posaient une base et comptaient sur son octogone entier —
+gratuit tant que la portée ÉTAIT la propriété. Ils rasent maintenant le voisinage
+de l'Ouvrage, par `sansVoisinsOuvrage`, pour mesurer la FORME et pas un rapport de
+force qu'ils n'ont pas choisi. `BASES-1 T2` a essayé le rasage aussi : il retire
+les CIBLES, et le montage tombait sur son propre garde-fou — il est resté tel
+quel, le tarif n'ayant pas changé.
+
+**Auparavant, après les lots TERRITOIRE-FORCE et MÉMO-DES-TOURS :**
+`npm test` → **1336 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 256 294 octets**, 0 référence externe. Coût **+1 011 octets, ENTIÈREMENT EN
+JAVASCRIPT**, et la somme des cinq postes tombe EXACTEMENT sur le total —
+**297 lignes `data:` et 292 URI de part et d'autre**. Borne T10 inchangée à
+9 300 000, marge **1 043 706 octets, 11,22 %**. Le lot touche
+`src/sim/territoire.js`, `src/sim/points-attaque.js` et `src/data/sites.js`.
+⚠⚠ **ETHAN, 07/09, POINT 13 : LE NIVEAU D'UNE BASE DEVIENT UNE FORCE, ET LES
+BASES D'UN CAMP S'ADDITIONNENT.** `influence = raison ^ (niveau − distance)`,
+somme par camp, la case au plus fort. À la raison **2**, deux bases de niveau 10
+valent EXACTEMENT une base de 11 — l'essaimage rapporte — et une base de 20 en
+vaut **1 024** de niveau 10 — il ne rattrape jamais la montée. Les deux moitiés
+de « deux bases 10 est moins fort qu'une base 20 » tiennent au même nombre.
+⚠⚠ **LA RÈGLE CENTRALE DU MODULE EST RENVERSÉE : LE JOUEUR PEUT PERDRE UNE
+CASE.** « Le joueur l'emporte : on n'écrase jamais sa marque » était une LECTURE
+prise faute d'arbitrage ; elle tombe. **Un joueur qui ne peut pas perdre une case
+ne peut pas non plus en gagner une** — la priorité rendait tout le partage muet.
+Les deux commentaires qui la portaient sont RÉÉCRITS, pas supprimés : ils disent
+l'ancienne règle, la nouvelle, et pourquoi.
+⚠⚠ **UN SEUL TEST EST TOMBÉ, ET C'EST UNE PRÉMISSE DEVENUE FAUSSE** — `EUCLIDE
+— les zones d'influence sont un OCTOGONE`, qui exigeait que la boucle de peinture
+appelle `dansLOctogoneDInfluence`. Elle appelle maintenant
+`distanceOctogonaleDInfluence`, dont le booléen se DÉRIVE : le test se resserre
+et exige les deux moitiés. **Aucune régression.** Le fait que l'ancienne priorité
+n'ait fait tomber AUCUN test est cohérent avec ce que son propre commentaire
+disait : « on pouvait le retirer sans qu'un seul test tombe ».
+⚠⚠ **UNE BASE RASÉE PEIGNAIT ENCORE SON TERRITOIRE — DÉFAUT MESURÉ AVANT
+CORRECTION.** `territoireDeLaFenetre` appelait `basesDeLaFenetre(etat.graine, …)`,
+la graine SEULE : mesuré sur la graine 11, base (1, 2), **trente cases restaient
+à l'Ouvrage** après le rasage, pendant que `siteDeLaCase` y rendait déjà `null`.
+Et le défaut ne faussait pas qu'un dessin : une base rasée pesait
+`raison ^ niveau` dans les sommes. Corrigé ici, `TF T10` le garde.
+⚠ **LA DISTANCE EST CELLE DE L'OCTOGONE, PAS TCHEBYCHEV, ET LES DEUX NE
+DIFFÈRENT QUE DANS LES ANGLES** — (2, 2) est à distance **3**, (3, 3) à **5**.
+C'est exactement là que le partage se joue, puisque la distance entre dans
+l'exposant. `distanceOctogonaleDInfluence` est extraite dans
+`sim/points-attaque.js` et `dansLOctogoneDInfluence` s'exprime PAR elle : une
+seule géométrie, deux lecteurs. Vérifié par exécution sur 2 023 couples, dont
+1 792 en diagonale.
+⚠ **LE NIVEAU D'UNE BASE DU JOUEUR EST LA MOYENNE DE SES BÂTIMENTS, ARRONDIE**
+— `GEOGRAPHIE.niveauBase` le dit déjà, et `palierDuSite` d'`ui/monde.js` emploie
+la MÊME grandeur avec le MÊME arrondi pour choisir son emblème. En prendre une
+autre ferait dire deux choses au même dessin. Surtout pas `niveauDeLaRangee`, qui
+est le niveau des sites de l'OUVRAGE.
+⚠ **`BigInt` OBLIGATOIRE, ET LES EXPOSANTS SONT DÉCALÉS.** 2⁵⁰ ≈ 1,1 × 10¹⁵ :
+une somme de plusieurs bases dépasse `Number.MAX_SAFE_INTEGER`, et un flottant
+perdrait des unités **exactement dans les cas serrés**. `niveau − distance` étant
+négatif pour un niveau 1 à trois cases — et `2n ** -2n` levant —, tous les
+exposants sont décalés du plus grand rayon : un facteur commun ne change aucune
+comparaison. `occupant` reste un `Uint8Array`.
+⚠⚠ **ET LE COÛT EST RÉGLÉ, PAS SEULEMENT MESURÉ — MÉMO-DES-TOURS, MÊME JOUR.**
+Le mémo de `priseAUnTour` s'ouvrait et se jetait à CHAQUE appel de
+`basesDeLaFenetre` ; il est désormais partagé, sur une seule entrée par graine —
+le motif exact de `carteDesPoi`, et la condition que `priseAUnTour` posait déjà
+(« le mémo est PROPRE À UNE GRAINE […] c'est l'appelant qui garantit l'unicité »).
+**Mesuré : `territoireDeLaFenetre` passe de 6 701 à 1 784 µs**, soit **3,8 fois
+plus rapide qu'après TERRITOIRE-FORCE et 3,1 fois plus rapide qu'AVANT lui**. Le
+défilement au doigt sur téléphone repasse sous les 10 ms. **Aucun comportement ne
+change** : la carte est une fonction pure de la graine, et `MEM T1` l'oblige en
+ALTERNANT deux graines case par case — deux balayages enchaînés passeraient même
+si le cache ne se renouvelait jamais.
+⚠⚠ **CE QUI RESTE OUVERT, ET QUI EST UNE DÉCISION DE JEU, PAS DE CODE : LE PRIX
+ET LES POI SUIVENT TOUJOURS LA PORTÉE, PAS LA PROPRIÉTÉ.** La correction a été
+écrite, mesurée, puis **retirée** : elle est juste, elle est abordable — 24 µs
+par case une fois le mémo partagé —, mais elle change le JEU. Mesuré sur la
+branche d'essai : **les vingt-cinq graines témoins divergent**, et deux tests de
+progression ordinaire tombent — le joueur cesse d'acquérir des POI qu'il
+acquérait. La raison est mécanique : le niveau d'un site de l'Ouvrage est celui
+de sa RANGÉE, jusqu'à 50, quand une base neuve vaut 1 — un joueur qui monte perd
+donc son territoire, son tarif de proximité ET ses gisements d'un coup. C'est une
+courbe de difficulté, et Ethan tranche.
+
+⚠⚠ **LE COÛT A ÉTÉ MESURÉ AVANT ET APRÈS : 5 612 µs → 6 701 µs par appel**,
+soit **+19,4 %**, sur une fenêtre pleine de 69 × 31 cases toutes occupées. ⚠
+**ET LA CARTE NE SE REDESSINE PAS DIX FOIS PAR SECONDE** — `rafraichir` sort sur
+une empreinte inchangée. Le vrai cas chaud est le DÉFILEMENT AU DOIGT, qui
+rappelle `dessiner` à chaque `pointermove` ; sur un téléphone trois à cinq fois
+plus lent, 6,7 ms deviennent 20 à 33 ms, et c'était **déjà** 17 à 28 ms avant ce
+lot. Deux remèdes proposés au rapport, aucun implanté d'office.
+⚠⚠ **CE QUE LA RELECTURE DU §10 A TROUVÉ, ET QUI RESTE OUVERT : LA CARTE ET LE
+PRIX NE DISENT PLUS LA MÊME CHOSE.** `estEnTerritoireAllie` demande « cette case
+est-elle dans l'OCTOGONE du joueur », pas « le joueur la POSSÈDE-t-il ». Avant ce
+lot les deux étaient la même question ; depuis, elles divergent — mesuré sur un
+montage : **15 cases peintes à l'Ouvrage sont encore facturées au tarif allié**,
+et `releverLesPoisAcquis` y ramasserait encore un POI. Le brief interdisait de
+toucher à ces deux modules ; le fait est donc CONSTATÉ, pas corrigé. **C'est
+exactement la divergence qu'EUCLIDE nomme depuis toujours — le prix affiché et la
+carte peinte décrivant deux choses.**
+
+**Auparavant, après le lot NOMBRES-COMPACTS :**
 `npm test` → **1324 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 255 283 octets**, 0 référence externe. Coût **+619 octets, ENTIÈREMENT EN
 JAVASCRIPT** : **JavaScript +619 · feuille +0 · balisage +0 · images +0 ·

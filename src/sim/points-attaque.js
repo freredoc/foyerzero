@@ -322,24 +322,51 @@ export const RAYON_ATTAQUE_CARRE = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAtt
  * ⚠ EN ENTIERS, SANS AUCUNE RACINE — deux valeurs absolues, deux comparaisons.
  * La doctrine d'EUCLIDE tient : `src/sim/` ne prend jamais de racine.
  *
+ * ⚠⚠ ELLE REND UNE DISTANCE DEPUIS LE LOT TERRITOIRE-FORCE, ET LE BOOLÉEN SE
+ * DÉRIVE D'ELLE. La boule de rayon `r` de cette distance-ci est EXACTEMENT
+ * l'octogone dicté : `max(|dr|, |dc|, |dr| + |dc| − marge) <= r` redit mot pour
+ * mot « dans le carré de Tchebychev de rayon `r` ET dans le losange de Manhattan
+ * de rayon `r + marge` ». Vérifié par exécution sur tous les écarts de −8 à 8 et
+ * les rayons 0 à 6, **coins compris** : une distance de Tchebychev et une
+ * distance d'octogone ne diffèrent que dans les angles, et c'est là que le
+ * partage du territoire se joue.
+ *
+ * @param {number} dr écart de rangée, entier
+ * @param {number} dc écart de colonne, entier
+ * @returns {number} la distance, en cases, dans la géométrie de l'influence
+ */
+export function distanceOctogonaleDInfluence(dr, dc) {
+  // ⚠ LES ÉCARTS SE VALIDENT ICI, PARCE QU'ILS ÉTAIENT VALIDÉS AVANT. Jusqu'au
+  // lot EUCLIDE, `estEnTerritoireAllie` passait par `distanceCarreeCases`, qui
+  // LÈVE sur une case non entière. Sans cette garde, une case mal formée ferait
+  // rendre `NaN` aux comparaisons, donc `false` — la cible sortirait du
+  // territoire en silence et le raid coûterait le tarif lointain sans rien dire.
+  if (!Number.isInteger(dr) || !Number.isInteger(dc)) {
+    throw new TypeError(`distanceOctogonaleDInfluence : écarts « ${dr}, ${dc} » — entiers attendus`);
+  }
+  const ar = Math.abs(dr);
+  const ac = Math.abs(dc);
+  return Math.max(ar, ac, ar + ac - GEOGRAPHIE.margeDiagonaleInfluence);
+}
+
+/**
+ * Cette case est-elle dans l'octogone d'influence de rayon `rayon` ?
+ *
+ * ⚠⚠ ELLE S'EXPRIME PAR LA DISTANCE DEPUIS LE LOT TERRITOIRE-FORCE, ET C'EST
+ * LE MÊME MOTIF QUE CELUI QUI L'A CRÉÉE. Elle portait la forme en clair — deux
+ * bornes de Tchebychev et une de Manhattan — et le partage du chevauchement a
+ * maintenant besoin de la DISTANCE, pas seulement de l'appartenance. Réécrire la
+ * forme une seconde fois pour en tirer un nombre aurait été la divergence que ce
+ * bloc dénonce depuis EUCLIDE ; c'est donc le booléen qui se dérive du nombre, et
+ * non l'inverse. Une seule géométrie, deux lecteurs.
+ *
  * @param {number} dr écart de rangée, entier
  * @param {number} dc écart de colonne, entier
  * @param {number} rayon rayon de la zone, en cases
  * @returns {boolean}
  */
 export function dansLOctogoneDInfluence(dr, dc, rayon) {
-  // ⚠ LES ÉCARTS SE VALIDENT ICI, PARCE QU'ILS ÉTAIENT VALIDÉS AVANT. Jusqu'à ce
-  // lot, `estEnTerritoireAllie` passait par `distanceCarreeCases`, qui LÈVE sur
-  // une case non entière. Sans cette garde, une case mal formée ferait rendre
-  // `NaN` aux deux comparaisons, donc `false` — la cible sortirait du territoire
-  // en silence et le raid coûterait le tarif lointain sans que rien ne le dise.
-  if (!Number.isInteger(dr) || !Number.isInteger(dc)) {
-    throw new TypeError(`dansLOctogoneDInfluence : écarts « ${dr}, ${dc} » — entiers attendus`);
-  }
-  const ar = Math.abs(dr);
-  const ac = Math.abs(dc);
-  if (ar > rayon || ac > rayon) return false;
-  return ar + ac <= rayon + GEOGRAPHIE.margeDiagonaleInfluence;
+  return distanceOctogonaleDInfluence(dr, dc) <= rayon;
 }
 
 /**

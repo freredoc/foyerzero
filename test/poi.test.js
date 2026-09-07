@@ -33,6 +33,9 @@ import {
 import { RAYONS, JOUEUR } from '../src/sim/territoire.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+import { basesDeLaFenetre } from '../src/sim/peuplement.js';
+import { campDeLaCase } from '../src/sim/territoire.js';
+import { NIVEAU } from '../src/data/niveaux.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const T0 = 1_700_000_000_000;
@@ -385,6 +388,36 @@ test('POI T27 — la séparation retire un tiers d\'une bande, et la carte reste
  * cases de côté satisfont la première sans satisfaire le second — on en observe
  * (min Tchebychev = 3, POI T26). Sur la graine 4242, 32 des 70 POI passent.
  */
+/**
+ * Rase les bases de l'Ouvrage du voisinage — ce que ces montages SUPPOSAIENT.
+ *
+ * ⚠⚠ ILS LE SUPPOSAIENT SANS LE DIRE, ET C'ÉTAIT GRATUIT JUSQU'AU LOT
+ * TERRITOIRE-FORCE. Tant que le joueur ne pouvait pas perdre une case, poser sa
+ * base sur un POI suffisait à le lui donner : sa portée ÉTAIT sa propriété. Depuis
+ * que la case revient au camp dont la somme des forces est la plus haute, et que
+ * `releverLesPoisAcquis` demande la PROPRIÉTÉ (lot TERRITOIRE-LU), un montage qui
+ * pose une base de niveau 1 au milieu de bases de l'Ouvrage de niveau 30 ne
+ * mesure plus la forme de la zone : il mesure un rapport de force qu'il n'a pas
+ * choisi.
+ *
+ * ⚠⚠ ON RASE PLUTÔT QUE DE MONTER LE JOUEUR EN NIVEAU, et c'est un choix. Le
+ * niveau du joueur changerait aussi la portée du raid, les coûts, les emblèmes ;
+ * raser ne touche qu'à ce que le montage veut écarter. `basesRasees` est déjà
+ * dans l'état, et `sim/territoire.js` le lit depuis TERRITOIRE-FORCE.
+ */
+function sansVoisinsOuvrage(etat) {
+  for (const b of etat.bases) {
+    const large = {
+      premiereRangee: b.position.rangee - 8, derniereRangee: b.position.rangee + 8,
+      premiereColonne: b.position.colonne - 8, derniereColonne: b.position.colonne + 8,
+    };
+    for (const o of basesDeLaFenetre(etat.graine, large)) {
+      etat.basesRasees.push(`${o.rangee}:${o.colonne}`);
+    }
+  }
+  return etat;
+}
+
 function partieSurLePoi(graine, marge = 5) {
   const liste = carteDesPoi(graine).liste;
   const isole = (p) => liste.every((q) => q === p
@@ -393,6 +426,7 @@ function partieSurLePoi(graine, marge = 5) {
   assert.ok(poi, `graine ${graine} : aucun POI isolé à ${marge} cases`);
   const etat = creerEtat(graine);
   baseCourante(etat).position = { rangee: poi.rangee, colonne: poi.colonne };
+  sansVoisinsOuvrage(etat);
   return { etat, poi };
 }
 
@@ -408,12 +442,14 @@ test('POI T8 — un POI dans le territoire est acquis au tick suivant, à trois 
   assert.equal(RAYONS[JOUEUR], 2, 'le rayon d\'influence du joueur a changé — refaire la mesure');
   const loin = creerEtat(4242);
   baseCourante(loin).position = { rangee: poi.rangee, colonne: poi.colonne + RAYONS[JOUEUR] + 1 };
+  sansVoisinsOuvrage(loin);
   tickJeu(loin);
   assert.deepEqual(loin.poisAcquis, [], 'un POI à trois cases a été acquis');
 
   // Falsifiable dans l'autre sens : à DEUX cases, il l'est.
   const juste = creerEtat(4242);
   baseCourante(juste).position = { rangee: poi.rangee, colonne: poi.colonne + RAYONS[JOUEUR] };
+  sansVoisinsOuvrage(juste);
   tickJeu(juste);
   assert.deepEqual(juste.poisAcquis, [{ type: poi.type, bande: poi.bande }]);
 });
@@ -994,6 +1030,7 @@ test('POI T25 — un POI dans un ANGLE ROGNÉ n\'est pas acquis, sa voisine l\'e
   const auCoin = () => {
     const e = creerEtat(3);
     baseCourante(e).position = { rangee: poi.rangee + rayon, colonne: poi.colonne + rayon };
+    sansVoisinsOuvrage(e);
     releverLesPoisAcquis(e);
     return e.poisAcquis;
   };
@@ -1003,6 +1040,7 @@ test('POI T25 — un POI dans un ANGLE ROGNÉ n\'est pas acquis, sa voisine l\'e
   const aLEpaule = () => {
     const e = creerEtat(3);
     baseCourante(e).position = { rangee: poi.rangee + rayon, colonne: poi.colonne + rayon - 1 };
+    sansVoisinsOuvrage(e);
     releverLesPoisAcquis(e);
     return e.poisAcquis;
   };
@@ -1045,4 +1083,94 @@ test('POI T24 — en partie normale, AUCUN POI n\'est acquérable, et ce n\'est 
   const { etat } = partieSurLePoi(4242);
   tickJeu(etat);
   assert.equal(etat.poisAcquis.length, 1, 'le relevé n\'acquiert rien du tout');
+});
+
+// ---------------------------------------------------------------------------
+// Lot TERRITOIRE-LU — un gisement se ramasse sur ce qu'on TIENT
+// ---------------------------------------------------------------------------
+
+test('TL T3 — un POI sur une case perdue n\'est pas ramassé, la même case tenue le donne', () => {
+  // ⚠⚠ C'EST LE POINT DU LOT, ET IL SE MESURE SUR LA MÊME CASE, DEUX FOIS. Un
+  // montage qui ne montrerait que le refus passerait sur un relevé cassé qui
+  // n'acquerrait plus rien ; on change donc UNE SEULE chose entre les deux
+  // moitiés — le niveau du joueur, donc le rapport de force — et le gisement
+  // bascule. La portée, elle, est identique des deux côtés.
+  //
+  // ⚠⚠ LA BASE EST À CÔTÉ DU GISEMENT, JAMAIS DESSUS, ET C'EST LE PLANCHER QUI
+  // L'IMPOSE. « Le territoire où la base se trouve ne change pas » : un POI sous
+  // le pied de la base est à elle quoi qu'il arrive, donc un montage qui poserait
+  // la base sur le gisement ne pourrait RIEN mesurer de la propriété.
+  const graine = 3;
+  const carte = carteDesPoi(graine);
+
+  const monter = (poi, dc, niveau) => {
+    const e = creerEtat(graine);
+    baseCourante(e).position = { rangee: poi.rangee, colonne: poi.colonne + dc };
+    e.bases[0].disposition = e.bases[0].disposition.map((b) => ({ ...b, niveau }));
+    return e;
+  };
+
+  // Un POI que l'Ouvrage tient quand le joueur est faible à côté, et que le
+  // joueur reprend quand il monte : c'est là que la propriété se joue.
+  let choisi = null;
+  for (const poi of carte.liste) {
+    if (poi.colonne + 1 > GEOGRAPHIE.carte.largeur) continue;
+    const faible = campDeLaCase(monter(poi, 1, 1), poi.rangee, poi.colonne);
+    const fort = campDeLaCase(monter(poi, 1, NIVEAU.plafond), poi.rangee, poi.colonne);
+    if (faible === JOUEUR || fort !== JOUEUR) continue;
+    choisi = poi;
+    break;
+  }
+  assert.ok(choisi !== null, 'montage : aucun POI ne bascule avec le niveau du joueur');
+
+  const ramasse = (niveau) => {
+    const e = monter(choisi, 1, niveau);
+    releverLesPoisAcquis(e);
+    return e.poisAcquis;
+  };
+
+  // ⚠ À NIVEAU 1, LE VOISIN TIENT LA CASE : rien n'est ramassé.
+  assert.deepEqual(ramasse(1), [], 'un gisement sur une case perdue est encore ramassé');
+  // ⚠ AU PLAFOND, LE JOUEUR LA REPREND : le même gisement tombe. C'est Ethan qui
+  // le dit — « si tu vas vers le nord, tu montes aussi en niveau avant ».
+  assert.deepEqual(
+    ramasse(NIVEAU.plafond), [{ type: choisi.type, bande: choisi.bande }],
+    'le gisement d\'une case tenue n\'est pas ramassé',
+  );
+});
+
+test('TL T4 — un POI DÉJÀ pris reste pris, même si la case est perdue ensuite', () => {
+  // ⚠⚠ ETHAN, 07/09 : « un poi pris est validé de façon permanente ». La garde
+  // d'acquisition passe AVANT celle de propriété, précisément pour ça : perdre
+  // une case ne reprend RIEN, elle empêche seulement d'en ramasser un nouveau.
+  const graine = 3;
+  const carte = carteDesPoi(graine);
+  const aCote = (poi, niveau, rase) => {
+    const e = creerEtat(graine);
+    baseCourante(e).position = { rangee: poi.rangee, colonne: poi.colonne + 1 };
+    e.bases[0].disposition = e.bases[0].disposition.map((b) => ({ ...b, niveau }));
+    if (rase) sansVoisinsOuvrage(e);
+    return e;
+  };
+  const choisi = carte.liste.find(
+    (poi) => poi.colonne + 1 <= GEOGRAPHIE.carte.largeur
+      && campDeLaCase(aCote(poi, 1, false), poi.rangee, poi.colonne) !== JOUEUR
+      && campDeLaCase(aCote(poi, 1, true), poi.rangee, poi.colonne) === JOUEUR,
+  );
+  assert.ok(choisi !== undefined, 'montage : aucun POI ne bascule au rasage du voisinage');
+
+  // On le ramasse pendant que la case est à nous.
+  const etat = aCote(choisi, 1, true);
+  releverLesPoisAcquis(etat);
+  assert.deepEqual(etat.poisAcquis, [{ type: choisi.type, bande: choisi.bande }],
+    'montage : le gisement n\'a pas été ramassé au départ');
+
+  // Puis on rend la case à l'Ouvrage — les voisines reviennent.
+  etat.basesRasees.length = 0;
+  assert.notEqual(campDeLaCase(etat, choisi.rangee, choisi.colonne), JOUEUR,
+    'montage : la case est encore au joueur, le test ne mesure rien');
+
+  for (let i = 0; i < 50; i += 1) releverLesPoisAcquis(etat);
+  assert.deepEqual(etat.poisAcquis, [{ type: choisi.type, bande: choisi.bande }],
+    'un gisement acquis a été repris avec la case');
 });

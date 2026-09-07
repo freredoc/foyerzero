@@ -34,7 +34,7 @@ import {
 } from '../data/sites.js';
 import { niveauDeLaRangee, estSurLaCarte, positionBaseTerminale } from './carte.js';
 import { hachageBrut, horsDeLaGarde, estBaseOuvrage } from './peuplement.js';
-import { basesDuJoueur, RAYONS, JOUEUR } from './territoire.js';
+import { basesDuJoueur, campDeLaCase, RAYONS, JOUEUR } from './territoire.js';
 import { dansLOctogoneDInfluence } from './points-attaque.js';
 import { empriseDeLaGrosseBase } from '../render/embleme.js';
 
@@ -341,6 +341,28 @@ export function releverLesPoisAcquis(etat) {
         const poi = poiDeLaCase(etat.graine, rangee, colonne);
         if (poi === null) continue;
         if (poiEstAcquis(etat.poisAcquis, poi)) continue;
+        // ⚠⚠ ET LA CASE DOIT LUI APPARTENIR, PAS SEULEMENT ÊTRE À SA PORTÉE —
+        // lot TERRITOIRE-LU. C'est le SIXIÈME site de la même bascule, et le
+        // premier que le renversement de TERRITOIRE-FORCE ait CRÉÉ plutôt que
+        // révélé : depuis que la case revient au camp dont la somme des forces
+        // est la plus forte, l'octogone d'une base dit où elle PROJETTE, pas ce
+        // qu'elle TIENT. Sans cette ligne, le joueur ramasserait le gisement
+        // d'une case que la carte peint à l'Ouvrage.
+        //
+        // ⚠⚠ ELLE EST LA DERNIÈRE DES QUATRE GARDES, ET L'ORDRE EST UNE MESURE,
+        // PAS UN GOÛT. `releverLesPoisAcquis` tourne À CHAQUE TICK ; demander la
+        // propriété AVANT de regarder s'il y a seulement un gisement la faisait
+        // passer de 1 à 45 µs par appel, et trois tests de simulation de secondes
+        // à des minutes — mesuré. Il y a soixante-dix POI sur 9 300 cases : la
+        // question ne se pose donc presque jamais, à condition de la poser en
+        // dernier.
+        //
+        // ⚠⚠ UN POI DÉJÀ PRIS EST PRIS POUR TOUJOURS — Ethan, 07/09 : « un poi
+        // pris est validé de façon permanente ». `poisAcquis` est de l'HISTOIRE,
+        // l'en-tête de ce fichier le dit, et la garde d'acquisition passe AVANT
+        // celle-ci : perdre la case ne reprend RIEN, elle empêche seulement d'en
+        // ramasser un nouveau sur une case qu'on ne tient pas.
+        if (campDeLaCase(etat, rangee, colonne) !== JOUEUR) continue;
         etat.poisAcquis.push({ type: poi.type, bande: poi.bande });
         ajoutes += 1;
       }

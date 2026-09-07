@@ -39,6 +39,7 @@ import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
 import { poiDeLaCase, carteDesPoi } from '../src/sim/poi.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+import { basesDeLaFenetre } from '../src/sim/peuplement.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -423,6 +424,18 @@ test('RAID-B T7 — le rasage redéploie de 20 cases, vide les stocks, et relèv
   assert.equal(poisAutourDe(etat, DEPART).length, 0,
     'le montage ne mesure rien : un POI est déjà sous la base AVANT le rasage');
   const arrivee = { rangee: DEPART.rangee + SAUT, colonne: DEPART.colonne };
+  // ⚠⚠ LE VOISINAGE EST RASÉ, ET C'EST CE QUE LE MONTAGE SUPPOSAIT SANS LE
+  // DIRE. Tant que le joueur ne pouvait pas perdre une case, sa PORTÉE était sa
+  // PROPRIÉTÉ, et poser une base suffisait à lui donner son octogone. Depuis
+  // TERRITOIRE-FORCE la case revient au camp le plus fort, et depuis
+  // TERRITOIRE-LU le barème et les POI demandent la propriété : une base de
+  // niveau 1 posée au milieu de bases de l'Ouvrage de niveau 30 ne tient plus
+  // rien. Ce test-ci mesure une FORME, pas un rapport de force — on écarte donc
+  // ce qu'il n'a pas choisi de mesurer.
+  for (const o of basesDeLaFenetre(etat.graine, {
+    premiereRangee: DEPART.rangee - 8, derniereRangee: arrivee.rangee + 8,
+    premiereColonne: 1, derniereColonne: 31,
+  })) etat.basesRasees.push(`${o.rangee}:${o.colonne}`);
   const attendus = poisAutourDe(etat, arrivee);
   assert.ok(attendus.length > 0,
     'le montage ne mesure rien : aucun POI ne tombe sous la base APRÈS le rasage');

@@ -14,8 +14,14 @@ import { dirname, join } from 'node:path';
 
 import {
   territoireDeLaFenetre, bordsDuTerritoire, occupantDeLaCase, basesDuJoueur,
+  forceDUneBase, niveauDUneBaseDuJoueur, campDeLaCase, RAISON,
   RAYONS, NEUTRE, JOUEUR, OUVRAGE,
 } from '../src/sim/territoire.js';
+import { dansLOctogoneDInfluence, distanceOctogonaleDInfluence } from '../src/sim/points-attaque.js';
+import { basesDeLaFenetre } from '../src/sim/peuplement.js';
+import { niveauDeLaRangee } from '../src/sim/carte.js';
+import { siteDeLaCase } from '../src/sim/site-de-la-case.js';
+import { NIVEAU } from '../src/data/niveaux.js';
 import { TEINTES_TERRITOIRE } from '../src/ui/monde.js';
 import { GEOGRAPHIE, EMBLEMES_CARTE, TYPES_SITE, ZOOM_CARTE } from '../src/data/sites.js';
 import { creerEtat } from '../src/sim/state.js';
@@ -378,4 +384,480 @@ test('frontières — le calcul tient dans le budget d\'une image', () => {
   // Le seuil est large : il n'est pas là pour mesurer la machine, il est là pour
   // attraper un retour au parcours par case, qui serait cent fois plus lent.
   assert.ok(ms < 200, `${ms.toFixed(1)} ms pour une fenêtre de 61 rangées`);
+});
+
+// ---------------------------------------------------------------------------
+// Lot TERRITOIRE-FORCE — le niveau devient une force, et les bases s'additionnent
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, 07/09, POINT 13 : « deux bases 10 est moins fort qu'une base 20 ».
+// La règle centrale du module est RENVERSÉE — le joueur ne l'emporte plus
+// d'office —, et ces douze montages la reprennent depuis le début.
+
+/**
+ * Un état où UNE SEULE base de l'Ouvrage subsiste dans la fenêtre.
+ *
+ * ⚠⚠ ON RASE LES AUTRES PLUTÔT QUE DE FORGER UNE CARTE. Les positions des bases
+ * de l'Ouvrage sont une fonction de la GRAINE — `basesDeLaFenetre` ne lit que
+ * ça —, donc on ne peut pas en poser une où l'on veut. `basesRasees` est déjà
+ * dans l'état et le module le lit depuis ce lot : raser le voisinage donne un
+ * montage EXACT sans une seule ligne de code de production écrite pour le test.
+ *
+ * ⚠ ET ÇA ÉPROUVE LE FILTRE DU MÊME COUP. Si `forcesDeLOuvrage` cessait de lire
+ * `basesRasees`, tous les montages ci-dessous verraient reparaître des dizaines
+ * de bases et tomberaient — c'est `TF T10` qui le dit de face, mais les autres
+ * le tiennent par la manche.
+ */
+function seuleBaseOuvrage(etat, gardee, autour) {
+  for (const b of basesDeLaFenetre(etat.graine, autour)) {
+    if (b.rangee === gardee.rangee && b.colonne === gardee.colonne) continue;
+    etat.basesRasees.push(`${b.rangee}:${b.colonne}`);
+  }
+  return etat;
+}
+
+/** Une base du joueur posée où l'on veut, au niveau de bâtiments voulu. */
+function joueurAu(etat, position, niveau) {
+  etat.bases[0].position = { ...position };
+  etat.bases[0].disposition = etat.bases[0].disposition.map((b) => ({ ...b, niveau }));
+  assert.equal(niveauDUneBaseDuJoueur(etat.bases[0]), niveau,
+    'le montage ne donne pas à la base du joueur le niveau qu\'il croit');
+  return etat;
+}
+
+/** Compte les cases d'un camp sur une carte d'occupation. */
+function compter(carte, camp) {
+  let n = 0;
+  for (const v of carte.occupant) if (v === camp) n += 1;
+  return n;
+}
+
+test('TF T1 — deux bases de niveau 10 valent EXACTEMENT une base de niveau 11', () => {
+  // ⚠⚠ C'EST LA PREMIÈRE MOITIÉ DE L'ARBITRAGE, ET ELLE TIENT À LA RAISON 2.
+  // `2¹⁰ + 2¹⁰ = 2¹¹` : l'essaimage rapporte. L'égalité est STRICTE et en
+  // `BigInt` — un flottant la rendrait vraie ici et fausse au niveau 50, où la
+  // somme dépasse `Number.MAX_SAFE_INTEGER`.
+  assert.equal(forceDUneBase(10, 0) + forceDUneBase(10, 0), forceDUneBase(11, 0));
+  assert.equal(typeof forceDUneBase(10, 0), 'bigint');
+
+  // ⚠ ET ELLE TIENT À TOUS LES NIVEAUX, PAS SEULEMENT À DIX. Un montage à un
+  // seul palier passerait sur un formateur qui aurait codé ce cas-là en dur.
+  for (let n = 1; n < NIVEAU.plafond; n += 1) {
+    assert.equal(forceDUneBase(n, 0) + forceDUneBase(n, 0), forceDUneBase(n + 1, 0),
+      `deux bases de niveau ${n} ne valent pas une de niveau ${n + 1}`);
+  }
+
+  // ⚠ FALSIFIABLE : TROIS bases de niveau 10 ne valent PAS une de niveau 11.
+  // Sans cette ligne, une force constante passerait l'égalité ci-dessus.
+  assert.notEqual(forceDUneBase(10, 0) * 3n, forceDUneBase(11, 0));
+
+  // ⚠ ET LA RAISON SE LIT DANS `GEOGRAPHIE`, elle ne s'écrit pas ici : c'est le
+  // seul nombre à tourner si Ethan veut une progression plus douce.
+  assert.equal(RAISON, BigInt(GEOGRAPHIE.raisonDeLaForce));
+  assert.equal(GEOGRAPHIE.raisonDeLaForce, 2);
+});
+
+test('TF T2 — une base de niveau 20 en vaut 1 024 de niveau 10', () => {
+  // ⚠⚠ C'EST LA SECONDE MOITIÉ, ET ELLE DIT LE CONTRAIRE DE LA PREMIÈRE SANS LA
+  // CONTREDIRE : l'essaimage rapporte, et il ne rattrape JAMAIS la montée en
+  // niveau. Un test à deux bases ne montrerait pas la domination.
+  const dix = forceDUneBase(10, 0);
+  const vingt = forceDUneBase(20, 0);
+  assert.equal(vingt / dix, 1024n);
+  assert.equal(dix * 1024n, vingt);
+
+  // Mille bases de niveau 10 restent SOUS une base de niveau 20.
+  assert.ok(dix * 1000n < vingt, 'mille bases de niveau 10 dépassent une base de 20');
+  // Et mille vingt-cinq la dépassent — la borne est là, pas ailleurs.
+  assert.ok(dix * 1025n > vingt, 'la borne des 1 024 n\'est pas serrée');
+});
+
+test('TF T3 — le niveau 15 rogne le territoire du niveau 13, à trois cases', () => {
+  // ⚠⚠ LE CAS D'ETHAN, MONTÉ EXACTEMENT, ET LE COMPTE N'EST PAS CELUI QUE LE
+  // BRIEF ANNONÇAIT. Il prévoyait « le 15 prend deux cases au 13 » ; mesuré, il
+  // lui en prend **onze**. La raison est géométrique et elle est vérifiable :
+  // les deux rayons ne sont pas les mêmes — 2 pour le joueur, 3 pour l'Ouvrage —
+  // et le chevauchement de leurs octogones à trois cases d'écart fait onze
+  // cases, pas deux. Le « deux cases » valait pour deux bases de MÊME rayon.
+  //
+  // ⚠⚠ ET LES DEUX BASES NE PEUVENT PAS ÊTRE DEUX BASES DE L'OUVRAGE, C'EST
+  // MESURABLE. Le niveau d'un site de l'Ouvrage est celui de sa RANGÉE et monte
+  // de `niveauParCase` = 0,2 par case : il faut **cinq rangées pour un niveau**,
+  // donc dix pour aller de 13 à 15. Deux bases de l'Ouvrage distantes de trois
+  // cases ne peuvent pas différer de deux niveaux. Le cas d'Ethan n'existe donc
+  // qu'entre le joueur et l'Ouvrage — ce qui est justement ce que ce lot ouvre.
+  const etat = creerEtat(GRAINE);
+  const bande = { premiereRangee: 233, derniereRangee: 237, premiereColonne: 1, derniereColonne: 31 };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+    (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(etat.graine, b.rangee, b.colonne - 3),
+  );
+  assert.ok(ouvrage !== undefined, 'la graine ne porte pas la base attendue');
+  assert.equal(niveauDeLaRangee(ouvrage.rangee), 13, 'la base retenue n\'est pas de niveau 13');
+  const position = { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 3 };
+  joueurAu(etat, position, 15);
+  seuleBaseOuvrage(etat, ouvrage, {
+    premiereRangee: ouvrage.rangee - 10, derniereRangee: ouvrage.rangee + 10,
+    premiereColonne: 1, derniereColonne: 31,
+  });
+
+  const carte = territoireDeLaFenetre(etat, {
+    premiereRangee: ouvrage.rangee - 6, derniereRangee: ouvrage.rangee + 6,
+    premiereColonne: position.colonne - 6, derniereColonne: ouvrage.colonne + 6,
+  });
+
+  // ⚠ CASE PAR CASE, PAS PAR COMPTE SEUL. Un total juste peut cacher deux cases
+  // échangées ; c'est le test qui relie la formule à l'arbitrage.
+  const qui = (dr, dc) => occupantDeLaCase(carte, ouvrage.rangee + dr, ouvrage.colonne + dc);
+  assert.equal(qui(0, 0), OUVRAGE, 'le 13 a perdu sa propre case');
+  assert.equal(qui(0, -3), JOUEUR, 'le 15 a perdu sa propre case');
+  assert.equal(qui(0, -1), JOUEUR, 'la case collée au 13, mais à deux du 15, ne va pas au 15');
+  assert.equal(qui(0, -2), JOUEUR);
+  assert.equal(qui(0, 1), OUVRAGE, 'une case que le 15 ne peint pas lui revient quand même');
+  assert.equal(qui(1, -1), JOUEUR);
+  assert.equal(qui(-1, -1), JOUEUR);
+
+  // ⚠ LE 15 GARDE SON OCTOGONE ENTIER — 21 cases — et le 13 tombe de 37 à 26.
+  assert.equal(compter(carte, JOUEUR), 21, 'le niveau 15 ne garde pas tout son octogone');
+  assert.equal(compter(carte, OUVRAGE), 26, 'le niveau 13 ne perd pas onze cases');
+});
+
+test('TF T4 — une base garde SA case face à un niveau 20 collé à elle', () => {
+  // ⚠⚠ C'EST LE TEST DU PLANCHER, ET SANS LUI LA FORMULE PREND LE PIED DU
+  // FAIBLE. Ethan, 07/09 : « le territoire où la base se trouve ne change pas ».
+  // Un niveau 20 à trois cases pèse `2^(20−3)` là où un niveau 1 chez lui pèse
+  // `2^(1−0)` : la somme donne la case au fort, et le plancher la lui reprend.
+  const etat = creerEtat(GRAINE);
+  const bande = { premiereRangee: 198, derniereRangee: 202, premiereColonne: 1, derniereColonne: 31 };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+    (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(etat.graine, b.rangee, b.colonne - 3),
+  );
+  assert.ok(ouvrage !== undefined, 'la graine ne porte pas la base attendue');
+  assert.equal(niveauDeLaRangee(ouvrage.rangee), 20, 'la base retenue n\'est pas de niveau 20');
+  const position = { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 3 };
+  joueurAu(etat, position, 1);
+  seuleBaseOuvrage(etat, ouvrage, {
+    premiereRangee: ouvrage.rangee - 10, derniereRangee: ouvrage.rangee + 10,
+    premiereColonne: 1, derniereColonne: 31,
+  });
+
+  const carte = territoireDeLaFenetre(etat, {
+    premiereRangee: ouvrage.rangee - 6, derniereRangee: ouvrage.rangee + 6,
+    premiereColonne: position.colonne - 6, derniereColonne: ouvrage.colonne + 6,
+  });
+  assert.equal(occupantDeLaCase(carte, position.rangee, position.colonne), JOUEUR,
+    'la base de niveau 1 a perdu son propre pied');
+
+  // ⚠⚠ FALSIFIABLE, ET LA PREMIÈRE ÉCRITURE DE CETTE LIGNE ÉTAIT FAUSSE. Elle
+  // exigeait que le joueur ne garde QUE sa case — c'était confondre « perdre le
+  // chevauchement » et « perdre son octogone ». Le niveau 20 ne peint que dans
+  // SON octogone : les dix cases que le joueur peint et que l'Ouvrage n'atteint
+  // pas ne sont disputées par personne et lui restent. Mesuré : 11 = 10 + le
+  // pied. Ce que le plancher protège, c'est UNE case, et c'est la voisine qui le
+  // dit.
+  assert.equal(occupantDeLaCase(carte, position.rangee, position.colonne + 1), OUVRAGE,
+    'le plancher déborde sur la case voisine : il protège plus que la base');
+  assert.equal(compter(carte, JOUEUR), 11,
+    'le joueur ne garde pas exactement les dix cases hors de portée du 20, plus son pied');
+  assert.equal(compter(carte, OUVRAGE), 36,
+    'le niveau 20 perd autre chose que le seul pied du niveau 1');
+});
+
+test('TF T5 — le joueur PEUT perdre une case, et ce test remplace celui de l\'ancienne priorité', () => {
+  // ⚠⚠ IL REMPLACE EXPLICITEMENT LA RÈGLE MORTE. `territoireDeLaFenetre` portait
+  // « le joueur l'emporte : on n'écrase jamais sa marque », une LECTURE prise
+  // faute d'arbitrage. Ethan a tranché le 07/09 : c'est la somme des forces qui
+  // décide, et le joueur peut donc perdre. Un joueur qui ne peut pas perdre une
+  // case ne peut pas non plus en gagner une — la priorité rendait tout le
+  // partage muet.
+  const etat = creerEtat(GRAINE);
+  const bande = { premiereRangee: 98, derniereRangee: 102, premiereColonne: 1, derniereColonne: 31 };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+    (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(etat.graine, b.rangee, b.colonne - 2),
+  );
+  assert.ok(ouvrage !== undefined, 'la graine ne porte pas la base attendue');
+  const position = { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 2 };
+  joueurAu(etat, position, 1);
+  seuleBaseOuvrage(etat, ouvrage, {
+    premiereRangee: ouvrage.rangee - 10, derniereRangee: ouvrage.rangee + 10,
+    premiereColonne: 1, derniereColonne: 31,
+  });
+
+  const carte = territoireDeLaFenetre(etat, {
+    premiereRangee: ouvrage.rangee - 6, derniereRangee: ouvrage.rangee + 6,
+    premiereColonne: position.colonne - 6, derniereColonne: ouvrage.colonne + 6,
+  });
+
+  // La case juste à l'est de la base du joueur : il la peint (distance 1), et
+  // l'Ouvrage la peint aussi (distance 1). Le plus fort l'emporte.
+  const disputee = { rangee: position.rangee, colonne: position.colonne + 1 };
+  assert.equal(occupantDeLaCase(carte, disputee.rangee, disputee.colonne), OUVRAGE,
+    'le joueur garde une case qu\'une base bien plus forte lui dispute');
+
+  // ⚠ ET SON PIED LUI RESTE : perdre du territoire n'est pas perdre sa base.
+  assert.equal(occupantDeLaCase(carte, position.rangee, position.colonne), JOUEUR);
+});
+
+test('TF T6 — c\'est la SOMME qui décide, pas l\'ordre des deux boucles', () => {
+  // ⚠⚠ LE MONTAGE NE RETOURNE PAS LES BOUCLES, IL RETOURNE LES NIVEAUX, ET C'EST
+  // PLUS FORT. Inverser l'ordre de peinture demanderait un drapeau de test dans
+  // le code de production — exactement ce que ce dépôt refuse. On monte donc
+  // DEUX configurations où seul le rapport de force change, l'ordre de peinture
+  // restant identique : si l'ordre décidait, la même case irait au même camp
+  // dans les deux. Sous l'ANCIENNE règle, la seconde aurait donné la case au
+  // joueur ; elle la donne à l'Ouvrage.
+  const bande = { premiereRangee: 148, derniereRangee: 152, premiereColonne: 1, derniereColonne: 31 };
+  const graine = creerEtat(GRAINE).graine;
+  const ouvrage = basesDeLaFenetre(graine, bande).find(
+    (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(graine, b.rangee, b.colonne - 2),
+  );
+  assert.ok(ouvrage !== undefined, 'la graine ne porte pas la base attendue');
+  const position = { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 2 };
+  const disputee = { rangee: position.rangee, colonne: position.colonne + 1 };
+
+  const campDeLaDisputee = (niveauDuJoueur) => {
+    const etat = creerEtat(GRAINE);
+    joueurAu(etat, position, niveauDuJoueur);
+    seuleBaseOuvrage(etat, ouvrage, {
+      premiereRangee: ouvrage.rangee - 10, derniereRangee: ouvrage.rangee + 10,
+      premiereColonne: 1, derniereColonne: 31,
+    });
+    const carte = territoireDeLaFenetre(etat, {
+      premiereRangee: ouvrage.rangee - 6, derniereRangee: ouvrage.rangee + 6,
+      premiereColonne: position.colonne - 6, derniereColonne: ouvrage.colonne + 6,
+    });
+    return occupantDeLaCase(carte, disputee.rangee, disputee.colonne);
+  };
+
+  assert.equal(niveauDeLaRangee(ouvrage.rangee), 30, 'la base retenue n\'est pas de niveau 30');
+  assert.equal(campDeLaDisputee(NIVEAU.plafond), JOUEUR, 'un joueur de niveau 50 perd contre un 30');
+  assert.equal(campDeLaDisputee(1), OUVRAGE, 'un joueur de niveau 1 gagne contre un 30');
+
+  // ⚠ ET LE GARDE-FOU DE L'ANCIENNE RÈGLE N'EST PLUS DANS LA SOURCE. Il tenait
+  // en une ligne — « si la case est au joueur, ne pas l'écraser » — et sa
+  // disparition est ce qui rend l'ordre des boucles sans effet.
+  const source = readFileSync(join(RACINE, 'src', 'sim', 'territoire.js'), 'utf8');
+  assert.doesNotMatch(source, /if \(occupant\[i\] === JOUEUR\) continue;/,
+    'la priorité inconditionnelle du joueur est revenue dans la source');
+});
+
+test('TF T7 — la géométrie est UNIQUE, et elle se vérifie dans les angles', () => {
+  // ⚠⚠ UN MONTAGE ALIGNÉ NE DISTINGUERAIT PAS TCHEBYCHEV D'UN OCTOGONE. Les deux
+  // ne diffèrent QUE dans les coins — et c'est précisément là que le partage se
+  // joue, puisque la distance entre dans l'exposant de la force.
+  assert.equal(distanceOctogonaleDInfluence(2, 2), 3, 'Tchebychev dirait 2');
+  assert.equal(distanceOctogonaleDInfluence(3, 3), 5, 'Tchebychev dirait 3');
+  assert.equal(distanceOctogonaleDInfluence(1, 1), 1);
+  assert.equal(distanceOctogonaleDInfluence(2, 1), 2);
+  assert.equal(distanceOctogonaleDInfluence(0, 0), 0);
+
+  // ⚠⚠ ET LE BOOLÉEN EST EXACTEMENT LA BOULE DE CETTE DISTANCE, sur tous les
+  // écarts et tous les rayons utiles — coins compris. C'est l'assertion qui dit
+  // « une seule géométrie » ; sans elle, les deux pourraient dériver l'une de
+  // l'autre en théorie et diverger en pratique.
+  let couples = 0;
+  let diagonales = 0;
+  for (let rayon = 0; rayon <= 6; rayon += 1) {
+    for (let dr = -8; dr <= 8; dr += 1) {
+      for (let dc = -8; dc <= 8; dc += 1) {
+        assert.equal(
+          dansLOctogoneDInfluence(dr, dc, rayon),
+          distanceOctogonaleDInfluence(dr, dc) <= rayon,
+          `(${dr}, ${dc}) au rayon ${rayon} : le booléen et la distance divergent`,
+        );
+        couples += 1;
+        if (dr !== 0 && dc !== 0) diagonales += 1;
+      }
+    }
+  }
+  assert.equal(couples, 7 * 17 * 17);
+  assert.ok(diagonales > 1500, `${diagonales} écarts en diagonale : le balayage évite les coins`);
+
+  // ⚠ ET LES DEUX FIGURES SE RECOMPTENT — 21 et 37, les nombres dictés par Ethan.
+  for (const [rayon, attendu] of [[GEOGRAPHIE.rayonInfluenceJoueur, 21],
+    [GEOGRAPHIE.rayonInfluenceEnnemie, 37]]) {
+    let dedans = 0;
+    for (let dr = -rayon; dr <= rayon; dr += 1) {
+      for (let dc = -rayon; dc <= rayon; dc += 1) {
+        if (distanceOctogonaleDInfluence(dr, dc) <= rayon) dedans += 1;
+      }
+    }
+    assert.equal(dedans, attendu);
+  }
+});
+
+test('TF T8 — la portée ne bouge pas : un niveau 50 ne peint pas une case de plus', () => {
+  // ⚠⚠ SEUL LE PARTAGE DÉPEND DU NIVEAU, JAMAIS LA PORTÉE. Deux modules lisent
+  // le rayon en dur — `sim/poi.js` parcourt le territoire, `sim/points-attaque.js`
+  // en tire le barème du raid — et une portée qui croîtrait avec le niveau
+  // changerait leur coût et leur prix sans que personne ne l'ait demandé.
+  const etat = creerEtat(GRAINE);
+  const position = { rangee: 150, colonne: 16 };
+  joueurAu(etat, position, NIVEAU.plafond);
+  seuleBaseOuvrage(etat, { rangee: -1, colonne: -1 }, {
+    premiereRangee: 130, derniereRangee: 170, premiereColonne: 1, derniereColonne: 31,
+  });
+  const carte = territoireDeLaFenetre(etat, {
+    premiereRangee: 140, derniereRangee: 160, premiereColonne: 6, derniereColonne: 26,
+  });
+  assert.equal(compter(carte, JOUEUR), 21,
+    'une base de niveau 50 peint autre chose que son octogone de 21 cases');
+
+  // Aucune case au-delà du rayon, sur les deux axes ET en diagonale.
+  for (const [dr, dc] of [[0, 3], [3, 0], [-3, 0], [0, -3], [2, 2], [-2, -2], [2, -2]]) {
+    assert.equal(occupantDeLaCase(carte, position.rangee + dr, position.colonne + dc), NEUTRE,
+      `(${dr}, ${dc}) est peinte alors qu'elle est hors de l'octogone`);
+  }
+  assert.equal(RAYONS[JOUEUR], GEOGRAPHIE.rayonInfluenceJoueur);
+  assert.equal(RAYONS[OUVRAGE], GEOGRAPHIE.rayonInfluenceEnnemie);
+});
+
+test('TF T9 — hors de tout octogone, la case reste NEUTRE', () => {
+  // Non-régression : la somme ne décide que là où au moins une base peint.
+  const etat = creerEtat(GRAINE);
+  const position = { rangee: 150, colonne: 16 };
+  joueurAu(etat, position, 20);
+  seuleBaseOuvrage(etat, { rangee: -1, colonne: -1 }, {
+    premiereRangee: 130, derniereRangee: 170, premiereColonne: 1, derniereColonne: 31,
+  });
+  const carte = territoireDeLaFenetre(etat, {
+    premiereRangee: 140, derniereRangee: 160, premiereColonne: 6, derniereColonne: 26,
+  });
+  assert.equal(compter(carte, NEUTRE), carte.occupant.length - 21);
+  assert.equal(occupantDeLaCase(carte, 145, 10), NEUTRE);
+});
+
+test('TF T10 — une base RASÉE ne peint plus, et le défaut a été mesuré avant', () => {
+  // ⚠⚠ CE MONTAGE ÉTAIT ROUGE AVANT LA CORRECTION, ET C'EST ÉCRIT AU RAPPORT.
+  // `territoireDeLaFenetre` appelait `basesDeLaFenetre(etat.graine, …)` — la
+  // graine seule, sans l'état — alors que `basesRasees` retient les cases rasées
+  // et que `siteDeLaCase` y rend déjà `null`. Mesuré sur la graine 11, base
+  // (1, 2) : **trente cases restaient à l'Ouvrage** après le rasage.
+  //
+  // ⚠ ET LE DÉFAUT NE FAUSSAIT PAS QU'UN DESSIN : une base rasée pesait
+  // `raison ^ niveau` dans le partage. C'est pour ça qu'il se corrige dans ce
+  // lot-ci et pas au suivant.
+  const etat = creerEtat(GRAINE);
+  const bande = { premiereRangee: 148, derniereRangee: 152, premiereColonne: 1, derniereColonne: 31 };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find((b) => b.colonne >= 6 && b.colonne <= 26);
+  assert.ok(ouvrage !== undefined, 'la graine ne porte pas la base attendue');
+  const fenetre = {
+    premiereRangee: ouvrage.rangee - 6, derniereRangee: ouvrage.rangee + 6,
+    premiereColonne: ouvrage.colonne - 6, derniereColonne: ouvrage.colonne + 6,
+  };
+  // Le joueur au loin : ce montage ne parle que de l'Ouvrage.
+  joueurAu(etat, { rangee: 290, colonne: 16 }, 1);
+  seuleBaseOuvrage(etat, ouvrage, {
+    premiereRangee: ouvrage.rangee - 10, derniereRangee: ouvrage.rangee + 10,
+    premiereColonne: 1, derniereColonne: 31,
+  });
+
+  const avant = territoireDeLaFenetre(etat, fenetre);
+  assert.equal(compter(avant, OUVRAGE), 37, 'la base debout ne peint pas son octogone');
+  assert.equal(siteDeLaCase(etat, ouvrage.rangee, ouvrage.colonne).type, 'base');
+
+  etat.basesRasees.push(`${ouvrage.rangee}:${ouvrage.colonne}`);
+  assert.equal(siteDeLaCase(etat, ouvrage.rangee, ouvrage.colonne), null,
+    'le montage ne rase pas vraiment la base');
+
+  const apres = territoireDeLaFenetre(etat, fenetre);
+  assert.equal(compter(apres, OUVRAGE), 0, 'une base rasée peint encore son territoire');
+  assert.equal(occupantDeLaCase(apres, ouvrage.rangee, ouvrage.colonne), NEUTRE,
+    'le plancher garde sa case à une base qui n\'existe plus');
+});
+
+test('TF T11 — aucun mélange `BigInt` et `Number`, aux deux extrêmes du niveau', () => {
+  // ⚠⚠ JAVASCRIPT LÈVE SUR `1n < 1`, ET C'EST LA FAUTE QUE CE TEST ATTRAPE. Un
+  // zéro écrit `0` au lieu de `0n` dans la comparaison ferait tomber la carte
+  // entière au premier chevauchement — pas une case de travers, une exception.
+  //
+  // ⚠ AUX DEUX EXTRÊMES, parce que c'est là que les types se mélangent : au
+  // niveau 1 les forces sont petites et un `Number` passerait inaperçu, au
+  // niveau 50 la somme dépasse `Number.MAX_SAFE_INTEGER` et un `Number` perdrait
+  // des unités **exactement dans les cas serrés**.
+  for (const niveau of [1, NIVEAU.plafond]) {
+    const etat = creerEtat(GRAINE);
+    const bande = { premiereRangee: 98, derniereRangee: 102, premiereColonne: 1, derniereColonne: 31 };
+    const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+      (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(etat.graine, b.rangee, b.colonne - 2),
+    );
+    joueurAu(etat, { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 2 }, niveau);
+    assert.doesNotThrow(() => territoireDeLaFenetre(etat, {
+      premiereRangee: ouvrage.rangee - 6, derniereRangee: ouvrage.rangee + 6,
+      premiereColonne: ouvrage.colonne - 8, derniereColonne: ouvrage.colonne + 6,
+    }), `un mélange de types au niveau ${niveau}`);
+  }
+
+  // ⚠ LA SOMME DE DEUX FORCES AU PLAFOND DÉPASSE L'ENTIER SÛR, et c'est ce qui
+  // rend les `BigInt` obligatoires plutôt que confortables. Sans cette ligne, on
+  // pourrait croire que des flottants auraient suffi.
+  const plafond = forceDUneBase(NIVEAU.plafond, 0);
+  assert.ok(plafond > BigInt(Number.MAX_SAFE_INTEGER),
+    'la force au plafond tient dans un entier sûr : la précision exacte serait gratuite');
+  assert.equal(typeof plafond, 'bigint');
+});
+
+// ---------------------------------------------------------------------------
+// Lot TERRITOIRE-LU — la récolte des POI demande la PROPRIÉTÉ, pas la portée
+// ---------------------------------------------------------------------------
+
+test('TL T1 — `campDeLaCase` rend EXACTEMENT ce que la carte peint', () => {
+  // ⚠⚠ DEUX FONCTIONS POUR UNE MÊME RÈGLE, ET C'EST LE RISQUE QUE CE TEST PORTE.
+  // `territoireDeLaFenetre` peint 2 139 cases d'un coup ; `campDeLaCase` en
+  // calcule UNE, parce que la récolte des POI ne peut pas peindre une fenêtre
+  // entière pour savoir si un gisement est à elle. Si les deux divergeaient d'une
+  // case, on aurait deux vérités sur la même case — c'est-à-dire la faute que ce
+  // lot existe pour corriger, un cran plus bas.
+  const etat = creerEtat(GRAINE);
+  // ⚠ LA FENÊTRE EST PRISE AU BAS DE LA CARTE, AUTOUR DU DÉPART DU JOUEUR, et
+  // c'est ce qui lui fait porter les TROIS occupants. Au milieu de la carte
+  // l'Ouvrage tient 100 % des rangées — mesuré, et son en-tête le dit — donc un
+  // balayage là-haut ne comparerait que des cases ennemies.
+  const fenetre = {
+    premiereRangee: 285, derniereRangee: 300, premiereColonne: 1, derniereColonne: 31,
+  };
+  const carte = territoireDeLaFenetre(etat, fenetre);
+  let comparees = 0;
+  const vus = new Set();
+  for (let r = fenetre.premiereRangee; r <= fenetre.derniereRangee; r += 1) {
+    for (let c = fenetre.premiereColonne; c <= fenetre.derniereColonne; c += 1) {
+      const parLaCarte = occupantDeLaCase(carte, r, c);
+      assert.equal(campDeLaCase(etat, r, c), parLaCarte,
+        `(${r}, ${c}) : la carte et la case ne disent pas la même chose`);
+      vus.add(parLaCarte);
+      comparees += 1;
+    }
+  }
+  assert.ok(comparees > 400, `${comparees} cases comparées : le balayage ne mesure rien`);
+  // ⚠ FALSIFIABLE : la fenêtre doit porter les TROIS réponses. Un balayage tout
+  // neutre — ou tout à l'Ouvrage — passerait sur deux fonctions qui rendraient
+  // toujours la même chose.
+  assert.deepEqual([...vus].sort(), [NEUTRE, JOUEUR, OUVRAGE].sort(),
+    'la fenêtre ne porte pas les trois occupants : le montage ne discrimine rien');
+
+  // Et hors carte, `NEUTRE` — comme `occupantDeLaCase`.
+  assert.equal(campDeLaCase(etat, 0, 5), NEUTRE);
+  assert.equal(campDeLaCase(etat, 5, 0), NEUTRE);
+  assert.equal(campDeLaCase(etat, GEOGRAPHIE.carte.hauteur + 1, 5), NEUTRE);
+});
+
+test('TL T2 — le plancher tient aussi sur UNE case : une base garde la sienne', () => {
+  // ⚠ LE PLANCHER EST ÉCRIT DEUX FOIS PARCE QUE LES DEUX CHEMINS L'APPLIQUENT
+  // DIFFÉREMMENT — la carte l'écrase après le partage, la case le rend avant.
+  // C'est exactement le genre d'écart que `TL T1` attraperait en masse ; ce
+  // test-ci le nomme.
+  const etat = creerEtat(GRAINE);
+  const bande = { premiereRangee: 198, derniereRangee: 202, premiereColonne: 1, derniereColonne: 31 };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+    (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(etat.graine, b.rangee, b.colonne - 3),
+  );
+  const position = { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 3 };
+  etat.bases[0].position = { ...position };
+  etat.bases[0].disposition = etat.bases[0].disposition.map((b) => ({ ...b, niveau: 1 }));
+
+  assert.equal(campDeLaCase(etat, position.rangee, position.colonne), JOUEUR,
+    'la base de niveau 1 a perdu son propre pied');
+  assert.equal(campDeLaCase(etat, ouvrage.rangee, ouvrage.colonne), OUVRAGE,
+    'la base de l\'Ouvrage a perdu son propre pied');
+  // ⚠ ET LA VOISINE, ELLE, TOMBE — sans quoi le plancher protégerait l'octogone.
+  assert.equal(campDeLaCase(etat, position.rangee, position.colonne + 1), OUVRAGE);
 });

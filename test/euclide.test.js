@@ -577,8 +577,19 @@ test('EUCLIDE — les zones d\'influence sont un OCTOGONE, et une seule écritur
   const carte = decommentee('src/sim/territoire.js');
   assert.match(barème, /dansLOctogoneDInfluence\(/,
     'le barème ne demande pas la zone à la fonction commune');
-  assert.match(carte, /dansLOctogoneDInfluence\(dr, dc, rayon\)/,
-    'la boucle de peinture ne demande pas la zone à la fonction commune');
+  // ⚠⚠ TROISIÈME RETOURNEMENT, ET LE TEST SE RESSERRE ENCORE. Au lot
+  // TERRITOIRE-FORCE, la boucle de peinture a besoin de la DISTANCE et plus
+  // seulement de l'appartenance : le partage du chevauchement se fait sur
+  // `raison ^ (niveau − distance)`. Elle appelle donc
+  // `distanceOctogonaleDInfluence`, et c'est le BOOLÉEN qui se dérive du nombre.
+  // On exige maintenant les DEUX moitiés : que la carte demande la distance à la
+  // fonction commune, ET que le booléen s'exprime par cette même distance. Une
+  // forme écrite deux fois reste interdite ; il y a un lecteur de plus, pas une
+  // écriture de plus.
+  assert.match(carte, /distanceOctogonaleDInfluence\(dr, dc\)/,
+    'la boucle de peinture ne demande pas la distance à la fonction commune');
+  assert.match(barème, /return distanceOctogonaleDInfluence\(dr, dc\) <= rayon;/,
+    'le booléen de zone ne se dérive plus de la distance : la forme est écrite deux fois');
   // ⚠ ET AUCUN DES DEUX NE REFAIT LE CALCUL DANS SON COIN. C'est l'assertion qui
   // porte le « une seule écriture » : les deux formes précédentes — la comparaison
   // au disque et celle de Tchebychev — sont interdites de retour.

@@ -287,7 +287,38 @@ function libreAuTour(graine, rangee, colonne, tour, memo) {
  * @returns {boolean}
  */
 export function estBaseOuvrage(graine, rangee, colonne) {
-  return priseAUnTour(graine, rangee, colonne, new Map());
+  return priseAUnTour(graine, rangee, colonne, memoDeLaGraine(graine));
+}
+
+/**
+ * Le mémo des tours de peuplement, MÉMOÏSÉ sur une seule entrée par graine.
+ *
+ * ⚠⚠ IL EXISTAIT DÉJÀ, PAR APPEL ; il devient partagé au lot TERRITOIRE-LU, et
+ * c'est ce qui rend la question « à qui est cette case » abordable. Le tarif du
+ * raid et la récolte des POI la posent maintenant case par case — voir
+ * `campDeLaCase` de `sim/territoire.js` —, et chaque question rouvrait un mémo
+ * vide pour refaire un travail que la question d'à côté venait de faire :
+ * **mesuré, 153 µs pour une seule case**, soit très exactement le « 441 hachages
+ * PAR CASE » que l'en-tête de `sim/territoire.js` existe pour refuser.
+ *
+ * ⚠⚠ UNE SEULE ENTRÉE SUFFIT, ET LE MOTIF EST CELUI DE `carteDesPoi` :
+ * « une seule partie est ouverte à la fois, donc une entrée couvre tout — et le
+ * cache ne peut pas mentir, puisque la carte est une fonction pure de la
+ * graine ». Le commentaire de `priseAUnTour` posait déjà la condition — « le
+ * mémo est PROPRE À UNE GRAINE […] c'est l'appelant qui garantit l'unicité » — ;
+ * cette fonction-ci est cet appelant, et elle la garantit en comparant la graine.
+ *
+ * ⚠ IL SE VIDE AU CHANGEMENT DE GRAINE, IL NE GROSSIT PAS INDÉFINIMENT. Un
+ * balayage de deux cents graines paie donc deux cents mémos successifs, jamais
+ * deux cents mémos vivants.
+ */
+let memoDesTours = null;
+
+function memoDeLaGraine(graine) {
+  if (memoDesTours === null || memoDesTours.graine !== graine) {
+    memoDesTours = { graine, memo: new Map() };
+  }
+  return memoDesTours.memo;
 }
 
 /**
@@ -335,7 +366,11 @@ export function basesDeLaFenetre(graine, fenetre) {
   const c0 = Math.max(1, fenetre.premiereColonne);
   const c1 = Math.min(GEOGRAPHIE.carte.largeur, fenetre.derniereColonne);
   const bases = [];
-  const memo = new Map();
+  // ⚠ LE MÉMO EST PARTAGÉ ENTRE LES APPELS DEPUIS LE LOT TERRITOIRE-LU, et
+  // c'est la même Map que `estBaseOuvrage` emploie. Deux chemins, un mémo, une
+  // graine : les réponses ne peuvent pas diverger, et un test les compare case
+  // par case depuis toujours.
+  const memo = memoDeLaGraine(graine);
   for (let rangee = r0; rangee <= r1; rangee++) {
     for (let colonne = c0; colonne <= c1; colonne++) {
       if (priseAUnTour(graine, rangee, colonne, memo)) bases.push({ rangee, colonne });

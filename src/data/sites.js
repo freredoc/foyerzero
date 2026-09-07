@@ -515,6 +515,22 @@ export const GEOGRAPHIE = {
   baseTerminale: { casesDepuisBordHaut: 14, colonne: 'centre' },
   rayonInfluenceJoueur: 2, // fixe
   rayonInfluenceEnnemie: 3, // fixe
+  // ⚠⚠ LA RAISON DE LA PROGRESSION DE FORCE — ETHAN, 07/09, POINT 13. « Deux
+  // bases 10 est moins fort qu'une base 20 » : la force d'une base sur une case
+  // vaut `raison ^ (niveau − distance)`, les bases d'un même camp s'ADDITIONNENT,
+  // et la case revient au camp dont la somme est la plus forte.
+  //
+  // ⚠⚠ DEUX, ET C'EST CE NOMBRE-LÀ QUI FAIT TENIR LES DEUX MOITIÉS DE LA PHRASE.
+  // À la raison 2, deux bases de niveau 10 valent EXACTEMENT une base de niveau
+  // 11 — 2¹⁰ + 2¹⁰ = 2¹¹ —, donc l'essaimage rapporte ; et une base de niveau 20
+  // en vaut 1 024 de niveau 10, donc il ne rattrape jamais la montée en niveau.
+  // Une raison plus petite écraserait la seconde moitié, une plus grande la
+  // première.
+  //
+  // ⚠ ELLE EST ICI PARCE QUE C'EST UNE VALEUR DE CALIBRAGE, et `sim/territoire.js`
+  // la LIT — il ne l'écrit pas. C'est le seul nombre à tourner si Ethan veut une
+  // progression plus douce ou plus dure.
+  raisonDeLaForce: 2,
   // ⚠⚠ LA ZONE N'EST NI UN CARRÉ NI UN DISQUE : C'EST UN OCTOGONE, ET
   // ETHAN L'A DESSINÉ CASE PAR CASE LE 03/09/2026. « le territoire doit avoir 8
   // cases de plus, dans les angles. un carré de 5x5 avec chaque coin rogné

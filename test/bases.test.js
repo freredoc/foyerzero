@@ -82,6 +82,8 @@ import {
   GESTES_ARMER_PRODUCTION_EN_DEFENSE, OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE,
   RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE, RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE,
   DEPLACES_PAR_CIBLES_RANGEES, EMPREINTES_PAR_GRAINE_CIBLES_RANGEES,
+  DEPLACES_PAR_TERRITOIRE_LU, EMPREINTES_PAR_GRAINE_TERRITOIRE_LU,
+  RAPPORTS_OUVRAGE_TERRITOIRE_LU,
   RAPPORTS_PROCHE_CIBLES_RANGEES, RAPPORTS_OUVRAGE_CIBLES_RANGEES,
 } from './temoins-bases-0.js';
 
@@ -134,7 +136,14 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_CIBLES_RANGEES[phase]?.[champ]
+  // ⚠⚠ LA PILE SE LIT DU PLUS RÉCENT AU PLUS ANCIEN, ET CHAQUE COUCHE NE DIT
+  // QUE CE QUE SON LOT A DÉPLACÉ. TERRITOIRE-LU est la douzième : la récolte des
+  // POI demande la PROPRIÉTÉ d'une case et plus sa portée, donc `poisAcquis`
+  // bouge à partir de la phase 10, et avec lui tout ce qui en dépend. Les neuf
+  // premières phases tombent EXACTEMENT sur la capture d'origine — c'est cette
+  // moitié-là qui dit que la règle n'a pas fui hors de la récolte.
+  return DEPLACES_PAR_TERRITOIRE_LU[phase]?.[champ]
+    ?? DEPLACES_PAR_CIBLES_RANGEES[phase]?.[champ]
     ?? DEPLACES_PAR_PRODUCTION_EN_DEFENSE[phase]?.[champ]
     ?? DEPLACES_PAR_SATELLITES_RESPAWN[phase]?.[champ]
     ?? DEPLACES_PAR_COLONNE[phase]?.[champ]
@@ -494,7 +503,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_CIBLES_RANGEES[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_TERRITOIRE_LU[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -588,8 +597,13 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // GRAINES : un site qui n'est plus disposé pareil ne rend pas le même
       // rapport. Ce qui NE bouge pas juste au-dessus — nombre de cibles, cible
       // retenue, non-fuite et exactitude — dit que seule la disposition a changé.
+      // ⚠ ET TERRITOIRE-LU EN DÉPLACE UNE SEULE, LA SIXIÈME : un gisement de
+      // moins finance une recherche de moins, donc une autre armée. Les
+      // vingt-quatre autres tombent à l'octet sur la couche d'avant — c'est ce
+      // qui dit que la propriété n'a bougé que la récolte.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
+        ? (RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
+          ?? RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
