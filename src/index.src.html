@@ -2746,6 +2746,26 @@
              ⚠ ET IL PART PENDANT LE DÉROULÉ, où la vue est d'ensemble : il n'y
              a plus de bande à quitter, et un combat ne se regarde pas ailleurs. -->
         <button type="button" id="raid-bascule-bande" hidden>▼</button>
+
+        <!-- ⚠⚠ LA FICHE D'UNE CIBLE ENNEMIE — lot FICHES-ENNEMIES, 07/09,
+             points 7 et 8. Ethan : « En prépa raid, possibilité de cliquer sur
+             une unité ennemie pour voir ses stats », puis « idem pour les
+             bâtiments ».
+             ⚠⚠ ELLE PORTE LA CLASSE `panneau-detail`, ET C'EST TOUT CE QU'ELLE
+             PORTE. Son CONTENU est écrit par `peindreVueDuPanneau` de
+             `ui/chantier.js` — le rendu partagé du Chantier et de l'Offense
+             depuis le lot ERGONOMIE, qui annonçait celle-ci par écrit depuis le
+             lot ÉCRAN-DÉFENSE. Rien n'est gravé ici.
+             ⚠ ET ELLE N'A PAS DE BOUTON D'ACTION, à la différence des deux
+             autres : la fiche informe, elle ne suggère rien. On n'améliore pas
+             une pièce qui ne t'appartient pas. -->
+        <div id="raid-fiche" class="panneau-detail" hidden>
+          <div class="tete">
+            <b id="raid-fiche-titre" class="titre">—</b>
+            <button type="button" id="raid-fiche-fermer" class="fermer">Fermer</button>
+          </div>
+          <div id="raid-fiche-corps" class="corps"></div>
+        </div>
       </div>
 
       <div id="raid-bas">

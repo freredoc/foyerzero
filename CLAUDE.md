@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.26 · build 128.
+Dernière révision : **07/09/2026**, version 0.99.27 · build 129.
 
 ---
 
@@ -42,7 +42,99 @@ Dernière révision : **07/09/2026**, version 0.99.26 · build 128.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot RETOUCHES), à confronter :**
+**Référence au 07/09/2026 (après le lot FICHES-ENNEMIES), à confronter :**
+`npm test` → **1397 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 352 389 octets**, 0 référence externe. Coût **+2 365 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +2 029 · feuille +0 · balisage +336 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **297
+lignes `data:` avant, 297 après, 292 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **947 611 octets, 10,19 %**. Le lot touche
+`src/ui/raid.js`, `src/ui/chantier.js`, `src/ui/banc.js`, `src/render/scene.js`
+et le balisage.
+⚠⚠ **LA FEUILLE NE GAGNE PAS UN OCTET, ET C'EST LA MESURE DU LOT.** Points 7 et
+8 : « cliquer sur une unité ennemie pour voir ses stats », « idem pour les
+bâtiments ». Le rendu ATTENDAIT ces deux fiches par écrit depuis ÉCRAN-DÉFENSE —
+« la fiche d'une cible ennemie l'appellera comme les deux autres » —, et le poste
+`feuille` à **+0** est ce qui dit que la promesse a été tenue : la fiche porte la
+classe `panneau-detail` et rien d'autre. **Trois appels de `peindreVueDuPanneau`
+dans tout `src/ui/`, une seule définition** ; `ÉD T8 ter` n'a pas bougé d'un
+caractère.
+⚠⚠ **LES DEUX VUES ONT LA MÊME FORME, MESURÉE ET NON AFFIRMÉE.** Une Casemate de
+niveau 12 en garnison du joueur et la même dans un site de l'Ouvrage : **mêmes
+titres de section — « Au combat », « La pièce » — et six lignes sur sept
+communes**, mot pour mot. `FE T7` monte la fiche du JOUEUR pour de bon et compare.
+⚠ **DEUX LIGNES S'ÉCARTENT, DANS LES DEUX SENS, ET LES DEUX SE DÉCLARENT.**
+« Points engagés » SORT — c'est un prix dans le budget d'armée du JOUEUR, et
+l'Ouvrage n'a pas de budget qu'on puisse lire ; « Classe » ENTRE — le brief la
+demande, et elle sert les DEUX points d'un seul libellé, `classeDe` rendant le
+châssis d'une unité, le type d'un ouvrage ET `batiment` pour un bâtiment.
+⚠⚠ **RIEN QUI NE SORTE DU MOTEUR, ET C'EST MESURÉ AU NOMBRE PRÈS.** Carapace de
+niveau 20, relevée à l'écran : **PV 4 893 = 800 × 6 116 ‰**, véhicules
+**214 = 35 × 6 116 ‰** — c'est la table MULTIPLIÉE par `facteurMilli(20)`, pas la
+table. `FE T3` monte la même pièce à deux niveaux et REFUSE l'égalité ; les deux
+falsifications qui lisent `ligne.pv` et `ligne.degats` le font tomber.
+⚠ **ET LES PV SE LISENT SUR LE MAXIMUM, L'AVARIE ÉTANT UNE PART À PART** : un
+site déjà entamé se lit dans « État », ce qui sert au joueur qui revient dessus.
+⚠⚠ **CE QUI DÉCIDE QU'UNE PIÈCE TIRE EST `porteeQuiTire`, ET RIEN D'AUTRE.** Un
+`genre === 'defense'` écrit dans l'écran aurait menti sur la **Ronce**, qui a une
+portée de 1 et FRANCHIT sans tirer, et sur le **Merlon**, rangé exactement comme
+une tourelle. Relevé : Casemate, Batterie et Créneau annoncent **2,5 cases**,
+Merlon et Herse **rien**, un bâtiment **rien**.
+⚠ **LA LIGNE « PORTÉE MINIMALE » N'A PAS ÉTÉ VUE À L'ÉCRAN — DÉCLARÉ.** Seules
+les trois artilleries la portent (`porteeMini: 3.5`), et la garnison du camp joué
+n'en comptait aucune. `FE T10` la mesure hors ligne, Faucheuse contre Casemate.
+⚠⚠ **LE CHEMIN TOUCHER → CASE EST CELUI DU BANC, ET IL N'EN EXISTE QU'UN** —
+`caseDepuisPixels` de `render/projection.js`, deux appelants, une écriture.
+⚠⚠ **ET LES DEUX DÉCALAGES NE S'AJOUTENT PAS — TROUVÉ PAR UN TEST, PAS PAR
+RELECTURE.** Ils sont DÉJÀ repliés dans `margeX`/`margeY` par
+`calculerProjection` — mesuré, `margeY` passe de 54 à **−546**. Les rajouter les
+comptait DEUX FOIS et le doigt désignait une case cinq rangées plus haut.
+⚠ **UNE CASE VIDE N'OUVRE RIEN ET NE FERME RIEN.** Fermer sur un doigt mal posé
+effacerait ce que le joueur venait de lire ; il y a un bouton pour ça. `FE T9`
+exige un point vide **encadré des deux côtés sur les deux axes** — sans ça il
+tombait dans la marge noire, où le code sort AVANT la question des occupants.
+⚠⚠ **AUCUN TOUCHER N'EST AVALÉ, ET C'EST MESURÉ À LA MAIN COMME LE BRIEF
+L'EXIGE.** La fiche ouverte occupe `y` 376 → 506 sur un canevas qui va de 40 à
+506, et **ZÉRO des 23 points qui ouvrent une fiche ne tombe sous elle** ; fiche
+ouverte sur le Nœud, un toucher sur la Gangue rend « Gangue » **au premier
+toucher**.
+⚠⚠ **`nomAffiche` ET `entitesSurLaCase` DÉMÉNAGENT DE `ui/banc.js` VERS
+`render/scene.js`, ET C'EST UN DÉPLACEMENT.** Un écran de production ne peut pas
+importer le banc de debug — c'est la dépendance à l'envers. **Pas une ligne de
+leur corps n'a changé** ; la falsification qui les rend privées fait tomber
+QUATRE fichiers de test d'un coup.
+⚠⚠ **VINGT-DEUX FALSIFICATIONS, VINGT ET UNE CHUTES, ET TROIS ONT FAIT ÉCRIRE DU
+TEST APRÈS LA MESURE.** Le pincement annulé compté comme un toucher, un zéro de
+dégâts écrit « 0 » au lieu de « — », et la classe rendue en CLÉ interne
+(`escouade` pour « Escouade ») laissaient la suite **entièrement verte — 51 pass
+/ 0 fail sur chacune** : le fichier gardait les LIBELLÉS et le chemin du toucher,
+pas les VALEURS ni le chemin du pincement. `FE T9 bis` entre pour la première,
+deux assertions de `FE T7` pour les deux autres.
+⚠⚠ **ET LA VINGT-DEUXIÈME SE DÉCLARE, POUR UNE RAISON MESURÉE.** Prendre le
+PREMIER occupant au lieu du dernier ne fait tomber aucun test : **les huit unités
+qui entrent en garnison sont quatre escouades et quatre blindés, ZÉRO aéronef**,
+et sur 40 graines, 120 sites, **19 440 cases**, le maximum d'occupants vaut **1**.
+Le cas est inatteignable du côté qu'on regarde ; le dernier est retenu quand même,
+un aéronef survolant étant celui que le doigt désigne.
+⚠ **ONZE TESTS ENTRENT — `FE T1` à `T10`, plus `FE T9 bis` — ET LE COMPTE PASSE
+DE 1 386 À 1 397.** **Aucune assertion n'a été retirée ni assouplie, et aucune
+garde existante n'a eu à changer de cible.**
+⚠ **`src/sim/` N'A PAS UNE LIGNE DE CHANGÉE**, et `SAVE_VERSION` reste à **28** —
+vérifié au diff contre le commit précédent. Une fiche est un affichage.
+⚠ **`peindreVueDuPanneau` GAGNE UNE GARDE DE TROIS LIGNES**, seul changement du
+rendu partagé : il écrivait son bouton sans regarder si l'appelant lui en donnait
+un. La falsification qui la retire fait tomber cinq tests.
+⚠ **UN DÉFAUT DE MON PROPRE RELEVÉ A COÛTÉ UNE HEURE, ET IL FAUT LE DIRE.** Un
+balayage en aveugle au pas de 10 px rendait **0 fiche ouverte** dans Chromium et
+m'a fait croire que le toucher ne passait pas. Instrumenter `drawImage` et viser
+le CENTRE des sprites réellement posés en ouvre **23 du premier coup**. Le code
+n'avait rien.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** Tout ce
+qui précède est relevé dans Chromium à la géométrie du S25 FE — **zéro erreur de
+page**, débordement horizontal 0 — et ce n'est pas le téléphone d'Ethan (§3).
+
+**Auparavant, après le lot RETOUCHES :**
 `npm test` → **1386 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 350 024 octets**, 0 référence externe. Coût **+3 458 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis le lot
@@ -7885,6 +7977,17 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 14 fi
     bande visible — centrer sur la bande laisse 240 px de buffer de noir
     au-dessus de la rangée 18, et la falsification qui le fait N'A PAS MORDU au
     premier relevé.
+  ⤷ ⚠⚠ `scene.js` RÉPOND « QU'EST-CE QUE CETTE ENTITÉ », ET IL PORTE DEUX
+    FONCTIONS DE PLUS DEPUIS LE 07/09 — lot FICHES-ENNEMIES. `nomAffiche` et
+    `entitesSurLaCase` vivaient dans `src/ui/banc.js` parce qu'un seul écran s'en
+    servait ; la fiche d'une cible ennemie en a besoin, et **un écran de
+    production ne peut pas importer le banc de debug** — c'est la dépendance à
+    l'envers. **Pas une ligne de leur corps n'a changé en route**, et `banc.js`
+    les importe désormais d'ici. ⚠ `caseDepuisMilli` entre avec elles, seul
+    import neuf : `entitesSurLaCase` compare des milli-cases.
+  ⤷ ⚠ ET LA CLÉ DE `nomAffiche` EST LE PROPRIÉTAIRE, JAMAIS LE CAMP. Le joueur
+    peut défendre : ses unités passent au camp `defense` sans changer de
+    propriétaire, et elles s'afficheraient sous le nom de l'Ouvrage.
   ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
     est celui de la SIMULATION : y prendre un tirage pour choisir une texture
     décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se

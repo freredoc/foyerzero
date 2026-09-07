@@ -23,7 +23,7 @@ import { calculerProjection, xDeColonne, yDeRangee } from '../src/render/project
 import { listeDefense } from '../src/render/scene.js';
 import { creerCombat } from '../src/sim/combat.js';
 import { genererSite } from '../src/sim/generateur.js';
-import { nomAffiche } from '../src/ui/banc.js';
+import { nomAffiche } from '../src/render/scene.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VIEWPORTS = [[412, 810], [360, 640], [800, 800]];

@@ -18,7 +18,8 @@ import {
 } from '../src/render/scene.js';
 import { nomDeVariante } from '../src/render/variante.js';
 import { executer } from '../src/render/canvas2d.js';
-import { montageDuBanc, executerRaidComplet, entitesSurLaCase, decrireEntite } from '../src/ui/banc.js';
+import { montageDuBanc, executerRaidComplet, decrireEntite } from '../src/ui/banc.js';
+import { entitesSurLaCase } from '../src/render/scene.js';
 
 /** Joue jusqu'au tick voulu, ou jusqu'à la fin du combat. */
 function jouer(etat, jusquAuTick) {

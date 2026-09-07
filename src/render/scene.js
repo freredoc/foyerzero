@@ -44,6 +44,7 @@ import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
 import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
 import { angleDeLaPiece } from '../sim/rendu-pose.js';
 import { nomDeVariante } from './variante.js';
+import { caseDepuisMilli } from '../sim/grille.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
 
@@ -971,6 +972,54 @@ export function listeAffichage(
 // d'une classe ou d'un accent non présenté apparaît.
 
 /** Libellé de chaque classe visuelle. */
+/**
+ * ⚠⚠ LES DEUX FONCTIONS QUI SUIVENT ONT DÉMÉNAGÉ DEPUIS `src/ui/banc.js` — lot
+ * FICHES-ENNEMIES, 07/09, ET C'EST UN DÉPLACEMENT, PAS UNE COPIE. Elles y
+ * vivaient parce qu'un seul écran s'en servait ; la fiche d'une cible ennemie
+ * en a besoin aussi, et `src/ui/raid.js` ne peut pas importer le BANC — un
+ * écran de production qui dépend du banc de debug est la dépendance à l'envers.
+ * Pas une ligne de leur corps n'a changé en route, et `banc.js` les importe
+ * désormais d'ici.
+ *
+ * ⚠ ET C'EST LE BON MODULE : celui-ci répond déjà « qu'est-ce que cette
+ * entité » — `classeDe`, `accentDe`, `NOMS_CLASSE`, `couchesDeLEntite`. « Quel
+ * est son nom » et « qui occupe cette case » sont de la même famille.
+ */
+
+/**
+ * Nom affiché d'une entité — DEUX JEUX DE NOMS, jamais mélangés : le joueur
+ * emploie le vocabulaire d'une armée régulière, l'Ouvrage celui des outils et
+ * des bêtes.
+ *
+ * ⚠ LA CLÉ EST LE PROPRIÉTAIRE, PAS LE CAMP. Elle a longtemps été le camp, et
+ * ça marchait tant que seul l'Ouvrage défendait. Le jour où le joueur garnit sa
+ * propre base, le camp de ses unités devient « defense » sans qu'elles changent
+ * de propriétaire — et elles s'afficheraient sous le nom de l'Ouvrage.
+ *
+ * Les BÂTIMENTS n'ont qu'un nom : une Souche est une Souche des deux côtés.
+ * Les DÉFENSES en ont deux depuis le 25/08/2026.
+ */
+export function nomAffiche(entite) {
+  if (entite.genre === 'batiment') return BATIMENTS[entite.id].nom;
+  const joueur = entite.proprietaire === 'joueur';
+  if (entite.genre === 'defense') {
+    const noms = DEFENSES[entite.id].nom;
+    return joueur ? noms.joueur : noms.ouvrage;
+  }
+  const noms = UNITES[entite.id].nom;
+  return joueur ? noms.joueur : noms.ouvrage;
+}
+
+/**
+ * Entités actives occupant une case. L'aviation ne bloque rien et peut donc
+ * partager sa case avec une entité au sol : la liste peut en compter deux.
+ */
+export function entitesSurLaCase(etat, rangee, colonne) {
+  return etat.entites.filter((e) => e.vivant && !e.sorti
+    && caseDepuisMilli(e.colonneMilli) === colonne
+    && caseDepuisMilli(e.rangeeMilli) === rangee);
+}
+
 export const NOMS_CLASSE = {
   escouade: 'Escouade',
   blinde: 'Blindé',

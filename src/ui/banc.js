@@ -21,7 +21,6 @@ import { NIVEAU } from '../data/niveaux.js';
 import {
   creerCombat, tick, construireResultat, butin, pointsRecherche, TICKS_AVANT_REPLI,
 } from '../sim/combat.js';
-import { caseDepuisMilli } from '../sim/grille.js';
 import {
   genererSite, genererAssaut, budgetAssaut, genererVague, budgetRaid,
 } from '../sim/generateur.js';
@@ -41,6 +40,7 @@ import {
 import { calculerProjection, caseDepuisPixels } from '../render/projection.js';
 import {
   listeAffichage, listeLegende, listeArsenal, listeDefense, classeDe, NOMS_CLASSE,
+  nomAffiche, entitesSurLaCase,
 } from '../render/scene.js';
 import { executer } from '../render/canvas2d.js';
 
@@ -169,40 +169,6 @@ export function executerRaidComplet(parametres, { vitesse = 1, dureeImageMs = 10
     butin: butin(resultat, montage),
     pointsRechercheMilli: pointsRecherche(resultat, montage),
   };
-}
-
-/**
- * Nom affiché d'une entité — DEUX JEUX DE NOMS, jamais mélangés : le joueur
- * emploie le vocabulaire d'une armée régulière, l'Ouvrage celui des outils et
- * des bêtes.
- *
- * ⚠ LA CLÉ EST LE PROPRIÉTAIRE, PAS LE CAMP. Elle a longtemps été le camp, et
- * ça marchait tant que seul l'Ouvrage défendait. Le jour où le joueur garnit sa
- * propre base, le camp de ses unités devient « defense » sans qu'elles changent
- * de propriétaire — et elles s'afficheraient sous le nom de l'Ouvrage.
- *
- * Les BÂTIMENTS n'ont qu'un nom : une Souche est une Souche des deux côtés.
- * Les DÉFENSES en ont deux depuis le 25/08/2026.
- */
-export function nomAffiche(entite) {
-  if (entite.genre === 'batiment') return BATIMENTS[entite.id].nom;
-  const joueur = entite.proprietaire === 'joueur';
-  if (entite.genre === 'defense') {
-    const noms = DEFENSES[entite.id].nom;
-    return joueur ? noms.joueur : noms.ouvrage;
-  }
-  const noms = UNITES[entite.id].nom;
-  return joueur ? noms.joueur : noms.ouvrage;
-}
-
-/**
- * Entités actives occupant une case. L'aviation ne bloque rien et peut donc
- * partager sa case avec une entité au sol : la liste peut en compter deux.
- */
-export function entitesSurLaCase(etat, rangee, colonne) {
-  return etat.entites.filter((e) => e.vivant && !e.sorti
-    && caseDepuisMilli(e.colonneMilli) === colonne
-    && caseDepuisMilli(e.rangeeMilli) === rangee);
 }
 
 /**

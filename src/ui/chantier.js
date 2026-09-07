@@ -1913,6 +1913,17 @@ export function peindreVueDuPanneau(doc, elements, vue) {
     elements.corps.appendChild(bloc);
   }
 
+  // ⚠⚠ UNE FICHE PEUT N'AVOIR AUCUN BOUTON, DEPUIS LE LOT FICHES-ENNEMIES.
+  // Les deux fiches du joueur finissent par « Améliorer » ; celle d'une cible
+  // ennemie n'a rien à proposer — « la fiche informe, elle ne suggère rien ».
+  // Lui donner un bouton mort pour satisfaire ce rendu aurait été écrire un
+  // geste qui n'existe pas, et un bouton inerte n'apprend rien (§4).
+  //
+  // ⚠ LA GARDE PORTE SUR L'ÉLÉMENT ET SUR LA VUE, pas sur l'un des deux : un
+  // panneau qui porterait un bouton sans que la vue le décrive le laisserait
+  // avec le texte de la fiche précédente.
+  if (elements.bouton === undefined || elements.bouton === null
+    || vue.bouton === undefined || vue.bouton === null) return;
   elements.bouton.textContent = '';
   const libelle = doc.createElement('span');
   libelle.textContent = vue.bouton.libelle;
@@ -2068,7 +2079,14 @@ export function posablesDeLaDefense(etat) {
  * @param {object} etat
  * @param {number} index indice dans `etat.garnison`
  */
-const LIBELLES_COLONNE_DEGATS = {
+/**
+ * ⚠⚠ EXPORTÉS DEPUIS LE LOT FICHES-ENNEMIES — 07/09. La fiche d'une cible
+ * ennemie dit les mêmes trois choses ; les retaper là-bas aurait donné deux
+ * vocabulaires pour la même grandeur, et le joueur aurait dû traduire d'un
+ * écran à l'autre. C'est la même règle que le rendu partagé juste au-dessus,
+ * appliquée aux MOTS et plus seulement à la mise en page.
+ */
+export const LIBELLES_COLONNE_DEGATS = {
   infanterie: 'Contre l\'infanterie',
   vehicule: 'Contre les véhicules',
   structureOuAviation: 'Contre les structures',
