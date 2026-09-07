@@ -147,7 +147,12 @@ test('enregistrer — une base rasée ne revient pas, alors qu\'elle est dériv�
   // ce qui a changé est que la même liste sert aussi à savoir qui tient le
   // terrain pendant vingt-quatre heures.
   assert.deepEqual(etat.basesRasees, [{
-    rangee: 150, colonne: 16, vainqueur: JOUEUR, niveau: 30, tick: etat.horloge.nbTicks,
+    rangee: 150,
+    colonne: 16,
+    type: 'base',
+    vainqueur: JOUEUR,
+    niveau: 30,
+    tick: etat.horloge.nbTicks,
   }]);
   assert.equal(siteDeLaCase(etat, 150, 16), null, 'la base rasée est revenue');
 });

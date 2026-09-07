@@ -41,7 +41,14 @@ const MESURES = JSON.parse(
 
 const FAMILLES = ['site_base_j', 'site_base_o', 'site_quartz', 'site_scorie'];
 const ETATS = ['', '_fumee', '_feu'];
+// ⚠⚠ LE QUATRIÈME ÉTAT N'EST PAS DANS `ETATS`, ET LE COMPTE PAR FAMILLE N'EST
+// DONC PLUS LE MÊME POUR TOUTES — lot CONQUÊTE-24H. Seules les deux familles de
+// BASE laissent une ruine : un camp ou un avant-poste respawne et ne laisse
+// rien. Une liste de quatre familles × quatre états aurait exigé dix-huit
+// sprites qui n'existent pas, et le test serait tombé sur son propre montage.
+const FAMILLES_A_RUINE = ['site_base_j', 'site_base_o'];
 const NIVEAUX = Array.from({ length: 9 }, (_, i) => `n${i + 1}`);
+const RUINES = FAMILLES_A_RUINE.flatMap((f) => NIVEAUX.map((n) => `${f}_${n}_ruine`));
 
 // ⚠⚠ LE SEUIL D'ENCRE SE LIT DANS L'OUTIL, IL NE SE RETAPE PAS — lot
 // EMBLÈME-CENTRÉ, 06/09. `ecrire` de `tools/final128.py` coupe l'alpha sous
@@ -113,16 +120,25 @@ function trous(img) {
 
 const nomsAttendus = FAMILLES.flatMap(
   (f) => ETATS.flatMap((e) => NIVEAUX.map((n) => `${f}_${n}${e}`)),
-);
+).concat(RUINES);
 
-test('EMB T1 — les douze planches rendent NEUF cellules chacune, fusion comprise', () => {
-  // Les 108 cellules existent, et elles sont réparties 27 par famille : c'est la
-  // sortie observable de « neuf composantes par planche ». Une planche qui en
-  // aurait rendu huit ferait LEVER `cellules_par_composante` — donc le manifeste
-  // et les fichiers n'existeraient pas du tout.
+test('EMB T1 — les quatorze planches rendent NEUF cellules chacune, fusion comprise', () => {
+  // Les 126 cellules existent : 27 par famille, et 36 pour les deux familles de
+  // base, qui ont un état de plus. C'est la sortie observable de « neuf
+  // composantes par planche ». Une planche qui en aurait rendu huit ferait LEVER
+  // `cellules_par_composante` — donc le manifeste et les fichiers n'existeraient
+  // pas du tout.
+  //
+  // ⚠⚠ ET LA QUATORZIÈME A FAILLI EN RENDRE ONZE — lot CONQUÊTE-24H. La ruine
+  // de l'Ouvrage projette des gravats détachés de 654 et 728 pixels, au-dessus du
+  // `SEUIL_COMPOSANTE` de 500 et pourtant sans être des emblèmes : la colonne 2 en
+  // portait CINQ. `cellules_par_composante` garde désormais les `ny` plus grandes
+  // et rend le reste à la plus proche, comme les braises — la plus petite gardée
+  // fait 24 886 pixels contre 728 au plus gros surnuméraire, un facteur 34.
   for (const famille of FAMILLES) {
-    assert.equal(Object.keys(MESURES[famille].cellules).length, 27,
-      `${famille} : 27 cellules attendues, trois états de neuf paliers`);
+    const attendu = FAMILLES_A_RUINE.includes(famille) ? 36 : 27;
+    assert.equal(Object.keys(MESURES[famille].cellules).length, attendu,
+      `${famille} : ${attendu} cellules attendues`);
   }
   for (const nom of nomsAttendus) {
     assert.ok(MESURES[nomFamille(nom)].cellules[nom], `${nom} absent du manifeste`);
@@ -383,14 +399,21 @@ test('EMB-C T4 — le compte de sprites et les noms de l\'atlas sont intacts', (
   // ⚠⚠ LE LOT NE FAIT NI ENTRER NI SORTIR UN SPRITE : il en réécrit les pixels.
   // Un compte qui bougerait voudrait dire qu'une cellule a été perdue ou
   // dédoublée en route, et le livrable le paierait en `data:`.
+  //
+  // ⚠⚠ LE COMPTE A BOUGÉ DE 18 AU LOT CONQUÊTE-24H, ET C'EST VOULU : les deux
+  // familles de base gagnent leur ruine, neuf paliers chacune. Le livrable le
+  // paie bien en `data:` — **+86 036 octets**, mesurés et ventilés au rapport —
+  // et c'est le prix annoncé, pas une fuite. Les camps n'en ont pas : ils
+  // respawnent.
   for (const grille of ['128', '64']) {
     const dossier = join(RACINE, 'art', 'sprites', 'carte', grille);
     const pngs = readdirSync(dossier).filter((f) => f.endsWith('.png'));
-    assert.equal(pngs.length, 117,
-      `carte/${grille} : ${pngs.length} sprites — 108 emblèmes, 7 POI, 2 grosses bases`);
+    assert.equal(pngs.length, 135,
+      `carte/${grille} : ${pngs.length} sprites — 126 emblèmes et ruines, 7 POI, `
+      + '2 grosses bases');
   }
-  assert.equal(ATLAS.carte.noms.length, 115,
-    'l\'atlas de carte ne coud plus 115 cellules');
+  assert.equal(ATLAS.carte.noms.length, 133,
+    'l\'atlas de carte ne coud plus 133 cellules');
   for (const nom of nomsAttendus) {
     assert.ok(ATLAS.carte.noms.includes(nom), `${nom} a quitté l'atlas`);
   }
@@ -448,26 +471,35 @@ test('EMB T7 — les trous se comptent, et les sains n\'en ont AUCUN', () => {
     const t = trous(m.img);
     total += t;
     pirePart = Math.max(pirePart, t / m.px);
-    if (!nom.includes('_fumee') && !nom.includes('_feu')) {
+    // ⚠⚠ UNE RUINE N'EST PAS UN SAIN, ET C'EST SA DÉFINITION MÊME — lot
+    // CONQUÊTE-24H. Le prédicat nommait les deux états abîmés ; il nomme
+    // maintenant les trois, parce qu'une carcasse est PERCÉE par construction :
+    // le cratère au centre est ce qu'on est venu dessiner. Mesuré, les dix-huit
+    // ruines apportent des trous là où les sains en ont zéro.
+    if (!/_(fumee|feu|ruine)$/.test(nom)) {
       assert.equal(t, 0, `${nom} : ${t} px de trou sur un emblème SAIN`);
     }
   }
   // Seuil calculé sur la mesure : pire part relevée 1,75 % (`site_quartz_n3_fumee`,
   // 56 px sur 3 206), médiane 0, 14 sprites sur 108 concernés.
+  //
+  // ⚠ RELEVÉ À NOUVEAU APRÈS LES 18 RUINES DU LOT CONQUÊTE-24H : **total 205,
+  // pire part 1,68 %**. Les carcasses tiennent dans le budget d'avant — le seuil
+  // n'a pas eu à bouger d'un centième, et c'est ce qui autorise à le laisser.
   assert.ok(pirePart < 0.03, `pire part de trous : ${(100 * pirePart).toFixed(2)} %`);
   assert.ok(total < 400, `${total} px de trous au total`);
 });
 
-test('EMB T8 — l\'atlas déclare les 115, et les 108 emblèmes y sont', () => {
+test('EMB T8 — l\'atlas déclare les 133, et les 126 emblèmes y sont', () => {
   const noms = ATLAS.carte.noms;
-  assert.equal(noms.length, 115, 'l\'atlas carte porte 115 sprites cousus');
+  assert.equal(noms.length, 133, 'l\'atlas carte porte 133 sprites cousus');
   for (const nom of nomsAttendus) {
     assert.ok(noms.includes(nom), `${nom} absent de l'index de l'atlas`);
   }
-  // La grille suit l'effectif : 11 × 11 tient 121 cellules, 10 × 10 n'en tient
-  // que 100 et ferait déborder.
-  assert.ok(ATLAS.carte.colonnes * ATLAS.carte.rangees >= 115,
-    'la grille de l\'atlas ne tient pas les 115');
+  // La grille suit l'effectif : 12 × 12 tient 144 cellules, 11 × 11 n'en tient
+  // que 121 et ferait déborder les 133.
+  assert.ok(ATLAS.carte.colonnes * ATLAS.carte.rangees >= 133,
+    'la grille de l\'atlas ne tient pas les 133');
   // ⚠⚠ ET AUCUN POI N'A D'ÉTAT — NI DANS L'INDEX, NI DANS CE QUE `spriteDuSite`
   // REND. La première écriture de cette garde ne lisait que l'INDEX : la
   // falsification qui fait porter le suffixe à un POI laissait la suite

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Lot 6 — emblèmes de la carte du monde, POI et grosses bases de l'Ouvrage.
 
-Cent dix-sept sprites : 36 emblèmes de site sains, 72 abîmés — fumée et feu —,
-7 points d'intérêt, 2 grosses bases de l'Ouvrage. Deux grilles chacun.
+Cent trente-cinq sprites : 36 emblèmes de site sains, 72 abîmés — fumée et feu —,
+18 RUINES, 7 points d'intérêt, 2 grosses bases de l'Ouvrage. Deux grilles chacun.
+
+⚠⚠ LE QUATRIÈME ÉTAT EST ARRIVÉ AU LOT CONQUÊTE-24H, 07/09/2026, ET IL NE
+CONCERNE QUE LES DEUX FAMILLES DE BASE. Une base rasée laisse une RUINE qui tient
+le terrain vingt-quatre heures ; un camp ou un avant-poste, lui, RESPAWNE et ne
+laisse rien — `retirerLeSite` de `sim/site-entame.js` ne range que les bases dans
+`basesRasees`. Écrire `_ruine` pour les quatre familles produirait dix-huit
+sprites que rien ne peut afficher.
 
 LA COUPE se fait par gouttière, jamais en tiers. Le §1 du rapport du lot 4
 rappelle pourquoi : sur les planches de connexions, la coupe régulière tombait
@@ -100,27 +107,36 @@ for _p in PLANCHES:
 # `render/embleme.js` et leurs gardes pour un lot qui n'ajoute qu'un état.
 ETATS = ['', '_fumee', '_feu']
 
-# préfixe, ouvrage, (planche saine, planche fumée, planche en feu)
+# ⚠⚠ LE QUATRIÈME ÉTAT N'EST PAS DANS `ETATS`, ET C'EST VOULU : il n'existe que
+# pour les familles qui en portent une planche. `None` en quatrième champ dit
+# « cette famille ne laisse pas de ruine », et c'est un fait de JEU — les
+# satellites respawnent — pas une planche qui manquerait.
+ETAT_RUINE = '_ruine'
+
+# préfixe, ouvrage, (planche saine, fumée, en feu), planche de ruine ou None
 FAMILLES = [
     ('site_base_j', False, (
         'S10_base_joueur_64-256.png',
         'S10_base_joueur_degats_fumee_3x3_1024.png',
-        'S10_base_joueur_en_feu_3x3_1024.png')),
+        'S10_base_joueur_en_feu_3x3_1024.png'),
+     'S10_base_joueur_completement_detruite_3x3_1024.png'),
     ('site_base_o', True, (
         'S10_base_ouvrage_64-256_v2.png',
         'S10_base_ouvrage_degats_fumee_3x3_1024.png',
-        'S10_base_ouvrage_en_feu_3x3_1024.png')),
+        'S10_base_ouvrage_en_feu_3x3_1024.png'),
+     'S10_base_ouvrage_completement_detruite_3x3_1024.png'),
     ('site_quartz', False, (
         'S10_camps_avant-postes_quartz_64-256.png',
         'S10_camps_quartz_degats_fumee_3x3_1024.png',
-        'S10_camps_quartz_en_feu_3x3_1024.png')),
+        'S10_camps_quartz_en_feu_3x3_1024.png'), None),
     ('site_scorie', False, (
         'S10_camps_avant-postes_scories_64-256.png',
         'S10_camps_scories_degats_fumee_3x3_1024.png',
-        'S10_camps_scories_en_feu_3x3_1024.png')),
+        'S10_camps_scories_en_feu_3x3_1024.png'), None),
 ]
 
 for _f in FAMILLES:
+    assert len(_f) == 4, f'{_f[0]} : planche de ruine manquante — écrire `None`'
     assert len(_f[2]) == len(ETATS), f'{_f[0]} : une planche par état attendue'
 
 # ⚠ LE SEUIL SÉPARE DEUX POPULATIONS QUI NE SE TOUCHENT PAS, ET C'EST MESURÉ :
@@ -192,6 +208,27 @@ def cellules_par_composante(chemin, nx, ny):
         ys, xs = np.where(msq)
         par_colonne[colonne_de((xs.min() + xs.max()) / 2, centres)].append(msq)
 
+    # ⚠⚠ UNE COLONNE QUI EN A TROP PORTE DES GRAVATS DÉTACHÉS, ET C'EST LE CAS
+    # SYMÉTRIQUE DE CELUI D'EN DESSOUS — lot CONQUÊTE-24H. Le seuil de
+    # `SEUIL_COMPOSANTE` sépare deux populations sur les douze premières
+    # planches ; les ruines de l'Ouvrage, elles, projettent des blocs à 654 et
+    # 728 pixels, au-dessus du seuil et pourtant sans être des emblèmes.
+    #
+    # ⚠⚠ LA RÈGLE EST MESURÉE, PAS SEUILLÉE : on garde les `ny` PLUS GRANDES et
+    # on rend le reste, exactement comme les braises. Sur la seule colonne
+    # concernée, la plus petite gardée fait 24 886 pixels et le plus gros
+    # surnuméraire 728 — **un facteur 34**, le même fossé que celui qui justifie
+    # `SEUIL_COMPOSANTE`, pris un cran plus haut. Relever le seuil aurait marché
+    # aussi, et aurait été un nombre choisi pour une planche ; le rang, lui, ne
+    # dépend d'aucune valeur.
+    surnumeraires = []
+    for i in range(nx):
+        if len(par_colonne[i]) <= ny:
+            continue
+        par_colonne[i].sort(key=lambda msq: -msq.sum())
+        surnumeraires += par_colonne[i][ny:]
+        del par_colonne[i][ny:]
+
     # ⚠ UNE COLONNE QUI N'A PAS SES `ny` EMBLÈMES EN PORTE UN QUI EN VAUT DEUX.
     # On coupe le plus HAUT, à sa taille, et on recommence tant qu'il en manque :
     # la boucle est bornée par `ny`, donc elle ne peut pas tourner sans fin.
@@ -218,15 +255,20 @@ def cellules_par_composante(chemin, nx, ny):
     # va à la composante dont elle est la PLUS PROCHE, par transformée de
     # distance, et non à celle dont la boîte la contient : une braise qui monte
     # au-dessus d'un emblème sort de sa boîte.
-    if petites:
+    #
+    # ⚠ ET LES GRAVATS SURNUMÉRAIRES PRENNENT LE MÊME CHEMIN, par la même
+    # transformée de distance : ce sont des braises plus grosses, rien d'autre.
+    # Deux boucles auraient dit deux fois la même règle.
+    a_rendre = [np.where(lab == c) for c in petites]
+    a_rendre += [np.where(msq) for msq in surnumeraires]
+    if a_rendre:
         grand = np.zeros(m.shape, dtype=int)
         for k, msq in enumerate(
                 [msq for i in range(nx) for msq in par_colonne[i]], start=1):
             grand[msq] = k
         _, (iy, ix) = ndimage.distance_transform_edt(grand == 0, return_indices=True)
         aplat = [msq for i in range(nx) for msq in par_colonne[i]]
-        for c in petites:
-            pts = np.where(lab == c)
+        for pts in a_rendre:
             voisins = grand[iy[pts], ix[pts]]
             k = np.bincount(voisins).argmax()
             aplat[k - 1][pts] = True
@@ -312,12 +354,24 @@ MESURES = {}
 
 n = 0
 toutes_les_coupes = []
-for prefixe, ouv, fichiers in FAMILLES:
+for prefixe, ouv, fichiers, ruine in FAMILLES:
     P = pal(ouv)
-    # Les trois états, découpés d'abord : la référence d'échelle les regarde
-    # tous les vingt-sept avant qu'un seul sprite ne soit écrit.
+    # ⚠⚠ LA RUINE ENTRE DANS LA FAMILLE, PAS À CÔTÉ, ET C'EST LA RÉFÉRENCE
+    # D'ÉCHELLE QUI L'EXIGE. Une ruine de palier 9 doit faire la taille d'une base
+    # de palier 9 : elle se conditionne donc du même bloc que les trois autres
+    # états. Mesuré, elle ne DÉPLACE pas la référence — 0,882 cellule côté joueur
+    # et 0,961 côté Ouvrage, contre 0,996 et 1,084 pour les états debout : une
+    # ruine est plus basse qu'une base, sans son panache le plus haut. Les 108
+    # sprites existants ne bougent donc pas d'un octet, et le vérificateur le dit.
+    etats = list(ETATS)
+    planches = list(fichiers)
+    if ruine is not None:
+        etats.append(ETAT_RUINE)
+        planches.append(ruine)
+    # Les états, découpés d'abord : la référence d'échelle les regarde tous
+    # avant qu'un seul sprite ne soit écrit.
     lots = []
-    for fichier in fichiers:
+    for fichier in planches:
         chemin = os.path.join(SRC, fichier)
         cells, coupes, releves = cellules_par_composante(chemin, 3, 3)
         toutes_les_coupes += coupes
@@ -338,7 +392,7 @@ for prefixe, ouv, fichiers in FAMILLES:
     reference = max(max(mesure(c)) / cote
                     for cells, cote, _releves, _f in lots for c in cells)
     MESURES[prefixe] = dict(reference=reference, cellules={})
-    for etat, (cells, cote_planche, releves, fichier) in zip(ETATS, lots):
+    for etat, (cells, cote_planche, releves, fichier) in zip(etats, lots):
         for cell, suffixe, releve in zip(cells, NIVEAUX, releves):
             nom = f'{prefixe}_{suffixe}{etat}'
             MESURES[prefixe]['cellules'][nom] = dict(
@@ -393,7 +447,14 @@ for fichier, nx, ny, ouv, prefixe, noms, cases in PLANCHES:
             n += 1
 import json  # noqa: E402
 MESURES['coupes'] = [dict(planche=f, colonne=c, y=y) for f, c, y in toutes_les_coupes]
-with open(os.path.join(DST, 'emblemes-mesures.json'), 'w', encoding='utf-8') as fh:
+# ⚠⚠ `newline=` EST OBLIGATOIRE, ET SON ABSENCE A FAIT ROUGIR LE VÉRIFICATEUR
+# SUR WINDOWS DEPUIS LE LOT EMBLÈMES-ABÎMÉS. Sans lui, Python traduit chaque `\n`
+# en `\r\n` à l'écriture : le fichier du dépôt est en LF, celui que la chaîne
+# rejoue est en CRLF, et `tools/verifier.py` annonce « DIFFÈRE » sur un contenu
+# IDENTIQUE — mille et un octets d'écart, zéro différence de sens. Un écart qui
+# ment est pire qu'un écart qui manque : il apprend à ne plus lire le verdict.
+with open(os.path.join(DST, 'emblemes-mesures.json'), 'w',
+          encoding='utf-8', newline='\n') as fh:
     json.dump(MESURES, fh, indent=1, ensure_ascii=False, sort_keys=True)
     fh.write('\n')
 

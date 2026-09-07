@@ -106,6 +106,15 @@ export const SPRITES_GROSSE_BASE = {
  */
 const SUFFIXE_AVARIE = { aucune: '', fumee: '_fumee', feu: '_feu' };
 
+/**
+ * Le suffixe d'une ruine — le quatrième dessin d'une famille de base.
+ *
+ * ⚠ IL EST HORS DE `SUFFIXE_AVARIE`, ET CE N'EST PAS UN RANGEMENT : une ruine
+ * n'est pas un état d'avarie, c'est ce qui reste quand le site n'existe plus.
+ * Voir `spriteDeLaRuine`.
+ */
+const SUFFIXE_RUINE = '_ruine';
+
 export function spriteDuSite(type, palier, saveur, avarie = 'aucune') {
   if (!Number.isInteger(palier) || palier < 1 || palier > 9) {
     throw new RangeError(`emblème : palier ${palier} hors de 1…9`);
@@ -139,6 +148,42 @@ export function spriteDuSite(type, palier, saveur, avarie = 'aucune') {
     throw new RangeError(`emblème : « ${type} » sans saveur — reçu « ${saveur} »`);
   }
   throw new RangeError(`emblème : type de site inconnu « ${type} »`);
+}
+
+/**
+ * Le sprite de la RUINE que laisse un site tombé — lot CONQUÊTE-24H.
+ *
+ * ⚠⚠ ELLE DESSINE CE QUI EST TOMBÉ, PAS QUI A GAGNÉ, ET LES DEUX PLANCHES
+ * D'ETHAN LE DISENT : « base joueur complètement détruite » et « base Ouvrage
+ * complètement détruite ». Une base de l'Ouvrage rasée par le joueur montre donc
+ * une carcasse d'OUVRAGE, tout en émettant du territoire JOUEUR pendant vingt-
+ * quatre heures. Les deux faits sont opposés, et c'est normal : le décombre
+ * appartient au vaincu, le terrain au vainqueur.
+ *
+ * ⚠⚠ ELLE NE PASSE PAS PAR `spriteDuSite`, ET C'EST DÉLIBÉRÉ. Le quatrième
+ * suffixe aurait pu rejoindre `SUFFIXE_AVARIE`, mais une ruine n'est PAS un état
+ * d'avarie : `AVARIE` de `sim/site-entame.js` décrit ce qui reste DEBOUT d'un
+ * site vivant, et une ruine n'a plus d'entrée de site du tout. Deux notions sous
+ * un même paramètre auraient invité à demander l'avarie d'une ruine.
+ *
+ * ⚠ SEULES LES BASES EN LAISSENT UNE. Un camp ou un avant-poste RESPAWNE —
+ * `TYPES_SITE` le dit, `detruireSatellite` le programme — et l'art n'a donc pas
+ * de ruine de camp. Un appel avec un autre type LÈVE plutôt que de rendre un nom
+ * absent de l'atlas : le sprite manquant se verrait au dessin, pas à l'appel.
+ *
+ * @param {string} type le type du site tombé, tel que `siteDeLaCase` le rend
+ * @param {number} palier 1…9, de `palierDeNiveau`
+ * @returns {string} un nom de la famille `carte`
+ */
+export function spriteDeLaRuine(type, palier) {
+  if (!Number.isInteger(palier) || palier < 1 || palier > 9) {
+    throw new RangeError(`emblème : palier ${palier} hors de 1…9`);
+  }
+  if (type === 'base') return `site_base_o_n${palier}${SUFFIXE_RUINE}`;
+  if (type === 'baseJoueur') return `site_base_j_n${palier}${SUFFIXE_RUINE}`;
+  throw new RangeError(
+    `emblème : « ${type} » ne laisse pas de ruine — seules les bases en laissent`,
+  );
 }
 
 /**
@@ -309,6 +354,43 @@ export function dessinerEmblemeDUneCase(site, palier, x, y, taille) {
     sCote,
     // ⚠ ENTIERS, comme la grosse base : un `drawImage` à une position
     // fractionnaire rééchantillonne et rend le pixel art flou.
+    x: Math.round(x),
+    y: Math.round(y),
+    cote: taille,
+  };
+}
+
+/**
+ * Où prendre et où poser la carcasse d'une ruine — lot CONQUÊTE-24H.
+ *
+ * ⚠⚠ LA GÉOMÉTRIE RESTE ICI, COMME CELLE DE L'EMBLÈME, ET POUR LA MÊME RAISON
+ * QUI L'Y A FAIT DESCENDRE. `ui/monde.js` calculait autrefois `cellule.x`,
+ * `cellule.y` et `cellule.cote` à la main sur ce que rend `celluleDuSprite` — qui
+ * rend des INDICES, jamais des pixels — et les trois valaient `undefined` :
+ * `drawImage` avec un rectangle source non fini NE DESSINE RIEN ET NE LÈVE PAS,
+ * si bien que la carte s'ouvrait vide de tout emblème. Refaire ce calcul dans
+ * l'écran pour les ruines rouvrirait très exactement cette porte-là.
+ *
+ * ⚠ ELLE PREND LE TYPE, PAS UN SITE. Une ruine n'est pas un site : elle n'a
+ * ni saveur, ni avarie, ni instance, et `sitesDeLaFenetre` ne la porte pas —
+ * elle n'est ni touchable ni légendable, §4 du brief. Lui donner la forme d'un
+ * site l'aurait invitée à en devenir un.
+ *
+ * @param {string} type le type du site tombé
+ * @param {number} palier 1…9, de `palierDeNiveau`
+ * @param {number} x
+ * @param {number} y
+ * @param {number} taille côté de la case, en pixels
+ */
+export function dessinerRuineDUneCase(type, palier, x, y, taille) {
+  const nom = spriteDeLaRuine(type, palier);
+  const cellule = celluleDuSprite(FAMILLE, nom);
+  const sCote = COTE_SPRITE;
+  return {
+    nom,
+    sx: cellule.colonne * sCote,
+    sy: cellule.rangee * sCote,
+    sCote,
     x: Math.round(x),
     y: Math.round(y),
     cote: taille,

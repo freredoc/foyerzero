@@ -321,12 +321,24 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
  *
  * ⚠⚠ ÉCRITE EN CLAIR, ET C'EST LA MOITIÉ QUI COMPTE. Une garde qui lirait la
  * taille du fichier qu'elle garde ne pourrait jamais la voir changer.
+ *
+ * ⚠⚠ DEUX LIGNES ONT BOUGÉ AU LOT CONQUÊTE-24H, EN LE SACHANT, ET C'EST LE SEUL
+ * MOYEN CORRECT DE LES FAIRE BOUGER. Les 18 ruines de bases entrent dans la
+ * famille `carte`, donc ses deux atlas sont recousus : 410 234 → **473 716** à la
+ * grille 128, 156 372 → **180 372** à la 64. Les seize autres n'ont pas bougé
+ * d'un octet, ce que les seize autres lignes continuent de garder — et c'est
+ * exactement ce que ce test existe pour dire.
+ *
+ * ⚠ `tools/atlas.py` A REFUSÉ DE LES ÉCRIRE, et il avait raison : sa garde
+ * ne connaissait qu'un cas, l'écart d'encodeur WebP. Elle en connaît deux depuis
+ * ce lot — `--forcer carte` nomme la famille qu'on entend réécrire, et laisse les
+ * dix autres tranquilles.
  */
 const TAILLES_D_AVANT = {
   'atlas-batiment-128.webp': 114650,
   'atlas-batiment-64.webp': 42952,
-  'atlas-carte-128.webp': 410234,
-  'atlas-carte-64.webp': 156372,
+  'atlas-carte-128.webp': 473716,
+  'atlas-carte-64.webp': 180372,
   'atlas-chassis-128.webp': 28850,
   'atlas-chassis-64.webp': 10690,
   'atlas-defense-128.webp': 53520,
@@ -369,7 +381,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 8 254 664 octets, la marge sur la borne T10 est de 11,24 %', () => {
+test('PIC T7 — le livrable pèse 8 344 729 octets, la marge sur la borne T10 est de 10,27 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -386,11 +398,25 @@ test('PIC T7 — le livrable pèse 8 254 664 octets, la marge sur la borne T10 e
   // ⚠ ET LA MARGE S'ÉCRIT ICI EN CLAIR, pas seulement l'inégalité. Une garde
   // qui ne dirait que « moins de 9 300 000 » resterait verte en passant de 11 %
   // de marge à 0,1 % sans que personne ne le voie venir.
+  //
+  // ⚠⚠ REMESURÉ AU LOT CONQUÊTE-24H, ET LA DERNIÈRE LIGNE DE CE TEST L'AVAIT
+  // DEMANDÉ : « remesurer et réécrire ». Les 18 ruines de bases entrent dans
+  // l'atlas `carte`, qui était DÉJÀ dans la page : aucune ressource nouvelle —
+  // les `data:` restent à **297** —, c'est la même image qui s'alourdit.
+  // **8 258 693 → 8 344 729, soit +86 036.** Ventilé, et la somme tombe juste :
+  // **images +84 644** — `atlas-carte-128.webp` passe de 410 234 à 473 716 octets,
+  // soit 546 980 → 631 624 en base64 — et **JavaScript +1 392**, le dessin des
+  // ruines et le filtre des rasées. La grille 64 n'entre pas dans la page : elle
+  // pèse 24 000 octets de plus sur le disque et zéro dans le livrable.
+  //
+  // ⚠⚠ LA MARGE DESCEND DE 11,24 % À 10,27 %, ET C'EST LE PRIX ANNONCÉ. Le §0
+  // du brief prévenait : « si ce lot ajoute des images, le delta est annoncé et
+  // ventilé avant d'être livré ».
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 8_254_664;          // mesuré le 07/09, version 0.99.19 · build 120
-  const MARGE = BORNE - MESURE;      // 1 045 336 octets
-  assert.equal(MARGE, 1_045_336);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 11.24);
+  const MESURE = 8_344_729;          // mesuré le 07/09, version 0.99.24 · build 126
+  const MARGE = BORNE - MESURE;      // 955 271 octets
+  assert.equal(MARGE, 955_271);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 10.27);
 
   const octets = statSync(join(RACINE, 'dist', 'index.html')).size;
   assert.ok(octets < BORNE, `${octets} octets : la borne T10 est franchie`);

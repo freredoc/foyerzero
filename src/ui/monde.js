@@ -57,8 +57,9 @@ import { formaterDixiemes } from './chantier.js';
 import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
-import { ruinesActives } from '../sim/ruines.js';
+import { ruinesActives, casesRasees, cleDeLaCase } from '../sim/ruines.js';
 import { dessinerLimiteDUneCase } from '../render/limite.js';
+import { dessinerRuineDUneCase } from '../render/embleme.js';
 import { PALETTE } from '../render/scene.js';
 import { baseCourante } from '../sim/base-courante.js';
 import { basculerVersLaBase } from '../sim/state.js';
@@ -352,14 +353,33 @@ export function sitesDeLaFenetre(etat, fenetre) {
   const avaries = avariesParCase(etat);
   const avarie = (rangee, colonne) => avaries.get(`${rangee}:${colonne}`) ?? 'aucune';
 
-  const sites = basesDeLaFenetre(etat.graine, fenetre).map((base) => ({
-    type: 'base',
-    rangee: base.rangee,
-    colonne: base.colonne,
-    niveau: niveauDeLaRangee(base.rangee),
-    saveur: saveur(base.rangee, base.colonne, 'base'),
-    avarie: avarie(base.rangee, base.colonne),
-  }));
+  // ⚠⚠ UNE BASE RASÉE NE SE DESSINE PLUS, ET LE DÉFAUT A ÉTÉ MESURÉ AVANT
+  // D'ÊTRE CORRIGÉ — lot CONQUÊTE-24H, 07/09/2026. Cette ligne appelait
+  // `basesDeLaFenetre(etat.graine, …)` — **la graine seule, sans l'état** —, si
+  // bien qu'une base rasée restait dessinée INTACTE sur la carte pendant que
+  // `siteDeLaCase` y rendait déjà `null` : le joueur voyait une base qu'il venait
+  // de détruire, et la toucher n'ouvrait rien. Mesuré sur la graine 31 082 026,
+  // base (200, 9) : après `retirerLeSite`, `sitesDeLaFenetre` la rendait encore,
+  // `avarie: 'aucune'`.
+  //
+  // ⚠⚠ C'EST LE MÊME DÉFAUT QUE `TF T10` A CORRIGÉ DANS `forcesDeLOuvrage`,
+  // pris par l'autre bout — la force, puis le dessin. Les deux venaient du même
+  // oubli : `basesDeLaFenetre` ne lit QUE la graine, et l'histoire vit dans
+  // l'état.
+  //
+  // ⚠ ET LE FILTRE IGNORE L'EXPIRATION, comme `siteDeLaCase` : une base rasée
+  // ne revient jamais. C'est la ruine qui expire, pas le rasement.
+  const rasees = casesRasees(etat);
+  const sites = basesDeLaFenetre(etat.graine, fenetre)
+    .filter((base) => !rasees.has(cleDeLaCase(base.rangee, base.colonne)))
+    .map((base) => ({
+      type: 'base',
+      rangee: base.rangee,
+      colonne: base.colonne,
+      niveau: niveauDeLaRangee(base.rangee),
+      saveur: saveur(base.rangee, base.colonne, 'base'),
+      avarie: avarie(base.rangee, base.colonne),
+    }));
 
   // ⚠⚠ APRÈS LES BASES DE L'OUVRAGE ET AVANT LES SATELLITES, ET L'ORDRE EST LE
   // DESSIN. Un POI ne peut tomber ni sur une base de l'Ouvrage ni sous un
@@ -1829,6 +1849,39 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * changer `strokeStyle` à chaque segment coûterait un changement d'état de
    * contexte par case, là où la fenêtre en compte des dizaines.
    */
+  /**
+   * Les ruines actives, dessinées sur leur case — lot CONQUÊTE-24H.
+   *
+   * ⚠⚠ ELLES NE PASSENT PAS PAR `sitesDeLaFenetre`, ET C'EST LE §4 DU BRIEF
+   * QUI L'EXIGE : « elle n'est pas une base […] et ne peut pas être attaquée ».
+   * `sitesAffiches` est ce que le TOUCHER interroge et ce que les ÉTIQUETTES
+   * légendent ; y faire entrer une ruine l'aurait rendue cliquable, donc
+   * ouvrable, donc — deux touchers plus loin — attaquable. Une passe à part la
+   * garde muette par construction, sans un seul `if (type === 'ruine')` dans le
+   * chemin du toucher.
+   *
+   * ⚠⚠ ELLE DESSINE CE QUI EST TOMBÉ, PAS QUI TIENT LE TERRAIN. Une base de
+   * l'Ouvrage rasée par le joueur montre une carcasse d'OUVRAGE tout en peignant
+   * du territoire JOUEUR autour d'elle — le décombre est au vaincu, le terrain au
+   * vainqueur. C'est `spriteDeLaRuine` qui porte la règle, et l'entrée porte le
+   * `type` pour qu'elle n'ait rien à déduire.
+   *
+   * ⚠ AVANT LES SITES, comme les frontières : si un site venait un jour à
+   * partager la case d'une ruine, c'est le site qui doit se lire.
+   */
+  function dessinerRuines(ox, oy, pas) {
+    if (emblemes === null) return;
+    for (const ruine of ruinesActives(etatCourant)) {
+      const x = (ruine.colonne - 1) * pas - ox;
+      const y = (ruine.rangee - 1) * pas - oy;
+      if (x + pas < 0 || y + pas < 0 || x > canvas.width || y > canvas.height) continue;
+      const d = dessinerRuineDUneCase(
+        ruine.type, palierDeNiveau(ruine.niveau), x, y, pas,
+      );
+      ctx.drawImage(emblemes, d.sx, d.sy, d.sCote, d.sCote, d.x, d.y, d.cote, d.cote);
+    }
+  }
+
   function dessinerFrontieres(ox, oy, pas) {
     const carte = territoireDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
@@ -2052,6 +2105,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
 
     const pas = echelle;
     dessinerFrontieres(ox, oy, pas);
+    dessinerRuines(ox, oy, pas);
     sitesAffiches = sitesDeLaFenetre(etatCourant, fenetreVisible({
       x: ox, y: oy, largeur: canvas.width, hauteur: canvas.height, cran: pas,
     }));

@@ -39,7 +39,7 @@
 // qu'on lui donne et le rend tel quel ; `JOUEUR` et `OUVRAGE` restent définis
 // une seule fois, là où la carte les emploie.
 
-import { APRES_RAID } from '../data/sites.js';
+import { APRES_RAID, GEOGRAPHIE } from '../data/sites.js';
 import { TICKS_PAR_HEURE } from './clock.js';
 
 /**
@@ -82,38 +82,57 @@ export function caseRasee(rangee, colonne) {
 }
 
 /**
- * Une ruine fraîche : la case, le camp qui l'a prise, le niveau de ce qui est
- * tombé, et le tick où c'est tombé.
+ * Une ruine fraîche : la case, le TYPE de ce qui est tombé, le camp qui l'a
+ * prise, le niveau de ce qui est tombé, et le tick où c'est tombé.
  *
  * ⚠ LE NIVEAU EST CELUI DE LA BASE RASÉE, PAS CELUI DU VAINQUEUR. C'est le mot
  * d'Ethan — « du niveau de la base rasée » — et c'est ce qui fait qu'abattre une
  * grosse base vaut mieux que d'en abattre deux petites.
  *
+ * ⚠⚠ LE `type` ET LE `vainqueur` SONT DEUX FAITS DIFFÉRENTS, ET ILS NE SE
+ * DÉDUISENT PAS L'UN DE L'AUTRE. Le `vainqueur` dit pour QUI la ruine émet ; le
+ * `type` dit CE QUI est tombé, donc quelle carcasse se dessine — les deux
+ * planches d'Ethan sont « base joueur détruite » et « base Ouvrage détruite ».
+ * Ils sont opposés dans les deux cas d'aujourd'hui, et c'est justement pourquoi
+ * les déduire l'un de l'autre serait une inférence : le jour où un camp rasera
+ * une base de son propre camp — une base du joueur écrasée par une fondation,
+ * par exemple —, la déduction serait fausse et le dessin mentirait.
+ *
  * @param {number} rangee
  * @param {number} colonne
+ * @param {string} type le type du site tombé, tel que `siteDeLaCase` le rend
  * @param {number} vainqueur le camp, tel que `sim/territoire.js` les numérote
  * @param {number} niveau entier ≥ 1, celui de la base rasée
  * @param {number} tick `etat.horloge.nbTicks` au moment du rasement
  */
-export function ruineFraiche(rangee, colonne, vainqueur, niveau, tick) {
+export function ruineFraiche(rangee, colonne, type, vainqueur, niveau, tick) {
   exigerCase(rangee, colonne);
+  if (typeof type !== 'string' || type === '') {
+    throw new TypeError(`ruines : type « ${type} » — nom de site attendu`);
+  }
   if (!Number.isInteger(vainqueur)) {
     throw new TypeError(`ruines : vainqueur « ${vainqueur} » — camp attendu`);
   }
-  if (!Number.isInteger(niveau) || niveau < 1) {
-    throw new RangeError(`ruines : niveau « ${niveau} » — entier ≥ 1 attendu`);
+  // ⚠ LE PLAFOND EST CELUI DE LA CARTE, ET IL EST GARDÉ ICI PLUTÔT QU'AU
+  // DESSIN. `palierDeNiveau` lève au-delà de `niveauPlafond` : sans cette borne,
+  // une entrée mal formée passerait la sauvegarde et ferait tomber la CARTE, très
+  // loin de l'endroit où l'erreur a été commise.
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+    throw new RangeError(
+      `ruines : niveau « ${niveau} » — entier de 1 à ${GEOGRAPHIE.niveauPlafond} attendu`,
+    );
   }
   if (!Number.isInteger(tick) || tick < 0) {
     throw new RangeError(`ruines : tick « ${tick} » — entier ≥ 0 attendu`);
   }
   return {
-    rangee, colonne, vainqueur, niveau, tick,
+    rangee, colonne, type, vainqueur, niveau, tick,
   };
 }
 
 /**
- * L'entrée revendique-t-elle quoi que ce soit ? Trois champs, tous les trois ou
- * aucun — une entrée à moitié remplie ne revendique rien.
+ * L'entrée revendique-t-elle quoi que ce soit ? Quatre champs, tous les quatre
+ * ou aucun — une entrée à moitié remplie ne revendique rien.
  *
  * ⚠ ELLE NE REGARDE PAS L'HORLOGE. Revendiquer et revendiquer ENCORE sont deux
  * questions ; les mélanger ferait de `ruineEstActive` une fonction qu'on peut
@@ -121,6 +140,7 @@ export function ruineFraiche(rangee, colonne, vainqueur, niveau, tick) {
  */
 export function revendique(entree) {
   return entree !== null && typeof entree === 'object'
+    && typeof entree.type === 'string'
     && Number.isInteger(entree.vainqueur)
     && Number.isInteger(entree.niveau)
     && Number.isInteger(entree.tick);
@@ -189,8 +209,8 @@ export function casesRasees(etat) {
  * ne pose aucune question : il rend une liste vide sans regarder l'heure.
  *
  * @param {object} etat
- * @returns {Array<{rangee: number, colonne: number, vainqueur: number,
- *   niveau: number, ruine: true}>}
+ * @returns {Array<{rangee: number, colonne: number, type: string,
+ *   vainqueur: number, niveau: number, ruine: true}>}
  */
 export function ruinesActives(etat) {
   const actives = [];
@@ -204,6 +224,7 @@ export function ruinesActives(etat) {
     actives.push({
       rangee: entree.rangee,
       colonne: entree.colonne,
+      type: entree.type,
       vainqueur: entree.vainqueur,
       niveau: entree.niveau,
       // ⚠ CE DRAPEAU N'EST PAS DÉCORATIF : `sim/territoire.js` s'en sert pour ne

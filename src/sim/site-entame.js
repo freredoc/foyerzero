@@ -314,6 +314,10 @@ function neDitRien(entree) {
  * `niveauDeLaRangee` pour une base de l'Ouvrage. C'est la seule grandeur que la
  * carte lui donne, et c'est celle que la formule de TERRITOIRE-FORCE attend.
  *
+ * ⚠ LE `type` AUSSI VIENT DE L'IDENTITÉ, et il dit CE QUI est tombé — donc
+ * quelle carcasse la carte dessine. Il ne se déduit pas du vainqueur : voir
+ * `ruineFraiche`.
+ *
  * @param {object} etat modifié en place
  * @param {object} identite le site à retirer
  * @param {number} vainqueur le camp qui prend la case — `JOUEUR` ou `OUVRAGE`
@@ -323,7 +327,8 @@ export function retirerLeSite(etat, identite, vainqueur) {
   delete etat.sitesEntames[cleDuSite(identite)];
   if (identite.type === 'base') {
     etat.basesRasees.push(ruineFraiche(
-      identite.rangee, identite.colonne, vainqueur, identite.niveau, etat.horloge.nbTicks,
+      identite.rangee, identite.colonne, identite.type, vainqueur,
+      identite.niveau, etat.horloge.nbTicks,
     ));
     return;
   }

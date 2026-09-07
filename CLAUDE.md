@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.24 · build 125.
+Dernière révision : **07/09/2026**, version 0.99.24 · build 126.
 
 ---
 
@@ -43,12 +43,19 @@ Dernière révision : **07/09/2026**, version 0.99.24 · build 125.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 07/09/2026 (après le lot CONQUÊTE-24H), à confronter :**
-`npm test` → **1357 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**8 258 693 octets**, 0 référence externe. Marge T10 : **1 041 307 octets,
-11,20 %** — aucune image ajoutée, les 297 `data:` de la page sont les mêmes.
-Le lot fait entrer `src/sim/ruines.js` et touche `src/sim/territoire.js`,
+`npm test` → **1359 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 344 729 octets**, 0 référence externe. Marge T10 : **955 271 octets,
+10,27 %**. Le lot fait entrer `src/sim/ruines.js` et touche `src/sim/territoire.js`,
 `src/sim/site-entame.js`, `src/sim/site-de-la-case.js`, `src/sim/poi.js`,
-`src/sim/fondation.js`, `src/sim/state.js`, `src/ui/monde.js`, `src/data/sites.js`.
+`src/sim/fondation.js`, `src/sim/state.js`, `src/ui/monde.js`, `src/render/embleme.js`,
+`src/data/sites.js`, `tools/emblemes.py`, `tools/atlas.py`, `tools/entrees.py`.
+⚠⚠ **LA MARGE T10 DESCEND SOUS LES 11 %, ET C'EST LE PRIX DES 18 RUINES.**
+**+87 965 octets** en tout depuis TERRITOIRE-LU : **+84 644 d'images** —
+`atlas-carte-128.webp` passe de 410 234 à 473 716 octets, donc 546 980 → 631 624
+en base64 — et **+3 321 de code**. ⚠ **AUCUNE RESSOURCE NOUVELLE N'ENTRE** :
+les `data:` restent à **297**, c'est la même image qui s'alourdit, parce que
+l'atlas de carte avait déjà son marqueur. La grille 64 pèse 24 000 octets de plus
+sur le disque et **zéro** dans le livrable.
 ⚠⚠ **ETHAN, 07/09, POINT 13 : « PENDANT 24 H, LA BASE RASÉE ÉMET LE TERRITOIRE DU
 VAINQUEUR, DU NIVEAU DE LA BASE RASÉE. APRÈS, LA RUINE DISPARAÎT, ET LES
 TERRITOIRES SONT RECALCULÉS. »** C'est le premier territoire à DURÉE du jeu, donc
@@ -101,12 +108,26 @@ son expiration, ni `baseCourante` ni les satellites ne bougent, si bien que
 au sud et lui vide ses stocks ; elle n'est jamais retirée, donc elle ne laisse
 rien. `retirerLeSite(etat, identite, OUVRAGE)` fonctionne quand même, et `C24 T4`
 le passe par le vrai écrivain.
-⚠ **LES PLANCHES S10 DE RUINES NE SONT PAS AU DÉPÔT**, et l'archive n'était pas
-jointe : `art/sprites/carte/128/` porte 9 paliers × 3 états (intact, fumée, feu)
-× 2 camps, aucun « complètement détruit ». La ruine tient donc son territoire sans
-emblème sur sa case — **point en suspens le plus visible du lot**. La
-correspondance niveau → palier, elle, existe déjà : `palierDeNiveau` de
-`data/sites.js`, et il n'y avait rien à écrire.
+⚠⚠ **LES 18 RUINES SONT PASSÉES PAR LA CHAÎNE COMPLÈTE**, Ethan ayant fourni
+les deux planches S10 en cours de lot. **Le camp de chaque planche est MESURÉ, pas
+déduit de l'ordre** : la pierre claire colle au joueur à 10,3 d'écart de couleur
+moyenne contre 34,0 à l'Ouvrage, la sombre à l'Ouvrage à 6,0 contre 37,7.
+⚠⚠ **`_ruine` EST UN QUATRIÈME ÉTAT, ET SEULEMENT POUR LES DEUX FAMILLES DE
+BASE.** Un camp ou un avant-poste RESPAWNE et ne laisse rien — d'où 18 sprites et
+non 36. La ruine se conditionne DANS sa famille, pour que le palier 9 d'une ruine
+fasse la taille du palier 9 d'une base ; mesuré, elle ne déplace pas la référence
+d'échelle (0,882 et 0,961 de cellule contre 0,996 et 1,084), **et les 108 sprites
+d'avant ne bougent pas d'un octet**.
+⚠⚠ **LA CARTE DESSINAIT ENCORE LES BASES RASÉES**, défaut ANTÉRIEUR au lot,
+trouvé en câblant : `sitesDeLaFenetre` partait de la graine seule, comme
+`forcesDeLOuvrage` avant `TF T10`. Corrigé, `C24 T18` le garde.
+⚠ **LA RUINE NE PASSE PAS PAR `sitesDeLaFenetre`** : c'est ce qui pilote le
+TOUCHER et les ÉTIQUETTES, et §4 dit qu'elle n'est pas attaquable. Elle a sa
+propre passe de dessin, muette par construction. ⚠ **ELLE MONTRE LE VAINCU,
+PAS LE VAINQUEUR** — le décombre est à qui est tombé, le terrain à qui a gagné —,
+d'où le `type` dans l'entrée : le déduire du vainqueur serait une inférence.
+⚠ **`palierDeNiveau` DE `data/sites.js` EXISTAIT DÉJÀ** : rien à écrire pour
+la correspondance niveau → palier.
 
 **Auparavant, après le lot TERRITOIRE-LU :**
 `npm test` → **1340 pass / 0 fail**, `npm run build` → `dist/index.html`,

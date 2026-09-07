@@ -13,24 +13,35 @@ Livré le **07/09/2026**. Modèle : Opus 5, effort maximum.
 
 | | avant | après |
 |---|---|---|
-| `npm test` | **1340 pass / 0 fail** | **1357 pass / 0 fail** |
-| `dist/index.html` | **8 256 764 octets** | **8 258 693 octets** |
-| delta | — | **+1 929 octets**, entièrement du code |
-| `data:` dans la page | 297 | **297**, aucune image ajoutée |
-| marge sous la borne T10 | 1 043 236 · 11,22 % | **1 041 307 octets · 11,20 %** |
+| `npm test` | **1340 pass / 0 fail** | **1359 pass / 0 fail** |
+| `dist/index.html` | **8 256 764 octets** | **8 344 729 octets** |
+| delta | — | **+87 965 octets** |
+| dont images | — | **+84 644** — l'atlas de carte s'alourdit de 18 ruines |
+| dont code | — | **+3 321** |
+| `data:` dans la page | 297 | **297** — aucune ressource nouvelle |
+| marge sous la borne T10 | 1 043 236 · 11,22 % | **955 271 octets · 10,27 %** |
 | `version` | 0.99.23 | **0.99.24** |
-| `build` | 124 | **125** |
+| `build` | 124 | **126** |
 | `SAVE_VERSION` | 27 | **28** |
 
 La base de départ correspond exactement à ce que le brief annonçait, mesurée
-avant la première ligne. Aucun fichier d'`art/` n'est touché — `git status` le
-montre —, `src/data/atlas.js` est intact, et les 297 `data:` de la page sont
-donc les mêmes des deux côtés.
+avant la première ligne.
 
-**Fichiers.** Un nouveau, `src/sim/ruines.js`. Neuf modifiés :
-`src/sim/territoire.js`, `src/sim/site-entame.js`, `src/sim/site-de-la-case.js`,
-`src/sim/poi.js`, `src/sim/fondation.js`, `src/sim/state.js`, `src/ui/monde.js`,
-`src/data/sites.js`, plus `CLAUDE.md`. Neuf fichiers de test, dont un nouveau.
+⚠⚠ **CE RAPPORT A ÉTÉ ÉCRIT DEUX FOIS, ET LE §7 DIT POURQUOI.** À la première
+livraison, l'archive S10 des ruines n'était pas au dépôt et le §6 du brief
+prévoyait ce cas : le lot était complet sauf le dessin, déclaré comme le point en
+suspens le plus visible. Ethan a fourni les deux planches dans la foulée ; elles
+sont passées par la chaîne complète, et **le poids ci-dessus est celui d'après**.
+Le code seul avait coûté **+1 929 octets**, marge 11,20 % ; les images ont pris
+le reste.
+
+**Fichiers.** Un nouveau, `src/sim/ruines.js`. Modifiés : `src/sim/territoire.js`,
+`src/sim/site-entame.js`, `src/sim/site-de-la-case.js`, `src/sim/poi.js`,
+`src/sim/fondation.js`, `src/sim/state.js`, `src/ui/monde.js`,
+`src/render/embleme.js`, `src/data/sites.js`, `src/data/atlas.js` (généré),
+`tools/emblemes.py`, `tools/atlas.py`, `tools/entrees.py`, plus `CLAUDE.md`.
+Côté art : **2 sources**, **36 sprites** (18 ruines × 2 grilles), **2 atlas**
+recousus. Onze fichiers de test, dont un nouveau.
 
 ---
 
@@ -86,13 +97,22 @@ existence. La lecture est donc le seul rempart, et `C24 T14` le vérifie sur un
 ### La forme d'une entrée
 
 ```js
-{ rangee, colonne }                              // case rasée, sans revendication
-{ rangee, colonne, vainqueur, niveau, tick }     // ruine : elle émet jusqu'à expiration
+{ rangee, colonne }                                    // case rasée, sans revendication
+{ rangee, colonne, type, vainqueur, niveau, tick }     // ruine : elle émet jusqu'à expiration
 ```
 
 `caseRasee` et `ruineFraiche` sont les deux seules fabriques, et elles valident.
-`revendique(entree)` exige **les trois champs ou aucun** : une entrée à moitié
+`revendique(entree)` exige **les quatre champs ou aucun** : une entrée à moitié
 remplie ne revendique rien.
+
+⚠⚠ **`type` ET `vainqueur` SONT DEUX FAITS DIFFÉRENTS, ET LE SECOND NE DONNE PAS
+LE PREMIER.** Le `vainqueur` dit pour QUI la ruine émet ; le `type` dit CE QUI est
+tombé, donc quelle carcasse se dessine — les deux planches d'Ethan sont « base
+joueur détruite » et « base Ouvrage détruite ». Ils sont **opposés** dans les deux
+cas d'aujourd'hui (le joueur ne rase que des bases de l'Ouvrage, et
+réciproquement), et c'est justement pourquoi les déduire l'un de l'autre serait
+une inférence : le jour où un camp rasera une base de son propre camp, la
+déduction serait fausse et le dessin mentirait sans que rien ne lève.
 
 ### Les 24 heures
 
@@ -260,30 +280,138 @@ GRAINE — les ruines n'y entrent pas.
 
 ---
 
-## 7. Les sprites : l'archive S10 n'est pas au dépôt
+## 7. Les sprites — la chaîne complète, et ce qu'elle a appris
+
+### 7.1 Le constat de départ, et ce qui l'a levé
 
 **Vérifié avant toute chose, comme le §6 le demandait.** `art/sprites/carte/128/`
-porte 54 emblèmes de site : **9 paliers × 3 états × 2 camps**, et les trois états
-sont `intact`, `_fumee` et `_feu`. `art/sources/` porte
-`S10_base_ouvrage_degats_fumee_3x3_1024.png` et `S10_base_ouvrage_en_feu_3x3_1024.png`
-côté Ouvrage, les deux mêmes côté joueur — **aucune planche « complètement
-détruite »**. L'archive `S10_2_planches_3x3_completement_detruites_1024.zip`
-n'était pas jointe au brief, et le lot PICTOGRAMMES ne l'a pas emportée.
+portait 54 emblèmes de site : **9 paliers × 3 états × 2 camps**, les trois états
+étant `intact`, `_fumee` et `_feu` — **aucune planche « complètement détruite »**.
+L'archive n'était pas jointe au brief, et le lot PICTOGRAMMES ne l'avait pas
+emportée. **Ethan a fourni les deux planches en cours de lot**, et elles sont
+passées par la chaîne complète : sources, `tools/planches.py` (rien à y faire —
+les emblèmes vivent dans `tools/emblemes.py`), grilles 128 et 64, atlas,
+`tools/entrees.py --declarer`, `tools/verifier.py` avant et après.
 
-**Rien n'a donc traversé la chaîne art**, et c'est pourquoi le poids ne bouge que
-de code. `tools/verifier.py` n'a pas été relancé : aucun fichier d'`art/` ni de
-`tools/` n'est touché, et CLAUDE.md §0.5 réserve ce passage aux lots qui y
-touchent.
+### 7.2 ⚠⚠ LE CAMP DE CHAQUE PLANCHE EST MESURÉ, PAS DÉDUIT DE L'ORDRE
 
-⚠ **Conséquence, et c'est le point en suspens le plus visible du lot : la ruine
-tient son territoire sans rien montrer sur sa case.** Le joueur voit une frontière
-alliée autour d'un endroit vide. La frontière, elle, est juste — elle suit celle
-des autres sans traitement particulier, §5 du brief.
+Rien dans deux images ne dit laquelle est le joueur. On les a confrontées aux
+quatre planches d'emblème déjà au dépôt, sur la couleur moyenne de leur matière :
+
+| planche | moyenne RVB | écart au joueur | écart à l'Ouvrage |
+|---|---|---|---|
+| pierre claire | (90, 81, 63) | **10,3** | 34,0 |
+| pierre sombre | (74, 56, 64) | 37,7 | **6,0** |
+
+Le canal vert tranche seul : les emblèmes du joueur tiennent un sable chaud
+(G ≈ 88–91), ceux de l'Ouvrage un gris froid (G ≈ 54–57). La claire est donc
+`S10_base_joueur_completement_detruite_3x3_1024.png`, la sombre
+`S10_base_ouvrage_completement_detruite_3x3_1024.png`. C'est le même motif que
+`tools/ruines.py` emploie depuis le lot 10 pour ses deux ruines de mur : « le camp
+est mesuré, pas déduit de l'ordre du nom de fichier ».
+
+### 7.3 ⚠⚠ UN QUATRIÈME ÉTAT, ET POUR DEUX FAMILLES SEULEMENT
+
+`ETATS` valait `['', '_fumee', '_feu']` pour les quatre familles. Le quatrième
+n'y est **pas entré** : il n'existe que pour les familles qui en portent une
+planche, et `None` en quatrième champ de `FAMILLES` dit « celle-ci ne laisse pas
+de ruine ». C'est un fait de JEU, pas une planche qui manquerait — un camp ou un
+avant-poste RESPAWNE, `retirerLeSite` ne range que les bases dans `basesRasees`.
+D'où **18 sprites, et non 36**.
+
+⚠⚠ **LA RUINE SE CONDITIONNE DANS SA FAMILLE, ET LA RÉFÉRENCE D'ÉCHELLE L'EXIGE.**
+Une ruine de palier 9 doit faire la taille d'une base de palier 9 ; les quatre
+états d'une famille partagent donc UNE échelle, et l'ajouter à côté aurait donné
+des carcasses à une taille sans rapport. **Mesuré avant d'écrire un seul
+sprite** : la ruine ne DÉPLACE pas la référence — 0,882 cellule côté joueur et
+0,961 côté Ouvrage, contre 0,996 et 1,084 pour les états debout. Une ruine est
+plus basse qu'une base, panache compris. **Conséquence vérifiée à l'octet : les
+234 fichiers d'avant sont identiques, 36 nouveaux, 1 différent — le manifeste,
+qui gagne 18 cellules.**
+
+### 7.4 ⚠⚠ LA COUPE A DÛ APPRENDRE LE CAS SYMÉTRIQUE
+
+`cellules_par_composante` savait traiter une colonne qui a **trop peu** de
+composantes — une qui en vaut deux, coupée à sa taille. La planche de ruines de
+l'Ouvrage en a **trop** : sa colonne 2 portait **cinq** composantes au-dessus du
+`SEUIL_COMPOSANTE` de 500 px, parce qu'une carcasse projette des blocs détachés
+de 654 et 728 pixels.
+
+**La règle ajoutée est un RANG, pas un seuil** : on garde les `ny` plus grandes,
+et le reste rejoint sa plus proche voisine — exactement ce que les braises font
+déjà, par la même transformée de distance. Ce qui l'autorise est une mesure : la
+plus petite gardée fait **24 886 px**, le plus gros surnuméraire **728** —
+**un facteur 34**, le même fossé qui justifie `SEUIL_COMPOSANTE`, pris un cran
+plus haut. Relever le seuil aurait marché aussi, et aurait été un nombre choisi
+pour une planche.
+
+### 7.5 L'atlas, et la garde qui refusait un ajout voulu
+
+La famille `carte` passe de **115 à 133** cellules cousues, grille 12 × 12.
+`tools/atlas.py` a refusé de l'écrire : sa garde — posée au lot PICTOGRAMMES
+contre les écarts d'encodeur WebP — n'écrase **jamais** un atlas existant qui ne
+se reproduit pas. Elle ne connaissait qu'un cas ; il y en avait deux.
+
+⚠ **`--forcer <famille>` a été ajouté, et il est PAR FAMILLE.** Forcer tout
+réécrirait les dix atlas qui ne diffèrent que par l'encodeur, pour des images
+identiques — c'est-à-dire exactement ce que la garde existe pour empêcher.
+`--forcer carte` nomme la famille qu'on entend réécrire ; les autres ne bougent
+pas, et `PIC T6` continue de le garder ligne par ligne.
+
+### 7.6 ⚠ TROIS OUTILS SUR TREIZE ÉCRIVENT ENFIN EN LF
+
+Le lot PICTOGRAMMES avait signalé que « les treize outils écrivent leurs fichiers
+texte **sans `newline=`** » : sous Windows, Python rend du CRLF, le dépôt est en
+LF, et `tools/verifier.py` annonce « DIFFÈRE » sur un contenu **identique**. Les
+trois outils que ce lot fait écrire sont corrigés — `emblemes.py`, `atlas.py`,
+`entrees.py` —, ce qui retire **quatre faux écarts** du verdict :
+`emblemes-mesures.json`, `atlas-empreintes.json`, `src/data/atlas.js`,
+`sources-declarees.json`. Les dix autres outils restent, et c'est un lot à part.
+
+### 7.7 Le verdict de `tools/verifier.py`
+
+**Avant le lot**, `--outil emblemes` : **234 identiques, 1 différent, 0 nouveau,
+0 MANQUANT**. Le seul écart était `emblemes-mesures.json`, **CRLF contre LF,
+contenu identique** — le défaut du §7.6.
+
+**Après le lot**, chaîne complète : **718 identiques à l'octet, 268 différents,
+0 nouveau, 0 MANQUANT**, en 571 s. **Aucun sprite ne diffère.** Les 268 se
+ventilent en deux tas connus :
+
+- **264 `.opus`** — `opusenc` est absent de cette machine. `tools/entrees.py
+  --declarer` rejoue TOUTE la chaîne, sons compris ; il a été joué avec un
+  `opusenc` local délégant à `ffmpeg`, et **cet encodeur-là n'est pas
+  `opus-tools`**. Les 264 écarts sont donc l'artefact de la mesure, pas un fait
+  du dépôt : le §7.8 dit comment la déclaration a été vérifiée de face.
+- **4 JSON** — `ancres-blindes.json`, `ancres-defense.json`,
+  `fond-empreintes.json`, `sol-empreintes.json` : le défaut `newline=` des dix
+  outils non corrigés.
+
+⚠ **Et la ligne « ATLAS » du vérificateur reste, en s'améliorant.**
+`atlas.py --verifier` rendait **10 identiques / 10 différents** sur un arbre
+pristine ; il rend maintenant **12 / 8** — les deux atlas `carte` ont été
+recousus par cette machine, donc ils se reproduisent. Les huit qui restent sont
+les écarts d'encodeur d'avant le lot.
+
+### 7.8 La déclaration des sources
+
+`tools/entrees.py --declarer` a été joué avec le même `opusenc` local, et **son
+résultat est vérifiable de face** : la déclaration ne bouge **que des deux
+planches**, qui passent de rien à consommées — **402 → 404 consommées, 114
+dormantes inchangées**, rien d'autre. `sources-declarees.json` n'a pas été édité
+à la main.
+
+### 7.9 Le niveau → palier, et l'ancrage
 
 ⚠ **La correspondance niveau → palier existait déjà, et dans `src/data/` :**
 `palierDeNiveau(niveau)` de `src/data/sites.js:1260`, adossée à
 `PALIERS_EMBLEME`. Il n'y avait rien à écrire — la dériver une seconde fois pour
 les ruines aurait fait deux tables.
+
+⚠ **`ancrage='centre'` n'a pas eu à être demandé** : l'appel des familles le
+passe depuis le lot EMBLÈME-CENTRÉ, et les ruines entrent par ce même appel. Le
+§6 du brief l'exigeait ; il est tenu par construction, pas par une ligne de
+plus.
 
 ---
 
@@ -346,6 +474,8 @@ Tous dans `test/conquete-24h.test.js`, **17 tests, 17 PASS**.
 | **C24 T15** | ✅ | La case est dans `ciblesAPortee` **avant**, plus après ; `etat.bases` inchangé en longueur et en contenu ; `siteDeLaCase` à `null` — alors que `campDeLaCase` dit que la ruine tient sa case. |
 | **C24 T16** | ✅ | Deux parties identiques → même texte à l'octet. Mordant : **l'ordre** des deux rasements change le résultat (les ticks diffèrent), et un aller-retour `serialiser`/`charger` rend le même texte. |
 | **C24 T17** | ✅ | ⚠ **Hors liste** — le §8. `empreinteDeLaCarte` change quand la ruine paraît, ne change pas à `−1` tick, et **revient à sa valeur d'origine** à l'échéance. |
+| **C24 T18** | ✅ | ⚠ **Hors liste** — le §5. La base rasée QUITTE `sitesDeLaFenetre` (elle y restait : défaut antérieur au lot), la ruine a un nom d'atlas au palier de son niveau, et à l'expiration **ni l'une ni l'autre** n'y sont. |
+| **C24 T19** | ✅ | ⚠ **Hors liste** — le §5. `spriteDeLaRuine('base', 5)` rend la carcasse d'**Ouvrage**, `'baseJoueur'` celle du **joueur** ; les cinq autres types LÈVENT, les 18 noms sont cousus, et la géométrie ne rend aucun `undefined` — la garde que `drawImage` ne donne pas. |
 
 ### Falsification — on casse UNE chose, on note ce qui rougit
 
@@ -363,11 +493,20 @@ modification retirée.
 | **F7** | la fondation ne voit pas les ruines | **T9** |
 | **F8** | les ruines de l'Ouvrage n'entrent plus dans la somme | T1 T2 T3 **T4** |
 | **F9** | la ruine reçoit le plancher des bases | **T1** |
+| **F10** | la carte cesse de filtrer les bases rasées | **T18** |
+| **F11** | la carcasse devient celle du vainqueur | T18 **T19** |
 
 Aucune ligne ne rend « aucun test ne tombe ». **F9 en rendait un avant
 correction** : la lecture « une ruine n'a pas de plancher » n'était gardée par
 rien, et deux assertions ont été ajoutées à `C24 T1` pour qu'un retournement de
 cette lecture se voie.
+
+⚠ **Une douzième falsification n'a pas eu besoin d'être jouée : la chaîne d'art
+tombe d'elle-même.** Retirer la branche « trop de composantes » de
+`cellules_par_composante` fait LEVER `tools/emblemes.py` sur
+« colonne 2 porte 5 emblèmes au lieu de 3 » — donc les 36 sprites n'existent pas,
+donc l'atlas ne se coud pas. C'est la forme la plus forte qu'une garde puisse
+prendre, et c'est ainsi que le défaut a été trouvé.
 
 ---
 
@@ -452,7 +591,34 @@ montages **écartent** des bases, ils ne les **conquièrent** pas. Leur donner u
 ruine fraîche aurait couvert la carte de territoire joueur, et douze montages de
 `territoire.test.js` auraient mesuré autre chose que ce qu'ils annoncent.
 
-### 11.5 `basesDuJoueur` de `territoire.js` n'a plus d'appelant dans `src/`
+### 11.5 ⚠ Trois outils sur treize écrivent en LF, dix restent
+
+Détaillé au §7.6. Le correctif est d'un mot par écriture, et il retire quatre
+faux écarts du vérificateur. Les dix autres outils rendent encore du CRLF sous
+Windows — `ancres-blindes.json`, `ancres-defense.json`, `fond-empreintes.json` et
+`sol-empreintes.json` en portent la trace dans le verdict du §7.7. **Les corriger
+tous est un lot à part** : ce lot-ci n'a corrigé que ce qu'il fait écrire, pour
+que son propre verdict soit lisible.
+
+### 11.6 ⚠⚠ La carte dessinait les bases rasées — défaut ANTÉRIEUR au lot
+
+Trouvé en câblant le dessin de la ruine, mesuré avant d'être corrigé :
+`sitesDeLaFenetre` de `src/ui/monde.js` partait de
+`basesDeLaFenetre(etat.graine, …)` — **la graine seule, sans l'état** —, si bien
+qu'une base rasée restait dessinée **intacte** (`avarie: 'aucune'`) pendant que
+`siteDeLaCase` y rendait déjà `null`. Le joueur voyait une base qu'il venait de
+détruire, et la toucher n'ouvrait rien.
+
+C'est le **jumeau exact** du défaut que `TF T10` a corrigé dans `forcesDeLOuvrage`
+au lot TERRITOIRE-FORCE, pris par l'autre bout — la force d'abord, le dessin
+maintenant. Les deux venaient du même oubli. `C24 T18` le garde.
+
+### 11.7 `--forcer` ajouté à `tools/atlas.py`
+
+Détaillé au §7.5. C'est une addition à un outil, pas à la règle du jeu, et elle
+répare une garde qui refusait un ajout **voulu** dans une famille existante.
+
+### 11.8 `basesDuJoueur` de `territoire.js` n'a plus d'appelant dans `src/`
 
 `sim/poi.js` était son seul consommateur de production ; il appelle maintenant
 `forcesDuJoueur`. Elle reste exportée et employée par `test/territoire.test.js`.
@@ -460,7 +626,7 @@ ruine fraîche aurait couvert la carte de territoire joueur, et douze montages d
 pas demandé. À noter que `sim/points-attaque.js` porte une **autre** fonction du
 même nom, celle-là bien vivante (raid, site-de-la-case, points d'attaque).
 
-### 11.6 Le refus de fonder change de nature
+### 11.9 Le refus de fonder change de nature
 
 Détaillé au §5 : le refus passe de la **portée** à la **propriété**, et le message
 change. Aucun test existant ne mesurait le cas où les deux divergent — la suite est
@@ -471,9 +637,11 @@ restée verte sans qu'une ligne soit touchée dans `fondation`. C'est un
 
 ## 12. Points en suspens
 
-1. ⚠⚠ **Les planches de ruines.** L'archive S10 n'était pas jointe ; une ruine
-   tient donc son territoire sans emblème sur sa case. C'est la seule partie du
-   §5 du brief qui ne soit pas livrée, et elle est visible en jeu.
+1. ⚠ **Le rendu n'a pas été vu à l'écran, et se déclare non exécuté.** Le dépôt
+   ne sait pas monter `creerEcranMonde` (CLAUDE.md §3) : ce qui est vérifié est
+   le NOM du sprite, sa présence dans l'atlas, et que la géométrie rendue est
+   faite de nombres finis — pas les pixels à l'écran. C'est la même limite que
+   les lots d'art précédents déclarent.
 2. ⚠ **`tickJeu` à douze ruines actives** : 92,3 µs contre 8,7. 0,09 % du budget
    de tick, linéaire en nombre de ruines. Signalé au §8, non corrigé —
    la seule correction évidente serait un cache indexé sur l'horloge, c'est-à-dire
@@ -487,7 +655,11 @@ restée verte sans qu'une ligne soit touchée dans `fondation`. C'est un
    permet à l'Ouvrage de reprendre une ruine du joueur autrement qu'en la
    surpassant en force. C'est cohérent avec « elle n'est pas une base », mais
    personne n'a arbitré le cas où les deux camps voudraient la même ruine.
-5. ⚠ **`basesDuJoueur` de `territoire.js`**, §11.5.
+5. ⚠ **`basesDuJoueur` de `territoire.js`**, §11.8.
+6. ⚠ **Les dix outils qui écrivent encore en CRLF**, §11.5 — et les 264 `.opus`
+   qui ne se reproduiront pas tant qu'`opusenc` manquera à cette machine.
+7. ⚠ **Une ruine ne se répare pas et ne s'attaque pas**, et personne n'a arbitré
+   ce qui devrait se passer si les deux camps voulaient la même. Voir le point 4.
 
 ---
 

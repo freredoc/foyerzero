@@ -39,7 +39,11 @@ import { poserLaBaseSur } from '../src/sim/deplacement.js';
 import { problemesDeLaFondation } from '../src/sim/fondation.js';
 import { poiDeLaCase, releverLesPoisAcquis } from '../src/sim/poi.js';
 import { baseCourante } from '../src/sim/base-courante.js';
-import { empreinteDeLaCarte } from '../src/ui/monde.js';
+import { empreinteDeLaCarte, sitesDeLaFenetre } from '../src/ui/monde.js';
+import {
+  spriteDeLaRuine, dessinerRuineDUneCase, estDansLAtlas,
+} from '../src/render/embleme.js';
+import { palierDeNiveau } from '../src/data/sites.js';
 
 const GRAINE = 31_082_026;
 const T0 = 1_700_000_000_000;
@@ -171,7 +175,7 @@ test('C24 T1 — une base rasée émet le territoire du JOUEUR, sur son octogone
   // retirer dans `campDeLaCase` et dans `peindre` — fait tomber ces deux
   // assertions, et c'est exactement ce qu'on veut d'une lecture réversible.
   etat.basesRasees.push(ruineFraiche(
-    BASE_20.rangee + 1, BASE_20.colonne, OUVRAGE, 25, etat.horloge.nbTicks,
+    BASE_20.rangee + 1, BASE_20.colonne, 'baseJoueur', OUVRAGE, 25, etat.horloge.nbTicks,
   ));
   assert.equal(campDeLaCase(etat, BASE_20.rangee, BASE_20.colonne), OUVRAGE,
     'la ruine garde sa case coûte que coûte : le plancher s\'applique aux ruines');
@@ -212,7 +216,8 @@ test('C24 T2 — la ruine émet au niveau de la base rasée, pas à un autre', (
     const disputee = { rangee: cible.rangee + 2, colonne: cible.colonne };
     retirerLeSite(etat, identite, JOUEUR);
     etat.basesRasees.push(
-      ruineFraiche(poste.rangee, poste.colonne, OUVRAGE, 18, etat.horloge.nbTicks),
+      ruineFraiche(poste.rangee, poste.colonne, 'baseJoueur', OUVRAGE, 18,
+        etat.horloge.nbTicks),
     );
     return {
       niveau: identite.niveau,
@@ -263,7 +268,8 @@ test('C24 T3 — une ruine de 10 et une base de 10 valent un 11 face à l\'Ouvra
   // se compte PAR ENTRÉE et non pour la liste entière.
   rattraperJeu(etat, 100);
   etat.basesRasees.push(
-    ruineFraiche(posteOuvrage.rangee, posteOuvrage.colonne, OUVRAGE, 11, etat.horloge.nbTicks),
+    ruineFraiche(posteOuvrage.rangee, posteOuvrage.colonne, 'baseJoueur', OUVRAGE, 11,
+      etat.horloge.nbTicks),
   );
 
   assert.equal(campDeLaCase(etat, disputee.rangee, disputee.colonne), JOUEUR,
@@ -542,6 +548,7 @@ test('C24 T13 — la migration n\'invente ni niveau ni vainqueur', () => {
     { rangee: 200, colonne: 9 }, { rangee: 215, colonne: 16 },
   ]);
   for (const entree of migre.basesRasees) {
+    assert.equal(entree.type, undefined, 'la migration a inventé un type de site');
     assert.equal(entree.vainqueur, undefined, 'la migration a inventé un vainqueur');
     assert.equal(entree.niveau, undefined, 'la migration a inventé un niveau');
     assert.equal(entree.tick, undefined, 'la migration a inventé une date de rasement');
@@ -553,7 +560,9 @@ test('C24 T13 — la migration n\'invente ni niveau ni vainqueur', () => {
   // main en montage, si.
   const tordue = migrer({
     version: 27,
-    basesRasees: [{ rangee: 200, colonne: 9, vainqueur: JOUEUR, niveau: 20, tick: 0 }],
+    basesRasees: [{
+      rangee: 200, colonne: 9, type: 'base', vainqueur: JOUEUR, niveau: 20, tick: 0,
+    }],
   });
   assert.deepEqual(tordue.basesRasees, [{ rangee: 200, colonne: 9 }]);
 
@@ -679,4 +688,94 @@ test('C24 T17 — l\'empreinte de la carte change quand une ruine expire', () =>
   etat.horloge.nbTicks = pose + TICKS_DE_RUINE;
   assert.equal(empreinteDeLaCarte(etat), nue,
     'une ruine qui expire ne déclenche aucun redessin : la carte ment jusqu\'au prochain geste');
+});
+
+// ---------------------------------------------------------------------------
+// C24 T18 — la carte : la rasée s'en va, la ruine s'y met
+// ---------------------------------------------------------------------------
+
+test('C24 T18 — la base rasée quitte la carte, et la ruine s\'y dessine', () => {
+  // ⚠⚠ LA CARTE DESSINAIT ENCORE LES BASES RASÉES, ET C'EST UN DÉFAUT
+  // ANTÉRIEUR AU LOT, mesuré en le cherchant. `sitesDeLaFenetre` partait de
+  // `basesDeLaFenetre(etat.graine, …)` — la graine seule, sans l'état — si bien
+  // qu'une base détruite restait peinte INTACTE pendant que `siteDeLaCase` y
+  // rendait déjà `null` : le joueur voyait une base qu'il venait de raser, et la
+  // toucher n'ouvrait rien. C'est le jumeau exact du défaut que `TF T10` a
+  // corrigé dans `forcesDeLOuvrage`, pris par l'autre bout.
+  const etat = creerEtat(GRAINE);
+  joueurAu(etat, LOIN);
+  terrainNu(etat, bande(190, 210), [BASE_20]);
+  const fenetre = autour(BASE_20, 6);
+  const surLaCase = (liste) => liste.filter(
+    (x) => x.rangee === BASE_20.rangee && x.colonne === BASE_20.colonne,
+  );
+
+  assert.equal(surLaCase(sitesDeLaFenetre(etat, fenetre)).length, 1,
+    'montage sans mordant : la base n\'était pas dessinée avant d\'être rasée');
+
+  retirerLeSite(etat, siteDeLaCase(etat, BASE_20.rangee, BASE_20.colonne), JOUEUR);
+  assert.equal(surLaCase(sitesDeLaFenetre(etat, fenetre)).length, 0,
+    'la carte dessine encore une base rasée');
+
+  // ⚠ ET LA RUINE, ELLE, A SON DESSIN — au palier de SON niveau, celui de la
+  // base tombée, et dans l'atlas : un nom que la couture ne porte pas ferait
+  // dessiner un rectangle vide sans que rien ne lève.
+  const [ruine] = ruinesActives(etat);
+  const nom = spriteDeLaRuine(ruine.type, palierDeNiveau(ruine.niveau));
+  assert.equal(nom, `site_base_o_n${palierDeNiveau(20)}_ruine`);
+  assert.ok(estDansLAtlas(nom), `${nom} n\'est pas cousu dans l'atlas`);
+
+  // ⚠⚠ À L'EXPIRATION, LA RUINE PART ET LA BASE NE REVIENT PAS. Les deux moitiés
+  // comptent : c'est ici que se verrait une lecture qui aurait confondu les deux
+  // durées de vie de `basesRasees`.
+  rattraperJeu(etat, TICKS_DE_RUINE);
+  assert.equal(ruinesActives(etat).length, 0, 'la ruine se dessine encore après 24 h');
+  assert.equal(surLaCase(sitesDeLaFenetre(etat, fenetre)).length, 0,
+    'la base rasée est revenue sur la carte à l\'expiration de sa ruine');
+});
+
+// ---------------------------------------------------------------------------
+// C24 T19 — la carcasse est celle du VAINCU
+// ---------------------------------------------------------------------------
+
+test('C24 T19 — la carcasse est celle du vaincu, et seules les bases en laissent', () => {
+  // ⚠⚠ LE DÉCOMBRE AU VAINCU, LE TERRAIN AU VAINQUEUR. Les deux planches d'Ethan
+  // sont « base joueur détruite » et « base Ouvrage détruite » : une base de
+  // l'Ouvrage rasée par le joueur montre donc une carcasse d'OUVRAGE tout en
+  // peignant du territoire JOUEUR. Les deux faits sont opposés dans les deux cas
+  // d'aujourd'hui, et c'est pour ça que l'entrée porte le `type` au lieu de le
+  // déduire du `vainqueur`.
+  assert.equal(spriteDeLaRuine('base', 5), 'site_base_o_n5_ruine');
+  assert.equal(spriteDeLaRuine('baseJoueur', 5), 'site_base_j_n5_ruine');
+
+  // ⚠ SEULES LES BASES EN LAISSENT — un camp ou un avant-poste RESPAWNE, et
+  // l'art n'a pas de ruine pour eux. L'appel lève plutôt que de rendre un nom
+  // absent de l'atlas, qui ne se verrait qu'au dessin.
+  for (const type of ['camp', 'avantPoste', 'baseTerminale', 'poiQuartz', 'inconnu']) {
+    assert.throws(() => spriteDeLaRuine(type, 5), /ne laisse pas de ruine/,
+      `« ${type} » rend un nom de ruine`);
+  }
+  for (const palier of [0, 10, 1.5, '5']) {
+    assert.throws(() => spriteDeLaRuine('base', palier), /palier/);
+  }
+
+  // ⚠ LES DIX-HUIT SONT COUSUS. Neuf paliers, deux camps ; un trou dans la
+  // série ne se verrait qu'au palier concerné, donc à un niveau précis.
+  for (let palier = 1; palier <= 9; palier += 1) {
+    for (const type of ['base', 'baseJoueur']) {
+      assert.ok(estDansLAtlas(spriteDeLaRuine(type, palier)),
+        `${spriteDeLaRuine(type, palier)} manque à l'atlas`);
+    }
+  }
+
+  // ⚠⚠ ET LA GÉOMÉTRIE REND DES NOMBRES FINIS. C'est la garde que l'en-tête de
+  // `dessinerRuineDUneCase` nomme : `drawImage` avec un rectangle source non
+  // fini NE DESSINE RIEN ET NE LÈVE PAS — c'est ainsi que la carte s'était
+  // ouverte vide de tout emblème, et rien ne l'avait dit.
+  const d = dessinerRuineDUneCase('base', 5, 12.4, 30.6, 32);
+  for (const champ of ['sx', 'sy', 'sCote', 'x', 'y', 'cote']) {
+    assert.ok(Number.isFinite(d[champ]), `dessinerRuineDUneCase : ${champ} n'est pas fini`);
+  }
+  assert.equal(d.x, 12);
+  assert.equal(d.y, 31);
 });

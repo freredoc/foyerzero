@@ -217,7 +217,15 @@ def declarer():
         'consommees': consommees,
         'dormantes': dormantes,
     }
-    with open(DECLARATION, 'w', encoding='utf-8') as f:
+
+    # ⚠⚠ `newline=` EST OBLIGATOIRE SOUS WINDOWS, ET SON ABSENCE A FAIT MENTIR LE
+    # VÉRIFICATEUR. Sans lui, Python traduit chaque saut de ligne en CRLF à
+    # l'écriture : le fichier du dépôt est en LF, celui que la chaîne rejoue est en
+    # CRLF, et `tools/verifier.py` annonce « DIFFÈRE » sur un contenu IDENTIQUE. Un
+    # écart qui ment est pire qu'un écart qui manque — il apprend à ne plus lire le
+    # verdict. ⚠ TROIS OUTILS SUR TREIZE SONT CORRIGÉS ICI, ceux que le lot
+    # CONQUÊTE-24H fait écrire ; les dix autres restent, et c'est un lot à part.
+    with open(DECLARATION, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(contenu, f, ensure_ascii=False, indent=2)
         f.write('\n')
     print('déclaration écrite : %d consommées · %d dormantes · %d dans art/sources/'
