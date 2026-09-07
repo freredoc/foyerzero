@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.22 · build 123.
+Dernière révision : **07/09/2026**, version 0.99.23 · build 124.
 
 ---
 
@@ -42,7 +42,55 @@ Dernière révision : **07/09/2026**, version 0.99.22 · build 123.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après les lots TERRITOIRE-FORCE et MÉMO-DES-TOURS), à confronter :**
+**Référence au 07/09/2026 (après le lot TERRITOIRE-LU), à confronter :**
+`npm test` → **1340 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 256 764 octets**, 0 référence externe. Marge T10 : **1 043 236 octets,
+11,22 %**. Le lot touche `src/sim/poi.js` et `src/sim/territoire.js`.
+⚠⚠ **ETHAN, 07/09 : « DONC POUR 1. TU CORRIGES OU NON », PUIS « UN POI PRIS EST
+VALIDÉ DE FAÇON PERMANENTE » ET « SI TU VAS VERS LE NORD, TU MONTES AUSSI EN
+NIVEAU AVANT ».** La réponse est OUI pour la récolte des POI, NON pour le tarif du
+raid, et les deux moitiés viennent d'une mesure, pas d'un goût.
+⚠⚠ **LA RÉCOLTE DEMANDE LA PROPRIÉTÉ.** `releverLesPoisAcquis` parcourait
+l'octogone d'une base — où elle PROJETTE — et ramassait tout ce qui s'y trouvait ;
+elle demande maintenant `campDeLaCase`, c'est-à-dire ce que la base TIENT. Sans
+ça, le joueur ramassait le gisement d'une case que la carte peint à l'Ouvrage.
+⚠⚠ **LE TARIF DU RAID, LUI, RESTE SUR LA PORTÉE, ET C'EST UNE MESURE QUI L'A
+DÉCIDÉ.** La correction avait été écrite ; elle a été retirée quand le montage a
+montré que **les 58 cibles de raid d'une base sont TOUTES des bases de
+l'Ouvrage** — et qu'une base garde toujours sa case, par le plancher d'Ethan.
+Demander la propriété rendrait donc le tarif de proximité **inatteignable** : la
+règle de la spec §8 — « le territoire allié est ce qui rend un raid bon marché » —
+mourrait en silence. Le prix suit donc la LOGISTIQUE (où mes bases projettent),
+la carte suit la PROPRIÉTÉ (ce que je tiens), et les deux disent maintenant deux
+choses différentes **parce qu'elles répondent à deux questions différentes**.
+⚠⚠ **L'ORDRE DES QUATRE GARDES DE LA RÉCOLTE EST UNE MESURE, PAS UN GOÛT.**
+`releverLesPoisAcquis` tourne À CHAQUE TICK ; demander la propriété avant de
+regarder s'il y a seulement un gisement la faisait passer de 1 à 45 µs, et trois
+tests de simulation de secondes à des MINUTES. Il y a 70 POI sur 9 300 cases : la
+question ne se pose donc presque jamais, à condition de la poser en dernier —
+mesuré à **3,1 µs** l'appel.
+⚠ **UN POI DÉJÀ PRIS RESTE PRIS**, et la garde d'acquisition passe AVANT celle
+de propriété pour cette raison exacte. `TL T4` le mesure : on ramasse, on rend la
+case à l'Ouvrage, on relève cinquante fois — rien ne bouge.
+⚠⚠ **`campDeLaCase` REND EXACTEMENT CE QUE LA CARTE PEINT, ET `TL T1` LE
+CONFRONTE CASE PAR CASE** sur une fenêtre entière, en exigeant que les trois
+occupants y paraissent. Deux vérités sur la même case seraient la faute que ce lot
+corrige, un cran plus bas.
+⚠⚠ **LES TROIS TÉMOINS GELÉS ONT UNE CINQUIÈME COUCHE, PAS UNE RÉÉCRITURE.**
+`DEPLACES_PAR_TERRITOIRE_LU` porte **cinq phases sur quatorze et dix-huit champs**
+— les neuf premières tombent à l'octet sur la capture d'origine, ce qui dit que la
+règle n'a pas fui hors de la récolte. Et `RAPPORTS_OUVRAGE_TERRITOIRE_LU` ne
+déplace **qu'une graine sur vingt-cinq** : sur la 6, un gisement de moins finance
+une recherche de moins, donc une autre armée.
+⚠ **QUATRE MONTAGES DE TEST DISENT ENFIN CE QU'ILS SUPPOSAIENT.** `POI T8`,
+`POI T25` et `RAID-B T7` posaient une base et comptaient sur son octogone entier —
+gratuit tant que la portée ÉTAIT la propriété. Ils rasent maintenant le voisinage
+de l'Ouvrage, par `sansVoisinsOuvrage`, pour mesurer la FORME et pas un rapport de
+force qu'ils n'ont pas choisi. `BASES-1 T2` a essayé le rasage aussi : il retire
+les CIBLES, et le montage tombait sur son propre garde-fou — il est resté tel
+quel, le tarif n'ayant pas changé.
+
+**Auparavant, après les lots TERRITOIRE-FORCE et MÉMO-DES-TOURS :**
 `npm test` → **1336 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 256 294 octets**, 0 référence externe. Coût **+1 011 octets, ENTIÈREMENT EN
 JAVASCRIPT**, et la somme des cinq postes tombe EXACTEMENT sur le total —

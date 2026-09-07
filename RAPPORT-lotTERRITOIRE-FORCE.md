@@ -1,6 +1,6 @@
 # RAPPORT — lot TERRITOIRE-FORCE
 
-**Version 0.99.22 · build 123.** Branche `claude/lot-territoire-force`, empilée
+**Version 0.99.23 · build 124.** Branche `claude/lot-territoire-force`, empilée
 sur `claude/lot-pictogrammes` (PR #106, encore ouverte). PR ouverte, non mergée.
 
 Arbitrages d'Ethan du 07/09, point **13**, première moitié.
@@ -364,57 +364,96 @@ Marge sur la borne T10 : **1 043 800 octets, 11,22 %**. La borne ne bouge pas.
 
 ---
 
-## 11. ⚠⚠ LA CORRECTION DU §7 : ÉCRITE, MESURÉE, PUIS RETIRÉE
+---
 
-Ethan, le jour même : « donc pour 1. tu corriges ou non ». **Elle a été écrite en
-entier**, puis retirée sur une mesure. Voici ce qu'elle disait et ce qu'elle a
-coûté, pour que la décision se prenne sur des chiffres.
+## 11. ⚠⚠ LA CORRECTION DU §7 — lot TERRITOIRE-LU
 
-**Ce qu'elle faisait.** `estEnTerritoireAllie` cessait de demander « cette case
-est-elle dans mon OCTOGONE » pour demander « cette case M'APPARTIENT-elle », et
-`releverLesPoisAcquis` en faisait autant. Une fonction `campDeLaCase(etat, r, c)`
-répondait pour UNE case, avec les mêmes planchers, la même distance et le même
-arbitrage d'égalité que la carte — **vérifié : 961 cases confrontées à
-`territoireDeLaFenetre`, zéro divergence**.
+Ethan, le jour même : « donc pour 1. tu corriges ou non », puis, sur mes
+objections : **« un poi pris est validé de façon permanente »** et **« si tu vas
+vers le nord, tu montes aussi en niveau avant sinon tu te fais poutrer »**.
 
-**Trois obstacles, et deux ont été franchis :**
+⚠⚠ **LES DEUX REMARQUES ONT INVALIDÉ MON REFUS, ET IL FAUT LE DIRE SANS DÉTOUR.**
+J'avais argumenté que la correction « fait perdre au joueur des POI qu'il
+acquérait » — mais les POI déjà pris restent pris, et un joueur de niveau 1 collé
+à une base de niveau 30 est un **artefact de montage**, pas une situation de jeu.
+Mon argument reposait sur des tests forgés, pas sur la partie réelle. La
+correction est faite.
 
-1. ⚠ **UN CYCLE D'IMPORTS.** `territoire.js` prenait sa géométrie à
-   `points-attaque.js`, qui aurait dû lui demander la propriété. La géométrie
-   descendait dans `carte.js` — au-dessous des deux, et chez elle : ce fichier
-   porte déjà les rangées, les niveaux et les bornes. **Franchi.**
-2. ⚠⚠ **LE COÛT, D'ABORD RÉDHIBITOIRE.** `campDeLaCase` rouvrait un mémo vide
-   par case : **153 µs pour une seule case**, soit très exactement le « 441
-   hachages PAR CASE » que l'en-tête de `territoire.js` existe pour refuser. Le
-   mémo partagé le ramène à **24 µs**, et réordonner les quatre gardes de
-   `releverLesPoisAcquis` — le gisement d'abord, la propriété en dernier, car il
-   y a 70 POI sur 9 300 cases — ramène l'appel de **45 µs à 3,3 µs**. La suite
-   repassait de 353 s à 12 s. **Franchi.**
-3. ⚠⚠ **LE JEU CHANGE, ET CE N'EST PAS UN DÉTAIL D'ÉQUILIBRAGE.** C'est
-   l'obstacle qui l'a fait retirer.
+### La réponse est OUI pour les POI, NON pour le tarif — et c'est une mesure
 
-**Ce que la mesure a montré :**
+**La récolte demande la propriété.** `releverLesPoisAcquis` parcourait l'octogone
+d'une base — où elle **projette** — et ramassait tout ce qui s'y trouvait. Elle
+demande maintenant `campDeLaCase` : ce qu'elle **tient**. Sans ça, le joueur
+ramassait le gisement d'une case que la carte peint à l'Ouvrage.
 
-- **Les vingt-cinq graines témoins de `BASES-0 T1` divergent** — toutes.
-- `POI T8`, `POI T25` et `RAID-B T7` tombent : **le joueur cesse d'acquérir des
-  POI qu'il acquérait**, sur des montages de progression ordinaire.
-- `BASES-1 T2` : un raid passe de 11 à 13 points.
+⚠⚠ **LE TARIF DU RAID, LUI, RESTE SUR LA PORTÉE, ET C'EST LA MESURE QUI L'A
+DÉCIDÉ, PAS UNE PRÉFÉRENCE.** La correction avait été écrite en entier ; elle a
+été retirée quand le montage a montré ceci :
 
-**La raison est mécanique.** Le niveau d'un site de l'Ouvrage est celui de sa
-RANGÉE — jusqu'à 50 — quand une base neuve vaut 1. Dès qu'il monte vers le nord,
-le joueur **perd son territoire, son tarif de proximité ET ses gisements d'un
-seul coup**, et les trois se cumulent. C'est une **courbe de difficulté**, pas une
-correction de bogue.
+```
+cibles à portée d'une base : 58   { base: 58 }
+cibles à 2 cases ou moins  : 4    — toutes OUVRAGE
+```
 
-⚠⚠ **CE QUI RESTE VRAI MALGRÉ LE RETRAIT** : la carte peinte et le prix affiché
-disent toujours deux choses différentes, mesuré à **15 cases** sur un montage.
-Le choix n'est pas entre « corriger » et « laisser une faute », il est entre
-**deux règles de jeu** :
+**Les cibles de raid sont TOUTES des bases de l'Ouvrage**, et une base garde
+toujours sa case — c'est le plancher qu'Ethan a dicté au §1 de ce lot. Demander
+la propriété rendrait donc le tarif de proximité **inatteignable** : la règle de
+la spec §8 — « le territoire allié est ce qui rend un raid bon marché » —
+mourrait en silence, sans qu'aucun test ne tombe.
 
-| | ce que ça dit | ce que ça coûte |
+**Les deux grandeurs répondent donc à deux questions différentes**, et ce n'est
+plus une divergence mais une distinction :
+
+| | ce que ça demande | qui le lit |
 |---|---|---|
-| **la portée** (aujourd'hui) | le tarif et les gisements suivent où tes bases PROJETTENT | la carte montre du rouge là où tu paies le prix du vert |
-| **la propriété** | ils suivent ce que tu TIENS | un joueur pressé par un voisin fort perd tout en même temps ; 25 témoins à refaire |
+| **portée** | où mes bases **projettent** — la logistique | le tarif du raid |
+| **propriété** | ce que je **tiens** — le rapport de force | la carte, la récolte des POI |
 
-**Rien n'est laissé à moitié dans le dépôt** : la correction est retirée en
-entier, seul le mémo partagé — qui ne change aucun comportement — est gardé.
+### Le coût, et l'ordre des gardes
+
+⚠⚠ **`campDeLaCase` A D'ABORD COÛTÉ 153 µs PAR CASE**, soit très exactement le
+« 441 hachages PAR CASE » que l'en-tête de `sim/territoire.js` existe pour
+refuser. Le mémo partagé du lot MÉMO-DES-TOURS le ramène à **20 µs**.
+
+⚠⚠ **ET L'ORDRE DES QUATRE GARDES DE LA RÉCOLTE EST UNE MESURE, PAS UN GOÛT.**
+`releverLesPoisAcquis` tourne **à chaque tick** ; demander la propriété AVANT de
+regarder s'il y a seulement un gisement la faisait passer de 1 à **45 µs**, et
+trois tests de simulation de secondes à des **minutes**. Il y a 70 POI sur 9 300
+cases : la question ne se pose donc presque jamais, à condition de la poser en
+dernier — mesuré à **3,1 µs** l'appel.
+
+⚠ **UN POI DÉJÀ PRIS RESTE PRIS**, et la garde d'acquisition passe AVANT celle de
+propriété pour cette raison exacte. `TL T4` le mesure : on ramasse, on rend la
+case à l'Ouvrage, on relève cinquante fois — rien ne bouge.
+
+### Les témoins gelés : une couche, pas une réécriture
+
+| | ce qui bouge |
+|---|---|
+| `DEPLACES_PAR_TERRITOIRE_LU` | **5 phases sur 14**, 18 champs — les neuf premières tombent à l'octet sur la capture d'origine |
+| `RAPPORTS_OUVRAGE_TERRITOIRE_LU` | **1 graine sur 25** — sur la 6, un gisement de moins finance une recherche de moins, donc une autre armée |
+
+⚠ **C'EST CETTE PROPORTION QUI PROUVE QUE LA RÈGLE N'A PAS FUI.** Une couche qui
+aurait déplacé les quatorze phases et les vingt-cinq graines ne dirait rien.
+
+### Quatre montages disent enfin ce qu'ils supposaient
+
+`POI T8`, `POI T25` et `RAID-B T7` posaient une base et comptaient sur son
+octogone entier — gratuit tant que la portée **était** la propriété. Ils rasent
+maintenant le voisinage de l'Ouvrage (`sansVoisinsOuvrage`) pour mesurer la
+**forme** et pas un rapport de force qu'ils n'ont pas choisi.
+
+⚠ **`BASES-1 T2` A ESSAYÉ LE RASAGE AUSSI, ET ÇA NE MARCHE PAS** : raser retire
+les **cibles**, et le montage tombait sur son propre garde-fou — « trop peu de
+cibles ». Il est resté tel quel, le tarif n'ayant pas changé.
+
+### Les tests
+
+| code | ce qu'il prouve |
+|---|---|
+| **TL T1** | `campDeLaCase` rend exactement ce que la carte peint, case par case, avec les trois occupants présents |
+| **TL T2** | le plancher tient aussi sur une case : chaque base garde la sienne, la voisine tombe |
+| **TL T3** | même case, deux niveaux : perdue elle ne donne rien, tenue elle donne son gisement |
+| **TL T4** | un POI déjà pris reste pris, cinquante relevés plus tard, la case rendue à l'Ouvrage |
+
+**`npm run check` : 1340 pass / 0 fail.** +4 tests, aucune assertion retirée.

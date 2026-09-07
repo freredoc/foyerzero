@@ -45,6 +45,7 @@
 import { GEOGRAPHIE } from '../data/sites.js';
 import { basesDeLaFenetre } from './peuplement.js';
 import { distanceOctogonaleDInfluence } from './points-attaque.js';
+
 // ⚠ LES DEUX NIVEAUX D'UNE BASE VIENNENT DE DEUX ENDROITS, ET C'EST LA RÈGLE
 // QUE `sim/carte.js` EXISTE POUR TENIR : celui de l'Ouvrage se lit sur la
 // RANGÉE, celui du joueur est la moyenne de ses BÂTIMENTS. Les confondre est la
@@ -191,6 +192,91 @@ export function forceDUneBase(niveau, distance) {
 }
 
 /**
+ * Qui l'emporte, entre deux sommes de force — et l'égalité va au joueur.
+ *
+ * ⚠⚠ ÉCRITE UNE FOIS, ET DEUX LECTEURS LA DEMANDENT : la carte d'une fenêtre et
+ * la question d'UNE case. Deux écritures du même arbitrage seraient exactement la
+ * divergence que le lot TERRITOIRE-LU vient de refermer entre le prix et la
+ * carte — il serait absurde de la rouvrir un cran plus bas.
+ *
+ * ⚠⚠ L'ÉGALITÉ VA AU JOUEUR, ET IL FALLAIT TRANCHER. Deux sommes peuvent tomber
+ * juste — 2¹¹ contre 2¹⁰ + 2¹⁰. C'est le seul reste de l'ancienne priorité
+ * inconditionnelle, et il tient à la même raison qu'elle : le territoire allié
+ * est la seule des deux zones qui ait un effet de jeu écrit — le tarif du raid —
+ * et une case qui se paie comme alliée doit se lire comme telle.
+ *
+ * ⚠ `undefined` VEUT DIRE « PERSONNE NE PEINT ICI », PAS « ZÉRO ». Les deux
+ * sommes sont des `BigInt` ou rien ; comparer `0n` à `undefined` serait un
+ * mélange de types, et JavaScript lève dessus.
+ *
+ * @param {bigint|undefined} forceJoueur
+ * @param {bigint|undefined} forceOuvrage
+ * @returns {number} `NEUTRE`, `JOUEUR` ou `OUVRAGE`
+ */
+export function campQuiLEmporte(forceJoueur, forceOuvrage) {
+  if (forceJoueur === undefined && forceOuvrage === undefined) return NEUTRE;
+  if (forceOuvrage === undefined) return JOUEUR;
+  if (forceJoueur === undefined) return OUVRAGE;
+  return forceJoueur >= forceOuvrage ? JOUEUR : OUVRAGE;
+}
+
+/**
+ * À qui appartient UNE case — la même règle que la carte, sur une seule case.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE LE PRIX DU RAID ET LA RÉCOLTE DES POI DEMANDENT LA
+ * PROPRIÉTÉ DEPUIS LE LOT TERRITOIRE-LU, et qu'ils ne peuvent pas peindre une
+ * fenêtre entière pour une case. `territoireDeLaFenetre` calcule 2 139 cases ;
+ * celle-ci en calcule UNE, en interrogeant les bases d'un carré de 7 × 7 autour
+ * d'elle.
+ *
+ * ⚠⚠ ET ELLE DOIT RENDRE EXACTEMENT CE QUE LA CARTE PEINT, SINON ON A DEUX
+ * VÉRITÉS SUR LA MÊME CASE — c'est-à-dire la faute qu'on vient de corriger, un
+ * cran plus bas. Les deux partagent `forceDUneBase`, `campQuiLEmporte`, les mêmes
+ * planchers et la même distance ; `TL T1` les confronte case par case sur une
+ * fenêtre entière.
+ *
+ * ⚠ SON COÛT TIENT AU MÉMO PARTAGÉ DU LOT MÉMO-DES-TOURS. Sans lui, elle
+ * rouvrait un mémo vide par case — 153 µs pour une seule —, soit très exactement
+ * le « 441 hachages PAR CASE » que l'en-tête de ce fichier existe pour refuser.
+ * Avec lui, 24 µs.
+ *
+ * @param {object} etat
+ * @param {number} rangee
+ * @param {number} colonne
+ * @returns {number} `NEUTRE`, `JOUEUR` ou `OUVRAGE`
+ */
+export function campDeLaCase(etat, rangee, colonne) {
+  if (rangee < 1 || rangee > GEOGRAPHIE.carte.hauteur
+    || colonne < 1 || colonne > GEOGRAPHIE.carte.largeur) return NEUTRE;
+
+  // ⚠ LA FENÊTRE INTERROGÉE EST CELLE DU PLUS GRAND RAYON : une base peint au
+  // plus à `DECALAGE_DES_EXPOSANTS` cases, donc aucune base plus loin ne compte.
+  const marge = DECALAGE_DES_EXPOSANTS;
+  const autour = {
+    premiereRangee: rangee - marge, derniereRangee: rangee + marge,
+    premiereColonne: colonne - marge, derniereColonne: colonne + marge,
+  };
+  const sommes = { [JOUEUR]: undefined, [OUVRAGE]: undefined };
+  let plancher = NEUTRE;
+  const ajouter = (base, camp) => {
+    if (base.rangee === rangee && base.colonne === colonne) {
+      // ⚠ LE PLANCHER D'ETHAN : « le territoire où la base se trouve ne change
+      // pas ». Le joueur l'emporte si les deux s'y trouvaient — cas impossible
+      // aujourd'hui, `fondation.js` refusant de fonder sur un site de l'Ouvrage.
+      if (plancher !== JOUEUR) plancher = camp;
+    }
+    const distance = distanceOctogonaleDInfluence(base.rangee - rangee, base.colonne - colonne);
+    if (distance > RAYONS[camp]) return;
+    const force = forceDUneBase(base.niveau, distance);
+    sommes[camp] = sommes[camp] === undefined ? force : sommes[camp] + force;
+  };
+  for (const base of forcesDuJoueur(etat)) ajouter(base, JOUEUR);
+  for (const base of forcesDeLOuvrage(etat, autour)) ajouter(base, OUVRAGE);
+  if (plancher !== NEUTRE) return plancher;
+  return campQuiLEmporte(sommes[JOUEUR], sommes[OUVRAGE]);
+}
+
+/**
  * Une carte d'occupation pour une fenêtre de la carte du monde.
  *
  * ⚠⚠ LA RÈGLE A ÉTÉ RENVERSÉE LE 07/09, POINT 13 D'ETHAN, ET CE BLOC RACONTE LES
@@ -333,12 +419,7 @@ export function territoireDeLaFenetre(etat, fenetre) {
   const forceJoueur = sommes[JOUEUR];
   const forceOuvrage = sommes[OUVRAGE];
   for (let i = 0; i < occupant.length; i += 1) {
-    const j = forceJoueur[i];
-    const o = forceOuvrage[i];
-    if (j === undefined && o === undefined) continue;
-    if (o === undefined) occupant[i] = JOUEUR;
-    else if (j === undefined) occupant[i] = OUVRAGE;
-    else occupant[i] = j >= o ? JOUEUR : OUVRAGE;
+    occupant[i] = campQuiLEmporte(forceJoueur[i], forceOuvrage[i]);
   }
 
   // ⚠⚠ LE PLANCHER D'ETHAN : « le territoire où la base se trouve ne change pas ».

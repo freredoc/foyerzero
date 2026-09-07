@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 
 import {
   territoireDeLaFenetre, bordsDuTerritoire, occupantDeLaCase, basesDuJoueur,
-  forceDUneBase, niveauDUneBaseDuJoueur, RAISON,
+  forceDUneBase, niveauDUneBaseDuJoueur, campDeLaCase, RAISON,
   RAYONS, NEUTRE, JOUEUR, OUVRAGE,
 } from '../src/sim/territoire.js';
 import { dansLOctogoneDInfluence, distanceOctogonaleDInfluence } from '../src/sim/points-attaque.js';
@@ -794,4 +794,70 @@ test('TF T11 — aucun mélange `BigInt` et `Number`, aux deux extrêmes du nive
   assert.ok(plafond > BigInt(Number.MAX_SAFE_INTEGER),
     'la force au plafond tient dans un entier sûr : la précision exacte serait gratuite');
   assert.equal(typeof plafond, 'bigint');
+});
+
+// ---------------------------------------------------------------------------
+// Lot TERRITOIRE-LU — la récolte des POI demande la PROPRIÉTÉ, pas la portée
+// ---------------------------------------------------------------------------
+
+test('TL T1 — `campDeLaCase` rend EXACTEMENT ce que la carte peint', () => {
+  // ⚠⚠ DEUX FONCTIONS POUR UNE MÊME RÈGLE, ET C'EST LE RISQUE QUE CE TEST PORTE.
+  // `territoireDeLaFenetre` peint 2 139 cases d'un coup ; `campDeLaCase` en
+  // calcule UNE, parce que la récolte des POI ne peut pas peindre une fenêtre
+  // entière pour savoir si un gisement est à elle. Si les deux divergeaient d'une
+  // case, on aurait deux vérités sur la même case — c'est-à-dire la faute que ce
+  // lot existe pour corriger, un cran plus bas.
+  const etat = creerEtat(GRAINE);
+  // ⚠ LA FENÊTRE EST PRISE AU BAS DE LA CARTE, AUTOUR DU DÉPART DU JOUEUR, et
+  // c'est ce qui lui fait porter les TROIS occupants. Au milieu de la carte
+  // l'Ouvrage tient 100 % des rangées — mesuré, et son en-tête le dit — donc un
+  // balayage là-haut ne comparerait que des cases ennemies.
+  const fenetre = {
+    premiereRangee: 285, derniereRangee: 300, premiereColonne: 1, derniereColonne: 31,
+  };
+  const carte = territoireDeLaFenetre(etat, fenetre);
+  let comparees = 0;
+  const vus = new Set();
+  for (let r = fenetre.premiereRangee; r <= fenetre.derniereRangee; r += 1) {
+    for (let c = fenetre.premiereColonne; c <= fenetre.derniereColonne; c += 1) {
+      const parLaCarte = occupantDeLaCase(carte, r, c);
+      assert.equal(campDeLaCase(etat, r, c), parLaCarte,
+        `(${r}, ${c}) : la carte et la case ne disent pas la même chose`);
+      vus.add(parLaCarte);
+      comparees += 1;
+    }
+  }
+  assert.ok(comparees > 400, `${comparees} cases comparées : le balayage ne mesure rien`);
+  // ⚠ FALSIFIABLE : la fenêtre doit porter les TROIS réponses. Un balayage tout
+  // neutre — ou tout à l'Ouvrage — passerait sur deux fonctions qui rendraient
+  // toujours la même chose.
+  assert.deepEqual([...vus].sort(), [NEUTRE, JOUEUR, OUVRAGE].sort(),
+    'la fenêtre ne porte pas les trois occupants : le montage ne discrimine rien');
+
+  // Et hors carte, `NEUTRE` — comme `occupantDeLaCase`.
+  assert.equal(campDeLaCase(etat, 0, 5), NEUTRE);
+  assert.equal(campDeLaCase(etat, 5, 0), NEUTRE);
+  assert.equal(campDeLaCase(etat, GEOGRAPHIE.carte.hauteur + 1, 5), NEUTRE);
+});
+
+test('TL T2 — le plancher tient aussi sur UNE case : une base garde la sienne', () => {
+  // ⚠ LE PLANCHER EST ÉCRIT DEUX FOIS PARCE QUE LES DEUX CHEMINS L'APPLIQUENT
+  // DIFFÉREMMENT — la carte l'écrase après le partage, la case le rend avant.
+  // C'est exactement le genre d'écart que `TL T1` attraperait en masse ; ce
+  // test-ci le nomme.
+  const etat = creerEtat(GRAINE);
+  const bande = { premiereRangee: 198, derniereRangee: 202, premiereColonne: 1, derniereColonne: 31 };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+    (b) => b.colonne >= 8 && b.colonne <= 24 && !estBaseOuvrage(etat.graine, b.rangee, b.colonne - 3),
+  );
+  const position = { rangee: ouvrage.rangee, colonne: ouvrage.colonne - 3 };
+  etat.bases[0].position = { ...position };
+  etat.bases[0].disposition = etat.bases[0].disposition.map((b) => ({ ...b, niveau: 1 }));
+
+  assert.equal(campDeLaCase(etat, position.rangee, position.colonne), JOUEUR,
+    'la base de niveau 1 a perdu son propre pied');
+  assert.equal(campDeLaCase(etat, ouvrage.rangee, ouvrage.colonne), OUVRAGE,
+    'la base de l\'Ouvrage a perdu son propre pied');
+  // ⚠ ET LA VOISINE, ELLE, TOMBE — sans quoi le plancher protégerait l'octogone.
+  assert.equal(campDeLaCase(etat, position.rangee, position.colonne + 1), OUVRAGE);
 });

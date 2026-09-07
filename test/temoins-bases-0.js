@@ -2949,3 +2949,97 @@ export const RAPPORTS_OUVRAGE_CIBLES_RANGEES = {
   24: '6c1c7cccc5682d9c',
   25: 'f92d38b29bc03c81',
 };
+
+/**
+ * Ce que le lot TERRITOIRE-LU a déplacé — cinquième couche par-dessus celle de
+ * CIBLES-RANGÉES.
+ *
+ * ⚠⚠ CE QUI A CHANGÉ, ET RIEN D'AUTRE : `releverLesPoisAcquis` demande la
+ * PROPRIÉTÉ d'une case, plus seulement sa portée. Le joueur ne ramasse donc plus
+ * le gisement d'une case que la carte peint à l'Ouvrage, et `poisAcquis` bouge
+ * dès la phase 10 — puis tout ce qui en dépend : la recherche que les POI
+ * financent, les rapports de raid, l'économie.
+ *
+ * ⚠⚠ CINQ PHASES SUR QUATORZE, ET LES NEUF PREMIÈRES SONT INTACTES. C'est ce
+ * qui dit que la règle n'a pas fui hors de la récolte : la pose, l'économie du
+ * début, le premier raid et les satellites tombent EXACTEMENT sur la capture
+ * d'origine. Une couche qui aurait tout déplacé ne prouverait rien.
+ *
+ * ⚠ UN POI DÉJÀ PRIS RESTE PRIS — Ethan, 07/09. Ce qui bouge est ce que le
+ * joueur ramasse À PARTIR DE MAINTENANT, jamais ce qu'il a déjà.
+ */
+export const DEPLACES_PAR_TERRITOIRE_LU = {
+  p10_montee: {
+    poisAcquis: '9f6db10be605c9c3',
+  },
+  p11_raidOuvrageApres: {
+    poisAcquis: '9f6db10be605c9c3',
+    rapports: '1494ba9bc953a91f',
+    recherche: 'f6e1c73fb88ae3f7',
+    sitesEntames: '6b47f499b5be4ab3',
+  },
+  p12_veilleDuRaid: {
+    poisAcquis: '9f6db10be605c9c3',
+    rapports: '1494ba9bc953a91f',
+    recherche: 'f6e1c73fb88ae3f7',
+    sitesEntames: 'dd32ece5fe4470d5',
+  },
+  p13_apresLeRaid: {
+    economie: 'cb48102a4a907ccd',
+    poisAcquis: '9f6db10be605c9c3',
+    rapports: '87cdb955c8fac3ed',
+    recherche: 'f6e1c73fb88ae3f7',
+    sitesEntames: 'ec0329828a325a38',
+  },
+  p14_sousLeFeu: {
+    economie: '682db64f316adaa5',
+    poisAcquis: '51b6e7462d13831b',
+    rapports: '2476e35709e2242f',
+    recherche: 'f6e1c73fb88ae3f7',
+  },
+};
+
+/** L'empreinte par graine, recalculée : les vingt-cinq divergent dès la récolte. */
+export const EMPREINTES_PAR_GRAINE_TERRITOIRE_LU = {
+  1: '7870f508069c21dc',
+  2: 'd4f989d1607531d7',
+  3: 'ee7776a13d27dc59',
+  4: '978f5dd896be5219',
+  5: '581e31a5e2295543',
+  6: 'ed0ecd394cb2e3a9',
+  7: 'c646f84487670a22',
+  8: 'dac8305680b9e42f',
+  9: '3e75bacb16b37703',
+  10: '2facf22e7daf3df6',
+  11: '0ddf78b3b6659065',
+  12: '0d40ee887430fdef',
+  13: 'f84106ce3fb3e87e',
+  14: '8711555cb416ffad',
+  15: 'a3fe9fbc81f3379d',
+  16: '80b6a5aa705a3845',
+  17: 'fb196740403741f0',
+  18: '3632dfc0f9c4465a',
+  19: '9edd27ee17695ab2',
+  20: '45f7a167f0c8e219',
+  21: '1a444d201706b7b2',
+  22: 'd0683a02dc6addbf',
+  23: '86e8899f0cf7afda',
+  24: 'c84e82cd15a6bc5b',
+  25: '593d8fb2db300dd3',
+};
+
+/**
+ * Le rapport du raid sur l'Ouvrage, déplacé par TERRITOIRE-LU — UNE graine.
+ *
+ * ⚠⚠ UNE SEULE SUR VINGT-CINQ, ET C'EST LA MESURE QUI COMPTE. La récolte des
+ * POI demande la PROPRIÉTÉ depuis ce lot ; sur vingt-quatre graines, ce que le
+ * joueur ramasse avant le raid ne change pas assez pour déplacer sa composition,
+ * et le rapport tombe à l'octet sur la capture d'origine. Sur la graine 6, un
+ * gisement de moins finance une recherche de moins, donc une armée différente,
+ * donc un autre rapport. Une couche qui aurait déplacé les vingt-cinq dirait que
+ * la règle a fui hors de la récolte ; une qui n'en déplace qu'une dit qu'elle est
+ * restée où on l'a mise.
+ */
+export const RAPPORTS_OUVRAGE_TERRITOIRE_LU = {
+  6: '2bacf3a789e060ef',
+};
