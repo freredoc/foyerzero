@@ -45,6 +45,7 @@ import { existeDansAtlas } from '../src/render/sprite.js';
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
 import { creerEtat, rattraperJeu, poserEffectif } from '../src/sim/state.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
 import { tousLesFonds } from '../src/render/fond.js';
@@ -2822,6 +2823,10 @@ function partiePeuplee(graine = 20260906, avecArmee = true) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, TICKS_APPARITION);
   assert.equal(baseCourante(etat).satellites.presents.length, 3, 'montage : les trois n\'ont pas paru');
+  // ⚠ ET LA CASERNE VA AVEC — lot PRODUCTION-EN-DÉFENSE. La règle est descendue
+  // dans le modèle : sans elle, `poserEffectif` refuse la Meute et le montage
+  // retomberait sur `sans-armee`, le refus même qu'il existe pour écarter.
+  if (avecArmee) poserLesBatimentsDeProduction(etat);
   if (avecArmee) poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
   return etat;
 }

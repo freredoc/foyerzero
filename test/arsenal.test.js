@@ -615,9 +615,17 @@ test('§10 — arsenal.js n\'importe ni page ni surface de dessin, et ne tire au
     assert.ok(!source.includes(interdit), `arsenal.js emploie « ${interdit} »`);
   }
   // Il n'importe que des DONNÉES, jamais de rendu ni de DOM.
+  //
+  // ⚠ `../data/base.js` EST ENTRÉ AU LOT PRODUCTION-EN-DÉFENSE, ET C'EST ENCORE
+  // UNE DONNÉE. `FAMILLE_DE_CHASSIS` et `messageSansBatiment` y ont descendu
+  // pour que `sim/state.js` puisse dire le refus au geste sans importer de
+  // `ui/` ; ce fichier les RÉEXPORTE. L'assertion garde exactement ce qu'elle
+  // gardait — quatre modules de `data/`, aucun de rendu, aucun DOM — et la
+  // liste reste EXHAUSTIVE : un import de `render/` ou de `sim/` la ferait
+  // tomber comme avant.
   const imports = [...source.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(imports.sort(),
-    ['../data/combat.js', '../data/niveaux.js', '../data/sites.js']);
+    ['../data/base.js', '../data/combat.js', '../data/niveaux.js', '../data/sites.js']);
 
   // Et l'état est sérialisable de bout en bout.
   let etat = arsenalVide(30);

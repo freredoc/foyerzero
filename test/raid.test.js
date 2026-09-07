@@ -23,6 +23,7 @@ import {
   problemesDuDeplacementDEffectif, tickJeu,
 } from '../src/sim/state.js';
 import { niveauDeLArmee } from '../src/sim/niveau-de-base.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { plafondDeLaReserve, crediterLesReserves } from '../src/sim/reparation.js';
 import { basesDeLaFenetre as basesFenetre } from '../src/sim/peuplement.js';
 import { siteDeLaCase } from '../src/sim/site-de-la-case.js';
@@ -550,6 +551,10 @@ test('RAID-0 T6 — désactiver ne fait pas monter le niveau d\'armée, ni le pl
   // réparation — deux clics pour douze heures de réserve en plus.
   const etat = partieAuMilieu();
   baseCourante(etat).armee = [];
+  // ⚠ LA CASERNE EST DU MONTAGE — lot PRODUCTION-EN-DÉFENSE. `partieAuMilieu`
+  // écrit son armée à la main ; ces deux poses-ci passent par le moteur, donc
+  // par la règle.
+  poserLesBatimentsDeProduction(etat);
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 21 });
   // Falsifiable : les deux niveaux doivent être TRÈS différents, sinon retirer
@@ -648,6 +653,8 @@ test('RAID-0 T9 — le champ traverse la sauvegarde, et une v17 ressort toute ac
 
   const etat = partieAuMilieu();
   baseCourante(etat).armee = [];
+  // ⚠ MÊME MONTAGE QU'EN T6, ET POUR LA MÊME RAISON — lot PRODUCTION-EN-DÉFENSE.
+  poserLesBatimentsDeProduction(etat);
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
   poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 1 });
   reglerActivite(etat, 'armee', 1, false);

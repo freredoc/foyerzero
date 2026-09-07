@@ -97,41 +97,21 @@ export function budgetDuNiveau(niveau) {
   return POINTS_ARMEE.offense.base + POINTS_ARMEE.offense.parNiveau * niveau;
 }
 
-/**
- * Comment le joueur appelle chaque famille de châssis.
- *
- * ⚠ CE SONT LES MOTS D'ETHAN, LE 29/08 : « Infanterie inconstructible sans
- * caserne. Même règle pour véhicule et avion. » On lui rend son vocabulaire
- * dans le message de refus plutôt que d'y écrire « escouade », qui est le nom
- * INTERNE du châssis et n'apparaît nulle part à l'écran.
- */
-export const FAMILLE_DE_CHASSIS = {
-  escouade: 'infanterie',
-  blinde: 'véhicule',
-  aeronef: 'avion',
-};
-
-/**
- * Ce que la palette dit d'une unité dont le bâtiment de production manque.
- *
- * ⚠ LA PHRASE ÉVITE L'ARTICLE DU BÂTIMENT, ET C'EST VOULU. « une Caserne » mais
- * « un Dépôt de véhicules » : porter le genre demanderait un champ de plus dans
- * `BASE_BATIMENTS` pour onze bâtiments, dont trois seulement s'en serviraient.
- * « sans Caserne » est juste des deux côtés. L'élision, elle, ne se contourne
- * pas — « pas d'infanterie » contre « pas de véhicule » — et se fait ici.
- *
- * @param {string} nomBatiment nom joueur du bâtiment manquant
- * @param {string} chassis clé de `FAMILLE_DE_CHASSIS`
- * @returns {string}
- */
-export function messageSansBatiment(nomBatiment, chassis) {
-  const famille = FAMILLE_DE_CHASSIS[chassis];
-  if (famille === undefined) {
-    throw new Error(`arsenal : châssis inconnu « ${chassis} »`);
-  }
-  const elide = /^[aeiouyéèêàâîïôûù]/i.test(famille) ? `d'${famille}` : `de ${famille}`;
-  return `sans ${nomBatiment}, pas ${elide}`;
-}
+// ---------------------------------------------------------------------------
+// Le refus « sans Caserne, pas d'infanterie » — RÉEXPORTÉ, PAS ÉCRIT ICI
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ `FAMILLE_DE_CHASSIS` ET `messageSansBatiment` ONT DESCENDU DANS
+// `data/base.js` AU LOT PRODUCTION-EN-DÉFENSE, ET LA RÈGLE LES A TIRÉS. Ils
+// étaient écrits ici tant que la phrase ne servait QUE deux palettes ;
+// `sim/state.js` la dit maintenant au geste de pose, et `sim/` n'importe jamais
+// de `ui/`. Les recopier là-bas aurait fait DEUX écritures de la même phrase —
+// exactement ce que le brief interdit.
+//
+// ⚠ ET LA RÉEXPORTATION N'EST PAS UNE SECONDE SOURCE : c'est la même liaison,
+// sous le nom où les deux palettes et leurs tests la cherchent déjà. La retirer
+// obligerait `ui/chantier.js` et `ui/offense.js` à changer d'import pour rien.
+export { FAMILLE_DE_CHASSIS, messageSansBatiment } from '../data/base.js';
 
 /**
  * Les unités que le joueur peut poser : celles que la RECHERCHE a ouvertes.

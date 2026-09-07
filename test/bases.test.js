@@ -59,6 +59,7 @@ import { capacitesMilli } from '../src/sim/economie-base.js';
 import { etatDesMissions, avancement } from '../src/sim/missions.js';
 import { CHAINE_TUTORIEL } from '../src/data/missions.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import {
   GRAINES, PHASES, CHAMPS, CHAMPS_AJOUTES_PAR_BASES_1, EMPREINTES_PAR_CHAMP, SCALAIRES,
   VERSION_AU_TEMOIN, OCTETS_AJOUTES_PAR_LE_DEPLIAGE, OCTETS_AJOUTES_PAR_BASES_1,
@@ -77,6 +78,9 @@ import {
   RAPPORTS_PROCHE_COLONNE, RAPPORTS_OUVRAGE_COLONNE,
   RAPPORTS_PROCHE_ARRET, RAPPORTS_OUVRAGE_ARRET,
   RAPPORTS_RETOURS_DU_03_SOIR,
+  DEPLACES_PAR_PRODUCTION_EN_DEFENSE, EMPREINTES_PAR_GRAINE_PRODUCTION_EN_DEFENSE,
+  GESTES_ARMER_PRODUCTION_EN_DEFENSE, OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE,
+  RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE, RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -128,7 +132,8 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  * déménagé : le relevé la recompose, donc son empreinte d'origine doit tenir.
  */
 function empreinteAttendue(phase, champ) {
-  return DEPLACES_PAR_SATELLITES_RESPAWN[phase]?.[champ]
+  return DEPLACES_PAR_PRODUCTION_EN_DEFENSE[phase]?.[champ]
+    ?? DEPLACES_PAR_SATELLITES_RESPAWN[phase]?.[champ]
     ?? DEPLACES_PAR_COLONNE[phase]?.[champ]
     ?? DEPLACES_PAR_RETOUR_DEFENSES[phase]?.[champ]
     ?? DEPLACES_PAR_ARRET[phase]?.[champ]
@@ -486,7 +491,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_SATELLITES_RESPAWN[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_PRODUCTION_EN_DEFENSE[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -497,7 +502,15 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
     const attendu = SCALAIRES[g];
     const x = t[g];
     assert.equal(x.gestes.join(' | '), attendu.gestes, `graine ${g} : gestes de construction`);
-    assert.equal(x.gestesArmer.join(' | '), attendu.gestesArmer, `graine ${g} : gestes d'armement`);
+    // ⚠⚠ LES GESTES D'ARMEMENT SONT SURCHARGÉS PAR PRODUCTION-EN-DÉFENSE, ET
+    // LES GESTES DE CONSTRUCTION NE LE SONT PAS. C'est cette moitié-là qui
+    // prouve que la règle n'a pas fui hors de la pose d'unité : le scénario
+    // bâtit exactement ce qu'il bâtissait, au geste près, et n'arme plus la
+    // Crécelle faute d'Aérodrome.
+    assert.equal(
+      x.gestesArmer.join(' | '), GESTES_ARMER_PRODUCTION_EN_DEFENSE,
+      `graine ${g} : gestes d'armement`,
+    );
     // ⚠ LA SAUVEGARDE GRANDIT D'UN NOMBRE FIXE, ET C'EST TOUT CE QU'ON LUI
     // PERMET. `{"bases":[…],"baseCourante":0}` enveloppe onze champs qui, eux,
     // n'ont pas changé d'un octet : si l'écart dépendait de la partie, c'est que
@@ -511,7 +524,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
     assert.equal(
       x.tailleSauvegarde,
       attendu.tailleSauvegarde + OCTETS_AJOUTES_PAR_LE_DEPLIAGE + OCTETS_AJOUTES_PAR_BASES_1
-        + OCTETS_AJOUTES_PAR_TRANSFERT + OCTETS_AJOUTES_PAR_RESERVE_BASE,
+        + OCTETS_AJOUTES_PAR_TRANSFERT + OCTETS_AJOUTES_PAR_RESERVE_BASE
+        - OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE,
       `graine ${g} : taille de la sauvegarde`,
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);
@@ -562,10 +576,17 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // les vingt-cinq graines, et restent gardés contre les captures d'avant.
       // Un raid qui ne s'arrête plus aux mêmes endroits ne rend pas le même
       // rapport ; s'il rendait le même, c'est la règle qui ne serait pas lue.
+      // ⚠ ET PRODUCTION-EN-DÉFENSE LES DÉPLACE TOUS LES DEUX, SUR LES VINGT-CINQ
+      // GRAINES : une armée à cinq unités au lieu de six ne rend pas le même
+      // rapport. Ce qui NE bouge pas juste au-dessus — nombre de cibles, cible
+      // retenue, non-fuite et exactitude de la simulation — dit que seule la
+      // composition a changé.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_COLONNE[g] ?? RAPPORTS_OUVRAGE_ARRET[g]
+        ? (RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
+          ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_COLONNE[g] ?? RAPPORTS_PROCHE_ARRET[g]);
+        : (RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]
+          ?? RAPPORTS_PROCHE_ARRET[g]);
       assert.equal(
         empreinte(JSON.stringify(x[`${prefixe}Rapport`])), attenduRapport,
         `graine ${g} : ${cle} — le rapport de raid a changé`,
@@ -703,6 +724,11 @@ test('BASES-0 T4 — `simulerRaid` prend la base de la copie, jamais celle de l\
   // LA MAUVAISE RAISON — « aucune unité en état de partir ». Un montage qui ne
   // part pas ne mesure pas une fuite.
   const etat = creerEtat(31);
+  // ⚠ LES BÂTIMENTS DE PRODUCTION SONT DU MONTAGE — lot PRODUCTION-EN-DÉFENSE.
+  // Sans eux, les trois poses seraient refusées et le raid le serait aussi :
+  // on mesurerait une fuite absente pour la mauvaise raison, exactement ce que
+  // le commentaire ci-dessus interdit.
+  poserLesBatimentsDeProduction(etat);
   rattraperJeu(etat, 2 * H);
   for (const [id, vague, colonne] of [['meute', 1, 2], ['perceurs', 1, 4], ['carapace', 2, 3]]) {
     poserEffectif(etat, 'armee', { id, vague, colonne, niveau: 8 });
@@ -1416,6 +1442,9 @@ test('BASES-1 T10 — réserve de réparation et satellites ne se mélangent pas
 
   // ⚠ ET LE PLAFOND SUIT L'ARMÉE DE **CETTE** BASE. On arme la première, pas la
   // seconde : leurs plafonds doivent diverger.
+  // ⚠ LE DÉPÔT DE VÉHICULES EST DU MONTAGE — lot PRODUCTION-EN-DÉFENSE : le
+  // Ratisseur est un blindé, et sans lui la pose serait refusée.
+  poserLesBatimentsDeProduction(etat);
   poserEffectif(etat, 'armee', {
     id: 'ratisseur', vague: 1, colonne: 1, niveau: 20,
   });

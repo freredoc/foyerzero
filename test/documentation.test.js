@@ -328,9 +328,19 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   //                             lieu de passer pour un rééquilibrage. Le
   //                             générateur IMPORTE la formule, il ne la
   //                             recopie pas.
+  //   `batiments-de-production.js` — la Caserne, le Dépôt de véhicules et
+  //                             l'Aérodrome posés sur une base de montage, au
+  //                             lot PRODUCTION-EN-DÉFENSE. La règle
+  //                             « infanterie inconstructible sans caserne » est
+  //                             descendue dans `sim/state.js` : tout montage qui
+  //                             pose une UNITÉ doit désormais porter le bâtiment
+  //                             de son châssis. SIX fichiers en ont eu besoin le
+  //                             même jour, comme le décodeur PNG — six recopies
+  //                             auraient divergé au premier déplacement d'un
+  //                             bâtiment.
   const connus = new Set([
     'prereglages-lot3a.js', 'png-rgba.js', 'temoins-bases-0.js', 'aplatir-sauvegarde.js',
-    'temoins-combat.js', 'temoins-couts.js',
+    'temoins-combat.js', 'temoins-couts.js', 'batiments-de-production.js',
   ]);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));

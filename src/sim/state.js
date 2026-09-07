@@ -39,6 +39,7 @@ import {
 } from './economie-base.js';
 import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, coutDeMontee, remboursementDuNiveau,
+  messageSansBatiment,
 } from '../data/base.js';
 import {
   GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT, APRES_RAID,
@@ -1457,6 +1458,56 @@ function verifierForce(base, force) {
 }
 
 /**
+ * Le refus qu'oppose un bâtiment de production manquant, ou `null`.
+ *
+ * ⚠⚠ ELLE EST LA RÈGLE DU LOT PRODUCTION-EN-DÉFENSE, ET SON EXISTENCE EST TOUT
+ * LE LOT. Ethan, 07/09, point 11 : « Je ne peux pas construire un fusilier alors
+ * que je n'ai pas de caserne — c'est vrai pour l'armée, faux en défense. » Il
+ * avait raison, et la mesure l'a confirmé : `batimentDeProductionManquant` était
+ * juste, mais elle n'était lue QUE par les deux palettes. En Offense la vignette
+ * DISPARAÎT, donc le geste est impossible ; en Défense elle reste GRISÉE — et
+ * rien derrière la vignette ne refusait le geste. La règle descend donc ici, où
+ * le geste est jugé, et elle vaut pour les DEUX forces.
+ *
+ * ⚠⚠ ELLE N'EST PAS DANS `problemesDeLEffectif`, ET C'EST LE POINT DÉLICAT DU
+ * LOT. Ce voisin-là est partagé avec `verifierForce`, donc avec le CHARGEMENT :
+ * l'y écrire aurait refusé toute sauvegarde portant une garnison de Fusiliers
+ * dont la Caserne est tombée au raid — une partie rendue injouable pour une
+ * faute que le joueur n'a pas commise. Le commentaire de
+ * `batimentDeProductionManquant` l'annonçait mot pour mot. La règle garde le
+ * GESTE, jamais le chargement ; c'est aussi ce qui évite toute migration, aucune
+ * sauvegarde ne changeant de forme.
+ *
+ * ⚠ ET ELLE N'A PAS BESOIN DE `CODES_TOLERES_AU_CHARGEMENT`. La tolérance est le
+ * remède quand la règle est écrite dans le chemin commun ; ici elle ne l'est
+ * pas, donc l'ensemble reste à deux codes et le test qui le fige ne bouge pas.
+ * Une règle absente du chemin de chargement vaut mieux qu'une règle présente et
+ * filtrée : la seconde tient par un `Set` qu'on peut vider par mégarde.
+ *
+ * ⚠ LES OUVRAGES FIXES NE SONT PAS CONCERNÉS, et c'est
+ * `batimentDeProductionManquant` qui le dit, pas un test écrit ici. Merlon,
+ * ronce, herse, casemate, créneau, batterie, faucheuse, mortier et harpon ne
+ * sont pas dans `UNITES`, n'ont pas de châssis, et elle rend `null` pour eux :
+ * un mur n'a jamais eu besoin d'une caserne.
+ *
+ * ⚠ LA PHRASE VIENT DE `messageSansBatiment`, JAMAIS D'UNE SECONDE ÉCRITURE.
+ * C'est la même que celle des deux palettes, et elle a descendu dans
+ * `data/base.js` pour que `sim/` puisse la lire sans importer de `ui/`.
+ *
+ * @param {Etat} etat
+ * @param {string} uniteId
+ * @returns {{code: string, message: string}|null}
+ */
+function problemeDuBatimentDeProduction(etat, uniteId) {
+  const manque = batimentDeProductionManquant(etat, uniteId);
+  if (manque === null) return null;
+  return {
+    code: 'sans-batiment-de-production',
+    message: messageSansBatiment(BASE_BATIMENTS[manque].nom.joueur, UNITES[uniteId].chassis),
+  };
+}
+
+/**
  * Ce qui empêcherait de poser cette pièce là. Liste vide = pose légale.
  *
  * ⚠ LES RÈGLES DE JEU NE SONT PAS ICI, ET C'EST LA MÊME FRONTIÈRE QUE PARTOUT.
@@ -1467,6 +1518,22 @@ function verifierForce(base, force) {
  * module garde ce que la SAUVEGARDE doit garantir ; l'appelant demande le reste
  * à l'éditeur avant d'appeler.
  *
+ * ⚠⚠ LE BÂTIMENT DE PRODUCTION EST L'EXCEPTION, ET IL EST ICI PARCE QU'IL NE
+ * POUVAIT ÊTRE NULLE PART AILLEURS — lot PRODUCTION-EN-DÉFENSE, 07/09. Les
+ * règles ci-dessus vivent dans les éditeurs parce que les éditeurs les
+ * APPLIQUENT : `ui/defense.js` refuse une pose hors budget, et l'écran passe par
+ * lui. Celle-ci ne se lisait que dans les PALETTES, qui grisent une vignette
+ * sans rien refuser derrière elle ; il n'existait donc aucun endroit où le geste
+ * était jugé. La mettre dans un éditeur l'aurait écrite DEUX fois — Défense et
+ * Arsenal — pour une règle qu'Ethan a énoncée UNE. Elle est donc dans le chemin
+ * que les deux forces partagent, et elle n'y est pas seule : les problèmes
+ * d'emplacement et d'occupation la précèdent déjà.
+ *
+ * ⚠ ELLE VIENT APRÈS, ET L'ORDRE N'EST PAS COSMÉTIQUE. Une case hors grille ou
+ * déjà occupée se lit AVANT le bâtiment manquant : le joueur doit lire ce qui le
+ * bloque là où il vise, pas la liste de tout ce qui le bloquerait. C'est
+ * l'ordre des trois raisons des deux palettes, dans le même sens.
+ *
  * @param {Etat} etat
  * @param {string} force 'garnison' ou 'armee'
  * @param {Effectif} piece sans `degatsMilli` — une pièce posée est intacte
@@ -1476,10 +1543,13 @@ export function problemesDeLaPoseDEffectif(etat, force, piece) {
   const f = exigerForce(force);
   const base = baseCourante(etat);
   exigerChamp(base, f.champ);
-  return problemesDeLEffectif(
+  const problemes = problemesDeLEffectif(
     force, base[f.champ], { degatsMilli: 0, ...defautDActivite(f), ...piece },
     null, base.obstacles?.cases ?? [],
   );
+  const sansBatiment = problemeDuBatimentDeProduction(etat, piece.id);
+  if (sansBatiment !== null) problemes.push(sansBatiment);
+  return problemes;
 }
 
 /**
@@ -1557,6 +1627,20 @@ export function retirerEffectif(etat, force, index) {
  * la pièce ne se fait pas obstacle à elle-même. Le refuser obligerait l'écran à
  * connaître cette exception et priverait le joueur de toute annulation.
  *
+ * ⚠⚠ LE BÂTIMENT DE PRODUCTION GARDE AUSSI CE CHEMIN — lot PRODUCTION-EN-DÉFENSE,
+ * et c'est le brief qui le nomme : « poser, mais aussi DÉPLACER, PERMUTER et
+ * tout ce qui fait entrer une pièce dans une force ; en oublier un laisserait
+ * exactement le trou qu'on referme ». Un chemin de geste laissé ouvert est un
+ * chemin par lequel l'écran contourne la règle sans le savoir.
+ *
+ * ⚠⚠ ET LA CONSÉQUENCE SE DÉCLARE, PARCE QU'ELLE EST RÉELLE ET QU'ELLE N'EST PAS
+ * DANS L'ÉNONCÉ D'ETHAN. Une Caserne qui tombe au raid FIGE sur place les
+ * Fusiliers déjà posés : ils restent, ils se chargent, ils se battent, ils se
+ * retirent — ils ne se déplacent plus tant que la Caserne n'est pas relevée. La
+ * pose, elle, était le trou mesuré. Si Ethan veut que le déplacement reste
+ * libre, c'est CET appel-ci qui tombe, et lui seul : la règle est écrite une
+ * fois, dans `problemeDuBatimentDeProduction`.
+ *
  * @param {Etat} etat
  * @param {string} force
  * @param {number} index
@@ -1572,9 +1656,12 @@ export function problemesDuDeplacementDEffectif(etat, force, index, position) {
   if (piece === undefined) {
     throw new RangeError(`deplacerEffectif : indice ${index} hors de la ${f.quoi}`);
   }
-  return problemesDeLEffectif(
+  const problemes = problemesDeLEffectif(
     force, base[f.champ], { ...piece, ...position }, index, base.obstacles?.cases ?? [],
   );
+  const sansBatiment = problemeDuBatimentDeProduction(etat, piece.id);
+  if (sansBatiment !== null) problemes.push(sansBatiment);
+  return problemes;
 }
 
 /**
@@ -1718,9 +1805,17 @@ export function problemesDeLaPermutationDEffectif(etat, force, indexA, indexB) {
     return piece;
   });
   const obstacles = base.obstacles?.cases ?? [];
+  // ⚠⚠ LE BÂTIMENT DE PRODUCTION EST DEMANDÉ POUR LES DEUX PIÈCES, ET LE
+  // DÉDOUBLONNAGE JUSTE DESSOUS EST CE QUI REND LA PHRASE UNE FOIS. Permuter
+  // deux Fusiliers sans Caserne produit littéralement le même refus deux fois ;
+  // permuter un Fusilier et un Éclaireur en produit DEUX, un par bâtiment
+  // manquant, et le joueur doit lire les deux. C'est exactement la règle du
+  // couple code+message écrite plus haut, sans exception à ajouter.
   const tous = [
     ...problemesDeLEffectif(force, apres, apres[indexA], indexA, obstacles),
     ...problemesDeLEffectif(force, apres, apres[indexB], indexB, obstacles),
+    ...[a, b].map((piece) => problemeDuBatimentDeProduction(etat, piece.id))
+      .filter((p) => p !== null),
   ];
   const vus = new Set();
   return tous.filter((p) => {
@@ -2029,6 +2124,14 @@ export function niveauDuChantier(etat) {
  * tombée au raid — et refuser le chargement rendrait la partie injouable pour
  * une faute que le joueur n'a pas commise. On SIGNALE au geste, le joueur
  * purge. C'est aussi ce qui évite une migration : aucune sauvegarde ne change.
+ *
+ * ⚠⚠ « AU GESTE » EST DEVENU VRAI LE 07/09, ET ÇA NE L'ÉTAIT PAS AVANT. Cette
+ * fonction répondait juste, mais ses SEULS lecteurs étaient les deux palettes —
+ * qui grisent une vignette sans rien refuser derrière elle. Ethan, point 11 :
+ * « je ne peux pas construire un fusilier alors que je n'ai pas de caserne —
+ * c'est vrai pour l'armée, faux en défense. » `problemeDuBatimentDeProduction`,
+ * plus haut dans ce fichier, est le lecteur qui manquait ; il sert les trois
+ * chemins de geste et les deux forces.
  *
  * @param {object} etat
  * @param {string} uniteId clé de `UNITES`, ou d'un ouvrage fixe de la défense
