@@ -17,6 +17,8 @@ import {
 } from '../sim/transfert.js';
 import { capacitesMilli } from '../sim/economie-base.js';
 import { TRANSFERT } from '../data/sites.js';
+// ⚠ LES PICTOGRAMMES SE DEMANDENT — voir `./pictogramme.js`.
+import { PICTOGRAMMES, creerPictogramme } from './pictogramme.js';
 
 /** Le millier qui sépare les unités des milli-unités. */
 const MILLE = 1000;
@@ -126,12 +128,19 @@ export function initialiserPanneauDeTransfert(doc, { apresTransfert } = {}) {
     }
   }
 
-  function ligneDeBilan(quoi, valeur, classe) {
+  function ligneDeBilan(quoi, valeur, classe, picto = null) {
     const l = doc.createElement('div');
     l.className = classe === undefined ? 'ligne' : `ligne ${classe}`;
     const q = doc.createElement('span');
     q.className = 'quoi';
-    q.textContent = quoi;
+    // ⚠⚠ DEUX LIGNES SUR QUATRE PORTENT UN SIGNE, ET CE SONT LES DEUX QUI
+    // BOUGENT LE STOCK. La taxe RETIRE en chemin, le reçu AJOUTE à l'arrivée ;
+    // la distance et la place ne sont ni l'un ni l'autre. C'est le seul endroit
+    // du jeu où le plus et le moins disent une OPÉRATION plutôt qu'un réglage —
+    // le zoom se fait au doigt, arbitré le 30/08 (« pas de zoom fixe avec + − »),
+    // et il n'y a donc aucun bouton de pas dans la page.
+    if (picto !== null) q.append(creerPictogramme(doc, picto));
+    q.append(doc.createTextNode(quoi));
     const b = doc.createElement('b');
     b.textContent = valeur;
     l.append(q, b);
@@ -161,10 +170,10 @@ export function initialiserPanneauDeTransfert(doc, { apresTransfert } = {}) {
     bilan.textContent = '';
     bilan.append(
       ligneDeBilan('Distance', `${vue.cases} cases`),
-      ligneDeBilan('Taxe', `${vue.taxePct} %`),
+      ligneDeBilan('Taxe', `${vue.taxePct} %`, undefined, PICTOGRAMMES.moins),
       ligneDeBilan('Place à l\'arrivée', String(vue.place)),
       // ⚠ LE REÇU EN DERNIER ET EN GROS : c'est le chiffre qui décide.
-      ligneDeBilan('Il arrivera', String(vue.recu), 'recu'),
+      ligneDeBilan('Il arrivera', String(vue.recu), 'recu', PICTOGRAMMES.plus),
     );
     refus.textContent = vue.problemes.map((p) => p.message).join(' ; ');
     agir.disabled = !vue.possible;

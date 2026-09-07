@@ -1131,8 +1131,14 @@ function fauxDocumentOffense() {
 
 /** Les trente-six cases de la grille des vagues, à plat. */
 function casesDesVagues(parId) {
+  // ⚠⚠ LE TITRE D'UNE VAGUE A DES ENFANTS DEPUIS LE LOT CÂBLAGE, 07/09, ET
+  // CETTE FONCTION DESCENDAIT DEDANS. Le `h2` ne portait que du texte ; il porte
+  // maintenant son pictogramme et un nœud de texte, et le balayage à plat
+  // rendait deux nœuds de plus par vague — dont un sans `dataset`, d'où un
+  // « lecture de `vague` sur `undefined` » à des lieues de sa cause. On ne
+  // descend donc plus que dans la RANGÉE d'emplacements, qui est nommée.
   return parId.get('offense-vagues').children
-    .flatMap((vague) => vague.children)
+    .flatMap((vague) => vague.children.filter((c) => c.classList.contains('emplacements')))
     .flatMap((rangee) => rangee.children);
 }
 

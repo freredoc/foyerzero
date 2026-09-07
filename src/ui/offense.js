@@ -30,6 +30,9 @@ import {
   messageSansBatiment, raisonDuVerrou,
 } from './arsenal.js';
 import { BASE_BATIMENTS } from '../data/base.js';
+// ⚠ LES PICTOGRAMMES SE DEMANDENT, ILS NE SE NOMMENT PAS ICI — voir
+// `./pictogramme.js`, qui traduit une clé de donnée en nom de sprite.
+import { PICTOGRAMME_DU_CHASSIS, PICTOGRAMMES, creerPictogramme } from './pictogramme.js';
 import {
   pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
   poserEffectif, retirerEffectif, deplacerEffectif, permuterEffectif,
@@ -529,7 +532,13 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     const bloc = doc.createElement('section');
     bloc.className = 'vague';
     const titre = doc.createElement('h2');
-    titre.textContent = vague.titre;
+    // ⚠⚠ LES QUATRE VAGUES SONT CONSTRUITES UNE FOIS, donc le pictogramme aussi.
+    // Le titre ne change jamais — « Vague 1 », « Vague 2 à +30 s » — et c'est ce
+    // qui permet de le composer plutôt que de l'écrire d'un trait.
+    titre.append(
+      creerPictogramme(doc, PICTOGRAMMES.vague),
+      doc.createTextNode(vague.titre),
+    );
     bloc.appendChild(titre);
 
     const rangee = doc.createElement('div');
@@ -868,10 +877,27 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       const vignette = doc.createElement('i');
       poserCouches(vignette, couchesDeLUniteDAssaut(unite.id));
       const nom = doc.createElement('b');
-      nom.textContent = unite.nom;
+      // ⚠⚠ LE CHÂSSIS VIENT DE `UNITES`, PAS DU NOM DE L'UNITÉ. Les trois
+      // familles — infanterie, véhicule, avion — décident déjà de ce qu'une
+      // pièce peut faire et de quel bâtiment la produit ; le pictogramme rend
+      // cette famille lisible d'un coup d'œil dans une palette qui défile.
+      nom.append(creerPictogramme(doc, PICTOGRAMME_DU_CHASSIS[UNITES[unite.id].chassis]));
+      // ⚠ ET LE CADENAS DIT LA MÊME CHOSE QUE LA CLASSE `verrouillee`, EN IMAGE.
+      // La vignette éteinte n'est PAS `disabled` — son toucher dit la raison —,
+      // et le grisé seul se lit mal sur une barre qui défile.
+      if (!unite.disponible) {
+        nom.append(creerPictogramme(doc, PICTOGRAMMES.verrou, 'verrouillée'));
+      }
+      nom.append(doc.createTextNode(unite.nom));
       const cout = doc.createElement('span');
       cout.className = 'cout';
-      cout.textContent = `${unite.points} pts`;
+      // ⚠ LE COÛT EST UNE DÉPENSE DE BUDGET D'ARMÉE, et c'est le même budget que
+      // le compteur du bandeau plafonne. Le pictogramme fait le lien entre la
+      // vignette et la tuile qui compte les points engagés.
+      cout.append(
+        creerPictogramme(doc, PICTOGRAMMES.budget),
+        doc.createTextNode(`${unite.points} pts`),
+      );
       bouton.append(vignette, nom, cout);
       bouton.classList.toggle('choisie', choisie === unite.id);
       palette.appendChild(bouton);

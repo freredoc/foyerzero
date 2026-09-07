@@ -35,6 +35,18 @@ import {
   ORDRE_PALETTE, RETOUR_DEFENSES,
 } from '../data/base.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
+// ⚠⚠ LES PICTOGRAMMES NE SONT PAS NOMMÉS ICI, ILS SONT DEMANDÉS — lot
+// CÂBLAGE, 07/09. `src/ui/pictogramme.js` traduit une clé de DONNÉE en nom de
+// sprite ; écrire un nom d'atlas en clair dans cet écran-ci serait la première
+// ligne à mentir le jour où une ressource change de clé.
+// ⚠ ET CE COMMENTAIRE NE L'ÉCRIT PAS NON PLUS : `CÂB T4` balaye les sources
+// de `src/ui/` à la recherche d'un nom entre guillemets, et il s'est déclenché
+// sur la phrase qui le décrivait. Une garde qui lit ce qu'on écrit à son sujet,
+// vue par l'autre bout — le dépôt raconte déjà le cas pour `viewport-fit`.
+import {
+  PICTOGRAMME_DE_LA_RESSOURCE, PICTOGRAMME_DU_CONTEXTE, PICTOGRAMME_DE_LA_COLONNE,
+  PICTOGRAMME_DE_LA_CATEGORIE, PICTOGRAMMES, creerPictogramme, poserPictogramme,
+} from './pictogramme.js';
 import { majorationsDeProduction } from '../sim/poi.js';
 import {
   debitDuBatiment, productionParRessource, voisinsQualifiants, voisinsQualifiantsParCase,
@@ -1539,6 +1551,11 @@ export function lignesDuPanneau(apercu) {
 
   const production = apercu.production.map((r) => ({
     libelle: LIBELLES_RESSOURCE[r.cle].nom,
+    // ⚠⚠ LE PICTOGRAMME SUIT LA DONNÉE, PAS LE LIBELLÉ. La ligne connaît sa
+    // CLÉ de ressource ; le mot, lui, est déjà dans `LIBELLES_RESSOURCE`. Deux
+    // traductions de la même clé — l'une en mot, l'autre en image — se lisent
+    // côte à côte et ne peuvent pas se contredire.
+    picto: PICTOGRAMME_DE_LA_RESSOURCE[r.cle],
     avant: formaterDebit(r.avantMilli),
     apres: r.apresMilli === null ? null : formaterDebit(r.apresMilli),
   }));
@@ -1576,6 +1593,7 @@ export function lignesDuPanneau(apercu) {
       titre: 'Stockage de la base',
       lignes: apercu.capacites.map((r) => ({
         libelle: LIBELLES_RESSOURCE[r.cle].nom,
+        picto: PICTOGRAMME_DE_LA_RESSOURCE[r.cle],
         avant: formaterUnites(r.avantMilli),
         apres: r.apresMilli === null ? null : formaterUnites(r.apresMilli),
       })),
@@ -1598,6 +1616,11 @@ export function lignesDuPanneau(apercu) {
       titre: 'Ce qu\'il commande',
       lignes: apercu.effets.map((e) => ({
         libelle: e.libelle,
+        // ⚠ SEULES LES DURÉES PORTENT UN PICTOGRAMME, et c'est la `forme` qui
+        // le dit, pas le libellé. Les trois formes sont un entier, une durée et
+        // un diviseur : deux d'entre elles n'ont pas d'image à montrer, et en
+        // inventer une pour remplir la colonne dirait quelque chose de faux.
+        picto: e.forme === 'duree' ? PICTOGRAMMES.temps : null,
         avant: formaterEffet(e.avant, e.forme),
         apres: e.apres === null ? null : formaterEffet(e.apres, e.forme),
       })),
@@ -1609,6 +1632,7 @@ export function lignesDuPanneau(apercu) {
       titre: 'Emplacements ouverts',
       lignes: [{
         libelle: 'Bâtiments posables',
+        picto: PICTOGRAMMES.emplacement,
         avant: formaterEntier(apercu.emplacements.avant),
         apres: apercu.emplacements.apres === null
           ? null : formaterEntier(apercu.emplacements.apres),
@@ -1633,6 +1657,10 @@ export function lignesDuPanneau(apercu) {
 
   return {
     titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
+    // ⚠ LE TITRE PORTE TOUJOURS « · niv. N », DONC IL PORTE LE PICTOGRAMME DU
+    // NIVEAU. Les deux fiches — un bâtiment, une pièce — le composent de la même
+    // façon, et c'est la seule grandeur que TOUTES les deux annoncent.
+    picto: PICTOGRAMMES.niveau,
     sections,
     // ⚠ `possible` NE DÉSACTIVE RIEN. Il décide d'une teinte, pas d'un
     // `disabled` : « un indice n'est pas une interdiction » (CLAUDE.md §4), et
@@ -1682,12 +1710,18 @@ export function lignesDeLaPiece(apercu) {
 
   const combat = [{
     libelle: 'Points de vie',
+    picto: PICTOGRAMMES.pv,
     avant: formaterEntier(apercu.pv),
     apres: apercu.pvVise === null ? null : formaterEntier(apercu.pvVise),
   }];
   for (const d of apercu.degats) {
     combat.push({
       libelle: d.libelle,
+      // ⚠⚠ LA CIBLE VIENT DE LA COLONNE DE MATRICE, ET C'EST TOUT L'INTÉRÊT.
+      // Les trois lignes se disent MÊME À ZÉRO — « contre les véhicules : — »
+      // apprend qu'une Batterie ne touche que ce qui vole — et le pictogramme
+      // rend cette lecture immédiate : trois silhouettes, trois colonnes.
+      picto: PICTOGRAMME_DE_LA_COLONNE[d.colonne],
       // ⚠ UN ZÉRO SE DIT « — », JAMAIS « 0 ». « 0 par tir » se lit comme un
       // nombre qu'on pourrait faire monter ; le tiret dit qu'il n'y a rien.
       avant: d.avant === 0 ? '—' : formaterEntier(d.avant),
@@ -1701,7 +1735,15 @@ export function lignesDeLaPiece(apercu) {
     // ⚠ LA VIRGULE, PAS LE POINT : `String(2.5)` rend « 2.5 », qui est de
     // l'anglais. Le dépôt écrit ses décimales en français partout ailleurs.
     { libelle: 'Portée', avant: `${String(apercu.portee).replace('.', ',')} cases`, apres: null },
-    { libelle: 'Points engagés', avant: formaterEntier(apercu.points), apres: null },
+    // ⚠ LES POINTS ENGAGÉS SONT UNE DÉPENSE DE BUDGET, et c'est le même
+    // budget que le compteur du bandeau plafonne. Le pictogramme fait le lien
+    // entre la fiche d'une pièce et la tuile qui compte les points de sa force.
+    {
+      libelle: 'Points engagés',
+      picto: PICTOGRAMMES.budget,
+      avant: formaterEntier(apercu.points),
+      apres: null,
+    },
   ];
   // Une structure ne se déplace pas : la ligne n'aurait rien à dire.
   if (apercu.vitesse !== null) {
@@ -1709,6 +1751,7 @@ export function lignesDeLaPiece(apercu) {
   }
   fiche.push({
     libelle: 'État',
+    picto: PICTOGRAMMES.degats,
     avant: apercu.degatsSubisMilliemes === 0
       ? 'intacte'
       : `${formaterEntier(Math.round(apercu.degatsSubisMilliemes / 10))} % de dégâts`,
@@ -1718,6 +1761,11 @@ export function lignesDeLaPiece(apercu) {
 
   return {
     titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
+    // ⚠⚠ LA MÊME CLÉ QUE LA FICHE D'UN BÂTIMENT, ET `ERGO T7 bis` LE MESURE.
+    // Les deux vues doivent avoir EXACTEMENT les mêmes clés — c'est ce qui
+    // permet un seul rendu —, donc ajouter `picto` d'un côté seulement fait
+    // rougir la suite. C'est arrivé, et c'est ce test-là qui l'a dit.
+    picto: PICTOGRAMMES.niveau,
     sections,
     // ⚠ `possible` NE DÉSACTIVE RIEN, comme pour les bâtiments : le refus
     // chiffré du moteur en apprend plus au joueur qu'un bouton mort.
@@ -1761,7 +1809,14 @@ export function lignesDeLaPiece(apercu) {
  * @param {object} vue ce que rend `lignesDuPanneau` ou `lignesDeLaPiece`
  */
 export function peindreVueDuPanneau(doc, elements, vue) {
-  elements.titre.textContent = vue.titre;
+  // ⚠⚠ LE TITRE SE RECOMPOSE, IL NE S'ÉCRIT PLUS D'UN TRAIT. `textContent`
+  // vide les enfants : poser le pictogramme AVANT lui le ferait disparaître à la
+  // peinture suivante, ce qui ne lève pas et ne se voit qu'à l'œil.
+  elements.titre.textContent = '';
+  if (vue.picto !== undefined && vue.picto !== null) {
+    elements.titre.append(creerPictogramme(doc, vue.picto));
+  }
+  elements.titre.append(doc.createTextNode(vue.titre));
   elements.corps.textContent = '';
   for (const section of vue.sections) {
     const bloc = doc.createElement('div');
@@ -1801,7 +1856,14 @@ export function peindreVueDuPanneau(doc, elements, vue) {
       ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
       const quoi = doc.createElement('span');
       quoi.className = 'quoi';
-      quoi.textContent = l.libelle;
+      // ⚠⚠ LE PICTOGRAMME EST DÉCORATIF ICI, ET IL EST DIT COMME TEL. Le
+      // libellé est juste à côté ; un `aria-label` ferait lire deux fois la même
+      // chose au lecteur d'écran. `creerPictogramme` pose `aria-hidden` faute de
+      // libellé, et c'est le cas par défaut parce que c'est le cas courant.
+      if (l.picto !== undefined && l.picto !== null) {
+        quoi.append(creerPictogramme(doc, l.picto));
+      }
+      quoi.append(doc.createTextNode(l.libelle));
       const avant = doc.createElement('b');
       avant.textContent = l.avant;
       ligne.append(quoi, avant);
@@ -1825,6 +1887,13 @@ export function peindreVueDuPanneau(doc, elements, vue) {
   const note = doc.createElement('em');
   note.className = 'note';
   note.textContent = vue.bouton.note;
+  // ⚠⚠ LA FLÈCHE VERTE NE PARAÎT QUE SI L'AMÉLIORATION EXISTE. Au plafond, le
+  // bouton dit « Niveau maximum » : une flèche montante à côté de cette phrase
+  // promettrait le geste qu'elle annonce impossible. C'est la même discipline
+  // que `possible`, qui peint une teinte sans désactiver le bouton.
+  if (vue.bouton.possible) {
+    elements.bouton.append(creerPictogramme(doc, PICTOGRAMMES.ameliorer));
+  }
   elements.bouton.append(libelle, note);
   elements.bouton.classList.toggle('impossible', !vue.bouton.possible);
 }
@@ -2338,6 +2407,12 @@ export const TERRAINS = {
       { genre: 'batiment', id: piece.id, proprietaire: 'joueur', camp: 'defense' },
     ),
     familleDe: familleDuBatiment,
+    // ⚠⚠ UN BÂTIMENT N'A PAS DE CATÉGORIE DE DÉFENSE, ET LE TERRAIN LE DIT
+    // PLUTÔT QUE L'ÉCRAN — lot CÂBLAGE, 07/09. La palette est la MÊME fonction
+    // pour les deux bandes ; un `terrainCourant() === 'defense'` écrit là-bas
+    // serait le cas particulier que cette table existe pour éviter, et qu'un
+    // test refuse déjà pour les gestes.
+    categorieDe: () => null,
     problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(etat, id, rangee, colonne),
     poser: (etat, id, rangee, colonne) => poserBatiment(etat, id, rangee, colonne),
     problemesDuDeplacement: (etat, index, rangee, colonne) => (
@@ -2414,6 +2489,12 @@ export const TERRAINS = {
     // libre pour distinguer un mur d'une tourelle. Le sigle, lui, les distingue
     // déjà. Ouvrir une teinte serait une décision de style, pas de code.
     familleDe: () => 'mil',
+    // ⚠⚠ LES QUATRE CATÉGORIES VIENNENT DE `DEFENSES`, ET LES HUIT UNITÉS DE
+    // GARNISON N'EN ONT AUCUNE. Les dix-sept posables de cette bande viennent de
+    // DEUX tables ; `UNITES` ne porte pas de `type`, donc une escouade en
+    // garnison rend `null` — ce qui est vrai : elle n'est ni un mur, ni une
+    // barrière, ni une tourelle, ni une artillerie.
+    categorieDe: (id) => DEFENSES[id]?.type ?? null,
     problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPoseDEffectif(
       etat, 'garnison', { id, rangee, colonne, niveau: 1 },
     ),
@@ -3322,7 +3403,11 @@ export function initialiserEcranChantier(doc, {
     haut.append(stock, capacite);
     const bas = doc.createElement('div');
     bas.className = 'ligne';
-    bas.append(nom, debit);
+    // ⚠⚠ LE PICTOGRAMME NAÎT AVEC LE BLOC, IL NE SE POSE PAS À CHAQUE IMAGE.
+    // `rafraichir` repasse dix fois par seconde sur ce bandeau : un élément créé
+    // là aurait fait six cents nœuds par minute, sans qu'aucune longueur ne soit
+    // fausse. Ce qui change à l'image est le CHIFFRE, jamais l'icône.
+    bas.append(creerPictogramme(doc, PICTOGRAMME_DE_LA_RESSOURCE[cleRessource]), nom, debit);
     bloc.append(haut, bas);
     bandeauRessources.appendChild(bloc);
     champsRessource.set(cleRessource, { stock, capacite, debit });
@@ -3358,7 +3443,7 @@ export function initialiserEcranChantier(doc, {
   hautAttaque.append(attaquePoints, attaquePlafond);
   const basAttaque = doc.createElement('div');
   basAttaque.className = 'ligne';
-  basAttaque.append(attaqueNom);
+  basAttaque.append(creerPictogramme(doc, PICTOGRAMMES.pointsAttaque), attaqueNom);
   blocAttaque.append(hautAttaque, basAttaque);
   bandeauRessources.appendChild(blocAttaque);
 
@@ -3393,7 +3478,13 @@ export function initialiserEcranChantier(doc, {
   hautEmplacements.append(emplacementsPoses, emplacementsOuverts);
   const basEmplacements = doc.createElement('div');
   basEmplacements.className = 'ligne';
-  basEmplacements.append(emplacementsNom);
+  // ⚠⚠ CELUI-CI CHANGE DE DESSIN AVEC LA BANDE, ET C'EST LE SEUL. La tuile dit
+  // « Emplac. », « Pts déf. » ou « Pts off. » selon ce qu'on regarde ; laisser
+  // l'icône des emplacements sous « Pts déf. » ferait dire à l'image le contraire
+  // du mot. Le nœud, lui, reste le même — c'est son CADRAGE que `majCompteur`
+  // déplace, deux propriétés, sans rien créer.
+  const pictoCompteur = creerPictogramme(doc, PICTOGRAMME_DU_CONTEXTE.batiments);
+  basEmplacements.append(pictoCompteur, emplacementsNom);
   blocEmplacements.append(hautEmplacements, basEmplacements);
   bandeauRessources.appendChild(blocEmplacements);
 
@@ -3413,7 +3504,17 @@ export function initialiserEcranChantier(doc, {
   // peinture, donc repeindre suffit à les faire suivre — mais `baseCourante`
   // est une décision du joueur, au même titre qu'une pose : la perdre parce que
   // l'application a été tuée serait la lui reprendre en silence.
-  for (const [bouton, pas] of [['navigation-precedente', -1], ['navigation-suivante', 1]]) {
+  // ⚠⚠ LES DEUX FLÈCHES DEVIENNENT DES PICTOGRAMMES — lot CÂBLAGE, 07/09.
+  // Elles portaient les glyphes `◀` et `▶`, dont le dessin dépend de la police
+  // de l'appareil. Elles sont SEULES dans leur bouton : le pictogramme porte donc
+  // un `aria-label`, sans quoi la bascule n'aurait plus de nom accessible du
+  // tout — c'est la seule paire du câblage dans ce cas.
+  for (const [bouton, pas, nom, dit] of [
+    ['navigation-precedente', -1, PICTOGRAMMES.precedent, 'Base précédente'],
+    ['navigation-suivante', 1, PICTOGRAMMES.suivant, 'Base suivante'],
+  ]) {
+    $(bouton).textContent = '';
+    $(bouton).append(creerPictogramme(doc, nom, dit));
     $(bouton).addEventListener('click', () => {
       if (etatCourant === null || etatCourant.bases.length < 2) return;
       basculerVersLaBase(
@@ -3628,7 +3729,9 @@ export function initialiserEcranChantier(doc, {
     const contexte = ecranCourant === 'chantier' ? bandeCourante : ecranCourant;
     // La bande « déploiement » n'a pas de bouton et n'a pas de compteur à elle :
     // on retombe sur les bâtiments plutôt que de lever pour un défilement.
-    const vue = compteurDeContexte(etatCourant, CONTEXTES[contexte] === undefined ? 'batiments' : contexte);
+    const cle = CONTEXTES[contexte] === undefined ? 'batiments' : contexte;
+    const vue = compteurDeContexte(etatCourant, cle);
+    poserPictogramme(pictoCompteur, PICTOGRAMME_DU_CONTEXTE[cle]);
     emplacementsNom.textContent = vue.libelle;
     emplacementsPoses.textContent = vue.valeur;
     emplacementsOuverts.textContent = vue.capacite;
@@ -3913,6 +4016,18 @@ export function initialiserEcranChantier(doc, {
     allerALaBande(basculeDeBande(bandeCourante).cible);
   });
 
+  // ⚠⚠ LE BOUTON « RÉPARER » SE RECOMPOSE POUR PRENDRE SON PICTOGRAMME. Il
+  // n'a pas d'enfant nommé — à la différence d'« Améliorer », qui porte un `em`
+  // d'identifiant `chantier-ameliorer-cible` que le vider ferait disparaître de
+  // la page. Le geste d'amélioration porte sa flèche verte dans le PANNEAU, où
+  // le bouton se reconstruit déjà de toute façon.
+  const boutonReparer = $(ACTIONS.reparer.bouton);
+  boutonReparer.textContent = '';
+  boutonReparer.append(
+    creerPictogramme(doc, PICTOGRAMMES.reparation),
+    doc.createTextNode(ACTIONS.reparer.libelle),
+  );
+
   // --- la palette des posables -----------------------------------------------
   const bandeauPalette = $('chantier-palette');
 
@@ -3967,7 +4082,18 @@ export function initialiserEcranChantier(doc, {
         ));
       }
       const nom = doc.createElement('b');
-      nom.textContent = posable.nom;
+      // ⚠⚠ DEUX PICTOGRAMMES POSSIBLES, ET ILS DISENT DEUX CHOSES DIFFÉRENTES.
+      // La CATÉGORIE — mur, barrière, tourelle, artillerie — vient de la donnée
+      // et ne vaut que sur la bande Défense ; le CADENAS dit qu'on ne peut pas
+      // poser cette pièce maintenant, et vaut sur les deux bandes. Un bâtiment
+      // n'a pas de catégorie : `PICTOGRAMME_DE_LA_CATEGORIE` rend `undefined`, et
+      // la ligne ne pose rien plutôt que d'inventer une famille.
+      const categorie = PICTOGRAMME_DE_LA_CATEGORIE[terrain.categorieDe(posable.id)];
+      if (categorie !== undefined) nom.append(creerPictogramme(doc, categorie));
+      if (posable.verrouille) {
+        nom.append(creerPictogramme(doc, PICTOGRAMMES.verrou, 'verrouillé'));
+      }
+      nom.append(doc.createTextNode(posable.nom));
       emplacement.append(vignette, nom);
       emplacement.addEventListener('click', () => choisirPosable(posable.id));
       bandeauPalette.appendChild(emplacement);

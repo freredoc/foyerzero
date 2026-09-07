@@ -3201,6 +3201,14 @@ function faireElement(tag, doc = null) {
     hidden: false,
     children: [],
     style: {},
+    // ⚠⚠ `setAttribute` ARRIVE AVEC LES PICTOGRAMMES — lot CÂBLAGE, 07/09.
+    // `creerPictogramme` pose `aria-hidden` sur un pictogramme décoratif et
+    // `role` + `aria-label` sur un pictogramme qui parle seul ; un faux qui ne
+    // sait pas les recevoir ferait tomber l'écran pour une raison qui ne le
+    // regarde pas. Les attributs sont RELUS par `RECH-C T1`, sans quoi ce serait
+    // une méthode qui avale ce qu'on lui donne.
+    attributs: {},
+    setAttribute(nom, valeur) { el.attributs[nom] = String(valeur); },
     clientWidth: 0,
     scrollLeft: 0,
     classList: {

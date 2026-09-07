@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.18 · build 119.
+Dernière révision : **07/09/2026**, version 0.99.19 · build 120.
 
 ---
 
@@ -42,7 +42,68 @@ Dernière révision : **07/09/2026**, version 0.99.18 · build 119.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot PICTOGRAMMES), à confronter :**
+**Référence au 07/09/2026 (après le lot CÂBLAGE-PICTOGRAMMES), à confronter :**
+`npm test` → **1323 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 254 664 octets**, 0 référence externe. Coût **+238 540 octets**, mesuré poste
+par poste contre le livrable du lot précédent : **images +233 940 · JavaScript
++2 901 · feuille +1 699 · balisage +0 · audio +0**, et la somme des cinq postes
+tombe EXACTEMENT sur le total — **296 lignes `data:` avant, 297 après ; 291 URI
+avant, 292 après**. Borne T10 inchangée à 9 300 000, marge **1 045 336 octets,
+11,24 %**. Le lot touche `src/index.src.html`, `tools/build.js`, un fichier NEUF
+`src/ui/pictogramme.js`, et cinq écrans — `chantier`, `offense`, `recherche`,
+`raid`, `transfert`.
+⚠⚠ **ETHAN, 07/09 : « FAIS TOUT D'UN SEUL COUP, LES QUATRE LOTS D'UN COUP. »**
+Le rapport du lot PICTOGRAMMES proposait quatre lots de câblage — bandeau,
+arsenal, modules, chiffres ; ils sont faits ensemble. **Les quarante-six
+pictogrammes sont à l'écran**, et `CÂB T3` mesure les deux sens : aucun n'est
+produit sans être employé, aucun n'est employé sans être dans l'atlas.
+⚠⚠ **UNE SEULE RESSOURCE ENTRE DANS LE LIVRABLE, ET C'EST TOUT LE COÛT.**
+Un fichier n'entre que par un MARQUEUR : `src/index.src.html` déclare
+`--atlas-interface` et `tools/build.js` ajoute la ligne d'inline. Les
+quarante-six pictogrammes posés ensuite ne coûtent RIEN de plus — `.picto` pointe
+la variable une fois, et chaque élément ne porte que son CADRAGE, deux
+propriétés. Recopier l'adresse `data:` par élément l'aurait fait entrer autant de
+fois qu'il y a de pictogrammes à l'écran.
+⚠⚠ **AUCUN ÉCRAN N'ÉCRIT UN NOM DE SPRITE EN DUR, ET `CÂB T4` LE BALAYE.**
+`src/ui/pictogramme.js` traduit une clé de DONNÉE — une ressource, un châssis, un
+type de défense, une colonne de dégâts, un module — en nom de sprite ; `CÂB T2`
+confronte chaque table à la table de données dont elle dépend, dans les deux
+sens. Les quatorze modules sont **dérivés** de leurs clés, pas tabulés : quatorze
+lignes écrites à la main seraient quatorze occasions de se tromper, et c'est le
+risque réel de cette famille.
+⚠ **LA GARDE S'EST DÉCLENCHÉE SUR LA PHRASE QUI LA DÉCRIVAIT.** `CÂB T4`
+cherche un nom de sprite entre guillemets dans `src/ui/` ; le commentaire
+d'import de `chantier.js` en citait un en exemple. C'est le cas que le dépôt
+raconte déjà pour `viewport-fit=cover`, vu par l'autre bout. ⚠ **ET ELLE NE
+RETIENT QUE CE QUI EST DANS L'ATLAS** : les sons du pack portent le même préfixe,
+et `ui/session.js` en nomme trois en clair, comme il doit.
+⚠⚠ **DEUX HARNAIS DE TEST ONT DÛ APPRENDRE QUELQUE CHOSE, ET AUCUN NE S'EST
+ASSOUPLI.** Le faux document de `recherche.test.js` ne savait pas recevoir
+`setAttribute`, que `creerPictogramme` emploie pour `aria-hidden` et
+`aria-label` ; et `casesDesVagues` d'`offense.test.js` descendait à plat dans les
+enfants d'une vague, donc dans le TITRE, qui porte maintenant un pictogramme et
+un nœud de texte — d'où une « lecture de `vague` sur `undefined` » à des lieues
+de sa cause. Il ne descend plus que dans la rangée d'emplacements, qui est
+nommée.
+⚠ **UN PICTOGRAMME EST DÉCORATIF OU IL PARLE, JAMAIS LES DEUX.** Posé à côté
+de son libellé il porte `aria-hidden` — le lecteur d'écran lirait deux fois la
+même chose ; SEUL dans son bouton — les deux flèches de la bascule entre bases,
+qui remplacent les glyphes `◀` et `▶` — il porte `role` et `aria-label`, sans
+quoi la bascule n'aurait plus de nom accessible. `CÂB T6` mesure les deux cas.
+⚠ **`ui_plus` ET `ui_moins` VONT AU PANNEAU DE TRANSFERT, ET NULLE PART
+AILLEURS.** Ce sont les deux seules lignes du jeu où un signe dit une OPÉRATION :
+la taxe RETIRE en chemin, le reçu AJOUTE à l'arrivée. Il n'existe aucun bouton de
+pas dans la page — le zoom se fait au doigt, arbitré le 30/08, « pas de zoom fixe
+avec + − ».
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Ce lot est entièrement visuel : ce qui est mesuré ici est
+le DOM et les octets, pas l'aspect. Aucun des quarante-six n'a été vu à sa taille
+d'affichage réelle.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ RELANCÉ, ET C'ÉTAIT CONFORME** :
+le câblage ne touche ni `art/`, ni un outil de la chaîne graphique — pas un octet
+d'`art/sprites/` ne change. Son verdict du lot précédent tient.
+
+**Auparavant, après le lot PICTOGRAMMES :**
 `npm test` → **1315 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 016 124 octets**, 0 référence externe. Coût **+911 octets, ENTIÈREMENT EN
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti depuis le lot
@@ -7328,7 +7389,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 13 fi
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
+src/ui/                 les sept écrans, leurs éditeurs et les pictogrammes — 13 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
@@ -7341,6 +7402,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
   son.js                l'adaptateur audio : il joue, il ne décide de rien
+  pictogramme.js        les 46 pictogrammes : une table par famille, un poseur
   ⤷ ⚠⚠ IL DÉCODE PARESSEUSEMENT DEPUIS LE LOT SON-CATALOGUE, ET C'EST LE POINT
     DUR DU CATALOGUE. Un son décodé pèse `durée × 48 000 × 4` : les 263 feraient
     **64,7 Mo** contre 890 417 octets de fichiers. Rien n'est décodé au

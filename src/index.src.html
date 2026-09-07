@@ -515,6 +515,38 @@
     --atlas-tourelle-unite: url('%ATLAS_TOURELLE_UNITE%');
   }
 
+  /* --- les quarante-six pictogrammes d'interface — lot CÂBLAGE, 07/09 -------
+
+     ⚠⚠ LE SEUL ATLAS QUI NE DESSINE PAS LE JEU, MAIS CE QUE L'ÉCRAN DIT. Les
+     neuf autres portent des bâtiments, des unités, du sol ; celui-ci porte des
+     mots — une ressource, un module, un cadenas, une flèche. Il entre dans le
+     livrable ICI, et c'est le seul endroit : le lot PICTOGRAMMES l'avait cousu
+     et indexé sans le poser, faute d'un marqueur, et un fichier n'entre que par
+     un marqueur.
+
+     ⚠⚠ ET LE FOND EST DANS LA RÈGLE, PAS DANS LE JS. Un pictogramme est un
+     `<span>` vide qui ne porte QUE son cadrage — deux propriétés écrites par
+     `poserPictogramme`. Recopier l'adresse en base64 sur chaque élément la
+     ferait entrer autant de fois qu'il y a de pictogrammes à l'écran ; c'est
+     très exactement le calcul qui a mis les quatre atlas ci-dessus dans une
+     variable plutôt que dans une balise.
+
+     ⚠ `1.15em` DE CÔTÉ, ET IL SUIT LE TEXTE. Un pictogramme accompagne un
+     libellé : lui donner une taille en pixels le désaccorderait du mot dès que
+     la ligne change de corps. `vertical-align` le pose sur la ligne de base du
+     texte plutôt qu'au-dessus.
+
+     ⚠ `flex: none` PARCE QUE LA MOITIÉ DE SES HÔTES SONT DES `flex`. Sans
+     lui, un pictogramme posé dans une ligne serrée se ferait comprimer à zéro
+     de large et disparaîtrait sans erreur. */
+  .picto {
+    display: inline-block; flex: none;
+    width: 1.15em; height: 1.15em; vertical-align: -0.2em;
+    background-image: var(--atlas-interface);
+    background-repeat: no-repeat;
+  }
+  :root { --atlas-interface: url('%ATLAS_INTERFACE%'); }
+
   /* La page de jeu : en-tête commun, écran du moment, barre du bas commune.
      ⚠ `#jeu` EXISTE POUR LE BANC. Il remplaçait deux écrans nommés un par un ;
      maintenant qu'il y en a trois et deux barres partagées, il en cache UN. */

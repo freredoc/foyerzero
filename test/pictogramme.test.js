@@ -18,13 +18,23 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decoderRgba } from './png-rgba.js';
 
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { MODULES } from '../src/data/modules.js';
+import { DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
+import {
+  ACCORDS, CLASSE_PICTOGRAMME, PICTOGRAMME_DE_LA_CATEGORIE, PICTOGRAMME_DE_LA_COLONNE,
+  PICTOGRAMME_DE_LA_RESSOURCE, creerPictogramme, pictogrammeDuModule, tousLesPictogrammes,
+} from '../src/ui/pictogramme.js';
+import {
+  apercuDeLaPiece, apercuDuBatiment, lignesDeLaPiece, lignesDuPanneau,
+} from '../src/ui/chantier.js';
+import { creerEtat } from '../src/sim/state.js';
+import { baseCourante } from '../src/sim/base-courante.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SPRITES = join(RACINE, 'art', 'sprites');
@@ -67,6 +77,24 @@ const PICTOGRAMMES = {
 const GRILLES = [64, 128];
 
 const TOUS = Object.values(PICTOGRAMMES).flat();
+
+/**
+ * Un élément assez complet pour ce que `creerPictogramme` en fait — et rien de
+ * plus.
+ *
+ * ⚠ IL PORTE « CE QUE LE CODE EMPLOIE VRAIMENT », comme les cinq autres faux
+ * documents du dépôt : `className`, `dataset`, `style` et `setAttribute`. Un
+ * faux plus riche laisserait passer un poseur qui emploierait autre chose.
+ */
+function fauxDocument() {
+  return {
+    createElement() {
+      const el = { className: '', dataset: {}, style: {}, attributs: {} };
+      el.setAttribute = (nom, valeur) => { el.attributs[nom] = String(valeur); };
+      return el;
+    },
+  };
+}
 
 function fichiersDe(grille) {
   return readdirSync(join(INTERFACE, String(grille)))
@@ -341,30 +369,28 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 8 016 124 octets, la marge sur la borne T10 est de 13,80 %', () => {
-  // ⚠⚠ CE LOT NE FAIT PAS ENTRER UNE IMAGE DANS LE LIVRABLE, ET C'EST LA
-  // MESURE QUI COMPTE. Le brief attendait « le plus gros ajout d'images depuis
-  // longtemps » ; mesuré, l'ajout vaut **+911 octets**, et le compte de `data:`
-  // ne bouge pas d'un : **296 avant, 296 après**. La raison est mécanique et
-  // elle est écrite dans `tools/build.js` : un fichier n'entre que par un
-  // MARQUEUR, et un marqueur se pose dans la page, c'est-à-dire dans `src/ui/`,
-  // où ce lot n'écrit pas une ligne (§6 du brief). Les 911 octets sont donc du
-  // JavaScript pur — les quarante-six noms et la grille dans `src/data/atlas.js`.
+test('PIC T7 — le livrable pèse 8 254 664 octets, la marge sur la borne T10 est de 11,24 %', () => {
+  // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
+  // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
+  // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
+  // bougé — 296 lignes, 291 URI. La raison était mécanique : un fichier n'entre
+  // que par un MARQUEUR, et un marqueur se pose dans la page.
   //
-  // ⚠⚠ CE QUI EST DIFFÉRÉ, ET COMBIEN. `atlas-interface-128.webp` pèse
-  // 175 596 octets, soit **234 128 en base64** : c'est ce que le lot de CÂBLAGE
-  // paiera, pas celui-ci. Projection à ce moment-là : 8 250 252 octets, marge
-  // 1 049 748, soit 11,29 % — au-dessus des 10 % dont le brief demandait qu'on
-  // parle. Le rapport le dit ; le chiffre n'est pas caché dans un test.
+  // ⚠⚠ LE CÂBLAGE POSE CE MARQUEUR, ET L'ATLAS ENTRE. Mesuré le 07/09, du lot
+  // PICTOGRAMMES au câblage : **8 016 124 → 8 254 664**, soit **+238 540**.
+  // Ventilé : **images +233 940** — l'atlas d'interface en base64 —,
+  // **JavaScript +2 901**, **feuille +1 699**, **balisage +0**, **audio +0**, et
+  // la somme des cinq postes tombe EXACTEMENT sur le total. Les `data:` passent
+  // de 296 lignes / 291 URI à **297 / 292** : une ressource entre, une seule.
   //
   // ⚠ ET LA MARGE S'ÉCRIT ICI EN CLAIR, pas seulement l'inégalité. Une garde
-  // qui ne dirait que « moins de 9 300 000 » resterait verte en passant de 3 %
+  // qui ne dirait que « moins de 9 300 000 » resterait verte en passant de 11 %
   // de marge à 0,1 % sans que personne ne le voie venir.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 8_016_124;          // mesuré le 07/09, version 0.99.18 · build 119
-  const MARGE = BORNE - MESURE;      // 1 283 876 octets
-  assert.equal(MARGE, 1_283_876);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 13.81);
+  const MESURE = 8_254_664;          // mesuré le 07/09, version 0.99.19 · build 120
+  const MARGE = BORNE - MESURE;      // 1 045 336 octets
+  assert.equal(MARGE, 1_045_336);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 11.24);
 
   const octets = statSync(join(RACINE, 'dist', 'index.html')).size;
   assert.ok(octets < BORNE, `${octets} octets : la borne T10 est franchie`);
@@ -374,4 +400,197 @@ test('PIC T7 — le livrable pèse 8 016 124 octets, la marge sur la borne T10 e
   // ci-dessus vieillirait en silence et la marge annoncée deviendrait fausse.
   assert.ok(Math.abs(octets - MESURE) < 50_000,
     `le livrable pèse ${octets} octets, la mesure écrite dit ${MESURE} : remesurer et réécrire`);
+});
+
+// ---------------------------------------------------------------------------
+// Le câblage — les quarante-six à l'écran, 07/09
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, 07/09 : « fais tout d'un seul coup, les quatre lots d'un coup ». Le
+// rapport du lot PICTOGRAMMES proposait quatre lots de câblage — bandeau,
+// arsenal, modules, chiffres — ; ils sont faits ensemble, et ces tests-ci
+// gardent ce que le découpage aurait gardé lot par lot.
+
+test('CÂB T1 — la famille entre dans le livrable, et par le seul chemin qui existe', () => {
+  // ⚠⚠ UN FICHIER N'ENTRE QUE PAR UN MARQUEUR, et le marqueur ne suffit pas : il
+  // faut AUSSI la ligne de `FICHIERS_INLINE`. Les deux moitiés sont dans deux
+  // fichiers différents, et l'oubli de l'une laisse un `%ATLAS_INTERFACE%` en
+  // clair dans la page — c'est-à-dire une image vide, sans erreur.
+  const page = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const build = readFileSync(join(RACINE, 'tools', 'build.js'), 'utf8');
+  assert.ok(page.includes('--atlas-interface: url(\'%ATLAS_INTERFACE%\')'),
+    'la feuille ne déclare plus la variable de l\'atlas d\'interface');
+  assert.ok(build.includes('atlas(\'interface\')'),
+    'tools/build.js n\'inline plus l\'atlas d\'interface');
+
+  // ⚠ LA CLASSE EST NOMMÉE DANS LE JS ET PEINTE DANS LA FEUILLE : les deux se
+  // confrontent, sinon renommer l'une laisserait des pictogrammes sans fond.
+  assert.equal(CLASSE_PICTOGRAMME, 'picto');
+  assert.match(page, new RegExp(`\\.${CLASSE_PICTOGRAMME}\\s*\\{`),
+    `la feuille ne peint plus « .${CLASSE_PICTOGRAMME} »`);
+  assert.ok(page.includes('background-image: var(--atlas-interface)'),
+    'la règle du pictogramme ne prend plus son fond dans la variable');
+
+  // ⚠⚠ ET LE MARQUEUR NE SURVIT PAS AU BUILD. C'est la moitié que le HTML source
+  // ne peut pas dire : un marqueur non remplacé ne lève pas, il dessine du vide.
+  const produit = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  assert.ok(!produit.includes('%ATLAS_INTERFACE%'), 'le marqueur n\'a pas été remplacé');
+  assert.ok(produit.includes('--atlas-interface: url(\'data:image/webp;base64,'),
+    'l\'atlas d\'interface n\'est pas inliné dans le livrable');
+});
+
+test('CÂB T2 — chaque table de pictogrammes couvre EXACTEMENT sa table de données', () => {
+  // ⚠⚠ C'EST LA GARDE QUI TIENT TOUT LE FICHIER `ui/pictogramme.js`. Il existe
+  // pour qu'aucun écran n'écrive un nom de sprite en dur ; s'il traduit une clé
+  // de travers, ou s'il en oublie une, le câblage montre le mauvais dessin sans
+  // qu'une seule ligne ne lève. Les paires table ↔ donnée sont déclarées DANS
+  // le module, pas recopiées ici : une liste écrite là serait la seconde vérité.
+  for (const [nom, table, cles] of ACCORDS) {
+    assert.deepEqual(Object.keys(table).sort(), [...cles].sort(),
+      `${nom} et sa table de données ne portent pas les mêmes clés`);
+  }
+  assert.equal(ACCORDS.length, 3, 'le nombre d\'accords a changé sans que ce test le dise');
+
+  // Les quatre catégories de défense sont les `type` que `DEFENSES` porte.
+  const types = [...new Set(Object.values(DEFENSES).map((d) => d.type))].sort();
+  assert.deepEqual(Object.keys(PICTOGRAMME_DE_LA_CATEGORIE).sort(), types);
+  assert.equal(types.length, 4);
+
+  // Les quatorze modules se DÉRIVENT, et la dérivation retombe sur l'atlas.
+  const desModules = Object.keys(MODULES).map(pictogrammeDuModule);
+  assert.equal(desModules.length, 14);
+  for (const nom of desModules) {
+    assert.ok(ATLAS.interface.noms.includes(nom), `« ${nom} » n'est pas dans l'atlas`);
+  }
+  // ⚠ FALSIFIABLE : une clé inconnue LÈVE, elle ne rend pas un nom plausible.
+  assert.throws(() => pictogrammeDuModule('bouclierMagique'), /n'est pas un module/);
+});
+
+test('CÂB T3 — les quarante-six sont TOUS employés, et rien d\'autre ne l\'est', () => {
+  // ⚠⚠ DANS LES DEUX SENS, ET C'EST CE QUI REND LE CÂBLAGE COMPLET. Un
+  // pictogramme produit mais jamais nommé serait 5 ko d'atlas payés pour rien —
+  // exactement ce que le lot EFFONDREMENT a trouvé sur `ruine_j` et `ruine_o`,
+  // « dans le livrable, payées en octets d'images, et employées par personne ».
+  // Un nom employé mais absent de l'atlas ferait lever `fondDuSprite` au premier
+  // affichage, sur un écran que les tests ne montent pas tous.
+  const employes = [...new Set(tousLesPictogrammes())].sort();
+  assert.deepEqual(employes, [...ATLAS.interface.noms].sort(),
+    'les pictogrammes employés et l\'atlas ont divergé');
+  assert.equal(employes.length, 46);
+});
+
+test('CÂB T4 — aucun écran n\'écrit un nom de sprite d\'interface en dur', () => {
+  // ⚠⚠ C'EST LA RÈGLE DE `ui/pictogramme.js`, MESURÉE PLUTÔT QU'ANNONCÉE. Le
+  // fichier existe pour que la traduction clé → sprite se fasse en UN endroit ;
+  // un écran qui écrirait `'ui_module_bouclier'` serait la première ligne à
+  // mentir le jour où un module change de clé, et rien ne le dirait.
+  const dossier = join(RACINE, 'src', 'ui');
+  let balayes = 0;
+  for (const fichier of readdirSync(dossier)) {
+    if (!fichier.endsWith('.js') || fichier === 'pictogramme.js') continue;
+    balayes += 1;
+    const source = readFileSync(join(dossier, fichier), 'utf8');
+    // ⚠ ON CHERCHE LE NOM ENTRE GUILLEMETS, PAS LE PRÉFIXE : le mot est écrit
+    // en prose dans les commentaires, et une garde qui tomberait dessus se
+    // déclencherait sur ce qu'on écrit à son sujet — c'est arrivé, à l'écriture
+    // même de ce test.
+    //
+    // ⚠⚠ ET ON NE RETIENT QUE CE QUI EST DANS L'ATLAS D'INTERFACE. Les sons du
+    // pack portent le MÊME préfixe — trois d'entre eux sont nommés en clair dans
+    // `ui/session.js`, comme ils doivent : ce ne sont pas des sprites. Une garde
+    // qui accuserait sur le préfixe seul serait rouge pour une raison qui ne la
+    // regarde pas, et on l'assouplirait pour de mauvaises raisons.
+    const trouves = [...source.matchAll(/'(ui_[a-z0-9_]+)'/g)]
+      .map((m) => m[1])
+      .filter((nom) => ATLAS.interface.noms.includes(nom));
+    assert.deepEqual(trouves, [], `${fichier} écrit ${trouves.join(', ')} en dur`);
+  }
+  assert.ok(balayes >= 12, `${balayes} fichiers balayés : le montage ne lit rien`);
+
+  // ⚠ FALSIFIABLE, DES DEUX CÔTÉS. Le motif doit attraper un nom de sprite, et
+  // le filtre doit laisser passer un nom de SON — sinon la garde ne garde rien,
+  // ou bien elle garde tout et le premier son la ferait tomber.
+  const attrape = (texte) => [...texte.matchAll(/'(ui_[a-z0-9_]+)'/g)]
+    .map((m) => m[1]).filter((nom) => ATLAS.interface.noms.includes(nom));
+  assert.deepEqual(attrape(`const x = '${'ui'}_quartz';`), ['ui_quartz'],
+    "le motif n'attrape même pas un appât");
+  assert.deepEqual(attrape(`son.jouer('${'ui'}_click');`), [],
+    'le filtre accuse un nom de son');
+});
+
+test('CÂB T5 — un pictogramme se pose, et un nom inconnu LÈVE', () => {
+  const doc = fauxDocument();
+  const picto = creerPictogramme(doc, 'ui_quartz');
+  assert.equal(picto.className, CLASSE_PICTOGRAMME);
+  assert.equal(picto.dataset.picto, 'ui_quartz');
+  // Le cadrage est celui de l'atlas, et il n'est pas vide.
+  assert.equal(picto.style.backgroundSize, '700% 700%');
+  assert.match(picto.style.backgroundPosition, /^[\d.]+% [\d.]+%$/);
+
+  // ⚠⚠ DEUX CELLULES DIFFÉRENTES ONT DEUX CADRAGES DIFFÉRENTS. Sans cette
+  // ligne, un poseur qui rendrait toujours « 0% 0% » passerait les assertions
+  // ci-dessus et dessinerait quarante-six fois le même pictogramme.
+  const autre = creerPictogramme(doc, 'ui_verrou');
+  assert.notEqual(autre.style.backgroundPosition, picto.style.backgroundPosition);
+
+  // ⚠ ET UN NOM ABSENT DE L'ATLAS LÈVE. Rendre un cadrage par défaut ferait
+  // dessiner la première cellule à la place de celle qu'on demande.
+  assert.throws(() => creerPictogramme(doc, 'ui_inexistant'), /absent de la famille/);
+});
+
+test('CÂB T6 — décoratif ou parlant, jamais les deux, jamais ni l\'un ni l\'autre', () => {
+  // ⚠⚠ UN PICTOGRAMME POSÉ À CÔTÉ DE SON LIBELLÉ EST DÉCORATIF : le lecteur
+  // d'écran lirait deux fois la même chose. Un pictogramme SEUL — la flèche
+  // d'une bascule, le cadenas d'une vignette — porte le sens et doit se dire.
+  // Les deux cas existent dans le câblage, et le défaut serait de traiter les
+  // quarante-six pareil.
+  const doc = fauxDocument();
+  const decoratif = creerPictogramme(doc, 'ui_pv');
+  assert.equal(decoratif.attributs['aria-hidden'], 'true');
+  assert.equal(decoratif.attributs['aria-label'], undefined);
+
+  const parlant = creerPictogramme(doc, 'ui_fleche_gauche', 'Base précédente');
+  assert.equal(parlant.attributs['aria-label'], 'Base précédente');
+  assert.equal(parlant.attributs.role, 'img');
+  assert.equal(parlant.attributs['aria-hidden'], undefined);
+});
+
+test('CÂB T7 — les fiches portent leurs pictogrammes, et le TITRE porte le niveau', () => {
+  // ⚠⚠ LES DEUX FICHES DOIVENT AVOIR LA MÊME FORME — `ERGO T7 bis` l'exige, et
+  // c'est ce qui permet un seul rendu. Ce test-ci mesure l'autre moitié : que
+  // les pictogrammes soient bien ceux de la DONNÉE, ligne par ligne.
+  const etat = creerEtat(11);
+  baseCourante(etat).garnison.push({
+    id: 'casemate', rangee: 5, colonne: 4, niveau: 1, degatsMilli: 0,
+  });
+  const piece = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0));
+  const batiment = lignesDuPanneau(apercuDuBatiment(etat, 0));
+
+  assert.equal(piece.picto, 'ui_niveau');
+  assert.equal(batiment.picto, 'ui_niveau');
+
+  const lignes = piece.sections.flatMap((s) => s.lignes);
+  const parLibelle = new Map(lignes.map((l) => [l.libelle, l.picto]));
+  assert.equal(parLibelle.get('Points de vie'), 'ui_pv');
+  assert.equal(parLibelle.get('Points engagés'), 'ui_budget');
+  assert.equal(parLibelle.get('État'), 'ui_degats');
+
+  // ⚠ LES TROIS COLONNES DE DÉGÂTS, DANS L'ORDRE DE LA MATRICE. Une seule ligne
+  // vérifiée laisserait passer deux cibles interverties.
+  const cibles = lignes.filter((l) => l.libelle.startsWith('Contre')).map((l) => l.picto);
+  assert.deepEqual(cibles, COLONNES_DEGATS.map((c) => PICTOGRAMME_DE_LA_COLONNE[c]));
+  assert.equal(cibles.length, 3);
+
+  // ⚠⚠ ET LA FICHE D'UN BÂTIMENT NOMME SES RESSOURCES PAR LEUR CLÉ, pas par le
+  // mot. Le stockage de la base est la section qui les liste TOUTES les trois,
+  // dans l'ordre de `RESSOURCES` : c'est celle qui attrape deux pictogrammes
+  // intervertis, ce qu'une seule ligne vérifiée ne verrait pas.
+  const stockage = batiment.sections.find((s) => s.titre === 'Stockage de la base');
+  assert.ok(stockage !== undefined, 'le Chantier ne stocke plus rien');
+  assert.deepEqual(
+    stockage.lignes.map((l) => l.picto),
+    Object.values(PICTOGRAMME_DE_LA_RESSOURCE),
+    "les lignes de stockage ne portent pas les trois ressources dans l'ordre",
+  );
+  assert.equal(stockage.lignes.length, 3);
 });

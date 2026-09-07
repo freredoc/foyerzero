@@ -246,6 +246,18 @@ const FICHIERS_INLINE = [
   // ⚠ IL NE SERT QU'AU CANEVAS DE L'ÉCRAN MONDE, donc pas de variable CSS : sa
   // balise porte le marqueur en `src`, comme `monde-emblemes` juste à côté.
   atlas('limite'),
+  // ⚠⚠ LA QUATORZIÈME FAMILLE ENTRE ICI, ET SEULEMENT ICI — lot CÂBLAGE,
+  // 07/09. Le lot PICTOGRAMMES l'avait cousue et inscrite dans
+  // `src/data/atlas.js` sans une seule ligne d'écran : elle n'était donc PAS
+  // dans le livrable, un fichier n'entrant que par un marqueur. C'est la règle
+  // écrite en tête de cette table — « chaque famille entre avec le lot qui la
+  // consomme » — appliquée à la lettre, et ce lot-ci est celui qui la consomme.
+  //
+  // ⚠⚠ ELLE PÈSE 233 938 OCTETS EN BASE64, ET C'EST LE SEUL COÛT DU CÂBLAGE.
+  // Les quarante-six pictogrammes posés à l'écran ne coûtent rien de plus :
+  // `.picto` de `src/index.src.html` pointe la variable une fois, et chaque
+  // élément ne porte que son cadrage.
+  atlas('interface'),
   { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.png'], type: 'image/png' },
   { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.png'], type: 'image/png' },
   // ⚠ LE FOND DU BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour

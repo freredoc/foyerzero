@@ -80,6 +80,10 @@ import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // il faut `attaque`, ce que son propre commentaire annonce.
 import { COTE_CASE_MAX, poserCouches } from './chantier.js';
 import { couchesDeLUniteDAssaut } from './offense.js';
+// ⚠ LES PICTOGRAMMES SE DEMANDENT — voir `./pictogramme.js`.
+import {
+  PICTOGRAMME_DU_CHASSIS, PICTOGRAMMES, creerPictogramme,
+} from './pictogramme.js';
 
 // ---------------------------------------------------------------------------
 // Étage pur
@@ -164,6 +168,10 @@ export function lignesDuResultat(rapport) {
     { quoi: 'Verdict', valeur: LIBELLE_VERDICT[rapport.verdict] ?? rapport.verdict },
     {
       quoi: 'Butin',
+      // ⚠ LE COFFRE EST LE SEUL PICTOGRAMME DE CE PANNEAU QUI DISE UN GAIN. Les
+      // quatre lignes de pourcentage disent ce qui RESTE debout chez la cible ;
+      // celle-ci dit ce qu'on rapporte.
+      picto: PICTOGRAMMES.butin,
       valeur: `${rapport.butin.quartz ?? 0} quartz · ${rapport.butin.scorie ?? 0} scorie`,
     },
     { quoi: 'Défense restante', valeur: pct(rapport.restantDefense) },
@@ -178,13 +186,20 @@ export function lignesDuResultat(rapport) {
   // `0 s`. Annoncer « aucune réparation » à un joueur dont l'infanterie est en
   // miettes et sans Caserne serait un mensonge par omission.
   for (const [chassis, r] of Object.entries(rapport.reparationInduite ?? {})) {
+    // ⚠⚠ LE CHÂSSIS DONNE LE PICTOGRAMME, ET LES TROIS BRANCHES LE PARTAGENT.
+    // Une ligne de réparation parle d'infanterie, de véhicule ou d'avion quel
+    // que soit son verdict — « sans bâtiment », « intacte » ou une durée — et
+    // c'est le SUJET qui porte l'image, pas l'issue.
+    const picto = PICTOGRAMME_DU_CHASSIS[chassis];
+    const quoi = LIBELLE_CHASSIS[chassis] ?? chassis;
     if (r.sansBatiment) {
-      lignes.push({ quoi: LIBELLE_CHASSIS[chassis] ?? chassis, valeur: 'sans bâtiment' });
+      lignes.push({ quoi, picto, valeur: 'sans bâtiment' });
     } else if (r.ticks === 0) {
-      lignes.push({ quoi: LIBELLE_CHASSIS[chassis] ?? chassis, valeur: 'intacte' });
+      lignes.push({ quoi, picto, valeur: 'intacte' });
     } else {
       lignes.push({
-        quoi: LIBELLE_CHASSIS[chassis] ?? chassis,
+        quoi,
+        picto,
         valeur: `${formaterDuree(r.secondes)} · ${pct(r.pctReserve)} de la réserve`,
       });
     }
@@ -192,7 +207,11 @@ export function lignesDuResultat(rapport) {
 
   // ⚠ LE TEMPS DE RAID EST `ticks × TICK_MS`, et `TICK_MS` vient de l'horloge,
   // jamais recopié : écrire 0,1 ici ferait un second pas de temps.
-  lignes.push({ quoi: 'Durée du combat', valeur: formaterDuree((rapport.ticks * TICK_MS) / 1000) });
+  lignes.push({
+    quoi: 'Durée du combat',
+    picto: PICTOGRAMMES.temps,
+    valeur: formaterDuree((rapport.ticks * TICK_MS) / 1000),
+  });
   return lignes;
 }
 
@@ -921,7 +940,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       bloc.className = 'ligne';
       const quoi = doc.createElement('span');
       quoi.className = 'quoi';
-      quoi.textContent = ligne.quoi;
+      // ⚠ TOUTES LES LIGNES N'ONT PAS D'IMAGE, ET C'EST VOULU. « Verdict » ou
+      // « Défense restante » ne sont pas des grandeurs dessinées ; leur poser un
+      // pictogramme par symétrie dirait quelque chose que l'archive ne dit pas.
+      if (ligne.picto !== undefined) quoi.append(creerPictogramme(doc, ligne.picto));
+      quoi.append(doc.createTextNode(ligne.quoi));
       const valeur = doc.createElement('b');
       valeur.textContent = ligne.valeur;
       bloc.append(quoi, valeur);
