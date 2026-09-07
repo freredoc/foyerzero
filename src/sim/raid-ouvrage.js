@@ -116,6 +116,60 @@ export function baseAttaqueALaMinute(graine, base, minute) {
 }
 
 /**
+ * Départage deux bases du joueur candidates pour LA MÊME base de l'Ouvrage.
+ * Rend un nombre négatif si `a` l'emporte, positif si c'est `b`.
+ *
+ * ARBITRÉ le 07/09/2026 par Ethan : « elle n'en frappe qu'une, la plus
+ * proche », et pour l'égalité « le plus haut, puis gauche à droite ».
+ *
+ * ⚠⚠ « LA PLUS PROCHE » SE MESURE AVEC `distanceCarree`, ET C'EST LA MESURE QUI
+ * DÉCIDE DÉJÀ DE LA PORTÉE. `estAPorteeDAttaque` teste `d² ≤ rayon²` — un
+ * DISQUE euclidien depuis le lot EUCLIDE — et `ciblesAPortee` pose le champ sur
+ * chaque site qu'elle rend, mesuré depuis la base qui l'a demandé. On le
+ * RELIT ; en écrire un second ici produirait une cible « la plus proche » selon
+ * une géométrie que la portée ne connaît pas. ⚠ Ce n'est PAS Tchebychev : le
+ * carré de Tchebychev est ce que le BALAYAGE parcourt, pas ce que la portée
+ * retient — mesuré, une case à (10, 10) est à distance 10 de Tchebychev et hors
+ * de portée, son `d²` valant 200 pour un rayon carré de 100.
+ *
+ * ⚠⚠ « LE PLUS HAUT » EST LA PLUS PETITE RANGÉE, ET LE SIGNE EST FACILE À
+ * PRENDRE À L'ENVERS. `niveauDeLaRangee` vaut `round((hauteur − rangee) ×
+ * niveauParCase)` : mesuré, la rangée 1 est au niveau 50 et la rangée 295 — celle
+ * du départ du joueur — au niveau 1. Le nord est en haut, le niveau y croît, et
+ * la rangée DÉCROÎT. Un signe inversé donnerait un départage qui marche
+ * parfaitement et choisit systématiquement la mauvaise base.
+ *
+ * ⚠ « GAUCHE À DROITE » EST LA COLONNE CROISSANTE : la plus petite gagne.
+ *
+ * ⚠⚠ ELLE LÈVE PLUTÔT QUE DE RENDRE ZÉRO, ET C'EST LA TOTALITÉ DU DÉPARTAGE. Deux
+ * bases du joueur ne peuvent pas partager une case — `fonderUneBase` l'interdit —
+ * donc un ex æquo après les trois critères est un fait de PROGRAMME, pas de jeu.
+ * Rendre 0 laisserait l'ordre de parcours trancher en silence, c'est-à-dire
+ * l'INDICE dans `etat.bases` : exactement ce que ce lot supprime. `RCU T5` le
+ * mesure sur cent montages.
+ *
+ * ⚠ ELLE LIT LA POSITION DANS `etat.bases[…]`, PAS SUR LA PAIRE. La paire porte
+ * la case du SITE attaquant ; ce qu'on départage, c'est la case de la BASE DU
+ * JOUEUR visée.
+ *
+ * @param {object} etat
+ * @param {{distanceCarree: number, baseVisee: number}} a
+ * @param {{distanceCarree: number, baseVisee: number}} b
+ * @returns {number}
+ */
+function departagerLesCandidates(etat, a, b) {
+  if (a.distanceCarree !== b.distanceCarree) return a.distanceCarree - b.distanceCarree;
+  const pa = etat.bases[a.baseVisee].position;
+  const pb = etat.bases[b.baseVisee].position;
+  if (pa.rangee !== pb.rangee) return pa.rangee - pb.rangee;
+  if (pa.colonne !== pb.colonne) return pa.colonne - pb.colonne;
+  throw new Error(
+    `raid-ouvrage : deux bases du joueur en (${pa.rangee}, ${pa.colonne}) — `
+      + 'le départage ne peut plus trancher',
+  );
+}
+
+/**
  * Les bases de l'Ouvrage qui peuvent attaquer le joueur, ici et maintenant.
  *
  * ⚠ LE FILTRE EST DANS LES DONNÉES, PAS ÉCRIT ICI. `TYPES_SITE[x].attaqueLeJoueur`
@@ -148,28 +202,54 @@ export function baseAttaqueALaMinute(graine, base, minute) {
  * `serialiser` copient des VALEURS, donc un renvoi vers l'objet base se
  * dédoublerait à la première copie.
  *
- * ⚠⚠ UNE BASE DE L'OUVRAGE À PORTÉE DE DEUX BASES DU JOUEUR LES ATTAQUE TOUTES
- * LES DEUX, LA MÊME MINUTE. **LECTURE PRISE, à signaler.** `baseAttaqueALaMinute`
- * hache la CASE de l'attaquante et la minute, jamais la cible : c'est ce qui rend
- * les tirages d'une partie à une seule base identiques au bit après ce lot, et le
- * témoin de BASES-0 le mesure. Lui faire choisir UNE cible demanderait une règle
- * qu'Ethan n'a pas donnée — la plus proche ? la plus faible ? — et déplacerait
- * tous les tirages existants. Si Ethan veut qu'elle n'en frappe qu'une, c'est ce
- * `for` imbriqué qui change, et lui seul.
+ * ⚠⚠ UNE BASE DE L'OUVRAGE N'EN FRAPPE QU'UNE, LA PLUS PROCHE — ARBITRÉ PAR ETHAN
+ * LE 07/09/2026. Ce commentaire portait une LECTURE PRISE : à portée de deux
+ * bases du joueur, une base de l'Ouvrage les attaquait TOUTES LES DEUX la même
+ * minute, faute d'une règle pour choisir. Elle est donnée : « elle n'en frappe
+ * qu'une, la plus proche », et pour l'égalité « le plus haut, puis gauche à
+ * droite ». Le `for` imbriqué que ce commentaire désignait est devenu la boucle
+ * ci-dessous, et lui seul : `departagerLesCandidates` porte la règle.
+ *
+ * ⚠⚠ ET `baseAttaqueALaMinute` N'A PAS BOUGÉ D'UNE LIGNE. Elle hache la CASE de
+ * l'attaquante et la minute, jamais la cible : le TIRAGE est donc identique au
+ * bit. Ce qui change est ce qui en découle — une minute qui produisait deux
+ * raids n'en produit plus qu'un. Une partie à UNE SEULE base du joueur n'a rien
+ * à départager et reste identique, minute pour minute ; c'est la non-régression
+ * `RCU T7`, et le témoin de BASES-0 la mesure sur vingt-cinq graines.
+ *
+ * ⚠ LE COÛT NE BOUGE PAS : `ciblesAPortee` reste appelée UNE FOIS PAR BASE DU
+ * JOUEUR. Inverser les boucles pour partir des bases de l'Ouvrage aurait
+ * demandé de balayer la carte à l'envers ; la distance est symétrique, donc on
+ * garde le balayage et on REGROUPE. `RCU T11` compte les appels.
+ *
+ * ⚠ L'ORDRE DE SORTIE EST UNE RÈGLE, PAS UN ORDRE DE TABLEAU. Il suit la case de
+ * l'ATTAQUANTE — la plus haute d'abord, puis de gauche à droite —, jamais
+ * l'indice dans `etat.bases`. `resoudreLaMinute` résout les raids d'une même
+ * minute dans cet ordre, et ils partagent des stocks : un ordre qui dépendrait de
+ * l'ordre du tableau ferait changer l'issue quand le joueur fonde une base.
  *
  * @param {object} etat
  * @returns {Array<object>} identités de site, chacune portant `baseVisee`
  */
 export function basesAttaquantes(etat) {
-  const paires = [];
+  // ⚠ UNE ENTRÉE PAR CASE D'ATTAQUANTE. Une case porte au plus un site, donc le
+  // couple (rangée, colonne) l'identifie : c'est la clé du regroupement, et elle
+  // ne doit RIEN devoir à l'ordre de parcours.
+  const parAttaquante = new Map();
   for (let i = 0; i < etat.bases.length; i += 1) {
     for (const site of ciblesAPortee(etat, etat.bases[i])) {
       if (TYPES_SITE[site.type]?.attaqueLeJoueur !== true) continue;
       if (site.niveau < RAID_OUVRAGE.niveauMinimal) continue;
-      paires.push({ ...site, baseVisee: i });
+      const cle = `${site.rangee},${site.colonne}`;
+      const candidate = { ...site, baseVisee: i };
+      const tenante = parAttaquante.get(cle);
+      if (tenante === undefined || departagerLesCandidates(etat, candidate, tenante) < 0) {
+        parAttaquante.set(cle, candidate);
+      }
     }
   }
-  return paires;
+  return [...parAttaquante.values()]
+    .sort((a, b) => a.rangee - b.rangee || a.colonne - b.colonne);
 }
 
 // ⚠⚠ `pvMaxDeLaPiece` A DÉMÉNAGÉ DANS `sim/reparation.js` AU LOT COMPLEXE, ET
