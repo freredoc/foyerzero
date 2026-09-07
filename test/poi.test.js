@@ -36,6 +36,7 @@ import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 import { basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { campDeLaCase } from '../src/sim/territoire.js';
 import { NIVEAU } from '../src/data/niveaux.js';
+import { caseRasee } from '../src/sim/ruines.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const T0 = 1_700_000_000_000;
@@ -412,7 +413,10 @@ function sansVoisinsOuvrage(etat) {
       premiereColonne: b.position.colonne - 8, derniereColonne: b.position.colonne + 8,
     };
     for (const o of basesDeLaFenetre(etat.graine, large)) {
-      etat.basesRasees.push(`${o.rangee}:${o.colonne}`);
+      // ⚠ SANS REVENDICATION — lot CONQUÊTE-24H. Ce montage écarte des
+      // ÉMETTEURS ; leur en substituer d'autres, du côté du joueur cette fois,
+      // ne mesurerait plus la forme de la zone mais la conquête.
+      etat.basesRasees.push(caseRasee(o.rangee, o.colonne));
     }
   }
   return etat;

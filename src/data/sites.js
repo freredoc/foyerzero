@@ -227,6 +227,21 @@ export const APRES_RAID = {
   // deux vérités le jour où Ethan en veut vingt, et la seconde se lirait comme
   // un bogue d'affichage.
   rapportsGardes: 10,
+  // ⚠⚠ COMBIEN DE TEMPS UNE BASE RASÉE TIENT ENCORE LE TERRAIN — arbitré par
+  // Ethan le 07/09, point 13 : « pendant 24 h, la base rasée émet le territoire
+  // du vainqueur, du niveau de la base rasée. Après, la ruine disparaît, et les
+  // territoires sont recalculés. »
+  //
+  // ⚠⚠ EN HEURES ICI, EN TICKS DANS `sim/ruines.js`, et c'est la route de
+  // toutes les durées du dépôt — `RETOUR_DEFENSES.heuresAuPlancher` et
+  // `SATELLITES.delaiApparitionSec` prennent la même. Vingt-quatre heures est
+  // une valeur de JEU : elle se règle ici, jamais dans le moteur.
+  //
+  // ⚠ ELLE EST DANS `APRES_RAID` PARCE QU'UNE RUINE EST CE QU'UN RAID
+  // LAISSE. La liste des cases rasées, elle, ne relève d'aucune durée : elle est
+  // définitive, et `sim/ruines.js` explique pourquoi les deux lectures de
+  // `basesRasees` ne se ressemblent pas.
+  ruineHeures: 24,
 };
 
 // --- réparation de l'armée ----------------------------------------------------

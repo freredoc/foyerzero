@@ -7,6 +7,7 @@ déterministe — même entrée, mêmes octets — et son mode --verifier le pro
 
     python3 tools/atlas.py --verifier   # ne rien écrire, comparer l'existant
     python3 tools/atlas.py --ecrire     # coudre les atlas et l'index
+    python3 tools/atlas.py --ecrire --forcer carte   # … en réécrivant CETTE famille
 
 Deux sorties par exécution :
 
@@ -119,17 +120,21 @@ FAMILLES = {
     # pivot, que `dessinerCouches` fait tourner. `tools/tourelles_unite.py`, qui
     # fabriquait les seize orientations, n'a plus d'objet et est supprimé.
     'tourelle-unite': ('tourelle_unite', 5, ()),
-    # ⚠⚠ 115 COUSUS SUR 117 SUR LE DISQUE — 43 jusqu'au lot EMBLÈMES-ABÎMÉS, qui
+    # ⚠⚠ 133 COUSUS SUR 135 SUR LE DISQUE — 43 jusqu'au lot EMBLÈMES-ABÎMÉS, qui
     # fait entrer les 72 emblèmes de site en fumée et en feu : quatre familles ×
     # neuf paliers × deux états. Les 7 POI n'en ont pas — il n'existe qu'un
     # dessin par type de POI, et un gisement ne brûle pas.
+    # ⚠⚠ ET 18 DE PLUS AU LOT CONQUÊTE-24H : les ruines des DEUX familles de
+    # base, neuf paliers chacune. Ni les camps ni les avant-postes n'en ont — ils
+    # RESPAWNENT et ne laissent rien —, et c'est pourquoi le compte monte de 18 et
+    # non de 36.
     # Les deux grosses bases de l'Ouvrage
     # mesurent 128×128 et 192×192 à la grille 64 — elles couvrent 2×2 et 3×3
     # cases — et `coudre` exige `COTE × COTE` : les laisser entrer ferait sortir
     # l'outil en erreur. Elles voyagent chacune dans son propre marqueur, comme
     # l'atlas de terrain de la carte du monde. Un atlas d'un seul sprite ne coud
     # rien.
-    'carte': ('carte', 115, ('base_o_2x2', 'base_o_3x3')),
+    'carte': ('carte', 133, ('base_o_2x2', 'base_o_3x3')),
     # ⚠⚠ LES LIMITES DE TERRITOIRE ENTRENT AU LOT TERRITOIRE (03/09), ET ELLES
     # SONT DANS UN ATLAS ALORS QUE LES MURS DE CONTOUR N'Y SONT PAS. La
     # différence n'est pas de nature, elle est de FORME : un mur fait 512 × 128,
@@ -321,9 +326,25 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--ecrire', action='store_true')
     ap.add_argument('--verifier', action='store_true')
+    # ⚠⚠ LE SEUL CAS QUE LA GARDE D'EN DESSOUS NE COUVRAIT PAS : UN AJOUT VOULU
+    # DANS UNE FAMILLE QUI EXISTE DÉJÀ — lot CONQUÊTE-24H, 07/09. Elle refuse
+    # d'écraser un atlas qui ne se reproduit pas, et elle a raison sur les dix
+    # atlas dont l'encodeur WebP de cette machine diffère de celui qui les a
+    # produits. Mais elle refusait AUSSI les 18 ruines de la famille `carte`, en
+    # imprimant un « ÉCART » qu'on pouvait lire comme une nuisance de plus. Le
+    # drapeau est **par famille**, jamais global : forcer tout réécrirait les dix
+    # autres pour des images identiques, c'est-à-dire exactement ce que la garde
+    # existe pour empêcher.
+    ap.add_argument('--forcer', action='append', default=[], metavar='SLUG',
+                    help='réécrire cet atlas-là même s\'il diffère (répétable)')
     args = ap.parse_args()
     if args.ecrire == args.verifier:
         ap.error('choisir --ecrire ou --verifier')
+    if args.forcer and not args.ecrire:
+        ap.error('--forcer ne s\'emploie qu\'avec --ecrire')
+    inconnus = [f for f in args.forcer if f not in {s for s, _, _ in FAMILLES.values()}]
+    if inconnus:
+        ap.error(f'--forcer : famille inconnue {inconnus}')
 
     familles = {}
     empreintes_atlas = {}
@@ -362,7 +383,7 @@ def main():
             # coudre : `atlas-empreintes.json` doit décrire ce qui est SUR LE
             # DISQUE, sinon `test/sprite.test.js` tombe en accusant l'atlas
             # d'avoir changé alors que c'est le manifeste qui aurait menti.
-            garde = (etat == 'different')
+            garde = (etat == 'different') and slug not in args.forcer
             if args.ecrire and not garde:
                 with open(sortie, 'wb') as f:
                     f.write(octets)
@@ -379,8 +400,15 @@ def main():
 
     js = index_js(familles)
     etat = comparer(INDEX, js.encode('utf-8'))
+# ⚠⚠ `newline=` EST OBLIGATOIRE SOUS WINDOWS, ET SON ABSENCE A FAIT MENTIR LE
+# VÉRIFICATEUR. Sans lui, Python traduit chaque saut de ligne en CRLF à
+# l'écriture : le fichier du dépôt est en LF, celui que la chaîne rejoue est en
+# CRLF, et `tools/verifier.py` annonce « DIFFÈRE » sur un contenu IDENTIQUE. Un
+# écart qui ment est pire qu'un écart qui manque — il apprend à ne plus lire le
+# verdict. ⚠ TROIS OUTILS SUR TREIZE SONT CORRIGÉS ICI, ceux que le lot
+# CONQUÊTE-24H fait écrire ; les dix autres restent, et c'est un lot à part.
     if args.ecrire:
-        with open(INDEX, 'w', encoding='utf-8') as f:
+        with open(INDEX, 'w', encoding='utf-8', newline='\n') as f:
             f.write(js)
     print(f'src/data/atlas.js  {etat}')
 
@@ -388,7 +416,7 @@ def main():
                        ensure_ascii=False, indent=2, sort_keys=True) + '\n'
     etat_manif = comparer(EMPREINTES, manif.encode('utf-8'))
     if args.ecrire:
-        with open(EMPREINTES, 'w', encoding='utf-8') as f:
+        with open(EMPREINTES, 'w', encoding='utf-8', newline='\n') as f:
             f.write(manif)
     if etat_manif != 'identique':
         differents += 1 if etat_manif == 'different' else 0

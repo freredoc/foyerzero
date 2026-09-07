@@ -53,6 +53,13 @@ import { distanceOctogonaleDInfluence } from './points-attaque.js';
 import { niveauDeLaRangee } from './carte.js';
 import { niveauDesBatiments } from './niveau-de-base.js';
 
+// ⚠⚠ LES RUINES SONT DES ÉMETTEURS DE PLUS, PAS UNE EXCEPTION DANS LE
+// CALCUL — lot CONQUÊTE-24H, 07/09/2026. Pendant vingt-quatre heures, une base
+// rasée émet pour le camp du vainqueur, au niveau de la base rasée, et sa force
+// s'ADDITIONNE à celle des bases de ce camp. La formule ci-dessous ne bouge pas
+// d'un caractère : c'est la LISTE des émetteurs qui s'allonge.
+import { ruinesActives, casesRasees, cleDeLaCase } from './ruines.js';
+
 /** Ce qu'une case peut porter. Les valeurs servent d'indices, pas de noms. */
 export const NEUTRE = 0;
 export const JOUEUR = 1;
@@ -129,11 +136,26 @@ export function niveauDUneBaseDuJoueur(base) {
  * @returns {Array<{rangee: number, colonne: number, niveau: number}>}
  */
 export function forcesDuJoueur(etat) {
-  return etat.bases.map((b) => ({
+  const forces = etat.bases.map((b) => ({
     rangee: b.position.rangee,
     colonne: b.position.colonne,
     niveau: niveauDUneBaseDuJoueur(b),
   }));
+  // ⚠⚠ ET LES RUINES QUE LE JOUEUR TIENT ENCORE — lot CONQUÊTE-24H. Elles
+  // entrent par la même porte que les bases parce que le brief le dit dans ces
+  // mots : « sa contribution s'additionne à celle des autres bases de ce camp,
+  // comme n'importe quelle base ». Une seconde boucle ailleurs, avec sa propre
+  // idée du partage, serait exactement la divergence que TERRITOIRE-LU vient de
+  // refermer entre le prix et la carte.
+  //
+  // ⚠ SANS FENÊTRE, COMME LES BASES. Une ruine expire en vingt-quatre
+  // heures : la liste des actives est courte par construction, et la borner
+  // coûterait plus que de la parcourir.
+  for (const ruine of ruinesActives(etat)) {
+    if (ruine.vainqueur !== JOUEUR) continue;
+    forces.push(ruine);
+  }
+  return forces;
 }
 
 /**
@@ -160,11 +182,27 @@ export function forcesDuJoueur(etat) {
  * @returns {Array<{rangee: number, colonne: number, niveau: number}>}
  */
 export function forcesDeLOuvrage(etat, fenetre) {
-  const rasees = new Set(etat.basesRasees ?? []);
+  const rasees = casesRasees(etat);
   const forces = [];
   for (const base of basesDeLaFenetre(etat.graine, fenetre)) {
-    if (rasees.has(`${base.rangee}:${base.colonne}`)) continue;
+    if (rasees.has(cleDeLaCase(base.rangee, base.colonne))) continue;
     forces.push({ rangee: base.rangee, colonne: base.colonne, niveau: niveauDeLaRangee(base.rangee) });
+  }
+  // ⚠⚠ ET LES RUINES QUE L'OUVRAGE TIENT — lot CONQUÊTE-24H, ET C'EST LA
+  // SYMÉTRIE DU §1 DU BRIEF. Aucun chemin du dépôt n'en produit aujourd'hui :
+  // `raserLaBase` de `sim/raid-ouvrage.js` REDÉPLOIE la base du joueur vingt
+  // cases plus au sud au lieu de la retirer, si bien qu'il n'y a rien à laisser
+  // en ruine. La règle est écrite quand même — elle ne coûte que ces trois
+  // lignes, et elle sera juste le jour où le chemin arrivera.
+  //
+  // ⚠ BORNÉES PAR LA FENÊTRE, comme les bases juste au-dessus : c'est le
+  // contrat de cette fonction, et une ruine hors fenêtre ne peint pas dedans —
+  // les deux appelants dilatent déjà du plus grand rayon.
+  for (const ruine of ruinesActives(etat)) {
+    if (ruine.vainqueur !== OUVRAGE) continue;
+    if (ruine.rangee < fenetre.premiereRangee || ruine.rangee > fenetre.derniereRangee) continue;
+    if (ruine.colonne < fenetre.premiereColonne || ruine.colonne > fenetre.derniereColonne) continue;
+    forces.push(ruine);
   }
   return forces;
 }
@@ -259,7 +297,15 @@ export function campDeLaCase(etat, rangee, colonne) {
   const sommes = { [JOUEUR]: undefined, [OUVRAGE]: undefined };
   let plancher = NEUTRE;
   const ajouter = (base, camp) => {
-    if (base.rangee === rangee && base.colonne === colonne) {
+    // ⚠⚠ UNE RUINE N'A PAS DE PLANCHER, ET C'EST UNE LECTURE — lot
+    // CONQUÊTE-24H. Le plancher dit « le territoire où la BASE se trouve ne
+    // change pas » ; une ruine n'est pas une base (§4 du brief), elle n'est
+    // qu'une contribution de plus dans la somme de son camp. Elle peut donc
+    // perdre sa propre case face à plus fort qu'elle — ce qui est exactement ce
+    // que dit le §5 : « sa frontière suit celle des autres, sans traitement
+    // particulier ». L'autre lecture — la ruine tient sa case coûte que coûte —
+    // tient au retrait de ces deux mots.
+    if (!base.ruine && base.rangee === rangee && base.colonne === colonne) {
       // ⚠ LE PLANCHER D'ETHAN : « le territoire où la base se trouve ne change
       // pas ». Le joueur l'emporte si les deux s'y trouvaient — cas impossible
       // aujourd'hui, `fondation.js` refusant de fonder sur un site de l'Ouvrage.
@@ -379,7 +425,11 @@ export function territoireDeLaFenetre(etat, fenetre) {
     // ⚠ LE PLANCHER SE RETIENT ICI ET S'APPLIQUE APRÈS LE PARTAGE. L'écrire dans
     // `occupant` maintenant ne servirait à rien : la boucle de partage repasse
     // ensuite sur toutes les cases et l'écraserait.
-    if (centre.rangee >= r0 && centre.rangee <= r1
+    //
+    // ⚠ ET PAS POUR LES RUINES — même lecture qu'au-dessus, dans
+    // `campDeLaCase` : les deux fonctions doivent rendre la même case, donc le
+    // même refus. `C24 T1` les confronte.
+    if (!centre.ruine && centre.rangee >= r0 && centre.rangee <= r1
       && centre.colonne >= c0 && centre.colonne <= c1) {
       planchers.push({ i: (centre.rangee - r0) * largeur + (centre.colonne - c0), camp });
     }

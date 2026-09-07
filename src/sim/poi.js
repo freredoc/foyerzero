@@ -34,7 +34,7 @@ import {
 } from '../data/sites.js';
 import { niveauDeLaRangee, estSurLaCarte, positionBaseTerminale } from './carte.js';
 import { hachageBrut, horsDeLaGarde, estBaseOuvrage } from './peuplement.js';
-import { basesDuJoueur, campDeLaCase, RAYONS, JOUEUR } from './territoire.js';
+import { forcesDuJoueur, campDeLaCase, RAYONS, JOUEUR } from './territoire.js';
 import { dansLOctogoneDInfluence } from './points-attaque.js';
 import { empriseDeLaGrosseBase } from '../render/embleme.js';
 
@@ -318,7 +318,23 @@ export function releverLesPoisAcquis(etat) {
   }
   const rayon = RAYONS[JOUEUR];
   let ajoutes = 0;
-  for (const base of basesDuJoueur(etat)) {
+  // ⚠⚠ ON PART DES ÉMETTEURS, PAS DES BASES — lot CONQUÊTE-24H, 07/09/2026,
+  // ET LE §4 DU BRIEF LE NOMMAIT D'AVANCE : « si `releverLesPoisAcquis` boucle
+  // sur `etat.bases`, les ruines n'y sont pas ». Elle bouclait sur
+  // `basesDuJoueur`, et une ruine qui TIENT une case n'aurait donné son gisement
+  // que si une base du joueur l'atteignait aussi — c'est-à-dire jamais, dans le
+  // seul cas où la question se pose.
+  //
+  // ⚠ `forcesDuJoueur` PORTE LE NIVEAU EN PLUS, ET IL NE SERT PAS ICI. Ce
+  // qu'on lui demande est la LISTE DES CENTRES d'où le joueur projette ; le
+  // partage, lui, se demande case par case à `campDeLaCase`, quatre gardes plus
+  // bas. Prendre deux listes — les bases ici, les ruines là — rouvrirait la
+  // divergence que ce dépôt referme depuis EUCLIDE.
+  //
+  // ⚠ ET LE RAYON NE CHANGE PAS : une ruine du joueur prend la portée du
+  // camp pour lequel elle émet, `RAYONS[JOUEUR]`, celle-là même que la boucle
+  // emploie déjà. C'est la lecture retenue au §1 du brief, déclarée réversible.
+  for (const base of forcesDuJoueur(etat)) {
     for (let dr = -rayon; dr <= rayon; dr += 1) {
       for (let dc = -rayon; dc <= rayon; dc += 1) {
         // ⚠⚠ CE FILTRE MANQUAIT DEPUIS TOUJOURS, ET IL A SURVÉCU À DEUX LOTS QUI

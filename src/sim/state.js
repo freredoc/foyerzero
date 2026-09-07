@@ -66,7 +66,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 27;
+export const SAVE_VERSION = 28;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -2992,6 +2992,56 @@ const MIGRATIONS = {
         if (!estSurLaCarte(attente.evite.rangee, attente.evite.colonne)) delete attente.evite;
       }
     }
+  },
+
+  /**
+   * v27 -> v28 : `basesRasees` porte des RUINES, pas seulement des cases — lot
+   * CONQUÊTE-24H, 07/09/2026.
+   *
+   * ⚠⚠ UNE ANCIENNE ENTRÉE DEVIENT UNE RUINE EXPIRÉE, ET C'EST LA SEULE
+   * LECTURE HONNÊTE. Une v27 ne retenait qu'une chaîne « rangée:colonne » : elle
+   * ne sait ni qui a rasé, ni de quel niveau était la base, ni quand. Les trois
+   * champs sont nés avec ce lot. On les laisse donc ABSENTS, et `sim/ruines.js`
+   * lit une entrée sans revendication comme n'émettant rien — c'est-à-dire
+   * exactement le comportement d'avant ce lot, à l'identique. Aucune partie ne
+   * change sous les pieds d'Ethan.
+   *
+   * ⚠⚠ ET ON N'INVENTE NI NIVEAU NI VAINQUEUR, MÊME PLAUSIBLES. Une ruine à
+   * qui l'on donnerait le niveau de sa rangée peindrait, au premier chargement,
+   * un territoire que personne n'a conquis — et il durerait vingt-quatre heures.
+   * `C24 T13` l'exige : aucune entrée migrée ne porte de revendication.
+   *
+   * ⚠ LE RETRAIT DE LA CASE, LUI, NE BOUGE PAS. `siteDeLaCase` continue de
+   * rendre `null` sur ces cases : une base rasée sous la v27 ne reparaît pas.
+   * C'est le fait que cette liste a toujours porté, et il n'a pas de durée.
+   *
+   * ⚠ ELLE ACCEPTE LES DEUX FORMES EN ENTRÉE, comme les v25 et v26
+   * juste au-dessus : la chaîne d'une vraie sauvegarde, et l'objet d'un état
+   * fabriqué à la main en montage. Ce qui ne tient pas sur la carte est retiré
+   * plutôt que recopié — une entrée illisible ne retire aucune case, elle
+   * empoisonne juste la liste.
+   *
+   * @param {object} s
+   */
+  27: (s) => {
+    s.version = 28;
+    const migrees = [];
+    for (const entree of s.basesRasees ?? []) {
+      let rangee = null;
+      let colonne = null;
+      if (typeof entree === 'string') {
+        const [r, c] = entree.split(':');
+        rangee = Number(r);
+        colonne = Number(c);
+      } else if (entree !== null && typeof entree === 'object') {
+        rangee = entree.rangee;
+        colonne = entree.colonne;
+      }
+      if (!Number.isInteger(rangee) || !Number.isInteger(colonne)) continue;
+      if (!estSurLaCarte(rangee, colonne)) continue;
+      migrees.push({ rangee, colonne });
+    }
+    s.basesRasees = migrees;
   },
 };
 

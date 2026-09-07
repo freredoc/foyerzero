@@ -501,10 +501,18 @@ test('EUCLIDE T8 — la migration 20 → 21 vide les dégâts de site et les POI
   // un état de site mais le fait qu'une case ne doit PLUS rien rendre : le vider
   // ferait REPARAÎTRE une base que le joueur a rasée. `satellites` porte de
   // l'histoire : un camp posé est là où le joueur l'a vu.
+  //
+  // ⚠⚠ ET LA FORME DE L'ENTRÉE, ELLE, A CHANGÉ EN v28 — lot CONQUÊTE-24H. La
+  // chaîne « rangée:colonne » devient `{ rangee, colonne }`, SANS revendication :
+  // une v20 ne sait ni qui a rasé, ni de quel niveau, ni quand. Ce que ce test
+  // garde est inchangé — la case reste retirée, la base ne réapparaît pas — et
+  // c'est `C24 T13` qui garde l'autre moitié : aucun niveau, aucun vainqueur
+  // inventés.
   const avecHistoire = structuredClone(v20);
   avecHistoire.basesRasees = ['150:12'];
   const apres = migrer(avecHistoire);
-  assert.deepEqual(apres.basesRasees, ['150:12'], 'une base rasée est réapparue');
+  assert.deepEqual(apres.basesRasees, [{ rangee: 150, colonne: 12 }],
+    'une base rasée est réapparue');
   assert.deepEqual(baseCourante(apres).satellites, v20.satellites, 'les satellites posés ont bougé');
 });
 

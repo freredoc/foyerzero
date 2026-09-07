@@ -858,8 +858,10 @@ test('SAT-R T11 — la chaîne de migrations, et le numéro qu\'elle porte', () 
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois —
   // la règle que `points-attaque.test.js` écrit depuis le lot SITE-ENTAMÉ. Elle
   // vivait sous `RÉSERVE-BASE T11` à `=== 25`, puis sous `RETOUR-D T18` à
-  // `=== 26` ; elle est ici.
-  assert.equal(SAVE_VERSION, 27, 'la chaîne de migrations a gagné un maillon');
+  // `=== 26`, puis ici à `=== 27` ; elle est passée à `C24 T12` le 07/09, avec
+  // le maillon v27 → v28 du lot CONQUÊTE-24H. Ce qui RESTE ici est ce que ce
+  // test-ci a toujours mesuré : que SON maillon existe encore.
+  assert.ok(SAVE_VERSION >= 27, 'le maillon v26 → v27 n\'est plus dans la chaîne');
 
   const etat = creerEtat(4242);
   rattraperJeu(etat, TICKS_APPARITION);

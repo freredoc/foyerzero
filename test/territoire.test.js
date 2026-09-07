@@ -27,6 +27,7 @@ import { GEOGRAPHIE, EMBLEMES_CARTE, TYPES_SITE, ZOOM_CARTE } from '../src/data/
 import { creerEtat } from '../src/sim/state.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { caseRasee } from '../src/sim/ruines.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GRAINE = 31_082_026;
@@ -411,7 +412,14 @@ test('frontières — le calcul tient dans le budget d\'une image', () => {
 function seuleBaseOuvrage(etat, gardee, autour) {
   for (const b of basesDeLaFenetre(etat.graine, autour)) {
     if (b.rangee === gardee.rangee && b.colonne === gardee.colonne) continue;
-    etat.basesRasees.push(`${b.rangee}:${b.colonne}`);
+    // ⚠⚠ `caseRasee` ET NON `ruineFraiche` — lot CONQUÊTE-24H, ET C'EST CE QUI
+    // GARDE CES DOUZE MONTAGES INCHANGÉS. Une entrée SANS revendication rase la
+    // base sans rien émettre : c'est exactement ce que la chaîne `'r:c'` faisait
+    // avant la v28, et ces tests-ci mesurent le partage entre bases DEBOUT, pas
+    // la conquête. Une ruine fraîche y ajouterait vingt et une cases de
+    // territoire joueur par base rasée, et douze montages mesureraient autre
+    // chose que ce qu'ils annoncent.
+    etat.basesRasees.push(caseRasee(b.rangee, b.colonne));
   }
   return etat;
 }
@@ -755,7 +763,7 @@ test('TF T10 — une base RASÉE ne peint plus, et le défaut a été mesuré av
   assert.equal(compter(avant, OUVRAGE), 37, 'la base debout ne peint pas son octogone');
   assert.equal(siteDeLaCase(etat, ouvrage.rangee, ouvrage.colonne).type, 'base');
 
-  etat.basesRasees.push(`${ouvrage.rangee}:${ouvrage.colonne}`);
+  etat.basesRasees.push(caseRasee(ouvrage.rangee, ouvrage.colonne));
   assert.equal(siteDeLaCase(etat, ouvrage.rangee, ouvrage.colonne), null,
     'le montage ne rase pas vraiment la base');
 

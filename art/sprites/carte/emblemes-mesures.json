@@ -35,6 +35,15 @@
     "rangee": 0,
     "sol": 255
    },
+   "site_base_j_n1_ruine": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 171,
+    "l": 103,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
+    "rangee": 0,
+    "sol": 255
+   },
    "site_base_j_n2": {
     "colonne": 1,
     "cotePlanche": 418.0,
@@ -61,6 +70,15 @@
     "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
     "rangee": 0,
     "sol": 255
+   },
+   "site_base_j_n2_ruine": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 165,
+    "l": 158,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
+    "rangee": 0,
+    "sol": 256
    },
    "site_base_j_n3": {
     "colonne": 2,
@@ -89,6 +107,15 @@
     "rangee": 0,
     "sol": 255
    },
+   "site_base_j_n3_ruine": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 157,
+    "l": 230,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
+    "rangee": 0,
+    "sol": 256
+   },
    "site_base_j_n4": {
     "colonne": 0,
     "cotePlanche": 418.0,
@@ -113,6 +140,15 @@
     "h": 279,
     "l": 191,
     "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_j_n4_ruine": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 219,
+    "l": 191,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
     "rangee": 1,
     "sol": 580
    },
@@ -143,6 +179,15 @@
     "rangee": 1,
     "sol": 575
    },
+   "site_base_j_n5_ruine": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 222,
+    "l": 218,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
+    "rangee": 1,
+    "sol": 576
+   },
    "site_base_j_n6": {
     "colonne": 2,
     "cotePlanche": 418.0,
@@ -167,6 +212,15 @@
     "h": 294,
     "l": 254,
     "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 1,
+    "sol": 580
+   },
+   "site_base_j_n6_ruine": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 227,
+    "l": 252,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
     "rangee": 1,
     "sol": 580
    },
@@ -197,6 +251,15 @@
     "rangee": 2,
     "sol": 910
    },
+   "site_base_j_n7_ruine": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 256,
+    "l": 246,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
+    "rangee": 2,
+    "sol": 911
+   },
    "site_base_j_n8": {
     "colonne": 1,
     "cotePlanche": 418.0,
@@ -224,6 +287,15 @@
     "rangee": 2,
     "sol": 916
    },
+   "site_base_j_n8_ruine": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 263,
+    "l": 240,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
+    "rangee": 2,
+    "sol": 918
+   },
    "site_base_j_n9": {
     "colonne": 2,
     "cotePlanche": 418.0,
@@ -248,6 +320,15 @@
     "h": 339,
     "l": 302,
     "planche": "S10_base_joueur_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 932
+   },
+   "site_base_j_n9_ruine": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 282,
+    "l": 301,
+    "planche": "S10_base_joueur_completement_detruite_3x3_1024.png",
     "rangee": 2,
     "sol": 932
    }
@@ -283,6 +364,15 @@
     "rangee": 0,
     "sol": 264
    },
+   "site_base_o_n1_ruine": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 168,
+    "l": 119,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 0,
+    "sol": 268
+   },
    "site_base_o_n2": {
     "colonne": 1,
     "cotePlanche": 418.0,
@@ -309,6 +399,15 @@
     "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
     "rangee": 0,
     "sol": 273
+   },
+   "site_base_o_n2_ruine": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 192,
+    "l": 173,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 0,
+    "sol": 277
    },
    "site_base_o_n3": {
     "colonne": 2,
@@ -337,6 +436,15 @@
     "rangee": 0,
     "sol": 278
    },
+   "site_base_o_n3_ruine": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 214,
+    "l": 234,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 0,
+    "sol": 287
+   },
    "site_base_o_n4": {
     "colonne": 0,
     "cotePlanche": 418.0,
@@ -363,6 +471,15 @@
     "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
     "rangee": 1,
     "sol": 580
+   },
+   "site_base_o_n4_ruine": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 235,
+    "l": 217,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 1,
+    "sol": 576
    },
    "site_base_o_n5": {
     "colonne": 1,
@@ -391,6 +508,15 @@
     "rangee": 1,
     "sol": 580
    },
+   "site_base_o_n5_ruine": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 249,
+    "l": 249,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 1,
+    "sol": 582
+   },
    "site_base_o_n6": {
     "colonne": 2,
     "cotePlanche": 418.0,
@@ -417,6 +543,15 @@
     "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
     "rangee": 1,
     "sol": 580
+   },
+   "site_base_o_n6_ruine": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 244,
+    "l": 297,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 1,
+    "sol": 583
    },
    "site_base_o_n7": {
     "colonne": 0,
@@ -445,6 +580,15 @@
     "rangee": 2,
     "sol": 924
    },
+   "site_base_o_n7_ruine": {
+    "colonne": 0,
+    "cotePlanche": 341.3333333333333,
+    "h": 271,
+    "l": 268,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 2,
+    "sol": 918
+   },
    "site_base_o_n8": {
     "colonne": 1,
     "cotePlanche": 418.0,
@@ -469,6 +613,15 @@
     "h": 342,
     "l": 261,
     "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
+    "rangee": 2,
+    "sol": 928
+   },
+   "site_base_o_n8_ruine": {
+    "colonne": 1,
+    "cotePlanche": 341.3333333333333,
+    "h": 294,
+    "l": 292,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
     "rangee": 2,
     "sol": 928
    },
@@ -498,6 +651,15 @@
     "planche": "S10_base_ouvrage_degats_fumee_3x3_1024.png",
     "rangee": 2,
     "sol": 942
+   },
+   "site_base_o_n9_ruine": {
+    "colonne": 2,
+    "cotePlanche": 341.3333333333333,
+    "h": 316,
+    "l": 361,
+    "planche": "S10_base_ouvrage_completement_detruite_3x3_1024.png",
+    "rangee": 2,
+    "sol": 941
    }
   },
   "reference": 1.083984375

@@ -49,6 +49,7 @@ import {
 } from '../src/sim/recherche.js';
 import { SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE } from '../src/data/recherche.js';
 import { territoireDeLaFenetre, occupantDeLaCase, OUVRAGE, JOUEUR } from '../src/sim/territoire.js';
+import { caseRasee } from '../src/sim/ruines.js';
 import { coutDUnRaid, distanceCarreeCases } from '../src/sim/points-attaque.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { poiDeLaCase } from '../src/sim/poi.js';
@@ -1112,7 +1113,7 @@ function basePeinteSeule(etat) {
     for (let dc = -7; dc <= 7; dc += 1) {
       if (dr === 0 && dc === 0) continue;
       const r = choisie.rangee + dr; const c = choisie.colonne + dc;
-      if (estBaseOuvrage(etat.graine, r, c)) etat.basesRasees.push(`${r}:${c}`);
+      if (estBaseOuvrage(etat.graine, r, c)) etat.basesRasees.push(caseRasee(r, c));
     }
   }
   return choisie;
@@ -1508,7 +1509,7 @@ test('BASES-1 T11 — les dix-sept missions ont un moteur (M2)', () => {
   const camp = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
   retirerLeSite(etat, {
     type: 'camp', rangee: camp.rangee, colonne: camp.colonne, instance: camp.instance,
-  });
+  }, JOUEUR);
   assert.equal(coche('detruire-un-camp'), true, 'détruire un camp ne coche pas');
 
   assert.equal(coche('se-rapprocher-de-l-ouvrage'), false);
@@ -1518,7 +1519,7 @@ test('BASES-1 T11 — les dix-sept missions ont un moteur (M2)', () => {
   assert.equal(coche('detruire-une-base-de-l-ouvrage'), false);
   const ennemie = ciblesAPortee(etat, baseCourante(etat)).find((c) => c.type === 'base')
     ?? baseOuvrageIsolee(etat);
-  retirerLeSite(etat, ennemie);
+  retirerLeSite(etat, ennemie, JOUEUR);
   assert.equal(coche('detruire-une-base-de-l-ouvrage'), true, 'raser une base ne coche pas');
 
   assert.equal(coche('seconde-base'), false);

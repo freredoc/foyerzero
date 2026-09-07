@@ -17,10 +17,10 @@
 // ailleurs ferait une seconde formulation qui finirait par dire autre chose que
 // la règle.
 
-import { FONDATION, GEOGRAPHIE } from '../data/sites.js';
+import { FONDATION } from '../data/sites.js';
 import { estSurLaCarte } from './carte.js';
-import { distanceCarreeCases, dansLOctogoneDInfluence } from './points-attaque.js';
-import { estBaseOuvrage } from './peuplement.js';
+import { distanceCarreeCases } from './points-attaque.js';
+import { campDeLaCase, OUVRAGE, JOUEUR } from './territoire.js';
 import { poiDeLaCase } from './poi.js';
 import { siteDeLaCase, butinSiToutTombe } from './site-de-la-case.js';
 import { montageCourant, retirerLeSite } from './site-entame.js';
@@ -136,6 +136,29 @@ export function problemesDeLaFondation(etat, cible) {
     });
   }
 
+  // ⚠⚠ CE MODULE LIT LA CARTE, IL NE LA REFAIT PLUS — lot CONQUÊTE-24H,
+  // 07/09/2026, ET C'EST LE §4 DU BRIEF. Il portait sa propre boucle : quarante-
+  // neuf cases interrogées autour de la cible, `estBaseOuvrage` puis
+  // `siteDeLaCase`, pour redemander « une base de l'Ouvrage est-elle À PORTÉE ».
+  // Trois choses s'y jouaient de travers :
+  //
+  //   1. il ne voyait pas les RUINES — elles ne sont pas des bases, et une case
+  //      tenue par une ruine du joueur doit être fondable ;
+  //   2. il demandait la PORTÉE quand la carte, depuis TERRITOIRE-FORCE, répond
+  //      la PROPRIÉTÉ : une case atteinte par une base de l'Ouvrage mais tenue
+  //      par le joueur était refusée alors que la carte la montrait alliée ;
+  //   3. c'était une seconde écriture du territoire, la faute que ce dépôt a
+  //      déjà retirée deux fois — de `points-attaque.js` à EUCLIDE, des POI à
+  //      TERRITOIRE-LU.
+  //
+  // ⚠⚠ CONSÉQUENCE MESURÉE ET ASSUMÉE : LE REFUS SE DESSERRE. Fonder est
+  // désormais permis partout où l'Ouvrage ne TIENT pas, y compris à deux cases
+  // d'une de ses petites bases si le joueur y est plus fort. C'est la même
+  // bascule que la récolte des POI a subie au lot précédent, et c'est ce
+  // qu'Ethan a demandé le 07/09 : « le territoire de 24 h sert à fonder ».
+  //
+  // ⚠ ET LE MESSAGE NE PARLE PLUS DE TROIS CASES, parce que ce n'est plus
+  // une distance. Il dit ce que le refus dit vraiment : la case est à eux.
   if (poiDeLaCase(etat.graine, cible.rangee, cible.colonne) !== null) {
     problemes.push({
       code: 'sur-un-poi',
@@ -143,51 +166,13 @@ export function problemesDeLaFondation(etat, cible) {
     });
   }
 
-  if (dansUnTerritoireEnnemi(etat, cible)) {
+  if (campDeLaCase(etat, cible.rangee, cible.colonne) === OUVRAGE) {
     problemes.push({
       code: 'territoire-ennemi',
-      message: `Cette case est sous l'influence d'une base de l'Ouvrage `
-        + `(${GEOGRAPHIE.rayonInfluenceEnnemie} cases).`,
+      message: 'Cette case est tenue par l\'Ouvrage.',
     });
   }
   return problemes;
-}
-
-/**
- * La case est-elle dans la zone d'influence d'une base de l'Ouvrage ?
- *
- * ⚠⚠ LA MÊME FONCTION QUE LA CARTE, PAS LA MÊME MÉTRIQUE — LA MÊME ÉCRITURE.
- * Ce module a porté sa propre copie de la forme : le carré jusqu'à BASES-1, puis
- * le disque. Depuis le 03/09, la zone est un OCTOGONE et il n'y a plus qu'une
- * écriture, `dansLOctogoneDInfluence` — celle que la carte peint et que le barème
- * du raid facture. Une forme recopiée ici referait exactement l'incohérence qu'on
- * a déjà retirée deux fois : un refus sur une case que la carte montre libre.
- *
- * ⚠ ET LE REFUS SE DURCIT DE HUIT CASES PAR BASE DE L'OUVRAGE, mécaniquement :
- * l'octogone est plus large que le disque. C'est mesuré au rapport du lot.
- *
- * ⚠ ON BALAIE LES CENTRES POSSIBLES, PAS LA CARTE. Une base de l'Ouvrage
- * influence à trois cases : il suffit donc de regarder le carré de rayon 3
- * autour de la cible et de demander à chaque case si elle EST une base. C'est
- * 49 lectures, contre 9 300 pour un balayage.
- *
- * ⚠ UNE BASE RASÉE N'INFLUENCE PLUS RIEN, et c'est `siteDeLaCase` qui le sait —
- * `estBaseOuvrage` est dérivé de la graine et la ferait reparaître.
- */
-function dansUnTerritoireEnnemi(etat, cible) {
-  const r = GEOGRAPHIE.rayonInfluenceEnnemie;
-  for (let dr = -r; dr <= r; dr += 1) {
-    for (let dc = -r; dc <= r; dc += 1) {
-      if (!dansLOctogoneDInfluence(dr, dc, r)) continue;
-      const rangee = cible.rangee + dr;
-      const colonne = cible.colonne + dc;
-      if (!estSurLaCarte(rangee, colonne)) continue;
-      if (!estBaseOuvrage(etat.graine, rangee, colonne)) continue;
-      const site = siteDeLaCase(etat, rangee, colonne);
-      if (site !== null && site.type === 'base') return true;
-    }
-  }
-  return false;
 }
 
 /**
@@ -277,7 +262,7 @@ export function fonderUneBase(etat, cible) {
   let siteDetruit = null;
   if (site !== null) {
     butin = verserLeButin(quiFonde, butinSiToutTombe(montageCourant(etat, site)));
-    retirerLeSite(etat, site);
+    retirerLeSite(etat, site, JOUEUR);
     siteDetruit = site;
   }
 

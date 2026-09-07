@@ -71,6 +71,10 @@ import {
 import { montageDuSite, resumeDuSite } from './site-de-la-case.js';
 import { baseCourante } from './base-courante.js';
 import { facteurMilli } from './combat.js';
+import { ruineFraiche } from './ruines.js';
+// ⚠ SEULEMENT LE NUMÉRO DU CAMP, et il n'est écrit qu'une fois — dans
+// `sim/territoire.js`, où la carte l'emploie. Le recopier ici en ferait deux.
+import { JOUEUR } from './territoire.js';
 import {
   pvApresRetour, pvMaxDeLaPieceDeGarnisonMilli, ticksDeRetour,
 } from './reparation.js';
@@ -293,14 +297,39 @@ function neDitRien(entree) {
  * montage, pas sur la table : rien ne garantit à ce module que le satellite est
  * encore là. Ce qui compte est qu'il ne soit plus là après.
  *
+ * ⚠⚠ UNE BASE RASÉE DEVIENT UNE RUINE, ET LA RUINE PORTE TROIS CHAMPS DE PLUS
+ * — lot CONQUÊTE-24H, 07/09/2026. L'entrée ne disait qu'une CASE ; elle dit
+ * maintenant aussi QUI a gagné, DE QUEL NIVEAU était ce qui est tombé, et QUAND.
+ * Pendant vingt-quatre heures, `sim/territoire.js` la compte comme un émetteur
+ * de plus dans la somme du vainqueur ; ensuite elle se tait, sans que la case
+ * cesse pour autant d'être retirée. `sim/ruines.js` porte les deux lectures.
+ *
+ * ⚠⚠ LE VAINQUEUR EST UN ARGUMENT, PAS UNE CONSTANTE ÉCRITE ICI, ET C'EST LA
+ * SYMÉTRIE DU §1 DU BRIEF. Les deux appelants d'aujourd'hui sont des gestes du
+ * JOUEUR — le raid qui rase, la fondation qui écrase —, mais l'Ouvrage attaque
+ * déjà : le jour où une base du joueur sera RETIRÉE au lieu d'être redéployée,
+ * la règle est écrite et il n'y aura qu'à passer `OUVRAGE`.
+ *
+ * ⚠ LE NIVEAU EST CELUI QUE `siteDeLaCase` A INSCRIT DANS L'IDENTITÉ, donc
+ * `niveauDeLaRangee` pour une base de l'Ouvrage. C'est la seule grandeur que la
+ * carte lui donne, et c'est celle que la formule de TERRITOIRE-FORCE attend.
+ *
+ * ⚠ LE `type` AUSSI VIENT DE L'IDENTITÉ, et il dit CE QUI est tombé — donc
+ * quelle carcasse la carte dessine. Il ne se déduit pas du vainqueur : voir
+ * `ruineFraiche`.
+ *
  * @param {object} etat modifié en place
  * @param {object} identite le site à retirer
+ * @param {number} vainqueur le camp qui prend la case — `JOUEUR` ou `OUVRAGE`
  */
-export function retirerLeSite(etat, identite) {
+export function retirerLeSite(etat, identite, vainqueur) {
   exigerTable(etat);
   delete etat.sitesEntames[cleDuSite(identite)];
   if (identite.type === 'base') {
-    etat.basesRasees.push(`${identite.rangee}:${identite.colonne}`);
+    etat.basesRasees.push(ruineFraiche(
+      identite.rangee, identite.colonne, identite.type, vainqueur,
+      identite.niveau, etat.horloge.nbTicks,
+    ));
     return;
   }
   const trouve = trouverSatellite(etat, identite);
@@ -334,7 +363,9 @@ export function enregistrerLeRaid(etat, identite, resultat) {
   const cle = cleDuSite(identite);
 
   if (resultat.cause === 'souche') {
-    retirerLeSite(etat, identite);
+    // ⚠ LE JOUEUR EST LE VAINQUEUR : `enregistrerLeRaid` n'est appelée que
+    // depuis un raid QU'IL LANCE. Le raid de l'Ouvrage a son propre module.
+    retirerLeSite(etat, identite, JOUEUR);
     return { rase: true };
   }
 
