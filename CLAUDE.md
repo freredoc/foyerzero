@@ -95,10 +95,13 @@ AILLEURS.** Ce sont les deux seules lignes du jeu où un signe dit une OPÉRATIO
 la taxe RETIRE en chemin, le reçu AJOUTE à l'arrivée. Il n'existe aucun bouton de
 pas dans la page — le zoom se fait au doigt, arbitré le 30/08, « pas de zoom fixe
 avec + − ».
-⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
-DÉCLARE NON EXÉCUTÉ.** Ce lot est entièrement visuel : ce qui est mesuré ici est
-le DOM et les octets, pas l'aspect. Aucun des quarante-six n'a été vu à sa taille
-d'affichage réelle.
+⚠⚠ **LE RENDU A ÉTÉ VU DANS UN NAVIGATEUR, EN 375 × 812, ET PAS SUR L'APPAREIL
+D'ETHAN.** Quatre écrans regardés — bandeau, fiche d'un bâtiment, Recherche,
+Offense —, tout se dessine : le compteur passe d'« EMPLAC. » à « PTS OFF. » avec
+son dessin, la flèche verte n'apparaît que sur une amélioration possible, le
+cadenas marque les vignettes verrouillées, les modules ont remplacé la pastille.
+⚠ Ni le `dpr` 3, ni la police du système, ni le toucher : la taille `1.15em` et
+l'étroitesse des vignettes de palette restent à juger sur le téléphone.
 ⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ RELANCÉ, ET C'ÉTAIT CONFORME** :
 le câblage ne touche ni `art/`, ni un outil de la chaîne graphique — pas un octet
 d'`art/sprites/` ne change. Son verdict du lot précédent tient.

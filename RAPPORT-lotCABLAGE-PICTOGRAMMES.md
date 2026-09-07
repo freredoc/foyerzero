@@ -173,13 +173,19 @@ fait six cents `<span>` par minute sans qu'aucune longueur ne soit fausse.
 
 ## 6. Écarts et points en suspens
 
-1. ⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
-   DÉCLARE NON EXÉCUTÉ.** Ce lot est entièrement visuel ; ce qui est mesuré ici
-   est le **DOM** et les **octets**, pas l'aspect. Aucun des quarante-six n'a été
-   vu à sa taille d'affichage réelle. La taille CSS retenue est `1.15em` avec
-   `vertical-align: -0.2em` : elle suit le texte plutôt qu'un nombre de pixels,
-   pour rester accordée au libellé quand la ligne change de corps. **C'est le
-   premier réglage à revoir à l'œil.**
+1. ⚠⚠ **LE RENDU A ÉTÉ VU DANS UN NAVIGATEUR, PAS SUR L'APPAREIL D'ETHAN.** Le
+   livrable a été servi et ouvert en **375 × 812** — la géométrie du téléphone —
+   et les quatre écrans ont été regardés : le bandeau et ses cinq tuiles, la
+   fiche d'un bâtiment, l'écran Recherche et ses modules, l'écran Offense avec
+   ses vagues et sa palette. **Tout se dessine.** Ce qui est confirmé à l'œil :
+   le compteur passe bien d'« EMPLAC. » à « PTS OFF. » avec son dessin, la
+   flèche verte n'apparaît que sur un bouton d'amélioration possible, le cadenas
+   marque les vignettes verrouillées, et les modules ont remplacé la pastille.
+   ⚠ **CE N'EST PAS L'APPAREIL** : ni le `dpr` 3, ni la police du système, ni le
+   toucher. Deux réglages restent à juger à l'œil sur le téléphone — la taille
+   `1.15em` (elle suit le texte plutôt qu'un nombre de pixels, pour rester
+   accordée au libellé quand la ligne change de corps) et l'étroitesse des
+   vignettes de palette, où un châssis, un cadenas et un nom se partagent 82 px.
 2. ⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ RELANCÉ, ET C'ÉTAIT CONFORME** :
    le câblage ne touche ni `art/`, ni un outil de la chaîne graphique — pas un
    octet d'`art/sprites/` ne change. Le verdict du lot précédent tient : 681
