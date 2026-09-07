@@ -20,8 +20,11 @@ import { dirname, join } from 'node:path';
 import {
   libelleDAttaque, vueDuRaid, plafondDuZoom,
   initialiserEcranRaid, BANDE_A_L_OUVERTURE,
+  ordreDeLEffondrement, effondrees,
 } from '../src/ui/raid.js';
 import { calculerProjection } from '../src/render/projection.js';
+import { listeAffichage, couchesDeLaRuine } from '../src/render/scene.js';
+import { creerCombat } from '../src/sim/combat.js';
 import { MUR_CASES, BANDE_SOUS_LE_MUR } from '../src/render/fond.js';
 import {
   BANDES, casesDeLaBande, bornesDuDecalage, bornesDuDecalageX, basculeDeBande,
@@ -33,7 +36,9 @@ import { gesteDuSecondToucher } from '../src/ui/monde.js';
 import {
   chromeMasque, CHROME_MASQUE_PAR, CHROME_MASQUE_PAR_LE_DEROULE, BLOCS_DE_CHROME,
 } from '../src/ui/session.js';
-import { ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE } from '../src/data/sites.js';
+import {
+  ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE, RESTE_APRES_DESTRUCTION,
+} from '../src/data/sites.js';
 import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { coutDUnRaid } from '../src/sim/points-attaque.js';
@@ -54,11 +59,11 @@ function balisage() {
 }
 
 /** Une partie dont les satellites sont parus, avec une armée posée. */
-function partieArmee(graine = 2026) {
+function partieArmee(graine = 2026, niveau = 1, colonnes = 6) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
-  for (let c = 1; c <= 6; c += 1) {
-    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
+  for (let c = 1; c <= colonnes; c += 1) {
+    baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau, degatsMilli: 0 });
   }
   etat.attaque.points = 5000;
   return etat;
@@ -961,8 +966,15 @@ function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) 
     aUnEcouteur(type) { return (ecouteursDoc.get(type) ?? []).length > 0; },
     defaultView: {
       devicePixelRatio: dpr,
-      requestAnimationFrame: () => { rafs.n += 1; return rafs.n; },
-      cancelAnimationFrame() {},
+      // ⚠⚠ LE FAUX RETIENT LA RAPPEL, ET IL NE LE JOUE PAS TOUT SEUL — lot
+      // EFFONDREMENT. Il ne comptait que les demandes, ce qui suffisait tant
+      // qu'aucun test n'avait besoin de faire AVANCER le temps : c'est
+      // exactement ce que `RDR T1` exploite, une boucle qui ne rappelle jamais.
+      // Le retenir ne change donc rien à ces tests-là, et il permet à ceux de
+      // l'effondrement de jouer image par image, avec un horodatage qu'ils
+      // choisissent.
+      requestAnimationFrame: (fn) => { rafs.n += 1; rafs.enAttente = fn; return rafs.n; },
+      cancelAnimationFrame() { rafs.enAttente = null; },
       setTimeout: () => 1,
       clearTimeout() {},
       performance: { now: () => 0 },
@@ -974,7 +986,25 @@ function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) 
   };
   for (const el of parId.values()) el.ownerDocument = doc;
   doc.head.ownerDocument = doc;
-  const rafs = { n: 0 };
+  const rafs = {
+    n: 0,
+    /** La rappel en attente, ou `null` — comme un navigateur entre deux images. */
+    enAttente: null,
+    /** L'horodatage cumulé, celui que `requestAnimationFrame` passerait. */
+    horodatage: 0,
+    /**
+     * Joue UNE image, `ms` après la précédente. Rend `false` s'il n'y en avait
+     * aucune en attente — c'est ainsi qu'un test voit la boucle s'arrêter.
+     */
+    image(ms = 250) {
+      const fn = rafs.enAttente;
+      rafs.enAttente = null;
+      if (typeof fn !== 'function') return false;
+      rafs.horodatage += ms;
+      fn(rafs.horodatage);
+      return true;
+    },
+  };
   return { doc, appels, parId, rafs };
 }
 
@@ -992,10 +1022,18 @@ function fauxAtlas() {
   return new Proxy({}, { get: () => image, has: () => true });
 }
 
-/** L'écran monté sur une partie prête à attaquer, et sa cible. */
+/**
+ * L'écran monté sur une partie prête à attaquer, et sa cible.
+ *
+ * ⚠ `graine`, `niveau` ET `colonnes` SONT ENTRÉS AU LOT EFFONDREMENT, et ils ne
+ * changent rien par défaut. Les tests de l'effondrement ont besoin d'un raid qui
+ * RASE — `rase === true` —, et le montage d'origine n'en produit pas : neuf
+ * Meutes de niveau 20 sur la graine 42, mesuré, rasent la Souche au tick 340.
+ */
 function ecranPret(options = {}) {
-  const { doc, appels, parId } = fauxDocumentRaid(options);
-  const etat = partieArmee();
+  const { doc, appels, parId, rafs } = fauxDocumentRaid(options);
+  const { graine = 2026, niveau = 1, colonnes = 6 } = options;
+  const etat = partieArmee(graine, niveau, colonnes);
   const cible = premierCamp(etat);
   const journal = { deroule: [] };
   const ecran = initialiserEcranRaid(doc, {
@@ -1003,7 +1041,8 @@ function ecranPret(options = {}) {
   });
   ecran.ouvrir(etat, cible, fauxAtlas());
   return {
-    doc, appels, parId, etat, cible, ecran, journal, $: (id) => parId.get(id),
+    doc, appels, parId, etat, cible, ecran, journal, rafs,
+    $: (id) => parId.get(id),
   };
 }
 
@@ -1241,4 +1280,467 @@ test('RDR T8 — le niveau peint sur une vague vient de l\'aperçu, pas d\'un 1 
   for (const vide of cases.filter((c) => !c.classList.contains('occupe'))) {
     assert.equal(vide.children.length, 0, 'une case vide porte une pastille de niveau');
   }
+});
+
+// ---------------------------------------------------------------------------
+// EFFONDREMENT — le site tombe avant le rapport, 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, POINT 12 : « lors d'une victoire totale, juste après la destruction
+// et avant le rapport, détruire les unités et bâtiments de défense en 2
+// secondes. » Arbitrage du même jour : **purement visuel, l'état ne bouge pas.**
+//
+// ⚠⚠ LE MONTAGE QUI RASE A DÛ ÊTRE CHERCHÉ, ET C'EST LA PREMIÈRE CHOSE À DIRE.
+// Le montage d'origine de ce fichier — six Meutes de niveau 1, graine 2026 —
+// rend `rase: false` : il n'aurait jamais déclenché l'effondrement, et `EFF T1`
+// serait passé sans rien mesurer. Balayage sur six graines et quatre niveaux :
+// **neuf Meutes de niveau 20 sur la graine 42** rasent la Souche au tick 340.
+// C'est le seul couple du balayage qui rase, et les deux montages servent les
+// deux moitiés du lot — `rase` vrai pour `EFF T1`, faux pour `EFF T2`.
+
+/** Un écran dont le raid RASE la cible, et sa boucle d\'images en main. */
+function ecranQuiRase() {
+  return ecranPret({ graine: 42, niveau: 20, colonnes: 9 });
+}
+
+/**
+ * Combien d\'images ce raid demande SANS effondrement — c\'est-à-dire la durée du
+ * combat lui-même, en images.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QU\'ON NE PEUT PAS VOIR LA FIN DU COMBAT DE L\'EXTÉRIEUR.
+ * `combat` ne sort pas du module — lui ouvrir un accesseur pour les besoins d\'un
+ * test mettrait dans `src/` une porte que la production n\'emploie pas —, et
+ * pendant l\'effondrement l\'écran ressemble EXACTEMENT à un combat en cours :
+ * `#raid-bas` caché, `#raid-fin` caché. On mesure donc le combat seul, en
+ * réglant la table à zéro, et on rejoue le MÊME raid en s\'arrêtant à ce
+ * compte-là : on est alors à la première image de l\'effondrement, sûrement.
+ */
+function imagesDuCombatSeul(msParImage) {
+  const dOrigine = ECRAN_RAID.effondrementMs;
+  try {
+    ECRAN_RAID.effondrementMs = 0;
+    const ecran = ecranQuiRase();
+    ecran.$('raid-attaquer').envoyer('click');
+    const { images, montre } = menerAuRapport(ecran, msParImage);
+    assert.equal(montre, true, 'le combat de référence ne se conclut pas');
+    return images;
+  } finally {
+    ECRAN_RAID.effondrementMs = dOrigine;
+  }
+}
+
+/** Un écran arrêté à la PREMIÈRE image de son effondrement. */
+function ecranDansLEffondrement(msParImage = 250) {
+  const duCombat = imagesDuCombatSeul(msParImage);
+  const ecran = ecranQuiRase();
+  ecran.$('raid-attaquer').envoyer('click');
+  assert.equal(ecran.etat.rapports[ecran.etat.rapports.length - 1].rase, true,
+    'le montage ne rase pas : il n\'y a pas d\'effondrement à mesurer');
+  for (let k = 0; k < duCombat; k += 1) ecran.rafs.image(msParImage);
+  assert.equal(ecran.$('raid-fin').hidden, true,
+    'le rapport est déjà venu : le montage n\'est pas dans l\'effondrement');
+  assert.equal(ecran.$('raid-bas').hidden, true, 'le déroulé est déjà quitté');
+  return ecran;
+}
+
+/**
+ * Mène le déroulé jusqu\'au rapport, image par image, et rend ce qu\'il a coûté.
+ *
+ * ⚠ LA BOUCLE EST BORNÉE, et la borne est assertée par les appelants : une
+ * boucle de test qui ne finirait pas ferait pendre la suite entière au lieu de
+ * dire ce qui ne va pas.
+ */
+function menerAuRapport(ecran, msParImage = 250, maxImages = 4000) {
+  let images = 0;
+  while (ecran.$('raid-fin').hidden && images < maxImages) {
+    if (!ecran.rafs.image(msParImage)) break;
+    images += 1;
+  }
+  return { images, montre: ecran.$('raid-fin').hidden === false };
+}
+
+test('EFF T1 — une victoire TOTALE retarde le rapport, et de la durée de la table', () => {
+  // ⚠⚠ LA MESURE EST UN ÉCART, PAS UN NOMBRE ABSOLU. Compter les images qu'un
+  // raid demande dirait surtout combien de ticks dure le combat. On joue donc le
+  // MÊME raid deux fois, avec deux durées d'effondrement, et c'est la
+  // DIFFÉRENCE qui porte la preuve — elle ne peut venir que de l'effondrement.
+  const dOrigine = ECRAN_RAID.effondrementMs;
+  try {
+    const mesurer = (dureeMs) => {
+      ECRAN_RAID.effondrementMs = dureeMs;
+      const ecran = ecranQuiRase();
+      ecran.$('raid-attaquer').envoyer('click');
+      // Le montage doit VRAIMENT raser, sinon rien de tout ceci ne se joue.
+      const rapport = ecran.etat.rapports[ecran.etat.rapports.length - 1];
+      assert.equal(rapport.rase, true, 'le montage ne rase pas : EFF T1 ne mesure rien');
+      assert.equal(ecran.$('raid-fin').hidden, true, 'le rapport est déjà à l\'écran');
+      const { images, montre } = menerAuRapport(ecran);
+      assert.equal(montre, true, `le rapport n\'est jamais venu (${images} images)`);
+      return images;
+    };
+    // 250 ms par image : une durée nulle ne coûte aucune image de plus, 2 000 ms
+    // en coûtent huit, 4 000 en coûtent seize.
+    const sansEffondrement = mesurer(0);
+    const deuxSecondes = mesurer(2000);
+    const quatreSecondes = mesurer(4000);
+
+    assert.ok(deuxSecondes > sansEffondrement,
+      `le rapport vient aussi vite avec effondrement (${deuxSecondes}) que sans `
+      + `(${sansEffondrement}) : rien ne s\'intercale`);
+    assert.equal(deuxSecondes - sansEffondrement, 2000 / 250,
+      'les deux secondes ne coûtent pas huit images de 250 ms');
+    // ⚠ ET C'EST BIEN PROPORTIONNEL : sans cette ligne, un délai FIXE écrit dans
+    // l'écran passerait les deux assertions ci-dessus.
+    assert.equal(quatreSecondes - sansEffondrement, 4000 / 250,
+      'doubler la durée ne double pas l\'attente : le délai ne vient pas de la table');
+  } finally {
+    ECRAN_RAID.effondrementMs = dOrigine;
+  }
+});
+
+test('EFF T2 — une victoire PARTIELLE ne déclenche rien : le rapport suit le combat', () => {
+  // ⚠⚠ C'EST LE TEST QUI BORNE LE LOT. Sans lui, un effondrement joué sur TOUS
+  // les raids passerait `EFF T1` sans qu'on le voie.
+  const dOrigine = ECRAN_RAID.effondrementMs;
+  try {
+    const mesurer = (dureeMs) => {
+      ECRAN_RAID.effondrementMs = dureeMs;
+      const ecran = ecranPret(); // six Meutes de niveau 1 : `rase` est FAUX
+      ecran.$('raid-attaquer').envoyer('click');
+      const rapport = ecran.etat.rapports[ecran.etat.rapports.length - 1];
+      assert.equal(rapport.rase, false, 'le montage rase : EFF T2 ne borne plus rien');
+      const { images, montre } = menerAuRapport(ecran);
+      assert.equal(montre, true, `le rapport n\'est jamais venu (${images} images)`);
+      return images;
+    };
+    // La durée de la table ne doit RIEN changer : le rapport ne l'attend pas.
+    assert.equal(mesurer(2000), mesurer(0),
+      'une victoire partielle attend l\'effondrement');
+    assert.equal(mesurer(10_000), mesurer(0),
+      'une victoire partielle attend l\'effondrement');
+  } finally {
+    ECRAN_RAID.effondrementMs = dOrigine;
+  }
+});
+
+test('EFF T3 — l\'état ne bouge pas d\'un champ pendant l\'effondrement', () => {
+  // ⚠⚠ C'EST LE TEST DU §2 DU BRIEF, ET DE L'ARBITRAGE « A » DU 01/09.
+  // `executerRaid` commet tout AVANT la première image ; l'effondrement est du
+  // dessin, et il ne doit pas retirer une entité, ni un PV, ni une unité de
+  // butin.
+  const ecran = ecranQuiRase();
+  ecran.$('raid-attaquer').envoyer('click');
+  const rapport = ecran.etat.rapports[ecran.etat.rapports.length - 1];
+  assert.equal(rapport.rase, true, 'le montage ne rase pas');
+
+  // On mène le combat jusqu'à sa fin, puis on relève l'état AU MILIEU de
+  // l'effondrement — pas après, où il serait trop tard pour voir une mutation.
+  let images = 0;
+  while (ecran.$('raid-fin').hidden && images < 4000) {
+    if (!ecran.rafs.image(250)) break;
+    images += 1;
+    // Quatre images après la fin du combat : `effondrementMs` vaut 1 000 sur
+    // 2 000, donc la moitié du site est tombée à l'écran.
+    if (images > 0 && ecran.$('raid-bas').hidden === true && images > 100) break;
+  }
+  const auMilieu = structuredClone(ecran.etat);
+  ecran.rafs.image(250);
+  ecran.rafs.image(250);
+  assert.deepEqual(ecran.etat, auMilieu,
+    'l\'effondrement a modifié l\'état : il devait être purement visuel');
+
+  // Et il finit quand même par montrer le rapport — sinon on aurait mesuré
+  // l'immobilité d'un écran mort.
+  const { montre } = menerAuRapport(ecran);
+  assert.equal(montre, true, 'le rapport n\'est jamais venu');
+});
+
+test('EFF T4 — l\'écran masqué COUPE l\'effondrement et va droit au rapport', () => {
+  // ⚠⚠ C'EST LE DÉFAUT DU LOT RETOUR-DE-RAID, REFAIT UN CRAN PLUS LOIN. Pendant
+  // l'effondrement le combat est TERMINÉ : la quatrième garde de l'écouteur
+  // renverrait sans rien conclure, et le joueur qui revient trouverait deux
+  // secondes d'animation figée devant son rapport.
+  const ecran = ecranDansLEffondrement();
+
+  ecran.doc.hidden = true;
+  ecran.doc.envoyer('visibilitychange');
+
+  assert.equal(ecran.$('raid-fin').hidden, false,
+    'masquer la page pendant l\'effondrement ne montre pas le rapport');
+  assert.equal(ecran.$('raid-bas').hidden, false, 'le déroulé n\'a pas été quitté');
+  // ⚠ ET IL N'EN FAUT PAS DAVANTAGE : la boucle s'arrête d'elle-même à l'image
+  // suivante, sans rejouer l'effondrement ni rouvrir un second rapport.
+  ecran.rafs.image(250);
+  assert.equal(ecran.$('raid-fin').hidden, false, 'le rapport a été refermé');
+  assert.equal(ecran.rafs.image(250), false, 'la boucle tourne encore');
+});
+
+test('EFF T5 — « Instantané » n\'attend pas l\'effondrement', () => {
+  // ⚠ LE BOUTON EST CACHÉ SUR UN VRAI RAID — `#raid-vitesses` garde son
+  // `hidden = !simule`, et `RDR T4` le tient. Ce qui est mesuré ici est le
+  // CHEMIN DE CODE, celui que `conclureLeDeroule` porte : son sens est d'aller
+  // au bout tout de suite, et l'effondrement ne doit pas s'y intercaler.
+  const ecran = ecranQuiRase();
+  ecran.$('raid-attaquer').envoyer('click');
+  assert.equal(ecran.etat.rapports[ecran.etat.rapports.length - 1].rase, true);
+  assert.equal(ecran.$('raid-fin').hidden, true, 'le rapport est déjà à l\'écran');
+
+  ecran.$('raid-instantane').envoyer('click');
+
+  assert.equal(ecran.$('raid-fin').hidden, false,
+    '« Instantané » attend l\'effondrement au lieu de conclure');
+  assert.equal(ecran.$('raid-bas').hidden, false, 'le déroulé n\'a pas été quitté');
+  // ⚠ ET AUCUNE IMAGE N'A ÉTÉ JOUÉE POUR EN ARRIVER LÀ : c'est tout le sens du
+  // bouton. Sans cette ligne, un effondrement joué d'un coup passerait aussi.
+  assert.equal(ecran.rafs.horodatage, 0, 'des images ont été jouées avant le rapport');
+});
+
+test('EFF T6 — une SIMULATION ne s\'effondre pas', () => {
+  // ⚠⚠ DÉCISION DU LOT, ÉCRITE PLUTÔT QUE LAISSÉE AU CÂBLAGE. Le simulateur ne
+  // commande rien à personne : le bandeau « SIMULATEUR » existe pour qu'on ne
+  // confonde pas un essai avec un ordre, et une animation de DESTRUCTION y
+  // ferait croire à une destruction. C'est la même garde que celle du son et que
+  // la deuxième des quatre de `visibilitychange`.
+  const dOrigine = ECRAN_RAID.effondrementMs;
+  try {
+    const mesurer = (dureeMs) => {
+      ECRAN_RAID.effondrementMs = dureeMs;
+      const ecran = ecranQuiRase();
+      ecran.$('raid-simuler').envoyer('click');
+      assert.equal(ecran.$('raid-bandeau').hidden, false,
+        'le montage n\'a pas lancé de SIMULATION');
+      let images = 0;
+      while (ecran.$('raid-sim').hidden && images < 4000) {
+        if (!ecran.rafs.image(250)) break;
+        images += 1;
+      }
+      assert.equal(ecran.$('raid-sim').hidden, false,
+        `le panneau de simulation n\'est jamais venu (${images} images)`);
+      return images;
+    };
+    // ⚠ FALSIFIABLE : la même mesure sur un VRAI raid DIFFÈRE — c'est `EFF T1`.
+    // Ici la durée de la table ne change rien, quelle qu'elle soit.
+    assert.equal(mesurer(2000), mesurer(0), 'la simulation attend l\'effondrement');
+    assert.equal(mesurer(10_000), mesurer(0), 'la simulation attend l\'effondrement');
+  } finally {
+    ECRAN_RAID.effondrementMs = dOrigine;
+  }
+});
+
+test('EFF T7 — le toucher N\'ABRÈGE PAS l\'effondrement, et c\'est la décision', () => {
+  // ⚠⚠ DÉCIDÉ, PAS LAISSÉ AU HASARD DU CÂBLAGE. Trois raisons, et la troisième
+  // est celle qui tranche :
+  //   — deux secondes est sous le seuil où un raccourci paie sa complexité ;
+  //   — le canevas porte DÉJÀ le pincement et le glissement, et un toucher qui
+  //     abrège entrerait en concurrence avec eux pendant que le joueur regarde ;
+  //   — Ethan a refusé un raccourci le 06/09, mot pour mot : « bouton passer
+  //     non ». Un toucher qui abrège est le même geste sans le bouton.
+  // Les DEUX vraies sorties restent : la page masquée et « Instantané ».
+  const ecran = ecranDansLEffondrement();
+
+  ecran.$('raid-canvas').envoyer('pointerdown', {
+    pointerId: 1, clientX: 10, clientY: 10, button: 0,
+  });
+  ecran.$('raid-canvas').envoyer('pointerup', { pointerId: 1, clientX: 10, clientY: 10 });
+
+  assert.equal(ecran.$('raid-fin').hidden, true,
+    'le toucher a abrégé l\'effondrement : la décision du lot a changé sans être dite');
+  // Et il finit tout seul, par la boucle.
+  const { montre } = menerAuRapport(ecran);
+  assert.equal(montre, true, 'le rapport n\'est jamais venu après le toucher');
+});
+
+test('EFF T8 — la durée vient de `src/data/`, pas de l\'écran', () => {
+  // ⚠⚠ LA MESURE EST DANS `EFF T1` — trois durées, trois attentes différentes,
+  // proportionnelles. Ce test-ci garde l'autre moitié : la valeur EST dans la
+  // table, et l'écran ne porte aucun nombre de millisecondes en clair.
+  assert.equal(typeof ECRAN_RAID.effondrementMs, 'number');
+  assert.equal(ECRAN_RAID.effondrementMs, 2000, 'Ethan a dit deux secondes');
+
+  const src = decommentee('src/ui/raid.js');
+  assert.match(src, /ECRAN_RAID\.effondrementMs/,
+    'l\'écran ne lit pas la durée dans la table');
+  // ⚠ AUCUN NOMBRE DE MILLISECONDES EN CLAIR DANS L'ÉCRAN. `2000` écrit ici
+  // rendrait la table décorative, et `EFF T1` continuerait de passer en la
+  // faisant varier — non : il tomberait, mais le jour où quelqu'un le retire,
+  // cette ligne-ci reste.
+  assert.ok(!/\b2000\b/.test(src),
+    'un « 2000 » est écrit en clair dans src/ui/raid.js');
+});
+
+test('EFF T9 — aucune seconde horloge : l\'effondrement ne pose pas de `setTimeout`', () => {
+  // ⚠⚠ UNE SECONDE HORLOGE NE SE FIGERAIT PAS AVEC LA PREMIÈRE quand
+  // l'application passe en arrière-plan, et c'est très exactement le défaut que
+  // le lot RETOUR-DE-RAID a réparé. Le temps se prend sur la boucle d'images.
+  const minuteries = { n: 0 };
+  const ecran = ecranQuiRase();
+  // On compte les `setTimeout` posés APRÈS le lancement : `armerLAttaque` en
+  // pose un à l'ouverture, et il ne regarde pas ce lot.
+  ecran.doc.defaultView.setTimeout = () => { minuteries.n += 1; return 1; };
+  ecran.$('raid-attaquer').envoyer('click');
+  const poseesAuLancement = minuteries.n;
+
+  const { montre, images } = menerAuRapport(ecran);
+  assert.equal(montre, true, `le rapport n\'est jamais venu (${images} images)`);
+  assert.equal(minuteries.n, poseesAuLancement,
+    'le chemin de l\'effondrement a posé une minuterie');
+
+  // ⚠ ET LA PREUVE PAR LA SOURCE : le corps de `image` et celui de
+  // `combatDessine` n'en contiennent aucun. Une égalité de compteur passerait
+  // aussi si le faux document ne portait pas `setTimeout`.
+  const src = decommentee('src/ui/raid.js');
+  const bloc = src.slice(src.indexOf('function image('), src.indexOf('function demarrerBoucle('));
+  assert.ok(bloc.length > 100, 'le découpage de `image` n\'a pas trouvé la fonction');
+  assert.ok(!/setTimeout|setInterval/.test(bloc),
+    'la boucle d\'images pose une minuterie');
+});
+
+test('EFF T10 — l\'ordre de chute suit l\'assaut, et il ne touche QUE la défense', () => {
+  // La règle, prise seule et sans écran : elle est pure, donc elle se mesure.
+  const entites = [
+    { indice: 0, camp: 'defense', vivant: true, sorti: false, rangeeMilli: 18_000, colonneMilli: 5000 },
+    { indice: 1, camp: 'defense', vivant: true, sorti: false, rangeeMilli: 3000, colonneMilli: 7000 },
+    { indice: 2, camp: 'defense', vivant: true, sorti: false, rangeeMilli: 3000, colonneMilli: 2000 },
+    { indice: 3, camp: 'attaque', vivant: true, sorti: false, rangeeMilli: 4000, colonneMilli: 1000 },
+    { indice: 4, camp: 'defense', vivant: false, sorti: false, rangeeMilli: 5000, colonneMilli: 1000 },
+    { indice: 5, camp: 'defense', vivant: true, sorti: true, rangeeMilli: 6000, colonneMilli: 1000 },
+  ];
+  // De l'avant vers le fond, la colonne départageant : 2, puis 1, puis 0.
+  // ⚠ L'ATTAQUANT SURVIVANT N'Y EST PAS — c'est lui qui a gagné.
+  // ⚠ NI LA MORTE, NI LA SORTIE : elles ne sont déjà plus à l'écran.
+  assert.deepEqual(ordreDeLEffondrement(entites), [2, 1, 0]);
+
+  // La chute est proportionnelle, et elle atteint le total à la fin.
+  assert.deepEqual([...effondrees(entites, 0, 2000)], []);
+  assert.deepEqual([...effondrees(entites, 1000, 2000)], [2]);
+  assert.deepEqual([...effondrees(entites, 2000, 2000)], [2, 1, 0]);
+  assert.deepEqual([...effondrees(entites, 9999, 2000)], [2, 1, 0]);
+  // ⚠ UNE DURÉE NULLE FAIT TOUT TOMBER PLUTÔT QUE DE DIVISER PAR ZÉRO.
+  assert.deepEqual([...effondrees(entites, 0, 0)], [2, 1, 0]);
+  // Falsifiable : sans le tri, l'ordre d'insertion rendrait [0, 1, 2].
+  assert.notDeepEqual(ordreDeLEffondrement(entites), [0, 1, 2]);
+});
+
+/**
+ * Un site à TROIS pièces de défense — un bâtiment, une structure, une escouade —
+ * et l\'ensemble de leurs indices, prêt pour `listeAffichage`.
+ *
+ * ⚠ LES TROIS GENRES SONT LÀ EXPRÈS : `RESTE_APRES_DESTRUCTION` en porte trois
+ * clés, et un montage qui n\'en couvrirait que deux laisserait la troisième sans
+ * mesure.
+ */
+function montageDeRuines() {
+  const montage = {
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 18, colonne: 5 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 10, colonne: 3 },
+      { id: 'meute', rangee: 9, colonne: 4 },
+    ],
+    vagues: [[{ id: 'meute', colonne: 1 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] },
+    },
+  };
+  const etat = creerCombat(montage);
+  const proj = calculerProjection(1080, 4000, MUR_CASES);
+  const noms = (liste) => liste.filter((p) => p.forme === 'sprite').map((p) => p.nom);
+  const parId = new Map(etat.entites.map((e) => [e.id, e]));
+  const souche = parId.get('souche');
+  const merlon = parId.get('merlon');
+  const escouade = etat.entites.find((e) => e.id === 'meute' && e.camp === 'defense');
+  assert.ok(souche && merlon && escouade, 'le montage n\'a pas les trois genres attendus');
+  return {
+    etat, proj, noms, souche, merlon, escouade,
+    tombees: new Set([souche.indice, merlon.indice, escouade.indice]),
+  };
+}
+
+test('EFF T11 — un BÂTIMENT laisse une ruine, une structure et une escouade n\'en laissent pas', () => {
+  // ⚠⚠ ETHAN, 07/09 : « utilise ruine_j ruine_o », puis « restreins aux bâtiments
+  // pour l\'instant ». Les deux planches dormaient dans la famille `batiment` de
+  // l\'atlas — DANS le livrable, donc payées en octets, et employées par
+  // personne. Elles travaillent, et sous les bâtiments SEULS : elles ont été
+  // dessinées pour une case de bâtiment, et personne n\'a encore vu ce qu\'elles
+  // donnent sous une tourelle.
+  const { etat, proj, noms, tombees, souche, merlon, escouade } = montageDeRuines();
+
+  // Sans effondrement, rien ne change : c\'est le cas de tous les autres
+  // appelants de `listeAffichage`, et il ne doit pas bouger.
+  const intact = noms(listeAffichage(etat, proj));
+  assert.equal(intact.filter((n) => n.startsWith('ruine_')).length, 0,
+    'une ruine se dessine hors effondrement');
+  assert.ok(intact.includes('bat_o_souche'), 'le montage ne dessine pas la Souche');
+
+  const apres = noms(listeAffichage(etat, proj, null, 0, null, 0, tombees));
+
+  // ⚠ UNE SEULE RUINE : la Souche. Le Merlon est une STRUCTURE, l\'autre pièce
+  // une escouade, et `RESTE_APRES_DESTRUCTION` les met toutes deux à `rien`.
+  assert.equal(apres.filter((n) => n === 'ruine_o').length, 1,
+    'le compte des ruines ne suit pas la table');
+  assert.equal(apres.filter((n) => n === 'ruine_j').length, 0,
+    'une ruine du JOUEUR sur un site de l\'Ouvrage');
+  // Et aucune des trois pièces d\'origine ne se dessine plus.
+  assert.ok(!apres.includes('bat_o_souche'), 'la Souche se dessine encore');
+  assert.ok(!apres.some((n) => n.startsWith('def_o_merlon')), 'le Merlon se dessine encore');
+  assert.ok(souche && merlon && escouade);
+
+  // ⚠ ET LA LETTRE SUIT LE PROPRIÉTAIRE, pas le camp — « le joueur peut
+  // défendre ». Prise seule, la règle se mesure sans montage.
+  assert.deepEqual(couchesDeLaRuine('ouvrage'), [{ famille: 'batiment', nom: 'ruine_o' }]);
+  assert.deepEqual(couchesDeLaRuine('joueur'), [{ famille: 'batiment', nom: 'ruine_j' }]);
+});
+
+test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage attend', () => {
+  // ⚠⚠ C\'EST LE TEST DE « PRÉPARE LES CÂBLAGES ». Ethan restreint aux bâtiments
+  // POUR L\'INSTANT : ce test prouve qu\'ouvrir aux structures ne demandera pas
+  // une ligne de code, seulement un mot dans `src/data/sites.js`. Sans lui, la
+  // table pourrait être décorative et personne ne le saurait avant d\'essayer.
+  const { etat, proj, noms, tombees } = montageDeRuines();
+
+  const dOrigine = { ...RESTE_APRES_DESTRUCTION };
+  try {
+    // Le réglage d\'aujourd\'hui : une ruine, celle du bâtiment.
+    assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
+      { batiment: 'ruine', defense: 'rien', unite: 'rien' },
+      'le réglage de la table a changé sans que ce test le dise');
+    assert.equal(
+      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+        .filter((n) => n === 'ruine_o').length, 1,
+    );
+
+    // ⚠ ON OUVRE LES STRUCTURES : deux ruines, sans toucher une ligne de code.
+    RESTE_APRES_DESTRUCTION.defense = 'ruine';
+    assert.equal(
+      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+        .filter((n) => n === 'ruine_o').length, 2,
+      'ouvrir `defense` ne donne pas de ruine à la structure : le câblage ne répond pas',
+    );
+
+    // ⚠ ET ON LES REFERME : le câblage marche dans les DEUX sens, sinon il ne
+    // prouverait qu\'une porte qui s\'ouvre.
+    RESTE_APRES_DESTRUCTION.defense = 'rien';
+    assert.equal(
+      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+        .filter((n) => n === 'ruine_o').length, 1,
+    );
+
+    // ⚠⚠ ET LES TROIS GENRES SONT COUVERTS, sinon une entité disparaîtrait en
+    // SILENCE. Un genre absent de la table LÈVE, et c\'est mesuré plutôt que cru.
+    RESTE_APRES_DESTRUCTION.batiment = undefined;
+    delete RESTE_APRES_DESTRUCTION.batiment;
+    assert.throws(
+      () => listeAffichage(etat, proj, null, 0, null, 0, tombees),
+      /sans reste après destruction/,
+      'un genre absent de la table passe en silence',
+    );
+  } finally {
+    for (const k of Object.keys(RESTE_APRES_DESTRUCTION)) delete RESTE_APRES_DESTRUCTION[k];
+    Object.assign(RESTE_APRES_DESTRUCTION, dOrigine);
+  }
+  // Le nettoyage a bien remis la table d\'origine.
+  assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
+    { batiment: 'ruine', defense: 'rien', unite: 'rien' });
 });

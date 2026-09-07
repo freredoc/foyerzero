@@ -385,7 +385,65 @@ export const EMPLACEMENTS_ASSAUT = { vagues: 4, parVague: 9 };
 // ⚠ ET IL VIT DANS `src/data/` PARCE QU'UN NOMBRE SE CHANGE SEUL — règle §4 de
 // `CLAUDE.md`. C'est exactement celle qui est tombée sur le seuil d'étiquette au
 // lot CONTOUR-ET-ÉTIQUETTES, parce qu'il valait 64 et qu'un cran valait 64.
-export const ECRAN_RAID = { delaiArmementMs: 300 };
+export const ECRAN_RAID = {
+  delaiArmementMs: 300,
+
+  // Combien de temps le site s'effondre, après une victoire TOTALE et avant le
+  // rapport — lot EFFONDREMENT, 07/09/2026.
+  //
+  // ARBITRÉ par Ethan, point 12 : « lors d'une victoire totale, juste après la
+  // destruction et avant le rapport, détruire les unités et bâtiments de défense
+  // en 2 secondes », et le même jour : **purement visuel, l'état ne bouge pas.**
+  //
+  // ⚠⚠ ELLE EST ICI ET PAS DANS L'ÉCRAN, ET C'EST §4 DE `CLAUDE.md` : aucun
+  // seuil de jeu ne s'écrit dans un fichier de dessin. Deux secondes est une
+  // VALEUR qu'Ethan a donnée ; elle se range avec `delaiArmementMs`, qui est de
+  // la même nature — un temps d'écran arbitré.
+  //
+  // ⚠ ET LE TEMPS SE PREND SUR LA BOUCLE D'IMAGES, PAS SUR UN `setTimeout`. Une
+  // seconde horloge à côté de la première ne se figerait pas avec elle quand
+  // l'application passe en arrière-plan, et c'est exactement le défaut que le
+  // lot RETOUR-DE-RAID a réparé. `EFF T9` refuse qu'elle apparaisse.
+  effondrementMs: 2000,
+};
+
+/**
+ * Ce qu'une entité laisse derrière elle quand elle tombe à l'effondrement.
+ *
+ * ⚠⚠ LE CÂBLAGE EST POSÉ POUR LES TROIS GENRES ; SEUL LE RÉGLAGE ATTEND. Ethan,
+ * 07/09 : « utilise ruine_j ruine_o », puis « restreins aux bâtiments pour
+ * l'instant ». Les deux planches de ruine ont été dessinées pour une case de
+ * BÂTIMENT, et personne n'a encore vu ce qu'elles donnent sous une tourelle ou
+ * sous un mur. On ne devine pas : on met `rien`, et on ouvre en changeant UN MOT
+ * le jour où il aura regardé.
+ *
+ * ⚠ DEUX VALEURS, ET PAS UNE DE PLUS. `'ruine'` pose `ruine_j` ou `ruine_o` sur
+ * la case ; `'rien'` efface la pièce. Un troisième reste — une explosion, une
+ * fumée — demanderait des sprites qui ne sont dans aucun atlas : les douze PNG
+ * de `art/sprites/effet/` dorment hors du livrable, et les faire entrer coûterait
+ * une famille d'atlas et des octets d'images. Inventer la valeur avant les
+ * sprites ferait une table qui promet ce qu'elle ne peut pas tenir.
+ *
+ * ⚠⚠ LES TROIS CLÉS SONT LES `genre` DE `creerCombat`, ET IL N'Y EN A PAS
+ * D'AUTRE. `'defense'` désigne les STRUCTURES — murs, tourelles, artilleries —
+ * et non le camp ; c'est le nom que porte l'entité depuis le lot 2A, et le
+ * changer ici sans le changer là ferait une table muette. Un genre absent de
+ * cette table LÈVE plutôt que de retomber sur un défaut : une entité qu'on
+ * oublierait de classer disparaîtrait en silence.
+ *
+ * ⚠ ET CE N'EST PAS DANS L'ÉCRAN, C'EST §4 DE `CLAUDE.md` : ce qu'on VOIT quand
+ * une chose est détruite est un arbitrage de jeu, pas une ligne de dessin.
+ */
+export const RESTE_APRES_DESTRUCTION = {
+  batiment: 'ruine',
+  // ⚠ EN ATTENTE D'UN COUP D'ŒIL D'ETHAN — passer à `'ruine'` suffit, et
+  // `EFF T12` mesure que le câblage répond.
+  defense: 'rien',
+  // ⚠ ET CELUI-CI N'A PAS DE RAISON DE CHANGER : une escouade ne laisse pas un
+  // pan de mur là où six hommes sont tombés. Il est dans la table pour que la
+  // règle soit LUE partout, jamais pour qu'on l'ouvre.
+  unite: 'rien',
+};
 
 // --- points de recherche -----------------------------------------------------
 // Ils ne se produisent pas, ils se prennent sur les défenses détruites.

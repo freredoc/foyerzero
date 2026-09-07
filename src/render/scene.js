@@ -32,7 +32,7 @@
 // champ de bataille à la légende.
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
-import { BATIMENTS } from '../data/sites.js';
+import { BATIMENTS, RESTE_APRES_DESTRUCTION } from '../data/sites.js';
 import {
   xDeColonne, xDeColonneMilli, yDeRangeeMilli, yDeRangee,
 } from './projection.js';
@@ -586,6 +586,28 @@ function couchesDuBatiment(d) {
 }
 
 /**
+ * Les couches d'une RUINE — une seule, et le propriétaire choisit la planche.
+ *
+ * ⚠⚠ `ruine_j` ET `ruine_o` DORMAIENT DANS L'ATLAS DEPUIS LEUR FABRICATION. Le
+ * relevé du lot EFFONDREMENT les a trouvées dans la famille `batiment`, donc
+ * DANS le livrable — payées en octets d'images — et employées par personne : un
+ * `grep` sur tout `src/` ne les trouvait que dans leur propre déclaration.
+ * C'était `ui_pause` une seconde fois. Ethan, 07/09 : « utilise ruine_j
+ * ruine_o. »
+ *
+ * ⚠ LA LETTRE VIENT DE `lettreDuProprietaire`, comme partout ailleurs. Les deux
+ * planches existent parce que les deux camps ont des bâtiments : c'est le
+ * PROPRIÉTAIRE qui décide, jamais le camp — « le joueur peut défendre »
+ * (CLAUDE.md §4).
+ *
+ * @param {string} proprietaire
+ * @returns {{famille: string, nom: string}[]}
+ */
+export function couchesDeLaRuine(proprietaire) {
+  return [{ famille: 'batiment', nom: `ruine_${lettreDuProprietaire(proprietaire)}` }];
+}
+
+/**
  * LE point d'entrée des couches de sprite — un seul, pour les cinq appelants.
  *
  * ⚠⚠ AVANT CE LOT, UNE CASEMATE SE DESSINAIT DE TROIS FAÇONS : en sprites sur
@@ -737,10 +759,12 @@ function positionAffichee(e, precedentes, alpha) {
  * @param {object} projection  Résultat de calculerProjection.
  * @param {number[]|null} precedentes  Instantané pris avant le dernier tick.
  * @param {number} alpha       Fraction du tick courant, en millièmes 0…1000.
+ * @param {Set<number>|null} tombees  Indices EFFONDRÉS — lot EFFONDREMENT.
  * @returns {Array<object>} primitives.
  */
 export function listeAffichage(
   etat, projection, precedentes = null, alpha = 0, fond = null, graine = 0,
+  tombees = null,
 ) {
   const t = projection.tailleCase;
   const liste = [];
@@ -832,12 +856,44 @@ export function listeAffichage(
     return { rangee: pos.rangeeMilli / 1000, colonne: pos.colonneMilli / 1000 };
   };
 
+  /**
+   * Cette entité est-elle tombée dans l'effondrement de fin de raid ?
+   *
+   * ⚠⚠ LE PARAMÈTRE EST UN ENSEMBLE D'INDICES, ET L'ÉTAT N'EST PAS TOUCHÉ — lot
+   * EFFONDREMENT, 07/09. L'effondrement est du DESSIN : `executerRaid` a commis
+   * tout l'état avant la première image, et une liste d'affichage n'a pas à
+   * muter ce qu'elle lit. `null` veut dire « aucun effondrement », et c'est le
+   * cas de tous les appelants sauf le déroulé de `ui/raid.js`.
+   */
+  const estTombee = (e) => tombees !== null && tombees.has(e.indice);
+
   // 3. Bâtiments — 4. structures — 5. unités.
   for (const genreVoulu of ['batiment', 'defense', 'unite']) {
     for (const e of etat.entites) {
       if (!visible(e) || e.genre !== genreVoulu) continue;
       const x = xDe(e);
       const y = yDe(e);
+      // ⚠⚠ CE QU'UNE CHOSE DÉTRUITE LAISSE DERRIÈRE ELLE SE LIT DANS
+      // `RESTE_APRES_DESTRUCTION`, IL NE SE DÉCIDE PAS ICI. Le premier jet
+      // écrivait `if (genreVoulu === 'unite') continue;` — juste, et déjà une
+      // règle de jeu écrite dans un fichier de dessin. Ethan a demandé de
+      // restreindre aux bâtiments « pour l'instant » : c'est très exactement un
+      // réglage qui va bouger, donc il appartient à `src/data/`.
+      //
+      // ⚠ UN GENRE ABSENT DE LA TABLE LÈVE, il ne retombe pas sur un défaut. Une
+      // entité qu'on oublierait de classer disparaîtrait en silence, et le
+      // silence est ce qu'on ne veut pas d'un effet qu'on ne regarde qu'une fois
+      // par raid.
+      if (estTombee(e)) {
+        const reste = RESTE_APRES_DESTRUCTION[genreVoulu];
+        if (reste === undefined) {
+          throw new Error(`scene : genre « ${genreVoulu} » sans reste après destruction`);
+        }
+        if (reste === 'rien') continue;
+        dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
+          accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
+        continue;
+      }
       dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
         accentDe(e.genre, e.id), couchesDeLEntite({
           genre: e.genre,
@@ -861,7 +917,9 @@ export function listeAffichage(
   //    glissement — une barre qui glisse ment sur l'instant de la mort.
   const bh = Math.max(2, Math.floor(t / 12));
   for (const e of etat.entites) {
-    if (!visible(e)) continue;
+    // ⚠ UNE RUINE N'A PAS DE BARRE DE PV, et une pièce effondrée non plus : la
+    // barre dit ce qu'il reste à casser, et il ne reste rien.
+    if (!visible(e) || estTombee(e)) continue;
     const x = xDe(e);
     const y = yDe(e);
     liste.push(rect(x + 1, y + 1, t - 2, bh, PALETTE.contour));
@@ -881,7 +939,7 @@ export function listeAffichage(
   //    être morte de ce tir : le trait se dessine quand même, vers sa case.
   const demi = Math.floor(t / 2);
   for (const e of etat.entites) {
-    if (!visible(e) || !e.aTire || e.cibleIndice === null) continue;
+    if (!visible(e) || estTombee(e) || !e.aTire || e.cibleIndice === null) continue;
     const cible = etat.entites[e.cibleIndice];
     const accent = accentDe(e.genre, e.id);
     // Une cible morte de ce tir n'est plus dans `positions` : le trait va
