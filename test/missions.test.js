@@ -40,6 +40,7 @@ import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
 import { deplacerLaBase } from '../src/sim/deplacement.js';
 import { acheterUneBaseDePlus } from '../src/sim/recherche.js';
 import { fonderUneBase, problemesDeLaFondation } from '../src/sim/fondation.js';
+import { JOUEUR } from '../src/sim/territoire.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...c) => readFileSync(join(RACINE, ...c), 'utf8');
@@ -175,7 +176,7 @@ function gestesDeLaChaine(etat) {
       assert.ok(camp !== undefined, 'aucun camp à détruire : le montage ne mesure rien');
       retirerLeSite(etat, {
         type: 'camp', rangee: camp.rangee, colonne: camp.colonne, instance: camp.instance,
-      });
+      }, JOUEUR);
     }],
     // ⚠ AVANT LA BASE DE L'OUVRAGE, ET C'EST UNE PROPRIÉTÉ DU JEU, PAS UN
     // ARRANGEMENT DE TEST : la garde du peuplement tient les bases de l'Ouvrage
@@ -193,7 +194,7 @@ function gestesDeLaChaine(etat) {
     ['détruire une base de l\'Ouvrage', () => {
       const cible = ciblesAPortee(etat, baseCourante(etat)).find((c) => c.type === 'base');
       assert.ok(cible !== undefined, 'aucune base à portée : le montage ne mesure rien');
-      retirerLeSite(etat, cible);
+      retirerLeSite(etat, cible, JOUEUR);
     }],
     ['fonder une seconde base', () => {
       etat.recherche.pointsMilli = String(BigInt(SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE].cout) * 1000n);

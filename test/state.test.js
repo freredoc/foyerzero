@@ -2400,7 +2400,13 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // ⚠ LE NOMBRE EST ÉCRIT EN CLAIR, ET C'EST VOULU. Un lot qui bumpe
   // légitimement `SAVE_VERSION` doit passer par cette ligne et la corriger en le
   // sachant ; un `>=` laisserait un bump involontaire passer sans un mot.
-  assert.equal(SAVE_VERSION, 27, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION');
+  //
+  // ⚠⚠ ET UN LOT Y EST PASSÉ, EN LE SACHANT : CONQUÊTE-24H, le 07/09.
+  // `basesRasees` a gagné trois champs — vainqueur, niveau, tick du rasement —
+  // et la chaîne un maillon v27 → v28. La phrase du message reste vraie de
+  // PRODUCTION-EN-DÉFENSE ; ce que la ligne garde n'est pas un numéro figé mais
+  // le fait qu'on ne bumpe pas sans passer par ici.
+  assert.equal(SAVE_VERSION, 28, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
@@ -2409,7 +2415,8 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   const json = serialiser(etat, 1_700_000_000_000);
   const avant = JSON.parse(json);
   const apres = migrer(JSON.parse(json));
-  assert.deepEqual(apres, avant, 'une sauvegarde v27 a été réécrite par une migration');
+  assert.deepEqual(apres, avant,
+    'une sauvegarde à la version courante a été réécrite par une migration');
 
   // Et l'aller-retour complet rend le MÊME texte, à l'octet.
   assert.equal(serialiser(charger(json, 1_700_000_000_000), 1_700_000_000_000), json);

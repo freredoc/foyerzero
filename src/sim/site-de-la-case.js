@@ -39,6 +39,7 @@ import {
 } from './points-attaque.js';
 import { baseCourante } from './base-courante.js';
 import { satellitesPresents } from './satellites.js';
+import { casesRasees, cleDeLaCase } from './ruines.js';
 
 /** Sel du tirage qui ne dépend que de la CASE : la saveur, et le terrain. */
 export const SEL_TERRAIN_DU_SITE = 4;
@@ -166,7 +167,15 @@ export function siteDeLaCase(etat, rangee, colonne) {
   // ne l'empêcherait de reparaître au prochain calcul : c'est la liste des
   // rasées qui porte le seul fait que la graine ne peut pas connaître.
   // `TYPES_SITE.base.respawn` vaut `false`, et la §10 de la spec le redit.
-  if ((etat.basesRasees ?? []).includes(`${rangee}:${colonne}`)) return null;
+  //
+  // ⚠⚠ ET ELLE NE REGARDE PAS L'HORLOGE, ALORS QUE LA MÊME LISTE PORTE
+  // DÉSORMAIS DES RUINES QUI EXPIRENT — lot CONQUÊTE-24H, 07/09/2026. Le retrait
+  // de la case est DÉFINITIF ; ce qui dure vingt-quatre heures est la
+  // revendication de territoire, pas la disparition du site. Filtrer ici sur
+  // l'expiration ferait reparaître, une à une, toutes les bases que le joueur a
+  // rasées la veille. `casesRasees` porte ce choix et le dit ; `ruinesActives`
+  // porte l'autre.
+  if (casesRasees(etat).has(cleDeLaCase(rangee, colonne))) return null;
 
   if (estBaseOuvrage(etat.graine, rangee, colonne)) {
     return {

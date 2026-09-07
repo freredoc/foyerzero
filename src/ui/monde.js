@@ -57,6 +57,7 @@ import { formaterDixiemes } from './chantier.js';
 import {
   territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
+import { ruinesActives } from '../sim/ruines.js';
 import { dessinerLimiteDUneCase } from '../render/limite.js';
 import { PALETTE } from '../render/scene.js';
 import { baseCourante } from '../sim/base-courante.js';
@@ -1154,6 +1155,49 @@ export function teinteDAttente() {
  * @param {Document} doc
  * @returns {{peindre: Function, rafraichir: Function}}
  */
+/**
+ * Ce qui, dans l'état, oblige la carte à se redessiner.
+ *
+ * ⚠⚠ ELLE ÉTAIT ÉCRITE DEUX FOIS — dans `peindre` et dans `rafraichir` — ET LES
+ * DEUX AVAIENT DIVERGÉ. Elles lisaient `satellites.prochaineInstance`, qui a
+ * quitté la base pour l'état au lot BASES-1 : l'empreinte valait donc
+ * « N:undefined », si bien qu'un camp DÉTRUIT puis REMPLACÉ au même compte
+ * laissait la carte figée sur l'ancien.
+ *
+ * ⚠ ELLE PORTE `baseCourante`, ET C'EST CE QUI FAIT SUIVRE LE HALO. Sans lui,
+ * basculer ne redessinerait rien — la liste des satellites n'ayant pas bougé.
+ *
+ * ⚠ ET TOUTES LES BASES, pas seulement la courante : les camps d'une autre base
+ * paraissent et disparaissent sur la même carte.
+ *
+ * ⚠⚠ ELLE PORTE LES RUINES ACTIVES DEPUIS LE LOT CONQUÊTE-24H, ET C'EST LE PIÈGE
+ * LE PLUS DISCRET DU LOT — le §8 du brief le nomme comme tel. Une ruine est le
+ * PREMIER élément de la carte qui change TOUT SEUL, sans que le joueur ait rien
+ * fait : au bout de vingt-quatre heures elle cesse d'émettre et la frontière se
+ * déplace. Sans cette ligne, l'empreinte serait restée identique — même base
+ * courante, mêmes satellites — et `rafraichir` aurait renvoyé sans redessiner :
+ * la carte serait restée juste au chargement et fausse une heure plus tard,
+ * jusqu'au prochain mouvement du joueur.
+ *
+ * ⚠ LES CASES, PAS LE COMPTE. Une ruine qui expirerait le tick où une autre
+ * naîtrait laisserait le compte inchangé ; leurs cases, non.
+ *
+ * ⚠⚠ ELLE EST SORTIE DE LA FERMETURE POUR ÊTRE MESURABLE, ET C'EST TOUT CE QUI
+ * A BOUGÉ D'ELLE. Elle ne lit que l'état — aucun canevas, aucun DOM —, et le
+ * dépôt ne sait pas monter `creerEcranMonde` (CLAUDE.md §3) : enfermée, le piège
+ * du §8 n'aurait été gardé par rien d'autre qu'une relecture. `C24 T17` la
+ * confronte à une ruine qui expire.
+ *
+ * @param {object} etat
+ * @returns {string}
+ */
+export function empreinteDeLaCarte(etat) {
+  let empreinte = `${etat.baseCourante}:${etat.prochaineInstanceSatellite}`;
+  for (const base of etat.bases) empreinte += `:${base.satellites.presents.length}`;
+  for (const ruine of ruinesActives(etat)) empreinte += `:${ruine.rangee},${ruine.colonne}`;
+  return empreinte;
+}
+
 export function initialiserEcranMonde(doc, crochets = {}) {
   // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE — même découpage que `versEcran` de
   // l'écran Chantier. La carte sait QUELLE cible on a touchée deux fois ; seule
@@ -2521,27 +2565,6 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       fenetre.cancelAnimationFrame(idImage);
       idImage = null;
     }
-  }
-
-  /**
-   * Ce qui, dans l'état, oblige la carte à se redessiner.
-   *
-   * ⚠⚠ ELLE ÉTAIT ÉCRITE DEUX FOIS — dans `peindre` et dans `rafraichir` — ET
-   * LES DEUX AVAIENT DIVERGÉ. Elles lisaient `satellites.prochaineInstance`,
-   * qui a quitté la base pour l'état au lot BASES-1 : l'empreinte valait donc
-   * « N:undefined », si bien qu'un camp DÉTRUIT puis REMPLACÉ au même compte
-   * laissait la carte figée sur l'ancien.
-   *
-   * ⚠ ELLE PORTE `baseCourante`, ET C'EST CE QUI FAIT SUIVRE LE HALO. Sans lui,
-   * basculer ne redessinerait rien — la liste des satellites n'ayant pas bougé.
-   *
-   * ⚠ ET TOUTES LES BASES, pas seulement la courante : les camps d'une autre
-   * base paraissent et disparaissent sur la même carte.
-   */
-  function empreinteDeLaCarte(etat) {
-    let empreinte = `${etat.baseCourante}:${etat.prochaineInstanceSatellite}`;
-    for (const base of etat.bases) empreinte += `:${base.satellites.presents.length}`;
-    return empreinte;
   }
 
   /**

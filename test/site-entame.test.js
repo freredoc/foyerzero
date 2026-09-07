@@ -22,6 +22,8 @@ import {
 import { genererAssaut } from '../src/sim/generateur.js';
 import { APRES_RAID } from '../src/data/sites.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { caseRasee } from '../src/sim/ruines.js';
+import { JOUEUR } from '../src/sim/territoire.js';
 
 /** Une partie dont les trois satellites sont parus. */
 function partie(graine = 2026) {
@@ -139,7 +141,14 @@ test('enregistrer — une base rasée ne revient pas, alors qu\'elle est dériv�
   const montage = montageDuSite(etat.graine, cible);
 
   enregistrerLeRaid(etat, cible, resultatSur(montage, { cause: 'souche' }));
-  assert.deepEqual(etat.basesRasees, ['150:16']);
+  // ⚠⚠ L'ENTRÉE PORTE TROIS CHAMPS DE PLUS DEPUIS LE LOT CONQUÊTE-24H : le
+  // vainqueur, le niveau de ce qui est tombé, et le tick du rasement. Le fait
+  // que ce test garde — « la case ne rend plus rien » — n'a pas bougé d'un cran ;
+  // ce qui a changé est que la même liste sert aussi à savoir qui tient le
+  // terrain pendant vingt-quatre heures.
+  assert.deepEqual(etat.basesRasees, [{
+    rangee: 150, colonne: 16, vainqueur: JOUEUR, niveau: 30, tick: etat.horloge.nbTicks,
+  }]);
   assert.equal(siteDeLaCase(etat, 150, 16), null, 'la base rasée est revenue');
 });
 
@@ -356,12 +365,12 @@ test('état — les sites entamés traversent la sauvegarde, et la v10 se migre'
   const etat = partie();
   const id = avantPoste(etat);
   enregistrerLeRaid(etat, id, resultatSur(montageDuSite(etat.graine, id), { defenses: { 0: 0 } }));
-  etat.basesRasees.push('150:16');
+  etat.basesRasees.push(caseRasee(150, 16));
   const attendu = structuredClone(etat.sitesEntames);
 
   const recharge = charger(serialiser(etat, 2_000_000), 2_000_000);
   assert.deepEqual(recharge.sitesEntames, attendu, 'les dégâts n\'ont pas survécu au tour');
-  assert.deepEqual(recharge.basesRasees, ['150:16']);
+  assert.deepEqual(recharge.basesRasees, [{ rangee: 150, colonne: 16 }]);
 
   // Une v10 n'a jamais rien entamé : deux tables vides, et rien de converti.
   const migre = migrer({ version: 10 });

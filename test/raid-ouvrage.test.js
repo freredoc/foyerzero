@@ -40,6 +40,7 @@ import { poiDeLaCase, carteDesPoi } from '../src/sim/poi.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 import { basesDeLaFenetre } from '../src/sim/peuplement.js';
+import { caseRasee } from '../src/sim/ruines.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -435,7 +436,7 @@ test('RAID-B T7 — le rasage redéploie de 20 cases, vide les stocks, et relèv
   for (const o of basesDeLaFenetre(etat.graine, {
     premiereRangee: DEPART.rangee - 8, derniereRangee: arrivee.rangee + 8,
     premiereColonne: 1, derniereColonne: 31,
-  })) etat.basesRasees.push(`${o.rangee}:${o.colonne}`);
+  })) etat.basesRasees.push(caseRasee(o.rangee, o.colonne));
   const attendus = poisAutourDe(etat, arrivee);
   assert.ok(attendus.length > 0,
     'le montage ne mesure rien : aucun POI ne tombe sous la base APRÈS le rasage');
@@ -1143,11 +1144,18 @@ test('RCU T11 — le coût n\'explose pas : UN appel à `ciblesAPortee` par base
 test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état', () => {
   // Le lot ne fait que CHOISIR ; il n'écrit aucun champ. Le §6 du brief demande
   // de le vérifier plutôt que de l'affirmer.
-  assert.equal(SAVE_VERSION, 27, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION');
+  // ⚠⚠ LE NOMBRE A ÉTÉ CORRIGÉ PAR LE LOT CONQUÊTE-24H, EN LE SACHANT, et
+  // c'est très exactement ce que la garde jumelle de `state.js` demandait :
+  // « un lot qui bumpe légitimement `SAVE_VERSION` doit passer par cette ligne
+  // et la corriger ». CONQUÊTE-24H y est passé — `basesRasees` porte désormais
+  // trois champs de plus — et RAID-CIBLE-UNIQUE, lui, n'a toujours rien ajouté :
+  // ce que ce test mesure est la ligne DEUX crans plus bas, où une sauvegarde à
+  // la version courante traverse `migrer` sans être touchée.
+  assert.equal(SAVE_VERSION, 28, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),
-    'une sauvegarde v27 a été réécrite par une migration');
+    'une sauvegarde à la version courante a été réécrite par une migration');
   // Et aucune paire ne se range dans l'état : `basesAttaquantes` est un CALCUL.
   basesAttaquantes(etat);
   assert.equal(serialiser(etat, 1_700_000_000_000), json,

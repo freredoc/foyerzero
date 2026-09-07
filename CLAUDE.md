@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.23 · build 124.
+Dernière révision : **07/09/2026**, version 0.99.24 · build 125.
 
 ---
 
@@ -42,7 +42,73 @@ Dernière révision : **07/09/2026**, version 0.99.23 · build 124.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot TERRITOIRE-LU), à confronter :**
+**Référence au 07/09/2026 (après le lot CONQUÊTE-24H), à confronter :**
+`npm test` → **1357 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 258 693 octets**, 0 référence externe. Marge T10 : **1 041 307 octets,
+11,20 %** — aucune image ajoutée, les 297 `data:` de la page sont les mêmes.
+Le lot fait entrer `src/sim/ruines.js` et touche `src/sim/territoire.js`,
+`src/sim/site-entame.js`, `src/sim/site-de-la-case.js`, `src/sim/poi.js`,
+`src/sim/fondation.js`, `src/sim/state.js`, `src/ui/monde.js`, `src/data/sites.js`.
+⚠⚠ **ETHAN, 07/09, POINT 13 : « PENDANT 24 H, LA BASE RASÉE ÉMET LE TERRITOIRE DU
+VAINQUEUR, DU NIVEAU DE LA BASE RASÉE. APRÈS, LA RUINE DISPARAÎT, ET LES
+TERRITOIRES SONT RECALCULÉS. »** C'est le premier territoire à DURÉE du jeu, donc
+le premier à être STOCKÉ.
+⚠⚠ **`SAVE_VERSION` PASSE À 28, ET C'EST LE SEUL LOT DE LA SÉRIE OÙ IL BOUGE.**
+`basesRasees` ne portait qu'une chaîne `"rangée:colonne"` ; une entrée porte
+maintenant `{ rangee, colonne, vainqueur, niveau, tick }`. **Lecture retenue pour
+les anciennes entrées : ruine expirée.** Une v27 ne sait ni qui a rasé, ni de quel
+niveau, ni quand — les trois champs sont nés avec ce lot — et lui inventer un
+niveau plausible peindrait au chargement un territoire que personne n'a conquis,
+pour vingt-quatre heures. `C24 T13` l'exige.
+⚠⚠ **UNE SEULE LISTE, DEUX LECTURES, ET C'EST TOUT LE LOT.** « Cette case
+porte-t-elle encore un site ? » — JAMAIS, définitivement, et c'est `casesRasees`.
+« Cette case émet-elle du territoire ? » — 24 h, pas une de plus, et c'est
+`ruinesActives`. Les deux vivent côte à côte dans `sim/ruines.js` pour qu'on ne
+puisse pas écrire l'une en croyant écrire l'autre. ⚠ **LA PURGE EST INTERDITE,
+pas seulement facultative** : retirer une entrée périmée ferait REPARAÎTRE la
+base, qui est dérivée de la graine. La lecture est le seul rempart, et `C24 T14`
+le vérifie sur un état non purgé.
+⚠⚠ **L'EXPIRATION EST UNE SOUSTRACTION SUR `etat.horloge.nbTicks`, PAS UNE FILE.**
+Elle est donc vraie au premier appel après le rattrapage hors ligne, sans
+traitement particulier : `C24 T7` sérialise, recharge vingt-cinq heures plus tard
+et exige le silence — puis recharge à vingt-trois heures et exige le contraire.
+⚠ **DEUX LECTURES DÉCLARÉES, RÉVERSIBLES, ET MESURÉES.** (1) La ruine prend la
+PORTÉE DU CAMP pour lequel elle émet — 2 côté joueur, 3 côté Ouvrage ; l'autre
+lecture, garder la portée de ce qu'elle était, changerait `C24 T1` de 21 à 37.
+(2) La ruine n'a PAS de plancher : le plancher dit « le territoire où la BASE se
+trouve ne change pas », et une ruine n'est pas une base — elle peut donc perdre
+sa propre case face à plus fort qu'elle. Les deux se retournent en une ligne, et
+`C24 T1` tombe si on les retourne.
+⚠⚠ **`fondation.js` LIT LA CARTE, IL NE LA REFAIT PLUS.** Il portait sa propre
+boucle de 49 cases pour redemander « une base de l'Ouvrage est-elle à PORTÉE ».
+Elle ne voyait pas les ruines, et elle demandait la portée là où la carte répond
+la propriété depuis TERRITOIRE-FORCE. **Conséquence mesurée et assumée : le refus
+se desserre** — on peut fonder partout où l'Ouvrage ne TIENT pas, y compris à deux
+cases d'une de ses petites bases. C'est la même bascule que la récolte des POI au
+lot précédent.
+⚠⚠ **LA RÉCOLTE DES POI PART DES ÉMETTEURS, PAS DE `etat.bases`.** Le §4 du brief
+l'annonçait et le défaut y était : une ruine qui TIENT une case n'aurait donné son
+gisement que si une base du joueur l'atteignait aussi — c'est-à-dire jamais.
+`releverLesPoisAcquis` boucle sur `forcesDuJoueur`. ⚠ Un POI pris reste pris :
+l'expiration ne rend rien (`C24 T11`).
+⚠⚠ **`empreinteDeLaCarte` PORTE LES RUINES, ET C'ÉTAIT « LE PIÈGE LE PLUS DISCRET
+DU LOT ».** Une ruine est le premier élément de la carte qui change TOUT SEUL ; à
+son expiration, ni `baseCourante` ni les satellites ne bougent, si bien que
+`rafraichir` serait reparti sans redessiner. Elle est sortie de la fermeture de
+`creerEcranMonde` pour être mesurable — `C24 T17` l'y confronte.
+⚠ **LA RÈGLE EST SYMÉTRIQUE, ET AUCUN CHEMIN NE LA PARCOURT ENCORE.** Mesuré :
+`raserLaBase` de `sim/raid-ouvrage.js` REDÉPLOIE la base du joueur vingt cases plus
+au sud et lui vide ses stocks ; elle n'est jamais retirée, donc elle ne laisse
+rien. `retirerLeSite(etat, identite, OUVRAGE)` fonctionne quand même, et `C24 T4`
+le passe par le vrai écrivain.
+⚠ **LES PLANCHES S10 DE RUINES NE SONT PAS AU DÉPÔT**, et l'archive n'était pas
+jointe : `art/sprites/carte/128/` porte 9 paliers × 3 états (intact, fumée, feu)
+× 2 camps, aucun « complètement détruit ». La ruine tient donc son territoire sans
+emblème sur sa case — **point en suspens le plus visible du lot**. La
+correspondance niveau → palier, elle, existe déjà : `palierDeNiveau` de
+`data/sites.js`, et il n'y avait rien à écrire.
+
+**Auparavant, après le lot TERRITOIRE-LU :**
 `npm test` → **1340 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 256 764 octets**, 0 référence externe. Marge T10 : **1 043 236 octets,
 11,22 %**. Le lot touche `src/sim/poi.js` et `src/sim/territoire.js`.
@@ -7387,7 +7453,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 28 fichiers
+src/sim/                simulation déterministe, sans DOM — 29 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
@@ -7397,6 +7463,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
   economie-base.js      le TICK : stocks, saturation, rattrapage analytique
   carte.js              distances de GEOGRAPHIE → coordonnées, niveau d'une rangée
   territoire.js         les deux zones d'influence de la spec, et leurs bordures
+  ruines.js             ce qu'une base rasée laisse : une case retirée pour toujours, un territoire pour 24 h
   niveau-de-base.js     les trois niveaux du JOUEUR : moyennes, en dixièmes
   points-attaque.js     le régulateur de session : plafond à cliquet, barème du raid, territoire
   poi.js                les soixante-dix points d'intérêt : où ils tombent, ce qu'ils donnent
@@ -7411,6 +7478,17 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
+  ⤷ ⚠⚠ `basesRasees` RÉPOND À DEUX QUESTIONS QUI N'ONT PAS LA MÊME DURÉE DE
+    VIE, et `ruines.js` existe pour que les deux lectures se voient l'une l'autre.
+    « Cette case porte-t-elle encore un site ? » — jamais, définitivement, et
+    c'est `casesRasees` que `site-de-la-case.js` interroge. « Cette case émet-elle
+    du territoire ? » — vingt-quatre heures, pas une de plus, et c'est
+    `ruinesActives` que `territoire.js` et `ui/monde.js` interrogent. Une lecture
+    d'émission qui ne passerait pas par la seconde compterait des ruines périmées :
+    la carte serait juste au chargement et fausse une heure plus tard.
+  ⤷ ⚠ LA PURGE D'UNE ENTRÉE EXPIRÉE EST INTERDITE, pas seulement inutile :
+    la base rasée reparaîtrait au calcul suivant, étant dérivée de la graine. Ce
+    qui expire est la REVENDICATION, jamais l'entrée.
   ⤷ ⚠ DEUX `recherche.js`, UN DANS `data/` ET UN DANS `sim/`, et c'est le motif
     déjà en place pour `combat.js` et `missions.js` : la TABLE d'un côté, le
     MOTEUR de l'autre. Un import qui se trompe de dossier ne compile pas — les
@@ -7762,7 +7840,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   57 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   58 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -7771,7 +7849,7 @@ test/                   57 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal  raid-ecran  arret  embleme  colonne  pictogramme
+  son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
