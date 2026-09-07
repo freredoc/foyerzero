@@ -68,7 +68,8 @@ restent à l'écran** : ce sont elles qui ont gagné, et les faire disparaître 
 le site dirait le contraire de ce qui vient de se passer.
 
 **③ Le câblage dans la boucle d'images**, entre la fin du combat et
-`montrerResultat` — cinq points, tous dans `src/ui/raid.js`.
+`montrerResultat` — cinq points dans `src/ui/raid.js`, plus un paramètre
+optionnel et `couchesDeLaRuine` dans `src/render/scene.js`.
 
 ---
 
@@ -81,23 +82,28 @@ VÉRITÉ. »
 
 **Aucune ligne de ce lot n'entre dans `src/sim/`** — `git diff --stat` le montre.
 
-Le dessin travaille sur une **copie** :
+Le dessin reçoit un **ensemble d'indices**, et l'état n'est pas touché :
 
 ```js
-function combatDessine() {
-  if (effondrementMs === null || combat === null) return combat;
-  const tombees = effondrees(combat.entites, effondrementMs, ECRAN_RAID.effondrementMs);
-  if (tombees.size === 0) return combat;
-  return { ...combat, entites: combat.entites.map(
-    (e) => (tombees.has(e.indice) ? { ...e, vivant: false } : e)) };
+function tombeesALEcran() {
+  if (effondrementMs === null || combat === null) return null;
+  return effondrees(combat.entites, effondrementMs, ECRAN_RAID.effondrementMs);
 }
+…
+listeAffichage(combat, projection, precedentes, …, etatCourant.graine, tombeesALEcran())
 ```
 
-⚠⚠ **ET LA LISTE GARDE SA LONGUEUR — ON MARQUE, ON NE FILTRE PAS.**
-`render/scene.js` fait `etat.entites[e.cibleIndice]` à **deux endroits** : une
-liste raccourcie ferait pointer ces deux lectures sur la mauvaise entité.
-`visible()` teste `vivant && !sorti`, donc marquer suffit — et les barres de PV
-disparaissent avec la pièce, ce qui est ce qu'on veut.
+⚠⚠ **LE PREMIER JET COPIAIT LE COMBAT** en marquant les tombées `vivant: false`.
+C'était juste, et c'était de trop dès lors qu'elles laissent une **ruine** plutôt
+que du vide : `listeAffichage` doit savoir laquelle dessiner **autrement**, pas
+laquelle sauter. On lui passe donc l'ensemble, et la décision de ce qu'une chose
+détruite laisse derrière elle vit chez le **dessin**, où elle appartient.
+
+⚠ **`null` EST LE CAS DE TOUS LES AUTRES APPELANTS** — l'Arsenal, la légende, le
+banc, le fond : le paramètre est optionnel, et son défaut ne change rien.
+
+⚠ **ET UNE RUINE N'A NI BARRE DE PV NI TRAIT DE TIR** : la barre dit ce qu'il
+reste à casser, et il ne reste rien.
 
 ---
 
@@ -211,15 +217,36 @@ l'atlas `batiment`, donc dans les 6,3 Mo d'images du livrable, et un `grep` sur
 tout `src/` ne les trouve **que dans leur propre déclaration**. C'est `ui_pause`,
 une seconde fois.
 
-**Ce lot ne les ramasse pas**, et c'est délibéré : les employer demanderait une
-famille d'atlas de plus, donc des octets d'images, donc un delta que le brief
-veut annoncé et ventilé — et le point 13 d'Ethan (le territoire, les planches de
-bases rasées) touchera de toute façon aux mêmes assets. **Le lot les nomme pour
-que le suivant les trouve.**
+### ⚠⚠ Et Ethan a tranché : « utilise ruine_j ruine_o »
 
-⚠ **CE QU'ON VOIT, DONC** : les entités de défense **disparaissent**
-progressivement. Aucun sprite neuf, **aucune teinte neuve**, **aucun `data:` de
-plus** — 296 lignes et 291 URI de part et d'autre.
+Elles sont **mises au travail**, et elles ne coûtent **pas un octet d'image** —
+elles étaient déjà dans l'atlas.
+
+**Ce qui est BÂTI laisse une ruine ; une escouade n'en laisse pas.** Bâtiments et
+structures de défense — murs, tourelles, artilleries — deviennent `ruine_o` en
+tombant ; les unités de garnison s'effacent. Donner une ruine à une escouade
+ferait pousser un pan de mur là où six hommes sont tombés.
+
+```js
+export function couchesDeLaRuine(proprietaire) {
+  return [{ famille: 'batiment', nom: `ruine_${lettreDuProprietaire(proprietaire)}` }];
+}
+```
+
+⚠ **LA LETTRE VIENT DU PROPRIÉTAIRE, JAMAIS DU CAMP** — « le joueur peut
+défendre » (CLAUDE.md §4). Les deux planches existent parce que les deux camps
+ont des bâtiments ; `ruine_j` n'a pas d'appelant aujourd'hui, et la règle la
+servira le jour où un déroulé montrera une base du joueur attaquée.
+
+⚠ **CE QUI RESTE DORMANT** : les douze explosions. Les employer demanderait une
+famille d'atlas, donc des octets d'images, donc un delta à ventiler — et le point
+13 d'Ethan touchera de toute façon aux mêmes assets. **Le lot les nomme pour que
+le suivant les trouve.**
+
+⚠ **CE QU'ON VOIT, DONC** : le site se couvre de ruines de l'avant vers le fond,
+les escouades s'effacent, et l'attaquant survivant reste debout au milieu.
+**Aucun sprite neuf, aucune teinte neuve, aucun `data:` de plus** — `images +0`,
+296 lignes et 291 URI de part et d'autre.
 
 ---
 
@@ -277,6 +304,8 @@ l'effondrement avant d'en arriver là.
 | **EFF T9** | **PASS** | Un compteur remplace `setTimeout` sur le faux `window` **après** le lancement — `armerLAttaque` en pose un à l'ouverture et il ne regarde pas ce lot. Zéro minuterie de plus jusqu'au rapport. ⚠ Plus la preuve par la source : le corps de `image` ne contient ni `setTimeout` ni `setInterval`. |
 | **EFF T10** | **PASS** | *Hors brief.* La règle pure, prise seule : six entités montées à la main — deux à l'avant, une au fond, un attaquant, une morte, une sortie. L'ordre rendu est `[2, 1, 0]` ; l'attaquant, la morte et la sortie n'y sont pas. La chute est proportionnelle, atteint le total à la fin, et une durée nulle fait tout tomber plutôt que de diviser par zéro. ⚠ Falsifiable : sans le tri, l'ordre d'insertion rendrait `[0, 1, 2]`. |
 
+| **EFF T11** | **PASS** | *Ajouté sur demande d'Ethan — « utilise ruine_j ruine_o ».* Un montage à trois pièces de défense : une Souche, un Merlon, une escouade. Hors effondrement, **zéro ruine** dessinée et la Souche présente. Les trois tombées : **deux `ruine_o`, pas trois** — l'escouade n'en laisse pas —, **zéro `ruine_j`**, et ni la Souche ni le Merlon ne se dessinent plus. Plus la règle prise seule : `couchesDeLaRuine('ouvrage')` et `('joueur')` rendent les deux planches. |
+
 ⚠ **LE FAUX DOCUMENT APPREND À RETENIR SA RAPPEL D'IMAGE**, et rien de plus. Il
 ne comptait que les demandes, ce qui suffisait tant qu'aucun test n'avait besoin
 de faire avancer le temps — c'est ce que `RDR T1` exploite, une boucle qui ne
@@ -288,8 +317,8 @@ rappelle jamais. **Aucun test existant n'a changé de comportement.**
 
 | Grandeur | Avant | Après | Écart |
 | --- | --- | --- | --- |
-| `npm test` | **1 295 pass / 0 fail** | **1 305 pass / 0 fail** | **+10** |
-| `dist/index.html` | **8 014 150** | **8 014 921** | **+771** |
+| `npm test` | **1 295 pass / 0 fail** | **1 306 pass / 0 fail** | **+11** |
+| `dist/index.html` | **8 014 150** | **8 015 058** | **+908** |
 | lignes `data:` | 296 | **296** | **0** |
 | URI `data:` | 291 | **291** | **0** |
 | `SAVE_VERSION` | 27 | **27** | **0** |
@@ -297,11 +326,15 @@ rappelle jamais. **Aucun test existant n'a changé de comportement.**
 
 | Poste | Écart |
 | --- | --- |
-| JavaScript | **+771** |
+| JavaScript | **+908** |
 | feuille · balisage · **images** · audio | **+0** |
 
 **La somme des cinq postes tombe EXACTEMENT sur le total.** Borne T10 inchangée à
-**9 300 000** ; marge **1 285 079 octets, 13,82 %**. Zéro référence externe.
+**9 300 000** ; marge **1 284 942 octets, 13,82 %**. Zéro référence externe.
+
+⚠ **`images +0` EST LE CHIFFRE À LIRE** : le lot ajoute un effet visuel — un
+champ de ruines — **sans un octet d'image**, parce que les deux planches étaient
+déjà payées et dormaient.
 
 ---
 
@@ -315,9 +348,9 @@ disparition progressive elle-même n'a été vue par personne : ni sur appareil,
 dans un navigateur.
 
 Ce qui reste à juger à l'œil : est-ce que deux secondes se **sentent** ? est-ce
-qu'une disparition sans effet — pas de fumée, pas de ruine — lit comme une
-destruction ou comme un bogue d'affichage ? **C'est la question à poser à Ethan
-avec le §5 sous les yeux.**
+que le champ de ruines lit comme une destruction ? et surtout — **`ruine_o` a été
+dessinée pour une case de BÂTIMENT, et ce lot en met une sous chaque structure de
+défense tombée**, murs et tourelles compris. Personne n'a vu le résultat.
 
 ### ⚠ 9.2 — `arreterBoucle` annule par `globalThis`
 
@@ -329,16 +362,16 @@ porte pas. **Rien n'a été corrigé** : c'est hors du lot, et la garde `deroule
 
 ### 9.3 — Points en suspens
 
-1. **Faut-il un effet plutôt qu'une disparition ?** Les douze explosions
-   existent, et `ruine_j` / `ruine_o` sont déjà payées dans le livrable. Employer
-   les secondes coûterait **zéro octet** ; employer les premières demanderait une
-   famille d'atlas. §5.
-2. **Deux secondes, est-ce le bon temps ?** La valeur est dans la table, elle se
+1. **`ruine_o` sous une tourelle, est-ce que ça tient ?** La planche a été
+   dessinée pour une case de bâtiment ; ce lot en met une sous chaque structure
+   de défense tombée. Si le dessin ne convient pas, la règle se restreint aux
+   `genre === 'batiment'` **en une ligne**.
+2. **Faut-il des explosions en plus des ruines ?** Les douze dorment toujours ;
+   les employer demanderait une famille d'atlas, donc des octets. §5.
+3. **Deux secondes, est-ce le bon temps ?** La valeur est dans la table, elle se
    change sans migration, et `EFF T1` la mesure quelle qu'elle soit.
-3. **Le toucher doit-il abréger ?** Décidé non, §3-②. La décision tient en un
+4. **Le toucher doit-il abréger ?** Décidé non, §3-②. La décision tient en un
    écouteur si Ethan la renverse.
-4. **`ruine_j` / `ruine_o` et les douze explosions dorment.** Le point 13 touchera
-   les mêmes assets ; c'est le moment de décider ce qu'on garde.
 5. **`package.json` ne déclare aucun `engines`.** Toujours non fait.
 
 ---

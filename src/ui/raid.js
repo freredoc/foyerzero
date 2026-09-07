@@ -674,29 +674,18 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   }
 
   /**
-   * Le combat tel qu'on le DESSINE — le vrai, ou celui dont les tombés sont
-   * marqués morts.
+   * Les entités déjà tombées à cet instant de l'effondrement, ou `null`.
    *
-   * ⚠⚠ ON COPIE, ON NE MUTE PAS, et c'est le §2 du brief pris au mot : l'état de
-   * combat appartient au rejeu, l'effondrement est du dessin. `EFF T3` compare
-   * l'état de la partie avant et après par `deepEqual`.
-   *
-   * ⚠⚠ ET LA LISTE GARDE SA LONGUEUR — on marque `vivant: false`, on ne FILTRE
-   * pas. `render/scene.js` fait `etat.entites[e.cibleIndice]` à deux endroits :
-   * une liste raccourcie ferait pointer ces deux lectures sur la mauvaise
-   * entité. `visible()` teste `vivant && !sorti`, donc marquer suffit — et les
-   * barres de PV disparaissent avec la pièce, ce qui est ce qu'on veut.
+   * ⚠⚠ UN ENSEMBLE D'INDICES, ET L'ÉTAT N'EST PAS TOUCHÉ — §2 du brief pris au
+   * mot. Le premier jet copiait le combat en marquant les tombées `vivant:
+   * false` ; c'était juste, et c'était de trop dès lors qu'elles laissent une
+   * RUINE plutôt que du vide : `listeAffichage` doit savoir laquelle dessiner
+   * autrement, pas laquelle sauter. On lui passe donc l'ensemble, et la décision
+   * de ce qu'une chose détruite laisse derrière elle vit chez le dessin.
    */
-  function combatDessine() {
-    if (effondrementMs === null || combat === null) return combat;
-    const tombees = effondrees(combat.entites, effondrementMs, ECRAN_RAID.effondrementMs);
-    if (tombees.size === 0) return combat;
-    return {
-      ...combat,
-      entites: combat.entites.map(
-        (e) => (tombees.has(e.indice) ? { ...e, vivant: false } : e),
-      ),
-    };
+  function tombeesALEcran() {
+    if (effondrementMs === null || combat === null) return null;
+    return effondrees(combat.entites, effondrementMs, ECRAN_RAID.effondrementMs);
   }
 
   function dessiner() {
@@ -711,9 +700,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // Passer la graine du site à la place ferait un second tirage : le même
       // obstacle, à la même case, n'aurait plus le même dessin des deux côtés,
       // et c'est très exactement ce que ce point d'Ethan demande de refermer.
-      listeAffichage(combatDessine(), projection, precedentes,
+      listeAffichage(combat, projection, precedentes,
         combat.termine ? 0 : alphaMilli(accumulateur, vitesse), fondCourant,
-        etatCourant.graine),
+        etatCourant.graine, tombeesALEcran()),
       atlas ?? {},
     );
     const fin = (doc.defaultView?.performance ?? globalThis.performance)?.now() ?? 0;
@@ -881,12 +870,18 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   function finDuDeroule() {
     arreterBoucle();
+    quitterLeDeroule();
     // ⚠ L'EFFONDREMENT SE REFERME ICI, ET PAR UN SEUL ENDROIT. Trois portes y
     // mènent — la boucle qui arrive au bout, « Instantané », et la page qui se
     // masque — et chacune passe par cette fonction. Le remettre à `null` ailleurs
     // aurait fait trois écritures d'une même remise à zéro.
+    //
+    // ⚠⚠ ET IL SE REFERME APRÈS `quitterLeDeroule`, PAS AVANT. Celle-ci REDESSINE
+    // — elle change de cadrage, donc elle repeint — et le faire avec un
+    // effondrement déjà oublié rendrait le site INTACT sur la dernière image,
+    // juste avant que le rapport ne la recouvre. Le champ de ruines est ce que
+    // le joueur doit voir derrière son rapport.
     effondrementMs = null;
-    quitterLeDeroule();
     if (rapportCourant !== null) montrerResultat(rapportCourant, simulation);
   }
 

@@ -23,6 +23,8 @@ import {
   ordreDeLEffondrement, effondrees,
 } from '../src/ui/raid.js';
 import { calculerProjection } from '../src/render/projection.js';
+import { listeAffichage, couchesDeLaRuine } from '../src/render/scene.js';
+import { creerCombat } from '../src/sim/combat.js';
 import { MUR_CASES, BANDE_SOUS_LE_MUR } from '../src/render/fond.js';
 import {
   BANDES, casesDeLaBande, bornesDuDecalage, bornesDuDecalageX, basculeDeBande,
@@ -1615,4 +1617,67 @@ test('EFF T10 — l\'ordre de chute suit l\'assaut, et il ne touche QUE la défe
   assert.deepEqual([...effondrees(entites, 0, 0)], [2, 1, 0]);
   // Falsifiable : sans le tri, l'ordre d'insertion rendrait [0, 1, 2].
   assert.notDeepEqual(ordreDeLEffondrement(entites), [0, 1, 2]);
+});
+
+test('EFF T11 — ce qui est BÂTI laisse une ruine, une escouade n\'en laisse pas', () => {
+  // ⚠⚠ ETHAN, 07/09 : « utilise ruine_j ruine_o ». Les deux planches dormaient
+  // dans la famille `batiment` de l'atlas depuis leur fabrication — DANS le
+  // livrable, donc payées en octets, et employées par personne. Le relevé du lot
+  // les a trouvées ; ce test les met au travail.
+  const montage = {
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 18, colonne: 5 }],
+    defenseurs: [
+      { id: 'merlon', rangee: 10, colonne: 3 },
+      { id: 'meute', rangee: 9, colonne: 4 },
+    ],
+    vagues: [[{ id: 'meute', colonne: 1 }]],
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] },
+    },
+  };
+  const etat = creerCombat(montage);
+  const proj = calculerProjection(1080, 4000, MUR_CASES);
+  const noms = (liste) => liste.filter((p) => p.forme === 'sprite').map((p) => p.nom);
+
+  // Sans effondrement, rien ne change : c'est le cas de tous les autres
+  // appelants de `listeAffichage`, et il ne doit pas bouger.
+  const intact = noms(listeAffichage(etat, proj));
+  assert.equal(intact.filter((n) => n.startsWith('ruine_')).length, 0,
+    'une ruine se dessine hors effondrement');
+  assert.ok(intact.includes('bat_o_souche'), 'le montage ne dessine pas la Souche');
+
+  // Les trois pièces de la DÉFENSE tombent : deux bâties, une escouade.
+  const parId = new Map(etat.entites.map((e) => [e.id, e]));
+  const souche = parId.get('souche');
+  const merlon = parId.get('merlon');
+  const escouade = etat.entites.find((e) => e.id === 'meute' && e.camp === 'defense');
+  assert.ok(souche && merlon && escouade, 'le montage n\'a pas les trois pièces attendues');
+
+  const tombees = new Set([souche.indice, merlon.indice, escouade.indice]);
+  const apres = noms(listeAffichage(etat, proj, null, 0, null, 0, tombees));
+
+  // ⚠ DEUX RUINES, PAS TROIS : la Souche et le Merlon sont BÂTIS, l'escouade non.
+  assert.equal(apres.filter((n) => n === 'ruine_o').length, 2,
+    'ce qui est bâti ne laisse pas exactement une ruine chacun');
+  assert.equal(apres.filter((n) => n === 'ruine_j').length, 0,
+    'une ruine du JOUEUR sur un site de l\'Ouvrage');
+  // Et les pièces d'origine ne sont plus dessinées.
+  assert.ok(!apres.includes('bat_o_souche'), 'la Souche se dessine encore');
+  assert.ok(!apres.some((n) => n.startsWith('def_o_merlon')), 'le Merlon se dessine encore');
+
+  // ⚠ L'ATTAQUANT SURVIVANT, LUI, EST TOUJOURS LÀ. C'est lui qui a gagné.
+  const attaquant = etat.entites.find((e) => e.camp === 'attaque');
+  assert.ok(attaquant !== undefined, 'le montage n\'a pas d\'attaquant');
+  assert.ok(apres.length > 0);
+  assert.equal(
+    noms(listeAffichage(etat, proj, null, 0, null, 0, tombees)).length, apres.length,
+  );
+
+  // ⚠ ET LA LETTRE SUIT LE PROPRIÉTAIRE, pas le camp — « le joueur peut
+  // défendre ». Prise seule, la règle se mesure sans montage.
+  assert.deepEqual(couchesDeLaRuine('ouvrage'), [{ famille: 'batiment', nom: 'ruine_o' }]);
+  assert.deepEqual(couchesDeLaRuine('joueur'), [{ famille: 'batiment', nom: 'ruine_j' }]);
 });

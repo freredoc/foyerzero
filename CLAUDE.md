@@ -43,14 +43,15 @@ Dernière révision : **07/09/2026**, version 0.99.17 · build 118.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 07/09/2026 (après le lot EFFONDREMENT), à confronter :**
-`npm test` → **1305 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**8 014 921 octets**, 0 référence externe. Coût **+771 octets, ENTIÈREMENT EN
+`npm test` → **1306 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 015 058 octets**, 0 référence externe. Coût **+908 octets, ENTIÈREMENT EN
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
-`git worktree` depuis le lot précédent : **JavaScript +771 · feuille +0 ·
+`git worktree` depuis le lot précédent : **JavaScript +908 · feuille +0 ·
 balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
 EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
-et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 285 079 octets,
-13,82 %**. Le lot touche `src/ui/raid.js` et `src/data/sites.js`.
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 284 942 octets,
+13,82 %**. Le lot touche `src/ui/raid.js`, `src/render/scene.js` et
+`src/data/sites.js`.
 ⚠⚠ **ETHAN, POINT 12 : « lors d'une victoire totale, juste après la destruction
 et avant le rapport, détruire les unités et bâtiments de défense en 2
 secondes. »** Arbitrage du même jour : **purement visuel, l'état ne bouge pas** —
@@ -85,19 +86,35 @@ côté. `EFF T8` interdit en plus tout `2000` en clair dans `src/ui/raid.js`.
 `art/sprites/effet/{64,128}` porte **douze PNG d'explosion** — aéronef,
 champignon, normale, quatre images chacune — et **aucune famille `effet`
 n'existe dans `src/data/atlas.js`** : elles ne sont dans aucun atlas, donc dans
-aucun livrable. Et `ruine_j` / `ruine_o` sont dans l'atlas `batiment`, donc DANS
-le livrable, **employées par personne**. C'est `ui_pause` deux fois. Ce lot ne
-les ramasse pas — les employer coûterait une famille d'atlas et des octets
-d'images —, mais il les nomme.
-⚠ **AUCUN `data:` DE PLUS, AUCUNE TEINTE NEUVE** : l'effondrement fait
-DISPARAÎTRE les entités, il n'en dessine pas de nouvelles.
+aucun livrable. Et `ruine_j` / `ruine_o` étaient dans l'atlas `batiment`, donc
+DANS le livrable — payées en octets d'images — et **employées par personne**.
+C'était `ui_pause` deux fois.
+⚠⚠ **`ruine_j` ET `ruine_o` SONT MISES AU TRAVAIL — ETHAN, 07/09 : « utilise
+ruine_j ruine_o ».** Ce qui est BÂTI — bâtiments et structures de défense —
+laisse une RUINE en tombant ; une escouade n'en laisse pas, et lui en donner une
+ferait pousser un pan de mur là où six hommes sont tombés. La lettre vient de
+`lettreDuProprietaire`, jamais du camp : « le joueur peut défendre » (§4).
+`EFF T11` compte deux ruines pour deux pièces bâties, zéro pour l'escouade.
+⚠ **ET ELLES NE COÛTENT PAS UN OCTET D'IMAGE** : elles étaient déjà dans
+l'atlas. **`images +0`, 296 lignes `data:` et 291 URI de part et d'autre**, et
+aucune teinte neuve. Les douze explosions, elles, dorment toujours — les employer
+demanderait une famille d'atlas, donc des octets ; le point 13 touchera les mêmes
+assets.
+⚠ **LES TOMBÉES SONT UN ENSEMBLE D'INDICES PASSÉ À `listeAffichage`, PAS UNE
+COPIE DE L'ÉTAT.** Le premier jet copiait le combat en marquant `vivant: false` ;
+c'était juste, et c'était de trop dès lors qu'une tombée laisse une ruine plutôt
+que du vide — le dessin doit savoir laquelle dessiner AUTREMENT, pas laquelle
+sauter. `EFF T3` compare l'état par `deepEqual` au milieu de l'effondrement.
+⚠ **ET L'EFFONDREMENT SE REFERME APRÈS `quitterLeDeroule`, PAS AVANT** : celle-ci
+REDESSINE, et l'oublier trop tôt rendrait le site INTACT sur la dernière image,
+juste avant que le rapport ne la recouvre.
 ⚠ **L'ORDRE DE CHUTE SUIT L'ASSAUT** — rangée croissante, puis colonne, puis
 indice : la vague court derrière l'attaquant et finit sur la Souche. Elle ne
 touche QUE le camp `defense` : les unités d'assaut survivantes restent, ce sont
 elles qui ont gagné.
 ⚠ **`SAVE_VERSION` RESTE À 27** — rien n'est ajouté à l'état.
-⚠ **DIX TESTS ENTRENT — `EFF T1` à `EFF T10` — ET LE COMPTE PASSE DE 1 295 À
-1 305.** **Aucune assertion n'a été retirée ni assouplie** ; le faux document de
+⚠ **ONZE TESTS ENTRENT — `EFF T1` à `EFF T11` — ET LE COMPTE PASSE DE 1 295 À
+1 306.** **Aucune assertion n'a été retirée ni assouplie** ; le faux document de
 `raid-ecran.test.js` apprend seulement à RETENIR sa rappel d'image, ce qui ne
 change rien aux tests qui comptaient sur une boucle qui ne rappelle jamais.
 ⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
