@@ -1427,6 +1427,7 @@
      porte déjà depuis le lot ÉCRAN-RAID. */
   #ecran-offense .emplacement,
   #ecran-raid .emplacement,
+  #offense-palette .unite,
   .posable {
     border: 1px dashed #4E5742;
   }
@@ -1520,10 +1521,21 @@
     background: #6A7658; color: #161914; font-size: 9px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.04em;
   }
-  /* ⚠ MÊME FORME QUE `#chantier-reparation` : `flex: 0 0 auto`, donc aucune
-     hauteur fixe à ajouter à la somme des six barres. Le ton est celui du
-     registre `mode` — un état, jamais un refus. */
-  #chantier-garnison { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #343A2C; color: #F5F3E8; }
+  /* ⚠⚠ IL SE POSE SUR LE CHAMP AU LIEU DE LE POUSSER — lot RETOUCHES, 07/09.
+     Il était en `flex: 0 0 auto`, ce qui ne coûtait rien tant qu'il était
+     TOUJOURS là sur la bande Défense ; depuis qu'il paraît et disparaît selon
+     l'état de la garnison, le laisser dans le flux aurait recadré le décor à
+     chaque réparation — le défaut du point 2, mesuré à 44 px par le lot
+     ÉCRAN-DÉFENSE sur la ligne d'avis.
+     ⚠ EN HAUT, la ligne d'avis tenant le bas : les deux ne se recouvrent pas.
+     ⚠ `pointer-events: none` : il couvre des cases, il ne les prend pas.
+     ⚠ ET LA MARGE DROITE N'EST PAS CELLE DE L'AVIS — la bascule vit en BAS à
+     droite, donc rien ne dégage ici. Le ton reste celui du registre `mode`. */
+  #chantier-garnison {
+    position: absolute; left: 0; right: 0; top: 0; z-index: 1;
+    pointer-events: none; margin: 0;
+    padding: 3px 8px; font-size: 9px; background: #343A2C; color: #F5F3E8;
+  }
   /* ⚠⚠ ELLE SE POSE SUR LE CHAMP AU LIEU DE LE POUSSER — Ethan, 07/09, point 2.
      Voir le balisage pour la mesure. Ce qui s'ajoute quand un mode s'arme se
      pose PAR-DESSUS ; entrer ou sortir d'un mode ne change plus la hauteur du
@@ -1800,17 +1812,40 @@
     overflow-x: auto; overflow-y: hidden;
     touch-action: pan-x;
   }
+  /* ⚠⚠ NI FOND PLEIN NI BORDURE PROPRE — Ethan, 07/09, point 16, précisé
+     « dans le menu offense ». Le lot ÉCRAN-DÉFENSE avait traité la palette du
+     CHANTIER ; celle-ci portait encore un aplat kaki et un liseré plein.
+     ⚠ `background: transparent` EST OBLIGATOIRE, PAS COSMÉTIQUE — c'est la
+     mesure du lot ÉCRAN-DÉFENSE, reprise telle quelle : un `<button>` sans fond
+     DÉCLARÉ retombe sur le gris clair du navigateur, et les vignettes
+     ressortiraient EN CLAIR sur le bandeau sombre, l'inverse exact de la
+     demande. « Enlever les fonds pleins » se dit en toutes lettres.
+     ⚠ ET LA BORDURE VIENT DE LA RÈGLE PARTAGÉE, plus haut : un troisième
+     `1px dashed #4E5742` écrit ici aurait fait quatre définitions du même
+     pointillé, dont trois se seraient tues au premier réglage. */
   #ecran-offense .unite {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 1px; overflow: hidden;
-    padding: 2px 1px; background: #343A2C; border: 1px solid #161914;
+    padding: 2px 1px; background: transparent;
     color: #F5F3E8; font: inherit; font-size: 8px; text-align: center; line-height: 1.05;
   }
   #ecran-offense .unite:disabled { color: #68727E; }
   #ecran-offense .unite .cout { font-size: 8px; color: #8C9A72; }
   /* La vignette armée. Même os que la case choisie du Chantier : un seul
      vocabulaire visuel pour « c'est ça que le prochain toucher va poser ». */
-  #ecran-offense .unite.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* ⚠⚠ LE LISERÉ DEVIENT LE DISCRIMINANT DES TROIS ÉTATS, exactement comme à
+     la palette du Chantier depuis le lot ÉCRAN-DÉFENSE : `#4E5742` au repos,
+     `#1E2124` verrouillée, `#F5F3E8` armée. AUCUNE TEINTE NEUVE — ce sont les
+     trois mêmes qu'au Chantier, et `RET T7` exige qu'elles restent deux à deux
+     différentes.
+     ⚠ L'`outline` PART AVEC LE FOND, et ce n'est pas une perte : posée à
+     `-2px` sur une bordure d'un pixel, elle recouvrait exactement la bande que
+     le liseré occupe. Ce qui la remplace est plus riche — le liseré, le libellé
+     en os et l'anneau du sprite, soit trois signaux là où il y en avait deux,
+     et le même vocabulaire que l'autre palette. */
+  #ecran-offense .unite.choisie { border-color: #F5F3E8; }
+  #ecran-offense .unite.choisie b { color: #F5F3E8; }
+  #ecran-offense .unite.choisie i { box-shadow: inset 0 0 0 2px #F5F3E8; }
   /* La ligne d'avis de l'Offense porte les mêmes registres que celle du
      Chantier : rouge pour ce qui refuse, métal pour ce qui rappelle un mode. */
   #offense-avis.mode { background: #343A2C; color: #F5F3E8; }
@@ -2046,7 +2081,7 @@
   #options-version.appui { color: #F5B636; }
   #offense-palette .unite {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
+    background: transparent; padding: 0 2px; color: #68727E;
   }
   /* ⚠ `overflow-wrap: anywhere` PARCE QUE LES NOMS SONT LONGS ET LA COLONNE
      ÉTROITE. À sept colonnes sur 360 px, une vignette fait 47 px : sans point
@@ -2073,9 +2108,19 @@
   /* ⚠ UNE VIGNETTE ÉTEINTE N'EST PAS `disabled` : elle doit répondre au toucher
      pour DIRE ce qui la verrouille. Elle se grise donc par une classe, comme
      l'unique déjà posé du Chantier depuis le 28/08. */
-  #offense-palette .unite.verrouillee { opacity: 0.45; }
+  #offense-palette .unite.verrouillee { opacity: 0.45; border-color: #1E2124; }
   #offense-palette .unite.verrouillee b { color: #68727E; }
 
+  /* ⚠ MÊME FORME QUE `#chantier-reserve` — même corps, même ton, même famille
+     de mots. Deux vocabulaires pour la même grandeur obligeraient le joueur à
+     traduire d'un écran à l'autre. `flex: 0 0 auto` : aucune hauteur fixe à
+     ajouter à la somme des barres. */
+  #offense-reserve {
+    flex: 0 0 auto; margin: 0; padding: 3px 8px; font-size: 9px;
+    background: #343A2C; color: #F5F3E8;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
   /* La barre contextuelle de l'Offense — jumelle de `#chantier-contexte`, même
      hauteur, mêmes quatre boutons, même modèle « armer puis toucher ». Elle ne
      coexiste jamais avec celle du Chantier : c'est l'autre écran. */
@@ -2210,6 +2255,30 @@
                c'est la vue qui est l'ancêtre positionné, et c'est le bas du
                CHAMP QUI DÉFILE qu'il faut longer, pas celui du tutoriel. -->
           <p id="chantier-avis" hidden></p>
+          <!-- ⚠⚠ L'ÉTAT DE LA GARNISON — lot COMPLEXE, 06/09. Ethan, 05/09 : sans
+               Complexe de défense construit, la garnison abîmée ne revient JAMAIS.
+               Ce n'est ni un défaut ni un cas limite, c'est la règle, et le joueur
+               doit en être averti LÀ OÙ IL REGARDE SA GARNISON — donc sous la bande
+               Défense, et nulle part ailleurs.
+               ⚠ CE N'EST PAS UN REFUS, C'EST UN ÉTAT. Il ne passe donc pas par
+               `#chantier-avis` et n'emprunte pas le rouge des refus : rien n'est
+               refusé, le joueur n'a rien demandé. Le ton est celui du registre
+               `mode`, métal sur métal.
+               ⚠⚠ ET IL NE PARAÎT PLUS QUE QUAND IL A QUELQUE CHOSE D'ANORMAL À
+               DIRE — Ethan, 07/09, point 5 : « enlever la barre "complexe de niv
+               x" ». C'est ce qu'on lit justement quand TOUT VA BIEN, et c'est la
+               seule lecture qui ne perde aucun avertissement : garnison abîmée,
+               Complexe absent, pièces qui ne reviendront jamais restent dits.
+               ⚠⚠ IL A QUITTÉ LE FLUX POUR `#chantier-vue` DANS LE MÊME GESTE, ET
+               C'ÉTAIT OBLIGATOIRE. En `flex: 0 0 auto` il POUSSAIT le champ, donc
+               apparaître et disparaître aurait recadré le décor — le défaut même
+               du point 2, que le lot ÉCRAN-DÉFENSE a mesuré à 44 px sur la ligne
+               d'avis. Ce qui apparaît se pose PAR-DESSUS, jamais en poussant la
+               vue.
+               ⚠ IL SE POSE EN HAUT, la ligne d'avis tenant le bas : les deux ne
+               peuvent pas se recouvrir. Et `pointer-events: none` comme elle —
+               il ne porte que du texte, donc il n'a rien à recevoir. -->
+          <p id="chantier-garnison" hidden></p>
         </div>
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
@@ -2269,23 +2338,6 @@
         <span id="chantier-reserve">—</span>
         <button type="button" id="chantier-tout-reparer">Tout réparer</button>
       </div>
-
-      <!-- ⚠⚠ L'ÉTAT DE LA GARNISON — lot COMPLEXE, 06/09. Ethan, 05/09 : sans
-           Complexe de défense construit, la garnison abîmée ne revient JAMAIS.
-           Ce n'est ni un défaut ni un cas limite, c'est la règle, et le joueur
-           doit en être averti LÀ OÙ IL REGARDE SA GARNISON — donc sous la bande
-           Défense, et nulle part ailleurs.
-           ⚠ CE N'EST PAS UN REFUS, C'EST UN ÉTAT. Il ne passe donc pas par
-           `#chantier-avis` et n'emprunte pas le rouge des refus : rien n'est
-           refusé, le joueur n'a rien demandé. Le ton est celui du registre
-           `mode`, métal sur métal.
-           ⚠ ET CE N'EST PAS UNE SEPTIÈME BARRE FIXE, pour la même raison que
-           `#chantier-reparation` juste au-dessus : `flex: 0 0 auto` et `hidden`
-           hors de la bande Défense. Le chrome fixe reste à 288 px.
-           ⚠ IL PARAÎT AVEC LA BANDE, PAS AVEC UN MODE, et c'est ce qui le
-           distingue de la ligne d'avis : changer de bande est un déplacement
-           voulu, armer un mode ne devrait rien déplacer du tout. -->
-      <p id="chantier-garnison" hidden></p>
 
       <div id="chantier-contexte">
         <div class="qui">
@@ -2383,6 +2435,25 @@
           <button type="button" id="offense-panneau-ameliorer" class="ameliorer"></button>
         </div>
       </div>
+      <!-- ⚠⚠ LA RÉSERVE DE RÉPARATION DE L'ARMÉE — lot RETOUCHES, 07/09.
+           Ethan, point 10 : « Compteur de réparation offensive nulle part, ni
+           dans l'ui (global) ni dans l'onglet unités. » Le moteur la crédite
+           depuis le lot RÉSERVE ; mesuré avant d'écrire, **aucun fichier de
+           `src/ui/` ne lisait `plafondDeLaReserve` ni `reserveReparation`** — seul
+           le plafond des BÂTIMENTS était affiché, au Chantier.
+           ⚠⚠ TROIS RÉSERVOIRS, UN SEUL PLAFOND, ET ÇA SE DIT COMME ÇA. Les
+           trois châssis se remplissent ENSEMBLE et se vident SÉPARÉMENT —
+           `MODELE-ECONOMIQUE.md` §7 —, donc n'en montrer qu'un serait une
+           seconde vérité. Le plafond, lui, est le même pour les trois :
+           l'écrire une fois suffit.
+           ⚠ ELLE EST DANS LE FLUX, ET ELLE COÛTE SA HAUTEUR EN PERMANENCE. Elle
+           n'apparaît ni ne disparaît — il n'y a pas de mode Réparer sur cet
+           écran, `ACTIONS_ARMEE.reparer.agir` valant `null` — donc elle ne
+           recadre jamais rien. C'est la différence avec `#chantier-reparation`,
+           qui paraît avec un mode et pousse le champ quand il paraît.
+           ⚠ ET CE N'EST PAS UNE CINQUIÈME BARRE FIXE : `flex: 0 0 auto`, donc la
+           garde des 288 px ne la compte pas. -->
+      <p id="offense-reserve">—</p>
       <!-- ⚠ LA BARRE CONTEXTUELLE, NEUVE AU 29/08. Ethan : « on ne peut pas
            supprimer une unité en cliquant dessus. D'ailleurs les boutons
            réparer, améliorer etc. n'apparaissent pas dans le menu offense. »

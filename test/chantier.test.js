@@ -5933,10 +5933,19 @@ test('ÉD T11 — les trois états de la palette restent deux à deux distincts'
 });
 
 test('ÉD T12 — le pointillé des grilles de composition vient d\'UNE règle', () => {
-  // ⚠⚠ IL ÉTAIT ÉCRIT DEUX FOIS AVANT LE LOT — `#ecran-raid .emplacement` et
-  // `#ecran-offense .emplacement` portaient chacun `1px dashed #4E5742`. En
-  // écrire une troisième pour la palette aurait fait trois définitions du même
-  // pointillé, dont deux se seraient tues au premier réglage.
+  // ⚠⚠ IL ÉTAIT ÉCRIT DEUX FOIS AVANT LE LOT ÉCRAN-DÉFENSE —
+  // `#ecran-raid .emplacement` et `#ecran-offense .emplacement` portaient chacun
+  // `1px dashed #4E5742`. En écrire une troisième pour la palette aurait fait
+  // trois définitions du même pointillé, dont deux se seraient tues au premier
+  // réglage.
+  //
+  // ⚠⚠ ET LA GARDE SE RESSERRE AU LOT RETOUCHES, 07/09 : QUATRE SÉLECTEURS AU
+  // LIEU DE TROIS. Ethan a précisé le point 16 — « dans le menu offense » —, et
+  // la palette de l'Offense portait encore un aplat kaki et un liseré PLEIN.
+  // Elle rejoint la règle partagée : c'est un SÉLECTEUR de plus, jamais une
+  // quatrième écriture, et cette assertion-ci le mesure en nommant la liste
+  // EXACTE. Un lot qui recopierait le pointillé ferait tomber la ligne
+  // au-dessus, qui exige UNE porteuse.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
   const regles = [...feuille.matchAll(/([^{}]+)\{([^}]*border:\s*1px dashed[^}]*)\}/g)];
@@ -5945,8 +5954,9 @@ test('ÉD T12 — le pointillé des grilles de composition vient d\'UNE règle',
     `le pointillé de composition est écrit ${porteuses.length} fois`);
   const selecteurs = porteuses[0][1].split(',').map((s) => s.trim());
   assert.deepEqual(selecteurs.slice().sort(),
-    ['#ecran-offense .emplacement', '#ecran-raid .emplacement', '.posable'].sort(),
-    'la règle partagée ne couvre plus exactement les trois grilles');
+    ['#ecran-offense .emplacement', '#ecran-raid .emplacement',
+      '#offense-palette .unite', '.posable'].sort(),
+    'la règle partagée ne couvre plus exactement les quatre grilles');
 });
 
 test('ÉD T13 — la palette de Défense grise, elle ne retire pas', () => {
@@ -6109,4 +6119,114 @@ test('CÂB T8 — les cinq tuiles du bandeau portent leur pictogramme, et le com
   for (let i = 0; i < 5; i += 1) bouton('defense').click();
   assert.equal(pictosDuBandeau().length, avant,
     'le bandeau a gagné des pictogrammes en changeant de bande');
+});
+
+// ---------------------------------------------------------------------------
+// lot RETOUCHES — 07/09/2026 : points 5 et 16
+// ---------------------------------------------------------------------------
+
+/** Abîme une pièce de garnison, pour que le bandeau ait quelque chose à dire. */
+function abimerLaGarnison(etat, part = 0.5) {
+  const laBase = baseCourante(etat);
+  assert.ok(laBase.garnison.length > 0, 'montage : la garnison est vide');
+  const piece = laBase.garnison[0];
+  const pvMax = pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau);
+  piece.degatsMilli = Math.round(pvMax * part);
+  return piece;
+}
+
+test('RET T1 — garnison intacte : le bandeau ne paraît pas', () => {
+  // ⚠ ETHAN, 07/09, POINT 5 : « enlever la barre "complexe de niv x" ». C'est
+  // exactement ce qu'on lit quand tout va bien — « Complexe de défense niv. 7 —
+  // garnison intacte » — et c'est cette phrase-là qu'il ne veut plus.
+  const etat = baseAvecComplexe(20, 7);
+  poserEnGarnison(etat, 'merlon');
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+
+  // Le montage mesure quelque chose : la garnison EST intacte, et le moteur le
+  // dit — sans quoi ce test passerait pour une raison qui n'est pas la sienne.
+  const vue = etatDeLaGarnison(etat);
+  assert.equal(vue.avertissement, false, 'montage : le Complexe manque');
+  assert.equal(vue.enAttente, 0, 'montage : une pièce attend déjà');
+
+  assert.equal(doc.getElementById('chantier-garnison').hidden, true,
+    'le bandeau paraît alors que la garnison est intacte');
+});
+
+test('RET T2 — garnison abîmée : le bandeau reparaît, avec son délai', () => {
+  // ⚠⚠ LES DEUX TESTS, PAS UN. Sans celui-ci, un lot qui retirerait le bandeau
+  // POUR TOUJOURS passerait `RET T1` — et emporterait avec la phrase de confort
+  // la règle du 05/09, celle qui dit qu'une garnison peut ne jamais revenir.
+  const etat = baseAvecComplexe(20, 7);
+  poserEnGarnison(etat, 'merlon');
+  abimerLaGarnison(etat);
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+
+  const vue = etatDeLaGarnison(etat);
+  assert.equal(vue.avertissement, false, 'montage : ce n\'est pas le cas « abîmée »');
+  assert.ok(vue.enAttente > 0, 'montage : aucune pièce n\'attend son retour');
+
+  const ligne = doc.getElementById('chantier-garnison');
+  assert.equal(ligne.hidden, false, 'le bandeau ne reparaît pas sur une garnison abîmée');
+  assert.equal(ligne.textContent, vue.texte);
+  assert.match(ligne.textContent, /retour/, 'le bandeau ne dit pas le retour');
+});
+
+test('RET T3 — sans Complexe : l\'avertissement sort, et c\'est l\'autre cas anormal', () => {
+  // ⚠ LE SECOND CAS ANORMAL, QUI N'EST PAS LE PREMIER. Sans Complexe, la
+  // garnison abîmée ne revient JAMAIS — Ethan, 05/09 —, et cette règle-là ne
+  // doit pas partir avec la phrase de confort.
+  const etat = baseAvecComplexe(20, 7);
+  poserEnGarnison(etat, 'merlon');
+  // On retire le Complexe par le geste du jeu, pas par une écriture sauvage.
+  moteurEtat.demolir(etat, indiceDe(etat, 'complexeDeDefense'));
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+
+  const vue = etatDeLaGarnison(etat);
+  assert.equal(vue.avertissement, true, 'montage : le Complexe est encore là');
+  assert.equal(vue.enAttente, 0,
+    'montage : une pièce attend, donc ce test ne mesure plus l\'avertissement SEUL');
+
+  const ligne = doc.getElementById('chantier-garnison');
+  assert.equal(ligne.hidden, false, 'l\'avertissement « sans Complexe » a disparu avec la phrase');
+  assert.match(ligne.textContent, /ne reviennent jamais/);
+});
+
+test('RET T4 — le bandeau se pose sur la vue, il ne pousse rien', () => {
+  // ⚠⚠ C'EST LE DÉFAUT DU POINT 2, ET IL REVIENDRAIT ICI. Tant que le bandeau
+  // était TOUJOURS là sur la bande Défense, son `flex: 0 0 auto` ne coûtait
+  // rien ; depuis qu'il paraît et disparaît, le laisser dans le flux ferait
+  // recadrer le décor à chaque réparation — 44 px, mesurés par ÉCRAN-DÉFENSE sur
+  // la ligne d'avis.
+  //
+  // ⚠ LE DÉPÔT N'A PAS DE NAVIGATEUR (§3), donc on mesure ce qui SE mesure sans
+  // lui : que la règle sort le bandeau du flux, et qu'il vit dans le même
+  // ancêtre positionné que la ligne d'avis — celui qui l'a déjà fait pour elle.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/#chantier-garnison\s*\{([^}]*)\}/);
+  assert.ok(regle, 'la règle du bandeau de garnison a disparu');
+  assert.match(regle[1], /position:\s*absolute/,
+    'le bandeau est resté dans le flux : il pousse la grille en paraissant');
+  assert.ok(!/flex:\s*0 0 auto/.test(regle[1]),
+    'le bandeau garde son `flex: 0 0 auto` : il prend encore de la hauteur');
+  // ⚠ ET IL NE PREND PAS LE TOUCHER DES CASES QU'IL COUVRE — la faute mesurée du
+  // lot TUTORIEL, et la moitié qui compte du point 2.
+  assert.match(regle[1], /pointer-events:\s*none/,
+    'le bandeau avalerait le toucher des cases qu\'il recouvre');
+
+  // ⚠ ET IL EST DANS `#chantier-vue`, l'ancêtre positionné — pas ailleurs.
+  const balisage = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  const debut = balisage.indexOf('id="chantier-vue"');
+  const fin = balisage.indexOf('id="chantier-panneau"');
+  assert.ok(debut > 0 && fin > debut, 'le découpage ne mesure rien');
+  assert.ok(balisage.slice(debut, fin).includes('id="chantier-garnison"'),
+    'le bandeau n\'est plus dans `#chantier-vue` : il se calerait sur un autre ancêtre');
+  // Falsifiable : la tranche voit bien la ligne d'avis, qui EST là.
+  assert.ok(balisage.slice(debut, fin).includes('id="chantier-avis"'),
+    'le découpage ne voit plus la ligne d\'avis : il ne mesure rien');
 });

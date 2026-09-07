@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.25 · build 127.
+Dernière révision : **07/09/2026**, version 0.99.26 · build 128.
 
 ---
 
@@ -42,7 +42,132 @@ Dernière révision : **07/09/2026**, version 0.99.25 · build 127.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot DÉPLACEMENT-ÉCLAIRÉ), à confronter :**
+**Référence au 07/09/2026 (après le lot RETOUCHES), à confronter :**
+`npm test` → **1386 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 350 024 octets**, 0 référence externe. Coût **+3 458 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +550 · feuille +2 856 · balisage +52 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **297
+lignes `data:` avant, 297 après, 292 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **949 976 octets, 10,21 %**. Le lot touche
+`src/ui/chantier.js`, `src/ui/offense.js`, `src/sim/satellites.js`,
+`src/sim/site-de-la-case.js`, la feuille et le balisage, et fait entrer
+`src/sim/saveur.js`.
+⚠⚠ **LE BANDEAU DE GARNISON DISPARAÎT QUAND TOUT VA BIEN, ET IL NE COÛTE PLUS UN
+PIXEL.** Ethan, point 5 : « enlever la barre "complexe de niv x" ». La lecture
+retenue ne perd AUCUN avertissement — il reparaît dès que `etatDeLaGarnison`
+porte un `avertissement` ou une pièce `enAttente` — et **les deux champs se
+LISENT**, jamais le texte : retester « la phrase contient-elle "intacte" ? »
+serait une seconde lecture du même fait, que la première retouche de libellé
+ferait mentir.
+⚠⚠ **ET LE DÉFAUT DU POINT 2 REVENAIT, ALORS IL EST TRAITÉ.** En `flex: 0 0
+auto`, un bandeau qui paraît et disparaît recadre le décor — 44 px mesurés par
+ÉCRAN-DÉFENSE sur la ligne d'avis. `#chantier-garnison` passe en `absolute`
+DANS `#chantier-vue`, EN HAUT, la ligne d'avis tenant le bas. **Mesuré dans
+Chromium sur DEUX vraies parties chargées** — même base, Merlon intact puis
+abîmé : bandeau **CACHÉ** puis **visible 16 px**, et les SEPT grandeurs de
+géométrie identiques — champ 492, défilé 404, `scrollTop` 281, `scrollHeight`
+685, `--case-cote` 46 px, fond 360 × 720 @ 50 % 0 %, haut de grille −171.
+⚠ **ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE** : `elementFromPoint`
+au milieu du bandeau rend **`DIV.case.batiments`**.
+⚠⚠ **LA PALETTE DE L'OFFENSE PERD SES FONDS PLEINS, ET LE POINTILLÉ NE S'ÉCRIT
+PAS UNE QUATRIÈME FOIS.** Point 16, « dans le menu offense ». La règle partagée
+d'ÉCRAN-DÉFENSE gagne un QUATRIÈME sélecteur — `#offense-palette .unite` — et
+`ÉD T12` se RESSERRE, de trois sélecteurs nommés à quatre. Relevé à l'écran :
+fond `rgba(0, 0, 0, 0)` dans les trois états, liseré `1px dashed` **`#4E5742`
+au repos, `#1E2124` verrouillée, `#F5F3E8` armée** — deux à deux différents,
+**aucune teinte neuve** —, et l'emplacement de vague voisin rend le MÊME
+pointillé.
+⚠ **`background: transparent` RESTE OBLIGATOIRE** : un `<button>` sans fond
+déclaré retombe sur le gris clair du navigateur, mesuré à ÉCRAN-DÉFENSE.
+⚠⚠ **ET LE CONFLIT DE CASCADE `verrouillee` / `choisie` EST INERTE, MESURÉ.**
+Même spécificité, `.verrouillee` écrite plus bas donc gagnante — **le cas ne
+peut pas arriver** : l'écouteur sort par un `toast` avant `choisirUnite` dès
+que `!unite.disponible`. **Relevé, non corrigé** : un `:not(.verrouillee)`
+serait une règle pour un état que le code interdit.
+⚠⚠ **LA RÉSERVE DE RÉPARATION DE L'ARMÉE S'AFFICHE, ET ELLE N'ÉTAIT LUE PAR
+PERSONNE.** Point 10. Mesuré avant d'écrire : **aucun fichier de `src/ui/` ne
+lisait `plafondDeLaReserve` ni `reserveReparation`** — seul le plafond des
+BÂTIMENTS était affiché, et au Chantier. `ligneDeLaReserveDArmee` est PURE et
+EXPORTÉE, `src/sim/reparation.js` n'a pas une ligne de changée, et les mots sont
+ceux d'Ethan — `FAMILLE_DE_CHASSIS`, « infanterie · véhicule · avion ».
+⚠⚠ **LA GARDE QUE LE BRIEF DEMANDAIT N'AVAIT PAS LIEU D'ÊTRE — MESURÉ.**
+`plafondDeLaReserveDesBatiments` LÈVE sur une disposition vide ; **l'équivalent
+côté ARMÉE ne lève PAS**, il passe par `niveauDeLArmee(base.armee) ?? 0` et rend
+douze heures tout rond. `RET T11` le mesure des DEUX côtés — `doesNotThrow`
+d'un bord, `throws` de l'autre — plutôt que de monter du code mort.
+⚠ **`flex: 0 0 auto`, JAMAIS UNE HAUTEUR FIXE** : la somme des barres ne bouge
+pas d'un pixel. Relevé — onglets 40 · ressources 44 · **réserve 16** · contexte
+46 · palette 86 · barre du bas 46 · navigation 26, zéro débordement.
+⚠⚠ **ET LE COMPTEUR GLOBAL EST CHIFFRÉ, PAS FAIT.** Le bandeau fait 360 px pour
+**cinq tuiles de 67 px**, écart 4, marges 6 : une sixième les ramène à
+**54,7 px**, et la réserve est TROIS nombres, donc trois tuiles, donc **38 px
+chacune**. Trop cher pour « tu compresses tout dans l'UI ». **Ethan tranche.**
+⚠⚠ **DEUX CAMPS QUI PARAISSENT ENSEMBLE DONNENT LES DEUX SAVEURS, ET C'EST LA
+CASE QU'ON CONTRAINT.** Point 15. La saveur est une propriété de la CASE —
+arbitrage du 29/08 — donc poser un champ `saveur` sur le satellite serait une
+seconde vérité contre `saveurDeLaCase`, **et `SAVE_VERSION` devrait bouger pour
+une grandeur qui se calcule.**
+⚠⚠ **LE DÉTERMINISME DICTE LA FORME : ON CONTRAINT AVANT DE TIRER.** Un tirage
+relancé jusqu'à la bonne saveur consommerait un nombre de tirages qui dépend du
+RÉSULTAT. `entier` est appelé **UNE fois quoi qu'il arrive**, et le décalage de
+tirages **vaut ZÉRO** — mesuré par le compteur d'instances, dérivé, et par
+`etat.rng` resté intact.
+⚠⚠ **LES DEUX CHEMINS D'APPARITION SIMULTANÉE SONT RELEVÉS, ET LES DEUX
+PRODUISENT.** `planifierSatellites` programme les TROIS au même tick — un seul
+`du` pour toute la boucle ; et `detruireSatellite` pousse `tickDu:
+etat.horloge.nbTicks` depuis SATELLITES-RESPAWN, donc **deux camps rasés la même
+minute donnent deux attentes échues au même tick**. Les deux passent par la même
+boucle, et c'est là que la contrainte vit.
+⚠⚠ **`src/sim/saveur.js` ENTRE, ET C'EST UN CYCLE D'IMPORTS QUI L'A EXIGÉ.**
+`saveurDeLaCase` vivait dans `site-de-la-case.js`, qui importe `satellites.js`
+: le retour aurait créé le **premier cycle de `src/sim/`**, mesuré inexistant.
+Précédent exact : `base-courante.js` au lot BASES-0. ⚠ Et `site-de-la-case.js`
+les IMPORTE **et** les RÉ-EXPORTE — un `export … from` seul ne crée aucune
+liaison locale, la leçon payée au lot MURS-OUVRAGE.
+⚠ **À UN SEUL SATELLITE, RIEN NE CHANGE** — `dues >= 2`. `RET T13` balaie 200
+graines et exige que les DEUX saveurs restent atteignables.
+⚠⚠ **ET LE REPLI N'EST ATTEIGNABLE SUR AUCUN ANNEAU D'AUJOURD'HUI — 0 SUR 800.**
+400 graines × 2 types : jamais une saveur absente, pire cas **1 case sur 12**.
+**Aucun test comportemental n'est écrit pour lui** — « un test qui ne peut tomber
+sur aucun état d'aujourd'hui se déclare, il ne se compte pas » ; c'est `RET T15`
+qui le garde par la SOURCE, et la falsification qui le retire ne mord que là.
+⚠⚠ **ET LA MESURE DE SOURCE PORTE SUR LE CORPS DE `poserUnSatellite`, JAMAIS SUR
+LE FICHIER — première écriture corrigée après mesure.** `niveauDuSatellite` tire
+elle aussi, pour son rayon : compter le fichier entier rendait **2** et accusait
+un tirage qui existait avant le lot. `RET T15` extrait le corps, prouve que la
+tranche n'est ni vide ni le fichier entier, puis compte.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE SOIXANTE-DIX COUPLES SUR 350, ET
+L'ATTRIBUTION EST PROUVÉE.** À partir de la **phase 2** — celle où les satellites
+paraissent ; **la phase 1 est identique AU BIT**. En neutralisant la SEULE ligne
+de la contrainte ET la couche de témoin du lot, `bases.test.js` repasse
+**30 pass / 0 fail**.
+⚠⚠ **UN SEUL SCALAIRE BOUGE, SUR QUATORZE GRAINES SUR VINGT-CINQ** : la cible du
+raid de proximité. **Les ONZE autres restent gardées contre la capture
+d'origine.** Gestes, gestes d'armement, **taille de la sauvegarde**, cases
+atteignables, déplacement, bases attaquantes et nombre de cibles : **0 sur 25
+pour chacun**.
+⚠ **SEIZE TESTS ENTRENT — `RET T1` à `T15`, plus `T12 bis` — ET LE COMPTE
+PASSE DE 1 370 À 1 386.** **Aucune assertion n'a été retirée ni assouplie** ;
+**une garde change de cible et se RESSERRE**, `ÉD T12`.
+⚠⚠ **VINGT FALSIFICATIONS, VINGT CHUTES, ET DEUX ONT DÛ ÊTRE REPRISES.** Les
+deux premières écritures changeaient un NOM au lieu d'une VALEUR : le module
+cessait de se charger, et cinq tests tombaient dont deux sans rapport. **Ce n'est
+pas la propriété qu'elles mesurent**, et il fallait le dire.
+⚠ **ET LA PLUS BRUYANTE TOUCHE UN FAIT STRUCTUREL** : échelonner les trois
+attentes fait tomber vingt tests, dont dix-sept gardes antérieures au lot.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 28 — VÉRIFIÉ AU DIFF.**
+`src/sim/state.js` n'a pas une ligne de changée : une saveur se calcule, un
+bandeau caché est un affichage, une ligne de réserve est une lecture.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠⚠ **ET LA ROTATION PORTE SUR TOUTES LES APPARITIONS DUES, PAS SUR LES SEULS
+CAMPS.** Une base neuve en pose trois : les rangs 0 et 1 vont aux deux camps —
+quartz puis scorie, ce qu'Ethan demande — et le rang 2, l'avant-poste, retombe
+sur quartz. **Lecture prise, réversible d'une ligne** si Ethan veut la rotation
+par TYPE.
+
+**Auparavant, après le lot DÉPLACEMENT-ÉCLAIRÉ, à confronter :**
 `npm test` → **1370 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 346 566 octets**, 0 référence externe. Coût **+1 837 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis `origin/main` :
@@ -7558,9 +7683,10 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 29 fichiers
+src/sim/                simulation déterministe, sans DOM — 30 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
+  saveur.js             la saveur d'une case : deux tirables, une géographie
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
   satellites.js         camps et avant-poste du joueur : de l'HISTOIRE, donc sauvegardée

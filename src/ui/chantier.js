@@ -4618,8 +4618,28 @@ export function initialiserEcranChantier(doc, {
       ligne.hidden = true;
       return;
     }
+    // ⚠⚠ IL NE PARAÎT QUE QUAND IL A QUELQUE CHOSE D'ANORMAL À DIRE — Ethan,
+    // 07/09, point 5 : « enlever la barre "complexe de niv x" ». Cette
+    // phrase-là — « Complexe de défense niv. 7 — garnison intacte » — est ce
+    // qu'on lit justement quand tout va bien, et c'est celle qu'il ne veut plus.
+    //
+    // ⚠ LA LECTURE RETENUE NE PERD AUCUN AVERTISSEMENT, et c'est la seule qui
+    // le garantisse : le bandeau reparaît dès que `etatDeLaGarnison` porte un
+    // `avertissement` — Complexe absent, pièces qui ne reviendront jamais — ou
+    // au moins une pièce `enAttente`. Retirer le bandeau tout court aurait
+    // emporté la règle du 05/09 avec la phrase de confort.
+    //
+    // ⚠ LES DEUX CHAMPS SE LISENT, ILS NE SE DEVINENT PAS. `etatDeLaGarnison`
+    // les rend depuis le lot COMPLEXE ; retester le texte — « est-ce que la
+    // phrase contient "intacte" ? » — serait une seconde lecture du même fait,
+    // et la première retouche de libellé la ferait mentir.
+    const etatGarnison = etatDeLaGarnison(etatCourant);
+    if (!etatGarnison.avertissement && etatGarnison.enAttente === 0) {
+      ligne.hidden = true;
+      return;
+    }
     ligne.hidden = false;
-    ligne.textContent = etatDeLaGarnison(etatCourant).texte;
+    ligne.textContent = etatGarnison.texte;
   }
 
   /**

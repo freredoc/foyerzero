@@ -57,6 +57,7 @@ import { poiDeLaCase } from './poi.js';
 import { niveauDesBatiments } from './niveau-de-base.js';
 import { creerRng, entier } from './rng.js';
 import { baseCourante } from './base-courante.js';
+import { saveurDeLaCase, SAVEURS_TIRABLES } from './saveur.js';
 
 /** Le délai d'apparition, en ticks — cinq minutes. */
 export const TICKS_APPARITION = SATELLITES.delaiApparitionSec * TICKS_PAR_SECONDE;
@@ -448,13 +449,41 @@ function resoudreSatellitesDeLaBase(etat, laBase) {
     // programmées, sinon deux chemins d'avancement rendraient les mêmes
     // satellites dans deux ordres, et `serialiser` les déclarerait différents.
     const enAttente = [];
+    // ⚠⚠ DEUX APPARITIONS SIMULTANÉES OU PLUS DONNENT AU MOINS UN QUARTZ ET UN
+    // SCORIE — Ethan, 07/09, point 15 : « Lorsqu'il y a deux camps ou plus qui
+    // spawn, faire au moins 1 quartz 1 scorie. » **Mesuré avant d'écrire : les
+    // TROIS satellites d'une base neuve paraissent au MÊME tick**, et sur 200
+    // graines les deux camps sortaient du même bord 91 fois — presque une sur
+    // deux, ce qui est très exactement la fréquence d'une pièce lancée.
+    //
+    // ⚠⚠ ET LE SECOND CHEMIN PRODUIT AUSSI DES SIMULTANÉITÉS : deux camps rasés
+    // dans la même minute poussent deux attentes au même `tickDu`, mesuré. Les
+    // deux passent ici, et c'est pour ça que la contrainte vit dans CETTE
+    // boucle et non dans `planifierSatellites`.
+    //
+    // ⚠⚠ LE RANG DÉCIDE, PAS UN TIRAGE. Les saveurs voulues s'alternent sur
+    // `SAVEURS_TIRABLES` dans l'ordre de la file : la première quartz, la
+    // deuxième scorie, la troisième quartz. À deux ou plus, il y a donc au moins
+    // une de chaque PAR CONSTRUCTION, et **aucun tirage de plus n'est consommé**
+    // — le §4 du brief l'exige, et un « tire, puis recommence si les deux sont
+    // pareilles » ferait diverger deux parties identiques.
+    //
+    // ⚠ À UN SEUL SATELLITE, RIEN NE CHANGE : `null`, donc aucune contrainte.
+    const dues = laBase.satellites.attentes.filter((a) => a.tickDu <= quand).length;
+    let rang = 0;
     for (const attente of laBase.satellites.attentes) {
       if (attente.tickDu > quand) { enAttente.push(attente); continue; }
+      const saveurVoulue = dues >= 2
+        ? SAVEURS_TIRABLES[rang % SAVEURS_TIRABLES.length]
+        : null;
+      rang += 1;
       // ⚠ L'ATTENTE PORTE SON EXCLUSION, ET ELLE LA GARDE SI ELLE EST REPORTÉE.
       // `reportees` pousse l'objet ENTIER : une attente qu'un anneau saturé
       // renvoie au tick suivant se souvient encore de la case qu'elle doit
       // éviter. Sans ça, « ailleurs » ne tiendrait que le premier tick.
-      const pose = poserUnSatellite(etat, attente.type, quand, laBase, attente.evite ?? null);
+      const pose = poserUnSatellite(
+        etat, attente.type, quand, laBase, attente.evite ?? null, saveurVoulue,
+      );
       // Aucune case libre dans l'anneau : on ne perd pas l'attente, on la met
       // de côté. Le cas est possible — un anneau saturé de bases de l'Ouvrage —
       // et perdre l'attente ferait disparaître un camp en silence.
@@ -530,7 +559,9 @@ export function prolongerApresAttaque(etat, identite, tickDuRaid) {
  * @param {{rangee: number, colonne: number}|null} evite une case à ne pas tirer
  * @returns {object|null} le satellite posé, ou null si l'anneau est plein
  */
-function poserUnSatellite(etat, type, tickDeLaPose, laBase, evite = null) {
+function poserUnSatellite(
+  etat, type, tickDeLaPose, laBase, evite = null, saveurVoulue = null,
+) {
   const anneau = ANNEAUX[type];
   if (anneau === undefined) throw new Error(`satellites : type inconnu « ${type} »`);
   const instance = etat.prochaineInstanceSatellite;
@@ -561,7 +592,27 @@ function poserUnSatellite(etat, type, tickDeLaPose, laBase, evite = null) {
   });
   if (libres.length === 0) return null;
 
-  const choisie = libres[entier(rng, 0, libres.length - 1)];
+  // ⚠⚠ LA CONTRAINTE SE POSE SUR L'ENSEMBLE DES CANDIDATES, AVANT LE TIRAGE, ET
+  // C'EST LA SEULE FORME QUI GARDE LE DÉTERMINISME. Un tirage relancé jusqu'à
+  // tomber sur la bonne saveur consommerait un nombre de tirages qui dépend du
+  // RÉSULTAT, et deux parties identiques divergeraient. Ici, `entier` est appelé
+  // UNE fois quoi qu'il arrive.
+  //
+  // ⚠⚠ ON CONTRAINT LA CASE, JAMAIS LE SATELLITE. La saveur est une propriété de
+  // la CASE — arbitrage du 29/08, « deux camps successifs sur la même case sont
+  // riches de la même chose » —, donc poser un champ `saveur` sur le satellite
+  // serait une seconde vérité contre `saveurDeLaCase`, et `SAVE_VERSION` devrait
+  // bouger pour une grandeur qui se calcule.
+  //
+  // ⚠ ET LA CONTRAINTE CÈDE PLUTÔT QUE DE NE RIEN POSER. Un anneau où AUCUNE
+  // case libre ne porte la saveur voulue ferait disparaître le satellite si l'on
+  // s'y tenait ; il vaut mieux deux camps du même bord qu'un camp manquant, et
+  // le repli consomme le même unique tirage.
+  const voulues = saveurVoulue === null ? libres
+    : libres.filter((k) => saveurDeLaCase(etat.graine, k.rangee, k.colonne, type) === saveurVoulue);
+  const candidates = voulues.length > 0 ? voulues : libres;
+
+  const choisie = candidates[entier(rng, 0, candidates.length - 1)];
   const satellite = {
     type,
     rangee: choisie.rangee,

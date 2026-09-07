@@ -42,6 +42,10 @@ import {
 } from '../sim/state.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
+import {
+  plafondDeLaReserve, direLaDuree, CHASSIS_REPARABLES,
+} from '../sim/reparation.js';
+import { FAMILLE_DE_CHASSIS } from '../data/base.js';
 // ⚠⚠ LE MÊME POINT D'ENTRÉE QUE LA GRILLE DU CHANTIER ET QUE LE CHAMP DE
 // BATAILLE. `couchesDeLEntite` est LE dispatch des couches de sprite depuis le
 // lot STRUCTURES-AU-COMBAT ; en dériver ici un nom d'unité de plus aurait fait
@@ -284,6 +288,56 @@ export function messageDeDestinationDUnite(nom) {
  */
 export const REPARATION_AILLEURS = 'Les unités se réparent sur l\'écran de raid,'
   + ' avec « Réparer » ou « Tout réparer ».';
+
+/**
+ * Ce que la ligne de réserve de réparation de l'armée annonce.
+ *
+ * ⚠⚠ ETHAN, 07/09, POINT 10 : « Compteur de réparation offensive nulle part, ni
+ * dans l'ui (global) ni dans l'onglet unités. » Le moteur crédite ces réserves
+ * depuis le lot RÉSERVE ; **mesuré avant d'écrire une ligne, aucun fichier de
+ * `src/ui/` ne lisait `plafondDeLaReserve` ni `reserveReparation`** — seul le
+ * plafond des BÂTIMENTS était affiché, et au Chantier.
+ *
+ * ⚠⚠ TROIS RÉSERVOIRS, UN SEUL PLAFOND, ET LES TROIS SE DISENT. Les trois
+ * châssis se remplissent ENSEMBLE et se vident SÉPARÉMENT — c'est l'arbitrage
+ * du lot RÉSERVE, et `MODELE-ECONOMIQUE.md` §7 le porte. N'en montrer qu'un, ou
+ * leur somme, serait une seconde vérité sur une grandeur que le moteur tient en
+ * trois exemplaires. Le PLAFOND, lui, est le même pour les trois — il ne dépend
+ * que du niveau de l'armée —, donc il s'écrit une fois.
+ *
+ * ⚠ RIEN N'EST RECALCULÉ. Le plafond vient de `plafondDeLaReserve`, les stocks
+ * de `laBase.reserveReparation`, la mise en mots de `direLaDuree`. Refaire ici
+ * la somme « 12 h + 1 h par niveau » serait la seconde vérité que §4 de
+ * `CLAUDE.md` interdit.
+ *
+ * ⚠ UN STOCK S'ARRONDIT VERS LE BAS — `Math.floor`, comme la réserve des
+ * bâtiments au Chantier. Annoncer « 5 min » pour 4 min 10 s ferait tenter une
+ * réparation que le moteur refuserait. C'est l'inverse d'un MANQUE, qui monte.
+ *
+ * ⚠ LES TROIS MOTS SONT CEUX D'ETHAN — `FAMILLE_DE_CHASSIS`, « infanterie »,
+ * « véhicule », « avion ». Écrire « escouade », « blindé », « aéronef » rendrait
+ * au joueur les noms INTERNES, qui n'apparaissent nulle part à l'écran.
+ *
+ * ⚠ ET L'ORDRE VIENT DE `CHASSIS_REPARABLES`, qui se dérive lui-même de
+ * `BATIMENT_DE_CHASSIS` : une quatrième famille s'y ajouterait toute seule.
+ *
+ * @param {object} etat
+ * @returns {string}
+ */
+export function ligneDeLaReserveDArmee(etat) {
+  const laBase = baseCourante(etat);
+  // ⚠ UNE ARMÉE VIDE NE FIGE RIEN, ET C'EST MESURÉ. `plafondDeLaReserve` passe
+  // par `niveauDeLArmee(base.armee) ?? 0` — le plafond vaut alors douze heures
+  // tout rond, et rien ne lève. C'est l'INVERSE de
+  // `plafondDeLaReserveDesBatiments`, qui lève sur une disposition vide parce
+  // qu'une base sans bâtiment n'existe pas.
+  const plafond = plafondDeLaReserve(etat);
+  const parChassis = CHASSIS_REPARABLES
+    .map((chassis) => `${FAMILLE_DE_CHASSIS[chassis]} `
+      + `${direLaDuree(laBase.reserveReparation[chassis] ?? 0, Math.floor)}`)
+    .join(' · ');
+  return `Réparation, max ${direLaDuree(plafond, Math.floor)} — ${parChassis}`;
+}
 
 export const ACTIONS_ARMEE = {
   reparer: { bouton: 'offense-reparer', libelle: 'Réparer', agir: null },
@@ -968,6 +1022,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     peindrePalette(vue);
     peindreContexte(vue);
     peindrePanneau();
+    ecrireLaReserveDArmee();
 
     // ⚠⚠ L'EXPLICATION DU BUDGET ABSENT VA DANS LE REGISTRE `mode`, PAS DANS
     // `session`, ET C'EST UNE CORRECTION FAITE AVANT LIVRAISON. Elle décrit
@@ -982,6 +1037,23 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     // le rappel du geste qu'on est en train de faire.
     if (choisie === null && enMain === null && actionArmee === null) ligneDeMode(vue.avis);
     else rendreLigne();
+  }
+
+  /**
+   * Écrit la réserve de réparation de l'armée — trois stocks, un plafond.
+   *
+   * ⚠ ELLE DEMANDE, ELLE NE CALCULE PAS : tout est dans
+   * `ligneDeLaReserveDArmee`, qui est pure et exportée pour être éprouvée sans
+   * monter l'écran.
+   *
+   * ⚠ ET ELLE REGARDE L'ÉTAT AVANT D'APPELER. `etatCourant` vaut `null` au
+   * câblage et pendant un chargement raté — même précaution qu'`ecrireLaReserve`
+   * au Chantier.
+   */
+  function ecrireLaReserveDArmee() {
+    const ligne = $('offense-reserve');
+    if (ligne === null) return;
+    ligne.textContent = etatCourant === null ? '—' : ligneDeLaReserveDArmee(etatCourant);
   }
 
   /**
