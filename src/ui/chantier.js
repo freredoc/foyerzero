@@ -53,11 +53,13 @@ import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation.js';
 import {
   BANDES, BANDES_NAVIGABLES, basculeDeBande, bornesDeDefilement, bandeDeLaRangee,
+  voilesDeLaBande,
 } from '../render/bandes.js';
 import { COTE_SPRITE } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
 import { nomDeVariante, variante } from '../render/variante.js';
 import { couchesDeLEntite, genreDeLaGarnison } from '../render/scene.js';
+import { casesAPortee, porteeQuiTire } from '../render/portee.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
 // base, et celle d'`ui/arsenal.js`, qui pose une unité dans une vague — que
@@ -1767,6 +1769,33 @@ export function peindreVueDuPanneau(doc, elements, vue) {
     const titre = doc.createElement('h3');
     titre.textContent = section.titre;
     bloc.appendChild(titre);
+    // ⚠⚠ DEUX PAIRES PAR LIGNE — Ethan, 07/09, point 4 : « condensé comme ça au
+    // lieu de deux lignes et un espace vide, faire une ligne et deux colonnes.
+    // Pour les unités défensive et offensive et futures cibles ennemies. » La
+    // fiche posait UNE paire par ligne, libellé collé à gauche et valeur poussée
+    // à droite, avec un vide au milieu que ses traits barraient d'un bout à
+    // l'autre. Rien n'est retiré : les mêmes six informations tiennent sur trois
+    // lignes au lieu de six.
+    //
+    // ⚠⚠ CE N'EST PAS UN TABLEAU À QUATRE COLONNES. Deux colonnes de PAIRES,
+    // chacune formant un bloc libellé + valeur : aligner les quatre champs sur
+    // quatre gouttières recréerait au milieu de chaque paire le vide qu'on
+    // vient de retirer.
+    //
+    // ⚠⚠ ET C'EST ICI QUE ÇA S'ÉCRIT, DONC UNE SEULE FOIS POUR LES TROIS FICHES.
+    // Cette fonction est déjà le rendu partagé du Chantier et de l'Offense
+    // depuis le lot ERGONOMIE ; la fiche d'une cible ennemie, que les points 7
+    // et 8 du 07/09 demandent, l'appellera comme les deux autres. Trois mises en
+    // page recopiées auraient divergé à la première retouche, et la troisième
+    // n'est pas encore écrite — `ÉD T8 ter` garde le partage.
+    //
+    // ⚠ UN NOMBRE IMPAIR DE PAIRES LAISSE SA DERNIÈRE SEULE À GAUCHE, et c'est
+    // le flux naturel de la grille — aucune règle à écrire. « La pièce » en a
+    // trois. L'étaler sur la largeur demanderait un `:last-child:nth-child(odd)`,
+    // c'est-à-dire un cas particulier de plus dans une feuille qui en a peu.
+    const paires = doc.createElement('div');
+    paires.className = 'paires';
+    bloc.appendChild(paires);
     for (const l of section.lignes) {
       const ligne = doc.createElement('div');
       ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
@@ -1785,7 +1814,7 @@ export function peindreVueDuPanneau(doc, elements, vue) {
         apres.textContent = l.apres;
         ligne.append(fleche, apres);
       }
-      bloc.appendChild(ligne);
+      paires.appendChild(ligne);
     }
     elements.corps.appendChild(bloc);
   }
@@ -2016,6 +2045,58 @@ export function detailDeLaDefense(etat, index) {
     niveau: piece.niveau,
     detail: `Niv. ${piece.niveau} · ${formaterEntier(ligne.points)} pts`
       + motDuRetour(laBase, piece, etat.horloge.nbTicks),
+  };
+}
+
+/**
+ * Ce que la barre d'action annonce quand RIEN n'est sélectionné, terrain par
+ * terrain.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE LA BARRE PARLAIT DU CHANTIER DEPUIS LA BANDE
+ * DÉFENSE — Ethan, 07/09, capture à l'appui : « Chantier de co… · Niv. 9 » et
+ * « AMÉLIORER vers niv. 10 » pendant qu'il regardait sa garnison. `rafraichir`
+ * n'avait pas de branche `else` : sans sélection, la ligne GARDAIT ce qu'elle
+ * avait, et ce qu'elle avait venait de la première peinture, qui choisit le
+ * Chantier d'office. C'est le JUMEAU du défaut corrigé au lot
+ * NIVEAU-DES-PIÈCES — la pièce SÉLECTIONNÉE y était décrite par le bâtiment de
+ * même indice — et ce lot-là avait laissé le cas « rien de sélectionné ».
+ *
+ * ⚠⚠ ET CE QUE ÇA COÛTAIT N'ÉTAIT PAS LE LIBELLÉ. Mesuré avant d'écrire une
+ * ligne : les quatre boutons de la barre suivent le modèle « armer puis
+ * toucher » — `executerAction` reçoit le terrain de la CASE TOUCHÉE
+ * (`terrainDeLaRangee`), jamais celui de la sélection. Le bouton n'agissait
+ * donc PAS sur le Chantier, et il faut le dire dans ce sens-là : ce qui était
+ * faux, c'est ce que la barre ANNONÇAIT, et « vers niv. 36 » promettait une
+ * montée que le prochain toucher n'aurait pas faite.
+ *
+ * ⚠ LE NOM DU COMPLEXE SE LIT, IL NE S'ÉCRIT PAS. `RETOUR_DEFENSES.indexeeSur`
+ * le nomme et `etatDeLaGarnison` le lit déjà pour son bandeau : écrire l'id en
+ * dur ferait la seconde vérité que §4 de `CLAUDE.md` interdit, et les deux
+ * lignes de l'écran finiraient par nommer deux bâtiments différents.
+ *
+ * ⚠⚠ ET SANS COMPLEXE, ELLE N'INVENTE PAS UNE SECONDE FORMULATION DU MANQUE.
+ * Le bandeau `#chantier-garnison` écrit déjà « Sans Complexe de défense, les
+ * pièces abîmées de la garnison ne reviennent jamais » ; le redire deux lignes
+ * plus bas, dans d'autres mots, donnerait au joueur deux phrases pour un seul
+ * fait — et la première des deux à être retouchée mentirait.
+ *
+ * @param {object} etat
+ * @param {string} cleTerrain
+ * @returns {{nom: string, detail: string}}
+ */
+export function ligneSansSelection(etat, cleTerrain) {
+  // ⚠ ELLE ACCEPTE UN ÉTAT ABSENT, ET C'EST CE QUI GARDE LA PHRASE UNIQUE.
+  // `selectionner(null)` est appelée au câblage, avant qu'une partie soit
+  // chargée ; lui laisser écrire sa propre phrase de repli aurait mis deux
+  // écritures du même mot dans le fichier, et la seconde aurait vieilli.
+  if (etat === null || etat === undefined || cleTerrain !== 'defense') {
+    return { nom: '—', detail: 'aucun bâtiment sélectionné' };
+  }
+  const complexe = complexeDeLaBase(baseCourante(etat));
+  if (complexe === null) return { nom: '—', detail: 'aucune pièce sélectionnée' };
+  return {
+    nom: BASE_BATIMENTS[RETOUR_DEFENSES.indexeeSur].nom.joueur,
+    detail: `Niv. ${formaterEntier(complexe.niveau)}`,
   };
 }
 
@@ -2251,6 +2332,11 @@ export const TERRAINS = {
     ),
     deplacer: (etat, index, rangee, colonne) => deplacer(etat, index, rangee, colonne),
     detail: (etat, index) => detailDuBatiment(etat, index),
+    // ⚠ AUCUN ROSTER DE COMBAT : un bâtiment de la base ne tire pas, donc il n'a
+    // pas de rayon à dessiner. `null` plutôt qu'une fonction qui rendrait
+    // toujours `undefined` — c'est le terrain qui le dit, jamais un
+    // `=== 'defense'` écrit dans l'écran.
+    roster: null,
     // ⚠ LE TERRAIN DES BÂTIMENTS RÉUTILISE `ACTIONS` TELLE QUELLE, il n'en
     // recopie pas le contenu : c'est la même table, sous un second nom. La
     // dupliquer ferait deux vérités sur ce qu'améliorer veut dire.
@@ -2324,6 +2410,11 @@ export const TERRAINS = {
     problemesDuDeplacement: refusDuDeplacementEnGarnison,
     deplacer: deplacerLaGarnison,
     detail: (etat, index) => detailDeLaDefense(etat, index),
+    // ⚠ LA LIGNE DE ROSTER D'UNE PIÈCE, POUR SON RAYON D'ATTAQUE. Les dix-sept
+    // pièces posables viennent de DEUX tables — neuf ouvrages dans `DEFENSES`,
+    // huit unités dans `UNITES` —, et c'est déjà la résolution qu'`apercuDeLaPiece`
+    // fait. La mettre ici évite qu'`ÉD` en écrive une troisième dans l'écran.
+    roster: (id) => DEFENSES[id] ?? UNITES[id],
     // ⚠ UNE SEULE DES QUATRE ACTIONS N'A PLUS DE MOTEUR EN DÉFENSE, ET ELLE LE
     // DIT. `null` n'est pas un oubli : c'est ce qui fait répondre le bouton au
     // lieu de le rendre inerte — « un indice n'est pas une interdiction »
@@ -3159,17 +3250,36 @@ export function initialiserEcranChantier(doc, {
   // ⚠ IL EST AJOUTÉ APRÈS LES CASES, DONC IL PEINT AU-DESSUS D'ELLES SANS
   // `z-index` — un `z-index` sur une case en ferait un contexte d'empilement, et
   // le dépôt a déjà payé cette faute avec `.case.choisie`.
+  // ⚠⚠ LE VOILE COUVRE TOUT CE QU'ON NE COMPOSE PAS, EN SÉQUENCES D'UN SEUL
+  // TENANT — Ethan, 07/09, point 6 : « Afficher le hachuré dans les 2 lignes du
+  // bas en défense. » Ces deux lignes sont les rangées 1 et 2, où les vagues
+  // PARAISSENT pendant un combat : le joueur n'y compose rien, et elles
+  // restaient en terrain nu à côté d'une bande zébrée.
+  //
+  // ⚠⚠ ET LE DÉCOUPAGE VIENT DE `voilesDeLaBande`, QUI FUSIONNE LES SÉQUENCES
+  // CONTIGUËS. Le motif est un dégradé répété à −45° : deux voiles ADJACENTS
+  // redémarreraient sa phase à leur jointure, et la couture se lirait comme un
+  // défaut de dessin — c'est la leçon écrite du `::after` par case. En fusionnant
+  // AVANT de créer les éléments, la couture devient impossible par construction
+  // au lieu d'être une coïncidence qu'il faudrait vérifier à l'œil.
+  //
+  // ⚠ CONSÉQUENCE ASSUMÉE ET DÉCLARÉE : la bande Base voile désormais la Défense
+  // ET le déploiement, d'un seul tenant. Ethan n'a nommé que la Défense ; les
+  // laisser dépareillées demanderait d'écrire une exception par bande, et sur la
+  // Base cette exception collerait deux voiles l'un à l'autre. Ce que la règle
+  // dit est plus simple et plus vrai : ce qu'on ne compose pas est zébré.
   const voiles = new Map();
   for (const cle of BANDES_NAVIGABLES) {
-    const bande = BANDES.find((b) => b.cle === cle);
-    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
-    const voile = doc.createElement('div');
-    voile.className = 'voile-bande';
-    voile.style.gridColumn = `1 / ${GRILLE.largeur + 1}`;
-    voile.style.gridRow = `${premiereLigne} / span ${nbLignes}`;
-    voile.hidden = true;
-    grille.appendChild(voile);
-    voiles.set(cle, voile);
+    const elements = voilesDeLaBande(cle).map((zone) => {
+      const voile = doc.createElement('div');
+      voile.className = 'voile-bande';
+      voile.style.gridColumn = `1 / ${GRILLE.largeur + 1}`;
+      voile.style.gridRow = `${zone.premiereLigne} / span ${zone.nbLignes}`;
+      voile.hidden = true;
+      grille.appendChild(voile);
+      return voile;
+    });
+    voiles.set(cle, elements);
   }
 
   const traits = doc.createElementNS(SVG, 'svg');
@@ -3409,7 +3519,9 @@ export function initialiserEcranChantier(doc, {
     // marquer ici et nulle part ailleurs : `bandeCourante` change à chaque
     // évènement de défilement, et deux écrivains de la même bascule
     // divergeraient à la première inattention.
-    for (const [cle, voile] of voiles) voile.hidden = cle === cleBande;
+    for (const [cle, elements] of voiles) {
+      for (const voile of elements) voile.hidden = cle !== cleBande;
+    }
     // ⚠ ICI AUSSI, ET PAS SEULEMENT DANS `rafraichir`. Le défilement change de
     // bande sans qu'un tick soit passé : sans cette ligne, l'avertissement
     // apparaîtrait avec un dixième de seconde de retard — et resterait à l'écran
@@ -3436,6 +3548,14 @@ export function initialiserEcranChantier(doc, {
     posableChoisi = null;
     poseEnAttente = null;
     deplacementEnCours = null;
+    // ⚠⚠ ET LA SÉLECTION TOMBE AVEC EUX — Ethan, 07/09, point 5. Elle survivait
+    // au changement de bande : `terrainSelection` restait `batiments` pendant
+    // qu'on regardait la garnison, si bien que `rafraichir` réécrivait dix fois
+    // par seconde le nom et le niveau du Chantier au-dessus de la Défense. Un
+    // indice qui désigne une pièce de l'AUTRE liste ne désigne rien de ce que le
+    // joueur regarde — c'est le raisonnement que `selectionner` tient déjà quand
+    // l'indice est hors bornes, appliqué au changement de terrain.
+    if (terrainSelection !== terrainCourant()) selectionner(null);
     // ⚠ ON REMET LE MOT DU MODE, ON NE L'EFFACE PAS. Un `ligneDeMode('')` tenait
     // ici : l'action armée SURVIT au changement de bande, si bien que la ligne
     // se vidait pendant que « Démolir » restait actif — et le bâtiment suivant
@@ -3937,6 +4057,17 @@ export function initialiserEcranChantier(doc, {
       actionArmee = null;
       marquerBoutonsAction();
     }
+    // ⚠⚠ ET IL FERME LE PANNEAU, DEPUIS LE LOT ÉCRAN-DÉFENSE. Trouvé en
+    // REGARDANT l'écran après avoir sorti la ligne d'avis du flux : le panneau
+    // couvre les trois quarts bas du champ, donc il cachait la ligne de mode que
+    // la pose vient d'écrire — et surtout la GRILLE des cases légales, celle
+    // qu'on demande justement au joueur de viser. C'est le défaut du point 2 par
+    // une autre porte, et il se referme du même côté : entrer dans un mode ne
+    // doit rien cacher de ce qu'il faut regarder.
+    // ⚠ « UN SEUL MODE À LA FOIS » (arbitré le 27/08) devient donc vrai des
+    // TROIS : l'action désarme la palette, la palette désarme l'action, et les
+    // deux ferment le panneau.
+    fermerPanneau();
     // Changer de bâtiment défait l'aperçu : il montrait l'ancien.
     poseEnAttente = null;
     deplacementEnCours = null;
@@ -4088,6 +4219,43 @@ export function initialiserEcranChantier(doc, {
     }
   }
 
+  /**
+   * Le rayon d'attaque de la pièce sélectionnée, cases par cases.
+   *
+   * ⚠⚠ ETHAN, 07/09, POINT 3 : « Afficher le rayon d'attaque. » Le nombre était
+   * déjà dans la fiche — « Portée : 2,5 cases » — et rien ne le montrait sur le
+   * terrain, si bien que le joueur ne savait pas quelles cases une tourelle
+   * couvre avant de l'avoir posée.
+   *
+   * ⚠⚠ L'ENSEMBLE VIENT DE `render/portee.js`, QUI LE DÉRIVE DE
+   * `distanceCarreeMilli` — la fonction même dont le moteur se sert pour décider
+   * d'un tir. Écrire ici un disque à l'œil aurait montré un rayon qui n'est pas
+   * celui du combat, et `ÉD T6` mesure l'accord sur DEUX portées : une seule
+   * passerait sur un rayon écrit en dur.
+   *
+   * ⚠ ET SEULE UNE PIÈCE QUI TIRE EN A UN. `porteeQuiTire` rend `null` pour un
+   * Mur — pas de table de dégâts — comme pour une Ronce, qui a une portée de 1
+   * et ne tire jamais : elle FRANCHIT. Un rayon autour d'elles promettrait un
+   * tir qui n'aura pas lieu.
+   *
+   * ⚠ LES BÂTIMENTS N'EN ONT PAS NON PLUS, et ce n'est pas un oubli : la bande
+   * du Chantier ne porte rien qui tire. Le terrain le dit par `roster`, jamais
+   * un `=== 'defense'` écrit à la main.
+   *
+   * @param {object|null} piece la pièce sélectionnée, ou `null`
+   */
+  function marquerPortee(piece) {
+    for (const case_ of cellules.values()) case_.classList.remove('a-portee');
+    if (piece === undefined || piece === null) return;
+    const roster = TERRAINS[terrainSelection].roster;
+    if (roster === null) return;
+    const portees = porteeQuiTire(roster(piece.id));
+    if (portees === null) return;
+    for (const c of casesAPortee(piece, portees)) {
+      cellules.get(cle(c.rangee, c.colonne))?.classList.add('a-portee');
+    }
+  }
+
   function marquerCasesLegales() {
     for (const case_ of cellules.values()) case_.classList.remove('legale');
     if (etatCourant === null) return;
@@ -4144,9 +4312,17 @@ export function initialiserEcranChantier(doc, {
     selection = index;
     for (const case_ of cellules.values()) case_.classList.remove('choisie');
     if (index === null || etatCourant === null) {
-      $('chantier-selection-nom').textContent = '—';
-      $('chantier-selection-detail').textContent = 'aucun bâtiment sélectionné';
+      // ⚠ LA LIGNE SUIT LA BANDE, MÊME SANS SÉLECTION — voir `ligneSansSelection`.
+      // Elle écrivait « aucun bâtiment sélectionné » sur les DEUX bandes, ce qui
+      // nommait un bâtiment devant une garnison ; et sur la Défense, le joueur a
+      // mieux à lire que rien : le Complexe, dont dépend le retour de ses pièces.
+      const vide = ligneSansSelection(etatCourant, terrainCourant());
+      $('chantier-selection-nom').textContent = vide.nom;
+      $('chantier-selection-detail').textContent = vide.detail;
+      // ⚠ ET « VERS NIV. N+1 » TOMBE AVEC ELLE. C'est ce mot-là qu'Ethan a vu
+      // promettre une montée du Chantier depuis la bande Défense.
       $('chantier-ameliorer-cible').textContent = '';
+      marquerPortee(null);
       fermerPanneau();
       return;
     }
@@ -4161,6 +4337,7 @@ export function initialiserEcranChantier(doc, {
     }
     const detail = terrain.detail(etatCourant, index);
     cellules.get(cle(b.rangee, b.colonne))?.classList.add('choisie');
+    marquerPortee(b);
     $('chantier-selection-nom').textContent = detail.nom;
     $('chantier-selection-detail').textContent = detail.detail;
     // ⚠ « VERS NIV. N+1 » NE S'ÉCRIT QUE LÀ OÙ AMÉLIORER EXISTE. Sur une pièce
@@ -4309,6 +4486,10 @@ export function initialiserEcranChantier(doc, {
       poseEnAttente = null;
       peindrePalette(etatCourant);
     }
+    // ⚠ ET LE PANNEAU SE FERME AVEC, pour la raison écrite dans
+    // `choisirPosable` : il couvre la grille et la ligne de mode qu'on vient
+    // d'écrire. Un mode armé demande de voir le champ.
+    if (actionArmee !== null) fermerPanneau();
     marquerCasesLegales();
     peindreApercu();
     // ⚠ ON N'EFFACE PLUS LA LIGNE, ON Y ÉCRIT. Un `avis('')` tenait ici, et il
@@ -4870,7 +5051,14 @@ export function initialiserEcranChantier(doc, {
     // À la première peinture, le Chantier est sélectionné d'office : un bandeau
     // contextuel vide au premier regard donne un écran qui a l'air en panne, et
     // le Chantier est de toute façon ce autour de quoi la base se lit.
-    if (selection === null) {
+    //
+    // ⚠⚠ MAIS SEULEMENT SUR SA PROPRE BANDE — Ethan, 07/09, point 5. `peindre`
+    // repasse après chaque geste : en Défense, il RÉSSÉLECTIONNAIT le Chantier
+    // dès que la sélection tombait, et la barre se remettait à parler d'un
+    // bâtiment que le joueur ne regarde pas. La Défense n'a pas de pièce
+    // évidente à choisir d'office — sa barre annonce le Complexe, ce qui n'est
+    // pas une sélection mais un état.
+    if (selection === null && terrainCourant() === 'batiments') {
       const chantier = baseCourante(etat).disposition
         .findIndex((b) => b.id === 'chantierDeConstruction');
       terrainSelection = 'batiments';
@@ -4966,6 +5154,16 @@ export function initialiserEcranChantier(doc, {
       // mauvaise liste — c'est déjà ce que fait `selectionner`.
       if (terrain.pieces(etat)[selection] === undefined) selectionner(null);
       else $('chantier-selection-detail').textContent = terrain.detail(etat, selection).detail;
+    } else {
+      // ⚠⚠ LA BRANCHE QUI MANQUAIT — Ethan, 07/09, point 5. Sans elle, la ligne
+      // GARDAIT ce qu'elle avait : le Chantier, choisi d'office à la première
+      // peinture, restait annoncé au-dessus de la garnison. Et elle se réécrit à
+      // CHAQUE passe parce que le Complexe qu'elle nomme peut monter de niveau
+      // pendant qu'on le regarde — c'est le même motif que l'état de la garnison
+      // juste au-dessus.
+      const vide = ligneSansSelection(etat, terrainCourant());
+      $('chantier-selection-nom').textContent = vide.nom;
+      $('chantier-selection-detail').textContent = vide.detail;
     }
     peindrePanneau();
   }

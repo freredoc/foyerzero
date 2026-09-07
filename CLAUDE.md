@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.12 · build 113.
+Dernière révision : **07/09/2026**, version 0.99.13 · build 114.
 
 ---
 
@@ -42,7 +42,145 @@ Dernière révision : **06/09/2026**, version 0.99.12 · build 113.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot EMBLÈME-CENTRÉ), à confronter :**
+**Référence au 07/09/2026 (après le lot ÉCRAN-DÉFENSE), à confronter :**
+`npm test` → **1264 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 012 076 octets**, 0 référence externe. Coût **+8 265 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +1 722 · feuille +6 529 · balisage +14 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **296
+lignes `data:` avant, 296 après, 291 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **1 287 924 octets, 13,85 %**. Le lot touche
+`src/ui/chantier.js`, `src/render/bandes.js`, la feuille et le balisage, et fait
+entrer `src/render/portee.js`.
+⚠⚠ **LA PRÉMISSE DU POINT 2 EST À MOITIÉ FAUSSE, ET C'EST L'INSTRUMENTATION QUI
+LE DIT.** Ethan : « en mode Pose le décor est cadré autrement. » Mesuré AVANT de
+toucher une ligne, Chromium, géométrie du S25 FE : **le décor ne se recadre
+pas** — `--case-cote` 36 px, fond 360 × 720, position 50 % 0 %, `scrollTop` 227,
+identiques dans les trois modes. Ce qui change est la FENÊTRE : `#chantier-avis`
+portait `flex: 0 0 auto`, donc armer un mode volait **44 px** de hauteur au
+champ — **458 → 414 px en Pose, 392 en Réparer**. Après : **458 dans les trois
+états**, la ligne d'avis est POSÉE en `absolute` sur `#chantier-vue`.
+⚠⚠ **ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE** — sans elle la ligne
+avalerait le toucher des cases qu'elle couvre, la faute mesurée du lot TUTORIEL.
+Relevé après correction : `elementFromPoint` au milieu de la ligne rend
+**`DIV#chantier-grille`**.
+⚠⚠ **ET IL Y AVAIT UNE SECONDE PORTE, TROUVÉE EN REGARDANT UNE CAPTURE.** La
+fiche restait ouverte par-dessus le champ — `z-index: 2` — et recouvrait la
+ligne de mode ET les trois quarts des cases que le mode venait de cercler.
+`choisirPosable` et `armer` ferment donc le panneau ; `ÉD T5 bis` le mesure sur
+les deux modes.
+⚠⚠ **ÉCART DÉCLARÉ : `#chantier-reparation` POUSSE ENCORE LE CHAMP DE 22 px, ET
+IL NE PEUT PAS PRENDRE LE MÊME REMÈDE.** Il porte un BOUTON, donc il doit
+recevoir le toucher ; lui réserver sa place d'avance coûterait ces 22 px en
+permanence. **Ethan tranche.**
+⚠⚠ **LA QUESTION DU POINT 5 A UNE RÉPONSE MESURÉE, ET C'EST NON.** « Le bouton
+AMÉLIORER agit-il vraiment sur le Chantier ? » — les quatre boutons suivent
+« armer puis toucher », et `executerAction` reçoit `terrainDeLaRangee(rangee)`,
+le terrain de la CASE TOUCHÉE. Ce qui était faux, c'est ce que la barre
+ANNONÇAIT : « Chantier de construction · Niv. 35 · vers niv. 36 » devant une
+garnison. `ÉD T2` FIGE le fait, parce que rien ne le disait.
+⚠⚠ **`ligneSansSelection` EST PURE, EXPORTÉE, ET ELLE LIT LE NOM DANS
+`RETOUR_DEFENSES.indexeeSur`** — la table qui dit déjà quel bâtiment commande le
+retour de la garnison —, jamais un `'complexeDeDefense'` écrit à la main. ⚠ Elle
+ACCEPTE un état absent, et c'est ce qui garde la phrase du vide écrite UNE fois :
+la première écriture laissait `selectionner` porter son propre repli, donc deux
+écritures de « aucun bâtiment sélectionné ».
+⚠ **ET « VERS NIV. N+1 » TOMBE AVEC** — c'est ce mot qui promettait la montée. La
+bande Base, elle, garde le Chantier : `ÉD T3` le tient.
+⚠⚠ **`src/render/portee.js` ENTRE, ET IL NE DÉCIDE D'AUCUN NOMBRE.** Une portée
+de 2,5 n'est PAS un cercle de 2,5 cases : le moteur compare des CARRÉS de
+milli-cases sur des centres de case, donc ce qu'on rend est l'ENSEMBLE DES
+CASES, dérivé de `distanceCarreeMilli` et `milliDepuisCase`. `ÉD T6` le confronte
+case par case à un témoin recalculé sur la grille ENTIÈRE, sur **deux portées** et
+**deux origines dont une contre le bord**.
+⚠⚠ **ET LE DISQUE N'EST PAS LE CARRÉ, MESURÉ** — Tchebychev rendrait **25 cases**
+pour la casemate au milieu de la grille, le disque en rend **21**. Sans cette
+assertion, les deux témoins seraient calculés pareil.
+⚠⚠ **LA PORTÉE MINIMALE FAIT UN TROU, ET IL EST RENDU.** Les trois artilleries
+portent `porteeMini: 3.5` : une Faucheuse ne couvre PAS sa propre case, une
+casemate SI. `ÉD T7` compte le trou pour qu'un module qui n'exclurait que le
+centre tombe.
+⚠ **ET SEULE UNE PIÈCE QUI TIRE A UN RAYON, AUX TROIS CONDITIONS DE `peutTirer`**
+— un Mur n'a pas de table de dégâts, une **Ronce a une portée de 1 et FRANCHIT**.
+Les bâtiments n'en ont pas, et le terrain le dit par `roster`, jamais par un
+`=== 'defense'`.
+⚠ **L'ANNEAU FAIT 4 px, PAS 2 — MESURÉ À L'ÉCRAN.** À 2 px il était invisible sur
+toute case déjà cerclée : `.case.legale` peint un `outline` de 2 px à
+`outline-offset: -2px`, exactement la bande qu'un anneau de 2 px occupe. Relevé :
+`inset 0 0 0 4px rgb(166, 112, 24)`, **`#A67018`, aucune teinte neuve**, 13 cases
+marquées pour une casemate en (3, 1).
+⚠ **ÉCART DÉCLARÉ : PAS DE `pointer-events: none` SUR LE RAYON, ET IL N'Y A RIEN
+À NEUTRALISER** — c'est une CLASSE sur la case, pas un calque posé dessus.
+⚠⚠ **LA FICHE PASSE À DEUX COLONNES DE PAIRES, ET C'EST LE COUPLE
+LIBELLÉ/VALEUR QUI SE MET CÔTE À CÔTE**, jamais quatre colonnes. Mesuré :
+panneau **243 → 204 px**, corps **142 → 103**, **7 rangées distinctes → 4**, sept
+paires des deux côtés, zéro débordement horizontal.
+⚠ **ET LA VALEUR TOUCHE SON LIBELLÉ** : le `flex: 1` du libellé creusait le vide
+qu'Ethan barre. ⚠ `tabular-nums` N'A PAS ÉTÉ AJOUTÉ : **il y était déjà**, sur la
+valeur d'une ligne de fiche.
+⚠⚠ **LE RENDU EST UNIQUE, PUR ET EXPORTÉ, ET `ÉD T8 ter` EMPÊCHE LA TROISIÈME
+COPIE.** Ethan écrit « et futures cibles ennemies » : la fiche ennemie n'existe
+pas, et c'est maintenant qu'on lui prépare la place. ⚠ La paire IMPAIRE reste
+seule à gauche, sans règle pour ça — l'étaler demanderait un
+`:last-child:nth-child(odd)`, et `ÉD T8 quater` prouve d'abord que la section a
+bien un nombre impair de paires.
+⚠⚠ **LE HACHURÉ COUVRE LES DEUX LIGNES DU BAS, D'UN SEUL TENANT.**
+`voilesDeLaBande` FUSIONNE les lignes contiguës : deux éléments adjacents
+redémarreraient la phase du dégradé à −45° et la couture se verrait. Relevé :
+**`1 / span 8` et `17 / span 2`** en Défense, **`9 / span 10`** en Base.
+⚠⚠ **ET LA FONCTION NE NOMME AUCUNE BANDE — UNE GARDE EXISTANTE L'A EXIGÉ.** Le
+premier jet posait deux tables littérales ; **`RAID-E T5` est tombé dessus**, en
+disant « les trois bandes sont nommées ailleurs qu'une fois ». Elle avait raison.
+⚠ **AUCUN `z-index` N'EST APPARU SUR UNE CASE** — `ÉD T10` le garde, c'est la
+faute que `.case.choisie` a coûtée une fois.
+⚠⚠ **LE MENU ARMÉ PERD SES FONDS PLEINS, ET `background: transparent` EST
+OBLIGATOIRE, PAS COSMÉTIQUE.** Un `<button>` sans fond déclaré retombe sur le
+gris clair du navigateur : **mesuré, les cinq vignettes sont ressorties EN CLAIR
+sur le bandeau sombre**. Le liseré devient le seul discriminant des trois états —
+`#4E5742` au repos, `#1E2124` verrouillée, `#F5F3E8` armée, **aucune teinte
+neuve** —, et `ÉD T11` exige qu'ils restent deux à deux différents.
+⚠ **LE POINTILLÉ N'EST PAS RECOPIÉ : C'EST UN SÉLECTEUR DE PLUS.** Il était déjà
+écrit deux fois — `#ecran-offense .emplacement` et `#ecran-raid .emplacement` ;
+une troisième écriture aurait fait trois définitions dont deux se seraient tues
+au premier réglage. `ÉD T12` exige UNE règle et nomme les trois sélecteurs.
+⚠ **ET LA PALETTE GRISE TOUJOURS, ELLE NE RETIRE PAS** — arbitrage du 28/08,
+intact : `ÉD T13` et `ÉD T14` gardent le roster entier ET la longueur constante.
+⚠⚠ **LA RELECTURE HOSTILE A TROUVÉ SA CHOSE, ET ELLE ÉTAIT DANS LE CODE DU LOT.**
+`casesAPortee` convertissait par `Math.round(portee × 1000)` : SECONDE conversion
+de la grandeur — `creerCombat` la fait par `enEntier` — et seconde écriture de
+`MILLI_PAR_CASE`. **Et les deux ne rendent pas la même chose** : `Math.round`
+accepte 2,5001 et l'arrondit en silence, `enEntier` LÈVE en nommant la table.
+Corrigé ; `ÉD T6 bis` le garde par la source ET par une levée mesurée.
+⚠ **DIX-NEUF TESTS ENTRENT — `ÉD T1` à `T14`, plus `T5 bis`, `T6 bis`, `T8 bis`,
+`T8 ter` et `T8 quater` — ET LE COMPTE PASSE DE 1 245 À 1 264.** **Aucune
+assertion n'a été retirée ni assouplie** ; **deux gardes changent de cible et les
+DEUX se RESSERRENT**.
+⚠⚠ **VINGT ET UNE FALSIFICATIONS, VINGT ET UNE CHUTES, ET LA PREMIÈRE A TROUVÉ UN
+MOTIF MORT DANS MA PROPRE GARDE.** Poser `z-index: 1` sur `.case.a-portee`
+laissait `ÉD T10` VERT : son expression s'échappait DEUX fois, donc elle
+cherchait un backslash littéral — **et son témoin ne le voyait pas non plus,
+parce qu'il portait une expression écrite à la main, DIFFÉRENTE de celle qu'il
+prétendait éprouver.** Elle compte désormais les règles retrouvées, et son témoin
+passe par LE MÊME constructeur de motif.
+⚠⚠ **ET LA SECONDE A TROUVÉ UNE BORNE TROP LARGE.** `ÉD T5` bornait sa tranche au
+`<div id="chantier-panneau">` qui suit `#chantier-vue` : la fente entre les deux
+tombait dedans, donc **sortir la ligne d'avis de la vue la laissait VERTE**. Elle
+compte maintenant la profondeur des `div`.
+⚠ **ET TROIS MONTAGES DE MOI ONT DÛ ÊTRE CORRIGÉS AVANT DE CROIRE LEUR ROUGE** :
+un QG resté au niveau 1 faisait refuser TOUTE montée sous `plafond-commandement`,
+un clic dispatché sur la case n'atteignait pas l'unique écouteur de la grille, et
+une case couverte cherchée dans le rayon d'une casemate tombait sur le
+DÉPLOIEMENT, où aucune pièce de garnison ne se pose.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27 — VÉRIFIÉ AU DIFF.** Une ligne de
+barre, un rayon dessiné, une mise en page de fiche, un voile de bande et un
+liseré de vignette vivent tous dans l'écran.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** Tout ce
+qui précède est relevé dans Chromium à la géométrie du S25 FE — **zéro erreur de
+page** — et ce n'est pas le téléphone d'Ethan (§3).
+
+**Auparavant, après le lot EMBLÈME-CENTRÉ :**
 `npm test` → **1245 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 003 811 octets**, 0 référence externe. Coût **+732 octets, ENTIÈREMENT EN
 IMAGES**, mesuré poste par poste contre un livrable rebâti dans un
@@ -6656,10 +6794,11 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
     l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 12 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 13 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
+  portee.js             quelles cases une pièce de défense couvre, et si elle tire
   fond.js               le décor peint d'une base : quel dessin, et où il se pose
   limite.js             quel dessin porte une frontière de territoire, et où le découper
   terrain.js            le sol de la carte : quels dessins, où, et avec quel poids

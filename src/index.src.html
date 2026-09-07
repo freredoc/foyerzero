@@ -312,7 +312,7 @@
   #ecran-raid .emplacement {
     /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — même motif qu'à l'Offense. */
     position: relative;
-    aspect-ratio: 1; background: #161914; border: 1px dashed #4E5742;
+    aspect-ratio: 1; background: #161914;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 6px; line-height: 1.1; text-align: center;
     color: #68727E; word-break: break-word; touch-action: none;
@@ -890,6 +890,38 @@
      dont on vient d'ouvrir le panneau — aurait été le seul barré par son
      propre mur. */
   .case.choisie { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* ⚠⚠ LE RAYON D'ATTAQUE DE LA PIÈCE SÉLECTIONNÉE — Ethan, 07/09, point 3. Les
+     cases couvertes se cernent d'ambre foncé : distinct du kaki de `legale`, qui
+     répond à un mode de pose, et de l'os de `choisie`, qui désigne la pièce
+     elle-même. Les trois peuvent tomber sur la même case et se lisent encore.
+
+     ⚠⚠ UN LISERÉ, PAS UN APLAT NI UN MOTIF, ET LES DEUX AUTRES VOIES SONT
+     FERMÉES. Un aplat demanderait une TRANSPARENCE, et la fiche n'en autorise
+     qu'une, `rgba(0,0,0,0.31)`, qui ASSOMBRIT — c'est le mot du voile de bande,
+     « celle-ci n'est pas la vôtre », l'inverse de ce qu'un rayon dit. Un motif
+     répété se heurterait à la leçon du voile : posé case par case, sa phase
+     redémarre à chaque bordure.
+
+     ⚠⚠ ET C'EST UN `box-shadow`, PAS UN `outline`. Les deux liserés existants
+     emploient déjà `outline` : un troisième les écraserait au lieu de s'y
+     ajouter, et une case à la fois choisie et à portée n'en montrerait qu'un.
+     Le `box-shadow` est en `inset`, donc il ne déborde pas sur la voisine — même
+     raison que l'`outline-offset: -2px` au-dessus.
+
+     ⚠⚠ ET IL N'Y A RIEN QUI PUISSE AVALER LE TOUCHER. Le brief demandait
+     `pointer-events: none` comme le voile de bande ; il n'y a pas de calque ici
+     — la marque est PORTÉE PAR LA CASE, qui reste sa propre cible. `ÉD T8`
+     mesure ce qui compte : un toucher sur une case couverte tombe bien sur
+     elle. */
+  /* ⚠⚠ QUATRE PIXELS, PAS DEUX, ET C'EST MESURÉ À L'ÉCRAN. `.case.legale` peint
+     un `outline` de 2 px à `outline-offset: -2px`, donc EXACTEMENT la bande que
+     couvrirait un anneau de 2 px : capture en mode Pose, le kaki masquait
+     l'ambre sur toutes les cases légales, et le rayon ne se voyait plus que sur
+     les cases obstruées. À 4 px, le kaki couvre la moitié extérieure et les
+     2 px du dedans restent lisibles — les deux marques répondent à deux
+     questions, et le joueur a besoin des deux en même temps : où poser, et ce
+     que la tourelle qu'il regarde couvre déjà. */
+  .case.a-portee { box-shadow: inset 0 0 0 4px #A67018; }
   /* ⚠⚠ LA BANDE QU'ON NE REGARDE PAS EST ZÉBRÉE — Ethan, 04/09 : « Dans les
      bases, assombrir la défense quand on regarde la base et inversement — du
      genre grandes barres hachurées en travers, comme les zébras sur la route. »
@@ -1123,11 +1155,26 @@
     margin: 0 0 2px; font-size: 8px; font-weight: 400;
     letter-spacing: 0.12em; text-transform: uppercase; color: #68727E;
   }
+  /* ⚠⚠ DEUX PAIRES PAR LIGNE — Ethan, 07/09, point 4. La grille porte la mise
+     en page, le JS ne compte rien : `peindreVueDuPanneau` pose ses lignes dans
+     `.paires` et la feuille les répartit. Deux colonnes ÉGALES, parce que la
+     paire la plus longue n'est pas toujours la même — au niveau 50 ce sont les
+     points de vie, au niveau 1 « Contre l'infanterie ».
+     ⚠ `column-gap` SEUL : l'écart vertical reste celui de `.ligne`, sans quoi
+     les trois lignes gagneraient ce qu'on vient de leur faire perdre. */
+  .panneau-detail .paires {
+    display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px;
+  }
+  /* ⚠⚠ LA VALEUR TOUCHE SON LIBELLÉ, ET C'EST LE `flex: 1` QUI PARTAIT. Il
+     poussait la valeur au bord droit de la ligne : sur une pleine largeur cela
+     laissait le vide qu'Ethan barre, et sur une demi-colonne cela le laisserait
+     deux fois. `min-width: 0` reste — un libellé long doit pouvoir se couper
+     plutôt que d'élargir sa colonne. */
   .panneau-detail .ligne {
     display: flex; align-items: baseline; gap: 4px;
     padding: 1px 0; font-size: 11px; color: #8C9A72;
   }
-  .panneau-detail .ligne .quoi { flex: 1; min-width: 0; }
+  .panneau-detail .ligne .quoi { flex: 0 1 auto; min-width: 0; }
   .panneau-detail .ligne b { font-weight: 600; color: #F5F3E8; font-variant-numeric: tabular-nums; }
   /* La colonne « après » se lit en kaki clair : elle n'est pas encore vraie,
      c'est ce que l'amélioration donnerait. La distinguer de l'os du présent
@@ -1337,9 +1384,29 @@
        peut prendre le geste pour un défilement de page. */
     touch-action: pan-x;
   }
+  /* ⚠⚠ UN SEUL LISERÉ TIRETÉ POUR LES TROIS GRILLES DE COMPOSITION — Ethan,
+     07/09, point 16 : « Menu armé : enlever les fonds pleins, garder les
+     contours pointillés pour les unités. » La palette portait un aplat kaki et
+     un liseré plein ; les emplacements de l'Offense et du raid portaient DÉJÀ
+     `1px dashed #4E5742`, écrit DEUX FOIS à l'identique. Reprendre la
+     déclaration une troisième fois aurait fait trois définitions du même
+     pointillé, dont deux se seraient tues au premier réglage : c'est UN
+     SÉLECTEUR DE PLUS, pas une seconde règle — le motif que la vignette `.piece`
+     porte déjà depuis le lot ÉCRAN-RAID. */
+  #ecran-offense .emplacement,
+  #ecran-raid .emplacement,
+  .posable {
+    border: 1px dashed #4E5742;
+  }
+  /* ⚠⚠ `background: transparent` EST OBLIGATOIRE, PAS COSMÉTIQUE — mesuré à
+     l'écran. Retirer la déclaration de fond ne laisse pas la vignette
+     transparente : un `<button>` sans fond déclaré retombe sur le gris clair du
+     navigateur, et les cinq vignettes sont ressorties EN CLAIR sur le bandeau
+     sombre — l'inverse exact de ce qu'Ethan demande. « Enlever les fonds
+     pleins » se dit donc en toutes lettres, il ne se fait pas par omission. */
   .posable {
     position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    background: #343A2C; border: 1px solid #161914; padding: 0 2px; color: #68727E;
+    padding: 0 2px; color: #68727E; background: transparent;
   }
   /* ⚠⚠ LA PASTILLE DE LA VIGNETTE PORTE LE SPRITE DE LA PIÈCE — 30/08. Ethan :
      « dans les barres de construction du bas (base def off) remplacer les
@@ -1375,7 +1442,12 @@
   /* Un unique déjà posé : présent, lisible, et manifestement hors service.
      Arbitré le 28/08 — « griser le bouton, pas le faire disparaître ». Il reste
      TOUCHABLE : le toucher dit pourquoi, ce qu'un bouton inerte ne fait pas. */
-  .posable.pose { background: #1E2124; border-color: #1E2124; }
+  /* ⚠ LE FOND PART, LES TROIS AUTRES SIGNAUX RESTENT. Une vignette verrouillée
+     se lisait à son aplat sombre ; sans lui elle se lit encore à son liseré
+     éteint, à son libellé gris ardoise et à son sprite à 40 % — trois signaux
+     là où il en fallait un. `ÉD T11` exige que les trois états restent
+     deux à deux différents. */
+  .posable.pose { border-color: #1E2124; }
   .posable.pose b { color: #3E454C; }
   /* ⚠ UN UNIQUE DÉJÀ POSÉ GARDE SON SPRITE, IL S'ÉTEINT. Le remplacer par un
      aplat gris rendrait les onze vignettes grisées identiques entre elles, et
@@ -1383,14 +1455,28 @@
      même geste que la palette de l'Offense depuis le 29/08. */
   .posable.pose i { opacity: 0.4; box-shadow: none; }
 
-  .posable.actif { background: #6A7658; }
-  .posable.actif b { color: #161914; }
+  /* ⚠⚠ L'ARMÉE N'A PLUS DE FOND PLEIN NON PLUS, ET C'EST LE CŒUR DU POINT 16.
+     Elle était un rectangle kaki plein ; elle est maintenant cernée d'os —
+     toujours en TIRETÉ, comme Ethan le demande pour les unités — et son sprite
+     garde son anneau. Le liseré devient donc le seul discriminant des trois
+     états : `#4E5742` au repos, `#1E2124` verrouillée, `#F5F3E8` armée. */
+  .posable.actif { border-color: #F5F3E8; }
+  .posable.actif b { color: #F5F3E8; }
   .posable.actif i { box-shadow: inset 0 0 0 2px #F5F3E8; }
 
   /* --- ce qui se dit quand quelque chose ne va pas -------------------------- */
-  /* ⚠ MÊME FORME QUE `#chantier-avis` : `flex: 0 0 auto`, donc une hauteur
-     dictée par son contenu et NULLE quand il est `hidden`. Ce n'est pas une
-     barre à hauteur fixe, et la garde des 288 px ne le compte pas. */
+  /* ⚠ `flex: 0 0 auto` : une hauteur dictée par son contenu et NULLE quand il
+     est `hidden`. Ce n'est pas une barre à hauteur fixe, et la garde des 288 px
+     ne le compte pas.
+     ⚠⚠ IL POUSSE ENCORE LE CHAMP, ET C'EST MESURÉ ET DÉCLARÉ. Le lot
+     ÉCRAN-DÉFENSE a sorti `#chantier-avis` du flux pour que l'armement d'un mode
+     ne recadre plus le décor (point 2) ; celui-ci reste dans le flux, et armer
+     Réparer coûte encore de la hauteur au champ — mesuré, `#chantier-defile`
+     tombe de 458 à 392 px, dont 22 pour cette barre. **Il ne peut PAS prendre le
+     même remède** : il porte un BOUTON, donc il doit recevoir le toucher, et un
+     calque en `pointer-events: none` posé sur la grille le rendrait inerte. Le
+     corriger demande de lui réserver sa place d'avance, ce qui coûte cette
+     hauteur en permanence : c'est un arbitrage, et il revient à Ethan. */
   #chantier-reparation {
     flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
     gap: 8px; padding: 3px 8px; background: #343A2C;
@@ -1406,7 +1492,19 @@
      hauteur fixe à ajouter à la somme des six barres. Le ton est celui du
      registre `mode` — un état, jamais un refus. */
   #chantier-garnison { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #343A2C; color: #F5F3E8; }
-  #chantier-avis { flex: 0 0 auto; padding: 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8; }
+  /* ⚠⚠ ELLE SE POSE SUR LE CHAMP AU LIEU DE LE POUSSER — Ethan, 07/09, point 2.
+     Voir le balisage pour la mesure. Ce qui s'ajoute quand un mode s'arme se
+     pose PAR-DESSUS ; entrer ou sortir d'un mode ne change plus la hauteur du
+     champ d'un pixel, donc plus le cadrage du décor.
+     ⚠ `pointer-events: none` : elle couvre des cases, elle ne les prend pas.
+     ⚠ ET LA MARGE DROITE DÉGAGE LA BASCULE, qui fait 40 px et vit à 6 px du
+     bord : sans elle, le texte passerait dessous. Le bouton garde son `z-index`
+     de 2 et reste au-dessus — il est le seul des deux qu'on touche. */
+  #chantier-avis {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
+    pointer-events: none; margin: 0;
+    padding: 3px 52px 3px 8px; font-size: 9px; background: #8A1E17; color: #F5F3E8;
+  }
   /* ⚠ UN MODE N'EST PAS UNE ALERTE. « Mode DÉMOLIR : touchez le bâtiment à
      démolir » ne signale aucune panne : il rappelle ce que le prochain toucher
      va faire. Le rouge des refus lui donnerait l'air d'une erreur, et le joueur
@@ -1568,7 +1666,7 @@
        l'ancêtre positionné de la couche tournante, et la pastille ne le lui
        prend pas. */
     position: relative;
-    aspect-ratio: 1; background: #161914; border: 1px dashed #4E5742;
+    aspect-ratio: 1; background: #161914;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 7px; line-height: 1.1; text-align: center;
     color: #68727E; word-break: break-word;
@@ -2045,6 +2143,27 @@
                balisage serait juste aujourd'hui et faux le jour où la grille
                changerait de sens — ce qui est déjà arrivé une fois. -->
           <button type="button" id="chantier-bascule-bande">▼</button>
+          <!-- ⚠⚠ LA LIGNE D'AVIS EST POSÉE SUR LE CHAMP, ELLE N'EST PLUS DANS LE
+               FLUX — Ethan, 07/09, point 2. Elle était une bande `flex: 0 0 auto`
+               sous le champ : armer un mode la faisait paraître, et le champ
+               PERDAIT sa hauteur. Mesuré dans Chromium à la géométrie du S25 FE,
+               bande Défense, tutoriel fermé : `#chantier-defile` passait de
+               **458 à 414 px** en mode Pose et à **392** en mode Réparer — le
+               décor ne changeait ni d'échelle ni de position, mais la fenêtre
+               qui l'encadre se raccourcissait de 44 px, ce qui est très
+               exactement « le décor est cadré autrement ».
+               ⚠⚠ ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE. Elle
+               couvre le bas de la grille : sans cette ligne elle avalerait le
+               toucher des cases qu'elle recouvre, ce qui est la faute mesurée
+               du lot TUTORIEL — `elementFromPoint` sur la première case légale
+               rendait `#tuto-objectifs`, et poser un Collecteur y était devenu
+               impossible. Ce que la mini-fenêtre ne pouvait pas faire — elle
+               porte une croix, donc elle doit recevoir —, cette ligne-ci le
+               peut : elle ne porte que du texte.
+               ⚠ ELLE RESTE DANS `#chantier-vue`, PAS DANS `#chantier-champ` :
+               c'est la vue qui est l'ancêtre positionné, et c'est le bas du
+               CHAMP QUI DÉFILE qu'il faut longer, pas celui du tutoriel. -->
+          <p id="chantier-avis" hidden></p>
         </div>
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
@@ -2062,11 +2181,14 @@
              les missions en bas au début du jeu, au-dessus des boutons
              améliorer etc., sous la forme d'une mini fenêtre. Texte court,
              compteur d'objectif. »
-             ⚠ ELLE EST EN `absolute` DANS `#chantier-champ`, PAS UNE SEPTIÈME
-             BARRE. Une barre à hauteur fixe de plus ferait tomber la garde des
-             288 px de `chantier.test.js`, et c'est exactement ce que cette
-             garde est là pour empêcher — « tu compresses tout dans l'UI ». Elle
-             se POSE sur la grille, comme les boutons de zoom de la carte.
+             ⚠⚠ ELLE EST DANS LE FLUX, ET CE COMMENTAIRE DISAIT LE CONTRAIRE.
+             Il annonçait « en `absolute` dans `#chantier-champ` […] elle se POSE
+             sur la grille » : c'est ce qu'elle FAISAIT, et la règle de la
+             feuille explique depuis pourquoi on l'en a sortie — posée, elle
+             avalait le toucher des cases, et poser un Collecteur était devenu
+             impossible. La feuille avait raison, ce commentaire-ci avait vieilli.
+             Elle n'est pas une septième barre pour autant : `flex: 0 0 auto`,
+             donc la garde des 288 px ne la compte pas.
              ⚠ SON CONTENU EST ÉCRIT PAR `ui/mission.js`, le même module que
              l'onglet Mission. Deux lectures des mêmes missions finiraient par
              dire deux choses différentes. -->
@@ -2087,10 +2209,13 @@
            que le mode Réparer armé, et au-dessus de la rangée »). Reprendre la
            discipline de l'autre écran vaut mieux que d'en inventer une seconde
            pour le même geste.
-           ⚠ ET IL N'EST PAS UNE SEPTIÈME BARRE FIXE. `flex: 0 0 auto` comme
-           `#chantier-avis`, et `hidden` par défaut : le chrome fixe reste à
-           288 px, et la garde de `chantier.test.js` qui énumère les
-           `flex: 0 0 Npx` ne le voit pas — c'est voulu, il n'en est pas une.
+           ⚠ ET IL N'EST PAS UNE SEPTIÈME BARRE FIXE. `flex: 0 0 auto` et
+           `hidden` par défaut : le chrome fixe reste à 288 px, et la garde de
+           `chantier.test.js` qui énumère les `flex: 0 0 Npx` ne le voit pas —
+           c'est voulu, il n'en est pas une. ⚠ Il POUSSE en revanche le champ
+           quand il paraît, ce que `#chantier-avis` ne fait plus depuis le lot
+           ÉCRAN-DÉFENSE : voir sa règle dans la feuille, l'écart y est mesuré
+           et déclaré.
            ⚠ LA RÉSERVE EST LÀ PARCE QU'UN JOUEUR QUI NE LA VOIT PAS NE COMPREND
            PAS POURQUOI RÉPARER REFUSE. Elle est écrite par `ui/chantier.js`
            depuis `plafondDeLaReserveDesBatiments` ; rien n'est calculé ici. -->
@@ -2110,10 +2235,11 @@
            `mode`, métal sur métal.
            ⚠ ET CE N'EST PAS UNE SEPTIÈME BARRE FIXE, pour la même raison que
            `#chantier-reparation` juste au-dessus : `flex: 0 0 auto` et `hidden`
-           hors de la bande Défense. Le chrome fixe reste à 288 px. -->
+           hors de la bande Défense. Le chrome fixe reste à 288 px.
+           ⚠ IL PARAÎT AVEC LA BANDE, PAS AVEC UN MODE, et c'est ce qui le
+           distingue de la ligne d'avis : changer de bande est un déplacement
+           voulu, armer un mode ne devrait rien déplacer du tout. -->
       <p id="chantier-garnison" hidden></p>
-
-      <p id="chantier-avis" hidden></p>
 
       <div id="chantier-contexte">
         <div class="qui">

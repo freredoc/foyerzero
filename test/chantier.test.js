@@ -21,7 +21,7 @@ import {
   SIGLES_OBSTACLE, LIBELLES_OBSTACLE, LIBELLES_FAMILLE, coteCaseParDefaut,
   COTE_CASE_MAX, ZOOM_BASE_MULTIPLE_MAX, defilementAncre,
   apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
-  etatDeLaGarnison,
+  etatDeLaGarnison, ligneSansSelection,
 } from '../src/ui/chantier.js';
 // ⚠ LES BANDES SE PRENNENT À LA SOURCE — lot ÉCRAN-RAID, 04/09. Elles ont
 // déménagé de `ui/chantier.js` vers `render/bandes.js` parce que l'écran de
@@ -29,6 +29,7 @@ import {
 // demanderaient une géométrie l'un à l'autre finiraient par se coupler.
 import {
   BANDES, BANDES_NAVIGABLES, basculeDeBande, bornesDeDefilement, bandeDeLaRangee,
+  voilesDeLaBande,
   casesDeLaBande, bornesDuDecalage, bornesDuDecalageX,
 } from '../src/render/bandes.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
@@ -3917,15 +3918,31 @@ test('défense — la ligne de détail suit le TERRAIN, jamais la disposition', 
   const table = ecran.slice(ecran.indexOf('const TERRAINS'), ecran.indexOf('export function actionSansMoteur'));
   assert.match(table, /detailDuBatiment/, 'la table des bâtiments ne se décrit plus elle-même');
 
-  // Et les DEUX écrivains de la ligne passent par le terrain sélectionné.
+  // Et TOUS les écrivains de la ligne passent par une fonction NOMMÉE, jamais
+  // par une phrase écrite sur place.
+  //
+  // ⚠⚠ ELLE SE RESSERRE AU LOT ÉCRAN-DÉFENSE, ELLE NE S'ASSOUPLIT PAS. Elle
+  // exemptait l'écrivain qui portait « aucun bâtiment » en toutes lettres : ce
+  // cas-là est justement celui qu'Ethan a vu mentir le 07/09 — sans sélection,
+  // la ligne gardait le Chantier au-dessus de la garnison. Il passe désormais
+  // par `ligneSansSelection`, donc AUCUN écrivain n'est exempté : chacun des
+  // quatre nomme `terrain.detail(` ou `ligneSansSelection(`.
   const lignes = ecran.split('\n')
     .map((l, i) => ({ l, i })).filter(({ l }) => l.includes('chantier-selection-detail'));
-  assert.equal(lignes.length, 3, 'le nombre d\'écrivains de la ligne de détail a changé');
+  assert.equal(lignes.length, 4, 'le nombre d\'écrivains de la ligne de détail a changé');
   for (const { l, i } of lignes) {
-    if (l.includes('aucun bâtiment')) continue;
-    const voisinage = ecran.split('\n').slice(Math.max(0, i - 3), i + 1).join('\n');
-    assert.match(voisinage, /terrain\.detail\(/,
-      `la ligne ${i + 1} écrit le détail sans passer par le terrain : ${l.trim()}`);
+    const voisinage = ecran.split('\n').slice(Math.max(0, i - 5), i + 1).join('\n');
+    assert.ok(/terrain\.detail\(/.test(voisinage) || /ligneSansSelection\(/.test(voisinage),
+      `la ligne ${i + 1} écrit le détail sans passer ni par le terrain ni par `
+      + `ligneSansSelection : ${l.trim()}`);
+  }
+
+  // ⚠ ET LA PHRASE DU VIDE N'EXISTE QU'UNE FOIS PAR CAS. Deux écrans qui
+  // l'écriraient chacun de leur côté finiraient par dire deux choses ; c'est
+  // exactement ce que `ligneSansSelection` centralise.
+  for (const phrase of ['aucun bâtiment sélectionné', 'aucune pièce sélectionnée']) {
+    const n = ecran.split(phrase).length - 1;
+    assert.equal(n, 1, `« ${phrase} » est écrite ${n} fois`);
   }
 
   // ⚠ LES DEUX TERRAINS SAVENT SE DÉCRIRE, ce qui est ce qui rend le chemin
@@ -4117,21 +4134,25 @@ test('ERGO T5 — la bande qu\'on ne regarde pas est zébrée, et elle reste tou
   // Le pas suit la case, donc le zoom.
   assert.match(regle[0], /var\(--case-cote\)/, 'les barres sont en pixels et non en cases');
 
-  // ⚠⚠ UN VOILE PAR BANDE NAVIGABLE, ET UN SEUL ALLUMÉ. L'écran en construit
-  // exactement autant que `BANDES_NAVIGABLES` en compte, et la bascule est
-  // écrite à UN seul endroit : `bandeCourante` change à chaque évènement de
-  // défilement, deux écrivains divergeraient.
+  // ⚠⚠ UN VOILE PAR ZONE, ET LE DÉCOUPAGE VIENT DE `voilesDeLaBande`. L'écran
+  // n'en compose aucun lui-même : il pose ce que la fonction lui rend, et la
+  // bascule est écrite à UN seul endroit — `bandeCourante` change à chaque
+  // évènement de défilement, deux écrivains divergeraient.
+  //
+  // ⚠⚠ ELLE CHANGE DE CIBLE AU LOT ÉCRAN-DÉFENSE, ET ELLE SE RESSERRE. Elle
+  // exigeait un voile PAR BANDE NAVIGABLE et une bascule « l'autre bande » :
+  // vrai tant que deux bandes se partageaient l'écran, faux depuis que le
+  // déploiement se voile sans être navigable (07/09, point 6). Ce qu'elle garde
+  // en plus est la propriété qui compte — les zones voilées ne se TOUCHENT
+  // jamais, donc la phase du dégradé ne redémarre pas en plein motif.
   const ecran = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
-  assert.match(ecran, /for \(const cle of BANDES_NAVIGABLES\) \{/,
-    'les voiles ne se dérivent plus des bandes navigables');
+  assert.match(ecran, /voilesDeLaBande\(cle\)\.map\(/,
+    'les voiles ne se dérivent plus de `voilesDeLaBande`');
   // Deux écritures de `hidden` en tout : la naissance, cachée, et la bascule.
   assert.equal((ecran.match(/voile\.hidden/g) ?? []).length, 2,
     'un second écrivain de la bascule du voile est apparu');
-  assert.equal((ecran.match(/hidden = cle === cleBande/g) ?? []).length, 1,
+  assert.equal((ecran.match(/cle !== cleBande/g) ?? []).length, 1,
     'la bascule du voile est écrite à plus d\'un endroit');
-  assert.match(ecran, /for \(const \[cle, voile\] of voiles\) voile\.hidden = cle === cleBande;/,
-    'la bascule ne montre plus exactement l\'autre bande');
-  assert.equal(BANDES_NAVIGABLES.length, 2, 'la lecture « l\'autre bande » suppose deux bandes');
 
   // ⚠ ET IL EST POSÉ DANS LA GRILLE, PAS EN ABSOLU : il suit le zoom et le
   // défilement sans qu'une ligne ne le repositionne. Le vérifier par la
@@ -4139,8 +4160,8 @@ test('ERGO T5 — la bande qu\'on ne regarde pas est zébrée, et elle reste tou
   // bande.
   assert.match(ecran, /voile\.style\.gridColumn = `1 \/ \$\{GRILLE\.largeur \+ 1\}`;/,
     'le voile ne couvre plus les neuf colonnes');
-  assert.match(ecran, /voile\.style\.gridRow = `\$\{premiereLigne\} \/ span \$\{nbLignes\}`;/,
-    'le voile ne couvre plus les lignes d\'écran de sa bande');
+  assert.match(ecran, /voile\.style\.gridRow = `\$\{zone\.premiereLigne\} \/ span \$\{zone\.nbLignes\}`;/,
+    'le voile ne couvre plus les lignes d\'écran de sa zone');
   assert.doesNotMatch(regle[0], /position: absolute/, 'le voile est sorti de la grille');
 });
 
@@ -5388,4 +5409,500 @@ test('F-J T10 — un Complexe à zéro PV ne promet rien, et le DIT', () => {
   const section = lignesDuPanneau(apercu).sections.find((s) => s.titre === 'Ce qu\'il commande');
   assert.ok(section, 'la ligne se tait au lieu de se dire');
   assert.equal(section.lignes[0].avant, 'aucun retour');
+});
+
+// ---------------------------------------------------------------------------
+// ÉD T1 à T14 — lot ÉCRAN-DÉFENSE, 07/09
+//
+// Six retours d'Ethan sur la bande Défense, tous d'AFFICHAGE : aucune règle de
+// jeu ne bouge, `src/sim/` n'a pas une ligne de changée.
+// ---------------------------------------------------------------------------
+
+/**
+ * Une base bâtie, un Complexe posé, et une garnison à qui parler.
+ *
+ * ⚠⚠ LE COMPLEXE EST À UN NIVEAU DIFFÉRENT DU CHANTIER, ET C'EST LA CONDITION
+ * DE `ÉD T1`. Le défaut qu'Ethan a vu est que la barre annonçait le CHANTIER
+ * au-dessus de la garnison ; si les deux bâtiments portaient le même niveau, un
+ * test qui lit « Niv. N » passerait sur le code fautif comme sur le juste.
+ */
+function baseAvecComplexe(niveauChantier = 20, niveauComplexe = 7, niveauQg = 12) {
+  const etat = baseDesUniques();
+  const laBase = baseCourante(etat);
+  laBase.disposition[0].niveau = niveauChantier;
+  laBase.disposition[indiceDe(etat, 'complexeDeDefense')].niveau = niveauComplexe;
+  // ⚠⚠ LE QG MONTE, ET CE N'EST PAS UN CONFORT DE MONTAGE. `baseDesUniques` le
+  // pose au niveau 1, donc `niveauDeCommandementDeLaBase` vaut 1 et TOUTE montée
+  // d'une pièce de garnison est refusée sous le code `plafond-commandement` :
+  // `ÉD T2` mesurerait alors un refus du moteur en croyant mesurer le terrain
+  // touché, et il passerait sur un code qui aurait bel et bien amélioré le
+  // Chantier. Mesuré : sans cette ligne, la pièce reste au niveau 1.
+  laBase.disposition[indiceDe(etat, 'qgDeDefense')].niveau = niveauQg;
+  assert.notEqual(niveauChantier, niveauComplexe,
+    'le montage ne discrimine rien : les deux bâtiments ont le même niveau');
+  return etat;
+}
+
+/** Pose une pièce de garnison sur la première case que le moteur accepte. */
+function poserEnGarnison(etat, id) {
+  const bande = GRILLE.bandes.defense;
+  for (let rangee = bande.premiere; rangee <= bande.derniere; rangee += 1) {
+    for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+      const piece = { id, rangee, colonne, niveau: 1 };
+      if (moteurEtat.problemesDeLaPoseDEffectif(etat, 'garnison', piece).length === 0) {
+        poserEffectif(etat, 'garnison', piece);
+        return { rangee, colonne };
+      }
+    }
+  }
+  throw new Error(`montage : aucune case légale en garnison pour ${id}`);
+}
+
+test('ÉD T1 — sans sélection, la Défense annonce le Complexe, pas le Chantier', () => {
+  // ⚠⚠ ETHAN, 07/09, POINT 5, CAPTURE À L'APPUI : la barre affichait « Chantier
+  // de co… · Niv. 9 » et « AMÉLIORER vers niv. 10 » pendant qu'il regardait sa
+  // garnison. Mesuré avant correction dans Chromium sur une partie bâtie :
+  // « Chantier de construction / Niv. 35 / vers niv. 36 » sur la bande Défense.
+  const etat = baseAvecComplexe(20, 7);
+  const chantier = baseCourante(etat).disposition[0];
+
+  const vide = ligneSansSelection(etat, 'defense');
+  assert.equal(vide.nom, BASE_BATIMENTS[RETOUR_DEFENSES.indexeeSur].nom.joueur);
+  assert.equal(vide.detail, 'Niv. 7');
+  // ⚠ ET LE CHANTIER N'Y EST NI PAR SON NOM NI PAR SON NIVEAU. Sans cette
+  // seconde moitié, une ligne qui dirait « Complexe de défense · Niv. 20 »
+  // passerait la première.
+  assert.ok(!vide.nom.includes(BASE_BATIMENTS.chantierDeConstruction.nom.joueur));
+  assert.ok(!vide.detail.includes(String(chantier.niveau)),
+    `la ligne porte encore le niveau du Chantier : ${vide.detail}`);
+
+  // Et l'écran monté l'écrit pour de bon, une fois la bande Défense atteinte.
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+  ecran.rafraichir(etat);
+  assert.equal(doc.getElementById('chantier-selection-nom').textContent,
+    BASE_BATIMENTS[RETOUR_DEFENSES.indexeeSur].nom.joueur);
+  assert.equal(doc.getElementById('chantier-selection-detail').textContent, 'Niv. 7');
+  // ⚠ ET « VERS NIV. N+1 » TOMBE AVEC : c'est ce mot qui promettait une montée
+  // du Chantier depuis la Défense.
+  assert.equal(doc.getElementById('chantier-ameliorer-cible').textContent, '');
+});
+
+test('ÉD T2 — armée depuis la Défense, une action ne touche jamais le Chantier', () => {
+  // ⚠⚠ C'EST LE TEST DU DANGER RÉEL, PAS DU LIBELLÉ. La question posée au lot
+  // était : « le bouton AMÉLIORER agit-il vraiment sur le Chantier ? » La
+  // réponse, mesurée, est NON — les quatre boutons suivent le modèle « armer
+  // puis toucher », et `executerAction` reçoit le terrain de la CASE TOUCHÉE,
+  // jamais celui de la sélection. Ce test le FIGE, parce que rien ne le disait.
+  const etat = baseAvecComplexe(20, 7);
+  const ou = poserEnGarnison(etat, 'merlon');
+  const laBase = baseCourante(etat);
+  const disposition = JSON.stringify(laBase.disposition);
+  const niveauAvant = laBase.garnison[0].niveau;
+
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+  armerEtToucher(doc, 'ameliorer', ou.rangee, ou.colonne);
+
+  assert.equal(laBase.garnison[0].niveau, niveauAvant + 1,
+    'le geste n\'a pas monté la pièce de garnison : le montage ne mesure rien');
+  assert.equal(JSON.stringify(laBase.disposition), disposition,
+    'un bâtiment de la base a bougé alors qu\'on agissait sur la garnison');
+});
+
+test('ÉD T3 — la bande Base garde son défaut : le Chantier', () => {
+  // Non-régression. En bande Base, annoncer le Chantier est légitime — c'est ce
+  // autour de quoi la base se lit, et c'est l'arbitrage du lot ÉCRAN-CHANTIER.
+  const etat = baseAvecComplexe(20, 7);
+  const { doc } = ecranMonte(etat);
+  assert.equal(doc.getElementById('chantier-selection-nom').textContent,
+    BASE_BATIMENTS.chantierDeConstruction.nom.joueur);
+  assert.match(doc.getElementById('chantier-selection-detail').textContent, /Niv\. 20/);
+  assert.equal(ligneSansSelection(etat, 'batiments').detail, 'aucun bâtiment sélectionné');
+});
+
+test('ÉD T4 — sans Complexe posé, la barre n\'invente pas une seconde formulation', () => {
+  // ⚠⚠ LE BANDEAU LE DIT DÉJÀ. `#chantier-garnison` écrit « Sans Complexe de
+  // défense, les pièces abîmées de la garnison ne reviennent jamais » ; le
+  // redire deux lignes plus bas dans d'autres mots donnerait au joueur deux
+  // phrases pour un seul fait, et la première retouchée mentirait.
+  const etat = creerEtat(4242);
+  assert.equal(complexeDeLaBase(baseCourante(etat)), null,
+    'le montage ne mesure rien : la base neuve porte déjà un Complexe');
+
+  const vide = ligneSansSelection(etat, 'defense');
+  assert.equal(vide.detail, 'aucune pièce sélectionnée');
+  const avertissement = etatDeLaGarnison(etat).texte;
+  assert.match(avertissement, /ne reviennent jamais/, 'le bandeau a changé de phrase');
+  // Aucun mot de l'avertissement ne se retrouve dans la ligne de la barre.
+  for (const mot of ['Complexe', 'jamais', 'abîmées']) {
+    assert.ok(!vide.detail.includes(mot), `la barre reprend « ${mot} » au bandeau`);
+  }
+});
+
+test('ÉD T5 — armer un mode ne pousse plus le champ : la ligne d\'avis est POSÉE', () => {
+  // ⚠⚠ MESURÉ AVANT D'ÊTRE CORRIGÉ — Chromium, géométrie du S25 FE, bande
+  // Défense, tutoriel fermé. `#chantier-defile` passait de **458 px à 414** en
+  // mode Pose : le décor ne changeait ni d'échelle (36 px de case des deux
+  // côtés) ni de position (`background-size` 360×720, `background-position`
+  // 50 % 0 %, `scrollTop` 227 identiques), mais la FENÊTRE qui l'encadre
+  // perdait 44 px par le bas. Après : 458 des deux côtés.
+  //
+  // ⚠ CE TEST NE MESURE PAS DES PIXELS — le dépôt n'a pas de navigateur (§3).
+  // Il mesure ce qui PRODUIT le pixel : la ligne d'avis ne participe plus au
+  // flux, et elle ne peut pas manger le toucher des cases qu'elle couvre.
+  const html = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const feuille = html.replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/#chantier-avis \{[^}]*\}/);
+  assert.ok(regle, 'la règle de #chantier-avis a disparu');
+  assert.match(regle[0], /position: absolute/, 'la ligne d\'avis est de nouveau dans le flux');
+  assert.match(regle[0], /pointer-events: none/, 'la ligne d\'avis avale le toucher des cases');
+  assert.ok(!/flex:\s*0 0/.test(regle[0]), 'la ligne d\'avis est redevenue une barre');
+
+  // ⚠⚠ ET ELLE EST DANS LA VUE, PAS À CÔTÉ — LA PREMIÈRE ÉCRITURE DE CE TEST NE
+  // LE MESURAIT PAS. Elle bornait sa tranche au `<div id="chantier-panneau"`
+  // qui suit, si bien que la fente entre le `</div>` de la vue et le panneau
+  // tombait DEDANS : déplacer la ligne d'avis juste après la fermeture de la vue
+  // la laissait VERTE, mesuré. Elle compte donc la profondeur des `div` et
+  // s'arrête sur la balise qui ferme vraiment `#chantier-vue`.
+  const balisage = html.replace(/<!--[\s\S]*?-->/g, '');
+  const depart = balisage.indexOf('<div id="chantier-vue">');
+  assert.ok(depart !== -1, '`#chantier-vue` a disparu du balisage');
+  let profondeur = 0;
+  let fin = -1;
+  for (const balise of balisage.slice(depart).matchAll(/<(\/?)div\b[^>]*>/g)) {
+    profondeur += balise[1] === '/' ? -1 : 1;
+    if (profondeur === 0) { fin = depart + balise.index + balise[0].length; break; }
+  }
+  assert.ok(fin !== -1, '`#chantier-vue` ne se ferme pas');
+  const dedans = balisage.slice(depart, fin);
+  assert.ok(dedans.includes('id="chantier-avis"'),
+    'la ligne d\'avis a quitté `#chantier-vue`');
+  // ⚠ ET LA TRANCHE NE COUVRE PAS LE PANNEAU, qui est le VOISIN de la vue : sans
+  // cette ligne, une borne trop large rendrait la précédente vraie pour rien.
+  assert.ok(!dedans.includes('id="chantier-panneau"'),
+    'la tranche déborde de `#chantier-vue` : elle ne mesure plus l\'appartenance');
+});
+
+test('ÉD T5 bis — armer un mode ferme le panneau, qui couvrait la moitié du champ', () => {
+  // ⚠⚠ C'EST LE POINT 2 PAR L'AUTRE PORTE, ET IL A FALLU LE REGARDER POUR LE
+  // VOIR. La ligne d'avis sortie du flux, la fiche restait ouverte par-dessus le
+  // champ : `.panneau-detail` est en `absolute` et porte `z-index: 2`, donc elle
+  // recouvrait la ligne de mode ET les trois quarts des cases que le mode vient
+  // justement de cercler. Le joueur armait « Poser » et ne voyait pas où poser.
+  const etat = baseAvecComplexe(20, 7);
+  const { doc } = ecranMonte(etat);
+  const panneau = doc.getElementById('chantier-panneau');
+
+  // Le panneau s'ouvre sur un bâtiment — sans quoi le montage ne mesure rien.
+  const chantier = baseCourante(etat).disposition[0];
+  doc.getElementById('chantier-grille').dispatch('click',
+    { target: caseDe(doc, chantier.rangee, chantier.colonne) });
+  assert.equal(panneau.hidden, false, 'le panneau ne s\'ouvre plus : le montage ne mesure rien');
+
+  // Armer une ACTION le referme.
+  doc.getElementById('chantier-ameliorer').click();
+  assert.equal(panneau.hidden, true, 'le panneau reste ouvert par-dessus le champ');
+
+  // ⚠ ON DÉSARME AVANT DE ROUVRIR. Retoucher le bouton armé le désarme — c'est
+  // la règle du 27/08 — ; sans ce geste, le clic suivant sur le Chantier
+  // EXÉCUTERAIT l'amélioration au lieu d'ouvrir la fiche, et le montage
+  // mesurerait un panneau resté fermé pour la mauvaise raison.
+  doc.getElementById('chantier-ameliorer').click();
+  // Et armer une POSE aussi — c'est le mode qu'Ethan avait sous les yeux.
+  doc.getElementById('chantier-grille').dispatch('click',
+    { target: caseDe(doc, chantier.rangee, chantier.colonne) });
+  assert.equal(panneau.hidden, false, 'le panneau ne se rouvre plus');
+  doc.getElementById('chantier-palette').children[0].click();
+  assert.equal(panneau.hidden, true, 'le panneau reste ouvert pendant le mode Pose');
+});
+
+test('ÉD T8 — le rayon est porté par la case, donc il ne mange aucun toucher', () => {
+  // ⚠⚠ LE BRIEF DEMANDAIT `pointer-events: none` COMME LE VOILE DE BANDE ; il
+  // n'y a rien à neutraliser ici, et c'est un écart déclaré. Le rayon n'est pas
+  // un calque posé sur la grille : c'est une CLASSE sur la case elle-même, qui
+  // reste sa propre cible. Ce test mesure ce qui compte — le toucher d'une case
+  // couverte tombe bien sur elle et déclenche le geste.
+  const etat = baseAvecComplexe(20, 7);
+  const ou = poserEnGarnison(etat, 'casemate');
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+  const case_ = caseDe(doc, ou.rangee, ou.colonne);
+  // ⚠ LE CLIC SE DISPATCHE SUR LA GRILLE, JAMAIS SUR LA CASE. L'écran ne pose
+  // qu'UN écouteur, sur `#chantier-grille`, et il lit `evenement.target` : un
+  // clic posé sur la case n'atteindrait personne, et le montage mesurerait
+  // l'absence de rayon là où il n'y a eu aucun geste.
+  doc.getElementById('chantier-grille').dispatch('click', { target: case_ });
+
+  const marquees = doc.getElementById('chantier-grille').children
+    .filter((c) => c.classList.contains('a-portee'));
+  assert.ok(marquees.length > 1, 'aucun rayon n\'est marqué : le montage ne mesure rien');
+  // ⚠ LA MARQUE EST SUR LA CASE, DONC `closest('.case')` la retrouve — c'est
+  // exactement ce que le gestionnaire de clic de la grille interroge.
+  for (const marquee of marquees) {
+    assert.ok(marquee.classList.contains('case'), 'le rayon est peint hors des cases');
+    assert.equal(marquee.closest('.case'), marquee, 'la case couverte a perdu sa cible');
+  }
+  // Et une case couverte reçoit encore une action armée.
+  // ⚠ ELLE DOIT ÊTRE DANS LA BANDE DE LA PIÈCE, ET C'EST LE MONTAGE QUI L'A DIT.
+  // Le rayon d'une casemate posée en rangée 3 déborde sur le DÉPLOIEMENT, où
+  // aucune pièce de garnison ne se pose : le premier jet visait la rangée 1 et
+  // mesurait un refus du moteur en croyant mesurer un toucher avalé.
+  const bandeDefense = GRILLE.bandes.defense;
+  const autre = marquees.find((c) => c !== case_ && c.children.length === 0
+    && Number(c.dataset.rangee) >= bandeDefense.premiere
+    && Number(c.dataset.rangee) <= bandeDefense.derniere);
+  assert.ok(autre, 'le montage ne trouve aucune case couverte et libre');
+  const rangee = Number(autre.dataset.rangee);
+  const colonne = Number(autre.dataset.colonne);
+  const avant = baseCourante(etat).garnison.length;
+  doc.getElementById('chantier-palette').children[0].click();
+  doc.getElementById('chantier-grille').dispatch('click', { target: autre });
+  doc.getElementById('chantier-grille').dispatch('click', { target: autre });
+  assert.equal(baseCourante(etat).garnison.length, avant + 1,
+    `la case couverte ${rangee};${colonne} n'a pas reçu la pose`);
+});
+
+test('ÉD T8 bis — la fiche pose deux paires par ligne, jamais une', () => {
+  // ⚠⚠ ETHAN, 07/09, POINT 4 : « condensé comme ça au lieu de deux lignes et un
+  // espace vide, faire une ligne et deux colonnes. » Mesuré dans Chromium : la
+  // fiche d'une Tourelle mitrailleuse passe de **7 rangées distinctes à 4**, son
+  // corps de **142 à 103 px** et le panneau de **243 à 204**.
+  //
+  // ⚠ UN TEST QUI COMPTERAIT LES SIX PAIRES PASSERAIT SUR LA MISE EN PAGE
+  // D'AVANT : ce qu'il faut mesurer, c'est le CONTENEUR et le nombre de
+  // colonnes qu'il déclare.
+  const etat = baseAvecComplexe(20, 7);
+  poserEnGarnison(etat, 'casemate');
+  const vue = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0));
+  const doc = fauxDocumentChantier();
+  const elements = {
+    titre: doc.createElement('b'),
+    corps: doc.createElement('div'),
+    bouton: doc.createElement('button'),
+  };
+  peindreVueDuPanneau(doc, elements, vue);
+
+  for (const bloc of elements.corps.children) {
+    const paires = bloc.children.filter((c) => c.classList.contains('paires'));
+    assert.equal(paires.length, 1, 'une section n\'a pas exactement un conteneur de paires');
+    const lignes = bloc.children.filter((c) => c.classList.contains('ligne'));
+    assert.equal(lignes.length, 0, 'une ligne est restée hors du conteneur de paires');
+    assert.ok(paires[0].children.length > 0, 'le conteneur de paires est vide');
+  }
+  // ⚠ ET LA SECTION « AU COMBAT » EN PORTE QUATRE, donc DEUX rangées. Sans ce
+  // compte, un conteneur à une colonne passerait le test ci-dessus.
+  const combat = elements.corps.children[0];
+  assert.equal(combat.children.find((c) => c.classList.contains('paires')).children.length, 4);
+
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/\.panneau-detail \.paires \{[^}]*\}/);
+  assert.ok(regle, 'le conteneur de paires n\'a pas de règle');
+  assert.match(regle[0], /display: grid/, 'les paires ne sont pas une grille');
+  assert.match(regle[0], /grid-template-columns: 1fr 1fr/, 'les paires ne font pas deux colonnes');
+  // ⚠ ET LA VALEUR TOUCHE SON LIBELLÉ : le `flex: 1` qui la poussait au bord
+  // droit est ce qui creusait le vide qu'Ethan barre.
+  const quoi = feuille.match(/\.panneau-detail \.ligne \.quoi \{[^}]*\}/);
+  assert.ok(quoi, 'la règle du libellé a disparu');
+  assert.ok(!/flex: 1/.test(quoi[0]), 'le libellé pousse de nouveau la valeur au bord');
+});
+
+test('ÉD T8 ter — les deux fiches passent par le MÊME rendu', () => {
+  // ⚠⚠ C'EST LE TEST QUI EMPÊCHE LA TROISIÈME COPIE. Ethan écrit « pour les
+  // unités défensive et offensive ET FUTURES CIBLES ENNEMIES » : la fiche
+  // ennemie n'existe pas encore, et c'est maintenant qu'on lui prépare la place.
+  const chantier = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8'));
+  const offense = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8'));
+  assert.match(chantier, /export function peindreVueDuPanneau\(/,
+    'le rendu partagé a disparu de l\'écran de la base');
+  assert.match(offense, /peindreVueDuPanneau\(/, 'l\'Offense ne passe plus par le rendu partagé');
+  assert.match(offense, /from '\.\/chantier\.js'/, 'l\'Offense n\'importe plus le rendu partagé');
+  // ⚠ ET LA MISE EN PAGE EST ÉCRITE UNE FOIS : un second conteneur de paires
+  // dans un autre écran serait la copie qu'on refuse.
+  for (const [nom, source] of [['chantier', chantier], ['offense', offense]]) {
+    const n = source.split("className = 'paires'").length - 1;
+    assert.equal(n, nom === 'chantier' ? 1 : 0,
+      `${nom} écrit ${n} fois le conteneur de paires`);
+  }
+});
+
+test('ÉD T8 quater — une paire impaire reste seule à gauche, sans règle pour ça', () => {
+  // ⚠ LE CHOIX EST ÉCRIT : la dernière paire d'un nombre impair suit le flux
+  // naturel de la grille et reste seule à gauche. L'étaler sur la largeur
+  // demanderait un `:last-child:nth-child(odd)`, c'est-à-dire un cas particulier
+  // de plus dans une feuille qui en a peu.
+  const etat = baseAvecComplexe(20, 7);
+  poserEnGarnison(etat, 'casemate');
+  const vue = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0));
+  const piece = vue.sections.find((s) => s.titre === 'La pièce');
+  assert.ok(piece, 'la section « La pièce » a disparu');
+  assert.equal(piece.lignes.length % 2, 1,
+    'le montage ne mesure rien : la section a un nombre PAIR de paires');
+
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const bloc = feuille.slice(feuille.indexOf('.panneau-detail .paires'),
+    feuille.indexOf('.panneau-detail .ameliorer'));
+  assert.ok(!/nth-child/.test(bloc), 'une règle décide du sort de la paire impaire');
+  assert.ok(!/grid-column/.test(bloc), 'une règle étale une paire sur la largeur');
+});
+
+test('ÉD T9 — le hachuré couvre chaque zone d\'un seul tenant', () => {
+  // ⚠⚠ ETHAN, 07/09, POINT 6 : « Afficher le hachuré dans les 2 lignes du bas en
+  // défense. » Ce sont les rangées 1 et 2, celles où les vagues paraissent.
+  //
+  // ⚠⚠ ET C'EST LE TEST QUI ATTRAPE LA COUTURE. Le voile est un dégradé répété
+  // à −45° : deux éléments ADJACENTS redémarrent sa phase à leur jointure. La
+  // garde ne se contente donc pas de compter les zones — elle exige qu'aucune
+  // paire de zones ne se touche.
+  const deploiement = ligneEcranDeLaBande(BANDES.find((b) => b.cle === 'deploiement'));
+
+  const enDefense = voilesDeLaBande('defense');
+  assert.equal(enDefense.length, 2, 'la Défense ne voile plus exactement deux zones');
+  const bas = enDefense.find((z) => z.premiereLigne === deploiement.premiereLigne);
+  assert.ok(bas, 'les deux lignes du bas ne sont pas voilées en Défense');
+  assert.equal(bas.nbLignes, deploiement.nbLignes,
+    'la zone du bas ne couvre pas exactement le déploiement');
+
+  // ⚠ ET LA BANDE BASE N'EN VOILE QU'UNE, D'UN SEUL TENANT — conséquence
+  // déclarée : la Défense et le déploiement s'y touchent, donc ils fusionnent
+  // plutôt que de laisser une couture.
+  assert.equal(voilesDeLaBande('batiments').length, 1,
+    'la bande Base voile en plusieurs morceaux : une couture est possible');
+
+  // La propriété, sur les deux bandes : aucune zone n'en touche une autre.
+  for (const cle of BANDES_NAVIGABLES) {
+    const zones = voilesDeLaBande(cle).slice().sort((a, b) => a.premiereLigne - b.premiereLigne);
+    for (let i = 1; i < zones.length; i += 1) {
+      const finPrecedente = zones[i - 1].premiereLigne + zones[i - 1].nbLignes;
+      assert.ok(zones[i].premiereLigne > finPrecedente,
+        `sur « ${cle} », deux zones de voile se touchent : la phase du motif saute`);
+    }
+    // Et le voile ne couvre JAMAIS la bande qu'on regarde.
+    const regardee = ligneEcranDeLaBande(BANDES.find((b) => b.cle === cle));
+    for (const z of zones) {
+      const chevauche = z.premiereLigne < regardee.premiereLigne + regardee.nbLignes
+        && regardee.premiereLigne < z.premiereLigne + z.nbLignes;
+      assert.ok(!chevauche, `sur « ${cle} », le voile couvre la bande qu'on regarde`);
+    }
+  }
+});
+
+test('ÉD T10 — aucun `z-index` n\'est apparu sur une case', () => {
+  // ⚠ NON-RÉGRESSION SUR UNE FAUTE DÉJÀ PAYÉE. Un `z-index` sur une case en fait
+  // un CONTEXTE D'EMPILEMENT : son jeton reste prisonnier de l'étage 1 et le mur
+  // lui passe dessus. `.case.choisie` l'a coûté une fois.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  // ⚠⚠ LE MOTIF NE S'ÉCHAPPE QU'UNE FOIS, ET LA PREMIÈRE ÉCRITURE DE CE TEST
+  // S'ÉCHAPPAIT DEUX FOIS. Elle préfixait la source d'un `\\` de trop, si bien
+  // que le motif cherchait un BACKSLASH littéral et ne trouvait jamais rien :
+  // poser `z-index: 1` sur `.case.a-portee` laissait le test VERT, mesuré. Le
+  // témoin d'alors ne le voyait pas non plus — il portait une expression écrite
+  // à la main, DIFFÉRENTE de celle qu'il prétendait éprouver.
+  const regleDe = (selecteur, texte) => [...texte.matchAll(
+    new RegExp(`${selecteur.replace(/\./g, '\\.')}\\s*\\{[^}]*\\}`, 'g'),
+  )].map(([regle]) => regle);
+  const selecteurs = ['.case', '.case.legale', '.case.choisie', '.case.a-portee'];
+  let vues = 0;
+  for (const selecteur of selecteurs) {
+    const regles = regleDe(selecteur, feuille);
+    vues += regles.length;
+    for (const regle of regles) {
+      assert.ok(!/z-index/.test(regle), `${selecteur} porte un z-index : ${regle}`);
+    }
+  }
+  // ⚠ ET LE MOTIF TROUVE VRAIMENT LES QUATRE RÈGLES : sans ce compte, un motif
+  // mort passerait le test en ne regardant rien, ce qu'il a fait une fois.
+  assert.equal(vues, selecteurs.length,
+    `le motif ne retrouve que ${vues} des ${selecteurs.length} règles de case`);
+  // Falsifiable par LE MÊME motif, jamais par une expression écrite à côté.
+  assert.equal(regleDe('.case.a-portee', '.case.a-portee { z-index: 1; }').length, 1);
+});
+
+test('ÉD T11 — les trois états de la palette restent deux à deux distincts', () => {
+  // ⚠⚠ ETHAN, 07/09, POINT 16 : « Menu armé : enlever les fonds pleins, garder
+  // les contours pointillés pour les unités. » Retirer les fonds retire le
+  // support qui portait une partie de la distinction : ce test exige que les
+  // trois états se lisent encore, et il tombe si deux se confondent.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const declarations = (selecteur) => {
+    const motif = new RegExp(`${selecteur.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`, 'g');
+    return [...feuille.matchAll(motif)].map((m) => m[1].trim()).join(' ');
+  };
+  const repos = declarations('.posable');
+  const verrouillee = declarations('.posable.pose');
+  const armee = declarations('.posable.actif');
+  assert.ok(repos !== '', 'la vignette au repos n\'a plus de règle');
+  assert.ok(verrouillee !== '', 'la vignette verrouillée n\'a plus de règle');
+  assert.ok(armee !== '', 'la vignette armée n\'a plus de règle');
+  assert.notEqual(verrouillee, armee, 'verrouillée et armée se peignent pareil');
+  assert.notEqual(repos, verrouillee, 'le repos et le verrouillage se peignent pareil');
+  assert.notEqual(repos, armee, 'le repos et l\'armement se peignent pareil');
+  // ⚠ ET LE DISCRIMINANT EST LE LISERÉ : trois teintes, toutes de la fiche.
+  for (const [etat, teinte] of [[verrouillee, '#1E2124'], [armee, '#F5F3E8']]) {
+    assert.match(etat, /border-color: #[0-9A-F]{6}/, 'l\'état ne change plus de liseré');
+    assert.ok(etat.includes(teinte), `le liseré attendu ${teinte} a disparu`);
+  }
+  // ⚠⚠ ET AUCUN FOND PLEIN NE REVIENT. `background: transparent` est OBLIGATOIRE
+  // et non cosmétique : un `<button>` sans fond déclaré retombe sur le gris clair
+  // du navigateur — mesuré à l'écran, les cinq vignettes sont ressorties EN
+  // CLAIR sur le bandeau sombre.
+  assert.match(repos, /background: transparent/, 'la vignette a repris un fond');
+  for (const etat of [verrouillee, armee]) {
+    assert.ok(!/background:\s*#/.test(etat), `un état de vignette a repris un fond plein : ${etat}`);
+  }
+});
+
+test('ÉD T12 — le pointillé des grilles de composition vient d\'UNE règle', () => {
+  // ⚠⚠ IL ÉTAIT ÉCRIT DEUX FOIS AVANT LE LOT — `#ecran-raid .emplacement` et
+  // `#ecran-offense .emplacement` portaient chacun `1px dashed #4E5742`. En
+  // écrire une troisième pour la palette aurait fait trois définitions du même
+  // pointillé, dont deux se seraient tues au premier réglage.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regles = [...feuille.matchAll(/([^{}]+)\{([^}]*border:\s*1px dashed[^}]*)\}/g)];
+  const porteuses = regles.filter(([, , corps]) => /border:\s*1px dashed #4E5742/.test(corps));
+  assert.equal(porteuses.length, 1,
+    `le pointillé de composition est écrit ${porteuses.length} fois`);
+  const selecteurs = porteuses[0][1].split(',').map((s) => s.trim());
+  assert.deepEqual(selecteurs.slice().sort(),
+    ['#ecran-offense .emplacement', '#ecran-raid .emplacement', '.posable'].sort(),
+    'la règle partagée ne couvre plus exactement les trois grilles');
+});
+
+test('ÉD T13 — la palette de Défense grise, elle ne retire pas', () => {
+  // ⚠ ARBITRAGE DU 28/08, INTACT : « griser le bouton, pas le faire
+  // disparaître ». Une palette qui change de longueur déplace les vignettes sous
+  // le doigt entre deux gestes.
+  const etat = baseAvecComplexe(20, 7);
+  const posables = posablesDeLaDefense(etat);
+  assert.equal(posables.length, rosterDefensif().length,
+    'la palette de Défense ne montre plus tout le roster');
+  assert.ok(posables.some((p) => p.verrouille),
+    'le montage ne mesure rien : aucune pièce n\'est verrouillée');
+  assert.ok(posables.some((p) => !p.verrouille),
+    'le montage ne mesure rien : tout est verrouillé');
+  // ⚠ ET LA RAISON EST DITE, pièce par pièce : une vignette grise qui ne répond
+  // rien n'apprend rien.
+  for (const p of posables.filter((x) => x.verrouille)) {
+    assert.equal(typeof p.raison, 'string', `« ${p.id} » est verrouillée sans raison`);
+    assert.ok(p.raison.length > 0, `« ${p.id} » a une raison vide`);
+  }
+});
+
+test('ÉD T14 — la palette ne change pas de longueur quand une pièce se pose', () => {
+  // ⚠ C'EST LA RAISON D'ÊTRE DU GRISAGE, et c'est ce qui la mesure : la palette
+  // compte le même nombre de vignettes avant et après une pose.
+  const etat = baseAvecComplexe(20, 7);
+  const { doc, ecran } = ecranMonte(etat);
+  ecran.allerALaBande('defense');
+  const avant = doc.getElementById('chantier-palette').children.length;
+  assert.ok(avant > 0, 'la palette est vide : le montage ne mesure rien');
+  poserEnGarnison(etat, 'merlon');
+  ecran.peindre(etat);
+  assert.equal(doc.getElementById('chantier-palette').children.length, avant,
+    'la palette a changé de longueur : les vignettes se déplacent sous le doigt');
 });
