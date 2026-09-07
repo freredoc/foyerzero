@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.13 · build 114.
+Dernière révision : **07/09/2026**, version 0.99.14 · build 115.
 
 ---
 
@@ -42,7 +42,97 @@ Dernière révision : **07/09/2026**, version 0.99.13 · build 114.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot ÉCRAN-DÉFENSE), à confronter :**
+**Référence au 07/09/2026 (après le lot PRODUCTION-EN-DÉFENSE), à confronter :**
+`npm test` → **1274 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 012 333 octets**, 0 référence externe. Coût **+257 octets, ENTIÈREMENT EN
+JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **JavaScript +257 · feuille +0 ·
+balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 287 667 octets,
+13,85 %**. Le lot touche `src/sim/state.js`, `src/data/base.js`,
+`src/ui/arsenal.js` et `src/ui/chantier.js`.
+⚠⚠ **ETHAN AVAIT RAISON, ET LE DÉFAUT N'ÉTAIT PAS OÙ ON L'AURAIT CHERCHÉ.**
+Point 11 du 07/09 : « je ne peux pas construire un fusilier alors que je n'ai pas
+de caserne — c'est vrai pour l'armée, faux en défense. »
+`batimentDeProductionManquant` était JUSTE ; ce qui manquait, c'est qu'un `grep`
+sur le dépôt entier ne la trouvait que dans `ui/chantier.js` et `ui/offense.js`,
+**et nulle part dans `src/sim/`**. La règle vivait dans les écrans.
+⚠⚠ **ELLE DESCEND DANS LE MODÈLE, ET DANS LES TROIS CHEMINS DE GESTE, PAS UN.**
+`problemeDuBatimentDeProduction` est lue par `problemesDeLaPoseDEffectif`,
+`problemesDuDeplacementDEffectif` et `problemesDeLaPermutationDEffectif` — les
+trois seules fonctions de `sim/state.js` qui rendent une liste de problèmes pour
+une force. Elle vaut pour la GARNISON comme pour l'ARMÉE : Ethan a énoncé une
+règle sur les unités sans dire « à l'assaut ».
+⚠⚠ **ET ELLE N'EST PAS DANS `problemesDeLEffectif`, CE QUI EST TOUT LE POINT
+DÉLICAT.** Ce voisin-là est partagé avec `verifierForce`, donc avec le
+CHARGEMENT : l'y écrire aurait refusé toute sauvegarde portant une garnison dont
+la Caserne est tombée au raid. La règle garde le GESTE, jamais le chargement, et
+`CODES_TOLERES_AU_CHARGEMENT` reste à DEUX codes — une règle absente du chemin de
+chargement vaut mieux qu'une règle présente et filtrée. `PD T6` le mesure.
+⚠ **AUCUNE MIGRATION, `SAVE_VERSION` RESTE À 27** — la règle lit `disposition`,
+qui est là depuis la v1. `PD T10` fige le nombre EN CLAIR et vérifie qu'une
+sauvegarde v27 traverse `migrer` sans être réécrite d'un octet.
+⚠⚠ **`messageSansBatiment` A DESCENDU DANS `data/base.js`, ET IL N'Y A TOUJOURS
+QU'UNE ÉCRITURE DE LA PHRASE.** Elle vivait dans `ui/arsenal.js`, que `sim/`
+n'a pas le droit d'importer ; `ui/arsenal.js` la RÉEXPORTE, si bien qu'aucune des
+deux palettes n'a changé d'import. `PD T7` le prouve par la SOURCE — la phrase se
+construit une fois et une seule, balayage à l'appui.
+⚠⚠ **LA PRÉMISSE DU BRIEF SUR L'ÉCRAN OFFENSE ÉTAIT PÉRIMÉE, MESURÉ.** Il disait
+« en Offense la pièce disparaît » ; `unitesDeLaPalette` a cessé de filtrer le
+29/08 et GRISE, exactement comme la Défense. Le commentaire de
+`posablesDeLaDefense` qui affirmait le contraire est parti avec la mesure. La
+vraie différence était que l'écran Offense DEMANDE avant de poser, là où la
+Défense grisait sans que rien derrière la vignette ne refuse. `PD T8` et `PD T9`
+comptent les deux longueurs de palette.
+⚠⚠ **ÉCART DÉCLARÉ : LE DÉPLACEMENT ET LA PERMUTATION SONT GARDÉS AUSSI, ET LE
+BRIEF LE DEMANDE DEUX FOIS.** Conséquence réelle : une Caserne tombée au raid
+FIGE sur place les Fusiliers déjà posés — ils restent, se chargent, se battent et
+se retirent, mais ne se déplacent plus tant qu'elle n'est pas relevée. Ce n'est
+pas dans l'énoncé d'Ethan, qui parle de CONSTRUIRE. **Si la lecture est trop
+large, c'est UN appel qui tombe** — la règle est écrite une seule fois.
+⚠ **ET L'AMÉLIORATION N'EST PAS CONCERNÉE, exprès :**
+`problemesDeLAmeliorationDEffectif` portait déjà l'arbitrage — « l'arbitrage du
+29/08 dit *infanterie inconstructible sans caserne* : il porte sur la
+CONSTRUCTION, et une pièce déjà posée l'est ». Le brief ne la nomme pas non plus.
+⚠⚠ **LE TÉMOIN DE `bases.test.js` BOUGE, ET IL EST RECAPTURÉ EN L'ÉCRIVANT.**
+`DEPLACES_PAR_PRODUCTION_EN_DEFENSE` — 72 couples, à partir de la phase 4. Le
+scénario bâtit une Caserne et un Dépôt de véhicules, **jamais un Aérodrome** : la
+Crécelle, seul AÉRONEF qu'il arme, est désormais refusée. Les phases p01 à p03
+sont identiques AU BIT, et sur les vingt-cinq graines `gestes`,
+`nbCasesAtteignables`, `deplacement`, `nbAttaquantes`, le nombre de cibles, la
+cible retenue et les clés du rapport ne bougent PAS — c'est cette moitié-là qui
+prouve que la règle n'a pas fui ailleurs. La sauvegarde perd **80 octets, le même
+nombre sur les vingt-cinq graines**.
+⚠ **ÉCART DÉCLARÉ : LE SCÉNARIO DE `bases.test.js` N'ARME PLUS D'AÉRONEF.** Lui
+poser un Aérodrome aurait changé la phase de construction et effacé la
+démonstration. La couverture des aéronefs au combat reste celle de
+`combat.test.js` et de `raid.test.js`.
+⚠⚠ **`test/batiments-de-production.js` ENTRE, ET IL EST NOMMÉ DANS LA LISTE
+BLANCHE** de `documentation.test.js`, comme `png-rgba.js`. SIX fichiers de test
+en ont eu besoin le même jour : tout montage qui pose une UNITÉ doit désormais
+porter le bâtiment de son châssis, comme il porte déjà un QG pour avoir un
+budget. Six recopies auraient divergé au premier déplacement d'un bâtiment.
+⚠ **DIX TESTS ENTRENT — `PD T1` à `PD T10` — ET LE COMPTE PASSE DE 1 264 À
+1 274.** **Aucune assertion n'a été retirée ni assouplie** ; les montages
+existants gagnent le bâtiment qui leur manque, et deux gardes changent de liste
+sans changer de force — les imports de `ui/arsenal.js` (quatre modules de
+`data/`, aucun de rendu) et la liste blanche de `test/`.
+⚠⚠ **DEUX ÉCARTS D'OUTILLAGE, DÉCLARÉS PARCE QU'ILS ONT COÛTÉ LA BASE.** Le
+clone était en **CRLF** (`core.autocrlf=true`) : dix tests de balayage de source
+tombaient sur des motifs qui cherchent `
+`. Corrigé par `core.autocrlf false`
+sur CE dépôt, puis re-checkout. Et **Node 20.11.1 n'a pas `Dirent.parentPath`**
+(ajouté en 20.12) ni le glob de `--test` : quatre tests de plus tombaient, et
+`npm test` ne trouvait aucun fichier. Base mesurée sous **Node 22.14.0** :
+**1 264 pass / 0 fail**, `dist/index.html` **8 012 076 octets** — la référence de
+CLAUDE.md, à l'octet.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE DÉCLARE
+NON EXÉCUTÉ.** Le lot ne change aucun pixel : il ajoute un refus dans le modèle.
+
+**Auparavant, après le lot ÉCRAN-DÉFENSE :**
 `npm test` → **1264 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 012 076 octets**, 0 référence externe. Coût **+8 265 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis le lot

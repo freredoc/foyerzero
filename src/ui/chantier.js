@@ -1895,11 +1895,24 @@ export function posablesDeLaBase(etat) {
  *
  * ⚠ UNE PIÈCE VERROUILLÉE RESTE DANS LA PALETTE, GRISÉE — même arbitrage que
  * pour les bâtiments uniques du Chantier, le 28/08 : « griser le bouton, pas le
- * faire disparaître ». C'est la différence avec la palette de l'écran Offense,
- * où le filtrage RETIRE : là-bas la palette est seule sur son écran et
- * s'allonge en début de partie ; ici elle partage la barre du bas avec celle
- * des bâtiments, et une palette qui change de longueur déplace les vignettes
- * sous le doigt entre deux gestes.
+ * faire disparaître ». Ici la palette partage la barre du bas avec celle des
+ * bâtiments, et une palette qui change de longueur déplace les vignettes sous le
+ * doigt entre deux gestes.
+ *
+ * ⚠⚠ ET LA PHRASE QUI OPPOSAIT CETTE PALETTE À CELLE DE L'OFFENSE EST PARTIE AU
+ * LOT PRODUCTION-EN-DÉFENSE, PARCE QU'ELLE ÉTAIT FAUSSE. Elle disait « c'est la
+ * différence avec la palette de l'écran Offense, où le filtrage RETIRE ». Or
+ * `unitesDeLaPalette` a cessé de filtrer le 29/08 — son propre en-tête le dit :
+ * « elle grise, elle ne filtre plus », Ethan ayant rapporté deux unités
+ * « indisponibles » qu'il attendait. Les DEUX palettes gardent donc une longueur
+ * fixe, et il n'y avait plus de différence à décrire. Mesuré par `PD T8` et
+ * `PD T9`, qui comptent les deux longueurs.
+ *
+ * ⚠⚠ LA VRAIE DIFFÉRENCE ÉTAIT AILLEURS, ET C'EST CE QU'ETHAN A VU LE 07/09 :
+ * l'écran Offense DEMANDE à `unitesDeLaPalette` avant de poser et refuse au
+ * toucher, là où cet écran-ci grisait sans que rien derrière la vignette ne
+ * refuse le geste. Ce n'est plus vrai : la règle est descendue dans
+ * `sim/state.js`, qui garde les deux forces et les trois chemins de geste.
  *
  * @param {object} etat
  * @returns {Array<{id, nom, sigle, points, raison, verrouille}>}

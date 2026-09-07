@@ -67,6 +67,7 @@ import {
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
   ORDRE_PALETTE,
+  messageSansBatiment,
 } from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
@@ -2587,7 +2588,13 @@ function baseAvecCommandement(niveauOffense = 3, niveauDefense = 2, avecProducti
 }
 
 test('compteur — la défense et l\'offense montrent un nombre dès que leur QG est posé', () => {
-  const etat = baseAvecCommandement(3, 2);
+  // ⚠ `avecProduction` PASSE À `true` AU LOT PRODUCTION-EN-DÉFENSE. Ce test parle
+  // de POINTS et de budget, pas de bâtiment de production : sans les trois,
+  // `poserEffectif` refuserait l'unité et le compteur mesurerait un autre verrou
+  // que le sien. C'est le partage que l'en-tête du montage annonce déjà — « on
+  // les pose quand le test parle de niveaux, on les omet quand il parle du
+  // bâtiment ».
+  const etat = baseAvecCommandement(3, 2, true);
 
   // Sans rien de posé : zéro engagé, mais un budget, donc une capacité.
   const videOff = compteurDeContexte(etat, 'offense');
@@ -2613,7 +2620,9 @@ test('compteur — la défense et l\'offense montrent un nombre dès que leur QG
 });
 
 test('compteur — la saturation se dit quand le budget est atteint, jamais avant', () => {
-  const etat = baseAvecCommandement(1, 1);
+  // ⚠ `avecProduction` À `true` — même raison qu'au test précédent : ce qui est
+  // mesuré est la SATURATION du budget, pas le bâtiment de production.
+  const etat = baseAvecCommandement(1, 1, true);
   const budget = budgetOffense(1);
   let engages = 0;
   let colonne = 1;
@@ -2630,7 +2639,9 @@ test('compteur — la saturation se dit quand le budget est atteint, jamais avan
 });
 
 test('résumé — les trois niveaux du joueur sont désormais trois moyennes', () => {
-  const etat = baseAvecCommandement();
+  // ⚠ `avecProduction` À `true` — même raison qu'aux deux compteurs : ce test
+  // mesure des MOYENNES de niveau, pas un bâtiment de production.
+  const etat = baseAvecCommandement(3, 2, true);
 
   // Rien de posé : deux des trois sont `null`, donc « — » à l'écran. C'est
   // l'état d'une base neuve, et ce n'est pas un défaut de calcul.
@@ -5905,4 +5916,79 @@ test('ÉD T14 — la palette ne change pas de longueur quand une pièce se pose'
   ecran.peindre(etat);
   assert.equal(doc.getElementById('chantier-palette').children.length, avant,
     'la palette a changé de longueur : les vignettes se déplacent sous le doigt');
+});
+
+// ---------------------------------------------------------------------------
+// PRODUCTION-EN-DÉFENSE — la palette ne change pas, le message n'a qu'une
+// source, 07/09/2026
+// ---------------------------------------------------------------------------
+
+test('PD T7 — le message du modèle et celui de la palette viennent de `messageSansBatiment`', () => {
+  // ⚠⚠ UNE SEULE ÉCRITURE DE LA PHRASE, ET C'EST LA CONDITION POUR QUE L'ÉCRAN
+  // ET LE MOTEUR DISENT LA MÊME CHOSE. La palette grise en disant « sans
+  // Caserne, pas d'infanterie » ; si le modèle refusait le geste avec une autre
+  // formulation, le joueur lirait deux phrases pour un seul fait.
+  const etat = baseAvecCommandement(3, 50, false, rosterDefensif());
+  const attendu = messageSansBatiment(BASE_BATIMENTS.caserne.nom.joueur, UNITES.meute.chassis);
+
+  const vignette = posablesDeLaDefense(etat).find((p) => p.id === 'meute');
+  assert.equal(vignette.raison, attendu, 'la palette n\'emploie plus `messageSansBatiment`');
+
+  const refus = moteurEtat.problemesDeLaPoseDEffectif(
+    etat, 'garnison', { id: 'meute', rangee: 6, colonne: 3, niveau: 1 },
+  );
+  assert.equal(refus.length, 1, 'le modèle refuse pour une autre raison que le bâtiment');
+  assert.equal(refus[0].message, attendu, 'le modèle a sa propre phrase');
+  assert.equal(refus[0].message, vignette.raison);
+
+  // ⚠ ET LA PREUVE PAR LA SOURCE : la phrase se CONSTRUIT à un seul endroit.
+  // Une égalité de chaînes passerait aussi si deux fichiers écrivaient le même
+  // texte à la main ; c'est ce balayage-ci qui l'interdit.
+  const nu = (chemin) => sansCommentaires(readFileSync(join(RACINE, chemin), 'utf8'));
+  for (const chemin of ['src/sim/state.js', 'src/ui/chantier.js', 'src/ui/offense.js',
+    'src/ui/arsenal.js']) {
+    assert.ok(!nu(chemin).includes(', pas '), `${chemin} réécrit la phrase du refus`);
+  }
+  const base = nu('src/data/base.js');
+  assert.equal(base.split(', pas ').length - 1, 1,
+    'la phrase du refus n\'est plus écrite exactement une fois dans data/base.js');
+});
+
+test('PD T8 — non-régression : la palette de Défense GRISE toujours, elle ne retire pas', () => {
+  // ⚠⚠ LE GRISAGE N'EST PAS LE DÉFAUT, ET IL NE SE CORRIGE PAS. Arbitrage du
+  // 28/08 — « griser le bouton, pas le faire disparaître » —, et son motif tient
+  // toujours : cette palette PARTAGE la barre du bas avec celle des bâtiments,
+  // et une palette qui change de longueur déplace les vignettes sous le doigt
+  // entre deux gestes. Ce lot descend la règle dans le modèle ; il ne touche pas
+  // à ce que l'écran montre.
+  const roster = rosterDefensif().length;
+  const avec = posablesDeLaDefense(baseAvecCommandement(3, 50, true, rosterDefensif()));
+  const sans = posablesDeLaDefense(baseAvecCommandement(3, 50, false, rosterDefensif()));
+
+  assert.equal(sans.length, roster, 'la palette de Défense a changé de longueur');
+  assert.equal(avec.length, roster, 'la palette de Défense a changé de longueur');
+  assert.deepEqual(sans.map((p) => p.id), avec.map((p) => p.id),
+    'la palette de Défense ne montre plus les mêmes pièces dans le même ordre');
+
+  // La pièce refusée est PRÉSENTE, et elle est verrouillée — les deux à la fois.
+  const vignette = sans.find((p) => p.id === 'meute');
+  assert.notEqual(vignette, undefined, 'la Meute a disparu de la palette de Défense');
+  assert.equal(vignette.verrouille, true, 'la Meute est vive sans Caserne');
+  assert.equal(avec.find((p) => p.id === 'meute').verrouille, false,
+    'la Meute reste verrouillée avec la Caserne : le montage ne discrimine rien');
+
+  // ⚠ ET LE MOTEUR, LUI, REFUSE DERRIÈRE LA VIGNETTE — c'est tout le lot. Avant
+  // le 07/09 cette assertion-ci était FAUSSE : la vignette grisait et la pose
+  // passait.
+  const piece = { id: 'meute', rangee: 6, colonne: 3, niveau: 1 };
+  assert.equal(
+    moteurEtat.problemesDeLaPoseDEffectif(
+      baseAvecCommandement(3, 50, false, rosterDefensif()), 'garnison', piece,
+    ).length, 1,
+  );
+  assert.deepEqual(
+    moteurEtat.problemesDeLaPoseDEffectif(
+      baseAvecCommandement(3, 50, true, rosterDefensif()), 'garnison', piece,
+    ), [],
+  );
 });

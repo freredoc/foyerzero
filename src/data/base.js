@@ -1458,6 +1458,50 @@ export const BATIMENT_DE_CHASSIS = {
 };
 
 /**
+ * Comment le joueur appelle chaque famille de châssis.
+ *
+ * ⚠ CE SONT LES MOTS D'ETHAN, LE 29/08 : « Infanterie inconstructible sans
+ * caserne. Même règle pour véhicule et avion. » On lui rend son vocabulaire
+ * dans le message de refus plutôt que d'y écrire « escouade », qui est le nom
+ * INTERNE du châssis et n'apparaît nulle part à l'écran.
+ */
+export const FAMILLE_DE_CHASSIS = {
+  escouade: 'infanterie',
+  blinde: 'véhicule',
+  aeronef: 'avion',
+};
+
+/**
+ * Ce qu'on dit d'une unité dont le bâtiment de production manque.
+ *
+ * ⚠ LA PHRASE ÉVITE L'ARTICLE DU BÂTIMENT, ET C'EST VOULU. « une Caserne » mais
+ * « un Dépôt de véhicules » : porter le genre demanderait un champ de plus dans
+ * `BASE_BATIMENTS` pour onze bâtiments, dont trois seulement s'en serviraient.
+ * « sans Caserne » est juste des deux côtés. L'élision, elle, ne se contourne
+ * pas — « pas d'infanterie » contre « pas de véhicule » — et se fait ici.
+ *
+ * ⚠⚠ ELLE A DESCENDU D'UN CRAN AU LOT PRODUCTION-EN-DÉFENSE, ET C'EST LA RÈGLE
+ * QUI L'A TIRÉE. Elle vivait dans `ui/arsenal.js`, seul endroit qui en avait
+ * besoin tant que la règle n'existait QUE dans les écrans ; `sim/state.js` la
+ * dit maintenant au geste, et `sim/` n'importe jamais de `ui/`. Elle est donc
+ * ici, au-dessus des deux, à côté de la table qu'elle sert — `ui/arsenal.js` la
+ * RÉEXPORTE, si bien que les deux palettes n'ont pas changé d'import et qu'il
+ * n'existe toujours qu'UNE écriture de la phrase.
+ *
+ * @param {string} nomBatiment nom joueur du bâtiment manquant
+ * @param {string} chassis clé de `FAMILLE_DE_CHASSIS`
+ * @returns {string}
+ */
+export function messageSansBatiment(nomBatiment, chassis) {
+  const famille = FAMILLE_DE_CHASSIS[chassis];
+  if (famille === undefined) {
+    throw new Error(`arsenal : châssis inconnu « ${chassis} »`);
+  }
+  const elide = /^[aeiouyéèêàâîïôûù]/i.test(famille) ? `d'${famille}` : `de ${famille}`;
+  return `sans ${nomBatiment}, pas ${elide}`;
+}
+
+/**
  * Le stockage propre d'un bâtiment à ce niveau — la poche du Chantier.
  *
  * Elle part de `stockagePropre`, qui vaut au niveau 1, et suit

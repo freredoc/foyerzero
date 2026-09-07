@@ -28,11 +28,13 @@ import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { gratuitesDe, ARBRE_RECHERCHE } from '../src/data/recherche.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
-import { coutDeMonteeOffense, coutDeMonteeDefense } from '../src/data/couts-militaires.js';
+import {
+  coutDeMonteeOffense, coutDeMonteeDefense, rosterDefensif,
+} from '../src/data/couts-militaires.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { niveauDeLaDefense, niveauDeLArmee } from '../src/sim/niveau-de-base.js';
 import {
-  BASE_BATIMENTS,
+  BASE_BATIMENTS, messageSansBatiment,
   coutDeMontee, coutCumule, remboursementDuNiveau, emplacementsDuNiveau,
 } from '../src/data/base.js';
 import {
@@ -49,6 +51,7 @@ import {
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 // ⚠ UN INSTANT MURAL FIXE, JAMAIS L'HORLOGE DE LA MACHINE. Depuis la v6,
 // `serialiser` et `charger` reçoivent l'instant présent en argument. Le prendre
@@ -1316,6 +1319,28 @@ function etatAvecCommandement(niveauOffense = 4, niveauDefense = 6) {
     {
       id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: niveauDefense, degatsMilli: 0,
     },
+    // ⚠⚠ LES TROIS BÂTIMENTS DE PRODUCTION ENTRENT AU LOT PRODUCTION-EN-DÉFENSE,
+    // ET SANS EUX CE MONTAGE NE POSERAIT PLUS UNE SEULE UNITÉ. La règle
+    // « infanterie inconstructible sans caserne » est descendue dans le modèle :
+    // elle garde `problemesDeLaPoseDEffectif`, `problemesDuDeplacementDEffectif`
+    // et `problemesDeLaPermutationDEffectif`. Un montage qui pose une Meute doit
+    // donc porter la Caserne, comme il porte déjà les deux QG pour avoir un
+    // budget — sinon le refus viendrait d'ailleurs et le test ne prouverait plus
+    // ce qu'il annonce. ⚠ LES OUVRAGES FIXES, EUX, N'EN ONT JAMAIS EU BESOIN :
+    // les tests qui ne posent que des Merlons passent sans ces trois lignes.
+    //
+    // ⚠ LES TROIS SONT `unique: true`, DONC ILS NE SE TOUCHENT PAS — ni entre
+    // eux, ni les deux QG de la rangée 11, ni le Chantier de (18, 5). Rangée 13,
+    // colonnes 1, 4 et 7 : deux cases d'écart partout.
+    {
+      id: 'caserne', rangee: 13, colonne: 1, niveau: 1, degatsMilli: 0,
+    },
+    {
+      id: 'depotDeVehicules', rangee: 13, colonne: 4, niveau: 1, degatsMilli: 0,
+    },
+    {
+      id: 'aerodrome', rangee: 13, colonne: 7, niveau: 1, degatsMilli: 0,
+    },
   );
   for (let i = baseCourante(etat).economie.residus.length; i < baseCourante(etat).disposition.length; i += 1) {
     baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
@@ -1734,6 +1759,13 @@ test('obstacles — ils sont dérivés, omis de la sauvegarde, et redéduits au 
 
 test('obstacles — une pièce de garnison ne se pose pas dessus, une unité d\'assaut s\'en moque', () => {
   const etat = creerEtat(4242);
+  // ⚠ LA CASERNE EST DU MONTAGE — lot PRODUCTION-EN-DÉFENSE. La seconde moitié
+  // du test pose des Meutes en armée et exige une liste VIDE : sans Caserne,
+  // elle lirait « sans Caserne, pas d'infanterie » et croirait avoir mesuré une
+  // règle de terrain qui aurait fui dans l'armée. Le Merlon, lui, n'en a jamais
+  // eu besoin — c'est un ouvrage fixe, sans châssis.
+  baseCourante(etat).disposition[0].niveau = 20;
+  poser(etat, 'caserne', 11, 3);
   const o = baseCourante(etat).obstacles.cases[0];
 
   const refus = problemesDeLaPoseDEffectif(
@@ -2016,6 +2048,13 @@ test('AMÉLIORER-PIÈCE — UN moteur pour les deux forces, et le barème vient 
 /** Une base avec deux unités d'assaut posées à des cases distinctes. */
 function armeeDeDeux(graine = 77) {
   const etat = creerEtat(graine);
+  // ⚠ LES DEUX BÂTIMENTS DE PRODUCTION SONT DU MONTAGE, PAS DU SUJET — lot
+  // PRODUCTION-EN-DÉFENSE. La Meute est une escouade, le Ratisseur un blindé :
+  // sans Caserne ni Dépôt de véhicules, `poserEffectif` refuse et les deux
+  // tests de permutation tomberaient pour une raison qui n'est pas la leur.
+  baseCourante(etat).disposition[0].niveau = 20;
+  poser(etat, 'caserne', 11, 3);
+  poser(etat, 'depotDeVehicules', 11, 6);
   poserEffectif(etat, 'armee', {
     id: 'meute', vague: 1, colonne: 2, niveau: 3,
   });
@@ -2124,4 +2163,254 @@ test('RDR T11 — une permutation ne coûte rien', () => {
     creerEtat(77).bases[0].economie.ressources,
     'la permutation a débité une ressource',
   );
+});
+
+// ---------------------------------------------------------------------------
+// PRODUCTION-EN-DÉFENSE — la règle du bâtiment de production descend dans le
+// modèle, 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, 07/09, POINT 11 : « Je ne peux pas construire un fusilier alors que
+// je n'ai pas de caserne — c'est vrai pour l'armée, FAUX EN DÉFENSE. » Il avait
+// raison, et le défaut n'était pas dans `batimentDeProductionManquant`, qui
+// répondait juste : la règle n'était LUE que par les deux palettes. En Offense
+// la vignette DISPARAÎT, donc le geste est impossible ; en Défense elle reste
+// GRISÉE — arbitrage du 28/08, intact — et rien derrière elle ne refusait le
+// geste.
+//
+// ⚠⚠ ET ELLE NE GARDE QUE LE GESTE. `verifierEtat` ne la connaît pas et ne doit
+// jamais la connaître : une Caserne tombée au raid sous une garnison déjà posée
+// rendrait la partie injouable pour une faute que le joueur n'a pas commise.
+// `PD T6` est le test de cette moitié-là, et c'est le plus important du lot.
+
+/**
+ * Une base qui a TOUT pour poser une unité, SAUF le bâtiment de production.
+ *
+ * ⚠⚠ LES TROIS AUTRES CONDITIONS SONT LÀ EXPRÈS, ET SANS ELLES LES TESTS NE
+ * PROUVERAIENT RIEN. Sans QG de défense il n'y a pas de budget, sans recherche
+ * acquise la palette verrouille, et sans Complexe de défense la garnison ne
+ * revient jamais : un refus mesuré sur une base neuve pourrait venir de
+ * n'importe laquelle des trois. Ici, la seule chose qui manque est le bâtiment.
+ *
+ * ⚠ LES BÂTIMENTS SONT POUSSÉS À LA MAIN, comme dans `etatAvecCommandement` :
+ * un montage ne doit pas dépendre du stock de départ ni du barème de
+ * construction. Les quatre sont `unique: true` et ne se touchent pas — rangée 11
+ * colonnes 1 et 8, rangée 16 colonne 8, Chantier en (18, 5) —, et les colonnes
+ * 1, 4 et 7 de la rangée 13 restent libres pour `poserLesBatimentsDeProduction`.
+ */
+function baseSansProduction() {
+  const etat = creerEtat(20260907);
+  baseCourante(etat).disposition[0].niveau = 12;
+  baseCourante(etat).disposition.push(
+    { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: 8, degatsMilli: 0 },
+    { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: 8, degatsMilli: 0 },
+    { id: 'complexeDeDefense', rangee: 16, colonne: 8, niveau: 1, degatsMilli: 0 },
+  );
+  for (let i = baseCourante(etat).economie.residus.length;
+    i < baseCourante(etat).disposition.length; i += 1) {
+    baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  etat.recherche.acquises.defense = [...rosterDefensif()].sort();
+  etat.recherche.acquises.offense = Object.keys(UNITES).sort();
+  return etat;
+}
+
+/** Le Fusilier de garnison du brief, sur une case libre de la bande de défense. */
+const FUSILIER_EN_GARNISON = { id: 'meute', rangee: 6, colonne: 3, niveau: 1 };
+
+test('PD T1 — poser un Fusilier en garnison sans Caserne est REFUSÉ', () => {
+  const etat = baseSansProduction();
+
+  // ⚠ FALSIFIABILITÉ D'ABORD : le montage doit être complet par ailleurs.
+  assert.notEqual(niveauDeCommandement(etat, 'garnison'), null, 'montage : pas de QG de défense');
+  assert.ok(etat.recherche.acquises.defense.includes('meute'),
+    'montage : la Meute n\'est pas acquise');
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'montage : la Caserne est déjà là');
+
+  const problemes = problemesDeLaPoseDEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
+  assert.ok(problemes.length > 0, 'la garnison accepte encore un Fusilier sans Caserne');
+  assert.deepEqual(problemes.map((p) => p.code), ['sans-batiment-de-production'],
+    'le refus vient d\'ailleurs que du bâtiment de production');
+  // ⚠ LE MESSAGE VIENT DE `messageSansBatiment`, ET C'EST LE MÊME QUE CELUI DES
+  // PALETTES — voir `PD T7`, qui le confronte à celui de l'écran.
+  assert.equal(problemes[0].message, messageSansBatiment('Caserne', 'escouade'));
+
+  // ⚠ ET LA MÊME CASE ACCEPTE UN OUVRAGE FIXE. Sans cette ligne, le test
+  // passerait aussi si la case était simplement injouable.
+  assert.deepEqual(
+    problemesDeLaPoseDEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, id: 'merlon' }), [],
+    'la case elle-même refuse : le montage ne mesure pas le bâtiment',
+  );
+
+  // Et le geste LÈVE, comme partout : « problèmes → si vide, agir ; sinon, toast ».
+  assert.throws(() => poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON), /Caserne/);
+  assert.equal(baseCourante(etat).garnison.length, 0, 'une pose refusée a quand même écrit');
+});
+
+test('PD T2 — avec la Caserne, la même pose est ACCEPTÉE', () => {
+  // ⚠⚠ C'EST LE TEST QUI DISTINGUE « LA RÈGLE MARCHE » DE « RIEN NE PASSE PLUS ».
+  // Sans lui, une règle qui refuserait TOUT laisserait PD T1 vert.
+  const etat = poserLesBatimentsDeProduction(baseSansProduction());
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), null,
+    'montage : la Caserne manque encore');
+  assert.deepEqual(problemesDeLaPoseDEffectif(etat, 'garnison', FUSILIER_EN_GARNISON), []);
+  poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
+  assert.equal(baseCourante(etat).garnison.length, 1);
+  assert.equal(baseCourante(etat).garnison[0].id, 'meute');
+});
+
+test('PD T3 — un mur n\'a besoin d\'aucun bâtiment de production', () => {
+  // ⚠ UNE BASE NEUVE : un Chantier, et rien d'autre. Un Merlon s'y pose.
+  const etat = creerEtat(20260907);
+  assert.equal(baseCourante(etat).disposition.length, 1,
+    'montage : la base neuve porte autre chose');
+  const mur = { id: 'merlon', rangee: 3, colonne: 1, niveau: 1 };
+  assert.deepEqual(problemesDeLaPoseDEffectif(etat, 'garnison', mur), []);
+  poserEffectif(etat, 'garnison', mur);
+  assert.equal(baseCourante(etat).garnison.length, 1);
+
+  // ⚠ ET C'EST VRAI DES NEUF OUVRAGES FIXES, pas du seul Merlon : aucun n'est
+  // dans `UNITES`, donc aucun n'a de châssis.
+  for (const id of Object.keys(DEFENSES)) {
+    assert.equal(batimentDeProductionManquant(etat, id), null, `${id} réclame un bâtiment`);
+  }
+});
+
+test('PD T4 — l\'armée est refusée aussi : la règle est UNE, pas deux', () => {
+  // ⚠⚠ C'EST LA LECTURE D'ETHAN, PRISE AU MOT. Il a dit « infanterie
+  // inconstructible sans caserne, même règle pour véhicule et avion », sans dire
+  // « à l'assaut » : la restreindre à un écran aurait été le choix arbitraire.
+  const etat = baseSansProduction();
+  const piece = { id: 'meute', vague: 1, colonne: 1, niveau: 1 };
+  assert.deepEqual(problemesDeLaPoseDEffectif(etat, 'armee', piece).map((p) => p.code),
+    ['sans-batiment-de-production']);
+  assert.throws(() => poserEffectif(etat, 'armee', piece), /Caserne/);
+
+  // Les trois familles réclament leur bâtiment, nommément — et le message le dit.
+  for (const [id, batiment] of [['meute', 'Caserne'], ['ratisseur', 'Dépôt de véhicules'],
+    ['busard', 'Aérodrome']]) {
+    const refus = problemesDeLaPoseDEffectif(etat, 'armee', { id, vague: 2, colonne: 2, niveau: 1 });
+    assert.equal(refus.length, 1, `${id} : un seul refus attendu`);
+    assert.ok(refus[0].message.includes(batiment), `${id} : le refus ne nomme pas ${batiment}`);
+  }
+
+  // Falsifiable : avec les trois bâtiments, les trois passent.
+  const arme = poserLesBatimentsDeProduction(baseSansProduction());
+  for (const [i, id] of ['meute', 'ratisseur', 'busard'].entries()) {
+    assert.deepEqual(
+      problemesDeLaPoseDEffectif(arme, 'armee', { id, vague: 1, colonne: i + 1, niveau: 1 }), [],
+      `${id} : refusé alors que son bâtiment est posé`,
+    );
+  }
+});
+
+test('PD T5 — les TROIS chemins de geste sont gardés : poser, déplacer, permuter', () => {
+  // ⚠⚠ UN CHEMIN OUBLIÉ EST UN CHEMIN PAR LEQUEL L'ÉCRAN CONTOURNE LA RÈGLE. Le
+  // brief les nomme tous les trois ; ce sont exactement les trois fonctions de
+  // `sim/state.js` qui rendent une liste de problèmes pour une force — un `grep`
+  // sur `problemesDe.*DEffectif` n'en trouve pas d'autre.
+  const etat = poserLesBatimentsDeProduction(baseSansProduction());
+  poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
+  poserEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, colonne: 5 });
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 4, colonne: 7, niveau: 1 });
+
+  // Les trois gestes passent TANT QUE la Caserne est là — sinon le refus mesuré
+  // plus bas ne dirait rien.
+  assert.deepEqual(
+    problemesDuDeplacementDEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 }), [],
+  );
+  assert.deepEqual(problemesDeLaPermutationDEffectif(etat, 'garnison', 0, 1), []);
+
+  // La Caserne tombe.
+  const index = baseCourante(etat).disposition.findIndex((b) => b.id === 'caserne');
+  demolir(etat, index);
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'montage : la Caserne est restée');
+
+  // 1. Poser.
+  // ⚠ LA CASE SE CHERCHE, ELLE NE S'ÉCRIT PAS. Les obstacles se tirent de la
+  // fondation : une colonne choisie à la main tombe sur un rocher une graine
+  // sur deux, et le test lirait DEUX codes là où il en attend un.
+  const libre = (rangee) => {
+    for (let c = 1; c <= GRILLE.largeur; c += 1) {
+      const mur = { id: 'merlon', rangee, colonne: c, niveau: 1 };
+      if (problemesDeLaPoseDEffectif(etat, 'garnison', mur).length === 0) return c;
+    }
+    throw new Error(`montage : aucune case libre en rangée ${rangee}`);
+  };
+  assert.deepEqual(
+    problemesDeLaPoseDEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, colonne: libre(6) })
+      .map((p) => p.code), ['sans-batiment-de-production'],
+  );
+  // 2. Déplacer.
+  assert.deepEqual(
+    problemesDuDeplacementDEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 })
+      .map((p) => p.code), ['sans-batiment-de-production'],
+  );
+  assert.throws(() => deplacerEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 }), /Caserne/);
+  // 3. Permuter — et le refus ne se dit qu'UNE fois pour deux Fusiliers, le
+  //    dédoublonnage du couple code+message s'en charge.
+  const permutation = problemesDeLaPermutationDEffectif(etat, 'garnison', 0, 1);
+  assert.deepEqual(permutation.map((p) => p.code), ['sans-batiment-de-production']);
+  assert.throws(() => permuterEffectif(etat, 'garnison', 0, 1), /Caserne/);
+
+  // ⚠ ET L'OUVRAGE FIXE, LUI, BOUGE ENCORE. Un mur n'a jamais eu besoin d'une
+  // caserne, et la règle ne doit pas figer toute la garnison.
+  assert.deepEqual(
+    problemesDuDeplacementDEffectif(etat, 'garnison', 2, { rangee: 5, colonne: 7 }), [],
+  );
+  assert.doesNotThrow(() => deplacerEffectif(etat, 'garnison', 2, { rangee: 5, colonne: 7 }));
+});
+
+test('PD T6 — le CHARGEMENT n\'est jamais refusé, et c\'est le test du lot', () => {
+  // ⚠⚠ LA RÈGLE PEUT DEVENIR FAUSSE SOUS UNE COMPOSITION DÉJÀ POSÉE — la Caserne
+  // démolie, ou tombée au raid. Refuser le chargement rendrait la partie
+  // injouable pour une faute que le joueur n'a pas commise. On SIGNALE au geste,
+  // le joueur purge.
+  const etat = poserLesBatimentsDeProduction(baseSansProduction());
+  poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
+  poserEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, colonne: 5 });
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+  demolir(etat, baseCourante(etat).disposition.findIndex((b) => b.id === 'caserne'));
+  assert.equal(batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'montage : la Caserne est restée');
+
+  const json = serialiser(etat, 1_700_000_000_000);
+  const relu = charger(json, 1_700_000_000_000);
+  assert.equal(baseCourante(relu).garnison.length, 2,
+    'la garnison sans Caserne a été refusée au chargement');
+  assert.equal(baseCourante(relu).armee.length, 1,
+    'l\'armée sans Caserne a été refusée au chargement');
+  assert.deepEqual(baseCourante(relu).garnison, baseCourante(etat).garnison);
+
+  // ⚠ ET LE CODE DU REFUS N'EST PAS DANS L'ENSEMBLE DES TOLÉRÉS : il n'a pas
+  // besoin d'y être, puisqu'il n'entre jamais dans le chemin de chargement. Une
+  // règle absente vaut mieux qu'une règle présente et filtrée — la seconde tient
+  // par un `Set` qu'on peut vider par mégarde.
+  assert.ok(!CODES_TOLERES_AU_CHARGEMENT.has('sans-batiment-de-production'));
+  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins', 'obstacle']);
+});
+
+test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegarde ne se réécrit', () => {
+  // ⚠⚠ SI LE LOT S'ÉTAIT SURPRIS À VOULOIR UNE MIGRATION, C'EST QU'IL AURAIT MIS
+  // LA RÈGLE AU MAUVAIS ENDROIT. Elle ne change AUCUN champ de la sauvegarde :
+  // elle lit `disposition`, qui est là depuis la v1.
+  //
+  // ⚠ LE NOMBRE EST ÉCRIT EN CLAIR, ET C'EST VOULU. Un lot qui bumpe
+  // légitimement `SAVE_VERSION` doit passer par cette ligne et la corriger en le
+  // sachant ; un `>=` laisserait un bump involontaire passer sans un mot.
+  assert.equal(SAVE_VERSION, 27, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION');
+
+  // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
+  const etat = poserLesBatimentsDeProduction(baseSansProduction());
+  poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
+  demolir(etat, baseCourante(etat).disposition.findIndex((b) => b.id === 'caserne'));
+  const json = serialiser(etat, 1_700_000_000_000);
+  const avant = JSON.parse(json);
+  const apres = migrer(JSON.parse(json));
+  assert.deepEqual(apres, avant, 'une sauvegarde v27 a été réécrite par une migration');
+
+  // Et l'aller-retour complet rend le MÊME texte, à l'octet.
+  assert.equal(serialiser(charger(json, 1_700_000_000_000), 1_700_000_000_000), json);
 });

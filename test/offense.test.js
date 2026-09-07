@@ -21,13 +21,16 @@ import { existeDansAtlas } from '../src/render/sprite.js';
 import { couchesDeLEntite } from '../src/render/scene.js';
 import {
   creerEtat, poser, poserEffectif, niveauDeCommandement, pointsEngages,
+  problemesDeLaPoseDEffectif,
 } from '../src/sim/state.js';
+import { BASE_BATIMENTS, BATIMENT_DE_CHASSIS, messageSansBatiment } from '../src/data/base.js';
 import { acquisesDe } from '../src/sim/recherche.js';
 import { ligneAAfficher } from '../src/ui/chantier.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -530,6 +533,12 @@ function baseAvecCommandement(niveau = 12) {
   baseCourante(etat).disposition[0].niveau = 5; // dix emplacements
   baseCourante(etat).disposition.push({ id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau });
   baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  // ⚠⚠ ET LES TROIS BÂTIMENTS DE PRODUCTION — lot PRODUCTION-EN-DÉFENSE. La
+  // règle « infanterie inconstructible sans caserne » est descendue dans le
+  // modèle : un montage qui pose une Meute doit porter la Caserne, exactement
+  // comme il porte le Centre de commandement pour avoir un budget. Sans eux,
+  // chaque test de cet écran tomberait sur un refus qui n'est pas son sujet.
+  poserLesBatimentsDeProduction(etat);
   return etat;
 }
 
@@ -1229,5 +1238,54 @@ test('RDR T9 bis — déposer sur une case occupée PERMUTE, au lieu de refuser'
   assert.deepEqual(
     { v: armee[0].vague, c: armee[0].colonne }, { v: 3, c: 7 },
     'reposer une pièce sur sa propre case ne la laisse plus en place',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// PRODUCTION-EN-DÉFENSE — l'autre palette, 07/09/2026
+// ---------------------------------------------------------------------------
+
+test('PD T9 — non-régression : la palette d\'Offense ne retire pas non plus, elle GRISE', () => {
+  // ⚠⚠ LE BRIEF DEMANDAIT « LA PALETTE D'OFFENSE RETIRE TOUJOURS », ET C'EST LA
+  // PRÉMISSE QUI ÉTAIT PÉRIMÉE — mesuré, pas supposé. Cette palette a cessé de
+  // filtrer le 29/08 : Ethan avait rapporté deux unités « indisponibles » qu'il
+  // attendait, et une palette qui CACHE ne peut pas répondre à ça. Les deux
+  // écrans grisent donc, et depuis ce lot les deux sont gardés par le modèle. Le
+  // commentaire de `posablesDeLaDefense` qui affirmait le contraire est parti
+  // avec cette mesure — un commentaire qui décrit un état révolu envoie chercher
+  // une différence qui n'existe plus.
+  const roster = Object.keys(UNITES).length;
+
+  const sansRien = unitesDeLaPalette(creerEtat(7));
+  assert.equal(sansRien.length, roster, 'la palette d\'Offense a changé de longueur');
+
+  const avecQg = baseAvecCommandement(GEOGRAPHIE.niveauPlafond);
+  avecQg.recherche.acquises.offense = Object.keys(UNITES).sort();
+  const armee = unitesDeLaPalette(avecQg);
+  assert.equal(armee.length, roster, 'la palette d\'Offense a changé de longueur');
+  assert.deepEqual(sansRien.map((u) => u.id), armee.map((u) => u.id),
+    'la palette d\'Offense ne montre plus les mêmes unités dans le même ordre');
+
+  // ⚠ ET LA LONGUEUR NE BOUGE PAS ENTRE « AVEC » ET « SANS » BÂTIMENT DE
+  // PRODUCTION : c'est la propriété que ce test garde, et la seule qui
+  // distinguerait un filtrage revenu d'un grisage.
+  const sansProduction = { ...avecQg };
+  sansProduction.bases = avecQg.bases.map((b) => ({
+    ...b, disposition: b.disposition.filter((x) => !Object.values(BATIMENT_DE_CHASSIS).includes(x.id)),
+  }));
+  const eteinte = unitesDeLaPalette(sansProduction);
+  assert.equal(eteinte.length, roster, 'retirer les bâtiments a raccourci la palette');
+  assert.ok(eteinte.every((u) => !u.disponible), 'sans bâtiment, une unité reste constructible');
+  assert.ok(armee.some((u) => u.disponible), 'avec les bâtiments, rien n\'est constructible');
+
+  // Chaque vignette éteinte DIT pourquoi, et c'est la phrase du modèle.
+  const meute = eteinte.find((u) => u.id === 'meute');
+  assert.equal(meute.raison, messageSansBatiment(BASE_BATIMENTS.caserne.nom.joueur, 'escouade'));
+  assert.deepEqual(
+    problemesDeLaPoseDEffectif(sansProduction, 'armee', {
+      id: 'meute', vague: 1, colonne: 1, niveau: 1,
+    }).map((p) => p.message),
+    [meute.raison],
+    'le modèle et la palette ne disent plus la même phrase',
   );
 });

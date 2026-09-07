@@ -2527,3 +2527,236 @@ export const EMPREINTES_PAR_GRAINE_SATELLITES_RESPAWN = {
   '24': 'cd17222c6ec5ca4b',
   '25': '199570ba592e882b'
 };
+
+// ---------------------------------------------------------------------------
+// LOT PRODUCTION-EN-DÉFENSE — 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE QUI A CHANGÉ, ET POURQUOI C'EST LÉGITIME. La règle « infanterie
+// inconstructible sans caserne » vivait dans les deux PALETTES ; elle est
+// descendue dans `sim/state.js`, où elle garde les trois chemins de geste. Le
+// scénario bâtit une Caserne et un Dépôt de véhicules — jamais un Aérodrome :
+// la Crécelle, seul AÉRONEF qu'il arme, est donc désormais REFUSÉE. Un seul
+// geste change sur les vingt-cinq graines, et tout le reste en découle.
+//
+// ⚠⚠ CE QUI NE CHANGE PAS EST LA MOITIÉ QUI PROUVE. Les phases p01 à p03 sont
+// identiques AU BIT — la règle ne touche ni la carte, ni un stock, ni la
+// construction. Et sur les vingt-cinq graines : `gestes`, `nbCasesAtteignables`,
+// `deplacement`, `nbAttaquantes`, le nombre de cibles et la cible retenue des
+// DEUX raids, la non-fuite et l'exactitude de la simulation, et les clés du
+// rapport sont IDENTIQUES. Si la règle avait fui ailleurs que dans la pose
+// d'unité, l'un de ces sept-là aurait bougé.
+//
+// ⚠ ÉCART DÉCLARÉ : LE SCÉNARIO N'ARME PLUS D'AÉRONEF. C'est la conséquence
+// exacte de la règle sur CE montage, pas un contournement — lui poser un
+// Aérodrome aurait changé la phase de construction et effacé la démonstration.
+// La couverture des aéronefs au combat reste celle de `combat.test.js` et de
+// `raid.test.js`, qui montent leurs compositions sans passer par la base.
+
+export const DEPLACES_PAR_PRODUCTION_EN_DEFENSE = {
+  p04_arme: {
+    armee: '0ee0dc0154412cf4',
+  },
+  p05_18h: {
+    attaque: 'b8993f8339b23fdf',
+    armee: '0ee0dc0154412cf4',
+  },
+  p06_relu: {
+    attaque: 'b8993f8339b23fdf',
+    armee: '0ee0dc0154412cf4',
+  },
+  p07_raidProcheApres: {
+    sitesEntames: '01e712a0b413495d',
+    attaque: '4edad300d43a6946',
+    rapports: '4f297aaa07112cf8',
+    armee: '11cb8950dbc3d064',
+    economie: 'd458fb91e278780d',
+    satellites: 'd4da18a09e52dc51',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p08_100ticks: {
+    sitesEntames: '01e712a0b413495d',
+    attaque: 'ed9cbfd53c86388a',
+    rapports: '4f297aaa07112cf8',
+    armee: '11cb8950dbc3d064',
+    economie: '1fa3840200980c39',
+    satellites: 'd4da18a09e52dc51',
+    prochaineInstanceSatellite: '6909d921c42a6a0f',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p09_deplace: {
+    sitesEntames: '01e712a0b413495d',
+    attaque: 'ed9cbfd53c86388a',
+    rapports: '4f297aaa07112cf8',
+    armee: '11cb8950dbc3d064',
+    economie: '1fa3840200980c39',
+    satellites: 'd4da18a09e52dc51',
+    prochaineInstanceSatellite: '6909d921c42a6a0f',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p10_montee: {
+    sitesEntames: '01e712a0b413495d',
+    attaque: 'ed9cbfd53c86388a',
+    rapports: '4f297aaa07112cf8',
+    armee: '11cb8950dbc3d064',
+    economie: '1fa3840200980c39',
+    satellites: 'd4da18a09e52dc51',
+    prochaineInstanceSatellite: '6909d921c42a6a0f',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p11_raidOuvrageApres: {
+    recherche: 'e9cbef5482aba43b',
+    sitesEntames: 'f79e3fe3e039181a',
+    attaque: 'cda3bae69e4bd5cf',
+    rapports: '4211bd0928ece958',
+    armee: '7d71a342e23285b5',
+    economie: '1fa3840200980c39',
+    satellites: 'd4da18a09e52dc51',
+    prochaineInstanceSatellite: '6909d921c42a6a0f',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p12_veilleDuRaid: {
+    recherche: 'e9cbef5482aba43b',
+    sitesEntames: '79e5d505ede0831f',
+    attaque: '7127ad6376a69ab5',
+    rapports: '4211bd0928ece958',
+    armee: '7d71a342e23285b5',
+    economie: '1fa3840200980c39',
+    satellites: 'bba845b645ff0324',
+    prochaineInstanceSatellite: '2529d6cb8eecff00',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p13_apresLeRaid: {
+    recherche: 'e9cbef5482aba43b',
+    sitesEntames: '9a945114730f874b',
+    attaque: 'a36c1ddaa3c17846',
+    rapports: '97555f692e040c7f',
+    armee: '7d71a342e23285b5',
+    economie: '2b0318f7b2cd1621',
+    satellites: 'a3177522583bed29',
+    prochaineInstanceSatellite: '2e3ed9d766d07ec3',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+  p14_sousLeFeu: {
+    recherche: 'e9cbef5482aba43b',
+    sitesEntames: 'dd1c617b7796a5ef',
+    attaque: 'b8993f8339b23fdf',
+    rapports: '0d6d8e6ebab7e34b',
+    armee: '7d71a342e23285b5',
+    satellites: 'b1cdc1b7223c96c4',
+    reserveReparation: '0aa10caab41dcc49',
+    prochaineInstanceSatellite: 'cd4d61c347e3b2de',
+    satellitesDetruits: 'f46a0f0f9f1961b8',
+  },
+};
+
+/**
+ * L'empreinte par graine, recalculée : les vingt-cinq divergent, puisque
+ * `armee` bouge dès la phase 4 sur chacune.
+ */
+export const EMPREINTES_PAR_GRAINE_PRODUCTION_EN_DEFENSE = {
+  1: 'eb2f752ef310cc06',
+  2: 'fb8b1da46a76d6c3',
+  3: '764c5b2b184ad5ac',
+  4: 'b4d5256d88cc10c3',
+  5: '5eccdf09bea85f01',
+  6: 'a6d01dcfc46ce264',
+  7: 'c80bc3b185c6c995',
+  8: '4c0d4f569b6dbb38',
+  9: '6173c493692f3410',
+  10: '4b0f018c7ab83dc8',
+  11: 'd728eeb512271b69',
+  12: '723540ecd2bae642',
+  13: '5cb49d5321327fbb',
+  14: '73b6279c56346c7b',
+  15: '0fbcfcbdae128d5f',
+  16: '91d66307614e0578',
+  17: '668d5fd22773f18c',
+  18: '820ea027f5b799e5',
+  19: '87b087d951f4f578',
+  20: '5213cc99681fcef2',
+  21: '4b3ff5adece7980f',
+  22: 'e928999538819b4f',
+  23: '4978bf945855d79c',
+  24: '7aa1c673393d5e5f',
+  25: '0db2ea9a089cb698',
+};
+
+/**
+ * Les gestes d'armement, IDENTIQUES sur les vingt-cinq graines — c'est pourquoi
+ * c'est une chaîne et non une table de vingt-cinq. Le refus y est écrit en
+ * toutes lettres : un lot qui rouvrirait la pose sans Aérodrome le ferait
+ * tomber en NOMMANT le geste, là où une empreinte dirait seulement « ça a bougé ».
+ */
+export const GESTES_ARMER_PRODUCTION_EN_DEFENSE = 'gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle refusé: poserEffectif : pose illégale en armée — | arm meute@v4,6';
+
+/**
+ * Ce que la sauvegarde PERD : une unité d'armée en moins, quatre-vingts octets,
+ * le MÊME nombre sur les vingt-cinq graines. Il se retranche des quatre termes
+ * qui s'ajoutaient — chacun dit ce que son lot a coûté, et la somme reste
+ * lisible ligne par ligne. S'il dépendait de la partie, c'est que la règle
+ * aurait touché un CONTENU.
+ */
+export const OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE = 80;
+
+/**
+ * Les deux rapports de raid, déplacés sur les vingt-cinq graines : une armée à
+ * cinq unités au lieu de six ne rend pas le même rapport. Le NOMBRE DE CIBLES
+ * et la CIBLE RETENUE, eux, ne bougent pas — ce qui prouve que seule la
+ * composition a changé, pas le choix de la cible ni le barème.
+ */
+export const RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE = {
+  1: '569e4119667a1c65',
+  2: '28f95b83485ebba5',
+  3: 'c0e9f8804895f01f',
+  4: 'ddb1e10af49e21d0',
+  5: '07f57bf1546aa93e',
+  6: '1242bede58f33364',
+  7: 'c24bc5be74c3b213',
+  8: '6ef1a007f3745c4a',
+  9: '45296f70428590bd',
+  10: 'f813b1e4734b5ef3',
+  11: 'afcc5487cbedd943',
+  12: 'b754ed1f7fa81ece',
+  13: '6c026bc931789ffc',
+  14: 'd88fc8fa90a83a90',
+  15: '0ededbae5877b33f',
+  16: 'f629178259a21754',
+  17: 'a840a0ced394dc7b',
+  18: 'f34e67a46f68eae3',
+  19: 'cb34ae45ef4e263a',
+  20: '408d72e33f872509',
+  21: '2ec7f7ba6bff5be5',
+  22: '2e51e3c1d614c29f',
+  23: '565c2e7c334d0fd5',
+  24: '4ea46cdb84cf6d73',
+  25: '35a4980f428d418b',
+};
+
+export const RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE = {
+  1: '1ddc6268fb9265b7',
+  2: '6ac4481df08f43c4',
+  3: '351f971feb2981b3',
+  4: '94ab72cbdff225da',
+  5: '5759bd5e71a21375',
+  6: '1628ec749752db7c',
+  7: '5f68b354b2585822',
+  8: '21500a826b7664e3',
+  9: '4d259e021275a9fa',
+  10: '75c42e7ff7f8a7d6',
+  11: 'fbc4c45ca9200130',
+  12: '64320f7b2e1db5fb',
+  13: '3033c73b40b6e27b',
+  14: '25eabdfed7b36dc2',
+  15: 'b7a7fae541383672',
+  16: 'c09532e957206303',
+  17: '75b0f4c383eb9285',
+  18: 'ee075028ad27c70f',
+  19: '13933295e895bd9b',
+  20: '63f96ed453d8f2db',
+  21: 'c55920206e72d6c1',
+  22: '9ac116110a8c9735',
+  23: '08612cc76dc3c2d6',
+  24: '7b5bbbb6b420e1b0',
+  25: '2ae9695fa653910f',
+};
