@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.24 · build 126.
+Dernière révision : **07/09/2026**, version 0.99.25 · build 127.
 
 ---
 
@@ -42,7 +42,91 @@ Dernière révision : **07/09/2026**, version 0.99.24 · build 126.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot CONQUÊTE-24H), à confronter :**
+**Référence au 07/09/2026 (après le lot DÉPLACEMENT-ÉCLAIRÉ), à confronter :**
+`npm test` → **1370 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 346 566 octets**, 0 référence externe. Coût **+1 837 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis `origin/main` :
+**JavaScript +771 · feuille +748 · balisage +318 · images +0 · audio +0**, et la
+somme des cinq postes tombe EXACTEMENT sur le total — **297 lignes `data:` avant,
+297 après, 297 URI de part et d'autre**. Borne T10 inchangée à 9 300 000, marge
+**953 434 octets, 10,25 %**. Le lot touche `src/sim/raid-ouvrage.js`,
+`src/ui/monde.js`, la feuille et le balisage.
+⚠⚠ **DÉPLACER SA BASE DEMANDE UN ACCORD, ET L'ACCORD ANNONCE COMBIEN DE BASES DE
+L'OUVRAGE POURRONT L'ATTAQUER.** Ethan, point 1 : « confirmation avant de bouger
+la base + indiquer le nombre de base ouvrage qui pourront attaquer ». **Ce n'est
+PAS « les bases à portée de raid »** — il faut le TYPE et le NIVEAU MINIMAL en
+plus de la portée, et les deux ensembles ne coïncident pas.
+⚠⚠ **`attaquantesDeLaPosition` EST LA SEULE ÉCRITURE DES TROIS CONDITIONS, ET
+`basesAttaquantes` S'EXPRIME PAR ELLE.** Ses trois `if` ont quitté son corps ;
+elle n'en garde que le REGROUPEMENT par case d'attaquante. Le chiffre annoncé au
+joueur est donc EXACTEMENT celui que le moteur appliquera — le recopier dans
+l'écran l'aurait rendu faux de la pire façon : plausible, stable, et démenti par
+le premier raid subi. C'est la divergence que FICHE-JUSTE a réparée entre
+`voisinsQualifiants` et `voisinsQualifiantsParCase` ; **`DÉ T4` la MESURE ici**,
+sur cent positions tirées dont **86 portent au moins une attaquante**.
+⚠ **ELLE PREND UNE POSITION, PAS UNE BASE**, et c'est ce qui la rend utile aux
+deux appelants : l'écran l'interroge sur une case CANDIDATE, où aucune base ne se
+trouve encore. `ciblesAPortee` n'a jamais lu que `.position` de ce qu'on lui
+donne.
+⚠⚠ **LA PREMIÈRE ÉCRITURE DE `DÉ T5` MESURAIT LA FAUTE INVERSE.** Elle fondait la
+seconde base du joueur sur une attaquante ; mesuré, le compte tombait de **49 à
+48**, pas à 98 — `siteDeLaCase` rend `null` sur toute case occupée par une base
+du joueur, donc fonder sur une base de l'Ouvrage l'EFFACE de la carte.
+⚠⚠ **LA CONFIRMATION S'INTERCALE ENTRE LE TOUCHER ET LE DÉPLACEMENT**, jamais
+entre le bouton et l'armement : c'est la case VISÉE qui donne le chiffre, et elle
+n'est pas connue avant. `poserLaBase` devient trois temps —
+`demanderLeDeplacement`, `renoncerAuDeplacement`, `confirmerLeDeplacement` —
+plus `refuserLeDeplacement`, extraite parce que DEUX chemins y mènent.
+⚠⚠ **ET LA RELECTURE DES PROBLÈMES À L'ACCORD N'EST PAS DÉCORATIVE.** Entre le
+toucher et l'accord, un raid de l'Ouvrage peut se résoudre, et `raserLaBase`
+DÉPLACE la base de vingt rangées : la case visée devient alors hors de portée, ou
+celle où la base se trouve déjà. Sans elle, `deplacerLaBase` LÈVERAIT au milieu
+d'un geste commencé légalement.
+⚠ **LE REFUS PASSE AVANT LA CONFIRMATION** — on ne demande pas d'accord pour un
+geste qui sera refusé. ⚠ Et le montage de `DÉ T9` a dû être RÉÉCRIT :
+`casesAtteignables` est **VIDE** pendant le délai, donc il vise une case à portée
+dont le refus est asserté `['delai']`.
+⚠⚠ **« FERMER » EST UNE PORTE DE SORTIE COMME UNE AUTRE, ET `DÉ T7 bis` A ÉTÉ
+ÉCRIT POUR ÇA.** `fermerPanneau` vide l'accord en attente : sans cette ligne, le
+panneau se refermerait en gardant la case retenue, et le bouton d'accord — que
+plus personne ne voit — resterait capable de déplacer la base.
+⚠ **ZÉRO SE DIT, IL NE SE MASQUE PAS** — « Aucune base de l'Ouvrage ne pourra
+vous attaquer ici. » C'est souvent le renseignement que le joueur cherche en
+fuyant. `phraseDesAttaquantes` est PURE et EXPORTÉE : le compte vient du moteur,
+elle n'en fait qu'une phrase.
+⚠ **MESURÉ, GRAINE 7, COLONNE 16** : **0** attaquante au départ (rangée 295) —
+la garde du peuplement écarte l'Ouvrage de quinze cases —, 37 à la rangée 250,
+54 à la 200, 57 à la 150, 55 à la 20. Et la frontière du niveau minimal est
+atteignable dans un même disque : rangées **248 à 252** au niveau 10, **253 à
+257** au niveau 9.
+⚠⚠ **UNE GARDE CHANGE DE SONDE ET SE RESSERRE — `RCU T11`.** Elle proxyait la
+BASE et comptait les lectures de `.position` ; `ciblesAPortee` reçoit désormais
+un objet nu, et la sonde ne voyait plus rien — **0 au lieu de 1, mesuré**. Elle
+porte sur la POSITION et compte les lectures de `rangee` faites DANS
+`ciblesAPortee` : elle mesure les ENTRÉES dans la fonction plutôt qu'une lecture
+que n'importe quel appelant pouvait faire. **Une assertion de source entre** en
+plus, sur le nombre d'appels d'`attaquantesDeLaPosition`.
+⚠ **ONZE TESTS ENTRENT — `DÉ T1` à `T10`, plus `T7 bis` — ET LE COMPTE PASSE DE
+1 359 À 1 370.** Cinq de moteur dans `test/deplacement.test.js`, six d'écran dans
+`test/monde.test.js`. **Aucune assertion n'a été retirée ni assouplie.**
+⚠ **ONZE FALSIFICATIONS, ONZE CHUTES**, dont **cinq qui ne font tomber qu'un seul
+test**. La centrale est F4 — `basesAttaquantes` reprend ses trois conditions avec
+un `<=` au lieu d'un `<` — et **`DÉ T4` la voit**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 28 — VÉRIFIÉ AU DIFF.**
+`src/sim/state.js` n'a pas une ligne de changée : une case retenue entre deux
+touchers vit dans la fermeture de l'écran.
+⚠ **AUCUNE VALEUR DE CALIBRAGE NE BOUGE** — `git diff src/data/` est vide.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** La hauteur
+du bloc de confirmation dans le panneau n'a pas été relevée à l'écran.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠⚠ **ET LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ.** Il pose 1 340 pass,
+8 256 764 octets et 0.99.23 · build 124 ; mesuré au départ, **1 359 pass,
+8 344 729 octets, 0.99.24 · build 126** — TERRITOIRE-LU et CONQUÊTE-24H ont été
+mergés entre l'écriture du brief et son exécution. **Les quatre faits dont le lot
+dépend étaient intacts**, vérifiés un par un.
+
+**Auparavant, après le lot CONQUÊTE-24H :**
 `npm test` → **1359 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 344 729 octets**, 0 référence externe. Marge T10 : **955 271 octets,
 10,27 %**. Le lot fait entrer `src/sim/ruines.js` et touche `src/sim/territoire.js`,

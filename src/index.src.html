@@ -2013,6 +2013,20 @@
   #monde-panneau-deplacer {
     margin: 0 8px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
   }
+  /* La confirmation d'un déplacement. Aucune teinte neuve : le fond du panneau
+     et l'os des titres suffisent, et la palette est close. */
+  #monde-panneau-confirmation { padding: 0 8px 8px; }
+  #monde-panneau-menace {
+    margin: 0 0 6px; font-size: 11px; line-height: 1.4; color: #F5F3E8;
+    font-variant-numeric: tabular-nums;
+  }
+  #monde-panneau-confirmation .choix { display: flex; gap: 8px; }
+  #monde-panneau-confirmation .choix button {
+    flex: 1; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  /* ⚠ LE BOUTON QUI ENGAGE EST LE PLUS VISIBLE DES DEUX, et il reprend l'ambre
+     des actions du dépôt plutôt qu'une teinte à lui. */
+  #monde-panneau-confirmer { background: #F5B636; color: #161914; }
   /* Les deux réglages de son. Aucune teinte neuve : la palette est fermée à
      trente-trois, et `banc.test.js` refuse tout hex qui n'y est pas. */
   #options-son-ligne-volume { align-items: center; }
@@ -2589,6 +2603,24 @@
            PROPRE base. Les TROIS autres mots restent interdits, la liste des
            boutons reste close, et le test tient les deux moitiés. -->
       <p id="monde-panneau-refus" hidden></p>
+      <!-- ⚠⚠ LA CONFIRMATION DU DÉPLACEMENT — lot DÉPLACEMENT-ÉCLAIRÉ, 07/09.
+           Ethan, point 1 : « confirmation avant de bouger la base + indiquer le
+           nombre de base ouvrage qui pourront attaquer ». Elle s'intercale entre
+           le TOUCHER de la case et le déplacement, jamais entre le bouton et
+           l'armement : c'est la case VISÉE qui donne le chiffre, et elle n'est
+           pas connue avant.
+           ⚠ LE CHIFFRE VIENT DE `nombreDAttaquantes`, la fonction du moteur dont
+           `basesAttaquantes` s'exprime elle-même. Le recalculer ici en ferait la
+           seconde vérité que §4 de CLAUDE.md interdit.
+           ⚠ ZÉRO SE DIT, il ne se masque pas : « aucune base ne pourra vous
+           attaquer » est souvent le renseignement que le joueur cherche. -->
+      <div id="monde-panneau-confirmation" hidden>
+        <p id="monde-panneau-menace"></p>
+        <div class="choix">
+          <button type="button" id="monde-panneau-confirmer">Déplacer ici</button>
+          <button type="button" id="monde-panneau-renoncer">Renoncer</button>
+        </div>
+      </div>
       <button type="button" id="monde-panneau-deplacer" hidden>Déplacer la base</button>
         </div>
       </div>

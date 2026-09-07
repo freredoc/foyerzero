@@ -170,6 +170,70 @@ function departagerLesCandidates(etat, a, b) {
 }
 
 /**
+ * Les bases de l'Ouvrage qui pourront attaquer une POSITION donnée.
+ *
+ * ⚠⚠ C'EST LA SEULE ÉCRITURE DES TROIS CONDITIONS DU RAID SUBI, ET
+ * `basesAttaquantes` S'EXPRIME PAR ELLE — lot DÉPLACEMENT-ÉCLAIRÉ, 07/09/2026.
+ * Ethan, point 1 : « confirmation avant de bouger la base + indiquer le nombre
+ * de base ouvrage qui pourront attaquer ». Le chiffre annoncé au joueur doit
+ * être EXACTEMENT celui que le moteur appliquera ; le recopier dans l'écran
+ * l'aurait rendu faux de la pire façon — plausible, stable, et démenti par le
+ * premier raid subi. C'est la divergence que le lot FICHE-JUSTE a réparée entre
+ * `voisinsQualifiants` et `voisinsQualifiantsParCase`, où un commentaire
+ * affirmait que deux fonctions suivaient la même règle sans qu'un test le
+ * mesure. `DÉ T4` le mesure ici, sur cent positions tirées.
+ *
+ * ⚠ ELLE PREND UNE POSITION, PAS UNE BASE, et c'est ce qui la rend utile aux
+ * DEUX appelants : `basesAttaquantes` lui passe la position d'une base
+ * existante, l'écran de la carte celle d'une case CANDIDATE, où aucune base ne
+ * se trouve encore. `ciblesAPortee` n'a jamais lu que `.position` de ce qu'on
+ * lui donne.
+ *
+ * ⚠ LE FILTRE DE TYPE EST DANS LES DONNÉES, PAS ÉCRIT ICI.
+ * `TYPES_SITE[x].attaqueLeJoueur` dit depuis toujours que seules les BASES
+ * attaquent — camp et avant-poste sont du butin, pas une menace, et le bord
+ * rouge de la carte le dit déjà au joueur. Écrire `type === 'base'` ferait une
+ * seconde vérité qui divergerait le jour où un type de plus arriverait.
+ *
+ * ⚠ ET LE NIVEAU MINIMAL AUSSI. `RAID_OUVRAGE.niveauMinimal` vaut 10 : les
+ * bases du début de partie sont là pour être attaquées, pas pour attaquer.
+ *
+ * ⚠ UNE ATTAQUANTE PAR CASE, PAR CONSTRUCTION. `ciblesAPortee` balaie chaque
+ * case une fois, donc un site n'y paraît qu'une fois : ce compte est celui des
+ * BASES OUVRAGE, jamais celui des paires. Deux bases du joueur à portée de la
+ * même attaquante ne la comptent pas deux fois — chacune l'interroge pour
+ * elle-même, et depuis RAID-CIBLE-UNIQUE l'attaquante n'en frappera qu'une.
+ *
+ * @param {object} etat
+ * @param {{rangee: number, colonne: number}} position case candidate
+ * @returns {Array<object>} identités de site, du plus proche au plus loin
+ */
+export function attaquantesDeLaPosition(etat, position) {
+  const retenues = [];
+  for (const site of ciblesAPortee(etat, { position })) {
+    if (TYPES_SITE[site.type]?.attaqueLeJoueur !== true) continue;
+    if (site.niveau < RAID_OUVRAGE.niveauMinimal) continue;
+    retenues.push(site);
+  }
+  return retenues;
+}
+
+/**
+ * Combien de bases de l'Ouvrage pourront attaquer cette position.
+ *
+ * ⚠ UNE DÉRIVATION D'UNE LIGNE, JAMAIS UNE SECONDE BOUCLE. C'est ce que l'écran
+ * lit avant de demander confirmation d'un déplacement ; le compte et la liste
+ * ne peuvent donc pas se contredire.
+ *
+ * @param {object} etat
+ * @param {{rangee: number, colonne: number}} position
+ * @returns {number}
+ */
+export function nombreDAttaquantes(etat, position) {
+  return attaquantesDeLaPosition(etat, position).length;
+}
+
+/**
  * Les bases de l'Ouvrage qui peuvent attaquer le joueur, ici et maintenant.
  *
  * ⚠ LE FILTRE EST DANS LES DONNÉES, PAS ÉCRIT ICI. `TYPES_SITE[x].attaqueLeJoueur`
@@ -237,9 +301,12 @@ export function basesAttaquantes(etat) {
   // ne doit RIEN devoir à l'ordre de parcours.
   const parAttaquante = new Map();
   for (let i = 0; i < etat.bases.length; i += 1) {
-    for (const site of ciblesAPortee(etat, etat.bases[i])) {
-      if (TYPES_SITE[site.type]?.attaqueLeJoueur !== true) continue;
-      if (site.niveau < RAID_OUVRAGE.niveauMinimal) continue;
+    // ⚠⚠ LES TROIS CONDITIONS NE SONT PLUS ÉCRITES ICI — lot DÉPLACEMENT-ÉCLAIRÉ,
+    // 07/09/2026. Elles vivent dans `attaquantesDeLaPosition`, juste au-dessus,
+    // et cette boucle-ci n'en garde que le REGROUPEMENT. Voir le commentaire de
+    // cette fonction pour le motif : l'écran de la carte annonce désormais le
+    // même compte avant un déplacement, et deux écritures auraient divergé.
+    for (const site of attaquantesDeLaPosition(etat, etat.bases[i].position)) {
       const cle = `${site.rangee},${site.colonne}`;
       const candidate = { ...site, baseVisee: i };
       const tenante = parAttaquante.get(cle);
