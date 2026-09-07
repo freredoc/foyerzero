@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.20 · build 121.
+Dernière révision : **07/09/2026**, version 0.99.21 · build 122.
 
 ---
 
@@ -42,7 +42,74 @@ Dernière révision : **07/09/2026**, version 0.99.20 · build 121.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot NOMBRES-COMPACTS), à confronter :**
+**Référence au 07/09/2026 (après le lot TERRITOIRE-FORCE), à confronter :**
+`npm test` → **1335 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 256 200 octets**, 0 référence externe. Coût **+917 octets, ENTIÈREMENT EN
+JAVASCRIPT**, et la somme des cinq postes tombe EXACTEMENT sur le total —
+**297 lignes `data:` et 292 URI de part et d'autre**. Borne T10 inchangée à
+9 300 000, marge **1 043 800 octets, 11,22 %**. Le lot touche
+`src/sim/territoire.js`, `src/sim/points-attaque.js` et `src/data/sites.js`.
+⚠⚠ **ETHAN, 07/09, POINT 13 : LE NIVEAU D'UNE BASE DEVIENT UNE FORCE, ET LES
+BASES D'UN CAMP S'ADDITIONNENT.** `influence = raison ^ (niveau − distance)`,
+somme par camp, la case au plus fort. À la raison **2**, deux bases de niveau 10
+valent EXACTEMENT une base de 11 — l'essaimage rapporte — et une base de 20 en
+vaut **1 024** de niveau 10 — il ne rattrape jamais la montée. Les deux moitiés
+de « deux bases 10 est moins fort qu'une base 20 » tiennent au même nombre.
+⚠⚠ **LA RÈGLE CENTRALE DU MODULE EST RENVERSÉE : LE JOUEUR PEUT PERDRE UNE
+CASE.** « Le joueur l'emporte : on n'écrase jamais sa marque » était une LECTURE
+prise faute d'arbitrage ; elle tombe. **Un joueur qui ne peut pas perdre une case
+ne peut pas non plus en gagner une** — la priorité rendait tout le partage muet.
+Les deux commentaires qui la portaient sont RÉÉCRITS, pas supprimés : ils disent
+l'ancienne règle, la nouvelle, et pourquoi.
+⚠⚠ **UN SEUL TEST EST TOMBÉ, ET C'EST UNE PRÉMISSE DEVENUE FAUSSE** — `EUCLIDE
+— les zones d'influence sont un OCTOGONE`, qui exigeait que la boucle de peinture
+appelle `dansLOctogoneDInfluence`. Elle appelle maintenant
+`distanceOctogonaleDInfluence`, dont le booléen se DÉRIVE : le test se resserre
+et exige les deux moitiés. **Aucune régression.** Le fait que l'ancienne priorité
+n'ait fait tomber AUCUN test est cohérent avec ce que son propre commentaire
+disait : « on pouvait le retirer sans qu'un seul test tombe ».
+⚠⚠ **UNE BASE RASÉE PEIGNAIT ENCORE SON TERRITOIRE — DÉFAUT MESURÉ AVANT
+CORRECTION.** `territoireDeLaFenetre` appelait `basesDeLaFenetre(etat.graine, …)`,
+la graine SEULE : mesuré sur la graine 11, base (1, 2), **trente cases restaient
+à l'Ouvrage** après le rasage, pendant que `siteDeLaCase` y rendait déjà `null`.
+Et le défaut ne faussait pas qu'un dessin : une base rasée pesait
+`raison ^ niveau` dans les sommes. Corrigé ici, `TF T10` le garde.
+⚠ **LA DISTANCE EST CELLE DE L'OCTOGONE, PAS TCHEBYCHEV, ET LES DEUX NE
+DIFFÈRENT QUE DANS LES ANGLES** — (2, 2) est à distance **3**, (3, 3) à **5**.
+C'est exactement là que le partage se joue, puisque la distance entre dans
+l'exposant. `distanceOctogonaleDInfluence` est extraite dans
+`sim/points-attaque.js` et `dansLOctogoneDInfluence` s'exprime PAR elle : une
+seule géométrie, deux lecteurs. Vérifié par exécution sur 2 023 couples, dont
+1 792 en diagonale.
+⚠ **LE NIVEAU D'UNE BASE DU JOUEUR EST LA MOYENNE DE SES BÂTIMENTS, ARRONDIE**
+— `GEOGRAPHIE.niveauBase` le dit déjà, et `palierDuSite` d'`ui/monde.js` emploie
+la MÊME grandeur avec le MÊME arrondi pour choisir son emblème. En prendre une
+autre ferait dire deux choses au même dessin. Surtout pas `niveauDeLaRangee`, qui
+est le niveau des sites de l'OUVRAGE.
+⚠ **`BigInt` OBLIGATOIRE, ET LES EXPOSANTS SONT DÉCALÉS.** 2⁵⁰ ≈ 1,1 × 10¹⁵ :
+une somme de plusieurs bases dépasse `Number.MAX_SAFE_INTEGER`, et un flottant
+perdrait des unités **exactement dans les cas serrés**. `niveau − distance` étant
+négatif pour un niveau 1 à trois cases — et `2n ** -2n` levant —, tous les
+exposants sont décalés du plus grand rayon : un facteur commun ne change aucune
+comparaison. `occupant` reste un `Uint8Array`.
+⚠⚠ **LE COÛT A ÉTÉ MESURÉ AVANT ET APRÈS : 5 612 µs → 6 701 µs par appel**,
+soit **+19,4 %**, sur une fenêtre pleine de 69 × 31 cases toutes occupées. ⚠
+**ET LA CARTE NE SE REDESSINE PAS DIX FOIS PAR SECONDE** — `rafraichir` sort sur
+une empreinte inchangée. Le vrai cas chaud est le DÉFILEMENT AU DOIGT, qui
+rappelle `dessiner` à chaque `pointermove` ; sur un téléphone trois à cinq fois
+plus lent, 6,7 ms deviennent 20 à 33 ms, et c'était **déjà** 17 à 28 ms avant ce
+lot. Deux remèdes proposés au rapport, aucun implanté d'office.
+⚠⚠ **CE QUE LA RELECTURE DU §10 A TROUVÉ, ET QUI RESTE OUVERT : LA CARTE ET LE
+PRIX NE DISENT PLUS LA MÊME CHOSE.** `estEnTerritoireAllie` demande « cette case
+est-elle dans l'OCTOGONE du joueur », pas « le joueur la POSSÈDE-t-il ». Avant ce
+lot les deux étaient la même question ; depuis, elles divergent — mesuré sur un
+montage : **15 cases peintes à l'Ouvrage sont encore facturées au tarif allié**,
+et `releverLesPoisAcquis` y ramasserait encore un POI. Le brief interdisait de
+toucher à ces deux modules ; le fait est donc CONSTATÉ, pas corrigé. **C'est
+exactement la divergence qu'EUCLIDE nomme depuis toujours — le prix affiché et la
+carte peinte décrivant deux choses.**
+
+**Auparavant, après le lot NOMBRES-COMPACTS :**
 `npm test` → **1324 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 255 283 octets**, 0 référence externe. Coût **+619 octets, ENTIÈREMENT EN
 JAVASCRIPT** : **JavaScript +619 · feuille +0 · balisage +0 · images +0 ·

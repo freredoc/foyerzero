@@ -44,7 +44,13 @@
 
 import { GEOGRAPHIE } from '../data/sites.js';
 import { basesDeLaFenetre } from './peuplement.js';
-import { dansLOctogoneDInfluence } from './points-attaque.js';
+import { distanceOctogonaleDInfluence } from './points-attaque.js';
+// ⚠ LES DEUX NIVEAUX D'UNE BASE VIENNENT DE DEUX ENDROITS, ET C'EST LA RÈGLE
+// QUE `sim/carte.js` EXISTE POUR TENIR : celui de l'Ouvrage se lit sur la
+// RANGÉE, celui du joueur est la moyenne de ses BÂTIMENTS. Les confondre est la
+// faute que trois commentaires du dépôt nomment déjà.
+import { niveauDeLaRangee } from './carte.js';
+import { niveauDesBatiments } from './niveau-de-base.js';
 
 /** Ce qu'une case peut porter. Les valeurs servent d'indices, pas de noms. */
 export const NEUTRE = 0;
@@ -65,20 +71,155 @@ export const RAYONS = {
 };
 
 /**
+ * La raison de la progression de force, en `BigInt`, LUE dans `GEOGRAPHIE`.
+ *
+ * ⚠ ELLE NE SE RECOPIE PAS. `GEOGRAPHIE.raisonDeLaForce` porte le nombre et dit
+ * pourquoi c'est deux ; ce module le convertit, il ne le choisit pas.
+ */
+export const RAISON = BigInt(GEOGRAPHIE.raisonDeLaForce);
+
+/**
+ * De combien tous les exposants sont décalés pour rester positifs.
+ *
+ * ⚠⚠ `niveau − distance` EST NÉGATIF POUR UNE BASE DE NIVEAU 1 À TROIS CASES, ET
+ * `BigInt` N'A PAS D'INVERSE : `2n ** -2n` lève. On décale donc tous les
+ * exposants du plus grand rayon — la force n'a de sens que COMPARÉE à une autre,
+ * et un facteur commun ne change aucune comparaison. L'exposant vaut alors au
+ * minimum `1 − rayon + rayon = 1`.
+ *
+ * ⚠ IL SE DÉRIVE DES RAYONS, il ne s'écrit pas. Un rayon qui monterait sans que
+ * ce nombre suive ferait lever la puissance, et la carte entière avec elle.
+ */
+export const DECALAGE_DES_EXPOSANTS = Math.max(...Object.values(RAYONS));
+
+/**
+ * Le niveau d'une base du joueur, en niveaux ENTIERS.
+ *
+ * ⚠⚠ C'EST LA MOYENNE DE SES BÂTIMENTS, ET LA SPEC LE DIT DÉJÀ :
+ * `GEOGRAPHIE.niveauBase` porte « moyenne des niveaux de ses bâtiments ». Ce
+ * n'est donc pas une lecture de ce lot-ci, c'est la grandeur du dépôt.
+ *
+ * ⚠⚠ ET C'EST EXACTEMENT CELLE QUE LA CARTE DESSINE DÉJÀ. `palierDuSite` de
+ * `ui/monde.js` choisit le palier d'emblème d'une base du joueur par
+ * `Math.max(1, Math.round(dixiemes / 10))` — la même moyenne, le même arrondi.
+ * En prendre une autre ici ferait dire deux choses au même dessin : un emblème
+ * de palier 3 qui projetterait la force d'un niveau 2.
+ *
+ * ⚠ SURTOUT PAS `niveauDeLaRangee`. Elle donne le niveau des sites de l'OUVRAGE
+ * à cet endroit ; l'employer pour le joueur est la faute que `sim/carte.js`
+ * existe pour empêcher, et que trois commentaires du dépôt nomment déjà.
+ *
+ * @param {{disposition: Array<{niveau: number}>}} base
+ * @returns {number} entier ≥ 1
+ */
+export function niveauDUneBaseDuJoueur(base) {
+  return Math.max(1, Math.round(niveauDesBatiments(base.disposition) / 10));
+}
+
+/**
+ * Les bases du joueur avec leur POSITION et leur NIVEAU.
+ *
+ * ⚠ `basesDuJoueur` RESTE CE QU'ELLE EST — des positions, et rien d'autre. Son
+ * en-tête le dit et `sim/poi.js` l'appelle pour ça ; lui faire rendre autre
+ * chose changerait le contrat d'un module qui n'a rien demandé. Deux fonctions,
+ * deux types, deux noms.
+ *
+ * @param {object} etat
+ * @returns {Array<{rangee: number, colonne: number, niveau: number}>}
+ */
+export function forcesDuJoueur(etat) {
+  return etat.bases.map((b) => ({
+    rangee: b.position.rangee,
+    colonne: b.position.colonne,
+    niveau: niveauDUneBaseDuJoueur(b),
+  }));
+}
+
+/**
+ * Les bases de l'Ouvrage d'une fenêtre, RASÉES EXCLUES, avec leur niveau.
+ *
+ * ⚠⚠ LE FILTRE DES RASÉES EST UNE CORRECTION DE CE LOT, ET LE DÉFAUT A ÉTÉ
+ * MESURÉ AVANT D'ÊTRE CORRIGÉ. `territoireDeLaFenetre` appelait
+ * `basesDeLaFenetre(etat.graine, …)` — **la graine seule, sans l'état** —, si
+ * bien qu'une base rasée continuait de peindre son octogone : mesuré sur la
+ * graine 11, base (1, 2), **trente cases restaient à l'Ouvrage** après le
+ * rasage, pendant que `siteDeLaCase` y rendait déjà `null`. La carte montrait un
+ * territoire autour d'un site que le joueur avait détruit.
+ *
+ * ⚠⚠ ET LE DÉFAUT NE FAUSSAIT PAS QU'UN DESSIN, IL FAUSSAIT LES SOMMES : une
+ * base rasée pesait `raison ^ niveau` dans le partage du chevauchement. C'est
+ * pourquoi il se corrige ICI, et pas au lot qui suit.
+ *
+ * ⚠ LE NIVEAU D'UNE BASE DE L'OUVRAGE EST CELUI DE SA RANGÉE — `niveauDeLaRangee`,
+ * la seule grandeur que la carte lui donne, et celle que `siteDeLaCase` inscrit
+ * déjà dans l'identité qu'il rend.
+ *
+ * @param {object} etat
+ * @param {object} fenetre déjà élargie du plus grand rayon
+ * @returns {Array<{rangee: number, colonne: number, niveau: number}>}
+ */
+export function forcesDeLOuvrage(etat, fenetre) {
+  const rasees = new Set(etat.basesRasees ?? []);
+  const forces = [];
+  for (const base of basesDeLaFenetre(etat.graine, fenetre)) {
+    if (rasees.has(`${base.rangee}:${base.colonne}`)) continue;
+    forces.push({ rangee: base.rangee, colonne: base.colonne, niveau: niveauDeLaRangee(base.rangee) });
+  }
+  return forces;
+}
+
+/**
+ * La force d'une base de ce niveau sur une case à cette distance.
+ *
+ * ⚠⚠ EN `BigInt`, ET LES ENTIERS SÛRS N'AURAIENT PAS SUFFI. `NIVEAU.plafond`
+ * vaut 50, donc 2⁵⁰ ≈ 1,1 × 10¹⁵ ; une somme de plusieurs bases dépasse
+ * `Number.MAX_SAFE_INTEGER` (2⁵³ − 1), et un flottant perdrait des unités
+ * **exactement dans les cas serrés** — ceux où le partage se décide. Le dépôt
+ * emploie déjà des `BigInt` pour les points de recherche : ce n'est pas une
+ * nouveauté à introduire, c'est une pratique à reprendre.
+ *
+ * ⚠ ET LES DEUX SOMMES COMPARÉES SONT DU MÊME TYPE DE BOUT EN BOUT. JavaScript
+ * LÈVE sur `1n < 1` ; un zéro écrit `0` au lieu de `0n` ferait tomber la carte
+ * entière au premier chevauchement.
+ *
+ * @param {number} niveau entier ≥ 1
+ * @param {number} distance entier ≥ 0, dans la géométrie de l'influence
+ * @returns {bigint}
+ */
+export function forceDUneBase(niveau, distance) {
+  return RAISON ** BigInt(niveau - distance + DECALAGE_DES_EXPOSANTS);
+}
+
+/**
  * Une carte d'occupation pour une fenêtre de la carte du monde.
  *
- * ⚠⚠ LE JOUEUR L'EMPORTE SUR L'OUVRAGE QUAND LES DEUX SE RECOUVRENT, et c'est
- * une LECTURE, pas un arbitrage — Ethan ne s'est pas prononcé. Elle se justifie
- * ainsi : le territoire allié est la seule des deux zones qui ait un effet de
- * jeu écrit (le tarif du raid à +1 par case, spec §8), et une case allié doit se
- * lire comme telle sinon l'écran contredirait le prix affiché. Elle tient en une
- * ligne — la comparaison ci-dessous — si Ethan tranche autrement.
+ * ⚠⚠ LA RÈGLE A ÉTÉ RENVERSÉE LE 07/09, POINT 13 D'ETHAN, ET CE BLOC RACONTE LES
+ * DEUX. **L'ancienne :** « le joueur l'emporte sur l'Ouvrage quand les deux se
+ * recouvrent », une LECTURE prise faute d'arbitrage, justifiée par le fait que le
+ * territoire allié est la seule des deux zones qui ait un effet de jeu écrit — le
+ * tarif du raid à +1 par case. **La nouvelle :**
+ *
+ *     influence d'une base sur une case = raison ^ (niveau − distance)
+ *     influence d'un camp sur une case  = somme de ses bases
+ *     la case revient au camp dont la somme est la plus forte
+ *
+ * **Pourquoi le renversement.** Ethan : « deux bases 10 est moins fort qu'une
+ * base 20 ». Un joueur qui ne peut pas perdre une case ne peut pas non plus en
+ * gagner une : la priorité inconditionnelle rendait tout le partage muet. Le
+ * joueur PEUT donc désormais perdre une case face à une base de l'Ouvrage plus
+ * forte, et c'est le point du lot.
+ *
+ * ⚠⚠ TROIS PLANCHERS SE POSENT PAR-DESSUS LE CALCUL, ET LE PREMIER EST UN
+ * ARBITRAGE : « le territoire où la base se trouve ne change pas ». Ce n'est PAS
+ * un cas particulier de la formule — sans lui, un niveau 20 à trois cases prendrait
+ * le pied d'un niveau 1. Les deux autres sont des invariants : la portée ne bouge
+ * pas (chaque base ne peint que son octogone, seul le PARTAGE dépend du niveau),
+ * et une case hors de tout octogone reste `NEUTRE`.
  *
  * ⚠ SEULES LES BASES DE L'OUVRAGE PROJETTENT SON INFLUENCE, pas les camps ni les
  * avant-postes. Là encore c'est une lecture, et elle suit `TYPES_SITE` : la base
  * est le seul type qui « attaque le joueur », les deux autres sont du butin qui
- * suit le joueur et disparaît. Peindre un territoire ennemi autour de ce qu'on
- * vient de faire apparaître à côté de chez soi serait illisible.
+ * suit le joueur et disparaît.
  *
  * @param {object} etat
  * @param {{premiereRangee: number, derniereRangee: number,
@@ -116,51 +257,102 @@ export function territoireDeLaFenetre(etat, fenetre) {
   };
   if (hauteur === 0 || largeur === 0) return carte;
 
+  // ⚠⚠ DEUX SOMMES PAR CASE, ET RIEN N'EST ALLOUÉ LÀ OÙ PERSONNE NE PEINT. Un
+  // `Array` creux laisse `undefined` sur les cases vides ; les remplir de `0n`
+  // coûterait deux `BigInt` par case de fenêtre, dont la plupart resteraient
+  // nuls. `occupant` reste un `Uint8Array` : ce qu'on y écrit est toujours un
+  // CAMP, jamais une force — les `BigInt` sont des intermédiaires de calcul.
+  const sommes = { [JOUEUR]: new Array(hauteur * largeur), [OUVRAGE]: new Array(hauteur * largeur) };
+  const planchers = [];
+
   const peindre = (centre, camp) => {
     const rayon = RAYONS[camp];
+    const somme = sommes[camp];
     for (let dr = -rayon; dr <= rayon; dr += 1) {
       const rangee = centre.rangee + dr;
       if (rangee < r0 || rangee > r1) continue;
       for (let dc = -rayon; dc <= rayon; dc += 1) {
         const colonne = centre.colonne + dc;
         if (colonne < c0 || colonne > c1) continue;
-        // ⚠⚠ LE FILTRE EST ICI, ET LA DOUBLE BOUCLE N'EST QU'UNE ENVELOPPE. Il
-        // n'est plus écrit sur place : il APPELLE la fonction que le barème du
-        // raid appelle aussi. Deux écritures de la même forme, c'est la
+        // ⚠⚠ LA DISTANCE EST CELLE DE L'OCTOGONE, ET C'EST LA MÊME FONCTION QUE
+        // LE BARÈME DU RAID. `dansLOctogoneDInfluence` s'exprime par elle depuis
+        // ce lot : le filtre d'appartenance et le partage du chevauchement
+        // lisent donc UNE géométrie. Deux écritures de la même forme, c'est la
         // divergence que CLAUDE.md nomme depuis EUCLIDE — le prix affiché et la
-        // carte peinte décrivant deux géométries.
-        if (!dansLOctogoneDInfluence(dr, dc, rayon)) continue;
+        // carte peinte décrivant deux figures.
+        //
+        // ⚠ ET ELLE NE VAUT PAS TCHEBYCHEV DANS LES ANGLES : (2, 2) est à
+        // distance 3, (3, 3) à distance 5. C'est précisément là que le partage
+        // se joue, et un montage aligné ne distinguerait pas les deux.
+        const distance = distanceOctogonaleDInfluence(dr, dc);
+        if (distance > rayon) continue;
         const i = (rangee - r0) * largeur + (colonne - c0);
-        // Le joueur l'emporte : on n'écrase jamais sa marque.
-        if (occupant[i] === JOUEUR) continue;
-        occupant[i] = camp;
+        somme[i] = (somme[i] ?? 0n) + forceDUneBase(centre.niveau, distance);
       }
+    }
+    // ⚠ LE PLANCHER SE RETIENT ICI ET S'APPLIQUE APRÈS LE PARTAGE. L'écrire dans
+    // `occupant` maintenant ne servirait à rien : la boucle de partage repasse
+    // ensuite sur toutes les cases et l'écraserait.
+    if (centre.rangee >= r0 && centre.rangee <= r1
+      && centre.colonne >= c0 && centre.colonne <= c1) {
+      planchers.push({ i: (centre.rangee - r0) * largeur + (centre.colonne - c0), camp });
     }
   };
 
   // ⚠ LA FENÊTRE SE DILATE DU PLUS GRAND RAYON. Une base hors champ projette
   // dans le champ ; ne demander que le visible ferait clignoter les bordures au
   // bord de l'écran à chaque défilement.
-  const marge = Math.max(...Object.values(RAYONS));
+  const marge = DECALAGE_DES_EXPOSANTS;
   const elargie = {
     premiereRangee: r0 - marge,
     derniereRangee: r1 + marge,
     premiereColonne: c0 - marge,
     derniereColonne: c1 + marge,
   };
-  // ⚠⚠ LE JOUEUR EN PREMIER, ET C'EST CE QUI REND LA RÈGLE DE PRIORITÉ RÉELLE.
-  // L'ordre inverse — l'Ouvrage d'abord, le joueur par-dessus — donnait le même
-  // résultat, mais pour la mauvaise raison : la priorité tenait alors à l'ORDRE
-  // DES DEUX BOUCLES, et le garde-fou de `peindre` ne servait à rien. Mesuré par
-  // falsification : on pouvait le retirer sans qu'un seul test tombe. En peignant
-  // le joueur d'abord, c'est le refus d'écraser qui décide, et il se teste.
+  // ⚠⚠ L'ORDRE DES DEUX BOUCLES N'A PLUS AUCUN EFFET, ET C'EST LE SIGNE QUE LE
+  // RENVERSEMENT EST RÉEL. Ce bloc disait le contraire : « le joueur en premier,
+  // et c'est ce qui rend la règle de priorité réelle » — parce qu'une priorité
+  // qui tient à l'ordre de deux boucles n'est pas une règle, et qu'on pouvait
+  // alors retirer le garde-fou sans qu'un seul test tombe. Il n'y a plus de
+  // garde-fou, plus de priorité, et plus d'ordre à tenir : chaque base AJOUTE sa
+  // force à la somme de son camp, et l'addition est commutative. `TF T6` inverse
+  // les deux boucles et exige le même résultat — c'est la falsification qui
+  // prouve que c'est bien la somme qui décide.
+  for (const base of forcesDuJoueur(etat)) peindre(base, JOUEUR);
+  for (const base of forcesDeLOuvrage(etat, elargie)) peindre(base, OUVRAGE);
+
+  // ⚠⚠ LE PARTAGE, ET L'ÉGALITÉ VA AU JOUEUR. Deux sommes peuvent tomber juste
+  // — 2¹¹ contre 2¹⁰ + 2¹⁰ — et il faut trancher. C'est le seul reste de
+  // l'ancienne priorité, et il tient à la même raison qu'elle : le territoire
+  // allié est la seule des deux zones qui ait un effet de jeu écrit, le tarif du
+  // raid à +1 par case, et une case qui se paie comme alliée doit se lire comme
+  // telle. Ça tient en un caractère si Ethan tranche autrement.
   //
-  // ⚠ ET LA BOUCLE EST VRAIMENT PLURIELLE DEPUIS BASES-0 : elle parcourt
-  // `etat.bases`, donc l'union de la spec §8 est prise au mot sans qu'une ligne
-  // de plus soit due. Ce commentaire annonçait « le jour où il en aura plusieurs,
-  // c'est cette boucle-ci qui s'allonge » — elle n'a pas eu à s'allonger.
-  for (const base of basesDuJoueur(etat)) peindre(base, JOUEUR);
-  for (const base of basesDeLaFenetre(etat.graine, elargie)) peindre(base, OUVRAGE);
+  // ⚠ UNE CASE OÙ PERSONNE NE PEINT RESTE `NEUTRE`, et c'est le troisième
+  // plancher : la somme ne décide que là où au moins une base peint.
+  const forceJoueur = sommes[JOUEUR];
+  const forceOuvrage = sommes[OUVRAGE];
+  for (let i = 0; i < occupant.length; i += 1) {
+    const j = forceJoueur[i];
+    const o = forceOuvrage[i];
+    if (j === undefined && o === undefined) continue;
+    if (o === undefined) occupant[i] = JOUEUR;
+    else if (j === undefined) occupant[i] = OUVRAGE;
+    else occupant[i] = j >= o ? JOUEUR : OUVRAGE;
+  }
+
+  // ⚠⚠ LE PLANCHER D'ETHAN : « le territoire où la base se trouve ne change pas ».
+  // Il se pose APRÈS le partage et il l'écrase — sans lui, un niveau 20 à trois
+  // cases prendrait le pied d'un niveau 1, qui est le seul endroit de la carte
+  // qu'une base ne peut pas perdre.
+  //
+  // ⚠ LE JOUEUR EN DERNIER, ET C'EST LE SEUL ENDROIT OÙ UN ORDRE COMPTE ENCORE.
+  // Deux bases de camps différents ne peuvent pas partager une case aujourd'hui —
+  // `fondation.js` refuse de fonder sur un site de l'Ouvrage —, donc la question
+  // ne se pose pas ; le jour où elle se posera, le joueur garde le pied de sa
+  // propre base, ce qui est la seule lecture défendable du plancher.
+  for (const { i, camp } of planchers) if (camp === OUVRAGE) occupant[i] = camp;
+  for (const { i, camp } of planchers) if (camp === JOUEUR) occupant[i] = camp;
   return carte;
 }
 
