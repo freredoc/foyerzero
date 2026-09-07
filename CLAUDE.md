@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.17 · build 118.
+Dernière révision : **07/09/2026**, version 0.99.20 · build 121.
 
 ---
 
@@ -42,7 +42,222 @@ Dernière révision : **07/09/2026**, version 0.99.17 · build 118.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot EFFONDREMENT), à confronter :**
+**Référence au 07/09/2026 (après le lot NOMBRES-COMPACTS), à confronter :**
+`npm test` → **1324 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 255 283 octets**, 0 référence externe. Coût **+619 octets, ENTIÈREMENT EN
+JAVASCRIPT** : **JavaScript +619 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total —
+**297 lignes `data:` et 292 URI de part et d'autre**. Borne T10 inchangée à
+9 300 000, marge **1 044 717 octets, 11,23 %**. Le lot touche un fichier NEUF
+`src/render/nombre.js`, `src/ui/chantier.js` et `src/sim/recherche.js`.
+⚠⚠ **ETHAN, 07/09 : « DÈS QU'UN NOMBRE EST SUPÉRIEUR À DIX MILLE, IL FAUDRAIT
+L'AFFICHER AVEC TROIS CHIFFRES ET k POUR MILLE, m POUR MILLION, g POUR MILLIARD,
+ET t POUR MILLE MILLIARDS. »** Les trois formes qu'il décrit — « soit un chiffre
+puis virgule puis deux chiffres, soit deux chiffres puis une virgule, soit trois
+chiffres » — sont **trois chiffres significatifs**, toujours : `10,0k`, `12,3k`,
+`100k`, `1,00M`, `2,50G`, `1,00T`.
+⚠⚠ **LA RÈGLE EST ÉCRITE UNE FOIS, DANS `src/render/nombre.js`, ET DEUX
+COUCHES LA DEMANDENT.** `ui/chantier.js` formate les stocks, les débits, les
+capacités, les coûts et les points engagés ; `sim/recherche.js` formate les
+points de recherche et **ne peut pas importer d'`ui/`**. `src/data/` est réservé
+aux valeurs de calibrage (§2) — reste `render/`, qui rend des primitives sans
+DOM, et où `sim/poi.js` puise déjà.
+⚠⚠ **ELLE TRAVAILLE SUR LES CHIFFRES, PAS SUR UN NOMBRE, ET C'EST CE QUI LUI
+PERMET DE SERVIR LES DEUX.** L'un lui passe un `number` tronqué, l'autre un
+`bigint` qui dépasse l'entier sûr — le dépôt portait DÉJÀ deux fonctions de
+groupement pour cette raison, avec un paragraphe expliquant qu'elles ne peuvent
+pas fusionner. `compacter` ne divise jamais : elle coupe une chaîne, donc elle ne
+perd rien, quelle que soit la taille.
+⚠⚠ **ELLE TRONQUE, ELLE N'ARRONDIT PAS**, comme `formaterUnites` et
+`formaterPoints` avant elle : arrondir ferait dire « 1,00M » à 999 999 points,
+c'est-à-dire promettre un achat que le moteur refuserait. Conséquence voulue et
+mesurée — 999 999 rend **« 999k »**, qui reste à trois chiffres.
+⚠ **`M`, `G` ET `T` SONT EN CAPITALES, ET C'EST UNE CORRECTION ASSUMÉE DE LA
+DICTÉE.** Ethan les a nommés à l'oral, où la casse ne se dit pas ; en notation
+SI, `m` est le préfixe de MILLI, et « 10,0m » se lirait « dix millièmes » là où
+on veut dire « dix millions ». `k` reste minuscule, comme en SI. Un seul
+caractère à changer s'il préfère l'oral à la norme.
+⚠ **`formaterDixiemes` NE L'HÉRITE PAS, ET LA GARDE EST STRUCTURELLE** : elle
+compose sa PROPRE virgule décimale, donc un entier compacté rendrait « 12,3k,4 ».
+Elle appelle le groupement directement. Les niveaux plafonnent à 50 et ne peuvent
+pas atteindre le seuil aujourd'hui ; la garde s'écrit maintenant.
+⚠ **AU-DELÀ DE MILLE MILLIARDS, LA MANTISSE GROSSIT** — « 1 200T » — plutôt
+que de prendre un cinquième palier qu'Ethan n'a pas nommé. Mesuré : le prix le
+plus cher de `ARBRE_RECHERCHE` vaut 2 500 000 000, soit « 2,50G ».
+⚠ **LE BANC D'ESSAI GARDE SES CHIFFRES EXACTS.** `formaterPv` et
+`formaterPointsMilli` d'`ui/banc.js` rendent des PV au dixième et des points au
+millième : c'est de la précision de DIAGNOSTIC, derrière un geste de debug, et
+la compacter reviendrait à casser l'outil qui sert à vérifier les autres.
+⚠ **CINQ TESTS ONT CHANGÉ DE VALEUR ATTENDUE, AUCUN NE S'EST ASSOUPLI**, et
+l'un d'eux a dû être REFAIT : le montage qui prouvait la troncature du compteur
+de recherche devenait muet en forme compacte — à 1,23M, arrondir au point
+supérieur rend « 1,23M » aussi. Il est refait sur le passage de k à M, où la
+différence se voit. **Le rendu a été vu** : les prix de l'arbre lisent « 10,0M »,
+« 60,0M », « 540M », « 200k » là où ils débordaient.
+
+**Auparavant, après le lot CÂBLAGE-PICTOGRAMMES :**
+`npm test` → **1323 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 254 664 octets**, 0 référence externe. Coût **+238 540 octets**, mesuré poste
+par poste contre le livrable du lot précédent : **images +233 940 · JavaScript
++2 901 · feuille +1 699 · balisage +0 · audio +0**, et la somme des cinq postes
+tombe EXACTEMENT sur le total — **296 lignes `data:` avant, 297 après ; 291 URI
+avant, 292 après**. Borne T10 inchangée à 9 300 000, marge **1 045 336 octets,
+11,24 %**. Le lot touche `src/index.src.html`, `tools/build.js`, un fichier NEUF
+`src/ui/pictogramme.js`, et cinq écrans — `chantier`, `offense`, `recherche`,
+`raid`, `transfert`.
+⚠⚠ **ETHAN, 07/09 : « FAIS TOUT D'UN SEUL COUP, LES QUATRE LOTS D'UN COUP. »**
+Le rapport du lot PICTOGRAMMES proposait quatre lots de câblage — bandeau,
+arsenal, modules, chiffres ; ils sont faits ensemble. **Les quarante-six
+pictogrammes sont à l'écran**, et `CÂB T3` mesure les deux sens : aucun n'est
+produit sans être employé, aucun n'est employé sans être dans l'atlas.
+⚠⚠ **UNE SEULE RESSOURCE ENTRE DANS LE LIVRABLE, ET C'EST TOUT LE COÛT.**
+Un fichier n'entre que par un MARQUEUR : `src/index.src.html` déclare
+`--atlas-interface` et `tools/build.js` ajoute la ligne d'inline. Les
+quarante-six pictogrammes posés ensuite ne coûtent RIEN de plus — `.picto` pointe
+la variable une fois, et chaque élément ne porte que son CADRAGE, deux
+propriétés. Recopier l'adresse `data:` par élément l'aurait fait entrer autant de
+fois qu'il y a de pictogrammes à l'écran.
+⚠⚠ **AUCUN ÉCRAN N'ÉCRIT UN NOM DE SPRITE EN DUR, ET `CÂB T4` LE BALAYE.**
+`src/ui/pictogramme.js` traduit une clé de DONNÉE — une ressource, un châssis, un
+type de défense, une colonne de dégâts, un module — en nom de sprite ; `CÂB T2`
+confronte chaque table à la table de données dont elle dépend, dans les deux
+sens. Les quatorze modules sont **dérivés** de leurs clés, pas tabulés : quatorze
+lignes écrites à la main seraient quatorze occasions de se tromper, et c'est le
+risque réel de cette famille.
+⚠ **LA GARDE S'EST DÉCLENCHÉE SUR LA PHRASE QUI LA DÉCRIVAIT.** `CÂB T4`
+cherche un nom de sprite entre guillemets dans `src/ui/` ; le commentaire
+d'import de `chantier.js` en citait un en exemple. C'est le cas que le dépôt
+raconte déjà pour `viewport-fit=cover`, vu par l'autre bout. ⚠ **ET ELLE NE
+RETIENT QUE CE QUI EST DANS L'ATLAS** : les sons du pack portent le même préfixe,
+et `ui/session.js` en nomme trois en clair, comme il doit.
+⚠⚠ **DEUX HARNAIS DE TEST ONT DÛ APPRENDRE QUELQUE CHOSE, ET AUCUN NE S'EST
+ASSOUPLI.** Le faux document de `recherche.test.js` ne savait pas recevoir
+`setAttribute`, que `creerPictogramme` emploie pour `aria-hidden` et
+`aria-label` ; et `casesDesVagues` d'`offense.test.js` descendait à plat dans les
+enfants d'une vague, donc dans le TITRE, qui porte maintenant un pictogramme et
+un nœud de texte — d'où une « lecture de `vague` sur `undefined` » à des lieues
+de sa cause. Il ne descend plus que dans la rangée d'emplacements, qui est
+nommée.
+⚠ **UN PICTOGRAMME EST DÉCORATIF OU IL PARLE, JAMAIS LES DEUX.** Posé à côté
+de son libellé il porte `aria-hidden` — le lecteur d'écran lirait deux fois la
+même chose ; SEUL dans son bouton — les deux flèches de la bascule entre bases,
+qui remplacent les glyphes `◀` et `▶` — il porte `role` et `aria-label`, sans
+quoi la bascule n'aurait plus de nom accessible. `CÂB T6` mesure les deux cas.
+⚠ **`ui_plus` ET `ui_moins` VONT AU PANNEAU DE TRANSFERT, ET NULLE PART
+AILLEURS.** Ce sont les deux seules lignes du jeu où un signe dit une OPÉRATION :
+la taxe RETIRE en chemin, le reçu AJOUTE à l'arrivée. Il n'existe aucun bouton de
+pas dans la page — le zoom se fait au doigt, arbitré le 30/08, « pas de zoom fixe
+avec + − ».
+⚠⚠ **LE RENDU A ÉTÉ VU DANS UN NAVIGATEUR, EN 375 × 812, ET PAS SUR L'APPAREIL
+D'ETHAN.** Quatre écrans regardés — bandeau, fiche d'un bâtiment, Recherche,
+Offense —, tout se dessine : le compteur passe d'« EMPLAC. » à « PTS OFF. » avec
+son dessin, la flèche verte n'apparaît que sur une amélioration possible, le
+cadenas marque les vignettes verrouillées, les modules ont remplacé la pastille.
+⚠ Ni le `dpr` 3, ni la police du système, ni le toucher : la taille `1.15em` et
+l'étroitesse des vignettes de palette restent à juger sur le téléphone.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ RELANCÉ, ET C'ÉTAIT CONFORME** :
+le câblage ne touche ni `art/`, ni un outil de la chaîne graphique — pas un octet
+d'`art/sprites/` ne change. Son verdict du lot précédent tient.
+
+**Auparavant, après le lot PICTOGRAMMES :**
+`npm test` → **1315 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 016 124 octets**, 0 référence externe. Coût **+911 octets, ENTIÈREMENT EN
+JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti depuis le lot
+précédent : **JavaScript +911 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total —
+**296 lignes `data:` avant, 296 après, 291 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **1 283 876 octets, 13,81 %**. Le lot touche
+`tools/planches.py`, `tools/atlas.py`, `src/data/atlas.js`,
+`art/sources-declarees.json` et fait entrer `art/sprites/interface/`.
+⚠⚠ **ETHAN, POINT 17 : « implantation pictogramme »**, avec l'archive
+`FoyerZero_S11_UI_complet_v1.zip`. **QUARANTE-SIX PICTOGRAMMES PRODUITS, ZÉRO
+CÂBLÉ** — l'arbitrage du brief, celui que SON-CATALOGUE avait pris avant
+SON-CÂBLAGE : décider où va chacun est quarante-six décisions d'interface, et ce
+n'est pas le même travail que de produire des images. **Aucune ligne dans
+`src/ui/`.**
+⚠⚠ **ET C'EST POUR ÇA QUE LE LIVRABLE NE PREND QUE 911 OCTETS, ALORS QUE LE
+BRIEF ATTENDAIT « LE PLUS GROS AJOUT D'IMAGES DEPUIS LONGTEMPS ».** Un fichier
+n'entre dans le livrable que par un MARQUEUR, et un marqueur se pose dans la
+page, c'est-à-dire dans `src/ui/`. La quatorzième famille est donc COUSUE et
+INDEXÉE sans être EMBARQUÉE : `atlas-interface-128.webp` pèse 175 454 octets,
+soit **233 938 en base64**, et c'est le lot de CÂBLAGE qui les paiera —
+projection **8 250 062 octets, marge 11,29 %**, toujours au-dessus des 10 % dont
+le brief demandait qu'on parle. Les 911 octets sont du JavaScript pur : les
+quarante-six noms et la grille 7 × 7 dans `src/data/atlas.js`.
+⚠⚠ **ETHAN A TRANCHÉ LA GRILLE DU CÂBLAGE LE JOUR MÊME : « 128. »** Le brief
+demandait de proposer la 64 si la seconde grille ne servait personne ; la 128
+l'emporte, et c'est la réponse qui ne demande RIEN — `GRILLE_ATLAS` de
+`tools/build.js` vaut déjà 128, `COTE_SPRITE` aussi, et la constante **reste
+unique** au lieu de devenir une valeur par famille. La grille 64 continue
+d'être produite comme pour les neuf autres familles : elle ne coûte rien au
+livrable, et la retirer serait une exception de plus pour zéro octet gagné.
+⚠ **LE CÂBLAGE EST PROPOSÉ EN QUATRE LOTS — §9 du rapport.** Seul le PREMIER
+paie des octets : il pose `--atlas-interface` dans `src/index.src.html` et
+`atlas('interface')` dans `tools/build.js`, et c'est LÀ que les 233 938 octets
+entrent. Les trois suivants ne font que remplacer des étiquettes par des fonds,
+`fondDuSprite('interface', …)` rendant déjà tout ce qu'il faut.
+⚠⚠ **`tools/atlas.py` ÉCRASAIT SANS CONDITION, ET CE LOT L'A DÉCOUVERT EN
+S'Y COGNANT.** Mesuré sur un arbre PRISTINE, avant qu'une ligne ne soit écrite :
+l'outil réécrit **dix atlas sur dix-huit** avec les octets de l'encodeur WebP de
+la machine, pour des images IDENTIQUES. Il porte désormais l'invariant que
+`tools/planches.py` a depuis toujours — « on n'écrase jamais un fichier existant
+qui ne se reproduit pas » —, et `atlas-empreintes.json` décrit le fichier
+RETENU, pas celui qu'on vient de coudre. `PIC T6` garde les dix-huit tailles en
+clair.
+⚠⚠ **LES GRILLES ONT ÉTÉ COMPTÉES SUR LES IMAGES, PAS RECOPIÉES DU
+MANIFESTE**, et deux planches sur neuf demandaient de regarder : **P11.8** montre
+quatre bandes verticales sans encre dont deux ne font que 11 et 6 px quand une
+vraie gouttière en fait 27 à 147 — ce sont des trous INTERNES au cadenas et à la
+jauge, la grille est bien 2 × 2 ; **P11.9** est 3 × 2 pour CINQ contenus, la
+sixième case est vide, mesurée à zéro pixel d'encre.
+⚠ **LES QUATORZE MODULES ONT ÉTÉ IDENTIFIÉS AU DESSIN.** Les planches
+s'annoncent « modules 1-8 » et « 9-14 », mais cette numérotation n'est PAS celle
+de `MODULES` — le cœur « PV +20 % » est le huitième de la première planche quand
+`pvPlusVingt` est le treizième de la table. `PIC T2 bis` confronte l'UNION des
+deux planches aux quatorze clés : une erreur d'attribution ferait manquer une clé
+et en laisserait une en trop.
+⚠ **ANCRAGE `centre`, ET PAS DE `cote_ref`** — c'est la leçon du 06/09 prise
+par l'autre bout. `ancrage='bas'` pose sur une ligne de sol commune, juste pour
+un bâtiment vu de côté, et il a coûté aux emblèmes 5 px de marge basse à tous les
+paliers. Un pictogramme n'a pas de sol, et deux pictogrammes n'ont aucune échelle
+commune : un cadenas n'est pas plus petit qu'un coffre. Mesuré sur les 46 × 2 :
+**1 px d'écart maximal, sur les DEUX AXES**, qui est l'arrondi d'une longueur
+d'encre impaire dans une case paire.
+⚠⚠ **ET UNE COUPE SUR VINGT TOMBAIT DANS UN DESSIN — TROUVÉE PAR LA MESURE.**
+`1024 / 3` ne tombe pas juste : la coupe arithmétique de P11.1 tombait à **682**
+quand sa gouttière finit à **679** et que l'éclair d'électricité commence à
+**680**. Trois colonnes de l'éclair entraient dans la cellule de la scorie —
+éliminées à l'érosion, mais assez pour gonfler la boîte que `recadrer` centre :
+`ui_scorie` sortait décalé de **11 px** sur la grille 128, soit **8,6 % d'une
+case**, et l'éclair perdait ces colonnes. `tools/planches.py` gagne
+**`verifier_les_coupes`**, qui LÈVE si une coupe interne tombe sur une colonne
+encrée — c'est ce que `tools/barrieres.py` dit déjà de sa propre coupe en deux —
+et **`COUPES_INTERFACE`**, qui porte les coupes explicites de la seule planche
+qui en demande. Les huit autres tombent juste, mesuré. Après correction, les
+deux axes valent 1 px, et `PIC T3` mesure MAINTENANT LES DEUX.
+⚠ **LES TROIS FLÈCHES VERTES NON CARRÉES RESTENT DORMANTES.** 1024 × 1024,
+1024 × 1536 et 1024 × 2048 : la chaîne coud des cellules CARRÉES à la taille de
+case, et la flèche verte est déjà dans P11.9. Elles restent déclarées dormantes,
+comme `icone_appli.png` — « dormante » ne veut pas dire « morte ».
+⚠ **VERDICTS DE LA CHAÎNE : `tools/planches.py --verifier` rend 124
+identiques à l'octet, 0 différent, 0 nouveau** — 32 avant le lot, +92 pour les
+46 pictogrammes × 2 grilles. ⚠⚠ **MAIS SEULEMENT SOUS PILLOW 10.4 :** sous
+Pillow 12.3.0 le même outil rend **0 identique / 32 différents** sur un arbre
+PRISTINE, et les 32 ont des PIXELS IDENTIQUES — seuls les octets de l'encodeur
+PNG diffèrent. Ne pas lire « chaîne cassée » là où il y a un changement de
+bibliothèque.
+⚠ **`opusenc` EST ABSENT DE CETTE MACHINE**, et `tools/sons.py` sort en
+erreur avec sa commande d'installation, comme la table de `verifier.py`
+l'annonce. `tools/entrees.py --declarer` a donc été joué avec un `opusenc`
+LOCAL délégant à `ffmpeg`, dans le bac à sable jetable de la trace — et le
+résultat est vérifiable de face : la déclaration ne bouge QUE des neuf planches,
+qui passent de dormantes à consommées.
+⚠ **LES TREIZE OUTILS ÉCRIVENT LEURS FICHIERS TEXTE SANS `newline=`** : sous
+Windows, `tools/atlas.py` rend `src/data/atlas.js` et `atlas-empreintes.json` en
+CRLF, soit un diff de fichier entier pour cinquante lignes ajoutées. Normalisé à
+la main ici ; le corriger dans les treize outils est un lot à part.
+
+**Auparavant, après le lot EFFONDREMENT :**
 `npm test` → **1307 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 015 213 octets**, 0 référence externe. Coût **+1 063 octets, ENTIÈREMENT EN
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
@@ -7137,7 +7352,7 @@ src/sim/                simulation déterministe, sans DOM — 28 fichiers
     MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
     l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 13 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 14 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
@@ -7147,6 +7362,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 13 fi
   terrain.js            le sol de la carte : quels dessins, où, et avec quel poids
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
+  nombre.js             comment un grand nombre s'écrit : trois chiffres et un suffixe
   embleme.js            quel dessin porte un site de la carte : palier, saveur, emprise
   ⤷ ⚠⚠ AU SINGULIER, ET CE N'EST PAS NÉGOCIABLE. `tools/emblemes.py` produit les
     sprites que ce module nomme ; un sélecteur de téléphone n'affiche que les
@@ -7230,7 +7446,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 13 fi
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
+src/ui/                 les sept écrans, leurs éditeurs et les pictogrammes — 13 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
@@ -7243,6 +7459,7 @@ src/ui/                 les sept écrans et leurs éditeurs — 12 fichiers
   arsenal.js            éditeur d'assaut — module PUR
   defense.js            éditeur de garnison — module PUR
   son.js                l'adaptateur audio : il joue, il ne décide de rien
+  pictogramme.js        les 46 pictogrammes : une table par famille, un poseur
   ⤷ ⚠⚠ IL DÉCODE PARESSEUSEMENT DEPUIS LE LOT SON-CATALOGUE, ET C'EST LE POINT
     DUR DU CATALOGUE. Un son décodé pèse `durée × 48 000 × 4` : les 263 feraient
     **64,7 Mo** contre 890 417 octets de fichiers. Rien n'est décodé au
@@ -7408,7 +7625,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   56 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   57 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -7417,7 +7634,7 @@ test/                   56 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   raid-ouvrage  euclide  deplacement
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
-  son  journal  raid-ecran  arret  embleme  colonne
+  son  journal  raid-ecran  arret  embleme  colonne  pictogramme
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

@@ -144,6 +144,22 @@ FAMILLES = {
     # l'écran ; c'est reproduit et mesuré dans `tools/limites.py`. La pointe est
     # ce carré-là, et elle n'est PAS `angle_l`, qui est un coin SORTANT.
     'limite': ('limite', 34, ()),
+    # ⚠⚠ LA QUATORZIÈME FAMILLE, ET LA PREMIÈRE QUI NE SOIT PAS DU JEU MAIS DE
+    # L'INTERFACE — lot PICTOGRAMMES, 07/09. Quarante-six pictogrammes : trois
+    # ressources, quatre points stratégiques, six cibles et châssis, quatre
+    # catégories de défense, les QUATORZE modules, six stats et actions, quatre
+    # états d'interface, cinq flèches et signes.
+    #
+    # ⚠⚠ ET ELLE EST COUSUE AVANT SON LOT DE CÂBLAGE, CONTRE LA RÈGLE ÉCRITE
+    # QUATRE-VINGTS LIGNES PLUS HAUT. Elle dit « on ajoute une ligne ici QUAND LE
+    # LOT QUI CONSOMME LA FAMILLE ARRIVE, jamais avant : chaque famille cousue
+    # est un `data:` de plus dans le HTML livré ». Le brief du 07/09 demande
+    # explicitement l'inverse — « bâtir l'atlas et l'ajouter à
+    # `src/data/atlas.js` » — tout en renvoyant le câblage à un second lot. Le
+    # coût est donc PAYÉ AVANT D'ÊTRE UTILISÉ, il est mesuré au rapport, et
+    # Ethan tranche : retirer cette ligne rend les octets et laisse les sprites
+    # sur le disque, prêts.
+    'interface': ('interface', 46, ()),
     # ⚠⚠ `bord/` N'EST PAS ICI, ET CE N'EST PAS UN OUBLI. Le mur de contour ne
     # tient pas dans une case : ses sprites font 512 × 64, 64 × 512 et 64 × 64
     # (arbitrage d'Ethan du 31/08, « divise par deux l'asset original […] le mur
@@ -316,11 +332,6 @@ def main():
         for dossier, (slug, effectif, exclus) in FAMILLES.items():
             noms, chemin = sprites_de(dossier, effectif, exclus, cote)
             octets, colonnes, rangees = coudre(noms, chemin, cote)
-            if cote == COTE_INDEX:
-                sprites = [(n, empreinte(open(os.path.join(chemin, n + '.png'), 'rb').read()))
-                           for n in noms]
-                familles[slug] = (colonnes, rangees, noms, sprites)
-                empreintes_atlas[slug] = empreinte(octets)
             sortie = os.path.join(SPRITES, f'atlas-{slug}-{cote}.{EXTENSION}')
             etat = comparer(sortie, octets)
             if etat == 'identique':
@@ -331,9 +342,36 @@ def main():
             else:
                 nouveaux += 1
                 print(f'  NOUVEAU atlas-{slug}-{cote}.{EXTENSION}')
-            if args.ecrire:
+            # ⚠⚠ ON N'ÉCRASE JAMAIS UN ATLAS EXISTANT QUI NE SE REPRODUIT PAS —
+            # lot PICTOGRAMMES, 07/09. C'est l'invariant que `planches.py` porte
+            # depuis toujours, mot pour mot : « s'il diverge, c'est que sa
+            # provenance n'est pas entièrement dans cette chaîne, et le fichier
+            # commité fait foi jusqu'à preuve du contraire ». Cet outil-ci ne
+            # l'avait pas, et il écrasait.
+            #
+            # ⚠⚠ ET CE N'EST PAS THÉORIQUE : mesuré le 07/09 sur un arbre
+            # PRISTINE, `--verifier` rend **8 identiques, 10 différents** avant
+            # qu'une seule ligne de ce lot ne soit écrite. Les images sont les
+            # mêmes — les sprites qui les composent, eux, se reproduisent à
+            # l'octet — c'est l'ENCODEUR WebP de la machine qui diffère de celui
+            # qui a produit les fichiers commités. Sans cette garde, ajouter une
+            # famille réécrivait ONZE atlas sans rapport avec elle, pour des
+            # images identiques.
+            #
+            # ⚠ ET L'EMPREINTE SUIT LE FICHIER RETENU, pas celui qu'on vient de
+            # coudre : `atlas-empreintes.json` doit décrire ce qui est SUR LE
+            # DISQUE, sinon `test/sprite.test.js` tombe en accusant l'atlas
+            # d'avoir changé alors que c'est le manifeste qui aurait menti.
+            garde = (etat == 'different')
+            if args.ecrire and not garde:
                 with open(sortie, 'wb') as f:
                     f.write(octets)
+            if cote == COTE_INDEX:
+                sprites = [(n, empreinte(open(os.path.join(chemin, n + '.png'), 'rb').read()))
+                           for n in noms]
+                familles[slug] = (colonnes, rangees, noms, sprites)
+                retenus = open(sortie, 'rb').read() if (garde and os.path.exists(sortie)) else octets
+                empreintes_atlas[slug] = empreinte(retenus)
             print(
                 f'{dossier:16} {cote:4d}  {len(noms):4d} sprites  '
                 f'{colonnes}×{rangees}  {len(octets):7d} o  ({len(octets) * 4 // 3} o en base64)'

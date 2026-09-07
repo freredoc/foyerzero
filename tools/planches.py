@@ -107,6 +107,148 @@ APPENDICE = set()
 RENOMMAGE = {'usine': 'depot_de_vehicules'}
 
 
+# ---------------- interface : les pictogrammes du lot S11 --------------------
+#
+# ⚠⚠ QUATORZIÈME FAMILLE, ET LA PREMIÈRE QUI NE SOIT PAS DU JEU MAIS DE
+# L'INTERFACE. Les treize autres dessinent ce que le joueur regarde sur un
+# terrain — bâtiments, unités, défenses, sol, emblèmes ; celle-ci dessine ce que
+# l'écran DIT. Elle sort donc de la logique d'échelle des autres : voir
+# `EMPRISE_INTERFACE` juste dessous.
+#
+# ⚠⚠ LES GRILLES SONT MESURÉES, PAS RECOPIÉES DU MANIFESTE. `S11_UI_CONTENU.txt`
+# annonce des tailles ; les gouttières de fond magenta ont été comptées sur les
+# neuf images avant d'écrire une seule ligne. Sept planches confirment le
+# manifeste. Les deux autres demandaient de regarder :
+#   — P11.8 montre QUATRE bandes verticales sans encre, mais deux ne font que 11
+#     et 6 px quand une vraie gouttière en fait 27 à 147 : ce sont des trous
+#     INTERNES au cadenas et à la jauge, pas des séparations. La grille est bien
+#     2 × 2.
+#   — P11.9 est une grille 3 × 2 pour CINQ contenus : la sixième case est VIDE,
+#     mesuré à zéro pixel d'encre. C'est le `None` de la table.
+#
+# ⚠ LES QUATORZE MODULES SONT NOMMÉS PAR LEUR CLÉ DE `src/data/modules.js`, ET
+# CE N'EST PAS UNE DEVINETTE. Les deux planches s'annoncent « modules 1-8 » et
+# « 9-14 », mais cette numérotation n'est PAS celle de la table — le cœur
+# « PV +20 % » est le huitième de la première planche quand `pvPlusVingt` est le
+# treizième de `MODULES`. Les quatorze ont donc été identifiés au dessin, et la
+# preuve est dans l'UNION : les huit de P11.5 et les six de P11.6 rendent
+# exactement les quatorze clés de la table, sans doublon ni manque. Un test le
+# confronte.
+INTERFACE = [
+    ('P11.1_ressources_3x1_1024.png', 3, 1, [
+        ['quartz', 'scorie', 'electricite'],
+    ]),
+    ('P11.2_points_strategiques_2x2_1024.png', 2, 2, [
+        ['points_attaque', 'armee_offensive'],
+        ['armee_defensive', 'recherche'],
+    ]),
+    # ⚠ LA TROISIÈME CIBLE S'APPELLE `aviation` ET LA COLONNE DE DÉGÂTS
+    # `structureOuAviation` : le pictogramme dessine un avion dans un réticule,
+    # donc la moitié qu'il montre. Nommer le sprite d'après la colonne ferait
+    # promettre une structure que personne n'a dessinée.
+    ('P11.3_cibles_chassis_3x2_1024.png', 3, 2, [
+        ['cible_infanterie', 'cible_vehicule', 'cible_aviation'],
+        ['chassis_escouade', 'chassis_blinde', 'chassis_aeronef'],
+    ]),
+    ('P11.4_categories_defense_2x2_1024.png', 2, 2, [
+        ['categorie_mur', 'categorie_barriere'],
+        ['categorie_tourelle', 'categorie_artillerie'],
+    ]),
+    ('P11.5_modules_1-8_4x2_1024.png', 4, 2, [
+        ['module_flashbang', 'module_camouflage', 'module_emp', 'module_munition_speciale'],
+        ['module_tir_de_barrage', 'module_vol_de_vie', 'module_booster', 'module_pv_plus_vingt'],
+    ]),
+    ('P11.6_modules_9-14_3x2_1024.png', 3, 2, [
+        ['module_garnison', 'module_rayon_mini_moins_un', 'module_ecraseur'],
+        ['module_rayon_plus_un', 'module_auto_reparation', 'module_bouclier'],
+    ]),
+    ('P11.7_stats_actions_3x2_1024.png', 3, 2, [
+        ['pv', 'degats', 'butin'],
+        ['reparation', 'temps', 'niveau'],
+    ]),
+    ('P11.8_etats_interface_2x2_1024.png', 2, 2, [
+        ['verrou', 'emplacement'],
+        ['vague', 'budget'],
+    ]),
+    # ⚠ LA SIXIÈME CASE EST VIDE, MESURÉE À ZÉRO PIXEL D'ENCRE. `None` la saute ;
+    # inventer un nom pour du vide ferait un sprite transparent que
+    # `recadrer` refuserait — il cherche la boîte de l'encre et `xs.max()`
+    # lèverait sur un tableau vide.
+    ('P11.9_fleches_plus_moins_3x2_1024.png', 3, 2, [
+        ['fleche_gauche', 'fleche_droite', 'fleche_verte'],
+        ['plus', 'moins', None],
+    ]),
+]
+
+# L'emprise d'un pictogramme, en gros pixels d'une grille de 32.
+#
+# ⚠⚠ 28, ET C'EST LE PLAFOND DES BÂTIMENTS, PAS UNE VALEUR NEUVE. `cible(pv)` de
+# `final128.py` rend 16 pour le plus petit bâtiment et 28 pour le plus grand :
+# 28 est donc la plus grande emprise que cette chaîne ait jamais produite, soit
+# 87,5 % de la case. Un pictogramme se lit petit et n'a rien à côté de lui : il
+# prend tout ce que la chaîne sait donner, et les 12,5 % restants sont la marge
+# qui l'empêche de toucher le bord — sans elle, l'érosion de `conditionner`
+# mordrait dans le dessin.
+#
+# ⚠ ET IL N'Y A PAS DE `cote_ref` : `produire` passe le défaut `None`, donc
+# CHAQUE cellule est normalisée séparément. C'est juste ici et faux ailleurs —
+# la référence commune sert à garder le rapport de taille entre les paliers d'un
+# MÊME sujet, et deux pictogrammes n'ont aucune échelle commune : un cadenas
+# n'est pas plus petit qu'un coffre. Le lot EMBLÈMES-ABÎMÉS l'a mesuré dans
+# l'autre sens, sur des bases de niveaux différents.
+#
+# ⚠⚠ L'ANCRAGE EST `centre`, ET C'EST LE DÉFAUT DE `recadrer` — donc rien à
+# passer. C'est la leçon du 06/09 : `ancrage='bas'` pose sur une ligne de sol
+# commune, juste pour un bâtiment vu de CÔTÉ, et il a coûté aux emblèmes de
+# carte 5 px de marge basse à tous les paliers et jusqu'à 35 px de vide en haut.
+# Un pictogramme n'a pas de sol.
+EMPRISE_INTERFACE = 28
+
+
+# ⚠⚠ UNE PLANCHE SUR NEUF NE SE COUPE PAS EN PARTS ÉGALES, ET ÇA S'EST VU AU
+# PIXEL. `1024 / 3` ne tombe pas juste : la coupe arithmétique de P11.1 tombe à
+# 682, alors que sa seconde gouttière finit à 679 et que l'éclair d'électricité
+# commence à 680. Résultat mesuré : trois colonnes de l'éclair entraient dans la
+# cellule de la scorie — assez pour gonfler la boîte que `recadrer` centre, donc
+# pour décaler `ui_scorie` de 11 px vers la gauche sur la grille 128, soit 8,6 %
+# d'une case — et l'éclair perdait ces trois colonnes-là.
+#
+# ⚠ LES HUIT AUTRES PLANCHES TOMBENT JUSTE, mesuré aussi : leurs coupes sont
+# toutes DANS une gouttière. Une seule fait exception, elle seule a une ligne.
+#
+# ⚠⚠ ET C'EST LA GARDE `verifier_les_coupes` QUI L'A TROUVÉE, PAS UNE RELECTURE.
+# Sans elle une coupe qui traverse un dessin ne casse rien : elle rend deux
+# sprites tronqués, et personne ne le voit avant de regarder les quarante-six.
+# C'est mot pour mot ce que `tools/barrieres.py` dit de sa propre coupe en deux.
+COUPES_INTERFACE = {
+    'P11.1_ressources_3x1_1024.png': ([0, 342, 663, 1024], None),
+}
+
+
+def verifier_les_coupes(encre, fichier, cx, cy):
+    """Lève si une coupe INTERNE tombe sur une colonne ou une ligne encrée."""
+    for axe, coupes, occupe in (('colonne', cx, encre.any(axis=0)),
+                                ('ligne', cy, encre.any(axis=1))):
+        for c in coupes[1:-1]:
+            if occupe[c]:
+                raise ValueError(
+                    '%s : la coupe en %s %d tombe dans le dessin — la planche '
+                    'ne se coupe pas en parts égales, lui donner ses coupes '
+                    'dans COUPES_INTERFACE.' % (fichier, axe, c))
+
+
+def decouper(im, fichier, nx, ny):
+    """Les `nx+1` et `ny+1` bornes de coupe d'une planche d'interface."""
+    largeur, hauteur = im.size
+    explicites = COUPES_INTERFACE.get(fichier, (None, None))
+    cx = explicites[0] or [i * (largeur // nx) for i in range(nx)] + [largeur]
+    cy = explicites[1] or [j * (hauteur // ny) for j in range(ny)] + [hauteur]
+    a = np.array(im.convert('RGBA'))
+    encre = (~est_fond(a[..., :3])) & (a[..., 3] >= 128)
+    verifier_les_coupes(encre, fichier, cx, cy)
+    return cx, cy
+
+
 def sha(chemin):
     with open(chemin, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
@@ -145,6 +287,27 @@ def taches():
                 out.append(('bâtiment', nom, os.path.join(SRC, fn),
                             (i * cw, j * ch, (i + 1) * cw, (j + 1) * ch),
                             cible(PV[cle]), ouv))
+    # --- les pictogrammes d'interface, lot PICTOGRAMMES du 07/09 -------------
+    #
+    # ⚠ `ouvrage=False` POUR TOUS, ET CE N'EST PAS UN DÉFAUT PRIS PAR HABITUDE.
+    # Le drapeau n'ouvre que les teintes violettes de `pal()`, qui sont celles de
+    # l'Ouvrage. Un pictogramme n'appartient à aucun camp : il dit une grandeur.
+    # ⚠⚠ ET LA PALETTE NE CONTRAINT PLUS LES COULEURS DEPUIS LE LOT PIXELS :
+    # `ecrire` réduit par FILTRE quand la matière lui est passée, et `produire`
+    # la lui passe. La flèche VERTE de P11.9 garde donc son vert, qui n'est
+    # pourtant dans aucune des quatorze teintes de base — vérifié plutôt que
+    # supposé, un test le mesure.
+    for fn, nx, ny, gr in INTERFACE:
+        im = Image.open(os.path.join(SRC, fn))
+        cx, cy = decouper(im, fn, nx, ny)
+        for j in range(ny):
+            for i in range(nx):
+                cle = gr[j][i]
+                if cle is None:
+                    continue
+                out.append(('interface', 'ui_' + cle, os.path.join(SRC, fn),
+                            (cx[i], cy[j], cx[i + 1], cy[j + 1]),
+                            EMPRISE_INTERFACE, False))
     return out
 
 

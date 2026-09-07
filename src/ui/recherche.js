@@ -46,6 +46,11 @@ import {
   NOMS_CLASSE, NOMS_ACCENT,
 } from '../render/scene.js';
 import { poserCouches, nomDeLaPieceDeDefense as nomDeLaPiece } from './chantier.js';
+// ⚠ LE PICTOGRAMME D'UN MODULE SE DÉRIVE DE SA CLÉ, il ne s'écrit pas —
+// voir `./pictogramme.js`. Les planches s'annoncent « modules 1-8 » et
+// « 9-14 » sans que cette numérotation soit celle de `MODULES` : une table
+// recopiée ici serait la première à décaler six noms sur quatorze.
+import { PICTOGRAMMES, creerPictogramme, pictogrammeDuModule } from './pictogramme.js';
 
 /** Les trois panneaux, dans l'ordre où le défilement horizontal les présente. */
 export const PANNEAUX = [...BRANCHES, 'special'];
@@ -466,9 +471,14 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
       }
       // ⚠ LA PASTILLE TIENT LA LARGEUR DU SPRITE, et c'est elle qui dit
       // « module » maintenant que le retrait a disparu.
+      // ⚠⚠ LA PASTILLE `◈` DEVIENT LE DESSIN DU MODULE — lot CÂBLAGE, 07/09.
+      // Elle tenait la largeur du sprite d'une pièce et disait « module » par un
+      // losange identique pour les quatorze ; chacun a maintenant son
+      // pictogramme, tiré de sa clé. La classe RESTE `pastille` : c'est elle qui
+      // tient la largeur, et la feuille n'a pas à connaître ce changement.
       const pastille = doc.createElement('span');
       pastille.className = 'pastille';
-      pastille.textContent = '◈';
+      pastille.append(creerPictogramme(doc, pictogrammeDuModule(achat.nom), achat.libelle));
       return cadreDOM(branche, ligne.id, 'module', achat,
         achat.libelle, pastille, achat.description);
     });
@@ -479,7 +489,14 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
     // ⚠ TOUT REPEINDRE DÉSARME. Les nœuds armés sont détruits juste après ;
     // garder la référence donnerait un bouton armé qui n'est plus dans la page.
     arme = null;
-    compteur.textContent = `${formaterPoints(BigInt(etat.recherche.pointsMilli))} points`;
+    // ⚠ LE COMPTEUR PORTE LE PICTOGRAMME DE LA RECHERCHE, et c'est le seul
+    // endroit de la page où celui-ci a un sens : il ne dit pas un objet mais une
+    // MONNAIE, celle que cet écran dépense.
+    compteur.textContent = '';
+    compteur.append(
+      creerPictogramme(doc, PICTOGRAMMES.recherche),
+      doc.createTextNode(`${formaterPoints(BigInt(etat.recherche.pointsMilli))} points`),
+    );
     for (const branche of BRANCHES) {
       const panneau = corps[branche];
       panneau.textContent = '';
