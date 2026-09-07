@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.16 · build 117.
+Dernière révision : **07/09/2026**, version 0.99.17 · build 118.
 
 ---
 
@@ -42,7 +42,72 @@ Dernière révision : **07/09/2026**, version 0.99.16 · build 117.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot CIBLES-RANGÉES), à confronter :**
+**Référence au 07/09/2026 (après le lot EFFONDREMENT), à confronter :**
+`npm test` → **1305 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 014 921 octets**, 0 référence externe. Coût **+771 octets, ENTIÈREMENT EN
+JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **JavaScript +771 · feuille +0 ·
+balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 285 079 octets,
+13,82 %**. Le lot touche `src/ui/raid.js` et `src/data/sites.js`.
+⚠⚠ **ETHAN, POINT 12 : « lors d'une victoire totale, juste après la destruction
+et avant le rapport, détruire les unités et bâtiments de défense en 2
+secondes. »** Arbitrage du même jour : **purement visuel, l'état ne bouge pas** —
+et c'était DÉJÀ vrai, `executerRaid` commettant tout avant la première image
+(arbitrage « A » du 01/09). **Aucune ligne dans `src/sim/`**, et `EFF T3` le
+mesure par `deepEqual` de l'état pris AU MILIEU de l'effondrement.
+⚠⚠ **LES QUATRE CHOIX DU §3, ÉCRITS PLUTÔT QUE LAISSÉS AU CÂBLAGE.** ① La page
+masquée COUPE l'effondrement et va droit au rapport — cinquième garde de
+`visibilitychange`, placée AVANT `combat.termine`, faute de quoi elle renverrait
+sans rien conclure. ② Le toucher **n'abrège pas** : deux secondes est sous le
+seuil où un raccourci paie sa complexité, le canevas porte déjà le pincement et
+le glissement, et Ethan a refusé un raccourci le 06/09 — « bouton passer non ».
+③ La **simulation ne s'effondre pas** : elle ne commande rien à personne, comme
+le son qui ne part que sur la vraie attaque. ④ **« Instantané » n'attend pas** :
+son sens est d'aller au bout tout de suite.
+⚠⚠ **UN DÉFAUT DU LOT A ÉTÉ TROUVÉ PAR `EFF T4`, PAS À LA RELECTURE.** Sans la
+garde `deroule`, une image arrivant APRÈS le rapport RELANÇAIT l'effondrement —
+`finDuDeroule` remet le compteur à `null`, le combat est toujours terminé, et la
+condition répond encore oui : le site se serait remis à tomber derrière le
+panneau de résultat, en boucle. En production `arreterBoucle` annule la demande
+et cette image n'arrive pas, mais **compter sur une annulation n'est pas une
+conception**.
+⚠ **LE TEMPS SE PREND SUR LA BOUCLE D'IMAGES, JAMAIS SUR UN `setTimeout`** —
+`EFF T9` le mesure par un compteur ET par la source. Une seconde horloge ne se
+figerait pas avec la première en arrière-plan, ce qui est le défaut même que le
+lot RETOUR-DE-RAID a réparé. Les deux plafonds d'interpolation ne bougent pas.
+⚠ **LA DURÉE VIT DANS `ECRAN_RAID.effondrementMs`, PAS DANS L'ÉCRAN.** `EFF T1`
+la mesure par un ÉCART : le même raid joué à 0, 2 000 et 4 000 ms coûte 0, 8 et
+16 images de 250 ms — proportionnel, donc ce n'est pas un délai fixe écrit à
+côté. `EFF T8` interdit en plus tout `2000` en clair dans `src/ui/raid.js`.
+⚠⚠ **RELEVÉ DES SPRITES DE DESTRUCTION, ET IL TROUVE DEUX GISEMENTS DORMANTS.**
+`art/sprites/effet/{64,128}` porte **douze PNG d'explosion** — aéronef,
+champignon, normale, quatre images chacune — et **aucune famille `effet`
+n'existe dans `src/data/atlas.js`** : elles ne sont dans aucun atlas, donc dans
+aucun livrable. Et `ruine_j` / `ruine_o` sont dans l'atlas `batiment`, donc DANS
+le livrable, **employées par personne**. C'est `ui_pause` deux fois. Ce lot ne
+les ramasse pas — les employer coûterait une famille d'atlas et des octets
+d'images —, mais il les nomme.
+⚠ **AUCUN `data:` DE PLUS, AUCUNE TEINTE NEUVE** : l'effondrement fait
+DISPARAÎTRE les entités, il n'en dessine pas de nouvelles.
+⚠ **L'ORDRE DE CHUTE SUIT L'ASSAUT** — rangée croissante, puis colonne, puis
+indice : la vague court derrière l'attaquant et finit sur la Souche. Elle ne
+touche QUE le camp `defense` : les unités d'assaut survivantes restent, ce sont
+elles qui ont gagné.
+⚠ **`SAVE_VERSION` RESTE À 27** — rien n'est ajouté à l'état.
+⚠ **DIX TESTS ENTRENT — `EFF T1` à `EFF T10` — ET LE COMPTE PASSE DE 1 295 À
+1 305.** **Aucune assertion n'a été retirée ni assouplie** ; le faux document de
+`raid-ecran.test.js` apprend seulement à RETENIR sa rappel d'image, ce qui ne
+change rien aux tests qui comptaient sur une boucle qui ne rappelle jamais.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Ce lot est le premier depuis longtemps dont l'objet EST
+un effet visuel : ce qui est mesuré ici est le TEMPS et l'ÉTAT, pas l'aspect. La
+disparition progressive elle-même n'a été vue par personne.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot CIBLES-RANGÉES :**
 `npm test` → **1295 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 014 150 octets**, 0 référence externe. Coût **+1 263 octets, ENTIÈREMENT EN
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un

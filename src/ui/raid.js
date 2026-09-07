@@ -337,6 +337,78 @@ export function plafondDuZoom(dpr) {
 // manque. On demande, puis on agit — jamais un `try` autour du geste.
 
 /** Les modes de la barre du raid — même forme que `ACTIONS_ARMEE` d'Offense. */
+// ---------------------------------------------------------------------------
+// L'effondrement du site — lot EFFONDREMENT, 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, POINT 12 : « lors d'une victoire totale, juste après la destruction
+// et avant le rapport, détruire les unités et bâtiments de défense en 2
+// secondes. » Arbitrage du même jour : **purement visuel, l'état ne bouge pas.**
+//
+// ⚠⚠ ET C'EST DÉJÀ VRAI AVANT CE LOT, CE QUI EST LA PREMIÈRE CHOSE À DIRE.
+// `executerRaid` commet TOUT l'état avant la première image — arbitrage « A » du
+// 01/09, écrit en tête de `rejouer` : « LE DÉROULÉ EST UN REJEU, PAS LA SOURCE DE
+// VÉRITÉ. » L'effondrement est donc du DESSIN : il ne retire aucune entité de
+// l'état, ne touche aucun PV, ni le butin, ni le rapport. **Aucune ligne de ce
+// lot n'entre dans `src/sim/`**, et `EFF T3` le mesure par `deepEqual`.
+
+/**
+ * L'ordre dans lequel le site s'effondre : de l'avant vers le fond.
+ *
+ * ⚠⚠ IL SUIT LE CHEMIN DE L'ASSAUT, ET C'EST LA SEULE LECTURE QUI SE DÉFENDE.
+ * La rangée 3 est celle que l'assaut rencontre en premier, la 18 celle où sont
+ * la Souche et l'Étai. Effondrer dans cet ordre fait courir la vague derrière
+ * l'attaquant, et elle se termine sur les deux objectifs du raid. L'ordre
+ * d'insertion des entités aurait donné l'inverse — bâtiments d'abord, donc le
+ * fond avant l'avant — sans qu'aucune raison ne le fonde.
+ *
+ * ⚠ LA COLONNE DÉPARTAGE, ET IL FAUT QU'ELLE LE FASSE : deux entités de la même
+ * rangée doivent avoir un ordre, sinon `sort` tranche et l'effondrement change
+ * de dessin d'un moteur JavaScript à l'autre. L'indice ferme l'ordre — deux
+ * entités ne peuvent pas partager une case, mais le dire coûte une comparaison.
+ *
+ * ⚠ ET ELLE NE LIT QUE LE CAMP DE LA DÉFENSE. Les unités d'assaut SURVIVANTES
+ * restent à l'écran : ce sont elles qui ont gagné, et les faire disparaître avec
+ * le site dirait le contraire de ce qui vient de se passer.
+ *
+ * @param {Array<object>} entites entités de combat
+ * @returns {number[]} les indices, dans l'ordre où ils tombent
+ */
+export function ordreDeLEffondrement(entites) {
+  return entites
+    .filter((e) => e.camp === 'defense' && e.vivant && !e.sorti)
+    .slice()
+    .sort((a, b) => a.rangeeMilli - b.rangeeMilli
+      || a.colonneMilli - b.colonneMilli
+      || a.indice - b.indice)
+    .map((e) => e.indice);
+}
+
+/**
+ * Les indices DÉJÀ tombés à cet instant de l'effondrement.
+ *
+ * ⚠ LE COMPTE EST PROPORTIONNEL, ET IL ATTEINT LE TOTAL À LA FIN. À `ecouleMs`
+ * nul, personne n'est tombé — l'image qui suit immédiatement la fin du combat
+ * montre donc le site intact, ce qui est ce que le joueur vient de voir. À
+ * `dureeMs`, tout le monde est tombé, et c'est cette image-là que le rapport
+ * recouvre.
+ *
+ * ⚠ UNE DURÉE NULLE OU NÉGATIVE FAIT TOUT TOMBER D'UN COUP plutôt que de
+ * diviser par zéro. C'est le comportement qu'on veut d'une table réglée à zéro :
+ * pas d'effondrement, pas d'exception.
+ *
+ * @param {Array<object>} entites
+ * @param {number} ecouleMs temps écoulé depuis la fin du combat
+ * @param {number} dureeMs durée totale, lue dans `ECRAN_RAID`
+ * @returns {Set<number>} indices des entités à ne plus dessiner
+ */
+export function effondrees(entites, ecouleMs, dureeMs) {
+  const ordre = ordreDeLEffondrement(entites);
+  if (!(dureeMs > 0)) return new Set(ordre);
+  const part = Math.max(0, Math.min(1, ecouleMs / dureeMs));
+  return new Set(ordre.slice(0, Math.floor(ordre.length * part)));
+}
+
 export const MODES_RAID = {
   reparer: {
     bouton: 'raid-reparer',
@@ -418,6 +490,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let enPause = false;
   let projection = null;
   let simulation = false;
+  /**
+   * Millisecondes écoulées depuis la fin du combat, ou `null` hors effondrement.
+   *
+   * ⚠ `null` ET PAS ZÉRO, ET LA DIFFÉRENCE PORTE TOUT LE CÂBLAGE. Zéro est le
+   * premier instant de l'effondrement — le site encore intact —, `null` veut
+   * dire qu'il n'y en a pas, et c'est ce que `finDuDeroule` teste pour savoir
+   * s'il doit montrer le rapport tout de suite.
+   */
+  let effondrementMs = null;
 
   // --- la vue : quelle bande, à quelle taille, et où -------------------------
   //
@@ -573,6 +654,51 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     dessiner();
   }
 
+  /**
+   * Ce combat doit-il s'effondrer à l'écran avant le rapport ?
+   *
+   * ⚠⚠ LA CONDITION SE LIT, ELLE NE SE RECALCULE PAS. `rapport.rase` sert déjà à
+   * `$('raid-reattaquer').hidden` : c'est la MÊME vérité — « le site n'existe
+   * plus » —, et en dériver une seconde ici en ferait deux qui divergeraient au
+   * premier ajustement du moteur de raid.
+   *
+   * ⚠⚠ ET LA SIMULATION NE S'EFFONDRE PAS — DÉCISION DU LOT. Le simulateur ne
+   * commande rien à personne : le bandeau « SIMULATEUR » existe pour qu'on ne
+   * confonde pas un essai avec un ordre, et une animation de destruction y
+   * ferait croire à une destruction. C'est la même garde que celle du son, qui
+   * ne part que sur la vraie attaque, et que la deuxième des quatre de
+   * `visibilitychange`.
+   */
+  function doitSEffondrer() {
+    return !simulation && rapportCourant !== null && rapportCourant.rase === true;
+  }
+
+  /**
+   * Le combat tel qu'on le DESSINE — le vrai, ou celui dont les tombés sont
+   * marqués morts.
+   *
+   * ⚠⚠ ON COPIE, ON NE MUTE PAS, et c'est le §2 du brief pris au mot : l'état de
+   * combat appartient au rejeu, l'effondrement est du dessin. `EFF T3` compare
+   * l'état de la partie avant et après par `deepEqual`.
+   *
+   * ⚠⚠ ET LA LISTE GARDE SA LONGUEUR — on marque `vivant: false`, on ne FILTRE
+   * pas. `render/scene.js` fait `etat.entites[e.cibleIndice]` à deux endroits :
+   * une liste raccourcie ferait pointer ces deux lectures sur la mauvaise
+   * entité. `visible()` teste `vivant && !sorti`, donc marquer suffit — et les
+   * barres de PV disparaissent avec la pièce, ce qui est ce qu'on veut.
+   */
+  function combatDessine() {
+    if (effondrementMs === null || combat === null) return combat;
+    const tombees = effondrees(combat.entites, effondrementMs, ECRAN_RAID.effondrementMs);
+    if (tombees.size === 0) return combat;
+    return {
+      ...combat,
+      entites: combat.entites.map(
+        (e) => (tombees.has(e.indice) ? { ...e, vivant: false } : e),
+      ),
+    };
+  }
+
   function dessiner() {
     if (ctx === null || combat === null || projection === null) return;
     const debut = (doc.defaultView?.performance ?? globalThis.performance)?.now() ?? 0;
@@ -585,7 +711,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // Passer la graine du site à la place ferait un second tirage : le même
       // obstacle, à la même case, n'aurait plus le même dessin des deux côtés,
       // et c'est très exactement ce que ce point d'Ethan demande de refermer.
-      listeAffichage(combat, projection, precedentes,
+      listeAffichage(combatDessine(), projection, precedentes,
         combat.termine ? 0 : alphaMilli(accumulateur, vitesse), fondCourant,
         etatCourant.graine),
       atlas ?? {},
@@ -607,8 +733,33 @@ export function initialiserEcranRaid(doc, crochets = {}) {
         avancerDUnTick();
       }
     }
+    // ⚠⚠ L'EFFONDREMENT S'INTERCALE ICI, ENTRE LA FIN DU COMBAT ET LE RAPPORT —
+    // lot EFFONDREMENT, 07/09. Il prend son temps sur la boucle d'images, celle
+    // qui tourne déjà : c'est ce qui le fige avec elle quand l'application passe
+    // en arrière-plan, là où un `setTimeout` continuerait de courir tout seul.
+    //
+    // ⚠ IL COMMENCE À ZÉRO, ET LA PREMIÈRE IMAGE MONTRE DONC LE SITE INTACT.
+    // Ajouter `ecoule` dès l'entrée ferait sauter la première tranche.
+    //
+    // ⚠⚠ `deroule` GARDE L'ENTRÉE, ET C'EST UN DÉFAUT TROUVÉ PAR `EFF T4`, PAS
+    // À LA RELECTURE. Sans lui, une image qui arrive APRÈS le rapport RELANCE
+    // l'effondrement : `finDuDeroule` remet `effondrementMs` à `null`, le
+    // combat est toujours terminé, et `doitSEffondrer` répond encore oui. Le
+    // site se serait remis à tomber derrière le panneau de résultat, en boucle.
+    // En production `arreterBoucle` annule la demande et cette image n'arrive
+    // pas — mais compter sur une annulation n'est pas une conception, et c'est
+    // la même garde, pour la même raison, que la troisième des quatre de
+    // `visibilitychange` : `deroule` est exactement « un déroulé est en cours ».
+    if (deroule && combat !== null && combat.termine
+      && effondrementMs === null && doitSEffondrer()) {
+      effondrementMs = 0;
+    } else if (effondrementMs !== null) {
+      effondrementMs += ecoule;
+    }
     dessiner();
-    if (combat !== null && combat.termine) { finDuDeroule(); return; }
+    if (effondrementMs !== null) {
+      if (effondrementMs >= ECRAN_RAID.effondrementMs) { finDuDeroule(); return; }
+    } else if (combat !== null && combat.termine) { finDuDeroule(); return; }
     if (!enPause) idImage = doc.defaultView.requestAnimationFrame(image);
   }
 
@@ -638,6 +789,10 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     precedentes = prendrePositions(combat);
     accumulateur = creerAccumulateur();
     enPause = false;
+    // ⚠ UN DÉROULÉ NEUF NE PORTE PAS L'EFFONDREMENT DU PRÉCÉDENT. `masquer` coupe
+    // la boucle sans passer par `finDuDeroule` : sans cette ligne, un raid lancé
+    // après un écran quitté en plein effondrement croirait en reprendre un.
+    effondrementMs = null;
     dimensionner();
     demarrerBoucle();
   }
@@ -726,6 +881,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   function finDuDeroule() {
     arreterBoucle();
+    // ⚠ L'EFFONDREMENT SE REFERME ICI, ET PAR UN SEUL ENDROIT. Trois portes y
+    // mènent — la boucle qui arrive au bout, « Instantané », et la page qui se
+    // masque — et chacune passe par cette fonction. Le remettre à `null` ailleurs
+    // aurait fait trois écritures d'une même remise à zéro.
+    effondrementMs = null;
     quitterLeDeroule();
     if (rapportCourant !== null) montrerResultat(rapportCourant, simulation);
   }
@@ -1279,6 +1439,14 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       if (doc.hidden !== true) return;
       if (simulation) return;
       if (!deroule) return;
+      // ⚠⚠ ET UNE CINQUIÈME GARDE DEPUIS LE LOT EFFONDREMENT, 07/09 — ELLE PASSE
+      // AVANT LA QUATRIÈME, ET C'EST TOUT SON INTÉRÊT. Pendant l'effondrement le
+      // combat est TERMINÉ : la garde `combat.termine` juste dessous renverrait
+      // donc sans rien conclure, et le joueur qui revient trouverait deux
+      // secondes d'animation figée devant son rapport. C'est très exactement le
+      // défaut que ce lot-là réparait, refait un cran plus loin. On coupe
+      // l'effondrement et on va droit au rapport.
+      if (effondrementMs !== null) { arreterBoucle(); finDuDeroule(); return; }
       if (combat === null || combat.termine) return;
       conclureLeDeroule();
     });

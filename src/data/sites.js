@@ -385,7 +385,27 @@ export const EMPLACEMENTS_ASSAUT = { vagues: 4, parVague: 9 };
 // ⚠ ET IL VIT DANS `src/data/` PARCE QU'UN NOMBRE SE CHANGE SEUL — règle §4 de
 // `CLAUDE.md`. C'est exactement celle qui est tombée sur le seuil d'étiquette au
 // lot CONTOUR-ET-ÉTIQUETTES, parce qu'il valait 64 et qu'un cran valait 64.
-export const ECRAN_RAID = { delaiArmementMs: 300 };
+export const ECRAN_RAID = {
+  delaiArmementMs: 300,
+
+  // Combien de temps le site s'effondre, après une victoire TOTALE et avant le
+  // rapport — lot EFFONDREMENT, 07/09/2026.
+  //
+  // ARBITRÉ par Ethan, point 12 : « lors d'une victoire totale, juste après la
+  // destruction et avant le rapport, détruire les unités et bâtiments de défense
+  // en 2 secondes », et le même jour : **purement visuel, l'état ne bouge pas.**
+  //
+  // ⚠⚠ ELLE EST ICI ET PAS DANS L'ÉCRAN, ET C'EST §4 DE `CLAUDE.md` : aucun
+  // seuil de jeu ne s'écrit dans un fichier de dessin. Deux secondes est une
+  // VALEUR qu'Ethan a donnée ; elle se range avec `delaiArmementMs`, qui est de
+  // la même nature — un temps d'écran arbitré.
+  //
+  // ⚠ ET LE TEMPS SE PREND SUR LA BOUCLE D'IMAGES, PAS SUR UN `setTimeout`. Une
+  // seconde horloge à côté de la première ne se figerait pas avec elle quand
+  // l'application passe en arrière-plan, et c'est exactement le défaut que le
+  // lot RETOUR-DE-RAID a réparé. `EFF T9` refuse qu'elle apparaisse.
+  effondrementMs: 2000,
+};
 
 // --- points de recherche -----------------------------------------------------
 // Ils ne se produisent pas, ils se prennent sur les défenses détruites.
