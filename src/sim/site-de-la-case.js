@@ -306,10 +306,24 @@ export function resumeDuSite(graine, identite, montageFourni = null) {
  * Les cibles à portée d'une base, avec leur identité — ce que l'écran de la
  * carte parcourra pour savoir quoi dessiner comme attaquable.
  *
- * ⚠ ELLE BALAIE UN CARRÉ DE TCHEBYCHEV, pas un disque : c'est la même distance
- * que le barème du raid et que la garde du peuplement. Au rayon 10, ça fait
- * 440 cases — assez peu pour être balayé à chaque ouverture d'écran, assez pour
- * ne pas le faire à chaque image.
+ * ⚠ ELLE BALAIE UN CARRÉ ET RETIENT UN DISQUE, et les deux moitiés de la phrase
+ * comptent. Le carré de Tchebychev de rayon 10 fait 440 cases — assez peu pour
+ * être balayé à chaque ouverture d'écran, assez pour ne pas le faire à chaque
+ * image — mais `estAPorteeDAttaque` en REFUSE les 124 coins depuis le lot
+ * EUCLIDE : la portée est `d² ≤ rayon²`, il en reste 316.
+ *
+ * ⚠⚠ LA PHRASE D'AVANT DISAIT « UN CARRÉ DE TCHEBYCHEV, PAS UN DISQUE », ET ELLE
+ * ÉTAIT DEVENUE FAUSSE — corrigé au lot RAID-CIBLE-UNIQUE, 07/09. Elle
+ * contredisait le commentaire de sa propre boucle, trois lignes plus bas, et
+ * elle a coûté un aller-retour : un brief l'a citée pour dire quelle mesure
+ * employer pour « la base la plus proche ». La bonne est `distanceCarree`, celle
+ * qui décide de la portée ; `distance` porte Tchebychev pour qui en a besoin
+ * ailleurs. Mesuré : une case à (10, 10) est à distance 10 de Tchebychev et
+ * hors de portée, son `d²` valant 200 pour un rayon carré de 100.
+ *
+ * ⚠ ET LE TRI QU'ELLE REND EST UNE PROMESSE : `distanceCarree` croissante, puis
+ * rangée, puis colonne. `sim/raid-ouvrage.js` s'appuie sur le premier de ces
+ * trois champs pour choisir la base du joueur qu'une attaquante frappe.
  *
  * @param {object} etat
  * @param {{position: {rangee: number, colonne: number}}} baseAttaquante

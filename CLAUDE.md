@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.14 · build 115.
+Dernière révision : **07/09/2026**, version 0.99.15 · build 116.
 
 ---
 
@@ -42,7 +42,77 @@ Dernière révision : **07/09/2026**, version 0.99.14 · build 115.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot PRODUCTION-EN-DÉFENSE), à confronter :**
+**Référence au 07/09/2026 (après le lot RAID-CIBLE-UNIQUE), à confronter :**
+`npm test` → **1287 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 012 887 octets**, 0 référence externe. Coût **+554 octets, ENTIÈREMENT EN
+JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **JavaScript +554 · feuille +0 ·
+balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 287 113 octets,
+13,84 %**. Le lot touche `src/sim/raid-ouvrage.js` et le commentaire d'en-tête de
+`ciblesAPortee` dans `src/sim/site-de-la-case.js`.
+⚠⚠ **ETHAN A ARBITRÉ UNE LECTURE QUE LE CODE ANNONÇAIT LUI-MÊME.** Le
+commentaire de `basesAttaquantes` disait : « une base de l'Ouvrage à portée de
+DEUX bases du joueur les attaque toutes les deux, la même minute — LECTURE PRISE,
+à signaler […] si Ethan veut qu'elle n'en frappe qu'une, c'est ce `for` imbriqué
+qui change, et lui seul ». Réponse du 07/09 : « **elle n'en frappe qu'une, la plus
+proche** », et pour l'égalité « **le plus haut, puis gauche à droite** ».
+⚠⚠ **LE SIGNE DE « LE PLUS HAUT » EST VÉRIFIÉ PAR EXÉCUTION, PAS DÉDUIT.**
+`niveauDeLaRangee(1)` vaut **50**, `niveauDeLaRangee(295)` — la rangée de départ
+du joueur — vaut **1** : le nord est en haut, le niveau y croît, donc « le plus
+haut » est la rangée **la plus PETITE**. `RCU T0` l'exécute avant que le
+comparateur ne soit lu. Un signe inversé donnerait un départage qui marche
+parfaitement et choisit systématiquement la mauvaise base.
+⚠⚠ **ET « LA PLUS PROCHE » N'EST PAS TCHEBYCHEV — LE BRIEF S'EST FIÉ À UN
+COMMENTAIRE PÉRIMÉ.** L'en-tête de `ciblesAPortee` affirmait « un carré de
+Tchebychev, PAS un disque », en contredisant le commentaire de sa propre boucle :
+depuis le lot EUCLIDE, `estAPorteeDAttaque` teste `d² ≤ rayon²` et refuse les 124
+coins du carré. La mesure qui décide de la portée est donc `distanceCarree`, et
+c'est celle que le départage relit — jamais une seconde distance écrite sur
+place. Mesuré : une case à (10, 10) est à distance 10 de Tchebychev et **hors de
+portée**, son `d²` valant 200 pour un rayon carré de 100. **L'en-tête est
+corrigé.**
+⚠⚠ **À UNE SEULE BASE, RIEN NE BOUGE — MESURÉ SUR TROIS JOURS.** 58 attaquantes,
+**157 raids subis**, et la même empreinte de minutes avant et après. Mieux : 24 h
+de `rattraperJeu` rendent une sauvegarde **identique au bit**. C'est la
+non-régression la plus importante du lot, et le témoin de BASES-0 — vingt-cinq
+graines, une base — n'a pas bougé d'une empreinte.
+⚠⚠ **À DEUX BASES, LES RAIDS SUBIS TOMBENT DE 318 À 202 ; À TROIS, DE 490 À
+267.** Le tirage lui-même n'a pas changé d'un bit — `baseAttaqueALaMinute` hache
+la CASE de l'attaquante et la minute, jamais la cible —, mais une minute qui
+produisait deux raids n'en produit plus qu'un. **Les raids subis d'une partie en
+cours à plusieurs bases ne seront plus les mêmes**, et c'est annoncé.
+⚠ **LE COÛT NE BOUGE PAS : UN APPEL À `ciblesAPortee` PAR BASE DU JOUEUR, AVANT
+COMME APRÈS** — 1, 2 et 3 appels pour 1, 2 et 3 bases, comptés sur l'appelant
+DIRECT du getter de `position`. Inverser les boucles pour partir de l'Ouvrage
+aurait balayé la carte à l'envers ; la distance étant symétrique, on garde le
+balayage et on REGROUPE. `RCU T11` le mesure, et exige en plus qu'il n'y ait
+qu'UN appel dans tout le fichier.
+⚠⚠ **L'ORDRE DE SORTIE EST DEVENU UNE RÈGLE.** Il suit la case de l'ATTAQUANTE —
+la plus haute d'abord, puis de gauche à droite — là où il suivait la distance
+depuis la base qui avait demandé le balayage. `resoudreLaMinute` parcourt cette
+liste et les raids d'une même minute partagent des stocks : un ordre qui
+dépendrait du tableau `etat.bases` ferait changer l'issue quand le joueur fonde
+une base. C'est le seul effet mesurable à une base, et il est sans conséquence —
+la sauvegarde après 24 h est identique.
+⚠ **`departagerLesCandidates` LÈVE PLUTÔT QUE DE RENDRE ZÉRO.** Deux bases du
+joueur ne peuvent pas partager une case : un ex æquo après les trois critères est
+un fait de PROGRAMME. Rendre 0 laisserait l'ordre de parcours trancher en
+silence, c'est-à-dire l'INDICE dans `etat.bases` — exactement ce que le lot
+supprime. `RCU T5` le mesure sur cent montages tirés au PRNG du dépôt, en
+recalculant le vainqueur indépendamment.
+⚠ **`SAVE_VERSION` RESTE À 27, VÉRIFIÉ** — `RCU T12` : rien n'est ajouté à
+l'état, `basesAttaquantes` est un CALCUL et n'écrit pas une valeur.
+⚠ **TREIZE TESTS ENTRENT — `RCU T0` à `RCU T12` — ET LE COMPTE PASSE DE 1 274 À
+1 287.** **Aucune assertion n'a été retirée ni assouplie**, et **aucun test
+existant n'a été modifié** — `RAID-B T6`, la garde du niveau minimal, est intacte.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Le lot ne change aucun
+pixel : il choisit une cible dans le modèle.
+
+**Auparavant, après le lot PRODUCTION-EN-DÉFENSE :**
 `npm test` → **1274 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 012 333 octets**, 0 référence externe. Coût **+257 octets, ENTIÈREMENT EN
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti dans un
