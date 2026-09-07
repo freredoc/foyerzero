@@ -398,7 +398,7 @@ marqueur, comme les décors ; les fichiers sont au dépôt.
 | `tools/planches.py --verifier` (Pillow 12.3) | 0 id. · 32 diff. | non rejoué — voir §1 |
 | `tools/atlas.py --verifier` | 8 id. · 10 diff. (18 atlas) | **10 id. · 10 diff. (20 atlas)** |
 | `src/data/atlas.js` / `atlas-empreintes.json` | — | **identiques** |
-| `tools/verifier.py` (chaîne entière) | non lançable ici | **681 id. · 269 diff. · 0 nouv. · 0 MANQUANT** |
+| `tools/verifier.py` (chaîne entière) | non lançable ici | **681 id. · 269 diff. · 0 nouv. · 0 MANQUANT** — rejoué APRÈS la correction du §4, mêmes chiffres |
 
 **+92 identiques sur `planches`, soit exactement les 46 pictogrammes × 2
 grilles.** Les deux atlas d'interface se reproduisent à l'octet.
