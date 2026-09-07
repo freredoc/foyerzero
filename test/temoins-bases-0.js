@@ -2760,3 +2760,192 @@ export const RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE = {
   24: '7b5bbbb6b420e1b0',
   25: '2ae9695fa653910f',
 };
+
+// ---------------------------------------------------------------------------
+// LOT CIBLES-RANGÉES — 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE QUI A CHANGÉ, ET POURQUOI C'EST LÉGITIME. Le lot tire les TAILLES DE
+// RANGÉE des sites de l'Ouvrage : `placerDefenses` et `placerBatiments`
+// consomment un nombre de tirages différent, donc tout ce qui tire APRÈS eux se
+// décale — obstacles, composition, vagues. Les sites RAIDÉS ne sont donc plus
+// les mêmes, et les deux rapports de raid du scénario bougent sur les vingt-cinq
+// graines.
+//
+// ⚠⚠ CE QUI NE CHANGE PAS EST LA MOITIÉ QUI PROUVE. Les phases p01 à p06 sont
+// identiques AU BIT : la base du JOUEUR n'est pas un site généré, donc bâtir,
+// armer, produire et sauvegarder ne dépendent d'aucun de ces tirages. Et sur les
+// vingt-cinq graines : `gestes`, `gestesArmer`, `tailleSauvegarde`,
+// `nbCasesAtteignables`, `deplacement`, `nbAttaquantes`, le nombre de cibles et
+// la cible retenue des DEUX raids, la non-fuite et l'exactitude de la
+// simulation, et les clés du rapport sont IDENTIQUES. Si le lot avait fui hors
+// de la disposition des sites, l'un de ces neuf-là aurait bougé.
+//
+// Cinquante-huit couples, tous à partir de la phase 7 — le premier raid.
+export const DEPLACES_PAR_CIBLES_RANGEES = {
+  p07_raidProcheApres: {
+    sitesEntames: '54f344b12076ce8a',
+    rapports: '928a628231a0662b',
+    armee: 'b342c3fef4ee3f2d',
+    economie: 'a3c412290b01883f',
+    satellites: '007a36e47eff24f4',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p08_100ticks: {
+    sitesEntames: '54f344b12076ce8a',
+    rapports: '928a628231a0662b',
+    armee: 'b342c3fef4ee3f2d',
+    economie: '93737d921b365753',
+    satellites: 'f42dd69e0e801d78',
+    prochaineInstanceSatellite: '537730bee2ed51e5',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p09_deplace: {
+    sitesEntames: '54f344b12076ce8a',
+    rapports: '928a628231a0662b',
+    armee: 'b342c3fef4ee3f2d',
+    economie: '93737d921b365753',
+    satellites: 'f42dd69e0e801d78',
+    prochaineInstanceSatellite: '537730bee2ed51e5',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p10_montee: {
+    sitesEntames: '54f344b12076ce8a',
+    rapports: '928a628231a0662b',
+    armee: 'b342c3fef4ee3f2d',
+    economie: '93737d921b365753',
+    satellites: 'f42dd69e0e801d78',
+    prochaineInstanceSatellite: '537730bee2ed51e5',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p11_raidOuvrageApres: {
+    recherche: '7fe778c3ac5e54ba',
+    sitesEntames: 'e3fb349bc5baa1c4',
+    rapports: 'cb56e1c1eaebeaf4',
+    armee: 'f4e0aff3d42695d1',
+    economie: '93737d921b365753',
+    satellites: 'f42dd69e0e801d78',
+    prochaineInstanceSatellite: '537730bee2ed51e5',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p12_veilleDuRaid: {
+    recherche: '7fe778c3ac5e54ba',
+    sitesEntames: 'dcaef5057c200602',
+    rapports: 'cb56e1c1eaebeaf4',
+    armee: 'f4e0aff3d42695d1',
+    economie: '93737d921b365753',
+    satellites: 'c4f1b59fbd7eaa15',
+    prochaineInstanceSatellite: 'f8c13fe64c8c691e',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p13_apresLeRaid: {
+    recherche: '7fe778c3ac5e54ba',
+    sitesEntames: 'bd48cc007dbc78fe',
+    rapports: '2f76e465dc6c1462',
+    armee: 'f4e0aff3d42695d1',
+    economie: '0d8aa4381ad0a806',
+    satellites: 'd2bf5c2f8ed04956',
+    prochaineInstanceSatellite: 'd7dd8a48a2b8cbe6',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+  p14_sousLeFeu: {
+    recherche: '7fe778c3ac5e54ba',
+    sitesEntames: '006066088a50a7ac',
+    rapports: 'a480bac388bfa04d',
+    armee: 'f4e0aff3d42695d1',
+    satellites: '6d33074b6be22921',
+    prochaineInstanceSatellite: 'eb5fa453f773600f',
+    satellitesDetruits: 'ec00e60b4f7a0278',
+  },
+};
+
+/** L'empreinte par graine, recalculée : les vingt-cinq divergent dès le premier raid. */
+export const EMPREINTES_PAR_GRAINE_CIBLES_RANGEES = {
+  1: '7d465be2f5bfe105',
+  2: '2234a47debe5c02b',
+  3: 'fe4f2ad10eefe37b',
+  4: 'a3c56fdf424f112d',
+  5: '581e31a5e2295543',
+  6: 'e9c591c8ed1ed780',
+  7: '00e5433c47c4dea6',
+  8: 'dac8305680b9e42f',
+  9: '73f2007f6841dfc5',
+  10: '2facf22e7daf3df6',
+  11: '0ddf78b3b6659065',
+  12: '0d40ee887430fdef',
+  13: '4636e652943b4cf1',
+  14: '6d068c86d28e697a',
+  15: 'c6317ec4cdb770c5',
+  16: 'cfed89c5a0731a3f',
+  17: 'a1813b96f47e5305',
+  18: '5dbc9826706848ea',
+  19: '1989078e275e2395',
+  20: '4912460d4e489d02',
+  21: '1a444d201706b7b2',
+  22: 'e15f932f3fa81b78',
+  23: '86e8899f0cf7afda',
+  24: '920e44f23f9eccab',
+  25: 'a3dbd8792e754a54',
+};
+
+/**
+ * Les deux rapports de raid, déplacés sur les vingt-cinq graines : un site qui
+ * n'est plus disposé pareil ne rend pas le même rapport. Le NOMBRE DE CIBLES et
+ * la CIBLE RETENUE, eux, ne bougent pas — ce qui prouve que seule la disposition
+ * du site a changé, pas le choix de la cible ni le barème.
+ */
+export const RAPPORTS_PROCHE_CIBLES_RANGEES = {
+  1: '01e50f6737c3f744',
+  2: '860818f94bdabae6',
+  3: '8929519680bea01d',
+  4: 'd5a23ab32e15a6d1',
+  5: '87e0f1544d8ee658',
+  6: 'a242f9b8e305061d',
+  7: '273da9afd4b257f7',
+  8: '1bc84a26e98d0824',
+  9: '407991770e8ff11b',
+  10: '1b88d7f0ba2fcde0',
+  11: '8e091c881a1ce473',
+  12: '0f2f78044d63ce81',
+  13: 'cc7a0f706195748e',
+  14: 'c17571eb0ce2c968',
+  15: '4f31d1eabe5761d5',
+  16: '64e09a2fee21433e',
+  17: 'b5444a459ac10b41',
+  18: 'ccbadbdebc5f7b9a',
+  19: '0a7f1be7aeedbe69',
+  20: '90efabbeff9973c8',
+  21: 'cc529eb1790f7576',
+  22: 'f8b336095a19f929',
+  23: 'c50629e445a20316',
+  24: '12fd5d0cffe86ce4',
+  25: 'ed96aa699f657a18',
+};
+
+export const RAPPORTS_OUVRAGE_CIBLES_RANGEES = {
+  1: 'cf061022659810c3',
+  2: 'f9fcd365765b8cb6',
+  3: '80afae6ab36044fd',
+  4: '327e76667a80fe87',
+  5: 'e4894663f64acd67',
+  6: 'ef19f38286e05e80',
+  7: 'c3ba7af25a5e6933',
+  8: 'fc0695edb4037f7f',
+  9: '46197f9fd321a93e',
+  10: 'c03169a1271445bf',
+  11: '438deca78b86662b',
+  12: '83c35d8929ac20e7',
+  13: '59174a4d009ec5bc',
+  14: '476f4da8fd024d31',
+  15: 'cdd4b7716323676b',
+  16: '5b3e6f8e3e11df13',
+  17: '2d4eebb71a00af3f',
+  18: 'a40fd502b3ed1b2c',
+  19: '39ae89e6fbe284b6',
+  20: 'eb10ac0331aabf60',
+  21: 'f09e238d62c0fb2f',
+  22: '727195dd897c7b7e',
+  23: '4d8d6248fbb7a927',
+  24: '6c1c7cccc5682d9c',
+  25: 'f92d38b29bc03c81',
+};

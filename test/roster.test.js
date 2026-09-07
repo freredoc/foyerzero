@@ -398,7 +398,12 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // disposé pareil, donc le combat ne dure plus pareil. **La propriété tient
   // toujours, et c'est la seule que ce test mesure : une SEULE durée, sur neuf
   // niveaux, sur un site dont la forme vient de changer.**
-  assert.deepEqual([...ticks], [188], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : 146. Les TAILLES DE RANGÉE se tirent à leur
+  // tour — le lot COLONNE n'avait traité que l'axe des colonnes —, donc le site
+  // de référence change encore de forme. **La propriété tient toujours, et c'est
+  // la seule que ce test mesure : UNE seule durée, sur neuf niveaux, sur un site
+  // dont la disposition vient de bouger une seconde fois.**
+  assert.deepEqual([...ticks], [146], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -446,15 +451,22 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // FORME : `composerRepartition` tire après `placerBatiments`, donc la
     // composition de la garnison change avec elle. Aucun barème n'a été touché,
     // et le calibrage revient à Ethan — voir `RAPPORT-lotCOLONNE.md`.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 355, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 749, butin: { quartz: 28_127, scorie: 9375 }, survivants: 7 },
+    // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : LES TROIS RAIDS SE DÉPLACENT UNE FOIS DE
+    // PLUS, ET LES TAILLES DE RANGÉE EN SONT LA CAUSE. A tombe de 355 à 241
+    // ticks, B de 749 à 311 en rapportant 10 % de plus, C monte de 513 à 635. Le
+    // sens diffère d'un raid à l'autre parce que la disposition ET la
+    // composition bougent ensemble : `composerRepartition` tire APRÈS
+    // `placerBatiments`, dont le nombre de tirages a changé. **Aucun barème n'a
+    // été touché** ; ce test mesure, il ne règle rien.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 241, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 311, butin: { quartz: 30_947, scorie: 10_315 }, survivants: 8 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 513, butin: { quartz: 54_560, scorie: 18_186 }, survivants: 3 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 635, butin: { quartz: 60_714, scorie: 20_238 }, survivants: 9 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

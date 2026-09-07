@@ -717,6 +717,18 @@ test('COL T14 — la pire vitesse latérale, Booster compris, reste sous une cas
 // préserve, par définition. Mesuré sur `origin/main` : **une seule valeur sur
 // quarante graines**, à chaque type et à chaque niveau — donc toutes les
 // dispositions y étaient l'image l'une de l'autre.
+//
+// ⚠⚠ ET CE TEST N'A PAS VU LA MOITIÉ DU DÉFAUT, CE QUI EST LA LEÇON DU LOT
+// CIBLES-RANGÉES (07/09). Il mesure le multi-ensemble des charges par COLONNE —
+// l'axe horizontal, et lui seul. Il est passé vert pendant que la RANGÉE d'un
+// occupant restait une fonction pure de son rang dans la liste : mesuré sur 200
+// graines, **UN SEUL** profil d'occupation par rangée, à tous les types et à
+// tous les niveaux. Le brief du lot COLONNE demandait « le multi-ensemble des
+// (rangee, id) » ; l'exécution a mesuré autre chose, et personne ne l'a relevé.
+// Ce test-ci reste juste et utile — il garde l'acquis des colonnes, et `CR T7`
+// le rejoue — mais il ne prouve PAS que deux sites ont deux FORMES. C'est
+// `CR T1` de `generateur.test.js` qui le fait, et son montage ignore la colonne
+// par construction.
 test('COL T15 — deux graines diffèrent par autre chose qu\'une permutation de colonnes', () => {
   const chargeTriee = (liste) => {
     const c = new Array(GRILLE.largeur).fill(0);
@@ -886,8 +898,17 @@ test('COL T18 — Souche et Étai au fond, au centre, sur cent graines', () => {
 test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () => {
   const MOTIF = ['belier', 'pilon', 'broyeur', 'crecelle'];
   const leve = [];
+  // ⚠⚠ LES TROIS TRIPLETS SONT RÉANCRÉS AU LOT CIBLES-RANGÉES, 07/09, ET LA
+  // DETTE N'EST PAS PAYÉE POUR AUTANT. Le lot tire les TAILLES DE RANGÉE : la
+  // disposition de chaque site change, donc les trois scénarios d'avant ne
+  // lèvent plus — zéro sur trois, mesuré. Balayage de 540 scénarios sur l'arbre
+  // du lot : **188 lèvent encore**, du même message `pvMilli N hors de 1…M`.
+  // Ce n'est donc pas une réparation, c'est le déplacement que ce commentaire
+  // annonçait déjà — « il le déplace comme il déplace tout ce qui touche à la
+  // disposition ». Retirer le test aurait été prendre un déplacement pour une
+  // correction.
   for (const [type, niveau, graine] of [
-    ['camp', 32, 4], ['camp', 34, 2], ['camp', 38, 8],
+    ['camp', 30, 18], ['camp', 32, 26], ['camp', 34, 29],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,

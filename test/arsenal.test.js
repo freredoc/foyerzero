@@ -583,7 +583,15 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // ne dure plus pareil. Ce que ce test-ci mesure n'a rien à voir avec la durée :
   // c'est que les DEUX chemins de montage rendent le même combat, et les trois
   // assertions qui le disent sont au-dessus, intactes.
-  assert.equal(r.nbTicks, 513);
+  //
+  // ⚠⚠ ET LE LOT CIBLES-RANGÉES (07/09) LE PORTE À 635. Même cause qu'au point 9
+  // du lot COLONNE, un cran plus haut : les TAILLES DE RANGÉE se tirent
+  // désormais, donc `placerDefenses` et `placerBatiments` consomment un nombre
+  // de tirages différent, donc tout ce qui tire APRÈS eux — obstacles, vagues,
+  // composition — se décale. Le brief l'annonçait et le rapport le chiffre. Ce
+  // que ce test-ci mesure n'a toujours rien à voir avec la durée : ce sont les
+  // trois assertions d'équivalence au-dessus, et elles n'ont pas bougé.
+  assert.equal(r.nbTicks, 635);
   assert.equal(r.cause, 'attaquants');
 });
 

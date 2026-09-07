@@ -22,6 +22,7 @@ import { genererSite } from '../src/sim/generateur.js';
 import { UNITES } from '../src/data/combat.js';
 import {
   TEMOINS_COMBAT, COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
+  COMBATS_DEPLACES_PAR_CIBLES_RANGEES,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,19 +107,27 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
           // déplaçait, sinon le témoin d'avant JOURNAL-DE-COMBAT. Empiler
           // plutôt qu'écraser est ce qui garde les 309 champs restants adossés
           // à une capture qu'aucun de ces trois lots n'a produite.
+          //
+          // ⚠⚠ ET LE LOT CIBLES-RANGÉES EN AJOUTE UNE TROISIÈME, AU-DESSUS DES
+          // DEUX AUTRES. Même doctrine : on empile, on ne remplace pas.
           const deplaces = COMBATS_DEPLACES_PAR_ARRET[i] ?? {};
           const deplacesColonne = COMBATS_DEPLACES_PAR_COLONNE[i] ?? {};
+          const deplacesRangees = COMBATS_DEPLACES_PAR_CIBLES_RANGEES[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
             if (Object.prototype.hasOwnProperty.call(deplacesColonne, c)) {
               reference = deplacesColonne[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesRangees, c)) {
+              reference = deplacesRangees[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
             if (Object.prototype.hasOwnProperty.call(deplaces, c)
-              || Object.prototype.hasOwnProperty.call(deplacesColonne, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesColonne, c)
+              || Object.prototype.hasOwnProperty.call(deplacesRangees, c)) surcharges += 1;
           }
           i += 1;
         }
@@ -141,10 +150,20 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
   // champs qu'ARRÊT avait déplacés n'ont pas rebougé, et ils restent surchargés
   // par lui. 1 233 entrées neuves, 1 266 champs couverts, 334 encore adossés au
   // témoin d'avant JOURNAL-DE-COMBAT.
-  assert.equal(surcharges, 1291, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : LA SURCHARGE PASSE DE 1 291 À 1 296, ET IL
+  // NE RESTE QUE **304 CHAMPS GARDÉS** contre la capture d'avant
+  // JOURNAL-DE-COMBAT. La troisième couche touche les DEUX CENTS combats et
+  // déplace 1 208 champs — mais 1 203 d'entre eux étaient DÉJÀ surchargés par
+  // COLONNE ou par ARRÊT : le compte est l'UNION des trois couches, pas leur
+  // somme, et il ne monte donc que de cinq. Les 304 restants sont pour
+  // l'essentiel des CAUSES de fin, que ni la disposition ni la composition ne
+  // font changer.
+  assert.equal(surcharges, 1296, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
-  assert.ok(champs - surcharges === 309, 'le compte des champs encore gardés a changé');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
+  assert.ok(champs - surcharges === 304, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -359,7 +378,17 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   // plus personne — mesuré, 0 écrasée contre 2 avant. La graine 12 en rend
   // deux, au même type, au même niveau, avec la même armée. Le seuil d'impacts
   // (> 500) tient aussi : 855 contre 955.
-  const etat = creerCombat(montageDe('base', null, 45, 12));
+  //
+  // ⚠⚠ ET LA GRAINE PASSE DE 12 À 35 AU LOT CIBLES-RANGÉES, POUR LA MÊME RAISON
+  // EXACTEMENT. Les tailles de rangée se tirent à leur tour : sur la graine 12,
+  // le montage n'écrase plus personne — zéro contre deux, mesuré — et
+  // l'exception « une pièce écrasée perd plus que son impact » cessait d'être
+  // mesurée. La graine 35 en écrase deux, au même type, au même niveau, avec la
+  // même armée, et rend 821 impacts pour un seuil de 500. Balayage à l'appui sur
+  // les graines 1 à 60 : cinq en donnent exactement deux. **C'est la deuxième
+  // fois que ce montage perd sa prémisse ; un montage qui dépend d'une
+  // disposition tirée la reperdra au prochain lot qui y touche.**
+  const etat = creerCombat(montageDe('base', null, 45, 35));
   let ticks = 0;
   let vus = 0;
   let parts = [];
@@ -383,6 +412,17 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
       // défense ; ils la traversent désormais et l'écrasent. Mesuré sur ce
       // montage-ci : un Ratisseur de garnison, 38 904 140 milli-PV perdus pour
       // 309 452 encaissés, au tick 140.
+      // ⚠⚠ UNE ENTITÉ POSÉE PENDANT CE TICK N'A PAS DE « AVANT », ET LE LOT
+      // CIBLES-RANGÉES L'A RENDU ATTEIGNABLE. `pvAvant` est relevé au DÉBUT du
+      // tick ; une vague qui se dépose ensuite y est absente, et la soustraction
+      // rendait `NaN` — une comparaison avec `NaN` est toujours fausse, donc
+      // l'assertion serait tombée en accusant le journal d'une faute qu'il n'a
+      // pas. On saute ces impacts-là : ils n'ont pas de perte à comparer.
+      if (!pvAvant.has(i.indice)) {
+        parts.push(Math.round((1000 * i.encaisseMilli) / i.pvMaxMilli));
+        vus += 1;
+        continue;
+      }
       const perdu = pvAvant.get(i.indice) - e.pvMilli;
       if (e.ecrase !== true) {
         assert.ok(i.encaisseMilli >= perdu,

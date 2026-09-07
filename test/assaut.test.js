@@ -346,20 +346,29 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // `composerRepartition` tire APRÈS `placerBatiments`, dont le nombre de
   // tirages a changé — LESQUELLES sont posées. La cause de chacun des trois ne
   // bouge pas, et c'est elle que ce test garde.
+  //
+  // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : LES TAILLES DE RANGÉE SE TIRENT À LEUR TOUR.
+  // Le lot COLONNE avait rendu la charge par COLONNE variable ; la rangée restait
+  // une fonction pure du rang, si bien qu'un site portait toujours le même nombre
+  // d'occupants sur les mêmes lignes — mesuré, UN SEUL profil d'occupation par
+  // rangée sur 200 graines. `taillesDeRangee` consomme donc désormais des
+  // tirages, et tout ce qui tire APRÈS `placerDefenses` et `placerBatiments` se
+  // décale : obstacles, composition, vagues. Le brief l'annonçait, le rapport le
+  // chiffre, et ce que ce test tient ne change pas.
   const figes = cas.map((c) => resoudre(creerCombat(montagePreregle(parametres(c)))));
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 287);
+  assert.equal(figes[0].tick, 296);
   assert.equal(figes[1].cause, 'souche', 'le préréglage figé ne rase plus la Souche');
-  assert.equal(figes[1].tick, 516);
+  assert.equal(figes[1].tick, 588);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 348);
+  assert.equal(figes[2].tick, 569);
 
   // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
   // que le figé de B rase : les deux séries se distinguent de nouveau par leur
   // ISSUE, et plus seulement par leurs durées.
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
-  assert.equal(budgetes[0].nbTicks, 355);
+  assert.equal(budgetes[0].nbTicks, 241);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -388,9 +397,9 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // — ce test mesure, il ne règle rien, et le rapport le porte pour Ethan.
   assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
   assert.equal(budgetes[1].cause, 'attaquants');
-  assert.equal(budgetes[1].nbTicks, 749);
+  assert.equal(budgetes[1].nbTicks, 311);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 513);
+  assert.equal(budgetes[2].nbTicks, 635);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -407,7 +416,7 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // plus la même : l'assaut la traverse et atteint les bâtiments. Les deux
   // moitiés du lot tirent en sens contraire ici aussi, et c'est mesuré, pas
   // compensé.
-  assert.equal(budgetes[2].butin.quartz, 54_560);
+  assert.equal(budgetes[2].butin.quartz, 60_714);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

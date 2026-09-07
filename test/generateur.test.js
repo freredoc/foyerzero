@@ -16,6 +16,7 @@ import {
   repartitionInterpolee,
   budgetRaid,
   budgetAssaut,
+  rangeeLaPlusAvanceeQuiTire,
 } from '../src/sim/generateur.js';
 import {
   creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurEconomiqueMilli,
@@ -249,10 +250,10 @@ test('T6 — six occupants au plus par rangée, et le bon nombre de rangées', (
   const rangeesMax = bande.derniere - bande.premiere + 1;
   assert.equal(rangeesMax, 8);
 
-  // Les trois points chiffrés du §7.4 :
-  //   39 défenses → ceil(39/6) = 7 rangées, couverture 39/63 = 61,9 % ≤ 66,7 %
-  //   35 défenses → ceil(35/6) = 6 rangées, couverture 35/54 = 64,8 %
-  //    3 défenses → ceil(3/6)  = 1 rangée,  couverture  3/9  = 33,3 %
+  // Les trois points chiffrés du §7.4, devenus le PLANCHER du nombre de rangées :
+  //   39 défenses → ceil(39/6) = 7 rangées au MOINS, couverture ≤ 39/63 = 61,9 %
+  //   35 défenses → ceil(35/6) = 6 rangées au MOINS, couverture ≤ 35/54 = 64,8 %
+  //    3 défenses → ceil(3/6)  = 1 rangée  au MOINS, couverture ≤  3/9  = 33,3 %
   for (const [nb, rangees, couverture] of [[39, 7, 61.9], [35, 6, 64.8], [3, 1, 33.3]]) {
     assert.equal(Math.min(rangeesMax, Math.ceil(nb / parRangee)), rangees, `${nb} défenses`);
     const obtenue = (nb / (rangees * GRILLE.largeur)) * 100;
@@ -260,6 +261,17 @@ test('T6 — six occupants au plus par rangée, et le bon nombre de rangées', (
     assert.ok(obtenue <= (parRangee / GRILLE.largeur) * 100, 'jamais au-delà de 6/9');
   }
 
+  // ⚠⚠ LE NOMBRE DE RANGÉES N'EST PLUS `ceil(nb / 6)` — LOT CIBLES-RANGÉES,
+  // 07/09. Cette ligne assertait l'égalité EXACTE, et c'était précisément le
+  // défaut d'Ethan : « les cibles ouvrage sont toutes positionnées de façon
+  // identique ». Un nombre de rangées fonction pure de `nb`, donc du niveau,
+  // veut dire que deux graines ne peuvent pas dessiner deux formes.
+  // `taillesDeRangee` le TIRE désormais, et l'assertion devient un ENCADREMENT :
+  // au moins `ceil(nb / 6)` rangées — on ne peut pas en mettre moins —, au plus
+  // `min(8, nb)` — une rangée vide n'est pas une rangée. **Ce qui NE s'est pas
+  // relâché** : le plafond par rangée, la bande, et la contiguïté depuis le fond,
+  // tous les trois assertés ci-dessous comme avant.
+  let vusDeuxComptes = new Set();
   balayer((montage, params) => {
     const rangees = new Map();
     for (const d of montage.defenseurs) {
@@ -272,45 +284,102 @@ test('T6 — six occupants au plus par rangée, et le bon nombre de rangées', (
       );
       assert.ok(rangee >= bande.premiere && rangee <= bande.derniere);
     }
-    const attendu = Math.min(rangeesMax, Math.ceil(montage.defenseurs.length / parRangee));
-    assert.equal(rangees.size, attendu, `nombre de rangées — ${JSON.stringify(params)}`);
-    // Collées aux bâtiments : les rangées occupées sont les plus ARRIÈRE.
+    const nb = montage.defenseurs.length;
+    if (nb === 0) return;
+    const plancher = Math.min(rangeesMax, Math.ceil(nb / parRangee));
+    const plafond = Math.min(rangeesMax, nb);
+    assert.ok(rangees.size >= plancher && rangees.size <= plafond,
+      `${rangees.size} rangées pour ${nb} défenses, hors de [${plancher}, ${plafond}] — `
+      + JSON.stringify(params));
+    // Collées aux bâtiments, sans trou : les rangées occupées sont les plus
+    // ARRIÈRE, et c'est la première des quatre contraintes.
     const plusAvancee = Math.min(...rangees.keys());
-    assert.equal(plusAvancee, bande.derniere - attendu + 1);
+    assert.equal(plusAvancee, bande.derniere - rangees.size + 1,
+      `la bande de défense a un trou — ${JSON.stringify(params)}`);
+    vusDeuxComptes.add(`${nb}:${rangees.size}`);
   });
+  // ⚠ FALSIFIABLE : un même nombre de défenses doit produire des nombres de
+  // rangées DIFFÉRENTS selon la graine. Sans cette ligne, un générateur resté
+  // sur `ceil(nb / 6)` passerait l'encadrement ci-dessus sans rien prouver.
+  const parNb = new Map();
+  for (const v of vusDeuxComptes) {
+    const [nb, r] = v.split(':');
+    if (!parNb.has(nb)) parNb.set(nb, new Set());
+    parNb.get(nb).add(r);
+  }
+  assert.ok([...parNb.values()].some((s) => s.size > 1),
+    'aucun effectif ne se répartit sur deux nombres de rangées : le tirage est mort');
 });
 
 // ---------------------------------------------------------------------------
 // T7 — artilleries au fond
 // ---------------------------------------------------------------------------
 
-test('T7 — les artilleries sont au fond, et une artillerie avancée serait inerte', () => {
-  // La justification, assérée plutôt que crue. Une artillerie a une portée
-  // minimale de 3,5. Posée en rangée 3, l'attaquant le plus éloigné qu'elle
-  // puisse voir est en rangée 1 : distance 3 − 1 = 2 cases, soit 2000² =
-  // 4 000 000 en milli-case², sous les 3500² = 12 250 000 de sa portée
-  // minimale. Elle ne tirerait jamais.
+test('T7 — les artilleries sont au fond, et l\'ordre des catégories tient', () => {
+  // ⚠⚠ LA JUSTIFICATION D'AVANT ÉTAIT FAUSSE, ET ELLE EST RETIRÉE — lot
+  // CIBLES-RANGÉES, 07/09. Elle disait : « posée en rangée 3, l'attaquant le
+  // plus éloigné qu'elle puisse voir est en rangée 1 : distance 2 cases, sous
+  // les 3,5 de sa portée minimale. Elle ne tirerait jamais. » Le raisonnement
+  // est en RANGÉES ; le moteur, lui, teste une distance EUCLIDIENNE 2D —
+  // `d² = (Δrangée)² + (Δcolonne)²`. `data/sites.js` l'a mesuré dès le 25/08 :
+  // une Faucheuse en rangée 3 tire 23 ticks, premier tir au tick 1. Elle n'est
+  // PAS inerte, et l'assertion qui « prouvait » le contraire ne regardait qu'un
+  // seul axe. C'est la faute que le §9 du brief demande de traquer.
+  //
+  // La contre-mesure, en 2D cette fois : depuis la rangée 3, il existe des cases
+  // dans la couronne [3,5 ; 5,5]. On l'ASSERTE, pour que la phrase retirée ne
+  // revienne pas.
+  const dansLaCouronne = (d, rangee, colonne, r, c) => {
+    const d2 = ((rangee - r) * 1000) ** 2 + ((colonne - c) * 1000) ** 2;
+    return d2 >= (d.porteeMini * 1000) ** 2 && d2 <= (d.portee * 1000) ** 2;
+  };
   for (const [id, d] of Object.entries(DEFENSES)) {
     if (d.type !== 'artillerie') continue;
     assert.equal(d.porteeMini, 3.5, `${id} : portée minimale`);
-    const distanceMax = (3 - GRILLE.bandes.deploiement.premiere) * 1000;
-    assert.ok(
-      distanceMax ** 2 < (d.porteeMini * 1000) ** 2,
-      `${id} en rangée 3 pourrait tirer, la justification tombe`,
-    );
+    let atteignables = 0;
+    for (let c = 1; c <= GRILLE.largeur; c += 1) {
+      for (let r = 1; r <= GRILLE.longueur; r += 1) {
+        for (let cc = 1; cc <= GRILLE.largeur; cc += 1) {
+          if (dansLaCouronne(d, 3, c, r, cc)) atteignables += 1;
+        }
+      }
+    }
+    assert.ok(atteignables > 0,
+      `${id} en rangée 3 n'atteindrait rien : la mesure du 25/08 serait fausse`);
+    // Et la rangée que le générateur en DÉDUIT est bien la plus avancée de la
+    // bande — le relevé est vacueux aujourd'hui, et c'est un fait mesuré.
+    assert.equal(rangeeLaPlusAvanceeQuiTire(id), GRILLE.bandes.defense.premiere,
+      `${id} : une rangée de la bande lui serait interdite`);
   }
 
+  // ⚠⚠ CE QUI BORNE VRAIMENT L'ARTILLERIE EST L'ORDRE, ET C'EST LUI QU'ON GARDE.
+  // `a.rangee >= bande.derniere - 1` était l'ancienne assertion : elle tenait
+  // parce que les rangées se remplissaient SIX PAR SIX, donc que les douze
+  // premières places étaient en rangées 9 et 10. Les tailles de rangée se tirent
+  // depuis ce lot, et une rangée du fond peut n'avoir qu'un occupant : une
+  // artillerie descend maintenant jusqu'à la rangée 8, mesuré. Ce qui ne bouge
+  // pas — et qui est le vrai motif, `ordreCategories` le porte — c'est qu'aucune
+  // artillerie ne se trouve DEVANT quoi que ce soit d'autre.
   const bande = GRILLE.bandes.defense;
   let minRangee = Infinity;
   let maxArtilleries = 0;
   balayer((montage, params) => {
     const artilleries = montage.defenseurs.filter((d) => categorieDe(d.id) === 'artillerie');
+    const autres = montage.defenseurs.filter((d) => categorieDe(d.id) !== 'artillerie');
     maxArtilleries = Math.max(maxArtilleries, artilleries.length);
     for (const a of artilleries) {
       minRangee = Math.min(minRangee, a.rangee);
+      for (const b of autres) {
+        assert.ok(
+          a.rangee >= b.rangee,
+          `artillerie « ${a.id} » en rangée ${a.rangee} devant « ${b.id} » (${b.rangee}) — `
+          + JSON.stringify(params),
+        );
+      }
       assert.ok(
-        a.rangee >= bande.derniere - 1,
-        `artillerie « ${a.id} » en rangée ${a.rangee} — ${JSON.stringify(params)}`,
+        a.rangee >= rangeeLaPlusAvanceeQuiTire(a.id),
+        `artillerie « ${a.id} » en rangée ${a.rangee}, devant sa portée — `
+        + JSON.stringify(params),
       );
     }
     // Et l'ordre des catégories est respecté de bout en bout : aucune entité
@@ -327,10 +396,16 @@ test('T7 — les artilleries sont au fond, et une artillerie avancée serait ine
       }
     }
   });
-  // Les rangées 9 et 10 tiennent 2 × 6 = 12 artilleries ; le maximum rencontré
-  // sur le balayage est bien en dessous, la contrainte « rangée ≥ 9 » tient.
+  // ⚠ LE MAXIMUM D'ARTILLERIES TIENT TOUJOURS EN DEUX RANGÉES PLEINES.
   assert.ok(maxArtilleries <= 2 * DISPOSITION_DEFENSES.occupantsMaxParRangee);
-  assert.equal(minRangee, bande.derniere - 1, 'les artilleries descendent jusqu\'à la rangée 9');
+  // ⚠⚠ MESURÉ, ET ÉCRIT EN CLAIR : la rangée la plus avancée qu'une artillerie
+  // atteigne sur tout le balayage. Elle valait 9 avant le lot CIBLES-RANGÉES, où
+  // les rangées se remplissaient six par six ; elle vaut 8 depuis que les tailles
+  // se tirent — une rangée du fond peut n'avoir qu'un occupant. Un chiffre en
+  // clair fait tomber ce test le jour où la dispersion irait plus loin, là où un
+  // `>=` la laisserait glisser sans un mot.
+  assert.equal(minRangee, bande.derniere - 2,
+    'les artilleries n\'atteignent plus la rangée 8, ou descendent plus bas encore');
 });
 
 // ---------------------------------------------------------------------------
@@ -987,4 +1062,289 @@ test('§7 — le générateur refuse des paramètres incohérents plutôt que de
   assert.throws(() => genererVague({ niveau: 10, budgetPoints: -1, graine: 1 }), /budget -1/);
   // Budget nul : une vague vide, pas une exception.
   assert.deepEqual(genererVague({ niveau: 10, budgetPoints: 0, graine: 1 }).unites, []);
+});
+
+// ---------------------------------------------------------------------------
+// CIBLES-RANGÉES — la rangée cesse d'être une fonction du rang, 07/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, 07/09, POINT 9 : « Audit sur les cibles ouvrage : elles sont toutes
+// positionnées de façon identique. Elles doivent bien + aléatoire. » C'est une
+// REPRISE : le lot COLONNE du 06/09 a traité la même plainte et n'en a traité
+// que la MOITIÉ — l'axe des colonnes.
+//
+// ⚠⚠ ET LA LEÇON EST DANS LE TEST QUI N'A RIEN VU. `COL T15` mesurait « le
+// multi-ensemble des charges », c'est-à-dire les COLONNES. Il est passé sans
+// jamais regarder l'axe qui gênait Ethan, alors que le brief d'alors demandait
+// « le multi-ensemble des (rangee, id) ». **Le montage de `CR T1` est donc
+// insensible aux colonnes par construction : il ne compte que `rangée → nombre
+// d'occupants`.** Un test qui inclurait la colonne passerait AVANT le lot.
+
+/** `rangée → nombre d'occupants`, et rien d'autre : la colonne n'y entre pas. */
+function profilDeRangee(liste) {
+  const parRangee = new Map();
+  for (const o of liste) parRangee.set(o.rangee, (parRangee.get(o.rangee) ?? 0) + 1);
+  return JSON.stringify([...parRangee.entries()].sort((a, b) => a[0] - b[0]));
+}
+
+/** Le multi-ensemble des couples `(rangée, id)` — le second angle du brief. */
+function couplesRangeeId(liste) {
+  return JSON.stringify(liste.map((o) => `${o.rangee}:${o.id}`).sort());
+}
+
+test('CR T1 — les FORMES varient : le profil d\'occupation par rangée n\'est plus unique', () => {
+  // ⚠⚠ LE COMPTE D'AVANT LE LOT EST ÉCRIT ICI POUR QUE LA COMPARAISON SE LISE.
+  // Mesuré sur l'arbre d'avant, 200 graines, dans un `git worktree` : **UN
+  // SEUL** profil d'occupation par rangée, à tous les types et à tous les
+  // niveaux. Un camp de niveau 7 portait toujours 5 occupants en rangée 10, 7
+  // en rangée 11 et 2 en rangée 18, quelle que soit la graine.
+  const AVANT_LE_LOT = 1;
+  const GRAINES = 200;
+
+  for (const [type, niveau] of [['camp', 3], ['camp', 7], ['base', 15], ['base', 30]]) {
+    const profils = new Set();
+    const profilsDefenses = new Set();
+    for (let g = 1; g <= GRAINES; g += 1) {
+      const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
+      profils.add(profilDeRangee([...site.batiments, ...site.defenseurs]));
+      profilsDefenses.add(profilDeRangee(site.defenseurs));
+    }
+    assert.ok(profils.size > AVANT_LE_LOT * 4,
+      `${type}/n${niveau} : ${profils.size} profils sur ${GRAINES} graines — `
+      + `il y en avait ${AVANT_LE_LOT} avant le lot, et la rangée est restée une `
+      + 'fonction du rang');
+    assert.ok(profilsDefenses.size > AVANT_LE_LOT,
+      `${type}/n${niveau} : ${profilsDefenses.size} profils de DÉFENSES seules`);
+  }
+
+  // ⚠⚠ ET LA FALSIFICATION DU MONTAGE : le même balayage, en incluant la
+  // COLONNE, distinguait DÉJÀ les graines avant le lot. C'est exactement
+  // l'erreur de `COL T15`, et cette assertion-ci prouve que `profilDeRangee` ne
+  // la refait pas — si elle regardait les colonnes, elle rendrait le même
+  // nombre que la ligne ci-dessous.
+  const avecColonnes = new Set();
+  const sansColonnes = new Set();
+  for (let g = 1; g <= 40; g += 1) {
+    const site = genererSite({ type: 'camp', niveau: 3, saveur: 'richeQuartz', graine: g });
+    const tout = [...site.batiments, ...site.defenseurs];
+    avecColonnes.add(JSON.stringify(tout.map((o) => `${o.id}@${o.rangee},${o.colonne}`).sort()));
+    sansColonnes.add(profilDeRangee(tout));
+  }
+  assert.equal(avecColonnes.size, 40, 'les colonnes ne distinguent plus les graines');
+  assert.ok(sansColonnes.size < avecColonnes.size,
+    'le profil de rangée distingue autant que la disposition complète : il lit les colonnes');
+});
+
+test('CR T2 — les ids changent de RANGÉE, pas seulement de colonne', () => {
+  // Second angle, pour ne pas dépendre du seul comptage : le multi-ensemble des
+  // couples `(rangée, id)`. Deux graines doivent en produire deux différents.
+  for (const [type, niveau] of [['camp', 7], ['avantPoste', 20], ['base', 30]]) {
+    const vus = new Set();
+    for (let g = 1; g <= 40; g += 1) {
+      const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
+      vus.add(couplesRangeeId([...site.batiments, ...site.defenseurs]));
+    }
+    assert.ok(vus.size > 1,
+      `${type}/n${niveau} : ${vus.size} multi-ensemble(s) (rangée, id) sur 40 graines`);
+  }
+  // ⚠ FALSIFIABLE PAR LE BAS : au niveau 3, un camp ne porte que trois défenses
+  // et onze bâtiments. Le nombre de formes légales y est petit — mais il n'est
+  // plus UN, et c'est tout ce que ce lot promet.
+  const auRasDuSol = new Set();
+  for (let g = 1; g <= 200; g += 1) {
+    const site = genererSite({ type: 'camp', niveau: 3, saveur: 'richeQuartz', graine: g });
+    auRasDuSol.add(couplesRangeeId([...site.batiments, ...site.defenseurs]));
+  }
+  assert.ok(auRasDuSol.size > 1, 'le plus petit camp reste identique à lui-même');
+});
+
+test('CR T3 — l\'artillerie tire toujours, et elle reste derrière tout le reste', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UNE DISPERSION QUI AURAIT LIBÉRÉ LA RANGÉE SANS
+  // REGARDER LA PORTÉE. Il mesure les deux moitiés de la contrainte 4 :
+  //   — la géométrie, par `rangeeLaPlusAvanceeQuiTire`, dérivée des données ;
+  //   — l'ORDRE, qui est ce qui borne vraiment l'artillerie.
+  //
+  // ⚠⚠ ET LE RELEVÉ DES PORTÉES MINIMALES DIT QUE LA PREMIÈRE MOITIÉ EST
+  // VACUEUSE, ce qui est un fait et non un échec. Trois pièces seulement portent
+  // une portée minimale — Faucheuse, Mortier, Harpon, toutes à 3,5 pour une
+  // portée de 5,5 — et depuis n'importe quelle rangée de la bande, la couronne
+  // [12,25 ; 30,25] en milli-cases² contient des cases. **Aucune rangée n'est
+  // interdite à personne.** `data/sites.js` le mesure depuis le 25/08 : une
+  // Faucheuse en rangée 3 tire 23 ticks. La phrase « posée à l'avant, elle ne
+  // tirerait jamais » était fausse, et deux commentaires la portaient encore.
+  const bande = GRILLE.bandes.defense;
+  for (const id of Object.keys(DEFENSES)) {
+    assert.equal(rangeeLaPlusAvanceeQuiTire(id), bande.premiere,
+      `${id} : une rangée de la bande lui serait interdite`);
+  }
+  // ⚠ Y COMPRIS CELLES QUI NE TIRENT PAS. Un Mur a `portee: 0` : sa couronne est
+  // vide, et un repli mal choisi lui interdirait toute la bande sauf le fond.
+  // C'est la faute que ce test a trouvée dans le code du lot, corrigée avant
+  // livraison.
+  assert.equal(DEFENSES.merlon.portee, 0, 'le Mur s\'est mis à tirer');
+  assert.equal(rangeeLaPlusAvanceeQuiTire('merlon'), bande.premiere);
+  // Le montage doit VRAIMENT porter des pièces à portée minimale, sinon la
+  // moitié géométrique ne mesurerait rien.
+  const aPorteeMini = Object.entries(DEFENSES).filter(([, d]) => (d.porteeMini ?? 0) > 0);
+  assert.equal(aPorteeMini.length, 3, 'le relevé des portées minimales a changé');
+  for (const [, d] of aPorteeMini) assert.equal(d.porteeMini, 3.5);
+
+  let vues = 0;
+  for (let g = 1; g <= 100; g += 1) {
+    for (const [type, niveau] of [['base', 30], ['camp', 20], ['avantPoste', 40]]) {
+      const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
+      const artilleries = site.defenseurs.filter((d) => categorieDe(d.id) === 'artillerie');
+      const autres = site.defenseurs.filter((d) => categorieDe(d.id) !== 'artillerie');
+      for (const a of artilleries) {
+        vues += 1;
+        assert.ok(a.rangee >= rangeeLaPlusAvanceeQuiTire(a.id),
+          `${type}/g${g} : ${a.id} en rangée ${a.rangee}, devant sa portée`);
+        for (const b of autres) {
+          assert.ok(a.rangee >= b.rangee,
+            `${type}/g${g} : ${a.id} en rangée ${a.rangee} devant ${b.id} (${b.rangee})`);
+        }
+      }
+    }
+  }
+  assert.ok(vues > 100, `le balayage ne porte que ${vues} artilleries : il ne mesure rien`);
+});
+
+test('CR T4 — les trois autres contraintes tiennent, seuils en clair COMPRIS', () => {
+  // ⚠ LES DEUX SEUILS S'ÉCRIVENT EN CLAIR, ET ON NE LES TOUCHE PAS. C'est la
+  // consigne de `COL T16`, reprise mot pour mot : une garde qui lit son seuil
+  // dans la table qu'elle garde ne peut pas voir ce seuil se relâcher.
+  const parRangee = DISPOSITION_DEFENSES.occupantsMaxParRangee;
+  assert.equal(parRangee, 6, 'six occupants sur neuf colonnes : trois libres au minimum');
+  assert.equal(DISPOSITION_DEFENSES.ecartColonnesMax, 2,
+    'le budget d\'écart a été relevé — une borne ne se desserre pas pour faire passer un lot');
+
+  const bande = GRILLE.bandes.defense;
+  let ecartMax = 0;
+  let batimentsMax = 0;
+  for (let g = 1; g <= 100; g += 1) {
+    for (const [type, niveau] of [['base', 30], ['camp', 20], ['avantPoste', 40]]) {
+      const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
+      // 1. six occupants au plus par rangée de DÉFENSE, donc trois colonnes libres.
+      const parLigne = new Map();
+      for (const d of site.defenseurs) parLigne.set(d.rangee, (parLigne.get(d.rangee) ?? 0) + 1);
+      for (const [rangee, n] of parLigne) {
+        assert.ok(n <= parRangee, `${type}/g${g} rangée ${rangee} : ${n} occupants`);
+        assert.ok(GRILLE.largeur - n >= 3, `${type}/g${g} rangée ${rangee} : moins de 3 libres`);
+      }
+      // 2. les rangées occupées sont les plus ARRIÈRE, sans trou.
+      const rangees = [...parLigne.keys()].sort((a, b) => b - a);
+      rangees.forEach((r, k) => {
+        assert.equal(r, bande.derniere - k, `${type}/g${g} : la bande de défense a un trou`);
+      });
+      // 3. l'écart de charge, sur les DEUX groupes.
+      for (const groupe of [site.defenseurs, site.batiments]) {
+        const charge = new Array(GRILLE.largeur).fill(0);
+        for (const e of groupe) charge[e.colonne - 1] += 1;
+        const ecart = Math.max(...charge) - Math.min(...charge);
+        assert.ok(ecart <= DISPOSITION_DEFENSES.ecartColonnesMax,
+          `${type}/g${g} : écart de ${ecart} — ${charge}`);
+        ecartMax = Math.max(ecartMax, ecart);
+      }
+      // ⚠⚠ ET LA RÉPONSE À LA QUESTION DU BRIEF, ASSERTÉE : le plafond des
+      // BÂTIMENTS n'est pas six, c'est `GRILLE.largeur`. Le relevé qui montrait
+      // « 7 occupants en rangée 11 » lisait une rangée de bâtiments, pas une
+      // violation — six est la règle des DÉFENSES, et elle a un motif que les
+      // bâtiments n'ont pas : laisser passer l'assaut.
+      const parLigneBat = new Map();
+      for (const b of site.batiments) parLigneBat.set(b.rangee, (parLigneBat.get(b.rangee) ?? 0) + 1);
+      for (const [, n] of parLigneBat) {
+        assert.ok(n <= GRILLE.largeur, `${type}/g${g} : ${n} bâtiments sur une rangée`);
+        batimentsMax = Math.max(batimentsMax, n);
+      }
+    }
+  }
+  assert.equal(ecartMax, DISPOSITION_DEFENSES.ecartColonnesMax,
+    'le placement n\'atteint jamais le budget d\'écart : la charge est restée plate');
+  assert.ok(batimentsMax > parRangee,
+    `les bâtiments ne dépassent jamais ${parRangee} par rangée : la question du brief ne se pose plus`);
+});
+
+test('CR T5 — Souche et Étai restent au fond, au centre', () => {
+  // Non-régression de `COL T18`, sur le chemin NEUF : les deux uniques sont
+  // posés HORS du tirage des tailles de rangée, et ils ne doivent pas bouger.
+  const fond = GRILLE.bandes.batiments.derniere;
+  const centre = Math.ceil(GRILLE.largeur / 2);
+  for (let g = 1; g <= 100; g += 1) {
+    for (const [type, niveau] of [['base', 30], ['camp', 20], ['avantPoste', 40]]) {
+      const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
+      const souche = site.batiments.find((b) => b.id === 'souche');
+      const etai = site.batiments.find((b) => b.id === 'etai');
+      assert.deepEqual({ rangee: souche.rangee, colonne: souche.colonne },
+        { rangee: fond, colonne: centre }, `${type}/g${g} : la Souche a bougé`);
+      assert.deepEqual({ rangee: etai.rangee, colonne: etai.colonne },
+        { rangee: fond, colonne: centre - 1 }, `${type}/g${g} : l'Étai a bougé`);
+    }
+  }
+});
+
+test('CR T6 — le déterminisme est intact, et une graine voisine ne suffit pas', () => {
+  for (const [type, niveau] of [['camp', 7], ['base', 30], ['avantPoste', 15]]) {
+    const params = { type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: 4242 };
+    assert.deepEqual(genererSite(params), genererSite(params),
+      `${type}/n${niveau} : deux appels de même graine diffèrent`);
+    // ⚠ CONTRE-ÉPREUVE : sans elle, un générateur qui rendrait toujours la même
+    // chose passerait la ligne ci-dessus.
+    assert.notDeepEqual(genererSite(params), genererSite({ ...params, graine: 4243 }),
+      `${type}/n${niveau} : la graine voisine rend le même site`);
+  }
+});
+
+test('CR T7 — les COLONNES varient encore : l\'acquis du lot COLONNE tient', () => {
+  // ⚠⚠ UN LOT QUI GAGNERAIT LES RANGÉES EN PERDANT LES COLONNES N'AURAIT RIEN
+  // GAGNÉ. C'est `COL T15` rejoué sur le chemin neuf, à l'identique : le
+  // multi-ensemble des charges par colonne, qu'une permutation préserve.
+  const chargeTriee = (liste) => {
+    const c = new Array(GRILLE.largeur).fill(0);
+    for (const e of liste) c[e.colonne - 1] += 1;
+    return c.sort((a, b) => a - b).join(',');
+  };
+  for (const [type, niveau, saveur] of [
+    ['base', 30, null], ['base', 10, null],
+    ['camp', 20, 'richeQuartz'], ['avantPoste', 40, 'richeScorie'],
+  ]) {
+    const profils = new Set();
+    for (let g = 1; g <= 40; g += 1) {
+      profils.add(chargeTriee(genererSite({ type, niveau, saveur, graine: g }).defenseurs));
+    }
+    assert.ok(profils.size > 1,
+      `${type}/n${niveau} : ${profils.size} profil(s) de charge sur 40 graines — `
+      + 'le lot a perdu l\'acquis de COLONNE');
+  }
+});
+
+test('CR T8 — le lot DÉPLACE les occupants, il n\'en ajoute ni n\'en retire', () => {
+  // ⚠⚠ LE DÉCALAGE DU PRNG EST MESURÉ AU RAPPORT, PAS ICI — le brief le demande
+  // comme une MESURE, et elle ne s'observe qu'en instrumentant `tirer`. Relevé,
+  // sur trois graines : un camp de niveau 3 consommait 192 tirages avant le lot
+  // et en consomme 296 après ; une base de niveau 50, 318 contre 422 à 438.
+  //
+  // ⚠⚠ ET LE COMPTE CESSE D'ÊTRE LE MÊME D'UNE GRAINE À L'AUTRE, CE QUI SE
+  // DÉCLARE. Avant le lot, `genererSite` consommait un nombre FIXE de tirages
+  // pour un couple (type, niveau) — 192, 192, 192. Après, il dépend des tailles
+  // de rangée tirées : `repartirLesColonnes` tire neuf clés PAR RANGÉE, et le
+  // nombre de rangées varie. Ce n'est PAS le « tire, si ça ne va pas
+  // recommence » que le §5 du brief interdit : le `rng` de `genererSite` naît de
+  // la graine du site, ne sort jamais de la fonction, et personne d'autre ne le
+  // consomme — `genererVague` et `genererAssaut` créent le leur. Le site reste
+  // une fonction PURE de ses paramètres, ce que `CR T6` mesure.
+  //
+  // Ce que ce test-ci garde, c'est l'autre moitié : le lot ne change RIEN à
+  // `densite`. Le nombre d'occupants d'un site est le même qu'avant, au un près.
+  for (const [type, niveau] of [['camp', 3], ['camp', 7], ['base', 15], ['base', 30]]) {
+    const attendu = densite(type, niveau);
+    for (let g = 1; g <= 40; g += 1) {
+      const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
+      assert.equal(site.batiments.length, attendu.batiments,
+        `${type}/n${niveau}/g${g} : le nombre de bâtiments a changé`);
+      assert.equal(site.defenseurs.length, attendu.defenses,
+        `${type}/n${niveau}/g${g} : le nombre de défenses a changé`);
+      assert.equal(site.obstacles.length, attendu.obstacles ?? site.obstacles.length,
+        `${type}/n${niveau}/g${g} : le nombre d'obstacles a changé`);
+    }
+  }
 });

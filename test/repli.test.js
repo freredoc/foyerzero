@@ -338,7 +338,16 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // camp de la graine 1 change de forme ET de composition, et l'infanterie la
   // traverse au lieu de s'y figer. Ce que ce test existe pour tenir ne bouge
   // pas davantage : au moins une unité rentre à la base.
-  assert.equal(r.nbTicks, 513);
+  //
+  // ⚠⚠ LOT CIBLES-RANGÉES (07/09) : LES TAILLES DE RANGÉE SE TIRENT À LEUR TOUR.
+  // Le lot COLONNE avait rendu la charge par COLONNE variable ; la rangée restait
+  // une fonction pure du rang, si bien qu'un site portait toujours le même nombre
+  // d'occupants sur les mêmes lignes — mesuré, UN SEUL profil d'occupation par
+  // rangée sur 200 graines. `taillesDeRangee` consomme donc désormais des
+  // tirages, et tout ce qui tire APRÈS `placerDefenses` et `placerBatiments` se
+  // décale : obstacles, composition, vagues. Le brief l'annonçait, le rapport le
+  // chiffre, et ce que ce test tient ne change pas.
+  assert.equal(r.nbTicks, 635);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -358,8 +367,12 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // atteint les bâtiments, elle en rapporte davantage et elle y laisse la
   // moitié de ses unités. Ce que ce test existe pour tenir ne bouge pas : au
   // moins une unité rentre à la base.
-  assert.deepEqual(r.butin, { quartz: 54_560, scorie: 18_186 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
+  // ⚠ LOT CIBLES-RANGÉES : 60 714 et 20 238, TROIS survivants encore. Le raid
+  // dure 635 ticks au lieu de 513 et rapporte 11 % de plus — même mécanique,
+  // même sens : plus de ticks, plus de tirs sur les bâtiments. Ce que ce test
+  // existe pour tenir ne bouge toujours pas : au moins une unité rentre.
+  assert.deepEqual(r.butin, { quartz: 60_714, scorie: 20_238 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 9);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
