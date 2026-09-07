@@ -26,7 +26,7 @@
 
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, ETIQUETTE_CARTE, POI,
-  palierDeNiveau, DEPLACEMENT,
+  palierDeNiveau, DEPLACEMENT, TYPES_SITE, ORIGINE_DU_NIVEAU,
 } from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
@@ -567,9 +567,36 @@ export function lignesDuSite(site, depuis, poisAcquis = [], ciblage = null) {
         ? '— trois moyennes, sur l\'écran Base'
         : String(site.niveau),
     },
+  ];
+  // ⚠⚠ D'OÙ VIENT CE NIVEAU — Ethan, 06/09. Il a vu un avant-poste de niveau 1
+  // collé à une base de niveau 7,6 et a demandé pourquoi : un CAMP suit le niveau
+  // des bâtiments du joueur, un AVANT-POSTE suit l'endroit de la carte, et rien à
+  // l'écran ne le disait. Il a choisi de ne pas changer la règle mais de
+  // l'AFFICHER.
+  //
+  // ⚠⚠ LE DISCRIMINANT EST `TYPES_SITE[x].indexeSur`, JAMAIS UN `if` SUR LE TYPE.
+  // Un `site.type === 'camp'` écrit ici serait la seconde vérité que §4 de
+  // `CLAUDE.md` interdit, et la première à mentir le jour où un troisième type de
+  // satellite arriverait. Le libellé, lui, vit dans `src/data/` à côté du champ.
+  //
+  // ⚠ ET AUCUN CHIFFRE N'EST RECALCULÉ : la ligne explique l'ORIGINE du niveau,
+  // elle ne le réévalue pas — celui du site est déjà dans l'état.
+  //
+  // ⚠ RIEN SUR SA PROPRE BASE, ni sur un POI. La base du joueur n'a pas UN niveau
+  // mais trois moyennes, et elle n'est pas dans `TYPES_SITE` ; un POI n'a pas de
+  // niveau du tout, sa « bande » n'en est pas un.
+  const typeDuSite = TYPES_SITE[site.type];
+  if (typeDuSite !== undefined && site.niveau !== null) {
+    const origine = ORIGINE_DU_NIVEAU[typeDuSite.indexeSur];
+    if (origine === undefined) {
+      throw new Error(`monde : « ${typeDuSite.indexeSur} » n'a pas de libellé d'origine`);
+    }
+    lignes.push({ quoi: 'Indexé sur', valeur: origine });
+  }
+  lignes.push(
     { quoi: 'Distance', valeur: distance === 1 ? '1 case' : `${distance} cases` },
     { quoi: 'Position', valeur: `rangée ${site.rangee}, colonne ${site.colonne}` },
-  ];
+  );
   // ⚠⚠ DEUX LIGNES DE PLUS POUR UN POI, ET LA FONCTION RESTE PURE. Elle reçoit la
   // LISTE DES ACQUIS, jamais l'état entier : lui passer `etat` lui donnerait accès
   // à tout, et la première commodité prise ici serait la fin de sa pureté.
@@ -972,6 +999,86 @@ export function traitDeLaFleche(depuis, vers, ox, oy, pas) {
 }
 
 /**
+ * Le même trait, rogné au bord du canevas.
+ *
+ * ⚠⚠ ETHAN, 06/09 : LA POINTE ÉTAIT HORS ÉCRAN. Quand la cible sort du cadre, la
+ * flèche continuait jusqu'à elle : le joueur ne voyait qu'une BARRE NUE qui
+ * traverse la carte sans rien désigner. Une flèche qui touche le bord dit « c'est
+ * par là » ; une barre qui sort de l'écran ne dit rien.
+ *
+ * ⚠⚠ ET LE CAS EST LE CAS COURANT AU ZOOM MAXIMUM, MESURÉ. Une case y vaut
+ * `ZOOM_CARTE.crans` au dernier cran — **256 pixels physiques** —, donc un
+ * téléphone de 1 080 × 2 340 montre **4,2 × 9,1 cases**. La portée d'un raid est
+ * de dix cases : deux sites attaquables ne tiennent PAS ensemble dans le cadre.
+ *
+ * ⚠⚠ LES DEUX BOUTS SONT ROGNÉS, PAS SEULEMENT L'ARRIVÉE — et le cas du DÉPART
+ * hors champ est atteignable pour la même raison. Le joueur promène la carte
+ * jusqu'à sa cible ; sa base, à dix cases de là, est alors hors du cadre. Un
+ * rognage qui ne traiterait que l'arrivée laisserait le trait partir d'un point
+ * imaginaire hors écran, ce qui est le défaut d'aujourd'hui vu par l'autre bout.
+ *
+ * ⚠⚠ L'ANGLE NE SE RECALCULE PAS : IL SE REPREND. `trait.angle` est celui du
+ * segment ENTIER, et c'est lui qui porte la direction de la cible. Le refaire
+ * depuis le segment rogné rendrait le même nombre aujourd'hui, par un chemin qui
+ * peut diverger demain — un rognage qui rend un point sur un bord et un angle
+ * calculé ailleurs est deux vérités pour une grandeur.
+ *
+ * ⚠ ET `traitDeLaFleche` NE BOUGE PAS D'UN CARACTÈRE. Elle rend le trait de
+ * centre à centre — l'arbitrage du 06/09 —, et le rognage est une SECONDE
+ * opération posée après elle. Sa garde « même case → `null` » est intacte.
+ *
+ * ⚠ UN TRAIT ENTIÈREMENT VISIBLE RESSORT IDENTIQUE, ET PAR IDENTITÉ D'OBJET :
+ * `t0` et `t1` valent exactement 0 et 1, aucune arithmétique n'est faite, et le
+ * cas courant ne paie donc pas un arrondi flottant pour rien.
+ *
+ * ⚠ ET S'IL EST ENTIÈREMENT DEHORS, ON REND `null`, jamais un segment de
+ * longueur nulle : `dessinerFleche` peindrait une pointe sur un point qui ne
+ * désigne rien.
+ *
+ * L'algorithme est Liang–Barsky : le segment est paramétré, chaque bord donne une
+ * borne sur le paramètre, et l'intersection des quatre bornes est le morceau
+ * visible. Il traite les deux bouts par construction.
+ *
+ * @param {{x1:number,y1:number,x2:number,y2:number,angle:number}|null} trait
+ * @param {number} largeur du canevas, en pixels
+ * @param {number} hauteur du canevas, en pixels
+ * @returns {{x1:number,y1:number,x2:number,y2:number,angle:number}|null}
+ */
+export function traitRogne(trait, largeur, hauteur) {
+  if (trait === null) return null;
+  const dx = trait.x2 - trait.x1;
+  const dy = trait.y2 - trait.y1;
+  const p = [-dx, dx, -dy, dy];
+  const q = [trait.x1, largeur - trait.x1, trait.y1, hauteur - trait.y1];
+  let t0 = 0;
+  let t1 = 1;
+  for (let i = 0; i < 4; i += 1) {
+    if (p[i] === 0) {
+      // Parallèle à ce bord-là : ou bien on est du bon côté, ou bien rien n'est
+      // visible — il n'y a aucune borne à en tirer.
+      if (q[i] < 0) return null;
+      continue;
+    }
+    const r = q[i] / p[i];
+    if (p[i] < 0) {
+      if (r > t1) return null;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return null;
+      if (r < t1) t1 = r;
+    }
+  }
+  if (t0 === 0 && t1 === 1) return trait;
+  return {
+    x1: trait.x1 + t0 * dx,
+    y1: trait.y1 + t0 * dy,
+    x2: trait.x1 + t1 * dx,
+    y2: trait.y1 + t1 * dy,
+    angle: trait.angle,
+  };
+}
+
+/**
  * ⚠⚠ `RETRAIT_FLECHE` A ÉTÉ RETIRÉE AU LOT CARTE-B (06/09), ET C'EST UNE
  * CONSTANTE EN MOINS QUI SE DÉCLARE.
  *
@@ -1086,6 +1193,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauCorps = $('monde-panneau-corps');
   const panneauRefus = $('monde-panneau-refus');
   const panneauDeplacer = $('monde-panneau-deplacer');
+  const panneauAttaquer = $('monde-panneau-attaquer');
   // ⚠ QUELLE CASE LE PANNEAU DÉCRIT — c'est ce à quoi le SECOND toucher se
   // compare. `null` quand le panneau est fermé.
   let siteOuvert = null;
@@ -1827,7 +1935,18 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // ⚠ ET LE COMMENTAIRE EST RÉÉCRIT PLUTÔT QUE LAISSÉ : un motif mort sous une
     // conclusion vivante est le mensonge que `CLAUDE.md` §6 raconte trois fois.
     if (siteOuvert === null || ciblageOuvert === null || ciblageOuvert.cout === null) return;
-    const trait = traitDeLaFleche(baseCourante(etatCourant).position, siteOuvert, ox, oy, pas);
+    // ⚠⚠ ROGNÉ AU BORD DU CANEVAS — lot CARTE-C, 06/09. Sans ça, une cible hors
+    // du cadre laissait une BARRE NUE qui traverse la carte sans rien désigner :
+    // sa pointe était hors écran. Voir `traitRogne` — c'est une SECONDE
+    // opération, `traitDeLaFleche` rend toujours son trait de centre à centre.
+    //
+    // ⚠ EN PIXELS DE BUFFER, PAS EN PIXELS CSS : `ctx` peint dans le référentiel
+    // du canevas, et c'est celui-là que `moveTo` et `lineTo` emploient deux
+    // lignes plus bas.
+    const trait = traitRogne(
+      traitDeLaFleche(baseCourante(etatCourant).position, siteOuvert, ox, oy, pas),
+      canvas.width, canvas.height,
+    );
     if (trait === null) return;
     ctx.lineWidth = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
     ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
@@ -2263,6 +2382,23 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // l'Ouvrage il n'aurait aucun sens, et le panneau retomberait dans la faute
     // qu'il combat depuis le 27/08 : promettre un geste qui n'existe pas là.
     panneauDeplacer.hidden = gesteDuSecondToucher(site) !== 'base';
+    // ⚠⚠ LE DISCRIMINANT N'EST PAS INVENTÉ : C'EST CELUI DE LA FLÈCHE. Le bouton
+    // ne doit exister que là où `entrerDansLaCible` a un sens, et l'écran le sait
+    // déjà — `ciblageDuSite` rend `null` sur sa propre base comme sur une case
+    // sans rien à attaquer, et c'est exactement ce que `dessinerFleche` lit deux
+    // lignes plus haut pour décider de peindre. En écrire une troisième version
+    // ici donnerait un bouton visible sous une flèche absente.
+    panneauAttaquer.hidden = ciblage === null;
+    // ⚠ HORS DE PORTÉE, IL SE VOIT ET NE SE TOUCHE PAS — `cout === null` EST
+    // « hors de portée », le motif que `dessinerFleche` porte depuis CARTE-A. Un
+    // bouton absent laisserait le joueur chercher ; un bouton éteint lui dit
+    // qu'il y a quelque chose à faire pour l'allumer, et `panneauRefus` écrit
+    // déjà quoi, deux lignes plus bas.
+    //
+    // ⚠ ET LES AUTRES REFUS NE L'ÉTEIGNENT PAS. Manquer de points d'attaque est
+    // un fait qui change à la minute : « un indice n'est pas une interdiction »
+    // (§4), et `entrerDansLaCible` refuse ET chiffre en appuyant.
+    panneauAttaquer.disabled = ciblage === null || ciblage.cout === null;
     panneau.hidden = false;
     // ⚠ LA FLÈCHE NAÎT AVEC LE PANNEAU, donc l'ouverture repeint. Sans ça elle
     // n'apparaîtrait qu'au prochain geste sur la carte — la boucle de dessin ne
@@ -2273,6 +2409,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   function fermerPanneau() {
     panneau.hidden = true;
     panneauDeplacer.hidden = true;
+    // ⚠ MÊME MOTIF QUE LA LIGNE AU-DESSUS : il est DANS le panneau aujourd'hui,
+    // donc le cacher ne se voit pas — mais le premier lot qui le sortirait de là
+    // hériterait d'un bouton d'attaque orphelin, pointant sur une case fermée.
+    panneauAttaquer.hidden = true;
     // ⚠ LE BLOC DE PRIX SE FERME AVEC LE PANNEAU. Le laisser visible sous un
     // panneau caché ne se verrait pas aujourd'hui — il est DANS le panneau —
     // mais le premier lot qui le sortirait de là hériterait d'un prix orphelin.
@@ -2310,6 +2450,18 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     fermerPanneau();
   });
   panneauDeplacer.addEventListener('click', armerLeDeplacement);
+  // ⚠⚠ LE MÊME CHEMIN QUE LE SECOND TOUCHER, PAS UN SECOND. `entrerDansLaCible`
+  // garde déjà l'entrée par `problemesDuRaid` et écrit le refus ; un bouton qui
+  // appellerait `surEntreeRaid` lui-même contournerait la garde, et le joueur
+  // entrerait sur une cible que l'écran de raid refuserait ensuite.
+  //
+  // ⚠ ET IL PASSE `siteOuvert`, LA CASE DONT LE PANNEAU PARLE. `ciblageDuSite`
+  // et `surEntreeRaid` ne lisent que la rangée et la colonne — vérifié —, donc
+  // il n'y a pas de site complet à retenir en plus, ni de risque qu'il vieillisse
+  // pendant que le panneau est ouvert.
+  panneauAttaquer.addEventListener('click', () => {
+    if (siteOuvert !== null) entrerDansLaCible(siteOuvert);
+  });
   // ⚠ IL SE FERME EXPLICITEMENT AU CÂBLAGE. Le `hidden` du balisage suffit
   // aujourd'hui, mais il serait la SEULE chose à le tenir fermé au démarrage :
   // un attribut oublié à la prochaine reprise du HTML l'ouvrirait par-dessus la

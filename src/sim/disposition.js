@@ -306,6 +306,14 @@ export function voisinsQualifiants(disposition, champs, index) {
  * une case en plus : une seconde lecture du voisinage dans `ui/` finirait par
  * diverger de celle-ci.
  *
+ * ⚠⚠ « LA MÊME RÈGLE » SE MESURE DEPUIS LE 06/09, ELLE NE S'AFFIRME PLUS. Cette
+ * phrase était écrite ici et dans `ui/chantier.js` **et elle était fausse** : les
+ * deux fonctions divergeaient sur une case occupée qui porte un champ, et rien
+ * ne l'attrapait. `F-J T2` compare désormais le compte PAR TYPE de cette
+ * fonction-ci à celui de `voisinsQualifiants`, sur une famille de montages —
+ * champ libre, champ occupé, bâtiment sur case nue, case vide. Une divergence ne
+ * peut plus revenir en silence.
+ *
  * ⚠ ELLE NE DIT RIEN DE L'ÉCRAN. Pas de direction, pas de glyphe, pas de
  * couleur : `src/sim/` ne connaît pas le sens dans lequel la grille se dessine,
  * et c'est `render/orientation.js` qui le sait. Ici on rend des COORDONNÉES.
@@ -333,25 +341,54 @@ export function voisinsQualifiantsParCase(disposition, champs, index) {
   const trouves = [];
   for (const [rangee, colonne] of casesVoisines(b.rangee, b.colonne)) {
     const i = occupees.get(cle(rangee, colonne));
-    let type = null;
-    if (i !== undefined && i !== index) {
-      // Une case occupée par un bâtiment ne peut pas porter de champ qualifiant
-      // en plus : c'est le bâtiment qui compte, ou rien.
-      if (parVoisin[disposition[i].id] !== undefined) type = disposition[i].id;
-    } else if (i === undefined) {
-      const ressource = ressourceDeLaCase(champs, rangee, colonne);
-      if (ressource !== null) {
-        const attendu = `champDe${ressource[0].toUpperCase()}${ressource.slice(1)}`;
-        if (parVoisin[attendu] !== undefined) type = attendu;
-      }
+    // ⚠⚠ UNE CASE PEUT QUALIFIER DEUX FOIS, ET C'EST CE QUE LE MOTEUR FAIT — lot
+    // FICHE-JUSTE, 06/09/2026. Ce bloc disait l'inverse : « une case occupée par
+    // un bâtiment ne peut pas porter de champ qualifiant en plus : c'est le
+    // bâtiment qui compte, ou rien », et sa branche champ était en
+    // `else if (i === undefined)`. **`voisinsQualifiants` ne regarde PAS
+    // l'occupation** pour une clé `champDe…` : elle boucle sur
+    // `ressourceDeLaCase` seule. Les deux fonctions répondaient donc à la même
+    // question et rendaient deux réponses.
+    //
+    // ⚠⚠ ET CE N'ÉTAIT PAS THÉORIQUE. Ethan, 06/09 : « un collecteur posé sur un
+    // champ de scories bloque la production d'élec : anormal ». **Mesuré : la
+    // production ne bougeait pas d'un milli** — centrale de niveau 1, champ de
+    // scorie voisin, `debitDuBatiment.total = 180` avec comme sans collecteur
+    // dessus. Ce qu'il voyait disparaître était la FLÈCHE de la fiche, et il l'a
+    // lue, très raisonnablement, comme une perte de production. On aligne donc le
+    // DESSIN sur le moteur, jamais l'inverse.
+    //
+    // ⚠ DEUX ENTRÉES POUR UNE CASE, ET NON UNE ENTRÉE À PLUSIEURS TYPES. Le
+    // moteur les compte SÉPARÉMENT — deux boucles, deux lignes de `comptes` — et
+    // `apportParHeure` est par TYPE : une entrée qui en porterait plusieurs
+    // devrait porter plusieurs apports, donc changer de forme pour rendre
+    // exactement ce que deux entrées disent déjà.
+    //
+    // ⚠⚠ LE CAS EST INATTEIGNABLE AUJOURD'HUI, MESURÉ ET NON SUPPOSÉ. Il faudrait
+    // qu'un `parVoisin` porte à la fois une clé `champDe…` et une clé de bâtiment
+    // POSABLE SUR UN CHAMP. Les quatre tables sont `centrale
+    // {champDeScorie, accumulateur}`, `accumulateur {centrale}`, `collecteur
+    // {raffinerie}`, `raffinerie {collecteur}` — et `CHAMPS.posableDessus` ne
+    // contient que `collecteur`, qu'aucune table n'apparie à un champ. La règle
+    // est écrite quand même : c'est celle du moteur, et une seconde ligne dans
+    // `parVoisin` la rendrait atteignable sans qu'on y pense.
+    const types = [];
+    const ressource = ressourceDeLaCase(champs, rangee, colonne);
+    if (ressource !== null) {
+      const attendu = `champDe${ressource[0].toUpperCase()}${ressource.slice(1)}`;
+      if (parVoisin[attendu] !== undefined) types.push(attendu);
     }
-    if (type === null) continue;
-    trouves.push({
-      rangee,
-      colonne,
-      type,
-      apportParHeure: debitVoisinParHeure(b.id, type, b.niveau),
-    });
+    if (i !== undefined && i !== index && parVoisin[disposition[i].id] !== undefined) {
+      types.push(disposition[i].id);
+    }
+    for (const type of types) {
+      trouves.push({
+        rangee,
+        colonne,
+        type,
+        apportParHeure: debitVoisinParHeure(b.id, type, b.niveau),
+      });
+    }
   }
   return trouves;
 }

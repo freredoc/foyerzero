@@ -22,11 +22,12 @@ import {
   sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles,
   teinteDAttente,
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
-  traitDeLaFleche, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
+  traitDeLaFleche, traitRogne, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
+  ciblageDuSite,
 } from '../src/ui/monde.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
-  palierDeNiveau, PALIERS_EMBLEME,
+  palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU,
 } from '../src/data/sites.js';
 import { echelleDuCran, geometrieDuCran, NOMS_DU_SOL } from '../src/render/terrain.js';
 
@@ -43,12 +44,13 @@ import {
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
-import { creerEtat } from '../src/sim/state.js';
+import { creerEtat, rattraperJeu, poserEffectif } from '../src/sim/state.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
 import { tousLesFonds } from '../src/render/fond.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { TICKS_APPARITION } from '../src/sim/satellites.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (...chemin) => readFileSync(join(RACINE, ...chemin), 'utf8');
@@ -289,13 +291,22 @@ test('sites — la base du joueur et la base terminale se dessinent en dernier',
 test('panneau — il dit ce qu\'on sait, et le niveau du joueur n\'est pas celui de sa rangée', () => {
   const depuis = { rangee: 275, colonne: 16 };
   const base = { type: 'base', rangee: 270, colonne: 13, niveau: 6 };
+  // ⚠⚠ RÉANCRÉ AU LOT CARTE-C, ET LES DEUX LISTES SONT ÉCRITES. Elle valait
+  // `['Type', 'Niveau', 'Distance', 'Position']` ; « Indexé sur » entre entre le
+  // niveau et la distance — Ethan, 06/09, a demandé d'où vient le niveau d'un
+  // site. L'assertion n'est pas assouplie : la liste reste EXACTE.
+  //
+  // ⚠ ET LES VALEURS SE CHERCHENT PAR NOM DÉSORMAIS, PLUS PAR INDICE. Une ligne
+  // insérée au milieu décalait trois assertions qui n'avaient rien à voir avec
+  // elle ; par nom, elles ne peuvent plus se tromper de ligne en silence.
+  const valeurDe = (l, quoi) => l.find((x) => x.quoi === quoi)?.valeur;
   const lignes = lignesDuSite(base, depuis);
-  assert.deepEqual(lignes.map((l) => l.quoi), ['Type', 'Niveau', 'Distance', 'Position']);
-  assert.equal(lignes[0].valeur, EMBLEMES_CARTE.base.nom);
-  assert.equal(lignes[1].valeur, '6');
+  assert.deepEqual(lignes.map((l) => l.quoi), ['Type', 'Niveau', 'Indexé sur', 'Distance', 'Position']);
+  assert.equal(valeurDe(lignes, 'Type'), EMBLEMES_CARTE.base.nom);
+  assert.equal(valeurDe(lignes, 'Niveau'), '6');
   // ⚠ BASELINE REMESURÉE AU LOT EUCLIDE : 5 rangées et 3 colonnes font 5,83
   // cases en ligne droite, arrondies à 6. Tchebychev en comptait 5.
-  assert.equal(lignes[2].valeur, '6 cases');
+  assert.equal(valeurDe(lignes, 'Distance'), '6 cases');
 
   // ⚠⚠ LA BASE DU JOUEUR N'A PAS DE NIVEAU DE CARTE. Elle en porte TROIS, qui
   // sont des moyennes de ce qu'il a posé, et aucun ne se déduit d'une position.
@@ -303,51 +314,76 @@ test('panneau — il dit ce qu\'on sait, et le niveau du joueur n\'est pas celui
   // c'est la faute que `sim/carte.js` existe pour empêcher.
   const joueur = { type: 'baseJoueur', rangee: 275, colonne: 16, niveau: null };
   const sien = lignesDuSite(joueur, depuis);
-  assert.equal(sien[2].valeur, '0 cases');
-  assert.ok(!/\b5\b/.test(sien[1].valeur),
-    `le panneau du joueur affiche « ${sien[1].valeur} » : le niveau de sa rangée`);
-  assert.ok(/moyennes/.test(sien[1].valeur), 'il ne dit pas pourquoi il n\'y a pas de niveau');
+  assert.equal(valeurDe(sien, 'Distance'), '0 cases');
+  assert.ok(!/\b5\b/.test(valeurDe(sien, 'Niveau')),
+    `le panneau du joueur affiche « ${valeurDe(sien, 'Niveau')} » : le niveau de sa rangée`);
+  assert.ok(/moyennes/.test(valeurDe(sien, 'Niveau')), 'il ne dit pas pourquoi il n\'y a pas de niveau');
+  // ⚠ ET IL NE DIT PAS D'OÙ VIENT UN NIVEAU QU'IL N'A PAS. Sa base n'est pas dans
+  // `TYPES_SITE`, et elle en porte TROIS : une ligne « Indexé sur » y désignerait
+  // une grandeur qui n'existe pas.
+  assert.equal(valeurDe(sien, 'Indexé sur'), undefined, 'le panneau du joueur dit d\'où vient son niveau');
 
   // Le singulier, parce qu'un « 1 cases » se remarque.
-  assert.equal(lignesDuSite({ ...base, rangee: 274, colonne: 16 }, depuis)[2].valeur, '1 case');
+  assert.equal(valeurDe(lignesDuSite({ ...base, rangee: 274, colonne: 16 }, depuis), 'Distance'), '1 case');
 
   // Un type inconnu LÈVE : c'est un fait de programme, pas un fait de jeu.
   assert.throws(() => lignesDuSite({ ...base, type: 'inconnu' }, depuis), /type de site inconnu/);
 });
 
-test('panneau — aucun bouton d\'action, ni dans le balisage ni dans l\'écran', () => {
+test('panneau — la liste des boutons est close, et trois mots restent interdits', () => {
   // ⚠ RIEN NE DOIT PROMETTRE CE QUI N'EXISTE PAS. C'était écrit le 27/08 contre
   // le bouton « Assaut » du lot ÉCRAN-CHANTIER, qui pointait sur du sol nu.
   //
-  // ⚠⚠ AMENDÉ AU LOT RAID-A, ET IL NE S'EST PAS ASSOUPLI D'UN MOT. Le raid
-  // EXISTE maintenant, et on y entre — mais par un SECOND TOUCHER sur la cible,
-  // pas par un bouton. La liste des boutons autorisés est donc toujours
-  // exactement « Fermer », et les quatre mots promis restent interdits : ce lot
-  // n'introduit délibérément AUCUN bouton dans ce panneau, et le garde-fou
-  // continue d'interdire tout le reste.
+  // ⚠⚠ ET LA RÈGLE A ÉTÉ RENVERSÉE AU LOT CARTE-C, PAS ASSOUPLIE. Elle exigeait
+  // la liste EXACTE `['monde-panneau-fermer']` et interdisait QUATRE mots —
+  // Attaquer, Raider, Piller, Conquérir —, au motif qu'on entre dans une cible
+  // par un SECOND TOUCHER. Ce motif tenait tant que le second toucher
+  // SUFFISAIT ; Ethan, 06/09 : « rajouter un bouton attaquer sur la fiche car ça
+  // bloque ». Le panneau occupe la moitié basse de l'écran, donc la cible est
+  // SOUS lui dès qu'elle est au sud de la vue.
   //
-  // ⚠ CE QUI EST AJOUTÉ, C'EST L'AUTRE MOITIÉ DE LA RÈGLE : le panneau doit
-  // pouvoir REFUSER ET DIRE POURQUOI. `problemesDuRaid` rend une liste de
-  // phrases justement pour ça ; sans la ligne de refus, un second toucher qui
-  // n'entre pas serait un geste mort, ce qui est la faute que ce test combat,
-  // vue de l'autre côté.
+  // ⚠⚠ CE QUE LA GARDE PERD, ELLE LE REPREND AILLEURS, ET ELLE NE SE RELÂCHE PAS.
+  // La liste reste EXACTE — deux boutons nommés, aucun autre —, les TROIS autres
+  // mots restent interdits, et le bouton doit passer par `entrerDansLaCible`,
+  // c'est-à-dire par la garde `problemesDuRaid`. Un bouton qui appellerait
+  // `surEntreeRaid` lui-même ferait tomber cette dernière assertion.
+  //
+  // ⚠ CE QUI RESTE DE L'AUTRE MOITIÉ : le panneau doit pouvoir REFUSER ET DIRE
+  // POURQUOI. `problemesDuRaid` rend une liste de phrases justement pour ça.
   //
   // On lit la page DÉCOMMENTÉE — le commentaire du lot raconte justement cette
-  // faute et cite le mot.
+  // histoire et cite les mots.
   const html = lire('dist', 'index.html').replace(/<!--[\s\S]*?-->/g, '');
   const debut = html.indexOf('id="monde-panneau"');
   assert.ok(debut > 0, 'le panneau de site a disparu du balisage');
   const fin = html.indexOf('</div>', html.indexOf('id="monde-panneau-corps"'));
   const bloc = html.slice(debut, fin);
   const boutons = [...bloc.matchAll(/<button[^>]*id="([^"]*)"/g)].map((m) => m[1]);
-  assert.deepEqual(boutons, ['monde-panneau-fermer'],
-    `le panneau porte d'autres boutons que « Fermer » : ${boutons.join(', ')}`);
+  assert.deepEqual(boutons, ['monde-panneau-attaquer', 'monde-panneau-fermer'],
+    `le panneau porte d'autres boutons que les deux nommés : ${boutons.join(', ')}`);
 
   // Et l'écran n'en fabrique pas non plus : il n'écrit que des lignes.
   const ecran = sansCommentaires(lire('src', 'ui', 'monde.js'));
-  for (const interdit of ['Attaquer', 'Raider', 'Piller', 'Conquérir']) {
+  for (const interdit of ['Raider', 'Piller', 'Conquérir']) {
     assert.ok(!ecran.includes(interdit), `l'écran Monde promet « ${interdit} »`);
   }
+  // ⚠ ET « ATTAQUER » NE REVIENT PAS PAR L'ÉCRAN : le libellé est dans le
+  // BALISAGE, comme les deux autres boutons du panneau. L'écrire en JavaScript
+  // mettrait le mot à deux endroits, et le premier renommage n'en changerait
+  // qu'un.
+  //
+  // ⚠ ET LE MOTIF CHERCHE UN LITTÉRAL, PAS LE MOT NU : `panneauAttaquer` porte
+  // « Attaquer » dans son propre nom, et un `includes` tombait dessus. C'est la
+  // faute du `\b` ASCII de §6, vue sous un autre jour — un motif non borné
+  // accuse un innocent.
+  assert.ok(!/['"`]Attaquer/.test(ecran), 'l\'écran Monde écrit le libellé du bouton');
+  assert.match(html, /id="monde-panneau-attaquer"[^>]*>Attaquer</, 'le libellé a quitté le balisage');
+
+  // ⚠ ET IL PASSE PAR LA GARDE DU RAID, jamais directement par l'entrée : c'est
+  // `entrerDansLaCible` qui interroge `problemesDuRaid` et écrit le refus.
+  assert.match(ecran, /panneauAttaquer\.addEventListener\('click',[\s\S]{0,160}?entrerDansLaCible\(/,
+    'le bouton Attaquer ne passe pas par `entrerDansLaCible`');
+
   // Falsifiable : le découpage doit bien voir le bouton qui EST là.
   assert.ok(bloc.includes('monde-panneau-fermer'), 'le découpage du bloc ne mesure rien');
 
@@ -2264,6 +2300,7 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     'monde-panneau', 'monde-panneau-titre', 'monde-panneau-prix',
     'monde-panneau-prix-cout', 'monde-panneau-prix-solde', 'monde-panneau-corps',
     'monde-panneau-refus', 'monde-panneau-deplacer', 'monde-panneau-fermer',
+    'monde-panneau-attaquer',
     'monde-recentrer', 'monde-base-2x2', 'monde-base-3x3',
     'sol-1', 'sol-2', 'sol-3', 'sol-4', 'sol-5', 'sol-6', 'sol-7', 'sol-8',
   ];
@@ -2295,7 +2332,12 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     classList: { add() {}, remove() {}, toggle() {} },
     children: [],
     appendChild(n) { this.children.push(n); },
+    // ⚠ `append` PREND PLUSIEURS NŒUDS, ET IL MANQUAIT — `ouvrirPanneau` s'en
+    // sert pour poser le couple libellé/valeur de chaque ligne. Le faux document
+    // ne montait donc aucun panneau.
+    append(...n) { this.children.push(...n); },
     replaceChildren(...n) { this.children = n; },
+    disabled: false,
     ecouteurs: new Map(),
     addEventListener(type, fn) {
       if (!this.ecouteurs.has(type)) this.ecouteurs.set(type, []);
@@ -2327,7 +2369,7 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
       cancelAnimationFrame() {},
     },
   };
-  return { doc, appels, canvas: parId.get('monde-canvas'), dpr };
+  return { doc, appels, canvas: parId.get('monde-canvas'), dpr, parId };
 }
 
 /**
@@ -2514,4 +2556,568 @@ test('CARTE-B T3 — la flèche part et finit aux CENTRES des deux cases', () =>
   const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
   assert.doesNotMatch(source, /RETRAIT_FLECHE/,
     'le retrait de la flèche est encore nommé dans l\'écran');
+});
+
+// ---------------------------------------------------------------------------
+// Le lot CARTE-C — la flèche s'arrête au bord, la fiche dit d'où vient le
+// niveau, et un bouton entre dans la cible. Retours d'Ethan du 06/09.
+// ---------------------------------------------------------------------------
+
+/** Un trait droit, horizontal, du point A au point B. */
+const trait = (x1, y1, x2, y2) => ({
+  x1, y1, x2, y2, angle: Math.atan2(y2 - y1, x2 - x1),
+});
+
+const CADRE = { largeur: 400, hauteur: 800 };
+const surUnBord = (x, y) => x === 0 || y === 0
+  || Math.abs(x - CADRE.largeur) < 1e-9 || Math.abs(y - CADRE.hauteur) < 1e-9;
+
+test('CARTE-C T1 — une flèche dont la cible est hors champ est rognée au bord', () => {
+  // ⚠⚠ ETHAN, 06/09 : la POINTE était hors écran, et le joueur ne voyait qu'une
+  // barre nue qui traverse la carte sans rien désigner.
+  //
+  // ⚠ LE MONTAGE DOIT SORTIR DU CADRE : une cible DANS le champ est le cas qui
+  // marchait déjà, et il ne prouverait rien.
+  const entier = trait(200, 400, 900, 400);
+  assert.ok(entier.x2 > CADRE.largeur, 'montage : la cible est dans le cadre');
+
+  const rogne = traitRogne(entier, CADRE.largeur, CADRE.hauteur);
+  assert.ok(rogne !== null, 'la flèche a disparu au lieu d\'être rognée');
+  assert.ok(surUnBord(rogne.x2, rogne.y2),
+    `la pointe est en (${rogne.x2}, ${rogne.y2}) : elle n'est pas sur un bord`);
+  assert.equal(rogne.x2, CADRE.largeur);
+  // Le départ, lui, ne bouge pas : il était déjà dans le cadre.
+  assert.equal(rogne.x1, entier.x1);
+  assert.equal(rogne.y1, entier.y1);
+
+  // ⚠ ET SUR L'AUTRE AXE AUSSI, sans quoi le test ne mesurerait qu'un bord.
+  const versLeBas = traitRogne(trait(200, 400, 200, 2000), CADRE.largeur, CADRE.hauteur);
+  assert.equal(versLeBas.y2, CADRE.hauteur);
+  const versLeHaut = traitRogne(trait(200, 400, 200, -900), CADRE.largeur, CADRE.hauteur);
+  assert.equal(versLeHaut.y2, 0);
+});
+
+test('CARTE-C T2 — l\'angle survit au rognage, et il n\'est pas recalculé', () => {
+  // ⚠⚠ UN TEST QUI REFERAIT L'ANGLE DEPUIS LE SEGMENT ROGNÉ SE VALIDERAIT
+  // LUI-MÊME. On compare à l'angle du trait ENTIER, qui est la grandeur que la
+  // pointe doit porter : la direction de la CIBLE, pas celle du bout visible.
+  const entier = trait(200, 400, 900, 100);
+  const rogne = traitRogne(entier, CADRE.largeur, CADRE.hauteur);
+  assert.equal(rogne.angle, entier.angle, 'l\'angle a été recalculé');
+
+  // ⚠ ET IL EST PRIS À L'IDENTIQUE, PAS « À PEU PRÈS » : une égalité stricte
+  // refuse un chemin de calcul qui rendrait le même nombre à l'epsilon près
+  // aujourd'hui et un autre demain.
+  assert.notEqual(
+    Math.atan2(rogne.y2 - rogne.y1, rogne.x2 - rogne.x1), Number.NaN,
+    'montage : le segment rogné est dégénéré',
+  );
+});
+
+test('CARTE-C T3 — une flèche entièrement visible n\'est pas touchée', () => {
+  // Non-régression du cas courant. L'égalité est STRICTE sur les quatre
+  // coordonnées : un rognage qui « corrigerait » un flottant au passage se
+  // verrait ici.
+  const entier = trait(50, 100, 300, 700);
+  const rogne = traitRogne(entier, CADRE.largeur, CADRE.hauteur);
+  assert.equal(rogne.x1, entier.x1);
+  assert.equal(rogne.y1, entier.y1);
+  assert.equal(rogne.x2, entier.x2);
+  assert.equal(rogne.y2, entier.y2);
+  assert.equal(rogne.angle, entier.angle);
+  // ⚠ ET C'EST LE MÊME OBJET : aucune arithmétique n'est faite dans ce cas-là.
+  assert.equal(rogne, entier, 'le cas courant paie un recalcul pour rien');
+});
+
+test('CARTE-C T4 — les deux bouts hors champ du même côté rendent `null`', () => {
+  // ⚠ `null`, PAS UN SEGMENT DE LONGUEUR NULLE : `dessinerFleche` peindrait une
+  // pointe sur un point qui ne désigne rien.
+  assert.equal(traitRogne(trait(-500, 400, -200, 400), CADRE.largeur, CADRE.hauteur), null);
+  assert.equal(traitRogne(trait(900, 400, 1200, 400), CADRE.largeur, CADRE.hauteur), null);
+  assert.equal(traitRogne(trait(200, -500, 300, -100), CADRE.largeur, CADRE.hauteur), null);
+  assert.equal(traitRogne(trait(200, 900, 300, 1200), CADRE.largeur, CADRE.hauteur), null);
+  // ⚠ ET EN DIAGONALE, où le segment passe À CÔTÉ du cadre sans qu'aucun de ses
+  // deux bouts ne soit du même côté d'un bord unique. C'est le cas que le test
+  // manquerait s'il ne balayait que les quatre directions droites.
+  assert.equal(traitRogne(trait(-100, -100, -50, 1000), CADRE.largeur, CADRE.hauteur), null);
+  // Falsifiable : le même montage décalé DANS le cadre rend bien quelque chose.
+  assert.ok(traitRogne(trait(100, -100, 150, 1000), CADRE.largeur, CADRE.hauteur) !== null,
+    'le montage refuse tout : il ne discrimine pas');
+  // Et `null` traverse : la garde « même case » de `traitDeLaFleche` survit.
+  assert.equal(traitRogne(null, CADRE.largeur, CADRE.hauteur), null);
+});
+
+test('CARTE-C T5 — le DÉPART hors champ est rogné lui aussi, et le cas est réel', () => {
+  // ⚠⚠ CE N'EST PAS UN CAS D'ÉCOLE, ET C'EST MESURÉ. Au zoom maximum une case
+  // vaut `ECHELLE_MAX` pixels physiques ; un téléphone de 1 080 × 2 340 montre
+  // donc moins de cinq cases de large. La portée d'un raid est de dix cases :
+  // le joueur qui promène la carte jusqu'à sa cible a sa base HORS du cadre.
+  const casesVisibles = 1080 / ECHELLE_MAX;
+  assert.ok(casesVisibles < 10,
+    `${casesVisibles} cases tiennent en largeur : les deux bouts pourraient être visibles`);
+
+  const entier = trait(-600, 400, 300, 400);
+  const rogne = traitRogne(entier, CADRE.largeur, CADRE.hauteur);
+  assert.ok(rogne !== null, 'la flèche disparaît quand sa base est hors champ');
+  assert.equal(rogne.x1, 0, 'le départ n\'a pas été rogné');
+  assert.equal(rogne.x2, entier.x2, 'l\'arrivée a bougé alors qu\'elle était visible');
+  assert.equal(rogne.angle, entier.angle);
+
+  // ⚠ ET LES DEUX BOUTS À LA FOIS, quand le trait traverse le cadre de part en
+  // part — c'est ce que « les deux bouts sont rognés » veut dire.
+  const traverse = traitRogne(trait(-600, 400, 1200, 400), CADRE.largeur, CADRE.hauteur);
+  assert.equal(traverse.x1, 0);
+  assert.equal(traverse.x2, CADRE.largeur);
+});
+
+test('CARTE-C T6 — `traitDeLaFleche` est intacte : centre à centre, et `null` sur sa case', () => {
+  // ⚠ LE ROGNAGE EST UNE SECONDE OPÉRATION. Le contrat de centre à centre est
+  // l'arbitrage du 06/09 et il ne bouge pas ; si cette assertion doit changer,
+  // c'est que le lot a débordé.
+  const a = { rangee: 10, colonne: 10 };
+  const b = { rangee: 10, colonne: 14 };
+  const t = traitDeLaFleche(a, b, 0, 0, 100);
+  assert.deepEqual({ x: t.x1, y: t.y1 }, centreDeLaCase(a, 0, 0, 100),
+    'le départ n\'est plus le centre de la case');
+  assert.deepEqual({ x: t.x2, y: t.y2 }, centreDeLaCase(b, 0, 0, 100),
+    'l\'arrivée n\'est plus le centre de la case');
+  assert.equal(traitDeLaFleche(a, { ...a }, 0, 0, 100), null, 'la garde « même case » est tombée');
+
+  // ⚠ ET LE ROGNAGE NE MUTE PAS SON ENTRÉE : une flèche rognée pour l'écran ne
+  // doit pas changer le trait que l'appelant tient encore.
+  const entier = trait(200, 400, 900, 400);
+  const copie = { ...entier };
+  traitRogne(entier, CADRE.largeur, CADRE.hauteur);
+  assert.deepEqual(entier, copie, '`traitRogne` a modifié le trait qu\'on lui a donné');
+});
+
+test('CARTE-C T7 — l\'épaisseur du trait suit toujours le zoom', () => {
+  // ⚠⚠ CE TEST FIGE UN ARBITRAGE, ET C'EST TOUT CE QU'IL FAIT. Ethan, 06/09 :
+  // « on fait croître avec le zoom ». Une proposition de borner l'épaisseur en
+  // pixels d'écran a été faite et REFUSÉE ; sans cette garde, un lot futur la
+  // plafonnerait sans que rien ne le dise.
+  const largeur = (pas) => Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+  const petit = CRANS[0];
+  const grand = ECHELLE_MAX;
+  assert.ok(grand > petit, 'la table de zoom ne monte plus : le montage ne mesure rien');
+
+  // ⚠ LA PROPORTIONNALITÉ SE MESURE À L'ARRONDI PRÈS, PAS SUR LE RAPPORT DES
+  // DEUX ÉPAISSEURS — mesuré : à `pas = 32` l'épaisseur exacte vaut 2,56 et
+  // l'arrondi rend 3, si bien que le rapport des ENTIERS vaut 6,67 quand celui
+  // des pas vaut 8. C'est l'arrondi du petit bout, pas un plafond ; ce qu'il faut
+  // asserter est que chaque épaisseur est celle de son pas à un demi-pixel près.
+  for (const cran of CRANS) {
+    assert.ok(
+      Math.abs(largeur(cran) - cran * EPAISSEUR_HALO) <= 0.5,
+      `au cran ${cran} l'épaisseur vaut ${largeur(cran)} pour ${cran * EPAISSEUR_HALO} attendus`,
+    );
+  }
+  assert.ok(largeur(grand) > largeur(petit), 'l\'épaisseur a été plafonnée');
+  // ⚠ ET ELLE CROÎT SUR TOUTE LA TABLE, pas seulement entre les deux bouts : un
+  // plafond posé au milieu passerait la ligne d'au-dessus.
+  for (let i = 1; i < CRANS.length; i += 1) {
+    assert.ok(largeur(CRANS[i]) > largeur(CRANS[i - 1]),
+      `l'épaisseur ne monte plus entre ${CRANS[i - 1]} et ${CRANS[i]}`);
+  }
+
+  // ⚠ ET L'ÉCRAN EMPLOIE BIEN CETTE FORMULE-LÀ, sans plafond glissé au passage.
+  const dessin = extraireFonction(sansCommentaires(lire('src', 'ui', 'monde.js')), 'dessinerFleche');
+  assert.match(dessin, /lineWidth = Math\.max\(1, Math\.round\(pas \* EPAISSEUR_HALO\)\)/,
+    'l\'épaisseur de la flèche ne se dérive plus de `pas` et d\'`EPAISSEUR_HALO`');
+  assert.doesNotMatch(dessin, /Math\.min\(/, 'un plafond a été posé sur l\'épaisseur de la flèche');
+});
+
+test('CARTE-C T8 — la fiche dit d\'où vient le niveau, et les deux types diffèrent', () => {
+  // ⚠⚠ UN TEST SUR UN SEUL TYPE PASSERAIT SUR UN TEXTE ÉCRIT EN DUR. Ethan a vu
+  // un avant-poste de niveau 1 collé à une base de niveau 7,6 : ce qu'il faut
+  // montrer, c'est que les deux ne se calculent PAS de la même façon.
+  const depuis = { rangee: 295, colonne: 16 };
+  const valeurDe = (l, quoi) => l.find((x) => x.quoi === quoi)?.valeur;
+  const camp = valeurDe(lignesDuSite({ type: 'camp', rangee: 293, colonne: 16, niveau: 3 }, depuis), 'Indexé sur');
+  const poste = valeurDe(lignesDuSite({ type: 'avantPoste', rangee: 291, colonne: 16, niveau: 1 }, depuis), 'Indexé sur');
+  assert.ok(camp, 'un camp ne dit pas d\'où vient son niveau');
+  assert.ok(poste, 'un avant-poste ne dit pas d\'où vient son niveau');
+  assert.notEqual(camp, poste, 'les deux types rendent le même libellé : la ligne est écrite en dur');
+
+  // ⚠ ET LA LIGNE EST SOUS « Niveau », là où le joueur la cherche.
+  const lignes = lignesDuSite({ type: 'camp', rangee: 293, colonne: 16, niveau: 3 }, depuis);
+  const rangs = lignes.map((l) => l.quoi);
+  assert.equal(rangs.indexOf('Indexé sur'), rangs.indexOf('Niveau') + 1);
+});
+
+test('CARTE-C T9 — le libellé se dérive d\'`indexeSur`, il n\'est pas un `if` sur le type', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UN `site.type === 'camp'` RECOPIÉ DANS L'ÉCRAN.
+  // On change `indexeSur` dans un montage : si la ligne suit, elle se dérive ;
+  // si elle ne suit pas, l'écran porte sa propre table.
+  const depuis = { rangee: 295, colonne: 16 };
+  const valeurDe = (l, quoi) => l.find((x) => x.quoi === quoi)?.valeur;
+  const site = { type: 'camp', rangee: 293, colonne: 16, niveau: 3 };
+  const avant = valeurDe(lignesDuSite(site, depuis), 'Indexé sur');
+
+  const memoire = TYPES_SITE.camp.indexeSur;
+  try {
+    TYPES_SITE.camp.indexeSur = 'rayon';
+    assert.equal(
+      valeurDe(lignesDuSite(site, depuis), 'Indexé sur'), ORIGINE_DU_NIVEAU.rayon,
+      'la ligne ne suit pas `indexeSur` : l\'écran a sa propre table',
+    );
+  } finally {
+    TYPES_SITE.camp.indexeSur = memoire;
+  }
+  assert.equal(valeurDe(lignesDuSite(site, depuis), 'Indexé sur'), avant, 'le montage n\'a pas rendu la table');
+
+  // ⚠ ET LA TABLE DES LIBELLÉS COUVRE EXACTEMENT LES VALEURS D'`indexeSur`, dans
+  // les DEUX sens : un troisième type indexé autrement ferait tomber cette
+  // ligne, et obligerait à écrire sa phrase plutôt qu'à afficher un vide.
+  const employees = new Set(Object.values(TYPES_SITE).map((t) => t.indexeSur));
+  assert.deepEqual(
+    [...employees].sort(), Object.keys(ORIGINE_DU_NIVEAU).sort(),
+    'la table des origines et les valeurs d\'`indexeSur` ont divergé',
+  );
+  // Et un `indexeSur` sans libellé LÈVE, il ne rend pas un vide.
+  try {
+    TYPES_SITE.camp.indexeSur = 'inconnu';
+    assert.throws(() => lignesDuSite(site, depuis), /n'a pas de libellé d'origine/);
+  } finally {
+    TYPES_SITE.camp.indexeSur = memoire;
+  }
+});
+
+/**
+ * Un toucher franc sur une case, à partir de ce que le halo a peint.
+ *
+ * ⚠⚠ LE MONTAGE NE CONNAÎT NI L'ORIGINE NI L'ÉCHELLE — le module ne les sort
+ * pas, et leur ouvrir un accesseur pour les besoins d'un test mettrait dans
+ * `src/` une porte que la production n'emploie pas. Le halo, lui, est peint À la
+ * position de la base et À l'échelle courante : il donne les deux, telles que
+ * l'écran les a employées, et toute autre case s'en déduit.
+ *
+ * ⚠ ET C'EST UN TOUCHER, PAS UN GLISSEMENT : `relacher` sort sur `glisse`, donc
+ * les deux évènements portent le MÊME point.
+ */
+function toucher(canvas, halo, dpr, echelle, base, cible) {
+  const epaisseur = Math.max(1, Math.round(echelle * EPAISSEUR_HALO));
+  const coinX = halo.x - epaisseur / 2;
+  const coinY = halo.y - epaisseur / 2;
+  const point = {
+    pointerId: 7,
+    clientX: (coinX + (cible.colonne - base.colonne) * echelle + echelle / 2) / dpr,
+    clientY: (coinY + (cible.rangee - base.rangee) * echelle + echelle / 2) / dpr,
+  };
+  canvas.envoyer('pointerdown', point);
+  canvas.envoyer('pointerup', point);
+}
+
+/**
+ * Une partie où les trois satellites sont parus autour de la base.
+ *
+ * ⚠⚠ ET ELLE PORTE UNE ARMÉE, SANS QUOI RIEN N'EST ATTAQUABLE — mesuré : une
+ * partie neuve rend `problemes: ['sans-armee']` sur les trois satellites, donc
+ * `entrerDansLaCible` refuse et le montage ne mesurerait que ce refus-là. La
+ * pièce se pose par le MOTEUR, jamais en écrivant dans `etat.armee` : une pose à
+ * la main sauterait `problemesDeLaPoseDEffectif`, et le montage garderait alors
+ * une composition que le jeu n'accepte pas.
+ */
+function partiePeuplee(graine = 20260906, avecArmee = true) {
+  const etat = creerEtat(graine);
+  rattraperJeu(etat, TICKS_APPARITION);
+  assert.equal(baseCourante(etat).satellites.presents.length, 3, 'montage : les trois n\'ont pas paru');
+  if (avecArmee) poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+  return etat;
+}
+
+/** La base de l'Ouvrage la plus proche AU-DELÀ de la portée d'un raid. */
+function baseHorsDePortee(etat) {
+  const base = baseCourante(etat).position;
+  for (let r = base.rangee - 15; r > base.rangee - 80; r -= 1) {
+    for (let c = 1; c <= GEOGRAPHIE.carte.largeur; c += 1) {
+      if (estBaseOuvrage(etat.graine, r, c)) return { rangee: r, colonne: c };
+    }
+  }
+  return null;
+}
+
+/** Ouvre le panneau sur un satellite, et rend ce qu'il faut pour le lire. */
+function ouvrirSurUnSatellite(graine = 20260906) {
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const entrees = [];
+  const ecran = initialiserEcranMonde(doc, { surEntreeRaid: (c) => entrees.push(c) });
+  const canvas = doc.getElementById('monde-canvas');
+  const etat = partiePeuplee(graine);
+  ecran.peindre(etat);
+
+  const halo = cadreDuHalo(appels);
+  const base = baseCourante(etat).position;
+  const cible = baseCourante(etat).satellites.presents
+    .find((s) => Math.abs(s.rangee - base.rangee) <= 1 && Math.abs(s.colonne - base.colonne) <= 1)
+    ?? baseCourante(etat).satellites.presents[0];
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, cible);
+  return { doc, parId, canvas, ecran, etat, entrees, cible, halo, base, appels, dpr };
+}
+
+test('CARTE-C T10 — le bouton entre dans la cible OUVERTE, pas dans une autre', () => {
+  const { parId, entrees, cible } = ouvrirSurUnSatellite();
+  const panneau = parId.get('monde-panneau');
+  assert.equal(panneau.hidden, false, 'montage : le panneau ne s\'est pas ouvert');
+
+  const bouton = parId.get('monde-panneau-attaquer');
+  assert.equal(bouton.hidden, false, 'le bouton Attaquer n\'apparaît pas sur une cible');
+  assert.equal(bouton.disabled, false, 'le bouton est éteint sur une cible à portée');
+
+  assert.deepEqual(entrees, [], 'montage : on est déjà entré avant de toucher le bouton');
+  bouton.envoyer('click', {});
+  assert.deepEqual(
+    entrees, [{ rangee: cible.rangee, colonne: cible.colonne }],
+    'le bouton n\'entre pas dans la cible que le panneau décrit',
+  );
+  // ⚠ ET LE PANNEAU SE FERME EN PARTANT, comme au second toucher : sinon il
+  // resterait ouvert sur un site qu'on ne regarde plus.
+  assert.equal(parId.get('monde-panneau').hidden, true, 'le panneau reste ouvert après l\'entrée');
+});
+
+test('CARTE-C T11 — pas de bouton actif sur sa propre base', () => {
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  const etat = partiePeuplee();
+  ecran.peindre(etat);
+  const base = baseCourante(etat).position;
+  toucher(canvas, cadreDuHalo(appels), dpr, ECHELLE_MAX, base, base);
+
+  assert.equal(parId.get('monde-panneau').hidden, false, 'montage : le panneau de sa base ne s\'ouvre pas');
+  assert.equal(parId.get('monde-panneau-attaquer').hidden, true,
+    'le panneau de sa propre base propose de l\'attaquer');
+  // Falsifiable : c'est bien le panneau de SA base — l'autre bouton y est.
+  assert.equal(parId.get('monde-panneau-deplacer').hidden, false,
+    'montage : ce n\'est pas le panneau de la base du joueur');
+});
+
+test('CARTE-C T12 — hors de portée, le bouton se voit et ne se touche pas', () => {
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  const etat = partiePeuplee();
+  ecran.peindre(etat);
+
+  // ⚠⚠ ON DÉPENSE LES POINTS D'ATTAQUE PLUTÔT QUE DE FORGER UN `cout` : ce que le
+  // bouton lit est `ciblage.cout === null`, qui vaut « hors de portée » — et un
+  // manque de points, lui, NE DOIT PAS l'éteindre. Le montage porte donc les deux
+  // moitiés : à portée sans le sou, il reste vif.
+  etat.attaque.points = 0;
+  const halo = cadreDuHalo(appels);
+  const base = baseCourante(etat).position;
+  const proche = baseCourante(etat).satellites.presents[0];
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, proche);
+  const bouton = parId.get('monde-panneau-attaquer');
+  assert.equal(bouton.hidden, false, 'montage : le panneau ne s\'est pas ouvert sur une cible');
+  assert.equal(bouton.disabled, false,
+    'un manque de points éteint le bouton : « un indice n\'est pas une interdiction »');
+  assert.equal(parId.get('monde-panneau-refus').hidden, false, 'montage : rien ne refuse');
+
+  // ⚠ ET HORS DE PORTÉE, IL EST PRÉSENT **ET** DÉSACTIVÉ. Un test qui n'asserterait
+  // que « pas cliquable » passerait sur un bouton retiré.
+  const ciblage = ciblageDuSite(etat, proche);
+  assert.notEqual(ciblage.cout, null, 'montage : la cible proche est déjà hors de portée');
+});
+
+/**
+ * L'échelle courante, lue à l'écran plutôt que devinée.
+ *
+ * ⚠ `initialiserEcranMonde` ne sort ni l'origine ni l'échelle, et leur ouvrir un
+ * accesseur pour un test mettrait dans `src/` une porte que la production
+ * n'emploie pas. La bulle de `#monde-outils`, elle, ANNONCE l'échelle en pixels
+ * CSS par case : c'est une sortie que le joueur lit, donc une mesure honnête.
+ */
+function echelleAffichee(doc, dpr) {
+  const titre = doc.getElementById('monde-outils').title;
+  const px = Number(titre.split(' ')[0]);
+  assert.ok(Number.isFinite(px) && px > 0, `l'échelle annoncée est illisible : « ${titre} »`);
+  return px * dpr;
+}
+
+/**
+ * Promène la vue d'un glissement, et rend le halo tel qu'elle le peint ensuite.
+ *
+ * ⚠ UN GLISSEMENT, PAS UN TOUCHER : `relacher` sort sur `glisse`, donc le doigt
+ * ne peut pas ouvrir un panneau en chemin. C'est ce que fait le joueur qui
+ * remonte la carte jusqu'à une cible lointaine.
+ */
+function promener(canvas, appels, dxCss, dyCss) {
+  const id = 11;
+  canvas.envoyer('pointerdown', { pointerId: id, clientX: 200, clientY: 400 });
+  const pas = 20;
+  for (let i = 1; i <= pas; i += 1) {
+    canvas.envoyer('pointermove', {
+      pointerId: id,
+      clientX: 200 + (dxCss * i) / pas,
+      clientY: 400 + (dyCss * i) / pas,
+    });
+  }
+  // ⚠ LE HALO SE RELÈVE SUR LA DERNIÈRE IMAGE SEULEMENT : `cadreDuHalo` exige
+  // d'être seul dans `appels` pour prouver qu'il mesure bien le halo.
+  appels.length = 0;
+  canvas.envoyer('pointermove', { pointerId: id, clientX: 200 + dxCss, clientY: 400 + dyCss });
+  const halo = cadreDuHalo(appels);
+  canvas.envoyer('pointerup', { pointerId: id, clientX: 200 + dxCss, clientY: 400 + dyCss });
+  return halo;
+}
+
+test('CARTE-C T12 bis — hors de portée : présent ET désactivé, mesuré à l\'écran', () => {
+  // ⚠⚠ LA PREMIÈRE ÉCRITURE DE CE TEST LISAIT LA SOURCE, ET ELLE NE MESURAIT
+  // RIEN DE CE QUI SE PEINT. Le hors-portée se prend sur un VRAI site lointain :
+  // `ciblageDuSite` rend `cout: null` quand `problemesDuRaid` porte
+  // « hors-portee », et le joueur y arrive en PROMENANT la carte — c'est le geste
+  // que le montage rejoue.
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  const etat = partiePeuplee();
+  ecran.peindre(etat);
+
+  const base = baseCourante(etat).position;
+  const loin = baseHorsDePortee(etat);
+  assert.ok(loin, 'montage : aucune base de l\'Ouvrage au-delà de la portée');
+  assert.equal(ciblageDuSite(etat, loin).cout, null, 'montage : la cible lointaine est à portée');
+
+  // ⚠⚠ ON DÉZOOME PLUTÔT QUE DE PROMENER, ET C'EST MESURÉ. Promener jusqu'à la
+  // cible sort la BASE du cadre, donc le halo cesse d'être peint — et le halo est
+  // la seule fenêtre honnête sur la vue. Au cran le plus large les deux tiennent
+  // ensemble : une case y vaut `CRANS[0]` pixels, et quinze cases font moins d'un
+  // tiers de la hauteur du canevas.
+  pincer(canvas, CRANS[0] / ECHELLE_MAX);
+  // ⚠ ET UN GLISSEMENT D'UN PIXEL FORCE L'IMAGE où le halo se relève : le
+  // pincement se termine par des `pointercancel`, qui ne repeignent pas.
+  const halo = promener(canvas, appels, 0, 1);
+  const echelle = echelleAffichee(doc, dpr);
+  assert.ok(echelle < ECHELLE_MAX, 'le pincement n\'a pas dézoomé : la cible reste hors du cadre');
+  toucher(canvas, halo, dpr, echelle, base, loin);
+
+  const bouton = parId.get('monde-panneau-attaquer');
+  assert.equal(parId.get('monde-panneau').hidden, false, 'montage : le panneau ne s\'est pas ouvert sur la cible lointaine');
+  assert.equal(parId.get('monde-panneau-titre').textContent, EMBLEMES_CARTE.base.nom,
+    'montage : ce n\'est pas la base de l\'Ouvrage qui s\'est ouverte');
+  // ⚠ PRÉSENT **ET** DÉSACTIVÉ. Un test qui n'asserterait que « pas cliquable »
+  // passerait sur un bouton retiré, et un bouton absent laisserait le joueur
+  // chercher ce qu'il a fait de travers.
+  assert.equal(bouton.hidden, false, 'hors de portée, le bouton disparaît au lieu de s\'éteindre');
+  assert.equal(bouton.disabled, true, 'hors de portée, le bouton reste touchable');
+  // Et le panneau écrit pourquoi.
+  assert.equal(parId.get('monde-panneau-refus').hidden, false, 'le panneau ne dit pas pourquoi');
+});
+
+test('CARTE-C T13 — le second toucher marche encore', () => {
+  // ⚠ LE BOUTON S'AJOUTE, IL NE REMPLACE PAS. Le chemin d'origine reste vert, et
+  // le commentaire d'`ouvrirPanneau` qui explique pourquoi il se COMPARE à la
+  // case ouverte plutôt que de se compter n'a pas bougé.
+  const { canvas, halo, base, cible, dpr, entrees } = ouvrirSurUnSatellite();
+  assert.deepEqual(entrees, [], 'montage : on est entré au premier toucher');
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, cible);
+  assert.deepEqual(
+    entrees, [{ rangee: cible.rangee, colonne: cible.colonne }],
+    'le second toucher n\'entre plus dans la cible',
+  );
+});
+
+test('CARTE-C T14 — le mode de déplacement éteint le bouton, et rien ne peut le rallumer', () => {
+  // ⚠⚠ LE BRIEF DEMANDAIT QUE « ATTAQUER » DÉSARME LE DÉPLACEMENT. **MESURÉ, LA
+  // QUESTION NE SE POSE PAS COMME ÇA**, et ce que le relevé a trouvé est plus
+  // intéressant : `armerLeDeplacement` FERME le panneau puis le ROUVRE pour y
+  // écrire son propre message — titre « Déplacer la base », corps vide. Le
+  // panneau reste donc VISIBLE pendant que le mode est armé, ce que le brief ne
+  // disait pas.
+  //
+  // ⚠⚠ CE QUI REND LE CAS IMPOSSIBLE EST DONC AUTRE CHOSE : `fermerPanneau` cache
+  // le bouton Attaquer, et `armerLeDeplacement` ne le rouvre pas. Y appeler
+  // `desarmerLeDeplacement` serait du code mort ; ce test garde les DEUX lignes
+  // qui rendent le cas inatteignable, et il tombe le jour où l'une cède.
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  const etat = partiePeuplee();
+  ecran.peindre(etat);
+  const base = baseCourante(etat).position;
+  // ⚠ LE HALO SE RELÈVE UNE FOIS : `appels` s'accumule d'une image à l'autre, et
+  // `cadreDuHalo` exige d'être seul pour prouver qu'il mesure bien le halo.
+  const halo = cadreDuHalo(appels);
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, base);
+  assert.equal(parId.get('monde-panneau').hidden, false, 'montage : le panneau ne s\'est pas ouvert');
+
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  // ⚠ LE PANNEAU RESTE OUVERT — c'est le mode qui s'y écrit. Relevé, pas supposé.
+  assert.equal(parId.get('monde-panneau').hidden, false,
+    'le mode de déplacement n\'écrit plus dans le panneau : le montage ne mesure plus rien');
+  assert.equal(parId.get('monde-panneau-titre').textContent, 'Déplacer la base');
+  // ⚠ ET LE BOUTON EST ÉTEINT, parce que `fermerPanneau` l'a caché et que
+  // l'armement ne le rouvre pas. C'est la première des deux lignes.
+  assert.equal(parId.get('monde-panneau-attaquer').hidden, true,
+    'le bouton Attaquer survit à l\'armement du déplacement');
+
+  // ⚠ ET RIEN NE PEUT LE RALLUMER TANT QUE LE MODE EST ARMÉ : c'est la seconde.
+  // Un toucher sur un site pose la base au lieu d'ouvrir son panneau.
+  const cible = baseCourante(etat).satellites.presents[0];
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, cible);
+  assert.equal(parId.get('monde-panneau-attaquer').hidden, true,
+    'un toucher a rouvert un panneau de site pendant que le déplacement est armé');
+
+  // Et la garde de source qui dit POURQUOI, dans les deux fonctions concernées.
+  const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.match(extraireFonction(source, 'fermerPanneau'), /panneauAttaquer\.hidden = true;/,
+    '`fermerPanneau` ne cache plus le bouton Attaquer');
+  assert.match(extraireFonction(source, 'relacher'), /if \(modeDeplacement\) \{[\s\S]{0,120}?return;/,
+    'le mode de déplacement ne prend plus la main avant l\'ouverture d\'un panneau');
+});
+
+test('CARTE-C T1 bis — et l\'écran peint bien une flèche qui reste dans le cadre', () => {
+  // ⚠⚠ LES TESTS PURS NE PROUVENT QUE LA FONCTION, PAS LE CHEMIN — c'est le proxy
+  // que le dépôt a déjà payé plusieurs fois. Sans celui-ci, retirer l'appel à
+  // `traitRogne` dans `dessinerFleche` laisserait T1 à T5 entièrement verts
+  // pendant que la pointe repartirait hors écran.
+  //
+  // ⚠ LE CADRE EST PETIT EXPRÈS : à `ECHELLE_MAX` une case fait 256 pixels de
+  // buffer, donc un canevas de 100 × 200 CSS à densité 3 en montre à peine plus
+  // d'une. Une cible à deux cases est alors dehors à coup sûr, et c'est ce que le
+  // montage doit garantir avant de mesurer.
+  const { doc, appels, dpr, parId } = fauxDocumentMonde({ largeurCss: 100, hauteurCss: 200 });
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  const etat = partiePeuplee();
+  ecran.peindre(etat);
+
+  const halo = cadreDuHalo(appels);
+  const base = baseCourante(etat).position;
+  const cible = baseCourante(etat).satellites.presents[0];
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, cible);
+  assert.equal(parId.get('monde-panneau').hidden, false, 'montage : le panneau ne s\'est pas ouvert');
+
+  // La cible est bien HORS du cadre : sans ça, il n'y a rien à rogner.
+  const centreCible = {
+    x: halo.x + (cible.colonne - base.colonne) * ECHELLE_MAX,
+    y: halo.y + (cible.rangee - base.rangee) * ECHELLE_MAX,
+  };
+  assert.ok(
+    centreCible.x < 0 || centreCible.y < 0
+      || centreCible.x > canvas.width || centreCible.y > canvas.height,
+    `la cible est dans le cadre (${centreCible.x}, ${centreCible.y}) : le montage ne mesure rien`,
+  );
+
+  // ⚠ ET ON MESURE CE QUI A ÉTÉ PEINT : tous les points du tracé tiennent dans le
+  // canevas, à un pixel près — l'épaisseur du trait mord un peu de chaque côté.
+  const points = appels.filter((a) => a.nom === 'moveTo' || a.nom === 'lineTo');
+  assert.ok(points.length >= 2, 'aucune flèche n\'a été peinte : le montage ne mesure rien');
+  for (const { nom, args: [x, y] } of points) {
+    assert.ok(x >= -1 && x <= canvas.width + 1 && y >= -1 && y <= canvas.height + 1,
+      `${nom}(${x}, ${y}) sort du canevas de ${canvas.width} × ${canvas.height}`);
+  }
+
+  // ⚠⚠ ET LES BORNES SONT CELLES DU CANEVAS, CE QUE LE MONTAGE SEUL NE DIT PAS —
+  // mesuré. Sur cette graine les trois satellites sont AU-DESSUS et À GAUCHE de
+  // la base, donc la flèche ne sort que par les bords 0 : une falsification qui
+  // remplace `canvas.width, canvas.height` par `Infinity, Infinity` laisse ce
+  // test VERT, les deux bords zéro rognant encore. La ligne suivante ferme le
+  // trou, et le rapport le déclare.
+  assert.match(
+    extraireFonction(sansCommentaires(lire('src', 'ui', 'monde.js')), 'dessinerFleche'),
+    /traitRogne\([\s\S]{0,200}?traitDeLaFleche\([\s\S]{0,200}?canvas\.width, canvas\.height/,
+    'la flèche n\'est plus rognée sur les dimensions du canevas',
+  );
 });

@@ -172,6 +172,23 @@
     flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
     background: #1E2124; color: #8C9A72; border: 1px solid #161914;
   }
+  /* ⚠⚠ LE BOUTON QUI ENGAGE — lot CARTE-C, 06/09. Ethan : « rajouter un bouton
+     attaquer sur la fiche car ça bloque » : le panneau occupe la moitié basse de
+     l'écran, donc le SECOND TOUCHER est impossible dès que la cible est dessous,
+     ce qui arrive constamment puisque la carte s'ouvre centrée sur la base.
+     ⚠ AUCUNE TEINTE NEUVE : `#8A1E17` sur `#F5F3E8` est déjà le bouton qui
+     engage du dépôt — `#raid-attaquer` et `#options-zero` —, et `#343A2C` sur
+     `#68727E` est déjà celui d'un bouton hors service. La palette est fermée à
+     quarante-et-une, et `banc.test.js` balaie ce fichier.
+     ⚠ ET IL SE VOIT INERTE PLUTÔT QUE D'ÊTRE ABSENT : hors de portée, il dit
+     qu'il y a quelque chose à faire pour l'allumer, et `#monde-panneau-refus`
+     écrit déjà quoi. Un bouton absent laisserait le joueur chercher. */
+  #monde-panneau-attaquer {
+    flex: 0 0 auto; padding: 4px 10px; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    background: #8A1E17; color: #F5F3E8; border: 1px solid #161914;
+  }
+  #monde-panneau-attaquer[disabled] { background: #343A2C; color: #68727E; }
   /* Le prix du raid, en gros, au-dessus du corps. Le nombre porte l'os des
      valeurs du panneau ; le libellé reprend la casse et la teinte des `.nom` du
      bandeau des ressources, parce que c'est la même grandeur qui s'y compte.
@@ -2369,6 +2386,13 @@
         <div id="monde-panneau" hidden>
           <div class="tete">
             <b id="monde-panneau-titre">—</b>
+            <!-- ⚠⚠ IL S'AJOUTE, IL NE REMPLACE PAS — lot CARTE-C, 06/09. Le
+                 second toucher reste le chemin d'entrée, et le commentaire
+                 d'`ouvrirPanneau` explique toujours pourquoi il se compare à la
+                 case ouverte plutôt que de se compter. Ce bouton existe parce
+                 que le panneau COUVRE la cible : Ethan, « rajouter un bouton
+                 attaquer sur la fiche car ça bloque ». -->
+            <button type="button" id="monde-panneau-attaquer" hidden>Attaquer</button>
             <button type="button" id="monde-panneau-fermer">Fermer</button>
           </div>
           <!-- ⚠⚠ LE PRIX D'UN RAID EST LA PREMIÈRE CHOSE QU'ON LIT — lot
@@ -2392,14 +2416,20 @@
       <!-- ⚠ LE REFUS D'ENTRER SE DIT ICI. `problemesDuRaid` rend une liste de
            PHRASES, et c'est pour ça qu'elle en rend une : l'écran doit pouvoir
            refuser ET expliquer.
-           ⚠⚠ ET LE PANNEAU PORTE DÉSORMAIS UN SECOND BOUTON, MAIS UN SEUL DE
-           PLUS, et il ne promet rien qui n'existe pas — c'est la règle que ce
-           bloc tient depuis le 27/08 contre le bouton « Assaut » du lot
-           ÉCRAN-CHANTIER. « Déplacer la base » n'apparaît que sur SA PROPRE
-           base, et le déplacement existe depuis le lot DÉPLACEMENT. On entre
-           toujours dans une cible par un SECOND TOUCHER, jamais par un bouton :
-           les quatre mots promis — Attaquer, Raider, Piller, Conquérir —
-           restent interdits, et le test le vérifie. -->
+           ⚠⚠ ET LA RÈGLE « AUCUN BOUTON D'ACTION » A ÉTÉ RENVERSÉE LE 06/09, PAS
+           ASSOUPLIE. Elle était écrite le 27/08 contre le bouton « Assaut » du
+           lot ÉCRAN-CHANTIER, qui pointait sur du sol nu, et elle interdisait
+           quatre mots — Attaquer, Raider, Piller, Conquérir. Le motif tenait
+           tant que le second toucher SUFFISAIT ; Ethan, 06/09 : « rajouter un
+           bouton attaquer sur la fiche car ça bloque ». Le panneau occupe la
+           moitié basse de l'écran, donc la cible est SOUS lui dès qu'elle est au
+           sud de la vue — ce qui arrive constamment, la carte s'ouvrant centrée
+           sur la base du joueur.
+           ⚠ CE QUI RESTE DE LA RÈGLE : le panneau ne promet toujours RIEN qui
+           n'existe pas. « Attaquer » entre dans une cible, ce que le raid fait
+           depuis le lot RAID-A ; « Déplacer la base » n'apparaît que sur SA
+           PROPRE base. Les TROIS autres mots restent interdits, la liste des
+           boutons reste close, et le test tient les deux moitiés. -->
       <p id="monde-panneau-refus" hidden></p>
       <button type="button" id="monde-panneau-deplacer" hidden>Déplacer la base</button>
         </div>

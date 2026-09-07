@@ -2430,3 +2430,100 @@ export const RAPPORTS_OUVRAGE_COLONNE = {
   24: 'f880879c9e1b806f',
   25: 'ba853077ee9ed513',
 };
+
+/**
+ * SURCHARGE DU LOT SATELLITES-RESPAWN — 06/09/2026, TREIZE COUPLES SUR 322.
+ *
+ * ⚠⚠ ELLE ENTRE COMME CINQUIÈME COUCHE, PAR-DESSUS CELLE DU LOT COLONNE. Le
+ * témoin ne se recapture JAMAIS : ce qu'il garde, c'est l'état d'AVANT le
+ * dépliage de BASES-0, et le recalculer sur le code du jour ferait comparer un
+ * code à lui-même. Chaque lot pose sa couche, et `empreinteAttendue` les lit de
+ * la plus récente à la plus ancienne.
+ *
+ * ⚠⚠ TREIZE COUPLES, ET PAS UN DE PLUS — deux champs seulement, `satellites` et
+ * `prochaineInstanceSatellite`, à partir de la PHASE 7. C'est le premier raid :
+ * les six premières phases sont identiques AU BIT. Un camp rasé revient
+ * sur-le-champ au lieu d'attendre cinq minutes, et il revient AILLEURS : la
+ * table des présents change, et le compteur d'instances avance plus tôt.
+ *
+ * ⚠⚠ ET C'EST LA MESURE QUI DIT QUE LE LOT NE TOUCHE QUE LES SATELLITES : les
+ * vingt autres champs sont IDENTIQUES sur les quatorze phases — `economie`,
+ * `disposition`, `garnison`, `armee`, `sitesEntames`, `rapports`, `recherche`,
+ * `poisAcquis`, `basesRasees`, `attaque`. Et `satellitesDetruits` non plus ne
+ * bouge pas : on détruit autant, on remplace plus vite.
+ *
+ * ⚠ LES CINQUANTE EMPREINTES DE RAPPORT NE BOUGENT PAS NON PLUS, ni aucun des
+ * huit scalaires — gestes, gestes d'armement, taille de la sauvegarde, cases
+ * atteignables, déplacement, bases attaquantes, nombre de cibles et cible
+ * retenue : 0 sur 25 pour chacun. Un remplaçant qui paraît ailleurs ne change ni
+ * ce que le joueur construit, ni ce que l'Ouvrage vient lui prendre.
+ *
+ * ⚠ ET `version` EST TOUJOURS SUBSTITUÉE PAR `VERSION_AU_TEMOIN`, qui reste à
+ * 22 : `SAVE_VERSION` passe de 26 à 27 dans ce lot, et la substitution absorbe
+ * le nombre exactement comme elle l'a fait aux six bumps précédents.
+ */
+export const DEPLACES_PAR_SATELLITES_RESPAWN = {
+  p07_raidProcheApres: {
+    satellites: '8b761cb2379fa5cc'
+  },
+  p08_100ticks: {
+    satellites: 'f9a466e2a52558a1',
+    prochaineInstanceSatellite: 'f0f711563f9b886e'
+  },
+  p09_deplace: {
+    satellites: 'f9a466e2a52558a1',
+    prochaineInstanceSatellite: 'f0f711563f9b886e'
+  },
+  p10_montee: {
+    satellites: 'f9a466e2a52558a1',
+    prochaineInstanceSatellite: 'f0f711563f9b886e'
+  },
+  p11_raidOuvrageApres: {
+    satellites: 'f9a466e2a52558a1',
+    prochaineInstanceSatellite: 'f0f711563f9b886e'
+  },
+  p12_veilleDuRaid: {
+    satellites: '95810fabe12bb2b5',
+    prochaineInstanceSatellite: 'e270d30446466d57'
+  },
+  p13_apresLeRaid: {
+    satellites: 'a432eb50eb586380'
+  },
+  p14_sousLeFeu: {
+    satellites: '4bb9224606c8ec9d'
+  }
+};
+
+/**
+ * ⚠ L'EMPREINTE PAR GRAINE SE RECAPTURE EN ENTIER, elle ne se surcharge pas
+ * champ par champ : elle concatène les vingt-deux champs des quatorze phases,
+ * donc un seul couple déplacé la change. C'est le second regard du témoin — il
+ * dit QUELLE graine diverge quand le premier dit QUEL champ.
+ */
+export const EMPREINTES_PAR_GRAINE_SATELLITES_RESPAWN = {
+  '1': '5061b4379f82a010',
+  '2': '951ce218c438bce0',
+  '3': 'aad3e20ccf163fcb',
+  '4': '61bdf9bdebd2fe6d',
+  '5': 'c658a434362c0f85',
+  '6': 'a7362aa7e4005cad',
+  '7': '920154575db0ac3b',
+  '8': '22ad4a2c47db6a6b',
+  '9': 'fcd57aaf9189dc78',
+  '10': '31d74e14694b6d70',
+  '11': '45431567169034bc',
+  '12': '0620791e19193f32',
+  '13': '85e9f466f4b40300',
+  '14': '554d9c2d7d80e6b6',
+  '15': '26daa29ec07369ea',
+  '16': 'dc1d5d265ce8ded8',
+  '17': 'e1a8cd763a77be55',
+  '18': 'd134e5557ee45df7',
+  '19': '324b1d6664107b18',
+  '20': '2c862918c2a30f9f',
+  '21': 'fbc85a76f95846ef',
+  '22': '9e119ffa079a563f',
+  '23': '801e23c930880ce5',
+  '24': 'cd17222c6ec5ca4b',
+  '25': '199570ba592e882b'
+};

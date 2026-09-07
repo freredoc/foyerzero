@@ -15,7 +15,7 @@
 // imports relatifs depuis src/), puis réinjecté inline en IIFE.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 // ⚠⚠ LA FAMILLE DES SONS SE LIT DANS LA TABLE QUE LE JEU LIT, ELLE NE SE
@@ -342,8 +342,22 @@ if (violations.length) {
 
 // --- écriture -----------------------------------------------------------------
 
-mkdirSync(join(racine, 'dist'), { recursive: true });
-const cheminSortie = join(racine, 'dist', 'index.html');
+// ⚠⚠ LA DESTINATION EST DÉROUTABLE PAR `FZ_SORTIE`, ET CE N'EST PAS UN CONFORT —
+// c'est le remède à une COURSE mesurée le 06/09/2026. `test/banc.test.js` T10
+// relance ce build pour éprouver la garde hors ligne, et il écrivait donc dans
+// `dist/index.html` pendant que `chantier.test.js` et `sprite.test.js` le
+// LISAIENT : le lanceur de `node --test` exécute les fichiers en PARALLÈLE, si
+// bien que la suite virait au rouge par intermittence sur un fichier tronqué,
+// sans qu'aucun code n'ait changé. Mesuré : une exécution sur quatre.
+//
+// ⚠ C'EST LE MÊME REMÈDE QUE `FZ_SPRITES` pour `tools/verifier.py`, et le même
+// motif écrit là-bas : « un contrôle qui écrit là où il compare est un piège ».
+// La SOURCE, elle, n'est pas déroutable — ce serait faire tourner le build sur
+// un arbre vide et lui faire dire que tout va bien.
+const cheminSortie = process.env.FZ_SORTIE
+  ? resolve(process.env.FZ_SORTIE)
+  : join(racine, 'dist', 'index.html');
+mkdirSync(dirname(cheminSortie), { recursive: true });
 writeFileSync(cheminSortie, html);
 
 const octets = Buffer.byteLength(html);

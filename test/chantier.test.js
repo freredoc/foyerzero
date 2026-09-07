@@ -62,17 +62,18 @@ import { creerChronometre,
 } from '../src/ui/session.js';
 import {
   BASE_BATIMENTS, CHAMPS, COUT_NIVEAU_DEUX, coutDeMontee, emplacementsDuNiveau,
-  RETOUR_DEFENSES,
+  DEBITS, RETOUR_DEFENSES,
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
   ORDRE_PALETTE,
 } from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
+import { NIVEAU } from '../src/data/niveaux.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { satellitesVides } from '../src/sim/satellites.js';
 import { creerPointsAttaque } from '../src/sim/points-attaque.js';
-import { reservesVides } from '../src/sim/reparation.js';
+import { reservesVides, complexeDeLaBase, ticksDeRetour } from '../src/sim/reparation.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orientation.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
@@ -5160,6 +5161,22 @@ test('CH-F T8 — l\'effet SUIT le niveau : il est lu, pas écrit en dur', () =>
   const bas = baseDesUniques();
   const haut = baseDesUniques();
 
+  // ⚠⚠ LE COMPLEXE EST ABÎMÉ DANS LES DEUX MONTAGES, ET C'EST LE LOT
+  // FICHE-JUSTE QUI L'EXIGE. Sa ligne annonçait le retour d'une pièce de niveau
+  // 50 ; depuis le 06/09 elle annonce celui d'une pièce de SON niveau, donc à
+  // dépassement nul — et à dépassement nul, un Complexe INTACT rend 1 h à tous
+  // les niveaux. Le montage cesserait alors de discriminer, et l'assertion
+  // tomberait sur un code parfaitement juste. Ce qui discrimine encore est la
+  // SANTÉ : les dégâts sont un absolu quand les PV maximaux croissent avec le
+  // niveau, donc le même `degatsMilli` laisse un Complexe de niveau 12 en
+  // meilleur état qu'un Complexe de niveau 1. **Aucune assertion n'est
+  // assouplie : c'est la prémisse du montage qui a cessé d'être vraie.**
+  const DEGATS_DU_COMPLEXE_MILLI = 800000;
+  for (const etat of [bas, haut]) {
+    baseCourante(etat).disposition[indiceDe(etat, 'complexeDeDefense')]
+      .degatsMilli = DEGATS_DU_COMPLEXE_MILLI;
+  }
+
   for (const id of UNIQUES_SANS_FICHE) {
     const index = indiceDe(haut, id);
     baseCourante(haut).disposition[index].niveau = 12;
@@ -5172,6 +5189,21 @@ test('CH-F T8 — l\'effet SUIT le niveau : il est lu, pas écrit en dur', () =>
     assert.ok(a.some((effet, i) => effet.avant !== b[i].avant),
       `${id} : aucune valeur ne bouge entre le niveau 1 et le niveau 12 — l'effet est écrit en dur`);
   }
+
+  // ⚠⚠ ET L'AVARIE SE JUSTIFIE PAR LA MESURE, PAS PAR LE RAISONNEMENT : sans
+  // elle, la ligne du Complexe rendrait le MÊME nombre aux deux niveaux — 1 h,
+  // à dépassement nul — et l'assertion ci-dessus tomberait sur un code juste.
+  // C'est aussi la preuve que la ligne est bien devenue celle d'une pièce de
+  // même niveau : sous l'ancienne règle, à pièce de niveau 50, ces deux-là
+  // diffèrent.
+  const intactBas = baseDesUniques();
+  const intactHaut = baseDesUniques();
+  baseCourante(intactHaut).disposition[indiceDe(intactHaut, 'complexeDeDefense')].niveau = 12;
+  assert.equal(
+    apercuDuBatiment(intactBas, indiceDe(intactBas, 'complexeDeDefense')).effets[0].avant,
+    apercuDuBatiment(intactHaut, indiceDe(intactHaut, 'complexeDeDefense')).effets[0].avant,
+    'un Complexe intact rend deux durées différentes : l\'avarie du montage était inutile',
+  );
 });
 
 test('CH-F T9 — un bâtiment qui n\'est pas unique ne gagne aucune fiche d\'effet', () => {
@@ -5197,4 +5229,163 @@ test('CH-F T9 — un bâtiment qui n\'est pas unique ne gagne aucune fiche d\'ef
   const titres = lignesDuPanneau(chantier).sections.map((s) => s.titre);
   assert.ok(titres.includes('Emplacements ouverts'));
   assert.ok(!titres.includes('Ce qu\'il commande'));
+});
+
+// ---------------------------------------------------------------------------
+// Lot FICHE-JUSTE — la flèche du champ occupé, et la durée du Complexe
+// ---------------------------------------------------------------------------
+
+/** L'aperçu du Complexe de défense de ce montage. */
+function ficheDuComplexe(etat) {
+  return apercuDuBatiment(etat, indiceDe(etat, 'complexeDeDefense'));
+}
+
+/** Le Complexe posé dans cette base, avec son niveau et sa santé. */
+function complexeDe(etat) {
+  return complexeDeLaBase(baseCourante(etat));
+}
+
+test('F-J T4 — la flèche du champ occupé arrive jusqu\'à l\'écran', () => {
+  // ⚠⚠ UN TEST SUR `voisinsQualifiantsParCase` SEULE NE PROUVERAIT PAS QUE
+  // L'ÉCRAN SUIT. C'est la fiche qu'Ethan regardait, et c'est `flechesDeVoisinage`
+  // qui la peint : elle mappe la liste du moteur, donc une entrée perdue en
+  // amont se perd ici sans qu'aucune ligne d'écran ne change.
+  const terrain = { cases: [{ rangee: 13, colonne: 3, ressource: 'scorie' }] };
+  const sans = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
+    { id: 'centrale', rangee: 14, colonne: 4, niveau: 1 },
+  ];
+  const avec = [...sans, { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }];
+
+  for (const [nom, d] of [['sans collecteur', sans], ['collecteur dessus', avec]]) {
+    const fleches = flechesDeVoisinage(d, terrain, 1);
+    const depuisLeChamp = fleches.filter((f) => f.rangee === 13 && f.colonne === 3);
+    assert.equal(depuisLeChamp.length, 1, `${nom} : aucune flèche depuis le champ`);
+    const [f] = depuisLeChamp;
+    assert.equal(f.libelle, libelleDuVoisin('champDeScorie'));
+    assert.ok(f.apportMilli > 0, `${nom} : la flèche annonce un apport nul`);
+    // ⚠ ET LE TRAIT PART BIEN DE LA CASE DU CHAMP, en LIGNES D'ÉCRAN : le
+    // glyphe est le libellé de la flèche, le couple départ/arrivée est son
+    // dessin, et les deux disent la même direction.
+    assert.equal(f.depart.colonne, 3);
+    assert.equal(f.arrivee.colonne, 4);
+  }
+
+  // ⚠ LE COLLECTEUR N'AJOUTE PAS DE FLÈCHE À LUI, et c'est le moteur qui le dit :
+  // `DEBITS.centrale.parVoisin` porte `champDeScorie` et `accumulateur`, pas
+  // `collecteur`. Sans cette ligne, « une flèche depuis 13,3 » serait aussi vrai
+  // d'un lot qui aurait fait qualifier le bâtiment à la place du champ.
+  assert.equal(flechesDeVoisinage(avec, terrain, 1).length, 1);
+  assert.equal(DEBITS.centrale.parVoisin.collecteur, undefined);
+});
+
+test('F-J T6 — la durée du Complexe est celle d\'une pièce de SON niveau', () => {
+  // ⚠⚠ ETHAN, 06/09 : « Le complexe n'indique pas le coût de réparation. Ou
+  // juste dire 1h pour un niveau similaire. » La fiche calculait sur une pièce
+  // de niveau 50 — le pire cas — et affichait 106,7 h à un joueur dont la
+  // garnison est au niveau 3.
+  //
+  // ⚠ LE NIVEAU 10 N'EST PAS UN DÉTAIL : à Complexe 50, les deux règles
+  // rendraient le MÊME nombre — dépassement nul des deux côtés — et le test ne
+  // falsifierait rien.
+  const etat = baseDesUniques();
+  const index = indiceDe(etat, 'complexeDeDefense');
+  baseCourante(etat).disposition[index].niveau = 10;
+  assert.notEqual(10, NIVEAU.plafond, 'le montage est au plafond : il ne discrimine pas');
+
+  // ⚠⚠ ET LE COMPLEXE EST ABÎMÉ, SANS QUOI CE TEST NE VERRAIT PAS LA PIRE
+  // FAÇON DE SE TROMPER. Intact, `ticksDeRetour(10, 10, 1000)` vaut EXACTEMENT
+  // une heure — donc une fiche qui écrirait 36 000 en dur, sans jamais appeler
+  // la formule, passerait l'égalité comme l'inégalité. Sous avarie, les trois
+  // nombres divergent, et seule la fiche qui APPELLE tombe juste.
+  baseCourante(etat).disposition[index].degatsMilli = 800000;
+
+  const complexe = complexeDe(etat);
+  assert.equal(complexe.niveau, 10);
+  assert.ok(complexe.santeMilli > 0 && complexe.santeMilli < 1000,
+    `le Complexe est à ${complexe.santeMilli} ‰ : le montage ne discrimine pas`);
+  assert.notEqual(ticksDeRetour(10, 10, complexe.santeMilli), TICKS_PAR_HEURE,
+    'la durée abîmée retombe sur une heure ronde : un 36 000 écrit en dur passerait');
+  const [effet] = ficheDuComplexe(etat).effets;
+  assert.equal(effet.forme, 'duree');
+  assert.equal(effet.avant, ticksDeRetour(10, 10, complexe.santeMilli),
+    'la fiche n\'annonce pas la durée d\'une pièce de même niveau');
+  assert.notEqual(effet.avant, ticksDeRetour(NIVEAU.plafond, 10, complexe.santeMilli),
+    'la fiche annonce encore le pire cas : les deux règles rendent le même nombre');
+});
+
+test('F-J T7 — Complexe entier : le repère de 1 h est tenu, et il est CALCULÉ', () => {
+  // ⚠⚠ « 1 h » EST CE QUE LA FORMULE REND, PAS CE QU'ON TAPE. `ticksDeRetour`
+  // fait `heuresDeBase × facteurMilli(1 + dépassement)/1000 × pénalité(santé)` ;
+  // à dépassement nul et pleine santé, les deux derniers facteurs valent un.
+  // Le nombre est écrit dans le test parce qu'un test qui refait la formule ne
+  // garde que la formule — 36 000 ticks à 10 Hz, soit une heure ronde.
+  const HEURE_EN_TICKS = 36000;
+  assert.equal(HEURE_EN_TICKS, TICKS_PAR_HEURE, 'le repère n\'est plus une heure');
+
+  for (const niveau of [1, 5, 10, 25, NIVEAU.plafond]) {
+    const etat = baseDesUniques();
+    const index = indiceDe(etat, 'complexeDeDefense');
+    baseCourante(etat).disposition[index].niveau = niveau;
+    assert.equal(complexeDe(etat).santeMilli, 1000, `niveau ${niveau} : le Complexe n'est pas entier`);
+    const [effet] = ficheDuComplexe(etat).effets;
+    assert.equal(effet.avant, HEURE_EN_TICKS,
+      `niveau ${niveau} : la fiche n'annonce pas une heure ronde`);
+  }
+
+  // ⚠ ET L'AUTRE REPÈRE DU §0 DE `CLAUDE.md` TIENT AUSSI — « 24 h TOUT ROND à
+  // 1 PV ». Il ne passe pas par la fiche, qui n'a pas de Complexe à 1 PV à
+  // montrer, mais il départage la formule d'une constante : une fiche qui
+  // écrirait 36 000 en dur rendrait la même chose ici.
+  assert.equal(ticksDeRetour(7, 7, 0), 24 * HEURE_EN_TICKS);
+});
+
+test('F-J T8 — la section du Complexe n\'annonce AUCUN coût', () => {
+  // ⚠⚠ ETHAN, 06/09 : « Complexe seulement du temps. » Le retour de la garnison
+  // est GRATUIT — `RETOUR_DEFENSES` l'écrit depuis le lot RETOUR-DÉFENSES, « ni
+  // réserve ni ressource » — et la fiche ne doit pas laisser croire à un prix.
+  const etat = baseDesUniques();
+  const apercu = ficheDuComplexe(etat);
+  for (const effet of apercu.effets) {
+    assert.equal(effet.forme, 'duree', 'la section du Complexe porte autre chose qu\'une durée');
+  }
+
+  const section = lignesDuPanneau(apercu).sections.find((s) => s.titre === 'Ce qu\'il commande');
+  assert.ok(section, 'la section d\'effet du Complexe a disparu');
+  const texte = section.lignes.map((l) => `${l.libelle} ${l.avant} ${l.apres ?? ''}`).join(' | ');
+  for (const cle of Object.keys(LIBELLES_RESSOURCE)) {
+    assert.ok(!texte.toLowerCase().includes(LIBELLES_RESSOURCE[cle].nom.toLowerCase()),
+      `la section du Complexe nomme « ${LIBELLES_RESSOURCE[cle].nom} »`);
+  }
+
+  // ⚠ ET LE MONTAGE DISCRIMINE : le mot d'une ressource EST écrit ailleurs dans
+  // le même panneau — le bouton porte le prix de l'amélioration. Sans cette
+  // ligne, « aucune ressource » serait vrai d'un panneau vide.
+  const bouton = lignesDuPanneau(apercu).bouton;
+  assert.ok(Object.keys(LIBELLES_RESSOURCE)
+    .some((cle) => bouton.note.toLowerCase().includes(LIBELLES_RESSOURCE[cle].nom.toLowerCase())),
+  'le bouton ne nomme aucune ressource : le test ne discrimine rien');
+});
+
+test('F-J T10 — un Complexe à zéro PV ne promet rien, et le DIT', () => {
+  // ⚠ NON-RÉGRESSION. `null` veut dire « rien ne revient, jamais », et non
+  // « très lentement » : il n'y a pas de durée à annoncer, et la ligne se dit
+  // SANS nombre au lieu de se taire.
+  const etat = baseDesUniques();
+  const index = indiceDe(etat, 'complexeDeDefense');
+  // ⚠ LES DÉGÂTS SONT POSÉS AU-DELÀ DU MAXIMUM PLUTÔT QU'À LA VALEUR EXACTE :
+  // `pvMaxDuBatimentMilli` n'est pas exportée, et l'exporter pour un test
+  // mettrait dans `src/` une porte que la production n'emploie pas.
+  // `complexeDeLaBase` borne à zéro, et l'assertion suivante prouve que le
+  // montage a bien atteint le zéro PV.
+  baseCourante(etat).disposition[index].degatsMilli = Number.MAX_SAFE_INTEGER;
+  assert.equal(complexeDe(etat).santeMilli, null, 'le montage ne met pas le Complexe à zéro PV');
+
+  const apercu = ficheDuComplexe(etat);
+  assert.equal(apercu.effets.length, 1);
+  assert.equal(apercu.effets[0].avant, null);
+
+  const section = lignesDuPanneau(apercu).sections.find((s) => s.titre === 'Ce qu\'il commande');
+  assert.ok(section, 'la ligne se tait au lieu de se dire');
+  assert.equal(section.lignes[0].avant, 'aucun retour');
 });

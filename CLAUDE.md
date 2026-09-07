@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **06/09/2026**, version 0.99.8 · build 109.
+Dernière révision : **06/09/2026**, version 0.99.12 · build 113.
 
 ---
 
@@ -42,7 +42,453 @@ Dernière révision : **06/09/2026**, version 0.99.8 · build 109.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 06/09/2026 (après le lot COLONNE), à confronter :**
+**Référence au 06/09/2026 (après le lot EMBLÈME-CENTRÉ), à confronter :**
+`npm test` → **1245 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 003 811 octets**, 0 référence externe. Coût **+732 octets, ENTIÈREMENT EN
+IMAGES**, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **images +732 · JavaScript +0 · feuille
++0 · balisage +0 · audio +0**, et la somme des cinq postes tombe EXACTEMENT sur
+le total — **296 lignes `data:` avant, 296 après, 291 URI de part et d'autre**.
+Borne T10 inchangée à 9 300 000, marge **1 296 189 octets, 13,94 %**. Le lot
+touche `tools/emblemes.py`, `tools/final128.py` et 208 PNG de
+`art/sprites/carte/`.
+⚠⚠ **L'EMBLÈME ÉTAIT COLLÉ AU SUD, ET C'EST UNE LIGNE D'OUTIL.** Ethan, 06/09,
+point 1 : « le sprite a dû être fabriqué bizarrement peut-être ? Regarde, il est
+collé au sud. » **Un seul appel du dépôt passait `ancrage='bas'`** —
+`tools/emblemes.py`, et lui seul, vérifié par `grep` : il passe `'centre'`.
+⚠⚠ **LE MOTIF QU'ON ÉCARTE ÉTAIT JUSTE, ET IL SE LIT ENCORE DANS `recadrer`.**
+Il défendait une LIGNE DE SOL commune : « centrer des contenus de hauteurs
+différentes ferait FLOTTER les petits au milieu de leur case pendant que les
+grands touchent le sol ». **C'est vrai d'un bâtiment vu de CÔTÉ et faux d'une vue
+zénithale** — il n'y a pas de sol à toucher sur une carte, et « reposer sur le
+sol » y devient « décalé vers le sud ». Le paragraphe disait « sous une carte » :
+c'était le contresens exact, et il est réécrit à sa place.
+⚠⚠ **MESURÉ SUR LES 216 EMBLÈMES DES DEUX GRILLES, PAS SUR TROIS.** Écart entre
+la marge haute et la marge basse de l'encre : **201 sur 216 au-dessus d'un pixel
+AVANT, pire cas +74 px** — `site_scorie_n1` en 128, soit **58 % de la case** ;
+**ZÉRO au-dessus d'un pixel APRÈS**, 154 à l'écart nul et 62 à un pixel, qui est
+la parité d'une hauteur d'encre impaire. Les trois paliers du relevé d'Ethan
+passent de **76 / 5, 45 / 5, 25 / 5** à **40 / 40, 27 / 23, 19 / 11** à
+alpha ≥ 128, et à **40 / 40, 23 / 22, 11 / 10** au seuil de l'encre.
+⚠⚠ **ET LE SEUIL DE MESURE EST DEVENU CELUI DE L'ENCRE, PARCE QUE 128 MENTAIT
+ICI.** `site_base_j_n9` porte un mât de deux pixels qui ressort à **alpha 86 à
+95** après la réduction LANCZOS : mesuré à 128 il DISPARAÎT, et la marge haute
+paraît valoir 19 px pour 11 en bas. Le mât est DESSINÉ — `ecrire` ne coupe qu'à
+`SEUIL_ALPHA` —, donc c'est la mesure qui était fausse, pas le sprite. **Le seuil
+se LIT dans `tools/final128.py`**, il ne se retape pas.
+⚠⚠ **`cote_ref` N'A PAS ÉTÉ TOUCHÉ, ET LES DEUX PARAMÈTRES SONT INDÉPENDANTS.**
+`cote_ref` décide de l'ÉCHELLE — le rapport de taille des paliers, l'acquis du
+lot EMBLÈMES-ABÎMÉS —, `ancrage` de la POSITION, et `recadrer` les lit
+séparément. `EMB-C T2` attrape un lot qui aurait retiré l'un avec l'autre, et
+`EMB-C T5` exige que l'appel porte encore les deux.
+⚠⚠ **QUATRE SPRITES SUR 108 NE CHANGENT PAS D'UN OCTET, ET CE SONT EXACTEMENT
+LES `*_n9_feu` — LA CELLULE DE RÉFÉRENCE DE CHAQUE FAMILLE.** Son encre remplit
+la référence, donc `box//2 + reference//2 − ys.max()` vaut `box//2 − cy` : la
+ligne de sol et le centre coïncident pour elle. C'est la preuve, à l'octet, que
+le lot n'a touché QUE l'ancrage — l'ancien commentaire l'annonçait, « la ligne de
+sol est celle que le centrage donnait au plus grand contenu », et les quatre
+fichiers le confirment.
+⚠ **LES DEUX GROSSES BASES ET LES SEPT POI NE BOUGENT PAS NON PLUS, ET C'ÉTAIT À
+VÉRIFIER.** `base_o_2x2` et `base_o_3x3` sortent par la seconde boucle de
+`emblemes.py`, qui n'a jamais passé `cote_ref` ni `ancrage` — donc `'centre'` par
+défaut depuis toujours. Mesuré avant le lot : marges **11 / 11** et **31 / 31**,
+écart nul. Elles étaient déjà centrées ; le brief demandait de le dire.
+⚠⚠ **UNE GARDE EXISTANTE EST RETOURNÉE, ET AUCUNE N'EST RETIRÉE.** `EMB T6`
+exigeait que les 108 emblèmes reposent sur UNE ligne de sol — c'est la propriété
+que l'arbitrage renverse. Elle devient `EMB-C T1`, qui exige le CENTRAGE **et
+falsifie l'ancienne de face** : les lignes de sol ne coïncident plus, sans quoi
+un `'bas'` revenu ferait tomber la boucle sans dire pourquoi.
+⚠⚠ **ET `EMB T5` A CHANGÉ DE MESURE SANS QUE SON SEUIL BOUGE — C'EST UN
+RESSERREMENT.** Il exige qu'un palier fasse la même largeur dans les trois états,
+à 4 px près. Recentrer ne change aucune largeur de DESSIN : **mesuré au seuil de
+l'encre, les neuf paliers rendent EXACTEMENT les mêmes largeurs avant et après**.
+À 128, une seule cellule bouge — `site_base_j_n7_feu`, 86 → 84 — parce que le
+décalage vertical change la PHASE de la réduction et fait tomber deux colonnes de
+bord sous le seuil. **Le 4 n'a pas été relevé** : la mesure a cessé de compter
+des pixels que l'écran dessine.
+⚠ **L'ATLAS GROSSIT ALORS QU'ON NE FAIT QUE DÉPLACER DES PIXELS** —
+`atlas-carte-128.webp` **409 686 → 410 234 octets**, et le 64, non embarqué,
+155 418 → 156 372. Le WebP q85 prédit un peu moins bien une planche dont les
+cellules ne partagent plus leur ligne de base. C'est le mouvement inverse du lot
+ARMÉE-ET-FRONTIÈRE, qui avait RENDU des octets en désaturant.
+⚠ **`src/data/atlas.js` EST IDENTIQUE**, et `art/sources-declarees.json` aussi —
+**393 consommées · 123 dormantes · 516 fichiers**, inchangé : aucune source
+n'entre ni ne sort, le lot repeint ce que la chaîne produit déjà.
+⚠ **CINQ TESTS ENTRENT, UN EST RETOURNÉ, ET LE COMPTE PASSE DE 1 241 À 1 245** —
+`EMB-C T1` à `T5`, dans `test/embleme.test.js`, qui passe de 13 à 17.
+⚠⚠ **SEPT FALSIFICATIONS, SEPT CHUTES, ET LA PREMIÈRE MORD PAR DEUX CHEMINS.**
+Remettre `'bas'` fait tomber `EMB-C T1` — qui voit le décalage dans les PIXELS —
+ET `EMB-C T5` — qui le voit dans la SOURCE de l'outil. Un lot qui reviendrait à
+`'bas'` sans régénérer l'art ne ferait tomber que le second, et c'est très
+exactement le trou du 30/08 où six PNG contredisaient l'outil qui les fabrique
+pendant que `npm run check` était vert. ⚠ Retirer `cote_ref` en fait tomber SIX,
+dont quatre gardes du lot EMBLÈMES-ABÎMÉS : l'échelle ne peut pas partir par
+mégarde. ⚠ Et mesurer `EMB-C T1` à 128 le fait tomber sur une chaîne juste —
+sans cette falsification-là, le choix du seuil serait une opinion.
+⚠⚠ **`python3 tools/verifier.py` → 858 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT, verdict VERT, AVANT ET APRÈS** — 516,9 s puis 509,9 s. Il était dû :
+le lot touche `art/` et `tools/`. **Le compte ne bouge pas, et les 208 PNG
+régénérés sont dans les identiques** : la chaîne reproduit à l'octet ce que le
+dépôt porte, ce qui est la seule chose qui dise que l'art commité vient de
+l'outil commité. ⚠ Son second verdict tient aussi — **393 / 393 consommées et
+123 / 123 dormantes**, `art/sourcesstandby/` 34 fichiers 0 lu, `art/reserve/`
+10 fichiers 0 lu —, et `python3 tools/atlas.py --verifier` rend **18 atlas
+identiques · 0 différent · 0 nouveau**, relancé APRÈS la ronde de falsifications.
+⚠ **`python3 tools/entrees.py --declarer` A ÉTÉ LANCÉ, ET IL NE CHANGE RIEN** :
+`art/sources-declarees.json` est identique à l'octet. Le lot repeint ce que la
+chaîne produit déjà ; aucune source n'entre ni ne sort.
+⚠⚠ **ÉCART DÉCLARÉ : LE LOT N'EST PAS SUR SA PROPRE BRANCHE.** Le brief l'exige
+— « à exécuter seul sur sa branche » — et l'environnement d'exécution épingle la
+session à une branche unique. Les quatre lots de la série sont donc quatre
+COMMITS distincts sur `claude/foyer-zer0-patch-5lqyq8` ; celui-ci est le dernier
+et le seul à toucher `art/`, donc il se révoque par un `git revert` d'un seul
+commit.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** §3 : il
+n'y a pas d'appareil ici. Le halo carré qu'Ethan cite comme repère est dessiné
+par `src/ui/monde.js`, que le lot ne touche pas.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27.** Un emblème est un dessin :
+`src/render/embleme.js` et `src/ui/monde.js` n'ont pas une ligne de changée.
+
+**Auparavant, après le lot FICHE-JUSTE :**
+`npm test` → **1241 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 003 079 octets**, 0 référence externe. Le lot **REND 39 octets**, ENTIÈREMENT
+DU JAVASCRIPT, mesurés poste par poste contre un livrable rebâti dans un
+`git worktree` depuis le lot précédent : **JavaScript −39 · feuille +0 ·
+balisage +0 · images +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291 URI de part
+et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 296 921 octets,
+13,95 %**. Le lot touche `src/sim/disposition.js` et `src/ui/chantier.js`.
+⚠⚠ **LE DÉPÔT AFFIRMAIT PAR ÉCRIT UNE PROPRIÉTÉ QUI ÉTAIT FAUSSE, ET C'EST LE
+PREMIER FAIT À DIRE.** `ui/chantier.js` portait, au-dessus de
+`flechesDeVoisinage` : « `voisinsQualifiantsParCase` est la même règle que celle
+qui calcule le débit. » **Elle ne l'était pas.** Sa branche champ était en
+`else if (i === undefined)`, quand `voisinsQualifiants` ne regarde PAS
+l'occupation pour une clé `champDe…` — elle boucle sur `ressourceDeLaCase` seule.
+Deux fonctions, une seule question, deux réponses.
+⚠⚠ **ET LA PLAINTE D'ETHAN EST RENVERSÉE PAR LA MESURE.** « Un collecteur posé
+sur un Champ de scories bloque la production d'élec : anormal » — **mesuré, la
+production ne bougeait pas d'un milli** : centrale de niveau 1, un champ de
+scorie voisin, `debitDuBatiment.total = 180` avec comme sans collecteur dessus,
+avant comme après le lot. Ce qu'il voyait disparaître était la **FLÈCHE** de la
+fiche, et il l'a lue, très raisonnablement, comme une perte de production. Le lot
+aligne le **DESSIN** sur le moteur, jamais l'inverse — `F-J T3` attrape un lot
+qui aurait « corrigé » le moteur à la place.
+⚠⚠ **LA CORRECTION OUVRE UN CAS QUE `ParCase` NE SAVAIT PAS DIRE, ET L'ISSUE
+RETENUE EST DEUX ENTRÉES POUR UNE CASE.** Une case peut qualifier comme champ ET
+comme bâtiment ; le moteur les compte SÉPARÉMENT — deux boucles, deux lignes de
+`comptes` — et `apportParHeure` est **par type**, si bien qu'une entrée à
+plusieurs types devrait porter plusieurs apports, c'est-à-dire changer de forme
+pour dire ce que deux entrées disent déjà.
+⚠⚠ **LE CAS EST INATTEIGNABLE AUJOURD'HUI, MESURÉ ET NON SUPPOSÉ.** Il faudrait
+qu'un `parVoisin` porte à la fois une clé `champDe…` et une clé de bâtiment
+POSABLE SUR UN CHAMP. Les quatre tables sont `centrale {champDeScorie,
+accumulateur}`, `accumulateur {centrale}`, `collecteur {raffinerie}`, `raffinerie
+{collecteur}`, et `CHAMPS.posableDessus` ne contient que `collecteur`, qu'aucune
+table n'apparie à un champ. **`F-J T5` monte donc un `parVoisin` à la main, dans
+un `try/finally` — pas de test sauté.**
+⚠⚠ **« LA MÊME RÈGLE » SE MESURE DÉSORMAIS, ELLE NE S'AFFIRME PLUS.** `F-J T2`
+compare le COMPTE PAR TYPE des deux fonctions sur six montages — champ libre,
+champ occupé, bâtiment sur case nue, les deux à la fois, aucun voisin, le terrain
+complet — avec **deux planchers** : au moins dix bâtiments comparés ET au moins
+huit voisins qualifiants vus, sans quoi une fonction qui rendrait toujours la
+liste vide passerait. Les deux commentaires sont réécrits et renvoient à lui.
+⚠⚠ **LA FICHE DU COMPLEXE ANNONCE UNE PIÈCE DE SON PROPRE NIVEAU, ET LE CHIFFRE
+EST CALCULÉ.** Ethan : « Le complexe n'indique pas le coût de réparation. Ou juste
+dire 1h pour un niveau similaire. » Elle calculait sur une pièce de niveau 50 — le
+pire cas — et affichait **106,7 h à un joueur dont le Complexe est au niveau 1**.
+Mesuré, Complexe entier : **1,0000 h aux niveaux 1, 3, 5, 10, 25 et 50** contre
+106,72 · 88,20 · 72,89 · 45,26 · 10,84 · 1,00. **36 000 ticks, et ce n'est pas
+écrit** : `facteurMilli(1 + 0)` vaut mille, la pénalité de santé vaut un.
+⚠ **ET LE SECOND REPÈRE DU §0 TIENT AUSSI** — `ticksDeRetour(7, 7, 0)` rend
+**24,0000 h TOUT ROND**, ce que `F-J T7` asserte à côté du premier.
+⚠⚠ **`F-J T6` MONTE UN COMPLEXE ABÎMÉ, ET C'EST CE QUI ATTRAPE LA PIRE FAÇON DE SE
+TROMPER.** Intact, la valeur vaut exactement 36 000 : **une fiche qui écrirait
+36 000 en dur, sans jamais appeler la formule, passerait l'égalité comme
+l'inégalité.** Sous `degatsMilli = 800 000`, les trois nombres divergent — niveau
+10, santé 864 ‰ : **4,128 h** contre 186,829 h pour l'ancienne règle. Le niveau 10
+n'est pas un détail non plus : **à 50, les deux règles coïncident**.
+⚠⚠ **ET `CH-F T8` A DÛ CHANGER DE MONTAGE SANS QU'UNE ASSERTION SOIT
+ASSOUPLIE.** Il exige qu'une valeur d'effet DIFFÈRE entre deux niveaux ; à
+dépassement nul, un Complexe intact rend 1 h à **tous** les niveaux, donc sa
+PRÉMISSE a cessé d'être vraie et il serait tombé sur un code juste. Le montage
+abîme le Complexe des deux côtés — les dégâts sont un absolu quand les PV
+maximaux croissent avec le niveau, donc la santé discrimine : **680 ‰ au niveau 1
+contre 888 ‰ au niveau 12**, soit 8,360 h contre 3,576 h. **Une assertion ENTRE**
+et prouve qu'un Complexe intact rendrait le même nombre.
+⚠⚠ **CE QUE LE NOUVEAU CHOIX COÛTE EST ÉCRIT, PAS TU : UN JOUEUR DONT LA GARNISON
+DÉPASSE LE NIVEAU DU COMPLEXE ATTENDRA PLUS LONGTEMPS QUE LA FICHE N'ANNONCE.**
+C'est la contrepartie exacte de l'ancien choix, prise dans l'autre sens ; le
+raisonnement du bloc — « il n'existe aucune durée qui soit fonction du seul
+Complexe » — était JUSTE et il est écarté par arbitrage. **Le jour où la fiche
+devra dire les deux, c'est une SECONDE ligne qu'il faudra.**
+⚠ **ET LA BORNE DE `ticksDeRetour` TIENT MIEUX QU'AVANT** : le dépassement vaut
+zéro par construction, donc le départage entre `NIVEAU.plafond` et
+`GEOGRAPHIE.niveauPlafond` devient sans objet. `NIVEAU` sort des imports de
+`ui/chantier.js`, et c'est là que les 39 octets sont rendus.
+⚠⚠ **ÉCART DÉCLARÉ : `REPARATION_BASE_JOUEUR` N'EST PAS TOUCHÉ, ET LE BRIEF
+DEMANDAIT DE LE CORRIGER.** Son instruction repose sur une confusion entre deux
+mécanismes que le dépôt tient séparés depuis RETOUR-DÉFENSES. Cette table décrit
+la réparation d'un **BÂTIMENT** — `indexeeSur` nomme le Chantier,
+`courbe.diviseurDuCout` est le diviseur d'un PRIX, et le quartz est réellement
+débité en quatre points de `sim/reparation.js`. Y écrire « ne coûte que du
+temps » en ferait un mensonge et contredirait l'arbitrage du 05/09. Ce dont Ethan
+parle — « Complexe seulement du temps » — est le RETOUR de la garnison, et
+`RETOUR_DEFENSES` **le dit déjà** : « c'est gratuit, donc il n'y a ni réserve ni
+ressource ». **Ce qui manquait n'était pas la phrase, c'était sa mesure.**
+⚠⚠ **`F-J T9` L'A ÉCRITE, ET ELLE MORD PLUS LOIN QUE PRÉVU.** Il balaie les corps
+de `pvApresRetour`, `ramenerLaGarnison` et `ticksDeRetour` sur huit mots
+interdits, **prouve que le motif n'est pas aveugle** en exigeant que
+`reparerUnBatiment` nomme bien le quartz, puis mesure par EXÉCUTION qu'un retour
+complet ne bouge ni les stocks ni les quatre réserves. ⚠ Et faire débiter du
+quartz à `ramenerLaGarnison` fait tomber **`RÉSERVE T3` et `RÉSERVE-BASE T4`** en
+plus : le retour gratuit n'est pas qu'une règle de jeu, c'est une condition de
+l'équivalence `tickJeu × n ≡ rattraperJeu(n)`.
+⚠ **NEUF FALSIFICATIONS, NEUF CHUTES**, dont quatre qui ne font tomber qu'un seul
+test — le champ qui l'emporte, l'avarie retirée de `CH-F T8`, le zéro PV qui
+promet « aucune attente », et le 36 000 écrit en dur (deux tests).
+⚠ **DIX TESTS ENTRENT — `F-J T1` à `T10` — ET LE COMPTE PASSE DE 1 231 À 1 241.**
+Quatre dans `test/disposition.test.js`, cinq dans `test/chantier.test.js`, un
+dans `test/reparation.test.js`. **Aucune assertion n'a été retirée ni assouplie**
+; **trois gardes changent de cible** — les deux commentaires cessent d'affirmer
+pour renvoyer à `F-J T2`, et `CH-F T8` gagne une avarie ET une assertion.
+⚠⚠ **LA RELECTURE HOSTILE N'A TROUVÉ QU'UNE CANDIDATE, ET ELLE EST DÉCLARÉE.**
+Vingt-trois occurrences de « la même règle », « s'accordent », « ne peuvent pas
+diverger » relues : vingt-deux sont des « par construction » où le second
+mécanisme APPELLE le premier, ou renvoient à un test nommé. La dernière est
+`formaterUnites`, qui dit « la même règle que `formaterPv` du banc » sans qu'un
+test les compare — mais les deux ne rendent pas la même grandeur (un entier
+contre un dixième), et chacune est épinglée par une assertion discriminante
+(`999 → '0'`, `499 → '0,4'`). **Non corrigée, dite.**
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27 — VÉRIFIÉ AU DIFF.** Une entrée de
+voisinage se calcule à la demande, une durée de fiche est un affichage :
+`src/sim/state.js` n'a pas une ligne de changée.
+⚠ **`src/sim/reparation.js` N'A PAS UNE LIGNE DE CODE CHANGÉE**, ni
+`RETOUR_DEFENSES`, ni `pvApresRetour`, ni `direLaDuree` et son point décimal —
+celle-ci est partagée avec la réserve de réparation, et la corriger ici ferait
+diverger les deux affichages.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot CARTE-C :**
+`npm test` → **1231 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 003 118 octets**, 0 référence externe. Coût **+2 087 octets**, mesuré poste
+par poste contre un livrable rebâti depuis le lot précédent : **JavaScript +798 ·
+feuille +1 187 · balisage +102 · images +0 · audio +0**, et la somme des cinq
+postes tombe EXACTEMENT sur le total — **296 lignes `data:` avant, 296 après, 291
+URI de part et d'autre**. Borne T10 inchangée à 9 300 000, marge **1 296 882
+octets, 13,95 %**. Le lot touche `src/ui/monde.js`, `src/data/sites.js` et la
+page.
+⚠⚠ **LA FLÈCHE S'ARRÊTE AU BORD DU CANEVAS, ET LE CAS EST LE CAS COURANT AU ZOOM
+MAXIMUM.** Ethan, 06/09 : la POINTE était hors écran, et le joueur ne voyait
+qu'une barre nue qui traverse la carte sans rien désigner. **Mesuré : une case
+vaut 256 pixels physiques au dernier cran, donc un téléphone de 1 080 × 2 340 en
+montre 4,2 × 9,1 — la portée d'un raid est de DIX cases.** Deux sites attaquables
+ne tiennent pas ensemble dans le cadre.
+⚠⚠ **`traitRogne` EST PURE, EXPORTÉE, ET ELLE ROGNE LES DEUX BOUTS.** Liang–Barsky
+les traite par construction, et le DÉPART hors champ est atteignable pour la même
+raison : le joueur promène la carte jusqu'à sa cible, et sa base est alors dehors.
+⚠ **L'ANGLE SE REPREND, IL NE SE RECALCULE PAS.** `trait.angle` est celui du
+segment ENTIER, et c'est lui qui porte la direction de la cible ; le refaire
+depuis le morceau visible rendrait le même nombre par un chemin qui peut diverger.
+⚠ **ET `traitDeLaFleche` N'A PAS UN CARACTÈRE DE CHANGÉ** — centre à centre, garde
+« même case → `null` » intacte. Un trait entièrement visible ressort par IDENTITÉ
+D'OBJET ; entièrement dehors, on rend `null` et jamais un segment de longueur
+nulle.
+⚠⚠ **LES TESTS PURS NE MORDAIENT PAS, ET `CARTE-C T1 bis` A ÉTÉ ÉCRIT POUR ÇA.**
+Retirer l'appel à `traitRogne` dans `dessinerFleche` laissait `T1` à `T5`
+**entièrement verts** : ils mesurent la FONCTION, pas le CHEMIN. Le test monte
+l'écran sur un canevas volontairement petit et exige que chaque point peint tienne
+dans le cadre.
+⚠⚠ **ET UNE SECONDE FALSIFICATION A MONTRÉ QU'IL NE COUVRAIT QUE DEUX BORDS SUR
+QUATRE.** Remplacer `canvas.width, canvas.height` par `Infinity, Infinity` le
+laissait VERT : sur cette graine les trois satellites sont au-dessus et à gauche
+de la base, donc la flèche ne sort que par les bords zéro. Une assertion de source
+ferme le trou, et le fait est déclaré.
+⚠ **L'ÉPAISSEUR N'EST PAS TOUCHÉE — ARBITRAGE D'ETHAN, « on fait croître avec le
+zoom ».** Une proposition de la borner en pixels d'écran a été faite et REFUSÉE ;
+`CARTE-C T7` la fige. ⚠ Et sa première écriture mesurait la mauvaise grandeur :
+le RAPPORT des deux épaisseurs vaut **6,67 quand celui des pas vaut 8**, parce
+qu'à `pas = 32` l'exacte vaut 2,56 et l'arrondi rend 3. Le test asserte désormais
+chaque cran à un demi-pixel près.
+⚠⚠ **LA FICHE DIT D'OÙ VIENT LE NIVEAU, ET LE DISCRIMINANT EXISTAIT DÉJÀ.** Ethan
+a vu un avant-poste de niveau 1 collé à une base de niveau 7,6 : un CAMP suit le
+niveau des bâtiments du joueur, un AVANT-POSTE l'endroit de la carte, et rien ne
+le disait. Il a choisi de ne pas changer la règle mais de l'AFFICHER.
+`ORIGINE_DU_NIVEAU` entre dans `src/data/sites.js`, **à côté d'`indexeSur`**, et
+`CARTE-C T9` change `indexeSur` dans un montage pour attraper un `if` sur le type
+recopié dans l'écran.
+⚠ **AUCUN CHIFFRE N'EST RECALCULÉ, ET RIEN NE S'AFFICHE SUR SA PROPRE BASE** —
+elle n'a pas UN niveau mais trois moyennes, et elle n'est pas dans `TYPES_SITE`.
+Un `indexeSur` sans libellé LÈVE plutôt que de rendre un vide.
+⚠⚠ **UN BOUTON ATTAQUER ENTRE DANS LE PANNEAU, ET LE MOTIF ÉCRIT EST RENVERSÉ
+PLUTÔT QU'ENJAMBÉ.** Ethan : « rajouter un bouton attaquer sur la fiche car ça
+bloque » — le panneau occupe la moitié basse de l'écran, donc le SECOND TOUCHER
+est impossible dès que la cible est dessous, ce qui arrive constamment puisque la
+carte s'ouvre centrée sur la base. Le commentaire du balisage interdisait QUATRE
+mots depuis le 27/08 ; il est réécrit.
+⚠⚠ **ET LA GARDE EST RETOURNÉE SANS SE RELÂCHER.** La liste des boutons reste
+EXACTE — deux nommés, aucun autre —, les TROIS autres mots restent interdits, le
+libellé doit être dans le BALISAGE et pas dans l'écran, et le bouton doit passer
+par `entrerDansLaCible`, donc par `problemesDuRaid`. Un bouton qui appellerait
+`surEntreeRaid` lui-même la fait tomber, mesuré.
+⚠ **LE DISCRIMINANT N'EST PAS INVENTÉ : C'EST CELUI DE LA FLÈCHE.** Présent quand
+`ciblage !== null` — `ciblageDuSite` rend `null` sur sa propre base comme sur une
+case sans rien à attaquer —, actif quand `cout !== null`, qui EST « hors de
+portée ». Hors de portée il se voit et ne se touche pas ; un manque de points, lui,
+ne l'éteint pas — « un indice n'est pas une interdiction ».
+⚠⚠ **ET CE QUE LE BRIEF DEMANDAIT SUR LE MODE DE DÉPLACEMENT NE SE POSE PAS COMME
+ÇA — RELEVÉ.** Il voulait que « Attaquer » désarme le mode ; mesuré,
+`armerLeDeplacement` FERME le panneau **puis le ROUVRE** pour y écrire son propre
+message, titre « Déplacer la base » et corps vide. Ce qui rend le cas
+inatteignable est autre chose, et ce sont DEUX lignes : `fermerPanneau` cache le
+bouton et l'armement ne le rouvre pas, et `relacher` route tout toucher vers
+`poserLaBase` tant que le mode est armé. Y appeler `desarmerLeDeplacement` serait
+du code mort ; `CARTE-C T14` garde les deux lignes.
+⚠ **LE PANNEAU RESTE DONC OUVERT PENDANT LE MODE — RELEVÉ, NON CORRIGÉ.** Ce n'est
+pas dans le brief, et c'est peut-être voulu. **Ethan tranche.**
+⚠ **DIX FALSIFICATIONS, DIX CHUTES**, dont deux refaites avant de mordre — celle
+du `null` visait la branche « parallèle au bord », qu'aucun montage n'atteint, et
+celle du rognage visait les bornes plutôt que l'appel.
+⚠ **SEIZE TESTS ENTRENT — `CARTE-C T1` à `T14`, plus `T1 bis` et `T12 bis`, dans
+`test/monde.test.js` — ET LE COMPTE PASSE DE 1 215 À 1 231.** **Aucune assertion
+n'a été retirée ni assouplie** ; **deux gardes changent de cible et les DEUX se
+RESSERRENT** — la liste des boutons gagne trois assertions, et les lignes du
+panneau se cherchent par NOM plutôt que par indice, une ligne insérée au milieu
+décalant trois assertions sans rapport.
+⚠ **LE FAUX DOCUMENT GAGNE `append` ET `disabled`** : il n'avait qu'`appendChild`,
+si bien qu'il ne montait AUCUN panneau — `ouvrirPanneau` pose le couple
+libellé/valeur par `append`.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 27 — VÉRIFIÉ PLUTÔT QUE CRU.** Une
+géométrie de trait, un libellé de fiche et un bouton vivent tous dans l'écran.
+⚠ **RIEN N'A ÉTÉ VU SUR UN APPAREIL, ET C'EST DÉCLARÉ NON EXÉCUTÉ.** Tout ce qui
+touche le DOM est mesuré par le faux document de `monde.test.js`, qui monte
+l'écran et rejoue de vrais évènements de pointeur — mais qui n'est pas un
+navigateur.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot SATELLITES-RESPAWN :**
+`npm test` → **1215 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 001 031 octets**, 0 référence externe. Coût **+479 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable bâti depuis
+`origin/main` : **JavaScript +479 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **296
+lignes `data:` avant, 296 après, 291 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **1 298 969 octets, 13,97 %**. Le lot ne touche que
+`src/sim/satellites.js`, `src/sim/state.js` et trois fichiers de `test/`.
+⚠⚠ **UN CAMP RASÉ REVIENT SUR-LE-CHAMP, ET IL PASSE QUAND MÊME PAR `attentes`.**
+Ethan, 06/09 : « un camp ou avant poste rasé = un autre pop direct ».
+`detruireSatellite` pousse `tickDu: etat.horloge.nbTicks` au lieu de
+`+ TICKS_APPARITION` — l'attente est ÉCHUE, et `resoudreSatellites`, seul endroit
+qui fasse paraître un satellite, la sert au tick suivant. Fabriquer le remplaçant
+sur place aurait ouvert un second chemin de création.
+⚠ **ET `TICKS_APPARITION` NE BOUGE PAS D'UN TICK.** Il sert à
+`planifierSatellites` : le mettre à zéro ferait paraître les trois satellites
+d'une base neuve à l'instant où le joueur fonde. `SAT-R T3` est le test qui
+attrape un lot parti par là. La relève NATURELLE garde ses cinq minutes aussi —
+« rasé » désigne une destruction, pas une expiration.
+⚠⚠ **« AILLEURS » SE FAIT PAR RETRAIT AVANT LE TIRAGE, ET IL RÉEMPLOIE `prises`,
+LE MÉCANISME QUI EXISTAIT DÉJÀ** — l'ensemble des cases des satellites présents,
+à côté des filtres « jamais sur une base de l'Ouvrage » et « ni sur un POI ». Une
+seconde façon d'exclure une case aurait été la seconde vérité que §4 interdit.
+⚠⚠ **LA PRÉMISSE DU §4 DU BRIEF EST FAUSSE, ET C'EST MESURÉ.** Il annonce qu'un
+re-tirage en boucle ferait « diverger deux parties identiques dès le premier
+remplacement », le nombre de tirages consommés dépendant du résultat. **Mesuré :
+un `entier(rng, 0, 7)` inconditionnel glissé avant le tirage laisse la suite
+ENTIÈREMENT VERTE, 29 pass / 0 fail.** Deux exécutions du MÊME code sur la MÊME
+graine ne peuvent pas diverger d'un nombre de tirages — elles le consomment
+toutes les deux.
+⚠⚠ **LE VRAI MOTIF EST LA TERMINAISON, ET LUI SE MESURE.** Écrit exactement comme
+le brief le décrit — pas de retrait, un `while` qui retire — le code **ne termine
+pas** : sur un anneau dont la seule case libre EST la case exclue, `libres` n'a
+qu'un élément et la boucle tourne pour toujours. **Timeout à 90 s sur
+`test/satellites.test.js`.** Le retrait, lui, dégrade proprement en attente
+reportée.
+⚠⚠ **ET `SAT-R T7` NE GARDAIT PAS CE QUE LE BRIEF LUI PRÊTAIT — SON COMMENTAIRE
+EST RÉÉCRIT.** Ce qu'il garde pour de bon est une source d'aléa qui ne vient PAS
+de la graine : mesuré, un `Math.random()` dans le choix de la case fait tomber ce
+test et les deux gardes d'équivalence des chemins d'avancement, et rien d'autre.
+⚠⚠ **`SAVE_VERSION` PASSE À 27, ET C'EST UN ÉCART AU BRIEF, DÉCLARÉ ET MESURÉ.**
+Il pose « rien n'est ajouté à l'état » en demandant de le vérifier plutôt que de
+le croire : vérifié, **quelque chose entre**. L'exclusion voyage sur l'ATTENTE,
+qui est sérialisée, et elle DOIT y voyager — `executerRaid` détruit le satellite,
+puis `ui/raid.js` appelle `apresGeste()`, qui SAUVEGARDE, et le tick qui sert
+l'attente vient après. Une exclusion gardée en mémoire seule serait perdue
+exactement dans le cas courant : le joueur rase un camp et ferme le jeu.
+**`SAT-R T12` le mesure de bout en bout, sérialisation comprise.**
+⚠ **LA MIGRATION 26 → 27 NE CALCULE RIEN, ET ELLE NE PEUT RIEN CALCULER.** Une
+v26 ne sait pas quel satellite a été rasé ni où. « Absent » vaut « pas
+d'exclusion », ce qui est exactement juste pour une attente programmée sous
+l'ancienne règle. Ce qu'elle fait, et c'est tout : RETIRER une valeur héritée
+malformée — même forme que la v25 → v26.
+⚠ **ET LE DÉLAI DES ATTENTES EXISTANTES N'EST PAS RAMENÉ À ZÉRO** : une v26 peut
+porter un remplacement programmé à cinq minutes, et l'avancer ferait paraître au
+chargement un camp que la partie attendait encore.
+⚠⚠ **LA SATURATION NE FAIT PAS CÉDER L'EXCLUSION — CHOIX ÉCRIT, ET LE CAS N'EST
+PAS ATTEIGNABLE.** Un anneau plein sauf la case rasée ne fait pas reparaître le
+remplaçant dessus : l'attente est reportée AVEC son exclusion, et repart dès
+qu'une place se libère — c'est le mécanisme que `reportees` porte déjà. **Mesuré :
+l'anneau du camp fait 12 cases, et il est bloqué à 0 sur 12 au départ sur 300
+graines ; balayé sur toute la carte et 20 graines, il ne reste jamais moins de 7
+cases libres**, quand la saturation en demanderait 3 ou moins. La garde est
+écrite quand même.
+⚠ **L'ANNEAU DE L'AVANT-POSTE FAIT 72 CASES**, six fois celui du camp : la
+question ne se pose pas de ce côté-là.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE TREIZE COUPLES SUR 322, ET PAS UN DE PLUS.**
+Deux champs seulement — `satellites` et `prochaineInstanceSatellite` — à partir
+de la **phase 7**, le premier raid ; les six premières phases sont identiques AU
+BIT. **Les vingt autres champs ne bougent pas**, `economie`, `disposition`,
+`garnison`, `armee`, `sitesEntames`, `rapports` et `recherche` compris — et
+`satellitesDetruits` non plus : on détruit autant, on remplace plus vite.
+⚠⚠ **ET LES CINQUANTE EMPREINTES DE RAPPORT NE BOUGENT PAS, NI AUCUN DES HUIT
+SCALAIRES** — gestes, gestes d'armement, taille de la sauvegarde, cases
+atteignables, déplacement, bases attaquantes, nombre de cibles et cible retenue :
+**0 sur 25 pour chacun**. C'est la mesure qui dit que le lot ne touche que les
+satellites.
+⚠ **ET LA TAILLE DE LA SAUVEGARDE NE BOUGE PAS NON PLUS** : le témoin la prend en
+phase 6, avant le premier raid, donc aucune attente ne porte d'exclusion. Aucun
+terme ne s'ajoute aux quatre de `test/temoins-bases-0.js`.
+⚠⚠ **DIX FALSIFICATIONS, HUIT CHUTES, ET LES DEUX MUETTES ONT CHACUNE PRODUIT UN
+TRAVAIL.** Le re-tirage conforme au brief : il ne mord pas, et c'est la PRÉMISSE
+du brief qui est fausse — mesurée ci-dessus. La garde de forme d'`evite`
+retirée : elle laissait **87 pass / 0 fail**, rien ne mesurait le refus d'une
+exclusion malformée au chargement — `SAT-R T11 bis` a été ÉCRIT après la mesure.
+⚠⚠ **ET `SAT-R T4` A DÛ ÊTRE CORRIGÉ AVANT D'ÊTRE CRU.** Sa première écriture
+montait UNE graine sur un anneau réduit à deux cases : le tirage sans exclusion y
+évitait la case rasée par chance, si bien que retirer l'exclusion laissait ce
+test VERT. Il balaie vingt graines désormais — la probabilité qu'aucune ne
+discrimine vaut 2⁻²⁰ — et la falsification mord.
+⚠ **QUATORZE TESTS ENTRENT — `SAT-R T1` à `T12`, plus `T4 bis` et `T11 bis`, dans
+`test/satellites.test.js` — ET LE COMPTE PASSE DE 1 201 À 1 215.** **Aucune
+assertion n'a été retirée ni assouplie** ; **deux gardes changent de porteur et
+une se RESSERRE** — le `SAVE_VERSION === 26` de `RETOUR-D T18` devient `=== 27`
+sous `SAT-R T11`, et ce qui le remplace là-bas est plus fort qu'un nombre : une
+v25 au `retour` MALFORMÉ doit ressortir à `null`, ce que seul ce maillon-là fait.
+⚠ **UN MONTAGE A ÉTÉ RÉANCRÉ EN ÉCRIVANT LES DEUX RÈGLES** — « un camp détruit
+revient » assertait « rattraper `TICKS_APPARITION - 1` laisse 2 présents » ; c'est
+UN tick qui suffit désormais, et le test le dit dans les deux sens.
+⚠⚠ **UNE COURSE DANS LA SUITE A ÉTÉ TROUVÉE EN MESURANT, ET CORRIGÉE HORS BRIEF.**
+`npm run check` virait au rouge sans qu'une ligne ait changé, puis vert à
+l'exécution suivante : **`banc.test.js` T10 relance `tools/build.js`, donc écrit
+dans `dist/index.html` — que `chantier.test.js` et `sprite.test.js` LISENT** —, et
+`node --test` exécute les fichiers en PARALLÈLE. **Mesuré : une exécution sur
+quatre.** Le défaut est ANTÉRIEUR au lot et hors du périmètre des quatre briefs ;
+corrigé quand même parce qu'il rend fausse la seule chose que ces rapports
+affirment. `FZ_SORTIE` déroute la destination du build, **exactement comme
+`FZ_SPRITES` déroute celle des outils d'art** — « un contrôle qui écrit là où il
+compare est un piège ». ⚠ La SOURCE n'est pas déroutable, et T10 mesure le même
+build sur les mêmes sources : seul l'endroit du fichier bouge.
+⚠ **ET LA GARDE QUI ENTRE EST DÉTERMINISTE LÀ OÙ LA COURSE NE L'EST PAS** : T10
+relève la date de `dist/index.html` avant et après et exige qu'elle n'ait pas
+bougé. Remettre la destination dans `dist/` la fait tomber **à tous les coups**.
+Trois exécutions complètes après correction : **1 215 · 1 215 · 1 215**.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche pas `art/`, et `tools/build.js` n'est pas un outil de la chaîne
+graphique — il ne produit ni sprite ni son.
+⚠ **LA BASE ANNONCÉE PAR LE BRIEF ÉTAIT EXACTE, PREMIÈRE FOIS DEPUIS SIX LOTS** —
+1 201 pass, 8 000 552 octets, 0.99.8 · build 109, mesurés au départ.
+
+**Auparavant, après le lot COLONNE :**
 `npm test` → **1201 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 000 552 octets**, 0 référence externe. Coût **+3 236 octets, ENTIÈREMENT DU
 JAVASCRIPT**, mesuré poste par poste contre un livrable rebâti depuis
@@ -685,6 +1131,10 @@ soit fonction du seul Complexe**. Le haut de la table donne le pire cas, qui est
 aussi le levier — c'est la mesure que ce fichier-ci porte déjà, « pièce de niveau
 50 sous un Complexe 10 → 45,3 h ». Relevé à l'écran : **106,7 h → 97,0 h** en
 montant le Complexe du niveau 1 au 2.
+⚠⚠ **CE PARAGRAPHE EST RENVERSÉ DEPUIS LE 06/09, LOT FICHE-JUSTE.** Le
+raisonnement reste juste ; Ethan l'a écarté — « ou juste dire 1h pour un niveau
+similaire » — et la fiche annonce désormais une pièce de MÊME niveau que le
+Complexe. Ne pas le réappliquer : voir le §0 de ce fichier.
 ⚠ **ET C'EST `NIVEAU.plafond`, PAS `GEOGRAPHIE.niveauPlafond`.** Les deux valent
 50, et ce n'est pas une coquetterie : `ticksDeRetour` **LÈVE** quand
 `1 + dépassement` sort de `NIVEAU`, si bien que prendre l'autre plafond ferait

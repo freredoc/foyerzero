@@ -15,7 +15,7 @@ import {
   TICKS_APPARITION,
   PREMIERE_INSTANCE, ANNEAUX,
 } from './satellites.js';
-import { positionDepartJoueur } from './carte.js';
+import { positionDepartJoueur, estSurLaCarte } from './carte.js';
 import { releverLesPoisAcquis, majorationsDeProduction, problemesDesPoisAcquis } from './poi.js';
 import {
   creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise,
@@ -65,7 +65,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 26;
+export const SAVE_VERSION = 27;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -2854,6 +2854,39 @@ const MIGRATIONS = {
       for (const piece of base.garnison ?? []) {
         if (piece.retour === undefined) continue;
         if (problemesDuRetour(piece.retour).length > 0) piece.retour = null;
+      }
+    }
+  },
+
+  /**
+   * v26 → v27 : une attente de satellite peut porter la case que son
+   * remplaçant doit ÉVITER — lot SATELLITES-RESPAWN, 06/09/2026.
+   *
+   * ⚠⚠ ELLE NE CALCULE RIEN, ET ELLE NE PEUT RIEN CALCULER. Une v26 ne sait pas
+   * quel satellite a été rasé ni où : le champ est né avec ce lot. « Absent »
+   * vaut « pas d'exclusion », ce qui est exactement juste pour une attente
+   * programmée sous l'ancienne règle — elle avait le droit de reparaître
+   * n'importe où, et lui inventer une case à éviter serait inventer un fait.
+   *
+   * ⚠ CE QU'ELLE FAIT, ET C'EST TOUT : refuser une valeur héritée malformée en
+   * la retirant. Un champ de ce nom ne peut pas exister dans une v26, mais un
+   * état fabriqué à la main en montage, lui, le peut — même motif et même forme
+   * que la v25 → v26 juste au-dessus.
+   *
+   * ⚠ ET LE DÉLAI DES ATTENTES EXISTANTES NE BOUGE PAS. Une v26 peut porter une
+   * attente de remplacement programmée à cinq minutes ; la ramener à zéro
+   * ferait paraître au chargement un camp que la partie attendait encore, et le
+   * joueur verrait un site apparaître pour avoir rouvert le jeu.
+   *
+   * @param {object} s
+   */
+  26: (s) => {
+    s.version = 27;
+    for (const base of s.bases ?? []) {
+      for (const attente of base.satellites?.attentes ?? []) {
+        if (attente.evite === undefined) continue;
+        if (attente.evite === null) { delete attente.evite; continue; }
+        if (!estSurLaCarte(attente.evite.rangee, attente.evite.colonne)) delete attente.evite;
       }
     }
   },

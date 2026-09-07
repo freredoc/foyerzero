@@ -113,6 +113,31 @@ export const TYPES_SITE = {
   },
 };
 
+/**
+ * Ce que `indexeSur` veut dire, en français, pour le joueur.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QU'ETHAN A DEMANDÉ « POURQUOI » — 06/09/2026. Il a vu un
+ * avant-poste de niveau 1 collé à une base de niveau 7,6, et la réponse est que
+ * les deux ne se calculent pas de la même façon : un CAMP suit le niveau des
+ * bâtiments du joueur — c'est le filet de sécurité, il doit rester à sa portée —
+ * quand un AVANT-POSTE suit l'endroit de la carte. Il a choisi de ne pas changer
+ * la règle mais de l'AFFICHER.
+ *
+ * ⚠ LES CLÉS SONT LES VALEURS D'`indexeSur`, ET UN TEST EXIGE LA COUVERTURE
+ * EXACTE dans les deux sens. Un troisième type de satellite indexé autrement
+ * ferait tomber la garde et obligerait à écrire sa phrase, plutôt qu'à afficher
+ * un vide.
+ *
+ * ⚠ ET LE LIBELLÉ VIT ICI, À CÔTÉ DU CHAMP QU'IL EXPLIQUE, jamais en dur dans
+ * `src/ui/monde.js` : c'est du calibrage au sens de §4 de `CLAUDE.md`, et
+ * l'écran qui le recopierait serait le premier à mentir le jour où la règle
+ * bougerait.
+ */
+export const ORIGINE_DU_NIVEAU = {
+  niveauDuJoueur: 'le niveau de vos bâtiments',
+  rayon: 'la position sur la carte',
+};
+
 // --- composition des garnisons (IA-DEFENSE) ----------------------------------
 // Ce qui garnit un camp, un avant-poste ou une base. Unités mobiles et
 // structures dans un seul pool : c'est ce que compte DENSITE.defenses.

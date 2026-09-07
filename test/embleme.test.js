@@ -16,7 +16,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decoderRgba } from './png-rgba.js';
@@ -43,13 +43,36 @@ const FAMILLES = ['site_base_j', 'site_base_o', 'site_quartz', 'site_scorie'];
 const ETATS = ['', '_fumee', '_feu'];
 const NIVEAUX = Array.from({ length: 9 }, (_, i) => `n${i + 1}`);
 
-/** La boîte de matière d'un sprite : alpha ≥ 128, comme partout au dépôt. */
-function matiere(nom) {
+// ⚠⚠ LE SEUIL D'ENCRE SE LIT DANS L'OUTIL, IL NE SE RETAPE PAS — lot
+// EMBLÈME-CENTRÉ, 06/09. `ecrire` de `tools/final128.py` coupe l'alpha sous
+// `SEUIL_ALPHA` : tout ce qui survit à cette coupe est DESSINÉ à l'écran, et
+// c'est donc là qu'est la frontière de l'encre. Un 8 recopié ici serait la
+// seconde vérité que §4 de `CLAUDE.md` interdit.
+const SEUIL_ENCRE = (() => {
+  const src = readFileSync(join(RACINE, 'tools', 'final128.py'), 'utf8');
+  const m = src.match(/^SEUIL_ALPHA\s*=\s*(\d+)/m);
+  assert.ok(m, 'tools/final128.py ne porte plus SEUIL_ALPHA');
+  return Number(m[1]);
+})();
+
+/**
+ * La boîte d'un sprite au-dessus d'un seuil d'alpha.
+ *
+ * ⚠⚠ LE DÉFAUT RESTE 128, « comme partout au dépôt », ET CE N'EST PAS LE SEUIL
+ * DE L'ENCRE. Un pixel à alpha 100 est DESSINÉ ; 128 est une convention de
+ * mesure, pas une propriété du produit. La distinction ne coûtait rien tant que
+ * rien ne déplaçait le contenu — le lot EMBLÈME-CENTRÉ l'a rendue visible :
+ * décaler un sprite change la PHASE de la réduction LANCZOS, donc l'alpha de ses
+ * colonnes de bord, donc la boîte mesurée à 128, **sans qu'un pixel de dessin
+ * n'ait bougé**. Mesuré : `site_base_j_n7_feu` passe de 86 à 84 px de large à
+ * 128, et reste à **86 px des deux côtés** au seuil de l'encre.
+ */
+function matiere(nom, seuil = 128) {
   const img = decoderRgba(join(SPRITES, `${nom}.png`));
   let xMin = Infinity; let xMax = -1; let yMin = Infinity; let yMax = -1; let px = 0;
   for (let y = 0; y < img.hauteur; y += 1) {
     for (let x = 0; x < img.largeur; x += 1) {
-      if (img.pixels[(y * img.largeur + x) * 4 + 3] < 128) continue;
+      if (img.pixels[(y * img.largeur + x) * 4 + 3] < seuil) continue;
       px += 1;
       if (x < xMin) xMin = x;
       if (x > xMax) xMax = x;
@@ -60,6 +83,8 @@ function matiere(nom) {
   assert.ok(px > 0, `${nom} : sprite vide`);
   return {
     l: xMax - xMin + 1, h: yMax - yMin + 1, bas: yMax, px, img,
+    haut: yMin, gauche: xMin, droite: img.largeur - 1 - xMax,
+    dessous: img.hauteur - 1 - yMax, cote: img.hauteur,
   };
 }
 
@@ -237,10 +262,19 @@ test('EMB T5 — un palier fait la MÊME largeur dans les trois états', () => {
   // et une chaîne qui normaliserait par PLANCHE passerait T3 en tombant ici.
   // C'est ce que la référence commune à la famille entière — saine, fumée, feu —
   // achète : sans elle, la base grandirait en prenant feu.
+  //
+  // ⚠⚠ ET IL MESURE L'ENCRE DEPUIS LE 06/09, PLUS LA CONVENTION DES 128 — LOT
+  // EMBLÈME-CENTRÉ, ET C'EST UN RESSERREMENT. Recentrer les emblèmes ne change
+  // pas une largeur de DESSIN : mesuré au seuil de l'encre, les neuf paliers de
+  // `site_base_j` rendent EXACTEMENT les mêmes largeurs avant et après le lot.
+  // À 128, une seule cellule bouge — `site_base_j_n7_feu`, 86 → 84 — parce que
+  // le décalage vertical change la phase de la réduction LANCZOS et fait tomber
+  // deux colonnes de bord sous le seuil. **Le seuil de 4 n'a pas été relevé** :
+  // c'est la mesure qui a cessé de compter des pixels que l'écran dessine.
   let pire = 0;
   for (const famille of FAMILLES) {
     for (const n of NIVEAUX) {
-      const ls = ETATS.map((e) => matiere(`${famille}_${n}${e}`).l);
+      const ls = ETATS.map((e) => matiere(`${famille}_${n}${e}`, SEUIL_ENCRE).l);
       const ecart = Math.max(...ls) - Math.min(...ls);
       pire = Math.max(pire, ecart);
       assert.ok(ecart <= 4, `${famille}_${n} : largeurs ${ls}, écart ${ecart} px`);
@@ -260,7 +294,7 @@ test('EMB T5 — un palier fait la MÊME largeur dans les trois états', () => {
     for (const n of NIVEAUX) {
       const cs = ETATS.map((e) => MESURES[famille].cellules[`${famille}_${n}${e}`]);
       const src = cs.map((c) => c.l / c.cotePlanche);
-      const spr = ETATS.map((e) => matiere(`${famille}_${n}${e}`).l);
+      const spr = ETATS.map((e) => matiere(`${famille}_${n}${e}`, SEUIL_ENCRE).l);
       for (let i = 1; i < 3; i += 1) {
         const attendu = spr[0] * (src[i] / src[0]);
         assert.ok(Math.abs(spr[i] - attendu) <= 2,
@@ -271,13 +305,132 @@ test('EMB T5 — un palier fait la MÊME largeur dans les trois états', () => {
   }
 });
 
-test('EMB T6 — les 108 emblèmes reposent sur UNE ligne de sol', () => {
-  // ⚠ SANS L'ANCRAGE PAR LE BAS, LES PETITS FLOTTENT. Le centrage d'avant posait
-  // la matière de `site_base_j` entre les lignes 104 et 122 selon le palier —
-  // mesuré —, si bien que les bâtiments ne reposaient pas sur le même sol.
-  const bas = new Set(nomsAttendus.map((nom) => matiere(nom).bas));
-  assert.equal(bas.size, 1,
-    `lignes de sol distinctes : ${[...bas].sort((a, b) => a - b).join(', ')}`);
+test('EMB-C T1 — les 108 emblèmes sont CENTRÉS, et ce test RETOURNE EMB T6', () => {
+  // ⚠⚠ CE TEST EXIGEAIT L'INVERSE JUSQU'AU 06/09, ET IL FAUT LE DIRE DANS CE
+  // SENS-LÀ. Il s'appelait « les 108 emblèmes reposent sur UNE ligne de sol » et
+  // assertait `new Set(bas).size === 1` : c'est la propriété que le lot
+  // EMBLÈMES-ABÎMÉS avait achetée, et qu'Ethan renverse le 06/09 — « le sprite a
+  // dû être fabriqué bizarrement peut-être ? Regarde, il est collé au sud. »
+  // Une ligne de sol commune est juste pour un bâtiment vu de CÔTÉ ; une carte
+  // se regarde de DESSUS, et « reposer sur le sol » y devient « décalé vers le
+  // sud ». **Aucune assertion n'est retirée : c'est la même garde, retournée.**
+  //
+  // ⚠⚠ ET C'EST AU PALIER LE PLUS BAS QUE L'ÉCART ÉTAIT LE PLUS GRAND, donc un
+  // test sur un seul sprite ne verrait rien. Mesuré sur les 216 emblèmes des deux
+  // grilles, écart marge haute − marge basse : **201 sur 216 au-dessus d'un
+  // pixel avant le lot, pire cas +74 px** — `site_scorie_n1` en 128, soit 58 %
+  // de la case ; **zéro après**, 154 à l'écart nul et 62 à un pixel.
+  //
+  // ⚠⚠ ET LE SEUIL EST CELUI DE L'ENCRE, PAS LES 128. `site_base_j_n9` porte un
+  // mât de deux pixels de large qui ressort à **alpha 86 à 95** après la
+  // réduction : mesuré à 128 il DISPARAÎT, et la marge haute paraît alors valoir
+  // 19 px pour 11 en bas. Le mât est dessiné — `ecrire` ne coupe qu'à
+  // `SEUIL_ALPHA` —, donc c'est la mesure à 128 qui serait fausse, pas le
+  // sprite. Sans cette ligne, ce test tomberait sur une chaîne juste.
+  let pire = 0;
+  for (const nom of nomsAttendus) {
+    const m = matiere(nom, SEUIL_ENCRE);
+    const ecart = m.haut - m.dessous;
+    pire = Math.max(pire, Math.abs(ecart));
+    assert.ok(Math.abs(ecart) <= 1,
+      `${nom} : marge haute ${m.haut}, marge basse ${m.dessous} — écart ${ecart} px`);
+  }
+  // ⚠ ET LE BALAYAGE VOIT VRAIMENT QUELQUE CHOSE : un pixel d'écart EXISTE, il
+  // vient de la parité d'une hauteur d'encre impaire. Un `pire` nul dirait qu'on
+  // mesure autre chose que des entiers.
+  assert.equal(pire, 1, `écart maximal ${pire} px : ce n'est plus la parité d'un pixel`);
+
+  // ⚠⚠ ET L'ANCIENNE PROPRIÉTÉ EST FALSIFIÉE DE FACE : les lignes de sol ne
+  // coïncident PLUS, et c'est ce qu'on veut. Sans cette assertion, un lot qui
+  // remettrait `ancrage='bas'` ferait tomber la boucle ci-dessus sans qu'on
+  // sache que c'est l'ancien comportement qui est revenu.
+  const sols = new Set(nomsAttendus.map((nom) => matiere(nom, SEUIL_ENCRE).bas));
+  assert.ok(sols.size > 1,
+    'les 108 emblèmes reposent encore sur une ligne de sol commune : `ancrage` est revenu à « bas »');
+});
+
+test('EMB-C T2 — les rapports de taille survivent au recentrage', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UN LOT QUI AURAIT RETIRÉ `cote_ref` EN MÊME
+  // TEMPS QUE L'ANCRAGE. Les deux paramètres de `recadrer` sont indépendants —
+  // `cote_ref` décide de l'ÉCHELLE, `ancrage` de la POSITION — et l'échelle est
+  // l'acquis du lot EMBLÈMES-ABÎMÉS : une base de niveau 1 doit rester plus
+  // petite qu'une base de niveau 9. Sans référence commune, chaque cellule est
+  // normalisée séparément et les neuf paliers ressortent à la même taille.
+  for (const famille of FAMILLES) {
+    const h = NIVEAUX.map((n) => matiere(`${famille}_${n}`, SEUIL_ENCRE).h);
+    assert.ok(h[8] > h[0],
+      `${famille} : le palier 9 fait ${h[8]} px de haut pour ${h[0]} au palier 1`);
+    // ⚠ ET LE RAPPORT EST FRANC, PAS D'UN PIXEL. Mesuré, il vaut 0,45 à 0,55
+    // selon la famille ; un `>` seul passerait sur une chaîne qui aurait perdu
+    // l'échelle et ne garderait qu'un accident d'arrondi.
+    assert.ok(h[0] / h[8] < 0.7,
+      `${famille} : rapport de hauteur ${(h[0] / h[8]).toFixed(2)} — l'échelle est perdue`);
+  }
+});
+
+test('EMB-C T3 — le centrage HORIZONTAL n\'a pas bougé', () => {
+  // ⚠ NON-RÉGRESSION. Il l'était déjà — `recadrer` pose `box//2 - cx` quel que
+  // soit l'ancrage, qui ne décide que de la VERTICALE. Ce test dit qu'un lot qui
+  // aurait touché à l'horizontale en passant s'en apercevrait.
+  for (const nom of nomsAttendus) {
+    const m = matiere(nom, SEUIL_ENCRE);
+    assert.ok(Math.abs(m.gauche - m.droite) <= 1,
+      `${nom} : marge gauche ${m.gauche}, droite ${m.droite}`);
+  }
+});
+
+test('EMB-C T4 — le compte de sprites et les noms de l\'atlas sont intacts', () => {
+  // ⚠⚠ LE LOT NE FAIT NI ENTRER NI SORTIR UN SPRITE : il en réécrit les pixels.
+  // Un compte qui bougerait voudrait dire qu'une cellule a été perdue ou
+  // dédoublée en route, et le livrable le paierait en `data:`.
+  for (const grille of ['128', '64']) {
+    const dossier = join(RACINE, 'art', 'sprites', 'carte', grille);
+    const pngs = readdirSync(dossier).filter((f) => f.endsWith('.png'));
+    assert.equal(pngs.length, 117,
+      `carte/${grille} : ${pngs.length} sprites — 108 emblèmes, 7 POI, 2 grosses bases`);
+  }
+  assert.equal(ATLAS.carte.noms.length, 115,
+    'l\'atlas de carte ne coud plus 115 cellules');
+  for (const nom of nomsAttendus) {
+    assert.ok(ATLAS.carte.noms.includes(nom), `${nom} a quitté l'atlas`);
+  }
+  // ⚠ ET LES DEUX GROSSES BASES N'Y SONT PAS, ce qui n'est pas un oubli : elles
+  // font 2 × 2 et 3 × 3 cases, et `coudre` n'accepte que des cellules carrées à
+  // la taille de case. Elles voyagent par leur propre marqueur.
+  for (const nom of ['base_o_2x2', 'base_o_3x3']) {
+    assert.ok(!ATLAS.carte.noms.includes(nom), `${nom} est entré dans l'atlas`);
+  }
+});
+
+test('EMB-C T5 — `recadrer` sait toujours ancrer en bas', () => {
+  // ⚠⚠ LA PRIMITIVE N'EST PAS RETIRÉE, ET CE TEST LE DIT. Le mode `'bas'` reste
+  // juste pour ce qu'il servirait à un bâtiment vu de côté ; ce lot change
+  // l'APPELANT, pas la primitive. **Il n'a plus aucun appelant aujourd'hui**, et
+  // c'est exactement pourquoi il lui faut une garde : du code que rien
+  // n'exécute pourrit sans que rien ne le dise.
+  const source = readFileSync(join(RACINE, 'tools', 'final128.py'), 'utf8');
+  assert.match(source, /def recadrer\(cell,cible,N,cote_ref=None,ancrage='centre'\)/,
+    'la signature de `recadrer` a changé');
+  assert.match(source, /if ancrage=='bas':\s*\n\s*oy=box\/\/2\+reference\/\/2-int\(ys\.max\(\)\)/,
+    'le mode « bas » a disparu de `recadrer`');
+  assert.match(source, /elif ancrage=='centre':\s*\n\s*oy=box\/\/2-cy/,
+    'le mode « centre » a disparu de `recadrer`');
+  assert.match(source, /raise ValueError\(f'recadrer : ancrage inconnu/,
+    'un ancrage inconnu ne lève plus');
+
+  // ⚠⚠ ET L'APPELANT EST PASSÉ À « centre », CE QUI EST L'AUTRE MOITIÉ.
+  // Falsifiable dans les deux sens : un `'bas'` remis ici fait tomber ce test ET
+  // `EMB-C T1`, et le seul appel du dépôt est celui-là.
+  const outil = readFileSync(join(RACINE, 'tools', 'emblemes.py'), 'utf8');
+  const sansCommentaires = outil.replace(/^\s*#.*$/gm, '');
+  const appels = [...sansCommentaires.matchAll(/ancrage='(\w+)'/g)].map((m) => m[1]);
+  assert.deepEqual(appels, ['centre'],
+    `tools/emblemes.py passe ${JSON.stringify(appels)} : un seul appel, en « centre », est attendu`);
+  // ⚠ ET `cote_ref` EST TOUJOURS PASSÉ AU MÊME APPEL : les deux paramètres sont
+  // indépendants, et un lot qui aurait retiré l'échelle avec l'ancrage tomberait
+  // ici avant même `EMB-C T2`.
+  assert.match(sansCommentaires, /cote_ref=reference \* cote_planche, ancrage='centre'/,
+    'l\'échelle commune a quitté l\'appel');
 });
 
 test('EMB T7 — les trous se comptent, et les sains n\'en ont AUCUN', () => {

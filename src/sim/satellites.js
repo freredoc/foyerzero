@@ -277,11 +277,45 @@ export function planifierSatellites(etat, base = null) {
 /**
  * Un satellite détruit réapparaît, sans intervention du joueur.
  *
- * ⚠ LE DÉLAI ET LA CASE DU RESPAWN NE SONT PAS ARBITRÉS. Ethan a dit « respawn
- * automatique », sans dire au bout de combien de temps ni où. Retenu, et
- * SIGNALÉ comme tel : le même délai de cinq minutes, et un nouveau tirage dans
- * l'anneau — c'est le même mécanisme rejoué, ce qui est la lecture la plus
- * simple. Les deux tiennent en une ligne chacun si la réponse est autre.
+ * ⚠⚠ LES DEUX POINTS QUE CE COMMENTAIRE ANNONÇAIT « NON ARBITRÉS » LE SONT
+ * DEPUIS LE 06/09/2026. Il disait : « le même délai de cinq minutes, et un
+ * nouveau tirage dans l'anneau — c'est le même mécanisme rejoué, ce qui est la
+ * lecture la plus simple. Les deux tiennent en une ligne chacun si la réponse
+ * est autre. » Ethan : « un camp ou avant poste rasé = un autre pop direct »,
+ * puis, sur la case du remplaçant, « ailleurs ». Les deux ont tenu en une ligne
+ * chacun, et les voici.
+ *
+ * ⚠⚠ « DIRECT » PASSE QUAND MÊME PAR `attentes`, ET C'EST CE QUI TIENT LE
+ * MODULE. `resoudreSatellites` est le SEUL endroit qui fasse paraître un
+ * satellite, et son en-tête décrit l'ordre dans lequel il relève puis fait
+ * paraître ; fabriquer le remplaçant ici ouvrirait un second chemin de création,
+ * et les deux divergeraient au premier réglage. L'attente est donc poussée avec
+ * `tickDu = maintenant`, donc ÉCHUE, et le chemin normal la sert au tick
+ * suivant. C'est « direct » au sens du joueur, et c'est une ligne.
+ *
+ * ⚠ `TICKS_APPARITION` NE BOUGE PAS. Il sert aussi à `planifierSatellites`, qui
+ * programme les trois apparitions d'une base neuve : le mettre à zéro ferait
+ * paraître les trois à l'instant où le joueur fonde, ce que personne n'a
+ * demandé. Ethan n'a parlé que du REMPLACEMENT d'un site rasé.
+ *
+ * ⚠ LA RELÈVE NATURELLE NE BOUGE PAS NON PLUS. Un satellite dont la durée de vie
+ * s'achève repart à `quand + TICKS_APPARITION`, dans `resoudreSatellitesDeLaBase`
+ * : « rasé » désigne une DESTRUCTION par le joueur, pas une expiration, et le
+ * compteur `satellitesDetruits` fait déjà exactement ce partage.
+ *
+ * ⚠⚠ ET LA CASE RASÉE EST EXCLUE POUR CE REMPLACEMENT-LÀ SEULEMENT — LECTURE
+ * PRISE, RÉVERSIBLE D'UNE LIGNE. Elle n'est pas retenue comme « brûlée » dans
+ * l'état : un satellite ULTÉRIEUR pourra y revenir. La lecture inverse — une
+ * case rasée définitivement interdite — demanderait une liste de plus dans la
+ * sauvegarde, et Ethan n'a pas demandé ça.
+ *
+ * ⚠⚠ ELLE VOYAGE SUR L'ATTENTE, ET IL LE FAUT — MESURÉ SUR LA CHAÎNE D'APPEL.
+ * `executerRaid` détruit le satellite, puis `ui/raid.js` appelle `apresGeste()`,
+ * qui SAUVEGARDE ; le tick qui sert l'attente vient après. Une exclusion gardée
+ * en mémoire seule serait donc perdue exactement dans le cas courant — le joueur
+ * rase un camp et ferme le jeu —, et le remplaçant reparaîtrait sur la case
+ * rasée sans que rien ne le dise. C'est pour ce champ-là, et pour lui seul, que
+ * `SAVE_VERSION` passe à 27.
  *
  * @param {object} etat modifié en place
  * @param {number} index dans `satellites.presents`
@@ -306,7 +340,8 @@ export function detruireSatellite(etat, index, base = null) {
   etat.satellitesDetruits[present.type] = (etat.satellitesDetruits[present.type] ?? 0) + 1;
   laBase.satellites.attentes.push({
     type: present.type,
-    tickDu: etat.horloge.nbTicks + TICKS_APPARITION,
+    tickDu: etat.horloge.nbTicks,
+    evite: { rangee: present.rangee, colonne: present.colonne },
   });
   return etat;
 }
@@ -415,10 +450,23 @@ function resoudreSatellitesDeLaBase(etat, laBase) {
     const enAttente = [];
     for (const attente of laBase.satellites.attentes) {
       if (attente.tickDu > quand) { enAttente.push(attente); continue; }
-      const pose = poserUnSatellite(etat, attente.type, quand, laBase);
+      // ⚠ L'ATTENTE PORTE SON EXCLUSION, ET ELLE LA GARDE SI ELLE EST REPORTÉE.
+      // `reportees` pousse l'objet ENTIER : une attente qu'un anneau saturé
+      // renvoie au tick suivant se souvient encore de la case qu'elle doit
+      // éviter. Sans ça, « ailleurs » ne tiendrait que le premier tick.
+      const pose = poserUnSatellite(etat, attente.type, quand, laBase, attente.evite ?? null);
       // Aucune case libre dans l'anneau : on ne perd pas l'attente, on la met
       // de côté. Le cas est possible — un anneau saturé de bases de l'Ouvrage —
       // et perdre l'attente ferait disparaître un camp en silence.
+      //
+      // ⚠⚠ ET L'EXCLUSION NE CÈDE PAS DEVANT LA SATURATION — CHOIX ÉCRIT, lot
+      // SATELLITES-RESPAWN. Un anneau dont toutes les cases sont prises SAUF
+      // celle qu'on vient de raser ne fait pas reparaître le remplaçant dessus :
+      // l'attente est reportée, avec son exclusion, et repart dès qu'une place
+      // se libère. « Ailleurs » est une règle, pas une préférence, et céder ici
+      // la briserait dans le seul cas où le joueur la verrait. Le prix est un
+      // camp qui tarde ; le cas ne tire d'ailleurs pas — voir le rapport, qui
+      // mesure les deux anneaux.
       if (pose === null) reportees.push(attente);
       else parus += 1;
     }
@@ -466,15 +514,33 @@ export function prolongerApresAttaque(etat, identite, tickDuRaid) {
 
 /**
  * Tire une case libre de l'anneau et y pose un satellite.
+ *
+ * ⚠⚠ `evite` SE RETIRE DE L'ENSEMBLE DES CANDIDATES AVANT LE TIRAGE, JAMAIS PAR
+ * UN RE-TIRAGE — lot SATELLITES-RESPAWN, 06/09/2026, et c'est la seule forme qui
+ * garde le déterminisme. « Tire, et si c'est la case exclue recommence » ferait
+ * dépendre le NOMBRE de tirages consommés du résultat : deux parties de même
+ * graine divergeraient dès le premier remplacement, et le décalage se
+ * propagerait à tout ce que ce flux tire ensuite. Ici un seul `entier` est
+ * consommé quoi qu'il arrive.
+ *
+ * ⚠ ET ELLE PASSE PAR `prises`, LE MÉCANISME QUI EXISTAIT DÉJÀ — celui des cases
+ * des satellites présents. Une seconde façon d'exclure une case aurait été la
+ * seconde vérité que §4 de `CLAUDE.md` interdit.
+ *
+ * @param {{rangee: number, colonne: number}|null} evite une case à ne pas tirer
  * @returns {object|null} le satellite posé, ou null si l'anneau est plein
  */
-function poserUnSatellite(etat, type, tickDeLaPose, laBase) {
+function poserUnSatellite(etat, type, tickDeLaPose, laBase, evite = null) {
   const anneau = ANNEAUX[type];
   if (anneau === undefined) throw new Error(`satellites : type inconnu « ${type} »`);
   const instance = etat.prochaineInstanceSatellite;
   const rng = creerRng(graineDeLApparition(etat.graine, instance));
 
   const prises = new Set(laBase.satellites.presents.map((s) => `${s.rangee}:${s.colonne}`));
+  // ⚠⚠ « AILLEURS » — Ethan, 06/09. La case que le site rasé occupait rejoint les
+  // cases prises, donc elle sort de `libres` AVANT le tirage. Voir l'en-tête :
+  // c'est ce qui fait qu'un seul tirage est consommé quoi qu'il arrive.
+  if (evite !== null && evite !== undefined) prises.add(`${evite.rangee}:${evite.colonne}`);
   const libres = casesDeLAnneau(laBase.position, anneau.min, anneau.max).filter((k) => {
     // ⚠ JAMAIS SUR UNE BASE DE L'OUVRAGE. Elles sont dérivées de la graine, donc
     // elles étaient là AVANT : un camp posé dessus ferait deux sites sur une
@@ -572,6 +638,16 @@ export function problemesDesSatellites(satellites, prochaineInstance) {
     if (ANNEAUX[a.type] === undefined) problemes.push(`type attendu inconnu « ${a.type} »`);
     if (!Number.isInteger(a.tickDu) || a.tickDu < 0) {
       problemes.push(`échéance « ${a.tickDu} » — entier de ticks ≥ 0 attendu`);
+    }
+    // ⚠ « ABSENT » VAUT « PAS D'EXCLUSION », ET ON NE REFUSE QU'UNE VALEUR
+    // PRÉSENTE ET MALFORMÉE — même idiome que `retour` d'une pièce de garnison.
+    // Une attente de peuplement initial n'en porte aucune, et une v26 non plus :
+    // l'exiger rendrait illisible toute sauvegarde d'avant le lot.
+    if (a.evite !== undefined && a.evite !== null) {
+      const e = a.evite;
+      if (typeof e !== 'object' || !estSurLaCarte(e.rangee, e.colonne)) {
+        problemes.push(`case évitée hors carte en (${e?.rangee}, ${e?.colonne})`);
+      }
     }
   }
   return problemes;

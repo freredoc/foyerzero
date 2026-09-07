@@ -3,7 +3,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, mkdtempSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
@@ -473,9 +474,36 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // La garde de tools/build.js sort en erreur sur toute référence externe :
   // un code de sortie 0 est déjà une preuve. On refait le contrôle ici,
   // indépendamment, sur le fichier produit.
-  execFileSync('node', [join(RACINE, 'tools', 'build.js')], { stdio: 'pipe' });
-  const chemin = join(RACINE, 'dist', 'index.html');
+  // ⚠⚠ IL BÂTIT DANS UN FICHIER À LUI, ET C'EST LE REMÈDE À UNE COURSE MESURÉE —
+  // 06/09/2026. Ce test écrivait dans `dist/index.html` pendant que
+  // `chantier.test.js` et `sprite.test.js` le LISAIENT : le lanceur exécute les
+  // fichiers de test en PARALLÈLE, si bien que la suite virait au rouge par
+  // intermittence sur un fichier tronqué, sans qu'aucun code n'ait changé —
+  // mesuré, une exécution sur quatre. `FZ_SORTIE` déroute la destination, comme
+  // `FZ_SPRITES` déroute celle des outils d'art pour le vérificateur.
+  //
+  // ⚠ ET CE QU'ON MESURE NE CHANGE PAS D'UN CARACTÈRE : c'est le MÊME build, sur
+  // les MÊMES sources, et son code de sortie comme son HTML sont ceux qu'il
+  // produirait dans `dist/`. Seul l'endroit où il pose le fichier bouge.
+  const livrable = join(RACINE, 'dist', 'index.html');
+  const empreinteAvant = existsSync(livrable) ? statSync(livrable).mtimeMs : null;
+
+  const chemin = join(mkdtempSync(join(tmpdir(), 'fz-build-')), 'index.html');
+  execFileSync('node', [join(RACINE, 'tools', 'build.js')], {
+    stdio: 'pipe', env: { ...process.env, FZ_SORTIE: chemin },
+  });
   const html = readFileSync(chemin, 'utf8');
+
+  // ⚠ ET VOICI LA GARDE, DÉTERMINISTE LÀ OÙ LA COURSE NE L'EST PAS : le livrable
+  // n'a pas été touché. Remettre la destination dans `dist/` fait tomber cette
+  // ligne à tous les coups, quand la course elle-même ne mordait qu'une fois sur
+  // quatre — et une garde qu'on ne peut pas faire tomber à volonté n'en est pas
+  // une.
+  assert.equal(
+    existsSync(livrable) ? statSync(livrable).mtimeMs : null, empreinteAvant,
+    'le test du build a réécrit dist/index.html — les autres fichiers de test le '
+      + 'LISENT, et le lanceur les exécute en parallèle',
+  );
 
   // ⚠⚠ UNE SEULE URL EST TOLÉRÉE, ET CE N'EST PAS UNE RÉFÉRENCE. L'espace de
   // noms XML du SVG est l'argument obligatoire de `createElementNS` — un
