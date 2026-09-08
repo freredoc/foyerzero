@@ -1677,13 +1677,17 @@ function montageDeRuines() {
   };
 }
 
-test('EFF T11 — un BÂTIMENT laisse une ruine, une structure et une escouade n\'en laissent pas', () => {
+test('EFF T11 — un BÂTIMENT laisse SA planche, une structure et une escouade rien', () => {
   // ⚠⚠ ETHAN, 07/09 : « utilise ruine_j ruine_o », puis « restreins aux bâtiments
   // pour l\'instant ». Les deux planches dormaient dans la famille `batiment` de
   // l\'atlas — DANS le livrable, donc payées en octets, et employées par
-  // personne. Elles travaillent, et sous les bâtiments SEULS : elles ont été
-  // dessinées pour une case de bâtiment, et personne n\'a encore vu ce qu\'elles
-  // donnent sous une tourelle.
+  // personne.
+  //
+  // ⚠⚠ ET LE 08/09 IL A REGARDÉ LE RÉSULTAT : « un bâtiment détruit laisse la
+  // ruine générique du camp au lieu de sa propre planche ». La Souche et le
+  // Nœud laissaient le même tas de gravats. `RESTE_APRES_DESTRUCTION.batiment`
+  // vaut désormais `planche`, et ce test dit CE RÉGLAGE-LÀ, pas l\'ancien — il
+  // rougissait tel qu\'il était écrit, et c\'est ce qui devait arriver.
   const { etat, proj, noms, tombees, souche, merlon, escouade } = montageDeRuines();
 
   // Sans effondrement, rien ne change : c\'est le cas de tous les autres
@@ -1695,12 +1699,14 @@ test('EFF T11 — un BÂTIMENT laisse une ruine, une structure et une escouade n
 
   const apres = noms(listeAffichage(etat, proj, null, 0, null, 0, tombees));
 
-  // ⚠ UNE SEULE RUINE : la Souche. Le Merlon est une STRUCTURE, l\'autre pièce
-  // une escouade, et `RESTE_APRES_DESTRUCTION` les met toutes deux à `rien`.
-  assert.equal(apres.filter((n) => n === 'ruine_o').length, 1,
-    'le compte des ruines ne suit pas la table');
-  assert.equal(apres.filter((n) => n === 'ruine_j').length, 0,
-    'une ruine du JOUEUR sur un site de l\'Ouvrage');
+  // ⚠ UNE SEULE PLANCHE DÉTRUITE : la Souche. Le Merlon est une STRUCTURE,
+  // l\'autre pièce une escouade, et `RESTE_APRES_DESTRUCTION` les met à `rien`.
+  assert.equal(apres.filter((n) => n === 'bat_o_souche_detruit').length, 1,
+    'le compte des planches détruites ne suit pas la table');
+  // ⚠⚠ ET PLUS AUCUNE RUINE GÉNÉRIQUE : c\'est très exactement le défaut
+  // d\'Ethan. Sans cette ligne, poser la planche EN PLUS de la ruine passerait.
+  assert.equal(apres.filter((n) => n.startsWith('ruine_')).length, 0,
+    'la ruine générique se dessine encore sous un bâtiment');
   // Et aucune des trois pièces d\'origine ne se dessine plus.
   assert.ok(!apres.includes('bat_o_souche'), 'la Souche se dessine encore');
   assert.ok(!apres.some((n) => n.startsWith('def_o_merlon')), 'le Merlon se dessine encore');
@@ -1721,30 +1727,42 @@ test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage 
 
   const dOrigine = { ...RESTE_APRES_DESTRUCTION };
   try {
-    // Le réglage d\'aujourd\'hui : une ruine, celle du bâtiment.
+    // Le réglage d\'aujourd\'hui : la planche du bâtiment, et rien d\'autre.
     assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
-      { batiment: 'ruine', defense: 'rien', unite: 'rien' },
+      { batiment: 'planche', defense: 'rien', unite: 'rien' },
       'le réglage de la table a changé sans que ce test le dise');
-    assert.equal(
-      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
-        .filter((n) => n === 'ruine_o').length, 1,
-    );
+    const ruines = () => noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+      .filter((n) => n === 'ruine_o').length;
+    assert.equal(ruines(), 0, 'une ruine générique au réglage du jour');
 
-    // ⚠ ON OUVRE LES STRUCTURES : deux ruines, sans toucher une ligne de code.
+    // ⚠⚠ ON OUVRE LES STRUCTURES, ET C\'EST CE QUI GARDE `ruine_j`/`ruine_o` EN
+    // VIE. Depuis que le bâtiment laisse sa propre planche, le réglage `defense`
+    // est le SEUL chemin vers les deux dessins — celui qu\'Ethan a parké « en
+    // attente d\'un coup d\'œil ». Un mot dans la table, pas une ligne de code.
     RESTE_APRES_DESTRUCTION.defense = 'ruine';
-    assert.equal(
-      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
-        .filter((n) => n === 'ruine_o').length, 2,
-      'ouvrir `defense` ne donne pas de ruine à la structure : le câblage ne répond pas',
-    );
+    assert.equal(ruines(), 1,
+      'ouvrir `defense` ne donne pas de ruine à la structure : le câblage ne répond pas');
 
     // ⚠ ET ON LES REFERME : le câblage marche dans les DEUX sens, sinon il ne
     // prouverait qu\'une porte qui s\'ouvre.
     RESTE_APRES_DESTRUCTION.defense = 'rien';
-    assert.equal(
-      noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
-        .filter((n) => n === 'ruine_o').length, 1,
-    );
+    assert.equal(ruines(), 0);
+
+    // ⚠⚠ ET `planche` SE REFUSE À QUI N\'A PAS D\'ÉTATS. Une structure na pas de
+    // planche `_detruit` : le réglage lÈVE plutôt que de la dessiner INTACTE au
+    // milieu de l\'effondrement, ce qui aurait tout l\'air d\'un choix.
+    RESTE_APRES_DESTRUCTION.defense = 'planche';
+    assert.throws(() => listeAffichage(etat, proj, null, 0, null, 0, tombees),
+      /reste « planche » pour « defense »/,
+      '`planche` sur une structure passe en silence');
+    RESTE_APRES_DESTRUCTION.defense = 'rien';
+
+    // ⚠ ET UN RESTE INCONNU LÈVE AUSSI — une valeur mal orthographiée ne
+    // retombe pas sur le dessin ordinaire.
+    RESTE_APRES_DESTRUCTION.batiment = 'ruines';
+    assert.throws(() => listeAffichage(etat, proj, null, 0, null, 0, tombees),
+      /reste « ruines » inconnu/, 'un reste mal orthographié passe en silence');
+    RESTE_APRES_DESTRUCTION.batiment = 'planche';
 
     // ⚠⚠ ET LES TROIS GENRES SONT COUVERTS, sinon une entité disparaîtrait en
     // SILENCE. Un genre absent de la table LÈVE, et c\'est mesuré plutôt que cru.
@@ -1761,7 +1779,7 @@ test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage 
   }
   // Le nettoyage a bien remis la table d\'origine.
   assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
-    { batiment: 'ruine', defense: 'rien', unite: 'rien' });
+    { batiment: 'planche', defense: 'rien', unite: 'rien' });
 });
 
 // ---------------------------------------------------------------------------

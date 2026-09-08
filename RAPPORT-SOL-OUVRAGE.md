@@ -15,12 +15,18 @@ la mesure ton par ton et les issues.
 
 ## 1. Version et numéro de construction réellement produits
 
-**0.99.33 · build 135.** Les deux sont bumpés ENSEMBLE, et les deux restent des
+**0.99.35 · build 137.** Les deux sont bumpés ENSEMBLE, et les deux restent des
 **chaînes** dans `package.json` — `android/app/build.gradle.kts` les lit
 `as String`, et un nombre y fait tomber le build Android à la configuration,
 avant le moindre test (CLAUDE.md §6).
 
 Le brief ne proposait aucun numéro, comme il se doit.
+
+⚠⚠ **LE LOT A ÉTÉ LIVRÉ EN 0.99.33 · 135, PUIS REMONTÉ À 0.99.35 · 137.** `main`
+a bougé sous lui pendant son exécution — Ethan a fusionné NEUTRALISATION (#114)
+puis ÉTAT-EN-RAID (#115), qui l'ont porté à 0.99.34 · 136. La branche a donc
+absorbé `main` par un MERGE — jamais un rebase, la branche étant déjà poussée —
+et le numéro suivant disponible est pris.
 
 ---
 
@@ -72,14 +78,14 @@ affirmait le contraire est corrigé, comme le brief le demandait.
 
 ## 3. Taille finale et marge
 
-`npm run build` → `dist/index.html`, **9 123 778 octets**, 0 référence externe.
+`npm run build` → `dist/index.html`, **9 124 362 octets**, 0 référence externe.
 
-Borne T10 **inchangée à 9 300 000** — marge **176 222 octets, 1,89 %**. Le brief
-exigeait 150 000 au moins : il en reste **26 222 de plus**.
+Borne T10 **inchangée à 9 300 000** — marge **175 638 octets, 1,89 %**. Le brief
+exigeait 150 000 au moins : il en reste **25 638 de plus**.
 
 **Coût du lot : +469 342 octets**, mesuré poste par poste contre un livrable
-rebâti dans un `git worktree` depuis `6f7b3bb` (8 654 436 octets, identique au
-nombre du §0 de CLAUDE.md) :
+rebâti dans un `git worktree` depuis **`37ef8eb`** — la base NEUVE, `main` ayant
+bougé pendant le lot — soit 8 655 020 octets :
 
 | poste | delta |
 |---|---|
@@ -91,6 +97,13 @@ nombre du §0 de CLAUDE.md) :
 | **somme** | **+469 342** |
 
 et la somme des cinq postes tombe **EXACTEMENT** sur le total.
+
+⚠⚠ **ET LA VENTILATION SE REJOUE À L'IDENTIQUE APRÈS LA FUSION, AU DERNIER
+OCTET.** Elle avait d'abord été relevée contre `6f7b3bb` (8 654 436 octets) et
+rendait les mêmes cinq nombres. Les deux lots d'Ethan sont du JavaScript pur et
+ne font entrer aucune image : ils ne recouvrent aucun poste de celui-ci. **C'est
+la mesure qui le dit, pas la lecture du diff** — le livrable de la base neuve a
+été rebâti et re-ventilé plutôt que le nombre recopié.
 
 **297 lignes `data:` avant, 311 après ; 292 URI avant, 306 après** — soit
 exactement les quatorze planches, et rien d'autre.
@@ -375,8 +388,8 @@ Voir le §5. **Deux tons sur huit**, `#475A2F` à −1,52 du seuil et `#5F7A3E` 
 
 ### 6.11 `PIC T7` — la borne de taille — PASS
 
-`dist/index.html` construit, taille relevée : **9 123 778 ≤ 9 300 000**, marge
-**176 222 ≥ 150 000**. Le test porte les deux assertions ; la seconde est neuve,
+`dist/index.html` construit, taille relevée : **9 124 362 ≤ 9 300 000**, marge
+**175 638 ≥ 150 000**. Le test porte les deux assertions ; la seconde est neuve,
 et elle vient du §6.11 du brief.
 
 ### 6.12 Les trois tests qui n'étaient pas au brief
@@ -638,7 +651,7 @@ les lots RETOURS-DU-31 et ASSAUT l'avaient déjà appris.
    test si le lot est fusionné tel quel.
 2. **La marge T10 est à 1,89 %, la plus mince depuis longtemps.** Le prochain lot
    qui fait entrer une image devra relever la borne EN ÉCRIVANT POURQUOI, ou
-   tenir dans 176 222 octets.
+   tenir dans 175 638 octets.
 3. **Six atlas ne se reproduisent pas à l'octet sur cette machine**, et c'est
    antérieur au lot. À reprendre le jour où quelqu'un touchera à `atlas.py`.
 4. **Le taux de répétition du sol a changé** — 2,75 cases par planche au lieu de

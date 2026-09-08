@@ -400,7 +400,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 123 778 octets, la marge sur la borne T10 est de 1,89 %', () => {
+test('PIC T7 — le livrable pèse 9 124 362 octets, la marge sur la borne T10 est de 1,89 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -468,10 +468,17 @@ test('PIC T7 — le livrable pèse 9 123 778 octets, la marge sur la borne T10 e
   // ⚠⚠ REMESURÉ AU LOT SOL-OUVRAGE, ET C'EST LE LOT QUI SERRE LE PLUS LA MARGE.
   // Le sol de la carte cesse d'être uniforme : huit planches deviennent
   // VINGT-DEUX, et quatorze `data:` entrent — 297 lignes / 292 URI deviennent
-  // **311 / 306**. **8 654 436 → 9 123 778, soit +469 342.** Ventilé contre un
-  // livrable rebâti dans un `git worktree` depuis `6f7b3bb`, et la somme des cinq
+  // **311 / 306**. **8 655 020 → 9 124 362, soit +469 342.** Ventilé contre un
+  // livrable rebâti dans un `git worktree` depuis `37ef8eb`, et la somme des cinq
   // postes tombe EXACTEMENT sur le total : **images +466 506 · JavaScript
   // +2 200 · balisage +636 · feuille +0 · audio +0**.
+  //
+  // ⚠⚠ ET LA BASE A BOUGÉ SOUS LE LOT : `main` EST PASSÉ DE `6f7b3bb` À
+  // `37ef8eb` PENDANT SON EXÉCUTION — NEUTRALISATION puis ÉTAT-EN-RAID. La
+  // ventilation a été REJOUÉE contre la base neuve plutôt que recopiée, et elle
+  // rend les MÊMES cinq nombres au dernier octet : les deux lots sont du
+  // JavaScript pur et ne font entrer aucune image, donc ils ne recouvrent aucun
+  // poste de celui-ci. Contre `6f7b3bb` c'était 8 654 436 → 9 123 778.
   //
   // ⚠⚠ ET LE CÔTÉ DES PLANCHES A ÉTÉ CHOISI PAR CETTE BORNE-CI, PAS PAR LE GOÛT.
   // Les vingt-deux ne tiennent pas à leur taille d'origine : `tools/sols.py` les
@@ -480,13 +487,13 @@ test('PIC T7 — le livrable pèse 9 123 778 octets, la marge sur la borne T10 e
   // Les quatre mesures qui ont désigné 704 sont dans l'en-tête de l'outil.
   //
   // ⚠⚠ LA MARGE TOMBE À 1,89 %, ET C'EST LA PLUS MINCE DEPUIS BASES-1. 7,02 % au
-  // 08/09 au matin, **1,89 %** maintenant : 176 222 octets. Le prochain lot qui
+  // 08/09 au matin, **1,89 %** maintenant : 175 638 octets. Le prochain lot qui
   // fait entrer une image devra relever la borne EN ÉCRIVANT POURQUOI, ou tenir
-  // dans cent soixante-seize kilo-octets.
+  // dans cent soixante-quinze kilo-octets.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 9_123_778;          // mesuré le 08/09, lot SOL-OUVRAGE
-  const MARGE = BORNE - MESURE;      // 176 222 octets
-  assert.equal(MARGE, 176_222);
+  const MESURE = 9_124_362;          // mesuré le 08/09, lot SOL-OUVRAGE, base `37ef8eb`
+  const MARGE = BORNE - MESURE;      // 175 638 octets
+  assert.equal(MARGE, 175_638);
   assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.89);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.33 · build 135.
+Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
 
 ---
 
@@ -44,17 +44,26 @@ Dernière révision : **08/09/2026**, version 0.99.33 · build 135.
 
 **Référence au 08/09/2026 (après le lot SOL-OUVRAGE), à confronter :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
-`npm test` rend **1451 pass / 1 fail** ; le dépôt DÉCLARE **1452 pass / 0 fail**
+`npm test` rend **1471 pass / 1 fail** ; le dépôt DÉCLARE **1472 pass / 0 fail**
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
 NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est unique, et le
 §4.4 du brief interdit de le réparer : voir le ⚠⚠ qui le nomme plus bas.
-`npm run build` → `dist/index.html`, **9 123 778 octets**, 0 référence externe.
+`npm run build` → `dist/index.html`, **9 124 362 octets**, 0 référence externe.
+⚠⚠ **ET LA BASE A BOUGÉ SOUS LE LOT — `main` EST PASSÉ DE `6f7b3bb` À `37ef8eb`
+PENDANT SON EXÉCUTION**, Ethan ayant fusionné NEUTRALISATION (#114) puis
+ÉTAT-EN-RAID (#115). Le lot est donc REMESURÉ contre la base neuve, poste par
+poste, plutôt que recopié : version et build passent à **0.99.35 · build 137**,
+le suivant disponible.
 Coût **+469 342 octets**, mesuré poste par poste contre un livrable rebâti dans
-un `git worktree` depuis `6f7b3bb` : **images +466 506 · JavaScript +2 200 ·
+un `git worktree` depuis `37ef8eb` : **images +466 506 · JavaScript +2 200 ·
 balisage +636 · feuille +0 · audio +0**, et la somme des cinq postes tombe
 EXACTEMENT sur le total — **297 lignes `data:` avant, 311 après ; 292 URI avant,
-306 après**. Borne T10 **inchangée à 9 300 000**, marge **176 222 octets,
-1,89 %** — le brief en exigeait 150 000 au moins, il en reste 26 222 de plus.
+306 après**. Borne T10 **inchangée à 9 300 000**, marge **175 638 octets,
+1,89 %** — le brief en exigeait 150 000 au moins, il en reste 25 638 de plus.
+⚠ **ET LES CINQ POSTES SONT LES MÊMES QU'AVANT LA FUSION, AU DERNIER OCTET.**
+Les deux lots d'Ethan sont du JavaScript pur et ne font entrer aucune image :
+ils ne recouvrent aucun poste de celui-ci, et la ventilation se rejoue à
+l'identique. C'est la mesure qui le dit, pas la lecture du diff.
 ⚠⚠ **LA COULEUR DU SOL NE DÉPEND QUE DE LA RANGÉE, LE MOTIF NE DÉPEND QUE DU
 BLOC, ET C'EST TOUT LE LOT.** Ethan : le sol de la carte cesse d'être uniforme —
 le bas reste le désert d'aujourd'hui, le haut devient l'Ouvrage, et la bascule se
@@ -204,8 +213,9 @@ EXACTEMENT deux couleurs calculées, et le fichier doit nommer `DELTA_TEINTE` �
 et trois falsifications la font tomber : une troisième couleur, une couleur
 littérale, une couleur calculée ailleurs.
 ⚠ **QUINZE TESTS ENTRENT — `SOU T1` à `T10`, plus `T4 bis`, et quatre `SOL T*`
-remaniés — ET LE COMPTE PASSE DE 1 441 À 1 452.** **Aucune assertion n'a été
-retirée ni assouplie** ; **six gardes changent de cible et toutes se RESSERRENT**
+remaniés — SOIT +11 NETS, ET LE COMPTE PASSE DE 1 461 À 1 472** après la fusion
+de `main` ; il passait de 1 441 à 1 452 avant elle, le même +11.
+**Aucune assertion n'a été retirée ni assouplie** ; **six gardes changent de cible et toutes se RESSERRENT**
 — `SOL T1` compte vingt-deux planches et les quatre familles, `SOL T3 ter` mesure
 l'arrondi du fondu selon sa PARITÉ, `SOL T8` exige la répartition DANS chaque
 famille et le biais de modulo EXACT, `SOL T10` et `SOL T12` suivent le compte,
@@ -251,6 +261,185 @@ déclarée plutôt que glissée.
 ⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** Tout ce
 qui précède est relevé dans Chromium à la géométrie du S25 FE, et ce n'est pas le
 téléphone d'Ethan (§3).
+
+**Auparavant, après le lot ÉTAT-EN-RAID :**
+`npm test` → **1461 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 655 020 octets**, 0 référence externe. Coût **+291 octets**, ENTIÈREMENT DU
+JAVASCRIPT — le lot ne touche ni `art/`, ni un outil de la chaîne, ni une
+feuille : **297 lignes `data:` avant, 297 après**, et l'atlas ne bouge pas d'un
+octet. Borne T10 inchangée à 9 300 000, marge **644 980 octets, 6,94 %**.
+⚠⚠ **DEUX DÉFAUTS VUS PAR ETHAN SUR UNE PARTIE, ET LES DEUX ÉTAIENT DU
+CÂBLAGE.** 08/09 : « les bâtiments d'un raid restent tout neufs quels que soient
+leurs PV », et « un bâtiment détruit laisse la ruine générique du camp au lieu
+de sa propre planche ». Les **quarante planches abîmées et les vingt détruites
+étaient dans l'atlas depuis la veille**, payées en octets, demandées par
+personne. **Aucun art dans ce lot, aucun seuil touché.**
+⚠⚠ **LE PREMIER TENAIT À UN CHAMP MANQUANT, À UN SEUL ENDROIT.** La boucle des
+entités visibles de `render/scene.js` composait le descripteur sans `etat` ;
+`couchesDuBatiment` retombait donc sur son défaut `intact` — un défaut JUSTE,
+qui sert les montages composant un bâtiment à la main. **Mesuré avant le
+correctif : `bat_o_souche` aux six valeurs de PV d'`ER T2`.** Le rendu APPELLE
+désormais `etatDuBatiment(e.pvMilli, e.pvMaxMilli)` ; il ne réécrit aucun seuil,
+et `ER T6` interdit tout suffixe d'état écrit en dur dans `render/` ou `sim/`.
+⚠ **ET SEULEMENT POUR LES BÂTIMENTS**, par `...` conditionnel : le champ est
+ABSENT pour les unités et les structures, pas à `undefined`. Un champ passé
+partout serait un champ qu'on croit lu ; `ER T5` mesure qu'une pièce sans états
+rend le même sprite à un tiers de PV qu'à pleins PV.
+⚠⚠ **LE SECOND A DONNÉ UNE TROISIÈME VALEUR À `RESTE_APRES_DESTRUCTION` :
+`'planche'`.** Elle pose la planche `_detruit` DU bâtiment. **Mesuré avant :
+`ruine_o` deux fois pour la Souche et le Nœud** — le défaut d'Ethan, mot pour
+mot. Un reste inconnu LÈVE, et `'planche'` demandé pour un genre sans états LÈVE
+aussi, plutôt que de dessiner la pièce intacte au milieu de son écroulement.
+⚠⚠ **ET L'EFFONDREMENT FORCE `detruit`, IL NE LE CALCULE PAS.**
+`ordreDeLEffondrement` ne prend que les SURVIVANTES du camp de la défense : une
+pièce qui tombe à l'effondrement est à pleins PV, et un rendu qui lirait
+`pvMilli` la dessinerait intacte pendant qu'elle s'écroule. `ER T3` monte les
+deux bâtiments à `pvMilli === pvMaxMilli` et l'asserte.
+⚠⚠ **LE BRIEF SE TROMPAIT SUR `ruine_j`/`ruine_o`, ET LA LECTURE LE DIT.** Il
+annonce « une base rasée les pose encore » : **faux**. Une base rasée est
+RETIRÉE de la carte par `sitesDeLaFenetre` (`.filter` sur `casesRasees`), et ce
+qui se dessine à sa place est `dessinerRuineDUneCase` de `render/embleme.js`,
+qui va chercher `spriteDeLaRuine` dans la famille **`embleme`**. Leur unique
+lecteur de production était la ligne même que ce lot change. **Elles ne sont pas
+retirées pour autant** : `RESTE_APRES_DESTRUCTION.defense`, parké par Ethan « en
+attente d'un coup d'œil », les remet à l'écran en changeant UN MOT, et `EFF T12`
+mesure le va-et-vient. `ER T4` fige la lecture pour qu'elle ne se reperde pas.
+⚠ **UN BÂTIMENT TOMBÉ À ZÉRO PV PENDANT LE RAID NE MONTRE PAS `_detruit`** :
+`retirerLesMorts` passe `vivant` à faux et `visible` le retire de la liste à
+l'instant même. `_detruit` est ce que l'EFFONDREMENT dessine. Les deux moitiés du
+lot sont donc complémentaires : le premier défaut donne `abime` et `tres_abime`
+à l'écran, le second `detruit`.
+⚠ **DEUX TESTS EXISTANTS CHANGENT DE VALEUR, ET AUCUN NE S'ASSOUPLIT.**
+`EFF T11` et `EFF T12` figeaient la ruine générique sous un bâtiment — c'est
+très exactement ce qu'Ethan fait changer. Ils rougissaient tels qu'ils étaient
+écrits, et `EFF T12` gagne deux gardes : `'planche'` sur une structure lève, un
+reste mal orthographié lève.
+⚠ **SIX TESTS ENTRENT — `ER T1` à `T6` — ET LE COMPTE PASSE DE 1 455 À
+1 461.** **Quatre rougissaient AVANT le correctif** (`T1`, `T2`, `T3`, `T6`) ;
+`T4` et `T5` passaient déjà, et c'est voulu : ils gardent ce qui ne devait pas
+bouger.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** :
+aucun fichier d'`art/` n'apparaît au diff.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Tout est mesuré sur la LISTE D'AFFICHAGE.
+
+**Auparavant, après le lot NEUTRALISATION :**
+`npm test` → **1455 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 654 729 octets**, 0 référence externe. Coût **+293 octets**, ENTIÈREMENT DU
+JAVASCRIPT, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis `6f7b3bb` : **JavaScript +293 · feuille +0 · balisage +0 ·
+images +0 · audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le
+total — **297 lignes `data:` avant, 297 après**. Borne T10 inchangée à
+9 300 000, marge **645 271 octets, 6,94 %**.
+⚠⚠ **CINQ POINTS OUVERTS SE FERMENT, UN SIXIÈME SE CONSERVE, ET C'EST ETHAN QUI
+L'A DEMANDÉ.** 08/09 : « il faut tout résoudre » pour le retour au joueur, « c'est
+pareil » pour la cible déjà neutralisée, « il faut le résoudre » pour l'Ouvrage
+armé en offense, « il faut l'implanter » pour la ligne défense, et surtout **« il
+faut neutraliser non seulement le tir, mais aussi le déplacement »**. Le sixième
+— un porteur neutralisé qui déclenche quand même — se GARDE : « non, on s'en
+fiche justement, ça c'est bien. Il faut le garder comme ça. »
+⚠⚠ **LA GARDE DU DÉPLACEMENT EST EN TÊTE DE `deplacement`, ET SA POSITION EST CE
+QUI EMPÊCHE L'EMP DE SUPPRIMER UNE UNITÉ.** La neutralisation dure
+`NEUTRALISATION_TICKS` (50), le repli se déclenche à `TICKS_AVANT_REPLI` (30) :
+une unité qui entre dans `avancer` sans avancer, sans tirer et sans rien forcer
+y voit `ticksInutiles` monter et **quitte le champ au trentième tick**. En
+sortant avant, `avancer` n'est jamais appelée et l'unité repart au 51ᵉ tick.
+⚠⚠ **ET LA FALSIFICATION QUI LE PROUVE A DÛ ÊTRE REPRISE — LE BRIEF DÉCRIVAIT
+LA FAUTE PLUS LARGEMENT QU'ELLE NE L'EST.** Un `return` posé en TÊTE d'`avancer`
+sort AVANT la comptabilité du repli : `ticksInutiles` ne monte pas, et
+`NEUT T2` reste vert. La faute n'est atteignable que si la garde rend
+`progresse` FAUX — `!arrete && !estNeutralisee(e) && peutAvancer(…)` —, et
+là `NEUT T1`, `T2`, `T3`, `T7` et `T12` tombent ensemble. **Ce n'est pas « dans
+`avancer` » qui tue, c'est « dans le calcul de `progresse` ».**
+⚠ **ET LA MÊME LIGNE SERT LES DEUX CAMPS GRATUITEMENT** : la boucle route la
+défense vers `seDecaler` depuis le lot COLONNE, donc une défenseuse neutralisée
+cesse aussi de se décaler — `NEUT T3` le mesure contre un contre-montage sans le
+module, où la même pièce continue de bouger aux mêmes ticks.
+⚠⚠ **UNE CIBLE DÉJÀ NEUTRALISÉE EST SAUTÉE DANS LA RECHERCHE, PAS DANS LE
+DÉCLENCHEUR, ET C'EST TOUTE LA DIFFÉRENCE.** Dans le déclencheur, un porteur dont
+la plus proche est marquée passerait son tour ; dans `cibleDeNeutralisation`, il
+en trouve une AUTRE s'il y en a une, et sinon `cible === null` — donc il ne
+consomme pas son usage. `NEUT T4` monte les deux cas dans le même test.
+⚠⚠ **CONSÉQUENCE MESURÉE : AUCUNE ENTITÉ NE PORTE PLUS DEUX EFFETS, ET
+`MODULES-B T15` EST RETOURNÉ.** Il figeait l'empilement comme un fait constaté —
+« le `.some()` d'`estNeutralisee` fait que le plus long l'emporte » ; c'est
+exactement le doublon qu'Ethan fait fermer. Le test mesure désormais la règle
+neuve, et sa moitié qui compte est que le second porteur garde son usage.
+⚠⚠ **`moduleDuCamp` EST EXTRAIT, ET SANS LUI LA LIGNE DÉFENSE N'AURAIT MARCHÉ
+QU'À MOITIÉ — LA MOITIÉ QUI MARCHE MASQUANT L'AUTRE.** Le déclencheur lisait
+`p.module`, le module d'ATTAQUE. La Meute et le Bélier portent le Flashbang des
+deux côtés, donc tout aurait paru fonctionner ; la Carapace porte `booster` et
+le Fendeur `ecraseur`, si bien que `NEUTRALISATION[p.module]` valait `undefined`
+et que **deux des quatre lignes vendues seraient restées inertes**. `NEUT T5`
+monte les trois pièces, et la passe Meute est là pour prouver que l'extraction
+SERT — elle passerait quand même.
+⚠⚠ **`flashbang.cable.defense` ET `emp.cable.defense` PASSENT À `true`, ET LE
+PRIX NE BOUGE PAS D'UN POINT.** `data/recherche.js` portait déjà les quatre
+lignes ; c'est `effetNonCable` qui refusait la vente. **Les lignes non câblées
+tombent de 6 à 2**, et les deux qui restent sont en défense : le Tir de barrage
+des Perceurs et la Garnison de l'Éclaireur.
+⚠⚠ **LES DEUX CENTS TÉMOINS DE COMBAT SONT VERTS SANS AVOIR ÉTÉ RÉGÉNÉRÉS**, et
+`test/temoins-combat.js` n'a pas une ligne de changée. `NEUT T13` en donne la
+raison MESURÉE : aucun des quatre porteurs ne porte le Flashbang ni l'EMP côté
+Ouvrage, et aucune des neuf `DEFENSES` non plus — ouvrir la boucle n'arme donc
+que la garnison du JOUEUR, qui n'apparaît que dans `raid-ouvrage`.
+⚠ **ET LE BRIEF SE TROMPAIT SUR UN DES QUATRE** : il annonce `moduleOuvrage`
+« `null` sur la Meute, le Bélier, la Carapace et le Fendeur ». **Mesuré : la
+Carapace porte `camouflage`.** La conclusion tient — ce qui compte est que le
+champ ne vaille NI l'un NI l'autre —, et le test mesure la propriété plutôt que
+la phrase.
+⚠⚠ **`modulesOuvrageOffenseAu` VIT DANS `raid-ouvrage.js`, ET `genererSite` N'A
+PAS UNE LIGNE DE CHANGÉE.** Dans un raid sur un SITE, l'Ouvrage est le
+DÉFENSEUR : sa liste d'offense n'y a personne pour la lire. Le seul chemin où il
+ATTAQUE est `subirUnRaid`. `NEUT T10` est le garde-fou qui le dit avant les
+témoins, et `NEUT T9` mesure la BRANCHE — la même liste versée dans `defense` ne
+fait rien.
+⚠⚠ **LE §6.3 EST MESURÉ EN TROIS PASSES, DANS L'ORDRE, ET LA DEUXIÈME EST
+IDENTIQUE À LA PREMIÈRE À L'OCTET.** Six graines × cinq rangées (250, 200, 150,
+100, 50) × 24 h : **502 raids** avant. Après les §2 à §5 : **502 raids, mêmes
+empreintes sur les trente lignes** — la neutralisation ne mord dans
+`raid-ouvrage` que si un module y est armé, et aucun ne l'est encore. Après le
+§6 : **461 raids** (−8,2 %), victoires totales **255 → 216**, restantDefense
+**74,48 → 66,61**, restantBatiments **76,32 → 68,99**, rasés 177 → 178. ⚠ **La
+rangée 250 (niveau 10) ne bouge pas d'une empreinte** : le premier palier est à
+20, et c'est ce qui attribue l'écart au §6 par construction.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE DEUX COUPLES SUR 308, ET D'UNE SEULE GRAINE
+SUR VINGT-CINQ.** `rapports` aux phases 13 et 14, les deux seules où l'Ouvrage
+attaque ; **les vingt et un autres champs tombent à l'octet**. Attribution
+mesurée : en remettant `offense: []` à la seule ligne du §6, `bases.test.js`
+repasse 31 pass / 0 fail. Le scénario plante sa base rangée 200, où le niveau
+vaut 20 — donc au PREMIER palier, celui du Flashbang.
+⚠ **LA GARNISON ENTRE DANS LA LISTE DE L'OUVRAGE ET Y RESTE INERTE, DÉCLARÉ.**
+`genererVague` compose une vague PLATE et ne sait pas embarquer. **Ne pas écrire
+un cas particulier pour l'exclure** — ce serait la première ligne écrite à la
+main dans une liste qui se lit, et `NEUT T8` fait tomber celui qui l'écrirait.
+⚠ **LE SIXIÈME CANAL DU JOURNAL EST MUET CÔTÉ SON, ET C'EST ÉCRIT DANS
+`evenementsDuJournal`.** Les 263 entrées de `data/sons.js` ne portent ni
+brouillage ni arrêt d'unité : en fabriquer un demande un master WAV, donc un lot
+d'ASSETS. `SAVE_VERSION` ne bouge pas — le journal est remis à zéro à l'étape 0.
+⚠ **LE CADRE DE NEUTRALISATION NE COÛTE AUCUN ACTIF** : `cadre` est une
+primitive de `canvas2d.js` et `PALETTE.metalClair` est dans la palette close.
+Le rendu APPELLE `estNeutralisee`, il ne la réécrit pas — `NEUT T12` interdit
+tout `effetsTemporises` dans `render/scene.js`.
+⚠⚠ **QUATORZE FALSIFICATIONS, QUATORZE CHUTES, ZÉRO MUETTE**, et l'une d'elles a
+dû être reprise avant d'être crue — voir le paragraphe sur `progresse` ci-dessus.
+⚠ **SEPT TESTS EXISTANTS CHANGENT DE VALEUR OU DE CIBLE, ET AUCUN NE
+S'ASSOUPLIT.** `T11`, `MODULES-A T9`, `MODULES-B T13` et `MODULES-C T10`
+remesurent le drapeau ; `T15` et `RECH-É T5` changent de LIGNE témoin — la Meute
+en défense s'achète désormais, le témoin passe au Tir de barrage des Perceurs,
+dont la pièce n'est PAS gratuite et doit donc être achetée pour que le refus
+d'effet ne soit pas noyé ; `MODULES-B T15` est RETOURNÉ.
+⚠ **QUATORZE TESTS ENTRENT — `NEUT T1` à `T13`, plus `T7 bis` — ET LE COMPTE
+PASSE DE 1 441 À 1 455.**
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — aucun fichier d'`art/` n'apparaît
+au diff.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE DÉCLARE
+NON EXÉCUTÉ.** Le cadre de neutralisation est mesuré par la LISTE D'AFFICHAGE,
+jamais à l'écran.
+⚠ **ET LA BASE ANNONCÉE PAR LE BRIEF ÉTAIT EXACTE, DEUXIÈME FOIS DU DÉPÔT** :
+`main` à `6f7b3bb`, 1 441 pass, 8 654 436 octets, 297 lignes `data:`, et les
+treize ancres présentes et UNIQUES, vérifiées une par une avant d'écrire.
 
 **Auparavant, après le lot FORMATION-ET-GARNISON :**
 `npm test` → **1441 pass / 0 fail**, `npm run build` → `dist/index.html`,
@@ -8873,7 +9062,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   61 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   62 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -8883,7 +9072,7 @@ test/                   61 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
-  journal-raids  batiments-quatre-etats  formation-et-garnison
+  journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

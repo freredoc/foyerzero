@@ -38,20 +38,30 @@
 export const MODULES = {
   flashbang: {
     libelle: 'Flashbang',
-    // ⚠ CÂBLÉ EN OFFENSE SEULEMENT — lot MODULES-B. `declencherNeutralisations`
-    // ne balaie que le camp `attaque`, comme le Booster : la Meute et le Bélier
-    // portent aussi ce module en défense (`data/combat.js`), mais rien ne le
-    // lirait de ce côté-là. Le drapeau refuse la vente plutôt que de la laisser
-    // passer contre un effet qui n'existe pas.
-    cable: { offense: true, defense: false },
+    // ⚠⚠ CÂBLÉ DES DEUX CÔTÉS DEPUIS LE LOT NEUTRALISATION, 08/09/2026 —
+    // Ethan : « la ligne défense, il faut l'implanter. » MODULES-B l'avait
+    // refusée parce que `declencherNeutralisations` ne balayait que le camp
+    // `attaque` ; sa boucle balaie désormais les DEUX, et le module s'y lit par
+    // `moduleDuCamp`, sans quoi les porteurs dont le module d'attaque n'est pas
+    // celui-ci resteraient inertes. Les deux porteurs de cette ligne-ci sont la
+    // **Meute** et le **Bélier**, qui portent le Flashbang des deux côtés.
+    // ⚠ Le prix ne bouge pas d'un point : `data/recherche.js` portait déjà la
+    // ligne, c'est `effetNonCable` qui refusait la vente, et il tombe avec le
+    // drapeau.
+    cable: { offense: true, defense: true },
     description: 'désactive une infanterie à portée pendant 5 s, une seule fois '
       + 'par raid, effet −20 % sur une unité de niveau n+1',
   },
   emp: {
     libelle: 'EMP',
-    // ⚠ MÊME RAISON QUE LE FLASHBANG, et les mêmes deux lignes défense
-    // refusées : la Carapace et le Fendeur le portent en défense.
-    cable: { offense: true, defense: false },
+    // ⚠⚠ MÊME OUVERTURE QUE LE FLASHBANG, MÊME LOT, ET C'EST ICI QUE
+    // `moduleDuCamp` COMPTE VRAIMENT. Les deux porteurs de cette ligne sont la
+    // **Carapace** et le **Fendeur** ; leur module d'ATTAQUE vaut `booster` et
+    // `ecraseur`, donc un déclencheur qui lirait `p.module` — ce qu'il faisait
+    // jusqu'à ce lot — rendrait `NEUTRALISATION[porte] === undefined` et
+    // passerait son tour. La ligne aurait été vendue et inerte : c'est
+    // exactement le défaut que ce lot ferme, et `NEUT T5` le mesure.
+    cable: { offense: true, defense: true },
     description: 'désactive un véhicule à portée pendant 5 s, une seule fois par '
       + 'raid, effet −20 % sur une unité de niveau n+1',
   },
