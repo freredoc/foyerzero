@@ -62,7 +62,7 @@ import {
   formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
   messageDePose, messageDeConfirmation,
   DUREE_TOAST_MS, poserCouches,
-  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
+  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau, vueDuJournal,
 } from './chantier.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -1098,6 +1098,27 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   $('offense-panneau-fermer').addEventListener('click', () => {
     fermerPanneau();
   });
+
+  // ⚠⚠ LE JOURNAL DES RAIDS — lot JOURNAL, 07/09, point 14. Six lignes, et pas
+  // une de plus : la VUE est `vueDuJournal` de `ui/chantier.js`, écrite une
+  // seule fois, et le rendu est `peindreVueDuPanneau`, partagé depuis le lot
+  // ERGONOMIE. Ce que cet écran-ci ajoute, c'est un bouton et un panneau.
+  const panneauJournal = $('offense-journal-panneau');
+  const elementsJournal = {
+    titre: $('offense-journal-titre'), corps: $('offense-journal-corps'), bouton: null,
+  };
+  function fermerLeJournal() { if (panneauJournal !== null) panneauJournal.hidden = true; }
+  fermerLeJournal();
+  $('offense-journal').addEventListener('click', () => {
+    if (etatCourant === null || panneauJournal === null) return;
+    fermerPanneau();
+    peindreVueDuPanneau(
+      doc, elementsJournal,
+      vueDuJournal(etatCourant.rapports, etatCourant.horloge.nbTicks),
+    );
+    panneauJournal.hidden = false;
+  });
+  $('offense-journal-fermer').addEventListener('click', fermerLeJournal);
   // ⚠ LE BOUTON DU PANNEAU AGIT DIRECTEMENT, SANS ARMER — même règle qu'au
   // Chantier : « armer puis toucher » existe parce que les boutons de la barre
   // n'ont pas de cible ; celui-ci en a une.

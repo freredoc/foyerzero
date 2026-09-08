@@ -14,7 +14,10 @@ import {
   creerRecherche, rechercheMilli, montageDuRaid,
 } from '../src/sim/raid.js';
 import { ciblageDuSite, lignesDuSite } from '../src/ui/monde.js';
-import { lignesDuResultat, LIBELLE_VERDICT } from '../src/ui/raid.js';
+import { lignesDuResultat } from '../src/ui/raid.js';
+// ⚠ `LIBELLE_VERDICT` A DÉMÉNAGÉ DANS `ui/chantier.js` AU LOT JOURNAL — deux
+// écrans le lisent désormais, et ils ne peuvent pas importer `ui/raid.js`.
+import { LIBELLE_VERDICT } from '../src/ui/chantier.js';
 import { butinSiToutTombe, forceDeLaDefense } from '../src/sim/site-de-la-case.js';
 import { coutDUnRaid } from '../src/sim/points-attaque.js';
 import {
@@ -951,11 +954,21 @@ test('RAID-A T7 — les deux panneaux affichent les MÊMES nombres', () => {
 test('RAID-A T8 — les trois verdicts, et « défense seule touchée » est une DÉFAITE', () => {
   // ⚠ LA RÈGLE D'ETHAN, TELLE QUELLE : une armée qui n'a griffé que la garnison
   // n'a rien pris. Trois verdicts, et « Défaite » sans « totale » n'existe pas.
+  // ⚠⚠ QUATRE VERDICTS DEPUIS LE LOT JOURNAL, ET LA GARDE SE RESSERRE PLUTÔT
+  // QUE DE S'ÉLARGIR. Elle exigeait TROIS clés et refusait « Défaite » tout
+  // court, au motif — écrit dans la table elle-même — qu'il était « réservé à la
+  // défense, que ce lot n'ouvre pas ». Le journal des raids l'ouvre :
+  // `verdictDeLaDefense` de `sim/raid-ouvrage.js` rend exactement ce mot, et
+  // sans son entrée le joueur aurait lu la clé interne.
+  //
+  // ⚠⚠ CE QUE LA GARDE DÉFENDAIT VRAIMENT, C'EST QU'UN RAID **MENÉ** NE RENDE
+  // JAMAIS « defaite » TOUT COURT — et elle le déduisait de l'ABSENCE d'une
+  // entrée de table, ce qui est un proxy. Elle le mesure maintenant sur les
+  // TROIS raids que ce test monte pour de bon, plus bas.
   assert.deepEqual(Object.keys(LIBELLE_VERDICT).sort(),
-    ['defaite-totale', 'victoire', 'victoire-totale']);
+    ['defaite', 'defaite-totale', 'victoire', 'victoire-totale']);
   assert.equal(LIBELLE_VERDICT['defaite-totale'], 'Défaite totale');
-  assert.ok(!Object.values(LIBELLE_VERDICT).includes('Défaite'),
-    '« Défaite » sans « totale » est réservé à la défense');
+  assert.equal(LIBELLE_VERDICT.defaite, 'Défaite');
 
   // Une armée trop faible pour entamer un bâtiment : défaite totale.
   //
@@ -995,6 +1008,15 @@ test('RAID-A T8 — les trois verdicts, et « défense seule touchée » est une
   }
   assert.ok(dernier.rase, 'montage : le camp n\'est jamais tombé');
   assert.equal(dernier.verdict, 'victoire-totale');
+
+  // ⚠⚠ ET AUCUN DES TROIS RAIDS MENÉS NE REND « defaite » TOUT COURT. C'est la
+  // propriété que l'ancienne assertion de table gardait par proxy ; elle se
+  // mesure ici sur les verdicts RÉELLEMENT rendus par `verdictDuRaid`, ce qui
+  // reste vrai quelle que soit la table d'affichage.
+  for (const v of [rate.verdict, gagne.verdict, dernier.verdict]) {
+    assert.notEqual(v, 'defaite',
+      '« Défaite » tout court est le verdict de la DÉFENSE : un raid mené ne le rend jamais');
+  }
 });
 
 test('RAID-A T9 — simuler ne range AUCUN rapport dans le journal', () => {

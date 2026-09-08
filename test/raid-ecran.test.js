@@ -2045,10 +2045,14 @@ test('FE T6 — la mise en page est PARTAGÉE : trois fiches, un seul rendu', ()
 
   const appels = ['src/ui/chantier.js', 'src/ui/offense.js', 'src/ui/raid.js']
     .map((f) => [f, compter(f, /peindreVueDuPanneau\(/g)]);
-  // `chantier.js` porte la déclaration ET son appel.
+  // ⚠⚠ QUATRE APPELS DEPUIS LE LOT JOURNAL, ET LE COMPTE SE DÉTAILLE PLUTÔT
+  // QUE DE MONTER EN BLOC. `chantier.js` porte la DÉCLARATION, la fiche d'un
+  // bâtiment ET le journal des raids — trois occurrences ; `offense.js` porte sa
+  // fiche et le journal — deux ; `raid.js` porte la fiche d'une cible ennemie —
+  // une. Quatre lecteurs du même rendu, zéro seconde mise en page.
   assert.deepEqual(appels, [
-    ['src/ui/chantier.js', 2],
-    ['src/ui/offense.js', 1],
+    ['src/ui/chantier.js', 3],
+    ['src/ui/offense.js', 2],
     ['src/ui/raid.js', 1],
   ], `les appels du rendu partagé ont changé : ${JSON.stringify(appels)}`);
 

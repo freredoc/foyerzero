@@ -761,6 +761,22 @@
     font-size: 16px; line-height: 1;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
   }
+  /* ⚠⚠ LE BOUTON DU JOURNAL — UNE RÈGLE, DEUX SÉLECTEURS, lot JOURNAL 07/09.
+     Les deux écrans portent le même geste : l'écrire deux fois aurait donné deux
+     définitions dont une seule aurait suivi le premier réglage, la faute que
+     `ÉD T12` garde déjà pour le pointillé des emplacements.
+     ⚠ MÊME GÉOMÉTRIE ET MÊMES TEINTES QUE LA BASCULE, au coin OPPOSÉ : 40 px de
+     côté, `#343A2C` sur `#161914`. AUCUNE TEINTE NEUVE.
+     ⚠ ET SON `z-index` EST CELUI DE LA BASCULE. Les panneaux de détail sont à 2
+     eux aussi et viennent APRÈS dans le document : le panneau du journal
+     recouvre donc son propre bouton, ce qui est voulu — on le referme par
+     « Fermer », jamais en retouchant le bouton à l'aveugle. */
+  #chantier-journal, #offense-journal {
+    position: absolute; right: 6px; top: 6px; z-index: 2;
+    width: 40px; height: 40px; padding: 0;
+    font-size: 16px; line-height: 1;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+  }
   /* ⚠⚠ IL DÉFILE MAINTENANT DANS LES DEUX SENS, ET C'EST LE ZOOM QUI L'EXIGE.
      Il ne défilait qu'en hauteur, `overflow-x: hidden` : une grille plus large
      que l'écran aurait été rognée sans qu'on puisse atteindre ses colonnes de
@@ -2279,6 +2295,34 @@
                peuvent pas se recouvrir. Et `pointer-events: none` comme elle —
                il ne porte que du texte, donc il n'a rien à recevoir. -->
           <p id="chantier-garnison" hidden></p>
+
+          <!-- ⚠⚠ LE BOUTON DU JOURNAL — lot JOURNAL, 07/09, point 14. Ethan :
+               « Défense et offense : rajouter un bouton rapport, qui permet de
+               voir les 10 dernières attaques et raids subis. »
+               ⚠⚠ IL EST POSÉ SUR LE CHAMP, PAS DANS UNE BARRE, ET C'EST LA
+               CONSIGNE « tu compresses tout dans l'UI ». Une septième barre fixe
+               ferait tomber la garde des 288 px de chrome ; en `absolute`, il ne
+               coûte pas un pixel de hauteur. C'est le chemin de
+               `#chantier-bascule-bande`, au coin opposé et sous une règle
+               jumelle.
+               ⚠ ET IL COUVRE UNE CASE, comme la bascule en couvre une autre —
+               relevé, pas ignoré : c'est le prix d'un contrôle posé sur le
+               champ, et il est le même des deux côtés. -->
+          <button type="button" id="chantier-journal"
+                  title="Journal des raids" aria-label="Journal des raids">▤</button>
+        </div>
+
+        <!-- ⚠⚠ LE PANNEAU DU JOURNAL PORTE `panneau-detail`, ET RIEN D'AUTRE.
+             Son contenu est écrit par `peindreVueDuPanneau` — le rendu partagé
+             du Chantier, de l'Offense et de la fiche ennemie. Quatrième lecteur,
+             zéro ligne de feuille.
+             ⚠ ET IL N'A PAS DE BOUTON D'ACTION : un journal se lit. -->
+        <div id="chantier-journal-panneau" class="panneau-detail" hidden>
+          <div class="tete">
+            <b id="chantier-journal-titre" class="titre">—</b>
+            <button type="button" id="chantier-journal-fermer" class="fermer">Fermer</button>
+          </div>
+          <div id="chantier-journal-corps" class="corps"></div>
         </div>
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
@@ -2422,6 +2466,18 @@
            défile, s'y poser ferait glisser le panneau avec les vagues. -->
       <div id="offense-champ">
         <div id="offense-vagues"></div>
+        <!-- ⚠ LE MÊME BOUTON ET LE MÊME PANNEAU QUE LE CHANTIER — voir là-bas.
+             `vueDuJournal` est écrite UNE fois, dans `ui/chantier.js` ; deux
+             écrans l'appellent, et `JRN T8` refuse la seconde. -->
+        <button type="button" id="offense-journal"
+                title="Journal des raids" aria-label="Journal des raids">▤</button>
+        <div id="offense-journal-panneau" class="panneau-detail" hidden>
+          <div class="tete">
+            <b id="offense-journal-titre" class="titre">—</b>
+            <button type="button" id="offense-journal-fermer" class="fermer">Fermer</button>
+          </div>
+          <div id="offense-journal-corps" class="corps"></div>
+        </div>
         <!-- ⚠ LE MÊME PANNEAU QUE CELUI DU CHANTIER, à la classe près : les
              règles vivent sur `.panneau-detail`, et le rendu est la fonction
              `peindreVueDuPanneau` de `ui/chantier.js`. Deux DOM voisins dont un

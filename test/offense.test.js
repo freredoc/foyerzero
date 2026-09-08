@@ -1045,6 +1045,9 @@ function fauxDocumentOffense() {
     'offense-deplacer', 'offense-retirer', 'offense-panneau',
     'offense-panneau-titre', 'offense-panneau-corps', 'offense-panneau-fermer',
     'offense-panneau-ameliorer', 'offense-reserve',
+    // Le journal des raids — lot JOURNAL, 07/09, point 14.
+    'offense-journal', 'offense-journal-panneau', 'offense-journal-titre',
+    'offense-journal-corps', 'offense-journal-fermer',
   ];
   // ⚠ LA LISTE SE CONFRONTE AU BALISAGE, elle ne se croit pas sur parole : le
   // faux garde donc aussi que l'écran ne demande rien que la page n'ait pas.

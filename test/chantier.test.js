@@ -4386,9 +4386,17 @@ test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent
   const horsImport = (code) => code
     .replace(/import \{[^}]*\} from '[^']*';/g, '')
     .replace(/export function peindreVueDuPanneau\(/g, 'DECLARATION(');
+  // ⚠⚠ DEUX APPELS PAR ÉCRAN DEPUIS LE LOT JOURNAL, ET LA GARDE CHANGE DE CIBLE
+  // SANS SE RELÂCHER. Elle exigeait « exactement UN » quand chaque écran n'avait
+  // qu'une fiche ; le journal des raids en est le SECOND lecteur, sur les deux
+  // écrans, et il passe par le MÊME rendu. Elle compte donc deux appels ET nomme
+  // ce que le second peint — un troisième, ou un journal qui se peindrait à la
+  // main, la fait tomber, ce qu'on lui demande.
   for (const [ou, code] of [['chantier', chantier], ['offense', offense]]) {
-    assert.equal((horsImport(code).match(/peindreVueDuPanneau\(/g) ?? []).length, 1,
-      `${ou} n'appelle pas exactement une fois \`peindreVueDuPanneau\``);
+    assert.equal((horsImport(code).match(/peindreVueDuPanneau\(/g) ?? []).length, 2,
+      `${ou} n'appelle pas exactement deux fois \`peindreVueDuPanneau\``);
+    assert.match(code, /peindreVueDuPanneau\(\s*\n?\s*doc, elementsJournal,/,
+      `${ou} ne peint pas le journal par le rendu partagé`);
   }
   // La classe CSS est partagée, pas dédoublée : une règle par famille.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')

@@ -83,7 +83,7 @@ import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // recopier ici serait se donner une seconde occasion d'écrire `garnison` là où
 // il faut `attaque`, ce que son propre commentaire annonce.
 import {
-  COTE_CASE_MAX, poserCouches, formaterEntier,
+  COTE_CASE_MAX, poserCouches, formaterEntier, LIBELLE_VERDICT,
   peindreVueDuPanneau, LIBELLES_COLONNE_DEGATS,
 } from './chantier.js';
 import { couchesDeLUniteDAssaut } from './offense.js';
@@ -116,15 +116,6 @@ if (!BANDES_NAVIGABLES.includes(BANDE_A_L_OUVERTURE)) {
     `ui/raid : « ${BANDE_A_L_OUVERTURE} » n'est pas une bande navigable`,
   );
 }
-
-/** Le mot affiché pour chacun des trois verdicts. */
-export const LIBELLE_VERDICT = {
-  'victoire-totale': 'Victoire totale',
-  victoire: 'Victoire',
-  // ⚠ « DÉFAITE TOTALE », ET « DÉFAITE » TOUT COURT N'EXISTE PAS ICI : il est
-  // réservé à la défense, que ce lot n'ouvre pas. Trois verdicts, trois.
-  'defaite-totale': 'Défaite totale',
-};
 
 /** Le libellé d'un châssis, pour la ligne de réparation induite. */
 const LIBELLE_CHASSIS = {

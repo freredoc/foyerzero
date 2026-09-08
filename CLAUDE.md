@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.27 · build 129.
+Dernière révision : **07/09/2026**, version 0.99.28 · build 130.
 
 ---
 
@@ -42,7 +42,111 @@ Dernière révision : **07/09/2026**, version 0.99.27 · build 129.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot FICHES-ENNEMIES), à confronter :**
+**Référence au 07/09/2026 (après le lot JOURNAL), à confronter :**
+`npm test` → **1408 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 356 534 octets**, 0 référence externe. Coût **+4 145 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +2 105 · feuille +1 018 · balisage +1 022 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **297
+lignes `data:` avant, 297 après, 292 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **943 466 octets, 10,15 %**. Le lot touche
+`src/ui/chantier.js`, `src/ui/offense.js`, `src/ui/raid.js`, le balisage et la
+feuille, et fait entrer `test/journal-raids.test.js`.
+⚠⚠ **LES TROIS MESURES DU BRIEF ONT ÉTÉ FAITES AVANT D'ÉCRIRE UNE LIGNE, ET LES
+TROIS RENDENT « C'EST DÉJÀ LÀ ».** Point 14 : « Défense et offense : rajouter un
+bouton rapport, qui permet de voir les 10 dernières attaques et raids subis. »
+(1) **`subirUnRaid` range DÉJÀ son rapport** — mesuré, 0 → 1, et c'est ce que le
+brief appelait « le cœur du lot » s'il ne le faisait pas ; (2) **le rapport dit
+DÉJÀ son côté** — `sens` vaut `'defense'` ou `'offense'`, les deux mesurés
+distincts dans le même journal ; (3) **la borne de dix est unique**,
+`APRES_RAID.rapportsGardes`. **Ce qui manquait était une GARDE et une VUE** : le
+raid MENÉ était tenu par `RAID-A T9` et `T10`, le raid SUBI ne l'était par rien.
+⚠ **ET UNE SIMULATION N'ENTRE PAS — MESURÉ AUSSI, 0 → 0.** `simulerRaid`
+travaille sur `structuredClone` : le journal de la COPIE reçoit le rapport.
+⚠⚠ **LA FILE SE LIT À L'ENDROIT, LA VUE S'AFFICHE À L'ENVERS — SUR UNE COPIE.**
+`[...liste].reverse()`, jamais `liste.reverse()` : un retournement en place
+casserait l'ordre de la file ET la borne, `garderLeRapport` jetant la TÊTE.
+⚠⚠ **ET `JRN T6` A DÛ ÊTRE CORRIGÉ AVANT D'ÊTRE CRU.** Son premier jet appelait
+la vue **DEUX fois** avant de comparer : `reverse()` en place laissait le test
+**entièrement vert** — deux retournements s'annulent. **Un nombre IMPAIR d'appels
+est la seule façon de voir la mutation.**
+⚠⚠ **`vueDuJournal` EST DANS `ui/chantier.js`, ET C'EST UN ÉCART MESURÉ.** Un
+`ui/journal.js` aurait eu besoin de `formaterEntier`, `direLaDuree` et du rendu
+partagé — les trois vivent là — donc `chantier.js` l'aurait importé en retour :
+un CYCLE. L'éviter demandait de déménager trois formateurs vers
+`render/nombre.js` pour un bouton. `JRN T8` garde ce qui compte : **une seule
+vue, deux appelants**, et l'Offense l'IMPORTE.
+⚠⚠ **LE RENDU PARTAGÉ A QUATRE LECTEURS ET CINQ APPELS, ET SON COMMENTAIRE EST
+RÉÉCRIT.** Il disait encore « la troisième n'est pas encore écrite » alors que
+FICHES-ENNEMIES l'avait écrite la veille — le mensonge que §6 raconte trois fois,
+commis par mon propre lot précédent. `FE T6` compte désormais **3 / 2 / 1** par
+fichier, et `ERGO T7 ter` exige DEUX appels par écran **en nommant** ce que le
+second peint.
+⚠⚠ **LE SENS D'UN RAPPORT SE LIT DANS UNE TABLE, ET LA GARDE EXISTANTE A REFUSÉ
+LE PREMIER JET.** `chantier.test.js` interdit `=== 'defense'` dans tout le
+fichier depuis GARNISON-ET-ARMÉE ; mon premier jet l'écrivait. **Elle avait
+raison** : `SENS_DU_RAPPORT` porte le titre de section, le libellé de
+l'adversaire, **le CHAMP qui le contient** et la fonction du bilan. ⚠ Et le
+contourner par une constante `SENS_SUBI = 'defense'` a été ÉCARTÉ — c'est passer
+sous un garde-fou en silence.
+⚠⚠ **`LIBELLE_VERDICT` DÉMÉNAGE DE `ui/raid.js` VERS `ui/chantier.js`, ET GAGNE
+SA QUATRIÈME ENTRÉE.** Deux écrans le lisent et ne peuvent pas importer
+`ui/raid.js` — c'est lui qui importe l'autre. Son propre commentaire annonçait le
+mot manquant : « "défaite" tout court est réservé à la défense, que ce lot
+n'ouvre pas ». Celui-ci l'ouvre. ⚠ **Et `RAID-A T8` se RESSERRE** : elle déduisait
+« un raid mené ne rend jamais defaite » de l'ABSENCE d'une entrée de table — un
+proxy — et le mesure désormais sur les TROIS raids qu'elle monte pour de bon.
+⚠⚠ **AUCUN CHIFFRE N'EST RECALCULÉ, ET LE CHAMP QUI MANQUE EST SIGNALÉ.** Un raid
+SUBI n'a pas de butin : son miroir est `sanction.perdu`, qui vaut **`null` tant
+que la base tient**. Une attaque repoussée n'a donc aucun chiffre de perte, et la
+ligne dit « — » — composer un total depuis l'état d'aujourd'hui serait le recalcul
+que le brief interdit, et il serait faux. **Les deux pourcentages du rapport
+(`restantBatiments`, `restantDefense`) sont disponibles et non affichés.**
+⚠ **AUCUNE SEPTIÈME BARRE FIXE.** Le bouton est posé sur le CHAMP en `absolute`,
+comme `#chantier-bascule-bande` au coin opposé, **une règle pour deux
+sélecteurs**, mêmes 40 px, mêmes teintes, **aucune teinte neuve**. Le chrome fixe
+reste à 288 px. ⚠ Il couvre une case, comme la bascule en couvre une autre —
+relevé, pas ignoré. ⚠ Et les deux PANNEAUX ne coûtent aucune feuille : ils portent
+`panneau-detail`.
+⚠ **OUVRIR LE JOURNAL FERME LA FICHE**, et c'est obligatoire : les deux sont des
+`panneau-detail` au même endroit et au même `z-index`. C'est la faute du lot
+TUTORIEL, qu'`ÉD T5 bis` garde déjà pour la ligne d'avis.
+⚠⚠ **VINGT FALSIFICATIONS, VINGT CHUTES, ET TROIS ONT FAIT CORRIGER UN MONTAGE
+APRÈS LA MESURE.** Le double appel de `JRN T6` ci-dessus ; l'âge arrondi vers le
+HAUT, que trois âges RONDS — 0 s, 1 h, 2 h — ne distinguaient pas (**un montage
+qui tombe rond ne mesure pas un arrondi**, quatrième fois du dépôt) ; et
+l'adversaire lu toujours dans `cible`, que les LIBELLÉS ne voyaient pas — ils
+viennent de la table, donc « Assaillant » s'affichait au-dessus d'un « — · niv.
+0 ». **C'est la VALEUR qui discrimine.**
+⚠⚠ **UN FICHIER DE TEST A ÉTÉ ÉCRASÉ PAR MÉGARDE, ET RESTAURÉ — IL FAUT LE
+DIRE.** Ma première écriture s'appelait `test/journal.test.js`, **nom pris depuis
+le lot JOURNAL-DE-COMBAT** par le journal de TICK : les dix `JOURNAL T*` ont été
+effacés. Repéré en comparant les comptes de tests entre `HEAD` et l'arbre — le
+total descendait de dix **sans qu'aucun test ne tombe** — puis `git checkout` et
+renommage en `test/journal-raids.test.js`. **C'est la leçon des homonymes du
+27/08, payée une seconde fois**, et l'en-tête du fichier la porte.
+⚠ **ONZE TESTS ENTRENT — `JRN T1` à `T11` — ET LE COMPTE PASSE DE 1 397 À
+1 408.** **Aucune assertion n'a été retirée ni assouplie** ; **quatre gardes
+changent de cible et les QUATRE se RESSERRENT.**
+⚠ **`src/sim/` N'A PAS UNE LIGNE DE CHANGÉE**, `verifierEtat` non plus, et
+`SAVE_VERSION` reste à **28** — vérifié au diff. Tout était déjà stocké.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE, SUR UNE VRAIE PARTIE.** Bouton
+**40 × 40 en (314, 116)** au Chantier et **(314, 154)** à l'Offense, glyphe ▤,
+`rgb(52, 58, 44)`, et `elementFromPoint` en son centre rend **le bouton lui-même**
+— il reçoit le toucher. Journal VIDE : panneau 360 × 67, **la phrase en titre de
+section, zéro ligne**. Après un vrai raid : « Raid mené · il y a 4 s », **quatre
+lignes sur DEUX rangées, une `.paires`, zéro flèche**, un seul bouton « Fermer »,
+**débordement 0** dans le panneau et sur la page, **zéro erreur de page**. ⚠ Et
+les DEUX écrans rendent le même journal, à la seconde d'âge près — la preuve au
+runtime de ce que `JRN T8` mesure dans la source.
+⚠ **LE POINT DÉCIMAL DE L'ÂGE EST UN POINT** — « il y a 1.0 h ». `direLaDuree`
+est PARTAGÉE avec la réserve de réparation, et FICHE-JUSTE a déjà déclaré ce
+point : le corriger ici ferait diverger deux affichages. **Relevé, non corrigé.**
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ** (§3).
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot FICHES-ENNEMIES :**
 `npm test` → **1397 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 352 389 octets**, 0 référence externe. Coût **+2 365 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis le lot
@@ -8135,6 +8239,27 @@ src/ui/                 les sept écrans, leurs éditeurs et les pictogrammes �
     formule du Chantier y rend son plancher, 11 px. `ui/defense.js` n'avait pas
     ce manque : il ne touche pas au DOM, et la bande Défense est peinte par
     `ui/chantier.js`, qui pose déjà `.jeton .niveau`.
+  ⤷ ⚠⚠ `chantier.js` PORTE LE JOURNAL DES RAIDS DEPUIS LE 07/09 — lot JOURNAL,
+    point 14 : « Défense et offense : rajouter un bouton rapport, qui permet de
+    voir les 10 dernières attaques et raids subis. » `vueDuJournal` y est écrite
+    UNE fois ; l'Offense l'importe, comme elle importe déjà `peindreVueDuPanneau`
+    et `apercuDeLaPiece`. Une seconde vue aurait donné deux histoires de la même
+    partie. ⚠ ELLE N'EST PAS DANS UN MODULE À ELLE, et c'est mesuré : elle a
+    besoin de `formaterEntier`, `direLaDuree` et du rendu partagé, qui vivent
+    tous ici — un `ui/journal.js` aurait fait un CYCLE avec ce fichier, ou aurait
+    obligé à déménager trois formateurs pour un bouton.
+  ⤷ ⚠⚠ ET `LIBELLE_VERDICT` A DÉMÉNAGÉ DEPUIS `ui/raid.js`, POUR LA MÊME RAISON.
+    Deux écrans le lisent désormais, et ni l'un ni l'autre ne peut importer
+    `ui/raid.js` — c'est LUI qui importe ce fichier-ci. ⚠ Il gagne sa QUATRIÈME
+    entrée, `defaite`, que son propre commentaire annonçait : elle était
+    « réservée à la défense, que ce lot n'ouvre pas », et le journal l'ouvre.
+  ⤷ ⚠⚠ LE SENS D'UN RAPPORT SE LIT DANS UNE TABLE, JAMAIS PAR UN `=== 'defense'`.
+    `SENS_DU_RAPPORT` porte, pour chacun des deux, le titre de sa section, le
+    libellé de l'adversaire, le CHAMP du rapport qui le contient et la fonction
+    qui compose son bilan. La garde « un cas particulier "defense" est écrit à la
+    main » de `chantier.test.js` couvre tout le fichier : elle a refusé le
+    premier jet, et elle avait raison — un `if` sur le sens aurait été le premier
+    à diverger.
 
 src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT
@@ -8174,7 +8299,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   58 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   59 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -8184,6 +8309,7 @@ test/                   58 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
+  journal-raids
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
