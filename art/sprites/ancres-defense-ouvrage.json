@@ -1,0 +1,84 @@
+{
+  "socles": {
+    "socle_def_o_batterie": {
+      "cote_case_pct": 93.83,
+      "diametre_pct": 32.9,
+      "dx_case_pct": 0.09,
+      "dy_case_pct": -23.56,
+      "mesure": true,
+      "x_pct": 0.1,
+      "y_pct": -26.0
+    },
+    "socle_def_o_casemate": {
+      "cote_case_pct": 93.35,
+      "diametre_pct": 31.4,
+      "dx_case_pct": 0.08,
+      "dy_case_pct": -23.56,
+      "mesure": true,
+      "x_pct": 0.1,
+      "y_pct": -26.0
+    },
+    "socle_def_o_creneau": {
+      "cote_case_pct": 93.61,
+      "diametre_pct": 32.8,
+      "dx_case_pct": 0.09,
+      "dy_case_pct": -22.75,
+      "mesure": true,
+      "x_pct": 0.1,
+      "y_pct": -25.1
+    },
+    "socle_def_o_faucheuse": {
+      "cote_case_pct": 111.95,
+      "diametre_pct": 20.5,
+      "dx_case_pct": 0.17,
+      "dy_case_pct": -27.97,
+      "mesure": true,
+      "x_pct": 0.2,
+      "y_pct": -35.3
+    },
+    "socle_def_o_harpon": {
+      "cote_case_pct": 96.52,
+      "diametre_pct": 20.4,
+      "dx_case_pct": 0.17,
+      "dy_case_pct": -27.89,
+      "mesure": true,
+      "x_pct": 0.2,
+      "y_pct": -35.2
+    },
+    "socle_def_o_mortier": {
+      "cote_case_pct": 104.94,
+      "diametre_pct": 20.5,
+      "dx_case_pct": 0.17,
+      "dy_case_pct": -27.52,
+      "mesure": true,
+      "x_pct": 0.2,
+      "y_pct": -34.7
+    }
+  },
+  "tourelles": {
+    "def_o_batterie": {
+      "cote_pct_embase": 171.6,
+      "echelle": 1.874
+    },
+    "def_o_casemate": {
+      "cote_pct_embase": 153.9,
+      "echelle": 2.37
+    },
+    "def_o_creneau": {
+      "cote_pct_embase": 200.4,
+      "echelle": 1.604
+    },
+    "def_o_faucheuse": {
+      "cote_pct_embase": 220.6,
+      "echelle": 2.934
+    },
+    "def_o_harpon": {
+      "cote_pct_embase": 199.2,
+      "echelle": 2.815
+    },
+    "def_o_mortier": {
+      "cote_pct_embase": 200.7,
+      "echelle": 3.023
+    }
+  }
+}
