@@ -42,138 +42,131 @@ Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot DISPOSITION-OUVRAGE), à confronter :**
-⚠⚠ **LA SUITE N'EST PAS VERTE, ET LE ROUGE EST CELUI QU'ON A TROUVÉ EN ARRIVANT.**
-`npm test` rend **1484 pass / 1 fail** sur 1485 ; le dépôt DÉCLARE
-**1485 pass / 0 fail** — c'est la forme que la garde de `documentation.test.js`
-cherche, et elle dit le NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est unique,
-il était là à la baseline, et le §7 du brief interdit de le réparer.
-`npm run build` → `dist/index.html`, **9 124 874 octets**, 0 référence externe.
-Coût **+512 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre un
-livrable rebâti dans un `git worktree` depuis `566a453` : **images +0 · audio +0 ·
-feuille +0 · balisage +0 · JavaScript +512**, et la somme des cinq postes tombe
-EXACTEMENT sur le total. **306 URI `data:` avant, 306 après ; 311 lignes avant,
-311 après.** Borne T10 **inchangée à 9 300 000**, marge **175 126 octets, 1,88 %**.
-⚠⚠ **LE BLOC OCCUPÉ D'UN SITE DE L'OUVRAGE FLOTTE DANS SA BANDE, ET C'EST TOUT LE
-LOT.** Ethan, point 9 du 08/09 : « malgré un patch, toutes les bases Ouvrage
-restent identiques : les unités de défense sont au fond, tous les bâtiments au
-premier rang, et souche et étai restent au fond. »
-⚠⚠ **LE LOT A COMMENCÉ PAR UNE MESURE, ET ELLE CONFIRME LA TROISIÈME PHRASE MOT
-POUR MOT.** Vingt graines de cases distinctes, quatre niveaux, trois types — 240
-montages, AVANT d'écrire une ligne : **les bâtiments commencent en rangée 11 sur
-240 sur 240**, **les défenses finissent en rangée 10 sur 240 sur 240**, et **les
-deux uniques tombent en (18, 4) et (18, 5) sur 240 sur 240**. Ensembles de rangées
-occupées distincts sur vingt graines : **3 à 5 pour les bâtiments, 2 à 4 pour les
-défenses, 1 pour les uniques**. Après : **9 à 18**, **3 à 19**, **18**.
-⚠⚠ **ET LA CAUSE N'EST PAS UN MANQUE DE HASARD, C'EST UN ANCRAGE.**
-`contigueDepuisLOrigine` interdit à l'indice 0 du tableau des tailles d'être vide :
-le bord ancré du bloc est donc cloué au bord de sa bande sur toute graine, et
-seule sa LONGUEUR variait. Mesuré sur mille sites, 48 000 transferts tentés :
-**40,4 % tombent sur une rangée source VIDE** — le bloc est collé à l'indice 0,
-tout le reste du tableau est à zéro — et **13,7 % sont annulés par la
-contiguïté**. Les deux lots précédents avaient traité la COLONNE puis la TAILLE
-des rangées ; aucun n'avait touché au bord.
-⚠⚠ **`placementDesRangees` ENTRE, ET C'EST UNE COUCHE À PART PLUTÔT QU'UN
-ASSOUPLISSEMENT DE `taillesDeRangee` — POUR UNE RAISON MESURÉE.** Les tailles
-disent COMBIEN d'occupants par rangée employée ; le placement dit LESQUELLES des
-rangées de la bande les portent. Toucher aux tailles aurait changé leur NOMBRE
-pour une graine donnée, donc le nombre de tirages de `repartirLesColonnes`
-(`9·L + nb − L`), donc la position du flux au moment où `composerRepartition`
-compose la garnison.
-⚠⚠ **ET C'EST LE PIÈGE DU §5, QUI EST RÉEL ET MESURÉ.** `sim/site-entame.js`
-range `pvBatimentsMilli` et `pvDefensesMilli` **PAR INDICE** dans le montage
-régénéré. Mesuré : la suite des identifiants de BÂTIMENTS est invariante par
-graine sur les 21 couples (type, niveau) essayés, mais celle des DÉFENSES **varie
-sur 18 des 21** — un seul tirage ajouté au flux principal aurait donc remappé
-silencieusement les dégâts de tout site à moitié rasé d'une sauvegarde existante.
-⚠⚠ **D'OÙ UN SECOND FLUX, SALÉ, ET C'EST CE QUI LAISSE `SAVE_VERSION` À 29.**
-`creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_DES_RANGEES))`, sel **8** — le
-premier libre dans `src/sim/` ET dans `src/render/`. **Mesuré sur 6 000
-montages — 3 types × 50 niveaux × 40 graines — : ZÉRO écart sur la suite des
-identifiants, bâtiments comme défenses**, pendant que les rangées bougent sur
-5 611 et les colonnes des uniques sur 5 850. **Aucun bump, aucune purge de
-`sitesEntames`.**
-⚠ **ET LA DÉRIVATION PASSE PAR `hachageBrut`, PAS PAR UNE ARITHMÉTIQUE SUR LA
-GRAINE.** `creerRng` pose `s = graine >>> 0` et `tirer` avance de `0x6d2b79f5` :
-deux graines qui diffèrent d'un multiple de ce pas rendent le MÊME flux, décalé.
-Un `graine + 1` aurait pu recoller au premier flux ; l'avalanche du hachage ne le
-peut pas, mesuré sur 2 000 graines.
-⚠⚠ **LA RANGÉE 18 RESTE, ET C'EST LA COLONNE DES DEUX UNIQUES QUI SE TIRE.** §4.2
-du brief : ce sont les deux objectifs du raid, ils doivent coûter la traversée
-complète ; les avancer raccourcirait tous les raids du jeu. **Les neuf colonnes
-sont atteintes des deux côtés**, et le bloc des proportionnels reste borné à
-`11..17` — sans quoi un bâtiment tiré pourrait recouvrir un unique.
-⚠⚠ **`etalementMaxRangees` VAUT 2, ET LE TABLEAU EST DANS `data/sites.js`.** À 0
-le bloc DÉRIVE sans porter de trou et le compte passe déjà de 4/3 à 11/11 ; les
-trous font le reste. Le compte ne monte plus après 3, et deux rangées vides au
-plus gardent le bloc lisible comme un bloc. ⚠ **Et `base n.45` ne bouge presque
-pas — 3 ensembles sur 20 —, ce qui est une propriété de la GÉOMÉTRIE et non un
-réglage manqué** : à ce niveau-là les blocs remplissent presque leur bande, donc
-la marge est nulle. C'est pourquoi le plancher de `DO T1` se calcule sur la
-MARGE mesurée, `1 + 3 × marge` plafonné à 12, et pas sur un seuil plat.
-⚠⚠ **LES OBSTACLES NE BOUGENT PAS, ET L'EFFET SUR LA TRAVERSÉE EST L'INVERSE DE
-CE QUE LE BRIEF ANNONÇAIT.** Il prévoyait que « les obstacles se retrouveront
-parfois seuls devant » : mesuré sur 40 raids par cellule, le nombre d'obstacles
-en avant de la défense **BAISSE** — camp n.12 7,85 → 2,70, camp n.30 5,13 → 1,10,
-avantPoste n.30 1,45 → 0,15, base n.45 0,75 → 0,20. Le bloc de défense dérive
-souvent vers l'AVANT et les dépasse.
-⚠ **ET LE COMBAT S'ALLONGE PLUS SOUVENT QU'IL NE RACCOURCIT, DE PEU** : ticks
-moyens 279,8 → 340,3 (camp n.12), 282,9 → 302,6 (camp n.30), 209,1 → 194,3
-(avantPoste n.30), 217,4 → 221,3 (base n.45). Les PV de défense restants baissent
-partout — 610 → 536, 463 → 376, 526 → 509, 546 → 534 pour mille : la défense
-vient à la rencontre de l'assaut et s'y use davantage. **Aucun barème n'a été
-touché ; le calibrage revient à Ethan.**
-⚠⚠ **UN RAID DE RÉFÉRENCE TOUCHE DE NOUVEAU LE « AUTRE RÉGIME », ET IL FAUT LE
-REMONTER.** `cible.test.js T5` : les raids qui touchent le plafond de 900 passent
-de trois à deux, la liste bougeant des deux côtés — et `blindeLourd/camp/42`, qui
-y entre, se conclut au tick **3 539** sans plafond, soit **quatre fois** les 900.
-C'est le troisième du genre après le 4 645 du lot CARTE et le 5 478 du lot
-COLONNE. **Ethan tranche.**
-⚠ **TREIZE TESTS ENTRENT — `DO T1` à `DO T12` plus `DO T3 bis`, dans
-`test/disposition-ouvrage.test.js` — ET LE COMPTE PASSE DE 1 472 À 1 485.** Aucune
-assertion n'a été retirée. ⚠ **QUATORZE FALSIFICATIONS, QUATORZE CHUTES**, et
-chacune est nommée par le test qu'elle vise : le retour au générateur d'avant, les
-colonnes refigées, le placement tirant sur le flux principal, un tirage
-conditionnel, les bâtiments montant sur les uniques, l'étalement débridé, les
-offsets renversés, le plafond d'occupants relevé, deux sels déjà pris, la
-dérivation arithmétique, les obstacles hors bande, un champ ajouté à une pièce, et
-`Math.random` dans le placement.
-⚠⚠ **SEPT GARDES CHANGENT DE CIBLE, ET AUCUNE NE S'ASSOUPLIT.** `COL T16`,
-`COL T18`, `CR T4`, `CR T5` et le `T6` de `generateur.test.js` assertaient
-l'INVARIANT QU'ETHAN DEMANDE DE RELÂCHER — « les rangées occupées sont les plus
-ARRIÈRE, sans trou », « Souche et Étai au centre ». Elles exigent désormais la
-bande ET un étalement borné, ce qu'un semis ne passerait pas. ⚠ Le `T7` du même
-fichier réancre la rangée la plus avancée d'une artillerie, **8 → 7**, avec la
-mesure large en clair — **6 sur 110 000 montages** — et le fait qu'elle ne
-descende PAS jusqu'à la rangée 3, l'artillerie occupant le bord arrière du bloc.
-⚠⚠ **ET `T12` PASSE D'UN PLAFOND EN TICKS À UN PLAFOND RELATIF, CE QUI EST PLUS
-FORT, PAS PLUS LÂCHE.** L'invariance en miroir tenait `ecartMax <= 1` sur un
-montage dont le pire combat durait 434 ticks ; le même montage en dure 644, et le
-seul écart non nul en vaut 5. **La STRUCTURE n'a pas bougé d'un cheveu** : quatre
-comparaisons sur cinq cents avant comme après, toujours UNE cellule sur cinquante,
-toujours le niveau 2 seul contre les quatre autres. Ce que le plafond doit tenir
-est donc la PART du combat que l'arrondi déplace — **0,231 % avant, 0,782 %
-après** — et un `<= 5` nu aurait laissé passer un miroir cassé sur un combat de
-cent ticks.
-⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.** Seizième couche pour
-`temoins-bases-0.js` — **58 couples sur 308, et LES SIX PREMIÈRES PHASES SONT
-IDENTIQUES AU BIT** : tout part de la phase 7, qui est le premier raid. ⚠ Et
-`disposition` n'y est PAS, alors que les quinze couches d'avant en déplaçaient :
-c'est celle de la base du JOUEUR, et ce lot ne recompose rien. Quatrième couche
-pour `temoins-combat.js` — 200 combats sur 200, 1 039 champs déplacés, dont
-**1 004 étaient déjà surchargés** : la surcharge passe de 1 296 à **1 331**, et il
-reste **269 champs** adossés à la capture d'avant JOURNAL-DE-COMBAT.
-⚠ **ET LES SCALAIRES DU TÉMOIN NE BOUGENT QUE SUR LES DEUX RAPPORTS DE RAID.**
-Gestes de construction, gestes d'armement, taille de la sauvegarde, cases
-atteignables, déplacement, nombre de bases attaquantes, nombre de cibles et cible
-retenue : **identiques sur les vingt-cinq graines**, et toujours gardés contre les
-captures d'avant.
-⚠ **AUCUN FICHIER DE `src/ui/` NI DE `src/render/` N'EST TOUCHÉ**, et leurs tests
-restent verts sans modification — c'est `DO T9` du brief, et il tient.
-⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 29.** Pas un champ n'entre dans
-l'état : une rangée et une colonne sont des positions que `genererSite` recalcule.
+**Référence au 08/09/2026 (après le lot VOISINAGE-ET-MENACE), à confronter :**
+⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST LE MÊME POINT D'ARRÊT QU'AU LOT
+PRÉCÉDENT.** `npm test` rend **1480 pass / 1 fail** ; le dépôt DÉCLARE **1481 pass / 0 fail**
+— c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
+NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est
+UNIQUE, il était **déjà là avant le lot** — mesuré au départ, 1471 pass / 1 fail
+sur `main` = `566a453` — et le §1.4 du brief interdit de le réparer.
+`npm run build` → `dist/index.html`, **9 125 020 octets**, 0 référence externe.
+Coût **+658 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre un
+livrable rebâti dans un `git worktree` depuis `origin/main` : **JavaScript +658 ·
+feuille +0 · balisage +0 · images +0 · audio +0**, et la somme des cinq postes
+tombe EXACTEMENT sur le total — **311 lignes `data:` de part et d'autre, 306 URI
+de part et d'autre**. Borne T10 inchangée à 9 300 000, marge **174 980 octets,
+1,88 %**. Le lot touche `src/data/sites.js`, `src/sim/fondation.js`,
+`src/sim/deplacement.js`, et fait entrer `src/sim/voisinage-des-bases.js` et
+`test/voisinage.test.js`.
+⚠⚠ **LE POINT 4 EST UNE MESURE, ET ELLE RÉPOND : CE N'EST PAS UN BOGUE.** Ethan :
+« je ne subis aucun raid Ouvrage alors que je suis à portée. » **Il EST à portée,
+et c'est précisément le problème.** Balayé sur 25 graines, rangée par rangée :
+au DÉPART (rangée 295) il n'y a **0 site à portée** — la garde de peuplement
+écarte l'Ouvrage de quinze cases ; de la rangée **290 à la rangée 263** il y en a
+jusqu'à **55,7 à portée et ZÉRO capable d'attaquer** ; la première base qualifiée
+apparaît à la rangée **262**. **Vingt-huit rangées où l'on voit l'ennemi sans rien
+risquer**, et rien à l'écran ne le dit.
+⚠⚠ **ET « À PORTÉE » EST SYMÉTRIQUE EN GÉOMÉTRIE, ASYMÉTRIQUE EN RÈGLE.** Le
+joueur peut raider une base de niveau 3 ; une base de niveau 3 ne peut pas le
+raider — `RAID_OUVRAGE.niveauMinimal` vaut 10, et le niveau d'une base de
+l'Ouvrage est celui de sa RANGÉE. Même disque, circulation à sens unique.
+⚠⚠ **L'ISSUE (c) DU BRIEF EST RÉFUTÉE PAR LA MESURE.** Il propose que « 1/1440
+rende la menace imperceptible » : **une fois qualifié, c'est 107,9 raids par 72 h
+à la rangée 250 et 165,1 à la 227** — un raid toutes les quarante minutes. La
+menace n'est pas faible, elle est ABSENTE puis BRUTALE.
+⚠ **L'ISSUE (b) EST ÉCARTÉE MAILLON PAR MAILLON.** À la rangée 250 :
+`basesAttaquantes` → 36, `baseAttaqueALaMinute` → 39 tirs sur 1440 minutes,
+`prochaineMinuteDeRaid` → minute 9, `resoudreLaMinute` → 1 raid, `subirUnRaid` →
+1 rapport, `verdict: defaite-totale`. **Aucun maillon ne rend systématiquement
+vide** ; à la rangée 270 la chaîne s'arrête au PREMIER, et c'est correct.
+⚠⚠ **L'INVARIANT QUI PRIME SUR TOUT EST INTACT : 0 DIVERGENCE SUR 5 GRAINES,
+72 h, SÉRIALISATION IDENTIQUE À L'OCTET.** `tickJeu` × 2 592 000 et
+`rattraperJeu(2 592 000)` rendent le même état, rapports et positions compris.
+⚠⚠ **UN FAIT ÉMERGENT, NON DEMANDÉ ET MESURÉ : LE RASAGE RENVOIE DANS LA BANDE
+IMMUNISÉE.** Une base neuve posée rangée 250 est rasée à la **minute 9** — elle
+n'a qu'un Chantier de niveau 1, donc aucune défense — et la sanction la descend
+de vingt rangées, à 270, où plus rien ne peut l'attaquer. **Mesuré : le repli
+protège aux rangées 245–250, et plus du tout à partir de 240.**
+⚠ **NI `chanceParMinute` NI `niveauMinimal` N'ONT ÉTÉ TOUCHÉS**, et la table
+d'arbitrage est au rapport : la bande immunisée vaut **28 rangées au seuil 10**,
+18 au seuil 8, 8 au seuil 6, et **0 au seuil 4**. **Ethan tranche.**
+⚠⚠ **LE POINT 3 EST ÉCRIT UNE FOIS ET LU DEUX FOIS, ET C'EST TOUT SON OBJET.**
+`src/sim/voisinage-des-bases.js` entre ; `problemesDeLaFondation` ET
+`problemesDuDeplacement` l'appellent. Sans le second, la règle ne vaudrait rien :
+le joueur fonderait loin, puis déplacerait sa base juste à côté de l'Ouvrage au
+geste suivant. `VM T4` est le test qui prouve que ce contournement est fermé.
+⚠⚠ **LE BLOC DE 3 × 3 CONTIENT SON CENTRE, ET C'EST UN ÉCART DÉCLARÉ AU BRIEF.**
+Celui-ci laissait entendre que seules les HUIT voisines étaient en jeu, la case
+exacte étant déjà refusée ailleurs. Elle l'est à la FONDATION ; elle ne l'était
+**PAS** au DÉPLACEMENT — mesuré, `problemesDuDeplacement` ne connaissait que
+`hors-carte`, `sur-place`, `trop-loin` et `delai`, si bien que **déplacer sa base
+SUR la case exacte d'une base de l'Ouvrage était permis, et le geste l'EFFAÇAIT
+de la carte** (`siteDeLaCase` rend `null` sur toute case occupée par une base du
+joueur). Ethan dit « les 9 cases » ; on prend les neuf, et le trou se ferme.
+⚠ **ET LA CASE EXACTE GARDE SON REFUS PROPRE, DES DEUX CÔTÉS.** Le brief demande
+de RÉÉCRIRE le commentaire du `=== 0`, pas de supprimer le bloc : « une de tes
+bases est DÉJÀ LÀ » est plus utile que « il faut une case libre ». Sur la case
+exacte le joueur lit donc DEUX raisons, et les deux sont vraies — elles répondent
+à deux questions différentes, la crushabilité et l'encombrement.
+⚠⚠ **ET CE QUE LA RÈGLE COÛTE EST MESURÉ, PAS DEVINÉ — C'EST LE CHIFFRE À
+ARBITRER.** L'Ouvrage est si dense que **0,3 % à 3 % des cases seulement ont un
+3 × 3 libre** passé la garde du départ ; à la rangée 50, **ZÉRO sur 290**.
+Conséquence sur `casesAtteignables`, 20 graines : **316 destinations avant la
+règle, ~6 après** au-delà de la rangée 275 — et **5 situations sur 300 (1,7 %)
+n'en ont AUCUNE**, c'est-à-dire un joueur immobilisé.
+⚠⚠ **MAIS LA PORTE DE SORTIE TIENT, ET ELLE EST MESURÉE 5 FOIS SUR 5 : UN SEUL
+RASAGE DÉBLOQUE.** Raser une base de l'Ouvrage voisine la met dans `casesRasees`,
+`siteDeLaCase` y rend `null`, et le 3 × 3 s'ouvre. La règle n'est donc pas une
+impasse : c'est une porte qui se mérite — « tout se débloque lorsqu'on pourra
+bouger la base », pris à la lettre. **Le départ n'est pas touché** : 261
+destinations avant, 261 après.
+⚠⚠ **ET UNE SECONDE RÈGLE D'ETHAN ENTRE EN COLLISION AVEC CELLE-CI — MESURÉ,
+NON CORRIGÉ.** `SATELLITES.camps.anneau` vaut `{min: 1, max: 2}` : sur 60
+graines, **70 % des camps paraissent COLLÉS à la base**, donc **70 % des camps
+sont devenus INFONDABLES** alors que `TYPES_ECRASABLES` les autorise toujours.
+Les avant-postes (`anneau {min: 2, max: 5}`) ne sont pas touchés — **0 %**. Le
+levier est UN nombre, `SATELLITES.camps.anneau.min` de 1 à 2 ; c'est du
+calibrage, et **Ethan tranche**. `BASES-1 T6` mesure et garde les deux moitiés.
+⚠ **LA SANCTION DE RASAGE N'EST PAS SOUMISE À LA RÈGLE, ET C'EST VOULU.**
+`raserLaBase` passe par `poserLaBaseSur`, qui ne vérifie ni portée ni délai ni
+voisinage : un redéploiement refusé bloquerait la sanction la plus lourde du jeu,
+donc le raid lui-même. Si la case d'arrivée tombe à côté d'une base de l'Ouvrage,
+elle y tombe — **relevé, non corrigé**.
+⚠ **LES SAUVEGARDES NE SONT PAS RÉTRO-CORRIGÉES**, et `SAVE_VERSION` reste à
+**29** — vérifié au diff. La règle juge les GESTES, pas l'histoire : une partie
+qui porte déjà deux bases adjacentes les garde.
+⚠⚠ **`casesAtteignables` SUIT PAR CONSTRUCTION, ET C'EST LE FAIT À GARDER.** Elle
+INTERROGE `problemesDuDeplacement` au lieu de réécrire ses règles — le motif de
+`casesPosables` de l'écran Chantier. La falsification que le brief proposait ne
+peut donc pas mordre ; `VM T8` garde la propriété par la SOURCE, et la
+falsification qui la fait décider seule le fait tomber.
+⚠ **AUCUN CYCLE D'IMPORT** : `site-de-la-case.js` n'importe ni `deplacement.js`
+ni `fondation.js`, vérifié avant d'écrire. Et **le poids ne bouge pas** de ce
+côté — tout est déjà inliné dans un fichier unique ; ce qui bouge est le couplage.
+⚠ **ONZE FALSIFICATIONS, ONZE CHUTES, ZÉRO MUETTE**, et le couple T1/T3 se
+comporte comme le brief l'annonçait : **le rayon porté à 2 fait rougir T3 et
+laisse T1 VERT** — c'est le couple qui mesure le rayon, pas T1 seul.
+⚠ **NEUF TESTS ENTRENT — `VM T1` à `T9` — ET LE COMPTE PASSE DE 1 472 À 1 481.**
+**Aucune assertion n'a été retirée ni assouplie** ; **une garde est RETOURNÉE et
+une se RESSERRE**. `BASES-1 T5` figeait l'arbitrage du 02/09 — « fonder à côté de
+sa propre base est autorisé » — que ce lot renverse : il est **retourné, pas
+réparé**, et il falsifie l'ancienne règle de face. `BASES-1 T6` gagne la moitié
+qui manquait : le camp collé est refusé, celui à deux cases passe.
+⚠⚠ **VINGT-DEUX MONTAGES ONT PERDU LEUR PRÉMISSE, ET AUCUN N'A ÉTÉ ASSOUPLI.**
+Onze dans `transfert.test.js` — il fondait à UNE case de la source, il fonde à
+deux ; huit dans `missions.test.js` et un dans `bases.test.js` — ils fondaient
+« une case au sud », **ils DEMANDENT désormais la case au moteur** ; sept dans
+`deplacement.test.js` — ils se posaient en territoire dense et mesuraient la
+densité au lieu du geste, ils rasent le voisinage par `partieDegagee`, le motif
+de `sansVoisinsOuvrage` de `poi.test.js`. **Un montage qui écrit une coordonnée
+ne garde que lui-même** — sixième fois du dépôt.
+⚠ **`src/ui/` N'A PAS UNE LIGNE DE CHANGÉE**, et `src/render/`, `art/`, `tools/`
+et `src/sim/generateur.js` non plus — trois lots tournaient en parallèle sur
+`src/ui/`, et le brief l'interdisait nommément. Vérifié au diff.
 ⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
-ne touche ni `art/`, ni `tools/`.
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Le lot ne change aucun
+pixel : il ajoute un refus dans le modèle et mesure une menace.
 
 **Auparavant, après le lot SOL-OUVRAGE :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
@@ -8762,7 +8755,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 31 fichiers
+src/sim/                simulation déterministe, sans DOM — 32 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -8789,6 +8782,7 @@ src/sim/                simulation déterministe, sans DOM — 31 fichiers
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
   formation-de-raid.js  la copie de travail de l'armée : ranger, embarquer, débarquer
+  voisinage-des-bases.js  ce qu'une base ENCOMBRE : le 3 × 3 qu'aucune autre ne partage
   ⤷ ⚠⚠ `formation-de-raid.js` NE VA JAMAIS DANS L'ÉTAT, ET C'EST TOUT SON OBJET —
     lot FORMATION-ET-GARNISON, 08/09. Il rend une copie profonde de
     `baseCourante(etat).armee`, ALIGNÉE PAR INDICE, plus un `embarqueDans` par
@@ -9206,7 +9200,7 @@ test/                   63 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  disposition-ouvrage
+  voisinage
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
