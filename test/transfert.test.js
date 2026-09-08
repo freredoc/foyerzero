@@ -42,7 +42,9 @@ function baseProductive(graine = 3) {
   for (const c of b.champs.cases) {
     if (poses[c.ressource] >= 2) continue;
     try {
-      poser(etat, 'collecteur', c.rangee, c.colonne);
+      // ⚠ LE COLLECTEUR SUIT SON CHAMP depuis le lot BÂTIMENTS-QUATRE-ÉTATS.
+      poser(etat, c.ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie',
+        c.rangee, c.colonne);
       poses[c.ressource] += 1;
     } catch { /* case illégale : on passe à la suivante */ }
   }

@@ -56,6 +56,7 @@ import {
 import { rectangleDuFond } from './fond.js';
 import { positionInterpolee } from './interpolation.js';
 import { celluleDuSprite, existeDansAtlas } from './sprite.js';
+import { ETATS_BATIMENT, SUFFIXE_ETAT_BATIMENT, batimentDeReference } from '../data/base.js';
 import { COTE_SPRITE } from '../data/atlas.js';
 import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
 import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
@@ -622,10 +623,74 @@ function couchesDeLaDefense(d, contexte) {
  * minuscules. UNE SEULE RÈGLE pour les deux camps, donc, et aucune table de
  * correspondance — qui serait la seconde vérité que ce lot existe pour retirer.
  */
+/**
+ * Le nom d'un bâtiment dans l'état demandé, RABATTU sur ce que l'atlas porte.
+ *
+ * ⚠⚠ L'ÉTAT SE LIT DANS L'ATLAS, IL NE S'ÉCRIT PAS ICI — c'est déjà la règle
+ * des poses `_def`, dix lignes plus haut, et c'est ce qui rend ce lot livrable
+ * avant que l'art n'arrive. Un bâtiment dont `_tres_abime` n'est pas encore
+ * cousu retombe sur `_abime`, puis sur l'intact ; le jour où la planche arrive,
+ * il n'y a **rien** à changer, et aucune liste de « qui a quel état » ne traîne
+ * quelque part pour y mentir.
+ *
+ * ⚠⚠ LA DÉGRADATION VA VERS LE SAIN, ET C'EST LE SEUL SENS DÉFENDABLE. Un
+ * bâtiment très abîmé dessiné en `_abime` montre moins de dégâts qu'il n'en a ;
+ * dessiné en `_detruit`, il annoncerait une ruine là où le joueur peut encore
+ * réparer. Mieux vaut sous-dire que sur-dire : la barre de PV, elle, ne ment
+ * jamais.
+ *
+ * ⚠ L'INTACT EST LE PLANCHER, ET IL EXISTE TOUJOURS. Les seize bâtiments
+ * cousus depuis le lot 6 portent leur nom nu ; si même celui-là manquait, le
+ * bâtiment n'aurait aucun sprite du tout et le rabattement n'y pourrait rien.
+ *
+ * @param {string} base le nom nu, `bat_<c>_<serpent>`
+ * @param {string} etat une valeur d'`ETATS_BATIMENT`
+ * @returns {string} un nom que l'atlas porte
+ */
+function nomAvecEtat(base, etat) {
+  const rang = ETATS_BATIMENT.indexOf(etat);
+  if (rang < 0) throw new RangeError(`bâtiment : état inconnu « ${etat} »`);
+  for (let i = rang; i > 0; i -= 1) {
+    const nom = `${base}${SUFFIXE_ETAT_BATIMENT[ETATS_BATIMENT[i]]}`;
+    if (existeDansAtlas('batiment', nom)) return nom;
+  }
+  return base;
+}
+
+/**
+ * Les couches d'un bâtiment — une seule, dans l'état où il se trouve.
+ *
+ * ⚠ L'ÉTAT EST UN CHAMP DU DESCRIPTEUR, PAS UN CALCUL FAIT ICI. `render/`
+ * ne lit pas de PV : la règle des seuils vit dans `data/base.js`
+ * (`etatDuBatiment`), et l'appelant la lui demande. Un module de rendu qui
+ * saurait à partir de quel pourcentage un mur se fissure serait la seconde
+ * vérité que `CLAUDE.md` §4 refuse.
+ *
+ * ⚠ ET SON DÉFAUT EST « INTACT », comme celui d'`avarie` pour les sites. Les
+ * montages qui composent un bâtiment à la main — il y en a plusieurs au dépôt —
+ * n'en portent pas, et un bâtiment sans blessure connue est un bâtiment sain.
+ */
 function couchesDuBatiment(d) {
   const c = lettreDuProprietaire(d.proprietaire);
-  const serpent = d.id.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`);
-  return [{ famille: 'batiment', nom: `bat_${c}_${serpent}` }];
+  const nu = (id) => `bat_${c}_${id.replace(/([A-Z])/g, (m) => `_${m.toLowerCase()}`)}`;
+  // ⚠⚠ UNE VIGNETTE DE PALETTE RETOMBE SUR CE QU'ELLE POSE, TANT QUE SON
+  // ICÔNE N'EST PAS COUSUE — lot BÂTIMENTS-QUATRE-ÉTATS. `collecteurMixte` n'est
+  // pas un bâtiment : c'est la vignette unique que le joueur touche, et Ethan a
+  // une icône pour elle (« une icône collecteur mixte », 08/09) qui n'est pas
+  // encore au dépôt. En attendant, elle montre le collecteur à quartz.
+  //
+  // ⚠⚠ ET C'EST L'ATLAS QUI DÉCIDE, PAS UNE LISTE. Le jour où
+  // `bat_j_collecteur_mixte` est cousu, il est pris **sans qu'une ligne change
+  // ici** — exactement comme les états manquants juste au-dessus, et comme les
+  // poses `_def` depuis le lot 8. Un `if (id === 'collecteurMixte')` écrit ici
+  // serait la ligne qu'on oublierait de retirer.
+  //
+  // ⚠ POUR TOUT AUTRE IDENTIFIANT, LA LIGNE NE FAIT RIEN.
+  // `batimentDeReference` rend son argument quand ce n'est pas une vignette :
+  // un bâtiment dont le sprite manquerait vraiment garde son nom, et le manque
+  // se voit là où il doit se voir — dans `celluleDuSprite`, qui lève.
+  const base = existeDansAtlas('batiment', nu(d.id)) ? nu(d.id) : nu(batimentDeReference(d.id));
+  return [{ famille: 'batiment', nom: nomAvecEtat(base, d.etat ?? 'intact') }];
 }
 
 /**

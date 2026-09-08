@@ -70,6 +70,7 @@
 import { DEFENSES, UNITES } from '../data/combat.js';
 import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, REPARATION_BASE_JOUEUR, RETOUR_DEFENSES, coutDeMontee,
+  etatDuBatiment,
 } from '../data/base.js';
 import { NIVEAU } from '../data/niveaux.js';
 import { ECONOMIE_NIVEAU } from '../data/economie.js';
@@ -723,6 +724,30 @@ function chantierDeLaBase(laBase) {
     );
   }
   return pose;
+}
+
+/**
+ * L'état d'un bâtiment POSÉ, de ses dégâts — lot BÂTIMENTS-QUATRE-ÉTATS.
+ *
+ * ⚠⚠ ELLE VIT ICI PARCE QUE LES PV D'UNE POSE VIVENT ICI. `pvMaxDuBatimentMilli`
+ * est deux lignes plus bas et `degatsMilli` est le champ que ce module écrit ;
+ * recomposer les deux dans l'écran aurait fait une seconde arithmétique des PV,
+ * et c'est la faute que ce fichier existe pour concentrer.
+ *
+ * ⚠⚠ LA RÈGLE DES SEUILS, ELLE, N'EST PAS ICI : `etatDuBatiment` de
+ * `data/base.js` la porte, et c'est du CALIBRAGE — « intact = PV pleins, abîmé
+ * jusqu'à 50 % inclus ». Ce module fournit les deux nombres, il ne décide pas où
+ * l'on coupe.
+ *
+ * ⚠ `degatsMilli` ABSENT VAUT ZÉRO, comme partout ailleurs dans ce fichier :
+ * une pose qui n'a jamais été touchée ne porte pas le champ.
+ *
+ * @param {{id: string, niveau: number, degatsMilli?: number}} pose
+ * @returns {string} une valeur d'`ETATS_BATIMENT`
+ */
+export function etatDeLaPose(pose) {
+  const max = pvMaxDuBatimentMilli(pose.id, pose.niveau);
+  return etatDuBatiment(Math.max(0, max - (pose.degatsMilli ?? 0)), max);
 }
 
 /** Les PV maximaux d'un bâtiment de la base, en milli-PV. */

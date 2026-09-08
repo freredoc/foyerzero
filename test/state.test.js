@@ -53,6 +53,17 @@ import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
+/**
+ * Le collecteur qui va sur CETTE case de champ.
+ *
+ * ⚠ L'IDENTIFIANT SE LIT SUR LE TERRAIN — lot BÂTIMENTS-QUATRE-ÉTATS. Le
+ * Collecteur s'est dédoublé, et poser celui de quartz sur un champ de scorie est
+ * refusé : un montage qui choisirait au hasard mesurerait ce refus.
+ */
+function collecteurDe(k) {
+  return k.ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie';
+}
+
 // ⚠ UN INSTANT MURAL FIXE, JAMAIS L'HORLOGE DE LA MACHINE. Depuis la v6,
 // `serialiser` et `charger` reçoivent l'instant présent en argument. Le prendre
 // ici sur l'horloge système rendrait la suite dépendante du moment où elle
@@ -83,7 +94,9 @@ function etatDeReference() {
   ];
   // Trois collecteurs, chacun sur un vrai champ.
   for (const k of champs.slice(0, 3)) {
-    baseCourante(etat).disposition.push({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 5 });
+    baseCourante(etat).disposition.push({
+      id: collecteurDe(k), rangee: k.rangee, colonne: k.colonne, niveau: 5,
+    });
   }
 
   baseCourante(etat).economie = {
@@ -411,7 +424,9 @@ test('état — une sauvegarde injouable est REFUSÉE au chargement, pas jouée 
   const abime = JSON.parse(serialiser(etat, T0));
   // Un collecteur posé sur une case nue : illégal, et silencieux si on laisse
   // passer — il ne produirait simplement jamais rien.
-  abime.bases[0].disposition.push({ id: 'collecteur', rangee: 11, colonne: 1, niveau: 1 });
+  abime.bases[0].disposition.push({
+    id: 'collecteurQuartz', rangee: 11, colonne: 1, niveau: 1,
+  });
   abime.bases[0].economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   assert.throws(() => charger(JSON.stringify(abime), T0), /injouable/);
 
@@ -549,7 +564,7 @@ function baseQuiProduit(graine) {
   const quartz = baseCourante(etat).champs.cases.filter((c) => c.ressource === 'quartz');
   assert.ok(quartz.length > 0, 'montage : pas un seul champ de quartz');
   baseCourante(etat).disposition.push(
-    { id: 'collecteur', rangee: quartz[0].rangee, colonne: quartz[0].colonne, niveau: 10 },
+    { id: 'collecteurQuartz', rangee: quartz[0].rangee, colonne: quartz[0].colonne, niveau: 10 },
     { id: 'raffinerie', rangee: quartz[0].rangee, colonne: quartz[0].colonne + 1, niveau: 10 },
   );
   baseCourante(etat).economie.residus.push(
@@ -697,7 +712,7 @@ test('état — poser un bâtiment de niveau 1 ne coûte RIEN', () => {
   baseCourante(etat).economie.ressources.scorie = 3_000_000;
   const avant = { ...baseCourante(etat).economie.ressources };
 
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
 
   assert.deepEqual(baseCourante(etat).economie.ressources, avant, 'poser a prélevé quelque chose');
   assert.equal(baseCourante(etat).disposition.length, 2);
@@ -724,7 +739,7 @@ test('état — le résidu suit le bâtiment posé, et le tick le prouve', () =>
   // vérifier plutôt que l'espérer.
   assert.deepEqual(problemesDeLaPose(etat, 'raffinerie', nue.rangee, nue.colonne), []);
   poser(etat, 'raffinerie', nue.rangee, nue.colonne);
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
 
   assert.equal(baseCourante(etat).economie.residus.length, baseCourante(etat).disposition.length);
   // Le montage doit produire ET pouvoir stocker, sinon il ne mesure rien.
@@ -747,7 +762,7 @@ test('état — une pose illégale est REFUSÉE, et elle dit laquelle', () => {
   // Un collecteur hors d'un champ : le champ décide de sa ressource, hors champ
   // il ne produirait rien et ne le dirait pas.
   assert.deepEqual(
-    problemesDeLaPose(etat, 'collecteur', 11, 1).map((p) => p.code), ['hors-champ'],
+    problemesDeLaPose(etat, 'collecteurQuartz', 11, 1).map((p) => p.code), ['hors-champ'],
   );
   // Un second Chantier : `unique` vaut true.
   assert.deepEqual(
@@ -799,7 +814,7 @@ test('état — une base déjà bancale reste constructible', () => {
     'montage : la base n\'est pas bancale, rien à filtrer',
   );
   // Et une pose légale reste légale malgré ça.
-  assert.deepEqual(problemesDeLaPose(etat, 'collecteur', champs[1].rangee, champs[1].colonne), []);
+  assert.deepEqual(problemesDeLaPose(etat, collecteurDe(champs[1]), champs[1].rangee, champs[1].colonne), []);
 });
 
 // ---------------------------------------------------------------------------
@@ -812,7 +827,7 @@ test('état — le Chantier plafonne le niveau de toute la base, sauf le sien', 
   // supérieur à celui du chantier. »
   const etat = creerEtat(4242);
   const champ = baseCourante(etat).champs.cases[0];
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
   baseCourante(etat).economie.ressources = { quartz: 9e9, scorie: 9e9, electricite: 9e9 };
 
   // Montage falsifiable : sans le plafond, cette montée serait payable. On le
@@ -918,7 +933,7 @@ const NIVEAU_CHANTIER_MONTAGE = 10;
 function baseAvecCollecteur(quartzMilli = 100_000_000) {
   const etat = creerEtat(20260827);
   const premierChamp = baseCourante(etat).champs.cases[0];
-  poser(etat, 'collecteur', premierChamp.rangee, premierChamp.colonne);
+  poser(etat, collecteurDe(premierChamp), premierChamp.rangee, premierChamp.colonne);
   baseCourante(etat).disposition[0].niveau = NIVEAU_CHANTIER_MONTAGE;
   baseCourante(etat).economie.ressources = {
     quartz: quartzMilli, scorie: quartzMilli, electricite: quartzMilli,
@@ -940,7 +955,7 @@ function baseAvecCollecteur(quartzMilli = 100_000_000) {
 test('état — améliorer monte d\'un niveau et débite exactement le palier', () => {
   const etat = baseAvecCollecteur();
   const avant = { ...baseCourante(etat).economie.ressources };
-  const cout = coutDeMontee('collecteur', 2);
+  const cout = coutDeMontee('collecteurQuartz', 2);
 
   // Falsifiable : un palier gratuit rendrait le débit indétectable.
   assert.ok(cout.quartz > 0, 'le montage ne mesure rien : palier gratuit');
@@ -960,7 +975,7 @@ test('état — améliorer monte d\'un niveau et débite exactement le palier', 
   ameliorer(etat, 1);
   assert.equal(baseCourante(etat).disposition[1].niveau, 3);
   const debitDeux = apresUn.quartz - baseCourante(etat).economie.ressources.quartz;
-  assert.equal(debitDeux, coutDeMontee('collecteur', 3).quartz * 1000);
+  assert.equal(debitDeux, coutDeMontee('collecteurQuartz', 3).quartz * 1000);
   assert.notEqual(debitDeux, cout.quartz * 1000);
 });
 
@@ -984,7 +999,7 @@ test('état — améliorer sans les ressources est REFUSÉ, et rien n\'est débi
 
   // Et avec juste ce qu'il faut, ça passe : le refus vient bien du stock, pas
   // d'un blocage permanent.
-  const cout = coutDeMontee('collecteur', 2);
+  const cout = coutDeMontee('collecteurQuartz', 2);
   for (const r of ['quartz', 'scorie', 'electricite']) {
     baseCourante(etat).economie.ressources[r] = cout[r] * 1000;
   }
@@ -998,12 +1013,12 @@ test('état — démolir rend 90 %, retire la ligne, et retire son résidu', () 
   ameliorer(etat, 1);
   ameliorer(etat, 1); // niveau 3, donc un investi non nul dans les deux canaux
   const avant = { ...baseCourante(etat).economie.ressources };
-  const investi = coutCumule('collecteur', 3);
+  const investi = coutCumule('collecteurQuartz', 3);
   assert.ok(investi.quartz > 0 && investi.electricite > 0, 'montage sans investi mesurable');
 
   const rendu = demolir(etat, 1);
 
-  assert.deepEqual(rendu, remboursementDuNiveau('collecteur', 3));
+  assert.deepEqual(rendu, remboursementDuNiveau('collecteurQuartz', 3));
   assert.ok(rendu.quartz < investi.quartz, 'le rendu doit être amputé de 10 %');
   for (const r of ['quartz', 'scorie', 'electricite']) {
     assert.equal(baseCourante(etat).economie.ressources[r], avant[r] + rendu[r] * 1000, `rendu en ${r}`);
@@ -1081,7 +1096,7 @@ test('état — l\'amorce paie de quoi démarrer, et c\'est vérifié sur les pr
   // et ce test le vérifie au lieu de le supposer.
   const etat = creerEtat(779);
   const champ = baseCourante(etat).champs.cases[0];
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
 
   // Rien d'autre que le Chantier ne peut monter tant qu'il est au niveau 1.
   assert.deepEqual(
@@ -1181,7 +1196,7 @@ test('déplacer — la règle est celle de la disposition, jamais une seconde', 
   const etat = creerEtat(4242);
   baseCourante(etat).disposition[0].niveau = 6;
   const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
   // ⚠ UN TROISIÈME BÂTIMENT, ET IL EST INDISPENSABLE. Sans lui le collecteur est
   // le DERNIER de la liste, et un `splice` suivi d'un `push` le remettrait
   // exactement au même indice : le test passerait sur du code qui décale tous
@@ -1197,7 +1212,7 @@ test('déplacer — la règle est celle de la disposition, jamais une seconde', 
   assert.deepEqual(problemesDuDeplacement(etat, 1, autre.rangee, autre.colonne), []);
   const horsChamp = problemesDuDeplacement(etat, 1, 16, 4);
   assert.deepEqual(horsChamp.map((p) => p.code), ['hors-champ']);
-  assert.equal(horsChamp[0].message, problemesDeLaPose(etat, 'collecteur', 16, 4)[0].message,
+  assert.equal(horsChamp[0].message, problemesDeLaPose(etat, 'collecteurQuartz', 16, 4)[0].message,
     'le refus du déplacement ne dit pas la même chose que celui de la pose');
 
   // ⚠ RESTER SUR PLACE EST LÉGAL. Le refuser obligerait l'écran à connaître
@@ -1214,7 +1229,7 @@ test('déplacer — la règle est celle de la disposition, jamais une seconde', 
   // protège : `economie.residus` est parallèle à `disposition`, et réécrire la
   // liste dans un autre ordre ferait produire à chaque bâtiment le reste de son
   // voisin.
-  assert.equal(baseCourante(etat).disposition[1].id, 'collecteur', 'le bâtiment déplacé a changé d\'indice');
+  assert.equal(baseCourante(etat).disposition[1].id, 'collecteurQuartz', 'le bâtiment déplacé a changé d\'indice');
   assert.equal(baseCourante(etat).disposition[2].id, apres, 'l\'ordre de la disposition a changé');
 
   // ⚠ L'INDICE NE BOUGE PAS, DONC LE RÉSIDU SUIT TOUT SEUL. `economie.residus`
@@ -1251,7 +1266,7 @@ test('déplacer — une base déjà bancale reste réarrangeable', () => {
   // le filtre protège, c'est le déplacement d'un bâtiment INNOCENT pendant que
   // le défaut demeure — le cas ordinaire d'une base déjà bancale.
   const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
   const ailleurs = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz' && c !== champ);
   assert.ok(problemesDeDisposition(baseCourante(etat).disposition, baseCourante(etat).champs)
     .some((p) => p.code === 'uniques-voisins'), 'le défaut doit survivre à la pose');
@@ -2406,7 +2421,7 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // et la chaîne un maillon v27 → v28. La phrase du message reste vraie de
   // PRODUCTION-EN-DÉFENSE ; ce que la ligne garde n'est pas un numéro figé mais
   // le fait qu'on ne bumpe pas sans passer par ici.
-  assert.equal(SAVE_VERSION, 28, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION');
+  assert.equal(SAVE_VERSION, 29, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());

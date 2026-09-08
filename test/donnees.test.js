@@ -582,8 +582,8 @@ test('BARÈME T8 — l\'électricité est une seconde ancre, pas le quart pour t
     const c = coutDeMontee(id, n);
     return c.electricite / c.quartz;
   };
-  assert.ok(Math.abs(rapport('collecteur', 40) - 0.75) < 1e-6,
-    `collecteur : ${rapport('collecteur', 40)} au lieu de 0,75`);
+  assert.ok(Math.abs(rapport('collecteurQuartz', 40) - 0.75) < 1e-6,
+    `collecteurQuartz : ${rapport('collecteurQuartz', 40)} au lieu de 0,75`);
   assert.ok(Math.abs(rapport('centrale', 40) - 0.5 / 5.2) < 1e-6,
     `centrale : ${rapport('centrale', 40)} au lieu de 0,5/5,2`);
   assert.ok(Math.abs(rapport('caserne', 40) - 0.25) < 1e-6, 'les autres gardent le quart');
@@ -597,7 +597,7 @@ test('BARÈME T8 — l\'électricité est une seconde ancre, pas le quart pour t
     'la fraction de la Centrale a été aplatie en décimale : sa dérivation est perdue');
 
   // Le code d'avant rendait 0,5 pour le Collecteur et 0,1 pour la Centrale.
-  assert.notEqual(COUT_ELECTRICITE.fraction.collecteur, 0.5);
+  assert.notEqual(COUT_ELECTRICITE.fraction.collecteurQuartz, 0.5);
   assert.notEqual(COUT_ELECTRICITE.fraction.centrale, 0.1);
 });
 
@@ -615,8 +615,8 @@ test('BARÈME T9 — le coefficient de régime couvre exactement les onze bâtim
   // ⚠⚠ ET `classeDeCout` NE SUFFIT PLUS : la Centrale et le Collecteur sont
   // tous deux `modeste`, ancre 3, et leurs coefficients diffèrent d'un facteur
   // 2,6. C'est ce fait-là qui interdit de dériver le coefficient de la classe.
-  assert.equal(BASE_BATIMENTS.centrale.classeDeCout, BASE_BATIMENTS.collecteur.classeDeCout);
-  assert.equal(COEFFICIENT_DE_REGIME.centrale / COEFFICIENT_DE_REGIME.collecteur, 2.6);
+  assert.equal(BASE_BATIMENTS.centrale.classeDeCout, BASE_BATIMENTS.collecteurQuartz.classeDeCout);
+  assert.equal(COEFFICIENT_DE_REGIME.centrale / COEFFICIENT_DE_REGIME.collecteurQuartz, 2.6);
 
   // Et les trois `majeur` gardent un facteur de 1 : c'est sur eux que la rampe
   // a été calée, et c'est pourquoi elle passait pour juste.

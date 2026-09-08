@@ -61,6 +61,8 @@ import { etatDesMissions, avancement } from '../src/sim/missions.js';
 import { CHAINE_TUTORIEL } from '../src/data/missions.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
+import { batimentDeLaVignette } from '../src/data/base.js';
+import { ressourceDeLaCase } from '../src/sim/champs.js';
 import {
   GRAINES, PHASES, CHAMPS, CHAMPS_AJOUTES_PAR_BASES_1, EMPREINTES_PAR_CHAMP, SCALAIRES,
   VERSION_AU_TEMOIN, OCTETS_AJOUTES_PAR_LE_DEPLIAGE, OCTETS_AJOUTES_PAR_BASES_1,
@@ -85,6 +87,8 @@ import {
   DEPLACES_PAR_CIBLES_RANGEES, EMPREINTES_PAR_GRAINE_CIBLES_RANGEES,
   DEPLACES_PAR_TERRITOIRE_LU, EMPREINTES_PAR_GRAINE_TERRITOIRE_LU,
   DEPLACES_PAR_RETOUCHES, EMPREINTES_PAR_GRAINE_RETOUCHES,
+  DEPLACES_PAR_QUATRE_ETATS, EMPREINTES_PAR_GRAINE_QUATRE_ETATS,
+  OCTETS_AJOUTES_PAR_QUATRE_ETATS,
   RAPPORTS_PROCHE_RETOUCHES, RAPPORTS_OUVRAGE_RETOUCHES, CIBLE_PROCHE_RETOUCHES,
   RAPPORTS_OUVRAGE_TERRITOIRE_LU,
   RAPPORTS_PROCHE_CIBLES_RANGEES, RAPPORTS_OUVRAGE_CIBLES_RANGEES,
@@ -146,7 +150,14 @@ function empreinteAttendue(phase, champ) {
   // paraissent — et tout ce qui en dépend à partir du premier raid. **`p01` est
   // identique AU BIT**, et l'attribution est mesurée : en neutralisant la seule
   // ligne de la contrainte, le témoin retombe à zéro couple déplacé.
-  return DEPLACES_PAR_RETOUCHES[phase]?.[champ]
+  // ⚠⚠ QUATORZIÈME COUCHE, ET LA PLUS ÉTROITE DE TOUTES — lot
+  // BÂTIMENTS-QUATRE-ÉTATS, 08/09. Elle ne porte QUE `disposition`, sur les
+  // quatorze phases : le Collecteur s'est dédoublé, donc le scénario pose deux
+  // identifiants au lieu d'un, et rien d'autre ne bouge. Les vingt et un autres
+  // champs tombent à l'octet sur la capture d'origine — c'est ce qui prouve que
+  // le dédoublement est un RENOMMAGE et pas un changement de règle.
+  return DEPLACES_PAR_QUATRE_ETATS[phase]?.[champ]
+    ?? DEPLACES_PAR_RETOUCHES[phase]?.[champ]
     ?? DEPLACES_PAR_TERRITOIRE_LU[phase]?.[champ]
     ?? DEPLACES_PAR_CIBLES_RANGEES[phase]?.[champ]
     ?? DEPLACES_PAR_PRODUCTION_EN_DEFENSE[phase]?.[champ]
@@ -270,17 +281,26 @@ function monterLeChantier(etat, journal) {
 }
 
 /** Pose un bâtiment sur la première case légale trouvée. */
-function poserOuDire(etat, id, journal) {
+function poserOuDire(etat, vignette, journal) {
   for (let r = 11; r <= 18; r += 1) {
     for (let c = 1; c <= 9; c += 1) {
       try {
+        // ⚠⚠ LA VIGNETTE SE RÉSOUT PAR LE CHAMP, CASE PAR CASE — lot
+        // BÂTIMENTS-QUATRE-ÉTATS. Le scénario posait `'collecteur'` ; il n'existe
+        // plus, et le joueur n'en choisit toujours pas un : il pose la vignette
+        // mixte, et le terrain dit lequel des deux atterrit. Le montage passe
+        // donc par `batimentDeLaVignette`, la fonction de PRODUCTION, plutôt que
+        // de deviner — et il balaie exactement comme avant.
+        const id = batimentDeLaVignette(
+          vignette, ressourceDeLaCase(baseCourante(etat).champs, r, c),
+        );
         poser(etat, id, r, c);
         journal.push(`${id}@${r},${c}`);
         return;
       } catch { /* case illégale : la suivante */ }
     }
   }
-  journal.push(`${id}: aucune case`);
+  journal.push(`${vignette}: aucune case`);
 }
 
 /**
@@ -352,7 +372,9 @@ function jouerUneGraine(graine) {
 
   // --- 1. bâtir en trois temps, entrecoupés de production -------------------
   monterLeChantier(etat, journal);
-  for (const id of ['collecteur', 'collecteur', 'raffinerie']) poserOuDire(etat, id, journal);
+  for (const id of ['collecteurMixte', 'collecteurMixte', 'raffinerie']) {
+    poserOuDire(etat, id, journal);
+  }
   t.p01_batir = releve(etat);
 
   rattraperJeu(etat, 6 * H);
@@ -509,8 +531,8 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
       ).join('')).join(''),
     );
     // ⚠ LA COUCHE LA PLUS RÉCENTE FAIT FOI, comme pour `empreinteAttendue` :
-    // RETOUCHES déplace la case des satellites, donc les vingt-cinq graines.
-    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOUCHES[g]) ecarts.push(g);
+    // BÂTIMENTS-QUATRE-ÉTATS déplace la disposition, donc les vingt-cinq graines.
+    if (obtenue !== EMPREINTES_PAR_GRAINE_QUATRE_ETATS[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -544,6 +566,7 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       x.tailleSauvegarde,
       attendu.tailleSauvegarde + OCTETS_AJOUTES_PAR_LE_DEPLIAGE + OCTETS_AJOUTES_PAR_BASES_1
         + OCTETS_AJOUTES_PAR_TRANSFERT + OCTETS_AJOUTES_PAR_RESERVE_BASE
+        + OCTETS_AJOUTES_PAR_QUATRE_ETATS
         - OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE,
       `graine ${g} : taille de la sauvegarde`,
     );
@@ -1569,7 +1592,7 @@ test('BASES-1 T12 — plusieurs bases traversent structuredClone sans se dédoub
   const etat = partieAvecDroit(3, 293);
   fonderUneBase(etat, { rangee: 293, colonne: 22 });
   basculerVersLaBase(etat, 0);
-  poser(etat, 'collecteur', ...premierChampLibre(etat));
+  poser(etat, ...collecteurDuPremierChampLibre(etat));
   rattraperJeu(etat, 3 * TICKS_PAR_MINUTE);
 
   const avant = serialiser(etat, 1_000_000);
@@ -1596,6 +1619,20 @@ test('BASES-1 T12 — plusieurs bases traversent structuredClone sans se dédoub
 });
 
 /** La première case de champ libre de la base courante — pour un montage. */
+/**
+ * Le collecteur qui va sur le premier champ libre, et ses coordonnées.
+ *
+ * ⚠ L'IDENTIFIANT SE DEMANDE AU TERRAIN, il ne se choisit pas : le premier
+ * champ libre est de quartz ou de scorie selon la graine, et poser le mauvais
+ * collecteur dessus est refusé depuis le lot BÂTIMENTS-QUATRE-ÉTATS.
+ */
+function collecteurDuPremierChampLibre(etat) {
+  const [rangee, colonne] = premierChampLibre(etat);
+  const champs = baseCourante(etat).champs;
+  return [batimentDeLaVignette('collecteurMixte',
+    ressourceDeLaCase(champs, rangee, colonne)), rangee, colonne];
+}
+
 function premierChampLibre(etat) {
   const laBase = baseCourante(etat);
   const prises = new Set(laBase.disposition.map((b) => `${b.rangee}:${b.colonne}`));
@@ -1667,7 +1704,7 @@ test('BASES-1 T14 — la migration 23 → 24 remonte les trois champs neufs', ()
 
 test('BASES-1 T9 — la bascule change l\'indice, et les écrans lisent la courante', () => {
   const etat = partieAvecDroit(3, 293);
-  poser(etat, 'collecteur', ...premierChampLibre(etat));
+  poser(etat, ...collecteurDuPremierChampLibre(etat));
   fonderUneBase(etat, { rangee: 293, colonne: 22 });
 
   // ⚠ FONDER REND LA NEUVE COURANTE : c'est ce qu'on veut voir bouger.

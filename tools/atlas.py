@@ -95,7 +95,18 @@ METHODE = 6
 # partout ailleurs — un champ optionnel aurait laissé croire qu'une famille sans
 # exclusion n'a pas eu à en décider.
 FAMILLES = {
-    'bâtiment': ('batiment', 34, ()),   # 16 intacts + 16 détruits + 2 ruines, lot 10 du 30/08
+    # ⚠⚠ 34 → 82 AU LOT BÂTIMENTS-QUATRE-ÉTATS, 08/09 : VINGT BÂTIMENTS À QUATRE
+    # ÉTATS, PLUS LES DEUX RUINES. C'était 16 intacts + 16 détruits + 2 ruines
+    # depuis le lot 10 du 30/08. Les seize anciennes planches sont REMPLACÉES, pas
+    # doublées : `tools/batiments_v2.py` produit les quatre-vingts depuis
+    # quatre-vingts sources à un sujet chacune, et `tools/ruines.py` ne garde que
+    # `ruine_j` et `ruine_o`, qui n'ont jamais été des bâtiments.
+    # ⚠ CINQ BÂTIMENTS DE PLUS, PAS QUATRE : le Collecteur se dédouble — un par
+    # ressource — et les trois artilleries entrent. 16 − 1 + 2 + 3 = 20.
+    # ⚠ ET UNE DE PLUS, QUI N'EST PAS UN BÂTIMENT : `bat_j_collecteur_mixte`,
+    # l'icône de la vignette de palette. Vingt bâtiments à quatre états font 80,
+    # plus les deux ruines et cette icône : 83.
+    'bâtiment': ('batiment', 83, ()),
     'terrain': ('terrain', 18, ()),
     # ⚠⚠ 204 → 18 AU LOT SPRITES-V2-JOUEUR, 05/09 : NEUF PAR CAMP, ET RIEN DE
     # PLUS. Les seize orientations tombent — la tourelle TOURNE au rendu — et les
@@ -414,13 +425,13 @@ def main():
 
     js = index_js(familles)
     etat = comparer(INDEX, js.encode('utf-8'))
-# ⚠⚠ `newline=` EST OBLIGATOIRE SOUS WINDOWS, ET SON ABSENCE A FAIT MENTIR LE
-# VÉRIFICATEUR. Sans lui, Python traduit chaque saut de ligne en CRLF à
-# l'écriture : le fichier du dépôt est en LF, celui que la chaîne rejoue est en
-# CRLF, et `tools/verifier.py` annonce « DIFFÈRE » sur un contenu IDENTIQUE. Un
-# écart qui ment est pire qu'un écart qui manque — il apprend à ne plus lire le
-# verdict. ⚠ TROIS OUTILS SUR TREIZE SONT CORRIGÉS ICI, ceux que le lot
-# CONQUÊTE-24H fait écrire ; les dix autres restent, et c'est un lot à part.
+    # ⚠⚠ `newline=` EST OBLIGATOIRE SOUS WINDOWS, ET SON ABSENCE A FAIT MENTIR LE
+    # VÉRIFICATEUR. Sans lui, Python traduit chaque saut de ligne en CRLF à
+    # l'écriture : le fichier du dépôt est en LF, celui que la chaîne rejoue est en
+    # CRLF, et `tools/verifier.py` annonce « DIFFÈRE » sur un contenu IDENTIQUE. Un
+    # écart qui ment est pire qu'un écart qui manque — il apprend à ne plus lire le
+    # verdict. ⚠ TROIS OUTILS SUR TREIZE SONT CORRIGÉS ICI, ceux que le lot
+    # CONQUÊTE-24H fait écrire ; les dix autres restent, et c'est un lot à part.
     if args.ecrire:
         with open(INDEX, 'w', encoding='utf-8', newline='\n') as f:
             f.write(js)

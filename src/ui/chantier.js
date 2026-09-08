@@ -33,7 +33,9 @@ import {
   BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
   ORDRE_PALETTE, RETOUR_DEFENSES,
+  VIGNETTES_MIXTES, batimentDeLaVignette, batimentDeReference,
 } from '../data/base.js';
+import { ressourceDeLaCase } from '../sim/champs.js';
 import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
 import { compacter } from '../render/nombre.js';
 // ⚠⚠ LES PICTOGRAMMES NE SONT PAS NOMMÉS ICI, ILS SONT DEMANDÉS — lot
@@ -101,6 +103,7 @@ import {
   problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
   plafondDeLaReserveDesBatiments, direLaDuree,
   complexeDeLaBase, retourDeLaPiece, ticksDeRetour, diviseurDuBatiment,
+  etatDeLaPose,
 } from '../sim/reparation.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
@@ -381,9 +384,22 @@ export const SIGLES = {
   depotDeVehicules: 'DEP',
   aerodrome: 'AER',
   centrale: 'CEN',
-  collecteur: 'COL',
+  collecteurQuartz: 'CLQ',
+  collecteurScorie: 'CLS',
   raffinerie: 'RAF',
   accumulateur: 'ACC',
+  // ⚠ « ART » NE CONVIENT POUR AUCUNE DES TROIS, et c'est très exactement le
+  // piège que l'en-tête de cette table décrit : trois pièces qui portent le même
+  // sigle sont trois pièces qu'on confond à l'œil. La cible se lit donc sur la
+  // troisième lettre — Infanterie, Véhicule, Aérien.
+  artillerieAntiInfanterie: 'AAI',
+  artillerieAntiVehicule: 'AAV',
+  artillerieAntiAerien: 'AAA',
+  // ⚠⚠ UNE SEIZIÈME ENTRÉE QUI N'EST PAS UN BÂTIMENT : la vignette mixte de
+  // la palette. Elle garde le `COL` que le Collecteur portait avant son
+  // dédoublement — c'est ce que le joueur a déjà appris à reconnaître, et les
+  // deux collecteurs POSÉS portent `CLQ` et `CLS`, qui disent lequel c'est.
+  collecteurMixte: 'COL',
 };
 
 /**
@@ -454,7 +470,10 @@ export function nomDeLaPieceDeDefense(id) {
  * @returns {'pivot'|'prod'|'mil'}
  */
 export function familleDuBatiment(id) {
-  const def = BASE_BATIMENTS[id];
+  // ⚠ UNE VIGNETTE MIXTE PREND LA FAMILLE DE CE QU'ELLE POSE — lot
+  // BÂTIMENTS-QUATRE-ÉTATS. `collecteurMixte` n'est pas un bâtiment : elle en
+  // pose un des deux, et les deux sont `producteur`, donc `prod`.
+  const def = BASE_BATIMENTS[batimentDeReference(id)];
   if (def === undefined) throw new Error(`chantier : « ${id} » n'est pas un bâtiment de la base`);
   if (def.role === 'central') return 'pivot';
   if (def.role === 'producteur' || def.role === 'stockage') return 'prod';
@@ -2164,11 +2183,16 @@ export function posablesDeLaBase(etat) {
   // quatre bâtiments d'économie d'abord. Trier ici sur un critère deviné —
   // la classe de coût, la famille — donnerait un ordre que personne n'a
   // demandé et qui changerait au premier ajustement d'équilibrage.
+  // ⚠⚠ UNE VIGNETTE N'EST PAS FORCÉMENT UN BÂTIMENT — lot
+  // BÂTIMENTS-QUATRE-ÉTATS. `collecteurMixte` en pose un des deux selon le champ
+  // visé ; elle affiche le nom générique et emprunte au bâtiment de référence
+  // tout ce qu'une vignette doit montrer. Les deux collecteurs partagent coût,
+  // classe et rôle : l'emprunt est exact, et un test le vérifie.
   return ORDRE_PALETTE
-    .map((id) => [id, BASE_BATIMENTS[id]])
+    .map((id) => [id, BASE_BATIMENTS[batimentDeReference(id)]])
     .map(([id, def]) => ({
       id,
-      nom: def.nom.joueur,
+      nom: VIGNETTES_MIXTES[id]?.nom ?? def.nom.joueur,
       famille: familleDuBatiment(id),
       coutPremiereAmelioration: COUT_NIVEAU_DEUX[def.classeDeCout],
       // ⚠ UN UNIQUE DÉJÀ POSÉ RESTE DANS LA LISTE, GRISÉ — arbitré par Ethan le
@@ -2557,12 +2581,28 @@ export function casesDeplacables(etat, index) {
  * @param {string} id
  * @returns {Array<{rangee: number, colonne: number}>}
  */
+/**
+ * Le bâtiment qu'une vignette pose SUR CETTE CASE.
+ *
+ * ⚠⚠ LA RÉSOLUTION SE FAIT À LA CASE, ET C'EST TOUT CE QUE L'ÉCRAN AJOUTE.
+ * `batimentDeLaVignette` est dans `data/`, `ressourceDeLaCase` dans `sim/` :
+ * l'écran ne fait que les mettre bout à bout, une fois, pour ses trois chemins —
+ * les cases légales, le refus, et la pose. Trois compositions écrites à trois
+ * endroits auraient fini par diverger sur le cas hors champ.
+ */
+function batimentPourLaCase(etat, vignette, rangee, colonne) {
+  return batimentDeLaVignette(
+    vignette, ressourceDeLaCase(baseCourante(etat).champs, rangee, colonne),
+  );
+}
+
 export function casesPosables(etat, id) {
   const bande = GRILLE.bandes.batiments;
   const cases = [];
   for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
     for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
-      if (problemesDeLaPose(etat, id, rangee, colonne).length === 0) {
+      const pose = batimentPourLaCase(etat, id, rangee, colonne);
+      if (problemesDeLaPose(etat, pose, rangee, colonne).length === 0) {
         cases.push({ rangee, colonne });
       }
     }
@@ -2618,7 +2658,10 @@ export const TERRAINS = {
     posables: (etat) => posablesDeLaBase(etat).map((p) => ({
       ...p, sigle: SIGLES[p.id], verrouille: p.dejaPose,
     })),
-    nomDe: (id) => BASE_BATIMENTS[id].nom.joueur,
+    // ⚠ UNE VIGNETTE A SON PROPRE NOM, ET IL EST GÉNÉRIQUE. Le joueur pose
+    // « un Collecteur » ; ce qu'il obtient s'appelle « Collecteur à quartz » ou
+    // « à scorie », et c'est le panneau du bâtiment POSÉ qui le lui dit.
+    nomDe: (id) => VIGNETTES_MIXTES[id]?.nom ?? BASE_BATIMENTS[id].nom.joueur,
     sigleDe: (id) => SIGLES[id],
     // ⚠ LES COUCHES DU JETON, DE LA PLUS HAUTE À LA PLUS BASSE. C'est la SEULE
     // chose qui sépare les deux bandes à la peinture, et elle est dans la table
@@ -2638,9 +2681,33 @@ export const TERRAINS = {
     // nom, dont une seule connaît le propriétaire, c'est la seconde vérité que
     // ce lot existe pour retirer — la règle camelCase → serpent est montée avec
     // la fonction, elle n'a pas été recopiée.
-    spriteDe: (piece) => couchesDeLEntite(
-      { genre: 'batiment', id: piece.id, proprietaire: 'joueur', camp: 'defense' },
-    ),
+    // ⚠⚠ LE JETON MONTRE L'ÉTAT DU BÂTIMENT DEPUIS LE LOT
+    // BÂTIMENTS-QUATRE-ÉTATS. Les quatre dessins existent ; sans cette ligne ils
+    // seraient dans le livrable et personne ne les verrait — la troisième fois
+    // du dépôt après `ui_pause` et `ruine_j`/`ruine_o`, que ce lot-ci vient
+    // justement de refermer pour `_detruit`.
+    //
+    // ⚠ L'ÉTAT SE DEMANDE AU MOTEUR, il ne se calcule pas ici :
+    // `etatDeLaPose` lit les dégâts rangés dans la pose et la règle des seuils
+    // de `data/base.js`. Un écran qui saurait à partir de quel pourcentage un mur
+    // se fissure serait la seconde vérité que `CLAUDE.md` §4 refuse.
+    spriteDe: (piece) => couchesDeLEntite({
+      genre: 'batiment',
+      id: piece.id,
+      proprietaire: 'joueur',
+      camp: 'defense',
+      // ⚠⚠ LA MÊME FONCTION SERT LA GRILLE ET LA PALETTE, ET SEULE LA GRILLE A
+      // DES DÉGÂTS. La palette décrit sa pièce « au niveau 1 », comme une pose,
+      // mais elle ne lui donne jamais de `degatsMilli` — et sa vignette peut même
+      // n'être PAS un bâtiment : `collecteurMixte` n'est pas dans
+      // `BASE_BATIMENTS`, et `etatDeLaPose` lève dessus, ce qui est juste
+      // puisqu'elle parle de POSES.
+      //
+      // ⚠⚠ ON TESTE DONC LES DÉGÂTS, PAS LE NIVEAU. Sans blessure, l'état est
+      // « intact » — vrai d'une vignette comme d'un bâtiment qu'on vient de
+      // poser —, et la fonction n'est appelée que sur ce qu'elle sait lire.
+      etat: (piece.degatsMilli ?? 0) === 0 ? 'intact' : etatDeLaPose(piece),
+    }),
     familleDe: familleDuBatiment,
     // ⚠⚠ UN BÂTIMENT N'A PAS DE CATÉGORIE DE DÉFENSE, ET LE TERRAIN LE DIT
     // PLUTÔT QUE L'ÉCRAN — lot CÂBLAGE, 07/09. La palette est la MÊME fonction
@@ -2648,8 +2715,15 @@ export const TERRAINS = {
     // serait le cas particulier que cette table existe pour éviter, et qu'un
     // test refuse déjà pour les gestes.
     categorieDe: () => null,
-    problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(etat, id, rangee, colonne),
-    poser: (etat, id, rangee, colonne) => poserBatiment(etat, id, rangee, colonne),
+    // ⚠ LES DEUX RÉSOLVENT LA VIGNETTE, ET PAR LA MÊME FONCTION. Le refus
+    // et la pose doivent parler du MÊME bâtiment : les résoudre séparément
+    // laisserait l'écran cercler une case que la pose refuserait ensuite.
+    problemesDeLaPose: (etat, id, rangee, colonne) => problemesDeLaPose(
+      etat, batimentPourLaCase(etat, id, rangee, colonne), rangee, colonne,
+    ),
+    poser: (etat, id, rangee, colonne) => poserBatiment(
+      etat, batimentPourLaCase(etat, id, rangee, colonne), rangee, colonne,
+    ),
     problemesDuDeplacement: (etat, index, rangee, colonne) => (
       problemesDuDeplacement(etat, index, rangee, colonne)
     ),

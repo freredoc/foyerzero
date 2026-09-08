@@ -106,6 +106,28 @@ import {
 import { rattraperJeu } from '../src/sim/state.js';
 import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
 import { PALIERS, SEUIL_COMPACT } from '../src/render/nombre.js';
+import { batimentDeLaVignette } from '../src/data/base.js';
+import { ressourceDeLaCase } from '../src/sim/champs.js';
+import { VIGNETTES_MIXTES } from '../src/data/base.js';
+import { batimentDeReference } from '../src/data/base.js';
+
+/**
+ * Le collecteur qui va sur CETTE case de champ.
+ *
+ * ⚠ L'IDENTIFIANT SE LIT SUR LE TERRAIN — lot BÂTIMENTS-QUATRE-ÉTATS. Poser
+ * celui de quartz sur un champ de scorie est refusé ; un montage qui choisirait
+ * au hasard mesurerait ce refus au lieu de ce qu'il annonce.
+ */
+function collecteurDe(k) {
+  return k.ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie';
+}
+
+/** Le collecteur d'une case, cherchée dans les champs de la base courante. */
+function collecteurEn(etat, rangee, colonne) {
+  return batimentDeLaVignette(
+    'collecteurMixte', ressourceDeLaCase(baseCourante(etat).champs, rangee, colonne),
+  );
+}
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -167,12 +189,24 @@ function baseDeLaMaquette() {
     cases: CHAMPS_DE_LA_MAQUETTE.cases.map((k) => ({ ...k })),
     tentatives: CHAMPS_DE_LA_MAQUETTE.tentatives,
   };
+  // ⚠⚠ UNE DISPOSITION RANGE DES BÂTIMENTS, JAMAIS UNE VIGNETTE — lot
+  // BÂTIMENTS-QUATRE-ÉTATS. `collecteurMixte` est ce que le joueur TOUCHE dans
+  // la palette ; ce qui atterrit dans `disposition` est toujours l'un des deux
+  // collecteurs, et c'est le champ sous la case qui le dit. Le montage passe
+  // donc par `batimentDeLaVignette`, comme l'écran, plutôt que d'écrire cinq
+  // identifiants à la main que le terrain pourrait démentir.
   const disposition = [
-    ['chantierDeConstruction', 18, 5, 6], ['collecteur', 13, 2, 6], ['collecteur', 14, 2, 6],
-    ['collecteur', 14, 6, 5], ['collecteur', 14, 7, 5], ['collecteur', 16, 7, 4],
+    ['chantierDeConstruction', 18, 5, 6], ['collecteurMixte', 13, 2, 6],
+    ['collecteurMixte', 14, 2, 6], ['collecteurMixte', 14, 6, 5],
+    ['collecteurMixte', 14, 7, 5], ['collecteurMixte', 16, 7, 4],
     ['raffinerie', 15, 6, 5], ['centrale', 16, 5, 4], ['accumulateur', 17, 5, 3],
     ['caserne', 18, 3, 4], ['complexeDeDefense', 18, 7, 3],
-  ].map(([id, rangee, colonne, niveau]) => ({ id, rangee, colonne, niveau }));
+  ].map(([vignette, rangee, colonne, niveau]) => ({
+    id: batimentDeLaVignette(vignette, ressourceDeLaCase(champs, rangee, colonne)),
+    rangee,
+    colonne,
+    niveau,
+  }));
   // Le montage doit être LÉGAL avant de mesurer quoi que ce soit : une
   // disposition invalide donnerait des débits qui ne veulent rien dire.
   assert.deepEqual(problemesDeDisposition(disposition, champs), []);
@@ -333,14 +367,31 @@ test('chantier — un niveau moyen montre TOUJOURS sa décimale', () => {
 // Vocabulaire d'écran
 // ---------------------------------------------------------------------------
 
-test('chantier — les onze sigles couvrent la table et sont tous distincts', () => {
+test('chantier — les seize sigles couvrent la table et sont tous distincts', () => {
   // Un sigle en double, ce sont deux bâtiments qu'on confond à l'œil sur la
   // grille — précisément ce que le sigle existe pour empêcher. Et la table doit
-  // suivre `BASE_BATIMENTS` : un douzième bâtiment sans sigle afficherait
+  // suivre `BASE_BATIMENTS` : un seizième bâtiment sans sigle afficherait
   // « undefined » sur son jeton.
-  assert.deepEqual(Object.keys(SIGLES).sort(), Object.keys(BASE_BATIMENTS).sort());
+  //
+  // ⚠⚠ SEIZE SIGLES POUR QUINZE BÂTIMENTS, ET LE SEIZIÈME N'EN EST PAS UN.
+  // `collecteurMixte` est la vignette de la palette : le joueur la touche, donc
+  // elle porte un jeton, donc il lui faut un sigle. Elle garde `COL`, celui que
+  // le Collecteur avait avant de se dédoubler ; les deux collecteurs POSÉS
+  // portent `CLQ` et `CLS`, qui disent lequel est sous le doigt.
+  assert.deepEqual(
+    Object.keys(SIGLES).sort(),
+    [...Object.keys(BASE_BATIMENTS), ...Object.keys(VIGNETTES_MIXTES)].sort(),
+  );
   const sigles = Object.values(SIGLES);
   assert.equal(new Set(sigles).size, sigles.length, 'deux bâtiments portent le même sigle');
+  // ⚠ ET LES TROIS ARTILLERIES NE SE CONFONDENT PAS ENTRE ELLES : « ART »
+  // aurait convenu aux trois, ce qui est exactement le piège que la table écrite
+  // à la main existe pour éviter. La cible se lit sur la troisième lettre.
+  assert.deepEqual(
+    ['artillerieAntiInfanterie', 'artillerieAntiVehicule', 'artillerieAntiAerien']
+      .map((id) => SIGLES[id]),
+    ['AAI', 'AAV', 'AAA'],
+  );
   for (const sigle of sigles) assert.match(sigle, /^[A-Z]{3}$/);
   // Le piège qui a imposé la table écrite : les trois premières lettres du nom
   // ne suffisent pas, deux bâtiments les partagent.
@@ -352,11 +403,21 @@ test('chantier — les onze sigles couvrent la table et sont tous distincts', ()
   );
 });
 
-test('chantier — la famille visuelle se déduit du rôle, pour les onze', () => {
+test('chantier — la famille visuelle se déduit du rôle, pour les quinze', () => {
   const familles = {};
   for (const id of Object.keys(BASE_BATIMENTS)) familles[id] = familleDuBatiment(id);
   assert.equal(familles.chantierDeConstruction, 'pivot');
-  assert.equal(familles.collecteur, 'prod');
+  assert.equal(familles.collecteurQuartz, 'prod');
+  assert.equal(familles.collecteurScorie, 'prod');
+  // ⚠ ET LA VIGNETTE MIXTE PREND LA FAMILLE DE CE QU'ELLE POSE — lot
+  // BÂTIMENTS-QUATRE-ÉTATS. Elle n'est pas dans `BASE_BATIMENTS`, donc pas dans
+  // la boucle ci-dessus : sans cette ligne, `familleDuBatiment` lèverait sur
+  // elle et la palette entière tomberait.
+  assert.equal(familleDuBatiment('collecteurMixte'), 'prod');
+  // ⚠ LES TROIS ARTILLERIES SONT `mil`, ET C'EST LEUR RÔLE NEUF QUI LE DIT :
+  // `artillerie` n'est ni `central` ni producteur ni stockage, donc il retombe
+  // sur le militaire — ce qui est exactement leur place à l'écran.
+  assert.equal(familles.artillerieAntiInfanterie, 'mil');
   assert.equal(familles.raffinerie, 'prod');
   assert.equal(familles.centrale, 'prod');
   assert.equal(familles.accumulateur, 'prod');
@@ -551,8 +612,11 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   const ids = posables.map((p) => p.id);
 
   // La palette porte TOUS les bâtiments, tout le temps.
-  assert.deepEqual(ids.slice().sort(), Object.keys(BASE_BATIMENTS).slice().sort());
-  assert.equal(posables.length, 11);
+  // ⚠⚠ CE SONT DES VIGNETTES, PAS DES BÂTIMENTS — lot BÂTIMENTS-QUATRE-ÉTATS.
+  // La palette en porte quatorze pour quinze bâtiments : les deux collecteurs
+  // partagent la leur, parce que le joueur n'en choisit pas un.
+  assert.deepEqual(ids.slice().sort(), [...ORDRE_PALETTE].slice().sort());
+  assert.equal(posables.length, 14);
 
   // Les trois uniques posés y sont, marqués…
   for (const pose of ['chantierDeConstruction', 'caserne', 'complexeDeDefense']) {
@@ -564,9 +628,17 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   }
   // …et les quatre non-uniques ne l'ont jamais, même posés en plusieurs
   // exemplaires : c'est la propriété `unique` qui décide, pas le compte.
-  for (const multiple of ['collecteur', 'raffinerie', 'centrale', 'accumulateur']) {
+  // ⚠ LA VIGNETTE N'EST PAS CE QUI EST POSÉ, ET LE TEST LE DIT EN DEUX
+  // TEMPS : la vignette reste non grisée, et c'est ce qu'elle POSE qu'on
+  // retrouve dans la disposition. Chercher `collecteurMixte` dans la
+  // disposition n'aurait rien trouvé — et c'est très exactement ce qui doit s'y
+  // passer.
+  for (const multiple of ['collecteurMixte', 'raffinerie', 'centrale', 'accumulateur']) {
     assert.equal(posables.find((p) => p.id === multiple).dejaPose, false, `${multiple} n'est pas unique`);
-    assert.ok(baseCourante(etat).disposition.some((b) => b.id === multiple), `${multiple} devrait être posé`);
+    const poses = VIGNETTES_MIXTES[multiple]
+      ? Object.values(VIGNETTES_MIXTES[multiple].pose) : [multiple];
+    assert.ok(baseCourante(etat).disposition.some((b) => poses.includes(b.id)),
+      `${multiple} devrait être posé`);
   }
 
   // Falsifiable : sur une base NEUVE, seul le Chantier porte la marque. Un
@@ -596,10 +668,19 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   // poser ne coûte RIEN — le niveau 1 est gratuit pour les onze. Le nom dit
   // maintenant ce que le nombre est : le coût de la PREMIÈRE AMÉLIORATION.
   for (const p of posables) {
-    assert.equal(
-      p.coutPremiereAmelioration, COUT_NIVEAU_DEUX[BASE_BATIMENTS[p.id].classeDeCout],
-    );
-    assert.equal(p.nom, BASE_BATIMENTS[p.id].nom.joueur);
+    // ⚠ UNE VIGNETTE EMPRUNTE AU BÂTIMENT QU'ELLE POSE, et c'est ici qu'on
+    // vérifie que l'emprunt est EXACT : les deux collecteurs partagent classe de
+    // coût et prix, donc la vignette peut n'en montrer qu'un chiffre. Le jour où
+    // deux bâtiments d'une même vignette différeraient par le prix, c'est cette
+    // ligne-ci qui tomberait — et il faudrait alors deux vignettes.
+    const ref = BASE_BATIMENTS[batimentDeReference(p.id)];
+    for (const pose of VIGNETTES_MIXTES[p.id]
+      ? Object.values(VIGNETTES_MIXTES[p.id].pose) : []) {
+      assert.equal(BASE_BATIMENTS[pose].classeDeCout, ref.classeDeCout,
+        `${p.id} : les bâtiments d'une même vignette n'ont pas le même prix`);
+    }
+    assert.equal(p.coutPremiereAmelioration, COUT_NIVEAU_DEUX[ref.classeDeCout]);
+    assert.equal(p.nom, VIGNETTES_MIXTES[p.id]?.nom ?? ref.nom.joueur);
     assert.ok(p.coutPremiereAmelioration > 0);
     // L'ancien nom ne doit pas survivre en doublon : deux champs pour le même
     // nombre laisseraient un appelant continuer d'employer le trompeur.
@@ -615,9 +696,12 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   // vignettes ne se déplacent plus sous le doigt.
   const neuve = creerEtat(7);
   assert.equal(baseCourante(neuve).disposition.length, 1);
-  assert.equal(posablesDeLaBase(neuve).length, Object.keys(BASE_BATIMENTS).length);
+  // ⚠ LA LONGUEUR EST CELLE DE LA PALETTE, PAS DU ROSTER — quatorze vignettes
+  // pour quinze bâtiments depuis le lot BÂTIMENTS-QUATRE-ÉTATS. Ce que ce test
+  // garde reste entier : elle ne bouge pas d'une pose à l'autre.
+  assert.equal(posablesDeLaBase(neuve).length, ORDRE_PALETTE.length);
   assert.equal(posablesDeLaBase(neuve).filter((p) => !p.dejaPose).length,
-    Object.keys(BASE_BATIMENTS).length - 1, 'un seul bâtiment devrait être grisé');
+    ORDRE_PALETTE.length - 1, 'une seule vignette devrait être grisée');
   assert.deepEqual(resumeDeLaBase(neuve).emplacements, {
     poses: 1, ouverts: emplacementsDuNiveau(1),
   });
@@ -936,7 +1020,7 @@ test('pose — sur une base neuve, un Collecteur a exactement les douze champs',
   assert.equal(baseCourante(etat).champs.cases.length, CHAMPS.total);
   assert.equal(CHAMPS.total, 12);
 
-  const legales = casesPosables(etat, 'collecteur');
+  const legales = casesPosables(etat, 'collecteurMixte');
   assert.equal(legales.length, baseCourante(etat).champs.cases.length);
 
   // Et ce sont EXACTEMENT les champs, pas douze cases qui se trouvent être au
@@ -1023,7 +1107,7 @@ test('pose — les refus reprennent les messages du moteur, mot pour mot', () =>
   const etat = creerEtat(7);
   // Une case sans champ, sous un Collecteur : le moteur a déjà écrit la phrase.
   const horsChamp = casesPosables(etat, 'centrale')[0];
-  const problemes = problemesDeLaPose(etat, 'collecteur', horsChamp.rangee, horsChamp.colonne);
+  const problemes = problemesDeLaPose(etat, 'collecteurQuartz', horsChamp.rangee, horsChamp.colonne);
   assert.ok(problemes.length > 0, 'le montage doit produire un vrai refus');
 
   // ⚠ AUCUNE REFORMULATION. Les messages viennent de `sim/disposition.js`, qui
@@ -1127,7 +1211,7 @@ test('pose — jamais de `try` autour de `poser`, dans tout src/ui/', () => {
   assert.ok(appelsVus > 0, 'aucun appel à poser vu : la garde ne garde rien');
 
   // Le découpage attrape bien un vrai appât…
-  const appat = 'try { poserBatiment(etat, \'collecteur\', 12, 3); } catch (e) { avis(e.message); }';
+  const appat = 'try { poserBatiment(etat, \'collecteurQuartz\', 12, 3); } catch (e) { avis(e.message); }';
   const attrapes = blocsTry(appat);
   assert.equal(attrapes.length, 1);
   assert.ok(MOTIF_POSER.test(attrapes[0]), 'l\'appât n\'est pas attrapé');
@@ -1375,7 +1459,14 @@ test('ERGO T3 — les cases distinguées suivent le MOTEUR, et plus aucun bâtim
   // ⚠ ET LA RÈGLE, ELLE, N'A PAS BOUGÉ DANS LA DONNÉE : le Collecteur reste le
   // seul bâtiment dont le TERRAIN décide. C'est le moteur qui l'applique — ce
   // que `casesPosablesDuTerrain` rend pour lui n'est pas la bande entière.
-  assert.equal(CHAMPS.posableDessus.length, 1);
+  // ⚠ LA RÈGLE N'A PAS BOUGÉ DANS LA DONNÉE, ELLE S'EST PRÉCISÉE : le
+  // terrain décide toujours, et il décide maintenant LEQUEL des deux
+  // collecteurs. `posableDessus` est une table par ressource depuis le lot
+  // BÂTIMENTS-QUATRE-ÉTATS ; ce qu'on garde ici est qu'un seul bâtiment ait le
+  // droit d'occuper un champ DONNÉ — sans quoi la case cesserait de trancher.
+  for (const posables of Object.values(CHAMPS.posableDessus)) {
+    assert.equal(posables.length, 1);
+  }
 
   // ⚠⚠ LA GRILLE S'ARME DANS LES TROIS MODES, ET LE MOTEUR LE DIT. Un montage
   // par mode, sur les DEUX bandes : la pose d'un bâtiment quelconque, la pose
@@ -1393,7 +1484,7 @@ test('ERGO T3 — les cases distinguées suivent le MOTEUR, et plus aucun bâtim
 
   // ⚠ ET LE COLLECTEUR, LUI, EN REND MOINS QUE LA BANDE — sans quoi « la règle
   // n'a pas bougé » ne se mesurerait nulle part.
-  const posablesCollecteur = casesPosablesDuTerrain(etat, 'batiments', 'collecteur');
+  const posablesCollecteur = casesPosablesDuTerrain(etat, 'batiments', 'collecteurMixte');
   assert.ok(posablesCollecteur.length < posablesBat.length,
     'le terrain ne décide plus pour le Collecteur');
 });
@@ -1496,7 +1587,7 @@ test('actions — le compteur d\'emplacements est REVENU à l\'écran, et le cal
   let pose = 0;
   while (resumeDeLaBase(pleine).emplacements.poses
     < resumeDeLaBase(pleine).emplacements.ouverts) {
-    poser(pleine, 'collecteur', champs[pose].rangee, champs[pose].colonne);
+    poser(pleine, collecteurDe(champs[pose]), champs[pose].rangee, champs[pose].colonne);
     pose += 1;
     assert.ok(pose <= champs.length, 'le montage ne parvient pas à remplir la base');
   }
@@ -1644,7 +1735,7 @@ test('aperçu — le « si j\'améliorais » se calcule avec les MÊMES fonction
   const etat = creerEtat(12345);
   moteurEtat.ameliorer(etat, 0);
   const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
 
   const avant = apercuDuBatiment(etat, 1);
   // Le montage doit MESURER quelque chose : un collecteur qui ne produit rien
@@ -1727,7 +1818,7 @@ test('panneau — sur une base neuve, il dit ce qui débloque la partie', () => 
     'une base neuve n\'a plus exactement deux emplacements libres');
   const bloquee = creerEtat(4242);
   const champ = baseCourante(bloquee).champs.cases.find((c) => c.ressource === 'quartz');
-  poser(bloquee, 'collecteur', champ.rangee, champ.colonne);
+  poser(bloquee, collecteurDe(champ), champ.rangee, champ.colonne);
   const plafond = capacitesMilli(baseCourante(bloquee).disposition).quartz;
   assert.ok(debitsMilliParHeure(baseCourante(bloquee).disposition, baseCourante(bloquee).champs)[1].quartz > 0,
     'le collecteur du montage ne produit rien : le blocage ne serait pas mesuré');
@@ -1787,7 +1878,7 @@ test('panneau — la production détaillée explique le chiffre qu\'elle affiche
   };
   // Le collecteur de (13,2) touche une raffinerie ? Sinon le montage ne mesure
   // rien : on prend celui qui a le plus de voisins qualifiants.
-  const index = disposition.findIndex((b, i) => b.id === 'collecteur'
+  const index = disposition.findIndex((b, i) => b.id.startsWith('collecteur')
     && apercuDuBatiment(etat, i).voisins.some((v) => v.compte > 0));
   assert.notEqual(index, -1, 'aucun collecteur voisiné : le montage ne mesure rien');
 
@@ -1819,7 +1910,8 @@ test('panneau — la production détaillée explique le chiffre qu\'elle affiche
   // « champDeScorie » à l'écran serait montrer au joueur un nom de champ de
   // données.
   assert.equal(libelleDuVoisin('champDeScorie'), 'champ de scorie');
-  assert.equal(libelleDuVoisin('collecteur'), BASE_BATIMENTS.collecteur.nom.joueur);
+  assert.equal(libelleDuVoisin('collecteurQuartz'),
+    BASE_BATIMENTS.collecteurQuartz.nom.joueur);
   assert.throws(() => libelleDuVoisin('nExistePas'), /voisin/);
   // Et aucun libellé rendu ne laisse passer une clé brute.
   for (const v of apercu.voisins) {
@@ -1834,7 +1926,7 @@ test('panneau — ce qu\'une démolition rend se dit AVANT le geste', () => {
   const etat = creerEtat(9);
   moteurEtat.ameliorer(etat, 0);
   const champ = baseCourante(etat).champs.cases[0];
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
 
   const neuf = lignesDuPanneau(apercuDuBatiment(etat, 1));
   const demolition = neuf.sections.find((s) => s.titre === 'Démolition');
@@ -1848,7 +1940,7 @@ test('panneau — ce qu\'une démolition rend se dit AVANT le geste', () => {
   const monte = lignesDuPanneau(apercuDuBatiment(etat, 1));
   assert.notEqual(monte.sections.find((s) => s.titre === 'Démolition').lignes[0].avant, 'rien');
   assert.equal(monte.sections.find((s) => s.titre === 'Démolition').lignes[0].avant,
-    formaterCout(remboursementDuNiveau('collecteur', 2)));
+    formaterCout(remboursementDuNiveau('collecteurQuartz', 2)));
 
   // Et le Chantier dit qu'il ne se démolit pas, avec le message du MOTEUR.
   const chantier = lignesDuPanneau(apercuDuBatiment(etat, 0));
@@ -1863,7 +1955,7 @@ test('écran — un stock saturé le DIT, il ne le laisse pas deviner à la coul
   // pas suffi.
   const etat = creerEtat(4242);
   const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
   const debut = resumeDeLaBase(etat).ressources.find((r) => r.cle === 'quartz');
   assert.ok(debut.stockMilli < debut.capaciteMilli,
     'le montage part déjà saturé : il ne mesurerait rien');
@@ -1902,7 +1994,7 @@ test('panneau — le chronomètre dit QUAND, ou pourquoi il n\'y en aura pas', (
   const etat = creerEtat(4242);
   moteurEtat.ameliorer(etat, 0);
   const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
   baseCourante(etat).economie.ressources.quartz = 0;
 
   // Le montage doit MESURER quelque chose : un manque réel, et un débit non nul.
@@ -2108,7 +2200,7 @@ test('compteur — le libellé suit le contexte, et la valeur reste honnête', (
   const champs = baseCourante(etat).champs.cases;
   let pose = 0;
   while (compteurDeContexte(etat, 'batiments').sature === false) {
-    poser(etat, 'collecteur', champs[pose].rangee, champs[pose].colonne);
+    poser(etat, collecteurDe(champs[pose]), champs[pose].rangee, champs[pose].colonne);
     pose += 1;
     assert.ok(pose <= champs.length, 'le montage ne parvient pas à remplir la base');
   }
@@ -2190,16 +2282,33 @@ test('palette — UNE bande qui défile, la hauteur gardée, et l\'économie en 
   // grandeur qu'on garde est la même — la HAUTEUR de la barre —, c'est la
   // répartition dedans qui change.
   const posables = posablesDeLaBase(creerEtat(5));
-  assert.equal(posables.length, Object.keys(BASE_BATIMENTS).length);
-  assert.equal(posables.length, 11, 'le montage suppose onze bâtiments');
+  // ⚠⚠ LA PALETTE N'EST PLUS UNE PERMUTATION DU ROSTER, ET C'EST UN ARBITRAGE
+  // D'ETHAN — 08/09 : « une icône collecteur mixte, le bâtiment posé quartz ou
+  // scories en fonction du champ. » Quinze bâtiments, QUATORZE vignettes : les
+  // deux collecteurs partagent la leur, parce que le joueur n'en choisit pas un —
+  // il pose un collecteur, et le terrain dit lequel c'est.
+  assert.equal(posables.length, 14, 'le montage suppose quatorze vignettes');
+  assert.equal(Object.keys(BASE_BATIMENTS).length, 15, 'le montage suppose quinze bâtiments');
+  assert.equal(posables.length, Object.keys(BASE_BATIMENTS).length - 1,
+    'une vignette par bâtiment, sauf les deux collecteurs qui en partagent une');
 
   // ⚠ LES QUATRE DE L'ÉCONOMIE D'ABORD, et l'ordre se lit dans la DONNÉE.
   assert.deepEqual(posables.slice(0, 4).map((p) => p.id),
-    ['collecteur', 'raffinerie', 'centrale', 'accumulateur'],
+    ['collecteurMixte', 'raffinerie', 'centrale', 'accumulateur'],
     'la palette ne commence plus par les quatre bâtiments d\'économie');
   // Et c'est bien une PERMUTATION : ni un bâtiment en trop, ni un oublié.
-  assert.deepEqual([...ORDRE_PALETTE].sort(), Object.keys(BASE_BATIMENTS).sort(),
-    'ORDRE_PALETTE n\'est plus une permutation du roster');
+  // ⚠⚠ CE QUI EST GARDÉ N'EST PLUS UNE PERMUTATION, C'EST UNE COUVERTURE
+  // EXACTE. Chaque vignette pose au moins un bâtiment, chaque bâtiment est posé
+  // par au moins une vignette, et rien ne se perd entre les deux. C'est la même
+  // exigence qu'avant — « ni un nom en trop, ni un oublié » — écrite pour une
+  // palette qui n'a plus le même cardinal que le roster.
+  assert.deepEqual(
+    [...new Set(ORDRE_PALETTE.flatMap(
+      (v) => (VIGNETTES_MIXTES[v] ? Object.values(VIGNETTES_MIXTES[v].pose) : [v]),
+    ))].sort(),
+    Object.keys(BASE_BATIMENTS).sort(),
+    'la palette ne couvre plus exactement le roster',
+  );
   assert.deepEqual(posables.map((p) => p.id), [...ORDRE_PALETTE],
     'la palette ne suit plus ORDRE_PALETTE');
 
@@ -2725,7 +2834,11 @@ test('défense — les sigles couvrent le roster, et aucun ne se confond avec un
   // le Chasseur.
   const tous = [...Object.values(SIGLES), ...Object.values(SIGLES_DEFENSE)];
   assert.equal(new Set(tous).size, tous.length, 'deux sigles identiques sur la même grille');
-  assert.equal(tous.length, 28, 'onze bâtiments et dix-sept pièces de garnison');
+  // ⚠ TRENTE-TROIS, ET LE TRENTE-TROISIÈME N'EST PAS UN BÂTIMENT : la
+  // vignette mixte de la palette porte le sien, `COL`, celui que le Collecteur
+  // avait avant de se dédoubler. Quinze bâtiments, une vignette, dix-sept pièces
+  // de garnison.
+  assert.equal(tous.length, 33, 'quinze bâtiments, une vignette, dix-sept pièces');
   for (const sigle of Object.values(SIGLES_DEFENSE)) {
     assert.match(sigle, /^[A-Z]{3}$/, `« ${sigle} » n'est pas un sigle de trois lettres`);
   }
@@ -2733,7 +2846,7 @@ test('défense — les sigles couvrent le roster, et aucun ne se confond avec un
   // Le nom qui fait foi reste celui du joueur, jamais celui de l'Ouvrage.
   assert.equal(nomDeLaPieceDeDefense('merlon'), DEFENSES.merlon.nom.joueur);
   assert.equal(nomDeLaPieceDeDefense('meute'), UNITES.meute.nom.joueur);
-  assert.throws(() => nomDeLaPieceDeDefense('collecteur'), /rôle en défense/);
+  assert.throws(() => nomDeLaPieceDeDefense('collecteurQuartz'), /rôle en défense/);
 });
 
 test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', () => {
@@ -3180,8 +3293,17 @@ test('écran — le jeton de la grille porte un sprite, plus un sigle', () => {
   // l'import là où elle voulait mesurer la dépendance.
   assert.match(ecran, /import \{[^}]*\bcouchesDeLEntite\b[^}]*\} from '\.\.\/render\/scene\.js'/,
     'l\'écran ne consomme plus le point d\'entrée des couches');
-  assert.match(ecran, /genre: 'batiment', id: piece\.id/,
+  // ⚠ LE DESCRIPTEUR S'ÉCRIT SUR PLUSIEURS LIGNES DEPUIS LE LOT
+  // BÂTIMENTS-QUATRE-ÉTATS — il porte un champ de plus, l'état. Le motif suit la
+  // forme sans relâcher ce qu'il garde : le terrain demande bien ses couches au
+  // point d'entrée, avec le genre et l'identifiant de la pièce.
+  assert.match(ecran, /genre: 'batiment',\s*id: piece\.id/,
     'le terrain des bâtiments ne demande plus ses couches au point d\'entrée');
+  // ⚠ ET IL DEMANDE L'ÉTAT, sans quoi les soixante sprites abîmés seraient
+  // dans le livrable et invisibles — la faute que ce lot vient de refermer pour
+  // `_detruit`, qui dormait depuis sa fabrication.
+  assert.match(ecran, /etat: \(piece\.degatsMilli/,
+    'le jeton ne demande plus l\'état du bâtiment');
   // ⚠⚠ L'EXIGENCE S'EST RESSERRÉE LE 30/08, ELLE NE S'EST PAS ASSOUPLIE. Elle
   // demandait `genre: 'defense'` écrit tel quel — et c'était précisément la
   // FAUTE : la bande de garnison porte dix-sept pièces posables, dont HUIT sont
@@ -5360,7 +5482,7 @@ test('F-J T4 — la flèche du champ occupé arrive jusqu\'à l\'écran', () => 
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 14, colonne: 4, niveau: 1 },
   ];
-  const avec = [...sans, { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }];
+  const avec = [...sans, { id: 'collecteurScorie', rangee: 13, colonne: 3, niveau: 1 }];
 
   for (const [nom, d] of [['sans collecteur', sans], ['collecteur dessus', avec]]) {
     const fleches = flechesDeVoisinage(d, terrain, 1);
@@ -5381,7 +5503,7 @@ test('F-J T4 — la flèche du champ occupé arrive jusqu\'à l\'écran', () => 
   // `collecteur`. Sans cette ligne, « une flèche depuis 13,3 » serait aussi vrai
   // d'un lot qui aurait fait qualifier le bâtiment à la place du champ.
   assert.equal(flechesDeVoisinage(avec, terrain, 1).length, 1);
-  assert.equal(DEBITS.centrale.parVoisin.collecteur, undefined);
+  assert.equal(DEBITS.centrale.parVoisin.collecteurQuartz, undefined);
 });
 
 test('F-J T6 — la durée du Complexe est celle d\'une pièce de SON niveau', () => {

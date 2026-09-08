@@ -325,9 +325,17 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
  * ⚠⚠ DEUX LIGNES ONT BOUGÉ AU LOT CONQUÊTE-24H, EN LE SACHANT, ET C'EST LE SEUL
  * MOYEN CORRECT DE LES FAIRE BOUGER. Les 18 ruines de bases entrent dans la
  * famille `carte`, donc ses deux atlas sont recousus : 410 234 → **473 716** à la
- * grille 128, 156 372 → **180 372** à la 64. Les seize autres n'ont pas bougé
- * d'un octet, ce que les seize autres lignes continuent de garder — et c'est
- * exactement ce que ce test existe pour dire.
+ * grille 128, 156 372 → **180 372** à la 64.
+ *
+ * ⚠⚠ ET DEUX AUTRES AU LOT BÂTIMENTS-QUATRE-ÉTATS, 08/09, POUR LA MÊME
+ * RAISON. La famille `batiment` passe de 34 à 83 sprites — vingt bâtiments à
+ * quatre états, deux ruines de case, et l'icône de la vignette mixte : 114 650
+ * → **299 848** à la grille 128, 42 952 → **107 050** à la 64. C'est le poste le
+ * plus lourd du lot, et il est ventilé au rapport.
+ *
+ * ⚠ LES QUATORZE AUTRES N'ONT PAS BOUGÉ D'UN OCTET, ce que les quatorze
+ * autres lignes continuent de garder — et c'est exactement ce que ce test
+ * existe pour dire.
  *
  * ⚠ `tools/atlas.py` A REFUSÉ DE LES ÉCRIRE, et il avait raison : sa garde
  * ne connaissait qu'un cas, l'écart d'encodeur WebP. Elle en connaît deux depuis
@@ -335,8 +343,8 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
  * dix autres tranquilles.
  */
 const TAILLES_D_AVANT = {
-  'atlas-batiment-128.webp': 114650,
-  'atlas-batiment-64.webp': 42952,
+  'atlas-batiment-128.webp': 299848,
+  'atlas-batiment-64.webp': 107050,
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
   'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
@@ -392,7 +400,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 8 344 729 octets, la marge sur la borne T10 est de 10,27 %', () => {
+test('PIC T7 — le livrable pèse 8 647 037 octets, la marge sur la borne T10 est de 7,02 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -443,11 +451,24 @@ test('PIC T7 — le livrable pèse 8 344 729 octets, la marge sur la borne T10 e
   // dernière assertion de ce test demande en toutes lettres. La tolérance de
   // 50 000 octets l'aurait laissé passer : elle garde contre la dérive lente,
   // pas contre un lot qui sait ce qu'il déplace.
+  //
+  // ⚠⚠ REMESURÉ AU LOT BÂTIMENTS-QUATRE-ÉTATS, ET C'EST LE PLUS GROS SAUT DE
+  // LA SÉRIE. Les bâtiments passent d'un état à QUATRE et de seize à vingt :
+  // 34 sprites cousus deviennent 83, et l'atlas `batiment` — qui était déjà dans
+  // la page — passe de 114 650 à 299 848 octets. Aucune ressource nouvelle : les
+  // `data:` restent à **297**. **8 395 461 → 8 647 037, soit +251 576.** Ventilé,
+  // et la somme tombe juste : **images +246 932** — 152 868 → 399 800 en base64 —
+  // et **code +4 644**, le dédoublement du Collecteur, les trois artilleries, la
+  // vignette mixte et le rabattement d'état.
+  //
+  // ⚠⚠ LA MARGE PASSE SOUS LES 8 %, ET C'EST LE POINT À SURVEILLER DU LOT.
+  // 11,22 % au 07/09 au matin, 9,73 % au 08/09 au matin, **7,02 %** maintenant :
+  // 652 963 octets. Le prochain lot d'art devra compter avant de dessiner.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 8_395_461;          // 8 344 729 avant OUVRAGE-CÂBLAGE
-  const MARGE = BORNE - MESURE;      // 904 539 octets
-  assert.equal(MARGE, 904_539);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 9.73);
+  const MESURE = 8_647_037;          // mesuré le 08/09, version 0.99.30 · build 132
+  const MARGE = BORNE - MESURE;      // 652 963 octets
+  assert.equal(MARGE, 652_963);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 7.02);
 
   const octets = statSync(join(RACINE, 'dist', 'index.html')).size;
   assert.ok(octets < BORNE, `${octets} octets : la borne T10 est franchie`);

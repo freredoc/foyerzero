@@ -110,12 +110,12 @@ function monterTout(etat, niveau) {
 /** La chaîne dictée, geste par geste, dans l'ordre d'Ethan. */
 function gestesDeLaChaine(etat) {
   return [
-    ['un Collecteur sur du quartz', () => poserOuLever(etat, 'collecteur', 'quartz')],
+    ['un Collecteur sur du quartz', () => poserOuLever(etat, 'collecteurQuartz', 'quartz')],
     ['le Chantier au deuxième palier', () => monter(etat, 'chantierDeConstruction', 2)],
     ['trois Collecteurs de quartz au niveau 2', () => {
-      poserOuLever(etat, 'collecteur', 'quartz');
-      poserOuLever(etat, 'collecteur', 'quartz');
-      monter(etat, 'collecteur', 2);
+      poserOuLever(etat, 'collecteurQuartz', 'quartz');
+      poserOuLever(etat, 'collecteurQuartz', 'quartz');
+      monter(etat, 'collecteurQuartz', 2);
     }],
     ['le Chantier au troisième palier', () => monter(etat, 'chantierDeConstruction', 3)],
     ['deux Centrales, toute la base au niveau 3', () => {
@@ -408,9 +408,9 @@ test('missions — le compteur d\'objectif compte, et son dénominateur peut bou
   const objectif = (id) => etatDesMissions(etat).find((m) => m.id === id).objectifs;
 
   assert.deepEqual(objectif('trois-collecteurs-de-quartz').map(compteDObjectif), ['0 / 3']);
-  poserOuLever(etat, 'collecteur', 'quartz');
+  poserOuLever(etat, 'collecteurQuartz', 'quartz');
   monter(etat, 'chantierDeConstruction', 2);
-  monter(etat, 'collecteur', 2);
+  monter(etat, 'collecteurQuartz', 2);
   assert.deepEqual(objectif('trois-collecteurs-de-quartz').map(compteDObjectif), ['1 / 3']);
 
   // ⚠ LE DÉNOMINATEUR DE « CHAQUE BÂTIMENT AU NIVEAU n » EST LE NOMBRE DE
@@ -693,7 +693,7 @@ test('tutoriel — la fenêtre ne se reconstruit que quand son contenu change', 
   assert.equal(signatureDuTutoriel(vueDuTutoriel(etat)), avant,
     'deux lectures sans geste doivent donner la même signature');
 
-  poserOuLever(etat, 'collecteur', 'quartz');
+  poserOuLever(etat, 'collecteurQuartz', 'quartz');
   assert.notEqual(signatureDuTutoriel(vueDuTutoriel(etat)), avant,
     'un geste du joueur doit changer la signature, sinon la fenêtre resterait figée');
 
@@ -702,8 +702,8 @@ test('tutoriel — la fenêtre ne se reconstruit que quand son contenu change', 
   // signature réduite à l'identifiant aurait figé le compteur à l'écran.
   const etat2 = approvisionner(baseNeuve());
   monter(etat2, 'chantierDeConstruction', 3);
-  for (let i = 0; i < 3; i++) poserOuLever(etat2, 'collecteur', 'quartz');
-  monter(etat2, 'collecteur', 2);
+  for (let i = 0; i < 3; i++) poserOuLever(etat2, 'collecteurQuartz', 'quartz');
+  monter(etat2, 'collecteurQuartz', 2);
   poserOuLever(etat2, 'centrale');
   const s1 = signatureDuTutoriel(vueDuTutoriel(etat2));
   poserOuLever(etat2, 'centrale');

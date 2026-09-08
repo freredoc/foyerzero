@@ -509,8 +509,10 @@ test('C24 T11 — le gisement reste acquis quand la ruine expire', () => {
 test('C24 T12 — une v27 se charge, et ses bases rasées n\'émettent rien', () => {
   // ⚠ LA GARDE DU NUMÉRO APPARTIENT AU MAILLON LE PLUS RÉCENT, une seule fois —
   // la règle du dépôt depuis le lot SITE-ENTAMÉ. Elle vivait sous `SAT-R T11` à
-  // `=== 27` ; elle est ici, avec le maillon v27 → v28.
-  assert.equal(SAVE_VERSION, 28, 'la chaîne de migrations a gagné un maillon');
+  // `=== 27`, puis ici à `=== 28` ; elle est passée à `B4 T7` le 08/09, avec le
+  // maillon v28 → v29 du lot BÂTIMENTS-QUATRE-ÉTATS. Ce qui RESTE ici est ce que
+  // ce test-ci a toujours mesuré : que SON maillon existe encore.
+  assert.ok(SAVE_VERSION >= 28, 'le maillon v27 → v28 n\'est plus dans la chaîne');
 
   const etat = creerEtat(GRAINE);
   terrainNu(etat, bande(190, 210), [BASE_20]);

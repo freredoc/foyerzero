@@ -8,7 +8,7 @@
 import { baseCourante } from './base-courante.js';
 import { creerRng, restaurerRng } from './rng.js';
 import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './clock.js';
-import { champsDeLaBase, obstaclesDeLaBase } from './champs.js';
+import { champsDeLaBase, obstaclesDeLaBase, ressourceDeLaCase } from './champs.js';
 import {
   satellitesVides, planifierSatellites, resoudreSatellites, problemesDesSatellites,
   TICKS_DUREE_DE_VIE,
@@ -66,7 +66,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 28;
+export const SAVE_VERSION = 29;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -2341,7 +2341,7 @@ const MIGRATIONS = {
    *
    * ⚠ CETTE MIGRATION NE CONVERTIT RIEN, ELLE REFONDE — et c'est le seul choix
    * honnête. Il n'existe aucune correspondance entre une `foreuse` sans
-   * coordonnée et un `collecteur` qui doit se poser sur un champ : inventer une
+   * coordonnée et un collecteur qui doit se poser sur un champ : inventer une
    * case reviendrait à fabriquer une partie qui n'a jamais été jouée.
    *
    * ⚠ ELLE NE DÉTRUIT RIEN NON PLUS, PARCE QU'IL N'Y AVAIT RIEN. Ethan, le
@@ -3042,6 +3042,47 @@ const MIGRATIONS = {
       migrees.push({ rangee, colonne });
     }
     s.basesRasees = migrees;
+  },
+
+  /**
+   * v28 -> v29 : le Collecteur se dédouble, et le CHAMP dit lequel — lot
+   * BÂTIMENTS-QUATRE-ÉTATS, 08/09/2026.
+   *
+   * ⚠⚠ ELLE NE DEVINE RIEN, ELLE CALCULE. Les champs d'une base sont une
+   * fonction DÉTERMINISTE de sa position — `champsDeLaBase`, contrat du 26/08,
+   * « une base posée à un endroit aura toujours les mêmes champs » — et la
+   * sauvegarde porte la position. Chaque `collecteur` posé devient donc le
+   * collecteur de la ressource qui est SOUS LUI, exactement celle qu'il
+   * produisait la seconde d'avant. Aucun joueur ne perd ni ne gagne un gramme.
+   *
+   * ⚠⚠ ET C'EST POURQUOI IL FALLAIT UNE MIGRATION PLUTÔT QU'UN ALIAS.
+   * `BASE_BATIMENTS.collecteur` n'existe plus : une disposition sauvegardée qui
+   * le porterait encore ferait rendre `undefined` à quinze lectures — le nom
+   * affiché, les PV, le coût de montée, la capacité — et chacune se serait
+   * plantée à un endroit différent, loin de la cause.
+   *
+   * ⚠ UN COLLECTEUR HORS CHAMP EST RETIRÉ, et c'est le seul cas où la
+   * migration jette quelque chose. Il ne peut pas exister : `problemesDeLaPose`
+   * refuse `hors-champ` depuis toujours. S'il s'en trouvait un dans un état
+   * fabriqué à la main, aucune des deux réponses ne serait vraie — lui donner
+   * une ressource serait inventer un gisement, et le laisser en `collecteur`
+   * casserait le chargement.
+   *
+   * @param {object} s
+   */
+  28: (s) => {
+    s.version = 29;
+    for (const base of s.bases ?? []) {
+      if (!Array.isArray(base.disposition)) continue;
+      const champs = champsDeLaBase(base.position.rangee, base.position.colonne);
+      base.disposition = base.disposition.filter((b) => {
+        if (b?.id !== 'collecteur') return true;
+        const ressource = ressourceDeLaCase(champs, b.rangee, b.colonne);
+        if (ressource !== 'quartz' && ressource !== 'scorie') return false;
+        b.id = ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie';
+        return true;
+      });
+    }
   },
 };
 

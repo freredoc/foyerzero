@@ -47,6 +47,23 @@ const NIVEAU_CHANTIER = 10;
 
 
 /** Le terrain de l'exemple d'Ethan : deux quartz, trois scories. */
+/**
+ * Le collecteur qui va sur CETTE case de champ.
+ *
+ * ⚠ L'IDENTIFIANT SE LIT SUR LE TERRAIN — lot BÂTIMENTS-QUATRE-ÉTATS. Le
+ * Collecteur s'est dédoublé, et `CHAMPS.posableDessus` refuse celui de quartz
+ * sur un champ de scorie : un montage qui choisirait au hasard mesurerait ce
+ * refus au lieu de ce qu'il annonce.
+ */
+function collecteurDe(k, niveau = 1) {
+  return {
+    id: k.ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie',
+    rangee: k.rangee,
+    colonne: k.colonne,
+    niveau,
+  };
+}
+
 const TERRAIN = {
   cases: [
     { rangee: 14, colonne: 4, ressource: 'quartz' },
@@ -63,7 +80,7 @@ function base() {
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: NIVEAU_CHANTIER },
     { id: 'raffinerie', rangee: 15, colonne: 5, niveau: 1 },
     ...TERRAIN.cases.map(
-      (k) => ({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 1 }),
+      (k) => collecteurDe(k),
     ),
     { id: 'accumulateur', rangee: 12, colonne: 8, niveau: 1 },
   ];
@@ -184,15 +201,15 @@ test('economie-base — le seuil d\'exactitude tient, mais avec 5,47 de marge et
   // `CLAUDE.md` annonçait un facteur 19, calculé sur le collecteur de niveau 50
   // SEUL — 13 452 465 u/h. Le voisinage n'était pas encore dans le modèle. Le
   // pire cas réel est un collecteur de niveau 50 entouré de HUIT raffineries.
-  const pire = debitParHeure('collecteur', 50)
-    + 8 * debitVoisinParHeure('collecteur', 'raffinerie', 50);
+  const pire = debitParHeure('collecteurQuartz', 50)
+    + 8 * debitVoisinParHeure('collecteurQuartz', 'raffinerie', 50);
   assert.equal(pire, 45_738_385);
-  assert.equal(debitParHeure('collecteur', 50), 13_452_465);
+  assert.equal(debitParHeure('collecteurQuartz', 50), 13_452_465);
 
   const marge = DEBIT_MILLI_PAR_HEURE_MAX / (pire * 1000);
   assert.ok(marge > 5 && marge < 6, `marge ${marge.toFixed(2)}, attendue entre 5 et 6`);
   // Et l'ancienne mesure, pour que l'écart soit lisible dans le test lui-même.
-  const margeAncienne = DEBIT_MILLI_PAR_HEURE_MAX / (debitParHeure('collecteur', 50) * 1000);
+  const margeAncienne = DEBIT_MILLI_PAR_HEURE_MAX / (debitParHeure('collecteurQuartz', 50) * 1000);
   assert.ok(margeAncienne > 18, 'l\'ancien calcul donnait bien ~19');
   assert.ok(margeAncienne / marge > 3, 'la marge a été divisée par plus de trois');
 
@@ -204,7 +221,7 @@ test('economie-base — le seuil d\'exactitude tient, mais avec 5,47 de marge et
   // Un débit au-dessus du seuil lève, il ne dérive pas en silence.
   const enorme = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 50 },
-    { id: 'collecteur', rangee: 14, colonne: 4, niveau: 50 },
+    { id: 'collecteurQuartz', rangee: 14, colonne: 4, niveau: 50 },
   ];
   assert.doesNotThrow(() => debitsMilliParHeure(enorme, TERRAIN));
 });
@@ -244,14 +261,14 @@ test('economie-base — sur une heure pleine, le débit horaire est rendu EXACTE
   // stock doit valoir le débit horaire à l'unité près — pas « à peu près ».
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 20 },
-    { id: 'collecteur', rangee: 14, colonne: 4, niveau: 3 },
+    { id: 'collecteurQuartz', rangee: 14, colonne: 4, niveau: 3 },
     { id: 'raffinerie', rangee: 13, colonne: 7, niveau: 30 }, // gros stockage
   ];
   const etat = creerEtatEconomie(dispo);
   for (let t = 0; t < TICKS_PAR_HEURE; t++) tickEconomieBase(etat, dispo, TERRAIN);
 
   // Collecteur de niveau 3, sans raffinerie voisine : 240 × 1,25² = 375 u/h.
-  assert.equal(debitParHeure('collecteur', 3), 375);
+  assert.equal(debitParHeure('collecteurQuartz', 3), 375);
   assert.equal(etat.ressources.quartz, 375_000);
   // Et le résidu est retombé à zéro : une heure pleine ne laisse rien traîner.
   assert.equal(etat.residus[1].quartz, 0);
@@ -266,7 +283,7 @@ test('economie-base — le stock sature, le résidu continue d\'avancer', () => 
   // perdu MAIS le compteur ne s'arrête pas.
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 20 },
-    { id: 'collecteur', rangee: 14, colonne: 4, niveau: 40 }, // très gros débit
+    { id: 'collecteurQuartz', rangee: 14, colonne: 4, niveau: 40 }, // très gros débit
     { id: 'raffinerie', rangee: 12, colonne: 2, niveau: 1 }, // tout petit stockage
   ];
   const cap = capacitesMilli(dispo).quartz;
@@ -301,7 +318,7 @@ test('economie-base — le rattrapage reproduit le tick AU BIT PRÈS', () => {
     ['base de référence', base()],
     ['saturation en 72 ticks', [
       { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 20 },
-      { id: 'collecteur', rangee: 14, colonne: 4, niveau: 40 },
+      { id: 'collecteurQuartz', rangee: 14, colonne: 4, niveau: 40 },
       { id: 'raffinerie', rangee: 12, colonne: 2, niveau: 1 },
     ]],
   ];
@@ -345,9 +362,7 @@ test('economie-base — et il le reproduit sur des bases tirées au hasard', () 
     const libres = [...champs.cases];
     for (let i = 0, n = entier(rng, 1, 4); i < n; i++) {
       const k = libres.splice(entier(rng, 0, libres.length - 1), 1)[0];
-      dispo.push({
-        id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: entier(rng, 1, 50),
-      });
+      dispo.push(collecteurDe(k, entier(rng, 1, 50)));
     }
     const prises = new Set(
       dispo.map((b) => `${b.rangee}:${b.colonne}`)
@@ -522,7 +537,7 @@ test('economie-base — un stock au-dessus du plafond est GELÉ, jamais amputé'
   const dispo = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: NIVEAU_CHANTIER },
     { id: 'raffinerie', rangee: 13, colonne: 7, niveau: 1 },
-    { id: 'collecteur', rangee: 14, colonne: 4, niveau: 1 },
+    { id: 'collecteurQuartz', rangee: 14, colonne: 4, niveau: 1 },
   ];
   const caps = capacitesMilli(dispo);
   const surplus = caps.quartz + 500_000;
@@ -552,7 +567,7 @@ test('economie-base — un stock gelé ne remonte pas non plus, il reste où il 
   const champs = champsDeLaBase(42, 15);
   const dispo = [{ id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 30 }];
   for (const k of champs.cases) {
-    dispo.push({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 5 });
+    dispo.push(collecteurDe(k, 5));
   }
   // Des collecteurs, donc de la production ; aucune raffinerie, donc capacité
   // nulle. Un stock hérité doit rester exactement là où il est.
@@ -599,7 +614,7 @@ test('economie-base — tick et rattrapage restent identiques SUR DES STOCKS HÉ
     const champs = champsDeLaBase(1 + rnd(300), 1 + rnd(30));
     const dispo = [{ id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 20 }];
     for (const k of champs.cases) {
-      if (rnd(2)) dispo.push({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 1 + rnd(8) });
+      if (rnd(2)) dispo.push(collecteurDe(k, 1 + rnd(8)));
     }
     for (const [r, c] of [[13, 7], [14, 7], [15, 3]]) {
       if (rnd(2)) dispo.push({ id: rnd(2) ? 'raffinerie' : 'accumulateur', rangee: r, colonne: c, niveau: 1 + rnd(8) });

@@ -41,10 +41,15 @@ const IDS = Object.keys(BASE_BATIMENTS);
 // Le roster de la base
 // ---------------------------------------------------------------------------
 
-test('base — onze bâtiments, nommés, et le dépôt de véhicules porte son nom arbitré', () => {
-  // MESURÉ : 11. C'est le total annoncé par BASE-DU-JOUEUR-1.md §2 (sept du
-  // lexique + Chantier + Caserne + dépôt de véhicules + aérodrome).
-  assert.equal(IDS.length, 11, `${IDS.length} bâtiments, 11 attendus`);
+test('base — quinze bâtiments, nommés, et le dépôt de véhicules porte son nom arbitré', () => {
+  // MESURÉ : 11 jusqu'au 08/09. C'était le total annoncé par
+  // BASE-DU-JOUEUR-1.md §2 (sept du lexique + Chantier + Caserne + dépôt de
+  // véhicules + aérodrome).
+  //
+  // ⚠⚠ QUINZE DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS, ET LE COMPTE SE DÉCOMPOSE.
+  // Le Collecteur s'est dédoublé — un par ressource, +1 — et les trois
+  // artilleries sont entrées, +3. 11 − 1 + 2 + 3 = 15.
+  assert.equal(IDS.length, 15, `${IDS.length} bâtiments, 15 attendus`);
 
   for (const id of IDS) {
     const b = BASE_BATIMENTS[id];
@@ -84,13 +89,27 @@ test('base — trois bâtiments portent un nom d\'Ouvrage, et ce sont les bons',
   );
   assert.deepEqual(
     avecOuvrage,
-    ['chantierDeConstruction', 'complexeDeDefense', 'collecteur'],
-    'les trois bâtiments à pendant Ouvrage ont changé',
+    ['chantierDeConstruction', 'complexeDeDefense'],
+    'les bâtiments à pendant Ouvrage ont changé',
   );
   assert.deepEqual(
     avecOuvrage.map((id) => BASE_BATIMENTS[id].nom.ouvrage),
-    ['Souche', 'Étai', 'Nœud'],
+    ['Souche', 'Étai'],
   );
+
+  // ⚠⚠ LE NŒUD A PERDU SON PENDANT AU LOT BÂTIMENTS-QUATRE-ÉTATS, ET C'EST
+  // L'ASYMÉTRIE DE LA RAFFINERIE PRISE DANS L'AUTRE SENS. Le Collecteur s'est
+  // dédoublé — un par ressource — et `BATIMENTS.noeud.ressource` vaut
+  // `{ quartz: 0.5, scorie: 0.5 }` : UN bâtiment de l'Ouvrage fait désormais face
+  // à DEUX du joueur. Le raisonnement écrit sous la raffinerie s'applique mot
+  // pour mot, à l'envers — « un vers deux : aucun nom ne convient, et en choisir
+  // un serait faux la moitié du temps ».
+  for (const id of ['collecteurQuartz', 'collecteurScorie']) {
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(BASE_BATIMENTS[id].nom, 'ouvrage'),
+      `${id} ne doit pas porter de nom d'Ouvrage`,
+    );
+  }
 
   // La raffinerie n'en a PAS, et c'est un arbitrage : côté Ouvrage le stockage
   // est deux bâtiments (Gangue pour le quartz, Terril pour la scorie) parce que
@@ -103,7 +122,7 @@ test('base — trois bâtiments portent un nom d\'Ouvrage, et ce sont les bons',
 
   // Les huit autres n'ont PAS la clé — c'est ce qui rend `hasOwnProperty`
   // capable de trancher. Sans cette moitié, le test ne mesurerait qu'un sens.
-  assert.equal(IDS.length - avecOuvrage.length, 8);
+  assert.equal(IDS.length - avecOuvrage.length, 13);
 });
 
 test('base — l\'appariement avec l\'Ouvrage boucle dans les deux sens', () => {
@@ -120,8 +139,9 @@ test('base — l\'appariement avec l\'Ouvrage boucle dans les deux sens', () => 
     IDS.filter((id) => Object.prototype.hasOwnProperty.call(BASE_BATIMENTS[id].nom, 'ouvrage'))
       .map((id) => [BASE_BATIMENTS[id].nom.ouvrage, BASE_BATIMENTS[id].nom.joueur]),
   );
-  // MESURÉ : 3 appariements déclarés côté base.
-  assert.equal(parNomOuvrage.size, 3);
+  // MESURÉ : 2 appariements déclarés côté base — le Nœud a perdu le sien au lot
+  // BÂTIMENTS-QUATRE-ÉTATS, voir le test précédent.
+  assert.equal(parNomOuvrage.size, 2);
 
   let boucles = 0;
   for (const site of Object.values(BATIMENTS)) {
@@ -144,6 +164,10 @@ test('base — l\'appariement avec l\'Ouvrage boucle dans les deux sens', () => 
   const nomsJoueur = new Set(IDS.map((id) => BASE_BATIMENTS[id].nom.joueur));
   assert.ok(!nomsJoueur.has(BATIMENTS.gangue.ta), `gangue.ta = ${BATIMENTS.gangue.ta}`);
   assert.ok(!nomsJoueur.has(BATIMENTS.terril.ta), `terril.ta = ${BATIMENTS.terril.ta}`);
+  // ⚠ ET LE NŒUD LES A REJOINTS. Il renvoie toujours vers « Collecteur »,
+  // qui ne nomme plus aucun bâtiment du joueur depuis que le Collecteur s'est
+  // dédoublé. C'est la même asymétrie, du même côté de la garde.
+  assert.ok(!nomsJoueur.has(BATIMENTS.noeud.ta), `noeud.ta = ${BATIMENTS.noeud.ta}`);
   // Et les deux silos portent bien des ressources OPPOSÉES : c'est la raison de
   // l'asymétrie, pas une coïncidence de nommage.
   assert.equal(BATIMENTS.gangue.ressource.quartz, 1);
@@ -156,12 +180,30 @@ test('base — la raffinerie stocke les DEUX ressources, le collecteur en produi
   // Arbitré le 26/08, et la nuance porte tout : « quartzOuScorie » est
   // exclusif, « quartzEtScorie » est inclusif. Les écrire pareil, c'est se
   // préparer à additionner deux capacités qui ne s'additionnent pas.
-  assert.equal(BASE_BATIMENTS.collecteur.ressource, 'quartzOuScorie');
+  // ⚠⚠ `quartzOuScorie` A DISPARU AU LOT BÂTIMENTS-QUATRE-ÉTATS, ET LA NUANCE
+  // QU'IL PORTAIT EST PLUS FORTE QU'AVANT. L'exclusif disait « ce bâtiment-ci
+  // produit l'un OU l'autre, le champ tranchera » ; il y a maintenant DEUX
+  // bâtiments, et chacun SAIT lequel — le champ tranche en amont, à la pose. La
+  // raffinerie, elle, garde l'inclusif : elle tient les deux à la fois.
+  assert.equal(BASE_BATIMENTS.collecteurQuartz.ressource, 'quartz');
+  assert.equal(BASE_BATIMENTS.collecteurScorie.ressource, 'scorie');
   assert.equal(BASE_BATIMENTS.raffinerie.ressource, 'quartzEtScorie');
   assert.notEqual(
-    BASE_BATIMENTS.collecteur.ressource, BASE_BATIMENTS.raffinerie.ressource,
-    'produire l\'une OU l\'autre et stocker les DEUX ne peuvent pas s\'écrire pareil',
+    BASE_BATIMENTS.collecteurQuartz.ressource, BASE_BATIMENTS.collecteurScorie.ressource,
+    'les deux collecteurs produisent la même chose : le dédoublement ne sert à rien',
   );
+  for (const id of ['collecteurQuartz', 'collecteurScorie']) {
+    assert.notEqual(
+      BASE_BATIMENTS[id].ressource, BASE_BATIMENTS.raffinerie.ressource,
+      'produire UNE ressource et stocker les DEUX ne peuvent pas s\'écrire pareil',
+    );
+  }
+  // ⚠ ET PLUS AUCUN BÂTIMENT NE PORTE L'ANCIENNE VALEUR — sans cette ligne,
+  // une ligne oubliée dans une table garderait `quartzOuScorie` sans que rien ne
+  // le dise, et `ressourceProduite` la lirait comme « pas de ressource propre ».
+  for (const id of IDS) {
+    assert.notEqual(BASE_BATIMENTS[id].ressource, 'quartzOuScorie', id);
+  }
 
   // Seule la raffinerie porte une capacité par ressource. L'accumulateur n'a
   // qu'une ressource, donc la clé est absente plutôt que `false` — même règle
@@ -196,7 +238,10 @@ test('base — sept bâtiments uniques, quatre libres, et le Chantier seul sans 
   // est borné par les emplacements, pas par la règle — c'est ce qui donne son
   // intérêt au voisinage (base.js, en-tête de BASE_BATIMENTS).
   assert.equal(uniques.length, 7, `${uniques.length} bâtiments uniques, 7 attendus`);
-  assert.deepEqual(libres, ['centrale', 'collecteur', 'raffinerie', 'accumulateur']);
+  assert.deepEqual(libres, [
+    'centrale', 'collecteurQuartz', 'collecteurScorie', 'raffinerie', 'accumulateur',
+    'artillerieAntiInfanterie', 'artillerieAntiVehicule', 'artillerieAntiAerien',
+  ]);
 
   // MODELE-REPARATION-1.md §2 : le central est la SEULE exception au plancher.
   // Si tout planchait, le Chantier ne tomberait jamais et la sanction la plus
@@ -228,8 +273,12 @@ test('base — les trois châssis de production tombent sur ceux de combat.js', 
   assert.equal(Object.keys(parChassis).length, 3);
 });
 
-test('base — les quatre classes de coût couvrent exactement les onze bâtiments', () => {
-  // MESURÉ : majeur 3 · courant 4 · modeste 2 · mineur 2 = 11.
+test('base — les quatre classes de coût couvrent exactement les quinze bâtiments', () => {
+  // MESURÉ : majeur 3 · courant 7 · modeste 3 · mineur 2 = 15.
+  // ⚠ `courant` PASSE DE 4 À 7 ET `modeste` DE 2 À 3 — lot
+  // BÂTIMENTS-QUATRE-ÉTATS. Les trois artilleries sont `courant`, comme les trois
+  // casernes qu'elles côtoient en PV ; le second collecteur est `modeste`, comme
+  // le premier.
   // C'est ce test qui empêchera un futur bâtiment d'entrer sans classe, et une
   // classe de rester dans un commentaire sans porteur — la faute exacte qui a
   // laissé « dépôt de véhicules » vivre un mois dans le commentaire de
@@ -243,7 +292,7 @@ test('base — les quatre classes de coût couvrent exactement les onze bâtimen
     );
     compte[c] = (compte[c] ?? 0) + 1;
   }
-  assert.deepEqual(compte, { majeur: 3, courant: 4, modeste: 2, mineur: 2 });
+  assert.deepEqual(compte, { majeur: 3, courant: 7, modeste: 3, mineur: 2 });
   // Aucune classe orpheline dans l'autre sens.
   assert.deepEqual(Object.keys(COUT_NIVEAU_DEUX).sort(), Object.keys(compte).sort());
   // Les ancrages décroissent avec la classe, et le premier niveau payant est
@@ -510,12 +559,20 @@ test('base — douze cases de champ, trois répartitions, et douze collecteurs a
   // ARBITRÉ le 26/08 : seul le collecteur se pose sur un champ. C'est ce qui
   // fait des douze cases le PLAFOND du nombre de collecteurs, et donc un vrai
   // régulateur : 12 collecteurs au plus sur une base de 40 emplacements.
-  assert.deepEqual(CHAMPS.posableDessus, ['collecteur']);
+  // ⚠⚠ UNE TABLE PAR RESSOURCE DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS : chaque
+  // collecteur sur SON champ, et rien d'autre sur aucun des deux.
+  assert.deepEqual(CHAMPS.posableDessus, {
+    quartz: ['collecteurQuartz'],
+    scorie: ['collecteurScorie'],
+  });
   assert.ok(
-    Object.prototype.hasOwnProperty.call(BASE_BATIMENTS, 'collecteur'),
+    Object.prototype.hasOwnProperty.call(BASE_BATIMENTS, 'collecteurQuartz'),
     'le bâtiment autorisé sur un champ doit exister',
   );
-  assert.equal(BASE_BATIMENTS.collecteur.unique, false, 'un plafond de 12 suppose un bâtiment libre');
+  assert.equal(BASE_BATIMENTS.collecteurQuartz.unique, false,
+    'un plafond de 12 suppose un bâtiment libre');
+  assert.equal(BASE_BATIMENTS.collecteurScorie.unique, false,
+    'un plafond de 12 suppose un bâtiment libre');
   assert.ok(
     CHAMPS.total < EMPLACEMENTS.plafond,
     'le plafond de champs doit mordre avant celui des emplacements',
@@ -530,16 +587,16 @@ test('base — debitParHeure suit la pente de production, et elle vient d\'econo
   // MESURÉS : collecteur 240 → 300 au niveau 2 (× 1,25), 13 452 465 au niveau 50.
   // Ce dernier est le débit le plus lourd du jeu, celui que CLAUDE.md §6 cite
   // comme n'étant que 19 fois sous DEBIT_MILLI_PAR_HEURE_MAX.
-  assert.equal(debitParHeure('collecteur', 1), 240);
-  assert.equal(debitParHeure('collecteur', 2), 300);
-  assert.equal(debitParHeure('collecteur', 50), 13_452_465);
+  assert.equal(debitParHeure('collecteurQuartz', 1), 240);
+  assert.equal(debitParHeure('collecteurQuartz', 2), 300);
+  assert.equal(debitParHeure('collecteurQuartz', 50), 13_452_465);
   assert.equal(debitParHeure('centrale', 1), 120);
   assert.equal(debitParHeure('centrale', 50), 6_726_233);
 
   // La pente n'est pas réécrite ici : elle est LUE. Si quelqu'un la duplique
   // dans base.js, le rapport cessera de coller et ce test tombera.
   assert.equal(
-    debitParHeure('collecteur', 2) / debitParHeure('collecteur', 1),
+    debitParHeure('collecteurQuartz', 2) / debitParHeure('collecteurQuartz', 1),
     ECONOMIE_NIVEAU.penteProduction,
   );
   // Et elle ne doit PAS valoir la pente des coûts — les deux courbes ont été
@@ -550,16 +607,16 @@ test('base — debitParHeure suit la pente de production, et elle vient d\'econo
   // palier se verrait ici.
   for (let n = 2; n <= GEOGRAPHIE.niveauPlafond; n++) {
     assert.ok(
-      debitParHeure('collecteur', n) > debitParHeure('collecteur', n - 1),
-      `collecteur : le débit n'a pas crû du niveau ${n - 1} au niveau ${n}`,
+      debitParHeure('collecteurQuartz', n) > debitParHeure('collecteurQuartz', n - 1),
+      `collecteurQuartz : le débit n'a pas crû du niveau ${n - 1} au niveau ${n}`,
     );
   }
 
   // Un bâtiment sans `propre` n'est pas un producteur : la fonction lève.
   assert.throws(() => debitParHeure('raffinerie', 1), /producteur/);
   assert.throws(() => debitParHeure('accumulateur', 1), /producteur/);
-  assert.throws(() => debitParHeure('collecteur', 0), /hors de/);
-  assert.throws(() => debitParHeure('collecteur', 51), /hors de/);
+  assert.throws(() => debitParHeure('collecteurQuartz', 0), /hors de/);
+  assert.throws(() => debitParHeure('collecteurQuartz', 51), /hors de/);
 });
 
 test('base — les bonus de voisinage sont typés, et les deux couples réciproques', () => {
@@ -569,22 +626,34 @@ test('base — les bonus de voisinage sont typés, et les deux couples réciproq
   assert.equal(debitVoisinParHeure('centrale', 'champDeScorie', 1), 60);
   assert.equal(debitVoisinParHeure('centrale', 'accumulateur', 1), 72);
   assert.equal(debitVoisinParHeure('accumulateur', 'centrale', 1), 48);
-  assert.equal(debitVoisinParHeure('collecteur', 'raffinerie', 1), 72);
-  assert.equal(debitVoisinParHeure('raffinerie', 'collecteur', 1), 72);
+  assert.equal(debitVoisinParHeure('collecteurQuartz', 'raffinerie', 1), 72);
+  assert.equal(debitVoisinParHeure('raffinerie', 'collecteurQuartz', 1), 72);
 
   // Réciprocité : chacun des deux couples se nourrit dans les deux sens. Ce
   // n'est pas de la symétrie de VALEUR (48 ≠ 72), c'est de la symétrie
   // d'EXISTENCE — et c'est elle qui donne son intérêt à la disposition.
-  for (const [stockage, producteur] of Object.entries(PRODUCTEUR_APPARIE)) {
-    assert.ok(DEBITS[stockage]?.parVoisin?.[producteur] > 0, `${stockage} ← ${producteur}`);
-    assert.ok(DEBITS[producteur]?.parVoisin?.[stockage] > 0, `${producteur} ← ${stockage}`);
+  // ⚠ LA VALEUR EST UNE LISTE DEPUIS LE DÉDOUBLEMENT, et la réciprocité se
+  // vérifie producteur par producteur. Une Raffinerie nourrie par un seul des
+  // deux collecteurs passerait la boucle d'avant sans qu'on le voie.
+  for (const [stockage, producteurs] of Object.entries(PRODUCTEUR_APPARIE)) {
+    for (const producteur of producteurs) {
+      assert.ok(DEBITS[stockage]?.parVoisin?.[producteur] > 0, `${stockage} ← ${producteur}`);
+      assert.ok(DEBITS[producteur]?.parVoisin?.[stockage] > 0, `${producteur} ← ${stockage}`);
+    }
   }
-  // MESURÉ : deux couples, et les quatre bâtiments concernés sont les quatre
-  // non-uniques. Ce n'est pas un hasard — c'est ce qui les rend multipliables.
-  assert.deepEqual(PRODUCTEUR_APPARIE, { raffinerie: 'collecteur', accumulateur: 'centrale' });
+  // MESURÉ : deux couples, cinq bâtiments concernés — et ce sont cinq des huit
+  // non-uniques. Ce n'est pas un hasard : c'est ce qui les rend multipliables.
+  // Les trois artilleries sont non-uniques aussi, et ne nourrissent personne —
+  // elles ne produisent rien, ce que `DEBITS` dit en ne les portant pas.
+  // ⚠ LA VALEUR EST UNE LISTE DEPUIS LE DÉDOUBLEMENT : la Raffinerie fait
+  // face à deux producteurs, l'Accumulateur toujours à un seul.
+  assert.deepEqual(PRODUCTEUR_APPARIE, {
+    raffinerie: ['collecteurQuartz', 'collecteurScorie'],
+    accumulateur: ['centrale'],
+  });
   assert.deepEqual(
     Object.keys(DEBITS).sort(),
-    ['accumulateur', 'centrale', 'collecteur', 'raffinerie'],
+    ['accumulateur', 'centrale', 'collecteurQuartz', 'collecteurScorie', 'raffinerie'],
   );
 
   // ⚠ LA FORME EXACTE, PAS SEULEMENT LES VALEURS. Les assertions ci-dessus
@@ -592,8 +661,13 @@ test('base — les bonus de voisinage sont typés, et les deux couples réciproq
   // bonus de terrain sur le Collecteur entrerait sans qu'on revoie la décision.
   // ARBITRÉ le 26/08 : asymétrie voulue, le Collecteur ne touche rien du
   // terrain. Le champ sous lui décide de sa ressource, un point c'est tout.
-  assert.deepEqual(DEBITS.collecteur.parVoisin, { raffinerie: 72 });
-  assert.deepEqual(DEBITS.raffinerie.parVoisin, { collecteur: 72 });
+  assert.deepEqual(DEBITS.collecteurQuartz.parVoisin, { raffinerie: 72 });
+  assert.deepEqual(DEBITS.collecteurScorie.parVoisin, { raffinerie: 72 });
+  // ⚠ LA RAFFINERIE EN A DEUX, séparément — c'est l'exemple d'Ethan du
+  // 26/08 : deux collecteurs à quartz et trois à scorie donnent 144/h et 216/h,
+  // jamais additionnés.
+  assert.deepEqual(DEBITS.raffinerie.parVoisin,
+    { collecteurQuartz: 72, collecteurScorie: 72 });
   assert.deepEqual(DEBITS.accumulateur.parVoisin, { centrale: 48 });
   assert.deepEqual(DEBITS.centrale.parVoisin, { champDeScorie: 60, accumulateur: 72 });
 
@@ -608,12 +682,17 @@ test('base — les bonus de voisinage sont typés, et les deux couples réciproq
   assert.deepEqual(bonusDeTerrain, ['centrale.champDeScorie']);
   assert.equal(bonusDeTerrain.length, 1, 'un seul ancrage au terrain, arbitré le 26/08');
 
-  // DEBITS est COMPLÈTE : sept valeurs, et il n'en manque plus aucune.
-  // MESURÉ par exécution — j'en avais annoncé six, c'était faux.
+  // DEBITS est COMPLÈTE : dix valeurs, et il n'en manque plus aucune.
+  // MESURÉ par exécution — sept jusqu'au 08/09, j'en avais d'abord annoncé six.
+  //
+  // ⚠ DIX DEPUIS LE DÉDOUBLEMENT DU COLLECTEUR : le second collecteur apporte
+  // son `propre` et son bonus de raffinerie (+2), et la raffinerie une seconde
+  // clé dans `parVoisin` (+1). Les trois artilleries n'en apportent AUCUNE —
+  // elles ne produisent rien, et c'est `DEBITS` qui le dit en ne les portant pas.
   const valeurs = Object.values(DEBITS).flatMap(
     (d) => (d.propre === undefined ? [] : [d.propre]).concat(Object.values(d.parVoisin ?? {})),
   );
-  assert.equal(valeurs.length, 7, `${valeurs.length} valeurs de débit, 7 attendues`);
+  assert.equal(valeurs.length, 10, `${valeurs.length} valeurs de débit, 10 attendues`);
   for (const v of valeurs) assert.ok(Number.isInteger(v) && v > 0, `débit ${v} invalide`);
 
   // Le bonus se règle sur le niveau du bâtiment QUI PRODUIT, donc il suit la
@@ -623,7 +702,7 @@ test('base — les bonus de voisinage sont typés, et les deux couples réciproq
       / debitVoisinParHeure('centrale', 'champDeScorie', 1),
     ECONOMIE_NIVEAU.penteProduction,
   );
-  assert.throws(() => debitVoisinParHeure('centrale', 'collecteur', 1), /aucun bonus/);
+  assert.throws(() => debitVoisinParHeure('centrale', 'collecteurQuartz', 1), /aucun bonus/);
   assert.throws(() => debitVoisinParHeure('centrale', 'champDeScorie', 0), /hors de/);
 
   // Le voisinage est le 3 × 3 : huit cases autour, rayon 1. Reconfirmé le 26/08.
@@ -688,14 +767,14 @@ test('base — capaciteDuNiveau suit la courbe arbitrée le 28/08, palier par pa
   // L'autonomie n'est plus constante : elle vaut cinq minutes au niveau 1 et
   // des décennies au niveau 50. On le MESURE, pour que personne ne rétablisse
   // l'ancienne égalité en croyant réparer une régression.
-  const autonomie = (n) => capaciteDuNiveau('raffinerie', n) / debitParHeure('collecteur', n);
+  const autonomie = (n) => capaciteDuNiveau('raffinerie', n) / debitParHeure('collecteurQuartz', n);
   assert.ok(autonomie(1) < 0.2, `autonomie de niveau 1 : ${autonomie(1)} h, moins de 12 minutes attendues`);
   assert.ok(autonomie(50) > 1_000, 'autonomie de niveau 50 : des mois attendus');
   assert.ok(autonomie(50) / autonomie(1) > 1e4,
     'les deux bouts de la courbe devraient être très écartés');
 
   // Un bâtiment qui n'est pas du stockage lève, plutôt que de rendre un nombre.
-  assert.throws(() => capaciteDuNiveau('collecteur', 1), /stockage/);
+  assert.throws(() => capaciteDuNiveau('collecteurQuartz', 1), /stockage/);
   assert.throws(() => capaciteDuNiveau('chantierDeConstruction', 1), /stockage/);
   assert.throws(() => capaciteDuNiveau('inexistant', 1), /stockage/);
   assert.throws(() => capaciteDuNiveau('raffinerie', 0), /hors de/);
@@ -793,7 +872,7 @@ test('base — l\'électricité ne se paie qu\'à partir du niveau 3, et jamais 
   // La centrale est la moins chère à monter en électricité, le collecteur le
   // plus cher : c'est ce qui pousse à monter sa production d'énergie d'abord.
   assert.ok(COUT_ELECTRICITE.fraction.centrale < COUT_ELECTRICITE.fraction.autres);
-  assert.ok(COUT_ELECTRICITE.fraction.autres < COUT_ELECTRICITE.fraction.collecteur);
+  assert.ok(COUT_ELECTRICITE.fraction.autres < COUT_ELECTRICITE.fraction.collecteurQuartz);
 });
 
 // ---------------------------------------------------------------------------
@@ -845,7 +924,7 @@ test('base — la chaîne des coûts restitue la table relevée, palier par pali
 
   // Le premier palier EST la table de classe, il ne s'en déduit pas.
   assert.equal(obtenus[0], COUT_NIVEAU_DEUX.majeur);
-  assert.equal(coutDeMontee('collecteur', 2).quartz, COUT_NIVEAU_DEUX.modeste);
+  assert.equal(coutDeMontee('collecteurQuartz', 2).quartz, COUT_NIVEAU_DEUX.modeste);
   assert.equal(coutDeMontee('raffinerie', 2).quartz, COUT_NIVEAU_DEUX.mineur);
 
   // Falsifiable : la suite doit être STRICTEMENT croissante, sinon une chaîne
@@ -880,7 +959,7 @@ test('base — l\'électricité est une fraction du coût principal, à partir d
 
   // Falsifiable : le collecteur, lui, en paie franchement — sinon le test
   // ci-dessus passerait sur un module qui rend zéro partout.
-  assert.ok(coutDeMontee('collecteur', 5).electricite > 0);
+  assert.ok(coutDeMontee('collecteurQuartz', 5).electricite > 0);
 });
 
 test('base — le niveau 1 est gratuit, et il ne se demande pas', () => {
@@ -894,7 +973,7 @@ test('base — le niveau 1 est gratuit, et il ne se demande pas', () => {
 });
 
 test('base — le cumul est la somme des paliers, et rien d\'autre', () => {
-  for (const id of ['chantierDeConstruction', 'collecteur', 'raffinerie']) {
+  for (const id of ['chantierDeConstruction', 'collecteurQuartz', 'raffinerie']) {
     for (const niveau of [2, 5, 8]) {
       const somme = { quartz: 0, scorie: 0, electricite: 0 };
       for (let n = ECONOMIE_NIVEAU.premierNiveauPayant; n <= niveau; n++) {
@@ -915,17 +994,17 @@ test('base — le cumul est la somme des paliers, et rien d\'autre', () => {
   // relevé par exécution se REMESURE quand une constante bouge, il ne se
   // conserve pas — mais il doit dire laquelle a bougé, sinon il devient une
   // valeur que personne n'ose plus toucher.
-  assert.deepEqual(coutCumule('collecteur', 5), { quartz: 41, scorie: 0, electricite: 28 });
+  assert.deepEqual(coutCumule('collecteurQuartz', 5), { quartz: 41, scorie: 0, electricite: 28 });
 
   // Falsifiable : le cumul doit dépasser STRICTEMENT le dernier palier, sinon
   // une fonction qui ne rendrait que le dernier passerait la comparaison.
-  assert.ok(coutCumule('collecteur', 5).quartz > coutDeMontee('collecteur', 5).quartz);
+  assert.ok(coutCumule('collecteurQuartz', 5).quartz > coutDeMontee('collecteurQuartz', 5).quartz);
 });
 
 test('base — démolir rend 90 % de l\'investi, arrondi vers le bas', () => {
   assert.equal(REMBOURSEMENT_DEMOLITION.fraction, 0.9);
 
-  for (const id of ['chantierDeConstruction', 'collecteur', 'centrale']) {
+  for (const id of ['chantierDeConstruction', 'collecteurQuartz', 'centrale']) {
     for (const niveau of [2, 4, 7]) {
       const investi = coutCumule(id, niveau);
       const rendu = remboursementDuNiveau(id, niveau);
@@ -942,7 +1021,7 @@ test('base — démolir rend 90 % de l\'investi, arrondi vers le bas', () => {
 
   // Relevé par exécution : un collecteur de niveau 5 rend 36 et 25. Remesuré le
   // 05/09 avec le cumul dont il dérive — voir le test précédent.
-  assert.deepEqual(remboursementDuNiveau('collecteur', 5), { quartz: 36, scorie: 0, electricite: 25 });
+  assert.deepEqual(remboursementDuNiveau('collecteurQuartz', 5), { quartz: 36, scorie: 0, electricite: 25 });
 });
 
 test('base — la poche du Chantier suit le niveau, et la pente n\'est écrite qu\'une fois', () => {

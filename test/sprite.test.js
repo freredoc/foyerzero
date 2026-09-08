@@ -365,18 +365,27 @@ test('sprite — les sprites de l\'Ouvrage ne sont plus percés de trous', () =>
   // et c'est l'appât : un `trousEnfermes` qui rendrait toujours zéro ferait
   // passer l'assertion du dessus sur n'importe quel art.
   //
-  // ⚠⚠ ET L'APPÂT A CHANGÉ DE FAMILLE AU LOT SPRITES-V2-JOUEUR. Il lisait les
-  // coques du joueur — 2 694 px d'ouvertures mesurés sur la V1 ; les neuf coques
-  // de la v2 n'en portent plus que 13, parce qu'Ethan les a redessinées pleines.
-  // Un seuil laissé à 2 000 aurait fait tomber la garde sur de l'art SAIN, et
-  // baisser le seuil sur la même famille aurait rendu l'appât muet — 13 px ne
-  // distinguent pas un compteur qui marche d'un compteur à zéro. On prend donc
-  // la famille qui porte vraiment des ajours : les BÂTIMENTS du joueur.
-  const bat = join(SPRITES, 'bâtiment', '128');
-  const batiments = readdirSync(bat)
-    .filter((f) => f.endsWith('.png') && f.startsWith('bat_j_'))
-    .reduce((t, f) => t + trousEnfermes(join(bat, f)), 0);
-  assert.ok(batiments > 500, `${batiments} px enfermés côté joueur : le compteur ne compte rien`);
+  // ⚠⚠ ET L'APPÂT A CHANGÉ DE FAMILLE DEUX FOIS, POUR LA MÊME RAISON. Au lot
+  // SPRITES-V2-JOUEUR il lisait les coques du joueur — 2 694 px d'ouvertures sur
+  // la V1, plus que 13 sur la v2, qu'Ethan avait redessinées pleines ; il est
+  // passé aux BÂTIMENTS du joueur. Au lot BÂTIMENTS-QUATRE-ÉTATS ceux-là ont
+  // subi le même sort : les quatre-vingts planches neuves sont denses, et les
+  // soixante sprites du joueur ne portent plus que **330 px** enfermés, contre
+  // les 500 que l'appât exigeait.
+  //
+  // ⚠⚠ ON NE BAISSE PAS LE SEUIL, ON CHANGE D'APPÂT — c'est la leçon que le
+  // paragraphe d'avant avait déjà tirée. Un seuil qu'on descend à chaque fois
+  // qu'il gêne finit à zéro, et un appât à zéro ne distingue plus un compteur
+  // qui marche d'un compteur cassé. MESURÉ sur les six familles candidates,
+  // grille 128 : bâtiments du joueur 330 px, coques 13, défenses 8, unités 94,
+  // et les **SOCLES 972 px sur six fichiers seulement**. Un socle de tourelle
+  // est un ANNEAU : ce qu'il enferme est un trou par construction, pas un aléa
+  // de dessin, et aucune refonte d'art ne le remplira sans le dénaturer.
+  const socles = join(SPRITES, 'socle', '128');
+  const ajours = readdirSync(socles)
+    .filter((f) => f.endsWith('.png') && f.includes('_j_'))
+    .reduce((t, f) => t + trousEnfermes(join(socles, f)), 0);
+  assert.ok(ajours > 500, `${ajours} px enfermés côté joueur : le compteur ne compte rien`);
 
   // Et le balayage a bien trouvé les sprites : sans ça, zéro fichier donnerait
   // zéro trou, et la garde serait verte sur un dossier vide.
@@ -606,11 +615,12 @@ test('sprite — un nom absent lève, il ne rend pas un fond vide', () => {
   assert.doesNotThrow(() => fondDuSprite('terrain', ATLAS.terrain.noms[0]));
 });
 
-test('sprite — les onze bâtiments du joueur se résolvent dans l\'atlas', () => {
-  // Ce test rougit le jour où un douzième bâtiment arrive sans son sprite, et
-  // c'est exactement ce qu'on lui demande de faire.
+test('sprite — les quinze bâtiments du joueur se résolvent dans l\'atlas', () => {
+  // Ce test rougit le jour où un seizième bâtiment arrive sans son sprite, et
+  // c'est exactement ce qu'on lui demande de faire — il l'a fait le 08/09, quand
+  // les cinq identifiants du lot BÂTIMENTS-QUATRE-ÉTATS sont entrés.
   const ids = Object.keys(BASE_BATIMENTS);
-  assert.equal(ids.length, 11, 'le roster des bâtiments du joueur a changé de taille');
+  assert.equal(ids.length, 15, 'le roster des bâtiments du joueur a changé de taille');
 
   for (const id of ids) {
     const nom = spriteDuBatiment(id);
@@ -621,10 +631,13 @@ test('sprite — les onze bâtiments du joueur se résolvent dans l\'atlas', () 
 
   // La règle est mécanique, et le cas qui la prouve porte trois majuscules.
   assert.equal(spriteDuBatiment('chantierDeConstruction'), 'bat_j_chantier_de_construction');
-  assert.equal(spriteDuBatiment('collecteur'), 'bat_j_collecteur');
-  // Onze noms DISTINCTS : une règle qui écraserait deux identifiants sur le même
-  // fichier passerait toutes les assertions ci-dessus.
-  assert.equal(new Set(ids.map(spriteDuBatiment)).size, 11);
+  assert.equal(spriteDuBatiment('collecteurQuartz'), 'bat_j_collecteur_quartz');
+  // ⚠⚠ QUINZE NOMS DISTINCTS, ET C'EST LA GARDE QUI COMPTE LE PLUS DEPUIS LE
+  // DÉDOUBLEMENT. Une règle qui écraserait deux identifiants sur le même fichier
+  // passerait toutes les assertions ci-dessus — et c'est exactement le risque
+  // que courent `collecteurQuartz` et `collecteurScorie`, qui ne diffèrent que
+  // par leur dernier mot.
+  assert.equal(new Set(ids.map(spriteDuBatiment)).size, 15);
 });
 
 test('sprite — la variante est stable, bornée, et elle ne l\'est pas parce qu\'elle est constante', () => {
@@ -779,7 +792,7 @@ test('sprite — l\'atlas cousu répond des sprites d\'aujourd\'hui', () => {
   // MESURÉ : 280 sprites confrontés après la bascule, 465 avant.
   assert.ok(comparees > 250, `${comparees} sprites confrontés : le balayage n'a rien parcouru`);
   assert.notEqual(
-    sha(join(SPRITES, 'bâtiment', '64', 'bat_j_collecteur.png')),
+    sha(join(SPRITES, 'bâtiment', '64', 'bat_j_collecteur_quartz.png')),
     sha(join(SPRITES, 'bâtiment', '64', 'bat_j_chantier_de_construction.png')),
     'l\'empreinte ne distingue pas deux sprites',
   );
@@ -1763,8 +1776,11 @@ test('couches — les trois genres en rendent, et `null` reste réservé à la l
     assert.ok(Array.isArray(c) && c.length > 0, `batiment ${id} ${proprietaire}`);
     vues += 1;
   }
-  // 14 unités × 2 camps × 2 propriétaires + 9 défenses × 2 + 16 bâtiments.
-  assert.equal(vues, 14 * 2 * 2 + 9 * 2 + 16, `${vues} descripteurs balayés`);
+  // ⚠ 14 unités × 2 camps × 2 propriétaires + 9 défenses × 2 + 20 bâtiments.
+  // Vingt et non seize depuis le lot BÂTIMENTS-QUATRE-ÉTATS : quinze du joueur
+  // — le Collecteur dédoublé, les trois artilleries — et cinq de l'Ouvrage, qui
+  // n'ont pas bougé.
+  assert.equal(vues, 14 * 2 * 2 + 9 * 2 + 20, `${vues} descripteurs balayés`);
 
   // Le témoin : un genre sans identifiant résoluble rend toujours `null`. Sans
   // lui, une fonction qui rendrait TOUJOURS une liste passerait tout ce qui
@@ -1831,9 +1847,14 @@ test('couches — tout nom composable est dans un atlas cousu, les deux proprié
   }
 
   // ⚠ LE BALAYAGE SE MESURE, IL NE SE SUPPOSE PAS. MESURÉ après la bascule :
-  // 18 défenses + 12 socles + 16 bâtiments = 46 noms distincts, contre 238
-  // avant, quand seize orientations et quatre liaisons se multipliaient.
-  assert.equal(noms.size, 46, `${noms.size} noms distincts composés`);
+  // 18 défenses + 12 socles + 20 bâtiments = 50 noms distincts, contre 238
+  // avant la bascule de la v2.
+  //
+  // ⚠ VINGT BÂTIMENTS ET NON SEIZE depuis le lot BÂTIMENTS-QUATRE-ÉTATS :
+  // le Collecteur dédoublé et les trois artilleries. Ce sont les noms des
+  // ÉTATS INTACTS — `couchesDeLEntite` n'en compose pas d'autre tant que le
+  // descripteur ne porte pas d'état, et son défaut est « intact ».
+  assert.equal(noms.size, 50, `${noms.size} noms distincts composés`);
 
   // ⚠⚠ ET LE COMPTE QUI FAISAIT LE LOT STRUCTURES-AU-COMBAT TIENT : les noms de
   // l'OUVRAGE sont atteints, et pas un ne dort. Ils étaient zéro avant ce

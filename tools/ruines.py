@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Lot 10 — les seize bâtiments détruits et les deux ruines.
+"""Lot 10 — les deux ruines de mur et de tourelle.
+
+⚠⚠ IL A PORTÉ SEIZE BÂTIMENTS DÉTRUITS JUSQU'AU LOT BÂTIMENTS-QUATRE-ÉTATS,
+08/09/2026, ET IL N'EN PORTE PLUS AUCUN. Ethan a livré quatre-vingts planches à
+un sujet chacune — vingt bâtiments × quatre états —, et `tools/batiments_v2.py`
+les produit sans découpe. Les seize d'ici étaient les mêmes objets, tirés de
+planches à quatre sujets et d'un seul état de destruction : les garder aurait
+fait deux producteurs pour les mêmes noms de fichier, dont le second écrasait le
+premier selon l'ordre de la chaîne.
+
+⚠ CE QUI RESTE N'A JAMAIS ÉTÉ UN BÂTIMENT. `ruine_j` et `ruine_o` se posent
+quand la CASE est rasée ; `bat_<c>_<id>_detruit` quand le bâtiment est à zéro PV
+mais encore là. Deux choses différentes, et c'est pour ça que ce fichier ne
+disparaît pas avec ses seize.
 
 Dix-huit sprites, trois grilles, cinquante-quatre fichiers. Le suffixe de sortie
 est `_detruit`, sur le modèle du `_def` des unités : même dossier, même nom de
@@ -38,27 +51,11 @@ from chemins import dossier_sprites
 from PIL import Image
 import numpy as np
 from cond import est_fond
-from final128 import pal, recadrer, conditionner, ecrire, B, PV, OUV, cible
+from final128 import pal, recadrer, conditionner, ecrire
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('bâtiment')
 GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests ne la lisaient
-
-RENOMMAGE = {'usine': 'depot_de_vehicules'}
-
-# Intacte -> détruite. Les deux planches à droite sont les jets retenus.
-DETRUITES = {
-    'P1_caserne_depot_aerodrome_1024.png':
-        'P1_caserne_depot_aerodrome_detruite_1024.png',
-    'P2_chantier_qg_complexe_centre_1024.png':
-        'P2_chantier_qg_complexe_centre_detruite_1024.png',
-    'P3_raffinerie_collecteur_centrale_accumulateur_1024-2.png':
-        'P3_raffinerie_collecteur_centrale_accumulateur_detruite_1024.png',
-    'P4_souche_etai_1024.png':
-        'P4_souche_etai_detruite_1024-1.png',
-    'P5_gangue_noeud_terril_1024.png':
-        'P5_gangue_noeud_terril_detruite_1024.png',
-}
 
 RUINES = ('R2_ruines_mur_tourelle_joueur_ouvrage_2x1.png',
           [('ruine_j', False), ('ruine_o', True)])
@@ -71,27 +68,6 @@ def part_violette(a, m):
 
 
 n = 0
-for fichier, nx, ny, grille in B:
-    detruite = DETRUITES.get(fichier)
-    if detruite is None:
-        raise AssertionError(f'{fichier} : aucune planche détruite déclarée')
-    im = Image.open(os.path.join(SRC, detruite))
-    W, H = im.size
-    cw, ch = W // nx, H // ny
-    for j in range(ny):
-        for i in range(nx):
-            cle = grille[j][i]
-            ouv = cle in OUV
-            nom = ('bat_o_' if ouv else 'bat_j_') + RENOMMAGE.get(cle, cle)
-            cell = im.crop((i * cw, j * ch, (i + 1) * cw, (j + 1) * ch))
-            P = pal(ouv)
-            emp = cible(PV[cle])
-            for N in GRILLES:
-                g, matiere = conditionner(recadrer(cell, emp * (N // 32), N), P, N)
-                d = os.path.join(DST, str(N))
-                os.makedirs(d, exist_ok=True)
-                ecrire(g, P, os.path.join(d, f'{nom}_detruit.png'), matiere)
-                n += 1
 
 # --- les deux ruines, camp mesuré au violet ---
 fichier, attendus = RUINES

@@ -77,7 +77,7 @@ test('niveau — SEUL CE QUI EST POSÉ compte, Chantier compris', () => {
   // Trois bâtiments posés, de niveaux différents.
   const posee = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 1 },
-    { id: 'collecteur', rangee: 14, colonne: 3, niveau: 8 },
+    { id: 'collecteurQuartz', rangee: 14, colonne: 3, niveau: 8 },
     { id: 'raffinerie', rangee: 15, colonne: 3, niveau: 6 },
   ];
   assert.equal(niveauDesBatiments(posee), 50, '15/3 = 5,0');

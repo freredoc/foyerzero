@@ -26,6 +26,7 @@
 import {
   BASE_BATIMENTS, DEBITS, CHAMPS, VOISINAGE, EMPLACEMENTS, BASE_NEUVE,
   emplacementsDuNiveau, debitParHeure, debitVoisinParHeure, estDansLaBase,
+  posablesSurUnChamp,
 } from '../data/base.js';
 import { ressourceDeLaCase } from './champs.js';
 import { GEOGRAPHIE } from '../data/sites.js';
@@ -114,13 +115,25 @@ export function problemesDeDisposition(disposition, champs) {
     // Le champ : socle obligatoire pour qui a le droit d'y être, interdit aux
     // autres. Les deux sens comptent — poser une centrale sur un champ gâche
     // une case de collecteur, et il n'y en a que douze.
-    const surChamp = ressourceDeLaCase(champs, b.rangee, b.colonne) !== null;
-    const aLeDroit = CHAMPS.posableDessus.includes(b.id);
+    // ⚠⚠ TROIS SENS DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS, ET LE TROISIÈME EST
+    // CE QUI TIENT LE MODÈLE DEBOUT. Il y avait deux collecteurs à partir de ce
+    // lot-là, un par ressource, et `posableDessus` est devenue une table : un
+    // collecteur à quartz n'a rien à faire sur un champ de scorie. Le cas ne
+    // naît pas à la POSE — `batimentDeLaVignette` lit le terrain — mais au
+    // DÉPLACEMENT, où le joueur reprend un bâtiment déjà posé. Sans cette garde,
+    // il produirait du quartz depuis un gisement de scorie, et rien ne le dirait.
+    const ressourceIci = ressourceDeLaCase(champs, b.rangee, b.colonne);
+    const surChamp = ressourceIci !== null;
+    const aLeDroit = posablesSurUnChamp().has(b.id);
     if (aLeDroit && !surChamp) {
       ajouter('hors-champ', `${def.nom.joueur} doit être posé sur un champ`, index);
     }
     if (!aLeDroit && surChamp) {
-      ajouter('champ-gache', `${def.nom.joueur} occupe un champ, réservé au Collecteur`, index);
+      ajouter('champ-gache', `${def.nom.joueur} occupe un champ, réservé aux Collecteurs`, index);
+    }
+    if (aLeDroit && surChamp && !CHAMPS.posableDessus[ressourceIci].includes(b.id)) {
+      ajouter('mauvais-champ',
+        `${def.nom.joueur} est posé sur un champ de ${ressourceIci}`, index);
     }
   });
 
@@ -369,7 +382,8 @@ export function voisinsQualifiantsParCase(disposition, champs, index) {
     // POSABLE SUR UN CHAMP. Les quatre tables sont `centrale
     // {champDeScorie, accumulateur}`, `accumulateur {centrale}`, `collecteur
     // {raffinerie}`, `raffinerie {collecteur}` — et `CHAMPS.posableDessus` ne
-    // contient que `collecteur`, qu'aucune table n'apparie à un champ. La règle
+    // ne contient que les deux collecteurs, qu'aucune table n'apparie à un champ.
+  // La règle
     // est écrite quand même : c'est celle du moteur, et une seconde ligne dans
     // `parVoisin` la rendrait atteignable sans qu'on y pense.
     const types = [];
@@ -459,10 +473,21 @@ export function ressourceProduite(disposition, champs, index) {
   if (b === undefined) {
     throw new RangeError(`disposition : indice ${index} hors de la liste`);
   }
-  if (b.id === 'collecteur') {
+  // ⚠⚠ LE CHAMP DÉCIDE ENCORE, ET C'EST L'ARBITRAGE DU 26/08 INTACT — mais le
+  // `=== 'collecteur'` écrit en dur a disparu au lot BÂTIMENTS-QUATRE-ÉTATS.
+  // Depuis qu'il y a DEUX collecteurs, reconnaître l'un ou l'autre par son nom
+  // aurait été la première liste à oublier un ajout ; c'est leur ligne de
+  // `BASE_BATIMENTS` qui les désigne, par la ressource qu'ils portent.
+  //
+  // ⚠⚠ ET ON REND CE QUE LE TERRAIN DIT, PAS CE QUE LE BÂTIMENT ANNONCE. Les
+  // deux s'accordent sur une disposition valide — `mauvais-champ` le garde —,
+  // mais un collecteur posé HORS champ n'a pas de gisement du tout : rendre sa
+  // ressource déclarée le ferait produire du quartz depuis rien, là où `null`
+  // remonte en `indetermine` et se voit.
+  const def = BASE_BATIMENTS[b.id];
+  if (posablesSurUnChamp().has(b.id)) {
     return ressourceDeLaCase(champs, b.rangee, b.colonne);
   }
-  const def = BASE_BATIMENTS[b.id];
   if (def?.ressource === 'electricite') return 'electricite';
   return null;
 }
