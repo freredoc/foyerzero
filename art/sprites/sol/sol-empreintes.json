@@ -1,153 +1,598 @@
 {
  "clarte": {
-  "p1": 50.72,
-  "p5": 54.96,
-  "p50": 64.54,
-  "p95": 74.24,
-  "p99": 77.97
+  "p1": 29.83,
+  "p5": 39.19,
+  "p50": 59.12,
+  "p95": 73.79,
+  "p99": 79.98
  },
- "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/sols.py ». Les planches sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur elles — au premier chef leur CÔTÉ, dont src/render/terrain.js dérive la géométrie de son pavage, la correction de moyenne appliquée à chacune, et depuis le 05/09 la CLARTÉ du sol, contre laquelle test/limite.test.js calibre les frontières de territoire. Même motif que art/sprites/fond/fond-empreintes.json.",
+ "commentaire": "FICHIER GÉNÉRÉ par « python3 tools/sols.py ». Les planches sont en WebP et Node n'a pas de décodeur WebP ; ce manifeste est ce que la suite JS peut encore mesurer sur elles — au premier chef leur CÔTÉ, dont src/render/terrain.js dérive la géométrie de son pavage, la correction de moyenne appliquée à chacune, la CLARTÉ du sol contre laquelle test/limite.test.js calibre les frontières de territoire, et depuis le 08/09 la translation ocre → violet que ui/monde.js peint et les minimums par canal qui rendent sa soustraction exacte. Même motif que art/sprites/fond/fond-empreintes.json.",
+ "cote": 704,
+ "delta": [
+  -69.0394,
+  -21.0827,
+  15.6858
+ ],
+ "ecretagePourCent": {
+  "artificiel": 0.2318,
+  "hybride": 0.5957,
+  "naturel": 0.321,
+  "ocre": 0.0003
+ },
+ "ecretagePourCentTotal": 0.2256,
+ "familles": [
+  "ocre",
+  "naturel",
+  "hybride",
+  "artificiel"
+ ],
+ "minimumParCanal": [
+  79,
+  26,
+  4
+ ],
+ "plancher": [
+  80,
+  32,
+  0
+ ],
+ "porteeDeTeinte": {
+  "artificiel": [
+   0.5846,
+   1.0
+  ],
+  "hybride": [
+   0.2923,
+   1.0
+  ],
+  "naturel": [
+   0.0077,
+   0.9154
+  ],
+  "ocre": [
+   0.0,
+   0.7462
+  ]
+ },
  "reference": [
   198.7909,
   144.1583,
   124.8837
  ],
+ "referenceViolette": [
+  129.7515,
+  123.0756,
+  140.5695
+ ],
+ "repere": "reference est un REPÈRE DE STOCKAGE, pas la moyenne des vingt-deux : c'est la moyenne des HUIT planches ocres seules, inchangée depuis le lot SOL-SATELLITE. Les quatorze planches de l'Ouvrage y sont alignées elles aussi, et ui/monde.js les ramène à delta près sur leur référence violette au rendu. La recalculer sur les vingt-deux déplacerait le sol du bas, qu'Ethan veut intact.",
  "sols": {
   "sol_carte_1": {
    "correction": [
-    -8.2622,
-    -5.6093,
-    -4.746
+    -15.8565,
+    -14.8529,
+    -14.4165
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    125,
+    69,
+    53
+   ],
    "moyenne": [
-    199.0531,
-    143.7677,
-    124.6296
+    198.6474,
+    144.0112,
+    125.3002
    ],
-   "octets": 192656,
+   "octets": 52546,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "f0090743cf2f6fe48a6928cf638fb1b2b0e8f1f5471fc197193d40fb07ae8a34"
+   "sha256": "d12f0b70e33f8567d510993e323403a2eaa5cd91c4b978429eacdd3c8cd5f6c6"
   },
   "sol_carte_2": {
    "correction": [
-    -6.6272,
-    -2.5406,
-    -3.0724
+    -7.9595,
+    -3.3825,
+    -3.4649
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    126,
+    72,
+    52
+   ],
    "moyenne": [
-    198.4181,
-    143.6989,
-    124.956
+    198.7504,
+    144.5408,
+    125.3485
    ],
-   "octets": 214818,
+   "octets": 63342,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "9861128db09874a939dd8dd7f8b119fbcc0ad023087bf2d24621b726c4aa74d7"
+   "sha256": "96f750a5ec455682df098a5e423b1e89c9450d34d903821062c4c209aa8bce1d"
   },
   "sol_carte_3": {
    "correction": [
-    -4.1371,
-    -0.3261,
-    3.702
+    -3.89,
+    -0.5306,
+    3.6085
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    130,
+    78,
+    66
+   ],
    "moyenne": [
-    198.928,
-    144.4844,
-    125.1816
+    198.6809,
+    143.6889,
+    125.2751
    ],
-   "octets": 171702,
+   "octets": 51800,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "ae1a07b3a2f86dd35398041e19340a9339af7dce0b386f8af53c14ec6624d5a6"
+   "sha256": "df9a58d2a959d2430a0de89caf427e9b59e872734fa0579698700394a7a690e9"
   },
   "sol_carte_4": {
    "correction": [
-    0.4322,
-    0.596,
-    0.5704
+    -0.1016,
+    0.1002,
+    0.411
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    126,
+    76,
+    63
+   ],
    "moyenne": [
-    198.3588,
-    144.5623,
-    125.3133
+    198.8925,
+    144.0581,
+    124.4726
    ],
-   "octets": 225442,
+   "octets": 68904,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "8ad200448644563221fe2e908f2cdaa65006b3f62b54f228fd903bfaef22bb5b"
+   "sha256": "effe11ebc86d0749b49712e77f829b4bf38274685f5cf3fdaa551032a75f8652"
   },
   "sol_carte_5": {
    "correction": [
-    2.8844,
-    1.7826,
-    1.2089
+    1.7064,
+    0.3119,
+    -0.0487
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    113,
+    57,
+    37
+   ],
    "moyenne": [
-    198.9065,
-    144.3758,
-    124.6747
+    199.0845,
+    143.8464,
+    124.9323
    ],
-   "octets": 196686,
+   "octets": 61160,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "bdadf8621b884b2eee8faefa6177f1132863bab0f6b67ce18833be4e38375c94"
+   "sha256": "bcc89fad2959cd44e2e3df13bf2ea65e4e6327927296c7279a7add997e37f86d"
   },
   "sol_carte_6": {
    "correction": [
-    16.2171,
-    4.6194,
-    0.8108
+    15.4806,
+    4.0317,
+    0.4305
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    105,
+    56,
+    38
+   ],
    "moyenne": [
-    198.5735,
-    144.5389,
-    125.0729
+    198.3102,
+    144.1266,
+    124.4532
    ],
-   "octets": 261394,
+   "octets": 82464,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "23d0986972e2699e7f395e9edc772b670472c35e13ac01a1da1e3538a518eeae"
+   "sha256": "b248c5ab23f2222f5bcfcf066cd034834903b85320ffb0f159fa78cbedcb5deb"
   },
   "sol_carte_7": {
    "correction": [
-    -0.759,
-    3.2807,
-    3.7471
+    0.5028,
+    4.4352,
+    4.6366
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    137,
+    87,
+    67
+   ],
    "moyenne": [
-    198.5499,
-    143.8776,
-    125.1365
+    199.2882,
+    143.7231,
+    125.2471
    ],
-   "octets": 200806,
+   "octets": 62024,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "b0722d9e7bbc2f1733899ed603d2168e48006fc9a291029d64b527e00b979c19"
+   "sha256": "9f771745698be1c908b2474a500069e46c5bfc69c2c597c01fe8ec4868230f72"
   },
   "sol_carte_8": {
    "correction": [
-    0.2517,
-    -1.8026,
-    -2.2208
+    1.2481,
+    -1.1048,
+    -1.9944
    ],
-   "hauteur": 1254,
-   "largeur": 1254,
+   "famille": "ocre",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    117,
+    62,
+    43
+   ],
    "moyenne": [
-    198.5392,
-    143.9609,
-    125.1045
+    198.5429,
+    144.2632,
+    124.878
    ],
-   "octets": 210692,
+   "octets": 66176,
+   "plancherPixels": 0,
    "qualite": 75,
-   "sha256": "9d031427ac04d22f30011f9cf225bda307c4f757409f88cd0ddc9287385a70a3"
+   "sha256": "c1bfe8a7e80381c198a615b80cc28294b0575fcdb17bb337031a9eb6eecf337b"
+  },
+  "sol_ouvrage_artificiel_1": {
+   "correction": [
+    65.1804,
+    16.8076,
+    -20.2387
+   ],
+   "famille": "artificiel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    79,
+    26,
+    5
+   ],
+   "moyenne": [
+    198.5695,
+    144.3507,
+    125.1224
+   ],
+   "octets": 104100,
+   "plancherPixels": 2,
+   "qualite": 75,
+   "sha256": "b00e6b5ce1faee29aa907ae90f2f7a142c544358584d6b1001b51f4ce1755ba9"
+  },
+  "sol_ouvrage_artificiel_2": {
+   "correction": [
+    67.7063,
+    18.061,
+    -18.9601
+   ],
+   "famille": "artificiel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    96,
+    42,
+    19
+   ],
+   "moyenne": [
+    199.005,
+    144.0973,
+    124.8438
+   ],
+   "octets": 94352,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "13cef4b54136dbfbcb83f0411bd630ffb214a103aeeca22120512d14dcf829b2"
+  },
+  "sol_ouvrage_artificiel_3": {
+   "correction": [
+    69.5396,
+    20.8643,
+    -15.8058
+   ],
+   "famille": "artificiel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    93,
+    40,
+    17
+   ],
+   "moyenne": [
+    199.2186,
+    144.294,
+    124.6894
+   ],
+   "octets": 92602,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "9123c6a6d5e09d495a3139af5ab225280dd06af78b90839055b83258ee54f0b5"
+  },
+  "sol_ouvrage_artificiel_4": {
+   "correction": [
+    69.8539,
+    21.4316,
+    -15.3404
+   ],
+   "famille": "artificiel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    95,
+    39,
+    20
+   ],
+   "moyenne": [
+    198.8694,
+    143.7267,
+    125.224
+   ],
+   "octets": 91876,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "e76776d933b9e661334d455921e2b3fe8dd4f6a07a9be4d9ff8620171a8c7079"
+  },
+  "sol_ouvrage_hybride_1": {
+   "correction": [
+    71.5796,
+    23.5198,
+    -12.3091
+   ],
+   "famille": "hybride",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    82,
+    27,
+    4
+   ],
+   "moyenne": [
+    198.966,
+    144.6384,
+    125.1928
+   ],
+   "octets": 126272,
+   "plancherPixels": 3,
+   "qualite": 75,
+   "sha256": "c5041b8add0165bb0be173a4da7e7869e2325043f70225a8c2d24ca528351f70"
+  },
+  "sol_ouvrage_hybride_2": {
+   "correction": [
+    69.7079,
+    22.408,
+    -13.2909
+   ],
+   "famille": "hybride",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    94,
+    38,
+    16
+   ],
+   "moyenne": [
+    198.9429,
+    143.7503,
+    125.1746
+   ],
+   "octets": 130474,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "6bf1e556b9f7df1eaa9763e3147b60a9b7d2901b75a69f9a9cb6b6994fa4e05a"
+  },
+  "sol_ouvrage_hybride_3": {
+   "correction": [
+    71.1182,
+    23.6869,
+    -13.5714
+   ],
+   "famille": "hybride",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    84,
+    31,
+    9
+   ],
+   "moyenne": [
+    198.5661,
+    144.4713,
+    124.455
+   ],
+   "octets": 130530,
+   "plancherPixels": 1,
+   "qualite": 75,
+   "sha256": "cadfeaf28188c19a9fddd175b409ba18ad1e7a0884bec59750313b83859a751f"
+  },
+  "sol_ouvrage_naturel_1": {
+   "correction": [
+    65.368,
+    16.8512,
+    -18.8659
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    84,
+    33,
+    11
+   ],
+   "moyenne": [
+    198.3555,
+    144.3072,
+    124.7496
+   ],
+   "octets": 104328,
+   "plancherPixels": 2,
+   "qualite": 75,
+   "sha256": "2e6ea1b4af57c67e93439b5895dd86eb83ed340874e3ab2a6640fa439424e400"
+  },
+  "sol_ouvrage_naturel_2": {
+   "correction": [
+    80.6145,
+    34.2039,
+    -3.47
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    97,
+    41,
+    22
+   ],
+   "moyenne": [
+    199.1388,
+    143.9544,
+    125.3536
+   ],
+   "octets": 82758,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "51bb50a57642c6eb17546b46f2e210edb41ff51636a8b1ef79635e1bc493c872"
+  },
+  "sol_ouvrage_naturel_3": {
+   "correction": [
+    66.9965,
+    18.3822,
+    -20.2786
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    94,
+    38,
+    18
+   ],
+   "moyenne": [
+    198.7818,
+    143.7761,
+    125.1622
+   ],
+   "octets": 93636,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "1b5f829690bf4edf4bc21dd59cb514062a6418b47dbf4c0f3a28b1271f63623c"
+  },
+  "sol_ouvrage_naturel_4": {
+   "correction": [
+    69.1012,
+    21.4741,
+    -15.2308
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    88,
+    33,
+    17
+   ],
+   "moyenne": [
+    198.6364,
+    143.6843,
+    125.1144
+   ],
+   "octets": 103750,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "40c9b4cb547711fb2b641b52ac4b8e41e1e305dccb9762c6fb0861cad754efa9"
+  },
+  "sol_ouvrage_naturel_5": {
+   "correction": [
+    66.0638,
+    18.1891,
+    -18.7032
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    86,
+    30,
+    8
+   ],
+   "moyenne": [
+    198.628,
+    143.9692,
+    124.5869
+   ],
+   "octets": 121526,
+   "plancherPixels": 2,
+   "qualite": 75,
+   "sha256": "1e44f4b882253316bac9f07ea563383edf60313bd236b7e544039ddfce45ff25"
+  },
+  "sol_ouvrage_naturel_6": {
+   "correction": [
+    68.2413,
+    21.6933,
+    -13.9462
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    90,
+    36,
+    16
+   ],
+   "moyenne": [
+    198.4344,
+    144.4649,
+    124.8299
+   ],
+   "octets": 121388,
+   "plancherPixels": 0,
+   "qualite": 75,
+   "sha256": "3c2d200bb8d57dea4a14fea75275aa5eb5b17d65f533a1ec364d9d960d1df1c6"
+  },
+  "sol_ouvrage_naturel_7": {
+   "correction": [
+    65.4805,
+    17.5843,
+    -19.5907
+   ],
+   "famille": "naturel",
+   "hauteur": 704,
+   "largeur": 704,
+   "minimum": [
+    88,
+    34,
+    15
+   ],
+   "moyenne": [
+    198.2472,
+    144.5741,
+    124.4743
+   ],
+   "octets": 117814,
+   "plancherPixels": 1,
+   "qualite": 75,
+   "sha256": "ed24fd635a0c1ba6b78a63209e56e1d9ffa10a0be6ceebe75e1effe46a928a3a"
   }
  }
 }

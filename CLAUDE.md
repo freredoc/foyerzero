@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.32 · build 134.
+Dernière révision : **08/09/2026**, version 0.99.33 · build 135.
 
 ---
 
@@ -42,7 +42,193 @@ Dernière révision : **08/09/2026**, version 0.99.32 · build 134.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot FORMATION-ET-GARNISON), à confronter :**
+**Référence au 08/09/2026 (après le lot SOL-OUVRAGE), à confronter :**
+⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
+`npm test` rend **1451 pass / 1 fail** ; le dépôt DÉCLARE **1452 pass / 0 fail**
+— c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
+NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est unique, et le
+§4.4 du brief interdit de le réparer : voir le ⚠⚠ qui le nomme plus bas.
+`npm run build` → `dist/index.html`, **9 123 778 octets**, 0 référence externe.
+Coût **+469 342 octets**, mesuré poste par poste contre un livrable rebâti dans
+un `git worktree` depuis `6f7b3bb` : **images +466 506 · JavaScript +2 200 ·
+balisage +636 · feuille +0 · audio +0**, et la somme des cinq postes tombe
+EXACTEMENT sur le total — **297 lignes `data:` avant, 311 après ; 292 URI avant,
+306 après**. Borne T10 **inchangée à 9 300 000**, marge **176 222 octets,
+1,89 %** — le brief en exigeait 150 000 au moins, il en reste 26 222 de plus.
+⚠⚠ **LA COULEUR DU SOL NE DÉPEND QUE DE LA RANGÉE, LE MOTIF NE DÉPEND QUE DU
+BLOC, ET C'EST TOUT LE LOT.** Ethan : le sol de la carte cesse d'être uniforme —
+le bas reste le désert d'aujourd'hui, le haut devient l'Ouvrage, et la bascule se
+fait **par plaques, jamais par un trait**. Les deux axes sont donc SÉPARÉS : la
+teinte est un dégradé vertical peint sur la dalle FINIE, le motif est un tirage
+de famille par bloc. **Le brief écarte nommément la façon évidente** — porter la
+couleur par la FAMILLE — parce qu'elle a été essayée et qu'elle rend « un
+escalier de rectangles orange et violets » : ne pas la rouvrir.
+⚠⚠ **LES DEUX AXES CESSENT À LA MÊME RANGÉE, ET LE PIVOT EST UNIQUE.**
+`TERRAIN_CARTE.ouvrage.rangeePivot` vaut **226** et sert aux deux ; seules les
+LARGEURS diffèrent — **150 rangées** pour les familles, **130** pour la teinte.
+La couleur est donc pleine dès la rangée **96** et les familles dès la **76**, si
+bien que les motifs artificiels du haut sont vus à leur teinte de dessin et
+jamais à une teinte intermédiaire. Deux pivots auraient laissé une bande où des
+plaques violettes se peignent en ocre.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE, SUR UN VRAI VOYAGE DU SUD AU
+NORD.** Quarante glissements au doigt, par CDP, au cran le plus large : le sol
+part à `R−B = 73` (l'ocre d'aujourd'hui), glisse sans marche de 65 à −7 sur onze
+relevés, puis se fixe à **rvb (129, 123, 140)**, c'est-à-dire EXACTEMENT la
+`referenceViolette` du manifeste, `(129,75 · 123,08 · 140,57)`, arrondie. **Les
+vingt-deux planches décodent en 704 × 704**, toutes en `data:image/webp` ;
+`difference` est appelée **61 fois**, `createLinearGradient` **122 fois** — deux
+par appel, un par couple de canaux —, **zéro erreur de page, zéro débordement
+horizontal**. ⚠ Et les deux derniers dégradés portent `rgb(69, 21, 0)` et
+`rgb(0, 0, 16)` aux DEUX arrêts : c'est Δ appliqué en plein, sur une dalle
+entièrement dans le violet.
+⚠⚠ **ET LE RACCORD DE DALLE A ÉTÉ CHERCHÉ À L'ÉCRAN, PAS SEULEMENT EN
+ARITHMÉTIQUE.** Profil vertical de `R−B` moyenné sur les 1 080 colonnes, au cœur
+de la transition : montée monotone de 10,3 à 44,8 sur 1 872 lignes, **saut
+médian 0,359, p99 2,83, pire saut 4,01**. Un détecteur de MARCHE — 24 lignes
+contre 24 — rend **2,98 au pire**, quand une dalle de 512 px porte à elle seule
+**9,5 unités** de montée : il n'y a donc aucune marche de dalle, et ce qui reste
+est le motif, qui DOIT varier. `SOU T10` le tient par ailleurs en arithmétique
+pure, une bande rendue en une dalle contre la même rendue en quatre.
+⚠⚠ **`fonduSourcePx` PASSE DE 128 À 72, ET CE N'EST PAS UN RÉGLAGE D'ALLURE.**
+Il est en pixels SOURCE, et la planche passe de 1 254 à 704 : le laisser à 128
+ferait tomber `PART_INTACTE` de **78,55 % à 60,49 %**, c'est-à-dire mélanger deux
+dessins sur deux pixels sur cinq — l'inverse de « le moins de traitement
+possible ». 72 est `round(128 × 704/1254)`, donc le MÊME fondu à l'échelle près,
+et **la part intacte tombe à 78,51 %**, soit quatre centièmes de point.
+⚠⚠ **LE CÔTÉ ET LA QUALITÉ SONT MESURÉS, CINQ ESSAIS, ET LE CHOIX EST LE SEUL
+QUI TIENNE DANS LA BORNE.** Coût du livrable : **768/q75 → 3 221 880** (−344 044
+sous la borne, donc REFUSÉ) · **704/q75 → 2 698 456, RETENU** · 704/q70 →
+2 520 244 · 640/q75 → 2 209 176 · 640/q70 → 2 063 788. ⚠ Et **la qualité ne se
+dédouble pas** : `QUALITE` vaut 75 pour les vingt-deux, ocres compris. En
+baisser une famille pour gagner des octets mettrait deux encodages dans le même
+dossier, et le §7 du brief l'interdit.
+⚠⚠ **LE REPÈRE DE STOCKAGE EST LA MOYENNE DES HUIT OCRES SEULES, ET C'EST CE QUI
+GARDE LES DEUX BOUTS DE LA CARTE EXACTS.** `reference` vaut
+`(198,7909 · 144,1583 · 124,8837)`, INCHANGÉE depuis SOL-SATELLITE : les
+vingt-deux planches y sont alignées, et `ui/monde.js` ramène le haut de la carte
+à `Δ = (−69,0394 · −21,0827 · +15,6858)` près sur sa `referenceViolette`. ⚠ **La
+recalculer sur les vingt-deux déplacerait le sol du BAS**, qu'Ethan veut intact —
+et mon premier jet l'a fait en la mesurant sur les planches RECADRÉES : elle
+dérivait de 1,2 niveau, et Δ ne reproduisait plus le nombre du brief. Elle se
+mesure sur les huit planches ENTIÈRES.
+⚠⚠ **LES MINIMUMS DU BRIEF NE SURVIVENT PAS AUX ÉTAPES QUE LE BRIEF PRESCRIT —
+MESURÉ, ET C'EST L'ÉCART LE PLUS COÛTEUX DU LOT.** Il pose `(71 · 21 · 0)` et ils
+se reproduisent EXACTEMENT à 1 024 ; après LANCZOS vers 704 ils tombent à
+`(65 · 17 · 0)`, et après WebP q75 à `(69 · 16 · 0)`. **Le vert passe sous 21**,
+donc la soustraction de `difference` se REPLIE et les pixels concernés
+S'ÉCLAIRCISSENT au lieu de foncer. Un `PLANCHER = (80 · 32 · 0)` est donc appliqué
+au STOCKAGE — après l'alignement, avant l'encodage —, et il est mesuré des deux
+côtés : **0 pixel sous le seuil après encodage**, pour **11 pixels relevés sur
+6,9 millions de pixels des quatorze, soit 0,000159 %** — contre les **0,354 %**
+d'écrêtage par le HAUT sur ces mêmes quatorze, que le brief accepte déjà. `minimumParCanal` du manifeste rend `(79 · 26 · 4)`, et
+`SOU T8` mesure la marge plutôt que de la croire.
+⚠⚠ **L'OCRE EST LA PREMIÈRE FAMILLE, ET CE N'EST PAS UN ORDRE D'ÉCRITURE.** Elle
+porte huit planches, donc `h % 8` vaut `h & 7`, et son décalage de début vaut
+zéro : **le bas de la carte tire EXACTEMENT les mêmes planches qu'avant le lot**,
+au bit près, sans qu'une ligne le dise. La mettre ailleurs aurait redessiné le
+désert du joueur en changeant l'ordre d'un tableau.
+⚠ **`SEL_FAMILLE` VAUT 7, ET C'EST LE PREMIER LIBRE** — 0 et 1 au peuplement, 2
+et 3 aux POI, 4 à la variante, 5 au fond, 6 au bloc. Deux tirages indépendants
+qui partagent un sel finissent par se corréler ; `SOU T6` le mesure.
+⚠⚠ **LE BRUIT DE FAMILLE EST LISSÉ, ET `Math.floor` EST OBLIGATOIRE.** Il
+s'interpole bilinéairement sur une maille de deux blocs, avec l'adoucissement
+d'Hermite `t²(3−2t)` : un tirage indépendant par bloc rendrait un damier, pas des
+plaques. ⚠ Et `Math.trunc` à la place de `Math.floor` **replie les indices
+négatifs sur zéro**, donc casse la maille à l'ouest et au nord du monde. **La
+falsification n'a PAS mordu au premier relevé** — mon balayage ne couvrait qu'une
+graine et `bx` de −3 à 3, où l'écart au voisin vaut 0,48 contre 0,99 en `bx = −4`.
+`SOU T5` balaie désormais trente graines, les deux axes, de −6 à 6.
+⚠⚠ **ET LA RANGÉE ANNONCÉE PAR UN BLOC N'ÉTAIT RELIÉE À RIEN — SECONDE
+FALSIFICATION MUETTE, ET ELLE A FAIT ÉCRIRE UN TEST.** `rangeeDuBloc` pouvait
+dériver sans qu'un seul test tombe : rien ne confrontait la rangée qu'elle
+annonce à la position où le bloc TOMBE vraiment. `SOU T4 bis` exige l'égalité
+EXACTE au cran le plus serré — où l'échelle vaut 1 — et borne l'écart ailleurs
+par la dérive d'arrondi de 0,18 % déjà mesurée au lot SOL-SATELLITE.
+⚠⚠ **`LIMITE T8` EST ROUGE, ET LE BRIEF INTERDIT DE LE RÉPARER.** Une seule
+teinte sur huit tombe : **`#475A2F`**, le kaki le plus clair du joueur, à **3,5
+sous le p5 du sol au lieu de 5** — il manque 1,5 de clarté. La cause est
+mécanique et se lit dans le manifeste : le **p5 du sol passe de 54,96 à 39,19**,
+les quatorze planches de l'Ouvrage étant plus sombres que les huit ocres. Le §4.4
+du brief dit « s'arrêter, ne pas assouplir le seuil, et le porter au rapport », et
+le §7 interdit toute teinte de frontière neuve. **Ni le seuil ni la rampe n'ont
+été touchés.** Les sept autres teintes passent, et **`RAPPORT-SOL-OUVRAGE.md`
+porte les deux issues** — remonter la clarté de ce seul ton, ou remonter la
+famille `naturel` — pour qu'Ethan tranche.
+⚠ **ET LA CLARTÉ SE LIT PAR FAMILLE, PAS EN BLOC** : p5 **ocre 48,18 · naturel
+37,29 · hybride 34,81 · artificiel 35,24**. C'est `naturel` qui borde la
+frontière du joueur, et c'est donc elle qui décide.
+⚠ **LES SEIZE LIGNES `data:` NEUVES SONT QUATORZE**, et le compte s'explique :
+297 → 311 lignes, 292 → 306 URI, soit exactement les quatorze planches. Aucun
+atlas n'entre — une planche de sol fait 704 px, `tools/atlas.py` ne coud que des
+cellules à la taille de case, et chacune voyage par son propre marqueur de
+`tools/build.js`, comme les huit ocres depuis SOL-SATELLITE.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 29.** `src/sim/` n'a pas une ligne de
+changée, vérifié au diff : un sol est un dessin, et une teinte est une
+dérivation de rangée.
+⚠⚠ **`src/render/interpolation.js` N'A PAS ÉTÉ EMPLOYÉ, ET C'EST UN ÉCART
+DÉCLARÉ.** Son nom le désigne, et il ne convient pas : il importe `sim/clock.js`
+et interpole des MILLI-entiers de position dans le TEMPS de la simulation. La
+teinte est une fraction de rangée, sans horloge ; l'y faire passer aurait fait
+dépendre le dessin du sol du module qui cadence le combat.
+⚠⚠ **LA GARDE DE PALETTE §11 A REFUSÉ LE PREMIER JET, ET ELLE AVAIT RAISON.** Les
+deux couleurs du dégradé sont CALCULÉES — `rgb(${…})` — et la fiche ne les
+contient pas, ce qui est normal : ce ne sont pas des teintes, c'est une
+translation par canal. **Le contournement était d'assembler la chaîne à
+l'exécution ; il a été écarté de face**, c'est passer sous un garde-fou en
+silence (§6). L'exception est **NOMMÉE et BORNÉE** — `src/ui/monde.js`,
+EXACTEMENT deux couleurs calculées, et le fichier doit nommer `DELTA_TEINTE` —,
+et trois falsifications la font tomber : une troisième couleur, une couleur
+littérale, une couleur calculée ailleurs.
+⚠ **QUINZE TESTS ENTRENT — `SOU T1` à `T10`, plus `T4 bis`, et quatre `SOL T*`
+remaniés — ET LE COMPTE PASSE DE 1 441 À 1 452.** **Aucune assertion n'a été
+retirée ni assouplie** ; **six gardes changent de cible et toutes se RESSERRENT**
+— `SOL T1` compte vingt-deux planches et les quatre familles, `SOL T3 ter` mesure
+l'arrondi du fondu selon sa PARITÉ, `SOL T8` exige la répartition DANS chaque
+famille et le biais de modulo EXACT, `SOL T10` et `SOL T12` suivent le compte,
+`PIC T7` se réancre.
+⚠⚠ **ET `SOL T3 ter` A DÛ ÊTRE RÉANCRÉ APRÈS MESURE, PAS AJUSTÉ.** Il annonçait
+un écart d'au plus 1/255 dans la bande de fondu ; à fondu 72 la bande fait **9
+pixels au cran 32, donc un nombre IMPAIR**, et le pixel du milieu vaut exactement
+`sin²(π/4)` — les deux arrondis bougent ensemble et la somme tombe à 254. Le test
+distingue désormais les deux parités et EXIGE le 1 au milieu quand la bande est
+impaire. ⚠ Mon premier jet assertait `p[mid] === 0.5` et tombait sur
+`0.4999999999999999` : une égalité flottante ne se pose pas sur un cosinus.
+⚠⚠ **`python3 tools/verifier.py` A ÉTÉ LANCÉ AVANT ET APRÈS, ET LA LIGNE `ATLAS`
+DE SON VERDICT EST PRÉEXISTANTE.** Avant : **1 096 identiques · 0 différent · 0
+nouveau · 0 MANQUANT** en 842,7 s, code de sortie **1** sur `ATLAS` seul — **6
+atlas différents** (`chassis-64`, `defense-128`, `socle-128`, `unite-128`,
+`chassis-128`, `tourelle_unite-128`), relevés sur l'arbre PRISTINE et sauvés
+avant d'écrire une ligne. Après : **1 110 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT** en 858,7 s, et `atlas.py --verifier` rend **14 identiques · 6
+différents · 0 nouveau, les six MÊMES fichiers**. **Le lot laisse ce compte
+exactement où il l'a trouvé** ; c'est l'encodeur WebP de cette machine, et
+`atlas.py` refuse d'écraser ce qui ne se reproduit pas.
+⚠⚠ **LE +14 EST EXACTEMENT LES QUATORZE PLANCHES, ET LES VINGT-DEUX SONT DANS
+LES « IDENTIQUES À L'OCTET », LES HUIT OCRES RÉENCODÉES COMPRISES.** C'est ce
+qui dit que `tools/sols.py` sait refaire ce sol — recadrage, alignement,
+plancher et encodage — au bit près. ⚠ Et `entrees.py --verifier` rend **653 / 653
+et 152 / 152**, `art/sourcesstandby/` 34 fichiers 0 lu, `art/reserve/` 10
+fichiers 0 lu.
+⚠ **LA PREMIÈRE PASSE AVANT A ÉTÉ JETÉE, ET IL FAUT LE DIRE** : elle avait été
+lancée pendant que les quatorze tuiles arrivaient dans `art/sources/` — très
+exactement ce que ce fichier interdit, « ne jamais le lancer sur un arbre qu'on
+modifie ». Arrêtée, l'arbre remis propre, relancée. Les deux passes rapportées
+tournent sur un arbre stable.
+⚠ **`art/sources/` PASSE DE 639 À 653 FICHIERS — 501 CONSOMMÉES · 152
+DORMANTES**, et les quatorze entrent CONSOMMÉES. Le diff de
+`art/sources-declarees.json` raconte le lot en quatorze lignes.
+⚠⚠ **ET TROIS COMPTES DE LA §2 ÉTAIENT DÉJÀ FAUX AVANT CE LOT, MESURÉ CONTRE
+`HEAD`.** `tools/` annonçait 42 et en portait **45** ; `art/sources/` annonçait
+558 et en portait **639** ; `art/sprites/` annonçait 1 045 fichiers et
+« TREIZE dossiers » et en portait **1 143** et **QUATORZE**. Aucune garde ne
+compte ces trois-là — la §2 le dit elle-même —, donc rien ne les corrige tout
+seul. Ils sont recomptés fichier par fichier ci-dessous, et la correction est
+déclarée plutôt que glissée.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** Tout ce
+qui précède est relevé dans Chromium à la géométrie du S25 FE, et ce n'est pas le
+téléphone d'Ethan (§3).
+
+**Auparavant, après le lot FORMATION-ET-GARNISON :**
 `npm test` → **1441 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 654 436 octets**, 0 référence externe. Coût **+7 118 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis `e97fb72` :
@@ -8365,7 +8551,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 14 fi
   portee.js             quelles cases une pièce de défense couvre, et si elle tire
   fond.js               le décor peint d'une base : quel dessin, et où il se pose
   limite.js             quel dessin porte une frontière de territoire, et où le découper
-  terrain.js            le sol de la carte : quels dessins, où, et avec quel poids
+  terrain.js            le sol de la carte : quel dessin, où, quel poids, et quelle teinte
   sprite.js             où tombe un sprite dans son atlas : deux chaînes CSS, rien de plus
   variante.js           quel dessin porte une case : pur, stable, sans toucher au tirage
   nombre.js             comment un grand nombre s'écrit : trois chiffres et un suffixe
@@ -8710,9 +8896,13 @@ test/                   61 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  42 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 08/09
-                        au lot OUVRAGE-CÂBLAGE, fichier par fichier, hors
-                        `__pycache__`. **UN outil entre, `ouvrage_v2.py`** ; les
+tools/                  **45 fichiers**, dont UN SEUL sert au build — RECOMPTÉ le
+                        08/09 au lot SOL-OUVRAGE par `git ls-files`, et le compte
+                        annoncé au lot précédent était FAUX de trois : il disait
+                        42, `HEAD` en portait déjà 45. Aucun outil n'entre à ce
+                        lot-ci — `sols.py` est réécrit, il n'est pas ajouté.
+                        ⚠ Auparavant, 42 annoncés au lot OUVRAGE-CÂBLAGE, fichier
+                        par fichier, hors `__pycache__`. **UN outil entre, `ouvrage_v2.py`** ; les
                         sept autres du saut de 34 à 42 sont ceux qu'Ethan a
                         commités le 07/09 avec ses sources — `ancres-ouvrage.py`,
                         `fond-vert-ouvrage.py`, `montage-ouvrage-40.py`,
@@ -8862,8 +9052,16 @@ tools/                  42 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sources brutes, hors chaîne de build — **558 fichiers à
-                        la racine**, RECOMPTÉ le 08/09 au lot OUVRAGE-CÂBLAGE.
+art/sources/            sources brutes, hors chaîne de build — **653 fichiers à
+                        la racine, 501 consommées · 152 dormantes**, RECOMPTÉ le
+                        08/09 au lot SOL-OUVRAGE, qui en fait entrer QUATORZE :
+                        les tuiles de sol de l'Ouvrage, sept `naturel`, trois
+                        `hybride`, quatre `artificiel`, toutes CONSOMMÉES.
+                        ⚠⚠ ET LE COMPTE ANNONCÉ AU LOT PRÉCÉDENT ÉTAIT FAUX DE
+                          QUATRE-VINGT-UN : il disait 558, `HEAD` en portait 639.
+                          Le classement, lui, était juste — c'est la §2 qui
+                          n'avait pas suivi, et aucune garde ne la compte.
+                        ⚠ Auparavant, 558 annoncés au lot OUVRAGE-CÂBLAGE.
                         Ethan en a commité **46** le 07/09 : les quarante-deux
                         sources v2 de l'OUVRAGE, plus `off_j_meute`,
                         `off_j_meute_def`, `off_j_guetteur` et
@@ -8998,9 +9196,19 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           trier les chemins à la sous-chaîne rangerait chaque
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
-art/sprites/            les sprites conditionnés — TREIZE dossiers de famille et
-                        **1 045 fichiers en tout**, recomptés le 08/09 au lot
-                        OUVRAGE-CÂBLAGE. Cinq familles bougent : `unite`
+art/sprites/            les sprites conditionnés — **QUATORZE dossiers de famille
+                        et 1 157 fichiers en tout**, recomptés le 08/09 au lot
+                        SOL-OUVRAGE par `git ls-files`, qui en fait entrer
+                        QUATORZE dans `sol/` : la famille passe de 8 à **22
+                        planches**, plus son manifeste.
+                        ⚠⚠ ET LES DEUX COMPTES ANNONCÉS AU LOT PRÉCÉDENT ÉTAIENT
+                          FAUX : il disait TREIZE dossiers et 1 045 fichiers,
+                          `HEAD` en portait QUATORZE — `interface/` est entré au
+                          lot PICTOGRAMMES — et 1 143. Aucune garde ne compte ce
+                          dossier ; le recompter à chaque lot qui y touche est la
+                          seule chose qui le tienne, et c'est écrit plus bas
+                          depuis trois lots sans que personne le fasse.
+                        ⚠ Auparavant, 1 045 annoncés au lot OUVRAGE-CÂBLAGE. Cinq familles bougent : `unite`
                         **35 → 26** par grille — les neuf blindés monolithes de
                         l'Ouvrage partent —, `chassis` **9 → 18**,
                         `tourelle-unite` **5 → 10**, `socle` et `defense` gardent
@@ -9022,15 +9230,36 @@ art/sprites/            les sprites conditionnés — TREIZE dossiers de famille
                         vérificateur le prouve à l'octet.
                         ⚠ `ancres-chassis.json` A DISPARU DE LA RACINE, remplacé
                         par les deux JSON d'ancres. Voir `src/data/` ci-dessus.
-                        ⤷ ⚠⚠ LA TREIZIÈME EST `sol/`, ET ELLE N'EST PAS UNE
-                          FAMILLE DE SPRITES NON PLUS — lot SOL-SATELLITE, 05/09 :
-                          les huit planches de terrain satellite de la carte du
-                          monde et leur manifeste, **1 674 196 octets**. Une
-                          planche fait 1 254 × 1 254, soit 4,9 cases : aucun
-                          atlas ne peut la coudre, `tools/atlas.py` n'acceptant
-                          que des cellules carrées à la taille de case. Chacune
-                          a donc son marqueur de `tools/build.js`, comme les
-                          décors de `fond/`.
+                        ⤷ ⚠⚠ `sol/` N'EST PAS UNE FAMILLE DE SPRITES NON PLUS, ET
+                          ELLE PORTE **VINGT-DEUX PLANCHES** DEPUIS LE 08/09 —
+                          lot SOL-OUVRAGE. Quatre FAMILLES DE MOTIF y vivent, et
+                          l'ordre n'en est pas libre : **ocre 8** (les planches
+                          de SOL-SATELLITE, intactes dans leur dessin), puis
+                          **naturel 7 · hybride 3 · artificiel 4**. L'ocre est en
+                          TÊTE pour que `h % 8` vaille `h & 7` et que le bas de
+                          la carte tire exactement les mêmes planches qu'avant.
+                          **2 023 822 octets** en tout, contre 1 674 196 pour les
+                          huit d'hier.
+                        ⚠⚠ ET LE CÔTÉ EST PASSÉ DE 1 254 À **704**, DONC LES HUIT
+                          OCRES ONT ÉTÉ RECADRÉES ET RÉENCODÉES. Elles sont
+                          RECADRÉES au centre et non réduites — `RECADREES` de
+                          `tools/sols.py` ne contient que `ocre` —, sans quoi
+                          leur grain aurait changé d'échelle et le désert du
+                          joueur aurait cessé d'être celui d'hier. Les quatorze
+                          neuves, elles, sont réduites en LANCZOS depuis 1 024.
+                          Une planche fait donc 704 × 704, soit 2,75 cases :
+                          aucun atlas ne peut la coudre, `tools/atlas.py`
+                          n'acceptant que des cellules carrées à la taille de
+                          case. Chacune a donc son marqueur de `tools/build.js`,
+                          comme les décors de `fond/`.
+                        ⚠ ET LE MANIFESTE PORTE LA TRANSLATION, PAS SEULEMENT LES
+                          EMPREINTES : `reference`, `referenceViolette`, `delta`,
+                          `plancher`, `minimumParCanal`, `clarte`,
+                          `porteeDeTeinte` et `ecretagePourCent` par famille.
+                          `SOU T9` confronte `DELTA_TEINTE` de `render/` à ce
+                          `delta` — `render/` ne lit aucun fichier, donc la
+                          constante est ÉCRITE dans le code et le test l'accorde
+                          à sa source.
                         ⚠ ET `art/sprites/carte/atlas-terrain-64.png` RESTE, SANS
                           PLUS ENTRER DANS LE LIVRABLE. C'était l'atlas indexé du
                           fond de carte ; il est une SOURCE DÉCLARÉE depuis

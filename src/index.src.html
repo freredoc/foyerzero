@@ -2593,6 +2593,31 @@
       <img id="sol-6" alt="" hidden src="%SOL_CARTE_6%">
       <img id="sol-7" alt="" hidden src="%SOL_CARTE_7%">
       <img id="sol-8" alt="" hidden src="%SOL_CARTE_8%">
+      <!-- ⚠⚠ LES QUATORZE PLANCHES DE L'OUVRAGE — lot SOL-OUVRAGE, 08/09. Le sol
+           de la carte cesse d'être uniforme : le bas reste le désert d'Ethan, le
+           haut devient l'Ouvrage, et entre les deux la bascule se fait par
+           PLAQUES, sans jamais dessiner de ligne. Les huit ci-dessus gardent
+           leurs identifiants — `render/terrain.js` met l'ocre en tête de
+           `NOMS_DU_SOL` exprès —, et les quatorze prennent la suite dans l'ordre
+           des familles : sept naturelles, trois hybrides, quatre artificielles.
+
+           ⚠ L'ORDRE EST LE NOM. `ui/monde.js` fait `NOMS_DU_SOL.map((_, i) =>
+           $('sol-' + (i + 1)))` : ces quatorze lignes doivent suivre l'ordre de
+           cette liste-là, et un test les confronte. -->
+      <img id="sol-9" alt="" hidden src="%SOL_OUVRAGE_NATUREL_1%">
+      <img id="sol-10" alt="" hidden src="%SOL_OUVRAGE_NATUREL_2%">
+      <img id="sol-11" alt="" hidden src="%SOL_OUVRAGE_NATUREL_3%">
+      <img id="sol-12" alt="" hidden src="%SOL_OUVRAGE_NATUREL_4%">
+      <img id="sol-13" alt="" hidden src="%SOL_OUVRAGE_NATUREL_5%">
+      <img id="sol-14" alt="" hidden src="%SOL_OUVRAGE_NATUREL_6%">
+      <img id="sol-15" alt="" hidden src="%SOL_OUVRAGE_NATUREL_7%">
+      <img id="sol-16" alt="" hidden src="%SOL_OUVRAGE_HYBRIDE_1%">
+      <img id="sol-17" alt="" hidden src="%SOL_OUVRAGE_HYBRIDE_2%">
+      <img id="sol-18" alt="" hidden src="%SOL_OUVRAGE_HYBRIDE_3%">
+      <img id="sol-19" alt="" hidden src="%SOL_OUVRAGE_ARTIFICIEL_1%">
+      <img id="sol-20" alt="" hidden src="%SOL_OUVRAGE_ARTIFICIEL_2%">
+      <img id="sol-21" alt="" hidden src="%SOL_OUVRAGE_ARTIFICIEL_3%">
+      <img id="sol-22" alt="" hidden src="%SOL_OUVRAGE_ARTIFICIEL_4%">
       <!-- ⚠⚠ LES EMBLÈMES DE LA CARTE, ET LES DEUX GROSSES BASES HORS ATLAS.
            Les 43 emblèmes tiennent dans un atlas 7 × 7 ; les deux grosses bases
            couvrent 2 × 2 et 3 × 3 cases, donc 128 et 192 pixels de côté à la

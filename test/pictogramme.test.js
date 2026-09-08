@@ -400,7 +400,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 8 647 037 octets, la marge sur la borne T10 est de 7,02 %', () => {
+test('PIC T7 — le livrable pèse 9 123 778 octets, la marge sur la borne T10 est de 1,89 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -464,11 +464,34 @@ test('PIC T7 — le livrable pèse 8 647 037 octets, la marge sur la borne T10 e
   // ⚠⚠ LA MARGE PASSE SOUS LES 8 %, ET C'EST LE POINT À SURVEILLER DU LOT.
   // 11,22 % au 07/09 au matin, 9,73 % au 08/09 au matin, **7,02 %** maintenant :
   // 652 963 octets. Le prochain lot d'art devra compter avant de dessiner.
+  //
+  // ⚠⚠ REMESURÉ AU LOT SOL-OUVRAGE, ET C'EST LE LOT QUI SERRE LE PLUS LA MARGE.
+  // Le sol de la carte cesse d'être uniforme : huit planches deviennent
+  // VINGT-DEUX, et quatorze `data:` entrent — 297 lignes / 292 URI deviennent
+  // **311 / 306**. **8 654 436 → 9 123 778, soit +469 342.** Ventilé contre un
+  // livrable rebâti dans un `git worktree` depuis `6f7b3bb`, et la somme des cinq
+  // postes tombe EXACTEMENT sur le total : **images +466 506 · JavaScript
+  // +2 200 · balisage +636 · feuille +0 · audio +0**.
+  //
+  // ⚠⚠ ET LE CÔTÉ DES PLANCHES A ÉTÉ CHOISI PAR CETTE BORNE-CI, PAS PAR LE GOÛT.
+  // Les vingt-deux ne tiennent pas à leur taille d'origine : `tools/sols.py` les
+  // ramène toutes à 704 pixels — recadrage pour les huit ocres, réduction pour
+  // les quatorze neuves — parce que 768 dépassait la borne de 344 044 octets.
+  // Les quatre mesures qui ont désigné 704 sont dans l'en-tête de l'outil.
+  //
+  // ⚠⚠ LA MARGE TOMBE À 1,89 %, ET C'EST LA PLUS MINCE DEPUIS BASES-1. 7,02 % au
+  // 08/09 au matin, **1,89 %** maintenant : 176 222 octets. Le prochain lot qui
+  // fait entrer une image devra relever la borne EN ÉCRIVANT POURQUOI, ou tenir
+  // dans cent soixante-seize kilo-octets.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 8_647_037;          // mesuré le 08/09, version 0.99.30 · build 132
-  const MARGE = BORNE - MESURE;      // 652 963 octets
-  assert.equal(MARGE, 652_963);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 7.02);
+  const MESURE = 9_123_778;          // mesuré le 08/09, lot SOL-OUVRAGE
+  const MARGE = BORNE - MESURE;      // 176 222 octets
+  assert.equal(MARGE, 176_222);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.89);
+  // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
+  // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
+  // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
+  assert.ok(MARGE >= 150_000, `marge de ${MARGE} octets : sous le plancher de 150 000`);
 
   const octets = statSync(join(RACINE, 'dist', 'index.html')).size;
   assert.ok(octets < BORNE, `${octets} octets : la borne T10 est franchie`);

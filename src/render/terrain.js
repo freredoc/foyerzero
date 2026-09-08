@@ -83,16 +83,68 @@ import { hachageBrut } from '../sim/peuplement.js';
 export const SEL_BLOC = 6;
 
 /**
- * Les huit planches, dans l'ordre où Ethan les a envoyées.
+ * Le sel du tirage de FAMILLE — lot SOL-OUVRAGE, 08/09.
  *
- * ⚠ L'ORDRE EST LE NOM. Le hachage rend un rang, et ce rang n'a que cette liste
- * pour désigner un dessin : la réordonner rebattrait le sol de toutes les
- * cartes de toutes les graines. `tools/sols.py` porte la même liste, et un test
- * les confronte au manifeste.
+ * ⚠⚠ IL EST NEUF, ET IL NE PARTAGE PAS `SEL_BLOC`. Celui-ci porte déjà le
+ * dessin, le quart de tour et le miroir sur six bits ; la famille est sans
+ * rapport avec eux, et les faire sortir du même mot les corrélerait — une
+ * famille donnée finirait par pencher vers une orientation. Relevé avant de
+ * choisir : 0 et 1 au peuplement, 2 et 3 à `sim/poi.js`, 4 à
+ * `render/variante.js`, 5 à `render/fond.js`, 6 juste au-dessus. **7 est le
+ * premier libre.**
+ *
+ * ⚠ ET IL NE SE TIRE PAS PAR BLOC MAIS PAR NŒUD DE MAILLE — voir
+ * `bruitDeFamille`. Deux blocs voisins de la même maille lisent les mêmes
+ * quatre nœuds : c'est ce qui fait des plaques plutôt que du poivre et sel.
  */
-export const NOMS_DU_SOL = Object.freeze(
-  Array.from({ length: 8 }, (_, i) => `sol_carte_${i + 1}`),
-);
+export const SEL_FAMILLE = 7;
+
+/**
+ * Les quatre familles de sol, et combien de dessins chacune porte.
+ *
+ * ⚠⚠ LA FAMILLE EST CE QUI FAIT LA BASCULE, ET LA COULEUR N'EN EST PAS. Le sol
+ * de la carte passait du désert d'Ethan à l'Ouvrage en un seul geste jusqu'au
+ * 08/09 : il n'y avait qu'une famille. Il y en a quatre, et un bloc en tire une
+ * selon la RANGÉE de son centre — mais **sa teinte, elle, ne dépend que de la
+ * rangée du pixel**, jamais de la famille. Voir `TERRAIN_CARTE.ouvrage`.
+ *
+ * ⚠ L'ORDRE EST LE NOM, ET IL L'EST DEUX FOIS. Le hachage rend un rang DANS une
+ * famille, et ce rang n'a que cette liste pour désigner un dessin ; et les
+ * quatre familles sont concaténées dans l'ordre ci-dessous pour former
+ * `NOMS_DU_SOL`, que `ui/monde.js` indexe par entier. Réordonner l'une ou
+ * l'autre rebattrait le sol de toutes les cartes de toutes les graines.
+ * `tools/sols.py` porte la même liste, et un test les confronte au manifeste.
+ *
+ * ⚠⚠ ET L'OCRE VIENT EN PREMIER, CE QUI N'EST PAS UN DÉTAIL. Ses huit planches
+ * gardent donc les rangs 0 à 7, et `h % 8` vaut `h & 7` comme avant : à graine
+ * égale, **le bas de la carte tire exactement les mêmes dessins qu'avant le
+ * lot**. Ce qui change en bas est la géométrie du pavage, pas le tirage.
+ */
+export const FAMILLES = Object.freeze([
+  Object.freeze({ nom: 'ocre', noms: Object.freeze(
+    Array.from({ length: 8 }, (_, i) => `sol_carte_${i + 1}`)) }),
+  Object.freeze({ nom: 'naturel', noms: Object.freeze(
+    Array.from({ length: 7 }, (_, i) => `sol_ouvrage_naturel_${i + 1}`)) }),
+  Object.freeze({ nom: 'hybride', noms: Object.freeze(
+    Array.from({ length: 3 }, (_, i) => `sol_ouvrage_hybride_${i + 1}`)) }),
+  Object.freeze({ nom: 'artificiel', noms: Object.freeze(
+    Array.from({ length: 4 }, (_, i) => `sol_ouvrage_artificiel_${i + 1}`)) }),
+]);
+
+/** Le rang du premier dessin de chaque famille dans `NOMS_DU_SOL`. */
+const DEBUT_DE_FAMILLE = FAMILLES.reduce((acc, f) => {
+  acc.push(acc[acc.length - 1] + f.noms.length);
+  return acc;
+}, [0]);
+
+/**
+ * Les vingt-deux planches, familles concaténées dans l'ordre de `FAMILLES`.
+ *
+ * ⚠ `ui/monde.js` LES INDEXE PAR ENTIER, et le balisage porte `sol-1` à
+ * `sol-22` dans ce même ordre. Les huit premières sont les ocres, donc les
+ * balises `sol-1` à `sol-8` ne changent pas de contenu.
+ */
+export const NOMS_DU_SOL = Object.freeze(FAMILLES.flatMap((f) => [...f.noms]));
 
 /**
  * Le côté d'une planche, en pixels SOURCE.
@@ -103,7 +155,29 @@ export const NOMS_DU_SOL = Object.freeze(
  * `art/sprites/sol/sol-empreintes.json` — elle tombe au dépôt, pas chez le
  * joueur. Même motif que `render/fond.js` depuis le lot MUR-PEINT.
  */
-export const COTE_SOURCE = 1254;
+export const COTE_SOURCE = 704;
+
+/**
+ * La translation ocre → violet, par canal, telle que `tools/sols.py` la mesure.
+ *
+ * ⚠⚠ LES VINGT-DEUX PLANCHES SONT STOCKÉES SUR LE REPÈRE OCRE, ET C'EST CE QUI
+ * REND LES DEUX BOUTS EXACTS D'UN SEUL COUP. En bas la teinte vaut zéro, donc
+ * les huit ocres se peignent telles qu'elles sont stockées ; en haut elle vaut
+ * un, donc les quatorze neuves — stockées à `art + (ocre − violet)` — retombent
+ * exactement sur la référence violette qu'Ethan a rendue.
+ *
+ * ⚠ ELLE EST ÉCRITE ICI ET MESURÉE AILLEURS, comme `COTE_SOURCE` et pour la
+ * même raison : `render/` est pur, il ne lit aucun fichier. Un test la confronte
+ * à `art/sprites/sol/sol-empreintes.json`, où l'outil l'écrit — elle tombe au
+ * dépôt, pas chez le joueur.
+ *
+ * ⚠⚠ ET LE ROUGE ET LE VERT SONT SOUSTRAITS, LE BLEU AJOUTÉ. C'est ce que dit le
+ * signe, et c'est ce qui oblige `ui/monde.js` à deux passes de composition sur
+ * des canaux DISJOINTS. La soustraction n'est exacte que si le sol reste
+ * au-dessus de ce qu'on lui retire : `tools/sols.py` pose pour ça un plancher au
+ * stockage, et un test relève les minimums au manifeste.
+ */
+export const DELTA_TEINTE = Object.freeze([-69.0394, -21.0827, 15.6858]);
 
 /** La largeur du fondu entre deux blocs voisins, en pixels SOURCE. */
 export const FONDU_SOURCE = TERRAIN_CARTE.fonduSourcePx;
@@ -176,31 +250,217 @@ export function geometrieDuCran(cran) {
   return { echelle, taille, fondu, pas: taille - fondu };
 }
 
+/** Ramène un nombre dans [0, 1]. */
+const borne01 = (x) => (x < 0 ? 0 : (x > 1 ? 1 : x));
+
+/**
+ * La part d'Ouvrage d'une rangée : 0 chez le joueur, 1 tout en haut.
+ *
+ * ⚠⚠ ELLE EST ROUVERTE, ET CE N'EST PAS CELLE D'AVANT. Une fonction de ce nom a
+ * existé jusqu'au 05/09 ; elle valait `(niveauDeLaRangee(r) − 1) / (plafond − 1)`
+ * — la rampe du NIVEAU de site, qui monte sur toute la hauteur de la carte — et
+ * elle a été retirée sur demande d'Ethan avec la note « à rouvrir ». La trace a
+ * été cherchée dans l'historique avant d'écrire celle-ci : elle en diffère, et
+ * c'est voulu. Le sol doit être **entièrement** celui d'aujourd'hui en bas et
+ * **entièrement** l'Ouvrage en haut, avec une bascule bornée entre les deux —
+ * une rampe indexée sur le niveau ferait basculer le sol dès la deuxième rangée.
+ *
+ * ⚠ TROIS BRANCHES SE RÉDUISENT À UN `borne01`, ET C'EST EXACTEMENT LA MÊME
+ * FONCTION. La rampe atteint 1 à la rangée 76 et 0 à la 226 ; la borner suffit à
+ * rendre les deux plateaux, et une écriture à trois branches donnerait trois
+ * endroits où se tromper de comparateur.
+ *
+ * @param {number} rangee rangée de carte, 1 en haut
+ * @returns {number} de 0 à 1
+ */
+export function partOuvrageDeLaRangee(rangee) {
+  const { rangeePivot, largeurFamilles } = TERRAIN_CARTE.ouvrage;
+  return borne01((rangeePivot - rangee) / largeurFamilles);
+}
+
+/**
+ * La part de TEINTE d'une rangée : 0 chez le joueur, 1 tout en haut.
+ *
+ * ⚠⚠ ELLE MONTE PLUS VITE QUE LA PART DE FAMILLE, ET C'EST LE POINT LE PLUS
+ * DÉLICAT DU LOT. Les deux partent de la même rangée pivot mais la teinte est
+ * pleine dès la rangée 96, quand les familles ne le sont qu'à la 76 : les
+ * premières plaques artificielles se peignent donc à teinte pleine, jamais à une
+ * teinte intermédiaire qui les rendrait ni ocres ni violettes.
+ *
+ * ⚠ ELLE EST LINÉAIRE PAR MORCEAUX, DONC ELLE A DEUX COUDES — aux rangées 226 et
+ * 96. `ui/monde.js` doit poser un arrêt de dégradé À CHAQUE COUDE qu'une dalle
+ * enjambe, faute de quoi le navigateur interpole en droite là où la fonction
+ * casse, et le raccord avec la dalle voisine se voit.
+ *
+ * @param {number} rangee rangée de carte, 1 en haut
+ * @returns {number} de 0 à 1
+ */
+export function partDeTeinteDeLaRangee(rangee) {
+  const { rangeePivot, largeurTeinte } = TERRAIN_CARTE.ouvrage;
+  return borne01((rangeePivot - rangee) / largeurTeinte);
+}
+
+/**
+ * Les rangées où la teinte CASSE de pente, de la plus haute à la plus basse.
+ *
+ * ⚠ ELLES SE DÉRIVENT, ELLES NE S'ÉCRIVENT PAS. `ui/monde.js` les demande pour
+ * poser ses arrêts de dégradé ; les recopier là-bas ferait deux vérités sur la
+ * forme de la même rampe, et la première retouche de `largeurTeinte` en
+ * rendrait une fausse sans qu'un pixel bouge au dépôt.
+ */
+export const COUDES_DE_TEINTE = Object.freeze([
+  TERRAIN_CARTE.ouvrage.rangeePivot - TERRAIN_CARTE.ouvrage.largeurTeinte,
+  TERRAIN_CARTE.ouvrage.rangeePivot,
+]);
+
+/**
+ * Les trois parts cumulées d'une part d'Ouvrage donnée.
+ *
+ * ⚠⚠ ELLES SONT CROISSANTES ET ORDONNÉES `c1 ≥ c2 ≥ c3` SUR TOUTE LA PLAGE, et
+ * c'est ce qui garantit qu'un bloc ne redevient jamais plus naturel quand on
+ * monte. Un bruit `u` fixé, faire croître `p` ne peut que faire franchir des
+ * seuils vers l'artificiel, jamais l'inverse. Un test l'échantillonne au
+ * millième plutôt que de croire cette ligne.
+ *
+ * @param {number} p part d'Ouvrage, de 0 à 1
+ * @returns {{c1: number, c2: number, c3: number}} non-ocre, hybride ou plus, artificielle
+ */
+export function partsCumulees(p) {
+  const { partNonOcre, partHybrideOuPlus, partArtificielle } = TERRAIN_CARTE.ouvrage;
+  return {
+    c1: borne01((p - partNonOcre.debut) / partNonOcre.largeur),
+    c2: borne01((p - partHybrideOuPlus.debut) / partHybrideOuPlus.largeur),
+    c3: borne01((p - partArtificielle.debut) / partArtificielle.largeur),
+  };
+}
+
+/** L'adoucissement d'Hermite, `t²(3 − 2t)` : plat aux deux bouts. */
+const adoucir = (t) => t * t * (3 - 2 * t);
+
+/**
+ * Le bruit qui décide de la famille d'un bloc, LISSÉ sur une maille de blocs.
+ *
+ * ⚠⚠ UN TIRAGE PAR BLOC DONNERAIT DU POIVRE ET SEL, ET C'EST LA RAISON D'ÊTRE DE
+ * CETTE FONCTION. Deux blocs voisins tireraient deux nombres indépendants : au
+ * milieu de la bascule, une plaque violette isolée, une ocre à côté, et rien qui
+ * se lise comme un terrain. On tire donc aux NŒUDS d'une maille de
+ * `mailleBlocs` blocs et on interpole entre eux, si bien que les plaques font
+ * quelques blocs de large.
+ *
+ * ⚠ BILINÉAIRE AVEC ADOUCISSEMENT, PAS LINÉAIRE. Une interpolation linéaire pure
+ * laisse une cassure de pente à chaque nœud, et une cassure de pente dans le
+ * champ de bruit se lit comme un alignement de plaques sur la maille — la grille
+ * qu'on cherche justement à cacher. `t²(3 − 2t)` est plat aux deux bouts.
+ *
+ * ⚠⚠ ET `Math.floor` EST OBLIGATOIRE, PAS UNE TRONCATURE. Les indices de bloc
+ * sont NÉGATIFS au-dessus et à gauche de l'origine — un bloc mord sur la dalle
+ * par le haut —, et `Math.trunc(-1 / 2)` rend 0 quand `Math.floor` rend −1 : la
+ * maille se replierait sur elle-même de part et d'autre de l'origine, et la
+ * carte porterait une couture invisible en test et flagrante à l'écran.
+ *
+ * ⚠ ELLE NE PASSE PAS PAR `render/interpolation.js`, ET C'EST DÉLIBÉRÉ. Ce
+ * module-là est l'accumulateur de TEMPS de la simulation : il importe
+ * `sim/clock.js`, travaille en milli-entiers et tronque vers `precedent`.
+ * `positionInterpolee` n'a ni la signature ni le domaine qu'il faudrait ici, et
+ * l'y plier ferait dépendre le sol de la carte de l'horloge du combat.
+ *
+ * @param {number} graine graine de la partie
+ * @param {number} by indice de bloc, axe des rangées
+ * @param {number} bx indice de bloc, axe des colonnes
+ * @returns {number} dans [0, 1)
+ */
+export function bruitDeFamille(graine, by, bx) {
+  const m = TERRAIN_CARTE.ouvrage.mailleBlocs;
+  const gy = Math.floor(by / m);
+  const gx = Math.floor(bx / m);
+  const ty = adoucir((by - gy * m) / m);
+  const tx = adoucir((bx - gx * m) / m);
+  const noeud = (jy, jx) => hachageBrut(graine, jy, jx, SEL_FAMILLE) / 0x100000000;
+  const haut = noeud(gy, gx) * (1 - tx) + noeud(gy, gx + 1) * tx;
+  const bas = noeud(gy + 1, gx) * (1 - tx) + noeud(gy + 1, gx + 1) * tx;
+  return haut * (1 - ty) + bas * ty;
+}
+
+/**
+ * La rangée de carte que touche le CENTRE d'un bloc.
+ *
+ * ⚠⚠ ELLE SE CALCULE EN PIXELS SOURCE, JAMAIS EN PIXELS D'ÉCRAN, et c'est ce qui
+ * rend la carte des familles STABLE AU ZOOM. Passer par le `pas` de
+ * `geometrieDuCran` — qui est arrondi au cran — ferait glisser la carte des
+ * familles d'un cran à l'autre : une plaque changerait de famille sous le doigt
+ * qui pince, ce qui se lit comme un scintillement et qu'aucun test de pixel ne
+ * verrait. Un test compare la famille d'un même bloc aux quatre crans.
+ *
+ * ⚠ CE QUI DÉRIVE QUAND MÊME, ET IL FAUT LE DIRE : le `pas` d'écran est arrondi,
+ * donc la POSITION PHYSIQUE d'un bloc s'écarte d'au plus 0,18 % de sa position
+ * nominale au cran le plus large. Le bord d'une plaque peut donc bouger d'environ
+ * un quart de rangée au milieu de la carte quand on pince. C'est sous la case et
+ * rien ne s'indexe dessus — mais `geometrieDuCran` déclarait jusqu'ici que ce
+ * 0,18 % n'avait AUCUN lecteur, et il en a un depuis ce lot.
+ *
+ * @param {number} by indice de bloc, axe des rangées
+ * @returns {number} rangée de carte, non bornée et non entière
+ */
+export function rangeeDuBloc(by) {
+  return (by * PAS_SOURCE + COTE_SOURCE / 2) / PIXELS_SOURCE_PAR_CASE + 1;
+}
+
+/**
+ * La famille d'un bloc : sa rangée décide des parts, le bruit lissé tranche.
+ *
+ * @param {number} graine graine de la partie
+ * @param {number} by indice de bloc, axe des rangées
+ * @param {number} bx indice de bloc, axe des colonnes
+ * @returns {number} rang dans `FAMILLES`
+ */
+export function familleDuBloc(graine, by, bx) {
+  const { c1, c2, c3 } = partsCumulees(partOuvrageDeLaRangee(rangeeDuBloc(by)));
+  const u = bruitDeFamille(graine, by, bx);
+  if (u < c3) return 3;
+  if (u < c2) return 2;
+  if (u < c1) return 1;
+  return 0;
+}
+
 /**
  * Ce que le hachage dit d'un bloc de la grille.
  *
- * ⚠ HUIT EST UNE PUISSANCE DE DEUX, DONC LE TIRAGE DU DESSIN EST SANS BIAIS.
- * `h % 8` et `h & 7` rendent ici la même chose, et aucun reste ne penche — le
- * biais de modulo que `sim/poi.js` déclare et accepte n'a pas d'équivalent.
- * Le jour où une neuvième planche arriverait, il faudra le dire.
+ * ⚠⚠ SEPT, TROIS ET QUATRE NE SONT PAS DES PUISSANCES DE DEUX, ET LE BIAIS SE
+ * DÉCLARE. Ce commentaire affirmait jusqu'au 08/09 que « huit est une puissance
+ * de deux, donc le tirage du dessin est sans biais », en ajoutant « le jour où
+ * une neuvième planche arriverait, il faudra le dire ». Ce jour est celui-ci :
+ * trois familles sur quatre ont un effectif qui ne divise pas 2³², donc `h % n`
+ * penche vers les petits restes. Le biais relatif vaut `n / 2³²`, soit **moins
+ * de 2⁻²⁹** pour sept — un dessin sur cinq cents millions de blocs. C'est le
+ * même ordre que celui que `sim/poi.js` déclare et accepte, et il est accepté
+ * ici pour la même raison : le corriger demanderait de retirer un tirage, donc
+ * de rendre le nombre de tirages dépendant du résultat.
+ *
+ * ⚠ L'OCRE, ELLE, RESTE EXACTE. Huit divise 2³², donc `h % 8` vaut `h & 7` : à
+ * graine égale, le bas de la carte tire exactement le dessin qu'il tirait avant
+ * le lot.
  *
  * ⚠ ET LES SIX BITS SONT PRIS PAR LE BAS. Le module d'avant portait la faute
  * inverse en mémoire — des champs découpés dans les trois bits de tête d'un mot
  * déjà entamé, donc toujours minuscules, donc toutes les tuiles du même côté.
  * Trois, deux, un : le compte est écrit ici pour qu'un quatrième champ sache
- * d'où partir.
+ * d'où partir. ⚠ Le dessin prend le mot ENTIER par le modulo, la rotation les
+ * bits 3–4 et le miroir le bit 5 : sept étant impair, `h % 7` et `(h >>> 3) & 3`
+ * restent indépendants.
  *
  * @param {number} graine graine de la partie
  * @param {number} by indice de bloc, axe des rangées
  * @param {number} bx indice de bloc, axe des colonnes
- * @returns {{sol: number, rotation: number, miroir: boolean}}
+ * @returns {{sol: number, rotation: number, miroir: boolean, famille: number}}
  */
 export function descriptionDuBloc(graine, by, bx) {
   const h = hachageBrut(graine, by, bx, SEL_BLOC);
+  const famille = familleDuBloc(graine, by, bx);
   return {
-    sol: h & 7,
+    sol: DEBUT_DE_FAMILLE[famille] + (h % FAMILLES[famille].noms.length),
     rotation: (h >>> 3) & 3,
     miroir: ((h >>> 5) & 1) === 1,
+    famille,
   };
 }
 
@@ -240,6 +500,42 @@ export function profilDuBloc(taille, fondu) {
     p[taille - 1 - i] = w;
   }
   return p;
+}
+
+/**
+ * Les arrêts du dégradé de teinte d'une dalle, en fraction de sa hauteur.
+ *
+ * ⚠⚠ DEUX ARRÊTS NE SUFFISENT PAS QUAND UNE DALLE ENJAMBE UN COUDE. La rampe de
+ * teinte est linéaire PAR MORCEAUX : posés aux seuls bords de la dalle, les
+ * arrêts feraient interpoler le navigateur EN DROITE là où la fonction casse, et
+ * la dalle voisine — dont les bords tombent ailleurs — casserait au même endroit
+ * avec une autre pente. Le raccord se verrait, en biais, à l'endroit exact où le
+ * joueur regarde la bascule. On pose donc un arrêt à CHAQUE coude enjambé.
+ *
+ * ⚠⚠ ET LE CALCUL EST EN COORDONNÉES ABSOLUES DE CARTE. `y0` est le coin haut de
+ * la dalle en pixels d'écran absolus, jamais une coordonnée locale : c'est
+ * l'invariant du module — une zone rendue en une dalle doit être identique à la
+ * même rendue en quatre. Calculer la teinte relativement à la dalle donnerait un
+ * dégradé qui recommence à chaque dalle, soit des bandes horizontales de la
+ * taille d'une dalle sur toute la carte.
+ *
+ * ⚠ LES ARRÊTS SONT RENDUS DANS L'ORDRE CROISSANT ET BORNÉS À [0, 1] :
+ * `addColorStop` refuse le reste.
+ *
+ * @param {number} y0 coin haut de la dalle, en pixels écran absolus
+ * @param {number} cote côté de la dalle, en pixels écran
+ * @param {number} cran pixels physiques par case
+ * @returns {Array<{s: number, t: number}>} au moins deux arrêts
+ */
+export function arretsDeTeinte(y0, cote, cran) {
+  const rangeeDuY = (y) => y / cran + 1;
+  const positions = [0, 1];
+  for (const coude of COUDES_DE_TEINTE) {
+    const s = ((coude - 1) * cran - y0) / cote;
+    if (s > 0 && s < 1) positions.push(s);
+  }
+  positions.sort((a, b) => a - b);
+  return positions.map((s) => ({ s, t: partDeTeinteDeLaRangee(rangeeDuY(y0 + s * cote)) }));
 }
 
 /**
