@@ -71,7 +71,13 @@ function deuxBases(graine = 3, rangeeSource = 293, ecart = 4) {
   const etat = baseProductive(graine);
   poserLaBaseSur(etat, rangeeSource, 16);
   etat.recherche.basesAutorisees = 2;
-  fonderUneBase(etat, { rangee: rangeeSource - 1, colonne: 16 });
+  // ⚠ DEUX CASES, PLUS UNE — lot VOISINAGE-ET-MENACE, 08/09/2026. Ethan :
+  // « aucune base joueur/ouvrage ne doit être côte à côte sur les 9 cases ».
+  // Le montage fondait à UNE case de la source, ce qui est désormais refusé ;
+  // il fonde à DEUX, puis déplace la neuve comme avant. Ce que le montage
+  // mesure — l'écart final, posé par `poserLaBaseSur` juste en dessous — n'a
+  // pas bougé d'une case.
+  fonderUneBase(etat, { rangee: rangeeSource - 2, colonne: 16 });
   poserLaBaseSur(etat, rangeeSource - ecart, 16, etat.bases[1]);
   basculerVersLaBase(etat, 0);
   assert.equal(

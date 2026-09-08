@@ -650,6 +650,36 @@ export const FONDATION = {
 };
 
 /**
+ * L'ENCOMBREMENT d'une base — lot VOISINAGE-ET-MENACE, arbitré par Ethan le
+ * 08/09/2026 : « 8 cases autour peu importe le territoire, aucune base
+ * joueur/ouvrage ne doit être côte à côte sur les 9 cases ».
+ *
+ * ⚠⚠ UNE QUATRIÈME TABLE DE DISTANCE, ET PAS UN CHAMP DE `FONDATION` NI DE
+ * `DEPLACEMENT`. C'est la règle §4 de `CLAUDE.md`, prise pour la quatrième
+ * fois : le déplacement dit jusqu'où une base SAUTE (10), la fondation jusqu'où
+ * on en POSE une (10), le transfert jusqu'où une ressource VOYAGE (99), et
+ * celle-ci dit ce qu'une base ENCOMBRE. Les quatre se règlent séparément, et
+ * ranger celle-ci dans l'une des deux premières ferait bouger l'écartement des
+ * bases le jour où Ethan règle une portée.
+ *
+ * ⚠⚠ TCHEBYCHEV, ET SURTOUT PAS UNE PORTÉE EUCLIDIENNE. Le lot EUCLIDE a fait
+ * de toute PORTÉE un disque ; ceci n'est pas une portée, c'est un encombrement,
+ * et « les 9 cases » nomme un CARRÉ. Les deux ne se ramènent pas l'une à
+ * l'autre : `d² ≤ 2` couvrirait bien les huit voisines aujourd'hui, mais dirait
+ * une géométrie qui n'est pas celle de la règle, et le premier qui porterait le
+ * rayon à 2 obtiendrait un octogone au lieu d'un 5 × 5.
+ *
+ * ⚠ RAYON 1 VEUT DIRE « UNE CASE LIBRE ENTRE DEUX BASES », et le bloc de 3 × 3
+ * qu'il décrit CONTIENT son centre : deux bases ne peuvent ni se toucher, ni se
+ * superposer. C'est ce second point qui ferme le trou du déplacement — voir
+ * `sim/voisinage-des-bases.js`.
+ */
+export const ENCOMBREMENT_DES_BASES = {
+  /** Rayon de l'encombrement, en cases, distance de TCHEBYCHEV. */
+  rayonCases: 1,
+};
+
+/**
  * Le transfert de ressources entre deux bases — lot TRANSFERT, arbitré par
  * Ethan le 02/09.
  *
