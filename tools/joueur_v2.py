@@ -165,35 +165,54 @@ def emprise_par_sprite():
     return out
 
 
-def taches(unites):
-    """Rend `(famille, nom, source, mode, emprise)` pour les quarante-deux."""
+def taches(unites, camp='j'):
+    """Rend `(famille, nom, source, mode, emprise)` pour les quarante-deux.
+
+    ⚠⚠ ELLE PREND UN CAMP DEPUIS LE LOT OUVRAGE-CÂBLAGE, ET C'EST UN ÉCART AU
+    BRIEF, DÉCLARÉ. Il demandait un `tools/ouvrage_v2.py` « jumeau » portant sa
+    propre table de quarante-deux entrées. Mesuré avant d'écrire : les huit
+    listes d'identifiants au-dessus décrivent EXACTEMENT le camp de l'Ouvrage
+    aussi — neuf poses d'infanterie, quatre aéronefs, neuf coques dont l'Obusier
+    sans pose de défense, cinq tourelles de blindé, trois pièces monolithiques,
+    six tourelles de défense, six socles. Une seconde table aurait donc recopié
+    quarante-deux lignes à l'identique au seul changement d'une lettre, et
+    `CLAUDE.md` §4 le refuse : « une seule table fait foi par grandeur ». La
+    lettre de camp est le SEUL paramètre, et `tools/ouvrage_v2.py` l'appelle avec
+    `'o'`.
+
+    ⚠ LE DÉFAUT VAUT `'j'`, DONC RIEN NE CHANGE POUR LE JOUEUR — et ce n'est pas
+    une supposition : `tools/verifier.py` rejoue `joueur_v2.py` et compare ses
+    quatre-vingt-quatre fichiers à l'octet.
+    """
+    if camp not in ('j', 'o'):
+        raise AssertionError(f'camp « {camp} » : la lettre vaut « j » ou « o »')
     out = []
     # unité — les neuf poses d'infanterie et les quatre aéronefs
     for suffixe in INFANTERIE + AERONEFS:
         cle = suffixe[:-4] if suffixe.endswith('_def') else suffixe
-        out.append(('unite', f'off_j_{suffixe}', f'off_j_{suffixe}',
+        out.append(('unite', f'off_{camp}_{suffixe}', f'off_{camp}_{suffixe}',
                     'emprise', emprise_de(cle, unites)))
     # chassis — les neuf coques ; l'Obusier n'a pas de pose de défense
     for nom in COQUES:
         cle = nom.split('_')[0]
-        out.append(('chassis', f'off_j_{nom}', f'off_j_{nom}',
+        out.append(('chassis', f'off_{camp}_{nom}', f'off_{camp}_{nom}',
                     'emprise', emprise_de(cle, unites)))
     # tourelle-unite — les cinq tourelles de blindé, carrées
     for cle in TOURELLES_BLINDE:
-        out.append(('tourelle-unite', f'off_j_{cle}_tourelle',
-                    f'off_j_{cle}_tourelle', 'carre', None))
+        out.append(('tourelle-unite', f'off_{camp}_{cle}_tourelle',
+                    f'off_{camp}_{cle}_tourelle', 'carre', None))
     # defense — le mur, les deux barrières, les six tourelles
     for cle in MUR_ET_BARRIERES:
-        out.append(('defense', f'def_j_{cle}', f'def_j_{cle}',
+        out.append(('defense', f'def_{camp}_{cle}', f'def_{camp}_{cle}',
                     'emprise', EMPRISE_QUATRE_VINGT_DIX))
     for cle in TOURELLES_DEFENSE:
-        out.append(('defense', f'def_j_{cle}', f'def_j_{cle}', 'carre', None))
+        out.append(('defense', f'def_{camp}_{cle}', f'def_{camp}_{cle}', 'carre', None))
     # socle — trois socles de tourelle à 90 %, trois coques d'artillerie à 85 %
     for cle in CONTACT:
-        out.append(('socle', f'socle_def_j_{cle}', f'socle_def_j_{cle}',
+        out.append(('socle', f'socle_def_{camp}_{cle}', f'socle_def_{camp}_{cle}',
                     'emprise', EMPRISE_QUATRE_VINGT_DIX))
     for cle in ARTILLERIES:
-        out.append(('socle', f'socle_def_j_{cle}', f'socle_def_j_{cle}',
+        out.append(('socle', f'socle_def_{camp}_{cle}', f'socle_def_{camp}_{cle}',
                     'emprise', EMPRISE_QUATRE_VINGT_CINQ))
     return out
 

@@ -189,10 +189,17 @@ function fichiersAffiches(id, lettre, force) {
     const defensif = `${base}_def`;
     return force === 'garnison' && existsSync(fichier(famille, defensif)) ? defensif : base;
   };
-  if (classeDe('unite', id) === 'blinde' && lettre === 'j') {
+  // ⚠⚠ LE `&& lettre === 'j'` EST PARTI AU LOT OUVRAGE-CÂBLAGE, ET C'ÉTAIT LA
+  // MÊME SECONDE VÉRITÉ QUE CELLE QUE `scene.js` A PERDUE LE MÊME JOUR. Ce
+  // fichier-ci doit refléter ce que le RENDU compose : depuis que l'Ouvrage a
+  // ses neuf coques et ses cinq tourelles, un blindé émet deux couches dans les
+  // deux camps. Laisser la lettre ici aurait fait chercher `off_o_belier`, qui
+  // n'existe plus, donc écarté DIX combinaisons en silence — et un accent qu'on
+  // ne mesure plus est un accent qu'on ne garde plus.
+  if (classeDe('unite', id) === 'blinde') {
     return [
-      fichier('chassis', pose(`off_j_${id}_chassis`, 'chassis')),
-      fichier('tourelle-unite', `off_j_${id}_tourelle`),
+      fichier('chassis', pose(`off_${lettre}_${id}_chassis`, 'chassis')),
+      fichier('tourelle-unite', `off_${lettre}_${id}_tourelle`),
     ];
   }
   return [fichier('unite', pose(`off_${lettre}_${id}`, 'unite'))];
@@ -267,6 +274,68 @@ const DETTES_ACCENT = [
 
 const estUneDette = (id, lettre) => DETTES_ACCENT.some((d) => d.unite === id && d.camp === lettre);
 
+/**
+ * ⚠⚠ L'ACCENT DE L'OUVRAGE, MESURÉ SUR SA v2 — ET C'EST UN FAIT, PAS NEUF DETTES.
+ *
+ * Ethan a livré les quarante-deux sources de l'Ouvrage le 07/09. Confronté à la
+ * table de dégâts, ce camp diverge sur DIX-NEUF combinaisons sur vingt-huit — et
+ * les dix-neuf divergent dans le même sens : c'est l'accent `infanterie` qui
+ * l'emporte. Sur les vingt-huit, **vingt-sept sont dominées par le rouge**, et
+ * la seule qui ne l'est pas est la Carapace en ATTAQUE — véhicule 98 contre 88.
+ * En garnison la même pièce bascule, 94 contre 95 : **un pixel**.
+ *
+ * Ce n'est donc pas neuf accidents de dessin, c'est UNE propriété de la palette
+ * du camp, et l'inscrire comme neuf lignes de `DETTES_ACCENT` l'aurait déguisée
+ * en série de petits défauts tout en retirant neuf unités de la mesure — la
+ * moitié du camp cesserait d'être gardée.
+ *
+ * ⚠⚠ LA TABLE CI-DESSOUS GARDE DONC LE CAMP ENTIER, ET ELLE EST PLUS SERRÉE
+ * QU'UNE LISTE D'EXCEPTIONS. Aucune unité n'est écartée : chacune est confrontée
+ * à ce qu'elle DESSINE aujourd'hui, si bien qu'un retouchage d'art la fait
+ * rougir dans les deux sens — celui qui casse comme celui qui répare. Et la
+ * divergence avec la table de dégâts est COMPTÉE, pas seulement tolérée.
+ *
+ * ⚠ CE LOT NE CORRIGE PAS L'ART, et c'est la consigne du brief : « si une pièce
+ * paraît fausse, le dire au rapport ; ne pas la corriger ». Recolorier
+ * treize sprites est une décision de production, et elle appartient à Ethan.
+ */
+const ACCENT_OUVRAGE_MESURE = {
+  // unité + pose                dominante   compte, et ce que la table de dégâts dit
+  'meute armee': 'infanterie', //           253 — d'accord
+  'meute garnison': 'infanterie', //        273 — d'accord
+  'guetteur armee': 'infanterie', //        234 — d'accord
+  'guetteur garnison': 'infanterie', //     277 — d'accord
+  'perceurs armee': 'infanterie', //         62 contre 12 de structure — table : structure
+  'perceurs garnison': 'infanterie', //      76 contre 27 — table : structure
+  'fouisseurs armee': 'infanterie', //      124 contre 9 — table : structure
+  'fouisseurs garnison': 'infanterie', //   124 contre 9 — table : structure
+  // ⚠⚠ UN PIXEL SÉPARE LES DEUX POSES DE LA CARAPACE, ET C'EST POUR ÇA QUE CETTE
+  // TABLE PORTE LA POSE ET PAS SEULEMENT L'UNITÉ. En attaque le véhicule
+  // l'emporte 98 contre 88 ; en garnison il PERD, 94 contre 95. Une table
+  // indexée par unité aurait dû trancher entre les deux et aurait menti sur
+  // l'autre.
+  'carapace armee': 'vehicule', //           98 contre 88 — d'accord, la SEULE
+  'carapace garnison': 'infanterie', //      95 contre 94 — table : véhicule, à UN pixel
+  'ratisseur armee': 'infanterie', //       717 — d'accord
+  'ratisseur garnison': 'infanterie', //    735 — d'accord
+  'fendeur armee': 'infanterie', //         348 contre 142 de véhicule — table : véhicule
+  'fendeur garnison': 'infanterie', //      377 contre 138 — table : véhicule
+  'broyeur armee': 'infanterie', //         790 contre 369 — table : véhicule
+  'broyeur garnison': 'infanterie', //      825 contre 372 — table : véhicule
+  'belier armee': 'infanterie', //          694 contre 327 de structure — table : structure
+  'belier garnison': 'infanterie', //       683 contre 331 — table : structure
+  'pilon armee': 'infanterie', //           675 contre 326 — table : structure
+  'pilon garnison': 'infanterie', //        675 contre 326 — table : structure
+  'crecelle armee': 'infanterie', //        261 — d'accord
+  'crecelle garnison': 'infanterie', //     261 — d'accord
+  'busard armee': 'infanterie', //          272 contre 27 de véhicule — table : véhicule
+  'busard garnison': 'infanterie', //       272 contre 27 — table : véhicule
+  'frappeur armee': 'infanterie', //        167 contre 44 de structure — table : structure
+  'frappeur garnison': 'infanterie', //     167 contre 44 — table : structure
+  'enclume armee': 'infanterie', //         287 contre 91 — table : structure
+  'enclume garnison': 'infanterie', //      287 contre 91 — table : structure
+};
+
 /** Toutes les combinaisons (unité, camp, force) dont les fichiers existent. */
 function combinaisonsAffichees() {
   const sortie = [];
@@ -314,10 +383,16 @@ test('accent — l\'accent dessiné est celui de la table, hors dettes', () => {
   assert.ok(combinaisons.length >= 40,
     `${combinaisons.length} combinaisons : le balayage n'a pas trouvé les sprites`);
 
+  // ⚠⚠ LA BOUCLE NE PORTE PLUS QUE LE JOUEUR AU LOT OUVRAGE-CÂBLAGE, ET LE CAMP
+  // DE L'OUVRAGE EST GARDÉ JUSTE EN DESSOUS, PIÈCE PAR PIÈCE. Sa v2 diverge de
+  // la table de dégâts sur neuf unités sur quatorze, toutes dans le même sens ;
+  // les inscrire en dettes aurait retiré neuf unités de toute mesure. Elles sont
+  // au contraire confrontées à leur dominante MESURÉE, ce qui garde les
+  // quatorze au lieu de cinq — voir `ACCENT_OUVRAGE_MESURE`.
   const violations = [];
   let mesurees = 0;
   for (const { id, lettre, force, chemins } of combinaisons) {
-    if (estUneDette(id, lettre)) continue;
+    if (lettre !== 'j' || estUneDette(id, lettre)) continue;
     const attendu = accentDe('unite', id).colonne;
     const rendu = dominant(comptesDAccent(chemins));
     mesurees += 1;
@@ -325,15 +400,58 @@ test('accent — l\'accent dessiné est celui de la table, hors dettes', () => {
   }
 
   // ⚠ SANS CETTE LIGNE, UNE TABLE DE DETTES QUI COUVRIRAIT TOUT PASSERAIT.
-  // ⚠⚠ IL DESCEND DE 45 À 42 AU LOT SPRITES-V2-JOUEUR, ET C'EST UN ASSOUPLISSEMENT
-  // QU'IL FAUT DIRE COMME TEL : deux dettes se referment, quatre s'ouvrent, donc
-  // les exceptions couvrent HUIT combinaisons au lieu de quatre. MESURÉ : 44
-  // mesurées sur 56, contre 52 sur 56 avant. La borne suit le fait, elle ne le
-  // déguise pas — et les quatre dettes neuves sont chacune nommée avec son
-  // compte de pixels, ce qui est le prix à payer pour ne pas retoucher l'art.
-  assert.ok(mesurees >= 42, `${mesurees} combinaisons hors dettes : les exceptions couvrent trop`);
+  // ⚠⚠ IL VAUT 20, ET CE N'EST PAS UNE BORNE DE 42 QU'ON BAISSE : c'est le même
+  // compte sur un ENSEMBLE PLUS PETIT. Le joueur porte 14 unités × 2 forces =
+  // 28 combinaisons, moins les quatre dettes du 05/09 qui en écartent huit,
+  // donc **20 mesurées sur 28** — la même proportion qu'avant, 71 %. Les
+  // 28 combinaisons de l'Ouvrage ne disparaissent pas de la mesure : elles
+  // changent de garde, et leur garde ne tolère AUCUNE exception.
+  assert.ok(mesurees >= 20, `${mesurees} combinaisons du joueur hors dettes : les exceptions couvrent trop`);
   assert.deepEqual(violations, [],
     'l\'art et la table de dégâts divergent — corriger l\'art, ou ajouter la dette avec sa raison');
+});
+
+test('accent — l\'Ouvrage dessine ce que la table MESURÉE dit, et non ce que les dégâts disent', () => {
+  // ⚠⚠ LE CAMP ENTIER EST GARDÉ, SANS UNE SEULE EXCEPTION, et c'est ce qui
+  // distingue cette table d'une liste de dettes. Chaque unité est confrontée à
+  // ce qu'elle dessine aujourd'hui : un retouchage la fait rougir dans les deux
+  // sens, celui qui casse comme celui qui répare.
+  const combinaisons = combinaisonsAffichees().filter((c) => c.lettre === 'o');
+  assert.equal(combinaisons.length, 28,
+    `${combinaisons.length} combinaisons de l'Ouvrage : quatorze unités × deux forces attendues`);
+
+  assert.equal(Object.keys(ACCENT_OUVRAGE_MESURE).length, 28,
+    'la table mesurée ne porte plus vingt-huit combinaisons');
+  for (const { id, force, chemins } of combinaisons) {
+    const cle = `${id} ${force}`;
+    const attendu = ACCENT_OUVRAGE_MESURE[cle];
+    assert.ok(attendu !== undefined, `${cle} : absent d'ACCENT_OUVRAGE_MESURE`);
+    assert.equal(dominant(comptesDAccent(chemins)), attendu,
+      `${cle} : l'art de l'Ouvrage a bougé — remesurer et réécrire la ligne`);
+  }
+
+  // ⚠⚠ ET LA DIVERGENCE AVEC LES DÉGÂTS EST COMPTÉE, PAS SEULEMENT TOLÉRÉE.
+  // Dix-neuf sur vingt-huit, et c'est le nombre qui dira qu'Ethan a repris
+  // l'art. Sans cette moitié-là, la table ci-dessus se contenterait de figer
+  // l'état du jour sans jamais dire qu'il pose un problème.
+  const divergentes = Object.keys(ACCENT_OUVRAGE_MESURE)
+    .filter((cle) => ACCENT_OUVRAGE_MESURE[cle] !== accentDe('unite', cle.split(' ')[0]).colonne)
+    .sort();
+  assert.equal(divergentes.length, 19,
+    `${divergentes.length} combinaisons divergentes, 19 mesurées — relire le lot`);
+  assert.deepEqual(divergentes.filter((c) => c.startsWith('carapace')), ['carapace garnison'],
+    'la Carapace ne diverge plus sur sa seule pose de garnison');
+
+  // ⚠ ET LES DIX-NEUF DIVERGENT DANS LE MÊME SENS : c'est UNE propriété de la
+  // palette du camp, pas dix-neuf accidents. Vingt-sept des vingt-huit sont
+  // dominées par le rouge ; la seule qui ne l'est pas est la Carapace en
+  // ATTAQUE, et sa pose de garnison bascule à UN pixel près.
+  for (const cle of divergentes) {
+    assert.equal(ACCENT_OUVRAGE_MESURE[cle], 'infanterie',
+      `${cle} diverge autrement que par le rouge — le motif commun a cessé d'être vrai`);
+  }
+  const rouges = Object.values(ACCENT_OUVRAGE_MESURE).filter((c) => c === 'infanterie').length;
+  assert.equal(rouges, 27, `${rouges} combinaisons de l'Ouvrage dominées par le rouge, 27 mesurées`);
 });
 
 test('accent — chaque dette déclarée est ENCORE violée', () => {

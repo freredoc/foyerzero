@@ -17,12 +17,29 @@
 //
 // ⚠ LA « DETTE DA À DÉFINIR » DE LA RAMPE ENNEMIE EST SOLDÉE PAR L'ART, ET CE
 // COMMENTAIRE DISAIT ENCORE LE CONTRAIRE. L'Ouvrage n'est plus « dessiné dans la
-// rampe MÉTAL en attendant » : ses sprites sont VIOLETS. Mesuré le 30/08 sur
-// `off_o_ratisseur` à la grille 64 — `#382E47` (279 px), `#231D2E` (173),
-// `#4E4160` (146), `#6B5B80` (14) dominent, et il ne reste du métal que
-// `#3E454C`, DEUX pixels sur 751. Le brief du lot disait « pas une de ses neuf
-// teintes n'est du métal » : mesuré, c'est faux d'un cheveu, et c'est écrit ici
-// plutôt que recopié.
+// rampe MÉTAL en attendant » : ses sprites sont VIOLETS.
+//
+// ⚠⚠ LA MESURE A ÉTÉ REFAITE AU LOT OUVRAGE-CÂBLAGE, PARCE QUE LE FICHIER
+// QU'ELLE CITAIT N'EXISTE PLUS. Elle portait sur `off_o_ratisseur`, l'un des
+// neuf blindés monolithes que ce lot retire, et sur un sprite QUANTIFIÉ sur
+// quatorze teintes — `#382E47` (279 px), `#231D2E` (173), `#4E4160` (146) —, ce
+// que la chaîne ne fait plus depuis le lot PIXELS. Un commentaire qui nomme un
+// fichier absent envoie chercher ce qu'on ne trouvera pas.
+//
+// Refaite sur `off_o_ratisseur_chassis` à la grille 64, v2 : **623 pixels
+// opaques pour 564 teintes DISTINCTES** — c'est de la matière réduite au filtre,
+// pas une palette, et c'est pourquoi on ne peut plus en nommer quatre —, et
+// **99,0 % des pixels portent plus de rouge ET plus de bleu que de vert**, ce
+// qui est la définition la plus simple de « violet ». La conclusion tient, et
+// elle tient plus largement qu'avant.
+//
+// ⚠ ET AUCUNE VALEUR HEXADÉCIMALE N'EST CITÉE ICI, DÉLIBÉRÉMENT. La garde de
+// palette de `banc.test.js` compte au motif `#` + six chiffres sur tout `src/`
+// et refuse ce qui n'est pas dans `FICHE-STYLE.md` ; les quatre dominantes de la
+// v2 n'y sont pas, puisque la chaîne ne quantifie plus. Le premier jet de ce
+// paragraphe les nommait et la garde est tombée dessus — **c'est le TEXTE qui a
+// été corrigé, pas la garde**, huitième fois du dépôt. Les nombres complets sont
+// au rapport du lot.
 //
 // ⚠ CE QUI SUBSISTE DE LA RAMPE MÉTAL POUR L'OUVRAGE, C'EST LA LÉGENDE, et elle
 // seule. `corpsDe` a toujours des appelants — `dessinerEscouade`,
@@ -160,16 +177,18 @@ export function accentDe(genre, id) {
 /**
  * ⚠⚠ LES TROIS CLASSES D'UNITÉ SONT PASSÉES AUX SPRITES AU LOT UNITÉS-AU-COMBAT.
  * Elles émettaient 6, 4 et 3 primitives géométriques ; elles en émettent
- * maintenant UNE — le sprite —, sauf le blindé du JOUEUR qui en émet DEUX, sa
- * coque et sa tourelle orientable.
+ * maintenant UNE — le sprite —, sauf le blindé qui en émet DEUX, sa coque et sa
+ * tourelle orientable.
  *
- * ⚠ `blinde: 2` VAUT POUR LE JOUEUR, ET LE BLINDÉ DE L'OUVRAGE EN ÉMET UN SEUL.
- * Sa tourelle est cuite dans la coque — arbitré le 30/08 —, et ses quatre-vingts
- * sprites de tourelle ont été retirés au lot PRODUCTION. Cette table dit donc le
- * cas du joueur, qui est celui de l'Arsenal et de la composition ; une scène qui
- * mêle les deux camps se compte entité par entité, pas par cette table. C'est la
- * première fois qu'une entrée de `NB_PRIMITIVES` dépend d'autre chose que de la
- * classe, et c'est écrit ici pour qu'on ne l'apprenne pas en comptant faux.
+ * ⚠⚠ `blinde: 2` VAUT POUR LES DEUX CAMPS DEPUIS LE LOT OUVRAGE-CÂBLAGE, ET
+ * L'EXCEPTION QUI ÉTAIT ÉCRITE ICI A DISPARU. Elle disait « `blinde: 2` vaut
+ * pour le joueur, et le blindé de l'Ouvrage en émet un seul — sa tourelle est
+ * cuite dans la coque, arbitré le 30/08 », et elle ajoutait qu'une scène qui
+ * mêle les deux camps devait se compter entité par entité. C'était la SEULE
+ * entrée de cette table dont la valeur dépendait d'autre chose que de la classe.
+ * Les neuf coques et les cinq tourelles de l'Ouvrage sont dessinées depuis le
+ * 07/09 : toute la table redépend de la seule classe, et une scène mixte se
+ * compte de nouveau par elle.
  *
  * ⚠⚠ ET LES STRUCTURES ONT SUIVI AU LOT STRUCTURES-AU-COMBAT. Le paragraphe qui
  * était ici disait « elles gardent leur géométrie », et il était vrai pendant
@@ -188,7 +207,7 @@ export function accentDe(genre, id) {
  */
 export const NB_PRIMITIVES = {
   escouade: 1, //  le sprite de l'unité, pose d'attaque ou de défense
-  blinde: 2, //    coque + tourelle orientable — CÔTÉ JOUEUR ; l'Ouvrage en a 1
+  blinde: 2, //    coque + tourelle orientable — les DEUX camps depuis le 07/09
   aeronef: 1, //   le sprite de l'unité
   mur: 1, //       le merlon seul — il ne se raccorde plus à ses voisines
   barriere: 1, //  ni orientation, ni socle
@@ -419,10 +438,13 @@ function forceDuCamp(camp) {
  * `existeDansAtlas` fait qu'il n'y aura alors RIEN à changer. Un test fige la
  * coïncidence d'aujourd'hui et rougira ce jour-là.
  *
- * ⚠ ELLE SERT AUSSI LES NEUF COQUES DU JOUEUR, ET LEUR COMPTE N'EST PLUS DIX :
- * `off_j_pilon_chassis_def` n'existe pas — l'Obusier n'entre jamais en garnison,
- * `pilon.defense.present` valant `false`. C'est la table de l'atlas qui le dit,
- * pas une liste écrite ici.
+ * ⚠ ELLE SERT AUSSI LES DIX-HUIT COQUES — NEUF PAR CAMP DEPUIS LE LOT
+ * OUVRAGE-CÂBLAGE —, ET LEUR COMPTE N'EST PAS DE VINGT : ni
+ * `off_j_pilon_chassis_def` ni `off_o_pilon_chassis_def` n'existe, l'Obusier
+ * n'entrant jamais en garnison, `pilon.defense.present` valant `false`. C'est la
+ * même absence des deux côtés, et c'est la table de l'atlas qui le dit, pas une
+ * liste écrite ici — ce qui est exactement ce qui a permis à ce lot de brancher
+ * un second camp sans toucher à cette fonction.
  */
 function nomAvecPose(famille, base, force) {
   const defensif = `${base}_def`;
@@ -435,11 +457,19 @@ function nomAvecPose(famille, base, force) {
  * Rend `null` pour tout ce qui n'est pas une unité : les structures gardent
  * leurs primitives géométriques, et les bâtiments sont hors de ce lot.
  *
- * ⚠ LE BLINDÉ DU JOUEUR EST LE SEUL À DEUX COUCHES. Sa coque et sa tourelle sont
- * deux sprites, la tourelle tournant vers sa cible. Le blindé de l'OUVRAGE n'en
- * a qu'une : sa tourelle est cuite dans la coque — arbitré le 30/08, et ses
- * quatre-vingts sprites de tourelle ont été retirés au lot PRODUCTION. Ne pas
- * chercher `off_o_*_chassis`, il n'en existe pas.
+ * ⚠⚠ UN BLINDÉ ÉMET DEUX COUCHES DANS LES DEUX CAMPS DEPUIS LE LOT
+ * OUVRAGE-CÂBLAGE, ET CE PARAGRAPHE DISAIT LE CONTRAIRE. Il portait « le blindé
+ * du JOUEUR est le seul à deux couches ; celui de l'Ouvrage n'en a qu'une, sa
+ * tourelle est cuite dans la coque — ne pas chercher `off_o_*_chassis`, il n'en
+ * existe pas ». Les deux moitiés sont devenues fausses le 07/09 : Ethan a livré
+ * les neuf coques et les cinq tourelles de l'Ouvrage, dessinées séparément comme
+ * celles du joueur. Le `|| c === 'o'` qui renvoyait l'Ouvrage sur le monolithe
+ * est parti avec elles, et les cinq monolithes `off_o_<id>` ne sont plus cousus.
+ *
+ * ⚠ LE NOM SE COMPOSE SUR LE PROPRIÉTAIRE, `off_${c}_`, JAMAIS `off_j_` EN DUR.
+ * Écrit en dur, il aurait donné la coque du joueur à un blindé de l'Ouvrage sans
+ * lever — les deux existent dans l'atlas, donc `existeDansAtlas` aurait dit oui.
+ * C'est la faute que `pointsRecherche` a déjà payée au lot MODULES-E.
  *
  * ⚠⚠ ELLE PREND UN DESCRIPTEUR, PAS UNE ENTITÉ DE COMBAT, et c'est ce qui
  * permet aux QUATRE listes de partager le même dessin. `listeAffichage` a des
@@ -467,12 +497,12 @@ function couchesDeLUnite(d, cible = null) {
   const c = lettreDuProprietaire(d.proprietaire);
   const force = forceDuCamp(d.camp);
 
-  if (classe !== 'blinde' || c === 'o') {
+  if (classe !== 'blinde') {
     return [{ famille: 'unite', nom: nomAvecPose('unite', `off_${c}_${d.id}`, force) }];
   }
 
-  // Blindé du joueur : la coque, puis la tourelle TOURNÉE par-dessus.
-  const coque = nomAvecPose('chassis', `off_j_${d.id}_chassis`, force);
+  // Blindé : la coque, puis la tourelle TOURNÉE par-dessus. Les deux camps.
+  const coque = nomAvecPose('chassis', `off_${c}_${d.id}_chassis`, force);
   const angle = angleDeLaPiece(
     force,
     { rangee: d.rangee ?? 0, colonne: d.colonne ?? 0 },
@@ -491,9 +521,11 @@ function couchesDeLUnite(d, cible = null) {
       // tourelle est dessinée une fois, canon au NORD, et le rendu la tourne.
       // Cinq sprites au lieu de quatre-vingts, et l'angle devient CONTINU — la
       // tourelle suit sa cible au degré, là où seize orientations la faisaient
-      // sauter par crans de 22,5°.
+      // sauter par crans de 22,5°. ⚠ DIX depuis le lot OUVRAGE-CÂBLAGE, cinq
+      // par camp : l'Ouvrage avait perdu ses quatre-vingts orientations au lot
+      // PRODUCTION sans jamais en regagner une, il en a cinq qui tournent.
       famille: 'tourelle_unite',
-      nom: `off_j_${d.id}_tourelle`,
+      nom: `off_${c}_${d.id}_tourelle`,
       ancre: ANCRES_BLINDES[coque] ?? null,
       angle,
     },
@@ -531,12 +563,22 @@ function couchesDeLUnite(d, cible = null) {
  * faisaient sauter par crans de 22,5°. C'est `dessinerCouches` qui pose le
  * carré, et `canvas2d.js` qui le tourne autour de son CENTRE.
  *
- * ⚠⚠ L'OUVRAGE NE TOURNE PAS, ET LE DISCRIMINANT EST LA DONNÉE, JAMAIS LE CAMP.
- * Ses six tourelles sont celles de la v1, dessinées au nord, dont le pivot est
- * décalé de 2 à 11 % du côté du sprite : les tourner autour du centre les ferait
- * osciller. Elles n'ont pas d'entrée d'ancre, donc elles se posent sur la case
- * entière comme avant — un `=== 'o'` écrit ici serait la seconde vérité que §4
- * interdit, et il mentirait le jour où l'Ouvrage sera redessiné.
+ * ⚠⚠ L'OUVRAGE TOURNE DEPUIS LE LOT OUVRAGE-CÂBLAGE, ET PAS UNE LIGNE DE CETTE
+ * FONCTION N'A CHANGÉ POUR ÇA. Ce paragraphe disait « l'Ouvrage ne tourne pas » :
+ * ses six tourelles étaient celles de la v1, dessinées au nord, pivot décalé de
+ * 2 à 11 % du côté du sprite, si bien que les tourner autour du centre les
+ * aurait fait osciller. Ethan les a redessinées le 07/09, carrées et centrées
+ * sur leur pivot, et `tools/ancres-ouvrage.py` en a mesuré les six ancres.
+ *
+ * ⚠⚠ ET C'EST TOUT CE QU'IL A FALLU — c'est ce que « le discriminant est la
+ * DONNÉE, jamais le camp » achète, mesuré cette fois plutôt qu'annoncé. Cette
+ * fonction écrivait déjà `socle_def_${c}_${d.id}` et lisait
+ * `ANCRES_DEFENSE[socle] ?? null` : tant que la table ne portait que le joueur,
+ * le `?? null` rendait `null` et `dessinerCouches` posait la pièce sur la case
+ * entière. Les six clés `socle_def_o_*` entrées dans `src/data/ancres-defense.js`
+ * suffisent à la faire tourner. Un `=== 'o'` écrit ici en 2026-09-05 aurait été
+ * la seconde vérité que §4 interdit, et il aurait fallu le RETIRER aujourd'hui,
+ * dans un lot qui n'a rien à voir avec lui.
  *
  * @param {{genre: string, id: string, proprietaire: string}} d
  * @param {{cible: object|null}} contexte

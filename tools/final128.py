@@ -1,6 +1,6 @@
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import ImageFile as _IF; _IF.LOAD_TRUNCATED_IMAGES=True
-from cond import est_fond, est_fond_sujet, eroder, reduire, boite
+from cond import cle_de_fond, est_fond_sujet, eroder, reduire, boite
 from portes import POIDS, PORTES
 from PIL import Image
 import numpy as np, os, math
@@ -83,7 +83,36 @@ def recadrer(cell,cible,N,cote_ref=None,ancrage='centre'):
     POSITION, et ce corps les lit séparément : passer à `'centre'` ne touche pas
     au rapport de taille des paliers, qui est l'acquis d'EMBLÈMES-ABÎMÉS.
     """
-    a=np.array(cell.convert('RGBA')); m=(~est_fond(a[...,:3]))&(a[...,3]>=128)
+    # ⚠⚠ LA CLÉ SE LIT, ELLE NE S'ÉCRIT PLUS EN DUR — lot OUVRAGE-CÂBLAGE, 08/09,
+    # ET C'ÉTAIT UN DÉFAUT MESURÉ, PAS UNE PRÉCAUTION. Ces deux lignes portaient
+    # `est_fond`, qui ne connaît QUE le magenta, et un remplissage
+    # `(255, 0, 255, 255)` écrit à la main. Les quarante-deux sources v2 de
+    # l'Ouvrage sont sur fond VERT : `est_fond` n'y voyait aucun fond, la boîte
+    # englobante devenait la planche ENTIÈRE, et le vert ressortait comme du
+    # sujet. **Mesuré avant de corriger : 31 des 42 sprites portaient la clé en
+    # pixels OPAQUES, jusqu'à 1 935 sur 2 500 — 75 % de la Crécelle était du fond
+    # vert.** Les onze tourelles y échappaient, et pour une raison qui le
+    # confirme : elles passent en mode `carre`, donc elles ne traversent pas
+    # cette fonction.
+    #
+    # ⚠⚠ ET `CLAUDE.md` §6 L'AVAIT ANNONCÉ, MOT POUR MOT : « la clé verte est
+    # PLOMBÉE, pas éprouvée […] une source verte qui arriverait demanderait aussi
+    # `recadrer`, dont le fond de remplissage est magenta en dur et qui appelle
+    # `est_fond` : ce sera un lot, pas une ligne. » C'est ce lot-ci.
+    #
+    # ⚠ ON DÉTECTE, ON NE PARAMÈTRE PAS. `cond.cle_de_fond` le dit en tête :
+    # « un drapeau à passer serait un drapeau à oublier sur une planche ». La clé
+    # se lit sur les quatre coins de la cellule, et le remplissage la reprend.
+    #
+    # ⚠ `est_fond_sujet` REMPLACE `est_fond` ICI, ET NULLE PART AILLEURS. C'est
+    # elle qui connaît les deux clés ; `est_fond` reste intacte parce qu'elle
+    # DÉCOUPE aussi les planches — gouttières d'`emblemes.cellules`, `bandes`,
+    # `pivot` de `tourelles.py` —, et la toucher déplacerait les cellules
+    # elles-mêmes. Sur une source magenta les deux rendent la même boîte, et ce
+    # n'est pas une relecture qui le dit : `tools/verifier.py` rejoue les quinze
+    # producteurs et les compare à l'octet.
+    a=np.array(cell.convert('RGBA')); rgb=a[...,:3]
+    cle=cle_de_fond(rgb); m=(~est_fond_sujet(rgb))&(a[...,3]>=128)
     ys,xs=np.where(m)
     cote=max(xs.max()-xs.min(),ys.max()-ys.min())+1
     reference=cote if cote_ref is None else int(round(cote_ref))
@@ -95,7 +124,7 @@ def recadrer(cell,cible,N,cote_ref=None,ancrage='centre'):
         oy=box//2-cy
     else:
         raise ValueError(f'recadrer : ancrage inconnu « {ancrage} »')
-    out=Image.new('RGBA',(box,box),(255,0,255,255)); out.paste(cell.convert('RGBA'),(box//2-cx,oy))
+    out=Image.new('RGBA',(box,box),(*cle,255)); out.paste(cell.convert('RGBA'),(box//2-cx,oy))
     return out
 
 def conditionner(im,P,N,erosion=3):
