@@ -355,20 +355,31 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // tirages, et tout ce qui tire APRÈS `placerDefenses` et `placerBatiments` se
   // décale : obstacles, composition, vagues. Le brief l'annonçait, le rapport le
   // chiffre, et ce que ce test tient ne change pas.
+  //
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : LES SIX NOMBRES BOUGENT, LES TROIS
+  // CAUSES NON, ET LE CONTRASTE TIENT. `A 296 → 206`, `B souche 588 → souche
+  // 492`, `C 569 → 650`. La cause n'est pas celle des quatre réancrages
+  // précédents : ceux-là déplaçaient le FLUX de tirages, donc RECOMPOSAIENT la
+  // garnison ; celui-ci tire sur un SECOND flux salé, et la composition ne bouge
+  // pas d'un identifiant — mesuré, zéro écart sur 6 000 montages. Ce qui bouge
+  // est la POSITION des mêmes pièces, les deux blocs FLOTTANT désormais dans
+  // leur bande. **Le préréglage figé de B rase toujours la Souche pendant
+  // qu'aucun des trois budgétés n'y parvient** : c'est le contraste que ce test
+  // garde, et il est intact.
   const figes = cas.map((c) => resoudre(creerCombat(montagePreregle(parametres(c)))));
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 296);
+  assert.equal(figes[0].tick, 206);
   assert.equal(figes[1].cause, 'souche', 'le préréglage figé ne rase plus la Souche');
-  assert.equal(figes[1].tick, 588);
+  assert.equal(figes[1].tick, 492);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 569);
+  assert.equal(figes[2].tick, 650);
 
   // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
   // que le figé de B rase : les deux séries se distinguent de nouveau par leur
   // ISSUE, et plus seulement par leurs durées.
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
-  assert.equal(budgetes[0].nbTicks, 241);
+  assert.equal(budgetes[0].nbTicks, 340);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -395,11 +406,17 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // la garnison n'est plus composée des mêmes pièces ; l'assaut d'infanterie
   // budgété n'en vient de nouveau pas à bout. C'est du CALIBRAGE, pas un défaut
   // — ce test mesure, il ne règle rien, et le rapport le porte pour Ethan.
-  assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
+  //
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : A REDEVIENT RENTABLE — 7 120 de quartz
+  // et 2 373 de scorie au lieu de zéro, en 340 ticks au lieu de 241. Les blocs
+  // flottent, l'assaut d'infanterie budgété atteint de nouveau les bâtiments de
+  // l'avant-poste. C'est du CALIBRAGE, pas un défaut, et c'est la cinquième fois
+  // que ce nombre change de sens : le rapport le porte pour Ethan.
+  assert.deepEqual(budgetes[0].butin, { quartz: 7_120, scorie: 2_373 });
   assert.equal(budgetes[1].cause, 'attaquants');
-  assert.equal(budgetes[1].nbTicks, 311);
+  assert.equal(budgetes[1].nbTicks, 323);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 635);
+  assert.equal(budgetes[2].nbTicks, 528);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -416,7 +433,10 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // plus la même : l'assaut la traverse et atteint les bâtiments. Les deux
   // moitiés du lot tirent en sens contraire ici aussi, et c'est mesuré, pas
   // compensé.
-  assert.equal(budgetes[2].butin.quartz, 60_714);
+  // ⚠ LOT DISPOSITION-OUVRAGE : 69 210, soit +14,0 % pour 107 ticks de MOINS. Le
+  // raid raccourcit et rapporte plus : ses unités atteignent les bâtiments plus
+  // vite parce que le bloc de défense n'est plus collé à eux.
+  assert.equal(budgetes[2].butin.quartz, 69_210);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

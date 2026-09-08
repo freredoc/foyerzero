@@ -591,7 +591,16 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // composition — se décale. Le brief l'annonçait et le rapport le chiffre. Ce
   // que ce test-ci mesure n'a toujours rien à voir avec la durée : ce sont les
   // trois assertions d'équivalence au-dessus, et elles n'ont pas bougé.
-  assert.equal(r.nbTicks, 635);
+  //
+  // ⚠⚠ ET LE LOT DISPOSITION-OUVRAGE (08/09) LE RAMÈNE À 528, POUR UNE AUTRE
+  // CAUSE QUE LES TROIS PRÉCÉDENTES, ET IL FAUT LE DIRE. Les trois d'avant
+  // déplaçaient le FLUX — un tirage de plus ou de moins, et tout ce qui suit se
+  // décale, composition comprise. Celui-ci ne touche pas au flux : ses tirages
+  // sont pris sur un SECOND, salé, précisément pour que la composition ne bouge
+  // pas d'un identifiant (voir `placementDesRangees`). Ce qui change est la
+  // POSITION des mêmes pièces — les deux blocs flottent dans leur bande —, donc
+  // le combat se joue autrement sans que le site soit composé autrement.
+  assert.equal(r.nbTicks, 528);
   assert.equal(r.cause, 'attaquants');
 });
 

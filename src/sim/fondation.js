@@ -23,6 +23,7 @@ import { distanceCarreeCases } from './points-attaque.js';
 import { campDeLaCase, OUVRAGE, JOUEUR } from './territoire.js';
 import { poiDeLaCase } from './poi.js';
 import { siteDeLaCase, butinSiToutTombe } from './site-de-la-case.js';
+import { problemesDuVoisinageDesBases } from './voisinage-des-bases.js';
 import { montageCourant, retirerLeSite } from './site-entame.js';
 import { verserLeButin } from './raid.js';
 import { rangDeLaBaseSuivante, problemesDeLAchatDUneBase } from './recherche.js';
@@ -66,9 +67,9 @@ function distanceCarreeAuPlusProche(etat, cible) {
 /**
  * Ce qui empêche de fonder ici — liste vide si rien.
  *
- * Les sept codes, dans l'ordre où ils se rencontrent : `hors-carte`,
- * `recherche-manquante`, `points-insuffisants`, `trop-loin`, `case-occupee`,
- * `sur-un-poi`, `territoire-ennemi`.
+ * Les huit codes, dans l'ordre où ils se rencontrent : `hors-carte`,
+ * `recherche-manquante`, `points-insuffisants`, `trop-loin`, `voisinage`,
+ * `case-occupee`, `sur-un-poi`, `territoire-ennemi`.
  *
  * ⚠⚠ `points-insuffisants` NE VIENT JAMAIS SEUL, ET C'EST VOULU. Le droit de
  * fonder s'ACHÈTE — `acheterUneBaseDePlus`, onglet Spécial — et se paie en
@@ -119,14 +120,37 @@ export function problemesDeLaFondation(etat, cible) {
     });
   }
 
-  // ⚠⚠ SEULE LA CASE EXACTE D'UNE BASE EXISTANTE EST REFUSÉE, ET C'EST ARBITRÉ.
-  // Ethan, 02/09 : fonder dans son PROPRE territoire est autorisé. **Conséquence
-  // signalée et acceptée : deux bases du joueur peuvent être adjacentes.** Il
-  // avait d'abord appelé cela un exploit, puis tranché autrement. Si Ethan
-  // revient dessus, c'est ce `=== 0` qui devient un rayon.
+  // ⚠⚠ ETHAN EST REVENU DESSUS LE 08/09, ET CE BLOC AVAIT PRÉVU LE GESTE.
+  // Il disait : « seule la case EXACTE d'une base existante est refusée, et
+  // c'est arbitré — Ethan, 02/09 : fonder dans son PROPRE territoire est
+  // autorisé, conséquence signalée et acceptée : deux bases du joueur peuvent
+  // être adjacentes. Il avait d'abord appelé cela un exploit, puis tranché
+  // autrement. Si Ethan revient dessus, c'est ce `=== 0` qui devient un rayon. »
+  //
+  // C'est fait : « 8 cases autour peu importe le territoire, aucune base
+  // joueur/ouvrage ne doit être côte à côte sur les 9 cases ». Le `=== 0` EST
+  // devenu un rayon, et il a changé de camp en même temps — la règle ne
+  // distingue plus les bases du joueur de celles de l'Ouvrage, ni le territoire
+  // qui tient la case.
+  //
+  // ⚠⚠ ET LE RAYON N'EST PAS ÉCRIT ICI, PARCE QUE LE DÉPLACEMENT LE LIT AUSSI.
+  // `problemesDuDeplacement` appelle la MÊME fonction : sans elle, le joueur
+  // fonderait loin, puis déplacerait sa base juste à côté de l'Ouvrage au geste
+  // suivant, et la règle ne vaudrait plus rien. Voir `sim/voisinage-des-bases.js`.
+  //
+  // ⚠⚠ ET LA CASE EXACTE GARDE SON REFUS PROPRE, DES DEUX CÔTÉS. Le voisinage
+  // couvre le 3 × 3 CENTRE COMPRIS, donc il parle aussi sur la case elle-même ;
+  // mais « une de tes bases est DÉJÀ LÀ » et « il faut une case libre entre
+  // deux bases » ne disent pas la même chose au joueur, et la première est la
+  // plus utile quand c'est elle qui s'applique. Le bloc ci-dessous est donc
+  // conservé, et son pendant Ouvrage juste en dessous aussi : sur la case
+  // exacte, le joueur lit DEUX raisons, et les deux sont vraies. C'est la règle
+  // « on rassemble, on ne s'arrête pas au premier », prise à l'endroit.
   if (carre === 0) {
     problemes.push({ code: 'case-occupee', message: 'Une de tes bases est déjà là.' });
   }
+
+  for (const p of problemesDuVoisinageDesBases(etat, cible)) problemes.push(p);
 
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
   if (site !== null && !TYPES_ECRASABLES.has(site.type)) {
