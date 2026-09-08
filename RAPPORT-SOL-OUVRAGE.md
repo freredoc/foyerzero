@@ -5,10 +5,11 @@ d'aujourd'hui, le haut devient l'Ouvrage, et la bascule se fait **par plaques,
 jamais par un trait**.
 
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
-`LIMITE T8` tombe, sur une teinte de frontière sur huit. Le §4.4 du brief dit
-« s'arrêter, ne pas assouplir le seuil, et le porter au rapport » ; le §7
-interdit toute teinte de frontière neuve. **Ni le seuil ni la rampe n'ont été
-touchés.** Voir le §5 ci-dessous, qui porte la mesure et les deux issues.
+`LIMITE T8` tombe, sur **DEUX teintes de frontière sur huit**, toutes deux dans
+la rampe du JOUEUR. Le §4.4 du brief dit « s'arrêter, ne pas assouplir le seuil,
+et le porter au rapport » ; le §7 interdit toute teinte de frontière neuve.
+**Ni le seuil ni la rampe n'ont été touchés.** Voir le §5 ci-dessous, qui porte
+la mesure ton par ton et les issues.
 
 ---
 
@@ -130,17 +131,27 @@ lot, il est au §9.**
 
 ## 5. Quantiles de clarté du sol, et verdict de `limite.test.js`
 
-Clarté L\* du sol, sur les vingt-deux planches encodées :
+Clarté L\* du sol, **teinte appliquée** — `tools/sols.py` mesure chaque famille
+sur l'intervalle de teinte où elle peut sortir, bornes comprises, donc le sol
+tel qu'il est PEINT et non tel qu'il est rangé :
 
 | | p1 | p5 | p50 | p95 | p99 |
 |---|---|---|---|---|---|
 | **après** | 29,83 | **39,19** | 59,12 | 73,79 | 79,98 |
 | avant (8 ocres, SOL-SATELLITE) | — | **54,96** | 64,54 | 74,24 | 77,97 |
 
-⚠ **Le p5 tombe de 54,96 à 39,19**, et c'est mécanique : les quatorze planches
-de l'Ouvrage sont franchement plus sombres que les huit ocres.
+⚠⚠ **ET LA CHUTE SE DÉCOMPOSE EN DEUX, PAS UNE — CORRIGÉ APRÈS MESURE.** La
+première écriture de cette section disait « sur les vingt-deux planches
+encodées », ce qui est imprécis : les vingt-deux **stockées** rendent **47,75**,
+et les **8,56** qui restent sont la TEINTE. Les quatorze planches de l'Ouvrage
+coûtent donc 7,54, le dégradé 8,56. Le nombre 39,19, lui, est juste — reproduit
+à l'identique en rejouant le chemin de l'outil sur les planches livrées.
 
-Par famille, p5 : **ocre 48,18 · naturel 37,29 · hybride 34,81 ·
+⚠ **Le désert du bas est intact, mesuré à la même règle** : les huit ocres
+RECADRÉES rendent **55,47** sans teinte, contre **55,29** pour les huit entières
+d'avant le lot. Le recadrage ne coûte rien.
+
+Par famille, p5, teinte comprise : **ocre 48,18 · naturel 37,29 · hybride 34,81 ·
 artificiel 35,24**.
 
 ### `LIMITE T8` — **KO**
@@ -149,9 +160,31 @@ artificiel 35,24**.
 limite_j : #475A2F est à 3.5 sous le p5 du sol (5 au moins)
 ```
 
-**Une seule teinte sur huit tombe** : `#475A2F`, le kaki le plus CLAIR du
-joueur, à 3,5 sous le p5 au lieu des 5 exigés. Il manque **1,5 de clarté**. Les
-sept autres passent.
+⚠⚠ **DEUX TEINTES SUR HUIT TOMBENT, ET NON UNE — LE PREMIER JET DE CE RAPPORT
+DISAIT « une seule », ET IL AVAIT TORT.** Le test s'arrête au premier échec, donc
+son message n'en nomme qu'une ; les huit ont été remesurées une par une :
+
+| rampe | rang | ton | L\* | p5 − L\* | verdict |
+|---|---|---|---|---|---|
+| joueur | 1 | `#161A0E` | 8,49 | 30,70 | OK |
+| joueur | 2 | `#2F3C20` | 23,47 | 15,72 | OK |
+| **joueur** | **3** | **`#475A2F`** | **35,71** | **3,48** | **KO — manque 1,52** |
+| **joueur** | **4** | **`#5F7A3E`** | **47,88** | **−8,69** | **KO — manque 13,69** |
+| Ouvrage | 1 | `#100916` | 3,28 | 35,91 | OK |
+| Ouvrage | 2 | `#26193C` | 12,18 | 27,01 | OK |
+| Ouvrage | 3 | `#3B285C` | 20,90 | 18,29 | OK |
+| Ouvrage | 4 | `#523A7A` | 29,97 | 9,22 | OK |
+
+⚠⚠ **LE RANG 4 EST LE PLUS GRAVE, ET IL CHANGE DE NATURE PLUTÔT QUE DE DEGRÉ.**
+`#5F7A3E` est désormais **plus CLAIR que le p5 du sol** : le ton le plus vif de
+la frontière du joueur ne se lit plus « plus sombre que le sol » du tout sur la
+moitié Ouvrage de la carte, ce qui est précisément la propriété que la garde
+défend. Le commentaire du test le dit d'ailleurs de face — « MESURÉ : le pire
+des huit tons est le kaki de rang 4, à 7,1 sous le p5 » —, relevé quand le p5
+valait 54,96 : c'est bien ce ton-là qui avait le moins de marge, et c'est lui
+qui a le plus bougé.
+
+⚠ **Les quatre tons de l'Ouvrage passent tous**, le plus juste à 9,22.
 
 ⚠ **Rien n'a été touché** — ni le seuil de `limite.test.js`, ni la rampe de
 `FICHE-STYLE.md`, ni `tools/limites.py`, ni un seul pixel de `art/sprites/limite/`.
@@ -160,22 +193,49 @@ Le §4.4 et le §7 du brief l'interdisent tous les deux.
 ⚠ **La famille qui décide est `naturel`**, pas la moyenne : c'est elle qui borde
 le territoire du joueur, entre les rangées 226 et 96, et son p5 vaut 37,29.
 
-**Deux issues, et elles appartiennent à Ethan :**
+⚠⚠ **ET LES DEUX ISSUES QUE CE RAPPORT PROPOSAIT D'ABORD NE MARCHENT NI L'UNE NI
+L'AUTRE — MESURÉ, PAS RELU.** Elles sont conservées ci-dessous avec ce qui les
+tue, parce que ce sont les deux premières auxquelles on pense.
 
-1. **Assombrir le ton fautif.** `#475A2F` descend de 1,5 de clarté et la garde
-   repasse. C'est une ligne de `FICHE-STYLE.md` et une régénération de
-   `tools/limites.py` ; le prix est que la frontière du joueur devient un peu
-   plus sombre partout, y compris sur le désert du bas où elle n'avait aucun
-   problème.
-2. **Éclaircir la famille `naturel`.** Remonter son alignement de 1,5 de clarté
-   rend le seuil sans toucher à la frontière. Le prix est que le sol de la
-   transition s'éloigne d'autant du dessin d'Ethan, et que l'écrêtage par le
-   haut remonte.
+1. ~~**Assombrir le ton fautif.**~~ **REFUSÉE PAR LE TEST LUI-MÊME.** `LIMITE T8`
+   exige AUSSI que chaque ton de frontière garde la clarté de la rampe de CAMP de
+   même rang **à 0,3 près** — c'est la moitié qui mesure « assez vif » sans
+   laisser la rampe s'éclaircir. Descendre `#475A2F` de 1,52 porte son écart au
+   kaki `#4E5742` de **0,05 à 1,46**, et cette assertion-là tombe. Le corriger
+   demande donc de descendre **aussi le kaki des châssis**, c'est-à-dire de
+   repeindre les unités du joueur partout dans le jeu. Et le rang 4 demanderait
+   13,69, ce qui poserait les rangs 3 et 4 à la **même** clarté : ce n'est plus
+   un ton à retoucher, c'est la rampe du joueur entière à redessiner.
+2. ~~**Éclaircir la famille `naturel`.**~~ **INSUFFISANTE.** Pour que les huit
+   tons passent il faut un p5 de **52,88** — contre 39,19 aujourd'hui et 54,96
+   avant le lot. `naturel` est à 37,29, mais `hybride` est à 34,81 et
+   `artificiel` à 35,24 : il faudrait éclaircir les **trois** familles de près de
+   dix-huit clartés, c'est-à-dire défaire le dessin qu'Ethan vient de livrer.
 
-⚠ **Une troisième issue existe et elle est écartée** : mesurer la clarté du sol
-là où la frontière se dessine plutôt que sur les vingt-deux planches. Elle est
-juste — la frontière du joueur ne rencontre jamais l'`artificiel` — mais c'est
-un assouplissement de la garde déguisé en raffinement, et le brief l'interdit.
+**Ce qui reste, et qui appartient à Ethan :**
+
+3. **Redessiner la rampe de frontière du joueur pour le nouveau sol**, et la
+   rampe de châssis avec elle, en la recomprimant entre L\* 8,5 et 34,19. C'est
+   la seule issue qui rende la garde telle qu'elle est écrite, et c'est une
+   décision de style : `FICHE-STYLE.md` fait autorité.
+4. **Accepter que la frontière du joueur se lise moins bien sur la moitié
+   Ouvrage**, et desserrer la garde EN L'ÉCRIVANT — par exemple en mesurant
+   chaque rampe contre le sol qu'elle rencontre vraiment. C'est l'issue nº 5
+   ci-dessous, et ce rapport ne la prend pas.
+5. **Donner à la frontière du joueur un second jeu de tons pour la moitié
+   sombre.** Le §7 du brief interdit toute teinte de frontière neuve, donc ce
+   lot ne peut pas le faire ; c'est aussi la seule issue qui ne coûte rien à ce
+   qui marche déjà en bas de carte.
+
+⚠ **L'issue nº 4 est écartée par ce lot, et il faut dire pourquoi.** Mesurer la
+clarté du sol là où la frontière se dessine vraiment est JUSTE — la frontière du
+joueur ne rencontre jamais l'`artificiel`. Mais prise sans arbitrage, c'est un
+assouplissement de la garde déguisé en raffinement, et le §4.4 l'interdit
+nommément. ⚠ **Et elle ne suffirait pas** : mesuré, le rang 4 tombe même contre
+le p5 de l'ocre SEUL, 48,18 contre 47,88 — il lui manquerait encore 4,7 sur le
+désert du bas, où il passait la veille. Ce n'est donc pas une frontière qui a
+cessé d'aller sur le haut de la carte, c'est une frontière dont la marge était
+déjà mince et que la teinte a mangée partout.
 
 ---
 
@@ -310,7 +370,8 @@ dans le code, et le test est la seule chose qui l'accorde à sa source.
 
 ### 6.10 `LIMITE T8` — KO
 
-Voir le §5.
+Voir le §5. **Deux tons sur huit**, `#475A2F` à −1,52 du seuil et `#5F7A3E` à
+−13,69 ; le test s'arrête au premier, les huit ont été remesurés à la main.
 
 ### 6.11 `PIC T7` — la borne de taille — PASS
 
@@ -571,9 +632,10 @@ les lots RETOURS-DU-31 et ASSAUT l'avaient déjà appris.
 
 ## 10. Points laissés ouverts
 
-1. ⚠⚠ **`LIMITE T8`, et il appartient à Ethan.** Les deux issues sont au §5.
-   Tant qu'il n'a pas tranché, `main` sera rouge sur ce test si le lot est
-   fusionné tel quel.
+1. ⚠⚠ **`LIMITE T8`, et il appartient à Ethan.** DEUX tons sur huit tombent, et
+   les issues sont au §5 — les deux premières auxquelles on pense y sont
+   mesurées et écartées. Tant qu'il n'a pas tranché, `main` sera rouge sur ce
+   test si le lot est fusionné tel quel.
 2. **La marge T10 est à 1,89 %, la plus mince depuis longtemps.** Le prochain lot
    qui fait entrer une image devra relever la borne EN ÉCRIVANT POURQUOI, ou
    tenir dans 176 222 octets.

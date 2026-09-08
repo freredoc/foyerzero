@@ -144,19 +144,43 @@ dériver sans qu'un seul test tombe : rien ne confrontait la rangée qu'elle
 annonce à la position où le bloc TOMBE vraiment. `SOU T4 bis` exige l'égalité
 EXACTE au cran le plus serré — où l'échelle vaut 1 — et borne l'écart ailleurs
 par la dérive d'arrondi de 0,18 % déjà mesurée au lot SOL-SATELLITE.
-⚠⚠ **`LIMITE T8` EST ROUGE, ET LE BRIEF INTERDIT DE LE RÉPARER.** Une seule
-teinte sur huit tombe : **`#475A2F`**, le kaki le plus clair du joueur, à **3,5
-sous le p5 du sol au lieu de 5** — il manque 1,5 de clarté. La cause est
-mécanique et se lit dans le manifeste : le **p5 du sol passe de 54,96 à 39,19**,
-les quatorze planches de l'Ouvrage étant plus sombres que les huit ocres. Le §4.4
-du brief dit « s'arrêter, ne pas assouplir le seuil, et le porter au rapport », et
-le §7 interdit toute teinte de frontière neuve. **Ni le seuil ni la rampe n'ont
-été touchés.** Les sept autres teintes passent, et **`RAPPORT-SOL-OUVRAGE.md`
-porte les deux issues** — remonter la clarté de ce seul ton, ou remonter la
-famille `naturel` — pour qu'Ethan tranche.
+⚠⚠ **`LIMITE T8` EST ROUGE, ET LE BRIEF INTERDIT DE LE RÉPARER.** Le §4.4 dit
+« s'arrêter, ne pas assouplir le seuil, et le porter au rapport », et le §7
+interdit toute teinte de frontière neuve. **Ni le seuil ni la rampe n'ont été
+touchés.**
+⚠⚠ **DEUX TEINTES SUR HUIT TOMBENT, ET LES DEUX SONT LA RAMPE DU JOUEUR — LE
+PREMIER JET DE CE BLOC EN ANNONÇAIT UNE, ET IL AVAIT TORT.** Le test s'arrête au
+premier échec ; les huit ont été remesurés un par un. **`#475A2F`** (rang 3) est
+à **3,48 sous le p5 au lieu de 5**, il manque 1,52 ; **`#5F7A3E`** (rang 4, le
+plus CLAIR) est à **−8,69** — il est désormais plus CLAIR que le p5 du sol —, il
+lui manque **13,69**. Les quatre tons de l'Ouvrage passent : 35,91 · 27,01 ·
+18,29 · 9,22. Le commentaire du test dit d'ailleurs « le pire des huit est le
+kaki de rang 4, à 7,1 sous le p5 » : c'était vrai à p5 54,96, et c'est ce
+ton-là qui a le plus bougé.
+⚠⚠ **ET LE p5 TOMBE POUR DEUX RAISONS QUI SE DÉCOMPOSENT, PAS UNE.** Les
+vingt-deux planches STOCKÉES rendent **47,75** ; les 8,56 qui restent sont la
+TEINTE — `tools/sols.py` mesure le sol tel qu'il est PEINT, chaque famille sur
+l'intervalle de teinte où elle peut sortir, et non tel qu'il est rangé. La
+phrase « sur les vingt-deux planches encodées » du rapport était donc imprécise,
+et le nombre, lui, est juste. ⚠ **Le désert du bas est intact, mesuré à la même
+règle** : les huit ocres RECADRÉES rendent **55,47** sans teinte contre **55,29**
+pour les huit entières d'avant le lot — le recadrage ne coûte rien.
+⚠⚠ **ET « ASSOMBRIR LE TON FAUTIF » NE MARCHE PAS — C'EST L'ISSUE QUE LE RAPPORT
+PROPOSAIT, ET UNE SECONDE ASSERTION DU MÊME TEST LA REFUSE.** `LIMITE T8` exige
+aussi que chaque ton de frontière garde la clarté de la rampe de CAMP de même
+rang **à 0,3 près** : descendre `#475A2F` de 1,52 porte l'écart à `#4E5742` de
+0,05 à 1,46, et c'est cette assertion-là qui tombe. Le corriger demande donc de
+descendre AUSSI le kaki des châssis, c'est-à-dire de repeindre les unités du
+joueur partout. Et le rang 4 demanderait 13,69, ce qui poserait les rangs 3 et 4
+à la MÊME clarté : c'est la rampe du joueur ENTIÈRE qu'il faudrait redessiner.
+⚠ **POUR QUE LES HUIT PASSENT IL FAUDRAIT UN p5 DE 52,88**, contre 39,19
+aujourd'hui et 54,96 avant le lot. Éclaircir la seule famille `naturel` n'y
+suffit pas non plus — `hybride` est à 34,81 et `artificiel` à 35,24.
+**`RAPPORT-SOL-OUVRAGE.md` porte les issues pour qu'Ethan tranche.**
 ⚠ **ET LA CLARTÉ SE LIT PAR FAMILLE, PAS EN BLOC** : p5 **ocre 48,18 · naturel
-37,29 · hybride 34,81 · artificiel 35,24**. C'est `naturel` qui borde la
-frontière du joueur, et c'est donc elle qui décide.
+37,29 · hybride 34,81 · artificiel 35,24**, teinte comprise. C'est `naturel` qui
+borde la frontière du joueur sur la transition, et c'est donc elle qui décide en
+premier — mais le rang 4 tombe même contre l'ocre, à 48,18.
 ⚠ **LES SEIZE LIGNES `data:` NEUVES SONT QUATORZE**, et le compte s'explique :
 297 → 311 lignes, 292 → 306 URI, soit exactement les quatorze planches. Aucun
 atlas n'entre — une planche de sol fait 704 px, `tools/atlas.py` ne coud que des
