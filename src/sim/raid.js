@@ -95,7 +95,39 @@ export function pvMaxDeLUnite(id, niveau) {
 }
 
 /**
- * Les vagues du raid, tirées de l'armée posée.
+ * Une pièce d'armée devenue descripteur d'unité de combat, ou `null` si elle
+ * reste à la maison.
+ *
+ * ⚠ SORTIE DE `composerLesVagues` AU LOT FORMATION-ET-GARNISON, ET C'EST UN
+ * DÉPLACEMENT, PAS UNE RÈGLE NEUVE. Le passager passe par les mêmes deux
+ * filtres que son porteur — le plancher de PV et rien d'autre — et les écrire
+ * deux fois aurait été deux occasions de les faire diverger.
+ *
+ * @param {object} piece
+ * @returns {object|null}
+ */
+function uniteDeLaPiece(piece) {
+  const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
+  const pv = pvMax - (piece.degatsMilli ?? 0);
+  // Au plancher ou en dessous : elle reste à la maison. Elle n'est pas
+  // retirée de l'armée pour autant — elle attend d'être réparée.
+  if (pv <= APRES_RAID.plancherPvMilli) return null;
+  const unite = { id: piece.id, colonne: piece.colonne, niveau: piece.niveau };
+  // ⚠ `pvMilli` N'EST POSÉ QUE SI L'UNITÉ EST ABÎMÉE. Le passer toujours
+  // ferait entrer le forçage explicite de `creerCombat` sur le chemin
+  // ordinaire, et une unité intacte serait montée par une autre route que
+  // celle que les raids de référence empruntent.
+  if (pv < pvMax) unite.pvMilli = pv;
+  return unite;
+}
+
+/** Cette pièce voyage-t-elle DANS une autre ? Vrai seulement en formation. */
+function estPassagere(piece) {
+  return piece.embarqueDans !== null && piece.embarqueDans !== undefined;
+}
+
+/**
+ * Les vagues du raid, tirées de l'armée posée — ou d'une formation de raid.
  *
  * Rend aussi la liste des INDICES de `etat.armee` dans l'ordre de montage : le
  * moteur rend ses attaquants dans le même ordre, et c'est ce qui permet de
@@ -106,14 +138,45 @@ export function pvMaxDeLUnite(id, niveau) {
  * dans lequel l'unité descend. Une armée rangée dans l'ordre où le joueur l'a
  * posée entrerait dans le désordre.
  *
+ * ⚠⚠ `formation === null` GARDE EXACTEMENT LE COMPORTEMENT D'AVANT LE LOT
+ * FORMATION-ET-GARNISON — lecture de `baseCourante(etat).armee`, `actif === false`
+ * compris. Tous les appelants et tous les tests existants sont donc intacts, et
+ * c'est ce qui permet de PROUVER que la copie de travail est neutre : la même
+ * armée, passée par les deux chemins, doit rendre les mêmes vagues ET les mêmes
+ * indices.
+ *
+ * ⚠⚠ UN PASSAGER EST ÉMIS IMMÉDIATEMENT APRÈS SON PORTEUR, DANS SA VAGUE ET SUR
+ * SA COLONNE, ET SON INDICE D'ARMÉE ENTRE DANS `indices` À CETTE POSITION-LÀ.
+ * C'est la SEULE façon de ne pas faire lever `reporterLesDegats` : la tentation
+ * naturelle est de créer le passager AU DÉBARQUEMENT, par `ajouterEntite`, et
+ * elle ne marche pas — `resultat.attaquants` se construit en parcourant
+ * `etat.entites`, une entité créée en cours de combat s'y ajoute, et le report
+ * lève sur « N attaquants rendus pour M engagés ». Le passager est donc MONTÉ
+ * avec les autres et reste inerte jusqu'à sa sortie. Ce n'est pas un
+ * contournement : c'est ce qu'un passager EST — présent, et pas encore là.
+ *
+ * ⚠ ET IL NE PART PAS SANS SON PORTEUR. Un porteur laissé à la maison — drapeau
+ * `actif`, ou plancher de PV — garde son passager avec lui : « elle part dans la
+ * vague du véhicule » n'a pas de sens si le véhicule ne part pas.
+ *
  * @param {object} etat
+ * @param {Array<object>|null} [formation] copie de travail alignée par indice
  * @returns {{vagues: Array<Array<object>>, indices: Array<number>}}
  */
-export function composerLesVagues(etat) {
+export function composerLesVagues(etat, formation = null) {
   const laBase = baseCourante(etat);
+  const liste = formation ?? laBase.armee;
   const parVague = new Map();
-  const ordonnees = laBase.armee
+  // Porteur → indice de son passager. Vide sur le chemin `etat.armee`, qui ne
+  // porte jamais `embarqueDans` : la boucle ci-dessous est alors la même
+  // qu'avant, à la lettre.
+  const passagers = new Map();
+  liste.forEach((piece, index) => {
+    if (estPassagere(piece)) passagers.set(piece.embarqueDans, index);
+  });
+  const ordonnees = liste
     .map((piece, index) => ({ piece, index }))
+    .filter(({ piece }) => !estPassagere(piece))
     .sort((a, b) => a.piece.vague - b.piece.vague || a.piece.colonne - b.piece.colonne);
 
   const indices = [];
@@ -133,20 +196,25 @@ export function composerLesVagues(etat) {
     // ⚠ AVANT LE CALCUL DES PV, et c'est de la lecture, pas du résultat : une
     // unité qui reste à la maison n'a pas besoin qu'on mesure sa santé.
     if (piece.actif === false) continue;
-    const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
-    const pv = pvMax - (piece.degatsMilli ?? 0);
-    // Au plancher ou en dessous : elle reste à la maison. Elle n'est pas
-    // retirée de l'armée pour autant — elle attend d'être réparée.
-    if (pv <= APRES_RAID.plancherPvMilli) continue;
+    const unite = uniteDeLaPiece(piece);
+    if (unite === null) continue;
     if (!parVague.has(piece.vague)) parVague.set(piece.vague, []);
-    const unite = { id: piece.id, colonne: piece.colonne, niveau: piece.niveau };
-    // ⚠ `pvMilli` N'EST POSÉ QUE SI L'UNITÉ EST ABÎMÉE. Le passer toujours
-    // ferait entrer le forçage explicite de `creerCombat` sur le chemin
-    // ordinaire, et une unité intacte serait montée par une autre route que
-    // celle que les raids de référence empruntent.
-    if (pv < pvMax) unite.pvMilli = pv;
     parVague.get(piece.vague).push(unite);
     indices.push(index);
+
+    // --- le passager, s'il y en a un, JUSTE derrière son porteur -----------
+    const indexPassager = passagers.get(index);
+    if (indexPassager === undefined) continue;
+    const passager = liste[indexPassager];
+    if (passager.actif === false) continue;
+    const embarquee = uniteDeLaPiece(passager);
+    if (embarquee === null) continue;
+    // ⚠ SA COLONNE EST CELLE DU PORTEUR, ET ELLE NE PEUT PAS ÊTRE LA SIENNE :
+    // `embarquerEnFormation` la lui a retirée pour libérer sa case.
+    embarquee.colonne = piece.colonne;
+    embarquee.embarquee = true;
+    parVague.get(piece.vague).push(embarquee);
+    indices.push(indexPassager);
   }
 
   const vagues = [...parVague.keys()].sort((a, b) => a - b).map((v) => parVague.get(v));
@@ -160,12 +228,20 @@ export function composerLesVagues(etat) {
  * `sim/state.js` : l'écran doit pouvoir griser un bouton et DIRE pourquoi. C'est
  * `executerRaid` qui lève, et seulement si on l'appelle quand même.
  *
+ * ⚠ ELLE PREND LA FORMATION DEPUIS LE LOT FORMATION-ET-GARNISON, ET ELLE DOIT
+ * LA PRENDRE. Le refus `sans-armee` se juge sur ce qui PART : depuis que le
+ * drapeau `actif` vit dans la copie de travail et non plus dans `etat.armee`,
+ * une formation entièrement désactivée laisserait passer un raid que le moteur
+ * résoudrait sans un seul attaquant — points payés, combat perdu, et le bouton
+ * n'aurait rien dit. Le défaut est `null`, donc l'ancien comportement.
+ *
  * @param {object} etat
  * @param {{position: object}} baseAttaquante
  * @param {{rangee: number, colonne: number}} cible
+ * @param {Array<object>|null} [formation]
  * @returns {Array<{code: string, message: string}>}
  */
-export function problemesDuRaid(etat, baseAttaquante, cible) {
+export function problemesDuRaid(etat, baseAttaquante, cible, formation = null) {
   const problemes = [];
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
   if (site === null) {
@@ -201,7 +277,7 @@ export function problemesDuRaid(etat, baseAttaquante, cible) {
     });
   }
 
-  const { vagues } = composerLesVagues(etat);
+  const { vagues } = composerLesVagues(etat, formation);
   if (vagues.length === 0) {
     problemes.push({
       code: 'sans-armee',
@@ -440,15 +516,22 @@ export function garderLeRapport(etat, rapport) {
 /**
  * Lance un raid, du paiement au retour.
  *
+ * ⚠ `options.formation` EST LA COPIE DE TRAVAIL DE L'ÉCRAN DE RAID, ET ELLE NE
+ * TOUCHE PAS L'ÉTAT. Absente, le raid part de `etat.armee` exactement comme
+ * avant le lot FORMATION-ET-GARNISON. Présente, elle décide de tout ce qui part
+ * — l'ordre, les activités, les embarquements — sans qu'une seule ligne
+ * n'atterrisse dans la sauvegarde.
+ *
  * @param {object} etat modifié en place
  * @param {{position: object}} baseAttaquante
  * @param {{rangee: number, colonne: number}} cible
- * @param {{maxTicks?: number}} [options]
+ * @param {{maxTicks?: number, formation?: Array<object>}} [options]
  * @returns {object} rapport du raid
  */
 export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   const laBase = baseCourante(etat);
-  const problemes = problemesDuRaid(etat, baseAttaquante, cible);
+  const formation = options.formation ?? null;
+  const problemes = problemesDuRaid(etat, baseAttaquante, cible, formation);
   if (problemes.length > 0) {
     throw new Error(`raid impossible — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
@@ -482,7 +565,7 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // `ouvrage` reste à zéro — aucun POI ne bénéficie à l'Ouvrage —, mais la forme
   // est symétrique, comme `modulesDebloques` depuis MODULES-E.
   const montage = montageDuRaid(etat, site);
-  const { vagues, indices } = composerLesVagues(etat);
+  const { vagues, indices } = composerLesVagues(etat, formation);
   const resultat = resoudre(
     creerCombat({ ...montage, vagues }),
     { maxTicks: options.maxTicks ?? TICKS_MAX_COMBAT },
@@ -592,10 +675,16 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
  * combat : le perdre en route changerait la borne du combat simulé, et le
  * simulateur cesserait d'être exact — la seule propriété qu'on lui demande.
  *
+ * ⚠⚠ ET C'EST CE QUI SERT LA FORMATION DE RAID GRATUITEMENT. `options.formation`
+ * traverse par le même « en entier » : le simulateur reçoit la MÊME formation
+ * que le vrai raid, sans une ligne de plus. La formation n'est pas clonée avec
+ * l'état — elle ne vit pas dedans —, et c'est sans conséquence : `executerRaid`
+ * la LIT sans jamais l'écrire.
+ *
  * @param {object} etat NON modifié
  * @param {{position: object}} baseAttaquante
  * @param {{rangee: number, colonne: number}} cible
- * @param {{maxTicks?: number}} [options]
+ * @param {{maxTicks?: number, formation?: Array<object>}} [options]
  * @returns {object} le rapport d'`executerRaid`, plus `simule: true`
  */
 export function simulerRaid(etat, baseAttaquante, cible, options = {}) {

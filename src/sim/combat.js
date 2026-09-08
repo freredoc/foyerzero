@@ -94,6 +94,18 @@ export const VAGUES_MAX = GRILLE.vaguesParRaid;
 export const RANGEE_APPARITION = GRILLE.bandes.deploiement.derniere;
 
 /**
+ * La première rangée AU-DELÀ de la défense — « a traversé la défense » vaut
+ * l'avoir atteinte.
+ *
+ * ⚠⚠ LE SEUIL SE LIT DANS `GRILLE.bandes`, IL NE S'ÉCRIT JAMAIS `11`. La bande
+ * de défense va des rangées 3 à 10 — les huit rangées d'Ethan, 08/09 : « a
+ * traversé la défense = les huit rangées de défense franchies » — et la première
+ * rangée des bâtiments est ce qui est au-delà. Un `11` en dur serait faux le
+ * jour où une bande change d'un cran, et rien ne le dirait.
+ */
+export const RANGEE_DEFENSE_FRANCHIE = GRILLE.bandes.batiments.premiere;
+
+/**
  * Facteur commun des trois échelles internes : milli-case, milli-PV, millième.
  * Une seule constante, parce qu'il n'y a qu'une seule convention.
  */
@@ -521,9 +533,23 @@ function peutTirer(e, p) {
   return COLONNES_DEGATS.some((colonne) => p.degatsColonne[colonne] > 0);
 }
 
-/** Une entité vivante et encore sur la grille. */
+/**
+ * Une entité vivante, encore sur la grille, et pas embarquée.
+ *
+ * ⚠⚠ CETTE NÉGATION-LÀ FAIT CINQ COMPORTEMENTS D'UN COUP, ET IL FAUT SAVOIR
+ * LESQUELS. `estActive` est lue par `construireOccupation` — un passager ne
+ * prend donc aucune case et n'en bloque aucune —, par `ciblage` — personne ne le
+ * vise —, par `tir` — il ne tire pas —, par `deplacement` — il n'avance pas — et
+ * par `conditionsDeFin` — un raid ne se termine pas « attaquants » parce qu'il
+ * ne reste que des passagers. Écrire cinq gardes séparées aurait été cinq
+ * occasions d'en oublier une.
+ *
+ * ⚠ ET IL S'ENSUIT QU'UN PASSAGER NE PREND AUCUN DÉGÂT PENDANT LE TRAJET :
+ * `appliquerDegats` le saute aussi. « Elle sort avec ses PV du départ » est donc
+ * vrai sans une ligne de plus — Ethan, 08/09.
+ */
 function estActive(e) {
-  return e.vivant && !e.sorti;
+  return e.vivant && !e.sorti && !e.embarquee;
 }
 
 /**
@@ -564,7 +590,7 @@ function verifierEntierPositif(valeur, contexte) {
  */
 function ajouterEntite(
   etat, contexte,
-  { camp, genre, id, rangee, colonne, pvMilli, reserve, niveau, proprietaire },
+  { camp, genre, id, rangee, colonne, pvMilli, reserve, niveau, proprietaire, embarquee },
   casesPrises, obstaclesIndex,
 ) {
   const p = TABLES_PROFIL[genre][id];
@@ -579,7 +605,12 @@ function ajouterEntite(
   if (typeObstacleSur(obstaclesIndex, rangee, colonne) !== undefined) {
     throw new Error(`combat : ${ou} est posée sur un obstacle`);
   }
-  if (casesPrises !== null) {
+  // ⚠ UN PASSAGER EST LE SEUL CAS LÉGITIME DE DEUX UNITÉS SUR UNE CASE, et
+  // l'exemption ne va pas d'un pouce plus loin : il est monté SUR la case de son
+  // porteur, il n'y occupe rien, et `estActive` le tient hors de l'occupation
+  // dérivée. Sans cette exception, le montage lèverait sur la pièce même qu'il
+  // vient de composer.
+  if (casesPrises !== null && embarquee !== true) {
     const cle = cleCase(rangee, colonne);
     if (casesPrises.has(cle)) {
       throw new Error(`combat : ${ou} occupe la même case que « ${casesPrises.get(cle)} »`);
@@ -711,6 +742,16 @@ function ajouterEntite(
   // remplit `etat.modulesDebloques` AVANT de monter la moindre entité (voir
   // plus bas), donc `moduleActif` est appelable ici. Le poser au premier tick
   // laisserait passer un tick de tir sans la moindre protection.
+  // ⚠⚠ `embarquee` N'EST POSÉ QUE SUR UNE PASSAGÈRE, ET C'EST DÉLIBÉRÉ. Un champ
+  // écrit sur TOUTES les entités entrerait dans `serialiserEtat`, donc dans
+  // l'empreinte d'état des deux cents témoins de `test/temoins-combat.js` : les
+  // deux cents rougiraient d'un coup, sur des montages où pas un seul passager
+  // n'embarque. Le témoin ne se rafraîchit pas — « un témoin régénéré par la
+  // même main que le code suivrait l'erreur qu'il devrait attraper » —, donc
+  // c'est le CHAMP qui reste absent là où il n'a rien à dire. Il passe à `false`
+  // au débarquement : sur les entités qui embarquent, il porte la vérité
+  // courante et rien d'autre.
+  if (embarquee === true) entite.embarquee = true;
   if (moduleActif(etat, entite, p, 'bouclier')) entite.bouclierMilli = pvMaxMilli;
   // ⚠⚠ EN MILLI-CASES, PUIS AU CARRÉ — jamais l'inverse. Une case vaut 1 000
   // milli, et `distanceCarree` compare des carrés de milli-cases : deux cases
@@ -914,11 +955,26 @@ export function creerCombat(montage) {
       if (typeObstacleSur(obstaclesIndex, rangee, u.colonne) !== undefined) {
         throw new Error(`combat : ${ou} est posée sur un obstacle`);
       }
-      const cle = cleCase(rangee, u.colonne);
-      if (cases.has(cle)) {
-        throw new Error(`combat : ${ou} occupe la même case que « ${cases.get(cle)} »`);
+      // ⚠⚠ UNE PASSAGÈRE DOIT SUIVRE IMMÉDIATEMENT SON PORTEUR, ET C'EST LE
+      // MONTAGE QUI LE GARANTIT. Tout le reste en dépend : `apparitionDeVague`
+      // la fait entrer avec la descripteure qui la précède, et `indices` de
+      // `composerLesVagues` compte sur cet ordre-là pour apparier les dégâts.
+      // Un montage qui l'ouvrirait en tête de vague, ou après une autre
+      // passagère, donnerait un passager sans porteur — et le report des dégâts
+      // tomberait d'un cran sans qu'aucun message ne le dise.
+      if (u.embarquee === true && (descripteurs.length === 0
+        || descripteurs[descripteurs.length - 1].embarquee === true)) {
+        throw new Error(`combat : ${ou} est embarquée et ne suit aucun porteur`);
       }
-      cases.set(cle, u.id);
+      const cle = cleCase(rangee, u.colonne);
+      // ⚠ ET ELLE NE PREND PAS DE CASE : c'est le seul cas légitime de deux
+      // unités sur une case, et il ne s'étend pas d'un pouce.
+      if (u.embarquee !== true) {
+        if (cases.has(cle)) {
+          throw new Error(`combat : ${ou} occupe la même case que « ${cases.get(cle)} »`);
+        }
+        cases.set(cle, u.id);
+      }
       descripteurs.push({
         id: u.id,
         colonne: u.colonne,
@@ -926,6 +982,13 @@ export function creerCombat(montage) {
         pvMilli: u.pvMilli,
         reserve: u.reserve,
         niveau: u.niveau,
+        // ⚠ `u.embarquee` TEL QUEL, JAMAIS `u.embarquee === true`. Il vaut
+        // `undefined` pour toute unité ordinaire — comme `pvMilli` et `reserve`
+        // juste au-dessus —, et `JSON.stringify` laisse tomber une clé
+        // `undefined` : les descripteures d'un montage sans passager rendent
+        // donc les MÊMES octets qu'avant ce lot. Écrire `false` ferait rougir
+        // les deux cents témoins par `etat.vagues` et `etat.enAttente`.
+        embarquee: u.embarquee,
       });
     }
     etat.vagues.push(descripteurs);
@@ -1056,13 +1119,30 @@ function apparitionDeVague(etat, casesPrises = null) {
 
   const occupation = construireOccupation(etat);
   const restants = [];
+  // La dernière entité entrée qui puisse porter quelqu'un, et le fait que la
+  // descripteure d'avant soit restée en attente.
+  //
+  // ⚠⚠ UNE PASSAGÈRE ENTRE AVEC SON PORTEUR, OU PAS DU TOUT, ET C'EST CE QUI
+  // GARDE L'APPARIEMENT DES DÉGÂTS. `construireResultat` rend les attaquants
+  // dans l'ORDRE D'INSERTION ; `composerLesVagues` a rangé la passagère juste
+  // derrière son porteur dans `indices`. Une passagère qui entrerait pendant que
+  // son porteur attend une case libre s'insérerait AVANT lui, et le raid
+  // reporterait les dégâts d'un cran de travers, en silence. Elle n'a par
+  // ailleurs aucune case à prendre : la sienne est celle du porteur.
+  let porteur = null;
+  let precedenteRetenue = false;
   for (const d of etat.enAttente) {
     const p = PROFILS_UNITE[d.id];
-    const libre = !p.bloquant || occupantDe(occupation, d.rangee, d.colonne) === undefined;
+    const embarquee = d.embarquee === true;
+    const libre = embarquee
+      ? !precedenteRetenue
+      : (!p.bloquant || occupantDe(occupation, d.rangee, d.colonne) === undefined);
     if (!libre) {
       restants.push(d);
+      precedenteRetenue = true;
       continue;
     }
+    precedenteRetenue = false;
     const entite = ajouterEntite(
       etat,
       'attaquant',
@@ -1070,10 +1150,23 @@ function apparitionDeVague(etat, casesPrises = null) {
       casesPrises ?? null,
       obtenirIndexObstacles(etat),
     );
+    if (embarquee) {
+      // ⚠ LE LIEN SE POSE ICI, ET IL SE LIT DE L'ORDRE D'ENTRÉE. `creerCombat`
+      // refuse déjà un montage où une passagère ne suit pas un porteur : ce
+      // `porteur` ne peut donc pas être nul, et le débarquement a l'ancrage
+      // qu'il lui faut — la position du porteur, morte ou vive.
+      entite.porteurIndice = porteur.indice;
+      continue;
+    }
+    porteur = entite;
     if (p.bloquant) poser(occupation, d.rangee, d.colonne, entite.indice);
     // ⚠ L'APPARITION EST UN FAIT DU MOTEUR, PAS UN DIFF. Une unité qui reste en
     // attente faute de case libre n'apparaît pas — elle sera journalisée le tick
     // où elle entre vraiment, et jamais deux fois.
+    //
+    // ⚠ ET UNE PASSAGÈRE N'APPARAÎT PAS AU MONTAGE : elle est présente et pas
+    // encore là. Elle entre au journal le tick où elle DÉBARQUE, une seule fois,
+    // par le même canal qu'une vague.
     etat.journal.apparitions.push(faitDeLEntite(entite));
   }
   etat.enAttente = restants;
@@ -2536,6 +2629,94 @@ function avancer(etat, e, p, occupation, obstacles) {
 }
 
 /**
+ * Une case peut-elle accueillir une entité qui y SORTIRAIT ?
+ *
+ * ⚠ C'EST LE TEST D'`apparitionDeVague`, ÉCRIT UNE FOIS DE PLUS ET PAS UNE FOIS
+ * AUTREMENT : dans la grille, sans obstacle, et sans occupante bloquante. La
+ * différence est qu'ici on ne peut pas LEVER — `ajouterEntite` refuse une case
+ * hors grille ou sur un obstacle par une exception, ce qui serait la fin du
+ * combat au lieu d'une sortie retardée d'un tick.
+ */
+function caseAccueille(occupation, obstacles, p, rangee, colonne) {
+  if (!estDansLaGrille(rangee, colonne)) return false;
+  if (typeObstacleSur(obstacles, rangee, colonne) !== undefined) return false;
+  return !p.bloquant || occupantDe(occupation, rangee, colonne) === undefined;
+}
+
+/**
+ * 7 bis. Le débarquement des passagers du module Garnison.
+ *
+ * ⚠⚠ APRÈS `retirerLesMorts` ET APRÈS `deplacement`, ET LES DEUX COMPTENT.
+ * Après le retrait des morts, parce qu'un porteur détruit à l'étape 6 doit
+ * rendre son passager AU MÊME TICK ; après le déplacement, parce qu'un porteur
+ * qui franchit la ligne à l'étape 7 doit la rendre au tick du franchissement, et
+ * pas au suivant. Le passager sort donc de la rangée où le porteur EST, jamais
+ * de celle où il était.
+ *
+ * DEUX CONDITIONS, ET UNE SEULE SUFFIT — Ethan, 08/09 : « elle débarque derrière
+ * lui quand il a franchi les huit rangées de défense, ou quand il est détruit,
+ * sans pénalité ».
+ *
+ * ⚠⚠ LE PORTEUR QUI RENTRE À LA BASE EMMÈNE SON PASSAGER. Un porteur qui passe
+ * `sorti` par le repli n'a rien débarqué : le passager rentre AVEC lui, et il
+ * compte parmi les survivants. Sans cette règle, il resterait embarqué pour
+ * toujours dans un porteur absent, et il compterait parmi les survivants sans
+ * qu'on sache où il est.
+ *
+ * ⚠ AUCUNE CASE LIBRE : IL RESTE EMBARQUÉ, ET ON RÉESSAIE AU TICK SUIVANT. C'est
+ * le comportement d'`etat.enAttente`, et c'est le seul qui ne perde personne.
+ *
+ * ⚠ ET SI LE PORTEUR EST MORT, SA DERNIÈRE POSITION SERT D'ANCRAGE : une entité
+ * morte ne bouge plus, `rangeeMilli` et `colonneMilli` disent donc où elle est
+ * tombée.
+ */
+function debarquements(etat) {
+  let occupation = null;
+  let obstacles = null;
+  for (const e of etat.entites) {
+    if (e.embarquee !== true) continue;
+    const porteur = etat.entites[e.porteurIndice];
+    if (porteur.sorti) {
+      // Il n'a pas débarqué, il est rentré : `embarquee` reste vrai, il est
+      // toujours dans le véhicule.
+      e.sorti = true;
+      continue;
+    }
+    const rangeePorteur = caseDepuisMilli(porteur.rangeeMilli);
+    if (porteur.vivant && rangeePorteur < RANGEE_DEFENSE_FRANCHIE) continue;
+
+    // ⚠ L'OCCUPATION SE CONSTRUIT AU PREMIER DÉBARQUEMENT, PAS À CHAQUE TICK.
+    // Elle est dérivée, donc chère ; la plupart des ticks n'en ont aucun besoin.
+    if (occupation === null) {
+      occupation = construireOccupation(etat);
+      obstacles = obtenirIndexObstacles(etat);
+    }
+    const p = profil(e);
+    const colonne = caseColonne(porteur);
+    // ⚠⚠ L'AÉRONEF LARGUE DESSOUS S'IL Y A DE LA PLACE, SINON DERRIÈRE — Ethan,
+    // 08/09. Le discriminant est `bloquant`, c'est-à-dire la masse nulle, et pas
+    // une liste de châssis : une pièce qui deviendrait aérienne suivrait la
+    // règle sans qu'on y touche. Un porteur terrestre, lui, occupe sa propre
+    // case : il n'a que celle de derrière à offrir.
+    const essais = profil(porteur).bloquant
+      ? [rangeePorteur - 1]
+      : [rangeePorteur, rangeePorteur - 1];
+    for (const rangee of essais) {
+      if (!caseAccueille(occupation, obstacles, p, rangee, colonne)) continue;
+      e.rangeeMilli = milliDepuisCase(rangee);
+      e.colonneMilli = milliDepuisCase(colonne);
+      e.embarquee = false;
+      if (p.bloquant) poser(occupation, rangee, colonne, e.indice);
+      // ⚠ ELLE ENTRE PAR LE CANAL D'UNE VAGUE, ET C'EST TOUT CE QU'IL FALLAIT.
+      // Le rendu et le pack sonore voient une unité entrer sans que ni l'un ni
+      // l'autre ait à connaître le module Garnison.
+      etat.journal.apparitions.push(faitDeLEntite(e));
+      break;
+    }
+  }
+}
+
+/**
  * 8. Consommation de réserve : un tir consommé par tir effectué. Seuls les
  * attaquants ont une réserve ; la défense tire sans compter.
  */
@@ -2605,6 +2786,7 @@ export function tick(etat) {
   retirerLesMorts(etat); //                      6. retrait des morts
   declencherBoosters(etat); //                   6 bis. réaction aux blessures
   deplacement(etat); //                          7. déplacement
+  debarquements(etat); //                        7 bis. débarquement des passagers
   consommerReserve(etat); //                     8. consommation de réserve
   conditionsDeFin(etat); //                      9. conditions de fin
   return etat;

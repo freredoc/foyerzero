@@ -1340,6 +1340,14 @@ function exigerForce(force) {
  * Les défauts STRUCTURELS d'un effectif : ce qui empêcherait la sauvegarde
  * d'être relue, pas ce qui empêcherait le joueur de jouer.
  *
+ * ⚠⚠ ELLE EST EXPORTÉE DEPUIS LE LOT FORMATION-ET-GARNISON, ET C'EST TOUT CE
+ * QUE CE LOT LUI DEMANDE. `sim/formation-de-raid.js` juge une COPIE de l'armée
+ * qui ne vit pas dans l'état : elle prend déjà une LISTE et non un état, donc
+ * elle travaille sur la copie telle quelle. Écrire une seconde table de refus
+ * pour la préparation de raid aurait donné deux jugements pour une seule grille
+ * de composition, et le premier désaccord se lirait comme un bogue de jeu : le
+ * joueur poserait en Offense ce que le raid refuserait, ou l'inverse.
+ *
  * ⚠⚠ LE BUDGET N'EST PAS ICI, ET SON ABSENCE EST DÉLIBÉRÉE. Une composition qui
  * dépasse son budget est un fait de JEU, pas un fait de programme : elle arrive
  * pour de bon dès que le budget BAISSE — QG démoli, QG tombé au raid — sous une
@@ -1359,7 +1367,7 @@ function exigerForce(force) {
  *   pièce elle-même, quand on la vérifie ou qu'on la déplace
  * @returns {Array<{code: string, message: string}>}
  */
-function problemesDeLEffectif(force, liste, piece, indexIgnore, obstacles = []) {
+export function problemesDeLEffectif(force, liste, piece, indexIgnore, obstacles = []) {
   const f = exigerForce(force);
   const problemes = [];
 

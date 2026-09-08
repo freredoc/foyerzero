@@ -26,7 +26,7 @@ import { ATLAS } from '../src/data/atlas.js';
 import { couchesDeLEntite } from '../src/render/scene.js';
 import { etatDeLaPose } from '../src/sim/reparation.js';
 import {
-  creerEtat, serialiser, charger, migrer, poser, exigerAucunePerte,
+  creerEtat, serialiser, charger, migrer, poser, exigerAucunePerte, SAVE_VERSION,
 } from '../src/sim/state.js';
 import { poserLaBaseSur } from '../src/sim/deplacement.js';
 import { baseCourante } from '../src/sim/base-courante.js';
@@ -300,12 +300,19 @@ test('B4 T6 — aucun camp écrit en dur dans le chemin des bâtiments', () => {
 // ---------------------------------------------------------------------------
 
 test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'un', () => {
-  // ⚠ LA GARDE DU NUMÉRO DE SAUVEGARDE APPARTIENT AU MAILLON LE PLUS RÉCENT,
-  // une seule fois — la règle du dépôt depuis le lot SITE-ENTAMÉ.
-  assert.equal(
-    JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8')).version,
-    '0.99.31',
-  );
+  // ⚠⚠ LA GARDE DU NUMÉRO DE SAUVEGARDE APPARTIENT AU MAILLON LE PLUS RÉCENT,
+  // une seule fois — la règle du dépôt depuis le lot SITE-ENTAMÉ. Elle porte sur
+  // `SAVE_VERSION`, et sur rien d'autre.
+  //
+  // ⚠⚠ ELLE LISAIT `package.json.version` ET C'ÉTAIT LA MAUVAISE GRANDEUR —
+  // corrigé au lot FORMATION-ET-GARNISON, 08/09. Le numéro de VERSION du jeu
+  // bump à chaque lot qui change `dist/index.html` (§5) : épinglé à `0.99.31`,
+  // ce test tombait au premier lot suivant, pour une raison qui n'a rien à voir
+  // avec la sauvegarde. Ce que le maillon doit garder, c'est le format de
+  // l'état — la migration v28 → v29 qu'entoure ce fichier —, et c'est ce que
+  // cette ligne-ci mesure désormais. Le nom de la garde et ce qu'elle lit
+  // s'accordent enfin.
+  assert.equal(SAVE_VERSION, 29);
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

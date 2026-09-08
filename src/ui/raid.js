@@ -40,9 +40,22 @@
 import { EMPLACEMENTS_ASSAUT, BATIMENTS, ECRAN_RAID } from '../data/sites.js';
 import { UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { TICK_MS } from '../sim/clock.js';
+// ⚠⚠ `reglerActivite` N'EST PLUS IMPORTÉE, ET C'EST L'ARBITRAGE D'ETHAN DU
+// 08/09. Le drapeau « reste à la maison » n'écrit plus dans `etat.armee` : il
+// vit dans la FORMATION, une copie de travail qui repart de l'armée d'Offense à
+// chaque ouverture de cet écran. Les deux fonctions de déplacement d'effectif
+// partent avec elle, pour la même raison — cet écran ne range plus l'armée, il
+// range une copie.
 import {
-  deplacerEffectif, problemesDuDeplacementDEffectif, reglerActivite,
-} from '../sim/state.js';
+  formationDepuisLArmee, resynchroniserLaFormation, reglerActiviteEnFormation,
+  problemesDuDeplacementEnFormation, deplacerEnFormation,
+  problemesDeLaPermutationEnFormation, permuterEnFormation,
+  problemesDeLEmbarquement, embarquerEnFormation,
+  problemesDuDebarquementEnFormation, debarquerEnFormation,
+  estPassager, estPorteur, passagerDe,
+  MODULE_DE_TRANSPORT, CHASSIS_DU_PASSAGER,
+} from '../sim/formation-de-raid.js';
+import { nomDuModule } from '../sim/recherche.js';
 import {
   reparerUnePiece, toutReparer, problemesDeLaReparationDUnePiece,
 } from '../sim/reparation.js';
@@ -213,35 +226,62 @@ export function lignesDuResultat(rapport) {
   return lignes;
 }
 
+/** Ce qu'une vignette dit d'une pièce : son identité et sa santé. */
+function vignetteDeLaPiece(piece, index) {
+  const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
+  return {
+    index,
+    id: piece.id,
+    nom: UNITES[piece.id].nom.joueur,
+    niveau: piece.niveau,
+    actif: piece.actif !== false,
+    degatsMilli: piece.degatsMilli ?? 0,
+    // Ce qui reste de la pièce, en pour-cent — la barre de vie de la vignette.
+    pvPct: Math.max(0, Math.round(((pvMax - (piece.degatsMilli ?? 0)) * 100) / pvMax)),
+  };
+}
+
 /**
  * Ce que l'écran affiche de l'armée : les quatre vagues, occupées ou vides.
  *
  * ⚠ FONCTION PURE, DONC FONCTION TESTÉE — le dépôt n'a ni jsdom ni navigateur,
  * et ce qui peut se vérifier sans écran doit l'être.
  *
+ * ⚠⚠ ELLE LIT LA FORMATION, PLUS `laBase.armee` — lot FORMATION-ET-GARNISON.
+ * C'est la copie de travail qui décide de ce qui est à l'écran : les positions,
+ * le drapeau d'activité et les embarquements y vivent, et `etat.armee` ne les
+ * voit jamais. L'`etat` reste nécessaire, et pour une seule question — le module
+ * Garnison est-il ACQUIS sur cette ligne, ce que la formation ne peut pas dire.
+ *
+ * ⚠ UN PASSAGER N'A PAS DE CASE, DONC PAS DE VIGNETTE À LUI. Il paraît sur la
+ * case de son porteur, par le badge — c'est la même règle que `vague: null`, vue
+ * du côté du dessin.
+ *
  * @param {object} etat
+ * @param {Array<object>} formation
  * @returns {Array<{numero: number, cases: Array<null|object>}>}
  */
-export function vaguesDeLArmee(etat) {
-  const laBase = baseCourante(etat);
+export function vaguesDeLArmee(etat, formation) {
   const vagues = [];
   for (let numero = 1; numero <= NB_VAGUES; numero += 1) {
     const cases = new Array(NB_COLONNES).fill(null);
     vagues.push({ numero, cases });
   }
-  laBase.armee.forEach((piece, index) => {
+  formation.forEach((piece, index) => {
+    if (estPassager(piece)) return;
     const v = vagues[piece.vague - 1];
     if (v === undefined || piece.colonne < 1 || piece.colonne > NB_COLONNES) return;
-    const pvMax = pvMaxDeLUnite(piece.id, piece.niveau);
+    const indexPassager = passagerDe(formation, index);
     v.cases[piece.colonne - 1] = {
-      index,
-      id: piece.id,
-      nom: UNITES[piece.id].nom.joueur,
-      niveau: piece.niveau,
-      actif: piece.actif !== false,
-      degatsMilli: piece.degatsMilli ?? 0,
-      // Ce qui reste de la pièce, en pour-cent — la barre de vie de la vignette.
-      pvPct: Math.max(0, Math.round(((pvMax - (piece.degatsMilli ?? 0)) * 100) / pvMax)),
+      ...vignetteDeLaPiece(piece, index),
+      // ⚠ DEUX QUESTIONS, DEUX CHAMPS, ET ELLES NE SE CONFONDENT PAS — c'est le
+      // couple exact de `reparerLaGarnison`. `porteur` dit « ce joueur-là peut
+      // s'en servir » et sert la phrase du survol ; le GESTE, lui, se route sur
+      // la ligne qui PORTE le module, acquis ou non, pour que le refus
+      // « le module Garnison n'est pas acquis » puisse s'afficher.
+      porteur: estPorteur(etat, piece.id),
+      passager: indexPassager === null ? null
+        : vignetteDeLaPiece(formation[indexPassager], indexPassager),
     };
   });
   return vagues;
@@ -427,18 +467,23 @@ export function ficheDeLEntite(entite) {
   };
 }
 
-export function vueDuRaid(etat, cible) {
+export function vueDuRaid(etat, cible, formation = null) {
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
+  // ⚠ LA FORMATION EST FACULTATIVE, ET SON DÉFAUT N'EST PAS UNE COMMODITÉ. Sans
+  // elle, `problemesDuRaid` et `composerLesVagues` rendent EXACTEMENT ce qu'ils
+  // rendaient avant le lot FORMATION-ET-GARNISON — donc les appelants d'hier
+  // sont intacts. Avec elle, les trois grandeurs que l'écran affiche — le refus,
+  // les vagues, le nombre d'engagées — décrivent ce qui partira vraiment.
   const problemes = site === null ? [{ code: 'sans-cible', message: 'Plus rien à attaquer ici.' }]
-    : problemesDuRaid(etat, baseCourante(etat), cible);
+    : problemesDuRaid(etat, baseCourante(etat), cible, formation);
   const horsPortee = site === null || problemes.some((p) => p.code === 'hors-portee');
   return {
     site,
     problemes,
     peutAttaquer: problemes.length === 0,
     cout: horsPortee ? null : coutDUnRaid(etat, baseCourante(etat), cible),
-    vagues: vaguesDeLArmee(etat),
-    engagees: composerLesVagues(etat).indices.length,
+    vagues: vaguesDeLArmee(etat, formation ?? formationDepuisLArmee(etat)),
+    engagees: composerLesVagues(etat, formation).indices.length,
   };
 }
 
@@ -506,10 +551,9 @@ export function plafondDuZoom(dpr) {
 // d'ergonomie plutôt que de la résoudre d'initiative.
 //
 // ⚠ AUCUNE EXCEPTION NE REMONTE À L'ÉCRAN. `reparerUnePiece`, `toutReparer` et
-// `deplacerEffectif` LÈVENT ; c'est `problemesDe…` qui grise et qui dit le
-// manque. On demande, puis on agit — jamais un `try` autour du geste.
+// les cinq gestes de `sim/formation-de-raid.js` LÈVENT ; c'est `problemesDe…`
+// qui dit le manque. On demande, puis on agit — jamais un `try` autour du geste.
 
-/** Les modes de la barre du raid — même forme que `ACTIONS_ARMEE` d'Offense. */
 // ---------------------------------------------------------------------------
 // L'effondrement du site — lot EFFONDREMENT, 07/09/2026
 // ---------------------------------------------------------------------------
@@ -582,6 +626,17 @@ export function effondrees(entites, ecouleMs, dureeMs) {
   return new Set(ordre.slice(0, Math.floor(ordre.length * part)));
 }
 
+/**
+ * Les modes de la barre du raid — même forme que `ACTIONS_ARMEE` d'Offense.
+ *
+ * ⚠⚠ LES DEUX HANDLERS PRENNENT LA FORMATION EN TROISIÈME ARGUMENT, ET LES DEUX
+ * N'ÉCRIVENT PAS AU MÊME ENDROIT. « Réparer » écrit dans `etat.armee` — la santé
+ * d'une pièce est une grandeur de l'ÉTAT, et un raid doit l'emporter telle
+ * qu'elle est au départ ; « Activer » écrit dans la FORMATION, parce que le
+ * drapeau repart à vrai à la prochaine ouverture de l'écran. Un mode qui se
+ * tromperait de destination écrirait dans une copie que le raid emporte, ou dans
+ * une sauvegarde que rien ne remet à zéro.
+ */
 export const MODES_RAID = {
   reparer: {
     bouton: 'raid-reparer',
@@ -589,15 +644,19 @@ export const MODES_RAID = {
     invite: 'Mode RÉPARER : touchez l\'unité à réparer. Retouchez le bouton pour annuler.',
     problemes: (etat, index) => problemesDeLaReparationDUnePiece(etat, index),
     agir: (etat, index) => reparerUnePiece(etat, index),
+    // ⚠ ELLE ÉCRIT DANS `etat.armee`, DONC LA FORMATION DOIT SE REMETTRE À
+    // NIVEAU : elle porte une copie des dégâts, prise à l'ouverture de l'écran.
+    ecritSurLArmee: true,
   },
   activer: {
     bouton: 'raid-activer',
     libelle: 'Activer / désactiver',
     invite: 'Mode ACTIVER : touchez l\'unité à laisser à la maison, ou à renvoyer au raid.',
     problemes: () => [],
-    agir: (etat, index) => reglerActivite(
-      etat, 'armee', index, baseCourante(etat).armee[index].actif === false,
+    agir: (etat, index, formation) => reglerActiviteEnFormation(
+      formation, index, formation[index].actif === false,
     ),
+    ecritSurLArmee: false,
   },
 };
 
@@ -652,6 +711,23 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let atlas = null;
   let mode = null;
   let rapportCourant = null;
+  /**
+   * La formation de raid — la copie de travail de l'armée.
+   *
+   * ⚠⚠ ELLE SE RECONSTRUIT À CHAQUE OUVERTURE DE L'ÉCRAN, PAR `ouvrirSurLaCible`,
+   * ET C'EST LA SEULE PORTE. Ethan, 08/09 : « la formation de raid repart
+   * toujours de celle d'Offense, et toutes les unités repartent actives ».
+   * Une seconde reconstruction ailleurs — au retour d'un rapport, à la fin d'un
+   * déroulé — effacerait en silence le rangement que le joueur vient de faire.
+   *
+   * ⚠ ELLE NE VA JAMAIS DANS `etat`, ET NE SE SÉRIALISE PAS : elle vit ici, elle
+   * meurt avec l'écran. C'est ce qui fait que `SAVE_VERSION` ne bouge pas.
+   *
+   * ⚠ ET ELLE VAUT LA LISTE VIDE TANT QU'AUCUNE CIBLE N'EST OUVERTE, jamais
+   * `null` : `peindreVagues` et `vueDuRaid` la parcourent sans avoir à demander
+   * si elle existe.
+   */
+  let formation = [];
 
   // --- le déroulé ------------------------------------------------------------
   let combat = null;
@@ -1140,7 +1216,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     if (hote === null || etatCourant === null) return;
     hote.textContent = '';
     cellules.clear();
-    for (const vague of vaguesDeLArmee(etatCourant)) {
+    for (const vague of vaguesDeLArmee(etatCourant, formation)) {
       const bloc = doc.createElement('div');
       bloc.className = 'vague';
       const rangee = doc.createElement('div');
@@ -1182,6 +1258,32 @@ export function initialiserEcranRaid(doc, crochets = {}) {
           niveau.className = 'niveau';
           niveau.textContent = String(occupant.niveau);
           emplacement.appendChild(niveau);
+          // ⚠⚠ LE BADGE PASSAGER EST LE POINT LE PLUS FRAGILE DU LOT, ET IL VAUT
+          // MIEUX LE DIRE QUE L'ESPÉRER. La cible est un téléphone et une case
+          // de vague fait une trentaine de pixels : le badge fait 24 px CSS de
+          // côté au minimum — la borne de toucher que le dépôt emploie déjà pour
+          // les boutons — et porte `touch-action: none`, sans quoi le navigateur
+          // avalerait le glissement pour faire défiler la page. Si à l'usage il
+          // reste trop petit, la correction n'est PAS de l'agrandir
+          // indéfiniment : c'est d'ajouter un mode « Débarquer » à `MODES_RAID`,
+          // comme « Réparer ». Ce lot ne le fait pas, et le rapport pose la
+          // question à Ethan.
+          if (occupant.passager !== null) {
+            emplacement.classList.add('chargee');
+            const badge = doc.createElement('button');
+            badge.type = 'button';
+            badge.className = 'badge-passager';
+            badge.dataset.passager = String(occupant.passager.index);
+            badge.title = `${occupant.passager.nom} · niveau ${occupant.passager.niveau}`
+              + ` · embarquée · ${occupant.passager.pvPct} % de PV`;
+            // Le châssis de la passagère, pas son nom : la case est trop petite
+            // pour un mot, et le pictogramme est celui que le dépôt emploie déjà.
+            badge.appendChild(creerPictogramme(
+              doc, PICTOGRAMME_DU_CHASSIS[UNITES[occupant.passager.id].chassis],
+              { libelle: occupant.passager.nom },
+            ));
+            emplacement.appendChild(badge);
+          }
         }
         cellules.set(cle(vague.numero, colonne), emplacement);
         rangee.appendChild(emplacement);
@@ -1236,7 +1338,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       peindreVagues();
       return;
     }
-    m.agir(etatCourant, index);
+    m.agir(etatCourant, index, formation);
+    // ⚠⚠ UNE RÉPARATION CHANGE `etat.armee` SOUS UNE FORMATION DÉJÀ COPIÉE, ET
+    // SANS CETTE LIGNE LE RAID PARTIRAIT AVEC LES DÉGÂTS D'IL Y A CINQ MINUTES.
+    // Pire : une pièce remontée au-dessus du plancher de PV resterait à la
+    // maison, puisque c'est la formation que `composerLesVagues` lit. Aucun
+    // test ne l'aurait dit — les deux chemins sont muets.
+    if (m.ecritSurLArmee) resynchroniserLaFormation(etatCourant, formation);
     desarmer();
     peindreVagues();
     apresGeste();
@@ -1247,25 +1355,67 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // ⚠ POINTER EVENTS, PAS SOURIS. La cible est un téléphone : les événements de
   // souris n'y arrivent qu'en émulation, et jamais pendant un vrai glissement.
   //
-  // ⚠⚠ ET IL PASSE PAR `deplacerEffectif`, TOUJOURS. Le glisser-déposer est un
-  // GESTE D'ENTRÉE ; écrire la case d'arrivée en direct donnerait une seconde
-  // vérité sur qui peut aller où, et le premier désaccord se lirait comme un
-  // bogue de jeu. On demande à `problemesDuDeplacementDEffectif`, puis on agit.
+  // ⚠⚠ ET IL PASSE PAR LA FORMATION, TOUJOURS. Le glisser-déposer est un GESTE
+  // D'ENTRÉE ; écrire la case d'arrivée en direct donnerait une seconde vérité
+  // sur qui peut aller où, et le premier désaccord se lirait comme un bogue de
+  // jeu. On demande à `problemesDe…`, puis on agit — et jamais un `try` autour
+  // du geste : `deplacerEnFormation` LÈVE, c'est la liste de problèmes qui parle
+  // au joueur.
+  //
+  // ⚠⚠ QUATRE GESTES SUR LE MÊME GLISSEMENT, ET UN SEUL EST NEUF EN GÉOMÉTRIE.
+  // Déposer sur une case libre DÉPLACE ; sur une case occupée, on PERMUTE — sauf
+  // si l'on tient une infanterie et que la case porte un véhicule à module
+  // Garnison, auquel cas on EMBARQUE (Ethan, 08/09 : « glisser une escouade sur
+  // la case d'un porteur éligible »). Et ce qu'on tient peut être une passagère,
+  // prise sur son badge : elle DÉBARQUE sur une case libre, ou change de
+  // véhicule sur une case occupée.
   let saisie = null;
+
+  /** La ligne de cette pièce porte-t-elle le module Garnison, acquis ou non ? */
+  function ligneDeTransport(id) {
+    return nomDuModule('offense', id) === MODULE_DE_TRANSPORT;
+  }
+
+  /** L'indice de la pièce POSÉE sur cette case de la formation, ou `null`. */
+  function occupantDeLaCase(position) {
+    const trouve = formation.findIndex((piece) => !estPassager(piece)
+      && piece.vague === position.vague && piece.colonne === position.colonne);
+    return trouve === -1 ? null : trouve;
+  }
+
+  /** On demande, on agit si la liste est vide, on répète le refus sinon. */
+  function tenter(problemes, agir) {
+    if (problemes.length > 0) {
+      avis(problemes.map((p) => p.message).join(' ; '));
+      return;
+    }
+    agir();
+    avis('');
+    peindreVagues();
+    apresGeste();
+  }
 
   function surPointerDown(evenement) {
     const emplacement = evenement.target.closest?.('.emplacement');
     if (emplacement === null || emplacement === undefined || etatCourant === null) return;
     const index = emplacement.dataset.index;
-    // Un mode armé l'emporte sur le glissement : le doigt désigne, il ne traîne
-    // pas.
+    // ⚠ UN MODE ARMÉ L'EMPORTE TOUJOURS SUR LE GLISSEMENT : le doigt désigne, il
+    // ne traîne pas. La dette d'ergonomie déclarée en tête de ce fichier —
+    // modes tactiles et glissement sur la même grille 4 × 9 — reste entière, et
+    // ce lot ne l'aggrave pas.
     if (mode !== null) {
       if (index !== undefined) agirSur(Number(index));
       else desarmer();
       return;
     }
     if (index === undefined) return;
-    saisie = { index: Number(index), depuis: emplacement };
+    // ⚠ LE BADGE PREND LA PASSAGÈRE, LE RESTE DE LA CASE PREND LE PORTEUR. Sans
+    // ce départage, une escouade embarquée serait inatteignable au doigt : elle
+    // n'a plus de case à elle.
+    const badge = evenement.target.closest?.('.badge-passager');
+    const enMain = badge === null || badge === undefined
+      ? Number(index) : Number(badge.dataset.passager);
+    saisie = { index: enMain, depuis: emplacement };
     emplacement.classList.add('enmain');
     if (typeof emplacement.setPointerCapture === 'function') {
       emplacement.setPointerCapture(evenement.pointerId);
@@ -1284,15 +1434,59 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       vague: Number(arrivee.dataset.vague),
       colonne: Number(arrivee.dataset.colonne),
     };
-    const problemes = problemesDuDeplacementDEffectif(etatCourant, 'armee', index, position);
-    if (problemes.length > 0) {
-      avis(problemes.map((p) => p.message).join(' ; '));
+    const occupant = occupantDeLaCase(position);
+
+    // --- ce qu'on tient est une PASSAGÈRE ------------------------------------
+    if (estPassager(formation[index])) {
+      if (occupant === null) {
+        tenter(
+          problemesDuDebarquementEnFormation(formation, index, position),
+          () => debarquerEnFormation(formation, index, position),
+        );
+        return;
+      }
+      // Sur une case occupée : elle change de véhicule. Un occupant qui ne
+      // transporte personne rend `sansModule`, et le joueur lit pourquoi.
+      tenter(
+        problemesDeLEmbarquement(etatCourant, formation, index, occupant),
+        () => embarquerEnFormation(etatCourant, formation, index, occupant),
+      );
       return;
     }
-    deplacerEffectif(etatCourant, 'armee', index, position);
-    avis('');
-    peindreVagues();
-    apresGeste();
+
+    // --- case libre : on déplace ---------------------------------------------
+    if (occupant === null || occupant === index) {
+      tenter(
+        problemesDuDeplacementEnFormation(formation, index, position),
+        () => deplacerEnFormation(formation, index, position),
+      );
+      return;
+    }
+
+    // --- une infanterie sur une ligne qui transporte : on embarque -----------
+    //
+    // ⚠ LE ROUTAGE LIT LA LIGNE, PAS L'ACQUISITION. Sur un porteur dont le
+    // module n'est pas payé, le geste rend `moduleNonAcquis` — un refus qui dit
+    // au joueur où aller. Router sur `estPorteur` renverrait la permutation à sa
+    // place, et ce refus-là ne s'afficherait jamais.
+    if (UNITES[formation[index].id]?.chassis === CHASSIS_DU_PASSAGER
+      && ligneDeTransport(formation[occupant].id)) {
+      tenter(
+        problemesDeLEmbarquement(etatCourant, formation, index, occupant),
+        () => embarquerEnFormation(etatCourant, formation, index, occupant),
+      );
+      return;
+    }
+
+    // --- sinon on permute, passagères comprises ------------------------------
+    //
+    // ⚠ UNE PIÈCE CHARGÉE SE PERMUTE, ET SA PASSAGÈRE SUIT SANS UNE ÉCRITURE :
+    // elle n'a pas de case à elle, `embarqueDans` porte un INDICE, et les indices
+    // ne bougent pas — `permuterEnFormation` échange deux positions en place.
+    tenter(
+      problemesDeLaPermutationEnFormation(formation, index, occupant),
+      () => permuterEnFormation(formation, index, occupant),
+    );
   }
 
   const hoteVagues = $('raid-vagues');
@@ -1549,6 +1743,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   brancher('raid-tout-reparer', () => {
     if (etatCourant === null) return;
     const bilan = toutReparer(etatCourant);
+    // Même raison qu'au mode « Réparer » : la formation porte une copie des
+    // dégâts, et c'est elle que le raid emporte.
+    resynchroniserLaFormation(etatCourant, formation);
     desarmer();
     peindreVagues();
     apresGeste();
@@ -1580,7 +1777,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   /** Lance un raid — pour de bon, ou en simulation. */
   function lancer(simule) {
     if (etatCourant === null || cibleCourante === null) return;
-    const problemes = problemesDuRaid(etatCourant, baseCourante(etatCourant), cibleCourante);
+    const problemes = problemesDuRaid(
+      etatCourant, baseCourante(etatCourant), cibleCourante, formation,
+    );
     if (problemes.length > 0) { avis(problemes.map((p) => p.message).join(' ; ')); return; }
     desarmer();
     simulation = simule;
@@ -1589,10 +1788,14 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // lieu. Le recomposer ici en donnerait un second, voisin et non éprouvé.
     const site = siteDeLaCase(etatCourant, cibleCourante.rangee, cibleCourante.colonne);
     const montage = montageDuRaid(etatCourant, site);
-    const { vagues } = composerLesVagues(etatCourant);
+    const { vagues } = composerLesVagues(etatCourant, formation);
+    // ⚠ `options` PASSE EN ENTIER À `executerRaid` — c'est écrit dans l'en-tête
+    // de `simulerRaid` —, donc le simulateur reçoit la MÊME formation que le
+    // vrai raid sans une ligne de plus. Le vérifier plutôt que le croire : c'est
+    // `FG T4`.
     rapportCourant = simule
-      ? simulerRaid(etatCourant, baseCourante(etatCourant), cibleCourante)
-      : executerRaid(etatCourant, baseCourante(etatCourant), cibleCourante);
+      ? simulerRaid(etatCourant, baseCourante(etatCourant), cibleCourante, { formation })
+      : executerRaid(etatCourant, baseCourante(etatCourant), cibleCourante, { formation });
     // ⚠ LE SON NE PART QUE SUR LA VRAIE ATTAQUE. Une simulation ne commande
     // rien à personne : la faire sonner comme un ordre ferait croire au joueur
     // qu'il vient d'engager son armée. Un bandeau couvre déjà la vue pour la
@@ -1764,6 +1967,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // les trois doivent s'ouvrir sur la défense. Une valeur posée une seule fois
     // au câblage n'aurait tenu que pour la première.
     bandeCourante = BANDE_A_L_OUVERTURE;
+    // ⚠⚠ LA FORMATION REPART DE L'ARMÉE D'OFFENSE, ICI ET NULLE PART AILLEURS.
+    // Ethan, 08/09 : « elle repart toujours de celle d'Offense, et toutes les
+    // unités repartent actives ». C'est aussi le chemin de « Ré-attaquer », qui
+    // repasse par cette fonction : après un raid, l'armée est abîmée et le
+    // rangement de la passe précédente n'a plus de sens.
+    formation = formationDepuisLArmee(etat);
     coteVoulu = null;
     decalageX = 0;
     // ⚠ HORS BORNES, PAS ZÉRO, ET C'EST LE MÊME GESTE QU'`allerALaBande`. La
@@ -1785,7 +1994,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // fonction de la distance et du niveau du site, que ni une réparation ni
     // une activation ne changent. Il se peint donc à l'ouverture, comme le
     // titre, et pas à chaque image.
-    armerLAttaque(vueDuRaid(etat, cibleCourante).cout);
+    armerLAttaque(vueDuRaid(etat, cibleCourante, formation).cout);
     const titre = $('raid-titre');
     if (titre !== null && site !== null) {
       titre.textContent = `${site.type} · niveau ${site.niveau}`

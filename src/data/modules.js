@@ -77,7 +77,20 @@ export const MODULES = {
   },
   garnison: {
     libelle: 'Garnison',
-    cable: { offense: false, defense: false },
+    // ⚠ CÂBLÉ EN OFFENSE AU LOT FORMATION-ET-GARNISON, 08/09. `composerLesVagues`
+    // monte le passager avec son porteur, `estActive` le tient inerte pendant le
+    // trajet, et `debarquements` le fait sortir au franchissement ou à la
+    // destruction du véhicule.
+    //
+    // ⚠⚠ `defense` RESTE FAUX, ET C'EST UN CONSTAT, PAS UN OUBLI. Le Ratisseur
+    // porte bien `defense.module === 'garnison'` (`data/combat.js`), mais une
+    // pièce de garnison n'AVANCE pas : `deplacement` ne fait que DÉCALER le camp
+    // `defense`, il ne le fait jamais franchir la moindre ligne. Il n'y a donc
+    // nulle part où transporter qui que ce soit, et l'effet serait rigoureusement
+    // nul — exactement le motif du Tir de barrage et du Flashbang juste
+    // au-dessus. Ethan, 08/09 : « côté défense, on laisse un commentaire et on va
+    // régler ça après. »
+    cable: { offense: true, defense: false },
     description: 'peut embarquer une infanterie dans le véhicule ; elle débarque '
       + 'derrière le véhicule s\'il a traversé la défense, ou s\'il est détruit — '
       + 'dans ce cas, pas de pénalité sur l\'infanterie',

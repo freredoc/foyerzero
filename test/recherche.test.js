@@ -279,26 +279,29 @@ test('T11 — un module non câblé ne se vend pas, même unité acquise et poin
       assert.deepEqual(codes, ['effetNonCable'], `${branche}/${id} : ${codes.join(',')}`);
     }
   }
-  // MESURÉ : 8 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ. Les
-  // vingt-trois qui restent sont douze en offense — Fendeur et Broyeur
-  // (Écraseur), Perceurs et Obusier (Tir de barrage), Cuirassiers et Sapeurs
-  // (Booster), Meute et Bélier (Flashbang), Crécelle (EMP), Guetteur et
-  // Frappeur (Camouflage), Enclume (Bouclier) — et ONZE EN DÉFENSE depuis
-  // MODULES-D : six ouvrages à Auto-réparation, trois à Rayon minimum −1, le
-  // Guetteur (Rayon +1) et le Broyeur (PV +20 %).
+  // MESURÉ : 6 lignes sur 31 portent un module non câblé DE LEUR CÔTÉ, et les
+  // SIX SONT EN DÉFENSE — Meute et Bélier (Flashbang), Fendeur et Carapace
+  // (EMP), Perceurs (Tir de barrage), Ratisseur (Garnison). Aucune ligne
+  // d'OFFENSE ne refuse plus : les huit modules que l'assaut peut porter sont
+  // tous câblés.
   //
-  // ⚠ RÉÉCRIT TROIS FOIS, ET LE COMPTE EST MESURÉ À CHAQUE LOT, jamais déduit :
+  // ⚠ RÉÉCRIT QUATRE FOIS, ET LE COMPTE EST MESURÉ À CHAQUE LOT, jamais déduit :
   // 29 avant MODULES-A, 25 après — `moduleEstCable` avait pris la branche, et
   // la ligne DÉFENSE des Perceurs restait non câblée alors qu'elle porte le
   // même module que leur ligne offense —, 20 après MODULES-B, 19 après
-  // MODULES-C, 8 depuis MODULES-D. Les onze lignes qui viennent de tomber sont
-  // exactement celles que ce lot vend, toutes en défense.
-  assert.equal(nonCables.length, 8, `${nonCables.length} lignes non câblées, 8 attendues`);
+  // MODULES-C, 8 après MODULES-D, 6 depuis FORMATION-ET-GARNISON. Les deux
+  // lignes qui viennent de tomber sont celles de la Garnison EN OFFENSE :
+  // l'Éclaireur et l'Épervier.
+  assert.equal(nonCables.length, 6, `${nonCables.length} lignes non câblées, 6 attendues`);
 
-  // ⚠ CE QUI FALSIFIERAIT CE TEST : passer `cable.offense` à `true` sur
-  // `garnison`. Les lignes du Ratisseur et de la Buse cesseraient de rendre
-  // `effetNonCable`, et le compte tomberait. Le contre-cas est ici, en dur :
-  // l'Écraseur PASSE.
+  // ⚠⚠ LE CONTRE-CAS ANNONCÉ ICI S'EST PRODUIT, ET C'EST CE LOT-CI. Il disait :
+  // « ce qui falsifierait ce test : passer `cable.offense` à `true` sur
+  // `garnison` — les lignes du Ratisseur et de la Buse cesseraient de rendre
+  // `effetNonCable`, et le compte tomberait ». Elles ont cessé, le compte est
+  // tombé de deux, et il est REMESURÉ ci-dessus plutôt que rattrapé. Ce qui
+  // falsifierait le test aujourd'hui est le SYMÉTRIQUE : câbler `garnison` en
+  // DÉFENSE, où aucune pièce de garnison n'avance. Le contre-cas positif reste
+  // ici, en dur : l'Écraseur PASSE.
   const cable = partie('999999999999999');
   acheter(cable, 'offense', 'fendeur', 'unite');
   assert.deepEqual(problemesDeLAchat(cable, 'offense', 'fendeur', 'module'), []);
@@ -337,18 +340,31 @@ test('MODULES-A T9 — `cable` est par branche, et la fonction lève des deux c�
     assert.deepEqual(Object.keys(m.cable).sort(), ['defense', 'offense'], nom);
     for (const b of BRANCHES) assert.equal(typeof m.cable[b], 'boolean', `${nom}/${b}`);
   }
-  // MESURÉ : treize modules câblés sur quatorze — sept en offense, SIX EN
+  // MESURÉ : QUATORZE modules câblés sur quatorze — huit en offense, SIX EN
   // DÉFENSE. ⚠ TROIS AU LOT MODULES-A, SIX APRÈS MODULES-B, SEPT APRÈS
-  // MODULES-C, ONZE APRÈS MODULES-D, TREIZE DEPUIS MODULES-F. Ce compte est la
-  // liste exacte, pas un nombre : ajouter un module câblé sans toucher cette
-  // ligne fait tomber le test, et c'est voulu — le drapeau gouverne une VENTE.
+  // MODULES-C, ONZE APRÈS MODULES-D, TREIZE APRÈS MODULES-F, QUATORZE DEPUIS
+  // FORMATION-ET-GARNISON. Ce compte est la liste exacte, pas un nombre :
+  // ajouter un module câblé sans toucher cette ligne fait tomber le test, et
+  // c'est voulu — le drapeau gouverne une VENTE.
   const cables = Object.entries(MODULES)
     .filter(([, m]) => m.cable.offense || m.cable.defense).map(([n]) => n).sort();
   assert.deepEqual(cables, [
     'autoReparation', 'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp',
-    'flashbang', 'munitionSpeciale', 'pvPlusVingt', 'rayonMiniMoinsUn',
-    'rayonPlusUn', 'tirDeBarrage', 'volDeVie',
+    'flashbang', 'garnison', 'munitionSpeciale', 'pvPlusVingt',
+    'rayonMiniMoinsUn', 'rayonPlusUn', 'tirDeBarrage', 'volDeVie',
   ]);
+  // ⚠⚠ ET LE CATALOGUE N'A PLUS UN SEUL MODULE SANS EFFET. C'est un FAIT
+  // mesuré, pas une conclusion : la Garnison était le dernier, et
+  // `MODULES-B T13` comme `MODULES-C T10` portaient sa liste. Conséquence à
+  // dire : le message « n'a pas encore d'effet en jeu » de `problemesDeLAchat`
+  // est désormais INATTEIGNABLE par l'arbre — tout refus `effetNonCable` nomme
+  // sa branche. La ligne de code n'est pas retirée pour autant : elle est ce
+  // qui parlera du prochain module écrit avant son moteur.
+  assert.deepEqual(
+    Object.entries(MODULES)
+      .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n), [],
+    'un module est câblé nulle part : le second message redevient atteignable',
+  );
   // ⚠ AUCUN DES SIX N'EST CÂBLÉ EN OFFENSE, et c'est la moitié qui compte :
   // le Guetteur porte `camouflage` à l'assaut et `rayonPlusUn` en garnison. Un
   // `offense: true` de trop lui vendrait le mauvais module.
@@ -383,20 +399,30 @@ test('MODULES-A T10 — l\'achat suit le drapeau, branche par branche', () => {
   assert.equal(pb[0].message, 'Tir de barrage n\'a pas d\'effet en défense');
   assert.throws(() => acheter(etat, 'defense', 'perceurs', 'module'), /pas d\'effet en défense/);
 
-  // Un module câblé NULLE PART garde l'autre message : celui-là est bien une
-  // attente, pas une impossibilité.
-  //
-  // ⚠ C'ÉTAIT LA MEUTE ET SON FLASHBANG JUSQU'AU LOT MODULES-B, qui vient de
-  // le câbler : la ligne rendrait désormais l'AUTRE message. Le contre-cas
-  // passe donc au Ratisseur et à sa Garnison, encore câblée nulle part. Le
-  // jour où elle le sera, ce bloc changera de pièce à son tour — c'est le
-  // signe que le test mesure le drapeau et pas une chaîne figée.
-  // ⚠ LE RATISSEUR EST GRATUIT À LA CRÉATION, comme la Meute : `acheter` y
-  // lèverait « déjà acquis ». On ASSERTE la précondition au lieu de la poser.
+  // ⚠⚠ LE CONTRE-CAS DU SECOND MESSAGE A DISPARU DU JEU, ET LE BLOC LE DIT
+  // PLUTÔT QUE DE CHANGER DE PIÈCE UNE TROISIÈME FOIS. Il portait la Meute
+  // jusqu'à MODULES-B, puis le Ratisseur et sa Garnison « encore câblée nulle
+  // part », en annonçant : « le jour où elle le sera, ce bloc changera de pièce
+  // à son tour ». Ce jour est celui du lot FORMATION-ET-GARNISON, et il n'y a
+  // PLUS DE PIÈCE OÙ ALLER — les quatorze modules du catalogue sont câblés
+  // quelque part, `MODULES-A T9` le mesure. Le message « n'a pas encore d'effet
+  // en jeu » est donc inatteignable par l'arbre, et l'asserter sur une ligne
+  // demanderait de décâbler un module exprès : on asserte le FAIT à la place.
+  assert.deepEqual(
+    Object.entries(MODULES)
+      .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n), [],
+    'un module est redevenu câblé nulle part : lui rendre son contre-cas ici',
+  );
+  // Et la Garnison, qui portait ce contre-cas, est passée de l'autre côté du
+  // drapeau : sa ligne d'OFFENSE s'achète, sa ligne de DÉFENSE nomme sa branche.
+  // ⚠ LE RATISSEUR EST GRATUIT À LA CRÉATION en offense, comme la Meute :
+  // `acheter` y lèverait « déjà acquis ». On ASSERTE la précondition.
   assert.ok(estAcquise(etat, 'offense', 'ratisseur'), 'montage : le Ratisseur est gratuit');
-  const pf = problemesDeLAchat(etat, 'offense', 'ratisseur', 'module');
+  assert.deepEqual(problemesDeLAchat(etat, 'offense', 'ratisseur', 'module'), []);
+  acheter(etat, 'defense', 'ratisseur', 'unite');
+  const pf = problemesDeLAchat(etat, 'defense', 'ratisseur', 'module');
   assert.deepEqual(pf.map((p) => p.code), ['effetNonCable']);
-  assert.equal(pf[0].message, 'Garnison n\'a pas encore d\'effet en jeu');
+  assert.equal(pf[0].message, 'Garnison n\'a pas d\'effet en défense');
 });
 
 test('recherche — les refus de programme lèvent, les refus de jeu se disent', () => {
@@ -1715,16 +1741,15 @@ test('MODULES-B T13 — `cable` par branche pour les trois modules', () => {
     assert.equal(moduleEstCable(nom, 'offense'), true, `${nom} en offense`);
     assert.equal(moduleEstCable(nom, 'defense'), false, `${nom} en défense`);
   }
-  // ⚠ UN SEUL DEPUIS MODULES-F : le Bouclier avait quitté cette liste au lot C,
-  // les quatre modules défensifs au lot D, la Munition spéciale et le Vol de
-  // vie au lot F. Le compte est la liste, et c'est `MODULES-A T9` qui porte
-  // désormais la référence — celle-ci reste ici pour que le lot B tombe si un
-  // lot futur décâble l'un de ses trois modules sans le dire. Le seul qui reste
-  // est la GARNISON, en attente d'arbitrage : c'est le dernier module sans
-  // effet du catalogue.
+  // ⚠ AUCUN DEPUIS FORMATION-ET-GARNISON : le Bouclier avait quitté cette liste
+  // au lot C, les quatre modules défensifs au lot D, la Munition spéciale et le
+  // Vol de vie au lot F, la GARNISON à celui-ci. Le compte est la liste, et
+  // c'est `MODULES-A T9` qui porte désormais la référence — celle-ci reste ici
+  // pour que le lot B tombe si un lot futur décâble l'un de ses trois modules
+  // sans le dire. Le catalogue n'a plus un seul module sans effet.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(restants, ['garnison']);
+  assert.deepEqual(restants, []);
 
   // L'achat : cinq lignes s'ouvrent en offense, quatre refusent en défense.
   const etat = partie('999999999999999');
@@ -2414,12 +2439,13 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
   assert.equal(moduleEstCable('bouclier', 'offense'), true, 'bouclier en offense');
   assert.equal(moduleEstCable('bouclier', 'defense'), false, 'bouclier en défense');
 
-  // ⚠ IL N'EN RESTE PLUS QU'UN — le compte EST la liste, et c'est elle qui tombe
+  // ⚠ IL N'EN RESTE PLUS AUCUN — le compte EST la liste, et c'est elle qui tombe
   // si un lot futur câble un module sans le dire ici. Elle en portait trois
-  // jusqu'à MODULES-F, qui a câblé la Munition spéciale et le Vol de vie.
+  // jusqu'à MODULES-F, qui a câblé la Munition spéciale et le Vol de vie, et un
+  // jusqu'à FORMATION-ET-GARNISON, qui a câblé la Garnison en offense.
   const restants = Object.entries(MODULES)
     .filter(([, m]) => !m.cable.offense && !m.cable.defense).map(([n]) => n).sort();
-  assert.deepEqual(restants, ['garnison']);
+  assert.deepEqual(restants, []);
 
   // L'ACHAT, pas seulement le drapeau : une seule ligne porte le Bouclier, en
   // offense, et elle s'achète. Aucune ligne de défense ne le porte — c'est ce
@@ -2444,8 +2470,10 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
 
   // ⚠ COMPTÉ EN PARCOURANT L'ARBRE, PAS DE TÊTE — et c'est la leçon de
   // MODULES-B, dont le brief annonçait six lignes ouvertes là où il y en avait
-  // cinq. Onze lignes s'ouvraient avant le lot C, douze après ; MODULES-D en
-  // ouvre ONZE DE PLUS, toutes en défense. Ce compte est le chiffre du rapport.
+  // cinq. Onze lignes s'ouvraient avant le lot C, douze après ; MODULES-D en a
+  // ouvert ONZE DE PLUS, toutes en défense, et FORMATION-ET-GARNISON DEUX de
+  // plus en offense — l'Éclaireur et l'Épervier, les deux porteurs de la
+  // Garnison. Ce compte est le chiffre du rapport.
   const ouvertes = { offense: 0, defense: 0 };
   for (const branche of BRANCHES) {
     for (const id of Object.keys(ARBRE_RECHERCHE[branche])) {
@@ -2453,7 +2481,7 @@ test('MODULES-C T10 — `cable` par branche pour le Bouclier', () => {
       if (nom !== null && MODULES[nom].cable[branche]) ouvertes[branche] += 1;
     }
   }
-  assert.deepEqual(ouvertes, { offense: 12, defense: 11 });
+  assert.deepEqual(ouvertes, { offense: 14, defense: 11 });
 });
 
 // ---------------------------------------------------------------------------
@@ -2561,15 +2589,23 @@ test('MODULES-D T2 — le module de défense est celui du PROPRIÉTAIRE', () => 
 
 test('MODULES-D T3 — les modules déjà câblés tirent toujours, à l\'assaut', () => {
   // ⚠ CE TEST PROTÈGE MODULES-A, B ET C. Le démêlage change la LECTURE du
-  // module ; s'il la changeait aussi du côté attaque, les sept modules câblés
+  // module ; s'il la changeait aussi du côté attaque, les modules câblés
   // s'éteindraient tous d'un coup et aucun test de ce fichier ne dirait
   // pourquoi. Chaque assertion ci-dessous tombe si `moduleActif` cesse de lire
   // `p.module` en camp d'attaque.
+  //
+  // ⚠ HUIT DEPUIS FORMATION-ET-GARNISON, ET LE HUITIÈME NE PASSE PAS PAR
+  // `moduleActif`. La Garnison ne se lit ni dans `ajouterEntite` ni dans `tir` :
+  // elle décide de ce que `composerLesVagues` MONTE, en amont du combat, et son
+  // effet se mesure dans `test/formation-et-garnison.test.js`. Elle entre donc
+  // dans la liste — le compte EST la liste — et pas dans les assertions de tir
+  // ci-dessous.
   const cables = Object.entries(MODULES)
     .filter(([, m]) => m.cable.offense).map(([n]) => n).sort();
   assert.deepEqual(cables, [
-    'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp', 'flashbang', 'tirDeBarrage',
-  ], 'sept modules câblés en offense — le compte EST la liste');
+    'booster', 'bouclier', 'camouflage', 'ecraseur', 'emp', 'flashbang',
+    'garnison', 'tirDeBarrage',
+  ], 'huit modules câblés en offense — le compte EST la liste');
 
   // Bouclier : le réservoir se pose AU MONTAGE, c'est le plus direct à lire.
   const avecBouclier = sceneBouclier();
@@ -3495,18 +3531,30 @@ test('T15 — ce qui est acquis se dit, ce qui refuse dit pourquoi', () => {
   assert.ok(!/n'a pas encore d'effet en jeu/.test(modRaison.textContent),
     'le Bouclier est déclaré sans effet alors qu\'il est câblé');
 
-  // Un module réellement non câblé, lui, le dit — la Buse porte la Garnison,
-  // qui n'a pas de moteur. Sa pièce est gratuite, donc acquise : le seul refus
-  // d'effet s'affiche sans être noyé dans celui de la pièce.
-  assert.match(raisonDe(moduleDe('busard')).textContent, /n'a pas encore d'effet en jeu/);
+  // ⚠⚠ LE CONTRE-CAS A CHANGÉ DE PANNEAU AU LOT FORMATION-ET-GARNISON, ET IL
+  // FALLAIT QU'IL CHANGE. Il portait l'Épervier et sa Garnison « qui n'a pas de
+  // moteur » ; la Garnison EN A UN depuis ce lot, et cette ligne-là s'achète.
+  // Un module réellement non câblé se lit maintenant du côté DÉFENSE : les
+  // Fusiliers y portent le Flashbang, qui ne s'y déclenche pas. Leur pièce est
+  // gratuite, donc acquise, et le seul refus d'effet s'affiche sans être noyé
+  // dans celui de la pièce — c'est la propriété que ce bloc mesure, et elle est
+  // intacte.
+  const idsDefense = Object.keys(ARBRE_RECHERCHE.defense);
+  const modsDefense = modulesDuPanneau(doc, 'defense');
+  const modMeute = modsDefense[idsDefense.indexOf('meute')];
+  assert.match(raisonDe(modMeute).textContent, /Flashbang n'a pas d'effet en défense/);
 
-  // ⚠ ET L'ÉCRASEUR NE PORTE PAS CE REFUS NON PLUS. Il était le seul câblé au
-  // lot Recherche ; ils sont sept depuis MODULES-C. Les sept autres modules
-  // s'affichent et ne s'achètent pas, parce que prendre les points du joueur
-  // contre rien serait un vol.
-  const ecraseurRaison = raisonDe(moduleDe('fendeur'));
-  assert.ok(!/n'a pas encore d'effet en jeu/.test(ecraseurRaison?.textContent ?? ''),
-    'l\'Écraseur est déclaré sans effet alors qu\'il est câblé');
+  // ⚠ ET L'ÉCRASEUR NE PORTE AUCUN REFUS D'EFFET NON PLUS. Il était le seul
+  // câblé au lot Recherche ; les HUIT modules que l'assaut peut porter le sont
+  // depuis FORMATION-ET-GARNISON, si bien qu'aucune ligne du panneau OFFENSE ne
+  // dit plus « pas d'effet ». C'est la propriété qu'on asserte, panneau entier
+  // plutôt qu'une ligne : elle est plus forte, et elle tombera le jour où un
+  // module d'assaut sera décâblé.
+  for (const id of ids) {
+    const raison = raisonDe(moduleDe(id))?.textContent ?? '';
+    assert.ok(!/d'effet/.test(raison),
+      `${id} est déclaré sans effet alors que tous les modules d'offense sont câblés`);
+  }
 });
 
 test('T15 — l\'achat se fait en DEUX touchers, et le premier ne paie rien', () => {
@@ -3736,7 +3784,14 @@ test('MODULES-E T2 — les quatre collisions, une par une', () => {
 
   // Chaque collision, prise séparément : l'achat de la ligne câblée range le
   // nom dans SA branche et laisse l'autre vide.
-  const attendu = { flashbang: 'meute', tirDeBarrage: 'perceurs', emp: 'crecelle' };
+  //
+  // ⚠ LA GARNISON EST ENTRÉE DANS CETTE BOUCLE AU LOT FORMATION-ET-GARNISON.
+  // Elle avait son bloc à part, plus bas, parce qu'elle n'était câblée nulle
+  // part et qu'aucune de ses deux lignes ne s'achetait ; sa ligne d'OFFENSE
+  // s'achète désormais, et elle se comporte comme les trois autres collisions.
+  const attendu = {
+    flashbang: 'meute', tirDeBarrage: 'perceurs', emp: 'crecelle', garnison: 'ratisseur',
+  };
   for (const [nom, id] of Object.entries(attendu)) {
     assert.ok(par[nom].offense.includes(id) && par[nom].defense.length > 0,
       `montage : ${nom} n'est plus une collision portée par ${id}`);
@@ -3746,16 +3801,15 @@ test('MODULES-E T2 — les quatre collisions, une par une', () => {
       `${nom} acheté en offense fuit vers la défense`);
   }
 
-  // ⚠ `garnison` EST LA QUATRIÈME, ET ELLE N'EST CÂBLÉE NULLE PART. Aucune de
-  // ses deux lignes ne s'achète : la collision existe dans la table et ne peut
-  // pas encore fuir. Le dire vaut mieux que la faire passer sous silence.
-  assert.equal(moduleEstCable('garnison', 'offense'), false);
+  // ⚠⚠ ET LA LIGNE DE DÉFENSE DE LA GARNISON REFUSE TOUJOURS, ce qui est la
+  // moitié qui compte : la collision est réelle — le Ratisseur porte `garnison`
+  // des DEUX côtés —, et c'est le drapeau par branche, lui seul, qui empêche
+  // l'achat d'un côté de payer pour l'autre.
+  assert.equal(moduleEstCable('garnison', 'offense'), true);
   assert.equal(moduleEstCable('garnison', 'defense'), false);
-  for (const branche of BRANCHES) {
-    const r = achatDeLaLigne(branche, 'ratisseur');
-    assert.deepEqual(r.soucis.map((s) => s.code), ['effetNonCable'],
-      `garnison est devenue achetable en ${branche} : reprendre la table`);
-  }
+  const enDefense = achatDeLaLigne('defense', 'ratisseur');
+  assert.deepEqual(enDefense.soucis.map((s) => s.code), ['effetNonCable'],
+    'garnison est devenue achetable en défense : reprendre la table');
 });
 
 test('MODULES-E T3 — les modules SANS collision ne bougent pas', () => {
@@ -5162,14 +5216,18 @@ test('RECH-É T4 — le moteur, lui, dit toujours le manque', () => {
 
 test('RECH-É T5 — les autres raisons survivent au filtre', () => {
   // ⚠ UN FILTRE TROP LARGE PASSERAIT SANS CE TEST. `effetNonCable` dit une chose
-  // que le joueur ne peut PAS deviner de la couleur d'un bouton — la Garnison de
-  // l'Épervier n'a pas de moteur, et sa pièce est gratuite, donc acquise : ce
-  // refus-là s'affiche seul.
+  // que le joueur ne peut PAS deviner de la couleur d'un bouton.
+  //
+  // ⚠⚠ LA LIGNE TÉMOIN A CHANGÉ DE BRANCHE AU LOT FORMATION-ET-GARNISON. C'était
+  // la Garnison de l'Épervier, « qui n'a pas de moteur » ; elle en a un, et sa
+  // ligne d'offense s'achète. Le témoin passe au Flashbang des Fusiliers EN
+  // DÉFENSE, qui ne s'y déclenche pas : leur pièce est gratuite, donc acquise,
+  // et ce refus-là s'affiche seul. La propriété mesurée est la même.
   const etat = partie('0');
-  const ligne = lignesDeRecherche(etat, 'offense').find((l) => l.id === 'busard');
-  assert.equal(moduleEstCable(ligne.module.nom, 'offense'), false,
+  const ligne = lignesDeRecherche(etat, 'defense').find((l) => l.id === 'meute');
+  assert.equal(moduleEstCable(ligne.module.nom, 'defense'), false,
     'montage sans mordant : ce module est câblé');
-  assert.match(ligne.module.raison, /n'a pas encore d'effet en jeu/);
+  assert.match(ligne.module.raison, /Flashbang n'a pas d'effet en défense/);
   assert.doesNotMatch(ligne.module.raison, /il manque/);
 
   // Et l'ordre des deux achats, qui n'est pas non plus une affaire de couleur.
