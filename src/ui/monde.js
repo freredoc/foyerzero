@@ -46,6 +46,7 @@ import {
 } from '../sim/deplacement.js';
 import {
   blocsDeLaDalle, geometrieDuCran, profilDuBloc, COTE_SOURCE, NOMS_DU_SOL,
+  arretsDeTeinte, DELTA_TEINTE,
 } from '../render/terrain.js';
 import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
@@ -1671,6 +1672,66 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * large en demande dix-sept ; en créer dix-sept par dalle donnerait au
    * ramasse-miettes de quoi hacher le défilement.
    */
+  /**
+   * La bascule du sol vers l'Ouvrage : une translation par canal, en dégradé.
+   *
+   * ⚠⚠ LA COULEUR NE DÉPEND QUE DE LA RANGÉE, ET C'EST TOUT LE LOT SOL-OUVRAGE.
+   * Le MOTIF change par bloc — `render/terrain.js` tire une famille — mais la
+   * TEINTE est une fonction du seul `y` : deux pixels voisins ont donc presque
+   * la même rangée, donc presque la même teinte, à toutes les échelles et sur
+   * toutes les dalles. **Aucune frontière de couleur ne peut apparaître.**
+   *
+   * ⚠⚠ LA VOIE ÉVIDENTE A ÉTÉ ESSAYÉE ET ELLE EST INUTILISABLE — faire porter la
+   * couleur par la FAMILLE, un bloc étant ocre ou violet. Les deux références
+   * sont à 69 niveaux l'une de l'autre sur le rouge et le fondu ne fait que
+   * 72 pixels source : la bascule ressort en escalier de rectangles orange et
+   * violets, qui se lit comme une tilemap cassée.
+   *
+   * ⚠ ET ELLE NE COÛTE RIEN À L'ARCHITECTURE. La dalle finit la boucle des blocs
+   * avec `Σw·v` en couleur et `Σw = 1` en alpha ; ajouter une constante par
+   * canal APRÈS l'accumulation donne exactement `Σw·(v + d)`, puisque `Σw` vaut
+   * un. Deux `fillRect` par dalle, et rien par bloc.
+   *
+   * ⚠⚠ DEUX PASSES, PARCE QU'IL N'Y A PAS DE SOUSTRACTION SATURANTE AU CANEVAS.
+   * `difference` rend `|d − s|`, ce qui n'est `d − s` que si le sol reste
+   * au-dessus de ce qu'on lui retire : `tools/sols.py` pose un plancher au
+   * stockage pour que ce soit vrai partout, et le manifeste porte les minimums
+   * relevés APRÈS encodage. `lighter` additionne, ce qui va pour le bleu.
+   *
+   * ⚠ LES DEUX PASSES PORTENT SUR DES CANAUX DISJOINTS — rouge et vert d'un
+   * côté, bleu de l'autre — donc leur ordre est indifférent. C'est dit pour
+   * qu'on n'aille pas chercher une raison qui n'existe pas.
+   *
+   * ⚠ ET LE BAS DE LA CARTE NE PAIE RIEN. Sous la rangée du pivot la teinte vaut
+   * zéro partout, donc les deux dégradés seraient noirs — `difference` et
+   * `lighter` avec du noir sont l'identité. On sort avant de peindre plutôt que
+   * de peindre deux aplats qui ne changent rien : c'est la moitié basse de la
+   * carte, celle où le joueur passe son temps.
+   */
+  function peindreLaTeinte(gDalle, y0, cote, cran) {
+    const arrets = arretsDeTeinte(y0, cote, cran);
+    if (arrets.every((a) => a.t === 0)) return;
+
+    // ⚠ `|Δ|`, ET IL VIENT DE `render/terrain.js`, JAMAIS D'UN NOMBRE ÉCRIT ICI.
+    // Un test confronte cette constante-là au manifeste que `tools/sols.py`
+    // écrit : la mesure est dans l'outil, la valeur au code, et l'écran ne fait
+    // que la peindre.
+    const [dr, dv, db] = DELTA_TEINTE;
+    const rampe = (canaux) => {
+      const g = gDalle.createLinearGradient(0, 0, 0, cote);
+      for (const { s, t } of arrets) g.addColorStop(s, canaux(t));
+      return g;
+    };
+
+    gDalle.globalCompositeOperation = 'difference';
+    gDalle.fillStyle = rampe((t) => `rgb(${Math.round(-dr * t)}, ${Math.round(-dv * t)}, 0)`);
+    gDalle.fillRect(0, 0, cote, cote);
+
+    gDalle.globalCompositeOperation = 'lighter';
+    gDalle.fillStyle = rampe((t) => `rgb(0, 0, ${Math.round(db * t)})`);
+    gDalle.fillRect(0, 0, cote, cote);
+  }
+
   function calculerDalle(i, j) {
     const cote = TERRAIN_CARTE.dalleCotePx;
     const cran = cranCourant();
@@ -1703,6 +1764,8 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       gBloc.drawImage(masque, 0, 0);
       gDalle.drawImage(bloc, b.x, b.y);
     }
+
+    peindreLaTeinte(gDalle, j * cote, cote, cran);
 
     gDalle.globalCompositeOperation = 'source-over';
     cache.ecrire(cleDeDalle(i, j), tampon);

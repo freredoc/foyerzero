@@ -1176,7 +1176,17 @@ export const TERRAIN_CARTE = {
   // une grille. Un bloc d'une planche entière n'a besoin ni de l'un ni de
   // l'autre : ce qui casse la répétition, c'est huit dessins et huit
   // orientations, pas un semis.
-  fonduSourcePx: 128,
+  //
+  // ⚠⚠ IL PASSE DE 128 À 72 AU LOT SOL-OUVRAGE, ET IL N'AVAIT PAS LE CHOIX. Le
+  // côté d'une planche tombe de 1 254 à 704 pour faire entrer les vingt-deux
+  // dessins sous la borne de taille : un fondu laissé à 128 sur un bloc de 704
+  // ferait tomber `PART_INTACTE` de 78,6 % à **60,5 %**, c'est-à-dire qu'un
+  // pixel sur trois de plus serait du mélange — l'inverse exact de « le moins de
+  // traitement possible ». Le fondu suit donc la planche, à l'échelle :
+  // `round(128 × 704 / 1254) = 72`, et la part intacte ne bouge pas d'un
+  // demi-point. `render/terrain.js` la calcule et un test la mesure sur le
+  // pavage lui-même.
+  fonduSourcePx: 72,
 
   /** Côté d'une dalle de rendu, en pixels ÉCRAN. */
   dalleCotePx: 512,
@@ -1238,12 +1248,67 @@ export const TERRAIN_CARTE = {
   // il n'y a plus ni accumulation, ni quantification, ni rampe peinte. Ne pas
   // les recréer sans le sol procédural qui allait avec.
   //
-  // ⚠ ET LE FOND DE L'OUVRAGE AVEC EUX, SUR DEMANDE D'ETHAN — 05/09, « pas de
-  // fond ouvrage pour le moment ». `partOuvrageDeLaRangee` faisait basculer le
-  // sol vers l'ardoise à mesure qu'on montait vers la base terminale ; c'était
-  // une PROPOSITION, elle le disait, et elle est retirée le temps qu'il regarde
-  // le sol satellite sur la carte. La rampe `ouvrage` ci-dessus reste, elle : la
-  // frontière de territoire s'en sert toujours.
+  // ⚠⚠ ET LE FOND DE L'OUVRAGE EST ROUVERT — lot SOL-OUVRAGE, 08/09. Il avait
+  // été retiré le 05/09 sur demande d'Ethan (« pas de fond ouvrage pour le
+  // moment »), avec la note « à rouvrir » ; c'est ce lot qui le rouvre, et il ne
+  // reprend PAS la fonction d'alors. Celle-là valait
+  // `(niveauDeLaRangee(r) − 1) / (niveauPlafond − 1)` — la rampe du NIVEAU de
+  // site, qui monte sur toute la carte — et elle faisait basculer le sol dès la
+  // deuxième rangée. Ce qui la remplace est une rampe à elle, bornée aux quatre
+  // étages ci-dessous. La rampe `ouvrage` ci-dessus reste, elle : la frontière
+  // de territoire s'en sert toujours.
+  //
+  // ⚠⚠ DEUX AXES SÉPARÉS, ET C'EST TOUT LE LOT. La COULEUR du sol ne dépend que
+  // de la RANGÉE — une translation par canal, peinte en dégradé vertical sur la
+  // dalle finie — et le MOTIF ne dépend que du BLOC. C'est ce qui rend la
+  // bascule invisible : deux pixels voisins ont presque la même rangée, donc
+  // presque la même teinte, à toutes les échelles et sur toutes les dalles, si
+  // bien qu'**aucune frontière de couleur ne peut apparaître**.
+  //
+  // ⚠⚠ LA VOIE ÉVIDENTE A ÉTÉ ESSAYÉE ET ELLE EST INUTILISABLE — faire porter la
+  // couleur par la FAMILLE, un bloc étant ocre ou violet. L'écart entre les deux
+  // références est de 69 niveaux sur le rouge et le fondu ne fait que 72 pixels
+  // source : la frontière ressort **en escalier de rectangles orange et
+  // violets**, qui se lit comme une tilemap cassée. La méthode ne tient qu'entre
+  // familles qui partagent une palette. Ne pas y revenir sans avoir relu ceci.
+  ouvrage: {
+    // La rangée où l'Ouvrage cesse tout à fait. Au-delà — vers le bas de la
+    // carte, donc vers le joueur — le sol est celui d'aujourd'hui, à la teinte
+    // près qui y vaut zéro.
+    //
+    // ⚠ ELLE EST COMMUNE AUX DEUX AXES, et ce n'est pas une économie : c'est ce
+    // qui fait que la teinte et le motif cessent À LA MÊME RANGÉE. Les séparer
+    // laisserait une bande où des plaques violettes se peignent en ocre, ou
+    // l'inverse.
+    rangeePivot: 226,
+
+    // Sur combien de rangées la part d'Ouvrage monte de 0 à 1. Elle atteint 1 à
+    // la rangée 76, donc les 75 premières sont l'Ouvrage pur.
+    largeurFamilles: 150,
+
+    // Sur combien de rangées la TEINTE monte de 0 à 1. Plus court que la
+    // précédente, exprès : la couleur est pleine dès la rangée 96, donc les
+    // motifs artificiels du haut sont vus à leur teinte de dessin, jamais à une
+    // teinte intermédiaire.
+    largeurTeinte: 130,
+
+    // Les trois parts cumulées, comparées à un même bruit. ⚠ ELLES SONT
+    // CROISSANTES EN `p` ET ORDONNÉES `c1 ≥ c2 ≥ c3` SUR TOUTE LA PLAGE — c'est
+    // ce qui garantit qu'un bloc ne redevient jamais plus naturel quand on
+    // monte, et un test le vérifie au millième plutôt que de le croire.
+    partNonOcre: { debut: 0, largeur: 0.65 },
+    partHybrideOuPlus: { debut: 0.25, largeur: 0.55 },
+    partArtificielle: { debut: 0.50, largeur: 0.50 },
+
+    // ⚠⚠ LE BRUIT DES FAMILLES EST LISSÉ, PAS INDÉPENDANT PAR BLOC. Un tirage
+    // de Bernoulli par bloc donne du poivre et sel — une plaque d'un bloc, une
+    // autre trois blocs plus loin, et rien qui se lise comme un terrain. Le
+    // bruit est donc interpolé sur une maille de DEUX blocs, ce qui fait des
+    // plaques de quelques blocs. Une maille de 1 rendrait le poivre et sel,
+    // une maille de 4 des plaques plus grandes que l'écran au cran le plus
+    // serré.
+    mailleBlocs: 2,
+  },
 };
 
 // --- gabarits d'emblèmes ------------------------------------------------------

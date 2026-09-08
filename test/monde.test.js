@@ -619,24 +619,31 @@ test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est i
   // sortirait en erreur. Les marqueurs du source ne doivent plus s'y trouver.
   assert.ok(!html.includes('%ATLAS_TERRAIN%'),
     'le marqueur de l\'atlas de fond de carte est revenu : il est parti au lot SOL-SATELLITE');
-  for (let i = 1; i <= NOMS_DU_SOL.length; i += 1) {
-    assert.ok(!html.includes(`%SOL_CARTE_${i}%`), `le marqueur %SOL_CARTE_${i}% n'a pas été remplacé`);
+  // ⚠ LE MARQUEUR SE DÉRIVE DU NOM, il ne s'écrit pas — lot SOL-OUVRAGE. Les
+  // huit planches s'appelaient toutes `sol_carte_N` et le marqueur pouvait se
+  // composer d'un chiffre ; il y en a vingt-deux dans quatre familles, et
+  // `tools/build.js` les nomme d'après le fichier. Une boucle sur un chiffre
+  // aurait cessé de voir quatorze marqueurs sans qu'un test tombe.
+  for (const nom of NOMS_DU_SOL) {
+    const marqueur = `%${nom.toUpperCase()}%`;
+    assert.ok(!html.includes(marqueur), `le marqueur ${marqueur} n'a pas été remplacé`);
   }
 
-  // ⚠⚠ ET CHACUNE DES HUIT N'Y EST QU'UNE FOIS. C'est l'assertion qui compte :
-  // à 200 Kio de WebP la planche, une seule copie de trop coûterait à elle seule
-  // plus que la marge sous la borne de T10. On identifie chaque planche par les
-  // 64 premiers caractères de SON base64, qui la distinguent des sept autres.
+  // ⚠⚠ ET CHACUNE DES VINGT-DEUX N'Y EST QU'UNE FOIS. C'est l'assertion qui compte :
+  // à 100 Kio de WebP la planche, une seule copie de trop mangerait la moitié de
+  // la marge sous la borne de T10. On identifie chaque planche par les 64
+  // premiers caractères de SON base64, qui la distinguent des vingt et une autres.
   const debut = 'data:image/webp;base64,';
   const empreintes = new Set();
-  for (let i = 1; i <= NOMS_DU_SOL.length; i += 1) {
+  for (const [rang, nom] of NOMS_DU_SOL.entries()) {
+    const i = rang + 1;
     const balise = html.match(new RegExp(`<img[^>]*id="sol-${i}"[^>]*>`))[0];
     const adresse = balise.match(/src="([^"]*)"/)[1];
     assert.ok(adresse.startsWith(debut), `sol-${i} : « ${adresse.slice(0, 40)} » n'est pas un WebP inliné`);
     // ⚠ ET ELLE PÈSE CE QU'ELLE PÈSE. Le manifeste donne les octets du fichier ;
     // le base64 en fait quatre tiers, au rembourrage près. Sans cette moitié-ci,
     // un fichier vide passerait pour une planche.
-    const octets = MANIFESTE_SOL.sols[`sol_carte_${i}`].octets;
+    const octets = MANIFESTE_SOL.sols[nom].octets;
     const attendu = Math.ceil(octets / 3) * 4;
     const utile = adresse.length - debut.length;
     assert.equal(utile, attendu, `sol-${i} : ${utile} caractères de base64 pour ${octets} octets`);
@@ -2309,7 +2316,13 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     'monde-panneau-confirmation', 'monde-panneau-menace',
     'monde-panneau-confirmer', 'monde-panneau-renoncer',
     'monde-recentrer', 'monde-base-2x2', 'monde-base-3x3',
-    'sol-1', 'sol-2', 'sol-3', 'sol-4', 'sol-5', 'sol-6', 'sol-7', 'sol-8',
+    // ⚠ LES VINGT-DEUX PLANCHES SE DÉRIVENT, ELLES NE SE RECOPIENT PAS — lot
+    // SOL-OUVRAGE. Elles étaient huit et écrites à la main ; le sol en porte
+    // vingt-deux depuis que la carte bascule vers l'Ouvrage, et une liste
+    // recopiée aurait vieilli au premier dessin ajouté. `NOMS_DU_SOL` fait foi
+    // sur l'ordre, `ui/monde.js` indexe les balises par lui, et le balisage se
+    // confronte à cette liste-ci juste en dessous.
+    ...NOMS_DU_SOL.map((_, i) => `sol-${i + 1}`),
   ];
   // ⚠ LA LISTE SE CONFRONTE AU BALISAGE, elle ne se croit pas sur parole.
   const balisage = lire('src', 'index.src.html');

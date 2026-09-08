@@ -401,8 +401,38 @@ test('§11 — aucune teinte hors de la palette de FICHE-STYLE.md', () => {
       assert.ok(FICHE.has(hex.toUpperCase()), `teinte hors fiche dans ${fichier} : ${hex}`);
     }
     // La seule valeur non-hex admise est l'ombre portée de la fiche.
+    //
+    // ⚠⚠ ET UNE SECONDE EXCEPTION DEPUIS LE LOT SOL-OUVRAGE, NOMMÉE ET BORNÉE.
+    // `ui/monde.js` peint la bascule du sol vers l'Ouvrage en deux dégradés dont
+    // les canaux sont `|Δ| · t` : ce n'est PAS une teinte, c'est une TRANSLATION
+    // par canal, mesurée par `tools/sols.py` sur l'art d'Ethan et portée par
+    // `DELTA_TEINTE`. La fiche décrit ce qu'on PEINT ; une soustraction n'y a pas
+    // sa place, et l'y inscrire ferait entrer deux couleurs qui ne se voient
+    // jamais à l'écran.
+    //
+    // ⚠ LA CONTOURNER AURAIT ÉTÉ D'ASSEMBLER LA CHAÎNE À L'EXÉCUTION, et c'est
+    // exactement ce que `CLAUDE.md` §6 interdit — l'idiome des hex à trois
+    // chiffres et de l'espace de noms SVG. On la NOMME donc, et on la resserre :
+    // seul `ui/monde.js` a le droit d'en porter, elles doivent être CALCULÉES
+    // (une couleur littérale reste refusée partout), et il ne peut y en avoir
+    // que DEUX — une par passe de composition. Une troisième fait tomber ce
+    // test, ce qui est ce qu'on lui demande.
+    let calculees = 0;
     for (const [rgba] of texte.matchAll(/rgba?\([^)]*\)/g)) {
-      assert.equal(rgba, 'rgba(0,0,0,0.31)', `rgba hors fiche dans ${fichier} : ${rgba}`);
+      if (rgba === 'rgba(0,0,0,0.31)') continue;
+      const estCalculee = rgba.includes('${');
+      assert.ok(estCalculee && fichier.endsWith(join('src', 'ui', 'monde.js')),
+        `rgba hors fiche dans ${fichier} : ${rgba}`);
+      calculees += 1;
+    }
+    if (fichier.endsWith(join('src', 'ui', 'monde.js'))) {
+      assert.equal(calculees, 2,
+        `${calculees} couleurs calculées dans monde.js, 2 attendues — `
+        + 'une par passe de la bascule du sol');
+      // ⚠ ET ELLES VIENNENT DE `DELTA_TEINTE`, PAS DE NOMBRES ÉCRITS SUR PLACE :
+      // sans ça, « calculée » suffirait à faire entrer n'importe quelle teinte.
+      assert.ok(texte.includes('DELTA_TEINTE'),
+        'monde.js peint des couleurs calculées sans lire DELTA_TEINTE');
     }
   }
   // Le balayage doit avoir réellement vu des couleurs, sinon il ne prouve rien.
