@@ -784,12 +784,23 @@ test('COL T16 — six occupants par rangée, trois colonnes libres, écart ≤ 2
         assert.ok(n <= parRangee, `${type}/g${g} rangée ${rangee} : ${n} occupants`);
         assert.ok(GRILLE.largeur - n >= 3, `${type}/g${g} rangée ${rangee} : moins de 3 libres`);
       }
-      // 2. les rangées occupées sont les plus ARRIÈRE, sans trou.
+      // 2. ⚠⚠ LE BLOC FLOTTE DEPUIS LE LOT DISPOSITION-OUVRAGE, 08/09, ET
+      //    CETTE GARDE CHANGE DE CIBLE. Elle exigeait `r === derniere - k` :
+      //    un bloc collé à la rangée 10, sans trou. Mesuré avant ce lot-là, les
+      //    défenses finissaient en rangée 10 sur 240 montages sur 240 — c'est
+      //    exactement ce qu'Ethan décrit au point 9 par « les unités de défense
+      //    sont au fond », donc l'invariant qu'on lui demande de relâcher. Ce
+      //    qui reste tenu : la bande, et un étalement borné — voir
+      //    `etalementMaxRangees`.
       const bande = GRILLE.bandes.defense;
       const rangees = [...parLigne.keys()].sort((a, b) => b - a);
-      rangees.forEach((r, k) => {
-        assert.equal(r, bande.derniere - k, `${type}/g${g} : la bande de défense a un trou`);
-      });
+      for (const r of rangees) {
+        assert.ok(r >= bande.premiere && r <= bande.derniere,
+          `${type}/g${g} : rangée ${r} hors de la bande de défense`);
+      }
+      const etendue = rangees[0] - rangees[rangees.length - 1] + 1;
+      assert.ok(etendue <= rangees.length + DISPOSITION_DEFENSES.etalementMaxRangees,
+        `${type}/g${g} : bloc étalé sur ${etendue} rangées pour ${rangees.length} employées`);
       // 3. l'écart de charge, sur les DEUX groupes.
       for (const groupe of [site.defenseurs, site.batiments]) {
         const charge = new Array(GRILLE.largeur).fill(0);
@@ -840,9 +851,14 @@ test('COL T17 — même graine, même disposition au bit près', () => {
 // doivent coûter la traversée complète. Le lot change la pose des
 // PROPORTIONNELS ; les deux uniques sont posés hors de ce tirage, et ce test
 // mesure qu'ils y sont restés.
-test('COL T18 — Souche et Étai au fond, au centre, sur cent graines', () => {
+test('COL T18 — Souche et Étai au fond, colonnes tirées, sur cent graines', () => {
+  // ⚠⚠ « AU CENTRE » EST TOMBÉ AU LOT DISPOSITION-OUVRAGE, 08/09 — troisième
+  // membre du point 9 d'Ethan, « souche et étai restent au fond ». Les deux
+  // colonnes valaient 5 et 4 sur toute graine : une seule position sur 240
+  // montages, mesuré. Ce qui RESTE est la rangée du fond, et elle n'est pas
+  // négociable — ce sont les deux objectifs du raid, ils doivent coûter la
+  // traversée complète.
   const fond = GRILLE.bandes.batiments.derniere;
-  const centre = Math.ceil(GRILLE.largeur / 2);
   for (let g = 1; g <= 100; g += 1) {
     for (const [type, niveau, saveur] of [
       ['base', 25, null], ['camp', 12, 'richeQuartz'], ['avantPoste', 40, 'richeScorie'],
@@ -853,8 +869,8 @@ test('COL T18 — Souche et Étai au fond, au centre, sur cent graines', () => {
       assert.ok(souche !== undefined && etai !== undefined, `${type}/g${g} : un unique manque`);
       assert.equal(souche.rangee, fond, `${type}/g${g} : la Souche a quitté le fond`);
       assert.equal(etai.rangee, fond, `${type}/g${g} : l'Étai a quitté le fond`);
-      assert.equal(souche.colonne, centre, `${type}/g${g} : la Souche a quitté le centre`);
-      assert.equal(etai.colonne, centre - 1, `${type}/g${g} : l'Étai n'est plus à sa gauche`);
+      assert.notEqual(souche.colonne, etai.colonne,
+        `${type}/g${g} : la Souche et l'Étai partagent une case`);
       // ⚠ ET AUCUN PROPORTIONNEL NE VIENT S'ASSEOIR DESSUS : les deux uniques
       // sont posés avant le tirage, leur plancher est réservé, et le test le
       // vérifie plutôt que de le croire.
@@ -898,17 +914,22 @@ test('COL T18 — Souche et Étai au fond, au centre, sur cent graines', () => {
 test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () => {
   const MOTIF = ['belier', 'pilon', 'broyeur', 'crecelle'];
   const leve = [];
-  // ⚠⚠ LES TROIS TRIPLETS SONT RÉANCRÉS AU LOT CIBLES-RANGÉES, 07/09, ET LA
-  // DETTE N'EST PAS PAYÉE POUR AUTANT. Le lot tire les TAILLES DE RANGÉE : la
-  // disposition de chaque site change, donc les trois scénarios d'avant ne
-  // lèvent plus — zéro sur trois, mesuré. Balayage de 540 scénarios sur l'arbre
-  // du lot : **188 lèvent encore**, du même message `pvMilli N hors de 1…M`.
-  // Ce n'est donc pas une réparation, c'est le déplacement que ce commentaire
-  // annonçait déjà — « il le déplace comme il déplace tout ce qui touche à la
-  // disposition ». Retirer le test aurait été prendre un déplacement pour une
-  // correction.
+  // ⚠⚠ LES TROIS TRIPLETS SONT RÉANCRÉS UNE SECONDE FOIS AU LOT
+  // DISPOSITION-OUVRAGE, 08/09, ET LA DETTE N'EST TOUJOURS PAS PAYÉE. Même
+  // mécanique qu'au lot CIBLES-RANGÉES : celui-ci fait FLOTTER le bloc dans sa
+  // bande, donc la disposition de chaque site change encore, donc les trois
+  // scénarios d'hier ne lèvent plus — zéro sur trois, mesuré. Balayage de 600
+  // scénarios sur l'arbre du lot : **16 lèvent encore**, du même message
+  // `pvMilli N hors de 1…M`. Ce n'est donc pas une réparation, c'est le
+  // déplacement que ce commentaire annonce depuis deux lots.
+  //
+  // ⚠ ET LE COMPTE DU BALAYAGE A BAISSÉ — 188 sur 540 au lot précédent, 16 sur
+  // 600 ici. Le dire dans ce sens-là et pas dans l'autre : c'est un autre
+  // échantillon de dispositions, pas une dette qui se referme. Le défaut est
+  // dans `pvCourantsDesDefenses` quand l'Étai est tombé, et aucune ligne de ce
+  // lot ne l'a touché.
   for (const [type, niveau, graine] of [
-    ['camp', 30, 18], ['camp', 32, 26], ['camp', 34, 29],
+    ['camp', 22, 20], ['camp', 22, 33], ['camp', 28, 32],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,

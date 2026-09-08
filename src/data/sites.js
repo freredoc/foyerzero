@@ -1528,4 +1528,67 @@ export const DISPOSITION_DEFENSES = {
   // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme les deux valeurs
   // ci-dessus.
   brassagesDeRangee: 24,
+
+  // Combien de rangées VIDES un bloc peut porter en son sein — lot
+  // DISPOSITION-OUVRAGE, 08/09, point 9 d'Ethan : « malgré un patch, toutes les
+  // bases Ouvrage restent identiques : les unités de défense sont au fond, tous
+  // les bâtiments au premier rang, et souche et étai restent au fond ».
+  //
+  // ⚠⚠ LES DEUX LOTS PRÉCÉDENTS ONT TRAITÉ LA COLONNE PUIS LA TAILLE DES
+  // RANGÉES, ET AUCUN N'A TOUCHÉ AU BORD. Mesuré sur vingt graines, quatre
+  // niveaux et les trois types AVANT ce lot : les bâtiments commencent en
+  // rangée 11 sur **240 montages sur 240**, les défenses finissent en rangée 10
+  // sur **240 sur 240**, et les deux uniques tombent en (18, 4) et (18, 5) sur
+  // **240 sur 240**. Ce n'est pas un défaut de hasard, c'est un ANCRAGE :
+  // `contigueDepuisLOrigine` interdit à l'indice 0 du tableau des tailles d'être
+  // vide, donc le bord ancré du bloc est cloué au bord de sa bande, sur toute
+  // graine. Seule la LONGUEUR du bloc variait.
+  //
+  // ⚠⚠ D'OÙ UNE COUCHE DE PLACEMENT, ET NON UN ASSOUPLISSEMENT DE
+  // `taillesDeRangee`. Les tailles disent COMBIEN d'occupants par rangée
+  // employée ; le placement dit LESQUELLES des rangées de la bande les portent.
+  // Toucher aux tailles aurait changé leur NOMBRE pour une graine donnée, donc
+  // le nombre de tirages de `repartirLesColonnes`, donc la position du flux au
+  // moment où `composerRepartition` compose la garnison — c'est-à-dire remappé
+  // les `pvDefensesMilli` de tout site à moitié rasé d'une sauvegarde
+  // existante. Voir `placementDesRangees`.
+  //
+  // Deux rangées vides au plus. Mesuré — ensembles de rangées occupées
+  // DISTINCTS sur vingt graines de cases, bâtiments / défenses :
+  //
+  //      étalement   camp n.30   base n.45   camp n.12
+  //   (avant le lot)    4 /  3      3 /  2      4 /  4
+  //              0     11 / 11      5 /  3     11 / 12
+  //              1     16 / 16      9 /  4     16 / 16
+  //          →   2     16 / 18      9 /  3     16 / 16
+  //              3     16 / 19      9 /  4     17 / 16
+  //              4     16 / 18      9 /  4     17 / 16
+  //
+  // ⚠⚠ LA PREMIÈRE LIGNE N'EST PAS « ÉTALEMENT 0 », ET C'EST LA MOITIÉ QUI
+  // COMPTE. Sans la couche de placement, le bloc est CLOUÉ au bord et seule sa
+  // longueur varie : 4 et 3 ensembles sur vingt. À étalement 0 le placement
+  // existe déjà — le bloc DÉRIVE sans porter de trou — et le compte passe à 11
+  // et 11. Les trous font le reste du chemin.
+  //
+  // ⚠ ET `base n.45` NE BOUGE PRESQUE PAS, CE QUI EST UNE PROPRIÉTÉ DE LA
+  // GÉOMÉTRIE ET NON UN RÉGLAGE MANQUÉ. À ce niveau-là les blocs remplissent
+  // presque leur bande — sept ou huit rangées employées sur les huit de la
+  // défense, six à huit sur les sept offertes aux bâtiments — donc la marge est
+  // nulle ou d'une rangée, et aucun plafond d'étalement ne l'ouvre. Une grosse
+  // base est dense ; c'est la densité qui la fige, pas le placement.
+  //
+  // ⚠ LE COMPTE NE MONTE PLUS APRÈS 3, ET 2 EST LE POINT OÙ LE BLOC RESTE
+  // LISIBLE COMME UN BLOC. Deux rangées vides au plus en son sein : au-delà, la
+  // garnison cesse d'être une ligne et devient un semis, ce qu'Ethan n'a pas
+  // demandé. Monter est sans risque et sans migration — la valeur est ici pour
+  // ça, et le tableau dit ce qu'on y gagnerait.
+  //
+  // ⚠ UN TIRAGE INEMPLOYÉ EST CONSOMMÉ COMME UN EMPLOYÉ : `placementDesRangees`
+  // prend ses `2 + etalementMaxRangees` tirages AVANT tout test, si bien que
+  // leur nombre ne dépend ni du bloc ni du résultat. Même discipline que
+  // `brassagesDeCharge` et `brassagesDeRangee`.
+  //
+  // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme les trois valeurs
+  // ci-dessus.
+  etalementMaxRangees: 2,
 };

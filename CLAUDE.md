@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
+Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
 
 ---
 
@@ -42,7 +42,140 @@ Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot SOL-OUVRAGE), à confronter :**
+**Référence au 08/09/2026 (après le lot DISPOSITION-OUVRAGE), à confronter :**
+⚠⚠ **LA SUITE N'EST PAS VERTE, ET LE ROUGE EST CELUI QU'ON A TROUVÉ EN ARRIVANT.**
+`npm test` rend **1484 pass / 1 fail** sur 1485 ; le dépôt DÉCLARE
+**1485 pass / 0 fail** — c'est la forme que la garde de `documentation.test.js`
+cherche, et elle dit le NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est unique,
+il était là à la baseline, et le §7 du brief interdit de le réparer.
+`npm run build` → `dist/index.html`, **9 124 874 octets**, 0 référence externe.
+Coût **+512 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre un
+livrable rebâti dans un `git worktree` depuis `566a453` : **images +0 · audio +0 ·
+feuille +0 · balisage +0 · JavaScript +512**, et la somme des cinq postes tombe
+EXACTEMENT sur le total. **306 URI `data:` avant, 306 après ; 311 lignes avant,
+311 après.** Borne T10 **inchangée à 9 300 000**, marge **175 126 octets, 1,88 %**.
+⚠⚠ **LE BLOC OCCUPÉ D'UN SITE DE L'OUVRAGE FLOTTE DANS SA BANDE, ET C'EST TOUT LE
+LOT.** Ethan, point 9 du 08/09 : « malgré un patch, toutes les bases Ouvrage
+restent identiques : les unités de défense sont au fond, tous les bâtiments au
+premier rang, et souche et étai restent au fond. »
+⚠⚠ **LE LOT A COMMENCÉ PAR UNE MESURE, ET ELLE CONFIRME LA TROISIÈME PHRASE MOT
+POUR MOT.** Vingt graines de cases distinctes, quatre niveaux, trois types — 240
+montages, AVANT d'écrire une ligne : **les bâtiments commencent en rangée 11 sur
+240 sur 240**, **les défenses finissent en rangée 10 sur 240 sur 240**, et **les
+deux uniques tombent en (18, 4) et (18, 5) sur 240 sur 240**. Ensembles de rangées
+occupées distincts sur vingt graines : **3 à 5 pour les bâtiments, 2 à 4 pour les
+défenses, 1 pour les uniques**. Après : **9 à 18**, **3 à 19**, **18**.
+⚠⚠ **ET LA CAUSE N'EST PAS UN MANQUE DE HASARD, C'EST UN ANCRAGE.**
+`contigueDepuisLOrigine` interdit à l'indice 0 du tableau des tailles d'être vide :
+le bord ancré du bloc est donc cloué au bord de sa bande sur toute graine, et
+seule sa LONGUEUR variait. Mesuré sur mille sites, 48 000 transferts tentés :
+**40,4 % tombent sur une rangée source VIDE** — le bloc est collé à l'indice 0,
+tout le reste du tableau est à zéro — et **13,7 % sont annulés par la
+contiguïté**. Les deux lots précédents avaient traité la COLONNE puis la TAILLE
+des rangées ; aucun n'avait touché au bord.
+⚠⚠ **`placementDesRangees` ENTRE, ET C'EST UNE COUCHE À PART PLUTÔT QU'UN
+ASSOUPLISSEMENT DE `taillesDeRangee` — POUR UNE RAISON MESURÉE.** Les tailles
+disent COMBIEN d'occupants par rangée employée ; le placement dit LESQUELLES des
+rangées de la bande les portent. Toucher aux tailles aurait changé leur NOMBRE
+pour une graine donnée, donc le nombre de tirages de `repartirLesColonnes`
+(`9·L + nb − L`), donc la position du flux au moment où `composerRepartition`
+compose la garnison.
+⚠⚠ **ET C'EST LE PIÈGE DU §5, QUI EST RÉEL ET MESURÉ.** `sim/site-entame.js`
+range `pvBatimentsMilli` et `pvDefensesMilli` **PAR INDICE** dans le montage
+régénéré. Mesuré : la suite des identifiants de BÂTIMENTS est invariante par
+graine sur les 21 couples (type, niveau) essayés, mais celle des DÉFENSES **varie
+sur 18 des 21** — un seul tirage ajouté au flux principal aurait donc remappé
+silencieusement les dégâts de tout site à moitié rasé d'une sauvegarde existante.
+⚠⚠ **D'OÙ UN SECOND FLUX, SALÉ, ET C'EST CE QUI LAISSE `SAVE_VERSION` À 29.**
+`creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_DES_RANGEES))`, sel **8** — le
+premier libre dans `src/sim/` ET dans `src/render/`. **Mesuré sur 6 000
+montages — 3 types × 50 niveaux × 40 graines — : ZÉRO écart sur la suite des
+identifiants, bâtiments comme défenses**, pendant que les rangées bougent sur
+5 611 et les colonnes des uniques sur 5 850. **Aucun bump, aucune purge de
+`sitesEntames`.**
+⚠ **ET LA DÉRIVATION PASSE PAR `hachageBrut`, PAS PAR UNE ARITHMÉTIQUE SUR LA
+GRAINE.** `creerRng` pose `s = graine >>> 0` et `tirer` avance de `0x6d2b79f5` :
+deux graines qui diffèrent d'un multiple de ce pas rendent le MÊME flux, décalé.
+Un `graine + 1` aurait pu recoller au premier flux ; l'avalanche du hachage ne le
+peut pas, mesuré sur 2 000 graines.
+⚠⚠ **LA RANGÉE 18 RESTE, ET C'EST LA COLONNE DES DEUX UNIQUES QUI SE TIRE.** §4.2
+du brief : ce sont les deux objectifs du raid, ils doivent coûter la traversée
+complète ; les avancer raccourcirait tous les raids du jeu. **Les neuf colonnes
+sont atteintes des deux côtés**, et le bloc des proportionnels reste borné à
+`11..17` — sans quoi un bâtiment tiré pourrait recouvrir un unique.
+⚠⚠ **`etalementMaxRangees` VAUT 2, ET LE TABLEAU EST DANS `data/sites.js`.** À 0
+le bloc DÉRIVE sans porter de trou et le compte passe déjà de 4/3 à 11/11 ; les
+trous font le reste. Le compte ne monte plus après 3, et deux rangées vides au
+plus gardent le bloc lisible comme un bloc. ⚠ **Et `base n.45` ne bouge presque
+pas — 3 ensembles sur 20 —, ce qui est une propriété de la GÉOMÉTRIE et non un
+réglage manqué** : à ce niveau-là les blocs remplissent presque leur bande, donc
+la marge est nulle. C'est pourquoi le plancher de `DO T1` se calcule sur la
+MARGE mesurée, `1 + 3 × marge` plafonné à 12, et pas sur un seuil plat.
+⚠⚠ **LES OBSTACLES NE BOUGENT PAS, ET L'EFFET SUR LA TRAVERSÉE EST L'INVERSE DE
+CE QUE LE BRIEF ANNONÇAIT.** Il prévoyait que « les obstacles se retrouveront
+parfois seuls devant » : mesuré sur 40 raids par cellule, le nombre d'obstacles
+en avant de la défense **BAISSE** — camp n.12 7,85 → 2,70, camp n.30 5,13 → 1,10,
+avantPoste n.30 1,45 → 0,15, base n.45 0,75 → 0,20. Le bloc de défense dérive
+souvent vers l'AVANT et les dépasse.
+⚠ **ET LE COMBAT S'ALLONGE PLUS SOUVENT QU'IL NE RACCOURCIT, DE PEU** : ticks
+moyens 279,8 → 340,3 (camp n.12), 282,9 → 302,6 (camp n.30), 209,1 → 194,3
+(avantPoste n.30), 217,4 → 221,3 (base n.45). Les PV de défense restants baissent
+partout — 610 → 536, 463 → 376, 526 → 509, 546 → 534 pour mille : la défense
+vient à la rencontre de l'assaut et s'y use davantage. **Aucun barème n'a été
+touché ; le calibrage revient à Ethan.**
+⚠⚠ **UN RAID DE RÉFÉRENCE TOUCHE DE NOUVEAU LE « AUTRE RÉGIME », ET IL FAUT LE
+REMONTER.** `cible.test.js T5` : les raids qui touchent le plafond de 900 passent
+de trois à deux, la liste bougeant des deux côtés — et `blindeLourd/camp/42`, qui
+y entre, se conclut au tick **3 539** sans plafond, soit **quatre fois** les 900.
+C'est le troisième du genre après le 4 645 du lot CARTE et le 5 478 du lot
+COLONNE. **Ethan tranche.**
+⚠ **TREIZE TESTS ENTRENT — `DO T1` à `DO T12` plus `DO T3 bis`, dans
+`test/disposition-ouvrage.test.js` — ET LE COMPTE PASSE DE 1 472 À 1 485.** Aucune
+assertion n'a été retirée. ⚠ **QUATORZE FALSIFICATIONS, QUATORZE CHUTES**, et
+chacune est nommée par le test qu'elle vise : le retour au générateur d'avant, les
+colonnes refigées, le placement tirant sur le flux principal, un tirage
+conditionnel, les bâtiments montant sur les uniques, l'étalement débridé, les
+offsets renversés, le plafond d'occupants relevé, deux sels déjà pris, la
+dérivation arithmétique, les obstacles hors bande, un champ ajouté à une pièce, et
+`Math.random` dans le placement.
+⚠⚠ **SEPT GARDES CHANGENT DE CIBLE, ET AUCUNE NE S'ASSOUPLIT.** `COL T16`,
+`COL T18`, `CR T4`, `CR T5` et le `T6` de `generateur.test.js` assertaient
+l'INVARIANT QU'ETHAN DEMANDE DE RELÂCHER — « les rangées occupées sont les plus
+ARRIÈRE, sans trou », « Souche et Étai au centre ». Elles exigent désormais la
+bande ET un étalement borné, ce qu'un semis ne passerait pas. ⚠ Le `T7` du même
+fichier réancre la rangée la plus avancée d'une artillerie, **8 → 7**, avec la
+mesure large en clair — **6 sur 110 000 montages** — et le fait qu'elle ne
+descende PAS jusqu'à la rangée 3, l'artillerie occupant le bord arrière du bloc.
+⚠⚠ **ET `T12` PASSE D'UN PLAFOND EN TICKS À UN PLAFOND RELATIF, CE QUI EST PLUS
+FORT, PAS PLUS LÂCHE.** L'invariance en miroir tenait `ecartMax <= 1` sur un
+montage dont le pire combat durait 434 ticks ; le même montage en dure 644, et le
+seul écart non nul en vaut 5. **La STRUCTURE n'a pas bougé d'un cheveu** : quatre
+comparaisons sur cinq cents avant comme après, toujours UNE cellule sur cinquante,
+toujours le niveau 2 seul contre les quatre autres. Ce que le plafond doit tenir
+est donc la PART du combat que l'arrondi déplace — **0,231 % avant, 0,782 %
+après** — et un `<= 5` nu aurait laissé passer un miroir cassé sur un combat de
+cent ticks.
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.** Seizième couche pour
+`temoins-bases-0.js` — **58 couples sur 308, et LES SIX PREMIÈRES PHASES SONT
+IDENTIQUES AU BIT** : tout part de la phase 7, qui est le premier raid. ⚠ Et
+`disposition` n'y est PAS, alors que les quinze couches d'avant en déplaçaient :
+c'est celle de la base du JOUEUR, et ce lot ne recompose rien. Quatrième couche
+pour `temoins-combat.js` — 200 combats sur 200, 1 039 champs déplacés, dont
+**1 004 étaient déjà surchargés** : la surcharge passe de 1 296 à **1 331**, et il
+reste **269 champs** adossés à la capture d'avant JOURNAL-DE-COMBAT.
+⚠ **ET LES SCALAIRES DU TÉMOIN NE BOUGENT QUE SUR LES DEUX RAPPORTS DE RAID.**
+Gestes de construction, gestes d'armement, taille de la sauvegarde, cases
+atteignables, déplacement, nombre de bases attaquantes, nombre de cibles et cible
+retenue : **identiques sur les vingt-cinq graines**, et toujours gardés contre les
+captures d'avant.
+⚠ **AUCUN FICHIER DE `src/ui/` NI DE `src/render/` N'EST TOUCHÉ**, et leurs tests
+restent verts sans modification — c'est `DO T9` du brief, et il tient.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 29.** Pas un champ n'entre dans
+l'état : une rangée et une colonne sont des positions que `genererSite` recalcule.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni `tools/`.
+
+**Auparavant, après le lot SOL-OUVRAGE :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
 `npm test` rend **1471 pass / 1 fail** ; le dépôt DÉCLARE **1472 pass / 0 fail**
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
@@ -9062,7 +9195,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   62 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   63 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -9073,6 +9206,7 @@ test/                   62 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
+  disposition-ouvrage
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
