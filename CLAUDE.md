@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.30 · build 132.
+Dernière révision : **08/09/2026**, version 0.99.31 · build 133.
 
 ---
 
@@ -43,12 +43,12 @@ Dernière révision : **08/09/2026**, version 0.99.30 · build 132.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 08/09/2026 (après le lot BÂTIMENTS-QUATRE-ÉTATS), à confronter :**
-`npm test` → **1419 pass / 0 fail**, `npm run build` → `dist/index.html`,
-**8 647 037 octets**, 0 référence externe. Coût **+251 576 octets** : **images
+`npm test` → **1421 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 647 318 octets**, 0 référence externe. Coût **+251 857 octets** : **images
 +246 932** — l'atlas `batiment` passe de 114 650 à 299 848 octets, donc 152 868 →
-399 800 en base64 — et **code +4 644**. **297 lignes `data:` avant, 297 après** :
+399 800 en base64 — et **code +4 925**. **297 lignes `data:` avant, 297 après** :
 aucune ressource nouvelle, c'est la même image qui s'alourdit.
-⚠⚠ **LA MARGE T10 TOMBE À 652 963 OCTETS, 7,02 %**, contre 9,73 % le matin même
+⚠⚠ **LA MARGE T10 TOMBE À 652 682 OCTETS, 7,02 %**, contre 9,73 % le matin même
 et 11,22 % la veille. C'est le point à surveiller du lot : le prochain lot d'art
 devra compter avant de dessiner.
 ⚠⚠ **UN ÉTAT DEVIENT QUATRE, ET `_detruit` AVAIT UN LECTEUR DE ZÉRO.** Relevé

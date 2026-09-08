@@ -3061,12 +3061,27 @@ const MIGRATIONS = {
    * affiché, les PV, le coût de montée, la capacité — et chacune se serait
    * plantée à un endroit différent, loin de la cause.
    *
-   * ⚠ UN COLLECTEUR HORS CHAMP EST RETIRÉ, et c'est le seul cas où la
-   * migration jette quelque chose. Il ne peut pas exister : `problemesDeLaPose`
-   * refuse `hors-champ` depuis toujours. S'il s'en trouvait un dans un état
-   * fabriqué à la main, aucune des deux réponses ne serait vraie — lui donner
-   * une ressource serait inventer un gisement, et le laisser en `collecteur`
-   * casserait le chargement.
+   * ⚠⚠ ELLE LIT `fondation`, JAMAIS `position`, ET LA PREMIÈRE ÉCRITURE S'EST
+   * TROMPÉE — corrigé le 08/09 sur la sauvegarde d'Ethan, « 19 résidus pour 16
+   * bâtiments ». Le bandeau de ce fichier le dit en capitales soixante lignes
+   * plus haut : « DÉRIVÉ DE LA FONDATION, PAS DE LA POSITION COURANTE […] il ne
+   * faut jamais les confondre ». Une base qui a bougé — le geste le plus
+   * ordinaire du jeu — voyait donc un terrain qui n'est pas le sien, et ses
+   * collecteurs tombaient « à côté » d'un champ imaginaire.
+   *
+   * ⚠⚠ ET ELLE NE SUPPRIME RIEN, PLUS JAMAIS. La première écriture FILTRAIT la
+   * disposition : elle a effacé trois bâtiments d'une vraie partie. C'est la
+   * faute la plus grave qu'une migration puisse commettre, et elle en a produit
+   * une seconde par ricochet — `economie.residus` est un tableau PARALLÈLE à
+   * `disposition`, si bien que retirer une pose sans retirer son résidu rend
+   * l'état incohérent. `verifierEtat` l'a refusé, ce qui a sauvé la partie ; il
+   * ne faut pas compter dessus deux fois.
+   *
+   * ⚠ UN COLLECTEUR QUE LE TERRAIN NE TRANCHE PAS PREND LE DÉFAUT DE LA
+   * VIGNETTE. Le cas est inatteignable — `problemesDeLaPose` refuse `hors-champ`
+   * depuis toujours — mais s'il survenait, garder le bâtiment avec un
+   * identifiant défendable vaut infiniment mieux que le jeter : la disposition
+   * est alors SIGNALÉE au chargement, et le joueur garde ce qu'il a construit.
    *
    * @param {object} s
    */
@@ -3074,17 +3089,57 @@ const MIGRATIONS = {
     s.version = 29;
     for (const base of s.bases ?? []) {
       if (!Array.isArray(base.disposition)) continue;
-      const champs = champsDeLaBase(base.position.rangee, base.position.colonne);
-      base.disposition = base.disposition.filter((b) => {
-        if (b?.id !== 'collecteur') return true;
-        const ressource = ressourceDeLaCase(champs, b.rangee, b.colonne);
-        if (ressource !== 'quartz' && ressource !== 'scorie') return false;
-        b.id = ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie';
-        return true;
-      });
+      const ou = base.fondation ?? base.position;
+      const champs = champsDeLaBase(ou.rangee, ou.colonne);
+      for (const b of base.disposition) {
+        if (b?.id !== 'collecteur') continue;
+        b.id = ressourceDeLaCase(champs, b.rangee, b.colonne) === 'scorie'
+          ? 'collecteurScorie'
+          : 'collecteurQuartz';
+      }
     }
   },
 };
+
+/** Combien de bâtiments chaque base porte — `null` pour une base sans liste. */
+function posesParBase(sauvegarde) {
+  return (sauvegarde.bases ?? []).map(
+    (b) => (Array.isArray(b?.disposition) ? b.disposition.length : null),
+  );
+}
+
+/**
+ * Une migration convertit, elle ne jette pas.
+ *
+ * ⚠⚠ CETTE GARDE VIENT D'UNE FAUTE RÉELLE, ET ELLE A COÛTÉ UNE PARTIE. La
+ * migration v28 → v29 du lot BÂTIMENTS-QUATRE-ÉTATS FILTRAIT la disposition sur
+ * un terrain recalculé depuis `position` au lieu de `fondation` : sur la base
+ * d'Ethan, qui avait bougé, trois bâtiments ont été effacés. Le défaut ne s'est
+ * vu que trois couches plus loin — `economie.residus` est un tableau PARALLÈLE à
+ * `disposition`, et `verifierEtat` a refusé l'état avec « 19 résidus pour 16
+ * bâtiments ». Un message qui parle d'économie pour une faute de migration.
+ *
+ * ⚠⚠ ELLE DIT « PAS MOINS », PAS « AUTANT ». Une migration a le droit
+ * d'AJOUTER une pose ; exiger l'égalité stricte interdirait un lot légitime pour
+ * attraper une faute qui, elle, est toujours une PERTE.
+ *
+ * ⚠ ELLE EST NOMMÉE ET EXPORTÉE POUR ÊTRE MESURÉE. `MIGRATIONS` ne l'est pas
+ * — et ne doit pas l'être, c'est une table interne —, si bien qu'un test ne
+ * peut pas monter une migration fautive. Il monte donc la garde elle-même.
+ *
+ * @param {Array<number|null>} avant poses par base, avant la migration
+ * @param {Array<number|null>} apres poses par base, après
+ * @param {number} version le maillon qui vient de jouer
+ */
+export function exigerAucunePerte(avant, apres, version) {
+  avant.forEach((n, i) => {
+    if (n === null || apres[i] === null || apres[i] >= n) return;
+    throw new Error(
+      `la migration ${version} → ${version + 1} a perdu ${n - apres[i]} bâtiment(s) `
+      + `de la base ${i} : une migration convertit, elle ne jette pas`,
+    );
+  });
+}
 
 /**
  * Migre une sauvegarde (objet déjà parsé) vers SAVE_VERSION, en place.
@@ -3103,10 +3158,12 @@ export function migrer(sauvegarde) {
     if (!migration) {
       throw new Error(`aucune migration depuis la version ${version}`);
     }
+    const avant = posesParBase(sauvegarde);
     migration(sauvegarde);
     if (sauvegarde.version !== version + 1) {
       throw new Error(`la migration ${version} → ${version + 1} n'a pas mis à jour la version`);
     }
+    exigerAucunePerte(avant, posesParBase(sauvegarde), version);
     version = sauvegarde.version;
   }
   return sauvegarde;
