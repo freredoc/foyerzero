@@ -400,7 +400,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 124 362 octets, la marge sur la borne T10 est de 1,89 %', () => {
+test('PIC T7 — le livrable pèse 9 127 599 octets, la marge sur la borne T10 est de 1,85 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -487,14 +487,27 @@ test('PIC T7 — le livrable pèse 9 124 362 octets, la marge sur la borne T10 e
   // Les quatre mesures qui ont désigné 704 sont dans l'en-tête de l'outil.
   //
   // ⚠⚠ LA MARGE TOMBE À 1,89 %, ET C'EST LA PLUS MINCE DEPUIS BASES-1. 7,02 % au
-  // 08/09 au matin, **1,89 %** maintenant : 175 638 octets. Le prochain lot qui
+  // 08/09 au matin, **1,89 %** au soir : 175 638 octets. Le prochain lot qui
   // fait entrer une image devra relever la borne EN ÉCRIVANT POURQUOI, ou tenir
   // dans cent soixante-quinze kilo-octets.
+  //
+  // ⚠⚠ REMESURÉ AU LOT PANNEAUX-DE-LA-CARTE, ET IL NE FAIT ENTRER AUCUNE IMAGE.
+  // **9 124 362 → 9 127 599, soit +3 237 octets, ENTIÈREMENT DU JAVASCRIPT** :
+  // ventilé contre un livrable rebâti dans un `git worktree` depuis `566a453`,
+  // **JavaScript +3 237 · images +0 · audio +0 · feuille +0 · balisage +0**, et
+  // la somme des cinq postes tombe EXACTEMENT sur le total. **311 lignes `data:`
+  // avant, 311 après ; 306 URI de part et d'autre** — le lot n'ajoute ni élément
+  // au balisage ni règle à la feuille, le §1.6 de son brief lui interdisant
+  // `src/index.src.html`.
+  //
+  // ⚠ LA MARGE PASSE DE 1,89 % À **1,85 %**, soit 172 401 octets. Elle reste
+  // au-dessus du plancher de 150 000 que l'assertion ci-dessous garde, et la
+  // borne T10 NE BOUGE PAS : ce lot ne fait entrer aucune ressource.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 9_124_362;          // mesuré le 08/09, lot SOL-OUVRAGE, base `37ef8eb`
-  const MARGE = BORNE - MESURE;      // 175 638 octets
-  assert.equal(MARGE, 175_638);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.89);
+  const MESURE = 9_127_599;          // mesuré le 08/09, lot PANNEAUX-DE-LA-CARTE, base `566a453`
+  const MARGE = BORNE - MESURE;      // 172 401 octets
+  assert.equal(MARGE, 172_401);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.85);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

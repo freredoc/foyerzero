@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
+Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
 
 ---
 
@@ -42,7 +42,173 @@ Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot SOL-OUVRAGE), à confronter :**
+**Référence au 08/09/2026 (après le lot PANNEAUX-DE-LA-CARTE), à confronter :**
+⚠⚠ **LA SUITE N'EST PAS VERTE, ET LE ROUGE EST CELUI D'HIER — LE BRIEF INTERDIT
+DE LE RÉPARER.** `npm test` rend **1481 pass / 1 fail** ; le dépôt DÉCLARE
+**1482 pass / 0 fail** — c'est la forme que la garde de `documentation.test.js`
+cherche, et elle dit le NOMBRE de tests, pas le verdict. Le rouge est
+`LIMITE T8`, il est unique, il est PRÉEXISTANT — il est arrivé au lot
+SOL-OUVRAGE, la PR #116 a été fusionnée avec lui —, et le §1 du brief de ce
+lot-ci dit « ne pas le réparer, ne pas le contourner, le consigner ». **Ni le
+seuil ni la rampe n'ont été touchés.**
+`npm run build` → `dist/index.html`, **9 127 599 octets**, 0 référence externe.
+Coût **+3 237 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre
+un livrable rebâti dans un `git worktree` depuis `566a453` : **JavaScript
++3 237 · images +0 · audio +0 · feuille +0 · balisage +0**, et la somme des cinq
+postes tombe EXACTEMENT sur le total des DEUX côtés — **311 lignes `data:`
+avant, 311 après ; 306 URI de part et d'autre**. Borne T10 **inchangée à
+9 300 000**, marge **172 401 octets, 1,85 %**.
+⚠⚠ **TROIS RETOURS D'ETHAN, ET LES TROIS VIVENT DANS `src/ui/monde.js`.**
+Point 5 : « lorsqu'on déplace une base, faire une simulation de territoire » ;
+point 6 : « rajouter un toast quand on possède un POI » ; point 10 : « une base
+détruite doit être cliquable et voir encore ses stats, surtout le niveau et dans
+combien de temps la ruine disparaît ». **Trois lots tournent en parallèle** — le
+brief attribue à celui-ci `ui/monde.js`, `ui/session.js`, `sim/ruines.js` et
+`sim/poi.js`, et lui interdit `ui/chantier.js`, `ui/offense.js`,
+`index.src.html`, `sim/fondation.js`, `sim/deplacement.js`,
+`sim/raid-ouvrage.js` et `sim/generateur.js`. **Vérifié au diff : le lot ne
+touche que `ui/monde.js` et `sim/ruines.js`.**
+⚠⚠ **LE BILAN DE TERRITOIRE N'ÉCRIT AUCUNE FORMULE D'INFLUENCE, ET C'EST TOUT LE
+POINT 5.** `bilanDuTerritoire` monte une HYPOTHÈSE — une copie de SURFACE de
+l'état où la seule base courante porte une position neuve — et appelle
+**`territoireDeLaFenetre` DEUX fois sur la MÊME fenêtre**, puis compte les cases
+qui changent de camp. La règle reste écrite une seule fois, dans
+`sim/territoire.js` ; ce module-ci ne fait que de l'arithmétique sur deux
+`Uint8Array`.
+⚠ **ET L'ÉTAT RÉEL NE BOUGE PAS D'UN OCTET** : `PC T1` sérialise avant et après,
+et compare les chaînes. Une copie qui partagerait l'objet `position` au lieu
+d'en poser un neuf téléporterait la base à l'ouverture de la confirmation, avant
+même l'accord du joueur.
+⚠⚠ **LA FENÊTRE COUVRE LES DEUX POSITIONS, DILATÉES DE `RAYON_DU_BILAN`, ET LE
+COUPLE `T1`/`T2` EST CE QUI LE MESURE.** `RAYON_DU_BILAN` vaut
+`max(...Object.values(RAYONS))`, donc **3** — jamais un nombre écrit à la main :
+une case peut changer de camp jusqu'au rayon de l'Ouvrage au-delà du segment.
+`T1` compare le panneau au comptage sur la MÊME fenêtre, `T2` mesure la fenêtre :
+c'est ce partage qui fait que le rayon ramené à zéro ne fait tomber que `T2`.
+⚠⚠ **ET `PC T1` A DÛ CHANGER DE MONTAGE APRÈS MESURE — LA FALSIFICATION DU BRIEF
+L'A LAISSÉ VERT AU PREMIER RELEVÉ.** Au DÉPART, la garde du peuplement écarte
+l'Ouvrage de quinze cases : un déplacement de cinq cases emporte l'octogone
+ENTIER sans rien contester, et rend **21 gagnées, 21 perdues, solde 0** quelle
+que soit la direction. Mesuré sur les 155 cases que le montage retient : 16
+bilans distincts en tout, mais **la PREMIÈRE — celle qu'il prend — tombe dans la
+nappe plate, et sa voisine y rend le MÊME 21/21/0**. Le montage vise donc
+désormais la **rangée 250, bâtiments au niveau 20**, où `niveauDeLaRangee` vaut
+10 et la carte est CONTESTÉE : **34 bilans distincts** sur 168 cases, la première
+rend **20/17/+3** et sa voisine 19/17/+2. **Une assertion de discrimination entre
+avec le montage**, pour qu'il ne puisse plus redevenir aveugle en silence.
+⚠⚠ **LE BILAN SE CALCULE UNE FOIS, À L'OUVERTURE, ET `PC T3` LE MESURE PAR
+DIFFÉRENTIEL.** `territoireDeLaFenetre` est appelée à CHAQUE image pour les
+frontières : un compte absolu d'appels ne dirait rien. Le test compte les
+lectures d'`etat.graine` — l'idiome de `RCU T11` — et exige DEUX choses :
+l'OUVERTURE de la confirmation en coûte au moins deux de plus, donc le bilan est
+bien calculé là ; et **dix images confirmation OUVERTE en coûtent exactement dix
+fois une image ordinaire**, donc il n'est pas recalculé à l'image. **Trois assertions de source l'accompagnent** : exactement deux
+occurrences de `bilanDuTerritoire(`, aucune dans `dessiner`, une dans
+`demanderLeDeplacement`.
+⚠⚠ **`direLaDuree` EST IMPORTÉE DE `sim/reparation.js`, ET C'EST UN ÉCART AU
+BRIEF, DÉCLARÉ.** Son §4.2 ne laissait que deux issues — exporter la fonction de
+`sim/deplacement.js`, qui appartient à un autre lot, ou « en écrire la sienne
+dans `monde.js`, en la déclarant comme la troisième jumelle ». **Mesuré : elle
+est DÉJÀ exportée de `sim/reparation.js` depuis le lot RÉPARER-ÉCRAN, et
+`ui/chantier.js` la partage DÉJÀ** — très exactement pour que la même durée ne se
+lise pas de deux façons. L'importer n'ajoute pas une ligne à `sim/reparation.js`,
+donc pas un conflit à résoudre sur un téléphone, ce qui EST le motif du §1.6.
+⚠⚠ **`ruinesActives` GAGNE `tick`, ET C'EST LE SECOND ÉCART, ANNONCÉ AVANT
+D'ÊTRE COMMIS COMME LE §6 L'EXIGE.** Elle est LA SEULE PORTE vers l'émission
+d'une ruine, et elle jetait le seul champ dont le compte à rebours se dérive.
+**Les deux autres issues sont écartées dans le fichier** : lire `etat.basesRasees`
+depuis l'écran contournerait cette porte, donc ouvrirait un panneau sur une
+ruine périmée ; une seconde recherche gardée par `ruineEstActive` parcourrait
+deux fois la même liste pour deux réponses qui doivent s'accorder. ⚠ Le champ ne
+sert à AUCUN calcul du module : `ruineEstActive` continue de lire l'entrée BRUTE.
+⚠⚠ **LE TOAST DES GISEMENTS SE DÉTECTE PAR DIFFÉRENCE, CÔTÉ ÉCRAN, ET
+`releverLesPoisAcquis` N'A PAS UNE LIGNE DE CHANGÉE.** Elle tourne dans le
+chemin CHAUD du tick ; lui faire émettre un événement mettrait une notion
+d'interface dans la simulation. L'écran compare l'ensemble des clés
+`type:bande` d'une image à l'autre. ⚠ **La comparaison porte sur l'IDENTITÉ, pas
+sur la longueur** : `poisAcquis` est retriée à chaque ajout, donc un compte
+n'aurait pas dit LESQUELS.
+⚠ **ET LA PREMIÈRE MESURE EST MUETTE, PAR CONSTRUCTION.** `poisConnus` vaut
+`null` tant que rien n'a été vu : sans ça, ouvrir la carte sur une partie qui
+porte déjà dix gisements annoncerait « 10 gisements acquis » au joueur qui les a
+pris la veille.
+⚠⚠ **ET LE RELEVÉ EST AVANT LA SORTIE ANTICIPÉE DE `rafraichir`, CE QUI N'EST PAS
+UN DÉTAIL.** `empreinteDeLaCarte` ne porte ni les gisements acquis ni l'horloge :
+posé après, le message ne partirait que les images où la carte change par
+ailleurs — donc presque jamais. La falsification qui le déplace fait tomber
+`PC T5` ET `PC T6`.
+⚠ **DEUX GISEMENTS DANS LE MÊME TICK FONT UN SEUL MESSAGE, QUI DIT DEUX.** Et le
+montage a dû être mesuré avant d'être écrit : **une base de niveau 1 ne peut PAS
+tenir deux cases à gisement** — le plancher ne protège que la sienne. Mesuré sur
+quatre graines et les **cinquante et un** centres qui couvrent deux gisements à
+la fois : **ZÉRO** en acquiert deux au niveau 1, **les cinquante et un** au
+niveau 50. Le centre se CHERCHE, il ne s'écrit pas.
+⚠⚠ **LE TOAST EST CRÉÉ EN JAVASCRIPT ET POSÉ DANS `#monde-outils`, PARCE QUE LE
+BALISAGE APPARTIENT À UN AUTRE LOT.** `src/index.src.html` est hors périmètre
+(§1.6) : l'élément naît donc dans l'écran, et son style se LIT dans `PALETTE` —
+**aucune teinte neuve, aucun hex écrit dans `monde.js`**, la garde de palette
+reste satisfaite. ⚠ Et sa durée vient de `DUREE_TOAST_MS` d'`ui/chantier.js` : un
+second message qui s'effacerait au bout d'un AUTRE délai apprendrait au joueur
+deux grammaires pour le même objet. **L'AFFICHAGE, lui, est recopié** — c'est une
+dette déclarée, et le lot qui pourra toucher au balisage la refermera.
+⚠⚠ **LA RUINE S'OUVRE EN LECTURE SEULE, ET ELLE N'ENTRE PAS DANS
+`sitesDeLaFenetre`.** C'est cette liste-là qui pilote le TOUCHER des cibles et
+les étiquettes ; une ruine n'est pas attaquable, et l'y faire entrer lui donnerait
+le bouton « Attaquer » par le même chemin que les autres. `ouvrirRuine` masque
+les CINQ blocs d'action : le prix, le refus, la confirmation, « Déplacer la
+base » et « Attaquer ».
+⚠ **UN SITE SUR LA MÊME CASE GAGNE SUR LA RUINE**, et c'est la POSITION de la
+recherche qui le dit : la ruine se cherche APRÈS la boucle des sites, jamais
+avant. Un panneau en lecture seule ne doit pas recouvrir une cible attaquable —
+c'est le sens du toucher qui changerait. `PC T9` pose la ruine sur la case d'un
+satellite et exige que le titre soit celui du SATELLITE ; la falsification qui
+avance la recherche le fait tomber, et lui seul.
+⚠ **LE COMPTE À REBOURS SE RAFRAÎCHIT, ET IL NE DIT JAMAIS UN DÉLAI NÉGATIF.**
+`resteDeLaRuine` plancher à zéro, et `rafraichirLaRuine` FERME le panneau dès que
+`ruineDeLaCase` ne rend plus rien — une ruine expirée cesse d'exister, elle ne
+reste pas à l'écran à annoncer « 0,0 h ».
+⚠⚠ **L'EN-TÊTE DE `monde.js` MENTAIT DEPUIS LE 06/09, ET IL EST RÉÉCRIT PLUTÔT
+QU'ENJAMBÉ.** Il finissait par « Aucun bouton "Attaquer" : le raid n'existe
+pas » — vrai le 27/08 contre le bouton « Assaut », FAUX depuis le lot CARTE-C,
+qui a posé `#monde-panneau-attaquer` sur ordre d'Ethan. **Le balisage portait
+déjà le renversement en toutes lettres ; l'en-tête ne l'avait pas suivi.** C'est
+le commentaire menteur en puissance que §6 raconte trois fois, trouvé en
+ajoutant un troisième panneau.
+⚠⚠ **UN DÉFAUT DU FAUX DOCUMENT A ÉTÉ TROUVÉ PAR `PC T10`, PAS À LA RELECTURE.**
+Son `textContent` était un CHAMP : écrire dedans ne vidait pas `children`, donc
+les lignes s'empilaient d'un rafraîchissement à l'autre et `find()` rendait la
+première, périmée. Le test lisait « 24.0 h » quatre fois pour quatre instants
+différents. C'est devenu un ACCESSEUR qui vide les enfants — le comportement
+fidèle du DOM, et exactement le défaut que `test/offense.test.js` a payé au lot
+RETOUR-DE-RAID.
+⚠ **QUINZE FALSIFICATIONS, QUINZE CHUTES, ZÉRO MUETTE**, et quatre mordent plus
+large que leur test : la phrase de menace écrite en dur fait tomber `DÉ T6` et
+`DÉ T10` en plus de `PC T4`, la ruine entrée dans `sitesDeLaFenetre` fait tomber
+`PC T7`, `T8`, `T9` et `T10` ensemble.
+⚠ **DIX TESTS ENTRENT — `PC T1` à `PC T10` — ET LE COMPTE PASSE DE 1 472 À
+1 482.** **Aucune assertion n'a été retirée ni assouplie** ; **une garde change de
+valeur**, `PIC T7`, qui suit la taille du livrable et la marge — 9 124 362 et
+1,89 % deviennent 9 127 599 et 1,85 %.
+⚠ **ÉCART DÉCLARÉ : `getBoundingClientRect` N'EST PAS ASSERTÉ**, ce que le §5 du
+brief demandait. Le faux document rend un rectangle CONSTANT, 360 × 640 : une
+assertion dessus mesurerait le faux et non l'écran. Ce qui est asserté à la
+place est ce qui se mesure ici — `hidden`, `pointer-events`, le CONTENU des
+lignes, et le comportement du toucher.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 29.** Rien n'entre dans l'état : un
+bilan est une hypothèse jetée, un message est un affichage, et l'ensemble des
+gisements connus vit dans la fermeture de l'écran — il se reconstruit au
+chargement, muet.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — le §1 du brief l'écrit de face.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Tout est mesuré par le faux document de
+`test/monde.test.js`, qui monte l'écran et rejoue de vrais évènements de
+pointeur — mais qui n'est pas un navigateur.
+⚠ **ET LA BASE ANNONCÉE PAR LE BRIEF ÉTAIT EXACTE** : `main` à `566a453`,
+**1 471 pass / 1 fail**, 9 124 362 octets, 0.99.35 · build 137, et le rouge
+unique était bien `LIMITE T8`.
+
+**Auparavant, après le lot SOL-OUVRAGE :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
 `npm test` rend **1471 pass / 1 fail** ; le dépôt DÉCLARE **1472 pass / 0 fail**
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le

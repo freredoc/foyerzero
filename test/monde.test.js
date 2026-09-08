@@ -24,7 +24,20 @@ import {
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
   traitDeLaFleche, traitRogne, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
   ciblageDuSite,
+  RAYON_DU_BILAN, fenetreDuBilan, bilanDuTerritoire, lignesDuBilan,
+  clesDesPoisAcquis, phraseDesPoisAcquis,
+  ruineDeLaCase, nomDeLaRuine, lignesDeLaRuine, resteDeLaRuine, NOM_DU_VAINQUEUR,
 } from '../src/ui/monde.js';
+import {
+  territoireDeLaFenetre, RAYONS, JOUEUR, OUVRAGE,
+} from '../src/sim/territoire.js';
+import {
+  ruineFraiche, ruinesActives, TICKS_DE_RUINE,
+} from '../src/sim/ruines.js';
+import { poisDeLaFenetre } from '../src/sim/poi.js';
+import { dansLOctogoneDInfluence } from '../src/sim/points-attaque.js';
+import { direLaDuree } from '../src/sim/reparation.js';
+import { DUREE_TOAST_MS } from '../src/ui/chantier.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
   palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU,
@@ -2346,7 +2359,22 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     complete: id === 'monde-emblemes',
     naturalWidth: id === 'monde-emblemes' ? 512 : 0,
     hidden: false,
-    textContent: '',
+    // ⚠⚠ ÉCRIRE `textContent` VIDE LES ENFANTS, ET LE FAUX NE LE FAISAIT PAS —
+    // trouvé en le MESURANT au lot PANNEAUX-DE-LA-CARTE, pas en le relisant.
+    // C'est un plain champ jusque-là : `peindreLesLignes` repartait d'un corps
+    // qu'il croyait vide et EMPILAIT ses lignes, si bien que le compte à rebours
+    // d'une ruine se lisait toujours à sa valeur d'ouverture — les quatre
+    // premières lignes du panneau étant les plus anciennes. C'est exactement le
+    // défaut que `test/offense.test.js` a payé au lot RETOUR-DE-RAID, et
+    // `CLAUDE.md` §6 le raconte déjà.
+    //
+    // ⚠ ET IL VIDE À CHAQUE ÉCRITURE, PAS SEULEMENT SUR LA CHAÎNE VIDE : le vrai
+    // DOM remplace TOUS les enfants par un unique nœud de texte, quelle que soit
+    // la valeur. Un faux qui ne viderait que sur `''` mentirait sur un titre
+    // réécrit.
+    _texte: '',
+    get textContent() { return this._texte; },
+    set textContent(valeur) { this._texte = valeur; this.children = []; },
     title: '',
     style: {},
     classList: { add() {}, remove() {}, toggle() {} },
@@ -2377,19 +2405,42 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
   });
 
   const parId = new Map(IDS.map((id) => [id, faire(id)]));
+  /** Les minuteries en attente, posées par `setTimeout` du faux `defaultView`. */
+  const minuteries = new Map();
+  let prochaineMinuterie = 0;
   const doc = {
     getElementById(id) {
       if (!parId.has(id)) throw new Error(`faux document : « ${id} » n'est pas dans src/index.src.html`);
       return parId.get(id);
     },
     createElement: (tag) => faire(tag),
+    // ⚠⚠ LES MINUTERIES ENTRENT AU LOT PANNEAUX-DE-LA-CARTE, ET ELLES SONT
+    // PILOTÉES PAR LE TEST. Le toast des gisements s'efface tout seul au bout de
+    // `DUREE_TOAST_MS` ; sans `setTimeout`, l'écran lèverait au premier message.
+    // Elles ne courent pas d'elles-mêmes — `echoir()` les fait toutes tomber —,
+    // parce qu'un test qui ATTEND quatre secondes est un test qu'on cesse de
+    // lancer.
     defaultView: {
       devicePixelRatio: dpr,
       requestAnimationFrame: () => 0,
       cancelAnimationFrame() {},
+      setTimeout(fn, delai) {
+        prochaineMinuterie += 1;
+        minuteries.set(prochaineMinuterie, { fn, delai });
+        return prochaineMinuterie;
+      },
+      clearTimeout(id) { minuteries.delete(id); },
     },
   };
-  return { doc, appels, canvas: parId.get('monde-canvas'), dpr, parId };
+  /** Fait tomber toutes les minuteries en attente, dans l'ordre de pose. */
+  const echoir = () => {
+    const enCours = [...minuteries.entries()];
+    minuteries.clear();
+    for (const [, { fn }] of enCours) fn();
+  };
+  return {
+    doc, appels, canvas: parId.get('monde-canvas'), dpr, parId, minuteries, echoir,
+  };
 }
 
 /**
@@ -3350,4 +3401,527 @@ test('DÉ T10 — le compte annoncé est celui de la case VISÉE, pas de la posi
   assert.notEqual(parId.get('monde-panneau-menace').textContent,
     phraseDesAttaquantes(montage.ici),
     'l\'écran annonce le compte de la position ACTUELLE, pas celui de la case visée');
+});
+
+// ---------------------------------------------------------------------------
+// lot PANNEAUX-DE-LA-CARTE — 08/09/2026
+//
+// Trois points du relevé d'Ethan : le 5 (« lorsqu'on déplace une base, faire une
+// simulation de territoire »), le 6 (« rajouter un toast quand on possède un
+// POI ») et le 10 (« une base détruite doit être cliquable et voir encore ses
+// stats, surtout le niveau et dans combien de temps la ruine disparaît »). Les
+// trois vivent dans `src/ui/monde.js`, donc ils se testent ensemble.
+//
+// ⚠⚠ ÉCART DÉCLARÉ AU §5 DU BRIEF, QUI DEMANDAIT D'ASSERTER
+// `getBoundingClientRect` PLUTÔT QUE LA SEULE PRÉSENCE AU DOM. Le faux document
+// de ce fichier rend un rectangle CONSTANT — 360 × 640, écrit à sa création —,
+// donc une assertion dessus mesurerait le faux et non l'écran. Le dépôt n'a ni
+// jsdom ni navigateur (CLAUDE.md §3) et cette instruction ne survit pas au
+// contact. Ce qui est asserté à la place est ce qui se mesure ici : `hidden`,
+// `pointer-events`, le CONTENU des lignes, et le comportement du toucher.
+// ---------------------------------------------------------------------------
+
+/** Les lignes du corps du panneau, telles que le DOM les porte. */
+function lignesDuCorps(parId) {
+  return parId.get('monde-panneau-corps').children.map((bloc) => ({
+    quoi: bloc.children[0].textContent,
+    valeur: bloc.children[1].textContent,
+  }));
+}
+
+/**
+ * Le bilan compté À LA MAIN, sur une fenêtre qu'on lui donne.
+ *
+ * ⚠⚠ ELLE RÉIMPLÉMENTE LE COMPTAGE, JAMAIS LA FORMULE D'INFLUENCE. C'est le
+ * partage qui rend ces tests utiles : `territoireDeLaFenetre` reste la seule
+ * écriture de la règle — la recopier ici ferait un témoin qui suivrait l'erreur
+ * qu'il devrait attraper —, mais l'ARITHMÉTIQUE du bilan, elle, est refaite.
+ */
+function compterLeBilan(etat, cible, fenetre) {
+  const hypothese = {
+    ...etat,
+    bases: etat.bases.map((b, k) => (
+      k === etat.baseCourante ? { ...b, position: { ...cible } } : b
+    )),
+  };
+  const avant = territoireDeLaFenetre(etat, fenetre).occupant;
+  const apres = territoireDeLaFenetre(hypothese, fenetre).occupant;
+  assert.equal(avant.length, apres.length, 'montage : les deux cartes diffèrent de forme');
+  let gagnees = 0;
+  let perdues = 0;
+  for (let i = 0; i < avant.length; i += 1) {
+    if (avant[i] === apres[i]) continue;
+    if (apres[i] === JOUEUR) gagnees += 1;
+    else if (avant[i] === JOUEUR) perdues += 1;
+  }
+  return { gagnees, perdues, solde: gagnees - perdues };
+}
+
+test('PC T1 — le bilan annoncé est celui que la carte peint', () => {
+  // ⚠⚠ LE MONTAGE A DÛ MONTER LA BASE VERS L'OUVRAGE, ET LE MOTIF EST MESURÉ.
+  // Au DÉPART — rangée 295 — la garde du peuplement écarte les bases de
+  // l'Ouvrage de quinze cases, si bien qu'un déplacement de cinq cases ou plus
+  // emporte l'octogone ENTIER sans rien contester : il rend **21 gagnées, 21
+  // perdues, solde 0**, quelle que soit la direction. Mesuré sur les 155 cases
+  // que `armerEtViser` retient : 16 bilans distincts en tout, mais **la PREMIÈRE
+  // — celle que ce montage prend, `ecart = 0` — tombe dans la nappe plate, et sa
+  // voisine y rend le MÊME 21/21/0**. Un montage qui vise là ne distingue donc
+  // pas une cible décalée d'une case, et c'est exactement ce que la
+  // falsification du §5 du brief a montré : elle a laissé ce test VERT.
+  //
+  // ⚠ RANGÉE 250, BÂTIMENTS AU NIVEAU 20 : c'est le premier endroit où la carte
+  // est CONTESTÉE — `niveauDeLaRangee(250)` vaut 10, la base tient donc une
+  // partie de son octogone et en perd une autre. Mesuré : **34 bilans distincts**
+  // sur les 168 cases retenues, la première rend **20 gagnées, 17 perdues, solde
+  // +3**, et sa voisine 19/17/+2 — elle discrimine. C'est aussi le seul endroit
+  // où ce que le panneau annonce APPREND quelque chose au joueur, un solde
+  // plutôt qu'un zéro mécanique.
+  const etat = creerEtat(20260906);
+  baseCourante(etat).position = { rangee: 250, colonne: 16 };
+  for (const batiment of baseCourante(etat).disposition) batiment.niveau = 20;
+  const avant = serialiser(etat, 0);
+  const m = armerEtViser(etat);
+
+  // ⚠ LE TÉMOIN SE CALCULE SUR LA MÊME FENÊTRE QUE L'ÉCRAN, et c'est délibéré :
+  // ce test-ci mesure que le panneau AFFICHE ce que le comptage donne, pas que
+  // la fenêtre est assez large. C'est `PC T2` qui mesure la fenêtre, et le
+  // partage est ce qui fait que la falsification du rayon ne fait tomber que
+  // lui — les deux côtés de celui-ci se déplaceraient ensemble.
+  const attendu = compterLeBilan(etat, m.cible, fenetreDuBilan(m.base, m.cible));
+
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : un déplacement qui ne changerait
+  // aucune case rendrait trois zéros, que n'importe quel code produirait.
+  assert.ok(attendu.gagnees + attendu.perdues > 0,
+    'montage : ce déplacement ne change aucune case de camp');
+
+  // ⚠⚠ ET IL DISCRIMINE UNE CIBLE FAUSSE, CE QUE LA PREMIÈRE ÉCRITURE DE CE TEST
+  // NE FAISAIT PAS. La falsification du §5 du brief — « décaler la cible d'une
+  // case » — l'a laissé VERT au premier relevé, sur le montage du départ, parce
+  // que les deux cibles y rendent le même 21/21/0. Un montage qui ne distingue
+  // pas la faute qu'il cherche ne garde rien.
+  const voisine = { rangee: m.cible.rangee + 1, colonne: m.cible.colonne };
+  assert.notDeepEqual(attendu, compterLeBilan(etat, voisine, fenetreDuBilan(m.base, voisine)),
+    'montage : décaler la cible d\'une case ne change pas le bilan — rien n\'est mesuré');
+
+  assert.deepEqual(lignesDuCorps(m.parId), lignesDuBilan(attendu),
+    'le panneau n\'annonce pas le bilan que la carte donne');
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, false,
+    'la confirmation ne s\'est pas ouverte');
+
+  // ⚠⚠ ET L'ÉTAT N'A PAS BOUGÉ. L'hypothèse est une copie de SURFACE ; si
+  // `territoireDeLaFenetre` écrivait quoi que ce soit — ou si la copie partageait
+  // l'objet `position` au lieu d'en poser un neuf —, le joueur verrait sa base se
+  // téléporter en ouvrant la confirmation, avant même d'avoir donné son accord.
+  assert.equal(serialiser(etat, 0), avant,
+    'la simulation de territoire a écrit dans l\'état réel');
+});
+
+test('PC T2 — la fenêtre du bilan couvre les DEUX positions, dilatées', () => {
+  const etat = partiePeuplee();
+  const base = { ...baseCourante(etat).position };
+  // ⚠ LA CASE LA PLUS LOINTAINE SE DEMANDE, elle ne s'écrit pas : c'est celle
+  // qui fait sortir l'ancienne position du cadre, et donc celle qui distingue
+  // une fenêtre dilatée d'une fenêtre qui ne l'est pas.
+  const loin = casesAtteignables(etat).reduce((a, k) => {
+    const d = (x) => (x.rangee - base.rangee) ** 2 + (x.colonne - base.colonne) ** 2;
+    return d(k) > d(a) ? k : a;
+  });
+  assert.ok(Math.max(Math.abs(loin.rangee - base.rangee), Math.abs(loin.colonne - base.colonne))
+    > 2 * RAYON_DU_BILAN,
+    'montage : la case visée est trop proche pour distinguer les deux fenêtres');
+
+  // ⚠⚠ LE TÉMOIN SE DONNE SA PROPRE FENÊTRE, LARGEMENT, ET IL NE DEMANDE RIEN AU
+  // MODULE. C'est ce qui fait de ce test le second terme du couple : une
+  // falsification qui ramènerait `RAYON_DU_BILAN` à zéro laisserait `PC T1` vert
+  // — ses deux côtés se déplaceraient ensemble — et ferait tomber celui-ci, dont
+  // le témoin ne bouge pas.
+  const marge = RAYON_DU_BILAN + 8;
+  const large = {
+    premiereRangee: Math.min(base.rangee, loin.rangee) - marge,
+    derniereRangee: Math.max(base.rangee, loin.rangee) + marge,
+    premiereColonne: Math.min(base.colonne, loin.colonne) - marge,
+    derniereColonne: Math.max(base.colonne, loin.colonne) + marge,
+  };
+  const attendu = compterLeBilan(etat, loin, large);
+  assert.ok(attendu.gagnees + attendu.perdues > 0, 'montage : rien ne change de camp');
+  assert.deepEqual(bilanDuTerritoire(etat, loin), attendu,
+    'le bilan est amputé : la fenêtre ne couvre pas les deux positions');
+
+  // ⚠ ET LA FENÊTRE DU MODULE CONTIENT BIEN LES DEUX POSITIONS, dilatées — la
+  // moitié qui se lit sans compter une seule case.
+  const f = fenetreDuBilan(base, loin);
+  for (const k of [base, loin]) {
+    assert.ok(k.rangee - RAYON_DU_BILAN >= f.premiereRangee
+      && k.rangee + RAYON_DU_BILAN <= f.derniereRangee
+      && k.colonne - RAYON_DU_BILAN >= f.premiereColonne
+      && k.colonne + RAYON_DU_BILAN <= f.derniereColonne,
+    `l'octogone de (${k.rangee}, ${k.colonne}) sort de la fenêtre du bilan`);
+  }
+});
+
+test('PC T3 — le bilan se calcule UNE fois, à l\'ouverture, et pas à chaque image', () => {
+  // ⚠⚠ LA MESURE EST UN ÉCART, PAS UN COMPTE ABSOLU. `territoireDeLaFenetre` est
+  // appelée à CHAQUE image depuis le lot TERRITOIRE — c'est elle qui peint les
+  // frontières — donc compter ses appels ne dirait rien. Ce qu'on mesure est que
+  // la confirmation OUVERTE ne coûte pas un centime de plus par image que la même
+  // image sans elle.
+  //
+  // ⚠ LA SONDE EST `etat.graine`, LUE UNE FOIS PAR APPEL À `forcesDeLOuvrage`,
+  // donc deux fois par bilan. C'est l'idiome de `RCU T11` : on compte les lectures
+  // d'un champ plutôt que les appels d'une fonction qu'un module ne sort pas.
+  const etat = partiePeuplee();
+  const { doc, dpr, parId, appels } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc, {});
+  const canvas = doc.getElementById('monde-canvas');
+  ecran.peindre(etat);
+  const base = { ...baseCourante(etat).position };
+  const halo = cadreDuHalo(appels);
+  const cible = casesAtteignables(etat)
+    .filter((k) => Math.abs(k.rangee - base.rangee) <= 6
+      && Math.abs(k.colonne - base.colonne) <= 6)[0];
+  assert.ok(cible !== undefined, 'montage : pas de case atteignable dans le cadre');
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+
+  const valeur = etat.graine;
+  let lectures = 0;
+  Object.defineProperty(etat, 'graine', {
+    configurable: true,
+    enumerable: true,
+    get() { lectures += 1; return valeur; },
+  });
+
+  const depart = lectures;
+  ecran.peindre(etat);
+  const sansConfirmation = lectures - depart;
+  assert.ok(sansConfirmation > 0, 'montage : la sonde ne voit aucune lecture');
+
+  const avantToucher = lectures;
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, cible);
+  assert.equal(parId.get('monde-panneau-confirmation').hidden, false,
+    'montage : la confirmation ne s\'est pas ouverte');
+  // ⚠ LE TOUCHER, LUI, PAIE LE BILAN : deux cartes de plus que le seul repeint
+  // qu'il déclenche. Sans cette moitié, un bilan qui ne serait JAMAIS calculé
+  // passerait l'égalité ci-dessous.
+  assert.ok(lectures - avantToucher >= 2,
+    'le toucher n\'a pas calculé de bilan : rien ne mesure le §2.2');
+
+  const avantDix = lectures;
+  for (let i = 0; i < 10; i += 1) ecran.peindre(etat);
+  assert.equal(lectures - avantDix, 10 * sansConfirmation,
+    'la confirmation ouverte recalcule son bilan à chaque image');
+
+  // ⚠ ET LA SOURCE LE DIT AUSSI : le bilan n'est appelé qu'à un seul endroit, et
+  // ce n'est pas la boucle de dessin. Une falsification qui le recalculerait dans
+  // `dessiner` fait tomber les deux moitiés.
+  const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  assert.equal((source.match(/bilanDuTerritoire\(/g) ?? []).length, 2,
+    '`bilanDuTerritoire` n\'a plus exactement un appelant (sa déclaration comprise)');
+  assert.doesNotMatch(extraireFonction(source, 'dessiner'), /bilanDuTerritoire/,
+    'la boucle de dessin recalcule le bilan de territoire');
+  assert.match(extraireFonction(source, 'demanderLeDeplacement'), /bilanDuTerritoire\(/,
+    'le bilan ne se calcule plus au moment où la case est visée');
+});
+
+test('PC T4 — la phrase de menace n\'a pas bougé d\'un mot', () => {
+  // ⚠ NON-RÉGRESSION DU LOT DÉPLACEMENT-ÉCLAIRÉ. Le bilan entre dans le MÊME
+  // panneau ; le §2.3 du brief interdit d'y toucher, un autre lot mesurant ce
+  // que ce chiffre compte.
+  const etat = partiePeuplee();
+  const m = armerEtViser(etat);
+  assert.equal(m.parId.get('monde-panneau-menace').textContent,
+    phraseDesAttaquantes(nombreDAttaquantes(etat, m.cible)),
+    'la phrase de menace ne vient plus de `phraseDesAttaquantes`');
+  assert.ok(m.parId.get('monde-panneau-menace').textContent.length > 0,
+    'la phrase de menace est vide');
+});
+
+/** La carte entière, pour demander tous les gisements d'une graine. */
+const CARTE_ENTIERE = {
+  premiereRangee: 1,
+  derniereRangee: GEOGRAPHIE.carte.hauteur,
+  premiereColonne: 1,
+  derniereColonne: GEOGRAPHIE.carte.largeur,
+};
+
+/**
+ * Un écran monté, avec la boîte du toast déjà sous surveillance.
+ *
+ * ⚠⚠ ON COMPTE LES ÉCRITURES, PAS L'ÉTAT FINAL. « Un seul toast » est une
+ * propriété du NOMBRE de messages, pas du dernier : deux écritures de la même
+ * phrase laisseraient la boîte dans un état identique, et une assertion sur son
+ * contenu passerait. C'est l'idiome du double appel de `JRN T6`, où deux
+ * retournements s'annulaient.
+ */
+function ecranAvecToast(etat) {
+  const m = fauxDocumentMonde();
+  const raids = [];
+  const ecran = initialiserEcranMonde(m.doc, {
+    surEntreeRaid: (cible) => raids.push(cible),
+  });
+  const boite = m.parId.get('monde-outils').children[0];
+  assert.ok(boite !== undefined, 'l\'écran ne pose aucune boîte de message dans `#monde-outils`');
+  const ecrits = [];
+  let texte = boite.textContent;
+  Object.defineProperty(boite, 'textContent', {
+    configurable: true,
+    get() { return texte; },
+    set(v) { texte = v; ecrits.push(v); },
+  });
+  ecran.peindre(etat);
+  return {
+    ...m, ecran, boite, ecrits, raids, dits: () => ecrits.filter((t) => t !== ''),
+  };
+}
+
+test('PC T5 — un gisement acquis parle UNE fois, et le tick suivant se tait', () => {
+  // ⚠ LE MONTAGE PASSE PAR LE MOTEUR : la base est posée SUR la case d'un
+  // gisement — le plancher « le territoire où la base se trouve ne change pas »
+  // la lui donne quel que soit le voisinage — et c'est `releverLesPoisAcquis`,
+  // dans le tick, qui l'acquiert. Aucune coordonnée n'est écrite : elle se
+  // demande à `poisDeLaFenetre`.
+  const etat = creerEtat(20260906);
+  const gisement = poisDeLaFenetre(etat.graine, CARTE_ENTIERE)[0];
+  baseCourante(etat).position = { rangee: gisement.rangee, colonne: gisement.colonne };
+  assert.deepEqual(etat.poisAcquis, [], 'montage : un gisement est déjà acquis');
+
+  const m = ecranAvecToast(etat);
+  // ⚠⚠ LA PREMIÈRE MESURE EST MUETTE, ET C'EST LE §6 DU BRIEF : un rechargement
+  // ne reparle pas. Ici la liste est vide, mais c'est le même chemin.
+  assert.deepEqual(m.dits(), [], 'l\'écran a parlé avant qu\'un gisement soit pris');
+  assert.equal(m.boite.hidden, true, 'la boîte de message est visible sans message');
+  // ⚠⚠ ET IL N'AVALE AUCUN TOUCHER. `#monde-outils` porte un `z-index` et
+  // intercepte le doigt pour son bouton ; un message posé dedans SANS
+  // `pointer-events: none` masquerait les cases de la carte sous lui — c'est la
+  // faute mesurée trois fois par le dépôt, la ligne d'avis du Chantier, le calque
+  // des traits et la mini-fenêtre du tutoriel.
+  assert.equal(m.boite.style.pointerEvents, 'none',
+    'la boîte de message avale le toucher de la carte sous elle');
+
+  rattraperJeu(etat, 1);
+  assert.deepEqual(etat.poisAcquis, [{ type: gisement.type, bande: gisement.bande }],
+    'montage : le tick n\'a acquis aucun gisement');
+
+  m.ecran.rafraichir(etat);
+  assert.deepEqual(m.dits(), [phraseDesPoisAcquis(1)], 'le gisement pris n\'a pas été annoncé');
+  assert.equal(m.boite.hidden, false, 'le message n\'est pas visible');
+
+  // ⚠ ET LE TICK SUIVANT SE TAIT. C'est la falsification du brief : deux ticks de
+  // suite ne font qu'un seul message.
+  rattraperJeu(etat, 1);
+  m.ecran.rafraichir(etat);
+  assert.deepEqual(m.dits(), [phraseDesPoisAcquis(1)],
+    'le second tick a réannoncé un gisement déjà pris');
+
+  // ⚠ ET IL S'EFFACE TOUT SEUL, comme celui de l'écran de la base et au bout du
+  // même délai — la minuterie est celle du faux document, on la fait échoir.
+  m.echoir();
+  assert.equal(m.boite.hidden, true, 'le message ne s\'efface pas de lui-même');
+});
+
+test('PC T6 — deux gisements dans le même tick font UN message, qui dit deux', () => {
+  // ⚠⚠ LE MONTAGE A DÛ ÊTRE MESURÉ AVANT D'ÊTRE ÉCRIT. Une base de niveau 1 ne
+  // peut PAS tenir deux cases à gisement : le plancher ne protège que la sienne,
+  // et l'Ouvrage l'emporte partout ailleurs. Mesuré sur quatre graines et les
+  // **cinquante et un** centres qui couvrent deux gisements à la fois : **ZÉRO**
+  // en acquiert deux au niveau 1, et **les cinquante et un** les acquièrent au
+  // niveau 50. Il faut donc une base assez forte pour gagner le partage, et le
+  // centre se CHERCHE, il ne s'écrit pas.
+  const etat = creerEtat(20260906);
+  const liste = poisDeLaFenetre(etat.graine, CARTE_ENTIERE);
+  const rayon = RAYONS[JOUEUR];
+  const centres = new Set();
+  for (let i = 0; i < liste.length; i += 1) {
+    for (let j = i + 1; j < liste.length; j += 1) {
+      const a = liste[i];
+      const b = liste[j];
+      if (Math.abs(a.rangee - b.rangee) > 2 * rayon) continue;
+      if (Math.abs(a.colonne - b.colonne) > 2 * rayon) continue;
+      for (let dr = -rayon; dr <= rayon; dr += 1) {
+        for (let dc = -rayon; dc <= rayon; dc += 1) {
+          const cr = a.rangee + dr;
+          const cc = a.colonne + dc;
+          if (!dansLOctogoneDInfluence(a.rangee - cr, a.colonne - cc, rayon)) continue;
+          if (!dansLOctogoneDInfluence(b.rangee - cr, b.colonne - cc, rayon)) continue;
+          centres.add(`${cr}:${cc}`);
+        }
+      }
+    }
+  }
+  assert.ok(centres.size > 0, 'montage : aucun centre ne couvre deux gisements sur cette graine');
+
+  /** Pose la base sur ce centre, en la rendant assez forte pour tenir les deux. */
+  const monter = (cle) => {
+    const monte = creerEtat(20260906);
+    const [rangee, colonne] = cle.split(':').map(Number);
+    baseCourante(monte).position = { rangee, colonne };
+    for (const batiment of baseCourante(monte).disposition) batiment.niveau = 50;
+    return monte;
+  };
+  let retenu = null;
+  for (const cle of centres) {
+    const essai = monter(cle);
+    rattraperJeu(essai, 1);
+    if (essai.poisAcquis.length >= 2) { retenu = cle; break; }
+  }
+  assert.ok(retenu !== null, 'montage : aucun centre n\'acquiert deux gisements d\'un coup');
+
+  const jeu = monter(retenu);
+  const m = ecranAvecToast(jeu);
+  assert.deepEqual(m.dits(), [], 'l\'écran a parlé avant le tick');
+
+  rattraperJeu(jeu, 1);
+  assert.equal(jeu.poisAcquis.length, 2, 'montage : le tick n\'a pas acquis deux gisements');
+
+  m.ecran.rafraichir(jeu);
+  assert.deepEqual(m.dits(), [phraseDesPoisAcquis(2)],
+    'deux gisements pris ensemble n\'ont pas fait UN message qui dit deux');
+  assert.match(m.boite.textContent, /2/, 'le message ne dit pas le nombre');
+});
+
+// ---------------------------------------------------------------------------
+// La ruine cliquable — point 10
+// ---------------------------------------------------------------------------
+
+/** Une case voisine de la base que la carte ne porte à AUCUN site. */
+function caseSansSite(etat) {
+  const base = baseCourante(etat).position;
+  const fenetre = {
+    premiereRangee: base.rangee - 6,
+    derniereRangee: base.rangee + 6,
+    premiereColonne: base.colonne - 6,
+    derniereColonne: base.colonne + 6,
+  };
+  const prises = new Set(
+    sitesDeLaFenetre(etat, fenetre).map((s) => `${s.rangee}:${s.colonne}`),
+  );
+  for (let dr = -3; dr <= 3; dr += 1) {
+    for (let dc = -2; dc <= 2; dc += 1) {
+      if (dr === 0 && dc === 0) continue;
+      const k = { rangee: base.rangee + dr, colonne: base.colonne + dc };
+      if (!prises.has(`${k.rangee}:${k.colonne}`)) return k;
+    }
+  }
+  throw new Error('montage : aucune case libre autour de la base');
+}
+
+/**
+ * Une partie où une ruine ACTIVE tient une case, et l'écran monté dessus.
+ *
+ * ⚠ LA RUINE SE FABRIQUE PAR `ruineFraiche`, la porte du module : une entrée
+ * écrite à la main sauterait ses quatre gardes, et le montage garderait alors une
+ * forme que `casesRasees` refuse.
+ */
+function partieAvecRuine(etat, ou, vainqueur = JOUEUR, niveau = 20) {
+  etat.basesRasees.push(
+    ruineFraiche(ou.rangee, ou.colonne, 'base', vainqueur, niveau, etat.horloge.nbTicks),
+  );
+  assert.equal(ruinesActives(etat).length, 1, 'montage : la ruine n\'est pas active');
+  const m = ecranAvecToast(etat);
+  return { ...m, base: { ...baseCourante(etat).position }, halo: cadreDuHalo(m.appels) };
+}
+
+test('PC T7 — une ruine s\'ouvre, et elle dit son niveau, son camp et son délai', () => {
+  const etat = partiePeuplee();
+  const ou = caseSansSite(etat);
+  const m = partieAvecRuine(etat, ou, OUVRAGE, 27);
+
+  toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, ou);
+
+  assert.equal(m.parId.get('monde-panneau').hidden, false, 'le panneau d\'une ruine ne s\'ouvre pas');
+  assert.match(m.parId.get('monde-panneau-titre').textContent, /^Ruine/,
+    'le titre ne dit pas que c\'est une ruine');
+  const lignes = lignesDuCorps(m.parId);
+  assert.deepEqual(lignes, lignesDeLaRuine(ruineDeLaCase(etat, ou.rangee, ou.colonne),
+    etat.horloge.nbTicks), 'le panneau n\'annonce pas les lignes de la ruine');
+  // Les trois choses qu'Ethan nomme, une par une.
+  const valeur = (quoi) => lignes.find((l) => l.quoi === quoi)?.valeur;
+  assert.equal(valeur('Niveau'), '27', 'le niveau de la base tombée n\'est pas dit');
+  assert.equal(valeur('Terrain tenu par'), NOM_DU_VAINQUEUR[OUVRAGE],
+    'le camp qui tient le terrain n\'est pas dit');
+  assert.ok((valeur('Disparaît dans') ?? '').length > 0, 'le délai de disparition est vide');
+  // ⚠ ET LE DÉLAI EST CELUI DE `TICKS_DE_RUINE`, PAS UN NOMBRE ÉCRIT À CÔTÉ.
+  assert.equal(valeur('Disparaît dans'), direLaDuree(TICKS_DE_RUINE),
+    'le délai ne se dérive pas de `TICKS_DE_RUINE`');
+});
+
+test('PC T8 — et elle n\'est PAS attaquable', () => {
+  // ⚠⚠ LE TEST QUI COMPTE. Sans lui, ce lot rouvre exactement ce que
+  // CONQUÊTE-24H avait fermé : une ruine qui entre dans `sitesAffiches` devient
+  // cliquable, donc ouvrable, donc — deux touchers plus loin — attaquable.
+  const etat = partiePeuplee();
+  const ou = caseSansSite(etat);
+  const m = partieAvecRuine(etat, ou);
+  toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, ou);
+  assert.equal(m.parId.get('monde-panneau').hidden, false, 'montage : le panneau ne s\'est pas ouvert');
+
+  // ⚠ LA FALSIFICATION VISE CETTE LIGNE-CI : faire entrer la ruine dans la liste
+  // des sites la ferait tomber, et elle seule dit d'où vient le danger.
+  const fenetre = {
+    premiereRangee: ou.rangee - 2,
+    derniereRangee: ou.rangee + 2,
+    premiereColonne: ou.colonne - 2,
+    derniereColonne: ou.colonne + 2,
+  };
+  assert.deepEqual(
+    sitesDeLaFenetre(etat, fenetre).filter((s) => s.rangee === ou.rangee && s.colonne === ou.colonne),
+    [], 'une ruine est entrée dans la liste des sites : le chemin du raid lui est ouvert',
+  );
+
+  assert.equal(m.parId.get('monde-panneau-attaquer').hidden, true,
+    'le panneau d\'une ruine porte un bouton d\'attaque');
+  assert.equal(m.parId.get('monde-panneau-deplacer').hidden, true,
+    'le panneau d\'une ruine porte le bouton « Déplacer la base »');
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
+    'le panneau d\'une ruine porte la confirmation d\'un déplacement');
+  assert.equal(m.parId.get('monde-panneau-prix').hidden, true,
+    'le panneau d\'une ruine annonce un prix de raid');
+
+  // ⚠⚠ ET LE BOUTON CACHÉ EST INERTE, CE QUI EST L'AUTRE MOITIÉ. `siteOuvert`
+  // reste `null` : même déclenché à la main — ce qu'un lot futur ferait en
+  // sortant le bouton du panneau —, il n'entre nulle part et n'écrit aucun refus.
+  m.parId.get('monde-panneau-attaquer').envoyer('click', {});
+  assert.deepEqual(m.raids, [], 'le bouton d\'attaque d\'une ruine est entré dans une cible');
+  assert.equal(m.parId.get('monde-panneau-refus').hidden, true,
+    'le bouton d\'attaque d\'une ruine a écrit un refus : elle est passée par le chemin du raid');
+});
+
+test('PC T9 — un site sur la même case gagne sur la ruine', () => {
+  const etat = partiePeuplee();
+  const satellite = baseCourante(etat).satellites.presents[0];
+  const ou = { rangee: satellite.rangee, colonne: satellite.colonne };
+  const m = partieAvecRuine(etat, ou);
+
+  toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, ou);
+  assert.equal(m.parId.get('monde-panneau-titre').textContent, nomDuSite(satellite),
+    'la ruine a pris le pas sur le site qui partage sa case');
+  assert.doesNotMatch(m.parId.get('monde-panneau-titre').textContent, /^Ruine/,
+    'c\'est le panneau de la ruine qui s\'est ouvert');
+});
+
+test('PC T10 — une ruine qui expire ferme son panneau, sans jamais dire un délai négatif', () => {
+  const etat = partiePeuplee();
+  const ou = caseSansSite(etat);
+  const m = partieAvecRuine(etat, ou);
+  toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, ou);
+  assert.equal(m.parId.get('monde-panneau').hidden, false, 'montage : le panneau ne s\'est pas ouvert');
+
+  // ⚠ L'HORLOGE AVANCE PAR PALIERS, ET ON LIT LE PANNEAU À CHAQUE FOIS. Un
+  // compte à rebours figé à sa valeur d'ouverture passerait une mesure prise au
+  // seul dernier instant.
+  const vus = [];
+  const pose = etat.horloge.nbTicks;
+  for (let k = 1; k <= 6; k += 1) {
+    etat.horloge.nbTicks = pose + Math.round((TICKS_DE_RUINE * k) / 5);
+    m.ecran.rafraichir(etat);
+    if (m.parId.get('monde-panneau').hidden) break;
+    const ligne = lignesDuCorps(m.parId).find((l) => l.quoi === 'Disparaît dans');
+    assert.ok(ligne !== undefined, 'le panneau a perdu sa ligne de délai');
+    vus.push(ligne.valeur);
+    assert.doesNotMatch(ligne.valeur, /-/, `délai négatif affiché : « ${ligne.valeur} »`);
+  }
+  assert.ok(vus.length >= 2 && new Set(vus).size >= 2,
+    'le compte à rebours n\'a pas bougé : il est figé sur sa valeur d\'ouverture');
+  assert.equal(ruinesActives(etat).length, 0, 'montage : la ruine n\'a pas expiré');
+  assert.equal(m.parId.get('monde-panneau').hidden, true,
+    'le panneau d\'une ruine expirée reste ouvert');
 });

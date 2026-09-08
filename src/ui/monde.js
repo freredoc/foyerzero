@@ -20,9 +20,23 @@
 //
 // ⚠ RIEN NE DOIT PROMETTRE CE QUI N'EXISTE PAS. Toucher un site ouvre un
 // panneau qui dit ce qu'on SAIT — type, niveau, distance, position — et rien
-// d'autre. Aucun bouton « Attaquer » : le raid n'existe pas. C'est la faute du
-// bouton « Assaut » du lot ÉCRAN-CHANTIER, retiré le 27/08, et elle ne se refait
-// pas. Un test balaie le panneau pour qu'aucun bouton d'action n'y entre.
+// d'autre.
+//
+// ⚠⚠ CE PARAGRAPHE A MENTI DEUX JOURS, ET IL EST RÉÉCRIT PLUTÔT QU'ENJAMBÉ. Il
+// finissait par « Aucun bouton "Attaquer" : le raid n'existe pas », ce qui était
+// vrai le 27/08 — contre le bouton « Assaut » de l'écran Chantier, qui pointait
+// sur du sol nu — et FAUX depuis le lot CARTE-C du 06/09, qui a posé
+// `#monde-panneau-attaquer` sur ordre d'Ethan. Le balisage, lui, portait déjà le
+// renversement en toutes lettres ; l'en-tête d'ici ne l'avait pas suivi. C'est le
+// commentaire menteur en puissance que `CLAUDE.md` §6 raconte trois fois, trouvé
+// au lot PANNEAUX-DE-LA-CARTE en lui ajoutant un troisième panneau.
+//
+// ⚠ CE QUI RESTE DE LA RÈGLE, ET QUI N'A PAS BOUGÉ : le panneau ne promet
+// toujours rien qui n'existe pas. « Attaquer » entre dans une cible, ce que le
+// raid fait depuis RAID-A ; « Déplacer la base » n'apparaît que sur SA PROPRE
+// base ; le panneau d'une RUINE ne porte aucun des deux — il est en lecture
+// seule, et `ouvrirRuine` dit pourquoi. La liste des boutons reste CLOSE, et un
+// test balaie le balisage pour qu'aucun autre n'y entre.
 
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, ETIQUETTE_CARTE, POI,
@@ -55,11 +69,31 @@ import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 // ⚠ LE FORMATAGE D'UN NIVEAU EN DIXIÈMES VIT DANS `ui/chantier.js`, ET IL N'Y
 // EN A QU'UN. `src/ui/recherche.js` importe déjà de là pour la même raison : ce
 // sont des fonctions PURES d'un module d'écran, pas son DOM.
-import { formaterDixiemes } from './chantier.js';
+//
+// ⚠⚠ ET LA DURÉE D'UN TOAST VIENT DE LÀ AUSSI, POUR LA MÊME RAISON. Le message
+// qui s'efface tout seul existe déjà sur l'écran de la base ; en écrire un
+// second qui s'effacerait au bout d'un AUTRE délai apprendrait au joueur deux
+// grammaires pour le même objet. Ce lot recopie l'affichage — il n'a pas le
+// droit de toucher au balisage (§1.6 du brief) — et pas le réglage.
+import { formaterDixiemes, DUREE_TOAST_MS } from './chantier.js';
 import {
-  territoireDeLaFenetre, bordsDuTerritoire, JOUEUR, OUVRAGE,
+  territoireDeLaFenetre, bordsDuTerritoire, RAYONS, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
-import { ruinesActives, casesRasees, cleDeLaCase } from '../sim/ruines.js';
+import {
+  ruinesActives, casesRasees, cleDeLaCase, TICKS_DE_RUINE,
+} from '../sim/ruines.js';
+// ⚠⚠ ÉCART AU BRIEF, DÉCLARÉ : LA DURÉE NE S'ÉCRIT PAS UNE TROISIÈME FOIS.
+// Le §4.2 du brief donne le choix entre exporter la fonction de
+// `sim/deplacement.js` — interdit, ce fichier appartient à un autre lot — et en
+// écrire « la sienne dans `monde.js`, en la déclarant au rapport comme la
+// troisième jumelle ». Ni l'une ni l'autre : `direLaDuree` est **déjà exportée**
+// de `sim/reparation.js` depuis le lot RÉPARER-ÉCRAN, et `ui/chantier.js` la
+// partage DÉJÀ, très exactement pour que la même quantité ne se lise pas de deux
+// façons. L'importer n'ajoute pas une ligne à `sim/reparation.js`, donc pas un
+// conflit à résoudre sur un téléphone — ce qui est le motif du §1.6. Écrire une
+// troisième jumelle aurait été la faute que §4 de `CLAUDE.md` interdit, et que
+// le brief lui-même se propose de défaire plus tard.
+import { direLaDuree } from '../sim/reparation.js';
 import { dessinerLimiteDUneCase } from '../render/limite.js';
 import { dessinerRuineDUneCase } from '../render/embleme.js';
 import { PALETTE } from '../render/scene.js';
@@ -1243,6 +1277,274 @@ export function phraseDesAttaquantes(nombre) {
   return `${nombre} bases de l'Ouvrage pourront vous attaquer ici.`;
 }
 
+/**
+ * Le rayon dont on dilate la fenêtre d'un bilan de territoire.
+ *
+ * ⚠⚠ IL SE LIT DANS `RAYONS`, ET C'EST LE PLUS GRAND DES DEUX. Déplacer la base
+ * ne change QUE la contribution du joueur : en toute rigueur, seules les cases à
+ * `RAYONS[JOUEUR]` de l'ancienne ou de la nouvelle position peuvent changer de
+ * camp, et dilater de deux suffirait. On prend le plus grand parce que c'est un
+ * SUR-ensemble — compter une case qui ne peut pas changer coûte une comparaison
+ * et ne fausse rien — et parce qu'il reste juste le jour où les deux rayons
+ * s'échangeraient. Le sous-estimer, lui, rendrait un bilan plausible et faux :
+ * c'est très exactement ce que `PC T2` mesure.
+ *
+ * ⚠ IL NE SE RECOPIE PAS DEPUIS `GEOGRAPHIE`. `RAYONS` est déjà la lecture que
+ * `sim/territoire.js` fait de la table, et c'est elle que le partage emploie ;
+ * en écrire une seconde ici ferait la divergence que §4 de `CLAUDE.md` interdit.
+ */
+export const RAYON_DU_BILAN = Math.max(...Object.values(RAYONS));
+
+/**
+ * La fenêtre sur laquelle un bilan de territoire se compte : les deux positions,
+ * dilatées du plus grand rayon d'influence.
+ *
+ * ⚠⚠ ELLE N'EST PAS CELLE QUI EST À L'ÉCRAN, ET C'EST TOUT LE PIÈGE.
+ * `territoireDeLaFenetre` dilate déjà d'elle-même pour aller chercher les
+ * ÉMETTEURS hors champ — chaque case qu'elle rend est donc juste quelle que soit
+ * la fenêtre demandée —, mais elle ne peut pas deviner quelle zone on veut
+ * COMPTER. Une fenêtre bornée à la vue amputerait le bilan dès que l'ancienne
+ * position sort du cadre, ce qui est le cas COURANT : on se déplace vers ce
+ * qu'on regarde, donc l'endroit d'où l'on part est souvent derrière soi.
+ *
+ * ⚠ ELLE NE SE ROGNE PAS SUR LA CARTE. `territoireDeLaFenetre` le fait déjà, et
+ * le refaire ici serait une seconde écriture du même clamp — donc la première à
+ * mentir le jour où la carte changerait de taille.
+ *
+ * @param {{rangee: number, colonne: number}} depuis
+ * @param {{rangee: number, colonne: number}} vers
+ */
+export function fenetreDuBilan(depuis, vers) {
+  const r = RAYON_DU_BILAN;
+  return {
+    premiereRangee: Math.min(depuis.rangee, vers.rangee) - r,
+    derniereRangee: Math.max(depuis.rangee, vers.rangee) + r,
+    premiereColonne: Math.min(depuis.colonne, vers.colonne) - r,
+    derniereColonne: Math.max(depuis.colonne, vers.colonne) + r,
+  };
+}
+
+/**
+ * Ce qu'un déplacement ferait au territoire : cases gagnées, perdues, et solde.
+ *
+ * ⚠⚠ AUCUNE FORMULE D'INFLUENCE N'EST ÉCRITE ICI, ET C'EST LA CONDITION DU LOT.
+ * `sim/territoire.js` porte la seule qui existe — `raison ^ (niveau − distance)`,
+ * sommée par camp — et le dépôt a déjà refermé six divergences de ce genre :
+ * l'en-tête de `sim/poi.js` en tient le compte, et la sixième a été CRÉÉE par un
+ * lot qui avait recopié la règle plutôt que de l'appeler. On simule donc en
+ * appelant LA FONCTION QUI PEINT LA CARTE sur un état hypothétique, deux fois,
+ * sur la même fenêtre.
+ *
+ * ⚠⚠ L'HYPOTHÈSE EST UNE COPIE DE SURFACE, ET ELLE NE TOUCHE JAMAIS L'ÉTAT RÉEL.
+ * Un `structuredClone` copierait la disposition, la garnison et l'armée de
+ * chaque base pour ne changer qu'un couple d'entiers ; ce qui est nécessaire et
+ * suffisant, c'est que `etat.bases[k].position` diffère et que rien d'autre ne
+ * soit écrit. `territoireDeLaFenetre` ne fait que LIRE — `PC T1` s'en assure en
+ * comparant l'état sérialisé avant et après.
+ *
+ * ⚠ LES DEUX APPELS PORTENT LA MÊME FENÊTRE, DONC LA MÊME GÉOMÉTRIE. `occupant`
+ * est indexé sur `(r0, c0)`, tous deux dérivés de la seule fenêtre et des bornes
+ * de la carte : deux appels sur la même fenêtre rendent deux tableaux de même
+ * longueur, case pour case. La garde ci-dessous n'est pas décorative pour
+ * autant — c'est elle qui ferait tomber un lot qui déplacerait le clamp.
+ *
+ * ⚠ ET C'EST LA BASE COURANTE QUI BOUGE, jamais un indice qu'on choisirait ici :
+ * `deplacerLaBase` écrit `baseCourante(etat).position`, et un bilan qui
+ * simulerait le déplacement d'une AUTRE base annoncerait un solde qu'aucun geste
+ * ne produirait.
+ *
+ * @param {object} etat
+ * @param {{rangee: number, colonne: number}} cible
+ * @returns {{gagnees: number, perdues: number, solde: number}}
+ */
+export function bilanDuTerritoire(etat, cible) {
+  const depuis = baseCourante(etat).position;
+  const fenetre = fenetreDuBilan(depuis, cible);
+  const hypothese = {
+    ...etat,
+    bases: etat.bases.map((b, k) => (
+      k === etat.baseCourante ? { ...b, position: { rangee: cible.rangee, colonne: cible.colonne } } : b
+    )),
+  };
+  const avant = territoireDeLaFenetre(etat, fenetre).occupant;
+  const apres = territoireDeLaFenetre(hypothese, fenetre).occupant;
+  if (avant.length !== apres.length) {
+    throw new Error('monde : les deux cartes du bilan n\'ont pas la même fenêtre');
+  }
+  let gagnees = 0;
+  let perdues = 0;
+  for (let i = 0; i < avant.length; i += 1) {
+    if (avant[i] === apres[i]) continue;
+    if (apres[i] === JOUEUR) gagnees += 1;
+    else if (avant[i] === JOUEUR) perdues += 1;
+  }
+  return { gagnees, perdues, solde: gagnees - perdues };
+}
+
+/**
+ * Les trois lignes du bilan, à la forme du panneau.
+ *
+ * ⚠ TROIS NOMBRES, ET RIEN D'AUTRE — §2.3 du brief. Pas de POI annoncés, pas de
+ * conseil : le panneau dit ce qu'il SAIT, et il ne sait que ça. C'est la règle
+ * que l'en-tête de ce fichier porte depuis le 27/08.
+ *
+ * ⚠ LE SOLDE PORTE SON SIGNE QUAND IL EST POSITIF. « 4 » et « +4 » disent la
+ * même chose, mais la colonne se lit à côté de « perdues » : sans le signe, un
+ * solde et un compte se ressemblent trop.
+ *
+ * ⚠ ET ELLE REND LA MÊME FORME QUE `lignesDuSite` — `{ quoi, valeur }` —, donc
+ * `ouvrirPanneau` et `demanderLeDeplacement` peignent par le même chemin. Deux
+ * formes de ligne dans le même panneau seraient deux façons de le styler.
+ */
+export function lignesDuBilan(bilan) {
+  return [
+    { quoi: 'Cases gagnées', valeur: String(bilan.gagnees) },
+    { quoi: 'Cases perdues', valeur: String(bilan.perdues) },
+    { quoi: 'Solde', valeur: bilan.solde > 0 ? `+${bilan.solde}` : String(bilan.solde) },
+  ];
+}
+
+/**
+ * L'ensemble des gisements déjà acquis, sous la forme « type:bande ».
+ *
+ * ⚠⚠ ON COMPARE DES IDENTITÉS, JAMAIS DES LONGUEURS — §3.1 du brief.
+ * `releverLesPoisAcquis` RETRIE la liste à chaque ajout : deux listes de même
+ * longueur peuvent ne pas porter les mêmes gisements, et une comparaison de
+ * comptes marcherait par hasard aujourd'hui. Un POI pris est pris pour toujours
+ * — Ethan, 07/09 —, donc l'ensemble ne peut que croître ; mais c'est une
+ * propriété de la RÈGLE, pas du code d'affichage, et l'écran ne doit pas s'y
+ * adosser.
+ *
+ * ⚠ LA CLÉ EST LE COUPLE, PAS LE TYPE. Un même gisement existe dans les dix
+ * bandes de la carte : `poiEstAcquis` compare déjà les deux champs, et n'en
+ * comparer qu'un ferait taire les neuf suivants.
+ */
+export function clesDesPoisAcquis(poisAcquis) {
+  const cles = new Set();
+  for (const acquis of poisAcquis ?? []) cles.add(`${acquis.type}:${acquis.bande}`);
+  return cles;
+}
+
+/**
+ * Ce que le toast annonce pour un nombre de gisements pris d'un coup.
+ *
+ * ⚠ UN SEUL TOAST, QUI DIT LE NOMBRE — §3.1 du brief. Plusieurs POI peuvent
+ * tomber dans le même tick : c'est même le cas COURANT après un déplacement, la
+ * base arrivant d'un coup au-dessus de tout un octogone neuf. Trois messages à
+ * la file sur un téléphone, c'est deux de trop.
+ *
+ * ⚠ ET IL NE NOMME PAS LE GISEMENT. Nommer « la veine de quartz » demanderait
+ * d'accorder le participe au genre du nom, et recomposer une phrase française
+ * morceau par morceau a déjà produit « aucun unité » puis « aucune unité n'est
+ * endommagé », en deux essais, au lot RETOURS-ETHAN. Le compte se dit sans
+ * accord.
+ *
+ * ⚠ ELLE EST PURE ET EXPORTÉE, comme `phraseDesAttaquantes` et pour la même
+ * raison : c'est la seule façon d'éprouver un libellé sans monter l'écran.
+ */
+export function phraseDesPoisAcquis(nombre) {
+  if (!Number.isInteger(nombre) || nombre < 1) {
+    throw new RangeError(`monde : « ${nombre} » gisements — entier ≥ 1 attendu`);
+  }
+  return nombre === 1 ? 'Gisement acquis.' : `${nombre} gisements acquis.`;
+}
+
+/**
+ * La ruine ENCORE ACTIVE d'une case, ou `null`.
+ *
+ * ⚠⚠ ELLE PASSE PAR `ruinesActives`, ET C'EST LA SEULE PORTE. Son commentaire le
+ * dit de face : « toute lecture qui compterait une ruine sans passer par ici
+ * compterait des périmées ». Lire `etat.basesRasees` depuis l'écran aurait ouvert
+ * une ruine expirée — juste au chargement, fausse une heure plus tard, et
+ * personne pour le voir.
+ *
+ * @param {object} etat
+ * @param {number} rangee
+ * @param {number} colonne
+ */
+export function ruineDeLaCase(etat, rangee, colonne) {
+  for (const ruine of ruinesActives(etat)) {
+    if (ruine.rangee === rangee && ruine.colonne === colonne) return ruine;
+  }
+  return null;
+}
+
+/**
+ * Le titre du panneau d'une ruine.
+ *
+ * ⚠ LE NOM DE CE QUI EST TOMBÉ VIENT D'`EMBLEMES_CARTE`, comme celui d'un site.
+ * `spriteDeLaRuine` n'accepte que `base` et `baseJoueur` — un camp ou un
+ * avant-poste RESPAWNE et ne laisse rien —, donc les deux clés existent dans la
+ * table ; un type hors table LÈVE plutôt que d'écrire un titre vide.
+ */
+export function nomDeLaRuine(ruine) {
+  const embleme = EMBLEMES_CARTE[ruine.type];
+  if (embleme === undefined) throw new Error(`monde : type de ruine inconnu « ${ruine.type} »`);
+  return `Ruine — ${embleme.nom}`;
+}
+
+/**
+ * À qui va le TERRAIN d'une ruine, en toutes lettres.
+ *
+ * ⚠⚠ LA CARCASSE EST AU VAINCU, LE TERRAIN AU VAINQUEUR, ET UN PANNEAU QUI LES
+ * CONFONDRAIT MENTIRAIT À L'ÉCRAN. `dessinerRuines` le dit déjà pour le dessin :
+ * une base de l'Ouvrage rasée par le joueur montre une carcasse d'OUVRAGE tout
+ * en peignant du territoire JOUEUR autour d'elle. Le titre porte donc le `type`
+ * — ce qui est tombé — et cette ligne-ci le `vainqueur` — qui tient le terrain.
+ *
+ * ⚠ UN CAMP HORS TABLE LÈVE. `NEUTRE` n'est pas un vainqueur : une ruine qui n'a
+ * pas de camp n'aurait rien à revendiquer, et `revendique` la refuse en amont.
+ */
+export const NOM_DU_VAINQUEUR = {
+  [JOUEUR]: 'Vous',
+  [OUVRAGE]: 'L\'Ouvrage',
+};
+
+/**
+ * Les lignes du panneau d'une ruine — en LECTURE SEULE.
+ *
+ * ⚠⚠ CE QU'ETHAN NOMME EN PREMIER EST LE NIVEAU, et c'est celui de la base
+ * TOMBÉE, pas celui du vainqueur : `ruineFraiche` le dit en toutes lettres, et
+ * c'est ce qui fait qu'abattre une grosse base vaut mieux que d'en abattre deux
+ * petites.
+ *
+ * ⚠⚠ ET LE TEMPS RESTANT SE DÉRIVE DE `TICKS_DE_RUINE`, JAMAIS D'UNE CONSTANTE
+ * RÉÉCRITE. Vingt-quatre heures est un arbitrage qui vit dans `src/data/` et que
+ * `sim/ruines.js` convertit ; en retaper la valeur ici ferait la seconde vérité
+ * que §4 de `CLAUDE.md` interdit, et l'écran annoncerait un compte à rebours que
+ * la carte ne suivrait pas.
+ *
+ * ⚠ `direLaDuree` ARRONDIT VERS LE HAUT par défaut, et c'est le bon sens ici :
+ * un compte à rebours annoncé plus court que la vérité ferait croire la ruine
+ * partie alors qu'elle tient encore. C'est le même arrondi que les quatre
+ * messages de refus qui l'appellent déjà.
+ *
+ * @param {{type: string, niveau: number, vainqueur: number, tick: number}} ruine
+ * @param {number} nbTicks `etat.horloge.nbTicks`
+ */
+export function resteDeLaRuine(ruine, nbTicks) {
+  const reste = TICKS_DE_RUINE - (nbTicks - ruine.tick);
+  // ⚠ LE PLANCHER À ZÉRO N'EST PAS DÉCORATIF. `ruineEstActive` a le bord franc et
+  // fermé en haut, donc une ruine active porte toujours un reste strictement
+  // positif ; mais l'écran rafraîchit dix fois par seconde et le panneau se ferme
+  // au tour suivant, si bien qu'une durée NÉGATIVE pourrait s'afficher pendant un
+  // dixième de seconde. `PC T10` exige qu'aucune ne le soit jamais.
+  return direLaDuree(Math.max(0, reste));
+}
+
+export function lignesDeLaRuine(ruine, nbTicks) {
+  const vainqueur = NOM_DU_VAINQUEUR[ruine.vainqueur];
+  if (vainqueur === undefined) {
+    throw new Error(`monde : vainqueur inconnu « ${ruine.vainqueur} » sur une ruine`);
+  }
+  return [
+    { quoi: 'Niveau', valeur: String(ruine.niveau) },
+    { quoi: 'Terrain tenu par', valeur: vainqueur },
+    { quoi: 'Disparaît dans', valeur: resteDeLaRuine(ruine, nbTicks) },
+    { quoi: 'Position', valeur: `rangée ${ruine.rangee}, colonne ${ruine.colonne}` },
+  ];
+}
+
 export function empreinteDeLaCarte(etat) {
   let empreinte = `${etat.baseCourante}:${etat.prochaineInstanceSatellite}`;
   for (const base of etat.bases) empreinte += `:${base.satellites.presents.length}`;
@@ -1294,9 +1596,56 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauConfirmer = $('monde-panneau-confirmer');
   const panneauRenoncer = $('monde-panneau-renoncer');
   const panneauAttaquer = $('monde-panneau-attaquer');
+  // ⚠⚠ LE TOAST DE LA CARTE EST FABRIQUÉ ICI, ET C'EST UNE DUPLICATION ASSUMÉE.
+  // Le §3.2 du brief la nomme : le toast du jeu vit dans `ui/chantier.js`,
+  // qu'un autre lot est en train de modifier, et l'extraire demanderait d'y
+  // toucher. Le §1.6 interdit par ailleurs `src/index.src.html` — quatre lots,
+  // quatre territoires —, donc l'élément ne peut pas venir du balisage : il se
+  // crée. Les deux moitiés sont à réunir plus tard, et le rapport le dit.
+  //
+  // ⚠⚠ IL SE POSE DANS `#monde-outils`, ET PAS SUR LE CHAMP. Cette barre-là est
+  // déjà en `absolute` au coin haut-droit, au-dessus de la carte et LOIN du
+  // panneau, qui occupe la moitié basse : un message posé en bas serait recouvert
+  // par le premier panneau qu'on ouvre. Elle est en `flex`, donc le message se
+  // range à côté du bouton « Recentrer » sans le déplacer quand il est caché —
+  // `[hidden]` porte un `!important` en tête de feuille.
+  //
+  // ⚠⚠ ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE. `#monde-outils` porte
+  // un `z-index` et intercepte le toucher pour son bouton ; un message qui
+  // avalerait les touchers de la carte sous lui serait la faute mesurée trois
+  // fois par le dépôt — la ligne d'avis du Chantier, le calque des traits, la
+  // mini-fenêtre du tutoriel.
+  //
+  // ⚠ LES TEINTES SE LISENT DANS `PALETTE`, ELLES NE SE RETAPENT PAS. La garde de
+  // palette de `banc.test.js` balaie ce fichier ; trois valeurs recopiées y
+  // passeraient, et seraient la copie qui vieillit au premier réglage. Ce sont
+  // celles du panneau : fond métal sombre, liseré kaki, texte os.
+  const toastPoi = doc.createElement('div');
+  toastPoi.hidden = true;
+  toastPoi.style.pointerEvents = 'none';
+  toastPoi.style.padding = '4px 8px';
+  toastPoi.style.fontSize = '10px';
+  toastPoi.style.background = PALETTE.metalSombre;
+  toastPoi.style.border = `1px solid ${PALETTE.kakiCorps}`;
+  toastPoi.style.color = PALETTE.accents.infanterie.clair;
+  $('monde-outils').appendChild(toastPoi);
+  /** La minuterie du toast en cours — `null` quand rien n'est affiché. */
+  let minuterieToast = null;
+  // ⚠⚠ L'ENSEMBLE DES GISEMENTS CONNUS, ET IL VIT EN MÉMOIRE DE SESSION. Le §6
+  // du brief l'exige : le PERSISTER serait un changement de schéma, donc un bump
+  // de `SAVE_VERSION` pour un message. `null` veut dire « jamais vu » — et c'est
+  // ce qui fait qu'un rechargement ne reparle pas : la liste est déjà pleine à la
+  // première mesure, donc il n'y a aucune différence à annoncer.
+  let poisConnus = null;
   // ⚠ QUELLE CASE LE PANNEAU DÉCRIT — c'est ce à quoi le SECOND toucher se
   // compare. `null` quand le panneau est fermé.
   let siteOuvert = null;
+  // ⚠⚠ ET QUELLE RUINE, QUAND C'EN EST UNE. Deux variables et non une, parce que
+  // ce sont deux chemins de toucher : `siteOuvert` porte le second toucher, la
+  // flèche et le bouton d'attaque, et une ruine n'a AUCUN des trois. Les
+  // confondre aurait rendu la ruine attaquable par le chemin qu'on garde fermé —
+  // voir `ouvrirRuine`.
+  let ruineOuverte = null;
   // ⚠ LE CIBLAGE DU SITE OUVERT, RETENU UNE FOIS. La flèche le relit plutôt que
   // de rappeler `ciblageDuSite` — qui monte un combat entier pour chiffrer le
   // butin, à chaque image. Et surtout : deux appels pourraient diverger le jour
@@ -1954,13 +2303,24 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   /**
    * Les ruines actives, dessinées sur leur case — lot CONQUÊTE-24H.
    *
-   * ⚠⚠ ELLES NE PASSENT PAS PAR `sitesDeLaFenetre`, ET C'EST LE §4 DU BRIEF
-   * QUI L'EXIGE : « elle n'est pas une base […] et ne peut pas être attaquée ».
-   * `sitesAffiches` est ce que le TOUCHER interroge et ce que les ÉTIQUETTES
+   * ⚠⚠ ELLES NE PASSENT TOUJOURS PAS PAR `sitesDeLaFenetre`, ET LE MOTIF N'A PAS
+   * BOUGÉ — SEULE LA CONCLUSION A CHANGÉ. Ce bloc disait, au lot CONQUÊTE-24H :
+   * « `sitesAffiches` est ce que le TOUCHER interroge et ce que les ÉTIQUETTES
    * légendent ; y faire entrer une ruine l'aurait rendue cliquable, donc
-   * ouvrable, donc — deux touchers plus loin — attaquable. Une passe à part la
-   * garde muette par construction, sans un seul `if (type === 'ruine')` dans le
-   * chemin du toucher.
+   * ouvrable, donc — deux touchers plus loin — ATTAQUABLE ». Ethan, 08/09,
+   * point 10 : « une base détruite doit être cliquable et voir encore ses stats ».
+   *
+   * ⚠⚠ LA CRAINTE RESTE ENTIÈREMENT VALABLE, ET C'EST POUR ÇA QUE `sitesAffiches`
+   * NE LES REÇOIT PAS DAVANTAGE. Une ruine est désormais cliquable par un SECOND
+   * chemin de toucher — `ruineDeLaCase`, à la fin de `relacher` — qui n'aboutit
+   * qu'à un panneau en LECTURE SEULE : pas de bouton d'attaque, pas de bouton de
+   * fondation, pas de bouton de déplacement, et `siteOuvert` reste `null`. La
+   * passe à part garde donc toujours le chemin du raid muet PAR CONSTRUCTION,
+   * sans un seul `if (type === 'ruine')` dedans, et `PC T8` le mesure de face.
+   *
+   * ⚠ ET LE SITE GAGNE TOUJOURS SUR LA RUINE, au toucher comme au dessin : la
+   * boucle des sites de `relacher` passe AVANT `ruineDeLaCase`, exactement comme
+   * cette passe-ci passe avant les emblèmes.
    *
    * ⚠⚠ ELLE DESSINE CE QUI EST TOMBÉ, PAS QUI TIENT LE TERRAIN. Une base de
    * l'Ouvrage rasée par le joueur montre une carcasse d'OUVRAGE tout en peignant
@@ -2425,6 +2785,24 @@ export function initialiserEcranMonde(doc, crochets = {}) {
         return;
       }
     }
+    // ⚠⚠ LE SECOND CHEMIN DE TOUCHER — point 10 d'Ethan, 08/09 : « une base
+    // détruite doit être cliquable et voir encore ses stats ». Il vient APRÈS la
+    // boucle des sites, et c'est ce qui donne au SITE la priorité : si une case
+    // portait les deux, la boucle ci-dessus a déjà rendu la main. C'est l'ordre
+    // du DESSIN, où `dessinerRuines` passe avant les emblèmes pour la même
+    // raison, et `PC T9` le mesure.
+    //
+    // ⚠⚠ ET LES RUINES N'ENTRENT PAS DANS `sitesAffiches`. C'est précisément le
+    // chemin qui mène au bouton « Attaquer » : `sitesAffiches` est ce que le
+    // second toucher interroge, ce que les étiquettes légendent, et ce que
+    // `entrerDansLaCible` reçoit. Une passe à part garde la ruine en lecture
+    // seule PAR CONSTRUCTION, sans un seul `if (type === 'ruine')` dans le chemin
+    // du raid — voir `ouvrirRuine`, et `PC T8`, qui est le test qui compte.
+    const ruine = ruineDeLaCase(etatCourant, rangee, colonne);
+    if (ruine !== null) {
+      ouvrirRuine(ruine);
+      return;
+    }
     fermerPanneau();
   }
 
@@ -2434,6 +2812,71 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     if (doigts.size < 2) pincement = null;
     if (pointeur !== null && evenement.pointerId === pointeur.id) pointeur = null;
   });
+
+  // --- le toast des gisements -----------------------------------------------
+
+  /**
+   * Un message qui répond à un fait, et qui s'efface tout seul.
+   *
+   * ⚠ MÊME GRAMMAIRE QUE CELUI DE L'ÉCRAN DE LA BASE, ET MÊME DURÉE. Un seul à
+   * la fois, une minuterie, pas d'empilement — c'est la règle que `chantier.js`
+   * a payée le 28/08 en ayant deux écrivains du même message.
+   *
+   * ⚠ ET IL NE S'EFFACE QUE S'IL EST ENCORE LE SIEN. Entre l'affichage et
+   * l'échéance, un autre message a pu s'écrire ; effacer celui-là ferait
+   * disparaître ce que le joueur vient de recevoir.
+   */
+  function toast(texte) {
+    if (minuterieToast !== null) {
+      fenetre.clearTimeout(minuterieToast);
+      minuterieToast = null;
+    }
+    toastPoi.textContent = texte;
+    toastPoi.hidden = texte === '';
+    if (texte === '') return;
+    minuterieToast = fenetre.setTimeout(() => {
+      minuterieToast = null;
+      if (toastPoi.textContent !== texte) return;
+      toastPoi.textContent = '';
+      toastPoi.hidden = true;
+    }, DUREE_TOAST_MS);
+  }
+
+  /**
+   * Ce qui a été pris depuis le dernier passage — et qui le dit une fois.
+   *
+   * ⚠⚠ LA DÉTECTION SE FAIT PAR DIFFÉRENCE, CÔTÉ ÉCRAN, ET `releverLesPoisAcquis`
+   * N'EST PAS TOUCHÉE. Elle est dans le chemin CHAUD — son propre commentaire
+   * mesure 1 µs contre 45 µs selon l'ordre de ses gardes —, elle tourne à chaque
+   * tick, et elle a trois appelants dont deux appartiennent à d'autres lots. Lui
+   * faire émettre un évènement aurait fait payer à la simulation le prix d'un
+   * message d'écran.
+   *
+   * ⚠⚠ LA PREMIÈRE MESURE EST MUETTE, ET C'EST CE QUI FAIT QU'UN RECHARGEMENT NE
+   * REPARLE PAS. `poisConnus` vaut `null` tant que rien n'a été vu : on adopte
+   * l'ensemble sans rien dire. Une partie chargée avec vingt gisements déjà pris
+   * n'annonce donc rien — il n'y a aucune différence à annoncer, et le §6 du
+   * brief le demande dans ces mots.
+   *
+   * ⚠ ELLE SE PLACE AVANT LA SORTIE ANTICIPÉE DE `rafraichir`, ET C'EST
+   * OBLIGATOIRE. Prendre un gisement ne change pas `empreinteDeLaCarte` — ni la
+   * base courante, ni les satellites, ni les ruines —, donc l'appeler après le
+   * `return` l'aurait rendue muette dans le seul cas où elle sert.
+   */
+  function signalerLesPoisNeufs(etat) {
+    const cles = clesDesPoisAcquis(etat.poisAcquis);
+    if (poisConnus === null) {
+      poisConnus = cles;
+      return;
+    }
+    let neufs = 0;
+    for (const cle of cles) if (!poisConnus.has(cle)) neufs += 1;
+    poisConnus = cles;
+    // ⚠ UN SEUL TOAST, MÊME POUR PLUSIEURS. Un déplacement fait entrer tout un
+    // octogone d'un coup : trois messages à la file sur un téléphone, c'est deux
+    // de trop. `phraseDesPoisAcquis` dit le nombre.
+    if (neufs > 0) toast(phraseDesPoisAcquis(neufs));
+  }
 
   // --- le panneau ------------------------------------------------------------
 
@@ -2541,7 +2984,19 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     }
     deplacementEnAttente = cible;
     panneauTitre.textContent = 'Déplacer la base';
-    panneauCorps.textContent = '';
+    // ⚠⚠ LE BILAN SE CALCULE ICI, UNE FOIS, ET IL SE RETIENT DANS LE DOM —
+    // point 5 d'Ethan, 08/09 : « lorsqu'on déplace une base, faire une simulation
+    // de territoire ». `territoireDeLaFenetre` peint quelques milliers de cases,
+    // et il est appelé DEUX fois : c'est payable au moment d'un toucher, ce ne le
+    // serait pas à chaque image. Le recalculer dans `dessiner` est très
+    // exactement ce que `PC T3` mesure — c'est le motif que `ciblageOuvert` porte
+    // déjà, deux fonctions plus bas.
+    //
+    // ⚠ ET IL ENTRE DANS LE MÊME CORPS DE PANNEAU QUE LES LIGNES D'UN SITE, par
+    // le même peintre : le §2.1 du brief dit que la simulation « entre au même
+    // endroit, par la même porte » que le chiffre de menace, et il ne s'agit pas
+    // d'un second écran.
+    peindreLesLignes(lignesDuBilan(bilanDuTerritoire(etatCourant, cible)));
     panneauRefus.hidden = true;
     panneauRefus.textContent = '';
     // ⚠⚠ LE CHIFFRE VIENT DU MOTEUR, ET C'EST TOUT L'ENJEU DU LOT.
@@ -2603,6 +3058,35 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     dessiner();
   }
 
+  /**
+   * Le corps du panneau, peint depuis une liste `{ quoi, valeur }`.
+   *
+   * ⚠⚠ UN SEUL PEINTRE POUR LES TROIS PANNEAUX — le site, le bilan d'un
+   * déplacement, la ruine. Il était écrit une fois, dans `ouvrirPanneau`, du
+   * temps où le panneau n'avait qu'un contenu ; ce lot lui en donne deux de plus,
+   * et trois boucles voisines qui montent les mêmes trois nœuds finiraient par ne
+   * plus les monter pareil — la feuille ne stylant que `.ligne` et `.quoi`, la
+   * divergence se verrait à l'écran et pas au diff.
+   *
+   * ⚠ IL VIDE AVANT DE POSER. Chaque appelant écrivait `panneauCorps.textContent
+   * = ''` de son côté ; l'oublier une fois empilerait les lignes à chaque
+   * rafraîchissement du compte à rebours d'une ruine, dix fois par seconde.
+   */
+  function peindreLesLignes(lignes) {
+    panneauCorps.textContent = '';
+    for (const ligne of lignes) {
+      const bloc = doc.createElement('div');
+      bloc.className = 'ligne';
+      const quoi = doc.createElement('span');
+      quoi.className = 'quoi';
+      quoi.textContent = ligne.quoi;
+      const valeur = doc.createElement('b');
+      valeur.textContent = ligne.valeur;
+      bloc.append(quoi, valeur);
+      panneauCorps.appendChild(bloc);
+    }
+  }
+
   function ouvrirPanneau(site) {
     // ⚠⚠ TOUCHER UNE AUTRE DE SES BASES LA HALOTE, ET C'EST ELLE QUI ATTAQUE —
     // point 3 de la spec Carte, ouvert au lot BASES-1. **LECTURE PRISE** :
@@ -2624,7 +3108,6 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // doit pas lire deux noms pour la même base à deux endroits de l'écran —
     // la plaque sous la case dit « Base n°1 », le titre aussi.
     panneauTitre.textContent = nomDuSite(site);
-    panneauCorps.textContent = '';
     // ⚠ LES TROIS NOMBRES DE CIBLAGE VIENNENT DES BRIQUES, PAS DE L'ÉCRAN.
     const ciblage = ciblageDuSite(etatCourant, site);
     // ⚠⚠ ET LA FLÈCHE RELIT CE MÊME OBJET. Le rappeler pour elle donnerait deux
@@ -2647,17 +3130,9 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauRefus.hidden = ciblage === null || ciblage.problemes.length === 0;
     panneauRefus.textContent = ciblage === null ? ''
       : ciblage.problemes.map((p) => p.message).join(' ; ');
-    for (const ligne of lignesDuSite(site, baseCourante(etatCourant).position, etatCourant.poisAcquis, ciblage)) {
-      const bloc = doc.createElement('div');
-      bloc.className = 'ligne';
-      const quoi = doc.createElement('span');
-      quoi.className = 'quoi';
-      quoi.textContent = ligne.quoi;
-      const valeur = doc.createElement('b');
-      valeur.textContent = ligne.valeur;
-      bloc.append(quoi, valeur);
-      panneauCorps.appendChild(bloc);
-    }
+    peindreLesLignes(lignesDuSite(
+      site, baseCourante(etatCourant).position, etatCourant.poisAcquis, ciblage,
+    ));
     // ⚠⚠ LE BOUTON N'APPARAÎT QUE SUR SA PROPRE BASE. Sur un camp ou une base de
     // l'Ouvrage il n'aurait aucun sens, et le panneau retomberait dans la faute
     // qu'il combat depuis le 27/08 : promettre un geste qui n'existe pas là.
@@ -2686,6 +3161,84 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     dessiner();
   }
 
+  /**
+   * Le panneau d'une ruine — EN LECTURE SEULE, et c'est tout ce qu'il est.
+   *
+   * ⚠⚠ CE QUE LE COMMENTAIRE DE `dessinerRuines` CRAIGNAIT RESTE ENTIÈREMENT
+   * VALABLE : une ruine ne doit PAS devenir attaquable. Ce qui change est la
+   * conclusion, pas le raisonnement. Elle est cliquable — Ethan, 08/09 — et elle
+   * ouvre un panneau qui ne porte AUCUN bouton d'action : ni « Attaquer », ni
+   * « Déplacer la base », ni la confirmation d'un déplacement.
+   *
+   * ⚠⚠ ET `siteOuvert` RESTE `null`, CE QUI N'EST PAS UNE PRÉCAUTION DE PLUS MAIS
+   * LA MÊME, PRISE PAR L'AUTRE BOUT. C'est cette variable-là que l'écouteur du
+   * bouton d'attaque relit — `if (siteOuvert !== null) entrerDansLaCible(...)` —
+   * et c'est elle que le SECOND toucher compare. La laisser pointer sur la case
+   * d'une ruine rendrait le chemin du raid atteignable depuis un bouton caché, le
+   * jour où un lot futur le sortirait du panneau. `ciblageOuvert` reste `null`
+   * avec elle, donc la flèche ne se peint pas non plus.
+   *
+   * ⚠ IL N'APPELLE PAS `fermerPanneau` D'ABORD. Elle repeint la carte pour rien —
+   * on va la repeindre en sortant —, et surtout elle remettrait `panneau.hidden`
+   * à vrai entre deux images. Chaque champ est posé explicitement, comme
+   * `ouvrirPanneau` le fait déjà.
+   */
+  function ouvrirRuine(ruine) {
+    siteOuvert = null;
+    ciblageOuvert = null;
+    deplacementEnAttente = null;
+    ruineOuverte = {
+      rangee: ruine.rangee,
+      colonne: ruine.colonne,
+      reste: resteDeLaRuine(ruine, etatCourant.horloge.nbTicks),
+    };
+    panneauTitre.textContent = nomDeLaRuine(ruine);
+    peindreLesLignes(lignesDeLaRuine(ruine, etatCourant.horloge.nbTicks));
+    panneauPrix.hidden = true;
+    panneauRefus.hidden = true;
+    panneauRefus.textContent = '';
+    panneauConfirmation.hidden = true;
+    panneauDeplacer.hidden = true;
+    panneauAttaquer.hidden = true;
+    panneau.hidden = false;
+    dessiner();
+  }
+
+  /**
+   * Le compte à rebours d'une ruine ouverte — et sa fermeture quand elle expire.
+   *
+   * ⚠⚠ LA RUINE EXPIRE PENDANT QUE LE PANNEAU EST OUVERT, ET C'EST LE DÉFAUT LE
+   * PLUS PROBABLE DU POINT 10. Vingt-quatre heures se rattrapent hors ligne, mais
+   * elles se terminent aussi sous les yeux du joueur : un panneau qui annoncerait
+   * « il reste 0 s » pour toujours serait la seule chose que ce § peut laisser à
+   * l'écran. `ruineDeLaCase` passe par `ruinesActives`, donc elle rend `null` à
+   * l'instant exact où la ruine cesse d'émettre, et le panneau se ferme.
+   *
+   * ⚠⚠ ET IL NE SE REPEINT QUE QUAND LE TEXTE CHANGE. `rafraichir` passe dix fois
+   * par seconde ; remonter quatre nœuds à chaque passage les ferait clignoter
+   * sous le doigt pour une image identique — c'est le motif que la mini-fenêtre
+   * du tutoriel porte déjà sous le nom de signature. La durée est le seul champ
+   * qui bouge, donc c'est elle qu'on compare.
+   *
+   * ⚠ ELLE SE PLACE AVANT LA SORTIE ANTICIPÉE DE `rafraichir`, comme le relevé
+   * des gisements. `empreinteDeLaCarte` porte bien les cases des ruines actives —
+   * donc l'expiration la fait changer, et le dessin suit —, mais elle ne porte
+   * pas l'HEURE : sans cet appel-ci, le compte à rebours resterait figé sur la
+   * valeur qu'il avait à l'ouverture.
+   */
+  function rafraichirLaRuine(etat) {
+    if (ruineOuverte === null) return;
+    const ruine = ruineDeLaCase(etat, ruineOuverte.rangee, ruineOuverte.colonne);
+    if (ruine === null) {
+      fermerPanneau();
+      return;
+    }
+    const reste = resteDeLaRuine(ruine, etat.horloge.nbTicks);
+    if (reste === ruineOuverte.reste) return;
+    ruineOuverte.reste = reste;
+    peindreLesLignes(lignesDeLaRuine(ruine, etat.horloge.nbTicks));
+  }
+
   function fermerPanneau() {
     panneau.hidden = true;
     panneauDeplacer.hidden = true;
@@ -2705,6 +3258,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     deplacementEnAttente = null;
     siteOuvert = null;
     ciblageOuvert = null;
+    // ⚠ LA RUINE OUVERTE PART AVEC LE RESTE, ET C'EST CE QUI ARRÊTE SON COMPTE À
+    // REBOURS. `rafraichirLaRuine` sort sur `null` : la laisser posée ferait
+    // réécrire dix fois par seconde le corps d'un panneau que plus personne ne
+    // voit, et surtout le rouvrirait tout seul au prochain rafraîchissement.
+    ruineOuverte = null;
     dessiner();
   }
 
@@ -2791,6 +3349,16 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     if (etat === null || etat === undefined) return;
     etatCourant = etat;
     visible = true;
+    // ⚠⚠ ICI AUSSI, ET PAS SEULEMENT DANS `rafraichir`. Un gisement peut se
+    // prendre pendant que le joueur regarde un AUTRE écran — `rafraichir` sort
+    // sur `!visible` —, typiquement quand une ruine expire et rend une case au
+    // joueur. Sans cet appel, la différence serait adoptée en silence au premier
+    // rafraîchissement de retour, et le message serait perdu pour de bon.
+    //
+    // ⚠ ET LA TOUTE PREMIÈRE FOIS EST MUETTE. `poisConnus` vaut `null` : on
+    // adopte l'ensemble sans rien dire, donc ouvrir la carte sur une partie
+    // chargée n'annonce pas les vingt gisements qu'elle porte déjà.
+    signalerLesPoisNeufs(etat);
     empreinteSatellites = empreinteDeLaCarte(etat);
     chargerSols();
     chargerEmblemes();
@@ -2819,6 +3387,14 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   function rafraichir(etat) {
     if (!visible || etat === null || etat === undefined) return;
     etatCourant = etat;
+    // ⚠⚠ LES DEUX PASSENT AVANT LA SORTIE ANTICIPÉE, ET C'EST OBLIGATOIRE.
+    // `empreinteDeLaCarte` porte la base courante, les satellites et les cases
+    // des ruines actives — elle ne porte NI les gisements acquis, NI l'heure.
+    // Placés après le `return` ci-dessous, le toast se tairait dans le seul cas
+    // où il sert, et le compte à rebours d'une ruine resterait figé sur la valeur
+    // qu'il avait à l'ouverture du panneau.
+    signalerLesPoisNeufs(etat);
+    rafraichirLaRuine(etat);
     // ⚠ ON NE REDESSINE QUE SI QUELQUE CHOSE A BOUGÉ. La session appelle ceci
     // dix fois par seconde ; refaire la liste des sites à chaque fois coûte
     // neuf hachages par case de la fenêtre — deux mille cases au cran le plus
