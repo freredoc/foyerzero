@@ -25,7 +25,10 @@ import {
 import { GRILLE, UNITES, DEFENSES } from '../src/data/combat.js';
 import { ARBRE_RECHERCHE, SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE } from '../src/data/recherche.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
-import { GEOGRAPHIE, POINTS_ARMEE, DEPLACEMENT } from '../src/data/sites.js';
+import {
+  GEOGRAPHIE, POINTS_ARMEE, DEPLACEMENT, FONDATION,
+} from '../src/data/sites.js';
+import { estSurLaCarte } from '../src/sim/carte.js';
 import { CHAINE_TUTORIEL, FAMILLES_OBJECTIF } from '../src/data/missions.js';
 import {
   MISSIONS, etatDesMissions, missionCourante, avancement, premierNiveauElectrique,
@@ -199,10 +202,26 @@ function gestesDeLaChaine(etat) {
     ['fonder une seconde base', () => {
       etat.recherche.pointsMilli = String(BigInt(SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE].cout) * 1000n);
       acheterUneBaseDePlus(etat);
+      // ⚠⚠ LA CASE SE DEMANDE AU MOTEUR, ELLE NE S'ÉCRIT PLUS — lot
+      // VOISINAGE-ET-MENACE, 08/09/2026. Ce montage fondait « une case au sud » ;
+      // Ethan a tranché que « aucune base joueur/ouvrage ne doit être côte à
+      // côte sur les 9 cases », donc cette case est refusée. Un montage qui
+      // écrit une coordonnée ne garde que lui-même — c'est la leçon que ce
+      // dépôt a déjà payée cinq fois. On balaie le disque de fondation et on
+      // prend la première case que `problemesDeLaFondation` accepte : le
+      // montage suit désormais la règle au lieu de la supposer.
       const laBase = baseCourante(etat);
-      const cible = { rangee: laBase.position.rangee + 1, colonne: laBase.position.colonne };
-      assert.deepEqual(problemesDeLaFondation(etat, cible), [],
-        'la case choisie par le montage est refusée : le geste ne mesure rien');
+      const r = FONDATION.porteeMaxCases;
+      let cible = null;
+      for (let dr = -r; dr <= r && cible === null; dr += 1) {
+        for (let dc = -r; dc <= r; dc += 1) {
+          const k = { rangee: laBase.position.rangee + dr, colonne: laBase.position.colonne + dc };
+          if (!estSurLaCarte(k.rangee, k.colonne)) continue;
+          if (problemesDeLaFondation(etat, k).length === 0) { cible = k; break; }
+        }
+      }
+      assert.ok(cible !== null,
+        'aucune case fondable dans le disque : le geste ne mesure rien');
       fonderUneBase(etat, cible);
     }],
   ];

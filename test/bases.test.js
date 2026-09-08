@@ -54,6 +54,7 @@ import { coutDUnRaid, distanceCarreeCases } from '../src/sim/points-attaque.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { poiDeLaCase } from '../src/sim/poi.js';
 import { GEOGRAPHIE, FONDATION, POINTS_ATTAQUE } from '../src/data/sites.js';
+import { estSurLaCarte } from '../src/sim/carte.js';
 import { retirerLeSite } from '../src/sim/site-entame.js';
 import { plafondDeLaReserveDeLaBase } from '../src/sim/reparation.js';
 import { capacitesMilli } from '../src/sim/economie-base.js';
@@ -1315,16 +1316,33 @@ test('BASES-1 T5 — refusé chez l\'Ouvrage, ACCEPTÉ chez soi', () => {
   const etat = partieAvecDroit(3, 293);
   const ici = baseCourante(etat).position;
 
-  // ⚠⚠ CHEZ SOI, C'EST OUI — Ethan, 02/09, explicitement. Conséquence signalée
-  // et acceptée : deux bases du joueur peuvent être ADJACENTES. Seule la case
-  // EXACTE d'une base existante est refusée.
-  assert.deepEqual(
-    problemesDeLaFondation(etat, { rangee: ici.rangee - 1, colonne: ici.colonne }), [],
-    'fonder à côté de sa propre base est autorisé (arbitrage du 02/09)',
+  // ⚠⚠ CHEZ SOI, C'EST NON DEPUIS LE 08/09 — ET CE TEST EST RETOURNÉ, PAS
+  // RÉPARÉ. Il figeait l'arbitrage du 02/09 : « fonder dans son PROPRE
+  // territoire est autorisé, conséquence signalée et acceptée : deux bases du
+  // joueur peuvent être ADJACENTES ». Ethan revient dessus : « 8 cases autour
+  // peu importe le territoire, aucune base joueur/ouvrage ne doit être côte à
+  // côte sur les 9 cases ». C'est la propriété que le lot renverse, donc c'est
+  // l'assertion qui se renverse — la réparer aurait gardé un test vert sur une
+  // règle morte.
+  //
+  // ⚠ ET IL FALSIFIE L'ANCIENNE DE FACE, comme `EMB-C T1` l'a fait pour
+  // l'ancrage des emblèmes : sans cette moitié, un `rayonCases` remis à 0
+  // ferait tomber la boucle ci-dessous sans dire pourquoi.
+  const collee = { rangee: ici.rangee - 1, colonne: ici.colonne };
+  assert.ok(
+    problemesDeLaFondation(etat, collee).some((p) => p.code === 'voisinage'),
+    'fonder à côté de sa propre base est REFUSÉ depuis l\'arbitrage du 08/09',
   );
+  assert.notDeepEqual(
+    problemesDeLaFondation(etat, collee), [],
+    'l\'ancienne règle du 02/09 — « à côté de soi, c\'est oui » — ne doit plus passer',
+  );
+  // ⚠ LA CASE EXACTE GARDE SON REFUS PROPRE, et il reste distinct du voisinage :
+  // « une de tes bases est déjà là » est plus précis que « il faut une case
+  // libre », et c'est lui que le joueur doit lire quand il s'applique.
   assert.ok(
     problemesDeLaFondation(etat, { ...ici }).some((p) => p.code === 'case-occupee'),
-    'la case exacte d\'une base existante doit être refusée',
+    'la case exacte d\'une base existante doit garder son refus propre',
   );
 
   // ⚠⚠ CHEZ L'OUVRAGE, C'EST NON — ET ON COMPARE CASE PAR CASE À LA RÈGLE, comme
@@ -1405,14 +1423,62 @@ test('BASES-1 T6 — refusé sur un POI, accepté sur un camp', () => {
   assert.ok(problemesDeLaFondation(etat, poi).map((p) => p.code).includes('sur-un-poi'));
 
   // Et sur un camp : accepté. On fait paraître les satellites par le vrai tick.
-  const surCamp = creerEtat(11);
-  rattraperJeu(surCamp, 6 * TICKS_PAR_MINUTE);
-  surCamp.recherche.basesAutorisees = 2;
-  const camp = baseCourante(surCamp).satellites.presents.find((x) => x.type === 'camp');
-  assert.ok(camp !== undefined, 'aucun camp paru : le montage ne mesure rien');
+  //
+  // ⚠⚠ LE CAMP DOIT ÊTRE À DEUX CASES, ET C'EST UNE CONSÉQUENCE MESURÉE DU LOT
+  // VOISINAGE-ET-MENACE, 08/09/2026 — pas un arrangement de montage.
+  // `SATELLITES.camps.anneau` vaut `{min: 1, max: 2}` : mesuré sur 60 graines,
+  // **70 % des camps paraissent à Tchebychev 1 de la base du joueur**, donc
+  // COLLÉS à elle. Depuis qu'aucune base ne peut se poser à côté d'une autre,
+  // ces camps-là sont devenus INFONDABLES : la règle d'Ethan du 08/09 et le
+  // rayon d'anneau du camp se contredisent sur 70 % des cas. Les avant-postes
+  // (`anneau {min: 2, max: 5}`) ne sont pas touchés — 0 % mesuré.
+  //
+  // ⚠ CE TEST NE TRANCHE PAS, IL CONSTATE. `TYPES_ECRASABLES` autorise toujours
+  // de fonder sur un camp, et ce test le garde sur les 30 % qui restent
+  // atteignables. Le levier — `SATELLITES.camps.anneau.min` de 1 à 2 — est du
+  // CALIBRAGE et appartient à Ethan.
+  //
+  // ⚠ LA GRAINE SE CHERCHE, ELLE NE S'ÉCRIT PAS. Il faut une partie qui porte
+  // les DEUX cas — un camp collé et un camp à deux cases — et l'ancienne graine
+  // 11 n'a que des camps collés. Mesuré : 30 graines sur 60 portent les deux ;
+  // une graine écrite en dur redeviendrait fausse au premier lot qui touche au
+  // tirage des satellites.
+  let surCamp = null;
+  let camps = [];
+  let ouEstLaBase = null;
+  const distance = (x, p) => Math.max(
+    Math.abs(x.rangee - p.rangee), Math.abs(x.colonne - p.colonne),
+  );
+  for (let graine = 1; graine <= 60 && surCamp === null; graine += 1) {
+    const e = creerEtat(graine);
+    rattraperJeu(e, 6 * TICKS_PAR_MINUTE);
+    const p = baseCourante(e).position;
+    const liste = baseCourante(e).satellites.presents.filter((x) => x.type === 'camp');
+    if (!liste.some((x) => distance(x, p) <= 1)) continue;
+    if (!liste.some((x) => distance(x, p) >= 2)) continue;
+    e.recherche.basesAutorisees = 2;
+    surCamp = e; camps = liste; ouEstLaBase = p;
+  }
+  assert.ok(surCamp !== null,
+    'aucune graine ne porte à la fois un camp collé et un camp à deux cases');
+  const colle = camps.find((x) => distance(x, ouEstLaBase) <= 1);
+  assert.ok(colle !== undefined, 'le montage suppose un camp COLLÉ');
+  assert.ok(
+    problemesDeLaFondation(surCamp, { rangee: colle.rangee, colonne: colle.colonne })
+      .some((p) => p.code === 'voisinage'),
+    'un camp collé à la base est désormais infondable — conséquence du 08/09',
+  );
+
+  // ⚠ ET LA MOITIÉ QUI COMPTE : à deux cases, fonder sur un camp reste permis.
+  // Sans elle, ce test passerait sur un code qui aurait retiré `camp` de
+  // `TYPES_ECRASABLES`, c'est-à-dire tué la règle qu'il prétend garder.
+  const aDeuxCases = camps.find((x) => distance(x, ouEstLaBase) >= 2);
+  assert.ok(aDeuxCases !== undefined, 'le montage suppose un camp à deux cases');
   assert.deepEqual(
-    problemesDeLaFondation(surCamp, { rangee: camp.rangee, colonne: camp.colonne }), [],
-    'fonder sur un camp doit être autorisé',
+    problemesDeLaFondation(surCamp, {
+      rangee: aDeuxCases.rangee, colonne: aDeuxCases.colonne,
+    }), [],
+    'fonder sur un camp à deux cases doit rester autorisé',
   );
 });
 
@@ -1421,12 +1487,26 @@ test('BASES-1 T6 — refusé sur un POI, accepté sur un camp', () => {
 // ---------------------------------------------------------------------------
 
 test('BASES-1 T7 bis — le camp fondé dessus disparaît, son butin va à la base qui fonde', () => {
-  const etat = creerEtat(11);
-  rattraperJeu(etat, 6 * TICKS_PAR_MINUTE);
-  etat.recherche.basesAutorisees = 2;
+  // ⚠ LE CAMP DOIT ÊTRE À DEUX CASES — lot VOISINAGE-ET-MENACE, 08/09/2026.
+  // 70 % des camps paraissent COLLÉS à la base (`SATELLITES.camps.anneau.min`
+  // vaut 1) et sont devenus infondables : voir `BASES-1 T6`, qui mesure et
+  // garde cette conséquence. Ce test-ci parle du BUTIN, pas de la distance ; il
+  // se pose donc sur un camp atteignable, et cherche la graine plutôt que de
+  // l'écrire.
+  let etat = null;
+  let camp = null;
+  for (let graine = 11; graine <= 70 && camp === null; graine += 1) {
+    const e = creerEtat(graine);
+    rattraperJeu(e, 6 * TICKS_PAR_MINUTE);
+    const p = baseCourante(e).position;
+    const c = baseCourante(e).satellites.presents.find((x) => x.type === 'camp'
+      && Math.max(Math.abs(x.rangee - p.rangee), Math.abs(x.colonne - p.colonne)) >= 2);
+    if (c === undefined) continue;
+    e.recherche.basesAutorisees = 2;
+    etat = e; camp = c;
+  }
+  assert.ok(camp !== null, 'aucune graine ne porte un camp à deux cases de la base');
   const laBase = baseCourante(etat);
-  const camp = laBase.satellites.presents.find((x) => x.type === 'camp');
-  assert.ok(camp !== undefined, 'aucun camp paru : le montage ne mesure rien');
   const cible = { rangee: camp.rangee, colonne: camp.colonne };
 
   const promis = butinDeLaFondation(etat, cible);
@@ -1578,10 +1658,28 @@ test('BASES-1 T11 — les dix-sept missions ont un moteur (M2)', () => {
 
   assert.equal(coche('seconde-base'), false);
   etat.recherche.basesAutorisees = 2;
-  fonderUneBase(etat, {
-    rangee: baseCourante(etat).position.rangee + 1,
-    colonne: baseCourante(etat).position.colonne,
-  });
+  // ⚠⚠ LA CASE SE DEMANDE AU MOTEUR, ELLE NE S'ÉCRIT PLUS — lot
+  // VOISINAGE-ET-MENACE, 08/09/2026. Le montage fondait « une case au sud » ;
+  // depuis qu'aucune base ne peut se coller à une autre, cette case est
+  // refusée, et un montage qui écrit une coordonnée ne garde que lui-même —
+  // c'est la leçon que ce dépôt a déjà payée cinq fois. On balaie le disque de
+  // fondation et on prend la première case que `problemesDeLaFondation`
+  // accepte, ce qui reste vrai quel que soit le rayon d'encombrement.
+  const ouFonder = (e) => {
+    const p = baseCourante(e).position;
+    const r = FONDATION.porteeMaxCases;
+    for (let dr = -r; dr <= r; dr += 1) {
+      for (let dc = -r; dc <= r; dc += 1) {
+        const k = { rangee: p.rangee + dr, colonne: p.colonne + dc };
+        if (!estSurLaCarte(k.rangee, k.colonne)) continue;
+        if (problemesDeLaFondation(e, k).length === 0) return k;
+      }
+    }
+    return null;
+  };
+  const ouPoser = ouFonder(etat);
+  assert.ok(ouPoser !== null, 'aucune case fondable : le montage ne mesure rien');
+  fonderUneBase(etat, ouPoser);
   assert.equal(coche('seconde-base'), true, 'fonder ne coche pas');
 
   // ⚠⚠ ET FONDER NE DÉCOCHE RIEN. C'est le défaut que ce lot aurait introduit
