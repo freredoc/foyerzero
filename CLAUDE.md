@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.31 · build 133.
+Dernière révision : **08/09/2026**, version 0.99.32 · build 134.
 
 ---
 
@@ -42,7 +42,163 @@ Dernière révision : **08/09/2026**, version 0.99.31 · build 133.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot BÂTIMENTS-QUATRE-ÉTATS), à confronter :**
+**Référence au 08/09/2026 (après le lot FORMATION-ET-GARNISON), à confronter :**
+`npm test` → **1441 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 654 436 octets**, 0 référence externe. Coût **+7 118 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis `e97fb72` :
+**JavaScript +5 579 · feuille +1 539 · balisage +0 · images +0 · audio +0**, et
+la somme des cinq postes tombe EXACTEMENT sur le total — **297 lignes `data:`
+avant, 297 après**. Borne T10 inchangée à 9 300 000, marge **645 564 octets,
+6,94 %**.
+⚠⚠ **LA FORMATION DE RAID EST UNE COPIE DE TRAVAIL, ET C'EST CE QUI FAIT QUE
+`SAVE_VERSION` NE BOUGE PAS.** Ethan, 08/09 : « la formation de raid repart
+toujours de celle d'Offense à chaque ouverture, et toutes les unités repartent
+actives ». `src/sim/formation-de-raid.js` rend une copie profonde de
+`baseCourante(etat).armee`, **alignée par indice**, plus un champ `embarqueDans`
+par pièce ; elle vit dans la fermeture de l'écran de raid et meurt avec lui. Pas
+un champ neuf n'entre dans la sauvegarde.
+⚠⚠ **L'ALIGNEMENT PAR INDICE N'EST PAS UN CONFORT, C'EST CE QUI EMPÊCHE LE RAID
+DE LEVER.** `reporterLesDegats` exige `resultat.attaquants.length ===
+indices.length` et apparie les deux listes POSITION PAR POSITION ; un `splice`,
+un `filter` ou un tri qui ne rend pas le même ordre feraient tomber les dégâts
+sur la mauvaise unité, **en silence**. La copie se construit par `map`, et
+`FG T1` mesure la neutralité — mêmes vagues ET mêmes indices que le chemin
+d'hier. **C'est le test qui rend le lot débogable** ; `FG T9` est celui qui
+compte, en croisant `resultat.attaquants[i].id` avec `armee[indices[i]].id` sur
+six identifiants distincts et un porteur chargé au milieu.
+⚠⚠ **LE VALIDATEUR NE SE RÉÉCRIT PAS : `problemesDeLEffectif` EST EXPORTÉ.** Il
+prend une LISTE et non un état, donc il juge la copie tel quel. Une seconde
+table de refus pour la préparation de raid aurait dit un jour autre chose que
+celle d'Offense, et les deux vivent sous le même doigt.
+⚠⚠ **UNE SEULE DIFFÉRENCE ASSUMÉE AVEC OFFENSE :
+`problemeDuBatimentDeProduction` N'EST PAS RAPPELÉ.** On ne compose rien ici, on
+RANGE ce qui est déjà composé ; refuser de réarranger sa formation parce qu'une
+Caserne est tombée serait un piège au moment où le joueur en a le plus besoin.
+**Décision réversible d'une ligne** — il suffit d'appeler ce voisin dans les deux
+`problemesDe…` du module.
+⚠⚠ **ET LES `null` DU PASSAGER NE SUFFISAIENT PAS — MESURÉ, PAS SUPPOSÉ.** Le
+brief posait que `vague: null` ferait refuser tout déplacement direct par
+`hors-grille` ; il ne le fait pas — le candidat est `{ ...piece, ...position }`
+et la position ÉCRASE les deux `null`. Sans garde, `deplacerEnFormation` posait
+une pièce à la fois EMBARQUÉE et POSÉE, que `composerLesVagues` montait derrière
+son porteur en ignorant sa case. Le déplacement et la permutation LÈVENT donc sur
+un passager ; ce qui reste vrai du brief est la SUPERPOSITION, impossible par
+construction — `autre[f.axe] === axe` ne peut pas être vrai avec `null`.
+⚠⚠ **`composerLesVagues(etat, formation = null)` GARDE EXACTEMENT LE
+COMPORTEMENT D'HIER À `null`**, `piece.actif === false` compris : tous les
+appelants et tous les tests existants sont intacts, et c'est ce qui permet à
+`FG T1` de prouver la neutralité. `executerRaid` passe `options.formation`, et
+`simulerRaid` est servi GRATUITEMENT — son en-tête dit déjà qu'`options` passe
+EN ENTIER. `FG T4` le vérifie plutôt que de le croire.
+⚠⚠ **`problemesDuRaid` PREND LA FORMATION AUSSI, ET C'EST UN ÉCART AU BRIEF,
+DÉCLARÉ.** Il ne le demandait pas ; sans elle, une formation entièrement
+désactivée laisserait passer un raid que le moteur résoudrait **sans un seul
+attaquant** — points payés, combat perdu, et le bouton n'aurait rien dit. Le
+refus `sans-armee` et le compteur « engagées » de l'écran se jugent donc sur ce
+qui PART. Défaut `null`, donc l'ancien comportement.
+⚠⚠ **UN PASSAGER EST MONTÉ AVEC LES AUTRES, ET RESTE INERTE JUSQU'À SA SORTIE.**
+La tentation naturelle — le créer AU DÉBARQUEMENT par `ajouterEntite` — ne marche
+pas : `resultat.attaquants` se construit en parcourant `etat.entites`, une entité
+créée en cours de combat s'y ajoute, et `reporterLesDegats` LÈVE sur « N
+attaquants rendus pour M engagés ». `composerLesVagues` l'émet donc juste après
+son porteur, dans la même vague, à la colonne du porteur, avec `embarquee: true`.
+⚠⚠ **ET L'INERTIE TIENT EN UNE LIGNE :** `estActive(e)` gagne `&& !e.embarquee`.
+Cinq comportements pour une négation — `construireOccupation` (il ne prend aucune
+case et n'en bloque aucune), `ciblage` (personne ne le vise), `tir` (il ne tire
+pas), `deplacement` (il n'avance pas) et `conditionsDeFin` (un raid ne se termine
+pas « attaquants » parce qu'il ne reste que des passagers). Il ne prend donc
+AUCUN dégât : « elle sort avec ses PV du départ » est vrai sans une ligne de plus.
+⚠⚠ **`embarquee` N'EST POSÉ SUR L'ENTITÉ QUE S'IL EST VRAI, ET C'EST CE QUI GARDE
+LES DEUX CENTS TÉMOINS VERTS.** Un champ écrit sur toutes les entités entrerait
+dans `serialiserEtat`, donc dans l'empreinte d'état de `test/temoins-combat.js` :
+les deux cents rougiraient d'un coup, sur des montages où pas un passager
+n'embarque. Le témoin ne se rafraîchit pas — « un témoin régénéré par la même
+main que le code suivrait l'erreur qu'il devrait attraper » —, donc c'est le
+CHAMP qui reste absent là où il n'a rien à dire. Même raison pour le
+`embarquee: u.embarquee` du `descripteurs.push` : à `undefined`,
+`JSON.stringify` laisse tomber la clé.
+⚠ **ET UNE PASSAGÈRE ENTRE AVEC SON PORTEUR, OU PAS DU TOUT.**
+`apparitionDeVague` la fait entrer si et seulement si la descripteure d'avant est
+entrée : une passagère qui apparaîtrait pendant que son porteur attend une case
+libre s'insérerait AVANT lui dans `etat.entites`, et le report des dégâts
+tomberait d'un cran de travers. `creerCombat` refuse d'ailleurs un montage où une
+`embarquee` ne suit pas un porteur.
+⚠⚠ **LE SEUIL DE FRANCHISSEMENT SE LIT DANS `GRILLE.bandes`, JAMAIS ÉCRIT `11`.**
+`RANGEE_DEFENSE_FRANCHIE` vaut `GRILLE.bandes.batiments.premiere` — la bande de
+défense va des rangées 3 à 10, les huit rangées d'Ethan, et la première rangée
+des bâtiments est ce qui est au-delà.
+⚠ **LE DÉBARQUEMENT EST L'ÉTAPE 7 bis, APRÈS `deplacement`**, et les deux
+positions comptent : après `retirerLesMorts` un porteur détruit rend sa passagère
+AU MÊME TICK, après `deplacement` un porteur qui franchit la rendra au tick du
+franchissement et pas au suivant. ⚠ **Aérien → sa case d'abord, puis derrière ;
+terrestre → derrière seulement**, et le discriminant est `profil(porteur).bloquant`,
+c'est-à-dire la masse nulle, jamais une liste de châssis.
+⚠ **AUCUNE CASE LIBRE : ELLE RESTE EMBARQUÉE, ET ON RÉESSAIE AU TICK SUIVANT** —
+le comportement d'`etat.enAttente`, le seul qui ne perde personne. ⚠ Et **le
+porteur qui rentre à la base emmène sa passagère** : elle passe `sorti` avec lui,
+sans débarquer, et compte parmi les survivants.
+⚠⚠ **LE MODULE GARNISON PASSE À `cable: { offense: true, defense: false }`, ET LE
+CATALOGUE N'A PLUS UN SEUL MODULE SANS EFFET.** C'était le dernier ;
+conséquence à dire, mesurée : le message « n'a pas encore d'effet en jeu » de
+`problemesDeLAchat` devient **INATTEIGNABLE par l'arbre** — tout refus
+`effetNonCable` nomme désormais sa branche. La ligne de code reste, elle parlera
+du prochain module écrit avant son moteur. ⚠ `defense` reste faux avec son
+commentaire : le Ratisseur porte bien `defense.module === 'garnison'`, mais une
+pièce de garnison n'AVANCE pas — `deplacement` ne fait que la DÉCALER — donc il
+n'y a nulle part où transporter qui que ce soit. Ethan : « côté défense, on
+laisse un commentaire et on va régler ça après ».
+⚠ **LES LIGNES NON CÂBLÉES TOMBENT DE 8 À 6, ET LES SIX SONT EN DÉFENSE.**
+Les deux qui partent sont la Garnison de l'Éclaireur et de l'Épervier ; le prix
+n'a pas bougé d'un point — `data/recherche.js` le portait déjà.
+⚠⚠ **UNE FUITE DE L'ÉTAT VERS LA COPIE A ÉTÉ TROUVÉE EN CÂBLANT L'ÉCRAN, ET ELLE
+N'ÉTAIT PAS AU BRIEF.** « Réparer » et « Tout réparer » écrivent dans
+`etat.armee` ; la formation en porte une COPIE prise à l'ouverture. Sans
+`resynchroniserLaFormation`, un raid lancé juste après une réparation partait
+avec les dégâts d'il y a cinq minutes, et une pièce remontée au-dessus du
+plancher de PV restait à la maison. **Aucun test ne l'aurait dit — les deux
+chemins sont muets.**
+⚠ **LE BADGE PASSAGER EST LE POINT LE PLUS FRAGILE DU LOT, ET IL SE DÉCLARE.**
+24 px CSS de côté et `touch-action: none` ; en dessous le doigt prend le porteur
+au lieu de la passagère. Si à l'usage ce n'est pas assez, la correction n'est PAS
+de l'agrandir — il mangerait la vignette — mais d'ajouter un mode « Débarquer »
+à `MODES_RAID`, comme « Réparer ». **Ce lot ne le fait pas ; Ethan tranche.**
+⚠ **DETTE DÉCLARÉE, PAS RÉPARÉE :** `piece.actif` reste dans `etat.armee` et
+d'anciennes sauvegardes peuvent le porter à `false`. Plus personne ne l'écrit
+depuis l'écran de raid ; seul le chemin `formation === null` le lit encore. Le
+purger demanderait une migration, donc `SAVE_VERSION`, donc un lot.
+⚠⚠ **QUINZE FALSIFICATIONS, TREIZE CHUTES AU PREMIER RELEVÉ, ET LES DEUX
+MUETTES ONT CHACUNE FAIT ÉCRIRE UN TEST.** (1) `resynchroniserLaFormation`
+enfermée dans un `if (false)` : la garde de source COMPTAIT les occurrences, donc
+l'appel y était encore — c'est le proxy du lot ÉCRAN-CARTE, vu une seconde fois ;
+elle lit désormais la CONDITION. (2) Une passagère qui entre sans son porteur :
+aucun montage du lot ne retenait un porteur à l'apparition, et il a fallu le
+chercher — impossible en vague 1, `creerCombat` refusant deux entités sur une
+case, donc une vague 2 dont la colonne est encore tenue par une alliée. `FG T20`
+le monte, et les deux falsifications mordent maintenant.
+⚠ **LES DEUX CENTS TÉMOINS DE COMBAT SONT VERTS SANS AVOIR ÉTÉ RÉGÉNÉRÉS**, et
+`test/temoins-combat.js` n'a pas une ligne de changée. Aucun passager n'embarque
+dans ces montages, et le champ `embarquee` n'y est donc jamais écrit.
+⚠ **SIX TESTS EXISTANTS CHANGENT DE VALEUR OU DE CIBLE, ET AUCUN NE S'ASSOUPLIT.**
+`T11`, `MODULES-A T9`, `MODULES-A T10`, `MODULES-B T13`, `MODULES-C T10`,
+`MODULES-D T3` et `RECH-É T5` remesurent le drapeau de câblage — le contre-cas
+qu'ils avaient eux-mêmes planté (« le jour où elle sera câblée, ce bloc changera
+de pièce à son tour ») s'est produit, et il est REMESURÉ plutôt que rattrapé ;
+`RAID-A T6` change de destination — de `deplacerEffectif` à la formation — et se
+RESSERRE, en nommant les quatre gestes du glissement et en interdisant l'écriture
+directe d'un champ des DEUX côtés.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — aucun fichier d'`art/` n'apparaît
+au diff.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE DÉCLARE
+NON EXÉCUTÉ.** Le badge passager, sa taille au doigt et le glisser-déposer qui
+l'emporte n'ont été mesurés que par les fonctions PURES de l'écran.
+⚠ **ET LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS TOUT À FAIT LÀ.** Il décrit le
+commit `5593b2c` (PR #111) — 1 419 tests, 8 647 037 octets ; mesuré au départ,
+`main` était à `e97fb72` (PR #112, le correctif de la migration v29) :
+**1 421 pass, 8 647 318 octets**. Les treize ancres du §9 étaient présentes et
+UNIQUES, vérifiées une par une avant d'écrire.
+
+**Auparavant, après le lot BÂTIMENTS-QUATRE-ÉTATS :**
 `npm test` → **1421 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 647 318 octets**, 0 référence externe. Coût **+251 857 octets** : **images
 +246 932** — l'atlas `batiment` passe de 114 650 à 299 848 octets, donc 152 868 →
@@ -8074,7 +8230,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 30 fichiers
+src/sim/                simulation déterministe, sans DOM — 31 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -8100,6 +8256,19 @@ src/sim/                simulation déterministe, sans DOM — 30 fichiers
   missions.js           le tutoriel : des QUESTIONS posées à la base, jamais une écriture
   rendu-pose.js         où poser un sprite sur une case : ancrage et variante, sans DOM
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
+  formation-de-raid.js  la copie de travail de l'armée : ranger, embarquer, débarquer
+  ⤷ ⚠⚠ `formation-de-raid.js` NE VA JAMAIS DANS L'ÉTAT, ET C'EST TOUT SON OBJET —
+    lot FORMATION-ET-GARNISON, 08/09. Il rend une copie profonde de
+    `baseCourante(etat).armee`, ALIGNÉE PAR INDICE, plus un `embarqueDans` par
+    pièce ; elle vit dans la fermeture de l'écran de raid et repart de l'armée
+    d'Offense à chaque ouverture. `SAVE_VERSION` ne bouge pas.
+  ⤷ ⚠⚠ IL N'ÉCRIT AUCUNE RÈGLE : `problemesDeLEffectif` de `state.js` est exporté
+    et juge la copie tel quel — il prend une LISTE, pas un état. La SEULE
+    différence assumée avec Offense est `problemeDuBatimentDeProduction`, qui
+    n'est PAS rappelé : on ne compose rien ici, on range ce qui est composé.
+  ⤷ ⚠ ET LE DÉPLACEMENT COMME LA PERMUTATION LÈVENT SUR UN PASSAGER. Ses `null`
+    ne suffisent pas — la position donnée les écrase, mesuré —, et sans garde on
+    obtiendrait une pièce à la fois posée et embarquée.
   ⤷ ⚠⚠ `basesRasees` RÉPOND À DEUX QUESTIONS QUI N'ONT PAS LA MÊME DURÉE DE
     VIE, et `ruines.js` existe pour que les deux lectures se voient l'une l'autre.
     « Cette case porte-t-elle encore un site ? » — jamais, définitivement, et
@@ -8494,7 +8663,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   60 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   61 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -8504,7 +8673,7 @@ test/                   60 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
-  journal-raids  batiments-quatre-etats
+  journal-raids  batiments-quatre-etats  formation-et-garnison
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

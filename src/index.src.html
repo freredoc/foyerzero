@@ -329,6 +329,30 @@
   /* L'unité au bout du doigt pendant un glissement — os, comme la sélection du
      Chantier et de l'Offense. */
   #ecran-raid .emplacement.enmain { outline: 2px solid #F5F3E8; outline-offset: -2px; }
+  /* ⚠⚠ LE BADGE PASSAGER — lot FORMATION-ET-GARNISON, 08/09. Un véhicule à
+     module Garnison qui transporte une escouade porte, dans le coin haut-gauche
+     de sa case, un badge qu'on peut PRENDRE au doigt pour débarquer la pièce.
+     C'est le point le plus fragile du lot : une case de vague fait une trentaine
+     de pixels sur un téléphone.
+     ⚠ 24 px DE CÔTÉ, ET C'EST UN PLANCHER DE TOUCHER, PAS UN GOÛT. En dessous
+     le doigt rate le badge et prend le porteur, c'est-à-dire le contraire du
+     geste voulu. Si à l'usage ce n'est pas assez, la correction n'est PAS de
+     l'agrandir — il mangerait la vignette — mais d'ajouter un mode
+     « Débarquer » à `MODES_RAID`, comme « Réparer ». Ethan tranche.
+     ⚠ `touch-action: none` COMME LA CASE QUI LE PORTE : sans lui, le navigateur
+     avale le glissement pour faire défiler la page et le badge devient inerte.
+     ⚠ AUCUNE TEINTE NEUVE — l'ambre `#F5B636` est déjà celle du bouton
+     d'acquisition possible de l'écran Recherche, et le fond est celui des
+     cases. */
+  #ecran-raid .emplacement .badge-passager {
+    position: absolute; left: 0; top: 0; z-index: 1;
+    width: 24px; height: 24px; padding: 2px;
+    display: flex; align-items: center; justify-content: center;
+    background: #161914; border: 1px solid #F5B636; color: #F5B636;
+    touch-action: none;
+  }
+  /* Un véhicule chargé se voit sans qu'on lise le badge — même liseré ambre. */
+  #ecran-raid .emplacement.chargee { border-color: #F5B636; }
   /* Les deux panneaux de résultat. Même contenu, deux tailles : petit onglet
      pour le simulateur, plein cadre pour le vrai raid. */
   #raid-sim, #raid-fin {

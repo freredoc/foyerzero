@@ -39,6 +39,13 @@ import { GRILLE } from '../src/data/combat.js';
 import { gratuitesDe } from '../src/data/recherche.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+import {
+  formationDepuisLArmee, problemesDuDeplacementEnFormation,
+} from '../src/sim/formation-de-raid.js';
+import { EMPLACEMENTS_ASSAUT } from '../src/data/sites.js';
+
+/** Les quatre vagues, lues dans la table — jamais un 4 écrit à la main. */
+const NB_VAGUES_DU_RAID = EMPLACEMENTS_ASSAUT.vagues;
 
 /** Une partie dont les satellites sont parus, avec une armée posée. */
 function partieArmee(graine = 2026, unites = 6, niveau = 1) {
@@ -859,28 +866,51 @@ test('RAID-A T5 — les six boutons, et « tout réparer » sous condition', () 
   assert.doesNotMatch(source, /try\s*\{/, 'l\'écran de raid rattrape une levée de la simulation');
 });
 
-test('RAID-A T6 — le glisser-déposer passe par `deplacerEffectif`, pas par une écriture', () => {
+test('RAID-A T6 — le glisser-déposer demande avant d\'agir, et n\'écrit jamais un champ', () => {
   const source = sansCommentairesRaidA(lireSource('src', 'ui', 'raid.js'));
-  // ⚠ LE GESTE EST UNE ENTRÉE ; la règle de qui peut aller où reste dans `sim/`.
-  assert.match(source, /problemesDuDeplacementDEffectif\(etatCourant, 'armee', index, position\)/,
-    'le glisser-déposer ne demande plus si le déplacement est légal');
-  assert.match(source, /deplacerEffectif\(etatCourant, 'armee', index, position\)/,
-    'le glisser-déposer n\'appelle plus `deplacerEffectif`');
-  // ⚠ AUCUNE ÉCRITURE DIRECTE DANS UNE PIÈCE D'ARMÉE. Le motif vise l'écriture
-  // dans l'ÉTAT, pas les `dataset` du DOM — une vignette porte légitimement sa
-  // vague et sa colonne en attributs, c'est ce qui permet de savoir où le doigt
-  // s'est posé.
+  // ⚠⚠ IL PASSE PAR LA FORMATION DEPUIS LE LOT FORMATION-ET-GARNISON, PLUS PAR
+  // `deplacerEffectif`. Ce que cette garde défend n'a pas changé d'un mot — le
+  // geste DEMANDE, puis il agit, et la règle de qui peut aller où reste dans
+  // `sim/` ; c'est sa DESTINATION qui a bougé, de `etat.armee` à la copie de
+  // travail. Elle se resserre au passage : les QUATRE gestes du glissement sont
+  // nommés, là où elle n'en gardait qu'un.
+  for (const geste of [
+    'problemesDuDeplacementEnFormation', 'deplacerEnFormation',
+    'problemesDeLaPermutationEnFormation', 'permuterEnFormation',
+    'problemesDeLEmbarquement', 'embarquerEnFormation',
+    'problemesDuDebarquementEnFormation', 'debarquerEnFormation',
+  ]) {
+    assert.match(source, new RegExp(`${geste}\\(`), `le glissement n'appelle plus ${geste}`);
+  }
+  // ⚠⚠ AUCUNE ÉCRITURE DIRECTE, NI DANS L'ARMÉE NI DANS LA FORMATION. Le motif
+  // vise l'écriture d'un CHAMP, pas les `dataset` du DOM — une vignette porte
+  // légitimement sa vague et sa colonne en attributs, c'est ce qui permet de
+  // savoir où le doigt s'est posé. La seconde moitié est neuve : une copie de
+  // travail se range par ses propres fonctions, sinon l'écran porterait une
+  // seconde table de règles à côté de celle d'Offense.
   assert.doesNotMatch(source, /etatCourant\.armee\[[^\]]*\]\.\w+\s*=[^=]/,
     'l\'écran écrit directement dans une pièce d\'armée');
+  assert.doesNotMatch(source, /formation\[[^\]]*\]\.\w+\s*=[^=]/,
+    'l\'écran écrit directement dans une pièce de la formation');
   // ⚠ POINTER EVENTS, PAS SOURIS : la cible est un téléphone.
   assert.match(source, /addEventListener\('pointerdown'/, 'le geste n\'écoute plus le pointeur');
   assert.doesNotMatch(source, /addEventListener\('mousedown'/, 'le geste écoute la souris');
 
-  // Et le refus est bien celui du moteur, sur une vraie tentative illégale.
+  // Et le refus est bien celui du moteur, sur une vraie tentative illégale —
+  // mesuré sur la FORMATION, qui est ce que le glissement range désormais.
   const etat = partieJouable();
-  const occupee = { vague: baseCourante(etat).armee[1].vague, colonne: baseCourante(etat).armee[1].colonne };
-  const problemes = problemesDuDeplacementDEffectif(etat, 'armee', 0, occupee);
+  const formation = formationDepuisLArmee(etat);
+  const occupee = { vague: formation[1].vague, colonne: formation[1].colonne };
+  const problemes = problemesDuDeplacementEnFormation(formation, 0, occupee);
   assert.ok(problemes.length > 0, 'poser sur une case occupée devrait être refusé');
+  // Falsifiable : une case LIBRE de la même formation ne refuse rien.
+  const libre = { vague: NB_VAGUES_DU_RAID, colonne: 9 };
+  assert.equal(
+    formation.some((x) => x.vague === libre.vague && x.colonne === libre.colonne), false,
+    'montage : la case témoin doit être libre',
+  );
+  assert.deepEqual(problemesDuDeplacementEnFormation(formation, 0, libre), [],
+    'montage sans mordant : cette case-là est déjà refusée');
 });
 
 test('RAID-A T7 — les deux panneaux affichent les MÊMES nombres', () => {
