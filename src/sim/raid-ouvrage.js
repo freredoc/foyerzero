@@ -42,7 +42,8 @@ import { genererVague, budgetRaid } from './generateur.js';
 import { ciblesAPortee } from './site-de-la-case.js';
 import { estSurLaCarte } from './carte.js';
 import { RESSOURCES } from './economie-base.js';
-import { modulesDebloquesDuJoueur } from './recherche.js';
+import { modulesDebloquesDuJoueur, nomDuModule } from './recherche.js';
+import { UNITES } from '../data/combat.js';
 import { majorationsDeCombat } from './poi.js';
 import { poserLaBaseSur } from './deplacement.js';
 import { reparerLaGarnison, garderLeRapport } from './raid.js';
@@ -404,6 +405,53 @@ function pvCourantsMilli(pvMax, degatsMilli) {
  * @param {object} [laBase] la base attaquée — la courante par défaut
  * @returns {object} montage prêt pour `creerCombat`
  */
+/**
+ * Les modules d'ATTAQUE que l'Ouvrage a débloqués à ce niveau — triés, sans
+ * doublon.
+ *
+ * ⚠⚠ SYMÉTRIQUE DE `modulesOuvrageAu` DE `sim/generateur.js`, ET ELLE VIT ICI
+ * PARCE QUE C'EST ICI QUE L'OUVRAGE ATTAQUE — lot NEUTRALISATION, 08/09/2026.
+ * Le générateur de site compose la DÉFENSE d'un site : dans un raid sur un site,
+ * l'Ouvrage est le défenseur, sa liste d'offense n'y a aucun sens, et la remplir
+ * armerait des modules que rien ne lit. Le seul chemin où il ATTAQUE est
+ * `subirUnRaid`, et c'est ce fichier-ci. Voir l'en-tête de `modulesOuvrageAu`,
+ * amendé le même jour pour dire où l'autre canal se remplit désormais.
+ *
+ * ⚠⚠ ELLE NE PARCOURT QUE `UNITES`, ET C'EST CE QUI LA DISTINGUE DE SA JUMELLE.
+ * Un module d'attaquant se lit sur `p.module`, que `profil` prend dans `UNITES` ;
+ * les neuf `DEFENSES` n'ont pas de ligne d'attaque et une vague n'en porte
+ * aucune. `nomDuModule('offense', id)` est LA lecture de cette grandeur, et la
+ * réécrire ici en `UNITES[id].module` ferait la seconde vérité que le dépôt
+ * refuse partout ailleurs.
+ *
+ * ⚠ NE JAMAIS ÉNUMÉRER LES MODULES À LA MAIN. `apparitionModule` est un palier
+ * de progression de l'Ouvrage, pas une propriété de la vague du jour : deux
+ * raids de même niveau et de graines différentes doivent armer les mêmes
+ * modules, sinon la liste devient un effet de tirage.
+ *
+ * ⚠⚠ LA GARNISON ENTRE DANS CETTE LISTE ET Y RESTE INERTE, ET C'EST DÉCLARÉ.
+ * L'Épervier la porte et son palier est 34 ; or `genererVague` compose une vague
+ * PLATE d'unités et ne sait pas embarquer — rien du lot FORMATION-ET-GARNISON ne
+ * le lui a appris. L'Ouvrage débloque donc le module sans qu'aucune de ses
+ * escouades ne monte jamais dans un Épervier. **Ne pas écrire un cas
+ * particulier pour l'exclure** : ce serait la première ligne écrite à la main
+ * dans une liste qui se lit, et le jour où la vague saura embarquer il faudrait
+ * la retrouver. Point ouvert du lot, pas un défaut.
+ *
+ * @param {number} niveau niveau de la base de l'Ouvrage qui attaque.
+ * @returns {string[]} noms triés, sans doublon.
+ */
+export function modulesOuvrageOffenseAu(niveau) {
+  const noms = new Set();
+  for (const id of Object.keys(UNITES)) {
+    if (UNITES[id].apparitionModule > niveau) continue;
+    const nom = nomDuModule('offense', id);
+    if (nom === null) continue;
+    noms.add(nom);
+  }
+  return [...noms].sort();
+}
+
 export function montageDeLaBaseDuJoueur(
   etat, niveauAttaquant, budgetPoints, graine, laBase = baseCourante(etat),
 ) {
@@ -453,7 +501,13 @@ export function montageDeLaBaseDuJoueur(
     // paquets de cinquante ticks, ce qu'il n'est pas.
     vagues: [vague.unites],
     modulesDebloques: {
-      ouvrage: { offense: [], defense: [] },
+      // ⚠⚠ `offense` N'EST PLUS VIDE DEPUIS LE LOT NEUTRALISATION, 08/09/2026 —
+      // Ethan : « l'Ouvrage armé en offense, il faut le résoudre. » C'est le
+      // seul § du lot qui change la difficulté ressentie, et il est mesuré en
+      // trois passes dans `RAPPORT-lotNEUTRALISATION.md`.
+      // ⚠ `defense` RESTE VIDE, et c'est juste : dans CE combat, l'Ouvrage
+      // attaque. Sa ligne de défense n'aurait personne pour la lire.
+      ouvrage: { offense: modulesOuvrageOffenseAu(niveauAttaquant), defense: [] },
       joueur: modulesDebloquesDuJoueur(etat),
     },
     majorationsPoi: { joueur: majorationsDeCombatDuJoueur(etat) },

@@ -63,6 +63,7 @@ import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
 import { angleDeLaPiece } from '../sim/rendu-pose.js';
 import { nomDeVariante } from './variante.js';
 import { caseDepuisMilli } from '../sim/grille.js';
+import { estNeutralisee } from '../sim/combat.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
 
@@ -1039,6 +1040,17 @@ export function listeAffichage(
       liste.push(rect(x + 1, y + 2 + bh, Math.floor(((t - 2) * e.reserve) / reserveMax), bh,
         COULEUR_BARRE_RESERVE));
     }
+    // ⚠⚠ LE CADRE DE NEUTRALISATION — lot NEUTRALISATION, 08/09/2026. C'est le
+    // SEUL retour visuel du lot, et il ne coûte aucun actif : `cadre` est une
+    // primitive de `canvas2d.js` au même titre que `rect`, et `metalClair`
+    // (`#68727E`) est dans la palette close depuis toujours. Le livrable ne
+    // gagne pas une ligne `data:`.
+    // ⚠ IL APPELLE LE PRÉDICAT DU MOTEUR, il ne le réécrit pas — voir
+    // `estNeutralisee` de `sim/combat.js`.
+    // ⚠ ET IL NE S'INTERPOLE PAS : il reprend `x` et `y`, les positions que la
+    // boucle des barres a déjà calculées. Les recalculer donnerait un cadre qui
+    // glisse d'un demi-pixel derrière la pièce qu'il entoure.
+    if (estNeutralisee(e)) liste.push(cadre(x, y, t, t, PALETTE.metalClair, 2));
   }
 
   // 7. Traits de tir : bref segment tireur → cible pour toute entité qui a

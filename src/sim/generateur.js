@@ -781,10 +781,19 @@ function verifierParametres({ type, niveau, saveur, graine }) {
  * différentes doivent débloquer les mêmes modules, sinon la liste devient un
  * effet de tirage et le joueur ne peut rien en apprendre.
  *
- * ⚠ `offense` RESTE VIDE, et ce n'est pas un oubli. Un module d'attaquant se lit
- * sur `p.module`, que `moduleOuvrage` ne renseigne pas ; les raids de l'Ouvrage
- * sur la base du joueur passent par un autre chemin. Y verser cette liste
- * armerait des modules sur des pièces qui ne les portent pas.
+ * ⚠ `offense` RESTE VIDE ICI, et ce n'est pas un oubli. Un module d'attaquant se
+ * lit sur `p.module`, que `moduleOuvrage` ne renseigne pas ; et dans un raid sur
+ * un SITE, l'Ouvrage est le défenseur — sa liste d'offense n'y a personne pour
+ * la lire. Y verser cette liste armerait des modules sur des pièces qui ne les
+ * portent pas.
+ *
+ * ⚠⚠ L'AUTRE CANAL SE REMPLIT DEPUIS LE LOT NEUTRALISATION, 08/09/2026, ET
+ * AILLEURS : `modulesOuvrageOffenseAu` de `sim/raid-ouvrage.js`, appelée par
+ * `montageDeLaBaseDuJoueur` — le seul chemin du dépôt où l'Ouvrage ATTAQUE.
+ * **Ce fichier-ci n'a pas une ligne de changée**, et `NEUT T10` l'exige : il
+ * asserte que `genererSite(...).modulesDebloques.ouvrage.offense` reste vide à
+ * tous les niveaux, ce qui est le seul garde-fou qui dise, avant les deux cents
+ * témoins, que le §6 a été appliqué au bon fichier.
  *
  * @param {number} niveau niveau du site.
  * @returns {string[]} noms triés, sans doublon.

@@ -423,5 +423,14 @@ export function evenementsDuJournal(journal) {
     }
   }
 
+  // ⚠⚠ LE SIXIÈME CANAL EXISTE ET IL EST DÉLIBÉRÉMENT MUET — lot
+  // NEUTRALISATION, 08/09/2026. `journal.neutralisations` porte, au tick exact
+  // de la pose, l'entité désactivée, son porteur et la durée ; **aucune boucle
+  // ne le lit ici**, et ce n'est pas un oubli. Mesuré sur les 263 entrées de
+  // `data/sons.js` : le pack ne porte ni brouillage, ni arrêt d'unité, ni
+  // impulsion électromagnétique — en fabriquer un demande un master WAV, donc
+  // un lot d'ASSETS, pas une ligne de câblage. Le jour où il arrivera, c'est
+  // ici qu'il se branchera, et `faitDeLEntite` donne déjà le propriétaire dont
+  // le choix du son a besoin.
   return [...voulu].sort();
 }
