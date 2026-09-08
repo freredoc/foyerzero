@@ -40,9 +40,19 @@ import {
 import { baseCourante } from './base-courante.js';
 import { satellitesPresents } from './satellites.js';
 import { casesRasees, cleDeLaCase } from './ruines.js';
+import {
+  SEL_TERRAIN_DU_SITE, graineDuTerrain, SAVEURS_TIRABLES, saveurDeLaCase,
+} from './saveur.js';
+
+// ⚠ LE RÉ-EXPORT GARDE LES APPELANTS EN PLACE, et il ne crée AUCUNE liaison
+// locale : ce qui SORT et ce qui SERT se déclarent séparément — la leçon payée
+// en une exécution au lot MURS-OUVRAGE, où `bornesDeDefilement` a levé sous un
+// `export … from` seul. D'où l'import ci-dessus EN PLUS de cette ligne.
+export {
+  SEL_TERRAIN_DU_SITE, graineDuTerrain, SAVEURS_TIRABLES, saveurDeLaCase,
+};
 
 /** Sel du tirage qui ne dépend que de la CASE : la saveur, et le terrain. */
-export const SEL_TERRAIN_DU_SITE = 4;
 /** Sel du tirage qui dépend de la case ET de l'instance : les occupants. */
 export const SEL_INSTANCE_DU_SITE = 5;
 
@@ -55,17 +65,6 @@ export const SEL_INSTANCE_DU_SITE = 5;
  * zéro est la valeur qui le dit — pas un numéro qui n'avancerait jamais.
  */
 export const INSTANCE_DUNE_BASE = 0;
-
-/**
- * La graine du TERRAIN d'une case : elle ignore l'instance, exprès.
- * @param {number} graine graine de la partie
- * @param {number} rangee
- * @param {number} colonne
- * @returns {number} entier de [0, 2³²[
- */
-export function graineDuTerrain(graine, rangee, colonne) {
-  return hachageBrut(graine, rangee, colonne, SEL_TERRAIN_DU_SITE);
-}
 
 /**
  * La graine des OCCUPANTS : la case, puis l'instance mélangée par-dessus.
@@ -88,35 +87,14 @@ export function graineDeLInstance(graine, rangee, colonne, instance) {
   return hachageBrut(deLaCase, instance, 0, SEL_INSTANCE_DU_SITE);
 }
 
-/**
- * Les deux saveurs, dans l'ordre où le tirage les rend.
- *
- * ⚠ DEUX, PAS TROIS, ET LA SPEC LE DIT : « deux variantes de camp et
- * d'avant-poste : riche quartz (75/25) ou riche scorie (l'inverse). Les bases
- * sont proportionnelles. » La clé `base` de `SAVEURS` vaut `null` — c'est
- * l'absence d'inclinaison d'une BASE, pas une troisième saveur qu'un camp
- * pourrait tirer.
- */
-export const SAVEURS_TIRABLES = ['richeQuartz', 'richeScorie'];
-
-/**
- * La saveur d'un site posé sur cette case — `null` pour une base.
- *
- * ⚠ ELLE EST DE LA CASE, PAS DE L'INSTANCE. Deux camps successifs sur la même
- * case sont riches de la même chose : c'est l'arbitrage du 29/08, et c'est aussi
- * ce qui fait de la saveur une géographie plutôt qu'une loterie.
- *
- * @param {number} graine
- * @param {number} rangee
- * @param {number} colonne
- * @param {string} type
- * @returns {string|null}
- */
-export function saveurDeLaCase(graine, rangee, colonne, type) {
-  if (type === 'base') return null;
-  const h = graineDuTerrain(graine, rangee, colonne);
-  return SAVEURS_TIRABLES[h % SAVEURS_TIRABLES.length];
-}
+// ⚠⚠ `SEL_TERRAIN_DU_SITE`, `graineDuTerrain`, `SAVEURS_TIRABLES` ET
+// `saveurDeLaCase` ONT DÉMÉNAGÉ DANS `sim/saveur.js` — lot RETOUCHES, 07/09, ET
+// C'EST UNE CONTRAINTE D'IMPORTS. Ce module-ci importe `satellitesPresents` de
+// `sim/satellites.js` ; le point 15 demande à `satellites.js` de choisir la case
+// d'un camp SELON sa saveur, donc de lire `saveurDeLaCase`. L'y importer d'ici
+// aurait fait le PREMIER cycle de `src/sim/` — mesuré avant d'écrire : le dossier
+// n'en portait aucun. Même remède que `base-courante.js`, ré-export compris :
+// pas un appelant n'a changé d'import.
 
 /**
  * Ce qu'il y a sur une case — `null` s'il n'y a rien à attaquer.

@@ -84,6 +84,8 @@ import {
   RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE, RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE,
   DEPLACES_PAR_CIBLES_RANGEES, EMPREINTES_PAR_GRAINE_CIBLES_RANGEES,
   DEPLACES_PAR_TERRITOIRE_LU, EMPREINTES_PAR_GRAINE_TERRITOIRE_LU,
+  DEPLACES_PAR_RETOUCHES, EMPREINTES_PAR_GRAINE_RETOUCHES,
+  RAPPORTS_PROCHE_RETOUCHES, RAPPORTS_OUVRAGE_RETOUCHES, CIBLE_PROCHE_RETOUCHES,
   RAPPORTS_OUVRAGE_TERRITOIRE_LU,
   RAPPORTS_PROCHE_CIBLES_RANGEES, RAPPORTS_OUVRAGE_CIBLES_RANGEES,
 } from './temoins-bases-0.js';
@@ -138,12 +140,14 @@ const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
  */
 function empreinteAttendue(phase, champ) {
   // ⚠⚠ LA PILE SE LIT DU PLUS RÉCENT AU PLUS ANCIEN, ET CHAQUE COUCHE NE DIT
-  // QUE CE QUE SON LOT A DÉPLACÉ. TERRITOIRE-LU est la douzième : la récolte des
-  // POI demande la PROPRIÉTÉ d'une case et plus sa portée, donc `poisAcquis`
-  // bouge à partir de la phase 10, et avec lui tout ce qui en dépend. Les neuf
-  // premières phases tombent EXACTEMENT sur la capture d'origine — c'est cette
-  // moitié-là qui dit que la règle n'a pas fui hors de la récolte.
-  return DEPLACES_PAR_TERRITOIRE_LU[phase]?.[champ]
+  // QUE CE QUE SON LOT A DÉPLACÉ. RETOUCHES est la treizième : le point 15
+  // contraint la CASE qu'un satellite retient quand deux apparitions tombent au
+  // même tick, donc `satellites` bouge dès la phase 2 — celle où ils
+  // paraissent — et tout ce qui en dépend à partir du premier raid. **`p01` est
+  // identique AU BIT**, et l'attribution est mesurée : en neutralisant la seule
+  // ligne de la contrainte, le témoin retombe à zéro couple déplacé.
+  return DEPLACES_PAR_RETOUCHES[phase]?.[champ]
+    ?? DEPLACES_PAR_TERRITOIRE_LU[phase]?.[champ]
     ?? DEPLACES_PAR_CIBLES_RANGEES[phase]?.[champ]
     ?? DEPLACES_PAR_PRODUCTION_EN_DEFENSE[phase]?.[champ]
     ?? DEPLACES_PAR_SATELLITES_RESPAWN[phase]?.[champ]
@@ -504,7 +508,9 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
         (c) => (c === 'version' ? VERSION_AU_TEMOIN : t[g][p][c]),
       ).join('')).join(''),
     );
-    if (obtenue !== EMPREINTES_PAR_GRAINE_TERRITOIRE_LU[g]) ecarts.push(g);
+    // ⚠ LA COUCHE LA PLUS RÉCENTE FAIT FOI, comme pour `empreinteAttendue` :
+    // RETOUCHES déplace la case des satellites, donc les vingt-cinq graines.
+    if (obtenue !== EMPREINTES_PAR_GRAINE_RETOUCHES[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -560,7 +566,15 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         }
         : attendu[cle];
       assert.equal(x[`${prefixe}NbCibles`], a.nbCibles, `graine ${g} : ${cle} — nombre de cibles`);
-      assert.equal(x[`${prefixe}Cible`], a.cible, `graine ${g} : ${cle} — cible choisie`);
+      // ⚠⚠ ET LE LOT RETOUCHES DÉPLACE LA CIBLE DU RAID DE PROXIMITÉ SUR
+      // QUATORZE GRAINES, ET SUR QUATORZE SEULEMENT. Contraindre la saveur
+      // contraint la CASE, donc le camp le plus proche n'est plus toujours le
+      // même. Les ONZE autres restent gardées contre la capture d'origine —
+      // c'est cette moitié-là qui dit que la contrainte ne redistribue pas tout.
+      const cibleAttendue = cle === 'raidProche'
+        ? (CIBLE_PROCHE_RETOUCHES[g] ?? a.cible)
+        : a.cible;
+      assert.equal(x[`${prefixe}Cible`], cibleAttendue, `graine ${g} : ${cle} — cible choisie`);
       assert.equal(x[`${prefixe}SimuleNeFuitPas`], a.neFuitPas, `graine ${g} : ${cle} — la simulation ne fuit pas`);
       assert.equal(x[`${prefixe}SimuleExact`], a.exact, `graine ${g} : ${cle} — la simulation est exacte`);
       // ⚠⚠ LES CINQUANTE EMPREINTES DE RAPPORT ONT BOUGÉ AU LOT TRANSFERT, et
@@ -602,13 +616,20 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // moins finance une recherche de moins, donc une autre armée. Les
       // vingt-quatre autres tombent à l'octet sur la couche d'avant — c'est ce
       // qui dit que la propriété n'a bougé que la récolte.
+      // ⚠⚠ ET LE LOT RETOUCHES LES DÉPLACE TOUS LES DEUX, SUR LES VINGT-CINQ
+      // GRAINES : un camp qui n'est plus sur la même case n'est plus de la même
+      // saveur, donc son butin change — et ce que la base a en stock quand
+      // l'Ouvrage la frappe en dépend. Ce qui NE bouge pas juste au-dessus —
+      // gestes, taille de la sauvegarde, cases atteignables, déplacement,
+      // nombre de bases attaquantes, nombre de cibles et cible retenue — dit
+      // que seule la saveur des satellites a changé.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
+        ? (RAPPORTS_OUVRAGE_RETOUCHES[g] ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
           ?? RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_CIBLES_RANGEES[g]
+        : (RAPPORTS_PROCHE_RETOUCHES[g] ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
           ?? RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]
           ?? RAPPORTS_PROCHE_ARRET[g]);
       assert.equal(

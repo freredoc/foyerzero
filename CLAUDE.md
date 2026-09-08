@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.24 · build 126.
+Dernière révision : **07/09/2026**, version 0.99.28 · build 130.
 
 ---
 
@@ -42,7 +42,412 @@ Dernière révision : **07/09/2026**, version 0.99.24 · build 126.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot CONQUÊTE-24H), à confronter :**
+**Référence au 07/09/2026 (après le lot JOURNAL), à confronter :**
+`npm test` → **1408 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 356 534 octets**, 0 référence externe. Coût **+4 145 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +2 105 · feuille +1 018 · balisage +1 022 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **297
+lignes `data:` avant, 297 après, 292 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **943 466 octets, 10,15 %**. Le lot touche
+`src/ui/chantier.js`, `src/ui/offense.js`, `src/ui/raid.js`, le balisage et la
+feuille, et fait entrer `test/journal-raids.test.js`.
+⚠⚠ **LES TROIS MESURES DU BRIEF ONT ÉTÉ FAITES AVANT D'ÉCRIRE UNE LIGNE, ET LES
+TROIS RENDENT « C'EST DÉJÀ LÀ ».** Point 14 : « Défense et offense : rajouter un
+bouton rapport, qui permet de voir les 10 dernières attaques et raids subis. »
+(1) **`subirUnRaid` range DÉJÀ son rapport** — mesuré, 0 → 1, et c'est ce que le
+brief appelait « le cœur du lot » s'il ne le faisait pas ; (2) **le rapport dit
+DÉJÀ son côté** — `sens` vaut `'defense'` ou `'offense'`, les deux mesurés
+distincts dans le même journal ; (3) **la borne de dix est unique**,
+`APRES_RAID.rapportsGardes`. **Ce qui manquait était une GARDE et une VUE** : le
+raid MENÉ était tenu par `RAID-A T9` et `T10`, le raid SUBI ne l'était par rien.
+⚠ **ET UNE SIMULATION N'ENTRE PAS — MESURÉ AUSSI, 0 → 0.** `simulerRaid`
+travaille sur `structuredClone` : le journal de la COPIE reçoit le rapport.
+⚠⚠ **LA FILE SE LIT À L'ENDROIT, LA VUE S'AFFICHE À L'ENVERS — SUR UNE COPIE.**
+`[...liste].reverse()`, jamais `liste.reverse()` : un retournement en place
+casserait l'ordre de la file ET la borne, `garderLeRapport` jetant la TÊTE.
+⚠⚠ **ET `JRN T6` A DÛ ÊTRE CORRIGÉ AVANT D'ÊTRE CRU.** Son premier jet appelait
+la vue **DEUX fois** avant de comparer : `reverse()` en place laissait le test
+**entièrement vert** — deux retournements s'annulent. **Un nombre IMPAIR d'appels
+est la seule façon de voir la mutation.**
+⚠⚠ **`vueDuJournal` EST DANS `ui/chantier.js`, ET C'EST UN ÉCART MESURÉ.** Un
+`ui/journal.js` aurait eu besoin de `formaterEntier`, `direLaDuree` et du rendu
+partagé — les trois vivent là — donc `chantier.js` l'aurait importé en retour :
+un CYCLE. L'éviter demandait de déménager trois formateurs vers
+`render/nombre.js` pour un bouton. `JRN T8` garde ce qui compte : **une seule
+vue, deux appelants**, et l'Offense l'IMPORTE.
+⚠⚠ **LE RENDU PARTAGÉ A QUATRE LECTEURS ET CINQ APPELS, ET SON COMMENTAIRE EST
+RÉÉCRIT.** Il disait encore « la troisième n'est pas encore écrite » alors que
+FICHES-ENNEMIES l'avait écrite la veille — le mensonge que §6 raconte trois fois,
+commis par mon propre lot précédent. `FE T6` compte désormais **3 / 2 / 1** par
+fichier, et `ERGO T7 ter` exige DEUX appels par écran **en nommant** ce que le
+second peint.
+⚠⚠ **LE SENS D'UN RAPPORT SE LIT DANS UNE TABLE, ET LA GARDE EXISTANTE A REFUSÉ
+LE PREMIER JET.** `chantier.test.js` interdit `=== 'defense'` dans tout le
+fichier depuis GARNISON-ET-ARMÉE ; mon premier jet l'écrivait. **Elle avait
+raison** : `SENS_DU_RAPPORT` porte le titre de section, le libellé de
+l'adversaire, **le CHAMP qui le contient** et la fonction du bilan. ⚠ Et le
+contourner par une constante `SENS_SUBI = 'defense'` a été ÉCARTÉ — c'est passer
+sous un garde-fou en silence.
+⚠⚠ **`LIBELLE_VERDICT` DÉMÉNAGE DE `ui/raid.js` VERS `ui/chantier.js`, ET GAGNE
+SA QUATRIÈME ENTRÉE.** Deux écrans le lisent et ne peuvent pas importer
+`ui/raid.js` — c'est lui qui importe l'autre. Son propre commentaire annonçait le
+mot manquant : « "défaite" tout court est réservé à la défense, que ce lot
+n'ouvre pas ». Celui-ci l'ouvre. ⚠ **Et `RAID-A T8` se RESSERRE** : elle déduisait
+« un raid mené ne rend jamais defaite » de l'ABSENCE d'une entrée de table — un
+proxy — et le mesure désormais sur les TROIS raids qu'elle monte pour de bon.
+⚠⚠ **AUCUN CHIFFRE N'EST RECALCULÉ, ET LE CHAMP QUI MANQUE EST SIGNALÉ.** Un raid
+SUBI n'a pas de butin : son miroir est `sanction.perdu`, qui vaut **`null` tant
+que la base tient**. Une attaque repoussée n'a donc aucun chiffre de perte, et la
+ligne dit « — » — composer un total depuis l'état d'aujourd'hui serait le recalcul
+que le brief interdit, et il serait faux. **Les deux pourcentages du rapport
+(`restantBatiments`, `restantDefense`) sont disponibles et non affichés.**
+⚠ **AUCUNE SEPTIÈME BARRE FIXE.** Le bouton est posé sur le CHAMP en `absolute`,
+comme `#chantier-bascule-bande` au coin opposé, **une règle pour deux
+sélecteurs**, mêmes 40 px, mêmes teintes, **aucune teinte neuve**. Le chrome fixe
+reste à 288 px. ⚠ Il couvre une case, comme la bascule en couvre une autre —
+relevé, pas ignoré. ⚠ Et les deux PANNEAUX ne coûtent aucune feuille : ils portent
+`panneau-detail`.
+⚠ **OUVRIR LE JOURNAL FERME LA FICHE**, et c'est obligatoire : les deux sont des
+`panneau-detail` au même endroit et au même `z-index`. C'est la faute du lot
+TUTORIEL, qu'`ÉD T5 bis` garde déjà pour la ligne d'avis.
+⚠⚠ **VINGT FALSIFICATIONS, VINGT CHUTES, ET TROIS ONT FAIT CORRIGER UN MONTAGE
+APRÈS LA MESURE.** Le double appel de `JRN T6` ci-dessus ; l'âge arrondi vers le
+HAUT, que trois âges RONDS — 0 s, 1 h, 2 h — ne distinguaient pas (**un montage
+qui tombe rond ne mesure pas un arrondi**, quatrième fois du dépôt) ; et
+l'adversaire lu toujours dans `cible`, que les LIBELLÉS ne voyaient pas — ils
+viennent de la table, donc « Assaillant » s'affichait au-dessus d'un « — · niv.
+0 ». **C'est la VALEUR qui discrimine.**
+⚠⚠ **UN FICHIER DE TEST A ÉTÉ ÉCRASÉ PAR MÉGARDE, ET RESTAURÉ — IL FAUT LE
+DIRE.** Ma première écriture s'appelait `test/journal.test.js`, **nom pris depuis
+le lot JOURNAL-DE-COMBAT** par le journal de TICK : les dix `JOURNAL T*` ont été
+effacés. Repéré en comparant les comptes de tests entre `HEAD` et l'arbre — le
+total descendait de dix **sans qu'aucun test ne tombe** — puis `git checkout` et
+renommage en `test/journal-raids.test.js`. **C'est la leçon des homonymes du
+27/08, payée une seconde fois**, et l'en-tête du fichier la porte.
+⚠ **ONZE TESTS ENTRENT — `JRN T1` à `T11` — ET LE COMPTE PASSE DE 1 397 À
+1 408.** **Aucune assertion n'a été retirée ni assouplie** ; **quatre gardes
+changent de cible et les QUATRE se RESSERRENT.**
+⚠ **`src/sim/` N'A PAS UNE LIGNE DE CHANGÉE**, `verifierEtat` non plus, et
+`SAVE_VERSION` reste à **28** — vérifié au diff. Tout était déjà stocké.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE, SUR UNE VRAIE PARTIE.** Bouton
+**40 × 40 en (314, 116)** au Chantier et **(314, 154)** à l'Offense, glyphe ▤,
+`rgb(52, 58, 44)`, et `elementFromPoint` en son centre rend **le bouton lui-même**
+— il reçoit le toucher. Journal VIDE : panneau 360 × 67, **la phrase en titre de
+section, zéro ligne**. Après un vrai raid : « Raid mené · il y a 4 s », **quatre
+lignes sur DEUX rangées, une `.paires`, zéro flèche**, un seul bouton « Fermer »,
+**débordement 0** dans le panneau et sur la page, **zéro erreur de page**. ⚠ Et
+les DEUX écrans rendent le même journal, à la seconde d'âge près — la preuve au
+runtime de ce que `JRN T8` mesure dans la source.
+⚠ **LE POINT DÉCIMAL DE L'ÂGE EST UN POINT** — « il y a 1.0 h ». `direLaDuree`
+est PARTAGÉE avec la réserve de réparation, et FICHE-JUSTE a déjà déclaré ce
+point : le corriger ici ferait diverger deux affichages. **Relevé, non corrigé.**
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ** (§3).
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+
+**Auparavant, après le lot FICHES-ENNEMIES :**
+`npm test` → **1397 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 352 389 octets**, 0 référence externe. Coût **+2 365 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +2 029 · feuille +0 · balisage +336 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **297
+lignes `data:` avant, 297 après, 292 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **947 611 octets, 10,19 %**. Le lot touche
+`src/ui/raid.js`, `src/ui/chantier.js`, `src/ui/banc.js`, `src/render/scene.js`
+et le balisage.
+⚠⚠ **LA FEUILLE NE GAGNE PAS UN OCTET, ET C'EST LA MESURE DU LOT.** Points 7 et
+8 : « cliquer sur une unité ennemie pour voir ses stats », « idem pour les
+bâtiments ». Le rendu ATTENDAIT ces deux fiches par écrit depuis ÉCRAN-DÉFENSE —
+« la fiche d'une cible ennemie l'appellera comme les deux autres » —, et le poste
+`feuille` à **+0** est ce qui dit que la promesse a été tenue : la fiche porte la
+classe `panneau-detail` et rien d'autre. **Trois appels de `peindreVueDuPanneau`
+dans tout `src/ui/`, une seule définition** ; `ÉD T8 ter` n'a pas bougé d'un
+caractère.
+⚠⚠ **LES DEUX VUES ONT LA MÊME FORME, MESURÉE ET NON AFFIRMÉE.** Une Casemate de
+niveau 12 en garnison du joueur et la même dans un site de l'Ouvrage : **mêmes
+titres de section — « Au combat », « La pièce » — et six lignes sur sept
+communes**, mot pour mot. `FE T7` monte la fiche du JOUEUR pour de bon et compare.
+⚠ **DEUX LIGNES S'ÉCARTENT, DANS LES DEUX SENS, ET LES DEUX SE DÉCLARENT.**
+« Points engagés » SORT — c'est un prix dans le budget d'armée du JOUEUR, et
+l'Ouvrage n'a pas de budget qu'on puisse lire ; « Classe » ENTRE — le brief la
+demande, et elle sert les DEUX points d'un seul libellé, `classeDe` rendant le
+châssis d'une unité, le type d'un ouvrage ET `batiment` pour un bâtiment.
+⚠⚠ **RIEN QUI NE SORTE DU MOTEUR, ET C'EST MESURÉ AU NOMBRE PRÈS.** Carapace de
+niveau 20, relevée à l'écran : **PV 4 893 = 800 × 6 116 ‰**, véhicules
+**214 = 35 × 6 116 ‰** — c'est la table MULTIPLIÉE par `facteurMilli(20)`, pas la
+table. `FE T3` monte la même pièce à deux niveaux et REFUSE l'égalité ; les deux
+falsifications qui lisent `ligne.pv` et `ligne.degats` le font tomber.
+⚠ **ET LES PV SE LISENT SUR LE MAXIMUM, L'AVARIE ÉTANT UNE PART À PART** : un
+site déjà entamé se lit dans « État », ce qui sert au joueur qui revient dessus.
+⚠⚠ **CE QUI DÉCIDE QU'UNE PIÈCE TIRE EST `porteeQuiTire`, ET RIEN D'AUTRE.** Un
+`genre === 'defense'` écrit dans l'écran aurait menti sur la **Ronce**, qui a une
+portée de 1 et FRANCHIT sans tirer, et sur le **Merlon**, rangé exactement comme
+une tourelle. Relevé : Casemate, Batterie et Créneau annoncent **2,5 cases**,
+Merlon et Herse **rien**, un bâtiment **rien**.
+⚠ **LA LIGNE « PORTÉE MINIMALE » N'A PAS ÉTÉ VUE À L'ÉCRAN — DÉCLARÉ.** Seules
+les trois artilleries la portent (`porteeMini: 3.5`), et la garnison du camp joué
+n'en comptait aucune. `FE T10` la mesure hors ligne, Faucheuse contre Casemate.
+⚠⚠ **LE CHEMIN TOUCHER → CASE EST CELUI DU BANC, ET IL N'EN EXISTE QU'UN** —
+`caseDepuisPixels` de `render/projection.js`, deux appelants, une écriture.
+⚠⚠ **ET LES DEUX DÉCALAGES NE S'AJOUTENT PAS — TROUVÉ PAR UN TEST, PAS PAR
+RELECTURE.** Ils sont DÉJÀ repliés dans `margeX`/`margeY` par
+`calculerProjection` — mesuré, `margeY` passe de 54 à **−546**. Les rajouter les
+comptait DEUX FOIS et le doigt désignait une case cinq rangées plus haut.
+⚠ **UNE CASE VIDE N'OUVRE RIEN ET NE FERME RIEN.** Fermer sur un doigt mal posé
+effacerait ce que le joueur venait de lire ; il y a un bouton pour ça. `FE T9`
+exige un point vide **encadré des deux côtés sur les deux axes** — sans ça il
+tombait dans la marge noire, où le code sort AVANT la question des occupants.
+⚠⚠ **AUCUN TOUCHER N'EST AVALÉ, ET C'EST MESURÉ À LA MAIN COMME LE BRIEF
+L'EXIGE.** La fiche ouverte occupe `y` 376 → 506 sur un canevas qui va de 40 à
+506, et **ZÉRO des 23 points qui ouvrent une fiche ne tombe sous elle** ; fiche
+ouverte sur le Nœud, un toucher sur la Gangue rend « Gangue » **au premier
+toucher**.
+⚠⚠ **`nomAffiche` ET `entitesSurLaCase` DÉMÉNAGENT DE `ui/banc.js` VERS
+`render/scene.js`, ET C'EST UN DÉPLACEMENT.** Un écran de production ne peut pas
+importer le banc de debug — c'est la dépendance à l'envers. **Pas une ligne de
+leur corps n'a changé** ; la falsification qui les rend privées fait tomber
+QUATRE fichiers de test d'un coup.
+⚠⚠ **VINGT-DEUX FALSIFICATIONS, VINGT ET UNE CHUTES, ET TROIS ONT FAIT ÉCRIRE DU
+TEST APRÈS LA MESURE.** Le pincement annulé compté comme un toucher, un zéro de
+dégâts écrit « 0 » au lieu de « — », et la classe rendue en CLÉ interne
+(`escouade` pour « Escouade ») laissaient la suite **entièrement verte — 51 pass
+/ 0 fail sur chacune** : le fichier gardait les LIBELLÉS et le chemin du toucher,
+pas les VALEURS ni le chemin du pincement. `FE T9 bis` entre pour la première,
+deux assertions de `FE T7` pour les deux autres.
+⚠⚠ **ET LA VINGT-DEUXIÈME SE DÉCLARE, POUR UNE RAISON MESURÉE.** Prendre le
+PREMIER occupant au lieu du dernier ne fait tomber aucun test : **les huit unités
+qui entrent en garnison sont quatre escouades et quatre blindés, ZÉRO aéronef**,
+et sur 40 graines, 120 sites, **19 440 cases**, le maximum d'occupants vaut **1**.
+Le cas est inatteignable du côté qu'on regarde ; le dernier est retenu quand même,
+un aéronef survolant étant celui que le doigt désigne.
+⚠ **ONZE TESTS ENTRENT — `FE T1` à `T10`, plus `FE T9 bis` — ET LE COMPTE PASSE
+DE 1 386 À 1 397.** **Aucune assertion n'a été retirée ni assouplie, et aucune
+garde existante n'a eu à changer de cible.**
+⚠ **`src/sim/` N'A PAS UNE LIGNE DE CHANGÉE**, et `SAVE_VERSION` reste à **28** —
+vérifié au diff contre le commit précédent. Une fiche est un affichage.
+⚠ **`peindreVueDuPanneau` GAGNE UNE GARDE DE TROIS LIGNES**, seul changement du
+rendu partagé : il écrivait son bouton sans regarder si l'appelant lui en donnait
+un. La falsification qui la retire fait tomber cinq tests.
+⚠ **UN DÉFAUT DE MON PROPRE RELEVÉ A COÛTÉ UNE HEURE, ET IL FAUT LE DIRE.** Un
+balayage en aveugle au pas de 10 px rendait **0 fiche ouverte** dans Chromium et
+m'a fait croire que le toucher ne passait pas. Instrumenter `drawImage` et viser
+le CENTRE des sprites réellement posés en ouvre **23 du premier coup**. Le code
+n'avait rien.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** Tout ce
+qui précède est relevé dans Chromium à la géométrie du S25 FE — **zéro erreur de
+page**, débordement horizontal 0 — et ce n'est pas le téléphone d'Ethan (§3).
+
+**Auparavant, après le lot RETOUCHES :**
+`npm test` → **1386 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 350 024 octets**, 0 référence externe. Coût **+3 458 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis le lot
+précédent : **JavaScript +550 · feuille +2 856 · balisage +52 · images +0 ·
+audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — **297
+lignes `data:` avant, 297 après, 292 URI de part et d'autre**. Borne T10
+inchangée à 9 300 000, marge **949 976 octets, 10,21 %**. Le lot touche
+`src/ui/chantier.js`, `src/ui/offense.js`, `src/sim/satellites.js`,
+`src/sim/site-de-la-case.js`, la feuille et le balisage, et fait entrer
+`src/sim/saveur.js`.
+⚠⚠ **LE BANDEAU DE GARNISON DISPARAÎT QUAND TOUT VA BIEN, ET IL NE COÛTE PLUS UN
+PIXEL.** Ethan, point 5 : « enlever la barre "complexe de niv x" ». La lecture
+retenue ne perd AUCUN avertissement — il reparaît dès que `etatDeLaGarnison`
+porte un `avertissement` ou une pièce `enAttente` — et **les deux champs se
+LISENT**, jamais le texte : retester « la phrase contient-elle "intacte" ? »
+serait une seconde lecture du même fait, que la première retouche de libellé
+ferait mentir.
+⚠⚠ **ET LE DÉFAUT DU POINT 2 REVENAIT, ALORS IL EST TRAITÉ.** En `flex: 0 0
+auto`, un bandeau qui paraît et disparaît recadre le décor — 44 px mesurés par
+ÉCRAN-DÉFENSE sur la ligne d'avis. `#chantier-garnison` passe en `absolute`
+DANS `#chantier-vue`, EN HAUT, la ligne d'avis tenant le bas. **Mesuré dans
+Chromium sur DEUX vraies parties chargées** — même base, Merlon intact puis
+abîmé : bandeau **CACHÉ** puis **visible 16 px**, et les SEPT grandeurs de
+géométrie identiques — champ 492, défilé 404, `scrollTop` 281, `scrollHeight`
+685, `--case-cote` 46 px, fond 360 × 720 @ 50 % 0 %, haut de grille −171.
+⚠ **ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE** : `elementFromPoint`
+au milieu du bandeau rend **`DIV.case.batiments`**.
+⚠⚠ **LA PALETTE DE L'OFFENSE PERD SES FONDS PLEINS, ET LE POINTILLÉ NE S'ÉCRIT
+PAS UNE QUATRIÈME FOIS.** Point 16, « dans le menu offense ». La règle partagée
+d'ÉCRAN-DÉFENSE gagne un QUATRIÈME sélecteur — `#offense-palette .unite` — et
+`ÉD T12` se RESSERRE, de trois sélecteurs nommés à quatre. Relevé à l'écran :
+fond `rgba(0, 0, 0, 0)` dans les trois états, liseré `1px dashed` **`#4E5742`
+au repos, `#1E2124` verrouillée, `#F5F3E8` armée** — deux à deux différents,
+**aucune teinte neuve** —, et l'emplacement de vague voisin rend le MÊME
+pointillé.
+⚠ **`background: transparent` RESTE OBLIGATOIRE** : un `<button>` sans fond
+déclaré retombe sur le gris clair du navigateur, mesuré à ÉCRAN-DÉFENSE.
+⚠⚠ **ET LE CONFLIT DE CASCADE `verrouillee` / `choisie` EST INERTE, MESURÉ.**
+Même spécificité, `.verrouillee` écrite plus bas donc gagnante — **le cas ne
+peut pas arriver** : l'écouteur sort par un `toast` avant `choisirUnite` dès
+que `!unite.disponible`. **Relevé, non corrigé** : un `:not(.verrouillee)`
+serait une règle pour un état que le code interdit.
+⚠⚠ **LA RÉSERVE DE RÉPARATION DE L'ARMÉE S'AFFICHE, ET ELLE N'ÉTAIT LUE PAR
+PERSONNE.** Point 10. Mesuré avant d'écrire : **aucun fichier de `src/ui/` ne
+lisait `plafondDeLaReserve` ni `reserveReparation`** — seul le plafond des
+BÂTIMENTS était affiché, et au Chantier. `ligneDeLaReserveDArmee` est PURE et
+EXPORTÉE, `src/sim/reparation.js` n'a pas une ligne de changée, et les mots sont
+ceux d'Ethan — `FAMILLE_DE_CHASSIS`, « infanterie · véhicule · avion ».
+⚠⚠ **LA GARDE QUE LE BRIEF DEMANDAIT N'AVAIT PAS LIEU D'ÊTRE — MESURÉ.**
+`plafondDeLaReserveDesBatiments` LÈVE sur une disposition vide ; **l'équivalent
+côté ARMÉE ne lève PAS**, il passe par `niveauDeLArmee(base.armee) ?? 0` et rend
+douze heures tout rond. `RET T11` le mesure des DEUX côtés — `doesNotThrow`
+d'un bord, `throws` de l'autre — plutôt que de monter du code mort.
+⚠ **`flex: 0 0 auto`, JAMAIS UNE HAUTEUR FIXE** : la somme des barres ne bouge
+pas d'un pixel. Relevé — onglets 40 · ressources 44 · **réserve 16** · contexte
+46 · palette 86 · barre du bas 46 · navigation 26, zéro débordement.
+⚠⚠ **ET LE COMPTEUR GLOBAL EST CHIFFRÉ, PAS FAIT.** Le bandeau fait 360 px pour
+**cinq tuiles de 67 px**, écart 4, marges 6 : une sixième les ramène à
+**54,7 px**, et la réserve est TROIS nombres, donc trois tuiles, donc **38 px
+chacune**. Trop cher pour « tu compresses tout dans l'UI ». **Ethan tranche.**
+⚠⚠ **DEUX CAMPS QUI PARAISSENT ENSEMBLE DONNENT LES DEUX SAVEURS, ET C'EST LA
+CASE QU'ON CONTRAINT.** Point 15. La saveur est une propriété de la CASE —
+arbitrage du 29/08 — donc poser un champ `saveur` sur le satellite serait une
+seconde vérité contre `saveurDeLaCase`, **et `SAVE_VERSION` devrait bouger pour
+une grandeur qui se calcule.**
+⚠⚠ **LE DÉTERMINISME DICTE LA FORME : ON CONTRAINT AVANT DE TIRER.** Un tirage
+relancé jusqu'à la bonne saveur consommerait un nombre de tirages qui dépend du
+RÉSULTAT. `entier` est appelé **UNE fois quoi qu'il arrive**, et le décalage de
+tirages **vaut ZÉRO** — mesuré par le compteur d'instances, dérivé, et par
+`etat.rng` resté intact.
+⚠⚠ **LES DEUX CHEMINS D'APPARITION SIMULTANÉE SONT RELEVÉS, ET LES DEUX
+PRODUISENT.** `planifierSatellites` programme les TROIS au même tick — un seul
+`du` pour toute la boucle ; et `detruireSatellite` pousse `tickDu:
+etat.horloge.nbTicks` depuis SATELLITES-RESPAWN, donc **deux camps rasés la même
+minute donnent deux attentes échues au même tick**. Les deux passent par la même
+boucle, et c'est là que la contrainte vit.
+⚠⚠ **`src/sim/saveur.js` ENTRE, ET C'EST UN CYCLE D'IMPORTS QUI L'A EXIGÉ.**
+`saveurDeLaCase` vivait dans `site-de-la-case.js`, qui importe `satellites.js`
+: le retour aurait créé le **premier cycle de `src/sim/`**, mesuré inexistant.
+Précédent exact : `base-courante.js` au lot BASES-0. ⚠ Et `site-de-la-case.js`
+les IMPORTE **et** les RÉ-EXPORTE — un `export … from` seul ne crée aucune
+liaison locale, la leçon payée au lot MURS-OUVRAGE.
+⚠ **À UN SEUL SATELLITE, RIEN NE CHANGE** — `dues >= 2`. `RET T13` balaie 200
+graines et exige que les DEUX saveurs restent atteignables.
+⚠⚠ **ET LE REPLI N'EST ATTEIGNABLE SUR AUCUN ANNEAU D'AUJOURD'HUI — 0 SUR 800.**
+400 graines × 2 types : jamais une saveur absente, pire cas **1 case sur 12**.
+**Aucun test comportemental n'est écrit pour lui** — « un test qui ne peut tomber
+sur aucun état d'aujourd'hui se déclare, il ne se compte pas » ; c'est `RET T15`
+qui le garde par la SOURCE, et la falsification qui le retire ne mord que là.
+⚠⚠ **ET LA MESURE DE SOURCE PORTE SUR LE CORPS DE `poserUnSatellite`, JAMAIS SUR
+LE FICHIER — première écriture corrigée après mesure.** `niveauDuSatellite` tire
+elle aussi, pour son rayon : compter le fichier entier rendait **2** et accusait
+un tirage qui existait avant le lot. `RET T15` extrait le corps, prouve que la
+tranche n'est ni vide ni le fichier entier, puis compte.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE SOIXANTE-DIX COUPLES SUR 350, ET
+L'ATTRIBUTION EST PROUVÉE.** À partir de la **phase 2** — celle où les satellites
+paraissent ; **la phase 1 est identique AU BIT**. En neutralisant la SEULE ligne
+de la contrainte ET la couche de témoin du lot, `bases.test.js` repasse
+**30 pass / 0 fail**.
+⚠⚠ **UN SEUL SCALAIRE BOUGE, SUR QUATORZE GRAINES SUR VINGT-CINQ** : la cible du
+raid de proximité. **Les ONZE autres restent gardées contre la capture
+d'origine.** Gestes, gestes d'armement, **taille de la sauvegarde**, cases
+atteignables, déplacement, bases attaquantes et nombre de cibles : **0 sur 25
+pour chacun**.
+⚠ **SEIZE TESTS ENTRENT — `RET T1` à `T15`, plus `T12 bis` — ET LE COMPTE
+PASSE DE 1 370 À 1 386.** **Aucune assertion n'a été retirée ni assouplie** ;
+**une garde change de cible et se RESSERRE**, `ÉD T12`.
+⚠⚠ **VINGT FALSIFICATIONS, VINGT CHUTES, ET DEUX ONT DÛ ÊTRE REPRISES.** Les
+deux premières écritures changeaient un NOM au lieu d'une VALEUR : le module
+cessait de se charger, et cinq tests tombaient dont deux sans rapport. **Ce n'est
+pas la propriété qu'elles mesurent**, et il fallait le dire.
+⚠ **ET LA PLUS BRUYANTE TOUCHE UN FAIT STRUCTUREL** : échelonner les trois
+attentes fait tomber vingt tests, dont dix-sept gardes antérieures au lot.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 28 — VÉRIFIÉ AU DIFF.**
+`src/sim/state.js` n'a pas une ligne de changée : une saveur se calcule, un
+bandeau caché est un affichage, une ligne de réserve est une lecture.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠⚠ **ET LA ROTATION PORTE SUR TOUTES LES APPARITIONS DUES, PAS SUR LES SEULS
+CAMPS.** Une base neuve en pose trois : les rangs 0 et 1 vont aux deux camps —
+quartz puis scorie, ce qu'Ethan demande — et le rang 2, l'avant-poste, retombe
+sur quartz. **Lecture prise, réversible d'une ligne** si Ethan veut la rotation
+par TYPE.
+
+**Auparavant, après le lot DÉPLACEMENT-ÉCLAIRÉ, à confronter :**
+`npm test` → **1370 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 346 566 octets**, 0 référence externe. Coût **+1 837 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis `origin/main` :
+**JavaScript +771 · feuille +748 · balisage +318 · images +0 · audio +0**, et la
+somme des cinq postes tombe EXACTEMENT sur le total — **297 lignes `data:` avant,
+297 après, 297 URI de part et d'autre**. Borne T10 inchangée à 9 300 000, marge
+**953 434 octets, 10,25 %**. Le lot touche `src/sim/raid-ouvrage.js`,
+`src/ui/monde.js`, la feuille et le balisage.
+⚠⚠ **DÉPLACER SA BASE DEMANDE UN ACCORD, ET L'ACCORD ANNONCE COMBIEN DE BASES DE
+L'OUVRAGE POURRONT L'ATTAQUER.** Ethan, point 1 : « confirmation avant de bouger
+la base + indiquer le nombre de base ouvrage qui pourront attaquer ». **Ce n'est
+PAS « les bases à portée de raid »** — il faut le TYPE et le NIVEAU MINIMAL en
+plus de la portée, et les deux ensembles ne coïncident pas.
+⚠⚠ **`attaquantesDeLaPosition` EST LA SEULE ÉCRITURE DES TROIS CONDITIONS, ET
+`basesAttaquantes` S'EXPRIME PAR ELLE.** Ses trois `if` ont quitté son corps ;
+elle n'en garde que le REGROUPEMENT par case d'attaquante. Le chiffre annoncé au
+joueur est donc EXACTEMENT celui que le moteur appliquera — le recopier dans
+l'écran l'aurait rendu faux de la pire façon : plausible, stable, et démenti par
+le premier raid subi. C'est la divergence que FICHE-JUSTE a réparée entre
+`voisinsQualifiants` et `voisinsQualifiantsParCase` ; **`DÉ T4` la MESURE ici**,
+sur cent positions tirées dont **86 portent au moins une attaquante**.
+⚠ **ELLE PREND UNE POSITION, PAS UNE BASE**, et c'est ce qui la rend utile aux
+deux appelants : l'écran l'interroge sur une case CANDIDATE, où aucune base ne se
+trouve encore. `ciblesAPortee` n'a jamais lu que `.position` de ce qu'on lui
+donne.
+⚠⚠ **LA PREMIÈRE ÉCRITURE DE `DÉ T5` MESURAIT LA FAUTE INVERSE.** Elle fondait la
+seconde base du joueur sur une attaquante ; mesuré, le compte tombait de **49 à
+48**, pas à 98 — `siteDeLaCase` rend `null` sur toute case occupée par une base
+du joueur, donc fonder sur une base de l'Ouvrage l'EFFACE de la carte.
+⚠⚠ **LA CONFIRMATION S'INTERCALE ENTRE LE TOUCHER ET LE DÉPLACEMENT**, jamais
+entre le bouton et l'armement : c'est la case VISÉE qui donne le chiffre, et elle
+n'est pas connue avant. `poserLaBase` devient trois temps —
+`demanderLeDeplacement`, `renoncerAuDeplacement`, `confirmerLeDeplacement` —
+plus `refuserLeDeplacement`, extraite parce que DEUX chemins y mènent.
+⚠⚠ **ET LA RELECTURE DES PROBLÈMES À L'ACCORD N'EST PAS DÉCORATIVE.** Entre le
+toucher et l'accord, un raid de l'Ouvrage peut se résoudre, et `raserLaBase`
+DÉPLACE la base de vingt rangées : la case visée devient alors hors de portée, ou
+celle où la base se trouve déjà. Sans elle, `deplacerLaBase` LÈVERAIT au milieu
+d'un geste commencé légalement.
+⚠ **LE REFUS PASSE AVANT LA CONFIRMATION** — on ne demande pas d'accord pour un
+geste qui sera refusé. ⚠ Et le montage de `DÉ T9` a dû être RÉÉCRIT :
+`casesAtteignables` est **VIDE** pendant le délai, donc il vise une case à portée
+dont le refus est asserté `['delai']`.
+⚠⚠ **« FERMER » EST UNE PORTE DE SORTIE COMME UNE AUTRE, ET `DÉ T7 bis` A ÉTÉ
+ÉCRIT POUR ÇA.** `fermerPanneau` vide l'accord en attente : sans cette ligne, le
+panneau se refermerait en gardant la case retenue, et le bouton d'accord — que
+plus personne ne voit — resterait capable de déplacer la base.
+⚠ **ZÉRO SE DIT, IL NE SE MASQUE PAS** — « Aucune base de l'Ouvrage ne pourra
+vous attaquer ici. » C'est souvent le renseignement que le joueur cherche en
+fuyant. `phraseDesAttaquantes` est PURE et EXPORTÉE : le compte vient du moteur,
+elle n'en fait qu'une phrase.
+⚠ **MESURÉ, GRAINE 7, COLONNE 16** : **0** attaquante au départ (rangée 295) —
+la garde du peuplement écarte l'Ouvrage de quinze cases —, 37 à la rangée 250,
+54 à la 200, 57 à la 150, 55 à la 20. Et la frontière du niveau minimal est
+atteignable dans un même disque : rangées **248 à 252** au niveau 10, **253 à
+257** au niveau 9.
+⚠⚠ **UNE GARDE CHANGE DE SONDE ET SE RESSERRE — `RCU T11`.** Elle proxyait la
+BASE et comptait les lectures de `.position` ; `ciblesAPortee` reçoit désormais
+un objet nu, et la sonde ne voyait plus rien — **0 au lieu de 1, mesuré**. Elle
+porte sur la POSITION et compte les lectures de `rangee` faites DANS
+`ciblesAPortee` : elle mesure les ENTRÉES dans la fonction plutôt qu'une lecture
+que n'importe quel appelant pouvait faire. **Une assertion de source entre** en
+plus, sur le nombre d'appels d'`attaquantesDeLaPosition`.
+⚠ **ONZE TESTS ENTRENT — `DÉ T1` à `T10`, plus `T7 bis` — ET LE COMPTE PASSE DE
+1 359 À 1 370.** Cinq de moteur dans `test/deplacement.test.js`, six d'écran dans
+`test/monde.test.js`. **Aucune assertion n'a été retirée ni assouplie.**
+⚠ **ONZE FALSIFICATIONS, ONZE CHUTES**, dont **cinq qui ne font tomber qu'un seul
+test**. La centrale est F4 — `basesAttaquantes` reprend ses trois conditions avec
+un `<=` au lieu d'un `<` — et **`DÉ T4` la voit**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 28 — VÉRIFIÉ AU DIFF.**
+`src/sim/state.js` n'a pas une ligne de changée : une case retenue entre deux
+touchers vit dans la fermeture de l'écran.
+⚠ **AUCUNE VALEUR DE CALIBRAGE NE BOUGE** — `git diff src/data/` est vide.
+⚠ **LE RENDU N'A PAS ÉTÉ VU SUR APPAREIL, ET SE DÉCLARE NON EXÉCUTÉ.** La hauteur
+du bloc de confirmation dans le panneau n'a pas été relevée à l'écran.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠⚠ **ET LA BASE ANNONCÉE PAR LE BRIEF N'ÉTAIT PLUS LÀ.** Il pose 1 340 pass,
+8 256 764 octets et 0.99.23 · build 124 ; mesuré au départ, **1 359 pass,
+8 344 729 octets, 0.99.24 · build 126** — TERRITOIRE-LU et CONQUÊTE-24H ont été
+mergés entre l'écriture du brief et son exécution. **Les quatre faits dont le lot
+dépend étaient intacts**, vérifiés un par un.
+
+**Auparavant, après le lot CONQUÊTE-24H :**
 `npm test` → **1359 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 344 729 octets**, 0 référence externe. Marge T10 : **955 271 octets,
 10,27 %**. Le lot fait entrer `src/sim/ruines.js` et touche `src/sim/territoire.js`,
@@ -7474,9 +7879,10 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 29 fichiers
+src/sim/                simulation déterministe, sans DOM — 30 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
+  saveur.js             la saveur d'une case : deux tirables, une géographie
   champs.js             terrain d'une base : 12 champs et 10 obstacles, tirés de la POSITION
   peuplement.js         où sont les bases de l'Ouvrage : dérivé de la graine, jamais stocké
   satellites.js         camps et avant-poste du joueur : de l'HISTOIRE, donc sauvegardée
@@ -7675,6 +8081,17 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 14 fi
     bande visible — centrer sur la bande laisse 240 px de buffer de noir
     au-dessus de la rangée 18, et la falsification qui le fait N'A PAS MORDU au
     premier relevé.
+  ⤷ ⚠⚠ `scene.js` RÉPOND « QU'EST-CE QUE CETTE ENTITÉ », ET IL PORTE DEUX
+    FONCTIONS DE PLUS DEPUIS LE 07/09 — lot FICHES-ENNEMIES. `nomAffiche` et
+    `entitesSurLaCase` vivaient dans `src/ui/banc.js` parce qu'un seul écran s'en
+    servait ; la fiche d'une cible ennemie en a besoin, et **un écran de
+    production ne peut pas importer le banc de debug** — c'est la dépendance à
+    l'envers. **Pas une ligne de leur corps n'a changé en route**, et `banc.js`
+    les importe désormais d'ici. ⚠ `caseDepuisMilli` entre avec elles, seul
+    import neuf : `entitesSurLaCase` compare des milli-cases.
+  ⤷ ⚠ ET LA CLÉ DE `nomAffiche` EST LE PROPRIÉTAIRE, JAMAIS LE CAMP. Le joueur
+    peut défendre : ses unités passent au camp `defense` sans changer de
+    propriétaire, et elles s'afficheraient sous le nom de l'Ouvrage.
   ⤷ ⚠ ET LE CHOIX D'UNE VARIANTE NE CONSOMME PAS `etat.rng`. Le flux de l'état
     est celui de la SIMULATION : y prendre un tirage pour choisir une texture
     décalerait tout ce que le moteur tire ensuite, et la partie cesserait de se
@@ -7822,6 +8239,27 @@ src/ui/                 les sept écrans, leurs éditeurs et les pictogrammes �
     formule du Chantier y rend son plancher, 11 px. `ui/defense.js` n'avait pas
     ce manque : il ne touche pas au DOM, et la bande Défense est peinte par
     `ui/chantier.js`, qui pose déjà `.jeton .niveau`.
+  ⤷ ⚠⚠ `chantier.js` PORTE LE JOURNAL DES RAIDS DEPUIS LE 07/09 — lot JOURNAL,
+    point 14 : « Défense et offense : rajouter un bouton rapport, qui permet de
+    voir les 10 dernières attaques et raids subis. » `vueDuJournal` y est écrite
+    UNE fois ; l'Offense l'importe, comme elle importe déjà `peindreVueDuPanneau`
+    et `apercuDeLaPiece`. Une seconde vue aurait donné deux histoires de la même
+    partie. ⚠ ELLE N'EST PAS DANS UN MODULE À ELLE, et c'est mesuré : elle a
+    besoin de `formaterEntier`, `direLaDuree` et du rendu partagé, qui vivent
+    tous ici — un `ui/journal.js` aurait fait un CYCLE avec ce fichier, ou aurait
+    obligé à déménager trois formateurs pour un bouton.
+  ⤷ ⚠⚠ ET `LIBELLE_VERDICT` A DÉMÉNAGÉ DEPUIS `ui/raid.js`, POUR LA MÊME RAISON.
+    Deux écrans le lisent désormais, et ni l'un ni l'autre ne peut importer
+    `ui/raid.js` — c'est LUI qui importe ce fichier-ci. ⚠ Il gagne sa QUATRIÈME
+    entrée, `defaite`, que son propre commentaire annonçait : elle était
+    « réservée à la défense, que ce lot n'ouvre pas », et le journal l'ouvre.
+  ⤷ ⚠⚠ LE SENS D'UN RAPPORT SE LIT DANS UNE TABLE, JAMAIS PAR UN `=== 'defense'`.
+    `SENS_DU_RAPPORT` porte, pour chacun des deux, le titre de sa section, le
+    libellé de l'adversaire, le CHAMP du rapport qui le contient et la fonction
+    qui compose son bilan. La garde « un cas particulier "defense" est écrit à la
+    main » de `chantier.test.js` couvre tout le fichier : elle a refusé le
+    premier jet, et elle avait raison — un `if` sur le sens aurait été le premier
+    à diverger.
 
 src/son/                la politique de voix, sans un octet de navigateur — 2 fichiers
   politique.js          jouer ou non, quelle variante, à quel gain — l'horloge est un ARGUMENT
@@ -7861,7 +8299,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   58 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   59 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -7871,6 +8309,7 @@ test/                   58 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
+  journal-raids
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

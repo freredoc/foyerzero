@@ -20,7 +20,7 @@ import {
   bornerEchelle, vueApresEchelle, bordDeDalle,
   dimensionsDeLaCarte, bornerDefilement, fenetreVisible, distanceEnCases,
   sitesDeLaFenetre, lignesDuSite, lignesDeLEtiquette, creerCacheDalles,
-  teinteDAttente,
+  teinteDAttente, phraseDesAttaquantes,
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
   traitDeLaFleche, traitRogne, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
   ciblageDuSite,
@@ -44,7 +44,11 @@ import {
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { ATLAS, COTE_SPRITE } from '../src/data/atlas.js';
 import { saveurDeLaCase } from '../src/sim/site-de-la-case.js';
-import { creerEtat, rattraperJeu, poserEffectif } from '../src/sim/state.js';
+import { creerEtat, rattraperJeu, poserEffectif, serialiser } from '../src/sim/state.js';
+import { nombreDAttaquantes } from '../src/sim/raid-ouvrage.js';
+import {
+  casesAtteignables, ticksAvantProchainDeplacement, problemesDuDeplacement,
+} from '../src/sim/deplacement.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
@@ -2302,6 +2306,8 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     'monde-panneau-prix-cout', 'monde-panneau-prix-solde', 'monde-panneau-corps',
     'monde-panneau-refus', 'monde-panneau-deplacer', 'monde-panneau-fermer',
     'monde-panneau-attaquer',
+    'monde-panneau-confirmation', 'monde-panneau-menace',
+    'monde-panneau-confirmer', 'monde-panneau-renoncer',
     'monde-recentrer', 'monde-base-2x2', 'monde-base-3x3',
     'sol-1', 'sol-2', 'sol-3', 'sol-4', 'sol-5', 'sol-6', 'sol-7', 'sol-8',
   ];
@@ -3125,4 +3131,210 @@ test('CARTE-C T1 bis — et l\'écran peint bien une flèche qui reste dans le c
     /traitRogne\([\s\S]{0,200}?traitDeLaFleche\([\s\S]{0,200}?canvas\.width, canvas\.height/,
     'la flèche n\'est plus rognée sur les dimensions du canevas',
   );
+});
+
+// ---------------------------------------------------------------------------
+// lot DÉPLACEMENT-ÉCLAIRÉ — 07/09/2026
+//
+// Ethan, point 1 : « confirmation avant de bouger la base + indiquer le nombre
+// de base ouvrage qui pourront attaquer ». Les cinq tests qui suivent portent
+// sur l'ÉCRAN ; les cinq du moteur vivent dans `test/deplacement.test.js`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Arme le déplacement et touche une case atteignable — c'est le geste qui doit
+ * désormais ouvrir la confirmation plutôt que déplacer.
+ *
+ * ⚠ LA CASE SE DEMANDE À `casesAtteignables`, elle ne s'écrit pas. Un montage
+ * qui poserait « rangée 198, colonne 16 » ne garderait que lui-même, et le
+ * dépôt a payé cette faute-là cinq fois.
+ */
+function armerEtViser(etat, ecart = 0) {
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const deplacements = [];
+  const ecran = initialiserEcranMonde(doc, { apresDeplacement: () => deplacements.push(1) });
+  const canvas = doc.getElementById('monde-canvas');
+  ecran.peindre(etat);
+  const base = { ...baseCourante(etat).position };
+  const halo = cadreDuHalo(appels);
+  const atteignables = casesAtteignables(etat)
+    .filter((k) => Math.abs(k.rangee - base.rangee) <= 6
+      && Math.abs(k.colonne - base.colonne) <= 6);
+  assert.ok(atteignables.length > ecart, 'montage : pas assez de cases atteignables');
+  const cible = atteignables[ecart];
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, cible);
+  return {
+    parId, canvas, halo, dpr, base, cible, deplacements, etat, ecran,
+  };
+}
+
+test('DÉ T6 — la confirmation s\'ouvre, et ZÉRO se dit', () => {
+  // ⚠ ZÉRO EST UNE INFORMATION, PAS UNE LIGNE À MASQUER. Une position que
+  // personne ne pourra attaquer doit le DIRE : c'est souvent le renseignement
+  // exact que le joueur cherche en fuyant.
+  const etat = partiePeuplee();
+  // La base de départ est à la rangée 295 : la garde du peuplement écarte les
+  // bases de l'Ouvrage de quinze cases, donc le compte y vaut zéro. Mesuré,
+  // pas supposé — le montage l'asserte avant de lire la phrase.
+  const m = armerEtViser(etat);
+  assert.equal(nombreDAttaquantes(etat, m.cible), 0,
+    'montage : la case visée porte déjà des attaquantes, ZÉRO n\'est plus mesuré');
+
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, false,
+    'la confirmation ne s\'ouvre pas au toucher d\'une case atteignable');
+  assert.equal(m.parId.get('monde-panneau-menace').textContent,
+    phraseDesAttaquantes(0));
+  assert.match(m.parId.get('monde-panneau-menace').textContent, /[Aa]ucune base/,
+    'zéro ne se dit pas en toutes lettres');
+  // ⚠ ET LA LIGNE N'EST PAS VIDE : c'est la faute que le brief nomme.
+  assert.ok(m.parId.get('monde-panneau-menace').textContent.length > 0);
+
+  // ⚠ ET RIEN N'A ENCORE BOUGÉ : la confirmation s'intercale AVANT le geste.
+  assert.deepEqual(baseCourante(etat).position, m.base,
+    'la base a bougé avant que le joueur ait donné son accord');
+  assert.deepEqual(m.deplacements, [], '`apresDeplacement` a été appelé sans accord');
+});
+
+test('DÉ T7 — renoncer ne bouge RIEN, et désarme proprement', () => {
+  const etat = partiePeuplee();
+  const avant = serialiser(etat, 0);
+  const m = armerEtViser(etat);
+  m.parId.get('monde-panneau-renoncer').envoyer('click', {});
+
+  assert.deepEqual(baseCourante(etat).position, m.base, 'la base a bougé après un refus');
+  assert.equal(serialiser(etat, 0), avant, 'l\'état a changé après un refus');
+  assert.deepEqual(m.deplacements, [], '`apresDeplacement` a été appelé après un refus');
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
+    'la confirmation reste ouverte après un refus');
+  assert.equal(m.parId.get('monde-panneau').hidden, true,
+    'le panneau reste ouvert après un refus');
+
+  // ⚠⚠ ET LE MODE EST DÉSARMÉ : le brief exige « l'état d'avant le toucher ».
+  // On le mesure par le COMPORTEMENT — un toucher de plus doit ouvrir le
+  // panneau d'un site, pas reposer la base — plutôt que par une variable que
+  // l'écran n'expose pas.
+  const cible = baseCourante(etat).satellites.presents[0];
+  toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, cible);
+  assert.deepEqual(baseCourante(etat).position, m.base,
+    'un toucher a déplacé la base : le mode est resté armé après le refus');
+  assert.equal(m.parId.get('monde-panneau-titre').textContent, nomDuSite(cible),
+    'le toucher suivant n\'ouvre pas le panneau du site : le mode est resté armé');
+});
+
+test('DÉ T7 bis — « Fermer » désarme l\'accord en attente, il ne le laisse pas vif', () => {
+  // ⚠⚠ LE BOUTON « FERMER » EST UNE PORTE DE SORTIE COMME UNE AUTRE. Sans la
+  // ligne qui vide `deplacementEnAttente` dans `fermerPanneau`, le panneau se
+  // refermerait en gardant la case retenue, et le bouton d'accord — que plus
+  // personne ne voit — resterait capable de déplacer la base.
+  const etat = partiePeuplee();
+  const m = armerEtViser(etat);
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, false,
+    'montage : la confirmation ne s\'est pas ouverte');
+
+  m.parId.get('monde-panneau-fermer').envoyer('click', {});
+  assert.equal(m.parId.get('monde-panneau').hidden, true, '« Fermer » n\'a pas fermé');
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
+    'la confirmation survit à la fermeture du panneau');
+
+  m.parId.get('monde-panneau-confirmer').envoyer('click', {});
+  assert.deepEqual(baseCourante(etat).position, m.base,
+    'un accord donné après « Fermer » a déplacé la base');
+  assert.deepEqual(m.deplacements, [], '`apresDeplacement` a été appelé après « Fermer »');
+});
+
+test('DÉ T8 — accepter déplace, et le chemin nominal reste vert', () => {
+  const etat = partiePeuplee();
+  const m = armerEtViser(etat);
+  assert.deepEqual(baseCourante(etat).position, m.base, 'montage : la base a bougé trop tôt');
+
+  m.parId.get('monde-panneau-confirmer').envoyer('click', {});
+
+  assert.deepEqual(baseCourante(etat).position,
+    { rangee: m.cible.rangee, colonne: m.cible.colonne },
+    'l\'accord n\'a pas déplacé la base');
+  assert.deepEqual(m.deplacements, [1], '`apresDeplacement` n\'a pas été prévenu');
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
+    'la confirmation reste ouverte après l\'accord');
+  assert.equal(m.parId.get('monde-panneau').hidden, true,
+    'le panneau reste ouvert après l\'accord');
+  // ⚠ ET LE DÉLAI EST CONSOMMÉ : `deplacerLaBase` écrit l'horodatage, et c'est
+  // la preuve qu'on est passé par le GESTE et non par `poserLaBaseSur`.
+  assert.equal(baseCourante(etat).dernierDeplacementTick, etat.horloge.nbTicks,
+    'l\'accord n\'est pas passé par `deplacerLaBase`');
+});
+
+test('DÉ T9 — un déplacement REFUSÉ ne demande pas d\'accord', () => {
+  // ⚠ ON NE DEMANDE PAS D'ACCORD POUR UN GESTE QUI SERA REFUSÉ. Le montage
+  // consomme le délai en déplaçant une première fois, puis rearme : le second
+  // toucher doit tomber sur le refus chiffré, pas sur une confirmation.
+  const etat = partiePeuplee();
+  const premier = armerEtViser(etat);
+  premier.parId.get('monde-panneau-confirmer').envoyer('click', {});
+  assert.ok(ticksAvantProchainDeplacement(etat) > 0,
+    'montage : le délai n\'a pas été consommé, le refus ne se produira pas');
+
+  // ⚠⚠ `casesAtteignables` EST VIDE PENDANT LE DÉLAI, ET C'EST BIEN CE QU'ON
+  // MESURE : le second montage ne peut donc pas passer par elle. Il vise une
+  // case À PORTÉE que le moteur refuse — et il l'asserte, pour que le refus
+  // mesuré soit celui du délai et non celui de la distance.
+  assert.deepEqual(casesAtteignables(etat), [],
+    'montage : des cases restent atteignables, le délai ne mord pas');
+  const apres = { ...baseCourante(etat).position };
+  const visee = { rangee: apres.rangee - 1, colonne: apres.colonne };
+  const refus = problemesDuDeplacement(etat, visee);
+  assert.deepEqual(refus.map((x) => x.code), ['delai'],
+    'montage : la case visée est refusée pour autre chose que le délai');
+
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  ecran.peindre(etat);
+  const halo = cadreDuHalo(appels);
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  toucher(canvas, halo, dpr, ECHELLE_MAX, apres, visee);
+
+  assert.equal(parId.get('monde-panneau-confirmation').hidden, true,
+    'une confirmation s\'est ouverte sur un déplacement refusé');
+  assert.equal(parId.get('monde-panneau-refus').hidden, false,
+    'le refus ne se dit pas');
+  assert.match(parId.get('monde-panneau-refus').textContent, /attendre/,
+    'le refus ne reprend pas le message chiffré du moteur');
+  assert.deepEqual(baseCourante(etat).position, apres,
+    'la base a bougé malgré le refus');
+});
+
+test('DÉ T10 — le compte annoncé est celui de la case VISÉE, pas de la position actuelle', () => {
+  // ⚠⚠ UN MONTAGE À COMPTES ÉGAUX NE DISTINGUERAIT PAS LES DEUX LECTURES, et
+  // c'est tout l'enjeu de ce test. On cherche donc une base et une case
+  // atteignable dont les comptes DIFFÈRENT, et on l'asserte avant de lire.
+  let montage = null;
+  for (let graine = 1; graine <= 300 && montage === null; graine += 1) {
+    const etat = partiePeuplee(graine, false);
+    baseCourante(etat).position.rangee = 200;
+    const ici = nombreDAttaquantes(etat, baseCourante(etat).position);
+    const atteignables = casesAtteignables(etat)
+      .filter((k) => Math.abs(k.rangee - baseCourante(etat).position.rangee) <= 6
+        && Math.abs(k.colonne - baseCourante(etat).position.colonne) <= 6)
+      .filter((k) => nombreDAttaquantes(etat, k) !== ici);
+    if (atteignables.length === 0) continue;
+    montage = { graine, etat, ici, visee: atteignables[0] };
+  }
+  assert.ok(montage !== null, 'aucune graine ne porte deux comptes différents');
+
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  ecran.peindre(montage.etat);
+  const base = { ...baseCourante(montage.etat).position };
+  const halo = cadreDuHalo(appels);
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  toucher(canvas, halo, dpr, ECHELLE_MAX, base, montage.visee);
+
+  const attendu = nombreDAttaquantes(montage.etat, montage.visee);
+  assert.notEqual(attendu, montage.ici, 'le montage a cessé de discriminer');
+  assert.equal(parId.get('monde-panneau-menace').textContent, phraseDesAttaquantes(attendu));
+  assert.notEqual(parId.get('monde-panneau-menace').textContent,
+    phraseDesAttaquantes(montage.ici),
+    'l\'écran annonce le compte de la position ACTUELLE, pas celui de la case visée');
 });

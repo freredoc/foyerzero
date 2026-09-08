@@ -20,24 +20,31 @@ import { dirname, join } from 'node:path';
 import {
   libelleDAttaque, vueDuRaid, plafondDuZoom,
   initialiserEcranRaid, BANDE_A_L_OUVERTURE,
-  ordreDeLEffondrement, effondrees,
+  ordreDeLEffondrement, effondrees, ficheDeLEntite,
 } from '../src/ui/raid.js';
 import { calculerProjection } from '../src/render/projection.js';
-import { listeAffichage, couchesDeLaRuine } from '../src/render/scene.js';
+import {
+  listeAffichage, couchesDeLaRuine, nomAffiche, entitesSurLaCase, NOMS_CLASSE,
+} from '../src/render/scene.js';
 import { creerCombat } from '../src/sim/combat.js';
 import { MUR_CASES, BANDE_SOUS_LE_MUR } from '../src/render/fond.js';
 import {
   BANDES, casesDeLaBande, bornesDuDecalage, bornesDuDecalageX, basculeDeBande,
 } from '../src/render/bandes.js';
-import { GRILLE } from '../src/data/combat.js';
 import { COTE_SPRITE } from '../src/data/atlas.js';
-import { COTE_CASE_MAX } from '../src/ui/chantier.js';
+import {
+  COTE_CASE_MAX, LIBELLES_COLONNE_DEGATS, lignesDeLaPiece, apercuDeLaPiece,
+  formaterEntier,
+} from '../src/ui/chantier.js';
+import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../src/data/combat.js';
+import { montageDuRaid } from '../src/sim/raid.js';
+import { siteDeLaCase } from '../src/sim/site-de-la-case.js';
 import { gesteDuSecondToucher } from '../src/ui/monde.js';
 import {
   chromeMasque, CHROME_MASQUE_PAR, CHROME_MASQUE_PAR_LE_DEROULE, BLOCS_DE_CHROME,
 } from '../src/ui/session.js';
 import {
-  ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE, RESTE_APRES_DESTRUCTION,
+  ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE, RESTE_APRES_DESTRUCTION, BATIMENTS,
 } from '../src/data/sites.js';
 import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
@@ -856,6 +863,8 @@ function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) 
     'raid-fin', 'raid-fin-corps', 'raid-fin-carte', 'raid-fin-base',
     'raid-retour-carte', 'raid-retour-offense',
     'raid-vitesse-1', 'raid-vitesse-2', 'raid-vitesse-4',
+    // La fiche d'une cible ennemie — lot FICHES-ENNEMIES, 07/09.
+    'raid-fiche', 'raid-fiche-titre', 'raid-fiche-corps', 'raid-fiche-fermer',
   ];
   const html = balisage();
   for (const id of IDS) {
@@ -1032,8 +1041,18 @@ function fauxAtlas() {
  */
 function ecranPret(options = {}) {
   const { doc, appels, parId, rafs } = fauxDocumentRaid(options);
-  const { graine = 2026, niveau = 1, colonnes = 6 } = options;
+  const { graine = 2026, niveau = 1, colonnes = 6, niveauDuCamp = null } = options;
   const etat = partieArmee(graine, niveau, colonnes);
+  // ⚠ `niveauDuCamp` MONTE LA CIBLE, PAS LE JOUEUR — lot FICHES-ENNEMIES. Un
+  // camp de niveau 1 ne porte que des Meutes : les fiches ennemies ont besoin
+  // d'une garnison VARIÉE — une artillerie, une tourelle, un mur — et c'est le
+  // niveau du satellite qui la décide. Le défaut est `null` : les tests
+  // d'avant ne bougent pas d'un tick.
+  if (niveauDuCamp !== null) {
+    const sat = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
+    assert.ok(sat !== undefined, 'montage : aucun camp à monter');
+    sat.niveau = niveauDuCamp;
+  }
   const cible = premierCamp(etat);
   const journal = { deroule: [] };
   const ecran = initialiserEcranRaid(doc, {
@@ -1743,4 +1762,588 @@ test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage 
   // Le nettoyage a bien remis la table d\'origine.
   assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
     { batiment: 'ruine', defense: 'rien', unite: 'rien' });
+});
+
+// ---------------------------------------------------------------------------
+// lot FICHES-ENNEMIES — 07/09/2026, points 7 et 8
+//
+// Ethan : « En prépa raid, possibilité de cliquer sur une unité ennemie pour
+// voir ses stats », puis « idem pour les bâtiments ».
+//
+// ⚠⚠ LE LOT N'ÉCRIT AUCUNE MISE EN PAGE. Le rendu en deux colonnes de paires
+// est `peindreVueDuPanneau` de `ui/chantier.js`, partagé avec le Chantier et
+// l'Offense depuis le lot ERGONOMIE, et son commentaire annonçait celle-ci par
+// écrit depuis le lot ÉCRAN-DÉFENSE. Ce que ce lot fournit, ce sont des
+// sections et des paires.
+// ---------------------------------------------------------------------------
+
+/** Le texte d'un élément du faux document — `textContent` plus ses enfants. */
+function texteDe(el) {
+  if (el === undefined || el === null) return '';
+  const propre = typeof el.textContent === 'string' ? el.textContent : '';
+  const enfants = (el.children ?? []).map(texteDe).join('');
+  return propre + enfants;
+}
+
+/** Toutes les paires d'une fiche peinte, à plat, dans l'ordre du DOM. */
+function pairesPeintes(corps) {
+  const lignes = [];
+  for (const section of corps.children ?? []) {
+    for (const bloc of section.children ?? []) {
+      if (bloc.className !== 'paires') continue;
+      for (const ligne of bloc.children ?? []) lignes.push(ligne);
+    }
+  }
+  return lignes;
+}
+
+/**
+ * Touche un pixel du canevas — un `pointerdown` puis un `pointerup` au MÊME
+ * point, donc un toucher et jamais un promenage.
+ */
+function toucherLeCanevas(banc, x, y) {
+  const canvas = banc.$('raid-canvas');
+  canvas.envoyer('pointerdown', { pointerId: 1, clientX: x, clientY: y });
+  canvas.envoyer('pointerup', { pointerId: 1, clientX: x, clientY: y });
+}
+
+/**
+ * Balaie le canevas au pas de quatre pixels et rend, pour chaque point, le
+ * titre de la fiche qui s'y ouvre — ou `null`.
+ *
+ * ⚠⚠ LE BALAYAGE EST LA SEULE FENÊTRE HONNÊTE SUR LA PROJECTION. Ni
+ * `projection`, ni `decalageX`, ni `decalageY` ne sortent du module, et leur
+ * ouvrir un accesseur pour les besoins d'un test mettrait dans `src/` une porte
+ * que la production n'emploie pas — c'est le motif que `ui/monde.js` écrit pour
+ * son halo. On regarde donc ce que le doigt OBTIENT, pixel par pixel.
+ */
+function balayerLesFiches(banc, { pas = 4, largeur = 360, hauteur = 466 } = {}) {
+  const carte = new Map();
+  for (let y = 2; y < hauteur; y += pas) {
+    for (let x = 2; x < largeur; x += pas) {
+      banc.$('raid-fiche').hidden = true;
+      toucherLeCanevas(banc, x, y);
+      const ouverte = banc.$('raid-fiche').hidden === false;
+      carte.set(`${x},${y}`, ouverte ? texteDe(banc.$('raid-fiche-titre')) : null);
+    }
+  }
+  return carte;
+}
+
+/** Le centre du nuage de points qui ouvre un titre donné. */
+function nuage(carte, titre) {
+  const points = [...carte.entries()].filter(([, t]) => t === titre)
+    .map(([cle]) => cle.split(',').map(Number));
+  if (points.length === 0) return null;
+  const moyenne = (i) => points.reduce((a, p) => a + p[i], 0) / points.length;
+  return { n: points.length, x: moyenne(0), y: moyenne(1) };
+}
+
+/** Le montage d'un camp monté au niveau voulu, tel que l'écran le verra. */
+function montageDuCamp(graine, niveauDuCamp) {
+  const etat = partieArmee(graine, 1, 6);
+  const sat = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
+  sat.niveau = niveauDuCamp;
+  const site = siteDeLaCase(etat, sat.rangee, sat.colonne);
+  return { etat, site, montage: montageDuRaid(etat, site) };
+}
+
+test('FE T1 — toucher une unité ennemie ouvre SA fiche, pas celle de sa voisine', () => {
+  // ⚠⚠ DEUX UNITÉS ADJACENTES DE TYPES DIFFÉRENTS, ET C'EST LE MONTAGE QUE LE
+  // BRIEF EXIGE. Un camp de niveau 1 ne porte que des Meutes : sans le monter,
+  // toutes les fiches se ressembleraient et le test passerait sur un code qui
+  // ouvre systématiquement la voisine. Mesuré sur la graine 42 au niveau 20 :
+  // un Fendeur en (8, 5) et une Carapace en (8, 6).
+  const { montage } = montageDuCamp(42, 20);
+  const par = new Map(montage.defenseurs.map((d) => [`${d.rangee}:${d.colonne}`, d.id]));
+  const paire = montage.defenseurs.find((d) => {
+    const droite = par.get(`${d.rangee}:${d.colonne + 1}`);
+    return droite !== undefined && droite !== d.id
+      && UNITES[d.id] !== undefined && UNITES[droite] !== undefined;
+  });
+  assert.ok(paire !== undefined, 'le montage ne porte aucune paire d\'unités adjacentes différentes');
+  const droite = par.get(`${paire.rangee}:${paire.colonne + 1}`);
+
+  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const carte = balayerLesFiches(banc);
+
+  const titreGauche = `${nomAffiche({ genre: 'unite', proprietaire: 'ouvrage', id: paire.id })} · niv. 20`;
+  const titreDroite = `${nomAffiche({ genre: 'unite', proprietaire: 'ouvrage', id: droite })} · niv. 20`;
+  assert.notEqual(titreGauche, titreDroite, 'les deux voisines portent le même titre : rien à discriminer');
+
+  const g = nuage(carte, titreGauche);
+  const d = nuage(carte, titreDroite);
+  assert.ok(g !== null, `aucun pixel n'ouvre « ${titreGauche} »`);
+  assert.ok(d !== null, `aucun pixel n'ouvre « ${titreDroite} »`);
+
+  // ⚠⚠ C'EST L'ORDRE QUI FALSIFIE. La pièce de gauche occupe la colonne la plus
+  // PETITE, donc son nuage de pixels est à GAUCHE de celui de sa voisine. Un
+  // écran qui ouvrirait la fiche d'à côté échangerait les deux nuages, et cette
+  // seule assertion tomberait — là où « les deux fiches existent » resterait
+  // vraie.
+  assert.ok(g.x < d.x,
+    `la fiche de la case ${paire.colonne} s'ouvre à droite de celle de la case ${paire.colonne + 1}`
+    + ` (${g.x.toFixed(1)} contre ${d.x.toFixed(1)})`);
+  // ⚠ ET LES DEUX NUAGES SONT DISJOINTS PAR CONSTRUCTION — un point ouvre au
+  // plus une fiche —, donc ce qu'on mesure en plus est qu'ils sont SÉPARÉS :
+  // deux cases voisines, donc deux paquets d'au moins quelques points chacun.
+  assert.ok(g.n >= 4 && d.n >= 4, `nuages trop maigres : ${g.n} et ${d.n} points`);
+});
+
+test('FE T2 — toucher un BÂTIMENT ennemi ouvre sa fiche, point 8 séparément', () => {
+  // ⚠⚠ LE POINT 8 A SON TEST À LUI. Un test sur les seules unités laisserait la
+  // moitié du lot sans garde — et les deux passent par des TABLES différentes,
+  // `UNITES` d'un côté, `BATIMENTS` de l'autre, avec des profils qui ne portent
+  // ni les mêmes champs ni les mêmes noms.
+  const { montage } = montageDuCamp(2026, 1);
+  const batiments = montage.batiments;
+  assert.ok(batiments.length >= 2, 'le montage ne porte pas de bâtiments');
+
+  const banc = ecranPret({ graine: 2026, niveauDuCamp: 1 });
+  const carte = balayerLesFiches(banc);
+  const titres = new Set([...carte.values()].filter((t) => t !== null));
+
+  // ⚠ AU MOINS UN BÂTIMENT DU MONTAGE S'OUVRE — tous ne sont pas forcément dans
+  // la bande affichée à l'ouverture, qui est la DÉFENSE ; ce qu'on exige, c'est
+  // que le chemin marche pour le genre `batiment`.
+  const attendus = new Set(batiments.map((b) => `${BATIMENTS[b.id].nom} · niv. ${b.niveau ?? montage.niveau}`));
+  const vus = [...titres].filter((t) => attendus.has(t));
+  assert.ok(vus.length > 0,
+    `aucune fiche de bâtiment ne s'est ouverte ; titres vus : ${[...titres].join(' | ')}`);
+  // ⚠ ET LE TITRE EST BIEN CELUI D'UN BÂTIMENT DU SITE, pas d'une défense : les
+  // noms des deux tables ne se croisent pas.
+  for (const t of vus) assert.ok(attendus.has(t));
+
+  // ⚠⚠ LE DISPATCH SE FAIT SUR LE GENRE, ET LA MESURE DIT POURQUOI ÇA NE SE VOIT
+  // PAS AUJOURD'HUI : les trois tables ont des clés DISJOINTES, donc un
+  // `UNITES[id] ?? DEFENSES[id] ?? BATIMENTS[id]` rendrait la même ligne — la
+  // falsification qui l'écrit ne mord sur rien, et c'est déclaré. Cette
+  // assertion-ci est ce qui le tient : le jour où deux tables partageront une
+  // clé, elle tombe, et le genre redevient le seul discriminant juste.
+  const clefs = [Object.keys(UNITES), Object.keys(DEFENSES), Object.keys(BATIMENTS)];
+  for (const [i, j] of [[0, 1], [0, 2], [1, 2]]) {
+    const communes = clefs[i].filter((c) => clefs[j].includes(c));
+    assert.deepEqual(communes, [],
+      `deux tables partagent des clés : ${communes.join(', ')} — le dispatch par genre devient le seul juste`);
+  }
+});
+
+test('FE T3 — les nombres viennent du moteur : le niveau les change', () => {
+  // ⚠⚠ UN MONTAGE À NIVEAU 1 PARTOUT NE DISTINGUERAIT PAS UN CHAMP LU D'UN
+  // CHAMP ÉCRIT EN DUR. On monte la MÊME pièce à deux niveaux et on exige que
+  // les PV ET les dégâts diffèrent.
+  const monter = (niveau) => creerCombat({
+    type: 'base', niveau, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [{ id: 'casemate', rangee: 5, colonne: 4 }],
+    batiments: [], obstacles: [], vagues: [],
+  }).entites[0];
+
+  const bas = ficheDeLEntite(monter(1));
+  const haut = ficheDeLEntite(monter(30));
+  const valeur = (fiche, libelle) => fiche.sections
+    .flatMap((s) => s.lignes).find((l) => l.libelle === libelle).avant;
+
+  assert.notEqual(valeur(bas, 'Points de vie'), valeur(haut, 'Points de vie'),
+    'les points de vie ne suivent pas le niveau');
+  assert.notEqual(valeur(bas, 'Contre l\'infanterie'), valeur(haut, 'Contre l\'infanterie'),
+    'les dégâts ne suivent pas le niveau');
+  // ⚠ ET LE TITRE PORTE LE NIVEAU DE L'ENTITÉ, pas celui du site : c'est
+  // `entite.niveau`, que `creerCombat` peut surcharger ligne à ligne.
+  assert.match(bas.titre, /niv\. 1$/);
+  assert.match(haut.titre, /niv\. 30$/);
+
+  // ⚠⚠ ET LES PV SONT CEUX DE L'ENTITÉ, PAS UNE COURBE REFAITE. On compare au
+  // champ du moteur : si la fiche recalculait, elle pourrait tomber juste ici et
+  // faux ailleurs — un module de PV +20 % suffirait à les séparer.
+  const e = monter(30);
+  assert.equal(valeur(ficheDeLEntite(e), 'Points de vie'),
+    formaterEntier(Math.round(e.pvMaxMilli / 1000)));
+});
+
+test('FE T4 — le nom est celui du camp OUVRAGE, et il diffère du nom joueur', () => {
+  const combat = creerCombat({
+    type: 'base', niveau: 20, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [{ id: 'meute', rangee: 5, colonne: 4 }],
+    batiments: [], obstacles: [], vagues: [],
+  });
+  const e = combat.entites[0];
+  const fiche = ficheDeLEntite(e);
+  assert.ok(fiche.titre.startsWith(UNITES.meute.nom.ouvrage),
+    `le titre ne porte pas le nom de l'Ouvrage : ${fiche.titre}`);
+  // ⚠⚠ ET LA CONTRE-ÉPREUVE : les deux noms DIFFÈRENT pour cette pièce-là. Sans
+  // elle, une pièce dont les deux noms coïncident ferait passer le test sur un
+  // écran qui lit le mauvais.
+  assert.notEqual(UNITES.meute.nom.joueur, UNITES.meute.nom.ouvrage,
+    'la pièce du montage porte le même nom des deux côtés : rien à discriminer');
+  assert.ok(!fiche.titre.includes(UNITES.meute.nom.joueur),
+    `le titre porte le nom JOUEUR : ${fiche.titre}`);
+
+  // ⚠⚠ ET LA MOITIÉ QUI DISCRIMINE VRAIMENT : UNE DÉFENSE DU JOUEUR. Tant que
+  // le camp et le propriétaire coïncident — une garnison de l'Ouvrage est du
+  // camp `defense` ET appartient à l'Ouvrage —, lire l'un ou l'autre rend le
+  // MÊME nom, et cette assertion-ci passerait sur un écran qui lit le camp.
+  // **Mesuré : la falsification qui remet le camp ne fait tomber aucun test de
+  // ce fichier.** Le seul montage qui les sépare est celui où le JOUEUR défend
+  // sa propre base — ce que `sim/raid-ouvrage.js` monte pour de bon — et c'est
+  // exactement le piège que l'en-tête de `nomAffiche` raconte.
+  // ⚠ ET L'ATTAQUE CHANGE DE MAIN AVEC ELLE : `creerCombat` refuse que les deux
+  // camps appartiennent au même — « personne ne s'attaque soi-même ». C'est le
+  // montage exact de `sim/raid-ouvrage.js`, quand l'Ouvrage vient chez le joueur.
+  const chezLeJoueur = creerCombat({
+    type: 'base', niveau: 20, saveur: null,
+    proprietaireDefense: 'joueur', proprietaireAttaque: 'ouvrage',
+    defenseurs: [{ id: 'meute', rangee: 5, colonne: 4 }],
+    batiments: [], obstacles: [], vagues: [],
+  }).entites[0];
+  assert.equal(chezLeJoueur.camp, 'defense', 'le montage ne sépare pas camp et propriétaire');
+  assert.equal(chezLeJoueur.proprietaire, 'joueur', 'le montage ne sépare pas camp et propriétaire');
+  const sienne = ficheDeLEntite(chezLeJoueur);
+  assert.ok(sienne.titre.startsWith(UNITES.meute.nom.joueur),
+    `une pièce du JOUEUR porte le nom de l'Ouvrage : ${sienne.titre}`);
+});
+
+test('FE T5 — aucune flèche de palier : `apres` vaut null sur toutes les paires', () => {
+  // ⚠⚠ LE RENDU NE DESSINE « → » QUE SI `apres !== null`. Inventer un palier
+  // suivant pour une pièce qui ne t'appartient pas promettrait une amélioration
+  // qui n'est pas la tienne.
+  const combat = creerCombat({
+    type: 'base', niveau: 30, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [
+      { id: 'faucheuse', rangee: 5, colonne: 2 },
+      { id: 'casemate', rangee: 5, colonne: 4 },
+      { id: 'merlon', rangee: 5, colonne: 6 },
+      { id: 'meute', rangee: 6, colonne: 3 },
+    ],
+    batiments: [{ id: 'souche', rangee: 15, colonne: 5 }],
+    obstacles: [], vagues: [],
+  });
+  let paires = 0;
+  for (const e of combat.entites) {
+    for (const section of ficheDeLEntite(e).sections) {
+      for (const ligne of section.lignes) {
+        paires += 1;
+        assert.equal(ligne.apres, null,
+          `« ${ligne.libelle} » de ${e.id} promet un palier : ${ligne.apres}`);
+      }
+    }
+  }
+  // ⚠ LE MONTAGE PROUVE D'ABORD QU'IL MESURE QUELQUE CHOSE.
+  assert.ok(paires >= 25, `seulement ${paires} paires mesurées`);
+});
+
+test('FE T6 — la mise en page est PARTAGÉE : trois fiches, un seul rendu', () => {
+  // ⚠⚠ C'EST `ÉD T8 ter` ÉTENDU À LA TROISIÈME FAMILLE, ET C'EST LA RAISON
+  // D'ÊTRE DU LOT. Le rendu en deux colonnes de paires ne s'écrit qu'à un seul
+  // endroit ; trois mises en page recopiées auraient divergé à la première
+  // retouche.
+  const chantier = decommentee('src/ui/chantier.js');
+  const compter = (fichier, motif) => (decommentee(fichier).match(motif) ?? []).length;
+
+  // La déclaration est dans `chantier.js` ; les APPELS sont ailleurs.
+  const declarations = (chantier.match(/export function peindreVueDuPanneau\(/g) ?? []).length;
+  assert.equal(declarations, 1, 'le rendu partagé est déclaré plus d\'une fois');
+
+  const appels = ['src/ui/chantier.js', 'src/ui/offense.js', 'src/ui/raid.js']
+    .map((f) => [f, compter(f, /peindreVueDuPanneau\(/g)]);
+  // ⚠⚠ QUATRE APPELS DEPUIS LE LOT JOURNAL, ET LE COMPTE SE DÉTAILLE PLUTÔT
+  // QUE DE MONTER EN BLOC. `chantier.js` porte la DÉCLARATION, la fiche d'un
+  // bâtiment ET le journal des raids — trois occurrences ; `offense.js` porte sa
+  // fiche et le journal — deux ; `raid.js` porte la fiche d'une cible ennemie —
+  // une. Quatre lecteurs du même rendu, zéro seconde mise en page.
+  assert.deepEqual(appels, [
+    ['src/ui/chantier.js', 3],
+    ['src/ui/offense.js', 2],
+    ['src/ui/raid.js', 1],
+  ], `les appels du rendu partagé ont changé : ${JSON.stringify(appels)}`);
+
+  // ⚠⚠ ET AUCUNE SECONDE MISE EN PAGE N'EST ÉCRITE. La grille de paires porte
+  // la classe `paires` ; elle ne doit être posée qu'à un seul endroit du dépôt.
+  for (const f of ['src/ui/raid.js', 'src/ui/offense.js']) {
+    assert.equal(compter(f, /'paires'/g), 0, `${f} écrit sa propre grille de paires`);
+  }
+  // ⚠⚠ ET LE COMPTE DE `className = 'ligne'` DE `raid.js` EST PINCÉ À UN, PAS À
+  // ZÉRO — mesuré, pas supposé. Cette écriture-là est ANTÉRIEURE au lot : c'est
+  // le panneau de RÉSULTAT, `remplirLignes`, qui n'a rien à voir avec la fiche
+  // et qui ne passe pas par le rendu partagé. La borner à zéro aurait accusé un
+  // innocent ; la borner à un attrape une SECONDE écriture, qui serait la fiche
+  // recopiée.
+  assert.equal(compter('src/ui/raid.js', /className = 'ligne'/g), 1,
+    'une seconde mise en page de ligne est apparue dans l\'écran de raid');
+  assert.equal(compter('src/ui/offense.js', /className = 'ligne'/g), 0,
+    'l\'écran Offense écrit ses propres lignes');
+  const raid = decommentee('src/ui/raid.js');
+  const ouRemplir = raid.indexOf('function remplirLignes');
+  const ouLigne = raid.indexOf("className = 'ligne'");
+  assert.ok(ouRemplir > 0 && ouLigne > ouRemplir && ouLigne - ouRemplir < 400,
+    'la seule ligne écrite par l\'écran de raid n\'est plus celle du panneau de résultat');
+  assert.ok(compter('src/ui/chantier.js', /'paires'/g) >= 1,
+    'la garde ne trouve plus la grille de paires : elle ne mesure plus rien');
+
+  // ⚠⚠ ET LA FICHE ENNEMIE N'A AUCUN BOUTON D'ACTION — « elle informe, elle ne
+  // suggère rien ». Le rendu partagé le tolère depuis ce lot, et les DEUX
+  // moitiés sont gardées : la vue ne décrit pas de bouton, et le panneau n'en
+  // porte pas. Mesuré à l'écran monté : le seul bouton du panneau est
+  // « Fermer », et il n'a pas été réécrit par le rendu.
+  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const carte = balayerLesFiches(banc, { pas: 16 });
+  const point = [...carte.entries()].find(([, t]) => t !== null);
+  assert.ok(point !== undefined, 'le montage n\'ouvre aucune fiche');
+  const [x, y] = point[0].split(',').map(Number);
+  toucherLeCanevas(banc, x, y);
+  assert.equal(banc.$('raid-fiche').hidden, false, 'la fiche ne s\'est pas ouverte');
+  // ⚠ LE BOUTON « FERMER » N'A RIEN REÇU : le rendu partagé y aurait poussé un
+  // libellé et une note s'il avait eu un bouton à peindre.
+  assert.equal((banc.$('raid-fiche-fermer').children ?? []).length, 0,
+    'le rendu a écrit dans le bouton Fermer : la fiche s\'est vu poser une action');
+  // ⚠⚠ ET LES DEUX MOITIÉS SONT GARDÉES : le panneau n'a pas d'élément de bouton
+  // — c'est la SOURCE qui le dit —, et la vue n'en décrit pas.
+  assert.match(decommentee('src/ui/raid.js'), /bouton: null,/,
+    'le panneau de la fiche s\'est vu donner un bouton');
+  const combat = creerCombat({
+    type: 'base', niveau: 20, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [{ id: 'casemate', rangee: 5, colonne: 4 }],
+    batiments: [], obstacles: [], vagues: [],
+  });
+  assert.equal(ficheDeLEntite(combat.entites[0]).bouton, undefined,
+    'la fiche ennemie décrit un bouton d\'action');
+});
+
+test('FE T7 — les libellés sont MOT POUR MOT ceux des fiches existantes', () => {
+  const combat = creerCombat({
+    type: 'base', niveau: 12, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [{ id: 'casemate', rangee: 5, colonne: 4 }],
+    batiments: [], obstacles: [], vagues: [],
+  });
+  const libelles = ficheDeLEntite(combat.entites[0]).sections
+    .flatMap((s) => s.lignes).map((l) => l.libelle);
+
+  // ⚠⚠ LES TROIS LIGNES DE DÉGÂTS VIENNENT DE LA TABLE DU CHANTIER, IMPORTÉE.
+  // Les retaper ici aurait fait deux vocabulaires pour la même grandeur — et
+  // c'est justement ce que ce test refuse.
+  for (const colonne of COLONNES_DEGATS) {
+    assert.ok(libelles.includes(LIBELLES_COLONNE_DEGATS[colonne]),
+      `« ${LIBELLES_COLONNE_DEGATS[colonne]} » manque : ${libelles.join(' | ')}`);
+  }
+  assert.ok(libelles.includes('Points de vie'), 'le libellé des PV a changé');
+  assert.ok(libelles.includes('Portée'), 'le libellé de la portée a changé');
+
+  // ⚠⚠ ET LA CONTRE-ÉPREUVE PASSE PAR LA FICHE DU JOUEUR : on monte une pièce de
+  // garnison et on compare les libellés qu'elle rend. Si l'une des deux fiches
+  // se met à dire autre chose, ce test tombe — c'est ce qu'on lui demande.
+  const etat = creerEtat(7);
+  rattraperJeu(etat, 3001);
+  baseCourante(etat).garnison.push({
+    id: 'casemate', rangee: GRILLE.bandes.defense.premiere, colonne: 1, niveau: 12, degatsMilli: 0,
+  });
+  const duJoueur = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0)).sections
+    .flatMap((s) => s.lignes).map((l) => l.libelle);
+  for (const commun of ['Points de vie', 'Portée', ...COLONNES_DEGATS.map((c) => LIBELLES_COLONNE_DEGATS[c])]) {
+    assert.ok(duJoueur.includes(commun), `la fiche du JOUEUR ne dit plus « ${commun} »`);
+    assert.ok(libelles.includes(commun), `la fiche ENNEMIE ne dit plus « ${commun} »`);
+  }
+
+  // ⚠⚠ ET LES VALEURS AUSSI SE LISENT EN FRANÇAIS — DEUX FALSIFICATIONS L'ONT
+  // EXIGÉ. Rendre la CLÉ de classe au lieu du mot (`escouade` pour « Escouade »)
+  // et écrire « 0 » au lieu de « — » laissaient ce test ENTIÈREMENT VERT :
+  // mesuré, 51 pass / 0 fail sur les deux. Il ne regardait que les LIBELLÉS.
+  const classe = ficheDeLEntite(combat.entites[0]).sections
+    .flatMap((s) => s.lignes).find((l) => l.libelle === 'Classe');
+  assert.ok(classe !== undefined, 'la ligne « Classe » a disparu');
+  assert.ok(Object.values(NOMS_CLASSE).includes(classe.avant),
+    `« ${classe.avant} » n'est pas un mot de NOMS_CLASSE : la clé interne est passée à l'écran`);
+  assert.ok(!Object.keys(NOMS_CLASSE).includes(classe.avant),
+    `« ${classe.avant} » EST une clé interne : le joueur lit un identifiant`);
+
+  // Un Merlon n'a pas de table de dégâts : ses trois lignes valent « — », jamais
+  // « 0 ». C'est la convention de la fiche du joueur, et c'est une information —
+  // « ce mur ne tue rien » se lit, « 0 » se calcule.
+  const mur = creerCombat({
+    type: 'base', niveau: 12, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [{ id: 'merlon', rangee: 5, colonne: 4 }],
+    batiments: [], obstacles: [], vagues: [],
+  });
+  const lignesDuMur = ficheDeLEntite(mur.entites[0]).sections.flatMap((s) => s.lignes);
+  assert.equal(mur.entites[0].degatsColonne, null,
+    'le montage ne mesure rien : ce Merlon porte une table de dégâts');
+  for (const colonne of COLONNES_DEGATS) {
+    const ligne = lignesDuMur.find((l) => l.libelle === LIBELLES_COLONNE_DEGATS[colonne]);
+    assert.equal(ligne.avant, '—',
+      `« ${LIBELLES_COLONNE_DEGATS[colonne] }» rend « ${ligne.avant} » et non « — »`);
+  }
+});
+
+test('FE T8 — rien ne s\'ouvre pendant le DÉROULÉ', () => {
+  // ⚠⚠ LE COMBAT EST UN REJEU D'UN ÉTAT DÉJÀ COMMIS : ouvrir une fiche au
+  // milieu ferait croire à une pause qui n'existe pas, et l'effondrement d'une
+  // pièce dure deux secondes qu'un toucher ne doit pas détourner.
+  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+
+  // Le montage prouve d'abord qu'il MESURE quelque chose : en préparation, le
+  // même balayage ouvre bien des fiches.
+  const avant = balayerLesFiches(banc, { pas: 8 });
+  assert.ok([...avant.values()].some((t) => t !== null),
+    'le montage n\'ouvre aucune fiche en préparation : il ne mesure rien');
+
+  // ⚠⚠ ET LA FICHE EST OUVERTE QUAND LE RAID PART — c'est la moitié que la
+  // falsification a réclamée. Mettre `hidden` à vrai avant de lancer laissait
+  // passer un écran qui n'aurait PAS refermé la fiche : elle serait restée
+  // par-dessus le combat, à décrire une pièce qui tombe dans la seconde qui
+  // suit. On l'ouvre donc pour de bon, et on exige qu'elle se referme.
+  const ouvrable = [...avant.entries()].find(([, t]) => t !== null);
+  assert.ok(ouvrable !== undefined, 'le montage n\'ouvre aucune fiche');
+  const [xo, yo] = ouvrable[0].split(',').map(Number);
+  toucherLeCanevas(banc, xo, yo);
+  assert.equal(banc.$('raid-fiche').hidden, false, 'le montage n\'a pas ouvert de fiche');
+
+  banc.$('raid-attaquer').envoyer('click');
+  assert.equal(banc.$('raid-bas').hidden, true, 'le montage n\'est pas dans un déroulé');
+  assert.equal(banc.$('raid-fiche').hidden, true,
+    'la fiche est restée ouverte par-dessus le combat');
+
+  const pendant = balayerLesFiches(banc, { pas: 8 });
+  assert.deepEqual([...new Set(pendant.values())], [null],
+    'une fiche s\'est ouverte pendant le déroulé');
+});
+
+test('FE T9 — une case vide n\'ouvre RIEN, et ne ferme rien non plus', () => {
+  // ⚠⚠ LA DÉCISION EST ÉCRITE : une case vide ne fait RIEN. Fermer une fiche
+  // qu'on vient de lire parce que le doigt a manqué la case de deux pixels
+  // serait le « par surprise » que le brief interdit ; la fiche se ferme par son
+  // bouton, en quittant la cible, ou en lançant le raid.
+  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const carte = balayerLesFiches(banc);
+
+  // ⚠⚠ LE POINT VIDE DOIT ÊTRE DANS LA GRILLE, ET C'EST LA FALSIFICATION QUI L'A
+  // DIT. Le premier jet prenait le PREMIER point sans fiche : il tombait dans la
+  // marge noire, hors de la grille, où `caseDepuisPixels` rend `null` et où le
+  // code sort AVANT la question des occupants — si bien qu'un « une case vide
+  // ferme la fiche » glissé dans l'écran laissait ce test VERT. On cherche donc
+  // un point ENCADRÉ : sans fiche, mais dont les deux voisins horizontaux en
+  // ouvrent une. Il est alors dans la grille par construction.
+  const points = [...carte.entries()].map(([cle, t]) => {
+    const [x, y] = cle.split(',').map(Number);
+    return { x, y, t };
+  });
+  const occupes = points.filter((p) => p.t !== null);
+  // ⚠ ENCADRÉ DANS LES DEUX AXES : il existe une case occupée à sa gauche ET à
+  // sa droite sur la même ligne, au-dessus ET au-dessous sur la même colonne.
+  // Le point est alors dans la grille par construction, quelle que soit la
+  // disposition du site — chercher un voisin IMMÉDIAT ne marchait pas, une
+  // défense de niveau 20 ne laissant aucun trou d'une case sur sa rangée.
+  const encadre = points.find((p) => p.t === null
+    && occupes.some((o) => o.y === p.y && o.x < p.x)
+    && occupes.some((o) => o.y === p.y && o.x > p.x)
+    && occupes.some((o) => o.x === p.x && o.y < p.y)
+    && occupes.some((o) => o.x === p.x && o.y > p.y));
+  assert.ok(encadre !== undefined,
+    'aucune case vide encadrée par deux cases occupées : le test ne mesure rien');
+  const plein = occupes[0];
+  assert.ok(plein !== undefined, 'aucun point n\'ouvre de fiche : rien à mesurer');
+
+  // 1. Fiche fermée + case vide → rien ne s'ouvre.
+  banc.$('raid-fiche').hidden = true;
+  const { x: xv, y: yv } = encadre;
+  toucherLeCanevas(banc, xv, yv);
+  assert.equal(banc.$('raid-fiche').hidden, true, 'une case vide a ouvert une fiche');
+
+  // 2. Fiche ouverte + case vide → elle reste ouverte, avec le MÊME titre.
+  toucherLeCanevas(banc, plein.x, plein.y);
+  assert.equal(banc.$('raid-fiche').hidden, false, 'le montage n\'a pas ouvert de fiche');
+  const titre = texteDe(banc.$('raid-fiche-titre'));
+  toucherLeCanevas(banc, xv, yv);
+  assert.equal(banc.$('raid-fiche').hidden, false, 'une case vide a fermé la fiche');
+  assert.equal(texteDe(banc.$('raid-fiche-titre')), titre, 'une case vide a réécrit la fiche');
+
+  // 3. Et le bouton, lui, ferme.
+  banc.$('raid-fiche-fermer').envoyer('click');
+  assert.equal(banc.$('raid-fiche').hidden, true, 'le bouton Fermer ne ferme pas');
+
+  // 4. ⚠⚠ UN GLISSEMENT N'EST PAS UN TOUCHER, ET RIEN NE LE MESURAIT. Le doigt
+  // qui promène la vue passe forcément sur des pièces ; sans cette garde, chaque
+  // promenage finirait sur une fiche ouverte. **Mesuré à la falsification :
+  // retirer `aGlisse` de la condition ne faisait tomber aucun test.**
+  //
+  // ⚠⚠ ET LE DOIGT REVIENT D'OÙ IL EST PARTI — SANS ÇA LA FALSIFICATION NE MORD
+  // PAS. Un promenage qui finit ailleurs relâche sur une case peut-être vide, si
+  // bien qu'« aucune fiche » serait vrai pour la mauvaise raison. On promène
+  // loin, puis on revient au MÊME point : sans la garde, le relâchement y
+  // ouvrirait la fiche que l'assertion suivante ouvre pour de bon.
+  const canvas = banc.$('raid-canvas');
+  canvas.envoyer('pointerdown', { pointerId: 3, clientX: plein.x, clientY: plein.y });
+  canvas.envoyer('pointermove', { pointerId: 3, clientX: plein.x + 40, clientY: plein.y + 30 });
+  canvas.envoyer('pointermove', { pointerId: 3, clientX: plein.x, clientY: plein.y });
+  canvas.envoyer('pointerup', { pointerId: 3, clientX: plein.x, clientY: plein.y });
+  assert.equal(banc.$('raid-fiche').hidden, true, 'un promenage a ouvert une fiche');
+  // ⚠ ET LE MÊME POINT, SANS GLISSER, OUVRE BIEN : sans cette moitié, une garde
+  // qui refuserait TOUT toucher passerait.
+  toucherLeCanevas(banc, plein.x, plein.y);
+  assert.equal(banc.$('raid-fiche').hidden, false, 'le même point ne s\'ouvre plus sans glissement');
+
+  // 5. ⚠⚠ ET LA FICHE NE S'OUVRE QUE SUR L'ENNEMI — DÉCLARÉ INERTE, MESURÉ.
+  // Ethan écrit « cliquer sur une unité ENNEMIE », donc le filtre est écrit ;
+  // mais **la préparation ne porte AUCUN attaquant** — `montageDuRaid` rend
+  // `vagues: []`, mesuré —, si bien qu'aucun montage d'aujourd'hui ne peut le
+  // faire tomber. C'est donc la SOURCE qui le garde, et le jour où la
+  // préparation montrera l'assaut, cette ligne-là sera déjà là.
+  const src = decommentee('src/ui/raid.js');
+  assert.match(src, /filter\(\(e\) => e\.camp !== 'attaque'\)/,
+    'la fiche ne filtre plus les attaquantes du joueur');
+});
+
+test('FE T9 bis — un pincement annulé n\'ouvre RIEN, `pointercancel` compris', () => {
+  // ⚠⚠ ÉCRIT APRÈS LA MESURE, PAS AVANT. La falsification qui passe
+  // `pointercancel` en `toucher: true` laissait la suite ENTIÈREMENT VERTE —
+  // 51 pass / 0 fail mesuré : aucun montage ne dispatchait cet évènement-là.
+  // Le cas est pourtant le cas COURANT du pincement : deux doigts se posent, la
+  // vue zoome, et le navigateur ANNULE les deux contacts. Sans cette garde, tout
+  // pincement finirait par ouvrir la fiche de la case du premier doigt.
+  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const carte = balayerLesFiches(banc, { pas: 8 });
+  const ouvrable = [...carte.entries()].find(([, t]) => t !== null);
+  assert.ok(ouvrable !== undefined, 'le montage n\'ouvre aucune fiche : il ne mesure rien');
+  const [x, y] = ouvrable[0].split(',').map(Number);
+
+  // Le même point, par le chemin du TOUCHER : la fiche s'ouvre.
+  banc.$('raid-fiche').hidden = true;
+  toucherLeCanevas(banc, x, y);
+  assert.equal(banc.$('raid-fiche').hidden, false, 'le point retenu n\'ouvre pas de fiche');
+
+  // Le même point, par le chemin du PINCEMENT : elle ne s'ouvre pas.
+  banc.$('raid-fiche').hidden = true;
+  const canvas = banc.$('raid-canvas');
+  canvas.envoyer('pointerdown', { pointerId: 1, clientX: x, clientY: y });
+  canvas.envoyer('pointercancel', { pointerId: 1, clientX: x, clientY: y });
+  assert.equal(banc.$('raid-fiche').hidden, true,
+    'un pincement annulé a ouvert une fiche');
+});
+
+test('FE T10 — la portée minimale paraît quand elle existe, et pas sinon', () => {
+  // ⚠⚠ LES TROIS ARTILLERIES PORTENT `porteeMini: 3.5` — elles ne couvrent pas
+  // leur propre case —, une tourelle non. « Portée minimale : 0 cases » ferait
+  // chercher un trou qu'il n'y a pas.
+  const combat = creerCombat({
+    type: 'base', niveau: 30, saveur: null, proprietaireDefense: 'ouvrage',
+    defenseurs: [
+      { id: 'faucheuse', rangee: 5, colonne: 2 },
+      { id: 'casemate', rangee: 5, colonne: 4 },
+      { id: 'merlon', rangee: 5, colonne: 6 },
+    ],
+    batiments: [], obstacles: [], vagues: [],
+  });
+  const parId = new Map(combat.entites.map((e) => [e.id, ficheDeLEntite(e)]));
+  const libelles = (id) => parId.get(id).sections.flatMap((s) => s.lignes).map((l) => l.libelle);
+
+  // ⚠ LE MONTAGE PROUVE SA PROPRE PRÉMISSE SUR LA TABLE, pas sur la fiche.
+  assert.ok(DEFENSES.faucheuse.porteeMini > 0, 'la Faucheuse n\'a plus de portée minimale');
+  assert.ok(!(DEFENSES.casemate.porteeMini > 0), 'la Casemate en a gagné une');
+
+  assert.ok(libelles('faucheuse').includes('Portée minimale'), 'l\'artillerie n\'annonce pas son trou');
+  assert.ok(!libelles('casemate').includes('Portée minimale'), 'la tourelle annonce un trou qu\'elle n\'a pas');
+  assert.ok(libelles('casemate').includes('Portée'), 'la tourelle n\'annonce plus sa portée');
+
+  // ⚠⚠ ET UN MUR N'ANNONCE AUCUNE PORTÉE DU TOUT — c'est `porteeQuiTire` qui le
+  // dit, aux trois conditions de `peutTirer`. C'est la moitié du point 8 :
+  // « une tourelle tire, un merlon non ».
+  assert.ok(!libelles('merlon').includes('Portée'), 'le Mur annonce une portée');
+  assert.ok(libelles('merlon').includes('Classe'), 'le Mur ne dit plus ce qu\'il est');
 });

@@ -28,7 +28,7 @@ import { GRILLE } from '../data/combat.js';
 // découpé dans l'atlas du MONDE depuis le 30/08, et c'est la géométrie de cet
 // atlas-là — côté d'une tuile, tuiles par case — qui dit comment le découper.
 // La recopier ici en ferait une seconde vérité.
-import { GEOGRAPHIE, ZOOM_CARTE } from '../data/sites.js';
+import { GEOGRAPHIE, ZOOM_CARTE, EMBLEMES_CARTE } from '../data/sites.js';
 import {
   BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
@@ -1869,12 +1869,17 @@ export function peindreVueDuPanneau(doc, elements, vue) {
     // quatre gouttières recréerait au milieu de chaque paire le vide qu'on
     // vient de retirer.
     //
-    // ⚠⚠ ET C'EST ICI QUE ÇA S'ÉCRIT, DONC UNE SEULE FOIS POUR LES TROIS FICHES.
-    // Cette fonction est déjà le rendu partagé du Chantier et de l'Offense
-    // depuis le lot ERGONOMIE ; la fiche d'une cible ennemie, que les points 7
-    // et 8 du 07/09 demandent, l'appellera comme les deux autres. Trois mises en
-    // page recopiées auraient divergé à la première retouche, et la troisième
-    // n'est pas encore écrite — `ÉD T8 ter` garde le partage.
+    // ⚠⚠ ET C'EST ICI QUE ÇA S'ÉCRIT, DONC UNE SEULE FOIS POUR LES QUATRE
+    // LECTEURS. Rendu partagé du Chantier et de l'Offense depuis le lot
+    // ERGONOMIE ; la fiche d'une cible ennemie l'appelle depuis le lot
+    // FICHES-ENNEMIES, et le JOURNAL DES RAIDS depuis le lot JOURNAL — les deux
+    // du 07/09. Quatre mises en page recopiées auraient divergé à la première
+    // retouche ; `ÉD T8 ter` garde le partage, et il n'a pas eu à bouger.
+    //
+    // ⚠ CE COMMENTAIRE ANNONÇAIT UN FUTUR DEVENU PRÉSENT, ET C'EST LE LOT
+    // JOURNAL QUI LE RÉÉCRIT : il disait « la troisième n'est pas encore
+    // écrite » alors que FICHES-ENNEMIES venait de l'écrire. Un commentaire qui
+    // promet ce qui existe déjà est le mensonge que §6 raconte trois fois.
     //
     // ⚠ UN NOMBRE IMPAIR DE PAIRES LAISSE SA DERNIÈRE SEULE À GAUCHE, et c'est
     // le flux naturel de la grille — aucune règle à écrire. « La pièce » en a
@@ -1913,6 +1918,17 @@ export function peindreVueDuPanneau(doc, elements, vue) {
     elements.corps.appendChild(bloc);
   }
 
+  // ⚠⚠ UNE FICHE PEUT N'AVOIR AUCUN BOUTON, DEPUIS LE LOT FICHES-ENNEMIES.
+  // Les deux fiches du joueur finissent par « Améliorer » ; celle d'une cible
+  // ennemie n'a rien à proposer — « la fiche informe, elle ne suggère rien ».
+  // Lui donner un bouton mort pour satisfaire ce rendu aurait été écrire un
+  // geste qui n'existe pas, et un bouton inerte n'apprend rien (§4).
+  //
+  // ⚠ LA GARDE PORTE SUR L'ÉLÉMENT ET SUR LA VUE, pas sur l'un des deux : un
+  // panneau qui porterait un bouton sans que la vue le décrive le laisserait
+  // avec le texte de la fiche précédente.
+  if (elements.bouton === undefined || elements.bouton === null
+    || vue.bouton === undefined || vue.bouton === null) return;
   elements.bouton.textContent = '';
   const libelle = doc.createElement('span');
   libelle.textContent = vue.bouton.libelle;
@@ -1928,6 +1944,186 @@ export function peindreVueDuPanneau(doc, elements, vue) {
   }
   elements.bouton.append(libelle, note);
   elements.bouton.classList.toggle('impossible', !vue.bouton.possible);
+}
+
+/**
+ * Le mot affiché pour chacun des QUATRE verdicts.
+ *
+ * ⚠⚠ ELLE VIENT DE `ui/raid.js`, ET C'EST UN DÉPLACEMENT — lot JOURNAL, 07/09.
+ * Elle y vivait parce qu'un seul écran lisait un verdict, celui du panneau de
+ * fin de raid ; le journal en lit d'autres, sur DEUX écrans qui ne peuvent pas
+ * importer `ui/raid.js` — il importe déjà ce fichier-ci, donc l'inverse ferait
+ * un CYCLE. Pas une ligne de son corps n'a changé, et `ui/raid.js` la prend
+ * désormais ici.
+ *
+ * ⚠⚠ ET ELLE GAGNE SA QUATRIÈME ENTRÉE, QUE SON PROPRE COMMENTAIRE ANNONÇAIT.
+ * Il écrivait : « "défaite" tout court n'existe pas ici : il est réservé à la
+ * défense, que ce lot n'ouvre pas ». Ce lot-ci l'ouvre. `verdictDeLaDefense` de
+ * `sim/raid-ouvrage.js` rend exactement ce mot quand des bâtiments ont été
+ * entamés sans que la base soit rasée, et sans cette ligne le journal aurait
+ * affiché la clé interne au joueur.
+ */
+export const LIBELLE_VERDICT = {
+  'victoire-totale': 'Victoire totale',
+  victoire: 'Victoire',
+  defaite: 'Défaite',
+  'defaite-totale': 'Défaite totale',
+};
+
+/** Ce qui s'affiche quand le journal est vide — une phrase, jamais un blanc. */
+export const JOURNAL_VIDE = 'Aucun raid mené ni subi pour l\'instant.';
+
+/** Le titre du panneau, écrit une fois pour les deux écrans. */
+export const TITRE_JOURNAL = 'Journal des raids';
+
+/**
+ * Ce que chaque SENS de rapport met dans sa section — et il n'y a que ça.
+ *
+ * ⚠⚠ UNE TABLE, JAMAIS UN `=== 'defense'`. C'est la règle du dépôt prise à la
+ * lettre : un cas particulier nommé à la main est le premier à diverger, et
+ * `ui/chantier.js` porte déjà une garde qui refuse ce littéral pour la table des
+ * terrains. Le sens du rapport a exactement la même forme de problème — deux
+ * moitiés du moteur qui écrivent deux mots — donc il se lit de la même façon.
+ *
+ * ⚠ ET UN SENS INCONNU LÈVE. Les deux moitiés du moteur écrivent `sens` depuis
+ * le lot RAID-B ; un rapport qui en porterait un troisième est un fait de
+ * PROGRAMME, pas de jeu, et l'afficher en silence ferait lire une histoire
+ * fausse.
+ */
+const SENS_DU_RAPPORT = {
+  offense: {
+    titre: 'Raid mené',
+    libelleAdversaire: 'Cible',
+    champAdversaire: 'cible',
+    ligneDuBilan: ligneDuButin,
+  },
+  defense: {
+    titre: 'Raid subi',
+    libelleAdversaire: 'Assaillant',
+    champAdversaire: 'attaquant',
+    ligneDuBilan: ligneDesPertes,
+  },
+};
+
+/**
+ * Une entrée du journal : un rapport de combat, en paires.
+ *
+ * ⚠⚠ RIEN N'EST RECALCULÉ, ET C'EST TOUTE LA RÈGLE DU LOT. Un rapport est le
+ * résultat FIGÉ d'un combat déjà résolu ; recalculer un butin ou une issue
+ * depuis l'état d'aujourd'hui donnerait un chiffre différent de celui qu'Ethan a
+ * vu au moment du raid, et il aurait raison de le croire faux. Cette fonction ne
+ * lit QUE le rapport — et `tickCourant`, pour dire depuis quand.
+ *
+ * @param {object} rapport une entrée d'`etat.rapports`
+ * @param {number} tickCourant `etat.horloge.nbTicks`
+ * @returns {{titre: string, lignes: Array<object>}}
+ */
+function sectionDuRapport(rapport, tickCourant) {
+  const forme = SENS_DU_RAPPORT[rapport.sens];
+  if (forme === undefined) {
+    throw new RangeError(`journal : sens « ${rapport.sens} » inconnu`);
+  }
+  const qui = rapport[forme.champAdversaire];
+  const nom = EMBLEMES_CARTE[qui?.type]?.nom ?? qui?.type ?? '—';
+  // ⚠ L'ÂGE S'ARRONDIT VERS LE BAS. Un raid d'il y a 59 secondes s'annonce
+  // « 59 s », jamais « 1 min » : c'est du temps ÉCOULÉ, donc un stock, et
+  // `direLaDuree` prend son arrondi en argument pour cette raison exacte.
+  const age = direLaDuree(Math.max(0, tickCourant - rapport.tick), Math.floor);
+  const lignes = [
+    {
+      libelle: forme.libelleAdversaire,
+      avant: `${nom} · niv. ${formaterEntier(qui?.niveau ?? 0)}`,
+      apres: null,
+    },
+    {
+      libelle: 'Position',
+      avant: `r ${formaterEntier(qui?.rangee ?? 0)} · c ${formaterEntier(qui?.colonne ?? 0)}`,
+      apres: null,
+      mineur: true,
+    },
+    {
+      libelle: 'Issue',
+      picto: PICTOGRAMMES.temps,
+      avant: LIBELLE_VERDICT[rapport.verdict] ?? rapport.verdict,
+      apres: null,
+    },
+    forme.ligneDuBilan(rapport),
+  ];
+  return { titre: `${forme.titre} · il y a ${age}`, lignes };
+}
+
+/** Ce que le raid a rapporté — la même paire que le panneau de fin. */
+function ligneDuButin(rapport) {
+  const butin = rapport.butin ?? {};
+  const quartz = butin.quartz ?? 0;
+  const scorie = butin.scorie ?? 0;
+  return {
+    libelle: 'Butin',
+    picto: PICTOGRAMMES.butin,
+    avant: quartz === 0 && scorie === 0
+      ? '—'
+      : `${formaterEntier(quartz)} q · ${formaterEntier(scorie)} s`,
+    apres: null,
+  };
+}
+
+/**
+ * Ce que le rasage a détruit — rien tant que la base tient.
+ *
+ * ⚠⚠ LE BUTIN N'A PAS DE MIROIR EXACT CÔTÉ DÉFENSE, ET C'EST DÉCLARÉ. Un raid
+ * SUBI ne rapporte rien : ce qu'il peut COÛTER est `sanction.perdu`, les
+ * ressources stockées qu'un RASAGE détruit — et cette sanction vaut `null` tant
+ * que la base tient. Une attaque repoussée n'a donc aucun chiffre de perte à
+ * annoncer, et « — » est la seule réponse honnête : composer un total depuis
+ * l'état d'aujourd'hui serait le recalcul que ce lot refuse.
+ */
+function ligneDesPertes(rapport) {
+  const perdu = rapport.sanction?.perdu ?? null;
+  const quartz = perdu?.quartz ?? 0;
+  const scorie = perdu?.scorie ?? 0;
+  return {
+    libelle: 'Perdu au rasage',
+    picto: PICTOGRAMMES.butin,
+    avant: perdu === null || (quartz === 0 && scorie === 0)
+      ? '—'
+      : `${formaterEntier(quartz)} q · ${formaterEntier(scorie)} s`,
+    apres: null,
+  };
+}
+
+/**
+ * La vue du journal — les dix derniers raids, du plus RÉCENT au plus ancien.
+ *
+ * ⚠⚠ UNE SEULE VUE POUR LES DEUX ÉCRANS, ET C'EST LA DEMANDE D'ETHAN PRISE À LA
+ * LETTRE : « Défense et offense : rajouter un bouton rapport, qui permet de voir
+ * les 10 dernières attaques et raids subis. » Deux vues auraient divergé à la
+ * première retouche, et le joueur aurait lu deux histoires de la même partie.
+ *
+ * ⚠⚠ LA FILE SE LIT À L'ENDROIT, LA VUE S'AFFICHE À L'ENVERS — ET LE RETOURNEMENT
+ * SE FAIT SUR UNE COPIE. `garderLeRapport` pousse en queue et jette la tête :
+ * c'est une FILE, et un `reverse()` en place casserait à la fois le rangement et
+ * la borne. `[...rapports]` copie d'abord ; `JRN T6` mesure que l'état n'a pas
+ * bougé après affichage.
+ *
+ * ⚠ ET LA BORNE N'EST PAS RÉÉCRITE ICI. Le journal ne porte JAMAIS plus de
+ * `APRES_RAID.rapportsGardes` entrées — `garderLeRapport` s'en charge à
+ * l'écriture, et `verifierEtat` le garde au chargement. Rogner une seconde fois
+ * à l'affichage mettrait un second dix dans le dépôt, ce que le commentaire de
+ * `src/data/sites.js` redoute nommément.
+ *
+ * @param {Array<object>} rapports `etat.rapports`, jamais modifié
+ * @param {number} tickCourant `etat.horloge.nbTicks`
+ * @returns {{titre: string, sections: Array<object>}}
+ */
+export function vueDuJournal(rapports, tickCourant) {
+  const liste = Array.isArray(rapports) ? rapports : [];
+  // ⚠ UN JOURNAL VIDE SE DIT. Zéro rapport n'est pas une erreur : c'est une
+  // partie qui commence. Une vue sans section rendrait un panneau blanc, et le
+  // joueur croirait le bouton cassé.
+  const sections = liste.length === 0
+    ? [{ titre: JOURNAL_VIDE, lignes: [] }]
+    : [...liste].reverse().map((r) => sectionDuRapport(r, tickCourant));
+  return { titre: TITRE_JOURNAL, picto: PICTOGRAMMES.temps, sections };
 }
 
 /**
@@ -2068,7 +2264,14 @@ export function posablesDeLaDefense(etat) {
  * @param {object} etat
  * @param {number} index indice dans `etat.garnison`
  */
-const LIBELLES_COLONNE_DEGATS = {
+/**
+ * ⚠⚠ EXPORTÉS DEPUIS LE LOT FICHES-ENNEMIES — 07/09. La fiche d'une cible
+ * ennemie dit les mêmes trois choses ; les retaper là-bas aurait donné deux
+ * vocabulaires pour la même grandeur, et le joueur aurait dû traduire d'un
+ * écran à l'autre. C'est la même règle que le rendu partagé juste au-dessus,
+ * appliquée aux MOTS et plus seulement à la mise en page.
+ */
+export const LIBELLES_COLONNE_DEGATS = {
   infanterie: 'Contre l\'infanterie',
   vehicule: 'Contre les véhicules',
   structureOuAviation: 'Contre les structures',
@@ -4618,8 +4821,28 @@ export function initialiserEcranChantier(doc, {
       ligne.hidden = true;
       return;
     }
+    // ⚠⚠ IL NE PARAÎT QUE QUAND IL A QUELQUE CHOSE D'ANORMAL À DIRE — Ethan,
+    // 07/09, point 5 : « enlever la barre "complexe de niv x" ». Cette
+    // phrase-là — « Complexe de défense niv. 7 — garnison intacte » — est ce
+    // qu'on lit justement quand tout va bien, et c'est celle qu'il ne veut plus.
+    //
+    // ⚠ LA LECTURE RETENUE NE PERD AUCUN AVERTISSEMENT, et c'est la seule qui
+    // le garantisse : le bandeau reparaît dès que `etatDeLaGarnison` porte un
+    // `avertissement` — Complexe absent, pièces qui ne reviendront jamais — ou
+    // au moins une pièce `enAttente`. Retirer le bandeau tout court aurait
+    // emporté la règle du 05/09 avec la phrase de confort.
+    //
+    // ⚠ LES DEUX CHAMPS SE LISENT, ILS NE SE DEVINENT PAS. `etatDeLaGarnison`
+    // les rend depuis le lot COMPLEXE ; retester le texte — « est-ce que la
+    // phrase contient "intacte" ? » — serait une seconde lecture du même fait,
+    // et la première retouche de libellé la ferait mentir.
+    const etatGarnison = etatDeLaGarnison(etatCourant);
+    if (!etatGarnison.avertissement && etatGarnison.enAttente === 0) {
+      ligne.hidden = true;
+      return;
+    }
     ligne.hidden = false;
-    ligne.textContent = etatDeLaGarnison(etatCourant).texte;
+    ligne.textContent = etatGarnison.texte;
   }
 
   /**
@@ -4909,6 +5132,36 @@ export function initialiserEcranChantier(doc, {
   // au démarrage, par-dessus la grille, sans qu'aucun test le voie.
   fermerPanneau();
   $('chantier-panneau-fermer').addEventListener('click', fermerPanneau);
+
+  // ⚠⚠ LE JOURNAL DES RAIDS — lot JOURNAL, 07/09, point 14. Le bouton ouvre, le
+  // panneau se peint par `peindreVueDuPanneau`, et la VUE vient de
+  // `vueDuJournal`, écrite une seule fois pour les deux écrans. L'Offense fait
+  // exactement les mêmes six lignes, et `JRN T8` refuse qu'elles divergent.
+  //
+  // ⚠ IL SE PEINT À L'OUVERTURE, PAS À CHAQUE IMAGE. Rien ne peut changer
+  // pendant qu'on le regarde : un rapport n'entre au journal qu'à la RÉSOLUTION
+  // d'un raid, et les deux chemins qui en résolvent un — le bouton Attaquer et
+  // le rattrapage au retour — passent par un autre écran. Le repeindre dix fois
+  // par seconde referait dix sections pour la même image.
+  const panneauJournal = $('chantier-journal-panneau');
+  const elementsJournal = {
+    titre: $('chantier-journal-titre'), corps: $('chantier-journal-corps'), bouton: null,
+  };
+  function fermerLeJournal() { if (panneauJournal !== null) panneauJournal.hidden = true; }
+  fermerLeJournal();
+  $('chantier-journal').addEventListener('click', () => {
+    if (etatCourant === null || panneauJournal === null) return;
+    // ⚠ LE PANNEAU DE DÉTAIL SE FERME, ET C'EST LA LEÇON DU LOT ÉCRAN-DÉFENSE :
+    // deux panneaux de détail au même endroit se recouvriraient, et le second
+    // avalerait les touchers du premier.
+    fermerPanneau();
+    peindreVueDuPanneau(
+      doc, elementsJournal,
+      vueDuJournal(etatCourant.rapports, etatCourant.horloge.nbTicks),
+    );
+    panneauJournal.hidden = false;
+  });
+  $('chantier-journal-fermer').addEventListener('click', fermerLeJournal);
 
   // ⚠ ON DEMANDE, PUIS ON AGIT — même règle que `tenterLaPose` et
   // `executerAction`, et jamais de `try` autour d'`ameliorer`.

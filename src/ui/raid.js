@@ -38,7 +38,7 @@
 // Cet écran FORMATE, il ne mesure pas.
 
 import { EMPLACEMENTS_ASSAUT, BATIMENTS, ECRAN_RAID } from '../data/sites.js';
-import { UNITES } from '../data/combat.js';
+import { UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { TICK_MS } from '../sim/clock.js';
 import {
   deplacerEffectif, problemesDuDeplacementDEffectif, reglerActivite,
@@ -66,7 +66,11 @@ import {
   bornesDuDecalage, bornesDuDecalageX,
 } from '../render/bandes.js';
 import { COTE_SPRITE } from '../data/atlas.js';
-import { listeAffichage } from '../render/scene.js';
+import {
+  listeAffichage, nomAffiche, entitesSurLaCase, classeDe, NOMS_CLASSE,
+} from '../render/scene.js';
+import { porteeQuiTire } from '../render/portee.js';
+import { caseDepuisPixels } from '../render/projection.js';
 import { MUR_CASES, fondDeLaBase } from '../render/fond.js';
 import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
@@ -78,11 +82,14 @@ import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // `couchesDeLUniteDAssaut` porte les QUATRE champs d'une unité d'assaut ; les
 // recopier ici serait se donner une seconde occasion d'écrire `garnison` là où
 // il faut `attaque`, ce que son propre commentaire annonce.
-import { COTE_CASE_MAX, poserCouches } from './chantier.js';
+import {
+  COTE_CASE_MAX, poserCouches, formaterEntier, LIBELLE_VERDICT,
+  peindreVueDuPanneau, LIBELLES_COLONNE_DEGATS,
+} from './chantier.js';
 import { couchesDeLUniteDAssaut } from './offense.js';
 // ⚠ LES PICTOGRAMMES SE DEMANDENT — voir `./pictogramme.js`.
 import {
-  PICTOGRAMME_DU_CHASSIS, PICTOGRAMMES, creerPictogramme,
+  PICTOGRAMME_DU_CHASSIS, PICTOGRAMME_DE_LA_COLONNE, PICTOGRAMMES, creerPictogramme,
 } from './pictogramme.js';
 
 // ---------------------------------------------------------------------------
@@ -109,15 +116,6 @@ if (!BANDES_NAVIGABLES.includes(BANDE_A_L_OUVERTURE)) {
     `ui/raid : « ${BANDE_A_L_OUVERTURE} » n'est pas une bande navigable`,
   );
 }
-
-/** Le mot affiché pour chacun des trois verdicts. */
-export const LIBELLE_VERDICT = {
-  'victoire-totale': 'Victoire totale',
-  victoire: 'Victoire',
-  // ⚠ « DÉFAITE TOTALE », ET « DÉFAITE » TOUT COURT N'EXISTE PAS ICI : il est
-  // réservé à la défense, que ce lot n'ouvre pas. Trois verdicts, trois.
-  'defaite-totale': 'Défaite totale',
-};
 
 /** Le libellé d'un châssis, pour la ligne de réparation induite. */
 const LIBELLE_CHASSIS = {
@@ -273,6 +271,162 @@ export function vaguesDeLArmee(etat) {
  * @param {{rangee: number, colonne: number}} cible
  * @returns {object}
  */
+/** Un milli-PV vaut un millième de point de vie : la table est en PV, le moteur en milli. */
+const MILLE_PV = 1000;
+
+/**
+ * Ce qu'un doigt a le droit de bouger sans que le geste cesse d'être un
+ * toucher — en pixels CSS.
+ *
+ * ⚠ TROIS, LE MÊME NOMBRE QUE `ui/monde.js`, et pour le motif qu'il écrit :
+ * « un doigt ne se pose jamais parfaitement immobile, et compter le moindre
+ * frémissement comme un défilement rendrait le toucher d'un site impossible ».
+ */
+const TOLERANCE_TOUCHER_PX = 3;
+
+/**
+ * La ligne de roster d'une entité de combat — la table dont elle sort.
+ *
+ * ⚠ TROIS TABLES, ET L'APPELANT DOIT SAVOIR LAQUELLE. C'est le contrat que
+ * `porteeQuiTire` pose en toutes lettres : « elle prend la LIGNE, pas
+ * l'identifiant […] réimporter les deux ici mettrait dans ce module une seconde
+ * façon de résoudre un identifiant ». Le dispatch se fait donc une fois, ici, et
+ * il est le MÊME que celui de `nomAffiche` et de `classeDe`.
+ *
+ * @param {object} entite une entité de `src/sim/combat.js`
+ * @returns {object|undefined}
+ */
+function ligneDeLEntite(entite) {
+  if (entite.genre === 'batiment') return BATIMENTS[entite.id];
+  if (entite.genre === 'defense') return DEFENSES[entite.id];
+  return UNITES[entite.id];
+}
+
+/**
+ * La fiche d'une entité du champ de bataille — points 7 et 8 du 07/09.
+ *
+ * Ethan : « En prépa raid, possibilité de cliquer sur une unité ennemie pour
+ * voir ses stats », puis « idem pour les bâtiments ».
+ *
+ * ⚠⚠ ELLE REND LA MÊME FORME QUE LES DEUX AUTRES FICHES, ET C'EST TOUT LE LOT.
+ * `peindreVueDuPanneau` de `ui/chantier.js` est le rendu partagé du Chantier et
+ * de l'Offense depuis le lot ERGONOMIE, et son commentaire annonce celle-ci
+ * depuis le lot ÉCRAN-DÉFENSE : « la fiche d'une cible ennemie, que les points 7
+ * et 8 du 07/09 demandent, l'appellera comme les deux autres ». **Ce lot ne
+ * fournit que des sections et des paires ; il n'écrit pas une ligne de mise en
+ * page.**
+ *
+ * ⚠⚠ RIEN QUI NE SORTE DU MOTEUR. Les PV, le niveau et les trois colonnes de
+ * dégâts sont lus SUR L'ENTITÉ, pas recalculés depuis la table : l'entité porte
+ * déjà l'échelle du niveau, la majoration des POI et celle des modules, et
+ * refaire ce produit ici en donnerait une seconde version. Une fiche d'ennemi
+ * qui mentirait de peu serait pire qu'une fiche absente.
+ *
+ * ⚠ LE NOM SE LIT DANS LE CAMP DE L'ENTITÉ — `nomAffiche`, dont l'en-tête écrit
+ * que la clé est le PROPRIÉTAIRE et jamais le camp. Afficher le nom joueur sur
+ * une pièce de l'Ouvrage serait un mensonge discret et durable.
+ *
+ * ⚠⚠ AUCUNE FLÈCHE DE PALIER : `apres` vaut `null` sur TOUTES les paires. Le
+ * rendu ne dessine « → » que si `apres !== null` ; inventer un palier suivant
+ * pour une pièce qui ne t'appartient pas promettrait une amélioration qui n'est
+ * pas la tienne.
+ *
+ * ⚠ ET ELLE NE RÉPÈTE PAS LE PANNEAU DE LA CIBLE — ni butin, ni force de
+ * défense, ni coût en points d'attaque. Ces trois-là y sont déjà, et les redire
+ * ici les ferait diverger.
+ *
+ * @param {object} entite une entité de `src/sim/combat.js`
+ * @returns {{titre: string, picto: string, sections: Array}}
+ */
+export function ficheDeLEntite(entite) {
+  const ligne = ligneDeLEntite(entite);
+  if (ligne === undefined) throw new RangeError(`raid : pièce « ${entite.id} » inconnue`);
+
+  // ⚠ LES DÉGÂTS VIENNENT DE L'ENTITÉ, ET LES TROIS SE DISENT MÊME À ZÉRO.
+  // « Contre les véhicules : — » est une information de jeu — c'est ce qui
+  // apprend au joueur qu'un Merlon ne tue rien et qu'une Batterie ne touche que
+  // ce qui vole. Un bâtiment et un mur portent `degatsColonne: null` : la table
+  // vide rend les trois tirets, ce qui est exactement vrai.
+  const degats = entite.degatsColonne ?? {};
+  const combat = [{
+    libelle: 'Points de vie',
+    picto: PICTOGRAMMES.pv,
+    avant: formaterEntier(Math.round(entite.pvMaxMilli / MILLE_PV)),
+    apres: null,
+  }];
+  for (const colonne of COLONNES_DEGATS) {
+    const valeur = Math.round((degats[colonne] ?? 0) / MILLE_PV);
+    combat.push({
+      libelle: LIBELLES_COLONNE_DEGATS[colonne],
+      picto: PICTOGRAMME_DE_LA_COLONNE[colonne],
+      // ⚠ UN ZÉRO SE DIT « — », JAMAIS « 0 » — la convention de la fiche d'une
+      // pièce du joueur, reprise à la lettre.
+      avant: valeur === 0 ? '—' : formaterEntier(valeur),
+      apres: null,
+      mineur: true,
+    });
+  }
+
+  // ⚠⚠ LA PORTÉE VIENT DE `porteeQuiTire`, L'UNIQUE ÉCRITURE DU DÉPÔT. Elle
+  // porte les TROIS conditions de `peutTirer` — pas de table de dégâts, portée
+  // nulle, table entièrement à zéro — et c'est elle qui répond au point 8 :
+  // « une tourelle tire, un merlon non ». Un `=== 'defense'` écrit ici serait
+  // une seconde règle, et elle mentirait sur la Ronce, qui a une portée de 1 et
+  // FRANCHIT sans jamais tirer.
+  const portees = porteeQuiTire(ligne);
+  const pieces = [];
+  if (portees !== null) {
+    // ⚠ LA VIRGULE, PAS LE POINT : `String(2.5)` rend « 2.5 », qui est de
+    // l'anglais. Même écriture que la fiche d'une pièce du joueur.
+    pieces.push({
+      libelle: 'Portée',
+      avant: `${String(portees.portee).replace('.', ',')} cases`,
+      apres: null,
+    });
+    // ⚠ LA PORTÉE MINIMALE NE SE DIT QUE SI ELLE EXISTE. Les trois artilleries
+    // portent `porteeMini: 3.5` — elles ne couvrent pas leur propre case — et
+    // une tourelle n'a pas d'angle mort : « Portée minimale : 0 cases » ferait
+    // chercher un trou qu'il n'y a pas.
+    if (portees.porteeMini > 0) {
+      pieces.push({
+        libelle: 'Portée minimale',
+        avant: `${String(portees.porteeMini).replace('.', ',')} cases`,
+        apres: null,
+        mineur: true,
+      });
+    }
+  }
+  pieces.push({
+    libelle: 'Classe',
+    avant: NOMS_CLASSE[classeDe(entite.genre, entite.id)],
+    apres: null,
+  });
+  // ⚠ L'ÉTAT EST UNE PART DES PV MAX, PAS UN ABSOLU — même lecture que la fiche
+  // d'une pièce du joueur : les PV max montent avec le niveau, donc un nombre
+  // nu ne se compare à rien. Un site déjà entamé se lit ici, et c'est ce qui
+  // sert au joueur qui revient dessus.
+  const perdus = entite.pvMaxMilli - entite.pvMilli;
+  pieces.push({
+    libelle: 'État',
+    picto: PICTOGRAMMES.degats,
+    avant: perdus <= 0
+      ? 'intacte'
+      : `${formaterEntier(Math.round((1000 * perdus) / entite.pvMaxMilli / 10))} % de dégâts`,
+    apres: null,
+  });
+
+  return {
+    titre: `${nomAffiche(entite)} · niv. ${formaterEntier(entite.niveau)}`,
+    // ⚠ LA MÊME CLÉ QUE LES DEUX AUTRES FICHES : le rendu est partagé, donc les
+    // trois vues doivent avoir EXACTEMENT les mêmes clés.
+    picto: PICTOGRAMMES.niveau,
+    sections: [
+      { titre: 'Au combat', lignes: combat },
+      { titre: 'La pièce', lignes: pieces },
+    ],
+  };
+}
+
 export function vueDuRaid(etat, cible) {
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
   const problemes = site === null ? [{ code: 'sans-cible', message: 'Plus rien à attaquer ici.' }]
@@ -821,6 +975,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   function entrerDansLeDeroule() {
     deroule = true;
+    // ⚠⚠ LA FICHE D'UNE CIBLE NE SURVIT PAS AU LANCEMENT. Le combat est un
+    // rejeu d'un état DÉJÀ COMMIS : laisser une fiche ouverte par-dessus
+    // ferait croire à une pause qui n'existe pas, et la pièce qu'elle décrit
+    // peut tomber dans la seconde qui suit. Elle se referme donc ici, en plus
+    // d'être interdite pendant le déroulé — les deux, parce que le déroulé
+    // s'ouvre par trois portes et que la garde du toucher ne ferme rien.
+    fermerLaFiche();
     const bas = $('raid-bas');
     if (bas !== null) bas.hidden = true;
     // ⚠⚠ LE DÉROULÉ S'OUVRE SUR LA VUE D'ENSEMBLE, ZOOM COMPRIS. C'est la moitié
@@ -1185,6 +1346,56 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     });
   }
 
+  // --- la fiche d'une cible ennemie ------------------------------------------
+  //
+  // ⚠⚠ POINTS 7 ET 8 DU 07/09. Ethan : « En prépa raid, possibilité de cliquer
+  // sur une unité ennemie pour voir ses stats », puis « idem pour les
+  // bâtiments ». Le contenu est `ficheDeLEntite`, PURE et exportée ; le rendu
+  // est `peindreVueDuPanneau`, partagé avec le Chantier et l'Offense. Ce bloc
+  // ne fait que DÉSIGNER l'entité et poser le panneau.
+
+  const elementsFiche = {
+    titre: $('raid-fiche-titre'),
+    corps: $('raid-fiche-corps'),
+    // ⚠ AUCUN BOUTON, ET C'EST DÉLIBÉRÉ. Le rendu partagé le tolère depuis ce
+    // lot : « la fiche informe, elle ne suggère rien ». Un bouton mort pour
+    // satisfaire une signature aurait été un geste qui n'existe pas.
+    bouton: null,
+  };
+
+  function fermerLaFiche() {
+    const panneau = $('raid-fiche');
+    if (panneau !== null) panneau.hidden = true;
+  }
+
+  /**
+   * Ouvre la fiche sur l'entité qui occupe une case, s'il y en a une.
+   *
+   * ⚠⚠ UNE CASE VIDE NE FAIT RIEN — ni ouvrir, ni fermer. C'est la décision
+   * que le brief demandait d'écrire : fermer une fiche qu'on vient de lire
+   * parce que le doigt a manqué la case de deux pixels serait exactement le
+   * « par surprise » qu'il interdit. La fiche se ferme par son bouton, en
+   * quittant la cible, ou en lançant le raid.
+   *
+   * ⚠ ET C'EST LA DERNIÈRE DE LA LISTE QUI GAGNE. `entitesSurLaCase` peut en
+   * rendre DEUX — l'aviation ne bloque rien et partage sa case avec ce qui est
+   * au sol — et c'est celle du DESSUS qu'on désigne, comme `ui/monde.js`
+   * cherche son site à l'envers pour la même raison.
+   */
+  function ouvrirLaFicheSur(cible) {
+    if (combat === null || cible === null) return;
+    const occupants = entitesSurLaCase(combat, cible.rangee, cible.colonne)
+      .filter((e) => e.camp !== 'attaque');
+    if (occupants.length === 0) return;
+    const panneau = $('raid-fiche');
+    if (panneau === null || elementsFiche.titre === null || elementsFiche.corps === null) return;
+    peindreVueDuPanneau(doc, elementsFiche, ficheDeLEntite(occupants[occupants.length - 1]));
+    panneau.hidden = false;
+  }
+
+  const boutonFermerFiche = $('raid-fiche-fermer');
+  if (boutonFermerFiche !== null) boutonFermerFiche.addEventListener('click', fermerLaFiche);
+
   /** Les contacts en cours, par identifiant — jamais un compteur. */
   const doigts = new Map();
   let pincement = null;
@@ -1240,7 +1451,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       }
       doigts.set(evenement.pointerId, { x: evenement.clientX, y: evenement.clientY });
       if (doigts.size >= 2) { ouvrirPincement(); return; }
-      pointeur = { id: evenement.pointerId, x: evenement.clientX, y: evenement.clientY };
+      pointeur = {
+        id: evenement.pointerId, x: evenement.clientX, y: evenement.clientY,
+        // ⚠ TROIS PIXELS CSS DE TOLÉRANCE, LE MÊME NOMBRE QUE `ui/monde.js` : un
+        // doigt ne se pose jamais parfaitement immobile, et compter le moindre
+        // frémissement comme un promenage rendrait le toucher d'une pièce
+        // impossible. Écrire une seconde tolérance ici ferait deux gestes
+        // différents pour le même doigt sur deux canevas voisins.
+        departX: evenement.clientX, departY: evenement.clientY, glisse: false,
+      };
     });
 
     canvas.addEventListener('pointermove', (evenement) => {
@@ -1269,17 +1488,53 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       decalageY -= (evenement.clientY - pointeur.y) * dpr;
       pointeur.x = evenement.clientX;
       pointeur.y = evenement.clientY;
+      if (Math.abs(evenement.clientX - pointeur.departX) > TOLERANCE_TOUCHER_PX
+        || Math.abs(evenement.clientY - pointeur.departY) > TOLERANCE_TOUCHER_PX) {
+        pointeur.glisse = true;
+      }
       dimensionner();
       dessiner();
     });
 
-    const relacher = (evenement) => {
+    const relacher = (evenement, toucher) => {
       doigts.delete(evenement.pointerId);
       if (doigts.size < 2) pincement = null;
-      if (pointeur !== null && evenement.pointerId === pointeur.id) pointeur = null;
+      if (pointeur === null || evenement.pointerId !== pointeur.id) return;
+      const aGlisse = pointeur.glisse;
+      pointeur = null;
+      // ⚠⚠ JAMAIS PENDANT LE DÉROULÉ. Le combat est un rejeu d'un état déjà
+      // commis ; ouvrir une fiche au milieu ferait croire à une pause qui
+      // n'existe pas, et l'effondrement d'une pièce dure deux secondes qu'un
+      // toucher ne doit pas détourner. `deroule` est exactement « un déroulé est
+      // en cours » — la même garde que le `visibilitychange` du lot
+      // RETOUR-DE-RAID.
+      //
+      // ⚠ ET UN PINCEMENT NE VAUT PAS UN TOUCHER : `pointercancel` passe ici
+      // avec `toucher` à faux, comme un doigt qui a promené la vue.
+      if (!toucher || aGlisse || deroule || projection === null) return;
+      const cadre = canvas.getBoundingClientRect();
+      const dpr = (doc.defaultView && doc.defaultView.devicePixelRatio) || 1;
+      // ⚠⚠ LE CHEMIN TOUCHER → CASE EST CELUI DU BANC, ET IL N'EN EXISTE QU'UN :
+      // `caseDepuisPixels` de `render/projection.js`, la réciproque exacte de
+      // `xDeColonne` et `yDeRangee` qui ont servi à dessiner. Refaire la
+      // division ici en ferait une seconde, et la première divergence se lirait
+      // comme un doigt qui désigne la voisine.
+      //
+      // ⚠⚠ ET LES DEUX DÉCALAGES N'ENTRENT PAS DANS LE CALCUL — TROUVÉ PAR UN
+      // TEST, PAS PAR RELECTURE. Ils sont DÉJÀ dans `projection` :
+      // `calculerProjection` les reçoit et les replie dans `margeX` et `margeY`
+      // — mesuré, `margeY` passe de 54 à −546 quand on lui donne le décalage de
+      // l'ouverture. Les rajouter ici les comptait DEUX FOIS, et le doigt
+      // désignait une case cinq rangées plus haut : le premier balayage de
+      // `FE T1` n'atteignait aucune pièce des rangées 9 et 10.
+      ouvrirLaFicheSur(caseDepuisPixels(
+        projection,
+        (evenement.clientX - cadre.left) * dpr,
+        (evenement.clientY - cadre.top) * dpr,
+      ));
     };
-    canvas.addEventListener('pointerup', relacher);
-    canvas.addEventListener('pointercancel', relacher);
+    canvas.addEventListener('pointerup', (e) => relacher(e, true));
+    canvas.addEventListener('pointercancel', (e) => relacher(e, false));
   }
 
   // --- les six boutons -------------------------------------------------------
@@ -1315,6 +1570,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // l'ouverture d'une cible aussi. Un chrome masqué qui ne revient pas laisse
     // le joueur enfermé dans un écran sans onglets.
     quitterLeDeroule();
+    fermerLaFiche();
     for (const id of ['raid-sim', 'raid-fin', 'raid-bandeau', 'raid-vitesses']) {
       const bloc = $(id);
       if (bloc !== null) bloc.hidden = true;

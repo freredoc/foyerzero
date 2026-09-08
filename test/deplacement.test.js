@@ -16,15 +16,19 @@ import {
 } from '../src/sim/deplacement.js';
 import {
   creerEtat, serialiser, charger, migrer, SAVE_VERSION, tickJeu, rattraperJeu, poser,
+  ajouterUneBase,
 } from '../src/sim/state.js';
-import { subirUnRaid, basesAttaquantes } from '../src/sim/raid-ouvrage.js';
+import { subirUnRaid, basesAttaquantes, nombreDAttaquantes } from '../src/sim/raid-ouvrage.js';
 import { casesDeLAnneau, ANNEAUX } from '../src/sim/satellites.js';
 import { carteDesPoi } from '../src/sim/poi.js';
 import { estSurLaCarte, niveauDeLaRangee, positionDepartJoueur } from '../src/sim/carte.js';
 import { distanceCarreeCases } from '../src/sim/points-attaque.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
-import { DEPLACEMENT, GEOGRAPHIE } from '../src/data/sites.js';
+import { DEPLACEMENT, GEOGRAPHIE, RAID_OUVRAGE } from '../src/data/sites.js';
+import { estBaseOuvrage } from '../src/sim/peuplement.js';
+import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
+import { caseRasee } from '../src/sim/ruines.js';
 import { GRILLE } from '../src/data/combat.js';
 import {
   centreDeLaCase, traitDeLaFleche, geometrieDuHalo,
@@ -627,4 +631,225 @@ test('DÉPLACEMENT — un déplacement change les cibles à portée, et ça se m
   }
   assert.ok(bougees > 10,
     `${bougees} graines sur 20 seulement voient leurs cibles changer : le déplacement ne mord pas`);
+});
+
+// ---------------------------------------------------------------------------
+// lot DÉPLACEMENT-ÉCLAIRÉ — 07/09/2026
+//
+// Ethan, point 1 : « confirmation avant de bouger la base + indiquer le nombre
+// de base ouvrage à portée », précisé le même jour : « nombre de base ouvrage
+// qui pourront attaquer ».
+//
+// ⚠⚠ CE N'EST PAS « LES BASES À PORTÉE DE RAID », ET LES DEUX ENSEMBLES NE
+// COÏNCIDENT PAS. Il faut le TYPE et le NIVEAU MINIMAL en plus de la portée :
+// mesuré ci-dessous, un camp et un avant-poste à trois cases comptent pour
+// ZÉRO, et une base de niveau 9 aussi.
+//
+// ⚠ LES CINQ TESTS QUI SUIVENT SONT DES TESTS DE MOTEUR, et ils vivent ici
+// plutôt que dans `raid-ouvrage.test.js` parce que c'est le DÉPLACEMENT qui a
+// demandé la fonction. `DÉ T4` est celui qui compte : il confronte le chiffre
+// annoncé à ce que `basesAttaquantes` produirait.
+// ---------------------------------------------------------------------------
+
+/**
+ * Les bases de l'Ouvrage réellement présentes dans le carré de balayage d'une
+ * position, avec leur distance au carré et leur niveau.
+ *
+ * ⚠ ELLE INTERROGE LE MONDE, ELLE NE LE FABRIQUE PAS. Une base de l'Ouvrage est
+ * DÉRIVÉE de la graine : écrire « une base en (190, 16) » dans un montage ne la
+ * ferait pas exister. Ce qu'on peut choisir, c'est ce qu'on RASE.
+ */
+function ouvragesAutour(etat, position) {
+  const rayon = GEOGRAPHIE.rayonAttaque;
+  const trouvees = [];
+  for (let r = position.rangee - rayon; r <= position.rangee + rayon; r += 1) {
+    for (let c = position.colonne - rayon; c <= position.colonne + rayon; c += 1) {
+      if (!estSurLaCarte(r, c)) continue;
+      if (r === position.rangee && c === position.colonne) continue;
+      if (!estBaseOuvrage(etat.graine, r, c)) continue;
+      trouvees.push({
+        rangee: r,
+        colonne: c,
+        niveau: niveauDeLaRangee(r),
+        d2: distanceCarreeCases(position, { rangee: r, colonne: c }),
+      });
+    }
+  }
+  return trouvees;
+}
+
+/** Rase tout ce que la liste ne garde pas, pour que le montage soit exact. */
+function neGarderQue(etat, position, gardees) {
+  const cles = new Set(gardees.map((b) => `${b.rangee}:${b.colonne}`));
+  for (const b of ouvragesAutour(etat, position)) {
+    if (cles.has(`${b.rangee}:${b.colonne}`)) continue;
+    etat.basesRasees.push(caseRasee(b.rangee, b.colonne));
+  }
+}
+
+test('DÉ T1 — le compte suit la PORTÉE : une dedans, une dehors, il en reste une', () => {
+  // ⚠⚠ LE MONTAGE PORTE LA BORNE, ET C'EST TOUTE SA VALEUR. Deux bases toutes
+  // les deux DEDANS ne diraient rien de la portée — elles compteraient toutes
+  // les deux quelle que soit la règle. Il faut une base juste dedans et une
+  // juste dehors, et le « dehors » doit rester DANS le carré de balayage :
+  // au-delà, `ciblesAPortee` ne la regarde même pas, et le test mesurerait le
+  // balayage au lieu de la portée.
+  const rayon = GEOGRAPHIE.rayonAttaque;
+  const carre = rayon * rayon;
+  let montage = null;
+  for (let graine = 1; graine <= 400 && montage === null; graine += 1) {
+    const etat = partie(graine, 200);
+    const position = baseCourante(etat).position;
+    const autour = ouvragesAutour(etat, position)
+      .filter((b) => b.niveau >= RAID_OUVRAGE.niveauMinimal);
+    const dedans = autour.find((b) => b.d2 <= carre);
+    const dehors = autour.find((b) => b.d2 > carre);
+    if (dedans === undefined || dehors === undefined) continue;
+    neGarderQue(etat, position, [dedans, dehors]);
+    montage = { etat, position, dedans, dehors };
+  }
+  assert.ok(montage !== null, 'aucune graine ne porte le couple dedans/dehors cherché');
+
+  // Le montage mesure quelque chose : les deux bases sont bien dans le CARRÉ,
+  // et une seule dans le DISQUE.
+  assert.ok(montage.dedans.d2 <= carre && montage.dehors.d2 > carre);
+  assert.ok(Math.max(
+    Math.abs(montage.dehors.rangee - montage.position.rangee),
+    Math.abs(montage.dehors.colonne - montage.position.colonne),
+  ) <= rayon, 'la base « dehors » est hors du balayage : le test mesurerait autre chose');
+
+  assert.equal(nombreDAttaquantes(montage.etat, montage.position), 1);
+});
+
+test('DÉ T2 — le NIVEAU MINIMAL compte : niveau 9 ne compte pas, niveau 10 si', () => {
+  // ⚠ LE NIVEAU D'UNE BASE DE L'OUVRAGE SE LIT SUR SA RANGÉE, et il n'y a pas
+  // d'autre règle. Mesuré : les rangées 248 à 252 rendent 10, les rangées 253 à
+  // 257 rendent 9 — la frontière est donc atteignable dans un même disque de
+  // rayon 10.
+  const seuil = RAID_OUVRAGE.niveauMinimal;
+  const carre = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAttaque;
+  let montage = null;
+  for (let graine = 1; graine <= 400 && montage === null; graine += 1) {
+    const etat = partie(graine, 252);
+    const position = baseCourante(etat).position;
+    const autour = ouvragesAutour(etat, position).filter((b) => b.d2 <= carre);
+    const dessus = autour.find((b) => b.niveau >= seuil);
+    const dessous = autour.find((b) => b.niveau === seuil - 1);
+    if (dessus === undefined || dessous === undefined) continue;
+    neGarderQue(etat, position, [dessus, dessous]);
+    montage = { etat, position, dessus, dessous };
+  }
+  assert.ok(montage !== null, 'aucune graine ne porte le couple niveau 9 / niveau 10 cherché');
+  assert.equal(montage.dessous.niveau, seuil - 1, 'le montage ne mesure pas la borne');
+  assert.ok(montage.dessus.niveau >= seuil);
+  assert.equal(nombreDAttaquantes(montage.etat, montage.position), 1);
+});
+
+test('DÉ T3 — le TYPE compte : un camp et un avant-poste à portée valent ZÉRO', () => {
+  // ⚠ LE FILTRE EST DANS LES DONNÉES — `TYPES_SITE[x].attaqueLeJoueur`. Un camp
+  // et un avant-poste sont du BUTIN, pas une menace, et le bord ambre de la
+  // carte le dit déjà au joueur.
+  const etat = partie(7, 200);
+  const position = baseCourante(etat).position;
+  neGarderQue(etat, position, []);
+  assert.equal(nombreDAttaquantes(etat, position), 0, 'le montage part d\'un monde vide');
+
+  // Les satellites, eux, SE POSENT : ce sont de l'histoire, pas une dérivation.
+  const laBase = baseCourante(etat);
+  laBase.satellites.presents = [
+    {
+      type: 'camp', niveau: 30, rangee: position.rangee - 3, colonne: position.colonne,
+      instance: 1, tickDu: 0,
+    },
+    {
+      type: 'avantPoste', niveau: 40, rangee: position.rangee + 4, colonne: position.colonne,
+      instance: 2, tickDu: 0,
+    },
+  ];
+  // Le montage mesure quelque chose : les deux sites sont bien VUS à portée.
+  const vus = ciblesAPortee(etat, { position }).filter((s) => s.type !== 'base');
+  assert.equal(vus.length, 2, 'le montage ne pose pas ses deux satellites à portée');
+  for (const s of vus) assert.ok(s.niveau >= RAID_OUVRAGE.niveauMinimal, 'le niveau ne discrimine pas ici');
+
+  assert.equal(nombreDAttaquantes(etat, position), 0);
+});
+
+test('DÉ T4 — UNE SEULE ÉCRITURE : le compte annoncé égale ce que `basesAttaquantes` produit', () => {
+  // ⚠⚠ C'EST LE TEST CENTRAL DU LOT. Sans lui, rien ne garantit que l'annonce
+  // faite au joueur et le moteur qui la démentira disent la même chose — et la
+  // divergence serait plausible, stable, et découverte au premier raid subi.
+  // C'est ce que le lot FICHE-JUSTE a réparé entre `voisinsQualifiants` et
+  // `voisinsQualifiantsParCase`, où un commentaire affirmait l'accord sans que
+  // rien ne le mesure.
+  const etat = partie(2026, 200);
+  const laBase = baseCourante(etat);
+  let vus = 0;
+  let nonNuls = 0;
+  for (let i = 0; i < 100; i += 1) {
+    const rangee = 20 + ((i * 37) % 260);
+    const colonne = 1 + ((i * 13) % GEOGRAPHIE.carte.largeur);
+    laBase.position.rangee = rangee;
+    laBase.position.colonne = colonne;
+    const attendu = new Set(
+      basesAttaquantes(etat).map((s) => `${s.rangee}:${s.colonne}`),
+    ).size;
+    assert.equal(
+      nombreDAttaquantes(etat, { rangee, colonne }), attendu,
+      `(${rangee}, ${colonne}) : l'annonce et le moteur ont divergé`,
+    );
+    vus += 1;
+    if (attendu > 0) nonNuls += 1;
+  }
+  // ⚠ ET LE BALAYAGE MESURE QUELQUE CHOSE. Cent positions qui rendraient toutes
+  // zéro passeraient sur n'importe quel code — c'est la faute que ce fichier
+  // s'est déjà faite au lot SATELLITES-RESPAWN, où une graine unique laissait
+  // la falsification muette.
+  assert.equal(vus, 100);
+  assert.ok(nonNuls >= 50, `seulement ${nonNuls} positions sur 100 portent une attaquante`);
+});
+
+test('DÉ T5 — une attaquante compte pour UNE, même à portée de deux bases du joueur', () => {
+  // ⚠ DEPUIS RAID-CIBLE-UNIQUE, une base de l'Ouvrage ne frappe qu'une cible.
+  // Ce qu'on annonce, ce sont les BASES OUVRAGE qui pourront frapper CETTE
+  // position — une par base, jamais une par paire.
+  const etat = partie(2026, 200);
+  const position = { rangee: 200, colonne: 16 };
+  baseCourante(etat).position.rangee = position.rangee;
+  baseCourante(etat).position.colonne = position.colonne;
+  const seule = nombreDAttaquantes(etat, position);
+  assert.ok(seule > 0, 'le montage ne mesure rien : aucune attaquante');
+
+  // ⚠⚠ LA SECONDE BASE NE SE POSE PAS SUR UNE ATTAQUANTE, ET LA PREMIÈRE
+  // ÉCRITURE DU MONTAGE L'A FAIT. Mesuré : le compte tombait de 49 à 48, dans le
+  // sens INVERSE de la faute qu'on cherche — `siteDeLaCase` rend `null` sur
+  // toute case occupée par une base du joueur, donc fonder sur une base de
+  // l'Ouvrage l'efface de la carte. Le montage cherche donc une case libre.
+  const carreDePortee = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAttaque;
+  const occupees = new Set(
+    ouvragesAutour(etat, position).map((b) => `${b.rangee}:${b.colonne}`),
+  );
+  let seconde = null;
+  for (let d = 1; d <= 4 && seconde === null; d += 1) {
+    for (const candidate of [
+      { rangee: position.rangee + d, colonne: position.colonne },
+      { rangee: position.rangee, colonne: position.colonne + d },
+      { rangee: position.rangee - d, colonne: position.colonne },
+    ]) {
+      if (occupees.has(`${candidate.rangee}:${candidate.colonne}`)) continue;
+      if (!estSurLaCarte(candidate.rangee, candidate.colonne)) continue;
+      seconde = candidate;
+      break;
+    }
+  }
+  assert.ok(seconde !== null, 'aucune case libre pour poser la seconde base');
+  ajouterUneBase(etat, seconde);
+  assert.equal(etat.bases.length, 2, 'la seconde base n\'a pas été fondée');
+  const partagees = ouvragesAutour(etat, position)
+    .filter((b) => b.d2 <= carreDePortee
+      && b.niveau >= RAID_OUVRAGE.niveauMinimal
+      && distanceCarreeCases(seconde, b) <= carreDePortee);
+  assert.ok(partagees.length > 0, 'le montage ne partage aucune attaquante entre les deux bases');
+
+  assert.equal(nombreDAttaquantes(etat, position), seule,
+    'le compte d\'une position a doublé quand une seconde base est arrivée à portée');
 });

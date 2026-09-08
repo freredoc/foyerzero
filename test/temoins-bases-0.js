@@ -3043,3 +3043,263 @@ export const EMPREINTES_PAR_GRAINE_TERRITOIRE_LU = {
 export const RAPPORTS_OUVRAGE_TERRITOIRE_LU = {
   6: '2bacf3a789e060ef',
 };
+/**
+ * Ce que le lot RETOUCHES a déplacé — sixième couche par-dessus celle de
+ * TERRITOIRE-LU.
+ *
+ * ⚠⚠ CE QUI A CHANGÉ, ET RIEN D'AUTRE : le point 15 du 07/09 contraint la CASE
+ * qu'un satellite retient quand deux apparitions ou plus tombent au même tick.
+ * La saveur est une propriété de la case — arbitrage du 29/08 —, donc la
+ * contraindre déplace la case, donc le site, donc son butin. Mesuré : les TROIS
+ * satellites d'une base neuve paraissent au même tick, et sur 200 graines les
+ * deux camps sortaient du même bord **91 fois sur 200 ; après, ZÉRO**.
+ *
+ * ⚠⚠ L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE. En neutralisant la SEULE ligne de
+ * la contrainte — `dues` forcé à zéro —, le témoin retombe à **0 couple
+ * déplacé** : les soixante-dix couples viennent tous de là, et les trois autres
+ * points du lot n'atteignent pas le moteur. C'est le protocole du lot
+ * SATELLITES-RESPAWN, repris tel quel.
+ *
+ * ⚠ LA PREMIÈRE PHASE TOUCHÉE EST `p02_6h`, celle où les satellites paraissent —
+ * **`p01` est identique AU BIT**. La chaîne se lit ensuite d'un bout à l'autre :
+ * le camp change de case, donc de saveur, donc son butin ; d'où `economie`,
+ * `rapports`, `recherche`, `armee` et `sitesEntames` à partir du premier raid.
+ *
+ * ⚠ ET `prochaineInstanceSatellite` NE BOUGE QU'À PARTIR DE `p08_100ticks` : le
+ * compte d'instances est le même tant qu'aucun satellite n'a été détruit ni
+ * relevé. La contrainte ne consomme aucun tirage de plus — c'est ce que dit
+ * l'immobilité de ce champ dans les premières phases.
+ */
+export const DEPLACES_PAR_RETOUCHES = {
+  p02_6h: {
+    satellites: '56f1dffeb27e4c6c',
+  },
+  p03_batiComplet: {
+    satellites: 'd9e230cea8df107e',
+  },
+  p04_arme: {
+    satellites: 'd9e230cea8df107e',
+  },
+  p05_18h: {
+    satellites: '095950c5fbbff6aa',
+  },
+  p06_relu: {
+    satellites: '095950c5fbbff6aa',
+  },
+  p07_raidProcheApres: {
+    sitesEntames: '249eb6bd5d554414',
+    attaque: 'b858ba273275702f',
+    rapports: '3b060ceabc5310be',
+    armee: '6eea960244053440',
+    economie: '5d42e19a16be12b1',
+    satellites: '47205630cf0bd71f',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p08_100ticks: {
+    sitesEntames: '249eb6bd5d554414',
+    attaque: '70c0b9d3687bfd44',
+    rapports: '3b060ceabc5310be',
+    armee: '6eea960244053440',
+    economie: '93e2b408dc09271f',
+    satellites: 'b39e8dd02f822752',
+    prochaineInstanceSatellite: 'c07e8d1e9d0e953e',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p09_deplace: {
+    sitesEntames: '249eb6bd5d554414',
+    attaque: '70c0b9d3687bfd44',
+    rapports: '3b060ceabc5310be',
+    armee: '6eea960244053440',
+    economie: '93e2b408dc09271f',
+    satellites: 'b39e8dd02f822752',
+    prochaineInstanceSatellite: 'c07e8d1e9d0e953e',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p10_montee: {
+    sitesEntames: '249eb6bd5d554414',
+    attaque: '70c0b9d3687bfd44',
+    rapports: '3b060ceabc5310be',
+    armee: '6eea960244053440',
+    economie: '93e2b408dc09271f',
+    satellites: 'b39e8dd02f822752',
+    prochaineInstanceSatellite: 'c07e8d1e9d0e953e',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p11_raidOuvrageApres: {
+    recherche: '9b585724747201d4',
+    sitesEntames: '5b08bf3b7acecc0f',
+    attaque: 'dab12a455daf1eec',
+    rapports: 'e78f149ccbb3bc4e',
+    armee: '37c469979257bc01',
+    economie: '93e2b408dc09271f',
+    satellites: 'b39e8dd02f822752',
+    prochaineInstanceSatellite: 'c07e8d1e9d0e953e',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p12_veilleDuRaid: {
+    recherche: '9b585724747201d4',
+    sitesEntames: '93316ea3d6a2ec98',
+    attaque: 'a95c282a2c402c4d',
+    rapports: 'e78f149ccbb3bc4e',
+    armee: '37c469979257bc01',
+    economie: '93e2b408dc09271f',
+    satellites: 'b4c83f45fbe4ea5d',
+    prochaineInstanceSatellite: 'fb7305350100f1cd',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p13_apresLeRaid: {
+    recherche: '9b585724747201d4',
+    sitesEntames: '13acfec9e01a6f50',
+    attaque: 'd11d4acd25daabbe',
+    rapports: '2788812df240632f',
+    armee: '37c469979257bc01',
+    economie: '9ba3ae4ca27c1389',
+    satellites: '7d545ca163860782',
+    prochaineInstanceSatellite: '7eb95128404d8598',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+  p14_sousLeFeu: {
+    recherche: '9b585724747201d4',
+    sitesEntames: '8cff6d01c96f55cd',
+    rapports: '4d9a157157f08357',
+    armee: '37c469979257bc01',
+    satellites: '7f86981d319daacb',
+    prochaineInstanceSatellite: '7095db6de24f4c5d',
+    satellitesDetruits: 'c937945c4387a399',
+  },
+};
+
+/**
+ * L'empreinte par graine, recalculée : les vingt-cinq divergent dès que les
+ * satellites paraissent.
+ */
+export const EMPREINTES_PAR_GRAINE_RETOUCHES = {
+  1: '8e0ddb4e8b25c14c',
+  2: '185efeb488876e7a',
+  3: '9d93ffa8a86b68e8',
+  4: '66825f1e050e6323',
+  5: '81604cc98c43d854',
+  6: '4399c86aa434fff7',
+  7: '134902221d764f8a',
+  8: '9c22db1980b4848d',
+  9: 'cc64c4db8d2baf71',
+  10: '7dfdec4a7ea1bb7a',
+  11: '58b57b3550aa0d59',
+  12: '53c20368c8404207',
+  13: '2f446facc7311610',
+  14: '80337e6fea1d5625',
+  15: '3628c1ea8468d589',
+  16: '1d0c0fbdbb516c9c',
+  17: 'a63e84520115d745',
+  18: 'cedf63c0dddee00d',
+  19: '18917dd0627513a6',
+  20: 'c7d656fbf363d837',
+  21: 'bef5625734f97257',
+  22: '386af652005870c0',
+  23: 'c0a1ba4e8ce92852',
+  24: '4e148186cce6804c',
+  25: '879d73a800bfa26e',
+};
+
+/**
+ * Les vingt-cinq rapports du raid de PROXIMITÉ, déplacés : le camp attaqué
+ * n'est plus sur la même case, donc plus de la même saveur, donc son butin
+ * n'est plus le même. Ce qui NE bouge pas — nombre de cibles, cible retenue,
+ * non-fuite et exactitude de la simulation — dit que seule la saveur a changé.
+ */
+export const RAPPORTS_PROCHE_RETOUCHES = {
+  1: '72747118dbebb543',
+  2: '860818f94bdabae6',
+  3: '5dfa8d989d400aaf',
+  4: 'd5a23ab32e15a6d1',
+  5: '6800486d792712b1',
+  6: 'e6ddd213225ec7eb',
+  7: 'fcf8f07e8bfb11b9',
+  8: '100593d24150d6d6',
+  9: 'f44782982a880db0',
+  10: '1b88d7f0ba2fcde0',
+  11: '21998c3431f05139',
+  12: 'd71f0ca9326d4ce5',
+  13: 'fc9623c956bc5a51',
+  14: '78e4c1b87f31218a',
+  15: '4f31d1eabe5761d5',
+  16: '023b39c0d28b8bb8',
+  17: 'b5444a459ac10b41',
+  18: '30728017f7752fbd',
+  19: '0a7f1be7aeedbe69',
+  20: '90efabbeff9973c8',
+  21: 'b509c00b4bfb6f00',
+  22: 'f8b336095a19f929',
+  23: 'c50629e445a20316',
+  24: '74cb8f7748727a01',
+  25: '25dedf2979a8839a',
+};
+
+/**
+ * Les vingt-cinq rapports du raid LOINTAIN, déplacés pour la même raison : ce
+ * que la base a en stock au moment où l'Ouvrage la frappe dépend de ce que les
+ * camps lui ont rapporté.
+ */
+export const RAPPORTS_OUVRAGE_RETOUCHES = {
+  1: '8ea1e5b8e018b2fa',
+  2: 'f9fcd365765b8cb6',
+  3: '5279876d4bdd6c90',
+  4: '327e76667a80fe87',
+  5: '26dff4fdae8dced6',
+  6: '01710939cc489206',
+  7: '2f2e22ed6af7682a',
+  8: 'e83e6dd91d6595a2',
+  9: '01c2df9232c049b3',
+  10: 'c03169a1271445bf',
+  11: '52aeca17a27357f8',
+  12: 'a7e38854caa153dd',
+  13: '59174a4d009ec5bc',
+  14: 'dabaf8f5837dcff9',
+  15: 'cdd4b7716323676b',
+  16: '3c59320f2c44cc39',
+  17: '2d4eebb71a00af3f',
+  18: 'bb915205cb198f41',
+  19: '39ae89e6fbe284b6',
+  20: 'eb10ac0331aabf60',
+  21: '0400bb11d9d4964e',
+  22: '727195dd897c7b7e',
+  23: '4d8d6248fbb7a927',
+  24: 'db6123f5f55bd0f3',
+  25: 'fa88f3118fcfb7da',
+};
+
+/**
+ * La CIBLE du raid de proximité, déplacée par le lot RETOUCHES sur QUATORZE
+ * graines — et sur quatorze seulement.
+ *
+ * ⚠⚠ C'EST LE SEUL SCALAIRE QUI BOUGE, MESURÉ CONTRE LES TREIZE AUTRES. Gestes
+ * de construction, gestes d'armement, TAILLE DE LA SAUVEGARDE, cases
+ * atteignables, déplacement, nombre de bases attaquantes, nombre de cibles des
+ * DEUX raids, cible du raid lointain, non-fuite et exactitude des DEUX
+ * simulations : identiques sur 25 graines sur 25. C'est cette moitié-là qui dit
+ * que le lot ne touche QUE la case d'un satellite.
+ *
+ * ⚠ ONZE GRAINES RESTENT GARDÉES CONTRE LA CAPTURE D'ORIGINE — leur camp le
+ * plus proche tombe sur la même case qu'avant. Une couche qui aurait tout
+ * déplacé ne prouverait rien.
+ *
+ * ⚠ ET LA TAILLE DE LA SAUVEGARDE NE BOUGE PAS D'UN OCTET : rien n'entre dans
+ * l'état. La saveur reste DÉRIVÉE de la case, ce qui est exactement pourquoi
+ * `SAVE_VERSION` n'a pas à bouger.
+ */
+export const CIBLE_PROCHE_RETOUCHES = {
+  1: '296,16:camp:n1',
+  3: '294,15:camp:n1',
+  5: '294,15:camp:n1',
+  7: '296,16:camp:n1',
+  8: '295,14:camp:n1',
+  9: '295,15:camp:n1',
+  11: '294,15:camp:n1',
+  12: '294,17:camp:n1',
+  13: '294,17:camp:n1',
+  14: '295,17:camp:n1',
+  18: '294,16:camp:n1',
+  21: '295,17:camp:n1',
+  24: '296,16:camp:n1',
+  25: '294,16:camp:n1',
+};

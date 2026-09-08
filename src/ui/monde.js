@@ -39,6 +39,7 @@ import {
   coutDUnRaid, distanceCarreeCases, casesArrondiesAuSuperieur,
 } from '../sim/points-attaque.js';
 import { problemesDuRaid } from '../sim/raid.js';
+import { nombreDAttaquantes } from '../sim/raid-ouvrage.js';
 import {
   problemesDuDeplacement, deplacerLaBase, casesAtteignables,
   ticksAvantProchainDeplacement,
@@ -1211,6 +1212,36 @@ export function teinteDAttente() {
  * @param {object} etat
  * @returns {string}
  */
+/**
+ * Ce que la confirmation d'un déplacement annonce, pour un compte donné.
+ *
+ * ⚠⚠ ZÉRO EST UNE INFORMATION, PAS UNE LIGNE À MASQUER. « Aucune base ne pourra
+ * vous attaquer » est souvent le renseignement exact que le joueur cherche en
+ * fuyant ; taire la ligne le laisserait croire que le chiffre n'a pas pu être
+ * calculé. Ethan, 07/09, point 1.
+ *
+ * ⚠ ELLE EST PURE ET EXPORTÉE parce que c'est la seule façon d'éprouver le
+ * libellé sans monter l'écran, et parce qu'elle n'a rien à savoir de l'état :
+ * le COMPTE vient du moteur, elle n'en fait qu'une phrase.
+ *
+ * ⚠ « POURRONT », PAS « SONT À PORTÉE ». Les deux ensembles ne coïncident pas —
+ * la portée d'attaque du joueur et celle de l'Ouvrage sont la même distance,
+ * mais toutes les bases de l'Ouvrage n'attaquent pas : il y faut le type ET le
+ * niveau minimal. C'est ce qu'Ethan a tranché en précisant « qui pourront
+ * attaquer ».
+ *
+ * @param {number} nombre
+ * @returns {string}
+ */
+export function phraseDesAttaquantes(nombre) {
+  if (!Number.isInteger(nombre) || nombre < 0) {
+    throw new RangeError(`monde : « ${nombre} » attaquantes — entier ≥ 0 attendu`);
+  }
+  if (nombre === 0) return 'Aucune base de l\'Ouvrage ne pourra vous attaquer ici.';
+  if (nombre === 1) return '1 base de l\'Ouvrage pourra vous attaquer ici.';
+  return `${nombre} bases de l'Ouvrage pourront vous attaquer ici.`;
+}
+
 export function empreinteDeLaCarte(etat) {
   let empreinte = `${etat.baseCourante}:${etat.prochaineInstanceSatellite}`;
   for (const base of etat.bases) empreinte += `:${base.satellites.presents.length}`;
@@ -1257,6 +1288,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauCorps = $('monde-panneau-corps');
   const panneauRefus = $('monde-panneau-refus');
   const panneauDeplacer = $('monde-panneau-deplacer');
+  const panneauConfirmation = $('monde-panneau-confirmation');
+  const panneauMenace = $('monde-panneau-menace');
+  const panneauConfirmer = $('monde-panneau-confirmer');
+  const panneauRenoncer = $('monde-panneau-renoncer');
   const panneauAttaquer = $('monde-panneau-attaquer');
   // ⚠ QUELLE CASE LE PANNEAU DÉCRIT — c'est ce à quoi le SECOND toucher se
   // compare. `null` quand le panneau est fermé.
@@ -1272,6 +1307,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // apprendre pour les deux écrans.
   let modeDeplacement = false;
   let casesDuDeplacement = [];
+  // ⚠ LA CASE VISÉE, RETENUE ENTRE LE TOUCHER ET L'ACCORD. Elle vaut `null`
+  // partout ailleurs, et c'est ce qui rend `confirmerLeDeplacement` inerte hors
+  // de son moment : un bouton laissé vif par un lot futur ne déplacerait rien.
+  let deplacementEnAttente = null;
 
   let etatCourant = null;
   // Les huit planches du sol, une fois décodées, et ce qu'on en dérive par cran.
@@ -2289,7 +2328,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // toucher une case occupée par un site ouvrirait son panneau au lieu de
     // poser la base, et le geste armé serait avalé par le geste ordinaire.
     if (modeDeplacement) {
-      poserLaBase({ rangee, colonne });
+      demanderLeDeplacement({ rangee, colonne });
       return;
     }
     // Le dernier dessiné est celui du dessus : on le cherche donc à l'envers.
@@ -2393,24 +2432,104 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   }
 
   /**
-   * Le second temps du geste : la case touchée devient la nouvelle position.
+   * Le refus d'un déplacement, dit dans le panneau — et le mode se désarme.
+   *
+   * ⚠ ELLE EXISTE PARCE QUE DEUX CHEMINS Y MÈNENT depuis la confirmation : le
+   * toucher de la case, et l'accord donné. Écrire le refus deux fois aurait
+   * donné deux formulations du même fait au premier ajustement.
+   */
+  function refuserLeDeplacement(problemes) {
+    panneauTitre.textContent = 'Déplacer la base';
+    panneauCorps.textContent = '';
+    panneauConfirmation.hidden = true;
+    panneauRefus.hidden = false;
+    panneauRefus.textContent = problemes.map((p) => p.message).join(' ; ');
+    panneau.hidden = false;
+    deplacementEnAttente = null;
+    desarmerLeDeplacement();
+  }
+
+  /**
+   * Le second temps du geste : la case touchée est SOUMISE, elle n'est pas prise.
+   *
+   * ⚠⚠ LA CONFIRMATION S'INTERCALE ICI, ENTRE LE TOUCHER ET LE DÉPLACEMENT —
+   * lot DÉPLACEMENT-ÉCLAIRÉ, 07/09. Ethan, point 1. Elle ne pouvait pas
+   * s'intercaler entre le bouton et l'armement : le chiffre qu'elle annonce est
+   * celui de la case VISÉE, et cette case n'est pas connue avant qu'on la
+   * touche.
    *
    * ⚠ ON DEMANDE, PUIS ON DÉPLACE — jamais un `try` autour de `deplacerLaBase`.
    * `problemesDuDeplacement` rend une LISTE, `deplacerLaBase` LÈVE, et la
    * différence est la règle du dépôt : un déplacement refusé est un fait de JEU
    * qu'on montre au joueur, une levée est un fait de PROGRAMME. Rattraper la
    * levée traiterait la seconde comme la première.
+   *
+   * ⚠⚠ ET LE REFUS PASSE AVANT LA CONFIRMATION : on ne demande pas d'accord pour
+   * un geste qui sera refusé. Un joueur à qui l'on demanderait « êtes-vous
+   * sûr ? » avant de répondre « la base vient de se déplacer » aurait fait deux
+   * gestes pour un refus.
    */
-  function poserLaBase(cible) {
+  function demanderLeDeplacement(cible) {
     if (etatCourant === null) return;
     const problemes = problemesDuDeplacement(etatCourant, cible);
     if (problemes.length > 0) {
-      panneauTitre.textContent = 'Déplacer la base';
-      panneauCorps.textContent = '';
-      panneauRefus.hidden = false;
-      panneauRefus.textContent = problemes.map((p) => p.message).join(' ; ');
-      panneau.hidden = false;
-      desarmerLeDeplacement();
+      refuserLeDeplacement(problemes);
+      return;
+    }
+    deplacementEnAttente = cible;
+    panneauTitre.textContent = 'Déplacer la base';
+    panneauCorps.textContent = '';
+    panneauRefus.hidden = true;
+    panneauRefus.textContent = '';
+    // ⚠⚠ LE CHIFFRE VIENT DU MOTEUR, ET C'EST TOUT L'ENJEU DU LOT.
+    // `nombreDAttaquantes` est la fonction dont `basesAttaquantes` s'exprime
+    // elle-même : une seule écriture des trois conditions — portée, type,
+    // niveau minimal —, deux lecteurs. Le recompter ici l'aurait rendu faux de
+    // la pire façon : plausible, stable, et démenti par le premier raid subi.
+    panneauMenace.textContent = phraseDesAttaquantes(
+      nombreDAttaquantes(etatCourant, cible),
+    );
+    panneauConfirmation.hidden = false;
+    panneau.hidden = false;
+    dessiner();
+  }
+
+  /**
+   * Renoncer : on revient à l'état d'avant le toucher.
+   *
+   * ⚠ LE MODE SE DÉSARME, la base ne bouge pas, et rien n'a été engagé — un
+   * déplacement ne coûte aucune ressource, et il n'a pas encore consommé son
+   * délai, qui s'écrit dans `deplacerLaBase` et nulle part ailleurs.
+   */
+  function renoncerAuDeplacement() {
+    deplacementEnAttente = null;
+    panneauConfirmation.hidden = true;
+    desarmerLeDeplacement();
+    fermerPanneau();
+  }
+
+  /**
+   * L'accord donné : la case retenue devient la nouvelle position.
+   *
+   * ⚠⚠ ON REDEMANDE LES PROBLÈMES, ET CE N'EST PAS UNE PRÉCAUTION DÉCORATIVE.
+   * Entre le toucher et l'accord, la session continue de tourner : un raid de
+   * l'Ouvrage peut se résoudre, et `raserLaBase` DÉPLACE la base de vingt
+   * rangées. La case visée devient alors hors de portée — ou celle où la base
+   * se trouve déjà. Sans cette relecture, `deplacerLaBase` LÈVERAIT au milieu
+   * d'un geste légal au moment où le joueur l'a commencé.
+   *
+   * ⚠ ET IL EST INERTE SANS CASE RETENUE. `deplacementEnAttente` vaut `null`
+   * partout ailleurs : un bouton qu'un lot futur laisserait vif ne déplacerait
+   * rien.
+   */
+  function confirmerLeDeplacement() {
+    if (etatCourant === null || deplacementEnAttente === null) return;
+    const cible = deplacementEnAttente;
+    deplacementEnAttente = null;
+    panneauConfirmation.hidden = true;
+    const problemes = problemesDuDeplacement(etatCourant, cible);
+    if (problemes.length > 0) {
+      refuserLeDeplacement(problemes);
       return;
     }
     deplacerLaBase(etatCourant, cible);
@@ -2515,6 +2634,12 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // panneau caché ne se verrait pas aujourd'hui — il est DANS le panneau —
     // mais le premier lot qui le sortirait de là hériterait d'un prix orphelin.
     panneauPrix.hidden = true;
+    // ⚠⚠ ET LA CONFIRMATION PART AVEC, ACCORD EN ATTENTE COMPRIS. Le bouton
+    // « Fermer » est une porte de sortie comme une autre : la laisser fermer le
+    // panneau en gardant `deplacementEnAttente` armé rendrait le déplacement
+    // exécutable par un bouton que plus personne ne voit.
+    panneauConfirmation.hidden = true;
+    deplacementEnAttente = null;
     siteOuvert = null;
     ciblageOuvert = null;
     dessiner();
@@ -2548,6 +2673,8 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     fermerPanneau();
   });
   panneauDeplacer.addEventListener('click', armerLeDeplacement);
+  panneauConfirmer.addEventListener('click', confirmerLeDeplacement);
+  panneauRenoncer.addEventListener('click', renoncerAuDeplacement);
   // ⚠⚠ LE MÊME CHEMIN QUE LE SECOND TOUCHER, PAS UN SECOND. `entrerDansLaCible`
   // garde déjà l'entrée par `problemesDuRaid` et écrit le refus ; un bouton qui
   // appellerait `surEntreeRaid` lui-même contournerait la garde, et le joueur

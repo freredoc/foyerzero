@@ -15,7 +15,7 @@ import {
   vagueDAssaut, vaguesDAssaut, unitesDeLaPalette, vueDeLOffense,
   SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
   ACTIONS_ARMEE, MESSAGES_MODE_ARMEE, messageDeDestinationDUnite, messageIndisponible,
-  couchesDeLUniteDAssaut, initialiserEcranOffense,
+  couchesDeLUniteDAssaut, initialiserEcranOffense, ligneDeLaReserveDArmee,
 } from '../src/ui/offense.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { couchesDeLEntite } from '../src/render/scene.js';
@@ -30,6 +30,10 @@ import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import {
+  plafondDeLaReserve, plafondDeLaReserveDesBatiments, direLaDuree,
+} from '../src/sim/reparation.js';
+import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1040,7 +1044,10 @@ function fauxDocumentOffense() {
     'offense-ameliorer-cible', 'offense-reparer', 'offense-ameliorer',
     'offense-deplacer', 'offense-retirer', 'offense-panneau',
     'offense-panneau-titre', 'offense-panneau-corps', 'offense-panneau-fermer',
-    'offense-panneau-ameliorer',
+    'offense-panneau-ameliorer', 'offense-reserve',
+    // Le journal des raids — lot JOURNAL, 07/09, point 14.
+    'offense-journal', 'offense-journal-panneau', 'offense-journal-titre',
+    'offense-journal-corps', 'offense-journal-fermer',
   ];
   // ⚠ LA LISTE SE CONFRONTE AU BALISAGE, elle ne se croit pas sur parole : le
   // faux garde donc aussi que l'écran ne demande rien que la page n'ait pas.
@@ -1294,4 +1301,208 @@ test('PD T9 — non-régression : la palette d\'Offense ne retire pas non plus, 
     [meute.raison],
     'le modèle et la palette ne disent plus la même phrase',
   );
+});
+
+// ---------------------------------------------------------------------------
+// lot RETOUCHES — 07/09/2026 : points 16 et 10
+// ---------------------------------------------------------------------------
+
+/** Une base qui porte un budget d'armée ET deux pièces posées. */
+function partieAvecBudget() {
+  const etat = baseAvecCommandement(12);
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 3 });
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 2, colonne: 4, niveau: 5 });
+  return etat;
+}
+
+/** L'écran Offense monté sur un faux document, peint une fois. */
+function ecranOffenseMonte(etat) {
+  const { doc, parId } = fauxDocumentOffense();
+  const ecran = initialiserEcranOffense(doc);
+  ecran.peindre(etat);
+  return { doc, parId, ecran };
+}
+
+/** La feuille, commentaires ôtés — une garde ne lit pas sa propre prose. */
+function feuilleDecommentee() {
+  return readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/** Le corps d'une règle CSS, par sélecteur exact. */
+function regleCss(selecteur) {
+  const motif = new RegExp(`${selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`);
+  const trouvee = feuilleDecommentee().match(motif);
+  assert.ok(trouvee, `la règle « ${selecteur} » a disparu de la feuille`);
+  return trouvee[1];
+}
+
+test('RET T5 — la palette de l\'Offense n\'a plus de fond plein', () => {
+  // ⚠⚠ ETHAN, 07/09, POINT 16, PRÉCISÉ « DANS LE MENU OFFENSE ». Le lot
+  // ÉCRAN-DÉFENSE avait traité la palette du CHANTIER ; celle-ci portait encore
+  // un aplat kaki et un liseré plein.
+  //
+  // ⚠⚠ `background: transparent` EST OBLIGATOIRE, PAS COSMÉTIQUE — c'est la
+  // mesure du lot ÉCRAN-DÉFENSE : un `<button>` sans fond DÉCLARÉ retombe sur
+  // le gris clair du navigateur, et les vignettes ressortiraient EN CLAIR sur le
+  // bandeau sombre. « Enlever les fonds pleins » se dit en toutes lettres.
+  for (const selecteur of ['#ecran-offense .unite', '#offense-palette .unite']) {
+    const corps = regleCss(selecteur);
+    assert.match(corps, /background:\s*transparent/,
+      `« ${selecteur} » ne déclare pas son fond : le navigateur le peindra en clair`);
+    assert.ok(!/background:\s*#[0-9A-Fa-f]{6}/.test(corps),
+      `« ${selecteur} » porte encore un aplat plein`);
+    // ⚠ ET AUCUNE BORDURE PROPRE : elle vient de la règle partagée.
+    assert.ok(!/border:\s/.test(corps),
+      `« ${selecteur} » écrit sa propre bordure au lieu de prendre la règle partagée`);
+  }
+});
+
+test('RET T6 — le pointillé vient d\'UNE définition, partagée par les quatre grilles', () => {
+  // ⚠⚠ TROIS ÉCRITURES DU MÊME POINTILLÉ AURAIENT DIVERGÉ AU PREMIER RÉGLAGE.
+  // C'est `ÉD T12` vu depuis l'autre écran, et il faut les DEUX : celui-là
+  // nomme la liste exacte, celui-ci vérifie qu'elle couvre bien les deux
+  // palettes ET les deux grilles d'emplacements.
+  const feuille = feuilleDecommentee();
+  const porteuses = [...feuille.matchAll(/([^{}]+)\{([^}]*border:\s*1px dashed[^}]*)\}/g)]
+    .filter(([, , corps]) => /border:\s*1px dashed #4E5742/.test(corps));
+  assert.equal(porteuses.length, 1,
+    `le pointillé de composition est écrit ${porteuses.length} fois`);
+  const selecteurs = porteuses[0][1].split(',').map((x) => x.trim());
+  for (const attendu of ['#offense-palette .unite', '.posable',
+    '#ecran-offense .emplacement', '#ecran-raid .emplacement']) {
+    assert.ok(selecteurs.includes(attendu),
+      `« ${attendu} » ne partage plus la règle du pointillé`);
+  }
+});
+
+test('RET T7 — les trois états de la vignette restent deux à deux différents', () => {
+  // ⚠ RETIRER LE FOND RETIRE UN SUPPORT DE LA DISTINCTION. Ce qui la porte
+  // désormais est le LISERÉ, comme à la palette du Chantier : `#4E5742` au
+  // repos, `#1E2124` verrouillée, `#F5F3E8` armée.
+  const repos = regleCss('#offense-palette .unite,\n  .posable')
+    ?? null;
+  // Le repos se lit sur la règle partagée, les deux autres sur leur propre règle.
+  const feuille = feuilleDecommentee();
+  const partagee = [...feuille.matchAll(/([^{}]+)\{([^}]*border:\s*1px dashed[^}]*)\}/g)]
+    .find(([, , corps]) => /border:\s*1px dashed #4E5742/.test(corps));
+  assert.ok(partagee, 'la règle partagée a disparu');
+  const teintes = {
+    repos: partagee[2].match(/#[0-9A-Fa-f]{6}/)[0].toUpperCase(),
+    verrouillee: regleCss('#offense-palette .unite.verrouillee')
+      .match(/border-color:\s*(#[0-9A-Fa-f]{6})/)[1].toUpperCase(),
+    armee: regleCss('#ecran-offense .unite.choisie')
+      .match(/border-color:\s*(#[0-9A-Fa-f]{6})/)[1].toUpperCase(),
+  };
+  const valeurs = Object.values(teintes);
+  assert.equal(new Set(valeurs).size, 3,
+    `deux états partagent un liseré : ${JSON.stringify(teintes)}`);
+  // ⚠ ET LES TROIS SONT CELLES DU CHANTIER — aucune teinte neuve. `banc.test.js`
+  // refuse déjà tout hex hors de la palette ; ici on exige en plus que ce soient
+  // les MÊMES trois, pour qu'un seul vocabulaire visuel serve les deux palettes.
+  assert.deepEqual(valeurs.slice().sort(), ['#1E2124', '#4E5742', '#F5F3E8']);
+  // ⚠ ET L'ARMÉE GARDE DEUX SIGNAUX DE PLUS : le libellé et l'anneau du sprite.
+  assert.match(regleCss('#ecran-offense .unite.choisie b'), /color:\s*#F5F3E8/);
+  assert.match(regleCss('#ecran-offense .unite.choisie i'), /box-shadow/);
+});
+
+test('RET T8 — l\'Offense RETIRE toujours, elle ne grise pas : non-régression', () => {
+  // ⚠ ARBITRAGE DU 28/08, INTACT ET NON TOUCHÉ PAR CE LOT : « une palette qui
+  // change de longueur déplace les vignettes sous le doigt ». L'Offense grise —
+  // classe `verrouillee` — et la vignette reste TOUCHABLE pour dire pourquoi.
+  const etat = partieAvecBudget();
+  const vue = vueDeLOffense(etat);
+  assert.equal(vue.palette.length, Object.keys(UNITES).length,
+    'la palette de l\'Offense ne montre plus tout le roster');
+  assert.ok(vue.palette.some((u) => !u.disponible),
+    'le montage ne mesure rien : aucune unité verrouillée');
+  assert.ok(vue.palette.some((u) => u.disponible),
+    'le montage ne mesure rien : tout est verrouillé');
+  for (const u of vue.palette.filter((x) => !x.disponible)) {
+    assert.equal(typeof u.raison, 'string', `« ${u.id} » est verrouillée sans raison`);
+  }
+  // ⚠ ET LA VIGNETTE ÉTEINTE N'EST PAS `disabled` : elle doit répondre au
+  // toucher. La feuille la grise par une classe, jamais par l'attribut.
+  assert.match(regleCss('#offense-palette .unite.verrouillee'), /opacity/);
+});
+
+test('RET T9 — la réserve de réparation de l\'armée s\'affiche, avec ses trois stocks', () => {
+  // ⚠⚠ ETHAN, 07/09, POINT 10 : « Compteur de réparation offensive nulle part ».
+  // Mesuré avant d'écrire : AUCUN fichier de `src/ui/` ne lisait
+  // `plafondDeLaReserve` ni `reserveReparation` — seul le plafond des BÂTIMENTS
+  // était affiché, et au Chantier.
+  const etat = partieAvecBudget();
+  const laBase = baseCourante(etat);
+  // ⚠⚠ LES TROIS RÉSERVES SONT DIFFÉRENTES ENTRE ELLES ET DIFFÉRENTES DE CELLE
+  // DES BÂTIMENTS. Deux réserves égales ne distingueraient pas les deux
+  // lectures, et c'est le piège que le brief nomme.
+  laBase.reserveReparation.escouade = 3 * TICKS_PAR_HEURE;
+  laBase.reserveReparation.blinde = 5 * TICKS_PAR_HEURE;
+  laBase.reserveReparation.aeronef = 7 * TICKS_PAR_HEURE;
+  laBase.reserveReparationBatiments = 11 * TICKS_PAR_HEURE;
+  assert.equal(new Set(Object.values(laBase.reserveReparation)).size, 3,
+    'le montage ne discrimine pas les trois châssis');
+
+  const { doc, ecran } = ecranOffenseMonte(etat);
+  const ligne = doc.getElementById('offense-reserve').textContent;
+  assert.equal(ligne, ligneDeLaReserveDArmee(etat), 'l\'écran n\'écrit pas ce que la fonction rend');
+  // Les trois familles se disent, avec les mots d'Ethan.
+  for (const mot of ['infanterie', 'véhicule', 'avion']) {
+    assert.ok(ligne.includes(mot), `« ${mot} » manque à la ligne : ${ligne}`);
+  }
+  // ⚠ ET LE PLAFOND VIENT DU MOTEUR, il ne se recalcule pas.
+  assert.ok(ligne.includes(direLaDuree(plafondDeLaReserve(etat), Math.floor)),
+    `le plafond annoncé n'est pas celui du moteur : ${ligne}`);
+  // ⚠ ET CE N'EST PAS CELUI DES BÂTIMENTS — la falsification la plus probable.
+  assert.ok(!ligne.includes(direLaDuree(11 * TICKS_PAR_HEURE, Math.floor)),
+    `la ligne annonce la réserve des BÂTIMENTS : ${ligne}`);
+  assert.ok(ecran !== null);
+});
+
+test('RET T10 — le nombre vient du moteur : changer l\'état change ce qui est peint', () => {
+  // ⚠ UN MONTAGE À ÉTAT CONSTANT NE DISTINGUERAIT PAS UN CHAMP LU D'UN CHAMP
+  // ÉCRIT EN DUR.
+  const etat = partieAvecBudget();
+  const laBase = baseCourante(etat);
+  laBase.reserveReparation.escouade = 2 * TICKS_PAR_HEURE;
+  const { doc, ecran } = ecranOffenseMonte(etat);
+  const avant = doc.getElementById('offense-reserve').textContent;
+
+  laBase.reserveReparation.escouade = 9 * TICKS_PAR_HEURE;
+  ecran.peindre(etat);
+  const apres = doc.getElementById('offense-reserve').textContent;
+  assert.notEqual(apres, avant, 'la ligne n\'a pas suivi la réserve');
+  assert.equal(apres, ligneDeLaReserveDArmee(etat));
+
+  // ⚠ ET LE PLAFOND SUIT LE NIVEAU DE L'ARMÉE, ce qui est l'autre moitié.
+  const plafondAvant = plafondDeLaReserve(etat);
+  for (const piece of laBase.armee) piece.niveau = 20;
+  assert.ok(plafondDeLaReserve(etat) > plafondAvant,
+    'le montage ne mesure rien : le plafond n\'a pas bougé');
+  ecran.peindre(etat);
+  assert.notEqual(doc.getElementById('offense-reserve').textContent, apres,
+    'la ligne n\'a pas suivi le plafond');
+});
+
+test('RET T11 — une armée VIDE ne fige rien, et c\'est mesuré', () => {
+  // ⚠⚠ `plafondDeLaReserveDesBatiments` LÈVE SUR UNE DISPOSITION VIDE —
+  // `niveauDesBatiments` refuse une liste vide, « une base a toujours son
+  // Chantier ». **Mesuré : l'équivalent côté ARMÉE ne lève PAS** — il passe par
+  // `niveauDeLArmee(base.armee) ?? 0`, et le plafond vaut alors douze heures
+  // tout rond. Une base neuve sans la moindre pièce n'a donc rien à figer, et ce
+  // test le prouve plutôt que de le supposer.
+  const etat = creerEtat(7);
+  assert.deepEqual(baseCourante(etat).armee, [], 'le montage porte déjà une armée');
+  assert.doesNotThrow(() => plafondDeLaReserve(etat),
+    'le plafond de l\'armée lève sur une armée vide');
+
+  const { doc } = ecranOffenseMonte(etat);
+  const ligne = doc.getElementById('offense-reserve').textContent;
+  assert.ok(ligne.length > 0, 'la ligne est vide sur une base neuve');
+  assert.equal(ligne, ligneDeLaReserveDArmee(etat));
+  // ⚠ ET LE CONTRE-EXEMPLE EST ASSERTÉ : côté BÂTIMENTS, la même question lève.
+  const sansBatiment = creerEtat(7);
+  baseCourante(sansBatiment).disposition = [];
+  assert.throws(() => plafondDeLaReserveDesBatiments(baseCourante(sansBatiment)),
+    'le montage ne discrimine rien : les deux plafonds se comportent pareil');
 });

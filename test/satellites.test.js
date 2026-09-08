@@ -18,6 +18,7 @@ import {
   TICKS_APPARITION, ANNEAUX, satellitesVides, planifierSatellites,
   resoudreSatellites, detruireSatellite, casesDeLAnneau, niveauDuSatellite,
   problemesDesSatellites, TICKS_DUREE_DE_VIE, TICKS_SURSIS, prolongerApresAttaque,
+  PREMIERE_INSTANCE,
 } from '../src/sim/satellites.js';
 import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger, SAVE_VERSION, migrer,
@@ -31,9 +32,14 @@ import { estSurLaCarte } from '../src/sim/carte.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { creerRng, entier } from '../src/sim/rng.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { saveurDeLaCase } from '../src/sim/saveur.js';
 
 const T0 = 1_700_000_000_000;
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 test('satellites — deux camps et un avant-poste, cinq minutes après la fondation', () => {
   const etat = creerEtat(4242);
@@ -950,4 +956,181 @@ test('SAT-R T11 bis — un « evite » malformé rend la sauvegarde injouable', 
   const sans = JSON.parse(serialiser(etat, T0));
   delete sans.bases[0].satellites.attentes[0].evite;
   assert.doesNotThrow(() => charger(JSON.stringify(sans), T0), 'une attente sans exclusion est refusée');
+});
+
+// ---------------------------------------------------------------------------
+// lot RETOUCHES — 07/09/2026, point 15
+//
+// Ethan : « Lorsqu'il y a deux camps ou plus qui spawn, faire au moins 1 quartz
+// 1 scorie. »
+//
+// ⚠⚠ LA SAVEUR EST UNE PROPRIÉTÉ DE LA CASE, PAS DU SATELLITE — arbitrage du
+// 29/08, « deux camps successifs sur la même case sont riches de la même
+// chose ». La contrainte porte donc sur la CASE que le tirage retient, jamais
+// sur un champ posé à la pose : un tel champ serait une seconde vérité contre
+// `saveurDeLaCase`, et il ferait bouger `SAVE_VERSION` pour une grandeur qui se
+// calcule.
+// ---------------------------------------------------------------------------
+
+/** Les saveurs des satellites présents d'une base, dans l'ordre de la liste. */
+function saveursPresentes(etat, filtre = () => true) {
+  return baseCourante(etat).satellites.presents
+    .filter(filtre)
+    .map((s) => saveurDeLaCase(etat.graine, s.rangee, s.colonne, s.type));
+}
+
+test('RET T12 — deux camps qui paraissent ensemble donnent les DEUX saveurs', () => {
+  // ⚠⚠ UNE SEULE GRAINE NE FALSIFIE RIEN : le tirage libre y produit déjà le
+  // bon résultat une fois sur deux. **Mesuré sur 200 graines AVANT le lot : les
+  // deux camps sortaient du même bord 91 fois.** On balaie donc, et on exige
+  // ZÉRO.
+  const memeBord = [];
+  for (let graine = 1; graine <= 200; graine += 1) {
+    const etat = creerEtat(graine);
+    rattraperJeu(etat, TICKS_APPARITION);
+    const camps = saveursPresentes(etat, (s) => s.type === 'camp');
+    assert.equal(camps.length, ANNEAUX.camp.nombre,
+      `graine ${graine} : le montage ne pose pas ses deux camps`);
+    if (new Set(camps).size === 1) memeBord.push(graine);
+  }
+  assert.deepEqual(memeBord, [],
+    `graine(s) où les deux camps sont du même bord : ${memeBord.join(', ')}`);
+});
+
+test('RET T12 bis — les TROIS paraissent au même tick, et c\'est ce qui rend le lot dû', () => {
+  // ⚠ LE MONTAGE MESURE SA PROPRE PRÉMISSE. Si les trois satellites d'une base
+  // neuve ne paraissaient PAS ensemble, la contrainte n'aurait rien à
+  // contraindre et `RET T12` serait vert pour une raison qui n'est pas la
+  // sienne. Mesuré : `planifierSatellites` programme les trois au MÊME tick.
+  const etat = creerEtat(7);
+  const attentes = baseCourante(etat).satellites.attentes;
+  assert.equal(attentes.length, 3, 'le montage ne programme pas trois apparitions');
+  assert.equal(new Set(attentes.map((a) => a.tickDu)).size, 1,
+    'les trois attentes ne tombent plus au même tick : la contrainte ne mord plus ici');
+
+  // ⚠ ET LE SECOND CHEMIN EN PRODUIT AUSSI : deux camps rasés dans la MÊME
+  // minute poussent deux attentes échues au même tick. Les deux passent par la
+  // même boucle, et c'est pourquoi la contrainte y vit.
+  const joue = creerEtat(7);
+  rattraperJeu(joue, TICKS_APPARITION);
+  const laBase = baseCourante(joue);
+  const premier = laBase.satellites.presents.findIndex((s) => s.type === 'camp');
+  detruireSatellite(joue, premier);
+  const second = laBase.satellites.presents.findIndex((s) => s.type === 'camp');
+  assert.ok(second >= 0, 'le montage ne porte plus qu\'un camp');
+  detruireSatellite(joue, second);
+  const ticks = laBase.satellites.attentes.map((a) => a.tickDu);
+  assert.equal(ticks.length, 2, 'les deux destructions n\'ont pas programmé deux attentes');
+  assert.equal(new Set(ticks).size, 1,
+    'deux camps rasés la même minute ne paraissent plus ensemble');
+});
+
+test('RET T13 — un seul satellite n\'est PAS contraint', () => {
+  // ⚠ LA CONTRAINTE NE MORD QU'À PARTIR DE DEUX. À un seul, les deux saveurs
+  // doivent rester possibles — sinon la règle serait devenue « tout camp est
+  // riche en quartz », ce que personne n'a demandé.
+  const vues = new Set();
+  for (let graine = 1; graine <= 200 && vues.size < 2; graine += 1) {
+    const etat = creerEtat(graine);
+    const laBase = baseCourante(etat);
+    // Une seule attente, donc une seule apparition à ce tick.
+    laBase.satellites.attentes = [{ type: 'camp', tickDu: etat.horloge.nbTicks }];
+    resoudreSatellites(etat);
+    assert.equal(laBase.satellites.presents.length, 1,
+      `graine ${graine} : le montage n'a pas posé son unique camp`);
+    for (const s of saveursPresentes(etat)) vues.add(s);
+  }
+  assert.deepEqual([...vues].sort(), ['richeQuartz', 'richeScorie'],
+    'à un seul satellite, une saveur est devenue inatteignable');
+});
+
+test('RET T14 — le déterminisme tient : même graine, même monde', () => {
+  // ⚠⚠ UN NOMBRE DE TIRAGES QUI DÉPENDRAIT DU RÉSULTAT FERAIT DIVERGER DEUX
+  // PARTIES IDENTIQUES. La contrainte porte sur l'ENSEMBLE des candidates, posé
+  // AVANT le tirage : `entier` est appelé une fois quoi qu'il arrive.
+  for (const graine of [7, 42, 2026]) {
+    const a = creerEtat(graine); rattraperJeu(a, TICKS_APPARITION);
+    const b = creerEtat(graine); rattraperJeu(b, TICKS_APPARITION);
+    assert.equal(serialiser(a, 0), serialiser(b, 0),
+      `graine ${graine} : deux exécutions ont divergé`);
+  }
+  // ⚠ ET LA CONTRE-ÉPREUVE : une graine voisine donne un AUTRE monde. Sans
+  // elle, un code qui rendrait toujours la même chose passerait l'égalité.
+  const x = creerEtat(7); rattraperJeu(x, TICKS_APPARITION);
+  const y = creerEtat(8); rattraperJeu(y, TICKS_APPARITION);
+  assert.notEqual(serialiser(x, 0), serialiser(y, 0),
+    'deux graines voisines rendent le même monde : le test ne mesure rien');
+
+  // ⚠ ET LES DEUX CHEMINS D'AVANCEMENT RESTENT ÉQUIVALENTS — c'est l'invariant
+  // que ce module protège depuis le lot SATELLITES.
+  const parTicks = creerEtat(7);
+  for (let i = 0; i < TICKS_APPARITION; i += 1) tickJeu(parTicks);
+  assert.equal(serialiser(parTicks, 0), serialiser(x, 0),
+    'le tick à tick et le rattrapage ne rendent plus le même monde');
+});
+
+test('RET T15 — le décalage de tirages est mesuré, et il vaut ZÉRO', () => {
+  // ⚠⚠ C'EST LA MESURE QUE LE BRIEF EXIGE, ET ELLE EST PLUS FORTE QUE PRÉVU :
+  // **la contrainte ne consomme AUCUN tirage de plus**. Elle rétrécit l'ensemble
+  // des candidates, elle ne relance rien — donc le choix de la case coûte
+  // exactement un `entier` par pose, avant comme après. Ce qui CHANGE est le
+  // RÉSULTAT du tirage, pas leur nombre : la liste des candidates est plus
+  // courte, donc l'indice tombe ailleurs.
+  //
+  // ⚠ CE DÉCALAGE-LÀ EST MESURÉ AILLEURS, ET IL EST DÉCLARÉ : le témoin de
+  // BASES-0 bouge de **soixante-dix couples sur 322**, à partir de la phase 2 —
+  // celle où les satellites paraissent —, et l'attribution est prouvée en
+  // neutralisant la seule ligne de la contrainte : le témoin retombe alors à
+  // zéro couple déplacé.
+  const etat = creerEtat(7);
+  rattraperJeu(etat, TICKS_APPARITION);
+  const laBase = baseCourante(etat);
+  assert.equal(laBase.satellites.presents.length, 3, 'le montage ne pose pas ses trois satellites');
+  assert.deepEqual(laBase.satellites.attentes, [], 'des attentes n\'ont pas été servies');
+
+  // ⚠⚠ LE COMPTEUR D'INSTANCES EST LA MESURE DIRECTE : il avance d'une unité par
+  // POSE, et une pose consomme EXACTEMENT un tirage de case. Trois satellites,
+  // trois instances — donc trois tirages, ni plus ni moins. Le compte se DÉRIVE
+  // du premier numéro et du nombre de présents : écrire « 4 » ici ne dirait plus
+  // rien le jour où une base neuve porterait un quatrième satellite.
+  assert.equal(etat.prochaineInstanceSatellite,
+    PREMIERE_INSTANCE + laBase.satellites.presents.length,
+    'le nombre de poses a changé : la contrainte consomme ou perd des tirages');
+
+  // ⚠⚠ ET LA SOURCE PORTE L'AUTRE MOITIÉ, celle qu'un compte ne peut pas voir :
+  // le choix de la case ne s'écrit qu'UNE fois, et la contrainte se pose AVANT
+  // lui. Un « tire, puis recommence si la saveur ne va pas » demanderait une
+  // boucle et un second site d'appel — c'est très exactement ce que le §4 du
+  // brief interdit, et c'est ce que cette assertion attrape.
+  //
+  // ⚠ ET LA MESURE PORTE SUR LE CORPS DE `poserUnSatellite`, JAMAIS SUR LE
+  // FICHIER : `niveauDuSatellite` tire elle aussi, pour son rayon, et compter le
+  // fichier entier attraperait ce tirage-là — qui n'a rien à voir avec le choix
+  // de la case et qui existait avant le lot.
+  const source = readFileSync(join(RACINE, 'src', 'sim', 'satellites.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+  const debut = source.indexOf('function poserUnSatellite(');
+  assert.ok(debut > 0, 'poserUnSatellite a été renommée : la mesure ne porte plus sur rien');
+  const fin = source.indexOf('\n}\n', debut);
+  const corps = source.slice(debut, fin);
+  // ⚠ UN TÉMOIN, POUR QUE LA TRANCHE NE PUISSE PAS ÊTRE VIDE : elle doit porter
+  // le paramètre de la contrainte ET le choix de la case, sans quoi zéro tirage
+  // passerait pour un tirage unique.
+  assert.ok(corps.includes('saveurVoulue') && corps.includes('const choisie ='),
+    'la tranche mesurée ne porte pas le corps de poserUnSatellite');
+  assert.ok(source.split('entier(rng,').length - 1 > corps.split('entier(rng,').length - 1,
+    'la tranche couvre tout le fichier : elle ne mesure plus la fonction');
+  const tirages = [...corps.matchAll(/entier\(rng,/g)];
+  assert.equal(tirages.length, 1,
+    `le tirage de la case est écrit ${tirages.length} fois : un re-tirage a été introduit`);
+  const iFiltre = corps.indexOf('voulues.length > 0');
+  const iTirage = corps.indexOf('entier(rng,');
+  assert.ok(iFiltre > 0 && iFiltre < iTirage,
+    'la contrainte ne se pose plus AVANT le tirage');
+
+  // ⚠ ET LE FLUX DE LA PARTIE N'EST PAS TOUCHÉ : la graine d'une apparition se
+  // dérive de l'INSTANCE, jamais d'`etat.rng`.
+  assert.deepEqual(etat.rng, { ...creerEtat(7).rng },
+    'la pose a consommé le flux de la partie');
 });

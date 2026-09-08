@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 
 import {
-  montageDuBanc, executerRaidComplet, nomAffiche,
+  montageDuBanc, executerRaidComplet,
   formaterPointsMilli, formaterPv, LIBELLES_CAUSE, DPR_MAX,
 } from '../src/ui/banc.js';
+import { nomAffiche } from '../src/render/scene.js';
 import { creerCombat, CAUSES } from '../src/sim/combat.js';
 import { PROFILS_ASSAUT, EMPLACEMENTS_ASSAUT } from '../src/data/sites.js';
 import { DEFENSES } from '../src/data/combat.js';

@@ -1109,22 +1109,33 @@ test('RCU T11 — le coût n\'explose pas : UN appel à `ciblesAPortee` par base
   // lectures de case. On garde donc le balayage par base du joueur — la distance
   // est symétrique — et on REGROUPE. Mesuré, pas supposé.
   //
-  // ⚠ LE COMPTE SE PREND SUR L'APPELANT DIRECT. `ciblesAPortee` lit
-  // `base.position` une fois et une seule ; chercher son nom dans la pile
+  // ⚠ LE COMPTE SE PREND SUR L'APPELANT DIRECT. Chercher le nom dans la pile
   // ENTIÈRE compterait aussi les lectures faites plus bas par `siteDeLaCase`,
   // appelée 316 fois par balayage.
+  //
+  // ⚠⚠ ET IL A CHANGÉ DE SONDE AU LOT DÉPLACEMENT-ÉCLAIRÉ, 07/09 — IL SE
+  // RESSERRE. Il proxyait la BASE et comptait les lectures de `.position` :
+  // depuis que `basesAttaquantes` lit cette position elle-même pour la passer à
+  // `attaquantesDeLaPosition`, `ciblesAPortee` reçoit un objet nu et la sonde ne
+  // voyait plus rien — 0 au lieu de 1, mesuré. La sonde porte désormais sur la
+  // POSITION, et elle compte les lectures de `rangee` faites DANS
+  // `ciblesAPortee` : c'est sa ligne de déstructuration, une par appel, donc
+  // elle mesure les ENTRÉES dans la fonction plutôt qu'une lecture que
+  // n'importe quel appelant pouvait faire à sa place.
   const appels = (positions) => {
     const etat = partieAvecBases(7, positions);
     let n = 0;
-    etat.bases = etat.bases.map((b) => new Proxy(b, {
-      get(cible, prop, recepteur) {
-        if (prop === 'position') {
-          const direct = new Error().stack.split(String.fromCharCode(10))[2] ?? '';
-          if (direct.includes('ciblesAPortee')) n += 1;
-        }
-        return Reflect.get(cible, prop, recepteur);
-      },
-    }));
+    for (const b of etat.bases) {
+      b.position = new Proxy(b.position, {
+        get(cible, prop, recepteur) {
+          if (prop === 'rangee') {
+            const direct = new Error().stack.split(String.fromCharCode(10))[2] ?? '';
+            if (direct.includes('ciblesAPortee')) n += 1;
+          }
+          return Reflect.get(cible, prop, recepteur);
+        },
+      });
+    }
     basesAttaquantes(etat);
     return n;
   };
@@ -1139,6 +1150,15 @@ test('RCU T11 — le coût n\'explose pas : UN appel à `ciblesAPortee` par base
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   assert.equal(source.split('ciblesAPortee(').length - 1, 1,
     '`ciblesAPortee` est appelée plus d\'une fois dans raid-ouvrage.js');
+
+  // ⚠⚠ ET LE MAILLON DE PLUS EST GARDÉ AUSSI — lot DÉPLACEMENT-ÉCLAIRÉ. Le seul
+  // appel de `ciblesAPortee` vit maintenant dans `attaquantesDeLaPosition`, et
+  // `basesAttaquantes` l'appelle une fois. Sans cette assertion, un second appel
+  // glissé dans la boucle intérieure passerait par la même unique `ciblesAPortee`
+  // et le compte ci-dessus doublerait sans qu'on sache où le chercher.
+  assert.equal(source.split('attaquantesDeLaPosition(').length - 1, 3,
+    'les appels d\'`attaquantesDeLaPosition` ne sont plus les trois attendus '
+    + '(sa déclaration, `basesAttaquantes`, `nombreDAttaquantes`)');
 });
 
 test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état', () => {
