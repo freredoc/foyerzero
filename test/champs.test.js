@@ -330,10 +330,17 @@ test('champs — l\'ordre du tirage ne transparaît pas dans le résultat', () =
   }
 });
 
-test('champs — le collecteur est le seul à pouvoir s\'y poser, et le champ décide de sa ressource', () => {
+test('champs — les collecteurs sont seuls à pouvoir s\'y poser, chacun sur SON champ', () => {
   // Les deux arbitrages du 26/08, assertés dans les données pour que le moteur
   // de base les trouve écrits quand il arrivera.
-  assert.deepEqual(CHAMPS.posableDessus, ['collecteur']);
+  // ⚠⚠ UNE TABLE PAR RESSOURCE DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS, et c'est
+  // plus strict qu'avant, pas moins : un collecteur à quartz n'a le droit d'être
+  // que sur un champ de quartz. `ressourceDonneeParLeChamp` reste vrai — le
+  // champ décide, et il décide maintenant DU BÂTIMENT.
+  assert.deepEqual(CHAMPS.posableDessus, {
+    quartz: ['collecteurQuartz'],
+    scorie: ['collecteurScorie'],
+  });
   assert.equal(CHAMPS.ressourceDonneeParLeChamp, true);
   // Douze cases → douze collecteurs au plus. C'est le plafond réel du jeu, et
   // il tient à ce module : si le générateur en posait treize, il se déplacerait.

@@ -425,7 +425,10 @@ test('JRN T9 — rien n\'est recalculé : l\'état bouge, les nombres du journal
 test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', () => {
   // ⚠⚠ TOUT ÉTAIT DÉJÀ STOCKÉ — `etat.rapports`, la borne, le champ `sens`. Le
   // lot n'ajoute pas un champ, donc il n'ajoute pas un maillon de migration.
-  assert.equal(SAVE_VERSION, 28);
+  // ⚠ CORRIGÉ EN LE SACHANT par le lot BÂTIMENTS-QUATRE-ÉTATS, qui dédouble
+  // le Collecteur et fait donc bouger la sauvegarde. Ce que la ligne garde n'est
+  // pas un numéro figé, c'est qu'on ne bumpe pas sans passer par ici.
+  assert.equal(SAVE_VERSION, 29);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

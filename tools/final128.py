@@ -190,9 +190,23 @@ U=[('P2_1_off_j_meute_off_j_perceurs.png',['meute','perceurs'],18),
    ('P2_5_off_j_crecelle_off_j_busard_off_j_frappeur.png',['crecelle','busard','frappeur'],24),
    ('P2_6_off_j_enclume.png',['enclume'],28)]
 # ---------------- batiments ----------------
+# ⚠⚠ CINQ CLÉS ENTRENT AU LOT BÂTIMENTS-QUATRE-ÉTATS, ET `collecteur` SORT.
+# Le Collecteur se dédouble — un par ressource, mêmes 1 500 PV — et les trois
+# artilleries sont des bâtiments neufs à 2 000 PV. Cette table ne sert qu'à une
+# chose : `cible(pv)` en tire l'EMPRISE du sprite. Elle n'est pas la table des PV
+# du jeu, qui vit dans `src/data/base.js` ; un test confronte les deux plutôt que
+# de les croire d'accord.
+#
+# ⚠ `usine` RESTE, et c'est l'ancienne clé d'index de `bat_j_depot_de_vehicules`.
+# Les planches de la v2 portent le nom définitif, donc `batiments_v2.py` ne la
+# demande plus — mais `planches.py` la lisait encore hier, et rien n'oblige à la
+# retirer aujourd'hui.
 PV={'chantier_de_construction':5500,'centre_de_commandement':3000,'qg_de_defense':3000,
- 'complexe_de_defense':2500,'caserne':2500,'usine':2500,'aerodrome':2500,'centrale':2000,
- 'collecteur':1500,'raffinerie':1000,'accumulateur':1000,
+ 'complexe_de_defense':2500,'caserne':2500,'usine':2500,'depot_de_vehicules':2500,
+ 'aerodrome':2500,'centrale':2000,
+ 'collecteur_quartz':1500,'collecteur_scorie':1500,'raffinerie':1000,'accumulateur':1000,
+ 'artillerie_anti_infanterie':2000,'artillerie_anti_vehicule':2000,
+ 'artillerie_anti_aerien':2000,
  'souche':5500,'etai':2500,'noeud':1500,'gangue':1000,'terril':1000}
 def cible(pv): return round(16+(28-16)*(math.sqrt(pv)-math.sqrt(1000))/(math.sqrt(5500)-math.sqrt(1000)))
 # Les seize bâtiments, sur les planches sources « 1024 » — bascule arbitrée par

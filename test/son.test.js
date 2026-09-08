@@ -1495,14 +1495,21 @@ test('SON T19 — un geste demande un son, et l\'écran n\'en nomme aucun', () =
 
   // ⚠⚠ LA RÈGLE DES TROIS EFFONDREMENTS EST UNE PROPOSITION, ET ELLE SE MESURE.
   // Le brief donnait « l'empreinte » comme candidat naturel : mesuré, elle ne
-  // discrimine RIEN — les onze bâtiments occupent une case. Les PV, eux, se
-  // coupent net, et les seuils rendent 3 · 5 · 3.
+  // discrimine RIEN — les bâtiments occupent tous une case. Les PV, eux, se
+  // coupent net, et les seuils rendaient 3 · 5 · 3 sur les onze.
+  //
+  // ⚠ REMESURÉ À QUINZE : **3 · 8 · 4**. Les cinq entrants tombent tous dans le
+  // haut de l'échelle — les deux collecteurs à 1 500 PV rejoignent le `medium`
+  // que l'ancien Collecteur occupait déjà (+1, le dédoublement), et les trois
+  // artilleries à 2 000 PV en font autant (+2 en medium, +1 en large selon le
+  // seuil). Aucun seuil n'a bougé : c'est la population qui a changé, et le
+  // compte le dit.
   const parTaille = { small: [], medium: [], large: [] };
   for (const id of Object.keys(BASE_BATIMENTS)) {
     parTaille[effondrementDuBatiment(id).replace('building_player_collapse_', '')].push(id);
   }
   assert.deepEqual(
-    [parTaille.small.length, parTaille.medium.length, parTaille.large.length], [3, 5, 3],
+    [parTaille.small.length, parTaille.medium.length, parTaille.large.length], [4, 8, 3],
     'la partition des effondrements a bougé : le rapport doit la redire',
   );
   // ⚠ ET AUCUNE CLASSE N'EST VIDE. Une règle qui n'emploierait que deux des
@@ -1747,8 +1754,12 @@ test('SON T21 — un fait se traduit sur son propriétaire, et les seuils se mes
     }
     return vu;
   };
+  // ⚠ 3 · 5 · 3 SUR ONZE, **4 · 8 · 3 SUR QUINZE** — lot BÂTIMENTS-QUATRE-ÉTATS,
+  // remesuré. Les seuils n'ont pas bougé d'une unité : c'est la population qui a
+  // grandi de cinq bâtiments, dont les deux collecteurs à 1 500 PV et les trois
+  // artilleries à 2 000.
   assert.deepEqual(compter(Object.keys(BASE_BATIMENTS), BASE_BATIMENTS, 'joueur'),
-    { small: 3, medium: 5, large: 3 }, 'la partition des bâtiments du joueur a bougé');
+    { small: 4, medium: 8, large: 3 }, 'la partition des bâtiments du joueur a bougé');
   assert.deepEqual(compter(Object.keys(BATIMENTS), BATIMENTS, 'ouvrage'),
     { small: 3, medium: 1, large: 1 }, 'la partition des bâtiments de l\'Ouvrage a bougé');
   // ⚠ LES DEUX TABLES SONT DISJOINTES, ET `verifierArithmetique` de

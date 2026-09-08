@@ -387,7 +387,7 @@ export function verifierArithmetique() {
   for (const [id, b] of Object.entries(BATIMENTS)) PROFILS_BATIMENT[id] = profilBatiment(id, b);
   // ⚠ LES ONZE DU JOUEUR DANS LA MÊME TABLE, ET AUCUNE CLÉ NE SE HEURTE —
   // mesuré : `souche`, `etai`, `noeud`, `gangue`, `terril` d'un côté,
-  // `chantierDeConstruction`, `collecteur`, … de l'autre. Une table séparée
+  // `chantierDeConstruction`, `collecteurQuartz`, … de l'autre. Une table séparée
   // aurait obligé `TABLES_PROFIL` à porter un sixième genre, donc `profil(e)` à
   // choisir — et un bâtiment est un bâtiment, quel que soit son propriétaire.
   // Un test asserte l'absence de collision plutôt que de la supposer.

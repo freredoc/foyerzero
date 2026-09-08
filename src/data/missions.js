@@ -53,7 +53,12 @@ export const CHAINE_TUTORIEL = [
     id: 'premier-collecteur',
     explication: 'C\'est le champ sous lui qui décide de ce qu\'il sort. Posé '
       + 'ailleurs que sur un champ, il ne produit rien du tout.',
-    objectifs: [{ famille: 'batiments', id: 'collecteur', nombre: 1, ressource: 'quartz' }],
+    // ⚠⚠ `ressource` A DISPARU DE L'OBJECTIF, ET L'IDENTIFIANT LA PORTE
+    // DÉSORMAIS — lot BÂTIMENTS-QUATRE-ÉTATS. La ligne demandait « un collecteur,
+    // sur un champ de quartz » en deux champs qui pouvaient se contredire ; elle
+    // demande maintenant « un collecteur à quartz », et il n'existe pas de
+    // collecteur à quartz ailleurs que sur un champ de quartz.
+    objectifs: [{ famille: 'batiments', id: 'collecteurQuartz', nombre: 1 }],
   },
   {
     id: 'chantier-deuxieme-niveau',
@@ -66,7 +71,7 @@ export const CHAINE_TUTORIEL = [
     explication: 'Trois sources valent mieux qu\'une. Monte-les : un Collecteur '
       + 'sature son stock en quelques minutes si rien ne le suit.',
     objectifs: [{
-      famille: 'batiments', id: 'collecteur', nombre: 3, niveau: 2, ressource: 'quartz',
+      famille: 'batiments', id: 'collecteurQuartz', nombre: 3, niveau: 2,
     }],
   },
   {

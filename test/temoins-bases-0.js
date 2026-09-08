@@ -470,7 +470,7 @@ export const EMPREINTES_PAR_GRAINE = {
  */
 export const SCALAIRES = {
   "1": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -494,7 +494,7 @@ export const SCALAIRES = {
     }
   },
   "2": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -518,7 +518,7 @@ export const SCALAIRES = {
     }
   },
   "3": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -542,7 +542,7 @@ export const SCALAIRES = {
     }
   },
   "4": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -566,7 +566,7 @@ export const SCALAIRES = {
     }
   },
   "5": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -590,7 +590,7 @@ export const SCALAIRES = {
     }
   },
   "6": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -614,7 +614,7 @@ export const SCALAIRES = {
     }
   },
   "7": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -638,7 +638,7 @@ export const SCALAIRES = {
     }
   },
   "8": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -662,7 +662,7 @@ export const SCALAIRES = {
     }
   },
   "9": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2991,
     "nbCasesAtteignables": 261,
@@ -686,7 +686,7 @@ export const SCALAIRES = {
     }
   },
   "10": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -710,7 +710,7 @@ export const SCALAIRES = {
     }
   },
   "11": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -734,7 +734,7 @@ export const SCALAIRES = {
     }
   },
   "12": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -758,7 +758,7 @@ export const SCALAIRES = {
     }
   },
   "13": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -782,7 +782,7 @@ export const SCALAIRES = {
     }
   },
   "14": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -806,7 +806,7 @@ export const SCALAIRES = {
     }
   },
   "15": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -830,7 +830,7 @@ export const SCALAIRES = {
     }
   },
   "16": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -854,7 +854,7 @@ export const SCALAIRES = {
     }
   },
   "17": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -878,7 +878,7 @@ export const SCALAIRES = {
     }
   },
   "18": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -902,7 +902,7 @@ export const SCALAIRES = {
     }
   },
   "19": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -926,7 +926,7 @@ export const SCALAIRES = {
     }
   },
   "20": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -950,7 +950,7 @@ export const SCALAIRES = {
     }
   },
   "21": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -974,7 +974,7 @@ export const SCALAIRES = {
     }
   },
   "22": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -998,7 +998,7 @@ export const SCALAIRES = {
     }
   },
   "23": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -1022,7 +1022,7 @@ export const SCALAIRES = {
     }
   },
   "24": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -1046,7 +1046,7 @@ export const SCALAIRES = {
     }
   },
   "25": {
-    "gestes": "chantier→3 | collecteur@12,2 | collecteur@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
+    "gestes": "chantier→3 | collecteurQuartz@12,2 | collecteurScorie@12,5 | raffinerie@11,1 | chantier→4 | centraleElectrique: aucune case | centreDeCommandement@11,2 | qgDeDefense@11,4 | chantier→4 | caserne@11,6 | depotDeVehicules@11,8 | accumulateur@11,3",
     "gestesArmer": "gar merlon@4,2 | gar casemate@5,4 | gar meute@6,3 | gar perceurs@6,5 | gar ronce@3,6 | gar batterie@8,7 | arm meute@v1,2 | arm perceurs@v1,4 | arm carapace@v2,3 | arm guetteur@v2,5 | arm crecelle@v3,4 | arm meute@v4,6",
     "tailleSauvegarde": 2993,
     "nbCasesAtteignables": 261,
@@ -3303,3 +3303,115 @@ export const CIBLE_PROCHE_RETOUCHES = {
   24: '296,16:camp:n1',
   25: '294,16:camp:n1',
 };
+
+// ---------------------------------------------------------------------------
+// Ce que le lot BÂTIMENTS-QUATRE-ÉTATS a déplacé — 08/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ QUATORZE PHASES, UN SEUL CHAMP : `disposition`, ET RIEN D'AUTRE. C'est la
+// mesure la plus utile du lot. Le Collecteur s'est dédoublé — `collecteurQuartz`
+// et `collecteurScorie` selon le champ — et le scénario pose donc deux
+// identifiants au lieu d'un. Tout ce qui DÉPEND de la disposition — l'économie,
+// les stocks, les raids, les rapports, la garnison, l'armée, les satellites —
+// tombe à l'octet sur la capture d'origine, sur les vingt-cinq graines.
+//
+// Autrement dit : **le dédoublement a changé un NOM, pas un comportement.** Un
+// collecteur à quartz produit exactement ce que le Collecteur produisait sur un
+// champ de quartz, ce qui est très exactement ce que la migration v28 → v29
+// promet aux sauvegardes existantes.
+//
+// ⚠ LES DEUX PREMIÈRES PHASES PARTAGENT UNE EMPREINTE, ET LES QUATRE
+// SUIVANTES UNE AUTRE. `p01_batir` et `p02_6h` ont la même disposition — six
+// heures passent sans qu'on pose —, puis `p03` à `p06` la même après le second
+// train de bâtiments. Ce n'est pas une recopie : c'est le scénario qui ne pose
+// rien entre ces phases-là, et les couches précédentes montrent le même motif.
+
+export const DEPLACES_PAR_QUATRE_ETATS = {
+  p01_batir: {
+    disposition: 'd8c8a1b6a7beb7eb',
+  },
+  p02_6h: {
+    disposition: 'd8c8a1b6a7beb7eb',
+  },
+  p03_batiComplet: {
+    disposition: '32696af53a8e6384',
+  },
+  p04_arme: {
+    disposition: '32696af53a8e6384',
+  },
+  p05_18h: {
+    disposition: '32696af53a8e6384',
+  },
+  p06_relu: {
+    disposition: '32696af53a8e6384',
+  },
+  p07_raidProcheApres: {
+    disposition: '32696af53a8e6384',
+  },
+  p08_100ticks: {
+    disposition: '32696af53a8e6384',
+  },
+  p09_deplace: {
+    disposition: '32696af53a8e6384',
+  },
+  p10_montee: {
+    disposition: '32696af53a8e6384',
+  },
+  p11_raidOuvrageApres: {
+    disposition: '32696af53a8e6384',
+  },
+  p12_veilleDuRaid: {
+    disposition: '32696af53a8e6384',
+  },
+  p13_apresLeRaid: {
+    disposition: 'cfb1005f5f958f28',
+  },
+  p14_sousLeFeu: {
+    disposition: '132108580aa2d9c0',
+  },
+};
+
+export const EMPREINTES_PAR_GRAINE_QUATRE_ETATS = {
+  1: '756a5b25231e3890',
+  2: 'cac165e55fd0aced',
+  3: 'efa90125920867b2',
+  4: '1d393acbd5d86d56',
+  5: '885128cee867bd9c',
+  6: '0bc55187eec8f6a8',
+  7: 'fb8d14674ef65ddb',
+  8: '502f96879d3d82db',
+  9: '358451aef3729e6e',
+  10: '7b091a6cc4fac904',
+  11: '38d09853285fd481',
+  12: '88e509202eea56d9',
+  13: '4987fa07186b2e35',
+  14: 'c9be9ee4ddf1bff4',
+  15: '7ada3fb04781eea3',
+  16: 'ff998992ec29aa0f',
+  17: '74938aa25aba757e',
+  18: 'd47eb365880a9754',
+  19: '7bc9d6aba6fc41d6',
+  20: 'af0c75025e3c9552',
+  21: '2343044cd4e67ec8',
+  22: 'ef5d9ba6f15ad4e5',
+  23: '2537e940124fc06f',
+  24: 'ea9ca6ba3a451d66',
+  25: '603bc3841d72edba',
+};
+
+/**
+ * Ce que le dédoublement du Collecteur ajoute à la sauvegarde — lot
+ * BÂTIMENTS-QUATRE-ÉTATS, 08/09/2026.
+ *
+ * ⚠⚠ DOUZE OCTETS, ET LE COMPTE EST EXACT À LA LETTRE PRÈS. Le scénario pose
+ * DEUX collecteurs ; `collecteur` fait onze caractères, `collecteurQuartz`
+ * dix-sept et `collecteurScorie` dix-sept — soit +6 et +6. Rien d'autre n'entre
+ * dans l'état : ni champ neuf, ni valeur, et c'est ce qui rend l'écart FIXE sur
+ * les vingt-cinq graines. Un écart qui dépendrait de la partie voudrait dire
+ * qu'un CONTENU a bougé, pas seulement un nom.
+ *
+ * ⚠ IL S'AJOUTE AUX PRÉCÉDENTS, il ne les remplace pas — même discipline que
+ * `OCTETS_AJOUTES_PAR_RESERVE_BASE` : chaque terme dit ce que SON lot a coûté,
+ * et la somme reste lisible ligne par ligne.
+ */
+export const OCTETS_AJOUTES_PAR_QUATRE_ETATS = 12;

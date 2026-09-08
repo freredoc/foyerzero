@@ -203,11 +203,44 @@ export const BASE_BATIMENTS = {
     classeDeCout: 'modeste',
     plancherPv: true,
   },
-  collecteur: {
-    nom: { joueur: 'Collecteur', ouvrage: 'Nœud' },
+  // ⚠⚠ DEUX COLLECTEURS DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS, ET LA RÈGLE DU
+  // 26/08 N'A PAS BOUGÉ D'UN MOT. « Un collecteur ne choisit pas ce qu'il
+  // produit : il produit ce qu'il y a sous lui » — c'est toujours vrai, et c'est
+  // même plus vrai qu'avant : le champ ne décide plus seulement de la ressource,
+  // il décide DU BÂTIMENT. Ethan, 08/09 : « une icône collecteur mixte, le
+  // bâtiment posé quartz ou scories en fonction du champ. »
+  //
+  // ⚠⚠ LE JOUEUR N'EN CHOISIT DONC PAS UN : la palette porte une seule
+  // vignette, `collecteurMixte`, et `batimentDuChamp` tranche à la pose. Deux
+  // vignettes auraient laissé poser un collecteur à quartz sur un champ de
+  // scorie — un bâtiment dont le nom ment sur ce qu'il sort.
+  //
+  // ⚠ ET NI L'UN NI L'AUTRE NE PORTE `nom.ouvrage`, EXACTEMENT COMME LA
+  // RAFFINERIE ET POUR LA RAISON QUI Y EST DÉJÀ ÉCRITE, prise dans l'autre sens.
+  // Le Nœud de l'Ouvrage tient les deux ressources — `BATIMENTS.noeud.ressource`
+  // vaut `{ quartz: 0.5, scorie: 0.5 }` —, il fait donc face à DEUX bâtiments du
+  // joueur : « un vers deux : aucun nom ne convient, et en choisir un serait
+  // faux la moitié du temps ». L'appariement déclaré passe de trois à deux.
+  collecteurQuartz: {
+    nom: { joueur: 'Collecteur à quartz' },
     ta: 'Harvester',
     role: 'producteur',
-    ressource: 'quartzOuScorie',
+    // ⚠ SA RESSOURCE PROPRE, ET PLUS `quartzOuScorie`. L'exclusif n'avait de
+    // sens que tant qu'un seul bâtiment couvrait les deux cas ; maintenant que
+    // le champ choisit le bâtiment, celui-ci SAIT ce qu'il sort. La raffinerie
+    // garde `quartzEtScorie`, l'inclusif, qui dit tout autre chose.
+    ressource: 'quartz',
+    pv: 1500,
+    reparationSec: 65,
+    unique: false,
+    classeDeCout: 'modeste',
+    plancherPv: true,
+  },
+  collecteurScorie: {
+    nom: { joueur: 'Collecteur à scorie' },
+    ta: 'Harvester',
+    role: 'producteur',
+    ressource: 'scorie',
     pv: 1500,
     reparationSec: 65,
     unique: false,
@@ -258,6 +291,57 @@ export const BASE_BATIMENTS = {
     classeDeCout: 'mineur',
     plancherPv: true,
   },
+
+  // ⚠⚠ LES TROIS ARTILLERIES SONT DES BÂTIMENTS, PAS DES DÉFENSES, ET LA
+  // CONFUSION EST FACILE. `DEFENSES` porte déjà Faucheuse, Mortier et Harpon,
+  // dessinées et câblées depuis le lot 8 : ce sont des PIÈCES qu'on garnit, qui
+  // tirent, qui ont une portée et une cadence. Celles-ci sont des BÂTIMENTS —
+  // elles occupent un emplacement du Chantier, elles se montent en niveau, elles
+  // se réparent. Les fusionner ferait un objet qui obéit à deux moteurs.
+  //
+  // ⚠⚠ LEUR EFFET DE JEU N'EST PAS DANS CE LOT, ET `role: 'artillerie'` LE DIT
+  // EN CLAIR. Le brief les fait entrer comme IDENTIFIANTS, avec leurs sprites et
+  // leurs quatre états ; aucune branche du dépôt ne lit ce rôle-là, si bien
+  // qu'elles se posent, se montent et se réparent sans rien produire. C'est un
+  // rôle NEUF plutôt qu'un rôle emprunté : leur donner `'production'` les aurait
+  // fait entrer dans la garde des trois casernes, et `'producteur'` dans le
+  // calcul des débits — deux mensonges silencieux au lieu d'un blanc déclaré.
+  //
+  // ⚠ LES PV ET LE COÛT SONT POSÉS POUR ÊTRE JOUÉS ET CHANGÉS. 2 000 PV les
+  // met entre la Centrale et les trois casernes, ce qui est la place d'une pièce
+  // fixe et lourde ; `courant` est la classe des bâtiments qu'on pose en
+  // plusieurs exemplaires sans qu'ils soient bon marché. Aucune mesure ne les
+  // dicte — Ethan n'a pas arbitré, et le brief ne le demande pas.
+  artillerieAntiInfanterie: {
+    nom: { joueur: 'Artillerie anti-infanterie' },
+    ta: 'Anti-Infantry Artillery',
+    role: 'artillerie',
+    pv: 2000,
+    reparationSec: 65,
+    unique: false,
+    classeDeCout: 'courant',
+    plancherPv: true,
+  },
+  artillerieAntiVehicule: {
+    nom: { joueur: 'Artillerie anti-véhicule' },
+    ta: 'Anti-Vehicle Artillery',
+    role: 'artillerie',
+    pv: 2000,
+    reparationSec: 65,
+    unique: false,
+    classeDeCout: 'courant',
+    plancherPv: true,
+  },
+  artillerieAntiAerien: {
+    nom: { joueur: 'Artillerie anti-aérienne' },
+    ta: 'Anti-Air Artillery',
+    role: 'artillerie',
+    pv: 2000,
+    reparationSec: 65,
+    unique: false,
+    classeDeCout: 'courant',
+    plancherPv: true,
+  },
 };
 
 /**
@@ -281,10 +365,95 @@ export const BASE_BATIMENTS = {
  * maquette — pour une décision qui ne concerne que la barre du bas.
  */
 export const ORDRE_PALETTE = [
-  'collecteur', 'raffinerie', 'centrale', 'accumulateur',
+  'collecteurMixte', 'raffinerie', 'centrale', 'accumulateur',
   'chantierDeConstruction', 'centreDeCommandement', 'qgDeDefense',
   'complexeDeDefense', 'caserne', 'depotDeVehicules', 'aerodrome',
+  'artillerieAntiInfanterie', 'artillerieAntiVehicule', 'artillerieAntiAerien',
 ];
+
+/**
+ * La vignette de palette qui n'est PAS un bâtiment, et ce qu'elle pose.
+ *
+ * ⚠⚠ QUINZE BÂTIMENTS, QUATORZE VIGNETTES, ET CE N'EST PLUS UNE PERMUTATION.
+ * `ORDRE_PALETTE` a été une permutation exacte du roster jusqu'ici, et un test
+ * l'exigeait. Ethan, 08/09 : « une icône collecteur mixte, le bâtiment posé
+ * quartz ou scories en fonction du champ. » Le joueur ne choisit donc pas entre
+ * les deux collecteurs — il pose UN collecteur, et le terrain dit lequel c'est.
+ *
+ * ⚠⚠ C'EST LA RÈGLE DU 26/08 PORTÉE D'UN CRAN PLUS HAUT, PAS UNE RÈGLE NEUVE.
+ * `ressourceDonneeParLeChamp` disait « le champ décide de ce qu'il produit » ;
+ * il décide maintenant DU BÂTIMENT, ce qui décide de ce qu'il produit. La phrase
+ * du tutoriel — « c'est le champ sous lui qui décide de ce qu'il sort » — reste
+ * vraie mot pour mot, et c'est ce qui a fait retenir cette lecture-là.
+ *
+ * ⚠ UNE TABLE, PAS UN `if`. Le jour où une seconde vignette mixte
+ * apparaîtra — un bâtiment qui suivrait le terrain d'une autre façon — elle
+ * s'ajoutera ici et nulle part ailleurs.
+ */
+export const VIGNETTES_MIXTES = {
+  collecteurMixte: {
+    // Ce que la vignette affiche — le nom générique, celui d'avant le
+    // dédoublement. Le joueur pose « un Collecteur » ; ce qu'il obtient porte le
+    // nom de sa ressource, et c'est le panneau du bâtiment posé qui le dit.
+    nom: 'Collecteur',
+    pose: { quartz: 'collecteurQuartz', scorie: 'collecteurScorie' },
+    // ⚠⚠ CE QU'ELLE POSE HORS D'UN CHAMP, ET IL FAUT QUE CE SOIT QUELQUE
+    // CHOSE. Le joueur peut viser une case nue : la pose doit alors être REFUSÉE
+    // avec « doit être posé sur un champ », pas lever une exception qui
+    // remonterait jusqu'à l'écran. On propose donc un des deux, et
+    // `problemesDeLaPose` rend le refus attendu — le même que celui d'avant le
+    // dédoublement, mot pour mot.
+    parDefaut: 'collecteurQuartz',
+  },
+};
+
+/**
+ * Le bâtiment qu'une vignette pose sur un champ de cette ressource.
+ *
+ * ⚠ ELLE REND LA VIGNETTE TELLE QUELLE QUAND CE N'EST PAS UNE MIXTE, si bien
+ * que tout appelant peut l'employer sans savoir laquelle il tient. Un appelant
+ * qui devrait d'abord demander « est-ce une mixte ? » finirait par oublier.
+ *
+ * ⚠ ET ELLE LÈVE SUR UN CHAMP QU'ELLE NE CONNAÎT PAS plutôt que de rendre
+ * `undefined` : un `undefined` deviendrait un `id` de bâtiment introuvable
+ * quinze appels plus loin, là où l'erreur ne dit plus rien de sa cause.
+ *
+ * @param {string} vignette une entrée d'`ORDRE_PALETTE`
+ * @param {string|null} ressourceDuChamp `quartz`, `scorie`, ou `null` hors champ
+ * @returns {string} un identifiant de `BASE_BATIMENTS`
+ */
+export function batimentDeLaVignette(vignette, ressourceDuChamp) {
+  const mixte = VIGNETTES_MIXTES[vignette];
+  if (mixte === undefined) return vignette;
+  // ⚠ HORS CHAMP, ON REND LE DÉFAUT ; SUR UNE RESSOURCE INCONNUE, ON LÈVE.
+  // Les deux cas se ressemblent et ne sont pas du tout le même : viser une case
+  // nue est un geste ORDINAIRE du joueur, que le refus de pose traite ; recevoir
+  // « quartzz » est une faute de programme, et la taire ferait poser un
+  // collecteur à quartz sur un gisement de scorie.
+  if (ressourceDuChamp === null || ressourceDuChamp === undefined) return mixte.parDefaut;
+  const pose = mixte.pose[ressourceDuChamp];
+  if (pose === undefined) {
+    throw new RangeError(
+      `palette : « ${vignette} » ne sait pas quoi poser sur « ${ressourceDuChamp} »`,
+    );
+  }
+  return pose;
+}
+
+/**
+ * Le bâtiment de référence d'une vignette — celui dont on lit le coût, le rôle
+ * et la classe pour la présenter.
+ *
+ * ⚠ LE PREMIER DE SA TABLE, ET LES DEUX SE VALENT. Les deux collecteurs
+ * partagent PV, coût, classe, rôle et coefficient de régime : ils ne diffèrent
+ * que par la ressource qu'ils sortent. Prendre le premier est donc exact, et un
+ * test l'exige plutôt que de le supposer — le jour où deux bâtiments d'une même
+ * vignette différeraient par le prix, c'est ce test-là qui le dirait.
+ */
+export function batimentDeReference(vignette) {
+  const mixte = VIGNETTES_MIXTES[vignette];
+  return mixte === undefined ? vignette : mixte.parDefaut;
+}
 
 
 // ---------------------------------------------------------------------------
@@ -524,11 +693,23 @@ export const CHAMPS = {
   margeBord: 1,
 
   /**
-   * Ce qui peut se poser sur une case de champ. Liste fermée, et volontairement
-   * une liste : si un jour un second bâtiment y a droit, il s'ajoute ici et
-   * nulle part ailleurs.
+   * Ce qui peut se poser sur une case de champ, PAR RESSOURCE du champ.
+   *
+   * ⚠⚠ C'ÉTAIT UNE LISTE PLATE, C'EST UNE TABLE DEPUIS LE LOT
+   * BÂTIMENTS-QUATRE-ÉTATS — et c'est ce qui empêche un collecteur à quartz
+   * d'atterrir sur un champ de scorie. Le cas ne se produit pas à la POSE, que
+   * `batimentDeLaVignette` tranche depuis le terrain ; il se produirait au
+   * DÉPLACEMENT, où le joueur prend un bâtiment déjà posé et le repose ailleurs.
+   * Sans la table, un collecteur à quartz glissé sur un champ de scorie
+   * produirait du quartz depuis un gisement qui n'en a pas.
+   *
+   * ⚠ LA LISTE PLATE RESTE DÉRIVÉE, elle ne se recopie pas : `posablesSurUnChamp`
+   * l'aplatit. Deux écritures du même ensemble diveraient au premier ajout.
    */
-  posableDessus: ['collecteur'],
+  posableDessus: {
+    quartz: ['collecteurQuartz'],
+    scorie: ['collecteurScorie'],
+  },
 
   /**
    * LE CHAMP DÉCIDE DE LA RESSOURCE — arbitré le 26/08 par Ethan.
@@ -536,8 +717,15 @@ export const CHAMPS = {
    * sous lui. C'est ce qui donne leur poids aux cinq à sept cases de quartz
    * d'une base — elles fixent, à la case près, combien de quartz on peut en
    * tirer, et ce plafond-là ne se déplace qu'en déménageant.
-   * `BASE_BATIMENTS.collecteur.ressource` vaut `quartzOuScorie` justement parce
-   * que la réponse n'est pas dans la ligne du bâtiment : elle est sous lui.
+   * `BASE_BATIMENTS.collecteur.ressource` valait `quartzOuScorie` justement
+   * parce que la réponse n'était pas dans la ligne du bâtiment.
+   *
+   * ⚠⚠ ELLE Y EST DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS, ET LA RÈGLE EN SORT
+   * PLUS FORTE, PAS PLUS FAIBLE. Il y a deux collecteurs, un par ressource, et
+   * le champ ne décide plus de ce que produit un bâtiment : il décide DU
+   * bâtiment, donc de ce qu'il produit. Le joueur n'en choisit toujours pas un
+   * — la palette n'a qu'une vignette — et la phrase du tutoriel, « c'est le
+   * champ sous lui qui décide de ce qu'il sort », reste vraie mot pour mot.
    */
   ressourceDonneeParLeChamp: true,
 
@@ -963,7 +1151,7 @@ export const RETOUR_DEFENSES = {
 export const COUT_NIVEAU_DEUX = {
   majeur: 8, // chantier, centre de commandement, QG de défense
   courant: 5, // caserne, dépôt de véhicules, aérodrome, complexe de défense
-  modeste: 3, // centrale, collecteur
+  modeste: 3, // centrale, les deux collecteurs
   mineur: 2, // raffinerie, accumulateur
 };
 
@@ -1000,9 +1188,22 @@ export const COEFFICIENT_DE_REGIME = {
   depotDeVehicules: 6, //      mesuré — 5,997 au niveau 45
   aerodrome: 6, //             mesuré — 5,997 au niveau 45
   centrale: 5.2, //            mesuré — 5,200 au niveau 41, ancre d'accueil 3
-  collecteur: 2, //            mesuré — 1,999 au niveau 56, ancre d'accueil 3
+  // ⚠ LES DEUX COLLECTEURS PARTAGENT LA MESURE DE L'ANCIEN, ET C'EST LE MÊME
+  // BÂTIMENT COUPÉ EN DEUX : 1,999 au niveau 56, ancre d'accueil 3. Rien n'a été
+  // remesuré parce que rien n'a changé de courbe — un collecteur à quartz coûte
+  // ce que coûtait le Collecteur.
+  collecteurQuartz: 2,
+  collecteurScorie: 2,
   raffinerie: 2, //            mesuré — le Silo, 1,999 au niveau 56
   accumulateur: 2, //          mesuré — 2,000 au niveau 62
+  // ⚠⚠ LES TROIS ARTILLERIES N'ONT AUCUNE MESURE, ET ELLES PRENNENT CELLE DES
+  // TROIS CASERNES — 6. C'est un emprunt déclaré, pas un relevé : elles partagent
+  // la classe de coût `courant` avec la Caserne, le Dépôt et l'Aérodrome, et rien
+  // dans `RELEVE-TA-*` ne parle d'elles. Le jour où Ethan les calibrera, ce sont
+  // ces trois lignes-ci qui bougent, et elles seules.
+  artillerieAntiInfanterie: 6,
+  artillerieAntiVehicule: 6,
+  artillerieAntiAerien: 6,
 };
 
 // Coût en électricité d'une amélioration, à partir du niveau 3. Exprimé en
@@ -1035,7 +1236,12 @@ export const COEFFICIENT_DE_REGIME = {
 // `autres`, soit le quart — 2 et 1,25 d'électricité pour 8 et 5 de tibérium.
 export const COUT_ELECTRICITE = {
   premierNiveauPayant: 3,
-  fraction: { centrale: 0.5 / 5.2, collecteur: 0.75, autres: 0.25 },
+  // ⚠ LES DEUX COLLECTEURS GARDENT LES TROIS QUARTS, mesurés sur l'ancien.
+  // `autres` couvre les treize restants, artilleries comprises : elles n'ont pas
+  // de mesure, et le quart est ce que prennent tous ceux qui n'en ont pas.
+  fraction: {
+    centrale: 0.5 / 5.2, collecteurQuartz: 0.75, collecteurScorie: 0.75, autres: 0.25,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1226,12 +1432,27 @@ export const DEBITS = {
   accumulateur: {
     parVoisin: { centrale: 48 },
   },
-  collecteur: {
+  // ⚠⚠ LES DEUX COLLECTEURS PRODUISENT AUTANT L'UN QUE L'AUTRE, ET C'EST UNE
+  // DÉCISION, PAS UNE RECOPIE. Le quartz et la scorie ne valent pas la même chose
+  // à l'achat — `RESSOURCE_DE_COUT` fait payer les bâtiments en quartz — mais
+  // aucune mesure ne dit qu'ils se RAMASSENT à des vitesses différentes, et
+  // l'ancien Collecteur en sortait 240/h quel que soit le champ sous lui. Les
+  // séparer aurait changé l'économie en croyant renommer.
+  collecteurQuartz: {
+    propre: 240,
+    parVoisin: { raffinerie: 72 },
+  },
+  collecteurScorie: {
     propre: 240,
     parVoisin: { raffinerie: 72 },
   },
   raffinerie: {
-    parVoisin: { collecteur: 72 },
+    // ⚠ LA RAFFINERIE TOUCHE SON BONUS DES DEUX, séparément. C'est déjà ce
+    // que l'exemple d'Ethan du 26/08 décrivait : « une raffinerie de niveau 1
+    // entourée de deux collecteurs à quartz et trois à scorie produit 144/h de
+    // quartz et 216/h de scorie » — cinq voisins, deux ressources, jamais
+    // additionnées. La table le dit maintenant en deux clés au lieu d'une.
+    parVoisin: { collecteurQuartz: 72, collecteurScorie: 72 },
   },
 };
 
@@ -1427,7 +1648,22 @@ export function capaciteDuNiveau(id, niveau) {
  * deux bâtiments de stockage sans en réécrire la liste, et le bonus de
  * voisinage suit le même appariement.
  */
-export const PRODUCTEUR_APPARIE = { raffinerie: 'collecteur', accumulateur: 'centrale' };
+/**
+ * ⚠⚠ LA VALEUR EST UNE LISTE DEPUIS LE LOT BÂTIMENTS-QUATRE-ÉTATS, et c'est le
+ * dédoublement du Collecteur qui l'a exigé : la Raffinerie fait face à DEUX
+ * producteurs, l'Accumulateur toujours à un seul. Une chaîne aurait obligé à en
+ * choisir un, donc à se tromper la moitié du temps — la même impasse que
+ * `nom.ouvrage` a rencontrée trois cents lignes plus haut.
+ *
+ * ⚠ SON SEUL LECTEUR NE REGARDE QUE LES CLÉS. `sim/economie-base.js` demande
+ * `hasOwnProperty` pour reconnaître un bâtiment de STOCKAGE sans réécrire la
+ * liste ; la valeur, elle, n'est lue que par les tests et par le bonus de
+ * voisinage, qui la retrouve dans `DEBITS`.
+ */
+export const PRODUCTEUR_APPARIE = {
+  raffinerie: ['collecteurQuartz', 'collecteurScorie'],
+  accumulateur: ['centrale'],
+};
 
 // ---------------------------------------------------------------------------
 // Ce qu'il faut avoir posé pour construire une unité
@@ -1577,7 +1813,7 @@ export function stockagePropreDuNiveau(id, niveau) {
 
 /**
  * Débit propre d'un producteur à ce niveau, en unités PAR HEURE.
- * @param {'centrale'|'collecteur'} id
+ * @param {'centrale'|'collecteurQuartz'|'collecteurScorie'} id
  * @param {number} niveau
  * @returns {number} entier.
  */
@@ -1609,4 +1845,91 @@ export function debitVoisinParHeure(id, voisin, niveau) {
     throw new Error(`base : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`);
   }
   return Math.round(base * ECONOMIE_NIVEAU.penteProduction ** (niveau - 1));
+}
+
+// ---------------------------------------------------------------------------
+// Les quatre états d'un bâtiment
+// ---------------------------------------------------------------------------
+//
+// Arbitré par Ethan le 07/09. Un bâtiment se dessine dans l'un de quatre états,
+// et c'est sa SANTÉ qui tranche :
+//
+//     intact         PV pleins, exactement
+//     _abime         du premier PV perdu jusqu'à 50 % inclus
+//     _tres_abime    sous 50 %, jusqu'à 1 PV
+//     _detruit       0 PV
+//
+// ⚠⚠ LE PREMIER SEUIL EST UNE ÉGALITÉ, PAS UNE FRACTION, et c'est ce qui rend
+// la règle testable au PV près. « Intact » ne veut pas dire « au-dessus de
+// 99 % » : un bâtiment à un PV près du plein est DÉJÀ abîmé. Écrire
+// `pv / pvMax > 0.99` marcherait sur un bâtiment de 1 000 PV et pas sur un de
+// 50 — la faute ne se verrait que sur les petits, c'est-à-dire jamais pendant
+// qu'on la cherche.
+//
+// ⚠⚠ ET LE DERNIER EN EST UNE AUSSI. `_detruit` est `pv === 0`, pas « moins de
+// 1 % » : un bâtiment à 1 PV sur 5 500 tient encore, et le dessin doit le dire.
+// Les deux fractions sont donc encadrées par deux égalités, ce qui est la seule
+// façon d'avoir quatre états sur trois frontières.
+//
+// ⚠ 50 % APPARTIENT À `_abime`, et la comparaison s'écrit `pv * 2 >= pvMax`
+// pour rester ENTIÈRE. Une division rendrait 0,5 sur un pvMax impair de façon
+// inexacte, et la frontière se déplacerait d'un PV selon la parité.
+//
+// ⚠ `_detruit` N'EST PAS `ruine_<c>`. La ruine se pose quand la CASE est
+// rasée ; `_detruit` quand le bâtiment est à zéro PV mais encore là. Deux
+// choses différentes, deux sprites différents, et `B4 T5` le
+// garde.
+
+/**
+ * Tout ce qui peut se poser sur un champ, quelle qu'en soit la ressource.
+ *
+ * ⚠ DÉRIVÉE, JAMAIS RECOPIÉE. `CHAMPS.posableDessus` est la table qui fait
+ * foi ; une seconde liste écrite à la main cesserait d'être juste au premier
+ * bâtiment qui gagnerait le droit d'occuper un champ, et la divergence ne se
+ * verrait qu'à la pose.
+ *
+ * @returns {Set<string>}
+ */
+export function posablesSurUnChamp() {
+  return new Set(Object.values(CHAMPS.posableDessus).flat());
+}
+
+/**
+ * Les quatre états, du plus sain au plus mort — l'ordre EST la progression.
+ *
+ * ⚠ LE SUFFIXE DE L'INTACT EST VIDE, ET LES SEIZE SPRITES SAINS GARDENT LEUR
+ * NOM NU. Les renommer aurait fait tomber `src/data/atlas.js`, `render/scene.js`
+ * et leurs gardes pour un lot qui ajoute trois états.
+ */
+export const ETATS_BATIMENT = ['intact', 'abime', 'tresAbime', 'detruit'];
+
+/** Le suffixe de fichier de chaque état. */
+export const SUFFIXE_ETAT_BATIMENT = {
+  intact: '',
+  abime: '_abime',
+  tresAbime: '_tres_abime',
+  detruit: '_detruit',
+};
+
+/**
+ * L'état d'un bâtiment, de ses PV restants et de son maximum.
+ *
+ * ⚠ EN UNITÉS QUELCONQUES, POURVU QUE LES DEUX SOIENT LES MÊMES. Le moteur
+ * range des milli-PV, les montages de test des PV entiers : la règle est une
+ * comparaison, pas une échelle.
+ *
+ * @param {number} pv PV restants, ≥ 0
+ * @param {number} pvMax PV à plein, > 0
+ * @returns {string} une valeur d'`ETATS_BATIMENT`
+ */
+export function etatDuBatiment(pv, pvMax) {
+  if (!Number.isFinite(pv) || pv < 0) {
+    throw new RangeError(`état de bâtiment : PV « ${pv} » — nombre ≥ 0 attendu`);
+  }
+  if (!Number.isFinite(pvMax) || pvMax <= 0) {
+    throw new RangeError(`état de bâtiment : PV max « ${pvMax} » — nombre > 0 attendu`);
+  }
+  if (pv === 0) return 'detruit';
+  if (pv >= pvMax) return 'intact';
+  return pv * 2 >= pvMax ? 'abime' : 'tresAbime';
 }

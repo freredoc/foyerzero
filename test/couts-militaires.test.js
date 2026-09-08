@@ -361,7 +361,7 @@ test('couts-militaires — l\'électricité commence au niveau 3 et vaut le quar
   // le Collecteur prend 0,75 et la Centrale 0,5/5,2 — mesurés. Les entités
   // militaires ne figurent pas dans la table par bâtiment et prennent donc
   // `autres`, qui est resté le quart et qui est le seul nombre confirmé.
-  assert.notEqual(COUT_ELECTRICITE.fraction.collecteur, COUT_ELECTRICITE.fraction.autres);
+  assert.notEqual(COUT_ELECTRICITE.fraction.collecteurQuartz, COUT_ELECTRICITE.fraction.autres);
 
   let arrondisNonTriviaux = 0;
   for (const [id, ancre] of Object.entries(COUT_NIVEAU_DEUX_OFFENSE)) {

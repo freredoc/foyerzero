@@ -31,6 +31,7 @@ import { champsDeLaBase, ressourceDeLaCase } from '../src/sim/champs.js';
 import {
   VOISINAGE, CHAMPS, DEBITS, EMPLACEMENTS, BASE_BATIMENTS, GEOMETRIE_BASE,
   emplacementsDuNiveau, zoneDesChamps,
+  posablesSurUnChamp,
 } from '../src/data/base.js';
 import { ECONOMIE_NIVEAU } from '../src/data/economie.js';
 import { GRILLE } from '../src/data/combat.js';
@@ -51,12 +52,30 @@ const TERRAIN = {
   ],
 };
 
+/**
+ * Le collecteur qui va sur CETTE case de champ.
+ *
+ * ⚠⚠ L'IDENTIFIANT SE LIT SUR LE TERRAIN, IL NE SE CHOISIT PAS — lot
+ * BÂTIMENTS-QUATRE-ÉTATS. `CHAMPS.posableDessus` est une table par ressource
+ * depuis le dédoublement : poser un collecteur à quartz sur un champ de scorie
+ * est un défaut `mauvais-champ`, et un montage qui le ferait mesurerait ce refus
+ * au lieu de ce qu'il annonce.
+ */
+function collecteurDe(k, niveau = 1) {
+  return {
+    id: k.ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie',
+    rangee: k.rangee,
+    colonne: k.colonne,
+    niveau,
+  };
+}
+
 /** Une base légale : Chantier niveau 10, centrale, collecteur, deux raffineries. */
 function baseDeReference() {
   return [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 14, colonne: 4, niveau: 1 },
-    { id: 'collecteur', rangee: 16, colonne: 6, niveau: 1 },
+    { id: 'collecteurQuartz', rangee: 16, colonne: 6, niveau: 1 },
     { id: 'raffinerie', rangee: 16, colonne: 5, niveau: 1 },
     { id: 'raffinerie', rangee: 15, colonne: 6, niveau: 1 },
   ];
@@ -100,7 +119,7 @@ test('disposition — une base légale ne remonte aucun problème', () => {
   assert.ok(problemesDeDisposition(casse, TERRAIN).length > 0);
 });
 
-test('disposition — le collecteur doit être SUR un champ, les autres à côté', () => {
+test('disposition — un collecteur doit être SUR son champ, les autres à côté', () => {
   // Les deux sens comptent. Poser une centrale sur un champ ne casse rien
   // mécaniquement, mais gâche une case de collecteur — et il n'y en a que
   // douze dans toute la base.
@@ -114,7 +133,10 @@ test('disposition — le collecteur doit être SUR un champ, les autres à côt�
 
   // Et la liste des ayants droit vient des données, pas d'un `=== 'collecteur'`
   // écrit ici : ce test tombera si `posableDessus` change sans qu'on le veuille.
-  assert.deepEqual(CHAMPS.posableDessus, ['collecteur']);
+  assert.deepEqual(CHAMPS.posableDessus, {
+    quartz: ['collecteurQuartz'],
+    scorie: ['collecteurScorie'],
+  });
 });
 
 test('disposition — tous les défauts sont remontés ensemble, pas le premier', () => {
@@ -124,7 +146,7 @@ test('disposition — tous les défauts sont remontés ensemble, pas le premier'
   const sale = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'centrale', rangee: 13, colonne: 3, niveau: 1 }, // champ gâché
-    { id: 'collecteur', rangee: 15, colonne: 4, niveau: 1 }, // hors champ
+    { id: 'collecteurQuartz', rangee: 15, colonne: 4, niveau: 1 }, // hors champ
     { id: 'qgDeDefense', rangee: 18, colonne: 6, niveau: 0 }, // niveau invalide
     { id: 'qgDeDefense', rangee: 18, colonne: 7, niveau: 1 }, // doublon d'unique
     { id: 'aerodrome', rangee: 99, colonne: 1, niveau: 1 }, // hors base
@@ -230,8 +252,18 @@ test('disposition — le voisinage distingue terrain et bâtiments', () => {
   // Le collecteur en (16,6) touche les raffineries de (16,5) et (15,6).
   assert.deepEqual(voisinsQualifiants(base, TERRAIN, 2), { raffinerie: 2 });
   // Réciproquement, chaque raffinerie touche le collecteur.
-  assert.deepEqual(voisinsQualifiants(base, TERRAIN, 3), { collecteur: 1 });
-  assert.deepEqual(voisinsQualifiants(base, TERRAIN, 4), { collecteur: 1 });
+  //
+  // ⚠⚠ ET ELLE COMPTE LES DEUX TYPES, CELUI À ZÉRO COMPRIS — lot
+  // BÂTIMENTS-QUATRE-ÉTATS. C'est la règle écrite six lignes plus haut, appliquée
+  // à un `parVoisin` qui porte maintenant deux clés : « un panneau doit pouvoir
+  // afficher “0 accumulateur” plutôt que rien ». Une raffinerie entourée de
+  // collecteurs à quartz seulement doit pouvoir dire qu'elle n'a aucun voisin à
+  // scorie — c'est ce qui explique au joueur pourquoi elle ne stocke qu'une des
+  // deux ressources.
+  assert.deepEqual(voisinsQualifiants(base, TERRAIN, 3),
+    { collecteurQuartz: 1, collecteurScorie: 0 });
+  assert.deepEqual(voisinsQualifiants(base, TERRAIN, 4),
+    { collecteurQuartz: 1, collecteurScorie: 0 });
   // Le Chantier ne tire aucun bonus : `{}`, pas un décompte inutile.
   assert.deepEqual(voisinsQualifiants(base, TERRAIN, 0), {});
 
@@ -251,7 +283,7 @@ test('disposition — aucun plafond de voisins autre que la géométrie', () => 
   // test, qui monte délibérément au-dessus de deux.
   const grappe = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 20 },
-    { id: 'collecteur', rangee: 16, colonne: 6, niveau: 1 },
+    { id: 'collecteurQuartz', rangee: 16, colonne: 6, niveau: 1 },
     { id: 'raffinerie', rangee: 15, colonne: 5, niveau: 1 },
     { id: 'raffinerie', rangee: 15, colonne: 6, niveau: 1 },
     { id: 'raffinerie', rangee: 15, colonne: 7, niveau: 1 },
@@ -281,7 +313,7 @@ test('disposition — le débit vaut le propre plus les voisins, en clair', () =
   });
   // Une raffinerie n'a pas de production propre : tout vient du voisinage.
   assert.deepEqual(debitDuBatiment(base, TERRAIN, 3), {
-    total: 72, propre: 0, parVoisin: { collecteur: 72 },
+    total: 72, propre: 0, parVoisin: { collecteurQuartz: 72, collecteurScorie: 0 },
   });
   // Le Chantier ne produit rien, et le dit sans lever.
   assert.deepEqual(debitDuBatiment(base, TERRAIN, 0), { total: 0, propre: 0, parVoisin: {} });
@@ -315,7 +347,7 @@ test('disposition — le bonus suit le niveau du PRODUCTEUR, pas celui du voisin
   assert.equal(debitDuBatiment(basses, TERRAIN, 2).total, 384);
 
   const collecteurHaut = baseDeReference().map(
-    (b) => (b.id === 'collecteur' ? { ...b, niveau: 2 } : b),
+    (b) => (b.id === 'collecteurQuartz' ? { ...b, niveau: 2 } : b),
   );
   // 300 propre + 2 × 90 = 480 au niveau 2.
   assert.equal(debitDuBatiment(collecteurHaut, TERRAIN, 2).total, 480);
@@ -332,7 +364,7 @@ test('disposition — le bonus suit le niveau du PRODUCTEUR, pas celui du voisin
 // Ressource produite
 // ---------------------------------------------------------------------------
 
-test('disposition — le champ décide de ce que produit le collecteur', () => {
+test('disposition — le champ décide DU collecteur, donc de ce qu\'il produit', () => {
   assert.equal(CHAMPS.ressourceDonneeParLeChamp, true);
   const base = baseDeReference();
   assert.equal(ressourceProduite(base, TERRAIN, 2), 'quartz'); // posé sur (16,6)
@@ -355,7 +387,7 @@ test('disposition — le champ décide de ce que produit le collecteur', () => {
   // produit 72/h par collecteur voisin, mais rien ne dit de quoi. Le détail par
   // voisin reste disponible pour trancher plus tard.
   assert.equal(ressourceProduite(base, TERRAIN, 3), null);
-  assert.equal(debitDuBatiment(base, TERRAIN, 3).parVoisin.collecteur, 72);
+  assert.equal(debitDuBatiment(base, TERRAIN, 3).parVoisin.collecteurQuartz, 72);
 });
 
 // ---------------------------------------------------------------------------
@@ -371,7 +403,7 @@ test('disposition — le module tient sur un terrain généré, pas seulement su
     // Un collecteur sur CHAQUE case de champ : c'est le maximum légal, douze.
     const dispo = [{ id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 30 }];
     for (const k of champs.cases) {
-      dispo.push({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 1 });
+      dispo.push(collecteurDe(k));
     }
     assert.deepEqual(
       problemesDeDisposition(dispo, champs), [],
@@ -390,7 +422,7 @@ test('disposition — le module tient sur un terrain généré, pas seulement su
 
     // Le treizième collecteur n'a nulle part où aller : toutes les cases de
     // champ sont prises. C'est le plafond réel du jeu, vérifié sur du généré.
-    const treizieme = [...dispo, { id: 'collecteur', rangee: 12, colonne: 2, niveau: 1 }];
+    const treizieme = [...dispo, { id: 'collecteurQuartz', rangee: 12, colonne: 2, niveau: 1 }];
     assert.ok(
       problemesDeDisposition(treizieme, champs).length > 0,
       'un treizième collecteur devrait être refusé',
@@ -428,7 +460,7 @@ function baseMelangee() {
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'raffinerie', rangee: 15, colonne: 5, niveau: 1 },
     ...TERRAIN_MELANGE.cases.map(
-      (k) => ({ id: 'collecteur', rangee: k.rangee, colonne: k.colonne, niveau: 1 }),
+      (k) => collecteurDe(k),
     ),
   ];
 }
@@ -478,7 +510,7 @@ test('disposition — la ressource du VOISIN ne vaut que pour la raffinerie', ()
   assert.deepEqual(productionParRessource(base, TERRAIN_MELANGE, 4), { scorie: 312 });
 
   // Les trois familles se lisent dans les données, pas dans un `if` écrit ici.
-  assert.equal(BASE_BATIMENTS.collecteur.ressource, 'quartzOuScorie');
+  assert.equal(BASE_BATIMENTS.collecteurQuartz.ressource, 'quartz');
   assert.equal(BASE_BATIMENTS.raffinerie.ressource, 'quartzEtScorie');
   assert.equal(BASE_BATIMENTS.centrale.ressource, 'electricite');
 });
@@ -491,7 +523,7 @@ test('disposition — l\'attribution suit le niveau de la RAFFINERIE, pas des co
   // Monter les COLLECTEURS ne change rien à ce que la raffinerie produit —
   // c'est la règle de `debitVoisinParHeure`, vérifiée ici de bout en bout.
   const collecteursHauts = baseMelangee().map(
-    (b) => (b.id === 'collecteur' ? { ...b, niveau: 40 } : b),
+    (b) => (b.id === 'collecteurQuartz' ? { ...b, niveau: 40 } : b),
   );
   assert.deepEqual(
     productionParRessource(collecteursHauts, TERRAIN_MELANGE, 1),
@@ -512,7 +544,7 @@ test('disposition — un voisin mal posé tombe dans `indetermine`, il n\'est pa
   const mal = [
     { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 10 },
     { id: 'raffinerie', rangee: 15, colonne: 5, niveau: 1 },
-    { id: 'collecteur', rangee: 15, colonne: 4, niveau: 1 }, // case nue
+    { id: 'collecteurQuartz', rangee: 15, colonne: 4, niveau: 1 }, // case nue
   ];
   assert.deepEqual(productionParRessource(mal, TERRAIN_MELANGE, 1), { indetermine: 72 });
   // Et la disposition est bien signalée comme fautive par ailleurs : les deux
@@ -755,14 +787,17 @@ test('F-J T1 — un champ sous un collecteur qualifie encore', () => {
   // `voisinsQualifiantsParCase` mettait sa branche champ en
   // `else if (i === undefined)`.
   const sans = CENTRALE_SEULE();
-  const avec = [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }];
+  const avec = [...CENTRALE_SEULE(), { id: 'collecteurScorie', rangee: 13, colonne: 3, niveau: 1 }];
 
   // ⚠ LE MONTAGE EST LÉGAL DES DEUX CÔTÉS, et on le prouve avant de mesurer :
   // un collecteur est le SEUL bâtiment que `CHAMPS.posableDessus` autorise sur
   // un champ, donc c'est le seul montage qui puisse exister en jeu.
   assert.deepEqual(problemesDeDisposition(sans, CHAMP_UNIQUE), []);
   assert.deepEqual(problemesDeDisposition(avec, CHAMP_UNIQUE), []);
-  assert.deepEqual(CHAMPS.posableDessus, ['collecteur']);
+  assert.deepEqual(CHAMPS.posableDessus, {
+    quartz: ['collecteurQuartz'],
+    scorie: ['collecteurScorie'],
+  });
 
   for (const [nom, d] of [['sans collecteur', sans], ['collecteur dessus', avec]]) {
     const cases = voisinsQualifiantsParCase(d, CHAMP_UNIQUE, INDICE_CENTRALE);
@@ -783,11 +818,11 @@ test('F-J T2 — les deux fonctions rendent le même compte par type', () => {
   const montages = [
     ['champ libre', CHAMP_UNIQUE, CENTRALE_SEULE()],
     ['champ occupé', CHAMP_UNIQUE,
-      [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }]],
+      [...CENTRALE_SEULE(), { id: 'collecteurScorie', rangee: 13, colonne: 3, niveau: 1 }]],
     ['bâtiment sur case nue', CHAMP_UNIQUE,
       [...CENTRALE_SEULE(), { id: 'accumulateur', rangee: 15, colonne: 5, niveau: 1 }]],
     ['les deux à la fois', CHAMP_UNIQUE,
-      [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 },
+      [...CENTRALE_SEULE(), { id: 'collecteurScorie', rangee: 13, colonne: 3, niveau: 1 },
         { id: 'accumulateur', rangee: 15, colonne: 5, niveau: 1 }]],
     ['aucun voisin', { cases: [] }, CENTRALE_SEULE()],
     ['le terrain complet', TERRAIN, baseDeReference()],
@@ -830,7 +865,7 @@ test('F-J T3 — la production n\'a pas bougé d\'un milli', () => {
   // 180 est la mesure du brief, rejouée : centrale de niveau 1, UN champ de
   // scorie voisin, avec et sans collecteur dessus.
   const sans = CENTRALE_SEULE();
-  const avec = [...CENTRALE_SEULE(), { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 }];
+  const avec = [...CENTRALE_SEULE(), { id: 'collecteurScorie', rangee: 13, colonne: 3, niveau: 1 }];
   assert.equal(debitDuBatiment(sans, CHAMP_UNIQUE, INDICE_CENTRALE).total, 180);
   assert.equal(debitDuBatiment(avec, CHAMP_UNIQUE, INDICE_CENTRALE).total, 180);
   assert.deepEqual(
@@ -848,12 +883,18 @@ test('F-J T5 — une case peut qualifier DEUX fois, et la fiche le dit', () => {
   // ⚠⚠ LE CAS EST INATTEIGNABLE AUJOURD'HUI, ET C'EST MESURÉ — donc le test
   // monte un `parVoisin` À LA MAIN plutôt que d'être sauté. Il faudrait qu'une
   // table porte à la fois une clé `champDe…` et une clé de bâtiment posable sur
-  // un champ ; `CHAMPS.posableDessus` ne contient que `collecteur`, qu'aucune
-  // table n'apparie à un champ.
+  // un champ ; les seuls posables sur un champ sont les deux collecteurs,
+  // qu'aucune table n'apparie à un champ.
+  //
+  // ⚠ LA LISTE SE DEMANDE À `posablesSurUnChamp`, ELLE NE SE LIT PLUS
+  // DIRECTEMENT — lot BÂTIMENTS-QUATRE-ÉTATS. `CHAMPS.posableDessus` est devenue
+  // une table par ressource ; l'aplatir ici en aurait fait une seconde écriture,
+  // et c'est précisément la fonction dérivée qui existe pour l'éviter.
+  const surUnChamp = posablesSurUnChamp();
   const apparie = Object.entries(DEBITS).filter(([, def]) => {
     const cles = Object.keys(def.parVoisin ?? {});
     return cles.some((c) => c.startsWith('champDe'))
-      && cles.some((c) => CHAMPS.posableDessus.includes(c));
+      && cles.some((c) => surUnChamp.has(c));
   });
   assert.deepEqual(apparie.map(([id]) => id), [],
     'le cas est devenu atteignable en jeu : le monter pour de bon et retirer le faux');
@@ -861,11 +902,11 @@ test('F-J T5 — une case peut qualifier DEUX fois, et la fiche le dit', () => {
   // ⚠ LA TABLE EST MONTÉE PUIS RETIRÉE, et `DEBITS` retrouve son état — un test
   // qui laisserait une entrée derrière lui empoisonnerait ses voisins.
   const FAUX = 'fauxDoubleQualifiant';
-  DEBITS[FAUX] = { propre: 0, parVoisin: { champDeScorie: 10, collecteur: 20 } };
+  DEBITS[FAUX] = { propre: 0, parVoisin: { champDeScorie: 10, collecteurScorie: 20 } };
   try {
     const d = [
       { id: FAUX, rangee: 14, colonne: 4, niveau: 1 },
-      { id: 'collecteur', rangee: 13, colonne: 3, niveau: 1 },
+      { id: 'collecteurScorie', rangee: 13, colonne: 3, niveau: 1 },
     ];
     const cases = voisinsQualifiantsParCase(d, CHAMP_UNIQUE, 0);
     // ⚠⚠ DEUX ENTRÉES POUR UNE CASE, ET NON UNE ENTRÉE À PLUSIEURS TYPES :
@@ -874,7 +915,7 @@ test('F-J T5 — une case peut qualifier DEUX fois, et la fiche le dit', () => {
     // que deux entrées disent déjà. Et c'est ce que le MOTEUR fait — deux
     // boucles, deux lignes de `comptes`.
     assert.equal(cases.length, 2, 'la case ne qualifie qu\'une fois');
-    assert.deepEqual(cases.map((v) => v.type).sort(), ['champDeScorie', 'collecteur']);
+    assert.deepEqual(cases.map((v) => v.type).sort(), ['champDeScorie', 'collecteurScorie']);
     for (const v of cases) {
       assert.equal(v.rangee, 13);
       assert.equal(v.colonne, 3);
@@ -882,7 +923,7 @@ test('F-J T5 — une case peut qualifier DEUX fois, et la fiche le dit', () => {
     }
     // Et le moteur compte pareil — c'est `F-J T2` sur ce cas-là précisément.
     assert.deepEqual(voisinsQualifiants(d, CHAMP_UNIQUE, 0),
-      { champDeScorie: 1, collecteur: 1 });
+      { champDeScorie: 1, collecteurScorie: 1 });
   } finally {
     delete DEBITS[FAUX];
   }

@@ -276,17 +276,16 @@ def taches():
     reste donc ici que les trente-quatre bâtiments et les deux ruines.
     """
     out = []
-    for fn, nx, ny, gr in B:
-        im = Image.open(os.path.join(SRC, fn)); W, H = im.size
-        cw, ch = W // nx, H // ny
-        for j in range(ny):
-            for i in range(nx):
-                cle = gr[j][i]
-                ouv = cle in OUV
-                nom = ('bat_o_' if ouv else 'bat_j_') + RENOMMAGE.get(cle, cle)
-                out.append(('bâtiment', nom, os.path.join(SRC, fn),
-                            (i * cw, j * ch, (i + 1) * cw, (j + 1) * ch),
-                            cible(PV[cle]), ouv))
+    # ⚠⚠ LA TABLE `B` N'EST PLUS PARCOURUE NON PLUS — lot BÂTIMENTS-QUATRE-ÉTATS,
+    # 08/09. Elle donnait les seize bâtiments, découpés à plusieurs par planche ;
+    # la v2 en dessine un par planche ET par état, et `tools/batiments_v2.py` les
+    # produit. C'est le même mouvement que `U` a fait au lot SPRITES-V2-JOUEUR,
+    # trois jours plus tôt, et pour la même raison : une planche à un sujet n'a
+    # ni gouttière à trouver ni attribution à mesurer.
+    #
+    # ⚠ `B` RESTE IMPORTÉE PAR `final128`, ET CE FICHIER NE LA LIT PLUS. Elle
+    # décrit encore les cinq planches d'origine, qui restent dans `art/sources/`
+    # — « rien n'y est un produit, tout y est un original ».
     # --- les pictogrammes d'interface, lot PICTOGRAMMES du 07/09 -------------
     #
     # ⚠ `ouvrage=False` POUR TOUS, ET CE N'EST PAS UN DÉFAUT PRIS PAR HABITUDE.

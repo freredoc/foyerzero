@@ -91,6 +91,18 @@ CHAINE = [
     # six tourelles de défense, six socles. Une seconde table aurait recopié
     # quarante-deux lignes au changement d'une lettre près.
     ('ouvrage_v2',      []),
+    # ⚠⚠ LES QUATRE-VINGT-UN SPRITES DE BÂTIMENT EN V2 — lot BÂTIMENTS-QUATRE-ÉTATS,
+    # 08/09, et c'est le même geste une troisième fois : une planche, un sprite.
+    # Vingt bâtiments × quatre états, plus l'icône de la vignette mixte. Il PREND
+    # les bâtiments à `planches` et à `ruines`, il ne s'y ajoute pas : les deux
+    # ont perdu leur boucle le même jour, et `ruines` ne garde que `ruine_j` et
+    # `ruine_o`, qui n'ont jamais été des bâtiments.
+    #
+    # ⚠ SANS CETTE LIGNE, LES QUATRE-VINGT-UNE SOURCES SONT CLASSÉES DORMANTES.
+    # Mesuré en l'oubliant : `entrees.py --declarer` a rendu 406 consommées et
+    # **233 dormantes** au lieu de 485 et 154 — la trace ne voit que ce que la
+    # CHAÎNE ouvre, et un outil hors table n'ouvre rien.
+    ('batiments_v2',    []),
     # ⚠⚠ LES DEUX OUTILS D'ANCRE ENTRENT DANS LA CHAÎNE, ET ILS N'ÉCRIVENT PAS UN
     # PIXEL. Ils produisent `ancres-defense.json` et `ancres-blindes.json` sous
     # `art/sprites/`, comme `chassis.py` écrivait `ancres-chassis.json` : le

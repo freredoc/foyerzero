@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.29 · build 131.
+Dernière révision : **08/09/2026**, version 0.99.30 · build 132.
 
 ---
 
@@ -42,7 +42,60 @@ Dernière révision : **08/09/2026**, version 0.99.29 · build 131.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot OUVRAGE-CÂBLAGE), à confronter :**
+**Référence au 08/09/2026 (après le lot BÂTIMENTS-QUATRE-ÉTATS), à confronter :**
+`npm test` → **1419 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 647 037 octets**, 0 référence externe. Coût **+251 576 octets** : **images
++246 932** — l'atlas `batiment` passe de 114 650 à 299 848 octets, donc 152 868 →
+399 800 en base64 — et **code +4 644**. **297 lignes `data:` avant, 297 après** :
+aucune ressource nouvelle, c'est la même image qui s'alourdit.
+⚠⚠ **LA MARGE T10 TOMBE À 652 963 OCTETS, 7,02 %**, contre 9,73 % le matin même
+et 11,22 % la veille. C'est le point à surveiller du lot : le prochain lot d'art
+devra compter avant de dessiner.
+⚠⚠ **UN ÉTAT DEVIENT QUATRE, ET `_detruit` AVAIT UN LECTEUR DE ZÉRO.** Relevé
+au brief et vérifié : les seize sprites `_detruit` étaient dans le livrable
+depuis leur fabrication et n'étaient nommés par aucune ligne de `src/` —
+troisième fois du dépôt après `ui_pause` et `ruine_j`/`ruine_o`. Les quatre états
+sont `intact`, `_abime`, `_tres_abime`, `_detruit`, et le jeton du Chantier les
+montre.
+⚠⚠ **LES SEUILS SONT DES ÉGALITÉS AUX DEUX BOUTS.** « Intact » vaut
+`pv === pvMax`, pas « au-dessus de 99 % » ; `_detruit` vaut `pv === 0`, pas
+« moins de 1 % ». Entre les deux, 50 % appartient à `_abime`, et la comparaison
+s'écrit `pv * 2 >= pvMax` pour rester ENTIÈRE. Un `pv / pvMax > 0.99` marcherait
+sur un bâtiment de 1 000 PV et pas sur un de 50.
+⚠⚠ **L'ÉTAT SE LIT DANS L'ATLAS, IL NE S'ÉCRIT PAS DANS LE CODE.** C'était déjà
+la règle des poses `_def` ; un état absent retombe sur le plus proche du côté
+SAIN, et le jour où une planche arrive il n'y a **rien** à changer. C'est ce qui
+a rendu le lot livrable avant l'art — et c'est ce qui a fait entrer l'icône
+`bat_j_collecteur_mixte` sans une ligne, le jour où Ethan l'a livrée.
+⚠⚠ **`collecteur` A DISPARU, REMPLACÉ PAR DEUX.** 341 occurrences relevées
+dans 30 fichiers. Ethan, 08/09 : « une icône collecteur mixte, le bâtiment posé
+quartz ou scories en fonction du champ. » La palette porte donc **quatorze
+vignettes pour quinze bâtiments** — elle n'est plus une permutation du roster —
+et `CHAMPS.posableDessus` devient une table PAR RESSOURCE, ce qui empêche un
+collecteur à quartz d'atterrir sur un champ de scorie en le DÉPLAÇANT.
+⚠ **L'ARBITRAGE DU 26/08 EST INTACT, ET MÊME RENFORCÉ.**
+`ressourceDonneeParLeChamp` disait « le champ décide de ce qu'il produit » ; il
+décide maintenant DU BÂTIMENT, donc de ce qu'il produit. La phrase du tutoriel —
+« c'est le champ sous lui qui décide de ce qu'il sort » — reste vraie mot pour
+mot, et c'est ce qui a fait retenir cette lecture-là plutôt qu'une palette à deux
+vignettes.
+⚠⚠ **`SAVE_VERSION` PASSE À 29, ET LA MIGRATION NE DEVINE RIEN.** Les champs
+d'une base sont une fonction déterministe de sa position ; chaque `collecteur`
+posé devient donc le collecteur de la ressource qui est SOUS LUI — celle qu'il
+produisait la seconde d'avant. Aucun joueur ne perd ni ne gagne un gramme, et le
+témoin gelé le prouve : **la quatorzième couche ne déplace QUE `disposition`**,
+sur les quatorze phases et les vingt-cinq graines. Les vingt et un autres champs
+tombent à l'octet.
+⚠ **TROIS ARTILLERIES ENTRENT SANS EFFET DE JEU**, et `role: 'artillerie'` le
+dit en clair : aucune branche du dépôt ne lit ce rôle. Elles se posent, se
+montent et se réparent sans rien produire — c'est ce que le brief demande, et le
+blanc est déclaré plutôt qu'emprunté à un rôle existant.
+⚠ **`tools/batiments_v2.py` REMPLACE les bâtiments de `planches.py` et de
+`ruines.py`**, il ne s'y ajoute pas. Les dix anciennes planches multi-sujets
+passent de consommées à DORMANTES ; `ruines.py` ne garde que `ruine_j` et
+`ruine_o`, qui n'ont jamais été des bâtiments.
+
+**Auparavant, après le lot OUVRAGE-CÂBLAGE :**
 `npm test` → **1412 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 395 461 octets**, 0 référence externe. Coût **+38 927 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis `214415d` :
@@ -8441,7 +8494,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   59 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   60 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -8451,7 +8504,7 @@ test/                   59 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
-  journal-raids
+  journal-raids  batiments-quatre-etats
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

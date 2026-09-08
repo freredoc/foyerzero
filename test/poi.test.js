@@ -508,7 +508,7 @@ function baseQuiProduit(graine = 20260826) {
   const etat = creerEtat(graine);
   const champ = baseCourante(etat).champs.cases.find((k) => k.ressource === 'quartz');
   assert.ok(champ, 'montage : aucun champ de quartz sous cette base');
-  poser(etat, 'collecteur', champ.rangee, champ.colonne);
+  poser(etat, 'collecteurQuartz', champ.rangee, champ.colonne);
   return etat;
 }
 
