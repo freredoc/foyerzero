@@ -1,0 +1,100 @@
+sprite                                         fumée  percé  trous
+bat_j_caserne                                   1077      0      0       
+bat_j_caserne_abime                            11469      0      0       
+bat_j_caserne_tres_abime                       19191      0      0       
+bat_j_caserne_detruit                           8399      0     85       
+bat_j_depot_de_vehicules                        1043      0     18   vert
+bat_j_depot_de_vehicules_abime                 14902      0      6   vert
+bat_j_depot_de_vehicules_tres_abime            27792      0    255   vert
+bat_j_depot_de_vehicules_detruit               10013      0    629   vert
+bat_j_aerodrome                                  625      0      0   vert
+bat_j_aerodrome_abime                          11175      0      0   vert
+bat_j_aerodrome_tres_abime                     19799      0      0   vert
+bat_j_aerodrome_detruit                         5920      0      0   vert
+bat_j_centrale                                  1316      0      0   vert
+bat_j_centrale_abime                            9594      0     76   vert
+bat_j_centrale_tres_abime                      24788      0     80   vert
+bat_j_centrale_detruit                          9055      0    246   vert
+bat_j_accumulateur                              1909      0      0   vert
+bat_j_accumulateur_abime                       19325      0      0   vert
+bat_j_accumulateur_tres_abime                  34389      0    195   vert
+bat_j_accumulateur_detruit                     16719      0    304   vert
+bat_j_collecteur_quartz                         1769      0      0   vert
+bat_j_collecteur_quartz_abime                   9997      0      0   vert
+bat_j_collecteur_quartz_tres_abime             22553      0    325   vert
+bat_j_collecteur_quartz_detruit                18866      0   1459   vert
+bat_j_collecteur_scorie                         1794      0      0   vert
+bat_j_collecteur_scorie_abime                   9814      0      0   vert
+bat_j_collecteur_scorie_tres_abime             37541      0    235   vert
+bat_j_collecteur_scorie_detruit                21204      0    192   vert
+bat_j_raffinerie                                2192      0      0   vert
+bat_j_raffinerie_abime                         25026      0      0   vert
+bat_j_raffinerie_tres_abime                    24685      0    162   vert
+bat_j_raffinerie_detruit                       10996      0    163   vert
+bat_j_artillerie_anti_infanterie                 814      0      0   vert
+bat_j_artillerie_anti_infanterie_abime         15203      0      0   vert
+bat_j_artillerie_anti_infanterie_tres_abime    20481      0    136   vert
+bat_j_artillerie_anti_infanterie_detruit        6453      0     25   vert
+bat_j_artillerie_anti_vehicule                   765      0      0       
+bat_j_artillerie_anti_vehicule_abime            9993      0      0       
+bat_j_artillerie_anti_vehicule_tres_abime      17666      0      0       
+bat_j_artillerie_anti_vehicule_detruit          5600      3    108         ⚠
+bat_j_artillerie_anti_aerien                    1020      0      0       
+bat_j_artillerie_anti_aerien_abime             10433      0      0       
+bat_j_artillerie_anti_aerien_tres_abime        13042      8      0         ⚠
+bat_j_artillerie_anti_aerien_detruit            3264      0      0       
+bat_j_chantier_de_construction                  2099      0   3816   vert
+bat_j_chantier_de_construction_abime           11191      0   3211   vert
+bat_j_chantier_de_construction_tres_abime      20976      0   3755   vert
+bat_j_chantier_de_construction_detruit          6302      0     69   vert
+bat_j_qg_de_defense                             1758      0      0   vert
+bat_j_qg_de_defense_abime                       8923      0      0   vert
+bat_j_qg_de_defense_tres_abime                 17390      0      0   vert
+bat_j_qg_de_defense_detruit                     5700      0    123   vert
+bat_j_complexe_de_defense                       1619      0      0       
+bat_j_complexe_de_defense_abime                 7169      0      0       
+bat_j_complexe_de_defense_tres_abime           28409      0      0       
+bat_j_complexe_de_defense_detruit               7229      0      8       
+bat_j_centre_de_commandement                    1642      0      0   vert
+bat_j_centre_de_commandement_abime             15702      0    212   vert
+bat_j_centre_de_commandement_tres_abime        36987      0      0   vert
+bat_j_centre_de_commandement_detruit            6464      0    403   vert
+bat_o_gangue                                    1207      0      0   vert
+bat_o_gangue_abime                              8535      0      0   vert
+bat_o_gangue_tres_abime                        43941      0     80   vert
+bat_o_gangue_detruit                           11842      0    630   vert
+bat_o_terril                                    1012      0      0   vert
+bat_o_terril_abime                             18049      0      0   vert
+bat_o_terril_tres_abime                        41721      0    325   vert
+bat_o_terril_detruit                           20779      0    167   vert
+bat_o_noeud                                     1344      0      0   vert
+bat_o_noeud_abime                               7246      0      0   vert
+bat_o_noeud_tres_abime                         39683      0   1547   vert
+bat_o_noeud_detruit                             6470      0      0   vert
+bat_o_souche                                     412      0      0   vert
+bat_o_souche_abime                             16543      0     70   vert
+bat_o_souche_tres_abime                        72514      0    384   vert
+bat_o_souche_detruit                           46828      0    323   vert
+bat_o_etai                                       458      0      0   vert
+bat_o_etai_abime                               16889      0      0   vert
+bat_o_etai_tres_abime                          58205      0     68   vert
+bat_o_etai_detruit                             29982      0     57   vert
+
+80 sprites écrits · 1162891 px de fumée opacifiés
+16 bâtiments sur 20 passés au vert :
+    bat_j_depot_de_vehicules
+    bat_j_aerodrome
+    bat_j_centrale
+    bat_j_accumulateur
+    bat_j_collecteur_quartz
+    bat_j_collecteur_scorie
+    bat_j_raffinerie
+    bat_j_artillerie_anti_infanterie
+    bat_j_chantier_de_construction
+    bat_j_qg_de_defense
+    bat_j_centre_de_commandement
+    bat_o_gangue
+    bat_o_terril
+    bat_o_noeud
+    bat_o_souche
+    bat_o_etai
