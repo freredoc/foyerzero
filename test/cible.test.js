@@ -321,7 +321,16 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // tirages, et tout ce qui tire APRÈS `placerDefenses` et `placerBatiments` se
   // décale : obstacles, composition, vagues. Le brief l'annonçait, le rapport le
   // chiffre, et ce que ce test tient ne change pas.
-  assert.equal(r.nbTicks, 409);
+  //
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : 414 TICKS, CINQ DE PLUS — ET LA CAUSE
+  // N'EST PAS CELLE DES QUATRE RÉANCRAGES PRÉCÉDENTS. Ceux-là déplaçaient le
+  // FLUX de tirages, donc RECOMPOSAIENT la garnison ; ce lot-ci tire sur un
+  // SECOND flux, salé, précisément pour que la composition ne bouge pas d'un
+  // identifiant. Ce qui change est la POSITION des mêmes pièces : les deux blocs
+  // FLOTTENT désormais dans leur bande au lieu d'être collés à son bord. Cinq
+  // ticks d'écart contre 401 puis 245 aux lots précédents — la mesure dit
+  // elle-même que ce lot déplace moins que ceux qui recomposaient.
+  assert.equal(r.nbTicks, 414);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -353,7 +362,13 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // multiplicateur de 3,25 de l'avant-poste amplifie la remontée comme il avait
   // amplifié la chute. **Aucun barème n'a été touché**, et ce que ce test tient
   // — le raid ne se termine pas faute de mieux — ne bouge pas.
-  assert.deepEqual(r.butin, { quartz: 31_028, scorie: 10_342 });
+  //
+  // ⚠ LOT DISPOSITION-OUVRAGE (08/09) : 21 542 et 7 180, soit −30,6 %, pour
+  // cinq ticks de PLUS. Le raid dure à peine plus longtemps et rapporte moins :
+  // les blocs flottent, donc l'assaut lourd de la graine 1 met plus de temps à
+  // atteindre les bâtiments et en griffe moins avant de tomber. **Aucun barème
+  // n'a été touché.**
+  assert.deepEqual(r.butin, { quartz: 21_542, scorie: 7_180 });
   assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
 });
 
@@ -485,10 +500,25 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // — six fois le plafond, « à remonter » — n'a plus d'équivalent : le pire des
   // trois vaut une fois et demie le plafond.
   //
-  // ⚠ ET LA LISTE EST NOMMÉE, PAS BORNÉE : « au plus trois » laisserait entrer
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : ILS SONT DEUX, ET LA LISTE BOUGE DES
+  // DEUX CÔTÉS. `mixte/base/11` et `mixte/camp/3` en sortent, `blindeLourd/camp/42`
+  // y entre ; `mixte/camp/11` reste, au même tick. Les deux blocs flottent
+  // désormais dans leur bande : un raid qui traînait s'achève, un raid qui
+  // s'achevait traîne — un allongement uniforme n'aurait fait qu'ajouter.
+  //
+  // ⚠⚠ ET LE « AUTRE RÉGIME » EST DE RETOUR SUR UN RAID, CE QU'IL FAUT DIRE
+  // PLUTÔT QUE DE LE TAIRE. Aucun des deux n'est un gel, vérifié en portant
+  // `maxTicks` à 20 000 : ils se concluent par `attaquants`, aux ticks **3 539**
+  // (blindeLourd/camp/42) et **1 101** (mixte/camp/11). Le premier vaut
+  // **quatre fois le plafond** — 354 secondes de combat. C'est le troisième du
+  // genre après le 4 645 du lot CARTE et le 5 478 du lot COLONNE, et il est à
+  // remonter pour la même raison : ce n'est plus un dépassement, c'est un autre
+  // régime. **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan.
+  //
+  // ⚠ ET LA LISTE EST NOMMÉE, PAS BORNÉE : « au plus deux » laisserait entrer
   // n'importe quel autre raid. Ceux-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), ['mixte/base/11', 'mixte/camp/11', 'mixte/camp/3'],
+    expires.sort(), ['blindeLourd/camp/42', 'mixte/camp/11'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.

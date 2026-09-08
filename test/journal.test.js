@@ -23,6 +23,7 @@ import { UNITES } from '../src/data/combat.js';
 import {
   TEMOINS_COMBAT, COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
   COMBATS_DEPLACES_PAR_CIBLES_RANGEES,
+  COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,6 +52,7 @@ function montageDe(type, saveur, niveau, graine, ids = TOUTES) {
 // ---------------------------------------------------------------------------
 // JOURNAL T1 — l'additivité, contre un témoin d'AVANT le lot
 // ---------------------------------------------------------------------------
+
 
 test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le journal (falsification n° 1)', () => {
   const TYPES = [
@@ -110,9 +112,13 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
           //
           // ⚠⚠ ET LE LOT CIBLES-RANGÉES EN AJOUTE UNE TROISIÈME, AU-DESSUS DES
           // DEUX AUTRES. Même doctrine : on empile, on ne remplace pas.
+          //
+          // ⚠⚠ ET LE LOT DISPOSITION-OUVRAGE EN AJOUTE UNE QUATRIÈME. Même
+          // doctrine, quatrième fois : on empile, on ne remplace pas.
           const deplaces = COMBATS_DEPLACES_PAR_ARRET[i] ?? {};
           const deplacesColonne = COMBATS_DEPLACES_PAR_COLONNE[i] ?? {};
           const deplacesRangees = COMBATS_DEPLACES_PAR_CIBLES_RANGEES[i] ?? {};
+          const deplacesFlottant = COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
@@ -122,12 +128,16 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
             if (Object.prototype.hasOwnProperty.call(deplacesRangees, c)) {
               reference = deplacesRangees[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesFlottant, c)) {
+              reference = deplacesFlottant[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
             if (Object.prototype.hasOwnProperty.call(deplaces, c)
               || Object.prototype.hasOwnProperty.call(deplacesColonne, c)
-              || Object.prototype.hasOwnProperty.call(deplacesRangees, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesRangees, c)
+              || Object.prototype.hasOwnProperty.call(deplacesFlottant, c)) surcharges += 1;
           }
           i += 1;
         }
@@ -159,11 +169,21 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
   // somme, et il ne monte donc que de cinq. Les 304 restants sont pour
   // l'essentiel des CAUSES de fin, que ni la disposition ni la composition ne
   // font changer.
-  assert.equal(surcharges, 1296, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : LA SURCHARGE PASSE DE 1 296 À 1 331, ET
+  // IL NE RESTE QUE **269 CHAMPS GARDÉS** contre la capture d'avant
+  // JOURNAL-DE-COMBAT. La quatrième couche touche les DEUX CENTS combats et
+  // déplace 1 039 champs — mais 1 004 d'entre eux étaient DÉJÀ surchargés par
+  // l'une des trois couches d'avant : le compte est l'UNION des quatre, pas leur
+  // somme, et il ne monte donc que de trente-cinq. Les 269 restants sont pour
+  // l'essentiel des CAUSES de fin, que ni la disposition ni la composition ne
+  // font changer.
+  assert.equal(surcharges, 1331, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
-  assert.ok(champs - surcharges === 304, 'le compte des champs encore gardés a changé');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE).length, 200);
+  assert.ok(champs - surcharges === 269, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------

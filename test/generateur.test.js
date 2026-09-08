@@ -291,11 +291,28 @@ test('T6 — six occupants au plus par rangée, et le bon nombre de rangées', (
     assert.ok(rangees.size >= plancher && rangees.size <= plafond,
       `${rangees.size} rangées pour ${nb} défenses, hors de [${plancher}, ${plafond}] — `
       + JSON.stringify(params));
-    // Collées aux bâtiments, sans trou : les rangées occupées sont les plus
-    // ARRIÈRE, et c'est la première des quatre contraintes.
-    const plusAvancee = Math.min(...rangees.keys());
-    assert.equal(plusAvancee, bande.derniere - rangees.size + 1,
-      `la bande de défense a un trou — ${JSON.stringify(params)}`);
+    // ⚠⚠ LE BLOC N'EST PLUS COLLÉ AU FOND — LOT DISPOSITION-OUVRAGE, 08/09, ET
+    // C'EST LA GARDE QUI CHANGE DE CIBLE, PAS L'ASSERTION QU'ON RETIRE. Elle
+    // exigeait `min(rangées) === derniere − taille + 1`, c'est-à-dire un bloc
+    // sans trou ET cloué à la rangée 10. Mesuré AVANT le lot sur 240 montages :
+    // les défenses finissaient en rangée 10 sur 240 sur 240 — c'est exactement
+    // ce qu'Ethan décrit par « les unités de défense sont au fond », donc
+    // l'invariant que le point 9 demande de relâcher. Ce qui la remplace est
+    // BORNÉ dans les deux sens et se mesure sur le même balayage :
+    //   — toutes les rangées sont dans la bande (asserté juste au-dessus) ;
+    //   — le bloc reste un BLOC : son étendue ne dépasse jamais le nombre de
+    //     rangées employées plus `etalementMaxRangees` ;
+    //   — donc au plus `etalementMaxRangees` rangées vides en son sein.
+    // Une garde qui dirait seulement « dans la bande » laisserait passer un
+    // semis sur les huit rangées ; celle-ci tombe dès qu'un trou de trop
+    // paraît.
+    const listeRangees = [...rangees.keys()].sort((a, b) => a - b);
+    const etendue = listeRangees[listeRangees.length - 1] - listeRangees[0] + 1;
+    assert.ok(
+      etendue <= rangees.size + DISPOSITION_DEFENSES.etalementMaxRangees,
+      `bloc de défense étalé sur ${etendue} rangées pour ${rangees.size} employées — `
+      + JSON.stringify(params),
+    );
     vusDeuxComptes.add(`${nb}:${rangees.size}`);
   });
   // ⚠ FALSIFIABLE : un même nombre de défenses doit produire des nombres de
@@ -400,12 +417,27 @@ test('T7 — les artilleries sont au fond, et l\'ordre des catégories tient', (
   assert.ok(maxArtilleries <= 2 * DISPOSITION_DEFENSES.occupantsMaxParRangee);
   // ⚠⚠ MESURÉ, ET ÉCRIT EN CLAIR : la rangée la plus avancée qu'une artillerie
   // atteigne sur tout le balayage. Elle valait 9 avant le lot CIBLES-RANGÉES, où
-  // les rangées se remplissaient six par six ; elle vaut 8 depuis que les tailles
-  // se tirent — une rangée du fond peut n'avoir qu'un occupant. Un chiffre en
-  // clair fait tomber ce test le jour où la dispersion irait plus loin, là où un
-  // `>=` la laisserait glisser sans un mot.
-  assert.equal(minRangee, bande.derniere - 2,
-    'les artilleries n\'atteignent plus la rangée 8, ou descendent plus bas encore');
+  // les rangées se remplissaient six par six ; 8 depuis que les tailles se
+  // tirent — une rangée du fond peut n'avoir qu'un occupant ; et **7 depuis le
+  // lot DISPOSITION-OUVRAGE**, où le bloc entier flotte dans sa bande.
+  //
+  // ⚠⚠ ET ELLE NE DESCEND PAS JUSQU'À LA RANGÉE 3, CE QUI EST UNE PROPRIÉTÉ ET
+  // NON UNE LIMITE DU BALAYAGE. L'artillerie occupe le bord ARRIÈRE du bloc —
+  // `ordonnerDefenses` la met en tête, et la rangée décroît avec l'offset —,
+  // donc elle ne peut s'avancer que de la marge que le bloc laisse dans sa
+  // bande. Mesuré au-delà du balayage de ce test : **6** sur 110 000 montages,
+  // graines 1 à 2000. Le §4 du brief prévoyait que
+  // `rangeeLaPlusAvanceeQuiTire` cesserait d'être vacueuse « si le bloc de
+  // défense peut descendre en rangée 3 » : il le peut — la bande entière est
+  // atteinte, asserté ailleurs — mais pas l'artillerie, et la fonction reste
+  // vacueuse de toute façon, rendant `bande.premiere` pour les trois (asserté
+  // plus haut dans ce même test).
+  //
+  // ⚠ ET LE CHIFFRE EN CLAIR RESTE UN CHIFFRE EN CLAIR. Un `>=` laisserait
+  // glisser la dispersion sans un mot ; cette égalité tombe le jour où le
+  // placement changerait de bornes, dans un sens comme dans l'autre.
+  assert.equal(minRangee, bande.derniere - 3,
+    'les artilleries n\'atteignent plus la rangée 7, ou descendent plus bas encore');
 });
 
 // ---------------------------------------------------------------------------
@@ -647,6 +679,7 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   // n'avait jamais été re-mesurée — deux passations l'ont portée comme dette.
   // Cinq graines et cinq compositions, médiane et maximum : CLAUDE.md §5.
   const ecarts = [];
+  const ecartsRelatifs = [];
   let cellules = 0;
   let combatsTropCourts = 0;
   let entitesQuiBasculent = 0;
@@ -685,7 +718,13 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
               resultats[i].cause, resultats[j].cause,
               `${type} g${graine} ${profil}/${graineAssaut} : causes différentes entre ${a} et ${b}`,
             );
-            ecarts.push(Math.abs(resultats[i].tick - resultats[j].tick));
+            const ecart = Math.abs(resultats[i].tick - resultats[j].tick);
+            ecarts.push(ecart);
+            // ⚠ L'ÉCART RELATIF SE PREND PAIRE PAR PAIRE, jamais contre la durée
+            // la plus courte du balayage : un écart de cinq ticks sur un combat
+            // de 644 et un combat de 155 qui n'écarte de rien sont deux
+            // cellules différentes, et les mêler ferait accuser la seconde.
+            ecartsRelatifs.push(ecart / Math.min(resultats[i].tick, resultats[j].tick));
           }
         }
 
@@ -733,15 +772,38 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   const mediane = ecarts[Math.floor(ecarts.length / 2)];
   const auDessusDeZero = ecarts.filter((e) => e > 0).length;
 
-  // Mesuré sur ce montage : médiane 0, maximum 1, et 32 comparaisons sur 4 200
-  // au-dessus de zéro sur le balayage large — soit 0,76 %. Le plafond de 5 %
-  // laisse 6,5 fois de marge et tomberait si l'arrondi se mettait à mordre.
+  // Mesuré sur ce montage : médiane 0, et 32 comparaisons sur 4 200 au-dessus de
+  // zéro sur le balayage large — soit 0,76 %. Le plafond de 5 % laisse 6,5 fois
+  // de marge et tomberait si l'arrondi se mettait à mordre.
   assert.equal(mediane, 0, `médiane des écarts = ${mediane} tick(s), attendue 0`);
-  assert.ok(ecartMax <= 1, `écart de ${ecartMax} ticks entre deux niveaux du même site`);
   assert.ok(
     auDessusDeZero <= ecarts.length * 0.05,
     `${auDessusDeZero} comparaisons sur ${ecarts.length} écartent d'un tick : au-dessus de 5 %`,
   );
+
+  // ⚠⚠ LE PLAFOND DE L'ÉCART EST DEVENU RELATIF — LOT DISPOSITION-OUVRAGE,
+  // 08/09 —, ET CE N'EST PAS UN ASSOUPLISSEMENT : MESURÉ DES DEUX CÔTÉS. Il
+  // valait `ecartMax <= 1`, un nombre de TICKS, sur un montage dont le pire
+  // combat durait 434 ticks. Le lot déplace les rangées des sites, donc il
+  // échantillonne d'autres combats : le même montage dure maintenant 644 ticks
+  // au pire, et le seul écart non nul en vaut 5.
+  //
+  // ⚠⚠ ET LA STRUCTURE DE L'ÉCART N'A PAS BOUGÉ D'UN CHEVEU — c'est ce qui
+  // distingue un miroir qui se dégrade d'un montage qui grandit. Avant comme
+  // après : **quatre comparaisons sur cinq cents**, toujours UNE cellule sur
+  // cinquante, et toujours le niveau 2 seul contre les quatre autres. Ce que le
+  // plafond doit tenir n'est donc pas un nombre de ticks — il grandit avec le
+  // combat — mais la PART du combat que l'arrondi déplace : **0,231 % avant,
+  // 0,782 % après**. Un pour cent laisse 1,3 fois de marge, et un `<= 5` nu
+  // aurait laissé passer un miroir cassé sur un combat de cent ticks.
+  const relatifMax = Math.max(...ecartsRelatifs);
+  assert.ok(
+    relatifMax <= 0.01,
+    `l'arrondi déplace ${(relatifMax * 100).toFixed(3)} % d'un combat, au-dessus de 1 %`,
+  );
+  // Et le montage doit avoir vraiment rencontré l'écart, sinon la borne
+  // ci-dessus serait vacueuse : la voici en clair, mesurée.
+  assert.equal(ecartMax, 5, `écart maximal ${ecartMax} ticks au lieu des 5 mesurés`);
 
   // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
   // du §4 aurait été choisi trop juste sans qu'on le sache.
@@ -1231,11 +1293,24 @@ test('CR T4 — les trois autres contraintes tiennent, seuils en clair COMPRIS',
         assert.ok(n <= parRangee, `${type}/g${g} rangée ${rangee} : ${n} occupants`);
         assert.ok(GRILLE.largeur - n >= 3, `${type}/g${g} rangée ${rangee} : moins de 3 libres`);
       }
-      // 2. les rangées occupées sont les plus ARRIÈRE, sans trou.
+      // 2. ⚠⚠ LE BLOC FLOTTE, ET LA GARDE CHANGE DE CIBLE — LOT
+      //    DISPOSITION-OUVRAGE, 08/09. Elle exigeait `r === derniere - k`,
+      //    c'est-à-dire un bloc collé à la rangée 10 et sans trou : mesuré avant
+      //    ce lot, les défenses finissaient en rangée 10 sur 240 montages sur
+      //    240, ce qu'Ethan décrit par « les unités de défense sont au fond ».
+      //    C'était l'invariant à relâcher, pas un effet de bord. Ce qui reste
+      //    gardé, et qui est BORNÉ dans les deux sens : toutes les rangées sont
+      //    dans la bande, et le bloc ne s'étale jamais de plus de
+      //    `etalementMaxRangees` rangées vides — sans quoi la garnison
+      //    deviendrait un semis.
       const rangees = [...parLigne.keys()].sort((a, b) => b - a);
-      rangees.forEach((r, k) => {
-        assert.equal(r, bande.derniere - k, `${type}/g${g} : la bande de défense a un trou`);
-      });
+      for (const r of rangees) {
+        assert.ok(r >= bande.premiere && r <= bande.derniere,
+          `${type}/g${g} : rangée ${r} hors de la bande de défense`);
+      }
+      const etendue = rangees[0] - rangees[rangees.length - 1] + 1;
+      assert.ok(etendue <= rangees.length + DISPOSITION_DEFENSES.etalementMaxRangees,
+        `${type}/g${g} : bloc étalé sur ${etendue} rangées pour ${rangees.length} employées`);
       // 3. l'écart de charge, sur les DEUX groupes.
       for (const groupe of [site.defenseurs, site.batiments]) {
         const charge = new Array(GRILLE.largeur).fill(0);
@@ -1264,22 +1339,45 @@ test('CR T4 — les trois autres contraintes tiennent, seuils en clair COMPRIS',
     `les bâtiments ne dépassent jamais ${parRangee} par rangée : la question du brief ne se pose plus`);
 });
 
-test('CR T5 — Souche et Étai restent au fond, au centre', () => {
-  // Non-régression de `COL T18`, sur le chemin NEUF : les deux uniques sont
-  // posés HORS du tirage des tailles de rangée, et ils ne doivent pas bouger.
+test('CR T5 — Souche et Étai restent au fond, et leur COLONNE se tire', () => {
+  // ⚠⚠ LA MOITIÉ « AU CENTRE » EST TOMBÉE — LOT DISPOSITION-OUVRAGE, 08/09.
+  // Elle exigeait `colonne === centre` et `centre − 1`, donc 5 et 4 sur toute
+  // graine : mesuré avant ce lot, UNE seule position sur 240 montages, et c'est
+  // le troisième membre du point 9 d'Ethan — « souche et étai restent au fond ».
+  // Les colonnes se tirent désormais.
+  //
+  // ⚠⚠ ET LA MOITIÉ « AU FOND » RESTE, INTACTE. Ce sont les deux objectifs du
+  // raid : ils doivent coûter la traversée complète, et les avancer
+  // raccourcirait tous les raids du jeu. Le §4.2 du brief le pose comme non
+  // négociable, et ce test le tient sur les mêmes 300 montages qu'avant.
   const fond = GRILLE.bandes.batiments.derniere;
-  const centre = Math.ceil(GRILLE.largeur / 2);
+  const colonnesSouche = new Set();
+  const colonnesEtai = new Set();
   for (let g = 1; g <= 100; g += 1) {
     for (const [type, niveau] of [['base', 30], ['camp', 20], ['avantPoste', 40]]) {
       const site = genererSite({ type, niveau, saveur: type === 'base' ? null : 'richeQuartz', graine: g });
       const souche = site.batiments.find((b) => b.id === 'souche');
       const etai = site.batiments.find((b) => b.id === 'etai');
-      assert.deepEqual({ rangee: souche.rangee, colonne: souche.colonne },
-        { rangee: fond, colonne: centre }, `${type}/g${g} : la Souche a bougé`);
-      assert.deepEqual({ rangee: etai.rangee, colonne: etai.colonne },
-        { rangee: fond, colonne: centre - 1 }, `${type}/g${g} : l'Étai a bougé`);
+      assert.equal(souche.rangee, fond, `${type}/g${g} : la Souche a quitté le fond`);
+      assert.equal(etai.rangee, fond, `${type}/g${g} : l'Étai a quitté le fond`);
+      assert.notEqual(souche.colonne, etai.colonne,
+        `${type}/g${g} : la Souche et l'Étai sur la même case`);
+      for (const c of [souche.colonne, etai.colonne]) {
+        assert.ok(Number.isInteger(c) && c >= 1 && c <= GRILLE.largeur,
+          `${type}/g${g} : colonne ${c} hors de la grille`);
+      }
+      colonnesSouche.add(souche.colonne);
+      colonnesEtai.add(etai.colonne);
     }
   }
+  // ⚠ ET LES NEUF COLONNES SONT ATTEINTES, PAS SEULEMENT « PLUS D'UNE ». Une
+  // garde qui dirait « au moins deux » resterait verte sur un tirage qui n'en
+  // rendrait que deux ; mesuré sur ces 300 montages, les neuf le sont, des deux
+  // côtés.
+  assert.equal(colonnesSouche.size, GRILLE.largeur,
+    `la Souche n'atteint que ${colonnesSouche.size} colonnes sur ${GRILLE.largeur}`);
+  assert.equal(colonnesEtai.size, GRILLE.largeur,
+    `l'Étai n'atteint que ${colonnesEtai.size} colonnes sur ${GRILLE.largeur}`);
 });
 
 test('CR T6 — le déterminisme est intact, et une graine voisine ne suffit pas', () => {

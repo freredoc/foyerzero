@@ -94,6 +94,8 @@ import {
   RAPPORTS_PROCHE_RETOUCHES, RAPPORTS_OUVRAGE_RETOUCHES, CIBLE_PROCHE_RETOUCHES,
   RAPPORTS_OUVRAGE_TERRITOIRE_LU,
   RAPPORTS_PROCHE_CIBLES_RANGEES, RAPPORTS_OUVRAGE_CIBLES_RANGEES,
+  DEPLACES_PAR_DISPOSITION_OUVRAGE, EMPREINTES_PAR_GRAINE_DISPOSITION_OUVRAGE,
+  RAPPORTS_PROCHE_DISPOSITION_OUVRAGE, RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -163,7 +165,15 @@ function empreinteAttendue(phase, champ) {
   // deux phases où l'Ouvrage attaque : le §6 arme ses modules d'offense, donc
   // seule l'issue d'un raid SUBI peut bouger. Attribution mesurée — en remettant
   // `offense: []` à la seule ligne du §6, ce fichier repasse entièrement vert.
-  return DEPLACES_PAR_NEUTRALISATION[phase]?.[champ]
+  // ⚠⚠ SEIZIÈME COUCHE — lot DISPOSITION-OUVRAGE, 08/09. Cinquante-huit couples,
+  // et **les six premières phases sont identiques AU BIT** : le lot fait flotter
+  // les blocs d'un site de l'Ouvrage dans leur bande, ce qui ne se voit qu'à
+  // partir du PREMIER RAID. ⚠ Et `disposition` n'y est pas — c'est celle de la
+  // base du JOUEUR, que le scénario pose lui-même. Les quinze couches d'avant en
+  // déplaçaient par accident de flux ; celle-ci tire sur un SECOND flux salé et
+  // ne recompose rien.
+  return DEPLACES_PAR_DISPOSITION_OUVRAGE[phase]?.[champ]
+    ?? DEPLACES_PAR_NEUTRALISATION[phase]?.[champ]
     ?? DEPLACES_PAR_QUATRE_ETATS[phase]?.[champ]
     ?? DEPLACES_PAR_RETOUCHES[phase]?.[champ]
     ?? DEPLACES_PAR_TERRITOIRE_LU[phase]?.[champ]
@@ -487,6 +497,7 @@ function temoins() {
 // T1 — les témoins, reproduits à l'identique
 // ---------------------------------------------------------------------------
 
+
 test('BASES-0 T1 — le scénario mesure quelque chose : quatorze phases toutes distinctes', () => {
   // ⚠ FALSIFIABILITÉ D'ABORD. Un témoin dont toutes les graines rendent la même
   // chose passerait sur n'importe quel code : il faut prouver qu'il DISTINGUE
@@ -543,7 +554,7 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // graines ; NEUTRALISATION n'en déplace qu'UNE, la 6 — les vingt-quatre
     // autres empreintes sont identiques d'une couche à l'autre, et c'est cette
     // moitié-là qui prouve que le §6 ne fuit pas hors du raid subi.
-    if (obtenue !== EMPREINTES_PAR_GRAINE_NEUTRALISATION[g]) ecarts.push(g);
+    if (obtenue !== EMPREINTES_PAR_GRAINE_DISPOSITION_OUVRAGE[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -657,13 +668,23 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // gestes, taille de la sauvegarde, cases atteignables, déplacement,
       // nombre de bases attaquantes, nombre de cibles et cible retenue — dit
       // que seule la saveur des satellites a changé.
+      // ⚠⚠ ET LE LOT DISPOSITION-OUVRAGE LES DÉPLACE TOUS LES DEUX, SUR LES
+      // VINGT-CINQ GRAINES : un site dont les blocs flottent dans leur bande ne
+      // rend pas le même rapport. Ce qui NE bouge pas juste au-dessus — gestes
+      // de construction, gestes d'armement, taille de la sauvegarde, cases
+      // atteignables, déplacement, nombre de bases attaquantes, nombre de cibles
+      // et cible retenue — dit que seule la POSITION des pièces a changé, et pas
+      // leur composition. C'est ce que le §5 du brief exigeait, et c'est ce qui
+      // laisse `SAVE_VERSION` à 29.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_RETOUCHES[g] ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
+        ? (RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g] ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
+          ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
           ?? RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_RETOUCHES[g] ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
+        : (RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g] ?? RAPPORTS_PROCHE_RETOUCHES[g]
+          ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
           ?? RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]
           ?? RAPPORTS_PROCHE_ARRET[g]);
       assert.equal(

@@ -348,7 +348,16 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // tirages, et tout ce qui tire APRÈS `placerDefenses` et `placerBatiments` se
   // décale : obstacles, composition, vagues. Le brief l'annonçait, le rapport le
   // chiffre, et ce que ce test tient ne change pas.
-  assert.equal(r.nbTicks, 635);
+  //
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : 528 TICKS, ET LA CAUSE EST AUTRE. Les
+  // quatre réancrages précédents déplaçaient le FLUX de tirages, donc
+  // RECOMPOSAIENT la garnison ; celui-ci tire sur un SECOND flux salé, et la
+  // composition ne bouge pas d'un identifiant — mesuré, zéro écart sur 6 000
+  // montages. Ce qui bouge est la POSITION des mêmes pièces : les deux blocs
+  // FLOTTENT désormais dans leur bande au lieu d'être collés à son bord. Ce que
+  // ce test existe pour tenir ne bouge pas : au moins une unité rentre à la
+  // base.
+  assert.equal(r.nbTicks, 528);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -372,8 +381,12 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // dure 635 ticks au lieu de 513 et rapporte 11 % de plus — même mécanique,
   // même sens : plus de ticks, plus de tirs sur les bâtiments. Ce que ce test
   // existe pour tenir ne bouge toujours pas : au moins une unité rentre.
-  assert.deepEqual(r.butin, { quartz: 60_714, scorie: 20_238 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 9);
+  // ⚠ LOT DISPOSITION-OUVRAGE : 69 210 et 23 070, soit +14,0 % pour 107 ticks de
+  // MOINS, et ONZE survivants au lieu de neuf. Le bloc de défense n'est plus
+  // collé aux bâtiments : l'infanterie les atteint plus vite, en rapporte
+  // davantage et y perd moins de monde.
+  assert.deepEqual(r.butin, { quartz: 69_210, scorie: 23_070 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 11);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
