@@ -227,6 +227,24 @@ export function ruinesActives(etat) {
       type: entree.type,
       vainqueur: entree.vainqueur,
       niveau: entree.niveau,
+      // ⚠⚠ LE TICK D'ORIGINE — AJOUTÉ AU LOT PANNEAUX-DE-LA-CARTE, ET C'EST UN
+      // ÉCART DÉCLARÉ AU §6 DE SON BRIEF, qui posait `sim/ruines.js` en LECTURE
+      // seule « si l'exécution ne démontre pas le contraire ». Elle l'a démontré :
+      // Ethan demande qu'une ruine dise « dans combien de temps la ruine
+      // disparaît », et `ruinesActives` — qui est LA SEULE PORTE VERS L'ÉMISSION,
+      // deux paragraphes plus haut — jetait le seul champ dont ce compte à
+      // rebours se dérive.
+      //
+      // ⚠ LES DEUX AUTRES ISSUES ONT ÉTÉ ÉCARTÉES, ET ELLES SE VALENT MAL. Lire
+      // `etat.basesRasees` depuis l'écran aurait contourné cette porte-ci, donc
+      // ouvert un panneau sur une ruine périmée ; refaire une seconde recherche
+      // dans la liste, guardée par `ruineEstActive`, aurait parcouru deux fois la
+      // même liste pour deux réponses qui doivent s'accorder.
+      //
+      // ⚠ ET IL NE SERT À AUCUN CALCUL DE CE MODULE. `ruineEstActive` continue de
+      // lire l'entrée BRUTE, comme avant : ce champ-ci est ce que l'entrée
+      // TRANSPORTE, pas une seconde source d'expiration.
+      tick: entree.tick,
       // ⚠ CE DRAPEAU N'EST PAS DÉCORATIF : `sim/territoire.js` s'en sert pour ne
       // PAS poser le plancher « le territoire où la base se trouve ne change
       // pas ». Une ruine n'est pas une base — §4 du brief —, elle n'est qu'une
