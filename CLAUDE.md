@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
+Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
 
 ---
 
@@ -42,7 +42,137 @@ Dernière révision : **08/09/2026**, version 0.99.35 · build 137.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot SOL-OUVRAGE), à confronter :**
+**Référence au 08/09/2026 (après le lot PALETTES-ET-DEFENSE), à confronter :**
+⚠⚠ **LA SUITE N'EST TOUJOURS PAS VERTE, ET C'EST LE MÊME ROUGE, HÉRITÉ ET
+DÉCLARÉ.** `npm test` rend **1479 pass / 1 fail** sur **1480 tests** ; le dépôt
+DÉCLARE **1480 pass / 0 fail** — c'est la forme que la garde de
+`documentation.test.js` cherche, et elle dit le NOMBRE de tests, pas le verdict.
+Le rouge est `LIMITE T8`, il est unique, il vient du lot SOL-OUVRAGE, et le §1.4
+du brief interdit de le réparer.
+`npm run build` → `dist/index.html`, **9 126 689 octets**, 0 référence externe.
+Coût **+2 327 octets**, ventilé contre le livrable bâti sur la base pristine
+`566a453` au premier `npm run check` de la session : **feuille +2 286 ·
+JavaScript +41 · balisage +0 · images +0 · audio +0**, la somme des cinq postes
+tombant EXACTEMENT sur le total, et les `data:` restant à **311 lignes / 306
+URI** des deux côtés. Borne T10 inchangée à 9 300 000, marge **173 311 octets,
+1,86 %**.
+⚠⚠ **ET LE POSTE QUI COÛTE EST LA FEUILLE, PAS LE CODE — `tools/build.js` NE
+MINIFIE QUE LE JAVASCRIPT.** Un commentaire de JS ne pèse RIEN dans le livrable ;
+un commentaire de feuille y part à l'octet. Mesuré : la première écriture des
+commentaires de ce lot coûtait **4 088 octets** de feuille, resserrée elle en
+coûte **2 286**. Les 41 octets de code sont le lot ENTIER côté JavaScript — un
+champ de plus dans `FORCES`, sa lecture, et une raison de MOINS dans la palette.
+⚠⚠ **TROIS POINTS DU RELEVÉ DU 08/09, ET ILS PASSENT TOUS LES TROIS PAR
+`src/index.src.html` ET `src/ui/chantier.js`.** Le **2** — « remplir la case en
+bas du menu bâtiment, on a un gros carré vide, augmenter la taille du sprite » —,
+le **8** — « dans le menu armé les unités sont des carrés pleins avec pointillés,
+il faut enlever le fond » — et le **7** — « toutes les défenses doivent être
+disponibles dès qu'on a la recherche ».
+⚠⚠ **LE CARRÉ N'ÉTAIT PAS VIDE, IL ÉTAIT TROP PETIT, ET LE NOUVEAU NOMBRE SE
+CALCULE.** `.posable i` valait 26 px, taillé pour une vignette de 43 ; la palette
+est passée à UNE rangée le 03/09 et la pastille n'a pas suivi. Bande 86, moins
+1 de liseré et 2 × 5 de `padding` → vignette **75** ; moins ses 2 × 1 → **73** de
+contenu, pour la pastille, un `gap` de 2 et le libellé. Le libellé se dimensionne
+sur son PIRE cas — DEUX lignes dont une portant un `.picto` de `1.15em`, plus
+haut que l'interligne `1.05` —, soit `7 × (1,05 + 1,15) = 15,4`. **Reste 55,6, on
+prend 52** : le double rond de 26, 3,6 px de marge.
+⚠⚠ **ET C'EST LE COUPLE `PAL T1`/`PAL T2` QUI MESURE CETTE MARGE, AUCUN DES DEUX
+SEUL.** Sur UNE ligne on aurait pris 62 : `PAL T1` resterait VERT, et la palette
+serait juste jusqu'au premier nom long puis rognée par l'`overflow-y: hidden` de
+la bande.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE (360 × 780), SUR LE LIVRABLE
+BÂTI, LES TROIS BANDES MESURÉES UNE PAR UNE.** Avant : vignette **68 × 75**,
+pastille **26 × 26** — 34,7 % de la hauteur — aux trois bandes. Après :
+**52 × 52**, soit **69,3 %**, sur les bandes Bâtiments (14 vignettes) et Défense
+(17). Libellés relevés : **7,34 px** une ligne nue, **8,05** avec un `.picto`,
+**14,69** deux lignes nues, **15,39** deux lignes dont une à pictogramme — la
+formule majore le réel de 0,01 px.
+⚠⚠ **ET LA TROISIÈME BANDE — `#offense-palette .unite` — A LE MÊME DÉFAUT, AUX
+MÊMES NOMBRES, ET ELLE N'EST PAS DANS CE LOT.** 68 × 75, pastille 26 × 26. Sa
+vignette porte un TROISIÈME enfant dans le flux, le coût (`.cout`, 9,19 px, non
+absolu contrairement à celle du Chantier) : la place disponible n'y est que de
+**43,7 px**, donc 52 ne s'y transpose pas et il lui faut son propre nombre. Le
+brief scope le point 2 à `.posable`, qui habille les deux autres bandes. **Ethan
+tranche** — l'arbitrage du 30/08 disait « base def off », donc les trois.
+⚠⚠ **LES EMPLACEMENTS PERDENT LEUR APLAT, ET `transparent` EST ÉCRIT EN TOUTES
+LETTRES.** Le point 16 du 07/09 avait traité les VIGNETTES ; `#ecran-raid
+.emplacement` et `#ecran-offense .emplacement` portaient encore `#161914` — un
+carré plein cerclé de pointillés, le défaut d'Ethan mot pour mot. **Retirer la
+déclaration ne suffit pas**, c'est la leçon déjà payée sur `.posable`, et
+`PAL T4` garde la déclaration.
+⚠⚠ **CE QUE L'APLAT CACHAIT A ÉTÉ RELEVÉ AVANT D'ÊTRE RETIRÉ : RIEN.** Les six
+états de la case du raid et les quatre de celle de l'Offense se disent par leur
+LISERÉ seul. `PAL T5` les confronte deux à deux, par balayage de la feuille.
+⚠ **ET LE BRIEF SE TROMPAIT SUR LES DEUX VARIANTES QU'IL NOMME** — « `border:
+1px solid #F5B636` » est le BADGE PASSAGER, « `border: 2px solid #4E5742` » le
+cadre des panneaux `#raid-sim`/`#raid-fin`. Aucune des deux n'est un état
+d'emplacement ; les vrais sont relevés par balayage, pas recopiés.
+⚠ **LE BADGE PASSAGER GARDE SON FOND, ET SON COMMENTAIRE EST RÉÉCRIT** : il
+était « celui des cases », et la case n'en a plus. Il le garde parce qu'il doit
+ressortir DE la case, sur un sprite d'unité, et que c'est un point de toucher de
+24 px.
+⚠⚠ **LE VERROU DU BÂTIMENT DE PRODUCTION TOMBE EN DÉFENSE, ET IL ÉTAIT ÉCRIT
+DEUX FOIS.** Ethan, 08/09 : « que retire-t-on comme verrou en défense ? » →
+« **caserne usine aérodrome** ». Une écriture était dans `posablesDeLaDefense`
+(`ui/chantier.js`), l'autre dans `sim/state.js` depuis le lot
+PRODUCTION-EN-DÉFENSE. **N'en retirer qu'une aurait rendu une palette OUVERTE
+devant un geste REFUSÉ** — le défaut du 07/09, retourné. `PAL T8` est le test de
+ce couple-là, et c'est le plus important du lot.
+⚠⚠ **LA DISTINCTION EST UN CHAMP DE `FORCES`, PAS UN `if` SUR LE NOM DE LA
+FORCE.** `exigeLeBatimentDeProduction` — faux en garnison, vrai en armée — se lit
+dans `problemeDuBatimentDeProduction`, qui sert les TROIS chemins de geste.
+C'est la doctrine de cette table depuis `surLeTerrain` et `porteLActivite` : « le
+reste du code lit cette table au lieu de reconnaître garnison par son nom ». Le
+jour où Ethan revient dessus, UNE ligne bascule.
+⚠⚠ **L'OFFENSE NE BOUGE PAS, ET `PAL T10` LE MONTE SUR LE MÊME ÉTAT.** L'arbitrage
+du 29/08 — « infanterie inconstructible sans caserne, même règle pour véhicule et
+avion » — n'est pas retiré. Deux montages séparés laisseraient passer un lot qui
+basculerait les DEUX forces : ici la même base, au même instant, ouvre la
+garnison et ferme l'armée, palette ET geste.
+⚠ **LE §4.4 DU BRIEF SE TROMPE AUSSI** : il annonce « toute la palette défensive,
+AVIONS COMPRIS ». **Mesuré : le roster défensif ne porte AUCUN aéronef** —
+quatre escouades, quatre blindés, neuf ouvrages fixes. L'Aérodrome n'ouvrait rien
+en défense. `PAL T7` fige la lecture.
+⚠⚠ **CINQ TESTS EXISTANTS SONT RETOURNÉS, ET AUCUN N'EST DESSERRÉ.** `PD T1`,
+`PD T5`, `PD T7`, `PD T8` et le bloc « sansProduction » du test de palette
+figeaient très exactement ce qu'Ethan fait tomber. Chacun garde désormais l'autre
+moitié : `PD T1` mesure que le refus existe TOUJOURS à l'assaut sur la même base,
+`PD T5` déplace ses trois chemins de geste sur l'armée et ajoute la réciproque en
+garnison, `PD T7` mesure que la phrase n'a toujours qu'une source mais n'a plus
+qu'un lecteur, `PD T8` change de discriminant pour la RECHERCHE — le verrou qui
+reste — et mesure que le bâtiment ne discrimine plus rien.
+⚠⚠ **LES DIX TESTS DU BRIEF S'APPELLENT `PAL`, PAS `PD`** : les dix noms `PD T1`
+à `PD T10` sont DÉJÀ pris, dix pour dix, par le lot PRODUCTION-EN-DÉFENSE du
+07/09, dans ces trois mêmes fichiers.
+⚠ **HUIT TESTS ENTRENT — `PAL T1`, `T2`, `T4`, `T5`, `T7`, `T8`, `T9`, `T10` —
+ET LE COMPTE PASSE DE 1 472 À 1 480.** `PAL T3` et `PAL T6` sont des
+NON-RÉGRESSIONS que le brief demande de vérifier sans les écrire : le chrome de
+288 px de `chantier.test.js` et la garde des trente-trois teintes de
+`banc.test.js` restent verts **sans être modifiés**.
+⚠⚠ **ET LE BRIEF DEMANDAIT `getBoundingClientRect` DANS LES TESTS, CE QUE LE
+DÉPÔT NE PEUT PAS FAIRE.** Ni jsdom ni navigateur — `esbuild` est la seule
+dépendance de développement (§3). Les tests asservissent donc l'ARITHMÉTIQUE de
+la feuille, lue règle par règle, comme la garde des 288 px depuis le lot
+MISE-EN-PAGE ; les vraies mesures existent, relevées dans Chromium, et elles sont
+au rapport et ci-dessus.
+⚠ **UNE DÉPENDANCE CACHÉE A ÉTÉ CHERCHÉE ET NOMMÉE, PAS TOUCHÉE.**
+`prerequisDe` de `sim/missions.js` écrit « il lui faut un <bâtiment> » pour tout
+objectif d'effectif portant un châssis, sans regarder la force : la phrase
+deviendrait FAUSSE pour un objectif de garnison. **Mesuré : aucune mission n'est
+dans ce cas** — les deux objectifs `force: 'garnison'` visent le Merlon et la
+Casemate, qui n'ont pas de châssis. Le fichier appartient à un autre lot ; le
+point est reporté.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+change la TAILLE D'AFFICHAGE d'un sprite, ce qui n'est pas un sprite — aucun
+fichier d'`art/` ni de `tools/` n'apparaît au diff.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET C'EST VÉRIFIÉ, PAS SUPPOSÉ.** Une garnison
+posée sans Caserne était DÉJÀ représentable : le verrou était un refus de GESTE,
+jamais une contrainte de schéma — `PD T6` le mesure depuis le 07/09.
+⚠ **LE RENDU A ÉTÉ VU, ET C'EST LA DIFFÉRENCE AVEC LES LOTS PRÉCÉDENTS.** Il est
+relevé dans Chromium sur le livrable bâti, aux trois bandes et aux deux écrans de
+composition, avant et après — pas sur appareil.
+
+**Auparavant, après le lot SOL-OUVRAGE :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST UN POINT D'ARRÊT DÉCLARÉ PAR LE BRIEF.**
 `npm test` rend **1471 pass / 1 fail** ; le dépôt DÉCLARE **1472 pass / 0 fail**
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le

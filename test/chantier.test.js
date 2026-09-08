@@ -2885,26 +2885,31 @@ test('défense — la palette est grise sans QG, et s\'ouvre avec son niveau', (
   assert.ok(posablesDeLaDefense(niveauSeul).some((p) => p.verrouille),
     'le niveau 50 seul ouvre encore des pièces');
 
-  // ⚠⚠ ET LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, arbitrée
-  // le 29/08 : « infanterie inconstructible sans caserne, même règle pour
-  // véhicule et avion ». Ethan ne l'a pas restreinte à un écran, donc elle ne
-  // l'est pas. Sans les trois bâtiments, au niveau 50, seules les pièces qui
-  // ne sont PAS des unités restent posables — un mur n'a pas besoin d'une
-  // caserne.
+  // ⚠⚠ ET LE BÂTIMENT DE PRODUCTION N'ENTRE PLUS EN GARNISON — ETHAN, 08/09,
+  // POINT 7 : « toutes les défenses doivent être disponibles dès qu'on a la
+  // recherche », le verrou retiré étant nommément « caserne usine aérodrome ».
+  // Ce bloc mesurait l'inverse le 07/09, et il est RETOURNÉ, pas desserré : sans
+  // les trois bâtiments, au niveau 50, roster acheté, la palette n'a plus UNE
+  // seule vignette grise — ni les unités, ni les ouvrages.
   const sansProduction = posablesDeLaDefense(
     baseAvecCommandement(3, 50, false, rosterDefensif()),
   );
   for (const p of sansProduction) {
-    const estUneUnite = UNITES[p.id] !== undefined;
-    assert.equal(p.verrouille, estUneUnite,
-      `${p.id} : seules les unités demandent un bâtiment de production`);
-    if (estUneUnite) {
-      assert.match(p.raison, /^sans .+, pas d/, `${p.id} : la raison ne nomme pas le bâtiment`);
-    }
+    assert.equal(p.verrouille, false,
+      `${p.id} : verrouillé alors que la recherche et le QG sont acquis`);
+    assert.equal(p.raison, null, `${p.id} : une raison sans verrou`);
   }
-  // Le montage doit voir les deux familles, sinon il ne distingue rien.
+  // Le montage doit voir les deux familles, sinon il ne distingue rien : c'est
+  // sur les UNITÉS que le verrou portait, les ouvrages n'en ont jamais eu.
   assert.ok(sansProduction.some((p) => UNITES[p.id] !== undefined), 'aucune unité dans le roster');
   assert.ok(sansProduction.some((p) => UNITES[p.id] === undefined), 'aucun ouvrage fixe');
+  // ⚠ ET LE MONTAGE MANQUE VRAIMENT LES TROIS BÂTIMENTS. Sans cette ligne, le
+  // bloc serait vert sur une base qui les porte, et ne mesurerait rien.
+  assert.equal(
+    moteurEtat.batimentDeProductionManquant(
+      baseAvecCommandement(3, 50, false, rosterDefensif()), 'meute',
+    ), 'caserne', 'montage : la Caserne est là, le bloc ne mesure rien',
+  );
 });
 
 test('défense — le détail d\'une pièce dit son niveau et ses points', () => {
@@ -6128,23 +6133,36 @@ test('ÉD T14 — la palette ne change pas de longueur quand une pièce se pose'
 // source, 07/09/2026
 // ---------------------------------------------------------------------------
 
-test('PD T7 — le message du modèle et celui de la palette viennent de `messageSansBatiment`', () => {
+test('PD T7 — la phrase du refus n\'a qu\'une source, et elle ne sert plus qu\'à l\'assaut', () => {
   // ⚠⚠ UNE SEULE ÉCRITURE DE LA PHRASE, ET C'EST LA CONDITION POUR QUE L'ÉCRAN
-  // ET LE MOTEUR DISENT LA MÊME CHOSE. La palette grise en disant « sans
-  // Caserne, pas d'infanterie » ; si le modèle refusait le geste avec une autre
-  // formulation, le joueur lirait deux phrases pour un seul fait.
+  // ET LE MOTEUR DISENT LA MÊME CHOSE. C'est la moitié du test qui ne bouge pas.
+  //
+  // ⚠⚠ CE QUI BOUGE EST QUI LA DIT — ETHAN, 08/09, POINT 7. La palette de
+  // DÉFENSE l'employait ; elle ne pose plus la question. Le test est RETOURNÉ :
+  // il mesure que cette palette-ci ne la dit plus, et que le modèle la dit
+  // toujours EN ARMÉE, sur le même montage. Le desserrer en retirant simplement
+  // la moitié « palette » aurait laissé la phrase sans lecteur mesuré.
   const etat = baseAvecCommandement(3, 50, false, rosterDefensif());
   const attendu = messageSansBatiment(BASE_BATIMENTS.caserne.nom.joueur, UNITES.meute.chassis);
 
+  // ⚠ FALSIFIABILITÉ : la Caserne manque VRAIMENT sur ce montage.
+  assert.equal(moteurEtat.batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'montage : la Caserne est posée, le test ne mesure rien');
+
   const vignette = posablesDeLaDefense(etat).find((p) => p.id === 'meute');
-  assert.equal(vignette.raison, attendu, 'la palette n\'emploie plus `messageSansBatiment`');
+  assert.equal(vignette.raison, null,
+    'la palette de Défense verrouille encore sur le bâtiment de production');
+  assert.deepEqual(
+    moteurEtat.problemesDeLaPoseDEffectif(
+      etat, 'garnison', { id: 'meute', rangee: 6, colonne: 3, niveau: 1 },
+    ), [], 'le modèle refuse encore la garnison sans Caserne',
+  );
 
   const refus = moteurEtat.problemesDeLaPoseDEffectif(
-    etat, 'garnison', { id: 'meute', rangee: 6, colonne: 3, niveau: 1 },
+    etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 },
   );
   assert.equal(refus.length, 1, 'le modèle refuse pour une autre raison que le bâtiment');
   assert.equal(refus[0].message, attendu, 'le modèle a sa propre phrase');
-  assert.equal(refus[0].message, vignette.raison);
 
   // ⚠ ET LA PREUVE PAR LA SOURCE : la phrase se CONSTRUIT à un seul endroit.
   // Une égalité de chaînes passerait aussi si deux fichiers écrivaient le même
@@ -6164,38 +6182,38 @@ test('PD T8 — non-régression : la palette de Défense GRISE toujours, elle ne
   // 28/08 — « griser le bouton, pas le faire disparaître » —, et son motif tient
   // toujours : cette palette PARTAGE la barre du bas avec celle des bâtiments,
   // et une palette qui change de longueur déplace les vignettes sous le doigt
-  // entre deux gestes. Ce lot descend la règle dans le modèle ; il ne touche pas
-  // à ce que l'écran montre.
+  // entre deux gestes.
+  //
+  // ⚠⚠ ET SON DISCRIMINANT A CHANGÉ LE 08/09, PARCE QUE LE SIEN EST TOMBÉ. Il
+  // grisait la Meute faute de Caserne ; ce verrou-là est retiré (point 7), donc
+  // le test mesurerait deux palettes identiques et ne prouverait plus rien. Le
+  // discriminant devient la RECHERCHE, qui est le verrou qui RESTE — et c'est
+  // une re-mesure, pas un desserrage : les trois assertions de longueur, d'ordre
+  // et de présence sont mot pour mot les mêmes.
   const roster = rosterDefensif().length;
   const avec = posablesDeLaDefense(baseAvecCommandement(3, 50, true, rosterDefensif()));
-  const sans = posablesDeLaDefense(baseAvecCommandement(3, 50, false, rosterDefensif()));
+  const sansRecherche = posablesDeLaDefense(baseAvecCommandement(3, 50, true, ['merlon']));
 
-  assert.equal(sans.length, roster, 'la palette de Défense a changé de longueur');
+  assert.equal(sansRecherche.length, roster, 'la palette de Défense a changé de longueur');
   assert.equal(avec.length, roster, 'la palette de Défense a changé de longueur');
-  assert.deepEqual(sans.map((p) => p.id), avec.map((p) => p.id),
+  assert.deepEqual(sansRecherche.map((p) => p.id), avec.map((p) => p.id),
     'la palette de Défense ne montre plus les mêmes pièces dans le même ordre');
 
   // La pièce refusée est PRÉSENTE, et elle est verrouillée — les deux à la fois.
-  const vignette = sans.find((p) => p.id === 'meute');
+  const vignette = sansRecherche.find((p) => p.id === 'meute');
   assert.notEqual(vignette, undefined, 'la Meute a disparu de la palette de Défense');
-  assert.equal(vignette.verrouille, true, 'la Meute est vive sans Caserne');
+  assert.equal(vignette.verrouille, true, 'la Meute est vive sans sa recherche');
   assert.equal(avec.find((p) => p.id === 'meute').verrouille, false,
-    'la Meute reste verrouillée avec la Caserne : le montage ne discrimine rien');
+    'la Meute reste verrouillée une fois cherchée : le montage ne discrimine rien');
 
-  // ⚠ ET LE MOTEUR, LUI, REFUSE DERRIÈRE LA VIGNETTE — c'est tout le lot. Avant
-  // le 07/09 cette assertion-ci était FAUSSE : la vignette grisait et la pose
-  // passait.
-  const piece = { id: 'meute', rangee: 6, colonne: 3, niveau: 1 };
-  assert.equal(
-    moteurEtat.problemesDeLaPoseDEffectif(
-      baseAvecCommandement(3, 50, false, rosterDefensif()), 'garnison', piece,
-    ).length, 1,
+  // ⚠⚠ ET LE BÂTIMENT, LUI, NE DISCRIMINE PLUS RIEN : les deux palettes sont
+  // IDENTIQUES avec et sans les trois bâtiments de production. C'est la trace du
+  // 08/09 laissée dans le test qui gardait l'inverse le 07/09.
+  const sansBatiments = posablesDeLaDefense(
+    baseAvecCommandement(3, 50, false, rosterDefensif()),
   );
-  assert.deepEqual(
-    moteurEtat.problemesDeLaPoseDEffectif(
-      baseAvecCommandement(3, 50, true, rosterDefensif()), 'garnison', piece,
-    ), [],
-  );
+  assert.deepEqual(sansBatiments, avec,
+    'la palette de Défense dépend encore des bâtiments de production');
 });
 
 // ---------------------------------------------------------------------------
@@ -6359,4 +6377,398 @@ test('RET T4 — le bandeau se pose sur la vue, il ne pousse rien', () => {
   // Falsifiable : la tranche voit bien la ligne d'avis, qui EST là.
   assert.ok(balisage.slice(debut, fin).includes('id="chantier-avis"'),
     'le découpage ne voit plus la ligne d\'avis : il ne mesure rien');
+});
+
+// ---------------------------------------------------------------------------
+// PALETTES-ET-DEFENSE — la pastille remplit sa vignette, les emplacements du
+// menu armé perdent leur aplat, la défense ne dépend plus des bâtiments
+// militaires, 08/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LE BRIEF DEMANDAIT D'ASSERTER `getBoundingClientRect`, ET LE DÉPÔT NE PEUT
+// PAS — `CLAUDE.md` §3 : ni jsdom ni navigateur, `esbuild` est la seule
+// dépendance de développement. Ce qui se fait à la place est ce que la garde des
+// 288 px fait déjà depuis le lot MISE-EN-PAGE : l'ARITHMÉTIQUE de la feuille,
+// lue règle par règle, jamais la présence dans le DOM. Les vraies mesures
+// existent — relevées dans Chromium à la géométrie du S25 FE, 360 × 780 — et
+// elles sont au rapport, avant et après ; ce sont elles qui ont donné le pire
+// cas de libellé que `PAL T2` recalcule ici.
+//
+// ⚠ ET LE PRÉFIXE N'EST PAS CELUI DU BRIEF. Il demandait `PD T1` à `PD T10` :
+// les dix noms sont DÉJÀ pris par le lot PRODUCTION-EN-DÉFENSE du 07/09, dix
+// pour dix, dans ces trois mêmes fichiers. `PAL` est libre.
+
+/** La feuille, commentaires retirés — comme `ÉD T12` juste au-dessus. */
+const FEUILLE_PALETTE = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+
+/**
+ * Toutes les déclarations qui portent sur ce sélecteur, dans l'ordre de la
+ * feuille.
+ *
+ * ⚠ IL EN CHERCHE PLUSIEURS, ET C'EST OBLIGATOIRE : `.posable` est écrit DEUX
+ * fois — la règle partagée du pointillé et sa règle propre —, et le liseré d'une
+ * vignette ne se lit que dans la première. Une lecture qui n'en prendrait qu'une
+ * rendrait `undefined` sur `border` et le test passerait à côté de deux pixels.
+ */
+function declarationsDe(selecteur) {
+  const corps = [...FEUILLE_PALETTE.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, liste]) => liste.split(',').map((s) => s.trim()).includes(selecteur))
+    .map(([, , bloc]) => bloc);
+  assert.ok(corps.length > 0, `la règle « ${selecteur} » a disparu de la feuille`);
+  return corps.join(' ; ');
+}
+
+/** La valeur déclarée d'une propriété, telle quelle. */
+function declaration(selecteur, propriete) {
+  const m = declarationsDe(selecteur).match(new RegExp(`(?:^|[;{\\s])${propriete}:\\s*([^;}]+)`));
+  assert.ok(m, `« ${selecteur} » ne déclare plus « ${propriete} »`);
+  return m[1].trim();
+}
+
+/** Le premier nombre d'une propriété — `padding: 5px 6px` rend 5, le vertical. */
+function mesure(selecteur, propriete) {
+  const v = declaration(selecteur, propriete);
+  const m = v.match(/(-?[\d.]+)/);
+  assert.ok(m, `« ${propriete} » de « ${selecteur} » ne porte pas de nombre : ${v}`);
+  return Number(m[1]);
+}
+
+/** La hauteur d'une bande à `flex: 0 0 Npx`. */
+function hauteurDeBande(selecteur) {
+  const m = declarationsDe(selecteur).match(/flex:\s*0 0 (\d+)px/);
+  assert.ok(m, `« ${selecteur} » n'a plus de hauteur fixe`);
+  return Number(m[1]);
+}
+
+/**
+ * La hauteur d'une vignette de palette, DÉDUITE de la bande.
+ *
+ * 86 px de bande, moins le liseré haut d'un pixel et les 2 × 5 px de `padding` :
+ * 75 px. Relevé dans Chromium à 360 × 780 — `.posable` fait 68 × 75, aux deux
+ * bandes, et la bande 360 × 86.
+ */
+function hauteurDeLaVignette() {
+  return hauteurDeBande('#chantier-palette')
+    - mesure('#chantier-palette', 'border-top')
+    - 2 * mesure('#chantier-palette', 'padding');
+}
+
+test('PAL T1 — la pastille remplit la vignette, et ne la dépasse pas', () => {
+  // ⚠⚠ ETHAN, POINT 2 : « remplir la case en bas du menu bâtiment, on a un gros
+  // carré vide, augmenter la taille du sprite. » Le carré n'était pas vide, il
+  // était TROP PETIT : la palette est passée à UNE rangée le 03/09 et la
+  // pastille est restée à 26 px, taillée pour une vignette de 43. Mesuré dans
+  // Chromium AVANT le lot : vignette 68 × 75, pastille 26 × 26 — 34,7 % de la
+  // hauteur. APRÈS : 52 × 52, soit 69,3 %.
+  const vignette = hauteurDeLaVignette();
+  assert.equal(vignette, 75, `la vignette fait ${vignette} px : recalculer les deux bornes`);
+
+  const pastille = mesure('.posable i', 'width');
+  assert.equal(mesure('.posable i', 'height'), pastille, 'la pastille n\'est plus carrée');
+  assert.ok(pastille >= vignette / 2,
+    `pastille de ${pastille} px dans une vignette de ${vignette} : moins de la moitié`);
+  assert.ok(pastille <= vignette,
+    `pastille de ${pastille} px dans une vignette de ${vignette} : elle déborde`);
+
+  // ⚠ ET LE SPRITE RESTE EN PIXELS FRANCS. Une source de 64 px rendue à 52 sans
+  // `pixelated` serait floue — même décision que `ui/banc.js` et l'écran Monde.
+  assert.equal(declaration('.posable i', 'image-rendering'), 'pixelated',
+    'le sprite agrandi est lissé par le navigateur');
+
+  // ⚠⚠ LES TROIS CADRES DE FAMILLE NE SUIVENT PAS LA PASTILLE. Ils disent une
+  // famille de coût ; épaissis avec elle, ils crieraient sur dix-sept vignettes
+  // et `.posable.actif i` — deux pixels d'os — cesserait de s'en distinguer.
+  for (const famille of ['.posable.prod i', '.posable.mil i', '.posable.pivot i']) {
+    assert.match(declaration(famille, 'box-shadow'), /^inset 0 0 0 1px /,
+      `${famille} : le cadre de famille a suivi la pastille`);
+  }
+  assert.match(declaration('.posable.actif i', 'box-shadow'), /^inset 0 0 0 2px /,
+    'la vignette armée ne se distingue plus des cadres de famille');
+});
+
+test('PAL T2 — un libellé sur DEUX lignes ne rogne rien, et c\'est lui qui borne', () => {
+  // ⚠⚠ C'EST LE COUPLE `PAL T1`/`PAL T2` QUI MESURE LA MARGE, ET AUCUN DES DEUX
+  // SEUL. Dimensionner sur une seule ligne donnerait 62 px : `PAL T1` resterait
+  // vert, et la palette serait juste jusqu'au premier nom long — puis le sprite
+  // se ferait rogner par l'`overflow-y: hidden` de la bande.
+  const contenu = hauteurDeLaVignette() - 2 * mesure('.posable', 'border');
+  const pastille = mesure('.posable i', 'width');
+  const ecart = mesure('.posable', 'gap');
+
+  // ⚠⚠ LE PIRE LIBELLÉ VAUT DEUX LIGNES DONT UNE PORTE UN PICTOGRAMME, et le
+  // pictogramme est PLUS HAUT que l'interligne : `1.15em` contre `1.05`. Relevé
+  // dans Chromium : 7,34 px pour une ligne nue, 8,05 avec un `.picto`, 15,39
+  // pour « Mur de défense » — deux lignes, deux pictogrammes. La formule
+  // ci-dessous rend 15,40 : elle majore le réel, elle ne le sous-estime pas.
+  const corps = mesure('.posable b', 'font-size');
+  const interligne = mesure('.posable b', 'line-height');
+  const picto = mesure('.picto', 'width');
+  const pireLibelle = corps * (interligne + picto);
+  assert.ok(pireLibelle >= 15.39,
+    `le pire libellé calculé vaut ${pireLibelle} px, moins que les 15,39 relevés à l'écran`);
+
+  assert.ok(pastille + ecart + pireLibelle <= contenu,
+    `${pastille} + ${ecart} + ${pireLibelle} > ${contenu} px : le libellé rogne le sprite`);
+
+  // ⚠ ET LE PIRE CAS EXISTE VRAIMENT, DANS LES DEUX BANDES. Sans cette moitié-ci
+  // le test bornerait un libellé hypothétique : un roster aux noms courts le
+  // laisserait vert sur une palette qui ne tient plus le jour d'un nom long.
+  const etat = baseAvecCommandement(3, 50, true, rosterDefensif());
+  for (const [quoi, noms] of [
+    ['bâtiments', posablesDeLaBase(etat).map((p) => p.nom)],
+    ['défense', posablesDeLaDefense(etat).map((p) => p.nom)],
+  ]) {
+    assert.ok(noms.some((n) => n.length >= 18),
+      `bande ${quoi} : plus aucun libellé assez long pour passer sur deux lignes`);
+  }
+});
+
+/**
+ * Les états visuels d'un emplacement de grille de composition, écran par écran.
+ *
+ * ⚠ LE LISERÉ DE BASE VIENT DE LA RÈGLE PARTAGÉE, et il est LU, pas recopié :
+ * c'est `border: 1px dashed #4E5742`, la porteuse unique que `ÉD T12` garde.
+ */
+function etatsDeLEmplacement(ecran) {
+  const base = `${ecran} .emplacement`;
+  const signature = (corps, depart) => {
+    const sortie = { ...depart };
+    const raccourci = corps.match(/(?:^|[;{\s])border:\s*([^;}]+)/);
+    if (raccourci) {
+      const [epaisseur, style, couleur] = raccourci[1].trim().split(/\s+/);
+      Object.assign(sortie, { epaisseur, style, couleur });
+    }
+    for (const [propriete, cle] of [['border-style', 'style'], ['border-color', 'couleur'],
+      ['border-width', 'epaisseur'], ['outline', 'contour']]) {
+      const m = corps.match(new RegExp(`(?:^|[;{\\s])${propriete}:\\s*([^;}]+)`));
+      if (m) sortie[cle] = m[1].trim();
+    }
+    return sortie;
+  };
+  const vide = signature(declarationsDe(base), { contour: 'aucun' });
+  const etats = new Map([['vide', vide]]);
+  for (const [, liste, corps] of FEUILLE_PALETTE.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const sel of liste.split(',').map((s) => s.trim())) {
+      const m = sel.match(new RegExp(`^${ecran} \\.emplacement\\.([a-z]+)$`));
+      if (m !== null) etats.set(m[1], signature(corps, vide));
+    }
+  }
+  return etats;
+}
+
+test('PAL T4 — les emplacements du menu armé n\'ont plus d\'aplat, et c\'est DÉCLARÉ', () => {
+  // ⚠⚠ ETHAN, POINT 8 : « dans le menu armé les unités sont des carrés pleins
+  // avec pointillés, il faut enlever le fond. » Le point 16 du 07/09 avait
+  // traité les VIGNETTES ; les EMPLACEMENTS portaient encore `#161914`.
+  //
+  // ⚠⚠ ET LA DÉCLARATION EST LE TEST. La leçon du 07/09 est écrite dans la
+  // feuille : « un `<button>` sans fond déclaré retombe sur le gris clair du
+  // navigateur, et les cinq vignettes sont ressorties EN CLAIR ». Supprimer la
+  // ligne au lieu de la remplacer fait rougir ici, et c'est voulu.
+  for (const ecran of ['#ecran-raid', '#ecran-offense']) {
+    const sel = `${ecran} .emplacement`;
+    assert.equal(declaration(sel, 'background'), 'transparent',
+      `${sel} : le fond n'est pas déclaré transparent`);
+    assert.ok(!/background:\s*#/.test(declarationsDe(sel)),
+      `${sel} porte encore un aplat`);
+  }
+
+  // ⚠ ET AUCUN ÉTAT NE REMET UN FOND PAR LA BANDE. Le corriger case par case
+  // ferait revenir le carré plein sous une autre classe.
+  for (const ecran of ['#ecran-raid', '#ecran-offense']) {
+    for (const [, liste, corps] of FEUILLE_PALETTE.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!liste.split(',').some((s) => s.trim().startsWith(`${ecran} .emplacement.`))) continue;
+      assert.ok(!/background/.test(corps), `${liste.trim()} redonne un fond à l'emplacement`);
+    }
+  }
+
+  // ⚠ LE BADGE PASSAGER, LUI, GARDE LE SIEN, et c'est mesuré ici pour que
+  // personne ne le retire « pendant qu'on y est ». Il est ce qui doit ressortir
+  // DE la case, sur un sprite d'unité, et c'est un point de toucher de 24 px.
+  assert.match(declaration('#ecran-raid .emplacement .badge-passager', 'background'), /^#/,
+    'le badge passager a perdu son aplat : il ne se lira plus sur un sprite');
+});
+
+test('PAL T5 — les états d\'un emplacement restent deux à deux distincts sans le fond', () => {
+  // ⚠⚠ C'EST CE QUE LE §3.2 DU BRIEF DEMANDE DE VÉRIFIER AVANT DE RETIRER : un
+  // aplat opaque sert parfois de contraste. Ici il n'en servait à aucun — les
+  // états se disent tous par leur LISERÉ —, et cette assertion l'établit plutôt
+  // que de l'affirmer. Même exigence que `ÉD T11` pour les trois états d'une
+  // vignette de palette.
+  //
+  // ⚠ LE BRIEF SE TROMPAIT SUR LES DEUX VARIANTES QU'IL NOMME. Il annonce
+  // « border: 1px solid #F5B636 » et « border: 2px solid #4E5742 » « juste en
+  // dessous dans la feuille » : la première est le BADGE PASSAGER, la seconde le
+  // cadre des panneaux `#raid-sim` / `#raid-fin`. Aucune des deux n'est un état
+  // d'emplacement. Les vrais sont relevés ci-dessous, par balayage.
+  for (const [ecran, attendus] of [
+    ['#ecran-raid', ['vide', 'occupe', 'inactive', 'abimee', 'enmain', 'chargee']],
+    ['#ecran-offense', ['vide', 'occupe', 'apercu', 'enmain']],
+  ]) {
+    const etats = etatsDeLEmplacement(ecran);
+    assert.deepEqual([...etats.keys()].sort(), [...attendus].sort(),
+      `${ecran} : la liste des états a changé — les confronter à nouveau, un par un`);
+
+    const vues = new Map();
+    for (const [nom, signature] of etats) {
+      const cle = JSON.stringify(signature);
+      assert.equal(vues.get(cle), undefined,
+        `${ecran} : « ${nom} » se dessine exactement comme « ${vues.get(cle)} »`);
+      vues.set(cle, nom);
+    }
+  }
+
+  // Falsifiable : deux signatures identiques DOIVENT être vues comme telles.
+  const jumelles = [{ style: 'dashed', couleur: '#4E5742' }, { style: 'dashed', couleur: '#4E5742' }];
+  assert.equal(JSON.stringify(jumelles[0]), JSON.stringify(jumelles[1]),
+    'la comparaison de signatures ne distingue même pas deux jumelles');
+});
+
+test('PAL T7 — la palette de Défense s\'ouvre sans Caserne, sans Dépôt et sans Aérodrome', () => {
+  // ⚠⚠ ETHAN, 08/09, POINT 7 : « toutes les défenses doivent être disponibles
+  // dès qu'on a la recherche » ; à « que retire-t-on comme verrou en défense ? »,
+  // la réponse est « caserne usine aérodrome ». C'est CE verrou-là qui tombe.
+  const etat = baseAvecCommandement(3, 50, false, ['meute', 'merlon']);
+
+  // ⚠ FALSIFIABILITÉ D'ABORD : les trois bâtiments manquent VRAIMENT, et le
+  // reste du montage est complet — QG de défense posé, pièce cherchée.
+  assert.notEqual(moteurEtat.niveauDeCommandement(etat, 'garnison'), null,
+    'montage : pas de QG de défense');
+  assert.equal(moteurEtat.batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'montage : la Caserne est posée, le test ne mesure rien');
+
+  const palette = posablesDeLaDefense(etat);
+  const meute = palette.find((p) => p.id === 'meute');
+  assert.equal(meute.verrouille, false, 'la Meute reste verrouillée faute de Caserne');
+  assert.equal(meute.raison, null, 'la Meute porte encore une raison');
+
+  // ⚠⚠ ET TOUS LES CHÂSSIS DU ROSTER AVEC ELLE, PAS LA SEULE INFANTERIE — le
+  // brief nomme « caserne usine aérodrome ». La liste se LIT dans le roster : la
+  // recopier ferait manquer un châssis ajouté un jour.
+  //
+  // ⚠⚠ ET LE §4.4 DU BRIEF SE TROMPE EN PASSANT : il annonce « toute la palette
+  // défensive, AVIONS COMPRIS ». Mesuré : le roster défensif ne porte AUCUN
+  // aéronef — quatre escouades et quatre blindés, plus les neuf ouvrages fixes.
+  // L'Aérodrome n'ouvrait donc rien en défense, et n'en ferme rien aujourd'hui.
+  // Cette assertion-ci fige la lecture pour qu'elle ne se reperde pas.
+  const large = baseAvecCommandement(3, 50, false, rosterDefensif());
+  const parChassis = new Map();
+  for (const id of rosterDefensif()) {
+    const unite = UNITES[id];
+    if (unite !== undefined && !parChassis.has(unite.chassis)) parChassis.set(unite.chassis, id);
+  }
+  assert.deepEqual([...parChassis.keys()].sort(), ['blinde', 'escouade'],
+    'le roster défensif a changé de châssis : reprendre le §4.4 du brief avec Ethan');
+  for (const [chassis, id] of parChassis) {
+    assert.notEqual(moteurEtat.batimentDeProductionManquant(large, id), null,
+      `montage : le bâtiment de ${chassis} est posé`);
+    assert.equal(posablesDeLaDefense(large).find((p) => p.id === id).verrouille, false,
+      `${id} : le verrou du bâtiment de ${chassis} tient encore en défense`);
+  }
+
+  // ⚠⚠ ET LES DEUX AUTRES VERROUS RESTENT DEBOUT, SUR LA MÊME PALETTE. Sans
+  // cette moitié-ci, une palette qui n'aurait plus AUCUN verrou passerait.
+  const cherchee = palette.filter((p) => !p.verrouille).map((p) => p.id);
+  assert.deepEqual(cherchee.slice().sort(), ['meute', 'merlon'].sort(),
+    'la recherche n\'ouvre plus la palette toute seule');
+  assert.ok(palette.filter((p) => p.verrouille)
+    .every((p) => p.raison === 'se débloque par la recherche'),
+  'une pièce est verrouillée pour autre chose que la recherche');
+});
+
+test('PAL T9 — sans QG de défense, rien ne s\'ouvre, bâtiments de production ou pas', () => {
+  // ⚠⚠ LE QG DE DÉFENSE RESTE EXIGÉ, ET C'EST ÉCRIT DANS LA RÉPONSE D'ETHAN :
+  // il retire « caserne usine aérodrome », pas le QG. Le point 7 d'origine
+  // parlait de « pas de centre de commandement » — le Centre de commandement est
+  // le QG de l'OFFENSE (`POINTS_ARMEE.offense.batiment`), et une base qui se
+  // défend n'en a pas. Les deux énoncés disent donc la même chose.
+  const etat = creerEtat(20260908);
+  baseCourante(etat).disposition[0].niveau = 12;
+  baseCourante(etat).disposition.push(
+    { id: 'caserne', rangee: 11, colonne: 3, niveau: 1, degatsMilli: 0 },
+    { id: 'depotDeVehicules', rangee: 11, colonne: 5, niveau: 1, degatsMilli: 0 },
+    { id: 'aerodrome', rangee: 13, colonne: 1, niveau: 1, degatsMilli: 0 },
+  );
+  while (baseCourante(etat).economie.residus.length < baseCourante(etat).disposition.length) {
+    baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  etat.recherche.acquises.defense = [...rosterDefensif()].sort();
+
+  // ⚠ FALSIFIABILITÉ : tout le reste est là — les trois bâtiments ET la
+  // recherche complète. Ce qui manque est le QG, et rien d'autre.
+  assert.equal(moteurEtat.niveauDeCommandement(etat, 'garnison'), null,
+    'montage : un QG de défense est posé');
+  assert.equal(moteurEtat.batimentDeProductionManquant(etat, 'meute'), null,
+    'montage : la Caserne manque, le test mesurerait l\'autre verrou');
+
+  const palette = posablesDeLaDefense(etat);
+  assert.equal(palette.length, rosterDefensif().length, 'la palette a changé de longueur');
+  for (const p of palette) {
+    assert.equal(p.verrouille, true, `${p.id} : posable sans QG de défense`);
+    assert.equal(p.raison, 'aucun QG de défense posé', `${p.id} : la raison a changé`);
+  }
+
+  // Falsifiable : le même état, QG posé, ouvre tout.
+  const avecQg = baseAvecCommandement(3, 50, false, rosterDefensif());
+  assert.ok(posablesDeLaDefense(avecQg).every((p) => !p.verrouille),
+    'avec le QG et la recherche, la palette verrouille encore : le montage ne discrimine rien');
+});
+
+test('PAL T8 — et le GESTE passe aussi : la palette ne ment pas', () => {
+  // ⚠⚠ C'EST LE TEST LE PLUS IMPORTANT DU LOT, ET SON SUJET EST LE COUPLE, PAS
+  // L'UNE DES DEUX MOITIÉS. Le verrou du bâtiment de production était écrit
+  // DEUX fois — ici, dans `posablesDeLaDefense`, et dans `sim/state.js` depuis
+  // le lot PRODUCTION-EN-DÉFENSE. N'en retirer qu'une laisserait une palette
+  // OUVERTE devant un geste REFUSÉ : le défaut qu'Ethan a rapporté le 07/09,
+  // retourné. `PAL T7` reste vert dans ce cas-là ; celui-ci rougit.
+  const etat = baseAvecCommandement(3, 50, false, rosterDefensif());
+  assert.equal(moteurEtat.batimentDeProductionManquant(etat, 'meute'), 'caserne',
+    'montage : la Caserne est posée, le test ne mesure rien');
+
+  const palette = posablesDeLaDefense(etat);
+  assert.ok(palette.some((p) => !p.verrouille), 'montage : la palette est entièrement grise');
+
+  // ⚠ LA CASE SE CHERCHE, ELLE NE S'ÉCRIT PAS. Les obstacles se tirent de la
+  // fondation : une colonne choisie à la main tombe sur un rocher une graine sur
+  // deux, et le test lirait un refus d'EMPLACEMENT là où il en attend zéro.
+  const surCaseLibre = (id) => {
+    for (let rangee = GRILLE.bandes.defense.premiere;
+      rangee <= GRILLE.bandes.defense.derniere; rangee += 1) {
+      for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+        const piece = { id, rangee, colonne, niveau: 1 };
+        const refus = moteurEtat.problemesDeLaPoseDEffectif(etat, 'garnison', piece);
+        if (refus.length === 0) return { piece, refus };
+        if (refus.some((r) => r.code === 'sans-batiment-de-production')) return { piece, refus };
+      }
+    }
+    throw new Error(`montage : aucune case libre pour « ${id} »`);
+  };
+
+  // ⚠⚠ TOUTE VIGNETTE VIVE EST POSABLE, LES DIX-SEPT COMPRISES. Une seule pièce
+  // essayée laisserait passer un lot qui n'aurait ouvert qu'un châssis.
+  for (const vignette of palette.filter((p) => !p.verrouille)) {
+    const { piece, refus } = surCaseLibre(vignette.id);
+    assert.deepEqual(refus, [],
+      `« ${vignette.id} » : la palette l'offre et le modèle le refuse`);
+    // ⚠ SUR UN ÉTAT NEUF, PIÈCE PAR PIÈCE. Poser les dix-sept sur le même
+    // état ferait buter les dernières sur le budget d'armement ou sur une case
+    // prise par les premières : le test lirait un refus qui n'est pas le sien.
+    assert.doesNotThrow(
+      () => moteurEtat.poserEffectif(
+        baseAvecCommandement(3, 50, false, rosterDefensif()), 'garnison', piece,
+      ),
+      `« ${vignette.id} » : le geste lève alors que la vignette est vive`,
+    );
+  }
+
+  // ⚠ ET RÉCIPROQUEMENT : aucune vignette GRISE ne l'est pour le bâtiment. Sans
+  // cette moitié-ci, une palette qui verrouillerait tout passerait le test.
+  const grisee = posablesDeLaDefense(baseAvecCommandement(3, 50, false, ['merlon']))
+    .filter((p) => p.verrouille);
+  assert.ok(grisee.length > 0, 'montage : plus rien n\'est grisé, la réciproque ne mesure rien');
+  for (const p of grisee) {
+    assert.equal(p.raison, 'se débloque par la recherche',
+      `« ${p.id} » : verrouillé pour autre chose que la recherche`);
+  }
 });

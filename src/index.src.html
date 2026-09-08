@@ -309,10 +309,21 @@
   #raid-vagues { padding: 4px 6px 6px; }
   #ecran-raid .vague { margin-bottom: 3px; }
   #ecran-raid .emplacements { display: grid; gap: 2px; }
+  /* ⚠⚠ SANS APLAT, ET `transparent` EST DÉCLARÉ EN TOUTES LETTRES — 08/09,
+     point 8 d'Ethan : « dans le menu armé les unités sont des carrés pleins avec
+     pointillés, il faut enlever le fond. » Le point 16 du 07/09 avait traité les
+     VIGNETTES ; les EMPLACEMENTS portaient encore `#161914`. La déclaration se
+     REMPLACE, jamais ne s'omet : c'est la leçon payée sur `.posable`, et
+     `PAL T4` la garde.
+     ⚠⚠ CE QUE L'APLAT CACHAIT A ÉTÉ RELEVÉ AVANT DE LE RETIRER : rien. Les six
+     états de cette case se disent par leur LISERÉ seul — `.occupe` en
+     `solid #161914`, `.inactive` `dashed #68727E`, `.abimee` `#E43E32`,
+     `.chargee` `#F5B636`, `.enmain` un `outline` d'os. `PAL T5` les confronte
+     deux à deux, comme `ÉD T11` pour la vignette de palette. */
   #ecran-raid .emplacement {
     /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — même motif qu'à l'Offense. */
     position: relative;
-    aspect-ratio: 1; background: #161914;
+    aspect-ratio: 1; background: transparent;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 6px; line-height: 1.1; text-align: center;
     color: #68727E; word-break: break-word; touch-action: none;
@@ -341,9 +352,12 @@
      « Débarquer » à `MODES_RAID`, comme « Réparer ». Ethan tranche.
      ⚠ `touch-action: none` COMME LA CASE QUI LE PORTE : sans lui, le navigateur
      avale le glissement pour faire défiler la page et le badge devient inerte.
-     ⚠ AUCUNE TEINTE NEUVE — l'ambre `#F5B636` est déjà celle du bouton
-     d'acquisition possible de l'écran Recherche, et le fond est celui des
-     cases. */
+     ⚠ AUCUNE TEINTE NEUVE — l'ambre `#F5B636` est celle du bouton d'acquisition
+     de l'écran Recherche, `#161914` celle du fond de l'écran de raid.
+     ⚠ ET SON APLAT RESTE (08/09) : il était « celui des cases » tant que la case
+     en avait un. Le badge le garde parce qu'il doit ressortir DE la case — un
+     badge transparent sur un sprite d'unité ne se lit plus, et c'est un point de
+     toucher de 24 px. */
   #ecran-raid .emplacement .badge-passager {
     position: absolute; left: 0; top: 0; z-index: 1;
     width: 24px; height: 24px; padding: 2px;
@@ -1490,9 +1504,18 @@
      le point d'entrée unique — donc le joueur reconnaît dans la palette
      exactement ce qu'il posera.
 
-     ⚠ ELLE GRANDIT DE 18 À 26 px : un sprite de 64 px réduit à 18 n'est plus
-     lisible, et la place existe — la vignette fait 43 px de haut et ne portait
-     que la pastille et deux lignes de 7 px.
+     ⚠⚠ ELLE PASSE DE 26 À 52 px — 08/09, POINT 2 D'ETHAN : « remplir la case
+     en bas du menu bâtiment, on a un gros carré vide. » Le carré n'était pas
+     vide, il était TROP PETIT : 26 px datait d'une vignette de 43, et la palette
+     est passée à UNE rangée le 03/09 sans que la pastille suive.
+     ⚠⚠ ET LE NOMBRE SE CALCULE. Bande 86, moins 1 de liseré et 2 × 5 de
+     `padding` : vignette 75 (mesuré). Moins ses 2 × 1 de liseré : 73 de contenu,
+     pour la pastille, un `gap` de 2 et le libellé. Le libellé se dimensionne sur
+     son PIRE cas — DEUX lignes, dont une portant un `.picto` de `1.15em`, plus
+     haut que l'interligne `1.05` —, soit `7 × (1,05 + 1,15) = 15,4` px, et
+     Chromium rend 15,39. Reste 55,6 : on prend 52. Sur UNE ligne on aurait pris
+     62, et la palette serait juste jusqu'au premier nom long, puis rognée par
+     l'`overflow-y: hidden` de la bande — c'est le couple `PAL T1`/`PAL T2`.
 
      ⚠ ET LES TROIS CADRES DE FAMILLE RESTENT ICI, eux. Ils partent de la
      GRILLE, où le sprite se suffit et où Ethan les a fait retirer ; dans la
@@ -1501,10 +1524,13 @@
   .posable i {
     /* ⚠ `relative` POUR LA COUCHE TOURNANTE — voir `.couche-tournante`. */
     position: relative;
-    width: 26px; height: 26px; font-style: normal;
+    width: 52px; height: 52px; font-style: normal;
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;
   }
+  /* ⚠ D'UN PIXEL, ET ILS NE SUIVENT PAS LA PASTILLE : épaissis avec elle, ils
+     crieraient sur dix-sept vignettes, et `.posable.actif i` — deux pixels
+     d'os — cesserait de s'en distinguer. */
   .posable.prod i { box-shadow: inset 0 0 0 1px #928E80; }
   .posable.mil i { box-shadow: inset 0 0 0 1px #8A1E17; }
   .posable.pivot i { box-shadow: inset 0 0 0 1px #A67018; }
@@ -1750,7 +1776,10 @@
        l'ancêtre positionné de la couche tournante, et la pastille ne le lui
        prend pas. */
     position: relative;
-    aspect-ratio: 1; background: #161914;
+    /* ⚠ SANS APLAT, COMME LA CASE DU RAID : même grille de composition, mêmes
+       pièces — en traiter une seule aurait donné deux fonds d'un écran à
+       l'autre. Voir le ⚠⚠ de `#ecran-raid .emplacement`. */
+    aspect-ratio: 1; background: transparent;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 7px; line-height: 1.1; text-align: center;
     color: #68727E; word-break: break-word;

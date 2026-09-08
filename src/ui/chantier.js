@@ -62,7 +62,7 @@ import {
 // troisième. Les deux fonctions portent le même nom court dans deux modules —
 // d'où le renommage à l'import, comme pour `poser`.
 import {
-  budgetDuNiveau as budgetOffense, messageSansBatiment, FAMILLE_DE_CHASSIS,
+  budgetDuNiveau as budgetOffense, FAMILLE_DE_CHASSIS,
 } from './arsenal.js';
 import { budgetDuNiveau as budgetDefense } from './defense.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../render/orientation.js';
@@ -87,7 +87,7 @@ import {
   problemesDeLAmelioration, ameliorer,
   problemesDeLaDemolition, demolir,
   problemesDuDeplacement, deplacer,
-  pointsEngages, niveauDeCommandement, batimentDeProductionManquant,
+  pointsEngages, niveauDeCommandement,
   poserEffectif, retirerEffectif, deplacerEffectif,
   problemesDeLaPoseDEffectif, problemesDuDeplacementDEffectif,
   problemesDeLAmeliorationDEffectif, ameliorerEffectif,
@@ -1246,7 +1246,12 @@ export function libelleDuVoisin(type) {
  *     niveau du bâtiment rend les réparations MOINS CHÈRES —
  *     `diviseurDuBatiment` —, et c'est son SEUL effet ». Il ne crédite rien, et
  *     la présence seule — non le niveau — gouverne la construction, par
- *     `batimentDeProductionManquant`.
+ *     `batimentDeProductionManquant`. ⚠ EN ARMÉE SEULEMENT DEPUIS LE 08/09 :
+ *     `FORCES.garnison.exigeLeBatimentDeProduction` est faux, et la garnison se
+ *     pose sans eux. Ils ne la réparent pas non plus — `reservoirsDeLArmee` ne
+ *     boucle que sur `base.armee`, et la garnison revient par la rampe du
+ *     Complexe de défense, deux lignes plus haut. Ces trois bâtiments-là ne
+ *     touchent donc plus la défense en RIEN.
  *
  * ⚠⚠ LA VALEUR SE DEMANDE, ELLE NE SE RECALCULE PAS. Aucune de ces formules
  * n'est réécrite ici : l'écran appelle la fonction relevée, une fois sur le
@@ -2233,7 +2238,15 @@ export function posablesDeLaBase(etat) {
  * l'écran Offense DEMANDE à `unitesDeLaPalette` avant de poser et refuse au
  * toucher, là où cet écran-ci grisait sans que rien derrière la vignette ne
  * refuse le geste. Ce n'est plus vrai : la règle est descendue dans
- * `sim/state.js`, qui garde les deux forces et les trois chemins de geste.
+ * `sim/state.js`, qui garde les trois chemins de geste.
+ *
+ * ⚠⚠ ET DEPUIS LE 08/09 ELLE NE VAUT PLUS ICI DU TOUT — POINT 7 D'ETHAN.
+ * « Toutes les défenses doivent être disponibles dès qu'on a la recherche » ;
+ * le verrou retiré est nommément « caserne usine aérodrome ». Cette palette
+ * compte donc DEUX raisons — pas de QG de défense, pas encore cherchée — et
+ * `sim/state.js` ne refuse plus le geste correspondant. Les deux moitiés sont
+ * tombées ENSEMBLE, et c'est tout le lot : n'en retirer qu'une aurait rendu une
+ * palette ouverte devant un geste refusé.
  *
  * @param {object} etat
  * @returns {Array<{id, nom, sigle, points, raison, verrouille}>}
@@ -2243,35 +2256,33 @@ export function posablesDeLaDefense(etat) {
   const ouvertes = acquisesDe(etat, 'defense');
   return rosterDefensif().map((id) => {
     const ligne = DEFENSES[id] ?? UNITES[id];
-    // ⚠ TROIS RAISONS, DANS L'ORDRE OÙ ELLES PRIMENT — les mêmes que la palette
-    // de l'Offense depuis le 29/08, et pour la même raison : le joueur lit ce
-    // qui le bloque MAINTENANT, pas la liste de tout ce qui le bloquera.
+    // ⚠⚠ DEUX RAISONS, ET IL Y EN AVAIT TROIS JUSQU'AU 08/09 — ETHAN, POINT 7 :
+    // « toutes les défenses doivent être disponibles dès qu'on a la recherche »,
+    // et « caserne usine aérodrome » à la question de savoir quel verrou tombe.
+    // La troisième était le bâtiment de PRODUCTION, et elle est partie d'ici
+    // comme elle est partie du modèle.
+    //
+    // ⚠⚠ ET C'ÉTAIT LE PIÈGE DU LOT : LES DEUX ÉCRITURES DEVAIENT TOMBER
+    // ENSEMBLE. Ne retirer que celle-ci aurait rendu une palette ouverte et un
+    // geste refusé — le défaut du 07/09, retourné. C'est `PAL T8` qui le garde,
+    // et il tient à ce que `FORCES.garnison.exigeLeBatimentDeProduction` soit
+    // faux dans `sim/state.js` ; cette palette-ci ne fait plus que ne pas poser
+    // la question.
+    //
+    // ⚠ L'ORDRE DES DEUX QUI RESTENT NE BOUGE PAS, et l'exemple qui le
+    // justifiait a disparu avec la troisième raison : l'Épervier restait
+    // verrouillé au démarrage faute d'aérodrome, et il fallait que ce soit le
+    // bâtiment qui le dise plutôt que la recherche. Aujourd'hui l'aérodrome
+    // n'entre plus en défense — l'Épervier s'y ouvre par la seule recherche.
+    // Ce qui reste vrai est le motif : le joueur lit ce qui le bloque
+    // MAINTENANT, pas la liste de tout ce qui le bloquerait.
     let raison = null;
     if (niveau === null) raison = 'aucun QG de défense posé';
-    // ⚠ LA DEUXIÈME RAISON A CHANGÉ DE NATURE, PAS DE RANG. C'était
+    // ⚠ LA SECONDE RAISON A CHANGÉ DE NATURE, PAS DE RANG. C'était
     // `apparition > niveau` jusqu'au lot RECHERCHE ; c'est désormais la
-    // recherche, et elle seule. L'ordre des trois ne bouge PAS : sans QG il n'y
-    // a ni budget ni pièce, et le message doit dire ce qui bloque MAINTENANT.
-    //
-    // ⚠ ET LA TROISIÈME PRIME TOUJOURS SUR RIEN. L'Épervier est gratuit en
-    // offense mais reste verrouillé au démarrage faute d'aérodrome : c'est
-    // `batimentDeProductionManquant` qui doit le dire, pas « se débloque par la
-    // recherche ». L'ordre le garantit — l'y intervertir mentirait au joueur.
+    // recherche, et elle seule. L'ordre ne bouge PAS : sans QG il n'y a ni
+    // budget ni pièce, et le message doit dire ce qui bloque MAINTENANT.
     else if (!ouvertes.includes(id)) raison = 'se débloque par la recherche';
-    else {
-      // ⚠⚠ LA RÈGLE DU BÂTIMENT DE PRODUCTION VAUT AUSSI EN GARNISON, et c'est
-      // une LECTURE de l'arbitrage du 29/08. Ethan a dit « infanterie
-      // inconstructible sans caserne, même règle pour véhicule et avion »,
-      // sans dire « à l'assaut » : la restreindre à un écran aurait été le
-      // choix arbitraire. Les six ouvrages fixes et les trois artilleries ne
-      // sont pas dans `UNITES` — ils n'ont pas de châssis, et
-      // `batimentDeProductionManquant` rend `null` pour eux : un mur n'a jamais
-      // eu besoin d'une caserne.
-      const manque = batimentDeProductionManquant(etat, id);
-      if (manque !== null) {
-        raison = messageSansBatiment(BASE_BATIMENTS[manque].nom.joueur, UNITES[id].chassis);
-      }
-    }
     return {
       id,
       nom: ligne.nom.joueur,
