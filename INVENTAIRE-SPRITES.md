@@ -142,46 +142,45 @@ L'interdit du §11 devient : *aucune SECONDE ORIENTATION DESSINÉE*. On ne produ
 jamais un second fichier pour la même entité tournée ; on ne tourne au rendu que
 ce qui figure dans ce tableau.
 
-**A6 — empreintes 18 / 24 / 28, doublées d'un compteur de pièces.** [tranché 26/08]
-La fiche §7 annonçait 20 / 26 / 30 gros pixels sur 32 pour 5 / 10 / 15 points, la
-dernière valeur étant décrite comme « case débordante ». Le non-dépassement
-(A7) supprime cette possibilité et la marge de 2 gros pixels plafonne à 28.
-Nouvelle échelle : **18 / 24 / 28**.
+**A6 — ABANDONNÉE le 07/09. L'empreinte est par châssis, le nombre de pièces
+dit la nature.** [tranché 26/08, abandonné 07/09]
 
-Mais la taille seule ne suffit pas, et le relevé de `combat.js` dit pourquoi :
-**l'échelle ne sert jamais à trois valeurs, seulement à trois oppositions
-binaires**, une par châssis.
+A6 disait deux choses, et les deux sont tombées.
 
-| Châssis | Opposition réelle | Absent |
+**« 18 / 24 / 28 selon les points »** a tenu jusqu'au 05/09. Le lot
+SPRITES-V2-JOUEUR a mis l'emprise **par châssis** dans `tools/joueur_v2.py` :
+escouade 18 et 24, blindé **20 et 31**, aéronef **25 et 32**. Un blindé à
+10 points ne fait donc plus la même longueur qu'une escouade à 10 points, et le
+palier unique n'existe plus.
+
+**« Le nombre de pièces code le coût »** est tombé le 07/09. Le relevé qui l'a
+tuée, mesuré sur les deux camps après alignement :
+
+| Unité | Points | Figures |
 |---|---|---|
-| Escouade | 5 (`meute`, `perceurs`) contre 10 (`guetteur`, `fouisseurs`, `carapace`) | pas de 15 |
-| Blindé | 10 (`ratisseur`, `fendeur`, `belier`) contre 15 (`broyeur`, `pilon`) | pas de 5 |
-| Aéronef | 10 (`crecelle`, `busard`, `frappeur`) contre 15 (`enclume`) | pas de 5 |
+| `meute` | 5 | **5** |
+| `perceurs` | 5 | **5** (¹) |
+| `guetteur` | 10 | **3** |
+| `carapace` | 10 | **2** |
+| `fouisseurs` | 10 | **1** |
 
-Deux conséquences. D'abord **18 gros pixels ne concerne que deux sprites sur
-vingt-huit** — le cas « trop petit pour être lisible » est marginal. Ensuite
-**24 contre 28 fait 17 % d'écart**, ce que personne ne verra sur deux unités qui
-ne sont jamais côte à côte.
+(¹) Compté sur la planche de l'Ouvrage. Les cinq figures des Perceurs du joueur
+se touchent, si bien qu'une mesure par composante connexe n'en rend qu'une : le
+nombre est celui du recoupage, pas celui d'un compteur d'îlots.
 
-D'où le second signal : **compter des pièces**. La pièce garde une taille
-lisible, c'est son NOMBRE qui code le coût.
+Le compte n'est pas seulement décorrélé du prix : il va **à rebours**. Les deux
+unités à 5 points sont les plus nombreuses, et la plus chère est seule. Le
+nombre de pièces dit ce qu'est l'unité — une meute est nombreuse, un fouisseur
+est solitaire — et il ne dira plus jamais ce qu'elle coûte.
 
-| Châssis | 5 points | 10 points | 15 points |
-|---|---|---|---|
-| Escouade | **3 figures** | **5 figures** | — |
-| Blindé | — | **1 tube**, train de chenilles simple | **2 tubes**, double train |
-| Aéronef | — | **3 modules** radiaux | **5 modules** |
+⚠⚠ **CE QUI RESTE VRAI, ET QUI EST TOUT CE QUI COMPTE :** la pièce garde une
+taille lisible, environ 8 gros pixels pour un fantassin, quel que soit le coût.
+C'est ce qui évite la bouillie, et c'est la seule ligne d'A6 qui survit.
 
-C'est ce qui évite la bouillie : un fantassin garde **environ 8 gros pixels**
-quel que soit le coût de l'escouade, et l'empreinte passe de 18 à 24 par
-accumulation, pas par étirement. Un signal discret qui se compte, doublé d'un
-signal continu qui se voit ; aucun des deux ne demande de détail sous le gros
-pixel. La grammaire de l'aéronef est celle qui était déjà écrite pour le Dard
-(3 modules, 5 pour `enclume`) — elle est simplement généralisée au joueur.
-
-⚠ Le §1.3 de la fiche tient toujours : **la forme code la classe**. Le nombre de
-pièces code le coût, pas la classe — cinq figures restent une escouade, deux
-tubes restent un blindé. On n'ajoute pas un axe, on gradue celui de la taille.
+⚠ **A6 est écrite une seconde fois dans `FICHE-STYLE.md`** — au §7 et dans le
+bloc du Dard, qui codait le coût par le nombre de modules. Les trois passages ont
+été repris dans le même commit ; si l'un d'eux réapparaît seul, c'est qu'un
+lecteur a « corrigé » vers l'ancienne règle.
 
 **A7 — vue top-down haute (~75°), non-dépassement absolu.** [tranché 26/08]
 Remplace le « zénithal strict » du §1.1 de la fiche. La caméra est à **75° de
@@ -201,8 +200,34 @@ avec une amorce de flanc en bas. Si quelqu'un compresse la grille, il a compris
 autre chose que ce qui est écrit ici.
 
 **Non-dépassement.** L'intégralité du sprite — flanc compris, canon compris,
-antenne comprise — tient dans un carré centré de **28 × 28 gros pixels sur 32**.
-Aucune exception, sauf les tuiles de terrain qui font 32 × 32 bord à bord.
+antenne comprise — tient dans sa case, et rien ne mord sur la case voisine.
+
+⚠⚠ **LE PLAFOND N'EST PLUS 28. Relevé le 07/09.** Cette ligne annonçait « un
+carré centré de 28 × 28 sur 32, aucune exception ». Deux emprises la dépassent
+depuis le 05/09 et le dépôt les affiche : le blindé lourd à **31**, l'aéronef
+lourd à **32**, soit la case bord à bord. La marge de deux gros pixels qui
+justifiait le 28 a été dépensée, et **la conséquence utile tient toujours** :
+tant que rien ne sort de la case, il n'y a pas de tri par profondeur à écrire.
+
+⚠⚠ **ET LE CARRÉ DE TOURELLE, LUI, SORT DE LA CASE.** Il porte la marge de
+rotation, presque entièrement transparente : mesuré au lot OUVRAGE-CÂBLAGE, sa
+portée va jusqu'à **83,94 %** du côté quand le bord de case est à 50 %, et une
+coque sur dix-huit dépasse aussi, à 50,45 %. Ce n'est pas une exception qu'on
+tolère en silence : **un test borne les deux camps séparément** et nomme le pire
+de chaque côté. Une borne unique assez large pour les deux cesserait de garder le
+camp le plus serré.
+
+Les tuiles de terrain font 32 × 32 bord à bord, comme avant.
+
+⚠⚠ **LE NOMBRE 28 SURVIT AILLEURS DANS CE DOCUMENT, ET IL Y EST FAUX.** Relevé
+le 07/09 : le tableau du roster (« 15 → 28 × 28 »), les trois conditions de
+l'arbitrage de rotation, la marge des obstacles et la liste des interdits en fin
+de fichier le répètent tous. Ils n'ont PAS été repris dans ce commit, qui ne
+touche qu'A6 et A7 : `INVENTAIRE-SPRITES.md` est daté du 26/08 et décrit un
+inventaire de 141 sprites là où le dépôt en porte plus du double. **Le reprendre
+est un chantier à lui seul.** En attendant, la règle vivante est celle-ci et
+celle de `FICHE-STYLE.md` §7 ; partout ailleurs dans ce fichier, 28 se lit 31 ou
+32 selon le châssis.
 Trois conséquences, toutes bonnes :
 
 1. **Aucun tri par profondeur à écrire.** Rien ne mord sur la case du dessus,

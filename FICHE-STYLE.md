@@ -299,23 +299,43 @@ Le décalage d'ombre est le **seul** signal d'altitude. Aucune autre indication 
 
 ---
 
-## 7. Taille = coût
+## 7. Empreinte — par châssis et par points
 
-Les trois paliers de points d'armée se lisent à l'empreinte :
+⚠⚠ **« TAILLE = COÛT » EST ABANDONNÉ. Tranché le 07/09.** Ce paragraphe a porté
+trois paliers uniques — 18 / 24 / 28 — valables pour les trois châssis. Le lot
+SPRITES-V2-JOUEUR les a remplacés le 05/09 par une valeur **par châssis**, et un
+blindé à 10 points ne fait plus la même longueur qu'une escouade à 10 points. Ce
+qui suit est relu dans le code, pas décidé ici.
 
-| Points | Empreinte logique | Pièces |
-|---|---|---|
-| 5 | **18 × 18** | escouade : 3 figures |
-| 10 | **24 × 24** | escouade 5 figures · blindé 1 tube · aéronef 3 modules |
-| 15 | **28 × 28** | blindé 2 tubes, double train · aéronef 5 modules |
+**La table fait foi, et elle est dans `tools/joueur_v2.py`**, jamais recopiée :
 
-Le poids visuel doit correspondre au poids réel. Aucune unité à 5 points ne doit paraître aussi massive qu'une à 15.
+| Châssis | 5 points | 10 points | 15 points |
+|---|---|---|---|
+| Escouade | **18** | **24** | — |
+| Blindé | — | **20** | **31** |
+| Aéronef | — | **25** | **32** |
 
-⚠ *L'échelle 20 / 26 / 30 des versions antérieures est caduque : le non-dépassement de case (A7) supprime la « case débordante » et plafonne à 28. Tranché le 26/08.*
+Les défenses ne suivent pas les points : une défense est un bâtiment posé sur sa
+case, et elle l'occupe. **29** pour les murs, les barrières et les socles carrés,
+**27** pour les trois coques d'artillerie.
 
-**Mais la taille seule ne suffit pas**, parce que l'échelle ne sert jamais à trois valeurs, seulement à trois oppositions binaires — 5 contre 10 pour les escouades, 10 contre 15 pour les blindés et les aéronefs. D'où le second signal : **on compte des pièces.** La pièce garde une taille lisible — un fantassin fait environ 8 gros pixels quel que soit le coût — et c'est son NOMBRE qui code le coût. L'empreinte passe de 18 à 24 par accumulation, pas par étirement. Détail complet en A6 de `INVENTAIRE-SPRITES.md`.
+⚠ **Ces valeurs valent pour LES DEUX CAMPS.** Elles sont indexées par châssis et
+par points, deux grandeurs que `combat.js` donne pour le joueur comme pour
+l'Ouvrage. Toucher une ligne bouge les deux camps à la fois.
 
-⚠ Le §1.3 tient : **la forme code la classe.** Le nombre de pièces code le coût, pas la classe — cinq figures restent une escouade, deux tubes restent un blindé.
+⚠⚠ **ET LE PALIER NE SUFFIT DÉJÀ PLUS.** Ethan a décidé le 07/09 un ajustement
+**par pièce** : le Frappeur à ×0,90, les trois artilleries de défense à ×1,10.
+Ces deux valeurs ne sont PAS dans le code — elles vivent dans
+`tools/planche-echelles-ouvrage.py` en attendant que les emprises soient
+reprises. Tant qu'elles n'y sont pas, ce tableau décrit ce que le jeu affiche.
+
+**Le poids visuel doit correspondre au poids réel.** Aucune unité à 5 points ne
+doit paraître aussi massive qu'une à 15 : c'est le seul morceau du §7 d'origine
+qui survit, et c'est celui qui compte.
+
+⚠ Le §1.3 tient : **la forme code la classe.** Le nombre de pièces ne code plus
+le coût — voir A6 — mais cinq figures restent une escouade et deux tubes restent
+un blindé.
 
 ---
 
@@ -338,17 +358,46 @@ Les planches d'animation ne sont produites que si une transformation ne suffit p
 
 ## 9. Nommage
 
+⚠⚠ **CE BLOC DÉCRIVAIT UN NOMMAGE QUI N'EXISTE PLUS.** Il annonçait
+`def_tourelle_av.png` et `off_<nom>.png`, sans lettre de camp — donc sans moyen
+de distinguer une Casemate du joueur de celle de l'Ouvrage. Relu dans
+`src/render/scene.js` le 07/09 :
+
 ```
-def_<chassis>_<cible>.png        def_tourelle_av.png
-def_<chassis>_<cible>_r.png      variante longue portée (artillerie)
-off_<nom>.png                    unité offensive
-bat_<id>.png                     bâtiment
+off_<c>_<id>.png                 escouade ou aéronef, <c> = j ou o
+off_<c>_<id>_def.png             sa pose de garnison, si elle existe
+off_<c>_<id>_chassis.png         coque de blindé, _chassis_def en garnison
+off_<c>_<id>_tourelle.png        sa tourelle, dessinée UNE fois, canon au nord
+socle_def_<c>_<id>.png           socle d'une tourelle ou d'une artillerie
+def_<c>_<id>.png                 la tourelle posée dessus, ou un mur, ou une barrière
+bat_<c>_<id>.png                 bâtiment
+bat_<c>_<id>_detruit.png         sa planche détruite — voir l'avertissement
+ruine_<c>.png                    la ruine posée sur la case au combat
 tile_<terrain>.png               terrain
 ui_<élément>.png                 interface
 poi_<type>.png                   point d'intérêt
 ```
 
-Cibles : `ai` (anti-infanterie) · `av` (anti-véhicule) · `aa` (anti-aérien)
+⚠ **La lettre est le PROPRIÉTAIRE, jamais le camp** — `CLAUDE.md` §4 : le joueur
+peut défendre. C'est la FORCE qui décide de la pose `_def`, et le propriétaire
+qui décide de la lettre ; ce sont deux fonctions séparées dans `scene.js`, et
+elles le sont pour cette raison.
+
+⚠ **Une pose de garnison n'existe pas toujours** : `off_j_pilon_chassis_def`
+n'existe pas, l'Obusier n'entrant jamais en garnison. La liste ne s'écrit nulle
+part — le rendu la LIT dans l'atlas.
+
+⚠⚠ **LES SEIZE PLANCHES `_detruit` NE SONT LUES PAR PERSONNE.** Relevé le
+07/09 : `_detruit` n'apparaît dans `src/` que dans la table de
+`src/data/atlas.js` — zéro occurrence dans `render/`, `ui/` et `sim/`. C'est
+`ruine_<c>` que le rendu emploie quand un bâtiment tombe. Les seize sont donc
+payées en octets et employées par personne, **troisième fois du dépôt** après
+`ui_pause` et `ruine_j`/`ruine_o` eux-mêmes. Ordre de grandeur : 59 981 octets
+de PNG à la grille 64. Les retirer ou les brancher est un arbitrage, pas une
+évidence — elles ont peut-être été dessinées pour un écran à venir.
+
+⚠ Le suffixe de cible `ai` · `av` · `aa` n'est plus employé nulle part : la cible
+se lit dans `combat.js`, elle ne se code plus dans le nom de fichier.
 
 Terrains (7, lexique arrêté en Phase 0) :
 
@@ -393,7 +442,7 @@ Les sprites sont **générés par composition** (`CHASSIS[x](arme)`), jamais des
 - Un sprite qui n'existe pas comme composition d'un châssis et d'un armement
 - **Une seconde orientation DESSINÉE** — un second fichier pour la même entité tournée. La rotation à 90° des véhicules et le miroir de l'infanterie se font AU RENDU et sont permis (§1.2)
 - Isométrie, point de fuite, horizon, grille inclinée ou compressée, tri par profondeur — l'inclinaison à 75° se dessine DANS le sprite, jamais dans la grille (§1.1)
-- **Tout dépassement de case** : flanc, canon et antenne compris, un sprite tient dans 28 × 28 gros pixels sur 32. Seules les tuiles de terrain font 32 × 32 bord à bord
+- **Tout dépassement de case** : flanc, canon et antenne compris, un sprite tient dans SA CASE. *Le plafond de 28 × 28 est caduc depuis le 05/09 — le blindé lourd vaut 31 et l'aéronef lourd 32, soit la case bord à bord ; voir A7. Les tuiles de terrain font 32 × 32 comme avant, et le carré de tourelle, presque entièrement transparent, sort de la case et est borné par un test.*
 - **Tout flanc au-delà de 2 gros pixels sur une unité** — régime B, c'est la contrepartie exacte de la rotation et du miroir
 - Tout éclairage directionnel cuit dans le sprite : il devient faux à la première rotation
 - Tout emblème — aigle, étoile, croix, cocarde, drapeau, blason, écusson — et tout texte ou chiffre
@@ -419,8 +468,13 @@ l'inverse de l'essaim au sol. Un moyeu central, des modules identiques disposés
 en triangle radial autour de lui, reliés par des bras courts, un disque sombre
 plein sous chaque module en guise de puits de sustentation. **Aucune aile
 portante, aucune hélice, aucun rotor** : la sustentation doit sembler procédée,
-non aérodynamique. Le nombre de modules code le coût — trois à 10 points, cinq
-pour `enclume` à 15.
+non aérodynamique.
+
+⚠⚠ **LE NOMBRE DE MODULES NE CODE PLUS LE COÛT. Tranché le 07/09.** Ce
+paragraphe disait « trois à 10 points, cinq pour `enclume` à 15 » : c'était la
+règle A6, écrite ici une seconde fois, et elle tombe avec elle. Le nombre de
+pièces dit la NATURE de l'unité, pas son prix — l'Enclume porte quatre branches
+autour de son moyeu, et elle vaut 15 points.
 
 Référence : `art/ouvrage/ref_dard.png`.
 
@@ -429,6 +483,12 @@ qui fait lire l'Ouvrage comme une installation qui se réplique ; elle coûte
 l'orientation, et ça ne se rattrapera sur aucun des quatre aéronefs.
 
 ---
+
+*v6 — 07/09/2026. « Taille = coût » est abandonné : le §7 est réécrit sur la
+table par châssis de `tools/joueur_v2.py`, le bloc du Dard perd le codage du coût
+par le nombre de modules, et le §9 est repris sur le nommage réellement employé
+par `src/render/scene.js`. Les trois disaient le contraire du dépôt. A6 et A7
+d'`INVENTAIRE-SPRITES.md` sont repris dans le même commit.*
 
 *v5 — 27/08/2026, nuit. Rampe de sol de l'Ouvrage inscrite — cinq tons, calés
 en clarté sur ceux du joueur. Les sept terrains disparaissent du tableau des
