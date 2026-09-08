@@ -339,20 +339,20 @@ const TAILLES_D_AVANT = {
   'atlas-batiment-64.webp': 42952,
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
-  'atlas-chassis-128.webp': 28850,
-  'atlas-chassis-64.webp': 10690,
-  'atlas-defense-128.webp': 53520,
-  'atlas-defense-64.webp': 21976,
+  'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
+  'atlas-chassis-64.webp': 27802, // 10690 avant OUVRAGE-CÂBLAGE
+  'atlas-defense-128.webp': 65050, // 53520 avant OUVRAGE-CÂBLAGE
+  'atlas-defense-64.webp': 27124, // 21976 avant OUVRAGE-CÂBLAGE
   'atlas-limite-128.webp': 13092,
   'atlas-limite-64.webp': 10016,
-  'atlas-socle-128.webp': 54642,
-  'atlas-socle-64.webp': 21092,
+  'atlas-socle-128.webp': 53918, // 54642 avant OUVRAGE-CÂBLAGE
+  'atlas-socle-64.webp': 21750, // 21092 avant OUVRAGE-CÂBLAGE
   'atlas-terrain-128.webp': 78802,
   'atlas-terrain-64.webp': 33256,
-  'atlas-tourelle_unite-128.webp': 19454,
-  'atlas-tourelle_unite-64.webp': 7912,
-  'atlas-unite-128.webp': 140972,
-  'atlas-unite-64.webp': 57386,
+  'atlas-tourelle_unite-128.webp': 36454, // 19454 avant OUVRAGE-CÂBLAGE
+  'atlas-tourelle_unite-64.webp': 14912, // 7912 avant OUVRAGE-CÂBLAGE
+  'atlas-unite-128.webp': 96784, // 140972 avant OUVRAGE-CÂBLAGE
+  'atlas-unite-64.webp': 37880, // 57386 avant OUVRAGE-CÂBLAGE
 };
 
 test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () => {
@@ -364,6 +364,17 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // écrite — les SPRITES, eux, se reproduisent à l'octet. L'outil porte
   // désormais l'invariant que `tools/planches.py` a depuis toujours : on
   // n'écrase jamais un fichier existant qui ne se reproduit pas.
+  //
+  // ⚠⚠ DIX DES DIX-HUIT SONT RÉANCRÉS AU LOT OUVRAGE-CÂBLAGE, ET LE NOMBRE
+  // D'AVANT EST ÉCRIT À CÔTÉ DE CELUI D'APRÈS. Ce n'est pas un assouplissement :
+  // ce lot fait entrer les quarante-deux sprites v2 de l'Ouvrage et retire ses
+  // neuf blindés monolithes, donc `unite`, `chassis`, `tourelle_unite`, `socle`
+  // et `defense` CHANGENT de contenu aux deux grilles. Ils ont été réécrits par
+  // `--forcer`, un drapeau PAR FAMILLE : les huit autres n'ont pas été touchés,
+  // et c'est ce que les huit lignes sans commentaire ci-dessus gardent encore.
+  // ⚠ `unite` MAIGRIT de 140 972 à 96 784 octets à la grille 128 — neuf sprites
+  // en moins et treize redessinés —, `chassis` et `tourelle_unite` DOUBLENT, un
+  // camp de plus chacun.
   for (const [fichier, octets] of Object.entries(TAILLES_D_AVANT)) {
     assert.equal(statSync(join(SPRITES, fichier)).size, octets,
       `${fichier} a changé de taille : la famille neuve a déplacé un atlas d'avant`);
@@ -412,11 +423,31 @@ test('PIC T7 — le livrable pèse 8 344 729 octets, la marge sur la borne T10 e
   // ⚠⚠ LA MARGE DESCEND DE 11,24 % À 10,27 %, ET C'EST LE PRIX ANNONCÉ. Le §0
   // du brief prévenait : « si ce lot ajoute des images, le delta est annoncé et
   // ventilé avant d'être livré ».
+  //
+  // ⚠⚠ ET ELLE DESCEND À 9,73 % AU LOT OUVRAGE-CÂBLAGE, 08/09 : le lot COÛTE
+  // 38 927 octets. Il fait entrer les quarante-deux sprites v2 de l'Ouvrage et
+  // retire ses neuf blindés monolithes ; mesuré poste par poste contre un
+  // livrable rebâti dans un `git worktree` depuis `214415d`, **images +36 820 ·
+  // JavaScript +2 107 · feuille +0 · audio +0 · balisage +0**, et la somme des
+  // cinq tombe EXACTEMENT sur le total. La borne T10, elle, NE BOUGE PAS.
+  //
+  // ⚠⚠ ET LES IMAGES COÛTENT ALORS QUE LE LOT RETIRE NEUF SPRITES — c'est le
+  // détourage de la clé VERTE qui l'explique, et il vaut la peine de le dire
+  // dans ce sens-là. Une première passe rendait 21 929 octets, et elle avait
+  // TORT : `recadrer` posait son fond en magenta écrit en dur, si bien que 31
+  // des 42 sprites gardaient le vert en pixels opaques. Un aplat de vert
+  // compresse mieux que du dessin, et le sujet, cadré sur la planche entière,
+  // sortait rétréci. Corrigé, l'art pèse ce qu'il dessine.
+  //
+  // ⚠ LE CHIFFRE EST REMESURÉ PARCE QUE CE LOT TOUCHE À L'ART, ce que la
+  // dernière assertion de ce test demande en toutes lettres. La tolérance de
+  // 50 000 octets l'aurait laissé passer : elle garde contre la dérive lente,
+  // pas contre un lot qui sait ce qu'il déplace.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 8_344_729;          // mesuré le 07/09, version 0.99.24 · build 126
-  const MARGE = BORNE - MESURE;      // 955 271 octets
-  assert.equal(MARGE, 955_271);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 10.27);
+  const MESURE = 8_395_461;          // 8 344 729 avant OUVRAGE-CÂBLAGE
+  const MARGE = BORNE - MESURE;      // 904 539 octets
+  assert.equal(MARGE, 904_539);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 9.73);
 
   const octets = statSync(join(RACINE, 'dist', 'index.html')).size;
   assert.ok(octets < BORNE, `${octets} octets : la borne T10 est franchie`);

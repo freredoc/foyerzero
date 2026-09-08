@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **07/09/2026**, version 0.99.28 · build 130.
+Dernière révision : **08/09/2026**, version 0.99.29 · build 131.
 
 ---
 
@@ -42,7 +42,149 @@ Dernière révision : **07/09/2026**, version 0.99.28 · build 130.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 07/09/2026 (après le lot JOURNAL), à confronter :**
+**Référence au 08/09/2026 (après le lot OUVRAGE-CÂBLAGE), à confronter :**
+`npm test` → **1412 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 395 461 octets**, 0 référence externe. Coût **+38 927 octets**, mesuré poste
+par poste contre un livrable rebâti dans un `git worktree` depuis `214415d` :
+**images +36 820 · JavaScript +2 107 · feuille +0 · audio +0 · balisage +0**, et
+la somme des cinq postes tombe EXACTEMENT sur le total — **297 lignes `data:`
+avant, 297 après, 292 URI de part et d'autre**. Borne T10 **inchangée à
+9 300 000**, marge **904 539 octets, 9,73 %**.
+⚠⚠ **LES QUARANTE-DEUX SPRITES v2 DE L'OUVRAGE SONT BRANCHÉS, ET LE CAMP ADVERSE
+CESSE D'ÊTRE UN MONOLITHE.** Ethan a commité ses sources le 07/09 ;
+`tools/ouvrage_v2.py` les conditionne toutes. Cinq familles bougent :
+`unite` **35 → 26** — les NEUF blindés monolithes partent —, `chassis`
+**9 → 18**, `tourelle-unite` **5 → 10**, `socle` et `defense` gardent leur compte
+et changent de contenu. Les deux camps se dessinent désormais par le même
+chemin : neuf coques et cinq tourelles chacun, six socles et six tourelles de
+défense chacun.
+⚠⚠ **`recadrer` POSAIT SON FOND EN MAGENTA ÉCRIT EN DUR, ET C'EST LE DÉFAUT LE
+PLUS COÛTEUX DU LOT — TROUVÉ EN MESURANT, PAS EN RELISANT.** Les sources de
+l'Ouvrage sont sur clé VERTE ; `est_fond` ne connaît que le magenta, donc la
+boîte englobante devenait la planche ENTIÈRE et le vert ressortait comme du
+sujet. **Mesuré : 31 des 42 sprites portaient la clé en pixels OPAQUES, jusqu'à
+1 935 sur 2 500 — 75 % de la Crécelle était du fond.** Les onze tourelles y
+échappaient, et pour une raison qui le confirme : elles passent en mode `carre`,
+donc elles ne traversent pas cette fonction. ⚠ **`CLAUDE.md` §6 l'avait annoncé
+mot pour mot** — « la clé verte est PLOMBÉE, pas éprouvée […] ce sera un lot, pas
+une ligne ». C'est ce lot-ci. `recadrer` DÉTECTE désormais la clé par
+`cond.cle_de_fond` et remplit avec elle ; `est_fond` n'est pas touchée, parce
+qu'elle DÉCOUPE aussi les planches.
+⚠⚠ **ET LA PREMIÈRE MESURE DU LIVRABLE ÉTAIT FAUSSE À CAUSE DE ÇA, IL FAUT LE
+DIRE DANS CE SENS-LÀ.** Avant correction le lot RENDAIT 21 929 octets ; un aplat
+de vert compresse mieux que du dessin, et le sujet cadré sur la planche entière
+sortait rétréci. Corrigé, il COÛTE 38 927. **Relevé de bout en bout dans
+Chromium sur le livrable : les 27 images inlinées portent ZÉRO pixel de clé,
+verte comme magenta.**
+⚠⚠ **LES ANCRES DE L'OUVRAGE ENTRENT DANS LES TABLES EXISTANTES, ET C'EST CE QUI
+ÉVITE UN `=== 'o'`.** `ANCRES_BLINDES` passe de 9 à 18 entrées, `ANCRES_DEFENSE`
+de 6 à 12 ; elles sont indexées par NOM DE SPRITE, donc `socle_def_o_casemate`
+ne peut pas entrer en collision avec `socle_def_j_casemate`. Deux fichiers
+séparés auraient obligé `scene.js` à choisir sa table selon le camp — le
+discriminant de camp que ce module dit ailleurs ne pas vouloir. **Le test le
+mesure : la collision est ASSERTÉE, pas supposée.**
+⚠⚠ **`couchesDeLaDefense` N'A PAS CHANGÉ D'UNE LIGNE, ET LES SIX DÉFENSES DE
+L'OUVRAGE SE METTENT À TOURNER.** Elle écrivait déjà `socle_def_${c}_${d.id}` et
+lisait `ANCRES_DEFENSE[socle] ?? null` : tant que la table ne portait que le
+joueur, le `?? null` posait la pièce sur la case entière. Les six clés qui
+entrent suffisent. C'est « le discriminant est la DONNÉE, jamais le camp »
+mesuré plutôt qu'annoncé — et un `=== 'o'` écrit le 05/09 aurait dû être RETIRÉ
+ici, dans un lot qui n'a rien à voir avec lui.
+⚠ **`couchesDeLUnite` EST LE SEUL VRAI CHANGEMENT DE CODE** : le `|| c === 'o'`
+disparaît et les deux `off_j_` deviennent `off_${c}_`. Trois retouches, et
+`NB_PRIMITIVES.blinde` perd son exception — c'était la SEULE entrée de cette
+table dont la valeur dépendait d'autre chose que de la classe.
+⚠⚠ **`tools/ouvrage_v2.py` N'A PAS DE TABLE À LUI, ET C'EST UN ÉCART AU BRIEF,
+DÉCLARÉ.** Il demandait « la table des tâches couvre 42 entrées » dans le fichier
+neuf. Mesuré avant d'écrire : les huit listes d'identifiants de `joueur_v2.py`
+décrivent EXACTEMENT le camp de l'Ouvrage aussi — neuf poses d'infanterie, quatre
+aéronefs, neuf coques dont l'Obusier sans pose de flanc, cinq tourelles de
+blindé, trois pièces monolithiques, six tourelles de défense, six socles. Ethan a
+livré la même découpe des deux côtés sans qu'aucune consigne ne le lui demande.
+`taches` prend donc une lettre de camp, de défaut `'j'`.
+⚠⚠ **QUATRE OUTILS SORTENT DE `CHAINE`, ET LE BRIEF N'EN NOMMAIT QUE DEUX.**
+Mesuré outil par outil sous `FZ_SPRITES` dans un dossier temporaire, pas
+supposé : `unites_ouvrage` **22 sprites** — les 13 que `ouvrage_v2` refait, PLUS
+les neuf monolithes que le lot retire —, `tourelles` **7**, `socles` **6**,
+`barrieres` **2**. Les quatre FICHIERS restent au dépôt, comme `bords.py` depuis
+MUR-PEINT ; les laisser produire écraserait `ouvrage_v2` et ferait recréer les
+neuf monolithes à chaque exécution.
+⚠⚠ **L'ART DE L'OUVRAGE NE SUIT PAS LA TABLE DE DÉGÂTS, ET C'EST UN FAIT, PAS
+NEUF DETTES.** Confronté à `accentDe`, ce camp diverge sur **dix-neuf
+combinaisons sur vingt-huit**, et les dix-neuf divergent dans le même sens :
+c'est l'accent `infanterie` qui l'emporte. **Vingt-sept des vingt-huit sont
+dominées par le rouge** ; la seule qui ne l'est pas est la Carapace en ATTAQUE —
+véhicule 98 contre 88 —, et sa pose de garnison bascule à **UN pixel**, 94 contre
+95. ⚠ Les inscrire en dettes aurait retiré neuf unités de toute mesure : elles
+sont au contraire confrontées à leur dominante MESURÉE, pose par pose, si bien
+que **les vingt-huit restent gardées, sans une seule exception**. La divergence,
+elle, est COMPTÉE. **Le lot ne corrige pas l'art — c'est la consigne du brief, et
+recolorier treize sprites appartient à Ethan.**
+⚠ **ET `fichiersAffiches` DE `accent.test.js` PORTAIT LA MÊME SECONDE VÉRITÉ QUE
+`scene.js`** — un `&& lettre === 'j'` sur le chemin du blindé. Le laisser aurait
+fait chercher `off_o_belier`, qui n'existe plus, donc écarté DIX combinaisons en
+silence.
+⚠ **CINQ TESTS SONT RETOURNÉS, AUCUN ASSOUPLI**, et chacun portait sa condition
+de mort : « le blindé de l'Ouvrage n'en a qu'une », « la tourelle de l'Ouvrage a
+gagné une ancre sans le dire » — celui-là finissait par « il mentirait le jour où
+l'Ouvrage sera redessiné, ce que cette assertion-ci rendra visible », et c'est
+bien lui qui l'a rendu visible —, les huit poses de défense qui deviennent
+quatre, et les deux mesures figées de `PIC T6` et `PIC T7`.
+⚠⚠ **LE CARRÉ DE TOURELLE DÉBORDE PLUS À L'OUVRAGE QU'AU JOUEUR, ET LE MOTIF EST
+DANS LE DESSIN.** 69,56 à 83,94 % de demi-case contre 58,23 à 65,34, là où 50 est
+le bord. Ses logements sont à **25,1 à 35,3 %** au-dessus du centre de la pièce
+contre 10,9 à 17,6 chez le joueur — le socle carré a une haute face avant, et
+l'artillerie est un marcheur sur pattes. Le canon est haut parce que la
+plate-forme est haute. ⚠ Une coque sur dix-huit déborde aussi,
+`off_o_fendeur_chassis_def` à **50,45 %**, soit un septième de gros pixel. **Un
+test borne les deux camps SÉPARÉMENT et nomme le pire de chaque côté au
+centième** ; le corriger demanderait de redessiner les socles, et c'est un
+arbitrage d'Ethan.
+⚠ **LA GARDE DE PALETTE A LU MA PROPRE PROSE, HUITIÈME FOIS DU DÉPÔT.** Le
+paragraphe de `scene.js` qui remesure la rampe de l'Ouvrage nommait quatre
+teintes de la v2 ; elles ne sont pas dans la fiche, puisque la chaîne ne
+quantifie plus. **C'est le TEXTE qui a été corrigé, pas la garde.**
+⚠ **`art/sources/` PASSE DE 404 / 114 / 518 À 416 CONSOMMÉES · 142 DORMANTES ·
+558 FICHIERS.** Quarante entrent, six écrasent un fichier existant, et
+vingt-huit planches de la V1 passent dormantes — les seize `T*` de tourelle, les
+neuf planches groupées d'unités, les deux `M3`/`M4` de socle, la `P5.2` des
+barrières et `merlons_o_connexions_2x2`.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 25.** Pas un champ n'entre dans
+l'état : un sprite est un dessin, et un angle une dérivation de tick.
+⚠ **LA BASE DE DÉPART ÉTAIT ROUGE DES DEUX CÔTÉS, ET POUR LA MÊME RAISON** —
+`npm test` 1407 pass / 1 fail et `verifier.py` arrêté au premier maillon, tous
+deux sur la garde d'entrées : Ethan a commité les 46 sources sur `main`, et c'est
+ce lot-ci qui les classe. Quatrième fois du dépôt, et c'était prévu.
+⚠ **CONTRÔLE DE NON-RÉGRESSION DU JOUEUR, EXIGÉ PAR LE BRIEF ET PASSÉ** :
+`tools/ancres-defense.py` et `tools/ancres-blindes.py` rejoués rendent des JSON
+**identiques au bit**, avant comme après le changement de `recadrer`. ⚠ Et le
+relevé dans Chromium à la géométrie du S25 FE le confirme à l'écran : sept
+jetons, **cinq couches tournantes, toutes en `matrix(-1, 0, 0, -1, 0, 0)`**,
+côtés 33,6 · 33,8 · 40,3 · 37,8 · 34,8 px pour une case de 36,
+`pointer-events: none`, zéro erreur de page, zéro débordement horizontal.
+⚠⚠ **ET `tools/ancres-ouvrage.py` ÉCRIVAIT DANS LE VRAI `art/sprites/`, MÊME SOUS
+`FZ_SPRITES` — SECOND DÉFAUT DU LOT, TROUVÉ PAR LE VÉRIFICATEUR.** Ses deux
+jumeaux du joueur passent par `chemins.dossier_sprites` depuis le 30/08 ; celui-ci
+portait le chemin en dur. Le premier passage rendait **2 MANQUANTS** — la chaîne
+rejouée ne produisait pas ses deux JSON dans le dossier temporaire — et surtout
+**le vérificateur écrivait dans le dossier qu'il compare**, ce que son invariant
+le plus important lui interdit. Corrigé.
+⚠ **`python3 tools/verifier.py` → 998 identiques · 0 différent · 0 nouveau ·
+0 MANQUANT**, en **578,3 s**, et `entrees.py --verifier` **416 / 416 · 142 / 142**.
+⚠⚠ **LA LIGNE `ATLAS` DE SON VERDICT EST PRÉEXISTANTE, ET C'EST MESURÉ DES DEUX
+CÔTÉS.** `atlas.py --verifier` rend **17 identiques · 3 différents** sur
+`origin/main` à `214415d` comme sur l'arbre du lot — `carte-64`, `carte-128` et
+`interface-128`, qu'aucune ligne d'ici ne touche. C'est l'encodeur WebP de cette
+machine, et `atlas.py` refuse d'écraser ce qui ne se reproduit pas. **Le lot
+laisse ce compte exactement où il l'a trouvé.**
+⚠⚠ **L'ÉCRAN DE RAID N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** C'est le seul
+endroit où l'art de l'Ouvrage se dessine, et y entrer demande une armée composée
+et une cible à portée — la garde du peuplement écarte les bases de l'Ouvrage de
+quinze cases du départ. Ce qui est mesuré à sa place est plus fort qu'une
+capture : **zéro pixel de clé dans les 27 images du livrable**, et les tests
+confrontent les couches rendues, nom par nom, aux cellules de l'atlas.
+
+**Auparavant, après le lot JOURNAL :**
 `npm test` → **1408 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 356 534 octets**, 0 référence externe. Coût **+4 145 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis le lot
@@ -7814,8 +7956,8 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
   couts-militaires.js   l'ancre du niveau 2 de la défense et de l'offense, entité par entité
   missions.js           la chaîne du tutoriel dictée par Ethan : objectifs, niveaux visés, comptes
   atlas.js              l'index des atlas de sprites — ⚠ GÉNÉRÉ, voir ci-dessous
-  ancres-blindes.js     où se pose la tourelle sur chaque coque de blindé du joueur
-  ancres-defense.js     où se pose la tourelle sur chaque socle de défense du joueur
+  ancres-blindes.js     où se pose la tourelle sur chaque coque de blindé, DEUX camps
+  ancres-defense.js     où se pose la tourelle sur chaque socle de défense, DEUX camps
   sons.js               les 263 sons du pack, les cinq bus, la mémoire, les réglages — ⚠ GÉNÉRÉ
   ⤷ ⚠⚠ `volumeDb` N'EST PLUS LE SEUL NIVEAU DU MANIFESTE DEPUIS LE 06/09 —
     lot SON-VOLUMES. C'est `recommended_volume_db` PLUS le cran que
@@ -8346,7 +8488,30 @@ test/                   59 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   ⤷ donnees.test.js : invariants des tables de src/data/ — sommes, bornes,
     références croisées. Il REMPLACE l'ancien verif.mjs de la racine.
 
-tools/                  34 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 05/09
+tools/                  42 fichiers, dont UN SEUL sert au build — RECOMPTÉ le 08/09
+                        au lot OUVRAGE-CÂBLAGE, fichier par fichier, hors
+                        `__pycache__`. **UN outil entre, `ouvrage_v2.py`** ; les
+                        sept autres du saut de 34 à 42 sont ceux qu'Ethan a
+                        commités le 07/09 avec ses sources — `ancres-ouvrage.py`,
+                        `fond-vert-ouvrage.py`, `montage-ouvrage-40.py`,
+                        `planche-echelles-ouvrage.py`,
+                        `recentrer-tourelles-ouvrage.py`,
+                        `recoupage-escouades-ouvrage.py`,
+                        `socle-jaune-ouvrage.py` —, et cette ligne ne les avait
+                        pas comptés.
+                        ⚠⚠ QUATRE OUTILS SORTENT DE `CHAINE` SANS SORTIR DU
+                        DÉPÔT : `unites_ouvrage`, `tourelles`, `socles` et
+                        `barrieres`. `ouvrage_v2.py` produit tout ce qu'ils
+                        produisaient, et **mesuré outil par outil sous
+                        `FZ_SPRITES`** — 22, 7, 6 et 2 sprites — les laisser
+                        écraserait son travail et recréerait les neuf
+                        monolithes de blindé à chaque exécution. Même idiome que
+                        `bords.py` depuis MUR-PEINT : hors chaîne n'est pas
+                        supprimé.
+                        ⚠ ET `ancres-ouvrage.py` ENTRE DANS `CHAINE`, APRÈS les
+                        deux outils d'ancre du joueur dont il IMPORTE `ancre`,
+                        `pivot`, `cote_du_carre` et `ancre_de_case`.
+                        Auparavant, RECOMPTÉ le 05/09
                         au lot SPRITES-V2-JOUEUR. **DEUX outils sortent, CINQ
                         entrent, et le compte annoncé était déjà faux de deux** :
                         cette ligne disait 31, le disque en portait 31 avant le
@@ -8475,11 +8640,28 @@ tools/                  34 fichiers, dont UN SEUL sert au build — RECOMPTÉ le
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sources brutes, hors chaîne de build — **516 fichiers à
-                        la racine**, RECOMPTÉ le 05/09 au lot SPRITES-V2-JOUEUR,
-                        qui en fait entrer 43 : les quarante-deux sprites v2 du
-                        joueur, découpés un par un par Ethan, plus
-                        `socle_def_j_neutre.png`.
+art/sources/            sources brutes, hors chaîne de build — **558 fichiers à
+                        la racine**, RECOMPTÉ le 08/09 au lot OUVRAGE-CÂBLAGE.
+                        Ethan en a commité **46** le 07/09 : les quarante-deux
+                        sources v2 de l'OUVRAGE, plus `off_j_meute`,
+                        `off_j_meute_def`, `off_j_guetteur` et
+                        `off_j_guetteur_def` REFAITES. Quarante sont des fichiers
+                        neufs ; six écrasent un fichier existant, d'où +40.
+                        ⚠ ET LE CLASSEMENT PASSE À **416 CONSOMMÉES ·
+                          142 DORMANTES** (avant : 404 / 114). Vingt-huit planches
+                          de la V1 passent dormantes — les seize `T*` de
+                          tourelle, les neuf planches groupées d'unités, les deux
+                          `M3`/`M4` de socle, la `P5.2` des barrières et
+                          `merlons_o_connexions_2x2`.
+                        ⚠⚠ ET LEUR CLÉ DE FOND EST VERTE, PAS MAGENTA. C'est ce
+                          qui a fait tomber `recadrer`, dont le remplissage était
+                          magenta écrit en dur — voir §0. `cond.cle_de_fond` la
+                          LIT sur les quatre coins : « un drapeau à passer serait
+                          un drapeau à oublier sur une planche ».
+                        Auparavant, **516 fichiers**, RECOMPTÉ le 05/09 au lot
+                        SPRITES-V2-JOUEUR, qui en faisait entrer 43 : les
+                        quarante-deux sprites v2 du joueur, découpés un par un
+                        par Ethan, plus `socle_def_j_neutre.png`.
                         ⚠ ET LE CLASSEMENT PASSE À **393 CONSOMMÉES ·
                           123 DORMANTES** (avant : 378 / 95). Le diff de
                           `art/sources-declarees.json` raconte le lot en
@@ -8595,7 +8777,14 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
 art/sprites/            les sprites conditionnés — TREIZE dossiers de famille et
-                        **903 fichiers en tout**, recomptés le 05/09 au lot
+                        **1 045 fichiers en tout**, recomptés le 08/09 au lot
+                        OUVRAGE-CÂBLAGE. Cinq familles bougent : `unite`
+                        **35 → 26** par grille — les neuf blindés monolithes de
+                        l'Ouvrage partent —, `chassis` **9 → 18**,
+                        `tourelle-unite` **5 → 10**, `socle` et `defense` gardent
+                        leur compte et changent de contenu. Les deux camps ont
+                        désormais la même découpe.
+                        Auparavant, **903 fichiers**, recomptés le 05/09 au lot
                         SPRITES-V2-JOUEUR : **882 dans les treize dossiers**, plus
                         DIX-HUIT atlas `.webp` et TROIS fichiers générés à la
                         racine — `ancres-blindes.json`, `ancres-defense.json` et

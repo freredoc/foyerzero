@@ -108,18 +108,32 @@ FAMILLES = {
     'socle': ('socle', 12, ()),
     # ⚠ 36 → 35, MÊME LOT : −5 blindés monolithes du joueur, que plus aucun
     # chemin de code ne lisait, +4 poses de défense d'escouade, dessinées en v2.
-    'unite': ('unite', 35, ()),
+    # ⚠⚠ 35 → 26 AU LOT OUVRAGE-CÂBLAGE, 08/09 : les NEUF monolithes de blindé de
+    # l'Ouvrage partent à leur tour — cinq poses d'attaque et quatre de flanc —,
+    # remplacés par neuf coques et cinq tourelles qui vivent dans `chassis` et
+    # `tourelle-unite`. Il reste treize poses par camp : neuf d'infanterie,
+    # quatre d'aéronef. La symétrie n'est pas une consigne, c'est le dessin
+    # d'Ethan : il a livré la même découpe des deux côtés.
+    'unite': ('unite', 26, ()),
     # ⚠ 10 → 9, MÊME LOT : `off_j_pilon_chassis_def` part. L'Obusier n'entre
     # jamais en garnison — `pilon.defense.present` vaut `false` — et `nomAvecPose`
     # ne demande `_def` que pour cette force-là : le sprite existait depuis le
     # lot 8 et personne ne l'a jamais lu.
-    'chassis': ('chassis', 9, ()),      # les coques de blindé du JOUEUR seul
+    # ⚠⚠ 9 → 18 AU LOT OUVRAGE-CÂBLAGE : neuf coques par camp, et pas dix — ni
+    # `off_j_pilon_chassis_def` ni `off_o_pilon_chassis_def` n'existent, l'Obusier
+    # n'entrant jamais en garnison. La même absence des deux côtés, dictée par
+    # `pilon.defense.present`, pas par une liste écrite ici.
+    'chassis': ('chassis', 18, ()),     # les coques de blindé des DEUX camps
     # ⚠ LE SLUG PREND UN SOULIGNÉ, PAS UN TIRET : il devient une clé JavaScript,
     # et `ATLAS['tourelle-unite']` s'écrirait mais `ATLAS.tourelle-unite` non.
     # ⚠ 80 → 5, MÊME LOT : une tourelle par blindé, carrée et centrée sur son
     # pivot, que `dessinerCouches` fait tourner. `tools/tourelles_unite.py`, qui
     # fabriquait les seize orientations, n'a plus d'objet et est supprimé.
-    'tourelle-unite': ('tourelle_unite', 5, ()),
+    # ⚠⚠ 5 → 10 AU LOT OUVRAGE-CÂBLAGE : cinq par camp. L'Ouvrage avait perdu ses
+    # quatre-vingts orientations au lot PRODUCTION sans jamais en regagner une —
+    # sa tourelle était cuite dans la coque. Elle est dessinée à part depuis le
+    # 07/09, et elle tourne.
+    'tourelle-unite': ('tourelle_unite', 10, ()),
     # ⚠⚠ 133 COUSUS SUR 135 SUR LE DISQUE — 43 jusqu'au lot EMBLÈMES-ABÎMÉS, qui
     # fait entrer les 72 emblèmes de site en fumée et en feu : quatre familles ×
     # neuf paliers × deux états. Les 7 POI n'en ont pas — il n'existe qu'un

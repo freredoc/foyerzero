@@ -58,6 +58,7 @@ sys.path.insert(0, os.path.join(RACINE, 'tools'))
 
 import importlib.util as _u                                          # noqa: E402
 from chassis import ancre                                            # noqa: E402
+from chemins import dossier_sprites                                  # noqa: E402
 from cond import est_fond_sujet                                      # noqa: E402
 from joueur_v2 import (EMPRISE_QUATRE_VINGT_CINQ, EMPRISE_QUATRE_VINGT_DIX,
                        emprise_de, unites_du_depot)                  # noqa: E402
@@ -80,13 +81,28 @@ BLINDES = ['ratisseur', 'fendeur', 'broyeur', 'belier', 'pilon']
 CONTACT = ['casemate', 'creneau', 'batterie']
 ARTILLERIES = ['faucheuse', 'mortier', 'harpon']
 DECAL_DEFENSES = 0.40      # voir l'en-tête : 0,22 rejette les six socles
-JOUEUR = os.path.join(RACINE, 'art', 'sprites')
+
+# ⚠⚠ LA DESTINATION EST DÉROUTABLE, ET ELLE NE L'ÉTAIT PAS — lot OUVRAGE-CÂBLAGE,
+# 08/09. Ce fichier écrivait ses deux JSON dans `os.path.join(RACINE, 'art',
+# 'sprites', …)`, en dur. Ses deux jumeaux du joueur passent par
+# `chemins.dossier_sprites` depuis le 30/08, et c'est ce qui rend la chaîne
+# vérifiable : `tools/verifier.py` déroute `FZ_SPRITES` sur un dossier temporaire
+# et compare. **Mesuré : le vérificateur rendait « 2 MANQUANTS » — le dépôt porte
+# les deux JSON, la chaîne rejouée ne les y produisait pas —, et surtout il
+# ÉCRIVAIT DANS `art/sprites/` pendant qu'il comparait**, ce que son invariant le
+# plus important lui interdit.
+#
+# ⚠ ET LA LECTURE DES NOMBRES DU JOUEUR PASSE PAR LE MÊME CHEMIN. Sous le
+# vérificateur, `ancres-blindes` et `ancres-defense` ont écrit leurs JSON dans le
+# dossier temporaire quelques secondes plus tôt : les lire là rend la chaîne
+# SELF-CONTENUE, au lieu de faire dépendre un maillon du fichier commité. Hors
+# vérificateur, les deux chemins désignent le même fichier.
 
 
 def echelle_calee(cle, famille, cote_pct_embase, lc, diam_pct, echelle_ref):
     """L'échelle qui aligne le carré de l'Ouvrage sur celui du joueur."""
     fichier = 'ancres-blindes.json' if famille == 'blinde' else 'ancres-defense.json'
-    d = json.load(open(os.path.join(JOUEUR, fichier), encoding='utf-8'))
+    d = json.load(open(dossier_sprites(fichier), encoding='utf-8'))
     bloc = d.get('coques') or d.get('socles')
     nom = f'off_j_{cle}_chassis' if famille == 'blinde' else f'socle_def_j_{cle}'
     cible = bloc[nom]['cote_case_pct']
@@ -167,7 +183,7 @@ def main():
                           {'coques': coques, 'tourelles': tour_bl}),
                          ('ancres-defense-ouvrage.json',
                           {'socles': socles, 'tourelles': tour_def})]:
-        with open(os.path.join(RACINE, 'art', 'sprites', nom), 'w', encoding='utf-8') as f:
+        with open(dossier_sprites(nom), 'w', encoding='utf-8') as f:
             json.dump(contenu, f, ensure_ascii=False, indent=2, sort_keys=True)
             f.write('\n')
 

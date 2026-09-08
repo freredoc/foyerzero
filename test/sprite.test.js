@@ -1070,24 +1070,50 @@ test('sprite — les deux tables d\'ancres transcrites sont identiques aux JSON 
   // transcrire que la moitié qui se lit au dessin laisserait la moitié qui dit
   // D'OÙ elle vient dériver en silence, et la première personne à relire
   // trouverait un nombre tombé du ciel.
-  for (const [fichier, section, table] of [
-    ['ancres-blindes.json', 'coques', ANCRES_BLINDES],
-    ['ancres-blindes.json', 'tourelles', TOURELLES_BLINDES],
-    ['ancres-defense.json', 'socles', ANCRES_DEFENSE],
-    ['ancres-defense.json', 'tourelles', TOURELLES_DEFENSE],
+  // ⚠⚠ CHAQUE TABLE SE CONFRONTE À L'UNION DE DEUX JSON DEPUIS LE LOT
+  // OUVRAGE-CÂBLAGE, ET C'EST CE QUE LA FUSION COÛTE. Les quatre tables portent
+  // désormais les DEUX camps — `ANCRES_BLINDES[coque]` marche pour l'un comme
+  // pour l'autre, ce qui est exactement ce qui évite un `=== 'o'` dans
+  // `scene.js` —, mais chaque camp garde son JSON, produit par son outil. Une
+  // comparaison fichier par fichier accuserait donc la transcription de porter
+  // des clés en trop. On réunit, puis on compare dans les deux sens.
+  //
+  // ⚠ ET LA COLLISION EST ASSERTÉE, PAS SUPPOSÉE. Toute la sûreté de la fusion
+  // tient à ce qu'aucune clé ne soit dans les deux fichiers : `off_j_…` et
+  // `off_o_…` ne peuvent pas se rencontrer aujourd'hui, mais c'est une propriété
+  // du NOMMAGE, et un outil qui écrirait la mauvaise lettre la casserait en
+  // silence — la seconde valeur écraserait la première dans l'union, et le test
+  // resterait vert sur une table à moitié fausse.
+  for (const [nomTable, table, sources] of [
+    ['ANCRES_BLINDES', ANCRES_BLINDES,
+      [['ancres-blindes.json', 'coques'], ['ancres-blindes-ouvrage.json', 'coques']]],
+    ['TOURELLES_BLINDES', TOURELLES_BLINDES,
+      [['ancres-blindes.json', 'tourelles'], ['ancres-blindes-ouvrage.json', 'tourelles']]],
+    ['ANCRES_DEFENSE', ANCRES_DEFENSE,
+      [['ancres-defense.json', 'socles'], ['ancres-defense-ouvrage.json', 'socles']]],
+    ['TOURELLES_DEFENSE', TOURELLES_DEFENSE,
+      [['ancres-defense.json', 'tourelles'], ['ancres-defense-ouvrage.json', 'tourelles']]],
   ]) {
-    const json = JSON.parse(readFileSync(join(SPRITES, fichier), 'utf8'))[section];
-    assert.ok(json !== undefined, `${fichier} n'a pas de section « ${section} »`);
-    const cles = Object.keys(json).sort();
-    assert.ok(cles.length > 0, `${fichier}/${section} est vide : le test ne mesure rien`);
-    assert.deepEqual(Object.keys(table).sort(), cles,
-      `${fichier}/${section} : la transcription et le JSON ne portent pas les mêmes clés`);
-    for (const cle of cles) {
+    const union = {};
+    for (const [fichier, section] of sources) {
+      const json = JSON.parse(readFileSync(join(SPRITES, fichier), 'utf8'))[section];
+      assert.ok(json !== undefined, `${fichier} n'a pas de section « ${section} »`);
+      const cles = Object.keys(json);
+      assert.ok(cles.length > 0, `${fichier}/${section} est vide : le test ne mesure rien`);
+      for (const cle of cles) {
+        assert.equal(union[cle], undefined,
+          `« ${cle} » est dans les DEUX JSON de ${nomTable} : la fusion n'est plus sûre`);
+        union[cle] = json[cle];
+      }
+    }
+    const attendues = Object.keys(union).sort();
+    assert.deepEqual(Object.keys(table).sort(), attendues,
+      `${nomTable} : la transcription et l'union des JSON ne portent pas les mêmes clés`);
+    for (const cle of attendues) {
       // ⚠ LES VALEURS SIGNÉES, PAS LEUR VALEUR ABSOLUE. Un signe inversé
       // décalerait toutes les tourelles du même côté, ce qui a l'air d'un choix
       // d'art et n'en est pas un.
-      assert.deepEqual(table[cle], json[cle],
-        `${fichier}/${section} : ancre « ${cle} » divergente`);
+      assert.deepEqual(table[cle], union[cle], `${nomTable} : ancre « ${cle} » divergente`);
     }
   }
 
@@ -1117,18 +1143,38 @@ test('sprite — les deux tables d\'ancres transcrites sont identiques aux JSON 
     }
   }
 
-  // ⚠⚠ NEUF COQUES, PAS DIX : `off_j_pilon_chassis_def` est parti avec le
-  // sprite. L'Obusier n'entre jamais en garnison — `pilon.defense.present` vaut
-  // `false` — et `nomAvecPose` ne demande `_def` que pour cette force-là. Le
-  // sprite existait depuis le lot 8 et personne ne l'avait jamais lu.
-  assert.equal(Object.keys(ANCRES_BLINDES).length, 9);
-  assert.equal(Object.keys(ANCRES_DEFENSE).length, 6);
+  // ⚠⚠ DIX-HUIT COQUES, NEUF PAR CAMP, ET PAS VINGT : ni
+  // `off_j_pilon_chassis_def` ni `off_o_pilon_chassis_def` n'existent. L'Obusier
+  // n'entre jamais en garnison — `pilon.defense.present` vaut `false` — et
+  // `nomAvecPose` ne demande `_def` que pour cette force-là. C'est la même
+  // absence des deux côtés, et c'est la DONNÉE qui la dicte : Ethan a livré neuf
+  // coques par camp sans qu'aucune consigne ne le lui demande.
+  assert.equal(Object.keys(ANCRES_BLINDES).length, 18);
+  assert.equal(Object.keys(ANCRES_DEFENSE).length, 12);
+  // ⚠ ET LES DEUX CAMPS SONT LÀ, CHACUN AU COMPLET. Sans ce partage, une
+  // transcription qui aurait perdu les neuf clés d'un camp et gagné neuf
+  // doublons de l'autre passerait le compte ci-dessus.
+  for (const [nom, table, prefixes] of [
+    ['ANCRES_BLINDES', ANCRES_BLINDES, ['off_j_', 'off_o_']],
+    ['ANCRES_DEFENSE', ANCRES_DEFENSE, ['socle_def_j_', 'socle_def_o_']],
+  ]) {
+    for (const p of prefixes) {
+      const n = Object.keys(table).filter((c) => c.startsWith(p)).length;
+      assert.equal(n, Object.keys(table).length / 2,
+        `${nom} : ${n} clés en « ${p} » — les deux camps ne sont plus à parité`);
+    }
+  }
 
   // ⚠⚠ `y_pct` N'EST PAS NÉGATIF PARTOUT, ET UN TEST QUI L'AFFIRMERAIT SERAIT
   // FAUX. Trois coques sur neuf portent une tourelle SOUS le centre. On asserte
   // le fait mesuré, jamais une règle qu'on croit générale — l'ancienne version
   // de cette assertion nommait déjà une exception, et il y en a deux
   // aujourd'hui.
+  //
+  // ⚠ ET LA LISTE NE GAGNE AUCUNE CLÉ DE L'OUVRAGE, CE QUI EST UNE MESURE ET NON
+  // UNE RÈGLE : ses neuf logements sont tous AU-DESSUS du centre de leur coque,
+  // de −4,9 à −18,2 %. La liste reste donc celle des trois coques du joueur, et
+  // elle dit maintenant deux choses au lieu d'une.
   const positifs = Object.entries(ANCRES_BLINDES)
     .filter(([, a]) => a.y_pct >= 0).map(([c]) => c).sort();
   assert.deepEqual(positifs,
@@ -1145,7 +1191,7 @@ test('sprite — le carré de tourelle tient sur les coques, et déborde sur les
   // CASE : il porte l'échelle du canon et la marge de rotation à 45°, donc il
   // est bien plus grand que le logement.
   //
-  // ⚠⚠ ET IL DÉBORDE SUR LES SIX SOCLES — MESURÉ, PAS SUBI. Deux arbitrages se
+  // ⚠⚠ ET IL DÉBORDE SUR LES DOUZE SOCLES — MESURÉ, PAS SUBI. Deux arbitrages se
   // croisent, et le lot n'en défait aucun : l'emprise des socles est celle
   // qu'Ethan a donnée — 90 % pour les socles de tourelle, 85 % pour les coques
   // d'artillerie — et `echelle` est ce qu'il a fallu pour que le canon SE LISE à
@@ -1157,30 +1203,67 @@ test('sprite — le carré de tourelle tient sur les coques, et déborde sur les
   // dessinait la tourelle sur la case ENTIÈRE — `sprite(famille, nom, x, y, t,
   // t)` —, son canon atteignant le bord par construction. On passe donc de
   // « toute la case » à « la case plus 12 à 15 % », pas de zéro à un débord.
+  //
+  // ⚠⚠ CHAQUE CAMP GARDE SA PROPRE FOURCHETTE, ET CE N'EST PAS UN ASSOUPLISSEMENT.
+  // Le lot OUVRAGE-CÂBLAGE fait entrer neuf coques et six socles de l'Ouvrage
+  // dans les MÊMES tables ; ses nombres ne sont pas ceux du joueur, et une borne
+  // unique assez large pour les deux cesserait de garder le camp le plus serré.
+  // Les deux fourchettes sont donc mesurées séparément, et le pire de chaque
+  // côté est nommé au centième.
   const portee = (a) => Math.max(
     Math.abs(a.dx_case_pct) + a.cote_case_pct / 2,
     Math.abs(a.dy_case_pct) + a.cote_case_pct / 2,
   );
-
-  // Les neuf coques de blindé tiennent toutes dans la case.
-  for (const [cle, a] of Object.entries(ANCRES_BLINDES)) {
-    assert.ok(portee(a) <= 50,
-      `${cle} : le carré de tourelle atteint ${portee(a).toFixed(2)} % de demi-case`);
-  }
-
-  // Les six socles débordent, et de combien : la borne est SIGNÉE des deux
-  // côtés, sinon un `echelle` divisé par deux la passerait aussi.
-  const debords = Object.entries(ANCRES_DEFENSE)
+  const par = (table, lettre) => Object.entries(table)
+    .filter(([cle]) => cle.split('_').includes(lettre))
     .map(([cle, a]) => [cle, portee(a)]);
-  for (const [cle, p] of debords) {
-    assert.ok(p > 50, `${cle} : le carré ne déborde plus — l'arbitrage a bougé, le dire`);
-    assert.ok(p < 70, `${cle} : le carré atteint ${p.toFixed(2)} %, au-delà du débord mesuré`);
+
+  // ⚠⚠ LES NEUF COQUES DU JOUEUR TIENNENT, ET UNE DE L'OUVRAGE NON — MESURÉ.
+  // `off_o_fendeur_chassis_def` atteint 50,45 % de demi-case, soit **un septième
+  // de gros pixel** de 32 au-delà du bord. C'est le seul blindé des dix-huit qui
+  // déborde, et il déborde de si peu qu'aucun œil ne le verra ; on le BORNE
+  // quand même, séparément, pour que la valeur ne dérive pas en silence sous
+  // couvert d'un « les blindés débordent un peu ».
+  for (const [cle, p] of par(ANCRES_BLINDES, 'j')) {
+    assert.ok(p <= 50, `${cle} : le carré de tourelle atteint ${p.toFixed(2)} % de demi-case`);
   }
-  // Et le pire des six est nommé, au centième : un test qui ne bornerait que
-  // par intervalle laisserait passer une dérive lente.
-  const pire = debords.reduce((m, x) => (x[1] > m[1] ? x : m));
-  assert.equal(pire[0], 'socle_def_j_faucheuse');
-  assert.equal(pire[1].toFixed(2), '65.34');
+  const blindesO = par(ANCRES_BLINDES, 'o');
+  assert.equal(blindesO.length, 9, 'les neuf coques de l\'Ouvrage ne sont pas toutes là');
+  for (const [cle, p] of blindesO) {
+    assert.ok(p < 51, `${cle} : le carré atteint ${p.toFixed(2)} %, au-delà du débord mesuré`);
+  }
+  const pireBlinde = blindesO.reduce((m, x) => (x[1] > m[1] ? x : m));
+  assert.equal(pireBlinde[0], 'off_o_fendeur_chassis_def');
+  assert.equal(pireBlinde[1].toFixed(2), '50.45');
+
+  // Les douze socles débordent, et de combien : la borne est SIGNÉE des deux
+  // côtés, sinon un `echelle` divisé par deux la passerait aussi.
+  //
+  // ⚠⚠ ET L'OUVRAGE DÉBORDE PLUS QUE LE JOUEUR — 69,56 à 83,94 % CONTRE 58,23 À
+  // 65,34. Le motif est dans le DESSIN, pas dans le rendu : ses logements sont à
+  // 25,1 à 35,3 % au-dessus du centre de la pièce contre 10,9 à 17,6 chez le
+  // joueur, parce que le socle carré a une haute face avant et que l'artillerie
+  // est un marcheur sur pattes. Le canon est haut parce que la plate-forme est
+  // haute ; le poser plus bas le mettrait dans les pattes. **Le corriger
+  // demanderait de redessiner les socles — arbitrage d'Ethan, pas de ce lot.**
+  for (const [lettre, plancher, plafond, attenduPire, attenduValeur] of [
+    ['j', 50, 70, 'socle_def_j_faucheuse', '65.34'],
+    ['o', 50, 85, 'socle_def_o_faucheuse', '83.94'],
+  ]) {
+    const debords = par(ANCRES_DEFENSE, lettre);
+    assert.equal(debords.length, 6, `camp « ${lettre} » : ${debords.length} socles, 6 attendus`);
+    for (const [cle, p] of debords) {
+      assert.ok(p > plancher,
+        `${cle} : le carré ne déborde plus — l'arbitrage a bougé, le dire`);
+      assert.ok(p < plafond,
+        `${cle} : le carré atteint ${p.toFixed(2)} %, au-delà du débord mesuré`);
+    }
+    // Et le pire de chaque camp est nommé, au centième : un test qui ne bornerait
+    // que par intervalle laisserait passer une dérive lente.
+    const pire = debords.reduce((m, x) => (x[1] > m[1] ? x : m));
+    assert.equal(pire[0], attenduPire);
+    assert.equal(pire[1].toFixed(2), attenduValeur);
+  }
 
   // ⚠ FALSIFIABLE : le montage sait DISTINGUER les deux verdicts. Sans cet
   // appât, une fonction `portee` qui rendrait toujours zéro ferait passer la
@@ -1231,28 +1314,52 @@ test('sprite — chaque unité des deux camps résout des noms qui sont dans l\'
   assert.equal(couchesDeLEntite({ genre: 'vignette', id: null, proprietaire: 'joueur', camp: 'defense' }), null);
 });
 
-test('sprite — le blindé du joueur rend DEUX couches, la coque SOUS la tourelle', () => {
+test('sprite — un blindé rend DEUX couches, la coque SOUS la tourelle, DANS LES DEUX CAMPS', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ AU LOT OUVRAGE-CÂBLAGE, PAS ASSOUPLI. Sa dernière
+  // moitié assertait que « le blindé de l'Ouvrage n'en a qu'une : sa tourelle
+  // est cuite dans la coque, ses 240 sprites ont été retirés au lot PRODUCTION ».
+  // C'était vrai du 30/08 au 07/09 ; Ethan a livré les neuf coques et les cinq
+  // tourelles de l'Ouvrage, dessinées séparément, et l'arbitrage tombe avec le
+  // dessin. L'assertion ne disparaît pas : elle demande l'INVERSE, et la boucle
+  // qui la porte passe des cinq blindés du joueur aux dix des deux camps.
   const blindes = Object.keys(UNITES).filter((id) => UNITES[id].chassis === 'blinde');
   assert.ok(blindes.length > 0, 'aucun blindé au roster : le test ne mesure rien');
 
   for (const id of blindes) {
-    const joueur = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque', rangee: 5, colonne: 5 });
-    assert.equal(joueur.length, 2, `${id} joueur : ${joueur.length} couche(s) au lieu de 2`);
+    for (const proprietaire of ['joueur', 'ouvrage']) {
+      const couches = couchesDeLUnite({
+        genre: 'unite', id, proprietaire, camp: 'attaque', rangee: 5, colonne: 5,
+      });
+      assert.equal(couches.length, 2,
+        `${id} ${proprietaire} : ${couches.length} couche(s) au lieu de 2`);
 
-    // ⚠ L'ORDRE SE MESURE PAR LES INDICES, PAS PAR LA PRÉSENCE. Les deux couches
-    // seraient là dans l'ordre inverse aussi, et la tourelle passerait sous sa
-    // coque sans qu'une assertion de présence le voie.
-    const iCoque = joueur.findIndex((c) => c.famille === 'chassis');
-    const iTourelle = joueur.findIndex((c) => c.famille === 'tourelle_unite');
-    assert.ok(iCoque >= 0 && iTourelle >= 0, `${id} : une des deux familles manque`);
-    assert.ok(iCoque < iTourelle, `${id} : la tourelle est dessinée SOUS sa coque`);
-    assert.ok(joueur[iTourelle].ancre, `${id} : la tourelle n'a pas d'ancre`);
+      // ⚠ L'ORDRE SE MESURE PAR LES INDICES, PAS PAR LA PRÉSENCE. Les deux
+      // couches seraient là dans l'ordre inverse aussi, et la tourelle passerait
+      // sous sa coque sans qu'une assertion de présence le voie.
+      const iCoque = couches.findIndex((c) => c.famille === 'chassis');
+      const iTourelle = couches.findIndex((c) => c.famille === 'tourelle_unite');
+      assert.ok(iCoque >= 0 && iTourelle >= 0,
+        `${id} ${proprietaire} : une des deux familles manque`);
+      assert.ok(iCoque < iTourelle,
+        `${id} ${proprietaire} : la tourelle est dessinée SOUS sa coque`);
+      assert.ok(couches[iTourelle].ancre, `${id} ${proprietaire} : la tourelle n'a pas d'ancre`);
 
-    // ⚠ ET LE BLINDÉ DE L'OUVRAGE N'EN A QU'UNE : sa tourelle est cuite dans la
-    // coque, ses 240 sprites ont été retirés au lot PRODUCTION.
-    const ouvrage = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'ouvrage', camp: 'attaque', rangee: 5, colonne: 5 });
-    assert.equal(ouvrage.length, 1, `${id} Ouvrage : la tourelle détachée est revenue`);
-    assert.equal(ouvrage[0].famille, 'unite');
+      // ⚠ ET LA LETTRE SUIT LE PROPRIÉTAIRE. Sans cette ligne, un `off_j_` écrit
+      // en dur donnerait la coque du joueur à un blindé de l'Ouvrage, et les
+      // quatre assertions ci-dessus passeraient toutes — les deux existent dans
+      // l'atlas, donc rien ne lèverait.
+      const lettre = proprietaire === 'joueur' ? 'j' : 'o';
+      for (const c of couches) {
+        assert.ok(c.nom.startsWith(`off_${lettre}_`),
+          `${id} ${proprietaire} : « ${c.nom} » n'est pas du bon camp`);
+      }
+    }
+
+    // ⚠ ET LES DEUX CAMPS NE RENDENT PAS LE MÊME DESSIN, ce qui est la moitié
+    // qu'une boucle symétrique ne peut pas garder toute seule.
+    const j = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'joueur', camp: 'attaque' });
+    const o = couchesDeLUnite({ genre: 'unite', id, proprietaire: 'ouvrage', camp: 'attaque' });
+    assert.notDeepEqual(j.map((c) => c.nom), o.map((c) => c.nom));
   }
 });
 
@@ -1279,23 +1386,41 @@ test('sprite — la pose suit la FORCE, pas le camp ni le propriétaire', () => 
   assert.match(duJoueur[0].nom, /^off_j_/, 'le propriétaire ne décide plus de la lettre');
 });
 
-test('sprite — les unités à pose de défense sont exactement les huit mesurées', () => {
+test('sprite — les unités à pose de défense sont exactement les quatre mesurées', () => {
   // ⚠⚠ CE TEST FIGE UNE COÏNCIDENCE D'AUJOURD'HUI, ET IL EST FAIT POUR ROUGIR.
-  // Huit des quatorze unités de l'Ouvrage ont une pose `_def`, six ne l'ont pas.
-  // Le rendu, lui, s'adapte tout seul — il LIT l'atlas par `existeDansAtlas` au
-  // lieu de porter cette liste. Le jour où les six manquantes seront dessinées,
-  // ce test tombe et quelqu'un relit le lot au lieu de découvrir la nouveauté
-  // six mois plus tard.
+  // Il l'a fait au lot OUVRAGE-CÂBLAGE, exactement comme annoncé. Il portait
+  // huit noms ; il en porte QUATRE, et ce n'est pas un trou d'art qui s'ouvre —
+  // c'est un déménagement : `belier`, `broyeur`, `fendeur` et `ratisseur` sont
+  // les quatre BLINDÉS, et leur pose de flanc a quitté la famille `unite` pour
+  // `chassis`, sous le nom `off_o_<id>_chassis_def`. Elle existe toujours ;
+  // elle n'est plus au même endroit, parce que la coque et la tourelle sont
+  // désormais deux sprites. **Le nombre d'avant est écrit ici pour qu'on ne
+  // relise pas ce test comme une perte.**
+  //
+  // ⚠ ET LES SIX SANS POSE N'ONT PAS BOUGÉ D'UN NOM : les quatre aéronefs, les
+  // Fouisseurs et l'Obusier. Le premier groupe n'en a jamais eu, le second est
+  // le seul blindé qui n'entre pas en garnison.
   const avec = Object.keys(UNITES).filter((id) => existeDansAtlas('unite', `off_o_${id}_def`)).sort();
   const sans = Object.keys(UNITES).filter((id) => !existeDansAtlas('unite', `off_o_${id}_def`)).sort();
 
   assert.ok(avec.length > 0 && sans.length > 0,
     'les deux groupes ne sont pas non vides : le test ne mesure rien');
-  assert.deepEqual(avec,
-    ['belier', 'broyeur', 'carapace', 'fendeur', 'guetteur', 'meute', 'perceurs', 'ratisseur'],
+  assert.deepEqual(avec, ['carapace', 'guetteur', 'meute', 'perceurs'],
     'la liste des poses de défense a changé — le trou d\'art se comble, relire le lot');
   assert.deepEqual(sans,
-    ['busard', 'crecelle', 'enclume', 'fouisseurs', 'frappeur', 'pilon']);
+    ['belier', 'broyeur', 'busard', 'crecelle', 'enclume', 'fendeur', 'fouisseurs',
+      'frappeur', 'pilon', 'ratisseur']);
+
+  // ⚠⚠ ET LA POSE DES QUATRE BLINDÉS EST RETROUVÉE DANS `chassis`, PAS SUPPOSÉE
+  // PERDUE. Sans ces trois lignes, ce test se lirait « quatre unités ont perdu
+  // leur pose de garnison », ce qui serait faux, et le prochain lot chercherait
+  // un art qui existe.
+  for (const id of ['belier', 'broyeur', 'fendeur', 'ratisseur']) {
+    assert.ok(existeDansAtlas('chassis', `off_o_${id}_chassis_def`),
+      `${id} : la pose de flanc n'est ni dans « unite » ni dans « chassis »`);
+  }
+  assert.equal(existeDansAtlas('chassis', 'off_o_pilon_chassis_def'), false,
+    'l\'Obusier a gagné une pose de garnison — il n\'entre pas en garnison');
 
   // Et la liste n'est écrite NULLE PART dans le code de rendu.
   const source = sansCommentaires(readFileSync(join(RACINE, 'src', 'render', 'scene.js'), 'utf8'));
@@ -1538,7 +1663,13 @@ test('entrées — la garde est le DERNIER maillon de la chaîne du vérificateu
   const source = readFileSync(join(RACINE, 'tools', 'verifier.py'), 'utf8');
   const bloc = source.match(/^CHAINE = \[$([\s\S]*?)^\]$/m);
   assert.ok(bloc !== null, '`CHAINE` est introuvable dans tools/verifier.py');
-  const maillons = [...bloc[1].matchAll(/^\s*\('([a-z_]+)',/gm)].map((m) => m[1]);
+  // ⚠⚠ LE MOTIF ACCEPTE LE TIRET DEPUIS LE LOT OUVRAGE-CÂBLAGE, ET C'EST UN
+  // RESSERREMENT. Il lisait `[a-z_]+`, donc il ne voyait AUCUN des maillons
+  // `ancres-defense`, `ancres-blindes` ni `ancres-ouvrage` : la garde comptait
+  // douze maillons sur quinze et s'en satisfaisait, le plancher étant à dix.
+  // Elle les voit tous désormais, et le plancher garde la même chose — que le
+  // parse trouve quelque chose — sur la liste entière.
+  const maillons = [...bloc[1].matchAll(/^\s*\('([a-z_-]+)',/gm)].map((m) => m[1]);
   assert.ok(maillons.length > 10, `${maillons.length} maillons lus : le parse ne trouve rien`);
   assert.equal(maillons.at(-1), 'entrees',
     'la garde des entrées doit passer en dernier — elle observe ce que les autres ouvrent');
@@ -1767,20 +1898,42 @@ test('couches — la tourelle du champ vise sa cible par l\'ANGLE, et le nom ne 
   assert.equal(couche(null).angle, versLAssaut.angle,
     'le repos et la cible au sud ne donnent pas le même angle : la boussole a redivergé');
 
-  // ⚠⚠ ET LA TOURELLE DE L'OUVRAGE NE TOURNE PAS, LE DISCRIMINANT ÉTANT LA
-  // DONNÉE ET JAMAIS LE CAMP. Son sprite est celui de la v1, dessiné au nord,
-  // dont le pivot est décalé de 2 à 11 % du côté : le tourner autour du centre
-  // le ferait osciller. Il n'a pas d'entrée d'ancre, donc il se pose sur la case
-  // entière comme avant. Un `=== 'o'` écrit dans `scene.js` serait la seconde
-  // vérité que §4 interdit — et il mentirait le jour où l'Ouvrage sera
-  // redessiné, ce que cette assertion-ci rendra visible.
-  const ouvrage = couchesDeLEntite(
+  // ⚠⚠ ET LA TOURELLE DE L'OUVRAGE TOURNE DEPUIS LE LOT OUVRAGE-CÂBLAGE : CETTE
+  // ASSERTION EST RETOURNÉE, PAS RETIRÉE. Elle disait « son sprite est celui de
+  // la v1, pivot décalé de 2 à 11 % du côté, donc pas d'ancre, donc il se pose
+  // sur la case entière », et elle finissait par « il mentirait le jour où
+  // l'Ouvrage sera redessiné, ce que cette assertion-ci rendra visible ». Ce
+  // jour est le 07/09, et c'est bien elle qui l'a rendu visible : elle est
+  // tombée sur « la tourelle de l'Ouvrage a gagné une ancre sans le dire », dans
+  // un lot qui ne l'avait pas prévue.
+  //
+  // ⚠⚠ CE QU'ELLE GARDE MAINTENANT EST PLUS FORT : que les deux camps tournent
+  // par le MÊME chemin. `couchesDeLaDefense` n'a pas changé d'une ligne pour ça
+  // — c'est l'arrivée des six clés `socle_def_o_*` dans `src/data/ancres-defense.js`
+  // qui suffit. Un `=== 'o'` écrit dans `scene.js` en septembre aurait dû être
+  // RETIRÉ ici, dans un lot qui n'a rien à voir avec lui.
+  const ouvrageVersLeFond = couchesDeLEntite(
     { genre: 'defense', id: 'casemate', proprietaire: 'ouvrage', camp: 'defense',
       rangee: 5, colonne: 5 },
     { cible: { rangee: 15, colonne: 5 } },
   )[1];
-  assert.equal(ouvrage.nom, 'def_o_casemate');
-  assert.equal(ouvrage.ancre, null, 'la tourelle de l\'Ouvrage a gagné une ancre sans le dire');
+  const ouvrageVersLAssaut = couchesDeLEntite(
+    { genre: 'defense', id: 'casemate', proprietaire: 'ouvrage', camp: 'defense',
+      rangee: 5, colonne: 5 },
+    { cible: { rangee: 2, colonne: 5 } },
+  )[1];
+  assert.equal(ouvrageVersLeFond.nom, 'def_o_casemate');
+  assert.equal(ouvrageVersLAssaut.nom, 'def_o_casemate');
+  assert.equal(ouvrageVersLeFond.angle, 0);
+  assert.equal(ouvrageVersLAssaut.angle, 180);
+  assert.notEqual(ouvrageVersLeFond.ancre, null,
+    'la tourelle de l\'Ouvrage a perdu son ancre — elle se reposerait sur la case entière');
+  assert.equal(ouvrageVersLeFond.ancre, ANCRES_DEFENSE.socle_def_o_casemate,
+    'l\'ancre de l\'Ouvrage n\'est pas celle de son propre socle');
+
+  // ⚠ ET LES DEUX CAMPS N'EMPRUNTENT PAS LA MÊME ANCRE, sans quoi tout ce qui
+  // précède passerait sur un code qui lirait la table du joueur pour les deux.
+  assert.notEqual(ouvrageVersLeFond.ancre, versLeFond.ancre);
 });
 
 test('couches — le renommage propriétaire est complet dans tout `src/`', () => {
@@ -2390,4 +2543,123 @@ test('ERGO T15 — l\'aplat d\'obstacle a disparu, et il ne reste pas de constan
     'la page ne déclare pas l\'atlas de terrain');
   assert.match(sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'banc.js'), 'utf8')),
     /terrain: \$\('atlas-terrain'\)/, 'le banc ne fournit pas l\'atlas de terrain');
+});
+
+test('sprite — un blindé de l\'Ouvrage émet DEUX couches, coque puis tourelle', () => {
+  // ⚠⚠ CE TEST ÉCHOUE SUR LE CODE D'AVANT LE LOT OUVRAGE-CÂBLAGE, ET C'EST SA
+  // MEILLEURE PROPRIÉTÉ. `couchesDeLUnite` s'ouvrait sur
+  // `if (classe !== 'blinde' || c === 'o')` : l'Ouvrage repartait sur le
+  // monolithe `off_o_<id>` et rendait UNE couche. Vérifié rouge dans un
+  // `git worktree` sur l'arbre d'avant — « 1 couche, 2 attendues ».
+  //
+  // ⚠ ET IL MESURE LES DEUX CAMPS DANS LA MÊME BOUCLE. Un test qui n'aurait
+  // regardé que l'Ouvrage serait passé si le patch avait cassé le joueur.
+  for (const c of ['joueur', 'ouvrage']) {
+    const lettre = c === 'joueur' ? 'j' : 'o';
+    const couches = couchesDeLEntite(
+      { genre: 'unite', id: 'fendeur', proprietaire: c, camp: 'attaque', rangee: 5, colonne: 4 },
+      { cible: { rangee: 2, colonne: 6 } },
+    );
+    assert.equal(couches.length, 2, `${c} : ${couches.length} couche(s), 2 attendues`);
+    assert.deepEqual(couches.map((x) => x.nom),
+      [`off_${lettre}_fendeur_chassis`, `off_${lettre}_fendeur_tourelle`]);
+    assert.deepEqual(couches.map((x) => x.famille), ['chassis', 'tourelle_unite']);
+
+    // La tourelle porte son ancre et un angle FINI. Un `null` d'ancre la ferait
+    // poser sur la case entière, un `NaN` d'angle la ferait disparaître sans
+    // lever — `drawImage` sous un `rotate(NaN)` ne dessine rien et se tait.
+    const tourelle = couches[1];
+    assert.notEqual(tourelle.ancre, null, `${c} : la tourelle n'a pas d'ancre`);
+    assert.equal(tourelle.ancre, ANCRES_BLINDES[`off_${lettre}_fendeur_chassis`],
+      `${c} : l'ancre n'est pas celle de la coque`);
+    assert.ok(Number.isFinite(tourelle.angle), `${c} : angle « ${tourelle.angle} »`);
+    // Et l'angle SUIT la cible : sans ça, une constante passerait ce test.
+    assert.notEqual(tourelle.angle, ANGLE_PAR_DEFAUT.armee,
+      `${c} : l'angle vaut le repos alors qu'une cible est donnée`);
+
+    // ⚠ LA COQUE N'A PAS D'ANCRE, ET C'EST CE QUI LA POSE SUR LA CASE ENTIÈRE.
+    assert.equal(couches[0].ancre, undefined, `${c} : la coque porte une ancre`);
+  }
+
+  // ⚠ ET LES DEUX CAMPS NE RENDENT PAS LE MÊME DESSIN — sans quoi tout ce qui
+  // précède passerait sur un code qui écrirait `off_j_` en dur.
+  const j = couchesDeLEntite({ genre: 'unite', id: 'fendeur', proprietaire: 'joueur', camp: 'attaque' }, {});
+  const o = couchesDeLEntite({ genre: 'unite', id: 'fendeur', proprietaire: 'ouvrage', camp: 'attaque' }, {});
+  assert.notDeepEqual(j.map((x) => x.nom), o.map((x) => x.nom));
+});
+
+test('sprite — la pose de garnison d\'un blindé se LIT dans l\'atlas, des deux côtés', () => {
+  // ⚠⚠ NI `off_j_pilon_chassis_def` NI `off_o_pilon_chassis_def` N'EXISTENT :
+  // l'Obusier n'entre jamais en garnison — `pilon.defense.present` vaut `false`.
+  // `nomAvecPose` demande donc `_def` et retombe sur la pose d'attaque quand
+  // l'atlas ne l'a pas. Écrire ici la liste des poses ferait une SECONDE vérité
+  // qui divergerait au premier sprite ajouté ; on interroge l'atlas, comme le
+  // code.
+  for (const lettre of ['j', 'o']) {
+    for (const id of ['ratisseur', 'fendeur', 'broyeur', 'belier', 'pilon']) {
+      const base = `off_${lettre}_${id}_chassis`;
+      const attendu = existeDansAtlas('chassis', `${base}_def`) ? `${base}_def` : base;
+      const rendu = couchesDeLEntite(
+        { genre: 'unite', id, proprietaire: lettre === 'j' ? 'joueur' : 'ouvrage', camp: 'defense' },
+        {},
+      )[0].nom;
+      assert.equal(rendu, attendu, `${base} : pose de garnison`);
+    }
+    // ⚠ D'ABORD : LE MONTAGE DISCRIMINE-T-IL ? Si toutes les coques avaient une
+    // pose de défense, la boucle ci-dessus passerait sur un code qui ajouterait
+    // `_def` sans jamais regarder l'atlas.
+    assert.equal(existeDansAtlas('chassis', `off_${lettre}_pilon_chassis_def`), false,
+      `off_${lettre}_pilon_chassis_def existe : le test ne mesure plus le repli`);
+    assert.equal(existeDansAtlas('chassis', `off_${lettre}_belier_chassis_def`), true,
+      `off_${lettre}_belier_chassis_def manque : le test ne mesure plus la pose`);
+  }
+});
+
+test('sprite — les cinq monolithes de blindé de l\'Ouvrage ont disparu de `src/`', () => {
+  // ⚠⚠ LE MOTIF EST BORNÉ À DROITE, ET C'EST TOUT LE TEST. `off_o_ratisseur`
+  // sans borne trouverait `off_o_ratisseur_chassis` et passerait toujours : la
+  // garde ne dirait rien. On cherche le nom NU — suivi d'un guillemet, d'un
+  // `_def`, ou de rien — jamais suivi de `_chassis` ni de `_tourelle`.
+  //
+  // ⚠ ET ON LIT LA SOURCE DÉCOMMENTÉE. Six paragraphes de `render/scene.js`
+  // nomment ces sprites pour dire qu'ils sont partis ; une garde qui lit ce
+  // qu'on a écrit à son sujet ne garde rien — sixième fois du dépôt.
+  const BLINDES = ['ratisseur', 'fendeur', 'broyeur', 'belier', 'pilon'];
+  const fichiers = [];
+  const balayer = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) balayer(p);
+      else if (e.name.endsWith('.js')) fichiers.push(p);
+    }
+  };
+  balayer(join(RACINE, 'src'));
+  assert.ok(fichiers.length > 20, `${fichiers.length} fichiers balayés : le test ne mesure rien`);
+
+  const sansCommentaire = (t) => t
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+  const motif = new RegExp(`off_o_(${BLINDES.join('|')})(_def)?(?![\\p{L}\\p{N}_])`, 'u');
+  for (const f of fichiers) {
+    const trouve = sansCommentaire(readFileSync(f, 'utf8')).match(motif);
+    assert.equal(trouve, null,
+      `${f.slice(RACINE.length + 1)} nomme encore « ${trouve?.[0]} » — le monolithe est retiré`);
+  }
+
+  // ⚠ ET L'APPÂT PROUVE QUE LE MOTIF MORD ENCORE. Sans lui, une expression
+  // rendue inerte par une faute de frappe laisserait la boucle verte pour
+  // toujours.
+  assert.ok(motif.test('const x = \'off_o_ratisseur\';'), 'le motif ne voit plus le nom nu');
+  assert.ok(motif.test('\'off_o_belier_def\''), 'le motif ne voit plus la pose de défense');
+  assert.equal(motif.test('\'off_o_ratisseur_chassis\''), false,
+    'le motif accuse la coque, qui est légitime');
+  assert.equal(motif.test('\'off_o_pilon_tourelle\''), false,
+    'le motif accuse la tourelle, qui est légitime');
+
+  // Et l'atlas ne les coud plus — c'est la moitié qui mord sur la DONNÉE.
+  for (const id of BLINDES) {
+    assert.equal(existeDansAtlas('unite', `off_o_${id}`), false,
+      `off_o_${id} est encore cousu dans l'atlas`);
+  }
 });

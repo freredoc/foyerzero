@@ -46,7 +46,26 @@ SPRITES = os.path.join(RACINE, 'art', 'sprites')
 # autres complètent. Le rejouer dans un autre ordre n'a pas été mesuré.
 CHAINE = [
     ('planches',        ['--ecrire']),
-    ('tourelles',       ['--ecrire']),
+    # ⚠⚠ QUATRE OUTILS SONT SORTIS DE CETTE TABLE AU LOT OUVRAGE-CÂBLAGE, 08/09,
+    # ET LE BRIEF N'EN NOMMAIT QUE DEUX. Ethan a livré les quarante-deux sources
+    # v2 de l'Ouvrage le 07/09 ; `tools/ouvrage_v2.py` les conditionne toutes, et
+    # les quatre outils qui fabriquaient l'art de ce camp n'ont plus rien à
+    # produire que lui ne produise. **Mesuré outil par outil, pas supposé** — le
+    # brief demandait de vérifier, chacun a été rejoué sous `FZ_SPRITES` dans un
+    # dossier temporaire et son contenu listé :
+    #
+    #   `unites_ouvrage`  22 sprites — les 13 que `ouvrage_v2` refait, PLUS les
+    #                     neuf monolithes de blindé que ce lot retire. Le laisser
+    #                     ici les recréerait à chaque exécution.
+    #   `tourelles`       7 sprites — les six tourelles de défense et le merlon.
+    #   `socles`           6 sprites.
+    #   `barrieres`        2 sprites — la ronce et la herse.
+    #
+    # ⚠ LES QUATRE FICHIERS RESTENT AU DÉPÔT, comme `bords.py` depuis le lot
+    # MUR-PEINT et `align_chenilles.py` depuis la sortie de la grille 32 : sortir
+    # de la chaîne n'est pas être supprimé, et le brief l'interdit explicitement.
+    # Les laisser PRODUIRE, en revanche, écraserait le travail de `ouvrage_v2` et
+    # ferait compter neuf sprites « nouveaux » à chaque passage.
     # ⚠⚠ TROIS OUTILS SONT SORTIS DE CETTE TABLE — lot SPRITES-V2-JOUEUR, 05/09.
     # `tourelles_unite` et `connexions` sont SUPPRIMÉS : le premier fabriquait
     # les seize orientations d'une tourelle de blindé, le second les quatre états
@@ -55,10 +74,7 @@ CHAINE = [
     # `chassis` est VIDÉ mais RESTE au dépôt : il ne produit plus de sprite, il
     # ne porte plus que le détecteur d'ancre, que les deux outils d'ancre ci-
     # dessous importent. Un outil qui ne produit rien n'a rien à comparer.
-    ('socles',          []),
     ('emblemes',        []),
-    ('unites_ouvrage',  []),
-    ('barrieres',       []),
     ('effets',          []),
     ('ruines',          []),
     # ⚠⚠ LES QUARANTE-DEUX SPRITES DU JOUEUR EN V2 — 05/09. Une planche pour un
@@ -67,6 +83,14 @@ CHAINE = [
     # règle est la même pour les cinq et qu'un outil par famille aurait recopié
     # cinq fois la même boucle.
     ('joueur_v2',       []),
+    # ⚠⚠ LES QUARANTE-DEUX SPRITES DE L'OUVRAGE EN V2 — 08/09, même règle et même
+    # code. Il n'a pas de table à lui : `joueur_v2.taches` prend une lettre de
+    # camp, parce que les huit listes d'identifiants décrivent EXACTEMENT les deux
+    # camps — neuf poses d'infanterie, quatre aéronefs, neuf coques dont l'Obusier
+    # sans pose de flanc, cinq tourelles de blindé, trois pièces monolithiques,
+    # six tourelles de défense, six socles. Une seconde table aurait recopié
+    # quarante-deux lignes au changement d'une lettre près.
+    ('ouvrage_v2',      []),
     # ⚠⚠ LES DEUX OUTILS D'ANCRE ENTRENT DANS LA CHAÎNE, ET ILS N'ÉCRIVENT PAS UN
     # PIXEL. Ils produisent `ancres-defense.json` et `ancres-blindes.json` sous
     # `art/sprites/`, comme `chassis.py` écrivait `ancres-chassis.json` : le
@@ -76,6 +100,11 @@ CHAINE = [
     # DORMANTES alors que deux outils les consomment.
     ('ancres-defense',  []),
     ('ancres-blindes',  []),
+    # ⚠ ET LE TROISIÈME MESURE L'OUVRAGE — 08/09. Il produit
+    # `ancres-blindes-ouvrage.json` et `ancres-defense-ouvrage.json`, et il
+    # IMPORTE `ancre`, `pivot`, `cote_du_carre` et `ancre_de_case` des deux
+    # au-dessus : il vient donc APRÈS eux, et jamais avant.
+    ('ancres-ouvrage',  []),
     # ⚠⚠ LES MURS DE CONTOUR SONT SORTIS DE LA CHAÎNE — lot MUR-PEINT, 03/09.
     # Ethan a fait peindre le mur DANS le fond de base : l'anneau que le code
     # dessinait n'existe plus, et aucun écran ne lit `bord_j_*` ni `bord_o_*`.

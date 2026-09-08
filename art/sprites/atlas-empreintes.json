@@ -180,7 +180,7 @@
       }
     },
     "chassis": {
-      "atlas": "760884b8085e7a6eb1e6af600084b0bae0a1adbefdbc5e4335f46eadf345a63a",
+      "atlas": "c50b67db74194a3c2dc815913b7dfaf801c2346d58ee8c629c0d63f1601d1877",
       "sprites": {
         "off_j_belier_chassis": "f03ed72f15d995f33d619204de1cb6b343c7f7bbca09ffe833efb6280ec67528",
         "off_j_belier_chassis_def": "98d2382650c0b0d63c92836c9adc0630bea0a9efebd91c16b02fba70723a977e",
@@ -190,11 +190,20 @@
         "off_j_fendeur_chassis_def": "300a706d23a2fb9f894917e3f8ec6dbae4e7a7ea9cfa20d0db1a8c225d6778cd",
         "off_j_pilon_chassis": "fe92b04e41fa40edac853f5d83bd8f30606fdba81c571913f2deb21846ac7e4b",
         "off_j_ratisseur_chassis": "c7b451bb84aee4f499a228af7ab4dd0bf044562f93f6d8ede9cb213b5c02c0ea",
-        "off_j_ratisseur_chassis_def": "97b6c9f63894de6b015abc6431a0aea8bbacd2d7856d1677002ed3354a7b6b3e"
+        "off_j_ratisseur_chassis_def": "97b6c9f63894de6b015abc6431a0aea8bbacd2d7856d1677002ed3354a7b6b3e",
+        "off_o_belier_chassis": "c8e2ac7126b8043bea692d84f5c33b19d6dedf2ba8c03c7ae9106b638102372f",
+        "off_o_belier_chassis_def": "c55b528f2b2d327fd5be63aa5d719b0f7071dbe26cf26fb9e04dd1b483e7f685",
+        "off_o_broyeur_chassis": "fccad84ec42681ebb870aa1dde3e87505f7d92a796bf2e4a904d0ffc1a4a0076",
+        "off_o_broyeur_chassis_def": "54ae780c739e14bb74bb04bdeefe2c5161612cd051e6cd8ef5522721da77e3cc",
+        "off_o_fendeur_chassis": "bbb3ee12e0c047f14b8e1290efe4e6c5e486da58ffda8247718441a132035d52",
+        "off_o_fendeur_chassis_def": "d75d44f2bc8438e1936bef4a9b9557030998cd51a7e406d7a178b165c091353b",
+        "off_o_pilon_chassis": "cfc38786cca3f8c8d962d385c64bb7246a0ef50376b6ef443367dd2d8937fa9e",
+        "off_o_ratisseur_chassis": "ff54a6db1648ec5fcc5b82d34ecfbfe7e1a4764ccf1637e22728ece4cb4accab",
+        "off_o_ratisseur_chassis_def": "aa7e2b596565a198079e016972635d1ff79a8d26e252680a4a3cc87693a86f9d"
       }
     },
     "defense": {
-      "atlas": "6aecf25cd004c92f1f799a332954e73bf8751c036d0cd561b657aa6a409ea34b",
+      "atlas": "266cb26ef3053bd9fa94b2dae72edd3ac4c5e6b8d6edda0d1d011395ffbed51a",
       "sprites": {
         "def_j_batterie": "176504c37d9cd5ba80a8e660455203086d52adcccac03570dfb353bab2538ee2",
         "def_j_casemate": "d519f1693dfad058da357c6a9a7979c5a2bb4458201df200fa06559b8b86778b",
@@ -205,15 +214,15 @@
         "def_j_merlon": "b3c907874346fc0ecb55d56dd8d681f31bc6bf9b6eae97b73109d01a01ebf90f",
         "def_j_mortier": "ff3997b1c4c8dd8d0f89977f97aa4ce5153b8ff56fc3c5923d64e2c8258438ac",
         "def_j_ronce": "fc1ec897e0d93810596ad2710baabfc3ca6ad39c1d49e98ab8df9caee5b7d039",
-        "def_o_batterie": "9cda8b2420aad98e1c30db7fca03be52cc9a92dee1dbe692fe509d482e37ea4d",
-        "def_o_casemate": "733187071360ce8c51e65e0e3390ac6e9e84afdc35f9b336c37ef9b23d7ce97f",
-        "def_o_creneau": "de0192ab91f99b4c6cc6a65ce8564612795a45564f513784c874b7a4208a1d8c",
-        "def_o_faucheuse": "229b68a996de26609982286f591c9c746ef014c58c8c2c6daa1efa5cd6619282",
-        "def_o_harpon": "e038b6b8407bc43d1c33e9bccabb9bba77d819f0eb2b387587c171442ddb9e4d",
-        "def_o_herse": "45bf98ca1c287f7b01dfa993f5d7606725601275c97d40a579230e0c78df7c57",
-        "def_o_merlon": "ae4452c3af0e24dddeda5d94e83025110695964711993598add027cfca3eb78c",
-        "def_o_mortier": "8d5e960cd65bbbde69d94ce19c24f3bc9e7de86396e7d31d2a938ffca673093b",
-        "def_o_ronce": "2e90024144edc1792ab34dee30c6f3cb6ec8094619d3440d27c50f173cebc2ea"
+        "def_o_batterie": "fcf89d6c3a2a9cb2755c263f90c3542fec63b64b94d4cdb6dc85c0dac66ce036",
+        "def_o_casemate": "d1e91c1f219a1238ae9c6770fccbf4b871bc57994883d6e2844471dd6691d009",
+        "def_o_creneau": "878c59f0c2b4b0140575ee6b6533f5a6cda9a974f9d2602665d9b54a77b80132",
+        "def_o_faucheuse": "d8fd961989076b1902846b42f973fa8b895aa52a37c83c143ceb68f0d75eef95",
+        "def_o_harpon": "e948c2f9f7a9644d6834bc0e318586db2396b02bcfdf3681b23ea5cc982d633a",
+        "def_o_herse": "523c668c47a53fcc16f1a82a7a69ee6a99b49792a2fcaa173addfcc9d6fabca7",
+        "def_o_merlon": "6e48e231959c592bd3e5dc772fe1e25127eed53c6a2217cb369bda25f504d5bb",
+        "def_o_mortier": "9194547fb376c7c91566ac7d0298099b6270e4bcc3696793c570cc1691416c8a",
+        "def_o_ronce": "e1c7d14793d1d33b27414b1f35c1f972bad99311446a3018465647882c731d6e"
       }
     },
     "interface": {
@@ -307,7 +316,7 @@
       }
     },
     "socle": {
-      "atlas": "9250e8dd62a169ec795db5e5ca591be46a8656caa8274510c6db7ef8a35ce58f",
+      "atlas": "9ebf9ff39d5aa7ac724201135b4a63cb1d7c81cea1cbb875e1c9e9d040c80918",
       "sprites": {
         "socle_def_j_batterie": "dd5c73bb74fa2d24e9e8813233400ab86a45dc1ee22ae364d65ce5ee0239b031",
         "socle_def_j_casemate": "8ba3edd6fbe67ee57f4babf963c29efcf0dd8dfc44e9eb372cbf1dee410cacb2",
@@ -315,12 +324,12 @@
         "socle_def_j_faucheuse": "a63ed49f947a90d624024829a6eb9b2d4b2f7330cc611d961e007cbec24b0f23",
         "socle_def_j_harpon": "336bf656efe1135ef569fe33252696a607007d1c29ae1510ace101b30360b7f9",
         "socle_def_j_mortier": "772e147e2ba86acf11c2ba52f1942fad3b2347bd21acf2f2227e271ea00aa136",
-        "socle_def_o_batterie": "9fa7c1b9da44985b88893af763920d3ef4fa2c277724eef6c1e731c42ae16fd9",
-        "socle_def_o_casemate": "f3bae8c1d925f5b01aad3762abeecc78b4022d4ed32a6bf0ceb37316fab2d253",
-        "socle_def_o_creneau": "5dd300de2c2faa39eb3ef5b8f5ab752642361f7ff310250640bfcda27cffa4b0",
-        "socle_def_o_faucheuse": "d4e4367ea4467b673fc93dcee1cdad28ac5e50d4b4bc122c6d06568c521ac027",
-        "socle_def_o_harpon": "dea4b4dbcfb76956e6380a4ffe88d70ba5be0bf272e22fcba5ec4d166bfda4e2",
-        "socle_def_o_mortier": "4467ca7041ee69ac5cc038bc1e293b9647d27247d307c29214be68c9eb0473c6"
+        "socle_def_o_batterie": "86e2dc8e2062cca32851286c1d4db2b1e703b8ea3b2f9cc777ca02dcba4edec8",
+        "socle_def_o_casemate": "e33c336c468746c128a574bae7c08423b26c8a396de1dfa52d131bacb789ec5b",
+        "socle_def_o_creneau": "635def44a9ee4de74cb98088b0e5862909e9152ae9d03b0885c944c0502c9382",
+        "socle_def_o_faucheuse": "528a0890f784237c5001b202389d56518d3d3238c132a0828dec68e4de41d2f0",
+        "socle_def_o_harpon": "bcea46dde897e9d149c71cdccb3517687f483030e7b31ca3b18f5efc33596995",
+        "socle_def_o_mortier": "fbfd01061d6d96277e24e96e2aa225a5540f7a8970b16aadca668fd59fafafa7"
       }
     },
     "terrain": {
@@ -347,17 +356,22 @@
       }
     },
     "tourelle_unite": {
-      "atlas": "f7deb7300d8a9f829094d59f8153319bea8c24e520c10a8091076cb70993ed9b",
+      "atlas": "73c5361c040b617f98a9c85cf1eeb1cea5f9ba7a8d792c9689611fa3c7a6ca67",
       "sprites": {
         "off_j_belier_tourelle": "25c7df3afca65eb9b706b6e7edf4943fec177aeeea677a9af247d158b9470982",
         "off_j_broyeur_tourelle": "22cd822f042436bf6d9b727c09bfafb2612c7f05a181ffb7587079e95f47abc8",
         "off_j_fendeur_tourelle": "9cef8fb62d0b1ad246186737dfb79ce6dff116472142648209a34aa5f37e350f",
         "off_j_pilon_tourelle": "27b25844ebf532e4ee27cf07a5f2bbce2edc9ede5b63679fd0978e580da81e50",
-        "off_j_ratisseur_tourelle": "50217d5bfeeb68c3e7805718387da5bea7a6544133aecb202bf9a8567745d8fe"
+        "off_j_ratisseur_tourelle": "50217d5bfeeb68c3e7805718387da5bea7a6544133aecb202bf9a8567745d8fe",
+        "off_o_belier_tourelle": "1b998812880e0758d095fc865b05f63462a45f3ae02f0a608b59a3bc1b402ad9",
+        "off_o_broyeur_tourelle": "4041a7c1668df1a6d684291462f0d5b440934fe018286e2d05c8b8bb4ac797fd",
+        "off_o_fendeur_tourelle": "21e6e1d6e64401a812d8fafff13fba0f5877ad0c186973e56674e4258a643ead",
+        "off_o_pilon_tourelle": "cc4c2e6f6da2ac49b92d8a6741b6bd28a2ed7998034186995b8122ba741eae91",
+        "off_o_ratisseur_tourelle": "2c0b335c8fbc7b92ac38c8745d8d233785cdda36d8f87d06fbca6dd71477a079"
       }
     },
     "unite": {
-      "atlas": "45581ead0b575af3bdbd5d6ae446a10bce6b91182f504fa34c60d5b7a71ad345",
+      "atlas": "34fe11d6f6aea65e76e7fbf8a88c16a41d2c105b108670df9735cf4b092f8df9",
       "sprites": {
         "off_j_busard": "2417fa8ed1cb3f35ed4a63e01ae549e084c34f36d4353d51655152407ea1ff66",
         "off_j_carapace": "9d71a9801e63f7639d37b601101742f2045466634478257360fc72ee41b9a292",
@@ -366,34 +380,25 @@
         "off_j_enclume": "9ceb5559e074fe86ae3c610ae6484625c57f18b0d0d46255dadf9466901ecb00",
         "off_j_fouisseurs": "a061439b7425ba98f9fd393bfe0cb5df88bc1489a77db16ca42d785a0d86816b",
         "off_j_frappeur": "32d271cc19ed638b0e6ded19aae27f5418d9d0cceaba199b5113cbb53f593bf7",
-        "off_j_guetteur": "426909c1b3614b47f87d0bbdc21108a8c0f4e864144f4a4cd3dfce129ba66a3b",
-        "off_j_guetteur_def": "6d723975cf96f5694ab2b73d853cd45fac560bd3ce483d17ef3561efdb4a0f90",
-        "off_j_meute": "5630432678a602430d260caeadba3f89818c98e3d5ee0f7b0bf0ae0b0a566b49",
-        "off_j_meute_def": "5411553293163afdf0f2f5273c9069e38f8274b28ee65cb8a02535a4a212afd5",
+        "off_j_guetteur": "0b06a6b239b1eee8e44088d71647d134f28b50d55d999e073770dd02f79d0b1b",
+        "off_j_guetteur_def": "5d29f581cd1289ad7053231ee24a26d3dd0902969293379b83c1f4721a022310",
+        "off_j_meute": "767606cc26f9501515eb1762ab2796af61c557809f7056ebaff62b03b6f8b9da",
+        "off_j_meute_def": "7c30106a9d3a4294899cdf99c892342a091962d4d6fc9d6b52d58734abf3a94b",
         "off_j_perceurs": "08afd8df021498c425e6ed2d46c68130daa7a333478da794a5a946f57a6add52",
         "off_j_perceurs_def": "28e36a80eba5f1eeac835ac9ca35e380229da9ea19d7888783a3f2eba98f0337",
-        "off_o_belier": "f93f9c5a203361dd4ea133520c3a8d3a2c1aa4a451e0592401301afb8c16dc13",
-        "off_o_belier_def": "2ccd5a30eee47af8a612336ff4057c8da92b7c9f5dee11c04a4f20540701f351",
-        "off_o_broyeur": "320e6ec27f511985346c8b5f6eca22cc6f06ce99586383534285cc04f009d8e3",
-        "off_o_broyeur_def": "4f6dff26801b73a9c9fed45b51403edbb3663e4578282ef3b2a7bd69f5f25e4c",
-        "off_o_busard": "3557af4f271a321a26b1cd18633f5d4b0ec2cd8f0b0a852dee4e3a66042610eb",
-        "off_o_carapace": "e7adaf5088773d2f1bc7ae71ef1d52bb43ccd2e600b64812d4282fa9351f39ab",
-        "off_o_carapace_def": "7e9b8d57818def2d008c6860493a64064535a0a15dc171cd0f8fc3ad34b30783",
-        "off_o_crecelle": "95e7997af615844dbdec63bb429aca03c4d97fa2604a24c7bed572d83cc1d2c7",
-        "off_o_enclume": "b71171d2f0200043d0e468371eba1582648f569c8de1df04e127ab0673ec49bf",
-        "off_o_fendeur": "b4ba77193a685a7e1e550ada69a07b5bfaa354780b2f186552a66df54abd86fc",
-        "off_o_fendeur_def": "3e5b1e89b8e8c00815842b997bc9dab2e2f8c0e0dcb2c89db440a6f95e99ce8a",
-        "off_o_fouisseurs": "4fc39aa3dad7e6728d81bc2ed519261061fa88bcdc7c2ce8a1116f48fe69edf7",
-        "off_o_frappeur": "17c8718640274bb77b1fb6ebb0b2e654326b4ed7e4636e8dc52d404e5624cf95",
-        "off_o_guetteur": "b0c30b39c440f326aa11bd51693ed9c0ddd3cef0bf9bed4107ab9d33c0aa57f7",
-        "off_o_guetteur_def": "d76ca7ff9749988ddbcf1ef08b8ffeae8f5e0a8b32ca5d09dd98cce6c25cc44e",
-        "off_o_meute": "7f92857acd5eec65f60df4684cfac9d9bca616158050d1c530a05242b671c529",
-        "off_o_meute_def": "3fa5a3129ddd1323340f9fe16ca38e7d18f749b3679292ea70a9b55ca5575cc4",
-        "off_o_perceurs": "915d2c1ba93155030e3bef99b719c81f1d440f9d005735d83715468161dbfbc6",
-        "off_o_perceurs_def": "ffe9732ac9b572a82505f1bf352d8acb4ad6cd723a2d287ea9430617c069283e",
-        "off_o_pilon": "09ddc370de8fcd5ec01887ab591ead7aa85583bf6425325ffca17905cda7bde6",
-        "off_o_ratisseur": "8d3c588728cfa61de8f0c08ab5ea9b9a2dc44d62cb15c2f407cdf583d16d3166",
-        "off_o_ratisseur_def": "84f7be9db5e3274215b2f687b012d4fa12f2178f2fded833c1ed608ccf8dd2d6"
+        "off_o_busard": "da82d68ce7059f16f4dc7656279a57feb7398216f90f6fe0a2cbbf72c4ce1a83",
+        "off_o_carapace": "3c1baa8c490087f81b86424c3c165461bb3e22376e7421078042809306e60c1e",
+        "off_o_carapace_def": "ba14b60a2d6ae2eaa1d298bfe63cfc185426a81c2653ba9a374619517317dee0",
+        "off_o_crecelle": "f17949607531b66b1497e2529dbf2573062afc78e4b4d3a54bdbf1825fc5234f",
+        "off_o_enclume": "83d8656c453f4ce8dd8ef00ce7c12cb8cbf411782dac1e693614d57fa79be460",
+        "off_o_fouisseurs": "8dd9fe985699786ee89d25c8ecfe46b7cf75cfaea5972f79ca53721b175d89bc",
+        "off_o_frappeur": "10eac50c2d25c7f884ac489424d60b267e6e72b286029ceb18ad6c8720abbde0",
+        "off_o_guetteur": "e7de61859fc3165d97bd917400f0e4420f9b07f6146d33e0380c8d2c2fea3a6e",
+        "off_o_guetteur_def": "811d90af2bb3ec50aa70b34ed76ec59cf726c3f8e93e218f9ebfbf304c74ce4a",
+        "off_o_meute": "424aef6da365fbe28df902b83b133326f7f9591da4e98a5f9966221dc907f308",
+        "off_o_meute_def": "a91a771023a1c2433df5c57191b3dbd637da78390be5680f0cc5697a9f3c19e5",
+        "off_o_perceurs": "e1382933a811e38370e674e3ff1bd51e4bc09cc0e23966be1d6ef0700419099a",
+        "off_o_perceurs_def": "1976d257549132eec8eaae675429868f47aa4a46214804157e7f3539bb4ccb60"
       }
     }
   },
