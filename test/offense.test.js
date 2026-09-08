@@ -25,7 +25,8 @@ import {
 } from '../src/sim/state.js';
 import { BASE_BATIMENTS, BATIMENT_DE_CHASSIS, messageSansBatiment } from '../src/data/base.js';
 import { acquisesDe } from '../src/sim/recherche.js';
-import { ligneAAfficher } from '../src/ui/chantier.js';
+import { ligneAAfficher, posablesDeLaDefense } from '../src/ui/chantier.js';
+import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
@@ -1505,4 +1506,81 @@ test('RET T11 — une armée VIDE ne fige rien, et c\'est mesuré', () => {
   baseCourante(sansBatiment).disposition = [];
   assert.throws(() => plafondDeLaReserveDesBatiments(baseCourante(sansBatiment)),
     'le montage ne discrimine rien : les deux plafonds se comportent pareil');
+});
+
+// ---------------------------------------------------------------------------
+// PALETTES-ET-DEFENSE — l'assaut ne bouge pas, 08/09/2026
+// ---------------------------------------------------------------------------
+
+test('PAL T10 — l\'OFFENSE refuse toujours faute de Caserne, sur la base qui ouvre la DÉFENSE', () => {
+  // ⚠⚠ SANS CE TEST, LE LOT CASSE UN ARBITRAGE QU'ETHAN N'A PAS RETIRÉ. Le 08/09
+  // il retire le verrou du bâtiment de production « en défense » — point 7,
+  // « caserne usine aérodrome ». Le 29/08 il avait dit « infanterie
+  // inconstructible sans caserne, même règle pour véhicule et avion », et il
+  // n'est pas revenu dessus pour l'assaut. Les deux tiennent ensemble ou le lot
+  // est faux.
+  //
+  // ⚠⚠ ET C'EST LE MÊME ÉTAT QUI PORTE LES DEUX MOITIÉS. Deux montages séparés
+  // laisseraient passer un lot qui basculerait les DEUX forces : ici la même
+  // base, au même instant, ouvre la garnison et ferme l'armée.
+  const etat = creerEtat(20260908);
+  baseCourante(etat).disposition[0].niveau = 12;
+  baseCourante(etat).disposition.push(
+    { id: 'centreDeCommandement', rangee: 11, colonne: 1, niveau: 8, degatsMilli: 0 },
+    { id: 'qgDeDefense', rangee: 11, colonne: 8, niveau: 8, degatsMilli: 0 },
+  );
+  while (baseCourante(etat).economie.residus.length < baseCourante(etat).disposition.length) {
+    baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  etat.recherche.acquises.offense = Object.keys(UNITES).sort();
+  etat.recherche.acquises.defense = [...rosterDefensif()].sort();
+
+  // ⚠ FALSIFIABILITÉ : les trois bâtiments manquent, les deux QG sont là, tout
+  // est cherché. Ce qui reste est le verrou, et lui seul.
+  for (const id of Object.values(BATIMENT_DE_CHASSIS)) {
+    assert.ok(!baseCourante(etat).disposition.some((b) => b.id === id),
+      `montage : ${id} est posé`);
+  }
+  assert.notEqual(niveauDeCommandement(etat, 'armee'), null, 'montage : pas de Centre');
+  assert.notEqual(niveauDeCommandement(etat, 'garnison'), null, 'montage : pas de QG de défense');
+
+  // La DÉFENSE s'ouvre — c'est le point 7, mesuré ici pour que le couple existe.
+  assert.ok(posablesDeLaDefense(etat).every((p) => !p.verrouille),
+    'la garnison verrouille encore : le montage ne discrimine rien');
+  assert.deepEqual(
+    problemesDeLaPoseDEffectif(etat, 'garnison', { id: 'meute', rangee: 6, colonne: 3, niveau: 1 }),
+    [], 'le modèle refuse encore la garnison sans Caserne',
+  );
+
+  // L'ARMÉE, elle, reste fermée — palette ET geste, comme le 29/08.
+  const palette = unitesDeLaPalette(etat);
+  assert.equal(palette.length, Object.keys(UNITES).length, 'la palette d\'Offense a filtré');
+  assert.ok(palette.every((u) => !u.disponible),
+    'une unité d\'assaut est constructible sans son bâtiment de production');
+  const meute = palette.find((u) => u.id === 'meute');
+  assert.equal(meute.raison,
+    messageSansBatiment(BASE_BATIMENTS.caserne.nom.joueur, UNITES.meute.chassis));
+
+  const refus = problemesDeLaPoseDEffectif(etat, 'armee', {
+    id: 'meute', vague: 1, colonne: 1, niveau: 1,
+  });
+  assert.deepEqual(refus.map((p) => p.code), ['sans-batiment-de-production'],
+    'l\'assaut accepte une Meute sans Caserne');
+  assert.equal(refus[0].message, meute.raison, 'la palette et le modèle divergent');
+  assert.throws(() => poserEffectif(etat, 'armee', {
+    id: 'meute', vague: 1, colonne: 1, niveau: 1,
+  }), /Caserne/);
+
+  // ⚠ ET LES TROIS CHÂSSIS DE L'ARMÉE, PAS LA SEULE INFANTERIE : le roster
+  // offensif porte les trois, là où le défensif n'en porte que deux.
+  const chassis = new Set(Object.keys(UNITES).map((id) => UNITES[id].chassis));
+  assert.deepEqual([...chassis].sort(), Object.keys(BATIMENT_DE_CHASSIS).sort(),
+    'un châssis de l\'armée n\'a plus de bâtiment de production');
+  for (const id of Object.keys(UNITES)) {
+    assert.deepEqual(
+      problemesDeLaPoseDEffectif(etat, 'armee', { id, vague: 2, colonne: 2, niveau: 1 })
+        .map((p) => p.code), ['sans-batiment-de-production'],
+      `${id} : l'assaut l'accepte sans son bâtiment`,
+    );
+  }
 });

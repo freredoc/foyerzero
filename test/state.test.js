@@ -2193,6 +2193,15 @@ test('RDR T11 — une permutation ne coûte rien', () => {
 // GRISÉE — arbitrage du 28/08, intact — et rien derrière elle ne refusait le
 // geste.
 //
+// ⚠⚠ ET LE 08/09 ETHAN A TRANCHÉ L'AUTRE MOITIÉ, POINT 7 : « toutes les défenses
+// doivent être disponibles dès qu'on a la recherche », le verrou retiré étant
+// « caserne usine aérodrome ». Le 07/09 la règle avait été LUE comme valant des
+// deux côtés faute d'une mention d'écran ; la mention existe maintenant, et elle
+// dit la défense. `PD T1` et `PD T5` sont donc RETOURNÉS — ils figeaient
+// exactement ce qu'Ethan fait tomber — et ce qu'ils gardent désormais est que la
+// règle existe TOUJOURS, à l'assaut, et qu'elle ne s'est pas dissoute avec la
+// moitié qu'on retire. Voir `PAL T7` à `PAL T10`.
+//
 // ⚠⚠ ET ELLE NE GARDE QUE LE GESTE. `verifierEtat` ne la connaît pas et ne doit
 // jamais la connaître : une Caserne tombée au raid sous une garnison déjà posée
 // rendrait la partie injouable pour une faute que le joueur n'a pas commise.
@@ -2233,34 +2242,39 @@ function baseSansProduction() {
 /** Le Fusilier de garnison du brief, sur une case libre de la bande de défense. */
 const FUSILIER_EN_GARNISON = { id: 'meute', rangee: 6, colonne: 3, niveau: 1 };
 
-test('PD T1 — poser un Fusilier en garnison sans Caserne est REFUSÉ', () => {
+test('PD T1 — RETOURNÉ le 08/09 : poser un Fusilier en garnison sans Caserne PASSE', () => {
+  // ⚠⚠ CE TEST DISAIT L'INVERSE JUSQU'AU 08/09, ET C'EST ETHAN QUI L'A RETOURNÉ.
+  // Point 7 : « toutes les défenses doivent être disponibles dès qu'on a la
+  // recherche » ; verrou retiré, « caserne usine aérodrome ». Il n'est pas
+  // ASSOUPLI — il garde toujours quelque chose, et ce quelque chose est
+  // désormais que le refus existe encore À L'ASSAUT sur la même base.
   const etat = baseSansProduction();
 
-  // ⚠ FALSIFIABILITÉ D'ABORD : le montage doit être complet par ailleurs.
+  // ⚠ FALSIFIABILITÉ D'ABORD : le montage doit être complet par ailleurs, et il
+  // doit VRAIMENT manquer le bâtiment — sans quoi le test ne mesure rien.
   assert.notEqual(niveauDeCommandement(etat, 'garnison'), null, 'montage : pas de QG de défense');
   assert.ok(etat.recherche.acquises.defense.includes('meute'),
     'montage : la Meute n\'est pas acquise');
   assert.equal(batimentDeProductionManquant(etat, 'meute'), 'caserne',
     'montage : la Caserne est déjà là');
 
-  const problemes = problemesDeLaPoseDEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
-  assert.ok(problemes.length > 0, 'la garnison accepte encore un Fusilier sans Caserne');
-  assert.deepEqual(problemes.map((p) => p.code), ['sans-batiment-de-production'],
-    'le refus vient d\'ailleurs que du bâtiment de production');
-  // ⚠ LE MESSAGE VIENT DE `messageSansBatiment`, ET C'EST LE MÊME QUE CELUI DES
-  // PALETTES — voir `PD T7`, qui le confronte à celui de l'écran.
-  assert.equal(problemes[0].message, messageSansBatiment('Caserne', 'escouade'));
+  assert.deepEqual(problemesDeLaPoseDEffectif(etat, 'garnison', FUSILIER_EN_GARNISON), [],
+    'la garnison refuse encore un Fusilier sans Caserne');
+  poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
+  assert.equal(baseCourante(etat).garnison.length, 1, 'la pose n\'a rien écrit');
+  assert.equal(baseCourante(etat).garnison[0].id, 'meute');
 
-  // ⚠ ET LA MÊME CASE ACCEPTE UN OUVRAGE FIXE. Sans cette ligne, le test
-  // passerait aussi si la case était simplement injouable.
-  assert.deepEqual(
-    problemesDeLaPoseDEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, id: 'merlon' }), [],
-    'la case elle-même refuse : le montage ne mesure pas le bâtiment',
-  );
-
-  // Et le geste LÈVE, comme partout : « problèmes → si vide, agir ; sinon, toast ».
-  assert.throws(() => poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON), /Caserne/);
-  assert.equal(baseCourante(etat).garnison.length, 0, 'une pose refusée a quand même écrit');
+  // ⚠⚠ ET LA MÊME PIÈCE, SUR LA MÊME BASE, RESTE REFUSÉE À L'ASSAUT. C'est ce
+  // qui distingue « la règle est portée par la force » de « la règle a
+  // disparu » : sans cette moitié-ci, le lot pourrait avoir supprimé
+  // `problemeDuBatimentDeProduction` et ce test resterait vert.
+  const aLAssaut = { id: 'meute', vague: 1, colonne: 1, niveau: 1 };
+  assert.deepEqual(problemesDeLaPoseDEffectif(etat, 'armee', aLAssaut).map((p) => p.code),
+    ['sans-batiment-de-production'], 'l\'assaut a perdu le verrou du 29/08 avec la défense');
+  assert.equal(problemesDeLaPoseDEffectif(etat, 'armee', aLAssaut)[0].message,
+    messageSansBatiment('Caserne', 'escouade'));
+  assert.throws(() => poserEffectif(etat, 'armee', aLAssaut), /Caserne/);
+  assert.equal(baseCourante(etat).armee.length, 0, 'une pose refusée a quand même écrit');
 });
 
 test('PD T2 — avec la Caserne, la même pose est ACCEPTÉE', () => {
@@ -2322,20 +2336,26 @@ test('PD T4 — l\'armée est refusée aussi : la règle est UNE, pas deux', () 
 
 test('PD T5 — les TROIS chemins de geste sont gardés : poser, déplacer, permuter', () => {
   // ⚠⚠ UN CHEMIN OUBLIÉ EST UN CHEMIN PAR LEQUEL L'ÉCRAN CONTOURNE LA RÈGLE. Le
-  // brief les nomme tous les trois ; ce sont exactement les trois fonctions de
-  // `sim/state.js` qui rendent une liste de problèmes pour une force — un `grep`
-  // sur `problemesDe.*DEffectif` n'en trouve pas d'autre.
+  // brief du 07/09 les nomme tous les trois ; ce sont exactement les trois
+  // fonctions de `sim/state.js` qui rendent une liste de problèmes pour une
+  // force — un `grep` sur `problemesDe.*DEffectif` n'en trouve pas d'autre.
+  //
+  // ⚠⚠ IL SE MESURE SUR L'ARMÉE DEPUIS LE 08/09, ET C'EST LE RETOURNEMENT DU
+  // POINT 7. Il montait la GARNISON, où le verrou vient de tomber : le laisser
+  // là aurait été le desserrer jusqu'à ne plus rien mesurer. La garnison garde
+  // sa moitié du test, en bas, et elle y mesure l'INVERSE — les trois chemins
+  // passent sans le bâtiment.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 2, niveau: 1 });
+  poserEffectif(etat, 'armee', { id: 'busard', vague: 2, colonne: 1, niveau: 1 });
   poserEffectif(etat, 'garnison', FUSILIER_EN_GARNISON);
   poserEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, colonne: 5 });
-  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 4, colonne: 7, niveau: 1 });
 
   // Les trois gestes passent TANT QUE la Caserne est là — sinon le refus mesuré
   // plus bas ne dirait rien.
-  assert.deepEqual(
-    problemesDuDeplacementDEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 }), [],
-  );
-  assert.deepEqual(problemesDeLaPermutationDEffectif(etat, 'garnison', 0, 1), []);
+  assert.deepEqual(problemesDuDeplacementDEffectif(etat, 'armee', 0, { vague: 3, colonne: 4 }), []);
+  assert.deepEqual(problemesDeLaPermutationDEffectif(etat, 'armee', 0, 1), []);
 
   // La Caserne tombe.
   const index = baseCourante(etat).disposition.findIndex((b) => b.id === 'caserne');
@@ -2344,9 +2364,31 @@ test('PD T5 — les TROIS chemins de geste sont gardés : poser, déplacer, perm
     'montage : la Caserne est restée');
 
   // 1. Poser.
-  // ⚠ LA CASE SE CHERCHE, ELLE NE S'ÉCRIT PAS. Les obstacles se tirent de la
-  // fondation : une colonne choisie à la main tombe sur un rocher une graine
-  // sur deux, et le test lirait DEUX codes là où il en attend un.
+  assert.deepEqual(
+    problemesDeLaPoseDEffectif(etat, 'armee', { id: 'meute', vague: 4, colonne: 1, niveau: 1 })
+      .map((p) => p.code), ['sans-batiment-de-production'],
+  );
+  // 2. Déplacer.
+  assert.deepEqual(
+    problemesDuDeplacementDEffectif(etat, 'armee', 0, { vague: 3, colonne: 4 })
+      .map((p) => p.code), ['sans-batiment-de-production'],
+  );
+  assert.throws(() => deplacerEffectif(etat, 'armee', 0, { vague: 3, colonne: 4 }), /Caserne/);
+  // 3. Permuter — et le refus ne se dit qu'UNE fois pour deux Fusiliers, le
+  //    dédoublonnage du couple code+message s'en charge.
+  const permutation = problemesDeLaPermutationDEffectif(etat, 'armee', 0, 1);
+  assert.deepEqual(permutation.map((p) => p.code), ['sans-batiment-de-production']);
+  assert.throws(() => permuterEffectif(etat, 'armee', 0, 1), /Caserne/);
+
+  // ⚠ ET L'AVION, LUI, BOUGE ENCORE : son Aérodrome est debout. La règle nomme
+  // un bâtiment par châssis, elle ne fige pas toute l'armée.
+  assert.deepEqual(problemesDuDeplacementDEffectif(etat, 'armee', 2, { vague: 3, colonne: 6 }), []);
+  assert.doesNotThrow(() => deplacerEffectif(etat, 'armee', 2, { vague: 3, colonne: 6 }));
+
+  // ⚠⚠ ET LES MÊMES TROIS CHEMINS SONT OUVERTS EN GARNISON, SANS LA CASERNE.
+  // C'est la moitié retournée du 08/09 : `PAL T8` la mesure pour la POSE,
+  // celle-ci l'étend au déplacement et à la permutation, que le brief du 07/09
+  // avait nommément fermés.
   const libre = (rangee) => {
     for (let c = 1; c <= GRILLE.largeur; c += 1) {
       const mur = { id: 'merlon', rangee, colonne: c, niveau: 1 };
@@ -2355,27 +2397,14 @@ test('PD T5 — les TROIS chemins de geste sont gardés : poser, déplacer, perm
     throw new Error(`montage : aucune case libre en rangée ${rangee}`);
   };
   assert.deepEqual(
-    problemesDeLaPoseDEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, colonne: libre(6) })
-      .map((p) => p.code), ['sans-batiment-de-production'],
+    problemesDeLaPoseDEffectif(etat, 'garnison', { ...FUSILIER_EN_GARNISON, colonne: libre(6) }), [],
   );
-  // 2. Déplacer.
   assert.deepEqual(
-    problemesDuDeplacementDEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 })
-      .map((p) => p.code), ['sans-batiment-de-production'],
+    problemesDuDeplacementDEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 }), [],
   );
-  assert.throws(() => deplacerEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 }), /Caserne/);
-  // 3. Permuter — et le refus ne se dit qu'UNE fois pour deux Fusiliers, le
-  //    dédoublonnage du couple code+message s'en charge.
-  const permutation = problemesDeLaPermutationDEffectif(etat, 'garnison', 0, 1);
-  assert.deepEqual(permutation.map((p) => p.code), ['sans-batiment-de-production']);
-  assert.throws(() => permuterEffectif(etat, 'garnison', 0, 1), /Caserne/);
-
-  // ⚠ ET L'OUVRAGE FIXE, LUI, BOUGE ENCORE. Un mur n'a jamais eu besoin d'une
-  // caserne, et la règle ne doit pas figer toute la garnison.
-  assert.deepEqual(
-    problemesDuDeplacementDEffectif(etat, 'garnison', 2, { rangee: 5, colonne: 7 }), [],
-  );
-  assert.doesNotThrow(() => deplacerEffectif(etat, 'garnison', 2, { rangee: 5, colonne: 7 }));
+  assert.doesNotThrow(() => deplacerEffectif(etat, 'garnison', 0, { rangee: 7, colonne: 3 }));
+  assert.deepEqual(problemesDeLaPermutationDEffectif(etat, 'garnison', 0, 1), []);
+  assert.doesNotThrow(() => permuterEffectif(etat, 'garnison', 0, 1));
 });
 
 test('PD T6 — le CHARGEMENT n\'est jamais refusé, et c\'est le test du lot', () => {
