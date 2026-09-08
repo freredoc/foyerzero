@@ -435,3 +435,87 @@ en a trouvé une **pendant le lot** : c'est la vignette mixte, et Ethan l'a livr
 ## 12. Rendu
 
 Branche `claude/lot-batiments-quatre-etats`, **PR ouverte, non mergée**.
+
+---
+
+## 13. ⚠⚠ LE DÉFAUT DU 08/09 — LA MIGRATION A EFFACÉ TROIS BÂTIMENTS
+
+**Signalé par Ethan, sur sa vraie partie, après l'ouverture de la PR :**
+« sauvegarde illisible — 19 résidus pour 16 bâtiment ».
+
+### Ce qui s'est passé
+
+La migration `v28 → v29`, celle qui convertit `collecteur` en
+`collecteurQuartz` / `collecteurScorie`, recalculait le terrain avec
+`champsDeLaBase(base.position.rangee, base.position.colonne)`.
+
+`sim/state.js` prévient pourtant **en capitales**, soixante lignes plus haut :
+les champs sont « **DÉRIVÉS DE LA FONDATION, PAS DE LA POSITION COURANTE** … il
+ne faut jamais les confondre ». C'est une règle arbitrée le 27/08 et écrite pour
+ça. La base d'Ethan avait bougé — le geste le plus ordinaire du jeu —, si bien
+que la migration lisait un terrain qui n'était pas le sien.
+
+Et elle **filtrait** la disposition : un collecteur « tombé à côté » de ce
+terrain imaginaire était **retiré**. Trois bâtiments d'une partie réelle.
+
+### ⚠⚠ LE DÉFAUT NE S'EST VU QUE TROIS COUCHES PLUS LOIN
+
+`economie.residus` est un tableau **parallèle** à `disposition`. Retirer une pose
+sans retirer son résidu désaligne les deux, et c'est `verifierEtat` qui a parlé,
+avec un message d'**économie** pour une faute de **migration** :
+`19 résidus pour 16 bâtiments`.
+
+**Cette maladresse de diagnostic a sauvé la partie.** `ui/session.js:683` ne
+réécrit la sauvegarde que si le chargement a réussi — `sauvegardeArmee` reste
+à `false` quand `charger` lève. Le fichier d'Ethan n'a **jamais** été écrasé :
+il était intact sur le disque pendant tout l'incident, et il n'y avait rien à
+supprimer. **Il ne faut pas compter dessus deux fois.**
+
+### Ce qui a été corrigé
+
+1. La migration lit **`base.fondation ?? base.position`**, jamais `position`
+   seule.
+2. Elle **ne supprime plus rien** : un collecteur que le terrain ne tranche pas
+   prend le défaut de la vignette (`collecteurQuartz`). Le cas est inatteignable
+   — `problemesDeLaPose` refuse `hors-champ` depuis toujours — mais s'il
+   survenait, garder le bâtiment avec un identifiant défendable vaut infiniment
+   mieux que le jeter : la disposition serait alors **signalée** au chargement,
+   et le joueur garderait ce qu'il a construit.
+
+### Et une garde structurelle, pour les migrations à venir
+
+`migrer` encadre désormais **chaque** maillon :
+
+```js
+const avant = posesParBase(sauvegarde);
+migration(sauvegarde);
+…
+exigerAucunePerte(avant, posesParBase(sauvegarde), version);
+```
+
+`exigerAucunePerte` est **nommée et exportée**, donc mesurable. `MIGRATIONS` ne
+l'est pas — et ne doit pas l'être, c'est une table interne : un test qui la
+remplacerait laisserait une migration fausse derrière lui si une assertion
+tombait au mauvais moment. Le test monte donc **la garde elle-même**.
+
+⚠ Elle dit « **pas moins** », pas « autant ». Une migration a le droit
+d'**ajouter** une pose ; exiger l'égalité stricte interdirait un lot légitime pour
+attraper une faute qui, elle, est **toujours une perte**. Le message nomme le
+maillon fautif et la base fautive — pas l'économie, trois couches plus loin.
+
+### Les deux tests
+
+| Test | Ce qu'il mesure |
+| --- | --- |
+| **B4 T8** | Une base **déplacée** migre sans perdre un bâtiment, `residus` et `disposition` restent alignés, et **chaque collecteur porte la ressource de son vrai champ** — celui de la fondation. Sans cette seconde moitié, une migration qui garderait tout en mettant `collecteurQuartz` partout passerait. |
+| **B4 T9** | La garde lève sur `[16] → [13]` — **le compte exact du défaut d'Ethan** —, laisse passer autant ou plus, ignore une base sans liste (une v9 n'avait pas de `bases`), et **nomme** la base fautive quand il y en a plusieurs. |
+
+⚠ **Ce qui manquait aux montages d'alors tient en une ligne** : ils posaient
+tous sur une base **neuve**, où `fondation` et `position` coïncident. La faute
+était invisible par construction.
+
+### Poids
+
+Le correctif coûte **281 octets** dans `dist/index.html` :
+**8 647 037 → 8 647 318**. La marge T10 passe à **652 682 octets, 7,02 %** —
+inchangée au centième. Compte de tests : **1 419 → 1 421**.

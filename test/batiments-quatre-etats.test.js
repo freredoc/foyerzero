@@ -25,6 +25,12 @@ import { BATIMENTS } from '../src/data/sites.js';
 import { ATLAS } from '../src/data/atlas.js';
 import { couchesDeLEntite } from '../src/render/scene.js';
 import { etatDeLaPose } from '../src/sim/reparation.js';
+import {
+  creerEtat, serialiser, charger, migrer, poser, exigerAucunePerte,
+} from '../src/sim/state.js';
+import { poserLaBaseSur } from '../src/sim/deplacement.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { ressourceDeLaCase } from '../src/sim/champs.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -298,7 +304,7 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // une seule fois — la règle du dépôt depuis le lot SITE-ENTAMÉ.
   assert.equal(
     JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8')).version,
-    '0.99.30',
+    '0.99.31',
   );
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
@@ -334,4 +340,100 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
     Object.keys(BASE_BATIMENTS).sort(),
   );
   assert.equal(ORDRE_PALETTE.filter((v) => VIGNETTES_MIXTES[v]).length, 1);
+});
+
+// ---------------------------------------------------------------------------
+// B4 T8 — la migration d'une base QUI A BOUGÉ
+// ---------------------------------------------------------------------------
+
+test('B4 T8 — une base déplacée garde tous ses bâtiments, et ses collecteurs suivent leur champ', () => {
+  // ⚠⚠ CE TEST VIENT D'UNE FAUTE RÉELLE, ET IL EN GARDE DEUX. La première
+  // écriture de la migration v28 → v29 recalculait le terrain depuis
+  // `base.position` au lieu de `base.fondation` — le bandeau de `sim/state.js`
+  // prévient pourtant en capitales : « DÉRIVÉ DE LA FONDATION, PAS DE LA POSITION
+  // COURANTE […] il ne faut jamais les confondre ». Une base qui a bougé, ce qui
+  // est le geste le plus ordinaire du jeu, voyait donc un terrain qui n'est pas
+  // le sien.
+  //
+  // ⚠⚠ ET ELLE FILTRAIT LA DISPOSITION : les collecteurs « tombés à côté » de
+  // ce faux terrain étaient EFFACÉS. Sur la partie d'Ethan, trois bâtiments.
+  // `economie.residus` étant un tableau PARALLÈLE, l'état devenait incohérent et
+  // `verifierEtat` refusait la sauvegarde — « 19 résidus pour 16 bâtiments », un
+  // message qui parle d'économie pour une faute de migration.
+  //
+  // ⚠ LE MONTAGE DÉPLACE LA BASE, et c'est tout ce qui manquait pour voir la
+  // faute : les montages de migration d'alors posaient tous sur une base neuve,
+  // où `fondation` et `position` coïncident.
+  const etat = creerEtat(7);
+  const base = baseCourante(etat);
+  let poses = 0;
+  for (const k of base.champs.cases) {
+    if (poses >= 3) break;
+    const id = k.ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie';
+    try { poser(etat, id, k.rangee, k.colonne); poses += 1; } catch { /* case prise */ }
+  }
+  assert.ok(poses >= 2, 'le montage ne pose pas assez de collecteurs');
+
+  poserLaBaseSur(etat, base.position.rangee - 10, base.position.colonne);
+  assert.notDeepEqual(base.position, base.fondation,
+    'la base n\'a pas bougé : le montage ne mesure rien');
+
+  // La sauvegarde telle qu'une v28 l'écrivait : un seul identifiant.
+  const v28 = JSON.parse(serialiser(etat, 1_700_000_000_000));
+  v28.version = 28;
+  for (const b of v28.bases) {
+    b.disposition = b.disposition.map(
+      (x) => (x.id.startsWith('collecteur') ? { ...x, id: 'collecteur' } : x),
+    );
+  }
+  const avant = v28.bases[0].disposition.length;
+
+  const migre = migrer(structuredClone(v28));
+  // ⚠⚠ AUCUN BÂTIMENT PERDU — c'est la moitié qui a coûté une partie.
+  assert.equal(migre.bases[0].disposition.length, avant, 'la migration a perdu un bâtiment');
+  assert.equal(
+    migre.bases[0].economie.residus.length, migre.bases[0].disposition.length,
+    'les résidus et la disposition ont divergé : c\'est le défaut du 08/09',
+  );
+
+  // ⚠⚠ ET CHAQUE COLLECTEUR PORTE LA RESSOURCE DE SON VRAI CHAMP, celui de la
+  // FONDATION. Sans cette moitié, une migration qui garderait tout en mettant
+  // `collecteurQuartz` partout passerait la ligne du dessus.
+  for (const b of migre.bases[0].disposition) {
+    if (!b.id.startsWith('collecteur')) continue;
+    const ressource = ressourceDeLaCase(base.champs, b.rangee, b.colonne);
+    assert.equal(b.id, ressource === 'quartz' ? 'collecteurQuartz' : 'collecteurScorie',
+      `${b.id}@${b.rangee},${b.colonne} ne suit pas son champ (${ressource})`);
+  }
+
+  // Et la sauvegarde se charge, ce qui est la seule chose que le joueur voit.
+  assert.doesNotThrow(() => charger(JSON.stringify(v28), 1_700_000_000_000));
+});
+
+// ---------------------------------------------------------------------------
+// B4 T9 — aucune migration ne peut plus perdre un bâtiment en silence
+// ---------------------------------------------------------------------------
+
+test('B4 T9 — la garde refuse qu\'une migration jette un bâtiment', () => {
+  // ⚠⚠ LA GARDE EST STRUCTURELLE, ET ELLE VAUT POUR LES MIGRATIONS À VENIR.
+  // Celle du 08/09 s'est vue trois couches plus loin, dans `verifierEtat`, sous
+  // un message qui parlait d'économie. La prochaine se verra à sa source, avec
+  // le numéro du maillon fautif dans la phrase.
+  //
+  // ⚠ ON MESURE LA GARDE, PAS UNE MIGRATION TRUQUÉE. `MIGRATIONS` n'est pas
+  // exportée — et ne doit pas l'être : c'est une table interne, et un test qui
+  // la remplacerait laisserait une migration fausse derrière lui si une
+  // assertion tombait au mauvais moment.
+  assert.throws(() => exigerAucunePerte([16], [13], 28),
+    /la migration 28 → 29 a perdu 3 bâtiment\(s\) de la base 0/);
+  // C'est le compte exact du défaut d'Ethan : 16 bâtiments, 13 après.
+
+  // Ce qu'elle laisse passer, et c'est délibéré : autant, ou PLUS.
+  assert.doesNotThrow(() => exigerAucunePerte([16], [16], 28));
+  assert.doesNotThrow(() => exigerAucunePerte([16], [17], 28));
+  // Une base sans liste ne se compare pas — une v9 n'avait pas de `bases`.
+  assert.doesNotThrow(() => exigerAucunePerte([null], [3], 28));
+  assert.doesNotThrow(() => exigerAucunePerte([3], [null], 28));
+  // Plusieurs bases : la fautive est NOMMÉE, pas seulement comptée.
+  assert.throws(() => exigerAucunePerte([5, 9], [5, 8], 28), /de la base 1/);
 });
