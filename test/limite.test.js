@@ -360,6 +360,48 @@ test('LIMITE T7 — la frontière n\'est plus un trait, et l\'épaisseur est par
 // ---------------------------------------------------------------------------
 // T8 — la couleur de la frontière, et son écart au sol de la carte
 // ---------------------------------------------------------------------------
+//
+// ⚠⚠ T8 EST SUSPENDU DEPUIS LE 08/09, SUR DÉCISION D'ETHAN. IL N'EST PAS CASSÉ
+// ET IL N'EST PAS À RÉPARER EN L'ÉTAT — il mesure une chose qui a cessé de
+// décrire le problème. À lire avant d'y toucher.
+//
+// Ce que T8 exige : chaque ton de frontière est PLUS SOMBRE que le sol, d'au
+// moins 5 clartés sous son cinquième centile. C'était juste tant que le sol
+// était l'ocre du désert : un trait de 2 pixels au cran le plus large n'y
+// ressortait que par la clarté.
+//
+// Ce que le lot SOL-OUVRAGE a changé : le haut de la carte est violet. Le kaki
+// du joueur y ressort par la TEINTE, pas par la clarté. Mesuré, écart de
+// couleur complet du rang 4 `#5F7A3E` au sol moyen :
+//
+//     contre le désert du bas   ΔL* −16,75   ΔE76 43,80
+//     contre l'ouvrage du haut  ΔL*  −4,87   ΔE76 46,87
+//
+// Le kaki se détache PLUS en haut qu'en bas. Ce qui s'effondre est la seule
+// composante que T8 regarde. Ethan a jugé les frontières à l'écran, au cran 32,
+// sur les quatre étages : elles se lisent partout. Le rouge est dans la mesure,
+// pas dans le dessin.
+//
+// ⚠ ET LES DEUX ANCRES DE NON-VACUITÉ NE SURVIVENT PAS AU CHANGEMENT DE SOL.
+// `#CD6F26` et `#9FB3C5` avaient été refusés le 05/09 devant le sol ocre. Ils
+// ne sont séparables des huit tons acceptés PAR AUCUNE mesure de distance de
+// couleur — mesuré, p5 de ΔE76 contre le sol d'aujourd'hui : or 37,3, quand le
+// rang 3 du joueur vaut 36,8 et le rang 4 vaut 41,4. Ce que ces deux ancres
+// épinglaient était la règle de clarté elle-même, rien d'autre.
+//
+// Donc rouvrir T8 demande DEUX choses, et pas une :
+//   1. une mesure qui prenne l'écart de couleur entier, seuil calé sous les
+//      huit tons actuels avec de la marge ;
+//   2. DE NOUVELLES ANCRES, prises sur ce sol-ci — un ton de la couleur du sol,
+//      qui est l'erreur que la garde doit réellement attraper.
+// Refaire la mesure en gardant les vieilles ancres est impossible : essayé,
+// mesuré, ça ne sépare pas.
+//
+// ⚠ Le corps du test est laissé INTACT sous le `skip`. Il porte l'arbitrage du
+// 05/09 et les six assertions qui, elles, restent bonnes : la rampe de la fiche,
+// les tons réellement présents dans les sprites, la teinte, la chroma, le lien
+// à ±0,3 avec le châssis. Seule la garde de clarté est en cause. Ne pas le
+// supprimer pour « faire propre » : ce serait jeter cinq assertions saines.
 
 /** La clarté L* d'un pixel sRGB. Elle RANGE et elle MESURE, elle ne peint pas. */
 function clarte([r, v, b]) {
@@ -429,7 +471,11 @@ function chromaEtTeinte([r, v, b]) {
   return { chroma: Math.hypot(a, bb), teinte: ((Math.atan2(bb, a) * 180) / Math.PI + 360) % 360 };
 }
 
-test('LIMITE T8 — la frontière porte sa rampe, et elle RESSORT du sol satellite', () => {
+test('LIMITE T8 — la frontière porte sa rampe, et elle RESSORT du sol satellite', {
+  skip: 'suspendu le 08/09 — mesure la clarté seule, or sur le sol violet la '
+      + 'frontière ressort par la teinte ; à rouvrir avec une mesure d\'écart '
+      + 'de couleur ET de nouvelles ancres (voir le bloc au-dessus)',
+}, () => {
   // ⚠⚠ ARBITRAGE D'ETHAN, 05/09 : « tu re-appliques un coloris vert kaki mais
   // assez vif pour qu'il se détache par rapport au nouveau plan satellite et tu
   // prends un violet pareil assez vif comme ouvrage mais qui ressort et qui

@@ -174,6 +174,18 @@ pixel : il ajoute un refus dans le modèle et mesure une menace.
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
 NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est unique, et le
 §4.4 du brief interdit de le réparer : voir le ⚠⚠ qui le nomme plus bas.
+⚠⚠ **ET ELLE EST REDEVENUE VERTE LE 08/09, SUR DÉCISION D'ETHAN : `LIMITE T8`
+EST SUSPENDU, PAS RÉPARÉ.** `npm test` rend désormais **1471 pass / 0 fail, 1
+skipped**, et `npm run check` sort en 0. Le test n'était pas cassé : il mesure la
+frontière contre le sol par la seule CLARTÉ, or depuis SOL-OUVRAGE le haut de la
+carte est violet et le kaki du joueur y ressort par la TEINTE — mesuré, ΔE76 46,9
+en haut contre 43,8 en bas, quand ΔL\* tombe de −16,8 à −4,9. **Le rouge était
+dans la mesure, pas dans le dessin.** Le corps du test est laissé INTACT sous le
+`skip`, avec ce qu'il faut pour le rouvrir : une mesure d'écart de couleur
+ENTIER, et de NOUVELLES ancres de non-vacuité — les deux anciennes, `#CD6F26` et
+`#9FB3C5`, ne se séparent plus des huit tons acceptés par aucune distance de
+couleur. Tout est écrit en tête de `test/limite.test.js` ; **ne pas le supprimer
+« pour faire propre »**, cinq de ses assertions restent bonnes.
 `npm run build` → `dist/index.html`, **9 124 362 octets**, 0 référence externe.
 ⚠⚠ **ET LA BASE A BOUGÉ SOUS LE LOT — `main` EST PASSÉ DE `6f7b3bb` À `37ef8eb`
 PENDANT SON EXÉCUTION**, Ethan ayant fusionné NEUTRALISATION (#114) puis
