@@ -3415,3 +3415,72 @@ export const EMPREINTES_PAR_GRAINE_QUATRE_ETATS = {
  * et la somme reste lisible ligne par ligne.
  */
 export const OCTETS_AJOUTES_PAR_QUATRE_ETATS = 12;
+
+/**
+ * QUINZIÈME COUCHE — lot NEUTRALISATION, 08/09/2026, ET LA PLUS ÉTROITE DE
+ * TOUTES : **DEUX couples sur 308**, et **UNE graine sur vingt-cinq**.
+ *
+ * ⚠⚠ ELLE NE PORTE QUE `rapports`, ET SEULEMENT AUX DEUX PHASES OÙ L'OUVRAGE
+ * ATTAQUE. Le §6 arme les modules d'OFFENSE de l'Ouvrage — jusqu'ici
+ * `montageDeLaBaseDuJoueur` posait `ouvrage: { offense: [] }` en dur —, donc ce
+ * qui peut bouger est l'issue d'un raid SUBI, et rien d'autre. `economie`,
+ * `disposition`, `garnison`, `armee`, `sitesEntames`, `poisAcquis`,
+ * `satellites`, `basesRasees` et les treize autres champs tombent à l'octet sur
+ * la capture d'origine ou sur la couche qui les portait déjà.
+ *
+ * ⚠⚠ ET L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE. Le scénario plante sa base
+ * rangée 200, où `niveauDeLaRangee` vaut **20** : les bases attaquantes sont
+ * donc autour du PREMIER palier de `modulesOuvrageOffenseAu`, celui du
+ * Flashbang. Vingt-quatre graines sur vingt-cinq ne voient rien changer — il
+ * faut qu'une Meute soit tirée dans la vague ET qu'une infanterie du joueur
+ * soit à sa portée. En remettant `offense: []` à la seule ligne du §6,
+ * `test/bases.test.js` repasse **31 pass / 0 fail**, la suite entière comprise.
+ *
+ * ⚠ LES SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT, le premier raid MENÉ par
+ * le joueur compris — et `p11_raidOuvrageApres` aussi : sur les vingt-cinq
+ * graines, le raid de cette phase-là ne porte aucune Meute armée.
+ */
+export const DEPLACES_PAR_NEUTRALISATION = {
+  p13_apresLeRaid: {
+    rapports: 'e54ba003ea1bc5aa',
+  },
+  p14_sousLeFeu: {
+    rapports: 'aa8915bd5cb8c64d',
+  },
+};
+
+/**
+ * Les vingt-cinq empreintes de graine après NEUTRALISATION.
+ *
+ * ⚠ VINGT-QUATRE SONT IDENTIQUES À CELLES DE BÂTIMENTS-QUATRE-ÉTATS, ET LA
+ * VINGT-CINQUIÈME EST LA GRAINE 6. Le bloc est recopié en entier parce que
+ * c'est la couche la plus récente qui fait foi ; la moitié qui prouve est celle
+ * qui NE bouge PAS.
+ */
+export const EMPREINTES_PAR_GRAINE_NEUTRALISATION = {
+  1: '756a5b25231e3890',
+  2: 'cac165e55fd0aced',
+  3: 'efa90125920867b2',
+  4: '1d393acbd5d86d56',
+  5: '885128cee867bd9c',
+  6: '71b39c96e210cd2f',
+  7: 'fb8d14674ef65ddb',
+  8: '502f96879d3d82db',
+  9: '358451aef3729e6e',
+  10: '7b091a6cc4fac904',
+  11: '38d09853285fd481',
+  12: '88e509202eea56d9',
+  13: '4987fa07186b2e35',
+  14: 'c9be9ee4ddf1bff4',
+  15: '7ada3fb04781eea3',
+  16: 'ff998992ec29aa0f',
+  17: '74938aa25aba757e',
+  18: 'd47eb365880a9754',
+  19: '7bc9d6aba6fc41d6',
+  20: 'af0c75025e3c9552',
+  21: '2343044cd4e67ec8',
+  22: 'ef5d9ba6f15ad4e5',
+  23: '2537e940124fc06f',
+  24: 'ea9ca6ba3a451d66',
+  25: '603bc3841d72edba',
+};

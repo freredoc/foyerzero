@@ -87,7 +87,8 @@ import {
   DEPLACES_PAR_CIBLES_RANGEES, EMPREINTES_PAR_GRAINE_CIBLES_RANGEES,
   DEPLACES_PAR_TERRITOIRE_LU, EMPREINTES_PAR_GRAINE_TERRITOIRE_LU,
   DEPLACES_PAR_RETOUCHES, EMPREINTES_PAR_GRAINE_RETOUCHES,
-  DEPLACES_PAR_QUATRE_ETATS, EMPREINTES_PAR_GRAINE_QUATRE_ETATS,
+  DEPLACES_PAR_QUATRE_ETATS,
+  DEPLACES_PAR_NEUTRALISATION, EMPREINTES_PAR_GRAINE_NEUTRALISATION,
   OCTETS_AJOUTES_PAR_QUATRE_ETATS,
   RAPPORTS_PROCHE_RETOUCHES, RAPPORTS_OUVRAGE_RETOUCHES, CIBLE_PROCHE_RETOUCHES,
   RAPPORTS_OUVRAGE_TERRITOIRE_LU,
@@ -156,7 +157,13 @@ function empreinteAttendue(phase, champ) {
   // identifiants au lieu d'un, et rien d'autre ne bouge. Les vingt et un autres
   // champs tombent à l'octet sur la capture d'origine — c'est ce qui prouve que
   // le dédoublement est un RENOMMAGE et pas un changement de règle.
-  return DEPLACES_PAR_QUATRE_ETATS[phase]?.[champ]
+  // ⚠⚠ QUINZIÈME COUCHE, ET ELLE EST ENCORE PLUS ÉTROITE QUE LA QUATORZIÈME —
+  // lot NEUTRALISATION, 08/09. **DEUX couples**, tous deux sur `rapports`, aux
+  // deux phases où l'Ouvrage attaque : le §6 arme ses modules d'offense, donc
+  // seule l'issue d'un raid SUBI peut bouger. Attribution mesurée — en remettant
+  // `offense: []` à la seule ligne du §6, ce fichier repasse entièrement vert.
+  return DEPLACES_PAR_NEUTRALISATION[phase]?.[champ]
+    ?? DEPLACES_PAR_QUATRE_ETATS[phase]?.[champ]
     ?? DEPLACES_PAR_RETOUCHES[phase]?.[champ]
     ?? DEPLACES_PAR_TERRITOIRE_LU[phase]?.[champ]
     ?? DEPLACES_PAR_CIBLES_RANGEES[phase]?.[champ]
@@ -531,8 +538,11 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
       ).join('')).join(''),
     );
     // ⚠ LA COUCHE LA PLUS RÉCENTE FAIT FOI, comme pour `empreinteAttendue` :
-    // BÂTIMENTS-QUATRE-ÉTATS déplace la disposition, donc les vingt-cinq graines.
-    if (obtenue !== EMPREINTES_PAR_GRAINE_QUATRE_ETATS[g]) ecarts.push(g);
+    // BÂTIMENTS-QUATRE-ÉTATS déplaçait la disposition, donc les vingt-cinq
+    // graines ; NEUTRALISATION n'en déplace qu'UNE, la 6 — les vingt-quatre
+    // autres empreintes sont identiques d'une couche à l'autre, et c'est cette
+    // moitié-là qui prouve que le §6 ne fuit pas hors du raid subi.
+    if (obtenue !== EMPREINTES_PAR_GRAINE_NEUTRALISATION[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.32 · build 134.
+Dernière révision : **08/09/2026**, version 0.99.33 · build 135.
 
 ---
 
@@ -42,7 +42,125 @@ Dernière révision : **08/09/2026**, version 0.99.32 · build 134.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot FORMATION-ET-GARNISON), à confronter :**
+**Référence au 08/09/2026 (après le lot NEUTRALISATION), à confronter :**
+`npm test` → **1455 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 654 729 octets**, 0 référence externe. Coût **+293 octets**, ENTIÈREMENT DU
+JAVASCRIPT, mesuré poste par poste contre un livrable rebâti dans un
+`git worktree` depuis `6f7b3bb` : **JavaScript +293 · feuille +0 · balisage +0 ·
+images +0 · audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le
+total — **297 lignes `data:` avant, 297 après**. Borne T10 inchangée à
+9 300 000, marge **645 271 octets, 6,94 %**.
+⚠⚠ **CINQ POINTS OUVERTS SE FERMENT, UN SIXIÈME SE CONSERVE, ET C'EST ETHAN QUI
+L'A DEMANDÉ.** 08/09 : « il faut tout résoudre » pour le retour au joueur, « c'est
+pareil » pour la cible déjà neutralisée, « il faut le résoudre » pour l'Ouvrage
+armé en offense, « il faut l'implanter » pour la ligne défense, et surtout **« il
+faut neutraliser non seulement le tir, mais aussi le déplacement »**. Le sixième
+— un porteur neutralisé qui déclenche quand même — se GARDE : « non, on s'en
+fiche justement, ça c'est bien. Il faut le garder comme ça. »
+⚠⚠ **LA GARDE DU DÉPLACEMENT EST EN TÊTE DE `deplacement`, ET SA POSITION EST CE
+QUI EMPÊCHE L'EMP DE SUPPRIMER UNE UNITÉ.** La neutralisation dure
+`NEUTRALISATION_TICKS` (50), le repli se déclenche à `TICKS_AVANT_REPLI` (30) :
+une unité qui entre dans `avancer` sans avancer, sans tirer et sans rien forcer
+y voit `ticksInutiles` monter et **quitte le champ au trentième tick**. En
+sortant avant, `avancer` n'est jamais appelée et l'unité repart au 51ᵉ tick.
+⚠⚠ **ET LA FALSIFICATION QUI LE PROUVE A DÛ ÊTRE REPRISE — LE BRIEF DÉCRIVAIT
+LA FAUTE PLUS LARGEMENT QU'ELLE NE L'EST.** Un `return` posé en TÊTE d'`avancer`
+sort AVANT la comptabilité du repli : `ticksInutiles` ne monte pas, et
+`NEUT T2` reste vert. La faute n'est atteignable que si la garde rend
+`progresse` FAUX — `!arrete && !estNeutralisee(e) && peutAvancer(…)` —, et
+là `NEUT T1`, `T2`, `T3`, `T7` et `T12` tombent ensemble. **Ce n'est pas « dans
+`avancer` » qui tue, c'est « dans le calcul de `progresse` ».**
+⚠ **ET LA MÊME LIGNE SERT LES DEUX CAMPS GRATUITEMENT** : la boucle route la
+défense vers `seDecaler` depuis le lot COLONNE, donc une défenseuse neutralisée
+cesse aussi de se décaler — `NEUT T3` le mesure contre un contre-montage sans le
+module, où la même pièce continue de bouger aux mêmes ticks.
+⚠⚠ **UNE CIBLE DÉJÀ NEUTRALISÉE EST SAUTÉE DANS LA RECHERCHE, PAS DANS LE
+DÉCLENCHEUR, ET C'EST TOUTE LA DIFFÉRENCE.** Dans le déclencheur, un porteur dont
+la plus proche est marquée passerait son tour ; dans `cibleDeNeutralisation`, il
+en trouve une AUTRE s'il y en a une, et sinon `cible === null` — donc il ne
+consomme pas son usage. `NEUT T4` monte les deux cas dans le même test.
+⚠⚠ **CONSÉQUENCE MESURÉE : AUCUNE ENTITÉ NE PORTE PLUS DEUX EFFETS, ET
+`MODULES-B T15` EST RETOURNÉ.** Il figeait l'empilement comme un fait constaté —
+« le `.some()` d'`estNeutralisee` fait que le plus long l'emporte » ; c'est
+exactement le doublon qu'Ethan fait fermer. Le test mesure désormais la règle
+neuve, et sa moitié qui compte est que le second porteur garde son usage.
+⚠⚠ **`moduleDuCamp` EST EXTRAIT, ET SANS LUI LA LIGNE DÉFENSE N'AURAIT MARCHÉ
+QU'À MOITIÉ — LA MOITIÉ QUI MARCHE MASQUANT L'AUTRE.** Le déclencheur lisait
+`p.module`, le module d'ATTAQUE. La Meute et le Bélier portent le Flashbang des
+deux côtés, donc tout aurait paru fonctionner ; la Carapace porte `booster` et
+le Fendeur `ecraseur`, si bien que `NEUTRALISATION[p.module]` valait `undefined`
+et que **deux des quatre lignes vendues seraient restées inertes**. `NEUT T5`
+monte les trois pièces, et la passe Meute est là pour prouver que l'extraction
+SERT — elle passerait quand même.
+⚠⚠ **`flashbang.cable.defense` ET `emp.cable.defense` PASSENT À `true`, ET LE
+PRIX NE BOUGE PAS D'UN POINT.** `data/recherche.js` portait déjà les quatre
+lignes ; c'est `effetNonCable` qui refusait la vente. **Les lignes non câblées
+tombent de 6 à 2**, et les deux qui restent sont en défense : le Tir de barrage
+des Perceurs et la Garnison de l'Éclaireur.
+⚠⚠ **LES DEUX CENTS TÉMOINS DE COMBAT SONT VERTS SANS AVOIR ÉTÉ RÉGÉNÉRÉS**, et
+`test/temoins-combat.js` n'a pas une ligne de changée. `NEUT T13` en donne la
+raison MESURÉE : aucun des quatre porteurs ne porte le Flashbang ni l'EMP côté
+Ouvrage, et aucune des neuf `DEFENSES` non plus — ouvrir la boucle n'arme donc
+que la garnison du JOUEUR, qui n'apparaît que dans `raid-ouvrage`.
+⚠ **ET LE BRIEF SE TROMPAIT SUR UN DES QUATRE** : il annonce `moduleOuvrage`
+« `null` sur la Meute, le Bélier, la Carapace et le Fendeur ». **Mesuré : la
+Carapace porte `camouflage`.** La conclusion tient — ce qui compte est que le
+champ ne vaille NI l'un NI l'autre —, et le test mesure la propriété plutôt que
+la phrase.
+⚠⚠ **`modulesOuvrageOffenseAu` VIT DANS `raid-ouvrage.js`, ET `genererSite` N'A
+PAS UNE LIGNE DE CHANGÉE.** Dans un raid sur un SITE, l'Ouvrage est le
+DÉFENSEUR : sa liste d'offense n'y a personne pour la lire. Le seul chemin où il
+ATTAQUE est `subirUnRaid`. `NEUT T10` est le garde-fou qui le dit avant les
+témoins, et `NEUT T9` mesure la BRANCHE — la même liste versée dans `defense` ne
+fait rien.
+⚠⚠ **LE §6.3 EST MESURÉ EN TROIS PASSES, DANS L'ORDRE, ET LA DEUXIÈME EST
+IDENTIQUE À LA PREMIÈRE À L'OCTET.** Six graines × cinq rangées (250, 200, 150,
+100, 50) × 24 h : **502 raids** avant. Après les §2 à §5 : **502 raids, mêmes
+empreintes sur les trente lignes** — la neutralisation ne mord dans
+`raid-ouvrage` que si un module y est armé, et aucun ne l'est encore. Après le
+§6 : **461 raids** (−8,2 %), victoires totales **255 → 216**, restantDefense
+**74,48 → 66,61**, restantBatiments **76,32 → 68,99**, rasés 177 → 178. ⚠ **La
+rangée 250 (niveau 10) ne bouge pas d'une empreinte** : le premier palier est à
+20, et c'est ce qui attribue l'écart au §6 par construction.
+⚠⚠ **LE TÉMOIN DE BASES-0 BOUGE DE DEUX COUPLES SUR 308, ET D'UNE SEULE GRAINE
+SUR VINGT-CINQ.** `rapports` aux phases 13 et 14, les deux seules où l'Ouvrage
+attaque ; **les vingt et un autres champs tombent à l'octet**. Attribution
+mesurée : en remettant `offense: []` à la seule ligne du §6, `bases.test.js`
+repasse 31 pass / 0 fail. Le scénario plante sa base rangée 200, où le niveau
+vaut 20 — donc au PREMIER palier, celui du Flashbang.
+⚠ **LA GARNISON ENTRE DANS LA LISTE DE L'OUVRAGE ET Y RESTE INERTE, DÉCLARÉ.**
+`genererVague` compose une vague PLATE et ne sait pas embarquer. **Ne pas écrire
+un cas particulier pour l'exclure** — ce serait la première ligne écrite à la
+main dans une liste qui se lit, et `NEUT T8` fait tomber celui qui l'écrirait.
+⚠ **LE SIXIÈME CANAL DU JOURNAL EST MUET CÔTÉ SON, ET C'EST ÉCRIT DANS
+`evenementsDuJournal`.** Les 263 entrées de `data/sons.js` ne portent ni
+brouillage ni arrêt d'unité : en fabriquer un demande un master WAV, donc un lot
+d'ASSETS. `SAVE_VERSION` ne bouge pas — le journal est remis à zéro à l'étape 0.
+⚠ **LE CADRE DE NEUTRALISATION NE COÛTE AUCUN ACTIF** : `cadre` est une
+primitive de `canvas2d.js` et `PALETTE.metalClair` est dans la palette close.
+Le rendu APPELLE `estNeutralisee`, il ne la réécrit pas — `NEUT T12` interdit
+tout `effetsTemporises` dans `render/scene.js`.
+⚠⚠ **QUATORZE FALSIFICATIONS, QUATORZE CHUTES, ZÉRO MUETTE**, et l'une d'elles a
+dû être reprise avant d'être crue — voir le paragraphe sur `progresse` ci-dessus.
+⚠ **SEPT TESTS EXISTANTS CHANGENT DE VALEUR OU DE CIBLE, ET AUCUN NE
+S'ASSOUPLIT.** `T11`, `MODULES-A T9`, `MODULES-B T13` et `MODULES-C T10`
+remesurent le drapeau ; `T15` et `RECH-É T5` changent de LIGNE témoin — la Meute
+en défense s'achète désormais, le témoin passe au Tir de barrage des Perceurs,
+dont la pièce n'est PAS gratuite et doit donc être achetée pour que le refus
+d'effet ne soit pas noyé ; `MODULES-B T15` est RETOURNÉ.
+⚠ **QUATORZE TESTS ENTRENT — `NEUT T1` à `T13`, plus `T7 bis` — ET LE COMPTE
+PASSE DE 1 441 À 1 455.**
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — aucun fichier d'`art/` n'apparaît
+au diff.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE DÉCLARE
+NON EXÉCUTÉ.** Le cadre de neutralisation est mesuré par la LISTE D'AFFICHAGE,
+jamais à l'écran.
+⚠ **ET LA BASE ANNONCÉE PAR LE BRIEF ÉTAIT EXACTE, DEUXIÈME FOIS DU DÉPÔT** :
+`main` à `6f7b3bb`, 1 441 pass, 8 654 436 octets, 297 lignes `data:`, et les
+treize ancres présentes et UNIQUES, vérifiées une par une avant d'écrire.
+
+**Auparavant, après le lot FORMATION-ET-GARNISON :**
 `npm test` → **1441 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 654 436 octets**, 0 référence externe. Coût **+7 118 octets**, mesuré poste
 par poste contre un livrable rebâti dans un `git worktree` depuis `e97fb72` :

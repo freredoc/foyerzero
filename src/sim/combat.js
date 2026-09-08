@@ -1057,10 +1057,19 @@ function obtenirIndexObstacles(etat) {
 // pas atteindre l'état. C'est la seule façon dont ce journal pourrait changer un
 // résultat, et elle est fermée ici.
 
-/** Le journal d'un tick, vide. Cinq listes, et rien qui vive plus d'un tick. */
+/**
+ * Le journal d'un tick, vide. SIX listes, et rien qui vive plus d'un tick.
+ *
+ * ⚠⚠ LE SIXIÈME CANAL ENTRE AU LOT NEUTRALISATION, 08/09/2026, ET IL NE COÛTE
+ * RIEN À LA SAUVEGARDE. `etat.journal` est remis à zéro en TÊTE de `tick`,
+ * étape 0 : il ne traverse ni `serialiser` ni une migration, et `SAVE_VERSION`
+ * ne bouge pas. C'est la même raison qui rend les deux cents témoins de combat
+ * insensibles à cette ligne — leur empreinte d'état écarte `journal`.
+ */
 function journalVide() {
   return {
     apparitions: [], vagues: [], tirs: [], impacts: [], destructions: [],
+    neutralisations: [],
   };
 }
 
@@ -1378,8 +1387,17 @@ const PV_PLUS_VINGT_PCT = 20;
 const NEUTRALISATION_TICKS = 50;
 const NEUTRALISATION_PENALITE_PCT = 20;
 
-/** L'entité est-elle désactivée en ce moment ? */
-function estNeutralisee(e) {
+/**
+ * L'entité est-elle désactivée en ce moment ?
+ *
+ * ⚠⚠ EXPORTÉE AU LOT NEUTRALISATION, 08/09/2026, ET `render/scene.js` L'APPELLE
+ * — il ne la réécrit pas. Retester `effetsTemporises` à la main dans le rendu
+ * ferait DEUX vérités pour une question, et c'est le rendu qui divergerait le
+ * jour où l'effet changerait de nom, sans que rien ne le dise. La couche est
+ * admise : `render/scene.js` importe déjà `sim/rendu-pose.js` et `sim/grille.js`,
+ * et `combat.js` n'importe rien de `render/` — il n'y a donc pas de cycle.
+ */
+export function estNeutralisee(e) {
   return e.effetsTemporises.some((f) => f.nom === 'neutralise');
 }
 
@@ -1420,6 +1438,17 @@ function ticksDeNeutralisation(porteur, cible) {
  * colonne, puis rangée. Un autre ordre rendrait le résultat dépendant de
  * l'ordre d'itération, et le test de déterminisme ne le dirait pas : les deux
  * résolutions seraient stables et fausses de la même façon.
+ *
+ * ⚠⚠ UNE CIBLE DÉJÀ NEUTRALISÉE EST SAUTÉE ICI, ET PAS DANS LE DÉCLENCHEUR —
+ * lot NEUTRALISATION, 08/09/2026. Ethan, sur le doublon : « c'est pareil », à
+ * résoudre. Le filtre est dans la RECHERCHE parce que c'est la seule position
+ * qui laisse le porteur en viser une AUTRE : mis dans
+ * `declencherNeutralisations`, un porteur dont la plus proche est déjà marquée
+ * passerait son tour alors qu'une seconde cible l'attend deux cases plus loin.
+ * Et s'il n'en trouve aucune, `cible === null` — donc il ne consomme pas son
+ * usage et retentera au tick suivant, exactement comme le fait déjà la garde
+ * « une durée nulle ne consomme pas l'usage » quelques lignes plus bas. Les deux
+ * doivent se comporter pareil ; `NEUT T3` et `NEUT T4` les mesurent ensemble.
  */
 function cibleDeNeutralisation(etat, e, p, colonneVisee) {
   let meilleur = null;
@@ -1428,6 +1457,7 @@ function cibleDeNeutralisation(etat, e, p, colonneVisee) {
   let meilleureRangee = 0;
   for (const c of etat.entites) {
     if (c.camp === e.camp || !estActive(c)) continue;
+    if (estNeutralisee(c)) continue;
     if (profil(c).colonneMatrice !== colonneVisee) continue;
     const d2 = distanceCarreeMilli(
       e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
@@ -1465,21 +1495,48 @@ function cibleDeNeutralisation(etat, e, p, colonneVisee) {
  *
  * ⚠ LA MARQUE N'EST JAMAIS RETIRÉE, exactement comme le Booster : « une seule
  * fois par raid » = une fois par combat et par entité.
+ *
+ * ⚠⚠ LA BOUCLE BALAIE LES DEUX CAMPS DEPUIS LE LOT NEUTRALISATION, 08/09/2026.
+ * Ethan : « la ligne défense, il faut l'implanter. » Elle portait
+ * `e.camp !== 'attaque'` depuis MODULES-B, si bien que les quatre lignes de
+ * défense du Flashbang et de l'EMP étaient EN VENTE et inertes. Le module se lit
+ * désormais par `moduleDuCamp` — voir le paragraphe de cette fonction-là, c'est
+ * elle qui empêche la moitié qui marche de masquer l'autre.
+ *
+ * ⚠⚠ ET UN PORTEUR NEUTRALISÉ GARDE LE DROIT DE DÉCLENCHER SON MODULE. La garde
+ * `estNeutralisee` est dans `tir`, elle n'entre PAS ici, et c'est une DÉCISION,
+ * pas un reste : Ethan, 08/09, sur ce point exact — « non, on s'en fiche
+ * justement, ça c'est bien. Il faut le garder comme ça. » Jusqu'à ce lot le cas
+ * était inatteignable, aucun défenseur ne neutralisant personne ; il devient
+ * atteignable à la ligne du dessus, donc il s'écrit. Deux porteurs adverses qui
+ * se voient se neutralisent mutuellement au même tick — la simultanéité
+ * normative du moteur —, et `NEUT T7` l'asserte pour qu'on ne la « corrige » pas
+ * un jour en croyant réparer un oubli.
  */
 function declencherNeutralisations(etat) {
   for (const e of etat.entites) {
-    if (e.camp !== 'attaque' || !estActive(e)) continue;
+    if (!estActive(e)) continue;
     const p = profil(e);
-    const colonneVisee = NEUTRALISATION[p.module];
+    const porte = moduleDuCamp(e, p);
+    const colonneVisee = NEUTRALISATION[porte];
     if (colonneVisee === undefined) continue;
-    if (e.modulesActifs.includes(p.module)) continue;
-    if (!moduleActif(etat, e, p, p.module)) continue;
+    if (e.modulesActifs.includes(porte)) continue;
+    if (!moduleActif(etat, e, p, porte)) continue;
     const cible = cibleDeNeutralisation(etat, e, p, colonneVisee);
     if (cible === null) continue;
     const ticks = ticksDeNeutralisation(e, cible);
     if (ticks === 0) continue;
     cible.effetsTemporises.push({ nom: 'neutralise', finTick: etat.tick + ticks });
-    e.modulesActifs.push(p.module);
+    // ⚠ APRÈS LA GARDE `ticks === 0`, JAMAIS AVANT. Une neutralisation de durée
+    // nulle n'a pas lieu — le porteur ne consomme même pas son usage : la
+    // journaliser ferait clignoter un cadre pour rien.
+    // ⚠ `faitDeLEntite` PORTE DÉJÀ `proprietaire`, donc le canal dit de quel
+    // côté est la neutralisée sans qu'on ajoute un champ — ce qui servira le
+    // jour où un son de brouillage entrera au catalogue.
+    etat.journal.neutralisations.push({
+      ...faitDeLEntite(cible), porteur: e.indice, ticks,
+    });
+    e.modulesActifs.push(porte);
   }
 }
 
@@ -2039,6 +2096,25 @@ function moduleDeDefense(e, p) {
 }
 
 /**
+ * Le module que cette entité emploie DANS LE CAMP OÙ ELLE SE BAT.
+ *
+ * ⚠⚠⚠ EXTRAITE DE `moduleActif` AU LOT NEUTRALISATION, 08/09/2026, ET
+ * `declencherNeutralisations` L'APPELLE AUSSI — sans quoi la ligne défense ne
+ * marcherait QU'À MOITIÉ, et la moitié qui marche masquerait l'autre. Le
+ * déclencheur lisait `p.module`, c'est-à-dire le module d'ATTAQUE de la pièce.
+ * Pour la Meute et le Bélier, le module d'attaque et celui de défense sont tous
+ * deux le Flashbang : ouvrir la boucle à la défense les armerait, et tout
+ * paraîtrait fonctionner. Pour la Carapace et le Fendeur, `p.module` vaut
+ * `booster` et `ecraseur` — leur EMP est sur la ligne de DÉFENSE.
+ * `NEUTRALISATION['booster']` vaut `undefined`, donc `continue` : **deux des
+ * quatre lignes vendues auraient été inertes**, ce qui est très exactement le
+ * défaut que ce lot ferme. `NEUT T5` tombe si l'appel redevient `p.module`.
+ */
+function moduleDuCamp(e, p) {
+  return e.camp === 'attaque' ? p.module : moduleDeDefense(e, p);
+}
+
+/**
  * Le camp d'une entité, traduit en BRANCHE d'achat.
  *
  * ⚠⚠ `camp` ET `branche` NE PORTENT PAS LES MÊMES MOTS, ET C'EST TOUT L'INTÉRÊT
@@ -2179,7 +2255,7 @@ function majorationPoi(etat, e, p) {
  * la garnison, dont la ligne de défense n'est même pas en vente.
  */
 function moduleActif(etat, e, p, nom) {
-  const porte = e.camp === 'attaque' ? p.module : moduleDeDefense(e, p);
+  const porte = moduleDuCamp(e, p);
   if (porte !== nom) return false;
   const liste = etat.modulesDebloques?.[e.proprietaire]?.[BRANCHE_DU_CAMP[e.camp]];
   return Array.isArray(liste) && liste.includes(nom);
@@ -2318,6 +2394,24 @@ function deplacement(etat) {
 
   for (const e of etat.entites) {
     if (!estActive(e)) continue;
+    // ⚠⚠⚠ ICI, ET SURTOUT PAS DANS `avancer` — lot NEUTRALISATION, 08/09/2026.
+    // Ethan : « il faut neutraliser non seulement le tir, mais aussi le
+    // déplacement. » La position de cette ligne est ce qui empêche l'EMP de
+    // RETIRER un blindé du raid pour de bon : la neutralisation dure
+    // `NEUTRALISATION_TICKS` (50) et le repli se déclenche à
+    // `TICKS_AVANT_REPLI` (30). Une unité qui entre dans `avancer` sans avancer,
+    // sans tirer et sans rien forcer y voit `ticksInutiles` monter — au trentième
+    // tick de l'effet elle QUITTE LE CHAMP définitivement et compte parmi les
+    // survivantes. Un module annoncé « désactive 5 s » supprimerait donc
+    // l'unité. En sortant ici, `avancer` n'est jamais appelée, le compteur ne
+    // monte pas, et l'unité repart au 51ᵉ tick — ce que la description promet.
+    // `NEUT T2` monte les deux cas et tombe si la garde descend d'un cran.
+    //
+    // ⚠ ET ELLE SERT LES DEUX CAMPS GRATUITEMENT : la même boucle route la
+    // défense vers `seDecaler` depuis le lot COLONNE. Une défenseuse neutralisée
+    // cesse donc aussi de se décaler, ce que la ligne défense de ce lot-ci rend
+    // atteignable pour la première fois.
+    if (estNeutralisee(e)) continue;
     const p = profil(e);
     if (p.vitesseMilli === 0) continue;
     if (e.camp === 'attaque') avancer(etat, e, p, occupation, obstacles);
