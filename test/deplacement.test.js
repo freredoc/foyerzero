@@ -25,8 +25,10 @@ import { estSurLaCarte, niveauDeLaRangee, positionDepartJoueur } from '../src/si
 import { distanceCarreeCases } from '../src/sim/points-attaque.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
-import { DEPLACEMENT, GEOGRAPHIE, RAID_OUVRAGE } from '../src/data/sites.js';
-import { estBaseOuvrage } from '../src/sim/peuplement.js';
+import {
+  DEPLACEMENT, GEOGRAPHIE, RAID_OUVRAGE, ENCOMBREMENT_DES_BASES,
+} from '../src/data/sites.js';
+import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
 import { caseRasee } from '../src/sim/ruines.js';
 import { GRILLE } from '../src/data/combat.js';
@@ -54,6 +56,34 @@ function partie(graine = 2026, rangee = 200) {
   return etat;
 }
 
+/**
+ * La même, mais avec de la PLACE — lot VOISINAGE-ET-MENACE, 08/09/2026.
+ *
+ * ⚠⚠ SANS ELLE, CES TESTS MESURERAIENT LA DENSITÉ DU PEUPLEMENT ET PLUS LE
+ * GESTE. Ethan a tranché le 08/09 : « aucune base joueur/ouvrage ne doit être
+ * côte à côte sur les 9 cases ». Or, mesuré au même lot, **0,3 % à 3 % des
+ * cases seulement ont un 3 × 3 libre de base de l'Ouvrage** passé la garde du
+ * départ — à la rangée 50, ZÉRO sur 290. Une partie posée en rangée 200 n'a
+ * donc presque aucune destination légale, et les sept tests ci-dessous, qui
+ * parlent de PORTÉE, de TERRAIN, de POI, d'ANNEAUX, de DÉLAI et de MIGRATION,
+ * tomberaient tous sur un rapport de force qu'aucun d'eux n'a choisi.
+ *
+ * ⚠ C'EST LE MOTIF DE `sansVoisinsOuvrage` DE `poi.test.js`, repris à la
+ * lettre : on rase le voisinage pour mesurer la FORME. Le rayon couvre le
+ * disque de déplacement PLUS l'encombrement, sans quoi la couronne du bord
+ * resterait refusée par une base juste au-delà.
+ */
+function partieDegagee(graine = 2026, rangee = 200) {
+  const etat = partie(graine, rangee);
+  const p = baseCourante(etat).position;
+  const rayon = DEPLACEMENT.porteeMaxCases + ENCOMBREMENT_DES_BASES.rayonCases;
+  for (const o of basesDeLaFenetre(etat.graine, {
+    premiereRangee: p.rangee - rayon, derniereRangee: p.rangee + rayon,
+    premiereColonne: p.colonne - rayon, derniereColonne: p.colonne + rayon,
+  })) etat.basesRasees.push(caseRasee(o.rangee, o.colonne));
+  return etat;
+}
+
 // ---------------------------------------------------------------------------
 // T1 — dix cases, en euclidien
 // ---------------------------------------------------------------------------
@@ -61,7 +91,7 @@ function partie(graine = 2026, rangee = 200) {
 test('DÉPLACEMENT T1 — dix cases en EUCLIDE : (10, 0) passe, (10, 10) est refusé', () => {
   assert.equal(DEPLACEMENT.porteeMaxCases, 10);
   assert.equal(PORTEE_CARREE, 100);
-  const etat = partie();
+  const etat = partieDegagee();
   const { rangee: r, colonne: c } = baseCourante(etat).position;
 
   assert.deepEqual(problemesDuDeplacement(etat, { rangee: r - 10, colonne: c }), []);
@@ -93,7 +123,7 @@ test('DÉPLACEMENT T1 — dix cases en EUCLIDE : (10, 0) passe, (10, 10) est ref
 // ---------------------------------------------------------------------------
 
 test('DÉPLACEMENT T2 — une destination hors carte est REFUSÉE, pas rabotée', () => {
-  const etat = partie(7, GEOGRAPHIE.carte.hauteur - 2);
+  const etat = partieDegagee(7, GEOGRAPHIE.carte.hauteur - 2);
   const hors = { rangee: GEOGRAPHIE.carte.hauteur + 3, colonne: baseCourante(etat).position.colonne };
   assert.equal(estSurLaCarte(hors.rangee, hors.colonne), false,
     'le montage ne mesure rien : la case est sur la carte');
@@ -114,7 +144,7 @@ test('DÉPLACEMENT T2 — une destination hors carte est REFUSÉE, pas rabotée'
       `(${k.rangee}, ${k.colonne}) est hors carte`);
   }
   // Et le montage mesure quelque chose : au bord, il en manque forcément.
-  const disque = casesAtteignables(partie(7, 150)).length;
+  const disque = casesAtteignables(partieDegagee(7, 150)).length;
   assert.ok(casesAtteignables(etat).length < disque,
     'au bord de la carte, la liste doit être rognée');
 });
@@ -206,6 +236,18 @@ test('DÉPLACEMENT T4 — après un déplacement, les POI de l\'arrivée sont ac
   const [depart, arrivee] = paire;
 
   const etat = creerEtat(graine);
+  // ⚠ ON DÉGAGE LES DEUX POI, ET SEULEMENT L'OUVRAGE — lot VOISINAGE-ET-MENACE.
+  // Un POI n'est pas une base et n'encombre rien ; ce qui empêcherait le
+  // déplacement est une base de l'Ouvrage collée à l'arrivée. Raser les bases
+  // du voisinage laisse les deux gisements intacts, donc mesure toujours le
+  // RELEVÉ et pas un rapport de force.
+  for (const k of [depart, arrivee]) {
+    const rayon = ENCOMBREMENT_DES_BASES.rayonCases + 1;
+    for (const o of basesDeLaFenetre(graine, {
+      premiereRangee: k.rangee - rayon, derniereRangee: k.rangee + rayon,
+      premiereColonne: k.colonne - rayon, derniereColonne: k.colonne + rayon,
+    })) etat.basesRasees.push(caseRasee(o.rangee, o.colonne));
+  }
   poserLaBaseSur(etat, depart.rangee, depart.colonne);
   const premiers = [...etat.poisAcquis];
   assert.ok(premiers.length > 0, 'le montage ne mesure rien : aucun POI sous la base de départ');
@@ -233,7 +275,7 @@ test('DÉPLACEMENT T4 — après un déplacement, les POI de l\'arrivée sont ac
 // ---------------------------------------------------------------------------
 
 test('DÉPLACEMENT T5 — le terrain ne suit pas la base, et aucun bâtiment ne bascule sur un obstacle', () => {
-  const etat = partie(2026, 200);
+  const etat = partieDegagee(2026, 200);
   // Une base réellement construite : sans bâtiments, « aucun ne bascule » ne
   // mesurerait rien.
   const pris = new Set(baseCourante(etat).obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
@@ -294,7 +336,7 @@ test('DÉPLACEMENT T6 — le rayon des anneaux de satellites suit la nouvelle ra
   // ⚠ LE RAYON D'UN ANNEAU SE LIT SUR LA RANGÉE — `satellites.js` fait
   // `niveauDeLaRangee(etat.position.rangee)`. Deux rangées assez éloignées
   // doivent donc donner deux niveaux, sinon le test ne mesure rien.
-  const etat = partie(2026, 200);
+  const etat = partieDegagee(2026, 200);
   const avant = niveauDeLaRangee(baseCourante(etat).position.rangee);
   deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 10, colonne: baseCourante(etat).position.colonne });
   const apres = niveauDeLaRangee(baseCourante(etat).position.rangee);
@@ -364,7 +406,7 @@ test('DÉPLACEMENT T7 — 1 h à bas niveau, 24 h au niveau 50, interpolé entre
 // ---------------------------------------------------------------------------
 
 test('DÉPLACEMENT T8 — un second déplacement trop tôt est refusé, et le refus CHIFFRE l\'attente', () => {
-  const etat = partie(2026, 200);
+  const etat = partieDegagee(2026, 200);
   const cible = { rangee: baseCourante(etat).position.rangee - 3, colonne: baseCourante(etat).position.colonne };
   deplacerLaBase(etat, cible);
   assert.equal(baseCourante(etat).dernierDeplacementTick, etat.horloge.nbTicks);
@@ -582,7 +624,7 @@ test('DÉPLACEMENT T12 — SAVE_VERSION passe à 22, et la migration pose `null`
     'la migration a posé un zéro : le premier déplacement attendrait');
 
   // Le champ traverse la sauvegarde.
-  const etat = partie(2026, 200);
+  const etat = partieDegagee(2026, 200);
   deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 4, colonne: baseCourante(etat).position.colonne });
   const relu = charger(serialiser(etat, T0), T0);
   assert.equal(baseCourante(relu).dernierDeplacementTick, baseCourante(etat).dernierDeplacementTick);
@@ -623,10 +665,19 @@ test('DÉPLACEMENT — un déplacement change les cibles à portée, et ça se m
   let bougees = 0;
   for (let graine = 1; graine <= 20; graine += 1) {
     const etat = partie(graine, 220);
-    const avant = casesAtteignables(etat).length;
-    assert.ok(avant > 0, 'aucune case atteignable : le montage ne mesure rien');
+    const atteignables = casesAtteignables(etat);
+    assert.ok(atteignables.length > 0, 'aucune case atteignable : le montage ne mesure rien');
     const avantCibles = basesAttaquantes(etat).length;
-    deplacerLaBase(etat, { rangee: baseCourante(etat).position.rangee - 10, colonne: baseCourante(etat).position.colonne });
+    // ⚠⚠ LA DESTINATION SE DEMANDE AU MOTEUR, ELLE NE S'ÉCRIT PLUS — lot
+    // VOISINAGE-ET-MENACE, 08/09/2026. Le montage sautait « dix cases plein
+    // nord » ; depuis qu'aucune base ne peut se coller à une autre, cette case
+    // est refusée presque partout, et un montage qui écrit une coordonnée ne
+    // garde que lui-même. On prend la plus LOINTAINE des cases légales — c'est
+    // celle qui déplace le plus la carte, donc celle que le test veut.
+    const dest = atteignables.reduce((a, b) => (
+      distanceCarreeCases(baseCourante(etat).position, b)
+        > distanceCarreeCases(baseCourante(etat).position, a) ? b : a));
+    deplacerLaBase(etat, dest);
     if (basesAttaquantes(etat).length !== avantCibles) bougees += 1;
   }
   assert.ok(bougees > 10,

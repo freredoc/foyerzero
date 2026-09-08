@@ -18,6 +18,7 @@
 // langage arrondirait à 38. Un effectif ne peut pas dépendre de ça.
 
 import { creerRng, entier, melanger } from './rng.js';
+import { hachageBrut } from './peuplement.js';
 import { GRILLE, OBSTACLES, UNITES, DEFENSES } from '../data/combat.js';
 import {
   BATIMENTS,
@@ -437,6 +438,102 @@ function profilDeCharge(rng, total, tailles, ecartMax, brassages, plancher) {
 }
 
 /**
+ * Le sel du flux de PLACEMENT — le second, celui qui ne touche pas au premier.
+ *
+ * ⚠⚠ HUIT, PARCE QUE LES SEPT PREMIERS SONT PRIS. `sim/peuplement.js` emploie 0
+ * et 1, `sim/poi.js` 2 et 3, `sim/saveur.js` 4, `sim/site-de-la-case.js` 5,
+ * `sim/raid-ouvrage.js` 6. Deux tirages sans rapport qui partagent un sel
+ * finissent par se corréler — c'est écrit dans `render/terrain.js`, qui a retiré
+ * 2 et 3 plutôt que de les réemployer.
+ */
+export const SEL_PLACEMENT_DES_RANGEES = 8;
+
+/** Borne d'une clé de tirage : un entier de [0, CLE_MAX]. */
+const CLE_MAX = 1000000;
+
+/**
+ * Ramène une clé de [0, CLE_MAX] dans [0, n[ — UN SEUL tirage, quel que soit n.
+ *
+ * ⚠ LE BIAIS DU MODULO EST ÉVITÉ, PAS ACCEPTÉ. Un `cle % n` favoriserait les
+ * petites valeurs de 1 pour 10⁶ ; la mise à l'échelle ne favorise personne à
+ * mieux que 10⁻⁶ près. `sim/poi.js` accepte le biais par écrit parce qu'il tire
+ * une case sur une carte ; ici on tire une rangée sur huit, et un dixième de
+ * pour-cent de dérive sur huit valeurs se lirait à l'œil sur mille sites.
+ */
+function borner(cle, n) {
+  return n <= 1 ? 0 : Math.floor((cle * n) / (CLE_MAX + 1));
+}
+
+/**
+ * OÙ le bloc se pose dans sa bande — une liste d'OFFSETS croissants depuis le
+ * bord ancré, un par rangée employée.
+ *
+ * ⚠⚠ C'EST LA COUCHE QUE LE DÉPÔT N'AVAIT PAS, ET C'EST TOUT LE POINT 9
+ * D'ETHAN. Le lot COLONNE (06/09) a rendu la CHARGE par colonne variable ; le
+ * lot CIBLES-RANGÉES (07/09) a rendu la TAILLE de chaque rangée variable. Aucun
+ * des deux n'a touché au BORD : `contigueDepuisLOrigine` interdit à l'indice 0
+ * du tableau des tailles d'être vide, donc le bord ancré du bloc est cloué au
+ * bord de sa bande. Mesuré AVANT ce lot sur 240 montages — vingt graines, quatre
+ * niveaux, trois types : bâtiments commençant en rangée 11, **240 sur 240** ;
+ * défenses finissant en rangée 10, **240 sur 240**. « Les unités de défense sont
+ * au fond, tous les bâtiments au premier rang » décrit exactement cet ancrage.
+ *
+ * ⚠⚠ ET C'EST UNE COUCHE À PART PLUTÔT QU'UN ASSOUPLISSEMENT DE
+ * `taillesDeRangee`, POUR UNE RAISON MESURÉE. Le nombre de tirages de
+ * `repartirLesColonnes` vaut `9 · L + nb − L`, donc il dépend de `L`, le nombre
+ * de rangées employées. Changer les tailles pour une graine donnée déplacerait
+ * `L`, donc la position du flux au moment où `genererSite` appelle
+ * `composerRepartition` — c'est-à-dire changerait la GARNISON. Or
+ * `sim/site-entame.js` range les PV d'un site entamé PAR INDICE dans le
+ * montage : une garnison recomposée remapperait silencieusement les dégâts de
+ * tout site à moitié rasé d'une sauvegarde existante. Mesuré : la suite des
+ * identifiants de défense varie avec la graine sur **18 des 21** couples
+ * (type, niveau) essayés. Le placement, lui, tire sur un SECOND flux et ne
+ * déplace pas d'un cran le premier.
+ *
+ * ⚠⚠ TOUS LES TIRAGES SONT PRIS AVANT TOUT TEST, ET LEUR NOMBRE NE DÉPEND QUE
+ * D'`etalementMax` — `2 + etalementMax`, quels que soient le bloc et le
+ * résultat. C'est la règle que `taillesDeRangee` et `profilDeCharge` portent
+ * déjà : « un transfert refusé consomme ses tirages comme un accepté ». Sans
+ * elle, le direct et le rattrapage hors ligne cesseraient de rendre le même
+ * site.
+ *
+ * ⚠ L'ÉTALEMENT EST BORNÉ PAR `nbUtilisees − 1`, ET C'EST GÉOMÉTRIQUE : une
+ * rangée vide se glisse ENTRE deux rangées employées, donc un bloc d'une seule
+ * rangée n'a aucun intervalle où en mettre une. Une vide posée avant la première
+ * ne serait qu'une dérive de plus, une posée après la dernière ne serait pas
+ * dans le bloc.
+ *
+ * @param {object} rng le flux de PLACEMENT, jamais celui de la composition
+ * @param {number} nbUtilisees rangées employées par le bloc
+ * @param {number} rangeesDisponibles rangées offertes par la bande
+ * @param {number} etalementMax rangées vides tolérées à l'intérieur du bloc
+ * @returns {number[]} offsets croissants, tous dans [0, rangeesDisponibles[
+ */
+function placementDesRangees(rng, nbUtilisees, rangeesDisponibles, etalementMax) {
+  const cleEtalement = entier(rng, 0, CLE_MAX);
+  const cleDerive = entier(rng, 0, CLE_MAX);
+  const clesTrous = [];
+  for (let k = 0; k < etalementMax; k += 1) clesTrous.push(entier(rng, 0, CLE_MAX));
+
+  const marge = Math.max(0, rangeesDisponibles - nbUtilisees);
+  const intervalles = Math.max(0, nbUtilisees - 1);
+  const etalement = borner(cleEtalement, Math.min(etalementMax, marge, intervalles) + 1);
+  const derive = borner(cleDerive, marge - etalement + 1);
+
+  const vides = new Array(Math.max(1, intervalles)).fill(0);
+  for (let k = 0; k < etalement; k += 1) vides[borner(clesTrous[k], intervalles)] += 1;
+
+  const offsets = [];
+  let position = derive;
+  for (let j = 0; j < nbUtilisees; j += 1) {
+    offsets.push(position);
+    position += 1 + (j < intervalles ? vides[j] : 0);
+  }
+  return offsets;
+}
+
+/**
  * Assigne les colonnes rangée par rangée, en honorant un profil de charge.
  *
  * ⚠ SERVIR LES COLONNES AU PLUS GRAND RESTE EST L'ALGORITHME DE GALE-RYSER, pas
@@ -477,16 +574,24 @@ function repartirLesColonnes(rng, tailles, charge) {
  * désormais — voir `profilDeCharge` —, et les deux uniques y comptent par leur
  * plancher.
  */
-function placerBatiments(rng, liste, niveau) {
+function placerBatiments(rng, placement, liste, niveau) {
   const fond = GRILLE.bandes.batiments.derniere;
   const premiere = GRILLE.bandes.batiments.premiere;
-  const centre = Math.ceil(GRILLE.largeur / 2);
   const poses = [];
   const proportionnels = [];
+  // ⚠⚠ LES COLONNES DES DEUX UNIQUES SE TIRENT DEPUIS LE LOT DISPOSITION-OUVRAGE
+  // — point 9 d'Ethan, « souche et étai restent au fond ». Elles valaient le
+  // centre exact et son voisin de gauche, donc 5 et 4 SUR TOUTE GRAINE : mesuré,
+  // une seule position sur 240 montages. La RANGÉE, elle, ne bouge pas : ce sont
+  // les deux objectifs du raid, et ils doivent coûter la traversée complète.
+  // Les avancer raccourcirait tous les raids du jeu, ce qu'Ethan n'a pas demandé.
+  //
+  // ⚠ HUIT TIRAGES, TOUJOURS — `melanger` en consomme `n − 1` quel que soit ce
+  // qu'on garde ensuite. Le compte ne dépend donc pas du nombre d'uniques.
+  const colonnesDesUniques = melanger(placement, colonnes());
   for (const id of liste) {
     if (BATIMENTS[id].unique) {
-      // Souche au centre exact, Étai immédiatement à sa gauche.
-      const colonne = poses.length === 0 ? centre : centre - 1;
+      const colonne = colonnesDesUniques[poses.length];
       poses.push({ id, rangee: fond, colonne, niveau });
     } else {
       proportionnels.push(id);
@@ -511,10 +616,23 @@ function placerBatiments(rng, liste, niveau) {
     DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, plancher,
   );
   const lignes = repartirLesColonnes(rng, tailles, charge);
+  // ⚠⚠ LE BLOC FLOTTE DEPUIS LE LOT DISPOSITION-OUVRAGE. `rangee: premiere + j`
+  // le clouait à la rangée 11 : mesuré, les bâtiments commençaient en 11 sur
+  // 240 montages sur 240, ce qu'Ethan décrit par « tous les bâtiments au premier
+  // rang ». Les offsets sont tirés sur le flux de PLACEMENT — voir
+  // `placementDesRangees` et le §5 qui explique pourquoi ce n'est pas le premier.
+  //
+  // ⚠ LA RANGÉE DU FOND RESTE HORS DU BLOC. La bande fait huit rangées, la
+  // dernière porte les deux uniques : `fond - premiere` en offre sept aux
+  // proportionnels, comme avant. Les y laisser entrer les ferait entrer en
+  // collision avec Souche et Étai, dont les colonnes se tirent désormais.
+  const offsets = placementDesRangees(
+    placement, lignes.length, fond - premiere, DISPOSITION_DEFENSES.etalementMaxRangees,
+  );
   let rang = 0;
   lignes.forEach((cols, j) => {
     for (const colonne of cols) {
-      poses.push({ id: proportionnels[rang], rangee: premiere + j, colonne, niveau });
+      poses.push({ id: proportionnels[rang], rangee: premiere + offsets[j], colonne, niveau });
       rang += 1;
     }
   });
@@ -569,7 +687,7 @@ function placerBatiments(rng, liste, niveau) {
  * l'ordre, `rangeeLaPlusAvanceeQuiTire` garde la géométrie, et le second est
  * vacueux aujourd'hui : aucune rangée de la bande n'est interdite à personne.
  */
-function placerDefenses(rng, liste, niveau) {
+function placerDefenses(rng, placement, liste, niveau) {
   const parRangee = DISPOSITION_DEFENSES.occupantsMaxParRangee;
   const bande = GRILLE.bandes.defense;
   const rangeesMax = bande.derniere - bande.premiere + 1;
@@ -583,12 +701,29 @@ function placerDefenses(rng, liste, niveau) {
     DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, null,
   );
   const lignes = repartirLesColonnes(rng, tailles, charge);
+  // ⚠⚠ LE BLOC FLOTTE DEPUIS LE LOT DISPOSITION-OUVRAGE. `rangee: derniere - j`
+  // le collait à la rangée 10 : mesuré, les défenses finissaient en rangée 10
+  // sur 240 montages sur 240, ce qu'Ethan décrit par « les unités de défense
+  // sont au fond ». La contrainte 1 ci-dessus — « collées aux bâtiments,
+  // l'attaquant traverse d'abord du vide » — est donc RELÂCHÉE, et c'est le
+  // point 9 lui-même qui la relâche : elle était l'invariant, pas un effet de
+  // bord. Ce qui ne se relâche pas : le plafond par rangée, la bande, l'ordre
+  // de retrait des portées, et le déterminisme.
+  //
+  // ⚠ L'ORDRE DE RETRAIT SURVIT PAR CONSTRUCTION, ET LA GARDE LE MESURE QUAND
+  // MÊME. Les offsets croissent, et la rangée DÉCROÎT avec l'offset : le rang 0
+  // de la liste — donc l'artillerie, `ordonnerDefenses` la mettant en tête —
+  // garde la rangée la plus arrière du bloc. Le bloc entier se décale ; il ne se
+  // retourne pas.
+  const offsets = placementDesRangees(
+    placement, lignes.length, rangeesMax, DISPOSITION_DEFENSES.etalementMaxRangees,
+  );
   const poses = [];
   let i = 0;
   lignes.forEach((cols, j) => {
     for (const colonne of cols) {
-      // Du fond vers l'avant : 10, 9, 8…
-      poses.push({ id: liste[i], rangee: bande.derniere - j, colonne, niveau });
+      // Du fond vers l'avant : 10, 9, 8… le bloc décalé de son offset.
+      poses.push({ id: liste[i], rangee: bande.derniere - offsets[j], colonne, niveau });
       i += 1;
     }
   });
@@ -823,16 +958,34 @@ function modulesOuvrageAu(niveau) {
 export function genererSite({ type, niveau, saveur = null, graine }) {
   verifierParametres({ type, niveau, saveur, graine });
   const rng = creerRng(graine);
+  // ⚠⚠ UN SECOND FLUX, ET C'EST LA CONDITION POUR NE PAS BUMPER `SAVE_VERSION`
+  // — lot DISPOSITION-OUVRAGE, 08/09. Le placement des rangées et les colonnes
+  // des deux uniques tirent ICI, jamais dans `rng`. Un seul tirage ajouté au
+  // premier flux déplacerait la position à laquelle `composerRepartition`
+  // compose la garnison, donc changerait la SUITE des défenseurs pour une graine
+  // donnée — mesuré, elle varie avec la graine sur 18 des 21 couples
+  // (type, niveau) essayés. Or `sim/site-entame.js` range `pvDefensesMilli` PAR
+  // INDICE dans le montage régénéré : les dégâts de tout site à moitié rasé
+  // d'une sauvegarde existante se retrouveraient sur d'autres pièces, sans
+  // erreur, sans message et sans test rouge. Le second flux laisse le premier
+  // intact d'un bout à l'autre.
+  //
+  // ⚠ IL SE DÉRIVE PAR `hachageBrut`, PAS PAR UNE ARITHMÉTIQUE SUR LA GRAINE.
+  // `creerRng` pose `s = graine >>> 0` et `tirer` avance de `0x6d2b79f5` : deux
+  // graines qui diffèrent d'un multiple de ce pas rendent le MÊME flux décalé.
+  // Un `graine + 1` aurait donc pu recoller au premier flux ; l'avalanche de
+  // `hachageBrut` ne le peut pas.
+  const placement = creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_DES_RANGEES));
   const effectifs = densite(type, niveau);
 
-  const batiments = placerBatiments(rng, composerBatiments(effectifs.batiments), niveau);
+  const batiments = placerBatiments(rng, placement, composerBatiments(effectifs.batiments), niveau);
 
   const garnison = composerRepartition(rng, GARNISON.parNiveau, niveau, GARNISON.variancePoints);
   const listeDefenses = [];
   for (const [id, n] of auPlusGrandReste(garnison, effectifs.defenses)) {
     for (let k = 0; k < n; k++) listeDefenses.push(id);
   }
-  const defenseurs = placerDefenses(rng, ordonnerDefenses(listeDefenses), niveau);
+  const defenseurs = placerDefenses(rng, placement, ordonnerDefenses(listeDefenses), niveau);
 
   const casesPrises = new Set();
   for (const e of [...batiments, ...defenseurs]) casesPrises.add(cleCase(e.rangee, e.colonne));

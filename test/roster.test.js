@@ -403,7 +403,13 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // de référence change encore de forme. **La propriété tient toujours, et c'est
   // la seule que ce test mesure : UNE seule durée, sur neuf niveaux, sur un site
   // dont la disposition vient de bouger une seconde fois.**
-  assert.deepEqual([...ticks], [146], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : 183. Les deux blocs FLOTTENT désormais
+  // dans leur bande, donc le site de référence change de forme une troisième
+  // fois. **La propriété tient toujours, et c'est la seule que ce test mesure :
+  // UNE seule durée, sur neuf niveaux.** ⚠ Et cette fois la COMPOSITION du site
+  // n'a pas bougé d'un identifiant — le lot tire sur un second flux salé —, donc
+  // ce sont bien les positions seules qui déplacent la durée.
+  assert.deepEqual([...ticks], [183], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -458,15 +464,26 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // composition bougent ensemble : `composerRepartition` tire APRÈS
     // `placerBatiments`, dont le nombre de tirages a changé. **Aucun barème n'a
     // été touché** ; ce test mesure, il ne règle rien.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 241, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 311, butin: { quartz: 30_947, scorie: 10_315 }, survivants: 8 },
+    // ⚠⚠ LOT DISPOSITION-OUVRAGE (08/09) : LES TROIS BOUGENT ENCORE, ET LA CAUSE
+    // N'EST PLUS LA MÊME QU'AUX QUATRE RÉANCRAGES PRÉCÉDENTS. Ceux-là déplaçaient
+    // le FLUX de tirages, donc RECOMPOSAIENT la garnison en même temps qu'ils la
+    // déplaçaient ; celui-ci tire sur un SECOND flux, salé, pour que la
+    // composition ne bouge pas d'un identifiant — mesuré, 0 écart sur 6 000
+    // montages. Ce qui bouge est la POSITION seule : les deux blocs FLOTTENT
+    // désormais dans leur bande au lieu d'être collés à son bord.
+    // A remonte de 241 à 340 ticks, REDEVIENT rentable — 0 · 0 → 7 120 · 2 373 —
+    // et ramène un survivant ; B passe de 311 à 323 et perd 60,6 % de butin ;
+    // C tombe de 635 à 528 en gagnant 14,0 % de butin et deux survivants.
+    // **Aucun barème n'a été touché** ; ce test mesure, il ne règle rien.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 340, butin: { quartz: 7_120, scorie: 2_373 }, survivants: 1 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 323, butin: { quartz: 12_180, scorie: 4_060 }, survivants: 8 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 635, butin: { quartz: 60_714, scorie: 20_238 }, survivants: 9 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 528, butin: { quartz: 69_210, scorie: 23_070 }, survivants: 11 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

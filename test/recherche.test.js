@@ -5433,7 +5433,20 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // graines DISCRIMINENT toujours aux deux niveaux — c'est ce que les deux
   // assertions ci-dessous exigent —, et la propriété gardée n'a pas bougé d'un
   // mot.
-  const apres20 = { 1: 2_831_563n, 3: 1_224_943n, 4: 1_683_674n };
+  // ⚠⚠ RÉANCRÉ AU LOT DISPOSITION-OUVRAGE (08/09), ET POUR LA PREMIÈRE FOIS LA
+  // PRÉMISSE NE TOMBE PAS : les trois graines discriminent toujours aux trois
+  // niveaux, donc elles ne changent pas. C'est une conséquence directe du §5 du
+  // lot — ses tirages sont pris sur un SECOND flux, salé, pour que la
+  // composition du site ne bouge pas d'un identifiant. Les trois lots
+  // précédents déplaçaient le flux principal, donc recomposaient la garnison, et
+  // c'est ce qui leur faisait perdre leur montage deux fois de suite. Seule la
+  // POSITION des mêmes pièces change ici.
+  //
+  // ⚠ ET LA MOITIÉ DES VALEURS NE BOUGE MÊME PAS — les trois du niveau 38 sont
+  // identiques au point, et deux des trois du niveau 50. Un balayage des graines
+  // 1 à 60 en donne 33 qui discriminent aux trois niveaux, contre six au lot
+  // précédent : la propriété est plus robuste qu'elle ne l'était.
+  const apres20 = { 1: 2_596_592n, 3: 3_354_495n, 4: 2_141_421n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5471,7 +5484,9 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // et c'est ce que le test mesure ; les valeurs, elles, sont un constat.
   // ⚠ RÉANCRÉ AU POINT 9, sur les trois graines neuves.
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves.
-  const apres50 = { 1: 1_641_420_965n, 3: 1_919_138_665n, 4: 4_866_746_857n };
+  // ⚠ RÉANCRÉ AU LOT DISPOSITION-OUVRAGE : seule la graine 1 bouge, les deux
+  // autres sont identiques au point.
+  const apres50 = { 1: 1_410_739_686n, 3: 1_919_138_665n, 4: 4_866_746_857n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);

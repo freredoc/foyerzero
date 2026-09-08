@@ -1313,13 +1313,25 @@ test('RDR T8 — le niveau peint sur une vague vient de l\'aperçu, pas d\'un 1 
 // Le montage d'origine de ce fichier — six Meutes de niveau 1, graine 2026 —
 // rend `rase: false` : il n'aurait jamais déclenché l'effondrement, et `EFF T1`
 // serait passé sans rien mesurer. Balayage sur six graines et quatre niveaux :
-// **neuf Meutes de niveau 20 sur la graine 42** rasent la Souche au tick 340.
-// C'est le seul couple du balayage qui rase, et les deux montages servent les
-// deux moitiés du lot — `rase` vrai pour `EFF T1`, faux pour `EFF T2`.
+// **neuf Meutes de niveau 20 sur la graine 42** rasaient la Souche au tick 340.
+// Les deux montages servent les deux moitiés du lot — `rase` vrai pour `EFF T1`,
+// faux pour `EFF T2`.
+//
+// ⚠⚠ ET IL A DÛ ÊTRE RECHERCHÉ AU LOT DISPOSITION-OUVRAGE, 08/09 : le bloc de
+// défense et le bloc de bâtiments FLOTTENT désormais dans leur bande, donc le
+// camp de la graine 42 n'est plus disposé pareil et neuf Meutes de niveau 20 ne
+// le rasent plus. Rebalayé sur dix graines, six niveaux et deux largeurs — 120
+// couples, **44 rasent** — : **neuf Meutes de niveau 30 sur la même graine 42**
+// rasent au tick 291. Seul le NIVEAU bouge ; la graine et la largeur ne bougent
+// pas, pour que le montage reste comparable à celui d'hier.
+//
+// ⚠ ET LE MONTAGE QUI NE RASE PAS N'A PAS BOUGÉ, mesuré : six Meutes de
+// niveau 1 sur la graine 2026 rendent toujours `rase: false`. `EFF T2` tient
+// donc sans être touché.
 
 /** Un écran dont le raid RASE la cible, et sa boucle d\'images en main. */
 function ecranQuiRase() {
-  return ecranPret({ graine: 42, niveau: 20, colonnes: 9 });
+  return ecranPret({ graine: 42, niveau: 30, colonnes: 9 });
 }
 
 /**

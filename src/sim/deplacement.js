@@ -32,6 +32,7 @@ import { releverLesPoisAcquis } from './poi.js';
 import { niveauDesBatiments } from './niveau-de-base.js';
 import { distanceCarreeCases } from './points-attaque.js';
 import { baseCourante } from './base-courante.js';
+import { problemesDuVoisinageDesBases } from './voisinage-des-bases.js';
 
 /** Dixièmes de niveau par niveau — `niveauDesBatiments` rend des dixièmes. */
 const DIXIEMES_PAR_NIVEAU = 10;
@@ -146,6 +147,25 @@ export function problemesDuDeplacement(etat, cible) {
         + `droite : la base ne se déplace que de ${DEPLACEMENT.porteeMaxCases}.`,
     });
   }
+
+  // ⚠⚠ LA MÊME RÈGLE QU'À LA FONDATION, ET LA MÊME ÉCRITURE — lot
+  // VOISINAGE-ET-MENACE, 08/09/2026. Ethan : « aucune base joueur/ouvrage ne
+  // doit être côte à côte sur les 9 cases ». Sans cet appel, la règle ne
+  // vaudrait RIEN : le joueur fonderait loin — où `problemesDeLaFondation` la
+  // fait respecter — puis déplacerait sa base juste à côté de l'Ouvrage au geste
+  // suivant, et le contournement serait à un toucher.
+  //
+  // ⚠⚠ ET IL FERME UN TROU QUI PRÉEXISTAIT AU LOT. Cette fonction ne connaissait
+  // que `hors-carte`, `sur-place`, `trop-loin` et `delai` : déplacer sa base SUR
+  // la case exacte d'une base de l'Ouvrage était PERMIS, et le geste l'effaçait
+  // de la carte — `siteDeLaCase` rend `null` sur toute case occupée par une base
+  // du joueur. Le bloc de 3 × 3 contient son centre, donc la règle le referme
+  // sans qu'on ait à écrire une seconde condition.
+  //
+  // ⚠ LA BASE QUI BOUGE NE SE COMPTE PAS ELLE-MÊME : sa case de départ est
+  // libérée par le geste. La compter ferait refuser tout saut d'une case,
+  // c'est-à-dire ferait dire à la règle que la base s'encombre elle-même.
+  for (const p of problemesDuVoisinageDesBases(etat, cible, laBase)) problemes.push(p);
 
   const reste = ticksAvantProchainDeplacement(etat);
   if (reste > 0) {

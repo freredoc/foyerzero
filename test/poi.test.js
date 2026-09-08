@@ -854,8 +854,15 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : 743 · 247. Les tailles de rangée
   // se tirent à leur tour, donc le camp visé n'est plus disposé pareil. L'ÉCART
   // entre les deux parties — ce que ce test mesure — n'est pas touché.
-  assert.deepEqual(rNu.butin, { quartz: 743, scorie: 247 });
-  assert.deepEqual(rAvec.butin, { quartz: 896, scorie: 298 });
+  // ⚠ RÉANCRÉ AU LOT DISPOSITION-OUVRAGE (08/09) : 939 · 313 et 1 095 · 365. Le
+  // bloc de défense et le bloc de bâtiments FLOTTENT désormais dans leur bande,
+  // donc le camp visé n'est encore une fois plus disposé pareil, et les six
+  // Meutes n'en tirent plus la même chose. **L'ÉCART RELATIF — ce que ce test
+  // mesure — vaut +16,6 %, au dixième de point comme aux deux lots précédents.**
+  // C'est cette stabilité-là, et non les valeurs absolues, qui dit que le
+  // montage emporte toujours les POI.
+  assert.deepEqual(rNu.butin, { quartz: 939, scorie: 313 });
+  assert.deepEqual(rAvec.butin, { quartz: 1095, scorie: 365 });
   assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),
