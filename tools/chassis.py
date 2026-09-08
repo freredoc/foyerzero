@@ -33,7 +33,7 @@ import numpy as np
 from scipy import ndimage as nd
 
 
-def ancre(a, m):
+def ancre(a, m, decal_max=0.22):
     """L'anneau de tourelle : trou traversant OU disque sombre, le plus gros.
 
     Trois contraintes écartent les faux positifs — les chenilles sont sombres,
@@ -62,7 +62,7 @@ def ancre(a, m):
             h = ys.max() - ys.min() + 1
             rondeur = t[i] / (np.pi * (max(w, h) / 2) ** 2)
             decal = max(abs(xs.mean() - cx0) / W, abs(ys.mean() - cy0) / H)
-            if rondeur > 0.55 and decal < 0.22 and 0.12 < w / W < 0.62:
+            if rondeur > 0.55 and decal < decal_max and 0.12 < w / W < 0.62:
                 trouves.append((t[i], w, h, xs.mean(), ys.mean()))
 
     ajouter(nd.binary_fill_holes(m) & ~m)            # anneau ouvert
