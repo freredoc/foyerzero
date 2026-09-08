@@ -56,7 +56,9 @@ import {
 import { rectangleDuFond } from './fond.js';
 import { positionInterpolee } from './interpolation.js';
 import { celluleDuSprite, existeDansAtlas } from './sprite.js';
-import { ETATS_BATIMENT, SUFFIXE_ETAT_BATIMENT, batimentDeReference } from '../data/base.js';
+import {
+  ETATS_BATIMENT, SUFFIXE_ETAT_BATIMENT, batimentDeReference, etatDuBatiment,
+} from '../data/base.js';
 import { COTE_SPRITE } from '../data/atlas.js';
 import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
 import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
@@ -999,9 +1001,24 @@ export function listeAffichage(
           throw new Error(`scene : genre « ${genreVoulu} » sans reste après destruction`);
         }
         if (reste === 'rien') continue;
-        dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
-          accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
-        continue;
+        if (reste === 'ruine') {
+          dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
+            accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
+          continue;
+        }
+        // ⚠ UN RESTE INCONNU LÈVE, comme un genre absent de la table. Une
+        // valeur mal orthographiée retomberait sinon sur le dessin ordinaire :
+        // la pièce se relèverait toute neuve au milieu de l'effondrement, ce qui
+        // est la pire façon de rater un réglage — ça ressemble à un choix.
+        if (reste !== 'planche') {
+          throw new Error(`scene : reste « ${reste} » inconnu pour « ${genreVoulu} »`);
+        }
+        // ⚠⚠ ET `planche` NE VEUT RIEN DIRE SANS ÉTATS. Seuls les bâtiments en
+        // ont ; l'écrire pour un autre genre dessinerait la pièce INTACTE en
+        // silence, et le réglage passerait pour appliqué.
+        if (genreVoulu !== 'batiment') {
+          throw new Error(`scene : reste « planche » pour « ${genreVoulu} », sans états`);
+        }
       }
       dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
         accentDe(e.genre, e.id), couchesDeLEntite({
@@ -1009,6 +1026,26 @@ export function listeAffichage(
           id: e.id,
           proprietaire: e.proprietaire,
           camp: e.camp,
+          // ⚠⚠ L'ÉTAT NE SE CALCULE PAS ICI, IL SE DEMANDE À `data/base.js`, et
+          // c'est tout le lot ÉTAT-EN-RAID. Ce descripteur n'avait AUCUN champ
+          // `etat` : `couchesDuBatiment` retombait donc sur son défaut `intact`,
+          // et chaque bâtiment de chaque raid se dessinait tout neuf quels que
+          // soient ses PV — quarante planches abîmées dans le livrable, nommées
+          // par personne. Vu par Ethan sur une partie, 08/09.
+          //
+          // ⚠⚠ ET SEULEMENT POUR LES BÂTIMENTS. `couchesDeLEntite` sert aussi
+          // les unités et les structures, qui n'ont pas d'états de dégâts : leur
+          // passer le champ ferait un champ qu'on croit lu, ignoré partout sauf
+          // à un endroit. Le `...` conditionnel le laisse ABSENT, pas à
+          // `undefined` — un test lit la différence.
+          //
+          // ⚠ ET L'EFFONDREMENT FORCE `detruit`, il ne le calcule pas : une
+          // pièce qui tombe à l'effondrement est VIVANTE —
+          // `ordreDeLEffondrement` ne prend que les survivantes —, donc ses PV
+          // diraient `intact` à l'instant où elle s'écroule.
+          ...(e.genre === 'batiment'
+            ? { etat: estTombee(e) ? 'detruit' : etatDuBatiment(e.pvMilli, e.pvMaxMilli) }
+            : {}),
           // ⚠ LA RANGÉE AFFICHÉE, INTERPOLÉE COMME CELLE DE LA CIBLE. Viser
           // juste depuis une case fausse rendrait le même décalage que viser
           // faux depuis la bonne.

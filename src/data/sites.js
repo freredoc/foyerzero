@@ -432,12 +432,29 @@ export const ECRAN_RAID = {
  * sous un mur. On ne devine pas : on met `rien`, et on ouvre en changeant UN MOT
  * le jour où il aura regardé.
  *
- * ⚠ DEUX VALEURS, ET PAS UNE DE PLUS. `'ruine'` pose `ruine_j` ou `ruine_o` sur
- * la case ; `'rien'` efface la pièce. Un troisième reste — une explosion, une
- * fumée — demanderait des sprites qui ne sont dans aucun atlas : les douze PNG
- * de `art/sprites/effet/` dorment hors du livrable, et les faire entrer coûterait
- * une famille d'atlas et des octets d'images. Inventer la valeur avant les
- * sprites ferait une table qui promet ce qu'elle ne peut pas tenir.
+ * ⚠⚠ TROIS VALEURS DEPUIS LE 08/09, ET LA TROISIÈME A ATTENDU SES SPRITES.
+ * `'ruine'` pose `ruine_j` ou `ruine_o` — le même tas de gravats pour tout le
+ * monde ; `'rien'` efface la pièce ; `'planche'` pose la planche `_detruit` DU
+ * BÂTIMENT, celle qui porte sa silhouette.
+ *
+ * ⚠⚠ CE COMMENTAIRE DISAIT LE CONTRAIRE, ET IL AVAIT RAISON JUSQU'AU 08/09.
+ * Il lisait : « un troisième reste demanderait des sprites qui ne sont dans
+ * aucun atlas ». C'était vrai au lot EFFONDREMENT — les bâtiments n'avaient
+ * alors qu'un seul dessin. Le lot BÂTIMENTS-QUATRE-ÉTATS a cousu les vingt
+ * planches `_detruit` : la phrase est devenue fausse le jour où l'atlas a
+ * changé, et personne n'est revenu la relire. On la RÉÉCRIT plutôt que de
+ * l'effacer, sinon la troisième valeur se relira comme une entorse à une règle
+ * de deux, et quelqu'un la retirera « pour revenir au propre ».
+ *
+ * ⚠⚠ ET `'ruine'` NE SE RETIRE PAS. Ethan a vu la ruine générique sous la
+ * Souche et le Nœud et a demandé leurs planches à eux ; il n'a pas demandé de
+ * jeter les deux dessins. `ruine_j` et `ruine_o` sortent de six semaines de
+ * sommeil dans l'atlas, et le réglage `defense` ci-dessous — celui qu'il a parké
+ * « en attente d'un coup d'œil » — est à UN MOT de les rendre au dessin.
+ *
+ * ⚠ `'planche'` N'A DE SENS QUE POUR UN GENRE QUI A DES ÉTATS, donc les
+ * bâtiments seuls. L'écrire pour `defense` ou `unite` LÈVE dans `scene.js`
+ * plutôt que de dessiner la pièce intacte en silence.
  *
  * ⚠⚠ LES TROIS CLÉS SONT LES `genre` DE `creerCombat`, ET IL N'Y EN A PAS
  * D'AUTRE. `'defense'` désigne les STRUCTURES — murs, tourelles, artilleries —
@@ -450,7 +467,9 @@ export const ECRAN_RAID = {
  * une chose est détruite est un arbitrage de jeu, pas une ligne de dessin.
  */
 export const RESTE_APRES_DESTRUCTION = {
-  batiment: 'ruine',
+  // ⚠ SA PROPRE PLANCHE, PAS LE TAS DE GRAVATS COMMUN — Ethan, 08/09 : la
+  // Souche et le Nœud laissaient le même `ruine_o`.
+  batiment: 'planche',
   // ⚠ EN ATTENTE D'UN COUP D'ŒIL D'ETHAN — passer à `'ruine'` suffit, et
   // `EFF T12` mesure que le câblage répond.
   defense: 'rien',

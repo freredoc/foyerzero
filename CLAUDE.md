@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.33 · build 135.
+Dernière révision : **08/09/2026**, version 0.99.34 · build 136.
 
 ---
 
@@ -42,7 +42,68 @@ Dernière révision : **08/09/2026**, version 0.99.33 · build 135.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot NEUTRALISATION), à confronter :**
+**Référence au 08/09/2026 (après le lot ÉTAT-EN-RAID), à confronter :**
+`npm test` → **1461 pass / 0 fail**, `npm run build` → `dist/index.html`,
+**8 655 020 octets**, 0 référence externe. Coût **+291 octets**, ENTIÈREMENT DU
+JAVASCRIPT — le lot ne touche ni `art/`, ni un outil de la chaîne, ni une
+feuille : **297 lignes `data:` avant, 297 après**, et l'atlas ne bouge pas d'un
+octet. Borne T10 inchangée à 9 300 000, marge **644 980 octets, 6,94 %**.
+⚠⚠ **DEUX DÉFAUTS VUS PAR ETHAN SUR UNE PARTIE, ET LES DEUX ÉTAIENT DU
+CÂBLAGE.** 08/09 : « les bâtiments d'un raid restent tout neufs quels que soient
+leurs PV », et « un bâtiment détruit laisse la ruine générique du camp au lieu
+de sa propre planche ». Les **quarante planches abîmées et les vingt détruites
+étaient dans l'atlas depuis la veille**, payées en octets, demandées par
+personne. **Aucun art dans ce lot, aucun seuil touché.**
+⚠⚠ **LE PREMIER TENAIT À UN CHAMP MANQUANT, À UN SEUL ENDROIT.** La boucle des
+entités visibles de `render/scene.js` composait le descripteur sans `etat` ;
+`couchesDuBatiment` retombait donc sur son défaut `intact` — un défaut JUSTE,
+qui sert les montages composant un bâtiment à la main. **Mesuré avant le
+correctif : `bat_o_souche` aux six valeurs de PV d'`ER T2`.** Le rendu APPELLE
+désormais `etatDuBatiment(e.pvMilli, e.pvMaxMilli)` ; il ne réécrit aucun seuil,
+et `ER T6` interdit tout suffixe d'état écrit en dur dans `render/` ou `sim/`.
+⚠ **ET SEULEMENT POUR LES BÂTIMENTS**, par `...` conditionnel : le champ est
+ABSENT pour les unités et les structures, pas à `undefined`. Un champ passé
+partout serait un champ qu'on croit lu ; `ER T5` mesure qu'une pièce sans états
+rend le même sprite à un tiers de PV qu'à pleins PV.
+⚠⚠ **LE SECOND A DONNÉ UNE TROISIÈME VALEUR À `RESTE_APRES_DESTRUCTION` :
+`'planche'`.** Elle pose la planche `_detruit` DU bâtiment. **Mesuré avant :
+`ruine_o` deux fois pour la Souche et le Nœud** — le défaut d'Ethan, mot pour
+mot. Un reste inconnu LÈVE, et `'planche'` demandé pour un genre sans états LÈVE
+aussi, plutôt que de dessiner la pièce intacte au milieu de son écroulement.
+⚠⚠ **ET L'EFFONDREMENT FORCE `detruit`, IL NE LE CALCULE PAS.**
+`ordreDeLEffondrement` ne prend que les SURVIVANTES du camp de la défense : une
+pièce qui tombe à l'effondrement est à pleins PV, et un rendu qui lirait
+`pvMilli` la dessinerait intacte pendant qu'elle s'écroule. `ER T3` monte les
+deux bâtiments à `pvMilli === pvMaxMilli` et l'asserte.
+⚠⚠ **LE BRIEF SE TROMPAIT SUR `ruine_j`/`ruine_o`, ET LA LECTURE LE DIT.** Il
+annonce « une base rasée les pose encore » : **faux**. Une base rasée est
+RETIRÉE de la carte par `sitesDeLaFenetre` (`.filter` sur `casesRasees`), et ce
+qui se dessine à sa place est `dessinerRuineDUneCase` de `render/embleme.js`,
+qui va chercher `spriteDeLaRuine` dans la famille **`embleme`**. Leur unique
+lecteur de production était la ligne même que ce lot change. **Elles ne sont pas
+retirées pour autant** : `RESTE_APRES_DESTRUCTION.defense`, parké par Ethan « en
+attente d'un coup d'œil », les remet à l'écran en changeant UN MOT, et `EFF T12`
+mesure le va-et-vient. `ER T4` fige la lecture pour qu'elle ne se reperde pas.
+⚠ **UN BÂTIMENT TOMBÉ À ZÉRO PV PENDANT LE RAID NE MONTRE PAS `_detruit`** :
+`retirerLesMorts` passe `vivant` à faux et `visible` le retire de la liste à
+l'instant même. `_detruit` est ce que l'EFFONDREMENT dessine. Les deux moitiés du
+lot sont donc complémentaires : le premier défaut donne `abime` et `tres_abime`
+à l'écran, le second `detruit`.
+⚠ **DEUX TESTS EXISTANTS CHANGENT DE VALEUR, ET AUCUN NE S'ASSOUPLIT.**
+`EFF T11` et `EFF T12` figeaient la ruine générique sous un bâtiment — c'est
+très exactement ce qu'Ethan fait changer. Ils rougissaient tels qu'ils étaient
+écrits, et `EFF T12` gagne deux gardes : `'planche'` sur une structure lève, un
+reste mal orthographié lève.
+⚠ **SIX TESTS ENTRENT — `ER T1` à `T6` — ET LE COMPTE PASSE DE 1 455 À
+1 461.** **Quatre rougissaient AVANT le correctif** (`T1`, `T2`, `T3`, `T6`) ;
+`T4` et `T5` passaient déjà, et c'est voulu : ils gardent ce qui ne devait pas
+bouger.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** :
+aucun fichier d'`art/` n'apparaît au diff.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Tout est mesuré sur la LISTE D'AFFICHAGE.
+
+**Auparavant, après le lot NEUTRALISATION :**
 `npm test` → **1455 pass / 0 fail**, `npm run build` → `dist/index.html`,
 **8 654 729 octets**, 0 référence externe. Coût **+293 octets**, ENTIÈREMENT DU
 JAVASCRIPT, mesuré poste par poste contre un livrable rebâti dans un
@@ -8781,7 +8842,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   61 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   62 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  documentation  donnees  economie-base  generateur
@@ -8791,7 +8852,7 @@ test/                   61 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
-  journal-raids  batiments-quatre-etats  formation-et-garnison
+  journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.
