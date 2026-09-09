@@ -19,9 +19,11 @@ import {
 } from '../src/sim/combat.js';
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
+import { genererSiteAncien } from './generateur-ancien.js';
 import { UNITES } from '../src/data/combat.js';
 import {
-  TEMOINS_COMBAT, COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
+  TEMOINS_COMBAT, TEMOINS_COMBAT_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
   COMBATS_DEPLACES_PAR_CIBLES_RANGEES,
   COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE,
 } from './temoins-combat.js';
@@ -45,57 +47,114 @@ function armee(ids, niveau) {
   return vagues.filter((v) => v.length > 0);
 }
 
-function montageDe(type, saveur, niveau, graine, ids = TOUTES) {
-  return { ...genererSite({ type, saveur, niveau, graine }), vagues: armee(ids, niveau) };
+function montageDe(type, saveur, niveau, graine, ids = TOUTES, gen = genererSite) {
+  return { ...gen({ type, saveur, niveau, graine }), vagues: armee(ids, niveau) };
 }
 
-// ---------------------------------------------------------------------------
-// JOURNAL T1 — l'additivité, contre un témoin d'AVANT le lot
-// ---------------------------------------------------------------------------
+const TYPES_TEMOINS = [
+  ['camp', 'richeQuartz'], ['camp', 'richeScorie'],
+  ['avantPoste', 'richeQuartz'], ['avantPoste', 'richeScorie'], ['base', null],
+];
 
-
-test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le journal (falsification n° 1)', () => {
-  const TYPES = [
-    ['camp', 'richeQuartz'], ['camp', 'richeScorie'],
-    ['avantPoste', 'richeQuartz'], ['avantPoste', 'richeScorie'], ['base', null],
-  ];
-  // ⚠ L'ÉTAT SE COMPARE SANS SA SORTIE NEUVE. `journal` et `vaguesPosees` sont
-  // ce que le lot AJOUTE ; les opposer à un témoin qui ne les connaît pas ne
-  // dirait rien. Tout le reste de l'état y est, à l'octet.
-  const sansJournal = (etat) => {
-    const copie = { ...etat };
-    delete copie.journal;
-    delete copie.vaguesPosees;
-    return serialiserEtat(copie);
-  };
-  const empreinte = (x) => createHash('sha256').update(x).digest('hex').slice(0, 32);
-
-  let i = 0;
-  let champs = 0;
-  let surcharges = 0;
+/** Les deux cents montages des témoins, dans l'ordre de la table. */
+function* montagesTemoins(gen) {
   for (const graine of [1, 2, 3, 4, 5]) {
     for (const niveau of [5, 20, 35, 50]) {
-      for (const [type, saveur] of TYPES) {
+      for (const [type, saveur] of TYPES_TEMOINS) {
         for (const [nomArmee, ids] of [
           ['toutes', TOUTES], ['moitie', TOUTES.filter((_, k) => k % 2 === 0)],
         ]) {
-          const montage = montageDe(type, saveur, niveau, graine, ids);
-          const etat = creerCombat(montage);
-          const r = resoudre(etat);
-          const vu = [
+          yield [
             `${type}/${saveur ?? '-'}/n${niveau}/g${graine}/${nomArmee}`,
-            empreinte(JSON.stringify(r)),
-            empreinte(sansJournal(etat)),
-            r.cause, r.tick,
-            JSON.stringify(butin(r, montage)), String(pointsRecherche(r, montage)),
-            [r.batiments, r.defenses, r.attaquants]
-              .map((l) => l.reduce((s, x) => s + x.pvMilli, 0)).join('/'),
-            [r.batiments, r.defenses, r.attaquants]
-              .map((l) => l.filter((x) => x.detruit).length).join('/'),
+            montageDe(type, saveur, niveau, graine, ids, gen),
           ];
-          const attendu = TEMOINS_COMBAT[i];
-          assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT.length} lignes`);
-          assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
+        }
+      }
+    }
+  }
+}
+
+// ⚠ L'ÉTAT SE COMPARE SANS SA SORTIE NEUVE. `journal` et `vaguesPosees` sont
+// ce que le lot JOURNAL-DE-COMBAT a AJOUTÉ ; les opposer à un témoin qui ne les
+// connaît pas ne dirait rien. Tout le reste de l'état y est, à l'octet.
+const sansJournal = (etat) => {
+  const copie = { ...etat };
+  delete copie.journal;
+  delete copie.vaguesPosees;
+  return serialiserEtat(copie);
+};
+const empreinte = (x) => createHash('sha256').update(x).digest('hex').slice(0, 32);
+
+/** La ligne de témoin d'un montage joué : les neuf colonnes de la table. */
+function ligneDeTemoin(nom, montage) {
+  const etat = creerCombat(montage);
+  const r = resoudre(etat);
+  return [
+    nom,
+    empreinte(JSON.stringify(r)),
+    empreinte(sansJournal(etat)),
+    r.cause, r.tick,
+    JSON.stringify(butin(r, montage)), String(pointsRecherche(r, montage)),
+    [r.batiments, r.defenses, r.attaquants]
+      .map((l) => l.reduce((s, x) => s + x.pvMilli, 0)).join('/'),
+    [r.batiments, r.defenses, r.attaquants]
+      .map((l) => l.filter((x) => x.detruit).length).join('/'),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// JOURNAL T1 — l'additivité, contre un témoin capturé au lot PAQUETS
+// ---------------------------------------------------------------------------
+
+// ⚠⚠ LOT PAQUETS (09/09) : LA TABLE EST RECAPTURÉE, ET LES QUATRE COUCHES SONT
+// DESCENDUES DANS `T1 bis`. Le placement change de modèle, donc les deux cents
+// montages ne sont plus les mêmes sites, et une cinquième couche aurait couvert
+// 1 267 champs sur 1 600 — plus rien à adosser. Le §7 du brief prescrit la
+// procédure : prouver d'abord que l'ANCIEN placement rejoue l'ancienne table
+// sur le moteur courant (`T1 bis`, 0 écart), et recapturer ALORS. Ce test
+// compare donc SANS couche : la capture repart de zéro, et le prochain lot qui
+// touche au combat devra EMPILER dessus, jamais recapturer.
+test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'au lot PAQUETS (falsification n° 1)', () => {
+  let i = 0;
+  let champs = 0;
+  for (const [nom, montage] of montagesTemoins(genererSite)) {
+    const vu = ligneDeTemoin(nom, montage);
+    const attendu = TEMOINS_COMBAT[i];
+    assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT.length} lignes`);
+    assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
+    for (let c = 1; c < vu.length; c += 1) {
+      assert.equal(vu[c], attendu[c], `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot PAQUETS`);
+      champs += 1;
+    }
+    i += 1;
+  }
+  assert.equal(i, TEMOINS_COMBAT.length, 'le nombre de combats joués a changé');
+  assert.equal(i, 200);
+  assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
+});
+
+// ---------------------------------------------------------------------------
+// JOURNAL T1 bis — l'ANCIEN placement rejoue l'ancienne table, sur le moteur courant
+// ---------------------------------------------------------------------------
+
+// ⚠⚠ C'EST LE POINT 2 DU §7 DU BRIEF PAQUETS, JOUÉ À CHAQUE `npm test`. Il
+// prouve que le MOTEUR n'a pas bougé au lot PAQUETS : `genererSiteAncien` — la
+// copie de l'ancien placement, dans `test/generateur-ancien.js`, jamais dans
+// `src/` — monte les deux cents sites d'hier, `combat.js` les joue, et les
+// empreintes retombent sur `TEMOINS_COMBAT_AVANT_PAQUETS` sous les quatre
+// couches empilées depuis JOURNAL-DE-COMBAT : 1 331 surchargés, 269 gardés,
+// exactement le compte d'avant le lot. Si ce test tombe un jour, c'est le
+// moteur ou la copie qui a bougé, pas le placement.
+test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre couches d\'avant PAQUETS', () => {
+  let i = 0;
+  let champs = 0;
+  let surcharges = 0;
+  for (const [nom, montage] of montagesTemoins(genererSiteAncien)) {
+    {
+      const vu = ligneDeTemoin(nom, montage);
+      const attendu = TEMOINS_COMBAT_AVANT_PAQUETS[i];
+      assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT_AVANT_PAQUETS.length} lignes`);
+      assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
           // ⚠⚠ LOT ARRÊT (04/09) : LA SURCHARGE EST NOMMÉE, LE TÉMOIN N'EST PAS
           // RAFRAÎCHI. `COMBATS_DEPLACES_PAR_ARRET` donne, combat par combat et
           // champ par champ, ce que la nouvelle règle d'arrêt déplace ; tout le
@@ -140,11 +199,9 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'avant le 
               || Object.prototype.hasOwnProperty.call(deplacesFlottant, c)) surcharges += 1;
           }
           i += 1;
-        }
-      }
     }
   }
-  assert.equal(i, TEMOINS_COMBAT.length, 'le nombre de combats joués a changé');
+  assert.equal(i, TEMOINS_COMBAT_AVANT_PAQUETS.length, 'le nombre de combats joués a changé');
   assert.equal(i, 200);
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
   // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON

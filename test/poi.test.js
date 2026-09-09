@@ -861,8 +861,11 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   // mesure — vaut +16,6 %, au dixième de point comme aux deux lots précédents.**
   // C'est cette stabilité-là, et non les valeurs absolues, qui dit que le
   // montage emporte toujours les POI.
-  assert.deepEqual(rNu.butin, { quartz: 939, scorie: 313 });
-  assert.deepEqual(rAvec.butin, { quartz: 1095, scorie: 365 });
+  // ⚠ LOT PAQUETS (09/09) : 939 · 313 → 52 · 17, 1 095 · 365 → 70 · 23. Le camp
+  // visé change de disposition et de garnison ; la durée coïncide encore
+  // (417 ticks), et le bonus se lit toujours sur le butin.
+  assert.deepEqual(rNu.butin, { quartz: 52, scorie: 17 });
+  assert.deepEqual(rAvec.butin, { quartz: 70, scorie: 23 });
   assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),

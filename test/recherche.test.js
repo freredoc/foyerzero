@@ -5427,7 +5427,13 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // qui en donne six. C'est la deuxième fois que ce montage perd sa prémisse, et
   // le fait vaut d'être dit : **un montage qui dépend d'une disposition tirée la
   // reperdra au prochain lot qui y touche.**
-  const GRAINES = [1, 3, 4];
+  // ⚠⚠ LOT PAQUETS (09/09) : 3 ET 4 NE DISCRIMINENT PLUS, 7 ET 24 LES
+  // REMPLACENT. Le site change de disposition et de garnison ; balayé sur les
+  // graines 1 à 60, **dix** discriminent aux trois niveaux — 1, 7, 24, 26, 33,
+  // 36, 39, 52, 56, 57 — contre 33 au lot d'avant. Un montage qui dépend d'une
+  // disposition tirée la reperd au prochain lot qui y touche, c'est écrit ici
+  // pour la quatrième fois.
+  const GRAINES = [1, 7, 24];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
   // graines DISCRIMINENT toujours aux deux niveaux — c'est ce que les deux
@@ -5446,7 +5452,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // identiques au point, et deux des trois du niveau 50. Un balayage des graines
   // 1 à 60 en donne 33 qui discriminent aux trois niveaux, contre six au lot
   // précédent : la propriété est plus robuste qu'elle ne l'était.
-  const apres20 = { 1: 2_596_592n, 3: 3_354_495n, 4: 2_141_421n };
+  const apres20 = { 1: 10_320_141n, 7: 1_801_577n, 24: 6_479_014n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5467,7 +5473,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves. Le SENS est
   // intact — armé reste sous vide sur les trois —, et c'est la seule chose que
   // ce test mesure.
-  const apres38 = { 1: 197_037_844n, 3: 111_904_700n, 4: 771_038_775n };
+  const apres38 = { 1: 522_201_087n, 7: 326_856_763n, 24: 524_648_503n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5486,7 +5492,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves.
   // ⚠ RÉANCRÉ AU LOT DISPOSITION-OUVRAGE : seule la graine 1 bouge, les deux
   // autres sont identiques au point.
-  const apres50 = { 1: 1_410_739_686n, 3: 1_919_138_665n, 4: 4_866_746_857n };
+  const apres50 = { 1: 10_294_965_482n, 7: 6_924_296_098n, 24: 22_542_241_392n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);
@@ -5524,7 +5530,11 @@ test('MODULES-F T14 bis — le Camouflage côté Ouvrage ne fait RIEN, et c\'est
   // assertions sont inchangées — c'est une prémisse réparée, pas une assertion
   // assouplie, et c'est la deuxième fois que ce montage la perd : un montage qui
   // dépend d'une disposition tirée la reperdra au prochain lot qui y touche.
-  const site = genererSite({ type: 'base', niveau: 28, saveur: null, graine: 1099 });
+  // ⚠ LOT PAQUETS (09/09) : 1099 → 1101. Sur 1099 le raid ne rapporte plus un
+  // point avec ou sans la liste — la garnison a changé —, donc le bonus de
+  // MODULES-E n'avait rien à majorer ; 1101 porte quatre Carapaces et un raid
+  // qui score. Réancré par balayage, pas au hasard.
+  const site = genererSite({ type: 'base', niveau: 28, saveur: null, graine: 1101 });
   assert.deepEqual(site.modulesDebloques.ouvrage.defense, ['camouflage'],
     'montage : le niveau 28 n\'isole plus le Camouflage');
   const porteurs = site.defenseurs.filter((d) => ['carapace', 'fouisseurs'].includes(d.id));

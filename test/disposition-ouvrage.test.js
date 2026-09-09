@@ -24,7 +24,8 @@ import { SEL_RAID_OUVRAGE } from '../src/sim/raid-ouvrage.js';
 import { SEL_VARIANTE } from '../src/render/variante.js';
 import { SEL_FOND } from '../src/render/fond.js';
 import { SEL_BLOC, SEL_FAMILLE } from '../src/render/terrain.js';
-import { creerRng, entier } from '../src/sim/rng.js';
+import { creerRng, entier, melanger } from '../src/sim/rng.js';
+import { cleCase } from '../src/sim/grille.js';
 import { GRILLE, OBSTACLES, DEFENSES } from '../src/data/combat.js';
 import { DISPOSITION_DEFENSES, BATIMENTS } from '../src/data/sites.js';
 import { creerEtat } from '../src/sim/state.js';
@@ -122,7 +123,25 @@ const PLANCHER_PAR_MARGE = (marge) => Math.min(12, 1 + 3 * marge);
 // Somme sur les douze cellules — mesurée 50 / 38 avant le lot, 179 / 163 après.
 // Le seuil de 120 est plus du double de l'avant et laisse un tiers de marge sous
 // l'après : c'est l'instrument émoussé qui tombe si le lot était défait en bloc.
+//
+// ⚠⚠ LOT PAQUETS (09/09) : LA SOMME TOMBE À 121 / 119, ET CE N'EST PAS UN RECUL
+// DU LOT, C'EST L'INSTRUMENT QUI CHANGE DE NATURE. « Ensembles de rangées
+// occupées distincts » mesurait un BLOC qui flotte ; des paquets répulsés
+// couvrent la bande entière dès le niveau 30 (base n.45 : 3 / 1 ensembles),
+// donc les ensembles convergent vers « toute la bande » pendant que les
+// silhouettes, elles, restent 20 sur 20 distinctes. Le seuil de 120 N'EST PAS
+// BAISSÉ : il reste tenu pour les BÂTIMENTS (121), et pour les DÉFENSES il est
+// REMPLACÉ par un instrument qui mesure ce que les paquets font — le profil
+// d'occupation par rangée (les huit comptes), distinct 20 sur 20 dans chacune
+// des douze cellules, mesuré. `PQ T1` et `PQ T3` de `paquets.test.js`
+// portent la même mesure sur 500 graines.
 const SOMME_MINIMALE = 120;
+const PROFILS_DISTINCTS_PAR_CELLULE = 20;
+const profilDeRangee = (entites, premiere, hauteur) => {
+  const comptes = new Array(hauteur).fill(0);
+  for (const e of entites) comptes[e.rangee - premiere] += 1;
+  return comptes.join(',');
+};
 
 // Positions d'uniques distinctes — **1 sur 20 avant, sur les DOUZE cellules** :
 // 240 montages sur 240 posaient l'Étai en (18, 4) et la Souche en (18, 5). Un
@@ -168,6 +187,12 @@ test('DO T1 — vingt graines ne donnent plus la même silhouette', () => {
         + `marge de ${margeD} rangées — plancher ${PLANCHER_PAR_MARGE(margeD)}`,
       );
 
+      const profilsD = distincts(montages.map((m) => profilDeRangee(
+        m.defenseurs, BANDE_DEFENSE.premiere, BANDE_DEFENSE.derniere - BANDE_DEFENSE.premiere + 1,
+      )));
+      assert.equal(profilsD, PROFILS_DISTINCTS_PAR_CELLULE,
+        `${type} n.${niveau} : ${profilsD} profils d'occupation de DÉFENSES sur 20`);
+
       const uniques = distincts(montages.map((m) => m.batiments
         .filter((b) => BATIMENTS[b.id].unique)
         .map((b) => `${b.id}@${b.rangee}:${b.colonne}`).sort().join(',')));
@@ -192,8 +217,9 @@ test('DO T1 — vingt graines ne donnent plus la même silhouette', () => {
   // TOUS ÊTRE VACUEUX À LA FOIS : la somme sur les douze cellules.
   assert.ok(sommeB >= SOMME_MINIMALE,
     `${sommeB} ensembles de rangées de bâtiments en tout, seuil ${SOMME_MINIMALE}`);
-  assert.ok(sommeD >= SOMME_MINIMALE,
-    `${sommeD} ensembles de rangées de défenses en tout, seuil ${SOMME_MINIMALE}`);
+  // ⚠ LOT PAQUETS : 119 mesuré pour les défenses, écrit en clair — l'instrument
+  // qui les garde est le profil d'occupation, asserté cellule par cellule.
+  assert.equal(sommeD, 119, `${sommeD} ensembles de rangées de défenses en tout`);
 });
 
 test('DO T2 — la même graine rend deux fois exactement le même montage', () => {
@@ -230,24 +256,28 @@ test('DO T3 — le placement ne déplace pas d\'un cran le flux de composition',
   // rouge. Mesuré : la suite des identifiants de défense varie avec la graine
   // sur 18 des 21 couples (type, niveau) essayés.
   //
-  // ⚠ ON LE MESURE EN TOURNANT LE SEUL BOUTON DU PLACEMENT. Si `etalementMax`
-  // changeait le nombre de tirages du flux PRINCIPAL, la composition bougerait
-  // avec lui. Elle ne bouge pas ; seules les rangées le font.
-  const dOrigine = DISPOSITION_DEFENSES.etalementMaxRangees;
+  // ⚠ ON LE MESURE EN TOURNANT UN BOUTON DU PLACEMENT. ⚠ LOT PAQUETS (09/09) :
+  // `etalementMaxRangees` est retiré, le bouton est `candidatsParPaquet` — dix
+  // candidats ou trois changent la case retenue, jamais la composition. Si le
+  // nombre de candidats changeait le nombre de tirages du flux PRINCIPAL, la
+  // composition bougerait avec lui. Elle ne bouge pas ; seules les cases le font.
+  const dOrigine = DISPOSITION_DEFENSES.candidatsParPaquet;
   try {
     const ids = (m) => [
       m.batiments.map((b) => b.id).join(','),
       m.defenseurs.map((d) => d.id).join(','),
     ].join('||');
-    const rangees = (m) => [rangeesDe(m.batiments), rangeesDe(m.defenseurs)].join('||');
+    const rangees = (m) => JSON.stringify(
+      [...m.batiments, ...m.defenseurs].map((e) => `${e.rangee},${e.colonne}`),
+    );
 
     let bougees = 0;
     for (const type of ['camp', 'avantPoste', 'base']) {
       for (const niveau of [12, 25, 40]) {
         for (const graine of VINGT_GRAINES.slice(0, 6)) {
-          DISPOSITION_DEFENSES.etalementMaxRangees = dOrigine;
+          DISPOSITION_DEFENSES.candidatsParPaquet = dOrigine;
           const a = genererSite({ type, niveau, graine });
-          DISPOSITION_DEFENSES.etalementMaxRangees = dOrigine + 3;
+          DISPOSITION_DEFENSES.candidatsParPaquet = 3;
           const b = genererSite({ type, niveau, graine });
           assert.equal(
             ids(a), ids(b),
@@ -260,43 +290,30 @@ test('DO T3 — le placement ne déplace pas d\'un cran le flux de composition',
     }
     // ⚠ ET LE MONTAGE DOIT AVOIR MESURÉ QUELQUE CHOSE : si tourner le bouton ne
     // déplaçait aucune rangée, l'égalité ci-dessus serait gratuite.
-    assert.ok(bougees >= 30, `seulement ${bougees} montages sur 54 changent de rangées`);
+    assert.ok(bougees >= 30, `seulement ${bougees} montages sur 54 changent de cases`);
   } finally {
-    DISPOSITION_DEFENSES.etalementMaxRangees = dOrigine;
+    DISPOSITION_DEFENSES.candidatsParPaquet = dOrigine;
   }
 });
 
 test('DO T3 bis — le flux de PLACEMENT se rejoue de l\'extérieur, tirage pour tirage', () => {
-  // ⚠⚠ LA SECONDE MOITIÉ DE T3 : le nombre de tirages du flux de placement ne
-  // dépend NI du bloc NI du résultat. On le prouve en refaisant le flux depuis
-  // le sel exporté et en comptant `2 + etalementMax` tirages par bloc, dans
-  // l'ordre — bâtiments d'abord (huit tirages de plus pour les colonnes des
-  // uniques), défenses ensuite. Si `placementDesRangees` prenait un tirage sous
-  // condition, la re-dérivation se désynchroniserait et les offsets cesseraient
-  // de coïncider.
-  const etalementMax = DISPOSITION_DEFENSES.etalementMaxRangees;
-  const CLE_MAX = 1000000;
-  const borner = (cle, n) => (n <= 1 ? 0 : Math.floor((cle * n) / (CLE_MAX + 1)));
-
-  const offsets = (rng, nbUtilisees, rangeesDisponibles) => {
-    const cleEtalement = entier(rng, 0, CLE_MAX);
-    const cleDerive = entier(rng, 0, CLE_MAX);
-    const clesTrous = [];
-    for (let k = 0; k < etalementMax; k += 1) clesTrous.push(entier(rng, 0, CLE_MAX));
-    const marge = Math.max(0, rangeesDisponibles - nbUtilisees);
-    const intervalles = Math.max(0, nbUtilisees - 1);
-    const etalement = borner(cleEtalement, Math.min(etalementMax, marge, intervalles) + 1);
-    const derive = borner(cleDerive, marge - etalement + 1);
-    const vides = new Array(Math.max(1, intervalles)).fill(0);
-    for (let k = 0; k < etalement; k += 1) vides[borner(clesTrous[k], intervalles)] += 1;
-    const sortie = [];
-    let position = derive;
-    for (let j = 0; j < nbUtilisees; j += 1) {
-      sortie.push(position);
-      position += 1 + (j < intervalles ? vides[j] : 0);
-    }
-    return sortie;
-  };
+  // ⚠⚠ LA SECONDE MOITIÉ DE T3, RÉÉCRITE AU LOT PAQUETS (09/09) : le nombre de
+  // tirages du flux de placement ne dépend NI du résultat NI des refus. Le
+  // placement par paquets tire TOUT d'avance — `nbPaquetsMax(N)` tailles, trois
+  // clés d'uniques, puis par paquet une clé de tiers et `candidatsParPaquet`
+  // triplets (forme, rangée, colonne) — et le repli case par case ne tire
+  // rien. On le prouve par la QUEUE du flux : les obstacles sont posés APRÈS
+  // les deux placements sur le même flux, par `melanger` puis un type par
+  // obstacle. En refaisant le flux depuis le sel exporté, en SAUTANT le nombre
+  // de tirages qu'annonce la formule, et en rejouant la pose des obstacles à la
+  // main, on doit retomber sur les obstacles du montage — si un tirage de
+  // placement était pris sous condition, la queue se désynchroniserait.
+  // `PQ T8` de `paquets.test.js` rejoue la même formule sur trois mille montages.
+  const { tailleDePaquet, candidatsParPaquet } = DISPOSITION_DEFENSES;
+  const nbPaquetsMax = (nb) => (nb < tailleDePaquet.paquetUnique ? 1 : Math.ceil(nb / tailleDePaquet.min));
+  const tiragesDUnPlacement = (nb, avecUniques) => (nb === 0
+    ? 0
+    : nbPaquetsMax(nb) * (1 + 1 + 3 * candidatsParPaquet) + (avecUniques ? 3 : 0));
 
   let verifies = 0;
   for (const type of ['camp', 'avantPoste', 'base']) {
@@ -304,39 +321,51 @@ test('DO T3 bis — le flux de PLACEMENT se rejoue de l\'extérieur, tirage pour
       for (const graine of VINGT_GRAINES.slice(0, 5)) {
         const m = genererSite({ type, niveau, graine });
         const rng = creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_DES_RANGEES));
+        const aSauter = tiragesDUnPlacement(m.batiments.length, true)
+          + tiragesDUnPlacement(m.defenseurs.length, false);
+        for (let k = 0; k < aSauter; k += 1) entier(rng, 0, 1);
 
-        // 1. les huit tirages des colonnes des deux uniques
-        const colonnes = Array.from({ length: GRILLE.largeur }, (_, i) => i + 1);
-        for (let i = colonnes.length - 1; i > 0; i -= 1) {
-          const j = entier(rng, 0, i);
-          const t = colonnes[i]; colonnes[i] = colonnes[j]; colonnes[j] = t;
+        // La pose des obstacles, refaite à la main : les cases libres de la
+        // bande de défense dans l'ordre de balayage, mélangées, les dix
+        // premières, un type chacune.
+        const prises = new Set([...m.batiments, ...m.defenseurs].map((e) => cleCase(e.rangee, e.colonne)));
+        const libres = [];
+        for (let r = BANDE_DEFENSE.premiere; r <= BANDE_DEFENSE.derniere; r += 1) {
+          for (let c = 1; c <= GRILLE.largeur; c += 1) {
+            if (!prises.has(cleCase(r, c))) libres.push({ rangee: r, colonne: c });
+          }
         }
-        const uniques = m.batiments.filter((b) => BATIMENTS[b.id].unique);
-        uniques.forEach((b, k) => {
-          assert.equal(b.colonne, colonnes[k],
-            `${type} n.${niveau} g${graine} : colonne de « ${b.id} » désynchronisée`);
-        });
-
-        // 2. le bloc des bâtiments, puis celui des défenses, dans cet ordre
-        const rBat = [...new Set(m.batiments.filter((b) => b.rangee !== FOND)
-          .map((b) => b.rangee))].sort((a, b) => a - b);
-        const attenduBat = offsets(rng, rBat.length, FOND - PREMIERE_BAT);
-        assert.deepEqual(rBat, attenduBat.map((o) => PREMIERE_BAT + o),
-          `${type} n.${niveau} g${graine} : rangées de bâtiments désynchronisées`);
-
-        const rDef = [...new Set(m.defenseurs.map((d) => d.rangee))].sort((a, b) => b - a);
-        if (rDef.length > 0) {
-          const attenduDef = offsets(
-            rng, rDef.length, BANDE_DEFENSE.derniere - BANDE_DEFENSE.premiere + 1,
-          );
-          assert.deepEqual(rDef, attenduDef.map((o) => BANDE_DEFENSE.derniere - o),
-            `${type} n.${niveau} g${graine} : rangées de défenses désynchronisées`);
-        }
+        melanger(rng, libres);
+        const attendus = libres.slice(0, OBSTACLES.nombre).map((c) => ({
+          rangee: c.rangee,
+          colonne: c.colonne,
+          type: OBSTACLES.types[entier(rng, 0, OBSTACLES.types.length - 1)],
+        }));
+        assert.deepEqual(m.obstacles, attendus,
+          `${type} n.${niveau} g${graine} : la queue du flux de placement est désynchronisée — `
+          + 'un tirage de placement dépend du résultat');
         verifies += 1;
       }
     }
   }
   assert.equal(verifies, 60, `${verifies} montages rejoués au lieu de 60`);
+  // ⚠ FALSIFIABLE : sauter un tirage de moins désynchronise la queue.
+  const m = genererSite({ type: 'base', niveau: 20, graine: VINGT_GRAINES[0] });
+  const rng = creerRng(hachageBrut(VINGT_GRAINES[0], 0, 0, SEL_PLACEMENT_DES_RANGEES));
+  const aSauter = tiragesDUnPlacement(m.batiments.length, true)
+    + tiragesDUnPlacement(m.defenseurs.length, false) - 1;
+  for (let k = 0; k < aSauter; k += 1) entier(rng, 0, 1);
+  const prises = new Set([...m.batiments, ...m.defenseurs].map((e) => cleCase(e.rangee, e.colonne)));
+  const libres = [];
+  for (let r = BANDE_DEFENSE.premiere; r <= BANDE_DEFENSE.derniere; r += 1) {
+    for (let c = 1; c <= GRILLE.largeur; c += 1) if (!prises.has(cleCase(r, c))) libres.push({ rangee: r, colonne: c });
+  }
+  melanger(rng, libres);
+  assert.notDeepEqual(
+    m.obstacles.map((o) => `${o.rangee},${o.colonne}`),
+    libres.slice(0, OBSTACLES.nombre).map((o) => `${o.rangee},${o.colonne}`),
+    'un tirage de moins rend les mêmes obstacles : le montage ne mesure rien',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -367,12 +396,10 @@ test('DO T4 — cinq mille montages, aucune levée du retrait des portées', () 
         artilleriesVues += artilleries.length;
         // ⚠ ET ON LE REMESURE DE L'EXTÉRIEUR, plutôt que de croire l'appel
         // interne : une garde retirée du générateur laisserait ce test vert.
+        // ⚠ LOT PAQUETS (09/09) : la moitié ORDRE de `verifierLeRetraitDesPortees`
+        // est retirée — l'ordre des catégories est un biais de tiers, `PQ T6` le
+        // mesure. Ne reste ici que la moitié GÉOMÉTRIQUE.
         for (const a of artilleries) {
-          for (const b of m.defenseurs) {
-            if (categorieDe(b.id) === 'artillerie') continue;
-            assert.ok(a.rangee >= b.rangee,
-              `${type} n.${niveau} g${graine} : ${a.id} en ${a.rangee} devant ${b.id} en ${b.rangee}`);
-          }
           assert.ok(a.rangee >= rangeeLaPlusAvanceeQuiTire(a.id),
             `${type} n.${niveau} g${graine} : ${a.id} devant sa portée`);
         }
@@ -420,10 +447,15 @@ test('DO T5 — six occupants au plus par rangée de défense, sur tout le balay
 // DO T6 — Souche et Étai restent en rangée 18, et leurs colonnes varient
 // ---------------------------------------------------------------------------
 
-test('DO T6 — les deux uniques restent au fond, et leurs colonnes se tirent', () => {
-  // ⚠⚠ LA RANGÉE NE SE NÉGOCIE PAS — §4.2 du brief : « ce sont les deux
-  // objectifs du raid, ils doivent coûter la traversée complète ». Les avancer
-  // raccourcirait tous les raids du jeu, ce qu'Ethan n'a pas demandé.
+test('DO T6 — les deux uniques flottent dans leur bande, et leurs colonnes se tirent', () => {
+  // ⚠⚠ LA RANGÉE NE SE NÉGOCIAIT PAS — §4.2 du brief DISPOSITION-OUVRAGE : « ce
+  // sont les deux objectifs du raid, ils doivent coûter la traversée complète ».
+  // ⚠⚠ RENVERSÉ AU LOT PAQUETS, 09/09 — Ethan : « un ratio de destruction trop
+  // grand ». La Souche et l'Étai entrent dans les paquets, ensemble une fois
+  // sur trois (`uniquesDansLeMemePaquetUneFoisSur`), et flottent sur les huit
+  // rangées de la bande. Mesuré AVANT d'écrire : le taux de rasage ne bouge
+  // pas, seule la durée du raid baisse. Ce test garde le reste : deux uniques,
+  // deux cases, la bande, les neuf colonnes — et gagne les huit rangées.
   //
   // ⚠⚠ ET LA COLONNE D'UN UNIQUE NE DÉPEND QUE DE LA GRAINE, PAS DU NIVEAU NI DU
   // TYPE — c'est une conséquence directe du second flux, qui est semé sur la
@@ -434,6 +466,7 @@ test('DO T6 — les deux uniques restent au fond, et leurs colonnes se tirent', 
   // GRAINES, pas sur le nombre de montages — d'où les soixante ci-dessous, là où
   // vingt en laissaient une sur neuf inatteinte.
   const colonnes = { souche: new Set(), etai: new Set() };
+  const rangees = { souche: new Set(), etai: new Set() };
   let montages = 0;
   for (const type of ['camp', 'avantPoste', 'base']) {
     for (const niveau of [1, 10, 20, 30, 40, 50]) {
@@ -443,21 +476,23 @@ test('DO T6 — les deux uniques restent au fond, et leurs colonnes se tirent', 
         const uniques = m.batiments.filter((b) => BATIMENTS[b.id].unique);
         assert.equal(uniques.length, 2, `${type} n.${niveau} g${graine} : ${uniques.length} uniques`);
         for (const u of uniques) {
-          assert.equal(u.rangee, FOND,
-            `${type} n.${niveau} g${graine} : « ${u.id} » a quitté le fond`);
+          assert.ok(u.rangee >= PREMIERE_BAT && u.rangee <= FOND,
+            `${type} n.${niveau} g${graine} : « ${u.id} » en rangée ${u.rangee}, hors de la bande`);
           colonnes[u.id].add(u.colonne);
+          rangees[u.id].add(u.rangee);
         }
-        assert.notEqual(uniques[0].colonne, uniques[1].colonne,
+        assert.ok(uniques[0].colonne !== uniques[1].colonne || uniques[0].rangee !== uniques[1].rangee,
           `${type} n.${niveau} g${graine} : les deux uniques sur la même case`);
-        // ⚠ ET AUCUN PROPORTIONNEL NE VIENT S'ASSEOIR SUR LEUR RANGÉE. Le bloc
-        // des proportionnels flotte dans `premiere..fond − 1`, jamais jusqu'au
-        // fond : sans cette borne, un bâtiment tiré pourrait recouvrir un unique.
-        assert.equal(m.batiments.filter((b) => b.rangee === FOND).length, 2,
-          `${type} n.${niveau} g${graine} : un proportionnel s'est posé au fond`);
       }
     }
   }
   assert.equal(montages, 360);
+  // ⚠ LES HUIT RANGÉES SONT ATTEINTES, DES DEUX CÔTÉS — mesuré. Un générateur
+  // qui les aurait laissés au fond passerait tout ce qui précède.
+  assert.equal(rangees.souche.size, FOND - PREMIERE_BAT + 1,
+    `la Souche n'atteint que ${rangees.souche.size} rangées`);
+  assert.equal(rangees.etai.size, FOND - PREMIERE_BAT + 1,
+    `l'Étai n'atteint que ${rangees.etai.size} rangées`);
   // ⚠ LES NEUF COLONNES SONT ATTEINTES, DES DEUX CÔTÉS — pas seulement « plus
   // d'une ». Avant le lot, les deux valaient 5 et 4 sur 240 montages sur 240.
   for (const graine of SOIXANTE_GRAINES) {
@@ -527,7 +562,10 @@ test('DO T8 — un site entamé retrouve ses dégâts sur les mêmes bâtiments'
   const identite = {
     type: 'camp', saveur: 'richeQuartz', niveau: 25, rangee: 120, colonne: 7, instance: 1,
   };
-  const etat = creerEtat(99);
+  // ⚠ LOT PAQUETS (09/09) : 99 → 102. Sur la graine 99 le raid ne touche plus
+  // qu'UN bâtiment ; la 102 en laisse **sept touchés dont six détruits**, et les
+  // deux branches restent exercées. Réancré par balayage des graines 99 à 140.
+  const etat = creerEtat(102);
   const vagues = [Array.from({ length: GRILLE.largeur }, (_, k) => ({
     id: ['belier', 'pilon', 'broyeur', 'crecelle'][k % 4], colonne: k + 1, niveau: 25,
   }))];
@@ -627,25 +665,31 @@ test('DO T10 — les bornes du placement, mesurées sur trois mille montages', (
   // laisserait la dispersion glisser sans un mot.
   let minDef = Infinity; let maxDef = -Infinity;
   let minBat = Infinity; let maxBat = -Infinity;
-  let trousDef = 0; let trousBat = 0;
+  let minUnique = Infinity; let maxUnique = -Infinity;
+  let chargeMaxDef = 0; let chargeMaxBat = 0;
   let montages = 0;
   for (const type of ['camp', 'avantPoste', 'base']) {
     for (let niveau = 1; niveau <= 50; niveau += 1) {
       for (const graine of VINGT_GRAINES) {
         const m = genererSite({ type, niveau, graine });
         montages += 1;
-        const rd = [...new Set(m.defenseurs.map((d) => d.rangee))].sort((a, b) => a - b);
-        const rb = [...new Set(m.batiments.filter((b) => b.rangee !== FOND)
-          .map((b) => b.rangee))].sort((a, b) => a - b);
-        if (rd.length) {
-          minDef = Math.min(minDef, rd[0]);
-          maxDef = Math.max(maxDef, rd[rd.length - 1]);
-          trousDef = Math.max(trousDef, rd[rd.length - 1] - rd[0] + 1 - rd.length);
+        for (const d of m.defenseurs) {
+          minDef = Math.min(minDef, d.rangee); maxDef = Math.max(maxDef, d.rangee);
         }
-        if (rb.length) {
-          minBat = Math.min(minBat, rb[0]);
-          maxBat = Math.max(maxBat, rb[rb.length - 1]);
-          trousBat = Math.max(trousBat, rb[rb.length - 1] - rb[0] + 1 - rb.length);
+        for (const b of m.batiments) {
+          if (BATIMENTS[b.id].unique) {
+            minUnique = Math.min(minUnique, b.rangee); maxUnique = Math.max(maxUnique, b.rangee);
+          } else {
+            minBat = Math.min(minBat, b.rangee); maxBat = Math.max(maxBat, b.rangee);
+          }
+        }
+        for (const [groupe, isDef] of [[m.defenseurs, true], [m.batiments, false]]) {
+          const charge = new Array(GRILLE.largeur).fill(0);
+          for (const e of groupe) charge[e.colonne - 1] += 1;
+          const depassement = Math.max(...charge)
+            - (Math.ceil(groupe.length / GRILLE.largeur) + DISPOSITION_DEFENSES.margeDeColonne);
+          if (isDef) chargeMaxDef = Math.max(chargeMaxDef, depassement);
+          else chargeMaxBat = Math.max(chargeMaxBat, depassement);
         }
       }
     }
@@ -654,16 +698,19 @@ test('DO T10 — les bornes du placement, mesurées sur trois mille montages', (
   // Mesuré : les défenses parcourent la bande ENTIÈRE, 3 à 10.
   assert.equal(minDef, BANDE_DEFENSE.premiere, `les défenses ne descendent qu'à ${minDef}`);
   assert.equal(maxDef, BANDE_DEFENSE.derniere, `les défenses ne montent qu'à ${maxDef}`);
-  // Et les bâtiments les sept rangées qui restent — jamais le fond, où sont les
-  // deux uniques.
+  // ⚠ LOT PAQUETS (09/09) : les bâtiments parcourent leur bande ENTIÈRE, fond
+  // compris — le fond n'est plus réservé aux uniques —, et les uniques la
+  // parcourent aussi, de 11 à 18.
   assert.equal(minBat, PREMIERE_BAT, `les bâtiments ne descendent qu'à ${minBat}`);
-  assert.equal(maxBat, FOND - 1, `les bâtiments montent jusqu'à ${maxBat}, donc sur le fond`);
-  // Les trous ne dépassent jamais le plafond de la table, et ils l'ATTEIGNENT —
-  // sans quoi le bouton serait décoratif.
-  assert.equal(trousDef, DISPOSITION_DEFENSES.etalementMaxRangees,
-    `étalement maximal des défenses : ${trousDef}`);
-  assert.equal(trousBat, DISPOSITION_DEFENSES.etalementMaxRangees,
-    `étalement maximal des bâtiments : ${trousBat}`);
+  assert.equal(maxBat, FOND, `les bâtiments ne montent qu'à ${maxBat}`);
+  assert.equal(minUnique, PREMIERE_BAT, `les uniques ne descendent qu'à ${minUnique}`);
+  assert.equal(maxUnique, FOND, `les uniques ne montent qu'à ${maxUnique}`);
+  // ⚠ `etalementMaxRangees` est retiré : un trou entre deux paquets est voulu.
+  // La borne qui reste est le plafond de colonne, `⌈N/9⌉ + margeDeColonne`, et
+  // le repli qui a le droit de le relâcher n'a jamais eu à le faire ici —
+  // mesuré, dépassement ZÉRO sur les trois mille, pour les deux groupes.
+  assert.equal(chargeMaxDef, 0, `plafond de colonne des défenses dépassé de ${chargeMaxDef}`);
+  assert.equal(chargeMaxBat, 0, `plafond de colonne des bâtiments dépassé de ${chargeMaxBat}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -748,5 +795,6 @@ test('DO T12 — l\'empreinte de trente montages, en clair', () => {
   }
   assert.equal(morceaux.length, 36);
   const empreinte = createHash('sha256').update(morceaux.join('|')).digest('hex').slice(0, 16);
-  assert.equal(empreinte, '41bf9bd339d8ae8f', 'la disposition d\'un site a changé sans être déclarée');
+  // ⚠ LOT PAQUETS (09/09) : `41bf9bd339d8ae8f` → `dfd5f7409f5f4c64`, déclaré.
+  assert.equal(empreinte, 'dfd5f7409f5f4c64', 'la disposition d\'un site a changé sans être déclarée');
 });

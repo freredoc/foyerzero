@@ -1171,7 +1171,7 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // trois champs de plus — et RAID-CIBLE-UNIQUE, lui, n'a toujours rien ajouté :
   // ce que ce test mesure est la ligne DEUX crans plus bas, où une sauvegarde à
   // la version courante traverse `migrer` sans être touchée.
-  assert.equal(SAVE_VERSION, 29, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION');
+  assert.equal(SAVE_VERSION, 30, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — PAQUETS, lui, y est passé (09/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

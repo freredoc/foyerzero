@@ -330,7 +330,11 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // FLOTTENT désormais dans leur bande au lieu d'être collés à son bord. Cinq
   // ticks d'écart contre 401 puis 245 aux lots précédents — la mesure dit
   // elle-même que ce lot déplace moins que ceux qui recomposaient.
-  assert.equal(r.nbTicks, 414);
+  // ⚠⚠ LOT PAQUETS (09/09) : LE SITE CHANGE DE DISPOSITION ET DE GARNISON. Le
+  // placement passe par paquets ET retire ses tirages du flux de composition,
+  // donc la garnison de toute graine change avec sa forme. 414 → 308, butin
+  // 21 542 · 7 180 → 18 610 · 6 203, survivants 6 → 4.
+  assert.equal(r.nbTicks, 308);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -368,8 +372,8 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // les blocs flottent, donc l'assaut lourd de la graine 1 met plus de temps à
   // atteindre les bâtiments et en griffe moins avant de tomber. **Aucun barème
   // n'a été touché.**
-  assert.deepEqual(r.butin, { quartz: 21_542, scorie: 7_180 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
+  assert.deepEqual(r.butin, { quartz: 18_610, scorie: 6_203 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
 });
 
 // ---------------------------------------------------------------------------
@@ -517,8 +521,14 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   //
   // ⚠ ET LA LISTE EST NOMMÉE, PAS BORNÉE : « au plus deux » laisserait entrer
   // n'importe quel autre raid. Ceux-là, et personne d'autre.
+  // ⚠⚠ LOT PAQUETS (09/09) : TROIS RAIDS TOUCHENT LE PLAFOND, ET AUCUN N'EST UN
+  // GEL — mesuré en portant `maxTicks` à 20 000 : ils se concluent par
+  // `attaquants` aux ticks **1 035** (blindeLourd/base/7), **978** (mixte/camp/7)
+  // et **2 104** (mixte/base/1). Le pire vaut 2,3 fois le plafond, contre 4 fois
+  // au lot d'avant. La liste change parce que la disposition ET la garnison de
+  // chaque site changent ; le calibrage reste à Ethan.
   assert.deepEqual(
-    expires.sort(), ['blindeLourd/camp/42', 'mixte/camp/11'],
+    expires.sort(), ['blindeLourd/base/7', 'mixte/base/1', 'mixte/camp/7'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.

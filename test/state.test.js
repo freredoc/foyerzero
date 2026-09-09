@@ -2450,7 +2450,7 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // et la chaîne un maillon v27 → v28. La phrase du message reste vraie de
   // PRODUCTION-EN-DÉFENSE ; ce que la ligne garde n'est pas un numéro figé mais
   // le fait qu'on ne bumpe pas sans passer par ici.
-  assert.equal(SAVE_VERSION, 29, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION');
+  assert.equal(SAVE_VERSION, 30, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — PAQUETS, lui, y est passé (09/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());

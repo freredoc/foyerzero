@@ -29,6 +29,7 @@ import {
   TYPES_SITE,
   RAID_OUVRAGE,
   DISPOSITION_DEFENSES,
+  FORMES_DE_PAQUET,
   POINTS_ARMEE,
   PROFILS_ASSAUT,
   EMPLACEMENTS_ASSAUT,
@@ -249,195 +250,6 @@ export function composerBatiments(nbBatiments) {
 }
 
 /**
- * Le support des tailles est-il un PRÉFIXE — aucune rangée vide au milieu ?
- *
- * ⚠ LA CONTIGUÏTÉ EST UNE CONTRAINTE TESTÉE, PAS UNE COMMODITÉ. `COL T16`
- * asserte que « les rangées occupées sont les plus ARRIÈRE, sans trou » : c'est
- * la première des quatre contraintes de `placerDefenses` — l'assaut doit
- * traverser du vide avant de rencontrer quoi que ce soit. Un transfert qui
- * ouvrirait un trou est donc DÉFAIT, pas accepté.
- */
-function contigueDepuisLOrigine(tailles) {
-  let vues = false;
-  for (const t of tailles) {
-    if (t === 0) vues = true;
-    else if (vues) return false;
-  }
-  return true;
-}
-
-/**
- * Découpe `nb` occupants en tailles de rangée — ET C'EST UN TIRAGE DEPUIS LE LOT
- * CIBLES-RANGÉES, 07/09.
- *
- * ⚠⚠ ELLE ÉTAIT LA CAUSE DU DÉFAUT D'ETHAN, ET ELLE SEULE. Elle rendait
- * `6, 6, …, reste` — une fonction pure de `nb`, donc du niveau. La colonne
- * passait par une permutation semée depuis le lot COLONNE ; la RANGÉE, elle,
- * était une fonction pure du rang `i` dans la liste, et la liste est composée
- * dans un ordre déterministe. Le nᵉ occupant tombait donc toujours dans la même
- * rangée. Mesuré sur 200 graines : **UN SEUL** profil d'occupation par rangée,
- * à tous les types et à tous les niveaux.
- *
- * ⚠⚠ ON PART DU DÉCOUPAGE D'AVANT, PUIS ON TRANSFÈRE — même forme que
- * `profilDeCharge`, et pour les mêmes raisons. Une unité passe d'une rangée à
- * une autre ; le transfert est DÉFAIT s'il dépasse `parRangee`, ou s'il ouvre un
- * trou dans le bloc collé au fond. Le nombre de rangées employées varie donc
- * aussi : c'est ce qui fait qu'un site ne se lit plus toujours sur les mêmes
- * trois lignes.
- *
- * ⚠⚠ UN TRANSFERT REFUSÉ CONSOMME SES TIRAGES COMME UN ACCEPTÉ. Les deux bornes
- * sont tirées AVANT tout test : le nombre de tirages ne dépend pas du résultat,
- * donc deux graines consomment exactement autant de flux. C'est la règle du §5
- * du brief, et c'est la seule forme sous laquelle `genererSite` reste
- * déterministe — un « tire, si ça ne va pas recommence » ferait diverger deux
- * parties identiques.
- *
- * ⚠ LE TABLEAU FAIT `rangeesMax` CASES, PAS `ceil(nb / parRangee)`. Sans les
- * cases vides au bout, aucun transfert ne pourrait AJOUTER une rangée, et le
- * nombre de rangées resterait la fonction pure de `nb` qu'on vient de retirer.
- *
- * @param {object} rng
- * @param {number} nb occupants à répartir
- * @param {number} parRangee plafond par rangée
- * @param {number} rangeesMax rangées disponibles
- * @param {number} brassages transferts tentés
- * @param {string} quoi pour le message d'erreur
- * @returns {number[]} Une taille par rangée EMPLOYÉE, depuis l'origine du bloc.
- */
-function taillesDeRangee(rng, nb, parRangee, rangeesMax, brassages, quoi) {
-  const rangees = Math.ceil(nb / parRangee);
-  if (rangees > rangeesMax) {
-    throw new Error(
-      `générateur : ${nb} ${quoi} ne tiennent pas en ${rangeesMax} rangées `
-      + `à ${parRangee} occupants`,
-    );
-  }
-  const tailles = new Array(rangeesMax).fill(0);
-  let reste = nb;
-  for (let k = 0; k < rangees; k++) {
-    const t = Math.min(parRangee, reste);
-    tailles[k] = t;
-    reste -= t;
-  }
-  for (let k = 0; k < brassages; k++) {
-    const depuis = entier(rng, 0, rangeesMax - 1);
-    const vers = entier(rng, 0, rangeesMax - 1);
-    if (depuis === vers) continue;
-    if (tailles[depuis] === 0) continue;
-    if (tailles[vers] + 1 > parRangee) continue;
-    tailles[depuis] -= 1;
-    tailles[vers] += 1;
-    if (!contigueDepuisLOrigine(tailles)) {
-      tailles[depuis] += 1;
-      tailles[vers] -= 1;
-    }
-  }
-  return tailles.filter((t) => t > 0);
-}
-
-/**
- * Le profil de charge est-il RÉALISABLE sur ces rangées ? C'est la condition de
- * Gale-Ryser, écrite telle quelle : une matrice 0/1 dont les sommes de lignes
- * valent `tailles` et les sommes de colonnes `charge` existe si et seulement si,
- * pour tout k, la somme des k plus grandes charges ne dépasse pas
- * `Σ min(taille, k)`.
- *
- * ⚠⚠ ELLE N'EST PAS DÉCORATIVE, ET LE CONTRE-EXEMPLE EST PETIT. Treize défenses
- * tiennent en trois rangées de 6 · 6 · 1 ; un profil à (3, 3, 2, 2, 1, 1, 1, 0,
- * 0) somme bien à treize et respecte le budget d'écart — et il est
- * IRRÉALISABLE : à k = 2 il demande 6 places quand les trois rangées n'en
- * offrent que min(6,2) + min(6,2) + min(1,2) = 5. La rangée d'un seul occupant
- * ne peut pas absorber deux colonnes chargées. Sans ce contrôle, le placement
- * lèverait — ou pire, poserait deux pièces sur la même case.
- */
-function profilRealisable(charge, tailles) {
-  const desc = [...charge].sort((a, b) => b - a);
-  let cumul = 0;
-  for (let k = 1; k <= desc.length; k++) {
-    cumul += desc[k - 1];
-    let capacite = 0;
-    for (const t of tailles) capacite += Math.min(t, k);
-    if (cumul > capacite) return false;
-  }
-  return true;
-}
-
-/**
- * Tire la CHARGE de chaque colonne : combien d'occupants elle recevra.
- *
- * ⚠⚠ C'EST ICI QUE LA FORME D'UN SITE CESSE D'ÊTRE LA MÊME — lot COLONNE,
- * 06/09, point 9. Le placement d'avant tirait une permutation des colonnes et
- * posait en tourniquet : la charge par colonne était TOUJOURS la même — plate à
- * une unité près — et deux graines ne rendaient que deux étiquetages du même
- * dessin. Une permutation préserve le multi-ensemble des charges ; tant qu'il
- * est constant, aucune graine ne peut produire autre chose qu'une image.
- *
- * On part donc du profil PLAT — `base` partout, `+1` sur `total % 9` colonnes
- * tirées —, puis on tente des TRANSFERTS : une unité passe d'une colonne à une
- * autre, et le transfert est DÉFAIT s'il fait sortir le profil du budget
- * d'écart, du plancher, ou de la capacité d'une colonne.
- *
- * ⚠⚠ LE PLANCHER SERT LES DEUX BÂTIMENTS UNIQUES, ET IL NE COMPTE QUE POUR
- * L'ÉCART. Souche et Étai sont posés hors de ce tirage, au fond et au centre,
- * et ils comptent pourtant dans la charge que `T8` mesure : le budget d'écart
- * s'apprécie donc sur la somme `profil + plancher`. Les ignorer rendrait un
- * profil à écart 2 sur les PROPORTIONNELS, donc à écart 3 une fois les deux
- * uniques ajoutés — le budget serait dépassé par une addition que personne ne
- * regarde.
- *
- * ⚠⚠ MAIS LE PROFIL LUI-MÊME PORTE LES SEULS PROPORTIONNELS, ET LES CONFONDRE
- * REND UN PROFIL IRRÉALISABLE — mesuré, pas soupçonné. Tirer le profil sur le
- * TOTAL puis lui retrancher le plancher donne, sur 31 bâtiments en 4 rangées de
- * 9 · 9 · 9 · 2, quatre colonnes à quatre occupants là où la dernière rangée
- * n'en offre que deux : Gale-Ryser refuse, et le repli plat refuse aussi,
- * puisqu'il est calculé de la même façon. Le profil se tire sur ce qu'il
- * PLACE.
- *
- * ⚠ UN TRANSFERT REFUSÉ CONSOMME SES TIRAGES COMME UN ACCEPTÉ : les deux bornes
- * sont tirées AVANT tout test. Le nombre de tirages ne dépend donc pas du taux
- * d'acceptation, et deux graines consomment exactement autant de flux.
- *
- * @param {number[]} plancher Minimum imposé par colonne, ou null.
- * @returns {number[]} Charge par colonne, indexée de 0.
- */
-function profilDeCharge(rng, total, tailles, ecartMax, brassages, plancher) {
-  const n = GRILLE.largeur;
-  const bas = plancher ?? new Array(n).fill(0);
-  const base = Math.floor(total / n);
-  const surplus = total % n;
-  const plat = new Array(n).fill(base);
-  for (const c of melanger(rng, colonnes()).slice(0, surplus)) plat[c - 1] += 1;
-  // L'écart se mesure sur la charge TOTALE — le profil plus son plancher.
-  const ecart = (t) => {
-    const v = t.map((x, i) => x + bas[i]);
-    return Math.max(...v) - Math.min(...v);
-  };
-  if (!profilRealisable(plat, tailles) || ecart(plat) > ecartMax) {
-    throw new Error(
-      `générateur : le profil plat de ${total} occupants sur ${tailles.length} rangées `
-      + 'sort du budget — c\'est le placement d\'avant le lot COLONNE qui ne tiendrait plus',
-    );
-  }
-
-  const charge = [...plat];
-  for (let k = 0; k < brassages; k++) {
-    const depuis = entier(rng, 0, n - 1);
-    const vers = entier(rng, 0, n - 1);
-    if (depuis === vers) continue;
-    if (charge[depuis] === 0) continue;
-    // Une colonne ne peut porter qu'un occupant par rangée.
-    if (charge[vers] + 1 > tailles.length) continue;
-    charge[depuis] -= 1;
-    charge[vers] += 1;
-    if (ecart(charge) > ecartMax) {
-      charge[depuis] += 1;
-      charge[vers] -= 1;
-    }
-  }
-  return profilRealisable(charge, tailles) ? charge : plat;
-}
-
-/**
  * Le sel du flux de PLACEMENT — le second, celui qui ne touche pas au premier.
  *
  * ⚠⚠ HUIT, PARCE QUE LES SEPT PREMIERS SONT PRIS. `sim/peuplement.js` emploie 0
@@ -445,6 +257,11 @@ function profilDeCharge(rng, total, tailles, ecartMax, brassages, plancher) {
  * `sim/raid-ouvrage.js` 6. Deux tirages sans rapport qui partagent un sel
  * finissent par se corréler — c'est écrit dans `render/terrain.js`, qui a retiré
  * 2 et 3 plutôt que de les réemployer.
+ *
+ * ⚠ LE NOM DIT « DES RANGÉES » ET IL EST GARDÉ TEL QUEL : le sel est une valeur
+ * figée dans les tests et dans les sauvegardes dérivées, et le renommer ne
+ * changerait rien à ce qu'il hache. Depuis le lot PAQUETS il sème TOUT le
+ * placement — paquets, formes, ancres, uniques, tiers, obstacles.
  */
 export const SEL_PLACEMENT_DES_RANGEES = 8;
 
@@ -457,278 +274,449 @@ const CLE_MAX = 1000000;
  * ⚠ LE BIAIS DU MODULO EST ÉVITÉ, PAS ACCEPTÉ. Un `cle % n` favoriserait les
  * petites valeurs de 1 pour 10⁶ ; la mise à l'échelle ne favorise personne à
  * mieux que 10⁻⁶ près. `sim/poi.js` accepte le biais par écrit parce qu'il tire
- * une case sur une carte ; ici on tire une rangée sur huit, et un dixième de
- * pour-cent de dérive sur huit valeurs se lirait à l'œil sur mille sites.
+ * une case sur une carte ; ici on tire une rangée sur huit ou une forme sur dix,
+ * et un dixième de pour-cent de dérive sur huit valeurs se lirait à l'œil sur
+ * mille sites.
  */
 function borner(cle, n) {
   return n <= 1 ? 0 : Math.floor((cle * n) / (CLE_MAX + 1));
 }
 
-/**
- * OÙ le bloc se pose dans sa bande — une liste d'OFFSETS croissants depuis le
- * bord ancré, un par rangée employée.
- *
- * ⚠⚠ C'EST LA COUCHE QUE LE DÉPÔT N'AVAIT PAS, ET C'EST TOUT LE POINT 9
- * D'ETHAN. Le lot COLONNE (06/09) a rendu la CHARGE par colonne variable ; le
- * lot CIBLES-RANGÉES (07/09) a rendu la TAILLE de chaque rangée variable. Aucun
- * des deux n'a touché au BORD : `contigueDepuisLOrigine` interdit à l'indice 0
- * du tableau des tailles d'être vide, donc le bord ancré du bloc est cloué au
- * bord de sa bande. Mesuré AVANT ce lot sur 240 montages — vingt graines, quatre
- * niveaux, trois types : bâtiments commençant en rangée 11, **240 sur 240** ;
- * défenses finissant en rangée 10, **240 sur 240**. « Les unités de défense sont
- * au fond, tous les bâtiments au premier rang » décrit exactement cet ancrage.
- *
- * ⚠⚠ ET C'EST UNE COUCHE À PART PLUTÔT QU'UN ASSOUPLISSEMENT DE
- * `taillesDeRangee`, POUR UNE RAISON MESURÉE. Le nombre de tirages de
- * `repartirLesColonnes` vaut `9 · L + nb − L`, donc il dépend de `L`, le nombre
- * de rangées employées. Changer les tailles pour une graine donnée déplacerait
- * `L`, donc la position du flux au moment où `genererSite` appelle
- * `composerRepartition` — c'est-à-dire changerait la GARNISON. Or
- * `sim/site-entame.js` range les PV d'un site entamé PAR INDICE dans le
- * montage : une garnison recomposée remapperait silencieusement les dégâts de
- * tout site à moitié rasé d'une sauvegarde existante. Mesuré : la suite des
- * identifiants de défense varie avec la graine sur **18 des 21** couples
- * (type, niveau) essayés. Le placement, lui, tire sur un SECOND flux et ne
- * déplace pas d'un cran le premier.
- *
- * ⚠⚠ TOUS LES TIRAGES SONT PRIS AVANT TOUT TEST, ET LEUR NOMBRE NE DÉPEND QUE
- * D'`etalementMax` — `2 + etalementMax`, quels que soient le bloc et le
- * résultat. C'est la règle que `taillesDeRangee` et `profilDeCharge` portent
- * déjà : « un transfert refusé consomme ses tirages comme un accepté ». Sans
- * elle, le direct et le rattrapage hors ligne cesseraient de rendre le même
- * site.
- *
- * ⚠ L'ÉTALEMENT EST BORNÉ PAR `nbUtilisees − 1`, ET C'EST GÉOMÉTRIQUE : une
- * rangée vide se glisse ENTRE deux rangées employées, donc un bloc d'une seule
- * rangée n'a aucun intervalle où en mettre une. Une vide posée avant la première
- * ne serait qu'une dérive de plus, une posée après la dernière ne serait pas
- * dans le bloc.
- *
- * @param {object} rng le flux de PLACEMENT, jamais celui de la composition
- * @param {number} nbUtilisees rangées employées par le bloc
- * @param {number} rangeesDisponibles rangées offertes par la bande
- * @param {number} etalementMax rangées vides tolérées à l'intérieur du bloc
- * @returns {number[]} offsets croissants, tous dans [0, rangeesDisponibles[
- */
-function placementDesRangees(rng, nbUtilisees, rangeesDisponibles, etalementMax) {
-  const cleEtalement = entier(rng, 0, CLE_MAX);
-  const cleDerive = entier(rng, 0, CLE_MAX);
-  const clesTrous = [];
-  for (let k = 0; k < etalementMax; k += 1) clesTrous.push(entier(rng, 0, CLE_MAX));
+// ---------------------------------------------------------------------------
+// Placement par PAQUETS — lot PAQUETS, 09/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LE MODÈLE LIGNE/COLONNE EST PARTI EN ENTIER. Six fonctions sont sorties —
+// `taillesDeRangee`, `contigueDepuisLOrigine`, `profilRealisable`,
+// `profilDeCharge`, `repartirLesColonnes`, `placementDesRangees` — parce que
+// c'est ce modèle qui produisait « toujours par ligne ou par colonne » : il ne
+// savait construire que des rangées remplies jusqu'à un plafond, décalées d'un
+// offset. Une seule mécanique sert désormais les deux bandes ; seuls les
+// paramètres changent.
+//
+// ⚠⚠ ET TOUT LE PLACEMENT TIRE SUR LE FLUX `placement`, JAMAIS SUR `rng`. Le
+// flux semé par `graine` ne sert plus qu'à la COMPOSITION — `composerRepartition`
+// pour la garnison, et rien d'autre. Avant ce lot, `placerBatiments` consommait
+// `rng` AVANT que la garnison ne se compose : tout changement de placement
+// décalait le flux et changeait la garnison, donc remappait par indice les
+// `pvDefensesMilli` de tout site à moitié rasé — c'est pourquoi `SAVE_VERSION`
+// passe à 30 ICI, et pourquoi c'est la DERNIÈRE fois qu'un lot de placement la
+// fait bouger. `PQ T7` le garde : changer le sel de placement ne change pas la
+// liste des identifiants.
+//
+// ⚠⚠ LE NOMBRE DE TIRAGES NE DÉPEND QUE DE N, JAMAIS DU RÉSULTAT. Tout se tire
+// AVANT tout test, pour le nombre MAXIMAL de paquets que N admet — un candidat
+// rejeté, un paquet qui n'existe pas, un repli déclenché consomment leurs
+// tirages comme un accepté. Un « tire jusqu'à ce que ça passe » ferait diverger
+// deux parties identiques ; `PQ T8` compte les tirages sur trois mille montages.
 
-  const marge = Math.max(0, rangeesDisponibles - nbUtilisees);
-  const intervalles = Math.max(0, nbUtilisees - 1);
-  const etalement = borner(cleEtalement, Math.min(etalementMax, marge, intervalles) + 1);
-  const derive = borner(cleDerive, marge - etalement + 1);
-
-  const vides = new Array(Math.max(1, intervalles)).fill(0);
-  for (let k = 0; k < etalement; k += 1) vides[borner(clesTrous[k], intervalles)] += 1;
-
-  const offsets = [];
-  let position = derive;
-  for (let j = 0; j < nbUtilisees; j += 1) {
-    offsets.push(position);
-    position += 1 + (j < intervalles ? vides[j] : 0);
-  }
-  return offsets;
+/** Les rangées d'une bande, dans l'ordre croissant. */
+function rangeesDeLaBande(bande) {
+  const sortie = [];
+  for (let r = bande.premiere; r <= bande.derniere; r += 1) sortie.push(r);
+  return sortie;
 }
 
 /**
- * Assigne les colonnes rangée par rangée, en honorant un profil de charge.
- *
- * ⚠ SERVIR LES COLONNES AU PLUS GRAND RESTE EST L'ALGORITHME DE GALE-RYSER, pas
- * une heuristique : sur un profil que `profilRealisable` a accepté, il aboutit
- * toujours. À égalité de reste, le tirage tranche — c'est ce qui fait qu'une
- * même charge se répartit différemment d'une graine à l'autre.
- *
- * @returns {number[][]} Les colonnes de chaque rangée, dans l'ordre des tailles.
+ * Le nombre MAXIMAL de paquets que `nb` occupants peuvent former : tous à la
+ * taille minimale, le dernier prenant le reste. C'est sur ce nombre que les
+ * tirages sont pris, pour qu'ils ne dépendent pas du découpage tiré.
  */
-function repartirLesColonnes(rng, tailles, charge) {
-  const reste = [...charge];
-  const lignes = [];
-  for (const k of tailles) {
-    const tri = colonnes()
-      .map((c) => ({ c, reste: reste[c - 1], cle: entier(rng, 0, 1000000) }))
-      .sort((a, b) => b.reste - a.reste || a.cle - b.cle);
-    const prises = tri.slice(0, k);
-    if (prises.some((o) => o.reste <= 0)) {
+function nbPaquetsMax(nb) {
+  const { min, paquetUnique } = DISPOSITION_DEFENSES.tailleDePaquet;
+  if (nb < paquetUnique) return 1;
+  return Math.ceil(nb / min);
+}
+
+/**
+ * Découpe `nb` occupants en tailles de paquet — 3 ou 4 tirés un par un, le
+ * dernier prenant le reste, de 2 à 5. Sous `paquetUnique`, un seul paquet.
+ *
+ * ⚠ `nbPaquetsMax(nb)` TIRAGES SONT PRIS, MÊME SI LE DÉCOUPAGE EN EMPLOIE MOINS :
+ * le compte ne dépend pas de ce qui sort.
+ */
+function decouperEnPaquets(placement, nb) {
+  const { min, max, resteMin, resteMax, paquetUnique } = DISPOSITION_DEFENSES.tailleDePaquet;
+  const tirages = [];
+  for (let k = 0; k < nbPaquetsMax(nb); k += 1) tirages.push(entier(placement, min, max));
+  if (nb < paquetUnique) return [nb];
+  const tailles = [];
+  let reste = nb;
+  let k = 0;
+  while (reste >= paquetUnique) {
+    tailles.push(tirages[k]);
+    reste -= tirages[k];
+    k += 1;
+  }
+  if (reste < resteMin || reste > resteMax) {
+    throw new Error(`générateur : reste de paquet ${reste} hors de ${resteMin}…${resteMax}`);
+  }
+  tailles.push(reste);
+  return tailles;
+}
+
+/**
+ * Les tiers de la bande de DÉFENSE, dérivés de `GRILLE.bandes.defense` et des
+ * largeurs de `tiersDeLaBande` : `{ avant: {premiere, derniere}, … }`.
+ */
+export function tiersDeLaDefense() {
+  const bande = GRILLE.bandes.defense;
+  const sortie = {};
+  let rangee = bande.premiere;
+  for (const [nom, largeur] of DISPOSITION_DEFENSES.tiersDeLaBande) {
+    sortie[nom] = { premiere: rangee, derniere: rangee + largeur - 1 };
+    rangee += largeur;
+  }
+  if (rangee - 1 !== bande.derniere) {
+    throw new Error(
+      `générateur : les tiers couvrent ${rangee - bande.premiere} rangées, `
+      + `la bande en fait ${bande.derniere - bande.premiere + 1}`,
+    );
+  }
+  return sortie;
+}
+
+/**
+ * Tire le tiers préféré d'une catégorie, sur les poids de `poidsDeTiers`.
+ * @returns {{premiere:number, derniere:number}}
+ */
+function tiersPrefere(cle, categorie) {
+  const poids = DISPOSITION_DEFENSES.poidsDeTiers[categorie];
+  if (poids === undefined) throw new Error(`générateur : catégorie sans poids « ${categorie} »`);
+  const tiers = tiersDeLaDefense();
+  const total = Object.values(poids).reduce((a, b) => a + b, 0);
+  let seuil = borner(cle, total);
+  for (const [nom, p] of Object.entries(poids)) {
+    if (seuil < p) return tiers[nom];
+    seuil -= p;
+  }
+  throw new Error('générateur : tirage de tiers hors des poids');
+}
+
+/** Le catalogue de formes d'une taille, en liste stable. */
+function formesDeTaille(taille) {
+  const formes = FORMES_DE_PAQUET[taille];
+  if (formes === undefined) throw new Error(`générateur : aucune forme de taille ${taille}`);
+  return Object.values(formes);
+}
+
+/** Distance de Tchebychev entre deux cases. */
+function tchebychev(a, b) {
+  return Math.max(Math.abs(a.rangee - b.rangee), Math.abs(a.colonne - b.colonne));
+}
+
+/**
+ * Le placement d'une bande — l'état qu'un paquet consulte et qu'il modifie.
+ * `prises` porte les cases occupées, `parRangee` et `parColonne` les charges.
+ */
+function ouvrirLaBande(bande, plafondRangee, plafondColonne) {
+  return {
+    bande,
+    plafondRangee,
+    plafondColonne,
+    prises: new Set(),
+    occupees: [],
+    parRangee: new Map(),
+    parColonne: new Array(GRILLE.largeur + 1).fill(0),
+  };
+}
+
+/** La distance de répulsion d'un jeu de cases : Tchebychev minimale aux prises, plafonnée. */
+function repulsion(etat, cases) {
+  const max = DISPOSITION_DEFENSES.repulsionMax;
+  let d = max;
+  for (const c of cases) {
+    for (const o of etat.occupees) {
+      d = Math.min(d, tchebychev(c, o));
+      if (d === 0) return 0;
+    }
+  }
+  return d;
+}
+
+/** La charge de colonne la plus haute qu'un jeu de cases produirait. */
+function chargeDeColonne(etat, cases) {
+  const ajout = new Map();
+  for (const c of cases) ajout.set(c.colonne, (ajout.get(c.colonne) ?? 0) + 1);
+  let pire = 0;
+  for (const [colonne, n] of ajout) pire = Math.max(pire, etat.parColonne[colonne] + n);
+  return pire;
+}
+
+/** Un jeu de cases tient-il — bande, grille, cases libres, plafonds ? */
+function admissible(etat, cases, avecPlafondColonne = true) {
+  const parRangee = new Map();
+  const parColonne = new Map();
+  for (const c of cases) {
+    if (c.rangee < etat.bande.premiere || c.rangee > etat.bande.derniere) return false;
+    if (c.colonne < 1 || c.colonne > GRILLE.largeur) return false;
+    const cle = cleCase(c.rangee, c.colonne);
+    if (etat.prises.has(cle)) return false;
+    parRangee.set(c.rangee, (parRangee.get(c.rangee) ?? 0) + 1);
+    parColonne.set(c.colonne, (parColonne.get(c.colonne) ?? 0) + 1);
+  }
+  for (const [r, n] of parRangee) {
+    if ((etat.parRangee.get(r) ?? 0) + n > etat.plafondRangee) return false;
+  }
+  if (avecPlafondColonne) {
+    for (const [c, n] of parColonne) {
+      if (etat.parColonne[c] + n > etat.plafondColonne) return false;
+    }
+  }
+  return true;
+}
+
+/** Prend une case dans la bande. */
+function prendre(etat, c) {
+  etat.prises.add(cleCase(c.rangee, c.colonne));
+  etat.occupees.push(c);
+  etat.parRangee.set(c.rangee, (etat.parRangee.get(c.rangee) ?? 0) + 1);
+  etat.parColonne[c.colonne] += 1;
+}
+
+/**
+ * Le repli : les membres d'un paquet se posent CASE PAR CASE, par balayage
+ * déterministe de la bande — chaque case prise étant celle qui maximise la
+ * même distance de répulsion sous les mêmes plafonds. Il ne tire RIEN.
+ *
+ * ⚠⚠ IL DOIT ABOUTIR, ET LE PROUVER. La bande de défense offre 6 × 8 = 48 cases
+ * sous plafond pour un besoin de 39 au pire ; celle des bâtiments 9 × 8 = 72
+ * pour 39. Si aucune case ne tient sous les DEUX plafonds, le plafond de
+ * colonne — qui n'est qu'un filtre d'équité, pas un invariant du moteur — est
+ * relâché pour cette case-là, et le rapport compte ces relâchements ; si aucune
+ * case ne tient sous le seul plafond de rangée, c'est un défaut de programme,
+ * et on LÈVE en nommant la bande et les comptes.
+ *
+ * @returns {Array<{rangee:number, colonne:number}>} une case par membre
+ */
+function replierCaseParCase(etat, taille, rangeesPreferees, quoi, compteur) {
+  const sortie = [];
+  const rangees = [
+    ...rangeesPreferees,
+    ...rangeesDeLaBande(etat.bande).filter((r) => !rangeesPreferees.includes(r)),
+  ];
+  for (let m = 0; m < taille; m += 1) {
+    let meilleure = null;
+    for (const strict of [true, false]) {
+      for (const rangee of rangees) {
+        for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+          const c = { rangee, colonne };
+          if (!admissible(etat, [c], strict)) continue;
+          const score = [repulsion(etat, [c]), -chargeDeColonne(etat, [c])];
+          if (meilleure === null
+            || score[0] > meilleure.score[0]
+            || (score[0] === meilleure.score[0] && score[1] > meilleure.score[1])) {
+            meilleure = { c, score };
+          }
+        }
+      }
+      if (meilleure !== null) {
+        if (!strict) compteur.colonneRelachee += 1;
+        break;
+      }
+    }
+    if (meilleure === null) {
       throw new Error(
-        'générateur : profil de charge irréalisable — Gale-Ryser aurait dû le refuser',
+        `générateur : ${quoi} — ${etat.occupees.length} posés, `
+        + `${taille - m} restent sans case sous le plafond de ${etat.plafondRangee} par rangée`,
       );
     }
-    for (const o of prises) reste[o.c - 1] -= 1;
-    lignes.push(melanger(rng, prises.map((o) => o.c)));
+    prendre(etat, meilleure.c);
+    sortie.push(meilleure.c);
   }
-  return lignes;
+  compteur.replis += 1;
+  return sortie;
 }
 
 /**
- * Pose les bâtiments. Souche et Étai au FOND, rangée 18, aussi centrés que
- * possible : ce sont les deux objectifs du raid, ils doivent coûter la
- * traversée complète. Le reste se répartit sur les rangées 11 à 17.
+ * Pose une suite de paquets dans une bande, par répulsion, à nombre de tirages
+ * FIXE.
  *
- * ⚠⚠ CE N'EST PLUS UN TOURNIQUET DEPUIS LE LOT COLONNE, 06/09. Il écrivait
- * `colonne = permutation[rang % 9]` et remplissait des rangées de neuf : la
- * charge par colonne était plate sur TOUTE graine, donc deux sites de même
- * niveau ne différaient que par le nom des colonnes. La charge se TIRE
- * désormais — voir `profilDeCharge` —, et les deux uniques y comptent par leur
- * plancher.
+ * Pour chaque paquet, `candidatsParPaquet` jeux `(forme, clé de rangée, colonne
+ * d'ancre)` sont tirés AVANT tout test. Un candidat est rejeté s'il sort de la
+ * bande ou de la grille, recouvre une case prise, fait dépasser le plafond de
+ * sa rangée, ou porte une colonne au-delà du plafond de colonne. Parmi ceux qui
+ * restent, on garde celui qui MAXIMISE la distance de Tchebychev minimale aux
+ * cases déjà prises, plafonnée à `repulsionMax` ; à égalité, la charge de
+ * colonne la plus faible tranche, puis le rang du tirage. Si les dix sont
+ * rejetés, `replierCaseParCase`.
+ *
+ * ⚠ LA RANGÉE D'ANCRE SE TIRE DANS LE TIERS PRÉFÉRÉ quand la bande en a — la
+ * défense —, dans la bande entière sinon. La forme, elle, peut déborder du tiers :
+ * seule la bande la borne. C'est ce qui rend le biais MOU.
+ *
+ * @param {object} placement le flux de PLACEMENT
+ * @param {Array<{taille:number, categorie:string|null}>} paquets
+ * @param {object} bande `{premiere, derniere}`
+ * @param {number} plafondRangee
+ * @param {number} nb occupants de la bande en tout
+ * @param {string} quoi pour les messages
+ * @returns {{ cases: Array<Array<{rangee,colonne}>>, compteur: object }}
  */
-function placerBatiments(rng, placement, liste, niveau) {
-  const fond = GRILLE.bandes.batiments.derniere;
-  const premiere = GRILLE.bandes.batiments.premiere;
-  const poses = [];
-  const proportionnels = [];
-  // ⚠⚠ LES COLONNES DES DEUX UNIQUES SE TIRENT DEPUIS LE LOT DISPOSITION-OUVRAGE
-  // — point 9 d'Ethan, « souche et étai restent au fond ». Elles valaient le
-  // centre exact et son voisin de gauche, donc 5 et 4 SUR TOUTE GRAINE : mesuré,
-  // une seule position sur 240 montages. La RANGÉE, elle, ne bouge pas : ce sont
-  // les deux objectifs du raid, et ils doivent coûter la traversée complète.
-  // Les avancer raccourcirait tous les raids du jeu, ce qu'Ethan n'a pas demandé.
-  //
-  // ⚠ HUIT TIRAGES, TOUJOURS — `melanger` en consomme `n − 1` quel que soit ce
-  // qu'on garde ensuite. Le compte ne dépend donc pas du nombre d'uniques.
-  const colonnesDesUniques = melanger(placement, colonnes());
-  for (const id of liste) {
-    if (BATIMENTS[id].unique) {
-      const colonne = colonnesDesUniques[poses.length];
-      poses.push({ id, rangee: fond, colonne, niveau });
-    } else {
-      proportionnels.push(id);
-    }
-  }
-  const plancher = new Array(GRILLE.largeur).fill(0);
-  for (const p of poses) plancher[p.colonne - 1] += 1;
+function poserLesPaquets(placement, paquets, bande, plafondRangee, nb, quoi) {
+  const K = DISPOSITION_DEFENSES.candidatsParPaquet;
+  const plafondColonne = Math.ceil(nb / GRILLE.largeur) + DISPOSITION_DEFENSES.margeDeColonne;
+  const etat = ouvrirLaBande(bande, plafondRangee, plafondColonne);
+  const compteur = { replis: 0, colonneRelachee: 0, candidatsRetenus: [] };
 
-  // ⚠ `GRILLE.largeur` EST LE PLAFOND DES BÂTIMENTS, ET CE N'EST PAS
-  // `occupantsMaxParRangee` — la réponse à la question du brief. Neuf bâtiments
-  // par rangée sont légaux ; six est la règle des DÉFENSES, et elle a un motif
-  // que les bâtiments n'ont pas : laisser passer l'assaut. Le relevé qui montrait
-  // « 7 occupants en rangée 11 » lisait une rangée de BÂTIMENTS, pas une
-  // violation. Mesuré sur les trois types, cinquante niveaux et vingt graines :
-  // défenses 6 au plus, bâtiments 9 au plus.
-  const tailles = taillesDeRangee(
-    rng, proportionnels.length, GRILLE.largeur, fond - premiere,
-    DISPOSITION_DEFENSES.brassagesDeRangee, 'bâtiments',
-  );
-  const charge = profilDeCharge(
-    rng, proportionnels.length, tailles,
-    DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, plancher,
-  );
-  const lignes = repartirLesColonnes(rng, tailles, charge);
-  // ⚠⚠ LE BLOC FLOTTE DEPUIS LE LOT DISPOSITION-OUVRAGE. `rangee: premiere + j`
-  // le clouait à la rangée 11 : mesuré, les bâtiments commençaient en 11 sur
-  // 240 montages sur 240, ce qu'Ethan décrit par « tous les bâtiments au premier
-  // rang ». Les offsets sont tirés sur le flux de PLACEMENT — voir
-  // `placementDesRangees` et le §5 qui explique pourquoi ce n'est pas le premier.
-  //
-  // ⚠ LA RANGÉE DU FOND RESTE HORS DU BLOC. La bande fait huit rangées, la
-  // dernière porte les deux uniques : `fond - premiere` en offre sept aux
-  // proportionnels, comme avant. Les y laisser entrer les ferait entrer en
-  // collision avec Souche et Étai, dont les colonnes se tirent désormais.
-  const offsets = placementDesRangees(
-    placement, lignes.length, fond - premiere, DISPOSITION_DEFENSES.etalementMaxRangees,
-  );
-  let rang = 0;
-  lignes.forEach((cols, j) => {
-    for (const colonne of cols) {
-      poses.push({ id: proportionnels[rang], rangee: premiere + offsets[j], colonne, niveau });
-      rang += 1;
+  // Tous les tirages d'abord, pour le nombre MAXIMAL de paquets.
+  const tirages = [];
+  for (let p = 0; p < nbPaquetsMax(nb); p += 1) {
+    const cleTiers = entier(placement, 0, CLE_MAX);
+    const candidats = [];
+    for (let k = 0; k < K; k += 1) {
+      candidats.push({
+        cleForme: entier(placement, 0, CLE_MAX),
+        cleRangee: entier(placement, 0, CLE_MAX),
+        colonne: entier(placement, 1, GRILLE.largeur),
+      });
+    }
+    tirages.push({ cleTiers, candidats });
+  }
+
+  const cases = [];
+  paquets.forEach((paquet, p) => {
+    const { cleTiers, candidats } = tirages[p];
+    const formes = formesDeTaille(paquet.taille);
+    const zone = paquet.categorie === null ? bande : tiersPrefere(cleTiers, paquet.categorie);
+    const hauteur = zone.derniere - zone.premiere + 1;
+    let meilleur = null;
+    candidats.forEach((cand, k) => {
+      const forme = formes[borner(cand.cleForme, formes.length)];
+      const ancre = { rangee: zone.premiere + borner(cand.cleRangee, hauteur), colonne: cand.colonne };
+      const jeu = forme.map(([dr, dc]) => ({ rangee: ancre.rangee + dr, colonne: ancre.colonne + dc }));
+      if (!admissible(etat, jeu)) return;
+      const score = [repulsion(etat, jeu), -chargeDeColonne(etat, jeu), -k];
+      if (meilleur === null
+        || score[0] > meilleur.score[0]
+        || (score[0] === meilleur.score[0] && score[1] > meilleur.score[1])) {
+        meilleur = { jeu, score, k };
+      }
+    });
+    if (meilleur !== null) {
+      for (const c of meilleur.jeu) prendre(etat, c);
+      cases.push(meilleur.jeu);
+      compteur.candidatsRetenus.push(meilleur.k);
+    } else {
+      cases.push(replierCaseParCase(etat, paquet.taille, rangeesDeLaBande(zone), quoi, compteur));
+      compteur.candidatsRetenus.push(null);
     }
   });
-  return poses;
+  return { cases, compteur };
 }
 
 /**
- * Pose les défenses.
+ * Pose les bâtiments par paquets. Souche et Étai sont deux occupants comme les
+ * autres, et rejoignent des paquets — le MÊME une fois sur
+ * `uniquesDansLeMemePaquetUneFoisSur`, deux paquets distincts sinon.
  *
- * Trois contraintes, satisfaites par CONSTRUCTION plutôt que par rattrapage :
+ * ⚠⚠ ILS NE SONT PLUS CLOUÉS À LA RANGÉE 18 — lot PAQUETS, arbitré par Ethan le
+ * 09/09. Le motif d'avant — « ce sont les deux objectifs du raid, ils doivent
+ * coûter la traversée complète » — était presque inerte, et c'est MESURÉ : en
+ * les déplaçant de la rangée 18 vers 15, 13 puis 11, 120 raids par ligne, le
+ * taux de rasage ne bouge pas (±1 sur 120 ; joueur 30 vs base 15 : 118 · 118 ·
+ * 116 · 118) et seule la durée tombe de 20 à 30 % (173 → 122 ticks). À niveau
+ * égal c'est 0 rasage sur 120 quelle que soit la rangée : l'assaut meurt dans la
+ * bande de défense. La traversée ne protégeait rien.
  *
- *   1. les défenses occupent les rangées les plus ARRIÈRE de la bande, collées
- *      aux bâtiments — l'attaquant traverse d'abord du vide ;
- *   2. six occupants au plus par rangée de neuf colonnes, donc trois colonnes
- *      libres au minimum : sans passage, le terrain ne décide plus rien ;
- *   3. l'écart de charge entre colonnes n'excède jamais `ecartColonnesMax` —
- *      l'ASSAUT ne change jamais de colonne, une colonne à huit structures
- *      serait infranchissable et une colonne vide une autoroute.
+ * ⚠ « DEVANT » VEUT DIRE RANGÉE 11, PAS RANGÉE 3 : `creerCombat` refuse un
+ * bâtiment hors de sa bande, et `RANGEE_DEFENSE_FRANCHIE` pilote le plancher de
+ * réserve à la rangée 11. Les bandes ne bougent pas ; c'est un autre lot.
  *
- * ⚠⚠ LES TAILLES DE RANGÉE SE TIRENT DEPUIS LE LOT CIBLES-RANGÉES, 07/09. Ce
- * paragraphe disait : « les rangées se remplissent du fond vers l'avant,
- * `occupantsMaxParRangee` à la fois, la rangée la plus AVANCÉE portant le reste.
- * Le nombre de rangées vaut donc toujours `ceil(nb / 6)`, et il n'a pas bougé. »
- * C'était vrai, et c'était le défaut restant : le nᵉ occupant tombait toujours
- * dans la même rangée, si bien qu'un camp de niveau 7 portait 5 occupants en
- * rangée 10 et 7 en rangée 11 SUR TOUTE GRAINE. Voir `taillesDeRangee`. Ce qui
- * ne bouge pas : le bloc reste COLLÉ AU FOND et sans trou.
- *
- * ⚠⚠ CE QUI A BOUGÉ, C'EST LA COLONNE — lot COLONNE, 06/09, point 9. Ce
- * paragraphe expliquait que « l'indice global i donne la colonne par
- * `permutation[i % 9]` », et en tirait que « chaque colonne reçoit floor(N/9) ou
- * ceil(N/9) défenses, donc un écart de 1 au plus ». C'était vrai, et c'était le
- * défaut : un écart de 1 au plus SUR TOUTE GRAINE veut dire que la charge par
- * colonne ne dépend pas de la graine, donc que deux sites de même niveau sont
- * l'image l'un de l'autre par une permutation. La charge se TIRE maintenant,
- * dans le budget d'écart de la table — voir `profilDeCharge`.
- *
- * ⚠ ET LE BUDGET N'A PAS ÉTÉ RELEVÉ POUR L'OCCASION : `ecartColonnesMax` vaut 2
- * depuis le lot 2B, et le placement d'avant n'en employait qu'un. Le lot cesse
- * de laisser une moitié du budget inutilisée ; il n'en demande pas davantage.
- *
- * L'ordre de la liste porte le reste : artilleries d'abord, donc au fond.
- *
- * ⚠⚠ ET LA RAISON QUE CETTE PHRASE DONNAIT ÉTAIT FAUSSE — corrigée au lot
- * CIBLES-RANGÉES. Elle disait : « une artillerie a une portée minimale de 3,5 —
- * posée à l'avant, elle ne tirerait jamais. » `data/sites.js` a mesuré le
- * contraire dès le 25/08 : le moteur teste une distance EUCLIDIENNE 2D, donc une
- * Faucheuse en rangée 3 atteint les colonnes lointaines — 23 ticks de tir
- * mesurés, premier tir au tick 1. Elle n'est PAS inerte. Ce qui est vrai, et qui
- * suffit à fonder l'ordre : elle ENGAGE MOINS — 23 ticks contre 110 en rangée
- * 10, et 32 cases de couverture contre 50. `verifierLeRetraitDesPortees` garde
- * l'ordre, `rangeeLaPlusAvanceeQuiTire` garde la géométrie, et le second est
- * vacueux aujourd'hui : aucune rangée de la bande n'est interdite à personne.
+ * @returns {{ poses: object[], compteur: object }}
  */
-function placerDefenses(rng, placement, liste, niveau) {
-  const parRangee = DISPOSITION_DEFENSES.occupantsMaxParRangee;
-  const bande = GRILLE.bandes.defense;
-  const rangeesMax = bande.derniere - bande.premiere + 1;
+function placerBatiments(placement, liste, niveau) {
+  const bande = GRILLE.bandes.batiments;
   const nb = liste.length;
-  if (nb === 0) return [];
-  const tailles = taillesDeRangee(
-    rng, nb, parRangee, rangeesMax, DISPOSITION_DEFENSES.brassagesDeRangee, 'défenses',
+  const tailles = decouperEnPaquets(placement, nb);
+  // Les trois tirages des uniques, toujours pris — même à un seul paquet.
+  const memePaquet = entier(placement, 1, DISPOSITION_DEFENSES.uniquesDansLeMemePaquetUneFoisSur) === 1;
+  const cle1 = entier(placement, 0, CLE_MAX);
+  const cle2 = entier(placement, 0, CLE_MAX);
+
+  const uniques = [];
+  const proportionnels = [];
+  liste.forEach((id, i) => (BATIMENTS[id].unique ? uniques : proportionnels).push(i));
+  if (uniques.length > 2) throw new Error(`générateur : ${uniques.length} uniques, deux attendus`);
+
+  // Les créneaux de chaque paquet, remplis par les uniques puis les autres.
+  const creneaux = tailles.map((t) => new Array(t).fill(null));
+  const p1 = borner(cle1, tailles.length);
+  let p2;
+  if (memePaquet || tailles.length === 1) {
+    p2 = p1;
+  } else {
+    p2 = borner(cle2, tailles.length - 1);
+    if (p2 >= p1) p2 += 1;
+  }
+  const paquetDesUniques = [p1, p2];
+  uniques.forEach((i, u) => {
+    const paquet = creneaux[paquetDesUniques[u]];
+    paquet[paquet.indexOf(null)] = i;
+  });
+  let suivant = 0;
+  for (const paquet of creneaux) {
+    for (let s = 0; s < paquet.length; s += 1) {
+      if (paquet[s] === null) paquet[s] = proportionnels[suivant++];
+    }
+  }
+  if (suivant !== proportionnels.length) {
+    throw new Error(`générateur : ${suivant} créneaux pour ${proportionnels.length} bâtiments`);
+  }
+
+  const paquets = tailles.map((taille) => ({ taille, categorie: null }));
+  const { cases, compteur } = poserLesPaquets(
+    placement, paquets, bande, GRILLE.largeur, nb, 'bâtiments',
   );
-  const charge = profilDeCharge(
-    rng, nb, tailles,
-    DISPOSITION_DEFENSES.ecartColonnesMax, DISPOSITION_DEFENSES.brassagesDeCharge, null,
-  );
-  const lignes = repartirLesColonnes(rng, tailles, charge);
-  // ⚠⚠ LE BLOC FLOTTE DEPUIS LE LOT DISPOSITION-OUVRAGE. `rangee: derniere - j`
-  // le collait à la rangée 10 : mesuré, les défenses finissaient en rangée 10
-  // sur 240 montages sur 240, ce qu'Ethan décrit par « les unités de défense
-  // sont au fond ». La contrainte 1 ci-dessus — « collées aux bâtiments,
-  // l'attaquant traverse d'abord du vide » — est donc RELÂCHÉE, et c'est le
-  // point 9 lui-même qui la relâche : elle était l'invariant, pas un effet de
-  // bord. Ce qui ne se relâche pas : le plafond par rangée, la bande, l'ordre
-  // de retrait des portées, et le déterminisme.
-  //
-  // ⚠ L'ORDRE DE RETRAIT SURVIT PAR CONSTRUCTION, ET LA GARDE LE MESURE QUAND
-  // MÊME. Les offsets croissent, et la rangée DÉCROÎT avec l'offset : le rang 0
-  // de la liste — donc l'artillerie, `ordonnerDefenses` la mettant en tête —
-  // garde la rangée la plus arrière du bloc. Le bloc entier se décale ; il ne se
-  // retourne pas.
-  const offsets = placementDesRangees(
-    placement, lignes.length, rangeesMax, DISPOSITION_DEFENSES.etalementMaxRangees,
+  const poses = new Array(nb);
+  creneaux.forEach((paquet, p) => {
+    paquet.forEach((i, s) => {
+      poses[i] = { id: liste[i], rangee: cases[p][s].rangee, colonne: cases[p][s].colonne, niveau };
+    });
+  });
+  return { poses, compteur };
+}
+
+/**
+ * Pose les défenses par paquets. La liste arrive groupée par catégorie
+ * (`ordonnerDefenses`), si bien qu'un paquet est homogène — au plus deux
+ * catégories à la couture — et que son tiers préféré, tiré sur la catégorie de
+ * son premier membre, a un sens.
+ *
+ * ⚠⚠ L'ORDRE DES CATÉGORIES N'EST PLUS UN INTERDIT, C'EST UN BIAIS — §1.3 du
+ * brief. Mesuré avant le lot, base 40, 500 graines : l'artillerie jamais devant
+ * la rangée 8, la barrière jamais derrière la 6. Ethan : « un peu plus mou, de
+ * l'artillerie au milieu et des barrières au milieu ». Le gradient reste — les
+ * poids de `poidsDeTiers` —, l'interdit tombe.
+ *
+ * ⚠ CE QUI NE BOUGE PAS : six occupants par rangée (`occupantsMaxParRangee`),
+ * la bande, le déterminisme, et la moitié GÉOMÉTRIQUE de
+ * `verifierLeRetraitDesPortees`.
+ */
+function placerDefenses(placement, liste, niveau) {
+  const bande = GRILLE.bandes.defense;
+  const nb = liste.length;
+  if (nb === 0) return { poses: [], compteur: { replis: 0, colonneRelachee: 0, candidatsRetenus: [] } };
+  const tailles = decouperEnPaquets(placement, nb);
+  const paquets = [];
+  let debut = 0;
+  for (const taille of tailles) {
+    paquets.push({ taille, categorie: categorieDe(liste[debut]) });
+    debut += taille;
+  }
+  const { cases, compteur } = poserLesPaquets(
+    placement, paquets, bande, DISPOSITION_DEFENSES.occupantsMaxParRangee, nb, 'défenses',
   );
   const poses = [];
   let i = 0;
-  lignes.forEach((cols, j) => {
-    for (const colonne of cols) {
-      // Du fond vers l'avant : 10, 9, 8… le bloc décalé de son offset.
-      poses.push({ id: liste[i], rangee: bande.derniere - offsets[j], colonne, niveau });
+  cases.forEach((jeu) => {
+    for (const c of jeu) {
+      poses.push({ id: liste[i], rangee: c.rangee, colonne: c.colonne, niveau });
       i += 1;
     }
   });
   verifierLeRetraitDesPortees(poses);
-  return poses;
+  return { poses, compteur };
 }
 
 /**
@@ -787,35 +775,24 @@ export function rangeeLaPlusAvanceeQuiTire(id) {
 }
 
 /**
- * L'artillerie reste DERRIÈRE tout le reste, et cette garde le dit.
+ * La moitié GÉOMÉTRIQUE de l'ancienne garde de retrait des portées : aucune
+ * artillerie ne se pose devant la rangée d'où elle ne tirerait plus.
  *
- * ⚠⚠ C'EST LA QUATRIÈME CONTRAINTE, ET C'EST CELLE QUE LA POSE LIBRE POUVAIT
- * PERDRE EN SILENCE. Elle tenait « par construction » : la liste arrive triée
- * par `ordonnerDefenses` — artillerie, tourelle, unité, mur, barrière — et les
- * rangées se remplissent du fond vers l'avant. Elle tient ENCORE, les tailles de
- * rangée tirées n'ayant pas changé cet ordre-là ; mais « par construction » est
- * exactement ce qui cesse d'être vrai quand la construction bouge, et ce lot la
- * fait bouger. On mesure donc, plutôt que de continuer à le déduire.
+ * ⚠⚠ ELLE EST VACUEUSE AUJOURD'HUI, ET ELLE RESTE — lot PAQUETS, §4 du brief.
+ * Mesuré au lot CIBLES-RANGÉES : aucune rangée de la bande n'est interdite à
+ * aucune pièce, donc elle ne lève pas. Elle deviendra mordante le jour où une
+ * portée minimale montera, et c'est précisément le jour où le placement libre
+ * serait dangereux. La garder coûte zéro.
  *
- * ⚠ LE MOTIF N'EST PAS QU'ELLE SERAIT MUETTE DEVANT — mesuré le 25/08, elle ne
- * l'est pas. C'est qu'elle ENGAGE MOINS : 23 ticks de tir en rangée 3 contre 110
- * en rangée 10, et une couverture géométrique qui tombe de 50 cases à 32. Le
- * motif est un motif de jeu, `DISPOSITION_DEFENSES.ordreCategories` le porte, et
- * cette garde ne fait que refuser qu'on le perde.
+ * ⚠⚠ SA MOITIÉ D'ORDRE — « l'artillerie reste DERRIÈRE tout le reste » — EST
+ * PARTIE AVEC LE LOT PAQUETS. C'est l'interdit que le §1.3 annule : l'ordre des
+ * catégories est devenu un biais MOU, porté par `poidsDeTiers`, et `PQ T6` le
+ * mesure dans les deux sens. Une garde qui lèverait sur une artillerie en
+ * rangée 5 rendrait ce biais impossible.
  */
 function verifierLeRetraitDesPortees(poses) {
-  const ordre = DISPOSITION_DEFENSES.ordreCategories;
   for (const a of poses) {
     if (categorieDe(a.id) !== 'artillerie') continue;
-    for (const b of poses) {
-      if (categorieDe(b.id) === 'artillerie') continue;
-      if (a.rangee < b.rangee) {
-        throw new Error(
-          `générateur : ${a.id} (artillerie) en rangée ${a.rangee}, devant `
-          + `${b.id} en rangée ${b.rangee} — l'ordre ${ordre.join(' → ')} est perdu`,
-        );
-      }
-    }
     if (a.rangee < rangeeLaPlusAvanceeQuiTire(a.id)) {
       throw new Error(
         `générateur : ${a.id} en rangée ${a.rangee}, devant sa rangée `
@@ -825,7 +802,7 @@ function verifierLeRetraitDesPortees(poses) {
   }
 }
 
-/** Trie les défenses du fond vers l'avant selon DISPOSITION_DEFENSES. */
+/** Groupe les défenses par catégorie, dans l'ordre de DISPOSITION_DEFENSES. */
 function ordonnerDefenses(liste) {
   const ordre = DISPOSITION_DEFENSES.ordreCategories;
   return [...liste]
@@ -978,18 +955,21 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
   const placement = creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_DES_RANGEES));
   const effectifs = densite(type, niveau);
 
-  const batiments = placerBatiments(rng, placement, composerBatiments(effectifs.batiments), niveau);
-
+  // ⚠⚠ LA COMPOSITION TIRE SUR `rng`, LE PLACEMENT SUR `placement`, ET LES DEUX
+  // NE SE CROISENT PLUS — lot PAQUETS, 09/09. La garnison se compose AVANT
+  // toute pose et après aucune : `rng` n'est plus consommé par personne d'autre.
   const garnison = composerRepartition(rng, GARNISON.parNiveau, niveau, GARNISON.variancePoints);
   const listeDefenses = [];
   for (const [id, n] of auPlusGrandReste(garnison, effectifs.defenses)) {
     for (let k = 0; k < n; k++) listeDefenses.push(id);
   }
-  const defenseurs = placerDefenses(rng, placement, ordonnerDefenses(listeDefenses), niveau);
+
+  const batiments = placerBatiments(placement, composerBatiments(effectifs.batiments), niveau).poses;
+  const defenseurs = placerDefenses(placement, ordonnerDefenses(listeDefenses), niveau).poses;
 
   const casesPrises = new Set();
   for (const e of [...batiments, ...defenseurs]) casesPrises.add(cleCase(e.rangee, e.colonne));
-  const obstacles = placerObstacles(rng, casesPrises);
+  const obstacles = placerObstacles(placement, casesPrises);
 
   return {
     // ⚠ LE TYPE VOYAGE AVEC LE MONTAGE DEPUIS LE LOT MULTIPLICATEUR (29/08), et

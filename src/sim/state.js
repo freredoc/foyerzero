@@ -66,7 +66,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 29;
+export const SAVE_VERSION = 30;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -3155,6 +3155,38 @@ const MIGRATIONS = {
           : 'collecteurQuartz';
       }
     }
+  },
+
+  /**
+   * v29 → v30 — lot PAQUETS, 09/09/2026 : les sites entamés sont VIDÉS.
+   *
+   * ⚠⚠ LE PLACEMENT D'UN SITE A CHANGÉ, ET LA GARNISON AVEC LUI. Avant ce lot
+   * `placerBatiments` consommait le flux de composition AVANT que
+   * `composerRepartition` ne compose la garnison ; retirer les tirages de
+   * placement de ce flux change donc la garnison de toute graine. Or
+   * `sim/site-entame.js` range `pvBatimentsMilli` et `pvDefensesMilli` PAR
+   * INDICE dans le montage régénéré : les dégâts de tout site à moitié rasé se
+   * retrouveraient sur d'autres pièces — sans erreur, sans message, sans test
+   * rouge — et `appliquer` lèverait « n PV rangés pour m pièces » au premier
+   * raid dès que les comptes divergent.
+   *
+   * ⚠ C'EST LE BON GESTE, ET IL EST GÉNÉREUX. Les bâtiments d'une base de
+   * l'Ouvrage reviennent tous au bout d'une heure de toute façon ; pour un camp
+   * ou un avant-poste à moitié rasé, le joueur retrouve un site intact — il y
+   * gagne. Remapper les indices serait plus long, plus fragile, et pire.
+   *
+   * ⚠ `basesRasees` N'EST PAS TOUCHÉE : elle ne porte que des cases et des
+   * vainqueurs, aucun indice de montage. Et aucune base du joueur n'est lue.
+   *
+   * ⚠⚠ ET C'EST LA DERNIÈRE FOIS QU'UN LOT DE PLACEMENT FAIT BOUGER
+   * `SAVE_VERSION` : depuis ce lot, le placement tire sur son propre flux, et la
+   * composition ne bouge plus quand la pose change.
+   *
+   * @param {object} s
+   */
+  29: (s) => {
+    s.version = 30;
+    s.sitesEntames = {};
   },
 };
 

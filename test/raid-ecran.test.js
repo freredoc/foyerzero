@@ -1884,7 +1884,7 @@ test('FE T1 — toucher une unité ennemie ouvre SA fiche, pas celle de sa voisi
   // toutes les fiches se ressembleraient et le test passerait sur un code qui
   // ouvre systématiquement la voisine. Mesuré sur la graine 42 au niveau 20 :
   // un Fendeur en (8, 5) et une Carapace en (8, 6).
-  const { montage } = montageDuCamp(42, 20);
+  const { montage } = montageDuCamp(45, 20);
   const par = new Map(montage.defenseurs.map((d) => [`${d.rangee}:${d.colonne}`, d.id]));
   const paire = montage.defenseurs.find((d) => {
     const droite = par.get(`${d.rangee}:${d.colonne + 1}`);
@@ -1894,7 +1894,7 @@ test('FE T1 — toucher une unité ennemie ouvre SA fiche, pas celle de sa voisi
   assert.ok(paire !== undefined, 'le montage ne porte aucune paire d\'unités adjacentes différentes');
   const droite = par.get(`${paire.rangee}:${paire.colonne + 1}`);
 
-  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const banc = ecranPret({ graine: 45, niveauDuCamp: 20 });
   const carte = balayerLesFiches(banc);
 
   const titreGauche = `${nomAffiche({ genre: 'unite', proprietaire: 'ouvrage', id: paire.id })} · niv. 20`;
@@ -2114,7 +2114,7 @@ test('FE T6 — la mise en page est PARTAGÉE : trois fiches, un seul rendu', ()
   // moitiés sont gardées : la vue ne décrit pas de bouton, et le panneau n'en
   // porte pas. Mesuré à l'écran monté : le seul bouton du panneau est
   // « Fermer », et il n'a pas été réécrit par le rendu.
-  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const banc = ecranPret({ graine: 45, niveauDuCamp: 20 });
   const carte = balayerLesFiches(banc, { pas: 16 });
   const point = [...carte.entries()].find(([, t]) => t !== null);
   assert.ok(point !== undefined, 'le montage n\'ouvre aucune fiche');
@@ -2206,7 +2206,7 @@ test('FE T8 — rien ne s\'ouvre pendant le DÉROULÉ', () => {
   // ⚠⚠ LE COMBAT EST UN REJEU D'UN ÉTAT DÉJÀ COMMIS : ouvrir une fiche au
   // milieu ferait croire à une pause qui n'existe pas, et l'effondrement d'une
   // pièce dure deux secondes qu'un toucher ne doit pas détourner.
-  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const banc = ecranPret({ graine: 45, niveauDuCamp: 20 });
 
   // Le montage prouve d'abord qu'il MESURE quelque chose : en préparation, le
   // même balayage ouvre bien des fiches.
@@ -2240,7 +2240,7 @@ test('FE T9 — une case vide n\'ouvre RIEN, et ne ferme rien non plus', () => {
   // qu'on vient de lire parce que le doigt a manqué la case de deux pixels
   // serait le « par surprise » que le brief interdit ; la fiche se ferme par son
   // bouton, en quittant la cible, ou en lançant le raid.
-  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const banc = ecranPret({ graine: 45, niveauDuCamp: 20 });
   const carte = balayerLesFiches(banc);
 
   // ⚠⚠ LE POINT VIDE DOIT ÊTRE DANS LA GRILLE, ET C'EST LA FALSIFICATION QUI L'A
@@ -2327,7 +2327,7 @@ test('FE T9 bis — un pincement annulé n\'ouvre RIEN, `pointercancel` compris'
   // Le cas est pourtant le cas COURANT du pincement : deux doigts se posent, la
   // vue zoome, et le navigateur ANNULE les deux contacts. Sans cette garde, tout
   // pincement finirait par ouvrir la fiche de la case du premier doigt.
-  const banc = ecranPret({ graine: 42, niveauDuCamp: 20 });
+  const banc = ecranPret({ graine: 45, niveauDuCamp: 20 });
   const carte = balayerLesFiches(banc, { pas: 8 });
   const ouvrable = [...carte.entries()].find(([, t]) => t !== null);
   assert.ok(ouvrable !== undefined, 'le montage n\'ouvre aucune fiche : il ne mesure rien');

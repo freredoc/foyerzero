@@ -758,7 +758,7 @@ test('COL T15 — deux graines diffèrent par autre chose qu\'une permutation de
 // échantillon d'une graine. Les trois contraintes sont celles de
 // `DISPOSITION_DEFENSES`, et le lot n'en relâche aucune — il cesse seulement de
 // laisser la moitié du budget d'écart inutilisée.
-test('COL T16 — six occupants par rangée, trois colonnes libres, écart ≤ 2', () => {
+test('COL T16 — six occupants par rangée, trois colonnes libres, plafond de colonne ⌈N/9⌉ + 2', () => {
   const parRangee = DISPOSITION_DEFENSES.occupantsMaxParRangee;
   // ⚠⚠ LES DEUX NOMBRES S'ÉCRIVENT EN CLAIR, ET C'EST DÉLIBÉRÉ. Une garde qui
   // lit son seuil dans la table qu'elle garde ne peut PAS voir ce seuil se
@@ -768,9 +768,15 @@ test('COL T16 — six occupants par rangée, trois colonnes libres, écart ≤ 2
   // faire passer un lot : c'est exactement la faute que ces deux lignes-ci
   // rendent visible. Le jour où Ethan arbitre autrement, elles se changent avec
   // la table, et le lot le dit.
+  //
+  // ⚠⚠ `ecartColonnesMax` EST RETIRÉ — LOT PAQUETS, 09/09. Son motif (« une
+  // colonne vide serait une autoroute ») est tombé avec le décalage latéral du
+  // lot COLONNE, et l'audit du 09/09 mesure ZÉRO colonne libre dès le niveau
+  // 15. La borne en clair est désormais `margeDeColonne` : au plus
+  // `⌈N/9⌉ + 2` occupants d'un même groupe dans une colonne.
   assert.equal(parRangee, 6, 'six occupants sur neuf colonnes : trois libres au minimum');
-  assert.equal(DISPOSITION_DEFENSES.ecartColonnesMax, 2,
-    'le budget d\'écart a été relevé — une borne ne se desserre pas pour faire passer un lot');
+  assert.equal(DISPOSITION_DEFENSES.margeDeColonne, 2,
+    'la marge de colonne a été relevée — une borne ne se desserre pas pour faire passer un lot');
   let ecartMax = 0;
   for (let g = 1; g <= 100; g += 1) {
     for (const [type, niveau, saveur] of [
@@ -784,38 +790,29 @@ test('COL T16 — six occupants par rangée, trois colonnes libres, écart ≤ 2
         assert.ok(n <= parRangee, `${type}/g${g} rangée ${rangee} : ${n} occupants`);
         assert.ok(GRILLE.largeur - n >= 3, `${type}/g${g} rangée ${rangee} : moins de 3 libres`);
       }
-      // 2. ⚠⚠ LE BLOC FLOTTE DEPUIS LE LOT DISPOSITION-OUVRAGE, 08/09, ET
-      //    CETTE GARDE CHANGE DE CIBLE. Elle exigeait `r === derniere - k` :
-      //    un bloc collé à la rangée 10, sans trou. Mesuré avant ce lot-là, les
-      //    défenses finissaient en rangée 10 sur 240 montages sur 240 — c'est
-      //    exactement ce qu'Ethan décrit au point 9 par « les unités de défense
-      //    sont au fond », donc l'invariant qu'on lui demande de relâcher. Ce
-      //    qui reste tenu : la bande, et un étalement borné — voir
-      //    `etalementMaxRangees`.
+      // 2. la bande. ⚠ LOT PAQUETS : le bloc a disparu et l'étalement n'est
+      //    plus borné — un trou entre deux paquets est ce qu'on demande ; ce qui
+      //    sépare un paquet d'un semis est `PQ T2` et le plafond de colonne.
       const bande = GRILLE.bandes.defense;
       const rangees = [...parLigne.keys()].sort((a, b) => b - a);
       for (const r of rangees) {
         assert.ok(r >= bande.premiere && r <= bande.derniere,
           `${type}/g${g} : rangée ${r} hors de la bande de défense`);
       }
-      const etendue = rangees[0] - rangees[rangees.length - 1] + 1;
-      assert.ok(etendue <= rangees.length + DISPOSITION_DEFENSES.etalementMaxRangees,
-        `${type}/g${g} : bloc étalé sur ${etendue} rangées pour ${rangees.length} employées`);
-      // 3. l'écart de charge, sur les DEUX groupes.
+      // 3. le plafond de colonne, sur les DEUX groupes.
       for (const groupe of [site.defenseurs, site.batiments]) {
         const charge = new Array(GRILLE.largeur).fill(0);
         for (const e of groupe) charge[e.colonne - 1] += 1;
-        const ecart = Math.max(...charge) - Math.min(...charge);
-        assert.ok(ecart <= DISPOSITION_DEFENSES.ecartColonnesMax,
-          `${type}/g${g} : écart de ${ecart} — ${charge}`);
-        ecartMax = Math.max(ecartMax, ecart);
+        const plafond = Math.ceil(groupe.length / GRILLE.largeur) + DISPOSITION_DEFENSES.margeDeColonne;
+        assert.ok(Math.max(...charge) <= plafond,
+          `${type}/g${g} : ${Math.max(...charge)} dans une colonne, plafond ${plafond} — ${charge}`);
+        ecartMax = Math.max(ecartMax, Math.max(...charge) - Math.min(...charge));
       }
     }
   }
-  // ⚠ ET LE BUDGET EST VRAIMENT CONSOMMÉ : sans cette ligne, un placement resté
-  // parfaitement plat passerait la garde ci-dessus sans rien prouver du lot.
-  assert.equal(ecartMax, DISPOSITION_DEFENSES.ecartColonnesMax,
-    'le placement n\'atteint jamais le budget d\'écart : la charge est restée plate');
+  // ⚠ ET L'ÉCART MAXIMAL EST ÉCRIT EN CLAIR : 6, mesuré sur ces 300 montages. Il
+  // valait 2 sous l'ancien budget ; un `<=` seul laisserait glisser sans un mot.
+  assert.equal(ecartMax, 6, `écart maximal entre colonnes : ${ecartMax}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -847,18 +844,19 @@ test('COL T17 — même graine, même disposition au bit près', () => {
 // COL T18 — Souche et Étai restent au fond
 // ---------------------------------------------------------------------------
 //
-// ⚠ CE SONT LES DEUX OBJECTIFS DU RAID, et le brief l'exige explicitement : ils
-// doivent coûter la traversée complète. Le lot change la pose des
-// PROPORTIONNELS ; les deux uniques sont posés hors de ce tirage, et ce test
-// mesure qu'ils y sont restés.
-test('COL T18 — Souche et Étai au fond, colonnes tirées, sur cent graines', () => {
+// ⚠ CE SONT LES DEUX OBJECTIFS DU RAID, et le brief COLONNE l'exigeait : ils
+// devaient coûter la traversée complète. ⚠⚠ RENVERSÉ AU LOT PAQUETS, 09/09 —
+// Ethan : « un ratio de destruction trop grand ». Ils flottent dans leur bande
+// comme les autres ; mesuré avant d'écrire une ligne, le taux de rasage ne
+// bouge pas, seule la durée du raid baisse. Ce test garde ce qui reste vrai :
+// un de chaque, deux cases distinctes, la bande, et les huit rangées atteintes.
+test('COL T18 — Souche et Étai dans leur bande, rangées et colonnes tirées, sur cent graines', () => {
   // ⚠⚠ « AU CENTRE » EST TOMBÉ AU LOT DISPOSITION-OUVRAGE, 08/09 — troisième
   // membre du point 9 d'Ethan, « souche et étai restent au fond ». Les deux
   // colonnes valaient 5 et 4 sur toute graine : une seule position sur 240
-  // montages, mesuré. Ce qui RESTE est la rangée du fond, et elle n'est pas
-  // négociable — ce sont les deux objectifs du raid, ils doivent coûter la
-  // traversée complète.
-  const fond = GRILLE.bandes.batiments.derniere;
+  // montages, mesuré. « AU FOND » est tombé au lot PAQUETS, 09/09.
+  const bande = GRILLE.bandes.batiments;
+  const rangees = { souche: new Set(), etai: new Set() };
   for (let g = 1; g <= 100; g += 1) {
     for (const [type, niveau, saveur] of [
       ['base', 25, null], ['camp', 12, 'richeQuartz'], ['avantPoste', 40, 'richeScorie'],
@@ -867,17 +865,20 @@ test('COL T18 — Souche et Étai au fond, colonnes tirées, sur cent graines', 
       const souche = site.batiments.find((b) => b.id === 'souche');
       const etai = site.batiments.find((b) => b.id === 'etai');
       assert.ok(souche !== undefined && etai !== undefined, `${type}/g${g} : un unique manque`);
-      assert.equal(souche.rangee, fond, `${type}/g${g} : la Souche a quitté le fond`);
-      assert.equal(etai.rangee, fond, `${type}/g${g} : l'Étai a quitté le fond`);
-      assert.notEqual(souche.colonne, etai.colonne,
+      for (const u of [souche, etai]) {
+        assert.ok(u.rangee >= bande.premiere && u.rangee <= bande.derniere,
+          `${type}/g${g} : « ${u.id} » en rangée ${u.rangee}, hors de la bande`);
+        rangees[u.id].add(u.rangee);
+      }
+      assert.ok(souche.colonne !== etai.colonne || souche.rangee !== etai.rangee,
         `${type}/g${g} : la Souche et l'Étai partagent une case`);
-      // ⚠ ET AUCUN PROPORTIONNEL NE VIENT S'ASSEOIR DESSUS : les deux uniques
-      // sont posés avant le tirage, leur plancher est réservé, et le test le
-      // vérifie plutôt que de le croire.
-      const surLeFond = site.batiments.filter((b) => b.rangee === fond);
-      assert.equal(surLeFond.length, 2, `${type}/g${g} : ${surLeFond.length} bâtiments au fond`);
     }
   }
+  // ⚠ FALSIFIABLE : un générateur qui les aurait laissés au fond passerait tout
+  // ce qui précède. Mesuré : les huit rangées, des deux côtés.
+  const hauteur = bande.derniere - bande.premiere + 1;
+  assert.equal(rangees.souche.size, hauteur, `la Souche n'atteint que ${rangees.souche.size} rangées`);
+  assert.equal(rangees.etai.size, hauteur, `l'Étai n'atteint que ${rangees.etai.size} rangées`);
 });
 
 // ---------------------------------------------------------------------------
@@ -928,8 +929,11 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   // échantillon de dispositions, pas une dette qui se referme. Le défaut est
   // dans `pvCourantsDesDefenses` quand l'Étai est tombé, et aucune ligne de ce
   // lot ne l'a touché.
+  // ⚠ LOT PAQUETS (09/09) : LES TROIS TRIPLETS ONT ENCORE BOUGÉ — la dette n'est
+  // pas payée, elle s'est déplacée avec la disposition. Balayage de 600
+  // scénarios : huit lèvent encore, du même message. Trois d'entre eux.
   for (const [type, niveau, graine] of [
-    ['camp', 22, 20], ['camp', 22, 33], ['camp', 28, 32],
+    ['camp', 28, 19], ['camp', 25, 31], ['camp', 30, 60],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
+Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
 
 ---
 
@@ -42,7 +42,85 @@ Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 08/09/2026 (après le lot VOISINAGE-ET-MENACE), à confronter :**
+**Référence au 09/09/2026 (après le lot PAQUETS), à confronter :**
+`npm test` rend **1524 pass / 0 fail** au sens de la garde de `documentation.test.js`
+— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1523 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. `npm run build` → `dist/index.html`, **9 134 181 octets**, 0 référence
+externe. Coût **+3 085 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré contre le
+livrable rebâti sur l'arbre pristine de `main` = `598d23a` (**9 131 096**) :
+**JavaScript +3 085 · feuille +0 · balisage +0 · images +0 · audio +0**, `data:`
+à **311 lignes / 306 URI** des deux côtés. Borne T10 inchangée à 9 300 000,
+marge **165 819 octets, 1,78 %**. Le lot touche `src/data/sites.js`,
+`src/sim/generateur.js`, `src/sim/state.js`, dix-neuf fichiers de `test/`, et
+fait entrer `test/paquets.test.js` et `test/generateur-ancien.js`.
+⚠⚠ **LE PLACEMENT D'UN SITE N'EST PLUS UN MODÈLE LIGNE/COLONNE, C'EST DES
+PAQUETS.** Ethan, 09/09 : « des paquets de 3-4, quelques-uns au fond, quelques-uns
+devant ». `taillesDeRangee`, `contigueDepuisLOrigine`, `profilRealisable`,
+`profilDeCharge`, `repartirLesColonnes` et `placementDesRangees` SORTENT de
+`generateur.js` ; `decouperEnPaquets`, `poserLesPaquets` et un catalogue de
+polyominos (`FORMES_DE_PAQUET`, tailles 1 à 5) entrent. Dix candidats par
+paquet, tirés AVANT tout test ; on garde celui qui maximise la distance de
+Tchebychev minimale aux cases prises (plafonnée à 4), puis la charge de colonne
+la plus basse, puis le rang. Le repli case par case ne tire rien.
+⚠⚠ **LA SOUCHE ET L'ÉTAI NE SONT PLUS CLOUÉS AU FOND.** Mesuré AVANT d'écrire
+une ligne : le taux de rasage ne bouge pas, la DURÉE du raid baisse de 20 à
+30 %. Ils entrent dans les paquets comme les autres — dans le MÊME paquet une
+fois sur trois (`entier(1,3)`), sinon deux paquets distincts — et flottent sur
+les huit rangées de la bande : `PQ T1` mesure 11:83 · 12:59 · 13:53 · 14:52 ·
+15:73 · 16:73 · 17:75 · 18:32 sur 500 graines, maximum 16,6 %.
+⚠⚠ **L'ORDRE DES CATÉGORIES DEVIENT UN BIAIS DE TIERS, PLUS UNE LOI.** La bande
+de défense se lit en trois tiers — avant 3–5, milieu 6–7, arrière 8–10, DÉRIVÉS
+de `GRILLE.bandes.defense` — et chaque paquet tire son tiers selon
+`poidsDeTiers`. Poids retenus : artillerie 5/20/75 · tourelle 10/30/60 · unité
+30/40/30 · mur 60/30/10 · barrière 85/12/3. Moyennes mesurées, base n.40 × 500 :
+**8,25 · 7,53 · 6,06 · 5,54 · 4,86**, toutes séparées d'au moins 0,3, et chaque
+catégorie paraît à l'avant ET à l'arrière. ⚠ Sur le balayage mixte de
+`generateur.test.js` (onze niveaux, trois types), unité et mur ne sont séparés
+que de 0,16 — les deux sont centrées sur le milieu, et le calibrage est fait
+sur base n.40 : **Ethan tranche** s'il veut le mur plus franchement devant.
+⚠⚠ **`verifierLeRetraitDesPortees` NE GARDE PLUS QUE SA MOITIÉ GÉOMÉTRIQUE.**
+Une artillerie peut être devant une unité ; elle ne peut toujours pas être
+devant sa portée minimale — et cette moitié-là est VACUEUSE aujourd'hui, ce que
+`CR T3` mesure. `ordonnerDefenses` reste : les paquets sont des tranches
+CONSÉCUTIVES de sa liste, donc la catégorie d'un paquet est celle de sa tête.
+⚠⚠ **TOUT LE PLACEMENT TIRE SUR `placement`, ET `rng` NE SERT PLUS QU'À
+`composerRepartition`.** Conséquence mesurée : la garnison de TOUTE graine
+change de tirage — c'est pourquoi les vingt-cinq témoins de `bases.test.js`,
+huit raids de référence et le témoin de combat bougent. `PQ T7` tourne tous les
+boutons de la table et exige les mêmes identifiants ; `PQ T8` rejoue la QUEUE
+du flux (les obstacles) sur 3 000 montages pour prouver que le compte de
+tirages ne dépend que de `(type, niveau)`.
+⚠⚠ **`SAVE_VERSION` PASSE À 30, ET C'EST LA DERNIÈRE FOIS QU'UN LOT DE
+PLACEMENT LE FAIT.** `sitesEntames` range les PV PAR INDICE dans un montage
+régénéré : la migration 29 → 30 le VIDE, et ne touche pas `basesRasees`. Le
+placement tirant désormais sur son propre flux, tout d'avance, un lot qui le
+retouche ne change plus la composition — écrit dans `state.js`.
+⚠⚠ **LES TÉMOINS DE COMBAT SONT RECAPTURÉS, ET C'EST LA SEULE FOIS OÙ C'ÉTAIT
+PERMIS — LE §7 DU BRIEF PRESCRIT LA PROCÉDURE ET ELLE EST SUIVIE.** (1) l'ANCIEN
+placement est copié dans `test/generateur-ancien.js`, jamais dans `src/` ; (2)
+les deux cents empreintes d'avant sont REJOUÉES sur le moteur courant avec
+l'ancien placement, sous les quatre couches : **0 écart, 1 331 surchargés, 269
+gardés** — exactement le compte d'avant, donc le MOTEUR n'a pas bougé ; (3)
+alors seulement, deux cents empreintes neuves sont capturées (`TEMOINS_COMBAT`),
+et l'ancienne table devient `TEMOINS_COMBAT_AVANT_PAQUETS`. `JOURNAL T1 bis`
+rejoue le point 2 à chaque `npm test`. ⚠ Le témoin de BASES-0 gagne une
+DIX-SEPTIÈME couche, `DEPLACES_PAR_PAQUETS` — 58 couples, phases 7 à 14,
+UNIQUEMENT `rapports` : les six premières phases et les scalaires sont
+identiques au bit. `temoins-couts.js` ne dépend pas des sites : intact.
+⚠⚠ **VINGT-SEPT TESTS ONT PERDU LEUR RÈGLE OU LEUR ANCRE, AUCUN N'EST SUPPRIMÉ
+ET AUCUNE ASSERTION N'EST ASSOUPLIE.** Chaque retrait est repris par un `PQ T*`
+nommé dans le test qui le retire, et `RAPPORT-lotPAQUETS.md` §6 porte la
+correspondance. Onze tests entrent (`PQ T1` à `T11`), un de plus dans
+`journal.test.js`, et le compte passe de 1 512 à 1 524.
+⚠ **`fendeur: 0` EST RETIRÉ DU PALIER 50 DE `GARNISON`** (§9.4) : l'interpolation
+traite une clé absente comme zéro, et le témoin de combat ne bouge pas.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Le lot ne change aucun
+pixel : il pose les mêmes sprites sur d'autres cases.
+
+**Auparavant, après le lot VOISINAGE-ET-MENACE :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST LE MÊME POINT D'ARRÊT QU'AU LOT
 PRÉCÉDENT.** `npm test` rend **1480 pass / 1 fail** ; le dépôt DÉCLARE **1512 pass / 0 fail**
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
@@ -9201,7 +9279,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   64 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   65 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -9212,7 +9290,14 @@ test/                   64 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage
+  voisinage  paquets
+  ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
+    la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
+    nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
+    `JOURNAL T1 bis`, qui rejoue les deux cents témoins d'AVANT le lot sur le
+    moteur COURANT et prouve que seul le placement a changé (0 écart, 1 331
+    surchargés, 269 gardés). Le septième, `batiments-de-production.js`, est
+    entré au lot PRODUCTION-EN-DÉFENSE et cette ligne ne l'avait pas compté.
   ⤷ ⚠ CINQ FICHIERS DE `test/` NE SONT PAS DES TESTS, et ils sont NOMMÉS dans
     la liste blanche de `documentation.test.js` — tout autre fichier déposé ici
     la fait ROUGIR, ce qui est l'accident du 26/08 pris par l'autre bout.

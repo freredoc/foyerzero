@@ -3675,3 +3675,185 @@ export const RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE = {
   24: '2b88d174afc35491',
   25: '8e52cc088e36d8d7',
 };
+
+// ---------------------------------------------------------------------------
+// DIX-SEPTIÈME COUCHE — lot PAQUETS, 09/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CINQUANTE-HUIT COUPLES, LES MÊMES CELLULES QUE LA SEIZIÈME, ET LES SIX
+// PREMIÈRES PHASES SONT IDENTIQUES AU BIT. Le lot réécrit le placement d'un
+// site de l'Ouvrage par paquets et retire ses tirages du flux de composition —
+// donc la garnison de tout site change avec sa disposition, et rien ne se voit
+// avant le PREMIER RAID (phase 7). `disposition` n'y est pas : c'est la base du
+// JOUEUR, que le scénario pose lui-même.
+//
+// ⚠ ET AUCUN SCALAIRE NE BOUGE, mesuré graine par graine : gestes, gestes
+// d'armement, taille de la sauvegarde, cases atteignables, déplacement, bases
+// attaquantes, nombre de cibles et cible retenue des DEUX raids — 0 sur 25 pour
+// chacun. Seules les empreintes des deux rapports changent, sur les
+// vingt-cinq graines : c'est ce qui dit que le lot ne touche que le site, pas
+// la carte ni la base du joueur.
+//
+// ⚠ ELLE SE LIT AU-DESSUS DE LA SEIZIÈME, sans la remplacer — même doctrine
+// que les seize d'avant : on empile, on ne rafraîchit pas.
+
+export const DEPLACES_PAR_PAQUETS = {
+  p07_raidProcheApres: {
+    sitesEntames: 'e146b3cc3322b3eb',
+    rapports: 'c592badaa68f0a27',
+    armee: '314fc451f9d028c5',
+    economie: '851b3745a29f72d7',
+    satellites: '567d377c89689497',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p08_100ticks: {
+    sitesEntames: 'e146b3cc3322b3eb',
+    rapports: 'c592badaa68f0a27',
+    armee: '314fc451f9d028c5',
+    economie: '72abf5c165d52106',
+    satellites: 'f2f83d3467654848',
+    prochaineInstanceSatellite: '296d53eddf596f4d',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p09_deplace: {
+    sitesEntames: 'e146b3cc3322b3eb',
+    rapports: 'c592badaa68f0a27',
+    armee: '314fc451f9d028c5',
+    economie: '72abf5c165d52106',
+    satellites: 'f2f83d3467654848',
+    prochaineInstanceSatellite: '296d53eddf596f4d',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p10_montee: {
+    sitesEntames: 'e146b3cc3322b3eb',
+    rapports: 'c592badaa68f0a27',
+    armee: '314fc451f9d028c5',
+    economie: '72abf5c165d52106',
+    satellites: 'f2f83d3467654848',
+    prochaineInstanceSatellite: '296d53eddf596f4d',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p11_raidOuvrageApres: {
+    recherche: '70d071a438fac79b',
+    sitesEntames: '626b400308ec5830',
+    rapports: 'e28c30b47101fbba',
+    armee: '4b63a8a5d866fcd6',
+    economie: '72abf5c165d52106',
+    satellites: 'f2f83d3467654848',
+    prochaineInstanceSatellite: '296d53eddf596f4d',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p12_veilleDuRaid: {
+    recherche: '70d071a438fac79b',
+    sitesEntames: '8f6d638379acc4bf',
+    rapports: 'e28c30b47101fbba',
+    armee: '4b63a8a5d866fcd6',
+    economie: '72abf5c165d52106',
+    satellites: '9a0ca35b596e55bd',
+    prochaineInstanceSatellite: 'e68bc29651f0db1e',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p13_apresLeRaid: {
+    recherche: '70d071a438fac79b',
+    sitesEntames: 'f920044071be9248',
+    rapports: '3d6d454f3e32ed8a',
+    armee: '4b63a8a5d866fcd6',
+    economie: '334ba75fbd924d40',
+    satellites: 'ed08c85e2080f28c',
+    prochaineInstanceSatellite: '9e3e02dda456d3cf',
+    satellitesDetruits: '172d111a29be7205'
+  },
+  p14_sousLeFeu: {
+    recherche: '70d071a438fac79b',
+    sitesEntames: '050119e999e88770',
+    rapports: '16c32d8a22d8d7a0',
+    armee: '4b63a8a5d866fcd6',
+    satellites: '9339d8d7ae91ea9d',
+    prochaineInstanceSatellite: '47461cc06179cc35',
+    satellitesDetruits: '172d111a29be7205'
+  }
+};
+
+export const EMPREINTES_PAR_GRAINE_PAQUETS = {
+  1: 'a43079a39f36f89e',
+  2: 'd6b36c5c28f58aa9',
+  3: '9c8094be4453c8f8',
+  4: 'b89e661180f5b8ee',
+  5: '95b189840bd9b6b9',
+  6: '9c3d780f88e689c9',
+  7: '722e03bd632e2715',
+  8: '3d5bae4d55cdffdd',
+  9: '43ec65bbab1123df',
+  10: '968554dc24b2ab9a',
+  11: 'cc263848a90f1a32',
+  12: 'c974218a2da314d4',
+  13: 'fe934a07ca9adb19',
+  14: 'd4124dd992e346da',
+  15: 'e87f687bc9007293',
+  16: 'e2552dd28820ba20',
+  17: '0b0ea02ffee6f45f',
+  18: '830386c0a15faad5',
+  19: '41a4de2a7a6991da',
+  20: 'c36ed03b6ed665cb',
+  21: '1fe80a1d24a5f1f3',
+  22: '49ac9ed04aa5b3e3',
+  23: '48492120e7cfd883',
+  24: 'f8aafbe4287bd068',
+  25: '3db13934df10a755'
+};
+
+export const RAPPORTS_PROCHE_PAQUETS = {
+  1: '900d8fca75c834b5',
+  2: 'e7943e37a49e8d3d',
+  3: '8c7bd39275bdd8ef',
+  4: 'f4a25d542be86fb0',
+  5: '4805e95749334a2e',
+  6: '2f28f93b26bc713d',
+  7: '9cd825e90b0b64f6',
+  8: '16410a8b2f21006c',
+  9: '68115be2e1002fa6',
+  10: 'b52f874193f96d3f',
+  11: '94e4f1fab128cead',
+  12: 'da7479bfd064011d',
+  13: '418f15baab5d8613',
+  14: 'd65821d2df3ad5a2',
+  15: '2c68872208af84b9',
+  16: '9598125b2621bc00',
+  17: '1f265bfeff987cab',
+  18: '776a9d748a5002bb',
+  19: 'f2f65431b33dc690',
+  20: 'b795e794f23edd7f',
+  21: '288362ecde14ba53',
+  22: '7bc26c3f69ebd09b',
+  23: 'ede34e5b0220babb',
+  24: 'e05a8ebf170309aa',
+  25: '0225682fdb7b05f8'
+};
+
+export const RAPPORTS_OUVRAGE_PAQUETS = {
+  1: 'a06ff13d9635abad',
+  2: 'e80f0fa8a5446db9',
+  3: '7ec7e73b6c0e951a',
+  4: 'd7eac71ed68786c4',
+  5: 'e0894e7b1c148d04',
+  6: '3e70d3682716d489',
+  7: '36360a5b4bd2cf23',
+  8: 'ba2268b7f17c8146',
+  9: 'aac5f2f020ebfb26',
+  10: '11f7bd5122da3933',
+  11: '94acaea481c25384',
+  12: 'e1e8b508678f41ce',
+  13: 'cd3848d47976e52d',
+  14: 'ece241d4f76b8889',
+  15: 'b266eba8d80ce66d',
+  16: 'e41276e7bccf5bde',
+  17: '7407fa946fed77cf',
+  18: 'a50df11a4aa9b61a',
+  19: '4770a63c45105fad',
+  20: '07b9df362058da66',
+  21: 'eac07a9de208c67f',
+  22: 'b706f73758155409',
+  23: '83093bc03ed373b9',
+  24: '78f4edf69e69cd41',
+  25: 'bba397b690e08c80'
+};

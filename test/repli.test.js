@@ -357,7 +357,10 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // FLOTTENT désormais dans leur bande au lieu d'être collés à son bord. Ce que
   // ce test existe pour tenir ne bouge pas : au moins une unité rentre à la
   // base.
-  assert.equal(r.nbTicks, 528);
+  // ⚠⚠ LOT PAQUETS (09/09) : LE SITE CHANGE DE DISPOSITION ET DE GARNISON. Le
+  // placement passe par paquets ET retire ses tirages du flux de composition,
+  // donc la garnison de toute graine change avec sa forme. 528 → 396.
+  assert.equal(r.nbTicks, 396);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -385,8 +388,11 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // MOINS, et ONZE survivants au lieu de neuf. Le bloc de défense n'est plus
   // collé aux bâtiments : l'infanterie les atteint plus vite, en rapporte
   // davantage et y perd moins de monde.
-  assert.deepEqual(r.butin, { quartz: 69_210, scorie: 23_070 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 11);
+  // ⚠ LOT PAQUETS : le butin tombe à zéro et les survivants de 11 à 4 — le raid
+  // C ne franchit plus la garnison. Ce que ce test garde est intact : il ne se
+  // traîne pas jusqu'au plafond, et des unités RENTRENT.
+  assert.deepEqual(r.butin, { quartz: 0, scorie: 0 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
