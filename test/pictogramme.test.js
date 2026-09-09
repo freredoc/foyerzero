@@ -400,7 +400,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 126 689 octets, la marge sur la borne T10 est de 1,86 %', () => {
+test('PIC T7 — le livrable pèse 9 134 181 octets, la marge sur la borne T10 est de 1,78 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -510,11 +510,22 @@ test('PIC T7 — le livrable pèse 9 126 689 octets, la marge sur la borne T10 e
   // plus dans `FORCES` pour chacune des deux forces, sa lecture dans
   // `problemeDuBatimentDeProduction`, et une raison de moins dans
   // `posablesDeLaDefense` — qui en REND, d'où un solde si petit.
+  //
+  // ⚠⚠ REMESURÉ AU LOT PAQUETS, 09/09, ET LA BASE ANNONCÉE CI-DESSUS ÉTAIT DÉJÀ
+  // PÉRIMÉE DE 4 407 OCTETS. `main` = `598d23a` bâtit **9 131 096** octets, pas
+  // 9 126 689 : trois lots fusionnés depuis (VOISINAGE-ET-MENACE, LIMITE-T8
+  // suspendu, la correction du compte de tests) n'avaient pas remesuré cette
+  // ligne — le §9.4 du brief PAQUETS demandait de la corriger. Le lot PAQUETS
+  // lui-même coûte **9 131 096 → 9 134 181, soit +3 085, ENTIÈREMENT DU
+  // JAVASCRIPT** — le placement par paquets et le catalogue de formes —, mesuré
+  // contre le livrable rebâti sur l'arbre pristine de `598d23a` (`git stash`)
+  // dans la même session : **images +0 · feuille +0 · balisage +0 · audio +0**,
+  // `data:` à **311 lignes / 306 URI** des deux côtés.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 9_126_689;          // mesuré le 08/09, lot PALETTES-ET-DEFENSE, base `566a453`
-  const MARGE = BORNE - MESURE;      // 173 311 octets
-  assert.equal(MARGE, 173_311);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.86);
+  const MESURE = 9_134_181;          // mesuré le 09/09, lot PAQUETS, base `598d23a`
+  const MARGE = BORNE - MESURE;      // 165 819 octets
+  assert.equal(MARGE, 165_819);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.78);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

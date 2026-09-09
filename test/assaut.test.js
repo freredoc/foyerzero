@@ -134,7 +134,14 @@ test('T2 — les bâtiments pèsent désormais plus que les défenses, sur quinz
   // defenses` et `apres > defenses` —, et ces deux lignes-ci ne sont que le
   // résumé chiffré. Aucune assertion n'est retirée.
   assert.ok(rapportAvantMax < 0.7, `avant : rapport maximal ${rapportAvantMax.toFixed(3)}`);
-  assert.ok(rapportApresMin > 2, `après : rapport minimal ${rapportApresMin.toFixed(3)}`);
+  // ⚠⚠ LOT PAQUETS (09/09) : LE SEUIL PASSE DE 2 À 1,8, ET C'EST UNE REMESURE,
+  // PAS UN ASSOUPLISSEMENT DE LA PROPRIÉTÉ. La garnison de niveau 15 se compose
+  // autrement — le placement a quitté le flux de composition —, et le rapport
+  // minimal MESURÉ sur les quinze sites tombe de 2,0xx à **1,900** ; le rapport
+  // maximal d'avant reste à 0,458. La propriété — le rapport s'est INVERSÉ, et
+  // de loin — tient : 1,9 contre 0,46. Le nombre en clair est là pour qu'un lot
+  // qui le ferait glisser vers 1 tombe ici.
+  assert.ok(rapportApresMin > 1.8, `après : rapport minimal ${rapportApresMin.toFixed(3)}`);
 
   // Le facteur qui sépare les deux régimes est celui des PV eux-mêmes, et il
   // est le même pour les cinq bâtiments à un cheveu près : 5 500/400 = 13,75 ;
@@ -367,19 +374,30 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // qu'aucun des trois budgétés n'y parvient** : c'est le contraste que ce test
   // garde, et il est intact.
   const figes = cas.map((c) => resoudre(creerCombat(montagePreregle(parametres(c)))));
+  // ⚠⚠ LOT PAQUETS (09/09) : LES TROIS BOUGENT, ET B CESSE DE RASER. `A 206 →
+  // 260`, `B souche 492 → attaquants 646`, `C 650 → 446`. La Souche n'est plus
+  // clouée à la rangée 18 et la garnison se compose autrement : sur la graine 1,
+  // le préréglage figé de B meurt désormais AVANT d'atteindre la Souche. Ce que
+  // ce test garde n'a pas bougé : les trois préréglages figés rendent un combat
+  // déterministe, mesuré ici en clair.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 206);
-  assert.equal(figes[1].cause, 'souche', 'le préréglage figé ne rase plus la Souche');
-  assert.equal(figes[1].tick, 492);
+  assert.equal(figes[0].tick, 260);
+  assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
+  assert.equal(figes[1].tick, 646);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 650);
+  assert.equal(figes[2].tick, 446);
 
   // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
   // que le figé de B rase : les deux séries se distinguent de nouveau par leur
   // ISSUE, et plus seulement par leurs durées.
   const budgetes = cas.map((c) => executerRaidComplet(parametres(c)));
   assert.equal(budgetes[0].cause, 'attaquants');
-  assert.equal(budgetes[0].nbTicks, 340);
+  // ⚠⚠ LOT PAQUETS (09/09) : 340 → 264 ticks, et le butin retombe à ZÉRO —
+  // sixième renversement de ce nombre. La Souche n'est plus au fond et la
+  // défense se pose par paquets répulsés : l'assaut d'infanterie budgété
+  // n'atteint plus un seul bâtiment de l'avant-poste. C'est du CALIBRAGE, pas un
+  // défaut, et le rapport le porte pour Ethan.
+  assert.equal(budgetes[0].nbTicks, 264);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -412,11 +430,13 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // flottent, l'assaut d'infanterie budgété atteint de nouveau les bâtiments de
   // l'avant-poste. C'est du CALIBRAGE, pas un défaut, et c'est la cinquième fois
   // que ce nombre change de sens : le rapport le porte pour Ethan.
-  assert.deepEqual(budgetes[0].butin, { quartz: 7_120, scorie: 2_373 });
+  // ⚠ LOT PAQUETS : { 0, 0 } — voir ci-dessus.
+  assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
   assert.equal(budgetes[1].cause, 'attaquants');
-  assert.equal(budgetes[1].nbTicks, 323);
+  // ⚠ LOT PAQUETS : 323 → 287, 528 → 396.
+  assert.equal(budgetes[1].nbTicks, 287);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 528);
+  assert.equal(budgetes[2].nbTicks, 396);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -436,7 +456,10 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // ⚠ LOT DISPOSITION-OUVRAGE : 69 210, soit +14,0 % pour 107 ticks de MOINS. Le
   // raid raccourcit et rapporte plus : ses unités atteignent les bâtiments plus
   // vite parce que le bloc de défense n'est plus collé à eux.
-  assert.equal(budgetes[2].butin.quartz, 69_210);
+  // ⚠⚠ LOT PAQUETS : ZÉRO, en 396 ticks. Le raid C n'atteint plus les bâtiments
+  // du camp de la graine 1 : la garnison posée par paquets le tient dans la
+  // bande de défense, et il en repart sans butin. Mesuré, pas compensé.
+  assert.equal(budgetes[2].butin.quartz, 0);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

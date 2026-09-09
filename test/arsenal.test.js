@@ -600,7 +600,11 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // pas d'un identifiant (voir `placementDesRangees`). Ce qui change est la
   // POSITION des mêmes pièces — les deux blocs flottent dans leur bande —, donc
   // le combat se joue autrement sans que le site soit composé autrement.
-  assert.equal(r.nbTicks, 528);
+  // ⚠⚠ LOT PAQUETS (09/09) : LE SITE CHANGE DE DISPOSITION ET DE GARNISON. Le
+  // placement passe par paquets ET retire ses tirages du flux de composition,
+  // donc la garnison de toute graine change avec sa forme. 528 → 396, la cause
+  // ne bouge pas.
+  assert.equal(r.nbTicks, 396);
   assert.equal(r.cause, 'attaquants');
 });
 

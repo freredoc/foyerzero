@@ -96,6 +96,8 @@ import {
   RAPPORTS_PROCHE_CIBLES_RANGEES, RAPPORTS_OUVRAGE_CIBLES_RANGEES,
   DEPLACES_PAR_DISPOSITION_OUVRAGE, EMPREINTES_PAR_GRAINE_DISPOSITION_OUVRAGE,
   RAPPORTS_PROCHE_DISPOSITION_OUVRAGE, RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE,
+  DEPLACES_PAR_PAQUETS, EMPREINTES_PAR_GRAINE_PAQUETS,
+  RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -172,7 +174,14 @@ function empreinteAttendue(phase, champ) {
   // base du JOUEUR, que le scénario pose lui-même. Les quinze couches d'avant en
   // déplaçaient par accident de flux ; celle-ci tire sur un SECOND flux salé et
   // ne recompose rien.
-  return DEPLACES_PAR_DISPOSITION_OUVRAGE[phase]?.[champ]
+  // ⚠⚠ DIX-SEPTIÈME COUCHE — lot PAQUETS, 09/09. Cinquante-huit couples, les
+  // MÊMES cellules que la seizième, et **les six premières phases sont
+  // identiques AU BIT** : le placement par paquets retire ses tirages du flux de
+  // composition, donc la garnison de tout site change avec sa disposition, et
+  // rien ne se voit avant le premier raid. Aucun scalaire ne bouge, seuls les
+  // deux rapports — voir la couche dans `temoins-bases-0.js`.
+  return DEPLACES_PAR_PAQUETS[phase]?.[champ]
+    ?? DEPLACES_PAR_DISPOSITION_OUVRAGE[phase]?.[champ]
     ?? DEPLACES_PAR_NEUTRALISATION[phase]?.[champ]
     ?? DEPLACES_PAR_QUATRE_ETATS[phase]?.[champ]
     ?? DEPLACES_PAR_RETOUCHES[phase]?.[champ]
@@ -554,7 +563,9 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // graines ; NEUTRALISATION n'en déplace qu'UNE, la 6 — les vingt-quatre
     // autres empreintes sont identiques d'une couche à l'autre, et c'est cette
     // moitié-là qui prouve que le §6 ne fuit pas hors du raid subi.
-    if (obtenue !== EMPREINTES_PAR_GRAINE_DISPOSITION_OUVRAGE[g]) ecarts.push(g);
+    // ⚠ PAQUETS (09/09) déplace les vingt-cinq, comme DISPOSITION-OUVRAGE : le
+    // premier raid est à la phase 7, et il touche toute graine.
+    if (obtenue !== EMPREINTES_PAR_GRAINE_PAQUETS[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -677,13 +688,15 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // leur composition. C'est ce que le §5 du brief exigeait, et c'est ce qui
       // laisse `SAVE_VERSION` à 29.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g] ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
+        ? (RAPPORTS_OUVRAGE_PAQUETS[g] ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
+          ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
           ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
           ?? RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g] ?? RAPPORTS_PROCHE_RETOUCHES[g]
+        : (RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
+          ?? RAPPORTS_PROCHE_RETOUCHES[g]
           ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
           ?? RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]
           ?? RAPPORTS_PROCHE_ARRET[g]);

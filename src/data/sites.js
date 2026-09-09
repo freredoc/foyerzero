@@ -156,7 +156,7 @@ export const GARNISON = {
     35: { meute: 4, perceurs: 4, merlon: 5, carapace: 5, casemate: 8, fendeur: 10, batterie: 10, belier: 10, ratisseur: 10, creneau: 5, herse: 5, guetteur: 8, ronce: 5, faucheuse: 3, broyeur: 5, mortier: 2, harpon: 1 },
     40: { meute: 3, perceurs: 3, merlon: 5, carapace: 5, casemate: 8, fendeur: 8, batterie: 10, belier: 10, ratisseur: 10, creneau: 5, herse: 5, guetteur: 8, ronce: 5, faucheuse: 4, broyeur: 6, mortier: 3, harpon: 2 },
     45: { meute: 2, perceurs: 2, merlon: 5, carapace: 5, casemate: 8, fendeur: 5, batterie: 10, belier: 10, ratisseur: 10, creneau: 5, herse: 5, guetteur: 9, ronce: 5, faucheuse: 4, broyeur: 8, mortier: 4, harpon: 3 },
-    50: { meute: 1, perceurs: 1, merlon: 5, carapace: 5, casemate: 8, fendeur: 0, batterie: 10, belier: 10, ratisseur: 10, creneau: 5, herse: 5, guetteur: 10, ronce: 5, faucheuse: 5, broyeur: 10, mortier: 5, harpon: 5 },
+    50: { meute: 1, perceurs: 1, merlon: 5, carapace: 5, casemate: 8, batterie: 10, belier: 10, ratisseur: 10, creneau: 5, herse: 5, guetteur: 10, ronce: 5, faucheuse: 5, broyeur: 10, mortier: 5, harpon: 5 },
   },
 };
 
@@ -1437,188 +1437,150 @@ export const EMBLEMES_CARTE = {
 //
 // Le nombre maximal de rangées n'est PAS dupliqué ici : c'est la hauteur de
 // GRILLE.bandes.defense, une seule table fait foi.
+//
+// ⚠⚠ LE MODÈLE LIGNE/COLONNE A DISPARU AU LOT PAQUETS, 09/09/2026. Cinq
+// réglages sont SORTIS avec lui — `versLeFond`, `ecartColonnesMax`,
+// `brassagesDeCharge`, `brassagesDeRangee`, `etalementMaxRangees` — parce que
+// plus aucun lecteur ne les lisait : le placement ne construit plus des rangées
+// remplies jusqu'à un plafond et décalées d'un offset, il pose des PAQUETS de
+// forme tirée, par répulsion. Ce que le modèle d'avant produisait, et qu'Ethan
+// a nommé : « toujours par ligne ou par colonne ». Mesuré AVANT le lot, base
+// niveau 1, 500 graines : **56** profils de charge par rangée distincts pour les
+// bâtiments, **47** pour les défenses ; après, 463 et 250 sur le prototype.
 export const DISPOSITION_DEFENSES = {
-  // Six occupants au plus par rangée de neuf colonnes : trois colonnes libres
-  // au minimum, jamais 100 %. Sans passage, le terrain ne décide plus rien.
+  // Six occupants au plus par rangée de neuf colonnes de DÉFENSE. Les
+  // bâtiments, eux, gardent `GRILLE.largeur` par rangée.
+  //
+  // ⚠⚠ CE PLAFOND EST PAR RANGÉE, ET IL NE PRODUIT AUCUNE VOIE TRAVERSABLE. Le
+  // commentaire d'avant promettait « trois colonnes libres au minimum — sans
+  // passage, le terrain ne décide plus rien » : les trois colonnes libres d'une
+  // rangée ne sont pas celles de la rangée d'à côté. Mesuré à l'audit du 09/09,
+  // 200 graines : **zéro colonne libre de bout en bout** dès le niveau 15. La
+  // garantie est locale, et c'est tout ce qu'elle est.
+  //
+  // ⚠ IL A UN LECTEUR HORS DU GÉNÉRATEUR : `src/ui/defense.js` en dérive
+  // `OCCUPANTS_MAX_PAR_RANGEE`, la borne de l'éditeur de garnison du JOUEUR.
   occupantsMaxParRangee: 6,
 
-  // Les défenses se collent aux bâtiments : les rangées les plus ARRIÈRE de la
-  // bande sont garnies les premières, l'attaquant traverse d'abord du vide.
-  versLeFond: true,
-
-  // Ordre de garnissage, du fond vers l'avant.
+  // Les catégories, de la plus « arrière » à la plus « avant ». Depuis le lot
+  // PAQUETS l'ordre ne commande plus une RANGÉE : il groupe les défenses par
+  // catégorie AVANT le découpage en paquets — un paquet est donc homogène, et le
+  // biais de tiers ci-dessous a un sens. Ce qui est tombé, c'est l'INTERDIT :
+  // mesuré avant le lot, base 40, 500 graines, l'artillerie n'était jamais
+  // devant la rangée 8 (moyenne 9,82) et la barrière jamais derrière la 6
+  // (3,58). Ethan : « un peu plus mou, de l'artillerie au milieu et des
+  // barrières au milieu ».
   //
   // ⚠ CE COMMENTAIRE ÉTAIT FAUX ET A ÉTÉ CORRIGÉ LE 25/08/2026. Il disait :
   // « en rangée 3 [l'artillerie] engagerait entre −2,5 et −0,5, c'est-à-dire
-  // jamais. Toute artillerie avancée est inerte. » Le raisonnement est en
-  // RANGÉES ; le moteur, lui, teste une distance EUCLIDIENNE 2D et sans
-  // direction — `d² = (Δrangée)² + (Δcolonne)²` contre `porteeCarree` et
-  // `porteeMiniCarree`. Une Faucheuse en rangée 3 atteint donc les colonnes
-  // lointaines dès l'apparition, puis tire dans le dos de ce qui l'a dépassée.
-  // Mesuré sur cinq graines au niveau 30 : 23 ticks de tir, premier tir au
-  // tick 1. Elle n'est PAS inerte.
-  //
-  // Ce qui est vrai, et qui suffit à fonder l'ordre : elle engage MOINS. La
-  // couverture géométrique sature à partir de la rangée 6 — 50 cases en
-  // colonne 5 — et les rangées 3, 4 et 5 tombent à 32, 38 et 45 par
-  // débordement de la grille sous la rangée 1. Le gradient dynamique est
-  // encore plus marqué : 23 ticks de tir en rangée 3 contre 110 en rangée 10.
-  // `src/ui/defense.js` recalcule cette couverture pour en faire un indice
-  // montré au joueur, et son T7 la vérifie case par case.
-  //
-  // Les unités mobiles de garnison s'intercalent entre tourelles et murs : la
-  // ligne de murs les couvre, et elles restent devant les tourelles qu'elles
-  // protègent. Les barrières viennent en tête, puisqu'on les franchit d'abord.
+  // jamais. Toute artillerie avancée est inerte. » Le moteur teste une distance
+  // EUCLIDIENNE 2D : une Faucheuse en rangée 3 tire 23 ticks, premier tir au
+  // tick 1. Elle n'est PAS inerte, elle engage MOINS — 23 ticks contre 110 en
+  // rangée 10 —, et c'est ce que les poids de tiers traduisent en préférence.
   ordreCategories: ['artillerie', 'tourelle', 'unite', 'mur', 'barriere'],
 
-  // Écart maximal de charge entre la colonne la plus garnie et la moins garnie.
-  //
-  // ⚠⚠ SON MOTIF A ÉTÉ RÉÉCRIT LE 06/09, LOT COLONNE. Il disait « les unités ne
-  // changent jamais de colonne : une colonne à huit structures serait
-  // infranchissable et une colonne vide une autoroute ». La première moitié est
-  // tombée pour la DÉFENSE, qui se décale désormais latéralement ; elle reste
-  // vraie pour l'ASSAUT, qui ne bouge que vers le fond. Le motif tient donc
-  // encore, et par le bon bout : c'est l'ATTAQUANT qui ne contourne pas, donc
-  // c'est lui qu'une colonne surchargée arrête et qu'une colonne vide laisse
-  // passer. Que la défense puisse venir à sa rencontre ne lui rend aucun
-  // contournement.
-  ecartColonnesMax: 2,
+  // La bande de défense se lit en TROIS TIERS, de l'avant vers l'arrière :
+  // 3 rangées, 2 rangées, 3 rangées — soit 3–5, 6–7, 8–10 sur la bande
+  // d'aujourd'hui. Les largeurs sont écrites ici, les rangées se DÉRIVENT de
+  // `GRILLE.bandes.defense` ; un test exige que la somme fasse la hauteur de la
+  // bande.
+  tiersDeLaBande: [['avant', 3], ['milieu', 2], ['arriere', 3]],
 
-  // Nombre de TRANSFERTS tentés sur le profil de charge des colonnes — lot
-  // COLONNE, 06/09, point 9 d'Ethan : « la disposition des unités et bâtiments
-  // ouvrage semblent identique alors qu'elle doit être plus aléatoire ».
+  // Le tiers PRÉFÉRÉ d'un paquet, tiré sur ces poids selon la catégorie de son
+  // premier membre — lot PAQUETS, §4 du brief.
   //
-  // ⚠⚠ ET LE DÉFAUT N'ÉTAIT PAS UNE ABSENCE DE HASARD, C'EN ÉTAIT LA FORME. Le
-  // placement tirait bien une permutation des colonnes par graine — mais il
-  // posait ensuite en TOURNIQUET, `colonne = permutation[i % 9]`, si bien que
-  // deux sites de même niveau ne différaient QUE par le NOM des colonnes : même
-  // nombre d'occupants par rangée, même charge par colonne, même forme. La
-  // graine renommait, elle ne redessinait pas.
+  // ⚠⚠ AUCUNE CATÉGORIE N'EST INTERDITE NULLE PART, ET C'EST TOUT L'OBJET. Un
+  // poids nul rendrait un tiers inatteignable, c'est-à-dire l'interdit qu'on
+  // vient de retirer. `PQ T6` exige que chaque catégorie paraisse au moins une
+  // fois à l'avant ET à l'arrière, et que les cinq moyennes restent séparées
+  // d'au moins 0,3 rangée dans l'ordre artillerie > tourelle > unité > mur ≥
+  // barrière.
   //
-  // ⚠⚠ CE QUI CHANGE LA FORME, C'EST LE PROFIL DE CHARGE. Une permutation
-  // préserve le MULTI-ENSEMBLE des charges par colonne : tant que les neuf
-  // colonnes portent toutes le même nombre d'occupants, aucun tirage ne peut
-  // produire deux dispositions qui ne soient pas l'image l'une de l'autre.
-  // C'est pourquoi le lot tire d'abord une charge PAR COLONNE — plate, puis
-  // brassée par transferts — et n'assigne les rangées qu'ensuite. Le budget
-  // d'écart ci-dessus est ce qui borne le brassage, et il n'a pas bougé.
-  //
-  // Dix-huit tentatives, soit deux par colonne : mesuré, c'est le point où le
-  // profil cesse d'être plat sans que le budget d'écart ne refuse la moitié des
-  // transferts. Un transfert refusé consomme ses tirages comme un accepté : le
-  // déterminisme ne dépend pas du taux d'acceptation.
-  //
-  // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme `ecartColonnesMax`
-  // le fait déjà. Le nom de la table dit « défenses » et c'est un héritage ;
-  // écrire une seconde table pour un seul nombre serait la seconde vérité que
-  // §4 interdit.
-  brassagesDeCharge: 18,
+  // ⚠ LES POIDS DU BRIEF ONT ÉTÉ MESURÉS ET RETOUCHÉS, base 40, 500 graines.
+  // Avec 5/25/70 · 10/30/60 · 30/40/30 · 55/35/10 · 70/25/5, le prototype rendait
+  // artillerie 7,50 · tourelle 6,65 · unité 5,86 · mur 5,39 · barrière 5,24 :
+  // mur et barrière se confondaient (0,15 d'écart). Les poids retenus et les
+  // moyennes mesurées sont au rapport du lot.
+  poidsDeTiers: {
+    artillerie: { avant: 5, milieu: 20, arriere: 75 },
+    tourelle: { avant: 10, milieu: 30, arriere: 60 },
+    unite: { avant: 30, milieu: 40, arriere: 30 },
+    mur: { avant: 60, milieu: 30, arriere: 10 },
+    barriere: { avant: 85, milieu: 12, arriere: 3 },
+  },
 
-  // Nombre de TRANSFERTS tentés sur les TAILLES DE RANGÉE — lot CIBLES-RANGÉES,
-  // 07/09, point 9 d'Ethan : « audit sur les cibles ouvrage : elles sont toutes
-  // positionnées de façon identique ».
-  //
-  // ⚠⚠ LE LOT COLONNE AVAIT TRAITÉ UN AXE SUR DEUX, ET C'EST LA LEÇON. Il a
-  // rendu la charge PAR COLONNE variable ; la rangée, elle, restait une
-  // fonction pure du rang dans la liste — `taillesDeRangee` découpait toujours
-  // `nb` en `6, 6, …, reste`. Mesuré sur 200 graines AVANT ce lot : **UN SEUL**
-  // profil d'occupation par rangée, à tous les types et à tous les niveaux. Un
-  // camp de niveau 7 portait toujours 5 occupants en rangée 10, 7 en rangée 11
-  // et 2 en rangée 18, quelle que soit la graine.
-  //
-  // ⚠⚠ ET LE TEST DU LOT COLONNE NE POUVAIT PAS LE VOIR : `COL T15` mesure le
-  // multi-ensemble des charges par COLONNE. Il est passé sans jamais regarder
-  // l'axe qui gênait Ethan. Le brief d'alors demandait « le multi-ensemble des
-  // `(rangee, id)` » ; l'exécution a mesuré autre chose. `CR T1` mesure les
-  // rangées, et son montage IGNORE la colonne pour ne pas refaire la faute.
-  //
-  // Vingt-quatre tentatives, soit TROIS par rangée de la bande de défense.
-  // Mesuré sur 200 graines — profils distincts, tous occupants / défenses
-  // seules :
-  //
-  //     transferts   camp n.3   camp n.7   base n.15   base n.30
-  //              6      5 / 2      6 / 3     59 / 25    122 / 50
-  //             12     10 / 4     12 / 5    117 / 53    190 / 121
-  //             18     11 / 4     13 / 5    162 / 90    200 / 147
-  //         →   24     18 / 4     21 / 6    187 / 124   200 / 164
-  //             36     25 / 4     32 / 10   200 / 158   200 / 191
-  //             48     35 / 4     44 / 13   198 / 172   200 / 197
-  //
-  // ⚠ LE COMPTE MONTE ENCORE À 48, ET LA VALEUR N'EST DONC PAS UN OPTIMUM. Ce
-  // qui plafonne, c'est la colonne des DÉFENSES aux bas niveaux : un camp de
-  // niveau 3 n'a que trois défenseurs, et il n'existe pas plus de quatre façons
-  // de les répartir sous les contraintes. Aucun nombre de transferts ne l'ouvre.
-  // Vingt-quatre est le point où les deux bandes sont franchement brassées pour
-  // un coût de tirages qui reste petit ; monter est sans risque et sans
-  // migration, la valeur est ici pour ça.
-  //
-  // ⚠ UN TRANSFERT REFUSÉ CONSOMME SES TIRAGES COMME UN ACCEPTÉ — même
-  // discipline que `brassagesDeCharge`, et pour la même raison.
-  //
-  // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme les deux valeurs
-  // ci-dessus.
-  brassagesDeRangee: 24,
+  // Les paquets : les N occupants d'une bande se découpent en paquets de 3 ou 4,
+  // tirés un par un ; le dernier prend le reste et vaut de 2 à 5. Sous
+  // `paquetUnique` occupants, un seul paquet. Ces bornes sont celles du §2.1.
+  tailleDePaquet: { min: 3, max: 4, resteMin: 2, resteMax: 5, paquetUnique: 6 },
 
-  // Combien de rangées VIDES un bloc peut porter en son sein — lot
-  // DISPOSITION-OUVRAGE, 08/09, point 9 d'Ethan : « malgré un patch, toutes les
-  // bases Ouvrage restent identiques : les unités de défense sont au fond, tous
-  // les bâtiments au premier rang, et souche et étai restent au fond ».
-  //
-  // ⚠⚠ LES DEUX LOTS PRÉCÉDENTS ONT TRAITÉ LA COLONNE PUIS LA TAILLE DES
-  // RANGÉES, ET AUCUN N'A TOUCHÉ AU BORD. Mesuré sur vingt graines, quatre
-  // niveaux et les trois types AVANT ce lot : les bâtiments commencent en
-  // rangée 11 sur **240 montages sur 240**, les défenses finissent en rangée 10
-  // sur **240 sur 240**, et les deux uniques tombent en (18, 4) et (18, 5) sur
-  // **240 sur 240**. Ce n'est pas un défaut de hasard, c'est un ANCRAGE :
-  // `contigueDepuisLOrigine` interdit à l'indice 0 du tableau des tailles d'être
-  // vide, donc le bord ancré du bloc est cloué au bord de sa bande, sur toute
-  // graine. Seule la LONGUEUR du bloc variait.
-  //
-  // ⚠⚠ D'OÙ UNE COUCHE DE PLACEMENT, ET NON UN ASSOUPLISSEMENT DE
-  // `taillesDeRangee`. Les tailles disent COMBIEN d'occupants par rangée
-  // employée ; le placement dit LESQUELLES des rangées de la bande les portent.
-  // Toucher aux tailles aurait changé leur NOMBRE pour une graine donnée, donc
-  // le nombre de tirages de `repartirLesColonnes`, donc la position du flux au
-  // moment où `composerRepartition` compose la garnison — c'est-à-dire remappé
-  // les `pvDefensesMilli` de tout site à moitié rasé d'une sauvegarde
-  // existante. Voir `placementDesRangees`.
-  //
-  // Deux rangées vides au plus. Mesuré — ensembles de rangées occupées
-  // DISTINCTS sur vingt graines de cases, bâtiments / défenses :
-  //
-  //      étalement   camp n.30   base n.45   camp n.12
-  //   (avant le lot)    4 /  3      3 /  2      4 /  4
-  //              0     11 / 11      5 /  3     11 / 12
-  //              1     16 / 16      9 /  4     16 / 16
-  //          →   2     16 / 18      9 /  3     16 / 16
-  //              3     16 / 19      9 /  4     17 / 16
-  //              4     16 / 18      9 /  4     17 / 16
-  //
-  // ⚠⚠ LA PREMIÈRE LIGNE N'EST PAS « ÉTALEMENT 0 », ET C'EST LA MOITIÉ QUI
-  // COMPTE. Sans la couche de placement, le bloc est CLOUÉ au bord et seule sa
-  // longueur varie : 4 et 3 ensembles sur vingt. À étalement 0 le placement
-  // existe déjà — le bloc DÉRIVE sans porter de trou — et le compte passe à 11
-  // et 11. Les trous font le reste du chemin.
-  //
-  // ⚠ ET `base n.45` NE BOUGE PRESQUE PAS, CE QUI EST UNE PROPRIÉTÉ DE LA
-  // GÉOMÉTRIE ET NON UN RÉGLAGE MANQUÉ. À ce niveau-là les blocs remplissent
-  // presque leur bande — sept ou huit rangées employées sur les huit de la
-  // défense, six à huit sur les sept offertes aux bâtiments — donc la marge est
-  // nulle ou d'une rangée, et aucun plafond d'étalement ne l'ouvre. Une grosse
-  // base est dense ; c'est la densité qui la fige, pas le placement.
-  //
-  // ⚠ LE COMPTE NE MONTE PLUS APRÈS 3, ET 2 EST LE POINT OÙ LE BLOC RESTE
-  // LISIBLE COMME UN BLOC. Deux rangées vides au plus en son sein : au-delà, la
-  // garnison cesse d'être une ligne et devient un semis, ce qu'Ethan n'a pas
-  // demandé. Monter est sans risque et sans migration — la valeur est ici pour
-  // ça, et le tableau dit ce qu'on y gagnerait.
-  //
-  // ⚠ UN TIRAGE INEMPLOYÉ EST CONSOMMÉ COMME UN EMPLOYÉ : `placementDesRangees`
-  // prend ses `2 + etalementMaxRangees` tirages AVANT tout test, si bien que
-  // leur nombre ne dépend ni du bloc ni du résultat. Même discipline que
-  // `brassagesDeCharge` et `brassagesDeRangee`.
-  //
-  // ⚠ IL SERT LES DEUX GROUPES, défenses ET bâtiments, comme les trois valeurs
-  // ci-dessus.
-  etalementMaxRangees: 2,
+  // Combien de jeux de candidats on tire par paquet — forme, clé de rangée,
+  // colonne d'ancre — AVANT tout test. Un candidat rejeté consomme ses tirages
+  // comme un accepté : c'est ce qui rend le nombre de tirages indépendant du
+  // résultat, donc `genererSite` déterministe et `PQ T8` vert.
+  candidatsParPaquet: 10,
+
+  // La distance de répulsion — Tchebychev minimale d'un candidat aux cases déjà
+  // prises de sa bande — est plafonnée ici : au-delà, deux candidats sont
+  // « loin » pareil, et c'est la charge de colonne qui tranche.
+  repulsionMax: 4,
+
+  // Un candidat est rejeté s'il porte une colonne au-delà de
+  // `⌈N / largeur⌉ + margeDeColonne` occupants. Le filtre borne le MAXIMUM d'une
+  // colonne, pas l'écart : mesuré sur prototype, l'écart entre la colonne la plus
+  // chargée et la moins chargée va de 1 à 6 (médiane 3), et sans le filtre il
+  // atteint 8 — une colonne pleine sur huit rangées à côté d'une colonne vide.
+  margeDeColonne: 2,
+
+  // Une fois sur trois, Souche et Étai vont dans le MÊME paquet — donc collés
+  // ou presque ; sinon dans deux paquets distincts. §3.1 du brief.
+  uniquesDansLeMemePaquetUneFoisSur: 3,
+};
+
+// --- formes de paquet --------------------------------------------------------
+// Le catalogue des polyominos, par taille, en offsets `[Δrangée, Δcolonne]`
+// depuis l'ancre `[0, 0]`. C'est de la DONNÉE : on y ajoute une forme sans
+// toucher au générateur, qui ne fait que tirer un indice dans la liste de la
+// taille demandée.
+//
+// ⚠ LA TAILLE 1 N'EST PAS AU BRIEF, ET ELLE EST NÉCESSAIRE : un camp de niveau 1
+// porte moins de deux défenses — `densite` en rend jusqu'à… un seul occupant —
+// et un paquet d'un occupant n'a qu'une forme possible. Un catalogue sans elle
+// ferait lever le générateur sur le premier site du jeu.
+//
+// ⚠ LES ROTATIONS SONT ÉCRITES, PAS CALCULÉES : le générateur tire un indice,
+// il ne tourne rien. Ce qui est dans la liste est ce qui peut sortir.
+export const FORMES_DE_PAQUET = {
+  1: {
+    point: [[0, 0]],
+  },
+  2: {
+    barreH: [[0, 0], [0, 1]],
+    barreV: [[0, 0], [1, 0]],
+  },
+  3: {
+    barreH: [[0, 0], [0, 1], [0, 2]],
+    barreV: [[0, 0], [1, 0], [2, 0]],
+    coudeNE: [[0, 0], [0, 1], [1, 0]],
+    coudeNO: [[0, 0], [0, 1], [1, 1]],
+    coudeSE: [[0, 0], [1, 0], [1, 1]],
+    coudeSO: [[0, 1], [1, 0], [1, 1]],
+  },
+  4: {
+    carre: [[0, 0], [0, 1], [1, 0], [1, 1]],
+    L: [[0, 0], [1, 0], [2, 0], [2, 1]],
+    J: [[0, 1], [1, 1], [2, 1], [2, 0]],
+    T: [[0, 0], [0, 1], [0, 2], [1, 1]],
+    TInverse: [[1, 0], [1, 1], [1, 2], [0, 1]],
+    S: [[0, 1], [0, 2], [1, 0], [1, 1]],
+    Z: [[0, 0], [0, 1], [1, 1], [1, 2]],
+    barreH: [[0, 0], [0, 1], [0, 2], [0, 3]],
+    barreV: [[0, 0], [1, 0], [2, 0], [3, 0]],
+    LCourt: [[0, 0], [0, 1], [0, 2], [1, 0]],
+  },
+  5: {
+    P: [[0, 0], [0, 1], [1, 0], [1, 1], [2, 0]],
+    PCouche: [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2]],
+    croix: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]],
+  },
 };

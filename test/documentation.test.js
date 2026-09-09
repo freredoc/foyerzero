@@ -338,9 +338,17 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   //                             même jour, comme le décodeur PNG — six recopies
   //                             auraient divergé au premier déplacement d'un
   //                             bâtiment.
+  //   `generateur-ancien.js` — la COPIE de l'ancien placement de site (modèle
+  //                             ligne/colonne), entrée au lot PAQUETS. Jamais
+  //                             dans `src/` : elle ne sert qu'à `JOURNAL T1 bis`,
+  //                             qui rejoue les deux cents témoins d'avant le lot
+  //                             sur le moteur COURANT et prouve que seul le
+  //                             placement a changé. Elle ne se met pas à jour :
+  //                             c'est un AVANT, comme `temoins-combat.js`.
   const connus = new Set([
     'prereglages-lot3a.js', 'png-rgba.js', 'temoins-bases-0.js', 'aplatir-sauvegarde.js',
     'temoins-combat.js', 'temoins-couts.js', 'batiments-de-production.js',
+    'generateur-ancien.js',
   ]);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));

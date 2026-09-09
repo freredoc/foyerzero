@@ -312,7 +312,7 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // l'état — la migration v28 → v29 qu'entoure ce fichier —, et c'est ce que
   // cette ligne-ci mesure désormais. Le nom de la garde et ce qu'elle lit
   // s'accordent enfin.
-  assert.equal(SAVE_VERSION, 29);
+  assert.equal(SAVE_VERSION, 30);
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

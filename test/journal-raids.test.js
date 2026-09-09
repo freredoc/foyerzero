@@ -428,7 +428,7 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // ⚠ CORRIGÉ EN LE SACHANT par le lot BÂTIMENTS-QUATRE-ÉTATS, qui dédouble
   // le Collecteur et fait donc bouger la sauvegarde. Ce que la ligne garde n'est
   // pas un numéro figé, c'est qu'on ne bumpe pas sans passer par ici.
-  assert.equal(SAVE_VERSION, 29);
+  assert.equal(SAVE_VERSION, 30);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();
