@@ -44,7 +44,7 @@ Dernière révision : **08/09/2026**, version 0.99.36 · build 138.
 
 **Référence au 08/09/2026 (après le lot VOISINAGE-ET-MENACE), à confronter :**
 ⚠⚠ **LA SUITE N'EST PAS VERTE, ET C'EST LE MÊME POINT D'ARRÊT QU'AU LOT
-PRÉCÉDENT.** `npm test` rend **1480 pass / 1 fail** ; le dépôt DÉCLARE **1481 pass / 0 fail**
+PRÉCÉDENT.** `npm test` rend **1480 pass / 1 fail** ; le dépôt DÉCLARE **1512 pass / 0 fail**
 — c'est la forme que la garde de `documentation.test.js` cherche, et elle dit le
 NOMBRE de tests, pas le verdict. Le rouge est `LIMITE T8`, il est
 UNIQUE, il était **déjà là avant le lot** — mesuré au départ, 1471 pass / 1 fail
@@ -9201,10 +9201,10 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   63 fichiers *.test.js (node:test) ; SIX n'en sont PAS
+test/                   64 fichiers *.test.js (node:test) ; SIX n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
-  disposition  documentation  donnees  economie-base  generateur
+  disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
   couts-militaires  peuplement  satellites  terrain  monde
   grille  missions  niveau-de-base  offense  points-attaque  poi  raid  rendu  repli  rng
   raid-ouvrage  euclide  deplacement
