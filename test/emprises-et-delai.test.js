@@ -25,11 +25,10 @@
 // règle qu'elle mesure, et elle FALSIFIE l'ancienne de face.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 
 import { ATLAS } from '../src/data/atlas.js';
 import { GEOGRAPHIE, DEPLACEMENT } from '../src/data/sites.js';
@@ -64,26 +63,109 @@ function sansProsePython(code) {
 }
 
 // ---------------------------------------------------------------------------
-// La table des paliers se LIT dans l'outil, elle ne se recopie pas
+// La table des paliers se LIT dans l'outil, et elle s'y REJOUE
 // ---------------------------------------------------------------------------
 //
 // ⚠⚠ RECOPIER LES VINGT LIGNES ICI FERAIT LA SECONDE VÉRITÉ QUE §4 DE
 // `CLAUDE.md` INTERDIT, et elle serait muette : un bâtiment déplacé d'un palier
 // à l'autre dans l'outil laisserait ce test vert sur l'ancienne classification,
-// donc mesurerait la copie au lieu de mesurer l'art. On demande donc à Python de
-// rendre la table qu'il APPLIQUE — le même idiome que `SEUIL_ENCRE` d'`AR T2`,
-// poussé d'un cran : là on lisait un nombre au motif, ici on exécute la
-// fonction.
+// donc mesurerait la copie au lieu de mesurer l'art. Les trois paliers, le
+// défaut, le roster et la table des exceptions se LISENT donc dans
+// `tools/batiments_v2.py`, et la règle `EMPRISE_PAR_BATIMENT.get(cle,
+// EMPRISE_DEFAUT)` est rejouée ici.
 //
-// ⚠ ET C'EST `emprise_du_batiment` QU'ON APPELLE, PAS `EMPRISE_PAR_BATIMENT`.
-// La table ne porte que les EXCEPTIONS ; c'est la fonction qui applique le
-// défaut, et c'est donc elle qui dit ce qu'un bâtiment mesure vraiment.
-const PALIERS = (() => {
-  const src = 'import sys, json; sys.path.insert(0, "tools"); import batiments_v2 as b;'
-    + ' print(json.dumps({c: b.emprise_du_batiment(c) for c in b.BATIMENTS}))';
-  const out = execFileSync('python3', ['-c', src], { cwd: RACINE, encoding: 'utf8' });
-  return JSON.parse(out);
+// ⚠⚠ ET C'EST UNE LECTURE PARCE QUE LA CI N'A PAS DE PYTHON — MESURÉ, PAS
+// SUPPOSÉ. Le premier jet de ce fichier appelait `python3 -c "import
+// batiments_v2 …"` AU CHARGEMENT DU MODULE : il passait sur cette machine, où
+// Pillow, numpy et scipy sont installés pour la chaîne d'art, et il a LEVÉ en
+// CI, où `npm ci` n'installe qu'esbuild. Le fichier ne se CHARGE alors pas, donc
+// `node --test` le compte pour UN test en échec : **1 556 − 7 + 1 = 1 550**, très
+// exactement ce que la CI a rendu. §3 de `CLAUDE.md` le dit depuis toujours — la
+// chaîne Python est HORS de `npm run check`, et l'y faire entrer serait un
+// changement d'architecture. C'est le même écart qu'`AR T4` et `AR T5` du lot
+// ART-90 : ce qui demande Python est une MESURE portée au rapport, pas un test.
+//
+// ⚠ REJOUER N'EST PAS RECOPIER, et c'est l'idiome de `SON T1`, qui refait en
+// JavaScript ce que `tools/sons.py` fait en Python plutôt que de retaper sa
+// table. Ce qui est PERDU se déclare : le test ne prouve plus que la fonction
+// Python s'EXÉCUTE ainsi, il prouve que sa source la DÉCRIT ainsi. Les trois
+// témoins ci-dessous empêchent la lecture d'être vide, et `ED T2` confronte le
+// roster lu à l'ATLAS — donc au dessin réellement cousu.
+const NU = sansProsePython(OUTIL);
+
+function constanteEntiere(nom) {
+  const m = NU.match(new RegExp(`^${nom}\\s*=\\s*(\\d+)\\s*$`, 'm'));
+  assert.ok(m, `tools/batiments_v2.py ne porte plus la constante ${nom}`);
+  return Number(m[1]);
+}
+
+const PALIER_HAUT = constanteEntiere('EMPRISE_QUATRE_VINGT_DIX_HUIT');
+const PALIER_MEDIAN = constanteEntiere('EMPRISE_QUATRE_VINGT_DOUZE');
+const PALIER_BAS = constanteEntiere('EMPRISE_QUATRE_VINGT_CINQ_BATIMENT');
+const PALIER_PAR_NOM = {
+  EMPRISE_QUATRE_VINGT_DIX_HUIT: PALIER_HAUT,
+  EMPRISE_QUATRE_VINGT_DOUZE: PALIER_MEDIAN,
+  EMPRISE_QUATRE_VINGT_CINQ_BATIMENT: PALIER_BAS,
+};
+
+// ⚠ LE DÉFAUT SE RÉSOUT, IL NE SE SUPPOSE PAS : `EMPRISE_DEFAUT` NOMME l'un des
+// trois paliers, et c'est ce nom-là qui dit lequel. Écrire 29 ici rendrait ce
+// fichier vert le jour où Ethan ferait du 85 % le défaut.
+const EMPRISE_DEFAUT = (() => {
+  const m = NU.match(/^EMPRISE_DEFAUT\s*=\s*([A-Z_]+)\s*$/m);
+  assert.ok(m, 'tools/batiments_v2.py ne porte plus EMPRISE_DEFAUT');
+  assert.ok(m[1] in PALIER_PAR_NOM,
+    `EMPRISE_DEFAUT nomme « ${m[1]} », qui n'est pas l'un des trois paliers`);
+  return PALIER_PAR_NOM[m[1]];
 })();
+
+/** Le roster de l'outil : les vingt clés de `BATIMENTS`. */
+const ROSTER = (() => {
+  const m = NU.match(/^BATIMENTS\s*=\s*\[([\s\S]*?)^\]/m);
+  assert.ok(m, 'tools/batiments_v2.py ne porte plus la liste BATIMENTS');
+  return (m[1].match(/'([a-z_]+)'/g) ?? []).map((t) => t.slice(1, -1));
+})();
+
+/** Les EXCEPTIONS nommées, clé → palier. La table ne porte JAMAIS le défaut. */
+const NOMMEES = (() => {
+  const m = NU.match(/^EMPRISE_PAR_BATIMENT\s*=\s*\{([\s\S]*?)^\}/m);
+  assert.ok(m, 'tools/batiments_v2.py ne porte plus EMPRISE_PAR_BATIMENT');
+  const out = {};
+  for (const [, cle, nom] of m[1].matchAll(/'([a-z_]+)'\s*:\s*([A-Z_]+)\s*,/g)) {
+    assert.ok(nom in PALIER_PAR_NOM,
+      `EMPRISE_PAR_BATIMENT['${cle}'] vaut « ${nom} », qui n'est pas un palier`);
+    out[cle] = PALIER_PAR_NOM[nom];
+  }
+  return out;
+})();
+
+/**
+ * Les vignettes de palette : (clé, bâtiment emprunté). Elles ne sont PAS du
+ * roster — le joueur ne les pose jamais — mais `taches()` les émet en plus, donc
+ * l'atlas les porte. `ED T2` s'en sert pour confronter le roster au dessin.
+ */
+const VIGNETTES = (() => {
+  const m = NU.match(/^VIGNETTES\s*=\s*\[([\s\S]*?)\]\s*$/m);
+  assert.ok(m, 'tools/batiments_v2.py ne porte plus VIGNETTES');
+  return [...m[1].matchAll(/\('([a-z_]+)',\s*'([a-z_]+)'\)/g)]
+    .map(([, cle, emprunte]) => [cle, emprunte]);
+})();
+
+// ⚠⚠ LES TÉMOINS DE LA LECTURE, ET ILS SONT AU CHARGEMENT : une expression qui
+// ne trouverait rien rendrait une table VIDE, donc un `PALIERS` vide, donc des
+// gardes vertes sur rien. Le compte exact est confronté à l'atlas dans `ED T2`.
+assert.equal(ROSTER.length, 20,
+  `le roster lu dans l'outil compte ${ROSTER.length} bâtiments et non vingt`);
+assert.ok(Object.keys(NOMMEES).length >= 2,
+  'la table des exceptions lue est vide : la lecture ne mesure plus rien');
+assert.equal(new Set([PALIER_HAUT, PALIER_MEDIAN, PALIER_BAS]).size, 3,
+  'les trois paliers lus ne sont plus deux à deux différents');
+assert.deepEqual(VIGNETTES, [['collecteur_mixte', 'collecteur_quartz']],
+  'la vignette mixte ne renvoie plus au collecteur à quartz');
+
+// ⚠ `emprise_du_batiment` REJOUÉE : la table des exceptions, sinon le défaut.
+const PALIERS = Object.fromEntries(
+  ROSTER.map((c) => [c, NOMMEES[c] ?? EMPRISE_DEFAUT]));
 
 // Le seuil de l'encre se lit dans l'outil qui coupe — idiome d'`AR T2` et de
 // `test/embleme.test.js`. Ce qui survit à `SEUIL_ALPHA` est DESSINÉ à l'écran,
@@ -233,33 +315,45 @@ test('ED T2 — les trois paliers sont deux à deux différents, et le défaut e
       `${pourcent} % de 32 ne rend plus ${palier} gros pixels`);
   }
 
-  // ⚠⚠ LA TABLE NE PORTE QUE DES CLÉS DU ROSTER, ET C'EST LA GARDE ANTI-COQUILLE.
-  // `collecteur_scorries` ne serait jamais lu : le collecteur resterait
-  // silencieusement au palier par défaut, et rien ne lèverait — c'est le défaut
-  // lui-même qui rend la faute muette. L'outil refuse donc une clé inconnue, et
-  // ce test le vérifie en lui en donnant une.
-  // ⚠⚠ LA GARDE ANTI-COQUILLE S'EXERCE, ELLE NE SE LIT PAS. On donne à l'outil
-  // une clé mal orthographiée et on exige qu'il LÈVE en la nommant : sans ça,
-  // `collecteur_scorries` ne serait jamais lu, le collecteur resterait au palier
-  // par défaut, et rien ne le dirait — c'est le défaut lui-même qui rend la
-  // faute muette.
-  const coquille = 'import sys; sys.path.insert(0, "tools"); import batiments_v2 as b;'
-    + ' b.EMPRISE_PAR_BATIMENT["collecteur_scorries"] = 27;'
-    + ' b.emprise_du_batiment("caserne")';
-  assert.throws(() => execFileSync('python3', ['-c', coquille],
-    { cwd: RACINE, encoding: 'utf8', stdio: 'pipe' }),
-  /collecteur_scorries/,
-  'une clé mal orthographiée passe en silence : son bâtiment irait au palier par défaut');
-
-  const roster = new Set(Object.keys(PALIERS));
-  const src = 'import sys, json; sys.path.insert(0, "tools"); import batiments_v2 as b;'
-    + ' print(json.dumps(sorted(b.EMPRISE_PAR_BATIMENT)))';
-  const nommees = JSON.parse(execFileSync('python3', ['-c', src],
-    { cwd: RACINE, encoding: 'utf8' }));
+  // ⚠⚠ LA GARDE ANTI-COQUILLE SE MESURE PAR SON INVARIANT ET PAR SA SOURCE, ET
+  // C'EST UN ÉCART DÉCLARÉ. Le premier jet l'EXERÇAIT : on donnait à l'outil une
+  // clé mal orthographiée et on exigeait qu'il LÈVE en la nommant. Son montage
+  // était `python3 -c …`, que la CI ne peut pas jouer — voir le bloc de lecture
+  // en tête de fichier. Ce qui reste est plus étroit et n'est pas nul : d'un
+  // côté l'INVARIANT que la levée protège, mesuré sur la vraie table ; de
+  // l'autre l'EXISTENCE de la levée, lue dans la source avec son appât.
+  // L'exercice, lui, est une MESURE du rapport, comme `AR T4` et `AR T5`.
+  //
+  // ⚠ CE QUE LA LEVÉE PROTÈGE : `collecteur_scorries` ne serait jamais lu, le
+  // collecteur resterait silencieusement au palier par défaut, et rien ne
+  // lèverait — c'est le défaut lui-même qui rend la faute muette.
+  const roster = new Set(ROSTER);
+  const nommees = Object.keys(NOMMEES).sort();
+  assert.ok(nommees.length > 0,
+    'la table des exceptions est vide : il n\'y a plus rien à confronter au roster');
   for (const cle of nommees) {
     assert.ok(roster.has(cle),
       `EMPRISE_PAR_BATIMENT nomme « ${cle} », qui n'est pas un bâtiment du roster`);
   }
+
+  // ⚠⚠ ET LE ROSTER LU EST CONFRONTÉ À L'ATLAS, DONC AU DESSIN RÉELLEMENT COUSU.
+  // C'est ce qui empêche la lecture d'être une copie : un bâtiment retiré de
+  // `BATIMENTS` sans que ses sprites sortent — ou l'inverse — fait tomber ce
+  // test, alors qu'une table recopiée ici l'aurait laissé vert.
+  // ⚠ L'ATLAS PORTE LE ROSTER **PLUS LES VIGNETTES** : `taches()` émet les deux,
+  // et `collecteur_mixte` est une icône de palette, pas un bâtiment posable.
+  assert.deepEqual([...roster, ...VIGNETTES.map(([cle]) => cle)].sort(),
+    [...new Set(BATIMENTS.map(cleDuSprite))].sort(),
+    'le roster de `tools/batiments_v2.py` et les sprites de l\'atlas ne parlent '
+    + 'plus des mêmes bâtiments');
+
+  // ⚠ ET LA LEVÉE EST ENCORE DANS L'OUTIL, avec son appât dans l'autre sens.
+  const MOTIF_LEVEE = /inconnues = \[c for c in EMPRISE_PAR_BATIMENT if c not in BATIMENTS\]\s*\n\s*if inconnues:\s*\n\s*raise AssertionError\(/;
+  assert.match(NU, MOTIF_LEVEE,
+    '`emprise_du_batiment` ne LÈVE plus sur une clé absente du roster : une clé '
+    + 'mal orthographiée enverrait son bâtiment au palier par défaut en silence');
+  assert.ok(!MOTIF_LEVEE.test(NU.replace('raise AssertionError(', 'pass  # ')),
+    'le motif de la garde ne voit pas le retrait de la levée');
 
   // ⚠ ET LA TABLE NE PORTE QUE LES EXCEPTIONS : y inscrire un bâtiment au défaut
   // ferait une ligne qui ne dit rien et qui survivrait à un changement de défaut.
@@ -317,49 +411,41 @@ test('ED T2 — les trois paliers sont deux à deux différents, et le défaut e
 // ---------------------------------------------------------------------------
 
 test('ED T3 — la vignette du collecteur mixte porte l\'emprise du collecteur, pas un nombre', () => {
-  // ⚠⚠ ON COMPARE LES DEUX SORTIES, JAMAIS L'UNE À UN NOMBRE. Écrire 27 ici
-  // passerait aujourd'hui et se tairait le jour où Ethan règle le palier de
-  // l'économie : la palette montrerait une icône à une échelle que plus aucun
-  // collecteur ne pose. C'est ce que le brief demande en toutes lettres.
-  const src = 'import sys, json; sys.path.insert(0, "tools"); import batiments_v2 as b;'
-    + ' print(json.dumps({n: e for n, _, e, _ in b.taches()}))';
-  const emprises = JSON.parse(execFileSync('python3', ['-c', src],
-    { cwd: RACINE, encoding: 'utf8' }));
-  assert.equal(emprises.bat_j_collecteur_mixte, emprises.bat_j_collecteur_quartz,
-    'la vignette mixte n\'emprunte plus l\'emprise du collecteur qu\'elle représente');
+  // ⚠⚠ L'EMPRUNT SE LIT DANS LA SOURCE ET SE MESURE DANS LES PIXELS. La CI n'a
+  // pas de Python — voir le bloc de lecture en tête de fichier —, donc
+  // `taches()` ne s'exécute pas ici : le premier jet l'appelait, et c'est ce qui
+  // a mis la CI au rouge. Ce qui reste dit la même chose par les deux bouts.
+  const emprunte = VIGNETTES[0][1];
+
+  // ⚠⚠ ET C'EST UN CALCUL, JAMAIS UN NOMBRE. Écrire `27` en dur passerait
+  // AUJOURD'HUI — 27 EST le palier du collecteur — et se tairait au premier
+  // réglage d'Ethan sur le palier de l'économie : la palette montrerait une
+  // icône à une échelle que plus aucun collecteur ne pose. C'est la
+  // falsification qui l'a dit : comparer deux sorties égales protège du MAUVAIS
+  // nombre, pas du BON. Ce qui l'attrape est de lire l'APPEL.
+  const MOTIF_EMPRUNT = /out\.append\(\(nom, source, emprise_du_batiment\(emprunte\), False\)\)/;
+  assert.match(NU, MOTIF_EMPRUNT,
+    'la vignette mixte ne calcule plus son emprise depuis le bâtiment qu\'elle '
+    + 'emprunte : elle se taira au premier réglage du palier de l\'économie');
+  // ⚠ L'APPÂT, DANS L'AUTRE SENS : le motif refuse un nombre à la place de l'appel.
+  assert.ok(!MOTIF_EMPRUNT.test('        out.append((nom, source, 27, False))'),
+    'le motif de la garde accepterait un nombre écrit en dur');
 
   // ⚠ ET LE MONTAGE DISCRIMINE : le collecteur n'est PAS au palier par défaut.
-  // Sans cette ligne, l'égalité ci-dessus serait vraie d'une vignette figée à 29
-  // à côté d'un collecteur qui vaudrait 29 lui aussi.
-  assert.notEqual(emprises.bat_j_collecteur_quartz, 29,
+  // Sans cette ligne, l'égalité mesurée ci-dessous serait vraie d'une vignette
+  // figée à 29 à côté d'un collecteur qui vaudrait 29 lui aussi.
+  assert.notEqual(PALIERS[emprunte], EMPRISE_DEFAUT,
     'le montage ne mesure rien : le collecteur est au palier par défaut');
 
-  // ⚠⚠ ET L'ÉGALITÉ NE SUFFIT PAS — MESURÉ, ET C'EST LA FALSIFICATION QUI L'A
-  // DIT. Écrire `27` EN DUR dans `taches()` laisse les deux sorties égales,
-  // puisque 27 est justement le palier du collecteur AUJOURD'HUI : la
-  // falsification ne mordait pas. Le brief posait que comparer les deux sorties
-  // protégeait du nombre en dur ; **il protège du mauvais nombre, pas du bon**.
-  //
-  // ⚠⚠ CE QUI L'ATTRAPE EST DE BOUGER LE PALIER DU COLLECTEUR ET DE VÉRIFIER QUE
-  // LA VIGNETTE SUIT. On monte donc un `EMPRISE_PAR_BATIMENT` forgé, dans le
-  // processus Python et pour ce seul appel — l'idiome de `F-J T5`, qui monte un
-  // `parVoisin` à la main plutôt que de sauter le test.
-  const forge = 'import sys, json; sys.path.insert(0, "tools"); import batiments_v2 as b;'
-    + ' b.EMPRISE_PAR_BATIMENT["collecteur_quartz"] = 21;'
-    + ' print(json.dumps({n: e for n, _, e, _ in b.taches()}))';
-  const bouge = JSON.parse(execFileSync('python3', ['-c', forge],
-    { cwd: RACINE, encoding: 'utf8' }));
-  assert.equal(bouge.bat_j_collecteur_quartz, 21, 'le montage forgé n\'a pas pris');
-  assert.equal(bouge.bat_j_collecteur_mixte, 21,
-    'la vignette mixte porte un nombre ÉCRIT EN DUR : elle ne suit plus le collecteur '
-    + 'qu\'elle représente, et se taira au premier réglage du palier de l\'économie');
-
-  // ⚠ ET L'EMPRUNT SE VOIT DANS LES PIXELS, pas seulement dans la table.
+  // ⚠ ET L'EMPRUNT SE VOIT DANS LES PIXELS, pas seulement dans la source — c'est
+  // la moitié que Python ne rendait pas, et elle n'a pas bougé.
   const vignette = boiteDuSprite(64, 'bat_j_collecteur_mixte');
-  const collecteur = boiteDuSprite(64, 'bat_j_collecteur_quartz');
+  const collecteur = boiteDuSprite(64, `bat_j_${emprunte}`);
   assert.equal(Math.max(vignette.largeur, vignette.hauteur),
     Math.max(collecteur.largeur, collecteur.hauteur),
     'à l\'écran, la vignette n\'est plus à l\'échelle de ce qu\'elle pose');
+  assert.equal(Math.max(vignette.largeur, vignette.hauteur), PALIERS[emprunte] * 2,
+    `la vignette ne mesure pas le palier du collecteur (${PALIERS[emprunte]}) en grille 64`);
 
   // ⚠ LA GARDE DU RENVOI RESTE, ET SA RAISON EST REDEVENUE DOUBLE : elle gardait
   // que la vignette renvoie encore à un bâtiment ; elle garde de nouveau la
@@ -398,11 +484,12 @@ test('ED T4 — les deux ruines mesurent 98 %, et le nombre vient d\'une seule �
 
   // ⚠ ET LA DÉFINITION EST UNIQUE DANS TOUT `tools/` — c'est ce que « une seule
   // écriture » veut dire, et un `grep` le mesure au lieu de le supposer.
-  const outils = execFileSync('grep',
-    ['-rn', '^EMPRISE_QUATRE_VINGT_DIX_HUIT', 'tools/'],
-    { cwd: RACINE, encoding: 'utf8' }).trim().split('\n');
-  assert.equal(outils.length, 1,
-    `le palier 98 % est défini ${outils.length} fois dans tools/ : ${outils.join(' | ')}`);
+  const outils = readdirSync(join(RACINE, 'tools'))
+    .filter((f) => f.endsWith('.py'))
+    .filter((f) => /^EMPRISE_QUATRE_VINGT_DIX_HUIT\s*=/m
+      .test(readFileSync(join(RACINE, 'tools', f), 'utf8')));
+  assert.deepEqual(outils, ['batiments_v2.py'],
+    `le palier 98 % est défini dans ${outils.length} fichiers de tools/ : ${outils.join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
